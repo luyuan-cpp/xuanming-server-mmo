@@ -263,8 +263,8 @@ void ItemStore::ApplyStackFill(const std::vector<StackFill> &fillPlan,
         auto *item = Find(plan.guid);
         if (item == nullptr)
         {
-            LOG_ERROR << "ItemStore::ApplyStackFill: 计划引用已销毁的 guid=" << plan.guid
-                      << ", 未写入数量=" << plan.amount << "; 淘汰后必须重新规划";
+            LOG_ERROR << "ItemStore::ApplyStackFill: plan references destroyed guid=" << plan.guid
+                      << ", unwritten_count=" << plan.amount << "; must re-plan after eviction";
             continue;
         }
         item->set_size(item->size() + plan.amount);

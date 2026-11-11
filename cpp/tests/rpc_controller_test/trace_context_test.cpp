@@ -3,8 +3,10 @@
 // 被锁定的契约:
 //   * ParseTraceparent 只收版本 00、55 个字符、小写十六进制、trace_id 与 span_id 都非零;失败时不改写输出;
 //   * 查表版 WriteLowerHex 与逐字节 snprintf("%02x") 在 0..255 上全部一致;ToTraceparent 只写 sampled 位;
-//   * ScopedSpan、ScopedPlayerId 退出时恢复进入前的值,嵌套也一样;
-//   * CurrentTraceHex 跟着当前 trace 走,包括绕过作用域直接 Set 的情况(缓存比对原值,不会读到过期值)。
+//   * ScopedSpan、ScopedPlayerId 退出时恢复进入前的值,嵌套也一样;ScopedRoot 不接当前 trace,总是开新根;
+//     ScopedIncoming 收到合法的上下文就建子 span,不合法就开新根,两种情况都不接线程上残留的上下文;
+//   * CurrentTraceHex 跟着当前 trace 走,包括绕过作用域直接 Set 的情况(缓存比对原值,不会读到过期值);
+//   * Bind 记下包装那一刻的 trace,执行时在它下面建子 span;包装时没有 trace 就在无 trace 下执行,执行完恢复。
 //
 // 与 rpc_controller_test.cpp 同一工程、同一个 main。线程局部的用例都在 gtest 主线程上跑,
 // 夹具在开始和结束时把本线程的 trace 复位,不让上下文漏给同进程里后面的用例。
@@ -194,4 +196,72 @@ TEST_F(TraceContextTlsTest, CurrentTraceHexFollowsEveryChange)
 
     tracing::Set(tracing::TraceContext{});
     EXPECT_TRUE(tracing::CurrentTraceHex().empty());
+}
+
+TEST_F(TraceContextTlsTest, ScopedIncomingContinuesAValidTraceAndRootsAnInvalidOne)
+{
+    const tracing::TraceContext leftover = tracing::NewRoot();
+    tracing::Set(leftover);   // 线程上碰巧在场的上下文:两种情况都不接它
+
+    const tracing::TraceContext upstream = tracing::NewRoot();
+    {
+        tracing::ScopedIncoming incoming(upstream);
+        EXPECT_EQ(tracing::Current().trace_id.bytes, upstream.trace_id.bytes);
+        EXPECT_NE(tracing::Current().span_id.bytes, upstream.span_id.bytes);
+    }
+    EXPECT_EQ(tracing::Current().span_id.bytes, leftover.span_id.bytes);
+
+    {
+        tracing::ScopedIncoming incoming{tracing::TraceContext{}};
+        ASSERT_TRUE(tracing::Current().IsValid());
+        EXPECT_NE(tracing::Current().trace_id.bytes, leftover.trace_id.bytes);
+    }
+    EXPECT_EQ(tracing::Current().trace_id.bytes, leftover.trace_id.bytes);
+    EXPECT_EQ(tracing::Current().span_id.bytes, leftover.span_id.bytes);
+}
+
+TEST_F(TraceContextTlsTest, ScopedRootIgnoresTheCurrentTraceAndRestoresIt)
+{
+    const tracing::TraceContext leftover = tracing::NewRoot();
+    tracing::Set(leftover);
+    {
+        tracing::ScopedRoot root;   // 入口不接线程上碰巧在场的 trace
+        ASSERT_TRUE(tracing::Current().IsValid());
+        EXPECT_NE(tracing::Current().trace_id.bytes, leftover.trace_id.bytes);
+    }
+    EXPECT_EQ(tracing::Current().trace_id.bytes, leftover.trace_id.bytes);
+    EXPECT_EQ(tracing::Current().span_id.bytes, leftover.span_id.bytes);
+}
+
+TEST_F(TraceContextTlsTest, BindRunsUnderTheTraceCapturedAtBindTime)
+{
+    const tracing::TraceContext request = tracing::NewRoot();
+    tracing::Set(request);
+    tracing::TraceContext seen;
+    auto continuation = tracing::Bind([&seen] { seen = tracing::Current(); });
+
+    const tracing::TraceContext other = tracing::NewRoot();
+    tracing::Set(other);   // 执行时线程上是另一条 trace
+    continuation();
+    EXPECT_EQ(seen.trace_id.bytes, request.trace_id.bytes);
+    EXPECT_NE(seen.span_id.bytes, request.span_id.bytes);   // 在捕获值下建了子 span
+    EXPECT_EQ(tracing::Current().trace_id.bytes, other.trace_id.bytes);   // 执行完恢复
+}
+
+TEST_F(TraceContextTlsTest, BindWithoutTraceRunsWithoutTraceEvenIfTheCallerHasOne)
+{
+    tracing::TraceContext seen = tracing::NewRoot();
+    auto continuation = tracing::Bind([&seen] { seen = tracing::Current(); });
+
+    const tracing::TraceContext other = tracing::NewRoot();
+    tracing::Set(other);
+    continuation();
+    EXPECT_FALSE(seen.IsValid());   // 宁可丢,不可错:不接上执行线程上的 trace
+    EXPECT_EQ(tracing::Current().trace_id.bytes, other.trace_id.bytes);
+}
+
+TEST_F(TraceContextTlsTest, BindForwardsArgumentsAndTheResult)
+{
+    auto add = tracing::Bind([](int a, int b) { return a + b; });
+    EXPECT_EQ(add(2, 3), 5);
 }

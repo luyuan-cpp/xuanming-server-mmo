@@ -958,9 +958,23 @@ namespace
 							 << "; the same battle is already APPLIED under an earlier seq in the recent ring,"
 							 << " recording APPLIED for the new seq without executing it again";
 				}
+				// 载荷带本二进制不认识的字段(更新版本的生产者写的):照常执行会丢掉新字段的语义、还记成 APPLIED。
+				// 与执行器报版本错位同口径,不调执行器(混版本持久字段保护设计 §12「载荷新字段」,2026-11-11)。
+				// 同局重投不执行,也就不用判。
+				std::string newerField;
+				const bool payloadFromNewerVersion = !duplicateBattle &&
+					player_inbox_registry::PayloadCarriesNewerVersionFields(msgType, item.payload(), newerField);
+				if (payloadFromNewerVersion)
+				{
+					LOG_WARN << "[PlayerInbox] metric=persist_version_skew where=inbox_payload player_id=" << playerId
+							 << " domain=" << state.domain << " seq=" << seq
+							 << " type=" << player_inbox_registry::TypeName(msgType) << " field=" << newerField
+							 << "; payload carries fields unknown to this version, not executing it";
+				}
 				const PlayerInboxExecResult result = duplicateBattle
 					? PlayerInboxExecResult{PlayerInboxExecKind::kApplied, 0}
-					: executor(player, item.payload());
+					: payloadFromNewerVersion ? PlayerInboxExecResult{PlayerInboxExecKind::kVersionSkew, 0}
+											  : executor(player, item.payload());
 				if (result.kind == PlayerInboxExecKind::kApplied)
 				{
 					decision.set_outcome(static_cast<uint32_t>(player_inbox::PLAYER_INBOX_OUTCOME_APPLIED));

@@ -64,7 +64,9 @@ try {
     }
     # player_inbox:在线提醒(PlayerInboxNotifyEvent)发往 scene-cmd,与 friend / guild 的推送同为命令主题生产者。
     # mail:新邮件提醒(NotifyMailEvent)经 gate-cmd_g<N> 推送,同为命令主题生产者(docs/design/mail-system.md §12.3)。
-    foreach ($serviceName in @('friend','guild','player_inbox','mail')) {
+    # chat:世界频道广播 chat-world-bcast_g<N> 取同一个命令主题代号(shared/kafkacmd 进程内只读一次),
+    # 换代后复用旧进程会把推送写进旧主题(docs/design/chat-world-channel-fanout.md §4)。
+    foreach ($serviceName in @('friend','guild','player_inbox','mail','chat')) {
         Test-Case "$serviceName 缺少可信启动记录时拒绝复用" {
             Write-TestRecords @{}
             $process = [pscustomobject]@{ Name = "$serviceName.exe"; ProcessId = 77 }
@@ -97,7 +99,7 @@ try {
     Test-Case '没有命令主题生产链的服务不检查或写契约' {
         Write-TestRecords @{}
         $script:ProcessQueries = 0
-        foreach ($serviceName in @('db','data_service','client_rpc_router','chat','trade')) {
+        foreach ($serviceName in @('db','data_service','client_rpc_router','trade')) {
             Assert-RunningCommandContract ([pscustomobject]@{ Name = "$serviceName.exe"; ProcessId = 77 })
             Save-LocalCommandContract $serviceName 77
         }

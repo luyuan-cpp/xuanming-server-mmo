@@ -416,6 +416,8 @@ func TestIntegration_TwoZonesSharedRedis_BothQueuesDrain(t *testing.T) {
 // (2026-10-18 更正)「ZPOPMIN 原子」改读:两个 leader 可能 ZRANGE 到同一批,放行脚本先 ZSCORE 判在队,并在同一段里
 // 写占位、ZREM 成员,每条只放行一次。条目现在是原子地从队列移进占位,快照因此用 MULTI 原子地读两个 ZSET(先读队列、
 // 再读占位的两次读之间若夹进一次放行,会看到同一条出现两次);断言不变。
+// (2026-11-11 收紧,R7)名额进了放行脚本:超发上界从 2×cap 收紧到 cap(在线 0,名额 = 容量)。两个 goroutine 的先后不确定,
+// 这里只钉住上界;确定地造出「两边按同一份快照放」的形状见 TestDispatchOnce_OverlappingLeadersSameSnapshot_CappedByBudget。
 func TestIntegration_DualLeadersSameZone_NoLossBoundedOverAdmit(t *testing.T) {
 	mr, err := miniredis.Run()
 	if err != nil {
@@ -473,8 +475,8 @@ func TestIntegration_DualLeadersSameZone_NoLossBoundedOverAdmit(t *testing.T) {
 	})
 	time.Sleep(300 * time.Millisecond) // 再给每个 leader 约十拍,确认余量为 0 后不再放行
 	queued, admitted := snapshot()
-	if len(admitted) > 2*capacity {
-		t.Fatalf("over-admission must be bounded by 2×cap=%d, got %d", 2*capacity, len(admitted))
+	if len(admitted) > capacity {
+		t.Fatalf("in-flight admits must be bounded by cap=%d even with two leaders, got %d", capacity, len(admitted))
 	}
 	seen := make(map[string]int, total)
 	for _, id := range append(queued, admitted...) {
@@ -487,6 +489,55 @@ func TestIntegration_DualLeadersSameZone_NoLossBoundedOverAdmit(t *testing.T) {
 		if c != 1 || !want[id] {
 			t.Fatalf("queueId %s appears %d times (known=%v)", id, c, want[id])
 		}
+	}
+}
+
+// R7(2026-11-11):两个 leader 按同一份快照放。d1 算完空位(容量 3、在线 0、在途 0 → 空位 3)之后、发 ZRANGE 之前,d2 完整地
+// 跑完一拍、放满 3 条;d1 接着拿自己那份已过期的「空位 3」出队,放行脚本数到在途已满,一条都不放,也不报错。队列剩 3 条,
+// 在途恰为 3。钩子挂在 d1 的第一条 ZRANGE(PopAdmit 读候选)上,转发它之前同步跑 d2.dispatchOnce;d2 自己的命令也经过这个
+// 钩子,用一次性的标记挡住重入。两个不同前缀的锁 = 同一 zone 两个 leader(与上一条用例同一形状)。
+// 修复前红:d1 再放 3 条,在途 6 = 2×(容量 − 在线)。
+func TestDispatchOnce_OverlappingLeadersSameSnapshot_CappedByBudget(t *testing.T) {
+	logs := logtest.NewCollector(t)
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	defer mr.Close()
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	secret := []byte("r7-budget")
+	q := New(rdb, time.Hour, 60*time.Second, secret)
+	ctx := context.Background()
+
+	const capacity = 3
+	prov := &integrationProvider{
+		caps:  map[uint32]uint32{1: capacity},
+		cands: map[uint32][]GateCandidate{1: {{NodeID: 1, IP: "10.0.0.1", Port: 9000, ZoneID: 1}}},
+	}
+	// 不 Start:直接调 dispatchOnce,没有 goroutine,结果确定。
+	d1 := mustNewDispatcher(t, q, prov, rdb, secret, "dispatcher:lock:r7-a", 1)
+	d2 := mustNewDispatcher(t, q, prov, rdb, secret, "dispatcher:lock:r7-b", 1)
+	enqueueN(t, q, rdb, 2*capacity)
+
+	var interleaved atomic.Bool
+	rdb.AddHook(cmdHook{process: func(hctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error {
+		if cmd.Name() == "zrange" && interleaved.CompareAndSwap(false, true) {
+			d2.dispatchOnce(hctx)
+		}
+		return next(hctx, cmd)
+	}})
+
+	d1.dispatchOnce(ctx)
+	if !interleaved.Load() {
+		t.Fatal("precondition: d1 never reached the ZRANGE of its batch")
+	}
+	mustAdmittedCount(t, q, capacity, "two leaders admitting from the same snapshot")
+	if n, err := q.QueueLen(ctx, 1); err != nil || n != capacity {
+		t.Fatalf("queue len = %d err=%v, want %d: the second leader's batch stays queued", n, err, capacity)
+	}
+	if out := logs.String(); strings.Contains(out, "PopAdmit zone=1 err=") {
+		t.Fatalf("a batch refused by the budget is not an error, got logs:\n%s", out)
 	}
 }
 
@@ -658,7 +709,7 @@ func TestBatchPickFn_NoCandidatesKeepsEntryQueued(t *testing.T) {
 	if err != nil {
 		t.Fatalf("zscore after enqueue: %v", err)
 	}
-	if n, err := q.PopAdmit(ctx, 1, 1, newBatchPickFn(nil)); err == nil || n != 0 {
+	if n, err := q.PopAdmit(ctx, 1, 1, noBudgetLimit, newBatchPickFn(nil)); err == nil || n != 0 {
 		t.Fatalf("popadmit without candidates = (%d, %v), want (0, error)", n, err)
 	}
 	if n, err := q.QueueLen(ctx, 1); err != nil || n != 1 {

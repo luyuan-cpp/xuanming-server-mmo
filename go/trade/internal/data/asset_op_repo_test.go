@@ -11,6 +11,7 @@ import (
 	tradepb "proto/trade"
 
 	"shared/assetop"
+	"shared/authoritysql"
 
 	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -129,8 +130,8 @@ func TestStatusToRecordMapsEverySemanticStatus(t *testing.T) {
 	}
 }
 
-// TestIsRetryableTxError:只有死锁 / 锁等待超时 / TiDB 写冲突值得整体重试。
-// 把别的错误(比如撞唯一键)判成可重试,会让一笔失败的上架被反复重放。
+// TestIsRetryableTxError:只有死锁 / 锁等待超时 / TiDB 写冲突,以及守卫判定的提交前中止(R6,COMMIT 没发、确定没写)
+// 值得整体重试。把别的错误(比如撞唯一键、结局未知)判成可重试,会让一笔失败的上架被反复重放。
 func TestIsRetryableTxError(t *testing.T) {
 	cases := []struct {
 		name string
@@ -144,6 +145,8 @@ func TestIsRetryableTxError(t *testing.T) {
 		{"唯一键冲突 1062", &mysql.MySQLError{Number: 1062}, false},
 		{"包了一层的死锁", fmt.Errorf("insert trade_asset_op: %w", &mysql.MySQLError{Number: 1213}), true},
 		{"普通错误", errors.New("connection refused"), false},
+		{"提交前中止", fmt.Errorf("insert trade_asset_op: %w", authoritysql.ErrTxAbortedBeforeCommit), true},
+		{"结局未知", fmt.Errorf("commit: %w", authoritysql.ErrOutcomeUnknown), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

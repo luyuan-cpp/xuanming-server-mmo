@@ -1,6 +1,10 @@
 package metrics
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 // 全球终局恢复与终局发件箱的指标(2026-10-30,评审 B-4 / B-6)。label 只用 kind(result / first / waiting)与
 // 投递结局的封闭集合(取值见 authority 包 OutboxKind* / OutboxPublished 等),battle_id / player_id 一律只进日志。
@@ -23,10 +27,38 @@ var (
 		Subsystem: subsystem, Name: "outcome_outbox_delivery_total",
 		Help: "终局发件箱逐行处理结局:published / pending / applied / failed / corrupt / claim_lost / deferred / store_error。",
 	}, []string{"kind", "outcome"})
+	globalDeadlineAbortOverdue = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: subsystem, Name: "global_deadline_abort_overdue_formations",
+		Help: "全球成局里截止之后超过最晚落定时刻(约 16 分钟)仍没有终局的可裁决在途存量(每分钟巡检,2026-11-11)。大于 0 说明到期恢复跟不上积压或 match / 库长期不可用,scene 可能已按续冻上限解冻;按 cross-zone-matchmaking.md 13.3 处置(加副本或查库)。",
+	})
+	globalDeadlineAbortOverdueOldest = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: subsystem, Name: "global_deadline_abort_overdue_oldest_seconds",
+		Help: "上一项里最早一局已超期多少秒(每分钟巡检;没有超期为 0)。",
+	})
+	// outcomeOutboxLastRun 是终局发件箱投递循环的活性(缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8)。
+	// 发件箱按片分给各 stable 副本之后,一个副本的循环卡住,它名下的片就没人投,别的副本照常推进。不带可变 label 的 GaugeVec:
+	// 循环起来才有序列、退出就删,canary(不跑发件箱)与停机中的副本都没有序列;告警 MatchOutcomeOutboxLoopStalled 按副本判。
+	outcomeOutboxLastRun = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem, Name: "outcome_outbox_last_run_unixtime",
+		Help: "终局发件箱投递循环最近一次跑完一轮的时刻(Unix 秒,这一轮成败都算;循环起来时也写一次)。只在循环运行时有序列;值长期不前进 = 循环卡在某一轮里。",
+	}, nil)
 )
 
 func outcomeCollectors() []prometheus.Collector {
-	return []prometheus.Collector{globalExpiredStranded, outcomeOutboxBacklogRows, outcomeOutboxOldestAge, outcomeOutboxDeliveryTotal}
+	return []prometheus.Collector{globalExpiredStranded, outcomeOutboxBacklogRows, outcomeOutboxOldestAge, outcomeOutboxDeliveryTotal,
+		globalDeadlineAbortOverdue, globalDeadlineAbortOverdueOldest, outcomeOutboxLastRun}
+}
+
+// MarkOutcomeOutboxRun 记终局发件箱投递循环起来、或跑完一轮的时刻(有告警 MatchOutcomeOutboxLoopStalled:长期不前进 = 循环卡住)。
+func MarkOutcomeOutboxRun(now time.Time) { outcomeOutboxLastRun.WithLabelValues().Set(float64(now.Unix())) }
+
+// ClearOutcomeOutboxRun 在投递循环退出时删掉活性序列:停掉的循环不该被当成卡住。
+func ClearOutcomeOutboxRun() { outcomeOutboxLastRun.Reset() }
+
+// SetGlobalDeadlineAbortOverdue 写「超期未作废」的存量与最早一局超期的秒数(0 也写:恢复跟上之后读数要能回落)。
+func SetGlobalDeadlineAbortOverdue(count uint64, oldestOverdueSeconds float64) {
+	globalDeadlineAbortOverdue.Set(float64(count))
+	globalDeadlineAbortOverdueOldest.Set(oldestOverdueSeconds)
 }
 
 // SetGlobalExpiredStranded 写到期滞留成局的存量(0 也写:处置之后读数要能回落)。

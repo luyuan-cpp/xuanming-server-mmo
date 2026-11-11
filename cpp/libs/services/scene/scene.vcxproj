@@ -38,6 +38,8 @@
     <ClInclude Include="combat\buff\system\buff_impl.h" />
     <ClInclude Include="combat\buff\system\modifier_buff_impl.h" />
     <ClInclude Include="combat\buff\system\motion_modifier_impl.h" />
+    <ClInclude Include="combat\engagement\comp\combat_engagement_comp.h" />
+    <ClInclude Include="combat\engagement\system\combat_engagement.h" />
     <ClInclude Include="combat\skill\comp\skill_comp.h" />
     <ClInclude Include="combat\skill\constants\skill.h" />
     <ClInclude Include="combat\skill\system\skill.h" />
@@ -71,6 +73,8 @@
     <ClInclude Include="player\system\player_inbox_registry.h" />
     <ClInclude Include="player\system\gm_sanction_inbox_executor.h" />
     <ClInclude Include="player\system\player_inbox_system.h" />
+    <ClInclude Include="player\system\mail_outbox_rules.h" />
+    <ClInclude Include="player\system\player_mail_outbox.h" />
     <ClInclude Include="player\system\player_store_client.h" />
     <ClInclude Include="player\system\player_store_projection.h" />
     <ClInclude Include="player\system\handoff_mark_withdraw.h" />
@@ -115,6 +119,7 @@
     <ClInclude Include="spatial\constants\view.h" />
     <ClInclude Include="spatial\manager\scene_nav.h" />
     <ClInclude Include="spatial\system\aoi.h" />
+    <ClInclude Include="spatial\system\aoi_load.h" />
     <ClInclude Include="spatial\system\grid.h" />
     <ClInclude Include="spatial\system\interest.h" />
     <ClInclude Include="spatial\system\movement.h" />
@@ -137,6 +142,7 @@
     <ClCompile Include="combat\buff\system\buff_impl.cpp" />
     <ClCompile Include="combat\buff\system\modifier_buff_impl.cpp" />
     <ClCompile Include="combat\buff\system\motion_modifier_impl.cpp" />
+    <ClCompile Include="combat\engagement\system\combat_engagement.cpp" />
     <ClCompile Include="combat\skill\system\skill.cpp" />
     <ClCompile Include="combat_state\system\combat_state.cpp" />
     <ClCompile Include="core\config\config.cpp" />
@@ -160,6 +166,7 @@
     <ClCompile Include="player\system\player_inbox_registry.cpp" />
     <ClCompile Include="player\system\gm_sanction_inbox_executor.cpp" />
     <ClCompile Include="player\system\player_inbox_system.cpp" />
+    <ClCompile Include="player\system\player_mail_outbox.cpp" />
     <ClCompile Include="player\system\player_store_client.cpp" />
     <ClCompile Include="player\system\player_store_projection.cpp" />
     <ClCompile Include="player\system\player_database_loader.cpp" />
@@ -185,6 +192,7 @@
     <ClCompile Include="player\system\stress_test_probe.cpp" />
     <ClCompile Include="player\system\bag_marshal.cpp" />
     <ClCompile Include="spatial\system\aoi.cpp" />
+    <ClCompile Include="spatial\system\aoi_load.cpp" />
     <ClCompile Include="spatial\system\grid.cpp" />
     <ClCompile Include="spatial\system\interest.cpp" />
     <ClCompile Include="spatial\system\movement.cpp" />

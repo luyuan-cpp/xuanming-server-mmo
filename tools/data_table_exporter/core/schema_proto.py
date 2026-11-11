@@ -818,6 +818,7 @@ def build_table_schema(proto_path: Path, xlsx_path: Path,
         # 主键可重复只有一个来源:主键列上的 (cfg_multi)。不设第二个表级开关,
         # 否则两处说法不一致时没有正确答案。
         multi_primary_key=first is not None and first.is_multi_key,
+        ids_permanent=main.opts.get("cfg_ids_permanent", False) is True,
         has_constants_name=constants_idx is not None,
         constants_name_index=constants_idx,
     )

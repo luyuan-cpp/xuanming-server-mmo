@@ -3,6 +3,7 @@ package match;
 
 import "proto/db/proto_option.proto";
 import "proto/battle/battle_data.proto";
+import "proto/battle/battle_script.proto";
 import "proto/battle/player_battle.proto";
 import "proto/common/base/service_call_auth.proto";
 
@@ -272,18 +273,18 @@ message StrandedFormation {
 }
 
 // 列出已过截止加宽限、仍停在 state 2/3/4 且带持久 Create 原件的成局(含原件合格、等自动恢复的局),只读、不加锁。
-// 沿 (state,retry_at_ms) 索引按 (retry_at_ms, battle_id) 升序翻页,与到期恢复同一顺序。
+// 按 battle_id 升序翻页(2026-11-11 起;retry_at_ms 会随取证排期变化,按它翻页会重复列出同一局)。
 message ListStrandedFormationsRequest {
-  uint64 after_retry_at_ms = 1;  // 游标;两者都为 0 从头开始
-  uint64 after_battle_id = 2;
+  uint64 after_retry_at_ms = 1;  // 保留不用(2026-11-11 起服务端忽略、回包恒为 0);游标只看 after_battle_id
+  uint64 after_battle_id = 2;    // 游标;0 从头开始
   uint32 limit = 3;              // 1..100
   common.base.ServiceCallAuth auth = 4;
 }
 message ListStrandedFormationsResponse {
   bool retry = 1;                // true = 这一次没读成,其余字段无意义
   repeated StrandedFormation formations = 2;
-  uint64 next_retry_at_ms = 3;   // 两者都为 0 = 已到末尾
-  uint64 next_battle_id = 4;
+  uint64 next_retry_at_ms = 3;   // 保留不用,恒为 0(2026-11-11)
+  uint64 next_battle_id = 4;     // 下一页游标;0 = 已到末尾
   uint64 now_ms = 5;             // TiDB 时刻
   string target = 6;             // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
 }
@@ -320,4 +321,51 @@ service MatchInternal {
   // 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方只有运维工具 formationfix,见上文消息定义处)。
   rpc ListStrandedFormations(ListStrandedFormationsRequest) returns (ListStrandedFormationsResponse);
   rpc ResolveStrandedFormation(ResolveStrandedFormationRequest) returns (ResolveStrandedFormationResponse);
+  // 运营审核玩家上传的战斗剧本(docs/design/battle-script.md §6.3;调用方只有运营工具 battlescriptreview,
+  // serviceauth 调用方 ops,与 SetSpectateFeatured 共用运营密钥)。
+  rpc ListPendingBattleScripts(ListPendingBattleScriptsRequest) returns (ListPendingBattleScriptsResponse);
+  rpc ReviewBattleScript(ReviewBattleScriptRequest) returns (ReviewBattleScriptResponse);
+}
+
+// ---- 战斗剧本审核(运营入口) ----
+
+// 带内拒绝:验签不过 / 参数不合法 / 审的不是当前待审版 / 库故障。业务结果都在带内,gRPC 恒返回 OK
+enum BattleScriptReviewReject {
+  BATTLE_SCRIPT_REVIEW_REJECT_NONE = 0;
+  BATTLE_SCRIPT_REVIEW_REJECT_DENIED = 1;    // 客户端来源、入口未开启(没配运营密钥)或签名无效
+  BATTLE_SCRIPT_REVIEW_REJECT_INVALID = 2;   // 参数不合法(limit 越界、驳回没写原因、审核员名超长……)
+  BATTLE_SCRIPT_REVIEW_REJECT_STALE = 3;     // 这一版已不是当前待审版(作者又改了、删了,或已被审过):重新拉待审列表
+  BATTLE_SCRIPT_REVIEW_REJECT_INTERNAL = 4;  // 库故障;只读列表可直接重试,审核提交结果未知时先重新拉列表核对
+}
+
+message ListPendingBattleScriptsRequest {
+  uint32 limit = 1;  // 1..50
+  common.base.ServiceCallAuth auth = 2;
+}
+
+message PendingBattleScript {
+  uint64 script_id = 1;
+  uint64 owner_player_id = 2;
+  uint32 revision = 3;
+  BattleScript content = 4;    // 待审的这一版正文
+  uint64 submitted_ms = 5;
+  uint32 approved_revision = 6;  // 作者上一次通过的版本;0 = 首次送审
+}
+
+message ListPendingBattleScriptsResponse {
+  BattleScriptReviewReject reject = 1;
+  repeated PendingBattleScript scripts = 2;  // 先提交的在前
+}
+
+message ReviewBattleScriptRequest {
+  uint64 script_id = 1;
+  uint32 revision = 2;    // 审的是哪一版:必须仍是当前提交版且待审,否则 STALE
+  bool approve = 3;
+  string reviewer = 4;    // 1..64 字节,不含控制字符
+  string reason = 5;      // ≤191 字节;驳回必填(作者会看到)
+  common.base.ServiceCallAuth auth = 6;
+}
+
+message ReviewBattleScriptResponse {
+  BattleScriptReviewReject reject = 1;
 }

@@ -278,6 +278,26 @@ TEST_F(PlayerItemGainBlockTest, ExistingStockStaysAndRestoreOrInternalMovesAreNo
 		<< "新增获得仍被拦";
 }
 
+// 交易退回本人托管的物品(TX_AUCTION_RETURN)不是新增获得:两个带交易类型的批量入口都放行;
+// 成交所得(TX_AUCTION_BUY)照常被拦(GainBlockService::CountsAsGain,数据覆写审计 r2-trade#1)。
+TEST_F(PlayerItemGainBlockTest, TradeReturnOfOwnEscrowIsNotAGain)
+{
+	ASSERT_NO_FATAL_FAILURE(Ban(kStackItem));
+	auto &inventory = Inventory(banned_);
+	EXPECT_FALSE(GainBlockService::CountsAsGain(TX_AUCTION_RETURN));
+	EXPECT_TRUE(GainBlockService::CountsAsGain(TX_AUCTION_BUY));
+
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked),
+			  BagService::AddItems(banned_, inventory, ItemCountMap{{kStackItem, 1}}, TX_AUCTION_BUY))
+		<< "成交所得照常被拦";
+	EXPECT_EQ(0u, inventory.GetTotalItemCount(kStackItem));
+	EXPECT_EQ(static_cast<uint32_t>(kSuccess),
+			  BagService::AddItems(banned_, inventory, ItemCountMap{{kStackItem, 2}}, TX_AUCTION_RETURN));
+	EXPECT_EQ(static_cast<uint32_t>(kSuccess),
+			  BagService::AddItems(banned_, inventory, std::vector<InitItemParam>{Piece(kStackItem, 1)}, TX_AUCTION_RETURN));
+	EXPECT_EQ(3u, inventory.GetTotalItemCount(kStackItem)) << "退回的照常入包";
+}
+
 // 解封之后照常获得;重复封禁 / 解封都是幂等的。
 TEST_F(PlayerItemGainBlockTest, UnbanRestoresGainsAndRepeatsAreIdempotent)
 {

@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS `player_database` (
 > **2026-10-15 修订(负责人 2026-10-13 拍板「④ 先做并修订 D5」;第 1 条措辞按 [S1 修订稿](../handoff/godb-pipeline-impl-20261015/S1-retry-owner-waitaof-addendum.md) §8 定稿,2026-10-17 写入本文)**
 > 状态:④ 与 WAITAOF 已落码,未编译、未测试,待 Codex 验证。验证与上线项见 [上线待做](../ops/godb-pipeline-launch-todo.md) §9。
 > 1. 「retry/dead 队列全不动」改为允许两项改动:④ 重试只交给分区属主(新增键族 `kafka:retry:queue:{topic}:p{N}`,开关 `ServerConfig.Kafka.RetryRouting`,见 [db-retry-owner-routing.md](./db-retry-owner-routing.md))与重试 / 死信 / 毒消息入队补 WAITAOF(`ServerConfig.RedisClient.WaitAOF*`)。两项随同一个 S1 镜像发布,S1 整体作为一个**独立发布单元**,不得与 TiDB Phase 1 任何迁移批次同窗口,也不得在同一次滚动里发布;两项的开关与指标各自独立,出问题时按 `db_retry_route_total` / `db_durable_enqueue_*` 归因。
->    - 开关:④ 是 `RetryRouting`(`shared` | `owner`,缺省 `shared`;环境变量 `DB_RETRY_ROUTING` 优先,只用于单 zone 金丝雀);WAITAOF 是 `WaitAOFNumLocal` / `WaitAOFNumReplicas` / `WaitAOFTimeoutMs`(代码缺省 1 / 0 / 1500,两个份数都写 0 才关闭)。取值只在启动时读:K8s 上只改 ConfigMap 不会滚动 go/db,改值后必须 `rollout restart deploy/db`。
+>    - 开关:④ 是 `RetryRouting`(`shared` | `owner`,缺省 `shared`;环境变量 `DB_RETRY_ROUTING` 优先,只用于单 zone 金丝雀);WAITAOF 是 `WaitAOFNumLocal` / `WaitAOFNumReplicas` / `WaitAOFTimeoutMs`(代码缺省 1 / 0 / 1500,两个份数都写 0 才关闭)。取值只在启动时读:K8s 上只改 ConfigMap 不会滚动 go/db,改值后必须 `rollout restart statefulset/db`。
 >    - 不拆成「先 0/0 发镜像、再开 1/0」两步:ConfigMap 由契约测试强制镜像 `go/db/etc/db.yaml`,拆步要改两次配置、多一次发布;S2 之前每多一次滚动就多一轮全服 eager 再平衡;第 2 步 ④ 处于 `shared`,行为基本等于今天,WAITAOF 的影响能单独从 `db_durable_enqueue_*` 看出来。
 > 2. 迁移窗口内冻结 RetryRouting:L1–L4 与 chaos_test 在迁移前后用同一个值跑;迁移的「停写 drain」核对清单加上 `kafka:retry:queue:{topic}:p*`。
 > 3. topic 命名与 partition=10 不可变契约**不变**:④ 不改分区数、不换代;④B2(双消费在线换代)本轮不做。要做 B2 必须先落 MySQL 条件写,并另行修订本节第一条「改 topic 路由必须走停写 drain + 新 TopicGeneration」,不能以本修订为依据;双消费窗口内禁止 relocate / 合服,三方相等校验要同步放宽。

@@ -41,9 +41,16 @@ ADDITIVE_SECRET_NAMES = ("SPECTATE_TOKEN_SECRET", "MATCH_OPS_CALLER_SECRET", "PL
                          "MMORPG_ROLE_FENCE_SECRET_COORDINATOR", "MMORPG_ROLE_FENCE_SECRET_GUILD", "MMORPG_ROLE_FENCE_SECRET_TRADE",
                          "MMORPG_ROLE_FENCE_SECRET_MAIL", "MMORPG_ROLE_FENCE_SECRET_MATCH", "MMORPG_ROLE_FENCE_SECRET_PLAYER_INBOX",
                          "MMORPG_ROLE_FENCE_SECRET_FRIEND", "MMORPG_ROLE_FENCE_SECRET_CHAT", "MMORPG_ROLE_FENCE_SECRET_DB")
+# gate 会话身份签名的开发密钥对（RFC 8032 §7.1 TEST 1 的公开测试向量，docs/design/gate-online-identity.md §10.1）：
+# gate 用私钥签名，login 与在线服务只拿公钥。docker 调试栈只跑 dev 模式，这一对不是秘密；Python 标准库没有 Ed25519，
+# 不在这里现生成。go/shared/callerauth 的 TestEd25519Rfc8032Vector 钉住它们配对。
+DEV_INTERNAL_IDENTITY = {
+    "INTERNAL_AUTH_SIGNING_KEY": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+    "INTERNAL_AUTH_PUBLIC_KEYS": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+}
 SECRET_NAMES = (
     "MYSQL_ROOT_PASSWORD", "GATE_TOKEN_SECRET",
-    "QUEUE_TOKEN_SECRET", "INTERNAL_AUTH_SECRET", "BATTLE_TOKEN_SECRET",
+    "QUEUE_TOKEN_SECRET", "BATTLE_TOKEN_SECRET",
     "LOGIN_DEV_PASSWORD_SHARED_SECRET", "GATEWAY_ADMIN_API_KEY",
     *ADDITIVE_SECRET_NAMES,
 )
@@ -221,11 +228,11 @@ ensure_topic() {
     if run_cli "$topic_deadline" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --describe --topic "$topic"; then
       actual=$(sed -n 's/.*PartitionCount:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$cli_output")
       if [ "$grow" = grow ]; then
-        case "$actual" in ''|*[!0-9]*) fail_cli "无法解析分区数: $topic";; esac
+        case "$actual" in ''|*[!0-9]*) fail_cli "cannot parse the partition count of topic $topic";; esac
         [ "$actual" -lt "$partitions" ] || break
         # data_service 的 EnsureTopics 可能同时在加:alter 失败不退出,回到上面重读分区数,由本阶段截止时间兜底。
         run_cli "$topic_deadline" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --alter --topic "$topic" --partitions "$partitions" || true
-        wait_metadata "$topic_deadline" "审计 topic 分区数在截止时间前仍少于配置: $topic expected>=$partitions actual=$actual"
+        wait_metadata "$topic_deadline" "audit topic $topic still has fewer partitions than configured at the deadline: expected>=$partitions actual=$actual"
         continue
       fi
       [ "$actual" = "$partitions" ] || fail_cli "分区契约不符: $topic expected=$partitions actual=$actual"
@@ -411,6 +418,9 @@ def main() -> None:
     output.mkdir(parents=True, exist_ok=True)
     environment = read_environment(output / ".env")
     environment.setdefault("KAFKA_CLUSTER_ID", secrets.token_urlsafe(16))
+    # 旧版 .env 里共用的 HMAC 内部身份密钥已退役，换成开发密钥对。
+    environment.pop("INTERNAL_AUTH_SECRET", None)
+    environment.update(DEV_INTERNAL_IDENTITY)
     config_dir = output / "config"
     sql_dir = output / "mysql-init"
     config_dir.mkdir(exist_ok=True)
@@ -432,15 +442,15 @@ def main() -> None:
             config["Prometheus"]["Host"] = "0.0.0.0"
     login = configs["login"]
     login["Secrets"] = {kind: {"Env": name} for kind, name in (
-        ("GateToken", "GATE_TOKEN_SECRET"), ("QueueToken", "QUEUE_TOKEN_SECRET"), ("InternalAuth", "INTERNAL_AUTH_SECRET"))}
+        ("GateToken", "GATE_TOKEN_SECRET"), ("QueueToken", "QUEUE_TOKEN_SECRET"))}
     login.pop("GateTokenSecret", None)
     login["RequireClientEndpoint"] = True
     # 常驻配置不留账号：写者每 boot 一个账号，由注册步骤写进私有卷里的运行配置（sql_boot_catalog_local.ps1 的 Get-LocalSqlBootConfigPatch）。
     db = configs["db"]
     db["ServerConfig"]["JsonPath"] = "/app/data/mysql_database_table_list.json"
-    # zone_1_db 是 go/db 的本区主库;player_store_1000000_db 是 dev 地域(0)唯一的地域存档库,新号都落这里
-    # (login Placement Region 0 / StorageShards 1,docs/design/player-data-tidb-scaling-plan.md §7.2)。与 compose 的 DB_ALLOWED_DATABASES 同一份。
-    db["ServerConfig"]["Database"].update(Backend="mysql", AllowedDatabases=["zone_1_db", "player_store_1000000_db"], AllowlistEnforcement="strict", AutoCreateDatabase=False, AutoMigrateSchema=False)
+    # player_store_1000000_db 是 dev 地域(0)唯一的地域存档库,新号都落这里(login Placement Region 0 / StorageShards 1);
+    # zone 库已退役(docs/design/player-data-tidb-scaling-plan.md §7.2 A17c)。与 compose 的 DB_ALLOWED_DATABASES 同一份。
+    db["ServerConfig"]["Database"].update(Backend="mysql", AllowedDatabases=["player_store_1000000_db"], AllowlistEnforcement="strict", AutoCreateDatabase=False, AutoMigrateSchema=False)
     for key in ("User", "Passwd"):
         db["ServerConfig"]["Database"].pop(key, None)
     data = configs["data_service"]

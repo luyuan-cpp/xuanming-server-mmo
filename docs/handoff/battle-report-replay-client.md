@@ -1,6 +1,6 @@
 # 交接:战报回放的客户端细节(2026-11-06)
 
-> **状态**:服务端 C++ / Go 已落码,**未生成协议、未编译、未测试**,验证由 Codex 按 [设计稿](../design/battle-report-replay.md) §17 执行。客户端还没做,本文是交给客户端的全部细节。
+> **状态**:服务端 C++ / Go 已落码,协议已生成,剩余验证由 Codex 按 [设计稿](../design/battle-report-replay.md) §17 执行(现状见本文 §8)。客户端还没做,本文是交给客户端的全部细节。
 > **没看过客户端仓**:本次没有客户端任务授权,没读 `../mmorpg-client`。文中「复用观战播放」「GZipStream 可用」等都基于服务端协议推断,落码前请在客户端仓核对,§9 列了要核对的点。
 > **服务端设计**:[battle-report-replay.md](../design/battle-report-replay.md)。负责人 2026-11-06 定:只录 PVP,每名玩家保留最近 100 条。
 
@@ -101,10 +101,11 @@
 
 **样例数据**:Codex 跑通服务端冒烟(设计稿 §17 第 5 步)后,用 robot 打一局 1v1,把 `GetBattleReport` 的回包原样存一份,给客户端当夹具;再造一份 `DEADLINE_DRAW`(整场期限到)的样例。
 
-## 8. 服务端还没做的
+## 8. 服务端状态(2026-11-10)
 
-- 协议生成、编译、测试、冒烟都还没跑(交 Codex,设计稿 §17)。
-- `data/MessageLimiter.xlsx` 两行限频要等生成出消息号之后再加(设计稿 §17 第 2 步)。
+- 协议已生成:`MatchServiceListBattleReports` 消息号 379、`MatchServiceGetBattleReport` 380,tip 码 `kMatchBattleReportNotFound = 16025`。客户端按自己的流程用默认配置重新生成 C# 即可拿到同样的号。
+- Codex 11-10 续验:battle 库编译与引擎 307/307 通过,三组体积见设计 §9;match build / vet、robot build / vet / 3 个解码用例通过。真 TiDB 与跨区冒烟因资源门槛尚未执行,输入版本与具体证据见设计稿 §17.1。
+- `data/MessageLimiter.xlsx` 的两行限频(379 每 2 秒 1 次、380 每秒 1 次)已导表落入服务端产物,批次 34;运行中加载效果待冒烟。
 - Java 版服务端待做(设计稿 §16);客户端契约两版相同,客户端不用区分。
 
 ## 9. 落码前请在客户端仓核对

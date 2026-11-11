@@ -650,6 +650,8 @@ func TestStrandedFormationsTiDBListsAllClasses(t *testing.T) {
 	strandedFixture(t, s, 2612, func(_ uint64, f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) { f.State, f.PreflightInstanceId = 3, "other-instance" })
 	strandedFixture(t, s, 2613, func(stamp uint64, f *pb.MatchFormationRecord, r *battlepb.CreateBattleRequest) { f.State = 4; clockSkewed(stamp, f, r) })
 	strandedFixture(t, s, 2614, nil)
+	// 2026-11-06:已开局(state 4)的 shape_invalid 也要进巡检计数(原先只数 state 2/3)。
+	strandedFixture(t, s, 2615, func(_ uint64, f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) { f.State, f.PreflightInstanceId = 4, "other-instance" })
 	insertArchivedOnly(t, s, 2613)
 
 	seen := map[uint64]*pb.StrandedFormation{}
@@ -667,7 +669,20 @@ func TestStrandedFormationsTiDBListsAllClasses(t *testing.T) {
 		}
 		cursor = next
 	}
-	require.Len(t, seen, 4, "翻页不漏")
+	require.Len(t, seen, 5, "翻页不漏")
+	require.Equal(t, pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_SHAPE_INVALID, seen[2615].FormationClass)
+	require.EqualValues(t, 4, seen[2615].State)
+	// 巡检计数与列表同一圈定范围(expiredInFlightSQL),数的就是其中 shape_invalid 一类。
+	shapeInvalid := 0
+	for _, f := range seen {
+		if f.FormationClass == pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_SHAPE_INVALID {
+			shapeInvalid++
+		}
+	}
+	stranded, err := s.CountStrandedExpiredFormations(ctx)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, shapeInvalid)
+	require.EqualValues(t, shapeInvalid, stranded, "巡检计数与人工处置列表的 shape_invalid 一类同一口径")
 	require.Equal(t, pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH, seen[2611].FormationClass)
 	require.Empty(t, seen[2611].Refusal)
 	require.Equal(t, pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_SHAPE_INVALID, seen[2612].FormationClass)
@@ -677,7 +692,7 @@ func TestStrandedFormationsTiDBListsAllClasses(t *testing.T) {
 	require.Equal(t, manualRefuseHasTerminalRow, seen[2613].Refusal)
 	require.Equal(t, pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_AUTO, seen[2614].FormationClass)
 	require.Equal(t, manualRefuseAutoRecoverable, seen[2614].Refusal)
-	_, _, _, err := s.ListStrandedFormations(ctx, ExpiredOutcomeCursor{}, StrandedFormationPageMax+1)
+	_, _, _, err = s.ListStrandedFormations(ctx, ExpiredOutcomeCursor{}, StrandedFormationPageMax+1)
 	require.Error(t, err)
 }
 
@@ -757,43 +772,44 @@ func TestManualAbortTiDBUnlockableReportsTicketProblems(t *testing.T) {
 	}
 }
 
-// 成局行协议不是 v1(failed_check=outcome_protocol)、停在 state 2/3 的局还在旧恢复循环里:Pending 照常列出,AcquireWork 每次
-// 到期都续 120 秒租约(awaitsExpiredOutcome 只拦 v1 原件)。retry_at_ms 一变摘要就变,租约有效期内又回 work_lease_active,
-// 所以本工具处置不了这类局,手册写明升级研发。用例把这个行为固定下来:要支持它,得另批让恢复循环对过截止的非 v1 原件停止续租。
-func TestManualAbortTiDBLegacyProtocolFormationKeepsRenewingLease(t *testing.T) {
+// 成局行协议不是 v1(failed_check=outcome_protocol)、停在 state 2/3、已过截止的局(2026-11-06 修复评审 B4 的残余):原先
+// awaitsExpiredOutcome 只拦 v1 原件,这类局仍在 Pending 里,AcquireWork 每次到期都续 120 秒,retry_at_ms 一变摘要就变,
+// 本工具处置不了,只能空转。现在与其余不可裁决的局一样停住:不进 Pending、领不到租约,到期恢复不写终局也不改排期,
+// scene 查询回不会落定(照常解冻),巡检数得到它;摘要稳定,本工具可以处置,处置之后计数回落。
+// 改回只拦 v1,AcquireWork 那一条转红;CountStrandedExpiredFormations 改回只认 v1,计数那一条转红。
+func TestManualAbortTiDBLegacyProtocolFormationStopsRenewingAndIsResolvable(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	const battleID = 2624
 	tickets := strandedFixture(t, s, battleID, func(_ uint64, f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) { f.OutcomeProtocolVersion = 0 })
-	view, _, err := s.ShowStrandedFormation(ctx, battleID)
-	require.NoError(t, err, "锁外看:租约恰好到期的这一刻可处置")
-	require.Equal(t, pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_SHAPE_INVALID, view.FormationClass)
-	require.Equal(t, "outcome_protocol", view.FailedCheck)
+	before, err := s.Formation(ctx, battleID)
+	require.NoError(t, err)
+	require.False(t, TerminalOutcomeExpected(before), "自动路径不裁决它:scene 照常解冻")
 
 	pending, err := s.Pending(ctx)
 	require.NoError(t, err)
-	listed := false
 	for _, f := range pending {
-		listed = listed || f.BattleId == battleID
+		require.NotEqual(t, uint64(battleID), f.BattleId, "过截止、有原件的成局不分终局协议都不进 Pending")
 	}
-	require.True(t, listed, "非 v1 原件不归到期终局恢复,仍在 Pending 候选里")
-	work, err := s.AcquireWork(ctx, battleID)
-	require.NoError(t, err, "恢复循环照常续租")
-	stamp, err := s.Now(ctx)
+	_, err = s.AcquireWork(ctx, battleID)
+	require.ErrorIs(t, err, ErrAwaitingExpiredOutcome, "不再续租")
+	_, _, err = s.RecoverExpiredOutcomes(ctx, 0, 0)
 	require.NoError(t, err)
-	require.Greater(t, work.RetryAtMs, stamp)
+	requireUntouched(t, s, before, tickets, "到期恢复不写终局,也不改 retry_at_ms")
+	stranded, err := s.CountStrandedExpiredFormations(ctx)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, stranded, "巡检数得到它(原先 expiredOutcomeSQL 只认 v1,数不到)")
 
+	view, _, err := s.ShowStrandedFormation(ctx, battleID)
+	require.NoError(t, err, "租约不再变,摘要稳定,可以处置")
+	require.Equal(t, pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_SHAPE_INVALID, view.FormationClass)
+	require.Equal(t, "outcome_protocol", view.FailedCheck)
 	_, _, err = s.ManualAbortFormation(ctx, manualRequest(battleID, view.Digest, true))
-	require.ErrorIs(t, err, ErrManualChanged, "续租改了 retry_at_ms,操作员核对过的摘要已不符")
-	fresh, _, err := s.ShowStrandedFormation(ctx, battleID)
-	require.Equal(t, manualRefuseWorkLeaseActive, ManualRefusalCode(err))
-	_, _, err = s.ManualAbortFormation(ctx, manualRequest(battleID, fresh.Digest, true))
-	require.Equal(t, manualRefuseWorkLeaseActive, ManualRefusalCode(err), "拿到新摘要也一样:租约有效期内一律拒绝")
-	require.Zero(t, terminalRows(t, s, battleID))
-	require.Zero(t, manualRows(t, s, battleID))
-	for _, original := range tickets {
-		require.EqualValues(t, 2, ticketRow(t, s, original.PlayerId).State)
-	}
+	require.NoError(t, err)
+	requireManuallyAborted(t, s, before, tickets)
+	stranded, err = s.CountStrandedExpiredFormations(ctx)
+	require.NoError(t, err)
+	require.Zero(t, stranded, "处置之后计数回落")
 }
 
 // 原件 operation 与成局不符(operation_mismatch)的局人工 ABORT 之后:battle 用原件里的 operation 提交的迟到 COMPLETE 与这份

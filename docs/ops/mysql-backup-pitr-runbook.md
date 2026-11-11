@@ -160,9 +160,10 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 **默认整个地域一起回档**,所有逻辑库回到同一个 T,这样跨库的资产、目录和存档才对得上。只回一个库是例外,要按 §4.1a 处理并人工核账。
 
 1. **挑 T。** T 不能落在搬库或排空的冻结窗口里,否则恢复出来的闸门是关的,写者全部被挡。
-2. **先记下部署参数,再停写。** 部署参数不粘滞,namespace 删掉之后 `k8s_deploy.ps1` 没有现状可比,防误关和形态核对都不会触发,漏传的参数会静默落回默认值。所以先从发布记录取出上一次部署的完整命令,对照线上核实,至少包括 `-ReleaseProfile`、`-Region`、`-DirectoryLogicalShards`、`-SqlClusters`、`-GateRouterMode`、`-ClientEntryMode` 和入口地址、`-RedisSplit`、`-PlayerRedisMasters`、`-NodeOpenFileLimitMode`、`-Login*`。然后逐个 zone 跑 `dev_tools.ps1 -Command k8s-zone-down -ZoneName <zone>`,再用 `kubectl get namespace` 确认已删除。这个命令失败时不报错,不能只看退出码。单独部署的全局服务也要停。
+2. **先记下部署参数,再停写。** 部署参数不粘滞,namespace 删掉之后 `k8s_deploy.ps1` 没有现状可比,防误关和形态核对都不会触发,漏传的参数会静默落回默认值。所以先从发布记录取出上一次部署的完整命令,对照线上核实,至少包括 `-ReleaseProfile`、`-Region`、`-DirectoryLogicalShards`、`-PlayerStoreShards`、`-SqlClusters`、`-GateRouterMode`、`-ClientEntryMode` 和入口地址、`-RedisSplit`、`-PlayerRedisMasters`、`-NodeOpenFileLimitMode`、`-Login*`。然后逐个 zone 跑 `dev_tools.ps1 -Command k8s-zone-down -ZoneName <zone>`,再用 `kubectl get namespace` 确认已删除。这个命令失败时不报错,不能只看退出码。单独部署的全局服务也要停。
 3. **恢复。** TiDB 档按 §4.1b,MySQL 档按 §4.1。先恢复到影子库或新集群核对,原库保留到开流量之后。T 之后搬过库的,恢复到映射现在指向的集群,但备份要用 T 时刻那个集群的。
 4. **核对闸门。** 每个逻辑库执行 `SELECT writable,HEX(freeze_run_id) FROM route_meta`,结果应该是可写、没有冻结标记。
+   **再核对合服映射**:对目录第 0 片跑 `pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRouteDbDsn <第 0 片 DSN>`,退出码应为 0:映射能解析,而且每一行映射在 `zone_merge_history` 里都有对应的合服记录(两张表同库、同一个事务写,回到同一个 T 之后仍然成对)。退出码 1 说明恢复出来的映射表有坏行或来历不明的行,按[不停服合服手册](merge-zone-runbook.md) §5 处理之后再起服。
 5. **跳过 `match-results` 的积压。** T 之后的对局结果和数据库一起丢弃。起服之前把 `match-rating`、`guild-trial` 两个消费组的位点都重置到最新:
 
    ```powershell
@@ -232,8 +233,8 @@ done | mysqlbinlog \
 kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$SHADOW_NS" \
   exec mysql-shadow -- sh -ec \
   'export MYSQL_PWD="${MYSQL_ROOT_PASSWORD:?影子容器未注入 root 凭据}"; exec mysql -uroot "$@"' \
-  mysql-client -e "SELECT COUNT(DISTINCT player_id) FROM zone_101_db.player_store;"
-# zone_101_db 仅为示例,必须替换为本次恢复计划中的真实业务库。
+  mysql-client -e "SELECT COUNT(DISTINCT player_id) FROM player_store_1001000_db.player_store;"
+# player_store_1001000_db 仅为示例(地域 1 的 0 号存档库),必须替换为本次恢复计划中的真实业务库。
 
 # 7a. 若仅是抽取单个玩家:从影子库 dump 该玩家行 → 导回生产
 # 7b. 若是全库回档:停生产 mysql,把影子 PVC 推上去。之后接着做 §4.0 的第 4~7 步。
@@ -277,7 +278,7 @@ TRUNCATE TABLE role_fence;
 | 参与者库 | 目录还记着新主。回档出来的库里可能有过户之前已经结束、回档后又回到未终局的挂起行(合同、资产指令、票) | 清空 `role_fence` 只能修护栏,修不了这些行。要按手册核账,这批角色的挂起行由人工裁决。不能让它们按旧主继续发资产 |
 | 目录 | 目录倒回旧主,参与者库和存档已经按新主写过 | 买卖双方的归属要人工核对,必要时按回档点之后的 `account_role_transfer_receipt` 备份和商城订单重放。抬版本只保证副本能跟上目录,不能证明目录的归属是对的 |
 
-**只回档存档库(`zone_<n>_db`、`player_store_<id>_db`)。** 写权行的代次倒退不用处理,玩家下次认领时代次比库里新。但回档点之后已经提交的资产结果(收件箱、公会、交易的资产指令)在发起方那边已经终局,存档里却没有了,这批玩家要核账。所以能全库一起回就不要只回存档库。
+**只回档存档库(`player_store_<id>_db`;zone 存档库 2026-11-11 已退役,总体方案 §7.2 A17c)。** 写权行的代次倒退不用处理,玩家下次认领时代次比库里新。但回档点之后已经提交的资产结果(收件箱、公会、交易的资产指令)在发起方那边已经终局,存档里却没有了,这批玩家要核账。所以能全库一起回就不要只回存档库。
 
 全库一起回档(§4.0)时目录和参与者是同一时刻,版本一致,不用做上面这些。逻辑库分在多个集群时例外,见下一段。
 
@@ -371,14 +372,14 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$SHADOW_NS" \
   mysqldump-client \
   --no-create-info --skip-add-drop-table --replace --single-transaction --hex-blob \
   --where="player_id=12345678" \
-  zone_101_db player_store \
+  player_store_1001000_db player_store \
   > player-12345678-recovered.sql
 
 # 在生产库 review 后再灌
 kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
   exec -i deploy/mysql -- sh -ec \
   'export MYSQL_PWD="${MYSQL_ROOT_PASSWORD:?容器未注入 root 凭据}"; exec mysql -uroot "$@"' \
-  mysql-client zone_101_db < player-12345678-recovered.sql
+  mysql-client player_store_1001000_db < player-12345678-recovered.sql
 ```
 
 ---
@@ -481,7 +482,7 @@ go run ./cmd/save_barrier_restore -mode apply -schema zone_17_db -zone 17 `
 - 玩家存档只在 `player_store`，`player:{id}:save_barrier` 已删除，恢复之后不用从 SQL 重建屏障（见上方 2026-10-30 说明）。
 - 工具已改名 `go/db/cmd/maintenance_phase`，`-allow-home-fallback` 和全部 `-mode` 都已删除。
 
-合过服的环境（撤没撤销都一样）要回档，做法和没合过服的相同：整体回档按 §4.0，`zone_merged_into` 在目录第 0 片，随目录回到同一个 T；只修一个库按 §4.1a。旧的「屏障重建」步骤只留在[停服版旧手册](../archive/merge-zone-runbook-stop-the-world.md) §10.1 作历史，不要照做。
+合过服的环境（撤没撤销都一样）要回档，做法和没合过服的相同：整体回档按 §4.0，`zone_merged_into` 与合服历史 `zone_merge_history` 都在目录第 0 片，同一个事务写入，随目录回到同一个 T；T 之后的合服和撤销连同它们的历史一起丢弃，要重做就按合服手册再执行一遍。只修一个库按 §4.1a。旧的「屏障重建」步骤只留在[停服版旧手册](../archive/merge-zone-runbook-stop-the-world.md) §10.1 作历史，不要照做。
 
 ### 2026-10-18 第二批：db_first、独立映射和全局落点（实现后须核本批验证收据）
 

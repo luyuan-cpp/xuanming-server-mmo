@@ -307,10 +307,16 @@ Test-Case '契约字面量与 login / proto / 部署生成器的源头一致' {
     $c = Get-GateDrainContract
     $nodeProto = Read-RepoText 'proto/common/base/node.proto'
     Assert-Match -Text $nodeProto -Pattern ("(?m)^\s*{0}\s*=\s*{1}\s*;" -f $c.GateServiceName, $c.GateNodeType) -Because 'gate 的 node_type 必须与 proto 一致,否则 etcd 前缀对不上'
+    # 2026-11-10 起 draining 键名(连同停写标记键名)只在 go/shared/gatepick/marks.go 定义一份,login 与 scene_manager 都引用它。
+    $marksGo = Read-RepoText 'go/shared/gatepick/marks.go'
+    $drainingLiteral = [regex]::Escape(($c.DrainingKeyFormat -replace '\{0\}', '%d'))
+    Assert-Match -Text $marksGo -Pattern ('DrainingKeyFmt\s*=\s*"{0}"' -f $drainingLiteral) -Because 'draining 键名的唯一定义必须与脚本一致'
     $drainGo = Read-RepoText 'go/login/internal/logic/pkg/loginqueue/gatedrain.go'
-    Assert-Match -Text $drainGo -Pattern ('GateDrainingKeyFmt\s*=\s*"{0}"' -f [regex]::Escape(($c.DrainingKeyFormat -replace '\{0\}', '%d'))) -Because 'draining 键名必须与 login 一致'
+    Assert-Match -Text $drainGo -Pattern 'GateDrainingKeyFmt\s*=\s*gatepick\.DrainingKeyFmt' -Because 'login 的 draining 键名是 gatepick 那份的别名'
+    Assert-NotMatch -Text $drainGo -Pattern ('"{0}"' -f $drainingLiteral) -Because 'login 不另写 draining 键名字面量'
     $redirectGo = Read-RepoText 'go/scene_manager/internal/logic/gate_redirect.go'
-    Assert-Match -Text $redirectGo -Pattern ('gateDrainingKeyFmt\s*=\s*"{0}"' -f [regex]::Escape(($c.DrainingKeyFormat -replace '\{0\}', '%d'))) -Because 'scene_manager 跨 zone 重定向读同一个 draining 键(2026-10-18 起),键名必须一致'
+    Assert-Match -Text $redirectGo -Pattern 'gatepick\.DrainingKey\(' -Because 'scene_manager 跨 zone 重定向读同一个 draining 键(2026-10-18 起),经 gatepick 取键名'
+    Assert-NotMatch -Text $redirectGo -Pattern ('"{0}"' -f $drainingLiteral) -Because 'scene_manager 不另写 draining 键名字面量'
     $monitorGo = Read-RepoText 'go/login/internal/logic/pkg/loginqueue/gatedrain_monitor.go'
     Assert-Match -Text $monitorGo -Pattern ('GateDrainedKeyFmt\s*=\s*"{0}"' -f [regex]::Escape(($c.DrainedKeyFormat -replace '\{0\}', '%d'))) -Because 'drained 键名必须与 login 一致'
     Assert-Match -Text $monitorGo -Pattern ('DrainReasonBelowThreshold\s*=\s*"{0}"' -f $c.DrainedReasonBelowThreshold) -Because '判定理由 below_threshold'
@@ -341,7 +347,9 @@ Test-Case '契约字面量与 login / proto / 部署生成器的源头一致' {
     $ttl = Get-YamlScalar -Path (Join-Path $script:RepoRoot 'bin/etc/base_deploy_config.yaml') -KeyPath 'Etcd.NodeTTLSeconds'
     Assert-True -Condition ($ttl.Found -and $c.StaleRecordWaitSeconds -gt [int]$ttl.Value) -Because '等旧记录消失的上限必须覆盖 C++ 节点租约 TTL(强杀后租约自然过期)'
     $cacheGo = Read-RepoText 'go/login/internal/logic/pkg/node/node_cache.go'
-    $period = [regex]::Match($cacheGo, '(?m)^const gateReportPeriod = (?<s>\d+) \* time\.Second')
+    Assert-Match -Text $cacheGo -Pattern '(?m)^const gateReportPeriod = gatepick\.ReportPeriod\s*$' -Because 'login 镜像的上报周期必须引用共享定义'
+    $gatepickGo = Read-RepoText 'go/shared/gatepick/eligibility.go'
+    $period = [regex]::Match($gatepickGo, '(?m)^const ReportPeriod = (?<s>\d+) \* time\.Second')
     $stale = [regex]::Match($cacheGo, '(?m)^const cacheStaleAfter = gateReportPeriod \+ (?<s>\d+)\*time\.Second')
     Assert-True -Condition ($period.Success -and $stale.Success) -Because 'login gate 目录镜像的过期时限定义形状变了要同步这里'
     $staleSeconds = [int]$period.Groups['s'].Value + [int]$stale.Groups['s'].Value

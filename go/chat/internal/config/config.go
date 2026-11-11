@@ -13,7 +13,6 @@ import (
 	"shared/authoritysql"
 	"shared/dbplacement"
 
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -27,10 +26,9 @@ const MaxRpcTimeoutMs int64 = 4000
 
 // Config 是 chat 服务的全部配置。
 //
-// 共享 Redis 库**不在这里重新声明**:嵌入的 zrpc.RpcServerConf 已经带了
-// `Redis redis.RedisKeyConf`(yaml 顶层 `Redis:`),再声明一个同名字段会让
-// go-zero conf 在加载期报 "conflict key Redis"(core/conf/config.go addOrMergeFields)。
-// 所以共享缓存句柄沿用c.Redis.RedisConf；正式Send/Pull只走SQL，不回落到缓存授权或历史。
+// chat 不连 Redis:发送决定、限速与历史都在 SQL 原件库。嵌入的 zrpc.RpcServerConf 自带的 `Redis` 段是 optional,
+// go-zero 只在 Auth=true 时用它(chat 不开 Auth),所以 yaml 与 K8s ConfigMap 都不写这一段;
+// 以前的 ChatRedis 段与两个从不发命令的缓存句柄已于 2026-11-11 删除。
 type Config struct {
 	zrpc.RpcServerConf
 
@@ -54,9 +52,6 @@ type Config struct {
 	// 不推,客户端只能靠拉历史看到新消息(本机不起 Kafka 时)。topic 代号读环境变量 KAFKA_COMMAND_TOPIC_GENERATION
 	// (与命令 topic 同源,shared/kafkacmd),由 start_game.ps1、docker 调试 compose 与 k8s_deploy.ps1 注入。
 	Kafka KafkaConf `json:",optional"`
-
-	// ChatRedis保留既有可丢缓存配置；正式Send/Pull只用SQL原件，不读写旧LIST或授权键。
-	ChatRedis redis.RedisConf `json:",optional"`
 
 	// ZoneId:只影响 etcd 注册路径 <Prefix>/zone/<z>/...(路由服按 NodeInfo 发现本服务)。
 	// 必填且拒 0(契约 §2):chat 是全局服务,业务代码**禁止**读它做分支(契约 §0)。
@@ -128,7 +123,6 @@ func (c *Config) ListenHostPort() (string, uint32, error) {
 //   - Etcd.Key 非空:go-zero 会额外把本服务注册成 chat.rpc key,且被 go_services.ps1 -Zone
 //     按 .z<N> 切分 —— 契约 D-13 规定全局服务 yaml 的 Etcd.Key 显式留空(不能整行省略:go-zero 的
 //     EtcdConf.Key 不是 optional,Etcd 段存在而缺 Key 会在 conf 加载期报错),直到首个 Go 调用方出现;
-//   - Redis.Host为空:既有框架共享缓存句柄配置不完整；业务授权/历史不依赖它;
 //   - 各上限 ≤0:例如 RateLimitPerSecond=0 会拒绝全部发言、HistoryMaxEntries=0 会让
 //     SQL窗口失去必要上限。
 func (c *Config) Validate() error {
@@ -165,9 +159,6 @@ func (c *Config) Validate() error {
 	}
 	if c.Etcd.Key != "" {
 		return fmt.Errorf("Etcd.Key 必须留空(得到 %q):全局服务不注册 go-zero key,契约 D-13", c.Etcd.Key)
-	}
-	if c.Redis.Host == "" {
-		return errors.New("Redis.Host不能为空：既有框架缓存句柄配置须完整，SQL授权与历史不向它回落")
 	}
 
 	positives := []struct {

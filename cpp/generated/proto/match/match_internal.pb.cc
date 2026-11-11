@@ -75,6 +75,16 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
         // ::match::ResolveStrandedFormationResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
+        // ::match::ListPendingBattleScriptsRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
+        // ::match::PendingBattleScript
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
+        // ::match::ListPendingBattleScriptsResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
+        // ::match::ReviewBattleScriptRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
+        // ::match::ReviewBattleScriptResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -708,6 +718,147 @@ const ::_pbi::ClassData* SetSpectateFeaturedResponse_get_class_data() {
   return SetSpectateFeaturedResponse_globals_.GetClassData();
 #else
   return SetSpectateFeaturedResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ReviewBattleScriptResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ReviewBattleScriptResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ReviewBattleScriptResponse, _impl_._has_bits_);
+};
+
+constexpr ReviewBattleScriptResponse::ParseTableT_ ReviewBattleScriptResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ReviewBattleScriptResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::ReviewBattleScriptResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .match.BattleScriptReviewReject reject = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReviewBattleScriptResponse, _impl_.reject_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ReviewBattleScriptResponse, _impl_.reject_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .match.BattleScriptReviewReject reject = 1;
+      {PROTOBUF_FIELD_OFFSET(ReviewBattleScriptResponse, _impl_.reject_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ReviewBattleScriptResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        reject_{static_cast< ::match::BattleScriptReviewReject >(0)} {}
+
+template <typename>
+constexpr ReviewBattleScriptResponse::ReviewBattleScriptResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ReviewBattleScriptResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ReviewBattleScriptResponse(arena);
+}
+constexpr auto ReviewBattleScriptResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ReviewBattleScriptResponse), alignof(ReviewBattleScriptResponse));
+}
+constexpr auto ReviewBattleScriptResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ReviewBattleScriptResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ReviewBattleScriptResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ReviewBattleScriptResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ReviewBattleScriptResponse>(), &ReviewBattleScriptResponse::ByteSizeLong,
+              &ReviewBattleScriptResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ReviewBattleScriptResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[27],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ReviewBattleScriptResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ReviewBattleScriptResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ReviewBattleScriptResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ReviewBattleScriptResponse::InternalGenerateClassData_(
+            _default, &ReviewBattleScriptResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ReviewBattleScriptResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ReviewBattleScriptResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ReviewBattleScriptResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ReviewBattleScriptResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ReviewBattleScriptResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ReviewBattleScriptResponseGlobalsTypeInternal ReviewBattleScriptResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ReviewBattleScriptResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ReviewBattleScriptResponse_globals_.GetClassData();
+#else
+  return ReviewBattleScriptResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1891,6 +2042,198 @@ const ::_pbi::ClassData* SetSpectateFeaturedRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ReviewBattleScriptRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ReviewBattleScriptRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_._has_bits_);
+};
+
+constexpr ReviewBattleScriptRequest::ParseTableT_ ReviewBattleScriptRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::ReviewBattleScriptRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 script_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReviewBattleScriptRequest, _impl_.script_id_), 3>(),
+       {8, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.script_id_)}},
+      // uint32 revision = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReviewBattleScriptRequest, _impl_.revision_), 4>(),
+       {16, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.revision_)}},
+      // bool approve = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ReviewBattleScriptRequest, _impl_.approve_), 5>(),
+       {24, 5, 0,
+        PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.approve_)}},
+      // string reviewer = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.reviewer_)}},
+      // string reason = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.reason_)}},
+      // .common.base.ServiceCallAuth auth = 6;
+      {::_pbi::TcParser::FastMtS1,
+       {50, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.auth_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 script_id = 1;
+      {PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.script_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 revision = 2;
+      {PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.revision_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool approve = 3;
+      {PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.approve_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // string reviewer = 4;
+      {PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.reviewer_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string reason = 5;
+      {PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.reason_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .common.base.ServiceCallAuth auth = 6;
+      {PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.auth_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\37\0\0\0\10\6\0\0"
+      "match.ReviewBattleScriptRequest"
+      "reviewer"
+      "reason"
+    }},
+  };
+}
+
+
+inline constexpr ReviewBattleScriptRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        reviewer_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr},
+        script_id_{::uint64_t{0u}},
+        revision_{0u},
+        approve_{false} {}
+
+template <typename>
+constexpr ReviewBattleScriptRequest::ReviewBattleScriptRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ReviewBattleScriptRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ReviewBattleScriptRequest(arena);
+}
+constexpr auto ReviewBattleScriptRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ReviewBattleScriptRequest), alignof(ReviewBattleScriptRequest));
+}
+constexpr auto ReviewBattleScriptRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ReviewBattleScriptRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ReviewBattleScriptRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ReviewBattleScriptRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ReviewBattleScriptRequest>(), &ReviewBattleScriptRequest::ByteSizeLong,
+              &ReviewBattleScriptRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[26],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ReviewBattleScriptRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ReviewBattleScriptRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ReviewBattleScriptRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ReviewBattleScriptRequest::InternalGenerateClassData_(
+            _default, &ReviewBattleScriptRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ReviewBattleScriptRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ReviewBattleScriptRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ReviewBattleScriptRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ReviewBattleScriptRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ReviewBattleScriptRequestGlobalsTypeInternal ReviewBattleScriptRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ReviewBattleScriptRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ReviewBattleScriptRequest_globals_.GetClassData();
+#else
+  return ReviewBattleScriptRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ResolveStrandedFormationRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<ResolveStrandedFormationRequest>()._impl_._has_bits_);
@@ -2426,6 +2769,160 @@ const ::_pbi::ClassData* ListStrandedFormationsRequest_get_class_data() {
   return ListStrandedFormationsRequest_globals_.GetClassData();
 #else
   return ListStrandedFormationsRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ListPendingBattleScriptsRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ListPendingBattleScriptsRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsRequest, _impl_._has_bits_);
+};
+
+constexpr ListPendingBattleScriptsRequest::ParseTableT_ ListPendingBattleScriptsRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::ListPendingBattleScriptsRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .common.base.ServiceCallAuth auth = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsRequest, _impl_.auth_)}},
+      // uint32 limit = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ListPendingBattleScriptsRequest, _impl_.limit_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsRequest, _impl_.limit_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 limit = 1;
+      {PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsRequest, _impl_.limit_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .common.base.ServiceCallAuth auth = 2;
+      {PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsRequest, _impl_.auth_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ListPendingBattleScriptsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        auth_{nullptr},
+        limit_{0u} {}
+
+template <typename>
+constexpr ListPendingBattleScriptsRequest::ListPendingBattleScriptsRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ListPendingBattleScriptsRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ListPendingBattleScriptsRequest(arena);
+}
+constexpr auto ListPendingBattleScriptsRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ListPendingBattleScriptsRequest), alignof(ListPendingBattleScriptsRequest));
+}
+constexpr auto ListPendingBattleScriptsRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ListPendingBattleScriptsRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ListPendingBattleScriptsRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ListPendingBattleScriptsRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ListPendingBattleScriptsRequest>(), &ListPendingBattleScriptsRequest::ByteSizeLong,
+              &ListPendingBattleScriptsRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[23],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ListPendingBattleScriptsRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ListPendingBattleScriptsRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ListPendingBattleScriptsRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ListPendingBattleScriptsRequest::InternalGenerateClassData_(
+            _default, &ListPendingBattleScriptsRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ListPendingBattleScriptsRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ListPendingBattleScriptsRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ListPendingBattleScriptsRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ListPendingBattleScriptsRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ListPendingBattleScriptsRequestGlobalsTypeInternal ListPendingBattleScriptsRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ListPendingBattleScriptsRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ListPendingBattleScriptsRequest_globals_.GetClassData();
+#else
+  return ListPendingBattleScriptsRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4209,9 +4706,351 @@ const ::_pbi::ClassData* CancelActivityBattleRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class PendingBattleScript::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PendingBattleScript>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_._has_bits_);
+};
+
+constexpr PendingBattleScript::ParseTableT_ PendingBattleScript::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::PendingBattleScript>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 script_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PendingBattleScript, _impl_.script_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.script_id_)}},
+      // uint64 owner_player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PendingBattleScript, _impl_.owner_player_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.owner_player_id_)}},
+      // uint32 revision = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PendingBattleScript, _impl_.revision_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.revision_)}},
+      // .BattleScript content = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.content_)}},
+      // uint64 submitted_ms = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PendingBattleScript, _impl_.submitted_ms_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.submitted_ms_)}},
+      // uint32 approved_revision = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PendingBattleScript, _impl_.approved_revision_), 4>(),
+       {48, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.approved_revision_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 script_id = 1;
+      {PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.script_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 owner_player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.owner_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 revision = 3;
+      {PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.revision_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .BattleScript content = 4;
+      {PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.content_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 submitted_ms = 5;
+      {PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.submitted_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 approved_revision = 6;
+      {PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.approved_revision_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::BattleScript>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::BattleScript_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr PendingBattleScript::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        content_{nullptr},
+        script_id_{::uint64_t{0u}},
+        owner_player_id_{::uint64_t{0u}},
+        revision_{0u},
+        approved_revision_{0u},
+        submitted_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr PendingBattleScript::PendingBattleScript(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PendingBattleScript::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PendingBattleScript(arena);
+}
+constexpr auto PendingBattleScript::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PendingBattleScript), alignof(PendingBattleScript));
+}
+constexpr auto PendingBattleScript::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PendingBattleScript::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PendingBattleScript>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PendingBattleScript::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PendingBattleScript>(), &PendingBattleScript::ByteSizeLong,
+              &PendingBattleScript::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[24],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PendingBattleScriptGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PendingBattleScriptGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PendingBattleScript_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PendingBattleScript::InternalGenerateClassData_(
+            _default, &PendingBattleScript_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PendingBattleScript>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PendingBattleScriptGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PendingBattleScript _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PendingBattleScript>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PendingBattleScriptGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PendingBattleScriptGlobalsTypeInternal PendingBattleScript_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PendingBattleScript_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PendingBattleScript_globals_.GetClassData();
+#else
+  return PendingBattleScript_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ListPendingBattleScriptsResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ListPendingBattleScriptsResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsResponse, _impl_._has_bits_);
+};
+
+constexpr ListPendingBattleScriptsResponse::ParseTableT_ ListPendingBattleScriptsResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::ListPendingBattleScriptsResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated .match.PendingBattleScript scripts = 2;
+      {::_pbi::TcParser::FastMtR1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsResponse, _impl_.scripts_)}},
+      // .match.BattleScriptReviewReject reject = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ListPendingBattleScriptsResponse, _impl_.reject_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsResponse, _impl_.reject_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .match.BattleScriptReviewReject reject = 1;
+      {PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsResponse, _impl_.reject_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // repeated .match.PendingBattleScript scripts = 2;
+      {PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsResponse, _impl_.scripts_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::PendingBattleScript>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::PendingBattleScript_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ListPendingBattleScriptsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        scripts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::ListPendingBattleScriptsResponse,
+            PROTOBUF_FIELD_OFFSET(::match::ListPendingBattleScriptsResponse, _impl_.scripts_)>()
+         }
+        ,
+        reject_{static_cast< ::match::BattleScriptReviewReject >(0)} {}
+
+template <typename>
+constexpr ListPendingBattleScriptsResponse::ListPendingBattleScriptsResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ListPendingBattleScriptsResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ListPendingBattleScriptsResponse(arena);
+}
+constexpr auto ListPendingBattleScriptsResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ListPendingBattleScriptsResponse), alignof(ListPendingBattleScriptsResponse));
+}
+constexpr auto ListPendingBattleScriptsResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ListPendingBattleScriptsResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ListPendingBattleScriptsResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ListPendingBattleScriptsResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ListPendingBattleScriptsResponse>(), &ListPendingBattleScriptsResponse::ByteSizeLong,
+              &ListPendingBattleScriptsResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[25],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ListPendingBattleScriptsResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ListPendingBattleScriptsResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ListPendingBattleScriptsResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ListPendingBattleScriptsResponse::InternalGenerateClassData_(
+            _default, &ListPendingBattleScriptsResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ListPendingBattleScriptsResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ListPendingBattleScriptsResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ListPendingBattleScriptsResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ListPendingBattleScriptsResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ListPendingBattleScriptsResponseGlobalsTypeInternal ListPendingBattleScriptsResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ListPendingBattleScriptsResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ListPendingBattleScriptsResponse_globals_.GetClassData();
+#else
+  return ListPendingBattleScriptsResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace match
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2fmatch_2fmatch_5finternal_2eproto[7];
+    file_level_enum_descriptors_proto_2fmatch_2fmatch_5finternal_2eproto[8];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2fmatch_2fmatch_5finternal_2eproto = nullptr;
 const ::uint32_t
@@ -4516,6 +5355,55 @@ const ::uint32_t
         1,
         2,
         3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::ListPendingBattleScriptsRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::ListPendingBattleScriptsRequest, _impl_.limit_),
+        PROTOBUF_FIELD_OFFSET(::match::ListPendingBattleScriptsRequest, _impl_.auth_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::PendingBattleScript, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::PendingBattleScript, _impl_.script_id_),
+        PROTOBUF_FIELD_OFFSET(::match::PendingBattleScript, _impl_.owner_player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::PendingBattleScript, _impl_.revision_),
+        PROTOBUF_FIELD_OFFSET(::match::PendingBattleScript, _impl_.content_),
+        PROTOBUF_FIELD_OFFSET(::match::PendingBattleScript, _impl_.submitted_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::PendingBattleScript, _impl_.approved_revision_),
+        1,
+        2,
+        3,
+        0,
+        5,
+        4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::ListPendingBattleScriptsResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::ListPendingBattleScriptsResponse, _impl_.reject_),
+        PROTOBUF_FIELD_OFFSET(::match::ListPendingBattleScriptsResponse, _impl_.scripts_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::ReviewBattleScriptRequest, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::ReviewBattleScriptRequest, _impl_.script_id_),
+        PROTOBUF_FIELD_OFFSET(::match::ReviewBattleScriptRequest, _impl_.revision_),
+        PROTOBUF_FIELD_OFFSET(::match::ReviewBattleScriptRequest, _impl_.approve_),
+        PROTOBUF_FIELD_OFFSET(::match::ReviewBattleScriptRequest, _impl_.reviewer_),
+        PROTOBUF_FIELD_OFFSET(::match::ReviewBattleScriptRequest, _impl_.reason_),
+        PROTOBUF_FIELD_OFFSET(::match::ReviewBattleScriptRequest, _impl_.auth_),
+        3,
+        4,
+        5,
+        0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::ReviewBattleScriptResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::ReviewBattleScriptResponse, _impl_.reject_),
+        0,
 };
 
 static const ::_pbi::MigrationSchema
@@ -4543,6 +5431,11 @@ static const ::_pbi::MigrationSchema
         {250, sizeof(::match::ListStrandedFormationsResponse)},
         {265, sizeof(::match::ResolveStrandedFormationRequest)},
         {282, sizeof(::match::ResolveStrandedFormationResponse)},
+        {299, sizeof(::match::ListPendingBattleScriptsRequest)},
+        {306, sizeof(::match::PendingBattleScript)},
+        {321, sizeof(::match::ListPendingBattleScriptsResponse)},
+        {328, sizeof(::match::ReviewBattleScriptRequest)},
+        {343, sizeof(::match::ReviewBattleScriptResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4569,185 +5462,219 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::match::ListStrandedFormationsResponse_globals_,
         &::match::ResolveStrandedFormationRequest_globals_,
         &::match::ResolveStrandedFormationResponse_globals_,
+        &::match::ListPendingBattleScriptsRequest_globals_,
+        &::match::PendingBattleScript_globals_,
+        &::match::ListPendingBattleScriptsResponse_globals_,
+        &::match::ReviewBattleScriptRequest_globals_,
+        &::match::ReviewBattleScriptResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fmatch_2fmatch_5finternal_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n proto/match/match_internal.proto\022\005matc"
     "h\032\033proto/db/proto_option.proto\032\036proto/ba"
-    "ttle/battle_data.proto\032 proto/battle/pla"
-    "yer_battle.proto\032)proto/common/base/serv"
-    "ice_call_auth.proto\"\303\001\n\032StartActivityBat"
-    "tleRequest\022\030\n\020battle_config_id\030\001 \001(\r\022\031\n\021"
-    "member_player_ids\030\002 \003(\004\0220\n\020activity_cont"
-    "ext\030\003 \001(\0132\026.BattleActivityContext\022\022\n\nreq"
-    "uest_id\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034.common.bas"
-    "e.ServiceCallAuth\"\222\001\n\033StartActivityBattl"
-    "eResponse\022+\n\006reject\030\001 \001(\0162\033.match.Activi"
-    "tyBattleReject\022\032\n\022offender_player_id\030\002 \001"
-    "(\004\022\021\n\tbattle_id\030\003 \001(\004\022\027\n\017formation_state"
-    "\030\004 \001(\r\"~\n\033CancelActivityBattleRequest\0223\n"
-    "\010original\030\001 \001(\0132!.match.StartActivityBat"
-    "tleRequest\022*\n\004auth\030\002 \001(\0132\034.common.base.S"
-    "erviceCallAuth\"\342\001\n\034CancelActivityBattleR"
-    "esponse\022\021\n\tbattle_id\030\001 \001(\004\022\031\n\021request_ca"
-    "ncelled\030\002 \001(\010\022\027\n\017formation_state\030\003 \001(\r\022*"
-    "\n\004auth\030\004 \001(\0132\034.common.base.ServiceCallAu"
-    "th\022\026\n\016request_digest\030\005 \001(\t\0227\n\021terminal_d"
-    "ecision\030\006 \001(\0162\034.match.BattleOutcomeDecis"
-    "ion\"\332\001\n\032CommitBattleOutcomeRequest\022\021\n\tba"
-    "ttle_id\030\001 \001(\004\022\036\n\026placement_operation_id\030"
-    "\002 \001(\t\022\032\n\022target_instance_id\030\003 \001(\t\022\032\n\022raw"
-    "_result_payload\030\004 \001(\014\022*\n\004auth\030\005 \001(\0132\034.co"
-    "mmon.base.ServiceCallAuth\022%\n\006replay\030\006 \001("
-    "\0132\025.BattleReplayEnvelope\"\221\001\n\033CommitBattl"
-    "eOutcomeResponse\022.\n\010decision\030\001 \001(\0162\034.mat"
-    "ch.BattleOutcomeDecision\022\026\n\016request_dige"
-    "st\030\002 \001(\t\022*\n\004auth\030\003 \001(\0132\034.common.base.Ser"
-    "viceCallAuth\"m\n\032SetSpectateFeaturedReque"
-    "st\022\021\n\tbattle_id\030\001 \001(\004\022\020\n\010featured\030\002 \001(\010\022"
-    "*\n\004auth\030\003 \001(\0132\034.common.base.ServiceCallA"
-    "uth\"j\n\033SetSpectateFeaturedResponse\022-\n\006re"
-    "ject\030\001 \001(\0162\035.match.SpectateFeaturedRejec"
-    "t\022\034\n\004tier\030\002 \001(\0162\016.eSpectateTier\"P\n\022Trial"
-    "OccupancyRole\022\021\n\tplayer_id\030\001 \001(\004\022\017\n\007acco"
-    "unt\030\002 \001(\t\022\026\n\016owner_revision\030\003 \001(\004\"\227\001\n\034Ac"
-    "quireTrialOccupancyRequest\022\020\n\010owner_id\030\001"
-    " \001(\004\022)\n\006roster\030\002 \003(\0132\031.match.TrialOccupa"
-    "ncyRole\022\016\n\006ttl_ms\030\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034."
-    "common.base.ServiceCallAuth\"h\n\035AcquireTr"
-    "ialOccupancyResponse\022+\n\006reject\030\001 \001(\0162\033.m"
-    "atch.TrialOccupancyReject\022\032\n\022offender_pl"
-    "ayer_id\030\002 \001(\004\"p\n\034ReleaseTrialOccupancyRe"
-    "quest\022\020\n\010owner_id\030\001 \001(\004\022\022\n\nplayer_ids\030\002 "
-    "\003(\004\022*\n\004auth\030\003 \001(\0132\034.common.base.ServiceC"
-    "allAuth\"L\n\035ReleaseTrialOccupancyResponse"
-    "\022+\n\006reject\030\001 \001(\0162\033.match.TrialOccupancyR"
-    "eject\"[\n\032GetBattleCompletionRequest\022\021\n\tb"
-    "attle_id\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.ba"
-    "se.ServiceCallAuth\"\217\001\n\033GetBattleCompleti"
-    "onResponse\022+\n\006reject\030\001 \001(\0162\033.match.Trial"
-    "OccupancyReject\022.\n\010decision\030\002 \001(\0162\034.matc"
-    "h.BattleOutcomeDecision\022\023\n\013raw_payload\030\003"
-    " \001(\014\"a\n GetBattleTerminalDecisionRequest"
-    "\022\021\n\tbattle_id\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.comm"
-    "on.base.ServiceCallAuth\"\301\001\n!GetBattleTer"
-    "minalDecisionResponse\022.\n\010decision\030\001 \001(\0162"
-    "\034.match.BattleOutcomeDecision\022\r\n\005retry\030\002"
-    " \001(\010\022\026\n\016request_digest\030\003 \001(\t\022*\n\004auth\030\004 \001"
-    "(\0132\034.common.base.ServiceCallAuth\022\031\n\021term"
-    "inal_expected\030\005 \001(\010\"i\n\027StrandedFormation"
-    "Ticket\022\021\n\tplayer_id\030\001 \001(\004\022\r\n\005state\030\002 \001(\r"
-    "\022\024\n\014formation_id\030\003 \001(\004\022\026\n\016owner_revision"
-    "\030\004 \001(\004\"\205\007\n\021StrandedFormation\022\021\n\tbattle_i"
-    "d\030\001 \001(\004\022\r\n\005state\030\002 \001(\r\022\024\n\014operation_id\030\003"
-    " \001(\t\022\032\n\022target_instance_id\030\004 \001(\t\022\035\n\025pref"
-    "light_instance_id\030\005 \001(\t\022\022\n\nmatch_mode\030\006 "
-    "\001(\r\022\021\n\tconfig_id\030\007 \001(\r\022\024\n\014member_count\030\010"
-    " \001(\r\022\020\n\010activity\030\t \001(\010\022\022\n\ncreated_ms\030\n \001"
-    "(\004\022\023\n\013deadline_ms\030\013 \001(\004\022\023\n\013retry_at_ms\030\014"
-    " \001(\004\022 \n\030outcome_protocol_version\030\r \001(\r\022#"
-    "\n\033preflight_supported_version\030\016 \001(\r\022(\n a"
-    "dopted_outcome_protocol_version\030\017 \001(\r\022 \n"
-    "\030adopted_outcome_observed\030\020 \001(\010\022\034\n\024creat"
-    "e_request_bytes\030\021 \001(\r\022\030\n\020create_decodabl"
-    "e\030\022 \001(\010\022\034\n\024create_created_at_ms\030\023 \001(\004\022\032\n"
-    "\022create_deadline_ms\030\024 \001(\004\022\036\n\026create_admi"
-    "t_before_ms\030\025 \001(\004\022\033\n\023create_player_count"
-    "\030\026 \001(\r\0226\n\017formation_class\030\027 \001(\0162\035.match."
-    "StrandedFormationClass\022\024\n\014failed_check\030\030"
-    " \001(\t\022\035\n\025effective_deadline_ms\030\031 \001(\004\022\030\n\020h"
-    "as_terminal_row\030\032 \001(\010\0227\n\021terminal_decisi"
-    "on\030\033 \001(\0162\034.match.BattleOutcomeDecision\022\034"
-    "\n\024terminal_source_kind\030\034 \001(\r\022\016\n\006digest\030\035"
-    " \001(\t\022\017\n\007refusal\030\036 \001(\t\022/\n\007tickets\030\037 \003(\0132\036"
-    ".match.StrandedFormationTicket\"\216\001\n\035ListS"
-    "trandedFormationsRequest\022\031\n\021after_retry_"
-    "at_ms\030\001 \001(\004\022\027\n\017after_battle_id\030\002 \001(\004\022\r\n\005"
-    "limit\030\003 \001(\r\022*\n\004auth\030\004 \001(\0132\034.common.base."
-    "ServiceCallAuth\"\257\001\n\036ListStrandedFormatio"
-    "nsResponse\022\r\n\005retry\030\001 \001(\010\022,\n\nformations\030"
-    "\002 \003(\0132\030.match.StrandedFormation\022\030\n\020next_"
-    "retry_at_ms\030\003 \001(\004\022\026\n\016next_battle_id\030\004 \001("
-    "\004\022\016\n\006now_ms\030\005 \001(\004\022\016\n\006target\030\006 \001(\t\"\341\001\n\037Re"
-    "solveStrandedFormationRequest\022\021\n\tbattle_"
-    "id\030\001 \001(\004\022*\n\004mode\030\002 \001(\0162\034.match.StrandedF"
-    "ormationMode\022\025\n\rexpect_digest\030\003 \001(\t\022\025\n\re"
-    "xpect_target\030\004 \001(\t\022\025\n\roperator_name\030\005 \001("
-    "\t\022\016\n\006reason\030\006 \001(\t\022*\n\004auth\030\007 \001(\0132\034.common"
-    ".base.ServiceCallAuth\"\327\001\n ResolveStrande"
-    "dFormationResponse\0220\n\007verdict\030\001 \001(\0162\037.ma"
-    "tch.StrandedFormationVerdict\022+\n\tformatio"
-    "n\030\002 \001(\0132\030.match.StrandedFormation\022\016\n\006now"
-    "_ms\030\003 \001(\004\022\016\n\006target\030\004 \001(\t\022\017\n\007replica\030\005 \001"
-    "(\t\022\017\n\007refusal\030\006 \001(\t\022\022\n\naudit_line\030\007 \001(\t*"
-    "\216\002\n\024ActivityBattleReject\022\037\n\033ACTIVITY_BAT"
-    "TLE_REJECT_NONE\020\000\022+\n\'ACTIVITY_BATTLE_REJ"
-    "ECT_INVALID_ARGUMENT\020\001\022)\n%ACTIVITY_BATTL"
-    "E_REJECT_MEMBER_OFFLINE\020\002\022+\n\'ACTIVITY_BA"
-    "TTLE_REJECT_MEMBER_IN_BATTLE\020\003\022+\n\'ACTIVI"
-    "TY_BATTLE_REJECT_MEMBER_NOT_READY\020\004\022#\n\037A"
-    "CTIVITY_BATTLE_REJECT_INTERNAL\020\005*\205\001\n\025Bat"
-    "tleOutcomeDecision\022#\n\037BATTLE_OUTCOME_DEC"
-    "ISION_UNKNOWN\020\000\022$\n BATTLE_OUTCOME_DECISI"
-    "ON_COMPLETE\020\001\022!\n\035BATTLE_OUTCOME_DECISION"
-    "_ABORT\020\002*\325\001\n\026SpectateFeaturedReject\022!\n\035S"
-    "PECTATE_FEATURED_REJECT_NONE\020\000\022&\n\"SPECTA"
-    "TE_FEATURED_REJECT_NOT_FOUND\020\001\022$\n SPECTA"
-    "TE_FEATURED_REJECT_PRIVATE\020\002\022%\n!SPECTATE"
-    "_FEATURED_REJECT_INTERNAL\020\003\022#\n\037SPECTATE_"
-    "FEATURED_REJECT_DENIED\020\004*\302\001\n\024TrialOccupa"
-    "ncyReject\022\037\n\033TRIAL_OCCUPANCY_REJECT_NONE"
-    "\020\000\022#\n\037TRIAL_OCCUPANCY_REJECT_OCCUPIED\020\001\022"
-    "\037\n\033TRIAL_OCCUPANCY_REJECT_ROLE\020\002\022!\n\035TRIA"
-    "L_OCCUPANCY_REJECT_DENIED\020\003\022 \n\034TRIAL_OCC"
-    "UPANCY_REJECT_RETRY\020\004*\301\001\n\026StrandedFormat"
-    "ionClass\022(\n$STRANDED_FORMATION_CLASS_UNS"
-    "PECIFIED\020\000\022!\n\035STRANDED_FORMATION_CLASS_A"
-    "UTO\020\001\022.\n*STRANDED_FORMATION_CLASS_ORIGIN"
-    "AL_MISMATCH\020\002\022*\n&STRANDED_FORMATION_CLAS"
-    "S_SHAPE_INVALID\020\003*\252\001\n\025StrandedFormationM"
-    "ode\022\'\n#STRANDED_FORMATION_MODE_UNSPECIFI"
-    "ED\020\000\022 \n\034STRANDED_FORMATION_MODE_SHOW\020\001\022#"
-    "\n\037STRANDED_FORMATION_MODE_DRY_RUN\020\002\022!\n\035S"
-    "TRANDED_FORMATION_MODE_ABORT\020\003*\270\002\n\030Stran"
-    "dedFormationVerdict\022*\n&STRANDED_FORMATIO"
-    "N_VERDICT_UNSPECIFIED\020\000\022\'\n#STRANDED_FORM"
-    "ATION_VERDICT_ELIGIBLE\020\001\022&\n\"STRANDED_FOR"
-    "MATION_VERDICT_REFUSED\020\002\022&\n\"STRANDED_FOR"
-    "MATION_VERDICT_CHANGED\020\003\022\'\n#STRANDED_FOR"
-    "MATION_VERDICT_RESOLVED\020\004\022(\n$STRANDED_FO"
-    "RMATION_VERDICT_NOT_FOUND\020\005\022$\n STRANDED_"
-    "FORMATION_VERDICT_RETRY\020\0062\364\007\n\rMatchInter"
-    "nal\022\\\n\023StartActivityBattle\022!.match.Start"
-    "ActivityBattleRequest\032\".match.StartActiv"
-    "ityBattleResponse\022_\n\024CancelActivityBattl"
-    "e\022\".match.CancelActivityBattleRequest\032#."
-    "match.CancelActivityBattleResponse\022\\\n\023Co"
-    "mmitBattleOutcome\022!.match.CommitBattleOu"
-    "tcomeRequest\032\".match.CommitBattleOutcome"
-    "Response\022\\\n\023SetSpectateFeatured\022!.match."
-    "SetSpectateFeaturedRequest\032\".match.SetSp"
-    "ectateFeaturedResponse\022b\n\025AcquireTrialOc"
-    "cupancy\022#.match.AcquireTrialOccupancyReq"
-    "uest\032$.match.AcquireTrialOccupancyRespon"
-    "se\022b\n\025ReleaseTrialOccupancy\022#.match.Rele"
-    "aseTrialOccupancyRequest\032$.match.Release"
-    "TrialOccupancyResponse\022\\\n\023GetBattleCompl"
-    "etion\022!.match.GetBattleCompletionRequest"
-    "\032\".match.GetBattleCompletionResponse\022n\n\031"
-    "GetBattleTerminalDecision\022\'.match.GetBat"
-    "tleTerminalDecisionRequest\032(.match.GetBa"
-    "ttleTerminalDecisionResponse\022e\n\026ListStra"
-    "ndedFormations\022$.match.ListStrandedForma"
-    "tionsRequest\032%.match.ListStrandedFormati"
-    "onsResponse\022k\n\030ResolveStrandedFormation\022"
-    "&.match.ResolveStrandedFormationRequest\032"
-    "\'.match.ResolveStrandedFormationResponse"
-    "B\024Z\013match/match\200\001\000\230\324a\025b\006proto3"
+    "ttle/battle_data.proto\032 proto/battle/bat"
+    "tle_script.proto\032 proto/battle/player_ba"
+    "ttle.proto\032)proto/common/base/service_ca"
+    "ll_auth.proto\"\303\001\n\032StartActivityBattleReq"
+    "uest\022\030\n\020battle_config_id\030\001 \001(\r\022\031\n\021member"
+    "_player_ids\030\002 \003(\004\0220\n\020activity_context\030\003 "
+    "\001(\0132\026.BattleActivityContext\022\022\n\nrequest_i"
+    "d\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034.common.base.Serv"
+    "iceCallAuth\"\222\001\n\033StartActivityBattleRespo"
+    "nse\022+\n\006reject\030\001 \001(\0162\033.match.ActivityBatt"
+    "leReject\022\032\n\022offender_player_id\030\002 \001(\004\022\021\n\t"
+    "battle_id\030\003 \001(\004\022\027\n\017formation_state\030\004 \001(\r"
+    "\"~\n\033CancelActivityBattleRequest\0223\n\010origi"
+    "nal\030\001 \001(\0132!.match.StartActivityBattleReq"
+    "uest\022*\n\004auth\030\002 \001(\0132\034.common.base.Service"
+    "CallAuth\"\342\001\n\034CancelActivityBattleRespons"
+    "e\022\021\n\tbattle_id\030\001 \001(\004\022\031\n\021request_cancelle"
+    "d\030\002 \001(\010\022\027\n\017formation_state\030\003 \001(\r\022*\n\004auth"
+    "\030\004 \001(\0132\034.common.base.ServiceCallAuth\022\026\n\016"
+    "request_digest\030\005 \001(\t\0227\n\021terminal_decisio"
+    "n\030\006 \001(\0162\034.match.BattleOutcomeDecision\"\332\001"
+    "\n\032CommitBattleOutcomeRequest\022\021\n\tbattle_i"
+    "d\030\001 \001(\004\022\036\n\026placement_operation_id\030\002 \001(\t\022"
+    "\032\n\022target_instance_id\030\003 \001(\t\022\032\n\022raw_resul"
+    "t_payload\030\004 \001(\014\022*\n\004auth\030\005 \001(\0132\034.common.b"
+    "ase.ServiceCallAuth\022%\n\006replay\030\006 \001(\0132\025.Ba"
+    "ttleReplayEnvelope\"\221\001\n\033CommitBattleOutco"
+    "meResponse\022.\n\010decision\030\001 \001(\0162\034.match.Bat"
+    "tleOutcomeDecision\022\026\n\016request_digest\030\002 \001"
+    "(\t\022*\n\004auth\030\003 \001(\0132\034.common.base.ServiceCa"
+    "llAuth\"m\n\032SetSpectateFeaturedRequest\022\021\n\t"
+    "battle_id\030\001 \001(\004\022\020\n\010featured\030\002 \001(\010\022*\n\004aut"
+    "h\030\003 \001(\0132\034.common.base.ServiceCallAuth\"j\n"
+    "\033SetSpectateFeaturedResponse\022-\n\006reject\030\001"
+    " \001(\0162\035.match.SpectateFeaturedReject\022\034\n\004t"
+    "ier\030\002 \001(\0162\016.eSpectateTier\"P\n\022TrialOccupa"
+    "ncyRole\022\021\n\tplayer_id\030\001 \001(\004\022\017\n\007account\030\002 "
+    "\001(\t\022\026\n\016owner_revision\030\003 \001(\004\"\227\001\n\034AcquireT"
+    "rialOccupancyRequest\022\020\n\010owner_id\030\001 \001(\004\022)"
+    "\n\006roster\030\002 \003(\0132\031.match.TrialOccupancyRol"
+    "e\022\016\n\006ttl_ms\030\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034.common"
+    ".base.ServiceCallAuth\"h\n\035AcquireTrialOcc"
+    "upancyResponse\022+\n\006reject\030\001 \001(\0162\033.match.T"
+    "rialOccupancyReject\022\032\n\022offender_player_i"
+    "d\030\002 \001(\004\"p\n\034ReleaseTrialOccupancyRequest\022"
+    "\020\n\010owner_id\030\001 \001(\004\022\022\n\nplayer_ids\030\002 \003(\004\022*\n"
+    "\004auth\030\003 \001(\0132\034.common.base.ServiceCallAut"
+    "h\"L\n\035ReleaseTrialOccupancyResponse\022+\n\006re"
+    "ject\030\001 \001(\0162\033.match.TrialOccupancyReject\""
+    "[\n\032GetBattleCompletionRequest\022\021\n\tbattle_"
+    "id\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.base.Ser"
+    "viceCallAuth\"\217\001\n\033GetBattleCompletionResp"
+    "onse\022+\n\006reject\030\001 \001(\0162\033.match.TrialOccupa"
+    "ncyReject\022.\n\010decision\030\002 \001(\0162\034.match.Batt"
+    "leOutcomeDecision\022\023\n\013raw_payload\030\003 \001(\014\"a"
+    "\n GetBattleTerminalDecisionRequest\022\021\n\tba"
+    "ttle_id\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.bas"
+    "e.ServiceCallAuth\"\301\001\n!GetBattleTerminalD"
+    "ecisionResponse\022.\n\010decision\030\001 \001(\0162\034.matc"
+    "h.BattleOutcomeDecision\022\r\n\005retry\030\002 \001(\010\022\026"
+    "\n\016request_digest\030\003 \001(\t\022*\n\004auth\030\004 \001(\0132\034.c"
+    "ommon.base.ServiceCallAuth\022\031\n\021terminal_e"
+    "xpected\030\005 \001(\010\"i\n\027StrandedFormationTicket"
+    "\022\021\n\tplayer_id\030\001 \001(\004\022\r\n\005state\030\002 \001(\r\022\024\n\014fo"
+    "rmation_id\030\003 \001(\004\022\026\n\016owner_revision\030\004 \001(\004"
+    "\"\205\007\n\021StrandedFormation\022\021\n\tbattle_id\030\001 \001("
+    "\004\022\r\n\005state\030\002 \001(\r\022\024\n\014operation_id\030\003 \001(\t\022\032"
+    "\n\022target_instance_id\030\004 \001(\t\022\035\n\025preflight_"
+    "instance_id\030\005 \001(\t\022\022\n\nmatch_mode\030\006 \001(\r\022\021\n"
+    "\tconfig_id\030\007 \001(\r\022\024\n\014member_count\030\010 \001(\r\022\020"
+    "\n\010activity\030\t \001(\010\022\022\n\ncreated_ms\030\n \001(\004\022\023\n\013"
+    "deadline_ms\030\013 \001(\004\022\023\n\013retry_at_ms\030\014 \001(\004\022 "
+    "\n\030outcome_protocol_version\030\r \001(\r\022#\n\033pref"
+    "light_supported_version\030\016 \001(\r\022(\n adopted"
+    "_outcome_protocol_version\030\017 \001(\r\022 \n\030adopt"
+    "ed_outcome_observed\030\020 \001(\010\022\034\n\024create_requ"
+    "est_bytes\030\021 \001(\r\022\030\n\020create_decodable\030\022 \001("
+    "\010\022\034\n\024create_created_at_ms\030\023 \001(\004\022\032\n\022creat"
+    "e_deadline_ms\030\024 \001(\004\022\036\n\026create_admit_befo"
+    "re_ms\030\025 \001(\004\022\033\n\023create_player_count\030\026 \001(\r"
+    "\0226\n\017formation_class\030\027 \001(\0162\035.match.Strand"
+    "edFormationClass\022\024\n\014failed_check\030\030 \001(\t\022\035"
+    "\n\025effective_deadline_ms\030\031 \001(\004\022\030\n\020has_ter"
+    "minal_row\030\032 \001(\010\0227\n\021terminal_decision\030\033 \001"
+    "(\0162\034.match.BattleOutcomeDecision\022\034\n\024term"
+    "inal_source_kind\030\034 \001(\r\022\016\n\006digest\030\035 \001(\t\022\017"
+    "\n\007refusal\030\036 \001(\t\022/\n\007tickets\030\037 \003(\0132\036.match"
+    ".StrandedFormationTicket\"\216\001\n\035ListStrande"
+    "dFormationsRequest\022\031\n\021after_retry_at_ms\030"
+    "\001 \001(\004\022\027\n\017after_battle_id\030\002 \001(\004\022\r\n\005limit\030"
+    "\003 \001(\r\022*\n\004auth\030\004 \001(\0132\034.common.base.Servic"
+    "eCallAuth\"\257\001\n\036ListStrandedFormationsResp"
+    "onse\022\r\n\005retry\030\001 \001(\010\022,\n\nformations\030\002 \003(\0132"
+    "\030.match.StrandedFormation\022\030\n\020next_retry_"
+    "at_ms\030\003 \001(\004\022\026\n\016next_battle_id\030\004 \001(\004\022\016\n\006n"
+    "ow_ms\030\005 \001(\004\022\016\n\006target\030\006 \001(\t\"\341\001\n\037ResolveS"
+    "trandedFormationRequest\022\021\n\tbattle_id\030\001 \001"
+    "(\004\022*\n\004mode\030\002 \001(\0162\034.match.StrandedFormati"
+    "onMode\022\025\n\rexpect_digest\030\003 \001(\t\022\025\n\rexpect_"
+    "target\030\004 \001(\t\022\025\n\roperator_name\030\005 \001(\t\022\016\n\006r"
+    "eason\030\006 \001(\t\022*\n\004auth\030\007 \001(\0132\034.common.base."
+    "ServiceCallAuth\"\327\001\n ResolveStrandedForma"
+    "tionResponse\0220\n\007verdict\030\001 \001(\0162\037.match.St"
+    "randedFormationVerdict\022+\n\tformation\030\002 \001("
+    "\0132\030.match.StrandedFormation\022\016\n\006now_ms\030\003 "
+    "\001(\004\022\016\n\006target\030\004 \001(\t\022\017\n\007replica\030\005 \001(\t\022\017\n\007"
+    "refusal\030\006 \001(\t\022\022\n\naudit_line\030\007 \001(\t\"\\\n\037Lis"
+    "tPendingBattleScriptsRequest\022\r\n\005limit\030\001 "
+    "\001(\r\022*\n\004auth\030\002 \001(\0132\034.common.base.ServiceC"
+    "allAuth\"\244\001\n\023PendingBattleScript\022\021\n\tscrip"
+    "t_id\030\001 \001(\004\022\027\n\017owner_player_id\030\002 \001(\004\022\020\n\010r"
+    "evision\030\003 \001(\r\022\036\n\007content\030\004 \001(\0132\r.BattleS"
+    "cript\022\024\n\014submitted_ms\030\005 \001(\004\022\031\n\021approved_"
+    "revision\030\006 \001(\r\"\200\001\n ListPendingBattleScri"
+    "ptsResponse\022/\n\006reject\030\001 \001(\0162\037.match.Batt"
+    "leScriptReviewReject\022+\n\007scripts\030\002 \003(\0132\032."
+    "match.PendingBattleScript\"\237\001\n\031ReviewBatt"
+    "leScriptRequest\022\021\n\tscript_id\030\001 \001(\004\022\020\n\010re"
+    "vision\030\002 \001(\r\022\017\n\007approve\030\003 \001(\010\022\020\n\010reviewe"
+    "r\030\004 \001(\t\022\016\n\006reason\030\005 \001(\t\022*\n\004auth\030\006 \001(\0132\034."
+    "common.base.ServiceCallAuth\"M\n\032ReviewBat"
+    "tleScriptResponse\022/\n\006reject\030\001 \001(\0162\037.matc"
+    "h.BattleScriptReviewReject*\216\002\n\024ActivityB"
+    "attleReject\022\037\n\033ACTIVITY_BATTLE_REJECT_NO"
+    "NE\020\000\022+\n\'ACTIVITY_BATTLE_REJECT_INVALID_A"
+    "RGUMENT\020\001\022)\n%ACTIVITY_BATTLE_REJECT_MEMB"
+    "ER_OFFLINE\020\002\022+\n\'ACTIVITY_BATTLE_REJECT_M"
+    "EMBER_IN_BATTLE\020\003\022+\n\'ACTIVITY_BATTLE_REJ"
+    "ECT_MEMBER_NOT_READY\020\004\022#\n\037ACTIVITY_BATTL"
+    "E_REJECT_INTERNAL\020\005*\205\001\n\025BattleOutcomeDec"
+    "ision\022#\n\037BATTLE_OUTCOME_DECISION_UNKNOWN"
+    "\020\000\022$\n BATTLE_OUTCOME_DECISION_COMPLETE\020\001"
+    "\022!\n\035BATTLE_OUTCOME_DECISION_ABORT\020\002*\325\001\n\026"
+    "SpectateFeaturedReject\022!\n\035SPECTATE_FEATU"
+    "RED_REJECT_NONE\020\000\022&\n\"SPECTATE_FEATURED_R"
+    "EJECT_NOT_FOUND\020\001\022$\n SPECTATE_FEATURED_R"
+    "EJECT_PRIVATE\020\002\022%\n!SPECTATE_FEATURED_REJ"
+    "ECT_INTERNAL\020\003\022#\n\037SPECTATE_FEATURED_REJE"
+    "CT_DENIED\020\004*\302\001\n\024TrialOccupancyReject\022\037\n\033"
+    "TRIAL_OCCUPANCY_REJECT_NONE\020\000\022#\n\037TRIAL_O"
+    "CCUPANCY_REJECT_OCCUPIED\020\001\022\037\n\033TRIAL_OCCU"
+    "PANCY_REJECT_ROLE\020\002\022!\n\035TRIAL_OCCUPANCY_R"
+    "EJECT_DENIED\020\003\022 \n\034TRIAL_OCCUPANCY_REJECT"
+    "_RETRY\020\004*\301\001\n\026StrandedFormationClass\022(\n$S"
+    "TRANDED_FORMATION_CLASS_UNSPECIFIED\020\000\022!\n"
+    "\035STRANDED_FORMATION_CLASS_AUTO\020\001\022.\n*STRA"
+    "NDED_FORMATION_CLASS_ORIGINAL_MISMATCH\020\002"
+    "\022*\n&STRANDED_FORMATION_CLASS_SHAPE_INVAL"
+    "ID\020\003*\252\001\n\025StrandedFormationMode\022\'\n#STRAND"
+    "ED_FORMATION_MODE_UNSPECIFIED\020\000\022 \n\034STRAN"
+    "DED_FORMATION_MODE_SHOW\020\001\022#\n\037STRANDED_FO"
+    "RMATION_MODE_DRY_RUN\020\002\022!\n\035STRANDED_FORMA"
+    "TION_MODE_ABORT\020\003*\270\002\n\030StrandedFormationV"
+    "erdict\022*\n&STRANDED_FORMATION_VERDICT_UNS"
+    "PECIFIED\020\000\022\'\n#STRANDED_FORMATION_VERDICT"
+    "_ELIGIBLE\020\001\022&\n\"STRANDED_FORMATION_VERDIC"
+    "T_REFUSED\020\002\022&\n\"STRANDED_FORMATION_VERDIC"
+    "T_CHANGED\020\003\022\'\n#STRANDED_FORMATION_VERDIC"
+    "T_RESOLVED\020\004\022(\n$STRANDED_FORMATION_VERDI"
+    "CT_NOT_FOUND\020\005\022$\n STRANDED_FORMATION_VER"
+    "DICT_RETRY\020\006*\342\001\n\030BattleScriptReviewRejec"
+    "t\022$\n BATTLE_SCRIPT_REVIEW_REJECT_NONE\020\000\022"
+    "&\n\"BATTLE_SCRIPT_REVIEW_REJECT_DENIED\020\001\022"
+    "\'\n#BATTLE_SCRIPT_REVIEW_REJECT_INVALID\020\002"
+    "\022%\n!BATTLE_SCRIPT_REVIEW_REJECT_STALE\020\003\022"
+    "(\n$BATTLE_SCRIPT_REVIEW_REJECT_INTERNAL\020"
+    "\0042\274\t\n\rMatchInternal\022\\\n\023StartActivityBatt"
+    "le\022!.match.StartActivityBattleRequest\032\"."
+    "match.StartActivityBattleResponse\022_\n\024Can"
+    "celActivityBattle\022\".match.CancelActivity"
+    "BattleRequest\032#.match.CancelActivityBatt"
+    "leResponse\022\\\n\023CommitBattleOutcome\022!.matc"
+    "h.CommitBattleOutcomeRequest\032\".match.Com"
+    "mitBattleOutcomeResponse\022\\\n\023SetSpectateF"
+    "eatured\022!.match.SetSpectateFeaturedReque"
+    "st\032\".match.SetSpectateFeaturedResponse\022b"
+    "\n\025AcquireTrialOccupancy\022#.match.AcquireT"
+    "rialOccupancyRequest\032$.match.AcquireTria"
+    "lOccupancyResponse\022b\n\025ReleaseTrialOccupa"
+    "ncy\022#.match.ReleaseTrialOccupancyRequest"
+    "\032$.match.ReleaseTrialOccupancyResponse\022\\"
+    "\n\023GetBattleCompletion\022!.match.GetBattleC"
+    "ompletionRequest\032\".match.GetBattleComple"
+    "tionResponse\022n\n\031GetBattleTerminalDecisio"
+    "n\022\'.match.GetBattleTerminalDecisionReque"
+    "st\032(.match.GetBattleTerminalDecisionResp"
+    "onse\022e\n\026ListStrandedFormations\022$.match.L"
+    "istStrandedFormationsRequest\032%.match.Lis"
+    "tStrandedFormationsResponse\022k\n\030ResolveSt"
+    "randedFormation\022&.match.ResolveStrandedF"
+    "ormationRequest\032\'.match.ResolveStrandedF"
+    "ormationResponse\022k\n\030ListPendingBattleScr"
+    "ipts\022&.match.ListPendingBattleScriptsReq"
+    "uest\032\'.match.ListPendingBattleScriptsRes"
+    "ponse\022Y\n\022ReviewBattleScript\022 .match.Revi"
+    "ewBattleScriptRequest\032!.match.ReviewBatt"
+    "leScriptResponseB\024Z\013match/match\200\001\000\230\324a\025b\006"
+    "proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_deps[4] = {
+    descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_deps[5] = {
         &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
+        &::descriptor_table_proto_2fbattle_2fbattle_5fscript_2eproto,
         &::descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2fservice_5fcall_5fauth_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
@@ -4756,13 +5683,13 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5finternal_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto = {
     false,
     false,
-    6870,
+    7966,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5finternal_2eproto,
     "proto/match/match_internal.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_once,
     descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_deps,
-    4,
-    23,
+    5,
+    28,
     schemas,
     file_message_globals,
     TableStruct_proto_2fmatch_2fmatch_5finternal_2eproto::offsets,
@@ -4819,6 +5746,13 @@ StrandedFormationVerdict_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t StrandedFormationVerdict_internal_data_[] = {
     458752u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+BattleScriptReviewReject_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto);
+  return file_level_enum_descriptors_proto_2fmatch_2fmatch_5finternal_2eproto[7];
+}
+PROTOBUF_CONSTINIT const uint32_t BattleScriptReviewReject_internal_data_[] = {
+    327680u, 0u, };
 // ===================================================================
 
 void StartActivityBattleRequest::clear_activity_context() {
@@ -12440,6 +13374,1415 @@ void ResolveStrandedFormationResponse::InternalSwap(ResolveStrandedFormationResp
 }
 
 ::google::protobuf::Metadata ResolveStrandedFormationResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ListPendingBattleScriptsRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+ListPendingBattleScriptsRequest::ListPendingBattleScriptsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListPendingBattleScriptsRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.ListPendingBattleScriptsRequest)
+}
+PROTOBUF_NDEBUG_INLINE ListPendingBattleScriptsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::ListPendingBattleScriptsRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+ListPendingBattleScriptsRequest::ListPendingBattleScriptsRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ListPendingBattleScriptsRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListPendingBattleScriptsRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ListPendingBattleScriptsRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.limit_ = from._impl_.limit_;
+
+  // @@protoc_insertion_point(copy_constructor:match.ListPendingBattleScriptsRequest)
+}
+PROTOBUF_NDEBUG_INLINE ListPendingBattleScriptsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ListPendingBattleScriptsRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, limit_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::limit_));
+}
+ListPendingBattleScriptsRequest::~ListPendingBattleScriptsRequest() {
+  // @@protoc_insertion_point(destructor:match.ListPendingBattleScriptsRequest)
+  SharedDtor(*this);
+}
+inline void ListPendingBattleScriptsRequest::SharedDtor(MessageLite& self) {
+  ListPendingBattleScriptsRequest& this_ = static_cast<ListPendingBattleScriptsRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ListPendingBattleScriptsRequest_class_data_ =
+        ListPendingBattleScriptsRequest::InternalGenerateClassData_(ListPendingBattleScriptsRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListPendingBattleScriptsRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListPendingBattleScriptsRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ListPendingBattleScriptsRequest_class_data_.tc_table);
+  return ListPendingBattleScriptsRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListPendingBattleScriptsRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListPendingBattleScriptsRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ListPendingBattleScriptsRequest_globals_));
+  return ListPendingBattleScriptsRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ListPendingBattleScriptsRequest::ParseTableT_
+    ListPendingBattleScriptsRequest::_table_ =
+        ListPendingBattleScriptsRequest::InternalGenerateParseTable_(ListPendingBattleScriptsRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ListPendingBattleScriptsRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.ListPendingBattleScriptsRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.auth_ != nullptr);
+    _impl_.auth_->Clear();
+  }
+  _impl_.limit_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ListPendingBattleScriptsRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ListPendingBattleScriptsRequest& this_ = static_cast<const ListPendingBattleScriptsRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ListPendingBattleScriptsRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ListPendingBattleScriptsRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.ListPendingBattleScriptsRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 limit = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_limit(), target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.ListPendingBattleScriptsRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ListPendingBattleScriptsRequest::ByteSizeLong(const MessageLite& base) {
+  const ListPendingBattleScriptsRequest& this_ = static_cast<const ListPendingBattleScriptsRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ListPendingBattleScriptsRequest::ByteSizeLong() const {
+  const ListPendingBattleScriptsRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.ListPendingBattleScriptsRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .common.base.ServiceCallAuth auth = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint32 limit = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_limit());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ListPendingBattleScriptsRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ListPendingBattleScriptsRequest*>(&to_msg);
+  auto& from = static_cast<const ListPendingBattleScriptsRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.ListPendingBattleScriptsRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_limit() != 0) {
+        _this->_impl_.limit_ = from._impl_.limit_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ListPendingBattleScriptsRequest::CopyFrom(const ListPendingBattleScriptsRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.ListPendingBattleScriptsRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ListPendingBattleScriptsRequest::InternalSwap(ListPendingBattleScriptsRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsRequest, _impl_.limit_)
+      + sizeof(ListPendingBattleScriptsRequest::_impl_.limit_)
+      - PROTOBUF_FIELD_OFFSET(ListPendingBattleScriptsRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata ListPendingBattleScriptsRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void PendingBattleScript::clear_content() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.content_ != nullptr) _impl_.content_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+PendingBattleScript::PendingBattleScript(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PendingBattleScript_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.PendingBattleScript)
+}
+PROTOBUF_NDEBUG_INLINE PendingBattleScript::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::PendingBattleScript& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+PendingBattleScript::PendingBattleScript(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PendingBattleScript& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PendingBattleScript_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PendingBattleScript* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.content_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.content_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, script_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, script_id_),
+           offsetof(Impl_, submitted_ms_) -
+               offsetof(Impl_, script_id_) +
+               sizeof(Impl_::submitted_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:match.PendingBattleScript)
+}
+PROTOBUF_NDEBUG_INLINE PendingBattleScript::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void PendingBattleScript::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, content_),
+           0,
+           offsetof(Impl_, submitted_ms_) -
+               offsetof(Impl_, content_) +
+               sizeof(Impl_::submitted_ms_));
+}
+PendingBattleScript::~PendingBattleScript() {
+  // @@protoc_insertion_point(destructor:match.PendingBattleScript)
+  SharedDtor(*this);
+}
+inline void PendingBattleScript::SharedDtor(MessageLite& self) {
+  PendingBattleScript& this_ = static_cast<PendingBattleScript&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.content_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PendingBattleScript_class_data_ =
+        PendingBattleScript::InternalGenerateClassData_(PendingBattleScript_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PendingBattleScript::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PendingBattleScript_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PendingBattleScript_class_data_.tc_table);
+  return PendingBattleScript_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PendingBattleScript::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PendingBattleScript_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PendingBattleScript_globals_));
+  return PendingBattleScript_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PendingBattleScript::ParseTableT_
+    PendingBattleScript::_table_ =
+        PendingBattleScript::InternalGenerateParseTable_(PendingBattleScript_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PendingBattleScript::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.PendingBattleScript)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.content_ != nullptr);
+    _impl_.content_->Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
+    ::memset(&_impl_.script_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.submitted_ms_) -
+        reinterpret_cast<char*>(&_impl_.script_id_)) + sizeof(_impl_.submitted_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PendingBattleScript::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PendingBattleScript& this_ = static_cast<const PendingBattleScript&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PendingBattleScript::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PendingBattleScript& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.PendingBattleScript)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 script_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_script_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_script_id(), target);
+    }
+  }
+
+  // uint64 owner_player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_owner_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_owner_player_id(), target);
+    }
+  }
+
+  // uint32 revision = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_revision(), target);
+    }
+  }
+
+  // .BattleScript content = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        4, *this_._impl_.content_, this_._impl_.content_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 submitted_ms = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_submitted_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_submitted_ms(), target);
+    }
+  }
+
+  // uint32 approved_revision = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_approved_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_approved_revision(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.PendingBattleScript)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PendingBattleScript::ByteSizeLong(const MessageLite& base) {
+  const PendingBattleScript& this_ = static_cast<const PendingBattleScript&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PendingBattleScript::ByteSizeLong() const {
+  const PendingBattleScript& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.PendingBattleScript)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // .BattleScript content = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.content_);
+    }
+    // uint64 script_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_script_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_script_id());
+      }
+    }
+    // uint64 owner_player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_owner_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_owner_player_id());
+      }
+    }
+    // uint32 revision = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_revision());
+      }
+    }
+    // uint32 approved_revision = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_approved_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_approved_revision());
+      }
+    }
+    // uint64 submitted_ms = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_submitted_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_submitted_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PendingBattleScript::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PendingBattleScript*>(&to_msg);
+  auto& from = static_cast<const PendingBattleScript&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.PendingBattleScript)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.content_ != nullptr);
+      if (_this->_impl_.content_ == nullptr) {
+        _this->_impl_.content_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.content_);
+      } else {
+        _this->_impl_.content_->MergeFrom(*from._impl_.content_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_script_id() != 0) {
+        _this->_impl_.script_id_ = from._impl_.script_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_owner_player_id() != 0) {
+        _this->_impl_.owner_player_id_ = from._impl_.owner_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_revision() != 0) {
+        _this->_impl_.revision_ = from._impl_.revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_approved_revision() != 0) {
+        _this->_impl_.approved_revision_ = from._impl_.approved_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_submitted_ms() != 0) {
+        _this->_impl_.submitted_ms_ = from._impl_.submitted_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PendingBattleScript::CopyFrom(const PendingBattleScript& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.PendingBattleScript)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PendingBattleScript::InternalSwap(PendingBattleScript* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.submitted_ms_)
+      + sizeof(PendingBattleScript::_impl_.submitted_ms_)
+      - PROTOBUF_FIELD_OFFSET(PendingBattleScript, _impl_.content_)>(
+          reinterpret_cast<char*>(&_impl_.content_),
+          reinterpret_cast<char*>(&other->_impl_.content_));
+}
+
+::google::protobuf::Metadata PendingBattleScript::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ListPendingBattleScriptsResponse::ListPendingBattleScriptsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListPendingBattleScriptsResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.ListPendingBattleScriptsResponse)
+}
+PROTOBUF_NDEBUG_INLINE ListPendingBattleScriptsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::ListPendingBattleScriptsResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        scripts_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::match::ListPendingBattleScriptsResponse,
+              PROTOBUF_FIELD_OFFSET(::match::ListPendingBattleScriptsResponse, _impl_.scripts_)>()
+          , from.scripts_
+        }
+     {}
+
+ListPendingBattleScriptsResponse::ListPendingBattleScriptsResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ListPendingBattleScriptsResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListPendingBattleScriptsResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ListPendingBattleScriptsResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.reject_ = from._impl_.reject_;
+
+  // @@protoc_insertion_point(copy_constructor:match.ListPendingBattleScriptsResponse)
+}
+PROTOBUF_NDEBUG_INLINE ListPendingBattleScriptsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        scripts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::ListPendingBattleScriptsResponse,
+            PROTOBUF_FIELD_OFFSET(::match::ListPendingBattleScriptsResponse, _impl_.scripts_)>()
+         }
+     {}
+
+inline void ListPendingBattleScriptsResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.reject_ = {};
+}
+ListPendingBattleScriptsResponse::~ListPendingBattleScriptsResponse() {
+  // @@protoc_insertion_point(destructor:match.ListPendingBattleScriptsResponse)
+  SharedDtor(*this);
+}
+inline void ListPendingBattleScriptsResponse::SharedDtor(MessageLite& self) {
+  ListPendingBattleScriptsResponse& this_ = static_cast<ListPendingBattleScriptsResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ListPendingBattleScriptsResponse_class_data_ =
+        ListPendingBattleScriptsResponse::InternalGenerateClassData_(ListPendingBattleScriptsResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListPendingBattleScriptsResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListPendingBattleScriptsResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ListPendingBattleScriptsResponse_class_data_.tc_table);
+  return ListPendingBattleScriptsResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListPendingBattleScriptsResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListPendingBattleScriptsResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ListPendingBattleScriptsResponse_globals_));
+  return ListPendingBattleScriptsResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ListPendingBattleScriptsResponse::ParseTableT_
+    ListPendingBattleScriptsResponse::_table_ =
+        ListPendingBattleScriptsResponse::InternalGenerateParseTable_(ListPendingBattleScriptsResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ListPendingBattleScriptsResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.ListPendingBattleScriptsResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.scripts_.Clear();
+  }
+  _impl_.reject_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ListPendingBattleScriptsResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ListPendingBattleScriptsResponse& this_ = static_cast<const ListPendingBattleScriptsResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ListPendingBattleScriptsResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ListPendingBattleScriptsResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.ListPendingBattleScriptsResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .match.BattleScriptReviewReject reject = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_reject() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_reject(), target);
+    }
+  }
+
+  // repeated .match.PendingBattleScript scripts = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_scripts_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_scripts().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              2, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.ListPendingBattleScriptsResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ListPendingBattleScriptsResponse::ByteSizeLong(const MessageLite& base) {
+  const ListPendingBattleScriptsResponse& this_ = static_cast<const ListPendingBattleScriptsResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ListPendingBattleScriptsResponse::ByteSizeLong() const {
+  const ListPendingBattleScriptsResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.ListPendingBattleScriptsResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // repeated .match.PendingBattleScript scripts = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_scripts_size();
+      for (const auto& msg : this_._internal_scripts()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .match.BattleScriptReviewReject reject = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_reject() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_reject());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ListPendingBattleScriptsResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ListPendingBattleScriptsResponse*>(&to_msg);
+  auto& from = static_cast<const ListPendingBattleScriptsResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.ListPendingBattleScriptsResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_scripts()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_scripts());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_reject() != 0) {
+        _this->_impl_.reject_ = from._impl_.reject_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ListPendingBattleScriptsResponse::CopyFrom(const ListPendingBattleScriptsResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.ListPendingBattleScriptsResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ListPendingBattleScriptsResponse::InternalSwap(ListPendingBattleScriptsResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.scripts_.InternalSwap(&other->_impl_.scripts_);
+  swap(_impl_.reject_, other->_impl_.reject_);
+}
+
+::google::protobuf::Metadata ListPendingBattleScriptsResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ReviewBattleScriptRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+ReviewBattleScriptRequest::ReviewBattleScriptRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReviewBattleScriptRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.ReviewBattleScriptRequest)
+}
+PROTOBUF_NDEBUG_INLINE ReviewBattleScriptRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::ReviewBattleScriptRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        reviewer_(arena, from.reviewer_),
+        reason_(arena, from.reason_) {}
+
+ReviewBattleScriptRequest::ReviewBattleScriptRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ReviewBattleScriptRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReviewBattleScriptRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ReviewBattleScriptRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, script_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, script_id_),
+           offsetof(Impl_, approve_) -
+               offsetof(Impl_, script_id_) +
+               sizeof(Impl_::approve_));
+
+  // @@protoc_insertion_point(copy_constructor:match.ReviewBattleScriptRequest)
+}
+PROTOBUF_NDEBUG_INLINE ReviewBattleScriptRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        reviewer_(arena),
+        reason_(arena) {}
+
+inline void ReviewBattleScriptRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, approve_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::approve_));
+}
+ReviewBattleScriptRequest::~ReviewBattleScriptRequest() {
+  // @@protoc_insertion_point(destructor:match.ReviewBattleScriptRequest)
+  SharedDtor(*this);
+}
+inline void ReviewBattleScriptRequest::SharedDtor(MessageLite& self) {
+  ReviewBattleScriptRequest& this_ = static_cast<ReviewBattleScriptRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.reviewer_.Destroy();
+  this_._impl_.reason_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ReviewBattleScriptRequest_class_data_ =
+        ReviewBattleScriptRequest::InternalGenerateClassData_(ReviewBattleScriptRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReviewBattleScriptRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReviewBattleScriptRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ReviewBattleScriptRequest_class_data_.tc_table);
+  return ReviewBattleScriptRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReviewBattleScriptRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReviewBattleScriptRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ReviewBattleScriptRequest_globals_));
+  return ReviewBattleScriptRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ReviewBattleScriptRequest::ParseTableT_
+    ReviewBattleScriptRequest::_table_ =
+        ReviewBattleScriptRequest::InternalGenerateParseTable_(ReviewBattleScriptRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ReviewBattleScriptRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.ReviewBattleScriptRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.reviewer_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.reason_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000038U)) {
+    ::memset(&_impl_.script_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.approve_) -
+        reinterpret_cast<char*>(&_impl_.script_id_)) + sizeof(_impl_.approve_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ReviewBattleScriptRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ReviewBattleScriptRequest& this_ = static_cast<const ReviewBattleScriptRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ReviewBattleScriptRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ReviewBattleScriptRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.ReviewBattleScriptRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 script_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_script_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_script_id(), target);
+    }
+  }
+
+  // uint32 revision = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_revision(), target);
+    }
+  }
+
+  // bool approve = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_approve() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_approve(), target);
+    }
+  }
+
+  // string reviewer = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_reviewer().empty()) {
+      const ::std::string& _s = this_._internal_reviewer();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.ReviewBattleScriptRequest.reviewer");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // string reason = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_reason().empty()) {
+      const ::std::string& _s = this_._internal_reason();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.ReviewBattleScriptRequest.reason");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        6, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.ReviewBattleScriptRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ReviewBattleScriptRequest::ByteSizeLong(const MessageLite& base) {
+  const ReviewBattleScriptRequest& this_ = static_cast<const ReviewBattleScriptRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ReviewBattleScriptRequest::ByteSizeLong() const {
+  const ReviewBattleScriptRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.ReviewBattleScriptRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // string reviewer = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_reviewer().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_reviewer());
+      }
+    }
+    // string reason = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_reason().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_reason());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint64 script_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_script_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_script_id());
+      }
+    }
+    // uint32 revision = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_revision());
+      }
+    }
+    // bool approve = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_approve() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ReviewBattleScriptRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ReviewBattleScriptRequest*>(&to_msg);
+  auto& from = static_cast<const ReviewBattleScriptRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.ReviewBattleScriptRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_reviewer().empty()) {
+        _this->_internal_set_reviewer(from._internal_reviewer());
+      } else {
+        if (_this->_impl_.reviewer_.IsDefault()) {
+          _this->_internal_set_reviewer("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_reason().empty()) {
+        _this->_internal_set_reason(from._internal_reason());
+      } else {
+        if (_this->_impl_.reason_.IsDefault()) {
+          _this->_internal_set_reason("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_script_id() != 0) {
+        _this->_impl_.script_id_ = from._impl_.script_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_revision() != 0) {
+        _this->_impl_.revision_ = from._impl_.revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_approve() != 0) {
+        _this->_impl_.approve_ = from._impl_.approve_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ReviewBattleScriptRequest::CopyFrom(const ReviewBattleScriptRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.ReviewBattleScriptRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ReviewBattleScriptRequest::InternalSwap(ReviewBattleScriptRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reviewer_, &other->_impl_.reviewer_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.approve_)
+      + sizeof(ReviewBattleScriptRequest::_impl_.approve_)
+      - PROTOBUF_FIELD_OFFSET(ReviewBattleScriptRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata ReviewBattleScriptRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ReviewBattleScriptResponse::ReviewBattleScriptResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReviewBattleScriptResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.ReviewBattleScriptResponse)
+}
+ReviewBattleScriptResponse::ReviewBattleScriptResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReviewBattleScriptResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReviewBattleScriptResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ReviewBattleScriptResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ReviewBattleScriptResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.reject_ = {};
+}
+ReviewBattleScriptResponse::~ReviewBattleScriptResponse() {
+  // @@protoc_insertion_point(destructor:match.ReviewBattleScriptResponse)
+  SharedDtor(*this);
+}
+inline void ReviewBattleScriptResponse::SharedDtor(MessageLite& self) {
+  ReviewBattleScriptResponse& this_ = static_cast<ReviewBattleScriptResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ReviewBattleScriptResponse_class_data_ =
+        ReviewBattleScriptResponse::InternalGenerateClassData_(ReviewBattleScriptResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReviewBattleScriptResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReviewBattleScriptResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ReviewBattleScriptResponse_class_data_.tc_table);
+  return ReviewBattleScriptResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReviewBattleScriptResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReviewBattleScriptResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ReviewBattleScriptResponse_globals_));
+  return ReviewBattleScriptResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ReviewBattleScriptResponse::ParseTableT_
+    ReviewBattleScriptResponse::_table_ =
+        ReviewBattleScriptResponse::InternalGenerateParseTable_(ReviewBattleScriptResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ReviewBattleScriptResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.ReviewBattleScriptResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.reject_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ReviewBattleScriptResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ReviewBattleScriptResponse& this_ = static_cast<const ReviewBattleScriptResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ReviewBattleScriptResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ReviewBattleScriptResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.ReviewBattleScriptResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .match.BattleScriptReviewReject reject = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_reject() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_reject(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.ReviewBattleScriptResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ReviewBattleScriptResponse::ByteSizeLong(const MessageLite& base) {
+  const ReviewBattleScriptResponse& this_ = static_cast<const ReviewBattleScriptResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ReviewBattleScriptResponse::ByteSizeLong() const {
+  const ReviewBattleScriptResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.ReviewBattleScriptResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .match.BattleScriptReviewReject reject = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_reject() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_reject());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ReviewBattleScriptResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ReviewBattleScriptResponse*>(&to_msg);
+  auto& from = static_cast<const ReviewBattleScriptResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.ReviewBattleScriptResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_reject() != 0) {
+      _this->_impl_.reject_ = from._impl_.reject_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ReviewBattleScriptResponse::CopyFrom(const ReviewBattleScriptResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.ReviewBattleScriptResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ReviewBattleScriptResponse::InternalSwap(ReviewBattleScriptResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.reject_, other->_impl_.reject_);
+}
+
+::google::protobuf::Metadata ReviewBattleScriptResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

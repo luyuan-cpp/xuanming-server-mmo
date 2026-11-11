@@ -35,7 +35,10 @@
   - 每条落库循环的吞吐:逐条 ≈ 1 / t_row;批量 ≈ B / t_batch(B)。t_row、t_batch 看 `data_service_kafka_consumer_flush_seconds`。
   - 建议值 S=12(待拍板,G2a 规格 Q-5);S=24 时审计单项盘量就是 15GiB,不建议。
 - **Kafka 盘预算必须按整台 broker 算,不能只算审计 topic**。副本数 3、broker 3 台时每台 broker 持有每个分区的一份副本,
-  最坏占用 ≈ Σ_所有分区 min(retention.bytes, 该分区写速 × retention.ms)。按 prod 每分区 512MiB 的上界:
+  最坏占用 ≈ Σ_所有分区 min(retention.bytes, 该分区写速 × retention.ms)。
+  (2026-11-11 更正:db_task 已随存盘直写退役,盘预算现在只算审计、命令与其余 topic 预留,由 `k8s_deploy.ps1` 的 `Get-KafkaDiskPlan` 按配置的分区数算,
+  见 `deploy/k8s/README.md`「Kafka 磁盘预算」;审计 topic 每分区 4GiB,S=3、T=6 时 prod 盘预算 80Gi,每多 9 个审计分区约多 47Gi。)
+  下面是 G2a 时的原始估算,数字已过时:按 prod 每分区 512MiB 的上界,
   审计 (S+T)×512MiB **加上** 每个 zone 的 db_task(10 分区)Z×10×512MiB,再加命令 / game-events 等。
   例:S=12、T=6、Z=2 → 9GiB + 10GiB = 19GiB,**已经顶到 20Gi PVC**(`deploy/k8s/manifests/infra/kafka.yaml`)。
   broker 盘满 = 所有 zone 的存盘与命令一起停,事故面远大于审计本身。所以 **S=12 的前提是同批扩 Kafka PVC**
@@ -97,7 +100,7 @@ g N 的 data-service 保持运行。
 
 - K8s 上「新配置」= 用改过的仓库重新生成并 apply **两份** ConfigMap:`go-svc-data-service-config`(`Kafka.TopicGeneration` / `*Partitions`)
   与 `node-config`(`AuditTopicGeneration`,由 data_service.yaml 镜像)。本仓的生成入口是 `k8s_deploy.ps1 -Command zone-up`
-  (多 zone 用 `all-up`),参数与平时部署相同;之后 `kubectl -n <zone-ns> rollout restart deploy/data-service`。
+  (多 zone 用 `all-up`),参数与平时部署相同;之后 `kubectl -n <zone-ns> rollout restart statefulset/data-service`。
 - **在起任何 scene 之前**核对:`kubectl -n <zone-ns> get cm node-config -o yaml` 里 `AuditTopicGeneration: N+1`,
   `go-svc-data-service-config` 里 `TopicGeneration: N+1`。不要只靠契约测试。
 - 日志应见 `[kafka] consumers started: ... topic=player_snapshot_topic_g<N+1> ... p=S`(2026-11-06 起审计 topic 不再建 marker,没有 `kafka immutable partition marker ensured` 这一行);
@@ -141,20 +144,22 @@ g N 的 data-service 保持运行。
 
 - 快照速率 R = 全球(登录速率 + 登出速率);每分区 R/P(按 key 哈希,近似均匀)。
 - 全球消费吞吐 ≈ min(P, 2Z × M) × 每循环吞吐,同时受全局库写入能力(fsync / 写带宽)封顶。
-- **broker 的每分区 `log.retention.bytes`(prod / prod-like 512MiB、dev 与 compose 128MiB)比 30 天先到**:
-  审计 topic 只声明了 `retention.ms`,积压超过每分区 retention.bytes 的未消费消息会被删。
+- **审计 topic 每分区的 `retention.bytes` 比 30 天先到**(2026-11-11 起 prod / prod-like 4GiB,由 `k8s_deploy.ps1 -AuditKafkaRetentionBytes`
+  的档位缺省渲染进 data-service、启动时设到 topic 上;dev 与 compose 沿用 broker 缺省 128MiB):积压超过它的未消费消息会被删。
   - 积压不丢的上限按**单分区**计(retention 按分区执行,哪个分区先到线就先删哪个):每分区(条)≈ retention.bytes ÷ 平均快照字节;
-    prod、300KB 时约 1750 条,与分区数无关。各分区积压均匀时(全局库故障、全部消费者同时停)合计约为它的 P 倍(P=3 约 5300 条);
-    积压集中在一个分区时(持有它的实例卡住、毒丸行卡住所在分区,Q-3)合计刚过 1750 条那个分区就开始丢 —— 所以不能拿合计去比删除线。
+    4GiB、300KB 时约 1.4 万条(15KB 时约 28 万条),与分区数无关。各分区积压均匀时(全局库故障、全部消费者同时停)合计约为它的 P 倍;
+    积压集中在一个分区时(持有它的实例卡住、毒丸行卡住所在分区,Q-3)那个分区先过线、先丢 —— 所以不能拿合计去比删除线。
   - 换算成时间:**T_safe = P × retention.bytes ÷ (R × 平均快照字节)**(单分区进水速率是 R/P,按单分区算是同一个式子;
-    积压只长在一个分区、其余分区照常消费时也是它)。示例 R=128/s、300KB:P=3 约 41 秒、P=12 约 164 秒;
-    即使快照只有 10KB 也只有约 20 / 80 分钟。broker 按 `log.retention.check.interval.ms`(prod 2 分钟)成段删除,删除是阶梯式的。
+    积压只长在一个分区、其余分区照常消费时也是它)。示例 R=128/s、P=3、4GiB:15KB 约 1.9 小时;300KB 只有约 5.5 分钟。
+    broker 按 `log.retention.check.interval.ms`(prod 2 分钟)成段删除,删除是阶梯式的。
   - T_safe 必须**大于**「最长可容忍的 DB 故障 + supervisor 冷却(`ResumeAfter`,60s)+ 积压追平时间」,否则任何一次 DB 抖动都会丢审计数据。
-  - 反过来算盘:真正保留 30 天要 R × 平均字节 × 30d(示例 R=128/s、300KB 约 98TB;10KB 约 3.3TB),20Gi PVC 差几个数量级。
-    「30 天」在开服速率下只是名义值。**保留策略是开服前必须拍板的阻塞项(G2a 规格 Q-1)**:建议回档负责人先定「可容忍的 DB 故障时长」
-    (例如 2 小时),按上式算出 retention.bytes 与盘量,同批扩 PVC。本次代码只做了**检测**(`retention_gap` 指标 + critical 告警),没改保留策略。
+  - 反过来算盘:真正保留 30 天要 R × 平均字节 × 30d(示例 R=128/s、300KB 约 98TB;10KB 约 3.3TB),「30 天」在开服速率下只是名义值。
+  - **保留策略 2026-11-11 已定(缺口清单第 3 条,原 G2a 规格 Q-1)**:目标是消费端中断 **2 小时**不丢;按容量模型一个 45k zone 峰时
+    单分区进水约 0.5MB/s(快照 15KB),每分区 4GiB(约 2.4 小时),prod 盘预算随之 80Gi。多 zone 时按 zone 数等比加审计分区,单分区进水不变。
+    推导、扩 zone 做法与前提见 `deploy/k8s/README.md`「审计 topic 的 retention.bytes」。前提是估计值:实测快照远大于 15KB 时 T_safe 按比例缩短
+    (300KB 时只剩几分钟),先用 `audit_snapshot` 抽样或关掉一个触发点,再按实测放大 retention.bytes 并同批扩 PVC。
 - `DataServiceAuditLagHigh` 比的是**单分区最大积压**(`data_service_kafka_consumer_lag_max_partition_messages`,探针每轮取各分区积压的最大值;
-  每个 consumer 一条序列,不按分区出指标),阈值 = 单分区删除线条数的 30%(当前 520 ≈ 30% × 512MiB ÷ 300KB 的占位值),
+  每个 consumer 一条序列,不按分区出指标),阈值 = 单分区删除线条数的 30%(当前 4000 ≈ 30% × 4GiB ÷ 300KB,快照按保守的 300KB 算),
   与分区数无关,换代**不用**重算。拿到实测快照大小(`data_service_kafka_consumer_message_bytes`)或放宽 retention.bytes 之后,
   按上面的单分区公式重算并写进告警注释。
   合计积压仍看 `data_service_kafka_consumer_lag_messages`(`DataServiceTxLogLagHigh` 与排空核对用它):它与单分区最大值接近 =
@@ -268,7 +273,7 @@ g N 的 data-service 保持运行。
 ## 9. 待负责人拍板 / 待验证
 
 - **拍板项**(G2a 规格 §15;凡涉及「快照是否必达 / 是否可丢」的都在这里,代码一律未改):
-  Q-1 保留策略(开服前阻塞项)、Q-2 快照 > 约 1MB 在生产端丢弃、Q-3 毒丸行永久卡住消费者(维持 / 跳过)、Q-4 开服期快照策略、
+  Q-1 保留策略(2026-11-11 已定:扛住 2 小时消费中断、审计 topic 每分区 4GiB,见 §4「保留期与积压」)、Q-2 快照 > 约 1MB 在生产端丢弃、Q-3 毒丸行永久卡住消费者(维持 / 跳过)、Q-4 开服期快照策略、
   Q-5 新分区数与换代时机(前提:同批扩 PVC)、Q-6 在线换代、Q-7 何时打开批量、Q-8 单分区停机是否只停该分区、Q-9 内存护栏。
 - **待 Codex 验证**:G2a 的单测、真库集成、部署生成器契约测试、`promtool check rules`、本机端到端冒烟与 L-14 压测,
   命令与通过标准见 G2a 交付说明;本文的步骤在第一次真实换代前没有被演练过。

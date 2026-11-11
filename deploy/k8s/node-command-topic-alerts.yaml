@@ -1,0 +1,54 @@
+# Prometheus alert rules for 控制面命令 topic 的读放大(docs/design/connection-fanout-subsetting-20261106.md §3.5)。
+#
+# 每个 C++ 节点只 assign `<类型>-cmd_g<N>` 的 node_id % P 号分区(node_command_topic.h、node_kafka_command_handler.h),
+# 同分区上别的节点的命令也要解码一遍再丢掉。计数 node_command_consumed_total{node_type, topic, target}:
+# target="own" 是发给本节点、已派发的,"foreign" 是目标过滤判定不是本节点、解码后丢弃的
+# (cpp/libs/engine/core/node/system/node/node_command_consume_stats.h)。topic 是 topic 基名,不带代号;
+# 广播 topic(如 chat-world-bcast)不带目标,只会有 own,不会触发下面的规则。
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/node-command-topic-alerts.yaml
+#
+# Scrape prerequisites:
+#   - C++ 节点的 Prometheus 出口(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400)。
+#   - A ServiceMonitor or PodMonitor pointed at that port.
+#
+# 阈值是经验值(设计稿 §3.5),待压测基线校准。处置沿用 node_command_topic.h 的契约:换代号、换更大的 P(2 的幂),
+# 生产端与消费端按同一配置一起切换;不在同名 topic 上扩分区(扩分区会让 node_id % P 的映射在新旧进程之间对不上)。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-command-topic-alerts
+  labels:
+    app: cpp-nodes
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: node-command-topic.read-amplification
+      interval: 30s
+      rules:
+        # 单节点 foreign 每秒超过 50 条,且 foreign 是 own 的 50 倍以上,持续 10 分钟。乘法写比值:own 为 0 时不会除零,
+        # 此时只要 foreign 超过 50 条/秒就成立。
+        - alert: NodeCommandTopicReadAmplificationHigh
+          expr: |
+            sum by (namespace, pod, node_type, topic) (rate(node_command_consumed_total{target="foreign"}[5m])) > 50
+            and
+            sum by (namespace, pod, node_type, topic) (rate(node_command_consumed_total{target="foreign"}[5m]))
+              > 50 * sum by (namespace, pod, node_type, topic) (rate(node_command_consumed_total{target="own"}[5m]))
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 从 {{ $labels.topic }} 解码的命令大多不是给它的"
+            description: >-
+              这个 {{ $labels.node_type }} 节点每秒解码超过 50 条同分区别的节点的命令,且是发给它自己的 50 倍以上,
+              持续 10 分钟。命令 topic 的分区数 P 相对节点数太小,每个节点白白解码大量命令。
+              按 node_command_topic.h 的契约换代号、换更大的 P(2 的幂),生产端与消费端一起切换;不要在同名 topic 上扩分区。
+              阈值是经验值,压测有基线后校准(connection-fanout-subsetting-20261106.md §3.5)。

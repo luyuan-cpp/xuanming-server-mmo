@@ -1622,8 +1622,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleTokenVerifyResponse final : p
   // accessors -------------------------------------------------------
   enum : int {
     kErrorFieldNumber = 2,
-    kBattleIdFieldNumber = 3,
     kSuccessFieldNumber = 1,
+    kHeartbeatIntervalMsFieldNumber = 4,
+    kBattleIdFieldNumber = 3,
+    kHeartbeatTimeoutMsFieldNumber = 5,
   };
   // string error = 2;
   void clear_error() ;
@@ -1640,16 +1642,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleTokenVerifyResponse final : p
   ::std::string* PROTOBUF_NONNULL _internal_mutable_error();
 
   public:
-  // uint64 battle_id = 3;
-  void clear_battle_id() ;
-  [[nodiscard]] ::uint64_t battle_id() const;
-  void set_battle_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_battle_id() const;
-  void _internal_set_battle_id(::uint64_t value);
-
-  public:
   // bool success = 1;
   void clear_success() ;
   [[nodiscard]] bool success() const;
@@ -1660,11 +1652,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleTokenVerifyResponse final : p
   void _internal_set_success(bool value);
 
   public:
+  // uint32 heartbeat_interval_ms = 4;
+  void clear_heartbeat_interval_ms() ;
+  [[nodiscard]] ::uint32_t heartbeat_interval_ms() const;
+  void set_heartbeat_interval_ms(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_heartbeat_interval_ms() const;
+  void _internal_set_heartbeat_interval_ms(::uint32_t value);
+
+  public:
+  // uint64 battle_id = 3;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint32 heartbeat_timeout_ms = 5;
+  void clear_heartbeat_timeout_ms() ;
+  [[nodiscard]] ::uint32_t heartbeat_timeout_ms() const;
+  void set_heartbeat_timeout_ms(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_heartbeat_timeout_ms() const;
+  void _internal_set_heartbeat_timeout_ms(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleTokenVerifyResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 39,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1694,8 +1716,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleTokenVerifyResponse final : p
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr error_;
-    ::uint64_t battle_id_;
     bool success_;
+    ::uint32_t heartbeat_interval_ms_;
+    ::uint64_t battle_id_;
+    ::uint32_t heartbeat_timeout_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7556,7 +7580,7 @@ inline void BattleTokenVerifyRequest::set_allocated_signature(::std::string* PRO
 inline void BattleTokenVerifyResponse::clear_success() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.success_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline bool BattleTokenVerifyResponse::success() const {
   // @@protoc_insertion_point(field_get:BattleTokenVerifyResponse.success)
@@ -7564,7 +7588,7 @@ inline bool BattleTokenVerifyResponse::success() const {
 }
 inline void BattleTokenVerifyResponse::set_success(bool value) {
   _internal_set_success(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:BattleTokenVerifyResponse.success)
 }
 inline bool BattleTokenVerifyResponse::_internal_success() const {
@@ -7644,7 +7668,7 @@ inline void BattleTokenVerifyResponse::set_allocated_error(::std::string* PROTOB
 inline void BattleTokenVerifyResponse::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t BattleTokenVerifyResponse::battle_id() const {
   // @@protoc_insertion_point(field_get:BattleTokenVerifyResponse.battle_id)
@@ -7652,7 +7676,7 @@ inline ::uint64_t BattleTokenVerifyResponse::battle_id() const {
 }
 inline void BattleTokenVerifyResponse::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:BattleTokenVerifyResponse.battle_id)
 }
 inline ::uint64_t BattleTokenVerifyResponse::_internal_battle_id() const {
@@ -7662,6 +7686,54 @@ inline ::uint64_t BattleTokenVerifyResponse::_internal_battle_id() const {
 inline void BattleTokenVerifyResponse::_internal_set_battle_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = value;
+}
+
+// uint32 heartbeat_interval_ms = 4;
+inline void BattleTokenVerifyResponse::clear_heartbeat_interval_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heartbeat_interval_ms_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t BattleTokenVerifyResponse::heartbeat_interval_ms() const {
+  // @@protoc_insertion_point(field_get:BattleTokenVerifyResponse.heartbeat_interval_ms)
+  return _internal_heartbeat_interval_ms();
+}
+inline void BattleTokenVerifyResponse::set_heartbeat_interval_ms(::uint32_t value) {
+  _internal_set_heartbeat_interval_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:BattleTokenVerifyResponse.heartbeat_interval_ms)
+}
+inline ::uint32_t BattleTokenVerifyResponse::_internal_heartbeat_interval_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.heartbeat_interval_ms_;
+}
+inline void BattleTokenVerifyResponse::_internal_set_heartbeat_interval_ms(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heartbeat_interval_ms_ = value;
+}
+
+// uint32 heartbeat_timeout_ms = 5;
+inline void BattleTokenVerifyResponse::clear_heartbeat_timeout_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heartbeat_timeout_ms_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t BattleTokenVerifyResponse::heartbeat_timeout_ms() const {
+  // @@protoc_insertion_point(field_get:BattleTokenVerifyResponse.heartbeat_timeout_ms)
+  return _internal_heartbeat_timeout_ms();
+}
+inline void BattleTokenVerifyResponse::set_heartbeat_timeout_ms(::uint32_t value) {
+  _internal_set_heartbeat_timeout_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:BattleTokenVerifyResponse.heartbeat_timeout_ms)
+}
+inline ::uint32_t BattleTokenVerifyResponse::_internal_heartbeat_timeout_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.heartbeat_timeout_ms_;
+}
+inline void BattleTokenVerifyResponse::_internal_set_heartbeat_timeout_ms(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heartbeat_timeout_ms_ = value;
 }
 
 // -------------------------------------------------------------------

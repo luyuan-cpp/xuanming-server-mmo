@@ -17,6 +17,8 @@
 
 **第 5 条:控制域 Redis 按 zone 组分实例,不上 Cluster。**
 
+> 2026-11-10 负责人改口径:「我要分布式水平扩展」,按 zone 组分实例不算完成。控制域改上 Redis Cluster,每个 zone 的控制域键共用一个 hash tag `{ctl:<z>}`,设计见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md)。下面第 3 条的不变量照用,它是按 zone 打 tag 的前提;§4.1 的选型与 §4.6 的部署形态由该设计取代,落码后改写本节。
+
 1. 每个 zone 组一个控制域实例 `redis-ctl-g<N>`。组号沿用 zones 配置的 `redisQueueGroup`,一个组是一组 zone 共用的 Redis 单元,排队实例和控制域实例各一个。
 2. 键名一个都不改。原来全服唯一的三把键:选主锁、死节点收尾任务表改按 zone 起名;zone 登记集合 `scene_manager:zones` 删除。
 3. **新不变量**:zone z 的控制域键只由 zone z 的 scene_manager 读写。别的 zone 的事实只从与 zone 无关的介质取:etcd、玩家域 Redis、Kafka、重定向票据(§4.3)。
@@ -110,6 +112,8 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 
 ### 4.1 选型
 
+> 2026-11-10 起本节的结论作废:负责人要求控制域也上 Cluster,见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md)。下面是当时的取舍,落码时改写。
+
 两个候选:按 zone 组分实例;或者上 Redis Cluster,并给控制域键加 `{zone}` hash tag。取前者,理由:
 
 1. **§4.3 的不变量让 Cluster 的长处用不上**。Cluster 的主要好处是一个地址能到任何键;不变量之后,一个进程只碰本 zone 的键,一个实例就够。
@@ -126,13 +130,15 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 
 | 键族 | 放在哪 | 谁读写 |
 |---|---|---|
-| 场景路由 `scene:<id>:node|zone|source|mirror|mirrors|draining|agones_gs|claim`、成员 `instance:<id>:members`、`node:zone:<z>:<n>:*`、`instances:zone:<z>:active`、`scene_nodes:zone:<z>:load`、世界频道 `world_channels:*:zone:<z>:*`、分线目录与线号、神秘商人、`world_init:lock:zone:<z>` | zone 所属组的 `redis-ctl-g<N>` | 本 zone 的 scene_manager;C++ scene 只读分线目录与神秘商人 |
+| 场景路由 `scene:<id>:node|zone|source|mirror|mirrors|draining|agones_gs|claim`、成员 `instance:<id>:members`、`node:zone:<z>:<n>:*`、`instances:zone:<z>:active`、`scene_nodes:zone:<z>:load`、世界频道 `world_channels:*:zone:<z>:*`、分线目录与线号、神秘商人、`world_init:lock:zone:<z>` | zone 所属组的 `redis-ctl-g<N>` | 本 zone 的 scene_manager;C++ scene 只读分线目录、神秘商人,以及归属对账读的本地场景 `scene:<id>:node` 与本节点号的 `node:zone:<z>:<n>:holder`(2026-11-06 / 11-10,scene-node-ownership-reconcile.md) |
 | 选主锁 `scene_manager:leader:lock:zone:<z>`(原 `scene_manager:leader:lock`) | 同上 | 本 zone 的 scene_manager |
 | 死节点收尾任务 `scene_manager:dead_node_reconcile:zone:<z>`(原全服一张) | 同上 | 本 zone 的领导者 |
+| etcd 修订号水位 `scene_manager:etcd_revision_seen:zone:<z>` 与 etcd 纪元 `scene_manager:etcd_epoch:zone:<z>`(2026-11-10,节点号持有者认 etcd 倒退用,scene-node-ownership-reconcile.md §4.6) | 同上 | 本 zone 的领导者写;纪元由各副本写持有者时在同一段 Lua 里读 |
 | `scene_manager:zones` | **删除** | — |
 | gate 排空标记 `gate:<id>:draining|drained` | 核心(G4a §25.3 的 10-23 订正) | scene_manager 只读,经新句柄 `CoreRedis` |
+| gate 停写标记 `gate:<id>:stale`(2026-11-10,键名在 `go/shared/gatepick/marks.go`) | 核心,与排空标记同一实例 | login 各副本写(本 zone 判为停写的 gate,过期 30s、不主动删,经 `Node.RedisClient`);scene_manager 只读,经 `CoreRedis`,与排空标记同一次 MGET(gate-load-balancing-design.md「满载与停写的 gate」) |
 | 落点唤醒频道 | 核心 | C++ scene PUBLISH,guild、trade 订阅 |
-| 玩家域 `player:{<id>}:*`、进场去重 | 玩家域(不动) | 经 `PlayerRedis` |
+| 玩家域 `player:{<id>}:*`、进场去重 | 玩家域(不动) | 经 `PlayerRedis`。没建玩家域集群时各服务的玩家域都回落到核心;scene_manager 的回落取 `CoreRedis`,**不取** `Redis` 段(那是控制域实例),否则 location / owner_epoch 在两个实例上各有一份(2026-11-10 订正,`config.go` `EffectivePlayerRedis`) |
 
 场景号不带 zone。同一组里几个 zone 的场景键放在一起,这没关系:场景号全局唯一,不会撞。按 §4.3,只读写本 zone 的场景。
 
@@ -179,7 +185,7 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 ### 4.5 C++ scene 的控制域句柄
 
 - `game_config.yaml` 新段 `scene_control_redis`(host、port、password、db),对应 `GameConfig.scene_control_redis = 11`,类型复用 `ZoneRedisConfig`。整段缺失时沿用 `zoneredis`,开发环境不用改。口令可被环境变量 `SCENE_CONTROL_REDIS_PASSWORD` 覆盖,值不进日志。
-- scene 进程多一个 `RedisManager`(`tlsSceneControlRedis`),认证与重连契约与 `zoneredis` 相同。只有 `player_scene.cpp` 的分线目录与 `player_mystery_merchant.cpp` 的神秘商人改读它。
+- scene 进程多一个 `RedisManager`(`tlsSceneControlRedis`),认证与重连契约与 `zoneredis` 相同。读它的有 `player_scene.cpp` 的分线目录、`player_mystery_merchant.cpp` 的神秘商人,以及 `world/scene_ownership_reconciler.cpp` 的归属对账(本地场景的 `scene:<id>:node` 与本节点号持有者,只读,scene-node-ownership-reconcile.md)。
 - gate、battle 不连它。落点唤醒的 PUBLISH 仍走 `zoneredis`(核心)。
 
 ### 4.6 K8s
@@ -205,15 +211,21 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 
 1. 跨 zone 传送预检在目标 zone 刚起的几秒内会放过(§4.3 第 2 条)。
 2. 位置落在别的 zone、持有节点已死时,玩家要多等一个再入屏障(§3.5)。
-3. 只给场景号、不给 zone 的 EnterScene 只能解析本组的场景。生产调用方都同时给了 zone(C++ 五处都填 `zone_id`,login 恒给 0 号场景),robot 与 GM 工具的写法未逐个核对。
+3. 只给场景号、不给 zone 的 EnterScene 只能解析本组的场景。2026-11-11 核对过全部调用方,没有人这样调:
+   - `SceneManager.EnterScene` 的 gRPC 调用方只有 C++ scene 与 login,go 其余服务、`tools/`、`robot/`、Java 网关里都没有。
+   - C++ 的请求都填 `zone_id`(例如 `player_scene_handler.cpp` 的 `req.set_zone_id(GetZoneId())`)。
+   - login 的 `SceneId` 恒为 0(`resolveEnterSceneRoute`):要么给本 zone 或归属 zone,要么 `ZoneId` 也为 0,由 scene_manager 按 location 决定去向。
+   - robot 走客户端协议,经 gate 到 scene,最后是上面 C++ 那条路径。
+   以后新增调用方必须同时给 zone。
 4. zone 换组只能停写迁移(§4.1)。
 5. 跨 zone 重定向挑 gate 仍是每次直读 etcd(第 7 条会话加了停写过滤),不在本设计范围。
 6. 全局池服务(data_service、match、battle、client-rpc-router、player_inbox、team)仍是全服 watch。它们实例少、键很少变,读量随 N_cpp 线性增长,不是平方项。
 7. scene_manager 的进场去重键 `enter_scene:dedup:` 不在控制域,本设计没有动它。
-8. Redis 连接总账没有为 `redis-ctl-g<N>` 单列一行:scene-manager 的控制域连接仍记在核心那一行(多算核心、少算控制域),每个 scene 进程多出的一条 `scene_control_redis` 连接也没计入。控制域实例 `MAXCLIENTS` 10000,同组 zone 的 scene-manager 池加 scene 进程数远低于它,但要在压测前补上。
-9. `redis-split-status` 不列控制域实例;`redis-wipe` 已覆盖 `redis-ctl-g<N>`。
-10. 合服:源 zone 下线后没有领导者再处理 `scene_manager:dead_node_reconcile:zone:<S>`(不以 `node:zone:` 开头,不在合服按前缀清的范围里),要由合服流程显式删掉;`tools/merge_zone` 没有改。
-11. 顺带发现:K8s 的 player-locator ConfigMap 没有 `SceneManagerRpc` 段(本机 `player_locator.yaml` 有),断线租约到期时的 LeaveScene 在 K8s 上可能发不出去。不在本设计范围,未核实影响,另行处理。
+8. Redis 连接总账(2026-11-10 补齐):控制域实例单独一份,写路径每组打一行 `Redis ctl connection ledger:`(`Get-RedisCtlConnectionLedgerInputs` / `Write-RedisCtlConnectionLedger`)。每个 scene-manager 副本一个 go-zero 缺省池(按 GOMAXPROCS 2 计 20 条),每个 scene 进程 1 条 `scene_control_redis`;规划档按全部 zone 落在同一组算,高可用形态另按单个代理算一次水位,超水位只告警。核心总账 scene-manager 那一行原样保留:那一池现在是 `CoreRedis`(地址不同,go-zero 另建一个池),不是多算。控制域实例 `MAXCLIENTS` 10000,同组几个 zone 远到不了。
+9. `redis-split-status`(2026-11-10 补齐):每个 zone 另查控制域一段,即 scene-manager 的 `Redis.Host`、node-config 的 `scene_control_redis.host` 是否都是本组实例,`deployment/scene-manager` 是否滚完,本组 `redis-ctl-g<N>` 是否在且就绪(同组只查一次);任一不满足退出码 1。`redis-wipe` 覆盖 `redis-ctl-g<N>`。
+10. 合服:源 zone 下线后没有领导者再处理 `scene_manager:dead_node_reconcile:zone:<S>`。合服流程不清源区的 Redis 热状态(`tools/merge_zone` 只改映射,不连 Redis),这张表与 `scene_nodes:zone:<S>:*` 一样留作没人读的垃圾键,不删:撤销合服、把源区节点拉回来时,源区的领导者照表里剩下的接着收尾,与进程重启后接手同一条路径,删了反而丢掉这些死节点的收尾。想让表里不留任务,收源区 namespace 前看 `scene_manager_dead_node_reconcile_pending{zone_id="<S>"}` 回到 0,写在 [合服手册](../ops/merge-zone-runbook.md) §8 末尾(2026-11-10)。
+11. K8s 的 player-locator ConfigMap 已有 `SceneManagerRpc` 段,键是 `scenemanagerservice.rpc.z<zone>`,只连本 zone 的 scene_manager。这一段由断线重连那条线补上(`infra-reconnect-overview.md` §4 R20),键的规则同 §3.6。
+12. §3.1 收窄带来的选号问题:node_id 的分配键 `<Svc>.rpc/allocated/...` 全服唯一,`NodeAllocator::SelectNodeId` 却只看发现快照里的同类节点。收窄之后 gate、scene 只看得到本 zone 的同类,新节点会逐个去撞别的 zone 已占的号,每撞一次等 1 秒,zone 越多启动越慢。修法由缺口第 30 条批 3 做:分配键 CAS 失败时列出全服已分配的号,下次选号排除(只改 `etcd_manager.cpp`、`etcd_helper`、`node_allocator`),见 [连接扇出子集化](connection-fanout-subsetting-20261106.md) §2 末段与 §3.4(2026-11-10 登记)。
 
 ## 7. 分批与文件
 
@@ -238,9 +250,19 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 - 5c:`k8s_deploy.ps1`(`-RedisCtlMaxMemory`、`-ConfirmRedisCtlSwitch`、控制域实例段、scene-manager ConfigMap 的 `Redis` / `CoreRedis`、node-config 的 `scene_control_redis`、`redis-wipe` 覆盖)、`dev_tools.ps1`、`k8s_image.ps1`、`scene-manager-alerts.yaml`、`docs/ops/scene-node-role-split.md`、新契约测试 `tools/scripts/tests/k8s_redis_ctl_contract.tests.ps1`、`k8s_client_entry_contract.tests.ps1` 的透传键。
 - 测试迁移:Go 单测的 svcCtx 设 `ZoneId = testZoneId` 并装别的 zone 的替身(`installTestZoneFakes`);模拟 zone 2 gate 的用例把进程设成 zone 2;依赖 zone 登记集合的用例改写为「只处理本 zone」。新用例:`foreign_zone_registry_test.go`、`control_zone_keys_contract_test.go`。
 
+2026-11-10 订正(复查 5c 时发现两处缺陷,并补齐 §6 第 8、9 条;未运行):
+
+- **玩家域回落到了控制域实例(数据一致性缺陷)**:K8s 没建玩家域集群时,`PlayerRedis` 段只写池上限、不写地址,scene_manager 的 `EffectivePlayerRedis` 回落到 `Redis` 段。5c 把 `Redis` 段改成 `redis-ctl-g<N>` 之后,scene_manager 的 location、owner_epoch、handoff 落在控制域实例,login、player_locator、data_service 等服务与 C++ scene 的玩家域仍在核心,两份各写各的,跨服务的 CAS 全部失效。改为回落到 `EffectiveCoreRedis()`(写了 `CoreRedis` 就是核心,没写就是 `Redis` 段,开发环境三者同一个实例,行为不变)。回归用例 `TestEffectivePlayerRedisFallsBackToCoreNotControlInstance`;`k8s_redis_ctl_contract` 钉住「不写 Addrs、`CoreRedis` 是核心、C++ 用 zoneredis」这层跨语言依赖。
+- **首次部署会被入口闸拒绝**:`ConvertFrom-RedisCtlLiveYaml` 的参数标了 `[string]`,PowerShell 把传进来的 `$null`(ConfigMap 不存在)转成空串,判成「在而读不出地址」→ `refuse`。不带 `-ConfirmRedisCtlSwitch` 的首次 zone-up / all-up 全部会被拦。参数改为不标类型(同 `ConvertFrom-RedisPurposeLiveYaml`)。契约里原有的 absent 用例本来就会红,只是这套契约还没人跑过。
+- 连接总账与 `redis-split-status` 见 §6 第 8、9 条:`k8s_deploy.ps1` 新增 `Get-RedisCtlConnectionLedgerInputs`、`Write-RedisCtlConnectionLedger`、`Read-LiveConfigMapData`(入口闸与状态命令共用)、`ConvertFrom-RedisCtlNodeConfigYaml`、`Get-RedisCtlZoneProblems`、`Get-RedisCtlZoneStatus`。
+- 诊断文案按 AGENTS §2 改英文:控制域一段的 throw / 告警 / 问题文本,以及 `ConvertFrom-RedisQueueInstanceLive` 的 7 条问题文本。后者去掉了写死的「login / gateway 指向的实例」,因为控制域实例也用它;`k8s_redis_split_contract` 的 9 条匹配同步改了。
+- `deploy/k8s/README.md`:总账与 `redis-split-status` 各加一段,`redis-wipe` 的实例清单补 `redis-ctl-g<N>`。
+
 ## 8. 交给 Codex 的验证
 
 全部在仓库根目录执行,按顺序。C++ MSBuild 必须串行 `/m:1`。
+
+已有的运行证据(2026-11-10 核对原件):第 2 步 Go 由 Codex 11-06 跑过,scene_manager `go vet ./...` 通过,`go test ./... -count=1` 788 个顶层用例 PASS、0 FAIL(PROGRESS 11-06「修正 scene_manager 旧夹具」两条);第 3 步 C++ 在 11-08 命名统一那轮整解后跑过,`cross_zone_test` 458 条全 PASS,其中 `DiscoveryZoneScopeTest.*` 5 条(`build/verification/naming-audit-20261108/cpp-tests/cross_zone_test/cross_zone_test.stdout.log`)。第 4、5 步至今没有运行记录。11-10 的订正(§7 末尾)只碰 `go/scene_manager/internal/config` 与部署脚本,第 2 步要重跑 `internal/config` 包,第 4 步整套首次跑。
 
 1. **协议生成**(第 5b 批改了 `config.proto`):
    `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`
@@ -255,8 +277,11 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
    - 测试工程:`msbuild cpp/tests/cross_zone_test/cross_zone_test.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`,运行 `--gtest_filter=DiscoveryZoneScopeTest.*`。
    - 通过标准:`DiscoveryZoneScopeTest.*` 全绿,既有 etcd / 发现 / 跨 zone 用例不回归。
 4. **部署脚本契约**:`pwsh -File tools/scripts/tests/k8s_redis_ctl_contract.tests.ps1`、`pwsh -File tools/scripts/tests/k8s_redis_split_contract.tests.ps1`、`pwsh -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`、`pwsh -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1`,全部通过。
-5. **冒烟**(kind,dev 档,两个 zone 同组):`pwsh -File tools/scripts/k8s_deploy.ps1 -Command all-up -RedisSplit queue -ConfirmRedisCtlSwitch`,然后:
-   - `kubectl get sts -n <infra> | grep redis-ctl-g0` 就绪;
+   - `k8s_redis_ctl_contract` 里 11-10 新增 5 条(PlayerRedis 回落依赖、总账行、按组合计、超水位告警、空数据键判 present)和 1 处断言;`k8s_redis_split_contract` 里新增 1 条(`Get-RedisCtlZoneProblems`),`Show-RedisSplitStatus` 与 DryRun 两条扩了控制域断言。
+   - 回归核对(可选):把 `EffectivePlayerRedis` 的回落临时改回 `c.Redis`,`TestEffectivePlayerRedisFallsBackToCoreNotControlInstance` 应红;把 `ConvertFrom-RedisCtlLiveYaml` 的参数临时改回 `[string]`,ctl 契约的 absent 用例应红。核对完还原。
+5. **冒烟**(kind,dev 档,两个 zone 同组,全新集群):`pwsh -File tools/scripts/k8s_deploy.ps1 -Command all-up -RedisSplit queue`。全新集群不带 `-ConfirmRedisCtlSwitch` 也必须放行,这一步同时验证首次部署的入口闸;那个开关只用于线上已有地址的切换。然后:
+   - `kubectl get sts -n <infra> | grep redis-ctl-g0` 就绪;`-Command redis-split-status` 退出码 0,每个 zone 都有一行 `ctl_expected=redis-ctl-g0…`;
+   - 玩家域只在核心:robot 进场后,核心 `redis-0` 上能读到该玩家的 `player:{<id>}:location`,`redis-ctl-g0` 上 `--scan --pattern 'player:*'` 为空;
    - 两个 zone 各自 `scene_manager_is_leader` 之和为 1;
    - 每个 zone 的 scene 日志里只有本 zone 的 `Watching prefix: SceneNodeService.rpc/zone/<z>/`;
    - robot 跑一次跨 zone 传送,两条腿都成功。

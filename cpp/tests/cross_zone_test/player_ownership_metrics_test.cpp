@@ -27,6 +27,7 @@ namespace
 		"freeze_cap_reached", "dispatch_window_closed", "mark_sent_destroyed", "mark_sent_client_reset",
 		"destroy_deferred_unsettled_save", "freeze_unstamped", "watchdog_early_fire", "handoff_fastpath_forced",
 		"rolled_back_adopted", "returned_after_grant", "rollback_receipt_anomaly", "sql_owner_rejected",
+		"rollback_unconfirmed",
 	};
 
 	const std::vector<std::string_view> kOwnerEpochKeys = {

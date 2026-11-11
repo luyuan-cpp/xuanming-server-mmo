@@ -198,7 +198,7 @@ type kickRecorder struct {
 	calls []kickCall
 }
 
-func (k *kickRecorder) KickSessionOnGate(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, loginGeneration uint64) error {
+func (k *kickRecorder) KickSessionOnGate(_ context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, loginGeneration uint64) error {
 	k.events.add("Kick")
 	k.mu.Lock()
 	defer k.mu.Unlock()

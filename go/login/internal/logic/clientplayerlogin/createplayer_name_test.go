@@ -512,7 +512,8 @@ func TestCreatePlayerName_StillUnknownReleasesTwice(t *testing.T) {
 	}
 }
 
-// 预算闸(设计 §3.11「剩余预算 ≥1s 则同名重试一次」):名字登记剩下的预算已经放不下一次完整的
+// 预算闸(设计 §3.11 的同名重试门槛,现为「剩余预算 ≥ playernamereg.DefaultReserveTimeout(800ms)则同名重试一次」;
+// 设计稿原写 ≥1s,2026-11-10 起单次预算收到 800ms):名字登记剩下的预算已经放不下一次完整的
 // Reserve(playernamereg.DefaultReserveTimeout)时 ——
 //   - 输入名:第一次照发(发之前不看预算);结果未知也**不再**同名重试,直接按 uncertain 补偿
 //     (立即 + 延迟各释放一次)。预算不够还硬发,多半只是再添一条结果未知的在途 INSERT;

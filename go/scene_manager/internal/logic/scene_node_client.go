@@ -14,6 +14,7 @@ import (
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 	"shared/safego"
+	"shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -37,7 +38,9 @@ var (
 var nodeDialer = defaultNodeDialer
 
 func defaultNodeDialer(_ context.Context, endpoint string) (*grpc.ClientConn, error) {
-	return grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// 裸客户端不经 zrpc,traceparent 由 shared/tracing 的拦截器写(docs/design/distributed-tracing.md §6.2)。
+	return grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(tracing.UnaryClientInterceptor()))
 }
 
 // SetNodeDialerForTest installs a custom dialer and returns a restore func.

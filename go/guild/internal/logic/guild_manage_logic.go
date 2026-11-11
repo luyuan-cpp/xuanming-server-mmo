@@ -391,7 +391,7 @@ func (l *GuildLogic) SetGuildMemberRole(ctx context.Context, req *pb.SetGuildMem
 	}
 	// Changed=false = 任免成同一职位,库里一个字节都没变;此时推送只会让全帮白拉一次,摘要同理不 bump。
 	if res.Changed {
-		l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_ROLE_CHANGED, guildID, actor, target, membersExcept(res.Guild, actor))
+		l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_ROLE_CHANGED, guildID, actor, target, membersExcept(res.Guild, actor))
 		l.bumpSync(membersPlus(res.Guild), scenepb.SyncDomain_SYNC_DOMAIN_GUILD)
 	}
 	return &pb.SetGuildMemberRoleResponse{Guild: l.guildInfoFor(ctx, res.Guild, actor)}, nil
@@ -435,7 +435,7 @@ func (l *GuildLogic) KickGuildMember(ctx context.Context, req *pb.KickGuildMembe
 	// 被踢者已经不在快照里,但他必须收到这条推送 —— 否则他的界面会一直停在
 	// "我还在帮里"的旧状态,直到下次手动刷新。
 	recipients := append(membersExcept(res.Guild, actor), target)
-	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_MEMBER_KICKED, guildID, actor, target, recipients)
+	l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_MEMBER_KICKED, guildID, actor, target, recipients)
 	// 摘要:快照全体(含操作者)+ 已不在快照里的被踢者。
 	l.bumpSync(membersPlus(res.Guild, target), scenepb.SyncDomain_SYNC_DOMAIN_GUILD)
 	return &pb.KickGuildMemberResponse{Guild: l.guildInfoFor(ctx, res.Guild, actor)}, nil
@@ -474,7 +474,7 @@ func (l *GuildLogic) TransferGuildLeader(ctx context.Context, req *pb.TransferGu
 	if tip, err := l.mapWriteErr(ctx, actor, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.TransferGuildLeaderResponse{ErrorMessage: tip}, err
 	}
-	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_LEADER_TRANSFERRED, guildID, actor, target, membersExcept(res.Guild, actor))
+	l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_LEADER_TRANSFERRED, guildID, actor, target, membersExcept(res.Guild, actor))
 	l.bumpSync(membersPlus(res.Guild), scenepb.SyncDomain_SYNC_DOMAIN_GUILD)
 	return &pb.TransferGuildLeaderResponse{Guild: l.guildInfoFor(ctx, res.Guild, actor)}, nil
 }
@@ -529,7 +529,7 @@ func (l *GuildLogic) ApplyJoinGuild(ctx context.Context, req *pb.ApplyJoinGuildR
 	}
 	// 只有**新建行**才推:刷新有效期对审批人来说什么都没变,推过去只会让申请列表闪一下。
 	if res.Inserted && l.applyPushAllowed(ctx, guildID, actor) {
-		l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_APPLICATION_RECEIVED, guildID, actor, actor, res.ReviewerIDs)
+		l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_APPLICATION_RECEIVED, guildID, actor, actor, res.ReviewerIDs)
 	}
 	// 摘要:申请人本人的申请列表总会变(新建一行,或刷新有效期 expire_ms)。
 	l.bumpSync([]uint64{actor}, scenepb.SyncDomain_SYNC_DOMAIN_GUILD_APPLICATION)
@@ -817,10 +817,10 @@ func (l *GuildLogic) ReviewGuildApplication(ctx context.Context, req *pb.ReviewG
 	}
 	if res.Approved {
 		// 快照里已经含新成员,所以"全体除审批人"自然把申请人算进去了。
-		l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_MEMBER_JOINED, guildID, actor, applicant, membersExcept(res.Guild, actor))
+		l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_MEMBER_JOINED, guildID, actor, applicant, membersExcept(res.Guild, actor))
 	} else {
 		// 拒绝只通知申请人本人:告诉全帮"谁被拒了"没有任何价值,只有社交伤害。
-		l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_APPLICATION_REJECTED, guildID, actor, applicant, []uint64{applicant})
+		l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_APPLICATION_REJECTED, guildID, actor, applicant, []uint64{applicant})
 	}
 	l.bumpReviewed(res, applicant)
 	return &pb.ReviewGuildApplicationResponse{Guild: l.guildInfoFor(ctx, res.Guild, actor)}, nil

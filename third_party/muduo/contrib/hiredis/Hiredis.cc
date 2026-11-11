@@ -209,13 +209,14 @@ void Hiredis::connect()
     lastError_ = context_ && context_->errstr ? context_->errstr : "hiredis context allocation failed";
     if (context_) ::redisAsyncFree(context_);
     context_ = NULL;
-    const auto state = maintenance_;
+    // 建连失败不进维护账：建连完成前 command() 一律拒收，这条连接上没有任何已接收的命令。
     CallbackPhase phase(callbackActive_);
     const ConnectCallback callback = connectCb_;
-    state->MarkUnknown();
     if (callback) callback(this, REDIS_ERR);
     return;
   }
+  // 每条新连接换一个代次：推迟执行的 disconnect() 只作用于请求它时的那条连接。
+  ++connectionGeneration_;
 
   context_->ev.addRead = addRead;
   context_->ev.delRead = delRead;
@@ -234,16 +235,27 @@ void Hiredis::connect()
 
 void Hiredis::disconnect()
 {
-  if (connected())
+  if (!connected()) return;
+  loop_->assertInLoopThread();
+  // 析构中的 null-reply 回调可能再请求断线，此时强引用已归零、context 已在 FREEING，直接忽略。
+  const auto self = weak_from_this().lock();
+  if (!self) return;
+  if (loop_->eventHandling())
   {
-    loop_->assertInLoopThread();
-    // 无在途命令时 disconnect 可同步触发业务回调；即使调用方在其中 reset，也须等 C 调用完全返回。
-    // 析构中的 null-reply 回调可能再请求断线，此时强引用已归零、context 已在 FREEING，直接忽略。
-    const auto self = weak_from_this().lock();
-    if (!self) return;
-    LOG_DEBUG << this;
-    ::redisAsyncDisconnect(context_);
+    // I/O 分发期间（含 Windows 在同一轮里跑定时器的阶段）不当场断：没有在途命令时 hiredis 会同步拆除，
+    // 在别的 Channel 的回调里注销本连接的 Channel、关掉 fd，而本连接这一轮可能也排在待分发列表里，
+    // Debug 撞 EventLoop::removeChannel 的断言。同删除器一样推迟到本轮 pending 阶段；那之前发出的命令照常发送，
+    // 干净断开会等它们的应答。期间连接已断开或换了一条（代次不同），推迟的这次什么也不做。
+    loop_->queueInLoop([weakSelf = weak_from_this(), generation = connectionGeneration_]
+    {
+      const auto me = weakSelf.lock();
+      if (me && me->connectionGeneration_ == generation) me->disconnect();
+    });
+    return;
   }
+  LOG_DEBUG << this;
+  // 没有在途命令时会同步触发业务断线回调；调用方即使在其中放掉 owner，self 也保住对象到 C 调用完全返回。
+  ::redisAsyncDisconnect(context_);
 }
 
 int Hiredis::fd() const
@@ -355,10 +367,11 @@ void Hiredis::connectCallback(int status)
   if (status != REDIS_OK)
   {
     // native context 随回调返回自动释放；先存错误并清指针，回调后不再访问 wrapper。
+    // 建连失败不进维护账，理由同 connect() 的同步失败。
     lastError_ = context_->errstr ? context_->errstr : "";
     context_ = NULL;
-    state->MarkUnknown();
   }
+  // 回调抛异常仍记 UNKNOWN：业务处理没有走完，无法证明它发起的写有确定结局。
   try { if (callback) callback(this, status); }
   catch (...) { state->MarkUnknown(); throw; }
 }
@@ -380,7 +393,9 @@ void Hiredis::disconnectCallback(int status)
   lastError_ = context_->errstr ? context_->errstr : "";
   // 先清旧 context；同一 wrapper 的回调内重连由 CallbackPhase 拒绝，调用方可在下一轮显式重连。
   context_ = NULL;
-  if (status != REDIS_OK) state->MarkUnknown();
+  // 出错断线本身不进维护账：hiredis 在调本回调之前，已用空应答回调完全部在途命令，各条按自己的结局记过账
+  // （没有被 notExecuted 判为未执行的记 UNKNOWN）。只按连接事件再记一次，会让一次没有在途命令的断线
+  // 永久卡住维护排空。回调抛异常仍记 UNKNOWN，理由同 connectCallback。
   try { if (callback) callback(this, status); }
   catch (...) { state->MarkUnknown(); throw; }
 }

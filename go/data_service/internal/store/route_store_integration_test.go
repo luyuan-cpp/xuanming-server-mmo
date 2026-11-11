@@ -160,9 +160,10 @@ func TestRouteSchema_MigrationCreatesTablesSeedsMetaAndIsIdempotent(t *testing.T
 	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "first migration")
 
 	wantPK := map[string][]string{
-		store.PlayerRouteTableName:    {"route_shard", "player_id"},
-		store.ZoneMergedIntoTableName: {"src_zone"},
-		store.RouteMetaTableName:      {"id"},
+		store.PlayerRouteTableName:      {"route_shard", "player_id"},
+		store.ZoneMergedIntoTableName:   {"src_zone"},
+		store.ZoneMergeHistoryTableName: {"src_zone", "event_seq"},
+		store.RouteMetaTableName:        {"id"},
 	}
 	before := map[string]string{}
 	for table, pk := range wantPK {

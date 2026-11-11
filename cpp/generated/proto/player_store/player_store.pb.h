@@ -32,6 +32,8 @@
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/common/base/service_call_auth.pb.h"
+#include "proto/common/rollback/player_snapshot.pb.h"
+#include "proto/common/rollback/transaction_log.pb.h"
 #include "proto/db/proto_option.pb.h"
 // @@protoc_insertion_point(includes)
 
@@ -59,6 +61,8 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_prot
 namespace playerstore {
 enum LoadAndClaimResult : int;
 extern const uint32_t LoadAndClaimResult_internal_data_[];
+enum PlayerAuditKind : int;
+extern const uint32_t PlayerAuditKind_internal_data_[];
 enum PlayerStoreKind : int;
 extern const uint32_t PlayerStoreKind_internal_data_[];
 enum SavePlayerResult : int;
@@ -109,6 +113,9 @@ namespace protobuf {
 template <>
 internal::EnumTraitsT<::playerstore::LoadAndClaimResult_internal_data_>
     internal::EnumTraitsImpl::value<::playerstore::LoadAndClaimResult>;
+template <>
+internal::EnumTraitsT<::playerstore::PlayerAuditKind_internal_data_>
+    internal::EnumTraitsImpl::value<::playerstore::PlayerAuditKind>;
 template <>
 internal::EnumTraitsT<::playerstore::PlayerStoreKind_internal_data_>
     internal::EnumTraitsImpl::value<::playerstore::PlayerStoreKind>;
@@ -212,6 +219,47 @@ template <>
 [[nodiscard]] inline bool SavePlayerResult_Parse(
     ::absl::string_view name, SavePlayerResult* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<SavePlayerResult>(SavePlayerResult_descriptor(), name,
+                                           value);
+}
+enum PlayerAuditKind : int {
+  PLAYER_AUDIT_KIND_UNSPECIFIED = 0,
+  PLAYER_AUDIT_KIND_TRANSACTION_LOG = 1,
+  PLAYER_AUDIT_KIND_PLAYER_SNAPSHOT = 2,
+  PlayerAuditKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  PlayerAuditKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t PlayerAuditKind_internal_data_[];
+inline constexpr PlayerAuditKind PlayerAuditKind_MIN =
+    static_cast<PlayerAuditKind>(0);
+inline constexpr PlayerAuditKind PlayerAuditKind_MAX =
+    static_cast<PlayerAuditKind>(2);
+[[nodiscard]] inline bool PlayerAuditKind_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int PlayerAuditKind_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+PlayerAuditKind_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlayerAuditKind) {
+  return PlayerAuditKind_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& PlayerAuditKind_Name(T value) {
+  static_assert(::std::is_same<T, PlayerAuditKind>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to PlayerAuditKind_Name().");
+  return PlayerAuditKind_Name(static_cast<PlayerAuditKind>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& PlayerAuditKind_Name(PlayerAuditKind value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<PlayerAuditKind_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool PlayerAuditKind_Parse(
+    ::absl::string_view name, PlayerAuditKind* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<PlayerAuditKind>(PlayerAuditKind_descriptor(), name,
                                            value);
 }
 enum LoadAndClaimResult : int {
@@ -416,8 +464,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePlayerResponse final : public :
   // accessors -------------------------------------------------------
   enum : int {
     kRowOwnerEpochFieldNumber = 2,
-    kRowSaveSeqFieldNumber = 3,
     kResultFieldNumber = 1,
+    kAuditOutboxWrittenFieldNumber = 4,
+    kRowSaveSeqFieldNumber = 3,
   };
   // uint64 row_owner_epoch = 2;
   void clear_row_owner_epoch() ;
@@ -427,16 +476,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePlayerResponse final : public :
   private:
   ::uint64_t _internal_row_owner_epoch() const;
   void _internal_set_row_owner_epoch(::uint64_t value);
-
-  public:
-  // uint64 row_save_seq = 3;
-  void clear_row_save_seq() ;
-  [[nodiscard]] ::uint64_t row_save_seq() const;
-  void set_row_save_seq(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_row_save_seq() const;
-  void _internal_set_row_save_seq(::uint64_t value);
 
   public:
   // .playerstore.SavePlayerResult result = 1;
@@ -449,11 +488,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePlayerResponse final : public :
   void _internal_set_result(::playerstore::SavePlayerResult value);
 
   public:
+  // bool audit_outbox_written = 4;
+  void clear_audit_outbox_written() ;
+  [[nodiscard]] bool audit_outbox_written() const;
+  void set_audit_outbox_written(bool value);
+
+  private:
+  bool _internal_audit_outbox_written() const;
+  void _internal_set_audit_outbox_written(bool value);
+
+  public:
+  // uint64 row_save_seq = 3;
+  void clear_row_save_seq() ;
+  [[nodiscard]] ::uint64_t row_save_seq() const;
+  void set_row_save_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_row_save_seq() const;
+  void _internal_set_row_save_seq(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:playerstore.SavePlayerResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -483,8 +542,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePlayerResponse final : public :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t row_owner_epoch_;
-    ::uint64_t row_save_seq_;
     int result_;
+    bool audit_outbox_written_;
+    ::uint64_t row_save_seq_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -859,6 +919,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePlayerRequest final : public ::
   // accessors -------------------------------------------------------
   enum : int {
     kRowsFieldNumber = 8,
+    kTransactionLogsFieldNumber = 10,
+    kAuditSnapshotsFieldNumber = 11,
     kInstanceIdFieldNumber = 7,
     kAuthFieldNumber = 1,
     kPlayerIdFieldNumber = 2,
@@ -887,6 +949,48 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePlayerRequest final : public ::
   private:
   const ::google::protobuf::RepeatedPtrField<::playerstore::PlayerStoreRow>& _internal_rows() const;
   ::google::protobuf::RepeatedPtrField<::playerstore::PlayerStoreRow>* PROTOBUF_NONNULL _internal_mutable_rows();
+
+  public:
+  // repeated .TransactionLogEntry transaction_logs = 10;
+  [[nodiscard]] int transaction_logs_size()
+      const;
+  private:
+  int _internal_transaction_logs_size() const;
+
+  public:
+  void clear_transaction_logs() ;
+  [[nodiscard]] const ::TransactionLogEntry& transaction_logs(int index) const;
+  [[nodiscard]] ::TransactionLogEntry* PROTOBUF_NONNULL mutable_transaction_logs(int index);
+  ::TransactionLogEntry* PROTOBUF_NONNULL add_transaction_logs();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::TransactionLogEntry>&
+  transaction_logs() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::TransactionLogEntry>* PROTOBUF_NONNULL
+  mutable_transaction_logs();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::TransactionLogEntry>& _internal_transaction_logs() const;
+  ::google::protobuf::RepeatedPtrField<::TransactionLogEntry>* PROTOBUF_NONNULL _internal_mutable_transaction_logs();
+
+  public:
+  // repeated .PlayerSnapshotEntry audit_snapshots = 11;
+  [[nodiscard]] int audit_snapshots_size()
+      const;
+  private:
+  int _internal_audit_snapshots_size() const;
+
+  public:
+  void clear_audit_snapshots() ;
+  [[nodiscard]] const ::PlayerSnapshotEntry& audit_snapshots(int index) const;
+  [[nodiscard]] ::PlayerSnapshotEntry* PROTOBUF_NONNULL mutable_audit_snapshots(int index);
+  ::PlayerSnapshotEntry* PROTOBUF_NONNULL add_audit_snapshots();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::PlayerSnapshotEntry>&
+  audit_snapshots() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::PlayerSnapshotEntry>* PROTOBUF_NONNULL
+  mutable_audit_snapshots();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::PlayerSnapshotEntry>& _internal_audit_snapshots() const;
+  ::google::protobuf::RepeatedPtrField<::PlayerSnapshotEntry>* PROTOBUF_NONNULL _internal_mutable_audit_snapshots();
 
   public:
   // bytes instance_id = 7;
@@ -984,8 +1088,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePlayerRequest final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
-                          2, 0,
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          4, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1014,6 +1118,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePlayerRequest final : public ::
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::playerstore::PlayerStoreRow > rows_;
+    ::google::protobuf::RepeatedPtrField< ::TransactionLogEntry > transaction_logs_;
+    ::google::protobuf::RepeatedPtrField< ::PlayerSnapshotEntry > audit_snapshots_;
     ::google::protobuf::internal::ArenaStringPtr instance_id_;
     ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
     ::uint64_t player_id_;
@@ -1670,7 +1776,7 @@ inline void PlayerStoreRow::set_allocated_payload(::std::string* PROTOBUF_NULLAB
 
 // .common.base.ServiceCallAuth auth = 1;
 inline bool SavePlayerRequest::has_auth() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
   PROTOBUF_ASSUME(!value || _impl_.auth_ != nullptr);
   return value;
 }
@@ -1691,16 +1797,16 @@ inline void SavePlayerRequest::unsafe_arena_set_allocated_auth(
   }
   _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:playerstore.SavePlayerRequest.auth)
 }
 inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE SavePlayerRequest::release_auth() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::common::base::ServiceCallAuth* released = _impl_.auth_;
   _impl_.auth_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -1720,7 +1826,7 @@ inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE SavePlayerRequest::uns
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:playerstore.SavePlayerRequest.auth)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::common::base::ServiceCallAuth* temp = _impl_.auth_;
   _impl_.auth_ = nullptr;
   return temp;
@@ -1735,7 +1841,7 @@ inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL SavePlayerRequest::_int
 }
 inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL SavePlayerRequest::mutable_auth()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::common::base::ServiceCallAuth* _msg = _internal_mutable_auth();
   // @@protoc_insertion_point(field_mutable:playerstore.SavePlayerRequest.auth)
   return _msg;
@@ -1752,9 +1858,9 @@ inline void SavePlayerRequest::set_allocated_auth(::common::base::ServiceCallAut
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
 
   _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
@@ -1765,7 +1871,7 @@ inline void SavePlayerRequest::set_allocated_auth(::common::base::ServiceCallAut
 inline void SavePlayerRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t SavePlayerRequest::player_id() const {
   // @@protoc_insertion_point(field_get:playerstore.SavePlayerRequest.player_id)
@@ -1773,7 +1879,7 @@ inline ::uint64_t SavePlayerRequest::player_id() const {
 }
 inline void SavePlayerRequest::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:playerstore.SavePlayerRequest.player_id)
 }
 inline ::uint64_t SavePlayerRequest::_internal_player_id() const {
@@ -1789,7 +1895,7 @@ inline void SavePlayerRequest::_internal_set_player_id(::uint64_t value) {
 inline void SavePlayerRequest::clear_storage_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.storage_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t SavePlayerRequest::storage_id() const {
   // @@protoc_insertion_point(field_get:playerstore.SavePlayerRequest.storage_id)
@@ -1797,7 +1903,7 @@ inline ::uint32_t SavePlayerRequest::storage_id() const {
 }
 inline void SavePlayerRequest::set_storage_id(::uint32_t value) {
   _internal_set_storage_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:playerstore.SavePlayerRequest.storage_id)
 }
 inline ::uint32_t SavePlayerRequest::_internal_storage_id() const {
@@ -1813,7 +1919,7 @@ inline void SavePlayerRequest::_internal_set_storage_id(::uint32_t value) {
 inline void SavePlayerRequest::clear_owner_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_epoch_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t SavePlayerRequest::owner_epoch() const {
   // @@protoc_insertion_point(field_get:playerstore.SavePlayerRequest.owner_epoch)
@@ -1821,7 +1927,7 @@ inline ::uint64_t SavePlayerRequest::owner_epoch() const {
 }
 inline void SavePlayerRequest::set_owner_epoch(::uint64_t value) {
   _internal_set_owner_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:playerstore.SavePlayerRequest.owner_epoch)
 }
 inline ::uint64_t SavePlayerRequest::_internal_owner_epoch() const {
@@ -1837,7 +1943,7 @@ inline void SavePlayerRequest::_internal_set_owner_epoch(::uint64_t value) {
 inline void SavePlayerRequest::clear_save_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.save_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t SavePlayerRequest::save_seq() const {
   // @@protoc_insertion_point(field_get:playerstore.SavePlayerRequest.save_seq)
@@ -1845,7 +1951,7 @@ inline ::uint64_t SavePlayerRequest::save_seq() const {
 }
 inline void SavePlayerRequest::set_save_seq(::uint64_t value) {
   _internal_set_save_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:playerstore.SavePlayerRequest.save_seq)
 }
 inline ::uint64_t SavePlayerRequest::_internal_save_seq() const {
@@ -1861,7 +1967,7 @@ inline void SavePlayerRequest::_internal_set_save_seq(::uint64_t value) {
 inline void SavePlayerRequest::clear_schema_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.schema_gen_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t SavePlayerRequest::schema_gen() const {
   // @@protoc_insertion_point(field_get:playerstore.SavePlayerRequest.schema_gen)
@@ -1869,7 +1975,7 @@ inline ::uint32_t SavePlayerRequest::schema_gen() const {
 }
 inline void SavePlayerRequest::set_schema_gen(::uint32_t value) {
   _internal_set_schema_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:playerstore.SavePlayerRequest.schema_gen)
 }
 inline ::uint32_t SavePlayerRequest::_internal_schema_gen() const {
@@ -1885,7 +1991,7 @@ inline void SavePlayerRequest::_internal_set_schema_gen(::uint32_t value) {
 inline void SavePlayerRequest::clear_instance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.instance_id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::std::string& SavePlayerRequest::instance_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -1895,13 +2001,13 @@ inline const ::std::string& SavePlayerRequest::instance_id() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void SavePlayerRequest::set_instance_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.instance_id_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:playerstore.SavePlayerRequest.instance_id)
 }
 inline ::std::string* PROTOBUF_NONNULL SavePlayerRequest::mutable_instance_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_instance_id();
   // @@protoc_insertion_point(field_mutable:playerstore.SavePlayerRequest.instance_id)
   return _s;
@@ -1921,10 +2027,10 @@ inline ::std::string* PROTOBUF_NONNULL SavePlayerRequest::_internal_mutable_inst
 inline ::std::string* PROTOBUF_NULLABLE SavePlayerRequest::release_instance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:playerstore.SavePlayerRequest.instance_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.instance_id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.instance_id_.Set("", GetArena());
@@ -1934,9 +2040,9 @@ inline ::std::string* PROTOBUF_NULLABLE SavePlayerRequest::release_instance_id()
 inline void SavePlayerRequest::set_allocated_instance_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.instance_id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.instance_id_.IsDefault()) {
@@ -2004,7 +2110,7 @@ SavePlayerRequest::_internal_mutable_rows() {
 inline void SavePlayerRequest::clear_release() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.release_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline bool SavePlayerRequest::release() const {
   // @@protoc_insertion_point(field_get:playerstore.SavePlayerRequest.release)
@@ -2012,7 +2118,7 @@ inline bool SavePlayerRequest::release() const {
 }
 inline void SavePlayerRequest::set_release(bool value) {
   _internal_set_release(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:playerstore.SavePlayerRequest.release)
 }
 inline bool SavePlayerRequest::_internal_release() const {
@@ -2024,6 +2130,106 @@ inline void SavePlayerRequest::_internal_set_release(bool value) {
   _impl_.release_ = value;
 }
 
+// repeated .TransactionLogEntry transaction_logs = 10;
+inline int SavePlayerRequest::_internal_transaction_logs_size() const {
+  return _internal_transaction_logs().size();
+}
+inline int SavePlayerRequest::transaction_logs_size() const {
+  return _internal_transaction_logs_size();
+}
+inline const ::TransactionLogEntry& SavePlayerRequest::transaction_logs(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:playerstore.SavePlayerRequest.transaction_logs)
+  return _internal_transaction_logs().Get(index);
+}
+inline ::TransactionLogEntry* PROTOBUF_NONNULL SavePlayerRequest::mutable_transaction_logs(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:playerstore.SavePlayerRequest.transaction_logs)
+  return _internal_mutable_transaction_logs()->Mutable(index);
+}
+inline ::TransactionLogEntry* PROTOBUF_NONNULL SavePlayerRequest::add_transaction_logs()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::TransactionLogEntry* _add =
+      _internal_mutable_transaction_logs()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:playerstore.SavePlayerRequest.transaction_logs)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::TransactionLogEntry>& SavePlayerRequest::transaction_logs() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:playerstore.SavePlayerRequest.transaction_logs)
+  return _internal_transaction_logs();
+}
+inline ::google::protobuf::RepeatedPtrField<::TransactionLogEntry>* PROTOBUF_NONNULL
+SavePlayerRequest::mutable_transaction_logs() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:playerstore.SavePlayerRequest.transaction_logs)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_transaction_logs();
+}
+inline const ::google::protobuf::RepeatedPtrField<::TransactionLogEntry>&
+SavePlayerRequest::_internal_transaction_logs() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.transaction_logs_;
+}
+inline ::google::protobuf::RepeatedPtrField<::TransactionLogEntry>* PROTOBUF_NONNULL
+SavePlayerRequest::_internal_mutable_transaction_logs() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.transaction_logs_;
+}
+
+// repeated .PlayerSnapshotEntry audit_snapshots = 11;
+inline int SavePlayerRequest::_internal_audit_snapshots_size() const {
+  return _internal_audit_snapshots().size();
+}
+inline int SavePlayerRequest::audit_snapshots_size() const {
+  return _internal_audit_snapshots_size();
+}
+inline const ::PlayerSnapshotEntry& SavePlayerRequest::audit_snapshots(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:playerstore.SavePlayerRequest.audit_snapshots)
+  return _internal_audit_snapshots().Get(index);
+}
+inline ::PlayerSnapshotEntry* PROTOBUF_NONNULL SavePlayerRequest::mutable_audit_snapshots(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:playerstore.SavePlayerRequest.audit_snapshots)
+  return _internal_mutable_audit_snapshots()->Mutable(index);
+}
+inline ::PlayerSnapshotEntry* PROTOBUF_NONNULL SavePlayerRequest::add_audit_snapshots()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::PlayerSnapshotEntry* _add =
+      _internal_mutable_audit_snapshots()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:playerstore.SavePlayerRequest.audit_snapshots)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::PlayerSnapshotEntry>& SavePlayerRequest::audit_snapshots() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:playerstore.SavePlayerRequest.audit_snapshots)
+  return _internal_audit_snapshots();
+}
+inline ::google::protobuf::RepeatedPtrField<::PlayerSnapshotEntry>* PROTOBUF_NONNULL
+SavePlayerRequest::mutable_audit_snapshots() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:playerstore.SavePlayerRequest.audit_snapshots)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_audit_snapshots();
+}
+inline const ::google::protobuf::RepeatedPtrField<::PlayerSnapshotEntry>&
+SavePlayerRequest::_internal_audit_snapshots() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.audit_snapshots_;
+}
+inline ::google::protobuf::RepeatedPtrField<::PlayerSnapshotEntry>* PROTOBUF_NONNULL
+SavePlayerRequest::_internal_mutable_audit_snapshots() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.audit_snapshots_;
+}
+
 // -------------------------------------------------------------------
 
 // SavePlayerResponse
@@ -2032,7 +2238,7 @@ inline void SavePlayerRequest::_internal_set_release(bool value) {
 inline void SavePlayerResponse::clear_result() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.result_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::playerstore::SavePlayerResult SavePlayerResponse::result() const {
   // @@protoc_insertion_point(field_get:playerstore.SavePlayerResponse.result)
@@ -2040,7 +2246,7 @@ inline ::playerstore::SavePlayerResult SavePlayerResponse::result() const {
 }
 inline void SavePlayerResponse::set_result(::playerstore::SavePlayerResult value) {
   _internal_set_result(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:playerstore.SavePlayerResponse.result)
 }
 inline ::playerstore::SavePlayerResult SavePlayerResponse::_internal_result() const {
@@ -2080,7 +2286,7 @@ inline void SavePlayerResponse::_internal_set_row_owner_epoch(::uint64_t value) 
 inline void SavePlayerResponse::clear_row_save_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.row_save_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t SavePlayerResponse::row_save_seq() const {
   // @@protoc_insertion_point(field_get:playerstore.SavePlayerResponse.row_save_seq)
@@ -2088,7 +2294,7 @@ inline ::uint64_t SavePlayerResponse::row_save_seq() const {
 }
 inline void SavePlayerResponse::set_row_save_seq(::uint64_t value) {
   _internal_set_row_save_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:playerstore.SavePlayerResponse.row_save_seq)
 }
 inline ::uint64_t SavePlayerResponse::_internal_row_save_seq() const {
@@ -2098,6 +2304,30 @@ inline ::uint64_t SavePlayerResponse::_internal_row_save_seq() const {
 inline void SavePlayerResponse::_internal_set_row_save_seq(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.row_save_seq_ = value;
+}
+
+// bool audit_outbox_written = 4;
+inline void SavePlayerResponse::clear_audit_outbox_written() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.audit_outbox_written_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool SavePlayerResponse::audit_outbox_written() const {
+  // @@protoc_insertion_point(field_get:playerstore.SavePlayerResponse.audit_outbox_written)
+  return _internal_audit_outbox_written();
+}
+inline void SavePlayerResponse::set_audit_outbox_written(bool value) {
+  _internal_set_audit_outbox_written(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:playerstore.SavePlayerResponse.audit_outbox_written)
+}
+inline bool SavePlayerResponse::_internal_audit_outbox_written() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.audit_outbox_written_;
+}
+inline void SavePlayerResponse::_internal_set_audit_outbox_written(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.audit_outbox_written_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -2534,6 +2764,12 @@ struct is_proto_enum<::playerstore::SavePlayerResult> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::playerstore::SavePlayerResult>() {
   return ::playerstore::SavePlayerResult_descriptor();
+}
+template <>
+struct is_proto_enum<::playerstore::PlayerAuditKind> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::playerstore::PlayerAuditKind>() {
+  return ::playerstore::PlayerAuditKind_descriptor();
 }
 template <>
 struct is_proto_enum<::playerstore::LoadAndClaimResult> : std::true_type {};

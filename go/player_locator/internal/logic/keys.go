@@ -82,4 +82,12 @@ const (
 	gateIndexAuditCooldownKey = "player:gate_index:audit_cooldown"
 	// reconcilerLeaderKey:写者检查与补建 / 审计的选主锁(shared/leader,带 TTL)。全服一个 leader。
 	reconcilerLeaderKey = "player_locator:session_reconciler:leader"
+
+	// 玩家域是 Cluster 时,补建 / 审计的一遍按段分给各副本(index_pass.go)。三把键都由 leader 建、删,各副本只推进自己段的进度。
+	// gateIndexPassKey:当前这一遍,值 "<id>|<kind>|<开始时的代次>",kind 是 backfill 或 audit。不存在 = 没有在跑的一遍。
+	gateIndexPassKey = "player:gate_index:pass"
+	// gateIndexPassSeqKey:一遍的编号计数器,只增不减。
+	gateIndexPassSeqKey = "player:gate_index:pass_seq"
+	// gateIndexPassProgressKey:HASH,字段是段号,值是这一段在哪一遍、做到哪个 slot 以及累计的统计(passProgress)。
+	gateIndexPassProgressKey = "player:gate_index:pass_progress"
 )

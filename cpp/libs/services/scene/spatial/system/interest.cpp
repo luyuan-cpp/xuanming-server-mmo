@@ -104,7 +104,7 @@ uint8_t EntryWeight(const AoiEntry& entry, const AoiPriorityPolicy& policy)
     return weight;
 }
 
-// 距离只约束空间来源(由网格评估把关);显式关注可以超出视野,但仍受隐身约束。
+// 距离只约束空间来源(由 AoiSystem 按进出视野半径把关);显式关注可以超出视野,但仍受隐身约束。
 bool IsEligible(entt::entity target, const AoiEntry& entry)
 {
     return !ViewSystem::IsStealthed(target) || entry.RevealsStealth();
@@ -139,6 +139,16 @@ bool IsValidPair(entt::entity watcher, entt::entity target, const char* caller)
 // 容量
 // ---------------------------------------------------------------------------
 
+// AoiNearbyRefillComp 的唯一创建点:附近候选因名额被拒收,或只有空间来源的条目被挤掉、
+// 被容量收缩裁掉时打上;名额空出后由 AoiSystem 重扫一次附近候选补回。调用方保证 watcher 存活。
+void MarkNearbyRefill(entt::entity watcher)
+{
+    if (!tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(watcher))
+    {
+        tlsEcs.actorRegistry.emplace<AoiNearbyRefillComp>(watcher);
+    }
+}
+
 // 已显示条目里权重最低的一个(不含 exclude);没有返回 end。
 EntryIterator FindLowestVisible(AoiListComp& list, const AoiPriorityPolicy& policy, entt::entity exclude)
 {
@@ -161,11 +171,18 @@ EntryIterator FindLowestVisible(AoiListComp& list, const AoiPriorityPolicy& poli
 }
 
 // 容量已满时,为权重 weight 的 incoming 让出一个名额:只淘汰权重严格更低的已显示条目。
-// 被淘汰者只剩空间来源时整条删除(下次跨格重新评估);有显式来源时转为暂隐,名额空出后补回。
+// 被淘汰者只剩空间来源时整条删除,观察者打上重扫标记,名额空出后由 AoiSystem 补回附近候选;
+// 有显式来源时转为暂隐,名额空出后由 FillFreeSlots 补回。
 // 淘汰只改本观察者的表,目标那一侧的关系各自独立,不要求互相占位。
 bool EvictForWeight(entt::entity watcher, AoiListComp& list, uint8_t weight, entt::entity incoming,
                     const AoiPriorityPolicy& policy, AoiVisibilityChanges* changes)
 {
+    // 权重 0 挤不掉任何条目(要求严格更低),不必扫表:满表的人群里每次位移重判,
+    // 普通候选都会走到这里。
+    if (weight == 0)
+    {
+        return false;
+    }
     const auto lowest = FindLowestVisible(list, policy, incoming);
     if (lowest == list.entries.end() || weight <= EntryWeight(lowest->second, policy))
     {
@@ -175,6 +192,7 @@ bool EvictForWeight(entt::entity watcher, AoiListComp& list, uint8_t weight, ent
     if (lowest->second.follows.empty())
     {
         EraseEntry(watcher, list, lowest, changes);
+        MarkNearbyRefill(watcher);
     }
     else
     {
@@ -236,6 +254,64 @@ void FillFreeSlots(entt::entity watcher, AoiListComp& list, AoiVisibilityChanges
     }
 }
 
+// 容量收缩后把已显示条目裁到 capacity 条:留下权重高的、同权重离得近的,其余按淘汰的规矩处理
+// (只剩空间来源的删除并打补回标记,有显式来源的转暂隐)。返回裁掉的条数。
+std::size_t TrimToCapacity(entt::entity watcher, AoiListComp& list, std::size_t capacity,
+                           AoiVisibilityChanges* changes)
+{
+    struct Ranked
+    {
+        entt::entity target;
+        uint8_t weight;
+        double distance;
+    };
+    const auto& policy = InterestSystem::GetPriorityPolicy(watcher);
+    std::vector<Ranked> visible;
+    visible.reserve(list.visibleCount);
+    for (const auto& [target, entry] : list.entries)
+    {
+        if (entry.visible)
+        {
+            // 量不出距离(缺 Transform)的排在同权重的最后,先被裁。
+            const auto distance = ViewSystem::GetDistanceBetweenEntities(watcher, target);
+            visible.push_back({target, EntryWeight(entry, policy),
+                               distance.value_or(std::numeric_limits<double>::infinity())});
+        }
+    }
+    if (visible.size() <= capacity)
+    {
+        return 0;
+    }
+    // 留下的排在前面:权重高的在前,同权重近的在前;最后按句柄排,结果与容器遍历顺序无关。
+    std::ranges::sort(visible, [](const Ranked& lhs, const Ranked& rhs)
+    {
+        if (lhs.weight != rhs.weight)
+        {
+            return lhs.weight > rhs.weight;
+        }
+        if (lhs.distance != rhs.distance)
+        {
+            return lhs.distance < rhs.distance;
+        }
+        return entt::to_integral(lhs.target) < entt::to_integral(rhs.target);
+    });
+    for (std::size_t i = capacity; i < visible.size(); ++i)
+    {
+        const auto it = list.entries.find(visible[i].target);
+        DropSpatial(it->second);
+        if (it->second.follows.empty())
+        {
+            EraseEntry(watcher, list, it, changes);
+            MarkNearbyRefill(watcher);
+        }
+        else
+        {
+            Hide(watcher, list, it->first, it->second, changes);
+        }
+    }
+    return visible.size() - capacity;
+}
+
 // 按当前可见条件校正一条关系:不再满足就暂停显示(空间来源以能看见为前提,一并撤掉),
 // 重新满足就尝试显示。可能删除条目,调用后不得再使用 it。
 void Reconcile(entt::entity watcher, AoiListComp& list, EntryIterator it, AoiVisibilityChanges* changes)
@@ -270,7 +346,8 @@ void Reconcile(entt::entity watcher, AoiListComp& list, EntryIterator it, AoiVis
 
 std::size_t InterestSystem::GetEffectiveCapacity(entt::entity watcher)
 {
-    // 三种容量/策略组件是稀疏可选配置,生产尚未接线。缺失表示使用默认值,不补建。
+    // 三种容量/策略组件都是可选的:ScenePressureComp 由 AoiSystem::ApplyServerPressure 每秒写进各场景,
+    // 客户端期望数与场景策略生产尚未接线。缺失表示使用默认值,不补建。
     // Client-reported desired count (per-entity).
     std::size_t clientCap = kAoiListCapacityDefault;
     if (const auto* clientComp = tlsEcs.actorRegistry.try_get<AoiClientCapacityComp>(watcher))
@@ -369,6 +446,8 @@ bool InterestSystem::AddAoiEntity(entt::entity watcher, entt::entity target, Aoi
     if (list != nullptr && list->visibleCount >= capacity &&
         !EvictForWeight(watcher, *list, policy.GetWeight(priority), target, policy, changes))
     {
+        // 被拒的是附近候选,不留条目:名额空出后由 AoiSystem 重扫补回。
+        MarkNearbyRefill(watcher);
         return false;
     }
     if (list == nullptr)
@@ -536,6 +615,23 @@ void InterestSystem::Unfollow(entt::entity watcher, entt::entity target, const A
     }
     // 还有其他来源:撤掉的若是唯一的侦测授权,隐身目标随之不可见。
     Reconcile(watcher, *list, it, changes);
+}
+
+// ---------------------------------------------------------------------------
+// 容量变化
+// ---------------------------------------------------------------------------
+
+std::size_t InterestSystem::ApplyCapacity(entt::entity watcher, AoiVisibilityChanges* changes)
+{
+    auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    if (list == nullptr)
+    {
+        return 0;
+    }
+    const auto capacity = GetEffectiveCapacity(watcher);
+    const auto trimmed = list->visibleCount > capacity ? TrimToCapacity(watcher, *list, capacity, changes) : 0;
+    FillFreeSlots(watcher, *list, changes);
+    return trimmed;
 }
 
 // ---------------------------------------------------------------------------

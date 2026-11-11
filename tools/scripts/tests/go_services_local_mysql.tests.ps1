@@ -125,7 +125,7 @@ function Reset-Fixture {
 }
 function Get-ThrownMessage([scriptblock]$Action) { try { & $Action | Out-Null } catch { return $_.Exception.Message }; return '' }
 try {
-    $env:DB_ALLOWED_DATABASES = 'zone_1_db'
+    $env:DB_ALLOWED_DATABASES = 'player_store_1000000_db'
     New-Item -ItemType Directory -Path (Split-Path -Parent $sourceConfig), $GoBinDir, $DerivedEtcDir, (Split-Path -Parent $PidFile) -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $GoBinDir 'db.exe') -Value '仅供进程桩识别'
     Test-Case '显式开关默认关闭，单实例仍使用原配置且不生成副本' {

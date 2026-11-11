@@ -19,6 +19,7 @@ import (
 	"scene_manager/internal/svc"
 	"shared/ownerepoch"
 	"shared/redisslot"
+	"shared/tracing/kafkagotrace"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
@@ -196,6 +197,10 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			return errResp(constants.ErrInvalidGateID,
 				"missing gate_instance_id (required for gate anti-zombie filtering)"), nil
 		}
+	}
+	// 托管落点(enter_hosted_placement.go):不带 gate、要带断开那次登录的身份,同样在任何写之前判掉。
+	if resp := l.rejectMalformedHostedPlacement(in); resp != nil {
+		return resp, nil
 	}
 	// 路由不变量(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):C++ gate / scene 与 login 只连本 zone 的
 	// scene_manager,请求的 gate zone 恒是本进程的 zone。不是的话是调用方连错了实例(发现键或前缀配错):本进程不能替
@@ -459,6 +464,10 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//    ErrNoAvailableNode 上,玩家永远到不了目标区 —— 这正是合服后源区
 	//    玩家登录卡死的路径。这里不做任何预占,所以也没有需要成对释放的人数。
 	crossZoneRedirect := in.GateZoneId != 0 && targetZoneId != 0 && in.GateZoneId != targetZoneId
+	if crossZoneRedirect && in.HostedPlacement {
+		// 托管落点没有 gate 可重定向,第二条腿也没有客户端去连:只限本 zone。此刻还没有任何预占与写入。
+		return l.rejectHostedPlacementAcrossZones(in, targetZoneId), nil
+	}
 	if crossZoneRedirect {
 		// 重定向分两种,只有第二种动归属:
 		//  a) 目标 zone 就是玩家现在所在的 zone(访客掉线后从别区 gate 登录、或等待
@@ -507,7 +516,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		guard := placementGuard{observedEpoch: observedEpoch, mint: true, pendingSceneConfID: in.SceneConfId,
 			identity: identityRecord, expectLoc: expectObservedLocation(observedLocRaw), ownerRevision: in.OwnerRevision, observedTag: currentLocTag}
 		if leavingZone && !awaitingPlacement {
-			resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "跨区重定向")
+			resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "cross-zone redirect")
 			if resp != nil {
 				return resp, nil
 			}
@@ -579,7 +588,15 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	if resumeSceneID != 0 {
 		requestedSceneID = resumeSceneID
 	}
-	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(requestedSceneID, sceneConfID, targetZoneId, in.PlayerId)
+	// 疏散请求(源 scene 节点把玩家从要没了的场景里搬走,docs/design/scene-node-planned-drain.md §4.4)单独解析:
+	// 原频道 → 同图 → 默认大世界,不选排空中的节点。它带 zone_id,不走上面的短重连回原场景;也不在等待落点上。
+	resolveTarget := func() (uint64, string, bool, error) {
+		if in.GetEvacuation() {
+			return l.resolveEvacuationTarget(in, evacuationSourceNode(currentLoc, currentZoneID, targetZoneId), targetZoneId)
+		}
+		return l.resolveSceneForEnter(requestedSceneID, sceneConfID, targetZoneId, in.PlayerId)
+	}
+	sceneId, nodeId, reserved, err := resolveTarget()
 	if err != nil && resumeSceneID != 0 && !errors.Is(err, ErrReentryBarrierPending) {
 		metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonResumeSceneFallback)
 		l.Logger.Infof("[Reconnect] Previous scene unavailable; falling back to default world: player=%d zone=%d scene=%d node=%s err=%v",
@@ -617,6 +634,18 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				fmt.Sprintf("invalid scene node id %q: %v", nodeId, parseErr)), nil
 		}
 	}
+	// 托管落点的事件要带目标节点的实例号(防僵尸);拿不到就在任何落点写之前可重试地拒绝(enter_hosted_placement.go)。
+	hostedInstance := ""
+	if in.HostedPlacement {
+		instance, instanceResp := l.resolveHostedPlacementInstance(in, targetZoneId, nodeId)
+		if instanceResp != nil {
+			if reserved {
+				l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
+			}
+			return instanceResp, nil
+		}
+		hostedInstance = instance
+	}
 
 	// 在任何旧场景扣减、ReleasePlayer、位置写入或 Gate 路由之前过换手门:跨节点
 	// 进入新场景时旧节点可能仍在存盘,新节点会读到陈旧快照。放行凭据是源 scene
@@ -644,7 +673,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 换手门仍在 3b 之前:跨节点换图的第一跳注定拿 18,没理由先为它查一次归属。
 	var handoffGrant handoffVerdict
 	if crossNodeHandoff {
-		resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "场景交接")
+		resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "scene handoff")
 		if resp != nil {
 			// 自动选择大世界频道会在 resolveSceneForEnter 内原子预占人数；拒绝
 			// 请求时必须成对释放，不能让失败请求污染调度负载。
@@ -679,11 +708,12 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//     下线(注册表里没有任何节点)时 currentLoc 已是 nil,这里按首次落点回落 gate zone(该旁路只对未映射且已有
 	//     等待落点的玩家可达,即旧版本遗留 / 映射丢失)。
 	//     走到这里之前本请求只动过去重占位与场景预占(下面成对释放),location / owner_epoch 一个字节都没写。
-	//     上面「拒绝先于任何写」只对带 GateId 的请求成立:没有 GateId 的请求不查归属,下面的第 6 步
+	//     上面「拒绝先于任何写」只对要发路由的请求成立:既没有 GateId、也不是托管落点的请求不查归属,下面的第 6 步
 	//     (铸 epoch + CAS 写 location)、第 6b 步(扣旧场景人数)与第 7b 步(跨节点时派发 ReleasePlayer)
 	//     照常执行。TestEnterScene_HomeZoneNotQueriedWithoutGateRoute 钉住「不带 GateId 不发归属 RPC」。
+	//     托管落点(hosted_placement)同样要发路由 —— 发给目标 scene 节点,它建实体要 home_zone —— 所以照查。
 	var homeZoneID uint32
-	if in.GateId != "" {
+	if in.GateId != "" || in.HostedPlacement {
 		unmappedPolicy := homeZoneUnmappedFallsBackToGateZone
 		if awaitingPlacement {
 			unmappedPolicy = homeZoneUnmappedRejectsTravel
@@ -771,6 +801,24 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		guard.mint, guard.requiredMarker = handoffGrant.committed, handoffGrant.marker
 	}
 
+	// 3d. 待确认回执(两段回执,zone-redis-regression-guard-20261022.md §4.3.4):location 记的 epoch 是一次回滚写下的值
+	//     (推路由失败或铸造没确认落盘之后),回滚本身的落盘还没确认。不铸造就要把这个值交出去的落点(同落点重连、同物理节点换图、dev 旁路)先确认它
+	//     落盘、把回执改成正式回执,再以改写后的 location 作为本次观察继续;确认不了就不下发(7 / 19 / 3 / ErrRedis,
+	//     都在任何人数扣减与落点写之前)。铸造的落点不需要:新铸的值比它大,确认的是新值。
+	//     典型来源:源端见到待确认回执按 B5′ 踢线之后,玩家重登落回原场景 —— 不在这里拦,重登就会原样下发那个没确认的值。
+	if currentLoc != nil && !guard.mint && ownerepoch.IsPendingRollbackReceipt(currentLoc.GetRollbackReceipt()) {
+		confirmedLoc, confirmedRaw, confirmedTag, confirmErr := confirmPendingRollbackLocation(l.ctx, l.svcCtx, l.Logger,
+			in.PlayerId, currentLoc, currentLocRaw, currentLocTag, observedEpoch)
+		if confirmErr != nil {
+			if reserved {
+				l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
+			}
+			return l.rejectUnconfirmedPendingRollback(in, targetZoneId, confirmErr), nil
+		}
+		currentLoc, currentLocRaw, currentLocTag, observedLocRaw = confirmedLoc, confirmedRaw, confirmedTag, confirmedRaw
+		guard.expectLoc, guard.observedTag = expectObservedLocation(observedLocRaw), currentLocTag
+	}
+
 	// 4. IDEMPOTENCY CHECK: Is player already in the same scene on the same node?
 	//    Location is unchanged, but we must still route the gate so the new
 	//    session/connection is wired to the correct scene node.
@@ -812,6 +860,13 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				if err := l.routePlayerToGate(in, nodeId, sceneId, homeZoneID, observedEpoch); err != nil {
 					l.Logger.Errorf("Failed to route reconnecting player %d to gate: %v", in.PlayerId, err)
 					return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route player to gate failed: %v", err)), nil
+				}
+			} else if in.HostedPlacement {
+				// 托管角色的 location 已经指向这个场景:通常是上一条托管落点的事件还没被目标节点消费。照样再发一次,
+				// 让实体收敛到 location(scene 侧对"已在目标场景"幂等);失败只回 7,理由同上,不回滚。
+				if err := l.routePlacement(in, nodeId, hostedInstance, sceneId, homeZoneID, observedEpoch); err != nil {
+					l.Logger.Errorf("[HostedPlacement] failed to re-deliver same-placement hosted route for player %d: %v", in.PlayerId, err)
+					return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route hosted player to scene node failed: %v", err)), nil
 				}
 			}
 			return &scene_manager.EnterSceneResponse{ErrorCode: 0}, nil
@@ -876,8 +931,9 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	}
 
 	// 6c. 铸造没确认落盘(上面第 6 步的 errOwnerEpochMintNotDurable):新 epoch 不交给任何节点,不推路由,按推路由失败
-	//     回滚并回 ErrKafkaRoute(可重试,C++ 源端走与推路由失败相同的取证 / 回执采纳路径)。不看 GateId:没有 gate
-	//     的请求也不能把一个可能随 Redis 崩溃消失的 epoch 留在 location 里,让之后的同落点重连原样下发。
+	//     回滚并回 ErrKafkaRoute(可重试,C++ 源端走与推路由失败相同的取证路径)。回滚写下的 epoch 同样要确认落盘之后才许
+	//     源端采纳,所以走两段回执(rollbackPlacementAfterPushFailure,zone-redis-regression-guard-20261022.md §4.3.4)。
+	//     不看 GateId:没有 gate 的请求也不能把一个可能随 Redis 崩溃消失的 epoch 留在 location 里,让之后的同落点重连原样下发。
 	if mintNotDurable {
 		l.Logger.Errorf("[OwnerEpochMint] Minted owner_epoch not confirmed durable; not routing, rolling back location/epoch/counts: player=%d epoch=%d target_scene=%d target_node=%s err=%v",
 			in.PlayerId, placed.epoch, sceneId, nodeId, updateErr)
@@ -890,13 +946,17 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 
 	// 7. Send Route Command to Gate. Broker ACK is the transaction commit
 	// point: only after it succeeds may the response be cached as successful.
-	if in.GateId != "" {
+	// 托管落点(hosted_placement)没有 gate:路由直接发给目标 scene 节点(PlayerHostedPlacementEvent),
+	// 提交点与失败回滚和推 gate 路由完全相同(routePlacement,enter_hosted_placement.go)。
+	if in.GateId != "" || in.HostedPlacement {
 		routeStart := time.Now()
-		if err := l.routePlayerToGate(in, nodeId, sceneId, homeZoneID, placed.epoch); err != nil {
-			l.Logger.Errorf("Failed to route player %d to gate, rolling back location/epoch/counts: %v", in.PlayerId, err)
+		if err := l.routePlacement(in, nodeId, hostedInstance, sceneId, homeZoneID, placed.epoch); err != nil {
+			l.Logger.Errorf("Failed to route player %d to its new placement, rolling back location/epoch/counts: %v", in.PlayerId, err)
 			// 回滚:location 退回本次之前的值,epoch 只进不退(GO-2,cross-zone-scene-travel.md §12.8)。
-			// 铸造过的再 INCR 一格(bump);凭标记铸造的以「所凭标记原样还在」为前提,并写回执、转写标记,
-			// 源 scene 凭回执采纳新值;标记已被目标节点消费 / 源端取走时保留本次落点(marker_gone)。
+			// 铸造过的再 INCR 一格(bump);凭标记铸造的以「所凭标记原样还在」为前提,并写回执、转写标记。
+			// 回执先写待确认形态,回滚确认落盘之后才改成正式回执,源 scene 只凭正式回执采纳新值(两段回执,
+			// zone-redis-regression-guard-20261022.md §4.3.4:铸造确认过,回滚写下的是另一个值,要单独确认);
+			// 标记已被目标节点消费 / 源端取走时保留本次落点(marker_gone)。
 			// 同节点 epoch 0 的铸造走 keep(sameNodeZeroMint:epoch 保留铸出值,只退 location):路由的目标
 			// 就是持有节点本身。没投递到 —— 持有节点缓存仍是 0,存盘不带 guard,1 拒不了它;kafka-go 报错但
 			// broker 其实已投递 —— 缓存已是 1,再 INCR 会让它之后带 guard 的存盘被拒、实体被当废黜销毁。
@@ -917,8 +977,8 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// it persists state and tears down the entity. Same-node switches skip this
 	// because the C++ node reuses the in-memory entity directly.
 	//
-	// 只在本请求**提交之后**派发(scene-enter-chain-residuals.md §4.2 ①):带 GateId 的请求以第 7 步路由
-	// broker ACK 为提交点,不带 GateId 的以第 6 步落点成功为提交点,两种情形都走到这里。第 6 步的各个失败
+	// 只在本请求**提交之后**派发(scene-enter-chain-residuals.md §4.2 ①):带 GateId 的请求与托管落点以第 7 步路由
+	// broker ACK 为提交点,其余不带 GateId 的以第 6 步落点成功为提交点,几种情形都走到这里。第 6 步的各个失败
 	// 返回、第 7 步路由失败与回滚的返回都不派发 —— 以前派发排在落点之前,落点失败(B4)或路由回滚(B5 采纳
 	// 回滚后的 epoch)之后迟到的释放会把仍持有归属的实体退掉,玩家挂在哑连接上只能重登。
 	//
@@ -1239,9 +1299,9 @@ func awaitingPlacementExpired(loc *scene_manager.PlayerLocation, now time.Time) 
 // etcd 读失败按放行处理(fail-open):这道检查只为给玩家一个更早、更准的拒绝,不是安全门;
 // 归属安全由后面的换手门与 epoch CAS 保证。
 func (l *EnterSceneLogic) rejectTravelToUnopenedMap(in *scene_manager.EnterSceneRequest, targetZoneId uint32) *scene_manager.EnterSceneResponse {
-	confID, mapKind := in.SceneConfId, "指定地图"
+	confID, mapKind := in.SceneConfId, "requested map"
 	if confID == 0 {
-		mapKind = "默认大世界"
+		mapKind = "default world"
 		var ok bool
 		if confID, ok = defaultWorldConfID(); !ok {
 			metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonTravelMapUnavailable)
@@ -1309,8 +1369,9 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 	// 第一条腿不存在同节点 epoch 0 的铸造,keepMintedEpoch 恒 false(dev 旁路不铸造,自然走 keep)。
 	// 回滚、还人数、回显三件事分开写:回显只看 echo,不能像以前串在一个 && 里那样被旧场景的
 	// SceneId 条件短路掉(等待落点再次重定向时旧 location 的 SceneId 就是 0)。
+	// 凭标记的 bump 走两段回执(rollbackPlacementAfterPushFailure),理由同同 zone 第 6c 步。
 	rollbackPlaced := func(resp *scene_manager.EnterSceneResponse) {
-		restored, echo := rollbackPlacementAfterPushFailure(l.svcCtx, l.Logger, in.PlayerId,
+		restored, echo := rollbackPlacementAfterPushFailure(l.ctx, l.svcCtx, l.Logger, in.PlayerId,
 			currentLoc, currentLocRaw, currentZoneID, placed, placement.guard.requiredMarker, false)
 		if restored && currentLoc != nil && currentLoc.SceneId != 0 {
 			l.commitSceneMember(in.PlayerId, currentLoc.SceneId, currentZoneID, currentLoc.NodeId)
@@ -1382,6 +1443,23 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 	}, nil
 }
 
+// rejectUnconfirmedPendingRollback 把第 3d 步 confirmPendingRollbackLocation 的失败翻成应答(错误清单见该函数)。
+// 这些拒绝都发生在任何人数扣减、落点写与路由之前:确认脚本只把 owner_epoch 原值写回,状态一个字节都没变。
+func (l *EnterSceneLogic) rejectUnconfirmedPendingRollback(in *scene_manager.EnterSceneRequest, zoneID uint32, err error) *scene_manager.EnterSceneResponse {
+	switch {
+	case errors.Is(err, errOwnerEpochConflict):
+		metrics.ObserveEnterSceneRejected(zoneID, "epoch_conflict")
+		return errResp(constants.ErrOwnerEpochConflict, "owner epoch or location advanced concurrently while confirming a pending rollback receipt; retry")
+	case errors.Is(err, errPendingRollbackNotDurable):
+		return errResp(constants.ErrKafkaRoute, fmt.Sprintf("pending rollback receipt not confirmed durable; owner epoch not routed: %v", err))
+	case errors.Is(err, svc.ErrOwnerEpochMintNotSent), errors.Is(err, errOwnerEpochMinterMissing):
+		return errResp(constants.ErrUpdateLocation, "pending rollback receipt confirmation not sent; retry")
+	default:
+		l.Logger.Errorf("[RollbackReceipt] Pending rollback receipt confirmation failed: player=%d err=%v", in.PlayerId, err)
+		return errResp(constants.ErrRedis, fmt.Sprintf("pending rollback receipt confirmation failed: %v", err))
+	}
+}
+
 // rollbackEnterSceneAfterRouteFailure 撤掉同 zone 第 7 步推路由失败的落点,并在回滚确认生效后把人数退回去
 // (目标场景的预占退回、旧场景的人数还回去)。Redis 操作尽力而为:路由失败本身才是主错误,回滚的每一种
 // 失败都已记日志供修复。
@@ -1391,10 +1469,12 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 // 返回 (restored, echo):restored 为 false(marker_gone / target_registered / fence_not_proof / superseded /
 // redis_error / plan_error)时人数一个都不动 —— 本次落点仍在 Redis 里,目标场景的预占与旧场景的扣减正对应它;echo 由调用方填进
 // EnterSceneResponse.owner_epoch_after_rollback。
+//
+// 第 6c 步(铸造没确认落盘)与第 7 步(推路由失败)共用;凭标记的 bump 都走两段回执(rollbackPlacementAfterPushFailure)。
 func (l *EnterSceneLogic) rollbackEnterSceneAfterRouteFailure(playerID uint64, old *scene_manager.PlayerLocation, oldRaw string,
 	oldZoneID uint32, placed placedLocation, requiredMarker string, keepMintedEpoch bool,
 	newZoneID uint32, newSceneID uint64, newNodeID string) (bool, uint64) {
-	restored, echo := rollbackPlacementAfterPushFailure(l.svcCtx, l.Logger, playerID, old, oldRaw, oldZoneID,
+	restored, echo := rollbackPlacementAfterPushFailure(l.ctx, l.svcCtx, l.Logger, playerID, old, oldRaw, oldZoneID,
 		placed, requiredMarker, keepMintedEpoch)
 	if !restored {
 		return false, echo
@@ -1454,8 +1534,11 @@ func (l *EnterSceneLogic) sendRedirectToGate(in *scene_manager.EnterSceneRequest
 		return fmt.Errorf("address RedirectToGate command: %w", err)
 	}
 	// 不用可取消 context：kafka-go 在 context 返回后仍可能继续投递批次。
-	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 提供有界终态。
-	if err := l.svcCtx.Kafka.WriteMessages(context.Background(), msg); err != nil {
+	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 提供有界终态。WithoutCancel 同样不可取消,只多保留请求的值:
+	// trace 写进消息头,gate 处理这条命令时接上同一次进场(docs/design/distributed-tracing.md §6.2)。
+	sendCtx := context.WithoutCancel(l.ctx)
+	msg.Headers = kafkagotrace.Headers(sendCtx)
+	if err := l.svcCtx.Kafka.WriteMessages(sendCtx, msg); err != nil {
 		return fmt.Errorf("push to Kafka topic %s partition %d: %w", msg.Topic, msg.Partition, err)
 	}
 
@@ -1530,14 +1613,18 @@ func (l *EnterSceneLogic) resolveScene(sceneId uint64, sceneConfId uint64, zoneI
 	return sid, nid, nil
 }
 
-// deadNodeReassignFollowUpTimeout 是死节点改派里两件收尾动作的时限:归属落地后转移 Agones 名额,
-// CAS 落空后回收预建的实体。两者都不挂请求 ctx —— 请求超时或取消时,K8s / RPC 写入可能已经生效、
+// deadNodeReassignFollowUpTimeout 是死节点改派里收尾动作的时限:归属落地后提交 Agones 名额、没用上的名额放弃,
+// CAS 落空后回收预建的实体。它们都不挂请求 ctx —— 请求超时或取消时,K8s / RPC 写入可能已经生效、
 // 本端却拿到错误(名额白占一份,或实体没回收)。时限只为不让 EnterScene 的应答被拖住。
 const deadNodeReassignFollowUpTimeout = 3 * time.Second
 
 // reassignSceneOffDeadNode 是 resolveScene 的死节点自愈:场景 sceneId 的属主 deadNode 已摘出负载集。
-// 只给大世界频道做,顺序与 rebalance(migrateWorldChannel)相同:先在新节点上建实体,再用
-// reassignSceneNode 的 CAS 改归属,最后转移 Agones 名额。
+// 只给大世界频道做,顺序与 rebalance(migrateWorldChannel)相同:先在落点的 GameServer 上占 Agones 名额,
+// 再在落点上建实体,然后用 reassignSceneNode 的 CAS 改归属,最后提交名额。
+//
+// 先占名额(docs/design/agones-scene-node-high-density.md §13.10):不把频道搬进 Agones 认为已经满了的进程。
+// 属主已死、频道必须搬走,挑中的节点满了就交给 GSA 在本 zone 另挑一台有空位的,落点改成它;哪台都占不到就
+// 不搬,归属一个字节不改,回错误由上游重试(FleetAutoscaler 扩出空位之后就能搬)。之后任何一步没成都放弃这次占的名额。
 //
 // 只给频道做:
 //   - 频道是常驻的,死节点上那份必须在别处重建,玩家才有地方去;rebalance、init 与懒改派做的是同一件事。
@@ -1560,6 +1647,9 @@ const deadNodeReassignFollowUpTimeout = 3 * time.Second
 // 另一个副本上的 EnterScene、rebalance、initWorldScenesForZone、懒改派,CAS 保证只有一个落地。
 // 记账(属主映射、两侧 node:zone:{z}:{n}:scenes、两侧 scene_count)由 CAS 脚本同批改,与
 // scene_registration.go 登记新场景时写的三项一致。
+//
+// 成员资格与屏障之后的搬迁(moveChannelOffDeadNode)在本进程里按频道合并(joinChannelMove,channel_move_flight.go):
+// 同时到的自愈与懒改派只跑一次,其余请求等它的结果。
 func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, zoneId uint32, deadNode string) (uint64, string, error) {
 	if sceneConfId == 0 {
 		return 0, "", fmt.Errorf("scene %d is on dead node %s and cannot be recreated without scene_conf_id", sceneId, deadNode)
@@ -1584,45 +1674,77 @@ func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, 
 		return 0, "", fmt.Errorf("scene %d 的属主节点 %s 刚判死,再入屏障未到: %w",
 			sceneId, deadNode, ErrReentryBarrierPending)
 	}
-	// 频道只能落在能承载大世界的节点上(仅承载副本的节点会在 C++ EnterScene 按类型拒绝)。
-	newNodeId, err := GetBestNodeForPurpose(l.ctx, l.svcCtx, zoneId, constants.NodePurposeWorld)
+	// 同一进程里同时到的自愈按频道合并成一次(joinChannelMove,2026-11-11):节点一死,它上面的玩家会一起重连进这个
+	// 频道,每个请求各占一次名额、各建一次实体,只会放大 K8s 写入与白建白拆。上面的廉价复核每个请求自己做:
+	// 带不了 scene_conf_id、不是这张图的频道的请求不去发起或带坏别人的那一次。
+	newNodeId, err := joinChannelMove(l.ctx, sceneId, func() (string, error) {
+		return l.moveChannelOffDeadNode(sceneId, sceneConfId, zoneId, deadNode)
+	})
 	if err != nil {
-		return 0, "", fmt.Errorf("scene %d mapped to dead node %s and no live world-hosting node: %w", sceneId, deadNode, err)
+		return 0, "", err
 	}
-	// 先分配这次放置的代次,再带着它建实体,挂请求 ctx(docs/design/world-channel-placement-generation.md)。
-	// 任何失败(计数器出错、节点拒绝、请求被截断、超时)都在改归属之前返回,归属一个字节都没改。截断与超时的
-	// 结论未知:节点可能已经建出实体,这份实体不回收 —— 下一次改派多半仍挑它,按 scene_id 幂等复用;与
-	// migrateWorldChannel 建场景失败时的取舍相同。
-	generation, err := allocatePlacementGeneration(l.svcCtx, zoneId)
-	if err != nil {
-		return 0, "", fmt.Errorf("scene %d on dead node %s, ownership unchanged: %w", sceneId, deadNode, err)
-	}
-	if _, err := RequestNodeCreateSceneAtGeneration(l.ctx, l.svcCtx, zoneId, newNodeId, uint32(sceneConfId), sceneId, generation); err != nil {
-		return 0, "", fmt.Errorf("scene %d on dead node %s: CreateScene on %s failed, ownership unchanged: %w", sceneId, deadNode, newNodeId, err)
-	}
-	if !reassignWorldChannelNode(l.svcCtx, zoneId, sceneId, deadNode, newNodeId, worldChannelsKey(zoneId, sceneConfId), generation) {
-		return l.adoptOwnerAfterLostReassign(sceneId, sceneConfId, zoneId, deadNode, newNodeId, generation)
-	}
-	l.Logger.Infof("resolveScene: world channel %d was on dead node %s, reassigned to %s", sceneId, deadNode, newNodeId)
-	l.transferAgonesRoomAfterReassign(sceneId, zoneId, newNodeId)
 	return sceneId, newNodeId, nil
 }
 
+// moveChannelOffDeadNode 是 reassignSceneOffDeadNode 的搬迁一半(调用方已做完成员资格与再入屏障的复核):挑节点、
+// 先占名额、建实体、改派 CAS、提交名额,回频道此刻的属主。CAS 落空时回 adoptOwnerAfterLostReassign 重读到的属主。
+func (l *EnterSceneLogic) moveChannelOffDeadNode(sceneId, sceneConfId uint64, zoneId uint32, deadNode string) (string, error) {
+	// 频道只能落在能承载大世界的节点上(仅承载副本的节点会在 C++ EnterScene 按类型拒绝)。
+	bestNodeId, err := GetBestNodeForPurpose(l.ctx, l.svcCtx, zoneId, constants.NodePurposeWorld)
+	if err != nil {
+		return "", fmt.Errorf("scene %d mapped to dead node %s and no live world-hosting node: %w", sceneId, deadNode, err)
+	}
+	// 先占名额:挑中的节点满了时落点换成回落分配挑的节点(见函数注释)。
+	newNodeId, placement, ok := reserveAgonesRoomForWorldChannel(l.ctx, l.svcCtx, zoneId, sceneId, bestNodeId, true)
+	if !ok {
+		return "", fmt.Errorf("scene %d on dead node %s: no Agones room capacity in zone %d, ownership unchanged",
+			sceneId, deadNode, zoneId)
+	}
+	if newNodeId == deadNode {
+		// 回落分配挑中了属主自己(它的 Pod 还在 etcd 里,负载集却已判死):搬过去等于没搬。
+		l.abandonAgonesRoomAfterReassign(zoneId, placement, "fallback_picked_old_owner")
+		return "", fmt.Errorf("scene %d on dead node %s: free allocation picked the dead owner, ownership unchanged",
+			sceneId, deadNode)
+	}
+	// 再分配这次放置的代次,带着它建实体,挂请求 ctx(docs/design/world-channel-placement-generation.md)。
+	// 任何失败(计数器出错、节点拒绝、请求被截断、超时)都在改归属之前返回,归属一个字节都没改,占的名额放弃。
+	// 截断与超时的结论未知:节点可能已经建出实体,这份实体不回收 —— 下一次改派多半仍挑它,按 scene_id 幂等复用;
+	// 与 migrateWorldChannel 建场景失败时的取舍相同。
+	generation, err := allocatePlacementGeneration(l.svcCtx, zoneId)
+	if err != nil {
+		l.abandonAgonesRoomAfterReassign(zoneId, placement, "placement_generation_unavailable")
+		return "", fmt.Errorf("scene %d on dead node %s, ownership unchanged: %w", sceneId, deadNode, err)
+	}
+	if _, err := RequestNodeCreateSceneAtGeneration(l.ctx, l.svcCtx, zoneId, newNodeId, uint32(sceneConfId), sceneId, generation); err != nil {
+		l.abandonAgonesRoomAfterReassign(zoneId, placement, "create_scene_failed")
+		return "", fmt.Errorf("scene %d on dead node %s: CreateScene on %s failed, ownership unchanged: %w", sceneId, deadNode, newNodeId, err)
+	}
+	if !reassignWorldChannelNode(l.svcCtx, zoneId, sceneId, deadNode, newNodeId, worldChannelsKey(zoneId, sceneConfId), generation) {
+		_, owner, err := l.adoptOwnerAfterLostReassign(sceneId, sceneConfId, zoneId, deadNode, newNodeId, generation, placement)
+		return owner, err
+	}
+	l.Logger.Infof("resolveScene: world channel %d was on dead node %s, reassigned to %s", sceneId, deadNode, newNodeId)
+	l.commitAgonesRoomAfterReassign(sceneId, zoneId, newNodeId, placement)
+	return newNodeId, nil
+}
+
 // adoptOwnerAfterLostReassign 处理 reassignSceneOffDeadNode 的 CAS 落空。此时 triedNode 上已经按放置代次 generation
-// 预建了实体;reassignWorldChannelNode 本次什么都没写,Redis 出错除外(脚本可能已执行,结论未知)。按这次的代次跑一次
-// 回收(reclaimUnownedWorldChannelEntity,限时 deadNodeReassignFollowUpTimeout,不挂请求 ctx):在一个脚本里比对属主、
-// 抬代次高水位,属主不是 triedNode 才拆预建的实体。比对时读到的属主就是重读结果,据此定应答,不再改派。
+// 预建了实体、在它的 GameServer 上占了名额(placement,没开 Agones 时为 nil);reassignWorldChannelNode 本次什么都没写,
+// Redis 出错除外(脚本可能已执行,结论未知)。按这次的代次跑一次回收(reclaimUnownedWorldChannelEntity,限时
+// deadNodeReassignFollowUpTimeout,不挂请求 ctx):在一个脚本里比对属主、抬代次高水位,属主不是 triedNode 才拆预建的
+// 实体。比对时读到的属主就是重读结果,据此定应答,不再改派。
 //
 // 不为落空另开错误码:落空的常见原因是别的写者刚做完同一件事,答案已经在 Redis 里,
 // 让玩家重试一圈拿到的也是这一次重读的结果。
 //
-//   - 比对失败:不知道预建的实体是不是现任属主的,不回收(同 destroyUnownedMigrationTarget),回错误。
+//   - 比对失败:不知道预建的实体是不是现任属主的,不回收(同 destroyUnownedMigrationTarget),放弃这次的名额,回错误。
+//     脚本其实已执行的话,旧条目仍记着,总数不少,之后由名额对账转过来。
 //   - 属主就是 triedNode:预建的实体正是现任属主的实体 —— 别的写者挑了同一个节点,或者 Redis 报错而本次脚本
-//     其实已执行。直接采用(高水位已抬到 generation,之后迁出时的拆除拆得到这份实体)。名额转移照做:它对同一个
-//     目标幂等(见 TransferAgonesRoomForScene),而后一种情况、以及不转名额的写者先提交的情况,都只能靠这里转。
+//     其实已执行。直接采用(高水位已抬到 generation,之后迁出时的拆除拆得到这份实体)。名额照常提交:别的写者已提交的,
+//     记录已在这台上,这次的条目放弃;没提交的,这次就是那一份。两边都按条目,只会留一条(commitAgonesRoomTransfer)。
 //
 // 其余情况属主都不是 triedNode,预建的实体没有归属,已按 generation 回收(拆除失败只记日志:留下的空实体没有映射
-// 指向它,不影响路由),再按属主定结果:
+// 指向它,不影响路由),这次的名额放弃,再按属主定结果:
 //
 //   - 属主是活节点:别的写者已接手,直接用它。
 //   - 属主仍是 deadNode:不是被抢,是没改成 —— 第二道屏障拦下、频道在提交前被缩容排空摘出在役集合、代次过期,
@@ -1630,11 +1752,12 @@ func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, 
 //   - 映射没了:场景已被销毁,与入口处「查无此场景」同一处理。
 //   - 属主身份歧义或也不活:拒绝,不连环改派;下一次请求按当时的属主重新判定。
 func (l *EnterSceneLogic) adoptOwnerAfterLostReassign(sceneId, sceneConfId uint64, zoneId uint32, deadNode, triedNode string,
-	generation uint64) (uint64, string, error) {
+	generation uint64, placement *agonesPlacement) (uint64, string, error) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(l.ctx), deadNodeReassignFollowUpTimeout)
 	reclaim, err := reclaimUnownedWorldChannelEntity(ctx, l.svcCtx, zoneId, sceneConfId, sceneId, triedNode, generation)
 	cancel()
 	if err != nil {
+		l.abandonAgonesRoomAfterReassign(zoneId, placement, "reassign_outcome_unknown")
 		return 0, "", fmt.Errorf("scene %d: reassign off dead node %s to %s has an unknown outcome and the owner check failed; the entity pre-created on %s is left in place: %w",
 			sceneId, deadNode, triedNode, triedNode, err)
 	}
@@ -1642,9 +1765,10 @@ func (l *EnterSceneLogic) adoptOwnerAfterLostReassign(sceneId, sceneConfId uint6
 	if reclaim.Kept {
 		l.Logger.Infof("resolveScene: scene %d reassign %s -> %s lost the CAS, but %s already owns it; adopting the pre-created entity",
 			sceneId, deadNode, triedNode, triedNode)
-		l.transferAgonesRoomAfterReassign(sceneId, zoneId, triedNode)
+		l.commitAgonesRoomAfterReassign(sceneId, zoneId, triedNode, placement)
 		return sceneId, owner, nil
 	}
+	l.abandonAgonesRoomAfterReassign(zoneId, placement, "reassign_lost")
 
 	if reclaim.DestroyErr != nil {
 		l.Logger.Errorf("resolveScene: reclaiming unowned pre-created scene %d on %s failed (owner=%q): %v",
@@ -1673,13 +1797,21 @@ func (l *EnterSceneLogic) adoptOwnerAfterLostReassign(sceneId, sceneConfId uint6
 	return sceneId, owner, nil
 }
 
-// transferAgonesRoomAfterReassign 在归属已经落到 newNode 之后,把 Agones 名额转过去。名额只是容量记账,
-// 占不到时 TransferAgonesRoomForScene 保留旧名额并打日志,交给 reconcile 暴露漂移,不拦本次进场。
-// Agones 未启用时是 no-op。
-func (l *EnterSceneLogic) transferAgonesRoomAfterReassign(sceneId uint64, zoneId uint32, newNode string) {
+// commitAgonesRoomAfterReassign 在归属已经落到 newNode 之后,提交改派之前在 newNode 上预占的名额(commitReservedAgonesRoom:
+// 写进记录、删旧条目)。名额只是容量记账,提交出错不拦本次进场:旧条目仍记着、新条目由在途占用护着,只会多记、不会少记,
+// 在途占用过期之后对账按记录收拾。Agones 未启用时 placement 为 nil,什么都不做。
+func (l *EnterSceneLogic) commitAgonesRoomAfterReassign(sceneId uint64, zoneId uint32, newNode string, placement *agonesPlacement) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(l.ctx), deadNodeReassignFollowUpTimeout)
 	defer cancel()
-	TransferAgonesRoomForScene(ctx, l.svcCtx, sceneId, newNode, zoneId)
+	commitReservedAgonesRoom(ctx, l.svcCtx, zoneId, sceneId, newNode, placement)
+}
+
+// abandonAgonesRoomAfterReassign 放弃改派之前预占、最终没用上的名额(建实体失败、CAS 落空且属主不是落点等)。
+// 删条目失败不用管:在途占用已删,没有记录指着的条目由对账当孤儿收。Agones 未启用时 placement 为 nil,什么都不做。
+func (l *EnterSceneLogic) abandonAgonesRoomAfterReassign(zoneId uint32, placement *agonesPlacement, reason string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(l.ctx), deadNodeReassignFollowUpTimeout)
+	defer cancel()
+	abandonAgonesPlacement(ctx, l.svcCtx, zoneId, placement, reason)
 }
 
 func (l *EnterSceneLogic) resolveSceneForEnter(sceneId uint64, sceneConfId uint64, zoneId uint32, playerId uint64) (uint64, string, bool, error) {
@@ -1771,8 +1903,11 @@ func (l *EnterSceneLogic) routePlayerToGate(in *scene_manager.EnterSceneRequest,
 		return fmt.Errorf("address RoutePlayer command: %w", err)
 	}
 	// 不用可取消 context：kafka-go 在 context 返回后仍可能继续投递批次。
-	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 提供有界终态。
-	if err := l.svcCtx.Kafka.WriteMessages(context.Background(), msg); err != nil {
+	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 提供有界终态。WithoutCancel 同样不可取消,只多保留请求的 trace
+	// (同 sendRedirectToGate)。
+	sendCtx := context.WithoutCancel(l.ctx)
+	msg.Headers = kafkagotrace.Headers(sendCtx)
+	if err := l.svcCtx.Kafka.WriteMessages(sendCtx, msg); err != nil {
 		return fmt.Errorf("push to Kafka topic %s partition %d: %w", msg.Topic, msg.Partition, err)
 	}
 

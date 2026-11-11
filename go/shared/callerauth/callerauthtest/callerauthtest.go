@@ -2,13 +2,12 @@
 //
 // 在线域的原身份只认 gate 签名的 SessionDetails(shared/roleidentity 的入口准入只读验签原件)。测试要么走真实的
 // 签名 + callerauth.SessionInterceptor 得到带验签原件的 ctx(Incoming),要么只放会话 metadata、
-// 不带原件(Unverified),用来证明未签名的声明进不了业务。密钥只在测试进程内使用。
+// 不带原件(Unverified),用来证明未签名的声明进不了业务。密钥对只在测试进程内使用。
 package callerauthtest
 
 import (
+	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/base64"
 	"testing"
 
@@ -20,18 +19,25 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Key 是测试专用的 HMAC 密钥,同时满足 callerauth.Signer 与 callerauth.SecretVerifier。
+// Key 是测试专用的 Ed25519 密钥对:Sign 扮演 gate 的私钥,Verify 扮演验证方的公钥列表,
+// 同时满足 callerauth.Signer 与 callerauth.KeySet。种子固定,结果确定。
 type Key struct{}
 
-var testSecret = []byte("callerauthtest-only-deterministic-secret-0123456789")
+var testSigner = mustTestSigner()
 
-func (Key) Sign(data []byte) []byte {
-	m := hmac.New(sha256.New, testSecret)
-	_, _ = m.Write(data)
-	return m.Sum(nil)
+func mustTestSigner() callerauth.Ed25519Signer {
+	signer, err := callerauth.NewEd25519Signer(bytes.Repeat([]byte{0x5a}, 32))
+	if err != nil {
+		panic(err)
+	}
+	return signer
 }
 
-func (k Key) Verify(mac, data []byte) bool { return hmac.Equal(mac, k.Sign(data)) }
+func (Key) Sign(data []byte) []byte { return testSigner.Sign(data) }
+
+func (Key) Verify(signature, data []byte) bool {
+	return callerauth.PublicKeys{testSigner.PublicKey()}.Verify(signature, data)
+}
 
 // Incoming 按 gate 的签名契约给 detail 签 fullMethod,并让它通过 callerauth.SessionInterceptor。
 // 返回的 ctx 同时带原始入站 metadata 与验签原件;在线域入口准入(roleidentity.EntryInterceptor)只认后者。
@@ -42,7 +48,7 @@ func Incoming(t testing.TB, fullMethod string, detail *base.SessionDetails) cont
 	if err != nil {
 		t.Fatalf("callerauthtest: 签名失败: %v", err)
 	}
-	verifier := callerauth.NewVerifier(callerauth.Options{Secrets: Key{}, Enforce: true, AllowedCallers: []string{"gate"}})
+	verifier := callerauth.NewVerifier(callerauth.Options{Keys: Key{}, Enforce: true, AllowedCallers: []string{"gate"}})
 	var verified context.Context
 	_, err = callerauth.SessionInterceptor(verifier)(metadata.NewIncomingContext(context.Background(), md), nil,
 		&grpc.UnaryServerInfo{FullMethod: fullMethod}, func(ctx context.Context, _ any) (any, error) {

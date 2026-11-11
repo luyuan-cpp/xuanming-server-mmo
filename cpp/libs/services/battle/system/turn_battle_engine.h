@@ -19,6 +19,7 @@
 //   player_battle.pb.h —— TurnResultS2C / BattleStateS2C(客户端协议)
 #include "proto/battle/battle_data.pb.h"
 #include "proto/battle/battle_node.pb.h"
+#include "proto/battle/battle_script.pb.h"
 #include "proto/battle/player_battle.pb.h"
 
 #include "constants/turn_battle_constants.h"
@@ -88,6 +89,23 @@ public:
     // BattleStateS2C.self_items 时用它。玩家不在本局返回空表。
     std::vector<BattleItemEntry> SelfItems(uint64_t playerId) const;
 
+    // 开局时被忽略的战斗剧本及原因(英文,每条一句;CreateBattleRequest.team_scripts 里不合法的条目)。
+    // 引擎不打日志,由节点在 Initialize 成功后逐条记 ERROR;被忽略的队出手照旧,对局照常进行
+    const std::vector<std::string>& ScriptRejections() const { return scriptRejections; }
+
+    // 回合制可施放的技能类型**黑名单**:拒绝 Passive(被动) / Toggle(开关) /
+    // Channel(持续施法,引擎已删相位概念);skill_type 为空或只含其它位号一律放行
+    // (存量表未必每行都填了 skill_type,白名单会把没填的全判死)。
+    // 表里 skill_type 存的是位号(0..5),不是掩码。职业被动另按 passive_stat 非空判定
+    // (被动位号是 0,导表器把重复槽位里的 0 当空格丢掉,skill_type 写不出它)。
+    // 与 scene 侧 PlayerSkillSystem::IsTurnBattleCastable 逐条同源:改一处必须同改另一处。
+    // 只看表行、不读引擎状态;公开给战斗剧本的开局前校验(battle_script.h),判据只此一份。
+    static bool IsTurnBattleCastableSkill(const SkillTable& skillRow);
+
+    // 老技能(class_id == 0)的耗蓝:cost_resource[] 里法力资源的 cost 之和。职业技能按最大法力比例算,不走这里。
+    // 公开给战斗剧本校验「怪物只能放零耗蓝的技能」(怪物没有法力列),与出手时的耗蓝同一份算法
+    static uint64_t LegacySkillManaCost(const SkillTable& skillRow);
+
 private:
     friend class TurnBattleEngineDeathTestAccess; // 内存测试注入周期伤害来源，不新增业务控制接口
     // ---- 初始化 ----
@@ -116,14 +134,6 @@ private:
     // ITEM 校验:表行存在且 battle_usable、快照副本里还有余量、目标合法(自己或同队存活单位)、
     // PVP 场次未超每人上限。这是提交期与出手期共用的唯一判据。
     uint32_t CheckItemUse(const BattleActorState& actor, const BattleAction& action) const;
-    // 回合制可施放的技能类型**黑名单**:拒绝 Passive(被动) / Toggle(开关) /
-    // Channel(持续施法,引擎已删相位概念);skill_type 为空或只含其它位号一律放行
-    // (存量表未必每行都填了 skill_type,白名单会把没填的全判死)。
-    // 表里 skill_type 存的是位号(0..5),不是掩码。职业被动另按 passive_stat 非空判定
-    // (被动位号是 0,导表器把重复槽位里的 0 当空格丢掉,skill_type 写不出它)。
-    // 与 scene 侧 PlayerSkillSystem::IsTurnBattleCastable 逐条同源:改一处必须同改另一处。
-    bool IsTurnBattleCastableSkill(const SkillTable& skillRow) const;
-
     // ---- 四职业技能(docs/design/class-skills.md §6;Skill.class_id != 0 的行) ----
 
     static bool IsClassSkill(const SkillTable& skillRow) { return skillRow.class_id() != 0; }
@@ -198,6 +208,31 @@ private:
     bool SpeedChangeFlipsOrder(const BattleActorState& target, uint64_t speedBefore, uint64_t speedAfter) const;
     // 普攻的比较基线:暴击与连击取期望、按剩余气血封顶,默认普攻目标随机,所以取各存活敌人的平均
     double AutoBasicAttackDamage(const BattleActorState& actor) const;
+
+    // ---- 战斗剧本(docs/design/battle-script.md) ----
+
+    // 本回合各角色位已选的目标:(role_id, target_id)。手动提交的行动也登记,跟随的角色位可以接着打。
+    // 只活在一次 FillScriptActions 里,按决策顺序追加;一队至多 10 个单位,线性查找
+    using ScriptClaims = std::vector<std::pair<uint32_t, uint64_t>>;
+
+    // 开局:取建房原件里每队的剧本,按本节点配表再校验(不合法记进 scriptRejections 并忽略),
+    // 按角色位 order 给本队单位认领角色位;认领了角色位的怪物把该角色位规则里的技能并进 skill_table_ids
+    // (怪物表没有技能列,怪物的技能集由剧本派生)
+    void BindBattleScripts();
+    // 每回合 FillDefaultActions 开头:按角色位 order 替本队还没有行动的单位选行动
+    // (挂机 / 超时的玩家、宝宝、怪物);已提交的手动行动一律不动
+    void FillScriptActions();
+    // 按规则 priority 取第一条能执行的:条件全成立、挑得出目标、过 CheckActionPrerequisites;都不行返回空。
+    // 只读当前状态,不消耗随机数
+    std::optional<BattleAction> SelectScriptAction(const BattleActorState& actor, const BattleScriptRole& role,
+                                                   const ScriptClaims& claims) const;
+    bool ScriptConditionHolds(const BattleActorState& actor, const BattleScriptCondition& condition) const;
+    bool ScriptFilterHolds(const BattleActorState& candidate, const BattleScriptTargetFilter& filter,
+                           uint32_t ownRoleId, const ScriptClaims& claims) const;
+    // ENEMY / ALLY 的候选:存活未逃、筛选全过,按 order 排好(同分按阵位、再按 actor_id 无符号升序)
+    std::vector<uint64_t> CollectScriptTargets(const BattleActorState& actor, const BattleScriptTarget& target,
+                                               uint32_t ownRoleId, const ScriptClaims& claims) const;
+    static bool ScriptRoleAccepts(const BattleScriptRole& role, const BattleActorState& actor);
 
     // ---- 回合结算 ----
 
@@ -361,6 +396,10 @@ private:
     std::map<uint64_t, BattleAction> pendingActions;      // actor_id → 本回合行动(有序容器保确定性)
     std::map<uint64_t, BattleSettlementData> settlements; // player_id → 结算累积(道具消耗账本等)
     std::map<uint64_t, uint32_t> itemUseCounts;           // player_id → 本场已用道具次数(PVP 限次用,有序容器保确定性)
+    // 战斗剧本:下标是 team_index,空 = 该队没有剧本、出手全走现行默认。开局取自建房原件、校验后整场不变
+    std::shared_ptr<const BattleScript> teamScripts[2];
+    std::map<uint64_t, uint32_t> scriptRoleOf;            // actor_id → 认领的 role_id(有序容器保确定性)
+    std::vector<std::string> scriptRejections;            // 开局被忽略的剧本及原因(见 ScriptRejections)
 
     std::mt19937_64 rng;
     uint32_t roundIndex = 1;       // 当前收集中的回合序号,从 1 开始

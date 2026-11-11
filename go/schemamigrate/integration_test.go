@@ -131,6 +131,25 @@ func TestIntegrationUpLifecycle(t *testing.T) {
 		t.Fatalf("恢复列类型: %v", err)
 	}
 
+	// 5b. 缺普通索引 → 只进 Warnings、ExitCode 0,结构化项带表名与索引名;补回后不再报。
+	// friend / guild / mail / rank 按 Report.MissingIndexes 把缺索引升级成拒启,这一步钉住真库的索引名
+	// 与 proto2mysql 的命名对得上:对不上时新建的库也会被误判缺索引而拒启。
+	if _, err := db.ExecContext(ctx, "ALTER TABLE `smit_listing` DROP INDEX `idx_smit_listing_1`"); err != nil {
+		t.Fatalf("制造缺索引: %v", err)
+	}
+	plan, err = Plan(ctx, db, opts(grown, favorite))
+	if missing := plan.MissingIndexes(); err != nil || ExitCode(plan, err) != ExitOK ||
+		len(missing) != 1 || missing[0].Table != "smit_listing" || missing[0].Index != "idx_smit_listing_1" {
+		t.Fatalf("缺索引 Plan: report=%+v err=%v", plan, err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER TABLE `smit_listing` ADD INDEX `idx_smit_listing_1` (`seller_player_id`, `listing_id`)"); err != nil {
+		t.Fatalf("补回索引: %v", err)
+	}
+	plan, err = Plan(ctx, db, opts(grown, favorite))
+	if missing := plan.MissingIndexes(); err != nil || len(missing) != 0 {
+		t.Fatalf("补回索引后不应再报缺索引: report=%+v err=%v", plan, err)
+	}
+
 	// 6. 锁被另一条连接持有 → ErrLockBusy / ExitCode 3。
 	holder, err := db.Conn(ctx)
 	if err != nil {

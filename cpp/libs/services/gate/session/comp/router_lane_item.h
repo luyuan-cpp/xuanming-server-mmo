@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 
+#include "core/tracing/trace_context.h"
 #include "router_lane.h"
 
 class ClientRequest;
@@ -24,6 +25,9 @@ struct RouterLaneItem
 	// 发出时原样作为 x-session-detail-bin。取入队时刻而不是发出时刻:排队期间换了角色,
 	// 请求也不会被算到新角色头上(与 Java 版 ClientSession.BackendPending 同一口径)。
 	std::string sessionDetailsBin;
+	// 入队时刻的 trace(docs/design/distributed-tracing.md §5.5),同样取入队时刻:真正发出可能在上一条请求的完成回调
+	// 或过期扫描里,那时线程上是别的上下文。发出时装回,出站 gRPC 据此写 traceparent。头文件只依赖 STL。
+	tracing::TraceContext trace;
 	CallSeq seq{kNoCallSeq};
 	SteadyTime enqueuedAt{};
 	// 回执用:不解引用 request 也能回带请求 id 的信封。

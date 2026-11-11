@@ -42,12 +42,14 @@ void OnRouteDecision(SessionId sessionId, SessionInfo &session, const SceneRoute
 // 否则按 lastSceneRoute 建一笔有上限的欠账(还没收到路由时什么都不做,等路由自己到来)。
 void OnLoginTypeBound(SessionId sessionId, SessionInfo &session, Clock::time_point now);
 
-// 客户端 LeaveGame(回到选角界面,TCP 不断)到达 gate、转发给 login 之前调用(docs/design/location-release-binding.md §3.5 R5):
-// 先向会话绑定的 scene 代发 ExitGame(与断线同一封包),再用 gate_scene_route::ResetSceneRoute 清空会话的 scene 路由状态并撤销欠账。
+// 客户端 LeaveGame(回到选角界面,TCP 不断)发给 login 的那一刻调用(docs/design/location-release-binding.md §3.5 R5;
+// client_session_handler.cpp ApplyLoginTransition;直连模式收包即发出,路由模式由路由 lane 的发出钩子在它真正发出时调,
+// 排在它前面的请求按原身份先执行):先向会话绑定的 scene 代发 ExitGame(与断线同一封包),再用 gate_scene_route::ResetSceneRoute 清空会话的 scene 路由状态并撤销欠账。
 // 之后同一连接上的进场只由新的路由事件驱动,不按 LeaveGame 之前的旧路由补发。会话没绑 scene 时只清状态。不会 erase 会话。
 void OnClientLeaveGame(SessionId sessionId, SessionInfo &session);
 
-// 客户端 EnterGame 到达 gate、转发给 login 之前调用(与 OnClientLeaveGame 同一个收包点):记下"LeaveGame 之后客户端已再次请求进场",
+// 客户端 EnterGame 发给 login 的那一刻调用(与 OnClientLeaveGame 同一种时刻:直连模式收包即发出,路由模式在 lane 真正发出时;
+// 按发出顺序置位,lane 里排在 LeaveGame 之前的 EnterGame 先置位、随后被 LeaveGame 的重置清掉):记下"LeaveGame 之后客户端已再次请求进场",
 // 从此 login 才可能为本连接发出新一次登录的 Bind 与路由;在这之前到达的一律按 LeaveGame 之前那条登录链丢弃
 // (gate_scene_route::NoteEnterGameRequested,location-release-binding.md §3.5,第二轮审计 r2-gate#1)。只改会话标志,不转发、不 erase。
 void OnClientEnterGame(SessionId sessionId, SessionInfo &session);

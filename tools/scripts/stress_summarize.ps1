@@ -388,7 +388,7 @@ function Get-FamilyCountsOrNull {
 # 按段打印「无数据」行。带 ASCII 的 no data,方便脚本与测试在任意控制台编码下匹配。
 function Write-NoData {
     param([string]$Reason)
-    Write-Host "  (无数据 no data: $Reason)" -ForegroundColor DarkGray
+    Write-Host "  (no data: $Reason)" -ForegroundColor DarkGray
 }
 
 # ----- Redis INFO 快照(stress_snap.ps1 -RedisTargets 写的 t<N>m_redis_<name>.txt) --------------
@@ -899,7 +899,7 @@ Write-Host "=== L1 Login outbound RPC (rpc_client_requests_duration_ms / _code_t
 Write-Host "  $($l1Legend -join ' ')"
 Write-Host ""
 if ($snapshots.Count -eq 0) {
-    Write-NoData "没有 login 快照"
+    Write-NoData "no login snapshot"
 } else {
     Write-Host ($l1Fmt -f $l1Header)
     Write-Host ($l1Fmt -f $l1Rule)
@@ -926,7 +926,7 @@ Write-Host ""
 Write-Host "=== L2 Login gate directory reads (login_gate_directory_reads_total) ===" -ForegroundColor Yellow
 Write-Host ""
 if ($snapshots.Count -eq 0) {
-    Write-NoData "没有 login 快照"
+    Write-NoData "no login snapshot"
 } else {
     Write-Host ($l2Fmt -f (@('snapshot') + $gateDirectorySources + @('cache%')))
     Write-Host ($l2Fmt -f (@('--------') + @($gateDirectorySources | ForEach-Object { '-' * $_.Length }) + @('------')))
@@ -979,7 +979,7 @@ Write-Host ""
 Write-Host "=== S1 SceneManager home_zone / role_lookup (home_zone_lookup_total, enter_scene_stage_seconds) ===" -ForegroundColor Yellow
 Write-Host ""
 if ($smSnapshots.Count -eq 0) {
-    Write-NoData "没有 *_sm 快照"
+    Write-NoData "no *_sm snapshot"
 } else {
     Write-Host ($s1Fmt -f @('snapshot', 'mapped', 'unmapped', 'unconfig', 'error', 'hz_n', 'hz_avg', 'hz_p99', 'rl_n', 'rl_avg', 'rl_p99'))
     Write-Host ($s1Fmt -f @('--------', '------', '--------', '--------', '-----', '----', '------', '------', '----', '------', '------'))
@@ -1004,7 +1004,7 @@ Write-Host ""
 Write-Host "=== D1 data_service home-zone reads (data_service_home_zone_read_seconds / _batch_ids / _route_read_total, :9260) ===" -ForegroundColor Yellow
 Write-Host ""
 if ($dsSnapshots.Count -eq 0) {
-    Write-NoData "没有 *_ds 快照(stress_snap.ps1 缺省抓 data_service :9260)"
+    Write-NoData "no *_ds snapshot (stress_snap.ps1 scrapes data_service :9260 by default)"
 } else {
     Write-Host ($d1Fmt -f @('snapshot', 'h_ok', 'h_nf', 'h_err', 'h_avg', 'h_p99', 'b_ok', 'b_nf', 'b_err', 'b_avg', 'b_p99', 'ids/b', 'rr_ok', 'rr_nf', 'rr_err'))
     Write-Host ($d1Fmt -f @('--------', '----', '----', '-----', '-----', '-----', '----', '----', '-----', '-----', '-----', '-----', '--------', '------', '---------'))
@@ -1051,7 +1051,7 @@ Write-Host ""
 Write-Host "=== D2 data_service account directory RPC (data_service_account_directory_rpc_seconds, :9260) ===" -ForegroundColor Yellow
 Write-Host ""
 if ($dsSnapshots.Count -eq 0) {
-    Write-NoData "没有 *_ds 快照"
+    Write-NoData "no *_ds snapshot"
 } else {
     Write-Host ($d2Fmt -f @('snapshot', 'rpc', 'n', 'avg', 'p99', 'nf', 'rej', 'err'))
     Write-Host ($d2Fmt -f @('--------', '---', '-', '---', '---', '--', '---', '---'))
@@ -1488,7 +1488,7 @@ function Get-QuantileSecondsCell {
     return $(if ($quantile.Overflow) { '>' } else { '' }) + (Format-DecimalCell $quantile.Value 1 's')
 }
 
-$matchNoSnapshot = "没有 *_match 快照(2026-11-05 之前的 stress_snap.ps1 不抓 :9170,或本机没起 match)"
+$matchNoSnapshot = "no *_match snapshot (stress_snap.ps1 before 2026-11-05 does not scrape :9170, or match is not running locally)"
 
 # G1:每个快照一行,跨 mode / level / pass 求和。
 #   owned        match_pool_owned(本副本负责的池数);units = match_pool_page_units 之和(本轮读到的可撮合单位数,近似排队深度,受页大小截断)
@@ -1598,7 +1598,7 @@ if ($matchSnapshots.Count -eq 0) {
 #   dead_*       reconcile_dead_gates / _dead_gate_members(本副本上还没清完的死 gate 与索引键,gauge)
 #   stale_inst   stale_gate_instance_total(来自别的 gate 实例、被忽略的断线 / 登出上报,跨 op 求和)
 #   rpc_*        go-zero 服务端 rpc_server_requests_duration_ms,跨全部方法(Reconnect、SetDisconnecting 等)
-$plNoSnapshot = "没有 *_pl 快照(2026-11-05 之前的 stress_snap.ps1 不抓 :9190,或本机没起 player_locator)"
+$plNoSnapshot = "no *_pl snapshot (stress_snap.ps1 before 2026-11-05 does not scrape :9190, or player_locator is not running locally)"
 $pl1Header = @('snapshot', 'leader', 'view_hold') + @($plIndexRoundColumns.Keys) + @($plSessionActionColumns.Keys) + @('dead_gates', 'dead_members', 'stale_inst', 'rpc_n', 'rpc_avg', 'rpc_p99')
 $pl1Fmt = "  {0,-30} | {1,-6} {2,-9} | {3,-6} {4,-7} {5,-8} | {6,-7} {7,-5} {8,-6} {9,-8} {10,-9} {11,-6} | {12,-10} {13,-12} | {14,-10} | {15,-7} {16,-8} {17}"
 Write-Host ""
@@ -1685,7 +1685,7 @@ Write-Host ""
 Write-Host "=== R1 Redis instance load (INFO snapshots t<N>m_redis_<name>.txt) ===" -ForegroundColor Yellow
 Write-Host ""
 if ($redisSnapshots.Count -eq 0) {
-    Write-NoData "没有 t<N>m_redis_<name>.txt(stress_snap.ps1 -RedisTargets)"
+    Write-NoData "no t<N>m_redis_<name>.txt (stress_snap.ps1 -RedisTargets)"
 } else {
     Write-Host ($r1Fmt -f @('target', 'window', 'secs', 'ops/s', 'cpu%', 'main%', 'in_KB/s', 'out_KB/s', 'clients', 'used_MB', 'mem%', 'rej_conn', 'err_rep', 'oom', 'aof_dfs', 'note'))
     Write-Host ($r1Fmt -f @('------', '------', '----', '-----', '----', '-----', '-------', '--------', '-------', '-------', '----', '--------', '-------', '---', '-------', '----'))
@@ -1735,7 +1735,7 @@ Write-Host ""
 Write-Host "=== R2 Redis top commands (commandstats delta, latencystats cumulative) ===" -ForegroundColor Yellow
 Write-Host ""
 if ($redisSnapshots.Count -eq 0) {
-    Write-NoData "没有 t<N>m_redis_<name>.txt(stress_snap.ps1 -RedisTargets)"
+    Write-NoData "no t<N>m_redis_<name>.txt (stress_snap.ps1 -RedisTargets)"
 } else {
     Write-Host ($r2Fmt -f @('target', 'window', 'cmd', 'calls/s', 'usec/call', 'p50', 'p99', 'p99.9', 'failed', 'rejected'))
     Write-Host ($r2Fmt -f @('------', '------', '---', '-------', '---------', '---', '---', '-----', '------', '--------'))
@@ -1816,7 +1816,7 @@ Write-Host ""
 Write-Host "=== M1 Mapping read path at a glance (avg per tag; rd = Redis $(if ($m1Redis) { $m1Redis } else { 'n/a' })) ===" -ForegroundColor Yellow
 Write-Host ""
 if ($m1ByTag.Count -eq 0) {
-    Write-NoData "没有任何 t<N>m_* 快照"
+    Write-NoData "no t<N>m_* snapshots at all"
 } else {
     Write-Host ($m1Fmt -f @('tag', 'l_bgz', 'l_rad', 'ds_batch', 'ds_home', 'ds_dir', 'sm_hz', 'sm_rl', 'db_claim', 'db_save', 'rd_ops/s', 'rd_main%'))
     Write-Host ($m1Fmt -f @('---', '-----', '-----', '--------', '-------', '------', '-----', '-----', '--------', '-------', '--------', '--------'))

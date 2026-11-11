@@ -172,6 +172,7 @@
     <ClCompile Include="table_battle_data_provider_test.cpp" />
     <ClCompile Include="battle_result_activity_test.cpp" />
     <ClCompile Include="class_skill_test.cpp" />
+    <ClCompile Include="battle_script_test.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>

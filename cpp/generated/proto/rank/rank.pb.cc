@@ -57,11 +57,11 @@ constexpr RankEntry::ParseTableT_ RankEntry::InternalGenerateParseTable_(const :
     {
       PROTOBUF_FIELD_OFFSET(RankEntry, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -92,7 +92,10 @@ constexpr RankEntry::ParseTableT_ RankEntry::InternalGenerateParseTable_(const :
       {::_pbi::TcParser::FastUS1,
        {42, 0, 0,
         PROTOBUF_FIELD_OFFSET(RankEntry, _impl_.name_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool beyond_rank_limit = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(RankEntry, _impl_.beyond_rank_limit_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(RankEntry, _impl_.beyond_rank_limit_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -107,6 +110,8 @@ constexpr RankEntry::ParseTableT_ RankEntry::InternalGenerateParseTable_(const :
       {PROTOBUF_FIELD_OFFSET(RankEntry, _impl_.achieved_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string name = 5;
       {PROTOBUF_FIELD_OFFSET(RankEntry, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool beyond_rank_limit = 6;
+      {PROTOBUF_FIELD_OFFSET(RankEntry, _impl_.beyond_rank_limit_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -128,7 +133,8 @@ inline constexpr RankEntry::Impl_::Impl_(
         rank_{::uint64_t{0u}},
         entity_id_{::uint64_t{0u}},
         score_{::int64_t{0}},
-        achieved_ms_{::uint64_t{0u}} {}
+        achieved_ms_{::uint64_t{0u}},
+        beyond_rank_limit_{false} {}
 
 template <typename>
 constexpr RankEntry::RankEntry(::_pbi::ConstantInitialized,
@@ -411,11 +417,11 @@ constexpr GetRankPageResponse::ParseTableT_ GetRankPageResponse::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(GetRankPageResponse, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      10,  // num_field_entries
       4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -459,10 +465,13 @@ constexpr GetRankPageResponse::ParseTableT_ GetRankPageResponse::InternalGenerat
        {66, 3, 3,
         PROTOBUF_FIELD_OFFSET(GetRankPageResponse, _impl_.self_)}},
       // .rankpb.RankGenerationState state = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetRankPageResponse, _impl_.state_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetRankPageResponse, _impl_.state_), 9>(),
+       {72, 9, 0,
         PROTOBUF_FIELD_OFFSET(GetRankPageResponse, _impl_.state_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 rank_limit = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetRankPageResponse, _impl_.rank_limit_), 8>(),
+       {80, 8, 0,
+        PROTOBUF_FIELD_OFFSET(GetRankPageResponse, _impl_.rank_limit_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -488,7 +497,9 @@ constexpr GetRankPageResponse::ParseTableT_ GetRankPageResponse::InternalGenerat
       // .rankpb.RankEntry self = 8;
       {PROTOBUF_FIELD_OFFSET(GetRankPageResponse, _impl_.self_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .rankpb.RankGenerationState state = 9;
-      {PROTOBUF_FIELD_OFFSET(GetRankPageResponse, _impl_.state_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(GetRankPageResponse, _impl_.state_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint64 rank_limit = 10;
+      {PROTOBUF_FIELD_OFFSET(GetRankPageResponse, _impl_.rank_limit_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -534,6 +545,7 @@ inline constexpr GetRankPageResponse::Impl_::Impl_(
         page_{0u},
         page_size_{0u},
         page_count_{::uint64_t{0u}},
+        rank_limit_{::uint64_t{0u}},
         state_{static_cast< ::rankpb::RankGenerationState >(0)} {}
 
 template <typename>
@@ -802,11 +814,11 @@ constexpr GetRankAroundResponse::ParseTableT_ GetRankAroundResponse::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -816,10 +828,7 @@ constexpr GetRankAroundResponse::ParseTableT_ GetRankAroundResponse::InternalGen
       ::_pbi::TcParser::GetTable<::rankpb::GetRankAroundResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .rankpb.RankEntry self = 4;
-      {::_pbi::TcParser::FastMtS1,
-       {34, 3, 3,
-        PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_.self_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // .TipInfoMessage error_message = 1;
       {::_pbi::TcParser::FastMtS1,
        {10, 1, 0,
@@ -832,6 +841,16 @@ constexpr GetRankAroundResponse::ParseTableT_ GetRankAroundResponse::InternalGen
       {::_pbi::TcParser::FastMtR1,
        {26, 0, 2,
         PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_.entries_)}},
+      // .rankpb.RankEntry self = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 3, 3,
+        PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_.self_)}},
+      // uint64 rank_limit = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetRankAroundResponse, _impl_.rank_limit_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_.rank_limit_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -843,6 +862,8 @@ constexpr GetRankAroundResponse::ParseTableT_ GetRankAroundResponse::InternalGen
       {PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_.entries_), _Internal::kHasBitsOffset + 0, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // .rankpb.RankEntry self = 4;
       {PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_.self_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 rank_limit = 5;
+      {PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_.rank_limit_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -883,7 +904,8 @@ inline constexpr GetRankAroundResponse::Impl_::Impl_(
         ,
         error_message_{nullptr},
         board_{nullptr},
-        self_{nullptr} {}
+        self_{nullptr},
+        rank_limit_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr GetRankAroundResponse::GetRankAroundResponse(::_pbi::ConstantInitialized,
@@ -1154,17 +1176,19 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rankpb::RankEntry, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::rankpb::RankEntry, _impl_.rank_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankEntry, _impl_.entity_id_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankEntry, _impl_.score_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankEntry, _impl_.achieved_ms_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankEntry, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::rankpb::RankEntry, _impl_.beyond_rank_limit_),
         1,
         2,
         3,
         4,
         0,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankPageRequest, _impl_._has_bits_),
         6, // hasbit index offset
@@ -1176,7 +1200,7 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankPageResponse, _impl_._has_bits_),
-        12, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankPageResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankPageResponse, _impl_.board_),
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankPageResponse, _impl_.entries_),
@@ -1186,6 +1210,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankPageResponse, _impl_.page_count_),
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankPageResponse, _impl_.self_),
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankPageResponse, _impl_.state_),
+        PROTOBUF_FIELD_OFFSET(::rankpb::GetRankPageResponse, _impl_.rank_limit_),
         1,
         2,
         0,
@@ -1194,6 +1219,7 @@ const ::uint32_t
         6,
         7,
         3,
+        9,
         8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankAroundRequest, _impl_._has_bits_),
@@ -1204,25 +1230,27 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankAroundResponse, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankAroundResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankAroundResponse, _impl_.board_),
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankAroundResponse, _impl_.entries_),
         PROTOBUF_FIELD_OFFSET(::rankpb::GetRankAroundResponse, _impl_.self_),
+        PROTOBUF_FIELD_OFFSET(::rankpb::GetRankAroundResponse, _impl_.rank_limit_),
         1,
         2,
         0,
         3,
+        4,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::rankpb::RankBoardKey)},
         {13, sizeof(::rankpb::RankEntry)},
-        {26, sizeof(::rankpb::GetRankPageRequest)},
-        {35, sizeof(::rankpb::GetRankPageResponse)},
-        {56, sizeof(::rankpb::GetRankAroundRequest)},
-        {63, sizeof(::rankpb::GetRankAroundResponse)},
+        {28, sizeof(::rankpb::GetRankPageRequest)},
+        {37, sizeof(::rankpb::GetRankPageResponse)},
+        {60, sizeof(::rankpb::GetRankAroundRequest)},
+        {67, sizeof(::rankpb::GetRankAroundResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1240,36 +1268,38 @@ const char descriptor_table_protodef_proto_2frank_2frank_2eproto[] ABSL_ATTRIBUT
     "tip.proto\"z\n\014RankBoardKey\022\022\n\nboard_type\030"
     "\001 \001(\r\022 \n\005scope\030\002 \001(\0162\021.rankpb.RankScope\022"
     "\020\n\010scope_id\030\003 \001(\004\022\016\n\006period\030\004 \001(\t\022\022\n\ngen"
-    "eration\030\005 \001(\004\"^\n\tRankEntry\022\014\n\004rank\030\001 \001(\004"
+    "eration\030\005 \001(\004\"y\n\tRankEntry\022\014\n\004rank\030\001 \001(\004"
     "\022\021\n\tentity_id\030\002 \001(\004\022\r\n\005score\030\003 \001(\003\022\023\n\013ac"
-    "hieved_ms\030\004 \001(\004\022\014\n\004name\030\005 \001(\t\"Z\n\022GetRank"
-    "PageRequest\022#\n\005board\030\001 \001(\0132\024.rankpb.Rank"
-    "BoardKey\022\014\n\004page\030\002 \001(\r\022\021\n\tpage_size\030\003 \001("
-    "\r\"\235\002\n\023GetRankPageResponse\022&\n\rerror_messa"
-    "ge\030\001 \001(\0132\017.TipInfoMessage\022#\n\005board\030\002 \001(\013"
-    "2\024.rankpb.RankBoardKey\022\"\n\007entries\030\003 \003(\0132"
-    "\021.rankpb.RankEntry\022\023\n\013total_count\030\004 \001(\004\022"
-    "\014\n\004page\030\005 \001(\r\022\021\n\tpage_size\030\006 \001(\r\022\022\n\npage"
-    "_count\030\007 \001(\004\022\037\n\004self\030\010 \001(\0132\021.rankpb.Rank"
-    "Entry\022*\n\005state\030\t \001(\0162\033.rankpb.RankGenera"
-    "tionState\"K\n\024GetRankAroundRequest\022#\n\005boa"
-    "rd\030\001 \001(\0132\024.rankpb.RankBoardKey\022\016\n\006radius"
-    "\030\002 \001(\r\"\251\001\n\025GetRankAroundResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\022#\n\005boar"
-    "d\030\002 \001(\0132\024.rankpb.RankBoardKey\022\"\n\007entries"
-    "\030\003 \003(\0132\021.rankpb.RankEntry\022\037\n\004self\030\004 \001(\0132"
-    "\021.rankpb.RankEntry*\204\001\n\tRankScope\022\032\n\026RANK"
-    "_SCOPE_UNSPECIFIED\020\000\022\025\n\021RANK_SCOPE_GLOBA"
-    "L\020\001\022\024\n\020RANK_SCOPE_GUILD\020\002\022\027\n\023RANK_SCOPE_"
-    "INSTANCE\020\003\022\025\n\021RANK_SCOPE_CUSTOM\020\004*l\n\023Ran"
-    "kGenerationState\022\037\n\033RANK_GENERATION_UNSP"
-    "ECIFIED\020\000\022\030\n\024RANK_GENERATION_OPEN\020\001\022\032\n\026R"
-    "ANK_GENERATION_SEALED\020\0022\257\001\n\020ClientPlayer"
-    "Rank\022F\n\013GetRankPage\022\032.rankpb.GetRankPage"
-    "Request\032\033.rankpb.GetRankPageResponse\022L\n\r"
-    "GetRankAround\022\034.rankpb.GetRankAroundRequ"
-    "est\032\035.rankpb.GetRankAroundResponse\032\005\210\250\303\001"
-    "\001B\025Z\017rank/proto/rank\230\324a\022b\006proto3"
+    "hieved_ms\030\004 \001(\004\022\014\n\004name\030\005 \001(\t\022\031\n\021beyond_"
+    "rank_limit\030\006 \001(\010\"Z\n\022GetRankPageRequest\022#"
+    "\n\005board\030\001 \001(\0132\024.rankpb.RankBoardKey\022\014\n\004p"
+    "age\030\002 \001(\r\022\021\n\tpage_size\030\003 \001(\r\"\261\002\n\023GetRank"
+    "PageResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022#\n\005board\030\002 \001(\0132\024.rankpb.Ran"
+    "kBoardKey\022\"\n\007entries\030\003 \003(\0132\021.rankpb.Rank"
+    "Entry\022\023\n\013total_count\030\004 \001(\004\022\014\n\004page\030\005 \001(\r"
+    "\022\021\n\tpage_size\030\006 \001(\r\022\022\n\npage_count\030\007 \001(\004\022"
+    "\037\n\004self\030\010 \001(\0132\021.rankpb.RankEntry\022*\n\005stat"
+    "e\030\t \001(\0162\033.rankpb.RankGenerationState\022\022\n\n"
+    "rank_limit\030\n \001(\004\"K\n\024GetRankAroundRequest"
+    "\022#\n\005board\030\001 \001(\0132\024.rankpb.RankBoardKey\022\016\n"
+    "\006radius\030\002 \001(\r\"\275\001\n\025GetRankAroundResponse\022"
+    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022"
+    "#\n\005board\030\002 \001(\0132\024.rankpb.RankBoardKey\022\"\n\007"
+    "entries\030\003 \003(\0132\021.rankpb.RankEntry\022\037\n\004self"
+    "\030\004 \001(\0132\021.rankpb.RankEntry\022\022\n\nrank_limit\030"
+    "\005 \001(\004*\204\001\n\tRankScope\022\032\n\026RANK_SCOPE_UNSPEC"
+    "IFIED\020\000\022\025\n\021RANK_SCOPE_GLOBAL\020\001\022\024\n\020RANK_S"
+    "COPE_GUILD\020\002\022\027\n\023RANK_SCOPE_INSTANCE\020\003\022\025\n"
+    "\021RANK_SCOPE_CUSTOM\020\004*l\n\023RankGenerationSt"
+    "ate\022\037\n\033RANK_GENERATION_UNSPECIFIED\020\000\022\030\n\024"
+    "RANK_GENERATION_OPEN\020\001\022\032\n\026RANK_GENERATIO"
+    "N_SEALED\020\0022\257\001\n\020ClientPlayerRank\022F\n\013GetRa"
+    "nkPage\022\032.rankpb.GetRankPageRequest\032\033.ran"
+    "kpb.GetRankPageResponse\022L\n\rGetRankAround"
+    "\022\034.rankpb.GetRankAroundRequest\032\035.rankpb."
+    "GetRankAroundResponse\032\005\210\250\303\001\001B\025Z\017rank/pro"
+    "to/rank\230\324a\022b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2frank_2frank_2eproto_deps[2] = {
@@ -1280,7 +1310,7 @@ static ::absl::once_flag descriptor_table_proto_2frank_2frank_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2frank_2frank_2eproto = {
     false,
     false,
-    1392,
+    1459,
     descriptor_table_protodef_proto_2frank_2frank_2eproto,
     "proto/rank/rank.proto",
     &descriptor_table_proto_2frank_2frank_2eproto_once,
@@ -1670,9 +1700,9 @@ RankEntry::RankEntry(
                offsetof(Impl_, rank_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, rank_),
-           offsetof(Impl_, achieved_ms_) -
+           offsetof(Impl_, beyond_rank_limit_) -
                offsetof(Impl_, rank_) +
-               sizeof(Impl_::achieved_ms_));
+               sizeof(Impl_::beyond_rank_limit_));
 
   // @@protoc_insertion_point(copy_constructor:rankpb.RankEntry)
 }
@@ -1687,9 +1717,9 @@ inline void RankEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, rank_),
            0,
-           offsetof(Impl_, achieved_ms_) -
+           offsetof(Impl_, beyond_rank_limit_) -
                offsetof(Impl_, rank_) +
-               sizeof(Impl_::achieved_ms_));
+               sizeof(Impl_::beyond_rank_limit_));
 }
 RankEntry::~RankEntry() {
   // @@protoc_insertion_point(destructor:rankpb.RankEntry)
@@ -1743,10 +1773,10 @@ PROTOBUF_NOINLINE void RankEntry::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.name_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
     ::memset(&_impl_.rank_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.achieved_ms_) -
-        reinterpret_cast<char*>(&_impl_.rank_)) + sizeof(_impl_.achieved_ms_));
+        reinterpret_cast<char*>(&_impl_.beyond_rank_limit_) -
+        reinterpret_cast<char*>(&_impl_.rank_)) + sizeof(_impl_.beyond_rank_limit_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1817,6 +1847,15 @@ PROTOBUF_NOINLINE void RankEntry::Clear() {
     }
   }
 
+  // bool beyond_rank_limit = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_beyond_rank_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          6, this_._internal_beyond_rank_limit(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1842,7 +1881,7 @@ PROTOBUF_NOINLINE void RankEntry::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // string name = 5;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_name().empty()) {
@@ -1878,6 +1917,12 @@ PROTOBUF_NOINLINE void RankEntry::Clear() {
             this_._internal_achieved_ms());
       }
     }
+    // bool beyond_rank_limit = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_beyond_rank_limit() != 0) {
+        total_size += 2;
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -1896,7 +1941,7 @@ void RankEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_name().empty()) {
         _this->_internal_set_name(from._internal_name());
@@ -1926,6 +1971,11 @@ void RankEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.achieved_ms_ = from._impl_.achieved_ms_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_beyond_rank_limit() != 0) {
+        _this->_impl_.beyond_rank_limit_ = from._impl_.beyond_rank_limit_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1948,8 +1998,8 @@ void RankEntry::InternalSwap(RankEntry* PROTOBUF_RESTRICT PROTOBUF_NONNULL other
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RankEntry, _impl_.achieved_ms_)
-      + sizeof(RankEntry::_impl_.achieved_ms_)
+      PROTOBUF_FIELD_OFFSET(RankEntry, _impl_.beyond_rank_limit_)
+      + sizeof(RankEntry::_impl_.beyond_rank_limit_)
       - PROTOBUF_FIELD_OFFSET(RankEntry, _impl_.rank_)>(
           reinterpret_cast<char*>(&_impl_.rank_),
           reinterpret_cast<char*>(&other->_impl_.rank_));
@@ -2392,7 +2442,11 @@ PROTOBUF_NOINLINE void GetRankPageResponse::Clear() {
         reinterpret_cast<char*>(&_impl_.page_count_) -
         reinterpret_cast<char*>(&_impl_.total_count_)) + sizeof(_impl_.page_count_));
   }
-  _impl_.state_ = 0;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.rank_limit_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.state_) -
+        reinterpret_cast<char*>(&_impl_.rank_limit_)) + sizeof(_impl_.state_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -2487,11 +2541,20 @@ PROTOBUF_NOINLINE void GetRankPageResponse::Clear() {
   }
 
   // .rankpb.RankGenerationState state = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_state() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
           9, this_._internal_state(), target);
+    }
+  }
+
+  // uint64 rank_limit = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_rank_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_rank_limit(), target);
     }
   }
 
@@ -2572,9 +2635,16 @@ PROTOBUF_NOINLINE void GetRankPageResponse::Clear() {
       }
     }
   }
-   {
-    // .rankpb.RankGenerationState state = 9;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint64 rank_limit = 10;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_rank_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_rank_limit());
+      }
+    }
+    // .rankpb.RankGenerationState state = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_state() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_state());
@@ -2650,9 +2720,16 @@ void GetRankPageResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_state() != 0) {
-      _this->_impl_.state_ = from._impl_.state_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_rank_limit() != 0) {
+        _this->_impl_.rank_limit_ = from._impl_.rank_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_state() != 0) {
+        _this->_impl_.state_ = from._impl_.state_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -2985,6 +3062,7 @@ GetRankAroundResponse::GetRankAroundResponse(
   _impl_.self_ = (CheckHasBit(cached_has_bits, 0x00000008U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.self_)
                 : nullptr;
+  _impl_.rank_limit_ = from._impl_.rank_limit_;
 
   // @@protoc_insertion_point(copy_constructor:rankpb.GetRankAroundResponse)
 }
@@ -3003,9 +3081,9 @@ inline void GetRankAroundResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE ar
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, error_message_),
            0,
-           offsetof(Impl_, self_) -
+           offsetof(Impl_, rank_limit_) -
                offsetof(Impl_, error_message_) +
-               sizeof(Impl_::self_));
+               sizeof(Impl_::rank_limit_));
 }
 GetRankAroundResponse::~GetRankAroundResponse() {
   // @@protoc_insertion_point(destructor:rankpb.GetRankAroundResponse)
@@ -3075,6 +3153,7 @@ PROTOBUF_NOINLINE void GetRankAroundResponse::Clear() {
       _impl_.self_->Clear();
     }
   }
+  _impl_.rank_limit_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -3132,6 +3211,15 @@ PROTOBUF_NOINLINE void GetRankAroundResponse::Clear() {
         stream);
   }
 
+  // uint64 rank_limit = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_rank_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_rank_limit(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3157,7 +3245,7 @@ PROTOBUF_NOINLINE void GetRankAroundResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // repeated .rankpb.RankEntry entries = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_entries_size();
@@ -3180,6 +3268,13 @@ PROTOBUF_NOINLINE void GetRankAroundResponse::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.self_);
     }
+    // uint64 rank_limit = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_rank_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_rank_limit());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -3199,7 +3294,7 @@ void GetRankAroundResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_entries()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -3229,6 +3324,11 @@ void GetRankAroundResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.self_->MergeFrom(*from._impl_.self_);
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_rank_limit() != 0) {
+        _this->_impl_.rank_limit_ = from._impl_.rank_limit_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -3249,8 +3349,8 @@ void GetRankAroundResponse::InternalSwap(GetRankAroundResponse* PROTOBUF_RESTRIC
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.entries_.InternalSwap(&other->_impl_.entries_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_.self_)
-      + sizeof(GetRankAroundResponse::_impl_.self_)
+      PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_.rank_limit_)
+      + sizeof(GetRankAroundResponse::_impl_.rank_limit_)
       - PROTOBUF_FIELD_OFFSET(GetRankAroundResponse, _impl_.error_message_)>(
           reinterpret_cast<char*>(&_impl_.error_message_),
           reinterpret_cast<char*>(&other->_impl_.error_message_));

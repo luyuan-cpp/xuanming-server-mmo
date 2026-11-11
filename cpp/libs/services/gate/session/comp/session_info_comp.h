@@ -1,12 +1,13 @@
 #pragma once
 
+#include <chrono>
 #include <optional>
 #include <unordered_map>
 
 #include "muduo/net/TcpConnection.h"
 #include "engine/core/type_define/type_define.h"
 #include "message_limiter/message_limiter.h"
-#include "client_liveness.h"
+#include "network/client_liveness.h"
 #include "pending_scene_entry_comp.h"
 #include "router_lane_item.h"
 
@@ -147,10 +148,10 @@ struct SessionInfo
 	// IllegalPacketCounter::ThresholdFromEnv).
 	uint32_t illegalPacketCount{0};
 
-	// 应用层心跳的存活状态(docs/design/gate-client-heartbeat.md,纯逻辑在 client_liveness.h)。发过心跳的连接
+	// 应用层心跳的存活状态(docs/design/gate-client-heartbeat.md,纯逻辑在 core 的 network/client_liveness.h)。发过心跳的连接
 	// 连续 30s 收不到任何一帧,gate 就 forceClose,之后照常走断开回调。只由 nodes/gate/handler/rpc/client_heartbeat.{h,cpp}
 	// 读写;会话 erase 即随之消失,判死检查点按会话代次核对,不需要另外清理。
-	gate_liveness::ClientLiveness liveness;
+	client_liveness::ClientLiveness liveness;
 
 	// 关连接之前置位:断开回调代发 ExitGame 时填 EXIT_GAME_REASON_LEASE_EXPIRED,scene 立即退出,不按断线保留角色
 	// (docs/design/player-connection-lost-hold.md §3)。目前只有断线租约到期、gate 关残留假死连接这一处置位:
@@ -170,6 +171,19 @@ struct SessionInfo
 	// in-flight #102 codegen lands — see hmac-message-signing.md slice A
 	// for the exact lines that activate this field.
 	std::string hmacSessionKey;
+
+	// gate 排空迁移与重定向(docs/design/gate-drain-session-migration.md §4.3)。只由 nodes/gate 的
+	// handler/rpc/drain_migration.cpp 与 handler/gate_redirect_delivery.cpp 读写;放在会话里 = 会话 erase 即随之消失,
+	// 也不怕 session_id 复用。
+	//   - drainMigrationInFlight:本会话的 RequestGateMigration 还没回,不重复请求;
+	//   - drainMigrationRetryAt:上次没要到票(无目标、调用失败、没发出)之后的退避截止,默认值 = 不退避;
+	//   - lastEnterGameAt:最近一次转发客户端 EnterGame 的时刻。停在选角界面的连接在它之后一段时间内不迁,
+	//     避开「EnterGame 已发出、绑定还没回来」的窗口;
+	//   - redirectedAt:推 msg 124 的时刻,没推过为空。滞留关闭按它算。
+	bool drainMigrationInFlight{false};
+	std::chrono::steady_clock::time_point drainMigrationRetryAt{};
+	std::optional<std::chrono::steady_clock::time_point> lastEnterGameAt;
+	std::optional<std::chrono::steady_clock::time_point> redirectedAt;
 private:
 	NodeEntityMap nodeEntities; // Sparse map, only stores assigned node entities
 };

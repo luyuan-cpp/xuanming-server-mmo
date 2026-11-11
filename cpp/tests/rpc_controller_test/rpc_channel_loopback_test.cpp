@@ -8,6 +8,9 @@
 //   * 服务端:id≠0 的请求恰好回一帧(Empty / 0 字节 / handler 早返回也回),派发前的拒绝回显 id;SetFailed → HANDLER_FAILED;
 //     id=0 永不回包(同 zone 停服一次切换,没有旧规则兼容分支);RpcDoneCallback 的接管、重复完成、丢弃兜底、
 //     「连接已断」与「在 loop 之外释放」。
+//   * 链路追踪(docs/design/distributed-tracing.md §5.2):REQUEST 带上发起方当前的 trace,不在 trace 里就不带;
+//     服务端在收到的 trace 下面建子 span,信封里的 trace 不合法就开新根、照常派发;回包不带 trace,
+//     回包回调恢复发起方的 trace。
 //
 // 三种端点,全部跑在同一个 EventLoopThread 上:
 //   * server_:原始 TcpServer。kRecorder 模式只记录收到的帧、由测试手工回包(观察被测客户端);
@@ -67,6 +70,7 @@
 #include "network/rpc_controller.h"
 #include "network/rpc_done_callback.h"
 #include "network/rpc_status.h"
+#include "network/rpc_trace_envelope.h"
 #include "proto/common/base/empty.pb.h"
 #include "proto/common/base/message.pb.h"
 #include "proto/common/base/rpc_message.pb.h"
@@ -75,6 +79,7 @@
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "rpc/service_metadata/scene_admin_service_metadata.h"
 #include "rpc/service_metadata/scene_service_metadata.h"
+#include "thread_context/trace_context_tls.h"
 
 using namespace std::chrono_literals;
 
@@ -250,6 +255,13 @@ uint32_t RequestSessionOf(const GameRpcMessage& frame)
     ProcessClientPlayerMessageRequest request;
     EXPECT_TRUE(request.ParseFromString(frame.request())) << Describe(frame);
     return request.session_id();
+}
+
+// 信封上四个 trace 字段都是 0(帧上没有 trace)。
+bool HasNoTraceFields(const GameRpcMessage& frame)
+{
+    return frame.trace_id_hi() == 0 && frame.trace_id_lo() == 0 && frame.parent_span_id() == 0 &&
+           frame.trace_flags() == 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -493,6 +505,20 @@ public:
     int destroyCalls{0};
     // PrepareBattle 接管后暂存的回复:测试决定何时 Run / Fail / 释放。
     std::vector<RpcDoneCallback> parked;
+    // ProcessClientPlayerMessage 执行时的当前 trace,按请求的 session_id 记(链路追踪用例读)。
+    std::vector<std::pair<uint32_t, tracing::TraceContext>> processTraces;
+
+    std::optional<tracing::TraceContext> ProcessTraceOf(uint32_t sessionId) const
+    {
+        for (const auto& [session, trace] : processTraces)
+        {
+            if (session == sessionId)
+            {
+                return trace;
+            }
+        }
+        return std::nullopt;
+    }
 
     // 同步回显:返回即由框架回包。
     void ProcessClientPlayerMessage(::google::protobuf::RpcController*,
@@ -501,6 +527,7 @@ public:
                                     ::google::protobuf::Closure*) override
     {
         ++processCalls;
+        processTraces.emplace_back(request->session_id(), tracing::Current());
         response->set_session_id(request->session_id());
         *response->mutable_message_content() = request->message_content();
     }
@@ -2313,4 +2340,127 @@ TEST_F(RpcChannelLoopback, PreparedBootRejectsWireDispatchUntilAtomicOpenAndCann
     ASSERT_TRUE(log->WaitForCount(2));ASSERT_TRUE(log->Find("opened").has_value());EXPECT_TRUE(log->Find("opened")->status.ok());
     RunInLoopAndWait([&]{EXPECT_EQ(service_.processCalls,1);serverMaintenance_->CloseSources();EXPECT_FALSE(serverMaintenance_->PrepareSources());EXPECT_FALSE(serverMaintenance_->OpenPreparedSources());Issue(*probeChannel_,log,"closed",kProcessId,ProcessRequest(3));});
     ASSERT_TRUE(log->WaitForCount(3));ASSERT_TRUE(log->Find("closed").has_value());EXPECT_TRUE(log->Find("closed")->status.DefinitelyNotExecuted());
+}
+
+// ===========================================================================
+// 五、链路追踪(docs/design/distributed-tracing.md §5.2)
+// ===========================================================================
+
+// 被测客户端:REQUEST 帧带发起时的当前 trace(span_id 原样作 parent),不在 trace 里的调用一个字段都不带;单向请求同样带。
+TEST_F(RpcChannelLoopback, RequestFramesCarryTheCallerTrace)
+{
+    ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());   // kRecorder:看被测客户端发出的原始帧
+    auto log = std::make_shared<CallLog>();
+    const std::size_t from = serverRecorder_.Count();
+    tracing::TraceContext tracedCall;
+    tracing::TraceContext tracedOneWay;
+    RunInLoopAndWait([&] {
+        {
+            tracing::ScopedSpan span;
+            tracedCall = tracing::Current();
+            Issue(*client_, log, "traced", kProcessId, ProcessRequest(1));
+        }
+        EXPECT_FALSE(tracing::Current().IsValid()) << "loop thread leaked a trace";
+        Issue(*client_, log, "untraced", kProcessId, ProcessRequest(2));
+        {
+            tracing::ScopedSpan span;
+            tracedOneWay = tracing::Current();
+            EXPECT_TRUE(client_->SendRequest(kProcessId, ProcessRequest(3)));
+        }
+    });
+    ASSERT_TRUE(serverRecorder_.WaitForCount(from + 3));
+
+    const auto frames = serverRecorder_.Since(from);
+    ASSERT_EQ(frames.size(), 3u) << Describe(frames);
+    tracing::TraceContext seen;
+    ASSERT_TRUE(ReadTraceFromRpcEnvelope(frames[0], seen)) << Describe(frames[0]);
+    EXPECT_EQ(seen.trace_id.bytes, tracedCall.trace_id.bytes);
+    EXPECT_EQ(seen.span_id.bytes, tracedCall.span_id.bytes);
+    EXPECT_EQ(seen.flags, tracedCall.flags);
+    EXPECT_TRUE(HasNoTraceFields(frames[1])) << Describe(frames[1]);
+    ASSERT_TRUE(ReadTraceFromRpcEnvelope(frames[2], seen)) << Describe(frames[2]);
+    EXPECT_EQ(seen.trace_id.bytes, tracedOneWay.trace_id.bytes);
+    EXPECT_EQ(seen.span_id.bytes, tracedOneWay.span_id.bytes);
+}
+
+// 端到端:对端 handler 接上同一条 trace(子 span),回包回调回到发起方的 trace。
+TEST_F(RpcChannelLoopback, ServerHandlerAndReplyCallbackStayOnTheCallerTrace)
+{
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
+    auto replyTrace = std::make_shared<std::optional<tracing::TraceContext>>();   // 只在 loop 线程上读写
+    tracing::TraceContext caller;
+    RunInLoopAndWait([&] {
+        tracing::ScopedSpan span;
+        caller = tracing::Current();
+        client_->CallMethod(
+            kProcessId, ProcessRequest(11),
+            [replyTrace](const RpcStatus& status, const MessagePtr&)
+            {
+                EXPECT_TRUE(status.ok()) << status.name();
+                *replyTrace = tracing::Current();
+            },
+            RpcCallOptions{kLongTimeout});
+    });
+    ASSERT_TRUE(WaitUntil([&] { return replyTrace->has_value(); })) << "reply callback never ran";
+
+    std::optional<tracing::TraceContext> handlerTrace;
+    tracing::TraceContext callbackTrace;
+    RunInLoopAndWait([&] {
+        handlerTrace = service_.ProcessTraceOf(11);
+        callbackTrace = **replyTrace;
+    });
+    ASSERT_TRUE(handlerTrace.has_value());
+    EXPECT_EQ(handlerTrace->trace_id.bytes, caller.trace_id.bytes);   // 跨连接接上同一条 trace
+    EXPECT_NE(handlerTrace->span_id.bytes, caller.span_id.bytes);     // 对端在它下面建了子 span
+    EXPECT_EQ(callbackTrace.trace_id.bytes, caller.trace_id.bytes);   // 回包回调恢复发起方的 trace
+}
+
+// 被测服务端:合法的信封 trace 被接续;trace 不完整(trace_id 有、span 为 0)开新根且照常派发;
+// RESPONSE 与 RPC_ERROR 都不带 trace 字段。
+TEST_F(RpcChannelLoopback, ServerContinuesAValidEnvelopeTraceAndRootsAnInvalidOne)
+{
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    const auto emptySlot = FindEmptyRegistrySlot();
+    ASSERT_TRUE(emptySlot.has_value()) << "registry has no empty slot to craft a rejected request";
+
+    const tracing::TraceContext upstream = tracing::NewRoot();
+    GameRpcMessage valid = MakeRequestFrame(kCraftedIdBase + 1, kProcessId, ProcessRequest(21));
+    WriteTraceToRpcEnvelope(upstream, valid);
+    GameRpcMessage spanless = MakeRequestFrame(kCraftedIdBase + 2, kProcessId, ProcessRequest(22));
+    spanless.set_trace_id_hi(valid.trace_id_hi());
+    spanless.set_trace_id_lo(valid.trace_id_lo());
+    spanless.set_trace_flags(valid.trace_flags());
+    GameRpcMessage rejected = MakeRequestFrame(kCraftedIdBase + 3, *emptySlot, ProcessRequest(23));
+    WriteTraceToRpcEnvelope(upstream, rejected);
+
+    const std::size_t from = probeRecorder_.Count();
+    RunInLoopAndWait([&] {
+        SendFromProbe(valid);
+        SendFromProbe(spanless);
+        SendFromProbe(rejected);
+    });
+    const auto replies = FramesBeforeBarrier(from, kCraftedIdBase + 4);
+    ASSERT_EQ(replies.size(), 3u) << Describe(replies);
+    EXPECT_EQ(replies[0].type(), RESPONSE) << Describe(replies[0]);
+    EXPECT_EQ(replies[1].type(), RESPONSE) << Describe(replies[1]);   // 不合法的 trace 不影响派发
+    EXPECT_EQ(replies[2].type(), RPC_ERROR) << Describe(replies[2]);
+    for (const auto& reply : replies)
+    {
+        EXPECT_TRUE(HasNoTraceFields(reply)) << Describe(reply);
+    }
+
+    std::optional<tracing::TraceContext> continued;
+    std::optional<tracing::TraceContext> rooted;
+    RunInLoopAndWait([&] {
+        continued = service_.ProcessTraceOf(21);
+        rooted = service_.ProcessTraceOf(22);
+    });
+    ASSERT_TRUE(continued.has_value());
+    ASSERT_TRUE(rooted.has_value());
+    EXPECT_EQ(continued->trace_id.bytes, upstream.trace_id.bytes);
+    EXPECT_NE(continued->span_id.bytes, upstream.span_id.bytes);
+    EXPECT_TRUE(rooted->IsValid());
+    EXPECT_NE(rooted->trace_id.bytes, upstream.trace_id.bytes);   // 开了新根,没有沿用不完整的 trace
 }

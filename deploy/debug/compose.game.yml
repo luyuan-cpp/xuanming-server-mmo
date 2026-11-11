@@ -31,7 +31,7 @@ x-sql-boot: &sql-boot
   entrypoint: [/bin/sh, -ec, 'umask 077; exec pwsh -NoLogo -NoProfile -NonInteractive -File /app/sql-boot/tools/scripts/lib/sql_boot_catalog_docker.ps1 "$$@"', --]
   environment:
     MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先准备配置}
-    DB_ALLOWED_DATABASES: zone_1_db,player_store_1000000_db
+    DB_ALLOWED_DATABASES: player_store_1000000_db
 
 # 授权逐表给，所以注册排在全部建表之后。
 x-sql-boot-deps: &sql-boot-deps
@@ -181,7 +181,7 @@ services:
     entrypoint: [/app/service]
     command: [-f, /app/etc/service.yaml, -command, up]
     environment:
-      DB_ALLOWED_DATABASES: zone_1_db,player_store_1000000_db
+      DB_ALLOWED_DATABASES: player_store_1000000_db
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/db.schema.yaml:/app/etc/service.yaml:ro
     depends_on:
@@ -256,7 +256,7 @@ services:
     command: [/app/service, -f, /run/sql-writer/runtime/db.yaml]
     environment:
       <<: *go-env
-      DB_ALLOWED_DATABASES: zone_1_db,player_store_1000000_db
+      DB_ALLOWED_DATABASES: player_store_1000000_db
       POD_IP: ${DB_IP:?请先准备配置}
       MMORPG_PLAYER_STORE_SECRET_SCENE: ${PLAYER_STORE_SCENE_SECRET:?请先准备配置}
       # 认领前调 data_service 的 GetPlayerRoute 选库，缺了拒启。
@@ -298,7 +298,7 @@ services:
       <<: *go-env
       POD_IP: ${DATA_SERVICE_IP:?请先准备配置}
       # 角色交易 SQL 证明的玩家库白名单，与 go/db 同一份。
-      DB_ALLOWED_DATABASES: zone_1_db,player_store_1000000_db
+      DB_ALLOWED_DATABASES: player_store_1000000_db
       # 账号目录四个调用方各一把，缺任何一把 data_service 拒启（validateGlobalCallerSecrets）。
       MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN:?请先准备配置}
       MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE:?请先准备配置}
@@ -398,7 +398,7 @@ services:
       POD_IP: ${LOGIN_IP:?请先准备配置}
       GATE_TOKEN_SECRET: ${GATE_TOKEN_SECRET:?请先准备配置}
       QUEUE_TOKEN_SECRET: ${QUEUE_TOKEN_SECRET:?请先准备配置}
-      INTERNAL_AUTH_SECRET: ${INTERNAL_AUTH_SECRET:?请先准备配置}
+      MMORPG_INTERNAL_AUTH_PUBLIC_KEYS: ${INTERNAL_AUTH_PUBLIC_KEYS:?请先准备配置}
       LOGIN_DEV_PASSWORD_SHARED_SECRET: ${LOGIN_DEV_PASSWORD_SHARED_SECRET:?请先准备配置}
       MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN:?请先准备配置}
     volumes:
@@ -464,7 +464,7 @@ services:
     environment:
       <<: *go-env
       POD_IP: ${MATCH_IP:?请先准备配置}
-      MMORPG_INTERNAL_AUTH_SECRET: ${INTERNAL_AUTH_SECRET:?请先准备配置}
+      MMORPG_INTERNAL_AUTH_PUBLIC_KEYS: ${INTERNAL_AUTH_PUBLIC_KEYS:?请先准备配置}
       # 探测与终局证明由 battle 签、match 验，两端同值。MATCH_MYSQL_PASSWORD 由入口脚本从本 boot 的私有卷读。
       MATCH_PROBE_SECRET: ${MATCH_PROBE_SECRET:?请先准备配置}
       MMORPG_MATCH_OUTCOME_SECRET_BATTLE: ${MMORPG_MATCH_OUTCOME_SECRET_BATTLE:?请先准备配置}
@@ -582,7 +582,8 @@ services:
       RPC_PORT: "10000"
       ZONE_ID: "1"
       GATE_RUN_MODE: dev
-      MMORPG_INTERNAL_AUTH_SECRET: ${INTERNAL_AUTH_SECRET:?请先准备配置}
+      MMORPG_INTERNAL_AUTH_SIGNING_KEY: ${INTERNAL_AUTH_SIGNING_KEY:?请先准备配置}
+      MMORPG_INTERNAL_AUTH_PUBLIC_KEYS: ${INTERNAL_AUTH_PUBLIC_KEYS:?请先准备配置}
       GATE_CLIENT_RPC_ROUTER: "1"
       CLIENT_ENDPOINT_SOURCE: static
       CLIENT_ENDPOINT_HOST: 127.0.0.1

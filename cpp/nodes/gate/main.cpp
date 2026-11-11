@@ -15,7 +15,9 @@
 #include "handler/rpc/client_session_handler.h"
 #include "handler/rpc/client_heartbeat.h"
 #include "handler/rpc/client_request_lane.h"
+#include "handler/rpc/drain_migration.h"
 #include "handler/rpc/router_muduo_forward.h"
+#include "handler/rpc/router_subset.h"
 #include "muduo_grpc/channel.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "thread_context/node_context_manager.h"
@@ -34,6 +36,7 @@
 #include "proto/common/base/message.pb.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "handler/event/gate_event_handler.h"
+#include "handler/event/world_chat_push_budget.h"
 #include "handler/event/gate_kafka_command_router.h"
 #include "handler/event/scene_entry_dispatch.h"
 #include "rpc/service_metadata/chat_service_metadata.h"
@@ -216,10 +219,16 @@ namespace
         // 观战订阅中心(spectate/gate_spectate_hub.h)。定时器与 Kafka 回调都不捕获对象,经 gate_spectate_client.h 的入口
         // 按弱引用找到它;在 Node 之后析构,这时 Kafka 消费已经停了。
         std::shared_ptr<gate_spectate::SpectateHub> spectateHub;
+        // 路由模式下本 zone 的路由服子集(handler/rpc/router_subset.h)。Node 上的准入与发现观察者只弱持有它;
+        // context 比 Node 活得久(node_entry 先建 context 后建 Node),延后关闭的扫描定时器随它析构取消。
+        std::shared_ptr<gate_router_subset::Subsetter> routerSubset;
         TimerTaskComp spectateSweepTimer;
         // 客户端连接的存活扫描:握手期限与空闲超时(handler/rpc/client_heartbeat.cpp,docs/design/gate-client-heartbeat.md §5.4)。
         // 回调不捕获任何对象;必须主动扫:死掉的客户端不会再发任何东西来触发检查。没有到期的检查点时每轮只做一次堆顶比较。
         TimerTaskComp clientLivenessSweepTimer;
+        // 排空迁移的每秒一拍与重定向滞留关闭(handler/rpc/drain_migration.cpp,docs/design/gate-drain-session-migration.md §4.3)。
+        // 回调不捕获任何对象;没有迁移许可、也没有待关的滞留连接时每拍只做两次判空。
+        TimerTaskComp drainMigrationTimer;
         bool sourceClosed = false;
 
         GateRuntimeContext()
@@ -300,40 +309,6 @@ namespace
         broadcastOptions.assignAllPartitions = node::kafka::kSpectateBroadcastTopicPartitions;
         return node::kafka::RegisterKafkaCommandHandler<SpectateFrameEvent>(gateNode, broadcastOptions, onFrame);
     }
-
-    // 世界频道推送的每台 gate 转发预算(docs/design/chat-world-channel-fanout.md §4)。推送开销是「世界消息数 × 本机在线人数」,
-    // 全服聊天量一涨(刷屏、脚本),不设上限每台 gate 的下行就按平方增长。预算按 gate 计、不按会话计:本机所有会话收的是同一条
-    // 广播流,超出预算的那几条对本机所有会话一起不推,每台 gate 的推送开销只与本机在线人数成正比。不推的消息仍在 chat 的历史里,
-    // 客户端打开面板或重连时拉得到。每秒 10 条、突发 20 条是人读得完的量级,不是压测结论,压测后按下行带宽再定。
-    // 只在 gate 主循环上用:Kafka 回调经 queueInLoop 投递到主循环(KafkaManager::StartBackgroundPolling),不加锁。
-    class WorldChatPushBudget
-    {
-    public:
-        bool TryTake(std::chrono::steady_clock::time_point now)
-        {
-            if (!started_)
-            {
-                started_ = true;
-                last_ = now;
-            }
-            const double elapsedSeconds = std::chrono::duration<double>(now - last_).count();
-            last_ = now;
-            tokens_ = std::min(kBurst, tokens_ + elapsedSeconds * kPerSecond);
-            if (tokens_ < 1.0)
-            {
-                return false;
-            }
-            tokens_ -= 1.0;
-            return true;
-        }
-
-    private:
-        static constexpr double kPerSecond = 10.0;
-        static constexpr double kBurst = 20.0;
-        double tokens_ = kBurst;
-        std::chrono::steady_clock::time_point last_{};
-        bool started_ = false;
-    };
 
     // 世界频道广播(docs/design/chat-world-channel-fanout.md §4):chat 每条世界消息只往 chat-world-bcast_g<N> 写一次,
     // 每台 gate assign 全部分区,推给本机全部已绑定的会话。这个 topic 上只接 BroadcastToAllEvent(不是 GateCommand 信封,
@@ -416,10 +391,13 @@ namespace
 
 int main(int argc, char *argv[])
 {
-	const auto* internalAuthSecret = std::getenv(caller_auth::kSecretEnv);
-	if (internalAuthSecret == nullptr || std::string_view(internalAuthSecret).size() < 32)
+	// 会话身份签名私钥在起任何线程之前装好(docs/design/gate-online-identity.md §10.1);
+	// 种子缺失、格式不对或与验证方公钥列表不配对都拒绝启动。
+	if (const auto signerError = caller_auth::InitProcessSigner(std::getenv(caller_auth::kSigningKeyEnv),
+			std::getenv(caller_auth::kPublicKeysEnv));
+		!signerError.empty())
 	{
-		LOG_ERROR << "内部会话签名密钥缺失或不足32字节，拒绝启动";
+		LOG_ERROR << "Internal session signing key rejected, refusing to start: " << signerError;
 		return EXIT_FAILURE;
 	}
     // 启动首行。事故复盘第一个问题永远是"线上跑的到底是哪一版",这一行直写
@@ -458,8 +436,10 @@ int main(int argc, char *argv[])
     //   * ClientRpcRouterNodeService — 客户端 RPC 路由服(Go gRPC,全局池,不分 zone;
     //     docs/design/client-rpc-router.md D29–D34)。GATE_CLIENT_RPC_ROUTER=1 时它是
     //     gate **唯一**的 gRPC 目标:白名单收成 {Scene(TCP), ClientRpcRouter},gate 对
-    //     login / scene_manager / match **零 stub、零 channel**,gRPC 连接数 =
-    //     路由服副本数,与业务服务数量无关 —— 以后加 chat / friend / guild 不再碰 gate。
+    //     login / scene_manager / match **零 stub、零 channel**,与业务服务数量无关 —— 以后加
+    //     chat / friend / guild 不再碰 gate。gate 只连本 zone 的 k 台路由服(HRW 子集,k 由
+    //     GATE_ROUTER_SUBSET_SIZE 给、缺省 3;canary gate 另连 stable 组的 k 台作退回),gRPC 连接数
+    //     不随路由服副本数增长(handler/rpc/router_subset.h,docs/design/connection-fanout-subsetting-20261106.md §3.2)。
     //     旧模式(默认,未设或非 1/true/on)完全不连路由服,除战斗(两种模式都不经 gate,
     //     见上)外行为与改前一致;所以路由服可以先于 gate 切换单独上线,回退 = 去掉环境
     //     变量再滚动(设计文档 §6 灰度)。
@@ -467,12 +447,18 @@ int main(int argc, char *argv[])
     const Node::CanConnectNodeTypeList connectTo = routerMode
         ? Node::CanConnectNodeTypeList{SceneNodeService, eNodeType::ClientRpcRouterNodeService}
         : Node::CanConnectNodeTypeList{SceneNodeService, LoginNodeService, SceneManagerNodeService, MatchNodeService};
+    // 从 etcd 发现的类型(docs/design/connection-fanout-subsetting-20261106.md §3.4)= 建连白名单 + 自身 Gate(本 zone;
+    // 注册自检、劫持检测与选号要看)。gate 读注册表与发现快照的地方只有这几类:不看 DataService、PlayerInbox、
+    // PlayerStore、Team、Battle、Friend、Guild;路由模式也不看 Login、SceneManager、Match。
+    Node::DiscoveryNodeTypeList discover(connectTo.begin(), connectTo.end());
+    discover.insert(GateNodeService);
 
     // 检查旧的 NODE_ETCD_TRANSPORT 环境变量(etcd 只剩 muduo_h2 传输;设成 grpc 会打 WARN),须在 Node 构造前调用。
     etcd_transport::InstallFromEnv();
     return node::entry::RunSimpleNodeMainWithOwnedContext<GateHandler, GateRuntimeContext, GateNodeHooks>(
         GateNodeService,
         connectTo,
+        discover,
         [connectTo, routerMode](Node &node, GateRuntimeContext &context)
         {
             // 先过安全门禁,再做任何别的初始化:配置有问题就不该把服务拉起来。
@@ -489,6 +475,12 @@ int main(int argc, char *argv[])
             // 观战订阅中心。hub 先建好:客户端消息、会话关闭与 Kafka 回调都经 gate_spectate_client.h 的入口找它。
             context.spectateHub = gate_spectate::InstallHub(
                 *node.GetLoop(), gNodeConfigManager.GetBaseDeployConfig().spectate_token_secret());
+            // 路由模式:只连、只挑本 zone 子集里的路由服。准入与发现观察者必须在 StartRpcServer 的 ConnectAllNodes
+            // 之前装好(这里早于 loop 运行,etcd 应答都还没处理);GATE_ROUTER_SUBSET_SIZE 非法在这里拒启。
+            if (routerMode)
+            {
+                context.routerSubset = gate_router_subset::Install(node);
+            }
             // 覆盖 node_entry 按 GateNodeHooks 装的默认钩子:gate-cmd 的注册不变,同一时机追加两个观战帧消费者。
             node.SetKafkaHandlers([](Node &n)
                                   { return RegisterGateKafkaConsumers(n); });
@@ -528,6 +520,8 @@ int main(int argc, char *argv[])
                 context.sourceClosed = true;
                 context.dependencyGate.probeTimer.Cancel();
                 context.playerCountReportTimer.Cancel();
+                // 全部连接马上就要关:不再给它们要迁移票据,也不必再做滞留关闭。
+                context.drainMigrationTimer.Cancel();
                 auto &sessions = tlsSessionManager.sessions();
                 LOG_INFO << "Disconnecting " << sessions.size() << " client sessions before shutdown...";
                 for (auto &[sessionId, info] : sessions)
@@ -560,8 +554,18 @@ int main(int argc, char *argv[])
                 node.SetBeforeShutdown(closeSource);
                 node.SetMaintenanceInboundRelay(); // 内部推送/路由是relay；客户端TCP根由closeSource关闭。
                 node.SetMaintenanceSourceClose(closeSource);
-                node.SetMaintenanceRelayStop([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); context.clientLivenessSweepTimer.Cancel(); });
-                node.SetBeforeTeardown([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); context.clientLivenessSweepTimer.Cancel(); });
+                // 拆除前收尾:普通停机由 SetBeforeTeardown 调;维护路径(P3)关闭中继时 Node 只调 SetMaintenanceRelayStop 的钩子,
+                // 随即置 beforeTeardownRan_,不再调 SetBeforeTeardown 的钩子。两处挂同一段收尾,两条路径停的定时器始终一致。
+                const auto stopGateTimers = [&context](Node &)
+                {
+                    context.sceneEntryRetryTimer.Cancel();
+                    context.routerLaneExpiryTimer.Cancel();
+                    context.spectateSweepTimer.Cancel();
+                    context.clientLivenessSweepTimer.Cancel();
+                    context.drainMigrationTimer.Cancel();
+                };
+                node.SetMaintenanceRelayStop(stopGateTimers);
+                node.SetBeforeTeardown(stopGateTimers);
                 node.SetShutdownDrainComplete([closingSessions](Node &)
                                               {
                     const auto &sessions = tlsSessionManager.sessions();
@@ -641,6 +645,11 @@ int main(int argc, char *argv[])
                         // 维护关源与停机关源都先关掉全部客户端连接、等会话删完才停中继与拆除,所以这两处取消时已没有要扫的连接。
                         context.clientLivenessSweepTimer.RunEvery(gate_client_heartbeat::kSweepIntervalSeconds, [] {
                             gate_client_heartbeat::SweepLiveness(std::chrono::steady_clock::now());
+                        });
+                        // 排空迁移:login 发来许可后每拍至多迁 rate 个连接;推过 124 仍不走的连接满 60 秒关掉。
+                        // 与上面几个扫描一样紧跟客户端回调装上;关源(disconnectAllClients)时取消。
+                        context.drainMigrationTimer.RunEvery(gate_drain_migration::kTickIntervalSeconds, [] {
+                            gate_drain_migration::Tick(std::chrono::steady_clock::now());
                         });
 
                         // 依赖门:路由模式下等的是路由服而不是 login —— gate 这时根本不连

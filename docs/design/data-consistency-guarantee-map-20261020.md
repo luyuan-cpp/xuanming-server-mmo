@@ -120,7 +120,7 @@
 
 | 编号 | 问题 | 位置 | 可达性 / 备注 |
 |---|---|---|---|
-| handover-single-writer#1 | location 只记 node_id，不记进程实例。同号新进程顶替后，`samePhysicalNode` / `samePlacement` 不铸造 epoch，存活的旧进程与新进程同持一个 E，存盘 CAS 拦不住，墙钟晚发号的一方胜出，可能旧盖新。旧进程还可能写出没有身份闸的改派标记，让新进程的进度在下一跳换图时作废 | `enterscenelogic.go:546-550`、`:687`、`:696-737`；`load_reporter.go:926-931`（同号注册即 `clearNodeDeath`）；`save_seq.h:59-66` | 要求进程暂停或 etcd 单边分区超过租约，加上同号被复用，加上玩家落到同号节点。设计 GO-3 只按活性问题登记；`cross-zone-scene-travel.md` §13.9 写"推迟没有数据风险"，与 `main.cpp:113-115` 注释和 M3/M13 矛盾。*2026-10-23：落地围栏线的 `handoff_fence` 拒绝同 E 不同实例登记，同代双持在当前树上不可达；GO-3 已按持有进程自己盖的资格章落码（接管时铸新 epoch，未编译），见 `cross-zone-scene-travel.md` §13.10* |
+| handover-single-writer#1 | location 只记 node_id，不记进程实例。同号新进程顶替后，`samePhysicalNode` / `samePlacement` 不铸造 epoch，存活的旧进程与新进程同持一个 E，存盘 CAS 拦不住，墙钟晚发号的一方胜出，可能旧盖新。旧进程还可能写出没有身份闸的改派标记，让新进程的进度在下一跳换图时作废 | `enterscenelogic.go:546-550`、`:687`、`:696-737`；`load_reporter.go:926-931`（同号注册即 `clearNodeDeath`）；`save_seq.h:59-66` | 要求进程暂停或 etcd 单边分区超过租约，加上同号被复用，加上玩家落到同号节点。设计 GO-3 只按活性问题登记；`cross-zone-scene-travel.md` §13.9 写"推迟没有数据风险"，与 `main.cpp:113-115` 注释和 M3/M13 矛盾。*2026-10-23：落地围栏线的 `handoff_fence` 拒绝同 E 不同实例登记，同代双持在当前树上不可达；GO-3 已按持有进程自己盖的资格章落码（接管时铸新 epoch，未编译），见 `cross-zone-scene-travel.md` §13.10。2026-11-11：证据栏里「同号注册即 `clearNodeDeath`」已不成立。断线重连 R15 起，watch PUT 改调 `clearNodeDeathForInstance`（`reentry_barrier.go`），只由领导者在判死的那一代进程回来时清 `death_at`；同号新进程注册时，老实例的再入屏障照常走完。老进程是否还持有这个号，由节点号持有者记录（缺口清单第 33 条，`node_holder.go`）告诉它。均未编译，见 `infra-reconnect-overview.md` §4.1 R15* |
 | handover-single-writer-v#1 | etcd 单边分区时，活着的持有节点被判死。C++ 失租后只重注册，不冻结、不存盘、不疏散（`node.cpp:1711-1727`，注释写明不设围栏）。再入屏障"老进程 15s 内疏散存盘"的前提（`enterscenelogic.go:974-976`）落空，接管后丢掉一个本可以落盘的活节点的进度 | `node.cpp:1711-1727`；`etcd_service.cpp:762-772`；`enterscenelogic.go:968-1026`；`leave_release.go:109-110` | 分区要超过租约 TTL 加 20s。只丢不盖。*2026-11-05：新存档路径的判死释放原先只比代次，判死之后持有进程以同一 UUID 重注册、玩家同节点重连复用实体，释放照样执行、在线玩家被踢；已改为释放前 etcd 线性一致复核持有实例、按读到的 (E, H, claim_seq) 比较并写（未编译），残余窗口见 `player-save-direct-commit.md` §5.5。失租不冻结本身不变* |
 | player-save#3 | 超过 kafka-go 缺省 `BatchBytes` 1MiB 的 DBTask 意图，补投每次都发布失败；不计次、永远到不了 exhausted、没有告警，还每 10~21s 把整个 zone 的补投暂停 10s | `saveoutbox/replay.go:305-311`；`publisher.go:30-41` | 这种意图本来在 go/db 的 1MiB 整行闸处就会被拒。危害只在于观测缺失、拖慢同 zone 其他玩家的恢复。是 r2-db#1 修复的副作用 |
 | identity-routing-redis#2 | 本地战斗 pending 的 SET 落在 Redis 丢尾里，且命令被重启后的 scene 按代次丢弃（或锁已过期）时，重投判"记录缺失 = 已销账"，静默摘除 | `settlement_outbox.h:55-80` | 复核后收窄：玩家离线时，开局 scene 的离线分支会按锁把 pending 写回去，多数情况能自愈 |
@@ -188,20 +188,20 @@
 
 | # | 严重度 | 问题 | 处置 |
 |---|---|---|---|
-| 1 | medium | match、guild 的对局结果消费者遇到一次失败或一次在途再均衡,就永久停止取消息,不重建(`go/shared/kafkautil/group_lag.go` 出错即 `StopFetching`,`Hold()` 只进排空证明);match 评分消费组没有 lag 告警。topic 保留 7 天,停超过 7 天永久丢评分和榜单更新。即第二轮的 r2-kc#1,至今未修 | 「数据覆写审计 R2 交接」会话在修 |
+| 1 | medium | match、guild 的对局结果消费者遇到一次失败或一次在途再均衡,就永久停止取消息,不重建(`go/shared/kafkautil/group_lag.go` 出错即 `StopFetching`,`Hold()` 只进排空证明);match 评分消费组没有 lag 告警。topic 保留 7 天,停超过 7 天永久丢评分和榜单更新。即第二轮的 r2-kc#1 | 「数据覆写审计 R2 交接」会话 11-06 已修:消费者跨代次存活,只有控制面真的维护排空才停取;告警改按分区已提交位点停滞判。去向与验证见 [第二轮审计](data-overwrite-rollback-audit-r2-20261019.md) §5.0、§6 |
 | 2 | medium(要运维操作) | trade、guild 的人工终结工具 `cmd/assetopfix` 让值班凭「流水里有这条 correlation_id」判 applied,流水却是内存改动当下发的、早于存盘提交,发送失败也只打日志;工具不读已提交账本,`-force` 能终结任何超过 30 分钟的待定行。判错就一物两得,或卖家物品凭空消失 | 根治:流水改成提交后才发(6.3 第 1 条)。共享判据 `go/shared/assetop/manual_evidence.go`(`JudgeManual`、`RowQuiet`、`QuietWitness`)和 trade 工具已改(6.3 第 4 条);guild 工具 11-06 已改调同一份判据(未编译) |
-| 3 | medium(要运维操作) | GM 回收按流水汇总金额、只按 tx_id 去重:同一指令崩溃后重投再应用,会多出一条同 correlation_id 的流水,金额算两遍,扣不够的挂成永不过期的欠款。`exploit_loss_prevention_zh.md` 把窗口写成「单次存盘间隔」,确定性拒存时其实是整段会话 | 根治同第 2 条;`recall_plan.go` 以已提交账本为证据、按 correlation_id 去重和文档更正由 R2 交接会话做;`ResolveRecallOp` 人工终结 11-06 改为查已提交账本(6.3 第 4 条) |
-| 4 | medium(只丢不盖) | 节点和 etcd 单边失联时不冻结、不疏散,租约到期再过再入屏障之后被判死;之后正常换图或重登就会铸新代次派到别的节点,老节点的存盘被拒,丢最后一次存盘之后的进度,最多 60 秒。即 §2.3 的 handover-single-writer-v#1,新增的事实是正常换图也会触发;`reentry_barrier.go` 和 `enterscenelogic.go` 里「失租后 15 秒紧急疏散」的注释与代码不符 | 本会话加身份不确认期间每 5 秒补存(6.3 第 2 条),丢失上限压到约 5 秒;更正 `reentry_barrier.go` 注释。`enterscenelogic.go` 那句由 R2 交接会话改 |
-| 5 | medium(只在灾难恢复时) | 一个地域的逻辑库分在多个集群时,PITR 各集群恢复到同一个 T 却没有统一时间点,贴着 T 的建角留下半截:角色不在列表里、名字能被别人再注册、认领回 NO_OWNER 永远进不了场。手册 §4.1a 的核账表只列了过户和删角 | R2 交接会话补核账项和修复工具 |
+| 3 | medium(要运维操作) | GM 回收按流水汇总金额、只按 tx_id 去重:同一指令崩溃后重投再应用,会多出一条同 correlation_id 的流水,金额算两遍,扣不够的挂成永不过期的欠款。`exploit_loss_prevention_zh.md` 把窗口写成「单次存盘间隔」,确定性拒存时其实是整段会话 | 根治同第 2 条;`recall_plan.go` 以已提交账本为证据、按 correlation_id 去重和文档更正由 R2 交接会话 11-06 修完(第一轮 §4 第 7 条下游);`ResolveRecallOp` 人工终结 11-06 改为查已提交账本(6.3 第 4 条) |
+| 4 | medium(只丢不盖) | 节点和 etcd 单边失联时不冻结、不疏散,租约到期再过再入屏障之后被判死;之后正常换图或重登就会铸新代次派到别的节点,老节点的存盘被拒,丢最后一次存盘之后的进度,最多 60 秒。即 §2.3 的 handover-single-writer-v#1,新增的事实是正常换图也会触发;`reentry_barrier.go` 和 `enterscenelogic.go` 里「失租后 15 秒紧急疏散」的注释与代码不符 | 本会话加身份不确认期间每 5 秒补存(6.3 第 2 条),丢失上限压到约 5 秒;更正 `reentry_barrier.go` 注释。`enterscenelogic.go` 那句 R2 交接会话 11-05 已改为「失租不疏散,15 秒疏散只在身份冲突时」 |
+| 5 | medium(只在灾难恢复时) | 一个地域的逻辑库分在多个集群时,PITR 各集群恢复到同一个 T 却没有统一时间点,贴着 T 的建角留下半截:角色不在列表里、名字能被别人再注册、认领回 NO_OWNER 永远进不了场。手册 §4.1a 的核账表只列了过户和删角 | R2 交接会话 11-06 已修:建角残留核账与修复工具,同日评审修正(先查已提交证据、起服之前核账);见第二轮审计 §6 |
 | 6 | low(只本地) | 本地 `scene_manager_service.yaml` 开着 `AllowUnsafeCrossNodeHandoff`。旁路放行不铸新代次,目标节点拿同一个代次认领,go/db 回 NOT_HOLDER,同 zone 跨节点换图卡住 | 本会话改成 false,和生产一致 |
-| 7 | low | 路由失败回滚时,kafka 报错但消息其实已投递,目标节点又抢在回滚之前完成登记和认领,就成了「没有 location 的现任」;下一次换图或重登按首次落点铸新代次,丢这之前最后一次提交之后的进度。只发生在不凭交接标记的铸造上(首次落点、第二条腿、死节点接管),凭标记的回滚早已靠「标记还在」互斥 | 11-06 本会话已改(6.3 第 5 条),未编译 |
-| 8 | low | 判死释放(`ReleaseDeadPlayerStoreHolder`)只比代次,交易判死比(代次、持有者、认领序号)三列。误判死与同落点重连认领凑在一次释放 RPC 的窗口里时,认领之后的进度丢 | R2 交接会话「判死释放前复核持有者」 |
-| 9 | low | rank 封榜奖励被邮件服务拒收时永远重试、没有终态;30 天后邮件一律按过期拒收 | R2 交接会话。目前没有生产调用方触发封榜发奖 |
+| 7 | low | 路由失败回滚时,kafka 报错但消息其实已投递,目标节点又抢在回滚之前完成登记和认领,就成了「没有 location 的现任」;下一次换图或重登按首次落点铸新代次,丢这之前最后一次提交之后的进度。只发生在不凭交接标记的铸造上(首次落点、第二条腿、死节点接管),凭标记的回滚早已靠「标记还在」互斥 | 11-06 本会话已改(6.3 第 5 条),Codex 已跑通(见 6.4) |
+| 8 | low | 判死释放(`ReleaseDeadPlayerStoreHolder`)只比代次,交易判死比(代次、持有者、认领序号)三列。误判死与同落点重连认领凑在一次释放 RPC 的窗口里时,认领之后的进度丢 | R2 交接会话 11-06 已修:判死释放比(代次、持有者、认领序号)三列并复核注册表(handover-single-writer-v#1 的 scene_manager 侧);见第二轮审计 §6 |
+| 9 | low | rank 封榜奖励被邮件服务拒收时永远重试、没有终态;30 天后邮件一律按过期拒收 | R2 交接会话 11-06 已修(r2-mail#2):发件取 min(封榜 +30 天, now + mail 当前 TTL),收件箱满与超出可投窗口设终态并计指标。目前没有生产调用方触发封榜发奖 |
 | 10 | low | `ReleasePlayerName` 非管理员路径不核调用方,只限登记年龄窗口;出 bug 或被越权调用时一名两角 | 2026-11-06 已落码,未编译,待 Codex 验证。名字行改成「预留 → 绑定」状态机(`player_name.bound_ms`):建角提交之后复核角色再绑定;已绑定的 `ReleasePlayerName` 一律拒绝,只有删角写完墓碑之后的收尾能释放;预留态释放之前在玩家片证明角色永远不会提交(必要时写墓碑);不带 token 时只认 login 的签名。核账工具加 `name_unbound`。设计与残余见 [名字设计](guild-phase2/03-names.md) §3.4a |
 
 核实成立的保证(各路复核过):写权判定先判代次、再判持有者、最后才比序号;认领在同一个事务里抬代次再读全部行;交接标记只在最终存盘提交、且没有排队快照之后才写,写了标记就不再存盘;判死释放用 location 记的那一代,库里更新就不动;发号器两套 etcd 都写成功才发号;外部腿只认已提交账本才终结,自动放弃的「已释放」和「账本未见」出自同一次读、按租约令牌提交;写者闸门冻结之后旧位置的写提交不了;搬库翻转结局未知时绝不解冻;过户、删角之后旧会话写不进存档。
 
-### 6.3 本轮改动(未编译,待 Codex 验证)
+### 6.3 本轮改动(验证状态见 6.4)
 
 1. **资产流水跟着存盘提交走。**
    - `TransactionLogSystem`(`cpp/libs/modules/transaction_log/transaction_log_system.*`)开闸之后,只涉及一名玩家的流水按玩家排队,带进程内单调的水位。
@@ -210,13 +210,30 @@
    - 效果:「流水里有这条」等于「这笔改动已提交」,人工终结工具和 GM 回收不会再拿未提交的改动当证据。反过来不成立:提交之后发送失败、提交成功但回包丢失时进程崩溃,已提交的改动可能没有流水,判「从未应用」仍要读已提交账本。
    - 每名玩家最多排 4096 条,超了丢最旧的一条并打 ERROR(`metric=txlog_pending_overflow`):宁可缺一条,也不发一条没落库的。流水晚于改动发出,最多晚一个存盘周期(60 秒)。
    - 只顺带的行(位置)被推迟时不进状态机,不会触发放行;投影启动校验只许这类行放 `transform`。
-2. **身份不确认期间补存。** `player_lifecycle.cpp` 的 `RunIdentityAtRiskSaves`:节点入口注入身份探针时挂一个 1 秒的定时器;身份不确认(keepalive 应答超过半个租约没来、重注册中、紧急疏散中)时,每 5 秒给所有可改的玩家 `SavePlayer` 一次(按玩家号分摊到每秒,和定时存盘同一个做法,不在一个回调里存全员),位置也一起写;身份恢复后回到定时存盘的节奏。这是缩短窗口,不是围栏:最后一次补存到接管之间的改动照样会丢。冻结所有玩家才能做到零丢失,代价是一次 etcd 抖动就让整个节点停摆,暂不这样做。
+2. **身份不确认期间补存。** `player_lifecycle.cpp` 的 `RunIdentityAtRiskSaves`:节点入口注入身份探针时挂一个 1 秒的定时器;身份不确认(keepalive 应答超过半个租约没来、重注册中、紧急疏散中)时,每 5 秒给所有可改的玩家 `SavePlayer` 一次(按玩家号分摊到每秒,和定时存盘同一个做法,不在一个回调里存全员),位置也一起写;身份恢复后回到定时存盘的节奏。这是缩短窗口,不是围栏:最后一次补存到接管之间的改动照样会丢。零丢失只能在失租时冻结或疏散全部玩家,而 2026-09-08 起明确定了「失租只重注册、不关停」(`node.h` 的 `NodeIdConflictReason`):etcd 整体抖动或故障恢复时所有节点会同时冻结或疏散,代价远大于单边失联时最多丢的 5 秒。这是可用性与丢失窗口的取舍,不是待修项;要改需负责人决定,可选做法见 6.4。
 3. **本地换图旁路关掉**:`go/scene_manager/etc/scene_manager_service.yaml` 的 `AllowUnsafeCrossNodeHandoff` 改成 false;`reentry_barrier.go` 的时间线注释按实际行为改写;`robot/etc/travel_smoke.yaml` 的说明同步。
 4. **人工终结以已提交账本为证据,trade 与 guild 一份判据(11-06 统一)。** `go/shared/assetop/manual_evidence.go` 的 `JudgeManual`:位图分类与自动终结同一套(`ClassifySeq`);有结局时还要收据是这一条请求(`CommittedOutcomeOf`,与重投循环终结同口径);部分发放兼看账本标记和行上粘性的 `last_reason`;判「从未应用」要求写权行已释放、账本没见过、而且行安静(`RowQuiet`:此刻没人持租约,距最后一次可能的投递超过 `ManualQuietGap`,即 30 分钟与租约取大,`last_send_ms` 为 0 按不安静)。账本判不了一律不终结:没流水不等于没应用,也还没有能从提交后的流水还原整笔发放的证明。`go/trade/cmd/assetopfix`:`list` 与 `resolve` 都读账本,终结走 `AssetOpRepo.ResolveManuallyIfQuiet`(条件写带读证据时的 `lease_until_ms`、`last_send_ms`,中间被领过就落空,退出码 3);`OpFromRecord` 抽成重投循环与工具共用的还原函数。guild 工具 11-06 改调同一份判据(请求还原不出按 none)。GM 回收的 `ResolveRecallOp` 也用这份判据读已提交账本,按回收自己的结局对表放行(判不了只收 `PARTIAL`:不放回来源,只会少扣),终结在 settle 里带同样的见证,详见 `exploit_loss_prevention_zh.md`「人工终结」。手册 `trade-commerce-quarantine-runbook.md` §4.1、§4.2 同步。
 5. **不凭标记的路由回滚先看交接资格原件(11-06)。** 目标节点入场时先跑 C++ `kRegisterFenceLua`(核对 owner_epoch == 铸出值,写出这一代的资格原件 `player:{id}:handoff_fence`),登记成功之后才认领存档;原件代次只升不降。`go/scene_manager/internal/logic/owner_epoch.go` 的 `luaRollbackPlayerPlacement` 对不凭标记的 bump 在同一次原子执行里读这份原件:已属于铸出值 → 一个字节不动、保留落点(`target_registered`,目标节点就是有 location 的现任);缺失或更早 → 照常 INCR 并退回 location,之后迟到的登记被 owner_epoch 拒掉,目标节点认领不了;比铸出值新或写坏 → 不回滚并告警(`fence_not_proof`,并入 `SceneManagerEnterSceneRollbackRedisError`)。判据与无资格持有者撤销(`location-release-binding.md` §17)同口径。不加 RPC,也不碰登录热路径:只在推路由失败的回滚里多读一个同 slot 的键。设计文档 `cross-zone-scene-travel.md` §13.7「设计残余」第一条、手册 `cross-zone-failure-test-runbook.md` §2.3 / §2.4 同步。
 
-### 6.4 没覆盖、没验证
+### 6.4 验证状态与没覆盖的(11-10 核对)
 
-- 全部改动未编译、未测试。杀进程、TiDB 切主、etcd 分区这类故障注入从没跑过,压测也没跑:「崩溃时不回档」目前只有读代码的证据。
-- Java 版、独立的 xuanming-server 仓不在这次范围内。
+6.3 的改动都已随保存提交进 main(`a8af9372d` 起)。Codex 的运行证据按条:
+
+| 条 | 已有的运行证据 | 出处 |
+|---|---|---|
+| 1 流水跟着提交走 | 11-08 主仓整解(`game.sln` Debug / x64,exit 0)之后,`currency_test` 的 `TransactionLogCommitGateTest.*` 7 条、`bag_test` 新增的 4 条提交水位用例全部 PASS | PROGRESS 11-08 Codex「命名审查阶段复验完成」,`build/verification/naming-audit-20261108/cpp-tests/` |
+| 2 身份不确认期间补存 | 11-08 整解编译通过。11-10 补了 3 条单测(`cross_zone_test` 的 `PlayerStoreDirectEcs.UnconfirmedIdentitySavesEachPlayerOnceEveryFiveSeconds` 等),补存入口改为 `PlayerLifecycleSystem::RunIdentityAtRiskSaves`,**未编译,待 Codex** | PROGRESS 11-10 Claude「身份不确认期间补存补单测」 |
+| 3 本地换图旁路关掉 | 只改配置与注释,没有运行证据 | — |
+| 4 人工终结统一判据 | `go/shared` assetop 144 PASS(9 条真 MySQL 门控 SKIP);trade 的 assetopfix、data、reconcile、svc 共 111 PASS | PROGRESS 11-06 Codex「数据一致性验证续跑」「修正 scene_manager 五项旧夹具」 |
+| 5 回滚先看资格原件 | `go/scene_manager` 的 `./internal/logic/...` 全量 756 PASS;回滚 Lua 在真 Redis 7.2.16 与 8.10.2 上 16/16(两种先后、6 类资格原件,返回 4 / 5 时 6 个键逐字节不变) | 同上两条 |
+
+还没有运行证据的:
+- 流水「提交之后才出现」的运行期核对,本地跨节点换图冒烟,etcd 单边失联演练,真实 SQL 条件写竞态,Kafka「报错但已投递」注入,告警规则的 promtool 校验。
+- 杀进程、TiDB 切主、etcd 分区这类故障注入从没跑过,压测也没跑:「崩溃时不回档」除单测外只有读代码的证据。
+
+待负责人决定的取舍(第 2 条的剩余窗口):节点和 etcd 单边失联时,接管之前最多丢一个补存间隔(5 秒)。要做到零丢失,有两条路,都要改 2026-09-08「失租只重注册、不关停」的定论:
+- **节点自己退位**:失租后在宽限期内重注册不成,就走现成的冲突关停(`Node::OnNodeIdConflictShutdown` → `BeginEmergencyRelocateAll`,先存盘、存盘落地再改派)。代价:etcd 整体抖动或故障时,所有节点同时疏散退出。
+- **控制面通知退位**:scene_manager 判死时(注册表线性读复核之后),用现成的 `SceneCommand` Kafka 通道按最后已知实例号发「退位」。节点收到后,宽限期内重注册不成才走冲突关停,宽限期加疏散预算(15 秒)要落在再入屏障(20 秒)之内。etcd 整体恢复时,各节点会在宽限期内重注册成功,收到的退位一律作废,不会集体疏散。代价是多一条跨语言协议和它的测试。
+- 不改的话,剩余窗口就是这 5 秒,只在单边失联、又恰好有接管触发时出现;写权行保证只丢不盖。
+- Java 版:只读核对后,只有流水早于提交一项适用,已在 Java `PARITY.md` 登记待做;人工终结由 R2 交接会话登记;补存与回滚两项 Java 已有等价做法。独立的 xuanming-server 仓不在这次范围内。
 - 四路都没读到的:match 的 direct_admission、challenge、spectator、global_pool_matcher;C++ 回合引擎;trade 的 rmb_mall、role_authority;Java `CommerceStore` 全文;tools/dbmove 的 replication、checksum。

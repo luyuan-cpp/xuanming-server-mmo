@@ -1000,7 +1000,7 @@ scene 不需要任何改动:活动奖励不走 scene 结算,scene 照常发 PVE 
 5. **生产装配可测**。恢复器的装配收进 `newTrialLaunchRecovery`(`StartTrialBackground` 调它),单测经它跑一轮,漏装释放后推送就变红。
 6. **运维**。坏行的核对与人工终结见 §6.35a 场景五,告警规则补进同节「部署与告警」。
 
-残余(复审):① 业务拒绝的具体原因(如某人离线)只回给最后同意的那个人;有 launch 原件时实时路径写不了大厅的结束原因,释放时大厅写的是 `trialCancelledLobbyEndTip`(暂为 `kGuildTrialServiceBusy`),名单里其他人看到的是「服务繁忙」。要显示原因,需在 launch 行上持久化实时路径的结束原因、释放时写回大厅,未做。② 同一原因,有 launch 原件时 `endTrialLobby` 每次都失败并打一条 ERROR「大厅未结束…保留原launch/占位等待终局证明」,这条在业务拒绝时属预期,不代表故障,排障时不要按它告警。③ Prepare 返回错误(含 guild 库抖动导致的提交结果未知)时实时路径不提前检查:这时 Start 没有发出,提前本身是安全的,但这是库故障路径、库多半也写不进这一条,没做,原件按宽限处理。
+残余(复审):① 业务拒绝的具体原因(2026-11-11 已修,未编译):有 launch 原件时实时路径写不了大厅的结束原因(`endPendingLobby` 拒绝),原先只有最后同意的人看到真正原因,大厅释放时写的是 `trialCancelledLobbyEndTip`(`kGuildTrialServiceBusy`)。现在实时路径拿到 match 的确定拒绝时先经 `RecordTrialLaunchEndReason` 把回给发起人的 tip id 与参数记在 launch 原件上(`GuildTrialLaunchRecord.realtime_end_tip`,字段 11,`base.TipInfoMessage` 确定性原字节;只写一次、只对没登记对局的 state1 原件写),再提前检查(`logic/trial_launch.go` 的 `handOffFailedTrialStart`,两步共用一份独立预算);恢复器凭零 battle 的取消墓碑释放时(`FinishCancelledTrialLaunch` → `cancelledTrialLobbyEnd`)用它关大厅,名单上所有人看到同一个原因。只影响展示,不参与释放判定:记录失败、原字节坏时退回默认原因。默认原因按回执分两个(`cancelledTrialLobbyEnd`):零 battle 的取消墓碑(开战没成)写 `kGuildTrialServiceBusy`;回执带对局(开局后 SQL ABORT、发房前中止)写新码 `kGuildTrialBattleAborted`「本次历练战斗已作废，结果不计」(2026-11-11 在 `Tip.xlsx` 帮会段末尾追加,fault 留空;此前同样写「服务繁忙」,与事实不符)。回归 `data/trial_launch_end_reason_tidb_test.go`、`logic/trial_launch_recovery_test.go` 的 `TestStartTrialAtMatchExpeditesOnlySettledFailures`(先记原因再提前检查)、`data/activity_repo_static_test.go`(新写语句只改展示列)。② 同一原因,有 launch 原件时 `endTrialLobby` 每次都失败并打一条 ERROR「大厅未结束…保留原launch/占位等待终局证明」,这条在业务拒绝时属预期,不代表故障,排障时不要按它告警。③ Prepare 返回错误(含 guild 库抖动导致的提交结果未知)时实时路径不提前检查:这时 Start 没有发出,提前本身是安全的,但这是库故障路径、库多半也写不进这一条,没做,原件按宽限处理。
 
 回归:`data/trial_launch_claim_test.go`(首次检查时刻、退避与抖动,纯函数)、`data/trial_launch_claim_tidb_test.go`(窗口内认领不到、到期只被认领一次、state=2 同一调度、终结后不再认领、坏行跳过;复审追加:提前检查只让从未认领的 state1 原件立即到期且只往前提、CAS 拿过期观察值或原件已终结时影响 0 行)、`data/trial_launch_abort_tidb_test.go`(EXPIRED / 发房前中止 / 别帮对局行 / 解散后 EXPIRED 历史行、大厅结束原因;复审追加:从未登记的发房前中止补写 SETTLED/LOSS)、`data/activity_repo_static_test.go`(复审追加:两条调度写只改调度列、带状态复核)、`logic/trial_launch_recovery_test.go`(只查认领到的原件、坏行不挡后面、解散不报错、释放后推送、一轮多页;复审追加:业务拒绝与预算不足提前检查而结局未知与开局成功不提前、认领失败不报错、剩余预算不够一条就不认领、页大小按预算截断、宽限盖住开局预算、生产装配释放后推送)。未编译、未运行,待 Codex 带 `GUILD_ROLE_TEST_DSN`、`GUILD_ROLE_REQUIRE_TIDB=1` 验证。
 
@@ -1318,7 +1318,7 @@ func runTrialResultConsumer(ctx context.Context, r trialReader, handle TrialResu
 > 2. **销账不在消费者里**。删 SharedRedis 的 `battle:activity_result:{battle_id}`、幂等闸门、毒消息标记都在 `SettleTrialResult` 里(只有一处权威)。消费者只决定"提交位点"还是"退避重调",不碰 MySQL 和 Redis。
 > 3. **消费者先过滤**:`activity_context` 为空、或 `kind != GUILD_TRIAL` 的结果直接提交,不调 handler(与正文第 3 步相同)。上下文残缺但 kind 是历练的仍交给 handler,由它判成"上下文不可用"并销账。
 > 4. **`Run` 是阻塞的,由 `guild.go` 放进 `safego.Go("guild.kafka.trial_results")`**,并返回一个 stop:取消 ctx 并等 goroutine 退出。stop 排在 `svcCtx.Stop`(关 MySQL / Redis)之前执行,也排在资产通道的 stop 之前(结算的同步投递用的是那条 Loop)。正文的 `StartTrialResultConsumer(...) error` 没有"等它退出"这一步。
-> 5. **确保 topic 失败的 30s 重试放在消费者内部**(`waitForTopic`),不在 `guild.go`。"历练结果消费者启动 topic=… group=…"这一行在**真正连上 Kafka、建好 reader 时**才打;`guild.go` 起 goroutine 时另打一行"历练结果消费已安排"。Kafka 没起时只会看到后者与每 30s 一条 ERROR。
+> 5. **确保 topic 失败的 30s 重试放在消费者内部**(`waitForTopic`),不在 `guild.go`。"[GuildTrial] Trial result consumer started topic=… group=…"这一行在**真正连上 Kafka、建好 reader 时**才打;`guild.go` 起 goroutine 时另打一行"历练结果消费已安排"。Kafka 没起时只会看到后者与每 30s 一条 ERROR。
 > 6. **纵深防御三条**(正文没有):
 >    - 单次调 handler 带 30s 上限(`trialResultHandleTimeout`):某个依赖把调用挂住时,到点按一次暂时性失败处理,留下日志与计数,而不是一个不出声的、永远停住的消费者;
 >    - handler 的 panic 只算一次暂时性失败(`safego.Run`),消费 goroutine 不死。否则 reader 关闭 → 重平衡 → 别的副本接手同一条消息 → 同样 panic,最后全服没有消费者;
@@ -1593,7 +1593,7 @@ COMMIT;
 
 | 看什么 | 怎么看 | 正常值 |
 |---|---|---|
-| 消费是否在跑 | guild 日志搜 `历练结果消费者启动 topic=match-results group=guild-trial`;`kafka-consumer-groups --bootstrap-server <broker> --describe --group guild-trial` | 有这一行;LAG = 0 |
+| 消费是否在跑 | guild 日志搜 `Trial result consumer started topic=match-results group=guild-trial`;`kafka-consumer-groups --bootstrap-server <broker> --describe --group guild-trial` | 有这一行;LAG = 0 |
 | 结算去向 | 指标 `guild_trial_result_total{result}` | `settled_win` / `settled_loss` 随对局增长;`duplicate` 偶尔增长属正常(battle 在 guild 销账之前的重发);`poison`、`handler_retry`、`bad_context`、`context_mismatch`、`decode_error` 恒为 0 |
 | 一局的状态 | `SELECT * FROM mmorpg_guild.guild_trial_battle WHERE battle_id = <id>;` | `state`:1 进行中 / 2 已结算 / 3 已判过期;`settle_result`:1 胜 / 2 负或平 / 4 配表缺行 / 5 毒消息(3 保留不写) |
 
@@ -2075,7 +2075,7 @@ private ulong _inviteModalLobbyId;                                        // 已
 >   - 退避:逐次翻倍、封顶 30s、不设次数上限;换一条消息从 1s 重新起算;handler 因 ctx 结束而回错不计重调。
 >   - 影响面(2026-10-08 评审修复补):`TestTrialConsumer_RetryingMessageHoldsBackOtherPartitions` —— 一条消息在重调期间,另一个分区的消息一次都不被处理(钉住"单协程串行、停的是本副本全部分区"这个现状,§6.28 落码修正第 8 点)。
 >   - 健壮性:handler panic 只算一次暂时性失败;每次调用带单次上限;提交失败不终止循环;拉取失败 1s 后重拉;reader 回 `io.EOF` 时退出。
->   - `Run`:先确保 topic(名字、分区数、7 天保留期)再建 reader;失败每 30s 重试(含 panic);等待期间或调用卡住时 ctx 结束即返回;退出前关闭 reader;**启动日志含 `历练结果消费者启动 topic=match-results group=guild-trial`**。
+>   - `Run`:先确保 topic(名字、分区数、7 天保留期)再建 reader;失败每 30s 重试(含 panic);等待期间或调用卡住时 ctx 结束即返回;退出前关闭 reader;**启动日志含 `Trial result consumer started topic=match-results group=guild-trial`**。
 >   - 构造参数:nil handler、空 Brokers / Topic / GroupID、分区数 < 1 一律报错。
 > - **`internal/logic/activity_trial_test.go`**:上表的口径有三处按落码改了。
 >   - `TestTrialCandidates` 按 U2:只去掉逃跑者,阵亡者在候选里。
@@ -2348,7 +2348,7 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 
 ### B6b-srv2
 1. `cd go/guild; go build ./...; go vet ./...; go test -count=1 ./internal/...`;集成 `-run "Trial|Owed|Poison"`,不得 SKIP。
-2. 部署顺序:battle → match → 路由服与 gate → guild。guild 日志应有"历练结果消费者启动 topic=match-results group=guild-trial"(本地 `-Zone` 也**不带** `_zN` 后缀)。
+2. 部署顺序:battle → match → 路由服与 gate → guild。guild 日志应有"Trial result consumer started topic=match-results group=guild-trial"(本地 `-Zone` 也**不带** `_zN` 后缀)。
 
 > **2026-10-08 落码修正(B6b-srv2 已落码;以下命令全部未执行,由 Codex 串行执行)**:上面两步按实际文件展开。
 >
@@ -2402,10 +2402,10 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 >   2. `帮会活动已装配(元宵灯会 / 中秋团圆 / 同道历练): … 历练开放=true(MatchRpc 已配置=true 结果消费=true)`
 >   3. `[GuildTrial] 后台循环已启动: goroutine guild.trial_owed_loop … guild.trial_sweeper …`
 >   4. `历练结果消费已安排: goroutine guild.kafka.trial_results topic=match-results group=guild-trial`
->   5. `历练结果消费者启动 topic=match-results group=guild-trial`(本地 `-Zone N` 也**不带** `_zN` 后缀)
+>   5. `Trial result consumer started topic=match-results group=guild-trial`(本地 `-Zone N` 也**不带** `_zN` 后缀)
 > - 不应出现:`同道历练关闭`、`确保历练结果 topic … 失败`、`goroutine_panic`。
 > - `kafka-consumer-groups --bootstrap-server localhost:9092 --describe --group guild-trial` 能看到该组,追完存量后 LAG = 0。
-> - 停服:Linux / 容器里发 SIGTERM,日志应有 `历练结果消费者退出`,进程在数秒内退出。Windows 本地 Ctrl+C 是直接杀进程,看不到这一行,不作判据。
+> - 停服:Linux / 容器里发 SIGTERM,日志应有 `[GuildTrial] Trial result consumer stopped`,进程在数秒内退出。Windows 本地 Ctrl+C 是直接杀进程,看不到这一行,不作判据。
 >
 > **失败时保留**:失败用例名与断言、`-v` 输出、`SHOW ENGINE INNODB STATUS` 的 LATEST DETECTED DEADLOCK 段、`SELECT VERSION()`;起服失败保留 guild 启动日志全文。
 >

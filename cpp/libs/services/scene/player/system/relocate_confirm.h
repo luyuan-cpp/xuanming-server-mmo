@@ -941,7 +941,9 @@ namespace relocate_confirm
 		uint32_t replyErrorCode{0};
 		bool reentered{false};		// kLanding:进场路由确实到过本节点
 		bool verifyInFlight{false}; // 有一条核实命令在途(只由 MarkVerifySent 置位)
-		bool retryPending{false};	// 上一次核实没读到、等重试(重连时可以提前重发)
+		// 上一次核实没读到、等重试。只决定下一次读的日志级别(首次没读到 WARN、之后的重试降为 DEBUG),不影响何时重发:
+		// 重发只看 nextVerifyAt,Redis 重连成功时也不提前(R14,见 CollectDue)。
+		bool retryPending{false};
 		uint32_t verifyGen{0};		// 核实代际:只由 MarkVerifySent 自增
 		Clock::time_point createdAt{};
 		Clock::time_point sentAt{};
@@ -1107,7 +1109,7 @@ namespace relocate_confirm
 		}
 
 		// 等到 settleAt 再读(可以在"还没读过"时调用:结果未知 / 还有请求结局未定)。本轮核实的截止时刻顺延到
-		// settleAt 之后还有一整轮。清 retryPending:重连不绕过 settle 等待。
+		// settleAt 之后还有一整轮。清 retryPending:settle 之后的那次读不是"没读到之后的重试",日志按首次读打。
 		static void WaitForSettle(Entry &entry)
 		{
 			entry.nextVerifyAt = entry.settleAt;
@@ -1183,10 +1185,11 @@ namespace relocate_confirm
 		//   kMarkWriting 到期   → BeginVerify(kNotSent, kAtSource),进 toVerify;
 		//   kAwaitingReply 到期 → BeginVerify(kNoReply, kAtSource),进 toVerify;
 		//   kVerifying 到期     → 只进 verifyExpired,不管是否在途(黑洞连接不会回空应答);
-		//   kVerifying 未到期、不在途,且 now >= nextVerifyAt 或(reconnected 且 retryPending)→ 进 toVerify。
-		//     重连只对"上次没读到、等重试"的条目生效,不绕过 settle 等待;
+		//   kVerifying 未到期、不在途,且 now >= nextVerifyAt → 进 toVerify。只看条目自己的重试时刻:Redis 重连成功时
+		//     也不提前重发(负责人 2026-11-05 定「重连成功不做业务逻辑」,infra-reconnect-overview.md R14;原来的
+		//     reconnected 参数已删);
 		//   kLanding            → 进 landingToCheck。
-		Due CollectDue(Clock::time_point now, bool reconnected)
+		Due CollectDue(Clock::time_point now)
 		{
 			Due due;
 			for (auto &item : entries_)
@@ -1215,8 +1218,7 @@ namespace relocate_confirm
 					{
 						due.verifyExpired.emplace_back(entry.playerId, entry.seq);
 					}
-					else if (!entry.verifyInFlight &&
-							 (now >= entry.nextVerifyAt || (reconnected && entry.retryPending)))
+					else if (!entry.verifyInFlight && now >= entry.nextVerifyAt)
 					{
 						due.toVerify.emplace_back(entry.playerId, entry.seq);
 					}

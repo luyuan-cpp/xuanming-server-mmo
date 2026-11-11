@@ -136,7 +136,7 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
 	if err != nil {
-		panic(fmt.Errorf("friend SQL boot 装配失败: %w", err))
+		panic(fmt.Errorf("friend SQL boot wiring failed: %w", err))
 	}
 	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New())
 }
@@ -145,7 +145,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // 新 boot 的 prepared 门禁也在这里传入，不能在 handler 已持有门禁后替换它。
 func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session) *ServiceContext {
 	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 || root == nil || relay == nil || root == relay {
-		panic("friend SQL boot 与 SOURCE/RELAY 装配缺失或角色复用")
+		panic("friend SQL boot or SOURCE/RELAY wiring missing, or roles reused")
 	}
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
@@ -195,7 +195,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		_ = directoryConn.Close()
 		_ = db.Close()
 		_ = etcdCli.Close()
-		panic(fmt.Errorf("friend 申请号源装配失败: %w", err))
+		panic(fmt.Errorf("friend request id source wiring failed: %w", err))
 	}
 
 	kafkaWriter := newKafkaWriter(c)
@@ -276,11 +276,14 @@ func NewRedisHandles(c config.Config) (friendRds *redis.Redis, target string) {
 // RC 下只剩记录锁,friend 全部锁定语句又都是完整主键点查 / 点更新,于是不存在可成环的间隙。
 // 自动提交语句每条各取新快照,读语义与 RR 下相同,不影响任何业务判定。
 //
+// 锁等待上限(session_lock_wait.go):行锁 innodb_lock_wait_timeout=1 由 authoritysql 逐连接设置,不在这里重复;
+// mysql 档在这里追加元数据锁 lock_wait_timeout=1,TiDB 档不发。启动时 openMySQL 读回两者核对。
+//
 // 返回值**含密码**,只能交给 sql.Open,绝不打日志、绝不进错误信息(横幅用 MySQLTarget)。
 func BuildDSN(c config.MySQLConf, backend authoritysql.Backend) string {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4&sql_mode=%%27STRICT_TRANS_TABLES%%27"+
 		"&transaction_isolation=%%27READ-COMMITTED%%27",
-		c.User, c.Password, c.Host, c.DBName)
+		c.User, c.Password, c.Host, c.DBName) + sessionLockWaitDSNParams(backend)
 	if backend != authoritysql.BackendMySQL {
 		// 驱动在每条新建物理连接上初始化会话，不能只在当前Ping连接SET一次。
 		// 权威列表是自动提交普通读；悲观事务模式不会关闭历史快照、缓存TSO或跳锁弱读。
@@ -341,6 +344,10 @@ func openMySQL(c config.MySQLConf, backend authoritysql.Backend, permission auth
 		_ = db.Close()
 		return nil, fmt.Errorf("ping MySQL %s 失败(库 %s 不存在时先按 deploy/mysql-init/00_init_zone_dbs.sql 建库并授权): %w",
 			MySQLTarget(c), c.DBName, err)
+	}
+	if err := verifySessionLockWaits(ctx, db, backend); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("MySQL %s: %w", MySQLTarget(c), err)
 	}
 	if backend != authoritysql.BackendMySQL {
 		dialect, _, err := sqldialect.Detect(ctx, db)
@@ -551,6 +558,6 @@ func (e relayDigestEvaler) Eval(ctx context.Context, script string, keys []strin
 
 func (sc *ServiceContext) Stop() {
 	if err := sc.StopAndReport(context.Background()); err != nil {
-		logx.Errorf("friend 排空 HOLD，保留同 boot SQL/RELAY 资源: %v", err)
+		logx.Errorf("friend drain HOLD, retaining same-boot SQL/RELAY resources: %v", err)
 	}
 }

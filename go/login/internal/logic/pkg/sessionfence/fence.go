@@ -16,6 +16,7 @@
 //	closed  "1" = 这条连接已断开(Disconnect 写)
 //	gen     LeaveGame 的次数(LeaveGame 递增);EnterGame 入口记下当时的值,后台链据此识别「期间已离开游戏」
 //	player  这条连接上已绑定的玩家(后台链绑定时写,LeaveGame 删)
+//	left_player  最近一次 LeaveGame 解除的玩家(Leave 写),只给 Leave 的重放返回同一个要收尾的玩家,别的操作不读
 //
 // 正确性靠两段原子脚本的「双边握手」:Close 先写 closed、再读 player;BindPlayer 先查 closed、再写 player。
 // 两段都在同一个 Redis 上原子执行,天然可串行化:关闭在前,绑定一定看到 closed,由后台链补发断线租约;
@@ -278,10 +279,18 @@ func Recheck(ctx context.Context, rdb redis.UniversalClient, key Key, expectGen 
 	return OutcomeOK, nil
 }
 
+// 解除绑定时把玩家记进 left_player:同一次离开被重放(脚本已执行、回包丢了,Leave 报错、LeaveGame 回错误之后客户端重发;
+// 登录域客户端自己不重发,shared/playerredis MaxRetries=-1,换成会重发的客户端也落在这里)时 player 已经删掉,
+// 返回 left_player,调用方照样拿到要收尾的玩家。
 var leaveScript = redis.NewScript(`
 redis.call('HINCRBY', KEYS[1], 'gen', 1)
 local p = redis.call('HGET', KEYS[1], 'player')
-redis.call('HDEL', KEYS[1], 'player')
+if p then
+  redis.call('HSET', KEYS[1], 'left_player', p)
+  redis.call('HDEL', KEYS[1], 'player')
+else
+  p = redis.call('HGET', KEYS[1], 'left_player')
+end
 redis.call('PEXPIRE', KEYS[1], ARGV[1])
 if p then
   return p
@@ -291,6 +300,12 @@ return '0'
 
 // Leave 记一次离开游戏(gen + 1)并解除绑定,返回原先绑定的玩家(没有为 0)。LeaveGame 在清理会话之前调用;
 // 会话里的 player_id 为 0 时,用这里返回的玩家删除会话。解除绑定后记录收回到 ttl:gen 只需活过还在途的后台链。
+//
+// 可以重放(F4,client-request-ordering.md §6.2):Leave 报错时 LeaveGame 不收尾、回错误,客户端重发;脚本可能已经执行、
+// 只是回包丢了。重放时 gen 再 + 1(后台链只比较「是否等于入口记下的值」,多加一次无害),记录里已没有绑定时返回
+// 上一次解除的玩家(left_player),不会因为第一次已经删掉 player 而漏掉收尾。之后又绑定了别的角色时返回新绑定的那个。
+// 对上一次解除的玩家再收尾一次是安全的:下游 DeleteSession 按 session_id + gate 实例做 CAS,对已不在本连接上的玩家是 no-op;
+// 它若此刻正被本连接的后台链写成在线(写会话之后、绑定之前),这次离开递增了 gen,后台链在绑定点照样会删掉它。
 func Leave(ctx context.Context, rdb redis.UniversalClient, key Key, ttl time.Duration) (uint64, error) {
 	raw, err := leaveScript.Run(ctx, rdb, []string{key.redisKey()}, ttl.Milliseconds()).Text()
 	if err != nil {

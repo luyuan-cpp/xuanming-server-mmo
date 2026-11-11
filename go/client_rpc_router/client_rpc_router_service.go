@@ -101,6 +101,9 @@ func main() {
 	}
 	nr.KeepAlive()
 	defer nr.Close()
+	// 有了 node_uuid 才知道本路由服在同轨道路由服里的名次;s.Start() 之前设好,接到的每个请求都按子集挑全服池目标。
+	// 重新注册(失租)沿用同一个 node_uuid,这里只设一次。
+	svcCtx.SetSubsetIdentity(nr.Info.NodeUuid, releaseTrack)
 
 	targetNames := make([]string, 0, len(svcCtx.Targets))
 	for nodeType := range svcCtx.Targets {
@@ -122,6 +125,7 @@ func main() {
 	fmt.Printf("  targets:     %s\n", strings.Join(targetNames, ", "))
 	fmt.Printf("  zone_scoped: %v\n", c.ZoneScopedNodeTypes)
 	fmt.Printf("  fwd_timeout: %d ms\n", c.ForwardTimeoutMs)
+	fmt.Printf("  subset_size: %d (global targets per router, 0 = all)\n", c.GlobalTargetSubsetSize)
 	fmt.Println("=============================================================")
 
 	s.Start()

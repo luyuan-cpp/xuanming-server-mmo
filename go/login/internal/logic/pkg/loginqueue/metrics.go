@@ -4,7 +4,8 @@
 // (RpcServerConf.Prometheus in login.yaml). Naming follows the
 // `login_queue_*` convention for easy Grafana filtering.
 //
-// Six metrics, mapping 1:1 onto the runbook's "待补 Prometheus 指标" table:
+// The first six map 1:1 onto the runbook's "待补 Prometheus 指标" table; the two capacity gauges
+// came with the gate-capacity cap (2026-11-10, capacity.go):
 //
 //	login_queue_size              Gauge       per zone     ZCARD snapshot
 //	login_queue_admitted_inflight Gauge       per zone     in-flight placeholders (ZCARD after dropping expired)
@@ -12,6 +13,8 @@
 //	login_queue_admit_total       Counter     per zone     dispatcher PopAdmit results
 //	login_queue_expired_total     Counter     per zone+reason  EXPIRED responses (token invalid / meta gone / etc.)
 //	login_queue_dispatcher_is_leader  Gauge   per pod+zone  1 = this pod leads its zone, 0 = standby
+//	login_queue_capacity          Gauge       per zone     admission ceiling FreeSlots used (after the gate cap, 2026-11-10)
+//	login_queue_configured_capacity Gauge     per zone     zone_config.capacity from the zone policy, 0 = policy unknown (soft cap)
 //
 // Why only these six (and not, say, "rank histogram" or "per-gate admit
 // distribution"):
@@ -71,6 +74,33 @@ var (
 			"ZCARD admitted:zset:zone:{zone} after dropping expired members. Sitting at " +
 			"(capacity - online) while login_queue_size > 0 is normal back-pressure; if gate " +
 			"PlayerCount does not grow at the same time, clients are not redeeming their admits.",
+		Labels: []string{"zone"},
+	})
+
+	// capacityGauge 是 FreeSlots 实际用的区容量:配置值(没配时按软上限)再按本区在接客的 gate 到水位一共能接的人数封顶
+	// (gatepick.AdmissionCapacity,2026-11-10 起)。每次算容量都写:快速通道每次 AssignGate、dispatcher 每个非空拍。
+	// 排队关着时不算容量,也就没有这条序列。
+	capacityGauge = metric.NewGaugeVec(&metric.GaugeVecOpts{
+		Namespace: metricNamespace,
+		Subsystem: "",
+		Name:      "capacity",
+		Help: "Admission ceiling FreeSlots used for the zone at its last computation: zone_config.capacity from the " +
+			"zone policy (or the soft cap while the policy is unknown), capped at what the zone's serving gates hold at 90% of their " +
+			"self-reported max_connections. Written on every capacity computation (AssignGate fast path, " +
+			"dispatcher ticks with a non-empty queue); absent while the queue is disabled.",
+		Labels: []string{"zone"},
+	})
+
+	// configuredCapacityGauge 是区服目录给本区的容量(zone_config.capacity,经 zonepolicy 读),0 = 读不到区服策略(按软上限)。
+	// 与 capacityGauge 同时写。它大于 login_queue_capacity 时,gate 台数装不下目录的容量,排队会比目录写的早开始拦人
+	// (告警 LoginQueueCapacityLimitedByGates)。
+	configuredCapacityGauge = metric.NewGaugeVec(&metric.GaugeVecOpts{
+		Namespace: metricNamespace,
+		Subsystem: "",
+		Name:      "configured_capacity",
+		Help: "zone_config.capacity for the zone as read from the zone policy in etcd; 0 = policy unknown (soft cap in use). " +
+			"Above login_queue_capacity means the zone's gates cannot hold the directory capacity and the queue " +
+			"starts holding players earlier than configured: add gate replicas or lower zone_config.capacity.",
 		Labels: []string{"zone"},
 	})
 

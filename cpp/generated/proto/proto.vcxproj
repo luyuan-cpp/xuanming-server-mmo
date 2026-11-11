@@ -444,4 +444,18 @@
     <ClCompile Include="common\component\client_request_ledger_comp.pb.cc" />
     <ClInclude Include="common\component\client_request_ledger_comp.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\player_item_hold_comp.pb.cc" />
+    <ClInclude Include="common\component\player_item_hold_comp.pb.h" />
+  </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\event\player_placement_event.pb.cc" />
+    <ClInclude Include="common\event\player_placement_event.pb.h" />
+  </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="battle\battle_script.pb.cc" />
+    <ClCompile Include="common\component\player_mail_outbox_comp.pb.cc" />
+    <ClInclude Include="battle\battle_script.pb.h" />
+    <ClInclude Include="common\component\player_mail_outbox_comp.pb.h" />
+  </ItemGroup>
 </Project>

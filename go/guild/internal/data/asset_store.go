@@ -90,6 +90,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/metric"
 	"google.golang.org/protobuf/proto"
@@ -98,8 +100,10 @@ import (
 	pb "proto/guild"
 
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/gameday"
 	"shared/safego"
+	"shared/workshard"
 )
 
 // Store 各方法的子预算(90 part2 §2 第 8 条)。
@@ -187,13 +191,32 @@ var (
 	recordCleanupDeleted = func(table string, n int64) { guildAssetCleanupDeletedTotal.Add(float64(n), table) }
 )
 
+// guildAssetCleanupLastRun 是清理循环的活性(缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8):
+// 最近一次跑完一轮的时刻(Unix 秒)。清理按 player_id 分片之后,一个副本的循环卡住,它名下的片就没人清,
+// 而 cleanup_deleted_total 的总和照样在涨,看不出来。用 Prometheus 客户端的不带可变 label 的 GaugeVec
+// (go-zero 的 metric 删不了序列):循环起来才有序列、退出就删,没开 CleanupEnabled 的副本没有序列;
+// 告警 AssetOpCleanupLoopStalled 按副本判。注册在默认注册表上,与 go-zero 的指标同一个 /metrics。
+var guildAssetCleanupLastRun = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: guildMetricNamespace,
+	Subsystem: "asset",
+	Name:      "cleanup_last_run_unixtime",
+	Help:      "清理循环最近一次跑完一轮的时刻(Unix 秒,这一轮成败都算,panic 的那一轮不算;循环起来时也写一次)。只在循环运行时有序列。",
+}, nil)
+
+// MarkCleanupRun 记清理循环起来、或跑完一轮的时刻(RunCleanup 与 guild.go 的 startAssetOpCleanup 两处循环共用)。
+func MarkCleanupRun(now time.Time) { guildAssetCleanupLastRun.WithLabelValues().Set(float64(now.Unix())) }
+
+// ClearCleanupRun 在清理循环退出时删掉活性序列:停掉的循环不该被当成卡住。
+func ClearCleanupRun() { guildAssetCleanupLastRun.Reset() }
+
 const (
-	sqlListDueSegmentFresh = "SELECT `op_id` FROM " + guildAssetOpTable +
-		" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ? AND `attempts` < ?" +
-		" ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"
-	sqlListDueSegmentAged = "SELECT `op_id` FROM " + guildAssetOpTable +
-		" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ? AND `attempts` >= ?" +
-		" ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"
+	// 到期扫描的两段(ListDueOwned):新行 `attempts` < ?、老行 `attempts` >= ?,其后接分片条件(workshard.Filter,
+	// 零值是恒真 1=1),再接公共的排序与 LIMIT。分片条件必须在 LIMIT 之前(缺口清单第 25 条),拼法只有 listDueQuery 一处。
+	sqlListDueFreshHead = "SELECT `op_id` FROM " + guildAssetOpTable +
+		" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ? AND `attempts` < ? AND "
+	sqlListDueAgedHead = "SELECT `op_id` FROM " + guildAssetOpTable +
+		" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ? AND `attempts` >= ? AND "
+	sqlListDueTail = " ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"
 
 	// sqlLockAssetOp:op 行的主键点锁(死锁复核 C5 / V1)。**只许**是完整主键等值 + FOR UPDATE、不带任何复核条件:
 	// TiDB 只有这种形状才走 Point_Get 快路径,加锁顺序固定为"PRIMARY key → 行 key";复核条件留在随后的点改 / 点删里。
@@ -317,15 +340,23 @@ const (
 	// 是人工补偿的依据,保留期之后与 ABORTED 一样删。
 	// 判龄按 next_attempt_ms —— 终态行上它等于终结时刻(Finalize / ResolveManually / Abandon 同写)。
 	// 按 op_id 升序取前 500:只是稳定地分批,op_id 不代表先后,判龄靠 next_attempt_ms。
-	sqlListCleanupTerminalOps = "SELECT `op_id` FROM " + guildAssetOpTable +
-		" WHERE `status` IN (?, ?, ?, ?) AND `next_attempt_ms` < ? ORDER BY `op_id` ASC LIMIT ?"
-	sqlCleanupTerminalOp = "DELETE FROM " + guildAssetOpTable +
+	//
+	// 三条候选读都拆成「头 + 分片条件 + 尾」(缺口清单第 25 条第二批,设计 §11):分片条件(workshard.Filter,按 player_id,
+	// 零值是恒真 1=1)接在 WHERE 末尾、ORDER BY / LIMIT 之前,拼法只有 cleanupCandidateQuery 一处;不带后缀的那条是不分片的形状
+	// (= 头 + "1=1" + 尾),给候选读不加锁的静态检查与不分工的调用方。
+	sqlListCleanupTerminalOpsHead = "SELECT `op_id` FROM " + guildAssetOpTable +
+		" WHERE `status` IN (?, ?, ?, ?) AND `next_attempt_ms` < ? AND "
+	sqlListCleanupTerminalOpsTail = " ORDER BY `op_id` ASC LIMIT ?"
+	sqlListCleanupTerminalOps     = sqlListCleanupTerminalOpsHead + "1=1" + sqlListCleanupTerminalOpsTail
+	sqlCleanupTerminalOp          = "DELETE FROM " + guildAssetOpTable +
 		" WHERE `op_id` = ? AND `status` IN (?, ?, ?, ?) AND `next_attempt_ms` < ?"
 
 	// 计数行:4 列完整主键点删,period_key 的范围条件同时作复核(日键与周键各走一段,见 dayKeyFloor)。
-	sqlListCleanupCounters = `SELECT player_id, counter_kind, ref_id, period_key FROM guild_daily_counter
-	WHERE period_key BETWEEN ? AND ? ORDER BY player_id, counter_kind, ref_id, period_key LIMIT ?`
-	sqlCleanupCounter = `DELETE FROM guild_daily_counter
+	sqlListCleanupCountersHead = `SELECT player_id, counter_kind, ref_id, period_key FROM guild_daily_counter
+	WHERE period_key BETWEEN ? AND ? AND `
+	sqlListCleanupCountersTail = ` ORDER BY player_id, counter_kind, ref_id, period_key LIMIT ?`
+	sqlListCleanupCounters     = sqlListCleanupCountersHead + "1=1" + sqlListCleanupCountersTail
+	sqlCleanupCounter          = `DELETE FROM guild_daily_counter
 	WHERE player_id = ? AND counter_kind = ? AND ref_id = ? AND period_key = ? AND period_key BETWEEN ? AND ?`
 
 	// 清理点删前的点锁(死锁复核 C5)。只写完整主键等值、不带任何复核条件:TiDB 只有这种形状才走 Point_Get 快路径,
@@ -339,9 +370,11 @@ const (
 	// 客户端幂等键的去重记录(guild_client_request,锁序位置 11):created_ms 早于截止的行。候选走 idx_guild_client_request_0,
 	// 点锁只写完整主键等值(Point_Get 快路径,理由同 sqlLockCleanupCounter),复核条件留在点删里。
 	// 本表别的写者只有预留事务插新行(created_ms = 请求的 now,远在截止之后),行集合不相交;点锁只为让多个副本的清理排队。
-	sqlListCleanupClientRequests = "SELECT `player_id`, `client_request_id` FROM " + guildClientRequestTable +
-		" WHERE `created_ms` < ? ORDER BY `created_ms` ASC LIMIT ?"
-	sqlLockCleanupClientRequest = "SELECT `op_id` FROM " + guildClientRequestTable +
+	sqlListCleanupClientRequestsHead = "SELECT `player_id`, `client_request_id` FROM " + guildClientRequestTable +
+		" WHERE `created_ms` < ? AND "
+	sqlListCleanupClientRequestsTail = " ORDER BY `created_ms` ASC LIMIT ?"
+	sqlListCleanupClientRequests     = sqlListCleanupClientRequestsHead + "1=1" + sqlListCleanupClientRequestsTail
+	sqlLockCleanupClientRequest      = "SELECT `op_id` FROM " + guildClientRequestTable +
 		" WHERE `player_id` = ? AND `client_request_id` = ? FOR UPDATE"
 	sqlCleanupClientRequest = "DELETE FROM " + guildClientRequestTable +
 		" WHERE `player_id` = ? AND `client_request_id` = ? AND `created_ms` < ?"
@@ -390,8 +423,11 @@ func isTerminalRecord(st pb.GuildAssetOpStatus) bool {
 // isRetryableBackground:后台写的重试分类 = 1213 / 9007 / errRetryTx(isRetryableTxError)再加 1205。
 // 与请求路径不同,后台写**重试** 1205:它没有玩家在等"稍后重试"的提示,锁等待超时之后再排一次队
 // 比把一个已定的终局留在内存里、等下一轮重投再投一次 scene 划算得多。
+// 另认权威 SQL 守卫判定的「提交前中止」(authoritysql.IsAbortedBeforeCommit,R6):事务里只发过纯 DML、COMMIT 还没发时
+// 连接断开或调用取消,库会回滚未提交的事务,确定没写,换一条连接整笔重跑是安全的。错误树里混有结局未知时它回假,照旧不重试。
+// 只加在这里,不加进 isRetryableTxError:那个还给请求路径的 retryOnDeadlock 计死锁指标、给 classifyCommitErr 分 COMMIT 错误用。
 func isRetryableBackground(err error) bool {
-	return isRetryableTxError(err) || isLockWaitTimeout(err)
+	return isRetryableTxError(err) || isLockWaitTimeout(err) || authoritysql.IsAbortedBeforeCommit(err)
 }
 
 // FinalizedOp 是一次**本次**终结的摘要,供提交后的推送使用。
@@ -421,6 +457,7 @@ var (
 	_ assetop.PlayerPendingLister = (*GuildAssetStore)(nil)
 	_ assetop.PendingClassCounter = (*GuildAssetStore)(nil)
 	_ assetop.Abandoner           = (*GuildAssetStore)(nil)
+	_ assetop.OwnedDueLister      = (*GuildAssetStore)(nil)
 )
 
 // NewGuildAssetStore。guilds 为 nil 时报错:对侧账要用它的缓存失效,连接池也取自它。
@@ -433,27 +470,38 @@ func NewGuildAssetStore(guilds *GuildRepo) (*GuildAssetStore, error) {
 
 // ── assetop.Store ────────────────────────────────────────────
 
-// ListDue 非加锁一致性读,只回主键,走 idx_guild_asset_op_0 (status, next_attempt_ms)。
+// ListDue 扫全部片的到期行,即不带分片条件的 ListDueOwned。重投循环绑了按片分工(assetop.Loop.BindWorkOwner)
+// 之后不再调它;assetopfix 之类不分工的调用方照旧用它。
+func (s *GuildAssetStore) ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error) {
+	return s.ListDueOwned(ctx, nowMs, limit, workshard.Filter{})
+}
+
+// ListDueOwned 非加锁一致性读,只回主键,走 idx_guild_asset_op_0 (status, next_attempt_ms, op_id, player_id)。
 //
 // **两段查询**(X-03 防饿死,契约见 assetop.Store.ListDue):第一段只取新行(attempts < FreshAttemptLimit)并占满
 // limit;只有它不够时才发第二段取老行,且只补缺口。写成一条 SQL,退避封顶在 MaxBackoff 的老行永远"早就到期",
 // 会霸占整批名额,新提交的捐献 / 兑换一次也轮不上。两段是两次独立的非锁读,期间 attempts 可能从 2 跳到 3,
 // 同一行两段都出现,所以按 op_id 去重;第一段的 id 排前面,让 Claim 先抢新行。
-func (s *GuildAssetStore) ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error) {
+//
+// owned 是本副本负责的片(片号 = player_id % 64,assetop.OwnedDueLister;缺口清单第 25 条),两段都接在 WHERE 里、
+// LIMIT 之前:别的副本的行再早到期也不占本副本的名额。零值不过滤。idx_0 带着 op_id 与 player_id(2026-11-11):
+// 按索引顺序扫、凑满就停;分片条件在索引条目上判,别的副本的行不回表,只有本副本的行才回表判 lease_until_ms、attempts
+// (docs/design/assetop-redelivery-sharding-20261110.md §2.4)。
+func (s *GuildAssetStore) ListDueOwned(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]uint64, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, storeReadBudget)
 	defer cancel()
 
-	fresh, err := s.listDueSegment(ctx, sqlListDueSegmentFresh, nowMs, limit)
+	fresh, err := s.listDueSegment(ctx, listDueQuery(sqlListDueFreshHead, owned), owned, nowMs, limit)
 	if err != nil {
 		return nil, err
 	}
 	if len(fresh) >= limit {
 		return fresh, nil
 	}
-	aged, err := s.listDueSegment(ctx, sqlListDueSegmentAged, nowMs, limit-len(fresh))
+	aged, err := s.listDueSegment(ctx, listDueQuery(sqlListDueAgedHead, owned), owned, nowMs, limit-len(fresh))
 	if err != nil {
 		return nil, err
 	}
@@ -470,8 +518,16 @@ func (s *GuildAssetStore) ListDue(ctx context.Context, nowMs uint64, limit int) 
 	return fresh, nil
 }
 
-func (s *GuildAssetStore) listDueSegment(ctx context.Context, query string, nowMs uint64, limit int) ([]uint64, error) {
-	rows, err := s.db.QueryContext(ctx, query, PendingStatus(), nowMs, nowMs, assetop.FreshAttemptLimit, limit)
+// listDueQuery 拼一段到期扫描:head 是新行或老行那一段的开头,owned 是分片条件,最后是公共的排序与 LIMIT。
+// 条件文本只来自 workshard.SQLFilter(列名写死、片号只走绑定参数),不含外部输入。
+func listDueQuery(head string, owned workshard.Filter) string {
+	return head + owned.SQL() + sqlListDueTail
+}
+
+// listDueSegment 跑一段到期扫描。实参顺序与 listDueQuery 的占位符一致:四个到期条件、分片条件的片号、LIMIT。
+func (s *GuildAssetStore) listDueSegment(ctx context.Context, query string, owned workshard.Filter, nowMs uint64, limit int) ([]uint64, error) {
+	args := append([]any{PendingStatus(), nowMs, nowMs, assetop.FreshAttemptLimit}, owned.Args()...)
+	rows, err := s.db.QueryContext(ctx, query, append(args, limit)...)
 	if err != nil {
 		return nil, fmt.Errorf("list due %s: %w", guildAssetOpTable, err)
 	}
@@ -1256,17 +1312,44 @@ type CleanupConf struct {
 	Interval          time.Duration
 	TerminalRetention time.Duration
 	CounterRetention  time.Duration
+	// Owns 判本副本是否负责清理的某一片(缺口清单第 25 条第二批,设计 §11):片号 = player_id % 64,第 n 片的归属键是
+	// workshard.ShardKey(CleanupWorkKind, n)。生产接重投循环那份成员表(svc.AssetPipeline.CleanupOwner);nil = 不分工,
+	// 本副本清全部行(通道关着、没有成员表时就是这样,与分片前相同)。正确性不靠它:点删前仍有主键点锁与带原条件的复核。
+	Owns func(key string) bool
+}
+
+// CleanupWorkKind 是终态清理按片分工的归属键前缀。与重投循环的 guild-assetop 分开:两类工作各自按最高随机权重哈希分,
+// 同一片的重投与清理不必落在同一个副本上。写死成常量,不进配置。
+const CleanupWorkKind = "guild-assetop-cleanup"
+
+// cleanupShardColumn 是清理分片用的列:三张表(guild_asset_op、guild_client_request、guild_daily_counter)都有 player_id。
+const cleanupShardColumn = "player_id"
+
+// cleanupCandidateQuery 拼一条清理候选读:head 以 "AND " 结尾,owned 是分片条件(零值是恒真 1=1),tail 是 ORDER BY / LIMIT。
+// 条件文本只来自 workshard.SQLFilter(列名写死、片号只走绑定参数),不含外部输入。
+func cleanupCandidateQuery(head string, owned workshard.Filter, tail string) string {
+	return head + owned.SQL() + tail
+}
+
+// cleanupArgs 按占位符顺序拼候选读的实参:先 before(WHERE 里分片条件之前的那些),再片号,最后 LIMIT。
+func cleanupArgs(owned workshard.Filter, before ...any) []any {
+	args := append(append(make([]any, 0, len(before)+len(owned.Args())+1), before...), owned.Args()...)
+	return append(args, cleanupBatchSize)
 }
 
 // RunCleanup 阻塞运行清理循环,ctx 取消即返回;调用方用 safego.Go("guild.asset_op_cleanup", …) 启动。
 //
-// 每个副本都跑:删除幂等,多副本同时跑无害;随机初始延迟 [0, Interval) 只是把各副本错开,少抢同一批行锁。
+// 每个 stable 副本都跑,c.Owns 装配了时各清各的片(CleanupOnce);没装配时各副本清全部行:删除幂等,多副本同时跑无害。
+// 随机初始延迟 [0, Interval) 只是把各副本错开,少抢同一批行锁。
 // 每一轮各自 recover:单轮 panic 只丢那一轮,清理不会从此静默停摆。
 func (s *GuildAssetStore) RunCleanup(ctx context.Context, c CleanupConf) {
 	if c.Interval <= 0 {
 		logx.Errorf("[GuildAsset] Invalid cleanup interval (%v); cleanup task not started", c.Interval)
 		return
 	}
+	// 活性:起来时写一次,每跑完一轮写一次(这一轮成败都写,panic 的那一轮由 safego.Run 兜住、不写),退出时删掉序列。
+	MarkCleanupRun(time.Now())
+	defer ClearCleanupRun()
 	timer := time.NewTimer(time.Duration(rand.Int64N(int64(c.Interval))))
 	defer timer.Stop()
 	for {
@@ -1279,6 +1362,7 @@ func (s *GuildAssetStore) RunCleanup(ctx context.Context, c CleanupConf) {
 			if err := s.CleanupOnce(ctx, time.Now(), c); err != nil && ctx.Err() == nil {
 				logx.Errorf("[GuildAsset] Cleanup failed: %v", err)
 			}
+			MarkCleanupRun(time.Now())
 		})
 		timer.Reset(c.Interval)
 	}
@@ -1293,11 +1377,16 @@ func (s *GuildAssetStore) RunCleanup(ctx context.Context, c CleanupConf) {
 // 所以一笔指令可删时它的去重记录早已可删。批次上限或单行失败仍可能让少量去重记录比指令行晚一轮删,
 // 那段时间里重发同一个键查到记录却查不到指令行 —— logic 按拒绝答复、不重新执行(economy_logic.go 的 clientRequestMismatch)。
 // 去重记录与回档检查的清理水位无关,水位写不进也照删。
+//
+// 按片分工(c.Owns,缺口清单第 25 条第二批):三类候选读都只取本副本负责的片(player_id % 64),条件在 LIMIT 之前;
+// 片的归属在本轮开头算一次,一轮里不变。清理水位仍由每个副本推进:它是只增的「这以下可能已删」,哪个副本先删都先写它,
+// 分片不改变 write-ahead 的论证。某一片暂时没人清(成员表变化、登记着却没开清理的副本)只是终态行多留一轮,不影响正确性。
 func (s *GuildAssetStore) CleanupOnce(ctx context.Context, now time.Time, c CleanupConf) error {
 	if c.TerminalRetention <= 0 || c.CounterRetention <= 0 {
 		return fmt.Errorf("guild asset cleanup: retention must be positive (terminal=%v counter=%v)",
 			c.TerminalRetention, c.CounterRetention)
 	}
+	owned := workshard.SQLFilter(c.Owns, CleanupWorkKind, cleanupShardColumn)
 	nowMs := uint64(now.UnixMilli())
 	terminalMs := uint64(c.TerminalRetention / time.Millisecond)
 	var opCutoffMs uint64
@@ -1309,7 +1398,7 @@ func (s *GuildAssetStore) CleanupOnce(ctx context.Context, now time.Time, c Clea
 	var errs []error
 	if opCutoffMs > 0 {
 		errs = append(errs, s.cleanupInBatches(ctx, cleanupTableClientRequest, func(ctx context.Context) (int, int64, error) {
-			return s.cleanupClientRequestsBatch(ctx, opCutoffMs)
+			return s.cleanupClientRequestsBatch(ctx, opCutoffMs, owned)
 		}))
 		// 先推进清理水位再删(write-ahead,理由见 asset_op_cleanup_watermark.go):回档检查靠水位知道"哪一段流水已经可能被删"。
 		// 水位写不进就不删终态行 —— 多留一轮无害;删了却没记下,调大保留期之后那段流水会被误当成"可证明且没有分歧"。
@@ -1317,16 +1406,16 @@ func (s *GuildAssetStore) CleanupOnce(ctx context.Context, now time.Time, c Clea
 			errs = append(errs, fmt.Errorf("cleanup %s skipped: %w", cleanupTableAssetOp, err))
 		} else {
 			errs = append(errs, s.cleanupInBatches(ctx, cleanupTableAssetOp, func(ctx context.Context) (int, int64, error) {
-				return s.cleanupTerminalOpsBatch(ctx, opCutoffMs)
+				return s.cleanupTerminalOpsBatch(ctx, opCutoffMs, owned)
 			}))
 		}
 	}
 	errs = append(errs,
 		s.cleanupInBatches(ctx, cleanupTableCounter, func(ctx context.Context) (int, int64, error) {
-			return s.cleanupCountersBatch(ctx, uint32(dayKeyFloor), dayCutoff)
+			return s.cleanupCountersBatch(ctx, uint32(dayKeyFloor), dayCutoff, owned)
 		}),
 		s.cleanupInBatches(ctx, cleanupTableCounter, func(ctx context.Context) (int, int64, error) {
-			return s.cleanupCountersBatch(ctx, uint32(weekKeyFloor), weekCutoff)
+			return s.cleanupCountersBatch(ctx, uint32(weekKeyFloor), weekCutoff, owned)
 		}))
 	return errors.Join(errs...)
 }
@@ -1369,15 +1458,17 @@ func (s *GuildAssetStore) cleanupInBatches(ctx context.Context, table string, ba
 	return nil
 }
 
-// cleanupTerminalOpsBatch:普通读至多 500 个保留期外的四种终态 op_id(升序),逐行短事务点锁 + 点删并复核条件。
-func (s *GuildAssetStore) cleanupTerminalOpsBatch(ctx context.Context, cutoffMs uint64) (int, int64, error) {
+// cleanupTerminalOpsBatch:普通读至多 500 个保留期外的四种终态 op_id(升序,只取 owned 里的片),逐行短事务点锁 + 点删并复核条件。
+func (s *GuildAssetStore) cleanupTerminalOpsBatch(ctx context.Context, cutoffMs uint64, owned workshard.Filter) (int, int64, error) {
 	applied := int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED)
 	rejected := int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_REJECTED)
 	aborted := int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_ABORTED)
 	abandoned := int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_ABANDONED)
 
 	readCtx, cancel := context.WithTimeout(ctx, storeReadBudget)
-	opIDs, err := scanOpIDs(readCtx, s.db, sqlListCleanupTerminalOps, applied, rejected, aborted, abandoned, cutoffMs, cleanupBatchSize)
+	opIDs, err := scanOpIDs(readCtx, s.db,
+		cleanupCandidateQuery(sqlListCleanupTerminalOpsHead, owned, sqlListCleanupTerminalOpsTail),
+		cleanupArgs(owned, applied, rejected, aborted, abandoned, cutoffMs)...)
 	cancel()
 	if err != nil {
 		return 0, 0, fmt.Errorf("list terminal %s: %w", guildAssetOpTable, err)
@@ -1397,9 +1488,10 @@ func (s *GuildAssetStore) cleanupTerminalOpsBatch(ctx context.Context, cutoffMs 
 // clientRequestKey 是 guild_client_request 的完整主键。
 type clientRequestKey struct{ PlayerID, ClientRequestID uint64 }
 
-// cleanupClientRequestsBatch:普通读至多 500 个 created_ms 早于截止的去重记录主键(按创建时刻升序),逐行短事务点锁 + 点删并复核。
-func (s *GuildAssetStore) cleanupClientRequestsBatch(ctx context.Context, cutoffMs uint64) (int, int64, error) {
-	keys, err := s.listCleanupClientRequests(ctx, cutoffMs)
+// cleanupClientRequestsBatch:普通读至多 500 个 created_ms 早于截止的去重记录主键(按创建时刻升序,只取 owned 里的片),
+// 逐行短事务点锁 + 点删并复核。
+func (s *GuildAssetStore) cleanupClientRequestsBatch(ctx context.Context, cutoffMs uint64, owned workshard.Filter) (int, int64, error) {
+	keys, err := s.listCleanupClientRequests(ctx, cutoffMs, owned)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1416,10 +1508,12 @@ func (s *GuildAssetStore) cleanupClientRequestsBatch(ctx context.Context, cutoff
 	return len(keys), deleted, nil
 }
 
-func (s *GuildAssetStore) listCleanupClientRequests(ctx context.Context, cutoffMs uint64) ([]clientRequestKey, error) {
+func (s *GuildAssetStore) listCleanupClientRequests(ctx context.Context, cutoffMs uint64, owned workshard.Filter) ([]clientRequestKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, storeReadBudget)
 	defer cancel()
-	rows, err := s.db.QueryContext(ctx, sqlListCleanupClientRequests, cutoffMs, cleanupBatchSize)
+	rows, err := s.db.QueryContext(ctx,
+		cleanupCandidateQuery(sqlListCleanupClientRequestsHead, owned, sqlListCleanupClientRequestsTail),
+		cleanupArgs(owned, cutoffMs)...)
 	if err != nil {
 		return nil, fmt.Errorf("list expired %s: %w", guildClientRequestTable, err)
 	}
@@ -1451,8 +1545,8 @@ type counterKey struct {
 // 前提:cutoff 来自 counterCleanupCutoffs,从不删到仍可能被在途预留 upsert 写的上一周期行。本短事务不持 seq 行守卫,
 // 所以它在计数行上只会遇到退款(sqlRefundCounter,Point_Get,与 sqlLockCleanupCounter 同为 PRIMARY key → 行 key),同序排队;
 // 直接传一个更新的 cutoff 进来就会与 upsert 同行相遇(TiDB 各持一半,C5 补遗),也会让被删周期的限购被在途预留绕过一次。
-func (s *GuildAssetStore) cleanupCountersBatch(ctx context.Context, floor, cutoff uint32) (int, int64, error) {
-	keys, err := s.listCleanupCounters(ctx, floor, cutoff)
+func (s *GuildAssetStore) cleanupCountersBatch(ctx context.Context, floor, cutoff uint32, owned workshard.Filter) (int, int64, error) {
+	keys, err := s.listCleanupCounters(ctx, floor, cutoff, owned)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1469,10 +1563,12 @@ func (s *GuildAssetStore) cleanupCountersBatch(ctx context.Context, floor, cutof
 	return len(keys), deleted, nil
 }
 
-func (s *GuildAssetStore) listCleanupCounters(ctx context.Context, floor, cutoff uint32) ([]counterKey, error) {
+func (s *GuildAssetStore) listCleanupCounters(ctx context.Context, floor, cutoff uint32, owned workshard.Filter) ([]counterKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, storeReadBudget)
 	defer cancel()
-	rows, err := s.db.QueryContext(ctx, sqlListCleanupCounters, floor, cutoff, cleanupBatchSize)
+	rows, err := s.db.QueryContext(ctx,
+		cleanupCandidateQuery(sqlListCleanupCountersHead, owned, sqlListCleanupCountersTail),
+		cleanupArgs(owned, floor, cutoff)...)
 	if err != nil {
 		return nil, fmt.Errorf("list expired daily counters: %w", err)
 	}

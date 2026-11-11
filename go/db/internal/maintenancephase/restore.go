@@ -215,7 +215,7 @@ func ValidateAuthorityPlan(plan *databasepb.SqlWriterMaintenanceReceipt_Plan) er
 		targets[key] = true
 		zones := map[uint32]bool{}
 		for _, zone := range target.Zones {
-			if zone == 0 || zone > placement.MaxZoneStorageID || zones[zone] {
+			if zone == 0 || zone > placement.MaxZoneID || zones[zone] {
 				return errors.New("Redis目标zone非法或重复")
 			}
 			zones[zone] = true

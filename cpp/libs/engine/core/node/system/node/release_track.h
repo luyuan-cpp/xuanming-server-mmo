@@ -45,6 +45,10 @@ namespace release_track
 	// 部署注入本进程轨道的环境变量名;Go 服务读同一个名字。
 	inline constexpr const char *kEnvVar = "MMORPG_RELEASE_TRACK";
 
+	// 把会话轨道带给目标服务的 gRPC metadata 键(设计文档 §2.6)。gate 直连模式调全局服务时写 gate 自己的轨道,
+	// 路由模式由路由服按 ForwardRequest.release_track 写。与 Go shared/releasetrack.MetadataKey 同名,Go 侧有对拍测试读本文件核对。
+	inline constexpr const char *kMetadataKey = "x-release-track";
+
 	// 解析一个轨道取值。空串是 stable;其余只认 "stable"、"canary",区分大小写、不去空白:
 	// 部署写出的值必须原样就是这两个之一,宽松匹配会让拼错的配置悄悄落到某条轨道上。认不出返回 nullopt。
 	inline std::optional<Track> Parse(std::string_view raw)

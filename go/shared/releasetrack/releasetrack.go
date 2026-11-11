@@ -42,6 +42,12 @@ const (
 // EnvVar 是部署注入本进程轨道的环境变量名。C++ 节点读同一个名字。
 const EnvVar = "MMORPG_RELEASE_TRACK"
 
+// MetadataKey 是客户端请求链路上把会话轨道带给目标服务的 gRPC metadata 键(设计文档 §2.6)。
+// 路由服按 ForwardRequest.release_track 写它(覆盖 gate 带来的同名键),gate 直连模式写 gate 自己的轨道;
+// 取值同 NodeInfo.release_track,读不到按 stable 算。只决定由哪条轨道承载后续工作(比如战斗放在哪条轨道的 battle 上),
+// 不是安全边界,所以不进 gate 的身份签名。C++ release_track.h 的 kMetadataKey 与它同名,对拍测试守着。
+const MetadataKey = "x-release-track"
+
 // 写进 NodeInfo.release_track 与 ForwardRequest.release_track 的两个取值。
 const (
 	stableName = "stable"

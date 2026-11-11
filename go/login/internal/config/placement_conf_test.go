@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -8,16 +9,15 @@ import (
 	"shared/placement"
 )
 
-// 存档库和区脱钩(docs/design/player-data-tidb-scaling-plan.md §7.2):配了 StorageShards,新号在本地域的 K 个
-// 存档库里按 player_id 取模选库,和 login 所在的区无关。
+// 存档库和区脱钩(docs/design/player-data-tidb-scaling-plan.md §7.2):新号在本地域的 K 个存档库里按 player_id 取模选库,
+// 区(Node.ZoneId)不是选库的输入。
 func TestPlacementStorageIDForNewPlayerUsesRegionStorage(t *testing.T) {
-	const loginZone = uint32(7)
 	c := PlacementConf{Region: 1, StorageShards: 64}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
 	for _, playerID := range []uint64{1, 63, 64, 1<<40 + 9} {
-		got, err := c.StorageIDForNewPlayer(playerID, loginZone)
+		got, err := c.StorageIDForNewPlayer(playerID)
 		if err != nil {
 			t.Fatalf("player %d: %v", playerID, err)
 		}
@@ -25,88 +25,67 @@ func TestPlacementStorageIDForNewPlayerUsesRegionStorage(t *testing.T) {
 		if got != want {
 			t.Fatalf("player %d: storage %d, want %d", playerID, got, want)
 		}
-		if placement.IsZoneStorage(got) {
-			t.Fatalf("player %d landed in the zone family (%d)", playerID, got)
+		if got <= placement.MaxZoneID {
+			t.Fatalf("player %d landed in the zone id range (%d)", playerID, got)
 		}
 	}
-	// 换一个区建号,落点不变:区不参与选库。
-	a, _ := c.StorageIDForNewPlayer(12345, 7)
-	b, _ := c.StorageIDForNewPlayer(12345, 8)
+	// 同一个号算两次落点相同:落点只由地域、K 和 player_id 决定。
+	a, _ := c.StorageIDForNewPlayer(12345)
+	b, _ := c.StorageIDForNewPlayer(12345)
 	if a != b {
-		t.Fatalf("storage depends on the login zone: %d vs %d", a, b)
+		t.Fatalf("storage is not a function of the player id: %d vs %d", a, b)
 	}
 }
 
 // dev、test:地域 0、K=1,所有新号落在 player_store_1000000_db。
 func TestPlacementDevRegionStorageIsTheDefaultGlobalStore(t *testing.T) {
 	c := PlacementConf{Region: 0, StorageShards: 1}
-	got, err := c.StorageIDForNewPlayer(987654321, 3)
+	got, err := c.StorageIDForNewPlayer(987654321)
 	if err != nil || got != placement.DefaultGlobalStorageID {
 		t.Fatalf("dev storage = (%d,%v), want %d", got, err, placement.DefaultGlobalStorageID)
 	}
 }
 
-// 过渡期(批次 A17b 删除):StorageShards 为 0 时沿用旧语义,NewPlayerStorageId 为 0 落本 login 的 zone。
-func TestPlacementLegacyStorageWhileShardsUnset(t *testing.T) {
-	const loginZone = uint32(7)
-	cases := map[string]struct {
-		c    PlacementConf
-		want uint32
-	}{
-		"0 uses login zone": {c: PlacementConf{}, want: loginZone},
-		"pinned storage":    {c: PlacementConf{NewPlayerStorageId: 1000000}, want: 1000000},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			if err := tc.c.Validate(); err != nil {
-				t.Fatal(err)
-			}
-			got, err := tc.c.StorageIDForNewPlayer(42, loginZone)
-			if err != nil || got != tc.want {
-				t.Fatalf("StorageIDForNewPlayer = (%d,%v), want %d", got, err, tc.want)
-			}
-		})
-	}
-	if id, err := (PlacementConf{}).StorageIDForNewPlayer(42, 0); err == nil {
-		t.Fatalf("no zone and no shards must be refused, got %d", id)
-	}
-}
-
-// 不合法的组合在启动时拒绝,不建出落到错误库的角色。
+// 不合法的配置在启动时拒绝,不建出落到错误库的角色。没配 StorageShards(包括整块缺席)也是不合法:
+// 没有回落到本 zone 库的旧语义(批次 A17b 删除),报错要点名缺的键。
 func TestPlacementValidateRejectsBadCombinations(t *testing.T) {
 	for name, c := range map[string]PlacementConf{
-		"region without shards":   {Region: 1},
-		"region out of range":     {Region: placement.MaxRegionCode + 1, StorageShards: 1},
-		"too many shards":         {StorageShards: placement.RegionStorageStride + 1},
-		"shards and pinned store": {StorageShards: 4, NewPlayerStorageId: 1000000},
+		"block absent":          {},
+		"region without shards": {Region: 1},
+		"region out of range":   {Region: placement.MaxRegionCode + 1, StorageShards: 1},
+		"too many shards":       {StorageShards: placement.RegionStorageStride + 1},
 	} {
-		if err := c.Validate(); err == nil {
+		err := c.Validate()
+		if err == nil {
 			t.Fatalf("%s: Validate accepted %+v", name, c)
+		}
+		if c.StorageShards == 0 && !strings.Contains(err.Error(), "Placement.StorageShards is required") {
+			t.Fatalf("%s: error must name the missing key, got %v", name, err)
 		}
 	}
 	// 建号时玩家号为 0 同样拒绝。
-	if id, err := (PlacementConf{StorageShards: 1}).StorageIDForNewPlayer(0, 7); err == nil {
+	if id, err := (PlacementConf{StorageShards: 1}).StorageIDForNewPlayer(0); err == nil {
 		t.Fatalf("player 0 must be refused, got %d", id)
 	}
 }
 
-// 缺 Placement 块是过渡期的旧语义:新角色落在本 login 的 zone,不会出现不写落点的角色。
-func TestPlacementBlockMissingUsesLoginZone(t *testing.T) {
+// 配置文件里没有 Placement 块:加载不报缺键(块是 optional),由 Validate 在任何外部连接之前拒绝启动(login.go)。
+func TestPlacementBlockMissingIsRefusedAtStartup(t *testing.T) {
 	var c Config
 	if err := conf.LoadFromYamlBytes([]byte("Name: login.rpc\nListenOn: 127.0.0.1:1\n"), &c); err != nil {
-		// 其余必填块缺失会报错;这里只关心 Placement 的零值语义,所以忽略加载错误。
+		// 其余必填块缺失会报错;这里只关心 Placement 的零值,所以忽略加载错误。
 		_ = err
 	}
-	if got, err := c.Placement.StorageIDForNewPlayer(42, 7); err != nil || got != 7 {
-		t.Fatalf("StorageIDForNewPlayer on a missing block = (%d,%v), want 7", got, err)
+	if err := c.Placement.Validate(); err == nil {
+		t.Fatalf("a missing Placement block must be refused, got %+v", c.Placement)
 	}
 }
 
 // placementKeysProbe 只用来核对样例 yaml 的段名 / 键名拼写。
 //
 // 字段**故意不加 optional**:go-zero 的必填语义下,键缺失时 conf.Load 报 "field ... is not set"。
-// 为什么需要它:go-zero 不校验未知键,`Placment:` 这类拼写错误会被静默忽略,新角色就落到意料之外的库。
-// json tag 必须与 Config / PlacementConf 上的保持一致。
+// 为什么需要它:go-zero 不校验未知键,`Placment:` 这类拼写错误会被静默忽略,login 就会因缺 StorageShards 拒启,
+// 而报错里看不出是拼错了。json tag 必须与 Config / PlacementConf 上的保持一致。
 type placementKeysProbe struct {
 	Placement struct {
 		Region        uint32 `json:"Region"`
@@ -115,7 +94,7 @@ type placementKeysProbe struct {
 }
 
 // 两份样例 yaml(仓内 etc 与 deploy/login-stack.linux)必须显式写出地域与存档库数,
-// 键名拼写由 placementKeysProbe 的必填字段保证。
+// 键名拼写由 placementKeysProbe 的必填字段保证。K8s 的 login ConfigMap 不镜像这一段,由 k8s_deploy.ps1 按 -Region / -PlayerStoreShards 渲染。
 func TestLoginYamlSpellsOutPlacementKeys(t *testing.T) {
 	for _, path := range []string{
 		"../../etc/login.yaml",
@@ -162,10 +141,10 @@ func TestEtcYamlPlacementIsRegionStorage(t *testing.T) {
 	if err := c.Placement.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if c.Placement.Region != 0 || c.Placement.StorageShards != 1 || c.Placement.NewPlayerStorageId != 0 {
-		t.Fatalf("etc/login.yaml Placement = %+v, want Region 0, StorageShards 1, no NewPlayerStorageId", c.Placement)
+	if c.Placement.Region != 0 || c.Placement.StorageShards != 1 {
+		t.Fatalf("etc/login.yaml Placement = %+v, want Region 0, StorageShards 1", c.Placement)
 	}
-	got, err := c.Placement.StorageIDForNewPlayer(1<<40+7, c.Node.ZoneId)
+	got, err := c.Placement.StorageIDForNewPlayer(1<<40 + 7)
 	if err != nil || got != placement.DefaultGlobalStorageID {
 		t.Fatalf("etc/login.yaml new player storage = (%d,%v), want %d", got, err, placement.DefaultGlobalStorageID)
 	}

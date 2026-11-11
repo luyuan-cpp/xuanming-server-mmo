@@ -74,8 +74,8 @@ type ServiceContext struct {
 	// 配置了 DataServiceRpc 就拨号,与 IdSegment.Enabled 无关。
 	DataServiceClient dspb.DataServiceClient
 	// GuildIDSegment 是 guild_id 号段客户端(shared/idsegment,biz_tag="guild");
-	// IdSegment.Enabled=false 时为 nil。发号策略(是否回退 snowflake)在 guild.go 里
-	// 用 NewGuildIDMinter 组装,因为 snowflake 节点在那里才申领得到。
+	// IdSegment.Enabled=false 时为 nil。guild.go 用 NewGuildIDMinter 把它组装成建帮发号器,
+	// 没有回退号源,号段失败即建帮失败。
 	GuildIDSegment *idsegment.Client
 	// AssetOpIDSegment 是资产指令 op_id 的号段客户端(biz_tag="guild_asset_op",B5b);
 	// IdSegment.Enabled=false 时为 nil。**没有** snowflake 回退(op_id 是 outbox 主键),
@@ -101,7 +101,7 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
 	if err != nil {
-		panic(fmt.Errorf("guild SQL boot 装配失败: %w", err))
+		panic(fmt.Errorf("guild SQL boot wiring failed: %w", err))
 	}
 	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New())
 }
@@ -110,7 +110,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // 新 boot 的 prepared 门禁也在这里传入，不能在 handler 已持有门禁后替换它。
 func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session) *ServiceContext {
 	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 || root == nil || relay == nil || root == relay {
-		panic("guild SQL boot 与 SOURCE/RELAY 装配缺失或角色复用")
+		panic("guild SQL boot or SOURCE/RELAY wiring missing, or roles reused")
 	}
 	table.LoadTables(c.TableDir, false)
 
@@ -479,7 +479,7 @@ func (s *ServiceContext) Stop() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	if err := s.StopAndReport(ctx); err != nil {
-		logx.Errorf("guild 排空 HOLD: %v", err)
+		logx.Errorf("guild drain HOLD: %v", err)
 	}
 }
 

@@ -1,21 +1,17 @@
 #include "id_segment_bootstrap.h"
-#include "id_segment_request_table.h"
+#include "id_segment_transport.h"
 
 #include <array>
 #include <chrono>
 #include <cstddef>
-#include <memory>
+#include <functional>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <vector>
 
 #include "muduo/base/Logging.h"
 #include "muduo_grpc/channel.h"
 
-#include "core/async/coroutine_callback.h"
-#include "core/async/loop_task_scope.h"
-#include <boost/cobalt/task.hpp>
 #include "grpc_client/data_service/data_service_grpc_client.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "node/system/grpc_call_deadline.h"
@@ -37,43 +33,11 @@ namespace
         return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     }
 
-    // 所有种类共用的 DataService 传输层。
-    //
-    // 完成回调按闭包捕获的 requestSequence 精确认领请求,不依赖响应字段或 metadata 回显。
-    // 单飞与迟到窗口继续保证同一 biz_tag 的迟到应答先于新请求到达;代价是各类冷启动串行领段,
-    // 运行期预取本来就稀疏,互不打扰。
-    class IdSegmentTransport
-    {
-    public:
-        void Init(muduo::net::EventLoop& loop)
-        {
-            stopped_ = false;
-            tasks_.emplace(loop);
-        }
-        void Close() { if (tasks_) tasks_->Close(); }
-        void Stop();
-        bool Send(GuidKind kind, uint32_t step);
-
-    private:
-        struct FetchResult
-        {
-            GrpcCallOutcome outcome;
-            std::optional<::data_service::AllocateIdSegmentResponse> reply;
-        };
-
-        static entt::entity PickReadyDataServiceNode();
-        static boost::cobalt::task<void> FetchAsync(muduo::net::EventLoop& loop, entt::entity target,
-            ::data_service::AllocateIdSegmentRequest request, uint64_t requestSequence);
-        void OnCompleted(uint64_t requestSequence, FetchResult result);
-
-        std::optional<LoopTaskScope> tasks_;
-        id_segment_detail::RequestTable requests_;
-        bool stopped_ = false;
-        uint64_t orphanResponses_{0};
-        uint32_t noNodeFailures_{0};
-    };
-
-    thread_local IdSegmentTransport tlsIdSegmentTransport;
+    // 所有种类共用的领段传输。单飞、迟到窗口、Close / Stop 的语义在 id_segment_transport.h,
+    // 这里只装配生产的选路(READY 的 DataService 节点 + 生成的 gRPC 客户端)与单调时钟。
+    thread_local id_segment_detail::Transport tlsIdSegmentTransport;
+    // 连续挑不到 READY 节点的次数,只用于日志节流。
+    thread_local uint32_t tlsNoNodeFailures = 0;
 
     // 只在候选里挑**挂着 muduo_grpc 通道且通道 READY** 的节点:ConnectToGrpcNode 先 emplace MuduoGrpcChannelPtr
     // 再 emplace NodeInfo,两者同在才是可用连接。DataService 是全局池(node_util.h
@@ -83,7 +47,7 @@ namespace
     // 连不上就占着共享路径直到 deadline 才失败。直接返回"发不出去",客户端按 500ms→5s 退避,冷启动时 data_service
     // 一连上就能领到段。
     // GetState(true) 顺手把 READY 连接断开后回到 IDLE 的通道踢回 CONNECTING(docs/design/grpc-muduo-transport.md §5)。
-    entt::entity IdSegmentTransport::PickReadyDataServiceNode()
+    entt::entity PickReadyDataServiceNode()
     {
         auto &registry = tlsNodeContextManager.GetRegistry(DataServiceNodeService);
         std::vector<entt::entity> ready;
@@ -102,106 +66,31 @@ namespace
         return ready[tlsRandom.Rand<std::size_t>(0, ready.size() - 1)];
     }
 
-    bool IdSegmentTransport::Send(GuidKind kind, uint32_t step)
+    // 生产的发送路径:挑一个 READY 的 DataService 节点,走生成的 gRPC 客户端(它连本地拒绝也延后交付完成)。
+    // 挑不到返回空,传输当场回 false,客户端按退避重试。闭包只捕获节点实体值,不捕获组件指针。
+    id_segment_detail::Transport::Fetcher PickDataServiceFetcher()
     {
-        if (!tasks_ || !tasks_->IsAccepting()) return false;
-        const double now = MonotonicNowSec();
-        using Admission = id_segment_detail::RequestTable::Admission;
-        const auto activeKind = requests_.InFlightKind();
-        const auto timeout = activeKind ? tlsGuidSegmentRegistry.Get(*activeKind).options().fetchTimeoutSec : 0.0;
-        const auto gate = requests_.BeforeSend(now, timeout);
-        if (gate.admission == Admission::kBusy) return false;
-        if (gate.admission == Admission::kOpenedLateWindow)
-        {
-            LOG_WARN << "[idsegment] request seq=" << gate.affected->sequence << " kind=" << GuidKindName(gate.affected->kind)
-                     << " unanswered for " << timeout << "s; holding the shared DataService path for "
-                     << id_segment_detail::RequestTable::kLateWindowSeconds << "s so a late reply is still attributable";
-            return false;
-        }
-        if (gate.admission == Admission::kExpiredLateWindow)
-        {
-            LOG_WARN << "[idsegment] giving up on a late reply for seq=" << gate.affected->sequence
-                     << " kind=" << GuidKindName(gate.affected->kind) << " (window elapsed); resuming sends";
-        }
-
         const entt::entity target = PickReadyDataServiceNode();
         if (target == entt::null)
         {
-            ++noNodeFailures_;
-            if (noNodeFailures_ == 1 || noNodeFailures_ % kNoNodeLogEveryN == 0)
+            ++tlsNoNodeFailures;
+            if (tlsNoNodeFailures == 1 || tlsNoNodeFailures % kNoNodeLogEveryN == 0)
             {
                 // 客户端自己按退避重试并节流记 ERROR;这里只补一句"缺什么",方便对着启动日志排障。
-                LOG_WARN << "[idsegment] no READY DataServiceNodeService channel yet (attempt " << noNodeFailures_
+                LOG_WARN << "[idsegment] no READY DataServiceNodeService channel yet (attempt " << tlsNoNodeFailures
                          << "): is DataServiceNodeService.rpc in service_discovery_prefixes, does data_service "
                          << "register a NodeInfo under it, and is its gRPC port reachable?";
             }
-            return false;
+            return {};
         }
-        noNodeFailures_ = 0;
-
-        ::data_service::AllocateIdSegmentRequest request;
-        request.set_biz_tag(tlsGuidSegmentRegistry.Get(kind).options().bizTag);
-        request.set_step(step);
-        const uint64_t requestSequence = requests_.Reserve(kind, now);
-        if (tasks_->Start(FetchAsync(*gNode->GetLoop(), target, std::move(request), requestSequence),
-            "[idsegment] AllocateIdSegment")) return true;
-        requests_.Take(requestSequence);
-        return false;
-    }
-
-    boost::cobalt::task<void> IdSegmentTransport::FetchAsync(muduo::net::EventLoop& loop, entt::entity target,
-        ::data_service::AllocateIdSegmentRequest request, uint64_t requestSequence)
-    {
-        auto result = co_await loop_async::AwaitCallback<FetchResult>(loop, [target, &request](auto done) {
+        tlsNoNodeFailures = 0;
+        return [target](const id_segment_detail::Transport::Request& request,
+            std::function<void(id_segment_detail::Transport::FetchResult)> done) {
             data_service::SendDataServiceAllocateIdSegment(tlsNodeContextManager.GetRegistry(DataServiceNodeService),
                 target, request, [done = std::move(done)](const GrpcCallOutcome& outcome, const auto* reply) {
                     done({outcome, reply ? std::optional{*reply} : std::nullopt});
                 });
-            return true; // 生成的 gRPC 客户端在本地拒绝时也交付完成。
-        }, {GrpcCallOutcome{kGrpcStatusUnavailable, "idsegment fetch rejected"}, std::nullopt});
-        // 结果可能已由适配器认领，之后同一栈才停止传输并清表。
-        if (result && !tlsIdSegmentTransport.stopped_)
-            tlsIdSegmentTransport.OnCompleted(requestSequence, std::move(*result));
-    }
-
-    void IdSegmentTransport::Stop()
-    {
-        if (!tasks_) return;
-        stopped_ = true;
-        tasks_->Stop();
-        tasks_.reset();
-        requests_.Clear();
-    }
-
-    void IdSegmentTransport::OnCompleted(uint64_t requestSequence, FetchResult result)
-    {
-        const auto completed = requests_.Take(requestSequence);
-        if (!completed)
-        {
-            ++orphanResponses_;
-            LOG_WARN << "[idsegment] completion for unknown request seq=" << requestSequence
-                     << " dropped; orphans=" << orphanResponses_;
-            return;
-        }
-        const auto kind = completed->kind;
-
-        if (result.outcome.ok() && result.reply)
-        {
-            tlsGuidSegmentRegistry.Get(kind).OnResponse(result.reply->error_code(), result.reply->lo(), result.reply->hi());
-            return;
-        }
-
-        std::ostringstream why;
-        why << "gRPC DataService.AllocateIdSegment code=" << result.outcome.code << " msg=" << result.outcome.message;
-        if (completed->late)
-        {
-            // 持有者早已按 fetchTimeout 判过失败;这次调用到此确定不会再有响应,共享路径不必再为它守迟到窗口。
-            LOG_WARN << "[idsegment] abandoned request seq=" << requestSequence << " kind=" << GuidKindName(kind)
-                     << " finally failed (" << why.str() << "); releasing the shared DataService path";
-            return;
-        }
-        // 客户端自己按连续失败次数节流记 ERROR,这里不再另记。
-        tlsGuidSegmentRegistry.Get(kind).OnTransportFailure(why.str());
+        };
     }
 
     // DataService 节点连上(NodeInfo 是 ConnectToGrpcNode 最后 emplace 的组件)就催一次首段。
@@ -218,7 +107,7 @@ void StopGuidSegmentTransport() { tlsIdSegmentTransport.Stop(); }
 
 std::size_t ConfigureGuidSegmentClients(Node &node)
 {
-    tlsIdSegmentTransport.Init(*node.GetLoop());
+    tlsIdSegmentTransport.Init(*node.GetLoop(), &PickDataServiceFetcher, &MonotonicNowSec);
     const IdSegmentConfig &config = gNodeConfigManager.GetBaseDeployConfig().id_segment();
     // 单次领段的兜底期限从 DataService 的 gRPC deadline 派生、比它宽 1s(上游比下游宽,
     // docs/design/grpc-muduo-transport.md §16.3):失败通知必须先于它到,

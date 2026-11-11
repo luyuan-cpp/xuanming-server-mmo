@@ -20,6 +20,8 @@
 //     实现 Store,状态列的数值映射也在业务方(见 Status 的注释)。
 //   - 不引 MySQL 驱动、不引 etcd / Redis 客户端:玩家定位交给 shared/scenenode,
 //     事务重试的错误分类由调用方注入(seq.go 的 WithTxRetry)。
+//   - 到期扫描的按片分工(Loop.BindWorkOwner)只用 shared/workshard 的纯函数拼 SQL 条件,
+//     成员表由装配方经 owns 注入,本包不读 etcd。
 //   - 时间、随机数、RPC 目标全部显式注入,单测不依赖真实墙钟,也不依赖真实 scene。
 //
 // # 线程模型

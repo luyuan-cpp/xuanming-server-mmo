@@ -746,18 +746,62 @@ TEST_F(AssetOpSystemTest, TamperedP2FieldsFailAuthNotRecorded)
 	EXPECT_EQ(70u, Gold());
 }
 
-TEST_F(AssetOpSystemTest, CreditUnknownItemRejected)
+// 本节点 Item 表里查不到的配置是版本错位,不是坏包(2026-11-11,混版本持久字段保护设计 §13 第 10 条):表行只增不删
+// (cfg_ids_permanent,导表器守住),查不到只可能是更新版本或尚未热更到本节点的行。回 RETRY + kFeatureUnavailable,
+// 不记账、不存盘;原先记终态拒绝会让对侧白白退款、交易转人工。配置号 0 在任何版本上都不合法,照旧记终态拒绝。
+TEST_F(AssetOpSystemTest, CreditWithItemConfigUnknownToThisNodeRetriesWithoutRecording)
 {
 	GiveBags();
 	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
 	request.mutable_bundle()->clear_currencies();
 	auto* item = request.mutable_bundle()->add_items();
-	item->set_config_id(999999999); // Item 表里不存在
+	item->set_config_id(999999999); // 本节点 Item 表里没有
 	item->set_count(1);
 
 	const auto response = CallCredit(request);
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, response.outcome()) << "版本错位不得记终态";
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), response.reason().id());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT)) << "RETRY 不记账";
+	EXPECT_EQ(0, g_persistCalls) << "不存盘";
+
+	item->set_config_id(0);
+	const auto zero = CallCredit(request);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, zero.outcome()) << "配置号 0 在任何版本上都不合法";
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), zero.reason().id());
+}
+
+// 同一配置写了两行与版本无关:在任何版本上都是坏包,照旧记终态拒绝,不能因为配置查不到就无限重投(确定性校验排在 8b 之前)。
+TEST_F(AssetOpSystemTest, DuplicateItemConfigUnknownToThisNodeIsStillRejected)
+{
+	GiveBags();
+	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
+	request.mutable_bundle()->clear_currencies();
+	for (int i = 0; i < 2; ++i)
+	{
+		auto* item = request.mutable_bundle()->add_items();
+		item->set_config_id(999999999);
+		item->set_count(1);
+	}
+	const auto response = CallCredit(request);
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, response.outcome());
 	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), response.reason().id());
+}
+
+// 按数量扣出的配置在本节点表里查不到:同样是版本错位,回 RETRY、不记账。
+TEST_F(AssetOpSystemTest, QuantityDebitOfItemConfigUnknownToThisNodeRetriesWithoutRecording)
+{
+	GiveBags();
+	::AssetOpRequest request = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 1, TX_TRADE);
+	request.clear_bundle();
+	auto* item = request.mutable_bundle()->add_items();
+	item->set_config_id(999999999);
+	item->set_count(1);
+	SignForTest("debit", request, "trade");
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(request, response);
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, response.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), response.reason().id());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_TRADE_DEBIT)) << "RETRY 不记账";
 }
 
 // ── 发放 ────────────────────────────────────────────────────────────────────
@@ -927,6 +971,57 @@ TEST_F(AssetOpSystemTest, CreditOfAPlayerBannedCompleteInstanceIsRejected)
 	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), response.reason().id());
 	EXPECT_EQ(nullptr, inventory.GetItemCompByGuid(incoming.item_id())) << "预设实例不进包";
 	EXPECT_EQ(0u, inventory.OccupiedGridCount());
+}
+
+// 交易退回本人托管的资产(TX_AUCTION_RETURN)不是新增获得(数据覆写审计 r2-trade#1):本人被封禁获取金币、
+// 这件物品与这种可叠加物品,退回照常入账、入包,不转人工。同一包按成交所得(TX_AUCTION_BUY)发,仍是记账式终局拒绝。
+// 走的是真实的 CurrencySystem::AddCurrency 与 BagService::AddItems,两层封禁判断都按交易类型放行。
+TEST_F(AssetOpSystemTest, TradeReturnOfOwnEscrowIgnoresGainBlocks)
+{
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	ASSERT_NE(nullptr, ItemTableManager::Instance().FindByIdSilent(1).first);
+	GiveBags();
+	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player_);
+	constexpr uint32_t kStackable = 10;
+	ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player_, kCurrencyGold));
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, 1));
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, kStackable));
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+
+	const auto credit = [&](uint64_t seq, TransactionType txType, uint64_t instanceGuid)
+	{
+		::AssetOpRequest request = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_CREDIT, seq, 30, txType);
+		ItemComp escrowed;
+		escrowed.set_item_id(instanceGuid);
+		escrowed.set_config_id(1);
+		escrowed.set_size(1);
+		auto* transfer = request.mutable_bundle()->add_item_instances();
+		transfer->set_item_uuid(escrowed.item_id());
+		transfer->set_config_id(1);
+		transfer->set_stack_size(1);
+		transfer->set_instance_proto(escrowed.SerializeAsString());
+		auto* stack = request.mutable_bundle()->add_items();
+		stack->set_config_id(kStackable);
+		stack->set_count(2);
+		SignForTest("credit", request, "trade");
+		::AssetOpResponse response;
+		PlayerAssetOpSystem::Credit(request, response);
+		return response;
+	};
+
+	const auto delivered = credit(1, TX_AUCTION_BUY, 950199996);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, delivered.outcome()) << "成交所得照常判封禁";
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), delivered.reason().id());
+	EXPECT_EQ(0u, Gold());
+	EXPECT_EQ(nullptr, inventory.GetItemCompByGuid(950199996));
+
+	const auto returned = credit(2, TX_AUCTION_RETURN, 950199997);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, returned.outcome()) << "退回本人托管的资产不受封禁约束";
+	EXPECT_FALSE(returned.partial());
+	EXPECT_EQ(30u, Gold());
+	EXPECT_NE(nullptr, inventory.GetItemCompByGuid(950199997));
+	EXPECT_EQ(2u, inventory.GetTotalItemCount(kStackable));
+	EXPECT_NE(nullptr, Ledger(ASSET_OP_STREAM_TRADE_CREDIT));
 }
 
 TEST_F(AssetOpSystemTest, CreditFirstCurrencyFailsRetry)
@@ -1364,6 +1459,37 @@ TEST_F(AssetOpSystemTest, CreditRejectsAnInstanceAlreadyCarriedInAnUnsupportedBa
 	}
 }
 
+// 整件物品过户时配置在本节点表里查不到:版本错位(混版本设计 §13 第 10 条,2026-11-11),回 RETRY、不记账、不入包。
+// 身份对不上这类与版本无关的坏包排在版本错位之前,照旧记终态拒绝。
+TEST_F(AssetOpSystemTest, CompleteInstanceWithConfigUnknownToThisNodeRetriesWithoutRecording)
+{
+	constexpr uint32_t kConfigNotOnThisNode = 999999999;
+	GiveBags();
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	ItemComp newer;
+	newer.set_item_id(950199051); newer.set_config_id(kConfigNotOnThisNode); newer.set_size(1);
+
+	::AssetOpRequest credit = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_CREDIT, 1, 1, TX_TRADE);
+	credit.clear_bundle();
+	auto* transfer = credit.mutable_bundle()->add_item_instances();
+	transfer->set_item_uuid(newer.item_id()); transfer->set_config_id(kConfigNotOnThisNode); transfer->set_stack_size(1);
+	transfer->set_instance_proto(newer.SerializeAsString());
+	SignForTest("credit", credit, "trade");
+	::AssetOpResponse skewed;
+	PlayerAssetOpSystem::Credit(credit, skewed);
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, skewed.outcome()) << "版本错位不得记终态";
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), skewed.reason().id());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_TRADE_CREDIT)) << "RETRY 不记账";
+	EXPECT_EQ(nullptr, inventory.GetItemCompByGuid(newer.item_id())) << "不入包";
+
+	transfer->set_item_uuid(newer.item_id() + 1); // 与实例里的身份对不上
+	SignForTest("credit", credit, "trade");
+	::AssetOpResponse mismatched;
+	PlayerAssetOpSystem::Credit(credit, mismatched);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, mismatched.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), mismatched.reason().id());
+}
+
 // 按数量扣出只认可互换的普通单位(混版本设计 §4.4 第 6 批)。只有算上带更新版本字段的单位才够 = 版本错位:
 // 回 RETRY、不记账、背包不动(不能当普通单位交易出去,也不能记成终态让对侧白白退款);普通单位够时照常扣,
 // 且只扣普通堆。确定不够(连算上都不够)照旧记终态拒绝。
@@ -1579,6 +1705,26 @@ TEST_F(AssetOpSystemTest, AbortStillClosesASeqWhoseBundleCarriesAnUnknownCurrenc
 	EXPECT_EQ(100u, Gold());
 }
 
+// 请求带本版本不认识的字段(更新版本的 Go 写的,混版本持久字段保护设计 §12「载荷新字段」,2026-11-11):照常应用会
+// 丢掉新字段的语义。与不认识的币种同口径(第 8b 步):回 RETRY + kFeatureUnavailable,不记账、不存盘、资产不动;
+// seq 没被占住,落到认识这些字段的节点照常应用(这里用不带新字段的同一条请求代表)。
+TEST_F(AssetOpSystemTest, RequestCarryingFieldsFromNewerVersionRetriesWithoutRecording)
+{
+	auto newer = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
+	newer.mutable_bundle()->mutable_currencies(0)->mutable_unknown_fields()->AddVarint(412345, 1); // 新版本给币种行加的字段
+	const auto skewed = CallCredit(newer);
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, skewed.outcome()) << "版本错位不得记终态";
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), skewed.reason().id());
+	EXPECT_FALSE(skewed.durable());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT)) << "RETRY 不记账";
+	EXPECT_EQ(0, g_persistCalls) << "不存盘";
+	EXPECT_EQ(0u, Gold());
+
+	const auto applied = CallCredit(MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP));
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, applied.outcome());
+	EXPECT_EQ(30u, Gold());
+}
+
 // ── GM 回收(docs/design/exploit_loss_prevention_zh.md)──────────────────────
 
 ::AssetOpRequest SignedRecallRequest(::AssetOpRequest request)
@@ -1752,9 +1898,16 @@ TEST_F(AssetOpRecallTest, InvalidBundlesAreRejectedAndRecorded)
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, mixed.outcome());
 	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), mixed.reason().id());
 
+	// 本节点表里查不到的配置是版本错位(混版本设计 §13 第 10 条,2026-11-11):回 RETRY、不记账;配置号 0 才是坏包。
 	::AssetOpResponse unknownConfig;
 	PlayerAssetOpSystem::Debit(ItemRecall(2, 999999999, 1), unknownConfig);
-	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, unknownConfig.outcome());
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, unknownConfig.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), unknownConfig.reason().id());
+
+	::AssetOpResponse zeroConfig;
+	PlayerAssetOpSystem::Debit(ItemRecall(2, 0, 1), zeroConfig);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, zeroConfig.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), zeroConfig.reason().id());
 
 	::AssetOpResponse duplicateHints;
 	PlayerAssetOpSystem::Debit(ItemRecall(3, 10, 1, {7, 7}), duplicateHints);

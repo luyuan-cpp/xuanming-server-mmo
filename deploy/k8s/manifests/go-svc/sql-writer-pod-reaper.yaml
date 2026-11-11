@@ -1,15 +1,17 @@
 # sql-writer-pod-reaper:删掉写资格已经消费、主容器再也起不来的写者 Pod。每个跑写者的 namespace 一份(k8s_deploy.ps1 Apply-SqlWriterPodReaper:每个 zone、infra namespace)。
 #
-# 为什么要它:写资格一次性(docs/design/horizontal-scale-logical-db.md §2「写资格什么时候消费」)。写者写过之后崩溃、被 OOMKill,容器原地重启读到消费标记就拒启,
-# 这个 Pod 自己再也起不来,只有删掉,ReplicaSet 建的新 Pod 才会领名册的下一条。没有它,一次 panic 就永久少一个副本。
+# 为什么要它:写资格按代一次性(docs/design/horizontal-scale-logical-db.md §2「写资格什么时候消费」)。写者写过之后崩溃、被 OOMKill,容器原地重启读到消费标记就拒启,
+# 这个 Pod 自己再也起不来,只有删掉:StatefulSet 按同一序号建新 Pod,新 Pod 的 init 在同一槽位上换代(docs/design/writer-roster-exhaustion-20261106.md §5)。
+# 没有它,一次 panic 就永久少一个副本。
 #
 # 判据:带 label mmorpg.io/sql-writer=true 的 Pod,status.containerStatuses 里有容器上一次以退出码 78 退出。写者的入口脚本(各写者清单和 Dockerfile.java-svc)看到消费标记就退出 78,别的退出都不是这个码。
-#   - 还没写过就退出的进程(依赖没就绪)没有消费标记,容器原地重启接着用这份写资格,不删,不烧名册。Java 读的时候就消费,所以 gateway 任何一次重启都是 78。
-#   - containerStatuses 只有主容器,init 不在里面。init 反复失败(闸门冻结、名册用完)这里看不到,这种 Pod 不删,删了白烧名册;它们由告警 SqlWriterRegistrarFailing 覆盖。
+#   - 还没写过就退出的进程(依赖没就绪)没有消费标记,容器原地重启接着用这一代的写资格,不删。Java 读的时候就消费,所以 gateway 任何一次重启都是 78。
+#   - containerStatuses 只有主容器,init 不在里面。init 反复失败(闸门冻结、副本数比名册槽位多、启动记录被同序号的另一个 Pod 抢先)这里看不到,这种 Pod 不删;
+#     它们由告警 SqlWriterRegistrarFailing 覆盖。
 #   - 已经在删的 Pod(带 deletionTimestamp)跳过,不重复打日志。
 #   - kubectl delete 不走 Eviction API,不受 PDB 约束。这种 Pod 本来就没在服务,不会多减可用副本。
 #
-# 每删一次烧一条名册。名册用完之后新 Pod 停在 Init,要换名册重新部署,见手册。
+# 删多少次都不消耗名册:名册按槽位批准,一个槽位就是一个序号,换代只多一行注册收据。
 #
 # 为什么没有 shell 脚本:官方镜像 registry.k8s.io/kubectl 是 distroless(基础镜像 go-runner),没有 /bin/sh,只有 /go-runner 和 /bin/kubectl(已按 v1.35.10 的镜像配置核过)。所以拆成两步,靠 emptyDir 传一个文件:
 #   select-restarted-writers(init):kubectl get 按 go-template 把要删的 Pod 写成 YAML。/go-runner 把 stdout 同时写进文件和容器日志,带的注释行就是删除前的日志;kubectl 的 stderr 不进文件。
@@ -117,7 +119,7 @@ spec:
                 # 退出码转成字符串再比:模板里数字的 Go 类型跟 kubectl 版本走(int64 或 float64),和常量直接比类型不符时整个模板报错。
                 - |-
                   --output=go-template={{range .items}}{{if .metadata.deletionTimestamp}}{{else}}{{$pod := .}}{{range .status.containerStatuses}}{{if .lastState}}{{if .lastState.terminated}}{{if eq (printf "%v" .lastState.terminated.exitCode) "78"}}---
-                  # sql-writer-pod-reaper: deleting pod {{$pod.metadata.name}} in namespace {{$pod.metadata.namespace}}: container {{.name}} exited 78, its writer grant is consumed, a new pod takes the next roster entry
+                  # sql-writer-pod-reaper: deleting pod {{$pod.metadata.name}} in namespace {{$pod.metadata.namespace}}: container {{.name}} exited 78, its writer grant is consumed, the StatefulSet recreates this ordinal and the new pod registers the next generation of its slot
                   apiVersion: v1
                   kind: Pod
                   metadata:

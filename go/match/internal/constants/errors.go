@@ -97,4 +97,22 @@ const (
 	// ErrBattleReportNotFound:取战报回放时,这一局不在本人的战报列表里(不存在、已被挤出或不是参战者),
 	// 或者这一局没存回放正文。几种情况统一回这一个码,不暴露别人的对局是否存在(battle-report-replay.md BR-9)。
 	ErrBattleReportNotFound = uint32(table.MatchError_kMatchBattleReportNotFound)
+
+	// 战斗剧本(docs/design/battle-script.md §7)。都是业务拒绝,库故障一律回 ErrInternal。
+	// ErrBattleScriptInvalid:提交的剧本过不了校验,具体位置在 SubmitBattleScriptResponse.invalid_detail。
+	ErrBattleScriptInvalid = uint32(table.MatchError_kMatchBattleScriptInvalid)
+	// ErrBattleScriptNotFound:剧本不存在、已删除,或不是本人的(不区分,不暴露别人的剧本是否存在)。
+	ErrBattleScriptNotFound = uint32(table.MatchError_kMatchBattleScriptNotFound)
+	// ErrBattleScriptLimitReached:本人的剧本份数已达上限。
+	ErrBattleScriptLimitReached = uint32(table.MatchError_kMatchBattleScriptLimitReached)
+	// ErrBattleScriptRevisionConflict:expected_revision 与当前版本不一致(别处改过或删过),刷新后再改。
+	ErrBattleScriptRevisionConflict = uint32(table.MatchError_kMatchBattleScriptRevisionConflict)
+	// ErrBattleScriptNotApproved:选用的玩家剧本从未通过审核。
+	ErrBattleScriptNotApproved = uint32(table.MatchError_kMatchBattleScriptNotApproved)
+	// ErrBattleScriptTooLarge:剧本序列化后超过单份上限(gate 对客户端消息的 1KB 包长上限决定)。
+	ErrBattleScriptTooLarge = uint32(table.MatchError_kMatchBattleScriptTooLarge)
+	// ErrBattleScriptLoadoutInvalid:选用条目不合法(未知模式 / 副本、官方剧本不存在或不适用于玩家方)。
+	ErrBattleScriptLoadoutInvalid = uint32(table.MatchError_kMatchBattleScriptLoadoutInvalid)
+	// ErrBattleScriptLoadoutFull:本人的选用条目已达上限。
+	ErrBattleScriptLoadoutFull = uint32(table.MatchError_kMatchBattleScriptLoadoutFull)
 )

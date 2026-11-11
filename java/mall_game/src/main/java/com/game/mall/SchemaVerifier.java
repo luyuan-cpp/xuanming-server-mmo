@@ -18,7 +18,7 @@ final class SchemaVerifier {
         Map.entry("commerce_delivery_intent", "order_sn,buyer_id,sku_id,quantity,status,created_ms"),
         Map.entry("commerce_refund_intent", "channel,transaction_id,order_sn,source,status"),
         Map.entry("commerce_refund_receipt", "channel,payment_transaction_id,transaction_id,order_sn,amount_minor,currency"),
-        Map.entry("commerce_duplicate_payment", "channel,transaction_id,order_sn,created_ms"),
+        Map.entry("commerce_abnormal_payment", "channel,transaction_id,order_sn,reason,created_ms"),
         Map.entry("commerce_mock_transaction", "kind,order_sn,request_id,transaction_id,payment_transaction_id,amount_minor,currency,created_ms,applied"),
         Map.entry("commerce_consignment", "listing_id,seller_player_id,seller_account,market_zone,asset_kind,asset_currency_type,escrow_reference,escrow_proof,request_digest,title,price_fen,fee_bps,cooling_ms,notice_end_ms,sale_end_ms,state,current_order_sn,created_ms"),
         Map.entry("commerce_consignment_order", "order_sn,listing_id,buyer_account,buyer_owner_revision,request_id,seller_account,escrow_reference,escrow_proof,fee_bps,cooling_ms"),
@@ -30,10 +30,15 @@ final class SchemaVerifier {
         Map.entry("commerce_withdrawal_receipt", "withdrawal_id,channel,transaction_id,amount_fen,successful"),
         Map.entry("commerce_mock_payout", "withdrawal_id,request_id,transaction_id,amount_fen,successful,created_ms,applied"),
         Map.entry("commerce_request_nonce", "caller_role,nonce,expires_ms"));
+    /**
+     * 存储合同戳,与 schema.sql 末行一致。2026-11-10 起换新:之前装的库里,退款待办的 CHECK 只认三种来源,
+     * 记不下金额或币种不符的付款(那笔待办插不进去,整笔回滚);下面只核表、列和唯一键,CHECK 的取值测不出,靠换戳强制重装。
+     */
+    static final String STORAGE_CONTRACT = "mall-game-official-sku-v1-minor-units-abnormal-payment";
     private SchemaVerifier() {}
     static void verify(JdbcTemplate jdbc, DataSource source) throws SQLException {
         List<Map<String, Object>> version = jdbc.queryForList("SELECT version,storage_contract FROM commerce_schema_version");
-        if (version.size() != 1 || ((Number)version.get(0).get("version")).intValue() != 1 || !"mall-game-official-sku-v1-minor-units".equals(version.get(0).get("storage_contract"))) {
+        if (version.size() != 1 || ((Number)version.get(0).get("version")).intValue() != 1 || !STORAGE_CONTRACT.equals(version.get(0).get("storage_contract"))) {
             throw new IllegalStateException("商城存储版本不兼容，必须使用独立迁移后的商城库");
         }
         try (Connection connection = source.getConnection()) {
@@ -50,10 +55,10 @@ final class SchemaVerifier {
                         if (column.equals("buyer_owner_revision") && metadata.getPrecision(i) != 20) {
                             throw new IllegalStateException("订单归属修订必须为规范uint64的VARBINARY(20)");
                         }
-                        // 已付订单的重复付款记成 order_sn 为 NULL 的付款回执;列若仍是 NOT NULL,第二笔钱会在运行时写不进来。
+                        // 异常付款(重复付款、金额或币种不符)记成 order_sn 为 NULL 的付款回执;列若仍是 NOT NULL,这些钱会在运行时写不进来。
                         if (table.getKey().equals("commerce_payment_receipt") && column.equals("order_sn")
                                 && metadata.isNullable(i) != ResultSetMetaData.columnNullable) {
-                            throw new IllegalStateException("付款回执的订单列必须可空，才能记录已付订单的重复付款");
+                            throw new IllegalStateException("付款回执的订单列必须可空，才能记录异常付款");
                         }
                         if (Set.of("price_minor", "pay_amount", "amount_minor", "product_price_minor", "price_fen", "gross_fen", "fee_fen", "net_fen", "reserved_fen", "paid_fen", "amount_fen").contains(column) && metadata.getColumnType(i) != Types.BIGINT) {
                             throw new IllegalStateException("商城金额列必须为最小单位 BIGINT: " + table.getKey() + "." + column);
@@ -68,7 +73,7 @@ final class SchemaVerifier {
             unique(connection, "oms_order_item", List.of("order_sn"));
             unique(connection, "commerce_official_owner", List.of("order_sn"));
             unique(connection, "commerce_payment_receipt", List.of("channel", "transaction_id")); unique(connection, "commerce_payment_receipt", List.of("order_sn"));
-            unique(connection, "commerce_duplicate_payment", List.of("channel", "transaction_id"));
+            unique(connection, "commerce_abnormal_payment", List.of("channel", "transaction_id"));
             // 退款按被退付款的交易键幂等:待办一笔一条、回执一笔一条,渠道退款流水也不能复用。
             unique(connection, "commerce_refund_intent", List.of("channel", "transaction_id"));
             unique(connection, "commerce_refund_receipt", List.of("channel", "payment_transaction_id"));

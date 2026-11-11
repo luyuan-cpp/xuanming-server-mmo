@@ -1,0 +1,27 @@
+syntax = "proto3";
+option go_package = "common/event";
+import "proto/common/options/event_ingress_option.proto";
+
+// 玩家落点事件(docs/design/player-connection-lost-hold.md §4.2、team-follow-server-trail.md §3.7)。
+// 经 SceneCommand{DispatchEvent} 进 scene 节点进程内分发(scene 侧生成 handler/event/player_placement_event_handler)。
+// Kafka 投递要求(照 proto/common/event/team_event.proto):topic = scene-cmd_g<N>,partition = scene_node_id % P,
+// key = player_id(同一玩家保序,AGENTS §7 #3);
+// SceneCommand{DispatchEvent, player_id, target_scene_id = scene_node_id,
+//              target_instance_id = 目标 scene 节点 uuid(防僵尸,AGENTS §7 #2), event_id}。
+
+// scene_manager → scene:托管落点已提交(EnterSceneRequest.hosted_placement),请把这名没有客户端的玩家放进 scene_id。
+// 它是 gate 路由(RoutePlayerEvent → PlayerEnterGameNode)在"没有 gate 会话"时的等价物,字段与 PlayerEnterGameNodeRequest
+// 一一对应:实体在本节点就换场景,不在就认领载入;两种都按断线托管重建保留状态,不绑定会话。
+// 重复、迟到都安全:入场会话栅栏按登录代次挡住被新登录取代的旧事件,角色登记只重放同一份上下文,已在目标场景时幂等。
+// 丢失(目标节点在消费前崩溃)不丢数据:玩家留在 location 指向的落点上无人持有,重新登录照常从盘上载入,
+// 月卡到期后由租约到期的会话结束释放收尾。
+message PlayerHostedPlacementEvent {
+  option (OptionKafkaIngress) = true;
+  uint64 player_id = 1;
+  uint64 scene_id = 2;          // 落点场景实例(本节点上)
+  uint32 home_zone_id = 3;      // 与 RoutePlayerEvent.home_zone_id 同口径;0 = 未知
+  uint64 owner_epoch = 4;       // 本次落点的归属 epoch(跨节点为新铸的值,同节点为观察值)
+  uint32 session_id = 5;        // 断开的那次登录的会话号:只作登录身份,不绑定、不推送
+  uint64 login_generation = 6;  // 断开的那次登录的代次
+  uint64 owner_revision = 7;    // 账号目录放行的所有权修订
+}

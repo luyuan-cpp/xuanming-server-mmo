@@ -124,6 +124,29 @@ class ZoneConfigRepositoryWiringTest {
         assertEquals("", open.getMaintenanceMsg());
     }
 
+    // 暂停创建新角色(2026-11-10):新建区服取库缺省(开着,原生 INSERT 不写这一列);开关只改这一列,PUT 整行替换不碰它。
+    @Test
+    void createRoleClosedDefaultsOpenAndOnlyItsToggleChangesIt() {
+        repo.insertIfAbsent(zone(ZONE, "keep-me", 0, 6000, "", null, true, 9), T1);
+        assertFalse(repo.findById(ZONE).orElseThrow().isCreateRoleClosed(), "a new zone accepts new characters");
+
+        repo.updateCreateRoleClosed(ZONE, true, T2);
+        ZoneConfig closed = repo.findById(ZONE).orElseThrow();
+        assertTrue(closed.isCreateRoleClosed());
+        assertEquals("keep-me", closed.getName(), "the toggle must not touch other columns");
+        assertEquals(6000, closed.getCapacity());
+        assertEquals(0, closed.getManualStatus());
+        assertEquals(T2, closed.getUpdatedAt());
+
+        repo.updateSettings(ZONE, zone(ZONE, "renamed", 0, 7000, "", null, false, 1), T2);
+        assertTrue(repo.findById(ZONE).orElseThrow().isCreateRoleClosed(), "a full-row PUT keeps the toggle");
+
+        repo.updateCreateRoleClosed(ZONE, false, T2);
+        assertFalse(repo.findById(ZONE).orElseThrow().isCreateRoleClosed());
+        repo.updateCreateRoleClosed(ABSENT_ZONE, true, T2);
+        assertTrue(repo.findById(ABSENT_ZONE).isEmpty(), "an absent zone is never inserted");
+    }
+
     @Test
     void deleteByZoneIdRunsInItsOwnTransactionAndReportsAffectedRows() {
         repo.insertIfAbsent(zone(ZONE, "x", 0, 5000, "", null, false, 0), T1);

@@ -25,18 +25,23 @@ Priority is split into two layers:
 |-------------|-------|--------|
 | `kNormal`   | 0 | Default spatial grid discovery |
 | `kTeammate` | 1 | Same `TeamId` component |
-| `kAttacker` | 2 | Combat/threat system (TODO: integrate) |
+| `kCombat`   | 2 | Combat partner: whoever I hit, hit me, healed or was healed by. Registered by `CombatEngagementSystem` as an explicit `kCombat` source, revoked after 10 s without interaction or on death (replaces the never-set `kAttacker`, 2026-11-10) |
 | `kQuestNpc` | 3 | Quest/mission system marks NPC (TODO: integrate) |
 | `kBoss`     | 4 | Boss / elite monster |
 | `kPinned`   | 5 | Highest weight (255) for explicit follows that must never be evicted, e.g. skill tracking |
 
 ### Built-in Policies
 
+The tables are static: an entry's weight depends only on its sources, never on the observer's state.
+"Combat partners first while fighting, quest NPCs first afterwards" comes from the combat source's
+lifetime. Switching tables by observer state was considered and rejected; see
+[aoi-directed-interest.md](aoi-directed-interest.md) (Chinese) for the reasons.
+
 | Policy | Weight order (low → high) |
 |--------|--------------------------|
-| `kPolicyOpenWorld` | normal(0) < teammate(1) < attacker(2) < questNpc(3) < boss(4) < pinned(255) |
-| `kPolicyDungeon`   | normal(0) < questNpc(1) < teammate(2) < attacker(3) < boss(4) < pinned(255) |
-| `kPolicyPvpArena`  | normal(0) < questNpc(1) < teammate(2) < boss(3) < attacker(4) < pinned(255) |
+| `kPolicyOpenWorld` | normal(0) < teammate(1) < questNpc(3) < boss(4) < combat(5) < pinned(255) |
+| `kPolicyDungeon`   | normal(0) < questNpc(1) < teammate(2) < boss(4) < combat(5) < pinned(255) |
+| `kPolicyPvpArena`  | normal(0) < questNpc(1) < teammate(2) < boss(3) < combat(4) < pinned(255) |
 
 Scenes attach `ScenePriorityPolicyComp` at creation to pick a policy.
 `kPinned` always gets weight 255 across all policies — it can never be evicted
@@ -80,8 +85,11 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 - 1 = max pressure → server capacity = `kAoiListCapacityMin` (20)
 - Linear interpolation between the two.
 
-The scene's tick/load monitor sets `pressureFactor` each frame (integration
-TODO).
+Pressure comes from simulation step time (wired 2026-11-11): `AoiLoadMonitor` smooths
+step time / fixed step, maps 0.5 → 0 and 0.9 → 1 in 10 levels with hysteresis, and decides at
+most once per second. `AoiSystem::ApplyServerPressure` writes it into every scene on the thread;
+when capacity shrinks, entries are trimmed lowest weight first, farthest first among equals, and
+restored when it grows back. Thresholds still need calibration from stress tests.
 
 ### Client Reported Count
 
@@ -105,13 +113,24 @@ idea is replaced by explicit follows; the Chinese version of this document has t
   priority tag and an optional stealth-detection grant. Re-adding a source updates it in place;
   unfollow revokes only that source.
 - One relation may have a spatial source and several explicit sources but only one client-visible
-  state. Leaving the grid removes only the spatial source; the client gets one removal when the last
-  source is gone.
+  state. Moving beyond the leave radius removes only the spatial source; the client gets one removal
+  when the last source is gone.
+
+## Spatial Re-evaluation (2026-11-10)
+
+Spatial interest is decided by distance and re-evaluated whenever a position changes, not only when an
+entity crosses a hex cell (that left people who approached within the same cells invisible forever).
+Enter: 3D distance ≤ view radius (10 m, inclusive), candidates from the current hex and its six
+neighbours. Leave: 3D distance > leave radius (view radius × 2 = 20 m), independent of the grid; the
+band in between is the hysteresis. A stationary entity is re-evaluated as soon as its position changes;
+a moving one after every 1 m of accumulated displacement. Each re-evaluation handles both directions.
+Same rules as the Java version. Details: [aoi-directed-interest.md](aoi-directed-interest.md).
 
 ## Stealth Visibility
 
-`ViewSystem::CanSee(observer, target)` is the spatial enter check: distance, then stealth.
-A stealthed target is visible only when one of the observer's explicit sources for it sets
+`ViewSystem::CanSee(observer, target)` is the spatial enter check (distance ≤ view radius, then stealth);
+`ViewSystem::CanKeepSeeing(observer, target)` keeps an existing spatial source (distance ≤ leave radius,
+then stealth). A stealthed target is visible only when one of the observer's explicit sources for it sets
 `revealsStealth`. When the stealth tag appears or disappears, `BuffSystem` calls
 `AoiSystem::RefreshTargetVisibility`: watchers without detection get one removal (explicit
 sources are kept), and on reveal paused follows plus nearby observers get a fresh create with the
@@ -133,23 +152,24 @@ scanning the node.
 | `spatial/constants/aoi_priority.h` | Priority tags, `AoiPriorityPolicy` struct, built-in policies, dynamic capacity constants |
 | `spatial/comp/scene_node_scene_comp.h` | `AoiListComp` (entries map), `AoiClientCapacityComp`, `ScenePressureComp`, `ScenePriorityPolicyComp` |
 | `spatial/system/interest.h/.cpp` | Policy-aware `AddAoiEntity`, `GetEffectiveCapacity`, `GetPriorityPolicy`, `UpgradePriority` |
-| `spatial/system/view.h/.cpp` | `CanSee()`, `IsStealthed()` |
-| `spatial/system/aoi.cpp` | Grid evaluation with `CanSee` / `DetermineAoiPriority`, explicit follow entry points, netted visibility delivery |
+| `spatial/constants/view.h` | View radius, leave radius factor, re-evaluation step, hex size |
+| `spatial/system/view.h/.cpp` | `CanSee()`, `CanKeepSeeing()`, `IsStealthed()` |
+| `spatial/system/aoi.cpp` | Grid membership, distance re-evaluation with `CanSee` / `CanKeepSeeing` / `DetermineAoiPriority`, explicit follow entry points, netted visibility delivery |
 | `actor/attribute/system/actor_state_attribute_sync.cpp` | Updated for `entries` API |
 | `tests/aoi_test/*` | Priority, capacity, pin/team, dynamic capacity, policy tests |
 
 ## Future Work
 
-- **Attacker priority**: Hook combat/damage system to call
-  `InterestSystem::UpgradePriority(target, attacker, kAttacker)` on hit.
+- **Threat values for AI**: NPC threat rosters (2026-11-11) only record members, so fighters of the
+  same NPC see each other as allies. Add threat values when AI target selection needs them. The
+  server does not spawn NPCs yet, so rosters take effect once spawning lands.
 - **Quest NPC priority**: Hook mission accept to call
   `InterestSystem::UpgradePriority(player, npc, kQuestNpc)`.
 - **Boss tagging**: Scene creation marks boss entities; grid entry detects and
   assigns `kBoss` tag.
-- **Pressure integration**: Scene tick monitors entity count / CPU load and
-  writes `ScenePressureComp.pressureFactor`.
+- **Pressure calibration**: the pressure monitor and weight-ordered trimming are wired
+  (2026-11-11); calibrate the thresholds with stress tests and decide whether RPC handling time
+  should feed the signal too.
 - **Client settings RPC**: Wire client-reported display count to
   `AoiClientCapacityComp`.
-- **Lazy-time / hysteresis**: Add a grace period before removing entities
-  that oscillate across grid boundaries.
 - **Custom policies**: Data-driven policy loading from configuration tables.

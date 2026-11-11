@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS zone_config (
     open_time      DATETIME DEFAULT NULL,
     recommended    BIT(1) DEFAULT 0,
     sort_order     INT DEFAULT 0,
+    create_role_closed BIT(1) NOT NULL DEFAULT 0 COMMENT '1 = 暂停创建新角色;只经 /admin/zones/{id}/create-role/close|open 改',
     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -63,9 +64,11 @@ CREATE TABLE IF NOT EXISTS writer_registry (
  retirement_request_id VARBINARY(16) NOT NULL DEFAULT '' COMMENT 'pb:8',
  retirement_digest VARBINARY(32) NOT NULL DEFAULT '' COMMENT 'pb:9',
  retired_ms BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:10',
- PRIMARY KEY(writer_key), UNIQUE KEY uk_writer_principal(sql_principal), UNIQUE KEY uk_writer_instance(instance_id),
+ boot_seq BIGINT UNSIGNED NOT NULL COMMENT 'pb:11',
+ PRIMARY KEY(writer_key), UNIQUE KEY uk_writer_principal_boot(sql_principal,boot_seq), UNIQUE KEY uk_writer_instance(instance_id),
  KEY idx_writer_state(state,writer_key),
- CONSTRAINT chk_writer_state CHECK(state IN (1,2))
+ CONSTRAINT chk_writer_state CHECK(state IN (1,2)),
+ CONSTRAINT chk_writer_boot_seq CHECK(boot_seq>0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='writer_registry';
 
 CREATE TABLE IF NOT EXISTS writer_slot (

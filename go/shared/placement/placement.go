@@ -14,19 +14,22 @@ import (
 	"strings"
 )
 
-// 落点编号空间(§4.2),库名由编号唯一派生,不需要配置表:
+// 落点编号空间(docs/design/player-data-tidb-scaling-plan.md §7.2),库名由编号唯一派生,不需要配置表:
 //   - 0:未指定;
-//   - 1..MaxZoneStorageID:zone 库,库名 zone_{id}_db;
-//   - >= FirstNonZoneStorageID:非 zone 库(如 Phase 2 全局库),库名 player_store_{id}_db。
+//   - 1..MaxZoneID:区号的值域。区号不是存档库编号:zone 库已经退役(A17c),这段编号不派生任何库名;
+//   - >= FirstStorageID:地域存档库,库名 player_store_{id}_db。
+//
+// 只有一个存档库家族,判「是不是合法落点」只有 StoreDBName / StorageIDFromDBName 这一处,
+// 路由写入、选库、迁移、存档库池、写资格清单都经它们,zone 编号的落点在每个入口都被拒绝。
 const (
-	FirstNonZoneStorageID  uint32 = 1000000
-	MaxZoneStorageID       uint32 = FirstNonZoneStorageID - 1
-	DefaultGlobalStorageID uint32 = FirstNonZoneStorageID
+	FirstStorageID         uint32 = 1000000
+	MaxZoneID              uint32 = FirstStorageID - 1
+	DefaultGlobalStorageID uint32 = FirstStorageID
 )
 
 // 地域存档库(docs/design/player-data-tidb-scaling-plan.md §7.2):每个地域固定 K 个存档逻辑库,和区无关。
 //
-//	storage_id = FirstNonZoneStorageID + 地域码 × RegionStorageStride + 片号(0..K-1)
+//	storage_id = FirstStorageID + 地域码 × RegionStorageStride + 片号(0..K-1)
 //
 // 库名照旧由 StoreDBName 派生为 player_store_{storage_id}_db,例如地域 1 的 7 号库是 player_store_1001007_db;
 // 地域 0(dev、test)的 0 号库正好是 DefaultGlobalStorageID。新角色建号时在本地域的 K 个库里按 player_id 取模选一个,
@@ -48,7 +51,7 @@ func RegionStorageID(region, shard uint32) (uint32, error) {
 	if shard >= RegionStorageStride {
 		return 0, fmt.Errorf("placement: storage shard %d is out of range 0..%d", shard, RegionStorageStride-1)
 	}
-	return FirstNonZoneStorageID + region*RegionStorageStride + shard, nil
+	return FirstStorageID + region*RegionStorageStride + shard, nil
 }
 
 // ValidateRegionStorage 校验地域码与存档库数 K:K 在 1..RegionStorageStride 之间。
@@ -91,37 +94,21 @@ func RegionStorageDBNames(region, shards uint32) ([]string, error) {
 	return names, nil
 }
 
-// IsZoneStorage 判断 storageID 是否属于 zone 库家族。
-func IsZoneStorage(storageID uint32) bool {
-	return storageID >= 1 && storageID <= MaxZoneStorageID
-}
-
-// StoreDBName 返回落点库名;storageID 为 0 时返回 false。
-// zone 家族的规则与 go/db/internal/config.ZoneDBName 相同,改一处必须两处同改。
+// StoreDBName 返回地域存档库的库名;storageID 不是存档库编号(0 或区号的值域 1..MaxZoneID)时返回 false。
 func StoreDBName(storageID uint32) (string, bool) {
-	switch {
-	case storageID == 0:
+	if storageID < FirstStorageID {
 		return "", false
-	case IsZoneStorage(storageID):
-		return fmt.Sprintf("zone_%d_db", storageID), true
-	default:
-		return fmt.Sprintf("player_store_%d_db", storageID), true
 	}
+	return fmt.Sprintf("player_store_%d_db", storageID), true
 }
 
-// StorageIDFromDBName 是 StoreDBName 的反函数,用于白名单之外的「家族」判定(§6.1)。
-// 名字不属于任何家族时返回 false。
+// StorageIDFromDBName 是 StoreDBName 的反函数,用于库名清单与白名单之外的「家族」判定(§6.1)。
+// 只认 player_store_{id}_db 且 id 是存档库编号;别的名字(包括已退役的 zone_{n}_db)返回 false。
 func StorageIDFromDBName(name string) (uint32, bool) {
-	var digits string
-	var zone bool
-	switch {
-	case strings.HasPrefix(name, "zone_") && strings.HasSuffix(name, "_db"):
-		digits, zone = strings.TrimSuffix(strings.TrimPrefix(name, "zone_"), "_db"), true
-	case strings.HasPrefix(name, "player_store_") && strings.HasSuffix(name, "_db"):
-		digits = strings.TrimSuffix(strings.TrimPrefix(name, "player_store_"), "_db")
-	default:
+	if !strings.HasPrefix(name, "player_store_") || !strings.HasSuffix(name, "_db") {
 		return 0, false
 	}
+	digits := strings.TrimSuffix(strings.TrimPrefix(name, "player_store_"), "_db")
 	if digits == "" || digits[0] == '0' {
 		return 0, false
 	}
@@ -130,7 +117,7 @@ func StorageIDFromDBName(name string) (uint32, bool) {
 		return 0, false
 	}
 	storageID := uint32(id)
-	if zone != IsZoneStorage(storageID) {
+	if storageID < FirstStorageID {
 		return 0, false
 	}
 	return storageID, true

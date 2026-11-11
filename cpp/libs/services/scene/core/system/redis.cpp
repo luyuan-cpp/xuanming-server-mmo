@@ -76,6 +76,8 @@ namespace
 		options.connect.password = config.password();
 		// 玩家域只接受带 hash tag 的键(§5.1):控制域的键发到这个句柄当场拒绝,单实例开发时也一样。
 		options.hashTagPolicy = redis_cluster::HashTagPolicy::kAllKeys;
+		// 控制集群的键也带 tag(全部 Redis 上 Cluster §3.1),只看「有没有 tag」拦不住它们,再按 tag 的形状拒绝。
+		options.keyDomain = redis_cluster::KeyDomain::kPlayer;
 		return true;
 	}
 
@@ -137,7 +139,8 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 	//   - A2′ 的闸门只认 A2′ 的应答(exit_release_mark.h);
 	//   - 改派核实的补写在 Lua 里原子复核 owner_epoch 与原 H(handoff_fence)。
 	// 去掉回调的代价只是:Redis 恢复后,条目要等到各自的下一次重试时刻才重发,而不是立刻抢发。
-	// 三个函数的 reconnected 参数在生产代码里已恒为 false,留待下次改 player_lifecycle 时一并删除。
+	// 下面三个函数原来用来区分「重连回调 / 定时器」的 reconnected 参数(重连时忽略重试间隔)已于 2026-11-11 删掉,
+	// 到期只看各条目自己的重试时刻。
     tlsPlayerRedis.Connect(loop, std::move(playerRedisOptions));
 
 	// 本 zone 的场景控制域(docs/design/control-plane-zone-scoping-20261105.md §4.5):scene_manager 写在本 zone 所属组控制域实例
@@ -164,16 +167,16 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     static constexpr double kRetryIntervalSec = 1.0;
     retryTimerId_ = loop->runEvery(kRetryIntervalSec, []()
                                    {
-        // A2′ 的有上限重发与截止拒绝(单调时钟,见 exit_release_mark.h)搭这个 1s 节拍。
+        // A2′ 的有上限重发与截止拒绝(单调时钟,见 exit_release_mark.h)搭这个 1s 节拍,时刻在这里取、显式传入。
         // 待入场表为空时直接返回。静态函数,不引入新的绑定。
-        PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/false);
-        // 没确认的 handoff 标记撤回也搭这个 1s 节拍重试(表为空时直接返回;条目自带 5s 重试间隔
-        // 与"标记 TTL + 余量"的截止时刻,见 handoff_mark_withdraw.h)。静态函数,不引入新的绑定。
-        PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(/*reconnected=*/false);
+        PlayerLifecycleSystem::RetryInheritedMarkClears(exit_release_mark::Clock::now());
+        // 没确认的 handoff 标记撤回也搭这个 1s 节拍重试(表为空时直接返回;条目自带 5s 重试间隔,没有截止,
+        // 重试到确认为止,见 handoff_mark_withdraw.h)。静态函数,不引入新的绑定。
+        PlayerLifecycleSystem::RetryPendingHandoffWithdrawals();
         // 改派待确认表的各阶段截止、核实的首发 / 重发、落地条目的检查,与撤回表、A2′ 用同一个 1s 节拍(单调时钟的
         // 时刻在这里取一次、显式传入)。表空时直接返回。静态函数,不引入新的绑定。
         // BeginShutdown 只取消周期存盘,本定时器在停机 drain 期间仍在跑:停机谓词等待确认表清空靠的就是它。
-        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now(), /*reconnected=*/false); });
+        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now()); });
     retryTimerActive_ = true;
 
     // 每 30 秒打一轮计数快照。
@@ -384,16 +387,12 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     // 周期存盘,限定 scene 崩溃时的丢失窗口。缺省 60 秒;
     // SCENE_PLAYER_SAVE_INTERVAL_SECONDS=0 关闭。
     //
-    // 分摊而不是一口气扫完:定时器每秒跑一次,只处理
-    // playerId % interval == 当前槽位 的玩家 —— 每个玩家每个周期仍然被存
-    // 恰好一次,但单次回调的工作量是 N/interval 而不是 N。
-    // 旧实现每 interval 秒在**单个回调里**全量遍历 playerList 逐个
-    // SavePlayer(每次都是整份 PlayerAllData 的 marshal + 脏比较),
-    // 回调跑在游戏 tick 同一个 EventLoop 线程上:几千在线就是每 300 秒一次
-    // 数百毫秒级的全服停顿,World::Update 的固定步长累加器 clamp 在 1s,
-    // 超过即直接丢模拟时间。注释里 "10k players over 300s = ~33 saves/sec"
-    // 的摊销口径,现在才真的成立。
-    // 只写有变化的行,没有变化不发请求,所以周期可以短(总体方案 §4,初值,压测后定)。环境变量优先。
+    // 分摊而不是一口气扫完:定时器每 kPeriodicSaveTickSec 跑一次,一个周期分成 interval / kPeriodicSaveTickSec 个槽,
+    // 每次只处理 playerId % 槽数 == 当前槽 的玩家。每个玩家每个周期仍然恰好存一次,单次回调的工作量是
+    // 在线人数 / 槽数(60 秒周期、1 万在线约 17 人)。回调和游戏 tick 在同一个 EventLoop 线程上,一次做太多就是一次卡顿;
+    // 原来每秒一个槽,同样的人数一次要做约 167 人(player-data-tidb-scaling-plan.md §4.6「tick 尖刺」,2026-11-11 定案按
+    // 更细的槽摊开,不等压测)。单次回调仍超过 save_timing_stats::kPeriodicTickBudget 时 [SaveTiming] 升 WARN。
+    // 只写有变化的行,没有变化不发请求,所以周期可以短(总体方案 §4)。环境变量优先。
     // 走 SavePlayerPeriodic:只有位置变了就推迟这一笔,位置随下一笔有别的行要写的存盘、下线等最终存盘
     // 或兜底间隔一起写(player-save-direct-commit.md §1.1)。别的入口要的是落盘,不走这里。
     int periodicSaveSec = 60;
@@ -407,14 +406,20 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     }
     if (periodicSaveSec > 0)
     {
-        const auto slotCount = static_cast<uint64_t>(periodicSaveSec);
-        periodicSaveTimerId_ = loop->runEvery(1.0, [slotCount, slot = uint64_t{0}]() mutable
+        // 每秒 10 个槽。槽数随周期变,周期 1 秒时也有 10 个槽,不会出现 0。
+        static constexpr uint64_t kPeriodicSaveTicksPerSecond = 10;
+        static constexpr double kPeriodicSaveTickSec = 1.0 / static_cast<double>(kPeriodicSaveTicksPerSecond);
+        const uint64_t slotCount = static_cast<uint64_t>(periodicSaveSec) * kPeriodicSaveTicksPerSecond;
+        // cycleSaved:本周期已经发起的定时存盘次数,周期最后一个槽打完汇总后清零(只在本定时器里读写)。
+        periodicSaveTimerId_ = loop->runEvery(kPeriodicSaveTickSec, [slotCount, slot = uint64_t{0},
+                                                                     cycleSaved = std::size_t{0}]() mutable
                                               {
             const uint64_t currentSlot = slot;
             slot = (slot + 1) % slotCount;
 
             if (tlsEcs.playerList.empty())
             {
+                cycleSaved = 0;
                 return;
             }
             // 单次回调的总耗时进 periodic_tick 段,含遍历整张在线表;超过 kPeriodicTickBudget 另计一次。
@@ -434,15 +439,20 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                 ++saved;
             }
             save_timing_stats::ObserveSince(save_timing_stats::Stage::kPeriodicTick, tickStart);
-            // 只在整个周期的最后一个槽位打一条汇总,避免每秒刷日志。
-            if (currentSlot == slotCount - 1 && saved > 0)
+            cycleSaved += saved;
+            // 每个周期只在最后一个槽打一条汇总,避免刷日志。数的是发起次数,推迟和无变化的也算。
+            if (currentSlot == slotCount - 1)
             {
-                LOG_INFO << "[RedisSystem] Periodic save slot " << currentSlot
-                         << " saved " << saved << " players (online=" << tlsEcs.playerList.size() << ")";
+                if (cycleSaved > 0)
+                {
+                    LOG_INFO << "[RedisSystem] Periodic save cycle attempted " << cycleSaved
+                             << " saves (online=" << tlsEcs.playerList.size() << ")";
+                }
+                cycleSaved = 0;
             } });
         periodicSaveTimerActive_ = true;
         LOG_INFO << "[RedisSystem] Periodic player save enabled, interval=" << periodicSaveSec
-                 << "s (sharded per-second by playerId)";
+                 << "s (" << slotCount << " slots by playerId, one slot every " << kPeriodicSaveTickSec << "s)";
     }
     else
     {

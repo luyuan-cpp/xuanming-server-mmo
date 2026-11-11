@@ -95,10 +95,26 @@ func tick(t *testing.T, e *Engine) {
 }
 
 // 此夹具只为交易库状态机提供已提交的资产终局；不冒充scene真实资产端到端验收。
+// 生产的终结路径在提交之后唤醒腿所属的合同(data.AssetOpRepo.wakeContractOf,缺口清单第 16 条);
+// 夹具直接改待办行,照同一口径唤醒这些合同,否则它们要等在途兜底复查(inFlightRecheck)才推进。
 func settleLegs(t *testing.T, e *Engine, outcome uint32) {
 	t.Helper()
-	_, err := e.Repo.DB.Exec("UPDATE trade_asset_op SET status=?,durable=1 WHERE status=1", outcome)
+	ctx := context.Background()
+	rows, err := e.Repo.DB.QueryContext(ctx, "SELECT DISTINCT ref_id FROM trade_asset_op WHERE status=1 AND ref_kind=2")
 	require.NoError(t, err)
+	var contracts []uint64
+	for rows.Next() {
+		var id uint64
+		require.NoError(t, rows.Scan(&id))
+		contracts = append(contracts, id)
+	}
+	require.NoError(t, rows.Err())
+	require.NoError(t, rows.Close())
+	_, err = e.Repo.DB.Exec("UPDATE trade_asset_op SET status=?,durable=1 WHERE status=1", outcome)
+	require.NoError(t, err)
+	for _, id := range contracts {
+		require.NoError(t, e.Repo.Wake(ctx, id, e.now()))
+	}
 }
 func state(t *testing.T, e *Engine, id uint64) (*tradepb.TradeCommerceRecord, *tradepb.TradeCommerceWorkflow) {
 	t.Helper()
@@ -666,6 +682,8 @@ func TestTiDBMallPagingReachesOfflineTailAndRestartKeepsOriginalContractAndSeq(t
 		updated, err := result.RowsAffected()
 		require.NoError(t, err)
 		require.EqualValues(t, 1, updated)
+		// 生产的终结路径在提交后唤醒合同(缺口清单第 16 条);直接改待办行时照同一口径唤醒,与 settleLegs 相同。
+		require.NoError(t, e.Repo.Wake(ctx, contract.CommerceId, e.now()))
 	}
 	tick(t, e)
 	require.NoError(t, restarted.Tick(ctx))
@@ -762,4 +780,73 @@ func TestMallPagingRejectsInvalidResponseWithoutMovingCursor(t *testing.T) {
 		require.NoError(t, m.Tick(context.Background()))
 		require.Empty(t, m.pollCursor)
 	})
+}
+
+// 盘口只收托管已完成的订单(jubaozhai-market.md §15.9)。以前选对手单只看 status=3,托管阶段(stage=escrow)的订单
+// status 也是 3:它若是最优价,就被选成对手单,撮合事务发现阶段不对、本轮不成交,排在它后面已经上盘的订单一单也撮不上;
+// 材料订单的托管腿没有截止,托管扣款一直回 RETRY 时,这本盘口就一直撮不动。
+func TestTiDBOrderBookSkipsOrdersStillInEscrow(t *testing.T) {
+	e := tiDBEngine(t)
+	ctx := context.Background()
+	currency := e.Policy.Currencies[0] // 材料盘口的结算币种
+	// place 下单并推进一步:发出托管扣款腿,停在 escrow。
+	place := func(player uint64, side tradepb.MarketOrderSide, price uint64) uint64 {
+		t.Helper()
+		r, err := e.PlaceMarket(ctx, player, &tradepb.PlaceMarketOrderRequest{ClientRequestId: fmt.Sprintf("book-escrow-%d", player), MarketId: 1, ItemConfigId: 10, Side: side, UnitPrice: price, Quantity: 1, CurrencyType: currency})
+		require.NoError(t, err)
+		require.NoError(t, e.advance(ctx, r))
+		return r.CommerceId
+	}
+	// open 只终结这一单名下的托管扣款(别的单的扣款留在途中),再推进一步进盘口。
+	open := func(id uint64) {
+		t.Helper()
+		_, err := e.Repo.DB.Exec("UPDATE trade_asset_op SET status=2,durable=1 WHERE ref_id=? AND status=1", id)
+		require.NoError(t, err)
+		r, _ := state(t, e, id)
+		require.NoError(t, e.advance(ctx, r))
+		r, w := state(t, e, id)
+		require.Equal(t, "market_open", w.Stage)
+		require.True(t, r.OnBook, "进入 market_open 的那次重存同时写上 on_book")
+	}
+	fillOf := func(buyOrder uint64) (counterparty, price uint64, err error) {
+		err = e.Repo.DB.QueryRow("SELECT counterparty_id,unit_price FROM trade_commerce WHERE kind=4 AND side=0 AND parent_id=?", buyOrder).Scan(&counterparty, &price)
+		return counterparty, price, err
+	}
+
+	resting := place(12, 2, 10)
+	open(resting)
+	escrowing := place(13, 2, 9) // 价格更优,托管扣款还在途
+	r, w := state(t, e, escrowing)
+	require.Equal(t, "escrow", w.Stage)
+	require.Equal(t, Escrowing, r.Status, "托管中与在盘口上的订单状态列相同,只能靠 on_book 区分")
+	require.False(t, r.OnBook)
+
+	buy := place(22, 1, 10)
+	open(buy)
+	ids := e.IDs.(*testIDs)
+	before := ids.value.Load()
+	require.NoError(t, e.matchMarket(ctx, escrowing))
+	require.Equal(t, before, ids.value.Load(), "托管中的订单不发起撮合,不发成交号")
+
+	require.NoError(t, e.matchMarket(ctx, buy))
+	counterparty, price, err := fillOf(buy)
+	require.NoError(t, err, "托管中的更优价不能挡住已上盘的对手单")
+	require.Equal(t, resting, counterparty)
+	require.EqualValues(t, 10, price, "按已上盘卖单的 maker 价成交")
+	r, w = state(t, e, escrowing)
+	require.Zero(t, r.FilledQuantity, "托管中的订单没有成交")
+	require.Equal(t, "escrow", w.Stage)
+
+	// 价位合适的卖单只剩托管中的那一张:撮不到任何对手单。它托管完成、进盘口那一步自己发起撮合。
+	late := place(23, 1, 9)
+	open(late)
+	require.NoError(t, e.matchMarket(ctx, late))
+	_, _, err = fillOf(late)
+	require.ErrorIs(t, err, sql.ErrNoRows, "托管中的卖单不在盘口上")
+	open(escrowing)
+	require.NoError(t, e.matchMarket(ctx, escrowing))
+	counterparty, price, err = fillOf(late)
+	require.NoError(t, err)
+	require.Equal(t, escrowing, counterparty)
+	require.EqualValues(t, 9, price)
 }

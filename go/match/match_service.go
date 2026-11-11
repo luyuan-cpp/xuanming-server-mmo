@@ -107,6 +107,8 @@ func main() {
 	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入)。-migrate 不连 Redis,迁移 Job 也不注入这个变量,
 	// 所以放在它之后、建任何 Redis 客户端之前。
 	logx.Must(c.ResolveSharedRedisPassword(os.LookupEnv))
+	// 观战两把密钥(Spectate.TicketSecretEnv / OpsCallerSecretEnv,K8s 上经 Secret 注入):迁移入口已在上面返回,这里只管常驻启动。
+	logx.Must(c.ResolveSpectateSecrets(os.LookupEnv))
 	// 发布轨道(docs/design/release-track-gray-canary.md §2.5):canary 副本只处理路由服转来的客户端请求,不跑全局作用域的后台:
 	// 排名发布、终局发件箱、结果消费组、team 的 SQL 维护、观战恢复、撮合与恢复循环,也不登记为匹配池成员。取值非法就拒启。
 	// 前提:线上 stable 已经是「match 镜像只收 stable」的版本(discovery.NodeWatcher.StableOnly),否则落到 canary 名下的池会停摆。
@@ -127,7 +129,7 @@ func main() {
 	if secret := strings.TrimSpace(os.Getenv("MMORPG_MATCH_INTERNAL_SECRET_GUILD")); secret != "" {
 		verifier, err := serviceauth.New(map[string]string{"guild": secret})
 		if err != nil {
-			logx.Must(fmt.Errorf("guild内部调用独立签名配置非法"))
+			logx.Must(fmt.Errorf("invalid dedicated signing configuration for guild internal calls"))
 		}
 		svcCtx.GuildCallAuth = verifier
 		svcCtx.GuildCallSecret = secret
@@ -148,7 +150,7 @@ func main() {
 	// 此门禁先于 matcher、节点发现和 RPC 注册；失败直接拒绝本进程启动。
 	if err := matchkafka.EnsureResultTopic(resultConfig); err != nil {
 		cancel()
-		panic(fmt.Errorf("全球匹配结果主题未满足耐久契约，拒绝启动: %w", err))
+		panic(fmt.Errorf("global match result topic does not meet the durability contract; refusing to start: %w", err))
 	}
 
 	// 连接池指标 mmorpg_sql_pool_*{sql_client="match",pool="primary"}:只有全球匹配权威库这一个池,抓取时现取 DBStats。
@@ -164,8 +166,12 @@ func main() {
 	// 组队给 scene 发 PlayerTeamRefreshEvent 也从这里取 NodeUuid)。
 	svcCtx.LaunchRelayTask("match.watch.scene", func() { svcCtx.SceneNodes.Run(ctx, svcCtx.Etcd) })
 	svcCtx.LaunchRelayTask("match.watch.battle", func() { svcCtx.BattleNodes.Run(ctx, svcCtx.Etcd) })
+	svcCtx.LaunchRelayTask("match.watch.battle.canary", func() { svcCtx.CanaryBattleNodes.Run(ctx, svcCtx.Etcd) })
 	// match 实例自身的注册:按池撮合用它作成员表,决定每个池由哪个副本负责(internal/poolowner)。
 	svcCtx.LaunchRelayTask("match.watch.match", func() { svcCtx.MatchNodes.Run(ctx, svcCtx.Etcd) })
+	// 截止作废先向原 battle 实例取证(2026-11-06,cross-zone-matchmaking.md §13.3):到期恢复与帮会取消都读它,必须在起后台循环、
+	// 注册 RPC 之前接好;stable 与 canary 都接(帮会取消是 RPC)。取证读上面的 battle 镜像。
+	matchlogic.BindDeadlineAbortEvidence(svcCtx)
 
 	// 结果来源归档独立于评分开关，PVE与不计分局也必须保全完整个人原件。
 	// 启动接线先于matcher与RPC注册；来源归档必须同步装配成功。
@@ -182,7 +188,7 @@ func main() {
 	if globalBackground {
 		if err := startResultConsumer(); err != nil {
 			cancel()
-			panic(fmt.Errorf("全球匹配完整结算来源消费者未就绪，拒绝启动: %w", err))
+			panic(fmt.Errorf("global match full-settlement source consumer not ready; refusing to start: %w", err))
 		}
 	}
 
@@ -197,7 +203,7 @@ func main() {
 	svcCtx.SetPartyTeam(teamService)
 	teamAuthority, teamAuthorityErr := team.NewAuthorityServer(svcCtx)
 	if teamAuthorityErr != nil {
-		logx.Errorf("SQL队伍场景读取契约未就绪，拒绝启动: %v", teamAuthorityErr)
+		logx.Errorf("SQL team scene read contract not ready; refusing to start: %v", teamAuthorityErr)
 		cancel()
 		svcCtx.Stop()
 		os.Exit(1)
@@ -205,7 +211,7 @@ func main() {
 	// 角色护栏参与者(docs/design/horizontal-scale-logical-db.md §3.4):data_service 过户、删角之前先冻结本库副本并核挂起。
 	roleFence, roleFenceErr := rolefence.NewParticipantServer(svcCtx.Authority.DB, authority.RoleFencePending, os.Getenv(rolefence.CoordinatorSecretEnv))
 	if roleFenceErr != nil {
-		logx.Errorf("角色护栏参与者未就绪，拒绝启动: %v", roleFenceErr)
+		logx.Errorf("role fence participant not ready; refusing to start: %v", roleFenceErr)
 		cancel()
 		svcCtx.Stop()
 		os.Exit(1)
@@ -213,6 +219,8 @@ func main() {
 	if globalBackground {
 		teamService.StartSQLMaintenance(ctx)
 		matchlogic.StartGlobalSpectatorRecovery(ctx, svcCtx)
+		// 原执行进程失效的提前作废(battle-instance-loss-early-abort.md §4):补签问不到原实例时记可疑,两次确认后写 ABORT。
+		matchlogic.StartBattleInstanceLossWatcher(ctx, svcCtx)
 		// 完整结果归档与队伍反向端口均就绪后才开放成局。全球模式下单排、整队与 PVP 都由同一个按池撮合循环负责。
 		matchlogic.StartMatcherLoop(ctx, svcCtx)
 	} else {
@@ -323,7 +331,7 @@ func main() {
 			}}, nil
 		}
 		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, svcCtx.BindDrainRuntime, svcCtx.CloseSource, svcCtx.StopAndReport, prepared); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("匹配排空 HOLD: %v", err)
+			logx.Errorf("match drain HOLD: %v", err)
 		}
 	}()
 	defer func() { cancelControl(); <-controlDone }()
@@ -409,22 +417,22 @@ func runMigration(c config.Config, allowModify bool, migrate func(context.Contex
 	// 迁移凭据不进入常驻配置；缺少任一项都不能拿runtime账号补做DDL。
 	user := os.Getenv(migrationUserEnv)
 	if strings.TrimSpace(user) == "" || os.Getenv(migrationPasswordEnv) == "" {
-		fmt.Fprintln(os.Stderr, "显式匹配迁移需要独立MATCH_MIGRATION_USER和MATCH_MIGRATION_PASSWORD环境变量")
+		fmt.Fprintln(os.Stderr, "Explicit match migration requires dedicated MATCH_MIGRATION_USER and MATCH_MIGRATION_PASSWORD environment variables")
 		return schemamigrate.ExitFailed
 	}
 	c.GlobalMatch.User, c.GlobalMatch.PasswordEnv = user, migrationPasswordEnv
 	report, err := migrate(context.Background(), c.GlobalMatch, allowModify)
 	for _, statement := range report.Statements {
-		fmt.Printf("迁移语句: %s\n", statement)
+		fmt.Printf("Migration statement: %s\n", statement)
 	}
 	for _, warning := range report.Warnings {
-		fmt.Printf("迁移告警: %s\n", warning)
+		fmt.Printf("Migration warning: %s\n", warning)
 	}
 	for _, manual := range report.Manual {
-		fmt.Printf("需人工处理: %s\n", manual)
+		fmt.Printf("Manual action required: %s\n", manual)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "匹配schema迁移失败: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Match schema migration failed: %v\n", err)
 	}
 	return schemamigrate.ExitCode(report, err)
 }

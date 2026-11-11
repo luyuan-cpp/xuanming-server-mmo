@@ -32,6 +32,7 @@ func Tables() []proto.Message {
 		&pb.MatchBattleCompletionRecord{}, &pb.MatchBattleSettlementSourceRecord{}, &pb.MatchRoleOccupancyRecord{},
 		&pb.MatchManualResolutionRecord{}, // 人工处置审计(2026-11-05,manual_abort.go)
 		&pb.MatchBattleReportRecord{}, &pb.MatchPlayerBattleReportRecord{}, // 战报回放(battle_report.go)
+		&pb.MatchBattleScriptRecord{}, &pb.MatchBattleScriptReviewRecord{}, &pb.MatchBattleScriptLoadoutRecord{}, // 战斗剧本(battle_script.go)
 		&teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{},
 		&teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{},
 		&teampb.TeamApplicationIndexRecord{}, &teampb.TeamLaunchRoleRecord{},
@@ -141,7 +142,7 @@ func Migrate(ctx context.Context, c config.GlobalMatchConf, allowModify bool) (s
 	// 普通索引的历史漂移不由迁移器擅自改写；Job也不能将其误报为已可接流。
 	if err == nil && len(report.Manual) == 0 {
 		if indexErr := (&Store{DB: db}).CheckCandidateIndexes(ctx); indexErr != nil {
-			report.Manual = append(report.Manual, fmt.Sprintf("迁移后候选索引仍需人工核对: %v", indexErr))
+			report.Manual = append(report.Manual, fmt.Sprintf("candidate indexes still need manual review after migration: %v", indexErr))
 		}
 	}
 	return report, err

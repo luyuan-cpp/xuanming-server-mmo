@@ -90,6 +90,8 @@ func TestWriterDriverConsumesGrantBeforeFirstWrite(t *testing.T) {
 }
 
 // COMMIT 没拿到结果才算提交结局未知。语句发出去之后失败,事务回滚了,不算。
+// R6(2026-11-10)起,自动事务只发过纯 DML 时语句失败判「提交前中止」,根本不是结局未知;
+// 别的阶段的结局未知(比如执行过可能隐式提交的语句之后)也不能被认成提交结局未知。
 func TestCommitOutcomeUnknownIsTellable(t *testing.T) {
 	_, err := writerFixture(&writerFakeWire{commitErr: driver.ErrBadConn}).ExecContext(context.Background(), "UPDATE t SET n=n+1", nil)
 	if !errors.Is(err, ErrOutcomeUnknown) || !IsCommitOutcomeUnknown(err) {
@@ -99,8 +101,11 @@ func TestCommitOutcomeUnknownIsTellable(t *testing.T) {
 		t.Fatal("包一层也要认得")
 	}
 	_, err = writerFixture(&writerFakeWire{execErr: driver.ErrBadConn}).ExecContext(context.Background(), "UPDATE t SET n=n+1", nil)
-	if !errors.Is(err, ErrOutcomeUnknown) || IsCommitOutcomeUnknown(err) {
-		t.Fatalf("语句失败不算提交结局未知: %v", err)
+	if !IsAbortedBeforeCommit(err) || errors.Is(err, ErrOutcomeUnknown) || IsCommitOutcomeUnknown(err) {
+		t.Fatalf("statement failure before COMMIT must be aborted-before-commit, not a commit outcome: %v", err)
+	}
+	if IsCommitOutcomeUnknown(unknown("业务发送后", driver.ErrBadConn)) {
+		t.Fatal("non-commit unknown outcome must not be reported as a commit outcome")
 	}
 	if IsCommitOutcomeUnknown(errors.New("other")) || IsCommitOutcomeUnknown(nil) {
 		t.Fatal("别的错误不算")

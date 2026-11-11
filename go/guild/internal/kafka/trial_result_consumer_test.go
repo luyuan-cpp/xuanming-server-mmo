@@ -448,7 +448,7 @@ func TestTrialConsumer_RunEnsuresTopicThenConsumesAndCloses(t *testing.T) {
 	assert.Equal(t, 1, opened)
 	assert.Equal(t, []string{"handle:801", "commit:160"}, h.events)
 	assert.Equal(t, 1, h.reader.closed)
-	assert.Contains(t, logs.String(), "历练结果消费者启动 topic=match-results group=guild-trial")
+	assert.Contains(t, logs.String(), "Trial result consumer started topic=match-results group=guild-trial")
 }
 
 func TestTrialConsumer_GlobalTopicCannotCreateSingleReplica(t *testing.T) {

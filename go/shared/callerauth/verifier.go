@@ -11,9 +11,9 @@ import (
 
 // Options 配置验签闸门。
 type Options struct {
-	// Secrets 是验签密钥集合(主密钥 + 轮换期的旧密钥)。
-	// 为 nil 或未配置时,任何签名都验不过 —— fail-closed。
-	Secrets SecretVerifier
+	// Keys 是验签公钥集合(轮换期新旧公钥并列),通常是 ParsePublicKeys 的结果。
+	// 为 nil 时任何签名都验不过 —— fail-closed。
+	Keys KeySet
 
 	// Enforce 决定验签失败时是**拒绝请求**还是**放行并打 WARN**。
 	// 它由运行模式推导(生产恒 true),不接受业务配置直接关掉。
@@ -39,7 +39,7 @@ const defaultMaxClockSkew = 30 * time.Second
 
 // Verifier 校验一条内部调用方身份声明。并发安全。
 type Verifier struct {
-	secrets  SecretVerifier
+	keys     KeySet
 	enforce  bool
 	skew     time.Duration
 	allowed  map[string]struct{}
@@ -59,7 +59,7 @@ func NewVerifier(opts Options) *Verifier {
 		now = time.Now
 	}
 	v := &Verifier{
-		secrets: opts.Secrets,
+		keys:    opts.Keys,
 		enforce: opts.Enforce,
 		skew:    skew,
 		nowFunc: now,
@@ -89,7 +89,8 @@ func (v *Verifier) Enforcing() bool { return v != nil && v.enforce }
 //
 // 检查顺序是刻意排的:**先验签名,后记 nonce**。反过来的话,未认证的流量
 // 就能往 nonce 表里灌垃圾,既能撑爆内存,又能通过预占 nonce 让合法请求
-// 被误判成重放 —— 那是自带的拒绝服务。
+// 被误判成重放 —— 那是自带的拒绝服务。签名之前的检查(调用方、时间窗、nonce 形状)
+// 都只是字符串运算,先做完再进椭圆曲线验签,格式不对的流量不消耗验签 CPU。
 func (v *Verifier) Verify(md metadata.MD, fullMethod string, subject []byte) (string, error) {
 	caller := mdFirst(md, MetaCaller)
 	if caller == "" {
@@ -105,8 +106,8 @@ func (v *Verifier) Verify(md metadata.MD, fullMethod string, subject []byte) (st
 	if sigHex == "" {
 		return "", ErrMissingSignature
 	}
-	mac, err := hex.DecodeString(sigHex)
-	if err != nil || len(mac) == 0 {
+	signature, err := hex.DecodeString(sigHex)
+	if err != nil || len(signature) == 0 {
 		return "", ErrBadSignature
 	}
 
@@ -132,7 +133,7 @@ func (v *Verifier) Verify(md metadata.MD, fullMethod string, subject []byte) (st
 		return "", ErrBadNonce
 	}
 
-	if v.secrets == nil || !v.secrets.Verify(mac, Canonical(caller, fullMethod, subject, tsMs, nonce)) {
+	if v.keys == nil || !v.keys.Verify(signature, Canonical(caller, fullMethod, subject, tsMs, nonce)) {
 		return "", ErrBadSignature
 	}
 

@@ -10,6 +10,7 @@
 #include "gate_codec.h"
 #include "network/broadcast_target_codec.h"
 #include "proto/common/base/message.pb.h"
+#include "proto/common/base/node.pb.h"
 #include "proto/contracts/kafka/gate_event.pb.h"
 #include "proto/gate/gate_service.pb.h"
 #include <session/manager/session_manager.h>
@@ -309,7 +310,7 @@ namespace gate_push
 		DeliverToTargetsImpl(path, event);
 	}
 
-	void DeliverToScene(Path path, uint64_t sceneId, const MessageContent *content)
+	void DeliverToScene(Path path, uint64_t sceneId, const MessageContent *content, const entt::entity senderSceneNode)
 	{
 		if (content == nullptr)
 		{
@@ -328,8 +329,14 @@ namespace gate_push
 			}
 			return;
 		}
+		// 认出发送方时只推会话当前指向它的那些(头文件注释):同一个 scene_id 的另一份实例上的玩家收不到这份实例的广播。
 		FanOutToBoundSessions(path, *content,
-							  [sceneId](const SessionInfo &session) { return session.sceneId == sceneId; });
+							  [sceneId, senderSceneNode](const SessionInfo &session)
+							  {
+								  return session.sceneId == sceneId &&
+										 (senderSceneNode == entt::null ||
+										  session.GetNodeEntity(common::base::SceneNodeService) == senderSceneNode);
+							  });
 	}
 
 	void DeliverToAll(Path path, const MessageContent *content)

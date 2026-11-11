@@ -1,0 +1,45 @@
+# data-service 读本 K8s 集群身份所需的最小权限。
+#
+# 发号器把地域码绑定到「部署身份 + 两套本地 etcd 的集群号」(docs/design/player-data-tidb-scaling-plan.md §6.3)。
+# 部署身份是 kube-system 命名空间的 UID,由 data_service 在运行期经 K8s API 读取(go/data_service/internal/clusteridentity):
+# 渲染进 ConfigMap、Secret 或环境变量的值会和 etcd 数据目录一起被集群级备份恢复带到另一个集群,运行期读到的 UID 带不过去。
+# 只有 AllowAutoSeed=false(staging、prod)读;dev 不读,但 Pod 引用的 ServiceAccount 必须存在,所以所有档位都 apply 同一份。
+#
+# k8s_deploy.ps1 的 Apply-OneGoSvc 在 data-service 的 StatefulSet 之前把本文件 apply 进 zone 命名空间,__ZONE_NAMESPACE__ 换成
+# 那个命名空间(New-DataServiceIdentityRbacYaml)。晚于 StatefulSet 的话,第一次预留读身份拿到 403,上报 identity_error,
+# 不写任何记录,下一次预留再读。zone-down(Remove-Zone)删命名空间时一并删本 zone 的 ClusterRoleBinding;ClusterRole 全集群一份,留着。
+#
+# 读的是集群级对象(Namespace),只能用 ClusterRole + ClusterRoleBinding,Role 管不到;权限收到最小:只有 get,
+# 只有 kube-system 这一个命名空间(resourceNames),不给 list / watch。ServiceAccount 用专用的 data-service,
+# 不用命名空间的 default,免得把权限挂到整个命名空间。Pod 模板不能关 automountServiceAccountToken:令牌就是读身份的凭据。
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: data-service
+  labels:
+    app: data-service
+    tier: go-svc
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mmorpg-cluster-identity-reader
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    resourceNames: ["kube-system"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mmorpg-cluster-identity-__ZONE_NAMESPACE__
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mmorpg-cluster-identity-reader
+subjects:
+  - kind: ServiceAccount
+    name: data-service
+    namespace: __ZONE_NAMESPACE__

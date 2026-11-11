@@ -486,7 +486,7 @@ Java 版:`PARITY.md`「战斗锁不再是销账证据」一行已更正(Java 待
 
 每次重发前重新取得玩家和战斗状态，等待期间只留 ID、自有上下文与回复。离线续期沿用首发上下文，在线续期重算期限。续期去重表仍存在，由任务局部 RAII 在成功、放弃、停止时统一摘除。同场景后续跟随、冻结与收件箱结算规则不变。
 
-任务由 Scene 瞬态作用域持有，维护或停机时停止继续写锁，迟到回复和定时器不再恢复业务。取消不撤回已发送 Lua，也不影响锁的现有 TTL。Java 写锁失败即拒绝备战、C++ 同步备战后异步补写的既有差异仍在，本次不改变可观察业务行为。
+任务由 Scene 持久作用域持有（`TryStartDurable`），维护 P1、普通停机和身份冲突时不随瞬态任务停止。这些窗口里备战（gRPC 保留到 P3）和 battle 的确认补发（Kafka）仍会到达，改造前的回调链也照常写锁和续期；这时停写，锁会停在“备战期限 + 60 秒”、ctx 停在 PREPARING，玩家在别的节点重登就重建不出冻结。只有拆除前的 `StopAll` 结束本地等待，之后迟到回复和定时器不再恢复业务。取消不撤回已发送 Lua，也不影响锁的现有 TTL。2026-11-10 订正：11-05 的实现把三条链放进了瞬态作用域，一进入停机就停写，现已改回持久作用域，回归用例为 `BattleLockWritesKeepRunningAfterGameplayStopUntilStopAll`。Java 写锁失败即拒绝备战、C++ 同步备战后异步补写的既有差异仍在，本次不改变可观察业务行为。
 
 ## 11. 2026-11-06 号段预检续段;FIGHTING 冻结到期先查 SQL 终局(已落码,未编译,待 Codex 验证)
 
@@ -549,13 +549,23 @@ match 的宽限只推迟 ABORT(`completion.go` 的 `terminalOutcomeGraceMs`);发
 | 未知:没发出去 / 传输失败 / 回包验签不过 / match 带内 retry / 取值不认识 | 同样续冻一拍(`metric=battle_freeze_held terminal=UNKNOWN`) |
 | 续冻到 `FreezeHoldDeadlineMs` = FreezeExpiresAtMs + 15 分钟之后仍是 COMPLETE、PENDING 或未知 | 越过上限的那一拍(第 2 步)告警 `metric=battle_freeze_hold_cap_reached`(ERROR)后照常解冻,不再查询 |
 
-**NONE 为什么分两种(2026-11-06 负责人定)。** 冻结到期 = 截止 + 60s 宽限 + 60s 余量,晚于 match 补写 ABORT 的时刻(截止 + 60s,
-`ready_recovery` 的到期恢复)。有原件的局到期还是 NONE,只说明 ABORT 还没写成(match 不可用或恢复任务滞后),而 COMPLETE 不判截止、
-仍可能先落库,所以 NONE 不是终局证据,按未知续冻;「解冻之后 COMPLETE 才落库」因此只剩续冻上限之后的一段,归入有告警的那条残余。
+**NONE 为什么分两种(2026-11-06 负责人定)。** 冻结到期 = 截止 + 60s 宽限 + 60s 余量。
+
+match 过了截止 + 宽限,不再立刻补写 ABORT(2026-11-10 起,[跨区匹配](cross-zone-matchmaking.md) §13.3「2026-11-06 修复」):
+
+- 先向原 battle 实例取证(DestroyBattle + QueryBattleCreation),有下面两种证据之一才写:
+  - 「没有房间」;
+  - 「原进程已不在」:查询失败、另起 TCP 拨号被拒、已同步的注册中心里不在册,三条同时成立。
+- 没有证据就等到硬上限:截止 + 宽限 + 10 分钟;越过硬上限后第一次看到房间还在,再给 2 分钟。
+- match 可用时,ABORT 最晚约在截止 + 14.2 分钟落定(硬上限加持有宽限之外,还要算恢复循环两次访问这一局的延迟;原 battle 成批被黑洞、每拍多等一个取证期限时约 16.3 分钟),仍早于续冻上限(截止 + 17 分钟)。
+
+所以有原件的局在冻结到期时查到 NONE 很常见,只说明 ABORT 还没写成(match 正在取证、不可用或恢复任务滞后)。而 COMPLETE 不判截止、仍可能先落库,所以 NONE 不是终局证据,按未知续冻;「解冻之后 COMPLETE 才落库」因此只剩续冻上限之后的一段,归入有告警的那条残余。
 没有可裁决原件的局另当别论:COMPLETE 与截止 ABORT 两条写终局的路径都要求原件可裁决(`authority.TerminalOutcomeExpected`,
-与 `supportedOutcomeOriginal` 同一判据),这种局永远不会有结算。核实结果:match 现在总是装配 SQL 成局权威(没有本地模式),
-所有备战都来自 match 的 gather,新成局只经 `SaveSupportedIntent` 落 v1 原件;没有可裁决原件的只剩上线前的协议 0 旧成局、
-battle 明确采用旧协议的成局、原件坏形状的成局,以及锁值对不上任何成局行的情形。它们也会走到这次查询,由 match 回
+与截止 ABORT、到期恢复同一判据 `autoTerminalOriginal`:成局在途(state 2/3/4),且原件可裁决 —— 在到期恢复的候选形状里
+(`recoverableOutcomeShape`)并过得了 `supportedOutcomeOriginal`),这种局永远不会有结算。核实结果:match 现在总是装配 SQL
+成局权威(没有本地模式),所有备战都来自 match 的 gather,新成局只经 `SaveSupportedIntent` 落 v1 原件;没有可裁决原件的只剩
+上线前的协议 0 旧成局、battle 明确采用旧协议的成局、原件坏形状的成局、operation 为空的成局、缺终局的旧 state 5,以及锁值
+对不上任何成局行的情形;已有终局行却没有决定(只有 Kafka 归档)的局同样不会落定。它们也会走到这次查询,由 match 回
 `terminal_expected=false`,scene 照常解冻。
 
 **续冻上限 15 分钟**(`PlayerBattleSystem::kFreezeHoldCapMs`):盖住 match 个人结算两到三轮失败重投(退避封顶 5 分钟,`pendingSettlementDelayMs`)
@@ -642,14 +652,64 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
 
 **残余与代价。**
 
-- **越过上限之后**照现行规则解冻:COMPLETE 未应用、有原件的 NONE、未知三种都在这里收口,结算(或 match 恢复之后才落库的 COMPLETE)
-  再晚到仍按持有量夹紧,有告警 `battle_freeze_hold_cap_reached`。match 侧 COMPLETE 不判截止这一点不动,不在本批。
+- **越过上限之后**照现行规则解冻:COMPLETE 未应用、有原件的 NONE、未知三种都在这里收口,有告警 `battle_freeze_hold_cap_reached`。
+  2026-11-10 起这一局带进战斗的道具仍被预留押着([battle-item-reservation.md](battle-item-reservation.md)),结算再晚到也从预留里扣,
+  不再按持有量夹紧;剩下的只是 HP / MP、宠物状态按终值覆盖。match 侧 COMPLETE 不判截止这一点不动,不在本批。
 - **锁多留。** 结算一直不来的局,FIGHTING 锁比改动前多留约 15 分钟,match 这段时间拒绝这名玩家排队;删锁没落地时同理。有界。
-- **离线超过续冻上限才重登**:锁已过期,不再重建冻结;这时结算若仍没到,与上一条同属越过上限的残余。
+- **离线超过续冻上限才重登**:锁已过期,不再重建冻结;道具预留随存档在盘上,重登后照样押着,由 reaper 的预留复核按 SQL 终局收尾
+  (2026-11-10),结算晚到仍从预留里扣。
 - **开销。** 每个续冻中的玩家每 30 秒一次主键只读查询,正常运行为 0。
 - 告警只到「值班固定查询」这一层:上面两条 LogQL(`battle_freeze_hold_cap_reached`、`battle_terminal_query_unknown`)已写进
   `deploy/k8s/asset-channel-alerts.yaml` 头注释的固定查询清单,但 scene 的这两个信号只在结构化日志里,Loki ruler 还没接线(上线批 BK8s),
   接线之前不会自动告警。match 一侧的发件箱积压已有 PromQL 规则(`deploy/k8s/match-outcome-outbox-alerts.yaml`,见上面「指标」段)。
+
+**2026-11-10 复核:上限之后这一段怎么堵(负责人当日拍板方案 A,已落码,未编译,待 Codex;
+做法与验证见 [battle-item-reservation.md](battle-item-reservation.md))。**
+
+越过上限之后的残余有两种来源,一致性上都不成立:
+
+- Match 发件箱积压超过约 17 分钟,结算更晚才到;
+- 玩家可控的延后:两个背包都满,结算整笔延后,熬过上限、解冻之后把本局用掉的药经资产通道转走,结算到了只能按持有量夹紧
+  (`bag-rule-policy-layering.md` §(7) 记过,`battle_inbox_shortfall_after_freeze_released` 能发现)。
+
+两种情况的影响有边界:解冻之后 match 仍按 APPLIED 收据才放 ready 票,玩家进不了下一场全球匹配。
+解冻放开的是资产通道、换场景与跨 zone,可被拿走的只有这一局带进战斗的消耗品。
+
+负责人要求按强一致收口。逐条核对之后,「到上限也不解冻,只认终局证据」不能单独做,原因有四条:
+
+1. **会死锁。** 冻结期间玩家腾不出位置。整理、穿脱装备、神秘商人、资产通道都按「在战」拒绝,背包协议也没有使用、丢弃、
+   出售入口,冻结中只能从临时格取回人物背包。两个背包都满、这一局整笔延后时,结算永远放不进去。冻结若不随上限解开,
+   玩家就永远冻住。现在的 15 分钟上限同时是这条死锁的唯一出口。
+2. **离线那一半要求锁活过离线期。** FIGHTING 锁的 TTL 现在到续冻上限 + 60 秒,玩家在这之后才重登,锁已过期,冻结重建不出来。
+   要堵就得让锁在终局之前不过期。删锁失败现在靠 TTL 兜底(`DeleteBattleLockIfMatch` 是发了就不管),也要改成有界重试,
+   重试用尽后等玩家重登,再按证据收尾。
+3. **证据要细到这名玩家。** 不设上限,解冻只能凭终局证据。现在的查询只回整局的 COMPLETE / ABORT,还要加「这名玩家的个人结算是否已
+   APPLIED」(Match 个人结算源行的派发状态)。否则删锁没落地、玩家又重登时,COMPLETE 会把他永远冻住。
+4. **Match 截止 ABORT 的硬上限**(`terminal_abort.go` 的 `deadlineAbortHardCapMs`)是按「早于 scene 上限」定的,
+   `TestDeadlineAbortBoundsFitSceneFreezeHold` 钉着。scene 不再按上限解冻,这条不等式的含义要一起改。
+
+可选的两条路:
+
+| 方案 | 做法 | 一致性 | 代价 |
+|---|---|---|---|
+| A. 战斗道具预留(推荐) | 见下文 | 强一致:预留随存档落库,离线、换节点、重登都不丢 | 新增一个持久字段和一道出包闸;客户端要显示「战斗结算中」占用的数量,这是客户端可见协议,两版同批;Java 同做 |
+| B. 冻结只凭终局证据解开 | 去掉上限;锁在终局之前不过期;查询带上这名玩家的结算状态;给两包全满开一个出口(冻结中允许丢弃,或溢出改投邮件) | 强一致 | 出口是新的玩法入口,或跨服务投递;事故期间受影响的玩家一直冻住,资产、换场景、跨 zone 都不能动 |
+
+方案 A 的做法:
+
+- 备战快照时,把带进战斗的道具按配置号与数量预留在玩家存档里,与背包同一次提交;
+- 结算只从预留里扣,扣完释放余量;ABORT、或没有可裁决原件时整笔释放;
+- 所有出包路径(资产通道、商人、强化与镶嵌扣材料等)只能动未预留的部分,`BagService` 是唯一闸口,结算走显式的预留扣减;
+- 这样冻结按现行规则到期解冻,也不会出现「药白喝」,不需要锁活过离线期。
+
+负责人选 A。它是「远端按快照执行、事后结算」的标准两阶段做法:先预留,再扣减或作废。
+
+- 只锁住真正会被结算扣掉的东西,其余照常可玩;
+- 一致性由存档本身保证,不依赖 Redis 锁的寿命,事故期间也不必冻住玩家。
+
+上面的续冻与上限保持不动,它们还管着 HP / MP、宠物状态的覆盖时序。续冻到上限解冻时**不放**预留,
+冻结已不在的预留由 reaper 按同一张终局表收尾、没有上限(`ReviewBattleItemHolds`);上面「残余与代价」的第一条
+(越过上限之后照现行规则解冻)因此只剩 HP / MP 与宠物状态的覆盖,道具不再夹紧。
 
 ### 11.3 用例与验证(全部未执行,待 Codex)
 

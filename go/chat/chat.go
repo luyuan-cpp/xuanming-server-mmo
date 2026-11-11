@@ -87,11 +87,11 @@ func main() {
 		defer cancel()
 		db, _, err := svc.OpenAuthority(ctx, c, true)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "聊天SQL迁移失败：", err)
+			fmt.Fprintln(os.Stderr, "Chat SQL migration failed:", err)
 			os.Exit(1)
 		}
 		if err = db.Close(); err != nil {
-			fmt.Fprintln(os.Stderr, "聊天SQL迁移关闭失败")
+			fmt.Fprintln(os.Stderr, "Failed to close chat SQL migration connection")
 			os.Exit(1)
 		}
 		return
@@ -271,7 +271,7 @@ func runChat(c config.Config) (runErr error) {
 	go func() {
 		defer close(controlDone)
 		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, nil, svcCtx.BindDrainRuntime, svcCtx.CloseSource, nil, prepared); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("聊天排空 HOLD: %v", err)
+			logx.Errorf("chat drain HOLD: %v", err)
 		}
 	}()
 	defer func() { cancelControl(); <-controlDone }()
@@ -286,7 +286,6 @@ func runChat(c config.Config) (runErr error) {
 	fmt.Printf("  node_id:     %d (etcd CAS)\n", nr.NodeID())
 	fmt.Printf("  node_uuid:   %s\n", nr.NodeUUID)
 	fmt.Printf("  zone:        %d (affects registration path only)\n", c.ZoneId)
-	fmt.Printf("  chat_redis:  %s\n", svcCtx.ChatRedisTarget)
 	if c.MetricsListenAddr != "" {
 		fmt.Printf("  metrics:     %s\n", c.MetricsListenAddr)
 	}

@@ -37,6 +37,11 @@ ForwardTimeoutMs: 5000
 ZoneScopedNodeTypes:
   - LoginNodeService
 
+# 全服池目标(不在 ZoneScopedNodeTypes 里的类型)每条发布轨道,本路由服只在约这么多台里挑(确定性子集,
+# internal/discovery/subset.go)。同轨道各路由服的范围均匀错开,每台目标收到的请求一样多;0 = 在全部实例里挑;
+# 不许是 1(那台一重启,本路由服对这类目标全部失败)。K8s ConfigMap 逐字镜像这一行。
+GlobalTargetSubsetSize: 4
+
 # Prometheus /metrics 监听地址,留空关闭(dev 默认关)。
 # 端口分工:9101=login / 9150=scene_manager / 9160=db / 9170=guild(match 也写了 9170)/
 # 9180=friend / 9190=player_locator。设计文档 §6 写「续 9180」,但 9180 已被 friend 占用,

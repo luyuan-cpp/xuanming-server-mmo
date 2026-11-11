@@ -128,8 +128,11 @@ scene_manager 跨 zone 重定向共用；Java 版 `game-discovery` 的 `GatePick
   标了挡不住新玩家（脚本侧的说明见 `Select-GateDrainPeers`）。
 - **总会给出非空的一档**，不拒绝：全部停写时要么本 zone 的 gate 全卡住了（分过去照样失败，与没有这层判定时一样），要么是本 login 的
   视图有问题，一律拒绝会把一次可能的误判放大成整区登不上；连得上的全在排空多半是整区误标，拒绝比分到待缩容的 gate 更糟；
-  全部满载说明 ZoneCapacity 配得比 gate 上限之和还大，拦人的地方是区级准入，gate 拒连兜底。
-- **只影响挑哪台，不影响容量记账**：`FreeSlots` 仍按全部候选的人数算 online，卡住、排空中或满载的 gate 上的人照样占着名额。
+  全部满载说明有人没经过区级准入就来了：2026-11-10 起排队的区容量按在接客的 gate 到水位的承载封顶（`gatepick.AdmissionCapacity`，
+  见 [login-queue-2026-05.md](./login-queue-2026-05.md)「FreeSlots 公式」），排队开着时只剩重连豁免与人数上报滞后，排队关着时快速通道
+  不判容量，gate 拒连兜底。此前这里写的「ZoneCapacity 配得比 gate 上限之和还大」在封顶之后不再会让排队多放人。
+- **只影响挑哪台，不影响容量记账**：`FreeSlots` 仍按全部候选的人数算 online，卡住、排空中或满载的 gate 上的人照样占着名额
+  （区容量本身按在接客那一档 gate 的水位承载封顶，见上一条，2026-11-10 起）。
   `buildGateCandidates` 只把 `Stale` 与 `MaxConnections` 透传进 `GateCandidate`，`candidatesFromNodes` 再打 `Draining` 标记，都不过滤。
   （2026-11-06 之前排空中的 gate 在这里就被剔掉，`FreeSlots` 数不到它上面的人。）
 - **观测**：`login_gate_pick_excluded_total{reason}`（stale / draining / full，每次挑每台被剔掉的 gate 计一次；回落时被用上的那一档
@@ -138,8 +141,9 @@ scene_manager 跨 zone 重定向共用；Java 版 `game-discovery` 的 `GatePick
   `excluded_total{reason="stale"}` 持续增长说明有 gate 卡住，按日志里的 node_id 去查那台 gate。
 - **告警**（2026-11-05；11-06 随分档调整；`deploy/k8s/login-alerts.yaml` 组 `login.gate-pick`，规则未编译、未实测）：
   `LoginGatePickFallbackStale`（reason 为 stale，critical：本 zone 一台连得上的 gate 都不剩，gate 全卡住或全写不进 etcd）、
-  `LoginGatePickFallbackDegraded`（reason 为 draining / full / mixed，warning：没有完全合格的 gate，整区误标排空或 ZoneCapacity 比
-  gate 上限之和还大；11-06 前叫 `LoginGatePickFallbackFull`、只管 full）。健康时恒 0，任一次即告警；go-zero 计数不预置 0 值序列，
+  `LoginGatePickFallbackDegraded`（reason 为 draining / full / mixed，warning：没有完全合格的 gate，整区误标排空，或有人没经过区级准入：
+  排队关着、重连豁免、人数上报滞后；11-06 前叫 `LoginGatePickFallbackFull`、只管 full）。gate 台数装不下配置的区容量另由
+  `LoginQueueCapacityLimitedByGates`（组 `login.queue-capacity`，2026-11-10 起）报。健康时恒 0，任一次即告警；go-zero 计数不预置 0 值序列，
   规则带 `unless … offset 10m` 的新序列分支。按 `namespace` 聚合（一个 zone 一个 namespace）。
 - 测试：`go/shared/gatepick` 的 `eligibility_test.go`（水位整数边界、归类先后、只留完全合格、排空中健康胜过停写、各档回落原因与剔除计数、
   三个周期）、`report_period_crosslang_test.go`（逐字核对 C++ gate 每 10s 无条件重写 etcd 记录，停写判定的前提）、`node_cache_test.go`
@@ -156,18 +160,41 @@ scene_manager 跨 zone 重定向共用；Java 版 `game-discovery` 的 `GatePick
   （`gatepick.RevisionTracker`，零值可用、并发安全）；同一个 ModRevision 从本进程第一次看到起超过 `StaleAfter`（30s）就判停写。
   - 第一次看到的时刻不早于那次写入，算出的停写时长只会偏短：读到同一个 ModRevision 说明这次读的线性化点还在下一次写之前，
     读返回又至多比线性化点晚一次直读超时（`gateFetchTimeout`，5s），健康 gate 的停写时长至多约 15s，比 30s 小一倍，单测钉住。
-  - 代价是发现得晚：进程刚起、某个 zone 第一次被重定向时不判；读得稀疏时最早在第一次看到之后、隔超过 30s 的那次重定向才判出来。
-    跨 zone 重定向本来就稀疏，这一层只挡「卡住之后还被反复选中」，不保证第一次就挡住。
+  - 只靠本进程历史发现得晚：进程刚起、某个 zone 第一次被重定向时判不出；读得稀疏时最早在第一次看到之后、隔超过 30s 的那次重定向
+    才判出来；多副本还各自从头学。所以 2026-11-10 起再读一份目标 zone 的 login 发布的判定（下一条），两个来源任一成立即算停写。
   - 每次读用全量结果替换该 zone 的记录，记录删了历史随之丢掉，内存与 gate 数同阶；并发的读乱序到达时，旧结果不判停写、不冲掉新版本。
   - 多副本 scene_manager 各记各的历史，互不依赖。
+- **停写标记**（2026-11-10 起；已落码，未编译、未测试）：由目标 zone 里本来就在持续观察本 zone gate 的一方发布判定，做法同 Kubernetes
+  节点控制器：观察者用自己的单调时钟判，消费者只读结果。
+  - **写**：login 的 `NodeWatcher` 对本 zone 的 gate 做 list-watch、按 ModRevision 判停写（`WatchedNode.Stale`）。各 login 副本每个
+    上报周期（`gatepick.ReportPeriod`）读一次镜像，给判为停写的 gate 写 `gatepick.StaleKey`（`gate:<node_id>:stale`，值 `"1"`，
+    过期 `gatepick.StaleMarkTTL` = 30s），不主动删：恢复后不再续写，30s 内自然过期。写在 login 的 `Node.RedisClient`（核心实例，
+    与排空标记同一处）。代码：`go/login/internal/logic/pkg/loginqueue/gatestale.go`（`PublishStaleMarks`）、
+    `go/login/internal/svc/gate_stale_publisher.go`（循环与接线，`Start` 起、`CloseSource` 停）。正常时一台都不停写，零写入；
+    镜像不新鲜、`Nodes` 回落直读 etcd 的那一拍 `Stale` 恒为 false，什么都不写，等于放行。
+  - **读**：scene_manager 读排空标记的那次 MGET 一并读出它（`gateRedisMarks`，经 `CoreRedis`），与本进程历史取并集（`unionMarks`）；
+    读失败两种标记都当没有，照旧放行。部署前提与排空标记相同：scene-manager ConfigMap 的 `CoreRedis` 必须指向 login 的 `Node.RedisClient`。
+  - **键名只定义一份**：`go/shared/gatepick/marks.go` 的 `DrainingKeyFmt` / `StaleKeyFmt`；login 的 `GateDrainingKeyFmt` 是它的别名，
+    scene_manager 不再自己抄一份排空键名。`tools/scripts/tests/k8s_gate_drain.tests.ps1` 钉住它与排空脚本的字面量一致、两边都不另写字面量。
+  - **不用的两种**：给 scene_manager 加 watch——跨区要看的是别的 zone 的 gate，按 zone 收窄的 watch（缺口清单第 4 条）看不到，
+    全服 watch 正是第 4 条要消除的；gate 在 NodeInfo 里自报心跳时间——要拿 gate 的墙钟和 scene_manager 的墙钟比，时钟偏差没有可靠上界
+    （AGENTS §11.3）。
+  - **边界**：多个 login 副本判断不一时，只要有一个写了标记就会剔除；误判上界仍是健康 gate 至多约 25s（小于 30s）。目标 zone 的 login
+    全挂时没有标记，回到只靠本进程历史，不比改动前差。恢复的 gate 最多晚 30s 重新参与跨区重定向（login 自己挑 gate 读的是镜像，不受影响）。
 - **观测**：`scene_manager_gate_redirect_excluded_total{zone_id, reason}`（stale / draining / full，每次重定向每台被剔掉的 gate 计一次，
   回落时被用上的不计）、`scene_manager_gate_redirect_fallback_total{zone_id, reason}`（stale / draining / full / mixed，含义同 login）；
   停写剔除与回落各一条 ERROR，各 30s 至多一条，停写那条带 node_id。告警 `SceneManagerGateRedirectFallback`
   （`deploy/k8s/scene-manager-alerts.yaml` 组 `scene-manager.gate-redirect`，warning，写法同 login 那两条；目标 zone 的 gate 全卡住时由
   那个 zone 的 `LoginGatePickFallbackStale` 呼人，其余原因对应 `LoginGatePickFallbackDegraded`，这条不重复呼）。
 - 测试：`gate_redirect_eligibility_test.go`（剔除、排空中健康胜过停写、退到连得上的、全部停写退到全部、跨两次读判停写、时限契约）、
-  `gate_redirect_client_endpoint_test.go`（整区排空照样重定向、先去重后分档、解析带上键与 ModRevision）、`go/shared/gatepick` 的
-  `revisions_test.go`（阈值从第一次看到起算、健康 gate 不误判、新写重新起算、乱序旧结果、未知 ModRevision、按 zone 替换、并发）。
+  `gate_redirect_client_endpoint_test.go`（整区排空照样重定向、先去重后分档、解析带上键与 ModRevision）、
+  `gate_redirect_draining_test.go`（两种标记按 node_id 读、互不串位、读失败放行、退化输入、并集、第一次重定向靠发布的标记避开卡住的 gate）、
+  `go/shared/gatepick` 的 `revisions_test.go`（阈值从第一次看到起算、健康 gate 不误判、新写重新起算、乱序旧结果、未知 ModRevision、按 zone 替换、并发）
+  与 `marks_test.go`（键名金样、过期时间盖住两次漏写）；login 的 `loginqueue/gatestale_test.go`（每台一条、带过期、续写与自然过期、
+  空输入、Redis 失败）与 `svc/gate_stale_publisher_test.go`（只写判为停写的、读镜像失败不写、都健康不写）。
+- **观测（停写标记）**：`login_gate_pick_stale_marks_total{outcome}`（`written` 按台计、`error` 按次计）；发布失败一条 ERROR
+  `[GateStale] publishing stale gate marks failed`，30s 至多一条。健康时恒 0；`written` 持续增长说明本 zone 有 gate 卡住，与
+  `login_gate_pick_excluded_total{reason="stale"}` 同步出现。
 
 **排队取走时复核放行时选定的 gate**（2026-11-05 起，`go/login/internal/logic/pkg/loginqueue/admit_recheck.go`）：
 dispatcher 放行时只挑 gate、不签票，放行槽在 Redis 里最多待 `AdmitTTL`。这段时间里选定的 gate 可能卡住、被标了排空、被摘掉、
@@ -190,15 +217,31 @@ dispatcher 放行时只挑 gate、不签票，放行槽在 Redis 里最多待 `A
 
 - Java 版（`game-discovery` 的 `GatePicker`）三项都未做，记在 Java 仓 `PARITY.md` 待做；做的时候按同一分档（排空并入，不先行剔除）。
 
+### 本进程在途票（2026-11-11 起；已落码，未编译、未测试，待 Codex 验证）
+
+gate 人数每 10s 才上报一次，login 看到的人数最多晚约 15s。只按它挑，两条挑法都会在一个上报周期里往同一台最闲的 gate 上堆人：
+快路径各请求互相看不到刚分出去的人；dispatcher 一拍之内有 `gatePicker` 记账，跨拍又从同一份滞后人数起算。
+
+- **记账**：`loginqueue.GateInflight`（`go/login/internal/logic/pkg/loginqueue/gate_inflight.go`）按 gate 记本进程交出去的票的
+  交出时刻。快路径在签票成功之后记（`PickAndSignGateToken`），排队在 dispatcher 挑定之后记（`recordPicks` 包住
+  `newBatchPickFn`）。一个进程一份，在 `ServiceContext.initLoginQueue` 里建，快路径、dispatcher、`CandidatesForZone` 共用。
+- **用法**：`CandidatesForZone` 给每台候选填 `GateCandidate.Inflight`（窗口内的票数）；两条挑法比的负载都是
+  `PlayerCount + Inflight`（`GateCandidate.load`），dispatcher 一拍之内再加本快照已分的人数。
+- **窗口取交票宽限 `defaultHandoffGrace`（20s）**：区级容量（`FreeSlots`）按同一个窗口把交出去的票算作在途占位，这里只是按 gate 拆开记。
+  窗口内已经连上、又被下一次上报算进人数的人会被多算一次，只让那台显得更忙、挑选往别处摊；放多少人仍由 `FreeSlots` 管，
+  满载判定（90% 水位）仍只看上报人数，不会因此多放或误判满载。
+- **取舍**：只记本进程的，多副本各记各的，看不到别的副本交出去的票，仍比不记好；不跨进程同步、不引入共享存储。
+  放行槽没写成，或取走时复核改挑了别的 gate，那张票会在原来那台上多算到窗口结束，只影响摊法，不影响谁能进入。
+- 测试：`gate_inflight_test.go`（窗口边界、副本不改入参、下线 gate 被清掉、nil 不记账、快路径按在途比负载、dispatcher 跨拍带上在途、
+  只有签票成功才记）。
+
+**告警补齐（2026-11-11）**：`deploy/k8s/login-alerts.yaml` 新增 `login.gate-health` 组两条持续型告警：
+`LoginGateStaleExcludedSustained`（critical，停写 gate 连续 5 分钟被剔除，即超过租约时长仍在 etcd 里，它上面的玩家多半卡住了）与
+`LoginQueueAdmitRecheckBlind`（warning，取走时复核连续 10 分钟读不到候选）。`tools/scripts/tests/gate_pick_alerts_contract.tests.ps1` 钉住组成与指标来源。
+
 **还没做**（容量模型 A0-7 的其余部分与评审登记）：
 
-- 跨请求的本地分配累加：快路径只靠随机二选一摊开，不记「本周期已分给某台多少人」；
-- dispatcher 跨拍仍从同一份滞后人数起算，同一个上报周期内连续几拍都会先填同一台最闲的 gate；
-- scene_manager 的停写判定只靠本进程读过的历史，第一次重定向到某个 zone 时判不出；要第一次就挡住，得有 watch 镜像或 gate 侧的
-  心跳时间，前者要等控制面按 zone 化（缺口清单第 4 条）之后按 zone 收窄 watch 再议；
-- 三条回落告警（2026-11-05 加，11-06 随分档改了 reason 口径并把 `LoginGatePickFallbackFull` 改名 `LoginGatePickFallbackDegraded`）
-  还没过 promtool、没部署到任何 Prometheus，阈值与 severity 没有演练依据；
-  `login_queue_admit_gate_recheck_total{outcome="unchecked"}` 与停写剔除的持续增长没有告警，只进看板。
+- 回落告警与 `login.gate-health` 组还没过 promtool、没部署到任何 Prometheus，阈值与 severity 没有演练依据（交 Codex 与首轮演练）。
 
 ## 有状态连接与跨 Gate 重连
 

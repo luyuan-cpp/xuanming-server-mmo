@@ -75,6 +75,13 @@ namespace player_inbox_registry
 	// 不能当成「不限长」。SelfCheck 拒绝写 0 的规格,所以消费开着时认识的类型都拿得到非 0 值。
 	uint32_t MaxPayloadBytes(uint32_t msgType);
 
+	// 载荷里有没有本二进制不认识、也不是已退役的字段(混版本持久字段保护设计 §12「载荷新字段」,2026-11-11)。
+	// 有,说明是更新版本的生产者写的:照常执行会丢掉新字段的语义、还记成 APPLIED,调用方按版本错位处理,不调执行器。
+	// 按类型规格的 payload_message 解码整棵载荷,判据是 unknown_field_carry::TreeCarriesNewerVersionFields。
+	// 只在 FindExecutor 找到执行器之后调。不认识的类型、解不开的载荷都返回 false:前者 FindExecutor 已拦下;
+	// 后者是坏载荷,由执行器按自己的规格判(确定性拒绝),这里不抢判。where 填第一个新字段的位置,只进日志。
+	bool PayloadCarriesNewerVersionFields(uint32_t msgType, const std::string &payload, std::string &where);
+
 	// 本二进制要消费的域:至少有一种类型登记了执行器的那些域,升序。落地钩子按它为每个域建运行时状态。
 	const std::vector<uint32_t> &ConsumerDomains();
 

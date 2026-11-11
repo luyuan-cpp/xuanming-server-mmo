@@ -75,8 +75,8 @@ type Config struct {
 	// optional 只为 -migrate:只建表的形态不连 data_service。
 	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc,optional"`
 	// IdSegment 控制 guild_id 的号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
-	// 字段语义见 shared/idsegment.Conf。**没写这块 = 号段关闭 = 纯 snowflake 老路径**
-	// (设计稿 §6.4「保留一个版本做回滚开关」)。
+	// 字段语义见 shared/idsegment.Conf。**没写这块 = 号段关闭 = 发不出 guild_id,建帮一律失败**:
+	// 没有回退号源(AGENTS §7 第 1 条),启动时只打一条 ERROR(svc/guild_id_minter.go)。
 	IdSegment idsegment.Conf `json:"IdSegment,optional"`
 
 	// KillSwitchPrefix 是 RPC 级热关停规则在 etcd 里的前缀(shared/killswitch)。
@@ -84,18 +84,6 @@ type Config struct {
 	// 前缀下没有任何 key 就是全部放行。只有多套环境共用一个 etcd 集群、需要各自
 	// 独立的止血阀时才需要改它。
 	KillSwitchPrefix string `json:"KillSwitchPrefix,optional"`
-
-	// ClusterId 是部署级集群号:snowflake 17 位 worker 段的 [cluster5] 部分
-	// (docs/design/node-id-overhaul-plan-20260908.md §5)。**运维按集群一次性设定,
-	// 策划不碰**;默认 0 = 单集群 / 存量 id 布局。etcd 槽位前缀带 c<cluster>,两个集群
-	// 共用一个 etcd 也不会撞号。必须 < 32。
-	ClusterId uint32 `json:"ClusterId,default=0"`
-
-	// SnowflakeCacheDir 是 snowflake 槽位的本地缓存目录(shared/snowflakealloc,设计稿 §3.5):
-	// 启动时 etcd 不可达、且缓存里的上次水位确认在 F(2h)内,就用缓存的槽起服并后台重试
-	// 注册。留空关闭。默认相对服务工作目录(go/guild/)指向仓库 run/(已 gitignore);
-	// k8s 想要"etcd 不通也能起"就挂一个持久卷进来,写失败只告警不影响正确性。
-	SnowflakeCacheDir string `json:"SnowflakeCacheDir,default=../../run/snowflake"`
 
 	// Schema 决定启动期是建表(Up)还是只核对(Plan)。整段不写 = Up(dev 默认)。
 	Schema SchemaConf `json:",optional"`

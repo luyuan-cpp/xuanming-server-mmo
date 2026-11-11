@@ -119,6 +119,22 @@ message EnterSceneRequest {
   uint64 login_generation = 12;
   // 账号目录放行的所有权修订；完整参与幂等指纹，不能用新买家的修订替旧路由补权。0拒绝。
   uint64 owner_revision = 13;
+  // 托管落点(docs/design/player-connection-lost-hold.md §4.2):没有客户端在场的换场景,只由 scene 节点替离线托管中的
+  // 角色发(组队跟随换图、跨节点交接的重发)。服务端内部字段,客户端不可见。
+  // - 置位时 gate_id / gate_instance_id 必须为空;session_id / login_generation 填断开的那次登录(角色的登录身份),
+  //   只作落点会话身份裁决与目标节点的角色登记,不绑定、不推送。
+  // - scene_manager 在提交点之后不发 gate 路由,改为直接给目标 scene 节点发 PlayerHostedPlacementEvent
+  //   (proto/common/event/player_placement_event.proto),broker ACK 是提交点,失败与推 gate 路由失败同一套回滚。
+  // - 只限本 zone:跨 zone 没有 gate 可重定向,预检时拒绝。
+  // - 进 request_id 指纹(业务语义);proto3 不序列化 false,不带它的请求指纹与加字段前逐字节相同。
+  bool hosted_placement = 14;
+  // 疏散(docs/design/scene-node-planned-drain.md §4.4):源 scene 节点要把玩家从自己身上搬走 —— 计划排空、
+  // 整节点疏散、频道缩容与归属对账的单场景排空。只由 scene 节点的改派出口置位,服务端内部字段,客户端不可见。
+  // - scene_id / scene_conf_id 是去向提示:原频道(副本为 0)与原地图(副本为 0)。
+  // - scene_manager 按「原频道 → 同图最空频道 → 默认大世界」依次解析,一律排除 location 记的源节点与排空中的节点;
+  //   都没有就回 ErrNoAvailableNode。
+  // - 进 request_id 指纹(业务语义);疏散请求不带 request_id(理由见 scene 侧 SendEmergencyRelocateEnterScene)。
+  bool evacuation = 15;
 }
 
 message EnterSceneResponse {

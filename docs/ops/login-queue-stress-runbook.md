@@ -24,9 +24,11 @@ Queue:
   AdmitTTL: 60s
   DefaultRetryAfterMs: 2000
   SoftCapMultiplier: 1.5
-  ZoneCapacityOverride:
-    "1": 1000   # 强制 1000,5000 robot 一定会触发排队
 ```
+
+区容量不在 login.yaml 里(2026-11-10 起只认网关区服目录 `zone_config.capacity`)。压测前把 zone 1 的容量改小,让 5000 个 robot 一定触发排队:
+GET 一次 `/admin/zones/1` 拿整行,把 `capacity` 改成 `1000` 再整行 `PUT /admin/zones/1`(PUT 要给全每个业务字段)。本区网关至多 5 秒写到 etcd,
+login 至多再 2 秒读到;login 日志 `[ZonePolicy] zone 1 policy changed: capacity=1000` 出现后再起 robot。压完改回原值。
 
 > **合入门槛(2026-10-15)**:在 `docs/handoff/launch-readiness-20261013/spec_G4b.md` §7「合入门槛」的三项都满足、`docs/PROGRESS.md` 有记录之前,上面的 `Queue.Enabled: true` 只在本机验证时用(清门槛所需的真实 Redis 冒烟即下方「验证清单」第 2、3 步与 `spec_G4b-G.md` §8.4),写在 scratchpad 里的配置副本上,不改 `go/login/etc/login.yaml`。部署环境一律不打开排队:K8s 由 `tools/scripts/k8s_deploy.ps1` 的 `$script:LoginQueueMergeGateCleared` 机械拦截(未清时各档位排队都关、`-LoginQueue on` 拒绝),手改 ConfigMap 或 login.yaml 的 `Queue.Enabled` 同样违规。
 
@@ -85,11 +87,11 @@ Queue:
 [stats 60s] ... q_entered=4080 q_admitted=20 q_avg_wait=22s q_max_rank=4078  ← admitted 不涨
 ```
 **排查**:
-- **先看是不是正常回压**:`login_queue_admitted_inflight` 与该 zone 各 gate 上报的 `PlayerCount` 之和是否已到 capacity(`ZoneCapacityOverride`)。到了就是正常回压(G4b-G 起取走后占位再留一段——2026-10-15 起 20s,此前 15s——之后名额转给在线数,见上方「放行节奏」),不往下查
+- **先看是不是正常回压**:`login_queue_admitted_inflight` 与该 zone 各 gate 上报的 `PlayerCount` 之和是否已到 capacity(看 `login_queue_capacity`:2026-11-10 起它是区服目录的 `zone_config.capacity` 再按在接客的 gate 到水位(90%)的承载封顶之后的值,gate 台数不够时小于目录的值,见 `login_queue_configured_capacity` 与告警 `LoginQueueCapacityLimitedByGates`)。到了就是正常回压(G4b-G 起取走后占位再留一段——2026-10-15 起 20s,此前 15s——之后名额转给在线数,见上方「放行节奏」),不往下查
 - `redis-cli ZCARD queue:zone:1` → 应该单调下降。不降 = ZPOPMIN 没在跑
 - 查 login 日志 `[loginqueue] elected dispatcher leader zone=<id>` 是否存在 + `[loginqueue] zone=1 admitted=N` 是否持续
 - 无 leader 日志 = `dispatcher:lock:login_queue:zone:<id>` 抢锁失败,看 Redis 连接。多 zone 共用 Redis 时每个 zone 各有一把锁(2026-10-12 G1b 起),某个 zone 没有锁键 = 该 zone 没有打开 Queue 的 login 副本
-- 有 leader 但无 admitted 日志,且在线 + 在途 < capacity(已按第一条排除正常回压)= `FreeSlots` 永远返回 0,查 `GateWatcher.FetchAllNodes()` 和 ZoneCapacityOverride
+- 有 leader 但无 admitted 日志,且在线 + 在途 < capacity(已按第一条排除正常回压)= `FreeSlots` 永远返回 0,查 `GateWatcher.FetchAllNodes()` 和区服目录的容量(`login_queue_configured_capacity`;为 0 说明读不到区服策略,看 `login_zone_policy_refresh_total` 与本区网关是否在发布)
 - 有 leader、日志里持续出现 `[loginqueue] freeSlots zone=<id> queueLen=<n> err=no gates for zone` = 有人在排,但本 zone 一台可用 gate 都没有(G1b 之前这种情况是静默跳过的)
 - 有 leader、日志里持续出现 `[loginqueue] queueLen zone=<id> err=...` = 读不出队列键(WRONGTYPE / ACL / 单键异常),锁照常续期但每拍都不出队(2026-10-14 之前这种情况零日志)
 - 日志里有 `goroutine_panic` 且 `point=login.queue_dispatcher_term`(指标 `safego_panic_total{point="login.queue_dispatcher_term"}` 在涨)= 出队路径有代码缺陷。该任期已放锁,本副本退避 TTL/3 后再参选,同 zone 备机可以接手;每个副本都 panic 就是每轮当选即 panic,队列照样不出,按栈修代码
@@ -128,7 +130,7 @@ gate 日志:VerifyGateToken 突然出现大量 token 过期 / 玩家被踢
 **排查**:
 - 看成员:`redis-cli ZRANGE admitted:zset:zone:1 0 -1 WITHSCORES`。分数是占位到期的 Unix 毫秒,`fast:` 开头的是快速通道占位,其余是排队放行的 queueId。
 - 只读统计未到期成员:先用 `redis-cli TIME` 取 Redis 当前 Unix 毫秒,再 `redis-cli ZCOUNT admitted:zset:zone:1 '(<当前毫秒>' +inf`。裸 `ZCARD` 可能包含尚未被下一次容量查询清掉的过期成员。
-- 对照 `login_queue_admitted_inflight`、gate 在线数与 `ZoneCapacityOverride`;在途数还包含 fast-path 的 `fast:<uuid>` 成员,没有固定的 `<50` 正常阈值:稳态约等于交票速率 × 20s(加上等轮询的放行数;2026-10-15 之前是 × 15s)。长时间顶在 `capacity − online` 而 gate 人数不涨 = 客户端拿了放行没去连 gate。
+- 对照 `login_queue_admitted_inflight`、gate 在线数与 `login_queue_capacity`;在途数还包含 fast-path 的 `fast:<uuid>` 成员,没有固定的 `<50` 正常阈值:稳态约等于交票速率 × 20s(加上等轮询的放行数;2026-10-15 之前是 × 15s)。长时间顶在 `capacity − online` 而 gate 人数不涨 = 客户端拿了放行没去连 gate。
 - 超发时检查占位键是否被删 / 淘汰、过早到期、login 与 Redis 的时钟偏差以及旧二进制是否仍在运行。占位偏高通常会压低放行量,不能直接归因为超发。
 
 **反方向(少放:在途偏高、放不出人)**:
@@ -214,13 +216,13 @@ cd go/login && go test ./internal/logic/pkg/loginqueue/... -count=1
 
 ### 2. 单 robot 冒烟(zone 不饱和)
 ```bash
-# RobotCount=5, ZoneCapacityOverride: "1": 100
+# RobotCount=5, zone_config 里 zone 1 的 capacity = 100(改法见上文「区容量不在 login.yaml 里」)
 # 期望:5 个 robot 全部 fast-path 直接进,q_entered=0
 ```
 
 ### 3. 多 robot 冒烟(zone 饱和)
 ```bash
-# RobotCount=200, ZoneCapacityOverride: "1": 100
+# RobotCount=200, zone_config 里 zone 1 的 capacity = 100
 # 期望:前 100 fast-path,后 100 入队(q_entered=100)。q_admitted 的涨幅 ≤ 容量 − 在线:
 #       robot 保持在线时不涨属正常(先核对在线 + 在途是否已到 capacity),robot 下线后每腾出一个名额放行一个。
 #       G4b-G(2026-10-13)起不再写死「100s 内涨到 100」,见上方「放行节奏」
@@ -251,7 +253,7 @@ cd go/login && go test ./internal/logic/pkg/loginqueue/... -count=1
 
 ## Grafana / Prometheus 指标(已接入)
 
-login 进程通过 go-zero 内置 `/metrics` endpoint(`login.yaml` 第 119 行 `Prometheus` 配置块)暴露下列 6 个指标:
+login 进程通过 go-zero 内置 `/metrics` endpoint(`login.yaml` 第 119 行 `Prometheus` 配置块)暴露下列 8 个指标(后两个 2026-11-10 起):
 
 | 指标 | 类型 | 标签 | 用途 |
 |---|---|---|---|
@@ -261,6 +263,8 @@ login 进程通过 go-zero 内置 `/metrics` endpoint(`login.yaml` 第 119 行 `
 | `login_queue_admit_total` | Counter | zone | dispatcher 累计 admit 数,`rate(...[1m])` = drain QPS |
 | `login_queue_expired_total` | Counter | zone, reason | reason ∈ `bad_signature` / `ttl` / `meta_gone` / `queue_disabled` / `admit_window_passed`(2026-10-15 起:放行槽已被取走或已按 AdmitTTL 过期后再查,回 EXPIRED;此前这类查询回名次 0、最长卡 1h。稳态里它主要来自客户端取票后的重复查询,偏高说明放行后没人来取) |
 | `login_queue_dispatcher_is_leader` | Gauge | pod, zone | 1=leader,0=standby;`sum by (zone) (...) == 1` 是稳态不变量(每 zone 一个 leader)。leader 每拍重发 1、备机每轮抢锁失败重发 0(2026-10-14 起),指标开关打开前写丢的样本下一拍就补上。**序列缺失不等于 0**:整 zone 没有副本上报时 `sum by (zone)` 根本不出这一组,发现不了整 zone 缺席,见下方 `absent` 告警 |
+| `login_queue_capacity` | Gauge | zone | `FreeSlots` 实际用的区容量:区服目录的 `zone_config.capacity`(读不到区服策略时按软上限)再按在接客的 gate 到自报 `max_connections` 90% 的承载封顶。每次算容量时写(快速通道每次 AssignGate、dispatcher 每个非空拍),排队关着时没有序列 |
+| `login_queue_configured_capacity` | Gauge | zone | 区服目录给本 zone 的容量,0 = 读不到区服策略。大于 `login_queue_capacity` = gate 台数装不下目录的容量,排队比配置的早开始拦人,持续 10 分钟报 `LoginQueueCapacityLimitedByGates`(`deploy/k8s/login-alerts.yaml`) |
 
 > (2026-10-18 补注,`login_queue_expired_total` 与 `login_queue_admit_total` 两行;已落码,未编译、未测试,待 Codex 验证)
 > - **新增 reason `queue_gone`。** 含义:meta 在、没有放行、又不在队列。来源有三个:整个 zone 空闲超过 `QueueEntryTTL` 后队列键先到期;人工 `ZREM` / `DEL` 队列键;排队开着时混跑新旧版。
@@ -290,7 +294,7 @@ absent(login_queue_dispatcher_is_leader{zone="1"})
 # 队列在涨但 admit 不涨(dispatcher 卡死)。
 # zone 满员(在线 + 在途 ≥ capacity)时这条同样成立,属正常回压(G4b-G 起取走后占位再留 20s(10-15 前 15s),之后名额转给在线数);
 # 判卡死要再加「在途 + 在线 < capacity」。上面 6 个排队指标里没有在线数与 capacity,这个条件先人工核对
-# gate PlayerCount 与 ZoneCapacityOverride。
+# gate PlayerCount 与 login_queue_capacity。
 deriv(login_queue_size[5m]) > 0 and rate(login_queue_admit_total[5m]) == 0
 
 # p99 等待超过 5 分钟

@@ -34,6 +34,9 @@ dev obs-down      # 停掉上面的观测台
 打上 `job / service / zone / instance / level` 标签送进 Loki,Grafana 预置了数据源和看板「游戏服务日志总览」。
 服务本身不用改代码(Java 只加了一段 `logging.structured` 配置)。
 详细的接入方式、标签约定、常用查询和排障见 [grafana-loki-local-logs.md](grafana-loki-local-logs.md)。
+2026-11-11 起三种语言的 `trace_id` / `span_id` / `player_id` 进了结构化元数据,看板顶部多了这两个过滤框:
+一条 trace_id 能查到一次请求经过的各服务的行(网关的登录请求从 Java 网关到 login;进游戏后客户端的一条消息从 gate 到 scene),
+按 player_id 能串起一个玩家在各服务的行(设计见 [distributed-tracing.md](../design/distributed-tracing.md))。
 
 ## Production (K8s)
 
@@ -105,11 +108,23 @@ Container runtime handles log rotation automatically:
   由 `k8s_deploy.ps1` 从这里镜像,默认 2 = INFO(2026-10-22 前写死 1 = DEBUG)。只在启动时读一次:上面 Key Practices 第 4 条说的
   config reload 与环境变量对 C++ 都不适用(`MUDUO_LOG_DEBUG` 会被配置覆盖)。临时看 DEBUG 的做法、预检拦截与重启条件见
   [演练手册](cross-zone-failure-test-runbook.md) §3.1 第 7 条。
+- **集群内 Loki 的两种形态(2026-11-10 落码,未编译、未在集群上验证;[去单点总纲](../design/no-single-node-horizontal-scaling-20261001.md) §10)**:
+  `k8s_deploy.ps1 -LokiReplicas` 选,只认 1 和 3,缺省按档位(非 dev 或非 custom 取 3)。
+  - 1:`infra/loki.yaml`,单副本加本地盘,只给 dev、kind。
+  - 3:`infra/loki-ha.yaml`,单体模式 3 副本(StatefulSet,`-target=all`),memberlist 组环、`replication_factor: 3`,
+    日志块与 TSDB 索引在共享 S3,每个 Pod 的 WAL 在自己的 PVC,PDB `minAvailable: 2`。Service 名和推送地址不变(`loki.<infra>:3100`),sidecar 和 Grafana 不用改。
+  - 对象存储:生产只接外部 S3 兼容存储(`-LokiS3Endpoint host:port`、`-LokiS3Bucket`、`-LokiS3Region`、`-LokiS3ForcePathStyle`;
+    访问密钥经环境变量 `MMORPG_LOKI_S3_ACCESS_KEY_ID`、`MMORPG_LOKI_S3_SECRET_ACCESS_KEY` 注入成 Secret)。云上用云厂商的对象存储,自建机房用平台层的 Rook-Ceph RGW。
+    dev、kind 上验证 3 副本用 `-LokiS3DevFixture`(单进程 SeaweedFS,数据在 emptyDir,不进 staging、prod)。
+  - 1 → 3 要 `-ConfirmLokiTopologyChange`,旧 PVC 里的日志不迁移;3 → 1 拒绝。细节见 `deploy/k8s/README.md`「Loki:单副本与单体模式 3 副本」。
 - **Go / Java 服务 = 仍是容器 stdout,尚未采集**。集群里**还没有**读 `/var/log/pods` 的 DaemonSet,这条路属于**未做**;
   现在只能 `kubectl logs` 看,Pod 重建即丢。
 - **这套方案采不到的东西**(别以为都进了 Loki):容器 stdout/stderr 上的 gRPC / abseil / librdkafka 输出,
   以及崩溃现场文本(glibc 断言、`terminate called`、abort 栈)—— 它们不经 muduo,不落共享卷。
   Loki 里的 `level="fatal"` 只覆盖代码里显式 `LOG_FATAL` 的分支。
+- **链路关联字段(2026-11-11)**:本机 Alloy 已把 `trace_id` / `span_id` / `player_id` 提成结构化元数据;
+  集群里的 C++ sidecar 规则**还没加**([distributed-tracing.md](../design/distributed-tracing.md) §9.2,改它会滚动重启 C++ 节点),
+  Go / Java 在集群里本来就没采。在那之前集群里按 trace 查用行内搜索 `|= "trace_id=<32 位>"`,C++ 行尾后缀里有原文。
 - **未部署**:Fluentd / Filebeat / Elasticsearch / Kibana 本项目一个都没有。
 - **本地文件只留最近一小段**:业务容器的启动命令里带一个每 5 分钟跑一次的清理循环,把
   `/app/bin/logs/cpp_nodes/*.log` 按时间排序后只留最近 8 个(≈64MiB)—— muduo 每 8MiB 滚一个新文件且**从不删旧文件**。

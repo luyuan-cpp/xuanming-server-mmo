@@ -1,0 +1,165 @@
+{
+  "scripts": [
+    {
+      "schema_version": 1,
+      "script_id": 1,
+      "name": "四职业·集火控速",
+      "description": "丹心保命,破军点名集火,玄霄跟着破军的目标打,第四职业先给最快的敌人减速;宝宝跟集火。",
+      "roles": [
+        {
+          "role_id": 1, "order": 10, "name": "丹心·治疗", "actor_type": "BATTLE_ACTOR_TYPE_PLAYER", "class_id": 3,
+          "rules": [
+            {
+              "priority": 10, "action": "BATTLE_ACTION_SKILL", "skill_id": 1305,
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ALLY", "order": "BATTLE_SCRIPT_ORDER_HP_RATIO_LOWEST",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_HP_BELOW", "p1": 3000 } ] },
+              "note": "队友气血低于三成:先急救最危险的"
+            },
+            {
+              "priority": 20, "action": "BATTLE_ACTION_SKILL", "skill_id": 1302,
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ALLY", "order": "BATTLE_SCRIPT_ORDER_HP_RATIO_LOWEST",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_HP_BELOW", "p1": 7000 } ] },
+              "note": "有队友气血低于七成:群疗"
+            },
+            {
+              "priority": 30, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_CLAIMED_BY_ROLE", "p1": 2 } ] },
+              "note": "没人要治:跟着破军集火"
+            },
+            {
+              "priority": 40, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENGINE_PICK" }
+            }
+          ]
+        },
+        {
+          "role_id": 2, "order": 20, "name": "破军·点名", "actor_type": "BATTLE_ACTOR_TYPE_PLAYER", "class_id": 1,
+          "rules": [
+            {
+              "priority": 10, "action": "BATTLE_ACTION_SKILL", "skill_id": 1104,
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY", "order": "BATTLE_SCRIPT_ORDER_HP_HIGHEST",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_IS_ACTOR_TYPE", "p1": 1 },
+                                       { "kind": "BATTLE_SCRIPT_FILTER_HAS_BUFF", "p1": 11104, "negate": true } ] },
+              "note": "PVP:给还没被削的敌方玩家减物攻(怪物物攻为 0,不放)"
+            },
+            {
+              "priority": 20, "action": "BATTLE_ACTION_SKILL", "skill_id": 1102,
+              "conditions": [ { "kind": "BATTLE_SCRIPT_COND_ENEMY_COUNT_AT_LEAST", "p1": 3 } ],
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY", "order": "BATTLE_SCRIPT_ORDER_HP_LOWEST" },
+              "note": "敌人三个以上:群攻,主目标取血最少的"
+            },
+            {
+              "priority": 30, "action": "BATTLE_ACTION_SKILL", "skill_id": 1101,
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY", "order": "BATTLE_SCRIPT_ORDER_HP_LOWEST" },
+              "note": "点杀血最少的"
+            },
+            {
+              "priority": 40, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY", "order": "BATTLE_SCRIPT_ORDER_HP_LOWEST" }
+            }
+          ]
+        },
+        {
+          "role_id": 3, "order": 30, "name": "玄霄·跟打", "actor_type": "BATTLE_ACTOR_TYPE_PLAYER", "class_id": 2,
+          "rules": [
+            {
+              "priority": 10, "action": "BATTLE_ACTION_SKILL", "skill_id": 1202,
+              "conditions": [ { "kind": "BATTLE_SCRIPT_COND_ENEMY_COUNT_AT_LEAST", "p1": 3 } ],
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_CLAIMED_BY_ROLE", "p1": 2 } ] },
+              "note": "敌人三个以上:以破军的目标为主目标放雷阵"
+            },
+            {
+              "priority": 20, "action": "BATTLE_ACTION_SKILL", "skill_id": 1201,
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_CLAIMED_BY_ROLE", "p1": 2 } ] },
+              "note": "组合:跟破军打同一个"
+            },
+            {
+              "priority": 30, "action": "BATTLE_ACTION_SKILL", "skill_id": 1201,
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY", "order": "BATTLE_SCRIPT_ORDER_HP_LOWEST" }
+            },
+            {
+              "priority": 40, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY", "order": "BATTLE_SCRIPT_ORDER_HP_LOWEST" }
+            }
+          ]
+        },
+        {
+          "role_id": 4, "order": 40, "name": "控速", "actor_type": "BATTLE_ACTOR_TYPE_PLAYER", "class_id": 4,
+          "rules": [
+            {
+              "priority": 10, "action": "BATTLE_ACTION_SKILL", "skill_id": 1404,
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY", "order": "BATTLE_SCRIPT_ORDER_SPEED_HIGHEST",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_HAS_BUFF", "p1": 11404, "negate": true } ] },
+              "note": "先给最快、还没被减速的敌人减速"
+            },
+            {
+              "priority": 20, "action": "BATTLE_ACTION_SKILL", "skill_id": 1401,
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_CLAIMED_BY_ROLE", "p1": 2 } ] }
+            },
+            {
+              "priority": 30, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY", "order": "BATTLE_SCRIPT_ORDER_HP_LOWEST" }
+            }
+          ]
+        },
+        {
+          "role_id": 5, "order": 50, "name": "宝宝", "actor_type": "BATTLE_ACTOR_TYPE_PET",
+          "rules": [
+            {
+              "priority": 10, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_CLAIMED_BY_ROLE", "p1": 2 } ] }
+            },
+            {
+              "priority": 20, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENGINE_PICK" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "script_id": 2,
+      "name": "首领·先打治疗",
+      "description": "首领盯住气血比例最低的丹心,小怪跟着首领打同一个人。",
+      "roles": [
+        {
+          "role_id": 1, "order": 10, "name": "首领", "actor_type": "BATTLE_ACTOR_TYPE_MONSTER", "monster_id": 16,
+          "rules": [
+            {
+              "priority": 10, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY", "order": "BATTLE_SCRIPT_ORDER_HP_RATIO_LOWEST",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_IS_CLASS", "p1": 3 } ] }
+            },
+            {
+              "priority": 20, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY", "order": "BATTLE_SCRIPT_ORDER_HP_LOWEST" }
+            }
+          ]
+        },
+        {
+          "role_id": 2, "order": 20, "name": "小怪", "actor_type": "BATTLE_ACTOR_TYPE_MONSTER",
+          "rules": [
+            {
+              "priority": 10, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENEMY",
+                          "filters": [ { "kind": "BATTLE_SCRIPT_FILTER_CLAIMED_BY_ROLE", "p1": 1 } ] }
+            },
+            {
+              "priority": 20, "action": "BATTLE_ACTION_ATTACK",
+              "target": { "side": "BATTLE_SCRIPT_TARGET_ENGINE_PICK" }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    { "match_mode": 0, "battle_config_id": 3, "side": "BATTLE_SCRIPT_SIDE_MONSTER", "script_id": 2 }
+  ]
+}

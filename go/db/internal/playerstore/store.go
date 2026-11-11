@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	storepb "proto/player_store"
 )
@@ -57,6 +58,8 @@ type Store struct {
 	db       *sql.DB
 	knownGen uint32
 	limits   Limits
+	// now 给审计发件箱取写入时刻与快照时间(audit_outbox.go);单测可替换。
+	now func() time.Time
 }
 
 // New 构造 Store。knownGen 是本进程认识的最高世代(persistschema.Gen)。
@@ -73,7 +76,10 @@ func New(db *sql.DB, knownGen uint32, limits Limits) (*Store, error) {
 		return nil, fmt.Errorf("playerstore: MaxRowBytes %d cannot fit %d rows into a claim response of %d bytes",
 			limits.MaxRowBytes, dataKinds, MaxClaimResponseBytes)
 	}
-	return &Store{db: db, knownGen: knownGen, limits: limits}, nil
+	if err := checkAuditBudget(limits); err != nil {
+		return nil, err
+	}
+	return &Store{db: db, knownGen: knownGen, limits: limits, now: time.Now}, nil
 }
 
 // VerifySchema 启动时核对 player_store 的列都在。基线已跑过的库上 cmd/migrate 建不出新表,
@@ -105,10 +111,17 @@ func (s *Store) VerifySchema(ctx context.Context) error {
 		return fmt.Errorf("playerstore: player_store is missing columns %v; on a database whose baseline already ran, "+
 			"cmd/migrate cannot create the table, rebuild the database (the project has not launched)", missing)
 	}
-	return nil
+	// 发件箱和存档同一个事务写(audit_outbox.go),缺表同样让存盘一直结果未知。
+	return verifyAuditOutboxSchema(ctx, s.db)
 }
 
-// validateSave 是进事务前的确定性拒绝,不碰库。返回 UNSPECIFIED 表示通过。
+// validateSave 是进事务前的拒绝,不碰库。返回 UNSPECIFIED 表示通过。
+//
+// INVALID 只给请求本身坏了的情形(身份为空、行种为 0 或负数、重复),scene 收到后按确定性拒绝处置,退出时不再等这一笔。
+// 本二进制不认识的正数行种不是请求坏了:行种的号只增不复用,scene 也发不出它自己不认识的号,所以它只会来自
+// 和本 go/db 版本不一致的 scene(发布顺序不对,或回退了 go/db)。这时回可重试的 SCHEMA_TOO_NEW,scene 保留实体、
+// 等版本对齐后照常提交。回 INVALID 的话,scene 下线时不存盘就销毁,认领以来的进度全丢(数据覆写审计 r2-ps#11)。
+// 这一条不能只靠认领时的世代判定兜住:go/db 新旧副本混跑时,在新副本上认领的玩家,下一笔存盘可能落到旧副本。
 func (s *Store) validateSave(req *storepb.SavePlayerRequest) storepb.SavePlayerResult {
 	if req.GetPlayerId() == 0 || req.GetOwnerEpoch() == 0 || req.GetSaveSeq() == 0 ||
 		len(req.GetInstanceId()) == 0 || len(req.GetInstanceId()) > maxInstanceBytes {
@@ -118,8 +131,11 @@ func (s *Store) validateSave(req *storepb.SavePlayerRequest) storepb.SavePlayerR
 	total := 0
 	for _, row := range req.GetRows() {
 		kind := int32(row.GetKind())
-		if _, known := storepb.PlayerStoreKind_name[kind]; !known || kind == ownerKind {
+		if kind <= ownerKind { // 0 是写权行,负数不是任何版本会发的号
 			return storepb.SavePlayerResult_SAVE_PLAYER_INVALID
+		}
+		if _, known := storepb.PlayerStoreKind_name[kind]; !known {
+			return storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW
 		}
 		if _, duplicate := seen[kind]; duplicate {
 			return storepb.SavePlayerResult_SAVE_PLAYER_INVALID
@@ -158,6 +174,10 @@ func (s *Store) Save(ctx context.Context, req *storepb.SavePlayerRequest) (*stor
 	if row != nil {
 		resp.RowOwnerEpoch, resp.RowSaveSeq = row.ownerEpoch, row.saveSeq
 	}
+	if result == storepb.SavePlayerResult_SAVE_PLAYER_EQUAL {
+		// 同序号意味着同一份请求之前已经提交过,那次提交在同一个事务里写过发件箱(审计发件箱设计 §6.1)。
+		resp.AuditOutboxWritten = true
+	}
 	if result != storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED {
 		return resp, nil
 	}
@@ -165,10 +185,17 @@ func (s *Store) Save(ctx context.Context, req *storepb.SavePlayerRequest) (*stor
 	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 		return nil, fmt.Errorf("playerstore: write player %d: %w", req.GetPlayerId(), err)
 	}
+	// 随这一笔交来的审计记录与脏行同一个事务写进发件箱:要么一起提交,要么一起没有(audit_outbox.go)。
+	audit, err := writeAuditOutbox(ctx, tx, req, s.now())
+	if err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("playerstore: commit player %d: %w", req.GetPlayerId(), err)
 	}
+	audit.observe()
 	resp.RowOwnerEpoch, resp.RowSaveSeq = req.GetOwnerEpoch(), req.GetSaveSeq()
+	resp.AuditOutboxWritten = true
 	return resp, nil
 }
 
@@ -191,7 +218,7 @@ func (s *Store) LoadAndClaim(ctx context.Context, req *storepb.LoadAndClaimReque
 	if err != nil {
 		return nil, err
 	}
-	result := decideClaim(row, req.GetOwnerEpoch(), req.GetInstanceId(), req.GetBinarySchemaGen())
+	result := decideClaim(row, req.GetOwnerEpoch(), req.GetInstanceId(), req.GetBinarySchemaGen(), s.knownGen)
 	resp := &storepb.LoadAndClaimResponse{Result: result}
 	if row != nil {
 		resp.OwnerEpoch, resp.SaveSeq, resp.SchemaGen = row.ownerEpoch, row.saveSeq, row.schemaGen

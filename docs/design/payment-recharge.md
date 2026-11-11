@@ -309,7 +309,7 @@ type Channel interface {
     Query(ctx context.Context, ref TxnRef) (VerifiedTxn, error)
     // 谷歌 consume、华为消耗;微信是推送回包失败后的补通知(待核实)。
     Finalize(ctx context.Context, txn VerifiedTxn) error
-    // req.IdempotencyKey 由交易键确定性派生(微信 out_refund_no、谷歌按 orderId);
+    // req.IdempotencyKey 由被退那笔付款的交易键确定性派生(微信 out_refund_no、谷歌按 orderId),一笔付款一个键,不按订单;
     // 调用前先按它查退款状态:已退款或退款处理中,直接返回结果,不再发起。
     // 苹果、微信小游戏、抖音返回 ErrRefundUnsupported;谷歌 orders.refund 在 R2 核实前默认 revoke=false。
     Refund(ctx context.Context, req RefundRequest) (RefundResult, error)
@@ -369,22 +369,22 @@ type VerifiedTxn struct {
        - 请求是 `/unbound` 时:建单并绑定,订单直接为 REVERSED,写 `entitled=0` 待办。
        - 以后的撤回仍按"已付、已绑定"处理。
    - **其它 SKU**(官方物品、寄售挂单):
-     - 订单已被别的守卫行绑定,或金额不符:**不回 409**。同一事务里写异常付款行和退款待办,回 200,`code=ABNORMAL_REFUND`。
+     - 订单已被别的守卫行绑定(重复付款),或金额、币种与订单冻结值不符:**不回 409**。同一事务里写一条不绑定订单的守卫行(`order_sn` 为 NULL)、一行异常付款和一条同原因的退款待办,回 200,应答 `refundReason` 为 `DUPLICATE_PAYMENT` / `AMOUNT_MISMATCH` / `CURRENCY_MISMATCH`(已落码,见 §8.2.1)。
      - 撤销:只更新守卫行的修订号与事实。订单已经是 REFUND_PENDING 或 REFUNDED 的不改成 REVERSED,也不写 `entitled=0` 待办。已发货订单的冲回交给寄售计划或官方物品的专门流程。
 2. **修订号相等**:幂等,回 200 + 当前状态。
 3. **修订号更小**:回 200 + 当前状态。
 4. **奇偶与事实不符**:回 400。唯一键冲突按约束分别映射成 `TXN_USED` 或 `DIFFERENT_RECEIPT`。
 
-**应答体**:`{code?, revision, fact, orderId, orderState, held}`。go/payment 按下表处理:
+**应答体**:`{order, refundReason, code?, revision, fact, held}`。`order` 是订单视图(含 orderId 与 state),`refundReason` 说明这笔钱是否已排进退款、为什么;这两项 2026-11-10 已落码(`CommerceApi.PaymentOutcome`),其余随 V3 加。本稿原用一个 `code=ABNORMAL_REFUND` 标异常付款,适配器分不出重复付款与金额 / 币种不符,改为按原因给值。go/payment 按下表处理:
 
 | 应答 | go/payment 本地动作 |
 |---|---|
 | 200,`revision ≥ 本次请求的 revision` | `mall_synced_revision = max(…)`;不覆盖本地 fact;`held=true` 时记本地 held 标记(供指标与 ListManual) |
 | 200,`revision < 本次请求的 revision` | 告警(不应出现),继续推进 |
-| 200 + `ABNORMAL_REFUND` | `resolution=ABNORMAL_REFUND`;不进 EXTRA,不计合规已付;等退款待办 |
+| 200 且 `refundReason` 非空 | `resolution=ABNORMAL_REFUND`;不进 EXTRA,不计合规已付;等退款待办。付款当时只会给出 `CANCELLED_LATE`(订单已取消,这笔随订单退)、`DUPLICATE_PAYMENT`、`AMOUNT_MISMATCH`、`CURRENCY_MISMATCH`;后两种说明渠道实收与订单冻结值对不上,另行告警 |
 | `DIFFERENT_RECEIPT` | 充值 SKU 改走 EXTRA |
 | `STATE_CONFLICT` | 退避重试 |
-| `TXN_USED` / `AMOUNT_MISMATCH` | `REJECTED_FINAL` + 原因,进人工 |
+| `TXN_USED` | `REJECTED_FINAL` + 原因,进人工 |
 | `NONCE_REPLAY` | 换新 nonce 立即重试 |
 | **400 或未知 4xx** | `REJECTED_FINAL` + 原因,告警进 ListManual,**不重试**,由 RetryManual 处理 |
 | 超时 / 5xx / 网络错误 | 退避重试 |
@@ -437,7 +437,8 @@ type VerifiedTxn struct {
 - 新增 `commerce_delivery_receipt unique(order_sn, revision)`;
 - 新增 `commerce_refund_intent / commerce_refund_receipt unique(channel, transaction_id)`;
 - 新表 `commerce_sku_currency_grant / commerce_order_currency_grant / commerce_sku_unlimited / commerce_close_intent` 加入存在性核对;
-- `commerce_payment_receipt` 保留 `unique(channel, transaction_id)` 和 `unique(order_sn)`(order_sn 可空)。
+- `commerce_payment_receipt` 保留 `unique(channel, transaction_id)` 和 `unique(order_sn)`(order_sn 可空);
+- `commerce_abnormal_payment unique(channel, transaction_id)`,列核对含 `reason`(2026-11-10 已落码,见第 1 点)。
 
 这样 V3 程序在 V2 库上会因缺列拒启,V2 程序在 V3 库上会因缺唯一键拒启。理由见 D-17.1;Java 仓 game-mall 放到 R4。
 
@@ -447,7 +448,16 @@ type VerifiedTxn struct {
    - `commerce_delivery_intent`:主键 `(order_sn, revision)`,加 `entitled`、`trade_order_id`、`attempts`、`next_poll_ms`;状态集合 `PENDING / ACCEPTED / HELD / SUPERSEDED / QUARANTINE / DENIED / 终态`。
    - `commerce_delivery_receipt`:加 revision,唯一键 `(order_sn, revision)`,state 取 `DELIVERED / VOIDED / MANUAL`。
    - `oms_order`:加单调递增的 `version` 列,每次状态变化 +1。
-   - 退款待办与退款回执:以被退那笔付款的 `(channel, transaction_id)` 为主键,带 `order_sn`、`source`。**2026-11-05 已落码(未编译,第一轮数据审计 §4 第 19 条)**:来源现有 `CANCELLED_LATE / DELIVERY_REJECTED / DUPLICATE_PAYMENT`,本稿原称 `ABNORMAL_SECOND` 的「非充值订单第二笔钱」即 `DUPLICATE_PAYMENT`,记成 `order_sn` 为 NULL 的付款回执加 `commerce_duplicate_payment` 一行;待办不另存金额币种,取那笔付款回执;回执表主键 `(channel, payment_transaction_id)`,退款流水 `(channel, transaction_id)` 另有唯一键。仍待做:`ABNORMAL_AMOUNT / OVER_LIMIT / HELD_DENIED / ADMIN` 来源与 `lease_until`。
+   - **异常付款**(已落码,未编译):钱进了渠道、却不能算作订单的付款,不回 409,同一事务里写三行:
+     - `commerce_payment_receipt` 一行,`order_sn` 为 NULL(不绑定订单),与绑定的回执共用交易键主键,一笔交易全局只记一次;金额币种是渠道实收值;
+     - `commerce_abnormal_payment` 一行:冲的是哪张订单、`reason`;每条 `order_sn` 为 NULL 的回执恰有一行;
+     - 一条退款待办,`source` 与 `reason` 相同;订单状态、库存、交付意图都不动。
+
+     `reason` 现有三种。`DUPLICATE_PAYMENT` 是订单已由另一笔付清,2026-11-05 落码,第一轮数据审计 §4 第 19 条;本稿原称 `ABNORMAL_SECOND` 的「非充值订单第二笔钱」即此。`AMOUNT_MISMATCH` / `CURRENCY_MISMATCH` 是金额或币种与订单冻结值不符,2026-11-10 落码,第二轮数据审计评审 R3;本稿原称的 `ABNORMAL_AMOUNT` 拆成这两个,因为适配器要分得清是金额错还是币种错。判定顺序:交易键已记过走重放;币种不同记 `CURRENCY_MISMATCH`(不同币种的金额不可比,不再比金额);币种同、金额不同记 `AMOUNT_MISMATCH`;金额币种都对、订单已付记 `DUPLICATE_PAYMENT`。金额币种先于订单状态判定,对不上的钱在任何状态下都不绑定订单:未付单仍待付款、保留预占,已取消单不转 REFUND_PENDING。
+   - **重放**:同一交易键、同一订单、同一金额币种,回原结论(`refundReason` 取这笔付款的退款待办),不写任何东西;报给别的订单,或改了金额币种,回 409。同一订单的并发回调在订单行锁上排队,后到者走重放;两张订单并发报同一交易键,在回执主键上撞键,只有一张记下,另一个回 409。
+   - **409 与 503 分开**:409 只表示适配器报来的这笔与已记下的冲突,适配器可当终局;存储不变量被破坏一律回 503,这笔钱没有记下,适配器保留、退避重试并告警。503 的情形:库存预占或订单状态对不上;已记下的回执、异常付款行、退款待办互相对不上;撞上唯一键,回滚后重读,交易键却不属于别的订单。
+   - **退款待办与退款回执**:以被退那笔付款的 `(channel, transaction_id)` 为主键,带 `order_sn`、`source`(2026-11-05 已落码,未编译)。来源现有 `CANCELLED_LATE / DELIVERY_REJECTED`(退订单绑定的那笔)与上面三种异常付款原因,取值集中在 `CommerceApi.RefundReason`。待办不另存金额币种,取那笔付款回执的实收值:异常付款退的是玩家实际付的钱,不是订单价。回执表主键 `(channel, payment_transaction_id)`,退款流水 `(channel, transaction_id)` 另有唯一键:一笔付款只认一条退款流水,一条退款流水也只能了结一笔付款,复用回 409。仍待做:`OVER_LIMIT / HELD_DENIED / ADMIN` 来源与 `lease_until`。
+   - 表改名:11-05 的 `commerce_duplicate_payment` 改为 `commerce_abnormal_payment`,加 `reason` 列。没写迁移,项目未上线,旧库按 `schema.sql` 新建重装。`SchemaVerifier` 在旧库上因缺表拒启;存储合同戳同时换新,防止有人在旧库上重跑 `schema.sql` 补出新表、却留着只认三种来源的退款待办 CHECK(闸门只核表、列和唯一键,测不出 CHECK)。
    - TiDB 上改主键:建新表 → 搬数据 → 改名。
 2. **发放物二选一**:
    - `create()` 要求恰好一种;充值 SKU 的 `quantity=1`,跳过预占与未付上限;`cancel()` 和付款对无限库存跳过库存运算;
@@ -482,14 +492,15 @@ type VerifiedTxn struct {
    - `POST /internal/deliveries/nack`:处理失败时调用,`attempts+1`,`next_poll_ms` 按指数退避。
    - `POST /internal/deliveries/quarantine`:连续失败 5 次时调用,置 QUARANTINE 并告警;人工修复后放回 PENDING。
    - `receipt()` 接受从 PENDING 或 ACCEPTED 转为终态。
-7. **机器码**:`AMOUNT_MISMATCH / DIFFERENT_RECEIPT / STATE_CONFLICT / TXN_USED / NONCE_REPLAY / ABNORMAL_REFUND`。
+7. **机器码**(拒绝时的 `code`):`DIFFERENT_RECEIPT / STATE_CONFLICT / TXN_USED / NONCE_REPLAY`。金额或币种不符不再是拒绝码,与重复付款一样回 200 并排进退款,原因写在 `refundReason`;原 `ABNORMAL_REFUND` 码由 `refundReason` 取代(见 §8.0 应答体)。
 8. **payment 角色只读接口**:
    - `/internal/payments/order-view`:返回 buyer / sku / 用途 / 数量 / 冻结金额与币种 / 状态 / version;
    - `/internal/payments/skus`;
    - `/internal/payments/held`。
 9. **退款待办**:
-   - `refunds()` 直接读待办自身的交易列(不再按 order_sn 联查,2026-11-05 已落码),带游标与租约(未做);
-   - `refunded()` 按被退付款的 `(channel, transaction_id)` 幂等,回执体须带 `paymentTransactionId`(2026-11-05 已落码)。只有订单本身的退款(`CANCELLED_LATE`,以及物品 SKU 的 `DELIVERY_REJECTED`)才推进订单 5 → 6,异常付款不碰订单状态,也不碰已绑定的交易;
+   - `refunds()` 直接读待办自身的交易列(不再按 order_sn 联查,2026-11-05 已落码),每项带 `reason`(2026-11-10 已落码,`CommerceApi.PendingRefund`);带游标与租约(未做);
+   - **适配器契约**:向渠道发起退款时,用被退那笔付款的交易号(待办项的 `transactionId`)作渠道退款的幂等键,渠道限制长度或字符集时由它确定性派生(如取摘要),发起前先按这个键查退款状态,已退或退款中就沿用结果、不再发起(§7 `Channel.Refund`)。不能用订单号:一张订单可能同时有本单那笔和几笔异常付款要退,按订单去重会让后几笔永远退不出去;
+   - `refunded()` 按被退付款的 `(channel, transaction_id)` 幂等,回执体须带 `paymentTransactionId`(2026-11-05 已落码)。只有订单本身的退款(`CANCELLED_LATE`,以及物品 SKU 的 `DELIVERY_REJECTED`)才推进订单 5 → 6,异常付款不碰订单状态,也不碰已绑定的交易。退款流水已了结别的付款时回 409(2026-11-10 起;之前撞唯一键以 500 冒出,适配器会一直重试);
    - 新增关闭回执"渠道不支持退款,已转发货";
    - 只自动执行白名单里的来源;
    - 充值 SKU 拒收 trade 的 `REFUND_PENDING` 回执。
@@ -909,6 +920,7 @@ Payment:
   - 封禁预检数据来源(MAIN-07)。
   - OfficialSkuView 新字段进入双版本契约(MAIN-08)。
   - 应答表补"400 / 未知 4xx",修正误告警条件;补 resolution 迁移边、迟到款超限用例;orders.refund 的 revoke 列入 R2 实测,默认 false。
+- **v5.1**(2026-11-10):按商城落码对齐。金额或币种不符改为与重复付款同形处理,记异常付款(`commerce_abnormal_payment`,带 reason),回 200;付款应答用 `refundReason` 取代 `code=ABNORMAL_REFUND`,适配器能分清重复付款与金额 / 币种不符;退款待办项带原因;退款幂等键按被退那笔付款写进适配器契约。改动在 §7、§8.0、§8.2 第 1、7、9 点、§21。
 
 ## 21. 与聚宝斋人民币寄售的接缝
 
@@ -920,7 +932,7 @@ Payment:
     - 不查 §14 的静态映射,金额与币种取 order-view 冻结的 `pay_amount / currency`;
     - **渠道只允许"我们定价 + 有开发者退款接口 + 支持关单或按商户单号查单"的两段式渠道**,用显式白名单(`wechat_pay`、`alipay`),排除 apple、google、wechat_minigame、douyin_minigame;
     - 不过 §4 的启动价格核对。
-- **异常付款**:非充值订单收到第二笔钱、关单后才到账、金额不符时,商城按 §8.0 写异常付款行和退款待办(按交易键,带来源),回 `ABNORMAL_REFUND`;go/payment 用幂等号调 `Channel.Refund`。
+- **异常付款**:非充值订单收到第二笔钱、关单后才到账、金额或币种不符时,商城按 §8.0 写退款待办(按交易键,带来源),回 200,`refundReason` 依次为 `DUPLICATE_PAYMENT`、`CANCELLED_LATE`、`AMOUNT_MISMATCH` / `CURRENCY_MISMATCH`;第二笔钱与金额币种不符的另写异常付款行,不绑定订单。go/payment 以被退那笔付款的交易号作幂等号调 `Channel.Refund`。
 - **关单握手**:见 §8.2.12。收据式渠道不参与。
 - **撤销**:按 §8.0 的"其它 SKU"分支,只更新守卫,不写权益待办。物品与实例的冲回由寄售计划定义;trade 收敛只覆盖货币。
 - **开工顺序**:充值 R1 先落地骨架(含非充值意图路径、异常付款、关单握手、退款待办改键);寄售第 13 步再接入。微信支付 / 支付宝渠道在 R3。

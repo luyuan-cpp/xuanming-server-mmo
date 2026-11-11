@@ -246,8 +246,9 @@ rc -h <IP> -p 6379 config set masterauth '新口令'
 然后带新的 `MMORPG_PLAYER_REDIS_PASSWORD` 跑 `infra-up`、每个 zone 的 `zone-up`:Secret 更新,scene 的配置指纹(`mmorpg.io/player-redis-config-hash`)变化会自动滚动。**Go 服务的 Pod 模板不变,要手工重启**:
 
 ```bash
-kubectl -n "$NS" rollout restart deployment match chat friend guild trade player-inbox mail
-kubectl -n mmorpg-zone-<zone> rollout restart deployment login player-locator scene-manager
+kubectl -n "$NS" rollout restart statefulset match chat friend guild trade player-inbox mail
+kubectl -n mmorpg-zone-<zone> rollout restart statefulset login
+kubectl -n mmorpg-zone-<zone> rollout restart deployment player-locator scene-manager
 ```
 
 确认全部客户端换完(`client list` 里 `age` 都比轮换时刻新),再去掉旧口令,按 §7 滚动 Redis 节点让启动参数里的 `--requirepass` 也换成新值:

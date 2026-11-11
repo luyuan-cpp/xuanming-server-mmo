@@ -30,6 +30,7 @@
 
 #include "muduo/net/Buffer.h"
 #include "muduo/net/TcpConnection.h"
+#include "engine/core/type_define/type_define.h"
 #include "network/codec/codec.h"
 #include "proto/common/base/message.pb.h"
 
@@ -114,7 +115,11 @@ namespace gate_push
 
 	// 场景广播:推给本 gate 上 sceneId 匹配、且已绑定玩家的会话。缺 content 整条拒绝并计一次无效消息;
 	// sceneId 为 0 整条拒绝并计数 —— 没进场景的会话 sceneId 就是 0,按 0 匹配会把消息推给所有还没进场景的连接。
-	void DeliverToScene(Path path, uint64_t sceneId, const MessageContent *content);
+	// senderSceneNode:RPC 路径认出的发送方 scene 节点(gate 节点注册表里的实体)。认出时只推会话当前指向它的那些 ——
+	// 计划排空窗口里同一个 scene_id 在新旧两台各有一份实例(docs/design/scene-node-planned-drain.md §4.3),只按 scene_id
+	// 匹配会把一份实例的广播串给另一份上的玩家。认不出(Kafka 路径,或连接不是已核验身份的当前链路)传 entt::null,只按 scene_id。
+	void DeliverToScene(Path path, uint64_t sceneId, const MessageContent *content,
+						entt::entity senderSceneNode = entt::null);
 
 	// 全服广播:推给本 gate 上所有已绑定玩家的会话。缺 content 整条拒绝并计一次无效消息。
 	void DeliverToAll(Path path, const MessageContent *content);

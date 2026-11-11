@@ -78,10 +78,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		// RequireNone(fire-and-forget,写进 socket 即返回 nil,broker 端
 		// leader 切换/落盘前崩溃全都不可见)。而 LeaseMonitor 的受理协议
 		// 恰恰以 WriteMessages 返回 nil 作为"gate 副作用已完成"的凭据去
-		// ack claim —— acks=0 时这个凭据是假的,清理命令会静默丢失且无重试。
-		// 兄弟服务 scene_manager 的 servicecontext 已修过同一个坑(RequireOne),
-		// 这里对齐。
-		RequiredAcks: kafkago.RequireOne,
+		// ack claim —— 凭据必须经得起 leader 切换,所以要 acks=all(RequireAll):集群按副本 3、
+		// min.insync.replicas 2 部署,RequireOne 时 broker 滚动重启切 leader 那一刻已 ACK 未复制的清理命令会被截掉,
+		// claim 却已结清、不再重试。与 scene_manager 的路由命令同一口径。
+		RequiredAcks: kafkago.RequireAll,
 	}
 
 	// SceneManager zrpc client (via etcd discovery).

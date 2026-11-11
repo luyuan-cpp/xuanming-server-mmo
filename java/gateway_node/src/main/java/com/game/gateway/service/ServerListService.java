@@ -91,7 +91,56 @@ public class ServerListService {
 
     public ServerListResponse getServerList() {
         List<ZoneInfoDto> dtos = getZoneRows().stream().map(this::toDto).toList();
+        applyRecommendation(dtos);
         return new ServerListResponse(dtos);
+    }
+
+    /**
+     * 推荐区(2026-11-10 起;此前 recommended 原样下发 zone_config 的手工值)。客户端与机器人按它默认选区,所以它决定新玩家去哪:
+     * <ul>
+     *   <li>运维勾的推荐只在区服显示 OPEN、没有暂停创建新角色、且负载档不是爆满时保留。维护、关闭、预告中的区进不去
+     *       (assign-gate 回 503),推荐它会让默认选中的区登不上;暂停创角的区新玩家建不了角;爆满的区要排队,应把新玩家
+     *       引到别处。负载档未知(探测态不新鲜)时不判爆满,照留。</li>
+     *   <li>一个都不剩时,改推荐负载率(在线 / 负载档分母,见 {@link ZoneHealthProbeService#getLoadRatio})最低的那个
+     *       开放且能建角的区,并列取列表里靠前的(sort_order 小)。这些区全都爆满时仍推荐最空的那个:排队照样能进,只是要等。
+     *       没有任何候选的负载率可知时不补推荐,没有依据挑。</li>
+     * </ul>
+     * 多副本各按自己的探测快照算,快照最多差一个探测周期(5 秒),推荐偶尔不一致无害。
+     */
+    private void applyRecommendation(List<ZoneInfoDto> dtos) {
+        boolean anyKept = false;
+        for (ZoneInfoDto dto : dtos) {
+            boolean keep = dto.isRecommended()
+                    && acceptsNewPlayers(dto)
+                    && dto.getLoadLevel() != LoadLevel.FULL;
+            dto.setRecommended(keep);
+            anyKept |= keep;
+        }
+        if (anyKept) {
+            return;
+        }
+
+        ZoneInfoDto emptiest = null;
+        double emptiestRatio = Double.POSITIVE_INFINITY;
+        for (ZoneInfoDto dto : dtos) {
+            // loadLevel 只在显示 OPEN 且探测态已知时才填(见 toDto),为 null 就是没有依据。
+            if (!acceptsNewPlayers(dto) || dto.getLoadLevel() == null) {
+                continue;
+            }
+            Double ratio = probeService.getLoadRatio(dto.getZoneId());
+            if (ratio != null && ratio < emptiestRatio) {
+                emptiest = dto;
+                emptiestRatio = ratio;
+            }
+        }
+        if (emptiest != null) {
+            emptiest.setRecommended(true);
+        }
+    }
+
+    /** 新玩家能在这个区建角色:区服显示开放,且没有暂停创建新角色。推荐区只在这些区里挑。 */
+    private static boolean acceptsNewPlayers(ZoneInfoDto dto) {
+        return dto.getStatus() == ZoneDisplayStatus.OPEN && !dto.isCreateRoleClosed();
     }
 
     /**
@@ -183,6 +232,7 @@ public class ServerListService {
         dto.setZoneId(zone.getZoneId());
         dto.setName(zone.getName());
         dto.setRecommended(zone.isRecommended());
+        dto.setCreateRoleClosed(zone.isCreateRoleClosed());
 
         ManualZoneStatus manualStatus = ManualZoneStatus.fromCode(zone.getManualStatus());
         AutoZoneStatus autoStatus = probeService.getAutoStatus(zone.getZoneId());

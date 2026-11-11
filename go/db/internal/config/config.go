@@ -5,6 +5,7 @@ import (
 
 	"shared/authoritysql"
 	"shared/dbplacement"
+	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/zrpc"
 )
@@ -32,36 +33,36 @@ type Config struct {
 	// DbPlacement:逻辑库按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 Database.Hosts。
 	// 和上面的 Placement 不是一回事:Placement 管玩家落在哪个库,DbPlacement 管库落在哪个物理集群。
 	DbPlacement dbplacement.Config `json:"DbPlacement,optional"`
+
+	// MySQLPasswordEnv:MySQL 口令所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md)。
+	// 写了它,ServerConfig.Database.Passwd 必须为空,由 ResolveMySQLPassword 在加载配置后填;本机 etc/db.yaml 不写,照用 Passwd。
+	MySQLPasswordEnv string `json:",optional"`
+
+	// AuditOutbox:审计发件箱转发循环(docs/design/player-audit-outbox.md §7),见 audit_outbox.go 的 AuditOutboxConfig。
+	AuditOutbox AuditOutboxConfig `json:"AuditOutbox,optional"`
 }
 
-// PlacementConfig 控制 go/db 能打开哪些落点库、每个库的连接池多大。
+// PlacementConfig 控制 go/db 能打开哪些存档库、每个库的连接池多大。
+//
+// go/db 没有「本区主库」,也不再有 zone 家族库(docs/design/player-data-tidb-scaling-plan.md §7.2 A17c):
+// 全部玩家存档在本地域的地域存档库 player_store_{>=1000000}_db 里,每个库第一次被指向时按需打开、一个池。
 //
 // go-zero 对整段 optional 且未出现的嵌套结构不回填内层 default 标签,所以这里不写 default:
 //   - AllowStoreFamilies 用 *bool,nil(没写)按 true 读,经 StoreFamiliesAllowed 取值;
 //   - 连接池大小由 Normalize 回填。
 type PlacementConfig struct {
-	// AllowStoreFamilies 为 nil 或 true 时,名字属于 zone_{1..999999}_db / player_store_{>=1000000}_db
-	// 两个家族之一的落点库即使不在库名白名单里也允许按需打开(§6.1)。按需打开只 Ping + 只读 schema 闸,
-	// 从不建库,白名单「防 ZoneId 填错静默建新库」的语义不受影响。显式 false 时只认白名单。
+	// AllowStoreFamilies 为 nil 或 true 时,名字属于存档库家族 player_store_{>=1000000}_db 的库即使不在库名白名单里
+	// 也允许按需打开(§6.1)。按需打开只 Ping + 只读 schema 闸,从不建库。显式 false 时只认白名单。
 	AllowStoreFamilies *bool `json:"AllowStoreFamilies,optional"`
 
-	// 额外落点库按家族分两个池旋钮(G2b 批 C;本 zone 库仍用 ServerConfig.Database.MaxOpenConn / MaxIdleConn):
-	//   ZoneStore*    —— **每个**额外 zone 家族库 zone_{1..999999}_db(本 zone 库除外):冷缓存访客读、合服 pin 后的源区库;
-	//   NonZoneStore* —— **每个**非 zone 落点库 player_store_{>=1000000}_db(Phase 2)。
-	// 分开的原因:zone 家族池的预算随 zone 数平方增长,非 zone 池在 Phase 2 是瓶颈要单独调大,一个旋钮两头顾不上。
-	// 0 = 回落旧键 ExtraStore*,再回落默认 8 / 2(Normalize;优先级 新键 > 旧键 > 默认)。
-	ZoneStoreMaxOpenConn    int `json:"ZoneStoreMaxOpenConn,optional"`
-	ZoneStoreMaxIdleConn    int `json:"ZoneStoreMaxIdleConn,optional"`
-	NonZoneStoreMaxOpenConn int `json:"NonZoneStoreMaxOpenConn,optional"`
-	NonZoneStoreMaxIdleConn int `json:"NonZoneStoreMaxIdleConn,optional"`
+	// StoreMaxOpenConn / StoreMaxIdleConn 是**每个**存档库连接池的上限与空闲数;0 = 取默认 8 / 2(Normalize)。
+	// 服务 yaml 写的是「本地域只有一个库」(K=1)时的预算,K8s 的 ConfigMap 按存档库数 K 摊到每个库
+	// (tools/scripts/k8s_deploy.ps1 Get-PlayerStorePoolLimit,每库至少 2 条),连接总账读同一条规则。
+	StoreMaxOpenConn int `json:"StoreMaxOpenConn,optional"`
+	StoreMaxIdleConn int `json:"StoreMaxIdleConn,optional"`
 
-	// ExtraStoreConnMaxIdleSeconds 是额外落点库池的 SetConnMaxIdleTime(秒);≤0 视为没写,取默认 60。
-	ExtraStoreConnMaxIdleSeconds int `json:"ExtraStoreConnMaxIdleSeconds,optional"`
-
-	// ExtraStoreMaxOpenConn / ExtraStoreMaxIdleConn 是**旧键**:只作上面新键缺省时的回落(两类库都回落到它),
-	// 新配置不要再写。Normalize 仍回填它的默认值 8 / 2,让「只写旧键」的旧部署两类库维持原来的大小。
-	ExtraStoreMaxOpenConn int `json:"ExtraStoreMaxOpenConn,optional"`
-	ExtraStoreMaxIdleConn int `json:"ExtraStoreMaxIdleConn,optional"`
+	// StoreConnMaxIdleSeconds 是存档库池的 SetConnMaxIdleTime(秒);≤0 视为没写,取默认 60。
+	StoreConnMaxIdleSeconds int `json:"StoreConnMaxIdleSeconds,optional"`
 }
 
 // StoreFamiliesAllowed 返回是否按家族放行落点库;没写(nil)按 true。
@@ -88,21 +89,20 @@ type DatabaseConfig struct {
 	Hosts       string `json:"Hosts"`
 	User        string `json:"User"`
 	Passwd      string `json:"Passwd"`
-	DBName      string `json:"DBName,optional"` // Derived from ZoneId at startup
-	MaxOpenConn int    `json:"MaxOpenConn"`
-	MaxIdleConn int    `json:"MaxIdleConn"`
-	Net         string `json:"Net"`
+	// DBName 只给迁移入口用:cmd/migrate 按 -storage-id 派生目标存档库名填进来。常驻进程不连固定的库,
+	// 每个存档库按需打开,池参数在 Placement.Store*(A17c 删了本区库和它的 MaxOpenConn / MaxIdleConn)。
+	DBName string `json:"DBName,optional"`
+	Net    string `json:"Net"`
 	// Backend:tidb | mysql,不写就是 tidb(docs/design/player-data-tidb-scaling-plan.md §9);非法值拒启。
 	// tidb 档每条玩家库物理连接固定 TiDB leader、当前严格读;mysql 档每条物理连接核对是 MySQL 主库。
 	Backend string `json:"Backend,default=tidb"`
 
 	// AllowedDatabases 是**外部注入**的库名白名单。
 	//
-	// 为什么必须外部注入:DBName 由 ZoneId 现拼(ZoneDBName),而 ZoneId 本身
-	// 就是最容易填错的那个字段 —— 填错一位(1 → 11)时旧实现会在生产实例上
-	// 静默 CREATE DATABASE + 建全套表,把玩家数据写进一个无人知晓的新库,
-	// 全程没有任何报错。用「ZoneId 推导出来的名字」自己校验自己是无效的,
-	// 所以白名单必须来自部署侧(env / ConfigMap 文件 / yaml),与 ZoneId 无关。
+	// 为什么必须外部注入:能写哪些库是部署的决定(本地域的 K 个存档库,k8s_deploy.ps1 核过恰好是这 K 个),
+	// 不能由进程从自己的配置推导 —— 用推导出来的名字自己校验自己是无效的。历史上 DBName 由 ZoneId 现拼,
+	// ZoneId 填错一位就会在生产实例上静默建库把玩家数据写进一个无人知晓的新库,白名单就是为此而设。
+	// 清单里只许有地域存档库名,zone 库名会让 go/db 拒启(proto_sql.NewStoreRegistryFromConfig)。
 	//
 	// 解析优先级:环境变量 DB_ALLOWED_DATABASES > AllowedDatabasesFile > 本字段。
 	AllowedDatabases []string `json:"AllowedDatabases,optional"`
@@ -134,7 +134,7 @@ type DatabaseConfig struct {
 	// Migration 是迁移入口(cmd/migrate)的超时与锁参数,业务服务不读。
 	Migration MigrationConfig `json:"Migration,optional"`
 
-	// 以下五个是业务连接池(本 zone 库与按需打开的落点库)的驱动级超时与会话级锁等待上限
+	// 以下五个是业务连接池(按需打开的存档库)的驱动级超时与会话级锁等待上限
 	// 迁移入口与建库不用这组值:DDL 可能合法地跑几分钟。
 	//
 	// 写 0 或不写取默认值;写负数表示不设(驱动不加超时 / 不发对应的 SET)。
@@ -191,20 +191,17 @@ const (
 	DefaultMigrationAdvisoryLockSeconds   = 60
 )
 
-// 额外落点库连接池默认值(player-storage-placement.md §6.1)。
+// 存档库连接池默认值(player-storage-placement.md §6.1)。没写时才用,etc/db.yaml 显式写出 K=1 的预算(60 / 20)。
 //
-// 每个被按需打开的库各自一个池,库数不设上限,所以单库默认给小。预算按「每个 go/db 实例的额外库数 × 池大小 × 副本数 × zone 数」
-// 计入同一台 MySQL 的总账(tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionLedger;mysql.yaml 的 max_connections 按其规划峰值取值)。
-// 以前这里写的「MySQL 默认 max_connections=151 下仍留得出余量」不成立(2026-10-12 更正)。
-// 两类库各有旋钮(ZoneStore* / NonZoneStore*,缺省都回落到这两个默认值):Phase 2 大部分玩家搬进非 zone 落点库后,
-// 那一类池会成为瓶颈,届时按压测结论只调大 NonZoneStore*(先重做总账规划档),不连带放大 zone 家族的访客池。
+// 每个被按需打开的库各自一个池。预算按「每个 go/db 实例的存档库数 × 每库池大小 × 副本数 × zone 数」计入连接总账
+// (tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionLedger)。
 //
-// ExtraStoreConnMaxIdleSeconds 默认 60:冷库(偶发访客读)的池因此回到 0 条,不再按 MaxIdleConn 常驻。
-// ConnMaxLifetime 仍是 5 分钟,本值大于 300 等于不生效(空闲连接本来就会在 5 分钟寿命到期时被回收,本值只是让冷池更早归零)。
+// StoreConnMaxIdleSeconds 默认 60:没有流量的库的池因此回到 0 条,不按 MaxIdleConn 常驻。
+// ConnMaxLifetime 是 5 分钟,本值大于 300 等于不生效(空闲连接本来就会在 5 分钟寿命到期时被回收,本值只是让冷池更早归零)。
 const (
-	DefaultPlacementExtraStoreMaxOpenConn        = 8
-	DefaultPlacementExtraStoreMaxIdleConn        = 2
-	DefaultPlacementExtraStoreConnMaxIdleSeconds = 60
+	DefaultPlacementStoreMaxOpenConn        = 8
+	DefaultPlacementStoreMaxIdleConn        = 2
+	DefaultPlacementStoreConnMaxIdleSeconds = 60
 )
 
 // Normalize 回填零值默认项。
@@ -245,30 +242,16 @@ func (c *Config) Normalize() {
 		d.SessionInnodbLockWaitSeconds = DefaultDatabaseSessionInnodbLockWaitSeconds
 	}
 
+	// 存档库池:0 取默认。不新增拒启校验:idle > open 由 database/sql 静默压到 open。
 	p := &c.Placement
-	// 旧键先补默认:它是新键缺省时的回落值,也让「只写旧键」的旧部署两类库维持原来的大小。
-	if p.ExtraStoreMaxOpenConn <= 0 {
-		p.ExtraStoreMaxOpenConn = DefaultPlacementExtraStoreMaxOpenConn
+	if p.StoreMaxOpenConn <= 0 {
+		p.StoreMaxOpenConn = DefaultPlacementStoreMaxOpenConn
 	}
-	if p.ExtraStoreMaxIdleConn <= 0 {
-		p.ExtraStoreMaxIdleConn = DefaultPlacementExtraStoreMaxIdleConn
+	if p.StoreMaxIdleConn <= 0 {
+		p.StoreMaxIdleConn = DefaultPlacementStoreMaxIdleConn
 	}
-	// 新键缺省回落旧键(优先级 新键 > 旧键 > 默认)。不新增拒启校验:idle > open 由 database/sql 静默压到 open,
-	// 与旧键的行为相同,不为此引入新的启动失败。
-	if p.ZoneStoreMaxOpenConn <= 0 {
-		p.ZoneStoreMaxOpenConn = p.ExtraStoreMaxOpenConn
-	}
-	if p.ZoneStoreMaxIdleConn <= 0 {
-		p.ZoneStoreMaxIdleConn = p.ExtraStoreMaxIdleConn
-	}
-	if p.NonZoneStoreMaxOpenConn <= 0 {
-		p.NonZoneStoreMaxOpenConn = p.ExtraStoreMaxOpenConn
-	}
-	if p.NonZoneStoreMaxIdleConn <= 0 {
-		p.NonZoneStoreMaxIdleConn = p.ExtraStoreMaxIdleConn
-	}
-	if p.ExtraStoreConnMaxIdleSeconds <= 0 {
-		p.ExtraStoreConnMaxIdleSeconds = DefaultPlacementExtraStoreConnMaxIdleSeconds
+	if p.StoreConnMaxIdleSeconds <= 0 {
+		p.StoreConnMaxIdleSeconds = DefaultPlacementStoreConnMaxIdleSeconds
 	}
 }
 
@@ -282,17 +265,17 @@ func (c *Config) Validate() error {
 	return c.ValidateGlobalAuthority()
 }
 
+// ResolveMySQLPassword 按 MySQLPasswordEnv 把 MySQL 口令填进 ServerConfig.Database.Passwd,规则见 secretenv.Fill
+// (变量缺席或为空、或 Passwd 同时写了字面量都返回错误)。主进程与 cmd/migrate 在 conf.MustLoad 之后、连库之前调用;lookup 生产传 os.LookupEnv。
+func (c *Config) ResolveMySQLPassword(lookup func(string) (string, bool)) error {
+	return secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
+		secretenv.Target{Field: "ServerConfig.Database.Passwd", Value: &c.ServerConfig.Database.Passwd})
+}
+
 // ValidateGlobalAuthority 是普通服务启动的配置门禁,不执行 DDL。Mode 不放宽它。
 func (c *Config) ValidateGlobalAuthority() error {
 	if _, err := authoritysql.ParseBackend(c.ServerConfig.Database.Backend); err != nil {
 		return fmt.Errorf("ServerConfig.Database.Backend: %w", err)
 	}
 	return nil
-}
-
-// ZoneDBName returns the zone-specific MySQL database name.
-// 与 shared/placement.StoreDBName 的 zone 家族同规则:落点库注册表把本 zone 库登记为落点 ZoneId,
-// 两边拼出的名字不一致时 proto_sql.NewStoreRegistry 拒启。
-func ZoneDBName(zoneId uint32) string {
-	return fmt.Sprintf("zone_%d_db", zoneId)
 }

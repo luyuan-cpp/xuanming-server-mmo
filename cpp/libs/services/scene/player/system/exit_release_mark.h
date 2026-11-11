@@ -387,7 +387,8 @@ namespace exit_release_mark
 
 	// 失败重发的上限(M10):总共最多 kInheritClearMaxAttempts 次(首发 + 3 次重发),且从首发起不超过
 	// kInheritClearDeadline(单调时钟)。在途超过截止时刻同样放弃(黑洞连接不会回空应答)。
-	// 重发由 RedisSystem 的 1s 定时器 / 重连回调驱动,实际间隔按 1s 取整。
+	// 重发只由 RedisSystem 的 1s 定时器驱动,实际间隔按 1s 取整。Redis 重连成功时不提前补发:负责人 2026-11-05 定
+	// 「重连成功不做业务逻辑」(docs/design/infra-reconnect-overview.md R14)。
 	using Clock = std::chrono::steady_clock;
 	inline constexpr uint32_t kInheritClearMaxAttempts = 4;
 	inline constexpr std::chrono::milliseconds kInheritClearDeadline{5000};

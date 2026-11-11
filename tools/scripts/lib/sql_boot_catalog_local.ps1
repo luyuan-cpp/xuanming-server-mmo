@@ -30,7 +30,7 @@ param(
     [string]$Endpoint = '',
     # auto = 问服务器自己是什么。mysql 用 LOCK_TOUCH,tidb 用 SELECT_ONLY(player-data-tidb-scaling-plan.md §9.3)。
     [ValidateSet('auto', 'mysql', 'tidb')][string]$Backend = 'auto',
-    # 多区一次生成。空 = 单区,行为不变。多区要求 DB_ALLOWED_DATABASES 或 MMORPG_DB_ALLOWED_DATABASES 显式给玩家库白名单。
+    # 多区一次生成。空 = 单区。存档库按地域分、和区无关(A17c),多区与单区用同一份存档库清单(go/login 的 Placement)。
     [int[]]$Zones = @(),
     # 'name=N,name=N' 或 hashtable,同 go_services.ps1 -Counts。
     [object]$Counts = @{},
@@ -205,7 +205,7 @@ function ConvertTo-LocalSqlBootOrdinalSet {
 # 本机账号与库名全部取已有配置的原件,缺了不猜。root 与 go_services.ps1 的本机建表同一来源:
 # go/db 的账号(与 compose 的 MYSQL_ROOT_PASSWORD 同值),值只进子进程环境;容器外连入 CURRENT_USER() 是 root@%。
 function Resolve-LocalSqlBootSettings {
-    param([Parameter(Mandatory)][string]$RepoRoot, [string]$Endpoint = '', [int[]]$Zones = @())
+    param([Parameter(Mandatory)][string]$RepoRoot, [string]$Endpoint = '')
     $dbConfig = Join-Path $RepoRoot 'go/db/etc/db.yaml'
     $resolved = $Endpoint
     if ([string]::IsNullOrWhiteSpace($resolved)) { $resolved = [string][Environment]::GetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST', 'Process') }
@@ -221,7 +221,7 @@ function Resolve-LocalSqlBootSettings {
     if ([string]::IsNullOrWhiteSpace($rootPrincipal)) { $rootPrincipal = "${rootUser}@%" }
 
     return New-LocalSqlBootSettings -Endpoint $resolved -EndpointName $parsed.Name -Port $parsed.Port -RootUser $rootUser -RootPassword $rootPassword -RootPrincipal $rootPrincipal `
-        -DbConfigPath $dbConfig -DataServiceConfigPath (Join-Path $RepoRoot 'go/data_service/etc/data_service.yaml') -Zones $Zones
+        -DataServiceConfigPath (Join-Path $RepoRoot 'go/data_service/etc/data_service.yaml') -LoginConfigPath (Join-Path $RepoRoot 'go/login/etc/login.yaml')
 }
 
 # 库名清单与保护集合只有这一份。端点和 root 身份由调用方定:本机入口先过回环校验,docker 调试栈固定 compose 的 mysql。
@@ -233,10 +233,9 @@ function New-LocalSqlBootSettings {
         [Parameter(Mandatory)][string]$RootUser,
         [Parameter(Mandatory)][string]$RootPassword,
         [Parameter(Mandatory)][string]$RootPrincipal,
-        [Parameter(Mandatory)][string]$DbConfigPath,
         [Parameter(Mandatory)][string]$DataServiceConfigPath,
-        # 非空 = 多区:白名单必须显式给,源 db.yaml 的 ZoneId 不当目标区。
-        [int[]]$Zones = @()
+        # 新号落哪几个存档库由 login 的 Placement 决定(地域码、每地域存档库数 K),本机建库、迁移、写资格都按它算。
+        [Parameter(Mandatory)][string]$LoginConfigPath
     )
     $globalSchema = Get-LocalSqlBootYamlRequired -Path $DataServiceConfigPath -KeyPath 'SnapshotMySQL.DBName'
     # 片数和 data_service 同一来源;没写按 1,和 Directory.Shards() 一样。
@@ -244,18 +243,23 @@ function New-LocalSqlBootSettings {
     $logicalShards = if ($shardsValue.Found -and -not [string]::IsNullOrEmpty($shardsValue.Value)) { [int]$shardsValue.Value } else { 1 }
     $directoryShards = [string[]]@(Get-DirectoryDbNames -Base $globalSchema -LogicalShards $logicalShards)
     $ledgerSchema = Get-DirectoryLedgerDbName -Base $globalSchema
-    $zoneId = Get-LocalSqlBootYamlRequired -Path $DbConfigPath -KeyPath 'ZoneId'
-    if ($zoneId -cnotmatch '^[1-9][0-9]*$') { throw 'go/db ZoneId must be a positive integer.' }
-    $zoneDatabase = "zone_${zoneId}_db"
+    # 存档库(docs/design/player-data-tidb-scaling-plan.md §7.2,A17c):本地域固定 K 个 player_store_<id>_db,和区无关,zone 库已退役。
+    # 地域码与 K 取 login 的 Placement(新号按 player_id % K 落库),库名公式和部署脚本同一份(release_common.ps1 Get-LoginPlayerStoreDbNames)。
+    $playerDatabases = [string[]]@(Get-LoginPlayerStoreDbNames -LoginConfigPath $LoginConfigPath)
+    # 调用方给了白名单(DB_ALLOWED_DATABASES 优先,其次 MMORPG_DB_ALLOWED_DATABASES)就必须恰好是这 K 个库:
+    # 对不上说明白名单和 login 不是同一份部署,落在缺的那个库上的玩家 go/db 存不了盘。
     $allowList = [string][Environment]::GetEnvironmentVariable('DB_ALLOWED_DATABASES', 'Process')
     if ([string]::IsNullOrWhiteSpace($allowList)) { $allowList = [string][Environment]::GetEnvironmentVariable('MMORPG_DB_ALLOWED_DATABASES', 'Process') }
-    if ($Zones.Count -gt 0 -and [string]::IsNullOrWhiteSpace($allowList)) { throw 'Multi-zone mode requires an explicit player database allow list: set DB_ALLOWED_DATABASES or MMORPG_DB_ALLOWED_DATABASES. The zone_1_db of the source go/db config is not carried over.' }
-    if ([string]::IsNullOrWhiteSpace($allowList)) { $allowList = $zoneDatabase }
-    $playerDatabases = [string[]]@($allowList -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
-    $requiredDatabases = if ($Zones.Count -gt 0) { @($Zones | ForEach-Object { "zone_${_}_db" }) } else { @($zoneDatabase) }
-    foreach ($database in $requiredDatabases) { if ($database -cnotin $playerDatabases) { throw "$database must be in the player database allow list." } }
-    # 多区没有「本 zone」:留空后存档库迁移每个都显式传 -storage-id。
-    if ($Zones.Count -gt 0) { $zoneDatabase = '' }
+    if (-not [string]::IsNullOrWhiteSpace($allowList)) {
+        $listed = [string[]]@($allowList -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+        $retired = @($listed | Where-Object { $_ -cmatch '\Azone_[0-9]+_db\z' })
+        if ($retired.Count -gt 0) {
+            throw "The player database allow list names $($retired -join ','): zone databases are retired (player-data-tidb-scaling-plan.md §7.2 A17c); list only the player stores player_store_<id>_db."
+        }
+        if ($listed.Count -ne $playerDatabases.Count -or ((ConvertTo-LocalSqlBootOrdinalSet -Values $listed) -join ',') -cne ((ConvertTo-LocalSqlBootOrdinalSet -Values $playerDatabases) -join ',')) {
+            throw "The player database allow list ($($listed -join ',')) must be exactly the player stores from go/login Placement: $($playerDatabases -join ',')."
+        }
+    }
 
     # 本机全部逻辑库。每个库自带一份写者闸门,写者连接的 DATABASE() 必须等于它的闸门所在的库(authoritysql pool.go、Java WriterAuthority)。
     $schemas = ConvertTo-LocalSqlBootOrdinalSet -Values (@('mmorpg', $ledgerSchema, 'mmorpg_chat', 'mmorpg_friend', 'mmorpg_guild', 'mmorpg_mail', 'mmorpg_match', 'mmorpg_player_inbox', 'mmorpg_rank', 'mmorpg_trade') + $directoryShards + $playerDatabases)
@@ -265,7 +269,7 @@ function New-LocalSqlBootSettings {
         Endpoint = $Endpoint; EndpointName = $EndpointName; Port = $Port
         RootUser = $RootUser; RootPassword = $RootPassword; RootPrincipal = $RootPrincipal
         GlobalSchema = $globalSchema; DirectoryShards = $directoryShards; DirectorySchema = $directoryShards[0]; LedgerSchema = $ledgerSchema
-        ZoneDatabase = $zoneDatabase; PlayerDatabases = $playerDatabases
+        PlayerDatabases = $playerDatabases
         LogicalDatabases = [string[]]@($schemas)
         Executor = $null; Backend = ''; LockPrimitive = ''
     }
@@ -710,9 +714,9 @@ function Start-LocalSqlBootJavaInstances {
             $originalFailure.Exception.Data['java_cleanup_evidence'] = $cleanupPath
             try {
                 $null = Write-MaintenanceImmutableJson -Path $cleanupPath -Value @{ format = 'LOCAL_R_JAVA_FAILED_START_CLEANUP_V1'; bootId = $summary.bootId; originalErrorType = $originalFailure.Exception.GetType().FullName; cleanup_pending = $cleanupPending; processes = $cleanupRows; birth_and_started_records_preserved = $true; releasing_Process_handle_is_not_exit_proof = $true; automatic_retry = $false }
-            } catch { Write-Warning 'Java失败清理证据写出未确认；原启动错误与身份记录保留，不能认定清理完成。' }
+            } catch { Write-Warning 'Writing the Java failure cleanup evidence was not confirmed; the original start error and identity records are kept, so cleanup cannot be considered complete.' }
         }
-        if ($cleanupPending) { Write-Warning '本批Java子进程仍有cleanup_pending；保留出生身份与原错误，不自动重试。' }
+        if ($cleanupPending) { Write-Warning 'Some Java child processes in this batch are still cleanup_pending; their birth identities and the original error are kept and nothing is retried automatically.' }
         throw $originalFailure
     } finally {
         $env:MMORPG_SQL_BOOT_CATALOG = $previousCatalog
@@ -721,7 +725,7 @@ function Start-LocalSqlBootJavaInstances {
         $disposeFailed = $false
         foreach ($owned in $processes) {
             try { $owned.Process.Dispose() }
-            catch { $disposeFailed = $true; Write-Warning 'Java监督句柄释放未确认；不覆盖原启动错误或把它当作进程退出。' }
+            catch { $disposeFailed = $true; Write-Warning 'Releasing the Java supervision handle was not confirmed; the original start error is kept and this is not treated as a process exit.' }
         }
         if ($disposeFailed) {
             if ($null -ne $originalFailure) { $originalFailure.Exception.Data['java_process_handle_cleanup_pending'] = $true }
@@ -814,16 +818,16 @@ function Invoke-LocalSqlBootServiceMigration {
     if ($result.Code -ne 0) { throw "$Service -migrate failed (exit code $($result.Code)): $(ConvertTo-LocalSqlBootSafeText -Text ([string]$result.Err + [string]$result.Out))" }
 }
 
-# 存档库名到编号(placement.StorageIDFromDBName):zone_<n>_db、player_store_<n>_db。
+# 存档库名到编号(placement.StorageIDFromDBName):只有地域存档库 player_store_<id>_db,zone 库已退役(A17c)。编号下限由 cmd/migrate 核。
 function Get-LocalSqlBootStorageId {
     param([Parameter(Mandatory)][string]$Database)
-    $match = [regex]::Match($Database, '\A(?:zone|player_store)_(?<id>[1-9][0-9]*)_db\z')
-    if (-not $match.Success) { throw "$Database is not a canonical player database name." }
+    $match = [regex]::Match($Database, '\Aplayer_store_(?<id>[1-9][0-9]*)_db\z')
+    if (-not $match.Success) { throw "$Database is not a player store database name player_store_<id>_db." }
     return $match.Groups['id'].Value
 }
 
 # go/db 的正式入口是 cmd/migrate,不走 authoritysql。退出码 4 = 迁移成功、有待人工过目的漂移(cmd/migrate/main.go),不拦。
-# 白名单里每个存档库都迁:data_service 的写资格要覆盖全部存档库,没有闸门表的库注册不了。本 zone 的库按 ZoneId 推导,其余给 -storage-id。
+# 每个存档库都迁:data_service 的写资格要覆盖全部存档库,没有闸门表的库注册不了。cmd/migrate 一次迁一个库,-storage-id 必填。
 function Invoke-LocalSqlBootDbMigration {
     param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$WorkDirectory)
     $tool = Resolve-LocalSqlBootTool -RepoRoot $RepoRoot -Name 'db_migrate'
@@ -832,8 +836,7 @@ function Invoke-LocalSqlBootDbMigration {
     Write-LocalSqlBootText -Path $config -Text (ConvertTo-LocalSqlBootConfig -Settings $Settings -Service 'db' -Content $source -User $Settings.RootUser -Password $Settings.RootPassword)
     $workingDirectory = [IO.Path]::GetFullPath((Join-Path $RepoRoot 'go/db'))
     foreach ($database in @($Settings.PlayerDatabases)) {
-        $arguments = @('-f', $config, '-command', 'up')
-        if ($database -cne $Settings.ZoneDatabase) { $arguments += @('-storage-id', (Get-LocalSqlBootStorageId -Database $database)) }
+        $arguments = @('-f', $config, '-command', 'up', '-storage-id', (Get-LocalSqlBootStorageId -Database $database))
         $result = Invoke-LocalSqlBootProcess -FilePath $tool -Arguments $arguments -Environment @{ DB_ALLOWED_DATABASES = ($Settings.PlayerDatabases -join ',') } -WorkingDirectory $workingDirectory -TimeoutSeconds 600
         if ($result.Code -eq 4) {
             Write-Warning "go/db migrate of $database reported drift that needs manual review: $(ConvertTo-LocalSqlBootSafeText -Text ([string]$result.Out))"
@@ -879,7 +882,7 @@ function Invoke-LocalSqlBootMigrations {
 }
 
 # 每个写者服务要写的逻辑库:闸门跟着库走,按库各注册一份。
-# login 没有自己的库,它的目录条目只为领每 boot 配置,挂在网关那个库上。go/db 只取已经建好闸门表的落点库(cmd/migrate 建的);本 zone 库必须在。
+# login 没有自己的库,它的目录条目只为领每 boot 配置,挂在网关那个库上。go/db 写本地域全部存档库,每个都必须已经由 cmd/migrate 建好闸门表。
 # data_service 恰好是目录各片、流水库和全部存档库(Config.WriterSchemas),多一份少一份都拒绝启动。
 function Get-LocalSqlBootWriterDatabases {
     param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)][string]$Service, [Parameter(Mandatory)][hashtable]$TablesBySchema)
@@ -894,11 +897,11 @@ function Get-LocalSqlBootWriterDatabases {
         'mall' { return @($Settings.JavaDatabases.mall) }
         'login' { return @('mmorpg') }
         'db' {
-            $ready = @($Settings.PlayerDatabases | Where-Object { @($TablesBySchema[$_]) -ccontains 'route_meta' })
-            # 多区没有单一的本 zone 库:白名单里每个都必须迁完。
-            $required = if ($Settings.ZoneDatabase) { @($Settings.ZoneDatabase) } else { @($Settings.PlayerDatabases) }
-            foreach ($database in $required) { if ($database -cnotin $ready) { throw "$database has no writer gate tables; go/db cmd/migrate has not completed." } }
-            return $ready
+            # 与 data_service 同一份存档库清单;A17c 起没有「本 zone 库」,没迁完的库 go/db 也写不了,一个都不能缺。
+            foreach ($database in @($Settings.PlayerDatabases)) {
+                if (@($TablesBySchema[$database]) -cnotcontains 'route_meta') { throw "$database has no writer gate tables; go/db cmd/migrate has not completed." }
+            }
+            return @($Settings.PlayerDatabases)
         }
     }
     return @("mmorpg_$Service")
@@ -1036,9 +1039,10 @@ function New-LocalSqlBootAccountName {
     return $name
 }
 
-# 为一个实例备齐注册原件:私有配置、环境值、正式 Request 与单条目 roster。不碰数据库。
-# 账号每次启动都换新:writer_registry.sql_principal 永久唯一,主体不能复用。
-# 实例要写的每个逻辑库一份 Request,身份和账号相同;writer_authority 把它们注册在各自的库,grant 写成一个集合。
+# 为一个实例备齐注册原件:私有配置、环境值、REGISTER 模板与单槽位名册(SQL_WRITER_BOOT_ROSTER_V2)。不碰数据库。
+# 本机每次启动都建新账号,一个账号就是一个槽位,所以本机的槽位只有第一代(K8s 上同一槽位每次启动换代,见
+# docs/design/writer-roster-exhaustion-20261106.md §5)。模板不带身份:writer_key、instance、request_id 由 writer_authority 现场生成。
+# 实例要写的每个逻辑库一份模板,账号相同;writer_authority 把这一代注册在各自的库,grant 写成一个集合。
 function New-LocalSqlBootInstanceFiles {
     param(
         [Parameter(Mandatory)]$Settings,
@@ -1098,28 +1102,20 @@ function New-LocalSqlBootInstanceFiles {
     $qualificationSha = if ($null -ne $FixtureIo) { (Read-LocalJavaFixtureFile $FixtureIo $qualificationCopy).Sha256 } else { Get-MaintenanceSha256 $qualificationCopy }
     $inputConfigSha = if ($null -ne $FixtureIo) { (Read-LocalJavaFixtureFile $FixtureIo $inputConfig).Sha256 } else { Get-MaintenanceSha256 $inputConfig }
     $deploymentId = "local-$BootId-$key"
-    $writerKey = New-LocalSqlBootIdentity
-    $instanceId = New-LocalSqlBootIdentity
-    $registeredMs = [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     $requests = [Collections.Generic.List[object]]::new()
     $registrations = [Collections.Generic.List[object]]::new()
     foreach ($database in $Databases) {
         $meta = $MetaByDatabase[$database]
         $request = [ordered]@{
-            requestId = (New-LocalSqlBootIdentity)
             kind = 'REGISTER'
             writer = [ordered]@{
-                writerKey = $writerKey
                 generation = $meta.Generation
-                instanceId = $instanceId
                 sqlPrincipal = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($principal))
                 state = 'ACTIVE'
-                registeredMs = $registeredMs
             }
             authoritySchema = $database
             protectedSchemas = [string[]]@($database)
             deploymentDigest = (ConvertTo-LocalSqlBootBase64 -Hex $PhysicalSha256)
-            deploymentId = $deploymentId
             lockPrimitive = $Settings.LockPrimitive
             lockQualificationSha256 = (ConvertTo-LocalSqlBootBase64 -Hex $qualificationSha)
         }
@@ -1135,7 +1131,7 @@ function New-LocalSqlBootInstanceFiles {
     }
     if ($environmentEntries.Count -gt 0) { $entry['runtimeEnvironment'] = [object[]]$environmentEntries.ToArray() }
     $rosterFile = Join-Path $inputRoot 'roster.json'
-    $roster = [ordered]@{ format = 'SQL_WRITER_BOOT_ROSTER_V1'; entries = [object[]]@($entry) }
+    $roster = [ordered]@{ format = 'SQL_WRITER_BOOT_ROSTER_V2'; entries = [object[]]@($entry) }
     $rosterSha256 = if ($null -ne $FixtureIo) { Write-LocalJavaFixtureJson $FixtureIo $rosterFile $roster } else { Write-MaintenanceImmutableJson -Path $rosterFile -Value $roster }
 
     return [pscustomobject]@{
@@ -1215,7 +1211,8 @@ function New-LocalSqlBootControlEnvironment {
     }
 }
 
-# 正式注册:每实例一次,单条目 roster。控制凭据只在这一个子进程的环境里;常驻进程拿不到(Enter-SqlWriterBootEnvironment 也会清)。
+# 正式注册:每实例一次,单槽位名册,本实例就是槽位 0(Pod 名按 StatefulSet 的写法 <实例>-0)。
+# 控制凭据只在这一个子进程的环境里;常驻进程拿不到(Enter-SqlWriterBootEnvironment 也会清)。
 function Register-LocalSqlBootInstance {
     param([Parameter(Mandatory)]$Item, [Parameter(Mandatory)][string]$Tool, [Parameter(Mandatory)][hashtable]$ControlEnvironment, [Parameter(Mandatory)][string]$PhysicalSha256, [switch]$PreserveInputs, $FixtureIo = $null)
     $operationSeconds=if ($null -ne $FixtureIo) { Get-LocalJavaFixtureOperationSeconds $FixtureIo 30 } else { 30 }
@@ -1228,6 +1225,7 @@ function Register-LocalSqlBootInstance {
         '-runtime-config-output', $Item.RuntimeFile
         '-boot-output', $Item.GrantFile
         '-deployment-id', $Item.DeploymentId
+        '-pod-name', "$($Item.InstanceKey)-0"
         '-timeout', "${operationSeconds}s"
     )
     if ($Item.EnvironmentNames.Count -gt 0) { $arguments += @('-runtime-env-output', $Item.EnvironmentDirectory) }
@@ -1486,7 +1484,7 @@ function New-LocalSqlBootCatalog {
         throw '-Counts, -PortStride and -ZonePortOffsets only apply with -Zones.'
     }
     # 回环校验先于任何子进程和落盘。
-    $settings = Resolve-LocalSqlBootSettings -RepoRoot $repo -Endpoint $Endpoint -Zones $Zones
+    $settings = Resolve-LocalSqlBootSettings -RepoRoot $repo -Endpoint $Endpoint
     if ($javaInstances.Count -gt 0) {
         $javaDatabases = @{}; foreach ($item in $javaInstances) { $javaDatabases[$item.Service] = $item.Database }
         foreach ($database in $javaDatabases.Values) { if ($database -cne 'mmorpg' -and $database -cin $settings.LogicalDatabases) { throw 'Java逻辑库不得接管Go服务或玩家存档库。' } }
@@ -1770,11 +1768,11 @@ function New-LocalJavaFixtureBoot {
     Invoke-LocalJavaFixtureSource $Settings $sql ''
     $control=Get-LocalJavaFixtureControlEnvironment $Settings $Owner.operators.registrar $schema 'registrar'
     $entry=Register-LocalSqlBootInstance -Item $prepared -Tool $Settings.WriterTool -ControlEnvironment $control -PhysicalSha256 $Settings.PhysicalSha256 -PreserveInputs -FixtureIo $Settings
-    $request=Read-LocalJavaFixtureJson $Settings $prepared.Registrations[0].RequestFile $prepared.Registrations[0].RequestSha256
-    $requestId=[Convert]::ToHexString([Convert]::FromBase64String($request.requestId)).ToLowerInvariant()
-    $canonical="$($prepared.GrantFile).$requestId.register.started.protojson"
-    $canonicalRecord=Read-LocalJavaFixtureFile $Settings $canonical
-    $registered=[ordered]@{format='JAVA_OWNED_TIDB_REGISTERED_V1';nonce=$Settings.Nonce;entry=$entry;item=$prepared;canonicalFile=$canonical;canonicalSha256=$canonicalRecord.Sha256}
+    # writer_authority 把这一代每个逻辑库的完整请求记在 grant 旁的启动记录里;本例只写一个库,取那一份当退休用的原件。
+    $bootRecord=Read-LocalJavaFixtureJson $Settings "$($prepared.GrantFile).register.started.protojson"
+    $canonical=Join-Path $bootRoot 'register.canonical.json'
+    $canonicalSha256=Write-LocalJavaFixtureJson $Settings $canonical @($bootRecord.requests)[0]
+    $registered=[ordered]@{format='JAVA_OWNED_TIDB_REGISTERED_V1';nonce=$Settings.Nonce;entry=$entry;item=$prepared;canonicalFile=$canonical;canonicalSha256=$canonicalSha256}
     $null=Write-LocalJavaFixtureJson $Settings (Join-Path $bootRoot 'boot.registered.json') $registered
     return [ordered]@{ format='JAVA_OWNED_TIDB_CONTEXT_V1'; nonce=$Settings.Nonce; ownerFile=$Settings.OwnerFile; ownerSha256=$Settings.OwnerSha256; jdbcUrl="jdbc:mysql://127.0.0.1:24000/$schema"; username=$prepared.User; password=$prepared.Password; environment=[ordered]@{ MMORPG_SQL_WRITER_GRANT_FILE=$entry.grantFile; MMORPG_SQL_WRITER_GRANT_SHA256=$entry.grantSha256; MMORPG_SQL_WRITER_CONSUME_DIR=$entry.consumeDir; MMORPG_SQL_DEPLOYMENT_ID=$entry.deploymentId; MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256=$Settings.PhysicalSha256 } }
 }

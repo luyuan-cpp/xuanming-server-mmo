@@ -1,4 +1,5 @@
 #include "player_scene.h"
+#include "core/async/coroutine_callback.h"
 #include "core/system/scene_task_scope.h"
 #include "engine/core/utils/registry/actor_log.h"
 #include "engine/core/type_define/player_guid_comp.h"
@@ -6,8 +7,6 @@
 #include "actor/actor_net_id.h"
 
 #define BOOST_COBALT_NO_LIB 1
-#include <boost/asio/dispatch.hpp>
-#include <boost/cobalt/op.hpp>
 #include <boost/cobalt/task.hpp>
 
 #include "muduo/base/Logging.h"
@@ -73,75 +72,22 @@ struct MirrorCreateResult
 	std::optional<::scene_manager::CreateSceneResponse> reply;
 };
 
-// GrpcDone 的回包只在调用期间借用。本地停止没有传输结果，由空 optional 表示。
-class CreateMirrorCall final : public cobalt::op<std::optional<MirrorCreateResult>>
+// 建镜像的一次 CreateScene 接到公共等待体。GrpcDone 的回包只在调用期间借用,在回调里复制成自有结果;
+// 生成的 gRPC 客户端恰好回调一次(本地拒绝也延后交付),所以提交恒为接纳。本地停止由等待体交 nullopt,
+// 停止在提交内重入时也等提交返回之后才交付。
+auto AwaitMirrorCreate(EventLoop& loop, entt::entity node, const ::scene_manager::CreateSceneRequest& request,
+	const PlayerSceneSystem::MirrorCreateSubmit& submit)
 {
-public:
-	CreateMirrorCall(EventLoop& loop, entt::entity node, const ::scene_manager::CreateSceneRequest& request,
-		const PlayerSceneSystem::MirrorCreateSubmit& submit) : loop_(loop), node_(node), request_(request), submit_(submit) {}
-
-	using Handler = cobalt::completion_handler<std::optional<MirrorCreateResult>>;
-	void initiate(Handler handler) override
-	{
-		loop_.assertInLoopThread();
-		auto state = std::make_shared<Completion>(loop_, std::move(handler));
-		const std::weak_ptr<Completion> weak = state;
-		auto slot = state->handler->get_cancellation_slot();
-		if (slot.is_connected())
-		{
-			slot.assign([weak](asio::cancellation_type) {
-				if (const auto state = weak.lock()) state->Finish(std::nullopt);
-			});
-		}
-		submit_(node_, request_, [weak](const GrpcCallOutcome& outcome, const ::scene_manager::CreateSceneResponse* reply) {
-			if (const auto state = weak.lock())
-			{
-				state->loop.assertInLoopThread();
+	return loop_async::AwaitCallback<MirrorCreateResult>(loop,
+		[node, &request, &submit](auto done) {
+			submit(node, request, [done](const GrpcCallOutcome& outcome, const ::scene_manager::CreateSceneResponse* reply) {
 				MirrorCreateResult result{outcome, std::nullopt};
 				if (reply != nullptr) result.reply.emplace(*reply);
-				state->Finish(std::move(result));
-			}
-		});
-		state->submitting = false;
-		completion_ = std::move(state);
-	}
-
-private:
-	struct Completion
-	{
-		EventLoop& loop;
-		std::optional<Handler> handler;
-		bool submitting = true;
-
-		Completion(EventLoop& loop, Handler handler) : loop(loop), handler(std::move(handler)) {}
-
-		void Finish(std::optional<MirrorCreateResult> result)
-		{
-			loop.assertInLoopThread();
-			if (!handler) return;
-			auto complete = std::move(*handler);
-			handler.reset();
-			auto slot = complete.get_cancellation_slot();
-			if (slot.is_connected()) slot.clear();
-			if (submitting)
-			{
-				// 停止可以在提交内重入，交给 Cobalt 在 await_suspend 返回后恢复。
-				auto executor = complete.get_immediate_executor();
-				asio::dispatch(executor, [complete = std::move(complete), result = std::move(result)]() mutable {
-					complete(std::move(result));
-				});
-				return;
-			}
-			complete(std::move(result));
-		}
-	};
-
-	EventLoop& loop_;
-	entt::entity node_;
-	const ::scene_manager::CreateSceneRequest& request_;
-	const PlayerSceneSystem::MirrorCreateSubmit& submit_;
-	std::shared_ptr<Completion> completion_;
-};
+				done(std::move(result));
+			});
+			return true;
+		}, MirrorCreateResult{GrpcCallOutcome{kGrpcStatusUnavailable, "mirror create not submitted"}, std::nullopt});
+}
 
 cobalt::task<void> CreateMirrorAndEnter(entt::entity player, entt::entity manager,
 	::scene_manager::CreateSceneRequest request, PlayerSceneSystem::MirrorCreateSubmit submit);
@@ -310,12 +256,12 @@ bool PlayerSceneSystem::HandleEnterScene(entt::entity player, SceneEntity scene)
 	if (!ownership.IsCurrent()) return false;
 	if (const auto result = CheckEnterScene(player, scene); result != kSuccess)
 	{
-		LOG_ERROR << "入场预检拒绝 entity=" << entt::to_integral(player) << " tip=" << result;
+		LOG_ERROR << "Scene entry precheck rejected entity=" << entt::to_integral(player) << " tip=" << result;
 		return false;
 	}
 	if (!tlsEcs.actorRegistry.all_of<Transform>(player))
 	{
-		LOG_ERROR << "HandleEnterScene: 持久组件 Transform 缺失，" << ActorLog(player);
+		LOG_ERROR << "HandleEnterScene: persistent component Transform missing, " << ActorLog(player);
 		return false;
 	}
 	const auto sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(scene);
@@ -366,7 +312,7 @@ bool PlayerSceneSystem::HandleEnterScene(entt::entity player, SceneEntity scene)
 	SendToPlayerClient(SceneSceneClientPlayerNotifyEnterSceneMessageId, message, player);
 
 	// 4.5 补发"自己"的 ActorCreate:AOI 可见性遍历刻意跳过 observer 本身
-	// (aoi.cpp HandleEntityVisibility 的 otherEntity == entity 分支),因此
+	// (aoi.cpp ForEachNearbyEntity 的 other != entity 判断),因此
 	// 除这里之外没有任何路径把玩家自己的 actor 下发给客户端——单人在线时
 	// 客户端将收不到任何 ActorCreate,本地角色/相机绑定/移动控制器全部
 	// 无法建立。客户端靠 guid == player_id 识别并绑定本地角色。
@@ -509,7 +455,7 @@ cobalt::task<void> CreateMirrorAndEnter(entt::entity originalPlayer, entt::entit
 			 << " source_scene=" << request.source_scene_id() << " mirror_config=" << mirrorConfigId
 			 << " scene_conf=" << request.scene_conf_id() << " token=" << token;
 
-	const auto result = co_await CreateMirrorCall{loop, manager, request, submit};
+	const auto result = co_await AwaitMirrorCreate(loop, manager, request, submit);
 	loop.assertInLoopThread();
 	if (!result || (co_await cobalt::this_coro::cancelled) != asio::cancellation_type::none)
 	{

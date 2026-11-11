@@ -502,9 +502,10 @@ void RedisManager::OnLivenessPingReply(std::uint64_t generation, const redisRepl
 void RedisManager::QueueDropUnresponsive()
 {
 	// 不在这里摘下:本函数运行在定时器回调里,与 socket 事件同属一轮分发(Linux 的 timerfd 与 socket 在同一批
-	// activeChannels_ 里;Windows 在 I/O 之后、eventHandling_ 仍为真时跑定时器)。在这里销毁一条本轮也有 I/O 的连接,
-	// Linux 是释放后使用(Hiredis 的 Channel 回调绑的是裸指针),Windows Debug 撞 EventLoop::removeChannel 的断言。
-	// 排到本轮的 pending functor 阶段再做:那时本轮 Channel 事件已全部分发完。
+	// activeChannels_ 里;Windows 在 I/O 之后、eventHandling_ 仍为真时跑定时器)。2026-10-21 之前 Hiredis 的 Channel 回调绑裸指针、
+	// 最后一个引用释放即同步析构,在这里销毁一条本轮也有 I/O 的连接,Linux 是释放后使用,Windows Debug 撞 EventLoop::removeChannel 的断言。
+	// 现在 Hiredis 工厂删除器把分发期间的最终释放推迟到 pending,同批旧事件经 weak 回调与 Channel tie 失效,直接摘也不再出内存错误;
+	// 仍排到本轮的 pending functor 阶段再做,作为纵深防御、不依赖适配器的延迟释放:那时本轮 Channel 事件已全部分发完。
 	loop_->get().queueInLoop(
 		[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this, generation = livenessGeneration_]
 		{

@@ -6,13 +6,14 @@ import (
 )
 
 // leaderLockKeyFmt 是按 zone 的选主锁(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.2)。
-// 原来全服一把 scene_manager:leader:lock,一个领导者编排全部 zone;现在每个 zone 一把,锁在该 zone 所属组的
-// 控制域实例上,同组几个 zone 的锁互不相干。
-const leaderLockKeyFmt = "scene_manager:leader:lock:zone:%d"
+// 原来全服一把 scene_manager:leader:lock,一个领导者编排全部 zone;现在每个 zone 一把,同组几个 zone 的锁互不相干。
+// %s 是 sceneControlTag(zone):锁与本 zone 的控制域键同槽(docs/design/redis-cluster-all-domains-20261110.md §4.7),
+// 以后给选主加任期号时,能在同一段脚本里核对任期并写数据。
+const leaderLockKeyFmt = "scene_manager:leader:lock:%s"
 
-// LeaderLockKey 返回 zone 的选主锁键。锁名只由 zone 决定、不可配置。
+// LeaderLockKey 返回 zone 的选主锁键 scene_manager:leader:lock:{ctl:<z>}。锁名只由 zone 决定、不可配置。
 func LeaderLockKey(zoneID uint32) string {
-	return fmt.Sprintf(leaderLockKeyFmt, zoneID)
+	return fmt.Sprintf(leaderLockKeyFmt, sceneControlTag(zoneID))
 }
 
 // 领导权闸门:scene_manager 多副本部署时,**变更类**后台动作(补建世界频道 /

@@ -55,8 +55,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // 客户端经 gate → client_rpc_router 到达(只承诺路由服模式)。
-// 身份与 zone 一律由服务端决定:请求体里的 player_id 只对不带会话的只读 GetPlayerGuild(mail 领附件读所在帮)生效,
-// 写方法一律只认会话、不带会话即拒绝(docs/design/gate-online-identity.md §7.5);zone_id 只认服务端归属。
+// 身份与 zone 一律由服务端决定:客户端方法的请求体里没有玩家与区字段,只认会话与服务端归属;
+// 唯一带 player_id 的是 GetPlayerGuild,只在不带会话的内部只读调用(mail 领附件读所在帮)时采信
+// (docs/design/gate-online-identity.md §7.5、§9.6)。
 // 本开关是服务级的,整个服务都登记在路由表;gate 上行白名单按方法方向收号,只收 REQUEST / ONE_WAY
 // (docs/design/client-rpc-callback.md §7 R4)。UpdateGuildScore 标了 CLIENT_RPC_SERVER_ONLY,仍登记在路由表,
 // 但不进 gate 上行白名单,客户端发上来在 gate 按非法包丢弃(计一次非法包、不回包,到不了路由服与 guild);
@@ -396,8 +397,9 @@ func (c *guildServiceClient) RespondGuildTrialInvite(ctx context.Context, in *Re
 // for forward compatibility.
 //
 // 客户端经 gate → client_rpc_router 到达(只承诺路由服模式)。
-// 身份与 zone 一律由服务端决定:请求体里的 player_id 只对不带会话的只读 GetPlayerGuild(mail 领附件读所在帮)生效,
-// 写方法一律只认会话、不带会话即拒绝(docs/design/gate-online-identity.md §7.5);zone_id 只认服务端归属。
+// 身份与 zone 一律由服务端决定:客户端方法的请求体里没有玩家与区字段,只认会话与服务端归属;
+// 唯一带 player_id 的是 GetPlayerGuild,只在不带会话的内部只读调用(mail 领附件读所在帮)时采信
+// (docs/design/gate-online-identity.md §7.5、§9.6)。
 // 本开关是服务级的,整个服务都登记在路由表;gate 上行白名单按方法方向收号,只收 REQUEST / ONE_WAY
 // (docs/design/client-rpc-callback.md §7 R4)。UpdateGuildScore 标了 CLIENT_RPC_SERVER_ONLY,仍登记在路由表,
 // 但不进 gate 上行白名单,客户端发上来在 gate 按非法包丢弃(计一次非法包、不回包,到不了路由服与 guild);

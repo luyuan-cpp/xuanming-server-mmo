@@ -110,11 +110,11 @@ func TestGlobalLoginYamlPinsFormalHome(t *testing.T) {
 	if err := c.Placement.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if !c.Placement.UsesRegionStorage() || c.Placement.NewPlayerStorageId != 0 {
-		t.Fatalf("样例 login.yaml 必须按地域存档库落点(Placement.StorageShards>0、不写 NewPlayerStorageId): %+v", c.Placement)
+	if c.Placement.StorageShards == 0 {
+		t.Fatalf("样例 login.yaml 必须按地域存档库落点(Placement.StorageShards>0): %+v", c.Placement)
 	}
 	const samplePlayer = uint64(1<<40 + 12345)
-	got, err := c.Placement.StorageIDForNewPlayer(samplePlayer, c.Node.ZoneId)
+	got, err := c.Placement.StorageIDForNewPlayer(samplePlayer)
 	if err != nil {
 		t.Fatal(err)
 	}

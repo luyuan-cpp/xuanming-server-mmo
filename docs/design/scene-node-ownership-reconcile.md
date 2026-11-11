@@ -1,20 +1,30 @@
-# scene 节点回来之后的场景归属对账(2026-11-06,缺口清单第 33 条)
+# scene 节点的场景归属对账(缺口清单第 33 条)
 
-状态:**已落码,未编译、未测试,待 Codex 验证(§10)。** Java 版不适用(§11)。
+状态:**已落码,未编译、未测试,待 Codex 验证(§10)。** 2026-11-06 初版(节点回来之后对账);2026-11-10 补完三项残余:
+与 etcd 失联期间也按映射收敛(§4.5)、节点号被新进程接走时全部排空(§4.6)、开始排空按住户预算限速(§4.7),加了告警(§8)。
+Java 版只登记待做(§11)。
 
 关联:[缺口清单](../handoff/server-gap-audit-20261101.md) 第 32、33 条;[再入屏障](scene-owner-reentry-barrier.md) §3.2;
-[场景创建架构](scene-creation-architecture.md)「死节点收尾」R1-I5;[控制面按 zone 化](control-plane-zone-scoping-20261105.md) §4.3、§4.5;
-[世界频道放置代次](world-channel-placement-generation.md)(同日另一会话,scene_manager 侧);[ECS 组件访问规则](ecs-component-access-rules.md)。
+[场景创建架构](scene-creation-architecture.md)「死节点收尾」R1-I5;[控制面按 zone 化](control-plane-zone-scoping-20261105.md) §4.2、§4.3、§4.5;
+[世界频道放置代次](world-channel-placement-generation.md);[ECS 组件访问规则](ecs-component-access-rules.md)。
 
 ## 1. 结论
 
-scene 节点在自己的 etcd 身份确认有效时,每 10 秒用 MGET 读一次本地全部场景的 `scene:{id}:node`(经本 zone 的场景控制域句柄
-`tlsSceneControlRedis`,只读)。某个实体连续两次读到「不是本节点」(映射指向别的节点或不存在),而且距它第一次被核对、
-或最近一次 CreateScene 按号命中它已满 60 秒,就走与 scene_manager 发来的 DestroyScene 完全相同的路径:
-`SceneLifecycle::DestroyScene` → `PlayerLifecycleSystem::BeginSceneDrain` 把住户存盘后改派,没有绑定了才销毁实体。
+scene 节点每 10 秒用一条 MGET 读本节点号的持有者记录 `node:zone:{z}:{n}:holder` 和本地全部场景的 `scene:{id}:node`
+(经本 zone 的场景控制域句柄 `tlsSceneControlRedis`,只读)。一个本地实体满足下面两条,就按本轮的住户预算走与 scene_manager
+发来的 DestroyScene 完全相同的路径:`SceneLifecycle::DestroyScene` → `PlayerLifecycleSystem::BeginSceneDrain` 把住户存盘后改派,
+没有绑定了才销毁实体。
 
-这是 Kubernetes kubelet 的做法:kubelet 回到集群后,把 API server 上已删除的 Pod 在本地停掉。期望状态只有一份(scene_manager
-写的映射),节点按它收敛,不自己判断谁该死。只在节点侧做,不加协议、不改 scene_manager。
+1. 连续两次读到「不归本进程」:映射指向别的节点、映射不存在,或者本节点号已被更新的登记(别的进程)接走;
+2. 距它第一次被核对、或最近一次 CreateScene 按号命中它已满 60 秒。
+
+核对不看本节点的 etcd 身份:etcd 整体故障时 scene_manager 不判任何节点死亡、映射不变,读到的都是本节点;只有本节点单边失联、
+被判死之后映射才会变。所以失联期间照样收敛,不用等 etcd 恢复。每轮每个节点最多新开始改派 200 名住户,控制域丢数据时
+全 zone 也不会同一时刻一起改派。
+
+这是 Kubernetes kubelet 的做法:按 API server 上的期望状态停掉本地多余的 Pod。期望状态只有一份(scene_manager 写的映射与持有者),
+节点按它收敛,不自己判断谁该死。节点不写控制域任何键;scene_manager 侧多写节点号持有者(连同纪元旁记)与本 zone 的 etcd 修订号水位、
+纪元两个键(§4.6),不加协议。
 
 ## 2. 问题
 
@@ -26,48 +36,57 @@ scene 节点在自己的 etcd 身份确认有效时,每 10 秒用 MGET 读一次
 | T0+90s | 身份转为不确认(半个租约没收到 ACK),每 5s 给玩家补存一次(既有) | — |
 | T0+180s | — | 租约到期,watch DELETE:写 death_at、摘负载集、入死节点收尾任务 |
 | T0+200s | — | 屏障放行:拆掉 A 名下实例的映射(A 不在负载集,不发 DestroyScene);世界频道「先建后改」改派到别的节点 |
-| T0+X | 连上 etcd:重新拿租约,按原 node_id、同一个 node_uuid 重新注册 | PUT 清 death_at;第 32 条的撤销已经晚了(任务早执行完) |
+| 之后某刻 | — | A 的节点号按「最小空闲 id」被新起的进程 B 拿走(可能发生),B 登记;还挂在这个号上的频道由 B 承载 |
+| T0+X | 连上 etcd:号还空着就按原 node_id、同一个 node_uuid 重新注册;号已被 B 拿走就因分配键冲突疏散退出 | — |
 
-此后 A 的进程里留着两类没有映射的实体:
+A 的进程里因此留着三类实体,玩家与新位置上的玩家互相看不见,实例谁也回收不了:
 
-- **实例(副本、镜像)**:新玩家进不去,scene_manager 的空闲回收看不到它(已不在 active 集合);
-- **世界频道**:留在旧实体里的玩家,与进了新频道(别的节点上同一个 scene_id)的玩家互相看不见。
+- **实例(副本、镜像)**:映射已被拆掉,新玩家进不去,scene_manager 的空闲回收看不到它;
+- **世界频道,改派到了别的节点号**:映射指向别的节点;
+- **世界频道,留在原节点号上、由接走这个号的 B 承载**:映射仍是「A 的号」,只看映射分不清是不是自己。
 
-玩家数据不受影响:被接管过的玩家,A 的存盘由 owner epoch / 写权行拒绝;没被接管的照常存盘。这是场景归属的一致性问题。
+2026-11-06 的初版只在 A 身份确认有效(重新注册成功)之后核对:A 一直连不上 etcd 时什么也不做,第三类在 A 重新注册失败、
+疏散退出之前一直留着。玩家数据不受影响:被接管过的玩家,A 的存盘由 owner epoch / 写权行拒绝;没被接管的照常存盘。
+这是场景归属的一致性问题。
 
 ## 3. 不选「失租就停服」
 
 etcd 整体故障时所有节点同时失租,节点分不清「etcd 挂了」和「只有我连不上」,失租自停等于 etcd 一挂全服掉线。
 `go/scene_manager/internal/constants/reentry_barrier.go` 文件头(2026-11-05 更正)定的也是:老节点继续服务,靠写权行挡回档。
-所以失联期间节点照常服务,回来之后再对账。
+
+本设计不靠节点自己猜:节点按控制面的结论行事。etcd 整体故障时控制面不会做出任何「拿走 A 的场景」的结论,A 照常服务;
+单边失联时控制面判 A 死、把场景改派或拆掉、号可能给了别人,这些结论都写在控制域里,A 读到就收敛。
 
 ## 4. 做法
 
 ### 4.1 期望状态的事实源
 
-- 唯一事实源:`scene:{id}:node`,值是属主 node_id 的十进制串(Go 侧 `strconv.FormatUint`,`createscenelogic.go` 的 `SceneNodeKeyFmt`)。
-  C++ 侧 `scene_ownership::SceneNodeKey` 与它是同一个键,跨语言契约,改名必须同批改(用例 `SceneNodeKeyMatchesTheSceneManagerKey` 钉住)。
-- 只读。节点不写控制域任何键:§4.3 的不变量「zone z 的控制域键只由 zone z 的 scene_manager 读写」不变,
-  `tlsSceneControlRedis` 原来也只读分线目录与神秘商人。
+- **场景属主** `scene:{id}:node`:值是属主 node_id 的十进制串(Go 侧 `strconv.FormatUint`,`createscenelogic.go` 的 `SceneNodeKeyFmt`)。
+- **节点号持有者** `node:zone:{z}:{n}:holder`:值是 `"<etcd ModRevision>:<node_uuid>"`,这个节点号最近一次登记的进程(§4.6)。
+- 两把键的 C++ 写法在 `scene_ownership::SceneNodeKey` / `NodeHolderKey`,与 Go 侧是跨语言契约,改名必须同批改
+  (C++ 用例 `KeysMatchTheSceneManagerKeys`、Go 用例 `TestNodeHolderKeyShape` 钉住同一个串)。
+- 只读。节点不写控制域任何键:不变量「zone z 的控制域键只由 zone z 的 scene_manager 读写」(control-plane-zone-scoping §4.3)不变。
 - 只看 `scene:{id}:node`,不读 `scene:{id}:zone`:节点只托管本 zone scene_manager 建的场景(发现按 zone 收窄,scene_manager 只认得本 zone
-  的节点),场景号全局唯一,别的 zone 不会改写本 zone 场景的映射(认领脚本比 zone、CreateScene 拒别的 zone)。同组别的 zone 有同号节点,
-  但它们的场景不会出现在本节点上。真出现「映射等于本节点号、却是别的 zone 写的」这种违例,结果是留着不拆,方向安全。
+  的节点),场景号全局唯一,别的 zone 不会改写本 zone 场景的映射(认领脚本比 zone、CreateScene 拒别的 zone)。真出现「映射等于本节点号、
+  却是别的 zone 写的」这种违例,结果是留着不拆,方向安全。
 - 不读反向索引 `node:zone:{z}:{n}:scenes`:那是派生索引,路由与收尾的判据都是映射本身。
 
 ### 4.2 判定(`world/scene_ownership_rules.h`,纯函数)
 
-每个本地实体一份核对状态 `SceneOwnershipCheckComp`(按需状态,只在内存):宽限起点、连续「不归本节点」次数、核对状态号。
+每个本地实体一份核对状态 `SceneOwnershipCheckComp`(按需状态,只在内存):宽限起点、连续「不归本进程」次数、核对状态号、
+是否已开始排空、是否在等预算。
 
 | 读数 | 归类 | 对状态的作用 |
 |---|---|---|
-| 等于本节点号 | `self` | 连击清零,留着 |
-| 别的节点号 | `other_node` | 连击 +1(封顶 2) |
-| 键不存在、空串 | `no_mapping` | 连击 +1(封顶 2) |
+| 本节点号已被更新的登记接走(§4.6),不看映射 | `superseded` | 连击 +1(封顶 2) |
+| 映射等于本节点号 | `self` | 连击清零,留着;已在排空或在等预算的,停下 |
+| 映射是别的节点号 | `other_node` | 连击 +1(封顶 2) |
+| 映射不存在、空串 | `no_mapping` | 连击 +1(封顶 2) |
 | 整条命令失败、断线空应答、元素类型不对、本节点号未知 | `unknown` | 不改连击,不动手 |
 
 释放条件:连击达到 `kNotMineConfirmations = 2`,并且这次读的**发出时刻**距宽限起点已满 `kCreateGrace = 60s`。
-判定释放之后,只要后续读数仍不归本节点,每一轮都再走一次销毁(幂等,住户走完之前实体留着)。排空途中读到映射又回到本节点
-(scene_manager 把它迁了回来),就停止排空、不再算「排空中」;已经改派走的住户由 scene_manager 重新落点。
+判定释放之后,只要后续读数仍不归本进程,每一轮都再走一次销毁(幂等,住户走完之前实体留着)。排空途中读到映射又回到本节点
+(scene_manager 把它迁了回来),就停止排空;已经改派走的住户由 scene_manager 重新落点。
 
 - **为什么要两次**:一次读可能落在 scene_manager 两步写入的中间。两次相隔一个周期都说不是,才当成稳定的期望状态。代价只是晚 10 秒。
 - **读不到不算证据,也不推翻证据**:控制域抖动时永远不会因此拆场景;「不归、读不到、不归」仍算两次。
@@ -96,31 +115,135 @@ etcd 整体故障时所有节点同时失租,节点分不清「etcd 挂了」和
 1. `BeginSceneDrain`:给场景里每个有 gate 会话的玩家登记改派票据,走既有退出流程(存盘落地 → 写交接标记 → 发 EnterScene,
    `scene_id` / `scene_conf_id` 都留 0,由 scene_manager 按它自己的规则落点)。已断线的玩家(含断线保留中的)只存盘、不改派,
    与频道缩容排空同一口径。
-2. 按玩家绑定重新数一遍;还有绑定就留着实体,下一轮仍不归本节点再调;没有了才销毁(同时记 Agones 单元账)。
+2. 按玩家绑定重新数一遍;还有绑定就留着实体,下一轮仍不归本进程再调;没有了才销毁(同时记 Agones 单元账)。
 
 改派之后玩家的去向由 scene_manager 定,节点不复制规则:世界频道的住户回到同号频道(已在新属主上),实例与镜像的住户回大世界。
+第一次开始排空受住户预算约束(§4.7);已在排空的实体每轮照常重调,不占预算。
 
 对账器在进程内直接调 `SceneLifecycle::DestroyScene`,不经 DestroyScene RPC,也就不经放置代次的栅栏。这是有意的:栅栏挡的是迟到的陈旧
 请求,对账器的输入是刚读到的期望状态本身。
 
-### 4.5 门禁
+### 4.5 门禁:为什么不看 etcd 身份
 
 | 门禁 | 不满足时 |
 |---|---|
-| 本节点 etcd 身份确认有效(`EtcdService::IsIdentityConfirmedFresh`:租约已授予、不在重注册中、注册流未停、最近一次 keepalive ACK 在 TTL/2 内),与断线释放标记 A1′ 的探针是同一个函数 | 本轮不核对(`identity_unconfirmed`)。失联期间分不清 etcd 整体故障与单边失联,排空要走的改派链路也被身份闸挡着。整节点疏散(身份冲突)开始前对账器先 Stop |
 | 控制域 Redis 已连上 | 本轮不核对(`redis_unavailable`) |
 | 上一轮的应答都回来了 | 本轮不发(`previous_in_flight`)。Redis 卡住时 RedisManager 的存活探测最迟约 20 秒摘掉连接,在途命令回空应答,计数归零 |
-| 应答回来时身份仍确认有效、本节点号与发读时相同 | 这批读数作废,计 `unknown` |
+| 应答回来时本节点号与发读时相同 | 这批读数作废,计 `unknown` |
 | 应答回来时实体仍在、核对状态号与 scene_id 都没变 | 这个实体的读数作废 |
 
-启停:`SetAfterStart` 里 Start(此时 node_id 已是终值);普通停机(`exitAllPlayers`)、身份冲突关停(`SetOnConflictShutdown`,整节点疏散接管全部玩家)、
-拆除前(`SetBeforeTeardown`)各 Stop 一次,Node 作用域结束后再 Stop 一次兜底。`exitAllPlayers` 在 Node 析构的兜底 drain 循环之前执行,
-所以探针捕获的 node 在它析构之前就解开了。定时器与 Redis 回调只捕获内部 Session 的 `weak_ptr`(AGENTS.md §11.7),Stop 之后到达的应答直接丢弃。
+初版另有一道「本节点 etcd 身份确认有效(`EtcdService::IsIdentityConfirmedFresh`)才核对」,2026-11-10 去掉。理由:
 
-### 4.6 回来之后多久收敛
+1. **「不归本进程」的三种读数都不依赖 etcd 身份就成立。** 映射指向别的节点号、映射不存在:不论本进程还持不持有这个号,scene_manager 都不要
+   这个场景在这里。节点号被更新的登记接走:持有者记录本身就是证明(§4.6)。唯一依赖身份的是「映射等于本节点号」能不能当成「是我」,
+   而这个读数只会让实体留着,方向安全;它的歧义由 §4.6 处理。
+2. **etcd 整体故障不会触发排空。** scene_manager 判死只来自 watch DELETE 与全量同步的陈旧清扫;etcd 整体故障时 watch 收不到 DELETE,
+   全量同步读不到快照或被存活集闸门(B1-1)压住,不会判任何节点死亡,映射不变。etcd 恢复时租约随新领导者续期,节点 1~2 秒内按同一
+   node_uuid 重新注册,第 32 条在屏障内撤掉收尾任务,映射同样不变。
+3. **改派链路不需要身份。** 存盘、交接标记、EnterScene 都不过身份闸;过身份闸的只有断线释放标记(A1′)与改派踢线前的凭证补写,
+   身份不确认时跳过,与整节点疏散(身份冲突时)完全同一口径,只是范围是单个场景。
 
-节点重新注册、身份转为确认有效之后,第一轮读到不归本节点(连击 1),下一轮(+10s)连击 2、宽限早已过,开始排空。
-即重新注册后约 10~20 秒开始改派住户,住户全部离开后实体销毁。失联期间(身份不确认)不核对,分裂一直持续到 etcd 恢复。
+身份探针仍然注入(与 A1′ 同一个函数),只用来解读持有者记录:身份确认有效时本进程此刻持有分配键,别人的记录只能是旧值(§4.6)。
+
+### 4.6 节点号被新进程接走
+
+C++ 节点按「最小空闲 id」分配 node_id。A 的租约到期之后,分配键随之过期,新起的进程 B 可以拿走同一个号。A 的世界频道如果在
+A 判死时没被改派(比如 B 在屏障走完之前就登记了,这个号看起来一直活着),scene_manager 之后会把频道补建到这个号上,也就是 B 上;
+映射的值没变。A 只看映射会一直以为是自己的。
+
+**scene_manager 写持有者**(`go/scene_manager/internal/logic/node_holder.go`):
+
+- 每次 watch PUT(每个副本都写,与死亡标记的清除同一口径)与领导者的全量同步,把这次登记写成
+  `node:zone:{z}:{n}:holder = "<etcd ModRevision>:<node_uuid>"`,TTL 24 小时(全量同步约每分钟给在册节点续一次)。旁边同写同过期一个
+  `node:zone:{z}:{n}:holder_epoch`,记着写入时本 zone 的 etcd 纪元(见下)。C++ 只读持有者记录本身。
+- 同一个纪元里,Lua 只在新值的修订号不小于已存值时覆盖(十进制串先比长度再比字典序,与放置代次同一个比较函数,大于 2^53 不丢精度)。
+  ModRevision 是 etcd 全局单调的修订号,B 只能在 A 的分配键过期之后登记,它那次登记的修订号一定更大;副本之间先后乱序也盖不回旧的。
+- 不随 DELETE 删除:节点死了,它是这个号最后一次登记的进程仍是事实,新进程登记时自然覆盖。没有 node_uuid 或修订号的登记不写。
+- 只发已过存活集闸门的快照:批量发布放在 `applyNodeSnapshot` 的领导者分支里,闸门(B1-1)拒掉的残缺快照在替换镜像之前就返回了。
+- 键以 `node:zone:{z}:` 开头,与其他节点级控制域键一样只由本 zone 的 scene_manager 写,合服按前缀清得到;不带 hash tag。
+
+**etcd 修订号倒退**(换成新集群、修订号从 1 重计,或者不带 `--bump-revision` 从快照恢复;运维规定所有节点重启,
+`docs/ops/etcd-maintenance-runbook.md` §7a):倒退之前写下的记录与新登记的修订号不可比,单调写会把修订号更小的新登记拒掉。
+所以修订号只在同一个**纪元**里比:
+
+- 已存记录的纪元不是当前纪元(`scene_manager:etcd_epoch:zone:{z}`,没有时按 0)时,写入不比修订号、直接覆盖。
+- 纪元只由领导者推进。每轮全量同步先读本 zone 的修订号水位 `scene_manager:etcd_revision_seen:zone:{z}`(领导者读到过的 etcd 当前修订号
+  的最大值),再线性一致地读 etcd 当前修订号 C。C 小于水位就是倒退了:一个脚本里比较并写,水位仍是刚读到的值时纪元加一、水位降到 C;
+  ERROR、计数与告警见 §8。随后照常发布快照,快照里在册的号当场换成新纪元的记录;不在快照里的号,旧记录留在旧纪元,
+  下一次登记时直接被覆盖。不倒退时水位抬到 C,只升不降。两个 zone 级键不设 TTL,只由本 zone 的领导者写。
+- **先读水位、后读 C** 是判据成立的前提:水位里的值都是某一任领导者读 etcd 得到的修订号、读到之后才写进来;同一个 etcd 里,
+  晚于那次读的线性一致读一定不小于它。领导者交接时新旧两任同时在跑、或者这一轮的快照读得很早,都不会误判成倒退。
+- **不用快照应答头的修订号判断**:快照读完到写持有者之间,跟随者的 watch PUT 可能已经写进快照之后的新登记,修订号比快照头大,
+  但不是残留;拿快照头当「etcd 当前修订号」,正常轮就会把它盖回快照里的上一代。所以正常轮严格单调,只有认出倒退才换纪元。
+- **不只覆盖「修订号大于 C」的旧记录**:倒退之前的记录修订号也可能落在新登记与 C 之间,一样拒得掉新登记;倒退那一刻没在册的号也要能
+  被之后的登记覆盖。纪元让「旧」不靠修订号的大小来判断。
+- 换纪元那一轮有一个窗口:倒退之后、换纪元之前写下的新登记也属于旧纪元,会被快照里同号的登记覆盖;它比快照还新时,这个号的记录暂时
+  回到上一代。本副本的 watch 从快照修订号之后接着读(`watchAndRefresh`),随后在新纪元里按单调覆盖改回。这几秒里只是那个号的上一代
+  进程晚一点认出被顶替;新进程看到的持有者修订号小于自己见过的,不会被误判顶替(下表)。
+
+**节点判定**(`scene_ownership::HolderTracker`,跨轮记着本进程自己那次登记的修订号 `ownRevision`):
+
+| 持有者读数 | 判定 |
+|---|---|
+| 是本进程的 uuid | 记下修订号(最近一次见到的,不取历史最大:记录在同一个纪元里单调写,只有 etcd 修订号倒退、换了纪元之后才会变小,那时要跟着新集群比);按映射判 |
+| 别人的 uuid,修订号 > ownRevision,本节点身份**不**确认有效 | **被接走**:本地实体一律 `superseded` |
+| 别人的 uuid,但本节点身份确认有效 | 按映射判:本进程此刻持有分配键,那条只能是登记之前留下的旧值 |
+| 别人的 uuid,但修订号不大于 ownRevision,或还没见过本进程自己的记录(ownRevision = 0) | 按映射判:证明不了别人更新 |
+| 键不存在、读不到、记录损坏、不知道自己的 uuid | 按映射判:没有信息 |
+
+判据里没有时间推断,只有「别人、比我那次登记更新」这一条证明,所以不会因为 scene_manager 迟迟没处理某次 PUT 而误判:新进程接走号
+之后、scene_manager 写下它的记录之前,控制域里是更旧的记录,新进程自己的身份也确认有效,两道都不会让它把刚分到的场景排空。
+代价是本进程一直没读到自己的持有者记录(ownRevision 一直是 0)时认不出被接走,退回到 A 重连 etcd 时分配键冲突、疏散退出那条老路。
+这种状态由指标 `scene_ownership_own_holder_known` 与告警 `SceneOwnershipOwnHolderUnknown` 报出来(§9 第 1 条)。
+
+本进程那次登记的修订号也可以从自己注册时 etcd 应答头里拿,不必等 scene_manager 写回来。没有这样做:要改 `etcd_service.cpp` 的注册路径
+并多注入一个探针,而它能补的只是上面那一种「scene_manager 一次都没写过」的情形;从持有者记录学到的修订号与 scene_manager 用的是同一个
+来源,etcd 修订号倒退时一起换纪元,不会出现节点拿新集群的小修订号、记录还是旧集群大修订号而误判被接走的窗口。
+
+被接走之后 A 不主动退出进程:它的场景全部排空、没人再往它身上放东西;重连 etcd 时照常因分配键冲突疏散退出。
+
+### 4.7 限速:按住户预算开始排空
+
+每轮核对的全部批次共用一份 `ReleaseBudget`,缺省 `kMaxRelocationsPerSweep = 200` 名住户:
+
+- 判定释放、还没开始排空的实体,按它绑定的玩家数(与 `BeginSceneDrain` 改派的范围同一口径:`SceneEntityComp` + `PlayerGuidComp`)扣预算;
+  不够就标记「等预算」(`releaseDeferred`),留到下一轮,下一轮连击仍是 2、照样判释放、重新竞争预算。
+- 没有玩家的实体不占预算,随时销毁。已经开始排空的实体每轮重调,不占预算(它的住户早已登记改派)。
+- 本轮第一个有住户的实体超出预算也放行:一个满员频道的住户可能比预算还多,不能永远排不动。
+- 应答按发出顺序回来,先回来的批次先用。一个 zone 的改派速率上限 ≈ 节点数 × 200 / 10 秒,单个节点的瞬时量最多一个场景的住户
+  (整节点疏散一次就是全部住户,这个量系统本来就要扛)。
+
+控制域丢数据(被清空、换成空实例、主从切换丢写入)时,全 zone 的场景都会读成 `no_mapping`,收敛方向仍是排空:scene_manager 也按丢后的
+状态重新铺频道、找不到这些实例,不排空它们会一直孤立。限速让这件事分批发生,scene_manager 有时间重建频道,被改派的玩家落到新频道;
+告警 `SceneOwnershipMassRelease` 让值班去查控制域为什么丢了状态。没有加「大面积缺失就压住」:第 33 条的实例节点本来就是全部缺失,
+丢掉的状态也不会自己回来,压住只会推迟收敛。
+
+**200 的取值(2026-11-11 定案,缺口清单第 33 条;原文「保守的初值,没有压测基线」)**:
+
+- 200 名 / 10 秒 = 每个节点每秒开始改派 20 名。R18 压测(1 zone 45k、4 个 scene,`docs/stress/stress-1zone-45k-2026-06-04-round18.md`)
+  稳态每秒约 70 次进场,即每个 scene 节点约 17.5 次,进场全部成功、apply 均值约 33ms。改派一名住户的开销是一次退出存盘加一次在别的节点进场,
+  与登录进场同一条路径,所以 20 名 / 秒 / 节点在已经跑通过的量级上,不用改。
+- 按节点限、不按 zone 均摊:节点号被接走(§4.6)时只有这一个节点在排空,按 zone 均摊会让它慢上 n 倍(n = 本 zone 的 scene 节点数,
+  4.5 万人的 zone 不论 n 多大都要约 11 分钟才能排空一个节点);按节点限时 1.125 万住户的节点约 9.4 分钟,2250 住户的节点不到 2 分钟。
+  全 zone 一起排空(控制域丢数据)时 zone 的总速率 = 20 × n 名 / 秒,随节点数涨;它落在 scene_manager、go/db、TiDB 上,三者都按 zone 规模扩副本,
+  这本来就是灾难恢复路径,`SceneOwnershipMassRelease`(critical)会叫值班。
+- 节点之间没有共享的限速器:节点对控制域只读(control-plane-zone-scoping §4.3),不能在那里放全 zone 的令牌桶;为一个灾难路径另起一套
+  共享状态不值得。不做成配置项:灾难当中改配置要滚动重启 scene,只会更乱;偏小由 `SceneOwnershipReleaseBacklog` 暴露,改常量重发即可。
+- 压测里补一轮「清空控制域」的故障演练核对这条(`docs/stress/` 的压测方案)。
+
+### 4.8 启停与生命周期
+
+`SetAfterStart` 里 Start(此时 node_id 与 node_uuid 已是终值);普通停机(`exitAllPlayers`)、身份冲突关停(`SetOnConflictShutdown`,
+整节点疏散接管全部玩家)、拆除前(`SetBeforeTeardown`)各 Stop 一次,Node 作用域结束后再 Stop 一次兜底。`exitAllPlayers` 在 Node 析构的
+兜底 drain 循环之前执行,所以探针捕获的 node 在它析构之前就解开了。定时器与 Redis 回调只捕获内部 Session 的 `weak_ptr` 与本轮预算的
+`shared_ptr`(AGENTS.md §11.7),Stop 之后到达的应答直接丢弃。
+
+### 4.9 多久收敛
+
+- A 一直连不上 etcd:屏障放行(T0+200s)之后,控制域里的映射一变,A 下一轮读到连击 1,再下一轮(+10s)开始排空;节点号被 B 接走的,
+  从 scene_manager 写下 B 的持有者记录算起同样两轮。
+- A 连回 etcd、按原号重新注册:同上,两轮之内开始排空。
+- 住户多于预算时按每轮 200 名分批。
 
 ## 5. 各类场景的口径
 
@@ -129,6 +252,7 @@ etcd 整体故障时所有节点同时失租,节点分不清「etcd 挂了」和
 | 世界频道(MainWorld / MainWorldCross 节点) | 登记脚本先写映射、同一轮 init 再补 CreateScene;改派先建后改 | 被改派走:`other_node`,排空,住户回同号频道的新属主 |
 | 副本实例(Instance / InstanceCross 节点) | 登记脚本先写映射,再 CreateScene;失败回滚删映射、发 DestroyScene | 死节点收尾拆掉:`no_mapping`,排空,住户回大世界 |
 | 镜像 | 按实例登记,属主 = 与镜像源共置的节点(`resolveMirrorSourceNode`),写的是承载它的节点 | 同实例。源频道被迁走时 scene_manager 级联拆镜像;DestroyScene 丢了也由这里收掉 |
+| 本节点号已被新进程接走,频道留在这个号上 | 映射仍是这个号 | `superseded`,全部排空,住户回到 B 上的同号频道 |
 | 正在缩容排空的频道(`scene:{id}:draining`) | 映射仍是本节点 | `self`,不动,由 scene_manager 的排空负责 |
 | 正在迁往本节点的预建 | 映射还指旧属主 | 宽限期内不动;命中已有实体时宽限期重算 |
 | 迁走之后旧属主上的实体 | 映射已是新属主 | `other_node`,与 scene_manager 随后发来的 DestroyScene 同一个动作,谁先到都一样 |
@@ -139,21 +263,23 @@ scene_manager 认得和派活,映射在本 zone 的控制域里。跨 zone 传�
 
 ## 6. 为什么不会误拆
 
-本地实体只会因为下面这件事被拆:两次相隔一个周期的读(都在身份确认有效、本节点号不变时发出)都说映射不是本节点,
-而且后一次发出时距最近一次 CreateScene 命中(或第一次核对)已满 60 秒。逐条对照 scene_manager 的写法:
+本地实体只会因为下面这件事被拆:两次相隔一个周期的读(本节点号不变时发出)都说它不归本进程,而且后一次发出时距最近一次
+CreateScene 命中(或第一次核对)已满 60 秒。逐条对照:
 
 1. **节点上的场景只来自本 zone scene_manager 的 CreateScene**(gRPC `SceneNodeGrpc.CreateScene`;muduo 版 `Scene.CreateScene` 全仓只有用例在调)。
 2. **新场景先写映射再 CreateScene**(`scene_registration.go`):实体建好时映射已经指向本节点。之后读到不是本节点,只能是映射被拆或被改走了。
 3. **改派都是先建后改,CAS 紧跟 CreateScene**,上界远小于宽限期;CAS 落空的预建由 scene_manager 按放置代次回收。
 4. **生产代码里没有「CAS 到本节点却不先 CreateScene」的写法**(不预建的 `reassignSceneNode` 只剩用例在用,2026-11-06 核对)。
    所以任何把场景重新放回本节点的动作,都会先有一次 CreateScene 命中本地实体,把宽限期与在途读数清掉。
-5. 读是只读的 MGET,不参与 scene_manager 的任何原子范围,不会让它的脚本看到中间状态。
+5. **`superseded` 只来自证明**:别人的登记、修订号比本进程那次登记更新、而且本进程此刻身份不确认有效(§4.6)。
+6. **etcd 整体故障不改映射**(§4.5 第 2 条),所以去掉身份门禁不会让全服在 etcd 故障时排空。
+7. 读是只读的 MGET,不参与 scene_manager 的任何原子范围,不会让它的脚本看到中间状态。
 
-剩下的误差来源是控制域本身丢数据(§9 第 2 条)。
+剩下的误差来源是控制域本身丢数据:那时排空是正确的收敛方向,按 §4.7 分批。
 
 ## 7. 顺带收掉的孤儿
 
-对账的输入只有「映射是不是本节点」,所以凡是「有实体没映射」都会在宽限期后收掉,不限于第 33 条:
+对账的输入只有「是不是本进程的」,所以凡是「有实体没映射」都会在宽限期后收掉,不限于第 33 条:
 
 - 回滚补发的 DestroyScene 早于节点处理完在途的 CreateScene,实体留下(11-05「场景拆除任务」条目的残余,原写「要 C++ 侧墓碑」);
 - rebalance 迁移之后发往旧属主的 DestroyScene 失败(它是尽力而为、失败只记日志),旧实体与住户留在旧节点上;
@@ -162,61 +288,133 @@ scene_manager 认得和派活,映射在本 zone 的控制域里。跨 zone 传�
 
 ## 8. 开销与可观测性
 
-**开销**:每轮每个节点发 ceil(本地场景数 / 256) 条 MGET,一个控制域实例每秒读的键数 = 同组全部场景数 / 10。
-例:一组 2 万个场景约 2000 键/s,单条 MGET 最多 256 个键。上一轮没回来不发下一轮,不叠加。
+**开销**:每轮每个节点发 ceil(本地场景数 / 256) 条 MGET,每条多带一个持有者键;一个控制域实例每秒读的键数 ≈ 同组全部场景数 / 10。
+例:一组 2 万个场景约 2000 键/s。上一轮没回来不发下一轮,不叠加。scene_manager 每次 PUT 与每次全量同步(领导者,每个在册节点一次)
+多一次 EVAL;领导者每轮全量同步另多一次 GET(水位)、一次 etcd 线性一致读(只要应答头,`WithCountOnly`)与一次 EVAL(抬水位)。
 
-**日志**(前缀 `[SceneOwnership]`):开始排空时一条 WARN(scene_id、读数归类、读到的属主、本节点号、连击、已核对秒数);
-有绑定留着时一条 WARN;销毁时一条 INFO;启停各一条 INFO。之后每轮重试只有 `BeginSceneDrain` 自己的那行 WARN。
+**日志**(前缀 `[SceneOwnership]`,英文):开始排空时一条 WARN(scene_id、读数归类、读到的属主、本节点号、连击、已核对秒数、住户数);
+有绑定留着时一条 WARN;销毁时一条 INFO;本批有实体在等预算时一条 INFO;判定本节点号被接走 / 不再被接走时各一条 ERROR / WARN;
+启停各一条 INFO。之后每轮重试只有 `BeginSceneDrain` 自己的那行 WARN。scene_manager 写持有者失败时 `[NodeHolder]` 一条 ERROR;
+认出 etcd 修订号倒退、换了纪元时一条 ERROR(`etcd revision went back in zone N: current revision C is below the recorded W ...`,带新纪元);
+读不到 etcd 当前修订号、读不到或读到损坏的水位、换纪元写失败时各一条 ERROR,这一轮只做单调覆盖。
 
-**指标**(`RegisterSceneOwnershipMetrics`,设了 `MMORPG_METRICS_PORT` 才有出口,标签都是低基数):
+**指标**(`RegisterSceneOwnershipMetrics`,设了 `MMORPG_METRICS_PORT` 才有出口,K8s 缺省 9400;标签都是低基数,启动即以 0 导出):
 
 | 指标 | 类型 | 说明 |
 |---|---|---|
-| `scene_ownership_sweeps_total{outcome}` | counter | sent / no_scenes / identity_unconfirmed / redis_unavailable / previous_in_flight / send_failed |
-| `scene_ownership_observations_total{result}` | counter | self / other_node / no_mapping / unknown |
-| `scene_ownership_releases_total{stage}` | counter | drain_started / destroyed。有增长就说明本节点托管过控制面已改派或已拆掉的场景 |
-| `scene_ownership_releasing_scenes` | gauge | 已判定不归本节点、还在等住户离开的本地实体数 |
+| `scene_ownership_sweeps_total{outcome}` | counter | sent / no_scenes / redis_unavailable / previous_in_flight / send_failed |
+| `scene_ownership_observations_total{result}` | counter | self / other_node / no_mapping / superseded / unknown |
+| `scene_ownership_releases_total{stage}` | counter | drain_started / destroyed。有增长就说明本节点托管过已不归它的场景 |
+| `scene_ownership_tracked_scenes` | gauge | 登记了核对状态的本地实体数(大面积释放告警的分母) |
+| `scene_ownership_releasing_scenes` | gauge | 已开始排空、还在等住户离开的本地实体数 |
+| `scene_ownership_release_deferred_scenes` | gauge | 已判定不归本进程、在等住户预算的本地实体数 |
+| `scene_ownership_superseded` | gauge | 1 = 最近一次读到本节点号已被别的进程接走 |
+| `scene_ownership_own_holder_known` | gauge | 1 = 本进程读到过自己的持有者记录;托管着场景却一直是 0 时认不出被接走(§9 第 1 条) |
+
+**告警**(`deploy/k8s/scene-ownership-alerts.yaml`,PrometheusRule,与 `owner-epoch-alerts.yaml` 同法安装;处置见
+`docs/ops/scene-node-role-split.md`「场景归属对账告警」;规则引用的指标名与取值由 `tools/scripts/tests/scene_ownership_alerts_contract.tests.ps1` 对照 C++ 源码钉住):
+
+| 告警 | 级别 | 条件 |
+|---|---|---|
+| `SceneOwnershipUnownedScenesReleased` | warning | 某个 scene Pod 15 分钟内开始排空过任何场景 |
+| `SceneOwnershipMassRelease` | critical | 一个 namespace 10 分钟内开始排空的场景数超过它场景总数的一半,且至少 10 个 |
+| `SceneOwnershipNodeIdTakenOver` | critical | 某个 scene Pod 读到自己的节点号已被别的进程接走 |
+| `SceneOwnershipOwnHolderUnknown` | warning | 某个 scene Pod 托管着场景,却持续 10 分钟没读到自己的节点号持有者记录 |
+| `SceneOwnershipReleaseBacklog` | warning | 某个 scene Pod 排空中与等预算的实体数持续 15 分钟大于 0 |
+| `SceneOwnershipReconcileBlind` | warning | 某个 scene Pod 10 分钟里过半轮次读不到控制域,持续 5 分钟 |
+
+scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_total`(不带标签,`go/scene_manager/internal/metrics/node_holder.go`,
+只在换纪元写成时加一)与告警 `SceneManagerEtcdRevisionRegressed`(critical,`deploy/k8s/scene-manager-alerts.yaml` 的
+`scene-manager.node-role-split` 组,15 分钟内有增长即响;处置见 etcd 运维手册 §7a;字段与指标注册也由上面那个契约测试钉住)。
 
 ## 9. 残余与风险
 
-1. **一直连不上 etcd 的节点不对账**:身份不确认期间不核对,分裂持续到 etcd 恢复。这是 §3 的取舍:分不清 etcd 整体故障与单边失联时,
-   宁可继续服务。
-2. **控制域丢数据时会大面积排空**:控制域实例被清空、换成空实例、或故障切换丢了最近的写入,本节点的场景会读成 `no_mapping`,
-   过宽限期后被排空,住户改派到 scene_manager 重新铺好的频道。这与 scene_manager 自己的口径一致(它也按丢后的状态铺频道、找不到这些实例),
-   收敛方向正确,但同一时刻全 zone 的玩家一起改派。部署手册要求切换控制域实例前先停本 zone 的 scene 节点(control-plane-zone-scoping §4.6),
-   这条仍要遵守。没有加「大面积缺失就压住」的闸门:第 33 条的实例节点本来就是全部缺失,压住只会推迟收敛。
-3. **宽限期依赖 scene_manager「先建后改」窗口的上界**。以后新增改派路径,若预建之后隔很久才 CAS,或者 CAS 到某节点而不先对它 CreateScene,
+1. **本进程一直没读到自己的持有者记录时,认不出被接走**(接受;有指标、告警与退路,2026-11-11 定):ownRevision 只从持有者记录里学。
+   本进程登记之后 scene_manager 一直没写成它的记录、或者本进程一直读不到控制域时,ownRevision 一直是 0;这时号被接走、频道留在这个号上的
+   那一类实体,要等本进程重连 etcd、分配键冲突、疏散退出才收掉。
+   - **为什么罕见**:节点托管着场景,说明 scene_manager 已经处理过它的注册,处理时就写持有者;写不成时全量同步约每分钟重写一次。
+     号要被接走,本进程得先失租(租约 180 秒),这期间至少还有两三次重写,节点每 10 秒读一次。要连续几分钟写不成或读不到,才会走到这里。
+   - **为什么不拿本进程注册时 etcd 应答里的修订号顶替**:etcd 修订号倒退之后、换纪元之前,控制域里还留着旧纪元的大修订号记录
+     (存活集闸门压着全量同步时,这段可能有几分钟)。节点拿新集群的小修订号去比,本节点身份恰好不确认的那几轮,会把旧记录当成
+     「别人更新的登记」,把本地场景误排空。现在的写法只会少拆、不会多拆(§6),这条残余也是同一方向。
+   - **兜底**:节点导出 `scene_ownership_own_holder_known`(读到过自己的记录为 1)。托管着场景却持续 10 分钟是 0 时告警
+     `SceneOwnershipOwnHolderUnknown`(warning):先修 scene_manager 到控制域的写入或节点的读;修不好、而这个节点又与 etcd 失联时,
+     按 `docs/ops/scene-node-role-split.md` 的处置核对这个节点号现在登记的进程,不是它就重启它。号真被接走时,
+     本进程重连 etcd 也照常因分配键冲突疏散退出。
+2. **不在任何场景里的玩家实体不归对账管**:节点号被接走时,对账只排空场景;在途换图等不绑定场景的玩家实体由它们自己的超时与
+   重连 etcd 时的整节点疏散收掉。
+3. **住户预算 200 名 / 轮 / 节点(2026-11-11 定案保留,依据见 §4.7)**:按 R18 实测的每节点进场速率定;偏小时排空积压
+   (`SceneOwnershipReleaseBacklog` 会响),全 zone 一起排空时下游按 zone 规模扩副本。「清空控制域」的故障演练列进压测方案作复核,不再挡定案。
+4. **宽限期依赖 scene_manager「先建后改」窗口的上界**。以后新增改派路径,若预建之后隔很久才 CAS,或者 CAS 到某节点而不先对它 CreateScene,
    要同时调大 `kCreateGrace` 或改这里的判据。`scene_ownership_rules.h` 与本节都写明了这条跨模块依赖。
-4. **控制域换成 Redis Cluster 时 MGET 会跨槽报错**:报错整批按读不到处理,只会不拆、不会误拆;真要上 Cluster(control-plane-zone-scoping §5)
-   时改成按槽分批。
-5. **排空期间每轮重调一次 DestroyScene**,`BeginSceneDrain` 每次打一行 WARN;与 scene_manager 重发 DestroyScene 的频率同量级。
-6. **断线保留中的玩家会被直接退出**(只存盘不改派):与频道缩容排空同一口径。短重连时 scene_manager 按 location 回到同号场景的新属主。
-7. **还没有告警规则**。C++ scene 的指标出口按 `MMORPG_METRICS_PORT` 开,接告警时建议 `increase(scene_ownership_releases_total{stage="drain_started"}[15m]) > 0`
-   报 warning,`scene_ownership_releasing_scenes` 持续大于 0 超过 10 分钟报 warning(住户迟迟不走)。
+5. **控制域换成 Redis Cluster 时 MGET 会跨槽报错**:报错整批按读不到处理,只会不拆、不会误拆;真要上 Cluster(control-plane-zone-scoping §5)
+   时改成按槽分批,持有者键单独读。
+6. **排空期间每轮重调一次 DestroyScene**,`BeginSceneDrain` 每次打一行 WARN;与 scene_manager 重发 DestroyScene 的频率同量级。
+7. **断线保留中的玩家会被直接退出**(只存盘不改派):与频道缩容排空同一口径。短重连时 scene_manager 按 location 回到同号场景的新属主。
+8. **告警规则没有过 promtool,也没有装进任何集群**:交 Codex,§10 第 7 步(promtool)与第 7a 步(本机 dev 集群)。
+9. **水位丢了的那一轮认不出倒退**(接受;有手工退路,2026-11-11 定):没有水位的那一轮只建立水位。水位刚丢、etcd 又恰在这一轮之前倒退,
+   这次倒退认不出来:旧记录里修订号大于新登记的,要等过期(不再续期,最长一天)才让位,期间这些号认不出顶替。只少一层识别,不会误判排空。
+   - **为什么接受**:水位只在控制域丢数据时才会没有。整个实例丢数据(被清空、换成空实例)时,持有者记录跟着一起没了,没有残留可防;
+     从备份恢复时,水位与还没过期的持有者记录出自同一份快照;主从切换只丢最后一瞬的写入,而水位第一次写成之后只升不降,
+     丢掉的最多是一次抬升,不会变成没有。剩下只有人手工删键,etcd 运维手册 §7a 写明不要删。
+   - **为什么不另做「从持有者记录反推水位」**:那要每轮多读一遍在册节点的持有者与纪元旁记,只为覆盖手工删键这一种情形,得不偿失。
+   - **退路**:计划内的换集群之后,某个 zone 没亮 `SceneManagerEtcdRevisionRegressed`(按手册每个 zone 应亮一次),确认 etcd 确实倒退之后,
+     在那个 zone 的控制域实例上手工 `INCR scene_manager:etcd_epoch:zone:<z>`。效果与自动换纪元相同:该 zone 全部持有者记录让位给
+     下一次登记。不需要时多做一次,也只是全部记录重写一遍,不会误判排空。
+10. **倒退时没重启的老进程认不出被接走**:它记着倒退之前的大修订号,新集群里接走它节点号的登记修订号更小。所以 etcd 运维手册 §7a
+    要求修订号倒退后重启全部 scene 节点;告警 `SceneManagerEtcdRevisionRegressed` 提醒这一步。
 
 ## 10. 文件与验证
 
 **改动**:
 
-- 新增 `cpp/libs/services/scene/world/scene_ownership_rules.h`(纯规则)、`world/scene_ownership_reconciler.{h,cpp}`(核对状态组件、
-  读数适配、ECS 级应用、定时宿主、指标)。登记进 `cpp/libs/services/scene/scene.vcxproj` 与 `.filters`(CMakeLists 由 vcxproj 生成)。
-- `world/scene_lifecycle.{h,cpp}`:新增 `SceneLifecycle::ReuseExistingScene`;`CreateScene` / `DestroyScene` 不变。
+- C++ 新增 `cpp/libs/services/scene/world/scene_ownership_rules.h`(纯规则:读数分类、连击与宽限、持有者判定、住户预算)、
+  `world/scene_ownership_reconciler.{h,cpp}`(核对状态组件、MGET 应答适配、ECS 级应用、定时宿主、指标)。登记进
+  `cpp/libs/services/scene/scene.vcxproj` 与 `.filters`(CMakeLists 由 vcxproj 生成)。
+- `world/scene_lifecycle.{h,cpp}`:`SceneLifecycle::ReuseExistingScene`;`CreateScene` / `DestroyScene` 不变。
 - `cpp/nodes/scene/handler/grpc/scene_node_service.cpp` `HandleCreateScene`、`cpp/nodes/scene/handler/rpc/scene_handler.cpp`
   `SceneHandler::CreateScene`:去重分支改调 `ReuseExistingScene`。
 - `cpp/nodes/scene/main.cpp`:`SceneRuntimeContext` 持有 `SceneOwnershipReconciler`;登记指标;`SetAfterStart` 里 Start;三条停机路径与 Node 析构后 Stop。
-- 新增用例 `cpp/tests/cross_zone_test/scene_ownership_reconcile_test.cpp`,登记进 `cross_zone_test.vcxproj` 与 `.filters`。
+- Go 新增 `go/scene_manager/internal/logic/node_holder.go`(持有者、纪元旁记、修订号水位与纪元)与 `internal/metrics/node_holder.go`
+  (倒退计数,登记进 `metrics.go` 的 `register()`);`load_reporter.go` 的 watch PUT 分支调 `publishNodeHolder`、`applyNodeSnapshot`
+  领导者分支调 `publishSnapshotHolders`;`scene_keys_contract_test.go` 的「控制域键不带 hash tag」名单加持有者、纪元旁记、水位、纪元四个键。
+- 用例:C++ `cpp/tests/cross_zone_test/scene_ownership_reconcile_test.cpp`(登记进 `cross_zone_test.vcxproj` 与 `.filters`);
+  Go `go/scene_manager/internal/logic/node_holder_test.go`;告警契约 `tools/scripts/tests/scene_ownership_alerts_contract.tests.ps1`。
+- 告警 `deploy/k8s/scene-ownership-alerts.yaml`;安装说明 `deploy/k8s/README.md`;处置 `docs/ops/scene-node-role-split.md`。
+  `deploy/k8s/scene-manager-alerts.yaml` 加 `SceneManagerEtcdRevisionRegressed`,处置 `docs/ops/etcd-maintenance-runbook.md` §7a。
 
-**给 Codex**:仓库根,MSBuild 串行 `/m:1`,失败不连续重试,保留第一条 `error C` / `LNK` 原文。同一工作区里「世界频道改派与排空收尾的属主一致性」
-会话在同几个文件上叠加放置代次(`scene_lifecycle`、两个 CreateScene / DestroyScene 入口、`scene_placement_fence.h`),编译错误先按文件归属分清。
+**给 Codex**:仓库根执行,MSBuild 串行 `/m:1`,失败不连续重试,保留第一条 `error C` / `LNK` 原文。同一工作区里还有别的会话在改
+`scene_lifecycle`、两个 CreateScene / DestroyScene 入口与 `go/scene_manager`,编译错误先按文件归属分清。
 
 1. `msbuild cpp/libs/services/scene/scene.vcxproj /m:1 /p:Configuration=Debug /p:Platform=x64`
 2. `msbuild cpp/nodes/scene/scene.vcxproj /m:1 /p:Configuration=Debug /p:Platform=x64`
 3. `msbuild cpp/tests/cross_zone_test/cross_zone_test.vcxproj /m:1 /p:Configuration=Debug /p:Platform=x64`(测试工程链接预编好的库,第 1 步不能省)
-4. `build\cpp\tests\cross_zone_test.exe --gtest_filter=SceneOwnership*`:`SceneOwnershipRules.*` 7 条、`SceneOwnershipReply.*` 2 条、
-   `SceneOwnershipEcs.*` 11 条,共 20 条全部 PASS;再跑 `--gtest_filter=RelocateConfirmEcs.*:ExitPersistEcs.*` 与 `cross_zone_test.exe` 全量,原有用例不回归。
-5. Linux:`build_linux.sh` 按 vcxproj 重新生成 CMakeLists 后编 scene 库与 scene 节点,0 error。
-6. **变异取红**:在工作树里逐个改,只改所列的那一处,重编第 1、3 步再跑第 4 步的过滤器,跑完立即手工改回,用 `git diff -- <文件>` 核对与改前一致。
-   这几个文件别的会话也在改,不要用 `git checkout` / `git stash` 恢复。
+4. `build\cpp\tests\cross_zone_test.exe --gtest_filter=SceneOwnership*`:`SceneOwnershipRules.*` 11 条、`SceneOwnershipReply.*` 2 条、
+   `SceneOwnershipEcs.*` 15 条,共 28 条全部 PASS;再跑 `--gtest_filter=RelocateConfirmEcs.*:ExitPersistEcs.*` 与 `cross_zone_test.exe` 全量,原有用例不回归。
+5. Go,工作目录 `go/scene_manager`,`GOTOOLCHAIN=local`、`GOPROXY=off`:
+   - `gofmt -l internal/logic/node_holder.go internal/logic/node_holder_test.go internal/logic/load_reporter.go internal/logic/scene_keys_contract_test.go internal/metrics/node_holder.go internal/metrics/metrics.go` 无输出;
+   - `go vet ./internal/logic/ ./internal/metrics/`、`go build ./...`;
+   - `go test ./internal/logic/ -count=1 -v -run 'TestNodeHolderKeyShape|TestPublishNodeHolder_|TestWatchPutPublishesTheNodeHolder|TestApplyNodeSnapshot_|TestStartNewEtcdEpoch_|TestPublishSnapshotHolders_|TestControlDomainKeysCarryNoHashTag|TestDeadNodeReregister_|TestNodeViewGate'`,
+     其中 `node_holder_test.go` 的 15 条(`TestApplyNodeSnapshot_WithoutAWatermarkOnlyRecordsIt` 含 2 个子用例)全部 PASS;
+   - `go test ./... -count=1`,既有失败逐条点名归因。
+6. `pwsh -NoProfile -File tools/scripts/tests/scene_ownership_alerts_contract.tests.ps1`:5 个 Test-Case 全绿。
+7. 规则语法:按 `docs/PROGRESS.md` 2026-11-10「死节点收尾告警」条目的做法,分别把 `deploy/k8s/scene-ownership-alerts.yaml` 与
+   `deploy/k8s/scene-manager-alerts.yaml` 的 `.spec` 取成单独文件(`yq '.spec' <文件>`),跑 `promtool check rules`。期望退出 0:
+   前者 `SUCCESS: 6 rules found`;后者的条数等于 `grep -c -- '- alert:' deploy/k8s/scene-manager-alerts.yaml`(写本条时 38,别的会话可能还在加)。
+   本机没有 yq / promtool 时,用固定摘要的 `prom/prometheus@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e`
+   (promtool 3.15.0,`--entrypoint promtool --network none --rm`,只读挂载)与 `mikefarah/yq`,回报镜像标签;不安装宿主工具。
+7a. 入集群,只在本机或负责人指定的 dev 集群,不碰生产(AGENTS.md §9):
+   - `kubectl get crd prometheusrules.monitoring.coreos.com`。没有这个 CRD(集群里没装 Prometheus Operator)就报告「未入集群」,
+     不要为此安装 Operator(AGENTS.md §10.2)。
+   - `kubectl apply -n observability -f deploy/k8s/scene-ownership-alerts.yaml`,`kubectl apply -n observability -f deploy/k8s/scene-manager-alerts.yaml`;
+     `kubectl get prometheusrule -n observability scene-ownership-alerts scene-manager-alerts` 两条都在。
+   - `kubectl get prometheus -A` 找到 Operator 管的那个 Prometheus,port-forward 它的 9090,`GET /api/v1/rules`:组 `scene.ownership`
+     有 6 条规则,组 `scene-manager.node-role-split` 里有 `SceneManagerEtcdRevisionRegressed`,每条 `health` 为 `ok`、`lastError` 为空。
+     组没出现时,如实报告那个 Prometheus 的 `ruleSelector` / `ruleNamespaceSelector`(本仓的规则带 `role: alert-rules`、`prometheus: kube-prometheus`)。
+   - 集群里有带指标出口的 scene Pod 时,`GET /api/v1/query?query=scene_ownership_own_holder_known`,每个 scene Pod 一条序列。
+8. Linux:`build_linux.sh` 按 vcxproj 重新生成 CMakeLists 后编 scene 库与 scene 节点,0 error。
+9. **变异取红**:在工作树里逐个改,只改所列的那一处,重编(C++ 第 1、3 步;Go 直接跑)再跑对应过滤器,跑完立即手工改回,用 `git diff -- <文件>`
+   核对与改前一致。这几个文件别的会话也在改,不要用 `git checkout` / `git stash` 恢复。
    - M1:`scene_ownership_rules.h` 的 `Advance` 里把 `notMineStreak >= kNotMineConfirmations` 改成 `notMineStreak >= 1`。期望
      `OneNotMineReadingPastTheGraceIsNotEnough`、`MineResetsTheStreak`、`SceneMovedToAnotherNodeWhileThisNodeWasAwayIsReleased` 红。
    - M2:`Advance` 里把 `confirmed && graceOver` 改成 `confirmed`。期望 `ReleasesOnlyAfterTwoConsecutiveNotMineReadingsPastTheGrace`、
@@ -226,20 +424,53 @@ scene_manager 认得和派活,映射在本 zone 的控制域里。跨 zone 传�
      `ReusingTheSceneRestartsTheGraceAndVoidsReadingsInFlight` 红(作废的旧批次读数被算进了新登记的核对状态)。
    - M5:`Advance` 里把 `case Observation::kUnknown:` 挪到 `kOtherNode` / `kNoMapping` 那一组。期望 `UnreadableNeitherCountsNorClearsTheEvidence`、
      `MalformedBatchOrUnknownSelfNeverReleases` 红。
-   - M6:`scene_ownership_reconciler.cpp` 的 `Sweep` 里删掉 `if (!session->IdentityConfirmed())` 那一段。期望 `ReconcilerDoesNotSweepWithoutAConfirmedIdentityOrControlRedis` 红。
-7. **冒烟**(本机 `dev-start`,一个 zone、两个 scene 节点,`MMORPG_METRICS_PORT` 打开):
-   - 让节点 A 的 etcd 租约过期超过 200 秒,而 A 的进程、A 到 gate 与 Redis 的连接都保持(例如用现成的 TCP 代理只切断 A 到 etcd 的链路)。
-     期间至少一个机器人留在 A 承载的世界频道、一个留在 A 上的副本。本机没有不改系统环境就能做到的手段时,这一步报告「未冒烟」,
-     不要为此改防火墙或装工具(AGENTS.md §10.2);
-   - 恢复后 30 秒内 A 的日志出现 `[SceneOwnership] scene <id> is no longer mapped to this node: observed=other_node` 与 `observed=no_mapping` 各至少一条,
-     随后 `destroyed unmapped scene`;机器人分别回到同号频道(新属主)与大世界;`scene_ownership_releases_total{stage="destroyed"}` 增长;
-   - `scene_ownership_observations_total{result="unknown"}` 不持续增长;
-   - 对照组:断开不到 180 秒就恢复,之后没有任何 `[SceneOwnership]` 排空日志。
+   - M6:`HolderTracker::Observe` 里删掉 `identityConfirmed ||`。期望 `HolderTrackerNeedsANewerRegistrationOfAnotherProcess` 红。
+   - M7:`HolderTracker::Observe` 里把 `record->revision <= ownRevision` 改成 `false`。期望 `HolderTrackerNeedsANewerRegistrationOfAnotherProcess` 红。
+   - M8:`ReleaseBudget::TryStart` 开头直接 `return true;`。期望 `ReleaseBudgetAdmitsEmptyScenesAndTheFirstLargeScene`、
+     `ReleaseBudgetDefersScenesWithResidentsToLaterSweeps`、`MetricsExposeTheCountersAndGauges` 红。
+   - M9:`ApplyReadings` 里把 `slotHolder == SlotHolder::kAnotherProcess ? Observation::kSuperseded : ` 删掉(只留 `Classify(...)`)。期望
+     `NodeIdTakenOverReleasesScenesStillMappedToIt` 红。
+   - M10:`Sweep` 里在读控制域之前加回旧门禁 `if (!session->IdentityConfirmed()) { return finish(SweepOutcome::kNoScenes); }`。期望
+     `ReconcilerSweepsWithoutEtcdIdentityButNeedsControlRedis` 红。
+   - M11(Go):`luaPublishNodeHolder` 里删掉 `if sep and generation_after(...) then return 0 end` 那三行(同一纪元里也无条件 SET)。期望
+     `TestPublishNodeHolder_NewerRegistrationWins`、`TestPublishNodeHolder_ComparesRevisionsAsDecimalStrings`、`TestWatchPutPublishesTheNodeHolder`,
+     以及 `TestApplyNodeSnapshot_` 里的 `NormalRoundKeepsANewerFollowerWrite`、`EtcdRevisionRegressionStartsANewEpoch`、`EarlySnapshotIsNotARegression`、
+     `WithoutAWatermarkOnlyRecordsIt`、`UnreadableEtcdRevisionOnlyPublishesMonotonically` 红。
+   - M12(Go):`handleWatchEvent` 里删掉 `publishNodeHolder(...)` 那一句。期望 `TestWatchPutPublishesTheNodeHolder` 红。
+   - M13(Go):`applyNodeSnapshot` 里删掉 `publishSnapshotHolders(ctx, svcCtx, svcCtx.Config.ZoneId, holders)`。期望 `TestApplyNodeSnapshot_`
+     开头的用例除 `FollowerDoesNotPublishHolders` 外全部红。
+   - M14(Go):`luaPublishNodeHolder` 里把 `(redis.call('GET', KEYS[2]) or '0') == epoch` 改成 `true`(不看纪元)。期望
+     `TestApplyNodeSnapshot_EtcdRevisionRegressionStartsANewEpoch` 红(倒退之前的记录不让位)。
+   - M15:`HolderTracker::Observe` 里把 `ownRevision = record->revision;` 改成 `ownRevision = std::max(ownRevision, record->revision);`。期望
+     `HolderTrackerNeedsANewerRegistrationOfAnotherProcess` 红(etcd 修订号倒退、换纪元之后认不出接走号的进程)。
+   - M16(Go):`publishSnapshotHolders` 里把 `seen > current` 改成 `seen > 0`(有水位就当倒退)。期望
+     `TestApplyNodeSnapshot_NormalRoundKeepsANewerFollowerWrite`、`TestApplyNodeSnapshot_EarlySnapshotIsNotARegression`、
+     `TestApplyNodeSnapshot_EtcdRevisionRegressionStartsANewEpoch`(第二轮又换了一次纪元)红。
+   - M17(Go):`luaStartNewEtcdEpoch` 里删掉开头的比较(`if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end`)。期望
+     `TestStartNewEtcdEpoch_ComparesAndSets` 红。
+   - M18(Go):`luaStartNewEtcdEpoch` 里把 `INCR` 与 `SET` 两行对调。期望 `TestStartNewEtcdEpoch_ComparesAndSets` 红(纪元没换成,水位却降了)。
+   - M19(Go):`publishSnapshotHolders` 里删掉 `&& isLeader()`。期望 `TestPublishSnapshotHolders_NonLeaderDoesNotStartANewEpoch` 红。
+   - M21:`ObserveHolder` 里删掉 `tlsStats.ownHolderKnown = holder.ownRevision != 0;`。期望 `HolderReadingsTrackTheOwnRecordAndTheTakeover` 红。
+   - M20(Go):`luaRaiseEtcdRevisionSeen` 里删掉 `and not generation_after(ARGV[1], current)`(水位能降)。期望
+     `TestPublishSnapshotHolders_NonLeaderDoesNotStartANewEpoch` 红。
+10. **冒烟**(本机 `dev-start`,一个 zone、两个 scene 节点,`MMORPG_METRICS_PORT` 打开):
+    - 让节点 A 的 etcd 租约过期超过 200 秒,而 A 的进程、A 到 gate 与 Redis 的连接都保持(例如用现成的 TCP 代理只切断 A 到 etcd 的链路)。
+      期间至少一个机器人留在 A 承载的世界频道、一个留在 A 上的副本。本机没有不改系统环境就能做到的手段时,这一步报告「未冒烟」,
+      不要为此改防火墙或装工具(AGENTS.md §10.2);
+    - **不恢复 etcd 链路**,屏障放行后 30 秒内 A 的日志出现 `[SceneOwnership] scene <id> is no longer owned by this process: observed=other_node`
+      与 `observed=no_mapping` 各至少一条,随后 `destroyed unowned scene`;机器人分别回到同号频道(新属主)与大世界;
+      `scene_ownership_releases_total{stage="destroyed"}` 增长;
+    - 再起第三个 scene 进程,让它拿到 A 的节点号(A 的分配键已过期),A 的日志出现 `is held by a newer registration of another process`,
+      `scene_ownership_superseded` 变 1;
+    - 对照组:断开不到 180 秒就恢复,之后没有任何 `[SceneOwnership]` 排空日志。
 
-**通过标准**:第 1~5 步 0 error;第 4 步 20 条全绿、原有用例不回归;第 6 步每个变异的红绿与上面一致;第 7 步日志与指标符合描述(或明确报告未冒烟)。
-失败时保留:第一条编译错误原文;失败用例用 `--gtest_filter=<用例全名>` 单跑的完整输出;冒烟时 A 的 scene 日志与 scene_manager 日志中 T0 到恢复后 60 秒的片段。
+**通过标准**:第 1~3、8 步 0 error;第 4 步 28 条、第 5 步 `node_holder_test.go` 15 条全绿,原有用例不回归;第 6 步全绿;第 7 步两份规则都 SUCCESS;第 7a 步规则健康(或明确报告未入集群);第 9 步每个变异的红绿
+与上面一致;第 10 步日志与指标符合描述(或明确报告未冒烟)。失败时保留:第一条编译错误原文;失败用例单跑的完整输出;冒烟时 A 的
+scene 日志与 scene_manager 日志中 T0 到恢复后 60 秒的片段。
 
 ## 11. Java 版
 
-不适用。Java 版的 scene 节点本来就按计划拉取场景,不在计划里的频道自己排空(Java 仓 `PARITY.md`「场景实例与主世界频道」行 D3),
-没有「scene_manager 推送建场景、节点只认推送」的结构,也就没有本文的孤儿。不往 `PARITY.md` 加行。
+只登记待做,不写 Java 代码(负责人 2026-11-10:Java 留到 todo)。Java 版的 scene 节点按计划拉取场景、不在计划里的频道自己排空
+(Java 仓 `PARITY.md`「场景实例与主世界频道」行 D3),没有本文的「推送建场景、节点只认推送」结构,初版判断为不适用;但 2026-11-10 补的
+三项要在 Java 侧逐项核对:拉计划是否受 etcd 身份门禁、计划里的节点标识会不会被新进程复用、按计划自己排空时有没有限速,以及对应告警。
+登记在 Java 仓 `PARITY.md`「2026-11-10 scene 节点归属对账」一节。

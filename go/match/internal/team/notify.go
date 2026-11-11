@@ -19,13 +19,16 @@ import (
 	"google.golang.org/protobuf/proto"
 	"shared/kafkacmd"
 	"shared/safego"
+	"shared/tracing/kafkagotrace"
 )
 
 // 提交后的副作用:S2C 推送与 scene 刷新信号(设计文档 docs/design/team-system.md §G.3、§F.3)。
 //
 // 契约:
-//   - 全部异步执行(asyncFn),整批一个独立预算 pushBatchBudget,不继承请求 ctx
-//     (请求结束即取消,§A.3 第 7 条);失败只记日志与指标,绝不影响 RPC 结果;
+//   - 全部异步执行(asyncFn),整批一个独立预算 pushBatchBudget,不继承请求 ctx 的取消与截止
+//     (请求结束即取消,§A.3 第 7 条),只经 context.WithoutCancel 继承它的值:推送与 scene 信号带着请求的 trace
+//     (docs/design/distributed-tracing.md §6.2;后台提交传维护任务的 ctx,没有 trace);
+//     失败只记日志与指标,绝不影响 RPC 结果;
 //   - 推送至多一次投递(playercontract.PushToPlayer):不在线就不推,客户端靠 GetMyTeam /
 //     ListMyInvites 拉取自愈(J-26);
 //   - 每份视图的 epoch 只取自提交 / ReadMembers 的同源结果(view.go);
@@ -65,12 +68,14 @@ var (
 // publish 异步执行一批已落盘提交的落地摘要 bump、推送与 scene 信号。
 // commits 按落盘顺序传入,调用方交出后不得再修改。
 // caller 是 RPC 调用者(后台提交传 0):推送排除他,摘要 bump 包含他(syncdigest.go)。
-func (s *Service) publish(caller uint64, commits []*CommitResult) {
+// ctx 是触发这批提交的请求(或后台任务)的 ctx,只取它的值(见文件头契约)。
+func (s *Service) publish(ctx context.Context, caller uint64, commits []*CommitResult) {
 	if len(commits) == 0 {
 		return
 	}
+	detached := context.WithoutCancel(ctx)
 	s.launchRelay("match.team.publish", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
+		ctx, cancel := context.WithTimeout(detached, pushBatchBudget)
 		defer cancel()
 		// 摘要先于推送:推送至多一次、丢了靠拉取自愈,而 bump 正是落地后那次拉取的触发条件。
 		s.bumpSyncDigest(ctx, caller, commits)
@@ -96,9 +101,10 @@ func (s *Service) publish(caller uint64, commits []*CommitResult) {
 }
 
 // publishOnline GetMyTeam{notify_online}:把当前视图推给其他在线队员(MEMBER_ONLINE,version 不变)。
-func (s *Service) publishOnline(caller, teamId uint64) {
+func (s *Service) publishOnline(ctx context.Context, caller, teamId uint64) {
+	detached := context.WithoutCancel(ctx)
 	s.launchRelay("match.team.online", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
+		ctx, cancel := context.WithTimeout(detached, pushBatchBudget)
 		defer cancel()
 		s.pushOnlineRefresh(ctx, caller, teamId)
 	})
@@ -108,13 +114,14 @@ func (s *Service) publishOnline(caller, teamId uint64) {
 // 瞬移 / 换图 / 不动由 scene 按既有跟随规则决定(cpp/libs/services/scene/player/system/player_team.h),这里不判距离。
 // 以本次回包视图为准(同一次读出来的),不另读:无队、队长自己、读失败没带视图都不发。
 // 频率由 gate 的 MessageLimiter(GetMyTeam 每秒 5 次)兜底,scene 侧每次至多瞬移一次且只在离得远 / 看不见时。
-func (s *Service) publishRegroup(caller uint64, team *teampb.TeamView) {
+func (s *Service) publishRegroup(ctx context.Context, caller uint64, team *teampb.TeamView) {
 	if team.GetTeamId() == 0 || team.GetLeaderId() == 0 || team.GetLeaderId() == caller {
 		return
 	}
 	teamId, leaderId := team.GetTeamId(), team.GetLeaderId()
+	detached := context.WithoutCancel(ctx)
 	s.launchRelay("match.team.regroup", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
+		ctx, cancel := context.WithTimeout(detached, pushBatchBudget)
 		defer cancel()
 		logx.WithContext(ctx).Infof("[team] Regroup requested player=%d team=%d leader=%d", caller, teamId, leaderId)
 		s.refreshScene(ctx, caller)
@@ -314,6 +321,8 @@ func writeSceneCommand(ctx context.Context, svcCtx *svc.ServiceContext, cmd *kaf
 	if err != nil {
 		return err
 	}
+	// ctx 带着触发这次刷新的请求 trace(publish 系列经 WithoutCancel 派生),scene 处理刷新时接上同一条。
+	msg.Headers = kafkagotrace.Headers(ctx)
 	return svcCtx.Kafka.WriteMessages(ctx, msg)
 }
 

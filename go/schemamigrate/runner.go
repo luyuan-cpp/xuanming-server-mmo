@@ -116,7 +116,7 @@ func (s *session) prepare(ctx context.Context) error {
 	if _, err := s.conn.ExecContext(ctx, stmt); err != nil {
 		return fmt.Errorf("schemamigrate: 设置库 %q 迁移会话的锁等待超时失败: %w", s.opts.Database, err)
 	}
-	s.opts.logf("schemamigrate 会话: database=%s connection_id=%d lock_wait_timeout=%ds innodb_lock_wait_timeout=%ds statement_timeout=%s",
+	s.opts.logf("schemamigrate session: database=%s connection_id=%d lock_wait_timeout=%ds innodb_lock_wait_timeout=%ds statement_timeout=%s",
 		s.opts.Database, s.connID, lockWait, innodbWait, s.opts.StatementTimeout)
 	return nil
 }
@@ -124,7 +124,7 @@ func (s *session) prepare(ctx context.Context) error {
 // close 归还连接。连接断开时服务端会自动释放 GET_LOCK 与会话变量。
 func (s *session) close() {
 	if err := s.conn.Close(); err != nil {
-		s.opts.logf("schemamigrate: 关闭库 %s 的迁移连接失败: %v", s.opts.Database, err)
+		s.opts.logf("schemamigrate: failed to close migration connection for database %s: %v", s.opts.Database, err)
 	}
 }
 
@@ -167,14 +167,14 @@ func (s *session) acquireLock(ctx context.Context) (func(), error) {
 	if got.Int64 != 1 {
 		return nil, fmt.Errorf("%w: 库 %q 锁 %q 等待 %ds 后仍被持有", ErrLockBusy, s.opts.Database, name, wait)
 	}
-	s.opts.logf("schemamigrate 已持有迁移锁: %s", name)
+	s.opts.logf("schemamigrate migration lock held: %s", name)
 
 	return func() {
 		releaseCtx, cancel := context.WithTimeout(context.Background(), lockReleaseTimeout)
 		defer cancel()
 		var released sql.NullInt64
 		if err := s.conn.QueryRowContext(releaseCtx, "SELECT RELEASE_LOCK(?)", name).Scan(&released); err != nil {
-			s.opts.logf("schemamigrate: 释放迁移锁 %q 失败(连接断开时服务端会自动释放): %v", name, err)
+			s.opts.logf("schemamigrate: failed to release migration lock %q (the server releases it automatically when the connection closes): %v", name, err)
 		}
 	}, nil
 }
@@ -235,7 +235,7 @@ func (s *session) apply(ctx context.Context, m migration, applied map[int64]appl
 		return nil, fmt.Errorf("schemamigrate: 台账 version=%d 已被 %s 占用,拒绝覆盖", m.Version, prev.Name)
 	}
 
-	s.opts.logf("schemamigrate 迁移开始: version=%d name=%s statements=%d", m.Version, m.Name, len(m.Statements))
+	s.opts.logf("schemamigrate migration started: version=%d name=%s statements=%d", m.Version, m.Name, len(m.Statements))
 	claim := fmt.Sprintf("INSERT INTO %s (version, name, checksum, dirty, started_at) VALUES (?, ?, ?, 1, NOW())",
 		quoteIdent(SchemaMigrationsTable))
 	if err := s.exec(ctx, claim, m.Version, m.Name, m.Checksum); err != nil {
@@ -244,7 +244,7 @@ func (s *session) apply(ctx context.Context, m migration, applied map[int64]appl
 
 	executed := make([]string, 0, len(m.Statements))
 	for _, stmt := range m.Statements {
-		s.opts.logf("  version=%d 执行: %s", m.Version, collapse(stmt))
+		s.opts.logf("  version=%d executing: %s", m.Version, collapse(stmt))
 		if err := s.exec(ctx, stmt); err != nil {
 			// 刻意保留 dirty=1:下一次 Plan / Up 直接拒绝,逼人工核对,而不是在未知结构上继续叠加 DDL。
 			return executed, fmt.Errorf("schemamigrate: 库 %q 迁移 version=%d name=%s 失败,台账保留 dirty=1;人工核对已生效的语句后修正台账再重跑: %w",
@@ -259,7 +259,7 @@ func (s *session) apply(ctx context.Context, m migration, applied map[int64]appl
 			s.opts.Database, m.Version, err)
 	}
 	applied[m.Version] = appliedMigration{Version: m.Version, Name: m.Name, Checksum: m.Checksum}
-	s.opts.logf("schemamigrate 迁移完成: version=%d name=%s", m.Version, m.Name)
+	s.opts.logf("schemamigrate migration finished: version=%d name=%s", m.Version, m.Name)
 	return executed, nil
 }
 
@@ -325,10 +325,10 @@ func (s *session) killQuery(reason error) {
 	killCtx, cancel := context.WithTimeout(context.Background(), killQueryTimeout)
 	defer cancel()
 	if _, err := s.db.ExecContext(killCtx, fmt.Sprintf("KILL QUERY %d", s.connID)); err != nil {
-		s.opts.logf("schemamigrate: KILL QUERY %d 失败(服务端可能仍在执行该语句,需人工确认): %v", s.connID, err)
+		s.opts.logf("schemamigrate: KILL QUERY %d failed (the server may still be executing the statement; manual confirmation required): %v", s.connID, err)
 		return
 	}
-	s.opts.logf("schemamigrate: 已发送 KILL QUERY %d(原因: %v)", s.connID, reason)
+	s.opts.logf("schemamigrate: KILL QUERY %d sent (reason: %v)", s.connID, reason)
 }
 
 // sortedApplied 按版本号升序返回台账行。

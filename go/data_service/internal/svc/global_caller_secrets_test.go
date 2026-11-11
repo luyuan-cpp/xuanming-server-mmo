@@ -73,12 +73,12 @@ func TestRouteCallerSecretIsOptionalButIndependent(t *testing.T) {
 
 // 写资格要恰好覆盖要写的逻辑库:少一份那个库打不开,多一份说明名册和配置不是同一次部署。
 func TestCheckWriterSchemas(t *testing.T) {
-	schemas := []string{"g_00", "g_01", "g_ledger", "zone_1_db"}
+	schemas := []string{"g_00", "g_01", "g_ledger", "player_store_1000000_db"}
 	writers := map[string]authoritysql.WriterConfig{}
 	for _, schema := range schemas {
 		writers[schema] = authoritysql.WriterConfig{}
 	}
 	require.NoError(t, checkWriterSchemas(writers, schemas))
-	require.ErrorContains(t, checkWriterSchemas(writers, append([]string{"zone_2_db"}, schemas...)), "zone_2_db")
+	require.ErrorContains(t, checkWriterSchemas(writers, append([]string{"player_store_1000001_db"}, schemas...)), "player_store_1000001_db")
 	require.Error(t, checkWriterSchemas(writers, schemas[1:]), "多一份也拒绝")
 }

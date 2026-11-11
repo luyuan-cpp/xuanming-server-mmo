@@ -71,6 +71,12 @@ const (
 	TransactionType_TX_EQUIP_ENHANCE         TransactionType = 27 // 装备强化:扣金币 + 销毁材料(成败都扣)。correlation_id = 装备 item guid
 	TransactionType_TX_EQUIP_INLAY           TransactionType = 28 // 宝石镶嵌:销毁 1 颗宝石物品。correlation_id = 装备 item guid
 	TransactionType_TX_EQUIP_GEM_REMOVE      TransactionType = 29 // 取下宝石:发回 1 颗宝石物品。correlation_id = 装备 item guid
+	// ── 聚宝斋退回(数据覆写审计 r2-trade#1)──────────────────────────────────
+	//
+	// 交易把玩家自己托管的资产还给他:撤单、过期、整单退款、竞价退回,以及它们的人工补发。
+	// 资产本来就是这名玩家的,不算新增获得,不受获取封禁约束(C++ GainBlockService::CountsAsGain);
+	// 成交所得(交付腿)仍用 TX_AUCTION_BUY,照常判封禁。correlation_id 同其他交易腿。
+	TransactionType_TX_AUCTION_RETURN TransactionType = 30
 )
 
 // Enum value maps for TransactionType.
@@ -106,6 +112,7 @@ var (
 		27: "TX_EQUIP_ENHANCE",
 		28: "TX_EQUIP_INLAY",
 		29: "TX_EQUIP_GEM_REMOVE",
+		30: "TX_AUCTION_RETURN",
 	}
 	TransactionType_value = map[string]int32{
 		"TX_UNKNOWN":               0,
@@ -138,6 +145,7 @@ var (
 		"TX_EQUIP_ENHANCE":         27,
 		"TX_EQUIP_INLAY":           28,
 		"TX_EQUIP_GEM_REMOVE":      29,
+		"TX_AUCTION_RETURN":        30,
 	}
 )
 
@@ -405,7 +413,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\x88\x05\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\x9f\x05\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -438,7 +446,8 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x18TX_GUILD_ACTIVITY_REWARD\x10\x1a\x12\x14\n" +
 	"\x10TX_EQUIP_ENHANCE\x10\x1b\x12\x12\n" +
 	"\x0eTX_EQUIP_INLAY\x10\x1c\x12\x17\n" +
-	"\x13TX_EQUIP_GEM_REMOVE\x10\x1dB\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x13TX_EQUIP_GEM_REMOVE\x10\x1d\x12\x15\n" +
+	"\x11TX_AUCTION_RETURN\x10\x1eB\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

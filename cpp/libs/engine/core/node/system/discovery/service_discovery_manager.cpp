@@ -11,9 +11,64 @@
 #include <network/node_utils.h>
 #include <node_config_manager.h>
 
+namespace
+{
+	// 发现快照读到本节点不发现的类型(ServiceNodeSnapshot::DeclareReadableTypes),每个类型报一次。
+	void ReportUndeclaredDiscoveryRead(uint32_t nodeType)
+	{
+		LOG_ERROR << "Discovery snapshot read for " << eNodeType_Name(static_cast<eNodeType>(nodeType))
+				  << ", which this node type does not discover: the snapshot for it is always empty. Add it to the"
+				  << " discovery set in this node's main.cpp (docs/design/connection-fanout-subsetting-20261106.md §3.4)";
+	}
+
+	std::vector<std::string> ConfiguredDiscoveryPrefixes()
+	{
+		const auto &configured = tlsNodeConfigManager.GetBaseDeployConfig().service_discovery_prefixes();
+		return {configured.begin(), configured.end()};
+	}
+} // namespace
+
 void ServiceDiscoveryManager::Init()
 {
 	etcdService.Init();
+
+	// 本节点读得到的类型 = 发现集合 + 自身类型(自身类型不在集合里时只看自己的键,快照里也只有自己)。
+	ServiceNodeSnapshot::ReadableTypes readable{};
+	for (const auto nodeType : gNode->GetDiscoveryNodeTypes())
+	{
+		if (nodeType < readable.size())
+		{
+			readable[nodeType] = true;
+		}
+	}
+	if (gNode->GetNodeType() < readable.size())
+	{
+		readable[gNode->GetNodeType()] = true;
+	}
+	serviceNodes_.DeclareReadableTypes(readable, &ReportUndeclaredDiscoveryRead);
+
+	const auto plan = NodeUtils::PlanDiscoveryScopes(ConfiguredDiscoveryPrefixes(), gNode->GetDiscoveryNodeTypes(),
+													 gNode->GetNodeInfo().zone_id());
+	std::vector<uint32_t> declared(gNode->GetDiscoveryNodeTypes().begin(), gNode->GetDiscoveryNodeTypes().end());
+	LOG_INFO << "Service discovery: discovers=" << Node::FormatNodeTypeNames(declared)
+			 << ", own node type watched " << (gNode->DiscoversNodeType(gNode->GetNodeType()) ? "by prefix" : "by its own key only")
+			 << ", scopes=" << plan.scopes.size() << ", skipped configured prefixes=" << plan.skippedPrefixes.size();
+	for (const auto &skipped : plan.skippedPrefixes)
+	{
+		LOG_INFO << "Service discovery: not watching configured prefix " << skipped << " (not in this node's discovery set)";
+	}
+	if (!plan.missingTypes.empty())
+	{
+		LOG_WARN << "Service discovery: " << Node::FormatNodeTypeNames(plan.missingTypes)
+				 << " in the discovery set but not in service_discovery_prefixes; callers will not find these services";
+	}
+	// 注册链从第一个 watch 应答开始(EtcdService::OnStreamWatchResponse):一个发现范围都没有就永远不会注册。
+	if (plan.scopes.empty())
+	{
+		LOG_FATAL << "Service discovery has no scope to watch: none of service_discovery_prefixes is in this node's"
+				  << " discovery set, so registration would never start";
+	}
+
 	// 启动时立即拉一次:watch 要从这次快照的下一个 revision 建起。
 	FetchServiceNodes();
 	ScheduleNextResync();
@@ -37,23 +92,39 @@ void ServiceDiscoveryManager::ScheduleNextResync()
 
 std::vector<std::string> ServiceDiscoveryManager::EffectiveDiscoveryPrefixes() const
 {
-	// zone-scoped 类型只看本 zone(control-plane-zone-scoping-20261105.md §3.1);本节点的 zone 在 InitRpcServer 里已定,
-	// 早于 InitEtcdService。Range 与 watch 重建都从这里取,两处不会各算各的。
-	const uint32_t zoneId = gNode->GetNodeInfo().zone_id();
-	std::vector<std::string> prefixes;
-	for (const auto &configured : tlsNodeConfigManager.GetBaseDeployConfig().service_discovery_prefixes())
+	// 只看本节点发现集合里的类型(connection-fanout-subsetting-20261106.md §3.4),zone-scoped 类型只看本 zone
+	// (control-plane-zone-scoping-20261105.md §3.1);本节点的 zone 在 InitRpcServer 里已定,早于 InitEtcdService。
+	// Range、兜底重拉与 watch 流重建都从这里取,几处不会各算各的。
+	auto scopes = NodeUtils::PlanDiscoveryScopes(ConfiguredDiscoveryPrefixes(), gNode->GetDiscoveryNodeTypes(),
+												 gNode->GetNodeInfo().zone_id())
+					  .scopes;
+	if (!ownRegistrationKey_.empty())
 	{
-		prefixes.push_back(NodeUtils::DiscoveryPrefixFor(configured, zoneId));
+		scopes.push_back(ownRegistrationKey_);
 	}
-	return prefixes;
+	return scopes;
 }
 
 void ServiceDiscoveryManager::FetchServiceNodes()
 {
-	for (const auto &prefix : EffectiveDiscoveryPrefixes())
+	for (const auto &scope : EffectiveDiscoveryPrefixes())
 	{
-		EtcdHelper::RangeQuery(prefix);
+		etcdService.RangeDiscoveryScope(scope);
 	}
+}
+
+void ServiceDiscoveryManager::WatchOwnRegistrationKey()
+{
+	if (gNode->DiscoversNodeType(gNode->GetNodeType()) || !ownRegistrationKey_.empty())
+	{
+		return;
+	}
+	// 与 EtcdManager::PublishNodeInfoAfterAllocation 发布的是同一条键。这时 node_id 已由分配键 CAS 定下。
+	ownRegistrationKey_ = gNode->GetEtcdManager().MakeNodeEtcdKey(gNode->GetNodeInfo());
+	etcdService.AddExactDiscoveryKey(ownRegistrationKey_);
+	LOG_INFO << "Own node type is not in the discovery set; watching only this node's own key " << ownRegistrationKey_;
+	// 应答到了走 OnPrefixRange:对账,并从快照之后建这条键的 watch。发布之前拿到的是空快照,发布的 PUT 由 watch 送到。
+	etcdService.RangeDiscoveryScope(ownRegistrationKey_);
 }
 
 void ServiceDiscoveryManager::AddServiceNode(const std::string &nodeJson, uint32_t nodeType)
@@ -162,14 +233,18 @@ void ServiceDiscoveryManager::AddServiceNode(const std::string &nodeJson, uint32
 		LOG_TRACE << "Node updated from service discovery event, uuid=" << discoveredNode.node_uuid();
 	}
 
+	// 快照已是新状态:按快照派生的选择(gate 的路由服子集,docs/design/connection-fanout-subsetting-20261106.md §3.2)
+	// 先对账,它可能连上别的节点或排掉出子集的节点延后关闭;下面再按准入决定连不连这一台。
+	gNode->NotifyDiscoveryChanged(nodeType);
+
 	if (gNode->IsCurrentNode(discoveredNode))
 	{
 		LOG_TRACE << "Node has same lease_id as self, skip adding node. Self uuid: " << discoveredNode.node_uuid();
 		return;
 	}
 
-	const auto &whitelist = gNode->GetTargetNodeTypeWhitelist();
-	if (!whitelist.contains(nodeType))
+	// 白名单之外再过一道按类型的准入(没装准入的类型 = 只看白名单,与原行为相同)。
+	if (!gNode->AdmitsConnection(discoveredNode))
 		return;
 	if (NodeUtils::IsNodeTracked(nodeType, discoveredNode))
 	{

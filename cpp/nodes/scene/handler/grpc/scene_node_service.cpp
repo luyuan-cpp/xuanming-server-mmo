@@ -32,15 +32,24 @@ boost::cobalt::task<void> CreateSceneWithPermit(muduo::net::EventLoop& loop,
                 [done](Permit value) { done(std::make_unique<Permit>(std::move(value))); });
             return true;
         }, nullptr);
-    if (!permit || (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none ||
-        call->ServerDraining())
+    // 三种拒绝都回 UNAVAILABLE,SceneManager 收到任何错误都回滚改派;日志按原因分开记,与改造前的回调一致。
+    const auto sceneId = call->request().scene_id();
+    if (!permit || (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none)
     {
+        // CloseCreationAdmission 停掉了等许可的任务:维护 P1、普通停机、身份冲突或计划排空已开始。
+        LOG_WARN << "[gRPC] CreateScene rejected while waiting for permit: creation admission closed, scene_id=" << sceneId;
+        call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
+        co_return;
+    }
+    if (call->ServerDraining())
+    {
+        LOG_WARN << "[gRPC] CreateScene rejected after permit wait: scene node is shutting down, scene_id=" << sceneId;
         call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
         co_return;
     }
     if (!*permit || !**permit)
     {
-        LOG_ERROR << "[gRPC] CreateScene rejected: Agones allocate not confirmed, scene_id=" << call->request().scene_id();
+        LOG_ERROR << "[gRPC] CreateScene rejected: Agones allocate not confirmed, scene_id=" << sceneId;
         call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, "agones allocate not confirmed"));
         co_return;
     }
@@ -244,8 +253,11 @@ void SceneNodeGrpcImpl::CreateScene(const std::shared_ptr<CreateSceneCall>& call
     // 在途创建才能阻止提前回到 Ready。任务由服务对象持有，传输回调不捕获 this(AGENTS §11.7)。
     //
     // 2026-09-15 恢复:原块在 commit 6c4021ae5 被 proto 重生成吞掉(当时位于守护段外)。
-    if (!creationTasks_.Start(CreateSceneWithPermit(loop_, call), "场景创建许可"))
+    if (!creationTasks_.Start(CreateSceneWithPermit(loop_, call), "SceneCreationPermit"))
+    {
+        LOG_WARN << "[gRPC] CreateScene rejected: creation admission closed (node draining), scene_id=" << request->scene_id();
         call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
+    }
     return;
     ///<<< END WRITING YOUR CODE
     call->Proceed();

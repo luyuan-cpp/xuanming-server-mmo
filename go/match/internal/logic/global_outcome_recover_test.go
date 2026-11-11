@@ -27,6 +27,7 @@ type recovererCall struct {
 
 type recovererReply struct {
 	next authority.ExpiredOutcomeCursor
+	more bool // 只对车道页有意义:这一页满了或改了排期,立刻再扫一页可能还有活
 	err  error
 }
 
@@ -48,15 +49,15 @@ func (f *recovererFake) budget(ctx context.Context) {
 	f.deadlines = append(f.deadlines, time.Until(deadline))
 }
 
-func (f *recovererFake) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint64, cursor authority.ExpiredOutcomeCursor) (authority.ExpiredOutcomeCursor, error) {
+func (f *recovererFake) RecoverExpiredOutcomeLanePage(ctx context.Context, lanes, lane uint64, cursor authority.ExpiredOutcomeCursor) (authority.ExpiredOutcomeCursor, bool, error) {
 	f.calls = append(f.calls, recovererCall{lanes: lanes, lane: lane, cursor: cursor})
 	f.budget(ctx)
 	i := f.lanePages
 	f.lanePages++
 	if i >= len(f.laneReplies) {
-		return authority.ExpiredOutcomeCursor{}, nil
+		return authority.ExpiredOutcomeCursor{}, false, nil
 	}
-	return f.laneReplies[i].next, f.laneReplies[i].err
+	return f.laneReplies[i].next, f.laneReplies[i].more, f.laneReplies[i].err
 }
 
 func (f *recovererFake) RecoverExpiredOutcomes(ctx context.Context, afterRetryMs, afterBattle uint64) (uint64, uint64, error) {
@@ -115,7 +116,7 @@ func TestGlobalOutcomeRecoveryKeepsPerLaneCursorAcrossRounds(t *testing.T) {
 	require.Equal(t, 2, order, "一圈走完才重新洗牌")
 	require.Len(t, held, 1, "只有未确认的那一拍 Hold")
 	require.ErrorIs(t, held[0], broken)
-	require.Contains(t, logs.String(), "全球匹配到期终局恢复未确认")
+	require.Contains(t, logs.String(), "global match expired-outcome recovery unconfirmed")
 	for _, budget := range fake.deadlines {
 		require.LessOrEqual(t, budget, globalOutcomeRecoverBudget)
 		require.Greater(t, budget, time.Duration(0))
@@ -175,6 +176,58 @@ func TestGlobalOutcomeRecoveryFullPageRunsEvenIfLanePageFails(t *testing.T) {
 	require.ErrorIs(t, held[0], fullBroken)
 }
 
+// 一拍把车道扫空(2026-11-11):车道页回 more 时同一拍接着扫同一条车道,游标逐页接续,直到 more 为假;全量页仍紧跟在
+// 第一页车道页之后。修复前一拍只扫一页,同一车道同时到期超过一页时,后面的局要隔一两圈才轮到。
+func TestGlobalOutcomeRecoveryDrainsLaneWithinOneRound(t *testing.T) {
+	recovery := &globalOutcomeRecovery{shuffle: fixedLaneOrder}
+	fake := &recovererFake{laneReplies: []recovererReply{
+		// 满页
+		{next: authority.ExpiredOutcomeCursor{AfterRetryMs: 10, AfterBattle: 1}, more: true},
+		// 改了排期,从头再扫
+		{next: authority.ExpiredOutcomeCursor{}, more: true},
+		// 不满一页:这条车道扫完了
+		{next: authority.ExpiredOutcomeCursor{AfterRetryMs: 30, AfterBattle: 3}},
+	}}
+	var held []error
+	recovery.round(context.Background(), fake, func(err error) { held = append(held, err) })
+	require.Empty(t, held)
+	require.Equal(t, []recovererCall{
+		{lanes: authority.ExpiredOutcomeLanes, lane: 0},
+		{full: true},
+		{lanes: authority.ExpiredOutcomeLanes, lane: 0, cursor: authority.ExpiredOutcomeCursor{AfterRetryMs: 10, AfterBattle: 1}},
+		{lanes: authority.ExpiredOutcomeLanes, lane: 0},
+	}, fake.calls, "同一车道逐页接续,全量页紧跟第一页")
+	require.Equal(t, authority.ExpiredOutcomeCursor{AfterRetryMs: 30, AfterBattle: 3}, recovery.lanes[0])
+}
+
+// 扫车道的停止条件:车道页出错就停(出错的那一页照样推进游标、Hold);本拍剩余预算不够一页(drainLanePageReserve)就停,
+// 留到这条车道下一次访问,不把下一页截断成「结局未知」。
+func TestGlobalOutcomeRecoveryStopsDrainingOnErrorOrLowBudget(t *testing.T) {
+	broken := errors.New("fixture 车道页未确认")
+	recovery := &globalOutcomeRecovery{shuffle: fixedLaneOrder}
+	fake := &recovererFake{laneReplies: []recovererReply{
+		{next: authority.ExpiredOutcomeCursor{AfterRetryMs: 10, AfterBattle: 1}, more: true, err: broken},
+	}}
+	var held []error
+	recovery.round(context.Background(), fake, func(err error) { held = append(held, err) })
+	require.Equal(t, 1, fake.lanePages, "出错就不再扫")
+	require.Equal(t, authority.ExpiredOutcomeCursor{AfterRetryMs: 10, AfterBattle: 1}, recovery.lanes[0], "出错也推进")
+	require.Len(t, held, 1)
+	require.ErrorIs(t, held[0], broken)
+
+	// 上游只给了不到一页的预算:第一页照扫(一拍至少一页),之后不再扫。
+	short, cancel := context.WithTimeout(context.Background(), drainLanePageReserve/2)
+	defer cancel()
+	recovery = &globalOutcomeRecovery{shuffle: fixedLaneOrder}
+	fake = &recovererFake{laneReplies: []recovererReply{
+		{next: authority.ExpiredOutcomeCursor{AfterRetryMs: 10, AfterBattle: 1}, more: true},
+		{next: authority.ExpiredOutcomeCursor{AfterRetryMs: 20, AfterBattle: 2}, more: true},
+	}}
+	recovery.round(short, fake, func(error) {})
+	require.Equal(t, 1, fake.lanePages, "预算不够一页就留到下一次访问")
+	require.Equal(t, authority.ExpiredOutcomeCursor{AfterRetryMs: 10, AfterBattle: 1}, recovery.lanes[0])
+}
+
 // 每个副本每圈恰好把每条车道访问一遍(用真随机排列),所以任一车道的访问间隔不超过两圈;全量页每圈一次。
 // 两个副本各自洗牌,这里不断言它们的重合率(随机),只断言各自的覆盖。
 func TestGlobalOutcomeRecoveryVisitsEveryLaneOncePerCycle(t *testing.T) {
@@ -225,7 +278,7 @@ func TestGlobalRoundNoLongerRunsExpiredOutcomeRecovery(t *testing.T) {
 	ast.Inspect(round.Body, func(n ast.Node) bool {
 		if sel, ok := n.(*ast.SelectorExpr); ok {
 			switch sel.Sel.Name {
-			case "RecoverExpiredOutcomes", "RecoverExpiredOutcome", "RecoverExpiredOutcomeLane":
+			case "RecoverExpiredOutcomes", "RecoverExpiredOutcome", "RecoverExpiredOutcomeLane", "RecoverExpiredOutcomeLanePage":
 				t.Errorf("runGlobalRound 在 %s 又调用了 %s:到期恢复只能在 match.global.outcome.recover 循环里跑",
 					fset.Position(sel.Pos()), sel.Sel.Name)
 			}

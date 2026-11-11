@@ -1153,13 +1153,18 @@ func (x *BattleTokenVerifyRequest) GetSignature() []byte {
 }
 
 // 握手应答(battle 节点 → 客户端)。失败时 battle 节点随后主动断开。
+// 心跳两项与 gate 的 ClientTokenVerifyResponse 同义同值(docs/design/gate-client-heartbeat.md §14):成功时填,
+// 客户端收到非 0 的间隔就要在这条直连上立即发第一条 ClientHeartbeatRequest、之后每个间隔一条;
+// battle 从发出本应答起,连续 heartbeat_timeout_ms 收不到这条直连的任何一帧就断开它。
 type BattleTokenVerifyResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`                        // 失败原因(非敏感,可直接展示 / 记日志)
-	BattleId      uint64                 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 成功时回填,客户端据此把连接与本地战斗状态机对上
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Success             bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Error               string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`                                                           // 失败原因(非敏感,可直接展示 / 记日志)
+	BattleId            uint64                 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`                                    // 成功时回填,客户端据此把连接与本地战斗状态机对上
+	HeartbeatIntervalMs uint32                 `protobuf:"varint,4,opt,name=heartbeat_interval_ms,json=heartbeatIntervalMs,proto3" json:"heartbeat_interval_ms,omitempty"` // 客户端在本直连上每隔这么久发一条 ClientHeartbeatRequest;0 = 这台 battle 不支持心跳,不发
+	HeartbeatTimeoutMs  uint32                 `protobuf:"varint,5,opt,name=heartbeat_timeout_ms,json=heartbeatTimeoutMs,proto3" json:"heartbeat_timeout_ms,omitempty"`    // battle 连续这么久收不到本直连任何一帧就断开;客户端同样按它判 battle 已死
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *BattleTokenVerifyResponse) Reset() {
@@ -1209,6 +1214,20 @@ func (x *BattleTokenVerifyResponse) GetError() string {
 func (x *BattleTokenVerifyResponse) GetBattleId() uint64 {
 	if x != nil {
 		return x.BattleId
+	}
+	return 0
+}
+
+func (x *BattleTokenVerifyResponse) GetHeartbeatIntervalMs() uint32 {
+	if x != nil {
+		return x.HeartbeatIntervalMs
+	}
+	return 0
+}
+
+func (x *BattleTokenVerifyResponse) GetHeartbeatTimeoutMs() uint32 {
+	if x != nil {
+		return x.HeartbeatTimeoutMs
 	}
 	return 0
 }
@@ -1688,11 +1707,13 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x16spectator_operation_id\x18\a \x01(\tR\x14spectatorOperationId\"R\n" +
 	"\x18BattleTokenVerifyRequest\x12\x18\n" +
 	"\apayload\x18\x01 \x01(\fR\apayload\x12\x1c\n" +
-	"\tsignature\x18\x02 \x01(\fR\tsignature\"h\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\"\xce\x01\n" +
 	"\x19BattleTokenVerifyResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x1b\n" +
-	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\"\xf0\x01\n" +
+	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\x122\n" +
+	"\x15heartbeat_interval_ms\x18\x04 \x01(\rR\x13heartbeatIntervalMs\x120\n" +
+	"\x14heartbeat_timeout_ms\x18\x05 \x01(\rR\x12heartbeatTimeoutMs\"\xf0\x01\n" +
 	"\x11BattleAssignedS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12\x12\n" +

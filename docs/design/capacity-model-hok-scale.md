@@ -323,7 +323,7 @@
 
 | 项 | 负载公式（参数出处） | S1 | S2 | S3 | 现有上限（出处） | 差距 / 说明 |
 |---|---|---|---|---|---|---|
-| 日志 | N_save + N_snap + 4E 行/s：每次存盘一行（`player_lifecycle.cpp:3743`）、每份快照一行（`snapshot_system.cpp:109`）、每条连接两行，都在 INFO 级；LogLevel 2 实际是 INFO（G5） | 0.6 万~1.2 万行/s | 2.8 万~6.1 万 | 5.6 万~12.2 万行/s，11~24 MB/s | Loki 1 个副本，ingestion_rate_mb 16，盘 10Gi，保留 168 小时（`loki.yaml:34`、`:89`、`:93`、`:133`） | S3 0.7~1.5 倍；保留 7 天要 6.7~14.5 TB |
+| 日志 | N_save + N_snap + 4E 行/s：每次存盘一行（`player_lifecycle.cpp:3743`）、每份快照一行（`snapshot_system.cpp:109`）、每条连接两行，都在 INFO 级；LogLevel 2 实际是 INFO（G5） | 0.6 万~1.2 万行/s | 2.8 万~6.1 万 | 5.6 万~12.2 万行/s，11~24 MB/s | Loki 1 个副本，ingestion_rate_mb 16，盘 10Gi，保留 168 小时（`loki.yaml:34`、`:89`、`:93`、`:133`） | S3 0.7~1.5 倍；保留 7 天要 6.7~14.5 TB。**（2026-11-10：输入已变，本行待重算）**存盘那行已降为 DEBUG，直写 TiDB 的存盘路径也不再逐次打 INFO；每条连接两行两个平台都已降为 TRACE（Windows `52ebf9e5d`，Linux 2026-11-10 覆盖层，见 [gate 准入设计](gate-connection-admission-control.md) P0-3）。INFO 下仍逐事件打的有每份快照一行（`snapshot_system.cpp:116`）和退出路径上的几行。所以 S3 至少少掉 N_save 一项（2.2 万~5.6 万行/s），上面「超出 Loki」的结论偏悲观；存储各行也要随直写 TiDB 一起重算 |
 | 监控 | 抓取目标 ≈ N_cpp + Go 实例；SM 序列见 §2.2 | 0.2k~0.8k | 1k~4.5k | 2k~9k | 仓库里没有 Prometheus 清单；gate 容器没有 resources，是 BestEffort（G11） | 节点数无法从清单推算 |
 | 停服维护 | 全服 kNodeShutdown：每人一次退出存盘加一份 LOGOUT 快照（`cpp/nodes/scene/main.cpp:168`、`:199`） | 100 万份，15~300 GB | 500 万份 | 1000 万份，150 GB~3 TB | 快照 topic 共 1.5 GiB | 99% 以上会被按大小删除 |
 | 停服后全服重登 | PCU/T_return，T_return 取 600 秒 [I] | 1,667/s | 8,333 | 1.67 万 | — | 相当于开服峰值的下沿；叠加口令哈希和 HTTP 入口；Redis 若也重启，f_miss=1 |
@@ -437,7 +437,7 @@
      - 已落码，未编译、未测试：GateWatcher 的 list-watch 镜像（按每台 gate 计新鲜度，有一台超过 15s 没刷新或镜像未同步时回落直读）；快路径 PickGate 改为随机二选一（同人数取第一次抽中的，不按 NodeID）；
      - gate 排空监视仍直读 etcd（要 fail-closed），不读镜像；排空脚本清标记前多等 20s，等各 login 的镜像跟上；
      - **当前 K8s 默认每 zone 2 台 gate**：两台人数不等时与旧规则相同；全体同人数（开新区第一个上报窗口）时从全落 NodeID 最小的一台变为两台各半；之后的窗口里羊群依旧，充分摊开要每 zone 至少 3 台，滞后窗口里最闲那台最多拿 2/n；
-     - 没做：本地累加已分配数，dispatcher 跨拍仍从同一份滞后人数起算；scene_manager 跨 zone 重定向的选 gate 已于同日改为随机二选一并补排空过滤（共用 `go/shared/gatepick`，Java `GatePicker` 同步；未编译、未测试），但不剔除停写与满载的 gate；
+     - 本地累加已分配数、dispatcher 跨拍从同一份滞后人数起算两条已于 2026-11-11 落码（未编译）：两条挑法都按「上报人数 + 本进程在途票」比负载，见 gate-load-balancing-design.md「本进程在途票」；scene_manager 跨 zone 重定向的选 gate 已于同日改为随机二选一并补排空过滤（共用 `go/shared/gatepick`，Java `GatePicker` 同步；未编译、未测试），但不剔除停写与满载的 gate；
      - 2026-11-05 补：「黑洞」与单台上限已落码（未编译、未测试）。login 挑 gate 前剔除三个上报周期没重写记录的 gate（按 etcd ModRevision 判，与镜像新鲜度分开）和人数到自报 `max_connections` 90% 的 gate，全部不合格时回落全集；
        同日又补（未编译、未测试）：scene_manager 跨 zone 重定向同样剔除这两类 gate（每次直读 etcd，本进程按 ModRevision 记历史判停写，规则与 login 共用 `go/shared/gatepick`）；排队玩家取走放行时先复核放行时选定的 gate，停写、满载或已不在候选里就重挑；
        见 gate-load-balancing-design.md「满载与停写的 gate」；
@@ -946,7 +946,7 @@ DAU 仍为 1 亿，PCU 从 1000 万增加到 2000 万；按在线人数增长的
 |---|---|---|
 | friend | 本仓 `recommend_repo.go` 的候选窗口、`recommend_sql.go` 的按方言提示与服务器语句超时，以及 `friend_repo.go` 的升序主键点锁应保留；原仓补充申请代次、推送恢复与 TiDB 运行接线。原仓 `friend_sharding.go` 仅做落点观测，真正跨节点事务由 TiDB 提供 | 不能根据一段 `database/sql` 事务判定单机，也不能把原仓旧推荐 SQL 覆盖本仓已有的有界修复；无同口径新实测，不能报提升百分比 |
 | chat | 本仓有 Redis Cluster 安全的单键操作，但世界历史固定 `chat:{world}:log`；原仓有多频道、持久私聊与推送。原仓 `chat_routing.go` 明确区域桥仅观测、未改变单总线投递，`sendWorld` 仍全服广播 | 双方都不能仅靠增加 chat 副本解决世界频道热点与全服扇出；本仓只做部分频道、历史尽力保留，不能直接与原仓完整推送业务比 QPS |
-| guild | 必须比较本仓 `guild_player_state(0)` 全局插入守卫、`guild_rank:maintenance_lock` 与原仓按 guild 父行锁的冲突范围；优先消除不相关帮会之间的串行化，同时保留本仓已有经济和活动的一致性门禁 | 不能直接删守卫以换吞吐，也不能把原仓少做的业务当作更高容量的证明 |
+| guild | 必须比较本仓 `guild_player_state(0)` 全局插入守卫与原仓按 guild 父行锁的冲突范围（`guild_rank:maintenance_lock` 已于 2026-11-11 退出写分路径，只留给启动重建与合服折叠互斥，见[帮会排行架构](guild_ranking_architecture_zh.md) §8）；优先消除不相关帮会之间的串行化，同时保留本仓已有经济和活动的一致性门禁 | 不能直接删守卫以换吞吐，也不能把原仓少做的业务当作更高容量的证明 |
 | mail | 原仓有完整业务，可作为移植起点；其递增 Snowflake 游标与提交乱序的多副本漏信风险、系统 / 帮会邮件无查询上限须先修复，再接现有 C++ 资产接口 | 本仓没有可直接比较的完整 mail 实现；原仓代码存在不等于可安全横向扩容，不能照搬后宣布可用 |
 | leaderboard | 以原仓现成服务为业务起点，另核单榜热 key、更新频率、排序口径、结算写放大及多副本结算幂等；本仓帮会内部榜不能代替通用榜 | Redis Cluster 可以分散不同榜，不会自动拆开同一个榜；无热点榜测试不能推断亿级玩家榜容量 |
 | login | 保留本仓已接 C++ 的 gate 会话栅栏、KDF 资源上限、开服队列；比较原仓账号 SQL 代际、失败配额和统一恢复行为。原仓 owner / allocator 不在本次迁移范围，恢复出口须适配现有场景管理 | 不得删掉 owner 依赖后直接启动原仓恢复链，造成全员 WAIT；不能把本仓当前保证冒充原仓 exact owner / lease 的完整证明 |

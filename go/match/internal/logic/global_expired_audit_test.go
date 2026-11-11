@@ -15,10 +15,13 @@ import (
 // 与终局发件箱三类积压。用替身权威直接调生产函数,不起 TiDB。
 
 type outcomeAuditorFake struct {
-	stranded    uint64
-	strandedErr error
-	backlog     authority.OutcomeOutboxBacklog
-	backlogErr  error
+	stranded         uint64
+	strandedErr      error
+	backlog          authority.OutcomeOutboxBacklog
+	backlogErr       error
+	overdue          uint64
+	overdueOldestMs  uint64
+	overdueReadError error
 }
 
 func (f *outcomeAuditorFake) CountStrandedExpiredFormations(context.Context) (uint64, error) {
@@ -29,15 +32,25 @@ func (f *outcomeAuditorFake) ReadOutcomeOutboxBacklog(context.Context) (authorit
 	return f.backlog, f.backlogErr
 }
 
+func (f *outcomeAuditorFake) CountOverdueDeadlineAborts(context.Context) (uint64, uint64, error) {
+	return f.overdue, f.overdueOldestMs, f.overdueReadError
+}
+
 type backlogReading struct {
 	kind   string
 	rows   uint64
 	oldest float64
 }
 
+type overdueReading struct {
+	count         uint64
+	oldestSeconds float64
+}
+
 type recordedAuditGauges struct {
 	stranded []uint64
 	backlog  []backlogReading
+	overdue  []overdueReading
 }
 
 func (r *recordedAuditGauges) sink() globalAuditGauges {
@@ -46,6 +59,37 @@ func (r *recordedAuditGauges) sink() globalAuditGauges {
 		outboxBacklog: func(kind string, rows uint64, oldest float64) {
 			r.backlog = append(r.backlog, backlogReading{kind, rows, oldest})
 		},
+		overdueAborts: func(count uint64, oldestSeconds float64) {
+			r.overdue = append(r.overdue, overdueReading{count, oldestSeconds})
+		},
+	}
+}
+
+// 2026-11-11:「超期未作废」每轮都写 gauge,0 也写;大于 0 打 ERROR;读失败不写(保留上一次读数)并打 ERROR。
+// 一拍也清不完的积压与 match 长期不可用都靠它报出来(authority.CountOverdueDeadlineAborts)。
+func TestGlobalOutcomeAuditReportsOverdueDeadlineAborts(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		auditor   *outcomeAuditorFake
+		want      []overdueReading
+		wantError string
+	}{
+		{"恢复跟得上", &outcomeAuditorFake{}, []overdueReading{{0, 0}}, ""},
+		{"两局超期", &outcomeAuditorFake{overdue: 2, overdueOldestMs: 90500}, []overdueReading{{2, 90.5}}, "overdue for their deadline abort"},
+		{"读失败", &outcomeAuditorFake{overdueReadError: errors.New("fixture TiDB down")}, nil, "overdue deadline-abort audit failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			logs := logtest.NewCollector(t)
+			var got recordedAuditGauges
+			auditGlobalOutcomes(context.Background(), tc.auditor, got.sink())
+			require.Equal(t, tc.want, got.overdue)
+			out := logs.String()
+			if tc.wantError == "" {
+				require.NotContains(t, out, "overdue", out)
+				return
+			}
+			require.Contains(t, out, tc.wantError)
+		})
 	}
 }
 

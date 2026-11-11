@@ -13,8 +13,9 @@
 // ordering-smoke O7),EnterGame 要等 Login 完成之后才发出,那时 Login 的回包已经处理完。直连模式没有 lane,收包即发出,
 // 连发的 EnterGame 在 Login 回包之前到达就会被拒(直连本来就不保序;真实客户端要先从 Login 回包的角色列表拿 player_id)。
 //
-// 同一文件还放着客户端入口的另外两道 login 相关判定(IsGateSynthesizedOnly、EnterGameRoleSwitchRejectTip),调用点都在
-// client_session_handler.cpp 的 DispatchClientRpcMessage(收包时判,直连 / 路由两种模式共用)。
+// 同一文件还放着客户端入口的另外两道 login 相关判定,调用点都在 client_session_handler.cpp:IsGateSynthesizedOnly 在
+// DispatchClientRpcMessage 收包时判(两种模式共用);EnterGameRoleSwitchRejectTip 随 EnterGame 发出时判(LoginTransitionRejectTip:
+// 直连模式收包即发出,路由模式由 lane 的发出钩子在轮到它时判,排在前面的 LeaveGame 那时已经生效)。
 //
 // 纯函数、零状态,单独成文件是为了在 routing_identity_test 里直接测,不把会话表、连接、RPC 注册链拖进测试工程。
 
@@ -74,17 +75,20 @@ inline bool IsLoginReplySuccess(const ::google::protobuf::Message &reply)
 	return false;
 }
 
-// 只能由 gate 合成、客户端不得发起的消息号。现在只有 Disconnect(58,proto 标 CLIENT_RPC_SERVER_ONLY):gate 在连接关闭时
-// 自己合成(HandleConnectionDisconnection 直接发给 login 或路由服,不经客户端入口),login 据此关闭会话栅栏、清登录态、
-// 给绑定的角色挂断线租约。客户端自己发 58 等于在连接还活着时把 login 侧的会话状态切成「已断线」,gate 却还当它在线。
+// 只能由 gate 合成、客户端不得发起的消息号(proto 都标 CLIENT_RPC_SERVER_ONLY),不经客户端入口发出:
+//   - Disconnect:gate 在连接关闭时自己合成(HandleConnectionDisconnection 直接发给 login 或路由服),login 据此关闭会话栅栏、
+//     清登录态、给绑定的角色挂断线租约。客户端自己发等于在连接还活着时把 login 侧的会话状态切成「已断线」,gate 却还当它在线。
+//   - RequestGateMigration:gate 排空时自己合成(drain_migration.cpp 经 SendGateMigrationRequest 发),应答只给 gate 用来推 124
+//     (docs/design/gate-drain-session-migration.md §4.3)。客户端自己发就能绕开 gate 的迁移限速与选人条件,直接拿到一张换 gate 的票。
 //
-// 客户端入口按「未知 / 未授权消息号」拒绝它(计非法包、不回包)。这道判定手写、不依赖生成物:生成的上行白名单
-// IsClientMessageId 按服务收号,Disconnect 所在的 ClientPlayerLogin 标了 OptionIsClientProtocolService,58 一直在白名单里;
-// 生成器按方法形态收口之后(docs/design/client-rpc-callback.md §7 R4)白名单本身也不再收它,这里照样拦,
+// 客户端入口按「未知 / 未授权消息号」拒绝它们(计非法包、不回包)。这道判定手写、不依赖生成物:生成的上行白名单
+// IsClientMessageId 按服务收号,它们所在的 ClientPlayerLogin 标了 OptionIsClientProtocolService,曾经一直在白名单里;
+// 生成器按方法形态收口之后(docs/design/client-rpc-callback.md §7 R4)白名单本身也不再收它们,这里照样拦,
 // 生成物没重新生成或生成器回退时同样挡得住。
 inline bool IsGateSynthesizedOnly(uint32_t messageId)
 {
-	return messageId == ClientPlayerLoginDisconnectMessageId;
+	return messageId == ClientPlayerLoginDisconnectMessageId ||
+		   messageId == ClientPlayerLoginRequestGateMigrationMessageId;
 }
 
 // 会话当前绑定的角色是否有效:BindSession(或先到的路由)把角色写进会话之后、客户端 LeaveGame 之前。

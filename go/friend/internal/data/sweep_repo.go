@@ -7,6 +7,8 @@ import (
 	"fmt"
 
 	"github.com/zeromicro/go-zero/core/logx"
+
+	"shared/workshard"
 )
 
 // sweep_repo.go —— friend_request 终态行的保留期清理(F2 §3.8)与 friend_capacity 零好友行的回收,SQL 侧。
@@ -19,12 +21,22 @@ import (
 // 删掉之后再次发起申请等价于一条全新的 pending INSERT。
 // **pending 永不在清理范围内**:那是玩家还没处理的东西,清掉等于替玩家做决定。
 //
-// # 多副本各删各的,不引入 leader
+// # 多副本按片分工(2026-11-11 起,消除单节点总纲 §9)
 //
-// DELETE 幂等,两个副本同时跑最坏只是其中一个删到空批(§3.8)。
+// 两类候选读都只取本副本负责的片:片号 = 玩家 id % 64(friend_request 按发起方 from_player_id,
+// friend_capacity 按 player_id),第 n 片的归属键是 workshard.ShardKey(SweepWorkKind, n),
+// 由 etcd 里注册的 stable friend 副本按最高随机权重哈希分(与 guild / trade 终态清理同法)。
+// 片条件放在 LIMIT 之前,每个副本一轮各删自己片里的一批,总吞吐随副本数增长;
+// 以前每个副本读同一批候选、抢同一批行,加副本只多出重复读和空删。
+// 分工只省重复劳动,不承担正确性:成员表变化的几秒里两个副本可能同删一片(后到的删到 0 行),
+// 或一片暂时没人删(终态行多留一轮)。逐行删的点锁与 WHERE 复核不变,正确性仍在那里。
 // 与在线写路径的锁冲突面也可控:本文件只碰**终态**行,而业务事务只在申请行是 pending 时
 // 才继续往下写(AcceptFriend 在 status≠pending 时直接返回),两边要动的行几乎不相交。
 // 万一真撞上 1213,一轮失败等下一轮 —— 这正是"后台任务不重试、靠节拍自愈"的用法。
+//
+// "updated_ms 恒为 0 就拒删"那道保险(countTerminalRequestsMissingUpdatedMs)**不分片**:
+// 它判的是"有没有写路径漏写 updated_ms",是全表的健康信号;任一片出现这种行,所有副本都不删。
+// 它是两个等值前缀上的有界读,平时命中 0 行,每个副本各跑一次的代价可以忽略。
 //
 // # 第二类清理对象:零好友的 friend_capacity 行(SweepIdleCapacityRows)
 //
@@ -33,9 +45,10 @@ import (
 // 回收对象是 `friend_count = 0 AND created_ms < 截止点` 的行,走 (friend_count, created_ms) 复合索引;
 // 保留期、批大小、模式与终态申请清理共用同一份 Friend.Sweep 配置,不新增配置键。
 // ⚠ "走索引、扫描量恒等于命中行数"的前提是该索引**真实存在**:go/schemamigrate 对已存在的表只
-// ADD COLUMN,缺普通索引只出一条 warning"缺索引(不会自动建)"、退出码仍是 0(见 plan.go 的 drift)。
-// 本批之前已经建过 friend_capacity 的环境,重跑 -migrate 只会补 created_ms 列,候选读会静默退化成
-// 每轮全表扫(report_only 下也会执行)。补救:手工执行
+// ADD COLUMN,缺普通索引只出一条 warning(类别 schemamigrate.FindingMissingIndex)、退出码仍是 0(见 plan.go 的 drift);
+// friend 按这个类别把它升级成拒启 / -migrate 退出 4(friend.go 的 missingIndexWarnings),不让候选读静默退化成
+// 每轮全表扫(report_only 下也会执行)。本批之前已经建过 friend_capacity 的环境,重跑 -migrate 只会补 created_ms 列、
+// 索引仍缺,friend 因此起不来。补救:手工执行
 // `ALTER TABLE friend_capacity ADD INDEX idx_friend_capacity_0 (friend_count, created_ms)`
 // (索引名以 -migrate 的 warning 原文为准);friend 未上线、无存量,也可以直接删库重建。
 //
@@ -84,6 +97,26 @@ const (
 	SweepModeDelete     = "delete"
 )
 
+// SweepWorkKind 是清理按片分工的归属键前缀:第 n 片的归属键是 workshard.ShardKey(SweepWorkKind, n)。
+// 两张表共用一个类别,同一片的终态申请行与零好友容量行归同一个副本。写死成常量,不进配置。
+const SweepWorkKind = "friend-sweep"
+
+// 两张表各自的分片列(片号 = 列值 % 64,即 workshard.SQLFilter 的 MOD(column, Shards))。
+// 都是发号器发的永久玩家 id,已经打散,取模足够均匀(AGENTS.md §7 不变量 1)。
+// 列名写死在这里,不来自任何外部输入:SQLFilter 把它直接拼进语句文本。
+const (
+	sweepRequestShardColumn  = "from_player_id"
+	sweepCapacityShardColumn = "player_id"
+)
+
+// sweepCandidateArgs 按占位符顺序拼候选读的实参:先 before(WHERE 里分片条件之前的),再片号,最后 LIMIT。
+func sweepCandidateArgs(owned workshard.Filter, limit int, before ...any) []any {
+	args := make([]any, 0, len(before)+len(owned.Args())+1)
+	args = append(args, before...)
+	args = append(args, owned.Args()...)
+	return append(args, limit)
+}
+
 // millisPerDay:保留期配置是"天",updated_ms 是毫秒时间戳,换算只在这里做一次。
 const millisPerDay int64 = 24 * 60 * 60 * 1000
 
@@ -102,10 +135,10 @@ func sweepCutoffMs(ctx context.Context, retentionDays, batchLimit int, nowMs int
 	// (一条长事务锁住整张 friend_request,把好友申请写路径一起卡住),
 	// retentionDays=0 会把刚被拒的申请立刻删掉。
 	if batchLimit <= 0 {
-		return 0, false, fmt.Errorf("sweep batchLimit 必须为正数,得到 %d", batchLimit)
+		return 0, false, fmt.Errorf("sweep batchLimit must be positive, got %d", batchLimit)
 	}
 	if retentionDays <= 0 || retentionDays > maxRetentionDays {
-		return 0, false, fmt.Errorf("sweep retentionDays 必须在 [1, %d] 内,得到 %d", maxRetentionDays, retentionDays)
+		return 0, false, fmt.Errorf("sweep retentionDays must be within [1, %d], got %d", maxRetentionDays, retentionDays)
 	}
 
 	cutoffMs := nowMs - int64(retentionDays)*millisPerDay
@@ -132,18 +165,21 @@ func sweepCutoffMs(ctx context.Context, retentionDays, batchLimit int, nowMs int
 //   - 保险触发(存在 updated_ms 恒为 0 的终态行)时只统计不删,返回 deleted=0 且 **err=nil** ——
 //     它不是故障,是刻意的拒绝;拒绝原因在这里打一条错误日志(logic 的 WARN 会指向它)。
 //   - nowMs 由调用方给(单测要固定时钟),本层不取 time.Now。
+//   - owns 判本副本是否负责某一片(见文件头「多副本按片分工」);nil = 不分工,本副本数和删全部片。
+//     两个返回值都只算本副本负责的片;分片归属在进入时算一次,本次调用里不变。
 //   - "终态"逐字等于 `status IN (accepted, rejected)`,**不是** `status <> pending`:
 //     `status = 0` 的行不再被扫到。现实中不存在那种行(status 只写 1/2/3),这正是想要的
 //     语义收紧 —— 真出现 0 说明有人绕过本层直写库,那种行不该被一个定时任务悄悄删掉。
 //     换成 IN 的性能理由见 countTerminalRequestsBefore。
 func (r *FriendRepo) SweepTerminalRequests(ctx context.Context, mode string,
-	retentionDays, batchLimit int, nowMs int64) (int64, int64, error) {
+	retentionDays, batchLimit int, nowMs int64, owns func(key string) bool) (int64, int64, error) {
 	cutoff, ok, err := sweepCutoffMs(ctx, retentionDays, batchLimit, nowMs)
 	if err != nil || !ok {
 		return 0, 0, err
 	}
+	owned := workshard.SQLFilter(owns, SweepWorkKind, sweepRequestShardColumn)
 
-	pending, err := r.countTerminalRequestsBefore(ctx, cutoff, batchLimit)
+	pending, err := r.countTerminalRequestsBefore(ctx, cutoff, batchLimit, owned)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -177,7 +213,7 @@ func (r *FriendRepo) SweepTerminalRequests(ctx context.Context, mode string,
 		return pending, 0, nil
 	}
 
-	deleted, err := r.deleteTerminalRequestsBefore(ctx, cutoff, batchLimit)
+	deleted, err := r.deleteTerminalRequestsBefore(ctx, cutoff, batchLimit, owned)
 	if err != nil {
 		// 逐行删:出错前已删掉的行是真删了,把计数带回去,别让日志把它们记成 0。
 		return pending, deleted, err
@@ -198,13 +234,17 @@ func (r *FriendRepo) SweepTerminalRequests(ctx context.Context, mode string,
 // 取不满,每轮都会扫完全部终态行(而 friend_request 正在在线写路径上)。
 // 写成 IN 之后每个 status 值各是一段等值前缀,`updated_ms < cutoff` 成为真正的区间上界,
 // 扫描量恒等于命中行数。两列都在索引里,不必回表。
-func (r *FriendRepo) countTerminalRequestsBefore(ctx context.Context, cutoffMs uint64, limit int) (int64, error) {
+//
+// 分片条件 owned(`MOD(from_player_id, 64) IN (...)`)接在区间条件之后、LIMIT 之前:from_player_id 是主键列,
+// 二级索引项自带主键,条件在索引项上就能判,仍不必回表。它不是索引边界,积压时本副本要多扫别的片的索引项
+// (约为副本数倍),换来的是一个副本积压的片占不住别的副本的名额。
+func (r *FriendRepo) countTerminalRequestsBefore(ctx context.Context, cutoffMs uint64, limit int, owned workshard.Filter) (int64, error) {
 	var rows int64
 	if err := r.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM (
-		     SELECT 1 FROM friend_request WHERE status IN (?, ?) AND updated_ms < ? LIMIT ?
+		     SELECT 1 FROM friend_request WHERE status IN (?, ?) AND updated_ms < ? AND `+owned.SQL()+` LIMIT ?
 		 ) AS bounded`,
-		requestStatusAccepted, requestStatusRejected, cutoffMs, limit).Scan(&rows); err != nil {
+		sweepCandidateArgs(owned, limit, requestStatusAccepted, requestStatusRejected, cutoffMs)...).Scan(&rows); err != nil {
 		return 0, fmt.Errorf("count terminal friend requests before %d: %w", cutoffMs, err)
 	}
 	return rows, nil
@@ -239,10 +279,11 @@ func (r *FriendRepo) countTerminalRequestsMissingUpdatedMs(ctx context.Context, 
 // 改回 pending(玩家重新发起申请),这时必须不删。多副本同时跑时,后到的一方删到 0 行,无害。
 // 每行一个 RC 写事务{lockRequestRowSQL 主键点锁 → 带复核的主键 DELETE}(deleteOneRowPointLocked),持锁窗口仍只有一行;
 // 2026-10-18 以前是单条自动提交 DELETE,TiDB 上会与守卫事务各持一半互等、检测不到(理由见该函数)。
-func (r *FriendRepo) deleteTerminalRequestsBefore(ctx context.Context, cutoffMs uint64, limit int) (int64, error) {
+// 候选只取本副本负责的片(owned,与 countTerminalRequestsBefore 同一个条件);逐行 DELETE 只按主键,不再带分片条件。
+func (r *FriendRepo) deleteTerminalRequestsBefore(ctx context.Context, cutoffMs uint64, limit int, owned workshard.Filter) (int64, error) {
 	rows, err := r.db.QueryContext(ctx,
-		"SELECT from_player_id, to_player_id FROM friend_request WHERE status IN (?, ?) AND updated_ms < ? LIMIT ?",
-		requestStatusAccepted, requestStatusRejected, cutoffMs, limit)
+		"SELECT from_player_id, to_player_id FROM friend_request WHERE status IN (?, ?) AND updated_ms < ? AND "+owned.SQL()+" LIMIT ?",
+		sweepCandidateArgs(owned, limit, requestStatusAccepted, requestStatusRejected, cutoffMs)...)
 	if err != nil {
 		return 0, fmt.Errorf("list terminal friend requests before %d: %w", cutoffMs, err)
 	}
@@ -330,7 +371,8 @@ const deleteTerminalRequestSQL = "DELETE FROM friend_request WHERE from_player_i
 //   - batchLimit <= 0、retentionDays 越界 → 返回 error;截止点非正 → 打错误日志并返回 (0,0,nil);
 //   - 两个返回值都受 batchLimit 封顶,"等于 batchLimit"只说明积压 ≥ 一批,不是精确积压;
 //   - deleted 可以小于 idle 而不是故障:候选读与逐行删除之间,该行可能已被 AcceptFriend 加过好友
-//     (提交点复核不再匹配),或者被另一个副本抢先删了。
+//     (提交点复核不再匹配),或者被另一个副本抢先删了(成员表变化的几秒里两个副本可能负责同一片)。
+//   - owns 的语义同 SweepTerminalRequests:只数和删本副本负责的片,nil = 全部片。
 //
 // 与 SweepTerminalRequests 的差别:**没有** "updated_ms=0 就拒删"那道保险 —— created_ms=0 的零好友行
 // 被回收是无害的(补行时按权威边数重算)。为什么逐行删、为什么无害,见文件头。
@@ -339,13 +381,14 @@ const deleteTerminalRequestSQL = "DELETE FROM friend_request WHERE from_player_i
 // 前面那些行是各自独立提交的,已经删了就是删了,报 0 会让指标与日志对不上账。
 // 不重试:后台任务靠节拍自愈,剩下的行下一轮还在候选里。
 func (r *FriendRepo) SweepIdleCapacityRows(ctx context.Context, mode string,
-	retentionDays, batchLimit int, nowMs int64) (int64, int64, error) {
+	retentionDays, batchLimit int, nowMs int64, owns func(key string) bool) (int64, int64, error) {
 	cutoff, ok, err := sweepCutoffMs(ctx, retentionDays, batchLimit, nowMs)
 	if err != nil || !ok {
 		return 0, 0, err
 	}
 
-	playerIDs, err := r.listIdleCapacityRowsBefore(ctx, cutoff, batchLimit)
+	owned := workshard.SQLFilter(owns, SweepWorkKind, sweepCapacityShardColumn)
+	playerIDs, err := r.listIdleCapacityRowsBefore(ctx, cutoff, batchLimit, owned)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -359,7 +402,7 @@ func (r *FriendRepo) SweepIdleCapacityRows(ctx context.Context, mode string,
 		// 逐行之间检查 ctx:单轮预算(logic 的 sweepRoundBudget)用完或进程在退出时,
 		// 停在行与行之间,而不是让下一条 DELETE 带着一个已取消的 ctx 去报一条含糊的驱动错误。
 		if err := ctx.Err(); err != nil {
-			return idle, deleted, fmt.Errorf("sweep idle friend capacity rows: 已删 %d/%d 行后中止: %w", deleted, idle, err)
+			return idle, deleted, fmt.Errorf("sweep idle friend capacity rows: aborted after deleting %d/%d rows: %w", deleted, idle, err)
 		}
 		removed, err := r.deleteIdleCapacityRow(ctx, playerID, cutoff)
 		if err != nil {
@@ -378,10 +421,11 @@ func (r *FriendRepo) SweepIdleCapacityRows(ctx context.Context, mode string,
 // 索引:(friend_count, created_ms),第一列等值、第二列区间,扫描量恒等于命中行数
 // (前提是索引真实存在,存量表不会被自动补建 —— 见文件头);
 // 二级索引项自带主键 player_id,不必回表。不加 ORDER BY:先删哪一批无所谓。
-func (r *FriendRepo) listIdleCapacityRowsBefore(ctx context.Context, cutoffMs uint64, limit int) ([]uint64, error) {
+// 分片条件 owned(`MOD(player_id, 64) IN (...)`)在 LIMIT 之前,同样在索引项上判;代价见 countTerminalRequestsBefore。
+func (r *FriendRepo) listIdleCapacityRowsBefore(ctx context.Context, cutoffMs uint64, limit int, owned workshard.Filter) ([]uint64, error) {
 	rows, err := r.db.QueryContext(ctx,
-		"SELECT player_id FROM friend_capacity WHERE friend_count = 0 AND created_ms < ? LIMIT ?",
-		cutoffMs, limit)
+		"SELECT player_id FROM friend_capacity WHERE friend_count = 0 AND created_ms < ? AND "+owned.SQL()+" LIMIT ?",
+		sweepCandidateArgs(owned, limit, cutoffMs)...)
 	if err != nil {
 		return nil, fmt.Errorf("list idle friend capacity rows before %d: %w", cutoffMs, err)
 	}

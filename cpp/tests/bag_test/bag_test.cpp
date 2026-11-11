@@ -16,6 +16,7 @@
 #include "modules/mission/comp/mission_comp.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "player/system/player_pet.h"
+#include "modules/audit/audit_outbox.h"
 #include "modules/snapshot/snapshot_system.h"
 #include "modules/transaction_log/transaction_log_system.h"
 #include "modules/gain_block/gain_block_service.h"
@@ -4176,7 +4177,7 @@ TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
     const auto player = tlsEcs.actorRegistry.create();
     tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, Guid{4243});
 
-    // 手搭玩家补成加载完成的持久化形状;否则只读 Marshal 会先拒绝,测不到 snapshot 号源门。
+    // 手搭玩家补成加载完成的持久化形状(2026-11-11 起快照请求不再在 scene 里序列化整档,这些组件只是让玩家形状贴近真实)。
     tlsEcs.actorRegistry.emplace<Transform>(player);
     tlsEcs.actorRegistry.emplace<PlayerUint64Comp>(player);
     tlsEcs.actorRegistry.emplace<PlayerSkillListComp>(player);
@@ -4194,24 +4195,33 @@ TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
     tlsEcs.actorRegistry.emplace<PlayerMysteryMerchantComp>(player); // 同上,经 mysql_database_table.pb.h 可见
     tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player); // 同上,近期战斗结果(battle-result-recovery.md)
     tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player); // 同上,客户端请求幂等键账本(client-request-idempotency.md §5.3)
+    tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player); // 同上,物品数量预留(battle-item-reservation.md)
+    tlsEcs.actorRegistry.emplace<PlayerMailOutboxComp>(player); // 同上,待寄邮件(battle-overflow-mail.md)
     tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerDatabaseCarryComp>(player);
 
-    EXPECT_EQ(0u, SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGIN)) << "没 snapshot_id 就跳过这条快照";
+    // 快照只能随存盘提交:这里像 scene 一样开着审计发件箱,快照请求进 4243 的审计队列(docs/design/player-audit-outbox.md §5.5)。
+    AuditOutbox::Enable(true);
+    EXPECT_EQ(0u, SnapshotSystem::RequestAuditSnapshot(player, SNAPSHOT_LOGIN)) << "没 snapshot_id 就跳过这条快照";
     auto s = snap.client().GetStats();
     EXPECT_EQ(1u, s.unavailable);
     EXPECT_EQ(0u, s.issued);
     EXPECT_EQ(1u, snap.transport.requests.size());
     EXPECT_EQ("snapshot", snap.transport.requests[0].bizTag);
+    EXPECT_EQ(0u, AuditOutbox::PendingCount(4243)) << "没领到号就不入队";
 
     snap.client().OnResponse(0, 1, 11);
-    // 有段:snapshot_id 铸出来了。单测没有 Kafka,发送失败返回 0,所以判据看号段统计而不是返回值。
-    (void)SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGIN);
+    // 有段:snapshot_id 铸出来了,快照请求进审计队列,等这名玩家下一笔存盘交给 go/db。
+    const uint64_t snapshotId = SnapshotSystem::RequestAuditSnapshot(player, SNAPSHOT_LOGIN);
     s = snap.client().GetStats();
     EXPECT_EQ(1u, s.issued);
     EXPECT_EQ(1u, s.unavailable);
+    EXPECT_NE(0u, snapshotId);
+    EXPECT_EQ(1u, AuditOutbox::PendingCount(4243));
 
+    EXPECT_EQ(1u, AuditOutbox::Discard(4243, "test teardown"));
+    AuditOutbox::Enable(false);
     tlsEcs.actorRegistry.destroy(player);
 }
 

@@ -295,6 +295,31 @@ func TestIT_NoOwnerAndSchemaChecks(t *testing.T) {
 	wantSave(t, save(t, ctx, store, 7, 100, 3, instanceA, false, hot("still-mine")), storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_REGRESSED)
 }
 
+// scene 比本 go/db 新(数据覆写审计 r2-ps#11):认领回 TOO_NEW、不抬代次,旧持有者照常提交;
+// 带本 go/db 不认识的行种存盘回 TOO_NEW(可重试),整笔不写。
+func TestIT_SceneNewerThanStore(t *testing.T) {
+	store, db, ctx := itStore(t)
+	seedOwner(t, ctx, db, 7)
+	claim(t, ctx, store, 7, 100, instanceA)
+	wantSave(t, save(t, ctx, store, 7, 100, 1, instanceA, false, hot("from-a")), storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED)
+	newer, err := store.LoadAndClaim(ctx, &storepb.LoadAndClaimRequest{PlayerId: 7, OwnerEpoch: 200, InstanceId: instanceB, BinarySchemaGen: testKnownGen + 1})
+	if err != nil || newer.GetResult() != storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW || newer.GetOwnerEpoch() != 100 {
+		t.Fatalf("resp=%+v err=%v", newer, err)
+	}
+	// 没抬代次:A 仍是现任,照常提交。
+	wantSave(t, save(t, ctx, store, 7, 100, 2, instanceA, false, hot("still-a")), storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED)
+	unknown := &storepb.PlayerStoreRow{Kind: storepb.PlayerStoreKind(999), Payload: []byte("from-a-newer-binary")}
+	resp, err := store.Save(ctx, &storepb.SavePlayerRequest{PlayerId: 7, OwnerEpoch: 100, SaveSeq: 3, SchemaGen: testKnownGen + 1,
+		InstanceId: instanceA, Rows: []*storepb.PlayerStoreRow{hot("with-new-kind"), unknown}})
+	if err != nil || resp.GetResult() != storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW {
+		t.Fatalf("resp=%+v err=%v", resp, err)
+	}
+	final := claim(t, ctx, store, 7, 100, instanceA)
+	if len(final.GetRows()) != 1 || payloadOf(final.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER) != "still-a" {
+		t.Fatalf("a TOO_NEW save must not land: %v", final.GetRows())
+	}
+}
+
 // nil payload 能写进 NOT NULL 列,读回来是空。
 func TestIT_EmptyPayload(t *testing.T) {
 	store, db, ctx := itStore(t)

@@ -2,9 +2,11 @@ package kafka
 
 // 同道历练对局结果消费者(设计 docs/design/guild-phase2/06-activities.md §6.28)。
 //
-// battle 节点打完一局,把 contracts.kafka.BattleResultEvent 发到全局 topic match-results(key = battle_id,
-// payload 直接是事件、不套 *Command 信封)。match 用消费组 match-rating 读它算评分;guild 用**另一个**消费组
-// guild-trial 读同一个 topic,只挑出帮会同道历练的对局交给结算。两个消费组各有各的位点,互不影响。
+// 一局打完、match 把终局提交进 SQL 之后,match 的终局发件箱把 contracts.kafka.BattleResultEvent 发到全局 topic
+// match-results(key = battle_id,payload 直接是事件、不套 *Command 信封)。只发 COMPLETE 的局:作废(ABORT)的局只在 SQL
+// 记终局、不进这个 topic,历练作废的释放走巡检器读 match 的 SQL 终局(trial_launch.go)。battle 节点已不直接发这个 topic。
+// match 用消费组 match-rating 读它算评分;guild 用**另一个**消费组 guild-trial 读同一个 topic,只挑出帮会同道历练的对局
+// 交给结算。两个消费组各有各的位点,互不影响。
 //
 // 分工(只有一处权威,别在这里重复实现):
 //
@@ -67,6 +69,7 @@ import (
 	kafkapb "proto/contracts/kafka"
 	"shared/kafkautil"
 	"shared/safego"
+	"shared/tracing/kafkagotrace"
 )
 
 // TrialResultConsumerConfig 是消费者参数,由 guild.go 从 config.Config 装配。
@@ -74,7 +77,7 @@ type TrialResultConsumerConfig struct {
 	RelayAdmission *drainproof.Session
 	// Brokers 是 Kafka 地址(= guild 的 Kafka.Brokers)。
 	Brokers []string
-	// Topic 必须与 match 的 ResultTopic、battle 的 kMatchResultsTopic 相同(默认 match-results,全局、不带 zone 段)。
+	// Topic 必须与 match 的 ResultTopic 相同(默认 match-results,全局、不带 zone 段;生产者只有 match 的终局发件箱)。
 	Topic string
 	// GroupID 是消费组(默认 guild-trial)。guild 的所有副本必须同组:同组分摊分区,每条结果只被一个副本处理。
 	GroupID string
@@ -259,7 +262,7 @@ func (c *TrialResultConsumer) Run(ctx context.Context) {
 		// 不变量破坏、提交点越过保留期，或终止时仍有没结清的记录。此后不再取新，修复后重启进程。
 		if err := c.bound.Run(ctx); err != nil {
 			c.cfg.RelayAdmission.Hold()
-			logx.Errorf("历练结果消费者 HOLD: %v", err)
+			logx.Errorf("[GuildTrial] Trial result consumer HOLD: %v", err)
 		}
 		return
 	}
@@ -276,7 +279,7 @@ func (c *TrialResultConsumer) Run(ctx context.Context) {
 		}
 	}()
 	// 这一行是部署验收的判据(06 §6.46 B6b-srv2):topic 与 group 都**不带** _zN 后缀。改文案要同步改文档。
-	logx.Infof("[GuildTrial] 历练结果消费者启动 topic=%s group=%s partitions=%d brokers=%v",
+	logx.Infof("[GuildTrial] Trial result consumer started topic=%s group=%s partitions=%d brokers=%v",
 		c.cfg.Topic, c.cfg.GroupID, c.cfg.Partitions, c.cfg.Brokers)
 	c.consume(ctx, reader)
 	logx.Info("[GuildTrial] Trial result consumer stopped")
@@ -389,7 +392,10 @@ func (c *TrialResultConsumer) process(ctx context.Context, reader trialReader, m
 }
 
 func (c *TrialResultConsumer) processRecord(ctx context.Context, msg kafkago.Message) bool {
-	ev, ok := c.trialResultOf(msg)
+	// 这条消息的处理(结算、之后的帮会推送)与逐条日志接上 match 发结果时的 trace(docs/design/distributed-tracing.md §6.2);
+	// 取消仍由消费者的 ctx 决定。
+	ctx = kafkagotrace.ContextFrom(ctx, msg.Headers)
+	ev, ok := c.trialResultOf(ctx, msg)
 	if !ok {
 		return true
 	}
@@ -397,12 +403,13 @@ func (c *TrialResultConsumer) processRecord(ctx context.Context, msg kafkago.Mes
 }
 
 // trialResultOf 解码并过滤一条消息。ok=false = 这条不用结算(坏消息已记日志与计数 / 不是帮会历练),调用方照常提交。
-func (c *TrialResultConsumer) trialResultOf(msg kafkago.Message) (*kafkapb.BattleResultEvent, bool) {
+// ctx 只用来给逐条日志带上消息自己的 trace。
+func (c *TrialResultConsumer) trialResultOf(ctx context.Context, msg kafkago.Message) (*kafkapb.BattleResultEvent, bool) {
 	ev := &kafkapb.BattleResultEvent{}
 	if err := proto.Unmarshal(msg.Value, ev); err != nil {
 		// 坏消息跳过并提交:留在 topic 里只会每次重启都撞一遍(match 的消费者对同一条消息也是这样处理)。
 		// 它若真是一局历练,match 权威库的 SQL 终局还在,巡检器会在结果超时后从那里取回来处理。
-		logx.Errorf("[GuildTrial] Failed to deserialize battle result; skipping partition=%d offset=%d key=%s: %v",
+		logx.WithContext(ctx).Errorf("[GuildTrial] Failed to deserialize battle result; skipping partition=%d offset=%d key=%s: %v",
 			msg.Partition, msg.Offset, string(msg.Key), err)
 		countIfSet(c.counters.DecodeError)
 		return nil, false
@@ -412,7 +419,7 @@ func (c *TrialResultConsumer) trialResultOf(msg kafkago.Message) (*kafkapb.Battl
 	}
 	if key := string(msg.Key); key != "" && key != strconv.FormatUint(ev.GetBattleId(), 10) {
 		// key 契约是 battle_id(同一局的重发落在同一分区、保持有序)。不一致只记日志,以 payload 里的 battle_id 为准。
-		logx.Errorf("[GuildTrial] Trial result key=%s differs from battle_id=%d partition=%d offset=%d",
+		logx.WithContext(ctx).Errorf("[GuildTrial] Trial result key=%s differs from battle_id=%d partition=%d offset=%d",
 			key, ev.GetBattleId(), msg.Partition, msg.Offset)
 	}
 	return ev, true
@@ -433,13 +440,14 @@ func (c *TrialResultConsumer) handleBound(call context.Context, message kafkago.
 // 退避期间不占 serial,别的分区照常结算);代次结束(再均衡)时 owner 把它交还 Kafka,由新属主重投,幂等闸门兜住。
 // 不在这里循环重试:那样一次再均衡要等到 HandlerTimeout(5 分钟)才放手,本副本会被踢出消费组再触发一轮再均衡。
 func (c *TrialResultConsumer) processRecordOnce(ctx context.Context, msg kafkago.Message) error {
-	ev, ok := c.trialResultOf(msg)
+	ctx = kafkagotrace.ContextFrom(ctx, msg.Headers) // 同 processRecord:接上消息自己的 trace
+	ev, ok := c.trialResultOf(ctx, msg)
 	if !ok {
 		return nil
 	}
 	if err := c.attempt(ctx, ev); err != nil {
 		countIfSet(c.counters.HandlerRetry)
-		logx.Errorf("[GuildTrial] Trial result processing failed; offset not committed, the consumer owner retries the same record with backoff battle=%d guild=%d partition=%d offset=%d: %v",
+		logx.WithContext(ctx).Errorf("[GuildTrial] Trial result processing failed; offset not committed, the consumer owner retries the same record with backoff battle=%d guild=%d partition=%d offset=%d: %v",
 			ev.GetBattleId(), ev.GetActivityContext().GetGuildId(), msg.Partition, msg.Offset, err)
 		return err
 	}
@@ -460,7 +468,7 @@ func (c *TrialResultConsumer) settle(ctx context.Context, msg kafkago.Message, e
 		err := c.attempt(ctx, ev)
 		if err == nil {
 			if attempt > 1 {
-				logx.Infof("[GuildTrial] Trial result processed successfully on attempt %d battle=%d partition=%d offset=%d",
+				logx.WithContext(ctx).Infof("[GuildTrial] Trial result processed successfully on attempt %d battle=%d partition=%d offset=%d",
 					attempt, ev.GetBattleId(), msg.Partition, msg.Offset)
 			}
 			return true
@@ -469,7 +477,7 @@ func (c *TrialResultConsumer) settle(ctx context.Context, msg kafkago.Message, e
 			return false
 		}
 		countIfSet(c.counters.HandlerRetry)
-		logx.Errorf("[GuildTrial] Trial result processing failed (attempt %d); offset not committed, retrying after %v; trial result consumption in this process (all assigned partitions) paused until this record succeeds battle=%d guild=%d partition=%d offset=%d: %v",
+		logx.WithContext(ctx).Errorf("[GuildTrial] Trial result processing failed (attempt %d); offset not committed, retrying after %v; trial result consumption in this process (all assigned partitions) paused until this record succeeds battle=%d guild=%d partition=%d offset=%d: %v",
 			attempt, backoff, ev.GetBattleId(), ev.GetActivityContext().GetGuildId(), msg.Partition, msg.Offset, err)
 		if !c.sleep(ctx, backoff) {
 			return false

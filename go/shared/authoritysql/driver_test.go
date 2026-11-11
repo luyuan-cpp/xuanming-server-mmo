@@ -151,6 +151,7 @@ func (g *writerFakeGate) enter(context.Context, driver.Conn) error {
 	g.wire.record("slot-current-ACTIVE")
 	return g.enterErr
 }
+
 func (g *writerFakeGate) admitRead(context.Context, driver.Conn) error {
 	g.wire.record("read-meta")
 	return g.readErr
@@ -250,7 +251,14 @@ func TestWriterDriverDatabaseSQLDoesNotReplayAfterSend(t *testing.T) {
 			db := sql.OpenDB(connector)
 			defer db.Close()
 			_, err = db.ExecContext(context.Background(), "UPDATE t SET n=n+1")
-			if !errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, driver.ErrBadConn) {
+			if errors.Is(err, driver.ErrBadConn) {
+				t.Fatalf("ErrBadConn must stay hidden from database/sql: %v", err)
+			}
+			// R6(2026-11-10):自动事务只发过这一条 UPDATE,COMMIT 之前断开是确定中止;COMMIT 阶段照旧是结局未知。
+			if phase == "exec" && (!IsAbortedBeforeCommit(err) || errors.Is(err, ErrOutcomeUnknown)) {
+				t.Fatalf("transport failure before COMMIT must be aborted-before-commit: %v", err)
+			}
+			if phase == "commit" && !errors.Is(err, ErrOutcomeUnknown) {
 				t.Fatalf("必须opaque UNKNOWN: %v", err)
 			}
 			if w.execs != 1 || inner.connects != 1 {
@@ -319,20 +327,27 @@ func TestWriterDriverOutcomePolicyBranches(t *testing.T) {
 			if w.rollbacks != 1 {
 				t.Fatal("abort/unknown必须终止Tx")
 			}
-			if outcome == outcomeUnknown && (!errors.Is(err, ErrOutcomeUnknown) || c.IsValid()) {
-				t.Fatal("unknown应隔离")
+			// R6:分类判不了的非服务端回包,在只发过纯 DML 的事务里按传输中止处理:确定没写,连接照旧隔离。
+			if outcome == outcomeUnknown && (!IsAbortedBeforeCommit(err) || errors.Is(err, ErrOutcomeUnknown) || c.IsValid()) {
+				t.Fatalf("unclassified transport failure before COMMIT must abort and quarantine: %v", err)
 			}
 		}
 	}
 }
 
+// 混合错误(服务端回包与 ErrBadConn 拼在一起)不能升级成「语句被拒」:连接状态不明。
+// R6 起自动事务只发过这一条 INSERT、COMMIT 没发,判传输中止(确定没写、连接隔离),原 1062 不外露。
 func TestWriterDriverBadConnOverridesOptimisticClassifier(t *testing.T) {
 	w := &writerFakeWire{execErr: errors.Join(&mysql.MySQLError{Number: 1062}, driver.ErrBadConn)}
 	c := writerFixture(w)
 	c.outcomes = writerFakeOutcome{outcome: outcomeStatementRejected}
 	_, err := c.ExecContext(context.Background(), "INSERT INTO t VALUES (1)", nil)
-	if !errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, driver.ErrBadConn) || c.IsValid() {
-		t.Fatalf("混合错误不得升级确定: %v", err)
+	var server *mysql.MySQLError
+	if !IsAbortedBeforeCommit(err) || errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, driver.ErrBadConn) || errors.As(err, &server) || c.IsValid() {
+		t.Fatalf("mixed error must become a transport abort, never a statement rejection: %v", err)
+	}
+	if w.rollbacks != 1 || w.commits != 0 {
+		t.Fatalf("transport abort must roll back without committing: rollbacks=%d commits=%d", w.rollbacks, w.commits)
 	}
 }
 
@@ -423,12 +438,65 @@ func TestWriterDriverCanceledRowsRollbackAndQuarantine(t *testing.T) {
 	assertWriterAutoQueryAdmission(t, w)
 	cancel()
 	err = rows.Close()
-	if !errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, context.Canceled) || errors.Is(err, driver.ErrBadConn) {
-		t.Fatalf("取消不得把UNKNOWN降类: %v", err)
+	// R6:取消发生在 COMMIT 之前,自动事务只发过这条 UPDATE,判确定中止;结果是哨兵,不露出 context.Canceled。
+	if !IsAbortedBeforeCommit(err) || errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, context.Canceled) || errors.Is(err, driver.ErrBadConn) {
+		t.Fatalf("cancellation before COMMIT must be aborted-before-commit without exposing the cause: %v", err)
 	}
 	if w.commits != 0 || w.rollbacks != 1 || c.IsValid() {
 		t.Fatal("取消后不得提交/复用")
 	}
+}
+
+// 显式事务里的读照旧走事务闸门,提交点的语义不变;读闸门只管事务外(事务外三种结局见 TestWriterDriverReadAdmissionWithoutTransaction)。
+func TestWriterDriverExplicitTxReadKeepsFullGate(t *testing.T) {
+	w := &writerFakeWire{}
+	c := writerFixture(w)
+	tx, err := c.BeginTx(context.Background(), driver.TxOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := c.QueryContext(context.Background(), "SELECT n FROM t", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"pre-BEGIN", "begin", "slot-current-ACTIVE", "query", "rows-close", "commit"}; !reflect.DeepEqual(w.events, want) {
+		t.Fatalf("步骤=%v", w.events)
+	}
+}
+
+// 预处理语句执行的读同样只过读闸门,每次执行都重新核。
+func TestWriterDriverPreparedReadUsesReadGate(t *testing.T) {
+	w := &writerFakeWire{}
+	c := writerFixture(w)
+	stmt, err := c.PrepareContext(context.Background(), "SELECT n FROM t WHERE id=?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		rows, err := stmt.(driver.StmtQueryContext).QueryContext(context.Background(), []driver.NamedValue{{Ordinal: 1, Value: int64(i)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = rows.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gates := 0
+	for _, event := range w.events {
+		if event == "read-meta" {
+			gates++
+		}
+	}
+	if gates != 2 || w.begins != 0 || w.commits != 0 || w.queries != 2 {
+		t.Fatalf("每次执行一次读闸门、不开事务: gates=%d begins=%d commits=%d queries=%d", gates, w.begins, w.commits, w.queries)
+	}
+	_ = stmt.Close()
 }
 
 func TestWriterDriverOldTxCannotCloseNextTransactionRows(t *testing.T) {
@@ -626,7 +694,10 @@ func TestWriterDriverCommitUnknownIsObserved(t *testing.T) {
 	}
 }
 
-func TestWriterDriverRows1062WithCleanupFailureIsUnknown(t *testing.T) {
+// Rows 回 1062 之后清理(关 Rows / 关临时 Stmt)又失败:1062 不能掩盖清理失败,事务要回滚、连接要隔离。
+// R6 起显式事务里只发过这条 SELECT、COMMIT 没发,判传输中止(确定没写),不再是结局未知。
+// 改名前叫 TestWriterDriverRows1062WithCleanupFailureIsUnknown,名字与 R6 契约矛盾。
+func TestWriterDriverRows1062WithCleanupFailureAbortsTx(t *testing.T) {
 	for _, failStmt := range []bool{false, true} {
 		w := &writerFakeWire{rowsNextErr: &mysql.MySQLError{Number: 1062}}
 		c := writerFixture(w)
@@ -646,7 +717,8 @@ func TestWriterDriverRows1062WithCleanupFailureIsUnknown(t *testing.T) {
 			t.Fatal(err)
 		}
 		err = raw.Next(make([]driver.Value, 1))
-		if !errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, driver.ErrBadConn) || w.rollbacks != 1 || c.IsValid() {
+		var server *mysql.MySQLError
+		if !IsAbortedBeforeCommit(err) || errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, driver.ErrBadConn) || errors.As(err, &server) || w.rollbacks != 1 || c.IsValid() {
 			t.Fatalf("1062不能掩盖清理失败: %v", err)
 		}
 		_ = tx.Rollback()
@@ -711,15 +783,35 @@ func TestWriterDriverLockAbortEndsExplicitTx(t *testing.T) {
 	}
 }
 
-// 没有列在分类里的服务端错误,结局仍按未知处理。
-func TestWriterDriverOtherServerErrorStaysUnknown(t *testing.T) {
-	w := &writerFakeWire{execErr: &mysql.MySQLError{Number: 1105}}
+// 没有列在分类里的服务端错误(R6,2026-11-10):事务里只发过纯 DML 时 COMMIT 还没发,回滚之后结局确定,
+// 原样返回原错误、连接可复用,不算结局未知;执行过可能隐式提交的语句(这里用 Schema 权限的 ALTER)之后,
+// 仍按结局未知处理、隔离连接,也不露出服务端错误。
+// 改名前叫 TestWriterDriverOtherServerErrorStaysUnknown,断言「一律未知」,与 R6 契约矛盾。
+func TestWriterDriverOtherServerErrorUnknownOnlyAfterNonDML(t *testing.T) {
+	server := &mysql.MySQLError{Number: 1105}
+	w := &writerFakeWire{execErr: server}
 	c := writerFixture(w)
 	_, err := c.ExecContext(context.Background(), "UPDATE t SET n=n+1", nil)
-	var server *mysql.MySQLError
-	if !errors.Is(err, ErrOutcomeUnknown) || errors.As(err, &server) || c.IsValid() {
+	if err != server || errors.Is(err, ErrOutcomeUnknown) || IsAbortedBeforeCommit(err) || w.rollbacks != 1 || w.commits != 0 || !c.IsValid() {
+		t.Fatalf("server error in a plain-DML transaction must roll back and return the original error: %v", err)
+	}
+
+	w = &writerFakeWire{}
+	c = writerFixtureWith(w, Schema("schema_test@%"))
+	tx, err := c.BeginTx(context.Background(), driver.TxOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = c.ExecContext(context.Background(), "ALTER TABLE t ADD COLUMN m INT", nil); err != nil {
+		t.Fatal(err)
+	}
+	w.execErr = server
+	_, err = c.ExecContext(context.Background(), "UPDATE t SET n=n+1", nil)
+	var exposed *mysql.MySQLError
+	if !errors.Is(err, ErrOutcomeUnknown) || IsAbortedBeforeCommit(err) || errors.As(err, &exposed) || c.IsValid() {
 		t.Fatalf("未分类的错误不可伪称可重试: %v", err)
 	}
+	_ = tx.Rollback()
 }
 
 func TestWriterDriverConfirmedCommitWinsLaterCancellation(t *testing.T) {
@@ -807,7 +899,8 @@ func TestWriterDriverRowsMetadataFallbackAndCloseError(t *testing.T) {
 		t.Fatal("Precision不应谎报支持")
 	}
 	err = raw.Close()
-	if !errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, driver.ErrBadConn) || raw.Close() != err || w.rollbacks != 1 {
+	// R6:自动事务只发过这条 UPDATE,关 Rows 失败时 COMMIT 还没发,判确定中止;失败照旧不能吞掉,也不能重复结束。
+	if !IsAbortedBeforeCommit(err) || errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, driver.ErrBadConn) || raw.Close() != err || w.rollbacks != 1 || w.commits != 0 || c.IsValid() {
 		t.Fatalf("Close失败不能吞掉或重复结束: %v", err)
 	}
 }
@@ -846,7 +939,9 @@ func TestWriterDriver1062WithConcurrentCancelCannotKeepTransaction(t *testing.T)
 		t.Fatal(err)
 	}
 	_, err = c.ExecContext(ctx, "INSERT INTO t VALUES (1)", nil)
-	if !errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, context.Canceled) || w.rollbacks != 1 || c.IsValid() {
+	// R6:取消发生在 COMMIT 之前,显式事务里只发过这条 INSERT,判传输中止(确定没写、连接隔离);仍不能当确定的 1062 保留事务。
+	var server *mysql.MySQLError
+	if !IsAbortedBeforeCommit(err) || errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, context.Canceled) || errors.As(err, &server) || w.rollbacks != 1 || c.IsValid() {
 		t.Fatalf("取消混合结果不能当确定1062: %v", err)
 	}
 	_ = tx.Rollback()
@@ -859,7 +954,7 @@ func retirementPlanFixture(t *testing.T) (*Catalog, *pb.SqlWriterMaintenanceRece
 	run := bytes.Repeat([]byte{3}, 16)
 	c := &Catalog{config: CatalogConfig{AuthoritySchema: "authority", Generation: "abcdef", ProtectedSchemas: []string{"authority"}, PhysicalAuthoritySHA256: bytes.Repeat([]byte{4}, 32), Principal: "operator@%"}}
 	plan := &pb.SqlWriterMaintenanceReceipt_Plan{AuthoritySchema: c.config.AuthoritySchema, ProtectedSchemas: c.config.ProtectedSchemas, PhysicalClusterIdentity: c.config.PhysicalAuthoritySHA256, RunId: run, BeforeEpoch: 7, CatalogRevision: 11, ActiveWriterKeys: [][]byte{key}, RootIssuers: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{{IssuerId: bytes.Repeat([]byte{5}, 16), InstanceId: instance, PhysicalWriterKey: key, LogicalRole: "SOURCE", PermanentRevivalFenceId: bytes.Repeat([]byte{6}, 16), SourceEvidence: []*pb.SqlWriterMaintenanceReceipt_SourcePin{{AbsolutePath: "/fixture/launcher", Sha256: bytes.Repeat([]byte{7}, 32)}}}}}
-	request := &pb.SqlWriterLifecycleReceipt_Request{RequestId: bytes.Repeat([]byte{8}, 16), Kind: pb.SqlWriterLifecycleReceipt_RETIRE, Writer: &pb.SqlWriterRegistry{WriterKey: key, InstanceId: instance, Generation: c.config.Generation, SqlPrincipal: []byte("writer@%"), RegistrationDigest: bytes.Repeat([]byte{9}, 32), State: pb.SqlWriterRegistry_ACTIVE}, ExpectedEpoch: 7, ExpectedCatalogRevision: 11, AuthoritySchema: c.config.AuthoritySchema, ProtectedSchemas: c.config.ProtectedSchemas, DeploymentDigest: c.config.PhysicalAuthoritySHA256, DeploymentId: "fixture-boot", MaintenanceRunId: run}
+	request := &pb.SqlWriterLifecycleReceipt_Request{RequestId: bytes.Repeat([]byte{8}, 16), Kind: pb.SqlWriterLifecycleReceipt_RETIRE, Writer: &pb.SqlWriterRegistry{WriterKey: key, InstanceId: instance, Generation: c.config.Generation, SqlPrincipal: []byte("writer@%"), RegistrationDigest: bytes.Repeat([]byte{9}, 32), State: pb.SqlWriterRegistry_ACTIVE, BootSeq: 1}, ExpectedEpoch: 7, ExpectedCatalogRevision: 11, AuthoritySchema: c.config.AuthoritySchema, ProtectedSchemas: c.config.ProtectedSchemas, DeploymentDigest: c.config.PhysicalAuthoritySHA256, DeploymentId: "fixture-boot", MaintenanceRunId: run}
 	raw, digest, err := c.validateLifecycle(request, pb.SqlWriterLifecycleReceipt_RETIRE)
 	if err != nil {
 		t.Fatal(err)

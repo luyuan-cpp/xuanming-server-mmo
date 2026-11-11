@@ -1,66 +1,65 @@
 # Redis 异步客户端重试、重连与生命周期
 
-> 当前接口与重试行为核对：2026-10-23。本次只修订文档，没有新增构建或运行证据。
-> 下文 2026-10-20／21 的生命周期设计、红绿记录与验收边界保留；历史通过只代表当时受测输入。
+> 现状核对：2026-11-10，只读对照源码；本次只改文档与注释，没有新增构建或运行证据。
+> 2026-10-30 起玩家存档、读档不再经过 Redis：原 `MessageAsyncClient`（`redis_client.{h,cpp}`，负责 protobuf 加载、快照写入与存盘重试队列）
+> 随存档改为直接提交 TiDB 删除（`fc504300b`），存盘契约见[存盘直接提交 TiDB](./player-save-direct-commit.md)。
+> 本文现在只讲 C++ 进程里的 Redis 连接这一层。下文 10-20、10-21、10-30 三节是当时的设计与验收记录，原文保留：
+> 其中提到 MessageAsyncClient 的地方按当时的代码理解，历史通过只代表当时受测输入。
 
 ## 1. 职责与入口
 
-[MessageAsyncClient](../../cpp/libs/engine/infra/storage/redis_client/redis_client.h)负责 protobuf 加载、快照写入与业务重试；
-[RedisManager](../../cpp/libs/engine/thread_context/redis_manager.cpp)负责连接、认证、重连与存活探测。
-Scene 的定时驱动与装配见 [redis.cpp](../../cpp/libs/services/scene/core/system/redis.cpp)，
-业务持久化提交契约见[存盘围栏设计](./db-write-fencing-mysql.md)。
+| 层 | 职责 | 入口 |
+|---|---|---|
+| Hiredis 适配器 | muduo 事件循环上的 hiredis 异步连接：Channel 注册、命令回调恰好一次、连接对象与 socket 的寿命，以及进程级命令账 `Hiredis::MaintenanceState`（维护排空用） | [Hiredis.h](../../cpp/libs/engine/muduo_windows/src/contrib/hiredis/Hiredis.h)；三份副本见 10-30 一节 |
+| RedisManager | 一条连接的建连、认证、重连与存活探测 | [redis_manager.h](../../cpp/libs/engine/thread_context/redis_manager.h) |
+| RedisClusterClient | 玩家域路由层：单实例与 Cluster 两种模式，每个主节点一个 RedisManager；命令守卫、同 slot 停等、确定没有执行的错误在预算内重试 | [redis_cluster_client.h](../../cpp/libs/engine/infra/storage/redis_cluster/redis_cluster_client.h)；设计见[玩家态 Redis 集群化](./redis-player-store-cluster.md) §5.6 |
 
-管理器入口为 `Connect(loop, addr, RedisConnectOptions)`，内部 StartHandshake 先安装回调再 connect，
+每个 loop 线程有三个句柄：`tlsRedis`（核心共享实例）、`tlsSceneControlRedis`（本 zone 的场景控制域）和 `tlsPlayerRedis`（玩家域路由层），
+后两个只有 scene 会连。Scene 的装配与定时驱动见 [redis.cpp](../../cpp/libs/services/scene/core/system/redis.cpp)。
+
+管理器入口为 `Connect(loop, addr, RedisConnectOptions)` 与 `Shutdown()`，内部 StartHandshake 先安装回调再 connect，
 避免冷启动连接失败发生在回调安装之前。`SetupReconnect`、`InstallCallbacks` 已退役。
-Hiredis 通过工厂创建并使用 shared_ptr；从 Connect 到 Shutdown 之间 GetConnection 保持非空，
-握手或断线期间为不可用对象，成功后移交已完成握手的连接。不能继续按旧 unique_ptr 临时置空的模型理解。
+Hiredis 只能经 `Hiredis::Create` 创建，由 shared_ptr 持有。从 Connect 到 Shutdown 之间 `GetConnection()` 保持非空：
+握手或断线期间是 `connected()` 为假的占位对象或已断开的旧连接，握手完成后才换成新连接。不能按旧 unique_ptr 临时置空的模型理解。
 调用仍要区分已建连、已认证与业务可用状态。
 
-## 2. 重连与周期重试分开
+## 2. 重连、存活探测与业务重试
 
-- `OnReconnected()` 只用于重连通知，回收在途状态并安排待处理工作的重新投递。
-- `RetryDuePending()` 由 Scene 每秒驱动，只处理到期队列，不按周期清空在途加载表。
-- 队列的 `next_retry_at` 使用 steady_clock。退避依次为 500ms、1s、2s、4s、8s、16s，之后封顶 16s。
-  定时器调度与连接恢复还会影响实际时间，不能把这些间隔相加当作整条操作的严格超时预算。
+- **重连**：建连失败、断线、AUTH 被拒或无应答，都由重连定时器（默认 3 秒，玩家域每个节点再加随机抖动）在 pending 阶段重建握手连接。
+  定时器与排队任务带代次：同批 AUTH 成功、建连成功后重挂 AUTH 截止或显式取消，都会作废旧任务（见 10-20 一节）。
+- **认证**：配了口令时 AUTH 是握手连接上唯一的命令，回 `+OK` 才移交给业务；被拒、发不出去或截止前无应答都不放行（fail-closed），
+  日志带 `metric=zone_redis_auth_failed`。
+- **存活探测**：默认每 5 秒检查一次对业务可见的连接，同一时刻至多一条探测 PING；15 秒没有应答就摘下、释放并走重连，
+  日志带 `metric=zone_redis_liveness_timeout`。摘下排到本轮 pending 阶段执行。
+- **连接层不做业务重试**：连接不可用时 `command()` 当场返回 `REDIS_ERR`，不缓存命令；在途命令在断线或释放时以空应答恰好回调一次，
+  空应答表示结果未知，不是没有执行。重试与放弃由各调用点负责：玩家域路由层只在预算内重试 MOVED、ASK、LOADING 这类确定没有执行的错误，
+  从不重放结果未知的命令；scene 的协调写（继承标记清理、handoff 标记撤回、改派核实）由 `RedisSystem` 的 1 秒节拍按各自的重试间隔与截止重发。
+  重连成功不做业务补发（[断线重连总览](./infra-reconnect-overview.md) §1.1 与 §4.1 的 R14）。
+- 原 MessageAsyncClient 的队列语义（加载 NIL 重试、存盘 `kMaxSaveRetries` 封顶退避、`RetryDuePending`、`OnReconnected`）已随它删除，不再适用于任何现行调用。
 
-### 加载
+## 3. 命令回调契约
 
-NIL 的重试上限为 6 次；耗尽后的 DataNotFound 只描述该读取路径的结果，
-不证明 SQL 没有角色数据，也不构成新角色创建资格。
-断线造成的空 reply 会重新排队，不消耗 NIL 次数；Redis ERROR 或 protobuf 解析失败直接按失败处理。
-同 key 存盘尚未落定时，加载还可能先挂起等待写入结果，不能只看 pending load 数判断卡点。
+- `command()` / `formattedCommand()` 返回 `REDIS_OK` 时回调恰好调用一次；返回 `REDIS_ERR` 时回调不会被调用，回调副本当场释放。
+  玩家域路由层的 `command()` / `commandForKey()` 是同一形状。
+- 回调在 loop 线程运行。连接对象析构时，挂起命令收到的空应答回调里 `Hiredis*` 参数指向正在析构的对象：
+  只能判断状态或发新命令（会被 hiredis 的 FREEING 状态拒绝），不能保存。
+- `formattedCommand()` 可带 `NotExecutedPredicate`，只影响维护账：判为确定没有执行的错误或空应答不记 UNKNOWN。
+  AUTH、探测 PING、CLUSTER SLOTS、ASKING 用 `Hiredis::hasNoSideEffect`。
+- 适配器只保证自身与 C context 的寿命；业务回调捕获的其它对象仍由业务用 weak 或稳定 ID 管理。
 
-### 存盘
+## 4. 生命周期与观测
 
-`kMaxSaveRetries=6` 是一次故障通知阈值，**不是丢弃阈值**。
-达到阈值通知一次后仍保留最新 payload，以封顶退避继续重试，直到写入落定、被后继值取代或进入停机流程。
-属主或覆盖世代护栏的终态拒绝另走业务拒绝路径，不将已作废的同一快照当作连接故障原样重试。
-这些待重试快照在进程内，不能把队列保留当成已落 Redis 或 SQL。
-
-同 key 最多一份在途写、一份更新的排队快照。新快照替代尚待重试的旧值时，继承重试次数、
-下次重试时间与已告警状态，避免新调用绕过退避。旧写成功时，每份实际成功快照的提交钩子先执行一次；
-若已有后继快照，先发送后继并抑制旧值的全局成功回调，不能误认为“旧快照完全不再回调”。
-
-## 3. 快照与提交回调契约
-
-Save 在调用时固定 serialized_payload，需要持久化的字段必须提前填写；后续修改不会进入本次重试字节。
-成功回调仍可能引用同一个 shared message，调用方应将其作为不可变快照使用；这是接口约定，不是类型系统自动禁止修改。
-
-当前 Scene 存盘提前固定两表 DBTask 意图与字节，严格路径使用提交屏障，Redis 成功后的提交钩子才发送 Kafka。
-不能再把流程写成“Save 返回后立即把当前可变消息发 Kafka”，也不能用 db 的分表回填承诺修复 Scene 父快照键；
-两者键空间与提交职责不同。详见[DBTask 投递设计](./db-task-delivery-and-retention.md)与[存盘围栏](./db-write-fencing-mysql.md)。
-
-写入按脚本缓存使用 EVALSHA；脚本尚未加载或收到 NOSCRIPT 时，可重载并回退 EVAL。
-脚本重发仍携带本次快照固定的保护条件，不回头读取调用方的新状态。
-
-## 4. 观测与生命周期
-
-队列观测包括在途 Load、在途 Save、pending Load、pending Save、等待 Save 的 Load；
-LogQueueSnapshot 在这些数量均为零时不输出，Scene 每 30 秒检查。
-定位重连还要结合认证、代次与连接释放日志，不能把“connected”或队列短暂为零当作业务提交证明。
-
-Hiredis → MessageAsyncClient → EventLoop 的释放顺序、pending 阶段销毁与回调重入约束见下面两节。
-底层对象自身保活不自动保护业务回调捕获的其它 owner；业务仍须用 weak 或稳定身份管理寿命。
+- 所有操作与最后一个引用的释放都在所属 loop 线程，EventLoop 必须活过连接对象与待销毁任务；Node 停机先排空 pending 再 quit。
+  I/O 分发期间（含 Windows 在同一轮里跑定时器的阶段）释放最后一个引用时，整个对象、context 与 fd 推迟到本轮 pending 阶段销毁；
+  同批里尚未分发的旧事件经 weak 回调与 Channel tie 失效。机制与验收见 10-21、10-30 两节。
+- `disconnect()` 是干净断开：不再接收新命令，已发出命令的应答都回来后再拆连接。I/O 分发期间（含 Windows 在同一轮里跑定时器的阶段）
+  调用时推迟到本轮 pending 阶段才开始（2026-11-11 起），避免在别的 Channel 的回调里同步拆除、撞 `EventLoop::removeChannel` 的断言；
+  推迟期间连接已断开或换了一条（连接代次不同），推迟的这次什么也不做。生产代码不调用它，释放连接一律放掉 shared_ptr。
+- 维护账只按命令记：命令在业务回调返回后计完成；空应答、错误应答（`NotExecutedPredicate` 判为未执行的除外）与回调异常记 UNKNOWN，
+  进程内不会清除。建连失败与断线本身不记（2026-11-11 起）：建连完成前 `command()` 一律拒收，断线时 hiredis 先以空应答回调完全部在途命令，
+  各条已按自己的结局记账；连接、断线回调抛异常仍记 UNKNOWN。理由与回归用例见 10-30 一节末的「2026-11-11」。
+- 观测：建连失败与断线日志带 hiredis 的 errstr（遮挡口令）；玩家域路由层每 30 秒在计数有变化时打一行 `[PlayerRedis]`，
+  拒绝类或预算耗尽有增长时升 WARN。定位重连还要结合认证、代次与连接释放日志，不能把「connected」当作业务提交证明。
 
 ## 5. 验证与环境边界
 
@@ -72,7 +71,7 @@ Hiredis → MessageAsyncClient → EventLoop 的释放顺序、pending 阶段销
 
 ## 2026-10-20：握手截止与 socket 同批事件的生命周期修复
 
-本节记录 2026-10-20 的 `RedisManager` 生命周期修复；文首已按 2026-10-23 源码更新接口与重试说明。
+本节记录 2026-10-20 的 `RedisManager` 生命周期修复；现状以文首 §1–§4（2026-11-10 核对）为准。
 
 Linux 的 timerfd 与 Hiredis socket 会进入同一批 `activeChannels_`。旧代码从重连定时器直接执行
 `DoReconnect()`，可能先释放握手连接，再分发同批中仍引用它的 socket Channel。Debug 构建会在
@@ -253,7 +252,7 @@ Hiredis 适配器有三份副本：`cpp/libs/engine/muduo_windows/src/contrib/hi
 
 现在三份统一为：端口参数直接写两版共有的 `sockets::networkToHost16(serverAddr_.portNetEndian())`（补 `muduo/net/Endian.h`），
 参数一律叫 `activeState`，镜像 `.cc` 跟上当前实现。语义不变；子模块检出哪一版都能编，三份 `.cc` 与三份 `.h` 逐字节一致，
-任意两份 `cmp` 应无输出。命令账与生命周期逻辑没有改动。
+任意两份 `cmp` 应无输出（2026-11-11 起由 `tools/scripts/tests/hiredis_adapter_copies_contract.tests.ps1` 机械守住）。命令账与生命周期逻辑没有改动。
 
 ### Windows 回归
 
@@ -306,3 +305,137 @@ exe 晚于 `muduo.lib`，该库 SHA256 与 11-02 验证记录相同。源码、�
 
 上述源码一致性结论限于本节 Hiredis 适配器及 Windows 测试；历史 298/298 不代表当前工作区其它在途改动已重新全量验证。
 Java 版使用 Redisson，没有对应 muduo 适配层，本节无 Java 待办。
+
+### 2026-11-10 独立复核（Claude，只读核对源码与原始证据，未编译、未运行）
+
+复核对象是 `e33b99351` 中的 Hiredis 部分与收尾提交 `dc1595b85`。结论：没有发现需要改代码的缺陷；11-05 一节记录的运行事实与原始文件一致，
+本节标题的「已合入并验证」有依据。顺带把文首 §1–§4 改成现状（原文按 10-23 描述已删除的 MessageAsyncClient），
+并修正 `redis_manager.{h,cpp}` 与 Windows muduo `Channel.cc` 里描述 Hiredis 旧行为的注释。下面是补充、订正与残余。
+
+**证据补充与订正**
+
+- 11-05 一节说哈希「与 11-02 的记录一致」：11-02 只留了 `fc.exe /b` 的退出码，能直接对上哈希的是两版 Linux 构建目录里的副本
+  （`build/player-store-verify-20261101-r2/15-linux-<sha>/build/muduo-source/contrib/hiredis/`），11-10 核对与当前一致。
+  两个构建目录里的 `InetAddress.h` 分别是 `toPort()` 与 `port()`，确认两轮各用了自己那版 muduo；52 条编译命令都带 sanitizer 与 `-UNDEBUG`。
+- 11-02 两轮 Linux 构建的输出目录在 Windows 绑定挂载上，大小写不敏感，上游 `muduo/net/boilerplate.cc`（包含 `BoilerPlate.h`，实际文件名是小写）
+  因此编过。11-05 改到容器 `/tmp` 构建后，首轮就在这里退出 2（`build/verification/cobalt-redis-lifecycle-20261105T151615998Z/`），
+  随后 `993b6da9d` 在回归入口的 CMakeLists 里排除了它。当前入口由 11-05 15:20Z 那一轮实证：122/122，
+  CMakeLists 与 Hiredis 的哈希同 HEAD（`build/verification/cobalt-redis-lifecycle-final-20261105T152044053Z/`）。
+- `74b097888`（11-08）改了 `redis_manager.{h,cpp}` 和同一个 Linux 二进制里的 `redis_manager_event_batch_test.cpp`，之后 Linux 套件没有再跑。
+- Windows：`lib/muduo.lib`（Debug）生成于 `Hiredis.cc` 最后一次修改之后；11-02 的两次 Debug 整解里 muduo 都判为最新、没有重编，库就是由当前源码编出的。
+  11-05 重复检查的 XML 里，用例行号 226、348 与当前测试文件一致。11-08 命名审查整解后 `rpc_controller_test` 366/366 通过，
+  两条 `HiredisEventBatchWindows` 仍在其中（`build/verification/naming-audit-20261108/cpp-tests/rpc_controller_test/`）。
+- 现行 SDK 钉住清单（`build/docker-debug-current/cpp-toolchain.json` 的守卫文件）记录的 overlay `Hiredis.cc` / `Hiredis.h` 哈希与当前一致。
+
+**用例强度与残余**
+
+- `EarlierChannelReleasesLastOwnerOfReadyConnectionInSameBatch` 发出 `+PONG` 后只等前置 UDP 通道可读，没有确认受害连接已经可读（Linux 版会等）。
+  回环投递晚于那次 WSAPoll 时，受害连接只靠挂起 PING 的可写事件进入同批，「已就绪的应答不再分发」这条断言就恒为真；
+  删除器不再延迟这类回归仍会被抓到（Debug 断言或 `nullReplyInPending`）。11-11 已补前置条件，见下节。
+- Windows 两条用例没有见过红态（见上文）；weak 回调与 tie 这一层在 Windows 上没有单独锁住它的用例。
+- Linux 用例里的 `replacementUsesDifferentFd` 只是重复 `oldFdHeldThroughBatch` 的结论，没有独立证明新连接拿到了不同的 fd。11-11 已改，见下节。
+- 三份副本逐字节一致只靠手工 `cmp`，没有自动守卫；SDK 守卫只记 overlay 的哈希，不与 Windows 副本、头文件镜像比较。11-11 已补契约测试，见下节。
+- `disconnect()` 的调用时机约束已写进 §4。11-11 改为分发期间自动推迟，不再要求调用方挑时机，见下节。
+- 待维护排空负责人确认：建连失败、没有在途命令的出错断线也记 UNKNOWN（`Hiredis.cc` 的 `connect()`、`connectCallback`、`disconnectCallback`）。
+  hiredis 在建连完成前不置 `REDIS_CONNECTED`，`command()` 在那之前一律拒收，所以这两种情况其实没有结果未知的命令；
+  但进程里只要发生过一次 Redis 建连失败（例如启动时 Redis 尚未就绪），维护排空的 Redis 前沿就再也过不了，只能 hold。
+  `hiredis_command_lifecycle_test.cpp` 的 `FailedConnectCallbackCannotReenterNativeConnect` 断言了这个行为，所以先按有意设计记录，不改代码。
+  11-11 负责人定改掉，见下节。
+
+**待 Codex 验证**
+
+1. Linux HEAD 两版重跑。新建 `build/verification/hiredis-linux-head-<时间戳>/`，以
+   `build/verification/cobalt-redis-lifecycle-final-20261105T152044053Z/runner.py` 为模板，只改两处：`SDK_ID` 换成
+   `build/docker-debug-current/cpp-toolchain.json` 的 `imageId`；删掉对 `FINAL_NODES` 的断言（那是 cobalt 会话的前置条件）。
+   其余照旧：只读封存上下文、在容器 `/tmp` 构建、`--parallel 1`、`ASAN_OPTIONS=detect_leaks=1:halt_on_error=1`、
+   `UBSAN_OPTIONS=halt_on_error=1`、`timeout 60s`。先按 gitlink（`b55b0ac`）跑一轮；再把 `git -C third_party/muduo-linux archive f1fc77e`
+   解到运行目录、只读挂到 `/src/third_party/muduo-linux`，跑第二轮。
+   通过标准：两轮的配置、构建、测试都退出 0；XML 0 失败、0 跳过，总数不是 122 时列出多出或缺少的用例名；
+   日志里没有 `AddressSanitizer`、`LeakSanitizer`、`runtime error:`；`changedLiveSources` 为空；两轮构建目录的 `InetAddress.h`
+   分别是 `toPort()` 与 `port()`。失败时保留完整日志、`result.json`、首个错误行、最后一个 `[ RUN ]`、镜像 ID 与 muduo 的 SHA，不重试。
+2. 可选：Windows 加量重复。工作区有其它会话在改 `rpc_controller_test` 工程，不要重编；把现有 exe 与同目录 DLL 复制到
+   `build/verification/hiredis-repeat500/bin/`，运行前后各记一次 exe 与三份 Hiredis 源码的哈希，在仓库根目录运行
+   `build/verification/hiredis-repeat500/bin/rpc_controller_test.exe --gtest_filter='HiredisEventBatchWindows.*:HiredisCommandLifecycle.*:HiredisMaintenanceState.*' --gtest_repeat=500 --gtest_color=no`。
+   通过标准：退出 0，每条用例的 RUN 与 OK 各 500 次，没有 FAILED，stderr 为空。
+3. 本次只改注释的 `cpp/libs/engine/thread_context/redis_manager.{h,cpp}` 与 `cpp/libs/engine/muduo_windows/src/muduo/net/Channel.cc`，
+   随下一次 muduo 与 thread_context 的串行 Debug 构建（`/m:1`）确认即可。thread_context 目录里的 `trace_context_tls.h` 有其它会话的在途改动，
+   单独构建前先确认归属。
+
+Java 版使用 Redisson，没有对应适配层，本次无 Java 待办。
+
+### 2026-11-11：维护账只按命令记，disconnect() 分发期间推迟，补三份副本守卫与同批用例（Claude，未编译、未测试，待 Codex 验证）
+
+负责人 11-11 定：上节列出的残余直接改代码，不留到以后。
+
+**维护账**
+
+- 三份 `Hiredis.cc` 去掉连接事件上的 `MarkUnknown()`：`connect()` 的同步失败、`connectCallback` 的失败分支、`disconnectCallback` 的出错断线。
+  连接、断线回调抛异常仍记 UNKNOWN：业务处理没有走完，无法证明它发起的写有确定结局。三份 `Hiredis.h` 在 `MaintenanceState` 上补了这条契约。
+- 为什么不会漏记：hiredis 在 `redisAsyncInitialize` 里清掉 `REDIS_CONNECTED`，`__redisAsyncHandleConnect` 建连成功后才置位
+  （`third_party/redis/deps/hiredis/async.c`），`command()` / `formattedCommand()` 在那之前一律拒收，失败的建连回调一定发生在置位之前；
+  断线回调只由 `__redisAsyncFree` 调用，它先用空应答回调完 `replies` 里全部在途命令，各条已经按自己的结局 `Complete(known)`。
+  所以连接事件本身不带额外的结果未知。旧实现再记一次，只会让一次没有在途命令的断线、或启动时 Redis 尚未就绪的一次建连失败，永久卡住维护排空。
+- 口径与另外两本账一致：`RpcChannel`、`muduo_grpc::Channel` 的维护账也只在命令或回调层面不确定时记 UNKNOWN，不因连接事件记。
+- 用例都在 `cpp/tests/rpc_controller_test/hiredis_command_lifecycle_test.cpp`（Windows 的 `rpc_controller_test` 与 Linux 的 `redis_lifecycle_test` 都编它）：
+  - `FailedConnectCallbackCannotReenterNativeConnect` 末尾的前沿断言由「不可证明」改为「可证明」，这正是本次改的语义，旧实现在这里红；
+  - 新增 `ErrorDisconnectWithOnlyNoSideEffectCommandKeepsFrontierKnown`：假服务端收到命令就关连接，在途只有 `hasNoSideEffect` 的 PING，
+    出错断线后前沿可证明。旧实现红，新实现绿；
+  - 新增对照 `ErrorDisconnectWithSideEffectCommandInFlightStaysUnknown`：在途是 `SET`，出错断线后前沿仍不可证明。新旧实现都应为绿，防止放宽过头。
+
+**disconnect() 在 I/O 分发期间推迟**
+
+- 旧实现：没有在途命令时 `redisAsyncDisconnect` 当场拆除。若调用发生在别的 Channel 的回调里（或 Windows 在同一轮里跑定时器的阶段），
+  而本连接这一轮也在待分发列表里，就会在别人的分发栈上注销本连接的 Channel，Debug 撞 `EventLoop::removeChannel` 的断言；
+  Release 下没有内存错误（Channel 由 `removeChannel` 排队保活），但本轮已就绪的事件被丢掉，断线也被记成「显式断开」。
+- 现在：`eventHandling()` 为真时，`disconnect()` 把这次断开 `queueInLoop` 到本轮 pending 阶段再执行，做法与工厂删除器一致；
+  任务只持 `weak_ptr` 与请求时的连接代次 `connectionGeneration_`（每次 `connect()` 建出新 context 加一），对象没了、
+  连接已断开或换了一条都什么也不做。推迟期间发出的命令照常发送，干净断开会等它们的应答。pending 阶段与连接自己回调里的调用不变。
+- 生产代码不调用 `disconnect()`（RedisManager、路由层释放连接都是放掉 shared_ptr），只影响示例与用例。
+
+**同批用例补强**
+
+- `Hiredis::fd()` 由私有改为公开，只给诊断与测试用（不要直接读写或关闭它）；muduo 的 `Channel::fd()` 本来就是公开的。
+- Windows `EarlierChannelReleasesLastOwnerOfReadyConnectionInSameBatch`：经 `fd()` 拿到受害连接的 socket，派发前用 WSAPoll 确认 `+PONG`
+  已经可读，「已就绪的应答不再分发」这条断言不再依赖回环投递的时序；前置通道回调里建好替代连接后，再确认受害 socket 的本地端口没变，
+  即它没被关掉、没被替代连接复用（对应 Linux 版的 `oldFdHeldThroughBatch`）。
+- 新增 Windows `EarlierChannelDisconnectsIdleConnectionWithReadyEofInSameBatch` 与 Linux `OtherChannelDisconnectsIdleVictimWithReadyEofInSameBatch`：
+  受害连接没有在途命令、本轮有对端半关闭带来的 EOF，前置通道回调里对它调 `disconnect()`。断言请求后连接仍在、断线回调恰好一次且是出错断线
+  （本轮的 EOF 先分发）、推迟的那次断开不再报第二次断线、账本可 join。旧实现在 Debug 下撞断言中止，Release 下断线状态不对，都是红。
+- Linux `replacementUsesDifferentFd` 改为比较受害 fd 的本地端口：只看 `getpeername` 分不出「还是原来那条连接」和「编号被同端口的新连接复用」。
+
+改后三份仍逐字节一致：`Hiredis.cc` 为 `aee7bd56851d27e02ea469e08a41bcfb135b15e519c22b332ba205bc07ad81dc`，
+`Hiredis.h` 为 `ddab1c3b099ad6d3295d0ee4612c27983a1e144f754345d8005439a01da88db0`。
+
+**三份副本守卫**
+
+- 新增 `tools/scripts/tests/hiredis_adapter_copies_contract.tests.ps1`：三处都有 `Hiredis.h` 与 `Hiredis.cc`（H1）；三份逐字节一致（H2）；
+  不调用随 muduo 版本改名的 `toPort()` / `port()`（H3）；比较函数用临时文件自检，差一个字节、只差换行都判不一致（H4），保证测试真能红。
+- `.github/workflows/deploy-config-tests.yml` 的 push 与 pull_request 触发路径加上三处 `contrib/hiredis/**`，只改其中一份也会触发；
+  该 job 自动执行 `tools/scripts/tests/` 一级目录下的全部脚本，不需要另行登记。
+
+**待 Codex 验证（取代上节 1–3 项，串行执行）**
+
+1. 契约测试：在仓库根目录执行 `pwsh -NoProfile -File tools/scripts/tests/hiredis_adapter_copies_contract.tests.ps1`，通过标准为 `fail=0`、退出 0。
+2. Windows 构建：先 `msbuild cpp\libs\engine\muduo_windows\muduo.vcxproj /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`，
+   再 `msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64` 增量整解，都退出 0。`Hiredis.h` 加了成员、`fd()` 改为公开，
+   凡是 include 它的库与工程（thread_context、infra、core、scene 等）都要配套重编，不能拿旧布局编出的对象链接新的 `muduo.lib`；
+   测试工程只经 AdditionalDependencies 链接 `muduo.lib` 等库，`run_cpp_tests.ps1 -Build` 不会顺带重编它们，所以必须先做这一步。
+   工作区里有其它会话的在途改动，整解失败落在它们的文件上时如实记录，不替它们修，并至少把 muduo、thread_context、infra、core 编过。
+3. Windows 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter rpc_controller -LogDir <日志目录>/rpc`，
+   再 `pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter muduo_grpc -LogDir <日志目录>/grpc`。
+   通过标准：两个 exe 的修改时间都晚于第 2 步的 `lib/muduo.lib`；全量 0 失败；以下用例都实际运行：
+   `ErrorDisconnectWithOnlyNoSideEffectCommandKeepsFrontierKnown`、`ErrorDisconnectWithSideEffectCommandInFlightStaysUnknown`、
+   `FailedConnectCallbackCannotReenterNativeConnect`、三条 `HiredisEventBatchWindows`（含新增的 `EarlierChannelDisconnectsIdleConnectionWithReadyEofInSameBatch`）
+   与 `HiredisPeerFin`。另跑一次 `rpc_controller_test.exe --gtest_filter='HiredisEventBatchWindows.*' --gtest_repeat=50`，
+   三条各 50 次 RUN 与 OK。
+4. 可选，取红态：只在隔离副本与独立输出目录里做，不要为取红在主工作区重编共享的 `lib/muduo.lib`。
+   把三处 `MarkUnknown()` 恢复后，`ErrorDisconnectWithOnlyNoSideEffectCommandKeepsFrontierKnown` 与 `FailedConnectCallbackCannotReenterNativeConnect` 应失败、
+   对照用例应通过；把 `disconnect()` 恢复为当场 `redisAsyncDisconnect` 后，`EarlierChannelDisconnectsIdleConnectionWithReadyEofInSameBatch`
+   在 Debug 下应在 `EventLoop::removeChannel` 断言中止。
+5. Linux：按上节第 1 项的做法（11-05 runner 模板、容器 `/tmp` 构建、ASan/UBSan、`timeout 60s`），在 `b55b0ac` 与 `f1fc77e` 各跑一轮
+   `redis_lifecycle_test`。本次新增 3 条（命令生命周期 2 条、同批断开 1 条），总数应比 11-05 的 122 多 3 条；对不上时列出差异用例名，
+   其余通过标准同上节。
+6. overlay 的 `Hiredis.{h,cc}` 变了，现行 SDK 钉住清单的守卫会判 SDK 过期（`build_docker_cpp_debug.py` 报「SDK 依赖输入已变化」属预期）。
+   Docker 调试栈重编 C++ 镜像之前，要先按既有流程重建并登记 Linux SDK；SDK 按 muduo 自己的编译选项（含 `-Werror`）编 overlay，顺带确认新代码没有告警。
+
+Java 版使用 Redisson，没有对应的维护账与适配层，本次无 Java 待办。

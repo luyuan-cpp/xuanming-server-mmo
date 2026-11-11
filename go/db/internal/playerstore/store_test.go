@@ -74,7 +74,10 @@ func TestSave_RejectedBeforeTransaction(t *testing.T) {
 		{"kind 为写权行", func(r *storepb.SavePlayerRequest) {
 			r.Rows[0].Kind = storepb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER
 		}, storepb.SavePlayerResult_SAVE_PLAYER_INVALID},
-		{"kind 未知", func(r *storepb.SavePlayerRequest) { r.Rows[0].Kind = storepb.PlayerStoreKind(99) }, storepb.SavePlayerResult_SAVE_PLAYER_INVALID},
+		{"kind 为负数", func(r *storepb.SavePlayerRequest) { r.Rows[0].Kind = storepb.PlayerStoreKind(-1) }, storepb.SavePlayerResult_SAVE_PLAYER_INVALID},
+		// 本 go/db 不认识的正数行种只会来自比它新的 scene:回可重试的 TOO_NEW,不是 INVALID(数据覆写审计 r2-ps#11)。
+		{"kind 本 go/db 不认识:版本不一致,可重试", func(r *storepb.SavePlayerRequest) { r.Rows[0].Kind = storepb.PlayerStoreKind(99) }, storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW},
+		{"不认识的行种排在后面也一样", func(r *storepb.SavePlayerRequest) { r.Rows[1].Kind = storepb.PlayerStoreKind(99) }, storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW},
 		{"kind 重复", func(r *storepb.SavePlayerRequest) { r.Rows[1].Kind = r.Rows[0].Kind }, storepb.SavePlayerResult_SAVE_PLAYER_INVALID},
 		{"单行超预算", func(r *storepb.SavePlayerRequest) { r.Rows[0].Payload = big }, storepb.SavePlayerResult_SAVE_PLAYER_TOO_LARGE},
 		{"合计超预算", func(r *storepb.SavePlayerRequest) {
@@ -362,6 +365,26 @@ func TestSave_DoesNotTouchClaimSeq(t *testing.T) {
 	query, _ := buildSave(validSave())
 	if strings.Contains(query, "claim_seq") {
 		t.Fatalf("save must leave claim_seq alone: %s", query)
+	}
+}
+
+// scene 比本 go/db 认识的世代新(发布窗口里新 scene 先于 go/db 换版本):回 TOO_NEW,不抬代次、不读数据、不提交,
+// 旧持有者不被围住,新 scene 按进场失败处理(数据覆写审计 r2-ps#11)。
+func TestLoadAndClaim_SceneNewerThanStoreDoesNotClaim(t *testing.T) {
+	store, rec := openStore(t, func(context.Context, string, []driver.NamedValue) (*dbtest.Rows, error) {
+		return ownerValues(10, 5, 1, instanceB), nil
+	})
+	req := validClaim()
+	req.BinarySchemaGen = testKnownGen + 1
+	resp, err := store.LoadAndClaim(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.GetResult() != storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW || resp.GetOwnerEpoch() != 10 {
+		t.Fatalf("response = %+v", resp)
+	}
+	if rec.Contains("UPDATE player_store") || rec.Contains("kind>0") || rec.Contains(dbtest.StatementCommit) {
+		t.Fatalf("statements = %v", rec.Statements())
 	}
 }
 

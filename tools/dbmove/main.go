@@ -81,7 +81,7 @@ const (
 	scrapeTimeout   = 5 * time.Second
 	ticdcTimeout    = 3 * time.Second
 	scrapeLimit     = 64 << 20
-	rosterFormat    = "SQL_WRITER_BOOT_ROSTER_V1"
+	rosterFormat    = "SQL_WRITER_BOOT_ROSTER_V2"
 )
 
 const usage = `usage: dbmove <plan|prepare|verify|cutover|rollback|audit|cleanup> -db <logical db> [flags]
@@ -308,7 +308,8 @@ func dsnAddr(name, dsn string) (string, error) {
 	return cfg.Addr, nil
 }
 
-// loadRosterPrincipals 从名册文件取写这个逻辑库的全部主体,包括还没注册的:滚动重启时新 Pod 用名册里下一个。
+// loadRosterPrincipals 从槽位名册取写这个逻辑库的全部主体:每个槽位一个账号,同槽位各代共用(writer-roster-exhaustion-20261106.md §5.1),
+// 还没起过的槽位(扩容时才用到的序号)也算在内。
 // 一个逻辑库可能有几个服务在写(存档库:go/db 和 data_service),所以可以给多个文件。文件里没有这个库,多半是给错了文件。
 func loadRosterPrincipals(paths []string, db string) ([]string, error) {
 	var out []string

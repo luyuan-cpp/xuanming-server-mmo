@@ -26,6 +26,9 @@ message ItemTable {
   option (cfg_sheet)       = "Item";
   option (cfg_source_file) = "Item.xlsx";
   option (cfg_primary_key) = "id";
+  // 行 id 只增不删:背包存档、在途的资产通道指令按 id 引用物品(混版本持久字段保护设计 §13 第 10 条)。
+  // 不再产出的物品去掉掉落、商店、奖励里的引用,表行保留。
+  option (cfg_ids_permanent) = true;
 
   uint32 id = 1;
   // 最大堆叠数量

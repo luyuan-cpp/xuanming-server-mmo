@@ -37,6 +37,7 @@
 #include "proto/common/base/tip.pb.h"
 #include "proto/battle/player_battle.pb.h"
 #include "proto/battle/battle_data.pb.h"
+#include "proto/battle/battle_script.pb.h"
 #include "proto/match/match_network.pb.h"
 // @@protoc_insertion_point(includes)
 
@@ -62,6 +63,8 @@ extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto;
 }  // extern "C"
 namespace match {
+enum BattleScriptReviewState : int;
+extern const uint32_t BattleScriptReviewState_internal_data_[];
 enum MatchMode : int;
 extern const uint32_t MatchMode_internal_data_[];
 enum QueueState : int;
@@ -83,6 +86,14 @@ extern BattleReportSummaryGlobalsTypeInternal BattleReportSummary_globals_;
 extern const ::google::protobuf::internal::ClassDataFull BattleReportSummary_class_data_;
 #else
 extern const BattleReportSummaryGlobalsTypeInternal BattleReportSummary_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattleScriptLoadoutEntry;
+struct BattleScriptLoadoutEntryGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattleScriptLoadoutEntryGlobalsTypeInternal BattleScriptLoadoutEntry_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattleScriptLoadoutEntry_class_data_;
+#else
+extern const BattleScriptLoadoutEntryGlobalsTypeInternal BattleScriptLoadoutEntry_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class BattleWatchSummary;
 struct BattleWatchSummaryGlobalsTypeInternal;
@@ -131,6 +142,22 @@ extern ChallengeResultS2CGlobalsTypeInternal ChallengeResultS2C_globals_;
 extern const ::google::protobuf::internal::ClassDataFull ChallengeResultS2C_class_data_;
 #else
 extern const ChallengeResultS2CGlobalsTypeInternal ChallengeResultS2C_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class DeleteBattleScriptRequest;
+struct DeleteBattleScriptRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern DeleteBattleScriptRequestGlobalsTypeInternal DeleteBattleScriptRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull DeleteBattleScriptRequest_class_data_;
+#else
+extern const DeleteBattleScriptRequestGlobalsTypeInternal DeleteBattleScriptRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class DeleteBattleScriptResponse;
+struct DeleteBattleScriptResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern DeleteBattleScriptResponseGlobalsTypeInternal DeleteBattleScriptResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull DeleteBattleScriptResponse_class_data_;
+#else
+extern const DeleteBattleScriptResponseGlobalsTypeInternal DeleteBattleScriptResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetBattleReportRequest;
 struct GetBattleReportRequestGlobalsTypeInternal;
@@ -196,6 +223,22 @@ extern const ::google::protobuf::internal::ClassDataFull ListBattleReportsRespon
 #else
 extern const ListBattleReportsResponseGlobalsTypeInternal ListBattleReportsResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListBattleScriptsRequest;
+struct ListBattleScriptsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListBattleScriptsRequestGlobalsTypeInternal ListBattleScriptsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListBattleScriptsRequest_class_data_;
+#else
+extern const ListBattleScriptsRequestGlobalsTypeInternal ListBattleScriptsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListBattleScriptsResponse;
+struct ListBattleScriptsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListBattleScriptsResponseGlobalsTypeInternal ListBattleScriptsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListBattleScriptsResponse_class_data_;
+#else
+extern const ListBattleScriptsResponseGlobalsTypeInternal ListBattleScriptsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class ListWatchableBattlesRequest;
 struct ListWatchableBattlesRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -228,6 +271,14 @@ extern const ::google::protobuf::internal::ClassDataFull MatchTeam_class_data_;
 #else
 extern const MatchTeamGlobalsTypeInternal MatchTeam_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class PlayerBattleScriptView;
+struct PlayerBattleScriptViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PlayerBattleScriptViewGlobalsTypeInternal PlayerBattleScriptView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PlayerBattleScriptView_class_data_;
+#else
+extern const PlayerBattleScriptViewGlobalsTypeInternal PlayerBattleScriptView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class RespondChallengeRequest;
 struct RespondChallengeRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -244,6 +295,22 @@ extern const ::google::protobuf::internal::ClassDataFull RespondChallengeRespons
 #else
 extern const RespondChallengeResponseGlobalsTypeInternal RespondChallengeResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SetBattleScriptLoadoutRequest;
+struct SetBattleScriptLoadoutRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SetBattleScriptLoadoutRequestGlobalsTypeInternal SetBattleScriptLoadoutRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SetBattleScriptLoadoutRequest_class_data_;
+#else
+extern const SetBattleScriptLoadoutRequestGlobalsTypeInternal SetBattleScriptLoadoutRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SetBattleScriptLoadoutResponse;
+struct SetBattleScriptLoadoutResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SetBattleScriptLoadoutResponseGlobalsTypeInternal SetBattleScriptLoadoutResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SetBattleScriptLoadoutResponse_class_data_;
+#else
+extern const SetBattleScriptLoadoutResponseGlobalsTypeInternal SetBattleScriptLoadoutResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class SpectateBattleRecord;
 struct SpectateBattleRecordGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -251,6 +318,22 @@ extern SpectateBattleRecordGlobalsTypeInternal SpectateBattleRecord_globals_;
 extern const ::google::protobuf::internal::ClassDataFull SpectateBattleRecord_class_data_;
 #else
 extern const SpectateBattleRecordGlobalsTypeInternal SpectateBattleRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SubmitBattleScriptRequest;
+struct SubmitBattleScriptRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SubmitBattleScriptRequestGlobalsTypeInternal SubmitBattleScriptRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SubmitBattleScriptRequest_class_data_;
+#else
+extern const SubmitBattleScriptRequestGlobalsTypeInternal SubmitBattleScriptRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SubmitBattleScriptResponse;
+struct SubmitBattleScriptResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SubmitBattleScriptResponseGlobalsTypeInternal SubmitBattleScriptResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SubmitBattleScriptResponse_class_data_;
+#else
+extern const SubmitBattleScriptResponseGlobalsTypeInternal SubmitBattleScriptResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class WatchBattleRequest;
 struct WatchBattleRequestGlobalsTypeInternal;
@@ -271,6 +354,9 @@ extern const WatchBattleResponseGlobalsTypeInternal WatchBattleResponse_globals_
 }  // namespace match
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::match::BattleScriptReviewState_internal_data_>
+    internal::EnumTraitsImpl::value<::match::BattleScriptReviewState>;
 template <>
 internal::EnumTraitsT<::match::MatchMode_internal_data_>
     internal::EnumTraitsImpl::value<::match::MatchMode>;
@@ -413,6 +499,48 @@ template <>
 [[nodiscard]] inline bool eSpectateDelivery_Parse(
     ::absl::string_view name, eSpectateDelivery* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<eSpectateDelivery>(eSpectateDelivery_descriptor(), name,
+                                           value);
+}
+enum BattleScriptReviewState : int {
+  BATTLE_SCRIPT_REVIEW_UNSPECIFIED = 0,
+  BATTLE_SCRIPT_REVIEW_PENDING = 1,
+  BATTLE_SCRIPT_REVIEW_APPROVED = 2,
+  BATTLE_SCRIPT_REVIEW_REJECTED = 3,
+  BattleScriptReviewState_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  BattleScriptReviewState_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t BattleScriptReviewState_internal_data_[];
+inline constexpr BattleScriptReviewState BattleScriptReviewState_MIN =
+    static_cast<BattleScriptReviewState>(0);
+inline constexpr BattleScriptReviewState BattleScriptReviewState_MAX =
+    static_cast<BattleScriptReviewState>(3);
+[[nodiscard]] inline bool BattleScriptReviewState_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int BattleScriptReviewState_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+BattleScriptReviewState_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(BattleScriptReviewState) {
+  return BattleScriptReviewState_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& BattleScriptReviewState_Name(T value) {
+  static_assert(::std::is_same<T, BattleScriptReviewState>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to BattleScriptReviewState_Name().");
+  return BattleScriptReviewState_Name(static_cast<BattleScriptReviewState>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& BattleScriptReviewState_Name(BattleScriptReviewState value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<BattleScriptReviewState_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool BattleScriptReviewState_Parse(
+    ::absl::string_view name, BattleScriptReviewState* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<BattleScriptReviewState>(BattleScriptReviewState_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -1311,6 +1439,144 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListWatchableBattlesRequest final :
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListBattleScriptsRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:match.ListBattleScriptsRequest) */ {
+ public:
+  inline ListBattleScriptsRequest() : ListBattleScriptsRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListBattleScriptsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListBattleScriptsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListBattleScriptsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListBattleScriptsRequest(const ListBattleScriptsRequest& from) : ListBattleScriptsRequest(nullptr, from) {}
+  inline ListBattleScriptsRequest(ListBattleScriptsRequest&& from) noexcept : ListBattleScriptsRequest(nullptr, ::std::move(from)) {}
+  inline ListBattleScriptsRequest& operator=(const ListBattleScriptsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListBattleScriptsRequest& operator=(ListBattleScriptsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListBattleScriptsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListBattleScriptsRequest>(&ListBattleScriptsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 27;
+  friend void swap(ListBattleScriptsRequest& a, ListBattleScriptsRequest& b) { a.Swap(&b); }
+  inline void Swap(ListBattleScriptsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListBattleScriptsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListBattleScriptsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<ListBattleScriptsRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const ListBattleScriptsRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const ListBattleScriptsRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.ListBattleScriptsRequest"; }
+
+  explicit ListBattleScriptsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListBattleScriptsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListBattleScriptsRequest& from);
+  ListBattleScriptsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListBattleScriptsRequest&& from) noexcept
+      : ListBattleScriptsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:match.ListBattleScriptsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
   friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
 };
 // -------------------------------------------------------------------
@@ -2473,6 +2739,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetBattleReportRequest final : publ
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t battle_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBattleScriptRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.DeleteBattleScriptRequest) */ {
+ public:
+  inline DeleteBattleScriptRequest() : DeleteBattleScriptRequest(nullptr) {}
+  ~DeleteBattleScriptRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DeleteBattleScriptRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DeleteBattleScriptRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr DeleteBattleScriptRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline DeleteBattleScriptRequest(const DeleteBattleScriptRequest& from) : DeleteBattleScriptRequest(nullptr, from) {}
+  inline DeleteBattleScriptRequest(DeleteBattleScriptRequest&& from) noexcept : DeleteBattleScriptRequest(nullptr, ::std::move(from)) {}
+  inline DeleteBattleScriptRequest& operator=(const DeleteBattleScriptRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DeleteBattleScriptRequest& operator=(DeleteBattleScriptRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const DeleteBattleScriptRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteBattleScriptRequest>(&DeleteBattleScriptRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 31;
+  friend void swap(DeleteBattleScriptRequest& a, DeleteBattleScriptRequest& b) { a.Swap(&b); }
+  inline void Swap(DeleteBattleScriptRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DeleteBattleScriptRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] DeleteBattleScriptRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DeleteBattleScriptRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DeleteBattleScriptRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DeleteBattleScriptRequest& from) { DeleteBattleScriptRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DeleteBattleScriptRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.DeleteBattleScriptRequest"; }
+
+  explicit DeleteBattleScriptRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  DeleteBattleScriptRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DeleteBattleScriptRequest& from);
+  DeleteBattleScriptRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DeleteBattleScriptRequest&& from) noexcept
+      : DeleteBattleScriptRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kScriptIdFieldNumber = 1,
+    kExpectedRevisionFieldNumber = 2,
+  };
+  // uint64 script_id = 1;
+  void clear_script_id() ;
+  [[nodiscard]] ::uint64_t script_id() const;
+  void set_script_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_script_id() const;
+  void _internal_set_script_id(::uint64_t value);
+
+  public:
+  // uint32 expected_revision = 2;
+  void clear_expected_revision() ;
+  [[nodiscard]] ::uint32_t expected_revision() const;
+  void set_expected_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_expected_revision() const;
+  void _internal_set_expected_revision(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.DeleteBattleScriptRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const DeleteBattleScriptRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t script_id_;
+    ::uint32_t expected_revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3697,6 +4176,255 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleWatchSummary final : public :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleScriptLoadoutEntry final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.BattleScriptLoadoutEntry) */ {
+ public:
+  inline BattleScriptLoadoutEntry() : BattleScriptLoadoutEntry(nullptr) {}
+  ~BattleScriptLoadoutEntry() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattleScriptLoadoutEntry* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleScriptLoadoutEntry));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattleScriptLoadoutEntry(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattleScriptLoadoutEntry(const BattleScriptLoadoutEntry& from) : BattleScriptLoadoutEntry(nullptr, from) {}
+  inline BattleScriptLoadoutEntry(BattleScriptLoadoutEntry&& from) noexcept : BattleScriptLoadoutEntry(nullptr, ::std::move(from)) {}
+  inline BattleScriptLoadoutEntry& operator=(const BattleScriptLoadoutEntry& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattleScriptLoadoutEntry& operator=(BattleScriptLoadoutEntry&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattleScriptLoadoutEntry& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleScriptLoadoutEntry>(&BattleScriptLoadoutEntry_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 26;
+  friend void swap(BattleScriptLoadoutEntry& a, BattleScriptLoadoutEntry& b) { a.Swap(&b); }
+  inline void Swap(BattleScriptLoadoutEntry* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattleScriptLoadoutEntry* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattleScriptLoadoutEntry* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattleScriptLoadoutEntry>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattleScriptLoadoutEntry& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattleScriptLoadoutEntry& from) { BattleScriptLoadoutEntry::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattleScriptLoadoutEntry* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.BattleScriptLoadoutEntry"; }
+
+  explicit BattleScriptLoadoutEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattleScriptLoadoutEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleScriptLoadoutEntry& from);
+  BattleScriptLoadoutEntry(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattleScriptLoadoutEntry&& from) noexcept
+      : BattleScriptLoadoutEntry(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMatchModeFieldNumber = 1,
+    kBattleConfigIdFieldNumber = 2,
+    kOriginFieldNumber = 3,
+    kOfficialScriptIdFieldNumber = 4,
+    kPlayerScriptIdFieldNumber = 5,
+  };
+  // uint32 match_mode = 1;
+  void clear_match_mode() ;
+  [[nodiscard]] ::uint32_t match_mode() const;
+  void set_match_mode(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_match_mode() const;
+  void _internal_set_match_mode(::uint32_t value);
+
+  public:
+  // uint32 battle_config_id = 2;
+  void clear_battle_config_id() ;
+  [[nodiscard]] ::uint32_t battle_config_id() const;
+  void set_battle_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_battle_config_id() const;
+  void _internal_set_battle_config_id(::uint32_t value);
+
+  public:
+  // .eBattleScriptOrigin origin = 3;
+  void clear_origin() ;
+  [[nodiscard]] ::eBattleScriptOrigin origin() const;
+  void set_origin(::eBattleScriptOrigin value);
+
+  private:
+  ::eBattleScriptOrigin _internal_origin() const;
+  void _internal_set_origin(::eBattleScriptOrigin value);
+
+  public:
+  // uint32 official_script_id = 4;
+  void clear_official_script_id() ;
+  [[nodiscard]] ::uint32_t official_script_id() const;
+  void set_official_script_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_official_script_id() const;
+  void _internal_set_official_script_id(::uint32_t value);
+
+  public:
+  // uint64 player_script_id = 5;
+  void clear_player_script_id() ;
+  [[nodiscard]] ::uint64_t player_script_id() const;
+  void set_player_script_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_script_id() const;
+  void _internal_set_player_script_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.BattleScriptLoadoutEntry)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattleScriptLoadoutEntry& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t match_mode_;
+    ::uint32_t battle_config_id_;
+    int origin_;
+    ::uint32_t official_script_id_;
+    ::uint64_t player_script_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleReportMember final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.BattleReportMember) */ {
  public:
@@ -4365,6 +5093,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateBattleRecord final : public
   // accessors -------------------------------------------------------
   enum : int {
     kBattleInstanceIdFieldNumber = 5,
+    kReleaseTrackFieldNumber = 7,
     kSummaryFieldNumber = 1,
     kBattleNodeIdFieldNumber = 2,
     kVisibilityFieldNumber = 3,
@@ -4384,6 +5113,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateBattleRecord final : public
   const ::std::string& _internal_battle_instance_id() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_battle_instance_id(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_battle_instance_id();
+
+  public:
+  // string release_track = 7;
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
 
   public:
   // .match.BattleWatchSummary summary = 1;
@@ -4446,8 +5190,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateBattleRecord final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          1, 53,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          1, 66,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4476,11 +5220,449 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateBattleRecord final : public
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr battle_instance_id_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
     ::match::BattleWatchSummary* PROTOBUF_NULLABLE summary_;
     ::uint32_t battle_node_id_;
     int visibility_;
     ::uint64_t deadline_ms_;
     int tier_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetBattleScriptLoadoutResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.SetBattleScriptLoadoutResponse) */ {
+ public:
+  inline SetBattleScriptLoadoutResponse() : SetBattleScriptLoadoutResponse(nullptr) {}
+  ~SetBattleScriptLoadoutResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetBattleScriptLoadoutResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetBattleScriptLoadoutResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SetBattleScriptLoadoutResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SetBattleScriptLoadoutResponse(const SetBattleScriptLoadoutResponse& from) : SetBattleScriptLoadoutResponse(nullptr, from) {}
+  inline SetBattleScriptLoadoutResponse(SetBattleScriptLoadoutResponse&& from) noexcept : SetBattleScriptLoadoutResponse(nullptr, ::std::move(from)) {}
+  inline SetBattleScriptLoadoutResponse& operator=(const SetBattleScriptLoadoutResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetBattleScriptLoadoutResponse& operator=(SetBattleScriptLoadoutResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SetBattleScriptLoadoutResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetBattleScriptLoadoutResponse>(&SetBattleScriptLoadoutResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 34;
+  friend void swap(SetBattleScriptLoadoutResponse& a, SetBattleScriptLoadoutResponse& b) { a.Swap(&b); }
+  inline void Swap(SetBattleScriptLoadoutResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetBattleScriptLoadoutResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SetBattleScriptLoadoutResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetBattleScriptLoadoutResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetBattleScriptLoadoutResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetBattleScriptLoadoutResponse& from) { SetBattleScriptLoadoutResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetBattleScriptLoadoutResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.SetBattleScriptLoadoutResponse"; }
+
+  explicit SetBattleScriptLoadoutResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetBattleScriptLoadoutResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetBattleScriptLoadoutResponse& from);
+  SetBattleScriptLoadoutResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetBattleScriptLoadoutResponse&& from) noexcept
+      : SetBattleScriptLoadoutResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kLoadoutFieldNumber = 2,
+    kErrorMessageFieldNumber = 1,
+  };
+  // repeated .match.BattleScriptLoadoutEntry loadout = 2;
+  [[nodiscard]] int loadout_size()
+      const;
+  private:
+  int _internal_loadout_size() const;
+
+  public:
+  void clear_loadout() ;
+  [[nodiscard]] const ::match::BattleScriptLoadoutEntry& loadout(int index) const;
+  [[nodiscard]] ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL mutable_loadout(int index);
+  ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL add_loadout();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>&
+  loadout() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>* PROTOBUF_NONNULL
+  mutable_loadout();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>& _internal_loadout() const;
+  ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>* PROTOBUF_NONNULL _internal_mutable_loadout();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.SetBattleScriptLoadoutResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetBattleScriptLoadoutResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::match::BattleScriptLoadoutEntry > loadout_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetBattleScriptLoadoutRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.SetBattleScriptLoadoutRequest) */ {
+ public:
+  inline SetBattleScriptLoadoutRequest() : SetBattleScriptLoadoutRequest(nullptr) {}
+  ~SetBattleScriptLoadoutRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetBattleScriptLoadoutRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetBattleScriptLoadoutRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SetBattleScriptLoadoutRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SetBattleScriptLoadoutRequest(const SetBattleScriptLoadoutRequest& from) : SetBattleScriptLoadoutRequest(nullptr, from) {}
+  inline SetBattleScriptLoadoutRequest(SetBattleScriptLoadoutRequest&& from) noexcept : SetBattleScriptLoadoutRequest(nullptr, ::std::move(from)) {}
+  inline SetBattleScriptLoadoutRequest& operator=(const SetBattleScriptLoadoutRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetBattleScriptLoadoutRequest& operator=(SetBattleScriptLoadoutRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SetBattleScriptLoadoutRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetBattleScriptLoadoutRequest>(&SetBattleScriptLoadoutRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 33;
+  friend void swap(SetBattleScriptLoadoutRequest& a, SetBattleScriptLoadoutRequest& b) { a.Swap(&b); }
+  inline void Swap(SetBattleScriptLoadoutRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetBattleScriptLoadoutRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SetBattleScriptLoadoutRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetBattleScriptLoadoutRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetBattleScriptLoadoutRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetBattleScriptLoadoutRequest& from) { SetBattleScriptLoadoutRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetBattleScriptLoadoutRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.SetBattleScriptLoadoutRequest"; }
+
+  explicit SetBattleScriptLoadoutRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetBattleScriptLoadoutRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetBattleScriptLoadoutRequest& from);
+  SetBattleScriptLoadoutRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetBattleScriptLoadoutRequest&& from) noexcept
+      : SetBattleScriptLoadoutRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kEntryFieldNumber = 1,
+  };
+  // .match.BattleScriptLoadoutEntry entry = 1;
+  [[nodiscard]] bool has_entry()
+      const;
+  void clear_entry() ;
+  [[nodiscard]] const ::match::BattleScriptLoadoutEntry& entry() const;
+  [[nodiscard]] ::match::BattleScriptLoadoutEntry* PROTOBUF_NULLABLE release_entry();
+  ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL mutable_entry();
+  void set_allocated_entry(::match::BattleScriptLoadoutEntry* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_entry(::match::BattleScriptLoadoutEntry* PROTOBUF_NULLABLE value);
+  ::match::BattleScriptLoadoutEntry* PROTOBUF_NULLABLE unsafe_arena_release_entry();
+
+  private:
+  const ::match::BattleScriptLoadoutEntry& _internal_entry() const;
+  ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL _internal_mutable_entry();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.SetBattleScriptLoadoutRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetBattleScriptLoadoutRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::match::BattleScriptLoadoutEntry* PROTOBUF_NULLABLE entry_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5645,6 +6827,213 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetBattleReportResponse final : pub
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBattleScriptResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.DeleteBattleScriptResponse) */ {
+ public:
+  inline DeleteBattleScriptResponse() : DeleteBattleScriptResponse(nullptr) {}
+  ~DeleteBattleScriptResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DeleteBattleScriptResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DeleteBattleScriptResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr DeleteBattleScriptResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline DeleteBattleScriptResponse(const DeleteBattleScriptResponse& from) : DeleteBattleScriptResponse(nullptr, from) {}
+  inline DeleteBattleScriptResponse(DeleteBattleScriptResponse&& from) noexcept : DeleteBattleScriptResponse(nullptr, ::std::move(from)) {}
+  inline DeleteBattleScriptResponse& operator=(const DeleteBattleScriptResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DeleteBattleScriptResponse& operator=(DeleteBattleScriptResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const DeleteBattleScriptResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteBattleScriptResponse>(&DeleteBattleScriptResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 32;
+  friend void swap(DeleteBattleScriptResponse& a, DeleteBattleScriptResponse& b) { a.Swap(&b); }
+  inline void Swap(DeleteBattleScriptResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DeleteBattleScriptResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] DeleteBattleScriptResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DeleteBattleScriptResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DeleteBattleScriptResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DeleteBattleScriptResponse& from) { DeleteBattleScriptResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DeleteBattleScriptResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.DeleteBattleScriptResponse"; }
+
+  explicit DeleteBattleScriptResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  DeleteBattleScriptResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DeleteBattleScriptResponse& from);
+  DeleteBattleScriptResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DeleteBattleScriptResponse&& from) noexcept
+      : DeleteBattleScriptResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.DeleteBattleScriptResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const DeleteBattleScriptResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChallengePlayerResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.ChallengePlayerResponse) */ {
  public:
@@ -6383,6 +7772,1063 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListBattleReportsResponse final : p
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::match::BattleReportSummary > reports_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubmitBattleScriptRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.SubmitBattleScriptRequest) */ {
+ public:
+  inline SubmitBattleScriptRequest() : SubmitBattleScriptRequest(nullptr) {}
+  ~SubmitBattleScriptRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SubmitBattleScriptRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SubmitBattleScriptRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SubmitBattleScriptRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SubmitBattleScriptRequest(const SubmitBattleScriptRequest& from) : SubmitBattleScriptRequest(nullptr, from) {}
+  inline SubmitBattleScriptRequest(SubmitBattleScriptRequest&& from) noexcept : SubmitBattleScriptRequest(nullptr, ::std::move(from)) {}
+  inline SubmitBattleScriptRequest& operator=(const SubmitBattleScriptRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SubmitBattleScriptRequest& operator=(SubmitBattleScriptRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SubmitBattleScriptRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubmitBattleScriptRequest>(&SubmitBattleScriptRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 29;
+  friend void swap(SubmitBattleScriptRequest& a, SubmitBattleScriptRequest& b) { a.Swap(&b); }
+  inline void Swap(SubmitBattleScriptRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SubmitBattleScriptRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SubmitBattleScriptRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SubmitBattleScriptRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SubmitBattleScriptRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SubmitBattleScriptRequest& from) { SubmitBattleScriptRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SubmitBattleScriptRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.SubmitBattleScriptRequest"; }
+
+  explicit SubmitBattleScriptRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SubmitBattleScriptRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SubmitBattleScriptRequest& from);
+  SubmitBattleScriptRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SubmitBattleScriptRequest&& from) noexcept
+      : SubmitBattleScriptRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kScriptFieldNumber = 3,
+    kScriptIdFieldNumber = 1,
+    kExpectedRevisionFieldNumber = 2,
+  };
+  // .BattleScript script = 3;
+  [[nodiscard]] bool has_script()
+      const;
+  void clear_script() ;
+  [[nodiscard]] const ::BattleScript& script() const;
+  [[nodiscard]] ::BattleScript* PROTOBUF_NULLABLE release_script();
+  ::BattleScript* PROTOBUF_NONNULL mutable_script();
+  void set_allocated_script(::BattleScript* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_script(::BattleScript* PROTOBUF_NULLABLE value);
+  ::BattleScript* PROTOBUF_NULLABLE unsafe_arena_release_script();
+
+  private:
+  const ::BattleScript& _internal_script() const;
+  ::BattleScript* PROTOBUF_NONNULL _internal_mutable_script();
+
+  public:
+  // uint64 script_id = 1;
+  void clear_script_id() ;
+  [[nodiscard]] ::uint64_t script_id() const;
+  void set_script_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_script_id() const;
+  void _internal_set_script_id(::uint64_t value);
+
+  public:
+  // uint32 expected_revision = 2;
+  void clear_expected_revision() ;
+  [[nodiscard]] ::uint32_t expected_revision() const;
+  void set_expected_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_expected_revision() const;
+  void _internal_set_expected_revision(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.SubmitBattleScriptRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SubmitBattleScriptRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::BattleScript* PROTOBUF_NULLABLE script_;
+    ::uint64_t script_id_;
+    ::uint32_t expected_revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleScriptView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.PlayerBattleScriptView) */ {
+ public:
+  inline PlayerBattleScriptView() : PlayerBattleScriptView(nullptr) {}
+  ~PlayerBattleScriptView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PlayerBattleScriptView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PlayerBattleScriptView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PlayerBattleScriptView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PlayerBattleScriptView(const PlayerBattleScriptView& from) : PlayerBattleScriptView(nullptr, from) {}
+  inline PlayerBattleScriptView(PlayerBattleScriptView&& from) noexcept : PlayerBattleScriptView(nullptr, ::std::move(from)) {}
+  inline PlayerBattleScriptView& operator=(const PlayerBattleScriptView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PlayerBattleScriptView& operator=(PlayerBattleScriptView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PlayerBattleScriptView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerBattleScriptView>(&PlayerBattleScriptView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 25;
+  friend void swap(PlayerBattleScriptView& a, PlayerBattleScriptView& b) { a.Swap(&b); }
+  inline void Swap(PlayerBattleScriptView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PlayerBattleScriptView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PlayerBattleScriptView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PlayerBattleScriptView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PlayerBattleScriptView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PlayerBattleScriptView& from) { PlayerBattleScriptView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PlayerBattleScriptView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.PlayerBattleScriptView"; }
+
+  explicit PlayerBattleScriptView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PlayerBattleScriptView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayerBattleScriptView& from);
+  PlayerBattleScriptView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PlayerBattleScriptView&& from) noexcept
+      : PlayerBattleScriptView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRejectReasonFieldNumber = 6,
+    kContentFieldNumber = 3,
+    kScriptIdFieldNumber = 1,
+    kRevisionFieldNumber = 2,
+    kReviewStateFieldNumber = 4,
+    kSubmittedMsFieldNumber = 7,
+    kApprovedRevisionFieldNumber = 5,
+  };
+  // string reject_reason = 6;
+  void clear_reject_reason() ;
+  [[nodiscard]] const ::std::string& reject_reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reject_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reject_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reject_reason();
+  void set_allocated_reject_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reject_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reject_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reject_reason();
+
+  public:
+  // .BattleScript content = 3;
+  [[nodiscard]] bool has_content()
+      const;
+  void clear_content() ;
+  [[nodiscard]] const ::BattleScript& content() const;
+  [[nodiscard]] ::BattleScript* PROTOBUF_NULLABLE release_content();
+  ::BattleScript* PROTOBUF_NONNULL mutable_content();
+  void set_allocated_content(::BattleScript* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_content(::BattleScript* PROTOBUF_NULLABLE value);
+  ::BattleScript* PROTOBUF_NULLABLE unsafe_arena_release_content();
+
+  private:
+  const ::BattleScript& _internal_content() const;
+  ::BattleScript* PROTOBUF_NONNULL _internal_mutable_content();
+
+  public:
+  // uint64 script_id = 1;
+  void clear_script_id() ;
+  [[nodiscard]] ::uint64_t script_id() const;
+  void set_script_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_script_id() const;
+  void _internal_set_script_id(::uint64_t value);
+
+  public:
+  // uint32 revision = 2;
+  void clear_revision() ;
+  [[nodiscard]] ::uint32_t revision() const;
+  void set_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_revision() const;
+  void _internal_set_revision(::uint32_t value);
+
+  public:
+  // .match.BattleScriptReviewState review_state = 4;
+  void clear_review_state() ;
+  [[nodiscard]] ::match::BattleScriptReviewState review_state() const;
+  void set_review_state(::match::BattleScriptReviewState value);
+
+  private:
+  ::match::BattleScriptReviewState _internal_review_state() const;
+  void _internal_set_review_state(::match::BattleScriptReviewState value);
+
+  public:
+  // uint64 submitted_ms = 7;
+  void clear_submitted_ms() ;
+  [[nodiscard]] ::uint64_t submitted_ms() const;
+  void set_submitted_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_submitted_ms() const;
+  void _internal_set_submitted_ms(::uint64_t value);
+
+  public:
+  // uint32 approved_revision = 5;
+  void clear_approved_revision() ;
+  [[nodiscard]] ::uint32_t approved_revision() const;
+  void set_approved_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_approved_revision() const;
+  void _internal_set_approved_revision(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.PlayerBattleScriptView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          1, 50,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PlayerBattleScriptView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr reject_reason_;
+    ::BattleScript* PROTOBUF_NULLABLE content_;
+    ::uint64_t script_id_;
+    ::uint32_t revision_;
+    int review_state_;
+    ::uint64_t submitted_ms_;
+    ::uint32_t approved_revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubmitBattleScriptResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.SubmitBattleScriptResponse) */ {
+ public:
+  inline SubmitBattleScriptResponse() : SubmitBattleScriptResponse(nullptr) {}
+  ~SubmitBattleScriptResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SubmitBattleScriptResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SubmitBattleScriptResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SubmitBattleScriptResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SubmitBattleScriptResponse(const SubmitBattleScriptResponse& from) : SubmitBattleScriptResponse(nullptr, from) {}
+  inline SubmitBattleScriptResponse(SubmitBattleScriptResponse&& from) noexcept : SubmitBattleScriptResponse(nullptr, ::std::move(from)) {}
+  inline SubmitBattleScriptResponse& operator=(const SubmitBattleScriptResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SubmitBattleScriptResponse& operator=(SubmitBattleScriptResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SubmitBattleScriptResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubmitBattleScriptResponse>(&SubmitBattleScriptResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 30;
+  friend void swap(SubmitBattleScriptResponse& a, SubmitBattleScriptResponse& b) { a.Swap(&b); }
+  inline void Swap(SubmitBattleScriptResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SubmitBattleScriptResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SubmitBattleScriptResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SubmitBattleScriptResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SubmitBattleScriptResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SubmitBattleScriptResponse& from) { SubmitBattleScriptResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SubmitBattleScriptResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.SubmitBattleScriptResponse"; }
+
+  explicit SubmitBattleScriptResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SubmitBattleScriptResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SubmitBattleScriptResponse& from);
+  SubmitBattleScriptResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SubmitBattleScriptResponse&& from) noexcept
+      : SubmitBattleScriptResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kInvalidDetailFieldNumber = 3,
+    kErrorMessageFieldNumber = 1,
+    kScriptFieldNumber = 2,
+  };
+  // string invalid_detail = 3;
+  void clear_invalid_detail() ;
+  [[nodiscard]] const ::std::string& invalid_detail() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_invalid_detail(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_invalid_detail();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_invalid_detail();
+  void set_allocated_invalid_detail(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_invalid_detail() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_invalid_detail(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_invalid_detail();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.PlayerBattleScriptView script = 2;
+  [[nodiscard]] bool has_script()
+      const;
+  void clear_script() ;
+  [[nodiscard]] const ::match::PlayerBattleScriptView& script() const;
+  [[nodiscard]] ::match::PlayerBattleScriptView* PROTOBUF_NULLABLE release_script();
+  ::match::PlayerBattleScriptView* PROTOBUF_NONNULL mutable_script();
+  void set_allocated_script(::match::PlayerBattleScriptView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_script(::match::PlayerBattleScriptView* PROTOBUF_NULLABLE value);
+  ::match::PlayerBattleScriptView* PROTOBUF_NULLABLE unsafe_arena_release_script();
+
+  private:
+  const ::match::PlayerBattleScriptView& _internal_script() const;
+  ::match::PlayerBattleScriptView* PROTOBUF_NONNULL _internal_mutable_script();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.SubmitBattleScriptResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 55,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SubmitBattleScriptResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr invalid_detail_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::PlayerBattleScriptView* PROTOBUF_NULLABLE script_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListBattleScriptsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.ListBattleScriptsResponse) */ {
+ public:
+  inline ListBattleScriptsResponse() : ListBattleScriptsResponse(nullptr) {}
+  ~ListBattleScriptsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListBattleScriptsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListBattleScriptsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListBattleScriptsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListBattleScriptsResponse(const ListBattleScriptsResponse& from) : ListBattleScriptsResponse(nullptr, from) {}
+  inline ListBattleScriptsResponse(ListBattleScriptsResponse&& from) noexcept : ListBattleScriptsResponse(nullptr, ::std::move(from)) {}
+  inline ListBattleScriptsResponse& operator=(const ListBattleScriptsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListBattleScriptsResponse& operator=(ListBattleScriptsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListBattleScriptsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListBattleScriptsResponse>(&ListBattleScriptsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 28;
+  friend void swap(ListBattleScriptsResponse& a, ListBattleScriptsResponse& b) { a.Swap(&b); }
+  inline void Swap(ListBattleScriptsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListBattleScriptsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListBattleScriptsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListBattleScriptsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListBattleScriptsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListBattleScriptsResponse& from) { ListBattleScriptsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListBattleScriptsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.ListBattleScriptsResponse"; }
+
+  explicit ListBattleScriptsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListBattleScriptsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListBattleScriptsResponse& from);
+  ListBattleScriptsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListBattleScriptsResponse&& from) noexcept
+      : ListBattleScriptsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOfficialScriptsFieldNumber = 2,
+    kMyScriptsFieldNumber = 3,
+    kLoadoutFieldNumber = 4,
+    kErrorMessageFieldNumber = 1,
+    kMaxScriptsFieldNumber = 5,
+    kMaxScriptBytesFieldNumber = 6,
+  };
+  // repeated .BattleScript official_scripts = 2;
+  [[nodiscard]] int official_scripts_size()
+      const;
+  private:
+  int _internal_official_scripts_size() const;
+
+  public:
+  void clear_official_scripts() ;
+  [[nodiscard]] const ::BattleScript& official_scripts(int index) const;
+  [[nodiscard]] ::BattleScript* PROTOBUF_NONNULL mutable_official_scripts(int index);
+  ::BattleScript* PROTOBUF_NONNULL add_official_scripts();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::BattleScript>&
+  official_scripts() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::BattleScript>* PROTOBUF_NONNULL
+  mutable_official_scripts();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::BattleScript>& _internal_official_scripts() const;
+  ::google::protobuf::RepeatedPtrField<::BattleScript>* PROTOBUF_NONNULL _internal_mutable_official_scripts();
+
+  public:
+  // repeated .match.PlayerBattleScriptView my_scripts = 3;
+  [[nodiscard]] int my_scripts_size()
+      const;
+  private:
+  int _internal_my_scripts_size() const;
+
+  public:
+  void clear_my_scripts() ;
+  [[nodiscard]] const ::match::PlayerBattleScriptView& my_scripts(int index) const;
+  [[nodiscard]] ::match::PlayerBattleScriptView* PROTOBUF_NONNULL mutable_my_scripts(int index);
+  ::match::PlayerBattleScriptView* PROTOBUF_NONNULL add_my_scripts();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::PlayerBattleScriptView>&
+  my_scripts() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::PlayerBattleScriptView>* PROTOBUF_NONNULL
+  mutable_my_scripts();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::PlayerBattleScriptView>& _internal_my_scripts() const;
+  ::google::protobuf::RepeatedPtrField<::match::PlayerBattleScriptView>* PROTOBUF_NONNULL _internal_mutable_my_scripts();
+
+  public:
+  // repeated .match.BattleScriptLoadoutEntry loadout = 4;
+  [[nodiscard]] int loadout_size()
+      const;
+  private:
+  int _internal_loadout_size() const;
+
+  public:
+  void clear_loadout() ;
+  [[nodiscard]] const ::match::BattleScriptLoadoutEntry& loadout(int index) const;
+  [[nodiscard]] ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL mutable_loadout(int index);
+  ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL add_loadout();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>&
+  loadout() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>* PROTOBUF_NONNULL
+  mutable_loadout();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>& _internal_loadout() const;
+  ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>* PROTOBUF_NONNULL _internal_mutable_loadout();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // uint32 max_scripts = 5;
+  void clear_max_scripts() ;
+  [[nodiscard]] ::uint32_t max_scripts() const;
+  void set_max_scripts(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_scripts() const;
+  void _internal_set_max_scripts(::uint32_t value);
+
+  public:
+  // uint32 max_script_bytes = 6;
+  void clear_max_script_bytes() ;
+  [[nodiscard]] ::uint32_t max_script_bytes() const;
+  void set_max_script_bytes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_script_bytes() const;
+  void _internal_set_max_script_bytes(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.ListBattleScriptsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          4, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListBattleScriptsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::BattleScript > official_scripts_;
+    ::google::protobuf::RepeatedPtrField< ::match::PlayerBattleScriptView > my_scripts_;
+    ::google::protobuf::RepeatedPtrField< ::match::BattleScriptLoadoutEntry > loadout_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::uint32_t max_scripts_;
+    ::uint32_t max_script_bytes_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8709,14 +11155,14 @@ inline void BattleWatchSummary::_internal_set_featured(bool value) {
 
 // .match.BattleWatchSummary summary = 1;
 inline bool SpectateBattleRecord::has_summary() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   PROTOBUF_ASSUME(!value || _impl_.summary_ != nullptr);
   return value;
 }
 inline void SpectateBattleRecord::clear_summary() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.summary_ != nullptr) _impl_.summary_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::match::BattleWatchSummary& SpectateBattleRecord::_internal_summary() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -8735,16 +11181,16 @@ inline void SpectateBattleRecord::unsafe_arena_set_allocated_summary(
   }
   _impl_.summary_ = reinterpret_cast<::match::BattleWatchSummary*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SpectateBattleRecord.summary)
 }
 inline ::match::BattleWatchSummary* PROTOBUF_NULLABLE SpectateBattleRecord::release_summary() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::match::BattleWatchSummary* released = _impl_.summary_;
   _impl_.summary_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -8764,7 +11210,7 @@ inline ::match::BattleWatchSummary* PROTOBUF_NULLABLE SpectateBattleRecord::unsa
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:match.SpectateBattleRecord.summary)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::match::BattleWatchSummary* temp = _impl_.summary_;
   _impl_.summary_ = nullptr;
   return temp;
@@ -8779,7 +11225,7 @@ inline ::match::BattleWatchSummary* PROTOBUF_NONNULL SpectateBattleRecord::_inte
 }
 inline ::match::BattleWatchSummary* PROTOBUF_NONNULL SpectateBattleRecord::mutable_summary()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::match::BattleWatchSummary* _msg = _internal_mutable_summary();
   // @@protoc_insertion_point(field_mutable:match.SpectateBattleRecord.summary)
   return _msg;
@@ -8796,9 +11242,9 @@ inline void SpectateBattleRecord::set_allocated_summary(::match::BattleWatchSumm
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
   _impl_.summary_ = reinterpret_cast<::match::BattleWatchSummary*>(value);
@@ -8809,7 +11255,7 @@ inline void SpectateBattleRecord::set_allocated_summary(::match::BattleWatchSumm
 inline void SpectateBattleRecord::clear_battle_node_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_node_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t SpectateBattleRecord::battle_node_id() const {
   // @@protoc_insertion_point(field_get:match.SpectateBattleRecord.battle_node_id)
@@ -8817,7 +11263,7 @@ inline ::uint32_t SpectateBattleRecord::battle_node_id() const {
 }
 inline void SpectateBattleRecord::set_battle_node_id(::uint32_t value) {
   _internal_set_battle_node_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:match.SpectateBattleRecord.battle_node_id)
 }
 inline ::uint32_t SpectateBattleRecord::_internal_battle_node_id() const {
@@ -8833,7 +11279,7 @@ inline void SpectateBattleRecord::_internal_set_battle_node_id(::uint32_t value)
 inline void SpectateBattleRecord::clear_visibility() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.visibility_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::eSpectateVisibility SpectateBattleRecord::visibility() const {
   // @@protoc_insertion_point(field_get:match.SpectateBattleRecord.visibility)
@@ -8841,7 +11287,7 @@ inline ::eSpectateVisibility SpectateBattleRecord::visibility() const {
 }
 inline void SpectateBattleRecord::set_visibility(::eSpectateVisibility value) {
   _internal_set_visibility(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:match.SpectateBattleRecord.visibility)
 }
 inline ::eSpectateVisibility SpectateBattleRecord::_internal_visibility() const {
@@ -8857,7 +11303,7 @@ inline void SpectateBattleRecord::_internal_set_visibility(::eSpectateVisibility
 inline void SpectateBattleRecord::clear_tier() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.tier_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::eSpectateTier SpectateBattleRecord::tier() const {
   // @@protoc_insertion_point(field_get:match.SpectateBattleRecord.tier)
@@ -8865,7 +11311,7 @@ inline ::eSpectateTier SpectateBattleRecord::tier() const {
 }
 inline void SpectateBattleRecord::set_tier(::eSpectateTier value) {
   _internal_set_tier(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:match.SpectateBattleRecord.tier)
 }
 inline ::eSpectateTier SpectateBattleRecord::_internal_tier() const {
@@ -8945,7 +11391,7 @@ inline void SpectateBattleRecord::set_allocated_battle_instance_id(::std::string
 inline void SpectateBattleRecord::clear_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t SpectateBattleRecord::deadline_ms() const {
   // @@protoc_insertion_point(field_get:match.SpectateBattleRecord.deadline_ms)
@@ -8953,7 +11399,7 @@ inline ::uint64_t SpectateBattleRecord::deadline_ms() const {
 }
 inline void SpectateBattleRecord::set_deadline_ms(::uint64_t value) {
   _internal_set_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:match.SpectateBattleRecord.deadline_ms)
 }
 inline ::uint64_t SpectateBattleRecord::_internal_deadline_ms() const {
@@ -8963,6 +11409,70 @@ inline ::uint64_t SpectateBattleRecord::_internal_deadline_ms() const {
 inline void SpectateBattleRecord::_internal_set_deadline_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deadline_ms_ = value;
+}
+
+// string release_track = 7;
+inline void SpectateBattleRecord::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SpectateBattleRecord::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SpectateBattleRecord.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SpectateBattleRecord::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.SpectateBattleRecord.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL SpectateBattleRecord::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:match.SpectateBattleRecord.release_track)
+  return _s;
+}
+inline const ::std::string& SpectateBattleRecord::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void SpectateBattleRecord::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SpectateBattleRecord::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SpectateBattleRecord::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SpectateBattleRecord.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SpectateBattleRecord::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.SpectateBattleRecord.release_track)
 }
 
 // -------------------------------------------------------------------
@@ -10028,6 +12538,1527 @@ inline void GetBattleReportResponse::set_allocated_replay(::BattleReplayEnvelope
   // @@protoc_insertion_point(field_set_allocated:match.GetBattleReportResponse.replay)
 }
 
+// -------------------------------------------------------------------
+
+// PlayerBattleScriptView
+
+// uint64 script_id = 1;
+inline void PlayerBattleScriptView::clear_script_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.script_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t PlayerBattleScriptView::script_id() const {
+  // @@protoc_insertion_point(field_get:match.PlayerBattleScriptView.script_id)
+  return _internal_script_id();
+}
+inline void PlayerBattleScriptView::set_script_id(::uint64_t value) {
+  _internal_set_script_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.PlayerBattleScriptView.script_id)
+}
+inline ::uint64_t PlayerBattleScriptView::_internal_script_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.script_id_;
+}
+inline void PlayerBattleScriptView::_internal_set_script_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.script_id_ = value;
+}
+
+// uint32 revision = 2;
+inline void PlayerBattleScriptView::clear_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t PlayerBattleScriptView::revision() const {
+  // @@protoc_insertion_point(field_get:match.PlayerBattleScriptView.revision)
+  return _internal_revision();
+}
+inline void PlayerBattleScriptView::set_revision(::uint32_t value) {
+  _internal_set_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.PlayerBattleScriptView.revision)
+}
+inline ::uint32_t PlayerBattleScriptView::_internal_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.revision_;
+}
+inline void PlayerBattleScriptView::_internal_set_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.revision_ = value;
+}
+
+// .BattleScript content = 3;
+inline bool PlayerBattleScriptView::has_content() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.content_ != nullptr);
+  return value;
+}
+inline const ::BattleScript& PlayerBattleScriptView::_internal_content() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::BattleScript* p = _impl_.content_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BattleScript>(&::BattleScript_globals_);
+}
+inline const ::BattleScript& PlayerBattleScriptView::content() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.PlayerBattleScriptView.content)
+  return _internal_content();
+}
+inline void PlayerBattleScriptView::unsafe_arena_set_allocated_content(
+    ::BattleScript* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.content_);
+  }
+  _impl_.content_ = reinterpret_cast<::BattleScript*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.PlayerBattleScriptView.content)
+}
+inline ::BattleScript* PROTOBUF_NULLABLE PlayerBattleScriptView::release_content() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::BattleScript* released = _impl_.content_;
+  _impl_.content_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::BattleScript* PROTOBUF_NULLABLE PlayerBattleScriptView::unsafe_arena_release_content() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.PlayerBattleScriptView.content)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::BattleScript* temp = _impl_.content_;
+  _impl_.content_ = nullptr;
+  return temp;
+}
+inline ::BattleScript* PROTOBUF_NONNULL PlayerBattleScriptView::_internal_mutable_content() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.content_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::BattleScript>(GetArena());
+    _impl_.content_ = reinterpret_cast<::BattleScript*>(p);
+  }
+  return _impl_.content_;
+}
+inline ::BattleScript* PROTOBUF_NONNULL PlayerBattleScriptView::mutable_content()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::BattleScript* _msg = _internal_mutable_content();
+  // @@protoc_insertion_point(field_mutable:match.PlayerBattleScriptView.content)
+  return _msg;
+}
+inline void PlayerBattleScriptView::set_allocated_content(::BattleScript* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.content_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.content_ = reinterpret_cast<::BattleScript*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.PlayerBattleScriptView.content)
+}
+
+// .match.BattleScriptReviewState review_state = 4;
+inline void PlayerBattleScriptView::clear_review_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.review_state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::match::BattleScriptReviewState PlayerBattleScriptView::review_state() const {
+  // @@protoc_insertion_point(field_get:match.PlayerBattleScriptView.review_state)
+  return _internal_review_state();
+}
+inline void PlayerBattleScriptView::set_review_state(::match::BattleScriptReviewState value) {
+  _internal_set_review_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.PlayerBattleScriptView.review_state)
+}
+inline ::match::BattleScriptReviewState PlayerBattleScriptView::_internal_review_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::BattleScriptReviewState>(_impl_.review_state_);
+}
+inline void PlayerBattleScriptView::_internal_set_review_state(::match::BattleScriptReviewState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.review_state_ = value;
+}
+
+// uint32 approved_revision = 5;
+inline void PlayerBattleScriptView::clear_approved_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approved_revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t PlayerBattleScriptView::approved_revision() const {
+  // @@protoc_insertion_point(field_get:match.PlayerBattleScriptView.approved_revision)
+  return _internal_approved_revision();
+}
+inline void PlayerBattleScriptView::set_approved_revision(::uint32_t value) {
+  _internal_set_approved_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.PlayerBattleScriptView.approved_revision)
+}
+inline ::uint32_t PlayerBattleScriptView::_internal_approved_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.approved_revision_;
+}
+inline void PlayerBattleScriptView::_internal_set_approved_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approved_revision_ = value;
+}
+
+// string reject_reason = 6;
+inline void PlayerBattleScriptView::clear_reject_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reject_reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& PlayerBattleScriptView::reject_reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.PlayerBattleScriptView.reject_reason)
+  return _internal_reject_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerBattleScriptView::set_reject_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.reject_reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.PlayerBattleScriptView.reject_reason)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerBattleScriptView::mutable_reject_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_reject_reason();
+  // @@protoc_insertion_point(field_mutable:match.PlayerBattleScriptView.reject_reason)
+  return _s;
+}
+inline const ::std::string& PlayerBattleScriptView::_internal_reject_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reject_reason_.Get();
+}
+inline void PlayerBattleScriptView::_internal_set_reject_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reject_reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerBattleScriptView::_internal_mutable_reject_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reject_reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerBattleScriptView::release_reject_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.PlayerBattleScriptView.reject_reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.reject_reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reject_reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerBattleScriptView::set_allocated_reject_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.reject_reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reject_reason_.IsDefault()) {
+    _impl_.reject_reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.PlayerBattleScriptView.reject_reason)
+}
+
+// uint64 submitted_ms = 7;
+inline void PlayerBattleScriptView::clear_submitted_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.submitted_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t PlayerBattleScriptView::submitted_ms() const {
+  // @@protoc_insertion_point(field_get:match.PlayerBattleScriptView.submitted_ms)
+  return _internal_submitted_ms();
+}
+inline void PlayerBattleScriptView::set_submitted_ms(::uint64_t value) {
+  _internal_set_submitted_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.PlayerBattleScriptView.submitted_ms)
+}
+inline ::uint64_t PlayerBattleScriptView::_internal_submitted_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.submitted_ms_;
+}
+inline void PlayerBattleScriptView::_internal_set_submitted_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.submitted_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BattleScriptLoadoutEntry
+
+// uint32 match_mode = 1;
+inline void BattleScriptLoadoutEntry::clear_match_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_mode_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t BattleScriptLoadoutEntry::match_mode() const {
+  // @@protoc_insertion_point(field_get:match.BattleScriptLoadoutEntry.match_mode)
+  return _internal_match_mode();
+}
+inline void BattleScriptLoadoutEntry::set_match_mode(::uint32_t value) {
+  _internal_set_match_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.BattleScriptLoadoutEntry.match_mode)
+}
+inline ::uint32_t BattleScriptLoadoutEntry::_internal_match_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_mode_;
+}
+inline void BattleScriptLoadoutEntry::_internal_set_match_mode(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_mode_ = value;
+}
+
+// uint32 battle_config_id = 2;
+inline void BattleScriptLoadoutEntry::clear_battle_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t BattleScriptLoadoutEntry::battle_config_id() const {
+  // @@protoc_insertion_point(field_get:match.BattleScriptLoadoutEntry.battle_config_id)
+  return _internal_battle_config_id();
+}
+inline void BattleScriptLoadoutEntry::set_battle_config_id(::uint32_t value) {
+  _internal_set_battle_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.BattleScriptLoadoutEntry.battle_config_id)
+}
+inline ::uint32_t BattleScriptLoadoutEntry::_internal_battle_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_config_id_;
+}
+inline void BattleScriptLoadoutEntry::_internal_set_battle_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_config_id_ = value;
+}
+
+// .eBattleScriptOrigin origin = 3;
+inline void BattleScriptLoadoutEntry::clear_origin() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.origin_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::eBattleScriptOrigin BattleScriptLoadoutEntry::origin() const {
+  // @@protoc_insertion_point(field_get:match.BattleScriptLoadoutEntry.origin)
+  return _internal_origin();
+}
+inline void BattleScriptLoadoutEntry::set_origin(::eBattleScriptOrigin value) {
+  _internal_set_origin(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.BattleScriptLoadoutEntry.origin)
+}
+inline ::eBattleScriptOrigin BattleScriptLoadoutEntry::_internal_origin() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::eBattleScriptOrigin>(_impl_.origin_);
+}
+inline void BattleScriptLoadoutEntry::_internal_set_origin(::eBattleScriptOrigin value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.origin_ = value;
+}
+
+// uint32 official_script_id = 4;
+inline void BattleScriptLoadoutEntry::clear_official_script_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.official_script_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t BattleScriptLoadoutEntry::official_script_id() const {
+  // @@protoc_insertion_point(field_get:match.BattleScriptLoadoutEntry.official_script_id)
+  return _internal_official_script_id();
+}
+inline void BattleScriptLoadoutEntry::set_official_script_id(::uint32_t value) {
+  _internal_set_official_script_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.BattleScriptLoadoutEntry.official_script_id)
+}
+inline ::uint32_t BattleScriptLoadoutEntry::_internal_official_script_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.official_script_id_;
+}
+inline void BattleScriptLoadoutEntry::_internal_set_official_script_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.official_script_id_ = value;
+}
+
+// uint64 player_script_id = 5;
+inline void BattleScriptLoadoutEntry::clear_player_script_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_script_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t BattleScriptLoadoutEntry::player_script_id() const {
+  // @@protoc_insertion_point(field_get:match.BattleScriptLoadoutEntry.player_script_id)
+  return _internal_player_script_id();
+}
+inline void BattleScriptLoadoutEntry::set_player_script_id(::uint64_t value) {
+  _internal_set_player_script_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.BattleScriptLoadoutEntry.player_script_id)
+}
+inline ::uint64_t BattleScriptLoadoutEntry::_internal_player_script_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_script_id_;
+}
+inline void BattleScriptLoadoutEntry::_internal_set_player_script_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_script_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListBattleScriptsRequest
+
+// -------------------------------------------------------------------
+
+// ListBattleScriptsResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool ListBattleScriptsResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& ListBattleScriptsResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& ListBattleScriptsResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListBattleScriptsResponse.error_message)
+  return _internal_error_message();
+}
+inline void ListBattleScriptsResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.ListBattleScriptsResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ListBattleScriptsResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ListBattleScriptsResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.ListBattleScriptsResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ListBattleScriptsResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ListBattleScriptsResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.ListBattleScriptsResponse.error_message)
+  return _msg;
+}
+inline void ListBattleScriptsResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.ListBattleScriptsResponse.error_message)
+}
+
+// repeated .BattleScript official_scripts = 2;
+inline int ListBattleScriptsResponse::_internal_official_scripts_size() const {
+  return _internal_official_scripts().size();
+}
+inline int ListBattleScriptsResponse::official_scripts_size() const {
+  return _internal_official_scripts_size();
+}
+inline const ::BattleScript& ListBattleScriptsResponse::official_scripts(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListBattleScriptsResponse.official_scripts)
+  return _internal_official_scripts().Get(index);
+}
+inline ::BattleScript* PROTOBUF_NONNULL ListBattleScriptsResponse::mutable_official_scripts(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.ListBattleScriptsResponse.official_scripts)
+  return _internal_mutable_official_scripts()->Mutable(index);
+}
+inline ::BattleScript* PROTOBUF_NONNULL ListBattleScriptsResponse::add_official_scripts()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::BattleScript* _add =
+      _internal_mutable_official_scripts()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.ListBattleScriptsResponse.official_scripts)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattleScript>& ListBattleScriptsResponse::official_scripts() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.ListBattleScriptsResponse.official_scripts)
+  return _internal_official_scripts();
+}
+inline ::google::protobuf::RepeatedPtrField<::BattleScript>* PROTOBUF_NONNULL
+ListBattleScriptsResponse::mutable_official_scripts() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.ListBattleScriptsResponse.official_scripts)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_official_scripts();
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattleScript>&
+ListBattleScriptsResponse::_internal_official_scripts() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.official_scripts_;
+}
+inline ::google::protobuf::RepeatedPtrField<::BattleScript>* PROTOBUF_NONNULL
+ListBattleScriptsResponse::_internal_mutable_official_scripts() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.official_scripts_;
+}
+
+// repeated .match.PlayerBattleScriptView my_scripts = 3;
+inline int ListBattleScriptsResponse::_internal_my_scripts_size() const {
+  return _internal_my_scripts().size();
+}
+inline int ListBattleScriptsResponse::my_scripts_size() const {
+  return _internal_my_scripts_size();
+}
+inline void ListBattleScriptsResponse::clear_my_scripts() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.my_scripts_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::PlayerBattleScriptView& ListBattleScriptsResponse::my_scripts(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListBattleScriptsResponse.my_scripts)
+  return _internal_my_scripts().Get(index);
+}
+inline ::match::PlayerBattleScriptView* PROTOBUF_NONNULL ListBattleScriptsResponse::mutable_my_scripts(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.ListBattleScriptsResponse.my_scripts)
+  return _internal_mutable_my_scripts()->Mutable(index);
+}
+inline ::match::PlayerBattleScriptView* PROTOBUF_NONNULL ListBattleScriptsResponse::add_my_scripts()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::PlayerBattleScriptView* _add =
+      _internal_mutable_my_scripts()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:match.ListBattleScriptsResponse.my_scripts)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::PlayerBattleScriptView>& ListBattleScriptsResponse::my_scripts() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.ListBattleScriptsResponse.my_scripts)
+  return _internal_my_scripts();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::PlayerBattleScriptView>* PROTOBUF_NONNULL
+ListBattleScriptsResponse::mutable_my_scripts() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:match.ListBattleScriptsResponse.my_scripts)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_my_scripts();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::PlayerBattleScriptView>&
+ListBattleScriptsResponse::_internal_my_scripts() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.my_scripts_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::PlayerBattleScriptView>* PROTOBUF_NONNULL
+ListBattleScriptsResponse::_internal_mutable_my_scripts() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.my_scripts_;
+}
+
+// repeated .match.BattleScriptLoadoutEntry loadout = 4;
+inline int ListBattleScriptsResponse::_internal_loadout_size() const {
+  return _internal_loadout().size();
+}
+inline int ListBattleScriptsResponse::loadout_size() const {
+  return _internal_loadout_size();
+}
+inline void ListBattleScriptsResponse::clear_loadout() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.loadout_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::match::BattleScriptLoadoutEntry& ListBattleScriptsResponse::loadout(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListBattleScriptsResponse.loadout)
+  return _internal_loadout().Get(index);
+}
+inline ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL ListBattleScriptsResponse::mutable_loadout(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.ListBattleScriptsResponse.loadout)
+  return _internal_mutable_loadout()->Mutable(index);
+}
+inline ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL ListBattleScriptsResponse::add_loadout()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::BattleScriptLoadoutEntry* _add =
+      _internal_mutable_loadout()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:match.ListBattleScriptsResponse.loadout)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>& ListBattleScriptsResponse::loadout() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.ListBattleScriptsResponse.loadout)
+  return _internal_loadout();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>* PROTOBUF_NONNULL
+ListBattleScriptsResponse::mutable_loadout() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:match.ListBattleScriptsResponse.loadout)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_loadout();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>&
+ListBattleScriptsResponse::_internal_loadout() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.loadout_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>* PROTOBUF_NONNULL
+ListBattleScriptsResponse::_internal_mutable_loadout() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.loadout_;
+}
+
+// uint32 max_scripts = 5;
+inline void ListBattleScriptsResponse::clear_max_scripts() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_scripts_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t ListBattleScriptsResponse::max_scripts() const {
+  // @@protoc_insertion_point(field_get:match.ListBattleScriptsResponse.max_scripts)
+  return _internal_max_scripts();
+}
+inline void ListBattleScriptsResponse::set_max_scripts(::uint32_t value) {
+  _internal_set_max_scripts(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.ListBattleScriptsResponse.max_scripts)
+}
+inline ::uint32_t ListBattleScriptsResponse::_internal_max_scripts() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_scripts_;
+}
+inline void ListBattleScriptsResponse::_internal_set_max_scripts(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_scripts_ = value;
+}
+
+// uint32 max_script_bytes = 6;
+inline void ListBattleScriptsResponse::clear_max_script_bytes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_script_bytes_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t ListBattleScriptsResponse::max_script_bytes() const {
+  // @@protoc_insertion_point(field_get:match.ListBattleScriptsResponse.max_script_bytes)
+  return _internal_max_script_bytes();
+}
+inline void ListBattleScriptsResponse::set_max_script_bytes(::uint32_t value) {
+  _internal_set_max_script_bytes(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.ListBattleScriptsResponse.max_script_bytes)
+}
+inline ::uint32_t ListBattleScriptsResponse::_internal_max_script_bytes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_script_bytes_;
+}
+inline void ListBattleScriptsResponse::_internal_set_max_script_bytes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_script_bytes_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SubmitBattleScriptRequest
+
+// uint64 script_id = 1;
+inline void SubmitBattleScriptRequest::clear_script_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.script_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t SubmitBattleScriptRequest::script_id() const {
+  // @@protoc_insertion_point(field_get:match.SubmitBattleScriptRequest.script_id)
+  return _internal_script_id();
+}
+inline void SubmitBattleScriptRequest::set_script_id(::uint64_t value) {
+  _internal_set_script_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.SubmitBattleScriptRequest.script_id)
+}
+inline ::uint64_t SubmitBattleScriptRequest::_internal_script_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.script_id_;
+}
+inline void SubmitBattleScriptRequest::_internal_set_script_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.script_id_ = value;
+}
+
+// uint32 expected_revision = 2;
+inline void SubmitBattleScriptRequest::clear_expected_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t SubmitBattleScriptRequest::expected_revision() const {
+  // @@protoc_insertion_point(field_get:match.SubmitBattleScriptRequest.expected_revision)
+  return _internal_expected_revision();
+}
+inline void SubmitBattleScriptRequest::set_expected_revision(::uint32_t value) {
+  _internal_set_expected_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.SubmitBattleScriptRequest.expected_revision)
+}
+inline ::uint32_t SubmitBattleScriptRequest::_internal_expected_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_revision_;
+}
+inline void SubmitBattleScriptRequest::_internal_set_expected_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_revision_ = value;
+}
+
+// .BattleScript script = 3;
+inline bool SubmitBattleScriptRequest::has_script() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.script_ != nullptr);
+  return value;
+}
+inline const ::BattleScript& SubmitBattleScriptRequest::_internal_script() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::BattleScript* p = _impl_.script_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BattleScript>(&::BattleScript_globals_);
+}
+inline const ::BattleScript& SubmitBattleScriptRequest::script() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SubmitBattleScriptRequest.script)
+  return _internal_script();
+}
+inline void SubmitBattleScriptRequest::unsafe_arena_set_allocated_script(
+    ::BattleScript* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.script_);
+  }
+  _impl_.script_ = reinterpret_cast<::BattleScript*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SubmitBattleScriptRequest.script)
+}
+inline ::BattleScript* PROTOBUF_NULLABLE SubmitBattleScriptRequest::release_script() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::BattleScript* released = _impl_.script_;
+  _impl_.script_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::BattleScript* PROTOBUF_NULLABLE SubmitBattleScriptRequest::unsafe_arena_release_script() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SubmitBattleScriptRequest.script)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::BattleScript* temp = _impl_.script_;
+  _impl_.script_ = nullptr;
+  return temp;
+}
+inline ::BattleScript* PROTOBUF_NONNULL SubmitBattleScriptRequest::_internal_mutable_script() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.script_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::BattleScript>(GetArena());
+    _impl_.script_ = reinterpret_cast<::BattleScript*>(p);
+  }
+  return _impl_.script_;
+}
+inline ::BattleScript* PROTOBUF_NONNULL SubmitBattleScriptRequest::mutable_script()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::BattleScript* _msg = _internal_mutable_script();
+  // @@protoc_insertion_point(field_mutable:match.SubmitBattleScriptRequest.script)
+  return _msg;
+}
+inline void SubmitBattleScriptRequest::set_allocated_script(::BattleScript* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.script_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.script_ = reinterpret_cast<::BattleScript*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SubmitBattleScriptRequest.script)
+}
+
+// -------------------------------------------------------------------
+
+// SubmitBattleScriptResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool SubmitBattleScriptResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& SubmitBattleScriptResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& SubmitBattleScriptResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SubmitBattleScriptResponse.error_message)
+  return _internal_error_message();
+}
+inline void SubmitBattleScriptResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SubmitBattleScriptResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SubmitBattleScriptResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SubmitBattleScriptResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SubmitBattleScriptResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SubmitBattleScriptResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SubmitBattleScriptResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.SubmitBattleScriptResponse.error_message)
+  return _msg;
+}
+inline void SubmitBattleScriptResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SubmitBattleScriptResponse.error_message)
+}
+
+// .match.PlayerBattleScriptView script = 2;
+inline bool SubmitBattleScriptResponse::has_script() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.script_ != nullptr);
+  return value;
+}
+inline void SubmitBattleScriptResponse::clear_script() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.script_ != nullptr) _impl_.script_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::match::PlayerBattleScriptView& SubmitBattleScriptResponse::_internal_script() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::PlayerBattleScriptView* p = _impl_.script_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::PlayerBattleScriptView>(&::match::PlayerBattleScriptView_globals_);
+}
+inline const ::match::PlayerBattleScriptView& SubmitBattleScriptResponse::script() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SubmitBattleScriptResponse.script)
+  return _internal_script();
+}
+inline void SubmitBattleScriptResponse::unsafe_arena_set_allocated_script(
+    ::match::PlayerBattleScriptView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.script_);
+  }
+  _impl_.script_ = reinterpret_cast<::match::PlayerBattleScriptView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SubmitBattleScriptResponse.script)
+}
+inline ::match::PlayerBattleScriptView* PROTOBUF_NULLABLE SubmitBattleScriptResponse::release_script() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::match::PlayerBattleScriptView* released = _impl_.script_;
+  _impl_.script_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::PlayerBattleScriptView* PROTOBUF_NULLABLE SubmitBattleScriptResponse::unsafe_arena_release_script() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SubmitBattleScriptResponse.script)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::match::PlayerBattleScriptView* temp = _impl_.script_;
+  _impl_.script_ = nullptr;
+  return temp;
+}
+inline ::match::PlayerBattleScriptView* PROTOBUF_NONNULL SubmitBattleScriptResponse::_internal_mutable_script() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.script_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::PlayerBattleScriptView>(GetArena());
+    _impl_.script_ = reinterpret_cast<::match::PlayerBattleScriptView*>(p);
+  }
+  return _impl_.script_;
+}
+inline ::match::PlayerBattleScriptView* PROTOBUF_NONNULL SubmitBattleScriptResponse::mutable_script()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::match::PlayerBattleScriptView* _msg = _internal_mutable_script();
+  // @@protoc_insertion_point(field_mutable:match.SubmitBattleScriptResponse.script)
+  return _msg;
+}
+inline void SubmitBattleScriptResponse::set_allocated_script(::match::PlayerBattleScriptView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.script_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.script_ = reinterpret_cast<::match::PlayerBattleScriptView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SubmitBattleScriptResponse.script)
+}
+
+// string invalid_detail = 3;
+inline void SubmitBattleScriptResponse::clear_invalid_detail() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.invalid_detail_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SubmitBattleScriptResponse::invalid_detail() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SubmitBattleScriptResponse.invalid_detail)
+  return _internal_invalid_detail();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SubmitBattleScriptResponse::set_invalid_detail(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.invalid_detail_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.SubmitBattleScriptResponse.invalid_detail)
+}
+inline ::std::string* PROTOBUF_NONNULL SubmitBattleScriptResponse::mutable_invalid_detail()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_invalid_detail();
+  // @@protoc_insertion_point(field_mutable:match.SubmitBattleScriptResponse.invalid_detail)
+  return _s;
+}
+inline const ::std::string& SubmitBattleScriptResponse::_internal_invalid_detail() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.invalid_detail_.Get();
+}
+inline void SubmitBattleScriptResponse::_internal_set_invalid_detail(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.invalid_detail_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SubmitBattleScriptResponse::_internal_mutable_invalid_detail() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.invalid_detail_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SubmitBattleScriptResponse::release_invalid_detail() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SubmitBattleScriptResponse.invalid_detail)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.invalid_detail_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.invalid_detail_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SubmitBattleScriptResponse::set_allocated_invalid_detail(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.invalid_detail_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.invalid_detail_.IsDefault()) {
+    _impl_.invalid_detail_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.SubmitBattleScriptResponse.invalid_detail)
+}
+
+// -------------------------------------------------------------------
+
+// DeleteBattleScriptRequest
+
+// uint64 script_id = 1;
+inline void DeleteBattleScriptRequest::clear_script_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.script_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t DeleteBattleScriptRequest::script_id() const {
+  // @@protoc_insertion_point(field_get:match.DeleteBattleScriptRequest.script_id)
+  return _internal_script_id();
+}
+inline void DeleteBattleScriptRequest::set_script_id(::uint64_t value) {
+  _internal_set_script_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.DeleteBattleScriptRequest.script_id)
+}
+inline ::uint64_t DeleteBattleScriptRequest::_internal_script_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.script_id_;
+}
+inline void DeleteBattleScriptRequest::_internal_set_script_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.script_id_ = value;
+}
+
+// uint32 expected_revision = 2;
+inline void DeleteBattleScriptRequest::clear_expected_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t DeleteBattleScriptRequest::expected_revision() const {
+  // @@protoc_insertion_point(field_get:match.DeleteBattleScriptRequest.expected_revision)
+  return _internal_expected_revision();
+}
+inline void DeleteBattleScriptRequest::set_expected_revision(::uint32_t value) {
+  _internal_set_expected_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.DeleteBattleScriptRequest.expected_revision)
+}
+inline ::uint32_t DeleteBattleScriptRequest::_internal_expected_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_revision_;
+}
+inline void DeleteBattleScriptRequest::_internal_set_expected_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_revision_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// DeleteBattleScriptResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool DeleteBattleScriptResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& DeleteBattleScriptResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& DeleteBattleScriptResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.DeleteBattleScriptResponse.error_message)
+  return _internal_error_message();
+}
+inline void DeleteBattleScriptResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.DeleteBattleScriptResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE DeleteBattleScriptResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE DeleteBattleScriptResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.DeleteBattleScriptResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL DeleteBattleScriptResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL DeleteBattleScriptResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.DeleteBattleScriptResponse.error_message)
+  return _msg;
+}
+inline void DeleteBattleScriptResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.DeleteBattleScriptResponse.error_message)
+}
+
+// -------------------------------------------------------------------
+
+// SetBattleScriptLoadoutRequest
+
+// .match.BattleScriptLoadoutEntry entry = 1;
+inline bool SetBattleScriptLoadoutRequest::has_entry() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.entry_ != nullptr);
+  return value;
+}
+inline void SetBattleScriptLoadoutRequest::clear_entry() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.entry_ != nullptr) _impl_.entry_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::match::BattleScriptLoadoutEntry& SetBattleScriptLoadoutRequest::_internal_entry() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::BattleScriptLoadoutEntry* p = _impl_.entry_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::BattleScriptLoadoutEntry>(&::match::BattleScriptLoadoutEntry_globals_);
+}
+inline const ::match::BattleScriptLoadoutEntry& SetBattleScriptLoadoutRequest::entry() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SetBattleScriptLoadoutRequest.entry)
+  return _internal_entry();
+}
+inline void SetBattleScriptLoadoutRequest::unsafe_arena_set_allocated_entry(
+    ::match::BattleScriptLoadoutEntry* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.entry_);
+  }
+  _impl_.entry_ = reinterpret_cast<::match::BattleScriptLoadoutEntry*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SetBattleScriptLoadoutRequest.entry)
+}
+inline ::match::BattleScriptLoadoutEntry* PROTOBUF_NULLABLE SetBattleScriptLoadoutRequest::release_entry() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::match::BattleScriptLoadoutEntry* released = _impl_.entry_;
+  _impl_.entry_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::BattleScriptLoadoutEntry* PROTOBUF_NULLABLE SetBattleScriptLoadoutRequest::unsafe_arena_release_entry() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SetBattleScriptLoadoutRequest.entry)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::match::BattleScriptLoadoutEntry* temp = _impl_.entry_;
+  _impl_.entry_ = nullptr;
+  return temp;
+}
+inline ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL SetBattleScriptLoadoutRequest::_internal_mutable_entry() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.entry_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::BattleScriptLoadoutEntry>(GetArena());
+    _impl_.entry_ = reinterpret_cast<::match::BattleScriptLoadoutEntry*>(p);
+  }
+  return _impl_.entry_;
+}
+inline ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL SetBattleScriptLoadoutRequest::mutable_entry()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::match::BattleScriptLoadoutEntry* _msg = _internal_mutable_entry();
+  // @@protoc_insertion_point(field_mutable:match.SetBattleScriptLoadoutRequest.entry)
+  return _msg;
+}
+inline void SetBattleScriptLoadoutRequest::set_allocated_entry(::match::BattleScriptLoadoutEntry* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.entry_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.entry_ = reinterpret_cast<::match::BattleScriptLoadoutEntry*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SetBattleScriptLoadoutRequest.entry)
+}
+
+// -------------------------------------------------------------------
+
+// SetBattleScriptLoadoutResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool SetBattleScriptLoadoutResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& SetBattleScriptLoadoutResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& SetBattleScriptLoadoutResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SetBattleScriptLoadoutResponse.error_message)
+  return _internal_error_message();
+}
+inline void SetBattleScriptLoadoutResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SetBattleScriptLoadoutResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SetBattleScriptLoadoutResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SetBattleScriptLoadoutResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SetBattleScriptLoadoutResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SetBattleScriptLoadoutResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SetBattleScriptLoadoutResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.SetBattleScriptLoadoutResponse.error_message)
+  return _msg;
+}
+inline void SetBattleScriptLoadoutResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SetBattleScriptLoadoutResponse.error_message)
+}
+
+// repeated .match.BattleScriptLoadoutEntry loadout = 2;
+inline int SetBattleScriptLoadoutResponse::_internal_loadout_size() const {
+  return _internal_loadout().size();
+}
+inline int SetBattleScriptLoadoutResponse::loadout_size() const {
+  return _internal_loadout_size();
+}
+inline void SetBattleScriptLoadoutResponse::clear_loadout() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.loadout_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::match::BattleScriptLoadoutEntry& SetBattleScriptLoadoutResponse::loadout(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SetBattleScriptLoadoutResponse.loadout)
+  return _internal_loadout().Get(index);
+}
+inline ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL SetBattleScriptLoadoutResponse::mutable_loadout(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.SetBattleScriptLoadoutResponse.loadout)
+  return _internal_mutable_loadout()->Mutable(index);
+}
+inline ::match::BattleScriptLoadoutEntry* PROTOBUF_NONNULL SetBattleScriptLoadoutResponse::add_loadout()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::BattleScriptLoadoutEntry* _add =
+      _internal_mutable_loadout()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.SetBattleScriptLoadoutResponse.loadout)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>& SetBattleScriptLoadoutResponse::loadout() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.SetBattleScriptLoadoutResponse.loadout)
+  return _internal_loadout();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>* PROTOBUF_NONNULL
+SetBattleScriptLoadoutResponse::mutable_loadout() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.SetBattleScriptLoadoutResponse.loadout)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_loadout();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>&
+SetBattleScriptLoadoutResponse::_internal_loadout() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.loadout_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::BattleScriptLoadoutEntry>* PROTOBUF_NONNULL
+SetBattleScriptLoadoutResponse::_internal_mutable_loadout() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.loadout_;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -10056,6 +14087,12 @@ struct is_proto_enum<::match::eSpectateDelivery> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::eSpectateDelivery>() {
   return ::match::eSpectateDelivery_descriptor();
+}
+template <>
+struct is_proto_enum<::match::BattleScriptReviewState> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::BattleScriptReviewState>() {
+  return ::match::BattleScriptReviewState_descriptor();
 }
 
 }  // namespace protobuf

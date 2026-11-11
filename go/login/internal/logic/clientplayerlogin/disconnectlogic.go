@@ -44,15 +44,21 @@ func (l *DisconnectLogic) Disconnect(in *login_proto.LoginNodeDisconnectRequest)
 	// 只认会话头的话新角色会永久停在 ONLINE。两者都收尾,见 sessionPlayersToSettle。
 	bound, err := sessionfence.Close(l.ctx, l.svcCtx.LoginRedis, sessionRef.Fence(), sessionFenceTTL)
 	if err != nil {
-		// 栅栏写失败不阻断清理:照旧按会话里的身份清,只是失去「补挂租约」这一层兜底。
+		// 栅栏写失败不阻断清理(fail-open,与 LeaveGame 的 fail-closed 相反,2026-11-10 复核理由仍成立):
+		// Disconnect 由 gate 在断线时合成、只发一次,回包被丢弃(会话已 erase),没有任何人会重发
+		// (client_session_handler.cpp 断线通知)。这里回错误什么也换不来,只会连会话头那个玩家的断线租约也挂不上 ——
+		// 那是它唯一的清理入口,丢了就永久停在 ONLINE。所以照旧按会话里的身份清,只失去两层兜底:
+		// 栅栏里绑定、会话头没有的玩家(BindSession 还没到 gate)不补挂租约;closed 没写上,晚到的后台链绑定点
+		// 看不到关闭。两者都要 LoginRedis 恰好在这一刻失败。残留的玩家按 release-checklist 附录 F.B-1「定向补救」
+		// 逐个补投断线(gate 还活着时会话对账看不到它们);不做全键 SCAN。
 		logx.Errorf("Disconnect session fence close failed: sessionId=%d err=%v", sessionDetails.SessionId, err)
 		bound = 0
 	}
 
 	cleanupLoginSessionState(l.ctx, l.svcCtx, sessionRef, "disconnect")
 
-	// Mark session as disconnecting with 30s lease in Redis (replaces Centre's DelayedCleanupTimer).
-	// When the Redis key TTL expires, the session is effectively cleaned up.
+	// 把会话转成 DISCONNECTING 并挂 30s 断线租约(取代 Centre 的 DelayedCleanupTimer)。会话键本身没有 TTL:
+	// 清理靠 player_locator 的 LeaseMonitor 在租约到期后发踢人与 LeaveScene,再删会话。
 	// 带上本连接所在的 gate 实例号:同号跨实例时,旧实例迟到的断线由 player_locator 按实例号忽略
 	// (docs/design/scene-enter-chain-residuals.md §6)。栅栏绑定的玩家来自同一个含实例号的栅栏键,用同一个实例号。
 	for _, playerID := range sessionPlayersToSettle(sessionDetails.PlayerId, bound) {

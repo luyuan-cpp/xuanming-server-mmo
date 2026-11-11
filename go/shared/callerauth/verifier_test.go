@@ -1,7 +1,6 @@
 package callerauth
 
 import (
-	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -11,37 +10,38 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// testSecret 是一把只在测试内出现的密钥,同时实现 Signer 与 SecretVerifier。
+// testSecret 是只在测试内出现的一组 Ed25519 密钥对,同时实现 Signer 与 KeySet:
+// 第一把签名,全部公钥都参与验签(模拟轮换期新旧公钥并列)。名字只用来派生确定性的种子。
 type testSecret struct {
-	keys [][]byte
+	signers []Ed25519Signer
 }
 
-func newTestSecret(keys ...string) *testSecret {
+func newTestSecret(names ...string) *testSecret {
 	s := &testSecret{}
-	for _, k := range keys {
-		s.keys = append(s.keys, []byte(k))
+	for _, name := range names {
+		seed := sha256.Sum256([]byte(name))
+		signer, err := NewEd25519Signer(seed[:])
+		if err != nil {
+			panic(err)
+		}
+		s.signers = append(s.signers, signer)
 	}
 	return s
 }
 
 func (s *testSecret) Sign(data []byte) []byte {
-	if len(s.keys) == 0 {
+	if len(s.signers) == 0 {
 		return nil
 	}
-	m := hmac.New(sha256.New, s.keys[0])
-	m.Write(data)
-	return m.Sum(nil)
+	return s.signers[0].Sign(data)
 }
 
-func (s *testSecret) Verify(mac, data []byte) bool {
-	for _, k := range s.keys {
-		m := hmac.New(sha256.New, k)
-		m.Write(data)
-		if hmac.Equal(mac, m.Sum(nil)) {
-			return true
-		}
+func (s *testSecret) Verify(signature, data []byte) bool {
+	keys := make(PublicKeys, 0, len(s.signers))
+	for _, signer := range s.signers {
+		keys = append(keys, signer.PublicKey())
 	}
-	return false
+	return keys.Verify(signature, data)
 }
 
 const (
@@ -60,7 +60,7 @@ func mustSignedMD(t *testing.T, s Signer, caller, method string, subject []byte)
 
 func TestVerify_签名正确时通过(t *testing.T) {
 	secret := newTestSecret("unit-test-internal-auth-secret-0123456789")
-	v := NewVerifier(Options{Secrets: secret, Enforce: true})
+	v := NewVerifier(Options{Keys: secret, Enforce: true})
 
 	subject := []byte("session-detail-bytes")
 	md := mustSignedMD(t, secret, testCaller, testMethod, subject)
@@ -79,7 +79,7 @@ func TestVerify_签名正确时通过(t *testing.T) {
 // 可信身份 —— 把 Verify 换回"无条件返回 nil"这条用例立刻失败。
 func TestVerify_没有签名一律拒绝(t *testing.T) {
 	secret := newTestSecret("unit-test-internal-auth-secret-0123456789")
-	v := NewVerifier(Options{Secrets: secret, Enforce: true})
+	v := NewVerifier(Options{Keys: secret, Enforce: true})
 
 	md := metadata.Pairs(MetaCaller, testCaller)
 	if _, err := v.Verify(md, testMethod, []byte("whatever")); !errors.Is(err, ErrMissingSignature) {
@@ -95,7 +95,7 @@ func TestVerify_没有签名一律拒绝(t *testing.T) {
 func TestVerify_密钥不对时拒绝(t *testing.T) {
 	signer := newTestSecret("attacker-key-aaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	server := newTestSecret("unit-test-internal-auth-secret-0123456789")
-	v := NewVerifier(Options{Secrets: server, Enforce: true})
+	v := NewVerifier(Options{Keys: server, Enforce: true})
 
 	subject := []byte("session-detail-bytes")
 	md := mustSignedMD(t, signer, testCaller, testMethod, subject)
@@ -109,7 +109,7 @@ func TestVerify_密钥不对时拒绝(t *testing.T) {
 // 转手去调 EnterGame(跨方法重放)。
 func TestVerify_换个方法调用会失败(t *testing.T) {
 	secret := newTestSecret("unit-test-internal-auth-secret-0123456789")
-	v := NewVerifier(Options{Secrets: secret, Enforce: true})
+	v := NewVerifier(Options{Keys: secret, Enforce: true})
 
 	subject := []byte("session-detail-bytes")
 	md := mustSignedMD(t, secret, testCaller, testMethod, subject)
@@ -123,7 +123,7 @@ func TestVerify_换个方法调用会失败(t *testing.T) {
 // 否则攻击者能拿别人的签名套上自己的 player_id。
 func TestVerify_篡改主体会失败(t *testing.T) {
 	secret := newTestSecret("unit-test-internal-auth-secret-0123456789")
-	v := NewVerifier(Options{Secrets: secret, Enforce: true})
+	v := NewVerifier(Options{Keys: secret, Enforce: true})
 
 	subject := []byte("session-detail-bytes")
 	md := mustSignedMD(t, secret, testCaller, testMethod, subject)
@@ -137,7 +137,7 @@ func TestVerify_时间戳超窗拒绝(t *testing.T) {
 	secret := newTestSecret("unit-test-internal-auth-secret-0123456789")
 	base := time.Now()
 	v := NewVerifier(Options{
-		Secrets:      secret,
+		Keys:         secret,
 		Enforce:      true,
 		MaxClockSkew: 5 * time.Second,
 		Now:          func() time.Time { return base },
@@ -160,7 +160,7 @@ func TestVerify_时间戳超窗拒绝(t *testing.T) {
 
 func TestVerify_同一条签名不能重放(t *testing.T) {
 	secret := newTestSecret("unit-test-internal-auth-secret-0123456789")
-	v := NewVerifier(Options{Secrets: secret, Enforce: true})
+	v := NewVerifier(Options{Keys: secret, Enforce: true})
 
 	subject := []byte("session-detail-bytes")
 	md := mustSignedMD(t, secret, testCaller, testMethod, subject)
@@ -178,7 +178,7 @@ func TestVerify_同一条签名不能重放(t *testing.T) {
 func TestVerify_验签失败不占用nonce(t *testing.T) {
 	real := newTestSecret("unit-test-internal-auth-secret-0123456789")
 	fake := newTestSecret("attacker-key-aaaaaaaaaaaaaaaaaaaaaaaaaaa")
-	v := NewVerifier(Options{Secrets: real, Enforce: true})
+	v := NewVerifier(Options{Keys: real, Enforce: true})
 
 	subject := []byte("session-detail-bytes")
 	nonce := "0123456789abcdef0123456789abcdef"
@@ -199,7 +199,7 @@ func TestVerify_验签失败不占用nonce(t *testing.T) {
 
 func TestVerify_白名单外的调用方被拒(t *testing.T) {
 	secret := newTestSecret("unit-test-internal-auth-secret-0123456789")
-	v := NewVerifier(Options{Secrets: secret, Enforce: true, AllowedCallers: []string{"gateway"}})
+	v := NewVerifier(Options{Keys: secret, Enforce: true, AllowedCallers: []string{"gateway"}})
 
 	subject := []byte("session-detail-bytes")
 	md := mustSignedMD(t, secret, testCaller, testMethod, subject)
@@ -213,14 +213,14 @@ func TestVerify_白名单外的调用方被拒(t *testing.T) {
 func TestVerify_轮换期新旧密钥都认(t *testing.T) {
 	oldKey := "rotation-old-key-000000000000000000000000"
 	newKey := "rotation-new-key-111111111111111111111111"
-	server := newTestSecret(newKey, oldKey) // 主密钥=新,附加=旧
+	server := newTestSecret(newKey, oldKey) // 公钥列表里新旧并列
 
 	subject := []byte("session-detail-bytes")
 	for name, signer := range map[string]*testSecret{
 		"上游还在用旧密钥": newTestSecret(oldKey),
 		"上游已切新密钥":  newTestSecret(newKey),
 	} {
-		v := NewVerifier(Options{Secrets: server, Enforce: true})
+		v := NewVerifier(Options{Keys: server, Enforce: true})
 		md := mustSignedMD(t, signer, testCaller, testMethod, subject)
 		if _, err := v.Verify(md, testMethod, subject); err != nil {
 			t.Fatalf("%s:期望验签通过,得到 %v", name, err)
@@ -229,8 +229,8 @@ func TestVerify_轮换期新旧密钥都认(t *testing.T) {
 }
 
 func TestVerify_密钥没配时一律拒绝(t *testing.T) {
-	// Secrets 为 nil = 密钥没配好。必须 fail-closed,绝不能当成"无需校验"。
-	v := NewVerifier(Options{Secrets: nil, Enforce: true})
+	// Keys 为 nil = 公钥没配好。必须 fail-closed,绝不能当成"无需校验"。
+	v := NewVerifier(Options{Keys: nil, Enforce: true})
 	signer := newTestSecret("unit-test-internal-auth-secret-0123456789")
 	subject := []byte("session-detail-bytes")
 	md := mustSignedMD(t, signer, testCaller, testMethod, subject)

@@ -1277,8 +1277,10 @@ type SpectateBattleRecord struct {
 	Tier             battle.ESpectateTier `protobuf:"varint,4,opt,name=tier,proto3,enum=ESpectateTier" json:"tier,omitempty"`
 	BattleInstanceId string               `protobuf:"bytes,5,opt,name=battle_instance_id,json=battleInstanceId,proto3" json:"battle_instance_id,omitempty"`
 	DeadlineMs       uint64               `protobuf:"varint,6,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 取自成局原件 MatchFormationRecord.release_track:这场所在 battle 节点的发布轨道,观战列表按它给 stable 观众过滤。
+	ReleaseTrack  string `protobuf:"bytes,7,opt,name=release_track,json=releaseTrack,proto3" json:"release_track,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SpectateBattleRecord) Reset() {
@@ -1351,6 +1353,13 @@ func (x *SpectateBattleRecord) GetDeadlineMs() uint64 {
 		return x.DeadlineMs
 	}
 	return 0
+}
+
+func (x *SpectateBattleRecord) GetReleaseTrack() string {
+	if x != nil {
+		return x.ReleaseTrack
+	}
+	return ""
 }
 
 // MatchResult is produced internally when matchmaking completes.
@@ -1937,7 +1946,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x10battle_config_id\x18\x03 \x01(\rR\x0ebattleConfigId\x12!\n" +
 	"\fplayer_names\x18\x04 \x03(\tR\vplayerNames\x12\"\n" +
 	"\rcreated_at_ms\x18\x05 \x01(\x04R\vcreatedAtMs\x12\x1a\n" +
-	"\bfeatured\x18\x06 \x01(\bR\bfeatured\"\x9a\x02\n" +
+	"\bfeatured\x18\x06 \x01(\bR\bfeatured\"\xbf\x02\n" +
 	"\x14SpectateBattleRecord\x123\n" +
 	"\asummary\x18\x01 \x01(\v2\x19.match.BattleWatchSummaryR\asummary\x12$\n" +
 	"\x0ebattle_node_id\x18\x02 \x01(\rR\fbattleNodeId\x124\n" +
@@ -1947,7 +1956,8 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x04tier\x18\x04 \x01(\x0e2\x0e.eSpectateTierR\x04tier\x12,\n" +
 	"\x12battle_instance_id\x18\x05 \x01(\tR\x10battleInstanceId\x12\x1f\n" +
 	"\vdeadline_ms\x18\x06 \x01(\x04R\n" +
-	"deadlineMs\"\xdf\x01\n" +
+	"deadlineMs\x12#\n" +
+	"\rrelease_track\x18\a \x01(\tR\freleaseTrack\"\xdf\x01\n" +
 	"\vMatchResult\x12\x19\n" +
 	"\bmatch_id\x18\x01 \x01(\tR\amatchId\x12$\n" +
 	"\x04mode\x18\x02 \x01(\x0e2\x10.match.MatchModeR\x04mode\x12\"\n" +

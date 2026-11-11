@@ -90,7 +90,7 @@ kubectl get pods -n mmorpg-zone-zone-1 --no-headers | Where-Object { $_ -notmatc
 ### 5. db CrashLoopBackOff（启动顺序问题）
 - **现象**：db Pod 处于 Error/CrashLoopBackOff，MySQL 正常运行。
 - **根因**：db Pod 在 MySQL 就绪前启动（由于 maxPods 限制，所有 Pod 最初都处于 Pending 状态）。等 MySQL 启动后，db 已经缓存了连接失败状态。
-- **修复**：`kubectl rollout restart deployment/db -n <zone-ns>`。
+- **修复**：`kubectl rollout restart statefulset/db -n <zone-ns>`。
 
 ### 6. Go protobuf 注册冲突
 - **现象**：Go 服务启动时因 protobuf 注册重复而 panic。

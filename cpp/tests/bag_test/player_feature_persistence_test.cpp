@@ -25,6 +25,8 @@
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
+#include "proto/common/component/player_item_hold_comp.pb.h"
+#include "proto/common/component/player_mail_outbox_comp.pb.h"
 #include "modules/gain_block/gain_block_service.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
@@ -157,6 +159,8 @@ void CompletePersistedComps(entt::entity player)
     EmplaceIfAbsent<PlayerMysteryMerchantComp>(player);
     EmplaceIfAbsent<PlayerBattleResultComp>(player); // 近期战斗结果(battle-result-recovery.md)
     EmplaceIfAbsent<ClientRequestLedgerComp>(player); // 客户端请求幂等键账本(client-request-idempotency.md §5.3)
+    EmplaceIfAbsent<PlayerItemHoldComp>(player); // 物品数量预留(battle-item-reservation.md)
+    EmplaceIfAbsent<PlayerMailOutboxComp>(player); // 待寄邮件(battle-overflow-mail.md)
     EmplaceIfAbsent<CurrencyComp>(player);
     EmplaceIfAbsent<PlayerCurrencyComp>(player);
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。
@@ -252,16 +256,14 @@ protected:
         EXPECT_FALSE(tlsEcs.actorRegistry.all_of<Comp>(player)) << "存盘只读,不得补建缺失的组件";
         EXPECT_EQ(0u, saved.player_database_data().ByteSizeLong()) << "缺组件时一个字段都不写";
         EXPECT_FALSE(saved.has_player_database_data()) << "拒绝时不得创建空子消息";
-        EXPECT_FALSE(saved.has_bag_data());
-        EXPECT_FALSE(saved.has_quest_data());
 
         // 调用者复用的输出可能已有上一份完整快照。拒绝不能改动其内容或 presence，
         // 更不能只更新一部分、留下混合了两个时刻的半份快照。
         PlayerAllData previous;
         previous.mutable_player_database_data()->set_player_id(kPlayerId + 1);
         previous.mutable_player_database_data()->mutable_currency()->add_values(831);
-        previous.mutable_bag_data()->add_items()->set_item_uuid(kInventoryItemId);
-        previous.mutable_quest_data()->set_scoped_state_present(true);
+        previous.mutable_player_database_data()->mutable_bag_component()->add_items()->set_item_uuid(kInventoryItemId);
+        previous.mutable_player_database_data()->mutable_mission_component()->set_scoped_state_present(true);
         const auto previousBytes = previous.SerializeAsString();
         EXPECT_FALSE(PlayerAllDataMessageFieldsMarshal(player, previous));
         EXPECT_EQ(previousBytes, previous.SerializeAsString()) << "拒绝必须保留原输出";
@@ -345,16 +347,11 @@ TEST_F(PlayerFeaturePersistenceTest, DatabaseRecordAloneRestoresBagAssetsAndMiss
     ASSERT_TRUE(database.has_mission_component());
     EXPECT_EQ(2, database.bag_component().items_size());
     EXPECT_TRUE(database.mission_component().scoped_state_present());
-    // 顶层是旧读者兼容镜像，不是 MySQL 落库所依赖的唯一副本。
-    EXPECT_EQ(database.bag_component().SerializeAsString(), saved.bag_data().SerializeAsString());
-    EXPECT_EQ(database.mission_component().SerializeAsString(), saved.quest_data().SerializeAsString());
 
     std::string bytes;
     ASSERT_TRUE(database.SerializeToString(&bytes));
     PlayerAllData coldSnapshot;
     ASSERT_TRUE(coldSnapshot.mutable_player_database_data()->ParseFromString(bytes));
-    ASSERT_FALSE(coldSnapshot.has_bag_data());
-    ASSERT_FALSE(coldSnapshot.has_quest_data());
     const auto restored = NewPlayer();
     PlayerAllDataMessageFieldsUnmarshal(restored, coldSnapshot);
     ExpectStocked(restored);
@@ -410,7 +407,8 @@ TEST_F(PlayerFeaturePersistenceTest, ItemGainBanAndItsInboxDecisionRoundTripInTh
     EXPECT_EQ((std::vector<uint32_t>{30045}), std::vector<uint32_t>(remaining.begin(), remaining.end()));
 }
 
-TEST_F(PlayerFeaturePersistenceTest, AuthoritativeEmptyDatabaseSnapshotWinsOverStaleLegacyTopLevel)
+// 数据库记录里背包、任务是空的,就加载成空的。顶层旧副本与读它的兼容分支 2026-11-11 已删,这里只剩数据库记录一个来源。
+TEST_F(PlayerFeaturePersistenceTest, EmptyDatabaseBagAndMissionsLoadEmpty)
 {
     PlayerAllData saved;
     ASSERT_TRUE(PlayerAllDataMessageFieldsMarshal(StockedPlayer(), saved));
@@ -420,8 +418,6 @@ TEST_F(PlayerFeaturePersistenceTest, AuthoritativeEmptyDatabaseSnapshotWinsOverS
     database->mutable_mission_component()->set_scoped_state_present(true);
     ASSERT_TRUE(database->has_bag_component());
     ASSERT_TRUE(database->has_mission_component());
-    ASSERT_FALSE(saved.bag_data().items().empty());
-    ASSERT_FALSE(saved.quest_data().scopes().empty());
 
     PlayerAllData parsed;
     ASSERT_TRUE(parsed.ParseFromString(saved.SerializeAsString()));
@@ -438,50 +434,6 @@ TEST_F(PlayerFeaturePersistenceTest, AuthoritativeEmptyDatabaseSnapshotWinsOverS
     EXPECT_FALSE(main->IsComplete(11));
     EXPECT_FALSE(main->IsClaimable(12));
     EXPECT_EQ(nullptr, missions->Get(77));
-}
-
-TEST_F(PlayerFeaturePersistenceTest, LegacyTopLevelRemainsReadableWhenNewDatabaseFieldsAreAbsent)
-{
-    PlayerAllData legacy;
-    ASSERT_TRUE(PlayerAllDataMessageFieldsMarshal(StockedPlayer(), legacy));
-    legacy.mutable_player_database_data()->clear_bag_component();
-    legacy.mutable_player_database_data()->clear_mission_component();
-    PlayerAllData parsed;
-    ASSERT_TRUE(parsed.ParseFromString(legacy.SerializeAsString()));
-    ASSERT_FALSE(parsed.player_database_data().has_bag_component());
-    ASSERT_FALSE(parsed.player_database_data().has_mission_component());
-    const auto restored = NewPlayer();
-    PlayerAllDataMessageFieldsUnmarshal(restored, parsed);
-    ExpectStocked(restored);
-
-    // 旧快照读出后再保存必须写入新的数据库字段，不能永远依赖兼容分支。
-    PlayerAllData resaved;
-    ASSERT_TRUE(PlayerAllDataMessageFieldsMarshal(restored, resaved));
-    EXPECT_TRUE(resaved.player_database_data().has_bag_component());
-    EXPECT_TRUE(resaved.player_database_data().has_mission_component());
-    EXPECT_EQ(2, resaved.player_database_data().bag_component().items_size());
-    EXPECT_TRUE(resaved.player_database_data().mission_component().scoped_state_present());
-}
-
-TEST_F(PlayerFeaturePersistenceTest, NewDatabaseAndLegacyTopLevelSourcesAreChosenIndependently)
-{
-    PlayerAllData mixed;
-    ASSERT_TRUE(PlayerAllDataMessageFieldsMarshal(StockedPlayer(), mixed));
-    // 背包已有正式空记录，任务仍来自旧顶层。不能只用一个总版本开关。
-    mixed.mutable_player_database_data()->mutable_bag_component()->Clear();
-    mixed.mutable_player_database_data()->clear_mission_component();
-    const auto restored = NewPlayer();
-    PlayerAllDataMessageFieldsUnmarshal(restored, mixed);
-    const auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(restored);
-    ASSERT_NE(nullptr, bags);
-    EXPECT_EQ(0u, bags->bags[kInventory].OccupiedGridCount());
-    const auto* container = tlsEcs.actorRegistry.try_get<MissionsContainerComp>(restored);
-    ASSERT_NE(nullptr, container);
-    const auto* main = container->Get(MissionListComp::kPlayerMission);
-    ASSERT_NE(nullptr, main);
-    EXPECT_TRUE(main->IsAccepted(7));
-    EXPECT_TRUE(main->IsClaimable(12));
-    EXPECT_EQ(5u, main->GetMissionList().missions().at(7).progress(0));
 }
 
 // 角色名副本(player_database.profile_component):真源是 data_service 全局库 player_name,
@@ -601,15 +553,12 @@ TEST_F(PlayerFeaturePersistenceTest, EquipInstanceDataRoundTripsThroughDatabaseR
     const auto& database = saved.player_database_data();
     ASSERT_TRUE(database.has_bag_component());
     ASSERT_EQ(3, database.bag_component().items_size());
-    // 顶层兼容镜像与数据库记录是同一份内容,equip 段同样在里面。
-    EXPECT_EQ(database.bag_component().SerializeAsString(), saved.bag_data().SerializeAsString());
 
-    // 只拿 player_database 的字节重建(MySQL 落库的就是这一份),不带顶层镜像。
+    // 只拿 player_database 的字节重建(落库的就是这一份)。
     std::string bytes;
     ASSERT_TRUE(database.SerializeToString(&bytes));
     PlayerAllData coldSnapshot;
     ASSERT_TRUE(coldSnapshot.mutable_player_database_data()->ParseFromString(bytes));
-    ASSERT_FALSE(coldSnapshot.has_bag_data());
     const auto restored = NewPlayer();
     PlayerAllDataMessageFieldsUnmarshal(restored, coldSnapshot);
 
@@ -692,6 +641,10 @@ TEST_F(PlayerFeaturePersistenceTest, MarshalRefusesWhenAnyPersistedComponentIsMi
     ExpectMarshalRefusedWithout<PlayerBattleResultComp>("PlayerBattleResultComp");
     // 幂等键账本缺失同样整份拒绝:补一本空账本落盘,等于让已经执行过的请求在重发时再执行一次。
     ExpectMarshalRefusedWithout<ClientRequestLedgerComp>("ClientRequestLedgerComp");
+    // 预留缺失同样整份拒绝:补一份空表落盘,等于把还押在未结算战斗里的道具放出去。
+    ExpectMarshalRefusedWithout<PlayerItemHoldComp>("PlayerItemHoldComp");
+    // 待寄邮件缺失同样整份拒绝:补一份空表落盘,等于把已经属于玩家、还没寄出的物品抹掉。
+    ExpectMarshalRefusedWithout<PlayerMailOutboxComp>("PlayerMailOutboxComp");
     ExpectMarshalRefusedWithout<CurrencyComp>("CurrencyComp");
     ExpectMarshalRefusedWithout<PlayerCurrencyComp>("PlayerCurrencyComp");
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1):缺了同样整份拒绝,补空等于抹掉新版本写进来的整列。

@@ -510,6 +510,14 @@ extern const ::google::protobuf::internal::ClassDataFull transaction_log_class_d
 #else
 extern const transaction_logGlobalsTypeInternal transaction_log_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class zone_merge_history;
+struct zone_merge_historyGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern zone_merge_historyGlobalsTypeInternal zone_merge_history_globals_;
+extern const ::google::protobuf::internal::ClassDataFull zone_merge_history_class_data_;
+#else
+extern const zone_merge_historyGlobalsTypeInternal zone_merge_history_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class zone_merged_into;
 struct zone_merged_intoGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1235,6 +1243,294 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED zone_merged_into final : public ::g
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED zone_merge_history final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:zone_merge_history) */ {
+ public:
+  inline zone_merge_history() : zone_merge_history(nullptr) {}
+  ~zone_merge_history() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(zone_merge_history* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(zone_merge_history));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr zone_merge_history(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline zone_merge_history(const zone_merge_history& from) : zone_merge_history(nullptr, from) {}
+  inline zone_merge_history(zone_merge_history&& from) noexcept : zone_merge_history(nullptr, ::std::move(from)) {}
+  inline zone_merge_history& operator=(const zone_merge_history& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline zone_merge_history& operator=(zone_merge_history&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const zone_merge_history& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<zone_merge_history>(&zone_merge_history_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 14;
+  friend void swap(zone_merge_history& a, zone_merge_history& b) { a.Swap(&b); }
+  inline void Swap(zone_merge_history* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(zone_merge_history* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] zone_merge_history* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<zone_merge_history>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const zone_merge_history& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const zone_merge_history& from) { zone_merge_history::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(zone_merge_history* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "zone_merge_history"; }
+
+  explicit zone_merge_history(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  zone_merge_history(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const zone_merge_history& from);
+  zone_merge_history(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, zone_merge_history&& from) noexcept
+      : zone_merge_history(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kActionFieldNumber = 3,
+    kRunIdFieldNumber = 5,
+    kSqlPrincipalFieldNumber = 6,
+    kEventSeqFieldNumber = 2,
+    kSrcZoneFieldNumber = 1,
+    kDstZoneFieldNumber = 4,
+    kAtMsFieldNumber = 7,
+  };
+  // string action = 3;
+  void clear_action() ;
+  [[nodiscard]] const ::std::string& action() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_action(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_action();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_action();
+  void set_allocated_action(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_action() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_action(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_action();
+
+  public:
+  // string run_id = 5;
+  void clear_run_id() ;
+  [[nodiscard]] const ::std::string& run_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_run_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_run_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_run_id();
+  void set_allocated_run_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_run_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_run_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_run_id();
+
+  public:
+  // string sql_principal = 6;
+  void clear_sql_principal() ;
+  [[nodiscard]] const ::std::string& sql_principal() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_sql_principal(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_sql_principal();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_sql_principal();
+  void set_allocated_sql_principal(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_sql_principal() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_sql_principal(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_sql_principal();
+
+  public:
+  // uint64 event_seq = 2;
+  void clear_event_seq() ;
+  [[nodiscard]] ::uint64_t event_seq() const;
+  void set_event_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_event_seq() const;
+  void _internal_set_event_seq(::uint64_t value);
+
+  public:
+  // uint32 src_zone = 1;
+  void clear_src_zone() ;
+  [[nodiscard]] ::uint32_t src_zone() const;
+  void set_src_zone(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_src_zone() const;
+  void _internal_set_src_zone(::uint32_t value);
+
+  public:
+  // uint32 dst_zone = 4;
+  void clear_dst_zone() ;
+  [[nodiscard]] ::uint32_t dst_zone() const;
+  void set_dst_zone(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_dst_zone() const;
+  void _internal_set_dst_zone(::uint32_t value);
+
+  public:
+  // uint64 at_ms = 7;
+  void clear_at_ms() ;
+  [[nodiscard]] ::uint64_t at_ms() const;
+  void set_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_at_ms() const;
+  void _internal_set_at_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:zone_merge_history)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 52,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const zone_merge_history& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr action_;
+    ::google::protobuf::internal::ArenaStringPtr run_id_;
+    ::google::protobuf::internal::ArenaStringPtr sql_principal_;
+    ::uint64_t event_seq_;
+    ::uint32_t src_zone_;
+    ::uint32_t dst_zone_;
+    ::uint64_t at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED transaction_log final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:transaction_log) */ {
  public:
@@ -1677,7 +1973,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_slot final : public ::go
   [[nodiscard]] static const sql_writer_slot& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_slot>(&sql_writer_slot_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(sql_writer_slot& a, sql_writer_slot& b) { a.Swap(&b); }
   inline void Swap(sql_writer_slot* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1948,7 +2244,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_registry final : public 
   [[nodiscard]] static const sql_writer_registry& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_registry>(&sql_writer_registry_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(sql_writer_registry& a, sql_writer_registry& b) { a.Swap(&b); }
   inline void Swap(sql_writer_registry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2070,6 +2366,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_registry final : public 
     kRetirementDigestFieldNumber = 9,
     kRegisteredMsFieldNumber = 7,
     kRetiredMsFieldNumber = 10,
+    kBootSeqFieldNumber = 11,
     kStateFieldNumber = 6,
   };
   // bytes writer_key = 1;
@@ -2197,6 +2494,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_registry final : public 
   void _internal_set_retired_ms(::uint64_t value);
 
   public:
+  // uint64 boot_seq = 11;
+  void clear_boot_seq() ;
+  [[nodiscard]] ::uint64_t boot_seq() const;
+  void set_boot_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_boot_seq() const;
+  void _internal_set_boot_seq(::uint64_t value);
+
+  public:
   // .sql_writer_registry.State state = 6;
   void clear_state() ;
   [[nodiscard]] ::sql_writer_registry_State state() const;
@@ -2211,7 +2518,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_registry final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 46,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2249,6 +2556,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_registry final : public 
     ::google::protobuf::internal::ArenaStringPtr retirement_digest_;
     ::uint64_t registered_ms_;
     ::uint64_t retired_ms_;
+    ::uint64_t boot_seq_;
     int state_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2313,7 +2621,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Tick
   [[nodiscard]] static const sql_writer_maintenance_receipt_TicketEvidence& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_TicketEvidence>(&sql_writer_maintenance_receipt_TicketEvidence_globals_);
   }
-  static constexpr int kIndexInFileMessages = 40;
+  static constexpr int kIndexInFileMessages = 41;
   friend void swap(sql_writer_maintenance_receipt_TicketEvidence& a, sql_writer_maintenance_receipt_TicketEvidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_TicketEvidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2587,7 +2895,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Sour
   [[nodiscard]] static const sql_writer_maintenance_receipt_SourcePin& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_SourcePin>(&sql_writer_maintenance_receipt_SourcePin_globals_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(sql_writer_maintenance_receipt_SourcePin& a, sql_writer_maintenance_receipt_SourcePin& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_SourcePin* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2810,7 +3118,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Redi
   [[nodiscard]] static const sql_writer_maintenance_receipt_RedisKeyClosure& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_RedisKeyClosure>(&sql_writer_maintenance_receipt_RedisKeyClosure_globals_);
   }
-  static constexpr int kIndexInFileMessages = 36;
+  static constexpr int kIndexInFileMessages = 37;
   friend void swap(sql_writer_maintenance_receipt_RedisKeyClosure& a, sql_writer_maintenance_receipt_RedisKeyClosure& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_RedisKeyClosure* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3166,7 +3474,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Manu
   [[nodiscard]] static const sql_writer_maintenance_receipt_ManualConsumerAssignment& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_ManualConsumerAssignment>(&sql_writer_maintenance_receipt_ManualConsumerAssignment_globals_);
   }
-  static constexpr int kIndexInFileMessages = 44;
+  static constexpr int kIndexInFileMessages = 45;
   friend void swap(sql_writer_maintenance_receipt_ManualConsumerAssignment& a, sql_writer_maintenance_receipt_ManualConsumerAssignment& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_ManualConsumerAssignment* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3582,7 +3890,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Kafk
   [[nodiscard]] static const sql_writer_maintenance_receipt_KafkaPartitionClosure& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_KafkaPartitionClosure>(&sql_writer_maintenance_receipt_KafkaPartitionClosure_globals_);
   }
-  static constexpr int kIndexInFileMessages = 35;
+  static constexpr int kIndexInFileMessages = 36;
   friend void swap(sql_writer_maintenance_receipt_KafkaPartitionClosure& a, sql_writer_maintenance_receipt_KafkaPartitionClosure& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_KafkaPartitionClosure* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3911,7 +4219,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt final 
   [[nodiscard]] static const sql_writer_lifecycle_receipt& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_lifecycle_receipt>(&sql_writer_lifecycle_receipt_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(sql_writer_lifecycle_receipt& a, sql_writer_lifecycle_receipt& b) { a.Swap(&b); }
   inline void Swap(sql_writer_lifecycle_receipt* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4238,7 +4546,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_freeze_ticket final : pu
   [[nodiscard]] static const sql_writer_freeze_ticket& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_freeze_ticket>(&sql_writer_freeze_ticket_globals_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(sql_writer_freeze_ticket& a, sql_writer_freeze_ticket& b) { a.Swap(&b); }
   inline void Swap(sql_writer_freeze_ticket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4729,7 +5037,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_drain_run final : public
   [[nodiscard]] static const sql_writer_drain_run& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_drain_run>(&sql_writer_drain_run_globals_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(sql_writer_drain_run& a, sql_writer_drain_run& b) { a.Swap(&b); }
   inline void Swap(sql_writer_drain_run* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5120,7 +5428,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_boot_roster_RuntimeEnvir
   [[nodiscard]] static const sql_writer_boot_roster_RuntimeEnvironment& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_boot_roster_RuntimeEnvironment>(&sql_writer_boot_roster_RuntimeEnvironment_globals_);
   }
-  static constexpr int kIndexInFileMessages = 53;
+  static constexpr int kIndexInFileMessages = 54;
   friend void swap(sql_writer_boot_roster_RuntimeEnvironment& a, sql_writer_boot_roster_RuntimeEnvironment& b) { a.Swap(&b); }
   inline void Swap(sql_writer_boot_roster_RuntimeEnvironment* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5360,7 +5668,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_boot_grant final : publi
   [[nodiscard]] static const sql_writer_boot_grant& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_boot_grant>(&sql_writer_boot_grant_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(sql_writer_boot_grant& a, sql_writer_boot_grant& b) { a.Swap(&b); }
   inline void Swap(sql_writer_boot_grant* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5844,7 +6152,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED route_meta final : public ::google:
   [[nodiscard]] static const route_meta& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<route_meta>(&route_meta_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(route_meta& a, route_meta& b) { a.Swap(&b); }
   inline void Swap(route_meta* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -10099,7 +10407,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_transfer_receipt final
   [[nodiscard]] static const account_role_transfer_receipt& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_transfer_receipt>(&account_role_transfer_receipt_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(account_role_transfer_receipt& a, account_role_transfer_receipt& b) { a.Swap(&b); }
   inline void Swap(account_role_transfer_receipt* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -10428,7 +10736,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_trade_holder final : p
   [[nodiscard]] static const account_role_trade_holder& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_trade_holder>(&account_role_trade_holder_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(account_role_trade_holder& a, account_role_trade_holder& b) { a.Swap(&b); }
   inline void Swap(account_role_trade_holder* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -10704,7 +11012,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_trade final : public :
   [[nodiscard]] static const account_role_trade& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_trade>(&account_role_trade_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(account_role_trade& a, account_role_trade& b) { a.Swap(&b); }
   inline void Swap(account_role_trade* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11040,7 +11348,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_removal final : public
   [[nodiscard]] static const account_role_removal& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_removal>(&account_role_removal_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(account_role_removal& a, account_role_removal& b) { a.Swap(&b); }
   inline void Swap(account_role_removal* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11282,7 +11590,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_ref final : public ::g
   [[nodiscard]] static const account_role_ref& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_ref>(&account_role_ref_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(account_role_ref& a, account_role_ref& b) { a.Swap(&b); }
   inline void Swap(account_role_ref* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11572,7 +11880,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_admission final : publ
   [[nodiscard]] static const account_role_admission& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_admission>(&account_role_admission_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(account_role_admission& a, account_role_admission& b) { a.Swap(&b); }
   inline void Swap(account_role_admission* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11901,7 +12209,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role final : public ::googl
   [[nodiscard]] static const account_role& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role>(&account_role_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(account_role& a, account_role& b) { a.Swap(&b); }
   inline void Swap(account_role* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12208,7 +12516,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_directory final : public ::
   [[nodiscard]] static const account_directory& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_directory>(&account_directory_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(account_directory& a, account_directory& b) { a.Swap(&b); }
   inline void Swap(account_directory* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12426,7 +12734,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Sour
   [[nodiscard]] static const sql_writer_maintenance_receipt_SourceOpenAck& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_SourceOpenAck>(&sql_writer_maintenance_receipt_SourceOpenAck_globals_);
   }
-  static constexpr int kIndexInFileMessages = 48;
+  static constexpr int kIndexInFileMessages = 49;
   friend void swap(sql_writer_maintenance_receipt_SourceOpenAck& a, sql_writer_maintenance_receipt_SourceOpenAck& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_SourceOpenAck* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12820,7 +13128,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Redi
   [[nodiscard]] static const sql_writer_maintenance_receipt_RedisTargetClosure& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_RedisTargetClosure>(&sql_writer_maintenance_receipt_RedisTargetClosure_globals_);
   }
-  static constexpr int kIndexInFileMessages = 37;
+  static constexpr int kIndexInFileMessages = 38;
   friend void swap(sql_writer_maintenance_receipt_RedisTargetClosure& a, sql_writer_maintenance_receipt_RedisTargetClosure& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_RedisTargetClosure* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13158,7 +13466,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Manu
   [[nodiscard]] static const sql_writer_maintenance_receipt_ManualConsumerEvidence& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_ManualConsumerEvidence>(&sql_writer_maintenance_receipt_ManualConsumerEvidence_globals_);
   }
-  static constexpr int kIndexInFileMessages = 45;
+  static constexpr int kIndexInFileMessages = 46;
   friend void swap(sql_writer_maintenance_receipt_ManualConsumerEvidence& a, sql_writer_maintenance_receipt_ManualConsumerEvidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_ManualConsumerEvidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13487,7 +13795,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Laun
   [[nodiscard]] static const sql_writer_maintenance_receipt_LaunchClosure& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_LaunchClosure>(&sql_writer_maintenance_receipt_LaunchClosure_globals_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(sql_writer_maintenance_receipt_LaunchClosure& a, sql_writer_maintenance_receipt_LaunchClosure& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_LaunchClosure* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13733,7 +14041,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Issu
   [[nodiscard]] static const sql_writer_maintenance_receipt_IssuerReadiness& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_IssuerReadiness>(&sql_writer_maintenance_receipt_IssuerReadiness_globals_);
   }
-  static constexpr int kIndexInFileMessages = 47;
+  static constexpr int kIndexInFileMessages = 48;
   friend void swap(sql_writer_maintenance_receipt_IssuerReadiness& a, sql_writer_maintenance_receipt_IssuerReadiness& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_IssuerReadiness* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14076,7 +14384,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Issu
   [[nodiscard]] static const sql_writer_maintenance_receipt_IssuerClosure& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_IssuerClosure>(&sql_writer_maintenance_receipt_IssuerClosure_globals_);
   }
-  static constexpr int kIndexInFileMessages = 34;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(sql_writer_maintenance_receipt_IssuerClosure& a, sql_writer_maintenance_receipt_IssuerClosure& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_IssuerClosure* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14426,7 +14734,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Emer
   [[nodiscard]] static const sql_writer_maintenance_receipt_EmergencyEvidence& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_EmergencyEvidence>(&sql_writer_maintenance_receipt_EmergencyEvidence_globals_);
   }
-  static constexpr int kIndexInFileMessages = 41;
+  static constexpr int kIndexInFileMessages = 42;
   friend void swap(sql_writer_maintenance_receipt_EmergencyEvidence& a, sql_writer_maintenance_receipt_EmergencyEvidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_EmergencyEvidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14707,7 +15015,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Cons
   [[nodiscard]] static const sql_writer_maintenance_receipt_ConsumerGroupReadiness& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_ConsumerGroupReadiness>(&sql_writer_maintenance_receipt_ConsumerGroupReadiness_globals_);
   }
-  static constexpr int kIndexInFileMessages = 43;
+  static constexpr int kIndexInFileMessages = 44;
   friend void swap(sql_writer_maintenance_receipt_ConsumerGroupReadiness& a, sql_writer_maintenance_receipt_ConsumerGroupReadiness& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_ConsumerGroupReadiness* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15056,7 +15364,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt_Reques
   [[nodiscard]] static const sql_writer_lifecycle_receipt_Request& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_lifecycle_receipt_Request>(&sql_writer_lifecycle_receipt_Request_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(sql_writer_lifecycle_receipt_Request& a, sql_writer_lifecycle_receipt_Request& b) { a.Swap(&b); }
   inline void Swap(sql_writer_lifecycle_receipt_Request* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15155,6 +15463,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt_Reques
     kMaintenanceRunIdFieldNumber = 9,
     kDeploymentIdFieldNumber = 10,
     kLockQualificationSha256FieldNumber = 12,
+    kSuccessorRequestIdFieldNumber = 13,
     kWriterFieldNumber = 3,
     kExpectedEpochFieldNumber = 4,
     kExpectedCatalogRevisionFieldNumber = 5,
@@ -15278,6 +15587,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt_Reques
   ::std::string* PROTOBUF_NONNULL _internal_mutable_lock_qualification_sha256();
 
   public:
+  // bytes successor_request_id = 13;
+  void clear_successor_request_id() ;
+  [[nodiscard]] const ::std::string& successor_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_successor_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_successor_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_successor_request_id();
+  void set_allocated_successor_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_successor_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_successor_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_successor_request_id();
+
+  public:
   // .sql_writer_registry writer = 3;
   [[nodiscard]] bool has_writer()
       const;
@@ -15338,7 +15662,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt_Reques
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
+      ::google::protobuf::internal::TcParseTable<4, 13,
                           1, 99,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -15374,6 +15698,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt_Reques
     ::google::protobuf::internal::ArenaStringPtr maintenance_run_id_;
     ::google::protobuf::internal::ArenaStringPtr deployment_id_;
     ::google::protobuf::internal::ArenaStringPtr lock_qualification_sha256_;
+    ::google::protobuf::internal::ArenaStringPtr successor_request_id_;
     ::sql_writer_registry* PROTOBUF_NULLABLE writer_;
     ::uint64_t expected_epoch_;
     ::uint64_t expected_catalog_revision_;
@@ -15442,7 +15767,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_boot_grant_set final : p
   [[nodiscard]] static const sql_writer_boot_grant_set& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_boot_grant_set>(&sql_writer_boot_grant_set_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(sql_writer_boot_grant_set& a, sql_writer_boot_grant_set& b) { a.Swap(&b); }
   inline void Swap(sql_writer_boot_grant_set* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15671,7 +15996,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Publ
   [[nodiscard]] static const sql_writer_maintenance_receipt_PublicationReadiness& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_PublicationReadiness>(&sql_writer_maintenance_receipt_PublicationReadiness_globals_);
   }
-  static constexpr int kIndexInFileMessages = 49;
+  static constexpr int kIndexInFileMessages = 50;
   friend void swap(sql_writer_maintenance_receipt_PublicationReadiness& a, sql_writer_maintenance_receipt_PublicationReadiness& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_PublicationReadiness* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15940,7 +16265,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Publ
   [[nodiscard]] static const sql_writer_maintenance_receipt_PublicationEvidence& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_PublicationEvidence>(&sql_writer_maintenance_receipt_PublicationEvidence_globals_);
   }
-  static constexpr int kIndexInFileMessages = 38;
+  static constexpr int kIndexInFileMessages = 39;
   friend void swap(sql_writer_maintenance_receipt_PublicationEvidence& a, sql_writer_maintenance_receipt_PublicationEvidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_PublicationEvidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -16192,7 +16517,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Plan
   [[nodiscard]] static const sql_writer_maintenance_receipt_Plan& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_Plan>(&sql_writer_maintenance_receipt_Plan_globals_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(sql_writer_maintenance_receipt_Plan& a, sql_writer_maintenance_receipt_Plan& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_Plan* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -16715,7 +17040,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_NonS
   [[nodiscard]] static const sql_writer_maintenance_receipt_NonSqlClosureEvidence& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_NonSqlClosureEvidence>(&sql_writer_maintenance_receipt_NonSqlClosureEvidence_globals_);
   }
-  static constexpr int kIndexInFileMessages = 39;
+  static constexpr int kIndexInFileMessages = 40;
   friend void swap(sql_writer_maintenance_receipt_NonSqlClosureEvidence& a, sql_writer_maintenance_receipt_NonSqlClosureEvidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_NonSqlClosureEvidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -17128,7 +17453,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Cons
   [[nodiscard]] static const sql_writer_maintenance_receipt_ConsumerReadiness& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_ConsumerReadiness>(&sql_writer_maintenance_receipt_ConsumerReadiness_globals_);
   }
-  static constexpr int kIndexInFileMessages = 46;
+  static constexpr int kIndexInFileMessages = 47;
   friend void swap(sql_writer_maintenance_receipt_ConsumerReadiness& a, sql_writer_maintenance_receipt_ConsumerReadiness& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_ConsumerReadiness* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -17363,7 +17688,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_boot_roster_Entry final 
   [[nodiscard]] static const sql_writer_boot_roster_Entry& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_boot_roster_Entry>(&sql_writer_boot_roster_Entry_globals_);
   }
-  static constexpr int kIndexInFileMessages = 52;
+  static constexpr int kIndexInFileMessages = 53;
   friend void swap(sql_writer_boot_roster_Entry& a, sql_writer_boot_roster_Entry& b) { a.Swap(&b); }
   inline void Swap(sql_writer_boot_roster_Entry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -17632,7 +17957,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Rele
   [[nodiscard]] static const sql_writer_maintenance_receipt_ReleaseReadiness& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_ReleaseReadiness>(&sql_writer_maintenance_receipt_ReleaseReadiness_globals_);
   }
-  static constexpr int kIndexInFileMessages = 42;
+  static constexpr int kIndexInFileMessages = 43;
   friend void swap(sql_writer_maintenance_receipt_ReleaseReadiness& a, sql_writer_maintenance_receipt_ReleaseReadiness& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_ReleaseReadiness* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -17907,7 +18232,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_boot_roster final : publ
   [[nodiscard]] static const sql_writer_boot_roster& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_boot_roster>(&sql_writer_boot_roster_globals_);
   }
-  static constexpr int kIndexInFileMessages = 54;
+  static constexpr int kIndexInFileMessages = 55;
   friend void swap(sql_writer_boot_roster& a, sql_writer_boot_roster& b) { a.Swap(&b); }
   inline void Swap(sql_writer_boot_roster* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -18147,7 +18472,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Evid
     kPublicationReadiness = 15,
     DETAIL_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 50;
+  static constexpr int kIndexInFileMessages = 51;
   friend void swap(sql_writer_maintenance_receipt_Evidence& a, sql_writer_maintenance_receipt_Evidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_Evidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -18517,7 +18842,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt fina
   [[nodiscard]] static const sql_writer_maintenance_receipt& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt>(&sql_writer_maintenance_receipt_globals_);
   }
-  static constexpr int kIndexInFileMessages = 51;
+  static constexpr int kIndexInFileMessages = 52;
   friend void swap(sql_writer_maintenance_receipt& a, sql_writer_maintenance_receipt& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -23749,6 +24074,298 @@ inline void zone_merged_into::_internal_set_merged_at_ms(::uint64_t value) {
 
 // -------------------------------------------------------------------
 
+// zone_merge_history
+
+// uint32 src_zone = 1;
+inline void zone_merge_history::clear_src_zone() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.src_zone_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t zone_merge_history::src_zone() const {
+  // @@protoc_insertion_point(field_get:zone_merge_history.src_zone)
+  return _internal_src_zone();
+}
+inline void zone_merge_history::set_src_zone(::uint32_t value) {
+  _internal_set_src_zone(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:zone_merge_history.src_zone)
+}
+inline ::uint32_t zone_merge_history::_internal_src_zone() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.src_zone_;
+}
+inline void zone_merge_history::_internal_set_src_zone(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.src_zone_ = value;
+}
+
+// uint64 event_seq = 2;
+inline void zone_merge_history::clear_event_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.event_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t zone_merge_history::event_seq() const {
+  // @@protoc_insertion_point(field_get:zone_merge_history.event_seq)
+  return _internal_event_seq();
+}
+inline void zone_merge_history::set_event_seq(::uint64_t value) {
+  _internal_set_event_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:zone_merge_history.event_seq)
+}
+inline ::uint64_t zone_merge_history::_internal_event_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.event_seq_;
+}
+inline void zone_merge_history::_internal_set_event_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.event_seq_ = value;
+}
+
+// string action = 3;
+inline void zone_merge_history::clear_action() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.action_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& zone_merge_history::action() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:zone_merge_history.action)
+  return _internal_action();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void zone_merge_history::set_action(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.action_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:zone_merge_history.action)
+}
+inline ::std::string* PROTOBUF_NONNULL zone_merge_history::mutable_action()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_action();
+  // @@protoc_insertion_point(field_mutable:zone_merge_history.action)
+  return _s;
+}
+inline const ::std::string& zone_merge_history::_internal_action() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.action_.Get();
+}
+inline void zone_merge_history::_internal_set_action(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.action_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL zone_merge_history::_internal_mutable_action() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.action_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE zone_merge_history::release_action() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:zone_merge_history.action)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.action_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.action_.Set("", GetArena());
+  }
+  return released;
+}
+inline void zone_merge_history::set_allocated_action(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.action_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.action_.IsDefault()) {
+    _impl_.action_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:zone_merge_history.action)
+}
+
+// uint32 dst_zone = 4;
+inline void zone_merge_history::clear_dst_zone() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.dst_zone_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t zone_merge_history::dst_zone() const {
+  // @@protoc_insertion_point(field_get:zone_merge_history.dst_zone)
+  return _internal_dst_zone();
+}
+inline void zone_merge_history::set_dst_zone(::uint32_t value) {
+  _internal_set_dst_zone(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:zone_merge_history.dst_zone)
+}
+inline ::uint32_t zone_merge_history::_internal_dst_zone() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.dst_zone_;
+}
+inline void zone_merge_history::_internal_set_dst_zone(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.dst_zone_ = value;
+}
+
+// string run_id = 5;
+inline void zone_merge_history::clear_run_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& zone_merge_history::run_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:zone_merge_history.run_id)
+  return _internal_run_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void zone_merge_history::set_run_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.run_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:zone_merge_history.run_id)
+}
+inline ::std::string* PROTOBUF_NONNULL zone_merge_history::mutable_run_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_run_id();
+  // @@protoc_insertion_point(field_mutable:zone_merge_history.run_id)
+  return _s;
+}
+inline const ::std::string& zone_merge_history::_internal_run_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.run_id_.Get();
+}
+inline void zone_merge_history::_internal_set_run_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL zone_merge_history::_internal_mutable_run_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.run_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE zone_merge_history::release_run_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:zone_merge_history.run_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.run_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.run_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void zone_merge_history::set_allocated_run_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.run_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.run_id_.IsDefault()) {
+    _impl_.run_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:zone_merge_history.run_id)
+}
+
+// string sql_principal = 6;
+inline void zone_merge_history::clear_sql_principal() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sql_principal_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& zone_merge_history::sql_principal() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:zone_merge_history.sql_principal)
+  return _internal_sql_principal();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void zone_merge_history::set_sql_principal(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.sql_principal_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:zone_merge_history.sql_principal)
+}
+inline ::std::string* PROTOBUF_NONNULL zone_merge_history::mutable_sql_principal()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_sql_principal();
+  // @@protoc_insertion_point(field_mutable:zone_merge_history.sql_principal)
+  return _s;
+}
+inline const ::std::string& zone_merge_history::_internal_sql_principal() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sql_principal_.Get();
+}
+inline void zone_merge_history::_internal_set_sql_principal(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sql_principal_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL zone_merge_history::_internal_mutable_sql_principal() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.sql_principal_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE zone_merge_history::release_sql_principal() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:zone_merge_history.sql_principal)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.sql_principal_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.sql_principal_.Set("", GetArena());
+  }
+  return released;
+}
+inline void zone_merge_history::set_allocated_sql_principal(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.sql_principal_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.sql_principal_.IsDefault()) {
+    _impl_.sql_principal_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:zone_merge_history.sql_principal)
+}
+
+// uint64 at_ms = 7;
+inline void zone_merge_history::clear_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t zone_merge_history::at_ms() const {
+  // @@protoc_insertion_point(field_get:zone_merge_history.at_ms)
+  return _internal_at_ms();
+}
+inline void zone_merge_history::set_at_ms(::uint64_t value) {
+  _internal_set_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:zone_merge_history.at_ms)
+}
+inline ::uint64_t zone_merge_history::_internal_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.at_ms_;
+}
+inline void zone_merge_history::_internal_set_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.at_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // route_meta
 
 // uint32 id = 1;
@@ -26535,7 +27152,7 @@ inline void sql_writer_registry::set_allocated_registration_digest(::std::string
 inline void sql_writer_registry::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::sql_writer_registry_State sql_writer_registry::state() const {
   // @@protoc_insertion_point(field_get:sql_writer_registry.state)
@@ -26543,7 +27160,7 @@ inline ::sql_writer_registry_State sql_writer_registry::state() const {
 }
 inline void sql_writer_registry::set_state(::sql_writer_registry_State value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:sql_writer_registry.state)
 }
 inline ::sql_writer_registry_State sql_writer_registry::_internal_state() const {
@@ -26729,6 +27346,30 @@ inline ::uint64_t sql_writer_registry::_internal_retired_ms() const {
 inline void sql_writer_registry::_internal_set_retired_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.retired_ms_ = value;
+}
+
+// uint64 boot_seq = 11;
+inline void sql_writer_registry::clear_boot_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boot_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t sql_writer_registry::boot_seq() const {
+  // @@protoc_insertion_point(field_get:sql_writer_registry.boot_seq)
+  return _internal_boot_seq();
+}
+inline void sql_writer_registry::set_boot_seq(::uint64_t value) {
+  _internal_set_boot_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:sql_writer_registry.boot_seq)
+}
+inline ::uint64_t sql_writer_registry::_internal_boot_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.boot_seq_;
+}
+inline void sql_writer_registry::_internal_set_boot_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boot_seq_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -27031,7 +27672,7 @@ inline void sql_writer_lifecycle_receipt_Request::set_allocated_request_id(::std
 inline void sql_writer_lifecycle_receipt_Request::clear_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.kind_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::sql_writer_lifecycle_receipt_Kind sql_writer_lifecycle_receipt_Request::kind() const {
   // @@protoc_insertion_point(field_get:sql_writer_lifecycle_receipt.Request.kind)
@@ -27039,7 +27680,7 @@ inline ::sql_writer_lifecycle_receipt_Kind sql_writer_lifecycle_receipt_Request:
 }
 inline void sql_writer_lifecycle_receipt_Request::set_kind(::sql_writer_lifecycle_receipt_Kind value) {
   _internal_set_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:sql_writer_lifecycle_receipt.Request.kind)
 }
 inline ::sql_writer_lifecycle_receipt_Kind sql_writer_lifecycle_receipt_Request::_internal_kind() const {
@@ -27053,14 +27694,14 @@ inline void sql_writer_lifecycle_receipt_Request::_internal_set_kind(::sql_write
 
 // .sql_writer_registry writer = 3;
 inline bool sql_writer_lifecycle_receipt_Request::has_writer() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
   PROTOBUF_ASSUME(!value || _impl_.writer_ != nullptr);
   return value;
 }
 inline void sql_writer_lifecycle_receipt_Request::clear_writer() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.writer_ != nullptr) _impl_.writer_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline const ::sql_writer_registry& sql_writer_lifecycle_receipt_Request::_internal_writer() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -27079,16 +27720,16 @@ inline void sql_writer_lifecycle_receipt_Request::unsafe_arena_set_allocated_wri
   }
   _impl_.writer_ = reinterpret_cast<::sql_writer_registry*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:sql_writer_lifecycle_receipt.Request.writer)
 }
 inline ::sql_writer_registry* PROTOBUF_NULLABLE sql_writer_lifecycle_receipt_Request::release_writer() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::sql_writer_registry* released = _impl_.writer_;
   _impl_.writer_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -27108,7 +27749,7 @@ inline ::sql_writer_registry* PROTOBUF_NULLABLE sql_writer_lifecycle_receipt_Req
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:sql_writer_lifecycle_receipt.Request.writer)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::sql_writer_registry* temp = _impl_.writer_;
   _impl_.writer_ = nullptr;
   return temp;
@@ -27123,7 +27764,7 @@ inline ::sql_writer_registry* PROTOBUF_NONNULL sql_writer_lifecycle_receipt_Requ
 }
 inline ::sql_writer_registry* PROTOBUF_NONNULL sql_writer_lifecycle_receipt_Request::mutable_writer()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::sql_writer_registry* _msg = _internal_mutable_writer();
   // @@protoc_insertion_point(field_mutable:sql_writer_lifecycle_receipt.Request.writer)
   return _msg;
@@ -27140,9 +27781,9 @@ inline void sql_writer_lifecycle_receipt_Request::set_allocated_writer(::sql_wri
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   }
 
   _impl_.writer_ = reinterpret_cast<::sql_writer_registry*>(value);
@@ -27153,7 +27794,7 @@ inline void sql_writer_lifecycle_receipt_Request::set_allocated_writer(::sql_wri
 inline void sql_writer_lifecycle_receipt_Request::clear_expected_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_epoch_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t sql_writer_lifecycle_receipt_Request::expected_epoch() const {
   // @@protoc_insertion_point(field_get:sql_writer_lifecycle_receipt.Request.expected_epoch)
@@ -27161,7 +27802,7 @@ inline ::uint64_t sql_writer_lifecycle_receipt_Request::expected_epoch() const {
 }
 inline void sql_writer_lifecycle_receipt_Request::set_expected_epoch(::uint64_t value) {
   _internal_set_expected_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:sql_writer_lifecycle_receipt.Request.expected_epoch)
 }
 inline ::uint64_t sql_writer_lifecycle_receipt_Request::_internal_expected_epoch() const {
@@ -27177,7 +27818,7 @@ inline void sql_writer_lifecycle_receipt_Request::_internal_set_expected_epoch(:
 inline void sql_writer_lifecycle_receipt_Request::clear_expected_catalog_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_catalog_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t sql_writer_lifecycle_receipt_Request::expected_catalog_revision() const {
   // @@protoc_insertion_point(field_get:sql_writer_lifecycle_receipt.Request.expected_catalog_revision)
@@ -27185,7 +27826,7 @@ inline ::uint64_t sql_writer_lifecycle_receipt_Request::expected_catalog_revisio
 }
 inline void sql_writer_lifecycle_receipt_Request::set_expected_catalog_revision(::uint64_t value) {
   _internal_set_expected_catalog_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:sql_writer_lifecycle_receipt.Request.expected_catalog_revision)
 }
 inline ::uint64_t sql_writer_lifecycle_receipt_Request::_internal_expected_catalog_revision() const {
@@ -27529,7 +28170,7 @@ inline void sql_writer_lifecycle_receipt_Request::set_allocated_deployment_id(::
 inline void sql_writer_lifecycle_receipt_Request::clear_lock_primitive() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.lock_primitive_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::sql_writer_boot_grant_LockPrimitive sql_writer_lifecycle_receipt_Request::lock_primitive() const {
   // @@protoc_insertion_point(field_get:sql_writer_lifecycle_receipt.Request.lock_primitive)
@@ -27537,7 +28178,7 @@ inline ::sql_writer_boot_grant_LockPrimitive sql_writer_lifecycle_receipt_Reques
 }
 inline void sql_writer_lifecycle_receipt_Request::set_lock_primitive(::sql_writer_boot_grant_LockPrimitive value) {
   _internal_set_lock_primitive(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:sql_writer_lifecycle_receipt.Request.lock_primitive)
 }
 inline ::sql_writer_boot_grant_LockPrimitive sql_writer_lifecycle_receipt_Request::_internal_lock_primitive() const {
@@ -27611,6 +28252,70 @@ inline void sql_writer_lifecycle_receipt_Request::set_allocated_lock_qualificati
     _impl_.lock_qualification_sha256_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:sql_writer_lifecycle_receipt.Request.lock_qualification_sha256)
+}
+
+// bytes successor_request_id = 13;
+inline void sql_writer_lifecycle_receipt_Request::clear_successor_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.successor_request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline const ::std::string& sql_writer_lifecycle_receipt_Request::successor_request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:sql_writer_lifecycle_receipt.Request.successor_request_id)
+  return _internal_successor_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void sql_writer_lifecycle_receipt_Request::set_successor_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  _impl_.successor_request_id_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:sql_writer_lifecycle_receipt.Request.successor_request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL sql_writer_lifecycle_receipt_Request::mutable_successor_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::std::string* _s = _internal_mutable_successor_request_id();
+  // @@protoc_insertion_point(field_mutable:sql_writer_lifecycle_receipt.Request.successor_request_id)
+  return _s;
+}
+inline const ::std::string& sql_writer_lifecycle_receipt_Request::_internal_successor_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.successor_request_id_.Get();
+}
+inline void sql_writer_lifecycle_receipt_Request::_internal_set_successor_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.successor_request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL sql_writer_lifecycle_receipt_Request::_internal_mutable_successor_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.successor_request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE sql_writer_lifecycle_receipt_Request::release_successor_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:sql_writer_lifecycle_receipt.Request.successor_request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000080U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  auto* released = _impl_.successor_request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.successor_request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void sql_writer_lifecycle_receipt_Request::set_allocated_successor_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  _impl_.successor_request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.successor_request_id_.IsDefault()) {
+    _impl_.successor_request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:sql_writer_lifecycle_receipt.Request.successor_request_id)
 }
 
 // -------------------------------------------------------------------

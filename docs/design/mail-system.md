@@ -148,7 +148,7 @@
 | 玩家侧状态 | 就在本人行上 | 只在**有交互**(已读 / 删除 / M2 领取)时物化一行 `mail_system_state` |
 | 读成本 | 一次按 owner 扫 | 多一次"有效系统邮件集"查询(有界,见下)+ 一次按 (player, id IN …) 的点查 |
 
-代价与约束:读时合并要求**有效系统邮件数有界**,否则每次列表都要扫一遍。约束手段:`SendSystemMail` 强制 `expire_ms`(不许永不过期,最长 `Mail.MaxSystemMailTtlDays`),并在发件时检查"当前有效系统邮件数 < `Mail.MaxActiveSystemMails`"(推荐 100)。这个检查在并发发件下是软上限(两个运维同时发可能各自看到 99),接受理由:发件方只有运维,并发极低;读侧另有 `ORDER BY sys_mail_id DESC LIMIT` 硬上限并在截断时打 WARN + 计指标(并有告警,§4.7),所以超额时丢弃的是 **`sys_mail_id` 最小的**几封(号段单调,即最早发出的),不会拖垮查询。没有 `ORDER BY` 时截掉哪几封由执行计划决定(走 `expire_ms` 索引时截掉的是最晚过期的),翻页也可能不稳定 —— 所以排序必须写进 SQL。
+代价与约束:读时合并要求**有效系统邮件数有界**,否则每次列表都要扫一遍。约束手段:`SendSystemMail` 强制 `expire_ms`(不许永不过期,最长 `Mail.MaxSystemMailTtlDays`),并在发件时检查"当前有效系统邮件数 < `Mail.MaxActiveSystemMails`"(推荐 100)。帮会邮件(文本与活动)不计入这个全服上限,按帮另计 `Mail.MaxActiveGuildMailsPerGuild`(缺省 20,2026-11-10,缺口清单第 27 条):它们只对本帮成员可见,不进别人的列表查询;共用一个全服上限时,帮会一多就会把系统邮件挤满。这个检查在并发发件下是软上限(两个运维同时发可能各自看到 99),接受理由:发件方只有运维与帮会公告,并发极低;超额的后果只是列表变长、每次读多扫几行,不会丢信。读侧不截断(2026-10-30 起):`ListMails` 把个人、系统、帮会、活动邮件放在同一条查询里,按 `(sent_ms, mail_id)` 倒序翻页,每页 `LIMIT ≤ 100`(多读一封只为判断有没有下一页),超出一页的翻页就能看到;排序写进 SQL,翻页稳定(游标是上一页最后一封的 `mail_id`,换算成 `(sent_ms, mail_id)`,`mail_id` 打散、不代表先后)。M1 原设计的「系统有效集 `ORDER BY sys_mail_id DESC LIMIT MaxActiveSystemMails`、截断时计数并告警」已不存在,截断计数与告警在 2026-11-11 删掉(缺口清单第 35 条,文末同日一节)。
 
 **不用"每玩家一个已看最大 sys_mail_id 游标"**:游标只能表达"看过",表达不了单封的已删 / 已领,最后还是要物化行;两套状态并存只会多一处不一致。
 
@@ -358,9 +358,11 @@ ON DUPLICATE KEY UPDATE read_ms = IF(read_ms = 0, VALUES(read_ms), read_ms), …
 
 **为什么定向邮件发件不校验收件人存在**:mail 没有玩家名册。可用的旁证是 data_service 的 `GetPlayerHomeZone`,**已核实**(`go/data_service/internal/server/dataserviceserver.go` 的 `GetPlayerHomeZone`):无映射 → gRPC `NotFound`(文案 `no home zone mapping` 是滚动升级契约,login 的 `homezone.IsUnmapped` 靠它识别)、Redis 故障 → `Unavailable`、成功才返回 `home_zone_id`。但它只能证明"有 home zone 映射",**不能当"玩家存在"的权威依据**(存量玩家可能早于映射注册)。M1 发件方只有运维与 robot,输错 id 的后果是"一封没人看的信,到期被 sweep",可接受;`mail_box` 守卫行会因此多一行,量级由运维操作数决定。M2 机器发件方出现时若要校验:`NotFound` 作业务拒绝、`Unavailable` 作 `kServiceUnavailable`,并先解决"存量玩家无映射"的误拒。
 
-**`ListMails` 的两个硬上限都必须在 SQL 里**(照 friend §5.6 可借鉴的一条"列表类读要有 LIMIT 硬上限"):系统有效集 `ORDER BY sys_mail_id DESC LIMIT MaxActiveSystemMails`,截断时 WARN + `mail_list_truncated_total`(有告警,§4.7);state 点查的 `IN` 列表长度 ≤ 该上限。
+**`ListMails` 的硬上限在 SQL 里**(照 friend §5.6 可借鉴的一条"列表类读要有 LIMIT 硬上限"):2026-10-30 起只有一条列表查询,`ORDER BY sent_ms DESC, mail_id DESC LIMIT limit+1`(`limit` 缺省 50、最大 100),按游标翻页,不截断(§3.1);未读与可领数是同一快照里的一条计数查询。M1 的「系统有效集单独读、`LIMIT MaxActiveSystemMails` 截断并计 `mail_list_truncated_total`」随之退役,指标与告警 2026-11-11 删掉(缺口清单第 35 条)。
 
 ### 4.3 "领取短路"的确切行为
+
+> M1 历史。M2 起领取走资产通道(§6 解禁清单),这条短路路径与 `MailError_kMailClaimNotOpen` 的返回都已不在代码里;没有调用方的计数器 `mail_claim_short_circuit_total` 在 2026-11-11 删掉(与第 35 条的截断计数同批,见文末同日一节)。
 
 - `ClaimMailAttachments{mail_ids ≤20 | all=true}`:
   1. 取会话身份,失败 → `CommonError_kInvalidParameter`;
@@ -385,7 +387,7 @@ ON DUPLICATE KEY UPDATE read_ms = IF(read_ms = 0, VALUES(read_ms), read_ms), …
 
 ### 4.6 过期 sweep(照 friend 纪律)
 
-配置 `Sweep`:`Mode` 默认 `report_only`,只收 `report_only|delete`,空串 / 非法值 `Validate` 拒收;`RetentionDays` 默认 7(过期后再保留 7 天供客服查询),**下界 1,`Validate` 拒 0**(评审第 8 / 25 条:它同时是幂等键寿命的余量与"upsert 与 sweep 不相交"的间隔,§4.2);`BatchLimit` 默认 1000,≤0 拒收;保留期上限 36500 天防回绕;`Interval` 带首轮随机抖动;单轮预算 30s。多副本各跑各的,不引入 leader(DELETE … LIMIT 天然可并发,重复删 = 0 行)。
+配置 `Sweep`:`Mode` 默认 `report_only`,只收 `report_only|delete`,空串 / 非法值 `Validate` 拒收;`RetentionDays` 默认 7(过期后再保留 7 天供客服查询),**下界 1,`Validate` 拒 0**(评审第 8 / 25 条:它同时是幂等键寿命的余量与"upsert 与 sweep 不相交"的间隔,§4.2);`BatchLimit` 默认 1000,≤0 拒收;保留期上限 36500 天防回绕;`Interval` 带首轮随机抖动;单轮预算 30s。不引入 leader;2026-11-11 起按 `mail_id` 分 64 片,分给本 zone 注册的 stable 副本(与附件重投同一份成员表,类别键 `mail-expiry-sweep`),每个副本的候选读与无效行抽样都只看自己的片,片条件在 `LIMIT` 之前;正确性仍靠每封点锁后按原条件复核再删,成员表变化时两个副本删同一封,后到的复核落空。为什么按 `mail_id` 而不按收件人、成员表怎么圈,见[资产指令重投分片设计](assetop-redelivery-sharding-20261110.md) §14.2。
 
 截止点 `cutoff = now − RetentionDays`;**`cutoff ≤ 0` 本轮什么都不做**(无符号列与负数比较会匹配全表,friend `sweepCutoffMs` 的教训)。计数一律"派生表 LIMIT 的有界 COUNT"。删除一律单条自动提交 `DELETE … LIMIT`(前提 `binlog_format=ROW`,已核实 `deploy/k8s/manifests/infra/mysql.yaml:60`;本地 compose 取 8.4 默认)。
 
@@ -407,19 +409,18 @@ ON DUPLICATE KEY UPDATE read_ms = IF(read_ms = 0, VALUES(read_ms), read_ms), …
 | `mail_sweep_candidate_rows{table,mode}` | gauge | 本轮有界计数得到的候选行数(`report_only` 下就是"本该删"的量) |
 | `mail_sweep_deleted_total{table}` | counter | 实删行数 |
 | `mail_sweep_invalid_rows{table}` | counter | `expire_ms = 0` 保险分支命中数 |
-| `mail_sweep_last_run_unixtime` | gauge | 每轮结束时**无论删了几行**都写 `time.Now().Unix()`;循环卡死 / panic 后不再调度时它停止前进 |
+| `mail_sweep_last_run_unixtime` | gauge | 清理循环起来时写一次,之后每轮跑完(**无论删了几行、这一轮成败**)写这一轮结束的时刻,循环退出时删掉序列(2026-11-11 起;canary 不跑清理,没有序列);循环卡住时它停止前进 |
 
 ### 4.7 告警(评审第 15 条)
 
-只在事件发生时更新的指标发现不了"sweep 卡死"(leaderboard §3.7 / L-21 的教训);而读侧的有效系统邮件集查询要靠 sweep 保持有界。新建 `deploy/k8s/mail-alerts.yaml`,形状照 `deploy/k8s/scene-manager-alerts.yaml`,多副本一律 `max()` 聚合:
+只在事件发生时更新的指标发现不了"sweep 卡死"(leaderboard §3.7 / L-21 的教训);而 `ListMails` 每次要扫的共享邮件行数要靠 sweep 保持有界。新建 `deploy/k8s/mail-alerts.yaml`,形状照 `deploy/k8s/scene-manager-alerts.yaml`。计数器按 `sum()` 跨副本求和;sweep 的活性 2026-11-11 起按副本逐条判,不再 `max()` 聚合:sweep 按片分工之后一个副本卡住,别的副本照常推进,`max()` 看不出来:
 
 | 告警 | 表达式 | 含义 |
 |---|---|---|
-| `MailSweepStalled` | `time() - max(mail_sweep_last_run_unixtime) > 3 * <Interval 秒>` | sweep 循环卡死或停止调度 |
+| `MailSweepStalled` | `time() - mail_sweep_last_run_unixtime > 3 * <Interval 秒>`(按副本) | 某个副本的 sweep 循环卡住,它名下的片没人清 |
 | `MailSweepInvalidRows` | `increase(mail_sweep_invalid_rows[1h]) > 0` | 出现 `expire_ms = 0` 的行(发件校验被绕过) |
-| `MailSystemListTruncated` | `increase(mail_list_truncated_total[10m]) > 0` | 有效系统邮件超软上限,玩家少看到信 |
 
-该文件计入 M1d 文件清单;§10 第 ⑤ 步验证 `:9240/metrics` 上这些指标都有预建的 0 值序列(否则 `increase` 类告警在首个事件前没有序列可比)。
+该文件计入 M1d 文件清单;§10 第 ⑤ 步验证 `:9240/metrics` 上计数器都有预建的 0 值序列(否则 `increase` 类告警在首个事件前没有序列可比)。活性 gauge `mail_sweep_last_run_unixtime` 例外:只在清理循环运行时有序列(canary 上没有),它是按副本判的,不靠预建。附件重投循环的停摆告警是 `asset-channel-alerts.yaml` 的 `AssetOpRedeliveryLoopStalled{service="mail"}`。
 
 ---
 
@@ -1310,3 +1311,27 @@ Java `DomainClientDispatch.withSession` 将完整不可变 `SessionContext` 送�
 - 回归:`go/mail/cmd/mailadmin/main_test.go`(本机随机端口的 MailAdmin 替身,不依赖真库;断言只比对替身实收的请求,不依赖当前时间的取值),含 `TestUnrecognizedTipCodeIsUnknownLikeFault`、`TestSuccessTipCodeIsDelivered`。
 
 `Mail.MaxPersonalMailTtlDays` 与排行榜奖励联动:`go/rank/etc/rank.yaml` 的 `MailMaxPersonalMailTtlDays` 必须同值,改有效期两边同批改,见 [leaderboard-system.md](leaderboard-system.md)「2026-11-05 奖励邮件过期写定、放弃终态与人工重投」。Java 版没有运维发件 CLI,r2-mail#1 不适用。
+
+### 2026-11-10 帮会邮件按帮计数(缺口清单第 27 条;未编译、未运行)
+
+- 问题:系统邮件和帮会邮件(文本与活动)共用全服 `Mail.MaxActiveSystemMails`(100)。帮会邮件只对本帮可见,却挤占全服名额:帮会一多,运维的系统邮件就发不出去;一个帮发得多,别的帮也发不了。
+- 做法:发件与建活动的封顶收进同一个判定 `checkSharedMailCapacity`(`go/mail/internal/data/repo.go`),按 `guild_id` 是否为 0 分两类计数:
+  - `guild_id=0` 是系统邮件,数 `owner_player_id=0 AND guild_id=0 AND kind IN (0,2)` 的有效行,上限 `MaxActiveSystemMails`;
+  - 非 0 是帮会邮件,数这个帮的有效共享行,上限新配置 `Mail.MaxActiveGuildMailsPerGuild`(缺省 20,允许 1~100,`go/mail/etc/mail.yaml` 与 ConfigMap 同源)。
+  - 两类不会混:`Send` 与 `CreateCampaign` 都校验系统邮件 `guild_id=0`、帮会邮件非 0。活动的幂等占位行(kind=0)和它的消息行算在各自那一类,与改动前的口径相同。
+- 仍是软上限,理由同前:并发发件可能略超,读侧 `ListMails` 另有 `LIMIT` 硬上限。帮会计数走 `(guild_id, mail_id)` 索引,只扫这个帮的行。
+- 帮会邮件目前还没有调用方,这一条先把数据口径改对,接入帮会公告时不用再动封顶。
+- 顺带发现、没改:`metrics.ObserveListTruncated` 已经没有调用方(读侧封顶在 2026-10-30 改成分页 `LIMIT` 时去掉了),告警 `MailSystemListTruncated`(`deploy/k8s/mail-alerts.yaml`)因此永远不会触发。要删要改另记,不在本条。(2026-11-11 已删,见文末同日一节。)
+- 回归:`go/mail/internal/data/repo_integration_test.go` 的 `TestTiDBGuildMailCapIsPerGuildAndSeparateFromSystemCap`(门控同文件其他 TiDB 用例)、`TestMailLimitsGuildCapDefaultsAndRange`(纯单测);部署契约 `k8s_deploy_contract.tests.ps1` 的邮件配置镜像清单加了新键。
+
+### 2026-11-11 过期清理按片分工、清理活性按副本判、删截断计数(缺口清单第 25、35 条;未编译、未运行)
+
+- **第 35 条结论:没有截断路径,删掉指标与告警。**
+  - 代码事实:`ListMails`(`go/mail/internal/data/inbox.go` 的 `listOnce`)从 2026-10-30 起只有两条只读查询:一条数未读与可领(不带 LIMIT,同一快照),一条按 `(sent_ms, mail_id)` 倒序翻页的列表(`LIMIT limit+1`,`limit` 最大 100,多读一封只为判断有没有下一页)。个人、系统、帮会、活动邮件都在这一条查询里,超出一页的翻页就能看到,没有「系统有效集撞上 `MaxActiveSystemMails`、少给玩家看」的地方。
+  - 所以 `mail_list_truncated_total`、`ObserveListTruncated` 与告警 `MailSystemListTruncated` 一并删掉,不补调用点:补一个永远走不到的调用点,只是把死代码换个位置。`MaxActiveSystemMails` 仍是发件侧的软上限(§3.1),它多了只是列表变长、每次读多扫几行。
+  - 改动:`go/mail/internal/metrics/metrics.go`(删计数器与注册)、`metrics_test.go`(钉住它不再注册)、`deploy/k8s/mail-alerts.yaml`(删 `mail.read` 组)、`deploy/k8s/README.md`、`tools/scripts/tests/k8s_deploy_contract.tests.ps1`(mail 告警用例不再要求引用它);本文 §3.1、§4.2、§4.7 的正文同步改成现在的读法。
+  - 同类的死计数器 `mail_claim_short_circuit_total` 一并删掉:M1 的领取短路(§4.3)已被 M2 的资产通道领取取代,`ObserveClaimShortCircuit` 没有调用方,也没有告警引用它。
+- **过期清理按 `mail_id` 分 64 片**(第 25 条第四批):复用附件重投那份成员表(本 zone 注册的 stable mail),类别键 `mail-expiry-sweep`;`data.Repo.Sweep` 多一个 `owned workshard.Filter`,候选读与无效行抽样的片条件都在 `LIMIT` 之前,删除前的点锁复核不变。按 `mail_id` 不按收件人:系统、帮会、活动邮件的 `owner_player_id` 都是 0,按收件人分会全挤进第 0 片。做法、理由与失败推演见[资产指令重投分片设计](assetop-redelivery-sharding-20261110.md) §14.2。
+- **清理活性改按副本判**:`mail_sweep_last_run_unixtime` 改成不带可变 label 的 GaugeVec,循环起来写一次、每轮跑完写这一轮**结束**的时刻(原来 `defer metrics.MarkSweepRun(time.Now())` 在开头就求了时刻,记的是开始时刻)、循环退出删序列;`MailSweepStalled` 从 `time() - max(...) > 900` 改成按副本的 `time() - mail_sweep_last_run_unixtime > 900`。原告警描述里引用的 `safego_panic_total{point=~"mail.expired_sweep.*"}` 与 `"[mail] Sweep"` 日志在代码里都不存在,一并改成实际的日志行。
+- **测试**(都没有运行):`go/mail/internal/data/sweep_test.go`(新,纯单测 `TestSweepQueriesPutShardFilterBeforeLimit`;TiDB 用例 `TestTiDBSweepDeletesOnlyOwnedShards`,门控同 `repo_integration_test.go`)、`go/mail/internal/maintenance/sweep_test.go`(新,3 个纯单测)、`go/mail/internal/metrics/metrics_test.go`(改 1 个、加 1 个)、`tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1`(新)。验证命令见 `docs/PROGRESS.md` 2026-11-11「回收派发与 mail 过期清理按片分工、循环活性指标、删 mail 截断计数」。
+- **Java 版**:只登记待做(Java 仓 `PARITY.md` 同日条目)。

@@ -68,9 +68,11 @@
     <ClCompile Include="../../libs/services/scene/actor/actor_net_id.cpp" />
     <ClCompile Include="../../libs/services/scene/core/system/id_generator.cpp" />
     <ClCompile Include="../../libs/services/scene/spatial/system/aoi.cpp" />
+    <ClCompile Include="../../libs/services/scene/spatial/system/aoi_load.cpp" />
     <ClCompile Include="../../libs/services/scene/spatial/system/grid.cpp" />
     <ClCompile Include="../../libs/services/scene/spatial/system/interest.cpp" />
     <ClCompile Include="../../libs/services/scene/spatial/system/view.cpp" />
+    <ClCompile Include="../../libs/services/scene/combat/engagement/system/combat_engagement.cpp" />
     <ClCompile Include="../../libs/services/scene/generated/attribute/actorbaseattributess2c_attribute_sync.cpp" />
     <ClCompile Include="../../libs/engine/thread_context/ecs_context.cpp" />
     <ClCompile Include="../../libs/engine/core/utils/stat/stat.cpp" />

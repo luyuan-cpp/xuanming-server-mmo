@@ -27,6 +27,9 @@
     <ClCompile Include="handler\gate_push_delivery.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="handler\gate_redirect_delivery.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -39,7 +42,13 @@
     <ClCompile Include="handler\rpc\client_heartbeat.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="handler\rpc\drain_migration.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="handler\rpc\router_muduo_forward.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="handler\rpc\router_subset.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="handler\rpc\rpc_reply_bridge.cpp">
@@ -80,7 +89,13 @@
     <ClInclude Include="handler\event\gate_kafka_command_router.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="handler\event\world_chat_push_budget.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="handler\gate_push_delivery.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="handler\gate_redirect_delivery.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="handler\rpc\client_session_handler.h">
@@ -92,7 +107,16 @@
     <ClInclude Include="handler\rpc\client_heartbeat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="handler\rpc\drain_migration.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="handler\rpc\router_muduo_forward.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="handler\rpc\router_subset.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="handler\rpc\router_subset_policy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="handler\rpc\rpc_reply_bridge.h">

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"login/internal/config"
+	"login/internal/logic/pkg/createbudget"
 	"login/internal/logic/pkg/ctxkeys"
 	"login/internal/logic/pkg/locker"
 	"login/internal/logic/pkg/loginsession"
@@ -40,14 +41,14 @@ var (
 )
 
 const (
-	// reserveNameBudget 是名字登记这一步的总预算(含同名重试、生成名换名重试)。
-	// 它计入 login.yaml Locker.AccountLockTTL 的持锁耗时估算,改它要同步改那边的注释与取值。
-	reserveNameBudget = 3 * time.Second
+	// 名字登记这一步的预算(含同名重试、生成名换名重试)不再是固定值:CreatePlayer 按 handler 截止分摊,
+	// 上限是 createbudget.NameCap(一次 + 同名重试一次),见 createplayer_budget.go。
 	// SQL提交未知后的独立强读预算，不继承已取消的请求。
 	accountBlobReadBackTimeout = time.Second
 	// createLockReleaseTimeout:释放建角锁的预算。释放不跟请求 ctx 走(见 CreatePlayer 第 3 步的 defer),
-	// 所以自带上界。含义同 accountBlobReadBackTimeout:掐掉的是 go-redis 的内部重发,
-	// 单次 EVAL 最长仍会等满约 3s 的 socket 读超时。
+	// 所以自带上界。建角锁在 LoginRedis 上,它的客户端用 ctx 截止约束套接字读写、不自动重发
+	// (shared/playerredis:ContextTimeoutEnabled、MaxRetries=-1),单次 EVAL 截在这 1s;
+	// 只有给 LoginRedis 配了 DisableContextTimeout 时才会等满 ReadTimeout(login.yaml Locker 注释的持锁耗时推导)。
 	createLockReleaseTimeout = time.Second
 )
 
@@ -90,6 +91,16 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 	if err != nil {
 		logGetAccountFailure("CreatePlayer", sessionDetails, err)
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginSessionNotFound)}
+		return resp, nil
+	}
+
+	// 2b. 本区暂停创建新角色(区服目录的 create_role_closed,运维开关,2026-11-10 起;读法见 svc/zone_policy.go)。
+	//     放在加建角锁、铸号、登记名字之前:拒绝路径不碰任何存储。只拦新建,账号在本区的已有角色照常登录进场。
+	//     读不到区服策略时不拦(fail-open):这是运营节奏上的软开关,不是资产或权限闸门,拦错的代价是整区建不了角。
+	if l.svcCtx.CreateRoleClosed() {
+		logx.Infof("CreatePlayer rejected: zone %d has paused new characters (account=%s)",
+			config.AppConfig.Node.ZoneId, account)
+		resp.ErrorMessage = loginTip(table.LoginError_kLoginZoneCreateRoleClosed)
 		return resp, nil
 	}
 
@@ -192,13 +203,21 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		return resp, nil
 	}
 
-	// 6b. 铸 PlayerId:号段优先(设计稿 §6),是否回退 snowflake 由 IdSegment 配置决定。
-	// 发号失败建角整体失败。绝不能吞掉错误再用 0 或自造 id —— snowflake 那条路上,
-	// 那会与接管了同一 worker id 的进程发出逐位相同的 PlayerId,而 player_database
-	// 的写路径是 INSERT ... ON DUPLICATE KEY UPDATE,撞号不报错而是静默串档。
+	// 6b. 铸 PlayerId:只走号段(设计稿 §6),没有回退号源。
+	// 发号失败建角整体失败。绝不能吞掉错误再用 0 或自造 id:自造的号不在发号器的预留里,唯一性无从保证。
+	// 从这里起持锁后的四跳(发号 / 名字 / player_route / SQL 账号目录提交)按 handler 截止分摊(createplayer_budget.go):
+	// 每一跳的截止 = min(此刻 + 本跳上限, handler 截止 − 后面各跳的下限与间隙),剩下的不够本跳下限就不发。
+	// 前面的读步骤拖慢到连发号之后的余量都放不下时,在这里放弃:一个写都没发,不用补偿。
+	budget := l.createBudgetPlan()
+	mintCtx, mintCancel, ok := l.enterHop(budget, createbudget.HopMint, account, 0)
+	if !ok {
+		resp.ErrorMessage = loginTip(table.LoginError_kLoginDataSerializeFailed)
+		return resp, nil
+	}
 	stageDone := observeStage(createPlayerStageSeconds, createStageMint)
-	newPlayerId, tip := l.mintPlayerID(account)
+	newPlayerId, tip := l.mintPlayerIDWithin(mintCtx, account)
 	stageDone()
+	mintCancel()
 	if tip != nil {
 		resp.ErrorMessage = tip
 		return resp, nil
@@ -210,9 +229,17 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 	// SET NX 且没有 TTL、也没有删除入口 —— 先登记映射再撞名,每次撞名都会留下一条永久的
 	// 幽灵映射,回档孤儿报告与合服重映射都会扫到它。名字登记失败只烧掉一个号段 id,
 	// 不留任何持久状态。
+	// 名字这一跳拿不到一个完整的单次登记预算就不发(名字一个 RPC 都没发,不释放);拿得到时上限是
+	// 「一次 + 同名重试一次」,同名重试照旧由剩余预算是否 ≥ 单次预算把关(tryReserveName)。
+	nameCtx, nameCancel, ok := l.enterHop(budget, createbudget.HopName, account, newPlayerId)
+	if !ok {
+		resp.ErrorMessage = loginTip(table.LoginError_kLoginDataSerializeFailed)
+		return resp, nil
+	}
 	stageDone = observeStage(createPlayerStageSeconds, createStageName)
-	name, owner, tip := l.reservePlayerName(account, newPlayerId, requested, rules, spec, attempts)
+	name, owner, tip := l.reservePlayerNameWithin(nameCtx, account, newPlayerId, requested, rules, spec, attempts)
 	stageDone()
+	nameCancel()
 	if tip != nil {
 		// 6c'. 「名字被占」且占用者就是本账号里一个职业、性别都相同的角色 = 上一次建角其实
 		// 成功了、只是响应丢了,客户端拿同样的参数重试。这时不建新角色、也不报「已被使用」
@@ -254,6 +281,13 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 	if abandonAfterDeadline("player_route registration") {
 		return resp, nil
 	}
+	// 剩下的预算不够 player_route 登记的下限(含给提交留的余量)时同样放弃,名字按「确定已登记」释放一次。
+	registerCtx, registerCancel, ok := l.enterHop(budget, createbudget.HopRegister, account, newPlayerId)
+	if !ok {
+		l.releaseName(account, newPlayerId, name, false)
+		resp.ErrorMessage = loginTip(table.LoginError_kLoginDataSerializeFailed)
+		return resp, nil
+	}
 
 	// 6d. 登记 player_route 归属映射,**fail-closed**:登记失败整体拒绝建角,一个字节都不落盘。
 	// 这条映射是数据路由 / 合服重映射 / 公会 / 榜的归属权威,而生产侧**只有这一个写入点**
@@ -266,8 +300,9 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 	// 同样走这条拒绝路径 —— 接线缺失在启动时已有 ERROR 日志(svc/home_zone.go)。
 	// 走到这里名字已经登记成功,所以失败时要先把名字释放掉再返回(确定已登记,一次即可)。
 	stageDone = observeStage(createPlayerStageSeconds, createStageRegister)
-	tip = l.registerHomeZone(account, newPlayerId)
+	tip = l.registerHomeZoneWithin(registerCtx, account, newPlayerId)
 	stageDone()
+	registerCancel()
 	if tip != nil {
 		l.releaseName(account, newPlayerId, name, false)
 		resp.ErrorMessage = tip
@@ -290,7 +325,7 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		return resp, nil
 	}
 	stageDone = observeStage(createPlayerStageSeconds, createStageAccountWrite)
-	tip = l.persistAccountRole(account, createLock, newPlayer, userAccount)
+	tip = l.persistAccountRole(budget, account, createLock, newPlayer, userAccount)
 	stageDone()
 	if tip != nil {
 		resp.ErrorMessage = tip
@@ -360,13 +395,18 @@ func matchesRetiredAppearanceRetry(players []*login_proto_common.AccountSimplePl
 // 客户端对它的处理(提示后重试)正是我们要的行为,而 Tip 码轴按段由导表器发号,
 // 这里不手写数字。
 func (l *CreatePlayerLogic) mintPlayerID(account string) (uint64, *login_proto_common.TipInfoMessage) {
+	return l.mintPlayerIDWithin(l.ctx, account)
+}
+
+// mintPlayerIDWithin 是 mintPlayerID 的本体,发号等续段时受 ctx 约束(CreatePlayer 传截止分摊派生的发号 ctx)。
+func (l *CreatePlayerLogic) mintPlayerIDWithin(ctx context.Context, account string) (uint64, *login_proto_common.TipInfoMessage) {
 	minter := l.svcCtx.PlayerIDMinter
 	if minter == nil {
 		// 接线错误(NewServiceContext 一定会装上它),按不可用处理而不是 nil 解引用崩掉整个进程。
 		logx.Errorf("Refusing to create player: PlayerIDMinter not wired (account=%s)", account)
 		return 0, &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginDataSerializeFailed)}
 	}
-	id, err := minter.Mint(l.ctx)
+	id, err := minter.Mint(ctx)
 	if err != nil {
 		logx.Errorf("Refusing to create player: id generator unavailable (account=%s): %v", account, err)
 		return 0, &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginDataSerializeFailed)}
@@ -395,11 +435,20 @@ const (
 //
 // 故障类 tip 复用 kLoginDataSerializeFailed,理由同 mintPlayerID / registerHomeZone:
 // 语义同档(「服务端此刻建不了角,稍后重试」),不为一个分支去申请新码。
+//
+// 这一步的总预算是 min(请求 ctx, createbudget.NameCap)。CreatePlayer 走 reservePlayerNameWithin,
+// 传按 handler 截止分摊派生的名字 ctx(还要给后面两跳留余量);这里只给直接调用(单测)一个同上限的入口。
 func (l *CreatePlayerLogic) reservePlayerName(account string, playerID uint64, requested string,
 	rules playername.Rules, spec playername.GenerateSpec, attempts int) (string, uint64, *login_proto_common.TipInfoMessage) {
 
-	ctx, cancel := context.WithTimeout(l.ctx, reserveNameBudget)
+	ctx, cancel := context.WithTimeout(l.ctx, createbudget.NameCap)
 	defer cancel()
+	return l.reservePlayerNameWithin(ctx, account, playerID, requested, rules, spec, attempts)
+}
+
+// reservePlayerNameWithin 是 reservePlayerName 的本体:ctx 就是这一步的总预算(截止即这一步的截止)。
+func (l *CreatePlayerLogic) reservePlayerNameWithin(ctx context.Context, account string, playerID uint64, requested string,
+	rules playername.Rules, spec playername.GenerateSpec, attempts int) (string, uint64, *login_proto_common.TipInfoMessage) {
 
 	if requested != "" {
 		outcome, owner := l.tryReserveName(ctx, account, playerID, requested)
@@ -611,7 +660,8 @@ func recordNameOrphan(account string, playerID uint64, name string, err error) {
 // persistAccountRole 把单个原角色提交到全局目录；SQL 账号锁裁决上限与唯一归属。
 // 已失去本次入口锁时不再发新写；SQL 提交结果未知时只强读原 player_id 恢复。
 // 提交点之前就失败时(ErrNotCommitted)角色确定没建成,释放名字,玩家重试不会撞上自己占住的名字。
-func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locker.Lock, role *login_proto_common.AccountSimplePlayer, directory *login_data_base.UserAccounts) *login_proto_common.TipInfoMessage {
+// 提交这一跳按 handler 截止分摊(budget,createplayer_budget.go):拿不满它的上限就不发,名字按「确定已登记」释放。
+func (l *CreatePlayerLogic) persistAccountRole(budget createbudget.Plan, account string, createLock *locker.Lock, role *login_proto_common.AccountSimplePlayer, directory *login_data_base.UserAccounts) *login_proto_common.TipInfoMessage {
 	if role == nil || l.svcCtx.AccountDirectory == nil {
 		return loginTip(table.LoginError_kLoginDataSerializeFailed)
 	}
@@ -620,7 +670,13 @@ func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locke
 		l.releaseName(account, playerID, name, false)
 		return loginTip(table.LoginError_kLoginInProgress)
 	}
-	created, err := accountdirectory.CreateWithInitialCommit(l.ctx, l.svcCtx.AccountDirectory, account, role)
+	commitCtx, commitCancel, ok := l.enterHop(budget, createbudget.HopCommit, account, playerID)
+	if !ok {
+		l.releaseName(account, playerID, name, false)
+		return loginTip(table.LoginError_kLoginDataSerializeFailed)
+	}
+	created, err := accountdirectory.CreateWithInitialCommit(commitCtx, l.svcCtx.AccountDirectory, account, role)
+	commitCancel()
 	if err == nil && created != nil && created.Players != nil {
 		directory.SimplePlayers = created.Players
 		return nil
@@ -665,14 +721,20 @@ func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locke
 // 写进 player_route 的同一行。钉落点失败与登记失败是同一次写,自然同样 fail-closed。
 // 存档库按地域选、和区无关(总体方案 §7.2):zone 只决定 home_zone,storage_id 由 player_id 在本地域 K 个库里取模。
 func (l *CreatePlayerLogic) registerHomeZone(account string, playerID uint64) *login_proto_common.TipInfoMessage {
+	return l.registerHomeZoneWithin(l.ctx, account, playerID)
+}
+
+// registerHomeZoneWithin 是 registerHomeZone 的本体,登记 RPC 受 ctx 约束(CreatePlayer 传截止分摊派生的登记 ctx;
+// homezone.Resolver 另套 RegisterTimeout,取两者较早的)。
+func (l *CreatePlayerLogic) registerHomeZoneWithin(ctx context.Context, account string, playerID uint64) *login_proto_common.TipInfoMessage {
 	zone := config.AppConfig.Node.ZoneId
-	storageID, err := config.AppConfig.Placement.StorageIDForNewPlayer(playerID, zone)
+	storageID, err := config.AppConfig.Placement.StorageIDForNewPlayer(playerID)
 	if err != nil {
 		logx.Errorf("Refusing to create player: no storage for the new player (account=%s player_id=%d zone=%d): %v",
 			account, playerID, zone, err)
 		return &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginDataSerializeFailed)}
 	}
-	if err := l.svcCtx.HomeZone.RegisterPlayerZone(l.ctx, playerID, zone, storageID); err != nil {
+	if err := l.svcCtx.HomeZone.RegisterPlayerZone(ctx, playerID, zone, storageID); err != nil {
 		logx.Errorf("Refusing to create player: player_route registration failed "+
 			"(account=%s player_id=%d zone=%d storage_id=%d): %v", account, playerID, zone, storageID, err)
 		return &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginDataSerializeFailed)}

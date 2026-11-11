@@ -16,7 +16,9 @@ message RankBoardRecord {
   uint64 generation = 6;
   string producer = 7;
   uint64 source_epoch = 8;
-  uint64 committed_cursor = 9; // 本代已落账的批次总数(各片之和),封榜按它核齐;各片游标看 rank_input_receipt。
+  // 9 committed_cursor、18 entries 于 2026-11-11 移到 rank_board_shard(缺口清单第 17 条):Submit 只锁自己那一片,
+  // 不再改榜行;本代已落账的批次总数与现有实体数都是各片行之和。开发期删除,上线前删库重建。
+  reserved 9, 18;
   uint32 ascending = 10;
   uint32 state = 11;
   uint64 settlement_id = 12;
@@ -25,9 +27,20 @@ message RankBoardRecord {
   uint64 created_ms = 15;
   uint64 sealed_ms = 16;
   uint64 deleted_ms = 17;
-  // 本代榜上现有的实体数(2026-11-05,缺口清单第 18 条):Submit 新增实体时加、Remove 删行时减,都在榜行锁里改,
-  // 与 rank_score 同事务提交。读路径的总数直接取它,不再对全榜 COUNT。
-  uint64 entries = 18;
+}
+// 一张榜一代里一个来源片的游标与计数(2026-11-11,缺口清单第 17 条)。拆成片行,是为了让不同片的 Submit 互不等待:
+// Submit 只锁自己那一片的行;本片第一次写入时在榜行锁里建行。封榜、移除、隐藏整代先锁榜行,再按片号升序锁全部片行,
+// 与在途批次互斥。设计见 docs/design/leaderboard-system.md「2026-11-11 同榜写入按来源片并行」。
+message RankBoardShardRecord {
+  option (OptionTableName) = "rank_board_shard";
+  option (OptionPrimaryKey) = "board_id,generation,source_shard";
+  uint64 board_id = 1;
+  uint64 generation = 2;
+  uint32 source_shard = 3;
+  uint64 committed_cursor = 4; // 本片已落账到的游标:同片无缺口、从 1 起。封榜时各片之和与生产者的最终游标之和比对。
+  // 记在本片行上的实体数。各片之和 = 本代榜上现有的实体数(读路径的总数)。某个实体记在哪一片行上没有业务含义:
+  // Submit 把本批新上榜的实体记在本片行上;Remove 删到一行时,从片号最小、计数大于 0 的片行上减一(持全部片行锁,和不变)。
+  uint64 entries = 5;
 }
 message RankScoreRecord {
   option (OptionTableName) = "rank_score";

@@ -16,22 +16,30 @@ import (
 )
 
 // gateConn 按语句里的表名回固定的一行,不连库:只验闸门把哪种状态判成冻结、哪种判成资格不符。
+// 顺带数发出的语句:execs 是条件写,queries 是全部读,slotReads 是其中读 writer_slot 的。
 type gateConn struct {
-	meta, slot, registry []driver.Value
-	touched              int64
+	meta, slot, registry      []driver.Value
+	touched                   int64
+	execs, queries, slotReads int
 }
 
 func (c *gateConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("不走预处理") }
 func (c *gateConn) Close() error                        { return nil }
 func (c *gateConn) Begin() (driver.Tx, error)           { return nil, errors.New("不走事务") }
 func (c *gateConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+	c.execs++
 	return driver.RowsAffected(c.touched), nil
 }
 func (c *gateConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	c.queries++
 	switch {
+	case strings.Contains(query, "route_meta") && strings.Contains(query, "writer_registry"):
+		// readGateView 的合并读:route_meta 五列在前,writer_registry 五列在后。
+		return &gateRows{row: append(append([]driver.Value{}, c.meta...), c.registry...)}, nil
 	case strings.Contains(query, "route_meta"):
 		return &gateRows{row: c.meta}, nil
 	case strings.Contains(query, "writer_slot"):
+		c.slotReads++
 		return &gateRows{row: c.slot}, nil
 	case strings.Contains(query, "writer_registry"):
 		return &gateRows{row: c.registry}, nil
@@ -121,6 +129,69 @@ func TestGateClassifiesFrozenApartFromDenied(t *testing.T) {
 	}
 }
 
+// 读闸门(admitRead,2026-11-06)只核 route_meta:可写放行;冻结回 ErrWriterFrozen;世代不符、写资格已关闭回 ErrWriterDenied。
+// 它不读 slot 与注册表:读不需要写资格,那两行退休或不符都不影响读。读放行不算过过闸门。
+func TestRuntimeGateAdmitRead(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(*gateConn)
+		closed bool
+		want   error
+	}{
+		{name: "可写放行", change: func(*gateConn) {}},
+		{name: "slot 已退休、注册主体不符也照样读", change: func(c *gateConn) { c.slot[2] = int64(2); c.registry[2] = []byte("other@%") }},
+		{name: "冻结", change: func(c *gateConn) { c.meta[1] = int64(0) }, want: ErrWriterFrozen},
+		{name: "世代不符", change: func(c *gateConn) { c.meta[0] = "cd" }, want: ErrWriterDenied},
+		{name: "写资格已关闭", change: func(*gateConn) {}, closed: true, want: ErrWriterDenied},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			conn := healthyGateConn()
+			test.change(conn)
+			config := gateConfig(databasepb.SqlWriterBootGrant_SELECT_ONLY)
+			config.boot.closed.Store(test.closed)
+			err := runtimeGate{config: config}.admitRead(context.Background(), conn)
+			switch test.want {
+			case nil:
+				if err != nil {
+					t.Fatalf("应放行: %v", err)
+				}
+			case ErrWriterFrozen:
+				if !IsWriterFrozen(err) {
+					t.Fatalf("应判冻结: %v", err)
+				}
+			case ErrWriterDenied:
+				if !errors.Is(err, ErrWriterDenied) || errors.Is(err, ErrWriterFrozen) {
+					t.Fatalf("应判资格不符、不是可重试的冻结: %v", err)
+				}
+			}
+			if config.boot.admitted.Load() {
+				t.Fatal("读放行不算过过闸门:启动阶段「冻结时放行读」的规则不能被只读流量改掉")
+			}
+		})
+	}
+}
+
+// 读闸门撞到冻结开始计时,之后读到可写就归零(只读进程上冻结结束后指标不会一直涨)。
+func TestRuntimeGateAdmitReadTracksFrozen(t *testing.T) {
+	config := gateConfig(databasepb.SqlWriterBootGrant_SELECT_ONLY)
+	gate := runtimeGate{config: config}
+	frozen := healthyGateConn()
+	frozen.meta[1] = int64(0)
+	if err := gate.admitRead(context.Background(), frozen); !IsWriterFrozen(err) {
+		t.Fatalf("应判冻结: %v", err)
+	}
+	if !config.boot.frozen.active.Load() {
+		t.Fatal("撞到冻结要开始计时")
+	}
+	if err := gate.admitRead(context.Background(), healthyGateConn()); err != nil {
+		t.Fatal(err)
+	}
+	if config.boot.frozen.active.Load() || config.boot.admitted.Load() {
+		t.Fatal("读到可写要归零,且不算过过闸门")
+	}
+}
+
 // 事务进入期间 writable 被置 0:第一次读到可写,持 slot 之后复核读到冻结。
 func TestGateFreezeDuringEnterIsFrozen(t *testing.T) {
 	conn := healthyGateConn()
@@ -132,6 +203,69 @@ func TestGateFreezeDuringEnterIsFrozen(t *testing.T) {
 	conn.meta[1] = int64(0)
 	if err = attempt.enter(context.Background(), conn); !errors.Is(err, ErrWriterFrozen) {
 		t.Fatalf("进入期间冻结: %v", err)
+	}
+}
+
+// 每笔写事务进闸门(enter)只发两条语句(2026-11-11,缺口清单第 20 条):LOCK_TOUCH 档一条条件写加一条合并读,
+// 条件写命中时不再读 writer_slot;SELECT_ONLY 档一条加锁读加一条合并读。以前分别是四条、三条。
+func TestGateEnterSendsTwoStatements(t *testing.T) {
+	tests := []struct {
+		name                      string
+		primitive                 databasepb.SqlWriterBootGrant_LockPrimitive
+		execs, queries, slotReads int
+	}{
+		{name: "LOCK_TOUCH", primitive: databasepb.SqlWriterBootGrant_LOCK_TOUCH, execs: 1, queries: 1, slotReads: 0},
+		{name: "SELECT_ONLY", primitive: databasepb.SqlWriterBootGrant_SELECT_ONLY, execs: 0, queries: 2, slotReads: 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			conn := healthyGateConn()
+			gate := runtimeGate{config: gateConfig(test.primitive)}
+			attempt, err := gate.beforeBegin(context.Background(), conn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			conn.execs, conn.queries, conn.slotReads = 0, 0, 0
+			if err = attempt.enter(context.Background(), conn); err != nil {
+				t.Fatalf("应放行: %v", err)
+			}
+			if conn.execs != test.execs || conn.queries != test.queries || conn.slotReads != test.slotReads {
+				t.Fatalf("enter 发了 execs=%d queries=%d slotReads=%d,应为 %d/%d/%d",
+					conn.execs, conn.queries, conn.slotReads, test.execs, test.queries, test.slotReads)
+			}
+		})
+	}
+}
+
+// 注册行不在(合并读里后五列是 NULL)判资格不符,与以前分两条读时「注册行读不到」相同。
+func TestGateDeniesWhenRegistrationRowIsMissing(t *testing.T) {
+	for _, primitive := range []databasepb.SqlWriterBootGrant_LockPrimitive{databasepb.SqlWriterBootGrant_LOCK_TOUCH, databasepb.SqlWriterBootGrant_SELECT_ONLY} {
+		t.Run(primitive.String(), func(t *testing.T) {
+			conn := healthyGateConn()
+			conn.registry = []driver.Value{nil, nil, nil, nil, nil}
+			gate := runtimeGate{config: gateConfig(primitive)}
+			attempt, err := gate.beforeBegin(context.Background(), conn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = attempt.enter(context.Background(), conn); !errors.Is(err, ErrWriterDenied) || errors.Is(err, ErrWriterFrozen) {
+				t.Fatalf("注册行不在应判资格不符、不是可重试的冻结: %v", err)
+			}
+		})
+	}
+}
+
+// LOCK_TOUCH 条件写命中、复核时 route_meta 的 epoch 已经推进:按冻结处理。命中时不再读 slot,拿 beforeBegin 读到的 epoch 去比。
+func TestGateLockTouchEpochAdvancedDuringEnterIsFrozen(t *testing.T) {
+	conn := healthyGateConn()
+	gate := runtimeGate{config: gateConfig(databasepb.SqlWriterBootGrant_LOCK_TOUCH)}
+	attempt, err := gate.beforeBegin(context.Background(), conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.meta[2] = int64(8)
+	if err = attempt.enter(context.Background(), conn); !IsWriterFrozen(err) {
+		t.Fatalf("epoch 推进应判冻结: %v", err)
 	}
 }
 
@@ -235,14 +369,24 @@ func TestFrozenGateErrorStaysDeterminate(t *testing.T) {
 	}
 }
 
-// 冻结之后回滚没确认:连接已隔离,这时不能再说「确定没写」。
-func TestFrozenWithUnconfirmedRollbackIsUnknown(t *testing.T) {
+// 冻结之后回滚没确认:连接已隔离,也不能再说成冻结(原样重试的那一类)。
+// R6(2026-11-10)起这里判「提交前中止、确定没写」:闸门在事务里只发过纯 DML(锁 slot 的 SELECT ... FOR UPDATE 或 UPDATE、
+// 读 route_meta 与注册表),业务语句一条没发,COMMIT 没发出去,连接断开时库会回滚。
+// 改名前叫 TestFrozenWithUnconfirmedRollbackIsUnknown,断言结局未知,与 R6 契约矛盾。
+func TestFrozenWithUnconfirmedRollbackIsAbortedBeforeCommit(t *testing.T) {
 	w := &writerFakeWire{rollbackErr: errors.New("connection reset")}
 	c := writerFixture(w)
 	c.gate.(*writerFakeGate).enterErr = ErrWriterFrozen
-	_, err := c.ExecContext(context.Background(), "UPDATE t SET n=n+1", nil)
-	if IsWriterFrozen(err) || ClassifyOutcome(err) != OutcomeUnknown || c.IsValid() {
-		t.Fatalf("回滚没确认要算结局未知: %v valid=%v", err, c.IsValid())
+	ctx, frozen := ObserveWriterFrozen(context.Background())
+	_, err := c.ExecContext(ctx, "UPDATE t SET n=n+1", nil)
+	if IsWriterFrozen(err) || !IsAbortedBeforeCommit(err) || errors.Is(err, ErrOutcomeUnknown) || c.IsValid() {
+		t.Fatalf("unconfirmed rollback before COMMIT must be aborted-before-commit, not frozen: %v valid=%v", err, c.IsValid())
+	}
+	if outcome := ClassifyOutcome(err); outcome == OutcomeUnknown || outcome == OutcomeFrozen {
+		t.Fatalf("ClassifyOutcome=%d, want neither unknown nor frozen: %v", outcome, err)
+	}
+	if !frozen() || WriterOutcomeUnknownSeen(ctx) || w.execs != 0 || w.commits != 0 {
+		t.Fatalf("frozen=%t unknown=%t execs=%d commits=%d", frozen(), WriterOutcomeUnknownSeen(ctx), w.execs, w.commits)
 	}
 }
 

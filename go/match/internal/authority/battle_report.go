@@ -47,7 +47,7 @@ const (
 )
 
 // ErrBattleReportNotFound:本人列表里没有这一局,或这一局没存回放正文。两种情况对调用方相同(BR-9),用 errors.Is 判断。
-var ErrBattleReportNotFound = errors.New("战报不在本人列表里或没有回放正文")
+var ErrBattleReportNotFound = errors.New("battle report not in the player's list or has no replay body")
 
 // battleReportWrite 是终局事务里战报写入的结果,提交成功之后才记指标。
 type battleReportWrite struct {
@@ -76,7 +76,7 @@ func battleReplayDropReason(env *battlepb.BattleReplayEnvelope) string {
 }
 
 func dropBattleReplay(battleID uint64, reason string) {
-	logx.Errorf("metric=match_battle_report_dropped reason=%s battle_id=%d;终局照常提交,这一局没有回放", reason, battleID)
+	logx.Errorf("metric=match_battle_report_dropped reason=%s battle_id=%d; outcome still commits, this battle has no replay", reason, battleID)
 	metrics.ObserveBattleReportDropped(reason)
 }
 
@@ -256,7 +256,7 @@ func checkBattleReportReplay(ctx context.Context, q interface {
 	}
 	digest := sha256.Sum256(envelope)
 	if !bytes.Equal(stored, digest[:]) {
-		logx.Errorf("metric=match_battle_report_replay_mismatch battle_id=%d;库里那份不改,回执照常", req.GetBattleId())
+		logx.Errorf("metric=match_battle_report_replay_mismatch battle_id=%d; stored replay kept, reply unchanged", req.GetBattleId())
 		metrics.ObserveBattleReportReplayMismatch()
 	}
 }
@@ -264,7 +264,7 @@ func checkBattleReportReplay(ctx context.Context, q interface {
 // BattleReports 读本人的战报列表:新的在前,最多 BattleReportsKeptPerPlayer 条。
 func (s *Store) BattleReports(ctx context.Context, playerID uint64) ([]*pb.BattleReportSummary, error) {
 	if s == nil || s.DB == nil {
-		return nil, errors.New("战报权威未装配")
+		return nil, errors.New("battle report store is not configured")
 	}
 	rows, err := s.DB.QueryContext(ctx, "SELECT summary FROM match_player_battle_report WHERE player_id=? ORDER BY created_ms DESC,battle_id DESC LIMIT ?", playerID, BattleReportsKeptPerPlayer)
 	if err != nil {
@@ -280,7 +280,7 @@ func (s *Store) BattleReports(ctx context.Context, playerID uint64) ([]*pb.Battl
 		summary := &pb.BattleReportSummary{}
 		if err = proto.Unmarshal(body, summary); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("战报列表行损坏: %w", err)
+			return nil, fmt.Errorf("corrupt battle report list row: %w", err)
 		}
 		reports = append(reports, summary)
 	}
@@ -294,7 +294,7 @@ func (s *Store) BattleReports(ctx context.Context, playerID uint64) ([]*pb.Battl
 // ErrBattleReportNotFound。先鉴权再读正文:不在列表里的人读不到大行。
 func (s *Store) BattleReport(ctx context.Context, playerID, battleID uint64) (*battlepb.BattleReplayEnvelope, error) {
 	if s == nil || s.DB == nil {
-		return nil, errors.New("战报权威未装配")
+		return nil, errors.New("battle report store is not configured")
 	}
 	var listed int
 	err := s.DB.QueryRowContext(ctx, "SELECT 1 FROM match_player_battle_report WHERE player_id=? AND battle_id=? LIMIT 1", playerID, battleID).Scan(&listed)
@@ -314,7 +314,7 @@ func (s *Store) BattleReport(ctx context.Context, playerID, battleID uint64) (*b
 	}
 	envelope := &battlepb.BattleReplayEnvelope{}
 	if err = proto.Unmarshal(body, envelope); err != nil {
-		return nil, fmt.Errorf("战报正文损坏: %w", err)
+		return nil, fmt.Errorf("corrupt battle report body: %w", err)
 	}
 	return envelope, nil
 }

@@ -183,6 +183,10 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kLoginTokenIssueFailed = 2036;</code>
      */
     kLoginTokenIssueFailed(2036),
+    /**
+     * <code>kLoginZoneCreateRoleClosed = 2037;</code>
+     */
+    kLoginZoneCreateRoleClosed(2037),
     UNRECOGNIZED(-1),
     ;
 
@@ -347,6 +351,10 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kLoginTokenIssueFailed = 2036;</code>
      */
     public static final int kLoginTokenIssueFailed_VALUE = 2036;
+    /**
+     * <code>kLoginZoneCreateRoleClosed = 2037;</code>
+     */
+    public static final int kLoginZoneCreateRoleClosed_VALUE = 2037;
 
 
     public final int getNumber() {
@@ -411,6 +419,7 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
         case 2034: return kRoleNameSensitive;
         case 2035: return kLoginAuthProviderUnavailable;
         case 2036: return kLoginTokenIssueFailed;
+        case 2037: return kLoginZoneCreateRoleClosed;
         default: return null;
       }
     }
@@ -476,7 +485,7 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025login_error_tip.proto*\305\010\n\013login_error\022" +
+      "\n\025login_error_tip.proto*\346\010\n\013login_error\022" +
       "\022\n\016kLogin_errorOK\020\000\022\032\n\025kLoginAccountNotF" +
       "ound\020\320\017\022\034\n\027kLoginAccountPlayerFull\020\321\017\022$\n" +
       "\037kLoginCreatePlayerUnLoadAccount\020\322\017\022.\n)k" +
@@ -503,9 +512,9 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
       "nt\020\356\017\022\022\n\rkLoginTimeout\020\357\017\022\025\n\020kRoleNameIn" +
       "valid\020\360\017\022\023\n\016kRoleNameTaken\020\361\017\022\027\n\022kRoleNa" +
       "meSensitive\020\362\017\022\"\n\035kLoginAuthProviderUnav" +
-      "ailable\020\363\017\022\033\n\026kLoginTokenIssueFailed\020\364\017B" +
-      "$\n\016com.game.tableZ\022generated/pb/tableb\006p" +
-      "roto3"
+      "ailable\020\363\017\022\033\n\026kLoginTokenIssueFailed\020\364\017\022" +
+      "\037\n\032kLoginZoneCreateRoleClosed\020\365\017B$\n\016com." +
+      "game.tableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

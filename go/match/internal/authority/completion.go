@@ -462,7 +462,7 @@ func (s *Store) terminalFormationOnce(ctx context.Context, id uint64) (*sql.Tx, 
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if !proto.Equal(locked, f) {
+	if !sameFormationIgnoringSchedule(locked, f) {
 		return nil, nil, nil, errors.New("终局原成局并发变化，需重放原请求")
 	}
 	for _, t := range originals {
@@ -476,6 +476,17 @@ func (s *Store) terminalFormationOnce(ctx context.Context, id uint64) (*sql.Tx, 
 	}
 	ok = true
 	return tx, locked, originals, nil
+}
+
+// sameFormationIgnoringSchedule 比对锁外读到的成局与锁内的成局,忽略调度字段 retry_at_ms(2026-11-11)。
+// terminalFormationOnce 锁外读成局只为找原票,锁内要的是成员、身份与状态没变;retry_at_ms 是调度:截止作废等证据期间,
+// 别的副本每 30 秒在同一把锁里改一次取证排期。整行比对时,恰好撞上的 COMPLETE 会白回「终局原提交尚未确认」、battle 5 秒后
+// 重放(B5 残余)。需要比对排期或租约的调用方各自在锁内比:到期恢复比观察值(recoverExpiredOutcome)、提前作废核租约(checkWork)、
+// 人工处置核摘要(formationDigest)。纯函数。
+func sameFormationIgnoringSchedule(a, b *pb.MatchFormationRecord) bool {
+	x, y := proto.Clone(a).(*pb.MatchFormationRecord), proto.Clone(b).(*pb.MatchFormationRecord)
+	x.RetryAtMs, y.RetryAtMs = 0, 0
+	return proto.Equal(x, y)
 }
 
 func readTerminal(ctx context.Context, q interface {
@@ -528,6 +539,8 @@ func decodeTerminalRequest(req *pb.CommitBattleOutcomeRequest) (*kafkapb.BattleR
 // 2026-11-05 修复:先复读既有终局,再判原件冲突。另一副本可能刚在截止后提交了 ABORT(同一事务把票置 4、formation 置 5);
 // 原件即使永久不合格(个人结算超 Inbox 上限、版本错位带未知字段),battle 也要拿到这份 ABORT 才能收尾删房,
 // 不能永远收到 FailedPrecondition、把房间占到 30 小时本地清理。既有 COMPLETE 照旧逐字节比对,不会因此放过别的原件。
+// 2026-11-11:原执行实例的原件内容不合格、且已过权威截止加宽限时,这次重放直接在锁内写 ABORT 并回 ABORT
+// (rejected_original_abort.go),不再等截止作废取证到硬上限;截止之前与版本错位类拒收照旧回原件冲突。
 func (s *Store) CommitBattleOutcome(ctx context.Context, req *pb.CommitBattleOutcomeRequest) (pb.BattleOutcomeDecision, error) {
 	if s == nil || s.DB == nil {
 		return 0, errors.New("终局权威未装配")
@@ -554,7 +567,7 @@ func (s *Store) CommitBattleOutcome(ctx context.Context, req *pb.CommitBattleOut
 		return decision, replayErr
 	}
 	if originalErr != nil {
-		return 0, originalErr
+		return s.settleRejectedOriginal(ctx, req, originalErr)
 	}
 	return s.commitBattleOutcomeLocked(ctx, req, event)
 }
@@ -592,7 +605,8 @@ func (s *Store) commitBattleOutcomeLocked(ctx context.Context, req *pb.CommitBat
 		return 0, fmt.Errorf("%w: 终局原操作、实例或成局状态不符", ErrBattleOutcomeOriginal)
 	}
 	if err = validateTerminalResult(f, event, req.RawResultPayload); err != nil {
-		return 0, fmt.Errorf("%w: %v", ErrBattleOutcomeOriginal, err)
+		// 原执行实例的原件内容不合格:过了截止加宽限就在这把锁里作废(rejected_original_abort.go),否则照旧回原件冲突。
+		return s.abortRejectedOriginalLocked(ctx, tx, f, req, fmt.Errorf("%w: %v", ErrBattleOutcomeOriginal, err))
 	}
 	stamp, err := now(ctx, tx)
 	if err != nil {
@@ -640,38 +654,38 @@ func (s *Store) commitBattleOutcomeLocked(ctx context.Context, req *pb.CommitBat
 	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE, nil
 }
 
-// abortTerminalTx 是截止裁决,只给已持全部原P与formation锁的入口(到期恢复、帮会取消)使用；绝不调用运行时猜终局。
-// 已有终局回它的决定(written=false);过了截止加宽限才在本事务里经 commitAbortTx 写 ABORT(written=true),
-// 由调用方提交,提交成功后计数。
-func (s *Store) abortTerminalTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord) (decision pb.BattleOutcomeDecision, written bool, err error) {
+// abortTerminalTx 是截止裁决,只给已持全部原P与formation锁的入口(到期恢复、帮会取消)使用；事务里不调用运行时。
+// evidence 是调用方在事务之前向原执行实例取到的截止作废证据(deadlineEvidence / probeDeadlinePage),时间判据只在
+// judgeDeadlineAbort(2026-11-06)。已有终局回它的决定(verdict.abort=false);自动路径不裁决的局(autoTerminalOriginal 为假:
+// 不在途,或原件不可裁决)回 UNKNOWN;judgeDeadlineAbort 判可以作废时在本事务里经 commitAbortTx 写 ABORT(verdict.abort=true),
+// 由调用方提交,提交成功后 observeDeadlineAbort 计数;判要等时 verdict.nextProbeMs 是到期恢复下次取证的排期。
+// 缺终局的 state 5 不再补 ABORT(2026-11-06):新代码写 state 5 时同一事务写终局或根本没有 Create 原件,
+// 缺终局的 state 5 只来自旧代码,项目未上线不兼容(与到期恢复同一口径,scene 查询回不会落定)。
+func (s *Store) abortTerminalTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord, evidence DeadlineAbortEvidence) (pb.BattleOutcomeDecision, deadlineAbortVerdict, error) {
 	old, err := readTerminal(ctx, tx, f.BattleId)
 	if err != nil {
-		return 0, false, err
+		return 0, deadlineAbortVerdict{}, err
 	}
 	if old != nil {
-		return old.Decision, false, nil
+		return old.Decision, deadlineAbortVerdict{}, nil
 	}
-	r, err := supportedOutcomeOriginal(f)
-	if err != nil {
-		return 0, false, nil
+	r, ok := autoTerminalOriginal(f)
+	if !ok {
+		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, deadlineAbortVerdict{}, nil
 	}
 	stamp, err := now(ctx, tx)
 	if err != nil {
-		return 0, false, err
+		return 0, deadlineAbortVerdict{}, err
 	}
-	if !terminalAbortDue(r.DeadlineMs, stamp) {
-		return 0, false, nil
-	}
-	// 旧恢复流程可能先将运行时ABORTED收为state5；它自身不是终局证明。
-	// 仍须本函数前面的原cap/version/UUID/body与deadline全部成立，才能补SQL ABORT。
-	if f.State != 2 && f.State != 3 && f.State != 4 && f.State != 5 {
-		return 0, false, nil
+	verdict := judgeDeadlineAbort(r.DeadlineMs, stamp, f.RetryAtMs, evidence)
+	if !verdict.abort {
+		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, verdict, nil
 	}
 	// 截止裁决的 ABORT 没有 Battle 原字节：format_version=0、来源记为 MATCH_DEADLINE_ABORT，不冒充 BATTLE_RPC。
 	if err = commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT); err != nil {
-		return 0, false, err
+		return 0, deadlineAbortVerdict{}, err
 	}
-	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, true, nil
+	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, verdict, nil
 }
 
 // PublishBattleOutcomesOnce 按默认参数(DefaultOutcomeOutboxOptions:结果 8 行、首投 4 行、等待 4 行、逐行串行,

@@ -246,6 +246,57 @@ TEST(ValidateCommandTarget, SceneCommandUsesItsOwnNodeIdField)
         "scene-cmd_g1", other, kSelfNodeId, kSelfInstance, filter));
 }
 
+// 派发与读放大计数(own / foreign)共用的判定。平常的启动与 ValidateCommandTarget 一致。
+TEST(IsCommandForThisNode, NormalBootFollowsTheTargetFilter)
+{
+    contracts::kafka::GateCommand mine;
+    mine.set_target_gate_id(kSelfNodeId);
+    mine.set_target_instance_id(kSelfInstance);
+    EXPECT_TRUE(node::kafka::detail::IsCommandForThisNode(
+        "gate-cmd_g1", mine, kSelfNodeId, kSelfInstance, GateFilter(), false));
+
+    contracts::kafka::GateCommand neighbour;
+    neighbour.set_target_gate_id(kSelfNodeId + 256);
+    neighbour.set_target_instance_id(kSelfInstance);
+    EXPECT_FALSE(node::kafka::detail::IsCommandForThisNode(
+        "gate-cmd_g1", neighbour, kSelfNodeId, kSelfInstance, GateFilter(), false));
+
+    contracts::kafka::GateCommand unaddressed;
+    EXPECT_TRUE(node::kafka::detail::IsCommandForThisNode(
+        "gate-cmd_g1", unaddressed, kSelfNodeId, kSelfInstance, GateFilter(), false))
+        << "平常的启动保留兼容位:两个字段都没填时放行";
+}
+
+// 维护受控启动共享手工分区:node_id 与实例号都必须填且都等于自己,「没填」的兼容位不算发给本实例。
+TEST(IsCommandForThisNode, MaintenanceBootRequiresAnExactTarget)
+{
+    contracts::kafka::GateCommand exact;
+    exact.set_target_gate_id(kSelfNodeId);
+    exact.set_target_instance_id(kSelfInstance);
+    EXPECT_TRUE(node::kafka::detail::IsCommandForThisNode(
+        "gate-cmd_g1", exact, kSelfNodeId, kSelfInstance, GateFilter(), true));
+
+    contracts::kafka::GateCommand noNodeId;
+    noNodeId.set_target_instance_id(kSelfInstance);
+    EXPECT_FALSE(node::kafka::detail::IsCommandForThisNode(
+        "gate-cmd_g1", noNodeId, kSelfNodeId, kSelfInstance, GateFilter(), true));
+
+    contracts::kafka::GateCommand noInstance;
+    noInstance.set_target_gate_id(kSelfNodeId);
+    EXPECT_FALSE(node::kafka::detail::IsCommandForThisNode(
+        "gate-cmd_g1", noInstance, kSelfNodeId, kSelfInstance, GateFilter(), true));
+
+    contracts::kafka::GateCommand unaddressed;
+    EXPECT_FALSE(node::kafka::detail::IsCommandForThisNode(
+        "gate-cmd_g1", unaddressed, kSelfNodeId, kSelfInstance, GateFilter(), true));
+
+    contracts::kafka::GateCommand predecessor;
+    predecessor.set_target_gate_id(kSelfNodeId);
+    predecessor.set_target_instance_id(kPredecessorInstance);
+    EXPECT_FALSE(node::kafka::detail::IsCommandForThisNode(
+        "gate-cmd_g1", predecessor, kSelfNodeId, kSelfInstance, GateFilter(), true));
+}
+
 // ---------------------------------------------------------------------------
 // 3. 配置驱动的落地层(拿得到 base_deploy_config.yaml 时才跑)
 // ---------------------------------------------------------------------------

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"shared/gatepick"
+
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -18,19 +20,22 @@ import (
 //
 // 三步:
 //  1. 标记 draining —— 新玩家不再被分配到这台 gate(本文件负责这一步)。
-//  2. 等在线自然掉到阈值以下,或等到超时。
-//  3. 到期把剩余玩家改派到别的 gate,然后才允许缩容。
+//  2. 等在线掉到阈值以下,或等到超时(gatedrain_monitor.go 判定并写 drained)。开了 GateDrain.Migrate 时,
+//     这段时间里 gate 按限速把已登录的连接重定向到同 zone 的其他 gate(gatedrain_migrate.go,
+//     docs/design/gate-drain-session-migration.md);没开时等玩家自然下线。
+//  3. 看到 drained 才删 Pod;到期还剩的人随 Pod 下线断开,重连时落到别的 gate。
 //
-// 本文件只实现第 1 步与状态读写。第 2/3 步由运维流程驱动 —— 刻意不做成
+// 本文件只实现第 1 步与状态读写。删 Pod 由运维流程(tools/scripts/k8s_gate_drain.ps1)驱动 —— 刻意不做成
 // "到期自动强踢":什么时候可以牺牲最后那批玩家的连接是运营决策,不该由一个
 // 后台循环替人做。
 
 // GateDrainingKeyFmt 标记某台 gate 正在排空。值是标记时间(Unix 秒),
 // 便于运维看它排了多久。带 TTL,防止标记的人挂了之后 gate 永久不接客。
-const GateDrainingKeyFmt = "gate:%d:draining"
+// 键名只在 shared/gatepick 定义一份(scene_manager 跨 zone 重定向读同一个键),这里是它的别名。
+const GateDrainingKeyFmt = gatepick.DrainingKeyFmt
 
 func gateDrainingKey(nodeID uint32) string {
-	return fmt.Sprintf(GateDrainingKeyFmt, nodeID)
+	return gatepick.DrainingKey(nodeID)
 }
 
 // MarkGateDraining 把一台 gate 标成排空中。

@@ -48,7 +48,7 @@ SceneManager (Go)                 Agones                       C++ Scene Node
 instance。原因是镜像 Scene 会**有意绕过**节点角色过滤与源 Scene 共置
 (`pickInstanceNode` 的 mirror 分支)。如果 world 还是普通 Deployment,
 镜像房间就会落到不受 Agones 管理的 world 进程上,容量统计出现两套语义 ——
-阶段 C 的 `rooms` Counter 会从第一天就是错的。
+阶段 C 的 `rooms` 名额(2026-11-10 起是 List 条目,§13)会从第一天就是错的。
 
 | Fleet | SCENE_NODE_TYPE | 承载 | 副本策略(第一版) |
 |---|---|---|---|
@@ -221,16 +221,16 @@ Fleet。注意 `kubectl apply` **不会**跨 kind 回收同名对象,Deployment 
   Allocator,证明的是"上层逻辑在给定 Agones 行为下是对的",不是"Agones
   真的这么行为"。见 §8.9。
 
-## 8. 阶段 C:rooms Counter 与 GameServerAllocation(已落码,未上集群)
+## 8. 阶段 C:rooms 名额与 GameServerAllocation(已落码,未上集群;2026-11-10 起 rooms 是按条目的 List,见 §13)
 
 ### 8.1 开关
 
 | 配置 | 默认 | 含义 |
 |---|---|---|
 | `Agones.Enabled` | `false` | 关:选节点完全走原来的 Redis 负载分数,不碰 Agones |
-| `Agones.HighDensityEnabled` | `false` | 关:走 GSA 但不用 Counters(一个进程一次一个房间) |
-| `Agones.RoomCapacity` | `0` | 仅作配置留痕,运行时容量以 GameServer 上的 `capacity` 为准 |
-| `-AgonesHighDensity` + `-AgonesRoomCapacity N` | 关 | 部署生成器给 Fleet 挂 `counters.rooms` |
+| `Agones.HighDensityEnabled` | `false` | 关:走 GSA 但不用 Counters and Lists(一个进程一次一个房间,不记名额) |
+| `Agones.RoomCapacity` | `0` | 仅作配置留痕,运行时容量以 GameServer 上 `status.lists.rooms.capacity` 为准 |
+| `-AgonesHighDensity` + `-AgonesRoomCapacity N` | 关 | 部署生成器给 Fleet 挂 `lists.rooms`(2026-11-10 前是 `counters.rooms`,§13) |
 
 Counters and Lists 在 Agones 里是 **beta**,需要集群侧显式打开
 `CountsAndLists` FeatureGate,所以默认关。
@@ -244,25 +244,26 @@ Counters and Lists 在 Agones 里是 **beta**,需要集群侧显式打开
 `createInstance` 在 Agones 模式下的顺序是刻意的:
 
 ```
-1. GSA:选 GameServer + rooms 原子 +1        （选中与计数是同一个操作,不留超卖窗口）
-2. status.state 必须是 Allocated
-3. 取 gameServerName / PodIP / counter 结果
-4. PodIP -> knownNodes 反查 nodeID
-5. 校验 zone 与 role                        （Fleet label 与 C++ SCENE_NODE_TYPE 是两条独立链路）
-6. 分配 scene_id
-7. 写 Redis scene 状态 + scene:{id}:agones_gs
-8. 调 C++ CreateScene
-9. 只有 8 成功才向调用方返回成功
+1. 分配 scene_id                            （名额条目里要有它,§13.2;分配失败浪费一个号,无害）
+2. 写在途占用 agones_rooms:zone:{z}:holds    （§13.3;写不进就不去要名额）
+3. GSA:选 GameServer + 加条目               （选中与占位是同一个操作,不留超卖窗口）
+4. status.state 必须是 Allocated,条目确实在 status.lists.rooms.values 里
+5. 取 gameServerName / PodIP
+6. PodIP -> knownNodes 反查 nodeID
+7. 校验 zone 与 role                        （Fleet label 与 C++ SCENE_NODE_TYPE 是两条独立链路）
+8. 登记脚本:写 Redis scene 状态 + scene:{id}:agones_gs = "GameServer/条目",同一步消费在途占用
+9. 调 C++ CreateScene
+10. 只有 9 成功才向调用方返回成功
 ```
 
-4/5 任一步失败都会把刚预占的名额还回去并拒绝请求。**不允许**"找不到就放行":
+4~7 任一步失败都会放弃这次占的条目(删在途占用、删条目)并拒绝请求。**不允许**"找不到就放行":
 那等于绕过容量约束。
 
 PodIP 反查必须唯一命中一条 `(zoneId,nodeId)` 注册；同一身份有重复 etcd
 记录时也按映射失败处理，不能任取一个同号进程。gRPC 连接缓存使用同一复合身份。
 
-`scene:{id}:agones_gs` 必须在第 8 步**之前**写。放到 RPC 成功之后写,进程正好
-在中间崩溃就永远找不回该减哪个 GameServer 的计数。
+`scene:{id}:agones_gs` 必须在第 9 步**之前**写。放到 RPC 成功之后写,进程正好
+在中间崩溃就找不回该删哪台 GameServer 上的哪一条。
 
 ### 8.3 修掉的既有 bug:phantom scene
 
@@ -280,8 +281,8 @@ Agones 名额)并返回错误码。**这一条与 Agones 无关**,非 Agones 模
 
 镜像必须与源 Scene 同进程(复用已驻留的地图/AI/spawn),这条业务约束优先于
 "让 Agones 自由挑进程"。GSA 只能按标签选、不能点名,所以共置路径走的是
-`AcquireRoomOnGameServer`:`nodeID -> PodIP -> GameServer 名字 -> 对该
-GameServer 的 rooms 做带 CAS 的 +1`。
+`AddRoomEntry`:`nodeID -> PodIP -> GameServer 名字 -> 写在途占用 -> 在该
+GameServer 的 rooms 列表里加条目(带 CAS,满了拒绝)`。
 
 源节点满了 / 反查不到(老版本 Agones 的 GameServer status 里没有 Pod 地址)
 时,回落到自由分配 —— 镜像失去共置优化但玩家不会卡死。
@@ -289,31 +290,29 @@ GameServer 的 rooms 做带 CAS 的 +1`。
 ### 8.5 回滚与漂移
 
 - 销毁:`scene:{id}:agones_gs` 与其余 scene 状态在**同一个 Lua 脚本**里读出并
-  删除,脚本把它返回给调用方去精确归还名额。先删后读会永久丢失回滚依据。
-- 重复 Destroy:第二次在脚本里读不到 `scene:{id}:node`,拿不到 gs 名字,
-  不会重复减。
+  删除,写进拆除任务的快照,拆除任务按它精确删掉那一条。先删后读会永久丢失归还依据。
+- 重复 Destroy:第二次认领落空,不会再删;就算再删一次,按条目删也是幂等的。
 - 节点死亡:GameServer 可能还在(Agones 还没判 Unhealthy),名额照样要还。
-  `ReleaseRoom` 对"GameServer 已消失"返回成功,所以无脑调用是安全的。
-- 归还最终失败:记
-  `scene_manager_agones_counter_rollback_total{outcome="failed"}` + ERROR 日志。
-  **这类漂移不会自愈**,必须对这个指标配告警。
+  `RemoveRoomEntry` 对"GameServer 已消失"返回成功,所以无脑调用是安全的。
+- 归还失败:记 `scene_manager_agones_counter_rollback_total{outcome="failed"}` + ERROR 日志;
+  拆除任务留着由扫描重做到成功,其余不重试的调用方留下的条目没有记录、也没有在途占用,由对账收(§13.5)。
 
-### 8.6 reconcile 只告警,不自动改
+### 8.6 对账:逐条收敛(2026-11-10 起)
 
-`StartAgonesReconcile` 周期性比对 Agones `rooms.count` 与 Redis
-`node:zone:{zoneId}:{nodeId}:scene_count`,把差异写进 `scene_manager_agones_counter_drift{zone}`。
-
-**第一版不自动改写任何一方。** 三方任意一方都可能是错的那个;在证据不完整时
-自动"修正"很可能把对的一方改错,还会掩盖真正的 bug。先让漂移可见。
+原来的第一版只比 Agones `rooms.count` 与 Redis `node:zone:{zoneId}:{nodeId}:scene_count`、只告警:
+计数没有逐个名额的身份,分不清哪一份是漏的,自动"修正"很可能把对的一方改错。2026-11-10 起名额是按身份的条目,
+`StartAgonesReconcile` 逐条判、两个方向都改(删孤儿条目、取消过期在途占用、补缺失条目、把改派时没转过来的名额
+转过来),做法见 §13.5;`scene_manager_agones_counter_drift{zone}` 改为一轮结束时仍没收敛的条目与场景数。
 
 ### 8.7 指标
 
 ```
 scene_manager_agones_allocation_total{zone,role,outcome}      ok|no_capacity|error|mapping_failed
 scene_manager_agones_allocation_latency_seconds{zone,role}
-scene_manager_agones_counter_rollback_total{outcome}          ok|failed
+scene_manager_agones_counter_rollback_total{outcome}          ok|failed(一次归还 = 删一个条目)
 scene_manager_agones_mapping_failure_total{zone,reason}        no_pod_ip|unknown_pod_ip|zone_mismatch|role_mismatch
-scene_manager_agones_counter_drift{zone}
+scene_manager_agones_counter_drift{zone}                       一轮对账结束时仍没收敛的条目与场景数
+scene_manager_agones_rooms_reconciled_total{zone,action}       orphan_removed|hold_expired_removed|hold_canceled|missing_added|missing_no_capacity|rehomed|rehome_no_capacity
 ```
 
 标签全是低基数维度。`scene_id` / `player_id` 绝不进 label(`CLAUDE.md §9`)。
@@ -331,11 +330,11 @@ RBAC 见 `deploy/k8s/manifests/go-svc/scene-manager-agones-rbac.yaml`:
 
 这些是按 Agones 文档写的,**没有跑过真集群**:
 
-1. `GameServerAllocation` 的 `spec.selectors[].counters.rooms.minAvailable`
-   与 `spec.counters.rooms.{action:Increment, amount}` 字段形状。
-2. `status.counters.rooms.{count,capacity}` 在 GSA 返回对象里的位置。
-3. 通过 `gameservers/status` 子资源直接改 `counters.rooms.count` 是否被
-   Agones 接受(还是必须走 SDK)。这一条影响回滚与共置预占两条路径。
+1. `GameServerAllocation` 的 `spec.selectors[].lists.rooms.minAvailable`
+   与 `spec.lists.rooms.addValues` 字段形状(2026-11-10 前是 counters,§13.8)。
+2. `status.lists.rooms.{values,capacity}` 在 GSA 返回对象里的位置(拿不到时代码会 GET 这台 GameServer 核对)。
+3. 直接 Update GameServer 改 `status.lists.rooms.values` 是否被 Agones 接受(还是必须走 SDK)。
+   这一条影响归还、共置、改派与对账所有按条目增删的路径。
 4. `status.addresses` 里 `type: "Pod"` 条目的可用性(老版本没有,代码会退化
    成 GET 同名 Pod)。
 
@@ -490,3 +489,142 @@ zlib、hiredis、yaml-cpp 也必须按 `/MDd` 构建；Debug 的 `/WHOLEARCHIVE`
 Scene/Battle 的 gRPC 创建守护段由各自服务对象的 `LoopTaskScope` 持有单次任务，等待现有 `AcquireAllocationPermitAsync` 后复核停机/准入并 `Proceed`。许可按值移入自有 RAII 对象，覆盖同步建房全过程。关闸取消本地等待，晚到许可仍自行释放，不能再次创建房间。
 
 这层接续不启动线程、不调用阻塞许可接口、不增加期限或重试。原 Agones worker、超时和投回 EventLoop 的顺序保持不变。正常许可回复在原 loop 回调栈续跑。Java 不使用这套 C++ Agones 适配，无客户端契约变化。
+
+
+## 13. 2026-11-10:rooms 名额改为 List 条目,增删幂等,对账两个方向都收敛(缺口清单第 1 条「仍剩」;已落码,未编译)
+
+本节先由「按缺口清单做完服务器代码(11-05 额度重置后)」会话写了初稿。同日改由「场景销毁认领:回滚原子化与重发幂等」会话落码,落码前改了两处,见 13.2 的条目与 13.3 的在途占用;不选的做法见 13.7。§8 里讲 rooms 的段落已按本节改写。
+
+### 13.1 问题
+
+rooms 原来是一个 Counter,只有数,没有「这一份是谁的」。下面几种情况会让它记错,而且收不回来:
+
+1. 建场景时 Agones 预占在 Redis 登记之前,进程在两者之间崩溃(多记);
+2. 拆除任务的归还是「至多一次」(先置位再调 K8s),置位之后、调用之前进程退出(多记);
+3. 归还调用失败,或请求已生效、回包丢了;为了不多还,这一份不再重试(多记);
+4. 改派转移名额时新 GameServer 满了:旧的不还,新的没记(旧的多记,新的少记,新节点会被超卖)。§13.10 起改派前先占名额,目标满了就不往那里搬,这种情况不再出现。
+
+对账(原 §8.6)分不清哪一份是漏的,只能告警,运维也没有安全的手工修法。
+
+### 13.2 名额条目
+
+- 高密度模式下每个 GameServer 挂一个 Agones List `rooms`(与 Counter 同属 `CountsAndLists` 特性),`capacity` 取 `-AgonesRoomCapacity`。占用数就是条目数。
+- **每次占用一个条目**,值是 `<scene_id>.<32 位十六进制随机串>`(`newAgonesRoomEntry`)。建场景、改派转移、对账补转都各占自己的一条。
+  - 不用裸 scene_id:同一个场景的两路操作可能落在同一台 GameServer 上,例如改派落空、发现属主恰好是自己挑的节点时补转,或 A→B→A 来回改派。两路共用一个值时,一路按「删掉自己刚加的」去删,删掉的是另一路正在用的那条,变成少记。每次占用各有一条,谁都只删自己的。
+- Redis 记录 `scene:{id}:agones_gs` 写成 `<GameServer 名>/<条目>`(Go 里的 `agonesRoom`)。GameServer 名是 DNS 子域名,不含 `/`。
+- 非高密度模式不记名额,记录只有 GameServer 名,归还是空操作,与原来相同。
+- 认领脚本、拆除任务、转移回执照旧把记录当作不透明的串搬运,只在 Go 里解析。改派转移的 CAS 要比「记录是不是已经在新 GameServer 上」,只在 Lua 里取 `/` 之前的部分。
+
+### 13.3 在途占用
+
+- 本 zone 的有序集合 `agones_rooms:zone:{z}:holds`,成员是条目,分数是截止时刻:写入时刻 + 5 分钟(`agonesRoomHoldTTL`)。
+- **向 Agones 要名额之前先写在途占用。** Redis 写不进就不去要,这次建场景或转移按没有容量处理。
+- 三段脚本把名额写进记录,都在同一步 `ZREM` 自己的在途占用:实例登记、频道登记、改派转移。删到了才写记录;删不到说明已被对账取消,这一次一个键都不写,回 `fenced`。
+- 对账只取消**已过截止时刻**的在途占用,取消与「判这个条目是不是孤儿」在同一段脚本里。取消之后晚到的提交一律被挡住,所以截止时刻只决定多久以后可以回收(活性),不影响正确性。
+- 失败路径(决定不提交):先删自己的在途占用,再尽力删自己的条目。删条目失败也不用管:没有记录、也没有在途占用的条目就是孤儿,对账下一轮收。
+- 截止时刻要长过从写在途占用到提交的最慢正常路径:分配(K8s 请求 5s,加可能的一次 Pod GET),加登记 EVAL 的 go-redis 重发(最坏约 33s),再加一次作废查询。5 分钟留足余量。慢过它的提交只会失败,不会记错。
+
+### 13.4 各动作
+
+| 动作 | 做法 | 失败时 |
+|---|---|---|
+| 自由分配 | 选择器 `lists.rooms.minAvailable: 1`,动作 `lists.rooms.addValues: [条目]`,选中与占位是一步。之后核对返回对象 `status.lists.rooms.values` 里确有这一条;返回对象里没有 `lists` 时 GET 这台 GameServer 再核对。没有这一条按没容量处理,防的是列表已满时 Agones 不加值却照样回 Allocated | 删在途占用,尽力删条目 |
+| 指定 GameServer(镜像共置、改派转移、对账补加) | 读 GameServer:条目已在就是成功;条目数到了 capacity 回 `ErrNoCapacity`;否则追加后带 resourceVersion 更新,409 冲突有界重试 | 同上 |
+| 删除 | 读 GameServer:条目不在、GameServer 已不存在都算成功;否则删掉后带 resourceVersion 更新,409 冲突有界重试 | 调用方可以放心重试 |
+| 登记结局 | `registered`:在途占用已消费。`conflict` / `aborted` / `fenced`:记录没指向这一条,删自己的条目与在途占用。`unknown`:都不动,在途占用过期之后由对账按记录判 | — |
+| 改派转移 | 改派之前先在目标上占名额(§13.10,写在途占用、加条目),改派 CAS 落地之后提交:属主仍是新节点才改记录,同一步消费在途占用。改成了就删旧条目。落空就删新条目:属主已变、场景已销毁、记录已在新 GameServer、在途占用被取消 | CAS 结局未知:都不动,交给对账 |
+| 拆除任务 | 按快照里的记录删条目;失败时任务留着,扫描重做到成功。去掉原来的「先置位、至多一次」 | 重做 |
+
+由此改变的调用方语义:
+
+- **建实例先铸 scene_id 再要名额**:条目里要有它。分配失败浪费一个号,无害。铺世界频道本来就先铸号。
+- **conflict 也删自己的条目**:原来分不清 conflict 的两种来历,怕双还,都不还;现在删的是自己那一条,不会删到别人的。
+- **改派先占名额再搬**(§13.10):目标满了不搬,属主已死的路径改落到 GSA 挑的有空位的节点;都没有空位就不搬。对账「转过来」只收进程中途退出留下的那一种。
+
+### 13.5 对账
+
+领导者每 `ReconcileIntervalSeconds`(缺省 60s)对本 zone 做一轮,只碰本 zone 的 GameServer 与本 zone 的场景键。列不出 GameServer 时整轮跳过,不改任何一方。
+
+- **条目 → 记录**:列表里的每个条目在 Redis 里用一段脚本判(`luaJudgeAgonesRoomEntry`):
+  - 场景登记在别的 zone:不碰,计入未收敛;
+  - 记录等于「这台/这条」:在用;
+  - 场景的拆除任务快照里是「这台/这条」:等拆除任务删;
+  - 在途占用还没到截止时刻:在途;
+  - 在途占用已过截止时刻:同一步取消它,然后按孤儿删;
+  - 都不是:孤儿,删。
+- **过期的在途占用,条目不在任何一台 GameServer 上**:取消。来历是分配根本没发出去,或者条目已经删了、在途占用没删掉。
+- **记录 → 条目**:按 PodIP 把 GameServer 对上本 zone 的节点,读节点的场景集合,只看属主仍是这个节点的场景:
+  - 记录在这台、条目不在:补加这一条,满了记 `missing_no_capacity`;
+  - 记录在别的 GameServer(改派 CAS 之后、名额提交之前进程退出,或 CAS 落空时属主比对出错、这次的条目已放弃):按改派转移的做法转过来,满了记 `rehome_no_capacity`,下一轮再试。
+- 单个条目、单个场景读写失败只跳过它,计入本轮未收敛数。
+- 指标:
+  - `scene_manager_agones_rooms_reconciled_total{zone,action}`,action 取 `orphan_removed`、`hold_expired_removed`、`hold_canceled`、`missing_added`、`missing_no_capacity`、`rehomed`、`rehome_no_capacity`;
+  - `scene_manager_agones_counter_drift{zone}` 改为「本轮结束时仍没收敛的条目与场景数」,降级的副本把自己发过的 zone 写回 0;
+  - 告警 `SceneManagerAgonesRoomsNotConverging`:持续 15 分钟大于 0。
+
+### 13.6 部署
+
+- Fleet 模板:`counters.rooms` 换成 `lists.rooms: {capacity: N}`(N = `-AgonesRoomCapacity`)。
+- FleetAutoscaler:策略从 `type: Counter` 换成 `type: List`(`list.key: rooms`)。`bufferSize`、`minCapacity`、`maxCapacity` 的含义与单位不变。
+- RBAC 不变(`gameservers` 的 get / list / update)。
+- 项目未上线,不做 Counter 到 List 的迁移:换版本时整批重建 Fleet。
+
+### 13.7 不选的做法
+
+- **保留 Counter、另写按场景号的注解**:身份与数量分在两处,每次更新都要保证两处一致,还要防别人只改了计数。List 把身份和数量放在同一个字段里,一次写完。
+- **对账直接把 Counter 改成 Redis 里的数**:Counter 被 GameServerAllocation 和本进程并发修改,按数覆盖会把别人刚占的名额抹掉,超卖。
+- **条目只用 scene_id**(初稿的做法):见 13.2。
+- **用「连续两轮、满宽限期」判孤儿,代替在途占用**(初稿的做法):宽限期挡不住慢过它的登记,登记落地时条目已经被删,就是少记、会超卖。在途占用与提交在同一步消费,取消之后晚到的提交被挡住,不依赖时间。
+
+### 13.8 上集群前要核对
+
+1. GameServerAllocation 的 `selectors[].lists.rooms.minAvailable`、`lists.rooms.addValues` 字段形状,以及返回对象里 `status.lists.rooms.values` 的位置。拿不到时代码会 GET 这台 GameServer 核对,只是多一次请求。
+2. 直接 Update GameServer 改 `status.lists.rooms.values` 能被 Agones 接受。现在改 `status.counters` 用的就是这个机制(§8.9 第 3 条)。
+3. FleetAutoscaler 的 `type: List` 策略字段。
+4. Agones SDK sidecar 不会拿自己的缓存覆盖 `status.lists`。C++ 节点不调列表相关的 SDK。
+
+### 13.9 代码位置
+
+- `go/scene_manager/internal/agones/{allocator.go,k8s_allocator.go}`:接口改为 `Allocate(条目)` / `AddRoomEntry` / `RemoveRoomEntry` / `ListGameServerRooms(含条目)`。
+- `internal/logic/agones_room_ledger.go`(新):条目与记录格式、在途占用、`luaJudgeAgonesRoomEntry`。
+- `internal/logic/agones_binding.go`:分配、指定节点、放弃、归还、改派转移。
+- `internal/logic/agones_reconcile.go`:两个方向的对账。
+- `internal/logic/scene_registration.go`:两段登记脚本消费在途占用,新结局 `fenced`。
+- `internal/logic/createscenelogic.go`:先铸号,按登记结局放弃名额。
+- `internal/logic/world_init.go`:按登记结局放弃名额。
+- `internal/logic/scene_teardown_job.go`:归还做到为止。
+- `internal/metrics/metrics.go`;`tools/scripts/k8s_deploy.ps1` 与部署合同测试;`deploy/k8s/scene-manager-alerts.yaml`。
+- C++ 节点不碰 rooms,不改。Java 版不接 Agones(PARITY「场景实例与主世界频道」行有意差异 D14),不适用。
+
+### 13.10 改派前先占名额(2026-11-11 定案,已落码,未编译)
+
+- **原来**:世界频道的四条改派路径按一致性哈希或最低负载挑目标节点,不问 Agones 有没有空位:rebalance 迁移、懒改派、init 的死节点改派、EnterScene 的死节点自愈。它们先改归属、建实体,事后才转名额。目标 GameServer 满了就保留旧名额(场景不能一份都不占)。
+  - 整个 Fleet 的占用总数是对的,但记在了旧 GameServer 上:旧的看着比实际满,新的比实际空。
+  - GSA 会按新的那台「还有空位」继续往里放,那台进程就超出压测定下的容量。
+- **做法**:改派与新建频道一样「先占名额再搬」(`reserveAgonesRoomForWorldChannel`)。
+  1. 选好目标之后,先在它的 GameServer 上占名额:写在途占用、加条目。
+     - rebalance 的「换更好的家」:只认计划的目标,满了这次不搬。搬到别处就违背了这次迁移的目的。
+     - 属主已死的四条路径(rebalance 的 urgent、懒改派、init 的死节点改派、EnterScene 的死节点自愈):目标满了交给 GSA,在本 zone 挑一台有空位、承载大世界的 GameServer,落点改成它对应的节点。落点偏离哈希目标的,之后由 rebalance 搬回去,与新建频道同一做法。
+     - 哪台都占不到:不搬。频道留在死节点上、暂时进不去(选频道时跳过它),玩家落到别的频道;下一拍、下一次请求再试,FleetAutoscaler 扩出空位之后就能搬。这与新建频道没有容量时 fail-closed 是同一取舍:不把房间塞进 Agones 认为已经满了的进程。EnterScene 的死节点自愈这时回错误,由上游重试。GSA 挑中的 GameServer 认不出是哪个节点(Pod 没在 etcd 里登记)也算占不到,与新建频道、建副本相同。
+     - 回落分配挑中了老属主自己:也不搬,放弃这一条。GSA 按 etcd 里登记的 Pod 地址认节点,而判死看的是负载集,老属主的 Pod 还登记着、GameServer 还有空位时会被挑中;搬过去等于没搬。
+     - 落点换了的,交给调用方的也是实际落点:懒改派按它记候选、回应答,init 按它记本轮不可达,EnterScene 按它把玩家派过去。
+  2. 带着放置代次在落点上建实体,再走原来的改派 CAS(`luaReassignSceneNode`,不改)。
+  3. CAS 落地:用这次占的名额提交记录(`commitReservedAgonesRoom` → `commitAgonesRoomTransfer`)。属主仍是落点才改记录,同一步消费在途占用;改成了就删旧条目。
+  4. 任何一步没成,就放弃这次占的条目:分配代次、建实体、读镜像集合失败,CAS 落空或被屏障挡住。落空时回收预建实体照旧。
+  5. CAS 落空但属主恰是落点:别的写者挑了同一个节点,或脚本其实已执行。这时实体留着,名额照常提交:别的写者已提交的,记录已在这台上,这次的条目放弃;没提交的,这次就是那一份。两边都按条目,只会留一条。属主比对本身出错时放弃这次的条目:旧条目仍记着,总数不少,之后由对账转过来。
+- **进场请求路径上的改派按频道合并**(`joinChannelMove`,`channel_move_flight.go`):懒改派与 EnterScene 的死节点自愈跑在进场请求上,任意副本、任意并发。节点一死,它上面的玩家会一起重连、一起进同一个频道。
+  - 不合并时,每个请求都先在同一台 GameServer 上占名额(K8s 读改写同一个对象,互相冲突、重试)。并发的占用把目标临时占满,后到的回落到 GSA、在别的节点上白建实体,CAS 落空后再拆。最后只有一个 CAS 落地,K8s 写入与建拆却随请求数放大。
+  - 合并之后,同一进程里同一时刻每个频道只跑一次改派,同时到的请求等它的结果,落点以回的为准。多副本之间最多每个副本一次。
+  - 这不是锁:正确性仍由改派 CAS 与名额提交的比较并交换保证。廉价复核(重读属主、成员资格、再入屏障)每个请求自己做,带不了 `scene_conf_id` 的请求不去发起别人的那一次。
+  - 等待方按自己的 ctx 放弃等待;发起方被取消或出错时,等待方拿到同一个错误,由上游重试。
+  - rebalance 与 init 的死节点改派不进来:前者只在领导者上跑,后者在 zone 锁内,本来就不并发。
+  - `golang.org/x/sync/singleflight` 不在本模块依赖里,离线构建拿不到新模块,所以只写了用得到的最小部分。
+- **为什么不把名额记录并进改派 CAS**:改派 CAS 之后、名额提交之前,两个条目都在:旧的有记录指着,新的有在途占用护着。这时只会多记一份、不会少记,也就不会超卖。进程在这时退出,在途占用过期之后对账收:新条目按孤儿删,场景按「名额记在别的 GameServer 上」转过来。并进同一个脚本只是缩短这个窗口,却要改所有改派写者共用的脚本和它的回执格式。
+- **代码**:
+  - `agones_binding.go`:`reserveAgonesRoomForWorldChannel`、`commitReservedAgonesRoom`;原来事后转名额的 `TransferAgonesRoomForScene` 删除。
+  - `world_rebalance.go`:`migrateWorldChannel`;`destroyUnownedMigrationTarget` 回是否留下了实体,新增 `settleLostChannelMove`。
+  - `world_init.go`:`moveWorldChannelOffDeadNode`(回实际落点)、`lazyReassignStaleWorldChannel`(回实际落点)、`commitPreCreatedWorldChannel`(带名额)。
+  - `enterscenelogic.go`:`reassignSceneOffDeadNode`(复核后按频道合并)、`moveChannelOffDeadNode`(搬迁一半)、`adoptOwnerAfterLostReassign`;名额的提交与放弃走 `commitAgonesRoomAfterReassign`、`abandonAgonesRoomAfterReassign`,不挂请求 ctx(限时 `deadNodeReassignFollowUpTimeout`)。
+  - `world_init.go` 的懒改派同样拆成复核(`lazyReassignStaleWorldChannel`)与搬迁(`moveStaleWorldChannel`)两半。
+  - `channel_move_flight.go`(新):`joinChannelMove`。
+- **测试**:`world_channel_reserve_before_move_test.go`(新):四条属主已死的路径各跑一遍「目标满了回落到另一台」「哪台都满了不搬」「回落挑中老属主不搬」;rebalance 换更好的家目标满了不搬、空出位子后照常搬;CAS 落空时属主恰是落点就提交、否则放弃;EnterScene 自愈与懒改派同时进同一个频道时只占一次名额、只建一次实体。`channel_move_flight_test.go`(新):合并器的等待方按自己的 ctx 放弃、发起方 panic 时等待方拿到错误、结束后不留记录。`agones_world_channel_test.go` 与 `world_channel_cas_replay_test.go` 原来调 `TransferAgonesRoomForScene` 的用例改走 `moveAgonesRoomForTest`(先占名额、CAS 之后提交)。`TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership` 的 lostScene 段改为断言这次占的那一条已放弃。

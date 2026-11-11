@@ -290,4 +290,3 @@ func WriteLuaServiceHeadHandlerFile() {
 	utils2.Wg.Add(1)
 	go writeInitLuaServiceFile()
 }
-

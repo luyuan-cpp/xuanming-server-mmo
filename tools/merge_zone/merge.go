@@ -28,12 +28,32 @@ type mappingRow struct {
 	MergedAtMs uint64
 }
 
-// mappingTx 是持锁事务里能做的事。
+// 历史的两种动作,与 zone_merge_history 的 chk_merge_history_action 一致。
+const (
+	historyActionMerge   = "merge"
+	historyActionUnmerge = "unmerge"
+)
+
+// historyRow 是 zone_merge_history 的一行:谁(库侧 CURRENT_USER())、什么时候,把源区合进 / 撤出哪个区。
+// 撤销合服会删掉映射行,事后只能从这里查到那次合服(提案 §16)。
+type historyRow struct {
+	Src       uint32
+	Seq       uint64 // 这个源区的第几次变更,从 1 起
+	Action    string // historyActionMerge 或 historyActionUnmerge
+	Dst       uint32
+	RunID     string // merge:新映射行的 run_id;unmerge:被删那一行的 run_id
+	Principal string
+	AtMs      uint64
+}
+
+// mappingTx 是持锁事务里能做的事。Insert / Delete 真改了映射时,在同一个事务里给源区追加一条历史:
+// 历史写不进去就回错误,调用方返回它,整个事务回滚,映射也不变。调用方不另写历史。
 type mappingTx interface {
 	// Rows 读全部映射。调用方持着 route_meta 的行锁,所有映射写者都串行在它上面,读到的就是提交时的状态。
 	Rows(ctx context.Context) ([]mappingRow, error)
+	// Insert 写一行映射,并追加一条 merge 历史(run_id 相同)。
 	Insert(ctx context.Context, src, dst uint32, runID string) error
-	// Delete 按 (src, dst) 删一行,返回是否删到了。
+	// Delete 按 (src, dst) 删一行,返回是否删到了;删到时追加一条 unmerge 历史,run_id 是被删那一行的。
 	Delete(ctx context.Context, src, dst uint32) (bool, error)
 }
 
@@ -41,6 +61,8 @@ type mappingTx interface {
 type mappingStore interface {
 	// Snapshot 不加锁读 route_meta.writable 和全部映射。只给 dry-run 和审计用,不能作为写的依据。
 	Snapshot(ctx context.Context) (writable bool, rows []mappingRow, err error)
+	// History 不加锁读全部合服历史,按时间先后。只给审计用。
+	History(ctx context.Context) ([]historyRow, error)
 	// Locked 在一个事务里锁 route_meta 那一行和 zones 对应的映射行,复核 writable 后跑 body,body 成功才提交。
 	// writable=0 回 errRefused;body 的错误原样返回,事务回滚。
 	Locked(ctx context.Context, zones []uint32, body func(mappingTx) error) error
@@ -207,7 +229,7 @@ func runUnmerge(ctx context.Context, store mappingStore, o options, out io.Write
 		return nil
 	}
 	fmt.Fprintf(out, "unmerged: zone %d -> zone %d deleted. Guilds and listings created in the target zone meanwhile stay there; "+
-		"restart guild once so its ranks are rebuilt from the current mapping\n", src, dst)
+		"restart guild once so its ranks are rebuilt from the current mapping. The merge and this unmerge stay in zone_merge_history (-mode audit)\n", src, dst)
 	return nil
 }
 
@@ -218,10 +240,18 @@ func nothingToUnmerge(merges map[uint32]uint32, src, dst uint32) string {
 	return fmt.Sprintf("nothing to delete: zone %d is not merged", src)
 }
 
-// runAudit 只读:列出所有映射和每个源区的最终区。解析不通(成环、链太长)报拒绝退出码,让人先去看这张表:
-// 这种表各服务的缓存也刷新不了。
+// runAudit 只读:列出所有映射、每个源区的最终区和合服历史。两种情况报拒绝退出码,让人先去看这两张表:
+//   - 映射解析不通(成环、链太长):这种表各服务的缓存也刷新不了;
+//   - 有映射行在历史里找不到对应的 merge 记录:它不是本工具写的(手改,或建历史表之前写的),来历查不到。
+//
+// 先读映射、后读历史:映射行和它的 merge 历史在同一个事务里提交,所以先读到的映射行,后读的历史里一定有。
+// 反过来读,两次读之间的一次合服会被误报成来历不明。
 func runAudit(ctx context.Context, store mappingStore, out io.Writer) error {
 	writable, rows, err := store.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	history, err := store.History(ctx)
 	if err != nil {
 		return err
 	}
@@ -240,11 +270,56 @@ func runAudit(ctx context.Context, store mappingStore, out io.Writer) error {
 		mergedAt := time.UnixMilli(int64(row.MergedAtMs)).UTC().Format(time.RFC3339)
 		fmt.Fprintf(out, "%-10d %-10d %-10s %-24s %s\n", row.Src, row.Dst, final, mergedAt, row.RunID)
 	}
+	printHistory(out, history)
+	untracked := untrackedMappings(rows, history)
+	for _, row := range untracked {
+		fmt.Fprintf(out, "untracked mapping: zone %d -> zone %d (run_id %s) has no merge event in zone_merge_history\n", row.Src, row.Dst, row.RunID)
+	}
 	if resolveErr != nil {
 		return refusedf("zone_merged_into does not resolve, services cannot refresh their caches until it is repaired: %v", resolveErr)
 	}
 	for _, final := range slices.Sorted(maps.Keys(finals)) {
 		fmt.Fprintf(out, "final zone %d includes zones %v\n", final, zones.Members(final))
 	}
+	if len(untracked) > 0 {
+		return refusedf("%d mapping row(s) have no merge event in zone_merge_history: they were written by hand or before the history table existed, "+
+			"so who wrote them and when cannot be told; check them, then unmerge and merge again with this tool to give them a history", len(untracked))
+	}
 	return nil
+}
+
+// printHistory 按时间先后列出合服历史。
+func printHistory(out io.Writer, history []historyRow) {
+	fmt.Fprintf(out, "merge history: %d event(s)\n", len(history))
+	if len(history) == 0 {
+		return
+	}
+	fmt.Fprintf(out, "%-24s %-8s %-10s %-6s %-10s %-40s %s\n", "at_utc", "action", "src_zone", "seq", "dst_zone", "run_id", "sql_principal")
+	for _, h := range history {
+		at := time.UnixMilli(int64(h.AtMs)).UTC().Format(time.RFC3339)
+		fmt.Fprintf(out, "%-24s %-8s %-10d %-6d %-10d %-40s %s\n", at, h.Action, h.Src, h.Seq, h.Dst, h.RunID, h.Principal)
+	}
+}
+
+// untrackedMappings 返回在历史里找不到同 (src, dst, run_id) 的 merge 记录的映射行,顺序同 rows。
+// 只要有过这条 merge 记录就算有来历,不要求它是这个源区最新的一条:审计先读映射后读历史,两次读之间的撤销
+// 会让最新一条变成 unmerge,那时映射行是撤销之前读到的,并非来历不明。
+func untrackedMappings(rows []mappingRow, history []historyRow) []mappingRow {
+	type key struct {
+		src, dst uint32
+		runID    string
+	}
+	merged := make(map[key]bool, len(history))
+	for _, h := range history {
+		if h.Action == historyActionMerge {
+			merged[key{h.Src, h.Dst, h.RunID}] = true
+		}
+	}
+	var out []mappingRow
+	for _, row := range rows {
+		if !merged[key{row.Src, row.Dst, row.RunID}] {
+			out = append(out, row)
+		}
+	}
+	return out
 }

@@ -66,3 +66,19 @@ spec:
               铸造的墙钟地板没有起作用(退化为当前值 + 1)。通常是 scene_manager 主机之间时钟偏差,
               或主机时钟回拨。Redis 回退后重铸同值的防护依赖墙钟单调,核对主机 NTP 与时钟偏差监控。
               偶发一次也可能是推路由失败回滚(铸出值 + 1)后同一毫秒内的重试,这种不用处理;持续增长才查时钟。
+
+        - alert: SceneManagerOwnerEpochRollbackReceiptPending
+          expr: |
+            sum by (namespace, site, result) (increase(scene_manager_owner_epoch_rollback_receipt_total{result!="confirmed"}[10m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 有回滚回执没能确认落盘({{ $labels.site }}/{{ $labels.result }})"
+            description: >-
+              两段回执(docs/design/zone-redis-regression-guard-20261022.md §4.3.4):凭标记的回滚(推路由失败或铸造没确认落盘)
+              之后、或进场前对待确认回执的确认,没能确认落盘。site=rollback 时源 scene 不采纳回滚值,按"标记已发出"踢线,玩家重登
+              (C++ 汇总行 rollback_unconfirmed);site=enter 时这次进场回可重试错误,不下发 epoch。与 SceneManagerOwnerEpochMintNotDurable
+              同时出现属同一原因:Redis 刷盘或副本落后,核对 Redis 的 AOF 与从库状态。site=rollback 的 not_sent 与 pending 在 Kafka
+              写满超时时也会响:推路由用掉了大半请求预算,留给确认的时间不够(不足 1ms 记 not_sent,等不到份数记 pending),
+              这时对照 scene_manager 的 Kafka 投递失败,Redis 本身未必有问题。

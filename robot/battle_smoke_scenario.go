@@ -16,6 +16,10 @@ package main
 //
 // 地域探测同样直连 battle 公网端口(network_probe.go):端口不可达或回执被拒 = FAIL step=a-network-probe。
 //
+// 直连心跳(C++ 仓 docs/design/gate-client-heartbeat.md §14):battle 在握手应答里通告心跳参数,robot 当场在直连上
+// 发第一条。A、B 的直连各自至少要收到一条心跳回包,否则 FAIL step=a-direct-heartbeat / b-direct-heartbeat。
+// 本场景不演练判死(停发心跳 30s 后被断开):PVE solo 一回合就结束,对局活不到判死阈值,判死的端到端由客户端验收。
+//
 // 结果约定(供外层脚本消费):
 //   全部断言通过 → 日志一行 `BATTLE_SMOKE_OK battle_id=… a_turns=… b_spectate_turns=…
 //                  a_direct_turns=… b_direct_spectate_turns=…`(直连计数恒 ≥ 1),
@@ -269,6 +273,11 @@ func RunBattleSmoke(cfg *config.Config) {
 		fail("b-direct-delivery", "observer direct connection saw %s, expected spectate_turns>=1 and spectate_ends>=1",
 			bDirect.summary())
 	}
+	// 观众直连同样按通告发心跳、收回包(同 A 的 a-direct-heartbeat)。
+	if bDirect.gc.HeartbeatReplies() < 1 {
+		fail("b-direct-heartbeat", "observer direct connection got no ClientHeartbeatResponse (%s); battle did not advertise or answer heartbeats",
+			bDirect.summary())
+	}
 
 	// ---- 步骤 5:收 A 的参战结果 ----
 	var aRes battleSmokeFighterResult
@@ -501,6 +510,14 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 	if directTurns < 1 || direct.battleEnds.Load() != 0 || direct.stateReplies.Load() < 1 {
 		return battleSmokeFighterResult{step: "a-direct-delivery",
 			err: fmt.Errorf("fighter direct connection saw %s, expected state_replies>=1, turn_results>=1 and battle_ends=0; personal settlement must arrive through scene",
+				direct.summary()),
+			battleId: battleId, outcome: outcome, turns: turns}
+	}
+	// 直连心跳(gate-client-heartbeat.md §14):battle 在握手应答里通告参数,robot 当场发第一条,battle 必须回。
+	// 没有回包说明 battle 没通告(robot 一条都没发)或没处理心跳;后者会把心跳当未知消息断开直连,前面的投递断言多半已先失败。
+	if direct.gc.HeartbeatReplies() < 1 {
+		return battleSmokeFighterResult{step: "a-direct-heartbeat",
+			err: fmt.Errorf("fighter direct connection got no ClientHeartbeatResponse (%s); battle did not advertise or answer heartbeats",
 				direct.summary()),
 			battleId: battleId, outcome: outcome, turns: turns}
 	}

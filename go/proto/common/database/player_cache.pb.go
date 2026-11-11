@@ -22,40 +22,14 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// PlayerAllData — the player's full persisted snapshot: written by SavePlayer (periodic, logout and the
-// ownership-handoff save before a cross-node / cross-zone move), loaded by whichever node owns the player next,
-// and snapshot'd for rollback. (The old cross-zone "migration" chain that shipped it over Kafka was removed, CZ-1.)
-//
-// Until 2026-05-16 this only contained player_database_data and
-// player_database_1_data — meaning bag/quest/mail were silently dropped
-// on every logout and every cross-zone hop. cross-zone-readiness-audit.md
-// §3.2 件 1 designed the fix: add the three missing data classes as
-// independent sub-messages here (NOT inside player_database, which is
-// already a 7-component grab-bag).
-//
-// Sub-message status (2026-05-16):
-//   - bag_data   — schema landed (conservative subset; game-design
-//     extensions tracked as TODOs in BagAllData proto)
-//   - quest_data — schema sketched; quest system itself doesn't exist
-//     in cpp yet, so the field is reserved for when it does
-//   - mail_data  — schema sketched; default plan is mail rides over an
-//     independent Go service, NOT via PlayerAllData.
-//     See cross-zone-readiness-audit.md §3.3.
-//
-// Wire-compatibility note: field numbers 4/5/6 are the canonical slots
-// — even if cpp Marshal/Unmarshal doesn't populate quest_data/mail_data
-// today, leaving them numbered prevents future schema drift between
-// the proto and any side-channel storage.
+// PlayerAllData:scene 里一个玩家的整份持久快照。每次存盘新拼一份(SavePlayerImpl),按行投影写进
+// player_store(docs/design/player-save-direct-commit.md);加载时由各行拼回 player_database_data。
 //
 // 冻结(docs/design/mixed-version-persist-field-protection.md §3.2 R1):顶层不经 SQL,冷加载由骨架组装,
-// 存盘每次新拼,顶层新字段无处持久化。新数据一律加进两张表消息。bag_data / quest_data 是由数据库记录
-// 重算的兼容副本,mail_data 没有写入方,三者标 OptionPersistUncarried。
+// 存盘每次新拼,顶层新字段无处持久化。新数据一律加进 player_database。
 type PlayerAllData struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	PlayerDatabaseData *PlayerDatabase        `protobuf:"bytes,2,opt,name=player_database_data,json=playerDatabaseData,proto3" json:"player_database_data,omitempty"`
-	BagData            *BagAllData            `protobuf:"bytes,4,opt,name=bag_data,json=bagData,proto3" json:"bag_data,omitempty"`
-	QuestData          *QuestAllData          `protobuf:"bytes,5,opt,name=quest_data,json=questData,proto3" json:"quest_data,omitempty"`
-	MailData           *MailAllData           `protobuf:"bytes,6,opt,name=mail_data,json=mailData,proto3" json:"mail_data,omitempty"`
 	LastSaveSeq        uint64                 `protobuf:"varint,7,opt,name=last_save_seq,json=lastSaveSeq,proto3" json:"last_save_seq,omitempty"` // 存盘发号水位，跨重接和跨场景继承，不承载业务数据
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
@@ -98,27 +72,6 @@ func (x *PlayerAllData) GetPlayerDatabaseData() *PlayerDatabase {
 	return nil
 }
 
-func (x *PlayerAllData) GetBagData() *BagAllData {
-	if x != nil {
-		return x.BagData
-	}
-	return nil
-}
-
-func (x *PlayerAllData) GetQuestData() *QuestAllData {
-	if x != nil {
-		return x.QuestData
-	}
-	return nil
-}
-
-func (x *PlayerAllData) GetMailData() *MailAllData {
-	if x != nil {
-		return x.MailData
-	}
-	return nil
-}
-
 func (x *PlayerAllData) GetLastSaveSeq() uint64 {
 	if x != nil {
 		return x.LastSaveSeq
@@ -130,14 +83,11 @@ var File_proto_common_database_player_cache_proto protoreflect.FileDescriptor
 
 const file_proto_common_database_player_cache_proto_rawDesc = "" +
 	"\n" +
-	"(proto/common/database/player_cache.proto\x1a\x1bproto/db/proto_option.proto\x1a0proto/common/database/mysql_database_table.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb2\x02\n" +
+	"(proto/common/database/player_cache.proto\x1a\x1bproto/db/proto_option.proto\x1a0proto/common/database/mysql_database_table.proto\"\xcf\x01\n" +
 	"\rPlayerAllData\x12B\n" +
-	"\x14player_database_data\x18\x02 \x01(\v2\x10.player_databaseR\x12playerDatabaseData\x12-\n" +
-	"\bbag_data\x18\x04 \x01(\v2\v.BagAllDataB\x05\xc0\xfe\xa4\x02\x01R\abagData\x123\n" +
-	"\n" +
-	"quest_data\x18\x05 \x01(\v2\r.QuestAllDataB\x05\xc0\xfe\xa4\x02\x01R\tquestData\x120\n" +
-	"\tmail_data\x18\x06 \x01(\v2\f.MailAllDataB\x05\xc0\xfe\xa4\x02\x01R\bmailData\x12\"\n" +
-	"\rlast_save_seq\x18\a \x01(\x04R\vlastSaveSeq:\x05\xc0\x94\xf4\x01\x01J\x04\b\x03\x10\x04R\x16player_database_1_dataB\x17Z\x15proto/common/databaseb\x06proto3"
+	"\x14player_database_data\x18\x02 \x01(\v2\x10.player_databaseR\x12playerDatabaseData\x12\"\n" +
+	"\rlast_save_seq\x18\a \x01(\x04R\vlastSaveSeq:\x05\xc0\x94\xf4\x01\x01J\x04\b\x03\x10\x04J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\x16player_database_1_dataR\bbag_dataR\n" +
+	"quest_dataR\tmail_dataB\x17Z\x15proto/common/databaseb\x06proto3"
 
 var (
 	file_proto_common_database_player_cache_proto_rawDescOnce sync.Once
@@ -155,20 +105,14 @@ var file_proto_common_database_player_cache_proto_msgTypes = make([]protoimpl.Me
 var file_proto_common_database_player_cache_proto_goTypes = []any{
 	(*PlayerAllData)(nil),  // 0: PlayerAllData
 	(*PlayerDatabase)(nil), // 1: player_database
-	(*BagAllData)(nil),     // 2: BagAllData
-	(*QuestAllData)(nil),   // 3: QuestAllData
-	(*MailAllData)(nil),    // 4: MailAllData
 }
 var file_proto_common_database_player_cache_proto_depIdxs = []int32{
 	1, // 0: PlayerAllData.player_database_data:type_name -> player_database
-	2, // 1: PlayerAllData.bag_data:type_name -> BagAllData
-	3, // 2: PlayerAllData.quest_data:type_name -> QuestAllData
-	4, // 3: PlayerAllData.mail_data:type_name -> MailAllData
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_player_cache_proto_init() }
@@ -177,7 +121,6 @@ func file_proto_common_database_player_cache_proto_init() {
 		return
 	}
 	file_proto_common_database_mysql_database_table_proto_init()
-	file_proto_common_database_bag_quest_mail_data_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

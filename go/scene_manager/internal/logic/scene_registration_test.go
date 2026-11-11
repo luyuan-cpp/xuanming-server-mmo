@@ -51,17 +51,19 @@ func TestRegisterInstance_WritesEverythingInOneStep(t *testing.T) {
 	)
 	member := strconv.FormatUint(sceneID, 10)
 	reg := testInstanceRegistration(sceneID)
-	reg.AgonesGs = "gs-a"
+	reg.AgonesRoom = agonesRoom{GameServer: "gs-a", Entry: newAgonesRoomEntry(sceneID)}
 	reg.CreatedAt = 1234
 	reg.Mirror = true
 	reg.SourceSceneID = source
+	require.NoError(t, holdAgonesRoom(sc, claimTestZone, reg.AgonesRoom.Entry))
 
 	require.Equal(t, registrationRegistered, registerInstance(sc, reg))
 
 	require.Equal(t, registrationTestNode, mustGet(t, mr, sceneNodeKey(sceneID)))
 	require.Equal(t, strconv.FormatUint(uint64(claimTestZone), 10), mustGet(t, mr, sceneZoneKey(sceneID)))
 	require.Equal(t, "1", mustGet(t, mr, nodeSceneCountKey(claimTestZone, registrationTestNode)))
-	require.Equal(t, "gs-a", mustGet(t, mr, sceneAgonesGsKey(sceneID)))
+	require.Equal(t, reg.AgonesRoom.record(), mustGet(t, mr, sceneAgonesGsKey(sceneID)))
+	require.Empty(t, agonesHoldsOf(t, sc, claimTestZone), "登记在同一步消费了名额的在途占用")
 	require.Equal(t, "1", mustGet(t, mr, sceneMirrorFlagKey(sceneID)))
 	require.Equal(t, strconv.FormatUint(source, 10), mustGet(t, mr, sceneSourceKey(sceneID)))
 	nodeScenes, err := mr.Members(nodeScenesKey(claimTestZone, registrationTestNode))
@@ -98,14 +100,17 @@ func TestRegisterWorldChannel_WritesEverythingInOneStep(t *testing.T) {
 		confID  uint64 = 3300
 	)
 	member := strconv.FormatUint(sceneID, 10)
-	reg := sceneRegistration{SceneID: sceneID, ZoneID: claimTestZone, NodeID: registrationTestNode, AgonesGs: "gs-w"}
+	reg := sceneRegistration{SceneID: sceneID, ZoneID: claimTestZone, NodeID: registrationTestNode,
+		AgonesRoom: agonesRoom{GameServer: "gs-w", Entry: newAgonesRoomEntry(sceneID)}}
+	require.NoError(t, holdAgonesRoom(sc, claimTestZone, reg.AgonesRoom.Entry))
 
 	require.Equal(t, registrationRegistered, registerWorldChannel(sc, reg, confID))
 
 	require.Equal(t, registrationTestNode, mustGet(t, mr, sceneNodeKey(sceneID)))
 	require.Equal(t, strconv.FormatUint(uint64(claimTestZone), 10), mustGet(t, mr, sceneZoneKey(sceneID)))
 	require.Equal(t, "1", mustGet(t, mr, nodeSceneCountKey(claimTestZone, registrationTestNode)))
-	require.Equal(t, "gs-w", mustGet(t, mr, sceneAgonesGsKey(sceneID)))
+	require.Equal(t, reg.AgonesRoom.record(), mustGet(t, mr, sceneAgonesGsKey(sceneID)))
+	require.Empty(t, agonesHoldsOf(t, sc, claimTestZone))
 	channels, err := mr.Members(worldChannelsKey(claimTestZone, confID))
 	require.NoError(t, err)
 	require.Equal(t, []string{member}, channels)
@@ -121,12 +126,13 @@ func TestRegisterInstance_ReplyLostResolvesToRegistered(t *testing.T) {
 	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
 	const sceneID uint64 = 89705
 	reg := testInstanceRegistration(sceneID)
-	reg.AgonesGs = "gs-a"
+	reg.AgonesRoom = agonesRoom{GameServer: "gs-a", Entry: newAgonesRoomEntry(sceneID)}
+	require.NoError(t, holdAgonesRoom(sc, claimTestZone, reg.AgonesRoom.Entry))
 
 	require.Equal(t, registrationRegistered, registerInstance(sc, reg))
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
 	require.Equal(t, "1", mustGet(t, mr, nodeSceneCountKey(claimTestZone, registrationTestNode)), "计数只加一次")
-	require.Equal(t, "gs-a", mustGet(t, mr, sceneAgonesGsKey(sceneID)))
+	require.Equal(t, reg.AgonesRoom.record(), mustGet(t, mr, sceneAgonesGsKey(sceneID)), "作废查询读记录拿回已登记,不用再消费在途占用")
 	requireActiveInstance(t, sc, claimTestZone, sceneID, true)
 }
 
@@ -240,12 +246,33 @@ func TestRegisterWorldChannel_OtherTokenRecordIsConflict(t *testing.T) {
 	require.False(t, mr.Exists(nodeSceneCountKey(claimTestZone, registrationTestNode)))
 }
 
-// 只有 aborted 能还名额。conflict 和 unknown 时登记可能已经落地,名额由空闲回收或销毁方按 agones_gs 还。
-func TestRegistrationOutcome_OnlyAbortedReleasesReservation(t *testing.T) {
+// aborted、conflict、fenced 都放弃这次占的名额条目:记录没指向它,删的只是自己那一条。unknown 不放弃:登记可能已经落地,
+// 记录指向这一条,删了就少记;条目与在途占用留给对账在过期之后按记录判。
+// 2026-11-10 之前名额是计数,conflict 分不清两种来历、怕双还,只有 aborted 还。
+func TestRegistrationOutcome_ReleasesReservationUnlessItMayHaveLanded(t *testing.T) {
 	require.True(t, registrationAborted.releasesReservation())
-	require.False(t, registrationConflict.releasesReservation())
+	require.True(t, registrationConflict.releasesReservation())
+	require.True(t, registrationFenced.releasesReservation())
 	require.False(t, registrationUnknown.releasesReservation())
 	require.False(t, registrationRegistered.releasesReservation())
+}
+
+// 名额的在途占用已被对账取消(拖过了截止时刻):登记一个键都不写,回 fenced。否则记录会指向一条已经被删的条目,
+// 这个场景不占名额,节点被超卖。没有在途占用这道闸时,对账只能靠宽限期猜「这条还在不在途」,猜错就是这一种少记。
+func TestRegisterInstance_CanceledRoomHoldIsFenced(t *testing.T) {
+	sc, mr := newIntegrationSvcCtx(t)
+	const sceneID uint64 = 89713
+	reg := testInstanceRegistration(sceneID)
+	reg.AgonesRoom = agonesRoom{GameServer: "gs-a", Entry: newAgonesRoomEntry(sceneID)}
+	// 刻意不写在途占用:等同于对账已经取消了它。
+
+	require.Equal(t, registrationFenced, registerInstance(sc, reg))
+	require.Equal(t, registrationFenced, evalTestInstanceRegistration(t, sc, reg, "token-1"), "重发照样被挡")
+	for _, key := range []string{sceneNodeKey(sceneID), sceneZoneKey(sceneID), sceneAgonesGsKey(sceneID), sceneRegistrationRecordKey(sceneID)} {
+		require.False(t, mr.Exists(key), key)
+	}
+	require.False(t, mr.Exists(nodeSceneCountKey(claimTestZone, registrationTestNode)))
+	requireActiveInstance(t, sc, claimTestZone, sceneID, false)
 }
 
 // newAgonesInstanceCtx 铺一个 Agones 模式、只有一个实例节点 10(gs-1)的 zone。opts(钩子)要在首次为这个地址
@@ -282,6 +309,7 @@ func TestCreateScene_AgonesRegistrationAbortedReleasesRoom(t *testing.T) {
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
 	require.Equal(t, constants.ErrRedis, resp.ErrorCode)
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-1"), "登记确定没落地,名额要还")
+	assert.Empty(t, agonesHoldsOf(t, l.svcCtx, testZoneId), "在途占用一起删")
 	members, _ := l.svcCtx.Redis.ZrangeWithScores(activeInstancesKey(testZoneId), 0, -1)
 	assert.Empty(t, members)
 }
@@ -295,6 +323,6 @@ func TestCreateScene_AgonesRegistrationReplyLostStillCreates(t *testing.T) {
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
 	require.Equal(t, uint32(0), resp.ErrorCode)
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-1"))
-	gs, _ := l.svcCtx.Redis.Get(sceneAgonesGsKey(resp.SceneId))
-	assert.Equal(t, "gs-1", gs)
+	requireAgonesRecordOn(t, l.svcCtx, alloc, resp.SceneId, "gs-1")
+	assert.Empty(t, agonesHoldsOf(t, l.svcCtx, testZoneId))
 }

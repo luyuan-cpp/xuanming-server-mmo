@@ -1,6 +1,8 @@
 package assetop
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
@@ -41,6 +43,19 @@ type Metrics struct {
 	pendingClassOldestAge *prometheus.GaugeVec
 	abandonedTotal        *prometheus.CounterVec
 	abandonSkippedTotal   *prometheus.CounterVec
+
+	// ownedShards 是缺口清单第 25 条追加(docs/design/assetop-redelivery-sharding-20261110.md):本副本此刻负责的
+	// 到期扫描片数。用不带可变 label 的 GaugeVec 而不是 Gauge:Gauge 一注册就报 0,没绑分工的循环(单测、离线工具)
+	// 会显得「一片都不负责」,实际它们扫的是全部行;GaugeVec 在第一次 Set 之前没有序列。
+	// 告警(deploy/k8s/asset-channel-alerts.yaml 的 asset-channel.work-shards 组)按 sum by (namespace, service) 判它是否为 64。
+	ownedShards *prometheus.GaugeVec
+
+	// loopLastRun 是缺口清单第 25 条第四批追加(设计 §14.3):重投循环(Loop.Run)最近一次跑完一轮的时刻(Unix 秒)。
+	// 循环起来时写一次,每跑完一轮写一次(这一轮成败都写,panic 的那一轮不写),循环退出时删掉序列。
+	// 用不带可变 label 的 GaugeVec,理由同 ownedShards:没起循环的副本(canary、单测、离线工具)与已经停掉循环的副本都没有序列。
+	// 告警 AssetOpRedeliveryLoopStalled(asset-channel-alerts.yaml 的 asset-channel.loop-liveness 组)按副本逐条判它停住多久:
+	// 分片之后卡住的副本名下的片没人扫,而 assetop_owned_shards 之和仍是 64。
+	loopLastRun *prometheus.GaugeVec
 }
 
 // NewMetrics 在 reg 上注册本包的全部指标。
@@ -168,6 +183,18 @@ func newMetrics(reg prometheus.Registerer, service string) *Metrics {
 				" / redis_unverified(Redis 副本未通过实例身份核验,等玩家下次登录)",
 			ConstLabels: labels,
 		}, []string{"reason"}),
+		ownedShards: f.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "assetop_owned_shards",
+			Help: "本副本此刻负责的到期扫描分片数(0..64,按 player_id 分片);各 stable 副本加起来应为 64," +
+				"成员表变化的几秒里会多或少几片。只有绑了按片分工的重投循环才报",
+			ConstLabels: labels,
+		}, nil),
+		loopLastRun: f.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "assetop_loop_last_run_unixtime",
+			Help: "重投循环最近一次跑完一轮的时刻(Unix 秒,这一轮成败都算,panic 的那一轮不算;循环起来时也写一次)。" +
+				"只在循环运行时有序列;值长期不前进 = 循环卡在某一轮里",
+			ConstLabels: labels,
+		}, nil),
 	}
 }
 
@@ -310,6 +337,30 @@ func (m *Metrics) setPendingOldestAge(stream assetpb.AssetOpStream, seconds floa
 		return
 	}
 	m.pendingOldestAge.WithLabelValues(StreamLabel(stream)).Set(seconds)
+}
+
+// setOwnedShards 记本副本本轮负责的到期扫描片数(Loop.listDue,只在绑了分工时调)。
+func (m *Metrics) setOwnedShards(n int) {
+	if m == nil {
+		return
+	}
+	m.ownedShards.WithLabelValues().Set(float64(n))
+}
+
+// markLoopRun 记重投循环起来、或跑完一轮的时刻(Loop.Run)。
+func (m *Metrics) markLoopRun(now time.Time) {
+	if m == nil {
+		return
+	}
+	m.loopLastRun.WithLabelValues().Set(float64(now.Unix()))
+}
+
+// clearLoopRun 在重投循环退出时删掉活性序列:停掉的循环不该被当成卡住。
+func (m *Metrics) clearLoopRun() {
+	if m == nil {
+		return
+	}
+	m.loopLastRun.Reset()
 }
 
 // WakeResult 是 assetop_wake_total 的 result label(docs/design/landing-recovery-sync-digest.md §5.3)。

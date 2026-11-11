@@ -292,9 +292,18 @@ namespace
 		{
 			return;
 		}
+		const uint64_t leaderPlayerId = driven->leaderPlayerId;
 		// 先停:此后 MovementSystem 不再排除他,不清零的话会按队形最后写的速度继续积分。
 		StopMotion(follower, *driven);
 		registry.remove<TeamFollowerComp>(follower);
+		// 队长离开本节点(交接、退出、实体没了):记下"在等队长的去留",有结论之后 PlayerTeamSystem 再跟一次
+		// (TeamFollowAwaitLeaderComp 的说明)。暂离中的不记:他本来就不想跟。
+		if (reason == TEAM_FOLLOW_STOP_REASON_LEADER_GONE && leaderPlayerId != 0 &&
+			registry.all_of<TeamFollowIntentComp>(follower))
+		{
+			registry.emplace_or_replace<TeamFollowAwaitLeaderComp>(
+				follower, TeamFollowAwaitLeaderComp{leaderPlayerId, tlsFrameTimeManager.frameTime.current_frame()});
+		}
 		// 瞬移落位等待只对客户端上报有意义;驱动期间上报全被丢弃,恢复上报时以当前位置为准。
 		MovementSystem::CancelTeleportSettle(follower);
 		SendFollowState(follower, false, entt::null, 0, reason);
@@ -655,6 +664,7 @@ void TeamFollowSystem::SetFollowIntent(entt::entity player, const bool follow)
 		return;
 	}
 	registry.remove<TeamFollowIntentComp>(player);
+	registry.remove<TeamFollowAwaitLeaderComp>(player);
 	Detach(player, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
 }
 
@@ -734,7 +744,52 @@ bool TeamFollowSystem::TryAttach(entt::entity follower, entt::entity leader, con
 		return false;
 	}
 
+	// 已经重新接上:不再等上一个队长的去留。
+	registry.remove<TeamFollowAwaitLeaderComp>(follower);
 	return PlaceMember(leader, *comp, follower, walkAllowed);
+}
+
+const std::vector<entt::entity>& TeamFollowSystem::TakeFollowersWithSettledLeader()
+{
+	auto& registry = tlsEcs.actorRegistry;
+	static thread_local std::vector<entt::entity> settled;
+	static thread_local std::vector<entt::entity> expired;
+	settled.clear();
+	expired.clear();
+	const uint32_t now = tlsFrameTimeManager.frameTime.current_frame();
+	for (auto&& [follower, waiting] : registry.view<TeamFollowAwaitLeaderComp>().each())
+	{
+		const auto leader = LivePlayer(waiting.leaderPlayerId);
+		// 队长实体已不在本节点:交接放行(location 已指向新落点)或退出完成。队长还在、但不再处于离开中:交接作废、原地解冻。
+		// 两种都有结论了,交给跟随检查按队长此刻的 location 决定去哪(去别的节点就发换场景,回到原地就重新接上)。
+		if (leader == entt::null || !IsLeavingNode(leader))
+		{
+			settled.push_back(follower);
+		}
+		else if (now - waiting.sinceFrame >= kTeamFollowAwaitLeaderFrames)
+		{
+			expired.push_back(follower);
+		}
+	}
+	for (const auto follower : expired)
+	{
+		LOG_INFO << "[TeamFollow] metric=team_follow_await_leader_expired player_id=" << GuidOf(follower)
+				 << " leader_id=" << registry.get<TeamFollowAwaitLeaderComp>(follower).leaderPlayerId;
+		registry.remove<TeamFollowAwaitLeaderComp>(follower);
+	}
+	// 收集与摘组件分开:遍历 view 时摘组件是未定义行为。
+	for (auto it = settled.begin(); it != settled.end();)
+	{
+		registry.remove<TeamFollowAwaitLeaderComp>(*it);
+		// 等的这段时间里暂离、退出或自己也在离开的,不再跟。
+		if (!registry.all_of<TeamFollowIntentComp>(*it) || IsLeavingNode(*it))
+		{
+			it = settled.erase(it);
+			continue;
+		}
+		++it;
+	}
+	return settled;
 }
 
 void TeamFollowSystem::Detach(entt::entity follower, const TeamFollowStopReason reason)

@@ -1,6 +1,6 @@
 #ifdef _WIN32
 
-// hiredis_event_batch_windows_test —— Hiredis 适配层在 Windows 上的两条同批生命周期回归:
+// hiredis_event_batch_windows_test —— Hiredis 适配层在 Windows 上的三条同批生命周期回归:
 //  1. 同一轮里先释放、后有事件:本轮较早派发的另一个 Channel 撤掉 Hiredis 的最后一个 owner,
 //     而这条连接本轮也有已就绪的 I/O。修复前(裸 this 回调、同步析构),同步析构会在
 //     EventLoop::removeChannel 撞 Debug 断言「本轮仍排着事件的 Channel 不得注销」;Release 下随后
@@ -9,6 +9,12 @@
 //  2. 对端半关闭:对端只 shutdown(SD_SEND),WSAPoll 可能只报 POLLHUP。断线必须被察觉,挂起命令恰好以
 //     空应答结束一次;所有者在断线回调里放掉最后一个引用时,对象要活到这次事件分发返回。保活主要靠 Channel
 //     回调里 weakSelf.lock() 拿到的局部强引用;Channel::tie 是纵深防御,本文件没有单独锁住它的用例。
+//  3. 同一轮里先请求断开、后有事件:较早派发的 Channel 对一条没有在途命令、本轮也有 EOF 可读的连接调
+//     disconnect()。修复前 hiredis 当场拆除,在前置通道的回调里注销它的 Channel,Debug 撞同一条 removeChannel
+//     断言;修复后 disconnect() 在 I/O 分发期间推迟到本轮 pending 阶段,本轮的 EOF 照常分发。
+//
+// 用例经 Hiredis::fd() 拿到受害连接的客户端 socket,确认它在派发前确实可读(否则「旧事件不再分发」的断言
+// 可能落空),并确认它在本轮里没被关掉、被替代连接复用;Linux 版同一做法走 /proc/self/fd。
 //
 // Linux 同一机制由 cpp/tests/redis_lifecycle_test/hiredis_event_batch_test.cpp 覆盖(eventfd + MUDUO_USE_POLL);
 // 本文件只登记进 Windows 的 rpc_controller_test.vcxproj。Windows muduo 的 PollPoller 按注册顺序收集
@@ -117,6 +123,19 @@ bool OpenUdpLoopback(SocketLease& udp, sockaddr_in& self)
 bool SendAll(SOCKET socket, const std::string& data)
 {
     return ::send(socket, data.data(), static_cast<int>(data.size()), 0) == static_cast<int>(data.size());
+}
+
+// IPv4 本地端口;socket 已关闭、调用失败或不是 IPv4 socket 时返回 0。用来确认一个句柄仍是原来那条连接:
+// 句柄被关掉后又被新连接复用时,本地端口会变成新连接的临时端口。
+uint16_t LocalPort(SOCKET socket)
+{
+    sockaddr_storage address{};
+    int size = sizeof(address);
+    if (::getsockname(socket, reinterpret_cast<sockaddr*>(&address), &size) != 0 || address.ss_family != AF_INET)
+    {
+        return 0;
+    }
+    return ntohs(reinterpret_cast<const sockaddr_in&>(address).sin_port);
 }
 
 // 在 loop 线程(即测试线程)上跑到有回调 quit,或看门狗到点;返回 false 表示是看门狗结束的。
@@ -247,6 +266,10 @@ TEST_F(HiredisEventBatchWindows, EarlierChannelReleasesLastOwnerOfReadyConnectio
     ASSERT_EQ(victimConnects, 1);
     ASSERT_TRUE(victim->connected());
     const std::weak_ptr<hiredis::Hiredis> victimWeak = victim;
+    // 受害连接的客户端 socket:派发前确认它真的可读;本轮里确认它没被关掉、被替代连接复用(本地端口不变)。
+    const SOCKET victimSocket = static_cast<SOCKET>(victim->fd());
+    const uint16_t victimLocalPort = LocalPort(victimSocket);
+    ASSERT_NE(victimLocalPort, 0) << "could not read the victim's local port";
 
     int nullReplies = 0;
     int nonNullReplies = 0;
@@ -271,6 +294,7 @@ TEST_F(HiredisEventBatchWindows, EarlierChannelReleasesLastOwnerOfReadyConnectio
     int attackerCalls = 0;
     std::int64_t attackerIteration = -1;
     bool victimExpiredInAttacker = false;
+    bool victimSocketHeldThroughBatch = false;
     std::shared_ptr<hiredis::Hiredis> replacement;
     int replacementConnects = 0;
     int replacementReplies = 0;
@@ -304,11 +328,14 @@ TEST_F(HiredisEventBatchWindows, EarlierChannelReleasesLastOwnerOfReadyConnectio
             }, "PING"), REDIS_OK);
         });
         replacement->connect();
+        // 旧 socket 要留到 pending 阶段才关:替代连接建好之后,这个句柄必须仍是原来那条连接(本地端口没变)。
+        victimSocketHeldThroughBatch = LocalPort(victimSocket) == victimLocalPort;
         loop.queueInLoop([&loop] { loop.quit(); });
     });
 
     // 先让受害连接可读,再让前置通道可读;loop 此刻没在跑,下一次 WSAPoll 会在同一批里同时报告二者。
     ASSERT_TRUE(SendAll(victimPeer.value, "+PONG\r\n"));
+    ASSERT_TRUE(WaitReadable(victimSocket)) << "precondition: the victim's reply must be readable before polling";
     const char trigger = 'x';
     ASSERT_EQ(::sendto(udp.value, &trigger, 1, 0, reinterpret_cast<const sockaddr*>(&udpSelf), sizeof(udpSelf)), 1);
     ASSERT_TRUE(WaitReadable(udp.value)) << "precondition: the earlier channel must be readable before polling";
@@ -316,6 +343,8 @@ TEST_F(HiredisEventBatchWindows, EarlierChannelReleasesLastOwnerOfReadyConnectio
 
     EXPECT_EQ(attackerCalls, 1);
     EXPECT_TRUE(victimExpiredInAttacker) << "after the last owner is gone the weak callbacks must no longer lock it";
+    EXPECT_TRUE(victimSocketHeldThroughBatch)
+        << "the victim's socket must stay open until the pending phase, so the replacement cannot reuse it";
     EXPECT_EQ(nonNullReplies, 0) << "the victim's ready reply must not be dispatched after its owner released it earlier in the batch";
     EXPECT_EQ(nullReplies, 1) << "the pending command must complete exactly once, with a null reply, on destruction";
     EXPECT_TRUE(nullReplyInPending) << "destruction must be deferred until the I/O dispatch of the batch is over";
@@ -414,6 +443,86 @@ TEST_F(HiredisEventBatchWindows, PeerHalfCloseDisconnectsAndOwnerMayReleaseInDis
     maintenance->Close();
     EXPECT_TRUE(maintenance->Joined())
         << "the wrapper and every queued Channel keep-alive must be released, and the PING completed";
+}
+
+// ---------------------------------------------------------------------------
+// 3. 同一轮里先请求断开、后有事件。受害连接没有在途命令,本轮又有对端半关闭带来的 EOF 可读;前置通道的回调对它
+//    调 disconnect()。修复前 hiredis 当场拆除(没有在途命令就不等),在前置通道的回调里注销受害连接的 Channel,
+//    Debug 撞 EventLoop::removeChannel 的断言;Release 下断线被记成「显式断开」。修复后 disconnect() 推迟到本轮
+//    pending 阶段:本轮的 EOF 照常分发,断线回调恰好一次、是出错断线;推迟的那次断开发现连接已断,什么也不做。
+// ---------------------------------------------------------------------------
+
+TEST_F(HiredisEventBatchWindows, EarlierChannelDisconnectsIdleConnectionWithReadyEofInSameBatch)
+{
+    muduo::net::EventLoop loop;
+    SocketLease listener;
+    uint16_t port = 0;
+    ASSERT_TRUE(ListenLoopback(listener, port));
+
+    SocketLease udp;
+    sockaddr_in udpSelf{};
+    ASSERT_TRUE(OpenUdpLoopback(udp, udpSelf));
+    ASSERT_LE(udp.value, static_cast<SOCKET>(INT32_MAX));
+    muduo::net::Channel attacker(&loop, static_cast<int>(udp.value));
+    attacker.enableReading();
+    const ChannelRegistration attackerRegistration{attacker};
+
+    const MaintenanceStatePtr maintenance = std::make_shared<hiredis::Hiredis::MaintenanceState>();
+    SocketLease victimPeer;
+    int victimConnects = 0;
+    auto victim = ConnectVictim(loop, port, maintenance, listener, victimPeer, victimConnects);
+    ASSERT_EQ(victimConnects, 1);
+    ASSERT_TRUE(victim->connected());
+    const SOCKET victimSocket = static_cast<SOCKET>(victim->fd());
+
+    int disconnects = 0;
+    int disconnectStatus = 12345;
+    bool disconnectDuringDispatch = false;
+    int attackerCalls = 0;
+    bool connectedAfterRequest = false;
+    victim->setDisconnectCallback([&](hiredis::Hiredis*, int status) {
+        ++disconnects;
+        disconnectStatus = status;
+        disconnectDuringDispatch = loop.eventHandling();
+        loop.queueInLoop([&loop] { loop.quit(); });
+    });
+    // 见 ScopeExit 注释:声明在全部被回调捕获的局部变量之后。
+    const ScopeExit releaseBeforeCaptures{[&] {
+        attacker.disableAll();
+        ReleaseConnection(victim);
+        DrainPending(loop);
+    }};
+    attacker.setReadCallback([&](muduo::Timestamp) {
+        char byte = 0;
+        EXPECT_EQ(::recvfrom(udp.value, &byte, 1, 0, nullptr, nullptr), 1);
+        ++attackerCalls;
+        EXPECT_TRUE(loop.eventHandling()) << "precondition: the request must happen during I/O dispatch";
+        victim->disconnect();
+        connectedAfterRequest = victim->connected();
+    });
+
+    // 对端只关写方向:受害连接上有 EOF 可读,它又没有在途命令,修复前的 disconnect() 会当场拆除。
+    ASSERT_EQ(::shutdown(victimPeer.value, SD_SEND), 0);
+    ASSERT_TRUE(WaitReadable(victimSocket)) << "precondition: the victim's EOF must be readable before polling";
+    const char trigger = 'x';
+    ASSERT_EQ(::sendto(udp.value, &trigger, 1, 0, reinterpret_cast<const sockaddr*>(&udpSelf), sizeof(udpSelf)), 1);
+    ASSERT_TRUE(WaitReadable(udp.value)) << "precondition: the earlier channel must be readable before polling";
+    ASSERT_TRUE(RunUntilQuit(loop)) << "the batch never completed";
+
+    EXPECT_EQ(attackerCalls, 1);
+    EXPECT_TRUE(connectedAfterRequest)
+        << "a disconnect requested during I/O dispatch must not tear the connection down on the spot";
+    EXPECT_EQ(disconnects, 1);
+    EXPECT_EQ(disconnectStatus, REDIS_ERR) << "the victim's own EOF in the same batch must be dispatched first";
+    EXPECT_TRUE(disconnectDuringDispatch) << "the EOF disconnect must come from the victim's own event dispatch";
+
+    // 推迟的那次断开在 pending 阶段发现连接已断:不能再断一次,也不能报第二次断线。
+    DrainPending(loop);
+    EXPECT_EQ(disconnects, 1);
+    ReleaseConnection(victim);
+    DrainPending(loop);
+    maintenance->Close();
+    EXPECT_TRUE(maintenance->Joined()) << "the wrapper and every queued Channel keep-alive must be released";
 }
 
 #endif // _WIN32

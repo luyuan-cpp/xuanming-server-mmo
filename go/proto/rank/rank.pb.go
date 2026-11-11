@@ -204,14 +204,17 @@ func (x *RankBoardKey) GetGeneration() uint64 {
 }
 
 type RankEntry struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Rank          uint64                 `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
-	EntityId      uint64                 `protobuf:"varint,2,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
-	Score         int64                  `protobuf:"varint,3,opt,name=score,proto3" json:"score,omitempty"`
-	AchievedMs    uint64                 `protobuf:"varint,4,opt,name=achieved_ms,json=achievedMs,proto3" json:"achieved_ms,omitempty"`
-	Name          string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Rank       uint64                 `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
+	EntityId   uint64                 `protobuf:"varint,2,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
+	Score      int64                  `protobuf:"varint,3,opt,name=score,proto3" json:"score,omitempty"`
+	AchievedMs uint64                 `protobuf:"varint,4,opt,name=achieved_ms,json=achievedMs,proto3" json:"achieved_ms,omitempty"`
+	Name       string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	// 这一行排在精确名次上限(回包的 rank_limit)之后,名次不再精确计数;此时 rank 为 0,客户端显示「{rank_limit}+」
+	// (2026-11-11,缺口清单第 18 条,负责人定「前 N 名精确、之后显示 N+」)。不在榜上仍是没有这一行 / self 为空。
+	BeyondRankLimit bool `protobuf:"varint,6,opt,name=beyond_rank_limit,json=beyondRankLimit,proto3" json:"beyond_rank_limit,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RankEntry) Reset() {
@@ -279,6 +282,13 @@ func (x *RankEntry) GetName() string {
 	return ""
 }
 
+func (x *RankEntry) GetBeyondRankLimit() bool {
+	if x != nil {
+		return x.BeyondRankLimit
+	}
+	return false
+}
+
 type GetRankPageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Board         *RankBoardKey          `protobuf:"bytes,1,opt,name=board,proto3" json:"board,omitempty"`
@@ -340,16 +350,19 @@ func (x *GetRankPageRequest) GetPageSize() uint32 {
 }
 
 type GetRankPageResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	Board         *RankBoardKey          `protobuf:"bytes,2,opt,name=board,proto3" json:"board,omitempty"`
-	Entries       []*RankEntry           `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
-	TotalCount    uint64                 `protobuf:"varint,4,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
-	Page          uint32                 `protobuf:"varint,5,opt,name=page,proto3" json:"page,omitempty"`
-	PageSize      uint32                 `protobuf:"varint,6,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
-	PageCount     uint64                 `protobuf:"varint,7,opt,name=page_count,json=pageCount,proto3" json:"page_count,omitempty"`
-	Self          *RankEntry             `protobuf:"bytes,8,opt,name=self,proto3" json:"self,omitempty"`
-	State         RankGenerationState    `protobuf:"varint,9,opt,name=state,proto3,enum=rankpb.RankGenerationState" json:"state,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Board        *RankBoardKey          `protobuf:"bytes,2,opt,name=board,proto3" json:"board,omitempty"`
+	Entries      []*RankEntry           `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
+	TotalCount   uint64                 `protobuf:"varint,4,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	Page         uint32                 `protobuf:"varint,5,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize     uint32                 `protobuf:"varint,6,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageCount    uint64                 `protobuf:"varint,7,opt,name=page_count,json=pageCount,proto3" json:"page_count,omitempty"`
+	Self         *RankEntry             `protobuf:"bytes,8,opt,name=self,proto3" json:"self,omitempty"`
+	State        RankGenerationState    `protobuf:"varint,9,opt,name=state,proto3,enum=rankpb.RankGenerationState" json:"state,omitempty"`
+	// 精确名次的上限:名次只精确数到第 rank_limit 名,翻页也只到这一名为止(page_count 按 min(total_count, rank_limit) 算,
+	// 最后一页取到第 rank_limit 名为止);排在其后的 self 带 beyond_rank_limit。total_count 仍是榜上的真实人数。
+	RankLimit     uint64 `protobuf:"varint,10,opt,name=rank_limit,json=rankLimit,proto3" json:"rank_limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -447,6 +460,13 @@ func (x *GetRankPageResponse) GetState() RankGenerationState {
 	return RankGenerationState_RANK_GENERATION_UNSPECIFIED
 }
 
+func (x *GetRankPageResponse) GetRankLimit() uint64 {
+	if x != nil {
+		return x.RankLimit
+	}
+	return 0
+}
+
 type GetRankAroundRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Board         *RankBoardKey          `protobuf:"bytes,1,opt,name=board,proto3" json:"board,omitempty"`
@@ -505,6 +525,7 @@ type GetRankAroundResponse struct {
 	Board         *RankBoardKey          `protobuf:"bytes,2,opt,name=board,proto3" json:"board,omitempty"`
 	Entries       []*RankEntry           `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
 	Self          *RankEntry             `protobuf:"bytes,4,opt,name=self,proto3" json:"self,omitempty"`
+	RankLimit     uint64                 `protobuf:"varint,5,opt,name=rank_limit,json=rankLimit,proto3" json:"rank_limit,omitempty"` // 同 GetRankPageResponse.rank_limit:排在其后的本人与附近条目带 beyond_rank_limit
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -567,6 +588,13 @@ func (x *GetRankAroundResponse) GetSelf() *RankEntry {
 	return nil
 }
 
+func (x *GetRankAroundResponse) GetRankLimit() uint64 {
+	if x != nil {
+		return x.RankLimit
+	}
+	return 0
+}
+
 var File_proto_rank_rank_proto protoreflect.FileDescriptor
 
 const file_proto_rank_rank_proto_rawDesc = "" +
@@ -580,18 +608,19 @@ const file_proto_rank_rank_proto_rawDesc = "" +
 	"\x06period\x18\x04 \x01(\tR\x06period\x12\x1e\n" +
 	"\n" +
 	"generation\x18\x05 \x01(\x04R\n" +
-	"generation\"\x87\x01\n" +
+	"generation\"\xb3\x01\n" +
 	"\tRankEntry\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\x04R\x04rank\x12\x1b\n" +
 	"\tentity_id\x18\x02 \x01(\x04R\bentityId\x12\x14\n" +
 	"\x05score\x18\x03 \x01(\x03R\x05score\x12\x1f\n" +
 	"\vachieved_ms\x18\x04 \x01(\x04R\n" +
 	"achievedMs\x12\x12\n" +
-	"\x04name\x18\x05 \x01(\tR\x04name\"q\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\x12*\n" +
+	"\x11beyond_rank_limit\x18\x06 \x01(\bR\x0fbeyondRankLimit\"q\n" +
 	"\x12GetRankPageRequest\x12*\n" +
 	"\x05board\x18\x01 \x01(\v2\x14.rankpb.RankBoardKeyR\x05board\x12\x12\n" +
 	"\x04page\x18\x02 \x01(\rR\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x03 \x01(\rR\bpageSize\"\xef\x02\n" +
+	"\tpage_size\x18\x03 \x01(\rR\bpageSize\"\x8e\x03\n" +
 	"\x13GetRankPageResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
 	"\x05board\x18\x02 \x01(\v2\x14.rankpb.RankBoardKeyR\x05board\x12+\n" +
@@ -603,15 +632,20 @@ const file_proto_rank_rank_proto_rawDesc = "" +
 	"\n" +
 	"page_count\x18\a \x01(\x04R\tpageCount\x12%\n" +
 	"\x04self\x18\b \x01(\v2\x11.rankpb.RankEntryR\x04self\x121\n" +
-	"\x05state\x18\t \x01(\x0e2\x1b.rankpb.RankGenerationStateR\x05state\"Z\n" +
+	"\x05state\x18\t \x01(\x0e2\x1b.rankpb.RankGenerationStateR\x05state\x12\x1d\n" +
+	"\n" +
+	"rank_limit\x18\n" +
+	" \x01(\x04R\trankLimit\"Z\n" +
 	"\x14GetRankAroundRequest\x12*\n" +
 	"\x05board\x18\x01 \x01(\v2\x14.rankpb.RankBoardKeyR\x05board\x12\x16\n" +
-	"\x06radius\x18\x02 \x01(\rR\x06radius\"\xcd\x01\n" +
+	"\x06radius\x18\x02 \x01(\rR\x06radius\"\xec\x01\n" +
 	"\x15GetRankAroundResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
 	"\x05board\x18\x02 \x01(\v2\x14.rankpb.RankBoardKeyR\x05board\x12+\n" +
 	"\aentries\x18\x03 \x03(\v2\x11.rankpb.RankEntryR\aentries\x12%\n" +
-	"\x04self\x18\x04 \x01(\v2\x11.rankpb.RankEntryR\x04self*\x84\x01\n" +
+	"\x04self\x18\x04 \x01(\v2\x11.rankpb.RankEntryR\x04self\x12\x1d\n" +
+	"\n" +
+	"rank_limit\x18\x05 \x01(\x04R\trankLimit*\x84\x01\n" +
 	"\tRankScope\x12\x1a\n" +
 	"\x16RANK_SCOPE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11RANK_SCOPE_GLOBAL\x10\x01\x12\x14\n" +

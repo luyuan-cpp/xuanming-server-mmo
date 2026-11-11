@@ -97,7 +97,7 @@ func (l *QueryQueueStatusLogic) QueryQueueStatus(in *loginpb.QueryQueueStatusReq
 	case loginqueue.StatusQueueing:
 		resp.QueueRank = state.Rank
 		resp.QueueTotal = state.Total
-		resp.RetryAfterMs = config.AppConfig.Queue.DefaultRetryAfterMs
+		resp.RetryAfterMs = loginqueue.RetryAfterForRank(config.AppConfig.Queue.DefaultRetryAfterMs, state.Rank, config.AppConfig.Queue.AdmitTTL)
 	}
 	return resp, nil
 }

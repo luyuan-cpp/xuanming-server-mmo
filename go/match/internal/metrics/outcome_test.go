@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -56,5 +57,38 @@ func TestOutcomeMetricsRegisteredAndWritten(t *testing.T) {
 		if !names[want] {
 			t.Errorf("默认注册表里没有 %s", want)
 		}
+	}
+}
+
+// outcomeOutboxLastRun 读默认注册表里的 match_outcome_outbox_last_run_unixtime;没有序列时 ok=false。
+func outcomeOutboxLastRun(t *testing.T) (value float64, ok bool) {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range families {
+		if f.GetName() == "match_outcome_outbox_last_run_unixtime" && len(f.GetMetric()) == 1 {
+			return f.GetMetric()[0].GetGauge().GetValue(), true
+		}
+	}
+	return 0, false
+}
+
+// 缺口清单第 25 条第五批:终局发件箱投递循环的活性 gauge 不预建,循环写过才有序列、值就是写入的时刻,循环退出删掉序列
+// (canary 与停机中的副本没有序列,告警按副本判不会误报)。
+func TestOutcomeOutboxLastRunExistsOnlyWhileTheLoopRuns(t *testing.T) {
+	register()
+	ClearOutcomeOutboxRun()
+	if _, ok := outcomeOutboxLastRun(t); ok {
+		t.Fatal("循环没起来(或已退出)时不该有活性序列")
+	}
+	MarkOutcomeOutboxRun(time.Unix(1234, 0))
+	if got, ok := outcomeOutboxLastRun(t); !ok || got != 1234 {
+		t.Fatalf("写入之后应有序列且值为 1234,实际 ok=%t 值=%v", ok, got)
+	}
+	ClearOutcomeOutboxRun()
+	if _, ok := outcomeOutboxLastRun(t); ok {
+		t.Fatal("循环退出之后应删掉活性序列")
 	}
 }

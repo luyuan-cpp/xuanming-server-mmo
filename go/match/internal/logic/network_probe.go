@@ -27,6 +27,11 @@ func GetNetworkProbePlan(ctx context.Context, s *svc.ServiceContext) (*pb.GetNet
 	if stale, e := playerSessionStaleFor(ctx, s, d.PlayerId); e != nil || stale {
 		return nil, errors.New("会话已经失效")
 	}
+	// 会话轨道随计划一起落库(发布轨道设计 §2.6):回执提交沿用计划里的值,成局时据此判这局放哪条轨道的 battle。
+	track, e := sessionReleaseTrack(ctx)
+	if e != nil {
+		return nil, e
+	}
 	n, e := s.Authority.Now(ctx)
 	if e != nil {
 		return nil, e
@@ -56,7 +61,7 @@ func GetNetworkProbePlan(ctx context.Context, s *svc.ServiceContext) (*pb.GetNet
 		resp.ErrorMessage = tipErr(constants.ErrInternal, "地域探测端点暂不可用")
 		return resp, nil
 	}
-	if e = s.Authority.SavePlan(ctx, d.PlayerId, &pb.MatchNetworkProfile{PlanId: plan, SessionBinding: binding}, expires); e != nil {
+	if e = s.Authority.SavePlan(ctx, d.PlayerId, &pb.MatchNetworkProfile{PlanId: plan, SessionBinding: binding, ReleaseTrack: track.String()}, expires); e != nil {
 		return nil, e
 	}
 	metrics.ObserveGlobalFlow("probe_plan", "ok")

@@ -55,8 +55,8 @@ public:
 	}
 
 	// 队员与队长已在同一个场景实例时,要不要把队员瞬移到队长脚下。
-	//   互相不可见:必须瞬移。可见性只在跨格时重新评估(AoiSystem::Update),两人同在一个六边形里
-	//               却互相看不见时,走到脸贴脸也不会再建立;而客户端要看得见队长才能跟着走。
+	//   互相不可见:必须瞬移。客户端要看得见队长才能跟着走;空间可见性要等任一方下一次位移重判
+	//               (AoiSystem::Update)才建立,瞬移则让队员在下一个模拟步按新位置立即重新进视野。
 	//   互相可见:  只有离得比队形还远才瞬移,队形内的落后由客户端自己走回来。
 	// mutuallyVisible 由调用方给出;任一方还没被 AoiSystem::Update 评估过(没有 Hex)时按"可见"传入,
 	// 理由见 RegroupToLeader。
@@ -88,8 +88,24 @@ public:
 	// 离线托管开始(开通了挂机的玩家下线,角色留在世界里):由服务器开启跟随,不等客户端声明(用户 2026-11-06 要求)。
 	// 不在队伍里什么都不做;已经接在队长身后只挂意图;否则挂意图并走一遍刷新与跟随检查,同场景里接到队长身后。
 	// 下线前点过「暂离」的,托管期间照样跟;重连后客户端按自己当前的选择重新声明(team-follow-server-trail.md §5)。
-	// 调用点:离线托管入口(挂机月卡玩家断线后不按 25 秒退出,待做,见 team-follow-server-trail.md §3.6)。
+	// 调用点:AfkHostingSystem::ApplyProbeResult(第一次确认挂机月卡有效,含托管落点到了新节点之后重建的那次)。
 	static void OnOfflineHostingStarted(entt::entity player);
+
+	// 离线托管期间的兜底:在队伍里、想跟却没接在队长身后时,替他重新走一遍刷新与跟随检查 —— 相当于在线客户端
+	// 没被驱动时每隔几秒重新声明一次跟随(team-follow-server-trail.md §3.7)。已接在队长身后、不在队伍里、没有跟随意图的
+	// 什么都不做,不发读(判据见 NeedsFollowRecheck)。调用点:PlayerLifecycleSystem::ExpireConnectionLostHolds,每名托管角色每
+	// connection_lost_hold::kHostedFollowRecheckPeriod 一次(按玩家号错开到不同的秒)。
+	static void OnOfflineHostingHeartbeat(entt::entity player);
+
+	// 只读:这名玩家在队伍里、有跟随意图、却没接在队长身后 —— 值得再走一遍跟随检查。不看会话与战斗
+	// (战斗、交接、换图在途由跟随链自己的守卫挡)。OnOfflineHostingHeartbeat 的判据,单测直接验。
+	static bool NeedsFollowRecheck(entt::entity player);
+
+	// 队长离开本节点(交接、退出)导致队形解散之后,队长的去留有了结论:对原随从重新走一遍跟随检查
+	// (TeamFollowSystem::TakeFollowersWithSettledLeader,team-follow-server-trail.md §3.7)。队长去了本 zone 的别的节点,
+	// 在线的随从发普通换场景、离线托管的发托管落点,都经 18 起服务器发起的同 zone 交接跟过去。
+	// 调用点:World::Update,紧跟 TeamFollowSystem::Update 之后。没有在等的随从时零开销。
+	static void FollowAfterLeaderSettled();
 
 	// ---- AOI ----
 
@@ -124,8 +140,9 @@ private:
 	// 事件驱动路径,不在 per-tick 上(AGENTS §7 #5)。
 	static void ApplyMembership(entt::entity player, uint64_t teamId, uint64_t epoch);
 
-	// 非队长跟随队长:战斗 / 会话 / battle:lock / zone / 节点守卫全部通过之后,
-	// 队长在别的场景 -> 请求 SceneManager 切过去;已在同一场景 -> RegroupToLeader。
+	// 非队长跟随队长:战斗 / 交接在途 / 换图在途 / battle:lock / zone 守卫全部通过之后,
+	// 队长在别的场景(本节点或本 zone 的别的节点) -> 请求 SceneManager 切过去(在线带 gate,离线托管发托管落点,
+	// 其余离线的不切);已在同一场景 -> RegroupToLeader。
 	static void CheckFollowLeader(entt::entity player, uint64_t leaderId);
 
 	// 同一场景实例内的归队:声明了跟随的交给 TeamFollowSystem::TryAttach(服务器驱动走位);

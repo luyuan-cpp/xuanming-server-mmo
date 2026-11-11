@@ -176,7 +176,7 @@ func (s *SessionReader) readChunk(ctx context.Context, ids []uint64, states map[
 			metrics.ObserveOnlineLookup(metrics.OutcomeError)
 		}
 		s.logLookupFailure(ctx, len(ids),
-			fmt.Errorf("mget 返回 %d 条,期望 %d 条", len(values), len(ids)))
+			fmt.Errorf("mget returned %d values, expected %d", len(values), len(ids)))
 		return fmt.Errorf("mget player sessions: got %d values for %d keys", len(values), len(ids))
 	}
 

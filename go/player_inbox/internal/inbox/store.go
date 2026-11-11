@@ -112,9 +112,14 @@ func TxRetryConfig() assetop.TxRetryConfig {
 	return cfg
 }
 
-// IsRetryableTxError 判定「事务已整体回滚,重跑是安全的」:1213 死锁、1205 锁等待超时、9007 TiDB 写冲突。
+// IsRetryableTxError 判定「事务已整体回滚,重跑是安全的」:1213 死锁、1205 锁等待超时、9007 TiDB 写冲突,
+// 以及权威 SQL 守卫判定的「提交前中止」(authoritysql.IsAbortedBeforeCommit,R6):事务里只发过纯 DML、COMMIT 还没发时
+// 连接断开或调用取消,库会回滚未提交的事务,确定没写,换一条连接整笔重跑是安全的。错误树里混有结局未知时它回假,照旧不重试。
 // 9007 必须在内:迁到 TiDB 之后它会取代死锁成为最常见的一类,漏判就等于不重试(assetop/seq.go 的注释)。
 func IsRetryableTxError(err error) bool {
+	if authoritysql.IsAbortedBeforeCommit(err) {
+		return true
+	}
 	var myErr *mysql.MySQLError
 	if !errors.As(err, &myErr) {
 		return false

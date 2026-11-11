@@ -506,7 +506,7 @@ if not defined MSBUILD_EXE (
 )
 
 echo Using MSBuild: %MSBUILD_EXE%
-"%MSBUILD_EXE%" game.sln /m /p:Configuration=Debug /p:Platform=x64 /v:minimal
+"%MSBUILD_EXE%" game.sln /m:1 /p:Configuration=Debug /p:Platform=x64 /v:minimal
 if errorlevel 1 (
     echo.
     echo C++ build failed. Check errors above.

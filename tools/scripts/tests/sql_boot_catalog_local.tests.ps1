@@ -48,9 +48,9 @@ function Get-FixtureTableRows {
         mmorpg_player_inbox = @('player_inbox_item', 'schema_migrations')
         mmorpg_rank = @('rank_score', 'schema_migrations')
         mmorpg_trade = @('trade_commerce', 'trade_asset_op', 'schema_migrations')
-        zone_1_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
-        zone_990017_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
-        zone_990018_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
+        # 存档库只有地域存档库(A17c):夹具仓库的 go/login 是 dev 地域 0、K=1,分片用例另造 K=2 的 login。
+        player_store_1000000_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
+        player_store_1000001_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
     }
     # 每个逻辑库自带一份闸门表。
     foreach ($schema in $business.Keys) { foreach ($table in @($business[$schema]) + @(Get-LocalSqlBootAuthorityTables)) { $rows.Add("$schema`t$table") } }
@@ -117,7 +117,8 @@ function Invoke-FixturePlan {
     return [pscustomobject]@{ Code = 0; Out = ''; Err = '' }
 }
 
-# 与 writer_authority register 同一输入输出形状:核 roster SHA,抄选中配置与环境值,写 16 字段 grant 和 .sha256。
+# 与 writer_authority register 同一输入输出形状:核槽位名册 SHA 与格式,按 -pod-name 的序号选槽位,现场生成这一代的身份,
+# 抄选中配置与环境值,写 16 字段 grant 和 .sha256,并在 grant 旁留启动记录(各库的完整请求)。
 function Invoke-FixtureRegister {
     param([string[]]$Arguments)
     $map = @{}
@@ -125,7 +126,12 @@ function Invoke-FixtureRegister {
     $rosterSha = (Get-FileHash -LiteralPath $map['-roster'] -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($rosterSha -cne $map['-roster-sha256']) { return [pscustomobject]@{ Code = 1; Out = ''; Err = 'roster sha mismatch' } }
     $roster = Get-Content -LiteralPath $map['-roster'] -Raw | ConvertFrom-Json -AsHashtable
-    $entry = $roster.entries[0]
+    if ($roster.format -cne 'SQL_WRITER_BOOT_ROSTER_V2' -or $map['-pod-name'] -cnotmatch '-(0|[1-9][0-9]{0,3})$') { return [pscustomobject]@{ Code = 1; Out = ''; Err = 'not a slot roster register' } }
+    $entry = $roster.entries[[int]$Matches[1]]
+    $newIdentity = { [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(16)) }
+    $writerKey = & $newIdentity
+    $instanceId = & $newIdentity
+    $registeredMs = [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     $configBytes = [IO.File]::ReadAllBytes((Join-Path $map['-input-root'] $entry.runtimeConfigPath))
     [IO.File]::WriteAllBytes($map['-runtime-config-output'], $configBytes)
     foreach ($variable in @($entry.runtimeEnvironment)) {
@@ -134,15 +140,22 @@ function Invoke-FixtureRegister {
     }
     # 每个逻辑库一份,写成一个集合文件。
     $grants = [Collections.Generic.List[object]]::new()
+    $minted = [Collections.Generic.List[object]]::new()
     foreach ($request in @($entry.requests)) {
+        $requestId = & $newIdentity
         $grants.Add([ordered]@{
-                format = 'SQL_WRITER_BOOT_V1'; writerKey = $request.writer.writerKey; instanceId = $request.writer.instanceId; generation = $request.writer.generation
+                format = 'SQL_WRITER_BOOT_V1'; writerKey = $writerKey; instanceId = $instanceId; generation = $request.writer.generation
                 authoritySchema = $request.authoritySchema; protectedSchemas = [string[]]@($request.protectedSchemas); sqlPrincipal = $request.writer.sqlPrincipal
-                registrationDigest = [Convert]::ToBase64String([byte[]]::new(32)); deploymentId = $map['-deployment-id']; grantId = $request.requestId
-                grantedMs = $request.writer.registeredMs; permission = 'NORMAL'; physicalAuthoritySha256 = $request.deploymentDigest
+                registrationDigest = [Convert]::ToBase64String([byte[]]::new(32)); deploymentId = $map['-deployment-id']; grantId = $requestId
+                grantedMs = $registeredMs; permission = 'NORMAL'; physicalAuthoritySha256 = $request.deploymentDigest
                 lockPrimitive = $request.lockPrimitive; lockQualificationSha256 = $request.lockQualificationSha256
             })
+        $request.requestId = $requestId; $request.deploymentId = $map['-deployment-id']
+        $request.writer.writerKey = $writerKey; $request.writer.instanceId = $instanceId; $request.writer.registeredMs = $registeredMs; $request.writer.bootSeq = '1'
+        $minted.Add($request)
     }
+    $bootRecord = [ordered]@{ requests = [object[]]$minted.ToArray(); runtimeConfigPath = $entry.runtimeConfigPath; runtimeConfigSha256 = $entry.runtimeConfigSha256 }
+    [IO.File]::WriteAllText("$($map['-boot-output']).register.started.protojson", (ConvertTo-Json -InputObject $bootRecord -Depth 8 -Compress), [Text.UTF8Encoding]::new($false))
     $grantSet = [ordered]@{ format = 'SQL_WRITER_BOOT_SET_V1'; grants = [object[]]$grants.ToArray() }
     [IO.File]::WriteAllText($map['-boot-output'], (ConvertTo-Json -InputObject $grantSet -Depth 6 -Compress), [Text.UTF8Encoding]::new($false))
     $grantSha = (Get-FileHash -LiteralPath $map['-boot-output'] -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -354,7 +367,7 @@ try {
         Assert-Equal @(Get-LocalSqlBootWriterServices).Count $registers.Count '每实例注册一次'
         $identities = @{}
         foreach ($call in $registers) {
-            foreach ($flag in @('-roster', '-roster-sha256', '-input-root', '-lock-qualification', '-runtime-config-output', '-boot-output', '-deployment-id')) {
+            foreach ($flag in @('-roster', '-roster-sha256', '-input-root', '-lock-qualification', '-runtime-config-output', '-boot-output', '-deployment-id', '-pod-name')) {
                 Assert-True ($call.Arguments -ccontains $flag) "register 缺 $flag"
             }
             Assert-Equal 'register' $call.Arguments[1] '只注册'
@@ -385,7 +398,7 @@ try {
                 Assert-Equal 'LOCK_TOUCH' $grant.lockPrimitive 'mysql 档 LOCK_TOUCH'
                 Assert-Equal $grant.authoritySchema (@($grant.protectedSchemas) -join ',') '闸门只保护它所在的逻辑库'
             }
-            $expected = switch -CaseSensitive ($key) { 'data_service' { 'mmorpg_global,mmorpg_global_ledger,zone_1_db' } 'db' { 'zone_1_db' } 'gateway' { 'mmorpg' } 'login' { 'mmorpg' } default { "mmorpg_$key" } }
+            $expected = switch -CaseSensitive ($key) { 'data_service' { 'mmorpg_global,mmorpg_global_ledger,player_store_1000000_db' } 'db' { 'player_store_1000000_db' } 'gateway' { 'mmorpg' } 'login' { 'mmorpg' } default { "mmorpg_$key" } }
             if ($key -cnotmatch '_[0-9]+$') { Assert-Equal $expected (@($grants | ForEach-Object { $_.authoritySchema }) -join ',') '写资格在实例自己的逻辑库' }
         }
     }
@@ -412,24 +425,27 @@ try {
         Assert-NotMatch $friend 'ON `mmorpg_global`\.`(route_meta|writer_slot|writer_registry|writer_lifecycle_receipt)`' '不再需要全局库闸门表的权限'
         $db = Get-AccountBlock -User (Get-BootUser -Summary $summary -Key 'db')
         Assert-NotMatch $db 'mmorpg_global' 'go/db 选库调 GetPlayerRoute,不连目录'
-        Assert-Match $db 'GRANT SELECT,INSERT,UPDATE,DELETE ON `zone_1_db`\.`player_store`' 'go/db 写玩家库'
+        Assert-Match $db 'GRANT SELECT,INSERT,UPDATE,DELETE ON `player_store_1000000_db`\.`player_store`' 'go/db 写地域存档库'
         $dataService = Get-AccountBlock -User (Get-BootUser -Summary $summary -Key 'data_service')
         Assert-NotMatch $dataService 'mmorpg_(guild|mail|match|player_inbox|trade|friend|chat|rank)' '不再跨库碰别的域'
-        Assert-Match $dataService 'GRANT SELECT,INSERT,UPDATE,DELETE ON `zone_1_db`\.`player_store`' '建角、判死、过户证明写存档库的 player_store'
-        Assert-Match $dataService 'GRANT SELECT ON `zone_1_db`\.`player_centre_database`' '空路由启动判据只读'
-        Assert-Match $dataService 'GRANT SELECT ON `zone_1_db`\.`user_accounts`' '空路由启动判据只读'
-        Assert-NotMatch $dataService 'GRANT [^\r\n]*(INSERT|UPDATE|DELETE)[^\r\n]*ON `zone_1_db`\.`(player_centre_database|user_accounts)`' '只读的表不写'
+        Assert-Match $dataService 'GRANT SELECT,INSERT,UPDATE,DELETE ON `player_store_1000000_db`\.`player_store`' '建角、判死、过户证明写存档库的 player_store'
+        Assert-Match $dataService 'GRANT SELECT ON `player_store_1000000_db`\.`player_centre_database`' '空路由启动判据只读'
+        Assert-Match $dataService 'GRANT SELECT ON `player_store_1000000_db`\.`user_accounts`' '空路由启动判据只读'
+        Assert-NotMatch $dataService 'GRANT [^\r\n]*(INSERT|UPDATE|DELETE)[^\r\n]*ON `player_store_1000000_db`\.`(player_centre_database|user_accounts)`' '只读的表不写'
         Assert-Match $dataService 'GRANT SELECT,INSERT,UPDATE,DELETE ON `mmorpg_global_ledger`\.`transaction_log`' '流水库 DML'
         Assert-Match $dataService 'GRANT SELECT ON `mmorpg_global_ledger`\.`route_meta`' '流水库的闸门表只读'
         Assert-Match $dataService 'GRANT SELECT,INSERT,UPDATE,DELETE ON `mmorpg_global`\.`player_name`' '全局库 DML'
         Assert-NotMatch $dataService 'GRANT SELECT,INSERT,UPDATE,DELETE ON `mmorpg_global`\.`route_meta`' 'route_meta 不进业务表'
         Assert-Match $dataService 'GRANT SELECT ON `mmorpg_global`\.`route_meta`' '目录库的闸门表只读'
         $login = Get-AccountBlock -User (Get-BootUser -Summary $summary -Key 'login')
-        Assert-NotMatch $login 'mmorpg_friend|zone_1_db' 'login 没有业务表'
+        Assert-NotMatch $login 'mmorpg_friend|player_store_1000000_db' 'login 没有业务表'
         $text = Get-SqlText
-        Assert-Match $text "GRANT SELECT,INSERT ON ``mmorpg_global``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号按 operator 模板'
+        Assert-Match $text "GRANT SELECT,INSERT,UPDATE ON ``mmorpg_global``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号按 operator 模板:换代要退休上一代,带 UPDATE'
         Assert-Match $text "GRANT SELECT,INSERT,UPDATE ON ``mmorpg_global``\.``sql_writer_drain_run`` TO 'mmorpg_local_maintenance'@'%'" '维护账号按 operator 模板'
-        Assert-Match $text "GRANT SELECT,INSERT ON ``mmorpg_friend``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号逐逻辑库授权'
+        Assert-Match $text "GRANT SELECT,INSERT,UPDATE ON ``mmorpg_friend``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号逐逻辑库授权'
+        # 一代结束时它的 slot 行随之删掉(writer-roster-exhaustion-20261106.md §5.8):注册账号换代、维护账号退休都要 DELETE;注册账号不再改写 slot 行。
+        Assert-Match $text "GRANT SELECT,INSERT,DELETE ON ``mmorpg_friend``\.``writer_slot`` TO 'mmorpg_local_registrar'@'%'" '注册账号换代时删上一代的 slot 行'
+        Assert-Match $text "GRANT SELECT,UPDATE,DELETE ON ``mmorpg_friend``\.``writer_slot`` TO 'mmorpg_local_maintenance'@'%'" '维护账号退休时删 slot 行,冻结解冻改 epoch'
         Assert-Match $text "GRANT SELECT,INSERT,DELETE ON ``mmorpg_global``\.``zone_merged_into`` TO 'mmorpg_local_maintenance'@'%'" '合服工具的映射表只在目录库'
         Assert-NotMatch $text "ON ``mmorpg_friend``\.``zone_merged_into``" '别的库没有合服映射表'
         Assert-NotMatch $text "TO 'root'@'%'" '本机 schema 身份就是 root,不再给 root 授权'
@@ -440,41 +456,78 @@ try {
         Reset-Fixture
         $configRoot = Join-Path $fixtureRoot ('shards-' + [guid]::NewGuid().ToString('N'))
         $null = New-Item -ItemType Directory -Path $configRoot -Force
-        Set-Content -LiteralPath (Join-Path $configRoot 'db.yaml') -Value "ZoneId: 1`n" -NoNewline
         Set-Content -LiteralPath (Join-Path $configRoot 'data_service.yaml') -Value "Directory:`n  LogicalShards: 4`nSnapshotMySQL:`n  DBName: fixture_global`n" -NoNewline
-        [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'zone_1_db,zone_2_db,player_store_1000000_db', 'Process')
+        # 地域 0、K=2:两个存档库,和区无关(A17c)。
+        Set-Content -LiteralPath (Join-Path $configRoot 'login.yaml') -Value "Placement:`n  Region: 0`n  StorageShards: 2`n" -NoNewline
+        [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'player_store_1000001_db,player_store_1000000_db', 'Process')
         try {
             $settings = New-LocalSqlBootSettings -Endpoint '127.0.0.1:3306' -EndpointName '127.0.0.1' -Port 3306 -RootUser 'root' -RootPassword 'fixture-password' -RootPrincipal 'root@%' `
-                -DbConfigPath (Join-Path $configRoot 'db.yaml') -DataServiceConfigPath (Join-Path $configRoot 'data_service.yaml')
+                -DataServiceConfigPath (Join-Path $configRoot 'data_service.yaml') -LoginConfigPath (Join-Path $configRoot 'login.yaml')
             Assert-Equal 'fixture_global_00,fixture_global_01,fixture_global_02,fixture_global_03' (@($settings.DirectoryShards) -join ',') '片库名与 dirshard.DirectoryDBNames 同形'
             Assert-Equal 'fixture_global_00' $settings.DirectorySchema '第 0 片放 zone_merged_into,注册账号也连它'
             Assert-Equal 'fixture_global_ledger' $settings.LedgerSchema '流水库'
             Assert-True ('fixture_global' -cnotin @($settings.LogicalDatabases)) 'K>1 时基名不是库'
-            foreach ($database in @('fixture_global_00', 'fixture_global_03', 'fixture_global_ledger', 'zone_2_db', 'player_store_1000000_db')) { Assert-True ($database -cin @($settings.LogicalDatabases)) "$database 要建" }
+            foreach ($database in @('fixture_global_00', 'fixture_global_03', 'fixture_global_ledger', 'player_store_1000000_db', 'player_store_1000001_db')) { Assert-True ($database -cin @($settings.LogicalDatabases)) "$database 要建" }
 
             $ready = [Collections.Generic.List[string]]::new(); $ready.Add('route_meta')
-            $tables = @{ zone_1_db = $ready; zone_2_db = $ready; player_store_1000000_db = $ready }
-            $expected = 'fixture_global_00,fixture_global_01,fixture_global_02,fixture_global_03,fixture_global_ledger,zone_1_db,zone_2_db,player_store_1000000_db'
+            $tables = @{ player_store_1000000_db = $ready; player_store_1000001_db = $ready }
+            $expected = 'fixture_global_00,fixture_global_01,fixture_global_02,fixture_global_03,fixture_global_ledger,player_store_1000000_db,player_store_1000001_db'
             Assert-Equal $expected (@(Get-LocalSqlBootWriterDatabases -Settings $settings -Service 'data_service' -TablesBySchema $tables) -join ',') '多一份少一份 data_service 都拒启'
-            $tables.Remove('zone_2_db')
-            Assert-Match (Get-ThrownMessage { Get-LocalSqlBootWriterDatabases -Settings $settings -Service 'data_service' -TablesBySchema $tables }) 'zone_2_db has no writer gate tables' '存档库没迁完不注册'
+            Assert-Equal 'player_store_1000000_db,player_store_1000001_db' (@(Get-LocalSqlBootWriterDatabases -Settings $settings -Service 'db' -TablesBySchema $tables) -join ',') 'go/db 写全部存档库'
+            $tables.Remove('player_store_1000001_db')
+            Assert-Match (Get-ThrownMessage { Get-LocalSqlBootWriterDatabases -Settings $settings -Service 'data_service' -TablesBySchema $tables }) 'player_store_1000001_db has no writer gate tables' '存档库没迁完不注册'
+            Assert-Match (Get-ThrownMessage { Get-LocalSqlBootWriterDatabases -Settings $settings -Service 'db' -TablesBySchema $tables }) 'player_store_1000001_db has no writer gate tables' 'go/db 也一个都不能缺'
 
             $manifest = Get-LocalSqlBootGrantManifest -Settings $settings
             Assert-Equal 'fixture_global_00,fixture_global_01,fixture_global_02,fixture_global_03,fixture_global_ledger' (@($manifest.data_service.Own) -join ',') 'data_service 本库是片库和流水库'
-            Assert-Equal 'zone_1_db,zone_2_db,player_store_1000000_db' (@($manifest.db.Own) -join ',') 'go/db 写全部存档库'
+            Assert-Equal 'player_store_1000000_db,player_store_1000001_db' (@($manifest.db.Own) -join ',') 'go/db 写全部存档库'
             foreach ($service in @('chat', 'friend', 'guild', 'mail', 'rank', 'match', 'trade', 'player_inbox', 'gateway')) { Assert-Equal 0 @($manifest[$service].Cross).Count "$service 不跨库" }
 
             $repo = New-FixtureRepo
             $null = New-Item -ItemType Directory -Path (Join-Path $repo 'schema-work') -Force
             Invoke-LocalSqlBootDbMigration -Settings $settings -RepoRoot $repo -WorkDirectory (Join-Path $repo 'schema-work')
             $migrations = @($script:Calls | Where-Object { $_.Leaf -ceq 'db_migrate.exe' })
-            Assert-Equal 3 $migrations.Count '每个存档库一次'
-            Assert-True ($migrations[0].Arguments -cnotcontains '-storage-id') '本 zone 的库按 ZoneId 推导'
-            Assert-Equal '2' $migrations[1].Arguments[[array]::IndexOf($migrations[1].Arguments, '-storage-id') + 1] 'zone 家族给编号'
-            Assert-Equal '1000000' $migrations[2].Arguments[[array]::IndexOf($migrations[2].Arguments, '-storage-id') + 1] 'player_store 家族给编号'
-            Assert-Match (Get-ThrownMessage { Get-LocalSqlBootStorageId -Database 'mmorpg_guild' }) 'not a canonical player database' '不是存档库名拒绝'
+            Assert-Equal 2 $migrations.Count '每个存档库一次'
+            Assert-Equal '1000000' $migrations[0].Arguments[[array]::IndexOf($migrations[0].Arguments, '-storage-id') + 1] '-storage-id 必填:0 号片'
+            Assert-Equal '1000001' $migrations[1].Arguments[[array]::IndexOf($migrations[1].Arguments, '-storage-id') + 1] '-storage-id 必填:1 号片'
+            foreach ($name in @('mmorpg_guild', 'zone_1_db')) {
+                Assert-Match (Get-ThrownMessage { Get-LocalSqlBootStorageId -Database $name }) 'is not a player store database name' "$name 不是存档库名,拒绝(zone 库已退役)"
+            }
         } finally {
             [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', $null, 'Process')
+        }
+    }
+
+    Test-Case '存档库清单按 login 的 Placement 推出:白名单可不给,给了必须恰好一致,zone 库拒绝(A17c)' {
+        Reset-Fixture
+        $configRoot = Join-Path $fixtureRoot ('stores-' + [guid]::NewGuid().ToString('N'))
+        $null = New-Item -ItemType Directory -Path $configRoot -Force
+        Set-Content -LiteralPath (Join-Path $configRoot 'data_service.yaml') -Value "SnapshotMySQL:`n  DBName: fixture_global`n" -NoNewline
+        Set-Content -LiteralPath (Join-Path $configRoot 'login.yaml') -Value "Placement:`n  Region: 7`n  StorageShards: 2`n" -NoNewline
+        $newSettings = {
+            New-LocalSqlBootSettings -Endpoint '127.0.0.1:3306' -EndpointName '127.0.0.1' -Port 3306 -RootUser 'root' -RootPassword 'fixture-password' -RootPrincipal 'root@%' `
+                -DataServiceConfigPath (Join-Path $configRoot 'data_service.yaml') -LoginConfigPath (Join-Path $configRoot 'login.yaml')
+        }
+        try {
+            Assert-Equal 'player_store_1007000_db,player_store_1007001_db' (@((& $newSettings).PlayerDatabases) -join ',') '没给白名单:按 login 的地域码和 K 推出'
+            [Environment]::SetEnvironmentVariable('MMORPG_DB_ALLOWED_DATABASES', 'player_store_1007001_db,player_store_1007000_db', 'Process')
+            Assert-Equal 'player_store_1007000_db,player_store_1007001_db' (@((& $newSettings).PlayerDatabases) -join ',') '给了就核对,顺序无关'
+            foreach ($case in @(
+                    @{ List = 'zone_1_db,player_store_1007000_db,player_store_1007001_db'; Pattern = 'zone databases are retired' }
+                    @{ List = 'player_store_1007000_db'; Pattern = 'must be exactly the player stores from go/login Placement: player_store_1007000_db,player_store_1007001_db' }
+                    @{ List = 'player_store_1007000_db,player_store_1007001_db,player_store_1007002_db'; Pattern = 'must be exactly the player stores' }
+                    @{ List = 'player_store_1007000_db,player_store_1007000_db'; Pattern = 'must be exactly the player stores' }
+                )) {
+                [Environment]::SetEnvironmentVariable('MMORPG_DB_ALLOWED_DATABASES', $case.List, 'Process')
+                Assert-Match (Get-ThrownMessage $newSettings) $case.Pattern "白名单 $($case.List) 要拒绝"
+            }
+            # DB_ALLOWED_DATABASES 优先于 MMORPG_DB_ALLOWED_DATABASES(与 go/db、go_services.ps1 同一顺序):它对得上就不看另一个。
+            [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'player_store_1007000_db,player_store_1007001_db', 'Process')
+            Assert-Equal 2 @((& $newSettings).PlayerDatabases).Count 'DB_ALLOWED_DATABASES 优先'
+            Set-Content -LiteralPath (Join-Path $configRoot 'login.yaml') -Value "Placement:`n  Region: 7`n" -NoNewline
+            Assert-Match (Get-ThrownMessage $newSettings) 'Cannot read Placement\.Region / Placement\.StorageShards' 'login 没写 K 就拒绝,不猜'
+        } finally {
+            foreach ($name in @('DB_ALLOWED_DATABASES', 'MMORPG_DB_ALLOWED_DATABASES')) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
         }
     }
 
@@ -554,7 +607,7 @@ try {
         $guild = @($script:Calls | Where-Object { $_.Leaf -ceq 'guild.exe' })[0]
         Assert-Match $guild.Environment.MMORPG_GUILD_SQL_DSN '^root:.*/mmorpg_guild\?' 'guild 迁移 DSN'
         $dbMigrate = @($script:Calls | Where-Object { $_.Leaf -ceq 'db_migrate.exe' })[0]
-        Assert-Match $dbMigrate.Environment.DB_ALLOWED_DATABASES '^zone_1_db$' 'go/db 迁移白名单'
+        Assert-Match $dbMigrate.Environment.DB_ALLOWED_DATABASES '^player_store_1000000_db$' 'go/db 迁移白名单是本地域的存档库'
     }
     Test-Case '权威表齐全时跳过 data_service -migrate(它拒绝已有表),go/db 退出码 4 不拦' {
         Reset-Fixture
@@ -709,10 +762,9 @@ try {
         Assert-NotMatch $safe ":pw@|short|$('a' * 64)" '三种形状都抹掉'
     }
 
-    Test-Case '双区一次生成:完整 22 个条目都过正式闸门,只有一次账号清理,存档库都显式给编号' {
+    Test-Case '双区一次生成:完整 22 个条目都过正式闸门,只有一次账号清理,两区共用本地域的存档库且显式给编号' {
         Reset-Fixture
         $repo = New-FixtureRepo
-        [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'zone_990017_db,zone_990018_db', 'Process')
         try {
             $summary = New-LocalSqlBootCatalog -RepoRoot $repo -Zones 990017, 990018 -ZonePortOffsets '990017=0,990018=1000'
             $catalog = Read-MaintenanceJson -Path $summary.catalog
@@ -736,28 +788,32 @@ try {
             Assert-Equal 1 @(Get-ChildItem -LiteralPath (Join-Path $private 'boots') -Directory).Count '只有一个 boot'
             Assert-Equal $false (Test-Path -LiteralPath (Join-Path $private 'catalog.candidate.json')) '候选文件转正后不留'
             $migrations = @($script:Calls | Where-Object { $_.Leaf -ceq 'db_migrate.exe' })
-            Assert-Equal 2 $migrations.Count '每个存档库迁移一次'
-            foreach ($migration in $migrations) { Assert-True ($migration.Arguments -ccontains '-storage-id') '源配置的 ZoneId 不当目标区' }
-            Assert-NotMatch (Get-SqlText) 'zone_1_db' '不带入源配置的 zone_1_db'
+            Assert-Equal 1 $migrations.Count '存档库只有本地域这一个(dev 地域 0、K=1),和区数无关(A17c)'
+            foreach ($migration in $migrations) { Assert-True ($migration.Arguments -ccontains '-storage-id') '-storage-id 必填' }
+            Assert-NotMatch (Get-SqlText) 'zone_[0-9]+_db' 'zone 库已退役,一个都不建'
             $grants = @((Read-MaintenanceJson -Path $catalog['z990018_data_service'].grantFile).grants)
-            Assert-Equal 'mmorpg_global,mmorpg_global_ledger,zone_990017_db,zone_990018_db' (@($grants | ForEach-Object { $_.authoritySchema }) -join ',') 'data_service 的写资格覆盖整个白名单'
+            Assert-Equal 'mmorpg_global,mmorpg_global_ledger,player_store_1000000_db' (@($grants | ForEach-Object { $_.authoritySchema }) -join ',') 'data_service 的写资格覆盖本地域的存档库'
         } finally {
             $env:MMORPG_SQL_BOOT_CATALOG = $null
             [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', $null, 'Process')
         }
     }
-    Test-Case '多区白名单缺失或少一个区都拒绝,不起子进程' {
+    Test-Case '多区:白名单写了 zone 库或和 login 的 Placement 对不上都拒绝,不起子进程' {
         Reset-Fixture
         $repo = New-FixtureRepo
-        Assert-Match (Get-ThrownMessage { New-LocalSqlBootCatalog -RepoRoot $repo -Zones 990017, 990018 }) 'explicit player database allow list' '不带入 zone_1_db,也不按区扩权'
-        [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'zone_990017_db', 'Process')
-        try {
-            Assert-Match (Get-ThrownMessage { New-LocalSqlBootCatalog -RepoRoot $repo -Zones 990017, 990018 }) 'zone_990018_db must be in the player database allow list' '每个目标区的库都要在'
-        } finally { [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', $null, 'Process') }
+        foreach ($case in @(
+                @{ List = 'zone_990017_db,zone_990018_db'; Pattern = 'zone databases are retired' }
+                @{ List = 'player_store_1001000_db'; Pattern = 'must be exactly the player stores from go/login Placement: player_store_1000000_db' }
+            )) {
+            [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', $case.List, 'Process')
+            try {
+                Assert-Match (Get-ThrownMessage { New-LocalSqlBootCatalog -RepoRoot $repo -Zones 990017, 990018 }) $case.Pattern "白名单 $($case.List) 要拒绝"
+            } finally { [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', $null, 'Process') }
+        }
         Assert-Equal 0 $script:Calls.Count '没有任何子进程'
     }
     Test-Case '第二区规划失败不发布,账号碰撞和两区端口冲突都在 DDL 前拒绝' {
-        [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'zone_990017_db,zone_990018_db', 'Process')
+        [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'player_store_1000000_db', 'Process')
         try {
             foreach ($case in @(
                     @{ Fail = 990018; Offsets = '990017=0,990018=1000'; Counts = ''; Expect = 'plan-instances failed for zone 990018' }
@@ -813,7 +869,7 @@ try {
         Assert-Equal 1 $setCatalog.Count '设置目录环境变量'
         Assert-True ($generate[0].Extent.EndOffset -lt $setCatalog[0].Extent.StartOffset) '生成在设置之前'
         Assert-True ($setCatalog[0].Extent.EndOffset -lt $firstWriter[0].Extent.StartOffset) '设置在起服务之前'
-        $allowList = @($assignments | Where-Object { $_.Left.Extent.Text -ceq '$env:MMORPG_DB_ALLOWED_DATABASES' -and $_.Right.Extent.Text.Contains('zone_1_db') })
+        $allowList = @($assignments | Where-Object { $_.Left.Extent.Text -ceq '$env:MMORPG_DB_ALLOWED_DATABASES' -and $_.Right.Extent.Text.Contains('player_store_1000000_db') })
         Assert-Equal 1 $allowList.Count '玩家库白名单,全球 DS/DB 没有它就拒启'
         Assert-True ($allowList[0].Extent.EndOffset -lt $firstWriter[0].Extent.StartOffset) '白名单先于第一批写者'
         Assert-True ($generate[0].Extent.Text.Contains("'gateway'")) '网关也要授权'

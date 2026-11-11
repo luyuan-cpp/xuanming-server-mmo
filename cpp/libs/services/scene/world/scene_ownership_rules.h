@@ -1,21 +1,32 @@
 #pragma once
 
 // scene 节点按控制面的期望状态核对本地场景归属:纯规则(缺口清单第 33 条)。
-// 设计见 docs/design/scene-node-ownership-reconcile.md。本头不碰 ECS、不碰 Redis,单测直接喂读数。
+// 设计见 docs/design/scene-node-ownership-reconcile.md。本头不碰 ECS、不连 Redis(只用 redis_slot.h 拼键),单测直接喂读数。
 //
-// 期望状态的唯一事实源是 scene_manager 写在本 zone 控制域 Redis 里的 scene:{id}:node(值 = 属主 node_id 的十进制串)。
-// 节点只读它,不写控制域任何键(control-plane-zone-scoping-20261105.md §4.3:zone z 的控制域键只由 zone z 的
-// scene_manager 读写)。读到的属主不是本节点,而且满足下面两条,才把本地实体排空并销毁:
-//   1. 连续 kNotMineConfirmations 次读到「不是本节点」(读失败不算证据,不改连击数);
+// 期望状态的事实源是 scene_manager 写在本 zone 控制域 Redis 里的两把键,节点只读、不写控制域任何键
+// (control-plane-zone-scoping-20261105.md §4.3:zone z 的控制域键只由 zone z 的 scene_manager 读写):
+//   - scene:{id}:node:场景的属主 node_id(十进制串);
+//   - node:{ctl:<z>}:<n>:holder:本节点号最近一次登记的进程("<etcd ModRevision>:<node_uuid>",§4.6)。
+// 一个本地实体「不归本节点」= 映射不是本节点号,或者本节点号已被更新的登记接走(那时映射里的号指的是别的进程)。
+// 满足下面两条才排空并销毁:
+//   1. 连续 kNotMineConfirmations 次读到「不归本节点」(读失败不算证据,不改连击数);
 //   2. 判定所用的那次读,发出时刻距宽限起点已满 kCreateGrace。宽限起点 = 本节点第一次核对到这个实体,
 //      或最近一次 CreateScene 按 scene_id 命中它(SceneLifecycle::ReuseExistingScene 把核对状态整个摘掉、从头算)。
+// 这两条都不看本节点的 etcd 身份:「映射不是我」不依赖 etcd 就成立,所以与 etcd 失联期间照样收敛(§4.5)。
+// 开始排空按本轮的住户预算限速(kMaxRelocationsPerSweep),控制域丢数据时全 zone 也不会同一时刻一起改派(§4.7)。
 
+#include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
+
+#include "engine/infra/storage/redis_cluster/redis_slot.h"
 
 namespace scene_ownership
 {
@@ -39,11 +50,28 @@ inline constexpr std::chrono::seconds kCreateGrace{60};
 // 一条 MGET 最多带几个场景。场景多时分批,单条命令的执行时间有上界,不长时间占住控制域实例。
 inline constexpr std::size_t kMaxScenesPerRead = 256;
 
+// 本节点每轮核对最多新开始改派多少名住户(§4.7)。改派一名住户 = 一次退出存盘、一次交接标记、一次 EnterScene、
+// 一次目标节点的认领载入。按住户而不按场景限:一个满员世界频道就有几百人。没有住户的场景不占预算,随时销毁。
+// 本轮第一个有住户的场景即使超出预算也放行,保证进度。
+// 取值依据(缺口清单第 33 条,2026-11-11 定案):200 名 / 10 秒 = 每个节点每秒 20 名,与 R18 压测(1 zone 45k、4 个 scene)
+// 实测的每个节点每秒约 17.5 次进场同量级,当时进场全部成功、apply 均值约 33ms。按节点限而不按 zone 限:一个节点的号被接走
+// 时只有它在排空,按 zone 均摊会让它慢上 n 倍;全 zone 一起排空(控制域丢数据)时总速率随节点数涨,下游(scene_manager、
+// go/db、TiDB)都是无状态或可扩的,按 zone 规模扩副本。偏小时 SceneOwnershipReleaseBacklog 会响,设计稿 §4.7。
+inline constexpr std::size_t kMaxRelocationsPerSweep = 200;
+
 // scene_manager 写的场景属主键。跨语言契约:与 go/scene_manager/internal/logic/createscenelogic.go 的
 // SceneNodeKeyFmt("scene:%d:node")是同一个键,两边改名必须同批改。
 inline std::string SceneNodeKey(std::uint64_t sceneId)
 {
 	return "scene:" + std::to_string(sceneId) + ":node";
+}
+
+// scene_manager 写的节点号持有者键 node:{ctl:<z>}:<n>:holder。跨语言契约:与 go/scene_manager/internal/logic/node_holder.go 的
+// nodeHolderKey 渲染出来的键逐字节相同,两边改名必须同批改;tag 由族表生成(docs/design/redis-cluster-all-domains-20261110.md §3)。
+inline std::string NodeHolderKey(std::uint32_t zoneId, std::string_view nodeId)
+{
+	return "node:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId) + ":" +
+		   std::string(nodeId) + ":holder";
 }
 
 // 一个场景的 scene:{id}:node 读数。
@@ -62,10 +90,11 @@ struct OwnerReading
 // 一次读数说明了什么。
 enum class Observation : std::uint8_t
 {
-	kSelf,      // 映射指向本节点
-	kOtherNode, // 映射指向别的节点(被改派走了)
-	kNoMapping, // 映射不存在(被拆除,或者从来没登记成功)
-	kUnknown,   // 读不到,不当证据
+	kSelf,       // 映射指向本节点
+	kOtherNode,  // 映射指向别的节点(被改派走了)
+	kNoMapping,  // 映射不存在(被拆除,或者从来没登记成功)
+	kSuperseded, // 本节点号已被更新的登记接走:映射里的号指的是那个进程,本地实体全都不归本进程(§4.6)
+	kUnknown,    // 读不到,不当证据
 	kCount
 };
 
@@ -74,6 +103,7 @@ inline constexpr std::string_view kObservationNames[] = {
 	"self",       // Observation::kSelf
 	"other_node", // Observation::kOtherNode
 	"no_mapping", // Observation::kNoMapping
+	"superseded", // Observation::kSuperseded
 	"unknown",    // Observation::kUnknown
 };
 static_assert(std::size(kObservationNames) == static_cast<std::size_t>(Observation::kCount),
@@ -109,6 +139,105 @@ inline Observation Classify(const OwnerReading &reading, std::string_view selfNo
 	return Observation::kUnknown;
 }
 
+// 本节点号此刻由谁持有(§4.6)。
+enum class SlotHolder : std::uint8_t
+{
+	kThisProcessOrUnknown, // 持有者是本进程,或者证明不了别人更新:按映射判
+	kAnotherProcess,       // 本节点号已被更新的登记接走:本地实体一律不归本进程
+};
+
+// 节点号持有者记录 "<etcd ModRevision>:<node_uuid>"。
+struct HolderRecord
+{
+	std::uint64_t revision{0};
+	std::string uuid;
+};
+
+// 解析持有者记录。修订号必须是不带符号的十进制、大于 0,uuid 非空;否则当作坏记录(nullopt)。
+inline std::optional<HolderRecord> ParseHolderRecord(std::string_view value)
+{
+	const auto sep = value.find(':');
+	if (sep == std::string_view::npos || sep == 0 || sep + 1 >= value.size())
+	{
+		return std::nullopt;
+	}
+	HolderRecord record;
+	const char *begin = value.data();
+	const char *end = value.data() + sep;
+	const auto [ptr, ec] = std::from_chars(begin, end, record.revision);
+	if (ec != std::errc() || ptr != end || record.revision == 0)
+	{
+		return std::nullopt;
+	}
+	record.uuid.assign(value.substr(sep + 1));
+	return record;
+}
+
+// 判定本节点号是不是已被别的进程接走,跨多次读数记着本进程自己那次登记的修订号。
+//
+// 判据:持有者不是本进程,而且它的修订号比本进程那次登记更新。etcd 修订号全局单调,同一个号的新进程只能在本进程的分配键
+// 过期之后登记,所以「别人、更新」就是证明;比修订号而不只比 uuid,是因为 scene_manager 处理新登记之前,控制域里还是更旧的记录。
+// 下面两种情况一律按映射判(kThisProcessOrUnknown),只会少拆、不会多拆:
+//   - 本节点 etcd 身份确认有效:本进程此刻持有分配键,别的记录只能是登记之前留下的旧值;
+//   - 还没见过本进程自己的记录(ownRevision == 0):比不出谁更新。scene_manager 处理本进程的 PUT 之后就会有;
+//     托管着场景却一直没有,由指标 scene_ownership_own_holder_known 与告警 SceneOwnershipOwnHolderUnknown 报出来
+//     (设计稿 §9 第 1 条:不拿本进程注册时 etcd 的应答修订号顶替,理由见那里)。
+// 读不到、记录不存在、记录损坏:没有信息。
+// ownRevision 记的是最近一次见到的本进程记录,而不是历史最大值:同一个 etcd 纪元里记录单调写,本进程的记录只会变新;
+// 唯一会变小的情形是 etcd 修订号倒退(换成新集群、或不带 bump 从备份恢复),scene_manager 换了纪元、把记录改写成新集群里的
+// 登记,这时要跟着用新集群的修订号比,否则新集群里接走这个号的进程永远比不过旧集群的大修订号。
+struct HolderTracker
+{
+	std::uint64_t ownRevision{0}; // 最近一次见到的本进程记录的修订号;0 = 还没见到
+
+	SlotHolder Observe(const OwnerReading &reading, std::string_view selfUuid, bool identityConfirmed)
+	{
+		if (reading.kind != OwnerReading::Kind::kValue || selfUuid.empty())
+		{
+			return SlotHolder::kThisProcessOrUnknown;
+		}
+		const auto record = ParseHolderRecord(reading.value);
+		if (!record.has_value())
+		{
+			return SlotHolder::kThisProcessOrUnknown;
+		}
+		if (record->uuid == selfUuid)
+		{
+			ownRevision = record->revision;
+			return SlotHolder::kThisProcessOrUnknown;
+		}
+		if (identityConfirmed || ownRevision == 0 || record->revision <= ownRevision)
+		{
+			return SlotHolder::kThisProcessOrUnknown;
+		}
+		return SlotHolder::kAnotherProcess;
+	}
+};
+
+// 本轮的改派预算(§4.7)。一轮核对的全部批次共用一份。
+struct ReleaseBudget
+{
+	std::size_t remainingResidents{kMaxRelocationsPerSweep};
+	bool startedResidentScene{false}; // 本轮已经开始排空过有住户的场景
+
+	// 这个场景本轮能不能开始排空;能的话扣掉它的住户数。没有住户的随时可以;有住户的在预算内可以;
+	// 本轮第一个有住户的场景超出预算也放行(一个场景的住户比预算多时,不能永远排不动)。
+	bool TryStart(std::size_t residents)
+	{
+		if (residents == 0)
+		{
+			return true;
+		}
+		if (startedResidentScene && residents > remainingResidents)
+		{
+			return false;
+		}
+		remainingResidents -= std::min(residents, remainingResidents);
+		startedResidentScene = true;
+		return true;
+	}
+};
+
 // 一个本地场景实体的核对状态。
 struct CheckState
 {
@@ -134,6 +263,7 @@ inline Decision Advance(CheckState &state, Observation observation, Clock::time_
 		return Decision::kKeep;
 	case Observation::kOtherNode:
 	case Observation::kNoMapping:
+	case Observation::kSuperseded:
 		if (state.notMineStreak < kNotMineConfirmations)
 		{
 			++state.notMineStreak;

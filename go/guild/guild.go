@@ -54,7 +54,6 @@ import (
 	"shared/roleidentity"
 	"shared/safego"
 	"shared/serverbase"
-	"shared/snowflakealloc"
 	"shared/sqlpoolstats"
 )
 
@@ -237,26 +236,14 @@ func main() {
 	}
 	logx.Infof("Guild node registered: id=%d uuid=%s", n.Info.NodeId, n.Info.NodeUuid)
 
-	// 通过 shared/snowflakealloc 独立申领 Snowflake 槽位(worker id = cluster<<12 | slot)。
-	//
-	// 注意:**不再用 n.Info.NodeId 当 Snowflake worker id**。
-	// 理由:
-	//   1. NodeInfo.NodeId 是 C++ 服务发现使用的逻辑节点编号,有可能因为 reRegister
-	//      CAS 失败而变化(参考 scene_manager 的 reRegister 设计)。
-	//   2. Snowflake worker id 一旦变化,可能在同一毫秒里和上一个 worker id 的 ID 序列冲突
-	//      (理论上不会,但毫秒级时钟回退 + worker id 跳变是公认的潜在风险)。
-	//   3. 同 hostname 优雅重启复用同槽,Snowflake 时间戳单调性更稳。
-	//   4. 与 scene_manager 模式一致,降低维护成本。
-	//
-	// kind="guild" 与其他服务不同,槽池互相隔离;ClusterId 由运维按集群设定(默认 0)。
-	// LegacyPrefix="/guild" 让 cluster 0 在滚动升级期仍读旧布局的水位 / 活 id(发布一版后可删)。
-	// 这个客户端同时给 killswitch 与场景节点镜像做 watch;keepalive 让 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
+	// 这个客户端给 killswitch 与场景节点镜像做 watch;keepalive 让 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
+	// guild_id 与 op_id 只由发号器发(号段),guild 不申领 snowflake 槽位、不写水位,也没有失槽退出(2026-11-11 删)。
 	etcdCli, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{
 		Endpoints:   config.AppConfig.Registry.Etcd.Hosts,
 		DialTimeout: config.AppConfig.Registry.Etcd.DialTimeout,
 	}))
 	if err != nil {
-		logx.Must(fmt.Errorf("snowflake etcd client: %w", err))
+		logx.Must(fmt.Errorf("etcd client: %w", err))
 	}
 	defer func() {
 		if !ownerReady || shutdownComplete {
@@ -264,35 +251,11 @@ func main() {
 		}
 	}()
 
-	host_name, err := os.Hostname()
-	if err != nil {
-		logx.Must(fmt.Errorf("hostname: %w", err))
-	}
-	sfCtx, sfCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	sfHandle, err := snowflakealloc.AllocateWithKeepAlive(sfCtx, etcdCli, "guild", host_name, snowflakealloc.Options{
-		LeaseTTL:     60,
-		ClusterID:    config.AppConfig.ClusterId,
-		LegacyPrefix: "/guild",
-		// 缓存文件名带监听端口:同主机多实例各自一份,不互相覆盖。
-		CachePath: snowflakealloc.DefaultCachePath(config.AppConfig.SnowflakeCacheDir, "guild",
-			fmt.Sprintf("%s_%d", host_name, port)),
-	})
-	sfCancel()
-	if err != nil {
-		logx.Must(fmt.Errorf("snowflake worker id alloc: %w", err))
-	}
-	defer func() {
-		if !ownerReady || shutdownComplete {
-			sfHandle.Close()
-		}
-	}()
-	logx.Infof("Guild snowflake %s worker_id=%d (host=%s)", sfHandle.LogFields(), sfHandle.WorkerID, host_name)
-
 	// RPC 级热关停(shared/killswitch):线上某个方法把 DB 打爆时,往 etcd 写一个
 	// key 就能秒级把它短路掉,不必走一遍构建-发布-滚动更新。
 	//
-	// 复用上面这个 etcdCli(snowflake worker id 分配用的那条连接),不另开第三条 ——
-	// 连的是同一个集群。Start 非阻塞:客户端为 nil、etcd 连不上、前缀下没有 key,
+	// 复用上面这个 etcdCli,不另开第三条 —— 连的是同一个集群。
+	// Start 非阻塞:客户端为 nil、etcd 连不上、前缀下没有 key,
 	// 一律放行(fail-open),因此这里既不需要判错也不需要 logx.Must。
 	ksCtx, ksCancel := context.WithCancel(context.Background())
 	// ⚠️ 这个 defer 必须写在 `defer etcdCli.Close()` 之后:defer 是后进先出,
@@ -301,14 +264,9 @@ func main() {
 	ks := killswitch.New(killswitch.Config{Prefix: config.AppConfig.KillSwitchPrefix})
 	ks.Start(ksCtx, etcdCli)
 
-	// 用 Handle.NewNode 而不是裸 snowflake.NewNode:它会把**前任在这个 worker id 上的
-	// 高水位**当地板注入(etcd 里的持久水位),顶住跨机时钟偏斜接管、本机时钟回拨、
-	// 前任借过逻辑秒这三类"启动 guard 挡不住"的重号。
-	sf := sfHandle.NewNode()
-
 	// repo 已在建表之后创建。
-	// 每次启动从 MySQL 权威快照重建全局 / 分区榜;失败拒绝启动,避免对外提供不完整榜单。
-	// canary 副本不重建:重建持维护锁整表删了再写,作用于全部玩家的榜单,由 stable 副本承担(发布轨道设计 §2.5)。
+	// 每次启动按 MySQL 权威快照与版本把各区帮会榜对齐(没有全服榜);失败拒绝启动,避免对外提供不完整榜单。
+	// canary 副本不重建:重建扫全表、逐项改全部区的榜,作用于全部玩家的榜单,由 stable 副本承担(发布轨道设计 §2.5)。
 	if globalBackground {
 		if err := repo.RebuildRanks(context.Background()); err != nil {
 			panic(fmt.Errorf("rebuild guild ranks from MySQL: %w", err))
@@ -378,6 +336,11 @@ func main() {
 		// 同样必须在 Start 之前接上。竞选者标识用节点 uuid(每个进程实例唯一,与历练巡检租约的持有者标识同源)。
 		// 自动放弃另需 Loop.Ledger(上一行)。
 		assetPipe.AttachMaintenanceLeader(svcCtx.RedisClient, n.Info.NodeUuid)
+		// 重投循环的到期扫描按玩家分片,分给本 zone 注册的 stable guild 副本(缺口清单第 25 条,
+		// docs/design/assetop-redelivery-sharding-20261110.md)。同样必须在 Start 之前;身份取上面注册拿到的 zone 与 uuid。
+		if err := assetPipe.AttachWorkShards(n.Info.ZoneId, n.Info.NodeUuid); err != nil {
+			logx.Must(fmt.Errorf("guild asset redelivery sharding: %w", err))
+		}
 		if finish, err := relay.Enter(); err == nil {
 			func() { defer finish(); svcCtx.WarmAssetOpIDSegment() }()
 		}
@@ -448,14 +411,14 @@ func main() {
 	if trialResultActive && matchConfigured {
 		trialMatch, err = logic.NewSignedTrialStarter(svcCtx.MatchInternal, matchSecret)
 		if err != nil {
-			logx.Must(errors.New("历练开局签名依赖未就绪"))
+			logx.Must(errors.New("trial battle start signing dependency not ready"))
 		}
 	}
 	var trialCancellation logic.TrialCancellation
 	if matchConfigured {
 		trialCancellation, err = logic.NewTrialCancellation(svcCtx.MatchInternal, matchSecret)
 		if err != nil {
-			logx.Must(errors.New("历练原请求取消签名依赖未就绪"))
+			logx.Must(errors.New("trial original-request cancellation signing dependency not ready"))
 		}
 	}
 	activities := logic.ActivityDeps{
@@ -495,11 +458,13 @@ func main() {
 	//
 	// WithSyncBumper:落地恢复摘要(docs/design/landing-recovery-sync-digest.md §3)。guild 的所有 bump 点(含资产终结的
 	// OnAssetFinalized)都经 logic 的 syncBumper 发出,**不接这一项,guild 四个域的 bump 全不生效**(静默退化为 Noop)。
-	// svcCtx.PlayerSyncBumper 由 NewServiceContext 无条件建好(指向核心 Redis DB 0 的专用客户端),NewGuildSyncBumper 自己判 nil。
+	// svcCtx.PlayerSyncBumper 由 NewServiceContext 无条件建好(玩家域的专用小池客户端 newPlayerSyncRedis,没建玩家域集群时回落到核心库),
+	// NewGuildSyncBumper 自己判 nil。
 	// 配额不能挤占正常仓储池；go-redis 必须启用 context 截止及短套接字/取连接预算。
 	quotaRedis := redis.NewClient(&redis.Options{
 		Addr: config.AppConfig.RedisClient.Host, Password: config.AppConfig.RedisClient.Password, DB: config.AppConfig.RedisClient.DB,
-		PoolSize: 4, MaxActiveConns: 4, MaxRetries: -1, DialerRetries: 1, ContextTimeoutEnabled: true,
+		PoolSize: logic.ApplicationQuotaRedisPoolSize, MaxActiveConns: logic.ApplicationQuotaRedisPoolSize,
+		MaxRetries: -1, DialerRetries: 1, ContextTimeoutEnabled: true,
 		DialTimeout: logic.ApplicationQuotaBudget, ReadTimeout: logic.ApplicationQuotaBudget,
 		WriteTimeout: logic.ApplicationQuotaBudget, PoolTimeout: logic.ApplicationQuotaBudget,
 	})
@@ -568,7 +533,7 @@ func main() {
 	// 以及落地恢复的 guild.asset_op_maintenance(选主后的日对账 + 自动放弃)与 assetopwake 的唤醒订阅)。
 	//
 	// ⚠️ 它们的 stop 必须写在 `defer s.Stop()` 之后:defer 后进先出,进程退出时它们**最先**执行,
-	// 从而早于 ksCancel、sfHandle.Close、etcdCli.Close、n.Close 与 svcCtx.Stop(关 MySQL / Redis)。
+	// 从而早于 ksCancel、etcdCli.Close、n.Close 与 svcCtx.Stop(关 MySQL / Redis)。
 	// 此时 s.Start 已经返回(gRPC 在途请求已排空),不会再有同步投递用到 Loop。
 	// 反过来的后果:循环落库那一步用 WithoutCancel + 700ms,取消拦不住,DB 先关就写不回终局,
 	// 行留在 PENDING、下一轮再投一次;watcher 撞上已 Close 的 etcd 客户端同理。
@@ -579,8 +544,11 @@ func main() {
 		defer assetPipe.Stop()
 	}
 	// 终态清理是全局作用域的后台,canary 副本不起(发布轨道设计 §2.5)。
+	// 资产通道开着时按玩家分片,与重投循环共用一份成员表(缺口清单第 25 条第二批);通道关着时没有成员表,清全部行。
 	if config.AppConfig.AssetOp.CleanupEnabled && globalBackground {
-		stopCleanup := startAssetOpCleanup(assetStore, svc.CleanupConfFrom(config.AppConfig.AssetOp), root)
+		cleanupConf := svc.CleanupConfFrom(config.AppConfig.AssetOp)
+		cleanupConf.Owns = assetPipe.CleanupOwner()
+		stopCleanup := startAssetOpCleanup(assetStore, cleanupConf, root)
 		if err := svcCtx.BindSourceStop(func(ctx context.Context) error {
 			done := make(chan struct{})
 			go func() { stopCleanup(); close(done) }()
@@ -656,33 +624,6 @@ func main() {
 		panic(err)
 	}
 
-	// Lost() 关闭 = 本进程**确认**不再是这个槽的持有者(slots key 被挂到了别的 uuid 上:
-	// 运维手动清理 / 水位机制被绕过 / 旧版本二进制)。再用 sf 发一个公会 ID 就是确定性撞号,
-	// 所以主动退出,让编排把进程拉起来 —— 重启会申领一个新槽,并以前任水位为地板。
-	//
-	// ⏱ 时间预算:lease 抖动 / etcd 不可达**不再**触发 Lost()(snowflakealloc 会自己 reclaim);
-	// 这段时间的安全由发号器内部的水位年龄自 fence 兜住 —— 距上次水位写成功超过 F(2h)
-	// Generate 返回 ErrWatermarkStale(暂态,写成功即恢复),建帮整体失败但进程不退出。
-	//
-	// ⚠️ 顺序不能反,而且**不能只调 s.Stop()**:go-zero 的 zrpc.RpcServer.Stop() 实测
-	// (v1.9.2 / v1.10.0 同)只有一行 logx.Close(),既不拒新请求也不排空在途 ——
-	// 靠它"停服"等于什么都没做,进程会带着已失效的 worker id 一直服务下去。
-	// 所以正确性由 Fence() 保证(之后 Generate 一律 ErrFenced,建帮整体失败),
-	// 可用性由进程退出 + 编排重拉保证。
-	//
-	// 用 safego.Go 而不是裸 `go func`:这条看门狗一旦 panic(比如 Lost() 通道被
-	// 重复关闭),裸 goroutine 会把整个进程当场打死,日志里只剩一段 runtime 栈;
-	// safego 兜住后会打稳定事件名 + 计 safego_panic_total{point="guild.snowflake_fence_watch"},
-	// 看门狗失效这件事变成可告警的,而不是伪装成一次"正常"的进程退出。
-	safego.Go("guild.snowflake_fence_watch", func() {
-		<-sfHandle.Lost()
-		sf.Fence() // ① 先关闸:此后一个号都发不出去,撞号从机制上不可能
-		logx.Error("Guild snowflake worker id lease lost; generator fenced, exiting to let the orchestrator restart " +
-			"(zrpc Stop() only closes the logger and cannot stop serving)")
-		logx.Close() // ② 冲掉日志缓冲,别把上面这条 ERROR 丢了
-		os.Exit(1)   // ③ 退出;重启后拿新租约,并被 snowflake 的启动 guard 兜住
-	})
-
 	logx.Infof("Starting Guild RPC server at %s...", config.AppConfig.ListenOn)
 	controlCtx, cancelControl := context.WithCancel(context.Background())
 	controlDone := make(chan struct{})
@@ -742,7 +683,7 @@ func main() {
 			}
 			return &serverbase.PreparedPublication{NoConsumers: true}, nil
 		}); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("guild 排空 HOLD: %v", err)
+			logx.Errorf("guild drain HOLD: %v", err)
 		}
 	}()
 	defer func() {
@@ -752,7 +693,7 @@ func main() {
 		closeCtx, cancelClose := context.WithTimeout(context.Background(), time.Minute)
 		defer cancelClose()
 		if err := svcCtx.StopAndReport(closeCtx); err != nil {
-			logx.Errorf("guild 退出保留资源，排空 HOLD: %v", err)
+			logx.Errorf("guild exit keeps resources; drain HOLD: %v", err)
 			return
 		}
 		shutdownComplete = true
@@ -770,7 +711,7 @@ func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf, admiss
 		root = admissions[0]
 	}
 	if len(admissions) > 1 {
-		panic("cleanup SOURCE 重复绑定")
+		panic("cleanup SOURCE bound more than once")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -785,6 +726,10 @@ func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf, admiss
 			root.Hold()
 			return
 		}
+		// 活性(缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8):起来时写一次,
+		// 每跑完一轮写一次(这一轮成败都写,panic 的那一轮不写),退出时删掉序列。
+		data.MarkCleanupRun(time.Now())
+		defer data.ClearCleanupRun()
 		timer := time.NewTimer(time.Duration(rand.Int64N(int64(c.Interval))))
 		defer timer.Stop()
 		for {
@@ -817,12 +762,14 @@ func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf, admiss
 					}
 					logx.Errorf("guild cleanup failed: %v", err)
 				}
+				// 写在这一轮正常走完的地方,不用 defer:defer 会在开头就求值 time.Now(),panic 时也照样执行。
+				data.MarkCleanupRun(time.Now())
 			})
 			timer.Reset(c.Interval)
 		}
 	})
-	logx.Infof("[guild] Asset cleanup started: goroutine guild.asset_op_cleanup interval=%v terminal_retention=%v counter_retention=%v",
-		c.Interval, c.TerminalRetention, c.CounterRetention)
+	logx.Infof("[guild] Asset cleanup started: goroutine guild.asset_op_cleanup interval=%v terminal_retention=%v counter_retention=%v sharded_by_player=%t",
+		c.Interval, c.TerminalRetention, c.CounterRetention, c.Owns != nil)
 	return func() {
 		cancel()
 		<-done
@@ -838,7 +785,7 @@ const trialResultsPoint = "guild.kafka.trial_results"
 //
 // 返回 error 只可能是参数非法(config.Validate 与 TrialResultActive 已经挡过一遍,走到这里是装配错误)。
 // **Kafka 连不上不在此列**:消费者自己在后台每 30s 重试确保 topic,真正连上时才打
-// "历练结果消费者启动 topic=… group=…"那一行(部署验收看的就是它)。
+// "[GuildTrial] Trial result consumer started topic=… group=…"那一行(部署验收看的就是它)。
 //
 // 接线只有两处:
 //   - 结算入口:消费者只关心"提交位点还是退避重调",所以丢掉 SettleTrialResult 的去向、只留 error。
@@ -1046,14 +993,12 @@ func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan sch
 	return missingIndexError(report)
 }
 
-// missingIndexWarnings 挑出"缺索引"告警。前缀取自 go/schemamigrate/plan.go 的文案;
-// guild_test.go 的真库用例负责守住两边一致(文案漂移时会红)。
+// missingIndexWarnings 挑出缺普通索引的告警原文。判断按 schemamigrate 报告项的结构化类别
+// (Report.MissingIndexes),不匹配告警文案:文案只给人看,改措辞不能改变拒启行为。
 func missingIndexWarnings(r schemamigrate.Report) []string {
 	var missing []string
-	for _, w := range r.Warnings {
-		if strings.HasPrefix(w, "缺索引") {
-			missing = append(missing, w)
-		}
+	for _, f := range r.MissingIndexes() {
+		missing = append(missing, f.Message)
 	}
 	return missing
 }

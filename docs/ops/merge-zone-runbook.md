@@ -84,6 +84,7 @@
 - **校验**:两区不同;目标区没有被合走;源区没有合进别的区;写入后整张表过一遍解析,不成环、链长不超过 16;`route_meta.writable` 不是 0。
 - **幂等**:同一对 (源, 目标) 已存在就是成功,什么都不写,`run_id` 不变,目标区后来又被合走也一样。撤销时没有这一行也是成功。
 - **崩溃恢复**:工具没有中间状态。提交前死了什么都没写,提交时没回音算结局未知(退出码 2),重跑同一条命令,判定在锁内重做,写过了就走幂等分支。
+- **历史**(2026-11-11 起,[映射提案](../design/player-route-mapping-durability-proposal.md) §16):每次真改了映射(合服写入一行、撤销删掉一行),同一个事务里往目录第 0 片的 `zone_merge_history` 追加一行:源区、源区内序号、`merge` / `unmerge`、目标区、`run_id`(撤销记被删那一行的)、库侧 `CURRENT_USER()`、库时钟。幂等重跑、没东西可删都不写。历史写不进去(表不在、没有 INSERT 权限)时整个事务回滚,映射也不变,退出码 2。撤销删掉映射行之后,那次合服还查得到;审计会列出全部历史。
 
 ## 3. 前置条件
 
@@ -101,7 +102,7 @@
    $env:MMORPG_SQL_BACKEND = 'mysql'                                    # 只有 mysql 档要设,缺省 tidb
    ```
 
-6. **账号权限**:操作员账号要有 `route_meta` 的 SELECT、UPDATE(`FOR UPDATE` 要它),`zone_merged_into` 的 SELECT、INSERT、DELETE,都在 `deploy/sql/authority_operator_role.sql` 的 maintenance 身份里。dry-run 和审计只要 SELECT。`zone_merged_into` 只在目录第 0 片,操作员的授权由这个库的 `render-roles` 计划(`directorySchema`)带出。match、guild、trade 读映射走 `GetMergedZones`,运行账号不用这张表的权限。
+6. **账号权限**:操作员账号要有 `route_meta` 的 SELECT、UPDATE(`FOR UPDATE` 要它),`zone_merged_into` 的 SELECT、INSERT、DELETE,`zone_merge_history` 的 SELECT、INSERT(**没有** UPDATE、DELETE:历史只增不改),都在 `deploy/sql/authority_operator_role.sql` 的 maintenance 身份里。dry-run 只要两张映射表与 `route_meta` 的 SELECT;审计还要 `zone_merge_history` 的 SELECT。两张表只在目录第 0 片,操作员的授权由这个库的 `render-roles` 计划(`directorySchema`)带出(`tools/scripts/maintenance_drain.ps1` 的 `MERGE_ZONE_GRANT`)。`zone_merge_history` 由 data_service `-migrate` 建,旧版本迁移过的库要先用新版本再迁移一次,授权要在迁移之后渲染(表不在时 GRANT 报 1146)。match、guild、trade 读映射走 `GetMergedZones`,运行账号不用这两张表的权限。
 
 ## 4. 操作步骤
 
@@ -139,7 +140,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRoute
 
 判据,全部满足:
 
-- 审计里源区的 `final_zone` 是预期的最终区,`final zone <目标> includes zones [...]` 含源区;
+- 审计里源区的 `final_zone` 是预期的最终区,`final zone <目标> includes zones [...]` 含源区;`merge history` 最后多出一行 `merge <源> <序号> <目标> <run_id> <操作员账号>`,`run_id` 与映射行相同;没有 `untracked mapping` 行;
 - 每个 data_service 副本打过 `[MergedZoneCache] mapping changed`,每个 guild 副本打过 `[guild] merged zone mapping changed`,每个 trade 副本打过 `[trade] merged zone mapping changed`,每个 match 副本打过 `[match] merged zone mapping changed`;
 - `data_service_merged_zone_refresh_total`、`guild_merged_zone_refresh_total`、`trade_merged_zone_refresh_total`、`match_merged_zone_refresh_total` 的 `result="error"` 不再增长;
 - 公会榜旧键已折叠:guild 打过 `[guild] folded ... rank entries`(源区本来没榜就不打),`redis-cli -n <guild 库> EXISTS guild_rank:zone:<源>` 返回 0。
@@ -169,6 +170,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRoute
 | 工具退出码 1,`route_meta has no row` | DSN 指错库,或迁移没跑 | 核对 DSN |
 | 工具退出码 2,锁等待、连接失败 | 没做成 | 查清占锁的会话或连接问题,重跑 |
 | 工具退出码 2,`commit: the outcome is unknown` | 可能已提交 | 重跑同一条命令,或先审计。不要手写表 |
+| 工具退出码 2,`append zone_merge_history` 报 1146 / 1142 | 历史表不在(data_service 还没用新版本迁移),或操作员没有它的 INSERT 权限 | 映射没变(同一个事务回滚了)。先用新版本跑 data_service `-migrate`,再重新渲染并执行操作员授权,然后重跑 |
+| 审计退出码 1,`untracked mapping: zone S -> zone T` | 这一行映射在历史里找不到对应的 merge 记录:被人手写过,或是建历史表之前写的 | 先查清这一行的来历。确认要保留就用本工具撤销再合一次,让它有历史;不要往历史表里手补记录 |
 | 工具报 `MMORPG_SQL_OPERATOR_PRINCIPAL`,或连库报「物理会话或boot身份核验失败」 | 操作员身份不对,或 `MMORPG_SQL_BACKEND` 和实际的库不符 | 用这个账号 `SELECT CURRENT_USER()` 的结果;核对档位 |
 | 映射提交了,服务迟迟不生效 | 看刷新指标和日志 | 下面两行 |
 | `DataServiceMergedZoneRefreshFailing` | data_service 读不到全局库,继续用旧映射 | 查全局库连接和 `zone_merged_into` 读权限。旧映射下玩家归属还是原值,最坏是同区判定拒绝,没有错误数据。恢复后等 2 个周期。**正在合服时先别做业务核对** |
@@ -178,8 +181,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRoute
 | 开战回 `kTeamCrossZoneDenied`,队里的人明明一直在一起 | 撤销合服留下的跨原始区队伍(§7) | 踢人或离队之后再开。要合就重新合服 |
 | `does not resolve` 同时刷新一直失败 | 映射表写坏,缓存拒绝坏表、保留旧值 | 按审计结果用 `merge-zone-unmerge` 删掉坏的那一行(撤销不校验整张表)。修好之前不要重启服务:启动读到坏表会拒绝启动 |
 | guild 或 trade 起不来,报 `GetMergedZones` | 启动时等了 60 秒还读不到映射 | 先起 data_service(zone 级,`zone-up` 才有)。这是有意的:分不清「没有合服」和「读不到」的实例不能对外服务 |
-| 榜单缺源区公会超过 1 分钟 | 折叠失败,看 guild 日志 `fold ranks of merged zones failed` | 通常是抢不到榜维护锁或 Redis 故障。可滚动重启 guild,启动时按当前映射全量重建 |
-| 榜上某公会分数比 `guild.score` 旧 | 滞后窗口里旧副本写了源区键,折叠时 NX 没盖 | 只影响显示。下一次推分或重启 guild 自愈,权威分在 `guild.score` |
+| 榜单缺源区公会超过 1 分钟 | 折叠失败,看 guild 日志 `fold ranks of merged zones failed` | 通常是抢不到榜维护锁(另一副本正在重建或折叠)或 Redis 故障。可滚动重启 guild,启动时按当前映射与 MySQL 对齐全部分区榜 |
+| 榜上某公会分数比 `guild.score` 旧 | 推分提交之后写榜那一步失败(Redis 抖动、请求超时),guild 日志有 `update rank cache for guild`。2026-11-11 起折叠按版本合并,不会再用旧分盖掉新分 | 只影响显示。下一次推分或重启 guild 自愈,权威分在 `guild.score`(版本在 `guild.score_version`) |
 | scene 日志 `EnterScene: home_zone changed` | 在线玩家重新路由时归属变成了最终区 | 合服后每个在线玩家最多一次,正常,不用处理 |
 
 ## 6. 撤销
@@ -191,7 +194,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeSourceZ
 
 撤销之后**滚动重启一次 guild**:启动时 `RebuildRanks` 按当前映射把榜拆回去。不重启的话,已折叠的条目留在目标区榜上,直到下一次重启。
 
-判据:退出码 0,审计里没有这一行;2 个刷新周期后源区玩家的角色列表回到源区;guild 重启后 `guild_rank:zone:<源>` 只有源区公会。
+判据:退出码 0,审计里没有这一行,`merge history` 末尾多出一行 `unmerge <源> <序号> <目标> <被删那一行的 run_id> <操作员账号>`(这次合服的 `merge` 记录仍在);2 个刷新周期后源区玩家的角色列表回到源区;guild 重启后 `guild_rank:zone:<源>` 只有源区公会。查「撤销之前这两个区合过多久」就看这两行历史的 `at_utc`。
 
 不要求逆序:4→5→6 可以先撤 5→6,4 之后解析到 5。没有这一行是成功;源区映射到别的区时什么都不删,输出会说明。
 
@@ -250,7 +253,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeSourceZ
 
 **下线之后不能再撤销**,除非先把源区的节点拉回来:撤销后这些玩家的最终区回到源区,没有节点接他们。
 
-源区留在共享 Redis 里的热状态(`scene_manager:zones` 的登记、`scene_nodes:zone:<源>:*`)不清:陈旧位置由持有节点判死兜住,目标区没有 gate 时分配 gate 会拒绝,剩下的只是垃圾键(读代码得出,未实测)。
+源区留在 Redis 里的热状态(`scene_nodes:zone:<源>:*`、死节点收尾任务表 `scene_manager:dead_node_reconcile:zone:<源>`)不清:陈旧位置由持有节点判死兜住,目标区没有 gate 时分配 gate 会拒绝,剩下的只是垃圾键(读代码得出,未实测)。收尾任务表只由源区自己的 scene_manager 领导者读写(2026-11-05 起按 zone 选主),namespace 收掉后没有人再读它;撤销合服、把源区节点拉回来时,源区的领导者照表里剩下的接着收尾,与进程重启后接手是同一条路径。想让表里不留任务,第 4 步收 namespace 前看 `scene_manager_dead_node_reconcile_pending{zone_id="<源>"}` 回到 0(scene 全部退出后约一个再入屏障加一拍,默认 25 秒)。
 
 ### 源库为什么不退役
 
@@ -264,7 +267,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeSourceZ
 
 **未完成,做完才能进真实环境**:
 
-- Java 版:同样的读时解析没有做。
+- Java 版:同样的读时解析没有做;合服历史(只增不改、与映射同事务、审计能列出)也待做,登记在 Java 仓 `PARITY.md`。
 
 ## 10. 原「当前目标」逐条对照
 
@@ -321,9 +324,11 @@ $env:MATCH_IT_TIDB='<数字 loopback 地址:端口>'; $env:MATCH_IT_REQUIRE_TIDB
 | 场景 | 步骤 | 通过标准 |
 |---|---|---|
 | **正常在线合服** | 两区各起 robot(`-Command dev-robot-zones -Zones 1,2`,持续在线)。两区各建公会、推榜分、上架商品。按 §4 跑完第 1~5 步 | 工具退出码 0。合服前后 robot 没有断线、登录和存盘失败数不增长。10 秒内 §4 第 4 步的判据全满足。第 5 步人工项全过。`SELECT COUNT(*) ... GROUP BY zone_id` 在 `guild`、`trade_listing`、`player_route.home_zone` 上合服前后不变 |
-| **并发写入** | 合服前开始持续写:两区同时建帮、入帮申请和审批、推榜分、上架、存盘(robot 加循环)。写入途中执行合服,窗口内和窗口后各再跑 2 分钟。另跑 `TestIT_ConcurrentMergesSerializeOnRouteMeta` | 没有新的错误类型;窗口内只允许可重试的「不同区」拒绝,窗口后归零。结束时逐公会比对:`guild.score` 等于 `ZSCORE guild_rank:zone:2 <id>`(不等的只能是窗口内旧副本写的,记录 id 和原因)。没有公会同时缺榜,`guild_rank:zone:1` 不存在。并发用例里只有一个 worker 成功、表里只有一行 |
+| **并发写入** | 合服前开始持续写:两区同时建帮、入帮申请和审批、推榜分、上架、存盘(robot 加循环)。写入途中执行合服,窗口内和窗口后各再跑 2 分钟。另跑 `TestIT_ConcurrentMergesSerializeOnRouteMeta` | 没有新的错误类型;窗口内只允许可重试的「不同区」拒绝,窗口后归零。结束时逐公会比对:`guild.score` 等于 `ZSCORE guild_rank:zone:2 <id>`,`guild.score_version` 等于 `HGET guild_rank:version:2 <id>`(榜上按版本合并,窗口内旧副本写进源区的分数也会按版本折过来;不等的只能是写榜失败的推分,日志有 `update rank cache for guild`,记录 id 和原因)。没有公会同时缺榜,`guild_rank:zone:1` 不存在。并发用例里只有一个 worker 成功、表里只有一行 |
 | **在途结算** | robot 跑 `battle-smoke` 对局,对局中途执行合服;再开一局,对局中途按 §8 停源区 scene。商城、寄售各留一笔未完成的订单跨过合服 | 两局结果都到账(`player_store` 资产和收件箱都有,且只有一次);第二局玩家被踢后重连到目标区,结算不丢。订单状态正常推进。`player_inbox` 没有积压告警 |
-| **重复执行** | 同一条合服连跑 3 次;合进去之后换目标区跑;撤销连跑 2 次;撤销后再合 | 3 次都是退出码 0,后两次 `nothing written`,`run_id` 不变。换目标区退出码 1,表不变。撤销第 2 次退出码 0,`nothing to delete`。再合成功,`run_id` 是新的 |
+| **重复执行** | 同一条合服连跑 3 次;合进去之后换目标区跑;撤销连跑 2 次;撤销后再合 | 3 次都是退出码 0,后两次 `nothing written`,`run_id` 不变。换目标区退出码 1,表不变。撤销第 2 次退出码 0,`nothing to delete`。再合成功,`run_id` 是新的。`zone_merge_history` 里这个源区恰好 3 行:`merge`(序号 1)、`unmerge`(序号 2,`run_id` 同第 1 行)、`merge`(序号 3,新 `run_id`),`sql_principal` 都是操作员账号的 `CURRENT_USER()`;幂等重跑和没东西可删都没有留历史 |
+| **合服历史只增不改** | 用工具合一次 1→2 留下映射。用操作员账号执行 `UPDATE zone_merge_history SET dst_zone=0`、`DELETE FROM zone_merge_history`。再用 root 把 `zone_merge_history` 改名,用工具合 3→4、撤销 1→2,然后改回原名再各跑一次 | 两条语句都报权限不足(1142),历史不变。改名期间合 3→4、撤 1→2 都是退出码 2,`zone_merged_into` 不变(事务回滚,3 没有映射,1→2 还在);改回之后重跑成功,历史各多一行 |
+| **审计认出来历不明的映射** | 用 root 往 `zone_merged_into` 手插一行(不经工具),跑审计;用工具撤销这一行再合一次,再审计 | 第一次审计退出码 1,点名 `untracked mapping` 这一行,解析结果照常打印;第二次退出码 0 |
 | **进程崩溃恢复** | ① 另开会话 `BEGIN; SELECT writable FROM route_meta WHERE id=1 FOR UPDATE;` 占锁,跑合服,确认退出码 2,释放锁后重跑。② 同样占锁,`kill -9` 正在等锁的工具,重跑。③ 合服后 `kill -9` 全部 data_service、guild、trade,再起。④ 造一个上万成员的 `guild_rank:zone:1`,折叠中途 `kill -9` guild。⑤ 停 data_service,起 guild 和 trade。⑥ 运行中停 data_service 1 分钟 | ①② 表里没有半截状态,重跑成功。③ 启动日志读到映射,解析正确,`RebuildRanks` 按最终区。④ 重启后榜完整,旧键不存在,分数等于 `guild.score`。⑤ 60 秒内 data_service 起来就正常启动;超过 60 秒退出码非 0,错误点名 `GetMergedZones`,没有注册进 etcd。⑥ guild、trade 继续服务,刷新失败指标增长,恢复后停止增长 |
 | **队伍与匹配跨过合服** | 合服前:两区各一支整队进队列(目标人数大于队伍人数),两区各几张同模板单排票。执行合服。再让两区玩家组一支跨原始区的队伍开战进队列。等它们成局或继续排队时撤销合服,再等 2 个周期 | 合服前两区的票不互相成局(范围未放宽时);合服后不用重排就能成局,`SELECT zone_id FROM match_authority_ticket` 还是原始区。撤销前后 `match.team.sql.queued`、`prepared`、`forming` 循环没有新错误,`relay` 没有 HOLD,关停能排空。跨原始区的队伍撤销后没有被解散,这一局走完;它再次开战回 `kTeamCrossZoneDenied`。撤销后新的跨区申请、邀请回同一个码 |
 | **切换后一致性** | 合服完成后,抽样核对:源区玩家的存档、背包、公会、好友、邮件;`go/rank` 榜;聚宝斋详情和收藏;回档检查 `ListAppliedAssetOpsSince` 带 `zone_id=1`、`zone_id=2` 各查一次。再做连续合服 2→3 和撤销,重复一遍 | 数据和合服前逐项一致。回档检查两个 zone 返回同一组行。连续合服后 1、2 都解析到 3。撤销 + 重启 guild 后榜和归属回到撤销后的映射,合服期间建的公会、商品留在目标区,§7 的边界如实出现,没有别的变化 |

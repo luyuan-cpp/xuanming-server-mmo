@@ -45,9 +45,9 @@ TiDB 使用 MySQL 协议，因此 `MySQL` 配置名、`OpenMySQL` / `load…From
 
 排行榜目前由公会服务提供，不能把旧文档里关于拆分服务或 Redis Cluster 的选型推论当作已落地架构。
 
-- `UpdateGuildScore` 先在 SQL 事务里更新 `guild.score`，再更新 Redis 全局 `guild_rank` 与按区 `guild_rank:zone:{zoneId}` 双 ZSET；归属区以 SQL 为准，不相信调用方传入的 zone。
-- `GetGuildRankPage` / `GetGuildRank` 查询 Redis ZSET，排行展示仍是派生投影，不是每次直接用 SQL 排序。
-- SQL 提交与 ZSET 同步不原子。Redis 更新失败时 SQL 分数可能已经提交，不能以 RPC 错误推断回滚；投影可能暂时缺项或陈旧。`RebuildRanks` 从 SQL 权威快照重建全局与各区榜，当前在启动时执行。
+- `UpdateGuildScore` 先在 SQL 事务里更新 `guild.score` 并把 `guild.score_version` 加 1，再按这个版本条件写入帮会所在最终区的 ZSET `guild_rank:zone:<最终区>`：版本不比榜上已记的旧才写，乱序到达的旧写入被丢弃，所以写分不拿全服锁（2026-11-11 起）；归属区以 SQL 为准，不相信调用方传入的 zone。只有本服榜：全服榜 `guild_rank` 2026-11-10 已删（负责人定运维 / GM 不需要，见 [帮会排行架构](guild_ranking_architecture_zh.md) §6）。
+- `GetGuildRankPage` / `GetGuildRank` 查询 Redis ZSET，排行展示仍是派生投影，不是每次直接用 SQL 排序；zone 必须非 0，传 0 回 `ErrRankZoneRequired`。
+- SQL 提交与 ZSET 同步不原子。Redis 更新失败时 SQL 分数可能已经提交，不能以 RPC 错误推断回滚；投影可能暂时缺项或陈旧，但不会被更旧的版本盖回去，解散的帮会也不会被迟到的写入写回榜上（墓碑）。`RebuildRanks` 按 SQL 权威快照与版本把各区榜对齐，当前在启动时执行。版本、墓碑与重建的细节见 [帮会排行架构](guild_ranking_architecture_zh.md) §3、§5。
 - 代码依据：[guild_repo.go](../../go/guild/internal/data/guild_repo.go) 的 `UpdateGuildScore` / `RebuildRanks` / `GetGuildRankPage` / `GetGuildRank`，以及 [guild.go](../../go/guild/guild.go) 的启动装配。
 
 ## Proto 集成

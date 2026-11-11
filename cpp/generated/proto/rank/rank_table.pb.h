@@ -63,6 +63,14 @@ extern const ::google::protobuf::internal::ClassDataFull RankBoardRecord_class_d
 #else
 extern const RankBoardRecordGlobalsTypeInternal RankBoardRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class RankBoardShardRecord;
+struct RankBoardShardRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RankBoardShardRecordGlobalsTypeInternal RankBoardShardRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RankBoardShardRecord_class_data_;
+#else
+extern const RankBoardShardRecordGlobalsTypeInternal RankBoardShardRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class RankInputReceiptRecord;
 struct RankInputReceiptRecordGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -188,7 +196,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankSnapshotRecord final : public :
   [[nodiscard]] static const RankSnapshotRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankSnapshotRecord>(&RankSnapshotRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(RankSnapshotRecord& a, RankSnapshotRecord& b) { a.Swap(&b); }
   inline void Swap(RankSnapshotRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -437,7 +445,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankSettlementRecord final : public
   [[nodiscard]] static const RankSettlementRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankSettlementRecord>(&RankSettlementRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(RankSettlementRecord& a, RankSettlementRecord& b) { a.Swap(&b); }
   inline void Swap(RankSettlementRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -739,7 +747,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankScoreRecord final : public ::go
   [[nodiscard]] static const RankScoreRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankScoreRecord>(&RankScoreRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(RankScoreRecord& a, RankScoreRecord& b) { a.Swap(&b); }
   inline void Swap(RankScoreRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1024,7 +1032,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankRemovedEntryRecord final : publ
   [[nodiscard]] static const RankRemovedEntryRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankRemovedEntryRecord>(&RankRemovedEntryRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(RankRemovedEntryRecord& a, RankRemovedEntryRecord& b) { a.Swap(&b); }
   inline void Swap(RankRemovedEntryRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1261,7 +1269,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankMutationRecord final : public :
   [[nodiscard]] static const RankMutationRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankMutationRecord>(&RankMutationRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(RankMutationRecord& a, RankMutationRecord& b) { a.Swap(&b); }
   inline void Swap(RankMutationRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1515,7 +1523,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankMailRewardRecord final : public
   [[nodiscard]] static const RankMailRewardRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankMailRewardRecord>(&RankMailRewardRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(RankMailRewardRecord& a, RankMailRewardRecord& b) { a.Swap(&b); }
   inline void Swap(RankMailRewardRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1877,7 +1885,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankInputReceiptRecord final : publ
   [[nodiscard]] static const RankInputReceiptRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankInputReceiptRecord>(&RankInputReceiptRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(RankInputReceiptRecord& a, RankInputReceiptRecord& b) { a.Swap(&b); }
   inline void Swap(RankInputReceiptRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2099,6 +2107,255 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankInputReceiptRecord final : publ
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardShardRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:rankpb.RankBoardShardRecord) */ {
+ public:
+  inline RankBoardShardRecord() : RankBoardShardRecord(nullptr) {}
+  ~RankBoardShardRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RankBoardShardRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RankBoardShardRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RankBoardShardRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RankBoardShardRecord(const RankBoardShardRecord& from) : RankBoardShardRecord(nullptr, from) {}
+  inline RankBoardShardRecord(RankBoardShardRecord&& from) noexcept : RankBoardShardRecord(nullptr, ::std::move(from)) {}
+  inline RankBoardShardRecord& operator=(const RankBoardShardRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RankBoardShardRecord& operator=(RankBoardShardRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RankBoardShardRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankBoardShardRecord>(&RankBoardShardRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(RankBoardShardRecord& a, RankBoardShardRecord& b) { a.Swap(&b); }
+  inline void Swap(RankBoardShardRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RankBoardShardRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RankBoardShardRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RankBoardShardRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RankBoardShardRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RankBoardShardRecord& from) { RankBoardShardRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RankBoardShardRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "rankpb.RankBoardShardRecord"; }
+
+  explicit RankBoardShardRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RankBoardShardRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RankBoardShardRecord& from);
+  RankBoardShardRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RankBoardShardRecord&& from) noexcept
+      : RankBoardShardRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kBoardIdFieldNumber = 1,
+    kGenerationFieldNumber = 2,
+    kCommittedCursorFieldNumber = 4,
+    kEntriesFieldNumber = 5,
+    kSourceShardFieldNumber = 3,
+  };
+  // uint64 board_id = 1;
+  void clear_board_id() ;
+  [[nodiscard]] ::uint64_t board_id() const;
+  void set_board_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_board_id() const;
+  void _internal_set_board_id(::uint64_t value);
+
+  public:
+  // uint64 generation = 2;
+  void clear_generation() ;
+  [[nodiscard]] ::uint64_t generation() const;
+  void set_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_generation() const;
+  void _internal_set_generation(::uint64_t value);
+
+  public:
+  // uint64 committed_cursor = 4;
+  void clear_committed_cursor() ;
+  [[nodiscard]] ::uint64_t committed_cursor() const;
+  void set_committed_cursor(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_committed_cursor() const;
+  void _internal_set_committed_cursor(::uint64_t value);
+
+  public:
+  // uint64 entries = 5;
+  void clear_entries() ;
+  [[nodiscard]] ::uint64_t entries() const;
+  void set_entries(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_entries() const;
+  void _internal_set_entries(::uint64_t value);
+
+  public:
+  // uint32 source_shard = 3;
+  void clear_source_shard() ;
+  [[nodiscard]] ::uint32_t source_shard() const;
+  void set_source_shard(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_source_shard() const;
+  void _internal_set_source_shard(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:rankpb.RankBoardShardRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RankBoardShardRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t board_id_;
+    ::uint64_t generation_;
+    ::uint64_t committed_cursor_;
+    ::uint64_t entries_;
+    ::uint32_t source_shard_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2frank_2frank_5ftable_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardRecord final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:rankpb.RankBoardRecord) */ {
  public:
@@ -2256,7 +2513,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardRecord final : public ::go
     kScopeIdFieldNumber = 4,
     kGenerationFieldNumber = 6,
     kSourceEpochFieldNumber = 8,
-    kCommittedCursorFieldNumber = 9,
     kAscendingFieldNumber = 10,
     kStateFieldNumber = 11,
     kSettlementIdFieldNumber = 12,
@@ -2264,7 +2520,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardRecord final : public ::go
     kCreatedMsFieldNumber = 15,
     kSealedMsFieldNumber = 16,
     kDeletedMsFieldNumber = 17,
-    kEntriesFieldNumber = 18,
   };
   // string period = 5;
   void clear_period() ;
@@ -2371,16 +2626,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardRecord final : public ::go
   void _internal_set_source_epoch(::uint64_t value);
 
   public:
-  // uint64 committed_cursor = 9;
-  void clear_committed_cursor() ;
-  [[nodiscard]] ::uint64_t committed_cursor() const;
-  void set_committed_cursor(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_committed_cursor() const;
-  void _internal_set_committed_cursor(::uint64_t value);
-
-  public:
   // uint32 ascending = 10;
   void clear_ascending() ;
   [[nodiscard]] ::uint32_t ascending() const;
@@ -2451,21 +2696,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardRecord final : public ::go
   void _internal_set_deleted_ms(::uint64_t value);
 
   public:
-  // uint64 entries = 18;
-  void clear_entries() ;
-  [[nodiscard]] ::uint64_t entries() const;
-  void set_entries(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_entries() const;
-  void _internal_set_entries(::uint64_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:rankpb.RankBoardRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 18,
+      ::google::protobuf::internal::TcParseTable<5, 16,
                           0, 78,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2503,7 +2738,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardRecord final : public ::go
     ::uint64_t scope_id_;
     ::uint64_t generation_;
     ::uint64_t source_epoch_;
-    ::uint64_t committed_cursor_;
     ::uint32_t ascending_;
     ::uint32_t state_;
     ::uint64_t settlement_id_;
@@ -2511,7 +2745,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardRecord final : public ::go
     ::uint64_t created_ms_;
     ::uint64_t sealed_ms_;
     ::uint64_t deleted_ms_;
-    ::uint64_t entries_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2806,35 +3039,11 @@ inline void RankBoardRecord::_internal_set_source_epoch(::uint64_t value) {
   _impl_.source_epoch_ = value;
 }
 
-// uint64 committed_cursor = 9;
-inline void RankBoardRecord::clear_committed_cursor() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.committed_cursor_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
-}
-inline ::uint64_t RankBoardRecord::committed_cursor() const {
-  // @@protoc_insertion_point(field_get:rankpb.RankBoardRecord.committed_cursor)
-  return _internal_committed_cursor();
-}
-inline void RankBoardRecord::set_committed_cursor(::uint64_t value) {
-  _internal_set_committed_cursor(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
-  // @@protoc_insertion_point(field_set:rankpb.RankBoardRecord.committed_cursor)
-}
-inline ::uint64_t RankBoardRecord::_internal_committed_cursor() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.committed_cursor_;
-}
-inline void RankBoardRecord::_internal_set_committed_cursor(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.committed_cursor_ = value;
-}
-
 // uint32 ascending = 10;
 inline void RankBoardRecord::clear_ascending() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ascending_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t RankBoardRecord::ascending() const {
   // @@protoc_insertion_point(field_get:rankpb.RankBoardRecord.ascending)
@@ -2842,7 +3051,7 @@ inline ::uint32_t RankBoardRecord::ascending() const {
 }
 inline void RankBoardRecord::set_ascending(::uint32_t value) {
   _internal_set_ascending(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:rankpb.RankBoardRecord.ascending)
 }
 inline ::uint32_t RankBoardRecord::_internal_ascending() const {
@@ -2858,7 +3067,7 @@ inline void RankBoardRecord::_internal_set_ascending(::uint32_t value) {
 inline void RankBoardRecord::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t RankBoardRecord::state() const {
   // @@protoc_insertion_point(field_get:rankpb.RankBoardRecord.state)
@@ -2866,7 +3075,7 @@ inline ::uint32_t RankBoardRecord::state() const {
 }
 inline void RankBoardRecord::set_state(::uint32_t value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:rankpb.RankBoardRecord.state)
 }
 inline ::uint32_t RankBoardRecord::_internal_state() const {
@@ -2882,7 +3091,7 @@ inline void RankBoardRecord::_internal_set_state(::uint32_t value) {
 inline void RankBoardRecord::clear_settlement_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.settlement_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t RankBoardRecord::settlement_id() const {
   // @@protoc_insertion_point(field_get:rankpb.RankBoardRecord.settlement_id)
@@ -2890,7 +3099,7 @@ inline ::uint64_t RankBoardRecord::settlement_id() const {
 }
 inline void RankBoardRecord::set_settlement_id(::uint64_t value) {
   _internal_set_settlement_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:rankpb.RankBoardRecord.settlement_id)
 }
 inline ::uint64_t RankBoardRecord::_internal_settlement_id() const {
@@ -2906,7 +3115,7 @@ inline void RankBoardRecord::_internal_set_settlement_id(::uint64_t value) {
 inline void RankBoardRecord::clear_open_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.open_request_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t RankBoardRecord::open_request_id() const {
   // @@protoc_insertion_point(field_get:rankpb.RankBoardRecord.open_request_id)
@@ -2914,7 +3123,7 @@ inline ::uint64_t RankBoardRecord::open_request_id() const {
 }
 inline void RankBoardRecord::set_open_request_id(::uint64_t value) {
   _internal_set_open_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:rankpb.RankBoardRecord.open_request_id)
 }
 inline ::uint64_t RankBoardRecord::_internal_open_request_id() const {
@@ -2994,7 +3203,7 @@ inline void RankBoardRecord::set_allocated_open_request_hash(::std::string* PROT
 inline void RankBoardRecord::clear_created_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t RankBoardRecord::created_ms() const {
   // @@protoc_insertion_point(field_get:rankpb.RankBoardRecord.created_ms)
@@ -3002,7 +3211,7 @@ inline ::uint64_t RankBoardRecord::created_ms() const {
 }
 inline void RankBoardRecord::set_created_ms(::uint64_t value) {
   _internal_set_created_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:rankpb.RankBoardRecord.created_ms)
 }
 inline ::uint64_t RankBoardRecord::_internal_created_ms() const {
@@ -3018,7 +3227,7 @@ inline void RankBoardRecord::_internal_set_created_ms(::uint64_t value) {
 inline void RankBoardRecord::clear_sealed_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sealed_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t RankBoardRecord::sealed_ms() const {
   // @@protoc_insertion_point(field_get:rankpb.RankBoardRecord.sealed_ms)
@@ -3026,7 +3235,7 @@ inline ::uint64_t RankBoardRecord::sealed_ms() const {
 }
 inline void RankBoardRecord::set_sealed_ms(::uint64_t value) {
   _internal_set_sealed_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:rankpb.RankBoardRecord.sealed_ms)
 }
 inline ::uint64_t RankBoardRecord::_internal_sealed_ms() const {
@@ -3042,7 +3251,7 @@ inline void RankBoardRecord::_internal_set_sealed_ms(::uint64_t value) {
 inline void RankBoardRecord::clear_deleted_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deleted_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t RankBoardRecord::deleted_ms() const {
   // @@protoc_insertion_point(field_get:rankpb.RankBoardRecord.deleted_ms)
@@ -3050,7 +3259,7 @@ inline ::uint64_t RankBoardRecord::deleted_ms() const {
 }
 inline void RankBoardRecord::set_deleted_ms(::uint64_t value) {
   _internal_set_deleted_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:rankpb.RankBoardRecord.deleted_ms)
 }
 inline ::uint64_t RankBoardRecord::_internal_deleted_ms() const {
@@ -3062,26 +3271,126 @@ inline void RankBoardRecord::_internal_set_deleted_ms(::uint64_t value) {
   _impl_.deleted_ms_ = value;
 }
 
-// uint64 entries = 18;
-inline void RankBoardRecord::clear_entries() {
+// -------------------------------------------------------------------
+
+// RankBoardShardRecord
+
+// uint64 board_id = 1;
+inline void RankBoardShardRecord::clear_board_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.board_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t RankBoardShardRecord::board_id() const {
+  // @@protoc_insertion_point(field_get:rankpb.RankBoardShardRecord.board_id)
+  return _internal_board_id();
+}
+inline void RankBoardShardRecord::set_board_id(::uint64_t value) {
+  _internal_set_board_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:rankpb.RankBoardShardRecord.board_id)
+}
+inline ::uint64_t RankBoardShardRecord::_internal_board_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.board_id_;
+}
+inline void RankBoardShardRecord::_internal_set_board_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.board_id_ = value;
+}
+
+// uint64 generation = 2;
+inline void RankBoardShardRecord::clear_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.generation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t RankBoardShardRecord::generation() const {
+  // @@protoc_insertion_point(field_get:rankpb.RankBoardShardRecord.generation)
+  return _internal_generation();
+}
+inline void RankBoardShardRecord::set_generation(::uint64_t value) {
+  _internal_set_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:rankpb.RankBoardShardRecord.generation)
+}
+inline ::uint64_t RankBoardShardRecord::_internal_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.generation_;
+}
+inline void RankBoardShardRecord::_internal_set_generation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.generation_ = value;
+}
+
+// uint32 source_shard = 3;
+inline void RankBoardShardRecord::clear_source_shard() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_shard_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t RankBoardShardRecord::source_shard() const {
+  // @@protoc_insertion_point(field_get:rankpb.RankBoardShardRecord.source_shard)
+  return _internal_source_shard();
+}
+inline void RankBoardShardRecord::set_source_shard(::uint32_t value) {
+  _internal_set_source_shard(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:rankpb.RankBoardShardRecord.source_shard)
+}
+inline ::uint32_t RankBoardShardRecord::_internal_source_shard() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_shard_;
+}
+inline void RankBoardShardRecord::_internal_set_source_shard(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_shard_ = value;
+}
+
+// uint64 committed_cursor = 4;
+inline void RankBoardShardRecord::clear_committed_cursor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.committed_cursor_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t RankBoardShardRecord::committed_cursor() const {
+  // @@protoc_insertion_point(field_get:rankpb.RankBoardShardRecord.committed_cursor)
+  return _internal_committed_cursor();
+}
+inline void RankBoardShardRecord::set_committed_cursor(::uint64_t value) {
+  _internal_set_committed_cursor(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:rankpb.RankBoardShardRecord.committed_cursor)
+}
+inline ::uint64_t RankBoardShardRecord::_internal_committed_cursor() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.committed_cursor_;
+}
+inline void RankBoardShardRecord::_internal_set_committed_cursor(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.committed_cursor_ = value;
+}
+
+// uint64 entries = 5;
+inline void RankBoardShardRecord::clear_entries() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entries_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
-inline ::uint64_t RankBoardRecord::entries() const {
-  // @@protoc_insertion_point(field_get:rankpb.RankBoardRecord.entries)
+inline ::uint64_t RankBoardShardRecord::entries() const {
+  // @@protoc_insertion_point(field_get:rankpb.RankBoardShardRecord.entries)
   return _internal_entries();
 }
-inline void RankBoardRecord::set_entries(::uint64_t value) {
+inline void RankBoardShardRecord::set_entries(::uint64_t value) {
   _internal_set_entries(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
-  // @@protoc_insertion_point(field_set:rankpb.RankBoardRecord.entries)
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:rankpb.RankBoardShardRecord.entries)
 }
-inline ::uint64_t RankBoardRecord::_internal_entries() const {
+inline ::uint64_t RankBoardShardRecord::_internal_entries() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.entries_;
 }
-inline void RankBoardRecord::_internal_set_entries(::uint64_t value) {
+inline void RankBoardShardRecord::_internal_set_entries(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entries_ = value;
 }

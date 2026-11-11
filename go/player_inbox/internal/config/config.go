@@ -21,6 +21,7 @@ import (
 	"shared/dbplacement"
 	"shared/playerredis"
 	"shared/redisauth"
+	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -100,6 +101,9 @@ type Config struct {
 	// 经 secretKeyRef 注入;ConfigMap 里 CoreRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
 	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
 	SharedRedisPasswordEnv string `json:",optional"`
+	// MySQLPasswordEnv 是 MySQL.Password 所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md);
+	// ConfigMap 里 MySQL.Password 写空串。不写 = 照用 Password 字面量(本机)。由 ResolveMySQLPassword 在加载配置后填好,变量缺失或为空即拒启。
+	MySQLPasswordEnv string `json:",optional"`
 
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8),只读两类东西:
 	//   - player:{id}:owner_epoch:仅STALE分类诊断，不是消费授权上界；
@@ -191,6 +195,13 @@ func (c *Config) EffectivePlayerRedis() playerredis.Config {
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
 	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
 		redisauth.Target{Field: "CoreRedis.Password", Password: &c.CoreRedis.Password})
+}
+
+// ResolveMySQLPassword 按 MySQLPasswordEnv 填 MySQL.Password,规则见 secretenv.Fill。-migrate 与常驻启动都连库,
+// 所以在 conf.MustLoad 之后、迁移分支之前调用(player_inbox.go);player-inbox-migrate Job 同样注入这个变量。
+func (c *Config) ResolveMySQLPassword(lookup func(string) (string, bool)) error {
+	return secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
+		secretenv.Target{Field: "MySQL.Password", Value: &c.MySQL.Password})
 }
 
 // KafkaConf 是在线提醒用的 Kafka 生产者参数。

@@ -114,7 +114,10 @@ message MailAssetOpRecord {
   option (OptionTableName) = "mail_asset_op";
   option (OptionPrimaryKey) = "op_id";
   option (OptionUniqueKey) = "player_id,stream,stream_epoch,seq";
-  option (OptionIndex) = "status,next_attempt_ms;player_id,stream,stream_epoch,status,seq;player_id,mail_id,claim_version;mail_id,status";
+  // idx_mail_asset_op_0 = 重投到期扫描 (status, next_attempt_ms, op_id, player_id)(2026-11-11,缺口清单第 25 条):
+  // op_id 让 ORDER BY next_attempt_ms, op_id 直接走索引顺序(TiDB 上主键非聚簇,不带它就要整段读完再排序);
+  // player_id 让按玩家分片的条件在索引上判,别的副本的行不回表。
+  option (OptionIndex) = "status,next_attempt_ms,op_id,player_id;player_id,stream,stream_epoch,status,seq;player_id,mail_id,claim_version;mail_id,status";
   option (OptionTiDBNonclusteredPK) = true;
   option (OptionTiDBShardRowIDBits) = 4;
   option (OptionTiDBPreSplitRegions) = 4;

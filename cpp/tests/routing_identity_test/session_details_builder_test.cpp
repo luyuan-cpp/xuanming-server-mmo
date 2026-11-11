@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "../../nodes/gate/handler/rpc/session_details_builder.h"
 #include "../../nodes/gate/handler/event/authenticated_session_binding.h"
@@ -60,14 +62,64 @@ TEST(GateAuthenticatedIdentity, BindingRejectsReusedConnectionAndRouteCannotProm
     EXPECT_EQ(detail.owner_revision(), 0);
 }
 
-TEST(GateAuthenticatedIdentity, SignatureMatchesGoCanonicalVector)
+// 跨语言契约:与 go/shared/callerauth 的 TestCanonicalV2Vector 断言同一条字面量。
+TEST(GateAuthenticatedIdentity, CanonicalMatchesGoVector)
 {
     const std::string subject("\0\1\xff\n", 4);
-    EXPECT_EQ(caller_auth::Sign("0123456789abcdef0123456789abcdef", "/login.ClientPlayerLogin/Login",
-        subject, 1762300000000LL, "00112233445566778899aabbccddeeff"),
-        "b06ac9d4ee1cdab3e9fef0f534b6ba8ba73cf73dd901d3d896f4329d6bfebd5e");
-    EXPECT_TRUE(caller_auth::Sign("short", "/login.ClientPlayerLogin/Login", subject, 0,
-        "00112233445566778899aabbccddeeff").empty());
+    EXPECT_EQ(caller_auth::Canonical("/login.ClientPlayerLogin/Login", subject, 1762300000000LL,
+        "00112233445566778899aabbccddeeff"),
+        "mmorpg-gate-identity/v2\n"
+        "gate\n"
+        "/login.ClientPlayerLogin/Login\n"
+        "a95803d91f2a2eb57d42e2a799bb0d42e2acc37c22aa9d433a4173e5db794f28\n"
+        "1762300000000\n"
+        "00112233445566778899aabbccddeeff");
+}
+
+// RFC 8032 §7.1 TEST 1:钉住「种子 → 公钥」与签名原语,Go 侧 TestEd25519Rfc8032Vector 用同一组向量。
+namespace
+{
+constexpr char kRfc8032Test1Seed[] = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
+constexpr char kRfc8032Test1PublicKey[] = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+constexpr char kRfc8032Test1EmptySignature[] =
+    "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b";
+}
+
+TEST(GateAuthenticatedIdentity, Ed25519MatchesRfc8032Vector)
+{
+    const auto key = caller_auth::ParseSeedHex(kRfc8032Test1Seed);
+    ASSERT_NE(key, nullptr);
+    const auto publicKey = caller_auth::PublicKeyBytes(key.get());
+    ASSERT_EQ(publicKey.size(), caller_auth::kPublicKeyBytes);
+    EXPECT_EQ(token_security::BytesToHex(reinterpret_cast<const unsigned char*>(publicKey.data()),
+        static_cast<unsigned int>(publicKey.size())), kRfc8032Test1PublicKey);
+    EXPECT_EQ(caller_auth::SignHex(key.get(), ""), kRfc8032Test1EmptySignature);
+}
+
+TEST(GateAuthenticatedIdentity, SignerRefusesUnpairedOrMalformedKeys)
+{
+    const std::string other(64, 'a');
+    EXPECT_FALSE(caller_auth::InitProcessSigner(nullptr, kRfc8032Test1PublicKey).empty());
+    EXPECT_FALSE(caller_auth::InitProcessSigner("short", kRfc8032Test1PublicKey).empty());
+    EXPECT_FALSE(caller_auth::InitProcessSigner(kRfc8032Test1Seed, nullptr).empty());
+    // 公钥列表里没有自己这一把:签出的名验证方一律验不过,启动时就拒绝。
+    EXPECT_FALSE(caller_auth::InitProcessSigner(kRfc8032Test1Seed, other.c_str()).empty());
+    // 列表格式不对(空项、重复)时验证方会拒启,gate 同样拒启。
+    EXPECT_FALSE(caller_auth::InitProcessSigner(kRfc8032Test1Seed,
+        (std::string(kRfc8032Test1PublicKey) + ",").c_str()).empty());
+    EXPECT_FALSE(caller_auth::InitProcessSigner(kRfc8032Test1Seed,
+        (std::string(kRfc8032Test1PublicKey) + "," + kRfc8032Test1PublicKey).c_str()).empty());
+    // 轮换期新旧公钥并列,只要含有自己这一把就放行;成功后 Append 能挂上完整签名头。
+    EXPECT_TRUE(caller_auth::InitProcessSigner(kRfc8032Test1Seed,
+        (other + "," + kRfc8032Test1PublicKey).c_str()).empty());
+    std::vector<std::pair<std::string, std::string>> metadata;
+    ASSERT_TRUE(caller_auth::Append(metadata, "/login.ClientPlayerLogin/Login", std::string("\0\1", 2)));
+    ASSERT_EQ(metadata.size(), 4u);
+    EXPECT_EQ(metadata[0].first, "x-caller-id");
+    EXPECT_EQ(metadata[3].first, "x-caller-sig");
+    EXPECT_EQ(metadata[3].second.size(), caller_auth::kSignatureBytes * 2);
+    EXPECT_FALSE(caller_auth::Append(metadata, "no-leading-slash", ""));
+    caller_auth::ProcessSigningKey().reset();
 }
 
 // ---------------------------------------------------------------------------

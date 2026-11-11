@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -40,6 +41,7 @@
 
 // muduo 头放在标准库 / 系统头之后(它的 Windows 适配头 #define 了 off_t / pid_t 等名字)。
 #include "core/network/grpc_client_runtime.h"
+#include "core/network/grpc_trace_hooks.h"
 #include "core/network/grpc_unary_call.h"
 #include "grpc_client/data_service/data_service_grpc_client.h"
 #include "muduo/net/EventLoop.h"
@@ -50,6 +52,7 @@
 #include "muduo_grpc/method_table.h"
 #include "muduo_grpc/server.h"
 #include "muduo_grpc/server_call.h"
+#include "thread_context/trace_context_tls.h"
 
 using namespace std::chrono_literals;
 
@@ -121,6 +124,8 @@ public:
     int dispatched{0};
     int businessRuns{0};
     muduo_grpc::Metadata receivedMetadata;
+    tracing::TraceContext dispatchTrace;   // 方法体执行时的当前 trace(链路追踪用例读)
+    uint64_t businessPlayerId{0};          // 业务执行时日志上下文里的玩家(链路追踪用例读)
     std::vector<std::shared_ptr<GetPlayerHomeZoneCall>> heldBeforeBusiness;
     std::vector<muduo_grpc::ServerCall> heldAfterBusinessStarted;
 
@@ -129,11 +134,13 @@ private:
     {
         ++dispatched;
         receivedMetadata = serverCall.metadata();
+        dispatchTrace = tracing::Current();
         const auto call = GetPlayerHomeZoneCall::Create(
             std::move(serverCall),
             [this](const GetPlayerHomeZoneRequest *request, GetPlayerHomeZoneResponse *response)
             {
                 ++businessRuns;
+                businessPlayerId = tracing::CurrentPlayerId();
                 response->set_home_zone_id(static_cast<uint32_t>(request->player_id() + 1));
             });
         if (!call->ParseRequest(requestBytes))
@@ -169,6 +176,8 @@ struct Observed
     bool hadReply{false};
     uint32_t homeZoneId{0};
     bool sendHadReturnedAtDone{false};
+    tracing::TraceContext sentTrace;   // 发起时的当前 trace
+    tracing::TraceContext doneTrace;   // 完成回调执行时的当前 trace
 };
 
 class GrpcClientLoopbackTest : public ::testing::Test
@@ -182,12 +191,19 @@ protected:
         muduo_grpc::ServerOptions options;
         options.name = "grpc_client_loopback";
         options.statsLogInterval = std::chrono::seconds(0);
+        muduo_grpc::ChannelOptions channelOptions;
+        if (installTraceHooks_)
+        {
+            // 与节点装配一致(node.cpp、node_connector.cpp):服务端装派发钩子,业务通道装出站钩子。
+            options.dispatchInterceptor = grpc_tracing::DispatchUnderIncomingTrace;
+            channelOptions.unaryInterceptor = grpc_tracing::InjectTraceIntoUnaryCall;
+        }
         server_ = muduo_grpc::Server::Create(loop_, "127.0.0.1", port_, options);
         ASSERT_NE(server_, nullptr);
         ASSERT_TRUE(server_->RegisterService(service_));
         server_->Start();
 
-        channel_ = muduo_grpc::Channel::Create(loop_, "127.0.0.1", port_);
+        channel_ = muduo_grpc::Channel::Create(loop_, "127.0.0.1", port_, std::move(channelOptions));
         ASSERT_NE(channel_, nullptr);
         nodeEntity_ = registry_.create();
         registry_.emplace<MuduoGrpcChannelPtr>(nodeEntity_, channel_);
@@ -232,11 +248,18 @@ protected:
     }
 
     // 在 loop 任务里发起一次带 done 的调用(Send 只在 loop 线程上调用);done 只捕获 observed。
+    // underTrace 为真时在一条新根里发起,发起时的 trace 记进 observed->sentTrace。
     void SendInLoop(const std::shared_ptr<Observed> &observed, uint64_t playerId, std::chrono::milliseconds deadline,
-                    GrpcSentMetadata metadata = {})
+                    GrpcSentMetadata metadata = {}, bool underTrace = false)
     {
-        loop_.queueInLoop([this, observed, playerId, deadline, metadata = std::move(metadata)]
+        loop_.queueInLoop([this, observed, playerId, deadline, metadata = std::move(metadata), underTrace]
         {
+            std::optional<tracing::ScopedRoot> requestTrace;
+            if (underTrace)
+            {
+                requestTrace.emplace();
+            }
+            observed->sentTrace = tracing::Current();
             GetPlayerHomeZoneRequest request;
             request.set_player_id(playerId);
             GrpcCallOptions options;
@@ -252,6 +275,7 @@ protected:
                     observed->hadReply = reply != nullptr;
                     observed->homeZoneId = reply != nullptr ? reply->home_zone_id() : 0;
                     observed->sendHadReturnedAtDone = observed->sendReturned;
+                    observed->doneTrace = tracing::Current();
                 },
                 options);
             observed->sendReturned = true;
@@ -267,6 +291,14 @@ protected:
     MuduoGrpcChannelPtr channel_;
     entt::entity nodeEntity_{entt::null};
     uint16_t port_{0};
+    bool installTraceHooks_{false};   // 派生夹具在构造时置位,SetUp 据此装两个链路追踪钩子
+};
+
+// 两个链路追踪钩子都装上的夹具(docs/design/distributed-tracing.md §5.3)。
+class GrpcTraceLoopbackTest : public GrpcClientLoopbackTest
+{
+public:
+    GrpcTraceLoopbackTest() { installTraceHooks_ = true; }
 };
 
 // ASCII 认证头必须逐字节保留;仅历史 SessionMD 额外应用编码,其他二进制头只走传输编码。
@@ -517,6 +549,81 @@ TEST_F(GrpcClientLoopbackTest, SceneManagerSelectionRejectsSnapshotOnlyAndClosin
     // 本例创建后不用 ASSERT,三个生产查询无论成功与否都只清理本例两实体。
     registry.destroy(connected);
     registry.destroy(snapshotOnly);
+}
+
+// ── 链路追踪(docs/design/distributed-tracing.md §5.3)──────────────────────
+
+// 发起方在 trace 里:traceparent 带它的 trace_id;服务端方法体接上同一条 trace(子 span);完成回调回到发起方的 trace。
+TEST_F(GrpcTraceLoopbackTest, TraceparentIsSentContinuedAndRestoredOnCompletion)
+{
+    const auto observed = std::make_shared<Observed>();
+    SendInLoop(observed, 42, kLiveness, {}, /*underTrace=*/true);
+    ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
+    ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
+    ASSERT_TRUE(observed->sentTrace.IsValid());
+
+    const auto *header = FindGrpcMetadata(service_.receivedMetadata, "traceparent");
+    ASSERT_NE(header, nullptr);
+    tracing::TraceContext onWire;
+    ASSERT_TRUE(tracing::ParseTraceparent(*header, onWire)) << *header;
+    EXPECT_EQ(onWire.trace_id.bytes, observed->sentTrace.trace_id.bytes);
+    EXPECT_EQ(service_.dispatchTrace.trace_id.bytes, observed->sentTrace.trace_id.bytes);
+    EXPECT_NE(service_.dispatchTrace.span_id.bytes, onWire.span_id.bytes) << "服务端应在收到的 span 下面建子 span";
+    EXPECT_EQ(observed->doneTrace.trace_id.bytes, observed->sentTrace.trace_id.bytes);
+    EXPECT_FALSE(tracing::Current().IsValid()) << "作用域都已退出,测试线程上不应残留 trace";
+}
+
+// 发起方不在 trace 里:不写 traceparent;服务端开新根;完成回调里也没有 trace。
+TEST_F(GrpcTraceLoopbackTest, UntracedCallSendsNoTraceparentAndTheServerStartsARoot)
+{
+    const auto observed = std::make_shared<Observed>();
+    SendInLoop(observed, 42, kLiveness);
+    ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
+    ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
+    EXPECT_EQ(FindGrpcMetadata(service_.receivedMetadata, "traceparent"), nullptr);
+    EXPECT_TRUE(service_.dispatchTrace.IsValid());
+    EXPECT_FALSE(observed->doneTrace.IsValid());
+}
+
+// 调用方已经写了 traceparent(例如转发):出站钩子不重复写,服务端接上调用方写的那一条。
+TEST_F(GrpcTraceLoopbackTest, ExistingTraceparentIsNotDuplicated)
+{
+    const tracing::TraceContext forwarded = tracing::NewRoot();
+    const auto observed = std::make_shared<Observed>();
+    SendInLoop(observed, 42, kLiveness, {{"traceparent", forwarded.ToTraceparent()}}, /*underTrace=*/true);
+    ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
+    ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
+    size_t headers = 0;
+    for (const auto &[key, value] : service_.receivedMetadata)
+    {
+        headers += key == "traceparent" ? 1 : 0;
+    }
+    EXPECT_EQ(headers, 1u);
+    EXPECT_EQ(service_.dispatchTrace.trace_id.bytes, forwarded.trace_id.bytes);
+}
+
+// 实体上没有通道,生成的客户端在本地以失败完成:回调同样回到发起方的 trace(QueueGrpcLocalCompletion 的包装)。
+TEST_F(GrpcTraceLoopbackTest, LocalFailureCompletesUnderTheCallerTrace)
+{
+    registry_.remove<MuduoGrpcChannelPtr>(nodeEntity_);
+    const auto observed = std::make_shared<Observed>();
+    SendInLoop(observed, 42, kLiveness, {}, /*underTrace=*/true);
+    ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
+    EXPECT_NE(observed->code, kGrpcStatusOk);
+    ASSERT_TRUE(observed->sentTrace.IsValid());
+    EXPECT_EQ(observed->doneTrace.trace_id.bytes, observed->sentTrace.trace_id.bytes);
+}
+
+// 业务方法体在请求顶层 player_id 的日志上下文里执行,执行完恢复(GrpcUnaryCall::Proceed,§5.5)。
+// 不依赖链路追踪钩子:玩家来自请求本身,所以用不装钩子的夹具。用 2^62+1 钉住 64 位原值。
+TEST_F(GrpcClientLoopbackTest, BusinessRunsUnderTheRequestPlayerId)
+{
+    const auto observed = std::make_shared<Observed>();
+    SendInLoop(observed, 4611686018427387905ULL, kLiveness);
+    ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
+    ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
+    EXPECT_EQ(service_.businessPlayerId, 4611686018427387905ULL);
+    EXPECT_EQ(tracing::CurrentPlayerId(), 0u) << "方法体结束后应恢复,loop 线程上不应残留玩家";
 }
 
 } // namespace

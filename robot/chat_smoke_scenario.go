@@ -9,10 +9,10 @@ package main
 //   4. A 发 PRIVATE 给 B → B 拉 PRIVATE(peer=A)→ 看到,sender == A;
 //   5. A 发 600 字节 ASCII 的 WORLD → chat 回 kMessageSizeExceeded(chat 侧二道闸:
 //      MaxContentBytes 默认 512;序列化后仍 <1024B,gate 的 1KB 闸不会先拒);
-//   6. A 用第 2 步的同一个 request_id 重发同一条 WORLD → 受理(tip=0)但 B 拉到的历史里该 nonce 仍只一条(幂等键 SET NX)。
+//   6. A 用第 2 步的同一个 request_id 重发同一条 WORLD → 受理(tip=0)但 B 拉到的历史里该 nonce 仍只一条(SQL 收据按 request_id 去重)。
 //
 // 为什么跨 zone 有意义:chat 是全局服务(§0 / §9),两个 zone 的 gate 经路由服到达的是同一份 chat,
-// 世界频道与私聊历史都在 ChatRedis 里、不分 zone —— 只有 A、B 真的落在不同 gate 上,
+// 世界频道与私聊历史都在 chat 的 SQL 原件库里、不分 zone —— 只有 A、B 真的落在不同 gate 上,
 // "B 看到 A 的消息"才证明路由服模式下的跨 zone 可达性,而不是同一个 gate 内部的巧合。
 //
 // 结果约定(供外层脚本消费):

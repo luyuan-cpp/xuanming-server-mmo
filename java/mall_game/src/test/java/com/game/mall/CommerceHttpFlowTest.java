@@ -1,6 +1,7 @@
 package com.game.mall;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -138,14 +139,29 @@ class CommerceHttpFlowTest {
         assertEquals(401, call("POST", "/internal/payments", "gateway", BUYER, payment).statusCode());
         HttpResponse<String> paid = call("POST", "/internal/payments", "payment", "payment-adapter", payment);
         assertEquals(200, paid.statusCode(), paid.body());
-        assertEquals("DELIVERY_PENDING", json.readTree(paid.body()).get("state").asText());
-        assertEquals(json.readTree(paid.body()), json.readTree(
+        JsonNode paidOutcome = json.readTree(paid.body());
+        assertEquals("DELIVERY_PENDING", paidOutcome.path("order").path("state").asText());
+        assertFalse(paidOutcome.hasNonNull("refundReason"), "订单本身那笔不退款");
+        assertEquals(paidOutcome.path("order"), json.readTree(
             call("POST", "/internal/payments/order-view", "payment", "payment-adapter", query).body()));
-        assertEquals(200, call("POST", "/internal/payments", "payment", "payment-adapter", payment).statusCode());
+        HttpResponse<String> replayed = call("POST", "/internal/payments", "payment", "payment-adapter", payment);
+        assertEquals(200, replayed.statusCode());
+        assertEquals(paidOutcome, json.readTree(replayed.body()), "重放同一笔回同一结论");
         assertEquals(1, count("commerce_payment_receipt"));
         assertEquals(1, count("commerce_delivery_intent"));
         assertEquals(2, stockValue("stock"));
         assertEquals(0, stockValue("lock_stock"));
+
+        // 金额与订单不符的一笔:同样回 200 并落库,订单视图不变,适配器从 refundReason 读出这笔要退、为什么退。
+        byte[] mismatched = json.writeValueAsBytes(Map.of("orderId", orderId, "channel", "test-channel", "transactionId", "HttpMismatch001", "amountMinor", 2499, "currency", "CNY"));
+        HttpResponse<String> abnormal = call("POST", "/internal/payments", "payment", "payment-adapter", mismatched);
+        assertEquals(200, abnormal.statusCode(), abnormal.body());
+        assertEquals("AMOUNT_MISMATCH", json.readTree(abnormal.body()).path("refundReason").asText());
+        assertEquals(paidOutcome.path("order"), json.readTree(abnormal.body()).path("order"));
+        assertEquals(2, count("commerce_payment_receipt"));
+        assertEquals(1, count("commerce_refund_intent"));
+        assertEquals(1, count("commerce_delivery_intent"));
+        assertEquals(2, stockValue("stock"));
         assertEquals(404, call("POST", "/api/orders/" + orderId + "/cancel", "gateway", BUYER, new byte[0]).statusCode());
         assertEquals(409, call("POST", "/api/orders/cancel", "gateway", BUYER, ownedQuery).statusCode());
 

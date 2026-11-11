@@ -1,0 +1,97 @@
+# SeaweedFS 单进程:只当 dev / kind 上 3 副本 Loki 的 S3 测试夹具(-LokiS3DevFixture,只在 dev;docs/design/no-single-node-horizontal-scaling-20261001.md §10)。
+#
+# 这不是生产存储:1 个副本,数据在 emptyDir,Pod 一重启桶和日志都没了。生产只接外部 S3 兼容存储(云厂商的对象存储,或自建机房平台层的 Rook-Ceph RGW)。
+# 为什么不在集群里自建生产级对象存储,见设计文档 §10。
+#
+# 身份配置(含访问密钥)在 Secret seaweedfs-dev-s3-config(键 s3.json),由 Apply-Infra 写;Pod 模板带它的指纹,换密钥自动滚动。
+# 占位由 Apply-Infra 替换:__SEAWEEDFS_S3_CONFIG_HASH__、__LOKI_S3_BUCKET__。
+# Loki 不自己建桶:同一个 Pod 里的 create-bucket 容器等服务起来后用 weed shell 建,建好就只睡着(重复建无害,先查后建)。
+# 这份夹具没有在集群上跑过,weed shell 的输出格式变了时建桶循环会一直重试,看 create-bucket 容器的日志。
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs-s3
+  labels:
+    app: seaweedfs
+spec:
+  selector:
+    app: seaweedfs
+  ports:
+    - name: s3
+      port: 8333
+      targetPort: 8333
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seaweedfs
+  labels:
+    app: seaweedfs
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: seaweedfs
+  template:
+    metadata:
+      labels:
+        app: seaweedfs
+      annotations:
+        mmorpg.io/seaweedfs-s3-config-hash: "__SEAWEEDFS_S3_CONFIG_HASH__"
+    spec:
+      containers:
+        - name: seaweedfs
+          image: chrislusf/seaweedfs:3.80
+          args:
+            - server
+            - -dir=/data
+            - -s3
+            - -s3.port=8333
+            - -s3.config=/etc/seaweedfs/s3.json
+          ports:
+            - containerPort: 8333
+              name: s3
+          readinessProbe:
+            tcpSocket:
+              port: 8333
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/seaweedfs
+              readOnly: true
+            - name: data
+              mountPath: /data
+        - name: create-bucket
+          image: chrislusf/seaweedfs:3.80
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              shell() { weed shell -master=localhost:9333 -filer=localhost:8888 2>/dev/null; }
+              until echo "s3.bucket.list" | shell | grep -qw "__LOKI_S3_BUCKET__"; do
+                echo "s3.bucket.create -name __LOKI_S3_BUCKET__" | shell >/dev/null || true
+                echo "waiting for bucket __LOKI_S3_BUCKET__"
+                sleep 2
+              done
+              echo "bucket __LOKI_S3_BUCKET__ ready"
+              exec sleep 2147483647
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: config
+          secret:
+            secretName: seaweedfs-dev-s3-config
+        - name: data
+          emptyDir: {}

@@ -708,8 +708,9 @@ func lockTrialLobbyForLaunch(ctx context.Context, tx *sql.Tx, original *pb.Guild
 }
 // closeProvenTrialLobby 在权威终局(结算、标毒或核签的作废回执)的同一事务里把大厅写成 ENDED 并清占位。
 // endTip 是写进视图的结束原因:有对局结果时为 trialSettledLobbyEndTip(客户端按结果显示);作废释放写
-// trialCancelledLobbyEndTip,否则客户端只看到 ENDED、不知道这一局没打成(2026-11-05 修复,r2-guild#1 评审第 5 条)。
-func closeProvenTrialLobby(ctx context.Context, tx *sql.Tx, row *pb.GuildTrialLobbyRecord, endTip uint32, now uint64) error {
+// 默认原因(cancelledTrialLobbyEnd),否则客户端只看到 ENDED、不知道这一局没打成(2026-11-05 修复,r2-guild#1 评审第 5 条)。
+// endParams 是原因 tip 的参数:作废释放沿用实时路径记下的业务拒绝原因时带上(如离线的是谁,2026-11-11),其余为 nil。
+func closeProvenTrialLobby(ctx context.Context, tx *sql.Tx, row *pb.GuildTrialLobbyRecord, endTip uint32, endParams []string, now uint64) error {
 	if row.State == 4 {
 		return nil
 	}
@@ -723,5 +724,6 @@ func closeProvenTrialLobby(ctx context.Context, tx *sql.Tx, row *pb.GuildTrialLo
 	v := currentLobbyView(row)
 	v.State = pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_ENDED
 	v.EndTipId = endTip
+	v.EndParameters = endParams
 	return writeLobby(ctx, tx, row, v, c, now)
 }

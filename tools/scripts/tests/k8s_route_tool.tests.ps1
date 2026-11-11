@@ -170,11 +170,11 @@ Test-Case 'New-RouteToolJobManifest:Job 名 / 运行号 / 镜像 / 拉取策略 
 
 Test-Case 'args 逐项 JSON 转义:引号、反斜杠、中文、逗号、等号原样往返;镜像里的说明文字(含空格与括号)也是合法 YAML 字符串' {
     $tricky = @('freeze', '-reason=回档 "PITR" C:\tmp, 2026-10-19', '-zones=1,2')
-    $manifest = New-TestManifest -Arguments $tricky -Image '(resolved at run time from deployment/data-service in mmorpg-zone-z1)'
+    $manifest = New-TestManifest -Arguments $tricky -Image '(resolved at run time from statefulset/data-service in mmorpg-zone-z1)'
     $renderedArgs = Get-ManifestArgs -Manifest $manifest
     Assert-Equal -Expected (@('-f', '/app/etc/data_service.yaml', '-route-tool') + $tricky -join '|') -Actual ($renderedArgs -join '|') -Because '每一项都必须原样还原(不按逗号 / 空格切,不吞引号与反斜杠)'
     $imageLine = [regex]::Match($manifest, '(?m)^          image: (?<v>.*)$').Groups['v'].Value
-    Assert-Equal -Expected '(resolved at run time from deployment/data-service in mmorpg-zone-z1)' -Actual ($imageLine | ConvertFrom-Json) -Because '镜像写成 JSON 字符串,说明文字不会被 YAML 误解析'
+    Assert-Equal -Expected '(resolved at run time from statefulset/data-service in mmorpg-zone-z1)' -Actual ($imageLine | ConvertFrom-Json) -Because '镜像写成 JSON 字符串,说明文字不会被 YAML 误解析'
 }
 
 Test-Case 'New-RouteToolJobManifest 负向:运行号形状、拉取策略、镜像含换行、参数非法、模板多出未知占位都 throw' {
@@ -288,8 +288,8 @@ Test-Case '子进程 -DryRun:退出码 0,打印 BEGIN / END MANIFEST 之间的 J
 
         $noImage = Invoke-ToolScript -ScriptName 'k8s_route_tool.ps1' -Env $fakeEnv -Arguments @('-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare', '-DryRun', '-ReportDir', $report)
         Assert-Equal -Expected 0 -Actual $noImage.ExitCode -Because "没给 -Image 的 DryRun 也应当成功。输出: $($noImage.Output)"
-        Assert-Match -Text $noImage.Output -Pattern 'resolved at run time from deployment/data-service in mmorpg-zone-z1' -Because '清单里的镜像写成说明文字'
-        Assert-Match -Text $noImage.Output -Pattern '-Image not given' -Because '提示真跑时从 deployment/data-service 读镜像'
+        Assert-Match -Text $noImage.Output -Pattern 'resolved at run time from statefulset/data-service in mmorpg-zone-z1' -Because '清单里的镜像写成说明文字'
+        Assert-Match -Text $noImage.Output -Pattern '-Image not given' -Because '提示真跑时从 statefulset/data-service 读镜像'
 
         Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $fake 'calls.txt'))) -Because "DryRun 不得调用 kubectl(假 kubectl 记了:$(if (Test-Path -LiteralPath (Join-Path $fake 'calls.txt')) { Get-Content -LiteralPath (Join-Path $fake 'calls.txt') -Raw }))"
         Assert-True -Condition (-not (Test-Path -LiteralPath $report)) -Because 'DryRun 不建报告目录'

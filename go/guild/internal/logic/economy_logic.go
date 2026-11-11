@@ -675,7 +675,7 @@ func (l *GuildLogic) OnAssetFinalized(ctx context.Context, op data.FinalizedOp) 
 		logx.Errorf("[GuildEconomy] finalized op of unknown kind=%d op_id=%d, no push", op.Kind, op.OpID)
 		return
 	}
-	l.notify(kind, op.GuildID, 0, op.PlayerID, []uint64{op.PlayerID})
+	l.notify(ctx, kind, op.GuildID, 0, op.PlayerID, []uint64{op.PlayerID})
 }
 
 // ── 客户端幂等键(05 顶部「客户端幂等键」覆盖块)──────────────────
@@ -722,7 +722,8 @@ func withClientRequest[R any](key uint64, replay func() (R, string, bool, error)
 		return replayed, replayedResult, nil
 	}
 	if raced || lookupErr != nil {
-		// 锁内读到了去重记录,事后却查不到(查询失败):既给不出首次结果,也绝不能重新执行。按故障回,客户端带同一个键重发即可。
+		// raced:锁内读到了去重记录,事后却查不到 —— 首次确已提交。lookupErr:查询失败,不知道首次是否已提交。
+		// 两种都给不出首次结果,也绝不能重新执行;按故障回,客户端带同一个键重发即可。
 		var zero R
 		return zero, resultError, status.Error(codes.Unavailable, "guild client request outcome unavailable, retry with the same key")
 	}
@@ -962,7 +963,7 @@ func (l *GuildLogic) upgradeGuild(ctx context.Context, req *pb.UpgradeGuildReque
 	result := resultUnchanged
 	if res.Changed {
 		result = resultOK
-		l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_LEVEL_UP, g.GuildID, playerID, 0, exceptPlayer(res.MemberIDs, playerID))
+		l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_LEVEL_UP, g.GuildID, playerID, 0, exceptPlayer(res.MemberIDs, playerID))
 		// 等级、成员上限、资金对全帮可见:MemberIDs(含操作者本人)全体 bump GUILD。
 		// 同一次扇出带上 GUILD_ECONOMY 与 GUILD_ACTIVITY:捐献档位的 unlocked(min_guild_level)、商品的 unlocked
 		// (required_guild_level)、活动行的等级门槛(blocked_tip_id)都随帮会等级变,全帮成员这两个域的拉取结果同样变了

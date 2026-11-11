@@ -28,7 +28,6 @@ type Config struct {
 	// 没写 Addrs 时都指向 Node.RedisClient 那一个实例,开发环境不用改(EffectivePlayerRedis / EffectiveLoginRedis)。
 	PlayerRedis      playerredis.Config `json:"PlayerRedis,optional"`
 	LoginRedis       playerredis.Config `json:"LoginRedis,optional"`
-	Snowflake        SnowflakeConf      `json:"Snowflake"`
 	Locker           LockerConf         `json:"Locker"`
 	Account          AccountConf        `json:"Account"`
 	Registry         RegistryConf       `json:"Registry"`
@@ -41,8 +40,8 @@ type Config struct {
 	// 报明确的域不可用；未配置时账号目录 fail-closed，不使用 Redis 权威替身。
 	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc,optional"`
 	// IdSegment 控制 PlayerId 的号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
-	// 字段语义见 shared/idsegment.Conf。**没写这块 = 号段关闭 = 纯 snowflake 老路径**,
-	// 这就是设计稿 §6.4 说的「保留一个版本做回滚开关」。
+	// 字段语义见 shared/idsegment.Conf。**没写这块 = 号段关闭 = 发不出 PlayerId,建角一律失败**:
+	// 没有回退号源(AGENTS §7 第 1 条),启动时只打一条 ERROR(svc/player_id_minter.go)。
 	IdSegment idsegment.Conf `json:"IdSegment,optional"`
 	// GateTokenSecret 已废弃:单个 string 无法不停服轮换,而且 gate token 与
 	// 排队 token 共用同一把密钥,信任域没拆。保留字段只为让 deploy/*.yaml 与
@@ -58,15 +57,6 @@ type Config struct {
 	KillSwitch    KillSwitchConf `json:"KillSwitch,optional"`
 	TableDir      string         `json:",default=../../generated/tables"`
 	AuthProviders AuthConfig     `json:"AuthProviders,optional"` // Third-party auth provider config
-	// ClusterId 是部署级集群号:PlayerId(bwmarrin 13 位 node 段)切成 [cluster3][slot10]
-	// 的 cluster 部分(docs/design/node-id-overhaul-plan-20260908.md §5)。**运维按集群
-	// 一次性设定,策划不碰**;默认 0 = 单集群 / 存量 PlayerId 布局。etcd 槽位前缀带
-	// c<cluster>,两个集群共用一个 etcd 也不会撞号。必须 < 8。
-	ClusterId uint32 `json:"ClusterId,default=0"`
-	// SnowflakeCacheDir 是 PlayerId 槽位的本地缓存目录(shared/snowflakealloc,设计稿 §3.5):
-	// 启动时 etcd 不可达、且缓存里的上次水位确认在 F(2h)内,就用缓存的槽起服并后台重试
-	// 注册。留空关闭。默认相对服务工作目录(go/login/)指向仓库 run/(已 gitignore)。
-	SnowflakeCacheDir string `json:"SnowflakeCacheDir,default=../../run/snowflake"`
 	// DevSkipAuth 是已废弃的不安全开关。保留字段只为让旧配置在启动时
 	// 明确失败,不能因为结构体删字段而静默忽略、让开发者误以为仍生效。
 	DevSkipAuth     bool                `json:"DevSkipAuth,optional"`
@@ -116,8 +106,8 @@ type Config struct {
 	HomeZone HomeZoneConf `json:"HomeZone,optional"`
 
 	// Placement 决定新角色的存档落点:本地域的 StorageShards 个存档库里按 player_id 取模选一个
-	// (docs/design/player-data-tidb-scaling-plan.md §7.2)。整块缺省是过渡期的旧语义(落在本 login 所在 zone 的库),
-	// 启动时打 ERROR;批次 A17b 起缺省拒绝启动。
+	// (docs/design/player-data-tidb-scaling-plan.md §7.2)。必填:没配 StorageShards 拒绝启动(PlacementConf.Validate);
+	// 标成 optional 只是让缺席时报出点名的错误,而不是 go-zero 的通用缺键错误。
 	Placement PlacementConf `json:"Placement,optional"`
 
 	// RequireClientEndpoint 控制下发 gate 地址时是否**必须**用 gate 自报的客户端可达地址
@@ -186,51 +176,29 @@ type GateDrainMigrateConf struct {
 //
 // 存档库和区脱钩:区(home_zone)是玩法分组、会别名合服;存档库是物理落点、会整库搬集群,两者不再互相推导。
 // 每个地域固定 StorageShards 个存档库 player_store_{1000000 + Region×1000 + 片号}_db,新号按 player_id 取模选库
-// (placement.RegionStorageIDForPlayer)。
+// (placement.RegionStorageIDForPlayer),和 login 所在的区(Node.ZoneId)无关。zone_{n}_db 不再放新号。
 type PlacementConf struct {
-	// Region 是地域码,与 data_service 发号器的地域码(Issuer.Region)同值;0 只给 dev、test。
+	// Region 是本地域存档库的地域编号(k8s_deploy.ps1 的 -Region),上线后不能改;0 只给 dev、test。缺省与 data_service
+	// 发号器的地域码(Issuer.Region)相同,发号器换码之后两者不同:换码只换发号码,存档库编号不变(docs/ops/id-issuer-runbook.md §4.5)。
 	Region uint32 `json:"Region,optional"`
-	// StorageShards 是本地域的存档库数 K(1..1000)。上线后不能改:改了只影响之后建的号,各库玩家数从此不均。
-	// 0 = 过渡期的旧语义(下面的 NewPlayerStorageId),启动时打 ERROR;批次 A17b 起 0 拒绝启动。
+	// StorageShards 是本地域的存档库数 K(1..1000),必填。上线后不能改:K 一变小,落在后面那些库里的老号就不在
+	// go/db、data_service 的库名清单里了。K8s 由 k8s_deploy.ps1 的 -Region / -PlayerStoreShards 渲染。
 	StorageShards uint32 `json:"StorageShards,optional"`
-	// NewPlayerStorageId 是脱钩之前的落点配置,只在 StorageShards 为 0 时生效:0 = 本 login 所在 zone(Node.ZoneId);
-	// 1..999999 = zone_{id}_db;>=1000000 = player_store_{id}_db。批次 A17b 删除。
-	NewPlayerStorageId uint32 `json:"NewPlayerStorageId,optional"`
 }
 
 // Validate 在启动时核对地域码与存档库数;不合法就拒绝启动,不建出落到错误库的角色。
 func (c PlacementConf) Validate() error {
 	if c.StorageShards == 0 {
-		if c.Region != 0 {
-			return fmt.Errorf("Placement.Region=%d is set but Placement.StorageShards is 0: region storage needs both", c.Region)
-		}
-		return nil
-	}
-	if c.NewPlayerStorageId != 0 {
-		return fmt.Errorf("Placement.NewPlayerStorageId=%d conflicts with Placement.StorageShards=%d: remove NewPlayerStorageId",
-			c.NewPlayerStorageId, c.StorageShards)
+		return fmt.Errorf("Placement.StorageShards is required: the number of player store databases of region %d (1..%d)",
+			c.Region, placement.RegionStorageStride)
 	}
 	return placement.ValidateRegionStorage(c.Region, c.StorageShards)
 }
 
-// UsesRegionStorage 报告新角色是否按地域存档库落点(StorageShards 已配)。
-func (c PlacementConf) UsesRegionStorage() bool {
-	return c.StorageShards != 0
-}
-
-// StorageIDForNewPlayer 返回建角时要传给 RegisterPlayerZone 的 storage_id。
-// 配了 StorageShards:本地域的 K 个存档库里按 player_id 取模。没配(过渡期):NewPlayerStorageId,为 0 时用 loginZone。
-func (c PlacementConf) StorageIDForNewPlayer(playerID uint64, loginZone uint32) (uint32, error) {
-	if c.UsesRegionStorage() {
-		return placement.RegionStorageIDForPlayer(c.Region, c.StorageShards, playerID)
-	}
-	if c.NewPlayerStorageId != 0 {
-		return c.NewPlayerStorageId, nil
-	}
-	if loginZone == 0 {
-		return 0, fmt.Errorf("no storage for new players: Placement.StorageShards is 0 and Node.ZoneId is 0")
-	}
-	return loginZone, nil
+// StorageIDForNewPlayer 返回建角时要传给 RegisterPlayerZone 的 storage_id:本地域的 K 个存档库里按 player_id 取模。
+// 发号打散之后 player_id 均匀,取模就是均匀分布;落点写进目录之后只认目录,不再按这条公式算。
+func (c PlacementConf) StorageIDForNewPlayer(playerID uint64) (uint32, error) {
+	return placement.RegionStorageIDForPlayer(c.Region, c.StorageShards, playerID)
 }
 
 // 没写 Addrs、Node.RedisClient 也没写对应项时,玩家域与登录域连接的口径:go-redis 对单实例的缺省值
@@ -302,7 +270,7 @@ func (c *Config) ValidateRedisDomains() error {
 // Login不另造TiDB开关：真实强SQL/已核ready由DS正式门禁负责，Login必须指向该DS而不能静默降级。
 func (c *Config) ValidateGlobalAuthority(getenv func(string) string) error {
 	if c.Node.ZoneId == 0 {
-		return fmt.Errorf("全球Login必须配置非零Node.ZoneId，NewPlayerStorageId=0才可取正规本区落点")
+		return fmt.Errorf("global login needs a non-zero Node.ZoneId: it is the home zone written for new players")
 	}
 	rpc := c.DataServiceRpc
 	target := strings.TrimSpace(rpc.Target) != ""
@@ -364,8 +332,9 @@ type HomeZoneConf struct {
 	// (5 分钟预算),可以比角色列表宽松。
 	EnterLookupTimeout time.Duration `json:"EnterLookupTimeout,optional"`
 	// RegisterTimeout 是 CreatePlayer 写 player_route 映射(RegisterPlayerZone)的预算;
-	// 0 = homezone.DefaultRegisterTimeout(3s)。这条写失败建角**整体失败**
-	// (createplayerlogic.go),所以给得比查询宽。
+	// 0 = homezone.DefaultRegisterTimeout(800ms)。这条写失败建角**整体失败**(createplayerlogic.go)。
+	// 它是建角截止分摊里这一跳的上限与下限(login/internal/logic/pkg/createbudget):拿不满它就不发;
+	// 启动时核对「本地余量 + 各跳上限 + 跳间间隙 ≤ Timeout」,调大到放不下就拒绝启动(login.go)。
 	RegisterTimeout time.Duration `json:"RegisterTimeout,optional"`
 }
 
@@ -380,9 +349,11 @@ type HomeZoneConf struct {
 //     loginqueue.defaultHandoffGrace,不是配置,依据见该常量的注释(G4b-G)。
 //     占位键的整键 TTL 只增不减(剩余不足本副本的 max(AdmitTTL, 20s) + 1min 才续),排队开着时
 //     也可以滚动调整它;调小之后,已续上的较大整键 TTL 要自然走完才收敛(见 loginqueue.admittedKeyTTL)。
+//   - 区容量不在这里配(2026-11-10 起):只有区服目录 zone_config.capacity 一个来源,经 etcd 发布给本区 login
+//     (loginqueue/capacity.go、zonepolicy 包)。此前这里的 ZoneCapacityOverride 与网关的区服目录各写一份,已删。
 //   - SoftCapMultiplier (e.g. 1.5) is the headroom factor applied to the
-//     largest observed PlayerCount when no explicit ZoneCapacityOverride is
-//     set, so freshly-deployed zones aren't capped at "current load".
+//     largest observed PlayerCount while the zone policy cannot be read,
+//     so freshly-deployed zones aren't capped at "current load".
 //   - DispatcherLockKey 是出队 leader 锁键的**前缀**,实际锁键是
 //     <DispatcherLockKey>:zone:<Node.ZoneId>(loginqueue.ZoneDispatcherLockKey),
 //     每个 zone 一个 leader。dispatcher 只看得见本 zone 的 gate,锁的范围必须与之相同。
@@ -408,10 +379,6 @@ type QueueConf struct {
 	DefaultRetryAfterMs uint32        `json:"DefaultRetryAfterMs,default=2000"`
 	DispatcherLockTTL   time.Duration `json:"DispatcherLockTTL,default=30s"`
 	DispatcherLockKey   string        `json:"DispatcherLockKey,default=dispatcher:lock:login_queue"`
-	// ZoneCapacityOverride lets ops pin the per-zone admission ceiling
-	// without trusting gate-side soft caps. Key is zone_id (string for YAML),
-	// value is the absolute number of concurrent online players permitted.
-	ZoneCapacityOverride map[string]uint32 `json:"ZoneCapacityOverride,optional"`
 }
 
 // InternalAuthConf 控制内部调用方身份声明的验签闸门(见
@@ -652,13 +619,6 @@ type KafkaConfig struct {
 	DialTimeout  time.Duration `json:"DialTimeout"`
 	ReadTimeout  time.Duration `json:"ReadTimeout"`
 	WriteTimeout time.Duration `json:"WriteTimeout"`
-}
-
-// SnowflakeConf holds snowflake ID generator settings.
-type SnowflakeConf struct {
-	Epoch    int64  `json:"Epoch"` // Epoch timestamp in milliseconds
-	NodeBits uint32 `json:"NodeBits"`
-	StepBits uint32 `json:"StepBits"`
 }
 
 // LockerConf holds distributed lock settings.

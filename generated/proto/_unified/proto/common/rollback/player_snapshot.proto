@@ -17,7 +17,7 @@ enum SnapshotTrigger
 // Stored in a dedicated table, isolated from live data.
 message PlayerSnapshotEntry
 {
-  uint64 snapshot_id = 1;          // Unique ID (SnowFlake)
+  uint64 snapshot_id = 1;          // Unique ID: issuer "snapshot" segment, scrambled by MixGuid (not monotonic; never compare by size)
   uint64 player_id = 2;
   uint64 snapshot_time = 3;        // Unix seconds when snapshot was taken
   SnapshotTrigger trigger = 4;

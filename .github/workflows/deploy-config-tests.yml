@@ -68,6 +68,9 @@ on:
       - "robot/Dockerfile"
       - "CHANGELOG.md"
       - ".github/workflows/release.yml"
+      - "cpp/libs/engine/muduo_windows/src/contrib/hiredis/**"
+      - "tools/archived/muduo_linux_overlay/contrib/hiredis/**"
+      - "third_party/muduo/contrib/hiredis/**"
   pull_request:
     branches: [main]
     paths:
@@ -134,6 +137,11 @@ on:
       # CHANGELOG 段落格式是 make_release.ps1 / release_preflight.ps1 / release.yml 的发布输入
       - "CHANGELOG.md"
       - ".github/workflows/release.yml"
+      # Hiredis 适配器三份副本(Windows 编译件、Linux overlay、业务 include 的头文件镜像)必须逐字节一致:
+      # 只改其中一份不会当场报错,由 hiredis_adapter_copies_contract.tests.ps1 守住
+      - "cpp/libs/engine/muduo_windows/src/contrib/hiredis/**"
+      - "tools/archived/muduo_linux_overlay/contrib/hiredis/**"
+      - "third_party/muduo/contrib/hiredis/**"
   workflow_dispatch:
 
 permissions:

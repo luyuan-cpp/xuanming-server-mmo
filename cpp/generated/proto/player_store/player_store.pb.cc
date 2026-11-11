@@ -55,11 +55,11 @@ constexpr SavePlayerResponse::ParseTableT_ SavePlayerResponse::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -69,28 +69,33 @@ constexpr SavePlayerResponse::ParseTableT_ SavePlayerResponse::InternalGenerateP
       ::_pbi::TcParser::GetTable<::playerstore::SavePlayerResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool audit_outbox_written = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SavePlayerResponse, _impl_.audit_outbox_written_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.audit_outbox_written_)}},
       // .playerstore.SavePlayerResult result = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavePlayerResponse, _impl_.result_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavePlayerResponse, _impl_.result_), 1>(),
+       {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.result_)}},
       // uint64 row_owner_epoch = 2;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavePlayerResponse, _impl_.row_owner_epoch_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.row_owner_epoch_)}},
       // uint64 row_save_seq = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavePlayerResponse, _impl_.row_save_seq_), 1>(),
-       {24, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavePlayerResponse, _impl_.row_save_seq_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.row_save_seq_)}},
     }}, {{
       65535, 65535
     }}, {{
       // .playerstore.SavePlayerResult result = 1;
-      {PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.result_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.result_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint64 row_owner_epoch = 2;
       {PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.row_owner_epoch_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 row_save_seq = 3;
-      {PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.row_save_seq_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.row_save_seq_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool audit_outbox_written = 4;
+      {PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.audit_outbox_written_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -104,8 +109,9 @@ inline constexpr SavePlayerResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         row_owner_epoch_{::uint64_t{0u}},
-        row_save_seq_{::uint64_t{0u}},
-        result_{static_cast< ::playerstore::SavePlayerResult >(0)} {}
+        result_{static_cast< ::playerstore::SavePlayerResult >(0)},
+        audit_outbox_written_{false},
+        row_save_seq_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr SavePlayerResponse::SavePlayerResponse(::_pbi::ConstantInitialized,
@@ -361,12 +367,12 @@ constexpr SavePlayerRequest::ParseTableT_ SavePlayerRequest::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
-      2,  // num_aux_entries
+      11,  // num_field_entries
+      4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -378,42 +384,48 @@ constexpr SavePlayerRequest::ParseTableT_ SavePlayerRequest::InternalGeneratePar
       {::_pbi::TcParser::MiniParse, {}},
       // .common.base.ServiceCallAuth auth = 1;
       {::_pbi::TcParser::FastMtS1,
-       {10, 2, 0,
+       {10, 4, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.auth_)}},
       // uint64 player_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavePlayerRequest, _impl_.player_id_), 3>(),
-       {16, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavePlayerRequest, _impl_.player_id_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.player_id_)}},
       // uint32 storage_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavePlayerRequest, _impl_.storage_id_), 5>(),
-       {24, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavePlayerRequest, _impl_.storage_id_), 7>(),
+       {24, 7, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.storage_id_)}},
       // uint64 owner_epoch = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavePlayerRequest, _impl_.owner_epoch_), 4>(),
-       {32, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavePlayerRequest, _impl_.owner_epoch_), 6>(),
+       {32, 6, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.owner_epoch_)}},
       // uint64 save_seq = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavePlayerRequest, _impl_.save_seq_), 7>(),
-       {40, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavePlayerRequest, _impl_.save_seq_), 9>(),
+       {40, 9, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.save_seq_)}},
       // uint32 schema_gen = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavePlayerRequest, _impl_.schema_gen_), 6>(),
-       {48, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavePlayerRequest, _impl_.schema_gen_), 8>(),
+       {48, 8, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.schema_gen_)}},
       // bytes instance_id = 7;
       {::_pbi::TcParser::FastBS1,
-       {58, 1, 0,
+       {58, 3, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.instance_id_)}},
       // repeated .playerstore.PlayerStoreRow rows = 8;
       {::_pbi::TcParser::FastMtR1,
        {66, 0, 1,
         PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.rows_)}},
       // bool release = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SavePlayerRequest, _impl_.release_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SavePlayerRequest, _impl_.release_), 10>(),
+       {72, 10, 0,
         PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.release_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // repeated .TransactionLogEntry transaction_logs = 10;
+      {::_pbi::TcParser::FastMtR1,
+       {82, 1, 2,
+        PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.transaction_logs_)}},
+      // repeated .PlayerSnapshotEntry audit_snapshots = 11;
+      {::_pbi::TcParser::FastMtR1,
+       {90, 2, 3,
+        PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.audit_snapshots_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -422,23 +434,27 @@ constexpr SavePlayerRequest::ParseTableT_ SavePlayerRequest::InternalGeneratePar
       65535, 65535
     }}, {{
       // .common.base.ServiceCallAuth auth = 1;
-      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.auth_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.auth_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 player_id = 2;
-      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 storage_id = 3;
-      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.storage_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.storage_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 owner_epoch = 4;
-      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.owner_epoch_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.owner_epoch_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 save_seq = 5;
-      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.save_seq_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.save_seq_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 schema_gen = 6;
-      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.schema_gen_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.schema_gen_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bytes instance_id = 7;
-      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.instance_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.instance_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // repeated .playerstore.PlayerStoreRow rows = 8;
       {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.rows_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool release = 9;
-      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.release_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.release_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // repeated .TransactionLogEntry transaction_logs = 10;
+      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.transaction_logs_), _Internal::kHasBitsOffset + 1, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .PlayerSnapshotEntry audit_snapshots = 11;
+      {PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.audit_snapshots_), _Internal::kHasBitsOffset + 2, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -450,6 +466,16 @@ constexpr SavePlayerRequest::ParseTableT_ SavePlayerRequest::InternalGeneratePar
         {::_pbi::TcParser::GetTable<::playerstore::PlayerStoreRow>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::playerstore::PlayerStoreRow_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TransactionLogEntry>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TransactionLogEntry_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PlayerSnapshotEntry>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PlayerSnapshotEntry_globals_},
         #endif
     }},
     {{
@@ -465,6 +491,16 @@ inline constexpr SavePlayerRequest::Impl_::Impl_(
         rows_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::playerstore::SavePlayerRequest,
             PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.rows_)>()
+         }
+        ,
+        transaction_logs_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::playerstore::SavePlayerRequest,
+            PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.transaction_logs_)>()
+         }
+        ,
+        audit_snapshots_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::playerstore::SavePlayerRequest,
+            PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.audit_snapshots_)>()
          }
         ,
         instance_id_(
@@ -940,7 +976,7 @@ const ::_pbi::ClassData* LoadAndClaimRequest_get_class_data() {
 #endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace playerstore
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto[3];
+    file_level_enum_descriptors_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto[4];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto = nullptr;
 const ::uint32_t
@@ -955,7 +991,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_._has_bits_),
-        12, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.auth_),
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.storage_id_),
@@ -965,24 +1001,30 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.instance_id_),
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.rows_),
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.release_),
-        2,
-        3,
-        5,
+        PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.transaction_logs_),
+        PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.audit_snapshots_),
         4,
+        5,
         7,
         6,
-        1,
-        0,
+        9,
         8,
+        3,
+        0,
+        10,
+        1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerResponse, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerResponse, _impl_.result_),
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerResponse, _impl_.row_owner_epoch_),
         PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerResponse, _impl_.row_save_seq_),
-        2,
-        0,
+        PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerResponse, _impl_.audit_outbox_written_),
         1,
+        0,
+        3,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::playerstore::LoadAndClaimRequest, _impl_._has_bits_),
         8, // hasbit index offset
@@ -1017,9 +1059,9 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::playerstore::PlayerStoreRow)},
         {7, sizeof(::playerstore::SavePlayerRequest)},
-        {28, sizeof(::playerstore::SavePlayerResponse)},
-        {37, sizeof(::playerstore::LoadAndClaimRequest)},
-        {50, sizeof(::playerstore::LoadAndClaimResponse)},
+        {32, sizeof(::playerstore::SavePlayerResponse)},
+        {43, sizeof(::playerstore::LoadAndClaimRequest)},
+        {56, sizeof(::playerstore::LoadAndClaimResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1033,73 +1075,84 @@ const char descriptor_table_protodef_proto_2fplayer_5fstore_2fplayer_5fstore_2ep
     protodesc_cold) = {
     "\n%proto/player_store/player_store.proto\022"
     "\013playerstore\032)proto/common/base/service_"
-    "call_auth.proto\032\033proto/db/proto_option.p"
-    "roto\"M\n\016PlayerStoreRow\022*\n\004kind\030\001 \001(\0162\034.p"
-    "layerstore.PlayerStoreKind\022\017\n\007payload\030\002 "
-    "\001(\014\"\362\001\n\021SavePlayerRequest\022*\n\004auth\030\001 \001(\0132"
-    "\034.common.base.ServiceCallAuth\022\021\n\tplayer_"
-    "id\030\002 \001(\004\022\022\n\nstorage_id\030\003 \001(\r\022\023\n\013owner_ep"
-    "och\030\004 \001(\004\022\020\n\010save_seq\030\005 \001(\004\022\022\n\nschema_ge"
-    "n\030\006 \001(\r\022\023\n\013instance_id\030\007 \001(\014\022)\n\004rows\030\010 \003"
-    "(\0132\033.playerstore.PlayerStoreRow\022\017\n\007relea"
-    "se\030\t \001(\010\"r\n\022SavePlayerResponse\022-\n\006result"
-    "\030\001 \001(\0162\035.playerstore.SavePlayerResult\022\027\n"
-    "\017row_owner_epoch\030\002 \001(\004\022\024\n\014row_save_seq\030\003"
-    " \001(\004\"\231\001\n\023LoadAndClaimRequest\022*\n\004auth\030\001 \001"
-    "(\0132\034.common.base.ServiceCallAuth\022\021\n\tplay"
-    "er_id\030\002 \001(\004\022\023\n\013owner_epoch\030\003 \001(\004\022\023\n\013inst"
-    "ance_id\030\004 \001(\014\022\031\n\021binary_schema_gen\030\005 \001(\r"
-    "\"\301\001\n\024LoadAndClaimResponse\022/\n\006result\030\001 \001("
-    "\0162\037.playerstore.LoadAndClaimResult\022\022\n\nst"
-    "orage_id\030\002 \001(\r\022\023\n\013owner_epoch\030\003 \001(\004\022\020\n\010s"
-    "ave_seq\030\004 \001(\004\022\022\n\nschema_gen\030\005 \001(\r\022)\n\004row"
-    "s\030\006 \003(\0132\033.playerstore.PlayerStoreRow*\354\002\n"
-    "\017PlayerStoreKind\022\033\n\027PLAYER_STORE_KIND_OW"
-    "NER\020\000\022#\n\030PLAYER_STORE_KIND_GROWTH\020\003\032\005\200\346\325"
-    "\002\001\022$\n\031PLAYER_STORE_KIND_PROFILE\020\004\032\005\200\346\325\002\001"
-    "\022&\n\033PLAYER_STORE_KIND_CHARACTER\020\006\032\005\200\346\325\002\001"
-    "\022#\n\030PLAYER_STORE_KIND_WALLET\020\007\032\005\200\346\325\002\001\022 \n"
-    "\025PLAYER_STORE_KIND_BAG\020\010\032\005\200\346\325\002\001\022%\n\032PLAYE"
-    "R_STORE_KIND_LOCATION\020\t\032\005\200\346\325\002\002\"\004\010\001\020\001\"\004\010\002"
-    "\020\002\"\004\010\005\020\005*\025PLAYER_STORE_KIND_HOT*\027PLAYER_"
-    "STORE_KIND_ASSET*\031PLAYER_STORE_KIND_LEGA"
-    "CY1*\347\002\n\020SavePlayerResult\022\"\n\036SAVE_PLAYER_"
-    "RESULT_UNSPECIFIED\020\000\022\031\n\025SAVE_PLAYER_COMM"
-    "ITTED\020\001\022\025\n\021SAVE_PLAYER_EQUAL\020\002\022\030\n\024SAVE_P"
-    "LAYER_NO_OWNER\020\003\022\027\n\023SAVE_PLAYER_INVALID\020"
-    "\004\022\033\n\027SAVE_PLAYER_STALE_OWNER\020\005\022\032\n\026SAVE_P"
-    "LAYER_NOT_HOLDER\020\006\022\031\n\025SAVE_PLAYER_UNCLAI"
-    "MED\020\007\022\031\n\025SAVE_PLAYER_OLDER_SEQ\020\010\022 \n\034SAVE"
-    "_PLAYER_SCHEMA_REGRESSED\020\t\022\036\n\032SAVE_PLAYE"
-    "R_SCHEMA_TOO_NEW\020\n\022\031\n\025SAVE_PLAYER_TOO_LA"
-    "RGE\020\013*\362\001\n\022LoadAndClaimResult\022%\n!LOAD_AND"
-    "_CLAIM_RESULT_UNSPECIFIED\020\000\022\032\n\026LOAD_AND_"
-    "CLAIM_CLAIMED\020\001\022\033\n\027LOAD_AND_CLAIM_NO_OWN"
-    "ER\020\002\022\032\n\026LOAD_AND_CLAIM_INVALID\020\003\022\036\n\032LOAD"
-    "_AND_CLAIM_STALE_OWNER\020\004\022\035\n\031LOAD_AND_CLA"
-    "IM_NOT_HOLDER\020\005\022!\n\035LOAD_AND_CLAIM_SCHEMA"
-    "_TOO_NEW\020\0062\265\001\n\013PlayerStore\022U\n\014LoadAndCla"
-    "im\022 .playerstore.LoadAndClaimRequest\032!.p"
-    "layerstore.LoadAndClaimResponse\"\000\022O\n\nSav"
-    "ePlayer\022\036.playerstore.SavePlayerRequest\032"
-    "\037.playerstore.SavePlayerResponse\"\000B\036Z\031pl"
-    "ayer_store/player_store\200\001\000b\006proto3"
+    "call_auth.proto\032+proto/common/rollback/p"
+    "layer_snapshot.proto\032+proto/common/rollb"
+    "ack/transaction_log.proto\032\033proto/db/prot"
+    "o_option.proto\"M\n\016PlayerStoreRow\022*\n\004kind"
+    "\030\001 \001(\0162\034.playerstore.PlayerStoreKind\022\017\n\007"
+    "payload\030\002 \001(\014\"\321\002\n\021SavePlayerRequest\022*\n\004a"
+    "uth\030\001 \001(\0132\034.common.base.ServiceCallAuth\022"
+    "\021\n\tplayer_id\030\002 \001(\004\022\022\n\nstorage_id\030\003 \001(\r\022\023"
+    "\n\013owner_epoch\030\004 \001(\004\022\020\n\010save_seq\030\005 \001(\004\022\022\n"
+    "\nschema_gen\030\006 \001(\r\022\023\n\013instance_id\030\007 \001(\014\022)"
+    "\n\004rows\030\010 \003(\0132\033.playerstore.PlayerStoreRo"
+    "w\022\017\n\007release\030\t \001(\010\022.\n\020transaction_logs\030\n"
+    " \003(\0132\024.TransactionLogEntry\022-\n\017audit_snap"
+    "shots\030\013 \003(\0132\024.PlayerSnapshotEntry\"\220\001\n\022Sa"
+    "vePlayerResponse\022-\n\006result\030\001 \001(\0162\035.playe"
+    "rstore.SavePlayerResult\022\027\n\017row_owner_epo"
+    "ch\030\002 \001(\004\022\024\n\014row_save_seq\030\003 \001(\004\022\034\n\024audit_"
+    "outbox_written\030\004 \001(\010\"\231\001\n\023LoadAndClaimReq"
+    "uest\022*\n\004auth\030\001 \001(\0132\034.common.base.Service"
+    "CallAuth\022\021\n\tplayer_id\030\002 \001(\004\022\023\n\013owner_epo"
+    "ch\030\003 \001(\004\022\023\n\013instance_id\030\004 \001(\014\022\031\n\021binary_"
+    "schema_gen\030\005 \001(\r\"\301\001\n\024LoadAndClaimRespons"
+    "e\022/\n\006result\030\001 \001(\0162\037.playerstore.LoadAndC"
+    "laimResult\022\022\n\nstorage_id\030\002 \001(\r\022\023\n\013owner_"
+    "epoch\030\003 \001(\004\022\020\n\010save_seq\030\004 \001(\004\022\022\n\nschema_"
+    "gen\030\005 \001(\r\022)\n\004rows\030\006 \003(\0132\033.playerstore.Pl"
+    "ayerStoreRow*\354\002\n\017PlayerStoreKind\022\033\n\027PLAY"
+    "ER_STORE_KIND_OWNER\020\000\022#\n\030PLAYER_STORE_KI"
+    "ND_GROWTH\020\003\032\005\200\346\325\002\001\022$\n\031PLAYER_STORE_KIND_"
+    "PROFILE\020\004\032\005\200\346\325\002\001\022&\n\033PLAYER_STORE_KIND_CH"
+    "ARACTER\020\006\032\005\200\346\325\002\001\022#\n\030PLAYER_STORE_KIND_WA"
+    "LLET\020\007\032\005\200\346\325\002\001\022 \n\025PLAYER_STORE_KIND_BAG\020\010"
+    "\032\005\200\346\325\002\001\022%\n\032PLAYER_STORE_KIND_LOCATION\020\t\032"
+    "\005\200\346\325\002\002\"\004\010\001\020\001\"\004\010\002\020\002\"\004\010\005\020\005*\025PLAYER_STORE_K"
+    "IND_HOT*\027PLAYER_STORE_KIND_ASSET*\031PLAYER"
+    "_STORE_KIND_LEGACY1*\347\002\n\020SavePlayerResult"
+    "\022\"\n\036SAVE_PLAYER_RESULT_UNSPECIFIED\020\000\022\031\n\025"
+    "SAVE_PLAYER_COMMITTED\020\001\022\025\n\021SAVE_PLAYER_E"
+    "QUAL\020\002\022\030\n\024SAVE_PLAYER_NO_OWNER\020\003\022\027\n\023SAVE"
+    "_PLAYER_INVALID\020\004\022\033\n\027SAVE_PLAYER_STALE_O"
+    "WNER\020\005\022\032\n\026SAVE_PLAYER_NOT_HOLDER\020\006\022\031\n\025SA"
+    "VE_PLAYER_UNCLAIMED\020\007\022\031\n\025SAVE_PLAYER_OLD"
+    "ER_SEQ\020\010\022 \n\034SAVE_PLAYER_SCHEMA_REGRESSED"
+    "\020\t\022\036\n\032SAVE_PLAYER_SCHEMA_TOO_NEW\020\n\022\031\n\025SA"
+    "VE_PLAYER_TOO_LARGE\020\013*\202\001\n\017PlayerAuditKin"
+    "d\022!\n\035PLAYER_AUDIT_KIND_UNSPECIFIED\020\000\022%\n!"
+    "PLAYER_AUDIT_KIND_TRANSACTION_LOG\020\001\022%\n!P"
+    "LAYER_AUDIT_KIND_PLAYER_SNAPSHOT\020\002*\362\001\n\022L"
+    "oadAndClaimResult\022%\n!LOAD_AND_CLAIM_RESU"
+    "LT_UNSPECIFIED\020\000\022\032\n\026LOAD_AND_CLAIM_CLAIM"
+    "ED\020\001\022\033\n\027LOAD_AND_CLAIM_NO_OWNER\020\002\022\032\n\026LOA"
+    "D_AND_CLAIM_INVALID\020\003\022\036\n\032LOAD_AND_CLAIM_"
+    "STALE_OWNER\020\004\022\035\n\031LOAD_AND_CLAIM_NOT_HOLD"
+    "ER\020\005\022!\n\035LOAD_AND_CLAIM_SCHEMA_TOO_NEW\020\0062"
+    "\265\001\n\013PlayerStore\022U\n\014LoadAndClaim\022 .player"
+    "store.LoadAndClaimRequest\032!.playerstore."
+    "LoadAndClaimResponse\"\000\022O\n\nSavePlayer\022\036.p"
+    "layerstore.SavePlayerRequest\032\037.playersto"
+    "re.SavePlayerResponse\"\000B\036Z\031player_store/"
+    "player_store\200\001\000b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_deps[2] = {
+    descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_deps[4] = {
         &::descriptor_table_proto_2fcommon_2fbase_2fservice_5fcall_5fauth_2eproto,
+        &::descriptor_table_proto_2fcommon_2frollback_2fplayer_5fsnapshot_2eproto,
+        &::descriptor_table_proto_2fcommon_2frollback_2ftransaction_5flog_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
 };
 static ::absl::once_flag descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto = {
     false,
     false,
-    2114,
+    2463,
     descriptor_table_protodef_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto,
     "proto/player_store/player_store.proto",
     &descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_once,
     descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_deps,
-    2,
+    4,
     5,
     schemas,
     file_message_globals,
@@ -1123,9 +1176,16 @@ SavePlayerResult_descriptor() {
 PROTOBUF_CONSTINIT const uint32_t SavePlayerResult_internal_data_[] = {
     786432u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
-LoadAndClaimResult_descriptor() {
+PlayerAuditKind_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto);
   return file_level_enum_descriptors_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto[2];
+}
+PROTOBUF_CONSTINIT const uint32_t PlayerAuditKind_internal_data_[] = {
+    196608u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+LoadAndClaimResult_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto);
+  return file_level_enum_descriptors_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto[3];
 }
 PROTOBUF_CONSTINIT const uint32_t LoadAndClaimResult_internal_data_[] = {
     458752u, 0u, };
@@ -1374,6 +1434,16 @@ void PlayerStoreRow::InternalSwap(PlayerStoreRow* PROTOBUF_RESTRICT PROTOBUF_NON
 void SavePlayerRequest::clear_auth() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+void SavePlayerRequest::clear_transaction_logs() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.transaction_logs_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+void SavePlayerRequest::clear_audit_snapshots() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.audit_snapshots_.Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 SavePlayerRequest::SavePlayerRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -1398,6 +1468,20 @@ PROTOBUF_NDEBUG_INLINE SavePlayerRequest::Impl_::Impl_(
           , from.rows_
         }
         ,
+        transaction_logs_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::playerstore::SavePlayerRequest,
+              PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.transaction_logs_)>()
+          , from.transaction_logs_
+        }
+        ,
+        audit_snapshots_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::playerstore::SavePlayerRequest,
+              PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.audit_snapshots_)>()
+          , from.audit_snapshots_
+        }
+        ,
         instance_id_(arena, from.instance_id_) {}
 
 SavePlayerRequest::SavePlayerRequest(
@@ -1415,7 +1499,7 @@ SavePlayerRequest::SavePlayerRequest(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
@@ -1435,6 +1519,16 @@ PROTOBUF_NDEBUG_INLINE SavePlayerRequest::Impl_::Impl_(
         rows_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::playerstore::SavePlayerRequest,
             PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.rows_)>()
+         }
+        ,
+        transaction_logs_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::playerstore::SavePlayerRequest,
+            PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.transaction_logs_)>()
+         }
+        ,
+        audit_snapshots_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::playerstore::SavePlayerRequest,
+            PROTOBUF_FIELD_OFFSET(::playerstore::SavePlayerRequest, _impl_.audit_snapshots_)>()
          }
         ,
         instance_id_(arena) {}
@@ -1498,24 +1592,34 @@ PROTOBUF_NOINLINE void SavePlayerRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.rows_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      _impl_.instance_id_.ClearNonDefaultToEmpty();
+      _impl_.transaction_logs_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.audit_snapshots_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.instance_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(_impl_.auth_ != nullptr);
       _impl_.auth_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.save_seq_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.save_seq_));
+        reinterpret_cast<char*>(&_impl_.storage_id_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.storage_id_));
   }
-  _impl_.release_ = false;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.schema_gen_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.release_) -
+        reinterpret_cast<char*>(&_impl_.schema_gen_)) + sizeof(_impl_.release_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1540,14 +1644,14 @@ PROTOBUF_NOINLINE void SavePlayerRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .common.base.ServiceCallAuth auth = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         1, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
         stream);
   }
 
   // uint64 player_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1556,7 +1660,7 @@ PROTOBUF_NOINLINE void SavePlayerRequest::Clear() {
   }
 
   // uint32 storage_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_storage_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1565,7 +1669,7 @@ PROTOBUF_NOINLINE void SavePlayerRequest::Clear() {
   }
 
   // uint64 owner_epoch = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_owner_epoch() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1574,7 +1678,7 @@ PROTOBUF_NOINLINE void SavePlayerRequest::Clear() {
   }
 
   // uint64 save_seq = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_save_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1583,7 +1687,7 @@ PROTOBUF_NOINLINE void SavePlayerRequest::Clear() {
   }
 
   // uint32 schema_gen = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_schema_gen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1592,7 +1696,7 @@ PROTOBUF_NOINLINE void SavePlayerRequest::Clear() {
   }
 
   // bytes instance_id = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (!this_._internal_instance_id().empty()) {
       const ::std::string& _s = this_._internal_instance_id();
       target = stream->WriteBytesMaybeAliased(7, _s, target);
@@ -1613,11 +1717,37 @@ PROTOBUF_NOINLINE void SavePlayerRequest::Clear() {
   }
 
   // bool release = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_release() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           9, this_._internal_release(), target);
+    }
+  }
+
+  // repeated .TransactionLogEntry transaction_logs = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_transaction_logs_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_transaction_logs().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              10, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // repeated .PlayerSnapshotEntry audit_snapshots = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_audit_snapshots_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_audit_snapshots().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              11, repfield, repfield.GetCachedSize(),
+              target, stream);
     }
   }
 
@@ -1654,57 +1784,71 @@ PROTOBUF_NOINLINE void SavePlayerRequest::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // bytes instance_id = 7;
+    // repeated .TransactionLogEntry transaction_logs = 10;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_transaction_logs_size();
+      for (const auto& msg : this_._internal_transaction_logs()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .PlayerSnapshotEntry audit_snapshots = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1UL * this_._internal_audit_snapshots_size();
+      for (const auto& msg : this_._internal_audit_snapshots()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // bytes instance_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!this_._internal_instance_id().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
                                         this_._internal_instance_id());
       }
     }
     // .common.base.ServiceCallAuth auth = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
     }
     // uint64 player_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint64 owner_epoch = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_owner_epoch() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_owner_epoch());
       }
     }
     // uint32 storage_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_storage_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_storage_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint32 schema_gen = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_schema_gen() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_schema_gen());
       }
     }
     // uint64 save_seq = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_save_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_save_seq());
       }
     }
-  }
-   {
     // bool release = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_release() != 0) {
         total_size += 2;
       }
@@ -1735,6 +1879,16 @@ void SavePlayerRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
           from._internal_rows());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_transaction_logs()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_transaction_logs());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _this->_internal_mutable_audit_snapshots()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_audit_snapshots());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!from._internal_instance_id().empty()) {
         _this->_internal_set_instance_id(from._internal_instance_id());
       } else {
@@ -1743,7 +1897,7 @@ void SavePlayerRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(from._impl_.auth_ != nullptr);
       if (_this->_impl_.auth_ == nullptr) {
         _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
@@ -1751,35 +1905,37 @@ void SavePlayerRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_owner_epoch() != 0) {
         _this->_impl_.owner_epoch_ = from._impl_.owner_epoch_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_storage_id() != 0) {
         _this->_impl_.storage_id_ = from._impl_.storage_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_schema_gen() != 0) {
         _this->_impl_.schema_gen_ = from._impl_.schema_gen_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_save_seq() != 0) {
         _this->_impl_.save_seq_ = from._impl_.save_seq_;
       }
     }
-  }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_release() != 0) {
-      _this->_impl_.release_ = from._impl_.release_;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_release() != 0) {
+        _this->_impl_.release_ = from._impl_.release_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1802,6 +1958,8 @@ void SavePlayerRequest::InternalSwap(SavePlayerRequest* PROTOBUF_RESTRICT PROTOB
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.rows_.InternalSwap(&other->_impl_.rows_);
+  _impl_.transaction_logs_.InternalSwap(&other->_impl_.transaction_logs_);
+  _impl_.audit_snapshots_.InternalSwap(&other->_impl_.audit_snapshots_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.instance_id_, &other->_impl_.instance_id_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(SavePlayerRequest, _impl_.release_)
@@ -1846,9 +2004,9 @@ inline void SavePlayerResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, row_owner_epoch_),
            0,
-           offsetof(Impl_, result_) -
+           offsetof(Impl_, row_save_seq_) -
                offsetof(Impl_, row_owner_epoch_) +
-               sizeof(Impl_::result_));
+               sizeof(Impl_::row_save_seq_));
 }
 SavePlayerResponse::~SavePlayerResponse() {
   // @@protoc_insertion_point(destructor:playerstore.SavePlayerResponse)
@@ -1898,10 +2056,10 @@ PROTOBUF_NOINLINE void SavePlayerResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     ::memset(&_impl_.row_owner_epoch_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.result_) -
-        reinterpret_cast<char*>(&_impl_.row_owner_epoch_)) + sizeof(_impl_.result_));
+        reinterpret_cast<char*>(&_impl_.row_save_seq_) -
+        reinterpret_cast<char*>(&_impl_.row_owner_epoch_)) + sizeof(_impl_.row_save_seq_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1927,7 +2085,7 @@ PROTOBUF_NOINLINE void SavePlayerResponse::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .playerstore.SavePlayerResult result = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_result() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -1945,11 +2103,20 @@ PROTOBUF_NOINLINE void SavePlayerResponse::Clear() {
   }
 
   // uint64 row_save_seq = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_row_save_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           3, this_._internal_row_save_seq(), target);
+    }
+  }
+
+  // bool audit_outbox_written = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_audit_outbox_written() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_audit_outbox_written(), target);
     }
   }
 
@@ -1978,7 +2145,7 @@ PROTOBUF_NOINLINE void SavePlayerResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // uint64 row_owner_epoch = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_row_owner_epoch() != 0) {
@@ -1986,18 +2153,24 @@ PROTOBUF_NOINLINE void SavePlayerResponse::Clear() {
             this_._internal_row_owner_epoch());
       }
     }
-    // uint64 row_save_seq = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_row_save_seq() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_row_save_seq());
-      }
-    }
     // .playerstore.SavePlayerResult result = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_result() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_result());
+      }
+    }
+    // bool audit_outbox_written = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_audit_outbox_written() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 row_save_seq = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_row_save_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_row_save_seq());
       }
     }
   }
@@ -2018,20 +2191,25 @@ void SavePlayerResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_row_owner_epoch() != 0) {
         _this->_impl_.row_owner_epoch_ = from._impl_.row_owner_epoch_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_row_save_seq() != 0) {
-        _this->_impl_.row_save_seq_ = from._impl_.row_save_seq_;
+      if (from._internal_result() != 0) {
+        _this->_impl_.result_ = from._impl_.result_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_result() != 0) {
-        _this->_impl_.result_ = from._impl_.result_;
+      if (from._internal_audit_outbox_written() != 0) {
+        _this->_impl_.audit_outbox_written_ = from._impl_.audit_outbox_written_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_row_save_seq() != 0) {
+        _this->_impl_.row_save_seq_ = from._impl_.row_save_seq_;
       }
     }
   }
@@ -2053,8 +2231,8 @@ void SavePlayerResponse::InternalSwap(SavePlayerResponse* PROTOBUF_RESTRICT PROT
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.result_)
-      + sizeof(SavePlayerResponse::_impl_.result_)
+      PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.row_save_seq_)
+      + sizeof(SavePlayerResponse::_impl_.row_save_seq_)
       - PROTOBUF_FIELD_OFFSET(SavePlayerResponse, _impl_.row_owner_epoch_)>(
           reinterpret_cast<char*>(&_impl_.row_owner_epoch_),
           reinterpret_cast<char*>(&other->_impl_.row_owner_epoch_));

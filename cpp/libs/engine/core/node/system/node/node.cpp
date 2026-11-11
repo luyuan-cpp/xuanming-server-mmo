@@ -29,6 +29,7 @@
 #include "error_reporter/error_reporter.h"
 #include "network/node_utils.h"
 #include "network/grpc_client_runtime.h"
+#include "network/grpc_trace_hooks.h"
 #include "node/system/node/thread_observability.h"
 #include "network/traffic_statistics.h"
 #include "network/rpc_channel_stats.h"
@@ -41,6 +42,7 @@
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "node/system/node/client_endpoint.h"
 #include "node/system/node/open_file_limit.h"
+#include "node/system/node/node_planned_drain.h"
 #include "node/system/node/release_track.h"
 #include "engine/config/node_log_level.h"
 #include "thread_context/node_context_manager.h"
@@ -949,6 +951,7 @@ Node::Node(muduo::net::EventLoop *loop, const std::string &logFilePath)
 Node::Node(muduo::net::EventLoop *loop,
 		   uint32_t nodeType,
 		   CanConnectNodeTypeList connectTo,
+		   DiscoveryNodeTypeList discover,
 		   ::google::protobuf::Service *rpcService)
 	: Node(loop, "logs/cpp_nodes/" + NodeUtils::NodeTypeToShortName(nodeType))
 {
@@ -958,6 +961,18 @@ Node::Node(muduo::net::EventLoop *loop,
 	}
 	MutableNodeInfo().set_node_type(nodeType);
 	targetNodeTypeWhitelist = std::move(connectTo);
+	discoveryNodeTypes_ = std::move(discover);
+	// 连得上的前提是发现得到(docs/design/connection-fanout-subsetting-20261106.md §3.4)。在 Initialize 之前查:
+	// 那里的 InitEtcdService 就按发现集合 Range。
+	for (const uint32_t connectType : targetNodeTypeWhitelist)
+	{
+		if (!discoveryNodeTypes_.contains(connectType))
+		{
+			LOG_FATAL << eNodeType_Name(static_cast<eNodeType>(nodeType)) << " connects to "
+					  << eNodeType_Name(static_cast<eNodeType>(connectType))
+					  << " but does not discover it; add it to the discovery set in main.cpp";
+		}
+	}
 	Initialize();
 	node::observability::RegisterThreadObservability(eventLoop, "logs/" + NodeUtils::NodeTypeToShortName(nodeType));
 	RegisterTrafficStatsReporter(eventLoop);
@@ -1126,6 +1141,10 @@ void Node::InitRpcServer()
 	}
 	localNodeInfo.set_release_track(std::string(release_track::Name(*releaseTrack)));
 	LOG_INFO << "Node release track: " << localNodeInfo.release_track();
+	// 部署构建标识(docs/design/scene-node-planned-drain.md §4.6):与 Pod 标签 mmorpg.io/build 同值,只作选点偏好,
+	// 同样要在首次发布 NodeInfo 之前定下。不设(本机开发)留空;不校验取值,选点只比相等。
+	localNodeInfo.set_build(planned_drain::BuildLabelFromEnv());
+	LOG_INFO << "Node build label: " << (localNodeInfo.build().empty() ? std::string("(not set)") : localNodeInfo.build());
 
 	localNodeInfo.set_node_uuid(boost::uuids::to_string(uuidGenerator()));
 
@@ -1352,7 +1371,9 @@ void Node::StartGrpcServer()
 		LOG_FATAL << "gRPC server bind address must be a canonical IPv4 literal: " << serverAddress;
 	}
 
-	const muduo_grpc::ServerOptions serverOptions{};
+	muduo_grpc::ServerOptions serverOptions;
+	// 入站接续调用方带来的 trace,不合法就开新根(docs/design/distributed-tracing.md §5.3)。
+	serverOptions.dispatchInterceptor = grpc_tracing::DispatchUnderIncomingTrace;
 	auto server = muduo_grpc::Server::Create(eventLoop, grpcEp.ip(), static_cast<uint16_t>(grpcEp.port()),
 											 serverOptions);
 	if (!server)
@@ -1429,7 +1450,7 @@ void Node::OnGrpcServerDrained()
 		stats.lateFinish != 0 || stats.dropped != 0 || stats.droppedOffLoop != 0)
 	{
 		shutdownFailure_.store(true, std::memory_order_release);
-		LOG_ERROR << "gRPC 生命周期 HOLD：已接收业务存在超时、丢弃或未知完成；连接清空不是成功闭合";
+		LOG_ERROR << "gRPC lifecycle HOLD: accepted work had timeouts, drops or unknown completions; drained connections are not a successful closure";
 	}
 	LOG_INFO << "gRPC server drained. drain_ms=" << drainMs << " "
 			 << muduo_grpc::FormatServerStats(stats);
@@ -1525,6 +1546,9 @@ void Node::StartRpcServer()
 		LOG_TRACE << "RPC server already started, skipping.";
 		return;
 	}
+
+	// node_id 已由分配键 CAS 定下:自身类型不在发现集合里时从这里开始只看自己那一条发现键(注册自检与劫持检测都靠它)。
+	serviceDiscoveryManager.WatchOwnRegistrationKey();
 
 	const NodeInfo &localNodeInfo = GetNodeInfo();
 
@@ -1662,24 +1686,24 @@ void Node::InitMaintenanceControl()
 {
     const char* directory = GetNonEmptyEnv("MMORPG_MAINTENANCE_CONTROL_DIR");
     const char* prepare=GetNonEmptyEnv("MMORPG_MAINTENANCE_PREPARE_ONLY");
-    if(prepare&&std::string(prepare)!="1")FatalStartupConfig("maintenance","prepare-only只能显式为1");
-    if (!directory) {if(prepare)FatalStartupConfig("maintenance","prepare-only缺私有控制目录");return;}
+    if(prepare&&std::string(prepare)!="1")FatalStartupConfig("maintenance","prepare-only must be explicitly set to 1");
+    if (!directory) {if(prepare)FatalStartupConfig("maintenance","prepare-only is missing the private control directory");return;}
     const char* helper = GetNonEmptyEnv("MMORPG_SQL_PRIVATE_FILE_HELPER");
     const char* helperHash = GetNonEmptyEnv("MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256");
     if (!helper || !helperHash || !PathFromUtf8(directory).is_absolute() ||
         !PathFromUtf8(helper).is_absolute() || !std::regex_match(helperHash, std::regex("[0-9a-fA-F]{64}")) ||
         !RpcChannel::ProcessMaintenance()->EnableAcknowledgedSends()) {
-        FatalStartupConfig("maintenance", "维护控制目录/固定文件助手配置无效，或首次发布已经发生");
+        FatalStartupConfig("maintenance", "maintenance control directory/fixed file helper config is invalid, or the first publish has already happened");
     }
     auto control = std::make_unique<NodeMaintenanceControl>();
     control->directory = directory; control->helper = helper;
     control->prepareBoot=prepare!=nullptr;maintenancePrepareBoot_=control->prepareBoot;
-    if(!kafkaManager.PrepareOnlyBeforeSubscribe(maintenancePrepareBoot_)||(maintenancePrepareBoot_&&!RpcChannel::ProcessMaintenance()->PrepareSources()))FatalStartupConfig("maintenance","prepare-only必须早于首次接收");
+    if(!kafkaManager.PrepareOnlyBeforeSubscribe(maintenancePrepareBoot_)||(maintenancePrepareBoot_&&!RpcChannel::ProcessMaintenance()->PrepareSources()))FatalStartupConfig("maintenance","prepare-only must take effect before the first receive");
     control->helperHash = boost::to_lower_copy(std::string(helperHash));
     try {
         const auto uuid = boost::uuids::string_generator()(GetNodeInfo().node_uuid());
         control->instance.assign(reinterpret_cast<const char*>(uuid.data()), uuid.size());
-    } catch (...) { FatalStartupConfig("maintenance", "实际节点 boot UUID 无效"); }
+    } catch (...) { FatalStartupConfig("maintenance", "actual node boot UUID is invalid"); }
     maintenanceControl_ = std::move(control);
     maintenanceControlTimer_.RunEvery(0.1, [this] { PollMaintenanceControl(); });
 }
@@ -1693,7 +1717,7 @@ void Node::CloseMaintenanceSource()
     if(!maintenanceInboundRelay_) RpcChannel::ProcessMaintenance()->CloseSources();
     if (!maintenanceSourceClose_ || !shutdownDrainCompleteFn_ || !maintenanceRelayStop_) {
         control.held = true; shutdownFailure_.store(true, std::memory_order_release);
-        LOG_ERROR << "维护 HOLD：实际节点未装配 source/relay 生命周期钩子";
+        LOG_ERROR << "Maintenance HOLD: actual node has no source/relay lifecycle hooks installed";
     } else if (!sourceBusinessClosed_) {
         sourceBusinessClosed_ = true; maintenanceSourceClose_(*this);
     }
@@ -1707,7 +1731,7 @@ void Node::PollMaintenanceControl()
     if (!maintenanceControl_ || shutdownStarted.load(std::memory_order_acquire)) return;
     auto& control = *maintenanceControl_;
     const auto hold = [&] {
-        if (!control.held) LOG_ERROR << "维护 HOLD：私有原件、实际 owner 结果或生命周期门禁未满足";
+        if (!control.held) LOG_ERROR << "Maintenance HOLD: private original, actual owner result or lifecycle gate not satisfied";
         control.held = true; shutdownFailure_.store(true, std::memory_order_release);
         CloseMaintenanceSource();
     };
@@ -1855,6 +1879,104 @@ void Node::ReleaseLocalOwnersInLoop()
         rpcServer.reset(); tlsNodeContextManager.Clear();
         eventLoop.queueInLoop([this] { eventLoop.queueInLoop([this] { rpcNativeJoined_ = true; }); });
     });
+}
+
+Node &Node::SetPlannedDrain(PlannedDrainBeginFn begin, PlannedDrainCompleteFn isComplete, std::chrono::seconds defaultBudget)
+{
+	const auto budget = planned_drain::BudgetFromEnv();
+	switch (budget.kind)
+	{
+	case planned_drain::BudgetKind::kInvalid:
+		FatalStartupConfig("planned drain", std::string(planned_drain::kBudgetEnvVar) +
+												" must be 0 (disabled) or a whole number of seconds up to " +
+												std::to_string(planned_drain::kMaxBudget.count()));
+	case planned_drain::BudgetKind::kDisabled:
+		plannedDrainBudget_ = std::chrono::seconds{0};
+		break;
+	case planned_drain::BudgetKind::kSeconds:
+		plannedDrainBudget_ = budget.seconds;
+		break;
+	default:
+		plannedDrainBudget_ = defaultBudget;
+		break;
+	}
+	plannedDrainBeginFn_ = std::move(begin);
+	plannedDrainCompleteFn_ = std::move(isComplete);
+	LOG_INFO << "Planned drain configured: budget_s=" << plannedDrainBudget_.count()
+			 << (plannedDrainBudget_.count() == 0 ? " (disabled; SIGTERM shuts down directly)" : "");
+	return *this;
+}
+
+void Node::RequestPlannedStop()
+{
+	if (shutdownStarted.load(std::memory_order_acquire))
+	{
+		return;
+	}
+	if (eventLoop.isInLoopThread())
+	{
+		BeginPlannedDrainInLoop();
+		return;
+	}
+	eventLoop.queueInLoop([this]
+						   { BeginPlannedDrainInLoop(); });
+}
+
+void Node::BeginPlannedDrainInLoop()
+{
+	eventLoop.assertInLoopThread();
+	if (shutdownStarted.load(std::memory_order_acquire) || plannedDrainStarted_)
+	{
+		return;
+	}
+	// 退回普通停机的三种情形:没登记(这类节点的 SIGTERM 本来就是直接停机)、预算为 0(部署关掉了计划排空)、
+	// 维护流程已关源(节点的生命周期归维护流程的 P1 / P3,不另起一套交接)。
+	const bool registered = plannedDrainBeginFn_ && plannedDrainCompleteFn_;
+	const bool maintenanceOwnsLifecycle = maintenanceControl_ && maintenanceControl_->sourceClosed;
+	if (!registered || plannedDrainBudget_.count() == 0 || maintenanceOwnsLifecycle)
+	{
+		ShutdownInLoop();
+		return;
+	}
+
+	plannedDrainStarted_ = true;
+	plannedDrainDeadline_ = std::chrono::steady_clock::now() + plannedDrainBudget_;
+	LOG_INFO << "Planned drain started; the node keeps serving while its work is handed over. budget_s="
+			 << plannedDrainBudget_.count();
+	plannedDrainBeginFn_(*this);
+
+	// 每拍现场重查业务状态,不锁存:排空期间仍可能有晚到的工作(例如选点提示还没传到的进场)。
+	constexpr double kPlannedDrainPollIntervalSec = 0.2;
+	plannedDrainTimer.RunEvery(kPlannedDrainPollIntervalSec, [this]
+							   { PollPlannedDrainInLoop(); });
+}
+
+void Node::PollPlannedDrainInLoop()
+{
+	eventLoop.assertInLoopThread();
+	// 计划排空期间也可能被别的入口直接停机(SIGINT、身份冲突关停、GM 停服):那条路接管,这里不再检查。
+	if (shutdownStarted.load(std::memory_order_acquire))
+	{
+		plannedDrainTimer.Cancel();
+		return;
+	}
+	const auto verdict = planned_drain::Decide(plannedDrainCompleteFn_(*this), std::chrono::steady_clock::now(),
+											   plannedDrainDeadline_);
+	if (verdict == planned_drain::Verdict::kWait)
+	{
+		return;
+	}
+	plannedDrainTimer.Cancel();
+	if (verdict == planned_drain::Verdict::kDrained)
+	{
+		LOG_INFO << "Planned drain complete; shutting down.";
+	}
+	else
+	{
+		LOG_ERROR << "Planned drain budget expired with work remaining; shutting down through the normal path. budget_s="
+				  << plannedDrainBudget_.count();
+	}
+	ShutdownInLoop();
 }
 
 void Node::RequestShutdown()
@@ -2007,7 +2129,7 @@ void Node::FinalizeTeardownInLoop()
 	if (!kafkaManager.Shutdown())
 	{
 		shutdownFailure_.store(true, std::memory_order_release);
-		LOG_ERROR << "Kafka 生命周期 HOLD：native producer 或已接收回调尚未确认，禁止以进程退出签闭合";
+		LOG_ERROR << "Kafka lifecycle HOLD: native producer or accepted callbacks not yet confirmed; process exit must not be signed off as a closure";
 	}
 	// 拆除前钩子(SetBeforeTeardown):排在 producer 最后一次有界 flush 之后(重入时 kafkaManager.Shutdown 只返回缓存结果,
 	// 不再 flush),排在 Redis / ECS / 注册表拆除与 logSystem.stop() 之前 —— 业务在这里停掉自己的定时器并把未落定的事
@@ -2315,6 +2437,41 @@ void Node::CancelPendingNodeRemoval(const std::string &nodeUuid)
 	pendingNodeRemovals_.erase(it);
 }
 
+namespace
+{
+	// 拆本节点到 nodeUuid 的网络实体(节点摘除与 DropUnadmittedConnection 共用),返回是否找到。只在 loop 线程、
+	// 排队任务里调用:直接在 etcd watch 回调里销毁会让正在派发的 channel 失效。
+	//
+	// TCP 与 gRPC 节点实体都按 uuid 找:TCP 实体以前按 `entt::entity{node_id}` 分配(ConnectToTcpNode 的 uuid 重构之前),
+	// 会把不同 zone 的同号节点叠到同一个槽,还要另一条摘除路径;现在两种连接都自动分配实体、按 uuid 去重,摘除一律按 uuid 扫。
+	bool DestroyNodeEntityByUuid(uint32_t nodeType, const std::string &nodeUuid)
+	{
+		entt::registry &nodeRegistry = tlsNodeContextManager.GetRegistry(nodeType);
+		for (const auto &[entity, nodeInfo] : nodeRegistry.view<NodeInfo>().each())
+		{
+			if (!NodeUtils::IsSameNode(nodeInfo.node_uuid(), nodeUuid))
+			{
+				continue;
+			}
+
+			OnNodeRemoveEvent nodeRemovedEvent;
+			nodeRemovedEvent.node = entity;
+			nodeRemovedEvent.nodeType = nodeType;
+			// 先摘掉 gRPC 通道:通知里的后续选点不能再挑中正在摘除的节点(HasUsableGrpcClient 看通道)。
+			// ~Channel 把在途调用以 UNAVAILABLE 排进队列,完成回调在实体销毁之后才执行,不捕获实体(§14.2)。
+			nodeRegistry.remove<MuduoGrpcChannelPtr>(entity);
+			tlsEcs.dispatcher.trigger(nodeRemovedEvent);
+
+			if (nodeRegistry.valid(entity))
+			{
+				DestroyEntity(nodeRegistry, entity);
+			}
+			return true;
+		}
+		return false;
+	}
+} // namespace
+
 void Node::ExecuteNodeRemoval(const NodeInfo &stoppedNode)
 {
 	// 先移除发现快照,网络实体的关闭仍走下面既有的延后收尾。
@@ -2330,50 +2487,96 @@ void Node::ExecuteNodeRemoval(const NodeInfo &stoppedNode)
 	else
 	{
 		LOG_INFO << "Removed " << removedSnapshotCount << " stale node record(s) for uuid=" << stoppedNode.node_uuid();
+		// 快照已是新状态:按快照派生的选择(gate 的路由服子集)先对账。被摘的这一台实体还在,由下面排队的销毁拆。
+		NotifyDiscoveryChanged(stoppedNode.node_type());
 	}
 
 	const auto stoppedNodeType = stoppedNode.node_type();
 	const auto stoppedNodeId = stoppedNode.node_id();
 	const auto stoppedNodeUuid = stoppedNode.node_uuid();
-	const auto stoppedProtocolType = stoppedNode.protocol_type();
 
 	// Important: destroy network entities after current channel dispatch cycle.
 	// Direct destroy inside etcd watch callback can invalidate activeChannels_.
-	GetLoop()->queueInLoop([stoppedNodeType, stoppedNodeId, stoppedNodeUuid, stoppedProtocolType]()
+	GetLoop()->queueInLoop([stoppedNodeType, stoppedNodeId, stoppedNodeUuid]()
 						   {
-		entt::registry& nodeRegistry = tlsNodeContextManager.GetRegistry(stoppedNodeType);
+		if (!DestroyNodeEntityByUuid(stoppedNodeType, stoppedNodeUuid))
+		{
+			LOG_WARN << "Service node stop: entity not found for uuid=" << stoppedNodeUuid
+				<< ", node_type=" << stoppedNodeType
+				<< ", node_id=" << stoppedNodeId;
+		} });
+	LOG_INFO << "Service node stopped : " << stoppedNode.DebugString();
+}
 
-		// Both TCP and gRPC nodes are now keyed by uuid: TCP entities used to
-		// be allocated as `entt::entity{node_id}` (see ConnectToTcpNode pre-
-		// uuid-refactor) but that scheme aliased nodes from different zones
-		// onto the same slot and required a parallel removal path. With both
-		// node_connector paths using auto-assigned entity ids and uuid for
-		// dedup, removal is uniformly a uuid scan.
-		(void)stoppedProtocolType;
-		(void)stoppedNodeId;
-		for (const auto& [entity, nodeInfo] : nodeRegistry.view<NodeInfo>().each()) {
-			if (!NodeUtils::IsSameNode(nodeInfo.node_uuid(), stoppedNodeUuid)) {
-				continue;
-			}
+Node &Node::SetConnectionAdmission(uint32_t nodeType, ConnectionAdmissionFn fn)
+{
+	eventLoop.assertInLoopThread();
+	if (nodeType >= connectionAdmission_.size())
+	{
+		LOG_FATAL << "SetConnectionAdmission: invalid node type " << nodeType;
+	}
+	connectionAdmission_[nodeType] = std::move(fn);
+	return *this;
+}
 
-			OnNodeRemoveEvent nodeRemovedEvent;
-			nodeRemovedEvent.node = entity;
-			nodeRemovedEvent.nodeType = stoppedNodeType;
-			// 先摘掉 gRPC 通道:通知里的后续选点不能再挑中正在摘除的节点(HasUsableGrpcClient 看通道)。
-			// ~Channel 把在途调用以 UNAVAILABLE 排进队列,完成回调在实体销毁之后才执行,不捕获实体(§14.2)。
-			nodeRegistry.remove<MuduoGrpcChannelPtr>(entity);
-			tlsEcs.dispatcher.trigger(nodeRemovedEvent);
+Node &Node::SetDiscoveryObserver(uint32_t nodeType, DiscoveryObserverFn fn)
+{
+	eventLoop.assertInLoopThread();
+	if (nodeType >= discoveryObservers_.size())
+	{
+		LOG_FATAL << "SetDiscoveryObserver: invalid node type " << nodeType;
+	}
+	discoveryObservers_[nodeType] = std::move(fn);
+	return *this;
+}
 
-			if (nodeRegistry.valid(entity))
-			{
-				DestroyEntity(nodeRegistry, entity);
-			}
+bool Node::AdmitsConnection(const NodeInfo &node) const
+{
+	const uint32_t nodeType = node.node_type();
+	if (!targetNodeTypeWhitelist.contains(nodeType) || nodeType >= connectionAdmission_.size())
+	{
+		return false;
+	}
+	const auto &admit = connectionAdmission_[nodeType];
+	return !admit || admit(node);
+}
+
+void Node::NotifyDiscoveryChanged(uint32_t nodeType)
+{
+	eventLoop.assertInLoopThread();
+	if (nodeType < discoveryObservers_.size() && discoveryObservers_[nodeType])
+	{
+		discoveryObservers_[nodeType]();
+	}
+}
+
+void Node::DropUnadmittedConnection(uint32_t nodeType, const std::string &nodeUuid)
+{
+	eventLoop.assertInLoopThread();
+	if (shutdownStarted.load(std::memory_order_acquire))
+	{
+		return;
+	}
+	// 与节点摘除一样排到下一轮再拆:调用方可能正处在 etcd 回调或定时器回调里。
+	GetLoop()->queueInLoop([nodeType, nodeUuid]()
+						   {
+		if (gNode == nullptr || gNode->shutdownStarted.load(std::memory_order_acquire))
+		{
 			return;
 		}
-		LOG_WARN << "Service node stop: entity not found for uuid=" << stoppedNodeUuid
-			<< ", node_type=" << stoppedNodeType
-			<< ", node_id=" << stoppedNodeId; });
-	LOG_INFO << "Service node stopped : " << stoppedNode.DebugString();
+		const auto entity = NodeUtils::FindNodeEntityByUuid(nodeType, nodeUuid);
+		if (!entity)
+		{
+			return; // 已经拆了(节点摘除先到),无事可做
+		}
+		const auto *nodeInfo = tlsNodeContextManager.GetRegistry(nodeType).try_get<NodeInfo>(*entity);
+		if (nodeInfo != nullptr && gNode->AdmitsConnection(*nodeInfo))
+		{
+			// 排队期间它又被准入(例如路由服子集变回来):保留连接。
+			return;
+		}
+		LOG_INFO << "Dropping a connection that is no longer admitted, node_type=" << nodeType << ", uuid=" << nodeUuid;
+		DestroyNodeEntityByUuid(nodeType, nodeUuid); });
 }
 
 void Node::StartNodeRegistrationHealthMonitor()

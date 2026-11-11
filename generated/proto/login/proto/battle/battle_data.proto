@@ -207,6 +207,10 @@ enum eBattleOutcome {
   BATTLE_OUTCOME_SIDE_A_WIN = 1; // team_index 0 胜
   BATTLE_OUTCOME_SIDE_B_WIN = 2;
   BATTLE_OUTCOME_DRAW = 3;       // 回合打满等平局情形(PVE 中进攻方判负走 SIDE_B_WIN)
+  // 作废:Match 为这一局写了唯一的 ABORT(执行进程失效、截止作废、帮会取消、人工处置等),全员没有任何效果。
+  // 只由 Match 在 ABORT 事务里写进「作废结算」,battle 引擎永远不产出;客户端收到后退出战斗、提示本局作废
+  // (docs/design/battle-instance-loss-early-abort.md §5、§6)。
+  BATTLE_OUTCOME_VOID = 4;
 }
 
 // ---- 单个玩家的结算数据(battle -> scene,scene 是唯一应用者) ----

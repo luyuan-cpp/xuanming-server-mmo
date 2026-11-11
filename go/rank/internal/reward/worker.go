@@ -61,7 +61,7 @@ func (w *Worker) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := w.Tick(ctx); err != nil && ctx.Err() == nil {
-				logx.Errorf("[rank] 邮件奖励投递失败: %v", err)
+				logx.Errorf("[rank] mail reward delivery failed: %v", err)
 			}
 		}
 	}

@@ -39,7 +39,7 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 
 Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口与后续验收要求见 [Claude Code 接手文档](handoff/redis-horizontal-scaling-requirements-20261022.md)；选定方案（玩家域 Redis Cluster 按 `{player_id}` 分片、控制域留原实例、C++ 自研路由层同 slot 停等、补投索引按 slot、Redis ≥ 8.4 原子迁移）与分批计划见 [玩家态 Redis 集群化设计](design/redis-player-store-cluster.md)（2026-10-23 v2，第 1 批已落码未编译）。
 
-全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，仅文档，尚未完成全类型验收）。灰度与金丝雀的选定方案（两条轨道、zone 内按 zone 灰度、会话轨道跟随 gate、全局服务金丝雀只接金丝雀会话的客户端请求、战斗按整局）与分批实施计划见 [发布轨道设计](design/release-track-gray-canary.md)（2026-11-05；批 1、2、2b、3a 已落码未编译，战斗按整局的批 3b 待做），操作步骤见 [灰度与金丝雀发布手册](ops/release-track-canary-runbook.md)。
+全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，尚未完成全类型验收；§3.7 是 11-11 的逐节点核对）。scene 重启、缩容、滚动升级时把玩家疏散到别的节点的做法见 [scene 节点计划排空](design/scene-node-planned-drain.md)（2026-11-11 落码未编译）。灰度与金丝雀的选定方案（两条轨道、zone 内按 zone 灰度、会话轨道跟随 gate、全局服务金丝雀只接金丝雀会话的客户端请求、战斗按整局）与分批实施计划见 [发布轨道设计](design/release-track-gray-canary.md)（2026-11-05；批 1、2、2b、3a、3b（战斗按整局）全部已落码未编译），操作步骤见 [灰度与金丝雀发布手册](ops/release-track-canary-runbook.md)。
 
 ## 索引
 
@@ -75,6 +75,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [hmac-message-signing.md](design/hmac-message-signing.md) — Per-Message HMAC Signing — Design (todo.md #76)
 - [java-gateway-portal-decision.md](design/java-gateway-portal-decision.md) — Java Gateway Portal Decision (2026-04-14)
 - [k8s-client-entry.md](design/k8s-client-entry.md) — gate / battle 集群外客户端入口(D76–D93)
+- [workload-secrets-via-k8s-secret.md](design/workload-secrets-via-k8s-secret.md) — 工作负载密钥只放 K8s Secret:gate / battle / 观战令牌、login 密钥、MySQL 与 gateway 数据源口令离开 ConfigMap(2026-11-10 起分批落码,未编译)
 - [k8s_gate_exposure_guidance.md](design/k8s_gate_exposure_guidance.md) — K8s Gate Exposure Guidance / K8s gate 暴露方式指南 · [EN](design/k8s_gate_exposure_guidance_en.md) · [中文](design/k8s_gate_exposure_guidance_zh.md)
 - [login-node-stateless-no-affinity.md](design/login-node-stateless-no-affinity.md) — Login Node: Stateless, No Session Affinity
 - [login-queue-2026-05.md](design/login-queue-2026-05.md) — Login Queue (AssignGate Real Queue) — 2026-05
@@ -83,6 +84,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [player_login_flow.md](design/player_login_flow.md) — 玩家登录/断线/重连/替换登录/超时清理 — 最终态事件流 · [EN](design/player_login_flow_en.md) · [中文](design/player_login_flow_zh.md)
 - [serverlist-static-publish-2026-05.md](design/serverlist-static-publish-2026-05.md) — 区服列表：现行 Gateway 接口与静态发布提案
 - [third-party-login-end-to-end-design.md](design/third-party-login-end-to-end-design.md) — QQ / 微信第三方登录端到端联调设计
+- [zone-full-handling.md](design/zone-full-handling.md) — 区服满员处理（保留选区）:区容量单一来源、排队按 gate 承载封顶、推荐避开满员区、暂停创建新角色(2026-11-10)
 
 #### 场景、AOI 与分线
 
@@ -110,6 +112,8 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
+- [battle-instance-loss-early-abort.md](design/battle-instance-loss-early-abort.md) — 战斗进程失效的提前作废与作废通知：原进程确定不在时约 1 分钟内判作废，所有作废经结算链送到场景服并通知客户端（2026-11-11 方案已定案，未落码）
+- [battle-item-reservation.md](design/battle-item-reservation.md) — 战斗道具预留：备战时押住带进战斗的道具，结算从预留里扣，作废或取消时释放；冻结解开后晚到的结算不再按持有量夹紧（2026-11-10 已落码，未编译）
 - [battle-report-replay.md](design/battle-report-replay.md) — 回合制战斗战报回放：只录 PVP，观众版帧随终局原件同事务存进 match 库，每名玩家保留最近 100 条（2026-11-06 已落码，未编译）
 - [battle-result-recovery.md](design/battle-result-recovery.md) — 战斗结果重登恢复：近期战斗结果随结算同一次存档提交，客户端落地查询（2026-11-05，未编译）
 - [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（提案）
@@ -140,7 +144,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [guild-actor-architecture.md](design/guild-actor-architecture.md) — Guild 存储架构现状与 Actor 历史提案
 - [guild-zone-client-access.md](design/guild-zone-client-access.md) — 公会:按 zone 隔离的客户端接入
 - [guild_friend_service_notes_zh.md](design/guild_friend_service_notes_zh.md) — 公会与好友服务实现笔记
-- [guild_ranking_architecture.md](design/guild_ranking_architecture.md) — Guild Ranking Architecture (2025-03-25) · [EN](design/guild_ranking_architecture_en.md) · [中文](design/guild_ranking_architecture_zh.md)
+- [guild_ranking_architecture.md](design/guild_ranking_architecture.md) — 帮会排行榜架构:只有本服榜(2026-11-10 删全服榜后重写) · [EN](design/guild_ranking_architecture_en.md) · [中文](design/guild_ranking_architecture_zh.md)
 - [jubaozhai-market.md](design/jubaozhai-market.md) — 聚宝斋(玩家间人民币寄售交易)设计 — 2026-09-14
 - [leaderboard-system.md](design/leaderboard-system.md) — 排行榜(leaderboard / rank)v1 设计
 - [mail-system.md](design/mail-system.md) — mail(邮件)M1:全局服务 + 系统邮件 / 定向邮件 + 领取短路
@@ -170,6 +174,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [db_zone_isolation.md](design/db_zone_isolation.md) — DB Zone Isolation (2026-04-11)
 - [global-data-layer-tidb-decision.md](design/global-data-layer-tidb-decision.md) — 全区全服数据层 + TiDB 架构决策
 - [landing-recovery-sync-digest.md](design/landing-recovery-sync-digest.md) — 落地恢复：按域版本摘要、场景侧待办唤醒与超窗处置（2026-10-14）
+- [assetop-redelivery-sharding-20261110.md](design/assetop-redelivery-sharding-20261110.md) — 资产指令重投与 match 终局发件箱按玩家分片，多副本分摊到期扫描（缺口清单第 25 条，2026-11-10）
 - [new-player-first-enter-no-cold-read.md](design/new-player-first-enter-no-cold-read.md) — 新号首次进场免冷读:建角时写入 PlayerAllData 种子
 - [player-async-save-loss-windows.md](design/player-async-save-loss-windows.md) — 玩家异步存盘：已修复问题、剩余丢失窗口与修复任务
 - [player-inbox-service.md](design/player-inbox-service.md) — 玩家持久收件箱服务（player_inbox）设计
@@ -217,7 +222,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 #### 基础设施与中间件
 
-- [distributed-tracing.md](design/distributed-tracing.md) — 分布式日志关联与链路追踪(todo.md #152;2026-11-06 重写,未落码)
+- [distributed-tracing.md](design/distributed-tracing.md) — 分布式日志关联与链路追踪(todo.md #152;阶段一第 1~7 批与补尾 11-11 全部落码:第 1 批 11-08 已验证,其余待 Codex 验证;K8s 采集是阶段二,未开始)
 - [double-buffer-queue-optimizations.md](design/double-buffer-queue-optimizations.md) — DoubleBufferQueue Optimizations (2026-04-16)
 - [error-reporting.md](design/error-reporting.md) — Error Aggregation & Reporting — Design (todo.md #250)
 - [go-zero-rpc-timeout-fix.md](design/go-zero-rpc-timeout-fix.md) — go-zero RPC Client Timeout Fix
@@ -231,7 +236,9 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [player-handler-deferred-reply.md](design/player-handler-deferred-reply.md) — 玩家级 handler 延后完成(PlayerCallContext)
 - [shared-redis-split-by-purpose.md](design/shared-redis-split-by-purpose.md) — 共享 Redis 按用途拆实例(G4a 设计稿)
 - [control-plane-zone-scoping-20261105.md](design/control-plane-zone-scoping-20261105.md) — 控制面按 zone 化(发现只看本 zone、scene_manager 按 zone 选主)与控制域 Redis 按 zone 组分实例(缺口第 4、5 条)
+- [redis-cluster-all-domains-20261110.md](design/redis-cluster-all-domains-20261110.md) — 全部 Redis 上 Cluster:新建控制集群,排队、控制域、gate 标记、唤醒频道、选主锁与各服务私有键按 hash tag 分片,go-zero Redis 句柄退役(缺口第 34 条;设计稿,未落码)
 - [connection-fanout-subsetting-20261106.md](design/connection-fanout-subsetting-20261106.md) — 连接与发现扇出:gate→路由服与路由服→全服池目标按 HRW 取确定性子集、每类 C++ 节点只发现自己用到的类型、命令 topic 读放大与场景亲和先测(缺口第 30 条、第 28 条后半;设计稿,未落码)
+- [gateway-zone-health-publish-20261111.md](design/gateway-zone-health-publish-20261111.md) — 网关区服健康:每 zone 的网关副本把本 zone 的健康汇总写进 etcd(挂租约、只在显示变化时写),网关只读汇总,不再 watch 全服 gate / scene;没有汇总的 zone 看 login 登记判 DOWN 或 UNKNOWN;指标与告警(缺口第 29 条残余;已落码,未编译)
 - [thread-count-monitoring.md](design/thread-count-monitoring.md) — Thread Count Monitoring & Control per Process · [EN](design/thread-count-monitoring_en.md) · [中文](design/thread-count-monitoring_zh.md)
 - [traffic-statistics-design.md](design/traffic-statistics-design.md) — Traffic Statistics Design
 
@@ -247,8 +254,9 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [docker_k8s_build_deploy.md](design/docker_k8s_build_deploy.md) — Docker & K8s Build/Deploy Guide (Windows) · [EN](design/docker_k8s_build_deploy_en.md) · [中文](design/docker_k8s_build_deploy_zh.md)
 - [gateway-k8s-deployment.md](design/gateway-k8s-deployment.md) — Gateway Service Notes
 - [release-packaging-standard-20260914.md](design/release-packaging-standard-20260914.md) — 服务端发布打包标准(对标 luyuan-go/xuanming-server)
-- [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05；批 1、2、2b、3a 已落码未编译，批 3b 待做）
-- [gate-drain-session-migration.md](design/gate-drain-session-migration.md) — gate 排空时把在线玩家按限速迁到同 zone 其他 gate（msg 124 + 租约内重连回原场景；2026-11-05 设计，11-06 批 A login 一侧已落码未编译，批 B gate 待做）
+- [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05；批 1、2、2b、3a、3b 全部已落码未编译）
+- [scene-node-planned-drain.md](design/scene-node-planned-drain.md) — scene 节点计划排空：重启、缩容、滚动升级时先迁频道再按限速把玩家疏散到别的节点（同频道、坐标保留，新构建优先）；battle 同一套 Node 机制等局结束（2026-11-11 批 1~4 落码未编译）
+- [gate-drain-session-migration.md](design/gate-drain-session-migration.md) — gate 排空时把在线玩家按限速迁到同 zone 其他 gate（msg 124 + 租约内重连回原场景；2026-11-05 设计，11-06 批 A login 一侧、11-10 批 B gate 一侧都已落码未编译；开关默认关，客户端跳数清零与 Java 待做）
 - [rolling-update-restart-resilience-tests.md](design/rolling-update-restart-resilience-tests.md) — Rolling Update & Node Restart Resilience Tests
 - [vs2026_cross_machine_compatibility.md](design/vs2026_cross_machine_compatibility.md) — VS2026 跨电脑兼容性维护记录 · [EN](design/vs2026_cross_machine_compatibility_en.md) · [中文](design/vs2026_cross_machine_compatibility_zh.md)
 
@@ -356,6 +364,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [stress-1zone-45k-2026-06-03-round17.md](stress/stress-1zone-45k-2026-06-03-round17.md) — Stress Test — 1 Zone × 45k Robots — Round 17 (2026-06-03)
 - [stress-1zone-45k-2026-06-04-round18.md](stress/stress-1zone-45k-2026-06-04-round18.md) — Stress Test — 1 Zone × 45k Robots — Round 18 (2026-06-04)
 - [stress-3zone-2026-05-23-postmortem.md](stress/stress-3zone-2026-05-23-postmortem.md) — 3 Zone × 15000 压测 — 复盘(2026-05-23)
+- [stress-gap-items-verification-20261111.md](stress/stress-gap-items-verification-20261111.md) — 缺口清单压测项(第 3、14、15、24、30、33 条)11-11 定案后的复核方案:场景、规模档、逐条判据与不成立时的动作(未运行)
 - [stress-test-2026-05-ephemeral-port.md](stress/stress-test-2026-05-ephemeral-port.md) — 压测复盘: ephemeral port 扩容前后对比 (2026-05)
 - [stress-test-2026-05-http-login.md](stress/stress-test-2026-05-http-login.md) — 端到端阶梯压测: HTTP /api/login 路径 (2026-05-09)
 - [stress-test-progress.md](stress/stress-test-progress.md) — 1000-Robot Stress Test Progress

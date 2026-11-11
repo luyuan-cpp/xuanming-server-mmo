@@ -165,10 +165,10 @@
 
 | 公会榜做法(`go/guild/internal/data/guild_repo.go`) | rank 为什么不照抄 |
 |---|---|
-| 键 `guild_rank` / `guild_rank:zone:<id>` / `guild_rank:maintenance_lock` / `guild_rank:rebuild:<uuid>:*` | `RebuildRanks` 会 `SCAN guild_rank:zone:*` 再 DEL / RENAME。任何以 `guild_rank` 开头的键(例如 `guild_rank:zone:player`)都会在公会启动重建时被删。**rank 的所有键不得以 `guild_rank` 开头**;同理避开 `match:*`(match 已有 `match:{mq}:rank:*`) |
+| 键 `guild_rank:zone:<id>` / `guild_rank:version:<id>` / `guild_rank:tombstone:<id>` / `guild_rank:maintenance_lock` | `RebuildRanks` 会 `SCAN guild_rank:zone:*`,把每张榜上与 MySQL 对不上的成员摘掉;摘榜、折叠也按这几个键名读写。别的服务以 `guild_rank` 开头的键会被当成公会榜改写。**rank 的所有键不得以 `guild_rank` 开头**;同理避开 `match:*`(match 已有 `match:{mq}:rank:*`) |
 | MySQL `guild.score` 是权威,ZSET 是读加速 | rank v1 **没有**持久化副本,权威在 match(§3.5) |
-| 每次写分拿全局 SETNX 锁(等 ≤5s,TTL 5min) | 玩家评分每局每人一次,全局锁会把写路径串行化;rank 单条写是一条 Lua,本身原子 |
-| 覆盖写绝对值,无版本号 | Kafka 会乱序与重放,必须带单调版本(`rating_gen`, `games`) |
+| 写分不拿锁(2026-11-11 起):按 `guild.score_version` 的 Lua 条件写入;全服 SETNX 锁只让启动重建与合服折叠互斥 | 同样不拿全局锁:玩家评分每局每人一次,全局锁会把写路径串行化;rank 单条写是一条 Lua,本身原子 |
+| 版本来自 MySQL:`guild.score_version` 在写分事务里加 1,榜上只接受不比已记版本旧的分数 | 版本来自上游:Kafka 会乱序与重放,必须带单调版本(`rating_gen`, `games`) |
 | 同分依赖 Redis member 字节序(十进制 id 字符串) | 既不是先到先得也不按数值,rank 显式定义同分规则(§3.3) |
 | `RebuildRanks` 用 SCAN + 多键 RENAME | 契约 §4:私有 Redis 不用 SCAN、不做跨 slot 多键操作 |
 | 分页越界返回**空页**(`rank_page_test.go` 的"超过末页""页码为零"断言空) | rank 越界**钳到末页**、page=0 当 1(§4.2),语义相反,测试不能照抄期望值(T5) |
@@ -865,10 +865,122 @@ go/match、go/rank、robot 的 build / vet / test 全过;CI 收回 go/rank)之�
 
 **残余**:
 
-1. 同一张榜的写入仍串行,只是每批的持锁时间从两百多次往返降到常数次。要并行,下一步是按 `(board, generation, source_shard)` 拆游标行:`Submit` 只锁自己那一片;某片第一次写入时在榜行锁里建行;`Freeze` 与 `Remove` 先锁榜行、再按片号升序锁全部片行,保证与在途批次互斥。实体并发插入的竞态要用「已有行 FOR UPDATE、新行普通 INSERT,撞 1062 就整笔重试」处理。本轮没做,等压测证明单榜写入真的不够再做。
-2. 本人名次的计数开销随名次增长:排在百万名之后的玩家每次查询都要数过前面的索引项。要么加几秒的进程内缓存,要么超过前 N 名改显示「N+」;后者改客户端语义,要负责人定、两版同批改。
-3. `OFFSET` 翻到很深的页同样随页码增长;客户端只翻前几页时不是问题。
+1. ~~同一张榜的写入仍串行~~:2026-11-11 已按来源片拆开,同榜不同片的写入并行,见本文末「2026-11-11 同榜写入按来源片并行」。
+2. ~~本人名次的计数开销随名次增长~~:2026-11-11 负责人定「前 N 名精确、之后显示 N+」(N = 10000),已改,见本文末「2026-11-11 前 N 名精确、之后显示 N+」。
+3. ~~`OFFSET` 翻到很深的页同样随页码增长~~:同上,翻页只到第 N 名为止,`OFFSET` 不超过 N。
 
 **Java 版**:`game-rank` 的 `RankStore` 有同样问题,已在 Java 仓 `PARITY.md` 登记待做(2026-11-05「排行榜读写按名次索引走」)。
 
 **验证**(交 Codex,仓库根):先 `proto-gen-build`(生成器有变化或没有工具时)、再 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`;然后 `cd go/rank && go build ./... && go vet ./... && go test ./...`,真库回归设 `MAIL_RANK_TEST_TIDB=127.0.0.1:<端口>` 跑 `go test ./internal/data/ -run 'TestTiDB' -count=1`(新用例 `TestTiDBRankReadsMatchBruteForceOrder` 与原有 6 条都要绿)。
+
+
+## 2026-11-11 同榜写入按来源片并行(服务器缺口清单第 17 条;已落码,未编译,需先重新生成协议)
+
+**起因**:负责人 11-11 定「不用等压测数据了,先写完」。11-05 之后,同一张榜的写入仍由榜行锁串行(每批持锁常数次往返),一张热榜的写吞吐被一把行锁封顶。
+
+**改法**(`go/rank/internal/data`,表结构 `proto/rank/rank_table.proto`):
+
+- 新表 `rank_board_shard`,主键 `(board_id, generation, source_shard)`:
+  - `committed_cursor`:本片已落账到的游标;
+  - `entries`:记在本片行上的实体数。
+- `rank_board` 删掉 `committed_cursor`(9)、`entries`(18) 两列(`reserved 9, 18`)。本代已落账的批次总数与现有实体数,都是各片行之和。
+- 锁序只有一条:榜行 → 片行(按片号升序)→ 分数行(按 entity_id 升序)。写在 `shards.go` 文件头。
+  - `Submit` 先锁自己那一片的片行,不锁榜行,榜行只做普通读。事务是读已提交,持片行锁之后读到的就是最新提交的榜行。
+  - 本片第一次写入时,才去锁榜行、在榜行锁里建片行。拿到锁之后再查一次片行,防止同片的重放刚建好。
+  - `Freeze`、`Remove`(移除实体与隐藏整代)先锁榜行,再按片号升序锁本代全部片行(`lockAllShards`)。建片行要先拿榜行锁,所以它们锁住的就是本代此刻全部的片行。在途的批次要么已经提交,要么等它们结束、读到新状态后被拒。
+  - 同一实体可能来自不同片:
+    - `loadScores` 用 `FOR UPDATE` 锁住已有的分数行,在锁住的现值上合并;
+    - 新实体用普通 `INSERT`(不带 `ON DUPLICATE KEY`)。别的片抢先插入了同一实体就撞唯一键,回 `errScoreInsertRace` 让整笔重试;重试时它已是已有行。
+  - `r.tx` 的重试条件改为 `retryableTxError`:死锁 1213、锁等待超时 1205、`errScoreInsertRace`。
+- 计数:
+  - `Submit` 把本批新上榜的实体数加到本片行上。
+  - `Remove` 删到一行时,从片号最小、计数大于 0 的片行上减一(`shardToDecrement`)。实体记在哪一片行上没有业务含义,只有和有意义。
+  - 各片计数全是 0 时整笔回滚(fail-closed,同以前)。
+- 读:`Page` 的总数 = 本代各片行 `entries` 之和(`boardEntries`),与这一页、本人名次在同一个可重复读事务里取,快照一致。
+- 封榜:按各片游标之和核 `ExpectedSourceCursor`;结算的 `final_cursor` 记这个和。
+- 片号上限 `maxSourceShards = 1024`,越界回参数无效。封榜、移除要锁住本代全部片行,片数必须有界;现有生产者 match 用 64 片。
+
+**并发推演**:
+
+| 并发 | 结果 |
+|---|---|
+| 同片两批(含重放) | 片行锁串行;重放读到 `cursor <= committed`,按收据摘要判重 |
+| 不同片两批改同一实体 | 已有行由 `FOR UPDATE` 串行,后者在前者的结果上合并,INCREMENT 不丢;新实体由后插入者撞 1062,整笔重试 |
+| 批次与封榜 | 封榜持榜行锁之后逐片加锁:先拿到片行的批次先提交,封榜计入它;后到的批次等封榜提交,读到 SEALED 被拒 |
+| 新片第一次写入与封榜 | 建片行要拿榜行锁,封榜持锁期间建不了;封榜提交之后读到 SEALED 被拒 |
+| 批次与移除、隐藏 | 同上;移除提交之后,批次读到墓碑,跳过该实体 |
+| 死锁 | 锁序一致。个别交错(MySQL 读已提交下,新行的插入锁与另一笔的已有行锁)可能被库判死锁,由 `r.tx` 整笔重试,生产者重投同一批兜底 |
+
+**不变**:客户端契约(消息、字段、tip 码),名次规则(L-9),游标与幂等语义(按「片 + 游标」),封榜的核齐口径。
+
+**迁移**:改了 proto(删两列、加一张表),要先重新生成协议;开发、测试环境的 rank 库删库重建。项目未上线,不做数据迁移。
+
+**残余**:
+
+- 同一实体在不同片之间仍按行锁串行,这本来就必须串行;同一片内的批次仍串行,这是游标连续性的要求。
+- 本人深名次的计数与深页 `OFFSET`(上一节残余第 2、3 条):负责人 11-11 定「前 N 名精确、之后显示 N+」,已改,见下一节。
+
+**Java 版**:`game-rank` 同样是榜行锁串行,已在 Java 仓 `PARITY.md` 登记待做。
+
+**验证**(交 Codex,仓库根,PowerShell 7,`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`):
+
+1. 重新生成协议:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
+   通过标准:`go/proto/rank/rank_table.pb.go` 的 `RankBoardRecord` 不再有 `CommittedCursor`、`Entries`,新增 `RankBoardShardRecord`。
+2. `cd go/rank; gofmt -l internal/data; go build ./...; go vet ./...; go test ./... -count=1`。
+   通过标准:gofmt 无输出;新单测 `TestCommittedTotalSumsEveryShard`、`TestShardToDecrementPicksLowestShardWithEntries`、`TestRetryableTxError`、`TestSubmitRejectsSourceShardOutOfRange` 在列且 PASS。
+3. 真 TiDB:`$env:MAIL_RANK_TEST_TIDB='127.0.0.1:<端口>'; $env:MAIL_RANK_REQUIRE_TESTS='1'; go test ./internal/data/ -run 'TestTiDB' -count=1`。
+   通过标准:新用例 `TestTiDBShardsSubmitInParallelWithoutLostUpdates`、`TestTiDBSubmitOnExistingShardDoesNotWaitForBoardLock` 与原有用例全部 PASS,没有 Skip。
+4. `cd go/match; go vet ./...`;真 TiDB 跑 `internal/authority/rank_mail_chain_integration_test.go`(读榜上游标的那句改成了各片之和),门控按该文件头。
+5. 变异取红(在 `%TEMP%` 副本里改,不动主仓):
+   - `loadScores` 去掉 `FOR UPDATE`:`TestTiDBShardsSubmitInParallelWithoutLostUpdates` 红在「不得丢更新」。并发下是概率性的,跑 3 遍、记下红了几遍,至少 1 遍才算取红;
+   - `writeScores` 的新行改回 `ON DUPLICATE KEY UPDATE`:同一用例红在「不得丢更新」或计数断言(同样记遍数);
+   - `Submit` 的已有片行路径也改成锁榜行:`TestTiDBSubmitOnExistingShardDoesNotWaitForBoardLock` 红在「已有片行的批次不等榜行锁」;
+   - `Freeze` 去掉 `lockAllShards`,游标和当作 0:`TestTiDBShardsSubmitInParallelWithoutLostUpdates` 红在 `ErrCursor` 那一步。
+
+## 2026-11-11 前 N 名精确、之后显示 N+(服务器缺口清单第 18 条;服务端与客户端已落码,未生成、未编译)
+
+**定案**:负责人 11-11 在两条路里选了「前 N 名精确、之后显示 N+」,N = 10000(`data.RankExactLimit`)。另一条 Redis 有序集合投影不做。
+
+**为什么必须封顶**:名次索引上的范围计数和 `OFFSET` 都随名次增长;排在百万名之后的玩家每查一次自己的名次,都要数过前面的全部索引项。名次精确、开销又有界,在 SQL 上做不到;要么像这里这样给精确名次封顶,要么另起一份内存有序结构。
+
+**协议**(`proto/rank/rank.proto`,客户端可见,两版同批改;Java 待做):
+
+- `RankEntry.beyond_rank_limit = 6`:这一行排在上限之后,`rank` 为 0,客户端显示「{rank_limit}+」。不在榜上仍是没有这一行 / `self` 为空。
+- `GetRankPageResponse.rank_limit = 10`、`GetRankAroundResponse.rank_limit = 5`:本次回包的上限。
+- `total_count` 仍是榜上的真实人数;`page_count` 按 `min(total_count, rank_limit)` 算。
+
+**服务端**(`go/rank/internal/data/read.go`):
+
+- 翻页(`pageWindowFor`):页数按 `min(总数, 上限)` 算,页码钳进 `[1, 页数]`,最后一页只取到第 N 名为止。`OFFSET` 不超过 N,页内名次全部精确。
+- 本人名次(`selfRank`):范围计数改成「最多数 countCap 行」(`SELECT COUNT(*) FROM (SELECT 1 … LIMIT ?)`)。`Page` 数到 N:没数满就是精确名次;数满了就标 `beyond_rank_limit`。
+- 附近名次(`Around`):本人前面最多数 N + radius 行。
+  - 没数满:本人名次精确,邻居的名次由它推出,超过 N 的标 `beyond_rank_limit`;
+  - 数满了:本人与这 radius 名邻居都排在 N 之后,全部标上。
+  - 邻居条目本来就是顺着索引从本人位置扫 radius 行,开销不变。
+- `positionAround`、`rankOrBeyond` 是纯函数;上限在 `Repo.rankLimit`,缺省 `RankExactLimit`,用例调小。
+- 每次读的开销都以 N(附近名次是 N + 25)为界,与榜长、名次无关。封榜取前 N 名(≤ 1000)不受影响。
+
+**客户端**(`../mmorpg-client`):
+
+- `RankClient.RankLimit` 取最近一次回包的上限。`FormatRowRank` 让列表里上限之后的条目显示「10000+」;`FormatSelfRank` 让「我的名次」精确时显示「第 N 名」,上限之后显示「10000+」。
+- `RankWindow`:不在榜上的判定改为「没有 self,或名次为 0 且不是上限之后」,不再把上限之后的玩家显示成「暂未上榜」。上限之后的行按玩家编号起名,不撞名。
+- 用例 `RankClientTests.EntriesBeyondTheRankLimitShowLimitPlus`(标签与上限取值)、`RankClientTests.WindowShowsLimitPlusForSelfBeyondTheRankLimit`(界面层:我的名次与行名)。
+
+**robot**:`rank_smoke_scenario.go` 判「在不在榜上」改用 `rankSmokeOnBoard`(名次非 0,或上限之后)。冒烟要按名次翻页、比较先后,两人任一在上限之后就直接报前提不满足(冒烟只在人数少于上限的榜上跑)。用例 `rank_smoke_scenario_test.go`。
+
+**Java 版**:`game-rank` 与 Java 侧客户端分发同样要改,已在 Java 仓 `PARITY.md` 登记待做。在 Java 版改好之前,两版回包的形状不一致。
+
+**验证**(交 Codex;仓库根,PowerShell 7,`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`):
+
+1. 重新生成协议。客户端任务已授权,用**默认配置**(会写同级客户端仓):`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`。
+   通过标准:Go 的 `rank.pb.go`(含 robot 的 vendor 副本)、C++、客户端 `Assets/Scripts/Proto/Generated/Rank.cs` 都有 `BeyondRankLimit`、`RankLimit`。
+2. `cd go/rank; gofmt -l internal/data; go build ./...; go vet ./...; go test ./... -count=1`。
+   通过标准:`TestPageWindowStopsAtRankLimit`、`TestRankOrBeyond`、`TestPositionAround` 在列且 PASS。
+3. 真 TiDB:`$env:MAIL_RANK_TEST_TIDB='127.0.0.1:<端口>'; $env:MAIL_RANK_REQUIRE_TESTS='1'; go test ./internal/data/ -run 'TestTiDB' -count=1`。
+   通过标准:新用例 `TestTiDBRankReadsStopCountingAtRankLimit` 与原有用例(含 `TestTiDBRankReadsMatchBruteForceOrder`)全部 PASS,没有 Skip。
+4. `cd robot; go vet ./...; go test -run 'RankSmoke' -count=1 .`。
+5. Unity EditMode:跑 `RankClientTests`(新用例 `EntriesBeyondTheRankLimitShowLimitPlus` 与原有用例),以及引用 `RankWindow` 的帮会 / 排行界面校验。
+6. 变异取红(在 `%TEMP%` 副本里改):
+   - `pageWindowFor` 去掉 `min(total, limit)`:`TestPageWindowStopsAtRankLimit` 与真库用例红;
+   - `selfRank` 的计数去掉 `LIMIT ?`:结果不变,只是开销不再有界,功能用例取不了红。改为在 TiDB 上对这条计数跑一次 `EXPLAIN`,确认聚合之下有 `Limit` 截住索引扫描,把原文贴进 PROGRESS;
+   - `RankWindow.RenderSelf` 的判定改回 `self.Rank == 0`:界面层用例 `RankClientTests.WindowShowsLimitPlusForSelfBeyondTheRankLimit` 红在「排在上限之后仍在榜上」。

@@ -3,6 +3,7 @@ package idissuer
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -98,23 +99,26 @@ func registryRegionKey(root string, region uint8) string {
 
 // EtcdRegistry 是放在 etcd 上的全局号源登记处。
 //
-// 值是 JSON,字段见 claimJSON。墓碑可以没有 authority;在用的码必须有。
+// 值是 JSON,字段见 claimJSON。墓碑可以没有 authority;在用的码必须有。deployment(部署环境身份)可以缺省:
+// dev 自动认领的码和本字段出现之前写的记录没有它,生产预留会拒绝这样的码,要 rebind 补上。
 type EtcdRegistry struct {
 	cli  *clientv3.Client
 	root string
 }
 
 // NewEtcdRegistry 建登记处的 etcd 客户端。不设 DialTimeout,理由同 NewEtcdStore。
-func NewEtcdRegistry(endpoints []string) (*EtcdRegistry, error) {
-	return newEtcdRegistryAt(endpoints, registryRoot)
+// tlsConfig 是双向 TLS(LoadRegistryTLS),生产必须给;nil 只给 dev、test 的本地登记处。
+// 地址照旧写 host:port、不带 scheme:tlsConfig 非空时客户端对每个地址都走 TLS,并按地址里的主机名核对服务端证书。
+func NewEtcdRegistry(endpoints []string, tlsConfig *tls.Config) (*EtcdRegistry, error) {
+	return newEtcdRegistryAt(endpoints, registryRoot, tlsConfig)
 }
 
 // newEtcdRegistryAt 让真 etcd 上的回归用自己的键根,不碰正式的登记处键。
-func newEtcdRegistryAt(endpoints []string, root string) (*EtcdRegistry, error) {
+func newEtcdRegistryAt(endpoints []string, root string, tlsConfig *tls.Config) (*EtcdRegistry, error) {
 	if len(endpoints) == 0 {
 		return nil, errors.New("id issuer: no etcd endpoints for the id registry")
 	}
-	cli, err := clientv3.New(clientv3.Config{Endpoints: endpoints})
+	cli, err := clientv3.New(clientv3.Config{Endpoints: endpoints, TLS: tlsConfig})
 	if err != nil {
 		return nil, fmt.Errorf("id issuer: connect etcd for the id registry: %w", err)
 	}
@@ -132,13 +136,22 @@ func (r *EtcdRegistry) nextKey() string {
 type claimJSON struct {
 	State            string `json:"state"`
 	Authority        string `json:"authority,omitempty"`
+	Deployment       string `json:"deployment,omitempty"`
 	PrimaryCluster   uint64 `json:"primary_cluster"`
 	SecondaryCluster uint64 `json:"secondary_cluster"`
 	HighWater        uint64 `json:"high_water"`
 	Blocks           uint64 `json:"blocks"`
 }
 
+func toClaimJSON(c Claim) claimJSON {
+	return claimJSON{State: c.State, Authority: c.Authority, Deployment: c.Deployment, PrimaryCluster: c.PrimaryCluster,
+		SecondaryCluster: c.SecondaryCluster, HighWater: c.HighWater, Blocks: c.Blocks}
+}
+
 func validClaim(c Claim) bool {
+	if c.Deployment != "" && !ValidDeployment(c.Deployment) {
+		return false
+	}
 	switch c.State {
 	case ClaimActive:
 		return ValidAuthority(c.Authority) && c.HighWater != 0
@@ -164,7 +177,7 @@ func (r *EtcdRegistry) Read(ctx context.Context, region uint8) (ClaimRecord, err
 	if err := decodeStrict(kv.Value, &body); err != nil {
 		return ClaimRecord{}, fmt.Errorf("id issuer: registry entry %s is corrupt: %w", key, err)
 	}
-	claim := Claim{State: body.State, Authority: body.Authority, PrimaryCluster: body.PrimaryCluster,
+	claim := Claim{State: body.State, Authority: body.Authority, Deployment: body.Deployment, PrimaryCluster: body.PrimaryCluster,
 		SecondaryCluster: body.SecondaryCluster, HighWater: body.HighWater, Blocks: body.Blocks}
 	if !validClaim(claim) {
 		return ClaimRecord{}, fmt.Errorf("id issuer: registry entry %s is corrupt: %+v", key, body)
@@ -178,8 +191,7 @@ func (r *EtcdRegistry) CompareAndSwap(ctx context.Context, region uint8, prev Cl
 	if !validClaim(next) {
 		return false, fmt.Errorf("id issuer: refusing to write registry entry %s: %+v", key, next)
 	}
-	raw, err := json.Marshal(claimJSON{State: next.State, Authority: next.Authority, PrimaryCluster: next.PrimaryCluster,
-		SecondaryCluster: next.SecondaryCluster, HighWater: next.HighWater, Blocks: next.Blocks})
+	raw, err := json.Marshal(toClaimJSON(next))
 	if err != nil {
 		return false, err
 	}
@@ -222,8 +234,10 @@ func (r *EtcdRegistry) ClaimNew(ctx context.Context, region uint8, claim Claim) 
 	if uint32(region) < next {
 		return false, fmt.Errorf("%w: code %d is below the next claimable code %d", ErrRegionClaimed, region, next)
 	}
-	raw, err := json.Marshal(claimJSON{State: claim.State, Authority: claim.Authority, PrimaryCluster: claim.PrimaryCluster,
-		SecondaryCluster: claim.SecondaryCluster, HighWater: claim.HighWater, Blocks: claim.Blocks})
+	if uint32(region) > next {
+		return false, fmt.Errorf("%w: the next claimable code is %d, this deployment is configured with %d", ErrRegionOutOfOrder, next, region)
+	}
+	raw, err := json.Marshal(toClaimJSON(claim))
 	if err != nil {
 		return false, err
 	}

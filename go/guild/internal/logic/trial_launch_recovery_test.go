@@ -29,6 +29,7 @@ import (
 
 	"guild/internal/config"
 	"guild/internal/data"
+	base "proto/common/base"
 	pb "proto/guild"
 	matchpb "proto/match"
 )
@@ -50,6 +51,9 @@ type launchRecoveryStore struct {
 	// expedited:每次 ExpediteTrialLaunchCheck 的 request_id;expediteCtxLive:当时 ctx 是否还没结束(须用独立预算)。
 	expedited       []uint64
 	expediteCtxLive []bool
+	// endReasons:每次 RecordTrialLaunchEndReason 记下的原因;handOff:记原因与提前检查的先后("record" / "expedite")。
+	endReasons []*base.TipInfoMessage
+	handOff    []string
 }
 
 func newLaunchRecoveryStore(pending ...*pb.GuildTrialLaunchOriginal) *launchRecoveryStore {
@@ -75,6 +79,13 @@ func (s *launchRecoveryStore) PrepareTrialLaunch(context.Context, uint64, data.T
 func (s *launchRecoveryStore) ExpediteTrialLaunchCheck(ctx context.Context, requestID uint64) error {
 	s.expedited = append(s.expedited, requestID)
 	s.expediteCtxLive = append(s.expediteCtxLive, ctx.Err() == nil)
+	s.handOff = append(s.handOff, "expedite")
+	return nil
+}
+
+func (s *launchRecoveryStore) RecordTrialLaunchEndReason(_ context.Context, _ uint64, tip *base.TipInfoMessage) error {
+	s.endReasons = append(s.endReasons, proto.Clone(tip).(*base.TipInfoMessage))
+	s.handOff = append(s.handOff, "record")
 	return nil
 }
 
@@ -414,10 +425,16 @@ func TestStartTrialAtMatchExpeditesOnlySettledFailures(t *testing.T) {
 			}
 			if !c.wantExpedite {
 				require.Empty(t, store.expedited, "Start 结局未知或已开局,不提前检查")
+				require.Empty(t, store.endReasons, "Start 结局未知或已开局,不记结束原因")
 				return
 			}
 			require.Equal(t, []uint64{397}, store.expedited)
 			require.Equal(t, []bool{true}, store.expediteCtxLive, "提前检查用独立预算,不继承已见底的请求预算")
+			// 2026-11-11:先记下回给发起人的结束原因(与写进大厅的同一对 tip id 与参数),再提前检查,恢复器释放时读得到它。
+			require.Equal(t, []string{"record", "expedite"}, store.handOff)
+			require.Len(t, store.endReasons, 1)
+			require.Equal(t, end.tipID, store.endReasons[0].GetId())
+			require.Equal(t, end.params, store.endReasons[0].GetParameters())
 		})
 	}
 

@@ -537,6 +537,14 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         response.mutable_error_message()->set_id(kInvalidTableData);
         return;
     }
+    // 战斗剧本(battle-script.md §4.3):match 冻结的剧本过不了本节点配表的复核时整份忽略、该队出手照旧,
+    // 对局照常进行(剧本只影响出招,不碰资产)。每条都记 ERROR:正常情况下 match 已用同一规则校验过,
+    // 出现就说明两边配表版本不一致或编排层出错
+    for (const auto &rejection : room->engine.ScriptRejections())
+    {
+        LOG_ERROR << "CreateBattle battle script ignored: battle_id=" << battleId
+                  << " battle_config_id=" << request.battle_config_id() << " reason=" << rejection;
+    }
 
     for (const auto &snapshot : request.players())
     {

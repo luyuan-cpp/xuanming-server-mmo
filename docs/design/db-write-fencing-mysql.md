@@ -1793,17 +1793,17 @@ DBTask TopicGeneration 换代的排空集合同时包含旧代 Kafka、retry 与
 
 本节约束本批隔离候选；尚未正规生成、编译、测试或通过真实环境验收，不能据此执行线上维护。两版各自实现内部协议。物理目标为本任务已核 TiDB 8.5.8 维护构建；锁原语必须由该目标实际最小权限资格原件选定。
 
-每个进程启动使用预先固定的 writer key、instance、独立 SQL principal 与 REGISTER 全文。主体和 instance 永久唯一，重启不能复用旧身份。normal 装配一次消费私有 grant，连接池共享同一 WriterConfig；只有独立 Schema/Operator 装配持有预建或维护能力。normal 不建表、不注册、不冻结、不解冻。fresh-prestart 遇已有表或部分失败残留就拒绝，保留现场。Windows 使用真实 ACL、无 reparse 路径与本地 NTFS 的耐久独占创建；该平台候选尚待合并与实际验证，不能把 Mode().Perm() 当作 Windows ACL。
+每个进程启动是一代：writer key、instance 与 REGISTER 全文每代都新，永久唯一，REVOKED 永久，重启不能复用旧的一代。SQL principal 按槽位（StatefulSet 序号）预先批准，同一槽位上下两代共用，同一逻辑库里同一账号同一时刻至多一代 ACTIVE；新一代在注册事务里原子退休上一代（2026-11-10 缺口第 22 条改，原来是「每次启动一个新账号」，见[写者名册换代](writer-roster-exhaustion-20261106.md) §5）。slot 行只属于在役的一代：一代结束（换代、人工或排空退休）时，结束它的事务在锁齐它的 64 个 slot 之后把这 64 行删掉，与 registry 置 REVOKED、追加 RETIRE 收据同一事务；registry 行（REVOKED，唯一约束的墓碑与 boot_seq 高水位）与生命周期收据永久保留。闸门读不到自己的 slot 行与读到 REVOKED 同样拒绝（2026-11-11，同文 §5.8）。normal 装配一次消费私有 grant，连接池共享同一 WriterConfig；只有独立 Schema/Operator 装配持有预建或维护能力。normal 不建表、不注册、不冻结、不解冻。fresh-prestart 遇已有表或部分失败残留就拒绝，保留现场。Windows 使用真实 ACL、无 reparse 路径与本地 NTFS 的耐久独占创建；该平台候选尚待合并与实际验证，不能把 Mode().Perm() 当作 Windows ACL。
 
-维护职责按逻辑角色划分：P1 永久关闭 SOURCE 并等待已接收集合确定收敛。兼任 RELAY 的同一物理 writer 保留原 SQL handle，直到 P3 的消费、重试、补投、回调和最终存盘全部确定结束。无 RELAY 的 writer 可在 P1 退役；兼任者只能在 P3 同轮退役。退役先锁自身全部 64 个 slot，再锁 meta/run，核对永久 ROLE_CLOSED / RELAY_QUIESCED 原件中的同 boot、同角色、复活围栏和已收敛前沿，最后原子 REVOKE registry/slots、增加 catalog_revision 并追加 RETIRE 全文收据。超时、取消、purge、PID 消失及 UNKNOWN 不生成成功闭合事实。
+维护职责按逻辑角色划分：P1 永久关闭 SOURCE 并等待已接收集合确定收敛。兼任 RELAY 的同一物理 writer 保留原 SQL handle，直到 P3 的消费、重试、补投、回调和最终存盘全部确定结束。无 RELAY 的 writer 可在 P1 退役；兼任者只能在 P3 同轮退役。退役先锁自身全部 64 个 slot，再锁 meta/run，核对永久 ROLE_CLOSED / RELAY_QUIESCED 原件中的同 boot、同角色、复活围栏和已收敛前沿，最后原子地把 registry 置 REVOKED、删掉它的 64 个 slot（2026-11-11 起，原为置 REVOKED）、增加 catalog_revision 并追加 RETIRE 全文收据。超时、取消、purge、PID 消失及 UNKNOWN 不生成成功闭合事实。
 
-P0 的 ManifestProto、初始 ACTIVE 全集、E 和 catalog_revision 永久不回写。初始角色的物理 key 并集必须覆盖 ACTIVE 全集。后续按 (catalog_revision, request_id) 有界读取 P0 之后的永久生命周期收据，只接受连续版本、同 run、同原 E、完整摘要匹配、每 key 恰一次的 RETIRE。预期 ACTIVE 等于初始集合减去这些合法退役；出现新 REGISTER、外来 run、版本缺口、重复或未知 key 都拒绝。正常 NON_SQL_CLOSED 要求全部旧 writer 已退役，紧急 HOLD 则可保留尚在途的精确 ACTIVE 集。
+P0 的 ManifestProto、初始 ACTIVE 全集、E 和 catalog_revision 永久不回写。初始角色的物理 key 并集必须覆盖 ACTIVE 全集。后续按 (catalog_revision, request_id) 有界读取 P0 之后的永久生命周期收据，只接受连续版本、同 run、同原 E、完整摘要匹配、每 key 恰一次的 RETIRE。换代退休（带 `successor_request_id` 的非 run RETIRE）不会出现在这段里：run 开着时注册事务拒绝换代，run 之前换代的结果就是 P0 的 ACTIVE 全集。预期 ACTIVE 等于初始集合减去这些合法退役；出现新 REGISTER、外来 run、版本缺口、重复或未知 key 都拒绝。正常 NON_SQL_CLOSED 要求全部旧 writer 已退役，紧急 HOLD 则可保留尚在途的精确 ACTIVE 集。
 
 冻结固定锁序为 R 的 slots→reconcile→meta→run→ticket、J 的 slots→meta→run→ticket。锁前推导预期 ACTIVE，锁后按同一实际目录版本重新折叠并核精确等集；全部退役后的空集仍须原子推进 E 和 writable。正常票据只能消费同轮 NON_SQL_CLOSED，票据 ID、目标冻结请求及完整时间窗均进入授权请求摘要。冻结原请求的 prior 固定为 grant 之前已知的排空/危险收据；事务通过 ticket.grant_receipt 核验真正的授权收据及其 prior，避免冻结摘要与尚未生成的 grant 收据互相依赖。
 
 正常解冻只消费原 NORMAL frozen ticket、原冻结收据和 RELEASE_READY 的完整恢复审核。Plan 的 E 始终是 P0 值；冻结前 E、解冻前 E+1、解冻后 E+2。R 的 route_watermark_floor_ms 由原审核证据固定，并在已有 reconcile 锁内与 writable 同一事务取 GREATEST；J 无此行时要求该字段为 0。紧急冻结只进入 EMERGENCY_FROZEN_HOLD，不能自动升级为正常成功或自动解冻。
 
-SQL_RELEASED 后只允许同 run 的全新预批准身份注册。新 boot 先准备消费者、保持 SOURCE 关闭；实际 open 产生正式 ACK 后才追加 PUBLICATION_REOPENED。旧 boot 不重新开闸。缺少真实应用 admission/join/ACK 接缝的入口必须继续保留维护状态，不能用部署脚本、日志或进程退出替应用事实。所有未完成接缝统一进入精确范围清单。
+SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的槽位账号，身份由注册器现场生成，上一代已在排空中退休，所以这一步只注册、不换代。新 boot 先准备消费者、保持 SOURCE 关闭；实际 open 产生正式 ACK 后才追加 PUBLICATION_REOPENED。旧 boot 不重新开闸。缺少真实应用 admission/join/ACK 接缝的入口必须继续保留维护状态，不能用部署脚本、日志或进程退出替应用事实。所有未完成接缝统一进入精确范围清单。
 
 本批新增回归覆盖：P1/P3 合法退役、共享 boot 提前退役拒绝、连续目录折叠与空 ACTIVE 冻结、外来目录变化拒绝、票据换参拒绝、UNKNOWN 不返回成功收据，以及 Schema 专用的既有迁移语句边界。这里只记录用例源码；执行证据仍为零。
 
@@ -1865,3 +1865,60 @@ SQL_RELEASED 后只允许同 run 的全新预批准身份注册。新 boot 先�
 - **回档 `-Apply` 在 #3 裁决前不可用**（`k8s_zone_rollback.ps1`）：没有可回档的线上 zone。
 
 首次上线直接以「go/db `dual` + scene / login 严格提交屏障」整批起步，缺省配置即可正常登录。上面这些机制保留，供上线之后的回退、混跑与回档使用；届时再按 §8.3、§8.6 的门禁执行。上线后本段作废，改以当时的线上状态为准。
+
+### 2026-11-10 写事务闸门的开销与热点（缺口清单第 20 条；11-11 定案并落码，未编译、未运行）
+
+**问题**（11-05 全链路水平扩展盘点）：每笔写事务过闸门要多发几条语句，而且所有实例的写事务都改写本逻辑库同一张小表 `writer_slot`。在 TiDB 上，这张表很可能只落在一个 Region 里，成为单 Region 写热点，加副本也提不高写吞吐。
+
+**每笔写事务的闸门语句**（`go/shared/authoritysql/writer.go`，11-11 落码之后）：
+
+1. BEGIN 之前点读一次 `route_meta(id=1)`（`beforeBegin`），核世代、可写和 epoch。这一次必须在 BEGIN 之前，不能挪进 RR 快照（`driver.go` `beginLocked` 的注释）。
+2. BEGIN 之后，锁住本实例轮到的那个 slot 行（每个实例 64 行轮转，`lockSlot`）。按锁原语二选一：
+   - `LOCK_TOUCH`：按第 1 步读到的 epoch 做条件改写 `UPDATE writer_slot SET lock_touch=1-lock_touch WHERE … writer_epoch=? …`。命中就不再读这一行：命中说明它此刻的世代、epoch、状态与条件逐列相同，以前紧跟着的那次普通读读到的就是本事务刚写的这一版。没命中才读一次，分清是资格没了（拒绝）还是 epoch 被推进了（冻结）；
+   - `SELECT_ONLY`：直接 `SELECT … FOR UPDATE` 这一行。
+3. 一条普通读同时取 `route_meta` 与 `writer_registry`（`readGateView`，以 `route_meta` 为驱动表左连注册行），核可写、epoch 与 slot 行一致，以及注册摘要、主体和 instance。
+
+合计每笔写事务在事务内只发两条闸门语句；11-10 之前 `LOCK_TOUCH` 档是四条、`SELECT_ONLY` 档是三条。另有 BEGIN 之前那一次点读。`LOCK_TOUCH` 档每笔写事务仍写一次 `writer_slot`。事务外的纯读从 11-06 起只过读闸门：一次 `route_meta` 点读，不开事务，也不碰 `writer_slot`（第 21 条）。
+
+**11-11 定案**（负责人 11-11：「不用等压测数据了，先写完」；下面「之后的压测验证」改为定案之后的验证，不再是动手的前提）：
+
+1. **已落码：事务内的读合成一条，命中的条件写不再回读。** 每笔写事务省一到两个往返，闸门判定不变：
+   - `route_meta` 与 `writer_registry` 两条普通读本来就落在同一个事务快照上，合成一条读到的是同一版。
+   - 退休与冻结都要先拿到 slot 行锁才能落地，所以锁之后的这条读只是复核。
+   - 注册行不在时，左连出来的后五列是 NULL，判资格不符；这与分两条读时「注册行读不到 → 拒绝」相同。
+   - 注册行的核对规则收成一个函数 `registrationMatchesGrant`，开池时的启动核对与每笔写事务共用。
+2. **不做：预切分 `writer_slot`。** 理由：
+   - 收益有上限。每个逻辑库的写者只有几个；主键是 `(writer_key, slot)`，一个写者的 64 行连在一起。按 `writer_key` 切，最多把这几个写者分开，切不开单个写者的负载。
+   - 权限不对口。TiDB 的 `SPLIT TABLE` 要求表的 `INSERT` 权限，`writer_slot` 只有注册账号有；防合并的 `ALTER TABLE … ATTRIBUTES 'merge_option=deny'` 要 `ALTER`，只有迁移账号有。为预切分给迁移账号 `writer_slot` 的 `INSERT`，会放宽写者资格表的最小权限。
+   - 不能按写者切。每次启动都换一个新的 `writer_key`，在注册时按写者切，再禁合并，Region 会随启动次数无限增长。
+   - 真要做，路线是：迁移时由迁移账号设 `merge_option=deny`；注册提交之后，由注册账号按 `writer_key` 首字节做固定的 16 段切分（尽力而为，失败只告警）。触发条件是：KeyViz 或 `tidb_hot_regions` 显示 `writer_slot` 所在 Region 是本库最热的写 Region，同时加副本后存档 TPS 不再上涨。
+3. **加库是扩写吞吐的手段**：玩家档每 zone 一个库，是 `NewPlayerStorageId` 的静态规则。写热点按库分摊，加库按[玩家数据 TiDB 扩容方案](player-data-tidb-scaling-plan.md)的分库办法做，不提高单个闸门的吞吐。
+4. **不做：去掉 BEGIN 之前那次 `route_meta` 读。** 它给 `LOCK_TOUCH` 档的条件写提供 epoch，这是一次当前读的 epoch 校验；挪进事务就落进了 RR 快照（见 `beginLocked` 注释）。要动它，得连锁原语资格一起重新论证。
+
+**之后的压测验证**（交 Codex，按 AGENTS §6 全流程，对比表用 `stress_summarize.ps1` 出）：
+
+- **负载**：以玩家存盘（go/db）为主的写负载，单 zone、单存档库。存档副本数按 1 → 2 → 4 阶梯加，每档稳态不少于 5 分钟。
+- **客户端侧**：用新指标 `writer_gate_seconds{logical_db, phase}`（phase 取 `before_begin`、`enter`、`read`），和同一个库的写事务总耗时对比（go/db 存盘接口已有耗时直方图）。
+- **库侧（TiDB）**：
+  - 在 `information_schema.cluster_statements_summary` 里按语句摘要，看 `route_meta` 点读、`writer_slot` 改写或加锁读、`writer_registry` 读的执行次数与平均耗时，并与业务语句对比；
+  - 用 Dashboard 的流量可视化（KeyViz）看 `writer_slot`、`route_meta` 所在 Region 的读写热度；
+  - 用 `information_schema.tidb_hot_regions` 和 `SHOW TABLE writer_slot REGIONS` 看这几张表落在几个 Region、leader 在哪几台 TiKV 上。
+- **看什么**：
+  - 加副本后，存档 TPS 是否随副本数近似线性增长，热点 Region 的写 QPS 是否顶住不涨（顶住就按上面第 2 条的路线重新评估预切分）；
+  - `before_begin` 与 `enter` 两段的 p50 之和占写事务 p50 的比例，与 11-10 之前的四条 / 三条语句相比降了多少。
+- 不预先宣称有提升，对比表出来之后结论记在本节。
+
+**落码**：
+
+- 11-10：测量用的 `writer_gate_seconds`，闸门判定不变。定义在 `go/shared/authoritysql/metrics.go`；三个观察点在 `writer.go` 的 `beforeBegin`、`enter`、`admitRead`；单测 `metrics_gate_test.go`。
+- 11-11：`writer.go` 的 `enter` 拆出 `lockSlot`、`readSlotRow`、`readGateView`、`registrationMatchesGrant`、`parseRawMeta`；`verifyBootRegistration` 改用 `registrationMatchesGrant`。单测 `writer_frozen_test.go`：假连接认得合并读并数语句；新增 `TestGateEnterSendsTwoStatements`、`TestGateDeniesWhenRegistrationRowIsMissing`、`TestGateLockTouchEpochAdvancedDuringEnterIsFrozen`；原有的冻结与拒绝分类用例不改，照样要过。
+
+**验证**（交 Codex）：
+
+1. 在 `go/shared` 下（`GOTOOLCHAIN=local`）跑 `gofmt -l authoritysql/`（应无输出）、`go vet ./authoritysql/` 与 `go test -count=1 ./authoritysql/`。上面三条新用例与 `TestGateClassifiesFrozenApartFromDenied` 全部要过。
+2. 真库闸门用例：合并读用了 `LEFT JOIN`，要在真库上走一遍。MySQL 与 TiDB 各跑一轮，两种锁原语（`MMORPG_SQL_FIXTURE_LOCK_PRIMITIVE`）都要跑。门控按 `writer_gate_tidb_test.go`、`writer_tidb_test.go`、`writer_succession_tidb_test.go` 文件头：设 `MMORPG_SQL_FIXTURE_ADMIN_DSN` 等夹具变量，再带上 `MAIL_RANK_REQUIRE_TESTS=1`，没配齐就直接失败、不跳过。
+3. 变异取红（在 `%TEMP%` 副本里改，不动主仓），每项都要红在目标断言上、不是编译错误：
+   - 把 `lockSlot` 的 `LOCK_TOUCH` 命中分支改成仍去读 slot 行：`TestGateEnterSendsTwoStatements/LOCK_TOUCH` 红；
+   - 删掉 `enter` 里的 `registrationMatchesGrant` 判定：`TestGateDeniesWhenRegistrationRowIsMissing` 与 `TestGateClassifiesFrozenApartFromDenied/registry_主体不符是资格问题` 红；
+   - 删掉 `enter` 里的 `|| meta.WriterEpoch != epoch`：`TestGateLockTouchEpochAdvancedDuringEnterIsFrozen` 红。
+   - 合并读改成内连接之后，注册行缺失时一行都读不到，同样判拒绝。单测的假连接不解析 SQL，这一点只能由第 2 步的真库用例覆盖。

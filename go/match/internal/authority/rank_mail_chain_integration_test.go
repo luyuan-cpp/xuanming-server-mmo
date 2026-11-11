@@ -125,7 +125,8 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 		require.Equal(t, uint64(1), produced)
 		require.Equal(t, produced, committed)
 		require.NotZero(t, board)
-		require.NoError(t, rankDB.QueryRowContext(ctx, "SELECT committed_cursor FROM rank_board WHERE board_id=?", board).Scan(&rankCursor))
+		// 榜上已落账的批次总数是各来源片片行的游标之和(rank 2026-11-11 起游标在 rank_board_shard 上,缺口清单第 17 条)。
+		require.NoError(t, rankDB.QueryRowContext(ctx, "SELECT COALESCE(SUM(committed_cursor),0) FROM rank_board_shard WHERE board_id=?", board).Scan(&rankCursor))
 		require.Equal(t, uint64(i+1), rankCursor)
 		var body []byte
 		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT entries FROM match_rank_outbox WHERE source_epoch=1 AND mode=3 AND shard=? AND source_cursor=?", shard, produced).Scan(&body))
@@ -497,7 +498,7 @@ func chainBootEnvironment(t *testing.T, ctx context.Context, fixture *sqltest.Fi
 	meta, err := catalog.CurrentMeta(ctx)
 	require.NoError(t, err)
 	deployment := "chain-" + hex.EncodeToString(instance[:])
-	writer := &dbpb.SqlWriterRegistry{WriterKey: writerID[:], InstanceId: instance[:], Generation: fixture.Generation, SqlPrincipal: []byte(normal.User + "@%"), State: dbpb.SqlWriterRegistry_ACTIVE, RegisteredMs: uint64(time.Now().UnixMilli())}
+	writer := &dbpb.SqlWriterRegistry{WriterKey: writerID[:], InstanceId: instance[:], Generation: fixture.Generation, SqlPrincipal: []byte(normal.User + "@%"), State: dbpb.SqlWriterRegistry_ACTIVE, RegisteredMs: uint64(time.Now().UnixMilli()), BootSeq: 1}
 	request := &dbpb.SqlWriterLifecycleReceipt_Request{RequestId: requestID[:], Kind: dbpb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: database, ProtectedSchemas: []string{database}, DeploymentDigest: opts.PhysicalAuthoritySHA256, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
 	request, err = authoritysql.CanonicalRegistrationRequest(request)
 	require.NoError(t, err)

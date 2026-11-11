@@ -176,11 +176,11 @@ func (s *Service) getMyTeam(ctx context.Context, caller uint64, in *teampb.GetMy
 	}
 	if in.GetNotifyOnline() {
 		if team := resp.GetTeam(); team.GetTeamId() != 0 {
-			s.publishOnline(caller, team.GetTeamId())
+			s.publishOnline(ctx, caller, team.GetTeamId())
 		}
 	}
 	if in.GetRegroup() {
-		s.publishRegroup(caller, resp.GetTeam())
+		s.publishRegroup(ctx, caller, resp.GetTeam())
 	}
 	return resp
 }
@@ -430,7 +430,7 @@ func (s *Service) runMutate(ctx context.Context, caller uint64, bind Binding, op
 		logx.WithContext(ctx).Errorf("[team] %s storage failure player=%d team=%d: %v", spec.method, caller, bind.TeamId(), err)
 		return s.respond(ctx, caller, ErrInternal, 0), nil
 	}
-	s.mutateEffects(caller, spec.method, res)
+	s.mutateEffects(ctx, caller, spec.method, res)
 
 	switch res.Outcome {
 	case OutcomeCommitted:
@@ -457,12 +457,12 @@ func (s *Service) runMutate(ctx context.Context, caller uint64, bind Binding, op
 }
 
 // mutateEffects 记一次 Mutate 的冲突指标,并派发已落盘提交的副作用。
-func (s *Service) mutateEffects(caller uint64, method string, res *MutateResult) {
+func (s *Service) mutateEffects(ctx context.Context, caller uint64, method string, res *MutateResult) {
 	for i := 0; i < res.Conflicts; i++ {
 		metrics.ObserveTeamCommitRetry(method)
 	}
 	if res.Outcome == OutcomeCommitted {
-		s.publish(caller, []*CommitResult{res.Commit})
+		s.publish(ctx, caller, []*CommitResult{res.Commit})
 	}
 }
 

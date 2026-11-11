@@ -194,7 +194,8 @@ func TestApplicationQuotaRealRedis(t *testing.T) {
 	if addr == "" {
 		t.Skip("设置 GUILD_QUOTA_TEST_REDIS 以验证独立真 Redis")
 	}
-	rdb := redis.NewClient(&redis.Options{Addr: addr, PoolSize: 4, MaxActiveConns: 4, MaxRetries: -1, DialerRetries: 1,
+	rdb := redis.NewClient(&redis.Options{Addr: addr, PoolSize: ApplicationQuotaRedisPoolSize,
+		MaxActiveConns: ApplicationQuotaRedisPoolSize, MaxRetries: -1, DialerRetries: 1,
 		ContextTimeoutEnabled: true, DialTimeout: ApplicationQuotaBudget, ReadTimeout: ApplicationQuotaBudget,
 		WriteTimeout: ApplicationQuotaBudget, PoolTimeout: ApplicationQuotaBudget})
 	t.Cleanup(func() { _ = rdb.Close() })

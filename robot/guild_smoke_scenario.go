@@ -5,19 +5,19 @@ package main
 // (docs/design/guild-zone-client-access.md §6、docs/design/guild-phase2/02-management.md §24):
 //
 //	0. 预备:每个机器人各自撤回遗留的待审申请,再 GetPlayerGuild,还在帮会里就解散(帮主)或退出(成员)—— 同账号可反复跑;
-//	1. A 建帮,请求体 zone_id 故意填错 → 受理,且帮会 zone_id == zone_a(zone 由服务端按归属映射决定);
+//	1. A 建帮 → 受理,且帮会 zone_id == zone_a(请求体没有区字段,zone 由服务端按归属映射决定);
 //	2. A 再建一个 → kGuildAlreadyInGuild;
 //	3. B(同区)查该帮在本区榜上的名次 → 上榜;
-//	4. C(zone_b,cross_zone=true 时):GetGuild → 不存在;查名次(请求体伪造 zone_a)→ 未上榜;
+//	4. C(zone_b,cross_zone=true 时):GetGuild → 不存在;查名次(只查 C 的归属区榜)→ 未上榜;
 //	   本区榜里没有它;申请入帮 → 不存在;用同一个帮名建帮 → kGuildNameTaken(帮名全局唯一);
 //	5. B 未入帮时改公告 → kGuildNoPermission;
 //	6. B 申请入帮 → 受理,B 与 A 各自列得到这条申请;A 审批通过 → 响应快照里 B 在册,B 的 GetPlayerGuild 看到自己是成员;
 //	   member-names:这份快照里每个成员的 name 与帮会的 leader_name 都非空(名字来自 data_service 名字注册表);
 //	7. A 改公告 → B 读到;700 字节公告 → kGuildAnnouncementTooLong(guild 侧拒绝,整包仍 < gate 1KB);
-//	8. 身份伪造:B 发 LeaveGuild 但请求体 player_id 填 A → 服务端按会话身份让 B 退出,A 仍是帮主;
+//	8. B 退帮:请求体没有玩家字段,服务端按会话身份让 B 退出,A 仍是帮主;
 //	9. 内部方法:A 发 UpdateGuildScore → 必须**超时**(SERVER_ONLY 不在 gate 上行白名单里,client-rpc-callback.md §7 R4),
 //	   随后查榜成功且积分仍是 0;请求到不了路由服与 guild,它们的日志里不会有这次请求;
-//	   guild 会话拦截器(方法级白名单)是第二道防线,经 gate 走不到,由 session 单测证明;
+//	   guild 的入口准入(按生成的客户端方法集合)是第二道防线,经 gate 走不到,由 session 单测证明;
 //
 // 管理段 M1–M10(设计 docs/design/guild-phase2/02-management.md §24.2),跑在第 9 步之后、解散之前。
 // 进入这一段时帮会里只剩帮主 A(B 已在第 8 步退帮),同区的 D / E / F 三人全程在场:
@@ -143,7 +143,6 @@ var (
 	tipGuildAlreadyInGuild     = uint32(tiptable.GuildError_kGuildAlreadyInGuild)
 	tipGuildNotFound           = uint32(tiptable.GuildError_kGuildNotFound)
 	tipGuildNotInGuild         = uint32(tiptable.GuildError_kGuildNotInGuild)
-	tipGuildLeaderCantLeave    = uint32(tiptable.GuildError_kGuildLeaderCantLeave)
 	tipGuildNoPermission       = uint32(tiptable.GuildError_kGuildNoPermission)
 	tipGuildNotRanked          = uint32(tiptable.GuildError_kGuildNotRanked)
 	tipGuildNameTaken          = uint32(tiptable.GuildError_kGuildNameTaken)
@@ -286,10 +285,9 @@ func RunGuildSmoke(cfg *config.Config) {
 
 	// ---- 步骤 1:A 建帮,zone 由服务端决定 ----
 	guildName := "烟测" + guildSmokeNonce()
-	spoofedZone := sc.ZoneA + 1000
 	created := &guildpb.CreateGuildResponse{}
 	if err := a.expect(game.GuildServiceCreateGuildMessageId,
-		&guildpb.CreateGuildRequest{Name: guildName, ZoneId: spoofedZone}, created, 0); err != nil {
+		&guildpb.CreateGuildRequest{Name: guildName}, created, 0); err != nil {
 		fail("create", "%v", err)
 	}
 	guild := created.GetGuild()
@@ -298,8 +296,8 @@ func RunGuildSmoke(cfg *config.Config) {
 		fail("create", "Guild creation was accepted but the response contains no guild")
 	}
 	if guild.GetZoneId() != sc.ZoneA {
-		fail("create-zone", "Guild zone_id=%d, expected A home zone %d (the server must ignore request-body zone_id=%d)",
-			guild.GetZoneId(), sc.ZoneA, spoofedZone)
+		fail("create-zone", "Guild zone_id=%d, expected A home zone %d (the zone comes from the session's home zone)",
+			guild.GetZoneId(), sc.ZoneA)
 	}
 	if role, ok := guildSmokeRoleOf(guild, a.gc.PlayerId); guild.GetLeaderId() != a.gc.PlayerId || !ok || role != guildSmokeRoleLeader {
 		fail("create-leader", "leader_id=%d A=%d A role=%d (member=%v), expected A to be guild leader", guild.GetLeaderId(), a.gc.PlayerId, role, ok)
@@ -332,12 +330,12 @@ func RunGuildSmoke(cfg *config.Config) {
 			fail("other-zone-get", "%v", err)
 		}
 		if err := c.expect(game.GuildServiceGetGuildRankByGuildMessageId,
-			&guildpb.GetGuildRankByGuildRequest{GuildId: guildID, ZoneId: sc.ZoneA}, &guildpb.GetGuildRankByGuildResponse{}, tipGuildNotRanked); err != nil {
+			&guildpb.GetGuildRankByGuildRequest{GuildId: guildID}, &guildpb.GetGuildRankByGuildResponse{}, tipGuildNotRanked); err != nil {
 			fail("other-zone-rank-entry", "%v", err)
 		}
 		page := &guildpb.GetGuildRankResponse{}
 		if err := c.expect(game.GuildServiceGetGuildRankMessageId,
-			&guildpb.GetGuildRankRequest{Page: 1, PageSize: guildSmokeRankPageSize, ZoneId: sc.ZoneA}, page, 0); err != nil {
+			&guildpb.GetGuildRankRequest{Page: 1, PageSize: guildSmokeRankPageSize}, page, 0); err != nil {
 			fail("other-zone-rank-page", "%v", err)
 		}
 		for _, entry := range page.GetEntries() {
@@ -447,30 +445,27 @@ func RunGuildSmoke(cfg *config.Config) {
 	}
 	zap.L().Info("[guild-smoke] step 7: announcement published and oversize rejected")
 
-	// ---- 步骤 8:请求体伪造 player_id 不生效 ----
+	// ---- 步骤 8:B 退帮,身份只取会话(请求体里没有玩家字段) ----
 	leaveTip, err := b.rpc(game.GuildServiceLeaveGuildMessageId,
-		&guildpb.LeaveGuildRequest{PlayerId: a.gc.PlayerId}, &guildpb.LeaveGuildResponse{})
+		&guildpb.LeaveGuildRequest{}, &guildpb.LeaveGuildResponse{})
 	if err != nil {
-		fail("spoof-leave", "%v", err)
-	}
-	if leaveTip == tipGuildLeaderCantLeave {
-		fail("spoof-leave", "The server processed B leave request as forged player_id=%d (leader A) from the request body; identity was not taken from the session", a.gc.PlayerId)
+		fail("member-leave", "%v", err)
 	}
 	if leaveTip != 0 {
-		fail("spoof-leave", "B leaving the guild should be accepted (tip=0), got tip=%d", leaveTip)
+		fail("member-leave", "B leaving the guild should be accepted (tip=0), got tip=%d", leaveTip)
 	}
 	if err := b.expect(game.GuildServiceGetPlayerGuildMessageId,
 		&guildpb.GetPlayerGuildRequest{}, &guildpb.GetPlayerGuildResponse{}, tipGuildNotInGuild); err != nil {
-		fail("spoof-leave-verify-b", "%v", err)
+		fail("member-leave-verify-b", "%v", err)
 	}
 	aGuild, err := a.myGuild()
 	if err != nil {
-		fail("spoof-leave-verify-a", "%v", err)
+		fail("member-leave-verify-a", "%v", err)
 	}
 	if aGuild.GetLeaderId() != a.gc.PlayerId || len(aGuild.GetMembers()) != 1 {
-		fail("spoof-leave-verify-a", "A guild leader=%d member count=%d, expected A still as leader with only 1 member", aGuild.GetLeaderId(), len(aGuild.GetMembers()))
+		fail("member-leave-verify-a", "A guild leader=%d member count=%d, expected A still as leader with only 1 member", aGuild.GetLeaderId(), len(aGuild.GetMembers()))
 	}
-	zap.L().Info("[guild-smoke] step 8: spoofed player_id ignored, session identity used")
+	zap.L().Info("[guild-smoke] step 8: member left the guild using the session identity")
 
 	// ---- 步骤 9:内部方法 UpdateGuildScore 对客户端关闭 ----
 	// 它标了 CLIENT_RPC_SERVER_ONLY:gate 的上行白名单只收客户端能发起的方法(REQUEST / ONE_WAY,

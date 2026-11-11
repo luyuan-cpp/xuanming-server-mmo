@@ -3,6 +3,7 @@
 #include <array>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -14,6 +15,7 @@
 
 #include "battle/system/player_battle.h"
 #include "engine/core/time/system/time.h"
+#include "engine/core/utils/proto/unknown_field_carry.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
@@ -96,8 +98,9 @@ constexpr AssetOpStreamRule kAssetOpStreamRules[] = {
 	 {TX_GUILD_SHOP, TX_GUILD_ACTIVITY_REWARD, TX_UNKNOWN}},
 	{ASSET_OP_STREAM_TRADE_DEBIT, AssetOpDirection::kDebit, 3,
 	 {TX_AUCTION_SELL, TX_TRADE, TX_AUCTION_BUY}},
-	{ASSET_OP_STREAM_TRADE_CREDIT, AssetOpDirection::kCredit, 2,
-	 {TX_AUCTION_BUY, TX_TRADE, TX_UNKNOWN}},
+	// TX_AUCTION_RETURN:退回本人托管的资产,不判获取封禁(GainBlockService::CountsAsGain,审计 r2-trade#1)。
+	{ASSET_OP_STREAM_TRADE_CREDIT, AssetOpDirection::kCredit, 3,
+	 {TX_AUCTION_BUY, TX_TRADE, TX_AUCTION_RETURN}},
 	{ASSET_OP_STREAM_SYSTEM_CREDIT, AssetOpDirection::kCredit, 3,
 	 {TX_SYSTEM_GRANT, TX_MAIL_ATTACHMENT, TX_GM_GRANT}},
 	{ASSET_OP_STREAM_GM_RECALL, AssetOpDirection::kDebit, 1,
@@ -419,6 +422,28 @@ const ::CurrencyAmount* FindCurrencyUnknownToThisVersion(const ::AssetBundle& bu
 	return nullptr;
 }
 
+// 包里第一个本节点表里查不到的物品 / 宝宝配置号;都查得到时返回 nullopt(2026-11-11,混版本设计 §13 第 10 条)。
+// Item / Pet 表行只增不删(data/schema 里的 cfg_ids_permanent,导表器守住),查不到只可能是更新版本或尚未热更到
+// 本节点的行:是版本错位,不是坏包。所以第 8 步的确定性校验不判"行存在",只判配置号非 0,
+// 依赖行内容的规则只在行存在时才判。
+struct ConfigUnknownToThisVersion
+{
+	const char* table; // 只进日志
+	uint32_t id;
+};
+
+std::optional<ConfigUnknownToThisVersion> FindConfigUnknownToThisVersion(const ::AssetBundle& bundle)
+{
+	const auto& items = ItemTableManager::Instance();
+	for (const auto& item : bundle.items())
+		if (!items.Exists(item.config_id())) return ConfigUnknownToThisVersion{"Item", item.config_id()};
+	for (const auto& transfer : bundle.item_instances())
+		if (!items.Exists(transfer.config_id())) return ConfigUnknownToThisVersion{"Item", transfer.config_id()};
+	if (bundle.has_pet_instance() && !PetTableManager::Instance().Exists(bundle.pet_instance().pet_table_id()))
+		return ConfigUnknownToThisVersion{"Pet", bundle.pet_instance().pet_table_id()};
+	return std::nullopt;
+}
+
 bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
 {
 	if (HasUnsupportedP2Fields(bundle))
@@ -442,9 +467,13 @@ bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
 		if (!IsCurrencyAmountValid(currency) || !types.insert(currency.currency_type()).second) { why = "invalid debit currency"; return false; }
 	for (const auto& item : bundle.items())
 	{
+		if (item.config_id() == 0 || item.count() == 0 || item.count() > 4096 || !configs.insert(item.config_id()).second)
+		{ why = "quantity debit requires distinct non-zero configurations with a count in [1, 4096]"; return false; }
+		// 本节点表里查不到的配置由第 8b 步按版本错位处理(FindConfigUnknownToThisVersion)。
 		const auto* row = ItemTableManager::Instance().FindByIdSilent(item.config_id()).first;
-		if (item.count() == 0 || item.count() > 4096 || row == nullptr || row->max_stack_size() <= 1 || !configs.insert(item.config_id()).second)
-		{ why = "quantity debit requires distinct stackable configurations"; return false; }
+		if (row == nullptr) continue;
+		if (row->max_stack_size() <= 1)
+		{ why = "quantity debit requires stackable configurations"; return false; }
 		// 装备行被误配成可叠加时也不按数量扣:强化、镶嵌、随机属性都在实例上,按数量扣出、再按数量发给对侧,
 		// 这些属性会无声丢失。装备只按 guid 转移(item_uuids)。确定性失败,记终态拒绝(AGENTS §11.3 资产路径 fail-closed)。
 		if (row->equip_kind() != 0)
@@ -497,34 +526,34 @@ bool ValidateCreditBundle(const ::AssetBundle& bundle, std::string& why)
 			why = "credit item count is 0";
 			return false;
 		}
-		if (!seenConfigIds.insert(item.config_id()).second)
+		if (item.config_id() == 0 || !seenConfigIds.insert(item.config_id()).second)
 		{
-			why = "credit contains duplicate item config_id";
+			why = "credit contains item config_id 0 or a duplicate config_id";
 			return false;
 		}
-		if (ItemTableManager::Instance().FindByIdSilent(item.config_id()).first == nullptr)
-		{
-			why = "credit item config_id is absent from Item table";
-			return false;
-		}
+		// 本节点表里查不到的配置由第 8b 步按版本错位处理(FindConfigUnknownToThisVersion)。
 	}
 	std::unordered_set<uint64_t> identities;
 	for (const auto& transfer : bundle.item_instances())
 	{
 		ItemComp item;
+		// 行查不到时不判堆叠上限,留给第 8b 步;行在时实例必须是不可叠加配置。
 		const auto* row = ItemTableManager::Instance().FindByIdSilent(transfer.config_id()).first;
 		if (transfer.instance_proto().size() > kInstanceBytesLimit || !item.ParseFromString(transfer.instance_proto()) ||
-			item.item_id() == 0 || item.item_id() != transfer.item_uuid() || item.config_id() != transfer.config_id() ||
-			item.size() != 1 || transfer.stack_size() != 1 || row == nullptr || row->max_stack_size() != 1 || !identities.insert(item.item_id()).second)
+			item.item_id() == 0 || item.item_id() != transfer.item_uuid() || transfer.config_id() == 0 ||
+			item.config_id() != transfer.config_id() ||
+			item.size() != 1 || transfer.stack_size() != 1 || (row != nullptr && row->max_stack_size() != 1) ||
+			!identities.insert(item.item_id()).second)
 		{ why = "invalid complete item instance"; return false; }
 	}
 	if (bundle.has_pet_instance())
 	{
+		// 种类在本节点表里查不到由第 8b 步按版本错位处理;这里只判与版本无关的身份一致性。
 		const auto& transfer = bundle.pet_instance();
 		PetInstance pet;
 		if (transfer.instance_proto().size() > kInstanceBytesLimit || !pet.ParseFromString(transfer.instance_proto()) ||
-			pet.pet_id() == 0 || pet.pet_id() != transfer.pet_id() || pet.pet_table_id() != transfer.pet_table_id() ||
-			pet.level() != transfer.level() || pet.name() != transfer.name() || PetTableManager::Instance().FindByIdSilent(pet.pet_table_id()).first == nullptr)
+			pet.pet_id() == 0 || pet.pet_id() != transfer.pet_id() || transfer.pet_table_id() == 0 ||
+			pet.pet_table_id() != transfer.pet_table_id() || pet.level() != transfer.level() || pet.name() != transfer.name())
 		{ why = "invalid complete pet instance"; return false; }
 	}
 	return true;
@@ -554,10 +583,11 @@ bool ValidateRecallBundle(const ::AssetBundle& bundle, std::string& why)
 		why = "recall needs exactly one currency or one item config";
 		return false;
 	}
+	// 本节点表里查不到的配置由第 8b 步按版本错位处理(FindConfigUnknownToThisVersion);ApplyRecall 只见得到查得到的行。
 	const auto& item = bundle.items(0);
-	if (item.count() == 0 || ItemTableManager::Instance().FindByIdSilent(item.config_id()).first == nullptr)
+	if (item.config_id() == 0 || item.count() == 0)
 	{
-		why = "recall item count is 0 or config_id is absent from Item table";
+		why = "recall item config_id or count is 0";
 		return false;
 	}
 	if (bundle.item_uuids_size() > kAssetOpMaxRecallHints)
@@ -651,23 +681,32 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 	// 错位先记下,等下面与版本无关的确定性校验(按 guid、宝宝)都跑完再回 RETRY:那些坏包在任何版本上都不会成功,
 	// 不能因为同包里有一项错位,就把它重投到截止时刻、占着这条流的未决窗口。
 	bool quantityVersionSkew = false;
+	// 战斗道具预留(docs/design/battle-item-reservation.md):要扣的物品还押在一局未结算的战斗里。这是会自己消失的条件
+	// (结算或作废之后释放),与版本错位同一处理:记下来,等确定性校验都跑完再回 RETRY、不记账;记成终态会让对侧白白退款或中止。
+	bool quantityHeld = false;
 	if (!quantities.empty() || !guids.empty())
 	{
 		if (bags == nullptr) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetPlayerNotHere); return; }
 		auto& bag = bags->bags[kInventory];
-		switch (bag.CheckQuantities(quantities))
+		switch (BagService::CheckRemovable(player, bag, quantities))
 		{
-		case ItemStore::QuantityVerdict::kEnough:
+		case BagService::RemovalVerdict::kEnough:
 			break;
-		case ItemStore::QuantityVerdict::kVersionSkew:
+		case BagService::RemovalVerdict::kHeld:
+			quantityHeld = true;
+			break;
+		case BagService::RemovalVerdict::kVersionSkew:
 			quantityVersionSkew = true;
 			break;
-		case ItemStore::QuantityVerdict::kInsufficient:
+		case BagService::RemovalVerdict::kInsufficient:
+		case BagService::RemovalVerdict::kCount:
 			RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
 			return;
 		}
 		if (!guids.empty() && bag.ReserveForBatchRemove(guids) != kSuccess)
 		{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
+		if (!guids.empty() && BagService::CheckRemovableInstances(player, bag, guids) == BagService::RemovalVerdict::kHeld)
+			quantityHeld = true;
 		for (auto guid : guids)
 		{
 			const auto* item = bag.GetItemCompByGuid(guid);
@@ -700,6 +739,14 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
 				 << "; items carrying newer-version fields are not debited by quantity, answering RETRY";
 		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
+	}
+	if (quantityHeld)
+	{
+		LOG_WARN << "[AssetOp] metric=asset_debit_items_held player_id=" << request.player_id()
+				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
+				 << "; items are held for an unsettled battle, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetInBattle);
 		return;
 	}
 	if (!HasReceiptRoom(ledgerComp, request, snapshot)) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetBagFull); return; }
@@ -890,11 +937,20 @@ struct RecallPick
 
 // 选出要销毁的不可叠加实例,不改任何状态。只认流水点名的实例:同配置的别的实例可能是玩家正当得来、强化过的,销毁了恢复不了。
 // 点不到的数量记缺口,让 GM 看见。同一实例来回交易时流水有两条,这里只扣一件,多出来的也进缺口,这是往少扣的方向错。
-std::vector<RecallPick> PickRecallInstances(const std::vector<Bag*>& order, const ::AssetOpRequest& request, uint32_t configId, uint64_t requested)
+// 每个包至多挑「可出包数量」件(BagService::RemovableCount):人物背包里被战斗道具预留占住的件数不挑,
+// 否则 RemoveItemsByGuid 会整批拒(battle-item-reservation.md);其余包没有预留,上限就是总数。
+std::vector<RecallPick> PickRecallInstances(entt::entity player, const std::vector<Bag*>& order, const ::AssetOpRequest& request,
+	uint32_t configId, uint64_t requested)
 {
 	std::vector<RecallPick> picks;
+	std::vector<uint64_t> caps;
 	picks.reserve(order.size());
-	for (std::size_t index = 0; index < order.size(); ++index) picks.push_back(RecallPick{index, {}});
+	caps.reserve(order.size());
+	for (std::size_t index = 0; index < order.size(); ++index)
+	{
+		picks.push_back(RecallPick{index, {}});
+		caps.push_back(BagService::RemovableCount(player, *order[index], configId));
+	}
 
 	uint64_t chosen = 0;
 	for (const auto hint : request.bundle().item_uuids())
@@ -906,6 +962,7 @@ std::vector<RecallPick> PickRecallInstances(const std::vector<Bag*>& order, cons
 			const auto* item = bag.ContainsGuid(hint) ? bag.GetItemCompByGuid(hint) : nullptr;
 			if (item != nullptr && IsRecallableInstance(*item, configId))
 			{
+				if (pick.guids.size() >= caps[pick.orderIndex]) break; // 这件在这个包里,但可出包的件数已经挑满
 				pick.guids.push_back(hint);
 				++chosen;
 				break;
@@ -936,12 +993,17 @@ void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, c
 		return;
 	}
 	// 可计单位不够、又有带新版本字段的单位:差额可能就在它们身上。版本错位不是确定性结果,回 RETRY、不记账。
+	// 可计单位按「可出包数量」算(BagService::RemovableCount):人物背包里被战斗道具预留占住的那部分不收
+	// (battle-item-reservation.md)。不够而差额就在预留里时同理回 RETRY:预留在那一局结算或作废之后释放,
+	// 到时候能收全;此刻按缺口记终态,剩下的那部分就再也收不回来了。
 	uint64_t countable = 0;
 	bool uncountable = false;
+	bool held = false;
 	for (const auto* bag : order)
 	{
-		countable += bag->GetTotalItemCount(configId);
+		countable += BagService::RemovableCount(player, *bag, configId);
 		uncountable = uncountable || HasUncountableUnits(*bag, configId);
+		held = held || BagService::HeldCount(player, *bag, configId) > 0;
 	}
 	if (countable < requested && uncountable)
 	{
@@ -949,6 +1011,14 @@ void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, c
 				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
 				 << " config_id=" << configId << "; items carrying newer-version fields are not recalled, answering RETRY";
 		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
+	}
+	if (countable < requested && held)
+	{
+		LOG_WARN << "[AssetOp] metric=asset_recall_items_held player_id=" << request.player_id()
+				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
+				 << " config_id=" << configId << "; part of the requested items is held for an unsettled battle, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetInBattle);
 		return;
 	}
 
@@ -961,7 +1031,7 @@ void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, c
 		for (auto* bag : order)
 		{
 			const uint64_t remaining = requested - taken;
-			const uint64_t want = std::min<uint64_t>(bag->GetTotalItemCount(configId), remaining);
+			const uint64_t want = std::min<uint64_t>(BagService::RemovableCount(player, *bag, configId), remaining);
 			if (want == 0) continue;
 			error = BagService::RemoveItemsExact(player, *bag, ItemCountMap{{configId, static_cast<uint32_t>(want)}}, txType, request.correlation_id());
 			if (error != kSuccess) break;
@@ -972,7 +1042,7 @@ void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, c
 	}
 	else
 	{
-		for (const auto& pick : PickRecallInstances(order, request, configId, requested))
+		for (const auto& pick : PickRecallInstances(player, order, request, configId, requested))
 		{
 			if (pick.guids.empty()) continue;
 			Bag& bag = *order[pick.orderIndex];
@@ -1027,9 +1097,12 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 {
 	const auto& bundle = request.bundle();
 	const auto txType = static_cast<TransactionType>(request.tx_type());
+	// 交易退回本人托管的资产不是新增获得,(a)(a') 两道封禁都不判;发币与入包的入口按同一个交易类型同样放行
+	// (GainBlockService::CountsAsGain,审计 r2-trade#1)。
+	const bool countsAsGain = GainBlockService::CountsAsGain(txType);
 
 	// (a) 货币封禁预检:封禁是终局拒绝,必须在任何改动之前判掉。
-	for (const auto& currency : bundle.currencies())
+	if (countsAsGain) for (const auto& currency : bundle.currencies())
 	{
 		const auto type = static_cast<CurrencyType>(currency.currency_type());
 		if (GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency, currency.currency_type()) ||
@@ -1044,7 +1117,7 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 	// 排在号段余量与背包空间两道 RETRY 预检之前:被封禁的物品无论背包满不满都是 REJECTED,
 	// 不能先回「背包满、稍后重试」(封禁不是容量不足)。完整实例的 config_id 已由第 8 步
 	// ValidateCreditBundle 核对与 instance_proto 里的一致,这里不必解码。
-	for (const auto& item : bundle.items())
+	if (countsAsGain) for (const auto& item : bundle.items())
 	{
 		if (GainBlockService::IsItemGainBlocked(player, item.config_id()))
 		{
@@ -1052,7 +1125,7 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 			return;
 		}
 	}
-	for (const auto& transfer : bundle.item_instances())
+	if (countsAsGain) for (const auto& transfer : bundle.item_instances())
 	{
 		if (GainBlockService::IsItemGainBlocked(player, transfer.config_id()))
 		{
@@ -1454,17 +1527,39 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 		RejectAndRecord(player, *ledgerComp, request, kAssetInvalidBundle, nowMs, response);
 		return;
 	}
-	// 8b. 本二进制不认识的币种:版本错位,回 RETRY、不记账、不存盘。Go 各入口已按同一张取值表
-	// (proto/common/base/currency_type.proto)拒绝写错的值,这里只可能是更新版本加的币种;记成终态
-	// 会让对侧白白退款或中止,等玩家落到认识它的节点再应用(混版本设计 §12)。
-	// 排在中止(第 6 步)与所有确定性包校验之后:截止时刻照常能关门,与版本无关的坏包仍先记终态;
-	// 排在任何改动之前:ApplyDebit / ApplyCredit 从此见不到不认识的币种。
+	// 8b. 版本错位:回 RETRY、不记账、不存盘,等玩家落到认识它的节点再应用;记成终态会让对侧白白退款或中止
+	// (混版本设计 §12)。排在中止(第 6 步)与所有确定性包校验之后:截止时刻照常能关门,与版本无关的坏包仍先记终态;
+	// 排在任何改动之前:ApplyDebit / ApplyCredit / ApplyRecall 从此见不到本版本解释不了的请求。三种来源:
+	//   - 请求带本二进制不认识的字段(更新版本的 Go 写的,2026-11-11):照常应用会丢掉新字段的语义。
+	//     instance_proto 是 bytes,里面原样携带的实例不往里解,实例的未知字段照旧跟着实例走(§4.2);
+	//   - 本二进制不认识的币种:Go 各入口已按同一张取值表(proto/common/base/currency_type.proto)拒绝写错的值,
+	//     这里只可能是更新版本加的币种;
+	//   - 本节点表里查不到的物品 / 宝宝配置(2026-11-11,§13 第 10 条):表行只增不删,查不到只可能是更新版本
+	//     或尚未热更到本节点的行。之后的应用段因此可以假定每个配置号都查得到行。
+	if (std::string newerField; unknown_field_carry::TreeCarriesNewerVersionFields(request, &newerField))
+	{
+		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_request rpc=" << RpcName(rpc)
+				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
+				 << " seq=" << request.seq() << " field=" << newerField
+				 << "; request carries fields unknown to this version, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
+	}
 	if (const auto* unknown = FindCurrencyUnknownToThisVersion(request.bundle()); unknown != nullptr)
 	{
 		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_currency rpc=" << RpcName(rpc)
 				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
 				 << " seq=" << request.seq() << " currency_type=" << unknown->currency_type()
 				 << "; currency unknown to this version, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
+	}
+	if (const auto unknownConfig = FindConfigUnknownToThisVersion(request.bundle()); unknownConfig.has_value())
+	{
+		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_config rpc=" << RpcName(rpc)
+				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
+				 << " seq=" << request.seq() << " table=" << unknownConfig->table << " config_id=" << unknownConfig->id
+				 << "; config row not on this node (newer version or pending hot reload), answering RETRY";
 		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
 		return;
 	}

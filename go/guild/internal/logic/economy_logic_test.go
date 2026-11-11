@@ -56,7 +56,7 @@ type recordedPush struct {
 	recipients []uint64
 }
 
-func (n *recordingNotifier) Notify(change *pb.GuildChangedS2C, recipients []uint64) {
+func (n *recordingNotifier) Notify(_ context.Context, change *pb.GuildChangedS2C, recipients []uint64) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.sent = append(n.sent, recordedPush{change: change, recipients: append([]uint64(nil), recipients...)})

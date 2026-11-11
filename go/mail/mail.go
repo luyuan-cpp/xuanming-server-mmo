@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -38,16 +39,31 @@ import (
 	"shared/domainhost"
 	tables "shared/generated/table"
 	"shared/kafkacmd"
+	"shared/noderegistry"
 	"shared/playerredis"
 	"shared/releasetrack"
 	"shared/rolefence"
 	"shared/scenenode"
 	"shared/serviceauth"
 	"shared/sqlpoolstats"
+	"shared/workshard"
 )
 
 // roleFenceCaller 是邮件读角色护栏权威状态时的调用方身份,密钥在 rolefence.SecretEnv(roleFenceCaller)。
 const roleFenceCaller = "mail"
+
+// assetOpCaller 是资产 RPC 白名单里的名字(SYSTEM_CREDIT 流只认它),也是 assetop_* 指标的 service 常量 label。
+const assetOpCaller = "mail"
+
+// assetOpWorkKind 是附件重投按片分工的归属键前缀:片号 = player_id % 64(缺口清单第 25 条,
+// docs/design/assetop-redelivery-sharding-20261110.md)。与别的服务的类别键都不同名,写死成常量,不进配置。
+const assetOpWorkKind = "mail-assetop"
+
+// assetShardMembersPrefix 是附件重投成员表圈住的 etcd 前缀:本 zone 注册的 mail 实例(MailNodeService.rpc/zone/<z>/),
+// 与 domainhost 注册时的路径同形。只圈本 zone 的理由见设计 §2.3:成员表只能圈住连同一个库、且都在跑重投循环的副本。
+func assetShardMembersPrefix(zoneID uint32) string {
+	return noderegistry.RpcZonePrefix(base.ENodeType_name[int32(base.ENodeType_MailNodeService)]+".rpc", zoneID)
+}
 
 type config struct {
 	domainhost.Config
@@ -134,7 +150,6 @@ func run(c config, migrate bool) (runErr error) {
 	var root, relay *drainproof.Session
 	relayIngress := drainproof.New()
 	var poolOptions []authoritysql.OpenOption
-	var err error
 	if migrate {
 		permission, err = authoritysql.LoadSchemaPermission(os.Getenv)
 		if err == nil {
@@ -191,10 +206,11 @@ func run(c config, migrate bool) (runErr error) {
 		return errors.New("邮箱结构未部署，请先运行mail -migrate")
 	}
 	for _, warning := range report.Warnings {
-		if strings.Contains(warning, "索引") {
-			return errors.New("邮箱必要索引缺失")
-		}
 		logx.Info(warning)
+	}
+	// 缺普通索引在 schemamigrate 里只是 Warning(不进 ExitCode);邮箱依赖这些索引,按结构化类别升级成拒启,不匹配文案。
+	if len(report.MissingIndexes()) > 0 {
+		return errors.New("邮箱必要索引缺失")
 	}
 	if migrate {
 		return nil
@@ -223,7 +239,7 @@ func run(c config, migrate bool) (runErr error) {
 	if err != nil {
 		return err
 	}
-	signer, err := assetop.NewSigner("mail", os.Getenv(c.AssetSecretEnv))
+	signer, err := assetop.NewSigner(assetOpCaller, os.Getenv(c.AssetSecretEnv))
 	if err != nil {
 		return err
 	}
@@ -310,7 +326,10 @@ func run(c config, migrate bool) (runErr error) {
 	loopConfig.AbandonAfter = 0
 	loopConfig.AuditInterval = 0
 	loopConfig.OfflineAfterAttempts = 0
-	loop, err := assetop.NewLoop(loopConfig, data.StoreAdapter{Repo: repo}, &assetop.Caller{Resolver: locator, Signer: signer}, nil, nil)
+	// assetop_* 指标(service="mail"):有了它才有 assetop_owned_shards 与 assetop_pending_oldest_age_seconds 的序列,
+	// asset-channel-alerts.yaml 的分片缺口告警才看得见 mail。run 每个进程只调一次,promauto 不会重复注册。
+	assetMetrics := assetop.NewMetrics(prometheus.DefaultRegisterer, assetOpCaller)
+	loop, err := assetop.NewLoop(loopConfig, data.StoreAdapter{Repo: repo}, &assetop.Caller{Resolver: locator, Signer: signer, Metrics: assetMetrics}, assetMetrics, nil)
 	if err != nil {
 		return err
 	}
@@ -319,18 +338,36 @@ func run(c config, migrate bool) (runErr error) {
 	if err := loop.CheckWiring(); err != nil {
 		return err
 	}
+	// 附件重投的到期扫描按玩家分片,分给本 zone 注册的 stable mail 副本(缺口清单第 25 条,设计 §2.3、§10)。
+	// 核对过圈法:K8s 上 mail 是全局服务(k8s_deploy.ps1 的 $GoSvcCatalogue 里 Global),infra namespace 一个 Deployment,
+	// 全部副本同一份 ConfigMap(同一个 ZoneId)、同一个 mmorpg_mail;本机每个 zone 起一份、连同一个库但前缀不同,
+	// 各自做全部片,只是重复。stable 副本都跑重投循环(没有开关),canary 不跑也不进成员表。
+	// 本副本的身份在 etcd 注册之后由 ServeWithReady 的回调补上;之前成员表若已有别的副本,本副本一片都不做。
+	membersPrefix := assetShardMembersPrefix(c.ZoneId)
+	members := workshard.NewMembership(membersPrefix)
+	if err := loop.BindWorkOwner(assetOpWorkKind, members.Owns); err != nil {
+		return fmt.Errorf("mail: shard asset redelivery: %w", err)
+	}
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
 	sweepCtx, cancelSweep := context.WithCancel(ctx)
 	watchDone := make(chan struct{})
+	membersDone := make(chan struct{})
 	loopDone := make(chan struct{})
 	sweepDone := make(chan struct{})
 	go func() { defer close(watchDone); watcher.Run(workerCtx, etcd) }()
 	if releaseTrack.RunsGlobalBackgroundWork() {
+		// 成员表先于重投循环起:第一拍读到之前成员表为空,本副本做全部片(保活优先)。
+		go func() { defer close(membersDone); members.Run(workerCtx, etcd) }()
 		go func() { defer close(loopDone); loop.Run(workerCtx) }()
-		go func() { defer close(sweepDone); maintenance.Run(sweepCtx, repo, c.Sweep, root) }()
+		// 过期清理复用同一份成员表,按 mail_id 分片、另一个类别键(缺口清单第 25 条第四批,设计 §14.2):
+		// 系统 / 帮会 / 活动邮件的 owner_player_id 都是 0,按收件人分会全挤进一片。正确性仍靠每封点锁后按原条件复核再删。
+		go func() { defer close(sweepDone); maintenance.Run(sweepCtx, repo, c.Sweep, members.Owns, root) }()
+		logx.Infof("[mail] Asset redelivery due scan sharded by player_id: kind=%s members_prefix=%s; expiry sweep sharded by mail_id: kind=%s",
+			assetOpWorkKind, membersPrefix, data.SweepWorkKind)
 	} else {
-		// canary 副本:不起重投与清理,canary 领到的附件由 stable 的重投循环投出。两个完成通道直接关掉,
+		// canary 副本:不起重投、成员表与清理,canary 领到的附件由 stable 的重投循环投出。完成通道直接关掉,
 		// closeSource / closeRelay 等它们时立即返回,否则停机要等满超时再 HOLD。
+		close(membersDone)
 		close(loopDone)
 		close(sweepDone)
 		logx.Infof("[mail] release_track=%s: redelivery loop and sweep disabled (canary serves client RPCs only)", releaseTrack)
@@ -373,7 +410,7 @@ func run(c config, migrate bool) (runErr error) {
 			return err
 		}
 		cancelWorkers()
-		for _, done := range []<-chan struct{}{watchDone, loopDone} {
+		for _, done := range []<-chan struct{}{watchDone, membersDone, loopDone} {
 			select {
 			case <-done:
 			case <-closeCtx.Done():
@@ -430,7 +467,7 @@ func run(c config, migrate bool) (runErr error) {
 			return &serverbase.PreparedPublication{NoConsumers: true}, nil
 		}
 		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, bind, closeSource, closeRelay, prepared); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("mail 排空 HOLD: %v", err)
+			logx.Errorf("mail drain HOLD: %v", err)
 		}
 	}()
 	defer func() {
@@ -446,7 +483,11 @@ func run(c config, migrate bool) (runErr error) {
 		mailpb.RegisterMailAdminServer(s, handler)
 		// 角色护栏的参与者接口:只有协调者(data_service)调,自带 ServiceCallAuth 鉴权;带会话的调用被 domainhost.Guard 挡住。
 		rfpb.RegisterRoleFenceParticipantServer(s, participant)
-	}, func() { close(listening) }, root, relay, relayIngress)
+	}, func(nodeUUID string) {
+		// 注册成功之后才知道本副本在成员表里的身份;此前成员表若已有别的副本,本副本的重投循环一片都不做。
+		members.SetSelf(nodeUUID)
+		close(listening)
+	}, root, relay, relayIngress)
 }
 
 // relayPublisher 覆盖通知实际发送；调用方即使只记录错误，未知发布仍留在同 boot 的 RELAY。

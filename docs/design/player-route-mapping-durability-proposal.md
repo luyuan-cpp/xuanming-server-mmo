@@ -1,8 +1,15 @@
-# 玩家归属与落点映射持久化:库为真源 + Redis 完整副本 + 就绪标记(已拍板;第 0 ~ 3 批已落码,未验证;2026-10-19 起读方按身份绑定的就绪标记判可信,见 §13)
+# 玩家归属与落点映射持久化:目录库是唯一真源,读写直连 TiDB(现行设计见 §15、§16;均未编译、未验证)
+
+> **现行设计(2026-11-11 整理,以此为准)**:
+> - **真源只有一份**:目录逻辑库(归 data_service)里的 `player_route`(每名玩家一行:home_zone、storage_id、行版本 rev、写者、库时钟时间戳,按 `player_id % 64` 聚簇分片)、第 0 片的 `zone_merged_into`(合服映射)和 `zone_merge_history`(合服历史,只增不改),以及每片的 `route_meta`(可写开关)。**Redis 里没有任何映射键**,Redis 重启、切主、丢数据都与映射无关,没有东西要检测或重建。
+> - **写者只有两个**:建角登记 W1(data_service `RegisterPlayerZone`,一个 SQL 事务,提交即完成,绝不覆盖)和合服工具 `tools/merge_zone`(持 `route_meta` 行锁在一个事务里判定、写映射、追加历史)。按玩家搬库、钉落点、回填、合服围栏、发布与 WAITAOF 都已删除:合服是别名合服,不改玩家行([总体方案](./player-data-tidb-scaling-plan.md) §7.1)。
+> - **读者**:go/db 认领前经 data_service `GetPlayerRoute` 强读一次;login、scene_manager 经 data_service 读 home(出口按合服映射解析成最终区);guild、trade、match 经 `GetMergedZones` 缓存合服映射。读失败一律回暂不可用,绝不当成「没有归属」,也不造空档。
+> - **回档**只走 [PITR 手册](../ops/mysql-backup-pitr-runbook.md) §4.0,全部逻辑库回到同一时刻;映射和合服历史同库同事务,随目录一起恢复。
+> - §15 是 2026-10-23 的拍板与 10-30 的落码;§16 是 11-11 对照「1b / 2 / 3 批」旧任务清单的逐项核对和合服历史。**§1 ~ §14 是历史记录**:其中的 Redis 完整副本、就绪标记、对账 leader、预热、发布与 WAITAOF、库回档反向修复、按玩家搬库、合服围栏都已删除,不要照着重做。
 
 > **2026-10-23 方向变更**：负责人拍板映射改为直读 TiDB、撤掉 Redis 副本与就绪标记，见文末 §15（2026-10-30 已按 §15.9 落码，未编译）。本文 §2 / §5.1 / §5.4 / §13 的副本与就绪标记设计、§14 里依赖 ready 的首次启动步骤随之作废，落码以 §15 为准。
 
-> **状态**:**已拍板(2026-10-12,负责人),分批落码中**。2026-10-12 起草;拍板结果与落码进度见文末「§11 拍板与落码记录」。
+> **状态(历史,2026-10-12)**:已拍板(2026-10-12,负责人),当时分批落码;拍板结果与落码进度见「§11 拍板与落码记录」。现状以上面「现行设计」为准。
 > **起因**:用户提出「逻辑服 id(home_zone)和 storage_id 应该存到 TiDB,Redis 只做缓存,不然 Redis 丢了映射无法恢复」。这正是 [TiDB 决策](./global-data-layer-tidb-decision.md) D1「映射持久化兜底」与 [player-storage-placement.md](./player-storage-placement.md) §4.4 / §11.4 的遗留项。
 > **怎么来的**:多 agent 只读设计。先盘点两份映射的全部读写点与不变量,再并行出三种方案:A 库为真源 + Redis 缓存;B Redis 为真源 + 数据库副本;C 把归属写进玩家主表。之后从「数据一致性」「运维上线」两个视角做对抗评审,最后汇总成本稿。只读代码、grep、git 得出,没有编译、测试或压测。按 AGENTS.md §10.1,实现后交 Codex 验证,在那之前不能说「已验证」。
 > **前置**:当前 HEAD 的落点代码先按 [placement-reverify-checklist-20261012.md](../handoff/placement-reverify-checklist-20261012.md) 复验,本方案不叠在未验证的基线上。行号以 2026-10-12 HEAD `73b852f32` 为准。
@@ -1926,3 +1933,58 @@ B8 删掉了 go/db 的 Kafka 消费和 saveoutbox,上面清单里 G1、G2、G9�
   - schemamigrate：该模块禁止引用 shared / proto；
   - R 的 `authority_jdbc`：只读 `route_meta`；
   - 纯环境类工作：容器恢复、Raw、旧库存核账。
+
+---
+
+## 16. 2026-11-11 收尾:对照「1b / 2 / 3 批」旧任务清单逐项核对,补合服历史
+
+> **状态**:§16.3 已落码,**未生成协议、未编译、未测试**,待 Codex 按 [PROGRESS](../PROGRESS.md) 2026-11-11「D1 映射持久化收尾:合服历史」条目验证。§16.2 的其余各项是对现有代码的核对结论,运行证据仍以 Codex 回执为准。
+
+### 16.1 为什么有这一节
+
+11-11 又有一份任务要求「补完第 1b 批自动恢复闭环(对账 leader、租约、全量预热、`mapping:route:ready`、Redis 切主检测与重建、库回档反向修复)、第 2 批全部写入者(合服、撤销、pin、backfill、relocate、abort、围栏、merged_into)库先写再按版本发布 Redis、第 3 批全部读方查 ready」。这些正是 §13 的设计,10-18 ~ 19 落过码,10-23 被负责人拍板的 §15 取代、10-30 删除。任务原文是照本文旧标题和 §11 写的。本节把每一项落到现状上,免得有人按旧设计把删掉的东西再写一遍;开头的标题与「现行设计」同批改正。
+
+### 16.2 逐项对照
+
+| 旧要求 | 现状 |
+|---|---|
+| SQL 是唯一权威提交点 | 成立。W1 在 data_service 的一个 TiDB 事务里提交(`store.RouteStore.RegisterHome`:普通读 `route_meta`、ODKU no-op 插入、`FOR UPDATE` 加锁读判定、`rev` CAS 补列);合服在 `tools/merge_zone/route_store.go` 的一个事务里提交;`route_meta` 只经 `authoritysql.Catalog` 冻结 / 解冻 |
+| Redis 是可重建的完整路由副本;对账 leader、租约续期、失权停止、全量预热、增量同步、`mapping:route:ready`、切主 / 重启 / 丢数据检测与重建 | **作废**(§15)。Redis 里不再有映射键,上述机制及 `route_reconcile` 表已删除,对应的检测对象不存在 |
+| 元数据固定在 data_service 全局库、不随玩家存档搬迁 | 成立。路由表在目录逻辑库(归 data_service,[逻辑库自治](./horizontal-scale-logical-db.md));玩家存档在 `player_store_*` 库;物理搬迁用 `tools/dbmove` 整库搬,路由行不变 |
+| 以 player_id 管理 home_zone、storage_id、版本与迁移状态 | home_zone、storage_id、`placement_version`、行版本 `rev`、`updated_by`、库时钟时间戳都在 `player_route` 一行里。**没有迁移状态**:不做按玩家搬库(原 `frozen_run_id` 已 `reserved`),落点建角后不变 |
+| 64 分片、扫描游标,不写死 16 | 成立。`route_shard = player_id % 64`,CHECK 钉住,建池探针 P4 / P5 实测 CHECK 生效且模数是 64 |
+| SQL 回档检测、停止写入、受控反向修复、审计、新 generation | **作废**。只有一份数据,没有第二份可以比对或反向修复。回档只走 PITR §4.0,全部逻辑库回到同一时刻;恢复后用合服审计核对映射与历史(本批补进 PITR §4.0 第 4 步) |
+| 第 2 批:合服、撤销合服 | merge_zone 持 `route_meta(id=1)` 行锁,在同一个事务里加锁读、判定(成环、链长、已合走)、写映射;幂等重跑走无写分支;退出码 0 / 1 / 2 区分完成、拒绝、未做成或结局未知 |
+| 第 2 批:pin、backfill、relocate、abort、合服围栏、W2 旧 remap、W3 删映射 | **已删除**(别名合服不改玩家行,§7.1);现在没有任何改写或删除 `player_route` 的写者,`TestNoPlayerRouteWritesOutsideRouteStore` 机械守住 |
+| 发布失败幂等重试、发布与 WAITAOF 同连接、版本乱序 / 同版本异值不写错库 | **前提不存在**:没有发布步骤。仍成立的提交点保证:判定只认 `FOR UPDATE` 加锁读;新行 ODKU no-op、受影响行数 1 / 0 判插入还是撞键;补列按 `rev` CAS;不用 INSERT IGNORE(会把 CHECK 违例降成 warning) |
+| 围栏失权后旧工具必须停止 | **前提不存在**:合服没有围栏和租约。工具只开一个事务,锁等待封顶 1 秒,失败即退出,重跑同一条命令幂等 |
+| 第 3 批:go/db 选库与复核 | go/db 认领前经 data_service `GetPlayerRoute` 强读一次;三态:读失败回暂不可用(带内 `retry`)、确定没有落点回 `ErrPlayerStorageMissing` 拒绝认领、读到才选库。写权由玩家库提交事务里的写权行判定;写权行不存在回 `NO_OWNER`,不造空档 |
+| data_service 缓存不可信时回源 SQL;查询故障回 Unavailable,不能变成 NotFound 或空白新号 | 没有缓存,直接读 SQL。故障:gRPC 回 Unavailable + `ErrCodeRouteStoreError`,`GetPlayerRoute` 带内 `retry`;只有「没有行或列为 NULL」才回 NotFound / `found=false`;调用方已放弃时回它自己的取消原因,不计故障 |
+| guild 围栏、全区枚举、一致性检查、指标与告警 | guild、trade、match 读 `GetMergedZones` 缓存:启动读不到拒绝启动,刷新失败留旧值并告警。全区枚举与一致性检查在 `tools/data_consistency_check`(读失败判失败,不当没有)。告警 `DataServiceRouteReadErrors`、`DataServiceRouteRegisterFailures` 与四个服务的 `*MergedZoneRefreshFailing` 在 `deploy/k8s/data-service-route-alerts.yaml` |
+| Redis 恢复保留冻结态和迁移任务 | 冻结态在 SQL `route_meta`;没有迁移任务。会话、锁、名字缓存等 Redis 状态的恢复不归映射管,各按自己的手册 |
+| 上线顺序:导入 → 审计 → 库先写 → 二次导入 → 预热 → 工具切换 → 读方门禁,及回退 | **作废**。项目未上线、玩家数据可清空,首次上线整批起步(§15.1、§14 修订后的首次启动顺序);不存在回退到 Redis 模式的路径 |
+| **真正还缺的** | ① 撤销合服整行删除 `zone_merged_into`,事后查不到谁、什么时候合过又撤过 → §16.3 补;② 路由相关真库用例(data_service store、merge_zone)在 MySQL 与 TiDB 上都没跑通过(11-01 第二轮:MySQL 档账号与 boot 身份核验失败,TiDB 档未开 `tidb_enable_check_constraint`、TiKV 内存溢出)→ 验证命令写明环境前置;③ 本文标题与开头仍是旧设计 → 已改 |
+
+### 16.3 合服历史 `zone_merge_history`(本批落码)
+
+- **表**:目录第 0 片,与 `zone_merged_into` 同库。列:`src_zone`、`event_seq`(这个源区的第几次变更,从 1 起)、`action`(`merge` / `unmerge`,CHECK 钉住)、`dst_zone`、`run_id`(合服是新映射行的;撤销是被删那一行的,说明撤的是哪一次)、`sql_principal`(库侧 `CURRENT_USER()`)、`at_ms`(库时钟)。主键 `(src_zone, event_seq)`。DDL 在 `go/data_service/internal/store/schema.go`(`zoneMergeHistoryBootstrapDDL`),形状守卫的事实源是 `proto/common/database/rollback_database_table.proto` 的 `zone_merge_history`,由 data_service `-migrate` 只在第 0 片建。
+- **写法**:只有 `tools/merge_zone/route_store.go` 写它。`Insert` / `Delete` 真改了映射时,在同一个事务里给源区追加一行;序号持 `route_meta` 行锁加锁读最大值 +1;锁序 `route_meta → zone_merged_into → zone_merge_history`,所有写者一致。历史写不进去时整个事务回滚,映射不变。幂等重跑、没东西可删都不写。
+- **只增不改**:操作员账号对它只有 SELECT、INSERT(`maintenance_drain.ps1` 的 `MERGE_ZONE_GRANT`,契约测试钉住没有 UPDATE / DELETE);工具源码里任何改写或删除它的语句都会被 `TestNoRouteTableWritesOutsideMergeRouteStore` 拒绝。
+- **审计**:`merge_zone -mode audit` 先读映射、后读历史(映射行和它的历史同一个事务提交,先读到的映射行,后读的历史里一定有),列出全部历史;有映射行在历史里找不到同 `(src, dst, run_id)` 的 merge 记录时列为 `untracked mapping` 并按拒绝退出(退出码 1):这种行是手写的或建历史表之前写的,来历查不到。
+- **为什么这样做**:软删除映射行会破坏 `src_zone` 主键语义(撤销后不能再合),每个读方都要加过滤;历史写进流水库是跨库,不能和映射同事务;自增主键在 TiDB 上跨 tidb-server 不单调,两种引擎上「按号排先后」口径不同。按源区编号、同事务追加是最简单且两种引擎语义一致的做法。
+
+### 16.4 本批改动文件
+
+- proto:`proto/common/database/rollback_database_table.proto`(新增 `zone_merge_history`,路由表段注释更正)。
+- data_service:`internal/store/{schema,route_store}.go`;测试 `route_store_test.go`、`route_store_integration_test.go`、`directory_shards_test.go`、`account_directory_shard_tidb_test.go`。
+- merge_zone:`main.go`、`merge.go`、`route_store.go`;测试 `merge_test.go`、`route_store_test.go`、`merge_integration_test.go`。
+- 授权与脚本:`tools/scripts/maintenance_drain.ps1`(`MERGE_ZONE_GRANT`)、`tools/scripts/tests/maintenance_drain.tests.ps1`、`deploy/sql/authority_operator_role.sql`(注释)、`tools/scripts/{currency_crash_window,stress_round19}.ps1`(清库表清单)、`tools/scripts/dev_tools.ps1`(合服帮助文字)。
+- 文档:本文开头与本节、[合服手册](../ops/merge-zone-runbook.md) §2 / §3 / §4 / §5 / §6 / §9 / §11、[PITR 手册](../ops/mysql-backup-pitr-runbook.md) §4.0 第 4 步与合服回档说明。
+
+### 16.5 Java 版
+
+不写 Java 代码(负责人 11-05 定 Java 只记待做)。Java 的归属区是单库 `player.zone_id` 列,没有映射副本,§16.2 的作废项对它同样不适用;合服历史、别名合服的读时解析、真实合服作业都记在 Java 仓 `PARITY.md` 待做。`rollback_database_table.proto` 在 Java 仓 `game-proto` 有一份同步副本,下次 ContractSync 时带上新 message 即可,Java 不需要实现这张表。
+
+### 16.6 验证
+
+命令、环境前置(TiDB 先 `SET GLOBAL tidb_enable_check_constraint=ON` 再建表、测试账号允许容器网段、单包串行)、PASS / FAIL / SKIP 的判法和日志位置写在 PROGRESS 同名条目。顺序:先跑本批之前就有的路由基线用例(§15 落码之后从未在真库跑通),再生成协议、跑本批新增用例。MySQL 通过不能代替 TiDB,`*_REQUIRE=1` 下的 SKIP 算失败。

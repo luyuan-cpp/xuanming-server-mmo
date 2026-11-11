@@ -20,7 +20,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="session\comp\session_info_comp.h" />
-    <ClInclude Include="session\comp\client_liveness.h" />
     <ClInclude Include="session\comp\pending_scene_entry_comp.h" />
     <ClInclude Include="session\comp\router_lane.h" />
     <ClInclude Include="session\comp\router_lane_item.h" />

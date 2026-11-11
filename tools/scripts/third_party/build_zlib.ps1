@@ -127,4 +127,4 @@ foreach ($relativePath in @('lib/zlibd.lib', 'lib/zlibstaticd.lib', 'bin/zlibd.d
 if (-not (Select-String -LiteralPath (Join-Path $InstallPath 'include/zlib.h') -Pattern '^#define ZLIB_VERSION "1\.3\.2"' -Quiet)) {
     throw "zlib 安装头文件版本不符：$InstallPath"
 }
-Write-Host "[done] zlib 1.3.2 Debug（/MDd）及上游测试完成，安装目录：$InstallPath"
+Write-Host "[done] zlib 1.3.2 Debug (/MDd) build and upstream tests finished; install dir: $InstallPath"

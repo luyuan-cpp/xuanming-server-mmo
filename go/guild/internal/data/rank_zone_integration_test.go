@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -133,7 +134,6 @@ func TestRemoveGuildFromRank_UsesAuthoritativeZoneNotCallerHint(t *testing.T) {
 
 	require.NoError(t, repo.RemoveGuildFromRank(ctx, guildID, sourceZone))
 
-	assertNotRanked(t, ctx, repo, guildRankKey, guildID)
 	assertNotRanked(t, ctx, repo, zoneRankKey(targetZone), guildID)
 	assertNotRanked(t, ctx, repo, zoneRankKey(sourceZone), guildID)
 }
@@ -165,7 +165,6 @@ func TestDisbandPath_RemovesFromAuthoritativeZoneAfterRowIsGone(t *testing.T) {
 		"DisbandGuild 必须返回删除事务里 FOR UPDATE 读到的权威 zone —— 清榜只有它可信")
 
 	require.NoError(t, repo.RemoveGuildFromRank(ctx, guildID, zoneFromDelete))
-	assertNotRanked(t, ctx, repo, guildRankKey, guildID)
 	assertNotRanked(t, ctx, repo, zoneRankKey(actualZone), guildID)
 	assertNotRanked(t, ctx, repo, zoneRankKey(staleZone), guildID)
 
@@ -207,6 +206,7 @@ func TestUpdateGuildScore_WritesTheFinalZoneRank(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, float64(777), score)
 	assertNotRanked(t, ctx, repo, zoneRankKey(10), guildID)
+	assertNoGlobalRank(t, ctx, repo)
 	var zone uint32
 	require.NoError(t, db.QueryRow("SELECT zone_id FROM guild WHERE guild_id=?", guildID).Scan(&zone))
 	assert.Equal(t, uint32(10), zone, "合服不改写 zone_id")
@@ -224,6 +224,7 @@ func TestRebuildRanks_FollowsTheCurrentMapping(t *testing.T) {
 	require.NoError(t, repo.RebuildRanks(ctx))
 	assert.EqualValues(t, 2, repo.rdb.ZCard(ctx, zoneRankKey(20)).Val())
 	assert.EqualValues(t, 0, repo.rdb.Exists(ctx, zoneRankKey(10)).Val(), "源区的旧键要清掉")
+	assertNoGlobalRank(t, ctx, repo)
 
 	bindMergedZones(t, repo, nil)
 	require.NoError(t, repo.RebuildRanks(ctx))
@@ -248,8 +249,166 @@ func TestDisbandPath_RemovesFromTheFinalZoneRank(t *testing.T) {
 	assert.Equal(t, uint32(10), res.ZoneID)
 	require.NoError(t, repo.RemoveGuildFromRank(ctx, guildID, res.ZoneID))
 
-	assertNotRanked(t, ctx, repo, guildRankKey, guildID)
 	assertNotRanked(t, ctx, repo, zoneRankKey(20), guildID)
+}
+
+// zone_id=0 的行是坏数据(帮会都按归属区建):分数照常落库、不报错,但写分与重建都不让它进任何榜;
+// 同库的正常帮会照常上榜。删全服榜之前,这类行只进全服榜。
+func TestUnzonedGuildIsPersistedButNeverRanked(t *testing.T) {
+	repo, db, _ := newRepoOnThrowawayDB(t)
+	ctx := context.Background()
+	const (
+		unzonedGuild uint64 = 5131
+		zonedGuild   uint64 = 5135
+	)
+	seedGuild(t, db, unzonedGuild, "no-zone", 0)
+	seedGuild(t, db, zonedGuild, "has-zone", 30)
+
+	require.NoError(t, repo.UpdateGuildScore(ctx, unzonedGuild, 0, 321))
+	var score int64
+	require.NoError(t, db.QueryRow("SELECT score FROM guild WHERE guild_id=?", unzonedGuild).Scan(&score))
+	assert.EqualValues(t, 321, score, "分数照常落库")
+	assert.Empty(t, repo.rdb.Keys(ctx, "guild_rank*").Val(), "写分不建任何榜键")
+
+	require.NoError(t, repo.RebuildRanks(ctx))
+	assert.ElementsMatch(t, []string{zoneRankKey(30), zoneRankVersionKey(30)}, repo.rdb.Keys(ctx, "guild_rank*").Val(),
+		"重建只留正常帮会所在区的榜和它的版本 HASH,不留锁键、全服键和墓碑")
+	assert.EqualValues(t, 1, repo.rdb.ZCard(ctx, zoneRankKey(30)).Val())
+}
+
+// 写分在同一事务里把 score_version +1;提交在前的那次写分迟到,按版本被丢弃。
+func TestUpdateGuildScore_BumpsTheVersionAndDropsALateOlderWrite(t *testing.T) {
+	repo, db, _ := newRepoOnThrowawayDB(t)
+	ctx := context.Background()
+	const guildID uint64 = 5141
+	seedGuild(t, db, guildID, "versioned", 30)
+
+	require.NoError(t, repo.UpdateGuildScore(ctx, guildID, 30, 100))
+	require.NoError(t, repo.UpdateGuildScore(ctx, guildID, 30, 200))
+	var score int64
+	var version uint64
+	require.NoError(t, db.QueryRow("SELECT score, score_version FROM guild WHERE guild_id=?", guildID).Scan(&score, &version))
+	assert.EqualValues(t, 200, score)
+	assert.EqualValues(t, 2, version, "每次写分版本 +1")
+
+	// 第一次写分(版本 1)的写榜这时才到。
+	require.NoError(t, repo.publishRank(ctx, guildID, 30, 100, 1))
+	got, err := repo.rdb.ZScore(ctx, zoneRankKey(30), fmt.Sprint(guildID)).Result()
+	require.NoError(t, err)
+	assert.Equal(t, float64(200), got, "旧版本迟到不得覆盖新版本")
+}
+
+// 写分不拿榜维护锁:别的副本正持着锁重建,写分照常完成。改之前写分要等这把锁(最多 5 秒),这里的 2 秒预算一定超时。
+func TestUpdateGuildScore_DoesNotWaitForTheMaintenanceLock(t *testing.T) {
+	repo, db, _ := newRepoOnThrowawayDB(t)
+	ctx := context.Background()
+	const guildID uint64 = 5142
+	seedGuild(t, db, guildID, "lock-free", 30)
+	require.NoError(t, repo.rdb.Set(ctx, guildRankLockKey, "rebuild-elsewhere", time.Minute).Err())
+
+	short, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	require.NoError(t, repo.UpdateGuildScore(short, guildID, 30, 300))
+
+	got, err := repo.rdb.ZScore(ctx, zoneRankKey(30), fmt.Sprint(guildID)).Result()
+	require.NoError(t, err)
+	assert.Equal(t, float64(300), got)
+	assert.Equal(t, "rebuild-elsewhere", repo.rdb.Get(ctx, guildRankLockKey).Val())
+}
+
+// 解散之后,解散前已提交的那次写分才写榜:被墓碑拒绝,帮会不回到榜上;解散之后再写分直接回 ErrGuildGone。
+func TestDisbandPath_LateScoreWriteDoesNotResurrect(t *testing.T) {
+	repo, db, _ := newRepoOnThrowawayDB(t)
+	ctx := context.Background()
+	const (
+		guildID  uint64 = 5143
+		leaderID uint64 = guildID + 1 // seedGuild 把 leader_id 与那行 role=3 都写成 guildID+1
+	)
+	seedGuild(t, db, guildID, "late-writer", 30)
+	require.NoError(t, repo.UpdateGuildScore(ctx, guildID, 30, 400))
+
+	res, err := repo.DisbandGuild(ctx, guildID, leaderID, testNowMs)
+	require.NoError(t, err)
+	require.NoError(t, repo.RemoveGuildFromRank(ctx, guildID, res.ZoneID))
+
+	require.NoError(t, repo.publishRank(ctx, guildID, res.ZoneID, 400, 1))
+	assertNotRanked(t, ctx, repo, zoneRankKey(30), guildID)
+	assert.ErrorIs(t, repo.UpdateGuildScore(ctx, guildID, 30, 500), ErrGuildGone)
+}
+
+// beforeFirstPipelineHook 在被测客户端发出第一条 pipeline 之前跑一次 inject。RebuildRanks 的第一条 pipeline
+// 是合并快照,inject 正好落在「快照已读完、还没合并」这个窗口里。
+type beforeFirstPipelineHook struct {
+	once   sync.Once
+	inject func()
+}
+
+func (h *beforeFirstPipelineHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+
+func (h *beforeFirstPipelineHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook { return next }
+
+func (h *beforeFirstPipelineHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		h.once.Do(h.inject)
+		return next(ctx, cmds)
+	}
+}
+
+// newSecondRepo 是同一个库、同一个 Redis 上的另一个副本(自己的连接,不带被测客户端的钩子)。
+func newSecondRepo(t *testing.T, db *sql.DB, mr *miniredis.Miniredis) *GuildRepo {
+	t.Helper()
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+	return NewGuildRepo(rdb, db, time.Minute)
+}
+
+// 重建不覆盖并发的新写入:快照读完、合并之前,另一个副本提交并写榜了新分数,合并不把它盖回快照里的旧分。
+// 改之前这次写分要等重建手里的维护锁,等满 5 秒报错。
+func TestRebuildRanks_KeepsAScoreWrittenDuringTheRebuild(t *testing.T) {
+	repo, db, mr := newRepoOnThrowawayDB(t)
+	ctx := context.Background()
+	const guildID uint64 = 5151
+	seedGuild(t, db, guildID, "racing-writer", 30)
+	require.NoError(t, repo.UpdateGuildScore(ctx, guildID, 30, 10))
+	other := newSecondRepo(t, db, mr)
+	repo.rdb.AddHook(&beforeFirstPipelineHook{inject: func() {
+		require.NoError(t, other.UpdateGuildScore(ctx, guildID, 30, 999))
+	}})
+
+	require.NoError(t, repo.RebuildRanks(ctx))
+
+	got, err := repo.rdb.ZScore(ctx, zoneRankKey(30), fmt.Sprint(guildID)).Result()
+	require.NoError(t, err)
+	assert.Equal(t, float64(999), got)
+}
+
+// 快照之后才建的帮会不被重建删除:它不在快照里,删之前回库复核,库里有、又属于这个区,就留着。
+func TestRebuildRanks_KeepsAGuildCreatedDuringTheRebuild(t *testing.T) {
+	repo, db, mr := newRepoOnThrowawayDB(t)
+	ctx := context.Background()
+	const (
+		existing uint64 = 5161
+		created  uint64 = 5165
+	)
+	seedGuild(t, db, existing, "already-there", 30)
+	other := newSecondRepo(t, db, mr)
+	repo.rdb.AddHook(&beforeFirstPipelineHook{inject: func() {
+		seedGuild(t, db, created, "created-mid-rebuild", 30)
+		require.NoError(t, other.AddNewGuildToRank(ctx, created, 30))
+	}})
+
+	require.NoError(t, repo.RebuildRanks(ctx))
+
+	for _, id := range []uint64{existing, created} {
+		_, err := repo.rdb.ZScore(ctx, zoneRankKey(30), fmt.Sprint(id)).Result()
+		assert.NoError(t, err, "guild %d 应该在榜上", id)
+	}
+}
+
+// assertNoGlobalRank:帮会榜只有分区榜,写分与重建都不得再建全服键 guild_rank(docs/design/gate-online-identity.md §9.6)。
+func assertNoGlobalRank(t *testing.T, ctx context.Context, repo *GuildRepo) {
+	t.Helper()
+	assert.EqualValues(t, 0, repo.rdb.Exists(ctx, "guild_rank").Val(), "不应存在全服帮会榜")
 }
 
 func assertNotRanked(t *testing.T, ctx context.Context, repo *GuildRepo, key string, guildID uint64) {

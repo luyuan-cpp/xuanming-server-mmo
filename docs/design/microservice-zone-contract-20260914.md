@@ -539,7 +539,7 @@ func AllocationKey(prefix string, nodeType, nodeId uint32) string
   ```
   build 等价于在 `go/chat` 下执行 `go build -o ..\..\bin\go_services\chat.exe ./chat.go`(`go_services.ps1:795-833`)。
 - 期望产物:`bin/go_services/chat.exe`。
-- 通过标准:输出 `[ok]    chat`;list 中有 `chat  50700  Chat (全局聊天,路由服可达)`。
+- 通过标准:输出 `[ok]    chat`;list 中有 `chat  50700  Chat (global chat, reachable via router)`(2026-11-11 服务说明改英文前是 `Chat (全局聊天,路由服可达)`)。
 - 若 `bin/go_services/client_rpc_router.exe` 比 `go/client_rpc_router` 源码旧,一并执行 `-Services client_rpc_router` 重编。
 
 ### ⑤ robot 重编
@@ -784,12 +784,12 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 
 `chat_send_authority`是唯一发送决定与历史真源：主键为玩家和原request_id，保存原账号/修订、确定性完整SendChatRequest字节及SHA256、已过滤ChatMessage字节、服务端SQL时间、固定成功结果。内部SQL列没有跨服务调用面，直接复用已有PB作为BLOB，不另造PB或重复PB结构。`chat_policy`固定同服规则指纹；副本限速、历史和敏感词规则不同即拒启。两表只由显式`-migrate`创建，普通启动只核结构、索引与已有策略。
 
-一次完整提交前缀为meta、caller的route/64片合服围栏、路由原件复核、P，再核原gate UUID/incarnation对应登录账号、原wire owner_revision及无交易冻结。原账号在事务前由只读全局login Redis捕获；当前目录不能替旧请求补身份。私聊对端沿用非0且非自己的既有纯参数资格，不新增目录存在要求；已有request_id只能重放首次原件。SQL提交是唯一发送线性化点，同一P内按SQL固定秒窗口计数限速。限速拒绝不写永久收据，之后同一ID仍可重试，只有成功接受才永久占用原ID。提交未知不换ID自动重试，原ID可查回同一决定；空request_id保留“每次新发”语义，由服务端生成不可预测内部ID。
+一次完整提交前缀为meta、caller的route/64片合服围栏、路由原件复核、P，再核原gate UUID/incarnation对应登录账号、原wire owner_revision及无交易冻结。原账号取自 gate 签名的会话身份原件（`roleidentity.Original`，见 [gate-online-identity.md](gate-online-identity.md)），chat 不读 login 的 Redis；当前目录不能替旧请求补身份。私聊对端沿用非0且非自己的既有纯参数资格，不新增目录存在要求；已有request_id只能重放首次原件。SQL提交是唯一发送线性化点，同一P内按SQL固定秒窗口计数限速。限速拒绝不写永久收据，之后同一ID仍可重试，只有成功接受才永久占用原ID。提交未知不换ID自动重试，原ID可查回同一决定；空request_id保留“每次新发”语义，由服务端生成不可预测内部ID。
 
 私聊stream继续只由双方玩家ID组成，按无符号ID排序；角色过户或ABA后合法新owner仍保留该角色已有历史。旧owner迟到请求在P内即被拒绝；新owner不能重放旧owner的原发送UUID。Pull只核caller的route/P至SQL结果全部读完，不因peer被删除而抹掉合法历史，按stream/state/accepted_ms/player_id/request_id覆盖索引读取min(调用limit,HistoryMaxLimit,HistoryMaxEntries)条，不由Redis先筛选，因此Redis丢失、旧快照或旧UUID不能改变授权与已提交历史。
 
 一次Pull的硬预算为200条：配置与Store构造均拒HistoryMaxLimit大于200，读取再以同一常量钳制。HistoryMaxEntries可独立配置容量，但不能扩大单次持P查询预算。
 
-窗口保留原LIST续期语义：最新接受时间距SQL当前时间达到TTL则为空；倒序读取时遇相邻接受时间间隔达到TTL即截断，避免冷窗口过期后新消息复活之前的历史，再按客户端limit钳制返回。排序时间来自SQL，时间相同以玩家ID和原request_id作稳定唯一序。窗口和条数控制可见历史，永久原UUID、身份、摘要与结果不删除，防过户后同ID重新入场；本批保留原PB正文，代价是SQL容量随发送量增长，未把显示TTL伪装成永久原件清理授权。Redis句柄仅是既有可丢缓存装配，正式Send/Pull不依赖它，没有第二份投影工作器或授权真相。
+窗口保留原LIST续期语义：最新接受时间距SQL当前时间达到TTL则为空；倒序读取时遇相邻接受时间间隔达到TTL即截断，避免冷窗口过期后新消息复活之前的历史，再按客户端limit钳制返回。排序时间来自SQL，时间相同以玩家ID和原request_id作稳定唯一序。窗口和条数控制可见历史，永久原UUID、身份、摘要与结果不删除，防过户后同ID重新入场；本批保留原PB正文，代价是SQL容量随发送量增长，未把显示TTL伪装成永久原件清理授权。chat 不建任何 Redis 句柄（2026-11-11 删掉了两个从不发命令的旧缓存句柄与 `ChatRedis` 配置段），没有第二份投影工作器或授权真相。
 
 验证必须分层记录：纯逻辑/原会话单测、TiDB同P换主/冻结/合服互斥、并发同UUID、延迟提交与回包丢失、旧owner拒绝及合法新owner保留角色历史、SQL限速/窗口边界以及强连接策略分别验收。源码修订不等于上述真实验证已经通过，旧仅Redis聊天的成功记录只保留为历史范围证据。

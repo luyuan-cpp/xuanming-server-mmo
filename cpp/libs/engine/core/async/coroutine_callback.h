@@ -10,12 +10,18 @@
 #include <utility>
 
 #include "muduo/net/EventLoop.h"
+#include "thread_context/trace_context_tls.h"
 
 namespace loop_async
 {
 // 把已有单次异步接口接入 Cobalt，不添加超时或重试。
 // submit 和回调都属于 loop；true 承诺回调，false 表示未接纳且不会再回调。
 // T 必须拥有结果，不能携带借用的回复指针。nullopt 专指本地停止。
+// nullopt 只交付给停止那一刻正在等待的这一次。停止之后同一任务再 co_await(包括再调本函数)会在挂起前抛
+// boost::system::system_error(operation_aborted)，那是 Cobalt 的 throw_if_cancelled，抛点之后的代码不再执行。
+// 所以拿到 nullopt 就直接 co_return；拿到真实结果后若同步代码可能重入停止，下一次等待前先查 this_coro::cancelled。
+// 协程挂起时记下当前 trace，完成时装回(docs/design/distributed-tracing.md §5.6)：协程从完成回调里继续，
+// 不论就地恢复还是经执行器投递，日志都挂在发起它的请求上；完成回调自己的上下文(Redis、etcd 回包一般没有)不影响协程。
 template<class T, class Submit>
 class Callback final : public boost::cobalt::op<std::optional<T>>
 {
@@ -24,10 +30,11 @@ class Callback final : public boost::cobalt::op<std::optional<T>>
     {
         muduo::net::EventLoop& loop;
         std::optional<Handler> handler;
+        tracing::TraceContext trace;   // 协程挂起那一刻的 trace；无效表示协程本来就不在任何 trace 里
         bool submitting = true;
 
-        Completion(muduo::net::EventLoop& loop, Handler handler)
-            : loop(loop), handler(std::move(handler)) {}
+        Completion(muduo::net::EventLoop& loop, Handler handler, const tracing::TraceContext& trace)
+            : loop(loop), handler(std::move(handler)), trace(trace) {}
 
         void Finish(std::optional<T> result)
         {
@@ -37,6 +44,8 @@ class Callback final : public boost::cobalt::op<std::optional<T>>
             handler.reset();
             auto slot = complete.get_cancellation_slot();
             if (slot.is_connected()) slot.clear();
+            // 停止(nullopt)也走这里：取消路径上协程的收尾日志同样挂回原请求，不挂到发起停止的那一方。
+            tracing::ScopedSpan restore(trace);
             if (submitting)
             {
                 // 交给 Cobalt 的即时完成协议，await_suspend 返回前不重入业务。
@@ -58,7 +67,7 @@ public:
     void initiate(Handler handler) override
     {
         loop_.assertInLoopThread();
-        const auto state = std::make_shared<Completion>(loop_, std::move(handler));
+        const auto state = std::make_shared<Completion>(loop_, std::move(handler), tracing::Current());
         completion_ = state; // 发命令之前准备完整状态，容许拒绝、完成和停止重入。
         const std::weak_ptr<Completion> weak = state;
         auto slot = state->handler->get_cancellation_slot();

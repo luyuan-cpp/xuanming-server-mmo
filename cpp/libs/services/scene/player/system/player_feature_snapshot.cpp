@@ -235,7 +235,7 @@ uint32_t PlayerMissionReadSystem::BuildList(entt::entity player, GetMissionListR
     const auto* container = tlsEcs.actorRegistry.try_get<MissionsContainerComp>(player);
     if (container == nullptr)
     {
-        LOG_ERROR << "[PlayerMission] 缺少持久 MissionsContainerComp，拒绝任务列表读取，entity="
+        LOG_ERROR << "[PlayerMission] Missing persistent MissionsContainerComp, rejecting mission list read, entity="
                   << entt::to_integral(player);
         return kServiceUnavailable;
     }
@@ -266,7 +266,7 @@ uint32_t PlayerActivityReadSystem::BuildList(entt::entity player, uint64_t serve
     if (!tlsEcs.actorRegistry.valid(player)) return kThisEntityIsInvalid;
     if (!tlsEcs.actorRegistry.all_of<MissionsContainerComp>(player))
     {
-        LOG_ERROR << "[PlayerActivity] 缺少持久 MissionsContainerComp，拒绝活动列表读取，entity="
+        LOG_ERROR << "[PlayerActivity] Missing persistent MissionsContainerComp, rejecting activity list read, entity="
                   << entt::to_integral(player);
         return kServiceUnavailable;
     }

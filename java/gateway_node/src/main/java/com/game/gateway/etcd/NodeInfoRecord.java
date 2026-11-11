@@ -37,6 +37,13 @@ public class NodeInfoRecord {
     @JsonProperty("playerCount")
     private long playerCount;
 
+    /**
+     * gate 自报的客户端连接上限(NodeInfo.max_connections = 13,即它的 GateMaxConnections)。
+     * 0 = 没声明(dev 下不设上限、旧版 gate);protobuf JSON 不输出 0 值,读出来同样是 0。
+     */
+    @JsonProperty("maxConnections")
+    private long maxConnections;
+
     public long getNodeId() { return nodeId; }
     public void setNodeId(long nodeId) { this.nodeId = nodeId; }
 
@@ -63,6 +70,9 @@ public class NodeInfoRecord {
 
     public long getPlayerCount() { return playerCount; }
     public void setPlayerCount(long playerCount) { this.playerCount = playerCount; }
+
+    public long getMaxConnections() { return maxConnections; }
+    public void setMaxConnections(long maxConnections) { this.maxConnections = maxConnections; }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Endpoint {

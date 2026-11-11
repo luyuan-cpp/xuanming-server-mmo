@@ -8,6 +8,8 @@
 #include "spatial/comp/grid_comp.h"
 #include "spatial/comp/scene_node_scene_comp.h"
 #include "spatial/constants/aoi_priority.h"
+#include "spatial/constants/view.h"
+#include "spatial/system/aoi_load.h"
 #include "spatial/system/grid.h"
 #include "spatial/system/interest.h"
 #include "spatial/system/view.h"
@@ -18,8 +20,11 @@
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "core/utils/stat/stat.h"
 #include "proto/scene/player_scene.pb.h"
+#include "proto/scene/scene_info.pb.h"  // SceneInfoComp:每个场景实体都有,用来遍历本线程的场景
 #include "network/client_message_sender.h"
 #include <modules/scene/comp/scene_comp.h>
+
+#include <unordered_set>
 
 // Determine the interest priority tag that |observer| should assign to |target|.
 // The tag is a semantic category; the active AoiPriorityPolicy turns it into a
@@ -68,11 +73,112 @@ bool AppendActorDestroy(ActorListDestroyS2C& message, entt::entity target)
     return true;
 }
 
-// 对 target 所在的当前格及邻格,让能看见它的实体补上空间来源(与首次入格同一判定)。
-void RebuildNearbyObservers(entt::entity target, AoiVisibilityChanges& changes)
+// 速度非零就算在移动(与 MovementSystem::BroadcastMove 的 move_state 同一口径)。
+// 没有 Velocity 组件的实体(NPC 等)按静止处理:位置一变就评估。
+bool IsMoving(entt::entity entity)
 {
-    const auto* hex = tlsEcs.actorRegistry.try_get<Hex>(target);
-    const auto* sceneComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(target);
+    const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(entity);
+    return velocity != nullptr && (velocity->x() != 0.0 || velocity->y() != 0.0 || velocity->z() != 0.0);
+}
+
+// 自上次评估之后要不要重新评估。
+//   - 视野半径变了(以后的鹰眼、致盲之类改 ViewRadius):不用等位移,下一帧就按新半径判;
+//   - 位置没变不评估;静止的(刚停步、被挪位)立即评估,停下来的那一刻一定按精确位置判一次;
+//     移动中的累计位移到 kAoiReevaluateDistance 才评估。
+bool IsReevaluationDue(entt::entity entity, const Transform& transform)
+{
+    const auto* evaluatedAt = tlsEcs.actorRegistry.try_get<AoiEvaluatedAtComp>(entity);
+    if (evaluatedAt == nullptr)
+    {
+        return true;
+    }
+    if (ViewSystem::GetMaxViewRadius(entity) != evaluatedAt->viewRadius)
+    {
+        return true;
+    }
+    const auto& location = transform.location();
+    const double dx = location.x() - evaluatedAt->x;
+    const double dy = location.y() - evaluatedAt->y;
+    const double dz = location.z() - evaluatedAt->z;
+    const double movedSquared = dx * dx + dy * dy + dz * dz;
+    if (movedSquared == 0.0)
+    {
+        return false;
+    }
+    return !IsMoving(entity) || movedSquared >= kAoiReevaluateDistance * kAoiReevaluateDistance;
+}
+
+// 有附近候选因名额被拒收或被挤掉(AoiNearbyRefillComp),现在又有空名额:重扫一次补回。
+// 位置不变也要补:打完架站着不动,战斗期间被挤掉的附近的人要回来。
+bool IsNearbyRefillDue(entt::entity entity)
+{
+    if (!tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(entity))
+    {
+        return false;
+    }
+    const auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(entity);
+    return list == nullptr || list->VisibleCount() < InterestSystem::GetEffectiveCapacity(entity);
+}
+
+// watcher 对 target 还没有空间来源、且距离进入视野半径时登记空间来源;容量与优先级由 InterestSystem 裁决。
+void TryAddSpatialSource(entt::entity watcher, entt::entity target, AoiVisibilityChanges& changes)
+{
+    const auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    if (list != nullptr && list->HasSpatialSource(target))
+    {
+        return;
+    }
+    if (ViewSystem::CanSee(watcher, target))
+    {
+        InterestSystem::AddAoiEntity(watcher, target, DetermineAoiPriority(watcher, target), &changes);
+    }
+}
+
+// 出视野:entity 关注的、关注 entity 的空间来源,距离超出离开半径(或目标隐身且没有侦测授权)的撤掉。
+// 只撤空间来源,显式关注照常显示。按距离判,与格子无关。先收集再撤:撤销会改两张索引。
+void DropDistantSpatialSources(entt::entity entity, AoiVisibilityChanges& changes)
+{
+    EntityVector stale;
+    if (const auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(entity))
+    {
+        for (const auto& [target, entry] : list->entries)
+        {
+            if (entry.spatial && !ViewSystem::CanKeepSeeing(entity, target))
+            {
+                stale.push_back(target);
+            }
+        }
+    }
+    for (const auto target : stale)
+    {
+        InterestSystem::RemoveAoiEntity(entity, target, &changes);
+    }
+
+    stale.clear();
+    if (const auto* index = tlsEcs.actorRegistry.try_get<AoiWatchersComp>(entity))
+    {
+        for (const auto& [watcher, visible] : index->watchers)
+        {
+            const auto* watcherList = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+            if (watcherList != nullptr && watcherList->HasSpatialSource(entity) &&
+                !ViewSystem::CanKeepSeeing(watcher, entity))
+            {
+                stale.push_back(watcher);
+            }
+        }
+    }
+    for (const auto watcher : stale)
+    {
+        InterestSystem::RemoveAoiEntity(watcher, entity, &changes);
+    }
+}
+
+// 对 entity 本格及六个邻格里的每个其他实体调用 visit(entity 必须已在格子里)。只读格子表。
+template <typename Visit>
+void ForEachNearbyEntity(entt::entity entity, Visit&& visit)
+{
+    const auto* hex = tlsEcs.actorRegistry.try_get<Hex>(entity);
+    const auto* sceneComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(entity);
     if (hex == nullptr || sceneComp == nullptr || !tlsEcs.sceneRegistry.valid(sceneComp->sceneEntity))
     {
         return;
@@ -93,16 +199,40 @@ void RebuildNearbyObservers(entt::entity target, AoiVisibilityChanges& changes)
         }
         for (const auto other : gridIt->second.entities)
         {
-            if (other != target && ViewSystem::CanSee(other, target))
+            if (other != entity)
             {
-                InterestSystem::AddAoiEntity(other, target, DetermineAoiPriority(other, target), &changes);
+                visit(other);
             }
         }
     }
 }
+
+// 进视野:entity 本格及六个邻格里的其他实体,两个方向各尝试建立空间来源。
+// 静止的一方不会自己评估,反向关系在位置变化的这一方评估时一并建立。
+void AddNearbySpatialSources(entt::entity entity, AoiVisibilityChanges& changes)
+{
+    ForEachNearbyEntity(entity, [entity, &changes](entt::entity other)
+    {
+        TryAddSpatialSource(entity, other, changes);
+        TryAddSpatialSource(other, entity, changes);
+    });
+}
+
+// 隐身结束:target 当前格及邻格里能看见它的实体补上空间来源(与入格评估同一判定)。
+void RebuildNearbyObservers(entt::entity target, AoiVisibilityChanges& changes)
+{
+    ForEachNearbyEntity(target, [target, &changes](entt::entity other)
+    {
+        TryAddSpatialSource(other, target, changes);
+    });
+}
 } // namespace
 
 void AoiSystem::Update(double delta) {
+    // 这一帧所有重判的可见性变化合成一批,帧末统一下发:同一观察者这一帧新看见、看不见的几个目标
+    // 合成一条列表消息。Update 里只记变化、不发别的 AOI 消息,位置在 Update 期间也不变,所以批内不会来回翻转;
+    // 帧末下发早于随后 MovementSystem 的移动广播,先创建、后移动的顺序不变。
+    AoiVisibilityChanges changes;
     for (auto&& [entity, transform, sceneComp] : tlsEcs.actorRegistry.view<Transform, SceneEntityComp>().each()) {
         // Skip invalid scenes
         if (!tlsEcs.sceneRegistry.valid(sceneComp.sceneEntity)) {
@@ -110,101 +240,64 @@ void AoiSystem::Update(double delta) {
             continue;
         }
 
-        // Get current hex grid position
-        const auto currentHex = GridSystem::CalculateHexPosition(transform);
-        const auto currentGridId = GridSystem::GetGridId(currentHex);
-
-        GridSet gridsToEnter, gridsToLeave;
-        auto* gridList = UpdateGridState(entity, sceneComp.sceneEntity, currentHex,
-                                        currentGridId, gridsToEnter, gridsToLeave);
-        if (gridList == nullptr) continue;
-
-        // Handle entity enter/leave visibility
-        HandleEntityVisibility(entity, *gridList, gridsToEnter, gridsToLeave);
+        const bool firstEntry = UpdateGridMembership(entity, sceneComp.sceneEntity,
+                                                     GridSystem::CalculateHexPosition(transform));
+        if (firstEntry || IsReevaluationDue(entity, transform) || IsNearbyRefillDue(entity)) {
+            ReevaluateVisibility(entity, transform, changes);
+        }
     }
+    SendVisibilityChanges(changes);
 }
 
-SceneGridListComp* AoiSystem::UpdateGridState(const entt::entity entity, const SceneEntity sceneEntity, const Hex& currentHex,
-                                const GridId currentGridId, GridSet& gridsToEnter, GridSet& gridsToLeave) {
+bool AoiSystem::UpdateGridMembership(const entt::entity entity, const SceneEntity sceneEntity, const Hex& currentHex) {
     const auto* previousHexPtr = tlsEcs.actorRegistry.try_get<Hex>(entity);
     if (previousHexPtr != nullptr && hex_distance(*previousHexPtr, currentHex) == 0) {
-        return nullptr;
+        return false;
     }
 
     // 此处延迟创建:真实入格写入口是 SceneGridListComp 的唯一创建点。
     // 空场景和只读空间查询不需要表;首次入格与跨格移动都在这里完成占位。
     auto& gridList = tlsEcs.sceneRegistry.get_or_emplace<SceneGridListComp>(sceneEntity);
+    const auto currentGridId = GridSystem::GetGridId(currentHex);
     if (previousHexPtr == nullptr) {
         // First time entering scene
         // AoiListComp 不在这里预挂;实际可见关系由 InterestSystem 按需创建。
         gridList[currentGridId].entities.insert(entity);
         tlsEcs.actorRegistry.emplace<Hex>(entity, currentHex);
-        GridSystem::GetCurrentAndNeighborGridIds(currentHex, gridsToEnter);
-    } else {
-        // Position update
-        const auto previousHex = *previousHexPtr;
-
-        GridSystem::GetCurrentAndNeighborGridIds(previousHex, gridsToLeave);
-        GridSystem::GetCurrentAndNeighborGridIds(currentHex, gridsToEnter);
-
-        // Remove common grids (no need to process enter/leave for unchanged grids)
-        for (auto it = gridsToLeave.begin(); it != gridsToLeave.end(); ) {
-            if (gridsToEnter.erase(*it)) {
-                it = gridsToLeave.erase(it);
-            } else {
-                ++it;
-            }
-        }
-
-        const auto previousGridId = GridSystem::GetGridId(previousHex);
-        if (auto previousGrid = gridList.find(previousGridId); previousGrid != gridList.end()) {
-            previousGrid->second.entities.erase(entity);
-        }
-        gridList[currentGridId].entities.insert(entity);
-
-        // Hex has const members -> copy assignment is deleted -> emplace_or_replace won't compile.
-        // Use remove + emplace instead.
-        tlsEcs.actorRegistry.remove<Hex>(entity);
-        tlsEcs.actorRegistry.emplace<Hex>(entity, currentHex);
+        return true;
     }
-    return &gridList;
+
+    // 跨格只挪格子成员;进出视野按距离判,由调用方的评估处理。
+    const auto previousGridId = GridSystem::GetGridId(*previousHexPtr);
+    if (auto previousGrid = gridList.find(previousGridId); previousGrid != gridList.end()) {
+        previousGrid->second.entities.erase(entity);
+    }
+    gridList[currentGridId].entities.insert(entity);
+
+    // Hex has const members -> copy assignment is deleted -> emplace_or_replace won't compile.
+    // Use remove + emplace instead.
+    tlsEcs.actorRegistry.remove<Hex>(entity);
+    tlsEcs.actorRegistry.emplace<Hex>(entity, currentHex);
+    return false;
 }
 
-void AoiSystem::HandleEntityVisibility(entt::entity entity, SceneGridListComp& gridList,
-                                       const GridSet& gridsToEnter, const GridSet& gridsToLeave) {
-    // 两个方向各自独立判定 CanSee、容量与来源;可见性变化统一收集后下发。
-    AoiVisibilityChanges changes;
+void AoiSystem::ReevaluateVisibility(const entt::entity entity, const Transform& transform,
+                                     AoiVisibilityChanges& changes) {
+    // 这次评估会扫一遍附近候选,待补回的标记在此消费;评估中再被拒会由 InterestSystem 重新打上。
+    tlsEcs.actorRegistry.remove<AoiNearbyRefillComp>(entity);
 
-    for (const auto& gridId : gridsToEnter) {
-        auto gridIt = gridList.find(gridId);
-        if (gridIt == gridList.end()) continue;
+    // 先撤后建:走远的先让出名额,同一次评估里走近的就能用上。两个方向各自判定距离、容量与来源。
+    DropDistantSpatialSources(entity, changes);
+    AddNearbySpatialSources(entity, changes);
 
-        for (const auto& otherEntity : gridIt->second.entities) {
-            if (otherEntity == entity) continue;
-
-            if (ViewSystem::CanSee(entity, otherEntity)) {
-                InterestSystem::AddAoiEntity(entity, otherEntity, DetermineAoiPriority(entity, otherEntity), &changes);
-            }
-            // 静止观察者可能一直不跨格:反向的空间来源在跨格者这一侧一并建立。
-            if (ViewSystem::CanSee(otherEntity, entity)) {
-                InterestSystem::AddAoiEntity(otherEntity, entity, DetermineAoiPriority(otherEntity, entity), &changes);
-            }
-        }
-    }
-
-    // 走出的格子只撤空间来源:显式关注(技能追踪、队伍等)继续有效,客户端不收移除。
-    for (const auto& gridId : gridsToLeave) {
-        auto gridIt = gridList.find(gridId);
-        if (gridIt == gridList.end()) continue;
-
-        for (const auto& otherEntity : gridIt->second.entities) {
-            if (otherEntity == entity) continue;
-            InterestSystem::RemoveAoiEntity(entity, otherEntity, &changes);
-            InterestSystem::RemoveAoiEntity(otherEntity, entity, &changes);
-        }
-    }
-
-    SendVisibilityChanges(changes);
+    // 此处延迟创建:AoiEvaluatedAtComp 的唯一创建点,之后的评估只覆盖。
+    // 记下这次评估用的位置与视野半径:任何一个变了,下一帧都要按新值重判。
+    auto& evaluatedAt = tlsEcs.actorRegistry.get_or_emplace<AoiEvaluatedAtComp>(entity);
+    const auto& location = transform.location();
+    evaluatedAt.x = location.x();
+    evaluatedAt.y = location.y();
+    evaluatedAt.z = location.z();
+    evaluatedAt.viewRadius = ViewSystem::GetMaxViewRadius(entity);
 }
 
 bool AoiSystem::Follow(entt::entity watcher, entt::entity target, const AoiFollowGrant& grant) {
@@ -220,13 +313,43 @@ void AoiSystem::Unfollow(entt::entity watcher, entt::entity target, const AoiFol
     SendVisibilityChanges(changes);
 }
 
+void AoiSystem::ApplyServerPressure(double pressureFactor) {
+    // 1) 写进本线程的每个场景,记下值真有变化(含刚建、还没有压力组件)的场景。
+    const auto pressure = static_cast<float>(pressureFactor);
+    std::unordered_set<SceneEntity> changedScenes;
+    for (const auto scene : tlsEcs.sceneRegistry.view<SceneInfoComp>()) {
+        const auto* current = tlsEcs.sceneRegistry.try_get<ScenePressureComp>(scene);
+        if (current != nullptr && current->pressureFactor == pressure) {
+            continue;
+        }
+        // 此处延迟创建:ScenePressureComp 的唯一创建点(也是唯一写入口)。
+        tlsEcs.sceneRegistry.get_or_emplace<ScenePressureComp>(scene).pressureFactor = pressure;
+        changedScenes.insert(scene);
+    }
+    if (changedScenes.empty()) {
+        return;
+    }
+
+    // 2) 这些场景里的观察者按新容量校正名额,变化合成一批下发(每个观察者一条列表消息)。
+    //    校正只改各自兴趣表的条目与目标的反向索引,不增删 AoiListComp,可以边遍历边做。
+    AoiVisibilityChanges changes;
+    std::size_t trimmed = 0;
+    for (auto&& [watcher, list, sceneComp] : tlsEcs.actorRegistry.view<AoiListComp, SceneEntityComp>().each()) {
+        if (changedScenes.contains(sceneComp.sceneEntity)) {
+            trimmed += InterestSystem::ApplyCapacity(watcher, &changes);
+        }
+    }
+    SendVisibilityChanges(changes);
+    aoi_load_stats::RecordTrimmedEntries(trimmed);
+}
+
 void AoiSystem::RefreshTargetVisibility(entt::entity target) {
     if (!tlsEcs.actorRegistry.valid(target)) {
         return;
     }
     AoiVisibilityChanges changes;
     InterestSystem::RefreshTargetVisibility(target, &changes);
-    // Update 只在跨格时评估空间可见性:隐身结束不能等任何一方跨格,附近实体在这里立即重新评估。
+    // Update 只在位置变化后重新评估:隐身结束不能等任何一方走动,附近实体在这里立即重新评估。
     if (!ViewSystem::IsStealthed(target)) {
         RebuildNearbyObservers(target, changes);
     }

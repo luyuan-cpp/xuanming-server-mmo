@@ -37,6 +37,8 @@ namespace
     constexpr std::size_t kMinSecretBytes = 32;
     // 连续失败时每这么多次打一条,第一次也打。退避封顶 5s 时约等于每分钟一条。
     constexpr uint32_t kFailureLogEveryN = 12;
+    // go/db 提交了却没写审计发件箱(go/db 比 scene 旧):全进程第一次和此后每这么多次打一条,发布顺序错了时不刷屏。
+    constexpr uint64_t kAuditNotWrittenLogEveryN = 1000;
 
     template<class Reply>
     struct AttemptResult
@@ -240,6 +242,12 @@ bool PlayerStoreClient::DeferPeriodicSave(Guid playerId, const player_store_rows
         return false;
     }
     State &state = it->second;
+    // 有到期的审计记录就不推迟:它们要随这一笔交出去(docs/design/player-audit-outbox.md §5.2)。
+    // 这份快照此刻才取,水位就是现在的水位。
+    if (options_.auditDue && options_.auditDue(playerId, options_.commitMark ? options_.commitMark() : 0))
+    {
+        return false;
+    }
     const KindSet &piggyback = PiggybackKinds();
     const KindSet dirty = DirtyKinds(state, rows);
     // 一定要写的情况:有别的行脏(位置照样顺带写出去);只顺带的行结果未决(库里是哪一份不知道,不能拖);
@@ -316,7 +324,10 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
     KindSet dirty = DirtyKinds(state, rows);
     save_timing_stats::ObserveSince(save_timing_stats::Stage::kCompare, compareStart);
     const bool epochBehind = state.committedOwnerEpoch != state.ownerEpoch;
-    if (dirty.none() && !submitOptions.release && !submitOptions.force && !state.releaseCommitted && !epochBehind)
+    // 水位不大于这份快照的审计记录还没交出去:没有脏行也要写一笔。净变化为零的改动(先 +100 后 −100)同样有流水要交,
+    // 它们只能随存盘进发件箱(docs/design/player-audit-outbox.md §5.2)。
+    const bool auditDue = options_.auditDue && options_.auditDue(playerId, commitMark);
+    if (dirty.none() && !submitOptions.release && !submitOptions.force && !state.releaseCommitted && !epochBehind && !auditDue)
     {
         return StartResult::kNothingToWrite;
     }
@@ -334,6 +345,12 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
     request.set_schema_gen(submitOptions.schemaGen);
     request.set_instance_id(options_.instanceId());
     request.set_release(submitOptions.release);
+    // 审计记录随这一笔交出去:go/db 在提交存档的同一个事务里写进发件箱。只在这里拷一次,重试发的是同一份请求。
+    if (options_.attachAudit)
+    {
+        options_.attachAudit(playerId, commitMark, request);
+    }
+    inflight.carriesAudit = request.transaction_logs_size() > 0 || request.audit_snapshots_size() > 0;
 
     std::string stampedProfile;
     const bool stamped = options_.stampProfile && dirty.any();
@@ -462,9 +479,21 @@ void PlayerStoreClient::HandleSaveResponse(Guid playerId, State &state, const pl
     {
     case playerstore::SAVE_PLAYER_COMMITTED:
     case playerstore::SAVE_PLAYER_EQUAL:
+    {
         result.status = SaveStatus::kCommitted;
-        Finish(playerId, state, result, /*committed=*/true);
+        // 带了审计记录却没有 audit_outbox_written:go/db 不认识审计字段(比 scene 旧),存档提交了、审计被它丢了。
+        // 行照常确认;审计记录不放行,留在队列里随下一笔再交(docs/design/player-audit-outbox.md §5.2、§10)。
+        const bool auditWritten = !state.inflight->carriesAudit || response.audit_outbox_written();
+        if (!auditWritten && auditNotWrittenCount_++ % kAuditNotWrittenLogEveryN == 0)
+        {
+            LOG_ERROR << "[player_store] save of player " << playerId << " seq " << request.save_seq()
+                      << " committed, but the store did not write its " << request.transaction_logs_size() << " transaction log(s) and "
+                      << request.audit_snapshots_size() << " snapshot request(s) to the audit outbox (store older than scene?);"
+                      << " keeping them for the next save (total=" << auditNotWrittenCount_ << ", metric=audit_outbox_store_too_old)";
+        }
+        Finish(playerId, state, result, /*committed=*/true, auditWritten);
         return;
+    }
     case playerstore::SAVE_PLAYER_NO_OWNER:
     case playerstore::SAVE_PLAYER_SCHEMA_TOO_NEW:
     case playerstore::SAVE_PLAYER_RESULT_UNSPECIFIED:
@@ -519,7 +548,7 @@ void PlayerStoreClient::Fire(Callbacks &callbacks, const SaveResult &result)
     }
 }
 
-void PlayerStoreClient::Finish(Guid playerId, State &state, const SaveResult &result, bool committed)
+void PlayerStoreClient::Finish(Guid playerId, State &state, const SaveResult &result, bool committed, bool auditWritten)
 {
     InFlight finished = std::move(*state.inflight);
     state.inflight.reset();
@@ -537,7 +566,10 @@ void PlayerStoreClient::Finish(Guid playerId, State &state, const SaveResult &re
         state.committedOwnerEpoch = finished.request.owner_epoch();
         state.committedSaveSeq = finished.request.save_seq();
         // 先放行再回调:回调里可能销毁实体,那之后还没放行的会被当成没落库丢掉。
-        NotifyCommittedThrough(playerId, finished.commitMark);
+        if (auditWritten)
+        {
+            NotifyCommittedThrough(playerId, finished.commitMark);
+        }
     }
     // 回调里可能再次 Submit(进 pending),也可能 Forget,之后不再使用 state。
     Fire(finished.callbacks, result);

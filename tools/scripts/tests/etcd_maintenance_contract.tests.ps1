@@ -146,7 +146,8 @@ Test-Case '启动:三套 StatefulSet 显式以 etcd 二进制启动、不用 bit
         $code = Get-NonCommentText (Read-RepoText $script:StatefulSetPaths[$name])
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($code, '(?m)^\s*command:\s*\["/usr/local/bin/etcd"\]\s*$').Count) -Because "${name}:官方镜像是 distroless,显式写出启动的二进制,ETCD_* 由 etcd 自己按同名参数解析"
         Assert-NotMatch -Text $code -Pattern 'ALLOW_NONE_AUTHENTICATION' -Because "${name}:那是 bitnami 启动脚本的开关,etcd 本身不认,留着只会让人以为它有作用"
-        $mount = Get-SingleCapture -Text $code -Pattern '(?m)^\s*mountPath:\s*(\S+)\s*$' -What "$name 的数据卷挂载点"
+        # 只认数据卷 etcd-data 的挂载点:登记处另挂了双向 TLS 的证书卷(/etc/etcd/tls)。
+        $mount = Get-SingleCapture -Text $code -Pattern '(?m)^\s*- name: etcd-data\s*\n\s*mountPath:\s*(\S+)\s*$' -What "$name 的数据卷挂载点"
         Assert-Equal -Expected '/var/lib/etcd' -Actual $mount -Because "${name}:etcd 的惯用位置,也是官方镜像的工作目录"
         $dataDir = Get-StatefulSetEnv -Text $code -Name 'ETCD_DATA_DIR' -Label $name
         Assert-Equal -Expected '/var/lib/etcd/data' -Actual $dataDir -Because "${name}:数据目录是 PVC 下的 data/ 子目录(与 bitnami 时代的布局相同,已有 PVC 里的数据照用)"
@@ -193,7 +194,9 @@ Test-Case '可观测:三套都带抓取注解;主 etcd 的探针排除 NOSPACE' 
     foreach ($name in $script:StatefulSetPaths.Keys) {
         $code = Get-NonCommentText (Read-RepoText $script:StatefulSetPaths[$name])
         Assert-Match -Text $code -Pattern 'prometheus\.io/scrape:\s*"true"' -Because "${name}:空间与无主告警要靠 etcd 自己的 /metrics(deploy/k8s/etcd-alerts.yaml)"
-        Assert-Match -Text $code -Pattern 'prometheus\.io/port:\s*"2379"' -Because "${name}:etcd 的指标在 client 端口上"
+        # 登记处的客户端口是双向 TLS,Prometheus 没有客户端证书,指标走 --listen-metrics-urls 的 http 口 2381;另外两套指标在 client 端口上。
+        $metricsPort = if ($name -eq 'etcd-id-registry') { '2381' } else { '2379' }
+        Assert-Match -Text $code -Pattern ('prometheus\.io/port:\s*"' + $metricsPort + '"') -Because "${name}:etcd 的指标端口是 $metricsPort"
     }
     $code = Get-NonCommentText (Read-RepoText $script:EtcdPath)
     $readinessPath = Get-SingleCapture -Text $code -Pattern 'readinessProbe:\s*\n\s*httpGet:\s*\n\s*path:\s*(\S+)' -What 'etcd.yaml 的 readinessProbe path'

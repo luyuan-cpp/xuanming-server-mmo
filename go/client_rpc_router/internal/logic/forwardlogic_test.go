@@ -431,8 +431,39 @@ func TestForwardInvalidReleaseTrackIsInvalidParameter(t *testing.T) {
 	require.Equal(t, 0, calls, "轨道无法识别的请求不能转发到任何实例")
 }
 
-// forward_by_track_total 按会话轨道记同一批终态(发布轨道设计 §2.7 的金丝雀观察项):空串记 stable,认不出记 unknown;
+// 会话轨道经 x-release-track 交给目标(发布轨道设计 §2.6):按 ForwardRequest.release_track 写,覆盖 gate 带来的同名键。
+// 写的是会话的轨道,不是目标实例的轨道:canary 会话退回 stable 实例时,目标照样知道这是金丝雀会话。
+func TestForwardWritesSessionTrackMetadata(t *testing.T) {
+	route, _ := game.LookupRoute(game.MatchServiceJoinQueueMessageId)
+	dialer := newBufDialer(t)
+	target := startEchoTarget(t, "match-stable", route.FullMethod)
+	dialer.add("match-stable", target)
+	sc := newSvcCtx(t, dialer, 2000)
+	addNodeOnTrack(sc, base.ENodeType_MatchNodeService, 1, 1, "match-stable", releasetrack.Stable)
+
+	cases := []struct{ track, forged, want string }{
+		{track: "", forged: "canary", want: "stable"},
+		{track: "stable", forged: "", want: "stable"},
+		{track: "canary", forged: "stable", want: "canary"},
+	}
+	for i, tc := range cases {
+		extra := []string{}
+		if tc.forged != "" {
+			extra = append(extra, releasetrack.MetadataKey, tc.forged)
+		}
+		resp, err := logic.NewForwardLogic(ctxWithSession(extra...), sc).
+			Forward(forwardReqOnTrack(game.MatchServiceJoinQueueMessageId, uint64(200+i), 1, []byte("q"), tc.track))
+		require.NoError(t, err)
+		require.Nil(t, resp.ErrorMessage)
+		_, _, gotMD := target.snapshot()
+		require.Equal(t, []string{tc.want}, gotMD.Get(releasetrack.MetadataKey),
+			"session track %q, gate forged %q: the target must see exactly the router's value", tc.track, tc.forged)
+	}
+}
+
+// forward_by_track_total 按会话轨道记同一批终态(发布轨道设计 §2.8 的金丝雀判据):空串记 stable,认不出记 unknown;
 // 早于轨道检查的拒绝(未知消息号)也记在会话自己的轨道上,两条轨道的错误率才能直接比。
+// forward_by_track_seconds 按同一个轨道 label 记耗时,每次 Forward 恰好一个样本,两条轨道的 p99 才能直接比。
 func TestForwardCountsOutcomeBySessionTrack(t *testing.T) {
 	route, _ := game.LookupRoute(game.MatchServiceJoinQueueMessageId)
 	dialer := newBufDialer(t)
@@ -459,11 +490,14 @@ func TestForwardCountsOutcomeBySessionTrack(t *testing.T) {
 	}
 	for i, tc := range cases {
 		before := metrics.ForwardByTrackValue(tc.label, tc.outcome)
+		beforeLatency := metrics.ForwardByTrackLatencyCount(tc.label)
 		_, err := logic.NewForwardLogic(ctxWithSession(), sc).
 			Forward(forwardReqOnTrack(tc.messageId, uint64(100+i), 1, []byte("q"), tc.track))
 		require.NoError(t, err)
 		require.Equal(t, before+1, metrics.ForwardByTrackValue(tc.label, tc.outcome),
 			"message_id=%d track=%q 应当记在 (%s, %s) 上", tc.messageId, tc.track, tc.label, tc.outcome)
+		require.Equal(t, beforeLatency+1, metrics.ForwardByTrackLatencyCount(tc.label),
+			"message_id=%d track=%q 的耗时应当记在 release_track=%s 上,恰好一个样本", tc.messageId, tc.track, tc.label)
 	}
 }
 

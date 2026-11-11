@@ -32,5 +32,10 @@ func OpenToolMySQL(ctx context.Context, c config.MySQLConf, permission authority
 		_ = db.Close()
 		return nil, fmt.Errorf("连接 MySQL 库 %s 失败: %w", c.DBName, err)
 	}
+	// 工具与服务进程同一套锁等待上限(session_lock_wait.go):工具的写与在线请求争的是同一批行锁。
+	if err := verifySessionLockWaits(pingCtx, db, authoritysql.Backend(c.Backend)); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("MySQL database %s: %w", c.DBName, err)
+	}
 	return db, nil
 }

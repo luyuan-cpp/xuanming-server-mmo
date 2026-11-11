@@ -56,7 +56,13 @@ func decideSave(row *ownerRow, ownerEpoch, saveSeq uint64, schemaGen uint32, ins
 // 角色不存在或未建完,不造空档。
 //
 // 同实例同代次的重新认领也放行,判定不看 claim_seq:它只在写入时加 1,给判死比较用。
-func decideClaim(row *ownerRow, ownerEpoch uint64, instance []byte, binarySchemaGen uint32) storepb.LoadAndClaimResult {
+//
+// 世代两头都要核,两种都回 SCHEMA_TOO_NEW、不抬代次,scene 按进场失败处理,玩家重试即可:
+//   - 库里写过的世代比 scene 新:scene 解释不了这份存档。
+//   - scene 比本 go/db 认识的世代新(binarySchemaGen > knownGen):本 go/db 存不下这个 scene 之后的存盘。
+//     不拦的话,发布窗口里新 scene 经旧 go/db 认领成功、抬了代次,旧持有者被围住,新 scene 却一笔也落不了盘
+//     (数据覆写审计 r2-ps#11)。
+func decideClaim(row *ownerRow, ownerEpoch uint64, instance []byte, binarySchemaGen, knownGen uint32) storepb.LoadAndClaimResult {
 	switch {
 	case row == nil:
 		return storepb.LoadAndClaimResult_LOAD_AND_CLAIM_NO_OWNER
@@ -64,7 +70,7 @@ func decideClaim(row *ownerRow, ownerEpoch uint64, instance []byte, binarySchema
 		return storepb.LoadAndClaimResult_LOAD_AND_CLAIM_STALE_OWNER
 	case ownerEpoch == row.ownerEpoch && len(row.holder) > 0 && !bytes.Equal(row.holder, instance):
 		return storepb.LoadAndClaimResult_LOAD_AND_CLAIM_NOT_HOLDER
-	case row.schemaGen > binarySchemaGen:
+	case row.schemaGen > binarySchemaGen, binarySchemaGen > knownGen:
 		return storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW
 	default:
 		return storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED

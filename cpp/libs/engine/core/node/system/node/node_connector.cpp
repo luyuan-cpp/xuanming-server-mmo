@@ -9,6 +9,7 @@
 #include <thread_context/redis_manager.h>
 #include "node.h"
 #include "network/network_utils.h"
+#include "network/grpc_trace_hooks.h"
 #include "thread_context/node_context_manager.h"
 #include "muduo_grpc/channel.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
@@ -73,6 +74,8 @@ void NodeConnector::ConnectToGrpcNode(const NodeInfo &nodeInfo)
 	// 业务服务通道不开周期 keepalive(对端是 grpc-go 默认强制策略,§4.4),连接参数取 ChannelOptions 默认值。
 	// 只有玩家存盘例外:认领响应是一个玩家的全部行,可以超过默认的接收上限。
 	muduo_grpc::ChannelOptions channelOptions;
+	// 业务调用带上当前 trace,完成回调回到发起时的 trace(docs/design/distributed-tracing.md §5.3)。
+	channelOptions.unaryInterceptor = grpc_tracing::InjectTraceIntoUnaryCall;
 	if (nodeInfo.node_type() == common::base::PlayerStoreNodeService)
 	{
 		channelOptions.maxReceiveMessageBytes = player_store_path::kMaxClaimResponseBytes;
@@ -180,6 +183,9 @@ void NodeConnector::ConnectAllNodes()
 
 		for (const auto &serviceNode : serviceNodes.NodesOfType(nodeType))
 		{
+			// 按类型的建连准入(例如 gate 只连本 zone 子集里的路由服);没装准入的类型只看白名单。
+			if (!gNode->AdmitsConnection(serviceNode))
+				continue;
 			if (NodeUtils::IsNodeTracked(nodeType, serviceNode))
 				continue;
 

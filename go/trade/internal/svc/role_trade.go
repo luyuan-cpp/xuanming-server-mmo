@@ -15,6 +15,7 @@ import (
 	"shared/scenenode"
 	"shared/serviceauth"
 	"trade/internal/commerce"
+	"trade/internal/config"
 )
 
 // RmbIdentity 先取原gate连接账号再核强SQL当前角色归属；当前owner不能替代会话账号。
@@ -91,8 +92,9 @@ func (sc *ServiceContext) initRmb() error {
 	if sc.Assets == nil {
 		return errors.New("交易必须显式装配资产通道")
 	}
+	// 与配置校验同一份白名单;配置校验只在人民币寄售开启时查,这里不论开关都查。
 	for _, c := range sc.Config.Rmb.CurrencyTypes {
-		if c > 1 {
+		if !config.IsTradableCurrency(c) {
 			return errors.New("人民币寄售货币只允许金币或显式开启钻石，绑定币禁售")
 		}
 	}

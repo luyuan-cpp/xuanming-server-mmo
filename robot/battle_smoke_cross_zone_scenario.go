@@ -8,7 +8,9 @@ package main
 //             → 直连 battle 节点(含 GetBattleState 补拉)→ 直连上 SetAutoBattle → NotifyBattleEnd;
 //   机器人 B:登 zone_b → 同上;
 //   主流程:断言 A/B 的 gate 地址不同(落在不同 zone 的证据)、battle_id 相同、
-//           双方回合数 ≥ 1。
+//           双方回合数 ≥ 1;最后双方各查一次战报列表、取一次回放并解压核对
+//           (battle_report_smoke.go,docs/design/battle-report-replay.md §17 第 5 步),
+//           通过时先打一行 `BATTLE_REPORT_OK battle_id=… a_rounds=… b_rounds=…`。
 //
 // 直连无条件建立(turn-based §22 D73):gate 拒绝战斗上行(D66)、战斗帧只走直连(D68),
 // 拨号失败即 FAIL,没有经 gate 的回落可跑。
@@ -232,6 +234,18 @@ func runCrossZoneMatchSmoke(cfg *config.Config) {
 	}
 	aRes := collect("a", aDone)
 	bRes := collect("b", bDone)
+
+	// ---- 步骤 5:双方都能查到这一局的战报并取回回放(battle-report-replay.md §17 第 5 步;1V1 是 PVP,一定录) ----
+	reportA, err := battleReportSmokeCheck(botA, stats, aRes.battleId)
+	if err != nil {
+		fail("a-battle-report", "%v", err)
+	}
+	reportB, err := battleReportSmokeCheck(botB, stats, bRes.battleId)
+	if err != nil {
+		fail("b-battle-report", "%v", err)
+	}
+	zap.L().Info(fmt.Sprintf("BATTLE_REPORT_OK battle_id=%d a_rounds=%d b_rounds=%d total_rounds=%d truncated=%t raw_bytes=%d payload_bytes=%d",
+		aRes.battleId, reportA.rounds, reportB.rounds, reportA.totalRounds, reportA.truncated, reportA.rawBytes, reportA.payload))
 
 	// ---- 全部断言通过 ----
 	zap.L().Info(fmt.Sprintf("CROSS_ZONE_MATCH_OK battle_id=%d zone_a=%d zone_b=%d a_turns=%d b_turns=%d a_direct_turns=%d b_direct_turns=%d",

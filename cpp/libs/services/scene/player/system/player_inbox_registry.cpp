@@ -4,9 +4,12 @@
 #include <array>
 #include <cstddef>
 #include <iterator>
+#include <memory>
 
 #include <google/protobuf/descriptor.h>
+#include <google/protobuf/message.h>
 
+#include "engine/core/utils/proto/unknown_field_carry.h"
 #include "player/system/gm_sanction_inbox_executor.h"
 #include "battle/system/player_battle.h"
 #include "proto/player_inbox/player_inbox.pb.h"
@@ -157,6 +160,32 @@ namespace player_inbox_registry
 			return 0;
 		}
 		return types[msgType].maxPayloadBytes;
+	}
+
+	bool PayloadCarriesNewerVersionFields(uint32_t msgType, const std::string &payload, std::string &where)
+	{
+		const auto &types = Types();
+		if (msgType >= types.size() || !types[msgType].hasSpec)
+		{
+			return false;
+		}
+		const auto *descriptor =
+			google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(types[msgType].payloadMessage);
+		if (descriptor == nullptr)
+		{
+			return false; // SelfCheck 不通过时消费不会启动;到这里只可能是调用方绕过了它
+		}
+		const auto *prototype = google::protobuf::MessageFactory::generated_factory()->GetPrototype(descriptor);
+		if (prototype == nullptr)
+		{
+			return false;
+		}
+		const std::unique_ptr<google::protobuf::Message> decoded(prototype->New());
+		if (!decoded->ParseFromString(payload))
+		{
+			return false;
+		}
+		return unknown_field_carry::TreeCarriesNewerVersionFields(*decoded, &where);
 	}
 
 	const std::vector<uint32_t> &ConsumerDomains()

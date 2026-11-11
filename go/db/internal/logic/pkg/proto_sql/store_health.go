@@ -3,6 +3,7 @@ package proto_sql
 import (
 	"context"
 	"database/sql/driver"
+	"db/internal/metrics"
 	"db/internal/storeerr"
 	"errors"
 	"fmt"
@@ -183,7 +184,7 @@ func (r *StoreRegistry) endCooldown(storageID uint32, why string) {
 	logx.Infof("[placement] store reachable again (%s), cooldown cleared: storage=%d", why, storageID)
 }
 
-// CooldownCounts 按连接池类别数此刻仍在冷却期内的库(db_store_cooldown_stores,抓取时现算)。
+// CooldownCounts 按连接池类别数此刻仍在冷却期内的库(db_store_cooldown_stores,抓取时现算)。类别只有 metrics.PoolStore。
 // 只数没到期的记录:到期之后要等下一次 Store() 探活才会删掉记录,某个库到期后再也没有流量时,
 // 按记录数会让指标与告警一直挂着。
 func (r *StoreRegistry) CooldownCounts() map[string]int {
@@ -191,9 +192,9 @@ func (r *StoreRegistry) CooldownCounts() map[string]int {
 	counts := map[string]int{}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	for storageID, c := range r.cooling {
+	for _, c := range r.cooling {
 		if now.Before(c.until) {
-			counts[r.poolClassOf(storageID)]++
+			counts[metrics.PoolStore]++
 		}
 	}
 	return counts

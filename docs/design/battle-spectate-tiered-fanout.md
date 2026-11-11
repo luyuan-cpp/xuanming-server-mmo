@@ -512,7 +512,7 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 | P2 | 15.6 升 L2 与配额、featured、广播 topic 消费 | 已落码并完成评审修正；广播与配额专项待验 |
 | Java | B + 本地模式原操作 + P0 剩余 → P1 / P2 | 全部已落盘；票据/频道/Hub 部分单测有证据，真 Redis 与整批专项待验 |
 
-FIX-CPP / FIX-GO 的第二轮完整语义评审已于 2026-11-05 完成（`reports/review2-gate.md`、`review2-battle.md`、`review2-go.md`），发现的问题已按 §15.10 修正，未编译，待 Codex 验证。FIX-JAVA 的第二轮评审与同类修正登记为 Java 待做（Java `PARITY.md`）。
+FIX-CPP / FIX-GO 的第二轮完整语义评审已于 2026-11-05 完成（`reports/review2-gate.md`、`review2-battle.md`、`review2-go.md`），发现的问题已按 §15.10 修正，运行状态见 §15.10 开头（C++ 与 Go 纯单测已通过，真 TiDB 用例待跑）。FIX-JAVA 的第二轮评审与同类修正登记为 Java 待做（Java `PARITY.md`）。
 
 ### 15.9 评审后的定稿决策（2026-10-30，负责人授权按标准做法定）
 
@@ -536,7 +536,12 @@ FIX-CPP / FIX-GO 的第二轮完整语义评审已于 2026-11-05 完成（`repor
 
 ### 15.10 第二轮评审修正（2026-11-05，负责人授权按标准做法定）
 
-FIX-CPP / FIX-GO 交付之后的第二轮语义评审（`reports/review2-gate.md`、`review2-battle.md`、`review2-go.md`）共 12 条发现：严重 1 条，一般 11 条，没有阻断。修正前三份报告逐条核实过代码；修正批的其余条目都已修对，后来的改写（删除 Go 本地模式、删观战记录键）没有弄丢修正项。下表全部已落码，**未编译、未运行，待 Codex 验证**。
+FIX-CPP / FIX-GO 交付之后的第二轮语义评审（`reports/review2-gate.md`、`review2-battle.md`、`review2-go.md`）共 12 条发现：严重 1 条，一般 11 条，没有阻断。修正前三份报告逐条核实过代码；修正批的其余条目都已修对，后来的改写（删除 Go 本地模式、删观战记录键）没有弄丢修正项。下表全部已在 main。
+
+**运行状态（2026-11-10 按 Codex 原件核对）**：
+- C++：本节全部 C++ 用例都在 2026-11-08 的全量测试里通过（`build/verification/naming-audit-20261108/cpp-tests/`：`rpc_controller_test` 366 条、`routing_identity_test` 267 条，0 失败），之后相关源码只有那次运行验证过的统一命名提交 `74b097888`（`AbortAllRooms` 改名 `BeginRoomShutdown`，关观战准入与发 `SOURCE_LOST` 两处都在）。2026-11-10 的 Linux 调试镜像带这些改动编译并启动成功，`node_command_topic.h` 的静态断言在 Linux 上同样成立。
+- Go：纯单测 2026-11-06 通过（`build/verification/battle-handoff-20261106-r4/`：`TestSpectatorFormationEnded`、`TestFormationOutcomeDecided`、`TestGlobalFormationWatchable`、`TestListWatchableBattlesEvictsCompletedBattle`、`TestListWatchableBattlesStopsWhenRequestCancelled`、`TestReleaseSpectateOnOutcomeSkipsWhenDraining`）。
+- **未验证**：7 条真 TiDB 用例（`TestGlobalWatchTiDBCompletedBattleNotWatchable`、`TestGlobalWatchTiDBReplacedInstanceEvictsBeforeAnyRPC`、`TestGlobalWatchTiDBUnregisteredInstanceBeginsNoOriginal`、`TestGlobalWatchTiDBRandomPickOfClosedFormationEvictsMember`、`TestCancelGlobalSpectatorTreatsAlreadyClosedAsDone`、`TestGlobalSpectatorClosesWithoutProofOnlyWhenSourceGone`、`TestTiDBCandidateIndexesRequireSpectatorIntentPurgeIndex`）只在没配 TiDB 的运行里被跳过，从没真跑过；LOBBY 端到端冒烟要等 robot 支持 `SubscribeSpectate`。命令见交接 `CODEX.md` 第 8 节。
 
 | 来源 | 问题 | 修法 | 回归用例 |
 |---|---|---|---|

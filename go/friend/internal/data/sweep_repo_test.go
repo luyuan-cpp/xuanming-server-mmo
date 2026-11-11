@@ -38,6 +38,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"shared/workshard"
 )
 
 // sweep 的两个模式在 data 层只能是这两个字面量(见 friend_repo_mysql_test.go 顶部说明:
@@ -299,9 +301,9 @@ func TestSweep_UnknownModeDeletesNothing(t *testing.T) {
 //	   谁照着 ④ 给回收也"补"一道 created_ms=0 拒删,存量空行就永远回收不掉。
 
 // callSweepIdleCapacity —— 与 friend_repo_mysql_test.go 的 callSweep 同一个用途:
-// 对生产签名的假设只出现在这一处。
+// 对生产签名的假设只出现在这一处。不分工(owns = nil),按片分工另由文件末尾的 TestSweep_*Shard* 验。
 func callSweepIdleCapacity(ctx context.Context, repo *FriendRepo, mode string, retentionDays, batchLimit int, nowMs int64) (idle int64, deleted int64, err error) {
-	return repo.SweepIdleCapacityRows(ctx, mode, retentionDays, batchLimit, nowMs)
+	return repo.SweepIdleCapacityRows(ctx, mode, retentionDays, batchLimit, nowMs, nil)
 }
 
 // seedIdleCapacityRow 直写一行零好友的容量行,created_ms 给绝对值。
@@ -613,5 +615,114 @@ func TestDeleteIdleCapacityRow_RechecksAtCommitPoint(t *testing.T) {
 	assert.Equal(t, int64(1), removed, "零好友且 created_ms 早于截止点的行必须被删掉")
 	assert.Zero(t, capacityRowCount(t, ctx, db, expiredIdle))
 
+	assertFriendInvariants(t, ctx, db)
+}
+
+// ── 按片分工(2026-11-11,sweep_repo.go 文件头「多副本按片分工」)────────────────
+//
+// 片号 = 玩家 id % 64。下面的 id 按这个算法挑:46016 = 64 × 719,所以 46019、46083 落在第 3 片,46021 落在第 5 片。
+// 断言既看返回的计数,也逐行点名看库里还剩什么:只看计数分不清"删对了片"和"删错了片但数目碰巧一样"。
+const (
+	shardThreeA uint64 = 46019
+	shardThreeB uint64 = 46083
+	shardFive   uint64 = 46021
+)
+
+// ownsOnly 返回只负责给定片的归属判定,与生产的 workshard.Membership.Owns 同一个形状(按归属键判)。
+func ownsOnly(shards ...int) func(key string) bool {
+	owned := make(map[string]bool, len(shards))
+	for _, shard := range shards {
+		owned[workshard.ShardKey(SweepWorkKind, shard)] = true
+	}
+	return func(key string) bool { return owned[key] }
+}
+
+func requestRowCount(t *testing.T, ctx context.Context, db *sql.DB, from, to uint64) int64 {
+	t.Helper()
+	return mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_request WHERE from_player_id=? AND to_player_id=?", from, to)
+}
+
+// TestSweep_ShardFilterLimitsTerminalRequestsToOwnedShards:终态申请清理只数、只删本副本负责的片(按发起方 id)。
+func TestSweep_ShardFilterLimitsTerminalRequestsToOwnedShards(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	nowMs := time.Now().UnixMilli()
+	const retentionDays = 7
+	expired := nowMs - int64(retentionDays)*testDayMs - testDayMs
+	seedRequestRow(t, ctx, db, shardThreeA, 46101, testStatusAccepted, expired)
+	seedRequestRow(t, ctx, db, shardThreeB, 46102, testStatusRejected, expired)
+	seedRequestRow(t, ctx, db, shardFive, 46103, testStatusRejected, expired)
+
+	pending, deleted, err := repo.SweepTerminalRequests(ctx, testSweepModeReportOnly, retentionDays, 1000, nowMs, ownsOnly(3))
+	require.NoError(t, err)
+	assert.Zero(t, deleted)
+	assert.Equal(t, int64(2), pending, "只负责第 3 片时只能数到第 3 片的两行")
+
+	pending, deleted, err = repo.SweepTerminalRequests(ctx, testSweepModeDelete, retentionDays, 1000, nowMs, ownsOnly(3))
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), pending)
+	assert.Equal(t, int64(2), deleted)
+	assert.Zero(t, requestRowCount(t, ctx, db, shardThreeA, 46101))
+	assert.Zero(t, requestRowCount(t, ctx, db, shardThreeB, 46102))
+	assert.Equal(t, int64(1), requestRowCount(t, ctx, db, shardFive, 46103), "别的副本负责的第 5 片一行都不许碰")
+
+	// 一片都不负责(成员表里有别的副本、本副本还没注册):SQLFilter 给恒假条件,什么都不数、不删。
+	pending, deleted, err = repo.SweepTerminalRequests(ctx, testSweepModeDelete, retentionDays, 1000, nowMs, ownsOnly())
+	require.NoError(t, err)
+	assert.Zero(t, pending)
+	assert.Zero(t, deleted)
+	assert.Equal(t, int64(1), requestRowCount(t, ctx, db, shardFive, 46103))
+
+	pending, deleted, err = repo.SweepTerminalRequests(ctx, testSweepModeDelete, retentionDays, 1000, nowMs, ownsOnly(5))
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), pending)
+	assert.Equal(t, int64(1), deleted, "第 5 片的负责副本删它自己的那一行")
+	assert.Zero(t, totalRequestRows(t, ctx, db))
+}
+
+// TestSweep_MissingUpdatedMsGuardIsNotSharded:"updated_ms 为 0 就拒删"的保险看全表,不看本副本的片。
+// 写路径漏写 updated_ms 是全表的缺陷;只在别的片出现也不许本副本照删,否则保险的覆盖面随副本数缩小。
+func TestSweep_MissingUpdatedMsGuardIsNotSharded(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	nowMs := time.Now().UnixMilli()
+	const retentionDays = 7
+	seedRequestRow(t, ctx, db, shardThreeA, 46201, testStatusAccepted, nowMs-int64(retentionDays)*testDayMs-testDayMs)
+	seedRequestRow(t, ctx, db, shardFive, 46202, testStatusRejected, 0) // 漏写 updated_ms 的行在别的片
+
+	pending, deleted, err := repo.SweepTerminalRequests(ctx, testSweepModeDelete, retentionDays, 1000, nowMs, ownsOnly(3))
+	require.NoError(t, err, "保险触发是刻意的拒绝,不是故障")
+	assert.Equal(t, int64(1), pending, "待清理行数只数本副本的片")
+	assert.Zero(t, deleted, "任一片有 updated_ms=0 的终态行,所有副本都不删")
+	assert.Equal(t, int64(2), totalRequestRows(t, ctx, db))
+}
+
+// TestSweepIdleCapacity_ShardFilterLimitsToOwnedShards:零好友容量行回收只数、只删本副本负责的片(按 player_id)。
+func TestSweepIdleCapacity_ShardFilterLimitsToOwnedShards(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	nowMs := time.Now().UnixMilli()
+	const retentionDays = 7
+	expired := nowMs - int64(retentionDays)*testDayMs - testDayMs
+	seedIdleCapacityRow(t, ctx, db, shardThreeA, expired)
+	seedIdleCapacityRow(t, ctx, db, shardThreeB, expired)
+	seedIdleCapacityRow(t, ctx, db, shardFive, expired)
+
+	idle, deleted, err := repo.SweepIdleCapacityRows(ctx, testSweepModeDelete, retentionDays, 1000, nowMs, ownsOnly(3))
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), idle)
+	assert.Equal(t, int64(2), deleted)
+	assert.Zero(t, capacityRowCount(t, ctx, db, shardThreeA))
+	assert.Zero(t, capacityRowCount(t, ctx, db, shardThreeB))
+	assert.Equal(t, int64(1), capacityRowCount(t, ctx, db, shardFive), "别的副本负责的第 5 片一行都不许碰")
+
+	idle, deleted, err = repo.SweepIdleCapacityRows(ctx, testSweepModeDelete, retentionDays, 1000, nowMs, ownsOnly())
+	require.NoError(t, err)
+	assert.Zero(t, idle)
+	assert.Zero(t, deleted)
+	assert.Equal(t, int64(1), capacityRowCount(t, ctx, db, shardFive))
 	assertFriendInvariants(t, ctx, db)
 }

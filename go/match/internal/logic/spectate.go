@@ -119,6 +119,7 @@ func spectateRecordFromFormation(f *matchpb.MatchFormationRecord) (*matchpb.Spec
 		Visibility:       create.GetSpectateVisibility(),
 		BattleInstanceId: f.TargetInstanceId,
 		DeadlineMs:       f.DeadlineMs,
+		ReleaseTrack:     f.GetReleaseTrack(),
 	}, nil
 }
 
@@ -255,7 +256,8 @@ func battleInstanceReplaced(svcCtx *svc.ServiceContext, node uint32, instance st
 	if svcCtx.BattleNodes == nil {
 		return false
 	}
-	entry, err := svcCtx.BattleNodes.EntryOfNode(node)
+	// canary battle 上的对局同样要认得出(发布轨道设计 §2.6):先查 stable 镜像,查不到再查 canary 镜像。
+	entry, err := battleEntryOfNode(svcCtx, node)
 	return err == nil && entry.NodeUuid != "" && entry.NodeUuid != instance
 }
 
@@ -267,7 +269,8 @@ func battleInstanceRegistered(svcCtx *svc.ServiceContext, node uint32, instance 
 	if svcCtx.BattleNodes == nil {
 		return true
 	}
-	entry, err := svcCtx.BattleNodes.EntryOfNode(node)
+	// 两条轨道的 battle 都要能确认(发布轨道设计 §2.6),同 battleInstanceReplaced。
+	entry, err := battleEntryOfNode(svcCtx, node)
 	return err == nil && entry.NodeUuid != "" && entry.NodeUuid == instance
 }
 

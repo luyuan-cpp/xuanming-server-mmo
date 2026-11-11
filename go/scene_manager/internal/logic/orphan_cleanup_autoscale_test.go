@@ -25,7 +25,7 @@ func TestOrphanCleanup_ReleasesAgonesRoomAndDesiredCount(t *testing.T) {
 	sc.Redis.Zadd(testLoadKey(), 0, "10")
 
 	alloc := newFakeAllocator(
-		&fakeGameServer{name: "gs-a", podIP: "10.0.0.8", state: "Allocated", count: 2, capacity: 8},
+		&fakeGameServer{name: "gs-a", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 8},
 	)
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
@@ -33,7 +33,7 @@ func TestOrphanCleanup_ReleasesAgonesRoomAndDesiredCount(t *testing.T) {
 	// conf 777 不在 World 表里(newAutoscaleCtx 只登记了 autoscaleTestConfID)。
 	const deadConf uint64 = 777
 	seedChannels(t, sc, testZoneId, deadConf, map[uint64]int64{701: 0})
-	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(701), "gs-a"))
+	seedAgonesRoom(t, sc, alloc, 701, "gs-a")
 	require.NoError(t, sc.Redis.Hset(worldDesiredChannelsKey(testZoneId),
 		strconv.FormatUint(deadConf, 10), "8"))
 
@@ -56,7 +56,7 @@ func TestOrphanCleanup_AlsoCleansDrainingChannels(t *testing.T) {
 	sc.Redis.Zadd(testLoadKey(), 0, "10")
 
 	alloc := newFakeAllocator(
-		&fakeGameServer{name: "gs-a", podIP: "10.0.0.8", state: "Allocated", count: 3, capacity: 8},
+		&fakeGameServer{name: "gs-a", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 8},
 	)
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
@@ -64,7 +64,7 @@ func TestOrphanCleanup_AlsoCleansDrainingChannels(t *testing.T) {
 	const deadConf uint64 = 778
 	// 留一个还在路由里的频道,外加一个已经摘出去排空中的。
 	seedChannels(t, sc, testZoneId, deadConf, map[uint64]int64{801: 0})
-	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(801), "gs-a"))
+	seedAgonesRoom(t, sc, alloc, 801, "gs-a")
 
 	const drainingScene uint64 = 802
 	drainingStr := strconv.FormatUint(drainingScene, 10)
@@ -74,7 +74,7 @@ func TestOrphanCleanup_AlsoCleansDrainingChannels(t *testing.T) {
 	require.NoError(t, sc.Redis.Set(sceneZoneKey(drainingScene),
 		strconv.FormatUint(uint64(testZoneId), 10)))
 	require.NoError(t, sc.Redis.Setex(sceneDrainingKey(drainingScene), "1", 300))
-	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(drainingScene), "gs-a"))
+	seedAgonesRoom(t, sc, alloc, drainingScene, "gs-a")
 
 	removed := CleanupOrphanWorldChannels(ctx, sc)
 	require.Equal(t, 1, removed)

@@ -139,6 +139,38 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchBattleReportNotFound = 16025;</code>
      */
     kMatchBattleReportNotFound(16025),
+    /**
+     * <code>kMatchBattleScriptInvalid = 16026;</code>
+     */
+    kMatchBattleScriptInvalid(16026),
+    /**
+     * <code>kMatchBattleScriptNotFound = 16027;</code>
+     */
+    kMatchBattleScriptNotFound(16027),
+    /**
+     * <code>kMatchBattleScriptLimitReached = 16028;</code>
+     */
+    kMatchBattleScriptLimitReached(16028),
+    /**
+     * <code>kMatchBattleScriptRevisionConflict = 16029;</code>
+     */
+    kMatchBattleScriptRevisionConflict(16029),
+    /**
+     * <code>kMatchBattleScriptNotApproved = 16030;</code>
+     */
+    kMatchBattleScriptNotApproved(16030),
+    /**
+     * <code>kMatchBattleScriptTooLarge = 16031;</code>
+     */
+    kMatchBattleScriptTooLarge(16031),
+    /**
+     * <code>kMatchBattleScriptLoadoutInvalid = 16032;</code>
+     */
+    kMatchBattleScriptLoadoutInvalid(16032),
+    /**
+     * <code>kMatchBattleScriptLoadoutFull = 16033;</code>
+     */
+    kMatchBattleScriptLoadoutFull(16033),
     UNRECOGNIZED(-1),
     ;
 
@@ -259,6 +291,38 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchBattleReportNotFound = 16025;</code>
      */
     public static final int kMatchBattleReportNotFound_VALUE = 16025;
+    /**
+     * <code>kMatchBattleScriptInvalid = 16026;</code>
+     */
+    public static final int kMatchBattleScriptInvalid_VALUE = 16026;
+    /**
+     * <code>kMatchBattleScriptNotFound = 16027;</code>
+     */
+    public static final int kMatchBattleScriptNotFound_VALUE = 16027;
+    /**
+     * <code>kMatchBattleScriptLimitReached = 16028;</code>
+     */
+    public static final int kMatchBattleScriptLimitReached_VALUE = 16028;
+    /**
+     * <code>kMatchBattleScriptRevisionConflict = 16029;</code>
+     */
+    public static final int kMatchBattleScriptRevisionConflict_VALUE = 16029;
+    /**
+     * <code>kMatchBattleScriptNotApproved = 16030;</code>
+     */
+    public static final int kMatchBattleScriptNotApproved_VALUE = 16030;
+    /**
+     * <code>kMatchBattleScriptTooLarge = 16031;</code>
+     */
+    public static final int kMatchBattleScriptTooLarge_VALUE = 16031;
+    /**
+     * <code>kMatchBattleScriptLoadoutInvalid = 16032;</code>
+     */
+    public static final int kMatchBattleScriptLoadoutInvalid_VALUE = 16032;
+    /**
+     * <code>kMatchBattleScriptLoadoutFull = 16033;</code>
+     */
+    public static final int kMatchBattleScriptLoadoutFull_VALUE = 16033;
 
 
     public final int getNumber() {
@@ -312,6 +376,14 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
         case 16023: return kMatchNoRegionWithinLatency;
         case 16024: return kMatchSpectateTicketInvalid;
         case 16025: return kMatchBattleReportNotFound;
+        case 16026: return kMatchBattleScriptInvalid;
+        case 16027: return kMatchBattleScriptNotFound;
+        case 16028: return kMatchBattleScriptLimitReached;
+        case 16029: return kMatchBattleScriptRevisionConflict;
+        case 16030: return kMatchBattleScriptNotApproved;
+        case 16031: return kMatchBattleScriptTooLarge;
+        case 16032: return kMatchBattleScriptLoadoutInvalid;
+        case 16033: return kMatchBattleScriptLoadoutFull;
         default: return null;
       }
     }
@@ -377,7 +449,7 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025match_error_tip.proto*\216\006\n\013match_error\022" +
+      "\n\025match_error_tip.proto*\255\010\n\013match_error\022" +
       "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}" +
       "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode" +
       "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure" +
@@ -397,8 +469,15 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       "}\022\030\n\023kMatchProbeRequired\020\226}\022 \n\033kMatchNoR" +
       "egionWithinLatency\020\227}\022 \n\033kMatchSpectateT" +
       "icketInvalid\020\230}\022\037\n\032kMatchBattleReportNot" +
-      "Found\020\231}B$\n\016com.game.tableZ\022generated/pb" +
-      "/tableb\006proto3"
+      "Found\020\231}\022\036\n\031kMatchBattleScriptInvalid\020\232}" +
+      "\022\037\n\032kMatchBattleScriptNotFound\020\233}\022#\n\036kMa" +
+      "tchBattleScriptLimitReached\020\234}\022\'\n\"kMatch" +
+      "BattleScriptRevisionConflict\020\235}\022\"\n\035kMatc" +
+      "hBattleScriptNotApproved\020\236}\022\037\n\032kMatchBat" +
+      "tleScriptTooLarge\020\237}\022%\n kMatchBattleScri" +
+      "ptLoadoutInvalid\020\240}\022\"\n\035kMatchBattleScrip" +
+      "tLoadoutFull\020\241}B$\n\016com.game.tableZ\022gener" +
+      "ated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

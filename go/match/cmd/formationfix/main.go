@@ -300,17 +300,17 @@ func printFormation(stdout io.Writer, resp *pb.ResolveStrandedFormationResponse)
 	fmt.Fprintf(stdout, "class=%s failed_check=%s\n", classLabel(f.GetFormationClass()), dash(f.GetFailedCheck()))
 	fmt.Fprintf(stdout, "digest=%s\n", f.GetDigest())
 	if code := f.GetRefusal(); code != "" {
-		fmt.Fprintf(stdout, "能否处理: no (%s)\n", code)
+		fmt.Fprintf(stdout, "actionable: no (%s)\n", code)
 	} else {
-		fmt.Fprintln(stdout, "能否处理: yes (锁外预检;以 abort 不带 -execute 的锁内演练为准)")
+		fmt.Fprintln(stdout, "actionable: yes (pre-lock preflight; the in-lock dry run of abort without -execute is authoritative)")
 	}
-	fmt.Fprintln(stdout, "另查(只作提示,不作放行条件):")
-	fmt.Fprintf(stdout, "  - battle 日志里 battle_id=%d 的 ErrBattleOutcomeOriginal / battle_sql_outcome_unflushed_at_shutdown\n", f.GetBattleId())
+	fmt.Fprintln(stdout, "Also check (hints only, not admission conditions):")
+	fmt.Fprintf(stdout, "  - battle logs for battle_id=%d: ErrBattleOutcomeOriginal / battle_sql_outcome_unflushed_at_shutdown\n", f.GetBattleId())
 	if f.GetFailedCheck() == "adopted_legacy" {
-		fmt.Fprintln(stdout, "  - battle 明确采用了旧协议:另查这一局是否已按旧路径发过结算")
+		fmt.Fprintln(stdout, "  - battle explicitly adopted the legacy protocol: check whether this battle already sent settlement through the legacy path")
 	}
 	if f.GetActivity() {
-		fmt.Fprintln(stdout, "  - 帮会历练局:ABORT 之后到 guild 日志确认 [GuildTrial] 恢复报错消失")
+		fmt.Fprintln(stdout, "  - guild trial battle: after ABORT, confirm in guild logs that the [GuildTrial] recovery errors stop")
 	}
 }
 

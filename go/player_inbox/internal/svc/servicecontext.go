@@ -577,12 +577,12 @@ func (sc *ServiceContext) Stop() {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if err := sc.StopAndReport(ctx); err != nil {
-		logx.Errorf("player_inbox 排空 HOLD，保留同 boot SQL/RELAY 资源: %v", err)
+		logx.Errorf("player_inbox drain HOLD, retaining same-boot SQL/RELAY resources: %v", err)
 	}
 }
 func (sc *ServiceContext) closeResources() {
 	if err := sc.closeResourcesReport(); err != nil {
-		logx.Errorf("player_inbox 资源关闭失败: %v", err)
+		logx.Errorf("player_inbox failed to close resources: %v", err)
 	}
 }
 func (sc *ServiceContext) closeResourcesReport() error {

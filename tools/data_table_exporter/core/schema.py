@@ -209,6 +209,8 @@ class TableSchema:
     # 现在它真的会改变产物:主键索引变多值,并且**不生成 FindById,只生成 FindAllById**,
     # 让「把可重复主键当单值用」在编译期就断,而不是悄悄只看第一行。
     multi_primary_key: bool = False
+    # 行 id 只增不删:由表级 (cfg_ids_permanent) 决定,门禁见 core/permanent_ids.py。
+    ids_permanent: bool = False
     has_constants_name: bool = False
     constants_name_index: Optional[int] = None
 

@@ -264,7 +264,7 @@ func (q *RedisPasswordFailureQuota) failure(operation, reason string) error {
 	defer q.warnMu.Unlock()
 	if q.lastWarn.IsZero() || time.Since(q.lastWarn) >= time.Minute {
 		q.lastWarn = time.Now()
-		logx.Errorf("口令失败配额拒绝认证 operation=%s reason=%s", operation, reason)
+		logx.Errorf("Password failure quota rejected authentication operation=%s reason=%s", operation, reason)
 	}
 	return ErrPasswordQuotaUnavailable
 }

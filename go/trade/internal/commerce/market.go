@@ -17,12 +17,16 @@ import (
 
 // 价格时间优先只由SQL中的已验证托管订单裁决。Redis深度缓存不是撮合证据。
 // 一次事务预留双边数量+写成交交付意图；RPC全在提交后。余额从不进本库。
+//
+// 「已验证托管」在 SQL 里是 on_book=1(data.OnBook,stage=market_open 的投影):托管阶段的订单 status 也是 3,
+// 不按它过滤就会被选成最优对手单、挡住整本盘口(jubaozhai-market.md §15.9)。两边是否在盘口上仍在锁内按 workflow 复核。
 func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 	taker, err := e.Repo.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	if taker.Kind != 4 || taker.Side == 0 || taker.FilledQuantity == taker.Quantity {
+	// 托管还没完成的 taker 不发起撮合:不发成交号、不抢盘口 guard 行锁。它进入 market_open 的那一步 step 会再撮一次。
+	if taker.Kind != 4 || taker.Side == 0 || !taker.OnBook || taker.FilledQuantity == taker.Quantity {
 		return nil
 	}
 	matchID, err := e.IDs.Next(ctx)
@@ -114,6 +118,7 @@ func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 				return err
 			}
 		}
+		// 提交点复核:选单的 on_book 与 taker 预检只是预选,两边是否还在盘口上以锁内读到的 workflow 为准(AGENTS §11.3)。
 		if aw.Stage != "market_open" || bw.Stage != "market_open" || aw.CancelRequested || bw.CancelRequested || a.FilledQuantity >= a.Quantity || b.FilledQuantity >= b.Quantity {
 			return nil
 		}
@@ -207,7 +212,8 @@ func marketCounterparty(ctx context.Context, q marketQuery, taker *tradepb.Trade
 		opposite = 2
 	}
 	var id uint64
-	err := q.QueryRowContext(ctx, "SELECT commerce_id FROM trade_commerce WHERE kind=4 AND side=? AND market_id=? AND item_config_id=? AND currency_type=? AND status=3 AND filled_quantity<quantity AND seller_player_id<>? AND "+filter+" ORDER BY "+order+" LIMIT 1", opposite, taker.MarketId, taker.ItemConfigId, taker.CurrencyType, taker.SellerPlayerId, taker.UnitPrice).Scan(&id)
+	// on_book=1:只选托管已完成、挂在盘口上的订单。预读与锁内重读都走这里,同一个条件。
+	err := q.QueryRowContext(ctx, "SELECT commerce_id FROM trade_commerce WHERE kind=4 AND side=? AND market_id=? AND item_config_id=? AND currency_type=? AND status=3 AND on_book=1 AND filled_quantity<quantity AND seller_player_id<>? AND "+filter+" ORDER BY "+order+" LIMIT 1", opposite, taker.MarketId, taker.ItemConfigId, taker.CurrencyType, taker.SellerPlayerId, taker.UnitPrice).Scan(&id)
 	return id, err
 }
 
@@ -215,13 +221,12 @@ func (e *Engine) marketBarrier(ctx context.Context, tx *sql.Tx, r *tradepb.Trade
 	if r.Kind != 4 || r.Side == 0 {
 		return nil
 	}
-	var pending, bad int
-	if err := tx.QueryRowContext(ctx, "SELECT COALESCE(SUM(status NOT IN (7,11)),0),COALESCE(SUM(status=10),0) FROM trade_commerce WHERE kind=4 AND side=0 AND (parent_id=? OR counterparty_id=?)", r.CommerceId, r.CommerceId).Scan(&pending, &bad); err != nil {
+	// 转人工的子单(status=10)算没收尾:母单等它被人工处理完再结案,不跟着转人工(2026-11-11,jubaozhai-market.md §15.7.1 第 4 类)。
+	// 子单的资产在撮合时已从两边母单的托管里划出,由子单自己的腿交付;母单只对剩下的部分负责,剩余挂单量照常成交或撤单。
+	// 以前这里把母单也转人工,一张子单出事就冻住母单剩下的挂单量,玩家撤不了单。
+	var pending int
+	if err := tx.QueryRowContext(ctx, "SELECT COALESCE(SUM(status NOT IN (7,11)),0) FROM trade_commerce WHERE kind=4 AND side=0 AND (parent_id=? OR counterparty_id=?)", r.CommerceId, r.CommerceId).Scan(&pending); err != nil {
 		return err
-	}
-	if bad > 0 {
-		markManual(r, w, manualReasonMarketFill, "名下有转人工的成交子单", e.now())
-		return nil
 	}
 	if w.Stage == "done" && pending > 0 {
 		w.Stage = "market_wait"

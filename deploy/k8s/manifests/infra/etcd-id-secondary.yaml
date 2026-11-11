@@ -138,8 +138,10 @@ spec:
               value: "etcd-id-secondary-0=http://etcd-id-secondary-0.etcd-id-secondary-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380,etcd-id-secondary-1=http://etcd-id-secondary-1.etcd-id-secondary-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380,etcd-id-secondary-2=http://etcd-id-secondary-2.etcd-id-secondary-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380"
             - name: ETCD_INITIAL_CLUSTER_STATE
               value: "new"
+            # 引导令牌带上本 K8s 集群的身份(kube-system 的 UID,k8s_deploy.ps1 Apply-Infra 替换 __KUBE_CLUSTER_UID__):
+            # 集群号只由 peer 地址和令牌算出,只带命名空间的话,两个 K8s 集群的这套 etcd 集群号相同,地域码绑定分不出来(设计 §6.3)。
             - name: ETCD_INITIAL_CLUSTER_TOKEN
-              value: "mmorpg-etcd-id-secondary-__INFRA_NAMESPACE__"
+              value: "mmorpg-etcd-id-secondary-__INFRA_NAMESPACE__-__KUBE_CLUSTER_UID__"
             # 只有一个键,写入极少。留 1000 个历史版本足够,配额给 512MiB(满足「配额 × 2 + 1Gi ≤ 盘」)。
             - name: ETCD_AUTO_COMPACTION_MODE
               value: "revision"

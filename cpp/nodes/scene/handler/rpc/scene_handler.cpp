@@ -19,6 +19,8 @@
 #include "network/rpc_channel.h"          // IsDispatchableMessageId:消息号越界或注册表空槽都不可派发
 #include "network/rpc_controller.h"
 #include "network/network_constants.h"
+#include "engine/core/type_define/type_define.h"
+#include "thread_context/trace_context_tls.h"
 #include "proto/common/component/player_async_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h" // UnregisterPlayer:退出中只放行 ExitGame
 #include "proto/common/component/player_network_comp.pb.h"
@@ -187,6 +189,10 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 	{
 		return;
 	}
+
+	// 身份核对过了:之后这条消息打的日志都带上玩家(docs/design/distributed-tracing.md §5.5)。trace 已由 RPC0 信封接上,
+	// 这里不开根。下面有分支会 erase(it),所以先取值。
+	tracing::ScopedPlayerId playerContext(it->second != kInvalidGuid ? it->second : 0);
 
 	const auto player = tlsEcs.GetPlayer(it->second);
 	if (player == entt::null)

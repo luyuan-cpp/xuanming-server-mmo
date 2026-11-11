@@ -21,21 +21,34 @@ import (
 // 铸造专用通道(owner_epoch_mint.go,docs/design/zone-redis-regression-guard-20261022.md §4.3.2 G3b)
 //
 // miniredis 有 EVAL、没有 WAITAOF:WAITAOF 在这里恒回错误回复,正好走「WAITAOF 被拒」那一支(真 Redis 上
-// 是 appendonly no / Redis < 7.2)。份数满足 / 不足的判定用纯函数 judgeWaitAOFReply 覆盖,真 Redis 上的端到端
-// 验证见设计 §8.1 G3b 与 §8.2 D2。
+// 是 appendonly no / Redis < 7.2)。份数满足 / 不足的判定用纯函数 judgeWaitAOFReply 覆盖;单实例真 Redis 上的端到端用例
+// 在 owner_epoch_mint_realredis_test.go(设 MMORPG_TEST_REDIS_ADDR 才跑),切主演练见设计 §8.1 G3b 与 §8.2 D2。
 // ---------------------------------------------------------------------------
 
 // pipelineRecorder 是挂在铸造专用客户端上的 go-redis hook:记下每条含 EVAL / WAITAOF 的 pipeline 的命令名、
-// 每条单发的 EVAL / WAITAOF;failFirst > 0 时前 failFirst 条这样的 pipeline 不发出去,逐条命令按传输错误(io.EOF)
+// 每条单发的 EVAL / WAITAOF;faults 非空时先按顺序把这些故障作用在接下来的几条这样的 pipeline 上(见 pipelineFault);
+// failFirst > 0 时前 failFirst 条这样的 pipeline 不发出去,逐条命令按传输错误(io.EOF)
 // 失败 —— 模拟「EVAL 结果未知」;replies 非空时前几条按顺序以这些错误回复失败,同样不发出去 —— 模拟服务端回 MOVED 等。
 // 别的命令不记也不拦:go-redis 建连时的 HELLO 等握手命令也会经过克隆来的 hook。
 type pipelineRecorder struct {
 	mu        sync.Mutex
 	pipelines [][]string
 	singles   []string
+	faults    []pipelineFault
 	failFirst int
 	replies   []error
 }
+
+// pipelineFault 是 pipelineRecorder.faults 里的一种故障。
+type pipelineFault uint8
+
+const (
+	// faultEOF:不发出去,逐条命令按传输错误(io.EOF)失败 —— 模拟「发出去了、结果未知」,同 failFirst。
+	faultEOF pipelineFault = iota
+	// faultUnsent:不发出去,也不给任何一条命令设错误或值,只返回 goredis.ErrPoolTimeout。go-redis 9.17 拿不到连接(池等待超时、
+	// 拨号失败、新连接握手失败)时就是这样:MaxRetries=0 的 generalProcessPipeline 不调 setCmdsErr,错误只从 Pipelined 返回。
+	faultUnsent
+)
 
 func isMintCommand(name string) bool { return name == "eval" || name == "waitaof" }
 
@@ -65,15 +78,23 @@ func (r *pipelineRecorder) ProcessPipelineHook(next goredis.ProcessPipelineHook)
 		}
 		r.mu.Lock()
 		r.pipelines = append(r.pipelines, names)
-		fail := r.failFirst > 0
-		if fail {
+		faulted, fault := false, faultEOF
+		if len(r.faults) > 0 {
+			faulted, fault, r.faults = true, r.faults[0], r.faults[1:]
+		}
+		fail := faulted && fault == faultEOF
+		if !faulted && r.failFirst > 0 {
+			fail = true
 			r.failFirst--
 		}
 		var reply error
-		if !fail && len(r.replies) > 0 {
+		if !faulted && !fail && len(r.replies) > 0 {
 			reply, r.replies = r.replies[0], r.replies[1:]
 		}
 		r.mu.Unlock()
+		if faulted && fault == faultUnsent {
+			return goredis.ErrPoolTimeout
+		}
 		if reply != nil {
 			for _, c := range cmds {
 				c.SetErr(reply)
@@ -184,6 +205,51 @@ func TestEvalAndConfirmGivesUpAfterBoundedAttempts(t *testing.T) {
 	assert.Len(t, rec.recordedPipelines(), ownerEpochMintAttempts)
 }
 
+// 连接都没拿到时 pipeline 一个字节都没发出去,go-redis 不给命令设错误或值、只从 Pipelined 返回错误。必须回
+// ErrOwnerEpochMintNotSent,不能当成「EVAL 有回复、回复是 nil」交回 err == nil(以前的行为:铸造报「CAS 返回值非法」,
+// 回滚被当成结果未知、不执行也不兜底);也不在通道里重发,剩下的预算留给调用方。
+func TestEvalAndConfirmUnsentPipelineIsNotSentAndNotResent(t *testing.T) {
+	m, rec, mr := newRecordedMinter(t, config.OwnerEpochMintConfig{})
+	rec.faults = []pipelineFault{faultUnsent}
+
+	res, err := m.EvalAndConfirm(context.Background(), testIncrScript, []string{testMintKey})
+	require.ErrorIs(t, err, ErrOwnerEpochMintNotSent)
+	assert.ErrorIs(t, err, goredis.ErrPoolTimeout, "原因留在包装链里")
+	assert.Nil(t, res.Reply)
+	assert.Equal(t, 0, res.Attempts, "一次都没到达 Redis")
+	assert.Len(t, rec.recordedPipelines(), 1, "确定没发出去的不在通道里重发")
+	assert.False(t, mr.Exists(testMintKey))
+}
+
+// 真实的取连接失败:地址上已经没有 Redis(拨号失败)。不靠替身,钉住 go-redis 9.17 真实的行为与上一条一致。
+func TestEvalAndConfirmDialFailureIsNotSent(t *testing.T) {
+	mr := miniredis.RunT(t)
+	addr := mr.Addr()
+	mr.Close()
+	m, err := NewRedisOwnerEpochMinter(playerredis.Config{Addrs: []string{addr}}, config.OwnerEpochMintConfig{}, func() uint64 { return 42 })
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = m.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	res, err := m.EvalAndConfirm(ctx, testIncrScript, []string{testMintKey})
+	require.ErrorIs(t, err, ErrOwnerEpochMintNotSent)
+	assert.Nil(t, res.Reply)
+	assert.Equal(t, 0, res.Attempts)
+}
+
+// 已有一次结果未知的发送(首发可能已生效)之后,重发连连接都没拿到:仍按结果未知返回,不能报成「一个字节都没改」。
+func TestEvalAndConfirmUnsentResendAfterUnknownStaysUnknown(t *testing.T) {
+	m, rec, _ := newRecordedMinter(t, config.OwnerEpochMintConfig{})
+	rec.faults = []pipelineFault{faultEOF, faultUnsent}
+
+	res, err := m.EvalAndConfirm(context.Background(), testIncrScript, []string{testMintKey})
+	require.Error(t, err)
+	assert.False(t, errors.Is(err, ErrOwnerEpochMintNotSent), "首发结果未知,不能报成没发")
+	assert.Equal(t, 1, res.Attempts, "只有首发那一次可能到达过 Redis")
+	assert.Len(t, rec.recordedPipelines(), 2)
+}
+
 // 剩余预算扣掉回包余量后不足 1ms:一条都不发(WAITAOF 的 timeout 0 是无限阻塞),Redis 一个字节都没改。
 func TestEvalAndConfirmNotSentWhenBudgetTooShort(t *testing.T) {
 	m, rec, mr := newRecordedMinter(t, config.OwnerEpochMintConfig{})
@@ -198,9 +264,14 @@ func TestEvalAndConfirmNotSentWhenBudgetTooShort(t *testing.T) {
 
 // 启动探针:开启时发一次 WAITAOF,被拒即报错(svc 据此拒启);关闭时一条命令都不发。
 func TestProbe(t *testing.T) {
-	m, rec, _ := newRecordedMinter(t, config.OwnerEpochMintConfig{})
+	m, rec, mr := newRecordedMinter(t, config.OwnerEpochMintConfig{})
 	require.Error(t, m.Probe(context.Background()), "miniredis 不认 WAITAOF,探针必须失败")
-	assert.Equal(t, []string{"waitaof"}, rec.recordedSingles())
+	assert.Empty(t, rec.recordedSingles(), "探针不单发 WAITAOF")
+	assert.Equal(t, [][]string{{"set", "waitaof"}}, rec.recordedPipelines(),
+		"先在同一条连接上写探针键,WAITAOF 才有偏移可等(新连接偏移为 0,不先写就查不出副本没开 AOF)")
+	probeKey := ownerEpochMintProbeKeyPrefix + "{0}"
+	assert.True(t, mr.Exists(probeKey), "单实例第一个候选就是本节点")
+	assert.Greater(t, mr.TTL(probeKey), time.Duration(0), "探针键带 TTL,自然消失")
 
 	off, offRec, _ := newRecordedMinter(t, config.OwnerEpochMintConfig{WaitAOFNumLocal: intPtr(0), WaitAOFNumReplicas: intPtr(0)})
 	require.NoError(t, off.Probe(context.Background()))
@@ -292,7 +363,10 @@ func TestOwnerEpochMintClientConfig(t *testing.T) {
 	assert.Equal(t, "u", got.Username)
 	assert.Equal(t, "p", got.Password)
 	assert.Equal(t, ownerEpochMintPoolSize, got.PoolSizePerNode, "专用池固定大小,不跟玩家域句柄的配置走")
-	assert.Equal(t, int((ack.timeout + ownerEpochMintReadTimeoutSlack).Milliseconds()), got.ReadTimeoutMs, "WAITAOF 的服务端超时先于客户端读超时到期")
+	assert.Equal(t, int((max(ack.timeout, ownerEpochMintProbeWaitAOFTimeout) + ownerEpochMintReadTimeoutSlack).Milliseconds()), got.ReadTimeoutMs,
+		"读超时盖住铸造与启动探针里最长的 WAITAOF 等待,服务端超时先于客户端读超时到期")
+	assert.Greater(t, got.ReadTimeoutMs, int(ownerEpochMintProbeWaitAOFTimeout.Milliseconds()),
+		"探针的 WAITAOF 在 pipeline 里,go-redis 按客户端 ReadTimeout 设读截止,读超时短于探针等待时探针会误报成连接问题")
 	assert.Equal(t, int(ownerEpochMintWriteTimeout.Milliseconds()), got.WriteTimeoutMs)
 	assert.False(t, got.DisableContextTimeout, "取连接排队与读写都受调用方 ctx 截止约束")
 	require.NoError(t, got.Validate())

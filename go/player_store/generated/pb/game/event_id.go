@@ -18,3 +18,4 @@ const PlayerTeamRefreshEventEventId = 48
 const PlayerInboxNotifyEventEventId = 49
 const ContractsKafkaSpectateFrameEventEventId = 51
 const ContractsKafkaGateDrainMigrationEventEventId = 52
+const PlayerHostedPlacementEventEventId = 53

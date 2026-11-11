@@ -119,22 +119,26 @@ return {tostring(bestIdx), ARGV[bestIdx], tostring(newCount)}
 // 调用方下一拍重来」。销毁认领不用它:认领的快照记在拆除任务里,副作用做完才删(scene_teardown_job.go)。
 const sceneClaimRecordTTLSeconds = 600
 
-// 销毁认领脚本有两段:空闲回收用 luaAtomicDestroyInstance,其余拆除一律用 luaAtomicDestroyInstanceForce。
-// 两段都由下面几块拼成,拆除任务的整体说明见 scene_teardown_job.go。
+// 销毁认领脚本有三段:空闲回收用 luaAtomicDestroyInstance,死节点收尾用 luaAtomicDestroyOrphanOfDeadNode,
+// 其余拆除一律用 luaAtomicDestroyInstanceForce。都由下面几块拼成,拆除任务的整体说明见 scene_teardown_job.go。
 //
 // KEYS(由 sceneTeardownRequest.keys 拼,顺序是脚本的契约):
 //   - [1..9] sceneClaimKeys:场景的状态键、zone 的 active 集合、拆除任务 scene:{id}:teardown、本 zone 的待办集合;
 //   - [10..11] 期望属主的场景集合与 scene_count,只在期望属主非空时传;
-//   - 其后:要在同一步把场景摘掉的集合(世界频道的频道集合 / 排空集合)。
+//   - 其后:要在同一步把场景摘掉的集合(世界频道的频道集合 / 排空集合);
+//   - 最后:死节点收尾任务表,只在死节点收尾时传(个数见 ARGV[9],摘集合的循环跳过它)。
 //
 // ARGV:
 //   - [1] sceneId(十进制,ZREM / SREM 的成员);[2] 本次认领的 token;[3] 当前 Unix 秒;
 //   - [4] 拆除任务种类;[5] reason;[6] 期望属主,空串表示映射必须已不存在;[7] '1' 表示同一步扣属主的 scene_count;
-//   - [8] 认领方的 zone(十进制),也就是 KEYS 里 active 集合、待办与属主键所属的 zone。
+//   - [8] 认领方的 zone(十进制),也就是 KEYS 里 active 集合、待办与属主键所属的 zone;
+//   - [9] KEYS 末尾的死节点收尾任务表个数('0' 或 '1');[10] 收尾任务成员;[11] 收尾任务的入队时刻(Unix 毫秒)。
+//     [10]、[11] 只在 [9] 为 '1' 时有意义(deadNodeTaskFence)。
 //
 // 应答由 parseSceneClaimReply 解:{状态, 属主, agones_gs, 镜像源, 镜像标记, 成员...}。状态是 'claimed'、
 // 'stale'(期望落空,一个键都没动)、'pending'(这个场景的上一次拆除还没做完,一个键都没动)、'foreign'
-// (场景登记在别的 zone,一个键都没动)或 'busy'(场景里有人,只有空闲回收脚本会回)。
+// (场景登记在别的 zone,一个键都没动)、'withdrawn'(死节点收尾任务已被撤或换了一次判死,一个键都没动,只有死节点
+// 收尾脚本会回)或 'busy'(场景里有人,只有空闲回收脚本会回)。
 
 // luaSceneClaimPrelude 是认领脚本的开头,先看拆除任务:
 //   - 同一 token 的任务在:脚本已经执行过,这次是 go-redis 读超时 / EOF 之后的原样重发(R5)。原样返回当时的快照,
@@ -183,6 +187,20 @@ elseif nodeId ~= ARGV[6] then
 end
 `
 
+// luaSceneClaimDeadNodeTaskCheck 只在死节点收尾脚本里:KEYS 末尾的收尾任务表里,成员 ARGV[10] 的入队时刻必须仍是
+// ARGV[11](deadNodeTaskFence),否则回 'withdrawn'、一个键都不动。任务不在了,是判死的那一代回来、任务被撤
+// (luaWithdrawDeadNodeForReturningInstance);入队时刻变了,是撤销之后同一 node_id 又判死了一次,新任务有自己的
+// 屏障,这一轮按旧快照拆不得(R1-I6,reentry_barrier.go)。
+//
+// 必须和删除在同一个脚本里:收尾只在每条任务开始时判一次「判死的那一代回来没有」,之后逐个认领场景的这段时间里它回来,
+// 只有这里拦得住。放在属主比对之前:回来的就是这个 node_id,属主比对拦不住;先回 'withdrawn',调用方才知道停掉整轮。
+const luaSceneClaimDeadNodeTaskCheck = `
+local deadNodeTaskQueuedAt = redis.call('ZSCORE', KEYS[#KEYS], ARGV[10])
+if not deadNodeTaskQueuedAt or tonumber(deadNodeTaskQueuedAt) ~= tonumber(ARGV[11]) then
+    return {'withdrawn', '', '', '', ''}
+end
+`
+
 // luaSceneClaimIdleGuard 只在空闲回收脚本里:场景里有人就把空闲时钟重置成 ARGV[3]、一个键都不删,回 'busy'。
 // 重置放在脚本里并用 ZADD XX:并发销毁已经把实例摘出 active 集合时不会把它加回去,那会留下永久僵尸。
 const luaSceneClaimIdleGuard = `
@@ -201,6 +219,9 @@ end
 //
 // scene_count 只在 > 0 时才减:计数键可能已被死节点收尾整个删掉,DECR 会把它重建成 -1,被复用同一 node_id 的
 // 新进程继承(同 luaReassignSceneNode 对老节点的处理)。
+//
+// 摘集合的循环止于 KEYS 末尾的死节点收尾任务表之前(ARGV[9] 个):那是只读的核对键,类型是有序集合,SREM 会报
+// WRONGTYPE,而那时前面的删除已经执行、不会回滚。
 const luaSceneClaimCommit = `
 local agonesGs = redis.call('GET', KEYS[7]) or ''
 local source = redis.call('GET', KEYS[5]) or ''
@@ -219,7 +240,8 @@ if nodeId ~= '' then
     end
     unlistFrom = 12
 end
-for i = unlistFrom, #KEYS do
+local unlistTo = #KEYS - (tonumber(ARGV[9] or '0') or 0)
+for i = unlistFrom, unlistTo do
     redis.call('SREM', KEYS[i], ARGV[1])
 end
 local reply = {'claimed', nodeId, agonesGs, source, mirror}
@@ -237,9 +259,14 @@ const luaAtomicDestroyInstance = luaSceneClaimPrelude + luaSceneClaimZoneCheck +
 	luaSceneClaimIdleGuard + luaSceneClaimCommit
 
 // luaAtomicDestroyInstanceForce 是其余拆除的认领脚本,不看人数,只看期望属主。调用方:显式 DestroyScene、镜像级联、
-// 死节点收尾、源迁移 / 缩容时的镜像级联(都经 AtomicDestroyForce),世界频道的排空收尾与孤儿清理(atomicTeardownScene),
+// 源迁移 / 缩容时的镜像级联(都经 AtomicDestroyForce),世界频道的排空收尾与孤儿清理(atomicTeardownScene),
 // 建实例失败的回滚(atomicRollbackInstanceAllocation)。
 const luaAtomicDestroyInstanceForce = luaSceneClaimPrelude + luaSceneClaimZoneCheck + luaSceneClaimOwnerCheck + luaSceneClaimCommit
+
+// luaAtomicDestroyOrphanOfDeadNode 是死节点收尾的认领脚本(atomicClaimOrphanOfDeadNode):不看人数,先核收尾任务仍是
+// 这一次判死,再核属主仍是死节点。
+const luaAtomicDestroyOrphanOfDeadNode = luaSceneClaimPrelude + luaSceneClaimZoneCheck + luaSceneClaimDeadNodeTaskCheck +
+	luaSceneClaimOwnerCheck + luaSceneClaimCommit
 
 // errSceneInOtherZone 表示要拆的场景登记在别的 zone:它的键只由那个 zone 的 scene_manager 读写,这里一个键都没动。
 var errSceneInOtherZone = errors.New("scene is registered in another zone")
@@ -273,6 +300,9 @@ type sceneTeardownRequest struct {
 	CountOwner bool
 	// UnlistKeys 是要在同一步把场景摘掉的集合。
 	UnlistKeys []string
+	// DeadNodeTask 非空时(只有死节点收尾)认领在同一步核对这条收尾任务仍是这一次判死(luaSceneClaimDeadNodeTaskCheck)。
+	// 只配 luaAtomicDestroyOrphanOfDeadNode 使用。
+	DeadNodeTask *deadNodeTaskFence
 }
 
 // keys 按 luaSceneClaimPrelude 之前写的布局拼出脚本的 KEYS。
@@ -281,11 +311,24 @@ func (r sceneTeardownRequest) keys() []string {
 	if r.ExpectedOwner != "" {
 		keys = append(keys, nodeScenesKey(r.ZoneID, r.ExpectedOwner), nodeSceneCountKey(r.ZoneID, r.ExpectedOwner))
 	}
-	return append(keys, r.UnlistKeys...)
+	keys = append(keys, r.UnlistKeys...)
+	if r.DeadNodeTask != nil {
+		keys = append(keys, r.DeadNodeTask.tasksKey)
+	}
+	return keys
+}
+
+// fenceArgs 是 ARGV[9..11]:KEYS 末尾的死节点收尾任务表个数、任务成员与入队时刻。不核对任务时是 '0' 与两个空串。
+func (r sceneTeardownRequest) fenceArgs() []any {
+	if r.DeadNodeTask == nil {
+		return []any{"0", "", ""}
+	}
+	return []any{"1", r.DeadNodeTask.member, strconv.FormatInt(r.DeadNodeTask.queuedAtMs, 10)}
 }
 
 // sceneClaim 是认领脚本的应答。Claimed=false 时其余字段都为空:期望落空,场景里有人(Busy),这个场景的上一次拆除
-// 还没做完(Pending,任务做完之前谁都认领不到),或场景登记在别的 zone(Foreign)。
+// 还没做完(Pending,任务做完之前谁都认领不到),场景登记在别的 zone(Foreign),或死节点收尾任务已被撤 / 换了一次
+// 判死(Withdrawn,只有 luaAtomicDestroyOrphanOfDeadNode 会回)。
 // Claimed=true 时其余字段是脚本删除前读到的值(属主为空串 = 映射本来就不在),认领之后的副作用一律以它们为准。
 // Source 是镜像源 scene_id 的十进制(不是镜像时为空),MirrorFlag 是 scene:{id}:mirror 的值("1" 表示镜像)。
 // Members 是场景里剩的成员,要由副作用从节点集合里摘掉(removeResidualSceneMembers)。
@@ -295,6 +338,7 @@ type sceneClaim struct {
 	Busy       bool
 	Pending    bool
 	Foreign    bool
+	Withdrawn  bool
 	NodeID     string
 	AgonesGs   string
 	Source     string
@@ -317,6 +361,8 @@ func parseSceneClaimReply(raw any) sceneClaim {
 		return sceneClaim{Pending: true}
 	case "foreign":
 		return sceneClaim{Foreign: true}
+	case "withdrawn":
+		return sceneClaim{Withdrawn: true}
 	case "claimed":
 		members := make([]string, 0, len(parts)-5)
 		for _, member := range parts[5:] {
@@ -348,9 +394,11 @@ func evalSceneClaimWithToken(svcCtx *svc.ServiceContext, script string, req scen
 	if req.CountOwner {
 		countOwner = "1"
 	}
-	raw, err := svcCtx.Redis.Eval(script, req.keys(),
+	args := append([]any{
 		strconv.FormatUint(req.SceneID, 10), token, time.Now().Unix(), req.Kind, req.Reason, req.ExpectedOwner, countOwner,
-		strconv.FormatUint(uint64(req.ZoneID), 10))
+		strconv.FormatUint(uint64(req.ZoneID), 10),
+	}, req.fenceArgs()...)
+	raw, err := svcCtx.Redis.Eval(script, req.keys(), args...)
 	if err != nil {
 		return sceneClaim{}, err
 	}
@@ -367,7 +415,8 @@ const sceneClaimOwnerAttempts = 3
 // AtomicDestroyForce 原子认领一个副本 / 镜像的拆除(不看人数),认领时在同一步扣属主的 scene_count、摘属主的
 // 反向索引,并写下拆除任务。reason 是 explicit / cascade / node_death / source_migrated / source_scaled_in。
 //
-// expectedOwner 非空时只在 scene:{id}:node 仍等于它时才拆(死节点收尾);不等(含映射已不存在)一个键都不动。
+// expectedOwner 非空时只在 scene:{id}:node 仍等于它时才拆;不等(含映射已不存在)一个键都不动。死节点收尾不走这里,
+// 它还要核对收尾任务,见 atomicClaimOrphanOfDeadNode。
 // 空串表示谁是属主都拆:先读属主、按读到的值认领;读完之后被改派就重读,至多读 sceneClaimOwnerAttempts 次。
 // 映射已不存在时不认领 —— 映射没了、别的键还在的残留只由空闲回收清扫(R3)。上一次拆除还没做完(Pending)、
 // 场景登记在别的 zone(Foreign)时也不重读,原样返回。
@@ -394,6 +443,16 @@ func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint6
 		}
 	}
 	return sceneClaim{}, fmt.Errorf("scene %d: owner changed between the read and the claim %d times in a row", sceneId, sceneClaimOwnerAttempts)
+}
+
+// atomicClaimOrphanOfDeadNode 原子认领死节点收尾的一个场景(reason=node_death,不看人数):同一步里先核对收尾任务
+// task 仍是这一次判死(否则 Withdrawn,R1-I6),再核对属主仍是 deadNode(否则落空),都对才删场景、扣死节点的
+// scene_count、摘它的反向索引并写拆除任务。三种落空都一个键不动。
+func atomicClaimOrphanOfDeadNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, deadNode string, task deadNodeTaskFence) (sceneClaim, error) {
+	return evalSceneClaim(svcCtx, luaAtomicDestroyOrphanOfDeadNode, sceneTeardownRequest{
+		ZoneID: zoneId, SceneID: sceneId, Kind: teardownKindInstance, Reason: "node_death",
+		ExpectedOwner: deadNode, CountOwner: true, DeadNodeTask: &task,
+	})
 }
 
 // atomicRollbackInstanceAllocation 原子撤销一次失败的实例创建(R3:原来逐条 DEL、不查错,中途中断会留下「映射没了、

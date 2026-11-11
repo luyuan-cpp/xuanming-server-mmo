@@ -34,6 +34,11 @@
 Name: login.rpc
 Mode: dev
 ListenOn: 0.0.0.0:51000
+# CreatePlayer 持锁后的四跳按 handler 截止分摊(2026-11-10,go/login/internal/logic/pkg/createbudget):第 i 跳截止 =
+# min(开始 + 本跳上限, handler 截止 − Σ后面每一跳(下限 + 50ms 间隙)),剩下的不够本跳下限就不发。推导与
+# go/login/etc/login.yaml 顶部相同:本地余量 250 + 发号 300 + 名字登记 1700(2 × 800 + 100)+ player_route 登记 800
+# + SQL 账号目录提交 800 + 3 × 50 = 4000 ≤ Timeout;login 启动时核对,不满足拒绝启动。本文件不写 HomeZone 块,
+# player_route 登记取缺省 800ms(homezone.DefaultRegisterTimeout)。
 Timeout: 4000 # 与 go/login/etc/login.yaml 同值(2026-10-14 由 10000 改为 4000:预算链要求 ≤ 路由服 ForwardTimeoutMs - 1000,见 docs/design/client-request-ordering.md §5)
 
 Etcd:

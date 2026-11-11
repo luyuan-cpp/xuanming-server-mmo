@@ -34,18 +34,26 @@ import (
 //
 // Mirror co-location deliberately does NOT go through this filter; see
 // createscenelogic.pickInstanceNode for the rationale.
+//
+// 计划排空(docs/design/scene-node-planned-drain.md §4.2、§4.6):自报排空中的节点(NodeInfo.admission = CLOSED)
+// 一律不返回 —— 不放新频道、新副本,也不当迁移与疏散的目标;它仍然活着、仍是名下场景的属主(IsNodeAlive 不看这里)。
+// 返回值里不在外出构建上的节点排在前面,两组内部各自保持负载升序,所以「最空的节点」是新构建里最空的那台。
 func getNodesForPurpose(svcCtx *svc.ServiceContext, zoneId uint32, purpose constants.NodePurpose) []string {
 	pairs, err := svcCtx.Redis.ZrangeWithScores(nodeLoadKey(zoneId), 0, -1)
 	if err != nil || len(pairs) == 0 {
 		return nil
 	}
 
+	admission := snapshotNodeAdmission(zoneId)
 	allNodes := make([]string, 0, len(pairs))
 	preferred := make([]string, 0, len(pairs))
 	for _, p := range pairs {
 		if isKnownNodeIdentityAmbiguous(zoneId, p.Key) {
 			logx.Errorf("[NodeSelection] zone %d node %s has duplicate registrations; refusing this identity",
 				zoneId, p.Key)
+			continue
+		}
+		if admission.isDraining(p.Key) {
 			continue
 		}
 		allNodes = append(allNodes, p.Key)
@@ -68,7 +76,7 @@ func getNodesForPurpose(svcCtx *svc.ServiceContext, zoneId uint32, purpose const
 	}
 
 	if len(preferred) > 0 {
-		return preferred
+		return admission.preferredFirst(preferred)
 	}
 
 	if svcCtx.Config.StrictNodeTypeSeparation {
@@ -79,7 +87,7 @@ func getNodesForPurpose(svcCtx *svc.ServiceContext, zoneId uint32, purpose const
 
 	logx.Infof("[NodeSelection] zone %d: no nodes match purpose %d, falling back to full pool (strict=false)",
 		zoneId, purpose)
-	return allNodes
+	return admission.preferredFirst(allNodes)
 }
 
 // GetBestNodeForPurpose returns the lowest-load node that can host the given

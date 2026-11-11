@@ -1,6 +1,6 @@
 # 玩家数据只存 TiDB 与全链路水平扩展:总体方案
 
-> **状态**:v1.7 — 2026-11-05:存档按「大小 × 变化频率」重新分行、位置只顺带写(§4.2、§4.5,存盘规格 §1.1,第一批已落码未编译);新增 §7.2 存档库和区脱钩、§12 第 10~11 项、§13 A16~A18(未落码)。v1.6 — 2026-10-30:阶段 A 的代码全部写完(§13),**未编译、未测试、未压测**,验证清单见 [落码进度](../handoff/player-save-direct-commit-20261030/progress.md)。v1.5(发号器落码时修正 §6,见文中注明之处)。总体方案,汇总「玩家数据存储方案」会话(2026-10-23 ~ 10-30)的讨论、用户拍板与推荐做法。**未落码、未编译、未测试、未压测**;容量数字除注明外都是推算 [I]。v1.1 补了 §2.1「Redis 该用的地方」、§2.2 判据,以及附录 A(会话里的关键发现、比较过的方案、更正过的说法)。v1.2 按用户 10-30 的决定重写 §6(64 位、向发号器申请、崩溃也不重复),新增 §7.1 别名合服。v1.3 加入 Lua 里 ID 用字符串、别名合服定稿、Kafka 最终用途清单(§3.5)。v1.4 按正确性评审重写发号器(§6.1~§6.3):内存发段 + 两份独立预留记录。
+> **状态**:v1.9 — 2026-11-11:§7.2 A17c 落码(go/db 不再打开本区库、落点编号只剩地域存档库、部署与本机只认存档库清单、连接总账与告警改名;未编译)。v1.8 — 2026-11-10:§7.2 A17b 落码(K8s 按地域存档库部署、清单恰好是本地域 K 个库、存档库池按库摊开、连接总账与告警、删 login 过渡路径;未编译)。v1.7 — 2026-11-05:存档按「大小 × 变化频率」重新分行、位置只顺带写(§4.2、§4.5,存盘规格 §1.1,第一批已落码未编译);新增 §7.2 存档库和区脱钩、§12 第 10~11 项、§13 A16~A18(未落码)。v1.6 — 2026-10-30:阶段 A 的代码全部写完(§13),**未编译、未测试、未压测**,验证清单见 [落码进度](../handoff/player-save-direct-commit-20261030/progress.md)。v1.5(发号器落码时修正 §6,见文中注明之处)。总体方案,汇总「玩家数据存储方案」会话(2026-10-23 ~ 10-30)的讨论、用户拍板与推荐做法。**未落码、未编译、未测试、未压测**;容量数字除注明外都是推算 [I]。v1.1 补了 §2.1「Redis 该用的地方」、§2.2 判据,以及附录 A(会话里的关键发现、比较过的方案、更正过的说法)。v1.2 按用户 10-30 的决定重写 §6(64 位、向发号器申请、崩溃也不重复),新增 §7.1 别名合服。v1.3 加入 Lua 里 ID 用字符串、别名合服定稿、Kafka 最终用途清单(§3.5)。v1.4 按正确性评审重写发号器(§6.1~§6.3):内存发段 + 两份独立预留记录。
 > **证据**:读代码、读文档,加两轮多代理只读盘点与对抗评审。第二轮的正确性评审因额度未跑成,发号(§6)与多集群(§7、§8)两部分**还没有过正确性评审**,落码前补(§12)。标注:[C] 读代码或配置确认,[D] 文档记载,[I] 推断,[W] 外部官方资料。
 > **关系**:
 > - [TiDB 决策 §9](./global-data-layer-tidb-decision.md)「玩家数据不再用 Redis 存储」:方向与现行键族分类以它为准,本文回答它 §9.4 的待定问题,不重复它的键族表。
@@ -199,7 +199,7 @@
 | `player_database_1` 的去留 | 删除,第二批(规格 §1.2),2026-11-06 已落码,未编译 |
 | 背包变化很频繁时是否把道具拆成多行 | 不拆,除非压测数据支持(§4.6) |
 
-### 4.6 判脏的开销、常驻内存和后续优化(2026-11-01 讨论,未实测)
+### 4.6 判脏的开销、常驻内存和后续优化(2026-11-01 讨论,2026-11-11 定案)
 
 **现在的做法**:每次存盘拼出整份 `PlayerAllData`,按行(kind)投影并确定性序列化(`player_store_projection.cpp`),和上一次确认提交的字节 `confirmed[kind]` 比较(`player_store_client.cpp`),只写不同的行。玩家数据在一张表 `player_store` 里;2026-11-05 之前分四行业务数据(`HOT`、`ASSET`、`GROWTH`、`PROFILE`),之后分六行(`LOCATION`、`CHARACTER`、`WALLET`、`BAG`、`GROWTH`、`PROFILE`,规格 §1.1)。
 
@@ -216,24 +216,24 @@
 
 **常驻内存**:每个玩家三份,ECS 实时数据、`confirmed`、`PlayerLastPersistedSnapshotComp`。快照不只用于比较,资产、结算、收件箱拿它当「已提交」的证据,所以不能简单去掉。
 
-**tick 尖刺**:周期存盘的定时器每秒跑一次,在游戏线程上一口气做完这一秒的玩家(`cpp/libs/services/scene/core/system/redis.cpp`)。周期从 300 秒缩到 60 秒之后,工作量是原来的 5 倍。
+**tick 尖刺**:周期存盘原来每秒跑一次,在游戏线程上一口气做完这一秒的玩家(`cpp/libs/services/scene/core/system/redis.cpp`)。周期从 300 秒缩到 60 秒之后,工作量是原来的 5 倍。2026-11-11 起改为每 0.1 秒一个槽,见下表。
 
-**压测之后再定,现在都不做**:
+**定案(2026-11-11,负责人要求不等压测、按标准做法定)**。估算口径:protobuf 序列化约每秒 1 GB,满背包的整份行约 15 KB,一次序列化约 15 µs;一个 scene 1 万人在线、周期 60 秒,每秒约 167 次存盘尝试,序列化合计约 2.5 ms/s,不到一个核的 0.3%。实测数字出来后写回本节核对,估算错一个数量级才重开对应一行。
 
-| 压测看到 | 做法 | 代价 |
+| 原来的触发条件 | 定案 | 代价 |
 |---|---|---|
 | 热行事务数压不住 | **2026-11-05 已改为缺省**:位置单独成行 `LOCATION`,存盘方式「只顺带」,定时存盘只遇到位置变化时推迟,别的行要写、非定时存盘(含下线、交接)一定带上,兜底 300 秒(规格 §1.1)。不再「比脏时排除 `transform`」:单独成行之后比脏照常比,只在「要不要发这一笔」时看存盘方式 | 崩溃时位置回到几分钟前。位置不是资产,可以接受 |
-| 周期存盘回调造成 tick 尖刺 | 把这一秒的玩家摊到多个 tick | 改动小 |
-| 序列化占 CPU 明显 | 给模块加变化提示,没变的大行不序列化,定期全量比较一次兜底。规则见规格 §1.1「变化提示」:行级提示、最终存盘和每 N 次定时存盘全量比较、全量比较发现「没标却变了」就计数报警 | 多一套提示。不能只靠提示,否则回到漏标丢数据 |
-| 内存吃紧 | `confirmed` 换成每行 128 位哈希。先核对没有别的代码读这份字节 | 碰撞时漏写一次,128 位下可以忽略 |
+| 周期存盘回调造成 tick 尖刺 | **2026-11-11 已落码(未编译)**:定时器每 0.1 秒一个槽,一个周期 `interval × 10` 个槽,按 `playerId % 槽数` 分;每个玩家每周期仍恰好一次,单次回调约「在线人数 / 槽数」(1 万在线、60 秒周期约 17 人)。单次仍超 10 毫秒时 `[SaveTiming]` 升 WARN | 定时器多跑 10 倍,每次遍历在线表,1 万在线约几十微秒 |
+| 序列化占 CPU 明显 | **定为不做**:按上面的估算,全量序列化不到一个核的 0.3%;变化提示要在货币、背包、任务、等级等全部领域入口打标记,还要兜底全量比较和抓漏标,多一套必须永远维护对的规则,换来的 CPU 可以忽略。每次存盘照旧全量序列化、按字节判脏,不存在漏标丢数据。规格 §1.1「变化提示」那段保留为「真要做时的规则」 | 每次存盘多花约 15 µs |
+| 内存吃紧 | **定为不做**:`confirmed` 每人约等于一份序列化行(满背包约 15 KB,1 万人约 150 MB),比 ECS 实时数据和快照都小。换成哈希要多一个依赖、失去按字节对照排障的能力,还要论证碰撞;精确比较更简单 | 每人多一份行字节 |
+| 每次确认提交深拷贝快照(`PlayerLastPersistedSnapshotComp::Replace`) | **定为不做**:一次深拷贝与一次序列化同一量级,可以忽略。快照是资产、结算、收件箱的「已提交」证据,独占一份不会被别处改到;改成共享已提交的消息要改它的所有读者和退出路径,收益不抵风险 | 每次提交多一次深拷贝 |
 | `ASSET` 写入量大 | **2026-11-05 已定并落码(未编译)**:货币和两本账本、限购进 `WALLET`,背包单独 `BAG`。同一次存盘的脏行本来就在一个事务里提交,不影响一致性 | 每笔多一行。上线后再改要迁移存档,所以**首次上线前定** |
 
 要看的数据:每行的大小(`player_store_row_bytes`)和写入频率、热行事务数、scene 的 tick 耗时和内存占比。不要拆到每个道具一行,除非这些数据支持。
 
-**下一步**(负责人 2026-11-01 定:不丢数据、强一致、性能高、可水平扩展、代码易懂,性能靠实测):先量,再按量到的数据从上表挑做法。
-- 判据初值:周期回调单次超过 10 毫秒就摊到多个 tick;摊开之后序列化仍占大头,再加变化提示。
+**之后**:上表都已定案,不再「等压测再定」。
 - 优化不能动存档的提交语义:同一次存盘的脏行同一事务提交,脏判断以确认提交为基准(§4.3)。
-- 实测数字写回本节,替换上面的估算。
+- 压测拿到 `[SaveTiming]` 后,实测数字写回本节,核对上面的估算。
 
 **已落码(2026-11-05,未编译,验证命令见 `docs/handoff/player-save-direct-commit-20261030/progress.md`「判脏分段耗时与基准」)**:
 - **分段耗时指标**:`save_timing_stats.h` 记五段,不带 `player_id`:
@@ -252,10 +252,10 @@
 - **退出收敛改成和判脏同一把尺子**(`player_exit::IsPersistedPayloadCurrent`):两边都投影成行,逐行比字节。原来用 `MessageDifferencer`,NaN 不等于自己:坐标里一旦有 NaN,退出永远判「没存上」;退出存盘带写权释放,每轮都真写一笔,重存 5 轮后实体滞留在节点上。回归用例 `SaveSeq.PersistedPayloadCurrentWithNaNCoordinate`。
 - 过时注释已改:`dirty_save_stats.h`、`last_persisted_snapshot_comp.h`、`player_lifecycle.h`。
 
-**读代码时看到的开销,等数据再决定改不改**:
-- 拼数据时还给旧读者复制一份背包和任务(`player_data_loader.h` 的 `bag_data` / `quest_data`)。服务端已经没有代码读这两份,每次存盘白白多两次深拷贝;删的话要连带改三个测试。
-- 每次确认提交,`PlayerLastPersistedSnapshotComp::Replace` 都整份深拷贝一次。
-- `proto_dirty_compare.h`(`dirty_save::IsEqual`)已经没有调用者,可以删,要和引用它的几份旧设计稿一起清理。
+**读代码时看到的开销(2026-11-11 处理完,未编译)**:
+- 拼数据时给旧读者复制的背包和任务副本已删:`PlayerAllData` 的 `bag_data` / `quest_data` / `mail_data`(4、5、6)写 `reserved`,`player_data_loader.h` 的复制和旧档兼容分支一起删;项目未上线、存档可以清空。三份测试里断言副本的地方删掉,只测兼容分支的两条用例删除,`AuthoritativeEmptyDatabaseSnapshotWinsOverStaleLegacyTopLevel` 改名 `EmptyDatabaseBagAndMissionsLoadEmpty`。要先重新生成协议,生成器会在 `proto/persist_schema_gen.txt` 写 `retired=PlayerAllData#4` 等三行。
+- `PlayerLastPersistedSnapshotComp::Replace` 的深拷贝定为不改,理由见上表。
+- `proto_dirty_compare.h`(`dirty_save::IsEqual`)已删,没有包含它的文件。旧设计稿里提到它的地方都是当时的历史记录,不改。
 
 ## 5. 什么情况下会丢,什么情况下保证不丢
 
@@ -312,19 +312,19 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 - **调用方不改。** C++ 的 `GuidSegmentClient`、Go 的 `go/shared/idsegment` 仍向 `data_service.AllocateIdSegment` 申请 `[lo, hi)` [C]。双缓冲预取、动态步长、发现号段重叠即拒绝都保留。「号段必须递增」这条要放宽:多个发号器副本各发各的块,同一个客户端先后领到的段不保证递增(落码时发现,2026-10-30)。
 - C++ Scene 每次领段由所属 EventLoop 的作用域持有并等待 gRPC 完成，之后按原请求编号交给号段客户端。客户端的兜底超时和 10 秒迟到认领窗口继续独立工作。开始停机时关闭新的请求，已经发出的结果在退出存盘期间仍可补入缓冲。节点拆除前取消剩余本地等待，手里已有的号仍按原规则发放。
 - **发号器从内存发号段,不是每次都写存储。** 发号器进程先预留一大块号,记录落盘后,再从这块里切号段给调用方。一块用完(或用掉一半时后台预取)才碰一次存储。所以 `id_segment` 表的单行热点和 etcd 单键争用都不存在。
-- **预留记录写三份,三份互相独立。** 主记录和副记录分别放在本地域两套独立的 etcd 集群里,第三份在全世界共用的全局号源登记处,都只增不减。一块号只有在三份都写成功之后才能发出去。任何一份或两份丢失、回退,剩下的仍然盖得住所有发过的号。登记处同时把每个地域码唯一绑定到一对本地 etcd 上。详见 §6.3。
+- **预留记录写三份,三份互相独立。** 主记录和副记录分别放在本地域两套独立的 etcd 集群里,第三份在全世界共用的全局号源登记处,都只增不减。一块号只有在三份都写成功之后才能发出去。任何一份或两份丢失、回退,剩下的仍然盖得住所有发过的号。登记处同时把每个地域码唯一绑定到一个部署环境(K8s 集群)里的一对本地 etcd 上。详见 §6.3。
 - **所有种类共用一个计数器。** 今天每种 `biz_tag` 一个计数器,不同种类的数值可能相同。共用之后,系统里任意两个 ID 都不相同。`biz_tag` 只用来校验和记指标,未登记的种类照旧拒绝。
 - **打散不决定唯一性,只解决索引热点。** 发号器发出的是递增的计数器值,直接用的话新号都挤在索引最右边一个 Region。客户端发号时过一遍 63 位内的公开混合函数:`x ^= x>>30; x = x*C1 mod 2^63; x ^= x>>27; x = x*C2 mod 2^63; x ^= x>>31`,`C1`、`C2` 用 SplitMix64 的两个奇数常量。每一步都可逆,所以一一对应;没有循环;0 只对应 0,而计数器恒大于 0。Go 与 C++ 用同一组固定样例对拍,并测逆函数往返。
 - **ID 不带业务含义**:不带分区、地域、时间、节点的语义,没有任何代码解析它。注意打散是公开可逆的,从 ID 能反算出计数器,所以这是「不依赖」,不是「保密」;权限判断不得依赖 ID 猜不到。
 - **位宽**:类型是 64 位(`uint64`、`BIGINT UNSIGNED`)。**值只用低 63 位,最高位恒为 0(负责人 2026-10-31 定)**:2^63 约 922 亿亿,用不完;而代码里有依赖最高位的地方——Java 网关的 `playerId` 是有符号 `long`(`LoginResponse`、`LoginRpcClient` [C]);trade 的守卫表靠 `| 1<<63` 区分哈希键和 ID 键(`market.go` [C])。若要用满 64 位,这些地方要先全部改掉。(2026-10-31 重新核对:player_locator 原来的 `locationKey(int64(playerID))` 已随 Redis 键改名消失,`auction.go` 也不再用最高位。)
 - **Lua 里 ID 一律当字符串**(用户 10-30 定):Redis Lua 的数字是浮点数,超过 2^53 会丢精度。脚本里 ID 只做字符串比较和拼键,不用 `tonumber` 计算或比较;有序集合的分数也是浮点数,不拿 ID 当分数。现有 `tonumber(` 约 96 处(30 个文件 [C])。2026-10-30 逐处看过:全部是计数、时间戳、版本号、代次和 TTL,没有处理 ID 的,不用改;有序集合的分数也全是时间。打散之后所有 ID 都超过 2^53,以后新写脚本要守这条。
-- **唯一性只依赖五点**:预留记录只增不减;一块号三份记录都落盘后才发;CAS 只有一个预留者成功;一个地域码只绑一对本地 etcd、一生只认领一次;打散一一对应。正常路径不依赖时钟和租约。
+- **唯一性只依赖五点**:预留记录只增不减;一块号三份记录都落盘后才发;CAS 只有一个预留者成功;一个地域码只绑一个部署环境里的一对本地 etcd、一生只认领一次;打散一一对应。正常路径不依赖时钟和租约。
 
 **计数器结构**(63 位,只有发号器知道,客户端不配、不解析):
 
 | 字段 | 位数 | 说明 |
 |---|---|---|
-| 地域 | 6 | 放在最高位。64 个码,0 只给 dev、test;由发号器配置,和记录里的地域核对,并由全局号源登记处唯一绑定到一对本地 etcd(§6.3),对不上拒绝预留。客户端拿到的 `[lo, hi)` 已经包含它,不需要、也不允许配置 |
+| 地域 | 6 | 放在最高位。64 个码,0 只给 dev、test;由发号器配置,和记录里的地域核对,并由全局号源登记处唯一绑定到一个部署环境里的一对本地 etcd(§6.3),对不上拒绝预留。客户端拿到的 `[lo, hi)` 已经包含它,不需要、也不允许配置。这个「发号码」平时等于地域的存档库编号(部署参数 `-Region`,§7.2);事故换码时只换发号码(`-IdIssuerRegion`),存档库编号不变 |
 | 时间 | 33 | 秒,从 2026 年起,约 272 年 |
 | 序号 | 24 | 每秒约 1677 万个,是 2000 万在线推算峰值(约每秒 116 万条流水 [I])的 14 倍以上 |
 
@@ -345,7 +345,7 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 | 本地两套 etcd 都丢了数据 | 拒绝发号,运维按登记处水位恢复(`-id-issuer-recover -id-issuer-rebind`) |
 | 登记处丢数据或回档 | 本地两份盖得住;丢了的码由 `-id-issuer-recover` 按本地记录重新登记 |
 | 本地和登记处都没有这个码的记录 | 没有可信上界,拒绝,不猜起点;退役这个码,换一个新码 |
-| 另一套环境配了同一个地域码、或者克隆了快照 | 登记处只认绑定的那一对 etcd,另一套初始化和发号都被拒绝 |
+| 另一套环境配了同一个地域码、或者克隆了快照 | 登记处只认绑定的那个部署环境(K8s 集群身份)和其中那一对 etcd,另一套初始化和发号都被拒绝。同一份清单部署出的 etcd 集群号相同、集群级备份恢复带走了集群号,也照样拒绝(§6.3) |
 | 时钟跑快、跑慢、回拨 | 不会重号。时钟只作为第三道防线抬高块的起点;跑快只浪费值域 |
 
 ### 6.3 etcd 丢数据或回退:三份预留记录 + 全局号源登记处(2026-11-05 修订)
@@ -360,12 +360,13 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 |---|---|---|
 | 主记录 | 本地域的 `etcd` | 本地域的水位 |
 | 副记录 | 本地域的 `etcd-id-secondary` | 同上,两套独立 etcd 是强规定(AGENTS §7) |
-| 登记处 | 全局号源登记处 `etcd-id-registry`,全世界一套,每个地域码一个键 | 这个码的水位,加上地域码绑定:发号世系(`authority`)、绑定的两套本地 etcd 的集群号、预留次数。另有一个「下一个可认领的码」 |
+| 登记处 | 全局号源登记处 `etcd-id-registry`,全世界一套,每个地域码一个键 | 这个码的水位,加上地域码绑定:发号世系(`authority`)、部署身份(`deployment`)、绑定的两套本地 etcd 的集群号、预留次数。另有一个「下一个可认领的码」 |
 
 ```
 预留一块(很少发生):
-  P、S = 本地两份记录,G = 登记处里这个码      // 三套独立 etcd,线性读
-  核对:G 存在且未退役;P、S 的世系等于 G 的;两套本地 etcd 报的集群号等于 G 绑的;P、S 不能都不存在
+  先读 G,再依次读 P、S                    // 三套独立 etcd,各自线性读,不是跨集群原子快照
+  核对:G 存在且未退役;P、S 的世系等于 G 的;本进程所在 K8s 集群的身份和两套本地 etcd 报的集群号等于 G 绑的;P、S 不能都不存在
+  若 max(P, S) > G.水位,复读登记处          // 完整记录有变化则从头重读;复读失败则拒绝,此时尚未写任何记录
   start = max(P, S, G.水位, now_floor)
   end   = start + 块大小
   CAS 主记录 P → end                     // 冲突就从头再来,这是多副本之间的仲裁点
@@ -375,29 +376,42 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 ```
 
 - **为什么不重号**:发出去的每个号都小于当时三份记录的值。任何一份或两份丢失、回退,剩下的那份还在,下一块的 `start` 自动跳到它之上。本地两套一起回档时靠登记处;登记处丢失或回档时靠本地两份。手里已有块的发号器不受影响,因为块在内存里、从不回读。
-- **回档看得出来**:写序是本地两份先、登记处最后,所以正常情况下登记处不会高过本地两份。本地两份都落后登记处,只能是本地被旧数据覆盖过,上报 `records_behind_registry`;登记处落后本地超过一块,说明登记处被回档过,上报 `registry_behind`。两种都照常发号。
-- **地域码唯一绑定**:登记处里一个码只认一条世系和一对本地 etcd。另一套环境配同一个码:初始化被拒(码已认领),直接发号也被拒(集群号对不上)。拿别人的 etcd 快照克隆过来:世系对得上,集群号对不上,照样拒绝。同一对 etcd 的多个副本照常发号。集群号拦不住的情形(用完全相同的清单和令牌在另一处恢复,集群号会一样),这个环境只要连着登记处,登记处水位就让它和原环境串行,不会重号;连不上登记处就发不了号。
+- **水位差异的诊断**:写序是本地两份先、登记处最后,读序是登记处先、本地两份后。这样正常并发提交不会把旧本地值和新登记处值拼在一起,误报双本地回档。本地两份都落后先读到的登记处,上报 `records_behind_registry`。本地高于登记处时先复读登记处,完整记录变了就整轮重读,避免把已经提交的并发预留说成登记处落后;版本未变才上报 `registry_behind`。登记处落后超过一块既可能是回档,也可能是多次预留没完成登记处写入,不能只凭差距断言回档。诊断在本轮写入之前完成,随后写失败仍保留差异信号;成功预留仍从三份水位和时间下限的最大值之上继续。
+- **地域码唯一绑定**(2026-11-11 按审核交接 §6.2 修订):登记处里一个码只认一条世系、一个部署环境和其中的一对本地 etcd。部署环境的身份是 `k8s:<kube-system 命名空间的 UID>`,data-service 运行期经 K8s API 读(`internal/clusteridentity`)。
+  - **为什么只比 etcd 集群号不够**:etcd 的集群号只由成员 peer 地址和引导令牌算出(etcd 3.6.16 `computeMemberID`,引导时不带时间),而三份清单的令牌和地址只由 `-InfraNamespace` 推出。所以同一份清单部署到两个 K8s 集群,集群号相同,原来的绑定分不出两套环境;集群级备份恢复(Velero、卷快照)还会把数据目录里的集群号一起带到别的集群。两套环境都拿到发号资格之后,登记处在时两边靠它串行;登记处一旦回档或丢码(§6.2 说能自愈的两类事故),就会重号。
+  - **为什么身份要运行期读**:渲染进 ConfigMap、Secret、环境变量的值,会和 PVC 一起被集群级备份恢复带走。kube-system 的 UID 由 API server 建集群时生成,按对象恢复出来的都是新 UID,带不走。data-service 的 ServiceAccount 只多一条权限:get `namespaces/kube-system`。身份第一次需要时读,成功后缓存到进程结束;读不到那次预留或运维操作失败、不写任何记录,指标 `identity_error`。dev 不核绑定,不读。
+  - **结果**:另一套环境配同一个码,初始化被拒(码已认领),直接发号也被拒;同一份清单部署到另一个 K8s 集群、集群号完全相同,同样拒绝。拿别人的 etcd 快照或整个数据目录克隆过来:世系和集群号都对得上,部署身份对不上,照样拒绝。同一个 K8s 集群里同一对 etcd 的多个副本照常发号;同一个 K8s 集群里原地恢复 etcd,身份和集群号都不变,不用 rebind。
+  - **令牌**:三套 etcd 的引导令牌也带上 kube-system UID,新部署出的 etcd 集群号各不相同(etcd 的建议做法)。已有数据的 etcd 忽略令牌,改它不影响在跑的集群。这只是加固,判定靠部署身份。
+  - **拦不住的情形**:整个 K8s 控制面连同 kube-system 一起从备份克隆出第二个集群(UID 也被复制),或者在同一个 K8s 集群里拷贝 etcd 数据目录、强制起成另一套集群。这两种都要有人刻意做,这时两边只能靠登记处水位串行,登记处完好时不重号。
+  - 本字段出现之前写的登记处记录没有部署身份,生产预留拒绝,`-id-issuer-recover -id-issuer-rebind` 补上。项目未上线,没有存量。
 - **用过的码永不再分配**:码按从小到大认领,认领时把「下一个可认领的码」推过去(一个 Txn 里核对和写入)。哪怕一个码的记录丢了,它也小于「下一个可认领的码」,初始化照样拒绝。退役的码留墓碑,预留、初始化、恢复都拒绝。
+  - **认领只能一个接一个**:初始化只能认领「下一个可认领的码」本身,大于它拒绝(`ErrRegionOutOfOrder`),什么都不写。跳过去的码再也不能认领,码一共只有 63 个,一次填错(5 写成 50)就会烧掉中间整段。
+  - **开启登记处不强制等于已有最大码 +1**,只要求大于全部已有码,取台账里用过的最大码 +1。重建时某个用过的码既没有幸存记录、也漏补了墓碑的话,强制「已有最大码 +1」会把它重新放开,新地域就和它当年发的号撞上。现规则最坏只是填大了浪费几个码,是可用性问题,不是唯一性问题。重建流程要求给每个用过、没重新登记的码补墓碑(运维手册 §4.3)。
 - **首次初始化和事故恢复分开**,都是运维显式跑的入口,不并进 `-migrate`:
-  - `-id-registry-open`:世界第一次部署时开启登记处(下一个可认领的码 = 1);登记处整个丢了重建时,取台账里用过的最大码 +1。没开启时任何初始化都拒绝。
+  - `-id-registry-open`:世界第一次部署时开启登记处(下一个可认领的码 = 1);登记处整个丢了重建时,取台账里用过的最大码 +1。扫描已有码之后,事务同时复核开启指针不存在、地域键范围在扫描后没有新增或更新,冲突则有界重读,保证并发恢复或退役不会越过“起点高于全部已有码”的检查。没开启时任何初始化都拒绝。
   - `-id-issuer-init`:只给从没认领过的码。认领之后、建本地记录之前中断过,而这个码还没发过号(预留次数 0)时,再跑一次接着做完。本地有记录而登记处没有、发过号的码本地都没了,都是事故,拒绝。
-  - `-id-issuer-recover`:只按幸存的记录取上界。登记处丢了这个码 → 按本地两份的最大值重新登记;本地两份都没了 → 按登记处水位重建,但要 `-id-issuer-rebind` 确认(两份都没了就证明不了这两套 etcd 还是原来那两套);etcd 换成新集群(集群号变了)→ 同样要 rebind。本地和登记处都没有这个码 → 没有可信上界,拒绝,只能退役这个码、换一个新码。
-  - `-id-issuer-retire`:码永久退役,登记处没有这条记录也写墓碑。
+  - `-id-issuer-recover`:只按幸存的记录取上界。登记处丢了这个码 → 按本地两份的最大值重新登记;本地两份都没了 → 按登记处水位重建,但要 `-id-issuer-rebind` 确认(两份都没了就证明不了这两套 etcd 还是原来那两套);etcd 换成新集群(集群号变了)或灾备到另一个 K8s 集群(部署身份变了)→ 同样要 rebind,rebind 把绑定改到本部署环境和这两套 etcd,原来那一份从此预留被拒。本地和登记处都没有这个码 → 没有可信上界,拒绝,只能退役这个码、换一个新码。
+  - `-id-issuer-retire`:码永久退役,登记处没有这条记录也写墓碑。码还在用时只能从绑定它的部署环境执行:本地记录的地域和世系、部署身份、两套 etcd 的集群号都要对得上,否则拒绝(审核交接 §6.3)。退役没有撤销入口,staging 和生产又共用登记处,配置里地域码写错就会从别处退掉一个在用的生产码。绑定它的地域已经不在、没法在那里执行时,确认之后加 `-id-issuer-retire-unbound` 放行。登记处没有这条记录时(重建时补墓碑)不核绑定。
 - **旧发号进程不用先停**:三份记录每次预留都重读,旧进程下一次预留只能落在可信上界之上或被拒;它们内存里的块都在上界之下,接着发也不重号。
 - **时间下限**仍然保留,是第四道防线:只抬高起点,`now` 不在可表示范围内时这次不采用、告警。计数器比时钟超前 7 天以上只告警。
-- **两份本地记录都不存在、登记处也没有这个码**:可能是新地域,也可能是全丢了。登记处靠「下一个可认领的码」区分:没认领过的码才能初始化,认领过的码只能恢复。生产环境(`AllowAutoSeed=false`)拒绝发号;dev(`AllowAutoSeed=true`)三份放同一套 etcd,缺什么第一次预留时自动补。
+- **两份本地记录都不存在、登记处也没有这个码**:可能是新地域,也可能是全丢了。登记处靠「下一个可认领的码」区分:没认领过的码才能初始化,认领过的码只能恢复。生产环境(`AllowAutoSeed=false`)拒绝发号;dev(`AllowAutoSeed=true`)三份放同一套 etcd,缺什么第一次预留时自动补。dev、test 不核地域码绑定,自动认领也不走「下一个可认领的码」,所以不许连共用登记处:配置里显式写了 `RegistryEtcd` 或 `RegistryTLS` 就拒绝启动。
 - **硬校验**:`end` 不得超过本地域的值域上限,时间字段不得溢出;记录的地域位必须等于配置;三份记录两两不能在同一套 etcd 上(配置比地址,运行期比 etcd 自报的集群号);否则拒绝发号。
 - **块大小**:2^32 个号(约 43 亿)。用掉一半时后台预取下一块,留出处理某一套 etcd 故障的时间。
-- **代价**:多一个全世界共用的 3 节点小集群(`deploy/k8s/manifests/infra/etcd-id-registry.yaml`),只有一个集群托管它(`k8s_deploy.ps1 -HostIdRegistry`),别的集群经私网用 `-IdRegistryEtcd` 访问。每预留一块号多一次跨地域的 CAS,预取在后台做,延迟不在发号路径上。登记处不可达时新块预留失败,发号器手里的块还能用很久(按峰值也有一小时以上 [I]),用完才 fail-closed。这是有意的取舍:跨环境的唯一性只能靠一个共用的仲裁者,「每个地域一整套」在发号这一项上让步。登记处和现有 etcd 一样没开认证,只能走私网;开认证、加 TLS 是后续项。
+- **代价**:多一个全世界共用的 3 节点小集群(`deploy/k8s/manifests/infra/etcd-id-registry.yaml`),只有一个集群托管它(`k8s_deploy.ps1 -HostIdRegistry`),别的集群经私网用 `-IdRegistryEtcd` 访问。每预留一块号多一次跨地域的 CAS,预取在后台做,延迟不在发号路径上。登记处不可达时新块预留失败,发号器手里的块还能用很久(按峰值也有一小时以上 [I]),用完才 fail-closed。这是有意的取舍:跨环境的唯一性只能靠一个共用的仲裁者,「每个地域一整套」在发号这一项上让步。
+- **登记处只走双向 TLS**(2026-11-11):
+  - 全世界一个 CA(世界 CA)。登记处 etcd 的服务端证书和每个地域的客户端证书都由它签。登记处开 `--client-cert-auth`,发号器只认世界 CA 签的服务端证书(`LoadRegistryTLS`)。
+  - 这同时钉住了「地域连的是哪一套登记处」:地域配置里只有地址,地址写错、被改,或者别的集群误起了一套登记处,都会握手失败,而不是悄悄在第二个世界里认领码。
+  - 客户端证书每次握手从文件重读,换证书不用重启。世界 CA 换代按运维手册 §4.8 新旧并存过渡。
+  - 生产三个文件必填(`IdSegment.Issuer.RegistryTLS`),dev 不开 TLS。仍只走私网。
 
-**还会不会重号**:要本地两套 etcd 和登记处三处同时恢复到一致的旧状态才可能。登记处不许从备份恢复,它整个丢了数据时从各地域的本地记录重建(运维手册 §4.3),所以这要求有人违反运维规定。手工改记录同理。
+**还会不会重号**:要本地两套 etcd 和登记处三处同时恢复到一致的旧状态才可能。登记处不许从备份恢复,它整个丢了数据时从各地域的本地记录重建(运维手册 §4.3),所以这要求有人违反运维规定。手工改记录同理。另一条路是两套环境同时拿到同一个码的发号资格、登记处又回档或丢码;部署身份进绑定之后,这只剩上面「拦不住的情形」两种刻意操作。
 
 已有的防线保留:
 
 - **客户端校验**:拿到的段不能和最近接受过的 16 段重叠,否则整段拒收(`client.go`、`guid_segment_client.h` [C]);上限校验放宽到 2^63。这只是兜底,窗口之外的重复查不到。
 - **部分唯一键兜底**:建角初始行是严格 INSERT,撞号报错回滚(`account_role_initial_commit.go` [C]),邮件、挂单等表的主键同样报错。但这不是全部:`transaction_log_store.go`、`snapshot_store.go` 的写入撞号不报错,存档 BLOB 里的物品号也不报错,所以前面的设计必须成立,不能靠唯一键兜底。
 
-**落码要带的测试**(由 Codex 执行,2026-11-05 已写,未运行):内存替身覆盖主记录回退、副记录回退、某一份被删、本地两份都被删、本地两份被恢复到两条记录都在的旧快照(时钟正常、计数器跑在时钟前面)、登记处回档、登记处丢一个码、登记处整个丢失后重建、三处都丢、主写成功副写失败、登记处写失败、时钟回拨、时钟跳到未来再恢复后主记录回退(v1.3 的反例)、并发预留、发号器崩溃重启、旧进程恢复后继续发、重复部署同一个码、克隆快照、退役码复用、换 etcd 后 rebind、不同地域码并发,都断言发出的段不重叠(`internal/idissuer/issuer_test.go`)。真 etcd 上的回归和真快照回档演练在 `etcd_integration_test.go`(构建标签 `etcd_integration`),分开报告。打散函数 Go 与 C++ 用同一组固定样例对拍,并测逆函数往返。
+**测试覆盖**(Codex 已执行内存测试、真 etcd 回归;逐次结果与未验证项见 [交接 §5](../handoff/global-id-issuer-registry-20261105.md#5-2026-11-06-修复与-2026-11-10-交接收尾)):内存替身覆盖主记录回退、副记录回退、某一份被删、本地两份都被删、本地两份被恢复到两条记录都在的旧快照(时钟正常、计数器跑在时钟前面)、登记处回档、登记处丢一个码、登记处整个丢失后重建、三处都丢、主写成功副写失败、登记处写失败、时钟回拨、时钟跳到未来再恢复后主记录回退(v1.3 的反例)、并发预留、发号器崩溃重启、旧进程恢复后继续发、重复部署同一个码、克隆快照、退役码复用、换 etcd 后 rebind、不同地域码并发,都断言发出的段不重叠(`internal/idissuer/issuer_test.go`)。2026-11-11 补(未编译,见交接 §8):另一个 K8s 集群里集群号完全相同的部署、认领后没发过号的码、集群级备份恢复,都拒绝;灾备 rebind 之后原集群被拒;没有部署身份的旧记录要 rebind;身份读失败不写记录、成功后缓存;在用的码从没绑定的环境退役被拒,`unbound` 放行;身份读取器(`internal/clusteridentity`)的成功、403、对象不对、证书不受信几种情形。真 etcd 上的回归和真快照回档演练在 `etcd_integration_test.go`(构建标签 `etcd_integration`),分开报告。打散函数 Go 与 C++ 用同一组固定样例对拍,并测逆函数往返。
 
 **etcd 运维现状**(2026-11-05 更新,P0-C 阶段 2):三套 etcd(主 etcd、`etcd-id-secondary`、`etcd-id-registry`)用同一个官方镜像 `quay.io/coreos/etcd:v3.6.16` 按摘要钉死;压缩只靠 etcd 内置的自动压缩(以前的压缩 CronJob `etcd-compact` 已退役),主 etcd 配额 3GiB、发号器两套 512MiB;空间与无主告警在 `deploy/k8s/etcd-alerts.yaml`;碎片整理仍只有手工流程([etcd 维护手册](../ops/etcd-maintenance-runbook.md) §5)。
 
@@ -492,11 +506,11 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 - **删除**:`zone_merge_fence` 表、`merge:in_progress:{zone}` 键及其镜像、`GetPlayerHomeZoneResponse.home_zone_merging`、scene_manager 的可重试码 21、guild 的 `MergeFence`、`RemapHomeZoneForMerge`、`merge_zone` 的玩家映射改写、玩家行拷贝、落点钉住、回填、搬库。`LockRoleRoutes` 只锁每个玩家自己的路由行并复核 home / rev / frozen,`route_meta` 一并移出这条路径。
 - **没做的**:跨集群搬迁(§7)要在 player_store 上重写,旧 relocate 随旧表删除。
 
-### 7.2 存档库和区脱钩(2026-11-05 定;A17a 2026-11-06 落码未编译,A17b 未落码)
+### 7.2 存档库和区脱钩(2026-11-05 定;A17a、A17b、A17c 都已落码未编译)
 
 负责人 11-05 要「可读可扩展移动」。今天存档库跟着区走,这是剩下的一处「区 = 物理位置」。
 
-**现状 [C]**:新号的 `storage_id` 由 login 的 `PlacementConf.StorageIDForNewPlayer(loginZone)` 给出:配了 `Placement.NewPlayerStorageId` 就用它,否则等于建角的区;`storage_id < 1000000` 对应库名 `zone_<id>_db`,`≥ 1000000` 对应 `player_store_<id>_db`(`go/shared/placement`)。所以缺省是一个区一个存档库。
+**脱钩前的做法 [C]**(A17b 之后已删):新号的 `storage_id` 由 login 按建角的区给出,配了旧键 `Placement.NewPlayerStorageId` 就用它;`storage_id < 1000000` 对应库名 `zone_<id>_db`,`≥ 1000000` 对应 `player_store_<id>_db`(`go/shared/placement`)。所以缺省是一个区一个存档库。
 
 **问题**:
 
@@ -507,7 +521,7 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 **决定**:
 
 1. 每个地域上线前定一个固定的存档逻辑库数 K,上线后不改,和目录分片数 `Directory.LogicalShards` 同一条规矩(AGENTS §7 第 6 条)。初值 64,开发 1。
-2. `storage_id = 1000000 + 地域码 × 1000 + 片号`(片号 0..K-1),库名沿用现有规则 `player_store_<storage_id>_db`,比如地域 1 的 7 号库是 `player_store_1001007_db`。现有的 `DefaultGlobalStorageID = 1000000` 正好是地域 0(dev、test)的 0 号库,命名代码不用改。
+2. `storage_id = 1000000 + 地域码 × 1000 + 片号`(片号 0..K-1),库名沿用现有规则 `player_store_<storage_id>_db`,比如地域 1 的 7 号库是 `player_store_1001007_db`。现有的 `DefaultGlobalStorageID = 1000000` 正好是地域 0(dev、test)的 0 号库,命名代码不用改。这里的地域码是部署参数 `-Region`,是地域的永久编号;发号器的码平时等于它。发号器出事故换码时(运维手册 §4.5),只换发号码(`-IdIssuerRegion`),这里的编号和库名都不变,老玩家照常存盘(2026-11-11 定)。
 3. 建号时按 `player_id % K` 在本地域的库里选一个,写进 `player_route.storage_id`;之后读写只认目录,不再按 ID 或区计算。发号打散之后 ID 均匀(§6),取模就是均匀分布;记进目录是为了以后可以不按公式放。
 4. 区只是 `player_route.home_zone` 上的玩法属性,合服、排行、频道照旧按它解析(§7.1)。新号不再落到 `zone_<n>_db`;项目未上线,`zone_<n>_db` 这类存档库直接退役、清库,不做迁移。
 5. 扩容就是把一个逻辑库整库搬到新集群(`tools/dbmove`),64 个库最多能摊到 64 个集群;冻结一个库只暂停 1/64 的玩家存盘。
@@ -518,24 +532,51 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 - 选库只认目录:go/db 认领前经 data_service 的 `GetPlayerRoute` 读 `storage_id`,没有落点就拒绝,不回落 `home_zone` 或本进程的区(`go/db/internal/playerstore/placement.go`);存盘用认领时返回的那个。§7.1「原始归属这几处用」里「go/db 按 home_zone 选库」是旧说法,以这里为准。
 - scene 选「本 zone 的 go/db」不用改:go/db 的库名白名单列出全部存档库,哪个 go/db 都能写哪个库,按区选 go/db 只是分摊负载。
 - 全部存档库清单 `DB_ALLOWED_DATABASES` 只有一份:go/db 的白名单、data_service 的写资格和存档库白名单、迁移建库都从它来。脱钩只改这份清单的内容和 login 的选库,不改这套机制。
-- go/db 仍然一区一个进程、开本区库 `zone_<ZoneId>_db` 当主库(写者闸门、`user_accounts` 等表还在那里)。这是进程拓扑,不是玩家落点:脱钩之后本区库里不再有新玩家。
+- go/db 仍然一区一个进程,但 A17c 起不再开本区库 `zone_<ZoneId>_db`:写者闸门在每个存档库里各一份,`ZoneId` 只剩注册发现(scene 按区找 go/db 分摊负载)。
 
 **A17a(2026-11-06 落码,未编译)**:建号选库与本机环境。
 - `go/shared/placement`:`RegionStorageID(region, shard)`、`RegionStorageIDForPlayer(region, K, player_id)`、`RegionStorageDBNames(region, K)`、`ValidateRegionStorage`,常量 `RegionStorageStride = 1000`、`MaxRegionCode = 63`;库名仍走 `StoreDBName`。
-- login:`Placement` 增加 `Region`、`StorageShards`。配了 `StorageShards` 就按 `player_id % K` 在本地域选库,和 `Node.ZoneId` 无关;启动校验(`PlacementConf.Validate`,`login.go` 在任何外部连接之前调用)拒绝地域码越界、K 越界、只配 `Region` 不配 `StorageShards`、同时配 `StorageShards` 和旧键 `NewPlayerStorageId`。启动日志 `[placement] new players go to region ...` 是核对依据。
-- 过渡:没配 `StorageShards`(K8s 现在就是这样)时沿用旧语义(`NewPlayerStorageId`,0 = 本区库),启动打 ERROR。A17b 删掉这条路径和旧键。
-- 本机、docker 调试栈、`deploy/login-stack.linux`:login 配 `Region: 0`、`StorageShards: 1`,新号都落 `player_store_1000000_db`;`start_game.ps1` 的缺省白名单、compose 的 `DB_ALLOWED_DATABASES`、`prepare_docker_debug.py` 的 go/db 白名单都改成 `zone_1_db,player_store_1000000_db`(本区主库 + dev 地域库),写者启动目录照这份清单建库、迁表、发写资格。本机多区(`sql-boot-catalog-local -Zones`)本来就要求调用方显式给清单,清单里要带上 `player_store_1000000_db`。
-- 本机 go/db 给 `player_store_1000000_db` 开的是非区落点库池(`Placement.NonZoneStoreMaxOpenConn`,8 条),所有新号的存盘都走它。按本机压测量(几千机器人、60 秒一笔)够用;压测看到这个池排队再调,调之前按 A17b 重做规划档。
+- login:`Placement` 增加 `Region`、`StorageShards`。按 `player_id % K` 在本地域选库,和 `Node.ZoneId` 无关;启动校验(`PlacementConf.Validate`,`login.go` 在任何外部连接之前调用)拒绝地域码越界、K 越界。启动日志 `[placement] new players go to region ...` 是核对依据。
+- 当时保留的过渡路径(没配 `StorageShards` 时落本区库)A17b 已删,见下。
+- 本机、docker 调试栈、`deploy/login-stack.linux`:login 配 `Region: 0`、`StorageShards: 1`,新号都落 `player_store_1000000_db`;`start_game.ps1` 的缺省白名单、compose 的 `DB_ALLOWED_DATABASES`、`prepare_docker_debug.py` 的 go/db 白名单 A17c 起都只有 `player_store_1000000_db`,写者启动目录按 go/login 的 `Placement` 推出存档库清单,照它建库、迁表、发写资格(见 A17c)。
+- 本机 go/db 给 `player_store_1000000_db` 开的是存档库池(A17c 起键名 `Placement.StoreMaxOpenConn`),A17b 起是 60 / 20。
 
-**A17b(未落码)**:K8s 部署按地域存档库。
-1. `k8s_deploy.ps1` 加 `-PlayerStoreShards`:dev 缺省 1;staging、prod 必须显式(1..1000),和 `-DirectoryLogicalShards`、`-Region` 一样没有回落值。
-2. 存档库清单由 `-Region` 和 K 推出(公式同 `placement.RegionStorageDBNames`),`MMORPG_DB_ALLOWED_DATABASES` 仍是唯一的那份清单:要求它恰好包含这 K 个地域库,外加各区 go/db 的本区主库;出现别的 `player_store_*` 库(地域码填错)就拒绝,什么都不写。
-3. login 的 ConfigMap 渲染 `Placement: { Region: <-Region>, StorageShards: <K> }`,与 data_service 的 `Issuer.Region` 同源。
-4. 连接总账(`Get-MysqlConnectionPlan` / `Get-MysqlConnectionLedger`):非区落点库数 `NonZoneStores = K`,每个 go/db 和 data_service 实例最坏各开 K 个存档库池;非区池上限按每库 1/K 的流量重定,规划档、`mysql.yaml` 的 `max_connections`、`mysql-connection-alerts.yaml` 里额外库数的阈值和契约测试一起改。MySQL 预算档 K 取小值(比如 4),TiDB 档 64。
-5. 删掉 login 的过渡路径:`StorageShards` 为 0 拒绝启动,删 `NewPlayerStorageId`;K8s 契约测试夹具里的 `MMORPG_DB_ALLOWED_DATABASES` 改成带地域库的清单。
-6. 不在 A17b:go/db 去掉「本区主库」、改成不分区的无状态池,`zone_<n>_db` 存档库家族从代码里删除(`placement.IsZoneStorage`、`go/db` 的 `ZoneDBName`、迁移工具、测试夹具)。那一步改的是 go/db 的进程拓扑和维护排空,单独一批(A17c),先写规格。
+**A17b(2026-11-06~10 落码,未编译)**:K8s 部署按地域存档库,删 login 过渡路径。
+1. `k8s_deploy.ps1 -PlayerStoreShards`(`dev_tools.ps1` 同名转发):dev 缺省 1;staging、prod 必须显式给 1..1000,和 `-DirectoryLogicalShards`、`-Region` 一样没有回落值、不粘滞(`Resolve-PlayerStoreShards`)。
+2. 存档库清单:`MMORPG_DB_ALLOWED_DATABASES` 仍是唯一的那份,写路径入口 `Assert-LogicalDbPreflight` 用 `Assert-PlayerStoreAllowlist` 要求其中的 `player_store_*` 恰好是本地域的 K 个库(库名公式在 `lib/release_common.ps1` 的 `Get-RegionPlayerStoreDbNames`,与 `placement.RegionStorageDBNames` 同一公式),A17c 起清单里出现 `zone_<n>_db` 一律拒绝并点名;少一个、多一个都在任何写操作之前拒绝,报错点名缺哪些、多哪些。生成 db、data-service 的 ConfigMap 时再核一次。入口打一行 `Player store databases: region=<r> shards=<K> databases=<首>..<尾>`。
+3. login 的 ConfigMap 不再镜像 `go/login/etc/login.yaml` 的 `Placement` 段(那是本机的地域 0、K=1),按 `-Region`、`-PlayerStoreShards` 渲染,与 data-service 的 `IdSegment.Issuer.Region` 同源。
+4. 存档库连接池按库摊开:服务 yaml 写「本地域只有一个库」时的预算,K8s 的 ConfigMap 按 `Get-PlayerStorePoolLimit` = `max(2, ceil(预算 / K))` 摊到每个库,与目录分片的 `Get-DirectoryShardPoolLimit` 同一规则,空闲数不超过摊开后的上限。go/db 的存档库池从 8 / 2 改成 60 / 20(全部存盘都走它,等于脱钩前本区库那个池;A17c 起键名 `Placement.StoreMaxOpenConn / StoreMaxIdleConn`);本区库池当时收到 8 / 2,A17c 整个删掉。data_service 的 `Directory.StoragePools` 预算仍是 8 / 2。
+5. 连接总账(`Get-MysqlConnectionPlan` / `Get-MysqlConnectionLedger`;A17c 起 `ExtraZoneStores`、`zone_store` 删掉,`NonZoneStores` / `TidbNonZoneStores` 改名 `PlayerStoreShards` / `TidbPlayerStoreShards`,以下是 A17b 时的口径):`ExtraZoneStores` 规划档 0(zone 库不放新号);`NonZoneStores` 是 K,MySQL 档 4、TiDB 档 `TidbNonZoneStores = 64`;每个 go/db、data_service 实例最坏开全部 K 个库,每库按上面的规则摊开;data_service 不再另算「本区那一个」存档库池;按逻辑库的账分出 `player_store`(一个地域存档库,全地域的实例都连它)与 `zone_store`(一个本区主库)。写路径打印的本次部署与规划档两份都按本次的 K。手算:MySQL 档峰值 2436 → 2036(`max_connections` 2600 不动);TiDB 档(目录 64 片、存档库 64 个)峰值约 7276,超过 6 台 tidb-server 的预算 6666,规划档加到 7 台(预算 8000)。告警 `DbExtraStorePoolsBeyondPlan` 的阈值 `extra_zone > 0`、`extra_non_zone > 64`。
+6. MySQL 初始化(`New-MysqlInitConfigMapYaml`,集群内 MySQL 只在 dev 的 mysql 档部署):按地域码和 K 预建存档库(A17c 起文件名 `01_k8s_player_store_dbs.sql`,不再建 zone 库),dev 缺省就是 `player_store_1000000_db`。staging、prod 的存档库在外部 SQL 入口上,由运维按同一份清单预建。
+7. login:删 `NewPlayerStorageId` 和「没配就落本区库」的路径,`StorageShards` 为 0 拒绝启动,报错点名缺的键;`StorageIDForNewPlayer` 只按地域码、K、player_id 算,区不再是输入。
+8. 契约测试:`tests/lib/deploy_capture.ps1` 给 staging、prod 的 DryRun 补 `-PlayerStoreShards 64`,并按本次的地域码和 K 给清单夹具换上存档库(`Add-PlayerStoreAllowlistFixture`;A17c 起夹具写占位值 `$PlayerStoreAllowlistFixture`,整份换成本地域的存档库);清单闸本身在 `logical_db_deploy_contract.tests.ps1` 里按纯函数测。
+9. 不在 A17b:go/db 去掉「本区主库」、删 `zone_<n>_db` 存档库家族,见下面 A17c。
 
-A17b 改的 `k8s_deploy.ps1` 在 2026-11-06 还有别的会话近千行在途改动,开工前先认领。
+**A17c(2026-11-11 定规格并落码,未编译)**:go/db 去掉本区主库,删 zone 存档库家族。A17b 之后 zone 库里已经没有玩家,go/db 却还在启动时打开它、给它开池、核它的表,清单、迁移、写资格、连接总账也都还带着它。项目未上线,不留兼容、不做迁移,存量环境按上面的「切换口径」清空重建。
+
+1. **落点编号只剩地域存档库一个家族**(`go/shared/placement`):`StoreDBName` 只对 `storage_id ≥ 1000000` 给库名,1..999999 一律不认;`StorageIDFromDBName` 只认 `player_store_<id>_db`;删 `IsZoneStorage`。`MaxZoneStorageID` 改名 `MaxZoneID`,只用来核区号的范围(路由的 home_zone、维护计划里 Redis 目标的区、角色证明);`FirstNonZoneStorageID` 改名 `FirstStorageID`。所有用到落点的地方都经这两个函数,所以 zone 编号的落点在 data_service 的路由写入、角色证明、存档库池、写资格清单,go/db 的选库、迁移入口一处不漏地被拒绝,规则只有一份。
+2. **写入口拒绝**:data_service 的 `RegisterPlayerZone` 拒绝不是地域存档库的 `storage_id`(`ErrInvalidRegistration`),目录里不会出现指向 zone 库的落点。
+3. **go/db 不再打开本区库**:启动只装配写资格(每个清单库一份)和逻辑库映射,不连任何库;全部存档库第一次被指向时按需打开(现有路径:Ping、核 `DATABASE()`、只读 schema 闸),之后常驻。`ZoneId` 只剩注册发现:scene 按区找 go/db 是为了分摊负载,哪个 go/db 都能写哪个存档库。
+   - 启动校验:库名清单的每一项都必须是地域存档库名(zone 库名直接拒启,报错点名),写资格必须覆盖清单的每一项。启动时不探活存档库:库在不在、表对不对由部署阶段的 `db-migrate` Job 核,运行期由按需打开的那道闸核;一个库坏了只影响落在它上面的玩家,不挡 go/db 起来。
+   - 删:`config.ZoneDBName`、启动时派生 `Database.DBName`、本区库的打开与表核对(`openDB`、`assertConnectedDatabase` 的启动调用)、「必须有本区库写资格」、注册表的 home。
+   - 池只剩一类:`Placement.NonZoneStoreMaxOpenConn / MaxIdleConn`、`ExtraStoreConnMaxIdleSeconds` 改名 `Placement.StoreMaxOpenConn / StoreMaxIdleConn / StoreConnMaxIdleSeconds`;删 `ZoneStore*`、旧键 `ExtraStoreMaxOpenConn / ExtraStoreMaxIdleConn` 和回落链;删本区库池 `ServerConfig.Database.MaxOpenConn / MaxIdleConn`(只有本区库用它)。指标 `mmorpg_sql_pool_*{sql_client="db"}` 的 `pool` 只剩 `store` 一个值。
+   - 迁移入口 `cmd/migrate` 的 `-storage-id` 必填,只收地域存档库;删「按 ZoneId 迁本区库」。
+4. **部署与本机(第二批)**:`MMORPG_DB_ALLOWED_DATABASES` 只列本地域 K 个存档库,一项 zone 库都不许有;`mysql-init` 只建存档库;db 的 ConfigMap 写新键;连接总账删 `DbHomeMaxOpen`、`ExtraZoneStores`、`DbZoneStoreMaxOpen` 和按逻辑库的 `zone_store`;告警 `DbExtraStorePoolsBeyondPlan` 改成 `DbStorePoolsBeyondPlan`(`pool="store"` 超过 TiDB 档的 K);`db-migrate` Job 只迁 `player_store_*`;本机 `start_game.ps1`、docker 调试栈、`sql_boot_catalog_local`、`deploy/mysql-init/00_init_zone_dbs.sql` 只建 `player_store_1000000_db`。
+5. **不在 A17c**:go/db 的部署形态(每区一个 Deployment、按区注册发现)不变,改成全局要动 C++ 的发现,没有收益;`Placement.AllowStoreFamilies` 保留,家族只剩 `player_store_*`。
+6. **拆批**:第一批 Go(落点包、data_service、go/db 与测试),第二批部署、本机脚本、告警与 PowerShell 契约测试,第三批文档。两批之间主干是能编的:第一批之后旧清单里的 zone 库名会让 go/db、data_service 拒启,所以第二批要紧跟着落,Codex 两批一起验。
+
+**A17c 落码记录(2026-11-11,三批都写完,未编译,验证命令见 PROGRESS 同日「A17c」条目)**:
+- 第一批 Go:`go/shared/placement` 按上面第 1 条;data_service 的 `RegisterPlayerZone`、角色证明、存档库池、写资格清单都经它拒绝 zone 编号;go/db 启动只装配写资格与逻辑库映射(`InitDBWithWriters` 拒绝空清单、拒绝不是存档库名的写资格、拒绝启动期 DDL),注册表开局一个库都不开,打开路径对 zone 编号和白名单不认的库同样拒绝、记失败节流日志(`reject`),报错如实写出编号;`cmd/migrate` 的 `-storage-id` 必填;指标池类别只剩 `store`;`go/db/etc/db.yaml` 的池键改成 `Placement.Store*`,删 `ServerConfig.Database.MaxOpenConn / MaxIdleConn`。
+- 第二批部署:连接总账删本区库池,参数改名 `-PlayerStoreShards`(规划档键 `PlayerStoreShards` / `TidbPlayerStoreShards`),E 至少是 1(go/db 的连接全在存档库池里);总账报错改成英文。规划档手算:每个 go/db 实例少 8 条(本区库池),规划档 10 个实例共少 80 条,MySQL 档峰值约 2036 → 1956,TiDB 档约 7276 → 7196,仍超 6 台 tidb-server 的预算 6666,保持 7 台;10 个 zone 的 MySQL 档仍超 `max_connections`(OverLimit 用例的前提不变)。db 的 ConfigMap 只写 `Placement.StoreMaxOpenConn / StoreMaxIdleConn / StoreConnMaxIdleSeconds`。`Get-RoleProofStorageIds` 拒绝 zone 库名并点名;`db-migrate` Job 只认 `player_store_<id>_db`;`mysql-init` 的生成文件改名 `01_k8s_player_store_dbs.sql`、只建存档库,删 `Get-InfraZoneIds`;告警改成 `DbStorePoolsBeyondPlan`(`pool="store"} > 64`),`SqlPoolSaturated` / `SqlPoolSlowAcquire` 里「home 池是限流点」改成存档库池。
+- 第二批本机:存档库清单只有一个来源 —— go/login 的 `Placement`(`release_common.ps1 Get-LoginPlayerStoreDbNames`);`sql_boot_catalog_local` 按它建库、迁移(每库都带 `-storage-id`)、发写资格,外部给了 `DB_ALLOWED_DATABASES` / `MMORPG_DB_ALLOWED_DATABASES` 就必须恰好一致、zone 库名拒绝;多区不再要求显式清单(存档库和区无关)。docker 调试栈注册入口读同一份 login 配置。`00_init_zone_dbs.sql` 只建 `player_store_1000000_db`(文件名是历史名字,K8s 与 compose 都按它挂载,不改名)。清库脚本 `stress_round19.ps1`、`currency_crash_window.ps1` 改成对本地域每个存档库逐个清表。
+- 契约测试:K8s 各套件的清单夹具写占位值 `$PlayerStoreAllowlistFixture`,由夹具换成本次地域的存档库;总账自检不再复现 2026-10-12 按「本区库 60 条」手算的历史值,改为按公式逐项复算。
+
+**切换口径**:项目未上线,玩家数据可以整体清空(负责人 2026-11-10),存量环境一律清空重建,不做迁移、不留混跑。
+- 全新环境不用额外操作:dev 的集群内 MySQL 首次启动由 `mysql-init-sql` 建出 `player_store_1000000_db`;staging、prod 由运维按清单建空库。
+- 存量 dev K8s 环境:`dev_tools.ps1 -Command k8s-all-down` 删掉各 namespace(MySQL、Redis、etcd、Kafka 的 PVC 随之删除),再带 `-PlayerStoreShards` 等参数 `k8s-all-up`。不清的话,旧的 MySQL 卷不会重跑初始化脚本,`db-migrate` Job 因 `player_store_1000000_db` 不存在以退出码 1 失败,部署停在 db、data-service 之前(fail-closed,不会半新半旧地跑起来)。
+- 存量 staging、prod:运维删掉旧库,按新清单重建空库。
+- 2026-11-11 核对:本机没有 K8s 集群(kubectl 没有上下文),没有要清的 K8s 环境;本机 docker 调试栈与 `start_game.ps1` 的库按 AGENTS §6.2 每轮压测前清空。
+- 不要为了绕过上面那道闸手工建存档库。A17c 之后没清的旧号落点还指着 zone 编号时,go/db 拒绝打开(`storage N is not a player store id`),这些玩家存不了盘、认领失败,只能清库重建。
 
 ## 8. 水平扩展全景
 
@@ -580,6 +621,7 @@ etcd 和 TiDB 的 PD 都是单 leader,加机器提升不了写能力。只让它
 
 - Redis 登录域和玩家域:令牌、登录态、连接栅栏、位置、会话、战斗锁进 Redis Cluster,加主节点就扩。2026-10-31 已落码,未编译([玩家态 Redis 集群化](./redis-player-store-cluster.md) §13,存档相关批次作废)。规模按剩下的键重算(TiDB 决策 §9.5)。
 - Redis 控制域按 zone 组分实例,一个组内是单主:排队 `redis-queue-g<N>`(G4a 第 1a 批,10-24)与 scene_manager 控制域 `redis-ctl-g<N>`(场景路由、成员集合、世界频道、选主锁、死节点收尾任务,2026-11-05 落码、未编译,[control-plane-zone-scoping-20261105.md](control-plane-zone-scoping-20261105.md) §4),组号都是 zones 配置的 `redisQueueGroup`。scene_manager 按 zone 选主、只读写本 zone 的键,加组就扩写入;一个组装不下时拆组。gate 排空标记与落点唤醒频道仍在核心。实际压力看压测。
+- 2026-11-10 负责人改口径:按 zone 组分单主实例与核心单主都不算水平扩展。排队、控制域、核心剩下的全部用途改上新建的控制集群 `redis-control`,设计见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md),还没落码。
 - data_service 写门禁用的 MappingRedis 随映射直读 TiDB 删除(映射提案 §15.9),配置段只留名字缓存,改名 `NameCacheRedis`。
 
 ## 9. 按预算分三档部署
@@ -703,7 +745,7 @@ SLG 补充:
 | 7 | MySQL 档何时实现 | 2026-10-30 已落码,未编译(§9.1~§9.4);生产 mysql 档要 3 个 Kafka broker(历练结果 topic 的 RF3 门禁不放开)。已定(负责人 2026-10-31):保持,broker 用小规格 |
 | 8 | 发号与多集群的正确性评审 | 发号部分 10-30 已补,否决了 v1.3,按 v1.4 重写(§6);多集群部分落 §7、§8.2 的代码前补做 |
 | 9 | 第二套 etcd | 已定(负责人 2026-10-31):**强规定**,任何生产环境、任何预算档都不许省,写进 AGENTS §7。配置比地址,运行期比 etcd 集群号 |
-| 10 | 存档库和区脱钩 | 已定(2026-11-05,§7.2):每地域固定 K 个存档逻辑库(初值 64),建号按 `player_id % K` 选库记进目录,区只是玩法属性。A17a(建号选库、本机与调试栈)2026-11-06 已落码未编译;A17b(K8s 部署、连接总账)未落码,要改部署脚本,开工前认领 |
+| 10 | 存档库和区脱钩 | 已定(2026-11-05,§7.2):每地域固定 K 个存档逻辑库(初值 64),建号按 `player_id % K` 选库记进目录,区只是玩法属性。A17a(建号选库、本机与调试栈)、A17b(K8s 部署、清单核对、连接总账、删 login 过渡路径)、A17c(go/db 去掉本区主库、删 zone 存档库家族)都已落码未编译 |
 | 11 | 写者闸门每笔约 20 次往返 | 拆法已写(存盘规格 §9 第 1 条):先加指标拿基线;同语义的「会话设置合成一条、只在新建连接时做」先落;改判定时机的两步要过正确性评审。未落码 |
 
 ## 13. 分批计划
@@ -736,7 +778,7 @@ SLG 补充:
 | A15 | 全层水平扩展:逻辑库自治、每库一份闸门、角色护栏、目录哈希分片、不停服搬库、多地域部署([规格](./horizontal-scale-logical-db.md))。**代码已写,未编译,待 Codex 验证** | A14 |
 | A16 | 存档重新分行(存盘规格 §1.1):六行、每行存盘方式、位置只顺带写、旧布局拒绝加载。**第一批代码已写(2026-11-05),未编译,待 Codex 验证** | A2、A3 |
 | A16b | 删 `player_database_1`、退役 kLegacy1(存盘规格 §1.2)。**代码已写(2026-11-06),未编译,待 Codex 验证**;约 45 个文件,按 proto 与库代码、测试与脚本两组审 | A16 |
-| A17 | 存档库和区脱钩(§7.2)。A17a 建号按地域存档库选库、本机与 docker 调试栈切换:**代码已写(2026-11-06),未编译,待 Codex 验证**。A17b K8s 部署参数、连接总账、删过渡路径:未落码。A17c go/db 去掉本区主库、删 zone 存档库家族:未写规格 | A15 |
+| A17 | 存档库和区脱钩(§7.2)。A17a 建号按地域存档库选库、本机与 docker 调试栈切换:**代码已写(2026-11-06),未编译,待 Codex 验证**。A17b K8s 部署参数 `-PlayerStoreShards`、清单恰好是本地域 K 个库、login 按地域渲染、存档库池按库摊开、连接总账与告警、删 login 过渡路径:**代码已写(2026-11-06~10),未编译,待 Codex 验证**。A17c go/db 去掉本区主库、删 zone 存档库家族(落点包、data_service、go/db、部署、本机、告警、契约测试):**代码已写(2026-11-11),未编译,待 Codex 验证** | A15 |
 | A18 | 写者闸门往返收敛(存盘规格 §9 第 1 条):先指标、后合并 `SET`,判定时机的改动评审后再做。未落码 | — |
 
 **阶段 B:压测**——TiDB 写入与事务数、PD 时间戳吞吐、冷读与热加载 P99、Redis、Kafka 的实际上限,按 AGENTS §6 出对比表,据此定短间隔与集群数。

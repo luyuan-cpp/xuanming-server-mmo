@@ -56,6 +56,12 @@ func (r *Repo) Remove(ctx context.Context, caller string, in *rankpb.RemoveRankE
 		if !hide && (b.State != uint32(rankpb.RankGenerationState_RANK_GENERATION_OPEN) || b.DeletedMs != 0) {
 			return ErrClosed
 		}
+		// 整代操作:持榜行锁再按片号升序锁全部片行,与在途的 Submit 互斥(shards.go 的锁序)。Submit 只锁自己那一片,
+		// 不锁全部片行的话,在途批次读到的还是移除 / 隐藏之前的状态,会把人写回榜上或写进已隐藏的一代。
+		shards, err := lockAllShards(ctx, tx, b.BoardId, b.Generation)
+		if err != nil {
+			return err
+		}
 		if hide {
 			_, err = tx.ExecContext(ctx, "UPDATE rank_board SET deleted_ms=? WHERE board_id=?", uint64(r.now().UnixMilli()), b.BoardId)
 		} else {
@@ -63,7 +69,7 @@ func (r *Repo) Remove(ctx context.Context, caller string, in *rankpb.RemoveRankE
 			if _, err = tx.ExecContext(ctx, "INSERT INTO rank_removed_entry (board_id,generation,entity_id,removed_ms) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE removed_ms=removed_ms", b.BoardId, b.Generation, in.EntityId, uint64(r.now().UnixMilli())); err != nil {
 				return err
 			}
-			err = deleteScoreAndCount(ctx, tx, b, in.EntityId)
+			err = deleteScoreAndCount(ctx, tx, b, shards, in.EntityId)
 		}
 		if err != nil {
 			return err
@@ -73,12 +79,13 @@ func (r *Repo) Remove(ctx context.Context, caller string, in *rankpb.RemoveRankE
 	})
 }
 
-// errEntriesDrift:删掉了一行,榜上的 entries 却已经是 0。计数与 rank_score 对不上只可能是数据被绕过本服务改过,
+// errEntriesDrift:删掉了一行,本代各片行的计数却都已是 0。计数与 rank_score 对不上只可能是数据被绕过本服务改过,
 // 回错误让整笔事务回滚(fail-closed),不把计数夹到 0 了事。
 var errEntriesDrift = errors.New("排行榜条目计数与数据不符")
 
-// deleteScoreAndCount 删掉 entity 在本代的分数行;真的删到一行时把榜上的 entries 减一。调用方持榜行锁。
-func deleteScoreAndCount(ctx context.Context, tx *sql.Tx, b *rankpb.RankBoardRecord, entity uint64) error {
+// deleteScoreAndCount 删掉 entity 在本代的分数行;真的删到一行时,从片号最小、计数大于 0 的片行上减一
+// (shardToDecrement:只有各片之和有意义)。调用方持榜行锁与全部片行锁,shards 是锁住时读到的片行。
+func deleteScoreAndCount(ctx context.Context, tx *sql.Tx, b *rankpb.RankBoardRecord, shards []shardRow, entity uint64) error {
 	result, err := tx.ExecContext(ctx, "DELETE FROM rank_score WHERE board_id=? AND generation=? AND entity_id=?", b.BoardId, b.Generation, entity)
 	if err != nil {
 		return err
@@ -90,7 +97,11 @@ func deleteScoreAndCount(ctx context.Context, tx *sql.Tx, b *rankpb.RankBoardRec
 	if deleted == 0 {
 		return nil
 	}
-	result, err = tx.ExecContext(ctx, "UPDATE rank_board SET entries=entries-1 WHERE board_id=? AND entries>0", b.BoardId)
+	shard, ok := shardToDecrement(shards)
+	if !ok {
+		return errEntriesDrift
+	}
+	result, err = tx.ExecContext(ctx, "UPDATE rank_board_shard SET entries=entries-1 WHERE board_id=? AND generation=? AND source_shard=? AND entries>0", b.BoardId, b.Generation, shard)
 	if err != nil {
 		return err
 	}

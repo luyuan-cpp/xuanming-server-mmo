@@ -982,36 +982,44 @@ TEST_F(AoiPriorityPolicyTest, DefaultPolicyIsOpenWorld)
               kPolicyOpenWorld.GetWeight(AoiPriority::kQuestNpc));
 }
 
-// Open-world policy: quest NPC weight (3) > attacker weight (2).
-TEST_F(AoiPriorityPolicyTest, OpenWorldQuestNpcOutranksAttacker)
+// 战斗时先看交手的人:开放世界里交手对象(5)高于任务 NPC(3)。脱战后交手来源撤销,任务 NPC 自然回到最前。
+TEST_F(AoiPriorityPolicyTest, OpenWorldCombatOutranksQuestNpc)
 {
     SetPolicy(AoiPolicyKind::kOpenWorld);
-    EXPECT_GT(kPolicyOpenWorld.GetWeight(AoiPriority::kQuestNpc),
-              kPolicyOpenWorld.GetWeight(AoiPriority::kAttacker));
+    EXPECT_GT(kPolicyOpenWorld.GetWeight(AoiPriority::kCombat),
+              kPolicyOpenWorld.GetWeight(AoiPriority::kQuestNpc));
 }
 
-// Dungeon policy: attacker weight (3) > quest NPC weight (1).
-TEST_F(AoiPriorityPolicyTest, DungeonAttackerOutranksQuestNpc)
+// Dungeon policy: combat weight (5) > quest NPC weight (1).
+TEST_F(AoiPriorityPolicyTest, DungeonCombatOutranksQuestNpc)
 {
     SetPolicy(AoiPolicyKind::kDungeon);
-    EXPECT_GT(kPolicyDungeon.GetWeight(AoiPriority::kAttacker),
+    EXPECT_GT(kPolicyDungeon.GetWeight(AoiPriority::kCombat),
               kPolicyDungeon.GetWeight(AoiPriority::kQuestNpc));
 }
 
-// Dungeon policy: boss weight (4) > attacker weight (3).
-TEST_F(AoiPriorityPolicyTest, DungeonBossOutranksAttacker)
+// Dungeon policy: combat weight (5) > boss weight (4):没在跟我交手的 Boss 让位给正在交手的人。
+TEST_F(AoiPriorityPolicyTest, DungeonCombatOutranksBoss)
 {
     SetPolicy(AoiPolicyKind::kDungeon);
-    EXPECT_GT(kPolicyDungeon.GetWeight(AoiPriority::kBoss),
-              kPolicyDungeon.GetWeight(AoiPriority::kAttacker));
+    EXPECT_GT(kPolicyDungeon.GetWeight(AoiPriority::kCombat),
+              kPolicyDungeon.GetWeight(AoiPriority::kBoss));
 }
 
-// PvP arena policy: attacker weight (4) > boss weight (3).
-TEST_F(AoiPriorityPolicyTest, PvpAttackerOutranksBoss)
+// PvP arena policy: combat weight (4) > boss weight (3).
+TEST_F(AoiPriorityPolicyTest, PvpCombatOutranksBoss)
 {
     SetPolicy(AoiPolicyKind::kPvpArena);
-    EXPECT_GT(kPolicyPvpArena.GetWeight(AoiPriority::kAttacker),
+    EXPECT_GT(kPolicyPvpArena.GetWeight(AoiPriority::kCombat),
               kPolicyPvpArena.GetWeight(AoiPriority::kBoss));
+}
+
+// 权重表是静态的:交手来源在每张表里都高于除 kPinned 外的所有标签(编译期也有 static_assert 守着)。
+TEST_F(AoiPriorityPolicyTest, CombatOutranksEverythingButPinnedInEveryPolicy)
+{
+    EXPECT_TRUE(CombatOutranksAllButPinned(kPolicyOpenWorld));
+    EXPECT_TRUE(CombatOutranksAllButPinned(kPolicyDungeon));
+    EXPECT_TRUE(CombatOutranksAllButPinned(kPolicyPvpArena));
 }
 
 // kPinned always has max weight (255) regardless of policy.
@@ -1040,8 +1048,8 @@ TEST_F(AoiPriorityPolicyTest, PolicyAffectsUpgradeDecision)
     EXPECT_EQ(comp->entries.at(target).priority, AoiPriority::kBoss);
 }
 
-// Under PvP policy, kAttacker outranks kBoss, so UpgradePriority from boss
-// to attacker should succeed.
+// Under PvP policy, kCombat outranks kBoss, so UpgradePriority from boss
+// to combat should succeed.
 TEST_F(AoiPriorityPolicyTest, UpgradePriorityUsesPolicy)
 {
     SetPolicy(AoiPolicyKind::kPvpArena);
@@ -1049,16 +1057,16 @@ TEST_F(AoiPriorityPolicyTest, UpgradePriorityUsesPolicy)
     auto target  = SpawnAt(5, 0);
 
     InterestSystem::AddAoiEntity(watcher, target, AoiPriority::kBoss);
-    InterestSystem::UpgradePriority(watcher, target, AoiPriority::kAttacker);
+    InterestSystem::UpgradePriority(watcher, target, AoiPriority::kCombat);
 
     auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
     ASSERT_NE(comp, nullptr);
-    // In PvP: attacker weight (4) > boss weight (3) -> upgrade should happen.
-    EXPECT_EQ(comp->entries.at(target).priority, AoiPriority::kAttacker);
+    // In PvP: combat weight (4) > boss weight (3) -> upgrade should happen.
+    EXPECT_EQ(comp->entries.at(target).priority, AoiPriority::kCombat);
 }
 
-// Under open-world policy, kAttacker (weight 2) < kQuestNpc (weight 3),
-// so upgrading from kQuestNpc to kAttacker should be a no-op.
+// Under open-world policy, kTeammate (weight 1) < kQuestNpc (weight 3),
+// so upgrading from kQuestNpc to kTeammate should be a no-op.
 TEST_F(AoiPriorityPolicyTest, UpgradePriorityNoOpWhenWeightIsLower)
 {
     SetPolicy(AoiPolicyKind::kOpenWorld);
@@ -1066,11 +1074,11 @@ TEST_F(AoiPriorityPolicyTest, UpgradePriorityNoOpWhenWeightIsLower)
     auto target  = SpawnAt(5, 0);
 
     InterestSystem::AddAoiEntity(watcher, target, AoiPriority::kQuestNpc);
-    InterestSystem::UpgradePriority(watcher, target, AoiPriority::kAttacker);
+    InterestSystem::UpgradePriority(watcher, target, AoiPriority::kTeammate);
 
     auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
     ASSERT_NE(comp, nullptr);
-    // Attacker weight (2) < quest NPC weight (3) in open-world → no change.
+    // Teammate weight (1) < quest NPC weight (3) in open-world → no change.
     EXPECT_EQ(comp->entries.at(target).priority, AoiPriority::kQuestNpc);
 }
 
@@ -1234,11 +1242,11 @@ TEST_F(AoiTeammateRefreshTest, DowngradePriorityOnlyMatchesExactTag)
     auto watcher = SpawnAt(0, 0);
     auto target = SpawnAt(5, 0);
 
-    InterestSystem::AddAoiEntity(watcher, target, AoiPriority::kAttacker);
+    InterestSystem::AddAoiEntity(watcher, target, AoiPriority::kCombat);
     InterestSystem::DowngradePriority(watcher, target, AoiPriority::kTeammate, AoiPriority::kNormal);
-    EXPECT_EQ(PriorityOf(watcher, target), AoiPriority::kAttacker);
+    EXPECT_EQ(PriorityOf(watcher, target), AoiPriority::kCombat);
 
-    InterestSystem::DowngradePriority(watcher, target, AoiPriority::kAttacker, AoiPriority::kNormal);
+    InterestSystem::DowngradePriority(watcher, target, AoiPriority::kCombat, AoiPriority::kNormal);
     EXPECT_EQ(PriorityOf(watcher, target), AoiPriority::kNormal);
 }
 

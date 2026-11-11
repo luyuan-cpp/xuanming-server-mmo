@@ -8,7 +8,16 @@ option (OptionFileDefaultNode) = NODE_RANK;
 enum RankScope { RANK_SCOPE_UNSPECIFIED = 0; RANK_SCOPE_GLOBAL = 1; RANK_SCOPE_GUILD = 2; RANK_SCOPE_INSTANCE = 3; RANK_SCOPE_CUSTOM = 4; }
 enum RankGenerationState { RANK_GENERATION_UNSPECIFIED = 0; RANK_GENERATION_OPEN = 1; RANK_GENERATION_SEALED = 2; }
 message RankBoardKey { uint32 board_type = 1; RankScope scope = 2; uint64 scope_id = 3; string period = 4; uint64 generation = 5; }
-message RankEntry { uint64 rank = 1; uint64 entity_id = 2; int64 score = 3; uint64 achieved_ms = 4; string name = 5; }
+message RankEntry {
+  uint64 rank = 1;
+  uint64 entity_id = 2;
+  int64 score = 3;
+  uint64 achieved_ms = 4;
+  string name = 5;
+  // 这一行排在精确名次上限(回包的 rank_limit)之后,名次不再精确计数;此时 rank 为 0,客户端显示「{rank_limit}+」
+  // (2026-11-11,缺口清单第 18 条,负责人定「前 N 名精确、之后显示 N+」)。不在榜上仍是没有这一行 / self 为空。
+  bool beyond_rank_limit = 6;
+}
 message GetRankPageRequest { RankBoardKey board = 1; uint32 page = 2; uint32 page_size = 3; }
 message GetRankPageResponse {
   TipInfoMessage error_message = 1;
@@ -20,9 +29,18 @@ message GetRankPageResponse {
   uint64 page_count = 7;
   RankEntry self = 8;
   RankGenerationState state = 9;
+  // 精确名次的上限:名次只精确数到第 rank_limit 名,翻页也只到这一名为止(page_count 按 min(total_count, rank_limit) 算,
+  // 最后一页取到第 rank_limit 名为止);排在其后的 self 带 beyond_rank_limit。total_count 仍是榜上的真实人数。
+  uint64 rank_limit = 10;
 }
 message GetRankAroundRequest { RankBoardKey board = 1; uint32 radius = 2; }
-message GetRankAroundResponse { TipInfoMessage error_message = 1; RankBoardKey board = 2; repeated RankEntry entries = 3; RankEntry self = 4; }
+message GetRankAroundResponse {
+  TipInfoMessage error_message = 1;
+  RankBoardKey board = 2;
+  repeated RankEntry entries = 3;
+  RankEntry self = 4;
+  uint64 rank_limit = 5; // 同 GetRankPageResponse.rank_limit:排在其后的本人与附近条目带 beyond_rank_limit
+}
 service ClientPlayerRank {
   option (OptionIsClientProtocolService) = true;
   rpc GetRankPage(GetRankPageRequest) returns (GetRankPageResponse);

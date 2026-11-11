@@ -9,6 +9,9 @@ package idissuer
 //	MMORPG_ID_ISSUER_IT_PRIMARY / MMORPG_ID_ISSUER_IT_SECONDARY / MMORPG_ID_ISSUER_IT_REGISTRY
 //
 // 重复部署的用例还要第二对本地 etcd:MMORPG_ID_ISSUER_IT_PRIMARY2 / MMORPG_ID_ISSUER_IT_SECONDARY2。没给就跳过那一条。
+// 第二对按和第一对相同的成员名与引导令牌启动时(同一份清单部署到另一个 K8s 集群的形态),再设
+// MMORPG_ID_ISSUER_IT_SECOND_PAIR_SAME_TOKENS=1,那一条会先断言两对报的集群号相同。
+// 每个 itEnv 是一个部署环境,有自己的部署身份(相当于一个 K8s 集群的 kube-system UID)。
 // 每个用例的键都在 /id_issuer_it/<随机串>/ 下,不碰正式的 /id_issuer/、/id_registry/ 键,可以重复跑。
 //
 // TestEtcdDrill 是真快照回档演练,分三段跑(MMORPG_ID_ISSUER_IT_PHASE=drill-a / drill-b / drill-c),
@@ -43,18 +46,34 @@ func itEndpoints(t *testing.T, name string) []string {
 	return out
 }
 
-// itEnv 是一个部署环境:两份本地记录 + 登记处,键都在 root 下。
+// itEnv 是一个部署环境:一个部署身份、两份本地记录 + 登记处,键都在 root 下。
 type itEnv struct {
-	t         *testing.T
-	root      string
-	primary   []string
-	secondary []string
-	registry  []string
-	now       time.Time
+	t          *testing.T
+	root       string
+	primary    []string
+	secondary  []string
+	registry   []string
+	deployment string
+	now        time.Time
 }
 
 func newItEnv(t *testing.T, root string, primary, secondary, registry []string) *itEnv {
-	return &itEnv{t: t, root: root, primary: primary, secondary: secondary, registry: registry, now: testNow}
+	return &itEnv{t: t, root: root, primary: primary, secondary: secondary, registry: registry, deployment: mintDeployment(), now: testNow}
+}
+
+// identity 是 Options.Deployment。
+func (e *itEnv) identity(context.Context) (string, error) {
+	return e.deployment, nil
+}
+
+// clusterID 是一套 etcd 自己报的集群号。
+func (e *itEnv) clusterID(endpoints []string) uint64 {
+	e.t.Helper()
+	resp, err := e.client(endpoints).Get(context.Background(), e.root+"probe")
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return resp.Header.ClusterId
 }
 
 func itRoot(t *testing.T) string {
@@ -77,12 +96,12 @@ func (e *itEnv) issuer(observe func(string)) *Issuer {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	g, err := newEtcdRegistryAt(e.registry, e.root+"registry/")
+	g, err := newEtcdRegistryAt(e.registry, e.root+"registry/", nil)
 	if err != nil {
 		e.t.Fatal(err)
 	}
 	iss, err := New(Options{Primary: p, Secondary: s, Registry: g, Region: itRegion, BlockSize: testBlock,
-		Tags: []string{"player"}, Now: func() time.Time { return e.now }, OnReserve: observe})
+		Tags: []string{"player"}, Now: func() time.Time { return e.now }, OnReserve: observe, Deployment: e.identity})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -121,7 +140,7 @@ func (e *itEnv) put(endpoints []string, key string, value []byte) {
 
 func (e *itEnv) registryHighWater() uint64 {
 	e.t.Helper()
-	g, err := newEtcdRegistryAt(e.registry, e.root+"registry/")
+	g, err := newEtcdRegistryAt(e.registry, e.root+"registry/", nil)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -195,12 +214,12 @@ func TestEtcdIntegration_StoreContract(t *testing.T) {
 		t.Fatal("a plain number is not a valid record and must not be read as absent")
 	}
 
-	registry, err := newEtcdRegistryAt(env.registry, root+"contract/registry/")
+	registry, err := newEtcdRegistryAt(env.registry, root+"contract/registry/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer registry.Close()
-	claim := Claim{State: ClaimActive, Authority: testAuthority, PrimaryCluster: 1, SecondaryCluster: 2, HighWater: 1}
+	claim := Claim{State: ClaimActive, Authority: testAuthority, Deployment: "k8s:contract", PrimaryCluster: 1, SecondaryCluster: 2, HighWater: 1}
 	if _, err := registry.ClaimNew(ctx, 3, claim); !errors.Is(err, ErrRegistryNotOpened) {
 		t.Fatalf("claim before open: %v", err)
 	}
@@ -212,6 +231,10 @@ func TestEtcdIntegration_StoreContract(t *testing.T) {
 	}
 	if _, err := registry.ClaimNew(ctx, 2, claim); !errors.Is(err, ErrRegionClaimed) {
 		t.Fatalf("claim below next: %v", err)
+	}
+	// 跳号拒绝:跳过去的码以后永远认领不了。
+	if _, err := registry.ClaimNew(ctx, 5, claim); !errors.Is(err, ErrRegionOutOfOrder) {
+		t.Fatalf("claim above next: %v", err)
 	}
 	if ok, err := registry.ClaimNew(ctx, 3, claim); err != nil || !ok {
 		t.Fatalf("claim 3: %v %v", ok, err)
@@ -254,12 +277,19 @@ func TestEtcdIntegration_BothLocalRolledBack(t *testing.T) {
 	}
 }
 
-// 问题 2:第二对独立 etcd 配同一个地域码,拿不到发号资格,也不改登记处。
+// 问题 2:另一个部署环境(另一个 K8s 集群)的一对 etcd 配同一个地域码,拿不到发号资格,也不改登记处。
+// 两对的集群号相同(同一份清单、同一个引导令牌)或不同都要拒绝:绑定比的是部署身份加集群号。
 func TestEtcdIntegration_SecondPairWithTheSameCodeIsRefused(t *testing.T) {
 	root := itRoot(t)
 	registry := itEndpoints(t, "MMORPG_ID_ISSUER_IT_REGISTRY")
 	first := newItEnv(t, root, itEndpoints(t, "MMORPG_ID_ISSUER_IT_PRIMARY"), itEndpoints(t, "MMORPG_ID_ISSUER_IT_SECONDARY"), registry)
 	second := newItEnv(t, root, itEndpoints(t, "MMORPG_ID_ISSUER_IT_PRIMARY2"), itEndpoints(t, "MMORPG_ID_ISSUER_IT_SECONDARY2"), registry)
+	sameIDs := first.clusterID(first.primary) == second.clusterID(second.primary) &&
+		first.clusterID(first.secondary) == second.clusterID(second.secondary)
+	t.Logf("the second pair reports the same etcd cluster ids as the first: %v", sameIDs)
+	if os.Getenv("MMORPG_ID_ISSUER_IT_SECOND_PAIR_SAME_TOKENS") == "1" && !sameIDs {
+		t.Fatal("the second pair was started with the same member names and tokens as the first, but reports different cluster ids")
+	}
 	first.prepare()
 	a := &allocated{t: t}
 	a.take(first.issuer(nil), 100)
@@ -287,10 +317,23 @@ func TestEtcdIntegration_SecondPairWithTheSameCodeIsRefused(t *testing.T) {
 	a.take(first.issuer(nil), 100)
 }
 
-// drillState 是演练三段之间传递的状态。
+// drillState 是演练三段之间传递的状态。三段是同一个部署环境的三次重启,部署身份要一样。
 type drillState struct {
-	Root   string      `json:"root"`
-	Ranges [][2]uint64 `json:"ranges"`
+	Root       string      `json:"root"`
+	Deployment string      `json:"deployment"`
+	Ranges     [][2]uint64 `json:"ranges"`
+}
+
+// drillEnv 按状态文件重建 drill-a 的那个部署环境。部署身份进状态文件之前写的状态(11-06 的 drill-a)对不上
+// 登记处现在的绑定规则,只能从 drill-a 重来。
+func drillEnv(t *testing.T, st drillState, primary, secondary, registry []string) *itEnv {
+	t.Helper()
+	if st.Deployment == "" {
+		t.Fatal("the drill state has no deployment identity: it was written before the binding included it; restart the drill from drill-a")
+	}
+	env := newItEnv(t, st.Root, primary, secondary, registry)
+	env.deployment = st.Deployment
+	return env
 }
 
 func loadDrill(t *testing.T, path string) drillState {
@@ -334,6 +377,7 @@ func TestEtcdDrill(t *testing.T) {
 	case "drill-a":
 		st := drillState{Root: itRoot(t)}
 		env := newItEnv(t, st.Root, primary, secondary, registry)
+		st.Deployment = env.deployment
 		env.prepare()
 		lo, hi, err := env.issuer(nil).Allocate(context.Background(), "player", 100)
 		if err != nil {
@@ -343,7 +387,7 @@ func TestEtcdDrill(t *testing.T) {
 		saveDrill(t, statePath, st)
 	case "drill-b":
 		st := loadDrill(t, statePath)
-		env := newItEnv(t, st.Root, primary, secondary, registry)
+		env := drillEnv(t, st, primary, secondary, registry)
 		for restart := 0; restart < 5; restart++ {
 			lo, hi, err := env.issuer(nil).Allocate(context.Background(), "player", 100)
 			if err != nil {
@@ -355,7 +399,7 @@ func TestEtcdDrill(t *testing.T) {
 		t.Logf("registry high water %d, records now point there; take the restore from the snapshot made after drill-a", env.registryHighWater())
 	case "drill-c":
 		st := loadDrill(t, statePath)
-		env := newItEnv(t, st.Root, primary, secondary, registry)
+		env := drillEnv(t, st, primary, secondary, registry)
 		historical := env.registryHighWater()
 		obs := newObserver()
 		lo, hi, err := env.issuer(obs.record).Allocate(context.Background(), "player", 100)

@@ -14,6 +14,7 @@ import (
 	dspb "proto/data_service"
 	tradepb "proto/trade"
 	"shared/accountdirectory"
+	"shared/currencytype"
 	"shared/roleidentity"
 	"trade/internal/data"
 
@@ -126,7 +127,7 @@ func rmbRuntime(t *testing.T) (*RmbConsignments, *rmbDirectoryFixture, *rmbMallP
 	t.Cleanup(server.Close)
 	mall, err := NewMall(server.URL, strings.Repeat("g", 32), strings.Repeat("d", 32), e)
 	require.NoError(t, err)
-	s := &RmbConsignments{Engine: e, Mall: mall, Directory: directory, Sealer: rmbSealerFixture{}, CurrencyTypes: []uint32{0}}
+	s := &RmbConsignments{Engine: e, Mall: mall, Directory: directory, Sealer: rmbSealerFixture{}, CurrencyTypes: []uint32{currencytype.Gold}}
 	e.Rmb = s
 	return s, directory, probe
 }
@@ -150,16 +151,21 @@ func rmbCreate(t *testing.T, s *RmbConsignments, character bool) *tradepb.TradeC
 
 func TestRmbSelectionRejectsMixedKindsBoundCurrencyAndUnconfiguredDiamond(t *testing.T) {
 	s := &RmbConsignments{Engine: &Engine{Policy: Policy{Items: []uint32{10}, AllowInstances: true}}}
-	for _, v := range []*tradepb.CreateRmbConsignmentRequest{{Assets: &tradepb.TradeAssetSelection{Items: map[uint32]uint32{10: 1}, PetId: 7}}, {Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: 2}}, {Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: 1}}, {CharacterPlayerId: 11, Assets: &tradepb.TradeAssetSelection{Items: map[uint32]uint32{10: 1}}}} {
+	for _, v := range []*tradepb.CreateRmbConsignmentRequest{{Assets: &tradepb.TradeAssetSelection{Items: map[uint32]uint32{10: 1}, PetId: 7}}, {Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: currencytype.BindDiamond}}, {Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: currencytype.Diamond}}, {CharacterPlayerId: 11, Assets: &tradepb.TradeAssetSelection{Items: map[uint32]uint32{10: 1}}}} {
 		_, err := s.selection(v)
 		require.Error(t, err)
 	}
-	kind, err := s.selection(&tradepb.CreateRmbConsignmentRequest{Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1}})
+	// 没配 CurrencyTypes 时只收银两。
+	kind, err := s.selection(&tradepb.CreateRmbConsignmentRequest{Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: currencytype.Gold}})
 	require.NoError(t, err)
 	require.Equal(t, "CURRENCY", kind)
-	s.CurrencyTypes = []uint32{0, 1}
-	_, err = s.selection(&tradepb.CreateRmbConsignmentRequest{Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: 1}})
+	s.CurrencyTypes = []uint32{currencytype.Gold, currencytype.Diamond}
+	_, err = s.selection(&tradepb.CreateRmbConsignmentRequest{Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: currencytype.Diamond}})
 	require.NoError(t, err)
+	// 绑定灵石被配进 CurrencyTypes(配置校验会拒绝,这里绕过它)也不可寄售。
+	s.CurrencyTypes = []uint32{currencytype.Gold, currencytype.Diamond, currencytype.BindDiamond}
+	_, err = s.selection(&tradepb.CreateRmbConsignmentRequest{Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: currencytype.BindDiamond}})
+	require.ErrorIs(t, err, ErrNotTradable)
 }
 func TestTiDBRmbRegistersOnlyAfterEscrowAndDeliversOneOriginalCredit(t *testing.T) {
 	s, _, probe := rmbRuntime(t)

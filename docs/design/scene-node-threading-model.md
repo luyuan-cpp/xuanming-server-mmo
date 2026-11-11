@@ -25,17 +25,30 @@ ThreadMonitor 继续采样实际线程基线，不再查询官方库的初始化
 
 2026-11-05 后续批次将角色授权、跨节点交接、战斗锁写入与续期、会话释放、存盘与认领、疏散改派、etcd 注册、号段预取及创建许可的单次异步操作收进协程。原有 SQL/Redis 围栏、未知结果确认表、重试身份、截止时间和持久状态机仍是权威。此次改变控制流表达，不构成吞吐或帧耗时结论，Java 内部实现无须照搬。
 
-共享 `LoopTaskScope` 只把 Cobalt task 交给现有 muduo loop，`Close` 封住新增，`Stop` 取消本地等待，均不等待任务排空。`AwaitCallback` 的提交与回调必须在同一 loop，状态在提交前准备，立即拒绝、提交内重入及本地停止只交付一次。结果值在原回调期间复制或移动为自有数据，晚回调只持操作状态的弱引用。正常回调原栈恢复，保持现有事件顺序。
+共享 `LoopTaskScope` 只把 Cobalt task 交给现有 muduo loop，`Close` 封住新增，`Stop` 取消本地等待，均不等待任务排空。`AwaitCallback` 的提交与回调必须在同一 loop，状态在提交前准备，立即拒绝、提交内重入及本地停止只交付一次。结果值在原回调期间复制或移动为自有数据，晚回调只持操作状态的弱引用。正常回调原栈恢复，保持现有事件顺序。`Stop` 只把 nullopt 交给当时正在等待的那一次；同一任务此后的 `co_await` 会在挂起前抛 `operation_aborted`（Cobalt 的 throw_if_cancelled），抛点之后的代码不再执行，所以拿到 nullopt 的业务直接 `co_return`。任务体的异常不吞：`Stop` 之后的 `operation_aborted` 只记一条警告，其余异常带任务名和 `what()` 经 `LOG_FATAL` 终止进程，与改造前回调里异常逸出 EventLoop 的结局一致。2026-11-11 之前只打一行不带原因的 ERROR、进程继续运行，半途更新的账本和计数会留在不一致的状态。
 
-Scene 的任务所有者分为瞬态与持久排空两组。维护 P1、普通关机、身份冲突停止瞬态任务。授权、存盘和会话释放在原业务排空期间仍允许必要工作，由 `TryStartDurable` 启动，只在 `BeforeTeardown` 停止本地等待。停止不减去未结束的远端写计数、不确认 SQL 提交、不解除围栏、不丢掉待确认记录。原传输关闭、Hiredis 空回复、客户端及 EventLoop 的销毁顺序不变。
+Scene 的任务所有者分为瞬态与持久排空两组。维护 P1、普通关机、身份冲突停止瞬态任务；瞬态组目前只有队伍跟随和镜像创建后自动进场。授权、存盘、会话释放，以及战斗锁的写入、续期与重建复核，在原业务排空期间仍允许必要工作，由 `TryStartDurable` 启动，只在 `BeforeTeardown` 停止本地等待。战斗锁归持久组，是因为排空期间备战和确认补发仍会到达，停写会让锁提前过期，玩家重登后重建不出冻结（2026-11-10 订正，11-05 的实现曾放在瞬态组）。维护 P3 路径不经过 `BeforeTeardown`：Node 关闭中继时只调中继停止钩子，随即置 `beforeTeardownRan_`、释放 Redis 与传输。所以 Scene 把同一段拆除前收尾（`StopAll`、关创建许可、停号段传输与归属对账、停定时器、打未落定存盘清单）同时挂在 `SetBeforeTeardown` 和 `SetMaintenanceRelayStop` 上，两条停机路径都在释放本地所有者之前停止持久任务（2026-11-11 订正，此前 P3 只停两个定时器，持久任务要到 `SceneRuntimeContext` 析构才停）。停止不减去未结束的远端写计数、不确认 SQL 提交、不解除围栏、不丢掉待确认记录。原传输关闭、Hiredis 空回复、客户端及 EventLoop 的销毁顺序不变。
 
-etcd 注册、领段及创建许可由各自对象或节点作用域持有。etcd unary 每次调用有独立终态归属，旧阶段的迟到回复不能命中新阶段。号段超时后原有迟到认领窗口保留。Agones 继续调用现有异步许可接口，已存在的 worker 和队列投递规则不变，本批不增加线程或线程池。
+etcd 注册、领段及创建许可由各自对象或节点作用域持有。etcd unary 每次调用有独立终态归属，旧阶段的迟到回复不能命中新阶段。号段超时后原有迟到认领窗口保留。Agones 继续调用现有异步许可接口，已存在的 worker 和队列投递规则不变，本批不增加线程或线程池。创建许可在维护 P1、普通关机、身份冲突入口与瞬态组一起关闸：此后新的 CreateScene 一律回 UNAVAILABLE，SceneManager 回滚后改派别的节点；等许可的请求按拒绝收口，已拿到许可的创建仍由许可覆盖到 `Proceed()` 返回。改造前非 Agones 模式下 P1 之后还能建场景、直到 gRPC 排空，Agones 模式下则因 lifecycle 已停而拒绝。2026-11-11 定案统一为从 P1 起拒绝：排空中的节点不接新放置，两种部署行为一致。
 
 `SceneRuntimeContext` 持有 `SceneTaskScope`。队伍跟随和镜像创建后自动进场都在所属 Scene EventLoop 启动、恢复和停止。Cobalt 执行器的同线程 `dispatch` 内联，根任务的完成通知经 `queueInLoop` 回收。Boost 的 `execution_context` 提供执行器属性，实际工作由 muduo 驱动。适配器的 Asio `blocking.possibly` 属性允许同栈执行当前工作，不表示等待异步结果；等待仍由协程挂起表达。
 
 等待回复期间协程挂起，Scene 可以执行其他排队工作。正常 Redis 和 gRPC 回包直接在原回调栈恢复。Redis 提交内即时拒绝或重入完成在 `command` 返回后交付。镜像沿用生成 gRPC 客户端的异步完成，连本地发送失败也按原规则排队交付。
 
 维护 P1、普通关机和身份冲突入口关闭瞬态任务准入并发出本地取消，持久任务在拆除前才停止。本地取消在当前 loop 结束等待，根任务完成通知稍后清理停止信号。晚到的 Redis 和 gRPC 回包只持等待状态的弱引用。号段任务的 TLS 所有者还由 `SceneRuntimeContext` 析构兜底收掉，覆盖启动异常，先于局部 EventLoop 销毁。整个路径沿用已有线程，以及下文 Redis 与 `MessageAsyncClient` 的销毁顺序。
+
+单次完成协议全仓只有 `loop_async::AwaitCallback` 一份（`core/async/coroutine_callback.h`）。队伍跟随的 Redis GET 与镜像的 CreateScene 原先各自手写了一份等价的 Cobalt `op`（取消槽、提交内重入延后交付、晚回包只持弱引用）。2026-11-11 起两处都改成接到公共等待体的薄接线：跟随在 hiredis 回调里把应答转成自有的 `GetResult`，镜像在 gRPC 回调里复制 `CreateSceneResponse`。生成的 gRPC 客户端恰好回调一次，连本地拒绝也延后交付，所以镜像的提交恒为接纳。行为不变，原有跟随与镜像用例照样覆盖。以后接新的单次异步接口一律用 `AwaitCallback`，不再手写 `op`。
+
+2026-11-11 审查定案，以下几处保持现状，原因写在这里，免得下次重开：
+
+- **认领应答整份复制保留。** `GrpcDone` 契约规定回包只在回调期间有效，零拷贝要改全仓生成客户端的完成签名。认领每次登录或交接只发生一次，不在帧路径上。没有剖析数据之前，不为它改全局契约（AGENTS.md §11.3）。
+- **只等一次的存盘、号段与创建许可协程不退回裸回调。** 它们和多跳任务共用同一套停止语义：`StopAll`（创建许可是 `CloseCreationAdmission`）之后不再执行业务。提交内同步完成要延后到提交返回之后才交付，由 `PlayerStoreClientTest.InlineReplyIsDeliveredAfterSendReturns` 钉住。退回回调要给每处手写停止标志，并逐处重新证明这两条。省下的只是每次请求一个协程帧（含 4096 字节小缓冲），而这些请求按登录、存盘、领段、建场景计次，不按帧计次。
+- **战斗锁链不另做去重。** 续期链已按「玩家 + 对局」去重（`TryBeginRenewChain`）。写锁每次备战一条；重建复核按设计每次重建都要有自己的首发，否则新一次重建失去「首发回 0 即撤销」的保护。每条链都受原预算约束：含首发最多 6 次、从首发起 30 秒（`battle_lock_rules.h`）。Redis 故障时，链数随在打的对局数线性增长，不会自我放大。
+- **创建许可的拒绝日志按原因分开。** Scene 的 CreateScene 分准入已关、gRPC 排空、Agones 未确认三种，Battle 的 CreateBattle 分准入已关、实例不可分配（带 Agones 状态与排空标志）、派发途中开始停机三种，与改造前的回调一致（2026-11-11 订正，改造后曾合成一条，准入已关时不留日志）。回给调用方的状态码与文案不变。
+- **原有阻塞不改。** 停机入口里 `GameServerLifecycle::Stop()` 的 join 有界：在途可放弃的 HTTP 当场中止，退避立即退出，`AgonesStopCancelTest` 钉住 1 秒以内；只有已经发出的 /shutdown 会多等，最多一个请求超时。`~Node` 的兜底 loop 与拆除阶段 Kafka 的有界 flush 在业务排空之后。初始化期的 getaddrinfo 与 sleep_for 在 loop 运行之前。`selectPort` 逐端口 bind 是本机系统调用，不等远端。这几处都不是这次协程改造新增的。
+- **换图与改派的 EnterScene 应答仍由协程等待。** `LifecycleCoroutineTest.TravelPublishesBeforeEnterAndLateReplyCannotMovePlayer` 钉住「拆除点之后的晚应答不能再移动玩家」。两条停机路径现在都在同一个拆除点 `StopAll`，这条保证在维护路径上同样成立。
+- **注册冲突的晚回包仍记全服分配清单。** 预算过期后才到的冲突回包照样调用 `NodeAllocator::RecordAllocatedIds`。清单只是选号提示，号的归属以分配键 CAS 为准。旧清单最多让下一次选号多撞一轮 CAS，不会让两个节点拿到同一个号。
+- **Cobalt 等待体的小缓冲用库默认值。** `BOOST_COBALT_SBO_BUFFER_SIZE` 保持 4096 字节。没有剖析数据说明协程帧分配或这块缓冲是瓶颈，不调这个值。
 
 ## 2. 当前帧与派发预算
 

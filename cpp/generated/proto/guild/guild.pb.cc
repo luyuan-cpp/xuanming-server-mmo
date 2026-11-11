@@ -935,9 +935,9 @@ constexpr SetAnnouncementRequest::ParseTableT_ SetAnnouncementRequest::InternalG
       0, // no _extensions_
       3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967290,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -952,10 +952,7 @@ constexpr SetAnnouncementRequest::ParseTableT_ SetAnnouncementRequest::InternalG
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetAnnouncementRequest, _impl_.guild_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(SetAnnouncementRequest, _impl_.guild_id_)}},
-      // uint64 player_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetAnnouncementRequest, _impl_.player_id_), 2>(),
-       {16, 2, 0,
-        PROTOBUF_FIELD_OFFSET(SetAnnouncementRequest, _impl_.player_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // string announcement = 3;
       {::_pbi::TcParser::FastUS1,
        {26, 0, 0,
@@ -965,14 +962,12 @@ constexpr SetAnnouncementRequest::ParseTableT_ SetAnnouncementRequest::InternalG
     }}, {{
       // uint64 guild_id = 1;
       {PROTOBUF_FIELD_OFFSET(SetAnnouncementRequest, _impl_.guild_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 player_id = 2;
-      {PROTOBUF_FIELD_OFFSET(SetAnnouncementRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string announcement = 3;
       {PROTOBUF_FIELD_OFFSET(SetAnnouncementRequest, _impl_.announcement_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\36\0\0\14\0\0\0\0"
+      "\36\0\14\0\0\0\0\0"
       "guildpb.SetAnnouncementRequest"
       "announcement"
     }},
@@ -987,8 +982,7 @@ inline constexpr SetAnnouncementRequest::Impl_::Impl_(
         announcement_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        guild_id_{::uint64_t{0u}},
-        player_id_{::uint64_t{0u}} {}
+        guild_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr SetAnnouncementRequest::SetAnnouncementRequest(::_pbi::ConstantInitialized,
@@ -1779,11 +1773,11 @@ constexpr LeaveGuildRequest::ParseTableT_ LeaveGuildRequest::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(LeaveGuildRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      2, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967293,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      1,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1794,20 +1788,14 @@ constexpr LeaveGuildRequest::ParseTableT_ LeaveGuildRequest::InternalGeneratePar
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       // uint64 expected_guild_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LeaveGuildRequest, _impl_.expected_guild_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LeaveGuildRequest, _impl_.expected_guild_id_), 0>(),
+       {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(LeaveGuildRequest, _impl_.expected_guild_id_)}},
-      // uint64 player_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LeaveGuildRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(LeaveGuildRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
-      {PROTOBUF_FIELD_OFFSET(LeaveGuildRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 expected_guild_id = 2;
-      {PROTOBUF_FIELD_OFFSET(LeaveGuildRequest, _impl_.expected_guild_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(LeaveGuildRequest, _impl_.expected_guild_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1820,7 +1808,6 @@ inline constexpr LeaveGuildRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        player_id_{::uint64_t{0u}},
         expected_guild_id_{::uint64_t{0u}} {}
 
 template <typename>
@@ -4632,11 +4619,11 @@ constexpr GetGuildRankRequest::ParseTableT_ GetGuildRankRequest::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      2, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967292,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -4646,19 +4633,14 @@ constexpr GetGuildRankRequest::ParseTableT_ GetGuildRankRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::guildpb::GetGuildRankRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint32 page = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetGuildRankRequest, _impl_.page_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_.page_)}},
       // uint32 page_size = 2;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetGuildRankRequest, _impl_.page_size_), 1>(),
        {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_.page_size_)}},
-      // uint32 zone_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetGuildRankRequest, _impl_.zone_id_), 2>(),
-       {24, 2, 0,
-        PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_.zone_id_)}},
+      // uint32 page = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetGuildRankRequest, _impl_.page_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_.page_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -4666,8 +4648,6 @@ constexpr GetGuildRankRequest::ParseTableT_ GetGuildRankRequest::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_.page_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 page_size = 2;
       {PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_.page_size_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 zone_id = 3;
-      {PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_.zone_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -4681,8 +4661,7 @@ inline constexpr GetGuildRankRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         page_{0u},
-        page_size_{0u},
-        zone_id_{0u} {}
+        page_size_{0u} {}
 
 template <typename>
 constexpr GetGuildRankRequest::GetGuildRankRequest(::_pbi::ConstantInitialized,
@@ -4788,11 +4767,11 @@ constexpr GetGuildRankByGuildRequest::ParseTableT_ GetGuildRankByGuildRequest::I
     {
       PROTOBUF_FIELD_OFFSET(GetGuildRankByGuildRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      1, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967294,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      1,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -4802,10 +4781,6 @@ constexpr GetGuildRankByGuildRequest::ParseTableT_ GetGuildRankByGuildRequest::I
       ::_pbi::TcParser::GetTable<::guildpb::GetGuildRankByGuildRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 zone_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetGuildRankByGuildRequest, _impl_.zone_id_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(GetGuildRankByGuildRequest, _impl_.zone_id_)}},
       // uint64 guild_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetGuildRankByGuildRequest, _impl_.guild_id_), 0>(),
        {8, 0, 0,
@@ -4815,8 +4790,6 @@ constexpr GetGuildRankByGuildRequest::ParseTableT_ GetGuildRankByGuildRequest::I
     }}, {{
       // uint64 guild_id = 1;
       {PROTOBUF_FIELD_OFFSET(GetGuildRankByGuildRequest, _impl_.guild_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 zone_id = 2;
-      {PROTOBUF_FIELD_OFFSET(GetGuildRankByGuildRequest, _impl_.zone_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -4829,8 +4802,7 @@ inline constexpr GetGuildRankByGuildRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        guild_id_{::uint64_t{0u}},
-        zone_id_{0u} {}
+        guild_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr GetGuildRankByGuildRequest::GetGuildRankByGuildRequest(::_pbi::ConstantInitialized,
@@ -5340,11 +5312,11 @@ constexpr DisbandGuildRequest::ParseTableT_ DisbandGuildRequest::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(DisbandGuildRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      2, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967293,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      1,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -5355,20 +5327,14 @@ constexpr DisbandGuildRequest::ParseTableT_ DisbandGuildRequest::InternalGenerat
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
       // uint64 expected_guild_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DisbandGuildRequest, _impl_.expected_guild_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DisbandGuildRequest, _impl_.expected_guild_id_), 0>(),
+       {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(DisbandGuildRequest, _impl_.expected_guild_id_)}},
-      // uint64 player_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DisbandGuildRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(DisbandGuildRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
-      {PROTOBUF_FIELD_OFFSET(DisbandGuildRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 expected_guild_id = 2;
-      {PROTOBUF_FIELD_OFFSET(DisbandGuildRequest, _impl_.expected_guild_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(DisbandGuildRequest, _impl_.expected_guild_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -5381,7 +5347,6 @@ inline constexpr DisbandGuildRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        player_id_{::uint64_t{0u}},
         expected_guild_id_{::uint64_t{0u}} {}
 
 template <typename>
@@ -5488,11 +5453,11 @@ constexpr CreateGuildRequest::ParseTableT_ CreateGuildRequest::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(CreateGuildRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      2, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967293,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      1,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -5502,32 +5467,19 @@ constexpr CreateGuildRequest::ParseTableT_ CreateGuildRequest::InternalGenerateP
       ::_pbi::TcParser::GetTable<::guildpb::CreateGuildRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateGuildRequest, _impl_.player_id_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(CreateGuildRequest, _impl_.player_id_)}},
       // string name = 2;
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(CreateGuildRequest, _impl_.name_)}},
-      // uint32 zone_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateGuildRequest, _impl_.zone_id_), 2>(),
-       {24, 2, 0,
-        PROTOBUF_FIELD_OFFSET(CreateGuildRequest, _impl_.zone_id_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 player_id = 1;
-      {PROTOBUF_FIELD_OFFSET(CreateGuildRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string name = 2;
       {PROTOBUF_FIELD_OFFSET(CreateGuildRequest, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // uint32 zone_id = 3;
-      {PROTOBUF_FIELD_OFFSET(CreateGuildRequest, _impl_.zone_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\32\0\4\0\0\0\0\0"
+      "\32\4\0\0\0\0\0\0"
       "guildpb.CreateGuildRequest"
       "name"
     }},
@@ -5541,9 +5493,7 @@ inline constexpr CreateGuildRequest::Impl_::Impl_(
       : _cached_size_{0},
         name_(
             &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        player_id_{::uint64_t{0u}},
-        zone_id_{0u} {}
+            ::_pbi::ConstantInitialized()) {}
 
 template <typename>
 constexpr CreateGuildRequest::CreateGuildRequest(::_pbi::ConstantInitialized,
@@ -11321,13 +11271,9 @@ const ::uint32_t
         14,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::CreateGuildRequest, _impl_._has_bits_),
-        6, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::guildpb::CreateGuildRequest, _impl_.player_id_),
+        4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::guildpb::CreateGuildRequest, _impl_.name_),
-        PROTOBUF_FIELD_OFFSET(::guildpb::CreateGuildRequest, _impl_.zone_id_),
-        1,
         0,
-        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::CreateGuildResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -11361,11 +11307,9 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::LeaveGuildRequest, _impl_._has_bits_),
-        5, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::guildpb::LeaveGuildRequest, _impl_.player_id_),
+        4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::guildpb::LeaveGuildRequest, _impl_.expected_guild_id_),
         0,
-        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::LeaveGuildResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -11373,11 +11317,9 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::DisbandGuildRequest, _impl_._has_bits_),
-        5, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::guildpb::DisbandGuildRequest, _impl_.player_id_),
+        4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::guildpb::DisbandGuildRequest, _impl_.expected_guild_id_),
         0,
-        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::DisbandGuildResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -11385,12 +11327,10 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::SetAnnouncementRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::guildpb::SetAnnouncementRequest, _impl_.guild_id_),
-        PROTOBUF_FIELD_OFFSET(::guildpb::SetAnnouncementRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::guildpb::SetAnnouncementRequest, _impl_.announcement_),
         1,
-        2,
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::SetAnnouncementResponse, _impl_._has_bits_),
@@ -11898,13 +11838,11 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::GetGuildRankRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::guildpb::GetGuildRankRequest, _impl_.page_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GetGuildRankRequest, _impl_.page_size_),
-        PROTOBUF_FIELD_OFFSET(::guildpb::GetGuildRankRequest, _impl_.zone_id_),
         0,
         1,
-        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::GetGuildRankResponse, _impl_._has_bits_),
         8, // hasbit index offset
@@ -11920,11 +11858,9 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::GetGuildRankByGuildRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::guildpb::GetGuildRankByGuildRequest, _impl_.guild_id_),
-        PROTOBUF_FIELD_OFFSET(::guildpb::GetGuildRankByGuildRequest, _impl_.zone_id_),
         0,
-        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::GetGuildRankByGuildResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -11939,70 +11875,70 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::guildpb::GuildMember)},
         {19, sizeof(::guildpb::GuildInfo)},
         {52, sizeof(::guildpb::CreateGuildRequest)},
-        {61, sizeof(::guildpb::CreateGuildResponse)},
-        {68, sizeof(::guildpb::GetGuildRequest)},
-        {73, sizeof(::guildpb::GetGuildResponse)},
-        {80, sizeof(::guildpb::GetPlayerGuildRequest)},
-        {85, sizeof(::guildpb::GetPlayerGuildResponse)},
-        {92, sizeof(::guildpb::LeaveGuildRequest)},
-        {99, sizeof(::guildpb::LeaveGuildResponse)},
-        {104, sizeof(::guildpb::DisbandGuildRequest)},
-        {111, sizeof(::guildpb::DisbandGuildResponse)},
-        {116, sizeof(::guildpb::SetAnnouncementRequest)},
-        {125, sizeof(::guildpb::SetAnnouncementResponse)},
-        {132, sizeof(::guildpb::SetGuildMemberRoleRequest)},
-        {141, sizeof(::guildpb::SetGuildMemberRoleResponse)},
-        {148, sizeof(::guildpb::KickGuildMemberRequest)},
-        {155, sizeof(::guildpb::KickGuildMemberResponse)},
-        {162, sizeof(::guildpb::TransferGuildLeaderRequest)},
-        {169, sizeof(::guildpb::TransferGuildLeaderResponse)},
-        {176, sizeof(::guildpb::ApplyJoinGuildRequest)},
-        {181, sizeof(::guildpb::ApplyJoinGuildResponse)},
-        {186, sizeof(::guildpb::CancelGuildApplicationRequest)},
-        {191, sizeof(::guildpb::CancelGuildApplicationResponse)},
-        {196, sizeof(::guildpb::GuildApplicationView)},
-        {217, sizeof(::guildpb::ListMyGuildApplicationsRequest)},
-        {218, sizeof(::guildpb::ListMyGuildApplicationsResponse)},
-        {225, sizeof(::guildpb::GuildApplicantView)},
-        {238, sizeof(::guildpb::ListGuildApplicationsRequest)},
-        {239, sizeof(::guildpb::ListGuildApplicationsResponse)},
-        {246, sizeof(::guildpb::ReviewGuildApplicationRequest)},
-        {253, sizeof(::guildpb::ReviewGuildApplicationResponse)},
-        {260, sizeof(::guildpb::GuildChangedS2C)},
-        {271, sizeof(::guildpb::GuildDonationView)},
-        {292, sizeof(::guildpb::GuildDonateOptionView)},
-        {315, sizeof(::guildpb::GuildShopGoodsView)},
-        {342, sizeof(::guildpb::GuildShopOrderView)},
-        {359, sizeof(::guildpb::GetGuildDonateOptionsRequest)},
-        {360, sizeof(::guildpb::GetGuildDonateOptionsResponse)},
-        {377, sizeof(::guildpb::DonateToGuildRequest)},
-        {386, sizeof(::guildpb::DonateToGuildResponse)},
-        {395, sizeof(::guildpb::UpgradeGuildRequest)},
-        {400, sizeof(::guildpb::UpgradeGuildResponse)},
-        {407, sizeof(::guildpb::GetGuildShopRequest)},
-        {408, sizeof(::guildpb::GetGuildShopResponse)},
-        {425, sizeof(::guildpb::BuyGuildShopGoodsRequest)},
-        {436, sizeof(::guildpb::BuyGuildShopGoodsResponse)},
-        {445, sizeof(::guildpb::GuildRewardItem)},
-        {452, sizeof(::guildpb::GuildTrialLobbyView)},
-        {473, sizeof(::guildpb::GuildActivityView)},
-        {536, sizeof(::guildpb::GetGuildActivitiesRequest)},
-        {537, sizeof(::guildpb::GetGuildActivitiesResponse)},
-        {544, sizeof(::guildpb::LightGuildLanternRequest)},
-        {549, sizeof(::guildpb::LightGuildLanternResponse)},
-        {556, sizeof(::guildpb::ClaimGuildReunionRequest)},
-        {561, sizeof(::guildpb::ClaimGuildReunionResponse)},
-        {568, sizeof(::guildpb::StartGuildTrialRequest)},
-        {575, sizeof(::guildpb::StartGuildTrialResponse)},
-        {582, sizeof(::guildpb::RespondGuildTrialInviteRequest)},
-        {589, sizeof(::guildpb::RespondGuildTrialInviteResponse)},
-        {596, sizeof(::guildpb::GuildRankEntry)},
-        {615, sizeof(::guildpb::UpdateGuildScoreRequest)},
-        {624, sizeof(::guildpb::UpdateGuildScoreResponse)},
-        {629, sizeof(::guildpb::GetGuildRankRequest)},
-        {638, sizeof(::guildpb::GetGuildRankResponse)},
-        {651, sizeof(::guildpb::GetGuildRankByGuildRequest)},
-        {658, sizeof(::guildpb::GetGuildRankByGuildResponse)},
+        {57, sizeof(::guildpb::CreateGuildResponse)},
+        {64, sizeof(::guildpb::GetGuildRequest)},
+        {69, sizeof(::guildpb::GetGuildResponse)},
+        {76, sizeof(::guildpb::GetPlayerGuildRequest)},
+        {81, sizeof(::guildpb::GetPlayerGuildResponse)},
+        {88, sizeof(::guildpb::LeaveGuildRequest)},
+        {93, sizeof(::guildpb::LeaveGuildResponse)},
+        {98, sizeof(::guildpb::DisbandGuildRequest)},
+        {103, sizeof(::guildpb::DisbandGuildResponse)},
+        {108, sizeof(::guildpb::SetAnnouncementRequest)},
+        {115, sizeof(::guildpb::SetAnnouncementResponse)},
+        {122, sizeof(::guildpb::SetGuildMemberRoleRequest)},
+        {131, sizeof(::guildpb::SetGuildMemberRoleResponse)},
+        {138, sizeof(::guildpb::KickGuildMemberRequest)},
+        {145, sizeof(::guildpb::KickGuildMemberResponse)},
+        {152, sizeof(::guildpb::TransferGuildLeaderRequest)},
+        {159, sizeof(::guildpb::TransferGuildLeaderResponse)},
+        {166, sizeof(::guildpb::ApplyJoinGuildRequest)},
+        {171, sizeof(::guildpb::ApplyJoinGuildResponse)},
+        {176, sizeof(::guildpb::CancelGuildApplicationRequest)},
+        {181, sizeof(::guildpb::CancelGuildApplicationResponse)},
+        {186, sizeof(::guildpb::GuildApplicationView)},
+        {207, sizeof(::guildpb::ListMyGuildApplicationsRequest)},
+        {208, sizeof(::guildpb::ListMyGuildApplicationsResponse)},
+        {215, sizeof(::guildpb::GuildApplicantView)},
+        {228, sizeof(::guildpb::ListGuildApplicationsRequest)},
+        {229, sizeof(::guildpb::ListGuildApplicationsResponse)},
+        {236, sizeof(::guildpb::ReviewGuildApplicationRequest)},
+        {243, sizeof(::guildpb::ReviewGuildApplicationResponse)},
+        {250, sizeof(::guildpb::GuildChangedS2C)},
+        {261, sizeof(::guildpb::GuildDonationView)},
+        {282, sizeof(::guildpb::GuildDonateOptionView)},
+        {305, sizeof(::guildpb::GuildShopGoodsView)},
+        {332, sizeof(::guildpb::GuildShopOrderView)},
+        {349, sizeof(::guildpb::GetGuildDonateOptionsRequest)},
+        {350, sizeof(::guildpb::GetGuildDonateOptionsResponse)},
+        {367, sizeof(::guildpb::DonateToGuildRequest)},
+        {376, sizeof(::guildpb::DonateToGuildResponse)},
+        {385, sizeof(::guildpb::UpgradeGuildRequest)},
+        {390, sizeof(::guildpb::UpgradeGuildResponse)},
+        {397, sizeof(::guildpb::GetGuildShopRequest)},
+        {398, sizeof(::guildpb::GetGuildShopResponse)},
+        {415, sizeof(::guildpb::BuyGuildShopGoodsRequest)},
+        {426, sizeof(::guildpb::BuyGuildShopGoodsResponse)},
+        {435, sizeof(::guildpb::GuildRewardItem)},
+        {442, sizeof(::guildpb::GuildTrialLobbyView)},
+        {463, sizeof(::guildpb::GuildActivityView)},
+        {526, sizeof(::guildpb::GetGuildActivitiesRequest)},
+        {527, sizeof(::guildpb::GetGuildActivitiesResponse)},
+        {534, sizeof(::guildpb::LightGuildLanternRequest)},
+        {539, sizeof(::guildpb::LightGuildLanternResponse)},
+        {546, sizeof(::guildpb::ClaimGuildReunionRequest)},
+        {551, sizeof(::guildpb::ClaimGuildReunionResponse)},
+        {558, sizeof(::guildpb::StartGuildTrialRequest)},
+        {565, sizeof(::guildpb::StartGuildTrialResponse)},
+        {572, sizeof(::guildpb::RespondGuildTrialInviteRequest)},
+        {579, sizeof(::guildpb::RespondGuildTrialInviteResponse)},
+        {586, sizeof(::guildpb::GuildRankEntry)},
+        {605, sizeof(::guildpb::UpdateGuildScoreRequest)},
+        {614, sizeof(::guildpb::UpdateGuildScoreResponse)},
+        {619, sizeof(::guildpb::GetGuildRankRequest)},
+        {626, sizeof(::guildpb::GetGuildRankResponse)},
+        {639, sizeof(::guildpb::GetGuildRankByGuildRequest)},
+        {644, sizeof(::guildpb::GetGuildRankByGuildResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -12092,295 +12028,293 @@ const char descriptor_table_protodef_proto_2fguild_2fguild_2eproto[] ABSL_ATTRIB
     "unds\030\n \001(\004\022\024\n\014max_officers\030\013 \001(\r\022\025\n\roffi"
     "cer_count\030\014 \001(\r\022\032\n\022upgrade_cost_funds\030\r "
     "\001(\004\022\023\n\013leader_name\030\016 \001(\t\022!\n\031pending_appl"
-    "ication_count\030\017 \001(\r\"F\n\022CreateGuildReques"
-    "t\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\017\n\007zo"
-    "ne_id\030\003 \001(\r\"`\n\023CreateGuildResponse\022&\n\rer"
-    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022!\n\005gu"
-    "ild\030\002 \001(\0132\022.guildpb.GuildInfo\"#\n\017GetGuil"
-    "dRequest\022\020\n\010guild_id\030\001 \001(\004\"]\n\020GetGuildRe"
-    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
-    "essage\022!\n\005guild\030\002 \001(\0132\022.guildpb.GuildInf"
-    "o\"*\n\025GetPlayerGuildRequest\022\021\n\tplayer_id\030"
-    "\001 \001(\004\"c\n\026GetPlayerGuildResponse\022&\n\rerror"
-    "_message\030\001 \001(\0132\017.TipInfoMessage\022!\n\005guild"
-    "\030\002 \001(\0132\022.guildpb.GuildInfo\"A\n\021LeaveGuild"
-    "Request\022\021\n\tplayer_id\030\001 \001(\004\022\031\n\021expected_g"
-    "uild_id\030\002 \001(\004\"<\n\022LeaveGuildResponse\022&\n\re"
-    "rror_message\030\001 \001(\0132\017.TipInfoMessage\"C\n\023D"
-    "isbandGuildRequest\022\021\n\tplayer_id\030\001 \001(\004\022\031\n"
-    "\021expected_guild_id\030\002 \001(\004\">\n\024DisbandGuild"
-    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
-    "oMessage\"S\n\026SetAnnouncementRequest\022\020\n\010gu"
-    "ild_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\024\n\014annou"
-    "ncement\030\003 \001(\t\"d\n\027SetAnnouncementResponse"
-    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
-    "\022!\n\005guild\030\002 \001(\0132\022.guildpb.GuildInfo\"^\n\031S"
-    "etGuildMemberRoleRequest\022\030\n\020target_playe"
-    "r_id\030\001 \001(\004\022\014\n\004role\030\002 \001(\r\022\031\n\021expected_gui"
-    "ld_id\030\003 \001(\004\"g\n\032SetGuildMemberRoleRespons"
-    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
-    "e\022!\n\005guild\030\002 \001(\0132\022.guildpb.GuildInfo\"M\n\026"
-    "KickGuildMemberRequest\022\030\n\020target_player_"
-    "id\030\001 \001(\004\022\031\n\021expected_guild_id\030\002 \001(\004\"d\n\027K"
-    "ickGuildMemberResponse\022&\n\rerror_message\030"
+    "ication_count\030\017 \001(\r\".\n\022CreateGuildReques"
+    "t\022\014\n\004name\030\002 \001(\tJ\004\010\001\020\002J\004\010\003\020\004\"`\n\023CreateGui"
+    "ldResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
+    "nfoMessage\022!\n\005guild\030\002 \001(\0132\022.guildpb.Guil"
+    "dInfo\"#\n\017GetGuildRequest\022\020\n\010guild_id\030\001 \001"
+    "(\004\"]\n\020GetGuildResponse\022&\n\rerror_message\030"
     "\001 \001(\0132\017.TipInfoMessage\022!\n\005guild\030\002 \001(\0132\022."
-    "guildpb.GuildInfo\"Q\n\032TransferGuildLeader"
-    "Request\022\030\n\020target_player_id\030\001 \001(\004\022\031\n\021exp"
-    "ected_guild_id\030\002 \001(\004\"h\n\033TransferGuildLea"
-    "derResponse\022&\n\rerror_message\030\001 \001(\0132\017.Tip"
-    "InfoMessage\022!\n\005guild\030\002 \001(\0132\022.guildpb.Gui"
-    "ldInfo\")\n\025ApplyJoinGuildRequest\022\020\n\010guild"
-    "_id\030\001 \001(\004\"@\n\026ApplyJoinGuildResponse\022&\n\re"
-    "rror_message\030\001 \001(\0132\017.TipInfoMessage\"1\n\035C"
-    "ancelGuildApplicationRequest\022\020\n\010guild_id"
-    "\030\001 \001(\004\"H\n\036CancelGuildApplicationResponse"
-    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
-    "\"\303\001\n\024GuildApplicationView\022\020\n\010guild_id\030\001 "
-    "\001(\004\022\022\n\nguild_name\030\002 \001(\t\022\r\n\005level\030\003 \001(\r\022\024"
-    "\n\014member_count\030\004 \001(\r\022\023\n\013max_members\030\005 \001("
-    "\r\022\021\n\tleader_id\030\006 \001(\004\022\023\n\013leader_name\030\007 \001("
-    "\t\022\020\n\010apply_ms\030\010 \001(\004\022\021\n\texpire_ms\030\t \001(\004\" "
-    "\n\036ListMyGuildApplicationsRequest\"~\n\037List"
-    "MyGuildApplicationsResponse\022&\n\rerror_mes"
-    "sage\030\001 \001(\0132\017.TipInfoMessage\0223\n\014applicati"
-    "ons\030\002 \003(\0132\035.guildpb.GuildApplicationView"
-    "\"j\n\022GuildApplicantView\022\021\n\tplayer_id\030\001 \001("
-    "\004\022\014\n\004name\030\002 \001(\t\022\016\n\006online\030\003 \001(\010\022\020\n\010apply"
-    "_ms\030\004 \001(\004\022\021\n\texpire_ms\030\005 \001(\004\"\036\n\034ListGuil"
-    "dApplicationsRequest\"x\n\035ListGuildApplica"
-    "tionsResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
-    "ipInfoMessage\022/\n\napplicants\030\002 \003(\0132\033.guil"
-    "dpb.GuildApplicantView\"M\n\035ReviewGuildApp"
-    "licationRequest\022\033\n\023applicant_player_id\030\001"
-    " \001(\004\022\017\n\007approve\030\002 \001(\010\"k\n\036ReviewGuildAppl"
-    "icationResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\022!\n\005guild\030\002 \001(\0132\022.guildpb"
-    ".GuildInfo\"~\n\017GuildChangedS2C\022&\n\004kind\030\001 "
-    "\001(\0162\030.guildpb.GuildChangeKind\022\020\n\010guild_i"
-    "d\030\002 \001(\004\022\027\n\017actor_player_id\030\003 \001(\004\022\030\n\020targ"
-    "et_player_id\030\004 \001(\004\"\353\001\n\021GuildDonationView"
-    "\022\r\n\005op_id\030\001 \001(\004\022\021\n\tdonate_id\030\002 \001(\r\022.\n\006st"
-    "atus\030\003 \001(\0162\036.guildpb.GuildAssetOrderStat"
-    "us\022\025\n\rcurrency_type\030\004 \001(\r\022\023\n\013cost_amount"
-    "\030\005 \001(\004\022\031\n\021contribution_gain\030\006 \001(\004\022\022\n\nfun"
-    "ds_gain\030\007 \001(\004\022\025\n\rreason_tip_id\030\010 \001(\r\022\022\n\n"
-    "created_ms\030\t \001(\004\"\347\001\n\025GuildDonateOptionVi"
-    "ew\022\021\n\tdonate_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\025\n\rc"
-    "urrency_type\030\003 \001(\r\022\023\n\013cost_amount\030\004 \001(\004\022"
-    "\031\n\021contribution_gain\030\005 \001(\004\022\022\n\nfunds_gain"
-    "\030\006 \001(\004\022\023\n\013daily_limit\030\007 \001(\r\022\022\n\nused_toda"
-    "y\030\010 \001(\r\022\027\n\017min_guild_level\030\t \001(\r\022\020\n\010unlo"
-    "cked\030\n \001(\010\"\214\002\n\022GuildShopGoodsView\022\020\n\010goo"
-    "ds_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\020\n\010category\030\003 "
-    "\001(\r\022\017\n\007item_id\030\004 \001(\r\022\022\n\nitem_count\030\005 \001(\r"
-    "\022\031\n\021cost_contribution\030\006 \001(\004\022\034\n\024required_"
-    "guild_level\030\007 \001(\r\022\020\n\010unlocked\030\010 \001(\010\022\024\n\014l"
-    "imit_period\030\t \001(\r\022\023\n\013limit_count\030\n \001(\r\022\022"
-    "\n\nused_count\030\013 \001(\r\022\025\n\rmax_buy_count\030\014 \001("
-    "\r\"\272\001\n\022GuildShopOrderView\022\r\n\005op_id\030\001 \001(\004\022"
-    "\020\n\010goods_id\030\002 \001(\r\022\r\n\005count\030\003 \001(\r\022.\n\006stat"
-    "us\030\004 \001(\0162\036.guildpb.GuildAssetOrderStatus"
-    "\022\031\n\021cost_contribution\030\005 \001(\004\022\025\n\rreason_ti"
-    "p_id\030\006 \001(\r\022\022\n\ncreated_ms\030\007 \001(\004\"\036\n\034GetGui"
-    "ldDonateOptionsRequest\"\272\002\n\035GetGuildDonat"
-    "eOptionsResponse\022&\n\rerror_message\030\001 \001(\0132"
-    "\017.TipInfoMessage\022/\n\007options\030\002 \003(\0132\036.guil"
-    "dpb.GuildDonateOptionView\0225\n\021pending_don"
-    "ations\030\003 \003(\0132\032.guildpb.GuildDonationView"
-    "\022\032\n\022contribution_total\030\004 \001(\004\022\034\n\024contribu"
-    "tion_balance\030\005 \001(\004\022\033\n\023next_daily_reset_m"
-    "s\030\006 \001(\004\0222\n\016recent_results\030\007 \003(\0132\032.guildp"
-    "b.GuildDonationView\"_\n\024DonateToGuildRequ"
-    "est\022\021\n\tdonate_id\030\001 \001(\r\022\031\n\021client_request"
-    "_id\030\002 \001(\004\022\031\n\021expected_guild_id\030\003 \001(\004\"\220\001\n"
-    "\025DonateToGuildResponse\022&\n\rerror_message\030"
-    "\001 \001(\0132\017.TipInfoMessage\022,\n\010donation\030\002 \001(\013"
-    "2\032.guildpb.GuildDonationView\022!\n\005guild\030\003 "
-    "\001(\0132\022.guildpb.GuildInfo\"-\n\023UpgradeGuildR"
-    "equest\022\026\n\016expected_level\030\001 \001(\r\"a\n\024Upgrad"
-    "eGuildResponse\022&\n\rerror_message\030\001 \001(\0132\017."
-    "TipInfoMessage\022!\n\005guild\030\002 \001(\0132\022.guildpb."
-    "GuildInfo\"\025\n\023GetGuildShopRequest\"\254\002\n\024Get"
-    "GuildShopResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\022*\n\005goods\030\002 \003(\0132\033.guild"
-    "pb.GuildShopGoodsView\022\034\n\024contribution_ba"
-    "lance\030\003 \001(\004\0223\n\016pending_orders\030\004 \003(\0132\033.gu"
-    "ildpb.GuildShopOrderView\022\033\n\023next_daily_r"
-    "eset_ms\030\005 \001(\004\022\034\n\024next_weekly_reset_ms\030\006 "
-    "\001(\004\0222\n\rrecent_orders\030\007 \003(\0132\033.guildpb.Gui"
-    "ldShopOrderView\"q\n\030BuyGuildShopGoodsRequ"
-    "est\022\020\n\010goods_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\r\022\031\n\021"
-    "client_request_id\030\003 \001(\004\022\031\n\021expected_guil"
-    "d_id\030\004 \001(\004\"\215\001\n\031BuyGuildShopGoodsResponse"
-    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
-    "\022*\n\005order\030\002 \001(\0132\033.guildpb.GuildShopOrder"
-    "View\022\034\n\024contribution_balance\030\003 \001(\004\"1\n\017Gu"
-    "ildRewardItem\022\017\n\007item_id\030\001 \001(\r\022\r\n\005count\030"
-    "\002 \001(\r\"\377\001\n\023GuildTrialLobbyView\022\020\n\010lobby_i"
-    "d\030\001 \001(\004\022\033\n\023initiator_player_id\030\002 \001(\004\022\031\n\021"
-    "member_player_ids\030\003 \003(\004\022\033\n\023accepted_play"
-    "er_ids\030\004 \003(\004\022,\n\005state\030\005 \001(\0162\035.guildpb.Gu"
-    "ildTrialLobbyState\022\024\n\014expire_at_ms\030\006 \001(\004"
-    "\022\021\n\tbattle_id\030\007 \001(\004\022\022\n\nend_tip_id\030\010 \001(\r\022"
-    "\026\n\016end_parameters\030\t \003(\t\"\301\006\n\021GuildActivit"
-    "yView\022\023\n\013activity_id\030\001 \001(\r\022(\n\004type\030\002 \001(\016"
-    "2\032.guildpb.GuildActivityType\022\014\n\004name\030\003 \001"
-    "(\t\022*\n\005state\030\004 \001(\0162\033.guildpb.GuildActivit"
-    "yState\022\023\n\013start_at_ms\030\005 \001(\004\022\021\n\tend_at_ms"
-    "\030\006 \001(\004\022\027\n\017min_guild_level\030\007 \001(\r\022\022\n\nperio"
-    "d_key\030\010 \001(\r\022\025\n\rnext_reset_ms\030\t \001(\004\022\026\n\016se"
-    "rver_time_ms\030\n \001(\004\022\035\n\025personal_contribut"
-    "ion\030\013 \001(\004\022\023\n\013guild_funds\030\014 \001(\004\022\027\n\017guild_"
-    "threshold\030\r \001(\r\022.\n\014reward_items\030\016 \003(\0132\030."
-    "guildpb.GuildRewardItem\022\023\n\013daily_limit\030\017"
-    " \001(\r\022\025\n\rmy_used_count\030\020 \001(\r\022\020\n\010progress\030"
-    "\021 \001(\r\022\031\n\021threshold_reached\030\022 \001(\010\022\025\n\rfund"
-    "s_granted\030\023 \001(\010\022\026\n\016blocked_tip_id\030\024 \001(\r\022"
-    "\022\n\ndungeon_id\030\025 \001(\r\022\025\n\rteam_size_min\030\026 \001"
-    "(\r\022\025\n\rteam_size_max\030\027 \001(\r\022\032\n\022my_trial_ba"
-    "ttle_id\030\030 \001(\004\022\037\n\027my_pending_reward_count"
-    "\030\031 \001(\r\022 \n\030my_pending_reason_tip_id\030\032 \001(\r"
-    "\022$\n\034my_last_reward_reject_tip_id\030\033 \001(\r\022\026"
-    "\n\016join_min_hours\030\034 \001(\r\022\030\n\020guild_period_k"
-    "ey\030\035 \001(\r\0221\n\013trial_lobby\030\036 \001(\0132\034.guildpb."
-    "GuildTrialLobbyView\"\033\n\031GetGuildActivitie"
-    "sRequest\"t\n\032GetGuildActivitiesResponse\022&"
-    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022."
-    "\n\nactivities\030\002 \003(\0132\032.guildpb.GuildActivi"
-    "tyView\"/\n\030LightGuildLanternRequest\022\023\n\013ac"
-    "tivity_id\030\001 \001(\r\"q\n\031LightGuildLanternResp"
+    "guildpb.GuildInfo\"*\n\025GetPlayerGuildReque"
+    "st\022\021\n\tplayer_id\030\001 \001(\004\"c\n\026GetPlayerGuildR"
+    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
+    "Message\022!\n\005guild\030\002 \001(\0132\022.guildpb.GuildIn"
+    "fo\"4\n\021LeaveGuildRequest\022\031\n\021expected_guil"
+    "d_id\030\002 \001(\004J\004\010\001\020\002\"<\n\022LeaveGuildResponse\022&"
+    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\"6"
+    "\n\023DisbandGuildRequest\022\031\n\021expected_guild_"
+    "id\030\002 \001(\004J\004\010\001\020\002\">\n\024DisbandGuildResponse\022&"
+    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\"F"
+    "\n\026SetAnnouncementRequest\022\020\n\010guild_id\030\001 \001"
+    "(\004\022\024\n\014announcement\030\003 \001(\tJ\004\010\002\020\003\"d\n\027SetAnn"
+    "ouncementResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022!\n\005guild\030\002 \001(\0132\022.guild"
+    "pb.GuildInfo\"^\n\031SetGuildMemberRoleReques"
+    "t\022\030\n\020target_player_id\030\001 \001(\004\022\014\n\004role\030\002 \001("
+    "\r\022\031\n\021expected_guild_id\030\003 \001(\004\"g\n\032SetGuild"
+    "MemberRoleResponse\022&\n\rerror_message\030\001 \001("
+    "\0132\017.TipInfoMessage\022!\n\005guild\030\002 \001(\0132\022.guil"
+    "dpb.GuildInfo\"M\n\026KickGuildMemberRequest\022"
+    "\030\n\020target_player_id\030\001 \001(\004\022\031\n\021expected_gu"
+    "ild_id\030\002 \001(\004\"d\n\027KickGuildMemberResponse\022"
+    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022"
+    "!\n\005guild\030\002 \001(\0132\022.guildpb.GuildInfo\"Q\n\032Tr"
+    "ansferGuildLeaderRequest\022\030\n\020target_playe"
+    "r_id\030\001 \001(\004\022\031\n\021expected_guild_id\030\002 \001(\004\"h\n"
+    "\033TransferGuildLeaderResponse\022&\n\rerror_me"
+    "ssage\030\001 \001(\0132\017.TipInfoMessage\022!\n\005guild\030\002 "
+    "\001(\0132\022.guildpb.GuildInfo\")\n\025ApplyJoinGuil"
+    "dRequest\022\020\n\010guild_id\030\001 \001(\004\"@\n\026ApplyJoinG"
+    "uildResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\"1\n\035CancelGuildApplicationRe"
+    "quest\022\020\n\010guild_id\030\001 \001(\004\"H\n\036CancelGuildAp"
+    "plicationResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\"\303\001\n\024GuildApplicationVi"
+    "ew\022\020\n\010guild_id\030\001 \001(\004\022\022\n\nguild_name\030\002 \001(\t"
+    "\022\r\n\005level\030\003 \001(\r\022\024\n\014member_count\030\004 \001(\r\022\023\n"
+    "\013max_members\030\005 \001(\r\022\021\n\tleader_id\030\006 \001(\004\022\023\n"
+    "\013leader_name\030\007 \001(\t\022\020\n\010apply_ms\030\010 \001(\004\022\021\n\t"
+    "expire_ms\030\t \001(\004\" \n\036ListMyGuildApplicatio"
+    "nsRequest\"~\n\037ListMyGuildApplicationsResp"
     "onse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMes"
-    "sage\022,\n\010activity\030\002 \001(\0132\032.guildpb.GuildAc"
-    "tivityView\"/\n\030ClaimGuildReunionRequest\022\023"
-    "\n\013activity_id\030\001 \001(\r\"q\n\031ClaimGuildReunion"
-    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
-    "oMessage\022,\n\010activity\030\002 \001(\0132\032.guildpb.Gui"
-    "ldActivityView\"H\n\026StartGuildTrialRequest"
-    "\022\023\n\013activity_id\030\001 \001(\r\022\031\n\021member_player_i"
-    "ds\030\002 \003(\004\"o\n\027StartGuildTrialResponse\022&\n\re"
-    "rror_message\030\001 \001(\0132\017.TipInfoMessage\022,\n\010a"
-    "ctivity\030\002 \001(\0132\032.guildpb.GuildActivityVie"
-    "w\"B\n\036RespondGuildTrialInviteRequest\022\020\n\010l"
-    "obby_id\030\001 \001(\004\022\016\n\006accept\030\002 \001(\010\"w\n\037Respond"
-    "GuildTrialInviteResponse\022&\n\rerror_messag"
-    "e\030\001 \001(\0132\017.TipInfoMessage\022,\n\010activity\030\002 \001"
-    "(\0132\032.guildpb.GuildActivityView\"\232\001\n\016Guild"
-    "RankEntry\022\020\n\010guild_id\030\001 \001(\004\022\014\n\004name\030\002 \001("
-    "\t\022\021\n\tleader_id\030\003 \001(\004\022\r\n\005level\030\004 \001(\r\022\024\n\014m"
-    "ember_count\030\005 \001(\r\022\r\n\005score\030\006 \001(\003\022\014\n\004rank"
-    "\030\007 \001(\r\022\023\n\013leader_name\030\010 \001(\t\"K\n\027UpdateGui"
-    "ldScoreRequest\022\020\n\010guild_id\030\001 \001(\004\022\r\n\005scor"
-    "e\030\002 \001(\003\022\017\n\007zone_id\030\003 \001(\r\"B\n\030UpdateGuildS"
-    "coreResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
-    "pInfoMessage\"G\n\023GetGuildRankRequest\022\014\n\004p"
-    "age\030\001 \001(\r\022\021\n\tpage_size\030\002 \001(\r\022\017\n\007zone_id\030"
-    "\003 \001(\r\"\236\001\n\024GetGuildRankResponse\022&\n\rerror_"
-    "message\030\001 \001(\0132\017.TipInfoMessage\022(\n\007entrie"
-    "s\030\002 \003(\0132\027.guildpb.GuildRankEntry\022\023\n\013tota"
-    "l_count\030\003 \001(\r\022\014\n\004page\030\004 \001(\r\022\021\n\tpage_size"
-    "\030\005 \001(\r\"\?\n\032GetGuildRankByGuildRequest\022\020\n\010"
-    "guild_id\030\001 \001(\004\022\017\n\007zone_id\030\002 \001(\r\"m\n\033GetGu"
-    "ildRankByGuildResponse\022&\n\rerror_message\030"
-    "\001 \001(\0132\017.TipInfoMessage\022&\n\005entry\030\002 \001(\0132\027."
-    "guildpb.GuildRankEntry*\246\004\n\017GuildChangeKi"
-    "nd\022!\n\035GUILD_CHANGE_KIND_UNSPECIFIED\020\000\022#\n"
-    "\037GUILD_CHANGE_KIND_MEMBER_JOINED\020\001\022!\n\035GU"
-    "ILD_CHANGE_KIND_MEMBER_LEFT\020\002\022#\n\037GUILD_C"
-    "HANGE_KIND_MEMBER_KICKED\020\003\022\"\n\036GUILD_CHAN"
-    "GE_KIND_ROLE_CHANGED\020\004\022(\n$GUILD_CHANGE_K"
-    "IND_LEADER_TRANSFERRED\020\005\022\037\n\033GUILD_CHANGE"
-    "_KIND_DISBANDED\020\006\022*\n&GUILD_CHANGE_KIND_A"
-    "PPLICATION_RECEIVED\020\007\022*\n&GUILD_CHANGE_KI"
-    "ND_APPLICATION_REJECTED\020\010\022#\n\037GUILD_CHANG"
-    "E_KIND_FUNDS_CHANGED\020\t\022\036\n\032GUILD_CHANGE_K"
-    "IND_LEVEL_UP\020\n\022*\n&GUILD_CHANGE_KIND_ANNO"
-    "UNCEMENT_CHANGED\020\013\022&\n\"GUILD_CHANGE_KIND_"
-    "ACTIVITY_CHANGED\020\014\022#\n\037GUILD_CHANGE_KIND_"
-    "DELIVERY_DONE\020\r*\210\002\n\025GuildAssetOrderStatu"
-    "s\022(\n$GUILD_ASSET_ORDER_STATUS_UNSPECIFIE"
-    "D\020\000\022$\n GUILD_ASSET_ORDER_STATUS_PENDING\020"
-    "\001\022$\n GUILD_ASSET_ORDER_STATUS_APPLIED\020\002\022"
-    "%\n!GUILD_ASSET_ORDER_STATUS_REJECTED\020\003\022$"
-    "\n GUILD_ASSET_ORDER_STATUS_ABORTED\020\004\022,\n("
-    "GUILD_ASSET_ORDER_STATUS_APPLIED_PARTIAL"
-    "\020\005*\231\001\n\021GuildActivityType\022#\n\037GUILD_ACTIVI"
-    "TY_TYPE_UNSPECIFIED\020\000\022\037\n\033GUILD_ACTIVITY_"
-    "TYPE_LANTERN\020\001\022\037\n\033GUILD_ACTIVITY_TYPE_RE"
-    "UNION\020\002\022\035\n\031GUILD_ACTIVITY_TYPE_TRIAL\020\003*\277"
-    "\001\n\022GuildActivityState\022$\n GUILD_ACTIVITY_"
-    "STATE_UNSPECIFIED\020\000\022!\n\035GUILD_ACTIVITY_ST"
-    "ATE_DISABLED\020\001\022!\n\035GUILD_ACTIVITY_STATE_U"
-    "PCOMING\020\002\022\035\n\031GUILD_ACTIVITY_STATE_OPEN\020\003"
-    "\022\036\n\032GUILD_ACTIVITY_STATE_ENDED\020\004*\324\001\n\024Gui"
-    "ldTrialLobbyState\022\'\n#GUILD_TRIAL_LOBBY_S"
-    "TATE_UNSPECIFIED\020\000\022#\n\037GUILD_TRIAL_LOBBY_"
-    "STATE_PENDING\020\001\022%\n!GUILD_TRIAL_LOBBY_STA"
-    "TE_LAUNCHING\020\002\022$\n GUILD_TRIAL_LOBBY_STAT"
-    "E_LAUNCHED\020\003\022!\n\035GUILD_TRIAL_LOBBY_STATE_"
-    "ENDED\020\0042\312\023\n\014GuildService\022H\n\013CreateGuild\022"
-    "\033.guildpb.CreateGuildRequest\032\034.guildpb.C"
-    "reateGuildResponse\022\?\n\010GetGuild\022\030.guildpb"
-    ".GetGuildRequest\032\031.guildpb.GetGuildRespo"
-    "nse\022Q\n\016GetPlayerGuild\022\036.guildpb.GetPlaye"
-    "rGuildRequest\032\037.guildpb.GetPlayerGuildRe"
-    "sponse\022E\n\nLeaveGuild\022\032.guildpb.LeaveGuil"
-    "dRequest\032\033.guildpb.LeaveGuildResponse\022K\n"
-    "\014DisbandGuild\022\034.guildpb.DisbandGuildRequ"
-    "est\032\035.guildpb.DisbandGuildResponse\022T\n\017Se"
-    "tAnnouncement\022\037.guildpb.SetAnnouncementR"
-    "equest\032 .guildpb.SetAnnouncementResponse"
-    "\022]\n\022SetGuildMemberRole\022\".guildpb.SetGuil"
-    "dMemberRoleRequest\032#.guildpb.SetGuildMem"
-    "berRoleResponse\022T\n\017KickGuildMember\022\037.gui"
-    "ldpb.KickGuildMemberRequest\032 .guildpb.Ki"
-    "ckGuildMemberResponse\022`\n\023TransferGuildLe"
-    "ader\022#.guildpb.TransferGuildLeaderReques"
-    "t\032$.guildpb.TransferGuildLeaderResponse\022"
-    "Q\n\016ApplyJoinGuild\022\036.guildpb.ApplyJoinGui"
-    "ldRequest\032\037.guildpb.ApplyJoinGuildRespon"
-    "se\022i\n\026CancelGuildApplication\022&.guildpb.C"
-    "ancelGuildApplicationRequest\032\'.guildpb.C"
-    "ancelGuildApplicationResponse\022l\n\027ListMyG"
-    "uildApplications\022\'.guildpb.ListMyGuildAp"
-    "plicationsRequest\032(.guildpb.ListMyGuildA"
-    "pplicationsResponse\022f\n\025ListGuildApplicat"
-    "ions\022%.guildpb.ListGuildApplicationsRequ"
-    "est\032&.guildpb.ListGuildApplicationsRespo"
-    "nse\022i\n\026ReviewGuildApplication\022&.guildpb."
-    "ReviewGuildApplicationRequest\032\'.guildpb."
-    "ReviewGuildApplicationResponse\022=\n\022Notify"
-    "GuildChanged\022\030.guildpb.GuildChangedS2C\032\006"
-    ".Empty\"\005\210\231\310\001\002\022^\n\020UpdateGuildScore\022 .guil"
-    "dpb.UpdateGuildScoreRequest\032!.guildpb.Up"
-    "dateGuildScoreResponse\"\005\210\231\310\001\003\022K\n\014GetGuil"
-    "dRank\022\034.guildpb.GetGuildRankRequest\032\035.gu"
-    "ildpb.GetGuildRankResponse\022`\n\023GetGuildRa"
-    "nkByGuild\022#.guildpb.GetGuildRankByGuildR"
-    "equest\032$.guildpb.GetGuildRankByGuildResp"
-    "onse\022f\n\025GetGuildDonateOptions\022%.guildpb."
-    "GetGuildDonateOptionsRequest\032&.guildpb.G"
-    "etGuildDonateOptionsResponse\022N\n\rDonateTo"
-    "Guild\022\035.guildpb.DonateToGuildRequest\032\036.g"
-    "uildpb.DonateToGuildResponse\022K\n\014UpgradeG"
-    "uild\022\034.guildpb.UpgradeGuildRequest\032\035.gui"
-    "ldpb.UpgradeGuildResponse\022K\n\014GetGuildSho"
-    "p\022\034.guildpb.GetGuildShopRequest\032\035.guildp"
-    "b.GetGuildShopResponse\022Z\n\021BuyGuildShopGo"
-    "ods\022!.guildpb.BuyGuildShopGoodsRequest\032\""
-    ".guildpb.BuyGuildShopGoodsResponse\022]\n\022Ge"
-    "tGuildActivities\022\".guildpb.GetGuildActiv"
-    "itiesRequest\032#.guildpb.GetGuildActivitie"
-    "sResponse\022Z\n\021LightGuildLantern\022!.guildpb"
-    ".LightGuildLanternRequest\032\".guildpb.Ligh"
-    "tGuildLanternResponse\022Z\n\021ClaimGuildReuni"
-    "on\022!.guildpb.ClaimGuildReunionRequest\032\"."
-    "guildpb.ClaimGuildReunionResponse\022T\n\017Sta"
-    "rtGuildTrial\022\037.guildpb.StartGuildTrialRe"
-    "quest\032 .guildpb.StartGuildTrialResponse\022"
-    "l\n\027RespondGuildTrialInvite\022\'.guildpb.Res"
-    "pondGuildTrialInviteRequest\032(.guildpb.Re"
-    "spondGuildTrialInviteResponse\032\005\210\250\303\001\001B\023Z\021"
-    "guild/proto/guildb\006proto3"
+    "sage\0223\n\014applications\030\002 \003(\0132\035.guildpb.Gui"
+    "ldApplicationView\"j\n\022GuildApplicantView\022"
+    "\021\n\tplayer_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\016\n\006onli"
+    "ne\030\003 \001(\010\022\020\n\010apply_ms\030\004 \001(\004\022\021\n\texpire_ms\030"
+    "\005 \001(\004\"\036\n\034ListGuildApplicationsRequest\"x\n"
+    "\035ListGuildApplicationsResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022/\n\napplic"
+    "ants\030\002 \003(\0132\033.guildpb.GuildApplicantView\""
+    "M\n\035ReviewGuildApplicationRequest\022\033\n\023appl"
+    "icant_player_id\030\001 \001(\004\022\017\n\007approve\030\002 \001(\010\"k"
+    "\n\036ReviewGuildApplicationResponse\022&\n\rerro"
+    "r_message\030\001 \001(\0132\017.TipInfoMessage\022!\n\005guil"
+    "d\030\002 \001(\0132\022.guildpb.GuildInfo\"~\n\017GuildChan"
+    "gedS2C\022&\n\004kind\030\001 \001(\0162\030.guildpb.GuildChan"
+    "geKind\022\020\n\010guild_id\030\002 \001(\004\022\027\n\017actor_player"
+    "_id\030\003 \001(\004\022\030\n\020target_player_id\030\004 \001(\004\"\353\001\n\021"
+    "GuildDonationView\022\r\n\005op_id\030\001 \001(\004\022\021\n\tdona"
+    "te_id\030\002 \001(\r\022.\n\006status\030\003 \001(\0162\036.guildpb.Gu"
+    "ildAssetOrderStatus\022\025\n\rcurrency_type\030\004 \001"
+    "(\r\022\023\n\013cost_amount\030\005 \001(\004\022\031\n\021contribution_"
+    "gain\030\006 \001(\004\022\022\n\nfunds_gain\030\007 \001(\004\022\025\n\rreason"
+    "_tip_id\030\010 \001(\r\022\022\n\ncreated_ms\030\t \001(\004\"\347\001\n\025Gu"
+    "ildDonateOptionView\022\021\n\tdonate_id\030\001 \001(\r\022\014"
+    "\n\004name\030\002 \001(\t\022\025\n\rcurrency_type\030\003 \001(\r\022\023\n\013c"
+    "ost_amount\030\004 \001(\004\022\031\n\021contribution_gain\030\005 "
+    "\001(\004\022\022\n\nfunds_gain\030\006 \001(\004\022\023\n\013daily_limit\030\007"
+    " \001(\r\022\022\n\nused_today\030\010 \001(\r\022\027\n\017min_guild_le"
+    "vel\030\t \001(\r\022\020\n\010unlocked\030\n \001(\010\"\214\002\n\022GuildSho"
+    "pGoodsView\022\020\n\010goods_id\030\001 \001(\r\022\014\n\004name\030\002 \001"
+    "(\t\022\020\n\010category\030\003 \001(\r\022\017\n\007item_id\030\004 \001(\r\022\022\n"
+    "\nitem_count\030\005 \001(\r\022\031\n\021cost_contribution\030\006"
+    " \001(\004\022\034\n\024required_guild_level\030\007 \001(\r\022\020\n\010un"
+    "locked\030\010 \001(\010\022\024\n\014limit_period\030\t \001(\r\022\023\n\013li"
+    "mit_count\030\n \001(\r\022\022\n\nused_count\030\013 \001(\r\022\025\n\rm"
+    "ax_buy_count\030\014 \001(\r\"\272\001\n\022GuildShopOrderVie"
+    "w\022\r\n\005op_id\030\001 \001(\004\022\020\n\010goods_id\030\002 \001(\r\022\r\n\005co"
+    "unt\030\003 \001(\r\022.\n\006status\030\004 \001(\0162\036.guildpb.Guil"
+    "dAssetOrderStatus\022\031\n\021cost_contribution\030\005"
+    " \001(\004\022\025\n\rreason_tip_id\030\006 \001(\r\022\022\n\ncreated_m"
+    "s\030\007 \001(\004\"\036\n\034GetGuildDonateOptionsRequest\""
+    "\272\002\n\035GetGuildDonateOptionsResponse\022&\n\rerr"
+    "or_message\030\001 \001(\0132\017.TipInfoMessage\022/\n\007opt"
+    "ions\030\002 \003(\0132\036.guildpb.GuildDonateOptionVi"
+    "ew\0225\n\021pending_donations\030\003 \003(\0132\032.guildpb."
+    "GuildDonationView\022\032\n\022contribution_total\030"
+    "\004 \001(\004\022\034\n\024contribution_balance\030\005 \001(\004\022\033\n\023n"
+    "ext_daily_reset_ms\030\006 \001(\004\0222\n\016recent_resul"
+    "ts\030\007 \003(\0132\032.guildpb.GuildDonationView\"_\n\024"
+    "DonateToGuildRequest\022\021\n\tdonate_id\030\001 \001(\r\022"
+    "\031\n\021client_request_id\030\002 \001(\004\022\031\n\021expected_g"
+    "uild_id\030\003 \001(\004\"\220\001\n\025DonateToGuildResponse\022"
+    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022"
+    ",\n\010donation\030\002 \001(\0132\032.guildpb.GuildDonatio"
+    "nView\022!\n\005guild\030\003 \001(\0132\022.guildpb.GuildInfo"
+    "\"-\n\023UpgradeGuildRequest\022\026\n\016expected_leve"
+    "l\030\001 \001(\r\"a\n\024UpgradeGuildResponse\022&\n\rerror"
+    "_message\030\001 \001(\0132\017.TipInfoMessage\022!\n\005guild"
+    "\030\002 \001(\0132\022.guildpb.GuildInfo\"\025\n\023GetGuildSh"
+    "opRequest\"\254\002\n\024GetGuildShopResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022*\n\005go"
+    "ods\030\002 \003(\0132\033.guildpb.GuildShopGoodsView\022\034"
+    "\n\024contribution_balance\030\003 \001(\004\0223\n\016pending_"
+    "orders\030\004 \003(\0132\033.guildpb.GuildShopOrderVie"
+    "w\022\033\n\023next_daily_reset_ms\030\005 \001(\004\022\034\n\024next_w"
+    "eekly_reset_ms\030\006 \001(\004\0222\n\rrecent_orders\030\007 "
+    "\003(\0132\033.guildpb.GuildShopOrderView\"q\n\030BuyG"
+    "uildShopGoodsRequest\022\020\n\010goods_id\030\001 \001(\r\022\r"
+    "\n\005count\030\002 \001(\r\022\031\n\021client_request_id\030\003 \001(\004"
+    "\022\031\n\021expected_guild_id\030\004 \001(\004\"\215\001\n\031BuyGuild"
+    "ShopGoodsResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022*\n\005order\030\002 \001(\0132\033.guild"
+    "pb.GuildShopOrderView\022\034\n\024contribution_ba"
+    "lance\030\003 \001(\004\"1\n\017GuildRewardItem\022\017\n\007item_i"
+    "d\030\001 \001(\r\022\r\n\005count\030\002 \001(\r\"\377\001\n\023GuildTrialLob"
+    "byView\022\020\n\010lobby_id\030\001 \001(\004\022\033\n\023initiator_pl"
+    "ayer_id\030\002 \001(\004\022\031\n\021member_player_ids\030\003 \003(\004"
+    "\022\033\n\023accepted_player_ids\030\004 \003(\004\022,\n\005state\030\005"
+    " \001(\0162\035.guildpb.GuildTrialLobbyState\022\024\n\014e"
+    "xpire_at_ms\030\006 \001(\004\022\021\n\tbattle_id\030\007 \001(\004\022\022\n\n"
+    "end_tip_id\030\010 \001(\r\022\026\n\016end_parameters\030\t \003(\t"
+    "\"\301\006\n\021GuildActivityView\022\023\n\013activity_id\030\001 "
+    "\001(\r\022(\n\004type\030\002 \001(\0162\032.guildpb.GuildActivit"
+    "yType\022\014\n\004name\030\003 \001(\t\022*\n\005state\030\004 \001(\0162\033.gui"
+    "ldpb.GuildActivityState\022\023\n\013start_at_ms\030\005"
+    " \001(\004\022\021\n\tend_at_ms\030\006 \001(\004\022\027\n\017min_guild_lev"
+    "el\030\007 \001(\r\022\022\n\nperiod_key\030\010 \001(\r\022\025\n\rnext_res"
+    "et_ms\030\t \001(\004\022\026\n\016server_time_ms\030\n \001(\004\022\035\n\025p"
+    "ersonal_contribution\030\013 \001(\004\022\023\n\013guild_fund"
+    "s\030\014 \001(\004\022\027\n\017guild_threshold\030\r \001(\r\022.\n\014rewa"
+    "rd_items\030\016 \003(\0132\030.guildpb.GuildRewardItem"
+    "\022\023\n\013daily_limit\030\017 \001(\r\022\025\n\rmy_used_count\030\020"
+    " \001(\r\022\020\n\010progress\030\021 \001(\r\022\031\n\021threshold_reac"
+    "hed\030\022 \001(\010\022\025\n\rfunds_granted\030\023 \001(\010\022\026\n\016bloc"
+    "ked_tip_id\030\024 \001(\r\022\022\n\ndungeon_id\030\025 \001(\r\022\025\n\r"
+    "team_size_min\030\026 \001(\r\022\025\n\rteam_size_max\030\027 \001"
+    "(\r\022\032\n\022my_trial_battle_id\030\030 \001(\004\022\037\n\027my_pen"
+    "ding_reward_count\030\031 \001(\r\022 \n\030my_pending_re"
+    "ason_tip_id\030\032 \001(\r\022$\n\034my_last_reward_reje"
+    "ct_tip_id\030\033 \001(\r\022\026\n\016join_min_hours\030\034 \001(\r\022"
+    "\030\n\020guild_period_key\030\035 \001(\r\0221\n\013trial_lobby"
+    "\030\036 \001(\0132\034.guildpb.GuildTrialLobbyView\"\033\n\031"
+    "GetGuildActivitiesRequest\"t\n\032GetGuildAct"
+    "ivitiesResponse\022&\n\rerror_message\030\001 \001(\0132\017"
+    ".TipInfoMessage\022.\n\nactivities\030\002 \003(\0132\032.gu"
+    "ildpb.GuildActivityView\"/\n\030LightGuildLan"
+    "ternRequest\022\023\n\013activity_id\030\001 \001(\r\"q\n\031Ligh"
+    "tGuildLanternResponse\022&\n\rerror_message\030\001"
+    " \001(\0132\017.TipInfoMessage\022,\n\010activity\030\002 \001(\0132"
+    "\032.guildpb.GuildActivityView\"/\n\030ClaimGuil"
+    "dReunionRequest\022\023\n\013activity_id\030\001 \001(\r\"q\n\031"
+    "ClaimGuildReunionResponse\022&\n\rerror_messa"
+    "ge\030\001 \001(\0132\017.TipInfoMessage\022,\n\010activity\030\002 "
+    "\001(\0132\032.guildpb.GuildActivityView\"H\n\026Start"
+    "GuildTrialRequest\022\023\n\013activity_id\030\001 \001(\r\022\031"
+    "\n\021member_player_ids\030\002 \003(\004\"o\n\027StartGuildT"
+    "rialResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022,\n\010activity\030\002 \001(\0132\032.guildpb"
+    ".GuildActivityView\"B\n\036RespondGuildTrialI"
+    "nviteRequest\022\020\n\010lobby_id\030\001 \001(\004\022\016\n\006accept"
+    "\030\002 \001(\010\"w\n\037RespondGuildTrialInviteRespons"
+    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
+    "e\022,\n\010activity\030\002 \001(\0132\032.guildpb.GuildActiv"
+    "ityView\"\232\001\n\016GuildRankEntry\022\020\n\010guild_id\030\001"
+    " \001(\004\022\014\n\004name\030\002 \001(\t\022\021\n\tleader_id\030\003 \001(\004\022\r\n"
+    "\005level\030\004 \001(\r\022\024\n\014member_count\030\005 \001(\r\022\r\n\005sc"
+    "ore\030\006 \001(\003\022\014\n\004rank\030\007 \001(\r\022\023\n\013leader_name\030\010"
+    " \001(\t\"K\n\027UpdateGuildScoreRequest\022\020\n\010guild"
+    "_id\030\001 \001(\004\022\r\n\005score\030\002 \001(\003\022\017\n\007zone_id\030\003 \001("
+    "\r\"B\n\030UpdateGuildScoreResponse\022&\n\rerror_m"
+    "essage\030\001 \001(\0132\017.TipInfoMessage\"<\n\023GetGuil"
+    "dRankRequest\022\014\n\004page\030\001 \001(\r\022\021\n\tpage_size\030"
+    "\002 \001(\rJ\004\010\003\020\004\"\236\001\n\024GetGuildRankResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage\022(\n\007"
+    "entries\030\002 \003(\0132\027.guildpb.GuildRankEntry\022\023"
+    "\n\013total_count\030\003 \001(\r\022\014\n\004page\030\004 \001(\r\022\021\n\tpag"
+    "e_size\030\005 \001(\r\"4\n\032GetGuildRankByGuildReque"
+    "st\022\020\n\010guild_id\030\001 \001(\004J\004\010\002\020\003\"m\n\033GetGuildRa"
+    "nkByGuildResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022&\n\005entry\030\002 \001(\0132\027.guild"
+    "pb.GuildRankEntry*\246\004\n\017GuildChangeKind\022!\n"
+    "\035GUILD_CHANGE_KIND_UNSPECIFIED\020\000\022#\n\037GUIL"
+    "D_CHANGE_KIND_MEMBER_JOINED\020\001\022!\n\035GUILD_C"
+    "HANGE_KIND_MEMBER_LEFT\020\002\022#\n\037GUILD_CHANGE"
+    "_KIND_MEMBER_KICKED\020\003\022\"\n\036GUILD_CHANGE_KI"
+    "ND_ROLE_CHANGED\020\004\022(\n$GUILD_CHANGE_KIND_L"
+    "EADER_TRANSFERRED\020\005\022\037\n\033GUILD_CHANGE_KIND"
+    "_DISBANDED\020\006\022*\n&GUILD_CHANGE_KIND_APPLIC"
+    "ATION_RECEIVED\020\007\022*\n&GUILD_CHANGE_KIND_AP"
+    "PLICATION_REJECTED\020\010\022#\n\037GUILD_CHANGE_KIN"
+    "D_FUNDS_CHANGED\020\t\022\036\n\032GUILD_CHANGE_KIND_L"
+    "EVEL_UP\020\n\022*\n&GUILD_CHANGE_KIND_ANNOUNCEM"
+    "ENT_CHANGED\020\013\022&\n\"GUILD_CHANGE_KIND_ACTIV"
+    "ITY_CHANGED\020\014\022#\n\037GUILD_CHANGE_KIND_DELIV"
+    "ERY_DONE\020\r*\210\002\n\025GuildAssetOrderStatus\022(\n$"
+    "GUILD_ASSET_ORDER_STATUS_UNSPECIFIED\020\000\022$"
+    "\n GUILD_ASSET_ORDER_STATUS_PENDING\020\001\022$\n "
+    "GUILD_ASSET_ORDER_STATUS_APPLIED\020\002\022%\n!GU"
+    "ILD_ASSET_ORDER_STATUS_REJECTED\020\003\022$\n GUI"
+    "LD_ASSET_ORDER_STATUS_ABORTED\020\004\022,\n(GUILD"
+    "_ASSET_ORDER_STATUS_APPLIED_PARTIAL\020\005*\231\001"
+    "\n\021GuildActivityType\022#\n\037GUILD_ACTIVITY_TY"
+    "PE_UNSPECIFIED\020\000\022\037\n\033GUILD_ACTIVITY_TYPE_"
+    "LANTERN\020\001\022\037\n\033GUILD_ACTIVITY_TYPE_REUNION"
+    "\020\002\022\035\n\031GUILD_ACTIVITY_TYPE_TRIAL\020\003*\277\001\n\022Gu"
+    "ildActivityState\022$\n GUILD_ACTIVITY_STATE"
+    "_UNSPECIFIED\020\000\022!\n\035GUILD_ACTIVITY_STATE_D"
+    "ISABLED\020\001\022!\n\035GUILD_ACTIVITY_STATE_UPCOMI"
+    "NG\020\002\022\035\n\031GUILD_ACTIVITY_STATE_OPEN\020\003\022\036\n\032G"
+    "UILD_ACTIVITY_STATE_ENDED\020\004*\324\001\n\024GuildTri"
+    "alLobbyState\022\'\n#GUILD_TRIAL_LOBBY_STATE_"
+    "UNSPECIFIED\020\000\022#\n\037GUILD_TRIAL_LOBBY_STATE"
+    "_PENDING\020\001\022%\n!GUILD_TRIAL_LOBBY_STATE_LA"
+    "UNCHING\020\002\022$\n GUILD_TRIAL_LOBBY_STATE_LAU"
+    "NCHED\020\003\022!\n\035GUILD_TRIAL_LOBBY_STATE_ENDED"
+    "\020\0042\312\023\n\014GuildService\022H\n\013CreateGuild\022\033.gui"
+    "ldpb.CreateGuildRequest\032\034.guildpb.Create"
+    "GuildResponse\022\?\n\010GetGuild\022\030.guildpb.GetG"
+    "uildRequest\032\031.guildpb.GetGuildResponse\022Q"
+    "\n\016GetPlayerGuild\022\036.guildpb.GetPlayerGuil"
+    "dRequest\032\037.guildpb.GetPlayerGuildRespons"
+    "e\022E\n\nLeaveGuild\022\032.guildpb.LeaveGuildRequ"
+    "est\032\033.guildpb.LeaveGuildResponse\022K\n\014Disb"
+    "andGuild\022\034.guildpb.DisbandGuildRequest\032\035"
+    ".guildpb.DisbandGuildResponse\022T\n\017SetAnno"
+    "uncement\022\037.guildpb.SetAnnouncementReques"
+    "t\032 .guildpb.SetAnnouncementResponse\022]\n\022S"
+    "etGuildMemberRole\022\".guildpb.SetGuildMemb"
+    "erRoleRequest\032#.guildpb.SetGuildMemberRo"
+    "leResponse\022T\n\017KickGuildMember\022\037.guildpb."
+    "KickGuildMemberRequest\032 .guildpb.KickGui"
+    "ldMemberResponse\022`\n\023TransferGuildLeader\022"
+    "#.guildpb.TransferGuildLeaderRequest\032$.g"
+    "uildpb.TransferGuildLeaderResponse\022Q\n\016Ap"
+    "plyJoinGuild\022\036.guildpb.ApplyJoinGuildReq"
+    "uest\032\037.guildpb.ApplyJoinGuildResponse\022i\n"
+    "\026CancelGuildApplication\022&.guildpb.Cancel"
+    "GuildApplicationRequest\032\'.guildpb.Cancel"
+    "GuildApplicationResponse\022l\n\027ListMyGuildA"
+    "pplications\022\'.guildpb.ListMyGuildApplica"
+    "tionsRequest\032(.guildpb.ListMyGuildApplic"
+    "ationsResponse\022f\n\025ListGuildApplications\022"
+    "%.guildpb.ListGuildApplicationsRequest\032&"
+    ".guildpb.ListGuildApplicationsResponse\022i"
+    "\n\026ReviewGuildApplication\022&.guildpb.Revie"
+    "wGuildApplicationRequest\032\'.guildpb.Revie"
+    "wGuildApplicationResponse\022=\n\022NotifyGuild"
+    "Changed\022\030.guildpb.GuildChangedS2C\032\006.Empt"
+    "y\"\005\210\231\310\001\002\022^\n\020UpdateGuildScore\022 .guildpb.U"
+    "pdateGuildScoreRequest\032!.guildpb.UpdateG"
+    "uildScoreResponse\"\005\210\231\310\001\003\022K\n\014GetGuildRank"
+    "\022\034.guildpb.GetGuildRankRequest\032\035.guildpb"
+    ".GetGuildRankResponse\022`\n\023GetGuildRankByG"
+    "uild\022#.guildpb.GetGuildRankByGuildReques"
+    "t\032$.guildpb.GetGuildRankByGuildResponse\022"
+    "f\n\025GetGuildDonateOptions\022%.guildpb.GetGu"
+    "ildDonateOptionsRequest\032&.guildpb.GetGui"
+    "ldDonateOptionsResponse\022N\n\rDonateToGuild"
+    "\022\035.guildpb.DonateToGuildRequest\032\036.guildp"
+    "b.DonateToGuildResponse\022K\n\014UpgradeGuild\022"
+    "\034.guildpb.UpgradeGuildRequest\032\035.guildpb."
+    "UpgradeGuildResponse\022K\n\014GetGuildShop\022\034.g"
+    "uildpb.GetGuildShopRequest\032\035.guildpb.Get"
+    "GuildShopResponse\022Z\n\021BuyGuildShopGoods\022!"
+    ".guildpb.BuyGuildShopGoodsRequest\032\".guil"
+    "dpb.BuyGuildShopGoodsResponse\022]\n\022GetGuil"
+    "dActivities\022\".guildpb.GetGuildActivities"
+    "Request\032#.guildpb.GetGuildActivitiesResp"
+    "onse\022Z\n\021LightGuildLantern\022!.guildpb.Ligh"
+    "tGuildLanternRequest\032\".guildpb.LightGuil"
+    "dLanternResponse\022Z\n\021ClaimGuildReunion\022!."
+    "guildpb.ClaimGuildReunionRequest\032\".guild"
+    "pb.ClaimGuildReunionResponse\022T\n\017StartGui"
+    "ldTrial\022\037.guildpb.StartGuildTrialRequest"
+    "\032 .guildpb.StartGuildTrialResponse\022l\n\027Re"
+    "spondGuildTrialInvite\022\'.guildpb.RespondG"
+    "uildTrialInviteRequest\032(.guildpb.Respond"
+    "GuildTrialInviteResponse\032\005\210\250\303\001\001B\023Z\021guild"
+    "/proto/guildb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fguild_2fguild_2eproto_deps[3] = {
@@ -12392,7 +12326,7 @@ static ::absl::once_flag descriptor_table_proto_2fguild_2fguild_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fguild_2fguild_2eproto = {
     false,
     false,
-    12185,
+    12100,
     descriptor_table_protodef_proto_2fguild_2fguild_2eproto,
     "proto/guild/guild.proto",
     &descriptor_table_proto_2fguild_2fguild_2eproto_once,
@@ -13452,13 +13386,6 @@ CreateGuildRequest::CreateGuildRequest(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  ::memcpy(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
-           reinterpret_cast<const char*>(&from._impl_) +
-               offsetof(Impl_, player_id_),
-           offsetof(Impl_, zone_id_) -
-               offsetof(Impl_, player_id_) +
-               sizeof(Impl_::zone_id_));
 
   // @@protoc_insertion_point(copy_constructor:guildpb.CreateGuildRequest)
 }
@@ -13470,12 +13397,6 @@ PROTOBUF_NDEBUG_INLINE CreateGuildRequest::Impl_::Impl_(
 
 inline void CreateGuildRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
-           0,
-           offsetof(Impl_, zone_id_) -
-               offsetof(Impl_, player_id_) +
-               sizeof(Impl_::zone_id_));
 }
 CreateGuildRequest::~CreateGuildRequest() {
   // @@protoc_insertion_point(destructor:guildpb.CreateGuildRequest)
@@ -13529,11 +13450,6 @@ PROTOBUF_NOINLINE void CreateGuildRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.name_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.zone_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.zone_id_));
-  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -13557,15 +13473,6 @@ PROTOBUF_NOINLINE void CreateGuildRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // string name = 2;
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_name().empty()) {
@@ -13573,15 +13480,6 @@ PROTOBUF_NOINLINE void CreateGuildRequest::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "guildpb.CreateGuildRequest.name");
       target = stream->WriteStringMaybeAliased(2, _s, target);
-    }
-  }
-
-  // uint32 zone_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-    if (this_._internal_zone_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          3, this_._internal_zone_id(), target);
     }
   }
 
@@ -13608,28 +13506,13 @@ PROTOBUF_NOINLINE void CreateGuildRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+   {
     // string name = 2;
+    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_name().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_name());
-      }
-    }
-    // uint64 player_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
-    // uint32 zone_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (this_._internal_zone_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_zone_id());
       }
     }
   }
@@ -13650,24 +13533,12 @@ void CreateGuildRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (!from._internal_name().empty()) {
-        _this->_internal_set_name(from._internal_name());
-      } else {
-        if (_this->_impl_.name_.IsDefault()) {
-          _this->_internal_set_name("");
-        }
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_zone_id() != 0) {
-        _this->_impl_.zone_id_ = from._impl_.zone_id_;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!from._internal_name().empty()) {
+      _this->_internal_set_name(from._internal_name());
+    } else {
+      if (_this->_impl_.name_.IsDefault()) {
+        _this->_internal_set_name("");
       }
     }
   }
@@ -13691,12 +13562,6 @@ void CreateGuildRequest::InternalSwap(CreateGuildRequest* PROTOBUF_RESTRICT PROT
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CreateGuildRequest, _impl_.zone_id_)
-      + sizeof(CreateGuildRequest::_impl_.zone_id_)
-      - PROTOBUF_FIELD_OFFSET(CreateGuildRequest, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
 }
 
 ::google::protobuf::Metadata CreateGuildRequest::GetMetadata() const {
@@ -14886,12 +14751,7 @@ PROTOBUF_NDEBUG_INLINE LeaveGuildRequest::Impl_::Impl_(
 
 inline void LeaveGuildRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
-           0,
-           offsetof(Impl_, expected_guild_id_) -
-               offsetof(Impl_, player_id_) +
-               sizeof(Impl_::expected_guild_id_));
+  _impl_.expected_guild_id_ = {};
 }
 LeaveGuildRequest::~LeaveGuildRequest() {
   // @@protoc_insertion_point(destructor:guildpb.LeaveGuildRequest)
@@ -14940,12 +14800,7 @@ PROTOBUF_NOINLINE void LeaveGuildRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.expected_guild_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.expected_guild_id_));
-  }
+  _impl_.expected_guild_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -14969,17 +14824,8 @@ PROTOBUF_NOINLINE void LeaveGuildRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // uint64 expected_guild_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_expected_guild_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -15010,18 +14856,10 @@ PROTOBUF_NOINLINE void LeaveGuildRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 player_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
+   {
     // uint64 expected_guild_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_expected_guild_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_expected_guild_id());
@@ -15045,16 +14883,9 @@ void LeaveGuildRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_expected_guild_id() != 0) {
-        _this->_impl_.expected_guild_id_ = from._impl_.expected_guild_id_;
-      }
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_expected_guild_id() != 0) {
+      _this->_impl_.expected_guild_id_ = from._impl_.expected_guild_id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -15074,12 +14905,7 @@ void LeaveGuildRequest::InternalSwap(LeaveGuildRequest* PROTOBUF_RESTRICT PROTOB
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(LeaveGuildRequest, _impl_.expected_guild_id_)
-      + sizeof(LeaveGuildRequest::_impl_.expected_guild_id_)
-      - PROTOBUF_FIELD_OFFSET(LeaveGuildRequest, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
+  swap(_impl_.expected_guild_id_, other->_impl_.expected_guild_id_);
 }
 
 ::google::protobuf::Metadata LeaveGuildRequest::GetMetadata() const {
@@ -15330,12 +15156,7 @@ PROTOBUF_NDEBUG_INLINE DisbandGuildRequest::Impl_::Impl_(
 
 inline void DisbandGuildRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
-           0,
-           offsetof(Impl_, expected_guild_id_) -
-               offsetof(Impl_, player_id_) +
-               sizeof(Impl_::expected_guild_id_));
+  _impl_.expected_guild_id_ = {};
 }
 DisbandGuildRequest::~DisbandGuildRequest() {
   // @@protoc_insertion_point(destructor:guildpb.DisbandGuildRequest)
@@ -15384,12 +15205,7 @@ PROTOBUF_NOINLINE void DisbandGuildRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.expected_guild_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.expected_guild_id_));
-  }
+  _impl_.expected_guild_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -15413,17 +15229,8 @@ PROTOBUF_NOINLINE void DisbandGuildRequest::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
   // uint64 expected_guild_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_expected_guild_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -15454,18 +15261,10 @@ PROTOBUF_NOINLINE void DisbandGuildRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint64 player_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
+   {
     // uint64 expected_guild_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_expected_guild_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_expected_guild_id());
@@ -15489,16 +15288,9 @@ void DisbandGuildRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_expected_guild_id() != 0) {
-        _this->_impl_.expected_guild_id_ = from._impl_.expected_guild_id_;
-      }
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_expected_guild_id() != 0) {
+      _this->_impl_.expected_guild_id_ = from._impl_.expected_guild_id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -15518,12 +15310,7 @@ void DisbandGuildRequest::InternalSwap(DisbandGuildRequest* PROTOBUF_RESTRICT PR
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(DisbandGuildRequest, _impl_.expected_guild_id_)
-      + sizeof(DisbandGuildRequest::_impl_.expected_guild_id_)
-      - PROTOBUF_FIELD_OFFSET(DisbandGuildRequest, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
+  swap(_impl_.expected_guild_id_, other->_impl_.expected_guild_id_);
 }
 
 ::google::protobuf::Metadata DisbandGuildRequest::GetMetadata() const {
@@ -15778,13 +15565,7 @@ SetAnnouncementRequest::SetAnnouncementRequest(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  ::memcpy(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, guild_id_),
-           reinterpret_cast<const char*>(&from._impl_) +
-               offsetof(Impl_, guild_id_),
-           offsetof(Impl_, player_id_) -
-               offsetof(Impl_, guild_id_) +
-               sizeof(Impl_::player_id_));
+  _impl_.guild_id_ = from._impl_.guild_id_;
 
   // @@protoc_insertion_point(copy_constructor:guildpb.SetAnnouncementRequest)
 }
@@ -15796,12 +15577,7 @@ PROTOBUF_NDEBUG_INLINE SetAnnouncementRequest::Impl_::Impl_(
 
 inline void SetAnnouncementRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, guild_id_),
-           0,
-           offsetof(Impl_, player_id_) -
-               offsetof(Impl_, guild_id_) +
-               sizeof(Impl_::player_id_));
+  _impl_.guild_id_ = {};
 }
 SetAnnouncementRequest::~SetAnnouncementRequest() {
   // @@protoc_insertion_point(destructor:guildpb.SetAnnouncementRequest)
@@ -15855,11 +15631,7 @@ PROTOBUF_NOINLINE void SetAnnouncementRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.announcement_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
-    ::memset(&_impl_.guild_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.player_id_) -
-        reinterpret_cast<char*>(&_impl_.guild_id_)) + sizeof(_impl_.player_id_));
-  }
+  _impl_.guild_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -15889,15 +15661,6 @@ PROTOBUF_NOINLINE void SetAnnouncementRequest::Clear() {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           1, this_._internal_guild_id(), target);
-    }
-  }
-
-  // uint64 player_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          2, this_._internal_player_id(), target);
     }
   }
 
@@ -15936,7 +15699,7 @@ PROTOBUF_NOINLINE void SetAnnouncementRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // string announcement = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_announcement().empty()) {
@@ -15949,13 +15712,6 @@ PROTOBUF_NOINLINE void SetAnnouncementRequest::Clear() {
       if (this_._internal_guild_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_guild_id());
-      }
-    }
-    // uint64 player_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
       }
     }
   }
@@ -15976,7 +15732,7 @@ void SetAnnouncementRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_announcement().empty()) {
         _this->_internal_set_announcement(from._internal_announcement());
@@ -15989,11 +15745,6 @@ void SetAnnouncementRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_guild_id() != 0) {
         _this->_impl_.guild_id_ = from._impl_.guild_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
   }
@@ -16017,12 +15768,7 @@ void SetAnnouncementRequest::InternalSwap(SetAnnouncementRequest* PROTOBUF_RESTR
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.announcement_, &other->_impl_.announcement_, arena);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SetAnnouncementRequest, _impl_.player_id_)
-      + sizeof(SetAnnouncementRequest::_impl_.player_id_)
-      - PROTOBUF_FIELD_OFFSET(SetAnnouncementRequest, _impl_.guild_id_)>(
-          reinterpret_cast<char*>(&_impl_.guild_id_),
-          reinterpret_cast<char*>(&other->_impl_.guild_id_));
+  swap(_impl_.guild_id_, other->_impl_.guild_id_);
 }
 
 ::google::protobuf::Metadata SetAnnouncementRequest::GetMetadata() const {
@@ -29585,9 +29331,9 @@ inline void GetGuildRankRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, page_),
            0,
-           offsetof(Impl_, zone_id_) -
+           offsetof(Impl_, page_size_) -
                offsetof(Impl_, page_) +
-               sizeof(Impl_::zone_id_));
+               sizeof(Impl_::page_size_));
 }
 GetGuildRankRequest::~GetGuildRankRequest() {
   // @@protoc_insertion_point(destructor:guildpb.GetGuildRankRequest)
@@ -29637,10 +29383,10 @@ PROTOBUF_NOINLINE void GetGuildRankRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     ::memset(&_impl_.page_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.zone_id_) -
-        reinterpret_cast<char*>(&_impl_.page_)) + sizeof(_impl_.zone_id_));
+        reinterpret_cast<char*>(&_impl_.page_size_) -
+        reinterpret_cast<char*>(&_impl_.page_)) + sizeof(_impl_.page_size_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -29683,15 +29429,6 @@ PROTOBUF_NOINLINE void GetGuildRankRequest::Clear() {
     }
   }
 
-  // uint32 zone_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-    if (this_._internal_zone_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          3, this_._internal_zone_id(), target);
-    }
-  }
-
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -29717,7 +29454,7 @@ PROTOBUF_NOINLINE void GetGuildRankRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint32 page = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_page() != 0) {
@@ -29730,13 +29467,6 @@ PROTOBUF_NOINLINE void GetGuildRankRequest::Clear() {
       if (this_._internal_page_size() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_page_size());
-      }
-    }
-    // uint32 zone_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (this_._internal_zone_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_zone_id());
       }
     }
   }
@@ -29757,7 +29487,7 @@ void GetGuildRankRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_page() != 0) {
         _this->_impl_.page_ = from._impl_.page_;
@@ -29766,11 +29496,6 @@ void GetGuildRankRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_page_size() != 0) {
         _this->_impl_.page_size_ = from._impl_.page_size_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_zone_id() != 0) {
-        _this->_impl_.zone_id_ = from._impl_.zone_id_;
       }
     }
   }
@@ -29792,8 +29517,8 @@ void GetGuildRankRequest::InternalSwap(GetGuildRankRequest* PROTOBUF_RESTRICT PR
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_.zone_id_)
-      + sizeof(GetGuildRankRequest::_impl_.zone_id_)
+      PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_.page_size_)
+      + sizeof(GetGuildRankRequest::_impl_.page_size_)
       - PROTOBUF_FIELD_OFFSET(GetGuildRankRequest, _impl_.page_)>(
           reinterpret_cast<char*>(&_impl_.page_),
           reinterpret_cast<char*>(&other->_impl_.page_));
@@ -30178,12 +29903,7 @@ PROTOBUF_NDEBUG_INLINE GetGuildRankByGuildRequest::Impl_::Impl_(
 
 inline void GetGuildRankByGuildRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, guild_id_),
-           0,
-           offsetof(Impl_, zone_id_) -
-               offsetof(Impl_, guild_id_) +
-               sizeof(Impl_::zone_id_));
+  _impl_.guild_id_ = {};
 }
 GetGuildRankByGuildRequest::~GetGuildRankByGuildRequest() {
   // @@protoc_insertion_point(destructor:guildpb.GetGuildRankByGuildRequest)
@@ -30232,12 +29952,7 @@ PROTOBUF_NOINLINE void GetGuildRankByGuildRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    ::memset(&_impl_.guild_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.zone_id_) -
-        reinterpret_cast<char*>(&_impl_.guild_id_)) + sizeof(_impl_.zone_id_));
-  }
+  _impl_.guild_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -30270,15 +29985,6 @@ PROTOBUF_NOINLINE void GetGuildRankByGuildRequest::Clear() {
     }
   }
 
-  // uint32 zone_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (this_._internal_zone_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          2, this_._internal_zone_id(), target);
-    }
-  }
-
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -30302,21 +30008,13 @@ PROTOBUF_NOINLINE void GetGuildRankByGuildRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+   {
     // uint64 guild_id = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_guild_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_guild_id());
-      }
-    }
-    // uint32 zone_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_zone_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_zone_id());
       }
     }
   }
@@ -30337,16 +30035,9 @@ void GetGuildRankByGuildRequest::MergeImpl(::google::protobuf::MessageLite& to_m
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_guild_id() != 0) {
-        _this->_impl_.guild_id_ = from._impl_.guild_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_zone_id() != 0) {
-        _this->_impl_.zone_id_ = from._impl_.zone_id_;
-      }
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_guild_id() != 0) {
+      _this->_impl_.guild_id_ = from._impl_.guild_id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -30366,12 +30057,7 @@ void GetGuildRankByGuildRequest::InternalSwap(GetGuildRankByGuildRequest* PROTOB
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GetGuildRankByGuildRequest, _impl_.zone_id_)
-      + sizeof(GetGuildRankByGuildRequest::_impl_.zone_id_)
-      - PROTOBUF_FIELD_OFFSET(GetGuildRankByGuildRequest, _impl_.guild_id_)>(
-          reinterpret_cast<char*>(&_impl_.guild_id_),
-          reinterpret_cast<char*>(&other->_impl_.guild_id_));
+  swap(_impl_.guild_id_, other->_impl_.guild_id_);
 }
 
 ::google::protobuf::Metadata GetGuildRankByGuildRequest::GetMetadata() const {

@@ -1,6 +1,6 @@
 # 写者名册会用完、死写者会堆积(缺口清单第 22 条,2026-11-06)
 
-状态:**分析与方案已写,未落码,等负责人拍板。** 推荐方案(§3.B)要改写者闸门的一条既有不变量,改动跨 `go/shared/authoritysql`、`writer_authority` 注册器、proto、部署脚本与手册,预计 30 个文件以上,按 AGENTS §10.2 先报告再动手。
+状态:**2026-11-10 定案(§4),11-10~11 按 §5 落码完毕,未生成、未编译、未测试,待 Codex 验证(命令、顺序与通过标准见 `docs/PROGRESS.md` 2026-11-11「写者名册按槽位换代」)。11-11 残余回收定案并落码(§5.8:slot 行只属于在役的一代,一代结束时同一事务删掉;登记行与收据永久保留),同样未编译,验证见 `docs/PROGRESS.md` 2026-11-11「写者名册残余:一代结束即删 slot 行」。** 负责人要求「待拍板项按有依据的标准做法直接定案」,两个待定项按 §4 定了。改动跨 `go/shared/authoritysql`、`writer_authority` 注册器、proto、排空收据、部署脚本与手册,超过 30 个文件,按 §4 分 4 批落码,每批不超过 30 个文件。
 上游:[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md) 第 22 条;相关:[MySQL 写入围栏](db-write-fencing-mysql.md)「2026-10-26:单次 writer 身份与永久排空收据」、[逻辑库自治与水平扩展](horizontal-scale-logical-db.md)「写资格什么时候消费」、[开服手册](../ops/k8s-open-server-runbook.md) §1、§9。
 
 ## 1. 现状
@@ -41,10 +41,152 @@
 
 进程启动时由集群内组件现建账号、现生成 REGISTER:集群里要常驻 CREATE USER / GRANT 权限,违背「运行期不签发身份」的前提,一旦这个组件失守就能凭空造写者。
 
-## 4. 建议与待拍板
+## 4. 定案(2026-11-10)与分批
 
-- 推荐 B,A 先做当作 B 落地前的告警。
-- 落地顺序:先改 `db-write-fencing-mysql.md` 2026-10-26 节与 `horizontal-scale-logical-db.md`「写资格」两节的不变量与收据规则,再分批落码:①proto(名册模板、代次)与 `Catalog` 的换代注册;②注册器;③排空收据接受「同槽位下一代」的 RETIRE;④部署脚本、名册校验(× 6 规则改成「槽位数 ≥ 副本上限 + 滚动余量」)、回收 CronJob、手册;⑤Java 网关核对(它只消费 grant;grant 格式不变就不用改,变了按 Java 惯用方式同批改)。项目未上线,存量名册与注册整批重建。
-- **需要负责人确认两件事**:
-  1. 同意把「每次启动一个新 SQL 账号」放宽为「槽位账号长期不变、每次启动换代(writer key 与 instance 仍每代唯一)」,或者要每槽位两个账号轮换保留数据库层兜底。
-  2. 槽位按 StatefulSet 序号分(§3.B 第 1 种),还是保持 Deployment、按租约领(第 2 种)。
+### 4.1 两个待定项
+
+1. **账号按槽位,不按启动。** 采用 §3.B:槽位的 SQL 账号长期不变,每次启动换一代 writer key 与 instance(两者仍每代唯一,REVOKED 仍永久)。不做「每槽位两个账号轮换」:所有写路径都经闸门(Go 的 `authoritysql`、Java 网关的 `WriterAuthority`),旧代下一笔事务就被注册表拒掉;轮换账号只多挡「绕过闸门的写」,而这种写在本项目不存在,多出一倍账号与授权换来的是假想场景。依据:Kafka 事务生产者(固定 `transactional.id` + producer epoch)、etcd / ZooKeeper 租约的 fencing token 都是「身份长期不变、按代围栏」。
+2. **槽位 = StatefulSet 序号。** 写者服务从 Deployment 换成 StatefulSet,Pod 名后缀就是槽位,K8s 保证同一序号同一时刻只有一个 Pod;节点失联后强删重建时,新 Pod 换代即围栏掉旧的。不选「Deployment + 租约领槽」:要多一套续期写入,续期断了还会把活着的进程误判成死的、互相围栏。代价:StatefulSet 滚动一次换一个副本、不能 `maxSurge`,发布慢一些;写者服务都无本地状态,PVC 不用加。
+
+### 4.2 不变量改写(落码前先改规格)
+
+- `db-write-fencing-mysql.md` 2026-10-26 节:「主体和 instance 永久唯一」改为「writer key 与 instance 每代唯一、REVOKED 永久;SQL 主体按槽位,同槽位上下两代共用」。
+- `horizontal-scale-logical-db.md` §2「写资格什么时候消费」:一次性的是**一代**,不是一个账号;写后崩溃的 Pod 被回收、同序号重建后换代,名册不再消耗。
+- 排空收据:RETIRE 多一个来源——同槽位的下一代在换代事务里退休上一代(非 run 的 RETIRE,收据照写全文)。「每个 key 恰一次 RETIRE」「ACTIVE 等于初始集合减合法退役」两条规则不变;排空期间(`freeze_run_id` 非空)不换代,与现在「冻结时注册器什么也不写」相同。
+
+### 4.3 分批(每批不超过 30 个文件,批内一起编译验证)
+
+| 批 | 内容 | 主要文件 |
+|---|---|---|
+| 1 协议与目录 | 名册改成槽位模板(账号、逻辑库、权限档位、锁原语资格);新表或新列记每个槽位的当前代次与当前 writer key;`Catalog.Supersede`:每个逻辑库一个事务,锁上一代的 64 个 slot 与 meta,核未冻结,非 run RETIRE 上一代、注册新一代、代次 +1,幂等(同一 Pod UID 重放回原收据);真库用例(MySQL 与 TiDB) | `proto/common/database/*.proto`、`go/shared/authoritysql/catalog.go` 与测试 |
+| 2 注册器 | `writer_authority register` 从 `POD_NAME` 取序号选槽位模板,现场生成 instance,按模板拼 REGISTER 并调 `Supersede`;消费标记语义不变(写后崩溃仍以 78 退出、Pod 被回收、同序号重建) | `go/data_service/cmd/writer_authority/*`、`tools/scripts/lib/sql_boot_catalog_*.ps1` |
+| 3 排空收据 | 排空 run 的 ACTIVE 记账接受「同槽位下一代」的 RETIRE;用例覆盖「换代发生在 run 之前 / 之后」「run 期间拒绝换代」 | `go/shared/authoritysql/maintenance.go` 与测试 |
+| 4 部署与手册 | 写者服务换 StatefulSet;名册校验「槽位数 ≥ 副本上限」取代「条数 ≥ 副本数 × 6」;回收 CronJob 不变(删 78 退出的 Pod,StatefulSet 按同序号重建);开服手册 §1、§9、`deploy/k8s/README.md`;契约测试 | `tools/scripts/k8s_deploy.ps1`、`deploy/k8s/manifests/go-svc/*`、`tools/scripts/tests/*` |
+
+- 批 1 到批 3 在 Go 内部,先落;批 4 动部署,和正在改 `k8s_deploy.ps1` 的会话先分工再动。
+- Java 网关(`java/gateway_node` 的 `WriterAuthority`)只消费 grant:grant 格式不变就不用改,变了在批 2 同批改。Java 版仓库(`D:\luyuan\xuanming-server-mmo`)只在 `PARITY.md` 登记待做。
+- 项目未上线:存量名册、注册与账号整批重建,不做迁移。
+
+## 5. 落码细节(2026-11-10)
+
+### 5.1 数据模型
+
+- `writer_registry` 加 `boot_seq`(pb:11):这个 SQL 账号上第几次启动,从 1 起,严格递增,允许有空洞。账号就是槽位:同一个账号在一个逻辑库里同一时刻至多一行 ACTIVE,而且就是 `boot_seq` 最大的那一行。唯一键 `uk_writer_principal(sql_principal)` 换成 `uk_writer_principal_boot(sql_principal, boot_seq)`,挡住同一账号同一序号注册两次;`writer_key`、`instance_id` 仍然永久唯一。
+  - 不另建槽位表:槽位和账号一一对应,账号已经在注册表里,再存一份槽位名就是第二份真相。「这个槽位现在是哪一代」= 按账号取 `boot_seq` 最大的一行,走唯一键前缀。
+- `sql_writer_lifecycle_receipt.Request` 加 `successor_request_id`(pb:13):换代退休时填退休它的那份 REGISTER 的 `request_id`,人工退休和排空退休为空。看收据全文就知道这次 RETIRE 是谁做的。
+- 名册格式改为 `SQL_WRITER_BOOT_ROSTER_V2`,沿用 `sql_writer_boot_roster` 消息:一条 entry 是一个槽位,下标就是 StatefulSet 序号。entry 里每个逻辑库一份 REGISTER 模板,固定账号、逻辑库、锁原语与资格、`generation`、维护 run;身份字段(`request_id`、`writer_key`、`instance_id`、`registration_digest`、`registered_ms`、`boot_seq`、`deployment_id`)必须为空,由注册器现场生成。条数等于这个服务副本数的上限,不随启动次数增长。V1 名册整份拒绝:项目未上线,不做兼容。
+
+### 5.2 注册事务(`Catalog.Register`)
+
+一个逻辑库一个事务,提交即生效,这就是提交点:
+
+1. 事务外先查同 `request_id` 的收据,在就原样返回(幂等重放);再预读这个账号的最新一行,知道要锁谁。
+2. 锁序与 `Retire`、冻结相同:上一代的 64 个 slot → `route_meta` → 这个账号的注册行。没有 ACTIVE 的上一代(第一次启动,或上一代已被人工、排空退休)就只锁 meta。
+3. 拿到锁后再查一次同 `request_id` 的收据:并发重放、上一次提交结局未知,都在这里收口。
+4. 复核:世代、`writable`(冻结回 `ErrWriterFrozen`,确定没写)、维护 run 的规则与原来相同;请求的 `boot_seq` 必须大于这个账号已有的全部 `boot_seq`(CAS,挡住陈旧请求,也挡住同序号另一个 Pod 抢先注册之后的重放);ACTIVE 至多一行,有的话必须就是锁住的那一代;有 ACTIVE 的上一代时维护 run 必须没开(排空期间不换代)。
+5. 写:新注册行、64 个 slot(当前 epoch)、REGISTER 收据(版本 r+1);有上一代就结束它(2026-11-11 起删掉它的 64 个 slot 行、注册行置 REVOKED,见 §5.8),追加 RETIRE 收据(版本 r+2,`expected_epoch` 为当前 epoch,`successor_request_id` 指向这次 REGISTER,`deployment_id` 是新 Pod 的);`route_meta.catalog_revision` 推到最后一份的版本。
+6. 旧代怎么被挡住:旧进程的在途事务持着自己的 slot 行锁,第 2 步要等它们提交完;提交之后,旧进程下一笔事务在 `enter` 找不到自己的 slot 行(11-11 之前是读到 REVOKED),回 `ErrWriterDenied`,写不进去。纯读不受影响(读闸门只核 `route_meta`),读不会改数据。
+
+RETIRE 排在 REGISTER 之后,是为了让带 `expected_catalog_revision` 的 REGISTER 仍满足「收据版本 = 期望版本 + 1」。两份在同一事务里,外面看不到先后。
+
+人工退休(缩容后留下的末代)和排空 run 的退休照旧由运维准备 RETIRE 原件,`writer` 要原样复制这一代 REGISTER 收据里的 `writer`,包括 `boot_seq`。`boot_seq` 为 0 的生命周期请求,闸门(`validateLifecycle`)和注册器(`validateRequestIdentity`)都在发 SQL 之前拒绝;退休的 UPDATE 按 `writer_key`、`instance_id`、`sql_principal`、`registration_digest`、`boot_seq` 一起匹配那一行。`successor_request_id` 只有换代事务能填,手工 RETIRE 带它也在发 SQL 之前被拒。
+
+### 5.3 注册器
+
+- 新参数 `-pod-name`(K8s 注入 `metadata.name`):序号取最后一个 `-` 之后的十进制数,选 `entries[序号]`;序号超出名册就拒绝,说明副本数比槽位多。
+- 启动记录 `<boot-output>.register.started.protojson`(本 Pod 私有 emptyDir,独占创建):第一次运行时现场生成 `writer_key`、`instance_id`、每个库的 `request_id`、`registered_ms`,`deployment_id` 是 Pod UID;`boot_seq` 取各库「这个账号最大序号 + 1」里最大的那个,各库用同一个号。顺序是先逐库预检,再写启动记录,再逐库注册。同一个 Pod 的 init 重跑只读启动记录、重发同样的请求,不再生成新身份;启动记录里除身份以外的字段必须和名册模板逐字相同。
+- 原来「结局未知就只能查原请求,查不到就停」,现在可以重发:注册事务在锁内先查收据,`boot_seq` CAS 挡住陈旧请求,同一请求最多落地一次。
+- 输出(grant 集合、选中配置、环境文件)不变。`RegistrationConsumedByOtherDeployment` 与「这条被别人用了就换下一条」的逻辑删除;单 Request 的注册入口(`-command register -request`)删除,注册只走槽位名册;`retire`、`status` 不变。
+
+### 5.4 权限
+
+注册账号在 `writer_registry` 上加 `UPDATE`:换代要在同一事务里退休上一代。注册账号本来就能插入新的 ACTIVE 写者,多出来的 `UPDATE` 只能退休(写者只会变少)或改状态,不比插入更危险。常驻账号的权限不变。
+
+2026-11-11 回收(§5.8)之后:一代结束时删掉它的 slot 行,所以注册账号对 `writer_slot` 是 `SELECT,INSERT,DELETE`(不再改写 slot 行,不给 `UPDATE`;MySQL 上 `FOR UPDATE` 锁读由 `DELETE` 权限满足),维护账号对 `writer_slot` 是 `SELECT,UPDATE,DELETE`(人工与排空退休要删,冻结、解冻推进 epoch 要改)。授权模板 `deploy/sql/authority_operator_role.sql`。
+
+### 5.5 部署
+
+- 写者服务(db、data-service、login、gateway 和 infra namespace 的全局写者,含 `<svc>-canary`)从 Deployment 改成 StatefulSet:`serviceName` 用同名 Service;`podManagementPolicy: Parallel`,扩缩容和首次部署不按序号排队;`updateStrategy: RollingUpdate`,一次换一个副本,不能 `maxSurge`。Pod 模板注入 `POD_NAME`,registrar init 加 `-pod-name`。
+- 名册校验改成「格式 V2、槽位数 ≥ 副本数、≤ 1024」,不再要求副本数 × 6。
+- 首次切换要先删同名的旧 Deployment:同一个 label 选择器不能同时归两个控制器。`k8s_deploy.ps1` 在 apply 写者之前删(`Remove-LegacySqlWriterDeployment`;gateway 排在建表 Job 之后),所以首次切换时这个服务有一段没有副本,直到 StatefulSet 的 Pod 就绪;项目未上线,不做无中断迁移。
+- 回收 CronJob 不变:删掉主容器以 78 退出的 Pod,StatefulSet 按同序号重建,新 Pod 换代。
+- 节点失联:StatefulSet 不会在别的节点自动重建同序号的 Pod,要等节点对象被删或人工强删。强删是安全的:新 Pod 换代,旧代下一笔事务被拒。
+
+### 5.6 失败与回滚
+
+| 情形 | 结局 |
+|---|---|
+| 预检时冻结或资格不符 | 什么都没写,不留启动记录;init 退出,原地重试 |
+| 提交时冻结 | 事务回滚,确定没写;启动记录留着,重跑时重发同一请求 |
+| 部分库已注册,init 重跑 | 已注册的查到收据,没注册的接着注册,还是同一个身份 |
+| 部分库已注册,Pod 没了 | 同序号新 Pod 换代,已注册的那几份由新一代在换代事务里退休,不用人工 |
+| 结局未知 | 重跑时重发同一请求,锁内查收据收口,最多落地一次 |
+| 同序号出现两个 Pod(强删之后旧节点其实还活着) | 后注册的那个换代,先注册的那份被退休、写不进去;旧 Pod 拿着过期的启动记录重跑时被 CAS 拒绝,停在 Init,告警 `SqlWriterRegistrarFailing`,删掉它即可 |
+| 两个工作负载误用同一份名册 | 同一账号会被两边轮流换代,谁都写不稳。部署脚本在 apply 之前核全部写者名册的账号互不重复 |
+| 缩容 | 被缩掉的序号最后一代留着 ACTIVE(没有下一代来退休它),再扩回来时被换代。下一次排空之前按非 run 的 RETIRE 退休,和原来一样,但数量不超过槽位数 |
+
+代码回滚:项目未上线,名册、注册与账号整批重建,不做 V1 兼容。
+
+### 5.7 测试
+
+- 单测:`validateLifecycle` 对 `boot_seq`、`successor_request_id` 的规则;注册器的序号解析、启动记录的生成与重放、模板比对;同一槽位连续换代 1100 次(超过旧上限 1024)不需要新的名册条目。
+- 真库(`MMORPG_SQL_FIXTURE_ADMIN_DSN`,MySQL 与 TiDB):首次注册;同账号换代(上一代 REVOKED,两份收据的版本与 `successor_request_id` 正确,旧代事务被拒);同序号重复与陈旧请求被 CAS 拒绝;冻结时换代确定没写;重放同一请求只落地一次;排空 run 开着时有上一代就拒绝换代,run 之前换代的新一代计入 P0,SQL_RELEASED 之后上一代已退休只注册。共享夹具解冻之后用同一账号重新注册(原来会撞唯一键,真库用例一直没跑过),改成换代。
+- 回收(§5.8,2026-11-11)的用例见 §5.8 末尾。
+
+### 5.8 回收(2026-11-11 定案)与残余
+
+11-10 落码时,每次启动在每个逻辑库留下 1 行 REVOKED 登记行、64 行 REVOKED slot 行和 2 份收据(REGISTER、换代 RETIRE)。原来 1024 条的名册上限顺带限住了行数,换代之后不再有上限,随启动次数无界增长。其中 slot 行占 64/67,而且 `writer_slot` 是每笔写事务都要锁的表。11-11 按下面定案落码,本节原来「先不做瘦身」的结论作废。
+
+**定案:slot 行只属于在役的一代;登记行与收据永久保留。**
+
+| 行 | 保留几代 | 谁删、什么时候删 |
+|---|---|---|
+| `writer_slot`(每代 64 行) | 只留在役的这一代;结束的一代 0 行 | 结束这一代的事务自己删:换代(`Register` 里的 `retireSuperseded`)、人工退休与排空退休(`Retire`)都走 `endGeneration`,删 64 行、登记行置 REVOKED、写 RETIRE 收据在同一事务 |
+| `writer_registry`(每代 1 行) | 全部代 | 不删,结束时置 REVOKED |
+| `writer_lifecycle_receipt`(每次换代 2 份) | 全部 | 不删 |
+
+不变量:`writer_slot` 的行数恒等于「ACTIVE 写者数 × 64」,不随启动次数增长;`writer_slot.state` 从此只会是 1(列与检查约束保留,闸门照旧核 `state=1`,不改表结构)。
+
+**什么时候可以删(逐条对照删除条件)**
+
+- **上一代已被继任或已退休**:删除与「登记行置 REVOKED、追加 RETIRE 收据」在同一事务里。提交之前,外面看不到「slot 没了但登记还 ACTIVE」或「已 REVOKED 但 slot 还在」的中间态。
+- **没有在途事务**:删之前,这个事务已按 slot 号顺序锁齐这一代的 64 行,并核过它们在当前 epoch 上 ACTIVE(`lockSlotRows` + `activeSlotsAt`)。每笔写事务从进闸门到提交一直持着自己轮到的那一行,所以锁齐就说明这一代在途的写都已提交或回滚;已提交的写照常保留,不丢。删除语句带 `state=1` 与 epoch 条件,必须正好删 64 行,否则整个事务回滚。
+- **删了之后仍挡得住僵尸**:这一代再开写事务,闸门找不到自己的 slot 行。Go 闸门 `LOCK_TOUCH` 的条件写影响 0 行、随后的读读到 EOF,`SELECT_ONLY` 的锁读读到 EOF,都回 `ErrWriterDenied`;Java 网关的 `WriterAuthority.begin` 条件锁未命中或读不到行即抛错。这和读到 REVOKED 行是同一结局。TiDB 上若旧事务在换代提交之前已拿到快照,读到旧版本的 ACTIVE 行,会按冻结回可重试,重试即被拒——与置 REVOKED 时完全相同。新连接核注册(`verifyBootRegistration`)读的是登记行,登记行不删,照旧拒绝。删掉的 slot 行也不会被重建:同一个 writer key 的登记行还在,主键挡住再注册。
+- **收据链**:排空 run 只读 P0 之后的生命周期收据(`plannedActive` / `foldRetirements`)与 ACTIVE 登记行(`active`);冻结只锁预期 ACTIVE 全集的 slot;发布就绪只核新一代自己的 slot。没有路径读已结束一代的 slot 行。收据一份不删,链不受影响。run 开着时不换代(§5.2),排空退休删的是被退休者自己的 64 行。
+- **审计**:slot 行只有锁、epoch 与状态,不是证据。每一代的全文证明在 REGISTER / RETIRE 收据里,登记行(REVOKED)记着退休它的请求与时间。删 slot 行不丢任何审计信息。
+
+**由谁删:结束这一代的事务自己删,不另做清理任务。** 删除需要的条件(锁齐 64 行、核 epoch 与 ACTIVE、与 REVOKE 原子)正是结束这一代的事务已经拿到并核过的。独立任务要再实现一遍锁序(slot → meta)和「现在删安全吗」的判断,另加调度、权限与监控,两次清理之间仍有 REVOKED slot 行堆着。三条结束路径共用 `endGeneration` 一段写,规则只在一处。
+
+**为什么登记行与收据不删(不做「保留 N 代」)**
+
+- 登记行是唯一约束的墓碑:`PRIMARY KEY(writer_key)`、`UNIQUE(instance_id)`、`UNIQUE(sql_principal, boot_seq)` 由库保证「writer key 与 instance 每代唯一、REVOKED 永久」([MySQL 写入围栏](db-write-fencing-mysql.md) 2026-10-26 节)。删了就只剩靠随机数不撞,被删 slot 行的 writer key 理论上还能再注册一次。每个账号最新的那一行是 `boot_seq` CAS 的高水位,无论如何不能删。
+- 收据是规格里的永久证明(排空收据链、重放幂等、审计)。删收据是数据保留策略,不是清理,要负责人另定。
+- 量小,不在热路径:每次启动每个库多 1 行登记(约 200 字节)加 2 份收据(各约 0.5–1 KB)。闸门按 `writer_key` 主键点读登记行;ACTIVE 全集走 `idx_writer_state` 的 `state=1` 段;槽位当前代走 `uk_writer_principal_boot` 前缀倒序取 1 行;收据按主键或 `(kind, request_digest)`、`(catalog_revision, request_id)` 索引读。只有 `tools/dbmove` 搬库时的全表校验和会读全表。粗估:一个库 64 个槽位、每个每天重启 10 次(已经很极端),一年约 23 万代,登记行约 50 MB、收据约 300 MB;正常发布频率比这小两个数量级。
+- 定案(2026-11-11,负责人要求不等数据、按标准做法定):登记行与收据永久保留,不做「保留 N 代」的瘦身。登记行是唯一约束的墓碑,收据是排空链与审计的证明;两者都是低量的审计数据(每次启动每库约 1.2–2.2 KB),标准做法就是永久保留。真要删,只能作为负责人另定的数据保留策略:先导出归档,再删「早于最近一次排空 run 的 P0、不属于 ACTIVE 写者、也不是各账号最新一代」的收据与登记行,并同时改 2026-10-26 节的不变量措辞。这不是挂起的缺陷。
+
+**落码(未编译)**
+
+- `go/shared/authoritysql/catalog.go`:新增 `endGeneration`(删 64 个 slot 行 → 登记行置 REVOKED),`retireSuperseded` 与 `Retire` 改调它。`lockSlotRows` 一行都没有时回空集,只缺一部分回 `ErrWriterDenied`(判定抽成 `lockedSlots`),不再把 `sql.ErrNoRows` 交给调用方:
+  - `lockSlots`(人工与排空退休、冻结与解冻、排空冻结)经 `activeSlotsAt` 回确定的 `ErrWriterDenied`;
+  - `Register` 拿到空集,说明预读之后上一代已被别的事务结束(人工退休,或同序号另一个 Pod 先换了代),持 meta 锁复核槽位,结局与原来读到 REVOKED 行时相同。
+- 授权模板 `deploy/sql/authority_operator_role.sql`,见 §5.4。
+- 运行期闸门(Go `writer.go`、Java `java/authority_jdbc` 的 `WriterAuthority`)与表结构不改。
+- 存量:项目未上线,按 `docs/PROGRESS.md` 2026-11-11「写者名册按槽位换代」第 0 步清库重建;库里已有的 REVOKED slot 行不迁移,没有路径读它们。
+
+**用例(未运行)**
+
+- 单测 `catalog_succession_test.go` `TestLockedSlotsOutcome`:空集、整代、缺一部分、计数不符;空集过不了 `activeSlotsAt`。
+- 真库 `writer_succession_tidb_test.go`(MySQL 与 TiDB):
+  - `TestSlotSuccessionRetiresPreviousGeneration`:换代后上一代 slot 0 行、登记行 REVOKED;旧进程连写两次都是拒绝,不是冻结;已被换代的一代再人工退休,回 `ErrWriterDenied`(不是 `sql.ErrNoRows`),不写目录。
+  - `TestSlotSuccessionChainKeepsOneActiveGeneration`:连续换代 20 次后整表 slot 行 = ACTIVE × 64;登记行 21 行;REGISTER 与 RETIRE 收据各多 20 份。
+  - `TestSlotSuccessionWaitsOutFreeze`:解冻后换代,上一代 slot 行按解冻后的 epoch 删掉,RETIRE 收据记这个 epoch。
+  - `TestSlotSuccessionAndDrainRun`:run 期间被拒的换代不动在役一代的 64 行。
+  - 新增 `TestSlotSuccessionWaitsForInFlightTransaction`:上一代开着一笔写事务时,换代在 slot 锁上等(按 TiDB `DATA_LOCK_WAITS` / MySQL `performance_schema.data_locks` 观测,不 sleep);那笔提交后换代落地,写保留,上一代 slot 0 行,下一笔写被拒。
+  - 新增 `TestManualRetireEndsGenerationAndSlotRegistersAgain`:人工 RETIRE(带 `bootSeq`)删 slot 行、登记行指回这份 RETIRE;重放原样返回,不推进目录;旧进程写被拒;同一槽位下一代只注册(目录 +1),整表 64 行;已退休的一代换 request_id 再退,回 `ErrWriterDenied`。
+- 真库 `writer_tidb_test.go` 的排空用例:排空退休之后这一代 slot 0 行,随后的空 ACTIVE 冻结照常推进。
+- 脚本契约 `sql_boot_catalog_local.tests.ps1`:注册账号对 `writer_slot` 是 `SELECT,INSERT,DELETE`,维护账号是 `SELECT,UPDATE,DELETE`。
+
+**其余残余**
+
+- 缩容留下的末代(§5.6 最后一行)先不自动退休:数量不超过槽位数;忘了退休时,下一次排空收不了尾、停下来(没有进程替它关闭),不会写坏数据;自动化要新加注册器命令和部署脚本里的收尾 Job。缩容变频繁时再做:部署脚本发现副本数变小、等多出来的序号的 Pod 删完之后,跑一次 Job,按名册把这些槽位当前 ACTIVE 的那一代用非 run 的 RETIRE 退休(写者已经没了,退休只会挡住它,总是安全的)。
+- Java 版(`D:\luyuan\xuanming-server-mmo`)只在 `PARITY.md` 登记待做(换代与 11-11 回收各一节)。本仓库的 Java 网关只消费 grant,核 REGISTER 原文用的 descriptor 在构建时由 proto 生成,不用改代码,要重新构建。回收也不用改它:它只在自己的事务里锁自己的 slot 行,行没了 `begin` 抛错、启动时 `verifySlots` 拒启,和读到 REVOKED 同一结局;注册与退休都由 Go 的 `Catalog` 做。

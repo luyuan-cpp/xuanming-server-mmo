@@ -385,3 +385,9 @@
 384=DataServiceRegisterRecallReviewHandled
 385=DataServiceGetPlayerItemGainBlock
 386=PlayerInboxAdminGetItemGainBlocks
+387=MatchInternalListPendingBattleScripts
+388=MatchInternalReviewBattleScript
+389=MatchServiceListBattleScripts
+390=MatchServiceSubmitBattleScript
+391=MatchServiceDeleteBattleScript
+392=MatchServiceSetBattleScriptLoadout

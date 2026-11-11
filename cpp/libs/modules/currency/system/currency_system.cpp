@@ -139,9 +139,12 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
         return PrintStackAndReturnError(kAssetFrozen);
     }
 
+    // 交易退回本人托管的货币不是新增获得,两道封禁都不判(GainBlockService::CountsAsGain,审计 r2-trade#1)。
+    const bool countsAsGain = GainBlockService::CountsAsGain(txType);
+
     // ── Global (server-wide) block check ────────────────────────────────
-    if (GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency,
-                                        static_cast<uint32_t>(type)))
+    if (countsAsGain && GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency,
+                                                            static_cast<uint32_t>(type)))
     {
         LOG_WARN << "CurrencySystem::AddCurrency: currency GLOBALLY blocked. CurrencyType="
                  << static_cast<uint32_t>(type) << " entity=" << entt::to_integral(player);
@@ -150,7 +153,7 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     }
 
     // ── Per-player GM block check ────────────────────────────────────────
-    if (IsCurrencyBlocked(player, type))
+    if (countsAsGain && IsCurrencyBlocked(player, type))
     {
         LOG_WARN << "CurrencySystem::AddCurrency: currency blocked by GM. CurrencyType="
                  << static_cast<uint32_t>(type) << " entity=" << entt::to_integral(player);

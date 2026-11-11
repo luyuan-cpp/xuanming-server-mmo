@@ -138,8 +138,9 @@ private:
 	bool ensureInitialized();
 	// 按当前投递语义建一个新的底层生产者;失败时 producer_ 保持为空。
 	bool createProducer(const std::string& brokers);
+	// traceparent 为空表示不带消息头(docs/design/distributed-tracing.md §5.4)。
 	RdKafka::ErrorCode produceOnce(const std::string& topic, const std::string& message,
-		const std::string& key, int32_t partition);
+		const std::string& key, int32_t partition, const std::string& traceparent);
 	// 销毁已进入 fatal 的实例并重建。只能在 librdkafka 的调用栈之外调用(不能在 dr_cb 里)。
 	// 返回 true = 新实例可用;false = 处于重建冷却期,或重建失败(留给下次 send() 惰性重试)。
 	bool rebuildAfterFatal(const char* trigger);

@@ -58,6 +58,8 @@ type enterGameSessionState struct {
 // enterGameChainBudget 是 EnterGame 后台链(预加载 → 写会话 → 绑 gate → 进场)的总预算。
 // gate 连接会话栅栏里没绑定玩家、或已关闭的记录的寿命由它派生:记录必须比所有还可能读它的操作活得久(sessionfence.TTLFor)。
 // 绑定了玩家的记录不用它:绑定只由 LeaveGame / Disconnect 解除,寿命由 sessionfence 自己管(包注释「寿命」)。
+// gate 排空迁移的 kEnterGameSettle(cpp/nodes/gate/handler/rpc/drain_migration.h)不得短于本值,
+// gate_drain_settle_crosslang_test.go 读头文件对拍;改长这里要同批改长那边。
 const enterGameChainBudget = 5 * time.Minute
 
 var sessionFenceTTL = sessionfence.TTLFor(enterGameChainBudget)
@@ -211,11 +213,14 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	enterCtx := flowState // value-copied state for the closure
 	playerID := in.PlayerId
 
-	// Background context for the whole chain — independent of gRPC ctx (which
-	// is cancelled the instant we return below). chainCancel both stops the
-	// timeout and cancels manually from the lost-lock heartbeat path.
+	// 后台链的 ctx 不受 gRPC ctx 的取消与截止约束(本函数一返回它就被取消),但保留它的值:
+	// trace 与日志上下文(player_id)随后台链走,链上的 RPC、发给 gate 的 Kafka 命令和日志都接着这次 EnterGame
+	// (docs/design/distributed-tracing.md §6.2)。WithoutCancel 是标准库给「请求返回后继续跑的工作」的做法;
+	// 它带过去的其余值(会话元数据、验签原件)链上没有代码读,出站拦截器也不读。
+	// chainCancel both stops the timeout and cancels manually from the lost-lock heartbeat path.
+	detachedCtx := context.WithoutCancel(ctx)
 	const chainBudget = enterGameChainBudget
-	chainCtx, chainCancel := context.WithTimeout(context.Background(), chainBudget)
+	chainCtx, chainCancel := context.WithTimeout(detachedCtx, chainBudget)
 
 	// chainStart is the t0 for the total latency histogram.
 	// We start the clock here (not before TryLock) because the histograms
@@ -264,7 +269,8 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		bindSent := false
 		defer func() {
 			if failedStage != "" {
-				notifyEnterGameFailed(l.svcCtx, enterCtx, failedStage, bindSent)
+				// 此时 chainCtx 已取消(chainCancel 先执行),用 detachedCtx 带 trace,推送本身不受链预算约束。
+				notifyEnterGameFailed(detachedCtx, l.svcCtx, enterCtx, failedStage, bindSent)
 			}
 		}()
 		defer chainCancel()
@@ -329,15 +335,18 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 // enterFailureTipPusher 是 notifyEnterGameFailed 唯一需要的能力:经 gate 给某个会话推一条 tip,分已绑定与未绑定两种会话。
 // 生产实现是 *svc.ServiceContext(PushTipToSession / PushTipToUnboundSession)。只收这两个方法而不是整个 ServiceContext,
 // 是因为其 KafkaClient 是具体类型、单测里起不出来;与 resolveEnterName 收 roleNameLookup 同做法。
+//
+// 本文件里发给 gate 的三种命令(tip、Bind、Kick)都收 ctx:只用来取 trace 写进 Kafka 消息头,不控制发送超时
+// (见 svc.ServiceContext.SendBindSessionToGate 的注释)。
 type enterFailureTipPusher interface {
-	PushTipToSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error
-	PushTipToUnboundSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error
+	PushTipToSession(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error
+	PushTipToUnboundSession(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error
 }
 
 // sessionBindSender 是通知 gate 绑定会话唯一需要的能力。生产实现是 *svc.ServiceContext(SendBindSessionToGate),
 // 做法同 replacedSessionKicker:KafkaClient 是具体类型,单测里起不出来,收成接口才测得到 Bind 发出之后的链段。
 type sessionBindSender interface {
-	SendBindSessionToGate(gateID string, gateInstanceID string, event *kafkapb.BindSessionEvent) error
+	SendBindSessionToGate(ctx context.Context, gateID string, gateInstanceID string, event *kafkapb.BindSessionEvent) error
 }
 
 // replacedSessionKicker 是 ReplaceLogin 踢旧会话唯一需要的能力:经 gate 踢掉被替换的会话。
@@ -345,7 +354,7 @@ type sessionBindSender interface {
 // 单测里起不出来,收成一个方法的接口才测得到「只在提交之后踢」(docs/design/scene-enter-chain-residuals.md §2.3)。
 // playerID 与 loginGeneration 随 KickPlayerEvent payload 下发,供 gate 的 ClassifyKick 核对。
 type replacedSessionKicker interface {
-	KickSessionOnGate(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, loginGeneration uint64) error
+	KickSessionOnGate(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, loginGeneration uint64) error
 }
 
 // replacedKicker 返回本次踢线用的 kicker:测试注入的优先,否则用生产的 l.svcCtx。
@@ -393,8 +402,8 @@ func (l *EnterGameLogic) sessionBinder() sessionBindSender {
 // 走未绑定的发送(player_id 留 0,理由见 login svc 的 buildPushTipToUnboundSessionCommand)。Bind 写 Kafka 报错时结果未知,
 // 按没发出处理:player_id = 0 在两种情况下都能送达。
 //
-// stage 只用于日志与计数 label(notifyStageApply)。
-func notifyEnterGameFailed(pusher enterFailureTipPusher, state enterGameSessionState, stage string, bindSent bool) {
+// stage 只用于日志与计数 label(notifyStageApply)。ctx 只用来取 trace,调用方传不会被取消的那份。
+func notifyEnterGameFailed(ctx context.Context, pusher enterFailureTipPusher, state enterGameSessionState, stage string, bindSent bool) {
 	if state.gateInstanceID == "" || state.gateID == "" || state.gateID == "0" {
 		failureNotifyCounter.Inc(stage, notifyOutcomeSkippedNoGate)
 		logx.Errorf("EnterGame failure tip not sent: session carries no gate address [PlayerId=%d session=%d stage=%s gate=%q]; client falls back to its own enter timeout",
@@ -407,7 +416,7 @@ func notifyEnterGameFailed(pusher enterFailureTipPusher, state enterGameSessionS
 		push = pusher.PushTipToSession
 	}
 	tipID := uint32(table.SceneError_kEnterSceneFailed)
-	if err := push(state.gateID, state.gateInstanceID, state.sessionID, state.playerID, tipID); err != nil {
+	if err := push(ctx, state.gateID, state.gateInstanceID, state.sessionID, state.playerID, tipID); err != nil {
 		failureNotifyCounter.Inc(stage, notifyOutcomeFailed)
 		logx.Errorf("EnterGame failure tip push failed [PlayerId=%d session=%d stage=%s gate=%s tip=%d]: %v; client falls back to its own enter timeout",
 			state.playerID, state.sessionID, stage, state.gateID, tipID, err)
@@ -572,7 +581,7 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	// 代次随 Bind 一起到 gate:Bind 先于本次路由到达时,gate 按旧路由补发也要带本次的代次(§4)。
 	enterGsType := sessionmanager.DecisionToEnterGsType(decision)
 	bindTimer := observeStage(applyBindGateSeconds)
-	bindErr := l.sessionBinder().SendBindSessionToGate(
+	bindErr := l.sessionBinder().SendBindSessionToGate(ctx,
 		state.gateID, state.gateInstanceID,
 		&kafkapb.BindSessionEvent{
 			SessionId: state.sessionID, PlayerId: state.playerID, SessionVersion: version,
@@ -741,7 +750,7 @@ func (l *EnterGameLogic) persistEnterGameSession(
 			return 0, err
 		}
 		if decision == sessionmanager.ReplaceLogin {
-			l.kickReplacedSessionAfterCommit(existing, state, loginGeneration)
+			l.kickReplacedSessionAfterCommit(ctx, existing, state, loginGeneration)
 		}
 		return newSession.SessionVersion, nil
 	case sessionmanager.ShortReconnect:
@@ -812,8 +821,9 @@ const setSessionProbeTimeout = 2 * time.Second
 
 // kickReplacedSessionAfterCommit 在本链的会话记录确认已提交之后踢掉被替换的旧会话,并按结局计数。
 // 踢线写 Kafka 失败只记 ERROR 并计数,不让链失败:提交已经发生,旧设备会因 scene 栅栏改绑而变哑(§2.2 ①)。
-func (l *EnterGameLogic) kickReplacedSessionAfterCommit(existing *sessionmanager.PlayerSession, state enterGameSessionState, loginGeneration uint64) {
-	kickTotal.Inc(kickReplacedSession(l.replacedKicker(), existing, state, loginGeneration))
+// ctx 只用来取 trace(踢线命令的消息头),已取消也照常发送。
+func (l *EnterGameLogic) kickReplacedSessionAfterCommit(ctx context.Context, existing *sessionmanager.PlayerSession, state enterGameSessionState, loginGeneration uint64) {
+	kickTotal.Inc(kickReplacedSession(ctx, l.replacedKicker(), existing, state, loginGeneration))
 }
 
 // settleReplaceLoginAfterSetSessionError 处理 ReplaceLogin 的 SetSession 报错(应答丢失、链 ctx 取消、locator 拒绝)。
@@ -841,7 +851,7 @@ func (l *EnterGameLogic) settleReplaceLoginAfterSetSessionError(
 	}
 	logx.Errorf("[login-kick] WARN SetSession outcome unknown, probe confirms commit: player=%d session=%d generation=%d err=%v; kicking replaced session and placing disconnect lease",
 		state.playerID, state.sessionID, loginGeneration, setErr)
-	l.kickReplacedSessionAfterCommit(existing, state, loginGeneration)
+	l.kickReplacedSessionAfterCommit(ctx, existing, state, loginGeneration)
 	// 等价于绑定失败的补偿:独立于链 ctx(WithoutCancel)、预算覆盖 markPlayerSessionDisconnecting 的退避重试,
 	// 带本链的 gate 实例号(e:与本链写下的记录同一个实例号)。
 	l.compensateFenceBind(ctx, state, true)
@@ -885,7 +895,7 @@ func setSessionProbeConfirmsCommit(record *sessionmanager.PlayerSession, session
 //
 // 被踢会话所属玩家取本链玩家:会话记录按玩家键存取,被替换的就是本玩家的会话。不用记录里的 PlayerID,
 // 免得字段缺失(0)时退化成 gate 不核对玩家的旧踢线。代次取本链铸出、已提交的值,gate 据此不踢承载更新登录的会话。
-func kickReplacedSession(kicker replacedSessionKicker, existing *sessionmanager.PlayerSession, state enterGameSessionState, loginGeneration uint64) string {
+func kickReplacedSession(ctx context.Context, kicker replacedSessionKicker, existing *sessionmanager.PlayerSession, state enterGameSessionState, loginGeneration uint64) string {
 	if existing == nil || existing.GateID == "" || existing.GateInstanceID == "" {
 		return kickResultSkipNoTarget
 	}
@@ -901,7 +911,7 @@ func kickReplacedSession(kicker replacedSessionKicker, existing *sessionmanager.
 		return kickResultSkipCrossInstance
 	}
 
-	if err := kicker.KickSessionOnGate(existing.GateID, existing.GateInstanceID, existing.SessionID, state.playerID, loginGeneration); err != nil {
+	if err := kicker.KickSessionOnGate(ctx, existing.GateID, existing.GateInstanceID, existing.SessionID, state.playerID, loginGeneration); err != nil {
 		logx.Errorf("[login-kick] kick after commit failed: player=%d old_session=%d old_gate=%s old_instance=%s generation=%d err=%v; old device stays connected until the scene fence rebinds",
 			state.playerID, existing.SessionID, existing.GateID, existing.GateInstanceID, loginGeneration, err)
 		return kickResultSendFailed

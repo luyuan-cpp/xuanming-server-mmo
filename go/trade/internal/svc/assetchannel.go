@@ -117,8 +117,9 @@ type AssetChannel struct {
 	Commerce *commerce.Engine
 	Mall     *commerce.Mall
 	Rmb      *commerce.RmbConsignments
-	// Members 是合同推进按片分工的成员表(本 zone 注册的 stable trade 实例,缺口清单第 16 条);
-	// 只在跑全局后台的副本上读,Commerce.Owns 绑的就是它。nil 时 Commerce 不分工、推进全部片。
+	// Members 是按片分工的成员表(本 zone 注册的 stable trade 实例):合同推进(缺口清单第 16 条)与资产指令重投
+	// (第 25 条)共用,Commerce.Owns 与 Pipeline 的重投循环(Pipeline.BindWorkOwner)绑的都是它。
+	// 只在跑全局后台的副本上读;nil 时两者都不分工、做全部片。
 	Members *workshard.Membership
 	// Wake 落地唤醒订阅(shared/assetopwake,设计 §5.3):订 SharedRedis 上的 assetop:wake,
 	// 把玩家落地交给 Pipeline.WakePlayer。AssetOp.Wake 显式关闭时为 nil(nil 接收者的 Start / Stop 安全)。
@@ -365,7 +366,10 @@ func maintenanceLeaderID() string {
 // (不拨共享 Redis、不建节点镜像)。只删保留期外的 APPLIED / REJECTED / ABORTED / ABANDONED,
 // PENDING 与 APPLIED_PARTIAL 永不删(data.AssetOpRepo.CleanupTerminalOps)。调用方只在 AssetOp.CleanupEnabled 时调用,
 // 且必须在建表(ensureSchema)之后。
-func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.Session) (stop func(), err error) {
+//
+// owns 是按片分工的归属判定(data.CleanupConf.Owns,缺口清单第 25 条第二批):生产传 ServiceContext.AssetOpCleanupOwner(),
+// 即重投循环与合同推进那份成员表;nil = 不分工,本副本清全部行(通道关着时就是这样)。
+func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, owns func(key string) bool, roots ...*drainproof.Session) (stop func(), err error) {
 	if db == nil {
 		return nil, errors.New("trade: 终态资产指令清理缺 MySQL 连接池")
 	}
@@ -374,6 +378,7 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.
 		return nil, fmt.Errorf("trade: 终态资产指令清理装配失败: %w", err)
 	}
 	conf := cleanupConfFrom(c)
+	conf.Owns = owns
 	if len(roots) > 1 || (len(roots) == 1 && roots[0] == nil) {
 		return nil, drainproof.ErrHold
 	}
@@ -390,12 +395,10 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.
 			return
 		}
 		owner := roots[0]
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				owner.Hold()
-				panic(recovered)
-			}
-		}()
+		// 活性(缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8):起来时写一次,
+		// 每跑完一轮写一次(这一轮成败都写,panic 的那一轮不写),退出时删掉序列。
+		data.MarkCleanupRun(time.Now())
+		defer data.ClearCleanupRun()
 		timer := time.NewTimer(time.Duration(rand.Int64N(int64(conf.Interval))))
 		defer timer.Stop()
 		for {
@@ -405,27 +408,41 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.
 			case <-timer.C:
 			}
 			finish, enterErr := owner.Enter()
-			if enterErr == nil {
-				func() {
-					defer finish()
-					budget, release := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
-					defer release()
-					if _, err := repo.CleanupTerminalOps(budget, time.Now(), conf.TerminalRetention); err != nil {
-						if !authoritysql.IsWriterFrozen(err) {
-							owner.Hold()
-						}
-						logx.Errorf("trade cleanup 失败: %v", err)
+			if enterErr != nil {
+				if !errors.Is(enterErr, drainproof.ErrClosed) {
+					owner.Hold()
+					return
+				}
+				timer.Reset(conf.Interval)
+				continue
+			}
+			// 每一轮各自 recover(同 guild 的清理与 assetop.Loop.Run):一轮 panic 先打 HOLD,只丢这一轮,循环接着跑。
+			// 原来整个 goroutine 共用一个 recover,一轮 panic 清理就停了,进程还活着、它名下的片从此没人清。
+			safego.Run(assetOpCleanupPoint, func() {
+				defer finish()
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						owner.Hold()
+						panic(recovered)
 					}
 				}()
-			} else if !errors.Is(enterErr, drainproof.ErrClosed) {
-				owner.Hold()
-				return
-			}
+				budget, release := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+				defer release()
+				// 片的归属每轮开头算一次,一轮里不变。
+				owned := workshard.SQLFilter(conf.Owns, data.CleanupWorkKind, "player_id")
+				if _, err := repo.CleanupTerminalOpsOwned(budget, time.Now(), conf.TerminalRetention, owned); err != nil {
+					if !authoritysql.IsWriterFrozen(err) {
+						owner.Hold()
+					}
+					logx.Errorf("trade cleanup failed: %v", err)
+				}
+				data.MarkCleanupRun(time.Now())
+			})
 			timer.Reset(conf.Interval)
 		}
 	})
-	logx.Infof("[trade] Asset cleanup started: goroutine %s interval=%v terminal_retention=%v",
-		assetOpCleanupPoint, conf.Interval, conf.TerminalRetention)
+	logx.Infof("[trade] Asset cleanup started: goroutine %s interval=%v terminal_retention=%v sharded_by_player=%t",
+		assetOpCleanupPoint, conf.Interval, conf.TerminalRetention, conf.Owns != nil)
 	return func() {
 		cancel()
 		<-done
@@ -477,6 +494,16 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client, globalB
 				"this should not happen; NewServiceContext switch and key validation were bypassed")
 			return
 		}
+		if a.Members != nil {
+			// 成员表先于重投循环与推进循环起:第一拍读到之前成员表为空,本副本做全部片(保活优先),读到之后按片分工。
+			// 重投循环(缺口清单第 25 条)与合同推进共用它,所以不放在 Commerce 分支里;点位名沿用原值,告警与看板不用改。
+			a.wg.Add(1)
+			safego.Go("trade.commerce.members", func() {
+				defer a.wg.Done()
+				defer a.holdPanic()
+				a.Members.Run(loopCtx, etcd)
+			})
+		}
 		a.wg.Add(1)
 		safego.Go(assetOpLoopPoint, func() {
 			defer a.wg.Done()
@@ -484,15 +511,6 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client, globalB
 			a.Pipeline.Run(loopCtx) // 阻塞到 loopCtx 结束、本轮 Tick 的 worker 全部落库完
 		})
 		if a.Commerce != nil {
-			if a.Members != nil {
-				// 成员表先于推进循环起:第一拍读到之前成员表为空,本副本推进全部片(保活优先),读到之后按片分工。
-				a.wg.Add(1)
-				safego.Go("trade.commerce.members", func() {
-					defer a.wg.Done()
-					defer a.holdPanic()
-					a.Members.Run(loopCtx, etcd)
-				})
-			}
 			a.wg.Add(1)
 			safego.Go("trade.commerce.reconcile", func() {
 				defer a.wg.Done()
@@ -545,7 +563,7 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client, globalB
 								release()
 								a.holdUnknownTick(err)
 								if err != nil && loopCtx.Err() == nil {
-									logx.Errorf("交易恢复通道失败 phase=%d: %v", (phase+n)%3, err)
+									logx.Errorf("trade recovery channel failed phase=%d: %v", (phase+n)%3, err)
 								}
 							}
 							phase = (phase + 1) % 3

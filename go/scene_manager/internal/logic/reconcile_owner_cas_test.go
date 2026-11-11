@@ -12,8 +12,9 @@ package logic
 // 在 owner_read_interleave_test.go(它的取红方法也是下面的变异 C)。
 //
 // 修复前红的取法(修复前没有 destroyOrphanOfDeadNode,本文件编不过,所以按变异取红):
-//   - 变异 A:把 destroyOrphanOfDeadNode 末行传给 destroyInstanceInternal 的 deadNode 换成 ""。期望属主为空时
-//     AtomicDestroyForce 先读属主、按读到的值认领(谁是属主都拆),整条链路与修复前 reconcile 调的
+//   - 变异 A:把 destroyOrphanOfDeadNode 末行传给 destroyInstanceInternal 的 deadNode 换成 ""、&task 换成 nil
+//     (2026-11-11 起末行多了收尾任务身份;只换 deadNode 会落到死节点收尾脚本的「映射必须已不存在」,不等价)。
+//     期望属主为空时 AtomicDestroyForce 先读属主、按读到的值认领(谁是属主都拆),整条链路与修复前 reconcile 调的
 //     destroyInstanceForce(..., "node_death") 等价。
 //     本文件 ReassignedAfterOwnerRead 红(失败信息含「收尾不得销毁」),其余四条绿;
 //     owner_read_interleave_test.go 的 ReconcileSkipsSceneReassignedAfterOwnerRead 也红。
@@ -22,7 +23,7 @@ package logic
 //     本文件 ReassignedAfterOwnerRead 与 ExpectedOwnerMismatch 两条红,其余三条绿;其中 NoExpectedOwner 与
 //     StillOwnedByDeadNode 守的是「不比对的 force 路径语义不变」与「属主仍是死节点时照常销毁」。
 //   - 变异 C:恢复 B,把 reconcileDeadNodeScenes 里的 destroyOrphanOfDeadNode(ctx, svcCtx, zoneId, sceneId,
-//     entry.nodeID) 换成修复前的 destroyInstanceForce(ctx, svcCtx, zoneId, sceneId, "node_death")(两者签名相同,
+//     entry.nodeID, task) 换成修复前的 destroyInstanceForce(ctx, svcCtx, zoneId, sceneId, "node_death")(返回值相同,
 //     直接替换)。本文件五条全绿,只有 owner_read_interleave_test.go 的 ReconcileSkipsSceneReassignedAfterOwnerRead
 //     红 —— 调用点由那条守。
 //   - DestroyScriptErrorKeepsMemberIndexed 守「收尾出错的成员留在反向索引里」,取红方法见该用例注释。
@@ -100,7 +101,8 @@ func TestReconcileDeadNode_ReassignedAfterOwnerRead_LeavesNewOwnerIntact(t *test
 	c := newReconcileDeadOwnerCase(t, 89501)
 	ctx := context.Background()
 	seedNodeMembers(c.mr, reconcileCASZone, reconcileNodeLive, mustAtoi(reconcileLiveNodePlayers))
-	// 改派成功的写者已把名额转到 live 的 GameServer(TransferAgonesRoomForScene),映射指向新名额。
+	// 改派成功的写者已把名额转到 live 的 GameServer(改派前在 live 上占名额,CAS 之后 commitReservedAgonesRoom 提交),
+	// 映射指向新名额。
 	require.NoError(t, c.mr.Set(sceneAgonesGsKey(c.sceneID), "gs-live"))
 
 	// 收尾的那次 GET:属主仍是 dead,收尾据此决定销毁。
@@ -112,7 +114,8 @@ func TestReconcileDeadNode_ReassignedAfterOwnerRead_LeavesNewOwnerIntact(t *test
 	require.True(t, reassignSceneNode(c.sc, reconcileCASZone, c.sceneID, reconcileNodeDead, reconcileNodeLive, freshPlacementGeneration(t, c.sc, reconcileCASZone)))
 	require.EqualValues(t, 1, readInt64(c.sc, nodeSceneCountKey(reconcileCASZone, reconcileNodeLive)))
 
-	ok, err := destroyOrphanOfDeadNode(ctx, c.sc, reconcileCASZone, c.sceneID, reconcileNodeDead)
+	ok, err := destroyOrphanOfDeadNode(ctx, c.sc, reconcileCASZone, c.sceneID, reconcileNodeDead,
+		seedDeadNodeTaskForTest(t, c.sc, reconcileCASZone, reconcileNodeDead))
 	require.NoError(t, err)
 	require.False(t, ok, "属主已改派到 live,收尾不得销毁这个实例")
 
@@ -139,7 +142,8 @@ func TestReconcileDeadNode_StillOwnedByDeadNode_Destroys(t *testing.T) {
 	seedNodeMembers(c.mr, reconcileCASZone, reconcileNodeDead, mustAtoi(reconcileScenePlayers))
 	seedNodeMembers(c.mr, reconcileCASZone, reconcileNodeLive, mustAtoi(reconcileLiveNodePlayers))
 
-	ok, err := destroyOrphanOfDeadNode(ctx, c.sc, reconcileCASZone, c.sceneID, reconcileNodeDead)
+	ok, err := destroyOrphanOfDeadNode(ctx, c.sc, reconcileCASZone, c.sceneID, reconcileNodeDead,
+		seedDeadNodeTaskForTest(t, c.sc, reconcileCASZone, reconcileNodeDead))
 	require.NoError(t, err)
 	require.True(t, ok, "属主仍是死节点,必须销毁")
 
@@ -258,7 +262,7 @@ func TestReconcileDeadNode_DestroyScriptErrorKeepsMemberIndexed(t *testing.T) {
 	ResetNodeConnCacheForTest()
 	t.Cleanup(clearKnownNodesForTest)
 
-	hook := &failFirstEvalHook{script: luaAtomicDestroyInstanceForce}
+	hook := &failFirstEvalHook{script: luaAtomicDestroyOrphanOfDeadNode}
 	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
 	const sceneID uint64 = 89507
 	member := strconv.FormatUint(sceneID, 10)
@@ -269,7 +273,7 @@ func TestReconcileDeadNode_DestroyScriptErrorKeepsMemberIndexed(t *testing.T) {
 
 	entry := nodeEntry{nodeID: reconcileNodeDead}
 	entry.reg.ZoneId = reconcileCASZone
-	reconcileDeadNodeScenes(context.Background(), sc, entry, []string{member})
+	reconcileDeadNodeScenes(context.Background(), sc, entry, []string{member}, seedDeadNodeTaskForTest(t, sc, reconcileCASZone, reconcileNodeDead))
 
 	require.True(t, hook.fired.Load(), "注入的脚本错误必须真的发生")
 	require.Equal(t, reconcileNodeDead, mustGet(t, mr, sceneNodeKey(sceneID)), "脚本没执行,属主映射原样")

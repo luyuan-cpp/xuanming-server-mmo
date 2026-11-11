@@ -22,6 +22,9 @@
     <ClCompile Include="discovery_zone_scope_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="discovery_set_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Include">
@@ -43,5 +46,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="scene_placement_fence_test.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="planned_drain_test.cpp" />
   </ItemGroup>
 </Project>

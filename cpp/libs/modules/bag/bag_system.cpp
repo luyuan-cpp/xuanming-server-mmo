@@ -688,7 +688,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 	// 先铸齐最终规划所需的号，再执行初始化回调和任何玩家状态修改。预取/失效可在铸号中途发生。
 	if (newInstanceCount < preassigned.size())
 	{
-		LOG_ERROR << "Bag::AddItems: 规划实例数少于预设身份数，批次未修改。player=" << PlayerGuid();
+		LOG_ERROR << "Bag::AddItems: planned instance count is less than preassigned guid count, batch unchanged. player=" << PlayerGuid();
 		assert(false && "规划实例数少于预设身份数");
 		return PrintStackAndReturnError(kInvalidTableData);
 	}
@@ -714,7 +714,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 		const auto *item = candidate.Find(guid);
 		if (item == nullptr)
 		{
-			LOG_ERROR << "Bag::AddItems: 淘汰策略返回仓库外身份，批次未修改。player=" << PlayerGuid();
+			LOG_ERROR << "Bag::AddItems: eviction policy returned a guid not in the store, batch unchanged. player=" << PlayerGuid();
 			assert(false && "淘汰策略返回仓库外身份");
 			return PrintStackAndReturnError(kInvalidTableData);
 		}
@@ -741,7 +741,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 			{
 				if (nextMint == minted.size())
 				{
-					LOG_ERROR << "Bag::AddItems: 预取身份数与规划不一致，批次未修改。player=" << PlayerGuid();
+					LOG_ERROR << "Bag::AddItems: pre-minted guid count does not match the plan, batch unchanged. player=" << PlayerGuid();
 					assert(false && "预取身份数与规划不一致");
 					return PrintStackAndReturnError(kInvalidTableData);
 				}
@@ -763,7 +763,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 	}
 	if (nextMint != minted.size())
 	{
-		LOG_ERROR << "Bag::AddItems: 规划与提交实例数不一致，批次未修改。player=" << PlayerGuid();
+		LOG_ERROR << "Bag::AddItems: planned and committed instance counts differ, batch unchanged. player=" << PlayerGuid();
 		assert(false && "规划与提交实例数不一致");
 		return PrintStackAndReturnError(kInvalidTableData);
 	}
@@ -772,7 +772,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 	auto candidateLayout = layout_->Clone();
 	if (candidateLayout == nullptr)
 	{
-		LOG_ERROR << "Bag::AddItems: 布局无法创建事务候选，批次未修改。player=" << PlayerGuid();
+		LOG_ERROR << "Bag::AddItems: layout could not create a transaction candidate, batch unchanged. player=" << PlayerGuid();
 		assert(false && "布局无法创建事务候选");
 		return PrintStackAndReturnError(kInvalidTableData);
 	}

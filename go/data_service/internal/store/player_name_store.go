@@ -88,8 +88,8 @@ const (
 	playerNameBindAttempts = 3
 
 	// playerNameLockRetryBackoffMin / Max:Reserve / Release 因 1213/1205 重来之前的等待,在 [Min, Max] 内
-	// 均匀取值(jitteredBackoff)。预算:单次调用最坏多睡 (attempts-1)×Max = 100ms,是 login 单次
-	// Reserve / Release 预算(playernamereg.DefaultReserveTimeout / DefaultReleaseTimeout = 1s)的十分之一;
+	// 均匀取值(jitteredBackoff)。预算:单次调用最坏多睡 (attempts-1)×Max = 100ms,约为 login 单次
+	// Reserve / Release 预算(playernamereg.DefaultReserveTimeout = 800ms、DefaultReleaseTimeout = 1s)的八分之一到十分之一;
 	// 等待可被 ctx 取消,预算用完立即返回,不会睡满再去撞一个注定超时的语句。
 	playerNameLockRetryBackoffMin = 10 * time.Millisecond
 	playerNameLockRetryBackoffMax = 50 * time.Millisecond

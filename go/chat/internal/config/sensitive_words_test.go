@@ -19,7 +19,6 @@ func TestValidateSensitiveWordsBeforeServiceStartup(t *testing.T) {
 	cfg.ListenOn = "127.0.0.1:50700"
 	cfg.Timeout = 3500
 	cfg.Etcd.Hosts = []string{"127.0.0.1:2379"}
-	cfg.Redis.Host = "127.0.0.1:6379"
 	cfg.SensitiveWords = []string{"广告", "Spam", ""}
 	require.NoError(t, cfg.Validate())
 	cfg.HistoryMaxLimit = 200

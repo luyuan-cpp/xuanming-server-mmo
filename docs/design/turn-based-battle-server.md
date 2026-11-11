@@ -603,7 +603,8 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
 ### 18.2 线协议与握手(客户端接入契约;Unity 客户端在独立仓库,按此实现)
 
 - **帧格式与 gate 完全一致**:ProtobufCodec(`len | nameLen | typeName | protobuf | adler32`);上行 `ClientRequest{id, message_id, body}`,下行 `MessageContent{message_id, serialized_message, id, error_message}`。客户端复用大厅连接的编解码与按 `message_id` 分发的 handler 表,**不需要第二套协议栈**。
-- **握手**:TCP 连上 `BattleAssignedS2C.host:port` 后,**首包必须**是 `BattleTokenVerifyRequest{payload=token_payload, signature=token_signature}`(两字段原样透传,客户端不解析 payload);服务端回 `BattleTokenVerifyResponse{success, error, battle_id}`。失败后服务端主动断开;客户端不得重试同一张票超过 1 次,应回大厅通道 `MatchService.RequestBattleTicket` 补签。
+- **握手**:TCP 连上 `BattleAssignedS2C.host:port` 后,**首包必须**是 `BattleTokenVerifyRequest{payload=token_payload, signature=token_signature}`(两字段原样透传,客户端不解析 payload);服务端回 `BattleTokenVerifyResponse{success, error, battle_id, heartbeat_interval_ms, heartbeat_timeout_ms}`。失败后服务端主动断开;客户端不得重试同一张票超过 1 次,应回大厅通道 `MatchService.RequestBattleTicket` 补签。
+- **心跳(2026-11-10)**:成功应答通告的两个值与大厅连接同义同值(10000 / 30000)。客户端收到非 0 的间隔,就在这条直连上立即发第一条 `ClientHeartbeatRequest`、之后每个间隔一条;battle 每条都回 `ClientHeartbeatResponse{seq}`,从发出成功应答起连续 30s 收不到这条直连的任何一帧就断开它。断开之后照常解绑直连,参战者的回合按超时自动出手。完整约定与取值理由见 [gate-client-heartbeat.md](./gate-client-heartbeat.md) §14。
 - **握手之后**:只允许 `SubmitBattleAction / GetBattleState / StopWatchBattle / SetAutoBattle` 四个消息号;应答 `MessageContent.message_id` = 请求消息号、`id` = 请求 id。别的消息号回信封错误 `kInvalidParameter` 并计非法包。
 - **S2C**:握手成功后本玩家的 `NotifyTurnResult / NotifyBattleEnd / NotifySpectateState / NotifySpectateTurnResult / NotifySpectateEnd` 全部改从直连到达;`NotifyBattleStart`、`NotifyBattleAssigned`、`NotifyBattleReconnect` 仍从大厅连接到达(它们发生在直连建立之前)。客户端两条连接的 S2C 走同一个 handler 表即可。
 - **生命周期**:战斗结束 / 作废 / 观众被清退时服务端先推终局包再 `shutdown`(FIN 在输出缓冲排空之后),客户端收到 FIN 即视为本局直连结束,不重连;战斗中直连意外断开 → 若手里的票据未过期直接重连握手(同票可重用,D25),否则大厅通道 `MatchService.RequestBattleTicket(battle_id)` 取新票再连。`NotifyBattleReconnect`(scene 在 RECONNECT 链路推)到达时按同样流程建直连。
@@ -652,7 +653,7 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
 - 配置:`BattleTokenSecret`(生产必须与 `GateTokenSecret` 不同且 ≥32 字节 —— 两条都由 battle 启动门禁强制,prod 违反即 LOG_FATAL;进 Secret 不进 git,本地 `base_deploy_config.yaml` 里的 `local-dev-` 值只用于开发)、`BattleMaxConnections`(无代码默认值,必须显式配);环境变量 `BATTLE_RUN_MODE=dev|test|prod`(默认 prod)。
 - **部署链尚未接入这两个键(与 battle manifest 同批补,缺一项 battle Pod 就 CrashLoopBackOff)**:`tools/scripts/k8s_deploy.ps1` 的 `Initialize-InjectedSecrets` 加 `MMORPG_BATTLE_TOKEN_SECRET`(`-MinLength 32`,并断言 ≠ `MMORPG_GATE_TOKEN_SECRET`)、node ConfigMap 模板追加 `BattleTokenSecret` / `BattleMaxConnections`(后者 `Get-AuthoritativeScalar` 取自 `base_deploy_config.yaml`)、`release_preflight.ps1` 加 battle 目标、`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 镜像 GateTokenSecret 那条非空断言。现在不改:battle 没有 manifest,而 `Initialize-InjectedSecrets` 在 prod 档位缺环境变量会 throw,提前加会把现有 gate/scene 发布一起打死。
 - **【已被 §22 D70 / D76–D93 取代,见 [k8s-client-entry.md](./k8s-client-entry.md):票据地址改由 `client_endpoint::ClientFacing` 选出(拿不到客户端可达地址即签票失败、按 D70 拒绝);原文保留】** 寻址:客户端连的是 `NodeInfo.endpoint`(`NODE_IP` 解析出的注册地址 + 框架分配的 TCP 端口)。本地 `dev_tools.ps1 -NodeIp <LAN ip>` 已能让局域网客户端连到;**K8s 上 battle Pod 需要客户端可达的入口(hostPort / NodePort,同 gate 的做法)—— C 档待办,battle 目前连 manifest 都没有(PROGRESS 2026-09-04)**。
-- 观测:`battle 客户端直连面已就绪` / `battle 直连握手成功` / `battle 直连拒绝(采样) reason=…` / `battle 关闭房间全部直连` 四类日志;拒绝原因枚举:`at_capacity / token_secret_not_configured / handshake_timeout / ticket_hmac_mismatch / ticket_payload_parse_failed / empty_identity / node_mismatch / instance_mismatch / expired / role_invalid / ticket_not_in_roster / request_before_verify / unknown_message_type`。
+- 观测:`battle 客户端直连面已就绪` / `battle 直连握手成功` / `battle 直连拒绝(采样) reason=…` / `battle 关闭房间全部直连` 四类日志;拒绝原因枚举:`at_capacity / token_secret_not_configured / handshake_timeout / ticket_hmac_mismatch / ticket_payload_parse_failed / empty_identity / node_mismatch / instance_mismatch / expired / role_invalid / ticket_not_in_roster / request_before_verify / unknown_message_type`,2026-11-10 起另有心跳的 `heartbeat_missing_session / heartbeat_before_verify / heartbeat_over_rate`。空闲判死另打两类日志(不走拒绝采样):`battle direct connection idle timeout;disconnecting: …`(INFO,逐条)与 `battle direct connection liveness verdict deferred, local loop stalled(sampled): …`(WARN,采样),见 [gate-client-heartbeat.md](./gate-client-heartbeat.md) §14。
 
 ### 18.7 明确不做 / 后续
 
@@ -1087,6 +1088,11 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
      `BattleGone`,全程没有报错。收缩后没有中继兜底,只能从 `match_request_battle_ticket_total{outcome="not_found"}` 的异常升高看出来。
      处置(淘汰策略、ChatRedis 拆分、内存告警)归 [handoff-backlog-2026-09-05.md](../handoff/handoff-backlog-2026-09-05.md) D-03 / P2-D1,
      待用户拍板;拍板前不单独改这个集群的淘汰策略。
+     〔2026-11-11 更正:这条的两个前提都已不成立。
+     - 淘汰策略:10-23 起这个集群改为 `noeviction`,写满时写命令报错、由告警发现,不再静默淘汰带 TTL 的记录(见该清单注释)。
+     - chat:10-21 改为 SQL 原件,K8s 上不再连这个集群;11-11 连句柄与 `ChatRedis` 段都删了。
+
+     上面的静默淘汰风险已不存在,剩下的是写满时写失败。这个集群 11-11 起也有了显式 maxclients 与单独一份连接总账(`deploy/k8s/README.md`「Redis 连接总账」)。〕
    - 以上 match 改动未编译、未测试,待 Codex 验证。
 5. **match 侧**:`createBattle` 不区分 RPC 失败与 tip≠0 明确拒绝,明确拒绝后若 `DestroyBattle` 也失败,会走 `create_failed_room_alive`
    保守分支(不解冻,冻结等 scene 的 `prepare_deadline_ms` 清掉、票据等 matched TTL 自愈);`PickRandom` 不排除坏节点,签票失败的节点
@@ -1142,6 +1148,10 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
   不断言「本局由系统出手」;② `AbortAllRooms` 在 `CloseDirectConnections` 之前给参战者推作废帧;③ scene reaper 解冻 FIGHTING 时推
   `NotifyBattleEnd`;④ `SpectateBattleRecord` 加建房时的实例 uuid,与当前同 node_id 注册实例的 `NodeUuid` 不等才判 `BattleGone`
   (改 proto,按 AGENTS §4 重生)。
+  **(2026-11-11 方案已定案,未落码)** 本条与「崩溃后要等到原截止才放人」合并处理,见 [battle-instance-loss-early-abort.md](./battle-instance-loss-early-abort.md):
+  参战者补签失败触发匹配服取证,原进程确定不在时约 1 分钟内写 ABORT;所有 ABORT 经个人结算链给参战者投「作废结算」,
+  场景服解冻并推 `BattleEndS2C{outcome = BATTLE_OUTCOME_VOID}`(覆盖候选 ①③;④ 已无必要,补签现在只读 SQL 成局原件)。
+  上文「`no_node` 分支」「观战记录 TTL」是 09-30 时的代码,现补签走 `global_match.go` 的 `globalRequestBattleTicket`。
 - D40 `SubmitBattleAction` 回合号幂等(收缩后直连抖动丢一手 = 该回合默认普攻)。
 - 生成器按服务过滤 gate 侧 gRPC 客户端桩。
 - match:`createBattle` 区分明确拒绝与 RPC 失败(明确拒绝时跳过 `DestroyBattle`,新增 `outcome=create_rejected`);`WatchBattle` 是否透传 battle 的 1003。
@@ -1212,7 +1222,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
      若 `player_battle.cpp` 因删 include 报错,只补回真正需要的那一个并回报。可选 Linux:`bash tools/scripts/build_linux.sh`(GCC `-Wall -Wextra`)。
    - **(2026-09-30 补)全量之后**:`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build`。必须带 `-Build`:不带时只跑已有 exe,多数 gtest 工程
      不在 game.sln 的构建配置里,不会针对新的 core 与 proto 重新链接。通过标准见 k8s-client-entry.md「上线之前:代码验证」第 3 步
-     (退出码 0,汇总表里没有「无 exe」行)。至此 C++ 顺序为「重生(第 3 步)→ `game.sln` 全量 → `run_cpp_tests -Build`」,与该文档一致。
+     (退出码 0,汇总表里没有「no exe」行;2026-11-11 汇总表改英文前写作「无 exe」)。至此 C++ 顺序为「重生(第 3 步)→ `game.sln` 全量 → `run_cpp_tests -Build`」,与该文档一致。
 6. **独立 gtest**(不进 vcxproj):
    - `battle_push_policy_test`,Linux / 带 g++ 的容器:
      `GT=third_party/googletest/googletest; g++ -std=c++23 -I cpp/nodes/battle -I "$GT/include" -I "$GT" cpp/nodes/battle/tests/battle_push_policy_test.cpp "$GT/src/gtest-all.cc" "$GT/src/gtest_main.cc" -lpthread -o /tmp/battle_push_policy_test && /tmp/battle_push_policy_test`。

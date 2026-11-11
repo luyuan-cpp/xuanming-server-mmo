@@ -17,10 +17,12 @@ import (
 	"shared/etcdwatch"
 	"shared/nodeinfo"
 	"shared/releasetrack"
+	"shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -51,8 +53,10 @@ type NodeWatcher struct {
 	nodes    map[string]NodeEntry
 	onCount  func(kind string, count int) // 镜像规模变化上报(指标)
 	onRemove func(entry NodeEntry)        // 节点消失回调(清连接缓存)
-	// stableOnly 为真时 canary 节点不进镜像,见 StableOnly。
-	stableOnly bool
+	// synced:fullSync 成功过至少一次,与 nodes 同受 mu 保护,见 Synced。
+	synced bool
+	// keepTrack 非空时只收这条轨道的节点,别的在解析时就丢掉,见 StableOnly / CanaryOnly。
+	keepTrack *releasetrack.Track
 }
 
 // StableOnly 让镜像只收 stable 节点(docs/design/release-track-gray-canary.md §2.5),返回 w 以便接在构造之后。
@@ -60,19 +64,35 @@ type NodeWatcher struct {
 // 若把 canary 的 MatchNodeService 算进 HRW 成员表,落到它名下的池 stable 既不撮合也不恢复,这些池就停了。
 // 在解析时就丢掉,所以快照、随机选点和按节点号查找都看不到 canary。scene 按 zone 选,不用它。必须在 Run 之前调用。
 func (w *NodeWatcher) StableOnly() *NodeWatcher {
-	w.stableOnly = true
+	return w.keepOnly(releasetrack.Stable)
+}
+
+// CanaryOnly 让镜像只收 canary 节点(设计文档 §2.6),用法同 StableOnly。match 单独镜像 canary battle 节点:
+// 只有全员都是金丝雀会话的新成局才到这里选点,金丝雀会话观战与按节点号确认对局实例时也查这里;
+// 其余一切(探测目标、机房集合、节点计数)只看 stable 镜像。
+func (w *NodeWatcher) CanaryOnly() *NodeWatcher {
+	return w.keepOnly(releasetrack.Canary)
+}
+
+func (w *NodeWatcher) keepOnly(track releasetrack.Track) *NodeWatcher {
+	w.keepTrack = &track
 	return w
 }
 
-// NewNodeWatcher 构造 watcher;onCount / onRemove 可为 nil。
+// NewNodeWatcher 构造 watcher;onCount / onRemove 可为 nil。构造的 watcher 登记进本进程的 watcher 名单,
+// 连接缓存的巡检(pruneUnlistedConns)据此判一个 endpoint 是否还在任何一份镜像里。
 func NewNodeWatcher(name, prefix string, onCount func(string, int), onRemove func(NodeEntry)) *NodeWatcher {
-	return &NodeWatcher{
+	w := &NodeWatcher{
 		name:     name,
 		prefix:   prefix,
 		nodes:    make(map[string]NodeEntry),
 		onCount:  onCount,
 		onRemove: onRemove,
 	}
+	watchersMu.Lock()
+	watchers = append(watchers, w)
+	watchersMu.Unlock()
+	return w
 }
 
 // Run 阻塞式跑 list-watch 循环:fullSync 建镜像 → watch 增量;watch 断开重来。
@@ -120,6 +140,7 @@ func (w *NodeWatcher) fullSync(ctx context.Context, etcd *clientv3.Client) (int6
 	w.mu.Lock()
 	prev := w.nodes
 	w.nodes = next
+	w.synced = true
 	count := len(next)
 	w.mu.Unlock()
 
@@ -134,6 +155,14 @@ func (w *NodeWatcher) fullSync(ctx context.Context, etcd *clientv3.Client) (int6
 			}
 		}
 	}
+	// 新上线的节点(新 key,或同 key 换了 endpoint):丢掉它的 endpoint 上停在 TRANSIENT_FAILURE 的旧缓存连接,见 dropStaleEndpointConn。
+	for key, entry := range next {
+		if prevEntry, had := prev[key]; !had || prevEntry.Endpoint != entry.Endpoint {
+			dropStaleEndpointConn(entry.Endpoint)
+		}
+	}
+	// 全量同步是周期性的(etcdwatch.ResyncInterval),顺带巡一遍连接缓存里的死端点,见 pruneUnlistedConns。
+	pruneUnlistedConns(time.Now())
 	w.reportCount(count)
 	logx.Infof("[NodeWatcher:%s] Full synchronization complete: %d nodes, rev=%d", w.name, count, resp.Header.Revision)
 	return resp.Header.Revision, nil
@@ -201,7 +230,8 @@ func (w *NodeWatcher) handleEvent(ev *clientv3.Event) {
 
 // Upsert 把一条节点登记写进镜像(etcd PUT 事件的落库路径;测试也用它直接
 // 灌节点,不必起 etcd)。同 key 重复登记且 endpoint 变了(重启换端口)会先
-// 通过 onRemove 废弃旧连接。
+// 通过 onRemove 废弃旧连接。新上线(新 key 或换了 endpoint)时还会丢掉新 endpoint 上
+// 停在 TRANSIENT_FAILURE 的旧缓存连接(dropStaleEndpointConn)。
 func (w *NodeWatcher) Upsert(key string, entry NodeEntry) {
 	w.mu.Lock()
 	prev, existed := w.nodes[key]
@@ -211,6 +241,9 @@ func (w *NodeWatcher) Upsert(key string, entry NodeEntry) {
 	// 重启后 endpoint 可能变了,旧连接必须废弃。
 	if existed && w.onRemove != nil && prev.Endpoint != entry.Endpoint {
 		w.onRemove(prev)
+	}
+	if !existed || prev.Endpoint != entry.Endpoint {
+		dropStaleEndpointConn(entry.Endpoint)
 	}
 	if !existed {
 		logx.Infof("[NodeWatcher:%s] Node online: zone=%d node=%d endpoint=%s",
@@ -246,7 +279,7 @@ func (w *NodeWatcher) parse(key string, value []byte) (NodeEntry, bool) {
 			w.name, key, reg.GetZoneId(), reg.GetNodeId(), err)
 		return NodeEntry{}, false
 	}
-	if w.stableOnly && track.IsCanary() {
+	if w.keepTrack != nil && track != *w.keepTrack {
 		return NodeEntry{}, false
 	}
 	return NodeEntry{
@@ -271,6 +304,15 @@ func (w *NodeWatcher) Snapshot() []NodeEntry {
 		out = append(out, n)
 	}
 	return out
+}
+
+// Synced 报告镜像是否已从 etcd 全量同步过至少一次(2026-11-06,截止作废取证用)。没同步过的空镜像不能当「节点不在」的证据:
+// match 刚启动、或 etcd 从启动起就连不上时镜像是空的。同步过之后 etcd 断开时镜像保留最后一次的登记,仍为 true。
+// Upsert(测试直接灌节点)不置它。
+func (w *NodeWatcher) Synced() bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.synced
 }
 
 func (w *NodeWatcher) reportCount(count int) {
@@ -369,11 +411,21 @@ func (w *NodeWatcher) PickRandom() (NodeEntry, bool) {
 var (
 	connMu    sync.RWMutex
 	connCache = make(map[string]*grpc.ClientConn)
+	// connLastDial:endpoint → 最近一次 DialEndpoint 的时刻(UnixMilli)。先于读缓存写入,所以拿到连接的调用方一定已刷新它;
+	// 只给 pruneUnlistedConns 判「多久没人用」。
+	connLastDial sync.Map
+	// watchers:本进程构造过的全部 NodeWatcher(NewNodeWatcher 登记),pruneUnlistedConns 据此判 endpoint 是否还在册。
+	watchersMu sync.Mutex
+	watchers   []*NodeWatcher
 )
+
+// unlistedConnIdle:不在任何镜像里的 endpoint,连接超过这么久没人拨、又不是 READY,巡检就关掉(pruneUnlistedConns)。
+const unlistedConnIdle = 10 * time.Minute
 
 // DialEndpoint 返回缓存的 gRPC 连接或新建一条。内网 overlay,insecure
 // transport(与 scene_manager defaultNodeDialer 同口径)。
 func DialEndpoint(endpoint string) (*grpc.ClientConn, error) {
+	connLastDial.Store(endpoint, time.Now().UnixMilli())
 	connMu.RLock()
 	conn, ok := connCache[endpoint]
 	connMu.RUnlock()
@@ -381,7 +433,9 @@ func DialEndpoint(endpoint string) (*grpc.ClientConn, error) {
 		return conn, nil
 	}
 
-	conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// 裸客户端不经 zrpc,traceparent 由 shared/tracing 的拦截器写(docs/design/distributed-tracing.md §6.2)。
+	conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(tracing.UnaryClientInterceptor()))
 	if err != nil {
 		return nil, fmt.Errorf("grpc dial %s: %w", endpoint, err)
 	}
@@ -406,6 +460,76 @@ func RemoveEndpointConn(endpoint string) {
 	if conn, ok := connCache[endpoint]; ok {
 		_ = conn.Close()
 		delete(connCache, endpoint)
+		connLastDial.Delete(endpoint)
 		logx.Infof("[discovery] Removed node connection %s", endpoint)
 	}
+}
+
+// pruneUnlistedConns 关掉连接缓存里的死端点连接(2026-11-11,cross-zone-matchmaking.md §13.3 B5 残余):endpoint 不在任何一份
+// 镜像里、超过 unlistedConnIdle 没人拨、且不是 READY。由每个 watcher 的周期性全量同步调用。
+//
+// 为什么:节点摘册时 onRemove 清过一次缓存,之后老路径(申请战斗票据、观战、恢复路径)对已摘册的原地址 DialEndpoint,
+// 连接又回到缓存里;K8s 里 Pod 每次重启换 IP,这个地址以后多半不会再有节点上线(dropStaleEndpointConn 管不到),
+// 连接对象就一直留着,长期运行是慢泄漏。
+// 不动的:还在册的 endpoint(正常节点的连接);最近拨过的(调用方可能正拿着它,DialEndpoint 先刷新时刻再读缓存,
+// 所以刚交出去的连接一定不满足「久未使用」);READY 的(还活着的长连接,比如镜像暂时没同步上的观战流)。
+func pruneUnlistedConns(now time.Time) {
+	watchersMu.Lock()
+	all := append([]*NodeWatcher(nil), watchers...)
+	watchersMu.Unlock()
+	listed := map[string]bool{}
+	for _, w := range all {
+		for _, entry := range w.Snapshot() {
+			listed[entry.Endpoint] = true
+		}
+	}
+	var stale []*grpc.ClientConn
+	connMu.Lock()
+	for endpoint, conn := range connCache {
+		if listed[endpoint] || conn.GetState() == connectivity.Ready {
+			continue
+		}
+		if last, ok := connLastDial.Load(endpoint); ok && now.Sub(time.UnixMilli(last.(int64))) < unlistedConnIdle {
+			continue
+		}
+		delete(connCache, endpoint)
+		connLastDial.Delete(endpoint)
+		stale = append(stale, conn)
+	}
+	connMu.Unlock()
+	for _, conn := range stale {
+		_ = conn.Close()
+	}
+	if len(stale) > 0 {
+		logx.Infof("[discovery] Pruned %d cached connections to endpoints no longer registered and unused for %s", len(stale), unlistedConnIdle)
+	}
+}
+
+// dropStaleEndpointConn:有节点在 endpoint 上新上线时,丢掉这个 endpoint 上停在 TRANSIENT_FAILURE 的缓存连接(2026-11-11,
+// cross-zone-matchmaking.md §13.3 B5 残余「老路径缓存死连接」)。
+//
+// 为什么:节点摘册时 onRemove 清过一次缓存,之后仍有调用方对已摘册的原地址 DialEndpoint(申请战斗票据、观战、恢复路径),
+// 连接又回到缓存里,在死地址上反复重连失败,退避一路涨到 gRPC 上限(约 120 秒)。pick_first 停在 TRANSIENT_FAILURE 期间,
+// 不带 WaitForReady 的调用当场回 Unavailable,直到重新 READY。新进程在同一 ip:port 上来时,镜像里是新条目、不触发 onRemove,
+// 撮合与观战就一直拿着这条旧连接,新节点最长约两分钟不可用。
+//
+// 只丢 TRANSIENT_FAILURE 的:READY / CONNECTING / IDLE 的连接可能正被同一进程的在途调用使用(同一进程换 key 重新登记时
+// 旧 key 还在镜像里),关掉会打断它们;停在 TRANSIENT_FAILURE 的连接上调用本来就当场失败,丢掉不会更糟。查状态与摘除
+// 在同一把锁里,并发的 DialEndpoint 要么拿到旧连接(当场失败,与不丢一样),要么新建。下次 DialEndpoint 新建连接,
+// 首个调用在 CONNECTING 里等建连,不再当场失败。任何 watcher 都可以调:缓存按 endpoint 全进程共用,没缓存时是空操作。
+func dropStaleEndpointConn(endpoint string) {
+	if endpoint == "" {
+		return
+	}
+	connMu.Lock()
+	conn, ok := connCache[endpoint]
+	if !ok || conn.GetState() != connectivity.TransientFailure {
+		connMu.Unlock()
+		return
+	}
+	delete(connCache, endpoint)
+	connLastDial.Delete(endpoint)
+	connMu.Unlock()
+	_ = conn.Close()
+	logx.Infof("[discovery] Dropped stale node connection %s in TRANSIENT_FAILURE after a node came online there", endpoint)
 }

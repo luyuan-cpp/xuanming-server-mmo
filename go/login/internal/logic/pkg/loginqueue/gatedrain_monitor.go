@@ -17,25 +17,24 @@ const drainMonitorPoint = "login.gate_drain_monitor"
 
 // gate 排空的第 2/3 步:等在线掉下去,然后判定"现在缩容是安全的"。
 //
-// **执行器自动化的是判定,不是踢人。** 这一条是刻意的,理由有两个:
+// **执行器自动化的是判定,不是踢人。** 不主动踢线,理由有两个:
 //
-//  1. 那台 gate 上的玩家最终靠"Pod 下线 -> 客户端重连 -> PickGate 已排除
-//     draining gate -> 落到别的 gate"完成改派 —— 这条链现在就通,不需要
-//     服务端主动踢。主动踢只是把同一件事提前,并不改变玩家体验。
+//  1. 那台 gate 上剩下的玩家最终靠"Pod 下线 -> 客户端重连 -> PickGate 已排除
+//     draining gate -> 落到别的 gate"完成改派 —— 这条链现在就通,踢线只是把
+//     同一件事提前,并不改变玩家体验。
 //  2. 现有的踢人原语 `KickPlayerEvent` 会让客户端弹
 //     `kLoginBeKickByAnOtherAccount`(账号在别处登录)。给一个正在做计划内
-//     缩容的玩家看这条提示是**误导**,比干净断开更糟。要正确地踢,得先加一个
-//     "服务器维护,正在为你切换接入点"的 tip,那是 proto + 表的改动。
+//     缩容的玩家看这条提示是**误导**,比干净断开更糟。
+//
+// 让人提前走的办法是**重定向**而不是踢线:客户端收到 msg 124 会自己换连接、重新 Login 与 EnterGame,玩家不用操作、
+// 不弹提示,在断线保留的租约内回到原场景。开了 GateDrain.Migrate 时,同一拍还会给排空中的 gate 发迁移许可,由 gate
+// 按限速把已登录的连接重定向到同 zone 的其他 gate(本包 gatedrain_migrate.go、login/internal/svc/gate_migration.go、
+// gate 侧 cpp/nodes/gate/handler/rpc/drain_migration.cpp,设计见 docs/design/gate-drain-session-migration.md)。
+// 迁移只让在线数更快掉下去,drained 的判定与写法不变。
 //
 // 所以这里的产出是一个明确的信号:`gate:{id}:drained`。缩容脚本 / 运维
-// 看到它才动手删 Pod。什么时候可以牺牲最后那批玩家的连接仍然是人的决定,
-// 只是"够不够安全"这个判断被自动化了。
-//
-// (2026-11-06)上面两条理由对**踢线**成立,对**重定向**不成立:客户端收到 msg 124 会自己换连接、重新 Login 与
-// EnterGame,玩家不用操作,也不弹「账号在别处登录」。所以开了 GateDrain.Migrate 时,同一拍还会给排空中的 gate
-// 发迁移许可,由 gate 按限速把已登录的连接重定向到同 zone 的其他 gate(gatedrain_migrate.go、
-// login/internal/svc/gate_migration.go,设计见 docs/design/gate-drain-session-migration.md)。这里仍然不踢人,
-// drained 的判定与写法也不变。
+// 看到它才动手删 Pod。到期时还剩的人(客户端不跟随、目标全满、迁移开关关着)
+// 什么时候可以牺牲仍然是人的决定,只是"够不够安全"这个判断被自动化了。
 
 const (
 	// GateDrainedKeyFmt 标记某台 gate 已排空到可以安全缩容。

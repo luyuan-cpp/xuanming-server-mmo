@@ -41,8 +41,8 @@ function New-SqlWriterCatalogFixture {
 
     $null = [System.IO.Directory]::CreateDirectory($Root)
     $rosterPath = Join-Path $Root 'roster.json'
-    # 两副本要至少 12 条(k8s_deploy.ps1 Get-SqlWriterRosterMinimumEntries)。
-    [System.IO.File]::WriteAllText($rosterPath, ('{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[' + ((@('{}') * 12) -join ',') + ']}'), [System.Text.UTF8Encoding]::new($false))
+    # 槽位名册:一个槽位一个 StatefulSet 序号,条数至少等于副本数(k8s_deploy.ps1 Get-SqlWriterRosterMinimumEntries)。12 个槽位,副本数随便调都够。
+    [System.IO.File]::WriteAllText($rosterPath, ('{"format":"SQL_WRITER_BOOT_ROSTER_V2","entries":[' + ((@('{}') * 12) -join ',') + ']}'), [System.Text.UTF8Encoding]::new($false))
     $rosterSha = (Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $catalog = @{}
     foreach ($namespace in $Namespaces) {
@@ -65,11 +65,12 @@ function New-SqlWriterCatalogFixture {
 
 .DESCRIPTION
     staging / prod 必须显式给 -PlayerRedisMasters,要 apply 集群时还要容量,开了集群还要口令(docs/design/redis-player-store-cluster.md §5.1)。
-    同样必须显式给 -DirectoryLogicalShards(prod 只能是 64)、-Region(docs/design/horizontal-scale-logical-db.md §5.1、§9)
+    同样必须显式给 -DirectoryLogicalShards(prod 只能是 64)、-Region(docs/design/horizontal-scale-logical-db.md §5.1、§9)、
+    -PlayerStoreShards(每地域的存档库数,docs/design/player-data-tidb-scaling-plan.md §7.2)
     和 -IdRegistryEtcd(全局号源登记处,docs/ops/id-issuer-runbook.md §1)。
     绝大多数用例测的不是这些闸,不补的话全部非 dev 档的 DryRun 都停在这里。
     用例自己给了 -PlayerRedisMasters(含 0,测闸本身)就原样不动;-Env 写了 MMORPG_PLAYER_REDIS_PASSWORD(含空串)就用它。
-    -DirectoryLogicalShards、-Region 同理(测闸本身时给 0、-1)。
+    -DirectoryLogicalShards、-Region、-PlayerStoreShards 同理(测闸本身时给 0、-1、0)。
     dev 档不补:dev 缺省不建集群,K=1、地域 0,这是要钉住的行为。
 #>
 function Add-PlayerRedisDeployFixture {
@@ -84,6 +85,7 @@ function Add-PlayerRedisDeployFixture {
     $logicalDb = @()
     if ($Arguments -notcontains '-DirectoryLogicalShards') { $logicalDb += @('-DirectoryLogicalShards', '64') }
     if ($Arguments -notcontains '-Region') { $logicalDb += @('-Region', '1') }
+    if ($Arguments -notcontains '-PlayerStoreShards') { $logicalDb += @('-PlayerStoreShards', '64') }
     # 全局号源登记处同理(Resolve-IdRegistryEtcd):测闸本身时用例自己给 -IdRegistryEtcd ''。
     if ($Arguments -notcontains '-IdRegistryEtcd' -and $Arguments -notcontains '-HostIdRegistry') { $logicalDb += @('-IdRegistryEtcd', 'id-registry.invalid:2379') }
     $result.Arguments = @($Arguments) + $logicalDb
@@ -96,6 +98,88 @@ function Add-PlayerRedisDeployFixture {
         $result.Env = @{} + $Env
         $result.Env['MMORPG_PLAYER_REDIS_PASSWORD'] = 'contract-player-redis-pw-01'
     }
+    return $result
+}
+
+<#
+.SYNOPSIS
+    给跑 k8s_deploy.ps1 的子进程补 3 副本 Loki 的对象存储参数与访问密钥,返回 @{ Arguments; Env }。
+
+.DESCRIPTION
+    部署集群内 Loki 时,staging / prod 与非 custom 的 OpsProfile 缺省 3 副本,要 -LokiS3Endpoint、-LokiS3Bucket 和两个访问密钥
+    (docs/design/no-single-node-horizontal-scaling-20261001.md §10)。绝大多数用例测的不是这道闸,不补的话这些档位的 infra-up、all-up
+    全部停在这里。虚构地址只用于 DryRun,不解析也不连接。以下情形原样不动:命令不部署 infra(zone-up、all-up -SkipInfra);
+    关了 sidecar 或给了 -LokiPushUrl(不部署集群内 Loki);用例自己给了 -LokiReplicas 或任何 -LokiS3*(测闸本身);缺省就是 1 副本(dev 且 custom)。
+#>
+function Add-LokiObjectStoreFixture {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][hashtable]$Env
+    )
+
+    $result = @{ Arguments = $Arguments; Env = $Env }
+    $valueOf = {
+        param([string]$Name, [string]$Default)
+        $at = [array]::IndexOf($Arguments, $Name)
+        if ($at -ge 0 -and ($at + 1) -lt $Arguments.Count) { return [string]$Arguments[$at + 1] }
+        return $Default
+    }
+    $command = & $valueOf '-Command' ''
+    $deploysInfra = ($command -eq 'infra-up') -or ($command -eq 'all-up' -and $Arguments -notcontains '-SkipInfra')
+    if (-not $deploysInfra) { return $result }
+    foreach ($flag in @('-NoCppLogSidecar', '-LokiPushUrl', '-LokiReplicas', '-LokiS3Endpoint', '-LokiS3Bucket', '-LokiS3Region',
+            '-LokiS3ForcePathStyle', '-LokiS3Insecure', '-LokiS3DevFixture')) {
+        if ($Arguments -contains $flag) { return $result }
+    }
+    if ((& $valueOf '-ReleaseProfile' 'dev') -eq 'dev' -and (& $valueOf '-OpsProfile' 'custom') -eq 'custom') { return $result }
+    $result.Arguments = @($Arguments) + @('-LokiS3Endpoint', 's3.invalid:443', '-LokiS3Bucket', 'contract-logs')
+    $result.Env = @{} + $Env
+    if (-not $result.Env.ContainsKey('MMORPG_LOKI_S3_ACCESS_KEY_ID')) { $result.Env['MMORPG_LOKI_S3_ACCESS_KEY_ID'] = 'contract-loki-key-id-0001' }
+    if (-not $result.Env.ContainsKey('MMORPG_LOKI_S3_SECRET_ACCESS_KEY')) { $result.Env['MMORPG_LOKI_S3_SECRET_ACCESS_KEY'] = 'contract-loki-secret-value-0123456789' }
+    return $result
+}
+
+# 存档库清单夹具的占位值:MMORPG_DB_ALLOWED_DATABASES 写它,Invoke-CapturedPwsh 按本次的地域码和 K 换成真实库名
+# (Add-PlayerStoreAllowlistFixture)。它不是合法库名:没经过换值就交给部署脚本,会被 Get-RoleProofStorageIds 当场拒绝。
+$PlayerStoreAllowlistFixture = 'fixture-player-stores-of-this-region'
+
+<#
+.SYNOPSIS
+    把存档库清单夹具的占位值换成本次地域的存档库,返回新的 Env。
+
+.DESCRIPTION
+    部署脚本要求 MMORPG_DB_ALLOWED_DATABASES 恰好是本地域的 K 个存档库,别的库一个都不许有(k8s_deploy.ps1
+    Assert-PlayerStoreAllowlist,设计 player-data-tidb-scaling-plan.md §7.2;A17c 起 zone 库已退役)。地域码和 K 随档位变
+    (dev 缺省地域 0、K=1;staging / prod 由 Add-PlayerRedisDeployFixture 补成地域 1、K=64,用例也可能自己给),
+    一份写死的清单对不上所有档位,所以夹具写占位值 $PlayerStoreAllowlistFixture,这里按本次参数换成库名
+    (库名公式用 release_common.ps1 的 Get-RegionPlayerStoreDbNames,与部署脚本同一份)。
+    不是占位值就原样不动:用例自己写了清单(测这道闸本身)、清单为空或没给(测「没给清单」)。
+    地域码或 K 越界、写成非数字时也原样不动(测参数闸,让部署脚本自己拒绝)。
+#>
+function Add-PlayerStoreAllowlistFixture {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][hashtable]$Env
+    )
+
+    if (-not $Env.ContainsKey('MMORPG_DB_ALLOWED_DATABASES')) { return $Env }
+    if ([string]$Env['MMORPG_DB_ALLOWED_DATABASES'] -cne $PlayerStoreAllowlistFixture) { return $Env }
+
+    # 参数没给 = 部署脚本的缺省:地域 -1(dev 取 0),K 0(dev 取 1)。staging / prod 到这里时已由上一步补齐。
+    $values = @{ '-Region' = -1; '-PlayerStoreShards' = 0 }
+    foreach ($name in @($values.Keys)) {
+        $at = [array]::IndexOf($Arguments, $name)
+        if ($at -lt 0) { continue }
+        $parsed = 0
+        if (($at + 1) -ge $Arguments.Count -or -not [int]::TryParse([string]$Arguments[$at + 1], [ref]$parsed)) { return $Env }
+        $values[$name] = $parsed
+    }
+    $region = if ($values['-Region'] -lt 0) { 0 } else { $values['-Region'] }
+    $shards = if ($values['-PlayerStoreShards'] -eq 0) { 1 } else { $values['-PlayerStoreShards'] }
+    if ($region -gt 63 -or $shards -lt 1 -or $shards -gt 1000) { return $Env }
+
+    $result = @{} + $Env
+    $result['MMORPG_DB_ALLOWED_DATABASES'] = @(Get-RegionPlayerStoreDbNames -Region $region -Shards $shards) -join ','
     return $result
 }
 
@@ -129,12 +213,17 @@ function Invoke-CapturedPwsh {
         [hashtable]$Env = @{}
     )
 
-    # 部署脚本(以及照抄它 param 块的驱动)在 staging / prod 要带玩家域集群参数,见 Add-PlayerRedisDeployFixture。
+    # 部署脚本(以及照抄它 param 块的驱动)在 staging / prod 要带玩家域集群参数,见 Add-PlayerRedisDeployFixture;
+    # 存档库清单夹具的占位值按本次的地域码和 K 换成本地域的存档库,见 Add-PlayerStoreAllowlistFixture。
     $scriptLeaf = [System.IO.Path]::GetFileName($ScriptPath)
     if ($scriptLeaf -ceq 'k8s_deploy.ps1' -or $scriptLeaf -like 'mmorpg-client-entry-dryrun-*') {
         $fixture = Add-PlayerRedisDeployFixture -Arguments $Arguments -Env $Env
         $Arguments = $fixture.Arguments
-        $Env = $fixture.Env
+        $Env = Add-PlayerStoreAllowlistFixture -Arguments $Arguments -Env $fixture.Env
+        # 3 副本 Loki 的对象存储参数,见 Add-LokiObjectStoreFixture。
+        $lokiFixture = Add-LokiObjectStoreFixture -Arguments $Arguments -Env $Env
+        $Arguments = $lokiFixture.Arguments
+        $Env = $lokiFixture.Env
     }
 
     $savedEnv = @{}

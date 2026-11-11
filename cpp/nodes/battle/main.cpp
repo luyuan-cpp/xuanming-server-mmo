@@ -16,6 +16,7 @@
 #include "client/battle_client_edge.h"
 #include "client/network_probe_security.h"
 #include "battle_admission_advertise.h"
+#include "node/system/node/node_admission_publisher.h"
 #include "battle_security.h"
 #include "node_config_manager.h"
 #include "time/comp/timer_task_comp.h"
@@ -62,6 +63,11 @@ namespace
     // 周期决定开闸 / 排空 / 解除排空最迟多久被 match 看到(排空标签本身每 5s 读一次,LifecycleOptions.drainPollInterval)。
     constexpr double kAdmissionAdvertiseIntervalSec = 1.0;
 
+    // 计划排空的进程缺省预算:0 = 关闭(docs/design/scene-node-planned-drain.md §9)。等一局打完要几分钟,只有宽限期跟着
+    // 调大才有意义:K8s 部署按 -BattleTerminationGracePeriodSeconds(缺省 330 秒 = 一局的成局期限 300 秒 + 停机 25 秒 + 余量)
+    // 注入 MMORPG_PLANNED_DRAIN_BUDGET_SECONDS;没注入的(本机起进程)SIGTERM 行为与以前相同。
+    constexpr std::chrono::seconds kBattlePlannedDrainDefaultBudget{0};
+
     // 日志用:"ip:port";未设置(podip 形态的 client_endpoint)打 "(unset)"。
     std::string EndpointForLog(const EndpointComp &endpoint)
     {
@@ -101,71 +107,20 @@ namespace
         lifecycle.Start(std::move(transport), agonesEnv.BaseUrl(), std::move(options));
     }
 
-    // battle_admission::Advertised 与 proto NodeAdmission 的映射(纯头文件 battle_admission_advertise.h 不依赖 protobuf)。
-    NodeAdmission ToNodeAdmission(const battle_admission::Advertised advertised)
-    {
-        switch (advertised)
-        {
-        case battle_admission::Advertised::kOpen:
-            return NODE_ADMISSION_OPEN;
-        case battle_admission::Advertised::kClosed:
-            return NODE_ADMISSION_CLOSED;
-        case battle_admission::Advertised::kUnspecified:
-            return NODE_ADMISSION_UNSPECIFIED;
-        }
-        return NODE_ADMISSION_UNSPECIFIED;
-    }
-
-    battle_admission::Advertised FromNodeAdmission(const NodeAdmission admission)
-    {
-        switch (admission)
-        {
-        case NODE_ADMISSION_OPEN:
-            return battle_admission::Advertised::kOpen;
-        case NODE_ADMISSION_CLOSED:
-            return battle_admission::Advertised::kClosed;
-        default:
-            // UNSPECIFIED,以及更新版本才有的取值:都按「没有上报」处理,与期望值不一致即重写。
-            return battle_admission::Advertised::kUnspecified;
-        }
-    }
-
-    // etcd 回读:发现快照里本节点(同 uuid)的登记。battle watch 自己的前缀(劫持检测与注册自检),快照里的自身登记
-    // 就是 etcd 里此刻的值;回读里还看不到自己的键(首发未回、已失租)返回 nullopt。只在 loop 线程调用。
-    std::optional<battle_admission::Advertised> ObservedAdvertised(Node &node)
-    {
-        for (const auto &registered : node.GetServiceDiscoveryManager().ServiceNodes().NodesOfType(node.GetNodeType()))
-        {
-            if (node.IsCurrentNode(registered))
-            {
-                return FromNodeAdmission(registered.admission());
-            }
-        }
-        return std::nullopt;
-    }
-
-    // 一拍可分配状态对账(battle_admission_advertise.h)。内存里的 NodeInfo 恒为期望值:首发与重注册整份发布它,带上的
-    // 就是最新状态;etcd 里的值按回读对账,只在不一致且注册链空闲时写(UpdateNodeInfo:带租约的整份 Put)。
-    // 只在 loop 线程调用(MutableNodeInfo 断言 loop 线程)。
+    // 一拍可分配状态对账。写 etcd 与回读对账在 core(node_admission_publisher.h,与 scene 共用);battle 只决定期望值,
+    // 并按自己的上下文打日志。只在 loop 线程调用(MutableNodeInfo 断言 loop 线程)。
     void ReconcileAdvertisedAdmission(Node &node, const battle_admission::AdmissionPhase phase,
                                       battle_admission::AdvertisePolicy &policy)
     {
         const bool grantsPermits = BattleNodeImpl::LifecycleGrantsPermits();
         const auto desired = battle_admission::DesiredAdvertised(phase, grantsPermits);
-        node.MutableNodeInfo().set_admission(ToNodeAdmission(desired));
-
-        auto &etcd = node.GetServiceDiscoveryManager().etcdService;
-        // 传输为空 = etcd 服务还没起或已经停了(停机收尾 CloseTransportOwnersInLoop 之后),写了也只会被丢弃。
-        const bool registrationIdle = etcd.Transport() != nullptr && etcd.IsIdentityConfirmedFresh() &&
-                                        !etcd.RegistrationInFlight();
-        const auto observed = ObservedAdvertised(node);
-        const auto action = policy.Decide(desired, observed, registrationIdle, std::chrono::steady_clock::now());
-        if (action == battle_admission::AdvertiseAction::kNone)
+        const auto result = node_admission::Reconcile(node, desired, policy);
+        if (result.action == battle_admission::AdvertiseAction::kNone)
         {
             return;
         }
-        const char *observedName = observed ? battle_admission::ToString(*observed) : "absent";
-        if (action == battle_admission::AdvertiseAction::kResend)
+        const char *observedName = result.observed ? battle_admission::ToString(*result.observed) : "absent";
+        if (result.action == battle_admission::AdvertiseAction::kResend)
         {
             // 上次写出 kResendAfter 之后回读仍不一致:多半是 Put 静默丢了(etcd 抖动、传输流重建),也可能是 watch 回读滞后。
             LOG_WARN << "battle admission readback still stale; re-advertising to etcd: admission="
@@ -177,7 +132,6 @@ namespace
                      << " observed=" << observedName << " gate=" << battle_admission::ToString(phase)
                      << " lifecycle_grants_permits=" << (grantsPermits ? 1 : 0);
         }
-        node.GetEtcdManager().UpdateNodeInfo();
     }
 
     // battle 节点运行时状态:match 控制面 gRPC 服务 + 客户端直连面。
@@ -212,7 +166,7 @@ namespace
         }
         const auto mode = resolution.mode;
         if(mode==battle_security::RunMode::kProd&&!network_probe::Enabled())
-            LOG_FATAL << "生产battle必须开启GLOBAL_MATCH_ENABLED并使用全球事务权威放置";
+            LOG_FATAL << "Production battle must enable GLOBAL_MATCH_ENABLED and use global transactional authority placement";
         const auto &deploy = gNodeConfigManager.GetBaseDeployConfig();
 
         switch (battle_security::ClassifyTokenSecret(deploy.battle_token_secret(), mode))
@@ -369,6 +323,10 @@ int main(int argc, char *argv[])
         // Match是全局SQL终局权威，按框架全局池发现，不限当前zone；个人奖励只由其持久Inbox重投。
         // gate/scene旧路由仍来自快照，不在这里新增玩家位置查询。
         Node::CanConnectNodeTypeList{common::base::MatchNodeService},
+        // 只发现 Match(docs/design/connection-fanout-subsetting-20261106.md §3.4)。自身类型 Battle 不在里面:battle 是全服
+        // 一个池,按前缀看同类每台都要看全部 battle(B² 项);这里只看本节点自己那一条发现键,劫持检测、注册自检与
+        // 可分配状态对账的回读(node_admission::Observed)都只找自己。选号读全服分配清单,不靠同类快照。
+        Node::DiscoveryNodeTypeList{common::base::MatchNodeService},
         [](Node &node, BattleRuntimeContext &context)
         {
             node.MutableNodeInfo().set_physical_region(network_probe::PhysicalRegion());
@@ -378,7 +336,7 @@ int main(int argc, char *argv[])
             if(network_probe::Enabled())
             {
                 if(network_probe::PhysicalRegion()==0||network_probe::Secret().size()<32)
-                    LOG_FATAL << "全球匹配要求非零 PHYSICAL_REGION 及至少32字节 MATCH_PROBE_SECRET";
+                    LOG_FATAL << "Global matching requires a nonzero PHYSICAL_REGION and a MATCH_PROBE_SECRET of at least 32 bytes";
             }
             // gRPC 服务要在 etcd 端口分配之前注册:框架看到 HasGrpcServices()
             // 为真才会派生 gRPC 端口(TCP + 30000)并在 server 就绪后发布服务发现
@@ -524,5 +482,25 @@ int main(int argc, char *argv[])
             // 并把排空预算内仍没落定的终局逐局打进日志(match 在权威截止后判 ABORT)。
             node.SetBeforeTeardown([](Node &)
                                    { BattleRoomManager::Instance().StopSqlOutcomes(); });
+
+            // 计划排空(docs/design/scene-node-planned-drain.md §4.1、§9):SIGTERM 先只关建房准入、不作废在打的房间,
+            // 等它们自然打完、终局拿到 SQL 决定(房间离表)再进普通停机;到预算还没打完的照旧走上面的停机收尾
+            // (match 在权威截止后判 ABORT)。Agones 形态的排空标签本来就是这个语义(关准入、房间归零后回 Ready)。
+            // 进程缺省关闭,K8s 部署按 battle 宽限期注入 MMORPG_PLANNED_DRAIN_BUDGET_SECONDS 打开(kBattlePlannedDrainDefaultBudget)。
+            node.SetPlannedDrain(
+                [&context](Node &n)
+                {
+                    context.battleNodeService->CloseAdmission();
+                    // 关闸当场把 CLOSED 对账进 etcd,与 closeSource 同一个理由:match 越早看到,越少白拨。
+                    if (const auto gate = context.battleNodeService->AdmissionGateView().lock())
+                    {
+                        ReconcileAdvertisedAdmission(n, gate->Phase(), *context.admissionAdvertise);
+                    }
+                    LOG_INFO << "[PlannedDrain] battle admission closed; waiting for live rooms to finish. rooms="
+                             << BattleRoomManager::Instance().RoomCount();
+                },
+                [](Node &)
+                { return BattleRoomManager::Instance().RoomCount() == 0; },
+                kBattlePlannedDrainDefaultBudget);
         });
 }

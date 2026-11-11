@@ -3,6 +3,7 @@
   <ItemGroup>
     <ClCompile Include="handler\event\team_event_handler.cpp" />
     <ClCompile Include="handler\event\player_inbox_event_handler.cpp" />
+    <ClCompile Include="handler\event\player_placement_event_handler.cpp" />
     <ClCompile Include="handler\rpc\scene_admin_handler.cpp" />
     <ClCompile Include="handler\rpc\scene_handler.cpp" />
     <ClCompile Include="handler\rpc\player\client_player_common_handler.cpp" />
@@ -18,14 +19,17 @@
     <ClCompile Include="handler\grpc\scene_node_service.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="id_segment_bootstrap.cpp" />
+    <ClCompile Include="scene_planned_drain.cpp" />
     <ClCompile Include="handler\event\scene_kafka_command_router.cpp" />
     <ClCompile Include="handler\rpc\player\player_currency_handler.cpp" />
     <ClCompile Include="handler\rpc\player\player_movement_handler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="id_segment_bootstrap.h" />
+    <ClInclude Include="scene_planned_drain.h" />
     <ClInclude Include="handler\event\team_event_handler.h" />
     <ClInclude Include="handler\event\player_inbox_event_handler.h" />
+    <ClInclude Include="handler\event\player_placement_event_handler.h" />
     <ClInclude Include="handler\rpc\scene_admin_handler.h" />
     <ClInclude Include="handler\rpc\scene_handler.h" />
     <ClInclude Include="handler\rpc\player\client_player_common_handler.h" />
@@ -57,5 +61,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="id_segment_request_table.h" />
+    <ClInclude Include="id_segment_transport.h" />
   </ItemGroup>
 </Project>

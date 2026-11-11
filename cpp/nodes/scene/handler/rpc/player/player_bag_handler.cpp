@@ -270,7 +270,7 @@ void SceneBagClientPlayerHandler::RetrieveTemporaryItems(entt::entity player,con
 	::RetrieveTemporaryItemsResponse* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	// 规则(二选一的参数、取哪几件、放不放得下、战斗中与传送途中拒绝)全在 PlayerBagSystem::RetrieveTemporary,
+	// 规则(二选一的参数、取哪几件、放不放得下、传送途中拒绝;战斗中放行,2026-11-06 评审修正)全在 PlayerBagSystem::RetrieveTemporary,
 	// 这里只做传输层的事。见 docs/design/bag-rule-policy-layering.md §6.6。
 	if (const auto err = PlayerBagSystem::RetrieveTemporary(player, request->item_id(), request->take_all());
 		err != kSuccess)

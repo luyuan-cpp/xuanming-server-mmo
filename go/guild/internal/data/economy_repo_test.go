@@ -45,7 +45,9 @@ import (
 	pb "proto/guild"
 
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/gameday"
+	"shared/workshard"
 
 	"guild/internal/constants"
 )
@@ -116,8 +118,8 @@ func TestGuildSeqTablesUsesGuildTables(t *testing.T) {
 	assert.Equal(t, PendingStatus(), tables.PendingStatus)
 }
 
-// TestIsRetryableBackground:后台写把 1213 / 1205 / 9007 当可重试(包一层也要认得),其余一律不重试 ——
-// 把撞唯一键判成可重试,会让一次注定失败的终结反复重放。
+// TestIsRetryableBackground:后台写把 1213 / 1205 / 9007 与守卫判定的提交前中止(R6,COMMIT 没发、确定没写)当可重试
+// (包一层也要认得),其余一律不重试 —— 把撞唯一键、结局未知判成可重试,会让一次注定失败或可能已生效的终结反复重放。
 func TestIsRetryableBackground(t *testing.T) {
 	cases := []struct {
 		name string
@@ -131,6 +133,8 @@ func TestIsRetryableBackground(t *testing.T) {
 		{"唯一键冲突 1062", &mysqlDriver.MySQLError{Number: 1062}, false},
 		{"包了一层的锁等待", fmt.Errorf("terminal CAS: %w", &mysqlDriver.MySQLError{Number: 1205}), true},
 		{"普通错误", errors.New("connection refused"), false},
+		{"提交前中止", fmt.Errorf("terminal CAS: %w", authoritysql.ErrTxAbortedBeforeCommit), true},
+		{"结局未知", fmt.Errorf("commit: %w", authoritysql.ErrOutcomeUnknown), false},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.want, isRetryableBackground(tc.err), tc.name)
@@ -280,6 +284,50 @@ func TestEconomyCandidateReadsTakeNoLocks(t *testing.T) {
 	// 事务内建 seq 行必须仍是"已存在即空操作"的 INSERT IGNORE、next_seq 从 1 起(与 assetop.EnsureSeqRow 同义)。
 	assert.True(t, strings.HasPrefix(sqlEnsureSeqRow, "INSERT IGNORE INTO "+guildPlayerOpSeqTable+" "), sqlEnsureSeqRow)
 	assert.Contains(t, sqlEnsureSeqRow, "VALUES (?, ?, 1, ?, ?)")
+}
+
+// TestListDueQueryPutsShardFilterBeforeLimit:到期扫描两段的分片条件(缺口清单第 25 条)都接在 WHERE 末尾、
+// ORDER BY / LIMIT 之前,片号只走占位符;零值条件是恒真 1=1,与分片前的语句等价。纯字符串,不连库。
+func TestListDueQueryPutsShardFilterBeforeLimit(t *testing.T) {
+	const kind = "guild-assetop"
+	owned := workshard.SQLFilter(func(key string) bool { return key == workshard.ShardKey(kind, 5) }, kind, "player_id")
+	for name, head := range map[string]string{"fresh": sqlListDueFreshHead, "aged": sqlListDueAgedHead} {
+		query := listDueQuery(head, owned)
+		assert.True(t, strings.HasSuffix(query, " AND MOD(player_id,64) IN(?) ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"),
+			"%s 段的分片条件必须在 ORDER BY / LIMIT 之前:%s", name, query)
+		assert.Equal(t, 6, strings.Count(query, "?"), "%s 段:4 个到期条件 + 1 个片号 + LIMIT", name)
+		assert.True(t, strings.HasSuffix(listDueQuery(head, workshard.Filter{}), " AND 1=1 ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"),
+			"%s 段:零值条件不过滤", name)
+		assert.NotContains(t, strings.ToUpper(query), "FOR UPDATE", "%s 段是候选读,必须是普通读", name)
+	}
+	assert.Contains(t, sqlListDueFreshHead, "`attempts` < ? AND ")
+	assert.Contains(t, sqlListDueAgedHead, "`attempts` >= ? AND ")
+}
+
+// TestCleanupCandidateQueriesPutShardFilterBeforeLimit:终态清理按片分工(缺口清单第 25 条第二批)。三条候选读的分片条件都在
+// ORDER BY / LIMIT 之前;零值条件拼出来的就是不分片的常量(TestEconomyCandidateReadsTakeNoLocks 查的那一份);
+// 实参按占位符顺序:原有条件、片号、LIMIT。纯函数,不连库。
+func TestCleanupCandidateQueriesPutShardFilterBeforeLimit(t *testing.T) {
+	owned := workshard.SQLFilter(func(key string) bool {
+		return key == workshard.ShardKey(CleanupWorkKind, 9) || key == workshard.ShardKey(CleanupWorkKind, 2)
+	}, CleanupWorkKind, "player_id")
+	for name, q := range map[string]struct {
+		head, tail, unsharded string
+		before                int
+	}{
+		"terminal ops":    {sqlListCleanupTerminalOpsHead, sqlListCleanupTerminalOpsTail, sqlListCleanupTerminalOps, 5},
+		"client requests": {sqlListCleanupClientRequestsHead, sqlListCleanupClientRequestsTail, sqlListCleanupClientRequests, 1},
+		"counters":        {sqlListCleanupCountersHead, sqlListCleanupCountersTail, sqlListCleanupCounters, 2},
+	} {
+		query := cleanupCandidateQuery(q.head, owned, q.tail)
+		assert.True(t, strings.HasSuffix(query, " AND MOD(player_id,64) IN(?,?)"+q.tail), "%s:分片条件必须在 ORDER BY / LIMIT 之前:%s", name, query)
+		assert.Equal(t, q.before+2+1, strings.Count(query, "?"), "%s:原有条件 + 2 个片号 + LIMIT", name)
+		assert.Equal(t, q.unsharded, cleanupCandidateQuery(q.head, workshard.Filter{}, q.tail), "%s:零值条件就是不分片的那一份", name)
+		assert.Contains(t, q.unsharded, " AND 1=1 ORDER BY ", "%s", name)
+	}
+	assert.Equal(t, []any{"a", "b", 2, 9, cleanupBatchSize}, cleanupArgs(owned, "a", "b"), "原有条件、升序片号、LIMIT")
+	assert.Equal(t, []any{"a", cleanupBatchSize}, cleanupArgs(workshard.Filter{}, "a"), "零值条件没有片号实参")
+	assert.NotEqual(t, CleanupWorkKind, "guild-assetop", "清理与重投的类别键不同名")
 }
 
 // TestCounterRefundIsTheOnlyRefundRule:退次数 / 退限购的判定只此一处(counterRefund),lockCounterparty 的 seq 行守卫
@@ -1260,6 +1308,49 @@ func TestListDue_FreshRowsFirst(t *testing.T) {
 	assert.Equal(t, []uint64{201, 202, 101, 102, 103}, ids)
 }
 
+// TestListDue_OwnedShardsOnly:分片条件(缺口清单第 25 条,片号 = player_id % 64)在两段里都生效、都在 LIMIT 之前:
+// 别的片的行再早到期也不占本副本的名额;零值条件与 ListDue 相同;一片都不归本副本时什么都不回。
+func TestListDue_OwnedShardsOnly(t *testing.T) {
+	f := openEconomyFixture(t)
+	const kind = "guild-assetop"
+	const mine, other uint64 = 64*134 + 1, 64*134 + 2 // 片 1 与片 2
+	epoch := testNowMs - 100_000
+
+	otherFresh := econShopRecord(t, 501, other, epoch, 1) // 别的片:新行老行各一条,都比本片的更早到期,先占队头
+	otherFresh.NextAttemptMs = testNowMs - 90_000
+	otherAged := econShopRecord(t, 502, other, epoch, 2)
+	otherAged.Attempts = assetop.FreshAttemptLimit
+	otherAged.NextAttemptMs = testNowMs - 80_000
+	mineFresh := econShopRecord(t, 601, mine, epoch, 1)
+	mineAged := econShopRecord(t, 602, mine, epoch, 2)
+	mineAged.Attempts = assetop.FreshAttemptLimit + 1
+	mineAged.NextAttemptMs = testNowMs - 50_000
+	for _, rec := range []*pb.GuildAssetOpRecord{otherFresh, otherAged, mineFresh, mineAged} {
+		econInsertOp(t, f, rec)
+	}
+
+	owned := workshard.SQLFilter(func(key string) bool { return key == workshard.ShardKey(kind, workshard.ShardOf(mine)) }, kind, "player_id")
+	ids, err := f.store.ListDueOwned(f.ctx, testNowMs, 1, owned)
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{601}, ids, "别的片更早到期的行不占本副本的名额")
+
+	ids, err = f.store.ListDueOwned(f.ctx, testNowMs, 10, owned)
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{601, 602}, ids, "老行那一段同样只取本副本的片")
+
+	ids, err = f.store.ListDueOwned(f.ctx, testNowMs, 10, workshard.Filter{})
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{501, 601, 502, 602}, ids, "零值条件:全部片,新行在前")
+	all, err := f.store.ListDue(f.ctx, testNowMs, 10)
+	require.NoError(t, err)
+	assert.Equal(t, ids, all, "ListDue 就是不带条件的 ListDueOwned")
+
+	none := workshard.SQLFilter(func(string) bool { return false }, kind, "player_id")
+	ids, err = f.store.ListDueOwned(f.ctx, testNowMs, 10, none)
+	require.NoError(t, err)
+	assert.Empty(t, ids, "一片都不归本副本:什么都不回")
+}
+
 // TestClaim_ReturnsFullOpAndHoldsLease:领到的 Op 带齐纪元 / correlation(= op_id)/ 令牌 / 包;租约期内别人领不到。
 func TestClaim_ReturnsFullOpAndHoldsLease(t *testing.T) {
 	f := openEconomyFixture(t)
@@ -2002,6 +2093,45 @@ func TestCleanupOnce_KeepsPendingAndPartial(t *testing.T) {
 		assert.Equal(t, survives, found, "period_key=%d", key)
 	}
 	assert.Equal(t, map[string]int64{"guild_asset_op": 4, "guild_daily_counter": 2}, deleted)
+}
+
+// TestCleanupOnce_OnlyOwnedShards:终态清理按片分工(缺口清单第 25 条第二批,片号 = player_id % 64)。
+// 只清本副本负责的片:别的片的保留期外终态行与过期计数行原样留着;换成不分工(Owns 为 nil)再跑一轮,剩下的也清掉。
+func TestCleanupOnce_OnlyOwnedShards(t *testing.T) {
+	f := openEconomyFixture(t)
+	const mine, other uint64 = 64*136 + 3, 64*136 + 4 // 片 3 与片 4
+	now := time.UnixMilli(int64(testNowMs))
+	oldMs := testNowMs - 31*econDayMs
+	oldDay := gameday.DayKey(now.Add(-31 * 24 * time.Hour))
+	for i, c := range []struct {
+		opID, player uint64
+	}{{801, mine}, {802, other}} {
+		rec := econShopRecord(t, c.opID, c.player, oldMs, uint64(i+1))
+		rec.Status = pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED
+		rec.NextAttemptMs = oldMs
+		rec.CreatedMs, rec.UpdatedMs = oldMs, oldMs
+		econInsertOp(t, f, rec)
+		mustExec(t, f.ctx, f.db,
+			`INSERT INTO guild_daily_counter (player_id, counter_kind, ref_id, period_key, used_count, updated_ms) VALUES (?, ?, ?, ?, ?, ?)`,
+			c.player, int32(pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP), 101, oldDay, 1, testNowMs)
+	}
+	counterExists := func(player uint64) bool {
+		_, found := econCounterUsed(t, f, player, pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP, 101, oldDay)
+		return found
+	}
+
+	conf := CleanupConf{Interval: time.Minute, TerminalRetention: 30 * 24 * time.Hour, CounterRetention: 30 * 24 * time.Hour,
+		Owns: func(key string) bool { return key == workshard.ShardKey(CleanupWorkKind, workshard.ShardOf(mine)) }}
+	require.NoError(t, f.store.CleanupOnce(f.ctx, now, conf))
+	assert.False(t, econOpExists(t, f, 801), "本片的终态行删掉")
+	assert.False(t, counterExists(mine), "本片的过期计数行删掉")
+	assert.True(t, econOpExists(t, f, 802), "别的片的终态行留给负责它的副本")
+	assert.True(t, counterExists(other), "别的片的计数行留给负责它的副本")
+
+	conf.Owns = nil
+	require.NoError(t, f.store.CleanupOnce(f.ctx, now, conf))
+	assert.False(t, econOpExists(t, f, 802), "不分工时清全部行")
+	assert.False(t, counterExists(other), "不分工时清全部行")
 }
 
 // ── 读查询 ───────────────────────────────────────────────────

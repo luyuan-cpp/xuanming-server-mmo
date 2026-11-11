@@ -104,15 +104,15 @@ Write-Host "Out dir: $OutDir" -ForegroundColor Cyan
 # route_meta 不 TRUNCATE:本脚本在服务运行中清库,meta 行没了之后建角会一直 fail-closed(route_meta 缺行),直到下次 -migrate。
 # 原地复位不换 generation。
 #
-# 比 Invoke-DataReset 里 zone 表的清理更严格 —— SQL 失败就 throw,不 2>&1 | Out-Null 吞掉:路由表还留着上一轮的行时,
+# 比 Invoke-DataReset 里存档库表的清理更严格 —— SQL 失败就 throw,不 2>&1 | Out-Null 吞掉:路由表还留着上一轮的行时,
 # 同一个 id 再注册会落进冲突或已存在分支,等于拿上一轮的映射跑这一轮,而且没有任何报错。
 # 只处理已存在的表:没跑过迁移的库里一张都没有,是合法状态。
 #
 # 本脚本只连本机 mysql 容器。TiDB 环境的清库按 docs/design/tidb-phase1-and-launch-readiness.md §3.5 做:
 # TiDB 上 TRUNCATE 会换表 ID、丢掉预切与 table attributes,清完要重跑 `route_tool -f <yaml> tidb-prepare -zones=… -dry-run=false`。
 # 既有全量本地 reset 同时清全局角色目录；Redis清空不再删除SQL归属。仅原显式wipe门禁允许执行。
-# 目录每片一个库(zone_merged_into 只在第 0 片,只清已存在的表),流水库没有这些表,只复位 route_meta。
-$RouteDataTables   = @('account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role_removal', 'account_role', 'account_role_ref', 'account_directory', 'player_name_owner', 'player_route', 'zone_merged_into')
+# 目录每片一个库(zone_merged_into、zone_merge_history 只在第 0 片,只清已存在的表),流水库没有这些表,只复位 route_meta。
+$RouteDataTables   = @('account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role_removal', 'account_role', 'account_role_ref', 'account_directory', 'player_name_owner', 'player_route', 'zone_merged_into', 'zone_merge_history')
 $RouteMetaResetSql = 'UPDATE route_meta SET writable=1 WHERE id=1;'
 
 # 目录各片(Directory.LogicalShards,与 data_service 同一来源;K=1 时库名就是基名)和流水库。
@@ -202,11 +202,9 @@ function Invoke-DataReset {
     . (Join-Path $PSScriptRoot 'lib/redis_local_flush.ps1')
     Invoke-LocalRedisFlushAll -WriteLine { param($line) Write-Host "[reset] $line" -ForegroundColor Yellow }
 
-    # MySQL: truncate the player tables in the zone-isolated schema (zone_<N>_db;
-    # saves live in player_store,
-    # see repo memory db-zone-isolation). Keep table definitions (DROP would force
-    # a re-init dance). We touch only the tables this verification reads.
-    $dbName = "zone_${Zone}_db"
+    # MySQL: truncate the player tables in every player store of this region (player_store_<id>_db, region and K
+    # from go/login Placement; zone databases are retired, player-data-tidb-scaling-plan.md §7.2 A17c).
+    # Keep table definitions (DROP would force a re-init dance). We touch only the tables this verification reads.
     $sql = @"
 SET FOREIGN_KEY_CHECKS=0;
 TRUNCATE TABLE player_store;
@@ -215,12 +213,14 @@ TRUNCATE TABLE user_accounts;
 TRUNCATE TABLE account_share_database;
 SET FOREIGN_KEY_CHECKS=1;
 "@
-    if (Get-Command mysql -ErrorAction SilentlyContinue) {
-        $sql | & mysql -uroot "-p$mysqlPwd" $dbName 2>&1 | Out-Null
-    } elseif ($hasDocker) {
-        $sql | & docker exec -i mysql mysql -uroot "-p$mysqlPwd" $dbName 2>&1 | Out-Null
-    } else {
-        throw "[reset] mysql client not on PATH and docker unavailable — cannot truncate $dbName"
+    foreach ($dbName in @(Get-LoginPlayerStoreDbNames -LoginConfigPath (Join-Path $RepoRoot 'go/login/etc/login.yaml'))) {
+        if (Get-Command mysql -ErrorAction SilentlyContinue) {
+            $sql | & mysql -uroot "-p$mysqlPwd" $dbName 2>&1 | Out-Null
+        } elseif ($hasDocker) {
+            $sql | & docker exec -i mysql mysql -uroot "-p$mysqlPwd" $dbName 2>&1 | Out-Null
+        } else {
+            throw "[reset] mysql client not on PATH and docker unavailable — cannot truncate $dbName"
+        }
     }
 
     # 全局库的路由表(fail-closed,理由见 Clear-GlobalRouteTables 上方注释)。

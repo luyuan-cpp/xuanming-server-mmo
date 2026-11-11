@@ -9,8 +9,8 @@ import (
 // 钉死 etc/login.yaml 里的号段块与 data_service 客户端块确实能被解析成设计稿 §6.4 的默认值。
 //
 // 为什么要有这条:go-zero 对 optional 结构体块缺失时不填内层 default(见 KillSwitchConf 注释),
-// 段名写错(IdSegments / DataServiceRPC)会静默保持零值 —— 号段悄悄关掉、PlayerId 继续走
-// snowflake,启动日志之外没有任何地方能看出来。
+// 段名写错(IdSegments / DataServiceRPC)会静默保持零值 —— 号段悄悄关掉、建角一律失败(没有回退号源),
+// 而进程照常起服,启动日志之外没有任何地方能看出来。
 func TestEtcYamlIdSegmentBlock(t *testing.T) {
 	var c Config
 	if err := conf.Load("../../etc/login.yaml", &c); err != nil {
@@ -33,7 +33,7 @@ func TestEtcYamlIdSegmentBlock(t *testing.T) {
 	}
 }
 
-// 块整个不写 = 关(回滚开关),而不是半开。
+// 块整个不写 = 关(发不出 PlayerId),而不是半开。
 func TestIdSegmentBlockMissingMeansDisabled(t *testing.T) {
 	var c Config
 	if err := conf.LoadFromYamlBytes([]byte("Name: login.rpc\nListenOn: 127.0.0.1:1\n"), &c); err != nil {

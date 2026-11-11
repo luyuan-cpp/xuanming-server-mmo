@@ -8,7 +8,7 @@
 
     plan       (default) print exactly what each phase WILL do, touch nothing.
     baseline   verify prev-summary.txt (R18) exists as the comparison baseline.
-    wipe       redis FLUSHALL(单实例 + 玩家域开发集群的每个主节点)+ mysql truncate(zone_1_db) + etcd del --prefix
+    wipe       redis FLUSHALL(单实例 + 玩家域开发集群的每个主节点)+ mysql truncate(本地域的存档库 player_store_<id>_db)+ etcd del --prefix
                + kafka offset reset + prune old robot/cpp logs.   [DESTRUCTIVE]
     build      go-svc-build (Go only — NEVER compiles C++, uses existing gate.exe).
     start      dev-start-exe (Go services + cpp gate/scene from prebuilt exe).
@@ -56,7 +56,7 @@ param(
     [int]$SteadyMinutes = 18,   # how long 'all' waits before summarize
     [string]$RunDir = '',       # reused by 'summarize'; auto-created by 'run'/'all'
 
-    # mysql tables to truncate in zone_<N>_db (same set as currency_crash_window.ps1).
+    # mysql tables to truncate in every player store of this region (same set as currency_crash_window.ps1).
     # 玩家存档只在 player_store;player_database 只是内存形状,不建表(player_database_1 已于 2026-11-05 删除),写进来 TRUNCATE 会在第一条就中断。
     [string[]]$MySqlTables = @(
         'player_store','player_centre_database',
@@ -85,7 +85,8 @@ function Warn($t) { Write-Host "  [warn] $t" -ForegroundColor Yellow }
 
 # Resolve the mysql root password the same way the rest of the repo does.
 $MysqlPwd = if ($env:MYSQL_PASSWORD) { $env:MYSQL_PASSWORD } else { 'Mmorpg#2026db' }
-$DbName   = "zone_${Zone}_db"
+# 玩家存档在本地域的存档库(docs/design/player-data-tidb-scaling-plan.md §7.2 A17c,zone 库已退役),地域码和 K 取 go/login 的 Placement。
+$PlayerStoreDbNames = @(Get-LoginPlayerStoreDbNames -LoginConfigPath (Join-Path $RepoRoot 'go/login/etc/login.yaml'))
 
 # ────────────────────────────────────────────────────────────────────────────
 function Invoke-Baseline {
@@ -115,8 +116,8 @@ function Invoke-Baseline {
 # 本脚本只连本机 mysql 容器。TiDB 环境的清库按 docs/design/tidb-phase1-and-launch-readiness.md §3.5 做:
 # TiDB 上 TRUNCATE 会换表 ID、丢掉预切与 table attributes,清完要重跑 `route_tool -f <yaml> tidb-prepare -zones=… -dry-run=false`。
 # 既有全量本地 reset 同时清全局角色目录；Redis清空不再删除SQL归属。仅原显式wipe门禁允许执行。
-# 目录每片一个库(zone_merged_into 只在第 0 片,只清已存在的表),流水库没有这些表,只复位 route_meta。
-$RouteDataTables   = @('account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role_removal', 'account_role', 'account_role_ref', 'account_directory', 'player_name_owner', 'player_route', 'zone_merged_into')
+# 目录每片一个库(zone_merged_into、zone_merge_history 只在第 0 片,只清已存在的表),流水库没有这些表,只复位 route_meta。
+$RouteDataTables   = @('account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role_removal', 'account_role', 'account_role_ref', 'account_directory', 'player_name_owner', 'player_route', 'zone_merged_into', 'zone_merge_history')
 $RouteMetaResetSql = 'UPDATE route_meta SET writable=1 WHERE id=1;'
 
 # 目录各片(Directory.LogicalShards,与 data_service 同一来源;K=1 时库名就是基名)和流水库。
@@ -187,7 +188,7 @@ function Invoke-Wipe {
 
     if (-not $Execute -or -not $WipeData) {
         Plan 'redis : FLUSHALL the local redis and every primary of redis-player-cluster-* when running (lib/redis_local_flush.ps1)'
-        Plan "mysql : TRUNCATE $($MySqlTables -join ', ') in $DbName"
+        Plan "mysql : TRUNCATE $($MySqlTables -join ', ') in every player store: $($PlayerStoreDbNames -join ', ')"
         Plan "mysql : TRUNCATE $($RouteDataTables -join ', ') in every directory shard of $GlobalDbName (only tables that exist; fail-closed)"
         Plan "mysql : route_meta(id=1) writable reset in place in every directory shard and the ledger of ${GlobalDbName}: $RouteMetaResetSql"
         Plan 'etcd  : docker exec etcd etcdctl del "" --prefix'
@@ -208,14 +209,16 @@ function Invoke-Wipe {
     Invoke-LocalRedisFlushAll -WriteLine { param($line) Do1 $line }
 
     # mysql
-    Do1 "mysql TRUNCATE in $DbName"
     $sqlBody = ($MySqlTables | ForEach-Object { "TRUNCATE TABLE $_;" }) -join "`n"
     $sql = "SET FOREIGN_KEY_CHECKS=0;`n$sqlBody`nSET FOREIGN_KEY_CHECKS=1;"
-    if (Get-Command mysql -ErrorAction SilentlyContinue) {
-        $sql | & mysql -uroot "-p$MysqlPwd" $DbName 2>&1 | Out-Null
-    } elseif ($hasDocker) {
-        $sql | & docker exec -i mysql mysql -uroot "-p$MysqlPwd" $DbName 2>&1 | Out-Null
-    } else { throw 'mysql client not on PATH and docker unavailable' }
+    foreach ($dbName in $PlayerStoreDbNames) {
+        Do1 "mysql TRUNCATE in $dbName"
+        if (Get-Command mysql -ErrorAction SilentlyContinue) {
+            $sql | & mysql -uroot "-p$MysqlPwd" $dbName 2>&1 | Out-Null
+        } elseif ($hasDocker) {
+            $sql | & docker exec -i mysql mysql -uroot "-p$MysqlPwd" $dbName 2>&1 | Out-Null
+        } else { throw 'mysql client not on PATH and docker unavailable' }
+    }
 
     # 全局库的路由表(fail-closed,理由见 Clear-GlobalRouteTables 上方注释)
     Do1 "mysql route tables in $GlobalDbName"

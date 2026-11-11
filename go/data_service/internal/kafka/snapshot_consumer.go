@@ -117,20 +117,20 @@ func (c *SnapshotConsumer) Health() *Health { return c.health }
 func (c *SnapshotConsumer) decode(msg kafkago.Message) (*store.SnapshotRow, bool) {
 	entry := &rollbackpb.PlayerSnapshotEntry{}
 	if err := proto.Unmarshal(msg.Value, entry); err != nil {
-		logx.Errorf("[%s] undecodable message skipped partition=%d offset=%d key=%s: %v",
+		messageLogger(msg).Errorf("[%s] undecodable message skipped partition=%d offset=%d key=%s: %v",
 			ConsumerSnapshot, msg.Partition, msg.Offset, string(msg.Key), err)
 		metrics.ObserveKafkaConsumerMessages(ConsumerSnapshot, "decode_error", 1)
 		return nil, false
 	}
 	if entry.GetSnapshotId() == 0 || entry.GetPlayerId() == 0 {
 		// 生产者对 snapshot_id=0 fail-closed;player_id=0 的快照无主。两者都无法按 guid 去重 / 按玩家检索。
-		logx.Errorf("[%s] invalid snapshot skipped partition=%d offset=%d snapshot_id=%d player_id=%d",
+		messageLogger(msg).Errorf("[%s] invalid snapshot skipped partition=%d offset=%d snapshot_id=%d player_id=%d",
 			ConsumerSnapshot, msg.Partition, msg.Offset, entry.GetSnapshotId(), entry.GetPlayerId())
 		metrics.ObserveKafkaConsumerMessages(ConsumerSnapshot, "invalid", 1)
 		return nil, false
 	}
 	if len(msg.Value) > c.cfg.MaxBlobBytes {
-		logx.Errorf("[%s] oversize snapshot skipped partition=%d offset=%d snapshot_id=%d player_id=%d bytes=%d limit=%d",
+		messageLogger(msg).Errorf("[%s] oversize snapshot skipped partition=%d offset=%d snapshot_id=%d player_id=%d bytes=%d limit=%d",
 			ConsumerSnapshot, msg.Partition, msg.Offset, entry.GetSnapshotId(), entry.GetPlayerId(), len(msg.Value), c.cfg.MaxBlobBytes)
 		metrics.ObserveKafkaConsumerMessages(ConsumerSnapshot, "oversize", 1)
 		return nil, false

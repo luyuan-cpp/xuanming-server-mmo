@@ -12,7 +12,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/bwmarrin/snowflake"
 	"github.com/google/uuid"
 	"github.com/panjf2000/ants/v2"
 	"github.com/redis/go-redis/v9"
@@ -26,6 +25,7 @@ import (
 	"login/internal/logic/pkg/node"
 	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/token"
+	"login/internal/logic/pkg/zonepolicy"
 	login_proto "proto/common/base"
 	kafkapb "proto/contracts/kafka"
 	dspb "proto/data_service"
@@ -64,17 +64,14 @@ type ServiceContext struct {
 	PlayerRedis redis.UniversalClient
 	// LoginRedis 是登录域句柄(同上,部署上可以与玩家域共用一个 Cluster):连接栅栏、登录态、设备集、令牌。
 	LoginRedis redis.UniversalClient
-	// SnowFlake 是 PlayerId 发号器。包了一层 fence 闸(见 player_id_gen.go):
-	// 失去 worker id 所有权后必须一个号都发不出去,不能靠"停服"兜底。
-	SnowFlake *PlayerIDGen
 	// DataServiceClient 是 data_service 的 gRPC 客户端:SQL账号目录、PlayerId号段、HomeZone
 	// 映射查询、角色名登记(PlayerNames)共用。IdSegment.Enabled=false 且 DataServiceRpc 没配目标时为 nil。
 	DataServiceClient dspb.DataServiceClient
 	// PlayerIDSegment 是 PlayerId 号段客户端(shared/idsegment,biz_tag="player");
 	// IdSegment.Enabled=false 时为 nil。
 	PlayerIDSegment *idsegment.Client
-	// PlayerIDMinter 是建角发号的**唯一**入口:号段优先,按 IdSegment 配置决定要不要
-	// 回退到 SnowFlake。handler 不许绕过它直接碰 SnowFlake / PlayerIDSegment。
+	// PlayerIDMinter 是建角发号的**唯一**入口:只走号段,没有回退号源,号段失败即建角失败。
+	// handler 不许绕过它直接碰 PlayerIDSegment。
 	PlayerIDMinter *idsegment.Minter
 	// HomeZone 查 data_service 的 player_route 映射(合服后的真归属)。Login 用它
 	// 修正角色列表的 zone_id,EnterGame 用它决定 EnterScene.ZoneId。永不为 nil;
@@ -99,6 +96,9 @@ type ServiceContext struct {
 	LoginQueue       *loginqueue.Queue
 	QueueDispatcher  *loginqueue.Dispatcher
 	queueCapProvider loginqueue.CapacityProvider
+	// gateInflight 是本进程交出去、还没反映进 gate 上报人数的票(按 gate 记,见 loginqueue/gate_inflight.go)。
+	// 快速通道签票、dispatcher 挑定时记,CandidatesForZone 取候选时算进每台的负载;initLoginQueue 里与 queueCapProvider 一起建。
+	gateInflight *loginqueue.GateInflight
 
 	// PreloadPool 跑 EnterGame 的异步入场链,不为每次登录起一个无界的 goroutine。名字是预加载时代留下的:
 	// 现在没有预加载,scene 进场时直接从 TiDB 认领存档。非阻塞,池满时 Submit 立即返回失败,
@@ -120,13 +120,19 @@ type ServiceContext struct {
 	gateDrainStop context.CancelFunc
 	// gateWatchStop 取消 startGateWatcher 起的 gate 目录 list-watch;nil = 没起。
 	gateWatchStop context.CancelFunc
+	// gateStaleStop 取消 startGateStalePublisher 起的停写标记发布循环(gate_stale_publisher.go);nil = 没起。
+	gateStaleStop context.CancelFunc
+	// ZonePolicy 读本区的区服策略(区容量、是否暂停创建新角色),见 zone_policy.go;没有 etcd 客户端时为 nil。
+	ZonePolicy *zonepolicy.Reader
+	// zonePolicyStop 取消 startZonePolicyReader 起的读循环;nil = 没起。
+	zonePolicyStop context.CancelFunc
 	// authCleanup 只拥有生产口令的专用 Redis 池与只读 SQL 连接。
 	authCleanup func()
 }
 
 func NewServiceContext() *ServiceContext {
 	if err := config.AppConfig.ValidateGlobalAuthority(os.Getenv); err != nil {
-		panic(fmt.Errorf("全球Login配置拒绝启动: %w", err))
+		panic(fmt.Errorf("global Login configuration rejected; refusing to start: %w", err))
 	}
 	if err := config.AppConfig.ValidateRedisDomains(); err != nil {
 		panic(fmt.Errorf("invalid redis domain config: %w", err))
@@ -234,6 +240,7 @@ func NewServiceContext() *ServiceContext {
 		PlayerLocatorClient: plClient,
 		SceneManagerClient:  smClient,
 		GateWatcher:         gateWatcher,
+		ZonePolicy:          newZonePolicyReader(etcdClient, config.AppConfig.Node.ZoneId),
 		TokenManager:        tokenMgr,
 		PreloadPool:         preloadPool,
 		bootInstance:        uuid.New(),
@@ -363,9 +370,8 @@ func activeSecrets() *config.ResolvedSecrets {
 		return config.ActiveSecrets
 	}
 	return &config.ResolvedSecrets{
-		GateToken:    &config.SecretSet{},
-		QueueToken:   &config.SecretSet{},
-		InternalAuth: &config.SecretSet{},
+		GateToken:  &config.SecretSet{},
+		QueueToken: &config.SecretSet{},
 	}
 }
 
@@ -377,15 +383,23 @@ func (s *ServiceContext) QueueCapacityProvider() loginqueue.CapacityProvider {
 	return s.queueCapProvider
 }
 
+// GateInflight 返回本进程的在途票记账,快速通道签票时传给 PickAndSignGateToken;nil = 不记(没走 initLoginQueue 的测试)。
+func (s *ServiceContext) GateInflight() *loginqueue.GateInflight {
+	return s.gateInflight
+}
+
 // gateWatcherCapacityProvider adapts NodeWatcher to the loginqueue.CapacityProvider
 // interface. 这里只产出本 zone 的候选集(按 zone 过滤、去重、给排空中的 gate 打标记,见 candidatesFromNodes),
 // 不排序、不挑 gate。挑 gate 有两条规则,都在 loginqueue:快速通道经 PickAndSignGateToken → PickGate
-// 在一份候选上随机抽两台、取人数少的那台;dispatcher 每个非空拍取一次候选,由 newBatchPickFn 在这一份上
-// 逐条挑并记账(负载 = PlayerCount + 本拍已分给它的人数,取最少,同数取 NodeID 最小)。
+// 在一份候选上随机抽两台、取负载少的那台;dispatcher 每个非空拍取一次候选,由 newBatchPickFn 在这一份上
+// 逐条挑并记账(负载再加本拍已分给它的人数,取最少,同数取 NodeID 最小)。两条的负载都是上报人数加本进程在途票数,
+// 在途票数在这里由 inflight 填(2026-11-11 起)。
 // gate 节点读自 NodeWatcher 的进程内 list-watch 镜像,镜像不新鲜时回落直读 etcd(见 node.NodeWatcher.Nodes)。
 type gateWatcherCapacityProvider struct {
 	watcher *node.NodeWatcher
-	caps    map[string]uint32 // zone_id (decimal string) → capacity ceiling
+	// policy 给区容量:区服目录 zone_config.capacity,经 etcd 发布给本区 login(zone_policy.go)。区容量只有这一个来源,
+	// 2026-11-10 起不再读 login 配置里的 Queue.ZoneCapacityOverride(已删)。
+	policy *zonepolicy.Reader
 	// drain 查 gate 排空标记:缩容前被标记 draining 的 gate 不再接新玩家(候选里打 Draining 标记,挑 gate 时分档)。
 	// 按 zone 缓存 gateDrainMarkRefresh(缺口清单第 31 条),选 gate 的各条路径不再每次各打一次 MGET。
 	// 它的 Redis 为 nil 时不打标记(早期初始化路径)。
@@ -393,6 +407,8 @@ type gateWatcherCapacityProvider struct {
 	// requireClientEndpoint 取自配置 RequireClientEndpoint:true 时没自报客户端地址的 gate
 	// 不进候选集(见 buildGateCandidates)。启动期定值,运行中不变。
 	requireClientEndpoint bool
+	// inflight 给每台候选填上本进程的在途票数(GateCandidate.Inflight),两条挑法按它比负载;nil 时不填。
+	inflight *loginqueue.GateInflight
 }
 
 func (g *gateWatcherCapacityProvider) CandidatesForZone(ctx context.Context, zoneID uint32) ([]loginqueue.GateCandidate, error) {
@@ -400,7 +416,7 @@ func (g *gateWatcherCapacityProvider) CandidatesForZone(ctx context.Context, zon
 	if err != nil {
 		return nil, err
 	}
-	return candidatesFromNodes(ctx, g.drain, nodes, zoneID, g.requireClientEndpoint), nil
+	return g.inflight.Annotate(candidatesFromNodes(ctx, g.drain, nodes, zoneID, g.requireClientEndpoint)), nil
 }
 
 // candidatesFromNodes 是 CandidatesForZone 取完节点之后的全部逻辑。单独拆出来,是为了让
@@ -429,8 +445,17 @@ func candidatesFromNodes(ctx context.Context, drain *loginqueue.DrainMarkCache, 
 // (他们之后照常随排空流程改派),调小则回到每次都查。
 const gateDrainMarkRefresh = time.Second
 
+// ZoneCapacity 回区服目录给的区容量;读不到区服策略、或问的不是本 login 的区时回 0,FreeSlots 退回软上限
+// (仍按 gate 承载封顶)。
 func (g *gateWatcherCapacityProvider) ZoneCapacity(zoneID uint32) uint32 {
-	return loginqueue.ZoneCapacityFromMap(g.caps, zoneID)
+	if zoneID != g.policy.ZoneID() {
+		return 0
+	}
+	p, ok := g.policy.Current()
+	if !ok {
+		return 0
+	}
+	return p.Capacity
 }
 
 // gateChoice 是 buildGateCandidates 的中间态:去重要用 launch_time,而 GateCandidate
@@ -545,11 +570,13 @@ func (s *ServiceContext) initLoginQueue() {
 	// queue was off, which made every AssignGate call to a Queue.Enabled=false
 	// login crash on a nil-receiver method call inside CandidatesForZone.
 	// Found during 3-zone × 15000 stress 2026-05.
+	s.gateInflight = loginqueue.NewGateInflight(nil)
 	s.queueCapProvider = &gateWatcherCapacityProvider{
 		watcher:               s.GateWatcher,
-		caps:                  cfg.ZoneCapacityOverride,
+		policy:                s.ZonePolicy,
 		drain:                 loginqueue.NewDrainMarkCache(s.RedisClient, gateDrainMarkRefresh, nil),
 		requireClientEndpoint: config.AppConfig.RequireClientEndpoint,
+		inflight:              s.gateInflight,
 	}
 	logx.Infof("[GateSelect] RequireClientEndpoint=%v (true: gates without clientEndpoint are never handed to clients)",
 		config.AppConfig.RequireClientEndpoint)
@@ -596,11 +623,13 @@ func (s *ServiceContext) initLoginQueue() {
 		panic(fmt.Errorf("login queue dispatcher: %w", err))
 	}
 	s.QueueDispatcher = queueDispatcher
+	// dispatcher 挑定的 gate 记进同一份在途票,下一拍与快速通道都能看到(Start 之前接上)。
+	s.QueueDispatcher.SetGateInflight(s.gateInflight)
 	// Identify this pod in the dispatcher_is_leader gauge so Grafana can
 	// answer "which replica is leading right now". Hostname is the simplest
 	// stable identifier across both bare-metal and K8s deployments; falling
-	// back to the etcd-allocated NodeUuid would also work but isn't set
-	// until SetNodeId() runs later in startup.
+	// back to the etcd-allocated NodeUuid would also work but isn't known
+	// until startGRPCServer registers the node later in startup.
 	if hostname, err := os.Hostname(); err == nil && hostname != "" {
 		s.QueueDispatcher.SetPodID(hostname)
 	}
@@ -617,6 +646,8 @@ func (s *ServiceContext) Start() {
 	}
 	s.startGateWatcher()
 	s.startGateDrainMonitor()
+	s.startGateStalePublisher()
+	s.startZonePolicyReader()
 }
 
 // startGateWatcher 起 gate 目录的 list-watch,让 AssignGate 与排队 dispatcher 读进程内镜像,
@@ -673,7 +704,7 @@ func (s *ServiceContext) startGateDrainMonitor() {
 				safego.Run("login.gate_drain_monitor", func() {
 					gates, err := snapshot(ctx)
 					if err != nil {
-						logx.Errorf("gate drain snapshot失败: %v", err)
+						logx.Errorf("gate drain snapshot failed: %v", err)
 						return
 					}
 					loginqueue.EvaluateDrainingGates(ctx, s.RedisClient, gates, policy, time.Now().Unix())
@@ -727,28 +758,17 @@ func gateDrainPolicy(cfg config.GateDrainConf) loginqueue.GateDrainPolicy {
 	}
 }
 
-func (c *ServiceContext) SetNodeId(nodeId int64) {
-	// Set package-level vars BEFORE creating the node — NewNode reads these at creation time.
-	snowflake.Epoch = config.AppConfig.Snowflake.Epoch
-	snowflake.NodeBits = uint8(config.AppConfig.Snowflake.NodeBits)
-	snowflake.StepBits = uint8(config.AppConfig.Snowflake.StepBits)
-
-	node, err := snowflake.NewNode(nodeId)
-	if err != nil {
-		logx.Errorf("Failed to create snowflake node (nodeId=%d): %v", nodeId, err)
-		panic(fmt.Errorf("snowflake.NewNode(%d): %w", nodeId, err))
-	}
-
-	c.SnowFlake = NewPlayerIDGen(node)
-}
-
 // SendBindSessionToGate sends a BindSession command to the target Gate via Kafka.
 // This replaces Centre's BindSessionToGate RPC.
 //
 // 寻址与两道 fail-closed 守卫都在 buildGateCommandMessage 里(gate_command.go),
 // 这里只负责组业务字段并把算好的 (topic, partition) 原样交给生产者。
 // loginGeneration 是本条登录链铸出的代次,随 BindSessionEvent 下发给 gate(scene-enter-session-fence.md §4)。
-func (s *ServiceContext) SendBindSessionToGate(gateID string, gateInstanceID string,
+//
+// ctx 只用来取 trace 写进消息头(docs/design/distributed-tracing.md §6.2),gate 处理这条命令时接上同一次 EnterGame;
+// 它不控制发送超时(sarama 同步发送不收 ctx,上界由生产者自身的超时配置决定),已取消的 ctx 也照常发送。
+// 本文件里 KickSessionOnGate、PushTipToSession 与 gate_command.go 的 PushTipToUnboundSession 同口径。
+func (s *ServiceContext) SendBindSessionToGate(ctx context.Context, gateID string, gateInstanceID string,
 	event *kafkapb.BindSessionEvent) error {
 
 	msg, err := buildBindSessionCommand(gateID, gateInstanceID, event)
@@ -756,7 +776,7 @@ func (s *ServiceContext) SendBindSessionToGate(gateID string, gateInstanceID str
 		return err
 	}
 
-	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+	if err := s.KafkaClient.SendToTopicPartitionContext(ctx, msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
 		return fmt.Errorf("send gate bind session command to %s/%d: %w", msg.Topic, msg.Partition, err)
 	}
 
@@ -768,13 +788,13 @@ func (s *ServiceContext) SendBindSessionToGate(gateID string, gateInstanceID str
 // playerID 是被踢会话所属玩家,loginGeneration 是发起踢线、已提交的那条登录链铸出的代次;
 // 两者都写进 KickPlayerEvent payload,由 gate 的 ClassifyKick 核对后才踢
 // (docs/design/scene-enter-chain-residuals.md §2.2 ③④)。调用方只能在会话记录提交之后调用。
-func (s *ServiceContext) KickSessionOnGate(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, loginGeneration uint64) error {
+func (s *ServiceContext) KickSessionOnGate(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, loginGeneration uint64) error {
 	msg, err := buildKickPlayerCommand(gateID, gateInstanceID, sessionID, playerID, loginGeneration)
 	if err != nil {
 		return err
 	}
 
-	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+	if err := s.KafkaClient.SendToTopicPartitionContext(ctx, msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
 		return fmt.Errorf("send gate kick command to %s/%d: %w", msg.Topic, msg.Partition, err)
 	}
 
@@ -790,13 +810,13 @@ func (s *ServiceContext) KickSessionOnGate(gateID string, gateInstanceID string,
 // 与 Bind / Kick 同一个生产者、同一条寻址收口(buildGateCommandMessage 的三道 fail-closed
 // 守卫照样生效)。发送是同步的,时长上界由 sarama 生产者自身的超时与重试配置决定,这里不另加
 // 重试:目标会话可能已经断开,重发没有意义。tipID 必须来自导表器生成的枚举,不许手写数字。
-func (s *ServiceContext) PushTipToSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
+func (s *ServiceContext) PushTipToSession(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
 	msg, err := buildPushTipCommand(gateID, gateInstanceID, sessionID, playerID, tipID)
 	if err != nil {
 		return err
 	}
 
-	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+	if err := s.KafkaClient.SendToTopicPartitionContext(ctx, msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
 		return fmt.Errorf("send gate push tip command to %s/%d: %w", msg.Topic, msg.Partition, err)
 	}
 
@@ -823,7 +843,7 @@ func (s *ServiceContext) EnterRoot() (func(), error) {
 }
 func (s *ServiceContext) Stop() {
 	if err := s.StopAndReport(context.Background()); err != nil {
-		logx.Errorf("login排空HOLD: %v", err)
+		logx.Errorf("login drain HOLD: %v", err)
 	}
 }
 
@@ -851,6 +871,12 @@ func (s *ServiceContext) CloseSource(ctx context.Context) error {
 		}
 		if s.gateWatchStop != nil {
 			s.gateWatchStop()
+		}
+		if s.gateStaleStop != nil {
+			s.gateStaleStop()
+		}
+		if s.zonePolicyStop != nil {
+			s.zonePolicyStop()
 		}
 		if s.preloadStatsStop != nil {
 			close(s.preloadStatsStop)
@@ -1083,7 +1109,7 @@ func (s *ServiceContext) OpenPreparedRoot(ctx context.Context) ([]byte, error) {
 // StartForDrain不warm号段，也不启动会发新根命令的登录队列。
 func (s *ServiceContext) StartForDrain() {
 	if !s.idSegmentNeverUsed {
-		panic("专用排空启动必须是从未serve的固定boot")
+		panic("dedicated drain startup must be a fixed boot that has never served")
 	}
 }
 

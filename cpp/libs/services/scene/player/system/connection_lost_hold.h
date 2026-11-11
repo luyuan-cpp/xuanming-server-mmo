@@ -246,6 +246,30 @@ namespace connection_lost_hold
 		kCount
 	};
 
+	// 托管中、且离月卡到期还远(与下面 JudgeHold 判"托管继续"同一个条件):服务器可以替这名没有客户端的角色换场景
+	// (组队跟随的托管落点,docs/design/player-connection-lost-hold.md §4.2)。还不知道有没有月卡的普通保留不算 ——
+	// 它的 25 秒窗口建立在 login 断线租约 30 秒之上(上面的 static_assert),搬到别的节点会在那里重新开一个窗口、拖过租约;
+	// 托管期间 player_locator 一直续租,没有这个顾虑。快到期的也不算:马上就该退了。
+	constexpr bool IsHosting(bool hostingStarted, AfkPass pass, uint64_t passExpiresAtSec, uint64_t nowUnixSec)
+	{
+		return hostingStarted && pass == AfkPass::kActive &&
+			   nowUnixSec + static_cast<uint64_t>(kHostingExitLead.count()) < passExpiresAtSec;
+	}
+
+	// 托管中、想跟队长却没接在队长身后的队员,服务器多久替他重新走一遍跟随检查(team-follow-server-trail.md §3.7)。
+	// 客户端在线时它自己做这件事:没被驱动就每 5 秒重新声明一次跟随(客户端 TeamRegroupPolicy.RetrySeconds)。托管中没有
+	// 客户端,由服务器兜底。正常路径(队长离开本节点、队长回到本节点的扇出、战斗结束、托管开始)都是当场触发,这里只补
+	// 漏掉的信号,周期放宽到 15 秒:每次是一次组队读加至多两次 Redis GET,只对没接上的托管队员发。
+	inline constexpr std::chrono::seconds kHostedFollowRecheckPeriod{15};
+
+	// 这一秒要不要替这名托管中的角色重新检查一次跟随。按玩家号错开(玩家号是打散过的发号器值,取模均匀),同一节点上的
+	// 托管角色不在同一秒集中发读;每名玩家每个周期恰好一秒到期。nowUnixSec 是墙钟 Unix 秒,由 1 秒扫描传入;扫描
+	// 偶尔跳过一秒时那一轮顺延到下一个周期,只晚不错。
+	constexpr bool IsHostedFollowRecheckDue(uint64_t playerId, uint64_t nowUnixSec)
+	{
+		return (playerId + nowUnixSec) % static_cast<uint64_t>(kHostedFollowRecheckPeriod.count()) == 0;
+	}
+
 	// 判定只看传入的事实:heldFor 是单调时钟的保留时长,nowUnixSec 是墙钟 Unix 秒(与月卡到期时刻同一口径)。
 	//   托管中:离到期还远 → 保留;快到期(剩下不到 kHostingExitLead)→ 查一次是不是续了(ParseAfkPass 按续没续
 	//           改成 kActive / kInactive);到期后 kHostingUnconfirmedGrace 仍确认不了 → 退出。
@@ -274,7 +298,8 @@ namespace connection_lost_hold
 } // namespace connection_lost_hold
 
 // 断线保留中的角色(按需状态,docs/design/ecs-component-access-rules.md):没有这个组件 = 连接正常,或不在保留中。
-// 挂:只在 PlayerLifecycleSystem::HandleClientConnectionLost(判定为 kHold 时,先 valid)。
+// 挂:PlayerLifecycleSystem::HandleClientConnectionLost(判定为 kHold 时,先 valid);托管落点到了本节点、EnterScene 入场之后
+//     (EnterHostedHold,player-connection-lost-hold.md §4.2:角色从别的节点搬来,在本节点从没有过活会话,按同一次断线重建)。
 // 摘:EnterScene 接回(ResumeConnectionLostHold)、HandleExitGameNode 发起任何原因的退出时;实体销毁随之消失。
 // 读:try_get / any_of,缺失按"不在保留中"处理。纯内存:不进 PlayerAllData、不序列化、不跨进程。
 struct PlayerConnectionLostComp

@@ -21,7 +21,8 @@ import (
 //
 // 清理、补发、扫描型 gauge **只在领导者上跑**:领导者由 go/shared/leader 选举(核心 Redis 上的
 // player_inbox:maintenance:leader)。它们的活只随异常增长(正常时近乎为零),单领导者加快速接任就够。
-//   - 清理只删终态行、逐行 autocommit、不持流行锁;领导者切换期间重叠执行无害(删除幂等)。
+//   - 清理现在是空转:终态行是永久收据,SweepTerminal 恒返回 0、不删任何行(设计 §9.1,数据覆写审计 r2-doc#2),
+//     循环只为保留调度接缝。TerminalRetention 的校验也只剩形式上的意义。
 //   - 补发的每一步都是 next_seq CAS,重叠执行最多多发一次提醒。
 //   - gauge 只由领导者产出,卸任时归零,避免 max() 聚合里留着卸任副本的旧值。
 //

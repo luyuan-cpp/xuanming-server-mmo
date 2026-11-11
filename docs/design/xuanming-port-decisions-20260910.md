@@ -422,7 +422,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
    - 帮名唯一键改为 `uk_guild(name_norm)`,规范化(NFKC → TrimSpace → 小写)在 Go 侧完成,不依赖库的排序规则;
      tools/merge_zone 与 data_consistency_check 经 `-guild-schema`(默认 `mmorpg_guild`)限定库名(B1b)。
    - 开发期改表纪律(只追加;索引组只追加到末尾;缺普通索引即拒启)见 `docs/design/guild-phase2/01-storage.md` §6.4。
-   - §9 清单对 `mmorpg_guild` 的结论:带 zone 的行只有 `guild.zone_id`(merge_zone 步骤 3 已覆盖);
+   - §9 清单对 `mmorpg_guild` 的结论:带 zone 的行只有 `guild.zone_id`(合服不改写它:merge_zone 只登记映射 `zone_merged_into`,读的时候解析到最终区,见 `player-data-tidb-scaling-plan.md` §7.1);
      biz_tag `guild` 已在 BootstrapTags,`guild_asset_op` 已于 B5a(2026-09-20)加入四处清单(config / store / 服务 yaml / k8s_deploy.ps1);TiDB BR 按库恢复清单加入 `mmorpg_guild`。
    - TiDB Phase 1 是逻辑库对逻辑库迁移,库名不改。
    - data_service 和 go/db 本轮不改迁移路径(见遗留)。

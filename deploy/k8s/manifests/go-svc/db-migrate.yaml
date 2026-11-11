@@ -1,4 +1,5 @@
-# db-migrate:存档库(MMORPG_DB_ALLOWED_DATABASES 列出的 zone_<n>_db、player_store_<n>_db)的建表 Job,每个 zone 一份,迁的是同一批库。
+# db-migrate:存档库(MMORPG_DB_ALLOWED_DATABASES 列出的本地域 player_store_<id>_db)的建表 Job,每个 zone 一份,迁的是同一批库。
+# zone 库已退役(docs/design/player-data-tidb-scaling-plan.md §7.2,A17c),清单里出现 zone_<n>_db 部署脚本就拒绝,这里再拦一道。
 #
 # 为什么要它:存档库的表和闸门表(route_meta、writer_slot 等)只有 go/db 的 cmd/migrate 建。常驻 go/db 没有 DDL 权限,而 go/db 和 data-service 的
 # registrar 都要在这些库上注册写者(data_service 的写资格覆盖全部存档库,k8s_deploy.ps1 Get-DataServiceWriterSchemas):
@@ -45,36 +46,39 @@ spec:
     spec:
       restartPolicy: Never
       initContainers:
-        # 等 MySQL 的 3306 真正可连再跑迁移(理由与时间预算的算法见 trade-migrate.yaml 同名 initContainer 的注释)。
-        - name: wait-mysql
+        # 等 SQL 入口真正可连再跑迁移(理由与时间预算的算法见 trade-migrate.yaml 同名 initContainer 的注释)。
+        - name: wait-sql
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
-            - name: MYSQL_ADDR
-              value: "mysql.__INFRA_NAMESPACE__"
-            - name: WAIT_MYSQL_TIMEOUT_SECONDS
+            # 这次实际的 SQL 入口,由 k8s_deploy.ps1 的 Get-SqlEntryEndpoint 替换:tidb 档是外部 TiDB,只有 dev 用集群内 MySQL 时才是 mysql.<infra>。
+            - name: SQL_HOST
+              value: "PLACEHOLDER_SQL_ENTRY_HOST"
+            - name: SQL_PORT
+              value: "PLACEHOLDER_SQL_ENTRY_PORT"
+            - name: WAIT_SQL_TIMEOUT_SECONDS
               value: "150"
           command:
             - sh
             - -c
             - |
               if ! command -v nc >/dev/null 2>&1; then
-                echo "nc not found in image, skip waiting for $MYSQL_ADDR:3306"
+                echo "nc not found in image, skip waiting for $SQL_HOST:$SQL_PORT"
                 exit 0
               fi
               uptime_s() { cut -d. -f1 /proc/uptime; }
-              deadline=$(( $(uptime_s) + $WAIT_MYSQL_TIMEOUT_SECONDS ))
+              deadline=$(( $(uptime_s) + $WAIT_SQL_TIMEOUT_SECONDS ))
               while :; do
-                if nc -z -w 3 "$MYSQL_ADDR" 3306; then
-                  echo "$MYSQL_ADDR:3306 reachable"
+                if nc -z -w 3 "$SQL_HOST" "$SQL_PORT"; then
+                  echo "$SQL_HOST:$SQL_PORT reachable"
                   exit 0
                 fi
                 now=$(uptime_s)
                 if [ "$now" -ge "$deadline" ]; then
-                  echo "ERROR: $MYSQL_ADDR:3306 not reachable within ${WAIT_MYSQL_TIMEOUT_SECONDS}s" >&2
+                  echo "ERROR: $SQL_HOST:$SQL_PORT not reachable within ${WAIT_SQL_TIMEOUT_SECONDS}s" >&2
                   exit 1
                 fi
-                echo "waiting for $MYSQL_ADDR:3306 ($(( deadline - now ))s left)..."
+                echo "waiting for $SQL_HOST:$SQL_PORT ($(( deadline - now ))s left)..."
                 sleep 5
               done
           resources:
@@ -89,6 +93,11 @@ spec:
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
+            # MySQL 口令:db 的配置(MySQLPasswordEnv)指名这个变量;Secret mysql-auth 由 k8s_deploy.ps1 先于本 Job 在本 namespace 建好
+            # (工作负载密钥目录,docs/design/workload-secrets-via-k8s-secret.md)。不写 optional:Secret 缺失时 Pod 起不来,不带空口令去连库。
+            - name: MMORPG_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: mysql-auth, key: password, optional: false}
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
             # cmd/migrate 按这份白名单放行目标库,下面的脚本也按它逐库迁。值由 Apply-GoSvcMigrateJob 从 MMORPG_DB_ALLOWED_DATABASES 渲染。
@@ -97,17 +106,17 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              # 库名和编号的对应与 placement.StoreDBName 相同:zone_<n>_db、player_store_<n>_db。
+              # 库名和编号的对应与 placement.StoreDBName 相同:只有地域存档库 player_store_<id>_db(编号 >= 1000000 由 cmd/migrate 核)。
               for database in $(echo "$DB_ALLOWED_DATABASES" | tr ',' ' '); do
-                storage_id="${database#zone_}"
-                storage_id="${storage_id#player_store_}"
+                storage_id="${database#player_store_}"
                 storage_id="${storage_id%_db}"
                 case "$storage_id" in
-                  ''|*[!0-9]*)
-                    echo "ERROR: $database is not a zone_<n>_db or player_store_<n>_db name" >&2
-                    exit 1
-                    ;;
+                  ''|*[!0-9]*) storage_id="" ;;
                 esac
+                if [ -z "$storage_id" ] || [ "player_store_${storage_id}_db" != "$database" ]; then
+                  echo "ERROR: $database is not a player store database player_store_<id>_db (zone databases are retired)" >&2
+                  exit 1
+                fi
                 echo "migrating $database (storage id $storage_id)"
                 code=0
                 /app/service -f /app/etc/db.yaml -command up -storage-id "$storage_id" || code=$?

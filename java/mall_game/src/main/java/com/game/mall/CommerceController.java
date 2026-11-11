@@ -32,7 +32,8 @@ public class CommerceController {
     @PostMapping("/api/orders/list") public java.util.List<CommerceApi.Order> list(HttpServletRequest request){return store.list(subject(request),input(request,DeliveryApi.OrderPage.class));}
     @PostMapping("/api/orders/cancel") public CommerceApi.Order cancel(HttpServletRequest request){return store.cancel(subject(request),input(request,CommerceApi.OwnedOrder.class));}
     @PostMapping("/api/orders/{orderId}/cancel") public CommerceApi.Order cancel(HttpServletRequest request, @PathVariable("orderId") String orderId) { return store.cancel(subject(request), orderId); }
-    @PostMapping("/internal/payments") public CommerceApi.Order payment(HttpServletRequest request, @Valid @RequestBody CommerceApi.Payment body) {
+    // 应答见 CommerceApi.PaymentOutcome：200 即已落库，refundReason 告诉适配器这笔钱是订单本身的付款还是已排进退款。
+    @PostMapping("/internal/payments") public CommerceApi.PaymentOutcome payment(HttpServletRequest request, @Valid @RequestBody CommerceApi.Payment body) {
         // 经济权限在提交入口再次检查，不能让容器路由前缀或未来路径适配改变信任边界。
         if (!"payment".equals(request.getAttribute(HmacAuthentication.ROLE))) { throw new CommerceException(401, "支付调用方认证失败"); }
         return store.recordTrustedPayment(body);

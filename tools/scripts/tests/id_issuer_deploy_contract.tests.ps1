@@ -39,6 +39,26 @@ function Get-NonCommentText {
     return (($Text -split "`n") | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
 }
 
+# k8s_deploy.ps1 的顶层函数按 AST 解析一次,只抽函数、不跑脚本入口(与 k8s_migrate_gate.tests.ps1 同一做法)。
+$script:DeployFunctions = @{}
+foreach ($node in ([System.Management.Automation.Language.Parser]::ParseFile($script:DeployPath, [ref]$null, [ref]$null)).FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
+    $script:DeployFunctions[$node.Name] = $node
+}
+
+function Import-DeployFunction {
+    param([Parameter(Mandatory = $true)][string[]]$Name)
+    foreach ($n in $Name) {
+        if (-not $script:DeployFunctions.ContainsKey($n)) { throw "夹具前提:k8s_deploy.ps1 里没有函数 $n" }
+        Set-Item -Path "Function:script:$n" -Value $script:DeployFunctions[$n].Body.GetScriptBlock()
+    }
+}
+
+function Get-ThrownMessage {
+    param([Parameter(Mandatory = $true)][scriptblock]$Action)
+    try { & $Action | Out-Null } catch { return $_.Exception.Message }
+    return ''
+}
+
 function Get-TagSet {
     param([Parameter(Mandatory = $true)][string]$Text, [Parameter(Mandatory = $true)][string]$Pattern)
     $match = [regex]::Match($Text, $Pattern)
@@ -69,7 +89,7 @@ Test-Case '第二套 etcd 的名字和标签与主 etcd 完全分开' {
 Test-Case '第二套 etcd 是独立引导的 3 成员集群' {
     $text = Get-NonCommentText (Read-RepoText $script:SecondaryPath)
     Assert-Match -Text $text -Pattern '(?m)^  replicas:\s*3\s*$' -Because '3 成员才能容忍单节点故障'
-    Assert-Match -Text $text -Pattern 'value:\s*"mmorpg-etcd-id-secondary-__INFRA_NAMESPACE__"' -Because '引导令牌要和主 etcd 不同,防止误把对方当成员'
+    Assert-Match -Text $text -Pattern 'value:\s*"mmorpg-etcd-id-secondary-__INFRA_NAMESPACE__-__KUBE_CLUSTER_UID__"' -Because '引导令牌要和主 etcd 不同,防止误把对方当成员;还要带本 K8s 集群的身份,否则两个集群里的这套 etcd 集群号相同'
     Assert-Match -Text $text -Pattern 'value:\s*"etcd-id-secondary-0=http://etcd-id-secondary-0\.etcd-id-secondary-headless\.' -Because '成员表必须指向自己的 headless Service'
     Assert-Match -Text $text -Pattern '(?m)^\s*publishNotReadyAddresses:\s*true\s*$' -Because '不发布未就绪地址,成员永远互相找不到'
 }
@@ -92,7 +112,7 @@ Test-Case '登记处 etcd 的名字和标签与两套发号 etcd 完全分开,�
     Assert-Equal -Expected 1 -Actual ([regex]::Matches($text, '(?m)^\s*app:\s*etcd-id-secondary\s*$').Count) -Because 'app: etcd-id-secondary 只能出现在反亲和里'
     Assert-Match -Text $text -Pattern '(?s)podAntiAffinity:.*app:\s*etcd\s*\n.*app:\s*etcd-id-secondary\s*\n' -Because '反亲和避开本集群两套发号 etcd'
     Assert-Match -Text $text -Pattern '(?m)^  replicas:\s*3\s*$' -Because '3 成员才能容忍单节点故障'
-    Assert-Match -Text $text -Pattern 'value:\s*"mmorpg-etcd-id-registry-__INFRA_NAMESPACE__"' -Because '引导令牌和两套发号 etcd 都不同'
+    Assert-Match -Text $text -Pattern 'value:\s*"mmorpg-etcd-id-registry-__INFRA_NAMESPACE__-__KUBE_CLUSTER_UID__"' -Because '引导令牌和两套发号 etcd 都不同,并带托管它的 K8s 集群的身份'
     Assert-Match -Text $text -Pattern 'value:\s*"etcd-id-registry-0=http://etcd-id-registry-0\.etcd-id-registry-headless\.' -Because '成员表指向自己的 headless Service'
     Assert-Match -Text $text -Pattern '(?m)^\s*publishNotReadyAddresses:\s*true\s*$' -Because '不发布未就绪地址,成员永远互相找不到'
     Assert-Equal -Expected (Get-NonCommentText (Read-RepoText $script:SecondaryPath) | Select-String -Pattern '(?m)^\s*image:\s*(\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value }) `
@@ -148,6 +168,225 @@ Test-Case 'match 走号段发 battle_id,ConfigMap 取自服务 yaml,不再申领
     Assert-Match -Text $deploy -Pattern "Get-AuthoritativeYamlBlock -RelativePath \`$matchYaml -Key 'IdSegment'" -Because 'K8s 的号段配置要和服务 yaml 同源'
     Assert-Match -Text $deploy -Pattern '(?m)^\$\{matchIdSegmentBlock\}\s*$' -Because '漏了这一行,K8s 上 match 起不来'
     Assert-NotMatch -Text (Read-RepoText $script:MatchManifestPath) -Pattern 'snowflake' -Because 'match 不再申领 snowflake 槽位,不需要缓存卷'
+}
+
+# ── 地域码绑定的部署侧(docs/handoff/global-id-issuer-registry-20261105.md §8.4)────────────────────────────
+# 发号器把地域码绑定到「部署身份 + 两套本地 etcd 的集群号」。部署身份是 kube-system 的 UID,data-service 运行期用自己的
+# ServiceAccount 读;etcd 的集群号只由 peer 地址和引导令牌算出,所以三套 etcd 的令牌也带上这个 UID。这里钉住部署侧的形状,
+# 真正渲染出来的样子由 k8s_deploy_contract.tests.ps1 末尾两条 DryRun 用例核对。
+
+$script:RbacPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/go-svc/data-service-identity-rbac.yaml'
+$script:DataServiceManifestPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/go-svc/data-service.yaml'
+$script:GoSvcManifestsDirFixture = Join-Path $script:RepoRoot 'deploy/k8s/manifests/go-svc'
+
+Test-Case '三套 etcd 的引导令牌都带命名空间和本 K8s 集群的身份' {
+    foreach ($path in @('deploy/k8s/manifests/infra/etcd.yaml', 'deploy/k8s/manifests/infra/etcd-id-secondary.yaml', 'deploy/k8s/manifests/infra/etcd-id-registry.yaml')) {
+        $text = Get-NonCommentText (Read-RepoText (Join-Path $script:RepoRoot $path))
+        $tokens = @([regex]::Matches($text, 'name: ETCD_INITIAL_CLUSTER_TOKEN\s*\n\s*value:\s*"([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+        Assert-Equal -Expected 1 -Actual $tokens.Count -Because "$path 恰好一个引导令牌"
+        Assert-Match -Text $tokens[0] -Pattern '^mmorpg-etcd(-id-secondary|-id-registry)?-__INFRA_NAMESPACE__-__KUBE_CLUSTER_UID__$' `
+            -Because "$path 的令牌只带命名空间的话,同一份清单部署到两个 K8s 集群,etcd 集群号相同,地域码绑定分不出两套环境"
+    }
+}
+
+Test-Case 'Apply-Infra 在第一个写操作之前读集群 UID,循环里替换 __KUBE_CLUSTER_UID__' {
+    $applyInfra = $script:DeployFunctions['Apply-Infra']
+    Assert-True -Condition ($null -ne $applyInfra) -Because '夹具前提:k8s_deploy.ps1 里有 Apply-Infra'
+    $commands = @($applyInfra.Body.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] }, $true))
+    $uidRead = @($commands | Where-Object { $_.GetCommandName() -eq 'Get-KubeClusterUid' } | Sort-Object { $_.Extent.StartOffset })
+    $ensureNs = @($commands | Where-Object { $_.GetCommandName() -eq 'Ensure-Namespace' } | Sort-Object { $_.Extent.StartOffset })
+    Assert-Equal -Expected 1 -Actual $uidRead.Count -Because 'Apply-Infra 只读一次集群 UID'
+    Assert-True -Condition ($ensureNs.Count -ge 1 -and $uidRead[0].Extent.StartOffset -lt $ensureNs[0].Extent.StartOffset) `
+        -Because '读不到要在第一个写操作(Ensure-Namespace)之前拒绝,什么都不写'
+    Assert-Match -Text $applyInfra.Extent.Text -Pattern '\$manifestContent = \$manifestContent\.Replace\("__KUBE_CLUSTER_UID__", \$kubeClusterUid\)' `
+        -Because '三套 etcd 的令牌在 apply 之前替换成读到的 UID'
+}
+
+Test-Case 'Get-KubeClusterUid:只认 API server 给的小写 UUID,读不到或格式不对就拒绝,DryRun 给固定标记' {
+    Import-DeployFunction -Name @('Get-KubeClusterUid', 'Build-KubectlBaseArgs')
+    $script:KubeContext = 'contract-ctx'
+    $script:KubeConfig = ''
+    $script:StubCalls = [System.Collections.Generic.List[string]]::new()
+    # 同名函数优先于外部命令:& kubectl 落到这个桩,不碰真实集群。
+    Set-Item -Path 'Function:script:kubectl' -Value {
+        $script:StubCalls.Add(($args -join ' '))
+        $global:LASTEXITCODE = $script:StubExitCode
+        return $script:StubOutput
+    }
+    try {
+        $script:DryRun = $false
+        $script:StubExitCode = 0
+        $script:StubOutput = '1b4e28ba-2fa1-11d2-883f-0016d3cca427'
+        Assert-Equal -Expected '1b4e28ba-2fa1-11d2-883f-0016d3cca427' -Actual (Get-KubeClusterUid) -Because '读到合法 UID 原样返回'
+        Assert-Equal -Expected '--context contract-ctx get namespace kube-system -o jsonpath={.metadata.uid}' -Actual $script:StubCalls[0] `
+            -Because '读 kube-system 的 metadata.uid,且发到部署目标的 context'
+        foreach ($case in @(
+                @{ Exit = 1; Output = ''; Why = 'kubectl 失败(没有权限、连不上集群)' }
+                @{ Exit = 0; Output = ''; Why = '输出为空' }
+                @{ Exit = 0; Output = '1B4E28BA-2FA1-11D2-883F-0016D3CCA427'; Why = '大写不是 API server 给的格式' }
+                @{ Exit = 0; Output = 'not-a-uid'; Why = '不是 UUID' }
+            )) {
+            $script:StubExitCode = $case.Exit
+            $script:StubOutput = $case.Output
+            $message = Get-ThrownMessage { Get-KubeClusterUid }
+            Assert-Match -Text $message -Pattern 'kube-system' -Because "$($case.Why)时必须拒绝,报错点名读的是什么"
+            Assert-Match -Text $message -Pattern 'Nothing was written\.$' -Because "$($case.Why)时必须写明什么都没写"
+        }
+        $script:DryRun = $true
+        $script:StubCalls.Clear()
+        Assert-Equal -Expected '00000000-0000-0000-0000-000000000000' -Actual (Get-KubeClusterUid) -Because 'DryRun 不连集群,给固定标记值'
+        Assert-Equal -Expected 0 -Actual $script:StubCalls.Count -Because 'DryRun 一次 kubectl 都不调'
+    }
+    finally {
+        Remove-Item -Path 'Function:script:kubectl' -ErrorAction SilentlyContinue
+        $script:DryRun = $false
+    }
+}
+
+Test-Case 'data-service 读集群身份的 RBAC:专用 ServiceAccount,只读 namespaces/kube-system,每个 zone 一个绑定' {
+    $text = Get-NonCommentText (Read-RepoText $script:RbacPath)
+    $kinds = @([regex]::Matches($text, '(?m)^kind:\s*(\S+)\s*$') | ForEach-Object { $_.Groups[1].Value })
+    Assert-Equal -Expected 'ServiceAccount,ClusterRole,ClusterRoleBinding' -Actual ($kinds -join ',') -Because '只有这三个对象'
+    Assert-Match -Text $text -Pattern 'kind: ServiceAccount\s*\nmetadata:\s*\n  name: data-service\s*\n' -Because '用专用 ServiceAccount,不把权限挂到命名空间的 default 上'
+    $role = [regex]::Match($text, '(?s)kind: ClusterRole\s*\n(.*?)(?=\n---|\z)').Groups[1].Value
+    Assert-Match -Text $role -Pattern '(?m)^  name: mmorpg-cluster-identity-reader\s*$' -Because 'ClusterRole 全集群一份,名字固定'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($role, '(?m)^  - apiGroups:').Count) -Because '只有一条规则'
+    Assert-Match -Text $role -Pattern 'apiGroups: \[""\]\s*\n\s*resources: \["namespaces"\]\s*\n\s*resourceNames: \["kube-system"\]\s*\n\s*verbs: \["get"\]' `
+        -Because '只给 get,只限 kube-system 一个命名空间,不给 list / watch'
+    $binding = [regex]::Match($text, '(?s)kind: ClusterRoleBinding\s*\n(.*)').Groups[1].Value
+    Assert-Match -Text $binding -Pattern '(?m)^  name: mmorpg-cluster-identity-__ZONE_NAMESPACE__\s*$' -Because '每个 zone 一个绑定,名字带命名空间,Remove-Zone 按同一个名字删'
+    Assert-Match -Text $binding -Pattern '(?s)roleRef:.*?kind: ClusterRole\s*\n\s*name: mmorpg-cluster-identity-reader' -Because '绑定的是上面那个只读角色'
+    Assert-Match -Text $binding -Pattern 'subjects:\s*\n\s*- kind: ServiceAccount\s*\n\s*name: data-service\s*\n\s*namespace: __ZONE_NAMESPACE__' `
+        -Because 'subject 写明命名空间,只授权本 zone 的 data-service'
+
+    $manifest = Get-NonCommentText (Read-RepoText $script:DataServiceManifestPath)
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($manifest, '(?m)^      serviceAccountName: data-service\s*$').Count) -Because 'Pod 模板恰好一处用 data-service 身份'
+    Assert-NotMatch -Text $manifest -Pattern 'automountServiceAccountToken:\s*false' -Because 'ServiceAccount 令牌就是读集群身份的凭据,不能关'
+}
+
+Test-Case 'New-DataServiceIdentityRbacYaml:按 zone 命名空间渲染,占位没换干净就在写操作之前拒绝' {
+    Import-DeployFunction -Name @('New-DataServiceIdentityRbacYaml')
+    $script:GoSvcManifestsDir = $script:GoSvcManifestsDirFixture
+    $rendered = New-DataServiceIdentityRbacYaml -Namespace 'mmorpg-zone-z1'
+    Assert-Match -Text $rendered -Pattern '(?m)^  name: mmorpg-cluster-identity-mmorpg-zone-z1\s*$' -Because '绑定名带上本 zone 命名空间'
+    Assert-Match -Text $rendered -Pattern '(?m)^    namespace: mmorpg-zone-z1\s*$' -Because 'subject 指向本 zone 命名空间'
+    Assert-NotMatch -Text $rendered -Pattern '(?-i)__[A-Z][A-Z0-9_]*__' -Because '占位全部替换'
+
+    $broken = Join-Path ([IO.Path]::GetTempPath()) ('idissuer-rbac-' + [Guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $broken
+    try {
+        [IO.File]::WriteAllText((Join-Path $broken 'data-service-identity-rbac.yaml'), "kind: ServiceAccount`nmetadata:`n  name: __OTHER__`n")
+        $script:GoSvcManifestsDir = $broken
+        Assert-Match -Text (Get-ThrownMessage { New-DataServiceIdentityRbacYaml -Namespace 'mmorpg-zone-z1' }) -Pattern 'placeholder __OTHER__.*Nothing was written\.' `
+            -Because '清单多了没人替换的占位,要在任何写操作之前拒绝'
+    }
+    finally {
+        Remove-Item -LiteralPath $broken -Recurse -Force
+        $script:GoSvcManifestsDir = $script:GoSvcManifestsDirFixture
+    }
+}
+
+Test-Case 'Apply-OneGoSvc 只给 data-service 渲染 RBAC,渲染在写操作之前,apply 先于工作负载;zone-down 删本 zone 的绑定' {
+    $applyOne = $script:DeployFunctions['Apply-OneGoSvc'].Extent.Text
+    Assert-Match -Text $applyOne -Pattern '(?s)if \(\$SvcName -eq ''data-service''\) \{\s*\$dataServiceIdentityRbac = New-DataServiceIdentityRbacYaml -Namespace \$Namespace\s*\}' `
+        -Because '只给 data-service 渲染'
+    $renderAt = $applyOne.IndexOf('New-DataServiceIdentityRbacYaml -Namespace')
+    # 本函数里最早的写操作:工作负载密钥的 Secret 或 ConfigMap,以先出现的为准。
+    $writeAts = @(@('Sync-WorkloadSecrets -Namespace', 'New-GoSvcConfigMapYaml') | ForEach-Object { $applyOne.IndexOf($_) } | Where-Object { $_ -ge 0 })
+    Assert-True -Condition ($writeAts.Count -ge 1) -Because '夹具前提:Apply-OneGoSvc 里能找到写 Secret 或 ConfigMap 的地方'
+    Assert-True -Condition ($renderAt -ge 0 -and $renderAt -lt ($writeAts | Measure-Object -Minimum).Minimum) -Because '渲染失败要在 Secret、ConfigMap 落地之前拦下,不留半截部署'
+    $applyAt = $applyOne.IndexOf('-InputContent $dataServiceIdentityRbac')
+    $canaryAt = $applyOne.IndexOf('if ($Canary) {', $renderAt)
+    $workloadAt = $applyOne.LastIndexOf('Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent')
+    Assert-True -Condition ($applyAt -gt $renderAt -and $applyAt -lt $canaryAt -and $applyAt -lt $workloadAt) `
+        -Because 'RBAC 先于 StatefulSet(稳定版与金丝雀都是),否则第一次预留读身份拿到 403'
+    $removeZone = $script:DeployFunctions['Remove-Zone'].Extent.Text
+    Assert-Match -Text $removeZone -Pattern 'Invoke-Kubectl -Args @\("delete", "clusterrolebinding", "mmorpg-cluster-identity-\$namespace", "--ignore-not-found"\) -AllowFailure' `
+        -Because 'ClusterRoleBinding 是集群级对象,删命名空间带不走;名字与清单里的 mmorpg-cluster-identity-__ZONE_NAMESPACE__ 一致'
+}
+
+# ── 登记处双向 TLS(交接 §9)────────────────────────────────────────────────────────────────────────
+
+Test-Case '登记处 etcd:客户端口 https 且要求客户端证书,证书来自预置 Secret,探针和指标走 2381 的 http 口' {
+    $text = Get-NonCommentText (Read-RepoText $script:RegistryPath)
+    foreach ($env in @(
+            @{ Name = 'ETCD_LISTEN_CLIENT_URLS'; Value = 'https://0\.0\.0\.0:2379' }
+            @{ Name = 'ETCD_ADVERTISE_CLIENT_URLS'; Value = 'https://\$\(POD_NAME\)\.etcd-id-registry-headless\.' }
+            @{ Name = 'ETCD_CLIENT_CERT_AUTH'; Value = 'true' }
+            @{ Name = 'ETCD_TRUSTED_CA_FILE'; Value = '/etc/etcd/tls/ca\.crt' }
+            @{ Name = 'ETCD_CERT_FILE'; Value = '/etc/etcd/tls/tls\.crt' }
+            @{ Name = 'ETCD_KEY_FILE'; Value = '/etc/etcd/tls/tls\.key' }
+            @{ Name = 'ETCD_LISTEN_METRICS_URLS'; Value = 'http://0\.0\.0\.0:2381' }
+        )) {
+        Assert-Match -Text $text -Pattern ('name: ' + $env.Name + '\s*\n\s*value:\s*"?' + $env.Value) -Because "登记处要设 $($env.Name)"
+    }
+    Assert-NotMatch -Text $text -Pattern 'http://0\.0\.0\.0:2379|"http://\$\(POD_NAME\)\.etcd-id-registry-headless\.[^"]*:2379"' -Because '客户端口不能再有明文 http'
+    Assert-Equal -Expected 2 -Actual ([regex]::Matches($text, '(?m)^\s*port:\s*2381\s*$').Count) -Because '就绪、存活两个探针都走 2381:客户端口要证书,kubelet 拿不到'
+    Assert-Match -Text $text -Pattern 'prometheus\.io/port:\s*"2381"' -Because 'Prometheus 没有客户端证书,指标走 2381'
+    Assert-Match -Text $text -Pattern '- name: etcd-tls\s*\n\s*mountPath: /etc/etcd/tls\s*\n\s*readOnly: true' -Because '证书卷只读挂在 /etc/etcd/tls'
+    Assert-Match -Text $text -Pattern 'secret:\s*\n\s*secretName: etcd-id-registry-tls\s*\n\s*defaultMode: 288\s*\n' -Because '服务端证书来自预置 Secret etcd-id-registry-tls'
+    Assert-NotMatch -Text $text -Pattern 'secretName: etcd-id-registry-tls[^\n]*\n[^\n]*\n\s*optional:\s*true' -Because '服务端证书不能可选:缺了宁可起不来,也不能无认证地跑'
+}
+
+Test-Case 'data-service:登记处客户端证书挂在 ConfigMap 写的同一个目录,staging/prod 在写操作之前核对两份 Secret' {
+    $manifest = Get-NonCommentText (Read-RepoText $script:DataServiceManifestPath)
+    Assert-Match -Text $manifest -Pattern '- \{name: id-registry-client-tls, mountPath: /etc/mmorpg/id-registry-tls, readOnly: true\}' -Because '客户端证书只读挂在 /etc/mmorpg/id-registry-tls'
+    Assert-Match -Text $manifest -Pattern '- name: id-registry-client-tls\s*\n\s*secret: \{secretName: id-registry-client-tls, defaultMode: 288, optional: true\}' `
+        -Because 'dev 没有这个 Secret 所以可选;staging/prod 由部署脚本核对它在'
+    $deploy = Read-RepoText $script:DeployPath
+    foreach ($file in @('CAFile: /etc/mmorpg/id-registry-tls/ca.crt', 'CertFile: /etc/mmorpg/id-registry-tls/tls.crt', 'KeyFile: /etc/mmorpg/id-registry-tls/tls.key')) {
+        Assert-Match -Text $deploy -Pattern ([regex]::Escape("'      $file'")) -Because "ConfigMap 模板的 RegistryTLS 写 $file,与清单的挂载目录一致"
+    }
+    Assert-Match -Text $script:DeployFunctions['Apply-Infra'].Extent.Text -Pattern '(?s)if \(\$HostIdRegistry\) \{\s*Assert-TlsSecretProvisioned -Namespace \$InfraNamespace -Name ''etcd-id-registry-tls''' `
+        -Because '托管登记处时核对服务端证书'
+    $applyInfra = $script:DeployFunctions['Apply-Infra'].Extent.Text
+    Assert-True -Condition ($applyInfra.IndexOf("-Name 'etcd-id-registry-tls'") -lt $applyInfra.IndexOf('Ensure-Namespace -Namespace $InfraNamespace')) -Because '服务端证书在第一个写操作之前核对'
+    $applyOne = $script:DeployFunctions['Apply-OneGoSvc'].Extent.Text
+    Assert-Match -Text $applyOne -Pattern '(?s)if \(\$SvcName -eq ''data-service'' -and \$ReleaseProfile -ne ''dev'' -and \$Stage -ne ''Prepare''\) \{\s*Assert-TlsSecretProvisioned -Namespace \$Namespace -Name ''id-registry-client-tls''' `
+        -Because 'staging/prod 部署 data-service 时核对客户端证书'
+    $checkAt = $applyOne.IndexOf("-Name 'id-registry-client-tls'")
+    $writeAts = @(@('Sync-WorkloadSecrets -Namespace', 'New-GoSvcConfigMapYaml') | ForEach-Object { $applyOne.IndexOf($_) } | Where-Object { $_ -ge 0 })
+    Assert-True -Condition ($checkAt -ge 0 -and $checkAt -lt ($writeAts | Measure-Object -Minimum).Minimum) -Because '客户端证书在本服务第一个写操作之前核对'
+}
+
+Test-Case 'Assert-TlsSecretProvisioned:Secret 在且三个键都有值才放行,缺 Secret、缺键、读失败都拒绝,DryRun 不连集群' {
+    Import-DeployFunction -Name @('Assert-TlsSecretProvisioned', 'Build-KubectlBaseArgs')
+    $script:KubeContext = ''
+    $script:KubeConfig = ''
+    $script:StubCalls = [System.Collections.Generic.List[string]]::new()
+    Set-Item -Path 'Function:script:kubectl' -Value {
+        $script:StubCalls.Add(($args -join ' '))
+        $global:LASTEXITCODE = $script:StubExitCode
+        return $script:StubOutput
+    }
+    $full = '{"data":{"ca.crt":"Y2E=","tls.crt":"Y3J0","tls.key":"a2V5"}}'
+    try {
+        $script:DryRun = $false
+        $script:StubExitCode = 0
+        $script:StubOutput = $full
+        Assert-Equal -Expected '' -Actual (Get-ThrownMessage { Assert-TlsSecretProvisioned -Namespace 'ns-a' -Name 'id-registry-client-tls' -Purpose 'test' }) -Because '三个键都有值时放行'
+        Assert-Equal -Expected 'get secret id-registry-client-tls -n ns-a --ignore-not-found -o json' -Actual $script:StubCalls[0] -Because '只读这一个 Secret'
+        foreach ($case in @(
+                @{ Exit = 0; Output = ''; Pattern = 'is missing'; Why = 'Secret 不存在' }
+                @{ Exit = 0; Output = '{"data":{"ca.crt":"Y2E=","tls.crt":"Y3J0"}}'; Pattern = 'lacks tls\.key'; Why = '缺私钥' }
+                @{ Exit = 0; Output = '{"data":{"ca.crt":"","tls.crt":"Y3J0","tls.key":"a2V5"}}'; Pattern = 'lacks ca\.crt'; Why = 'CA 是空值' }
+                @{ Exit = 1; Output = ''; Pattern = 'Cannot read Secret'; Why = 'kubectl 读失败' }
+            )) {
+            $script:StubExitCode = $case.Exit
+            $script:StubOutput = $case.Output
+            $message = Get-ThrownMessage { Assert-TlsSecretProvisioned -Namespace 'ns-a' -Name 'id-registry-client-tls' -Purpose 'test' }
+            Assert-Match -Text $message -Pattern $case.Pattern -Because "$($case.Why)时必须拒绝"
+            Assert-Match -Text $message -Pattern 'Nothing was written for this step\.$' -Because "$($case.Why)时写明这一步什么都没写"
+        }
+        $script:DryRun = $true
+        $script:StubCalls.Clear()
+        Assert-Equal -Expected '' -Actual (Get-ThrownMessage { Assert-TlsSecretProvisioned -Namespace 'ns-a' -Name 'id-registry-client-tls' -Purpose 'test' }) -Because 'DryRun 只打说明'
+        Assert-Equal -Expected 0 -Actual $script:StubCalls.Count -Because 'DryRun 一次 kubectl 都不调'
+    }
+    finally {
+        Remove-Item -Path 'Function:script:kubectl' -ErrorAction SilentlyContinue
+        $script:DryRun = $false
+    }
 }
 
 exit (Complete-TestRun -SuiteName 'id_issuer_deploy_contract')

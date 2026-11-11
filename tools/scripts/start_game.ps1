@@ -163,7 +163,7 @@ function Get-LocalKafkaContract {
     # data_service 启动时按自己配置的分区数原地加，所以这里只要求配置是正整数，不要求等于预建清单。
     foreach ($key in @('TransactionLogPartitions','SnapshotPartitions')) {
         $number = 0L
-        if (-not [long]::TryParse($values[$key],[ref]$number) -or $number -le 0) { throw "data_service Kafka.$key 必须是正整数，已中止主题预建。" }
+        if (-not [long]::TryParse($values[$key],[ref]$number) -or $number -le 0) { throw "data_service Kafka.$key must be a positive integer; topic pre-creation aborted." }
     }
     $generation = $values['Kafka.CommandTopicGeneration']
     $partitions = $values['Kafka.CommandTopicPartitions']
@@ -193,7 +193,7 @@ function Assert-LocalKafkaTopic($Spec) {
     $partitionCount = [long]$header.Groups[1].Value
     if ($Spec.GrowOnly) {
         if ($partitionCount -lt $Spec.Partitions -or [int]$header.Groups[2].Value -ne 1) {
-            throw "Kafka 审计主题 $topic 分区或副本契约不符（应至少 $($Spec.Partitions) 分区、1 副本，实际 $partitionCount 分区）。审计主题只许加分区：运行 kafka-topic-init 原地加分区后重试。"
+            throw "Kafka audit topic $topic does not meet its contract (needs at least $($Spec.Partitions) partitions and 1 replica, has $partitionCount partitions). Audit topics only grow: run kafka-topic-init to add partitions in place, then retry."
         }
     } elseif ($partitionCount -ne $Spec.Partitions -or [int]$header.Groups[2].Value -ne 1) {
         throw "Kafka 主题 $topic 分区或副本契约不符（应为 $($Spec.Partitions) 分区、1 副本）。保留现有主题，必须协调换代，禁止原地扩分区。"
@@ -322,11 +322,14 @@ function Invoke-Dev([string]$Label, [string[]]$Arguments) {
     if ($reply.Code -ne 0) { throw "$Label 启动失败，查看 $logDir 下同名日志。" }
 }
 # friend / guild / mail 的异步推送经 shared/kafkautil 写 gate-cmd,必须与 gate 使用同一代主题。
-# chat v1 只读写 Redis 历史,trade 资产通道走 gRPC,db/router 也不生产命令主题;不纳入此契约。
+# chat 的世界频道推送写 chat-world-bcast_g<N>,代号同样取 KAFKA_COMMAND_TOPIC_GENERATION(shared/kafkacmd 在进程内只读一次);
+# 换代后复用旧 chat 进程,推送会写进旧代号的主题、gate 收不到,所以也纳入。
+# trade 资产通道走 gRPC,db/router 也不生产命令主题;不纳入此契约。
 # 校验与落记录共用名单,防止服务被复用后才在第一次推送时暴露旧 generation。
 function Test-UsesKafkaCommandContract([string]$Name) {
     # player_inbox:在线提醒(PlayerInboxNotifyEvent)发往 scene-cmd,与 guild / friend 的推送同为命令主题生产者。
-    return $Name -in @('gate','scene','battle','login','scene_manager','player_locator','match','guild','friend','mail','player_inbox')
+    # chat:世界频道广播 chat-world-bcast_g<N> 与命令主题同一代号。
+    return $Name -in @('gate','scene','battle','login','scene_manager','player_locator','match','guild','friend','mail','player_inbox','chat')
 }
 # 已运行进程不会重新读取进程环境；记录本启动器实际拉起的 PID 与启动时间，防止换代后复用旧进程。
 function Assert-RunningCommandContract($Process) {
@@ -503,10 +506,10 @@ try {
         Initialize-LocalKafkaTopics $kafkaContract $compose
         # 写者启动目录：建库建表、给每个实例建独立账号、发单次启动授权。授权启动即消费，所以每次启动都重新生成。
         # 只接受回环数据库；已在运行的实例不重发（go_services 会 skip 它们）。详见 lib/sql_boot_catalog_local.ps1。
-        # 玩家库白名单：全球 DS/DB 不从 Zone 推导，调用方已设置时不覆盖。本机一区给两个库：zone_1_db 是 go/db 的本区主库，
-        # player_store_1000000_db 是 dev 地域(0)唯一的地域存档库，新号都落这里(login Placement Region 0 / StorageShards 1，
-        # docs/design/player-data-tidb-scaling-plan.md §7.2)。
-        if ([string]::IsNullOrWhiteSpace($env:DB_ALLOWED_DATABASES) -and [string]::IsNullOrWhiteSpace($env:MMORPG_DB_ALLOWED_DATABASES)) { $env:MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,player_store_1000000_db' }
+        # 玩家库白名单：全球 DS/DB 不从 Zone 推导，调用方已设置时不覆盖。本机只有 dev 地域(0)唯一的地域存档库 player_store_1000000_db，
+        # 新号都落这里(go/login/etc/login.yaml 的 Placement Region 0 / StorageShards 1)；zone 库已退役
+        # (docs/design/player-data-tidb-scaling-plan.md §7.2 A17c)。下一步的写者启动目录会核对它与 login 的 Placement 恰好一致。
+        if ([string]::IsNullOrWhiteSpace($env:DB_ALLOWED_DATABASES) -and [string]::IsNullOrWhiteSpace($env:MMORPG_DB_ALLOWED_DATABASES)) { $env:MMORPG_DB_ALLOWED_DATABASES = 'player_store_1000000_db' }
         Invoke-Dev 'sql-boot-catalog' @('-Command','sql-boot-catalog-local','-GoServices',((@($services | Where-Object { $_ -notin $skippedServices }) + 'gateway') -join ','))
         $sqlBootRoot = [IO.Path]::GetFullPath((Join-Path $serverRoot 'run/secrets/sql-boot-local'))
         $sqlBootSummary = Get-Content -LiteralPath (Join-Path $sqlBootRoot 'last-run.json') -Raw | ConvertFrom-Json
@@ -577,7 +580,7 @@ try {
         Assert-NodeStartup 'battle'
         Wait-LocalNode 'battle'
         Write-Step '5/6 Start login, match, chat, guild services and game gateway'
-        # chat / guild 与路由服同为 Tier 1（chat 只依赖 etcd + Redis；guild 另依赖 MySQL 与 data_service）；
+        # chat / guild 与路由服同为 Tier 1（chat 依赖 etcd、SQL 原件库与 data_service，不连 Redis；guild 另依赖 MySQL 与 data_service）；
         # 直连模式下它们也照样起，只是玩家不可达（见 -GateRouterMode）。
         # 第 1 步因缺 exe 跳过的可选服务不在这里启动，否则 Start-LocalGoServices 会因“没有启动记录”抛错。
         # match 与 guild 的表已在第 3 步生成写者启动目录时建好。

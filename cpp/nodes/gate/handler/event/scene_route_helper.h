@@ -138,10 +138,14 @@ bool ApplyRoute(SessionInfo& session, const uint64_t targetSceneId, const SceneN
 // 保留 playerId / loginGeneration / sessionVersion:下一次 BindSession 按既有规则处理(换角取新值、同角色取 max)。
 // 欠账的索引(scene_entry_dispatch.cpp 的 tlsSessionsWithPendingEntry)由调用方摘;漏摘也无害,扫描找不到欠账会自己删索引。
 // 同时置位 sceneRouteResetPending、记下被离开的那条登录链的角色与代次:LeaveGame 之前那条登录链发出的 Bind / 路由可能晚于
-// 本次重置才到(已在 Kafka 里的跨节点换图、login 后台链还没发完的 Bind、路由模式下仍在 lane 里的 EnterGame),它们由
-// IsRouteFromBeforeLeaveGame / IsBindFromBeforeLeaveGame 认出、在入口丢弃,不能重新填上 lastSceneRoute。
+// 本次重置才到(已在 Kafka 里的跨节点换图、login 后台链还没发完的 Bind —— 路由模式下包括 lane 里排在 LeaveGame 之前、已经发出的
+// EnterGame,它的回包只表示已受理),它们由 IsRouteFromBeforeLeaveGame / IsBindFromBeforeLeaveGame 认出、在入口丢弃,
+// 不能重新填上 lastSceneRoute。
 // 上一次重置还没被下一次进场消化(选角界面重复点 LeaveGame,或重登还没进场又回选角)且仍是同一角色时,旧链身份只抬高不覆盖:
 // 丢弃旧链事件时抬上去的代次(NoteDroppedFromBeforeLeaveGame)不能被会话上可能更低的代次冲掉。
+// 调用时刻是 LeaveGame 真正发出的那一刻(client_session_handler.cpp ApplyLoginTransition;路由模式由 lane 的发出钩子调)。
+// 路由模式下 LeaveGame 还排在 lane 里时,之后受理的请求按本函数清掉之后的身份取入队快照(client_request_lane.cpp Admit 清
+// authenticated_account、owner_revision 归零):改下面清掉的身份字段时同改那里。
 inline void ResetSceneRoute(SessionInfo& session)
 {
     session.SetNodeEntity(common::base::SceneNodeService, entt::null);
@@ -168,10 +172,11 @@ inline void ResetSceneRoute(SessionInfo& session)
     session.enterGameSentAfterLeave = false;
 }
 
-// 客户端在这条连接上发出 EnterGame(gate 收包、转发给 login 之前,gate_scene_entry::OnClientEnterGame)。LeaveGame 重置之后,
-// 只有这之后 login 才可能为本连接发出新一次登录的 Bind 与路由(login 只在处理 EnterGame 时发 Bind,
+// 客户端在这条连接上发出 EnterGame(gate_scene_entry::OnClientEnterGame;直连模式收包即发出,路由模式在 lane 真正发出的那一刻)。
+// LeaveGame 重置之后,只有这之后 login 才可能为本连接发出新一次登录的 Bind 与路由(login 只在处理 EnterGame 时发 Bind,
 // entergamelogic.go SendBindSessionToGate);在这之前到达的一律属于 LeaveGame 之前那条登录链。
-// 按收包顺序置位(与 LeaveGame 的重置同一个点),路由模式下 lane 里排在 LeaveGame 之前的 EnterGame 不会把它置上。
+// 按发出顺序置位(与 LeaveGame 的重置同一种时刻,client_session_handler.cpp ApplyLoginTransition):lane 里排在 LeaveGame 之前的
+// EnterGame 先发出、先置位,随后被 LeaveGame 的重置清掉,不会被当成离场之后的那一次。
 inline void NoteEnterGameRequested(SessionInfo& session)
 {
     session.enterGameSentAfterLeave = true;

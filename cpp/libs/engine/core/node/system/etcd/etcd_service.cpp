@@ -204,9 +204,34 @@ void EtcdService::OnPrefixRange(const std::string& prefix, const etcdserverpb::R
 	{
 		watch.createSent = true;
 		pendingWatchCreates_.push_back(prefix);
-		EtcdHelper::StartWatchingPrefix(prefix, watchFrom);
-		LOG_INFO << "Watching prefix: " << prefix << " from revision " << watchFrom;
+		if (exactDiscoveryKeys_.contains(prefix))
+		{
+			EtcdHelper::StartWatchingKey(prefix, watchFrom);
+			LOG_INFO << "Watching key: " << prefix << " from revision " << watchFrom;
+		}
+		else
+		{
+			EtcdHelper::StartWatchingPrefix(prefix, watchFrom);
+			LOG_INFO << "Watching prefix: " << prefix << " from revision " << watchFrom;
+		}
 	}
+}
+
+void EtcdService::AddExactDiscoveryKey(const std::string& key)
+{
+	exactDiscoveryKeys_.insert(key);
+}
+
+void EtcdService::RangeDiscoveryScope(const std::string& scope)
+{
+	// 精确键的快照里最多只有它自己。对账(discoveryKeys_.ApplySnapshot)按前缀扫索引,把它当前缀扫也只会扫到它:
+	// 本节点不 Range / watch 自身类型的前缀(否则不会登记成精确键),同类别的节点的键不会进索引。
+	if (exactDiscoveryKeys_.contains(scope))
+	{
+		EtcdHelper::RangeKey(scope);
+		return;
+	}
+	EtcdHelper::RangeQuery(scope);
 }
 
 void EtcdService::OnPut(const etcdserverpb::PutResponse& reply)
@@ -280,7 +305,7 @@ void EtcdService::OnStreamWatchResponse(const etcdserverpb::WatchResponse& respo
 	if (response.compact_revision() != 0)
 	{
 		// 起点已被压缩:立刻重新 Range → 对账 → 从新快照的 R+1 建 watch(新起点必然在压缩点之后,不会再被拒)。
-		EtcdHelper::RangeQuery(prefix);
+		RangeDiscoveryScope(prefix);
 		return;
 	}
 	// 其他原因的取消:以前等下一次 2 秒全量 Range 重建;兜底周期拉长到约 60 秒之后不能再等它,
@@ -308,7 +333,7 @@ void EtcdService::ScheduleCanceledPrefixRetry(const std::string& prefix)
 		for (const auto& p : prefixes)
 		{
 			// 应答到了走 OnPrefixRange:对账,并在当前流上还没有 watch 时从快照之后建。
-			EtcdHelper::RangeQuery(p);
+			RangeDiscoveryScope(p);
 		}
 	});
 }
@@ -393,7 +418,7 @@ void EtcdService::OnWatchStreamRestarted()
 	canceledPrefixesToRetry_.clear();
 	for (const auto& prefix : prefixes)
 	{
-		EtcdHelper::RangeQuery(prefix);
+		RangeDiscoveryScope(prefix);
 	}
 }
 

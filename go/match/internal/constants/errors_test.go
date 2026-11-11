@@ -39,6 +39,14 @@ func tipCodes() map[string]uint32 {
 		"ErrSpectateFull":           ErrSpectateFull,
 		"ErrSpectateTicketInvalid":  ErrSpectateTicketInvalid,
 		"ErrBattleReportNotFound":   ErrBattleReportNotFound,
+		"ErrBattleScriptInvalid":          ErrBattleScriptInvalid,
+		"ErrBattleScriptNotFound":         ErrBattleScriptNotFound,
+		"ErrBattleScriptLimitReached":     ErrBattleScriptLimitReached,
+		"ErrBattleScriptRevisionConflict": ErrBattleScriptRevisionConflict,
+		"ErrBattleScriptNotApproved":      ErrBattleScriptNotApproved,
+		"ErrBattleScriptTooLarge":         ErrBattleScriptTooLarge,
+		"ErrBattleScriptLoadoutInvalid":   ErrBattleScriptLoadoutInvalid,
+		"ErrBattleScriptLoadoutFull":      ErrBattleScriptLoadoutFull,
 	}
 }
 

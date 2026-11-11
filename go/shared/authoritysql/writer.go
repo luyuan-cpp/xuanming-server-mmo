@@ -9,6 +9,7 @@ import (
 	"io"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	databasepb "proto/common/database"
@@ -164,8 +165,7 @@ func verifyBootRegistration(ctx context.Context, conn driver.Conn, grant *databa
 	if err != nil {
 		return err
 	}
-	state, err := unsignedValue(values[4])
-	if err != nil || state != 1 || stringValue(values[0]) != grant.Generation || !bytes.Equal(byteValue(values[1]), grant.InstanceId) || !bytes.Equal(byteValue(values[2]), grant.SqlPrincipal) || !bytes.Equal(byteValue(values[3]), grant.RegistrationDigest) {
+	if !registrationMatchesGrant(values, grant) {
 		return ErrWriterDenied
 	}
 	values, err = rawOne(ctx, conn, "SELECT request_proto FROM "+qualified(grant.AuthoritySchema, "writer_lifecycle_receipt")+" WHERE kind=1 AND request_digest=?", []driver.NamedValue{{Ordinal: 1, Value: grant.RegistrationDigest}}, 1)
@@ -194,6 +194,7 @@ func (g runtimeGate) beforeBegin(ctx context.Context, conn driver.Conn) (gateAtt
 	if g.config.boot == nil || g.config.boot.closed.Load() {
 		return nil, ErrWriterDenied
 	}
+	defer observeWriterGate(g.config.AuthoritySchema(), gatePhaseBeforeBegin, time.Now())
 	meta, err := readRawMeta(ctx, conn, g.config.AuthoritySchema())
 	if err != nil {
 		return nil, err
@@ -219,6 +220,7 @@ func (g runtimeGate) admitRead(ctx context.Context, conn driver.Conn) error {
 	if g.config.boot == nil || g.config.boot.closed.Load() {
 		return ErrWriterDenied
 	}
+	defer observeWriterGate(g.config.AuthoritySchema(), gatePhaseRead, time.Now())
 	meta, err := readRawMeta(ctx, conn, g.config.AuthoritySchema())
 	if err != nil {
 		return err
@@ -233,48 +235,27 @@ func (g runtimeGate) admitRead(ctx context.Context, conn driver.Conn) error {
 	g.config.boot.noteReadable()
 	return nil
 }
+
+// enter 在 BEGIN 之后锁住本次轮到的 slot 行,再复核 route_meta 与本写者的注册行。
+//
+// 每笔写事务在这里只发两条语句(2026-11-11,缺口清单第 20 条;以前是三到四条):
+//   - 锁 slot 行(lockSlot):LOCK_TOUCH 档是一条按 beforeBegin 读到的 epoch 的条件写,SELECT_ONLY 档是一条加锁读;
+//   - 一条普通读同时取 route_meta 与 writer_registry(readGateView)。这两张表以前分两条读,本来就落在同一个事务快照上,
+//     合成一条读到的是同一版,判定不变。
+//
+// 退休永久REVOKED与freeze推进epoch都落在已CURRENT锁住的slot原件上，RR旧snapshot不能放行:锁之后的这条普通读只做复核。
+// 依据与取舍见 docs/design/db-write-fencing-mysql.md「2026-11-10 写事务闸门的开销与热点」及其 11-11 定案。
 func (a *runtimeAttempt) enter(ctx context.Context, conn driver.Conn) error {
 	grant := a.config.boot.grant
 	if a.config.boot.closed.Load() {
 		return ErrWriterDenied
 	}
-	query := "SELECT generation,writer_epoch,state FROM " + qualified(grant.AuthoritySchema, "writer_slot") + " WHERE writer_key=? AND slot=?"
-	args := []driver.NamedValue{{Ordinal: 1, Value: grant.WriterKey}, {Ordinal: 2, Value: int64(a.slot)}}
-	touched := true
-	if grant.LockPrimitive == databasepb.SqlWriterBootGrant_LOCK_TOUCH {
-		result, err := rawExec(ctx, conn, "UPDATE "+qualified(grant.AuthoritySchema, "writer_slot")+" SET lock_touch=1-lock_touch WHERE writer_key=? AND slot=? AND generation=? AND writer_epoch=? AND state=1 AND lock_touch IN (0,1)", append(args, driver.NamedValue{Ordinal: 3, Value: grant.Generation}, driver.NamedValue{Ordinal: 4, Value: a.before.WriterEpoch}))
-		if err != nil {
-			return err
-		}
-		if result == nil {
-			return ErrWriterDenied
-		}
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return ErrWriterDenied
-		}
-		touched = affected == 1
-	} else if grant.LockPrimitive == databasepb.SqlWriterBootGrant_SELECT_ONLY {
-		query += " FOR UPDATE"
-	} else {
-		return ErrWriterDenied
-	}
-	values, err := rawOne(ctx, conn, query, args, 3)
+	defer observeWriterGate(grant.AuthoritySchema, gatePhaseEnter, time.Now())
+	epoch, err := a.lockSlot(ctx, conn)
 	if err != nil {
 		return err
 	}
-	epoch, e1 := unsignedValue(values[1])
-	state, e2 := unsignedValue(values[2])
-	if e1 != nil || e2 != nil || stringValue(values[0]) != grant.Generation || state != 1 {
-		return ErrWriterDenied
-	}
-	// 条件写没命中、这里却读到 ACTIVE:epoch 被推进了(RR 旧快照可能还读到旧 epoch),按冻结处理,下一次尝试会读到真相。
-	if !touched || epoch != a.before.WriterEpoch {
-		a.config.boot.noteFrozen()
-		return ErrWriterFrozen
-	}
-	// 退休永久REVOKED与freeze推进epoch都落在已CURRENT锁住的slot原件上，RR旧snapshot不能放行。
-	meta, err := readRawMeta(ctx, conn, grant.AuthoritySchema)
+	meta, registry, err := readGateView(ctx, conn, grant.AuthoritySchema, grant.WriterKey)
 	if err != nil {
 		return err
 	}
@@ -285,16 +266,111 @@ func (a *runtimeAttempt) enter(ctx context.Context, conn driver.Conn) error {
 		a.config.boot.noteFrozen()
 		return ErrWriterFrozen
 	}
-	values, err = rawOne(ctx, conn, "SELECT generation,instance_id,sql_principal,registration_digest,state FROM "+qualified(grant.AuthoritySchema, "writer_registry")+" WHERE writer_key=?", []driver.NamedValue{{Ordinal: 1, Value: grant.WriterKey}}, 5)
-	if err != nil {
-		return err
-	}
-	state, err = unsignedValue(values[4])
-	if err != nil || state != 1 || stringValue(values[0]) != grant.Generation || !bytes.Equal(byteValue(values[1]), grant.InstanceId) || !bytes.Equal(byteValue(values[2]), grant.SqlPrincipal) || !bytes.Equal(byteValue(values[3]), grant.RegistrationDigest) {
+	if !registrationMatchesGrant(registry, grant) {
 		return ErrWriterDenied
 	}
 	a.config.boot.noteAdmitted()
 	return nil
+}
+
+// lockSlot 锁住本次轮到的 slot 行并核它,回这一行的 writer_epoch。资格不符(世代不对、已退休、行不在)回 ErrWriterDenied;
+// epoch 被推进了回 ErrWriterFrozen。
+func (a *runtimeAttempt) lockSlot(ctx context.Context, conn driver.Conn) (uint64, error) {
+	grant := a.config.boot.grant
+	slotTable := qualified(grant.AuthoritySchema, "writer_slot")
+	slotSelect := "SELECT generation,writer_epoch,state FROM " + slotTable + " WHERE writer_key=? AND slot=?"
+	key := []driver.NamedValue{{Ordinal: 1, Value: grant.WriterKey}, {Ordinal: 2, Value: int64(a.slot)}}
+	switch grant.LockPrimitive {
+	case databasepb.SqlWriterBootGrant_LOCK_TOUCH:
+		touchArgs := []driver.NamedValue{key[0], key[1], {Ordinal: 3, Value: grant.Generation}, {Ordinal: 4, Value: a.before.WriterEpoch}}
+		result, err := rawExec(ctx, conn, "UPDATE "+slotTable+" SET lock_touch=1-lock_touch WHERE writer_key=? AND slot=? AND generation=? AND writer_epoch=? AND state=1 AND lock_touch IN (0,1)", touchArgs)
+		if err != nil {
+			return 0, err
+		}
+		if result == nil {
+			return 0, ErrWriterDenied
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return 0, ErrWriterDenied
+		}
+		if affected == 1 {
+			// 条件写命中:这一行此刻就是 generation=本世代、writer_epoch=beforeBegin 读到的 epoch、state=ACTIVE。
+			// lock_touch 每次都翻转,命中必改一行。以前紧跟着的那次普通读,读到的是本事务刚写的这一版,值与条件逐列相同,所以不再读。
+			return a.before.WriterEpoch, nil
+		}
+		// 条件写没命中:读这一行,分清是资格没了(拒绝)还是 epoch 被推进了(冻结)。
+		generation, _, state, err := readSlotRow(ctx, conn, slotSelect, key)
+		if err != nil {
+			return 0, err
+		}
+		if generation != grant.Generation || state != 1 {
+			return 0, ErrWriterDenied
+		}
+		// 没命中却读到 ACTIVE:epoch 被推进了(RR 旧快照可能还读到旧 epoch),按冻结处理,下一次尝试会读到真相。
+		a.config.boot.noteFrozen()
+		return 0, ErrWriterFrozen
+	case databasepb.SqlWriterBootGrant_SELECT_ONLY:
+		generation, epoch, state, err := readSlotRow(ctx, conn, slotSelect+" FOR UPDATE", key)
+		if err != nil {
+			return 0, err
+		}
+		if generation != grant.Generation || state != 1 {
+			return 0, ErrWriterDenied
+		}
+		if epoch != a.before.WriterEpoch {
+			a.config.boot.noteFrozen()
+			return 0, ErrWriterFrozen
+		}
+		return epoch, nil
+	default:
+		return 0, ErrWriterDenied
+	}
+}
+
+// readSlotRow 按 query 读本写者的一行 slot(generation,writer_epoch,state)。行不在、列取值不合法都按资格不符。
+func readSlotRow(ctx context.Context, conn driver.Conn, query string, key []driver.NamedValue) (generation string, epoch, state uint64, err error) {
+	values, err := rawOne(ctx, conn, query, key, 3)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	epoch, e1 := unsignedValue(values[1])
+	state, e2 := unsignedValue(values[2])
+	if e1 != nil || e2 != nil {
+		return "", 0, 0, ErrWriterDenied
+	}
+	return stringValue(values[0]), epoch, state, nil
+}
+
+// gateViewColumns 是 readGateView 那条读的列数:route_meta 五列在前,writer_registry 五列在后。
+const gateViewColumns = 10
+
+// readGateView 用一条普通读同时取 route_meta 与本写者的 writer_registry 行(2026-11-11,缺口清单第 20 条)。
+// 以 route_meta 为驱动表左连 writer_registry:注册行不在时后五列是 NULL,registrationMatchesGrant 判成不符,
+// 与分两条读时「注册行读不到 → 拒绝」相同;route_meta 不在时一行都读不到,同样拒绝。
+// 不加锁:SELECT_ONLY 档那条加锁读不能并进来,FOR UPDATE 会把 route_meta 也锁上,本库全部写事务就被串行化了。
+func readGateView(ctx context.Context, conn driver.Conn, schema string, writerKey []byte) (*databasepb.RouteMeta, []driver.Value, error) {
+	values, err := rawOne(ctx, conn, "SELECT m.generation,m.writable,m.writer_epoch,m.catalog_revision,m.freeze_run_id,"+
+		"r.generation,r.instance_id,r.sql_principal,r.registration_digest,r.state FROM "+qualified(schema, "route_meta")+" m"+
+		" LEFT JOIN "+qualified(schema, "writer_registry")+" r ON r.writer_key=? WHERE m.id=1",
+		[]driver.NamedValue{{Ordinal: 1, Value: writerKey}}, gateViewColumns)
+	if err != nil {
+		return nil, nil, err
+	}
+	meta, err := parseRawMeta(values[:5])
+	if err != nil {
+		return nil, nil, err
+	}
+	return meta, values[5:], nil
+}
+
+// registrationMatchesGrant 核 writer_registry 的一行(generation,instance_id,sql_principal,registration_digest,state)
+// 是不是这份 boot grant 登记的那一代、而且仍 ACTIVE。整行为 NULL(注册行不在)判不符。启动核对与每笔写事务共用这一条规则。
+func registrationMatchesGrant(values []driver.Value, grant *databasepb.SqlWriterBootGrant) bool {
+	state, err := unsignedValue(values[4])
+	return err == nil && state == 1 && stringValue(values[0]) == grant.Generation &&
+		bytes.Equal(byteValue(values[1]), grant.InstanceId) && bytes.Equal(byteValue(values[2]), grant.SqlPrincipal) &&
+		bytes.Equal(byteValue(values[3]), grant.RegistrationDigest)
 }
 
 func readRawMeta(ctx context.Context, conn driver.Conn, schema string) (*databasepb.RouteMeta, error) {
@@ -302,6 +378,11 @@ func readRawMeta(ctx context.Context, conn driver.Conn, schema string) (*databas
 	if err != nil {
 		return nil, err
 	}
+	return parseRawMeta(values)
+}
+
+// parseRawMeta 解 route_meta 的五列(generation,writable,writer_epoch,catalog_revision,freeze_run_id)。取值不合法按资格不符。
+func parseRawMeta(values []driver.Value) (*databasepb.RouteMeta, error) {
 	writable, e1 := unsignedValue(values[1])
 	epoch, e2 := unsignedValue(values[2])
 	revision, e3 := unsignedValue(values[3])

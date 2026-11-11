@@ -12,7 +12,8 @@
 // AOI 单向关注(docs/design/aoi-directed-interest.md)。
 // 关注是有向的:观察者 A 关注目标 B,A 的客户端显示 B、接收 B 的移动与属性;B 是否关注 A 是另一条关系。
 // 一条关系的来源分两类:
-//   - 空间来源:网格评估(本格及相邻六格 + CanSee)认定 A 能看见 B,由 AoiSystem 维护;
+//   - 空间来源:按距离判定,由 AoiSystem 维护。候选取本格及相邻六格,距离进入视野半径时建立,
+//     超出离开半径时撤销(两个半径见 spatial/constants/view.h);任一方位置变化后重新评估;
 //   - 显式来源:玩法按需建立和撤销(技能追踪、队伍、任务……),可以超出网格范围。
 // 下面两张索引描述同一批关系,只由 InterestSystem 写:正向在观察者身上,反向在目标身上。
 // ---------------------------------------------------------------------------
@@ -20,8 +21,9 @@
 // 显式来源的种类。新增玩法接入时在 kCount 之前加一项,kCount 固定最后。
 enum class AoiFollowKind : uint8_t
 {
-    kTeam  = 0,   // 队伍逻辑建立的关注:id 为 team_id
-    kSkill = 1,   // 技能或 Buff 效果建立的关注:id 为该效果的实例号(如 buff_id)
+    kTeam   = 0,   // 队伍逻辑建立的关注:id 为 team_id
+    kSkill  = 1,   // 技能或 Buff 效果建立的关注:id 为该效果的实例号(如 buff_id)
+    kCombat = 2,   // 交手关系(CombatEngagementSystem):每对观察者与目标最多一份,id 恒为 0;脱战、死亡时撤销
     kCount,
 };
 
@@ -77,6 +79,13 @@ struct AoiListComp
     // 是否存在关注关系(可能暂时不可见)。
     [[nodiscard]] bool HasRelation(entt::entity target) const { return entries.contains(target); }
 
+    // 对 target 的关系是否带空间来源(带空间来源必然在显示)。
+    [[nodiscard]] bool HasSpatialSource(entt::entity target) const
+    {
+        const auto it = entries.find(target);
+        return it != entries.end() && it->second.spatial;
+    }
+
     // 当前显示中的目标数(占用的容量)。
     [[nodiscard]] std::size_t VisibleCount() const { return visibleCount; }
 };
@@ -87,6 +96,26 @@ struct AoiListComp
 struct AoiWatchersComp
 {
     std::unordered_map<entt::entity, bool> watchers;
+};
+
+// 实体上次视野评估时的位置(米)与视野半径。按需状态,只由 AoiSystem 写:每次评估空间关注后记下,
+// 每帧拿当前值和它比,决定要不要重新评估:视野半径变了立即评估,位置按 kAoiReevaluateDistance 的规则
+// (spatial/constants/view.h)。第一次入格评估时创建;实体销毁自然清理。换场景、同场景瞬移后实体按首次入格
+// 重新评估并覆盖它,所以不随 Hex 一起摘。
+struct AoiEvaluatedAtComp
+{
+    double x = 0;
+    double y = 0;
+    double z = 0;
+    double viewRadius = 0;
+};
+
+// 空标记(按需状态):有附近候选因为名额被拒收,或者被权重更高的关注挤掉。
+// InterestSystem 拒收、挤掉只有空间来源的条目时打上;AoiSystem::Update 发现它又有空名额时
+// 重扫一次附近候选并摘掉,重扫中再被拒会重新打上。没有标记 = 名额空出后不用重扫,
+// 所以重扫只落在真被拒过的观察者身上,开销有界。
+struct AoiNearbyRefillComp
+{
 };
 
 // ---------------------------------------------------------------------------
@@ -102,6 +131,8 @@ struct AoiClientCapacityComp
 // Per-scene: server pressure metric.
 // pressureFactor in [0, 1]: 0 = idle, 1 = maximum pressure.
 // GetServerCapacity() linearly interpolates between max and min capacity.
+// 按需状态:唯一写入口是 AoiSystem::ApplyServerPressure(压力来自 AoiLoadMonitor 的模拟步耗时,每秒一次);
+// 缺失 = 不受压。容量因此收缩时按权重裁表,见 docs/design/aoi-directed-interest.md「服务器压力」。
 // ---------------------------------------------------------------------------
 struct ScenePressureComp
 {

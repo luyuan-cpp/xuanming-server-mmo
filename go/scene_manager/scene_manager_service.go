@@ -25,6 +25,7 @@ import (
 	"shared/leader"
 	"shared/safego"
 	"shared/serverbase"
+	"shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -58,6 +59,10 @@ func main() {
 	if err := c.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
 		logx.Must(fmt.Errorf("shared Redis password: %w", err))
 	}
+	// gate 令牌密钥(GateTokenSecretEnv,K8s 上经 Secret gate-token 注入):指名了变量却没有值就拒启,不带空密钥去签跨 zone 令牌。
+	if err := c.ResolveGateTokenSecret(os.LookupEnv); err != nil {
+		logx.Must(fmt.Errorf("gate token secret: %w", err))
+	}
 
 	// 再入屏障:进程起来之前先把常数与配置校验一遍(设计文档
 	// docs/design/scene-owner-reentry-barrier.md §3.2 要求的"机械校验")。
@@ -65,7 +70,7 @@ func main() {
 	// 常数之间劈叉是**代码错误**,而且后果是静默的双写窗口 —— 直接 panic 让
 	// Pod 起不来(K8s 会 CrashLoopBackOff 并告警),远好过带着一个假屏障跑。
 	if err := constants.ValidateSceneReentryBarrier(); err != nil {
-		panic(fmt.Sprintf("再入屏障常数自检失败: %v", err))
+		panic(fmt.Sprintf("scene re-entry barrier constant self-check failed: %v", err))
 	}
 	// 配置低于安全下限是**运维错误**,但安全值是已知的:钳回下限并大声报出来,
 	// 比让进程起不来更合适(屏障调高永远是安全的,进程停摆不是)。
@@ -141,10 +146,10 @@ func main() {
 	// 宁可这个 Pod 起不来(K8s 会 CrashLoopBackOff 并告警)。
 	if c.Agones.Enabled {
 		allocator, err := agones.NewK8sAllocatorInCluster(agones.K8sAllocatorOptions{
-			HighDensity:            c.Agones.HighDensityEnabled,
-			CounterRollbackRetries: c.Agones.CounterRollbackRetries,
-			CounterRollbackBackoff: time.Duration(c.Agones.CounterRollbackBackoffMs) * time.Millisecond,
-			RequestTimeout:         time.Duration(c.Agones.RequestTimeoutMs) * time.Millisecond,
+			HighDensity:     c.Agones.HighDensityEnabled,
+			ConflictRetries: c.Agones.CounterRollbackRetries,
+			ConflictBackoff: time.Duration(c.Agones.CounterRollbackBackoffMs) * time.Millisecond,
+			RequestTimeout:  time.Duration(c.Agones.RequestTimeoutMs) * time.Millisecond,
 		})
 		if err != nil {
 			panic(fmt.Sprintf("Agones.Enabled=true but allocator init failed: %v", err))
@@ -344,6 +349,11 @@ func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor
 				//                               见 logic/channel_pick.go
 			),
 		}),
+
+		// ④ 日志上下文紧贴 handler:请求顶层带 player_id 的方法(EnterScene 等),handler 里经
+		//    logx.WithContext(ctx) 打的日志带上它(docs/design/distributed-tracing.md §6.2)。
+		//    只往 ctx 加日志字段,不改请求、不改响应,前三层的行为不受影响。
+		tracing.PlayerFieldInterceptor(),
 	}
 }
 

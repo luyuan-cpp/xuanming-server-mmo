@@ -5,6 +5,8 @@
 #include "rpc/service_metadata/kafka_command_event_whitelist.h"
 #include "battle_event_handler.h"
 #include "rpc/service_metadata/common_event_battle_event_event_id.h"
+#include "player_placement_event_handler.h"
+#include "rpc/service_metadata/common_event_player_placement_event_event_id.h"
 #include "player_inbox_event_handler.h"
 #include "rpc/service_metadata/common_event_player_inbox_event_event_id.h"
 #include "team_event_handler.h"
@@ -33,6 +35,15 @@ void DispatchSceneKafkaCommand(const std::string& topic, const contracts::kafka:
             return;
         }
         BattleEventHandler::BattleConfirmedEventHandler(event);
+        return;
+    }
+    case PlayerHostedPlacementEventEventId: {
+        PlayerHostedPlacementEvent event;
+        if (!event.ParseFromString(command.payload())) {
+            LOG_WARN << "SceneCommand payload decode failed, topic=" << topic << ", event_id=" << command.event_id();
+            return;
+        }
+        PlayerPlacementEventHandler::PlayerHostedPlacementEventHandler(event);
         return;
     }
     case PlayerInboxNotifyEventEventId: {

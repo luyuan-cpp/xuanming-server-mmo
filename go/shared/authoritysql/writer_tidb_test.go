@@ -241,6 +241,11 @@ func TestTiDBSameRunRetirementAndFreeze(t *testing.T) {
 			if retired.CatalogRevision != meta.CatalogRevision+1 || retired.ResultingEpoch != meta.WriterEpoch {
 				t.Fatal("退役只增加目录版本，不改变E")
 			}
+			// 排空退休同样结束这一代:slot 行随退休事务删掉(writer-roster-exhaustion-20261106.md §5.8),下面的空 ACTIVE 冻结照常推进。
+			var slots int
+			if err = fixture.Operator.QueryRowContext(ctx, "SELECT COUNT(*) FROM writer_slot WHERE writer_key=?", fixture.Config.WriterKey()).Scan(&slots); err != nil || slots != 0 {
+				t.Fatalf("排空退休删掉这一代的 slot 行: %d %v", slots, err)
+			}
 			if _, err = fixture.Open(ctx, opts.AuthoritySchema, 1); err == nil {
 				t.Fatal("旧boot封闭后仍能新建业务池")
 			}

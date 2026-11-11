@@ -66,9 +66,10 @@ func TestRouteDSNSetsReadCommittedAndLockWaitWithoutClientFoundRows(t *testing.T
 // TestRouteBootstrapDDLContract 把路由表的手写 DDL 与本 store / 规格 b.3 / G1a 的假设钉在一起(不连库)。
 func TestRouteBootstrapDDLContract(t *testing.T) {
 	ddls := map[string]string{
-		PlayerRouteTableName:    playerRouteBootstrapDDL,
-		ZoneMergedIntoTableName: zoneMergedIntoBootstrapDDL,
-		RouteMetaTableName:      routeMetaBootstrapDDL,
+		PlayerRouteTableName:      playerRouteBootstrapDDL,
+		ZoneMergedIntoTableName:   zoneMergedIntoBootstrapDDL,
+		ZoneMergeHistoryTableName: zoneMergeHistoryBootstrapDDL,
+		RouteMetaTableName:        routeMetaBootstrapDDL,
 	}
 	for name, ddl := range ddls {
 		if !strings.HasPrefix(ddl, "CREATE TABLE IF NOT EXISTS `"+name+"` (") {
@@ -88,7 +89,7 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 			t.Fatalf("%s 有 %d 个 ascii 列,只有 %d 个显式 COLLATE ascii_bin(MySQL 默认 ascii_general_ci、TiDB 只有 ascii_bin)", name, n, m)
 		}
 	}
-	// 14张业务/路由表之外，正式authority catalog新增六张永久写资格控制表，外加搬库的哨兵表。
+	// 15张业务/路由表(2026-11-11 加 zone_merge_history)之外，正式authority catalog新增六张永久写资格控制表，外加搬库的哨兵表。
 	writerControlDDLs := map[string]string{
 		"writer_registry":                writerRegistryBootstrapDDL,
 		"writer_slot":                    writerSlotBootstrapDDL,
@@ -98,8 +99,8 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		"sql_writer_maintenance_receipt": writerMaintenanceReceiptBootstrapDDL,
 		"db_move_sentinel":               moveSentinelBootstrapDDL,
 	}
-	if got, want := len(bootstrapTables), 14+len(writerControlDDLs); got != want {
-		t.Fatalf("bootstrapTables 有 %d 项,want %d(14张业务/路由表加七张闸门表)", got, want)
+	if got, want := len(bootstrapTables), 15+len(writerControlDDLs); got != want {
+		t.Fatalf("bootstrapTables 有 %d 项,want %d(15张业务/路由表加七张闸门表)", got, want)
 	}
 	for name, ddl := range writerControlDDLs {
 		if bootstrapTables[name] != ddl {
@@ -136,6 +137,21 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 	}
 	if n := strings.Count(playerRouteBootstrapDDL, "KEY `idx_route_"); n != 2 {
 		t.Fatalf("player_route 有 %d 个 idx_route_* 索引,want 2", n)
+	}
+	// zone_merge_history(提案 §16):按源区编号的只增历史。序号由 merge_zone 持 route_meta 锁算,不用自增列;
+	// 动作只有两种,CHECK 兜底(应用层本来只写这两个值)。
+	for _, want := range []string{
+		"PRIMARY KEY (`src_zone`, `event_seq`) /*T![clustered_index] CLUSTERED */",
+		"CONSTRAINT `chk_merge_history_action` CHECK (`action` IN ('merge', 'unmerge'))",
+		"CONSTRAINT `chk_merge_history_seq` CHECK (`event_seq` >= 1)",
+		"`sql_principal` varchar(288) NOT NULL",
+	} {
+		if !strings.Contains(zoneMergeHistoryBootstrapDDL, want) {
+			t.Fatalf("zone_merge_history 的 DDL 丢了 %q", want)
+		}
+	}
+	if strings.Contains(strings.ToUpper(zoneMergeHistoryBootstrapDDL), "AUTO_INCREMENT") {
+		t.Fatal("zone_merge_history 不用自增列:序号按源区由 merge_zone 在持锁事务里算")
 	}
 
 	// 列漂移守卫的事实源是 proto(routeTableMessages):每张路由表的 proto 字段集合 = DDL 列集合(双向,多一列少一列都拒),
@@ -382,6 +398,7 @@ func allRouteSQLForTest() map[string]string {
 		"T1":              routeTiDBPKTypeSQL,
 		"ddl_route":       playerRouteBootstrapDDL,
 		"ddl_merged_into": zoneMergedIntoBootstrapDDL,
+		"ddl_history":     zoneMergeHistoryBootstrapDDL,
 		"ddl_meta":        routeMetaBootstrapDDL,
 	}
 	for i, stmt := range routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000}, 0, 1) {

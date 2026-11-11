@@ -45,7 +45,7 @@ type Repo struct {
 
 func New(db *sql.DB, mailIDs, opIDs NextID, exists func(uint32) bool, guilds GuildDirectory) *Repo {
 	if guilds == nil {
-		panic("帮会目录未装配")
+		panic("guild directory not wired")
 	}
 	seq, err := assetop.NewSeqTables("mail_player_op_seq", "mail_asset_op", 1)
 	if err != nil {
@@ -252,12 +252,8 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 			}
 		}
 		if !personal {
-			var count uint64
-			if e := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_message WHERE kind IN (0,2,3) AND owner_player_id=0 AND expire_ms>?", now).Scan(&count); e != nil {
+			if e := checkSharedMailCapacity(ctx, tx, in.GuildId, now, limits); e != nil {
 				return e
-			}
-			if count >= uint64(limits.MaxActiveSystemMails) {
-				return ErrBoxFull
 			}
 		}
 		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_message ("+messageColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0)", id, in.RecipientPlayerId, in.GuildId, uint32(kind), in.SenderKind, in.RequestId, digest, in.Title, in.Body, payload, now, expire); e != nil {
@@ -288,6 +284,32 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 		return nil, ErrConflict
 	}
 	return result, err
+}
+
+// checkSharedMailCapacity 判共享邮件(owner_player_id=0)还能不能再发一封,按可见范围分开计数(缺口清单第 27 条):
+//   - guildID=0 是系统邮件(文本与活动),人人可见,全服共用 MaxActiveSystemMails;
+//   - 非 0 是帮会邮件(文本与活动),只对本帮可见,按这个帮计数,上限 MaxActiveGuildMailsPerGuild。
+//
+// 两类正好按 guild_id 是否为 0 分开:Send 与 CreateCampaign 都校验系统邮件 guild_id=0、帮会邮件非 0。
+// 活动的幂等占位行(kind=0)与它的消息行都算在各自那一类里,与改动前的口径相同。
+// 软上限:并发发件可能略超,理由见 Send 的注释;读侧 ListMails 另有 LIMIT 硬上限。
+func checkSharedMailCapacity(ctx context.Context, tx *sql.Tx, guildID, now uint64, limits Limits) error {
+	query := "SELECT COUNT(*) FROM mail_message WHERE owner_player_id=0 AND guild_id=0 AND kind IN (0,2) AND expire_ms>?"
+	args := []any{now}
+	limit := limits.MaxActiveSystemMails
+	if guildID != 0 {
+		query = "SELECT COUNT(*) FROM mail_message WHERE owner_player_id=0 AND guild_id=? AND expire_ms>?"
+		args = []any{guildID, now}
+		limit = limits.MaxActiveGuildMailsPerGuild
+	}
+	var count uint64
+	if err := tx.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return err
+	}
+	if count >= uint64(limit) {
+		return ErrBoxFull
+	}
+	return nil
 }
 
 // isDuplicateKey 判断是不是唯一键冲突(1062)。

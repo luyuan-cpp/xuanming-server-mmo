@@ -88,7 +88,7 @@ function Initialize-LlvmSupport([string]$CMake) {
         $stamp = Join-Path $supportRoot "$($dep.Name).sha256"
         $ready = (Test-Path -LiteralPath $stamp) -and ((Get-Content -LiteralPath $stamp -Raw).Trim() -eq $dep.Sha)
         foreach ($file in $dep.Required) { $ready = $ready -and (Test-Path -LiteralPath (Join-Path $prefix $file)) }
-        if ($ready) { Write-Host "复用 LLVM 依赖: $($dep.Name)"; continue }
+        if ($ready) { Write-Host "Reusing LLVM dependency: $($dep.Name)"; continue }
         $archive = Join-Path $cacheRoot "$($dep.Name).tar.gz"
         Get-VerifiedArchive $dep.Url $archive $dep.Sha
         $source = Join-Path $supportRoot "$($dep.Name)-src"
@@ -134,7 +134,7 @@ if ($DryRun) {
     Write-Host "Official development package: $downloadUrl"
     Write-Host "SHA256: $archiveSha256"
     Write-Host "Development library directory: $sdkRoot"
-    if (-not $DownloadOnly) { Write-Host "Release x64 串行构建: $buildRoot\Release\no_raw_ptr_check.exe" }
+    if (-not $DownloadOnly) { Write-Host "Release x64 serial build: $buildRoot\Release\no_raw_ptr_check.exe" }
     return
 }
 if (-not $IsWindows -or [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64') {
@@ -168,9 +168,9 @@ if ($LlvmRoot) {
             throw '解压目录超出 build/deps。'
         }
         Move-Item -LiteralPath $stage -Destination $sdkRoot
-    } else { Write-Host "复用 LLVM $version 开发库: $sdkRoot" }
+    } else { Write-Host "Reusing LLVM $version dev libraries: $sdkRoot" }
 }
-if ($DownloadOnly) { Write-Host "开发库已就绪: $sdkRoot"; return }
+if ($DownloadOnly) { Write-Host "Dev libraries ready: $sdkRoot"; return }
 
 $supportPrefix = Initialize-LlvmSupport $cmake
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'

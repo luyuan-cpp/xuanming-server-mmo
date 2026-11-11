@@ -8,20 +8,20 @@
     生产上 route-tool 并在 data_service 主程序里:`/app/service -f /app/etc/data_service.yaml -route-tool <子命令> [参数]`
     (go/data_service/data_service.go;子命令与退出码见 go/data_service/internal/routetoolcli/cli.go)。
     不 kubectl exec 进在役 Pod:一次性 Job 不占在役进程的资源,输出按运行号留档。本脚本渲染 deploy/k8s/manifests/go-svc/data-service-route-tool.yaml:
-    同一镜像(缺省取在役 deployment/data-service 的镜像)、同一 ConfigMap(go-svc-data-service-config)、资源单独设。
+    同一镜像(缺省取在役 statefulset/data-service 的镜像)、同一 ConfigMap(go-svc-data-service-config)、资源单独设。
 
     流程:
       1. 入口校验(任何 kubectl 之前):-RouteToolArgs 第一项必须是已知子命令;不许带 -f / -route-tool / -migrate / -version
          (这几项由本脚本固定);不许有换行等控制字符;只有一项且含空白 = 把整条命令行塞成了一个字符串,拒绝(不替你按空格切)。
       2. 只读核对:zone namespace 存在;**全部 namespace** 里没有在途的 route-tool Job(同一个全局库只许一个在跑);
-         没给 -Image 时读 deployment/data-service 的镜像与拉取策略。
+         没给 -Image 时读 statefulset/data-service 的镜像与拉取策略。
       3. 渲染 Job(名字 data-service-route-tool-<运行号>,每次新名字、不删上一次的),写进报告目录的 manifest.yaml,kubectl apply。
       4. 有界轮询 Job 终态(预算 = -TimeoutSeconds + 120s;Job 自己的 activeDeadlineSeconds = -TimeoutSeconds,到点由 K8s 杀掉)。
       5. 取 Pod 的容器退出码与日志:日志按带运行号的标记切回 stdout.txt / stderr.txt(Job 模板里 sh 包了一层,见模板注释),
          再写 summary.txt。控制台只打 stdout(统计行)与 stderr 末尾若干行。
 
     -DryRun 只做第 1 步与渲染,把 Job 清单打印出来(夹在 --- BEGIN MANIFEST --- / --- END MANIFEST --- 之间,与 k8s_deploy.ps1 同一标记),
-    不调用 kubectl、不建报告目录。没给 -Image 时清单里的镜像写成说明文字(真跑时从 deployment/data-service 读)。
+    不调用 kubectl、不建报告目录。没给 -Image 时清单里的镜像写成说明文字(真跑时从 statefulset/data-service 读)。
 
     退出码:route-tool 容器的退出码原样返回 —— 0 完成 / 2 失败。
     本脚本自己失败(参数不合法、kubectl 失败、namespace 不存在、已有在途 Job、等不到终态、容器退出码不是这两个、取不到退出码)一律 2,
@@ -64,7 +64,7 @@ param(
     [ValidateRange(60, 86400)]
     [int]$TimeoutSeconds = 2400,
 
-    # 镜像引用。留空 = 取在役 deployment/data-service 的镜像与拉取策略(同一二进制、同一份配置);给了就按它,拉取策略按 tag 是否可变推导。
+    # 镜像引用。留空 = 取在役 statefulset/data-service 的镜像与拉取策略(同一二进制、同一份配置);给了就按它,拉取策略按 tag 是否可变推导。
     [string]$Image = "",
 
     [switch]$DryRun,
@@ -94,7 +94,7 @@ function Get-RouteToolContract {
         JobAppLabel             = 'data-service-route-tool'
         ContainerName           = 'route-tool'
         # 在役服务:k8s_deploy.ps1 $GoSvcCatalogue."data-service" 与 manifests/go-svc/data-service.yaml。
-        DeploymentName          = 'data-service'
+        WorkloadName          = 'data-service'
         DeploymentContainerName = 'data-service'
         ConfigMapName           = 'go-svc-data-service-config'
         # 与 data-service.yaml 的 args 前两项相同,再接 -route-tool(data_service.go 的 flag)。
@@ -350,16 +350,16 @@ function Invoke-RouteToolKubectlChecked {
 
 # ─── 读集群 ───
 
-# 在役 deployment/data-service 的镜像与拉取策略。读不到、容器不是恰好一个 data-service 一律 throw(不替你猜镜像)。
+# 在役 statefulset/data-service 的镜像与拉取策略。读不到、容器不是恰好一个 data-service 一律 throw(不替你猜镜像)。
 function Get-LiveDataServiceImage {
     param([Parameter(Mandatory = $true)][string]$Namespace)
     $contract = Get-RouteToolContract
-    $text = Invoke-RouteToolKubectlChecked -Arguments @('get', 'deployment', $contract.DeploymentName, '-n', $Namespace, '-o', 'json') `
-        -What "读取 namespace $Namespace 的 deployment/$($contract.DeploymentName)"
-    $deployment = $text | ConvertFrom-Json -ErrorAction Stop
-    $containers = @($deployment.spec.template.spec.containers | Where-Object { $_.name -eq $contract.DeploymentContainerName })
+    $text = Invoke-RouteToolKubectlChecked -Arguments @('get', 'statefulset', $contract.WorkloadName, '-n', $Namespace, '-o', 'json') `
+        -What "读取 namespace $Namespace 的 statefulset/$($contract.WorkloadName)"
+    $workload = $text | ConvertFrom-Json -ErrorAction Stop
+    $containers = @($workload.spec.template.spec.containers | Where-Object { $_.name -eq $contract.DeploymentContainerName })
     if ($containers.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$containers[0].image)) {
-        throw "namespace $Namespace 的 deployment/$($contract.DeploymentName) 里名为 $($contract.DeploymentContainerName) 的容器应恰好一个且带 image(实际 $($containers.Count) 个):不替你猜镜像,请显式传 -Image"
+        throw "namespace $Namespace 的 statefulset/$($contract.WorkloadName) 里名为 $($contract.DeploymentContainerName) 的容器应恰好一个且带 image(实际 $($containers.Count) 个):不替你猜镜像,请显式传 -Image"
     }
     $policy = [string]$containers[0].imagePullPolicy
     if ($policy -cnotin @('Always', 'IfNotPresent', 'Never')) { $policy = Resolve-ImagePullPolicy -ImageRef ([string]$containers[0].image) }
@@ -477,7 +477,7 @@ function Invoke-RouteTool {
 
     if ($DryRun) {
         try {
-            $jobImage = if ([string]::IsNullOrWhiteSpace($Image)) { "(resolved at run time from deployment/$($contract.DeploymentName) in $namespace)" } else { $Image }
+            $jobImage = if ([string]::IsNullOrWhiteSpace($Image)) { "(resolved at run time from statefulset/$($contract.WorkloadName) in $namespace)" } else { $Image }
             $jobPullPolicy = if ([string]::IsNullOrWhiteSpace($Image)) { 'IfNotPresent' } else { Resolve-ImagePullPolicy -ImageRef $Image }
             $manifest = New-RouteToolJobManifest -TemplateText $templateText -RunId $runId -Image $jobImage -PullPolicy $jobPullPolicy `
                 -Arguments $RouteToolArgs -TimeoutSeconds $TimeoutSeconds
@@ -488,7 +488,7 @@ function Invoke-RouteTool {
         }
         Write-Host "[dry-run] route-tool job=$jobName namespace=$namespace subcommand=$subcommand timeout=${TimeoutSeconds}s (kubectl is not called, no report directory is created)"
         if ([string]::IsNullOrWhiteSpace($Image)) {
-            Write-Host "[dry-run] -Image not given: a real run reads image and imagePullPolicy from deployment/$($contract.DeploymentName); the rendered imagePullPolicy is a placeholder"
+            Write-Host "[dry-run] -Image not given: a real run reads image and imagePullPolicy from statefulset/$($contract.WorkloadName); the rendered imagePullPolicy is a placeholder"
         }
         Write-Host '--- BEGIN MANIFEST ---'
         Write-Host $manifest

@@ -23,6 +23,7 @@
     <ClCompile Include="network\codec\codec.cpp" />
     <ClCompile Include="network\rpc_channel.cpp" />
     <ClCompile Include="network\rpc_channel_stats.cpp" />
+    <ClCompile Include="network\grpc_trace_hooks.cpp" />
     <ClCompile Include="tracing\log_context_suffix.cpp" />
     <ClCompile Include="metrics\prometheus_text.cpp" />
     <ClCompile Include="metrics\metrics_registry.cpp" />
@@ -64,12 +65,17 @@
     <ClInclude Include="node\system\etcd\etcd_stream_backoff.h" />
     <ClInclude Include="node\system\discovery\discovery_key_index.h" />
     <ClInclude Include="node\system\discovery\discovery_resync_policy.h" />
+    <ClInclude Include="node\system\discovery\rendezvous_subset.h" />
     <ClInclude Include="node\system\node\node.h" />
     <ClInclude Include="node\system\node\node_allocator.h" />
+    <ClInclude Include="node\system\node\node_id_selection.h" />
     <ClInclude Include="node\system\node\node_connector.h" />
     <ClInclude Include="node\system\node\client_endpoint.h" />
     <ClInclude Include="node\system\node\open_file_limit.h" />
     <ClInclude Include="node\system\node\release_track.h" />
+    <ClInclude Include="node\system\node\node_planned_drain.h" />
+    <ClInclude Include="node\system\node\node_admission_advertise.h" />
+    <ClInclude Include="node\system\node\node_admission_publisher.h" />
     <ClInclude Include="node\system\node\node_util.h" />
     <ClInclude Include="node\system\registration\registration_manager.h" />
     <ClInclude Include="node\system\discovery\service_discovery_manager.h" />
@@ -82,7 +88,10 @@
     <ClInclude Include="network\codec\dispatcher.h" />
     <ClInclude Include="network\rpc_channel.h" />
     <ClInclude Include="network\rpc_channel_stats.h" />
+    <ClInclude Include="network\rpc_trace_envelope.h" />
+    <ClInclude Include="network\grpc_trace_hooks.h" />
     <ClInclude Include="tracing\log_context_suffix.h" />
+    <ClInclude Include="tracing\player_field.h" />
     <ClInclude Include="tracing\trace_context.h" />
     <ClInclude Include="metrics\prometheus_text.h" />
     <ClInclude Include="metrics\metrics_registry.h" />
@@ -90,6 +99,7 @@
     <ClInclude Include="network\rpc_controller.h" />
     <ClInclude Include="network\rpc_done_callback.h" />
     <ClInclude Include="network\rpc_link_liveness.h" />
+    <ClInclude Include="network\client_liveness.h" />
     <ClInclude Include="network\grpc_client_call.h" />
     <ClInclude Include="network\grpc_unary_call.h" />
     <ClInclude Include="network\rpc_status.h" />
@@ -97,6 +107,7 @@
     <ClInclude Include="network\network_constants.h" />
     <ClInclude Include="network\network_utils.h" />
     <ClInclude Include="network\client_message_sender.h" />
+    <ClInclude Include="network\broadcast_fanout_stats.h" />
     <ClInclude Include="network\process_info.h" />
     <ClInclude Include="network\rpc_client.h" />
     <ClInclude Include="network\rpc_server.h" />
@@ -121,6 +132,7 @@
     <ClInclude Include="utils\proto\message_util.h" />
     <ClInclude Include="node\system\grpc_call_deadline.h" />
     <ClInclude Include="node\system\node\node_kafka_command_handler.h" />
+    <ClInclude Include="node\system\node\node_command_consume_stats.h" />
     <ClInclude Include="node\system\node\node_entry.h" />
     <ClInclude Include="node\system\node\thread_observability.h" />
     <ClInclude Include="network\traffic_statistics.h" />

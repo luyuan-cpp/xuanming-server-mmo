@@ -110,8 +110,9 @@ function New-TestProcess([int]$ProcessId, [string]$Name, [string]$ConfigPath, [i
 }
 
 $chatOuterDsn = [Environment]::GetEnvironmentVariable('CHAT_AUTHORITY_DSN', 'Process')
-$outerGateIdentity = [Environment]::GetEnvironmentVariable('MMORPG_INTERNAL_AUTH_SECRET', 'Process')
-[Environment]::SetEnvironmentVariable('MMORPG_INTERNAL_AUTH_SECRET', 'fixture-gate-identity-key-for-launcher-tests', 'Process')
+$outerGateIdentity = [Environment]::GetEnvironmentVariable('MMORPG_INTERNAL_AUTH_PUBLIC_KEYS', 'Process')
+# Go 服务只拿验签公钥列表(gate-online-identity.md §10.1);这里是形状合格的夹具值,不连任何服务。
+[Environment]::SetEnvironmentVariable('MMORPG_INTERNAL_AUTH_PUBLIC_KEYS', ('b' * 64), 'Process')
 try {
     # 仅桩启动器的输入，不连接数据库；真实启动必须提供外部运行账号DSN。
     [Environment]::SetEnvironmentVariable('CHAT_AUTHORITY_DSN','fixture@tcp(127.0.0.1:24000)/mmorpg_chat','Process')
@@ -471,7 +472,7 @@ try {
     }
 }
 finally {
-    [Environment]::SetEnvironmentVariable('MMORPG_INTERNAL_AUTH_SECRET', $outerGateIdentity, 'Process')
+    [Environment]::SetEnvironmentVariable('MMORPG_INTERNAL_AUTH_PUBLIC_KEYS', $outerGateIdentity, 'Process')
     [Environment]::SetEnvironmentVariable('CHAT_AUTHORITY_DSN',$chatOuterDsn,'Process')
     $resolvedRoot = [System.IO.Path]::GetFullPath($testRoot)
     $tempParent = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar

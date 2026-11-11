@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <mutex>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -7,10 +9,14 @@
 
 #include "muduo/base/Logging.h"
 #include "messaging/kafka/kafka_proto_decoder.h"
+#include "metrics/metrics_registry.h"
 #include "node/system/node/node.h"
+#include "node/system/node/node_command_consume_stats.h"
 #include "node/system/node/node_command_route.h"
 #include "node/system/node/node_kafka_command_filter.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
+#include "core/tracing/player_field.h"
+#include "thread_context/trace_context_tls.h"
 #include <node_config_manager.h>
 
 namespace node::kafka {
@@ -26,6 +32,25 @@ struct KafkaCommandHandlerOptions {
     // 调用方要在该模式下自己决定是否注册。
     uint32_t assignAllPartitions{0};
 };
+
+namespace detail {
+
+// 进程唯一的命令消费计数(node_command_consume_stats.h)。第一次注册命令消费时把它登记进 /metrics;
+// 注册只发生在启动期,派发路径不经过这里。
+inline CommandConsumeCounters& CommandConsumeCountersFor(const std::string& nodeType, const std::string& topicBase)
+{
+    static CommandConsumeStats stats;
+    static std::once_flag registered;
+    std::call_once(registered, [] {
+        if (!GlobalMetricsRegistry().Register("node_command_consume",
+                [](prometheus_text::Writer& writer) { stats.Collect(writer); })) {
+            LOG_ERROR << "[Metrics] collector node_command_consume is already registered";
+        }
+    });
+    return stats.CountersFor(nodeType, topicBase);
+}
+
+} // namespace detail
 
 // Derive KafkaCommandHandlerOptions from node type.
 // e.g. GateNodeService -> commandTopicBase="gate-cmd", nodeIdFieldNames={"target_gate_id","target_node_id"}.
@@ -84,25 +109,25 @@ bool RegisterKafkaCommandHandler(Node& node,
     using Dispatch = std::decay_t<DispatchFn>;
     Dispatch dispatch = std::forward<DispatchFn>(dispatchFn);
     const KafkaCommandTargetFilter filter = options.targetFilter;
+    // 读放大计数(node_command_consume_stats.h):派发的记 own,目标过滤丢掉的记 foreign。计数对象活到进程结束。
+    CommandConsumeCounters* const consumed = &detail::CommandConsumeCountersFor(
+        NodeUtils::NodeTypeToShortName(node.GetNodeType()), options.commandTopicBase);
 
-    auto callback = [&node, dispatch, filter](const std::string& t, const std::string& payload) {
+    auto callback = [&node, dispatch, filter, consumed](const std::string& t, const std::string& payload) {
         auto command = DecodeKafkaProtoPayload<CommandT>(t, payload);
         if (!command) {
             return;
         }
 
-        if (node.RequiresMaintenanceTargetIdentity()) {
-            uint64_t targetNode=0;std::string nodeField,targetInstance,instanceField;
-            if(!detail::TryReadUintField(*command,filter.nodeIdFieldNames,targetNode,nodeField) ||
-               !detail::TryReadStringField(*command,filter.instanceIdFieldNames,targetInstance,instanceField) ||
-               targetNode!=node.GetNodeId() || targetInstance!=node.GetNodeInfo().node_uuid()) return;
-            // P8之后共享manual分区必须精确目标boot；不把空兼容位视为本实例命令。
-        }
-        if (!detail::ValidateCommandTarget(t, *command, node.GetNodeId(),
-                node.GetNodeInfo().node_uuid(), filter)) {
+        const bool forThisNode = detail::IsCommandForThisNode(t, *command, node.GetNodeId(),
+            node.GetNodeInfo().node_uuid(), filter, node.RequiresMaintenanceTargetIdentity());
+        (forThisNode ? consumed->own : consumed->foreign).fetch_add(1, std::memory_order_relaxed);
+        if (!forThisNode) {
             return;
         }
-
+        // 派发期间的日志带上命令信封顶层的 player_id(docs/design/distributed-tracing.md §5.5)。trace 已由 KafkaConsumer
+        // 按消息头接续(§5.4);0 = 不针对单个玩家的命令(整台 gate 的排空迁移等),也显式装 0,不沿用执行线程上残留的玩家。
+        const tracing::ScopedPlayerId player(tracing::TopLevelPlayerId(*command));
         dispatch(t, *command);
     };
 

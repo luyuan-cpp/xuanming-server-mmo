@@ -187,7 +187,7 @@ message GuildRecord {
   option(OptionTableName) = "guild";
   option(OptionPrimaryKey) = "guild_id";
   option(OptionUniqueKey) = "name_norm";      // 生成 uk_guild;帮名全服唯一,判重只看规范化值
-  option(OptionIndex) = "zone_id;leader_id";  // idx_guild_0 = 合服 / 分区榜重建;idx_guild_1 = 按会长查
+  option(OptionIndex) = "zone_id;leader_id";  // idx_guild_0 = 按区查询(zone_id IN 合服组);idx_guild_1 = 按会长查
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -199,11 +199,12 @@ message GuildRecord {
   string announcement = 5;    // ≤ MaxAnnouncementBytes=600
   uint64 create_time_ms = 6;
   uint32 max_members = 7;     // 建帮写入;B5 起按 GuildLevel.max_members 改写
-  uint32 zone_id = 8;         // 帮会归属 zone;merge_zone 步骤 3 改写
+  uint32 zone_id = 8;         // 建帮时的归属区,此后不改写;合服只登记映射 zone_merged_into,按区比较、查询先解析到最终区
   int64 score = 9;            // 排行分权威副本;Redis ZSET 由 RebuildRanks 重建
   uint64 funds = 10;          // 帮会资金;B1 恒为 0,B5 起写入
   string name_norm = 11;      // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于 191 前缀)
-  // 追加区:从 12 起。
+  uint64 score_version = 12;  // 2026-11-11 追加:score 的版本,写分事务里 +1;Redis 榜按它条件写入(guild_ranking_architecture_zh.md §3)
+  // 追加区:从 13 起。
 }
 
 message GuildPlayerStateRecord {
@@ -318,7 +319,7 @@ schemamigrate 能做到和做不到的:
 硬规则:
 1. 只追加表和字段;删字段写 `reserved`,开发期如需删列就删库重建。
 2. `OptionIndex` 组只能追加到末尾,不得调序,不得改已有组的列;`OptionUniqueKey` 与主键定下后不得改列。确需修改时,开发期删库重建,上线后另建新表。
-3. `ensureSchema` 在 Up 和 Plan 两种模式下,只要 `report.Warnings` 中有以 `缺索引` 开头的行,就拒绝启动(第 3 部分 §7.4),把"缺普通索引"从 Warning 升级为阻断。
+3. `ensureSchema` 在 Up 和 Plan 两种模式下,只要 `report.MissingIndexes()` 非空(schemamigrate 报告项的结构化类别 `FindingMissingIndex`,不匹配告警文案),就拒绝启动(第 3 部分 §7.4),把"缺普通索引"从 Warning 升级为阻断。
 4. 枚举一旦有行写入,数值不得重排。
 5. 删库重建步骤:停 guild → root 执行 `DROP DATABASE mmorpg_guild;` → 重新执行 §3 的两条语句 → 启动 guild 自动建表。触发了规则 2 或 4 的批次,必须把这个步骤写进交付说明。
 6. 集成测试 `TestSchemaMigrateProducesExpectedGuildShape`(第 6 部分 §16)按 `INDEX_NAME` 逐个核对 `COLUMN_NAME / SEQ_IN_INDEX / SUB_PART`,防止同名换列的漂移混过去。
@@ -529,7 +530,7 @@ func requestBudgetInterceptor(budget time.Duration) grpc.UnaryServerInterceptor 
   - `ShouldAutoMigrate` 为真:`report, err := runWithLockRetry(ctx, up, …)`,然后 `logReport("schemamigrate.Up", report)`。`err != nil` 时返回 `[guild] 启动期建表失败(库 mmorpg_guild),拒绝启动: %w`;`len(Manual)>0` 时返回"发现 N 项需人工处理"。
   - 否则:`runWithLockRetry(ctx, plan, …)`。`err != nil` 或 `!report.Clean()` 时返回错误,附上 `migrateRemedyCommand`。
   - **两种模式都要做**:`missing := missingIndexWarnings(report)`,非空时返回 `[guild] 库 mmorpg_guild 缺 %d 个 proto 声明的普通索引,拒绝启动(schemamigrate 不自动补建;开发期按 guild-phase2 §6.4 删库重建): %s`。
-- `missingIndexWarnings(r schemamigrate.Report) []string`:返回 `strings.HasPrefix(w, "缺索引")` 的行。前缀取自 `go/schemamigrate/plan.go:346` 的文案;`TestMissingIndexWarningPrefixMatchesSchemamigrate` 负责守住(第 6 部分 §16)。
+- `missingIndexWarnings(r schemamigrate.Report) []string`:返回 `r.MissingIndexes()` 各项的 `Message`(英文告警原文)。判断只看结构化类别 `FindingMissingIndex`,不匹配文案;2026-11-11 之前按 `缺索引` 前缀匹配,告警改英文后会静默失效,所以先改成按类别判断再译文案。
 - `runMigration(c config.Config) int`:`sql.Open("mysql", c.MySQL.DataSource)` → 10s 超时 `PingContext`。失败返回 `schemamigrate.ExitCode(schemamigrate.Report{}, err)`(即 1)。成功则执行 `schemamigrate.Up(context.Background(), db, schemaOptions())` → `printReport` → 返回 `ExitCode`。`-migrate` 模式**不做**锁忙重试(退出码 3 交给 Job 的 backoff),但缺索引时同样返回 4 并打印 MANUAL 行。只打印库名,不打印 DSN。
   - stdout / stderr 固定文案:开头 `guild schema migration: database=mmorpg_guild`;连接失败 `schema migration FAILED (exit 1): <err>`;Up 出错 `schema migration FAILED (exit <code>): <err>`;需人工 `schema migration needs manual action (exit 4): <n> item(s) listed above`;成功 `schema migration OK: mmorpg_guild synced from proto/guild/guild_db.proto (<n> statement(s) executed)`。
 - `reportLines` / `printReport(w io.Writer, r)` / `logReport(stage, r)`:逐字照搬 trade,前缀改为 `[guild]`。
@@ -757,7 +758,7 @@ guild 目前没有 ConfigMap 和 manifest。部署 guild 时一次补齐:
 | DDL 执行中进程被杀 | 台账留下 dirty,下次 Up/Plan 返回 `ErrDirty`,拒绝启动 | 未上线:删库重建(§6.4);上线后人工核对 `mmorpg_guild.schema_migrations` |
 | 本地多开首次同时建表 | 等锁超过 10s 的一方拿到 `ErrLockBusy`,进程内间隔 2s 重试,最多 3 次;仍忙则拒绝启动 | 再启动一次(这时表已建好,Up 为 0 条语句) |
 | 类型漂移、缺唯一键 | Report.Manual 非空,拒绝启动 | 开发期删库重建;上线后单独设计 |
-| 后续批次加了 OptionIndex 组,库是旧的 | Warnings 出现"缺索引",ensureSchema 拒绝启动 | 开发期删库重建(§6.4 规则 5) |
+| 后续批次加了 OptionIndex 组,库是旧的 | 报告里出现缺普通索引项(`FindingMissingIndex`,文案以 `missing index` 开头),ensureSchema 拒绝启动 | 开发期删库重建(§6.4 规则 5) |
 | 请求内 I/O 超预算 | 预算 ctx 到期,logic 回 `kGuildIdGenUnavailable` 或内部错误,整个请求 ≤ 4000ms | 查 data_service / MySQL 延迟 |
 | 切库后 Redis 旧缓存 | `guild:v2:{id}` 里是旧库的帮会,最长保留 30 分钟 | §19 第 3 步清空 DB 2;`RebuildRanks` 清掉旧榜 |
 | 新 yaml 配旧 guild 二进制 | 旧二进制执行 `MigrateLegacyRankScores`,在新库找不到门表,panic;旧 Validate 不存在,不拦 | yaml 与二进制同一提交部署 |
@@ -796,12 +797,12 @@ B1 不涉及 C++ gtest 和 Unity EditMode:C++ 只登记生成物,没有 C++ 逻�
 - `TestEnsureSchemaStrategy`:照 `trade_test.go:308-345` 的 fakeSchemaRunner 和 7 个用例改名复制,再加 5 个用例(`lockBusyRetryDelay` 在用例里置 0,`t.Cleanup` 还原):
   1. Up 前两次返回 `ErrLockBusy`、第三次成功 → nil,调用 3 次。
   2. Up 三次都 `ErrLockBusy` → 返回错误,`errors.Is(err, schemamigrate.ErrLockBusy)`,调用 3 次。
-  3. Up 成功,但 `Warnings` 含 `缺索引(不会自动建):guild 上没有 proto 声明的索引 idx_guild_1` → 返回错误,文案含 `缺 1 个`。
-  4. AutoMigrate=false,Plan 返回 Clean,但 Warnings 含同样的缺索引行 → 返回错误。
-  5. Warnings 只有 `多余列(不会删除):…` → nil。
+  3. Up 成功,但报告含一条缺索引项(`Findings` 里 `FindingMissingIndex`、表 `guild`、索引 `idx_guild_1`,`Warnings` 里是同一条英文原文)→ 返回错误,文案含 `缺 1 个`。
+  4. AutoMigrate=false,Plan 返回 Clean,但报告含同样的缺索引项 → 返回错误。
+  5. 报告只有多余列项(`FindingExtraColumn`)→ nil。
 - `TestSchemaOptionsTargetsGuildDatabase`:`Database=="mmorpg_guild"`;`len(Tables)==len(data.Tables())==4`。
 - `TestReportLinesFormatsAllSections`。
-- `TestMissingIndexWarningDetectedOnRealDB`(需 `GUILD_TEST_MYSQL_DSN`,没设就 Skip):库名先过 §16.2 的白名单 → DROP 全部表后 Up → `ALTER TABLE guild DROP INDEX idx_guild_0` → `schemamigrate.Plan` → 断言 `missingIndexWarnings(report)` 恰为 1 行。它守住 `缺索引` 前缀与 schemamigrate 真实文案一致。
+- 真库守卫不放在 guild(这条用例从未落地;2026-11-11 改按结构化类别判断后也不再需要守文案前缀):「真库删一条普通索引 → Plan 恰好报出一条 `FindingMissingIndex`,补回后不再报」由 `go/schemamigrate/integration_test.go` 第 5b 步守住(`SCHEMAMIGRATE_TEST_MYSQL_DSN`,没设就 Skip)。
 
 **`internal/data/guild_repo_zone_test.go`**
 - `isDuplicateKeyOn` 表驱动(第 27-33 行):应命中 `Duplicate entry '青云门' for key 'guild.uk_guild'`、`… for key 'uk_guild'`、以及 wrapped 的形式;不应命中 `guild_member.uk_guild_member`、`guild.PRIMARY`、`Duplicate entry 'a.uk_guild'' for key 'guild_member.uk_guild_member'`、1452 错误、非 MySQL 错误。
@@ -979,7 +980,7 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
    - `rg -n "Timeout: 10000|Timeout: 3000" go/guild/etc` → 0 条。
    - `rg -n "(CreateTimeMs|JoinTimeMs|LastActiveMs) +int64" go/guild/internal/data` → 0 条。
 9. **本地端到端**:按 §19 切换后执行 `pwsh tools/scripts/start_game.ps1`。
-   - guild 日志含 `schemamigrate up 完成: database=mmorpg_guild`。重启 guild 一次,日志为 `statements=0`。
+   - guild 日志含 `schemamigrate up finished: database=mmorpg_guild`。重启 guild 一次,日志为 `statements=0`。
    - 用 `go_services.ps1` 同时起 zone 1 / zone 2 的 guild:都能启动;如果出现 `迁移锁忙`,随后要能成功。
    - 跑 §16.4 的 robot guild-smoke,期望通过。
 
@@ -1011,7 +1012,7 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
 >    - `guild_friend_tables.sql` 删除帮会表与遗留迁移过程;`guild_schema_migration` 门表、`MigrateLegacyRankScores`、friend 的 `friend_capacity_backfill_v1` 门一并删除。friend 缺容量行时按权威边重算。
 >    - 帮名唯一键改为 `uk_guild(name_norm)`,规范化在 Go 侧完成,不依赖排序规则;tools/merge_zone 与 data_consistency_check 经 `-guild-schema`(默认 `mmorpg_guild`)限定库名。
 >    - 开发期改表纪律(只追加;索引组只追加到末尾;缺普通索引即拒启)见 `guild-phase2.md` §6.4。
->    - §9 清单对 `mmorpg_guild` 的结论:带 zone 的行只有 `guild.zone_id`(merge_zone 步骤 3 已覆盖);biz_tag `guild` 已在 BootstrapTags,`guild_asset_op` 随 B5 加入;TiDB BR 按库恢复清单加入 `mmorpg_guild`。
+>    - §9 清单对 `mmorpg_guild` 的结论:带 zone 的行只有 `guild.zone_id`(合服不改写它:merge_zone 只登记映射 `zone_merged_into`,读的时候解析到最终区,见 `player-data-tidb-scaling-plan.md` §7.1);biz_tag `guild` 已在 BootstrapTags,`guild_asset_op` 随 B5 加入;TiDB BR 按库恢复清单加入 `mmorpg_guild`。
 >    - TiDB Phase 1 是逻辑库对逻辑库迁移,库名不改。data_service 与 go/db 本轮不改迁移路径。
 
 - **"被推翻 / 修订的旧条目"** 追加:"本条 §8 原文'friend、guild……留在 `mmorpg`,`guild_schema_migration` 门表照旧':**修订**(2026-09-16,guild 迁 `mmorpg_guild`)。"

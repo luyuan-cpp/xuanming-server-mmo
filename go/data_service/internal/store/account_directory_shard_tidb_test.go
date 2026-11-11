@@ -506,8 +506,10 @@ func TestTiDBShardedRouteStore(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, merged)
 	require.True(t, tableExistsForTest(t, f.Raw[0], ZoneMergedIntoTableName))
+	require.True(t, tableExistsForTest(t, f.Raw[0], ZoneMergeHistoryTableName))
 	for _, db := range f.Raw[1:] {
 		require.False(t, tableExistsForTest(t, db, ZoneMergedIntoTableName))
+		require.False(t, tableExistsForTest(t, db, ZoneMergeHistoryTableName))
 	}
 }
 
@@ -596,6 +598,7 @@ func TestTiDBMigrateSchemaBuildsEveryShardAndLedger(t *testing.T) {
 			require.Truef(t, hasTable(schema, table), "%s 缺 %s", schema, table)
 		}
 		require.Equal(t, slot == 0, hasTable(schema, ZoneMergedIntoTableName), schema)
+		require.Equal(t, slot == 0, hasTable(schema, ZoneMergeHistoryTableName), schema)
 		require.False(t, hasTable(schema, PlayerSnapshotTableName), schema)
 		var seeded int
 		require.NoError(t, admin.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM `%s`.route_meta WHERE id=1", schema)).Scan(&seeded))

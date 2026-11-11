@@ -1,10 +1,13 @@
 package pkg
 
-// gate 应用层心跳的客户端一侧(C++ 仓 docs/design/gate-client-heartbeat.md §3、§9)。
+// 应用层心跳的客户端一侧(C++ 仓 docs/design/gate-client-heartbeat.md §3、§9;战斗直连见同文档 §14)。
 //
-// 契约:验签成功、gate 在回包里通告了非 0 的 heartbeat_interval_ms 之后,立即发第一条 ClientHeartbeatRequest,
-// 之后每个间隔一条,不看别的流量。gate 从验签成功回包起按读空闲 heartbeat_timeout_ms 判死并强关,随后照常走断线保留。
-// 没有通告(旧 gate、Java 版尚未实现)就一条都不发:旧 gate 不认识心跳类型,发了会被当非法帧强关。
+// 契约:验签成功、服务端在回包里通告了非 0 的 heartbeat_interval_ms 之后,立即发第一条 ClientHeartbeatRequest,
+// 之后每个间隔一条,不看别的流量。服务端从验签成功回包起按读空闲 heartbeat_timeout_ms 判死并强关。
+// 没有通告(旧服务端、Java 版尚未实现)就一条都不发:不认识心跳类型的服务端会把它当非法帧强关。
+//
+// 两种连接用同一套:大厅连接由 VerifyGateToken 起(gate 关掉之后走断线保留);战斗直连是另一个 GameClient,
+// 由 VerifyBattleToken 起(battle 关掉之后照常解绑直连,参战者的回合按超时自动出招)。
 //
 // 只往「验签成功的那条连接」发:跟随 gate 重定向时 SwapConn 先换上一条还没验签的新连接(redirect.go),
 // 新连接验签之前发心跳会被 gate 当成验签前的心跳断开。重定向到不通告心跳的 gate 时停发。
@@ -23,6 +26,7 @@ import (
 
 	"github.com/luyuancpp/muduoclient/muduo"
 
+	"proto/battle"
 	"proto/common/base"
 )
 
@@ -45,8 +49,18 @@ type heartbeat struct {
 
 // onGateVerified 在 VerifyGateToken 于连接 c 上验签成功后调用(调用 VerifyGateToken 的 goroutine)。
 func (gc *GameClient) onGateVerified(c *muduo.Client, resp *base.ClientTokenVerifyResponse) {
-	interval := time.Duration(resp.GetHeartbeatIntervalMs()) * time.Millisecond
-	timeout := time.Duration(resp.GetHeartbeatTimeoutMs()) * time.Millisecond
+	gc.onVerified(c, resp.GetHeartbeatIntervalMs(), resp.GetHeartbeatTimeoutMs())
+}
+
+// onBattleVerified 在 VerifyBattleToken 于战斗直连 c 上握手成功后调用。battle 的通告与 gate 同义同值。
+func (gc *GameClient) onBattleVerified(c *muduo.Client, resp *battle.BattleTokenVerifyResponse) {
+	gc.onVerified(c, resp.GetHeartbeatIntervalMs(), resp.GetHeartbeatTimeoutMs())
+}
+
+// onVerified 按服务端在验签成功回包里通告的参数起心跳。intervalMs 为 0 = 这台服务端不支持心跳,不往这条连接发。
+func (gc *GameClient) onVerified(c *muduo.Client, intervalMs, timeoutMs uint32) {
+	interval := time.Duration(intervalMs) * time.Millisecond
+	timeout := time.Duration(timeoutMs) * time.Millisecond
 	hb := &gc.hb
 	hb.mu.Lock()
 	if hb.closed {

@@ -1129,7 +1129,7 @@ const file_proto_mail_mail_table_proto_rawDesc = "" +
 	"\bnext_seq\x18\x03 \x01(\x04R\anextSeq\x12\x1d\n" +
 	"\n" +
 	"updated_ms\x18\x04 \x01(\x04R\tupdatedMs\x12\x14\n" +
-	"\x05epoch\x18\x05 \x01(\x04R\x05epoch:,\x8a\x92\xf4\x01\x12mail_player_op_seq\x92\x92\xf4\x01\x10player_id,stream\"\x97\a\n" +
+	"\x05epoch\x18\x05 \x01(\x04R\x05epoch:,\x8a\x92\xf4\x01\x12mail_player_op_seq\x92\x92\xf4\x01\x10player_id,stream\"\xa7\a\n" +
 	"\x11MailAssetOpRecord\x12\x13\n" +
 	"\x05op_id\x18\x01 \x01(\x04R\x04opId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x16\n" +
@@ -1160,7 +1160,7 @@ const file_proto_mail_mail_table_proto_rawDesc = "" +
 	"lastSendMs\x12\x1f\n" +
 	"\vresolved_by\x18\x16 \x01(\tR\n" +
 	"resolvedBy\x12%\n" +
-	"\x0eresolve_reason\x18\x17 \x01(\tR\rresolveReason:\xc4\x01\x8a\x92\xf4\x01\rmail_asset_op\x92\x92\xf4\x01\x05op_idڒ\xf4\x01nstatus,next_attempt_ms;player_id,stream,stream_epoch,status,seq;player_id,mail_id,claim_version;mail_id,status\xe2\x92\xf4\x01!player_id,stream,stream_epoch,seq\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xbb\x01\n" +
+	"\x0eresolve_reason\x18\x17 \x01(\tR\rresolveReason:\xd4\x01\x8a\x92\xf4\x01\rmail_asset_op\x92\x92\xf4\x01\x05op_idڒ\xf4\x01~status,next_attempt_ms,op_id,player_id;player_id,stream,stream_epoch,status,seq;player_id,mail_id,claim_version;mail_id,status\xe2\x92\xf4\x01!player_id,stream,stream_epoch,seq\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xbb\x01\n" +
 	"\x11MailAssetOpStatus\x12\x1d\n" +
 	"\x19MAIL_ASSET_OP_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15MAIL_ASSET_OP_PENDING\x10\x01\x12\x19\n" +

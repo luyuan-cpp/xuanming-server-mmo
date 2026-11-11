@@ -43,6 +43,8 @@
 #include "services/scene/player/comp/player_persist_carry_comp.h"
 #include "services/scene/player/system/asset_op_ledger.h"
 #include "services/scene/player/system/client_request_ledger.h"
+#include "modules/bag/item_hold.h"
+#include "services/scene/player/system/mail_outbox_rules.h"
 #include "services/scene/player/system/player_attribute.h"
 #include "services/scene/player/system/player_data_loader.h"
 #include "services/scene/player/system/player_inbox_rules.h"
@@ -579,12 +581,40 @@ protected:
         clientRequest->set_enhance_success(true);
         clientRequest->set_enhance_level(3);
 
+        // 物品数量预留(battle-item-reservation.md):一份战斗预留、一行物品,覆盖三个可携带类型
+        // (PlayerItemHoldComp / ItemHold / ItemHoldLine)。加载原样挂上、存盘原样拷回,不做整理,每层的未知字段都要原样留下。
+        auto &itemHolds = *db.mutable_item_holds();
+        auto *itemHold = itemHolds.add_holds();
+        itemHold->set_hold_id((uint64_t{1} << 60) + 862);
+        itemHold->set_kind(static_cast<uint32_t>(item_hold::ItemHoldKind::kBattle));
+        itemHold->set_created_at_ms(1900000000000);
+        itemHold->set_review_after_ms(1900000120000);
+        auto *itemHoldLine = itemHold->add_lines();
+        itemHoldLine->set_config_id(3);
+        itemHoldLine->set_count(1);
+
+        // 待寄邮件(battle-overflow-mail.md):一封战斗改投、一行物品,覆盖三个可携带类型
+        // (PlayerMailOutboxComp / MailOutboxEntry / MailOutboxItem)。加载原样挂上、存盘原样拷回,每层的未知字段都要原样留下。
+        auto &mailOutbox = *db.mutable_mail_outbox();
+        auto *mailEntry = mailOutbox.add_entries();
+        mailEntry->set_request_id((uint64_t{1} << 60) + 863);
+        mailEntry->set_source(static_cast<uint32_t>(mail_outbox_rules::MailOutboxSource::kBattleOverflow));
+        mailEntry->set_source_id((uint64_t{1} << 60) + 862);
+        mailEntry->set_title("battle reward");
+        mailEntry->set_body("bags were full");
+        mailEntry->set_created_at_ms(1900000000000);
+        auto *mailItem = mailEntry->add_items();
+        mailItem->set_config_id(3);
+        mailItem->set_count(1);
+
         // 夹具自洽:校验不过时加载会挂失效标记、打 ERROR,往返仍能过,但测的就是一个被 fail-closed 的玩家了。
         EXPECT_TRUE(ValidateAssetOpLedger(db.asset_op_ledger()).empty()) << ValidateAssetOpLedger(db.asset_op_ledger());
         EXPECT_TRUE(player_inbox_rules::ValidateLedger(db.inbox_ledger()).empty())
             << player_inbox_rules::ValidateLedger(db.inbox_ledger());
         EXPECT_TRUE(client_request_ledger::Validate(db.client_request_ledger()).empty())
             << client_request_ledger::Validate(db.client_request_ledger());
+        EXPECT_TRUE(item_hold::Validate(db.item_holds()).empty()) << item_hold::Validate(db.item_holds());
+        EXPECT_TRUE(mail_outbox_rules::Validate(db.mail_outbox()).empty()) << mail_outbox_rules::Validate(db.mail_outbox());
         return all;
     }
 

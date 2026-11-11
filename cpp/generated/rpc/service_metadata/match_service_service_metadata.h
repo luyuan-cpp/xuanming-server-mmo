@@ -58,3 +58,19 @@ constexpr uint32_t MatchServiceListBattleReportsIndex = 12;
 constexpr uint32_t MatchServiceGetBattleReportMessageId = 380;
 constexpr uint32_t MatchServiceGetBattleReportIndex = 13;
 #define MatchServiceGetBattleReportMethod  ::MatchService_Stub::descriptor()->method(13)
+
+constexpr uint32_t MatchServiceListBattleScriptsMessageId = 389;
+constexpr uint32_t MatchServiceListBattleScriptsIndex = 14;
+#define MatchServiceListBattleScriptsMethod  ::MatchService_Stub::descriptor()->method(14)
+
+constexpr uint32_t MatchServiceSubmitBattleScriptMessageId = 390;
+constexpr uint32_t MatchServiceSubmitBattleScriptIndex = 15;
+#define MatchServiceSubmitBattleScriptMethod  ::MatchService_Stub::descriptor()->method(15)
+
+constexpr uint32_t MatchServiceDeleteBattleScriptMessageId = 391;
+constexpr uint32_t MatchServiceDeleteBattleScriptIndex = 16;
+#define MatchServiceDeleteBattleScriptMethod  ::MatchService_Stub::descriptor()->method(16)
+
+constexpr uint32_t MatchServiceSetBattleScriptLoadoutMessageId = 392;
+constexpr uint32_t MatchServiceSetBattleScriptLoadoutIndex = 17;
+#define MatchServiceSetBattleScriptLoadoutMethod  ::MatchService_Stub::descriptor()->method(17)

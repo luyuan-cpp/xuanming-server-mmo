@@ -975,7 +975,7 @@ pwsh -NoProfile -File tools/scripts/tests/run_ownership_fault_fullstack.ps1 `
   - `cross_zone_test/save_seq_test.cpp` 新增 NaN 用例。原用例把改 `player_id` 换成改等级:`player_id` 不进任何行,换尺子之后改它测不出不收敛。
 - **压测汇总**:`stress_summarize.ps1` 汇总 `[SaveTiming]`。原来 `[DirtySave]` 只扫 `run\logs\cpp_nodes`,节点日志实际在 `bin\logs\cpp_nodes`,一直读不到;现在两处都扫,旧路径的文件名前加 `run/`。
 - **注释**:`dirty_save_stats.h`、`last_persisted_snapshot_comp.h`、`player_lifecycle.h`。
-- **工程文件**:`scene.vcxproj`、`.filters`、`CMakeLists.txt` 加 `player_save_metrics.cpp`;`bag_test.vcxproj`、`.filters` 加两个测试文件。
+- **工程文件**:`scene.vcxproj`、`.filters` 加 `player_save_metrics.cpp`;`bag_test.vcxproj`、`.filters` 加两个测试文件。`CMakeLists.txt` 那一行是手加的,其实不用加:它由 `build_linux.sh` 按 vcxproj 生成,手加的位置和生成结果一致。
 - **Java 版**:存盘比较用 record 的 `equals`,double 分量按 `Double.compare` 比,NaN 判相等,退出收敛问题不适用。分段耗时指标登记在 Java 仓 `PARITY.md` 待做。
 
 ### 和「玩家数据存储策略优化」会话的分工
@@ -991,7 +991,7 @@ C++ 一律串行 `/m:1`;测试工程只链接预编好的库,先编库再跑测�
    - `bag_test`:`SaveTimingStats.*`、`SaveTimingLine.*`、`PlayerSaveMetrics.*`、`PlayerSaveCostTest.*`、`PlayerStoreClientTest.*`;
    - `cross_zone_test`:`SaveSeq.*`、`ExitPersistPayload.*`。
 3. 基准取数:在 PowerShell 里设 `$env:PLAYER_SAVE_COST_ITERATIONS = '2000'`,再跑 `build\cpp\tests\bag_test.exe --gtest_filter=PlayerSaveCostTest.*`,把输出里全部 `[SaveCost]` 行原样贴进回执。这是 Debug 构建,只看各项之间的比例。
-4. Linux:按现有 `build_linux.sh` 编 scene,确认 `player_save_metrics.cpp` 能编过。另外,`core/system/scene_task_scope.cpp` 是别的会话加的,只进了 `scene.vcxproj`,`CMakeLists.txt` 里没有;Linux 链接报 `SceneTaskScope` 找不到就是这个原因。
+4. Linux:按现有 `build_linux.sh` 编 scene,确认 `player_save_metrics.cpp` 能编过。(11-10 更正:原来这里说 `scene_task_scope.cpp` 没进 `CMakeLists.txt` 会导致 Linux 链接失败,是错的。`build_linux.sh` 按 `.vcxproj` 重新生成各目录的 `CMakeLists.txt`,文件进了 vcxproj 就会编到。)
 5. 脚本语法:在 PowerShell 里执行 `$errs = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path tools/scripts/stress_summarize.ps1).Path, [ref]$null, [ref]$errs); $errs.Count`,输出 0。
 6. 本机调试栈冒烟,要有玩家在线 1 分钟以上:
    - scene 日志里每 30 秒有一行 `[SaveTiming]`;
@@ -1011,3 +1011,27 @@ C++ 一律串行 `/m:1`;测试工程只链接预编好的库,先编库再跑测�
 - compare 段的次数现在包含推迟判断,多于存盘次数,`save_timing_stats.h` 已写明。
 
 Codex 在上面第 5 步之后加跑:`pwsh -File tools/scripts/test_stress_summarize.ps1`,通过标准是退出码 0、没有 FAIL 行。它会临时挪走 `run\logs\cpp_nodes` 下的 scene 日志,跑完放回。
+
+## 判脏遗留项定案(2026-11-11,Claude)
+
+改了什么见 `docs/PROGRESS.md` 2026-11-11 同名条目,定案理由见总体方案 §4.6。只写了源码和文档,**未编译、未运行**。
+
+### Codex 验证
+
+协议改了(`PlayerAllData` 删 4、5、6),先生成再编译。C++ 一律串行 `/m:1`,测试工程只链接预编好的库,先编库再跑测试。
+
+1. 仓库根目录生成协议:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。通过标准:
+   - 退出码 0;
+   - `proto/persist_schema_gen.txt` 末尾多出 `retired=PlayerAllData#4`、`#5`(`mail_data` 原来不在台账里,不一定有 `#6`),原来的 `1=PlayerAllData#4 …`、`#5 …` 两行消失;
+   - `git diff -- proto/persist_schema_gen.txt` 只有这些变化。
+2. `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`。通过标准:scene 库、scene 节点、`bag_test`、`cross_zone_test` 没有 error。报「`bag_data` 不是成员」之类的错误,说明还有漏改的读者,把文件名和行号贴进回执。
+3. `pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter bag_test -LogDir <日志目录>/save-legacy-1111`,再把 `-Filter` 换成 `cross_zone_test` 跑一遍。单独报这些用例:
+   - `bag_test`:`PlayerFeaturePersistenceTest.*`(含改名的 `EmptyDatabaseBagAndMissionsLoadEmpty`)、`PlayerEquipAttributeTest.*`、`PersistRoundTripTest.*`、`PlayerSaveCostTest.*`;
+   - `cross_zone_test`:全量。
+4. Go:生成器会更新 `go/proto` 里的 `PlayerAllData` 绑定。Go 代码里没有读这三个字段的地方(只有注释和测试里的键名提到 `PlayerAllData`),按 Codex 平时的各模块编译口径跑一遍 `go/data_service`、`go/db`,`GOTOOLCHAIN=local`、`GOPROXY=off`,通过标准是退出码 0。
+5. 本机调试栈冒烟,要有玩家在线 1 分钟以上:
+   - scene 日志里有 `Periodic player save enabled, interval=60s (600 slots by playerId, one slot every 0.1s)`;
+   - 每 60 秒一条 `Periodic save cycle attempted N saves`;
+   - `[SaveTiming]` 的 `periodic_tick_n` 每 30 秒约 300。
+
+失败时保留:生成器的完整输出、msbuild 第一个 error、gtest 失败用例的断言原文。

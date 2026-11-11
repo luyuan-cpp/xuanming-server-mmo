@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "entt/src/entt/entity/registry.hpp"
 #include "gate_codec.h"
 #include "handler/gate_push_delivery.h"
 #include "muduo/net/Buffer.h"
@@ -30,6 +31,7 @@
 #include "muduo/net/TcpServer.h"
 #include "network/broadcast_target_codec.h"
 #include "proto/common/base/message.pb.h"
+#include "proto/common/base/node.pb.h"
 #include "proto/contracts/kafka/gate_event.pb.h"
 #include "proto/gate/gate_service.pb.h"
 #include "session/manager/session_manager.h"
@@ -487,6 +489,43 @@ TEST_F(GatePushDelivery, SceneBroadcastReachesOnlyBoundSessionsOfThatScene)
 	ExpectReceived(otherScene, "");
 	ExpectReceived(unbound, "");
 	ExpectCounted(Path::kKafka, {.delivered = 1});
+}
+
+// 计划排空窗口里同一个 scene_id 在新旧两台 scene 各有一份实例(docs/design/scene-node-planned-drain.md §4.3)。
+// RPC 路径认出发送方时,只推会话当前指向发送方的那些;认不出(entt::null,Kafka 路径同样)时只按 scene_id。
+// 变异:去掉过滤里的节点比对 → 旧实例的广播串给已搬到新实例的玩家,本用例红。
+TEST_F(GatePushDelivery, SceneBroadcastFromOneInstanceSkipsSessionsOnTheOtherInstanceOfTheSameScene)
+{
+	entt::registry nodes;
+	const entt::entity oldInstanceNode = nodes.create();
+	const entt::entity newInstanceNode = nodes.create();
+	const auto &stillOnOld = AddSession(kSession, kPlayerA, kScene);
+	const auto &movedToNew = AddSession(kOtherSession, kPlayerB, kScene);
+	tlsSessionManager.sessions()[kSession].SetNodeEntity(common::base::SceneNodeService, oldInstanceNode);
+	tlsSessionManager.sessions()[kOtherSession].SetNodeEntity(common::base::SceneNodeService, newInstanceNode);
+	const MessageContent fromOld = Content("from-old-instance");
+
+	gate_push::DeliverToScene(Path::kRpc, kScene, &fromOld, oldInstanceNode);
+
+	ExpectReceived(stillOnOld, Bytes(fromOld));
+	ExpectReceived(movedToNew, "");
+	ExpectCounted(Path::kRpc, {.delivered = 1});
+}
+
+TEST_F(GatePushDelivery, SceneBroadcastWithUnknownSenderStillMatchesBySceneOnly)
+{
+	entt::registry nodes;
+	const auto &first = AddSession(kSession, kPlayerA, kScene);
+	const auto &second = AddSession(kOtherSession, kPlayerB, kScene);
+	tlsSessionManager.sessions()[kSession].SetNodeEntity(common::base::SceneNodeService, nodes.create());
+	tlsSessionManager.sessions()[kOtherSession].SetNodeEntity(common::base::SceneNodeService, nodes.create());
+	const MessageContent content = Content("unknown-sender");
+
+	gate_push::DeliverToScene(Path::kRpc, kScene, &content);
+
+	ExpectReceived(first, Bytes(content));
+	ExpectReceived(second, Bytes(content));
+	ExpectCounted(Path::kRpc, {.delivered = 2});
 }
 
 // 没进场景的会话 sceneId 就是 0,按 0 匹配会把消息推给所有还没进场景的连接。

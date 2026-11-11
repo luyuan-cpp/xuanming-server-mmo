@@ -11,6 +11,7 @@ import (
 	"shared/idsegment"
 	"shared/playerredis"
 	"shared/redisauth"
+	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -207,6 +208,11 @@ type GlobalMatchConf struct {
 	// 同样关闭入口并打 ERROR,不拒启。不用库地址作 target:库名固定 mmorpg_match,各环境的 Host 常是同一个 Service DNS,拦不住连错环境。
 	// 不是提交点规则,不进策略指纹。
 	ManualResolutionEnvironment string `json:",optional"`
+	// BattlePodNamespace:battle Pod 所在的 K8s 命名空间(2026-11-11,docs/design/battle-instance-loss-early-abort.md §4.2 E3)。
+	// 非空时,判「原执行进程已不在」多一种证据:这个命名空间里已没有任何 Pod 持有原执行实例的 IP。ServiceAccount 要有该命名空间的
+	// pods list 权限(deploy/k8s/manifests/go-svc/match-battle-pod-reader-rbac.yaml,部署脚本在 battle 跑在 K8s 上时渲染)。
+	// 空 = 不查 Pod(本机开发、非 K8s 部署),只认另两种证据。不是提交点规则,不进策略指纹。
+	BattlePodNamespace string `json:",optional"`
 }
 
 // ManualResolutionCaller 是 MatchInternal.ListStrandedFormations / ResolveStrandedFormation 唯一接受的 serviceauth 调用方(2026-11-05)。
@@ -341,6 +347,12 @@ type SpectateConf struct {
 
 	// OpsCallerSecret:运营工具调用 MatchInternal.SetSpectateFeatured 的 serviceauth 密钥。空 = 运营入口关闭,一律 PermissionDenied。
 	OpsCallerSecret string `json:",optional"`
+
+	// TicketSecretEnv / OpsCallerSecretEnv 是上面两把密钥所在的环境变量名(K8s 上分别经 Secret spectate-token、match-ops-caller 注入,
+	// docs/design/workload-secrets-via-k8s-secret.md);ConfigMap 里对应字段写空串。不写 = 照用字面量(本机)。
+	// 由 Config.ResolveSpectateSecrets 在加载配置后填好,变量缺失或为空即拒启;加载期的 Validate 对「指名了变量、还没填」的密钥先不判长度。
+	TicketSecretEnv    string `json:",optional"`
+	OpsCallerSecretEnv string `json:",optional"`
 }
 
 // RelayUsable 判定本实例能否把观众放进 L1 / L2:开关打开且有凭证密钥。dev / test 允许开关开着而密钥为空
@@ -372,14 +384,31 @@ func (c *Config) validateSpectate() error {
 	if spectate.BroadcastAutoGateThreshold < 0 {
 		return fmt.Errorf("Spectate.BroadcastAutoGateThreshold 不能为负数,得到 %d(0 = 只认运营标记)", spectate.BroadcastAutoGateThreshold)
 	}
-	if spectate.RelayEnabled && c.Mode != "dev" && c.Mode != "test" &&
+	// 指名了环境变量而还没填的密钥(conf.MustLoad 调 Validate 时),长度留到 ResolveSpectateSecrets 填完再判。
+	ticketPending := spectate.TicketSecretEnv != "" && spectate.TicketSecret == ""
+	opsPending := spectate.OpsCallerSecretEnv != "" && spectate.OpsCallerSecret == ""
+	if !ticketPending && spectate.RelayEnabled && c.Mode != "dev" && c.Mode != "test" &&
 		len(strings.TrimSpace(spectate.TicketSecret)) < spectateSecretMinBytes {
 		return fmt.Errorf("Spectate.RelayEnabled=true 时 Spectate.TicketSecret 去除首尾空白后必须至少 %d 字节", spectateSecretMinBytes)
 	}
-	if spectate.OpsEntryEnabled() && len(strings.TrimSpace(spectate.OpsCallerSecret)) < spectateSecretMinBytes {
+	if !opsPending && spectate.OpsEntryEnabled() && len(strings.TrimSpace(spectate.OpsCallerSecret)) < spectateSecretMinBytes {
 		return fmt.Errorf("Spectate.OpsCallerSecret 去除首尾空白后必须至少 %d 字节(留空 = 关闭运营入口)", spectateSecretMinBytes)
 	}
 	return nil
+}
+
+// ResolveSpectateSecrets 按 Spectate.TicketSecretEnv / OpsCallerSecretEnv 填两把观战密钥(规则见 secretenv.Fill),填完按 validateSpectate
+// 再判一次长度。迁移入口不签凭证,只在常驻启动时调用(match_service.go);迁移 Job 不注入这两个变量。
+func (c *Config) ResolveSpectateSecrets(lookup func(string) (string, bool)) error {
+	if err := secretenv.Fill("Spectate.TicketSecretEnv", c.Spectate.TicketSecretEnv, lookup,
+		secretenv.Target{Field: "Spectate.TicketSecret", Value: &c.Spectate.TicketSecret}); err != nil {
+		return err
+	}
+	if err := secretenv.Fill("Spectate.OpsCallerSecretEnv", c.Spectate.OpsCallerSecretEnv, lookup,
+		secretenv.Target{Field: "Spectate.OpsCallerSecret", Value: &c.Spectate.OpsCallerSecret}); err != nil {
+		return err
+	}
+	return c.validateSpectate()
 }
 
 // ResultTopicRequiresDurability 报告结果 topic 是否要核验 RF3 严格策略:只有 dev / test 档放行(本地 Kafka 通常单 broker),

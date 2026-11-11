@@ -41,7 +41,9 @@ func TestAllocateIdSegment_ErrorMapping(t *testing.T) {
 		{"region not registered", idissuer.ErrRegistryMissing, constants.ErrCodeIdSegmentUnknownTag, false},
 		{"binding mismatch", fmt.Errorf("reserve: %w", idissuer.ErrBindingMismatch), constants.ErrCodeIdSegmentUnknownTag, false},
 		{"region retired", idissuer.ErrRegionRetired, constants.ErrCodeIdSegmentUnknownTag, false},
-		{"region mismatch", idissuer.ErrRegionMismatch, constants.ErrCodeIdSegmentSourceError, true},
+		// 配置错误:重试不会变好,与绑定不符同一口径(refused,确定性拒绝,不回 gRPC 错误)。
+		{"region mismatch", fmt.Errorf("reserve: %w", idissuer.ErrRegionMismatch), constants.ErrCodeIdSegmentUnknownTag, false},
+		{"same cluster", fmt.Errorf("reserve: %w", idissuer.ErrSameCluster), constants.ErrCodeIdSegmentUnknownTag, false},
 		{"contended", idissuer.ErrContended, constants.ErrCodeIdSegmentSourceError, true},
 		{"store down", storeDown, constants.ErrCodeIdSegmentSourceError, true},
 		{"caller deadline", context.DeadlineExceeded, constants.ErrCodeIdSegmentSourceError, true},
@@ -70,6 +72,32 @@ func TestAllocateIdSegment_NoIssuerFailsClosed(t *testing.T) {
 	resp, err := AllocateIdSegment(context.Background(), &svc.ServiceContext{}, &AllocateIdSegmentReq{BizTag: "player"})
 	if err == nil || resp.ErrorCode != constants.ErrCodeIdSegmentSourceError {
 		t.Fatalf("resp=%+v err=%v", resp, err)
+	}
+}
+
+// 指标的 biz_tag label 基数有界:只有登记过的 tag 原样记,调用方编出来的格式合法的 tag 记成 unregistered。
+func TestBizTagLabel_OnlyRegisteredTagsBecomeLabels(t *testing.T) {
+	restricted := &svc.ServiceContext{}
+	restricted.Config.IdSegment.Tags = []string{"item"}
+	cases := []struct {
+		name   string
+		svcCtx *svc.ServiceContext
+		tag    string
+		want   string
+	}{
+		{"default list", &svc.ServiceContext{}, "player", "player"},
+		{"no service context uses the default list", nil, "player", "player"},
+		{"well-formed but unregistered", &svc.ServiceContext{}, "made_up_tag_123", "unregistered"},
+		{"malformed", &svc.ServiceContext{}, "Bad-Tag", "invalid"},
+		{"configured list wins", restricted, "player", "unregistered"},
+		{"configured tag", restricted, "item", "item"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := bizTagLabel(tc.svcCtx, tc.tag); got != tc.want {
+				t.Fatalf("label = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

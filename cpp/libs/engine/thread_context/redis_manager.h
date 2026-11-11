@@ -93,8 +93,9 @@ public:
 	//   积压的命令一个截止内跑不完)同样会触发摘下重连:对本进程而言那段时间 Redis 等同于不可用,这是有意的。
 	// - 检测时延:最后一次正常往返之后,最迟约 livenessTimeoutSec + livenessProbeIntervalSec(默认 20 秒)判定断线。
 	// - 摘下与释放不在定时器回调里做,而是 queueInLoop 到本轮的 pending functor 阶段:定时器回调与 socket 事件
-	//   同属一轮事件分发,在那里销毁一条本轮也有 I/O 的连接,Linux 是释放后使用、Windows Debug 撞 removeChannel 断言
-	//   (见下方生命周期说明)。排队期间这条连接若已自行断开、或已被 Connect / 移交替换,就什么也不做。
+	//   同属一轮事件分发。2026-10-21 之前在那里销毁一条本轮也有 I/O 的连接,Linux 是释放后使用、Windows Debug 撞
+	//   removeChannel 断言;现在 Hiredis 工厂已把分发期间的最终释放推迟到 pending,排队保留为纵深防御(见下方生命周期说明)。
+	//   排队期间这条连接若已自行断开、或已被 Connect / 移交替换,就什么也不做。
 	void Connect(muduo::net::EventLoop *loop, const muduo::net::InetAddress &addr, RedisConnectOptions options);
 
 	// 显式取消重连与存活探测定时器,作废已排队的摘下任务,并释放 Hiredis Channel。必须在 EventLoop 析构前调用;

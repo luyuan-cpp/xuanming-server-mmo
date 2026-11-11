@@ -1701,4 +1701,114 @@ TEST(ServerStatsFormatTest, FieldOrderIsStable)
               "late_finish=0 dropped=0 dropped_off_loop=0 codes= methods={}");
 }
 
+// ── 拦截钩子(ChannelOptions::unaryInterceptor / ServerOptions::dispatchInterceptor)──────────────
+// 传输层只管「怎么包」,不认识键;engine 拿它们接链路追踪(docs/design/distributed-tracing.md §5.3)。
+
+// 出站钩子:追加的 metadata 到达服务端;包装后的回调恰好执行一次,并且在原回调之前。
+TEST_F(ServerLoopbackTest, UnaryInterceptorAppendsMetadataAndWrapsTheCompletion)
+{
+    ASSERT_NE(StartServer(), nullptr);
+    const auto order = std::make_shared<std::vector<std::string>>();
+    muduo_grpc::ChannelOptions channelOptions;
+    channelOptions.unaryInterceptor = [order](Metadata &metadata, muduo_grpc::UnaryCallback done) -> muduo_grpc::UnaryCallback
+    {
+        metadata.emplace_back("x-hook", "on");
+        return [order, done = std::move(done)](UnaryCallResult &&result) mutable
+        {
+            order->push_back("wrapper");
+            done(std::move(result));
+        };
+    };
+    const auto channel = Channel::Create(loop_, "127.0.0.1", port_, std::move(channelOptions));
+    ASSERT_NE(channel, nullptr);
+
+    const auto outcome = std::make_shared<CallOutcome>();
+    UnaryCallRequest request;
+    request.method = kEchoPath;
+    request.message = "ping";
+    request.deadline = std::chrono::steady_clock::now() + 5s;
+    channel->StartUnaryCall(std::move(request), [order, outcome](UnaryCallResult &&result)
+                            {
+        order->push_back("done");
+        ++outcome->count;
+        outcome->result = std::move(result); });
+    ASSERT_TRUE(RunUntil([&] { return outcome->count > 0; }, 5s));
+    RunFor(100ms);
+
+    EXPECT_EQ(outcome->count, 1);
+    ASSERT_TRUE(outcome->result.status.ok()) << outcome->result.status.ToString();
+    EXPECT_EQ(*order, (std::vector<std::string>{"wrapper", "done"}));
+    const std::string *hook = muduo_grpc::FindMetadata(state_->lastMetadata, "x-hook");
+    ASSERT_NE(hook, nullptr);
+    EXPECT_EQ(*hook, "on");
+}
+
+// 出站钩子排在通道的所有本地检查之前:截止已过的本地拒绝同样走包装后的回调。
+TEST_F(ServerLoopbackTest, UnaryInterceptorAlsoWrapsLocalRejections)
+{
+    const auto wrapped = std::make_shared<int>(0);
+    muduo_grpc::ChannelOptions channelOptions;
+    channelOptions.unaryInterceptor = [wrapped](Metadata &, muduo_grpc::UnaryCallback done) -> muduo_grpc::UnaryCallback
+    {
+        return [wrapped, done = std::move(done)](UnaryCallResult &&result) mutable
+        {
+            ++*wrapped;
+            done(std::move(result));
+        };
+    };
+    const auto channel = Channel::Create(loop_, "127.0.0.1", port_, std::move(channelOptions));
+    ASSERT_NE(channel, nullptr);
+
+    const auto outcome = StartCall(*channel, kEchoPath, "ping", -1ms); // 截止已过:本地拒绝,不发出
+    ASSERT_TRUE(RunUntil([&] { return outcome->count > 0; }, 5s));
+    EXPECT_EQ(outcome->count, 1);
+    EXPECT_EQ(outcome->result.status.code(), StatusCode::kDeadlineExceeded) << outcome->result.status.ToString();
+    EXPECT_EQ(*wrapped, 1);
+}
+
+// 派发钩子:每次派发恰好经过钩子一次,读得到本次调用的 metadata;钩子误调 invoke 两次,handler 仍只执行一次。
+TEST_F(ServerLoopbackTest, DispatchInterceptorRunsOncePerCallAndExtraInvokesAreIgnored)
+{
+    const auto hookCalls = std::make_shared<int>(0);
+    const auto sawMetadata = std::make_shared<bool>(false);
+    ServerOptions options = QuietOptions();
+    options.dispatchInterceptor = [hookCalls, sawMetadata](const Metadata &metadata, const std::function<void()> &invoke)
+    {
+        ++*hookCalls;
+        *sawMetadata = muduo_grpc::FindMetadata(metadata, "x-hook") != nullptr;
+        invoke();
+        invoke(); // 误调第二次:必须被忽略
+    };
+    ASSERT_NE(StartServer(std::move(options)), nullptr);
+    const auto channel = MakeChannel();
+    ASSERT_NE(channel, nullptr);
+
+    const auto outcome = StartCall(*channel, kEchoPath, "ping", 5000ms, {{"x-hook", "on"}});
+    ASSERT_TRUE(RunUntil([&] { return outcome->count > 0; }, 5s));
+    RunFor(100ms);
+    ASSERT_TRUE(outcome->result.status.ok()) << outcome->result.status.ToString();
+    EXPECT_EQ(outcome->count, 1);
+    EXPECT_EQ(*hookCalls, 1);
+    EXPECT_TRUE(*sawMetadata);
+    EXPECT_EQ(state_->invocations, 1u);
+}
+
+// 派发钩子一次都没调 invoke:服务端补调一次(打 ERROR),调用照常完成。
+TEST_F(ServerLoopbackTest, DispatchInterceptorThatNeverInvokesStillDispatchesOnce)
+{
+    ServerOptions options = QuietOptions();
+    options.dispatchInterceptor = [](const Metadata &, const std::function<void()> &) {};
+    ASSERT_NE(StartServer(std::move(options)), nullptr);
+    const auto channel = MakeChannel();
+    ASSERT_NE(channel, nullptr);
+
+    const auto outcome = StartCall(*channel, kEchoPath, "ping");
+    ASSERT_TRUE(RunUntil([&] { return outcome->count > 0; }, 5s));
+    RunFor(100ms);
+    ASSERT_TRUE(outcome->result.status.ok()) << outcome->result.status.ToString();
+    EXPECT_EQ(outcome->result.response, "echo:ping");
+    EXPECT_EQ(outcome->count, 1);
+    EXPECT_EQ(state_->invocations, 1u);
+}
+
 } // namespace

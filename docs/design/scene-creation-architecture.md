@@ -103,17 +103,22 @@ Client/System → Go SceneManager.CreateScene(scene_conf_id)
 - **重发幂等**:登记带一次性 token,记在自己的记录键 `scene:{id}:registration`(TTL 600s),不和销毁认领的记录共用:
   两边的 token 互不相干,共用一把键就会互相覆盖。go-redis 重发同一段 EVAL 时不再写任何键,计数不会加两次。
 - **结局未知**:EVAL 最终回错时,用同一个 token 跑作废脚本问清楚。登记已落地就照常往下走;没落地就写下「已作废」,
-  之后才到的那次登记什么都不写,这时才归还 Agones 名额。作废也失败时不还名额,宁可多占一份,由 Agones 对账告警暴露:
-  登记可能已经落地,空闲回收会按 `agones_gs` 归还,这里再还就是双还。
+  之后才到的那次登记什么都不写,这时放弃这次占的 Agones 名额条目。作废也失败时条目与在途占用都留着:登记可能已经
+  落地、记录指向这一条,删了就少记;在途占用过期之后由 Agones rooms 对账按记录判
+  (`agones-scene-node-high-density.md` §13.5,2026-11-10)。
 - **重放前核对映射**:同一 token 重放「已登记」之前,先核对映射仍指向这次的节点。登记落地之后、重发或作废查询到达之前,
   场景可能已被销毁或改派(死节点收尾等);这时回 conflict,调用方不再向节点发 CreateScene,否则节点上留下一个没有
   Redis 状态的实体。
 - **冲突**:新铸的号已有映射、别的 token 的记录,或上一个用这个号的场景还有没拆完的拆除任务(`scene:{id}:teardown`,
   登记了的话旧任务补发的 DestroyScene 会打到新场景上),一个键都不写,回 conflict,建实例回 `ErrDuplicateScene`。
-  conflict 也可能是登记落地后场景已被销毁或改派,名额已由销毁方还过或随场景转走,所以 conflict 同样不还名额。
+  conflict 也可能是登记落地后场景已被销毁或改派,名额已由销毁方删过或随场景转走。两种来历下都放弃这次占的那一条:
+  名额条目每次占用各不相同,删的只是自己那一条,删两次无害(2026-11-10 之前名额是计数,conflict 怕双还、不还)。
+- **Agones 在途占用**(2026-11-10):占了名额的登记在写任何键之前先消费自己的在途占用(`agones_rooms:zone:{z}:holds`);
+  消费不到说明这次占用拖过了截止时刻、已被对账取消,一个键都不写,回 `fenced`。
 - **指标**:`scene_manager_scene_registration_total{zone_id,kind,outcome}`,kind 为 `instance` / `world_channel`,
-  outcome 为 `registered` / `conflict` / `aborted` / `unknown`。conflict 出现一次就该查发号器。
-- **仍是多步的**:Agones 预占在登记之前。进程在预占之后、登记之前崩溃,名额不还,由 Agones 对账告警暴露;
+  outcome 为 `registered` / `conflict` / `aborted` / `fenced` / `unknown`。conflict 出现一次就该查发号器。
+- **仍是多步的**:Agones 预占在登记之前。进程在预占之后、登记之前崩溃,条目没有记录、只有在途占用,
+  在途占用过期之后由 Agones rooms 对账取消并删掉(2026-11-10 之前这一份永远不还,只有告警);
   登记之后、C++ CreateScene 之前崩溃,实例在 active 集合里,空闲回收按超时销毁并归还名额。
 
 ### Channel count overrides
@@ -409,7 +414,8 @@ destroyInstanceInternal(zone, scene_id)
 │    ├─ [if mirror] unlinkFromSourceMirrors: SREM scene:{sourceId}:mirrors, only if the source is in this zone
 │    │            (or has no zone record here); source in another zone → leave its key; zone unreadable → the job stays
 │    ├─ SREM residual members from node:zone:{zoneId}:{nodeId}:members
-│    └─ take the job's Agones step once, then ReleaseAgonesRoomForScene (if agones_gs was set)
+│    └─ releaseTeardownRoom: remove the recorded Agones room entry ("GameServer/entry" in agones_gs) from its
+│                 GameServer — idempotent; failure keeps the job, the sweep retries until it succeeds
 └─ finish: DEL scene:{id}:teardown + ZREM pending (token must match), then count instance_destroyed_total
 ```
 
@@ -423,8 +429,8 @@ no node counters, but the cascade, the source's mirror-set SREM and the Agones r
 - **问题**:认领脚本删掉场景之后,镜像级联、C++ DestroyScene、从镜像源的子集合摘掉自己、摘剩余成员、还 Agones 名额
   这些副作用以前只在认领方的内存里。认领方在这之间退出(崩溃,或滚动发布取消了空闲回收的 ctx)、或者认领的回包丢了
   (go-redis 重试耗尽后回错,调用方以为没认领到),副作用就永远没人做:节点上留下没有映射的实体,源频道的子集合挂着死 id,
-  Agones 的 rooms 多占一份。最常见的情形是认领之后马上退出,这时 scene_count 与 rooms 同时多 1,两数一样,Agones 对账
-  (`agones_reconcile.go`,只比这两个数)看不出来。
+  Agones 的 rooms 多占一份。最常见的情形是认领之后马上退出,这时 scene_count 与 rooms 同时多 1,两数一样,当时的 Agones
+  对账(只比这两个数)看不出来。
 - **做法(事务性发件箱)**:三条认领路径(空闲回收、force、建实例回滚)共用 `luaSceneClaimCommit`,在提交的同一步写
   拆除任务 `scene:{id}:teardown`(hash,不带 TTL:token、种类、reason、认领时刻、快照),并把场景放进本 zone 的待办
   `scene_teardown:zone:{z}:pending`(有序集合,分数是认领时刻)。认领提交了,任务就一定在。
@@ -435,16 +441,16 @@ no node counters, but the cascade, the source's mirror-set SREM and the Agones r
     `world_orphan`(孤儿频道清理)、`rollback`(建实例失败的回滚;顺带向节点补一次 DestroyScene,CreateScene 回错
     不等于节点上没建)。不认识的种类不做也不删,留给认识它的版本。
 - **为什么副作用可以重跑**:级联(子镜像各自认领)、C++ DestroyScene(找不到实体只打 WARN)、SREM、DEL、摘成员本来就幂等。
-  不幂等的两样:
-  - scene_count:在认领脚本里按期望属主扣(只在 > 0 时减),不留到脚本外,扫描晚做也不会扣到复用同一 node_id 的
+  另外两样:
+  - scene_count 不幂等:在认领脚本里按期望属主扣(只在 > 0 时减),不留到脚本外,扫描晚做也不会扣到复用同一 node_id 的
     新进程头上。世界频道只扣活属主(活不活在认领前判),死属主的计数键由死节点收尾整个删。
-  - Agones 名额:任务上原子置位后才调 K8s,一个任务至多还一次(`luaTakeTeardownRoom`,同一次调用的重发仍认得出自己)。
-    置位之后、调用之前进程退出,这份名额不还 —— 这时 scene_count 已经减了,两数对不上,Agones 对账会告警。
-    选「至多一次」而不是「至少一次」:后者在置位丢失时还两次,把容量算少、让 FleetAutoscaler 超卖;与
-    TransferAgonesRoomForScene 结局未知时「两边都不还」同一取舍。
+  - Agones 名额:2026-11-10 起名额是 GameServer 上 rooms 列表里按身份的条目,记录是「GameServer/条目」
+    (`agones-scene-node-high-density.md` §13)。归还 = 按条目删,幂等:失败时任务留着、扫描重做到成功,认领方与扫描
+    同时做也只删那一条。之前名额是计数,只能「至多一次」(任务上先置位再调 K8s),置位之后进程退出、或调用本身失败,
+    那一份就永远不还。
 - **重发与并发**:同 token 的任务在 = 这次是 go-redis 的原样重发,原样返回快照、一个键都不动(R5)。别的 token 的任务在 =
   上一次拆除还没做完,一律回 `pending`:谁都认领不到,同一个 scene_id 被重新登记(号源出错)也挡在这里,直到旧任务做完。
-  认领方慢过了租期、与扫描同时做时,两边重跑的都是幂等步骤,名额与删任务各只发生一次。
+  认领方慢过了租期、与扫描同时做时,两边重跑的都是幂等步骤,名额只还那一条,删任务只发生一次。
 - **11-01 的进程内接手(`ServiceContext.SceneClaimTokens`)已删**:Eval 回错时调用方按「这次没认领到」处理即可,
   任务在就由扫描补;接手只能救本进程、而且依赖「下一次认领同一场景」,场景摘出各个索引之后通常没有下一次。
   它暴露过的三处问题(按属主是否为空判认领、空闲分支丢剩余成员、镜像源在认领前预读)的规则仍然成立:是否认领只看
@@ -452,8 +458,10 @@ no node counters, but the cascade, the source's mirror-set SREM and the Agones r
 - **观测**:`scene_manager_scene_teardown_jobs_total{zone_id, kind, outcome=completed|recovered|deferred}`;
   `scene_manager_scene_teardown_oldest_pending_seconds{zone_id}`(只有领导者发布,跟随者归零),告警
   `SceneManagerSceneTeardownStuck`(> 600s 持续 10 分钟)。日志前缀 `[SceneTeardown]`。
-- **仍不保证的**:Agones 至多一次留下的那份名额(由对账告警暴露,不自动收);C++ 节点在 DestroyScene 之后才处理完
-  一个在途的 CreateScene(回滚的那次补发早到),实体仍会留下,要 C++ 侧的墓碑才能收。
+- **别的路径怎么收**:Agones 名额漏还的其余来源(占了名额之后、登记之前崩溃,改派转移后删旧条目失败,登记结局未知)
+  由 Agones rooms 对账逐条收(`agones-scene-node-high-density.md` §13.5,2026-11-10)。C++ 节点在 DestroyScene 之后才
+  处理完一个在途的 CreateScene(回滚的那次补发早到)时实体仍会留下,scene_manager 这边收不了;由节点侧的归属对账收
+  (`scene-node-ownership-reconcile.md`,缺口清单第 33 条):节点连续两次读到映射不是自己、过 60 秒宽限就排空销毁。
 
 #### 销毁只改本 zone 的键(2026-11-06)
 
@@ -612,9 +620,11 @@ Invariants (comment block in `reentry_barrier.go`, 「被屏障推迟的死节�
   照旧收尾。记的是最近一次判死的那一代:更早的一代不可能再回来(新一代占了分配键,旧一代重注册的 CAS 必然失败)。
   两次判死之间换过代、回来的是后一代时,前一代的孤儿实例随任务一起撤掉不拆,宁可留孤儿也不拆活实例。撤销脚本报错时
   这一拍不收。`luaFinishDeadNodeReconcile` 同时加了守卫:任务已不在表里就一个键都不动,免得领导者重叠时拿着旧列表的
-  一方删掉回来那一代的计数。只覆盖「在屏障放行、drain 动手之前回来」的情形:失联超过屏障再回来的节点,实例此前已被拆掉、
-  世界频道已被改派,由 scene 节点自己按期望状态对账:读到 `scene:{id}:node` 不再是本节点就排空并销毁本地实体
-  ([scene-node-ownership-reconcile.md](scene-node-ownership-reconcile.md),缺口清单第 33 条,2026-11-06 落码,未编译)。
+  一方删掉回来那一代的计数。只覆盖「在屏障放行、drain 动手之前回来」的情形:失联超过屏障的节点(不论回没回来),实例此前已被拆掉、
+  世界频道已被改派,由 scene 节点自己按期望状态对账:读到 `scene:{id}:node` 不再是本节点,或本节点号的持有者
+  `node:zone:{z}:{n}:holder`(watch PUT 与全量同步按 etcd ModRevision 单调写,`node_holder.go`)已换成更新的另一代进程,就按住户预算
+  排空并销毁本地实体,不看 etcd 身份([scene-node-ownership-reconcile.md](scene-node-ownership-reconcile.md),缺口清单第 33 条,
+  2026-11-06 初版、2026-11-10 补完,未编译)。
 
 `reentry_barrier.go::drainPendingDeadNodeReconciles` runs on every 5s
 loadTicker and in fullSync's leader branch. For each task whose barrier
@@ -683,8 +693,8 @@ Regression: `TestReconcileDeadNode_{DestroysOrphanInstances,PreservesWorldChanne
 `TestDeadNodeReconcileTakeover_{NewLeaderFinishesTaskQueuedInBarrierWindow,FollowerLeavesCountersAndTaskAlone,FailedSceneRetriedNextTick,LeadershipLostMidSweepRestTakenOver}`
 (`dead_node_reconcile_takeover_test.go`, red on the pre-fix commit),
 `TestDeadNodeReconcile_{AbandonsAfterGiveUpDeadline,ScopeIsDeathTimeSnapshot,DropsMalformedTask}`,
-`TestDeadNodeReregister_*`(`dead_node_reregister_test.go`,R1-I5:同一代回来撤任务、换代照常收尾、不知道是哪一代照常收尾、
-清扫从旧镜像补实例号、迟到的结束不删计数)。
+`TestDeadNodeReregister_*`(`dead_node_reregister_test.go`,R1-I5:同一代回来撤任务;换代或不知道是哪一代时 `death_at` 留着,
+屏障压着不收、走完后照常收尾(R15);清扫从旧镜像补实例号、迟到的结束不删计数)。
 
 ### Observability (Prometheus)
 
@@ -1170,7 +1180,7 @@ MetricsListenAddr: ":9150"
 | File | Purpose |
 |------|---------|
 | `go/scene_manager/internal/logic/createscenelogic.go` | CreateScene routing: main world vs instance |
-| `go/scene_manager/internal/logic/world_init.go` | Startup init of persistent world scenes。2026-11-05 起属主已死的频道由 `moveWorldChannelOffDeadNode` 改派:重读属主并过再入屏障 → 先在活节点 CreateScene → `reassignWorldChannelNode`(属主 CAS + 在役核对)→ 转名额,落空回收预建实体;提交一半与懒改派共用 `commitPreCreatedWorldChannel`。以前是 CAS 之后才建,CAS 与 CreateScene 之间被按新属主拆除(排空收尾等)时会在新节点留下没有 Redis 状态的幽灵实体,见 PROGRESS 2026-11-05「世界频道改派提交后与排空收尾」。2026-11-06 起世界频道每次换节点带放置代次([world-channel-placement-generation.md](world-channel-placement-generation.md)):四个改派者(rebalance、懒改派、init、resolveScene 死节点自愈)先 `allocatePlacementGeneration`,建场景、CAS(要求比高水位 `scene:{id}:placement_gen` 新)、拆老实体都带它;落空后回收预建实体一律经 `reclaimUnownedWorldChannelEntity`(比对属主并抬高水位,再按那次的代次 DestroyScene);init 补建用 MGET 读属主与高水位,带高水位建。scene 节点忽略比自己见过的建场景更旧的拆场景,晚到多久的回收都拆不到之后合法放过来的实体 |
+| `go/scene_manager/internal/logic/world_init.go` | Startup init of persistent world scenes。2026-11-05 起属主已死的频道由 `moveWorldChannelOffDeadNode` 改派:重读属主并过再入屏障 → 先在活节点 CreateScene → `reassignWorldChannelNode`(属主 CAS + 在役核对)→ 提交名额,落空回收预建实体;提交一半与懒改派共用 `commitPreCreatedWorldChannel`。2026-11-11 起改派前先占名额([agones-scene-node-high-density.md](agones-scene-node-high-density.md) §13.10):过屏障之后先在哈希目标的 GameServer 上占名额,满了交给 GSA 在本 zone 另挑一台有空位的、落点改成它,哪台都占不到就本轮不搬;没改成就放弃这次占的名额。`moveWorldChannelOffDeadNode` 与 `lazyReassignStaleWorldChannel` 回实际落点。以前是 CAS 之后才建,CAS 与 CreateScene 之间被按新属主拆除(排空收尾等)时会在新节点留下没有 Redis 状态的幽灵实体,见 PROGRESS 2026-11-05「世界频道改派提交后与排空收尾」。2026-11-06 起世界频道每次换节点带放置代次([world-channel-placement-generation.md](world-channel-placement-generation.md)):四个改派者(rebalance、懒改派、init、resolveScene 死节点自愈)先 `allocatePlacementGeneration`,建场景、CAS(要求比高水位 `scene:{id}:placement_gen` 新)、拆老实体都带它;落空后回收预建实体一律经 `reclaimUnownedWorldChannelEntity`(比对属主并抬高水位,再按那次的代次 DestroyScene);init 补建用 MGET 读属主与高水位,带高水位建。scene 节点忽略比自己见过的建场景更旧的拆场景,晚到多久的回收都拆不到之后合法放过来的实体 |
 | `go/scene_manager/internal/logic/instance_lifecycle.go` | Auto-destroy idle instances + player count helpers. Per-type timeout (mirror vs. regular) via `resolveMirrorTimeout` + `scene:{id}:mirror` flag. Also: atomic CAS destroy, cascade to mirrors, node-death owner-CAS force path (`destroyOrphanOfDeadNode`) |
 | `go/scene_manager/internal/logic/scene_atomic.go` | Redis Lua scripts for the race-safe enter / destroy CAS paths |
 | `go/scene_manager/internal/logic/scene_node_client.go` | gRPC client cache + RequestNodeCreateScene/DestroyScene |
@@ -1181,7 +1191,7 @@ MetricsListenAddr: ":9150"
 | `go/scene_manager/internal/logic/load_refresh.go` | (2026-10-16)领导者按 zone 批量刷新负载分;pipeline 结果按批判定、读失败不按 0 写 |
 | `go/scene_manager/internal/logic/zone_registry.go` | (2026-10-16)zone 登记集合 `scene_manager:zones`,替代 fullSync 里的全库 SCAN |
 | `go/scene_manager/internal/logic/logic_test.go` | Unit tests incl. `TestCreateScene_Mirror_*` co-location suite |
-| `go/scene_manager/internal/logic/world_rebalance.go` | World channel migration. `migrateWorldChannel` uses `reassignSceneNode` to keep `node:zone:{zoneId}:{nodeId}:scenes` in sync with `scene:{id}:node`。2026-10-20 起 `reassignSceneNode`(`world_init.go`)是 Lua CAS:只在属主仍为 oldNode 时同批改归属、两侧反向索引与 scene_count;迁移 CAS 落空时 `destroyUnownedMigrationTarget` 回收 newNode 上预建的实体。`resolveScene` 的死节点自愈仍是无条件 SET,未纳入(2026-10-22 更正:已纳入,`enterscenelogic.go` `reassignSceneOffDeadNode` 改走 `reassignSceneNode`,落空时重读属主;见 PROGRESS 同日「resolveScene 死节点自愈改走 reassignSceneNode CAS」)。2026-10-23 再更正:死节点自愈只重建大世界频道(以 `world_channels` 成员资格确认 conf,提交时经 `reassignWorldChannelNode` 在 CAS 脚本里再核对一次;副本 / 镜像留给死节点收尾销毁),顺序与本行的 rebalance 相同:先建实体、再 CAS、最后转名额;`TransferAgonesRoomForScene` 的记录改写也改为比较并交换,见 PROGRESS 2026-10-23「resolveScene 死节点自愈收窄为只重建频道」 |
+| `go/scene_manager/internal/logic/world_rebalance.go` | World channel migration. `migrateWorldChannel` uses `reassignSceneNode` to keep `node:zone:{zoneId}:{nodeId}:scenes` in sync with `scene:{id}:node`。2026-10-20 起 `reassignSceneNode`(`world_init.go`)是 Lua CAS:只在属主仍为 oldNode 时同批改归属、两侧反向索引与 scene_count;迁移 CAS 落空时 `destroyUnownedMigrationTarget` 回收 newNode 上预建的实体。`resolveScene` 的死节点自愈仍是无条件 SET,未纳入(2026-10-22 更正:已纳入,`enterscenelogic.go` `reassignSceneOffDeadNode` 改走 `reassignSceneNode`,落空时重读属主;见 PROGRESS 同日「resolveScene 死节点自愈改走 reassignSceneNode CAS」)。2026-10-23 再更正:死节点自愈只重建大世界频道(以 `world_channels` 成员资格确认 conf,提交时经 `reassignWorldChannelNode` 在 CAS 脚本里再核对一次;副本 / 镜像留给死节点收尾销毁),顺序与本行的 rebalance 相同:先建实体、再 CAS、最后转名额;名额记录的改写也改为比较并交换,见 PROGRESS 2026-10-23「resolveScene 死节点自愈收窄为只重建频道」。2026-11-11 起 rebalance 与死节点自愈都改为先占名额再搬([agones-scene-node-high-density.md](agones-scene-node-high-density.md) §13.10):`migrateWorldChannel` 换更好的家只认计划的目标、满了不搬,老节点已不在时满了交给 GSA 另挑;CAS 落地后 `commitReservedAgonesRoom` 提交名额(`commitAgonesRoomTransfer` 的比较并交换),落空由 `settleLostChannelMove` 按回收时比对出的属主提交或放弃。原来事后转名额的 `TransferAgonesRoomForScene` 已删 |
 | `go/scene_manager/internal/logic/orphan_cleanup.go` | Drops world-channel sets whose confId is no longer in the World table; cleans all scene-scoped keys + reverse indexes |
 | `go/scene_manager/internal/metrics/metrics.go` | Prometheus gauges + counters for nodes, mirrors, lifecycle, dedup, source-missing, orphans |
 | `proto/scene/scene.proto` | C++ Scene service (CreateScene, DestroyScene) |

@@ -374,6 +374,7 @@ pwsh -File tools/scripts/k8s_gate_drain.ps1 -ZoneName <zone> -Ordinal <i> -Delet
 - 不带 `-DeletePod` 跑完之后,用同样的参数加 `-DeletePod` 重跑,即可接着删。
 - **单副本 zone 不能无损排空**:login 的 `FilterDrainingGates` 在候选全部 draining 时会忽略标记照常分配,标了也挡不住新玩家。脚本在任何 Redis 写之前拒绝(原子 EVAL 回 `NO_UNDRAINED_PEER`;`-DryRun` 也会按 etcd 判定并拒绝)。要先把该 zone 扩到 ≥2 个 gate 再排空。
 - `reason=deadline` 时打醒目警告:这台 gate 上还有玩家,删 Pod 会让他们断线重连。
+- **排空期间迁移**(login `GateDrain.Migrate`,默认关;[gate 排空迁移](gate-drain-session-migration.md),2026-11-10 服务端两批落码,未编译):打开后 login 每个判定周期给排空中的 gate 发迁移许可,gate 每秒按 `RatePerSecond` 个把已登录的连接经 msg 124 迁到同 zone 的其他 gate,玩家在断线保留的租约内回到原场景,通常远早于 Deadline 就出现 `drained=below_threshold`。脚本只打印迁移开关、速率与按在线数估算的时长,流程与预算校验不变。客户端的跳数清零上线、robot 集成跑过之前不要打开。
 - 取消排空:在 login 所连的 Redis 上执行 `DEL gate:<id>:draining gate:<id>:drained`。
 - **脚本不做缩容**。直接 scale StatefulSet 之后,要等旧 node_id 的 etcd 记录消失,再手工 `DEL gate:<id>:draining gate:<id>:drained`。不清的话,因为 node_id 全局唯一、按最小空闲号复用,而 login 的 Redis 跨 zone 共用,之后拿到这个 node_id 的 gate(可能在任意 zone)在 TTL 内分不到玩家。
 - 依赖:脚本 `kubectl exec` 进 `svc/etcd` 背后的 Pod、`statefulset/redis` 的 redis 容器(2026-10-19 起;共享 Redis 高可用形态下 `svc/redis` 指向 haproxy 代理,代理镜像没有 redis-cli),再按 login 配置里的 Service 地址连回同一个 Service(高可用形态下经代理落到主),需要 pods/exec 权限;etcd 与单实例 Redis 依赖集群支持 hairpin 流量,高可用 Redis 经 redis-proxy、不涉及 hairpin(脚本的失败提示两种形态都写)。Redis 若用 ACL 禁了 EVAL,脚本会 fail-closed 拒绝。这三项都要在 kind 上顺带验证。
@@ -680,7 +681,7 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
      - scene:`cpp\libs\services\scene\scene.vcxproj` → `cpp\nodes\scene\scene.vcxproj`;
      - 测试:`cpp\tests\client_endpoint_test\client_endpoint_test.vcxproj` → `cpp\tests\agones_lifecycle_test\agones_lifecycle_test.vcxproj`。
    - **C++ 单测(放在全量之后)**:`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build`。必须带 `-Build`:不带时脚本只跑已有 exe,
-     而多数 gtest 工程没进 game.sln 的构建配置,不会针对新的 core 与 proto 重新链接。通过:退出码 0,汇总表里没有「无 exe」行。
+     而多数 gtest 工程没进 game.sln 的构建配置,不会针对新的 core 与 proto 重新链接。通过:退出码 0,汇总表里没有「no exe」行(2026-11-11 汇总表改英文前写作「无 exe」)。
    - `check_no_raw_pointer_member.ps1 -ProjectDir <各工程>`;
    - battle 的两个独立 gtest(`cpp/nodes/battle/tests/battle_room_table_test.cpp`、`battle_admission_gate_test.cpp`)按文件头命令编译运行。
    - Linux:`tools/scripts/build_linux.sh`,`ldd bin/battle | grep libcurl` 应有输出。
@@ -768,7 +769,7 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
 - 给客户端同时下发内外两个地址;用 SDK SetAnnotation 回写地址。
 - battle 的 FleetAutoscaler(本批固定 replicas)。
 - Deployment 形态下 battle 的 SIGTERM 优雅排空。
-- 排空超时后对剩余会话用 RedirectToGate 强制迁移:超时后直接删 Pod,玩家重新登录。
+- 排空**到期之后**再对剩余会话强制迁移:到期后仍直接删 Pod,剩下的玩家断线重连。排空**期间**的限速迁移另有设计并已落码(2026-11-10 未编译,开关默认关),见上文「gate 排空」一节。
 - scene 的 Health 改绑心跳(后续项)。
 - gate / battle TCP 上加 TLS、票据绑定 IP。
 - 客户端仓改动(Unity 已支持 DNS 名)。

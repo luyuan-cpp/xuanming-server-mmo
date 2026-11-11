@@ -63,7 +63,7 @@ func startGlobalDirectAdmissionRecovery(ctx context.Context, s *svc.ServiceConte
 				through, err = s.Authority.DirectAdmissionHighWater(call)
 				if err != nil {
 					cancel()
-					warnRead("直接开战待退出高水位读取失败")
+					warnRead("direct battle pending-exit high-water read failed")
 					continue
 				}
 				after = authority.DirectCursor{}
@@ -72,7 +72,7 @@ func startGlobalDirectAdmissionRecovery(ctx context.Context, s *svc.ServiceConte
 			records, err := s.Authority.DirectAdmissionsThrough(call, after, through)
 			cancel()
 			if err != nil {
-				warnRead("直接开战待退出原件读取失败")
+				warnRead("direct battle pending-exit original read failed")
 				continue
 			}
 			if len(records) == 0 {
@@ -93,7 +93,7 @@ func startGlobalDirectAdmissionRecovery(ctx context.Context, s *svc.ServiceConte
 					f, err := resumeGlobalDirectAdmission(call, s, original)
 					if err != nil {
 						s.HoldRelay(err)
-						warnOperation("直接开战原退出仍未确认")
+						warnOperation("direct battle original exit still unconfirmed")
 						return
 					}
 					if f != nil && f.State < 4 {
@@ -156,7 +156,7 @@ func startGlobalJoinAdmissionRecovery(ctx context.Context, s *svc.ServiceContext
 				through, err = s.Authority.PendingJoinHighWater(call)
 				if err != nil {
 					cancel()
-					warnRead("单排待退出高水位读取失败")
+					warnRead("solo queue pending-exit high-water read failed")
 					continue
 				}
 				after = authority.JoinCursor{}
@@ -165,7 +165,7 @@ func startGlobalJoinAdmissionRecovery(ctx context.Context, s *svc.ServiceContext
 			records, err := s.Authority.PendingJoinsThrough(call, after, through)
 			cancel()
 			if err != nil {
-				warnRead("单排待退出原件读取失败")
+				warnRead("solo queue pending-exit original read failed")
 				continue
 			}
 			if len(records) == 0 {
@@ -185,7 +185,7 @@ func startGlobalJoinAdmissionRecovery(ctx context.Context, s *svc.ServiceContext
 					defer cancel()
 					if err := resumeGlobalJoinAdmission(call, s, original); err != nil {
 						s.HoldRelay(err)
-						warnOperation("单排原退出仍未确认")
+						warnOperation("solo queue original exit still unconfirmed")
 					}
 				})
 			}

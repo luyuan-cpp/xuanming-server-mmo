@@ -301,6 +301,10 @@
     # 0 / -1 / 留空 = 没给,不转发。追加在参数块末尾,理由同上。
     [int]$DirectoryLogicalShards = 0,
     [int]$Region = -1,
+    # 发号器地域码,只在换码之后给(发号器手册 §4.4、§4.5);-1 = 没给,不转发,k8s_deploy.ps1 取 -Region。
+    [int]$IdIssuerRegion = -1,
+    # 每地域的存档库数 K(docs/design/player-data-tidb-scaling-plan.md §7.2)。0 = 没给,不转发。
+    [int]$PlayerStoreShards = 0,
     [string]$SqlClusters = "",
     [string]$SqlDefaultCluster = "",
     # 全新集群先跑迁移 Job(k8s_deploy.ps1 同名参数,docs/ops/k8s-open-server-runbook.md §5);写者 Pod 回收 CronJob 的镜像。留空不转发,默认值只在 k8s_deploy.ps1。
@@ -833,6 +837,8 @@ function Invoke-K8sDeploy {
     # 逻辑库:给了才传。档位规则只在 k8s_deploy.ps1(Assert-LogicalDbPreflight)。
     if ($DirectoryLogicalShards -gt 0) { $args.DirectoryLogicalShards = $DirectoryLogicalShards }
     if ($Region -ge 0) { $args.Region = $Region }
+    if ($IdIssuerRegion -ge 0) { $args.IdIssuerRegion = $IdIssuerRegion }
+    if ($PlayerStoreShards -gt 0) { $args.PlayerStoreShards = $PlayerStoreShards }
     if (-not [string]::IsNullOrWhiteSpace($SqlClusters)) { $args.SqlClusters = $SqlClusters }
     if (-not [string]::IsNullOrWhiteSpace($SqlDefaultCluster)) { $args.SqlDefaultCluster = $SqlDefaultCluster }
     if ($SqlSchemaOnly) { $args.SqlSchemaOnly = $true }
@@ -1315,7 +1321,8 @@ Go micro-service commands (local dev):
     -Command sql-boot-catalog-local [-GoServices db,data_service,...] [-Zones 990017,990018 [-GoCounts ...] [-GoPortStride N] [-ZonePortShift N] [-ZonePortOffsets 990017=0,990018=1000]]
         Build the local writer boot catalog (loopback database only): schemas, per-instance SQL accounts and
         single-use grants under run/secrets/sql-boot-local. start_game.ps1 runs it on every start. See tools/scripts/README.md.
-        -Zones plans every zone in one run and publishes one catalog; it requires DB_ALLOWED_DATABASES or MMORPG_DB_ALLOWED_DATABASES.
+        -Zones plans every zone in one run and publishes one catalog. All zones share the player stores derived from go/login Placement;
+        DB_ALLOWED_DATABASES or MMORPG_DB_ALLOWED_DATABASES is optional and, when set, must list exactly those stores.
 
 Go micro-service build commands (local binary):
     -Command go-svc-build [-GoServices login,db,...]
@@ -1383,7 +1390,9 @@ Other common commands:
         tools/scripts/k8s_route_tool.ps1; exits with the container's code (0 done / 2 failed).
 
 Zone merge (合服) commands, online, no downtime — full SOP: docs/ops/merge-zone-runbook.md
-    A merge writes one row to zone_merged_into and moves no data. Every merge-zone* command
+    A merge writes one row to zone_merged_into and moves no data; every real merge or unmerge also
+    appends one row to the append-only zone_merge_history in the same transaction (listed by
+    merge-zone-audit). Every merge-zone* command
     REQUIRES -MergeZoneRouteDbDsn <directory shard 0 DSN> (pass it from an env var; no default) and
     exits with merge_zone's own code: 0 done (including idempotent), 1 refused and nothing
     written, 2 not done or outcome unknown (re-running is safe). If merge_zone fails to build,
@@ -1489,8 +1498,8 @@ switch ($Command) {
         # Multi-zone local stress launch. Each zone gets its own go services
         # (zone-prefixed instance keys + derived yaml with ZoneId/port rewritten)
         # and its own gate/scene processes (ZONE_ID env var override).
-        # Shared infra (etcd/Redis/Kafka/MySQL) is reused; per-zone DB schemas
-        # (zone_<N>_db) must be pre-created via deploy/mysql-init/00_init_zone_dbs.sql.
+        # Shared infra (etcd/Redis/Kafka/MySQL) is reused; all zones share the region's player stores
+        # (player_store_<id>_db from go/login Placement, created by sql-boot-catalog-local; zone databases are retired).
         $zoneList = if ($Zones.Count -gt 0) { $Zones } else { @(1, 2) }
         Write-Host "=== Multi-zone launch: zones [$($zoneList -join ',')] ===" -ForegroundColor Cyan
         foreach ($z in $zoneList) {

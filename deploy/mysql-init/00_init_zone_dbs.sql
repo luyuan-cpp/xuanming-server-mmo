@@ -1,7 +1,8 @@
 -- 这里只预建具名业务库。所有runtime权限只来自deploy/sql/authority_runtime_role.sql，按每boot固定表manifest授予。
 -- 不自动给旧appuser或MYSQL_USER授schema.*；已有账号宽权限必须在独立维护权限核验中撤回。
-CREATE DATABASE IF NOT EXISTS zone_1_db;
-CREATE DATABASE IF NOT EXISTS zone_2_db;
+-- 玩家存档只在地域存档库 player_store_<id>_db(本机 dev 地域 0、K=1,只有 player_store_1000000_db);zone 库已退役
+-- (docs/design/player-data-tidb-scaling-plan.md §7.2,A17c)。文件名里的 zone_dbs 是历史名字,K8s 与 compose 都按这个名字挂载。
+CREATE DATABASE IF NOT EXISTS player_store_1000000_db;
 CREATE DATABASE IF NOT EXISTS testdb;
 CREATE DATABASE IF NOT EXISTS mmorpg_trade DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mmorpg_guild DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

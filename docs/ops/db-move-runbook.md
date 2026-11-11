@@ -390,6 +390,7 @@ Java 进程(网关的 `mmorpg` 库,`mall_game` 的 `COMMERCE_JDBC_URL`)不做动
 1. **翻转之前不要动 Java 配置,不要提前写新地址。** 目标上的闸门表是复制过去的,`writable=1`:配了新地址的进程一重启就连到目标。账号锁着时它连不上、起不来;账号没锁时它能写,两边分叉,`cutover` 查到连接只能回滚。
 2. 窗口里:Java 写者在闸门上收到 `WriterFrozenException`(`SQLTransientException`,SQLSTATE 40001),按可重试处理。读也一样。
 3. **cutover 翻转之后才改 Java 配置,立刻滚动重启这些进程**,用新地址。重启完成之前这个库对它们是读写暂停(源库冻结),不会写错地方。窗口比 Go 服务长,选低峰。
+   2026-11-06 起网关 Pod 的 registrar init 和 Go 写者一样按库映射拨号(`MMORPG_DB_PLACEMENT`),主进程的 JDBC URL 仍是静态的。翻转之后、改配置之前有网关 Pod 重启的话,registrar 登记在目标集群,主进程仍连源库,启动核对资格对不上就拒启;不会写错地方,改完配置重启即恢复。
 4. `go/login` 的密码校验是只读直连 `mmorpg`,`PasswordAuth` 的 DSN 同样改完滚动重启;重启之前读到的是冻结时的数据。`password_admin` 的连接串也改成新地址。
 
 `cutover`、`audit` 的 `-metrics-targets` 不列这些进程。它们的账号写进 `-roster` 或者已经 ACTIVE,照样由 `prepare` 锁、`cutover` 解。

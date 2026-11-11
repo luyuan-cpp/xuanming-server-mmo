@@ -156,6 +156,69 @@ namespace
 		EXPECT_EQ(route(Resp({"SCRIPT", "LOAD", "return 1"})).kind, RouteKind::kAnyNode);
 	}
 
+	// ---- 按域检查 tag 的形状(docs/design/redis-cluster-all-domains-20261110.md §3.1)----
+
+	TEST(RedisCommandRouteTest, SpublishRoutesByShardChannel)
+	{
+		const std::string channel = "assetop:wake:" + redis_slot::ControlTag(redis_slot::ControlFamily::kAssetWake, "7");
+		const CommandRoute route = RouteOf(Resp({"SPUBLISH", channel, "42"}));
+		EXPECT_EQ(route.kind, RouteKind::kSlot);
+		EXPECT_EQ(route.slot, redis_slot::HashSlot(channel));
+		// 普通 PUBLISH 仍不登记:Cluster 下它广播到全部节点,不随节点数扩展(设计 §4.6)。
+		EXPECT_EQ(RouteOf(Resp({"PUBLISH", "assetop:wake", "42"})).reason, RouteRejectReason::kUnknownCommand);
+	}
+
+	TEST(RedisCommandRouteTest, ControlDomainAcceptsOnlyRegisteredFamilyTags)
+	{
+		const auto route = [](const std::string& formatted, std::optional<std::string_view> routingKey = std::nullopt) {
+			return ResolveCommandRoute(formatted, routingKey, HashTagPolicy::kMultiKeyOnly, KeyDomain::kControl);
+		};
+
+		// 单键可以不带 tag;带 tag 只能是登记过的族。
+		EXPECT_EQ(route(Resp({"GET", "trade:assetop:maintenance:leader"})).kind, RouteKind::kSlot);
+		EXPECT_EQ(route(Resp({"GET", "world_channel_directory:{ctl:1}:2"})).kind, RouteKind::kSlot);
+		const CommandRoute playerKey = route(Resp({"GET", "player:{42}:location"}));
+		EXPECT_EQ(playerKey.reason, RouteRejectReason::kWrongDomainTag);
+		EXPECT_EQ(playerKey.offendingKey, "player:{42}:location");
+		EXPECT_EQ(route(Resp({"GET", "player:save_pending:{afps}"})).reason, RouteRejectReason::kWrongDomainTag);
+		EXPECT_EQ(route(Resp({"GET", "x:{unknown:1}"})).reason, RouteRejectReason::kWrongDomainTag);
+
+		// 多键:每个键都带 tag,且是同一个 tag。
+		EXPECT_EQ(route(Resp({"MGET", "node:{ctl:7}:3:holder", "scene:{ctl:7}:1:node"})).kind, RouteKind::kSlot);
+		EXPECT_EQ(route(Resp({"MGET", "node:{ctl:7}:3:holder", "scene:1:node"})).reason, RouteRejectReason::kMissingHashTag);
+		const CommandRoute mixed = route(Resp({"EVAL", "return 1", "2", "a:{ctl:7}", "b:{ctl:8}"}));
+		EXPECT_EQ(mixed.reason, RouteRejectReason::kMixedTags);
+		EXPECT_EQ(mixed.offendingKey, "b:{ctl:8}");
+		EXPECT_EQ(route(Resp({"EVAL", "return 1", "2", "a:{q:7}", "b:{gm:7}"})).reason, RouteRejectReason::kMixedTags);
+		EXPECT_EQ(route(Resp({"MGET", "a:{ctl:7}", "b:{42}"})).reason, RouteRejectReason::kWrongDomainTag);
+
+		// 显式路由键同样按域检查。
+		EXPECT_EQ(route(Resp({"PING"}), std::string_view("x:{ctl:7}")).kind, RouteKind::kSlot);
+		EXPECT_EQ(route(Resp({"PING"}), std::string_view("player:{42}:x")).reason, RouteRejectReason::kWrongDomainTag);
+		EXPECT_EQ(route(Resp({"GET", "a:{ctl:7}"}), std::string_view("player:{42}:x")).reason, RouteRejectReason::kWrongDomainTag);
+	}
+
+	TEST(RedisCommandRouteTest, PlayerDomainRejectsControlFamilyTags)
+	{
+		const auto route = [](const std::string& formatted, std::optional<std::string_view> routingKey = std::nullopt) {
+			return ResolveCommandRoute(formatted, routingKey, HashTagPolicy::kAllKeys, KeyDomain::kPlayer);
+		};
+
+		EXPECT_EQ(route(Resp({"GET", "player:{42}:location"})).kind, RouteKind::kSlot);
+		EXPECT_EQ(route(Resp({"GET", "player:save_pending:{afps}"})).kind, RouteKind::kSlot);
+		const CommandRoute controlKey = route(Resp({"GET", "world_channel_directory:{ctl:1}:2"}));
+		EXPECT_EQ(controlKey.reason, RouteRejectReason::kWrongDomainTag);
+		EXPECT_EQ(controlKey.offendingKey, "world_channel_directory:{ctl:1}:2");
+		EXPECT_EQ(route(Resp({"SPUBLISH", "assetop:wake:{aw:7}", "42"})).reason, RouteRejectReason::kWrongDomainTag);
+		EXPECT_EQ(route(Resp({"PING"}), std::string_view("x:{ctl:7}")).reason, RouteRejectReason::kWrongDomainTag);
+		// 不带 tag 的键仍由 kAllKeys 拒绝,原因不变。
+		EXPECT_EQ(route(Resp({"GET", "world_channel_directory:zone:1:2"})).reason, RouteRejectReason::kMissingHashTag);
+
+		// 缺省的 kUnrestricted 不看 tag 形状,既有调用方行为不变。
+		EXPECT_EQ(RouteOf(Resp({"GET", "world_channel_directory:{ctl:1}:2"})).kind, RouteKind::kSlot);
+		EXPECT_EQ(RouteOf(Resp({"EVAL", "return 1", "2", "a:{ctl:7}", "b:{ctl:7}"})).kind, RouteKind::kSlot);
+	}
+
 	TEST(RedisCommandRouteTest, CommandMissingItsKeyIsMalformed)
 	{
 		for (const std::string_view name : {std::string_view("GET"), std::string_view("MGET"), std::string_view("DEL")})

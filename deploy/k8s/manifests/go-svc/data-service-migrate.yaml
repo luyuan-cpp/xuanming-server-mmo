@@ -57,37 +57,40 @@ spec:
     spec:
       restartPolicy: Never
       initContainers:
-        # 等 MySQL 的 3306 真正可连再跑迁移(理由与时间预算的算法见 trade-migrate.yaml 同名 initContainer 的注释):
-        # 上限 WAIT_MYSQL_TIMEOUT_SECONDS + 8s,要明显小于 k8s_deploy.ps1 的 $GoSvcMigrateJobMinWaitSeconds。
-        - name: wait-mysql
+        # 等 SQL 入口真正可连再跑迁移(理由与时间预算的算法见 trade-migrate.yaml 同名 initContainer 的注释):
+        # 上限 WAIT_SQL_TIMEOUT_SECONDS + 8s,要明显小于 k8s_deploy.ps1 的 $GoSvcMigrateJobMinWaitSeconds。
+        - name: wait-sql
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
-            - name: MYSQL_ADDR
-              value: "mysql.__INFRA_NAMESPACE__"
-            - name: WAIT_MYSQL_TIMEOUT_SECONDS
+            # 这次实际的 SQL 入口,由 k8s_deploy.ps1 的 Get-SqlEntryEndpoint 替换:tidb 档是外部 TiDB,只有 dev 用集群内 MySQL 时才是 mysql.<infra>。
+            - name: SQL_HOST
+              value: "PLACEHOLDER_SQL_ENTRY_HOST"
+            - name: SQL_PORT
+              value: "PLACEHOLDER_SQL_ENTRY_PORT"
+            - name: WAIT_SQL_TIMEOUT_SECONDS
               value: "150"
           command:
             - sh
             - -c
             - |
               if ! command -v nc >/dev/null 2>&1; then
-                echo "nc not found in image, skip waiting for $MYSQL_ADDR:3306"
+                echo "nc not found in image, skip waiting for $SQL_HOST:$SQL_PORT"
                 exit 0
               fi
               uptime_s() { cut -d. -f1 /proc/uptime; }
-              deadline=$(( $(uptime_s) + $WAIT_MYSQL_TIMEOUT_SECONDS ))
+              deadline=$(( $(uptime_s) + $WAIT_SQL_TIMEOUT_SECONDS ))
               while :; do
-                if nc -z -w 3 "$MYSQL_ADDR" 3306; then
-                  echo "$MYSQL_ADDR:3306 reachable"
+                if nc -z -w 3 "$SQL_HOST" "$SQL_PORT"; then
+                  echo "$SQL_HOST:$SQL_PORT reachable"
                   exit 0
                 fi
                 now=$(uptime_s)
                 if [ "$now" -ge "$deadline" ]; then
-                  echo "ERROR: $MYSQL_ADDR:3306 not reachable within ${WAIT_MYSQL_TIMEOUT_SECONDS}s" >&2
+                  echo "ERROR: $SQL_HOST:$SQL_PORT not reachable within ${WAIT_SQL_TIMEOUT_SECONDS}s" >&2
                   exit 1
                 fi
-                echo "waiting for $MYSQL_ADDR:3306 ($(( deadline - now ))s left)..."
+                echo "waiting for $SQL_HOST:$SQL_PORT ($(( deadline - now ))s left)..."
                 sleep 5
               done
           resources:
@@ -102,6 +105,11 @@ spec:
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
+            # MySQL 口令:data-service 的配置(MySQLPasswordEnv)指名这个变量;Secret mysql-auth 由 k8s_deploy.ps1 先于本 Job 在本 namespace 建好
+            # (工作负载密钥目录,docs/design/workload-secrets-via-k8s-secret.md)。不写 optional:Secret 缺失时 Pod 起不来,不带空口令去连库。
+            - name: MMORPG_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: mysql-auth, key: password, optional: false}
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
           # 与 data-service.yaml 的 args 只差最后一个 -migrate:同一份 ConfigMap,库名 / 账号与服务完全一致。

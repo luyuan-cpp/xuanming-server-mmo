@@ -16,6 +16,12 @@ import (
 // ApplicationQuotaBudget 是整个配额查询的上限，父请求截止时间更早时服从父请求。
 const ApplicationQuotaBudget = 250 * time.Millisecond
 
+// ApplicationQuotaRedisPoolSize 是配额专用客户端的连接池上限（guild.go 装配时 PoolSize 与 MaxActiveConns 都取它）。
+// 配额单独用一个小池：Redis 变慢时，卡住的配额查询只占这几条连接，不挤仓储池。
+// 它连控制域核心 Redis（RedisClient.Host），每个 guild 副本固定多这么多条连接。
+// K8s 的 Redis 连接总账 guild 行按它记 Fixed，k8s_deploy_contract 从本行读值比对，改值要同改总账。
+const ApplicationQuotaRedisPoolSize = 4
+
 const applicationQuotaWindowMs = 60_000
 
 // 计数与 TTL 原子写入；修复无 TTL 的遗留键，重复尝试不延长窗口。

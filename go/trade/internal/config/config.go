@@ -28,6 +28,7 @@ import (
 	"shared/dbplacement"
 	"shared/idsegment"
 	"shared/redisauth"
+	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -125,6 +126,9 @@ type Config struct {
 	// 经 secretKeyRef 注入;ConfigMap 里 SharedRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
 	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
 	SharedRedisPasswordEnv string `json:",optional"`
+	// MySQLPasswordEnv 是 MySQL.Password 所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md);
+	// ConfigMap 里 MySQL.Password 写空串。不写 = 照用 Password 字面量(本机)。由 ResolveMySQLPassword 在加载配置后填好,变量缺失或为空即拒启。
+	MySQLPasswordEnv string `json:",optional"`
 
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.8):资产通道读 player:{id}:location。
 	// SharedRedis 留给控制域(唤醒频道与去重键、选主锁)。读取走 EffectivePlayerRedis():没写 Addrs 时指向 SharedRedis 那一个实例,
@@ -412,6 +416,13 @@ func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) 
 		redisauth.Target{Field: "SharedRedis.Password", Password: &c.SharedRedis.Password})
 }
 
+// ResolveMySQLPassword 按 MySQLPasswordEnv 填 MySQL.Password,规则见 secretenv.Fill。-migrate 与常驻启动都连库,
+// 所以在 conf.MustLoad 之后、迁移分支之前调用(trade.go);trade-migrate Job 同样注入这个变量。
+func (c *Config) ResolveMySQLPassword(lookup func(string) (string, bool)) error {
+	return secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
+		secretenv.Target{Field: "MySQL.Password", Value: &c.MySQL.Password})
+}
+
 // MySQLConf 是 mmorpg_trade 的连接参数。
 type MySQLConf struct {
 	Host string `json:"Host"`
@@ -620,7 +631,7 @@ func (c *Config) Validate() error {
 			}
 		}
 		for _, currency := range c.Commerce.CurrencyTypes {
-			if !isTradableCurrency(currency) {
+			if !IsTradableCurrency(currency) {
 				return errors.New("交易货币只允许金币0与显式启用钻石1，绑定币禁售")
 			}
 		}
@@ -633,7 +644,7 @@ func (c *Config) Validate() error {
 			return errors.New("人民币寄售必须开启商城与SQL资产通道")
 		}
 		for _, currency := range c.Rmb.CurrencyTypes {
-			if !isTradableCurrency(currency) {
+			if !IsTradableCurrency(currency) {
 				return errors.New("人民币寄售不能交易绑定币")
 			}
 		}
@@ -653,9 +664,9 @@ func HasRpcTarget(c zrpc.RpcClientConf) bool {
 	return c.Etcd.Key != "" || len(c.Endpoints) > 0 || c.Target != ""
 }
 
-// isTradableCurrency:交易与人民币寄售可用的币种,是取值表(shared/currencytype)的子集。只点名常量、
+// IsTradableCurrency:交易与人民币寄售可用的币种,是取值表(shared/currencytype)的子集。只点名常量、
 // 不写数字:扩白名单时不可能写出表外的值,否则 scene 会把它判成版本错位,截止为 0 的交付流将永久 RETRY。
-// 绑定灵石禁售。
-func isTradableCurrency(currency uint32) bool {
+// 绑定灵石禁售。白名单只在这里一份:配置校验与 svc 装配人民币寄售都调它。
+func IsTradableCurrency(currency uint32) bool {
 	return currency == currencytype.Gold || currency == currencytype.Diamond
 }

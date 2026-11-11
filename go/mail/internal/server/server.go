@@ -76,7 +76,7 @@ func rejection(err error) *base.TipInfoMessage {
 		code = uint32(table.CommonError_kFeatureUnavailable)
 	}
 	if code == uint32(table.CommonError_kServiceUnavailable) {
-		logx.Error("[mail] 权威邮件请求失败")
+		logx.Error("[mail] authoritative mail request failed")
 	}
 	return &base.TipInfoMessage{Id: code}
 }

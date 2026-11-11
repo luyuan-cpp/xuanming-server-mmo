@@ -62,6 +62,7 @@ const (
 	LoginError_kRoleNameSensitive                        LoginError = 2034
 	LoginError_kLoginAuthProviderUnavailable             LoginError = 2035
 	LoginError_kLoginTokenIssueFailed                    LoginError = 2036
+	LoginError_kLoginZoneCreateRoleClosed                LoginError = 2037
 )
 
 // Enum value maps for LoginError.
@@ -105,6 +106,7 @@ var (
 		2034: "kRoleNameSensitive",
 		2035: "kLoginAuthProviderUnavailable",
 		2036: "kLoginTokenIssueFailed",
+		2037: "kLoginZoneCreateRoleClosed",
 	}
 	LoginError_value = map[string]int32{
 		"kLogin_errorOK":                            0,
@@ -145,6 +147,7 @@ var (
 		"kRoleNameSensitive":                        2034,
 		"kLoginAuthProviderUnavailable":             2035,
 		"kLoginTokenIssueFailed":                    2036,
+		"kLoginZoneCreateRoleClosed":                2037,
 	}
 )
 
@@ -179,7 +182,7 @@ var File_login_error_tip_proto protoreflect.FileDescriptor
 
 const file_login_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15login_error_tip.proto*\xc5\b\n" +
+	"\x15login_error_tip.proto*\xe6\b\n" +
 	"\vlogin_error\x12\x12\n" +
 	"\x0ekLogin_errorOK\x10\x00\x12\x1a\n" +
 	"\x15kLoginAccountNotFound\x10\xd0\x0f\x12\x1c\n" +
@@ -218,7 +221,8 @@ const file_login_error_tip_proto_rawDesc = "" +
 	"\x0ekRoleNameTaken\x10\xf1\x0f\x12\x17\n" +
 	"\x12kRoleNameSensitive\x10\xf2\x0f\x12\"\n" +
 	"\x1dkLoginAuthProviderUnavailable\x10\xf3\x0f\x12\x1b\n" +
-	"\x16kLoginTokenIssueFailed\x10\xf4\x0fB$\n" +
+	"\x16kLoginTokenIssueFailed\x10\xf4\x0f\x12\x1f\n" +
+	"\x1akLoginZoneCreateRoleClosed\x10\xf5\x0fB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

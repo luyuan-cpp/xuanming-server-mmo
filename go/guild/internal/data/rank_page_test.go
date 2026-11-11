@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -14,7 +13,7 @@ import (
 )
 
 // 验证实际 Redis 分页结果:超大页码应为空,不能因乘法溢出重新读到前几名。
-// 不依赖 MySQL;同时覆盖客户端受限页长与内部调用的完整 uint32 参数范围。
+// 不依赖 MySQL;覆盖 data 层接受的完整 uint32 参数范围(客户端页长由逻辑层夹到 MaxRankPageSize)。
 func TestGetGuildRankPageHandlesPaginationBoundaries(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
@@ -25,9 +24,7 @@ func TestGetGuildRankPageHandlesPaginationBoundaries(t *testing.T) {
 	for i := range members {
 		members[i] = redis.Z{Score: float64(60 - i*10), Member: strconv.Itoa(101 + i)}
 	}
-	for _, key := range []string{guildRankKey, zoneRankKey(2)} {
-		require.NoError(t, rdb.ZAdd(ctx, key, members...).Err())
-	}
+	require.NoError(t, rdb.ZAdd(ctx, zoneRankKey(2), members...).Err())
 
 	const maxUint32 = 1<<32 - 1
 	cases := []struct {
@@ -49,18 +46,32 @@ func TestGetGuildRankPageHandlesPaginationBoundaries(t *testing.T) {
 		{name: "内部调用最大页长", page: 1, pageSize: maxUint32,
 			wantGuildIDs: []uint64{101, 102, 103, 104, 105, 106}, wantFirstRank: 1},
 	}
-	for _, zoneID := range []uint32{0, 2} {
-		for _, tc := range cases {
-			t.Run(fmt.Sprintf("zone=%d/%s", zoneID, tc.name), func(t *testing.T) {
-				entries, total, err := repo.GetGuildRankPage(ctx, zoneID, tc.page, tc.pageSize)
-				require.NoError(t, err)
-				assert.Equal(t, uint32(6), total)
-				require.Len(t, entries, len(tc.wantGuildIDs))
-				for i, guildID := range tc.wantGuildIDs {
-					assert.Equal(t, guildID, entries[i].GuildID)
-					assert.Equal(t, tc.wantFirstRank+uint32(i), entries[i].Rank)
-				}
-			})
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			entries, total, err := repo.GetGuildRankPage(ctx, 2, tc.page, tc.pageSize)
+			require.NoError(t, err)
+			assert.Equal(t, uint32(6), total)
+			require.Len(t, entries, len(tc.wantGuildIDs))
+			for i, guildID := range tc.wantGuildIDs {
+				assert.Equal(t, guildID, entries[i].GuildID)
+				assert.Equal(t, tc.wantFirstRank+uint32(i), entries[i].Rank)
+			}
+		})
 	}
+}
+
+// 帮会榜只有分区榜:不给区就是调用方写错了,两个读口都拒绝,不回落到任何全服键。
+func TestGuildRankReadsRequireZone(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+	repo := NewGuildRepo(rdb, nil, time.Minute)
+	ctx := context.Background()
+
+	_, _, err := repo.GetGuildRankPage(ctx, 0, 1, 10)
+	require.ErrorIs(t, err, ErrRankZoneRequired)
+	_, err = repo.GetGuildRank(ctx, 101, 0)
+	require.ErrorIs(t, err, ErrRankZoneRequired)
+	// 读命令不建键,查 Keys 区分不出「读过 Redis」;go-redis 懒连接,一条命令都没发时计数为 0。
+	assert.Zero(t, mr.CommandCount(), "拒绝发生在访问 Redis 之前")
 }

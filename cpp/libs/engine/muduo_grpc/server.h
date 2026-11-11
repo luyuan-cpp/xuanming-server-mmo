@@ -73,8 +73,18 @@ namespace detail
 class ServerConnection;
 } // namespace detail
 
+// 派发拦截:派发泵每次调用 unary handler 时包一层。参数是本次调用的 metadata 和执行 handler 的 invoke。
+//   * metadata 只能在调用 invoke 之前读:handler 可能同步完成,并随调用记录一起释放它。
+//   * 实现应当恰好调用一次 invoke,并在 handler 执行期间保持它需要的上下文。多调的被忽略;一次都没调的,服务端补调一次
+//     并打 ERROR。所以 handler 总是恰好执行一次。
+// 传输层不认识 metadata 里的键;链路追踪的实现在 engine 的 core/network/grpc_trace_hooks.h
+// (docs/design/distributed-tracing.md §5.3)。
+using UnaryDispatchInterceptor = std::function<void(const Metadata &metadata, const std::function<void()> &invoke)>;
+
 struct ServerOptions
 {
+    // 派发拦截;空 = 直接调用 handler。见上面 UnaryDispatchInterceptor。
+    UnaryDispatchInterceptor dispatchInterceptor;
     std::string name{"grpc"};                           // 只用于连接名与日志
     ServerSessionOptions session;
     size_t maxSendMessageBytes{4 * 1024 * 1024};

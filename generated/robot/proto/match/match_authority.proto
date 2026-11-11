@@ -11,6 +11,9 @@ message MatchNetworkProfile {
   repeated NetworkProbeReceipt receipts = 3;
   string owner_account = 4; // 服务端捕获的原会话账号；不得由当前目录反查补权。
   uint64 owner_revision = 5;
+  // 写计划时服务端按会话轨道记下（x-release-track，取值 "stable" / "canary"；空串是本字段之前的档案，按 stable 算）。
+  // 回执提交沿用计划里的值，不接受客户端自带。成局时全员都是 canary 才放 canary battle（docs/design/release-track-gray-canary.md §2.6）。
+  string release_track = 6;
 }
 
 // 全局观战占用与匹配票在同P事务内互斥；时间到期不意味着远端已取消。
@@ -188,6 +191,9 @@ message MatchFormationMember {
   uint64 player_id = 1;
   string ticket = 2;
   uint32 team_index = 3; // PVP_TEAM成局时持久化0/1分边，恢复不能重新排序或拆散原队伍。
+  // 整队开局的发起人(该队队长)。成局时由撮合按 TeamLaunchRecord.actor_id 写入,单排成员恒为 false;
+  // 建房时每一方的战斗剧本按队长的选用,没有队长按阵位第一的成员(docs/design/battle-script.md §5.2)。
+  bool captain = 4;
 }
 message MatchFormationRecord {
   option (OptionTableName) = "match_formation";
@@ -215,6 +221,9 @@ message MatchFormationRecord {
   string preflight_instance_id = 20; // 发任何Create之前与完整version1正文同事务保存。
   uint32 adopted_outcome_protocol_version = 21; // 独立保存真实Create/PRESENT回执，不能由能力推算。
   bool adopted_outcome_observed = 22; // 未回包与原身份明确回显0不同；首个实际回执永久不变。
+  // 这局所在 battle 节点的发布轨道（"stable" / "canary"），选点时按选中节点记下，之后不变（docs/design/release-track-gray-canary.md §2.6）。
+  // 观战入口、观战列表与随机选场按它判 stable 观众能不能看，不看实时节点镜像。空串（本字段之前的原件，迁移补列后读出 NULL）按 stable。
+  string release_track = 23;
 }
 message MatchPreparedEndpoint {
   uint64 player_id = 1;
@@ -280,6 +289,16 @@ enum MatchBattleCompletionSourceKind {
   // 只给过了截止加宽限、没有任何终局行、持久 Create 原件过不了终局核对的成局；同一事务另写一行 match_manual_resolution 审计。
   // 同样没有 Battle 原字节，format_version 为 0。
   MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT = 5;
+  // 原执行实例提交的终局原件内容本身不合格、永远提交不了 COMPLETE 时，Match 在权威截止加终局提交宽限之后、
+  // 收到它的下一次重放时写的 ABORT（2026-11-11，go/match/internal/authority/rejected_original_abort.go）。
+  // battle 冻结的终局只会原样重放，这份原件被确定性规则拒收就不会再有别的结果；版本错位类拒收（未知字段等）不算。
+  // 同样没有 Battle 原字节，format_version 为 0。
+  MATCH_BATTLE_COMPLETION_SOURCE_MATCH_REJECTED_ORIGINAL_ABORT = 6;
+  // 原执行进程确定已不在时 Match 提前写的 ABORT（2026-11-11，go/match/internal/authority/instance_gone.go，
+  // docs/design/battle-instance-loss-early-abort.md §4）：两次确定证据（原地址上是另一个实例 / 原端口拒连 /
+  // K8s 里原 IP 已没有 Pod）相隔不少于复核间隔，期间原实例从没亲口应答过。截止之前也可以写。
+  // 同样没有 Battle 原字节，format_version 为 0。
+  MATCH_BATTLE_COMPLETION_SOURCE_MATCH_INSTANCE_GONE_ABORT = 7;
 }
 
 // 唯一终局与原结果outbox；RPC来源不伪造Kafka位点。
@@ -369,4 +388,53 @@ message MatchPlayerBattleReportRecord {
   uint64 created_ms = 2;  // match 库时间 now(tx);列表按它倒序,同一时刻按 battle_id 倒序
   uint64 battle_id = 3;
   bytes summary = 4;      // 确定性序列化的 BattleReportSummary(match_service.proto)
+}
+
+// ---- 战斗剧本(docs/design/battle-script.md §6) ----
+
+// 玩家上传的剧本:一份一行,只存「当前提交版」与「审核通过版」两份正文。
+// 改一次 = 新版本、重新待审;审过之前对局一直用上一份通过版(approved_*),审核看的永远是 content 那一版。
+// 正文都是确定性序列化的 battle.BattleScript(script_id 恒为 0,身份是本行 script_id)。
+message MatchBattleScriptRecord {
+  option (OptionTableName) = "match_battle_script";
+  option (OptionPrimaryKey) = "script_id";
+  option (OptionIndex) = "owner_player_id,script_id;review_state,submitted_ms,script_id";
+  uint64 script_id = 1;          // 发号器永久 ID(只当身份用,不比大小)
+  uint64 owner_player_id = 2;
+  uint32 revision = 3;           // 每次提交 +1,从 1 起;客户端改、删、审核都按它做 CAS
+  bytes content = 4;             // 当前提交版正文
+  uint32 review_state = 5;       // BattleScriptReviewState(match_service.proto):当前提交版的审核状态
+  uint32 approved_revision = 6;  // 最近一次通过的版本号;0 = 从未通过,不能选用
+  bytes approved_content = 7;    // 最近一次通过的那一版正文;建房只用它
+  string reject_reason = 8;      // 最近一次驳回的原因(给作者看)
+  uint64 submitted_ms = 9;       // match 库时间:当前版本提交时刻;待审列表按它排
+  uint64 reviewed_ms = 10;
+}
+
+// 审核流水:每审一次一行,与剧本行的状态变更同一事务写入,只增不改(审计、追责、事后核对审的是哪一版正文)。
+message MatchBattleScriptReviewRecord {
+  option (OptionTableName) = "match_battle_script_review";
+  option (OptionPrimaryKey) = "script_id,revision";
+  uint64 script_id = 1;
+  uint32 revision = 2;
+  uint64 owner_player_id = 3;
+  bool approved = 4;
+  string reviewer = 5;      // 审核员名,≤64 字节
+  string reason = 6;        // 驳回原因或通过备注,≤191 字节
+  uint64 reviewed_ms = 7;   // match 库时间
+  bytes content = 8;        // 审的那一版正文
+}
+
+// 玩家对某种对局选用的剧本:(玩家, 模式, 副本) 一行,模式 / 副本为 0 表示任意;查找按 具体 → 通用 取第一条。
+// 只记引用,不存正文:官方剧本随 match 发布,玩家剧本建房时读审核通过版。
+message MatchBattleScriptLoadoutRecord {
+  option (OptionTableName) = "match_battle_script_loadout";
+  option (OptionPrimaryKey) = "player_id,match_mode,battle_config_id";
+  uint64 player_id = 1;
+  uint32 match_mode = 2;
+  uint32 battle_config_id = 3;
+  uint32 origin = 4;               // battle.eBattleScriptOrigin:1 官方 / 2 玩家
+  uint32 official_script_id = 5;   // origin = 官方
+  uint64 player_script_id = 6;     // origin = 玩家:只能是本人的剧本
+  uint64 updated_ms = 7;
 }

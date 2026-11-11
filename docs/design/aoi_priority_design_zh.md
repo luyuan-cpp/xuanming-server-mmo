@@ -15,8 +15,10 @@ AOI 空间查询（六边形网格邻居）填充的是**关注列表（Interest
 ## 优先级标签与策略权重
 
 优先级分为两个层次：
-1. **语义标签** (`AoiPriority` 枚举) — 实体所属的分类。
+1. **语义标签** (`AoiPriority` 枚举) — 「为什么关注它」的分类，登记在每个来源上。
 2. **优先级策略** (`AoiPriorityPolicy`) — 场景级别的权重表，为每个标签分配一个淘汰权重。
+
+权重表是静态的：一条关注的权重只由它有哪些来源决定，不随观察者的状态切换表。「战斗时先看交手的人、脱战后任务 NPC 回到最前」靠交手来源有寿命实现，见 [AOI 单向关注](aoi-directed-interest.md)「战斗关注」；按观察者状态切换权重表是被否掉的做法，理由见同文「被否掉的做法：按观察者状态切换权重表」。
 
 ### 标签定义
 
@@ -24,29 +26,30 @@ AOI 空间查询（六边形网格邻居）填充的是**关注列表（Interest
 |------|-----|------|
 | `kNormal` | 0 | 默认：通过空间网格查询发现的实体 |
 | `kTeammate` | 1 | 同队：拥有相同的 `TeamId` 组件 |
-| `kAttacker` | 2 | 攻击者：来自战斗/仇恨系统（TODO：接入） |
+| `kCombat` | 2 | 交手对象：我打的、打我的、我治疗的、治疗我的。由 `CombatEngagementSystem` 登记显式来源 `kCombat`，脱战（10 秒不再交手）、死亡时撤销（2026-11-10 起，取代原来没人设置的 `kAttacker`） |
 | `kQuestNpc` | 3 | 任务NPC：由任务系统标记（TODO：接入） |
 | `kBoss` | 4 | Boss / 精英怪 |
-| `kPinned` | 5 | 预留锁定标签，权重恒为 255；玩法尚未接入 |
+| `kPinned` | 5 | 锁定标签，权重恒为 255，供技能追踪这类不能被挤掉的显式关注使用 |
 
 ### 内置策略
 
 | 策略 | 权重顺序（低 → 高） |
 |------|---------------------|
-| `kPolicyOpenWorld`（开放世界） | normal(0) < teammate(1) < attacker(2) < questNpc(3) < boss(4) < pinned(255) |
-| `kPolicyDungeon`（副本） | normal(0) < questNpc(1) < teammate(2) < attacker(3) < boss(4) < pinned(255) |
-| `kPolicyPvpArena`（PvP 竞技场） | normal(0) < questNpc(1) < teammate(2) < boss(3) < attacker(4) < pinned(255) |
+| `kPolicyOpenWorld`（开放世界） | normal(0) < teammate(1) < questNpc(3) < boss(4) < combat(5) < pinned(255) |
+| `kPolicyDungeon`（副本） | normal(0) < questNpc(1) < teammate(2) < boss(4) < combat(5) < pinned(255) |
+| `kPolicyPvpArena`（PvP 竞技场） | normal(0) < questNpc(1) < teammate(2) < boss(3) < combat(4) < pinned(255) |
 
-场景在创建时附加 `ScenePriorityPolicyComp` 来选择使用哪种策略。
+`kCombat` 在每张表里都高于除 `kPinned` 外的所有标签，`aoi_priority.h` 用 `static_assert` 守住。
+场景在创建时附加 `ScenePriorityPolicyComp` 来选择使用哪种策略（生产尚未挂，实际都是开放世界）。
 `kPinned` 在所有策略中始终为权重 255 —— 它**永远不会**被空间逻辑淘汰。
 
 ### 淘汰规则
 
 容量只数**正在显示**的条目（`AoiListComp::visibleCount`）。一个条目的权重取它的空间标签与各显式来源标签中最高的一个。当显示名额已满、又有关系需要显示时，比较它与已显示条目中**最低权重**者的**策略权重**：
-- 新关系权重 > 最低条目权重 → 淘汰最低条目，显示新关系。被淘汰者只剩空间来源时整条删除，下次跨格重新评估；带显式来源时转为暂不显示，关系保留。
-- 否则：新的空间关系被拒，不建条目；新的显式关注照常登记，暂不显示。
+- 新关系权重 > 最低条目权重 → 淘汰最低条目，显示新关系。被淘汰者只剩空间来源时整条删除，观察者打上补回标记；带显式来源时转为暂不显示，关系保留。
+- 否则：新的空间关系被拒，不建条目，观察者打上补回标记；新的显式关注照常登记，暂不显示。
 
-淘汰只改本观察者的表，并只通知本观察者的客户端移除一次；目标那一侧的关系各自独立，不要求互相占位。观察者让出名额后（空间离开、撤销关注、目标离场），按权重补上满足可见条件的暂隐显式关注，并发送创建与当前位置。
+淘汰只改本观察者的表，并只通知本观察者的客户端移除一次；目标那一侧的关系各自独立，不要求互相占位。观察者让出名额后（空间离开、撤销关注、脱战、目标离场），按权重补上满足可见条件的暂隐显式关注，并发送创建与当前位置；还有空名额且带补回标记（`AoiNearbyRefillComp`）的，下一帧重扫一次附近候选，把被拒、被挤掉的附近的人补回来，见 [AOI 单向关注](aoi-directed-interest.md)「名额空出后补回附近的人」。
 
 ## 动态容量
 
@@ -78,7 +81,7 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 - 1 = 最大压力 → 服务器容量 = `kAoiListCapacityMin`（20）
 - 中间值线性插值。
 
-场景的 tick/负载监控器每帧设置 `pressureFactor`（集成 TODO）。
+压力来自模拟步耗时（2026-11-11 接上）：`AoiLoadMonitor` 按「这一步耗时 / 步长」的指数平均算出利用率，0.5 以下压力为 0、0.9 时为 1，量化成 10 档、带防抖，每秒最多决定一次；`AoiSystem::ApplyServerPressure` 把它写进本线程的每个场景（`ScenePressureComp` 的唯一写入口），容量因此收缩时按权重裁表、回升时补回。规则与理由见 [AOI 单向关注](aoi-directed-interest.md)「服务器压力：容量收缩时按权重裁表」；阈值待压测校准。
 
 ### 客户端上报数量
 
@@ -102,10 +105,12 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 
 ## 隐身可见性
 
-`ViewSystem::CanSee(observer, target)` 用于空间关注的进入检查：
+空间关注用两个判定，隐身规则相同、距离不同：
 
-1. 距离检查。
-2. 目标带 `StealthedTagComp`（`kBuffTypeStealth` Buff 维护）时不可见，**除非**观察者对它的某个显式来源授予了侦测能力（`AoiFollowGrant::revealsStealth`）。普通关注、队伍关系和空间邻近都不能看穿隐身。
+- `ViewSystem::CanSee(observer, target)`：建立空间关注，三维距离不超过视野半径（含等号）。
+- `ViewSystem::CanKeepSeeing(observer, target)`：维持已有的空间关注，三维距离不超过离开半径（视野半径 × `kAoiLeaveRadiusFactor`）。两个半径之间是滞后区间，评估时机见 [AOI 单向关注](aoi-directed-interest.md)「空间关注的评估时机」。
+
+隐身规则：目标带 `StealthedTagComp`（`kBuffTypeStealth` Buff 维护）时不可见，**除非**观察者对它的某个显式来源授予了侦测能力（`AoiFollowGrant::revealsStealth`）。普通关注、队伍关系和空间邻近都不能看穿隐身。
 
 隐身标签从无到有、从有到无时，`BuffSystem` 调用 `AoiSystem::RefreshTargetVisibility`：
 
@@ -140,7 +145,9 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 | `InterestSystem::GetVisibleWatchers(target, out)` | 正在显示 target 的观察者，移动、属性、技能广播的接收者 |
 | `InterestSystem::GetEffectiveCapacity(watcher)` | 动态解析有效容量 |
 | `InterestSystem::GetPriorityPolicy(watcher)` | 获取场景的策略（默认：开放世界） |
-| `ViewSystem::CanSee(observer, target)` | 空间可见判定：距离 + 隐身（侦测授权例外） |
+| `ViewSystem::CanSee(observer, target)` | 进视野判定：距离 ≤ 视野半径 + 隐身（侦测授权例外） |
+| `ViewSystem::CanKeepSeeing(observer, target)` | 维持判定：距离 ≤ 离开半径 + 隐身（侦测授权例外） |
+| `AoiSystem::Update` | 更新格子成员；首次入格或位置变化到了重判时机时按距离重判空间来源（两个方向） |
 | `ViewSystem::IsStealthed(entity)` | 检查是否有隐身 Buff |
 
 ## 相关文件
@@ -150,8 +157,9 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 | `spatial/constants/aoi_priority.h` | 优先级标签、`AoiPriorityPolicy` 结构体、内置策略、动态容量常量 |
 | `spatial/comp/scene_node_scene_comp.h` | `AoiEntry`、`AoiListComp`（正向）、`AoiWatchersComp`（反向）、`AoiFollowSource` / `AoiFollowGrant`、容量与策略组件 |
 | `spatial/system/interest.h/.cpp` | 两张索引的唯一写者：来源合并、容量淘汰与补位、隐身可见条件、离场清理 |
-| `spatial/system/aoi.h/.cpp` | 网格评估、显式关注入口、可见性变化的净化与组包下发 |
-| `spatial/system/view.h/.cpp` | `CanSee()`、`IsStealthed()`、技能广播接收者 |
+| `spatial/constants/view.h` | 视野半径、离开半径系数、重判步长、格子尺寸 |
+| `spatial/system/aoi.h/.cpp` | 格子成员、按距离的位移重判、显式关注入口、可见性变化的净化与组包下发 |
+| `spatial/system/view.h/.cpp` | `CanSee()`、`CanKeepSeeing()`、`IsStealthed()`、技能广播接收者 |
 | `spatial/system/movement.cpp` | 移动广播接收者、同场景瞬移后给显式关注者补发新位置 |
 | `actor/attribute/system/actor_state_attribute_sync.cpp` | 属性同步接收者改为反向索引中的可见观察者 |
 | `combat/buff/system/buff.cpp` | 隐身标签变化时调用 `RefreshTargetVisibility` |
@@ -159,12 +167,11 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 
 ## 后续计划
 
-- **攻击者优先级**：接入战斗/伤害系统，受击时调用 `InterestSystem::UpgradePriority(target, attacker, kAttacker)`。
+- **仇恨值与 AI 选目标**：NPC 的仇恨名单（2026-11-11 已落码，见 [AOI 单向关注](aoi-directed-interest.md)「仇恨名单」）只记成员，用来让一起打同一个怪的人互相算友方；AI 选目标需要仇恨值时在这份名单上加。生产代码还不刷怪，名单在刷怪接上后才生效。
 - **任务NPC优先级**：接受任务时调用 `InterestSystem::UpgradePriority(player, npc, kQuestNpc)`。
 - **Boss 标记**：场景创建时标记 Boss 实体；网格进入时检测并分配 `kBoss` 标签。
-- **压力集成**：场景 tick 监控器根据实体数量 / CPU 负载写入 `ScenePressureComp.pressureFactor`。
+- **压力阈值校准**：压力监控与按权重裁表已在 2026-11-11 接上，阈值（利用率 0.5 / 0.9、10 档、每秒一次）没有压测数据，上线前随 AOI 压测校准；要不要把事件循环处理 RPC 的耗时并入压力信号，也等压测数据再定。
 - **客户端设置 RPC**：将客户端上报的显示数量接入 `AoiClientCapacityComp`。
-- **滞后/缓冲期**：为在网格边界反复振荡的实体添加一个宽限期，避免频繁添加/移除。只作用于空间来源，不能绑到显式关注的存续上。
 - **玩法接入显式关注**：技能追踪（鹰眼术）、任务目标、切磋对象等按各自来源调用 `AoiSystem::Follow` / `Unfollow`；队伍需要视野外同步时由队伍逻辑分别建立两个方向的关注。
 - **自定义策略**：从配置表数据驱动加载策略。
 
@@ -209,3 +216,31 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 - 容量淘汰此前静默删除条目、客户端留下不再更新的残影；现在被淘汰者通知观察者本人一次。
 - 隐身此前只在跨格时生效，已在显示的观察者会一直收到隐身者的坐标；现在隐身开始与结束都立即重判。
 - 内存：每个条目多一个空的 `std::vector<AoiFollowGrant>` 和两个布尔，约增加 24～32 字节；反向索引与正向条目一一对应。没有压测数据，上线前随 AOI 压测复核。
+
+## 2026-11-10 空间关注改为按距离重判
+
+冒烟发现：移动进入新的一组格子时对方被 `CanSee` 的距离挡住，之后在格子里怎么走都互相看不见。根因是距离只在跨格那一刻判一次（格子 20 m、视野 10 m，跨格时新格子里的人至少在 20 m 外），同一组格子里的靠近不会再判；出视野则只看是否离开七格（20～73 m）。完整推导与规则见 [AOI 单向关注](aoi-directed-interest.md)「空间关注的评估时机」，要点：
+
+- 进视野三维距离 ≤ 10 m（含等号），出视野 > 20 m，中间是滞后区间；格子只负责找进视野的候选，出视野与格子无关。
+- 每个模拟步比较当前位置与上次评估位置：静止的实体位置一变就重判，移动中的累计位移 ≥ 1 m 才重判；首次入格立即判。每次重判两个方向都处理。
+- 口径与 Java 版一致（Java 仓 `docs/reference/mmorpg-client-contract-aoi.md` §8、`PARITY.md`「视野（AOI）进出通知」行），Java 不用改代码。
+- 原来「后续计划」里的滞后 / 缓冲期由这次的两个半径实现，已从计划中删去。
+- `AoiSystem::UpdateGridState` / `HandleEntityVisibility` 改为 `UpdateGridMembership`（只挪格子成员）与 `ReevaluateVisibility`（按距离重判）；上两节提到的跨格进出处理以本节为准。
+- 未编译，待 Codex 按 [AOI 单向关注](aoi-directed-interest.md)「验证」执行。
+
+## 2026-11-10 战斗关注、补回附近的人，权重表保持静态
+
+负责人要求：关注列表优先于格子；名额满、压力大时先看当时感兴趣的，战斗时先看交手的敌人和友方，不在战斗时任务 NPC 优先。讨论中提过「权重随观察者状态变」，比较后定为不用，改为来源有寿命、权重表不变。规则、反例与理由见 [AOI 单向关注](aoi-directed-interest.md)「战斗关注」「名额空出后补回附近的人」「被否掉的做法：按观察者状态切换权重表」。要点：
+
+- `kAttacker` 改名为 `kCombat`（值仍为 2，运行期枚举，不进协议、不落盘），在三张表里都调到除 `kPinned` 外最高；开放世界原来任务 NPC 高于攻击者，与「战斗时先看交手的人」相反。
+- 新增 `CombatEngagementSystem`：伤害、治疗登记双方交手来源，10 秒脱战、死亡时撤销。
+- 新增补回标记 `AoiNearbyRefillComp`：被拒、被挤掉的附近候选在名额空出后的下一帧补回。
+- 未编译；Java 版待做（`PARITY.md` 已登记）。
+
+## 2026-11-11 仇恨名单与服务器压力裁表
+
+接着做上一节留下的两项，详见 [AOI 单向关注](aoi-directed-interest.md)「仇恨名单」「服务器压力：容量收缩时按权重裁表」：
+
+- **仇恨名单**（`CombatAllyRosterComp`，挂在 NPC 上）：和 NPC 敌对交手的非 NPC 实体按先后进名单，最多 40 人，名单里两两互相算友方交手；给正在打怪的人加血会把治疗者也记进名单（治疗仇恨）。只对 NPC 推，玩家之间的混战不推。`RecordInteraction` 拆成 `RecordDamage` / `RecordHeal`，交手记录多了「敌对」标记。
+- **服务器压力**：`AoiLoadMonitor` 按模拟步耗时算压力，`AoiSystem::ApplyServerPressure` 每秒写进各场景；容量收缩时 `InterestSystem::ApplyCapacity` 按权重从低到高、同权重先远后近裁表，回升时补回。新增三个 `/metrics` 读数。
+- 未编译；Java 版待做（`PARITY.md` 已登记）。

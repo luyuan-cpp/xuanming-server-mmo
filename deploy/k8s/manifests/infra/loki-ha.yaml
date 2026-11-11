@@ -1,0 +1,246 @@
+# Loki 单体模式 3 副本(docs/design/no-single-node-horizontal-scaling-20261001.md §10):-LokiReplicas 3 时由 k8s_deploy.ps1 apply,替代 loki.yaml。
+#
+# 形态:每个 Pod 都跑全部组件(-target=all),既收日志也答查询;memberlist 组环,replication_factor 3,写入要 2 份确认,挂一个照常写。
+# 日志块和 TSDB 索引放共享 S3(运维提供的外部 S3 兼容存储,本仓库不部署生产级对象存储),每个 Pod 的 WAL 放自己的 PVC。
+# Service 名和推送地址不变(loki.<infra>:3100),C++ 日志 sidecar 和 Grafana 都不用改。
+# 这就是官方文档里单体模式的高可用:多个实例共用一个对象存储、memberlist 组环、replication_factor 3,流量轮询打到各实例。
+# compactor 只该有一个在干活,Loki 用自己的 compactor 环在这些实例里选一个(环的配置从 common.ring 继承)。这一点未在集群上验证。
+#
+# 占位由 Apply-Infra 替换,任何一个没替换都拒绝 apply:
+#   __INFRA_NAMESPACE__、__LOKI_S3_ENDPOINT__、__LOKI_S3_BUCKET__、__LOKI_S3_REGION__、__LOKI_S3_FORCE_PATH_STYLE__、__LOKI_S3_INSECURE__,
+#   __LOKI_S3_CREDENTIALS_HASH__(访问密钥的指纹,只改 Secret 时 Pod 模板也跟着变,自动滚动)。
+# 访问密钥来自 Secret loki-s3(键 access-key-id)和 loki-s3-secret(键 secret-access-key),经环境变量交给 -config.expand-env,
+# 不进这份 ConfigMap。
+#
+# 改完 ConfigMap 要 kubectl -n mmorpg-infra rollout restart statefulset/loki:Loki 只在启动时读一次主配置(理由同 loki.yaml)。
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  labels:
+    app: loki
+spec:
+  selector:
+    app: loki
+  ports:
+    - name: http
+      port: 3100
+      targetPort: 3100
+---
+# memberlist 组环用的 headless Service。还没 Ready 的 Pod 也要能被发现(publishNotReadyAddresses):Ready 要等环里凑够副本,
+# 不发布的话三个 Pod 互相等。
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki-memberlist
+  labels:
+    app: loki
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: loki
+  ports:
+    - name: memberlist
+      port: 7946
+      targetPort: 7946
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+data:
+  loki.yaml: |
+    auth_enabled: false
+
+    server:
+      http_listen_port: 3100
+      grpc_listen_port: 9095
+      log_level: warn
+
+    memberlist:
+      join_members:
+        - loki-memberlist.__INFRA_NAMESPACE__.svc.cluster.local:7946
+
+    common:
+      path_prefix: /loki
+      replication_factor: 3
+      ring:
+        kvstore:
+          store: memberlist
+      storage:
+        s3:
+          endpoint: __LOKI_S3_ENDPOINT__
+          bucketnames: __LOKI_S3_BUCKET__
+          region: __LOKI_S3_REGION__
+          access_key_id: ${LOKI_S3_ACCESS_KEY_ID}
+          secret_access_key: ${LOKI_S3_SECRET_ACCESS_KEY}
+          s3forcepathstyle: __LOKI_S3_FORCE_PATH_STYLE__
+          insecure: __LOKI_S3_INSECURE__
+
+    schema_config:
+      configs:
+        - from: 2024-01-01
+          store: tsdb
+          object_store: s3
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+    storage_config:
+      tsdb_shipper:
+        active_index_directory: /loki/tsdb-index
+        cache_location: /loki/tsdb-cache
+
+    ingester:
+      wal:
+        dir: /loki/wal
+
+    # 与 loki.yaml 相同:7 天保留,限速按单副本时的取值(每个流的写入要落到 3 个副本上,总量按副本数摊开)。
+    limits_config:
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      retention_period: 168h
+      allow_structured_metadata: true
+      volume_enabled: true
+      discover_log_levels: true
+      ingestion_rate_mb: 16
+      ingestion_burst_size_mb: 32
+      per_stream_rate_limit: 8MB
+      per_stream_rate_limit_burst: 32MB
+      max_query_series: 2000
+
+    compactor:
+      working_directory: /loki/compactor
+      retention_enabled: true
+      delete_request_store: s3
+      compaction_interval: 10m
+      retention_delete_delay: 2h
+
+    pattern_ingester:
+      enabled: true
+
+    ruler:
+      storage:
+        type: local
+        local:
+          directory: /loki/rules
+      rule_path: /loki/rules-temp
+
+    query_range:
+      results_cache:
+        cache:
+          embedded_cache:
+            enabled: true
+            max_size_mb: 100
+
+    analytics:
+      reporting_enabled: false
+---
+# 3 个副本至少留 2 个:replication_factor 3 的写入要 2 份确认,节点排空时一次只能走一个。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: loki-pdb
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: loki
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: loki
+  labels:
+    app: loki
+spec:
+  serviceName: loki-memberlist
+  replicas: 3
+  # 三个 Pod 同时起:Ready 要等环里凑够副本,按序起的话第一个永远等不到另外两个。
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+      annotations:
+        mmorpg.io/loki-s3-credentials-hash: "__LOKI_S3_CREDENTIALS_HASH__"
+    spec:
+      securityContext:
+        # grafana/loki 镜像里的运行用户是 10001;PVC 要 fsGroup 才写得进去。
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      # 尽量分到不同节点:挂一个节点只少一个副本。用 preferred 而不是 required,单节点的 kind 上照样起得来(那里只做功能验证)。
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: loki
+      containers:
+        - name: loki
+          image: grafana/loki:3.5.8
+          args:
+            - -config.file=/etc/loki/loki.yaml
+            - -config.expand-env=true
+            - -target=all
+          env:
+            - name: LOKI_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: loki-s3
+                  key: access-key-id
+            - name: LOKI_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: loki-s3-secret
+                  key: secret-access-key
+          ports:
+            - containerPort: 3100
+              name: http
+            - containerPort: 9095
+              name: grpc
+            - containerPort: 7946
+              name: memberlist
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki
+              readOnly: true
+            - name: data
+              mountPath: /loki
+      volumes:
+        - name: config
+          configMap:
+            name: loki-config
+  # 每个 Pod 自己的 WAL、TSDB 索引缓存与 compactor 工作目录。日志块和索引的正本在 S3,这块盘丢了只丢还没刷上去的那一小段,
+  # 而那一段另外两个副本也有。
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi

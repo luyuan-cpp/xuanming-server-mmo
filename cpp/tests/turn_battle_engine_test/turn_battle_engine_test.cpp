@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <limits>
 #include <map>
@@ -10,11 +12,13 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "constants/turn_battle_constants.h"
 #include "memory_battle_data_provider.h"
 #include "modules/currency/constants/currency.h"
+#include "system/battle_replay_recorder.h"
 #include "system/combat_damage_rules.h"
 #include "system/turn_battle_engine.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -4073,4 +4077,110 @@ TEST(TurnBattleEngineTest, StripEngineOnlyStateClearsCombatWithoutTouchingEngine
     const auto second = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
     EXPECT_EQ(CountEventsOfKind(second, BATTLE_EVENT_DAMAGE, BATTLE_HIT_COMBO), 1);
     EXPECT_EQ(CountEventsOfKind(second, BATTLE_EVENT_DAMAGE, BATTLE_HIT_REFLECT), 2);
+}
+
+// ---------------------------------------------------------------------------
+// 战报回放体积实测(docs/design/battle-report-replay.md §9):全员挂机打满整场期限对应的回合数,
+// 逐回合录观众版帧,冻结后打印原始字节、压缩后字节与冻结耗时,并核对都在回放上限之内。
+// 数字只作量级参考(Debug 构建、内存数据源),写回设计稿 §9;判据只有「不超上限」。
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// 与 battle 节点 RedactStateForViewer(state, 0) 同口径的观众版:清装备概率、全员冷却与道具余量。
+void ToSpectatorView(BattleStateS2C& state) {
+    TurnBattleEngine::StripEngineOnlyState(state);
+    state.clear_self_items();
+    for (auto& actor : *state.mutable_actors()) {
+        actor.clear_skill_cooldown_rounds();
+    }
+}
+
+struct ReplaySizeReport {
+    int rounds = 0;
+    bool truncated = false;
+    bool frozen = false;
+    uint32_t rawBytes = 0;
+    std::size_t payloadBytes = 0;
+    long long freezeUs = 0;
+};
+
+// 两边各 playersPerSide 名玩家(可带宝宝)全员挂机,血量足够大,打满 rounds 回合也分不出胜负。
+ReplaySizeReport MeasureAutoBattleReplay(const uint64_t battleId, const int playersPerSide, const bool withPets,
+                                         const int rounds) {
+    TurnBattleEngine engine(MakeProvider());
+    // 3 = PVP 1v1,1 = 5v5;引擎只按「是不是 PVE」分支,两者都走 PVP 规则。
+    auto request = MakeRequest(battleId, playersPerSide == 1 ? 3u : 1u, 7);
+    for (uint32_t side = 0; side < 2; ++side) {
+        for (int i = 0; i < playersPerSide; ++i) {
+            const uint64_t playerId = 81000 + side * 100 + static_cast<uint64_t>(i);
+            auto* player = AddPlayer(request, playerId, side, 10'000'000, 10'000'000, 4, 100, 0,
+                                     static_cast<uint64_t>(120 + i));
+            if (withPets) {
+                AddPet(player, 910000 + side * 100 + static_cast<uint64_t>(i), 10'000'000, 10'000'000, 4,
+                       static_cast<uint64_t>(110 + i));
+            }
+        }
+    }
+    ReplaySizeReport report;
+    if (!engine.Initialize(request)) {
+        ADD_FAILURE() << "engine initialization failed: per_side=" << playersPerSide;
+        return report;
+    }
+    for (const auto& player : request.players()) {
+        EXPECT_EQ(0u, engine.SetActorAuto(player.player_id(), true));
+    }
+    auto start = engine.BuildStateSnapshot();
+    start.set_battle_id(battleId);
+    ToSpectatorView(start);
+    turnbattle::BattleReplayRecorder recorder(
+        turnbattle::BattleReplayHeader{battleId, request.match_mode(), request.battle_config_id(), 0, "replay-size-test"},
+        start);
+    for (; report.rounds < rounds && engine.Outcome() == BATTLE_OUTCOME_ONGOING; ++report.rounds) {
+        auto turn = engine.ResolveCurrentRound();
+        turn.set_battle_id(battleId);
+        ToSpectatorView(*turn.mutable_state());
+        recorder.AddRound(turn);
+    }
+    report.truncated = recorder.Truncated();
+    const auto began = std::chrono::steady_clock::now();
+    const auto envelope = recorder.Freeze(engine.Outcome(), static_cast<uint32_t>(report.rounds), 1);
+    report.freezeUs =
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - began).count();
+    if (envelope) {
+        report.frozen = true;
+        report.rawBytes = envelope->raw_bytes();
+        report.payloadBytes = envelope->payload().size();
+    }
+    return report;
+}
+
+}  // namespace
+
+TEST(BattleReplaySize, AutoBattlesStayWithinReplayLimits) {
+    struct SizeCase {
+        std::string_view name;
+        uint64_t battleId;
+        int playersPerSide;
+        bool withPets;
+        int rounds;  // 整场期限 300 秒 ÷ 全自动回合间隔(max(2 秒, 出手单位数 × 250 毫秒))
+    };
+    const SizeCase cases[] = {
+        {"1v1_pets_150_rounds", 9801, 1, true, 150},   // 4 个单位:2 秒一回合
+        {"5v5_120_rounds", 9802, 5, false, 120},       // 10 个单位:2.5 秒一回合
+        {"5v5_pets_60_rounds", 9803, 5, true, 60},     // 20 个单位:5 秒一回合
+    };
+    for (const auto& c : cases) {
+        const auto report = MeasureAutoBattleReplay(c.battleId, c.playersPerSide, c.withPets, c.rounds);
+        std::printf("[replay-size] case=%s rounds=%d truncated=%d frozen=%d raw_bytes=%u payload_bytes=%zu freeze_us=%lld\n",
+                    c.name.data(), report.rounds, report.truncated ? 1 : 0, report.frozen ? 1 : 0, report.rawBytes,
+                    report.payloadBytes, report.freezeUs);
+        RecordProperty(std::string(c.name) + "_raw_bytes", static_cast<int>(report.rawBytes));
+        RecordProperty(std::string(c.name) + "_payload_bytes", static_cast<int>(report.payloadBytes));
+        EXPECT_EQ(c.rounds, report.rounds) << c.name << ":血量足够,应打满预定回合";
+        ASSERT_TRUE(report.frozen) << c.name << ":冻结失败(压缩后超过 512 KiB 或序列化失败)";
+        EXPECT_LE(report.rawBytes, turnbattle::kMaxBattleReplayRawBytes) << c.name;
+        EXPECT_LE(report.payloadBytes, turnbattle::kMaxBattleReplayPayloadBytes) << c.name;
+        EXPECT_LT(report.payloadBytes, report.rawBytes) << c.name << ":帧之间高度重复,压缩后应更小";
+    }
 }

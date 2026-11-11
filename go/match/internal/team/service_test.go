@@ -344,24 +344,24 @@ func TestPushAndSceneRecipients(t *testing.T) {
 	l := newTeamLedger(t, allOnline(1, 2, 3, 4))
 
 	// 建队:回包即视图,不推送;scene 只通知队长。
-	h.service.publish(1, []*CommitResult{l.commit(CreateOp(1, ruleTid, testZone))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(CreateOp(1, ruleTid, testZone))})
 	require.Empty(t, h.takePushes())
 	h.requireSceneRefresh(1)
 
 	// 申请:只推队长 APPLICATION_CHANGED,队长视图带申请;成员关系没变,不发 scene。
-	h.service.publish(2, []*CommitResult{l.commit(ApplyOp(2, testZone))})
+	h.service.publish(context.Background(), 2, []*CommitResult{l.commit(ApplyOp(2, testZone))})
 	pushes := h.takePushes()
 	require.Len(t, pushes, 1)
 	snap := requireSnapshot(t, pushes[0], 1, teampb.TeamChangeReason_TEAM_CHANGE_REASON_APPLICATION_CHANGED)
 	require.Len(t, snap.GetTeam().GetApplications(), 1)
 	require.Equal(t, uint64(2), snap.GetTeam().GetApplications()[0].GetPlayer().GetPlayerId())
 	h.requireSceneRefresh()
-	h.service.publish(3, []*CommitResult{l.commit(ApplyOp(3, testZone))})
+	h.service.publish(context.Background(), 3, []*CommitResult{l.commit(ApplyOp(3, testZone))})
 	h.takePushes()
 
 	// 同意 2:新人收 MEMBER_JOINED(队长是调用者,看回包);非队长看不到申请列表,只看到计数;
 	// 各人 epoch 取自同一次提交;scene 只通知新人。
-	h.service.publish(1, []*CommitResult{l.commit(HandleApplicationOp(1, 2, true))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(HandleApplicationOp(1, 2, true))})
 	pushes = h.takePushes()
 	require.Len(t, pushes, 1)
 	snap = requireSnapshot(t, pushes[0], 2, teampb.TeamChangeReason_TEAM_CHANGE_REASON_MEMBER_JOINED)
@@ -376,7 +376,7 @@ func TestPushAndSceneRecipients(t *testing.T) {
 	h.requireSceneRefresh(2)
 
 	// 拒绝 3:申请人不在队里、收不到视图,只收 APPLICATION_REJECTED;队长是调用者,不另推快照。
-	h.service.publish(1, []*CommitResult{l.commit(HandleApplicationOp(1, 3, false))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(HandleApplicationOp(1, 3, false))})
 	pushes = h.takePushes()
 	require.Len(t, pushes, 1)
 	ev := requireEvent(t, pushes[0], 3, teampb.TeamEventType_TEAM_EVENT_TYPE_APPLICATION_REJECTED)
@@ -385,7 +385,7 @@ func TestPushAndSceneRecipients(t *testing.T) {
 	h.requireSceneRefresh()
 
 	// 邀请 4:被邀请人收 NotifyTeamInvite。
-	h.service.publish(1, []*CommitResult{l.commit(InviteOp(1, 4, testZone))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(InviteOp(1, 4, testZone))})
 	pushes = h.takePushes()
 	require.Len(t, pushes, 1)
 	require.Equal(t, uint64(4), pushes[0].playerId)
@@ -401,7 +401,7 @@ func TestPushAndSceneRecipients(t *testing.T) {
 	h.requireSceneRefresh()
 
 	// 踢 2:被踢者收 team_id=0 的空视图 MEMBER_KICKED,epoch 为提交后的新值;scene 只通知被踢者。
-	h.service.publish(1, []*CommitResult{l.commit(KickOp(1, 2))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(KickOp(1, 2))})
 	pushes = h.takePushes()
 	require.Len(t, pushes, 1)
 	snap = requireSnapshot(t, pushes[0], 2, teampb.TeamChangeReason_TEAM_CHANGE_REASON_MEMBER_KICKED)
@@ -411,7 +411,7 @@ func TestPushAndSceneRecipients(t *testing.T) {
 	h.requireSceneRefresh(2)
 
 	// 解散:未过期邀请的被邀请人收 INVITE_REVOKED;scene 通知全体成员(此时只剩队长)。
-	h.service.publish(1, []*CommitResult{l.commit(DisbandOp(1))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(DisbandOp(1))})
 	pushes = h.takePushes()
 	require.Len(t, pushes, 1)
 	ev = requireEvent(t, pushes[0], 4, teampb.TeamEventType_TEAM_EVENT_TYPE_INVITE_REVOKED)
@@ -427,13 +427,13 @@ func TestMutateEffects(t *testing.T) {
 	digest := h.withDigestRecorder()
 
 	retries := metrics.TeamCommitRetryValue(methodKickMember)
-	h.service.mutateEffects(1, methodKickMember, &MutateResult{Outcome: OutcomeRejected, Code: ErrStateChanged, Conflicts: CommitRetries})
+	h.service.mutateEffects(context.Background(), 1, methodKickMember, &MutateResult{Outcome: OutcomeRejected, Code: ErrStateChanged, Conflicts: CommitRetries})
 	require.Equal(t, retries+float64(CommitRetries), metrics.TeamCommitRetryValue(methodKickMember))
 	require.Empty(t, h.takePushes())
 	h.requireSceneRefresh()
 	require.Empty(t, digest.take(t))
 
-	h.service.mutateEffects(1, methodCreateTeam, &MutateResult{Outcome: OutcomeCommitted, Commit: l.commit(CreateOp(1, ruleTid, testZone))})
+	h.service.mutateEffects(context.Background(), 1, methodCreateTeam, &MutateResult{Outcome: OutcomeCommitted, Commit: l.commit(CreateOp(1, ruleTid, testZone))})
 	h.requireSceneRefresh(1)
 	require.Equal(t, []uint64{1}, digest.take(t)[domTeam])
 }
@@ -473,18 +473,18 @@ func TestRegroupSignalsOnlyTheCallingMember(t *testing.T) {
 	team := &teampb.TeamView{TeamId: ruleTid, LeaderId: 1}
 
 	// 队员请求归队:只给他自己发;不推任何快照(视图没变)。
-	h.service.publishRegroup(2, team)
+	h.service.publishRegroup(context.Background(), 2, team)
 	h.requireSceneRefresh(2)
 	require.Empty(t, h.takePushes())
 
 	// 队长自己请求归队:没有可归的队长,不发。
-	h.service.publishRegroup(1, team)
+	h.service.publishRegroup(context.Background(), 1, team)
 	h.requireSceneRefresh()
 
 	// 不在任何队伍里(空视图)或读失败没带视图:不发。
-	h.service.publishRegroup(9, &teampb.TeamView{})
+	h.service.publishRegroup(context.Background(), 9, &teampb.TeamView{})
 	h.requireSceneRefresh()
-	h.service.publishRegroup(9, nil)
+	h.service.publishRegroup(context.Background(), 9, nil)
 	h.requireSceneRefresh()
 }
 
@@ -494,31 +494,31 @@ func TestLeaderChangeRefreshesEveryRemainingMember(t *testing.T) {
 	h := newServiceHarness(t)
 	h.addPlayers(1, 2, 3)
 	l := newTeamLedger(t, allOnline(1, 2, 3))
-	h.service.publish(1, []*CommitResult{l.commit(CreateOp(1, ruleTid, testZone))})
-	h.service.publish(2, []*CommitResult{l.commit(ApplyOp(2, testZone))})
-	h.service.publish(1, []*CommitResult{l.commit(HandleApplicationOp(1, 2, true))})
-	h.service.publish(3, []*CommitResult{l.commit(ApplyOp(3, testZone))})
-	h.service.publish(1, []*CommitResult{l.commit(HandleApplicationOp(1, 3, true))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(CreateOp(1, ruleTid, testZone))})
+	h.service.publish(context.Background(), 2, []*CommitResult{l.commit(ApplyOp(2, testZone))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(HandleApplicationOp(1, 2, true))})
+	h.service.publish(context.Background(), 3, []*CommitResult{l.commit(ApplyOp(3, testZone))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(HandleApplicationOp(1, 3, true))})
 	h.takePushes()
 	h.takeScenes()
 
 	// 转让队长:没有人的 TeamId 变,但三个人都要重读(新队长停止被驱动、旧队长解散队形、其他人接到新队长身后)。
 	transfer := l.commit(TransferLeaderOp(1, 2))
 	require.True(t, transfer.Decision.LeaderChanged)
-	h.service.publish(1, []*CommitResult{transfer})
+	h.service.publish(context.Background(), 1, []*CommitResult{transfer})
 	h.requireSceneRefresh(1, 2, 3)
 
 	// 队长离队:改选出新队长,留下的人和离队者都收信号。
 	leaderLeft := l.commit(LeaveOp(2))
 	require.True(t, leaderLeft.Decision.LeaderChanged)
 	require.Equal(t, uint64(1), leaderLeft.Decision.Record.GetLeaderId())
-	h.service.publish(2, []*CommitResult{leaderLeft})
+	h.service.publish(context.Background(), 2, []*CommitResult{leaderLeft})
 	h.requireSceneRefresh(1, 2, 3)
 
 	// 普通队员离队:队长没变,只有离队者收信号(与原来一致)。
 	memberLeft := l.commit(LeaveOp(3))
 	require.False(t, memberLeft.Decision.LeaderChanged)
-	h.service.publish(3, []*CommitResult{memberLeft})
+	h.service.publish(context.Background(), 3, []*CommitResult{memberLeft})
 	h.requireSceneRefresh(3)
 }
 
@@ -528,7 +528,7 @@ func TestRegroupWithoutLocationSendsNothing(t *testing.T) {
 	h.addPlayers(2)
 	h.mr.Del(playercontract.LocationKey(2))
 
-	h.service.publishRegroup(2, &teampb.TeamView{TeamId: ruleTid, LeaderId: 1})
+	h.service.publishRegroup(context.Background(), 2, &teampb.TeamView{TeamId: ruleTid, LeaderId: 1})
 	h.requireSceneRefresh()
 }
 

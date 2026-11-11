@@ -6,6 +6,7 @@ import "proto/common/base/empty.proto";
 import "proto/common/base/tip.proto";
 import "proto/battle/player_battle.proto";
 import "proto/battle/battle_data.proto";
+import "proto/battle/battle_script.proto";
 import "proto/match/match_network.proto";
 
 option go_package = "proto/match";
@@ -56,6 +57,16 @@ service MatchService {
   rpc ListBattleReports(ListBattleReportsRequest) returns (ListBattleReportsResponse) {}
   // 取一局的回放正文:只有列表里还有这一局的玩家能取。
   rpc GetBattleReport(GetBattleReportRequest) returns (GetBattleReportResponse) {}
+
+  // ---- 战斗剧本(docs/design/battle-script.md §7):请求都不带 player_id,只认会话本人 ----
+  // 官方剧本 + 本人的剧本(含审核状态)+ 本人的选用,一次全给。
+  rpc ListBattleScripts(ListBattleScriptsRequest) returns (ListBattleScriptsResponse) {}
+  // 新建或改写本人的剧本:校验通过即存为新版本、进入待审;审核通过前对局继续用上一份通过版。
+  rpc SubmitBattleScript(SubmitBattleScriptRequest) returns (SubmitBattleScriptResponse) {}
+  // 删除本人的剧本,选用了它的条目同一事务清掉。
+  rpc DeleteBattleScript(DeleteBattleScriptRequest) returns (DeleteBattleScriptResponse) {}
+  // 为某种对局选用剧本(官方剧本或本人已通过审核的剧本),或清除这条选用。
+  rpc SetBattleScriptLoadout(SetBattleScriptLoadoutRequest) returns (SetBattleScriptLoadoutResponse) {}
 }
 
 // ----- Match mode config -----
@@ -239,6 +250,8 @@ message SpectateBattleRecord {
   eSpectateTier tier = 4;
   string battle_instance_id = 5;
   uint64 deadline_ms = 6;
+  // 取自成局原件 MatchFormationRecord.release_track:这场所在 battle 节点的发布轨道,观战列表按它给 stable 观众过滤。
+  string release_track = 7;
 }
 
 // ----- Server-internal: match result (used between MatchService and SceneManager) -----
@@ -296,4 +309,75 @@ message GetBattleReportRequest {
 message GetBattleReportResponse {
   TipInfoMessage error_message = 1;  // 0 = 成功;不在本人列表里 / 没存回放 / 不存在,统一回 kMatchBattleReportNotFound
   BattleReplayEnvelope replay = 2;   // 成功时非空,就是存库的那一份
+}
+
+// ----- 战斗剧本(docs/design/battle-script.md §7) -----
+
+// 玩家剧本当前提交版的审核状态
+enum BattleScriptReviewState {
+  BATTLE_SCRIPT_REVIEW_UNSPECIFIED = 0;
+  BATTLE_SCRIPT_REVIEW_PENDING = 1;   // 待审
+  BATTLE_SCRIPT_REVIEW_APPROVED = 2;  // 已通过
+  BATTLE_SCRIPT_REVIEW_REJECTED = 3;  // 已驳回,原因看 reject_reason
+}
+
+// 本人的一份剧本
+message PlayerBattleScriptView {
+  uint64 script_id = 1;
+  uint32 revision = 2;                       // 当前提交版;改写、删除都要带它
+  BattleScript content = 3;                  // 当前提交版正文
+  BattleScriptReviewState review_state = 4;  // 当前提交版的审核状态
+  uint32 approved_revision = 5;              // 对局实际用的那一版;0 = 从未通过,不能选用
+  string reject_reason = 6;
+  uint64 submitted_ms = 7;                   // 当前版本的提交时刻(Unix 毫秒,match 库时间)
+}
+
+// 一条选用:某种对局用哪份剧本。模式 / 副本为 0 表示任意;建房按 具体 → 通用 取第一条
+message BattleScriptLoadoutEntry {
+  uint32 match_mode = 1;        // MatchMode 数值;0 = 任意模式
+  uint32 battle_config_id = 2;  // Dungeon 表 id;0 = 任意副本
+  eBattleScriptOrigin origin = 3;
+  uint32 official_script_id = 4;  // origin = 官方
+  uint64 player_script_id = 5;    // origin = 玩家:只能是本人已通过审核的剧本
+}
+
+message ListBattleScriptsRequest {}
+
+message ListBattleScriptsResponse {
+  TipInfoMessage error_message = 1;
+  repeated BattleScript official_scripts = 2;      // 按 script_id 升序
+  repeated PlayerBattleScriptView my_scripts = 3;  // 新提交的在前
+  repeated BattleScriptLoadoutEntry loadout = 4;   // 按 (match_mode, battle_config_id) 升序
+  uint32 max_scripts = 5;                          // 每人最多几份剧本
+  uint32 max_script_bytes = 6;                     // 单份剧本序列化后的上限(gate 对客户端消息的 1KB 包长上限决定)
+}
+
+message SubmitBattleScriptRequest {
+  uint64 script_id = 1;          // 0 = 新建
+  uint32 expected_revision = 2;  // 改写时必须等于当前 revision;新建填 0
+  BattleScript script = 3;       // 正文;其中的 script_id 一律按 0 存
+}
+
+message SubmitBattleScriptResponse {
+  TipInfoMessage error_message = 1;   // 剧本不合法回 kMatchBattleScriptInvalid,位置看 invalid_detail
+  PlayerBattleScriptView script = 2;  // 成功时为刚存下的这一版
+  string invalid_detail = 3;          // 校验失败的位置与原因(英文,如 "script 0 role 2 rule 10: unknown skill 4242")
+}
+
+message DeleteBattleScriptRequest {
+  uint64 script_id = 1;
+  uint32 expected_revision = 2;
+}
+
+message DeleteBattleScriptResponse {
+  TipInfoMessage error_message = 1;
+}
+
+message SetBattleScriptLoadoutRequest {
+  BattleScriptLoadoutEntry entry = 1;  // origin = UNSPECIFIED 表示清除 (match_mode, battle_config_id) 这条选用
+}
+
+message SetBattleScriptLoadoutResponse {
+  TipInfoMessage error_message = 1;
+  repeated BattleScriptLoadoutEntry loadout = 2;  // 改完之后本人的全部选用
 }

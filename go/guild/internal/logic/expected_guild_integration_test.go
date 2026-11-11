@@ -286,7 +286,7 @@ func TestExpectedGuildZeroKeepsLegacyBehavior(t *testing.T) {
 		env := newExpectedGuildEnv(t, constants.RoleMember)
 		counts := watchExpectedGuild(t)
 
-		_, err := env.logic.LeaveGuild(context.Background(), &pb.LeaveGuildRequest{PlayerId: egActor})
+		_, err := env.logic.LeaveGuild(context.Background(), &pb.LeaveGuildRequest{})
 
 		require.Equal(t, codes.PermissionDenied, status.Code(err))
 		_, found := egMemberRole(t, env.db, egGuild, egActor)

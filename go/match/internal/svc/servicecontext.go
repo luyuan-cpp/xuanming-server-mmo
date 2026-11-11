@@ -36,6 +36,7 @@ import (
 	"shared/playersync"
 	"shared/rolefence"
 	"shared/serviceauth"
+	"shared/tracing/kafkagotrace"
 
 	redv9 "github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
@@ -129,9 +130,18 @@ type ServiceContext struct {
 	// SceneNodes / BattleNodes 是 etcd list-watch 内存镜像:
 	//   - SceneNodes:按 player:{id}:location 里的 (zone_id, node_id) 定位
 	//     scene 节点 gRPC 地址(PrepareBattle / CancelBattlePrepare 对端);
-	//   - BattleNodes:全局池,机房内按负载选点(internal/battleplace)后写进成局原件。
-	SceneNodes  *discovery.NodeWatcher
-	BattleNodes *discovery.NodeWatcher
+	//   - BattleNodes:全局池,机房内按负载选点(internal/battleplace)后写进成局原件。只收 stable 节点;
+	//   - CanaryBattleNodes:同一前缀下只收 canary 节点(发布轨道设计 §2.6)。全员都是金丝雀会话的新成局先在这里、
+	//     在按 stable 节点选定的机房里选点,选不到退回 BattleNodes;按节点号确认已有对局的实例时两份都查。
+	//     探测目标、机房集合与节点计数只看 BattleNodes,所以 canary battle 节点要和 stable 的部署在同一批机房。
+	SceneNodes        *discovery.NodeWatcher
+	BattleNodes       *discovery.NodeWatcher
+	CanaryBattleNodes *discovery.NodeWatcher
+
+	// BattleInstanceLoss 是原执行进程失效的提前作废(docs/design/battle-instance-loss-early-abort.md §4):补签问不到原实例时
+	// 把这一局记成可疑,取证循环两次确认原进程已不在之后写 ABORT。由 logic.BindDeadlineAbortEvidence 装配(与截止作废共用
+	// 一个复核记录器),取证循环只在跑后台任务的副本上启动(logic.StartBattleInstanceLossWatcher)。nil = 没装配,补签不记可疑。
+	BattleInstanceLoss BattleInstanceLossWatcher
 
 	// DataServiceClient 是 data_service 的 gRPC 客户端:领号段、查玩家昵称与展示资料。
 	// DataServiceRpc 没配任何目标时为 nil,号段装配随之拒绝启动。连接是 NonBlock 的:data_service 没起
@@ -238,7 +248,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // 其余装配(收件箱节点镜像、权威库、合服映射等数据面)照旧。match_service 按 releasetrack.FromEnv 传入,NewServiceContext 固定 stable。
 func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session, globalBackground bool) *ServiceContext {
 	if root == nil || relay == nil || root == relay {
-		panic("匹配真实角色门禁未装配")
+		panic("match real role admission gates not wired")
 	}
 	// keepalive:节点镜像的 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
 	etcdCli, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{
@@ -300,6 +310,9 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	sc.BattleNodes = discovery.NewNodeWatcher("battle", BattleNodeRpcPrefix,
 		metrics.SetDiscoveredNodes,
 		func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) }).StableOnly()
+	sc.CanaryBattleNodes = discovery.NewNodeWatcher("battle-canary", BattleNodeRpcPrefix,
+		metrics.SetDiscoveredNodes,
+		func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) }).CanaryOnly()
 	sc.MatchNodes = discovery.NewNodeWatcher("match", MatchNodeRpcPrefix, metrics.SetDiscoveredNodes, nil).StableOnly()
 	sc.Placement = battleplace.New()
 
@@ -307,7 +320,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	matchCatalog, err := catalog.Load(c.TableDir)
 	if err != nil {
 		sc.Stop()
-		panic(fmt.Errorf("匹配模板目录加载失败(TableDir=%s): %w", c.TableDir, err))
+		panic(fmt.Errorf("failed to load match template catalog (TableDir=%s): %w", c.TableDir, err))
 	}
 	sc.Catalog = matchCatalog
 
@@ -324,7 +337,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		opsAuth, err := serviceauth.New(map[string]string{config.SpectateOpsCaller: c.Spectate.OpsCallerSecret})
 		if err != nil {
 			sc.Stop()
-			panic(fmt.Errorf("Spectate.OpsCallerSecret 无效: %w", err))
+			panic(fmt.Errorf("invalid Spectate.OpsCallerSecret: %w", err))
 		}
 		sc.SpectateOpsAuth = opsAuth
 	}
@@ -336,7 +349,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	store, err := authority.OpenWithPermission(ctx, c.GlobalMatch, authoritysql.Writer(writer))
 	if err != nil {
 		sc.Stop()
-		panic(fmt.Errorf("全球匹配权威初始化失败: %w", err))
+		panic(fmt.Errorf("failed to initialize global match authority: %w", err))
 	}
 	sc.Authority = store
 	schedule := scope.Schedule{
@@ -345,14 +358,14 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	}
 	if err := store.ConfigureMatchCatalog(matchCatalog, schedule); err != nil {
 		sc.Stop()
-		panic(fmt.Errorf("全球匹配范围规则无效: %w", err))
+		panic(fmt.Errorf("invalid global match scope rules: %w", err))
 	}
 	// 成局恢复、整队维护、闲置队伍到期、投榜按片分工,与撮合池同一条归属规则(OwnsWork)。
 	store.BindWorkOwner(sc.OwnsWork)
 	// 角色归属锁本库的护栏副本,自愈、事务外的读和入场校验走 data_service(docs/design/horizontal-scale-logical-db.md §3)。
 	if err := sc.configureRoleFence(ctx, store); err != nil {
 		sc.Stop()
-		panic(fmt.Errorf("全球匹配角色护栏不可用: %w", err))
+		panic(fmt.Errorf("global match role fence unavailable: %w", err))
 	}
 	// 分不清「没有合服」和「读不到」的实例不能对外服务,同区判定全靠这份映射。
 	if err := sc.loadMergedZones(context.Background(), store); err != nil {
@@ -366,7 +379,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	secret := os.Getenv(c.GlobalMatch.RankSecretEnv)
 	if len(secret) < 32 || c.GlobalMatch.RankEndpoint == "" {
 		sc.Stop()
-		panic("全球评级投榜必须注入RANK_PRODUCER_SECRET_MATCH与RankEndpoint")
+		panic("global rating rank publishing requires RANK_PRODUCER_SECRET_MATCH and RankEndpoint")
 	}
 	// 终局发件箱的批量与并发(GlobalMatch.OutcomeOutbox,2026-10-30):越界拒启、不悄悄夹紧;逐行结局计入 metrics。
 	outboxOptions, err := authority.OutcomeOutboxOptions{
@@ -378,7 +391,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	}.Normalized()
 	if err != nil {
 		sc.Stop()
-		panic(fmt.Errorf("GlobalMatch.OutcomeOutbox 参数无效: %w", err))
+		panic(fmt.Errorf("invalid GlobalMatch.OutcomeOutbox parameters: %w", err))
 	}
 	pubctx, pubcancel := context.WithCancel(context.Background())
 	sc.rankPublisherCancel = pubcancel
@@ -390,7 +403,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		pubcancel()
 		close(sc.rankPublisherDone)
 		sc.Stop()
-		panic("全球终局必须配置独立Battle/Match入箱签名密钥")
+		panic("global outcomes require dedicated Battle/Match inbox signing secrets")
 	}
 	sc.BattleOutcomeAuth, sc.BattleOutcomeSecret = outcomeVerifier, outcomeSecret
 	inboxNodes := discovery.NewNodeWatcher("player_inbox", PlayerInboxRpcPrefix, nil, func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) }).StableOnly()
@@ -409,8 +422,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		}
 		return inboxpb.NewPlayerInboxClient(conn), nil
 	}
+	// ctx 里有 trace 就写进消息头,guild 等结果消费者接上同一条 trace(docs/design/distributed-tracing.md §6.2);
+	// 后台 outbox 中继发的没有 trace,不带头。
 	publishResult := func(ctx context.Context, battle uint64, raw []byte) error {
-		return sc.resultPublisher.WriteMessages(ctx, kafka.Message{Topic: c.ResultTopic, Key: []byte(fmt.Sprint(battle)), Value: raw})
+		return sc.resultPublisher.WriteMessages(ctx, kafka.Message{Topic: c.ResultTopic, Key: []byte(fmt.Sprint(battle)), Value: raw,
+			Headers: kafkagotrace.Headers(ctx)})
 	}
 	sc.RefreshBattleSettlement = func(ctx context.Context, ticket *matchpb.MatchAuthorityTicketRecord) error {
 		return store.RefreshBattleSettlementReceipt(ctx, ticket, resolveInbox, inboxSecret)
@@ -424,6 +440,9 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		defer publishers.Done()
 		ticker := time.NewTicker(c.GlobalMatch.OutcomeOutboxInterval())
 		defer ticker.Stop()
+		// 活性(缺口清单第 25 条第五批):起来时写一次,每跑完一轮写一次(这一轮成败都写;panic 会让进程退出),退出时删掉序列。
+		metrics.MarkOutcomeOutboxRun(time.Now())
+		defer metrics.ClearOutcomeOutboxRun()
 		for {
 			if pubctx.Err() != nil {
 				return
@@ -448,8 +467,9 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 				return store.PublishBattleOutcomes(call, resolveInbox, inboxSecret, publishResult, outboxOptions)
 			}()
 			cancel()
+			metrics.MarkOutcomeOutboxRun(time.Now())
 			if err != nil && pubctx.Err() == nil {
-				logx.Errorf("终局原件投递等待恢复: %v", err)
+				logx.Errorf("outcome original delivery awaiting recovery: %v", err)
 			}
 			select {
 			case <-pubctx.Done():
@@ -670,7 +690,7 @@ func (sc *ServiceContext) Stop() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	if err := sc.StopAndReport(ctx); err != nil {
-		logx.Errorf("匹配关闭 HOLD: %v", err)
+		logx.Errorf("match shutdown HOLD: %v", err)
 	}
 }
 

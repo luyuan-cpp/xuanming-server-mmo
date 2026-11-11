@@ -26,110 +26,12 @@ func TestPlacementBlockMissingMeansDefaults(t *testing.T) {
 
 	c := Config{Placement: h.Placement}
 	c.Normalize()
-	if c.Placement.ExtraStoreMaxOpenConn != DefaultPlacementExtraStoreMaxOpenConn ||
-		c.Placement.ExtraStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn {
-		t.Fatalf("pool defaults = %d/%d, want %d/%d", c.Placement.ExtraStoreMaxOpenConn, c.Placement.ExtraStoreMaxIdleConn,
-			DefaultPlacementExtraStoreMaxOpenConn, DefaultPlacementExtraStoreMaxIdleConn)
-	}
-}
-
-// 写了段但没写 AllowStoreFamilies:同样按 true(*bool 的 nil),不能因为「写了半段」换一套默认值。
-func TestPlacementPartialBlockKeepsFamilyDefault(t *testing.T) {
-	var h placementHolder
-	if err := conf.LoadFromYamlBytes([]byte("Placement:\n  ZoneStoreMaxOpenConn: 12\n"), &h); err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	if !h.Placement.StoreFamiliesAllowed() {
-		t.Fatal("an omitted AllowStoreFamilies must stay true inside a present block")
-	}
-	if h.Placement.ZoneStoreMaxOpenConn != 12 {
-		t.Fatalf("ZoneStoreMaxOpenConn = %d, want 12", h.Placement.ZoneStoreMaxOpenConn)
-	}
-}
-
-func TestPlacementExplicitValues(t *testing.T) {
-	var h placementHolder
-	yaml := "Placement:\n" +
-		"  AllowStoreFamilies: false\n" +
-		"  ExtraStoreMaxOpenConn: 16\n"
-	if err := conf.LoadFromYamlBytes([]byte(yaml), &h); err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	if h.Placement.StoreFamiliesAllowed() {
-		t.Fatal("an explicit AllowStoreFamilies=false must disable store families")
-	}
-
-	c := Config{Placement: h.Placement}
-	c.Normalize()
-	if c.Placement.ExtraStoreMaxOpenConn != 16 {
-		t.Fatalf("an explicit pool size must survive Normalize, got %d", c.Placement.ExtraStoreMaxOpenConn)
-	}
-	if c.Placement.ExtraStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn {
-		t.Fatalf("an omitted idle size falls back to the default, got %d", c.Placement.ExtraStoreMaxIdleConn)
-	}
-}
-
-// etc/db.yaml必须能解析且显式写出全球默认，不能靠Normalize掩盖漏键。
-func TestEtcYamlPlacementBlockMatchesDefaults(t *testing.T) {
-	var c Config
-	if err := conf.Load("../../etc/db.yaml", &c); err != nil {
-		t.Fatalf("load etc/db.yaml: %v", err)
-	}
-	// Normalize 之前:示例 yaml 必须把两类池的四个新键与空闲秒数都写出来(键名写错会静默保持零值,
-	// Normalize 之后又被回落值盖住,只看 Normalize 之后的值发现不了)。K8s ConfigMap 从这几个键镜像,总账也读它们。
-	raw := c.Placement
-	if raw.ZoneStoreMaxOpenConn <= 0 || raw.ZoneStoreMaxIdleConn <= 0 ||
-		raw.NonZoneStoreMaxOpenConn <= 0 || raw.NonZoneStoreMaxIdleConn <= 0 || raw.ExtraStoreConnMaxIdleSeconds <= 0 {
-		t.Fatalf("etc/db.yaml must spell out the split pool keys, got zone=%d/%d nonZone=%d/%d idleSeconds=%d",
-			raw.ZoneStoreMaxOpenConn, raw.ZoneStoreMaxIdleConn, raw.NonZoneStoreMaxOpenConn, raw.NonZoneStoreMaxIdleConn,
-			raw.ExtraStoreConnMaxIdleSeconds)
-	}
-	c.Normalize()
-	if c.Placement.AllowStoreFamilies == nil {
-		t.Fatal("etc/db.yaml must spell out AllowStoreFamilies so the example documents the key")
-	}
-	if !c.Placement.StoreFamiliesAllowed() {
-		t.Fatal("etc/db.yaml must ship the default semantics: store families allowed")
-	}
-	if c.Placement.ZoneStoreMaxOpenConn != DefaultPlacementExtraStoreMaxOpenConn ||
-		c.Placement.ZoneStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn {
-		t.Fatalf("etc/db.yaml zone store pool = %d/%d, want the default %d/%d",
-			c.Placement.ZoneStoreMaxOpenConn, c.Placement.ZoneStoreMaxIdleConn,
-			DefaultPlacementExtraStoreMaxOpenConn, DefaultPlacementExtraStoreMaxIdleConn)
-	}
-	// 地域存档库池写的是「本地域只有一个库」时的预算(docs/design/player-data-tidb-scaling-plan.md §7.2,A17b):
-	// 存档库和区脱钩之后全部存盘都走它,所以等于脱钩前本 zone 库那个池的 60 / 20,不是默认的 8 / 2。
-	// K8s 的 ConfigMap 按存档库数摊到每个库(k8s_deploy.ps1 Get-PlayerStorePoolLimit),连接总账读同一个键。
-	const wantNonZoneOpen, wantNonZoneIdle = 60, 20
-	if c.Placement.NonZoneStoreMaxOpenConn != wantNonZoneOpen || c.Placement.NonZoneStoreMaxIdleConn != wantNonZoneIdle {
-		t.Fatalf("etc/db.yaml non-zone store pool = %d/%d, want the single-store budget %d/%d",
-			c.Placement.NonZoneStoreMaxOpenConn, c.Placement.NonZoneStoreMaxIdleConn, wantNonZoneOpen, wantNonZoneIdle)
-	}
-	if c.Placement.ExtraStoreConnMaxIdleSeconds != DefaultPlacementExtraStoreConnMaxIdleSeconds {
-		t.Fatalf("etc/db.yaml ExtraStoreConnMaxIdleSeconds = %d, want %d",
-			c.Placement.ExtraStoreConnMaxIdleSeconds, DefaultPlacementExtraStoreConnMaxIdleSeconds)
-	}
-}
-
-// 两类额外落点库池(G2b 批 C)整段缺省时:都取默认 8 / 2,空闲回收 60s。
-func TestPlacementSplitPoolsDefault(t *testing.T) {
-	var h placementHolder
-	if err := conf.LoadFromYamlBytes([]byte("Name: db.rpc\n"), &h); err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	c := Config{Placement: h.Placement}
-	c.Normalize()
-	p := c.Placement
-	if p.ZoneStoreMaxOpenConn != DefaultPlacementExtraStoreMaxOpenConn || p.ZoneStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn {
-		t.Fatalf("zone store pool = %d/%d, want %d/%d", p.ZoneStoreMaxOpenConn, p.ZoneStoreMaxIdleConn,
-			DefaultPlacementExtraStoreMaxOpenConn, DefaultPlacementExtraStoreMaxIdleConn)
-	}
-	if p.NonZoneStoreMaxOpenConn != DefaultPlacementExtraStoreMaxOpenConn || p.NonZoneStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn {
-		t.Fatalf("non-zone store pool = %d/%d, want %d/%d", p.NonZoneStoreMaxOpenConn, p.NonZoneStoreMaxIdleConn,
-			DefaultPlacementExtraStoreMaxOpenConn, DefaultPlacementExtraStoreMaxIdleConn)
-	}
-	if p.ExtraStoreConnMaxIdleSeconds != DefaultPlacementExtraStoreConnMaxIdleSeconds {
-		t.Fatalf("idle seconds = %d, want %d", p.ExtraStoreConnMaxIdleSeconds, DefaultPlacementExtraStoreConnMaxIdleSeconds)
+	if c.Placement.StoreMaxOpenConn != DefaultPlacementStoreMaxOpenConn ||
+		c.Placement.StoreMaxIdleConn != DefaultPlacementStoreMaxIdleConn ||
+		c.Placement.StoreConnMaxIdleSeconds != DefaultPlacementStoreConnMaxIdleSeconds {
+		t.Fatalf("pool defaults = %d/%d/%ds, want %d/%d/%ds", c.Placement.StoreMaxOpenConn, c.Placement.StoreMaxIdleConn,
+			c.Placement.StoreConnMaxIdleSeconds, DefaultPlacementStoreMaxOpenConn, DefaultPlacementStoreMaxIdleConn,
+			DefaultPlacementStoreConnMaxIdleSeconds)
 	}
 
 	// 可重复调用(Normalize 的契约):第二次不得改变任何值。
@@ -140,69 +42,87 @@ func TestPlacementSplitPoolsDefault(t *testing.T) {
 	}
 }
 
-// 只写旧键的旧部署:两类库都回落到旧键的值,维持原来的池大小。
-func TestPlacementSplitPoolsFallBackToLegacyKeys(t *testing.T) {
+// 写了段但没写 AllowStoreFamilies:同样按 true(*bool 的 nil),不能因为「写了半段」换一套默认值。
+func TestPlacementPartialBlockKeepsFamilyDefault(t *testing.T) {
 	var h placementHolder
-	yaml := "Placement:\n" +
-		"  ExtraStoreMaxOpenConn: 16\n" +
-		"  ExtraStoreMaxIdleConn: 4\n"
-	if err := conf.LoadFromYamlBytes([]byte(yaml), &h); err != nil {
+	if err := conf.LoadFromYamlBytes([]byte("Placement:\n  StoreMaxOpenConn: 12\n"), &h); err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	c := Config{Placement: h.Placement}
-	c.Normalize()
-	p := c.Placement
-	if p.ZoneStoreMaxOpenConn != 16 || p.ZoneStoreMaxIdleConn != 4 {
-		t.Fatalf("zone store pool = %d/%d, want legacy 16/4", p.ZoneStoreMaxOpenConn, p.ZoneStoreMaxIdleConn)
+	if !h.Placement.StoreFamiliesAllowed() {
+		t.Fatal("an omitted AllowStoreFamilies must stay true inside a present block")
 	}
-	if p.NonZoneStoreMaxOpenConn != 16 || p.NonZoneStoreMaxIdleConn != 4 {
-		t.Fatalf("non-zone store pool = %d/%d, want legacy 16/4", p.NonZoneStoreMaxOpenConn, p.NonZoneStoreMaxIdleConn)
+	if h.Placement.StoreMaxOpenConn != 12 {
+		t.Fatalf("StoreMaxOpenConn = %d, want 12", h.Placement.StoreMaxOpenConn)
 	}
 }
 
-// 新键优先于旧键:只调大非 zone 池时,zone 家族池仍按旧键。
-func TestPlacementSplitPoolsNewKeysWin(t *testing.T) {
+func TestPlacementExplicitValues(t *testing.T) {
 	var h placementHolder
 	yaml := "Placement:\n" +
-		"  ExtraStoreMaxOpenConn: 16\n" +
-		"  NonZoneStoreMaxOpenConn: 32\n" +
-		"  ExtraStoreConnMaxIdleSeconds: 30\n"
+		"  AllowStoreFamilies: false\n" +
+		"  StoreMaxOpenConn: 16\n" +
+		"  StoreConnMaxIdleSeconds: 30\n"
 	if err := conf.LoadFromYamlBytes([]byte(yaml), &h); err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	c := Config{Placement: h.Placement}
-	c.Normalize()
-	p := c.Placement
-	if p.ZoneStoreMaxOpenConn != 16 {
-		t.Fatalf("zone store max open = %d, want the legacy fallback 16", p.ZoneStoreMaxOpenConn)
-	}
-	if p.NonZoneStoreMaxOpenConn != 32 {
-		t.Fatalf("non-zone store max open = %d, want the explicit 32", p.NonZoneStoreMaxOpenConn)
-	}
-	if p.ZoneStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn || p.NonZoneStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn {
-		t.Fatalf("idle pools = %d/%d, want the default %d", p.ZoneStoreMaxIdleConn, p.NonZoneStoreMaxIdleConn,
-			DefaultPlacementExtraStoreMaxIdleConn)
-	}
-	if p.ExtraStoreConnMaxIdleSeconds != 30 {
-		t.Fatalf("idle seconds = %d, want the explicit 30", p.ExtraStoreConnMaxIdleSeconds)
+	if h.Placement.StoreFamiliesAllowed() {
+		t.Fatal("an explicit AllowStoreFamilies=false must disable store families")
 	}
 
-	// 新旧键混写的起点上同样可重复调用。
-	before := c.Placement
+	c := Config{Placement: h.Placement}
 	c.Normalize()
-	if c.Placement != before {
-		t.Fatal("Normalize must be idempotent when legacy and new keys are mixed")
+	if c.Placement.StoreMaxOpenConn != 16 || c.Placement.StoreConnMaxIdleSeconds != 30 {
+		t.Fatalf("explicit pool values must survive Normalize, got %d / %ds", c.Placement.StoreMaxOpenConn, c.Placement.StoreConnMaxIdleSeconds)
+	}
+	if c.Placement.StoreMaxIdleConn != DefaultPlacementStoreMaxIdleConn {
+		t.Fatalf("an omitted idle size falls back to the default, got %d", c.Placement.StoreMaxIdleConn)
 	}
 }
 
-// go/db 不再连 Redis、选库读全局库:样例不能留着已经没有含义的键,读的人会以为它们还起作用。
+// etc/db.yaml 必须能解析且显式写出存档库池的三个键,不能靠 Normalize 掩盖漏键。
+func TestEtcYamlPlacementBlockSpellsOutStorePool(t *testing.T) {
+	var c Config
+	if err := conf.Load("../../etc/db.yaml", &c); err != nil {
+		t.Fatalf("load etc/db.yaml: %v", err)
+	}
+	// Normalize 之前:键名写错会静默保持零值,Normalize 之后又被默认值盖住,只看 Normalize 之后的值发现不了。
+	// K8s ConfigMap 从这几个键镜像,总账也读它们。
+	raw := c.Placement
+	if raw.StoreMaxOpenConn <= 0 || raw.StoreMaxIdleConn <= 0 || raw.StoreConnMaxIdleSeconds <= 0 {
+		t.Fatalf("etc/db.yaml must spell out the store pool keys, got %d/%d idleSeconds=%d",
+			raw.StoreMaxOpenConn, raw.StoreMaxIdleConn, raw.StoreConnMaxIdleSeconds)
+	}
+	c.Normalize()
+	if c.Placement.AllowStoreFamilies == nil {
+		t.Fatal("etc/db.yaml must spell out AllowStoreFamilies so the example documents the key")
+	}
+	if !c.Placement.StoreFamiliesAllowed() {
+		t.Fatal("etc/db.yaml must ship the default semantics: store families allowed")
+	}
+	// 存档库池写的是「本地域只有一个库」时的预算(docs/design/player-data-tidb-scaling-plan.md §7.2):go/db 没有本区库,
+	// 全部存盘都走它,所以是 60 / 20,不是默认的 8 / 2。K8s 的 ConfigMap 按存档库数摊到每个库(k8s_deploy.ps1 Get-PlayerStorePoolLimit)。
+	const wantOpen, wantIdle = 60, 20
+	if c.Placement.StoreMaxOpenConn != wantOpen || c.Placement.StoreMaxIdleConn != wantIdle {
+		t.Fatalf("etc/db.yaml store pool = %d/%d, want the single-store budget %d/%d",
+			c.Placement.StoreMaxOpenConn, c.Placement.StoreMaxIdleConn, wantOpen, wantIdle)
+	}
+	if c.Placement.StoreConnMaxIdleSeconds != DefaultPlacementStoreConnMaxIdleSeconds {
+		t.Fatalf("etc/db.yaml StoreConnMaxIdleSeconds = %d, want %d",
+			c.Placement.StoreConnMaxIdleSeconds, DefaultPlacementStoreConnMaxIdleSeconds)
+	}
+}
+
+// go/db 不再连 Redis、选库读全局库,也没有本区库和 zone 家族库(A17c):样例不能留着已经没有含义的键,
+// 读的人会以为它们还起作用(加载器忽略不认识的键,写了也不报错)。
 func TestEtcYamlDropsRetiredKeys(t *testing.T) {
 	raw, err := os.ReadFile("../../etc/db.yaml")
 	if err != nil {
 		t.Fatalf("read etc/db.yaml: %v", err)
 	}
 	text := string(raw)
-	for _, key := range []string{"RedisClient:", "Required:", "RequireRouteReady:", "LegacyNonGlobal:", "Redis:"} {
+	for _, key := range []string{"RedisClient:", "Required:", "RequireRouteReady:", "LegacyNonGlobal:", "Redis:",
+		"ZoneStoreMaxOpenConn:", "ZoneStoreMaxIdleConn:", "NonZoneStoreMaxOpenConn:", "NonZoneStoreMaxIdleConn:",
+		"ExtraStoreMaxOpenConn:", "ExtraStoreMaxIdleConn:", "ExtraStoreConnMaxIdleSeconds:", "\n    MaxOpenConn:", "\n    MaxIdleConn:"} {
 		if strings.Contains(text, key) {
 			t.Fatalf("etc/db.yaml still carries the retired key %q", key)
 		}
@@ -231,7 +151,7 @@ func TestConfigLoaderIgnoresUnknownKeys(t *testing.T) {
 	if err := conf.LoadFromYamlBytes([]byte(text), &c); err != nil {
 		t.Fatalf("unknown keys must be ignored by the config loader: %v", err)
 	}
-	if c.ServerConfig.Database.Hosts == "" || c.Placement.ZoneStoreMaxOpenConn <= 0 {
+	if c.ServerConfig.Database.Hosts == "" || c.Placement.StoreMaxOpenConn <= 0 {
 		t.Fatal("the rest of etc/db.yaml must still load")
 	}
 }

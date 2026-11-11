@@ -32,6 +32,8 @@ import java.util.function.Supplier;
  * 之前两者直接绑实体,实体字段是带初值的基本类型,漏传 manualStatus 就是 0 = OPEN,一次只想改名的 PUT 会把维护中的
  * 区服改成开放,容量、推荐、排序、开服时间、维护文案一并被初值覆盖;create 撞上已存在的 zone_id 也走同样的整行覆盖。
  * 现在 create 只插不改(已存在且内容不同回 409),局部修改走 {@code /maintenance}、{@code /open}。
+ * 「暂停创建新角色」(create_role_closed,2026-11-10)不在整行设置里:它是运营开关,只经 {@code /create-role/close}、
+ * {@code /create-role/open} 改,POST 新建时取库缺省(开着),PUT 整行替换不碰它。
  *
  * <p>返回形状:200 + ZoneConfig JSON / 204 / 404 不变;新增 400(请求体不完整或不合法,原因记 WARN 日志)与
  * 409(create 撞上已存在且内容不同的区服,响应体是库里那一行)。时间戳上的有意变化写在各接口注释里。
@@ -190,6 +192,34 @@ public class AdminZoneController {
     @PostMapping("/{zoneId}/open")
     public ResponseEntity<ZoneConfig> setOpen(@PathVariable Long zoneId) {
         return setManualStatus(zoneId, ManualZoneStatus.OPEN, "");
+    }
+
+    /**
+     * 暂停本区创建新角色(2026-11-10,区服满员处理)。
+     * POST /admin/zones/1/create-role/close
+     *
+     * <p>只拦新建:账号在本区已有的角色照常登录进场,login 只拒绝 CreatePlayer(tip kLoginZoneCreateRoleClosed)。
+     * 区服列表随 zone_config 行缓存(1 秒)立即显示 create_role_closed、不再推荐这个区;本区网关的 ZonePolicyPublisher
+     * 下一拍(至多 5 秒)写到 etcd,本区 login 至多再晚 2 秒读到。只改这一列,其余列不动;存在性判定与不重试的理由同
+     * {@link #update}。什么时候该关:按本区角色总量(而不是某一时刻的在线人数)判断,在线高峰由登录排队承担。
+     */
+    @PostMapping("/{zoneId}/create-role/close")
+    public ResponseEntity<ZoneConfig> closeRoleCreation(@PathVariable Long zoneId) {
+        return setCreateRoleClosed(zoneId, true);
+    }
+
+    /**
+     * 恢复本区创建新角色。POST /admin/zones/1/create-role/open。口径同 {@link #closeRoleCreation}。
+     */
+    @PostMapping("/{zoneId}/create-role/open")
+    public ResponseEntity<ZoneConfig> openRoleCreation(@PathVariable Long zoneId) {
+        return setCreateRoleClosed(zoneId, false);
+    }
+
+    private ResponseEntity<ZoneConfig> setCreateRoleClosed(Long zoneId, boolean closed) {
+        LocalDateTime at = now.get();
+        return okOrNotFound(writeExistingZone(zoneId,
+                () -> zoneConfigRepo.updateCreateRoleClosed(zoneId, closed, at)));
     }
 
     private ResponseEntity<ZoneConfig> setManualStatus(Long zoneId, ManualZoneStatus status, String maintenanceMsg) {

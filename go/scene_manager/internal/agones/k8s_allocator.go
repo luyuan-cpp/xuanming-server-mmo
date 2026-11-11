@@ -3,6 +3,7 @@ package agones
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -34,30 +35,31 @@ var (
 	}
 )
 
-// CounterName 是高密度模式使用的 Agones Counter 名字。
-// Fleet 模板里的 spec.template.spec.counters.rooms 必须同名。
-const CounterName = "rooms"
+// RoomListName 是高密度模式使用的 Agones List 名字。
+// Fleet 模板里的 spec.template.spec.lists.rooms 必须同名(tools/scripts/k8s_deploy.ps1 New-SceneFleetYaml),
+// FleetAutoscaler 的 list.key 也是它。改一个就要改另一个。
+const RoomListName = "rooms"
 
 // K8sAllocatorOptions 控制分配器行为。
 type K8sAllocatorOptions struct {
-	// HighDensity 决定是否使用 Counters and Lists(beta 能力)。
-	// 关闭时 GSA 只按 Ready 选,不带 counters 动作 —— 退化成
-	// "一个 GameServer 一次只接一个房间",但仍然走 Agones 分配。
+	// HighDensity 决定是否使用 Counters and Lists 的 rooms 列表记名额。
+	// 关闭时 GSA 只按 Ready 选,不带列表动作 —— 退化成
+	// "一个 GameServer 一次只接一个房间",但仍然走 Agones 分配,也没有名额可记。
 	HighDensity bool
-	// CounterRollbackRetries / CounterRollbackBackoff 控制回滚 counter 的
-	// CAS 重试。冲突是正常现象(另一个请求同时在改同一个 GameServer)。
-	CounterRollbackRetries int
-	CounterRollbackBackoff time.Duration
+	// ConflictRetries / ConflictBackoff 控制按条目增删时的乐观并发重试。
+	// 409 冲突是正常现象(另一个请求同时在改同一个 GameServer)。
+	ConflictRetries int
+	ConflictBackoff time.Duration
 	// RequestTimeout 单次 K8s API 调用的超时。
 	RequestTimeout time.Duration
 }
 
 func (o *K8sAllocatorOptions) withDefaults() {
-	if o.CounterRollbackRetries <= 0 {
-		o.CounterRollbackRetries = 5
+	if o.ConflictRetries <= 0 {
+		o.ConflictRetries = 5
 	}
-	if o.CounterRollbackBackoff <= 0 {
-		o.CounterRollbackBackoff = 100 * time.Millisecond
+	if o.ConflictBackoff <= 0 {
+		o.ConflictBackoff = 100 * time.Millisecond
 	}
 	if o.RequestTimeout <= 0 {
 		o.RequestTimeout = 5 * time.Second
@@ -91,9 +93,9 @@ func NewK8sAllocator(dyn dynamic.Interface, opts K8sAllocatorOptions) *K8sAlloca
 }
 
 // buildSelectors 构造 GSA 的选择器列表。顺序即优先级:
-//  1. 已经 Allocated 且 rooms 还有余量的 —— 高密度的关键,优先把房间塞进
+//  1. 已经 Allocated 且 rooms 还有空位的 —— 高密度的关键,优先把房间塞进
 //     已经在用的进程,而不是点亮一个新的。
-//  2. Ready 且有余量的 —— 前者没有时才开新进程。
+//  2. Ready 且有空位的 —— 前者没有时才开新进程。
 //
 // 两条都带上 zone/role(/build)标签,避免把 world 的房间塞进 instance 进程。
 func (a *K8sAllocator) buildSelectors(req AllocationRequest) []any {
@@ -115,9 +117,9 @@ func (a *K8sAllocator) buildSelectors(req AllocationRequest) []any {
 			"gameServerState": state,
 		}
 		if a.opts.HighDensity {
-			sel["counters"] = map[string]any{
-				CounterName: map[string]any{
-					// minAvailable 是 Agones 的"至少还剩这么多名额"过滤。
+			sel["lists"] = map[string]any{
+				RoomListName: map[string]any{
+					// minAvailable 是 Agones 的"列表至少还剩这么多空位"过滤。
 					// 没有它就会选中已经满员的 GameServer。
 					"minAvailable": int64(1),
 				},
@@ -137,8 +139,8 @@ func (a *K8sAllocator) Allocate(ctx context.Context, req AllocationRequest) (*Al
 	if a.dyn == nil {
 		return nil, ErrNotConfigured
 	}
-	if req.RoomsAmount <= 0 {
-		req.RoomsAmount = 1
+	if a.opts.HighDensity && req.Entry == "" {
+		return nil, fmt.Errorf("agones: high-density allocation needs a room entry")
 	}
 
 	spec := map[string]any{
@@ -146,12 +148,11 @@ func (a *K8sAllocator) Allocate(ctx context.Context, req AllocationRequest) (*Al
 		"selectors":  a.buildSelectors(req),
 	}
 	if a.opts.HighDensity {
-		// counters.action=Increment 让"选中"和"计数 +1"在 Agones 侧是同一个
-		// 原子操作。分两步做就会出现"选中了但还没加成功"的窗口,并发下超卖。
-		spec["counters"] = map[string]any{
-			CounterName: map[string]any{
-				"action": "Increment",
-				"amount": req.RoomsAmount,
+		// lists.addValues 让"选中"和"占位"在 Agones 侧是同一个操作。分两步做就会出现
+		// "选中了但还没占上"的窗口,并发下超卖。
+		spec["lists"] = map[string]any{
+			RoomListName: map[string]any{
+				"addValues": []any{req.Entry},
 			},
 		}
 	}
@@ -187,26 +188,64 @@ func (a *K8sAllocator) Allocate(ctx context.Context, req AllocationRequest) (*Al
 		return nil, fmt.Errorf("agones: allocation returned empty gameServerName")
 	}
 
-	count, _, _ := unstructured.NestedInt64(created.Object, "status", "counters", CounterName, "count")
-	capacity, _, _ := unstructured.NestedInt64(created.Object, "status", "counters", CounterName, "capacity")
+	result := &AllocationResult{GameServerName: gsName}
+	if a.opts.HighDensity {
+		// 核对条目确实在列表里:防列表已满时 Agones 不加值却照样回 Allocated。没有这一条就当没拿到容量;
+		// 这台 GameServer 照常 Allocated,不占名额,无害。核对本身出错时把 GameServerName 带回去,调用方按条目删。
+		recorded, entries, capacity, verifyErr := a.allocationRecordsEntry(ctx, req.Namespace, gsName, req.Entry, created.Object)
+		if verifyErr != nil {
+			return result, fmt.Errorf("agones: verify room entry on %s: %w", gsName, verifyErr)
+		}
+		if !recorded {
+			return nil, fmt.Errorf("%w (gs=%s allocated without the room entry; list full)", ErrNoCapacity, gsName)
+		}
+		result.RoomsCount, result.RoomsCapacity = int64(len(entries)), capacity
+	}
 
 	podIP, err := a.resolvePodIP(ctx, req.Namespace, gsName, created.Object)
 	if err != nil {
 		// 拿不到 PodIP 就无法映射回 knownNodes。这里**不**吞掉错误:
-		// 调用方必须把刚预占的房间还回去,否则计数漂移。
-		return &AllocationResult{
-			GameServerName: gsName,
-			RoomsCount:     count,
-			RoomsCapacity:  capacity,
-		}, fmt.Errorf("agones: resolve pod ip for %s: %w", gsName, err)
+		// 调用方必须把刚占的条目删掉,否则它一直占着名额(对账也会收,只是要等)。
+		return result, fmt.Errorf("agones: resolve pod ip for %s: %w", gsName, err)
 	}
+	result.PodIP = podIP
+	return result, nil
+}
 
-	return &AllocationResult{
-		GameServerName: gsName,
-		PodIP:          podIP,
-		RoomsCount:     count,
-		RoomsCapacity:  capacity,
-	}, nil
+// allocationRecordsEntry 核对分配之后 entry 是否在 GameServer 的 rooms 列表里,顺带返回列表快照。
+// 先看 GSA 返回对象里的 status.lists;返回对象里没有 lists(Agones 版本不回这一段)时 GET 这台 GameServer。
+func (a *K8sAllocator) allocationRecordsEntry(ctx context.Context, namespace, gsName, entry string, gsaObj map[string]any) (bool, []string, int64, error) {
+	if _, found, _ := unstructured.NestedMap(gsaObj, "status", "lists"); found {
+		entries, capacity, err := roomList(gsaObj)
+		if err != nil {
+			return false, nil, 0, err
+		}
+		return slices.Contains(entries, entry), entries, capacity, nil
+	}
+	callCtx, cancel := context.WithTimeout(ctx, a.opts.RequestTimeout)
+	defer cancel()
+	gs, err := a.dyn.Resource(gsGVR).Namespace(namespace).Get(callCtx, gsName, metav1.GetOptions{})
+	if err != nil {
+		return false, nil, 0, err
+	}
+	entries, capacity, err := roomList(gs.Object)
+	if err != nil {
+		return false, nil, 0, err
+	}
+	return slices.Contains(entries, entry), entries, capacity, nil
+}
+
+// roomList 读对象 status.lists.rooms 的条目与容量。没有 values 时是空列表。
+func roomList(obj map[string]any) ([]string, int64, error) {
+	entries, _, err := unstructured.NestedStringSlice(obj, "status", "lists", RoomListName, "values")
+	if err != nil {
+		return nil, 0, fmt.Errorf("status.lists.%s.values: %w", RoomListName, err)
+	}
+	capacity, _, err := unstructured.NestedInt64(obj, "status", "lists", RoomListName, "capacity")
+	if err != nil {
+		return nil, 0, fmt.Errorf("status.lists.%s.capacity: %w", RoomListName, err)
+	}
+	return entries, capacity, nil
 }
 
 // resolvePodIP 解析 GameServer 对应的 Pod IP。
@@ -268,51 +307,59 @@ func podIPFromAddresses(obj map[string]any) string {
 	return ""
 }
 
-// ReleaseRoom 把指定 GameServer 的 rooms 计数减 delta。
+// AddRoomEntry 在指定 GameServer 的 rooms 列表里加 entry,见 Allocator。
 //
-// 用 read-modify-write + resourceVersion 乐观并发(Update 带上读到的
-// resourceVersion,冲突时 API server 返回 409)。冲突重试有上限;
-// 最终失败必须由调用方记指标 + 可恢复事件,不能只打一条普通日志 ——
-// 这类漂移不会自愈,靠 reconcile 才能发现。
-func (a *K8sAllocator) ReleaseRoom(ctx context.Context, namespace, gameServerName string, delta int64) error {
-	return a.adjustRoomCount(ctx, namespace, gameServerName, -delta)
+// 容量检查不能省:共置与改派路径会点名 GameServer,不查就会把房间塞进一个已经满员的进程,
+// 绕过 Agones 的容量语义。
+func (a *K8sAllocator) AddRoomEntry(ctx context.Context, namespace, gameServerName, entry string) error {
+	if !a.opts.HighDensity {
+		// 没开 Lists 就没有名额可记。
+		return nil
+	}
+	return a.updateRoomEntries(ctx, namespace, gameServerName, func(entries []string, capacity int64) ([]string, error) {
+		if slices.Contains(entries, entry) {
+			return nil, nil
+		}
+		if capacity > 0 && int64(len(entries)) >= capacity {
+			return nil, fmt.Errorf("%w (gs=%s rooms %d/%d)", ErrNoCapacity, gameServerName, len(entries), capacity)
+		}
+		return append(slices.Clone(entries), entry), nil
+	}, false)
 }
 
-// AcquireRoomOnGameServer 在指定 GameServer 上 +delta,超 capacity 则拒绝。
-func (a *K8sAllocator) AcquireRoomOnGameServer(ctx context.Context, namespace, gameServerName string, delta int64) error {
-	return a.adjustRoomCount(ctx, namespace, gameServerName, delta)
+// RemoveRoomEntry 从指定 GameServer 的 rooms 列表里删 entry,见 Allocator。
+func (a *K8sAllocator) RemoveRoomEntry(ctx context.Context, namespace, gameServerName, entry string) error {
+	if !a.opts.HighDensity {
+		return nil
+	}
+	return a.updateRoomEntries(ctx, namespace, gameServerName, func(entries []string, _ int64) ([]string, error) {
+		i := slices.Index(entries, entry)
+		if i < 0 {
+			return nil, nil
+		}
+		return slices.Delete(slices.Clone(entries), i, i+1), nil
+	}, true)
 }
 
-// adjustRoomCount 是 Acquire/Release 的共同实现:带 CAS 的 read-modify-write。
-//
-// delta > 0 时会检查 capacity —— 这一步不能省,否则共置路径会把房间塞进
-// 一个已经满员的进程,绕过 Agones 的容量语义。
-// delta < 0 时钳到 0,计数永远不为负。
-func (a *K8sAllocator) adjustRoomCount(ctx context.Context, namespace, gameServerName string, delta int64) error {
+// updateRoomEntries 是按条目增删的共同实现:读 GameServer,交给 mutate 算出新的条目列表,带读到的
+// resourceVersion 更新。mutate 回 nil 列表表示已经是想要的样子,不写。409 冲突时重读重试,有上限。
+// GameServer 不存在时:goneIsSuccess(删除)算成功 —— 计数随对象一起消失;否则(加)回 ErrNoCapacity。
+func (a *K8sAllocator) updateRoomEntries(ctx context.Context, namespace, gameServerName string,
+	mutate func(entries []string, capacity int64) ([]string, error), goneIsSuccess bool) error {
+
 	if a.dyn == nil {
 		return ErrNotConfigured
 	}
-	if !a.opts.HighDensity {
-		// 没开 Counters 就没有计数可动。Agones 会在 GameServer 被 Shutdown
-		// 时自行回收,acquire 也没有可占的名额概念。
-		return nil
-	}
-	if delta == 0 {
-		return nil
-	}
 
 	var lastErr error
-	for attempt := 1; attempt <= a.opts.CounterRollbackRetries; attempt++ {
+	for attempt := 1; attempt <= a.opts.ConflictRetries; attempt++ {
 		callCtx, cancel := context.WithTimeout(ctx, a.opts.RequestTimeout)
 		gs, err := a.dyn.Resource(gsGVR).Namespace(namespace).Get(callCtx, gameServerName, metav1.GetOptions{})
 		if err != nil {
 			cancel()
 			if errors.IsNotFound(err) {
-				if delta < 0 {
-					// GameServer 已经没了(进程被替换/缩容)。计数随对象一起消失,
-					// 没有可回滚的东西,这不是失败。
-					logx.Infof("[Agones] release: gameserver %s/%s already gone, nothing to roll back",
-						namespace, gameServerName)
+				if goneIsSuccess {
+					logx.Infof("[Agones] rooms %s/%s: gameserver already gone, nothing to remove", namespace, gameServerName)
 					return nil
 				}
 				return fmt.Errorf("%w (gameserver %s/%s not found)", ErrNoCapacity, namespace, gameServerName)
@@ -324,24 +371,23 @@ func (a *K8sAllocator) adjustRoomCount(ctx context.Context, namespace, gameServe
 			continue
 		}
 
-		count, _, _ := unstructured.NestedInt64(gs.Object, "status", "counters", CounterName, "count")
-		capacity, _, _ := unstructured.NestedInt64(gs.Object, "status", "counters", CounterName, "capacity")
-
-		newCount := count + delta
-		if delta > 0 && capacity > 0 && newCount > capacity {
+		entries, capacity, err := roomList(gs.Object)
+		if err != nil {
 			cancel()
-			return fmt.Errorf("%w (gs=%s rooms %d+%d > capacity %d)",
-				ErrNoCapacity, gameServerName, count, delta, capacity)
+			return fmt.Errorf("agones: read rooms of %s/%s: %w", namespace, gameServerName, err)
 		}
-		if newCount < 0 {
-			logx.Errorf("[Agones] adjust would drive %s/%s rooms negative (count=%d delta=%d), clamping to 0",
-				namespace, gameServerName, count, delta)
-			newCount = 0
-		}
-
-		if err := unstructured.SetNestedField(gs.Object, newCount, "status", "counters", CounterName, "count"); err != nil {
+		next, err := mutate(entries, capacity)
+		if err != nil {
 			cancel()
-			return fmt.Errorf("agones: set rooms count: %w", err)
+			return err
+		}
+		if next == nil {
+			cancel()
+			return nil
+		}
+		if err := unstructured.SetNestedStringSlice(gs.Object, next, "status", "lists", RoomListName, "values"); err != nil {
+			cancel()
+			return fmt.Errorf("agones: set rooms values: %w", err)
 		}
 
 		// 必须用 Update 而不是 UpdateStatus。
@@ -350,25 +396,23 @@ func (a *K8sAllocator) adjustRoomCount(ctx context.Context, namespace, gameServe
 		// (Agones 1.58,kubectl get crd gameservers.agones.dev):
 		//   subresources = {"scale":{...}}
 		// 只有 scale,没有 status。所以 /status 端点不存在,UpdateStatus 会直接
-		// 报 "the server could not find the requested resource",整条归还名额的
-		// 路径(创建失败回滚、排空归还、孤儿清理归还)全部失效 —— 而 rooms
-		// Counter 只增不减就是持续超卖。
+		// 报 "the server could not find the requested resource",整条增删名额的
+		// 路径(共置、改派、归还、对账)全部失效。
 		//
 		// 单测抓不到这个:fake allocator 不建模 API 表面,UpdateStatus 和
 		// Update 在它眼里没区别。
 		//
-		// 换成 Update 仍然是安全的 read-modify-write:gs 带着 GET 回来的
-		// resourceVersion,并发改动会拿到 409,由下面的有界重试处理。
-		_, err = a.dyn.Resource(gsGVR).Namespace(namespace).
-			Update(callCtx, gs, metav1.UpdateOptions{})
+		// Update 仍然是安全的 read-modify-write:gs 带着 GET 回来的
+		// resourceVersion,并发改动会拿到 409,由这里的有界重试处理。
+		_, err = a.dyn.Resource(gsGVR).Namespace(namespace).Update(callCtx, gs, metav1.UpdateOptions{})
 		cancel()
 		if err == nil {
-			logx.Infof("[Agones] rooms %s/%s: %d -> %d (delta=%d)", namespace, gameServerName, count, newCount, delta)
+			logx.Infof("[Agones] rooms %s/%s: %d -> %d entries", namespace, gameServerName, len(entries), len(next))
 			return nil
 		}
 		lastErr = err
 		if !errors.IsConflict(err) {
-			return fmt.Errorf("agones: update rooms count: %w", err)
+			return fmt.Errorf("agones: update rooms of %s/%s: %w", namespace, gameServerName, err)
 		}
 		// 409 冲突:别人刚改过,重读重试。
 		if !a.sleepBackoff(ctx, attempt) {
@@ -376,15 +420,15 @@ func (a *K8sAllocator) adjustRoomCount(ctx context.Context, namespace, gameServe
 		}
 	}
 
-	return fmt.Errorf("agones: adjust rooms on %s/%s exhausted %d attempts: %w",
-		namespace, gameServerName, a.opts.CounterRollbackRetries, lastErr)
+	return fmt.Errorf("agones: update rooms of %s/%s exhausted %d attempts: %w",
+		namespace, gameServerName, a.opts.ConflictRetries, lastErr)
 }
 
 func (a *K8sAllocator) sleepBackoff(ctx context.Context, attempt int) bool {
 	select {
 	case <-ctx.Done():
 		return false
-	case <-time.After(time.Duration(attempt) * a.opts.CounterRollbackBackoff):
+	case <-time.After(time.Duration(attempt) * a.opts.ConflictBackoff):
 		return true
 	}
 }
@@ -409,16 +453,19 @@ func (a *K8sAllocator) ListGameServerRooms(ctx context.Context, namespace, zoneL
 		item := list.Items[i]
 		name := item.GetName()
 		state, _, _ := unstructured.NestedString(item.Object, "status", "state")
-		count, _, _ := unstructured.NestedInt64(item.Object, "status", "counters", CounterName, "count")
-		capacity, _, _ := unstructured.NestedInt64(item.Object, "status", "counters", CounterName, "capacity")
-		// reconcile 只做比对告警,拿不到 PodIP 也不影响结论,所以这里不为它
-		// 额外发一次 Pod GET(每轮 reconcile 会放大成 N 次请求)。
+		entries, capacity, err := roomList(item.Object)
+		if err != nil {
+			// 对账按条目判,读不出条目的这一台不能当成空的:当成空会漏判,整轮失败让调用方跳过。
+			return nil, fmt.Errorf("agones: read rooms of %s/%s: %w", namespace, name, err)
+		}
+		// 对账拿不到 PodIP 也能按条目判「条目 → 记录」,所以这里不为它额外发一次 Pod GET
+		// (每轮对账会放大成 N 次请求);拿不到 PodIP 的那台只少做「记录 → 条目」。
 		podIP := podIPFromAddresses(item.Object)
 		out = append(out, GameServerRooms{
 			Name:     name,
 			PodIP:    podIP,
 			State:    state,
-			Count:    count,
+			Entries:  entries,
 			Capacity: capacity,
 		})
 	}

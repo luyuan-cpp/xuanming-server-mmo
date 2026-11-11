@@ -1,6 +1,6 @@
 # 存盘直接提交 TiDB:落码规格
 
-> **状态**:v3 — 2026-11-05:§1.1 按「大小 × 变化频率」重新分行(钱包、背包、位置拆开,退役 kHot、kAsset),每行声明存盘方式,位置只顺带写;第一批代码已写,**未编译、未测试**(§1.1「落码」)。2026-11-06:第二批删掉 `player_database_1` 与 kLegacy1(§1.2),代码已写,**未编译、未测试**。v2 — 2026-10-30,已按[对抗评审](../handoff/player-save-direct-commit-20261030/spec-review-1.md)修正。B1~B7 代码已写,**未编译、未测试**;开关缺省 redis,行为不变,新分支只在 `PlayerStorePath=direct` 时走。B8(翻默认值、删旧路径)要等全链路验收。
+> **状态**:v3 — 2026-11-05:§1.1 按「大小 × 变化频率」重新分行(钱包、背包、位置拆开,退役 kHot、kAsset),每行声明存盘方式,位置只顺带写;第一批代码已写,**未编译、未测试**(§1.1「落码」)。2026-11-06:第二批删掉 `player_database_1` 与 kLegacy1(§1.2),代码已写,**未编译、未测试**。v2 — 2026-10-30,已按[对抗评审](../handoff/player-save-direct-commit-20261030/spec-review-1.md)修正。B1~B7 代码已写,**未编译、未测试**。当时的过渡开关 `PlayerStorePath: redis | direct` 同日已随 B8 删除:直接提交 SQL 是唯一的存盘路径,玩家存档不经过 Redis(§8 末「2026-10-30」一条)。
 > **上游**:[总体方案](./player-data-tidb-scaling-plan.md) §3、§4(本文是它 §13 的 A0,细化 A1~A6);[TiDB 决策 §9](./global-data-layer-tidb-decision.md)(方向与键族,本文回答 §9.4)。
 > **现状依据**:[三路盘点](../handoff/player-save-direct-commit-20261030/survey.md),行号以它为准。标注:[C] 读代码确认,[D] 文档记载,[I] 推断。
 > **用户已定**:玩家数据只放 TiDB;存盘服务放 go/db;关键变化立即存 + 拆出热行;正常运行不丢、不回档;存盘不再按归属区选 topic 和库。
@@ -68,13 +68,14 @@ CREATE TABLE IF NOT EXISTS `player_store` (
 | kWallet(钱包) | 7 | `currency`、`asset_op_ledger`、`inbox_ledger`、`mystery_merchant`、`client_request_ledger`(客户端请求幂等键账本,2026-11-06 别的批次加,[请求幂等](client-request-idempotency.md) §5.3) | 小,任何经济行为都改它 | 定时 |
 | kBag(背包) | 8 | `bag_component` | 最大的一行,只在道具操作时变 | 定时 |
 | kGrowth(成长) | 3 | `skill_list`、`attribute_component`、`pet_component`、`mission_component` | 中等,随进度变 | 定时 |
-| kProfile(资料) | 4 | `uint32_pb_component`(职业)、`uint64_pb_component`(注册时间)、`profile_component`、`battle_results`、`item_gain_block`、`stress_test_probe` | 都很小,大多建角后不变 | 定时 |
+| kProfile(资料) | 4 | `uint32_pb_component`(职业)、`uint64_pb_component`(注册时间)、`profile_component`、`battle_results`、`item_gain_block`、`item_holds`、`stress_test_probe` | 都很小,大多建角后不变 | 定时 |
 | 元数据(不入 payload) | — | `player_id`、`persist_schema_gen` | | |
 
 - 退役号:1(旧 kHot)、2(旧 kAsset),proto 里 `reserved`。新加一行取下一个空闲号,不回填。
 - 钱包和背包分开之后,一次交易同时改了两者时两行同一事务提交(原则 1)。
 - 职业、注册时间移到资料行:建角只写写权行和资料行(§5.4);展示资料读 kCharacter(等级)和 kProfile(职业、名字、外观、性别)(§5.6)。
 - `battle_results`(本人近期战斗结果,[战斗结果重登恢复](battle-result-recovery.md) §4.1)和 `item_gain_block`(物品获取封禁,[玩家收件箱](player-inbox-service.md) §2.2)是 2026-11-05 别的批次加的,原本就放资料行,不动:只在结算、GM 处置时变,资料行仍然小。
+- `item_holds`(物品数量预留,字段 26,[战斗道具预留](battle-item-reservation.md))2026-11-10 加在资料行:最多 8 份 × 每份 256 种,只在备战、结算、取消、终局复核时变;建起来、取消和按终局释放时请求关键进度存盘,结算时随结算那一次存盘。它和背包分在两行没关系:结算的扣物与释放预留是同一帧的改动,按原则 1 在同一个事务里提交。
 - `derived_attributes_component` 字段名沿用旧名(改名要动生成代码和全部调用点,随 §1.2 的改名批一起);装的是基础属性和当前血蓝,真正的派生属性 `DerivedAttributesComp` 不落库、加载时重算。基础属性能不能由职业和加点重算,待核对:能重算的就不该落库(AGENTS §11.6),只存当前血蓝。
 - 新加字段按上面的原则选行。小而常变的不放背包行;资产、账本、任务领取标记不放只顺带的行。
 - 认领回包的上限按「每行都到上限」算(§5.2,`playerstore.New` 校验):现在 6 个数据行 × 1 MiB + 64 KiB ≤ 8 MiB(第二批删掉 kLegacy1 之前是 7 行)。再加行要先核这条。
@@ -104,7 +105,7 @@ CREATE TABLE IF NOT EXISTS `player_store` (
 - **抓漏标**:全量比较时发现「没被标却变了」的行,计数 `scene_player_save_unhinted_dirty_total{kind}` 并打日志(不带 player_id 标签);单测里直接断言失败。这样漏标会被发现、被修,不是默默被兜底吃掉。
 - **提示是行级,不是字段级**:存盘的单位是行。打标记的地方收口在领域入口(货币、背包、任务、等级各自的写入函数),不散在玩法代码里。
 - 和属性同步的区别:属性同步漏标,客户端看不到更新,马上就能发现;存盘漏标平时看不出来,只在崩溃时多丢,所以兜底和抓漏标必须同时有。
-- **现在不做**:每次存盘都全量序列化比较,没有提示,不存在漏标丢数据。压测显示序列化占 CPU 明显再加(总体方案 §4.6 表「序列化占 CPU 明显」一行)。
+- **定为不做(2026-11-11)**:每次存盘都全量序列化比较,没有提示,不存在漏标丢数据。按估算全量序列化不到一个核的 0.3%,换不来值得多维护一套规则的收益,理由与估算见总体方案 §4.6 表「序列化占 CPU 明显」一行。上面几条留作真要做时的规则。
 
 **仍然成立的规则**
 
@@ -152,7 +153,7 @@ message SavePlayerResponse {
 事务(`storage_id` 选库后,读已提交 + 悲观锁):
 
 ```
-进事务前校验(确定性拒绝,不碰库):E、q、实例非空,kind 是已知值、非 0、不重复 → 否则 INVALID;payload 超预算 → TOO_LARGE
+进事务前校验(不碰库):E、q、实例非空,kind 为正、不重复 → 否则 INVALID;kind 是本 go/db 不认识的正数 → SCHEMA_TOO_NEW(scene 比 go/db 新,可重试,见 §4);payload 超预算 → TOO_LARGE
 SELECT owner_epoch, save_seq, schema_gen, holder_instance, released
   FROM player_store WHERE player_id=? AND kind=0 FOR UPDATE
 按 §4 判定;拒绝或幂等成功就回滚并返回
@@ -205,7 +206,7 @@ COMMIT
 ```
 
 - 写权行不存在 = 角色不存在或未建完,回 `NO_OWNER`,不造空档(今天的规则 [C])。
-- 世代比本进程新 = `SCHEMA_TOO_NEW`,拒绝加载(今天的 C2)。
+- 世代比本进程新 = `SCHEMA_TOO_NEW`,拒绝加载(今天的 C2)。scene 的世代比本 go/db 认识的新,同样回 `SCHEMA_TOO_NEW`、不抬代次(§4)。
 - scene 把片段拼接后 `ParseFromString`,再把 E、q、世代填回元数据字段,`InitPlayerFromAllData` 不改。q 按 `max(本进程发号, 响应 save_seq)` 播种。
 
 ## 4. 写权判定表
@@ -225,7 +226,12 @@ COMMIT
 | 世代 > go/db 认识的世代 | `SCHEMA_TOO_NEW` | 重试,属发布顺序问题(今天的 C1) |
 | 其余 | 写入,`COMMITTED`。E>Er 时把 Er 抬到 E,`released` 按请求重写 | 提交成功 |
 
-**`Save` 进事务前的确定性拒绝:** `INVALID`(E、q、实例为空,或 kind 非法、重复)、`TOO_LARGE`(payload 超预算)。不碰库。scene 告警,这笔的 q 作废,等下一次变化重试;退出时遇到它就记告警并放弃这一笔,不无限等。E=0 的无 guard 路径删除。
+**`Save` 进事务前的确定性拒绝:** `INVALID`(E、q、实例为空,或 kind 为 0、负数、重复)、`TOO_LARGE`(payload 超预算)。不碰库。scene 告警,这笔的 q 作废,等下一次变化重试;退出时遇到它就记告警并放弃这一笔,不无限等。E=0 的无 guard 路径删除。
+
+**本 go/db 不认识的行种回 `SCHEMA_TOO_NEW`,不回 `INVALID`(2026-11-10,数据覆写审计 r2-ps#11)。**
+- 行种的号只增不复用,scene 也发不出它自己不认识的号,所以这只会来自比 go/db 新的 scene(发布顺序不对,或回退了 go/db)。这是版本问题,不是请求坏了,按上表的 `SCHEMA_TOO_NEW` 重试。
+- 原先回 `INVALID`。新 scene 的存盘拼装给每个持久组件都设了存在位,新行种第一笔就脏;于是窗口期内新 scene 上几乎每个玩家下线时都不存盘就销毁,认领以来的进度全丢。
+- 这一条不能只靠认领时的世代判定兜住:go/db 新旧副本混跑时,在新副本上认领的玩家,下一笔存盘可能落到旧副本。
 
 **三条要点:**
 
@@ -241,6 +247,7 @@ COMMIT
 | E < Er | `STALE_OWNER`(路由过期,上层按进场失败处理) |
 | E = Er,持有者非空且 ≠ 实例 | `NOT_HOLDER`(今天 `kRegisterFenceLua` 拒同 E 跨实例的语义) |
 | 库里世代比本进程新 | `SCHEMA_TOO_NEW`,不抬代次(今天的 C2) |
+| scene 世代比本 go/db 认识的新 | `SCHEMA_TOO_NEW`,不抬代次(2026-11-10,审计 r2-ps#11:不拦的话,新 scene 经旧 go/db 认领成功,旧持有者被围住,新 scene 却一笔也存不进) |
 | E = Er,其余 | 认领成功(同实例重进,或新号初行) |
 | E > Er | 认领成功,抬代次(换持有者或接管) |
 

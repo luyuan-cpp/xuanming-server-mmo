@@ -32,7 +32,6 @@
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/db/proto_option.pb.h"
 #include "proto/common/database/mysql_database_table.pb.h"
-#include "proto/common/database/bag_quest_mail_data.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -224,9 +223,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAllData final : public ::goog
   // accessors -------------------------------------------------------
   enum : int {
     kPlayerDatabaseDataFieldNumber = 2,
-    kBagDataFieldNumber = 4,
-    kQuestDataFieldNumber = 5,
-    kMailDataFieldNumber = 6,
     kLastSaveSeqFieldNumber = 7,
   };
   // .player_database player_database_data = 2;
@@ -245,54 +241,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAllData final : public ::goog
   ::player_database* PROTOBUF_NONNULL _internal_mutable_player_database_data();
 
   public:
-  // .BagAllData bag_data = 4 [(.OptionPersistUncarried) = true];
-  [[nodiscard]] bool has_bag_data()
-      const;
-  void clear_bag_data() ;
-  [[nodiscard]] const ::BagAllData& bag_data() const;
-  [[nodiscard]] ::BagAllData* PROTOBUF_NULLABLE release_bag_data();
-  ::BagAllData* PROTOBUF_NONNULL mutable_bag_data();
-  void set_allocated_bag_data(::BagAllData* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_bag_data(::BagAllData* PROTOBUF_NULLABLE value);
-  ::BagAllData* PROTOBUF_NULLABLE unsafe_arena_release_bag_data();
-
-  private:
-  const ::BagAllData& _internal_bag_data() const;
-  ::BagAllData* PROTOBUF_NONNULL _internal_mutable_bag_data();
-
-  public:
-  // .QuestAllData quest_data = 5 [(.OptionPersistUncarried) = true];
-  [[nodiscard]] bool has_quest_data()
-      const;
-  void clear_quest_data() ;
-  [[nodiscard]] const ::QuestAllData& quest_data() const;
-  [[nodiscard]] ::QuestAllData* PROTOBUF_NULLABLE release_quest_data();
-  ::QuestAllData* PROTOBUF_NONNULL mutable_quest_data();
-  void set_allocated_quest_data(::QuestAllData* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_quest_data(::QuestAllData* PROTOBUF_NULLABLE value);
-  ::QuestAllData* PROTOBUF_NULLABLE unsafe_arena_release_quest_data();
-
-  private:
-  const ::QuestAllData& _internal_quest_data() const;
-  ::QuestAllData* PROTOBUF_NONNULL _internal_mutable_quest_data();
-
-  public:
-  // .MailAllData mail_data = 6 [(.OptionPersistUncarried) = true];
-  [[nodiscard]] bool has_mail_data()
-      const;
-  void clear_mail_data() ;
-  [[nodiscard]] const ::MailAllData& mail_data() const;
-  [[nodiscard]] ::MailAllData* PROTOBUF_NULLABLE release_mail_data();
-  ::MailAllData* PROTOBUF_NONNULL mutable_mail_data();
-  void set_allocated_mail_data(::MailAllData* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_mail_data(::MailAllData* PROTOBUF_NULLABLE value);
-  ::MailAllData* PROTOBUF_NULLABLE unsafe_arena_release_mail_data();
-
-  private:
-  const ::MailAllData& _internal_mail_data() const;
-  ::MailAllData* PROTOBUF_NONNULL _internal_mutable_mail_data();
-
-  public:
   // uint64 last_save_seq = 7;
   void clear_last_save_seq() ;
   [[nodiscard]] ::uint64_t last_save_seq() const;
@@ -307,8 +255,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAllData final : public ::goog
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          4, 0,
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -337,9 +285,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAllData final : public ::goog
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::player_database* PROTOBUF_NULLABLE player_database_data_;
-    ::BagAllData* PROTOBUF_NULLABLE bag_data_;
-    ::QuestAllData* PROTOBUF_NULLABLE quest_data_;
-    ::MailAllData* PROTOBUF_NULLABLE mail_data_;
     ::uint64_t last_save_seq_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -456,290 +401,11 @@ inline void PlayerAllData::set_allocated_player_database_data(::player_database*
   // @@protoc_insertion_point(field_set_allocated:PlayerAllData.player_database_data)
 }
 
-// .BagAllData bag_data = 4 [(.OptionPersistUncarried) = true];
-inline bool PlayerAllData::has_bag_data() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
-  PROTOBUF_ASSUME(!value || _impl_.bag_data_ != nullptr);
-  return value;
-}
-inline const ::BagAllData& PlayerAllData::_internal_bag_data() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::BagAllData* p = _impl_.bag_data_;
-  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BagAllData>(&::BagAllData_globals_);
-}
-inline const ::BagAllData& PlayerAllData::bag_data() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:PlayerAllData.bag_data)
-  return _internal_bag_data();
-}
-inline void PlayerAllData::unsafe_arena_set_allocated_bag_data(
-    ::BagAllData* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.bag_data_);
-  }
-  _impl_.bag_data_ = reinterpret_cast<::BagAllData*>(value);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PlayerAllData.bag_data)
-}
-inline ::BagAllData* PROTOBUF_NULLABLE PlayerAllData::release_bag_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::BagAllData* released = _impl_.bag_data_;
-  _impl_.bag_data_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::BagAllData* PROTOBUF_NULLABLE PlayerAllData::unsafe_arena_release_bag_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:PlayerAllData.bag_data)
-
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::BagAllData* temp = _impl_.bag_data_;
-  _impl_.bag_data_ = nullptr;
-  return temp;
-}
-inline ::BagAllData* PROTOBUF_NONNULL PlayerAllData::_internal_mutable_bag_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.bag_data_ == nullptr) {
-    auto* p = ::google::protobuf::Message::DefaultConstruct<::BagAllData>(GetArena());
-    _impl_.bag_data_ = reinterpret_cast<::BagAllData*>(p);
-  }
-  return _impl_.bag_data_;
-}
-inline ::BagAllData* PROTOBUF_NONNULL PlayerAllData::mutable_bag_data()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::BagAllData* _msg = _internal_mutable_bag_data();
-  // @@protoc_insertion_point(field_mutable:PlayerAllData.bag_data)
-  return _msg;
-}
-inline void PlayerAllData::set_allocated_bag_data(::BagAllData* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.bag_data_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  }
-
-  _impl_.bag_data_ = reinterpret_cast<::BagAllData*>(value);
-  // @@protoc_insertion_point(field_set_allocated:PlayerAllData.bag_data)
-}
-
-// .QuestAllData quest_data = 5 [(.OptionPersistUncarried) = true];
-inline bool PlayerAllData::has_quest_data() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
-  PROTOBUF_ASSUME(!value || _impl_.quest_data_ != nullptr);
-  return value;
-}
-inline const ::QuestAllData& PlayerAllData::_internal_quest_data() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::QuestAllData* p = _impl_.quest_data_;
-  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::QuestAllData>(&::QuestAllData_globals_);
-}
-inline const ::QuestAllData& PlayerAllData::quest_data() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:PlayerAllData.quest_data)
-  return _internal_quest_data();
-}
-inline void PlayerAllData::unsafe_arena_set_allocated_quest_data(
-    ::QuestAllData* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.quest_data_);
-  }
-  _impl_.quest_data_ = reinterpret_cast<::QuestAllData*>(value);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PlayerAllData.quest_data)
-}
-inline ::QuestAllData* PROTOBUF_NULLABLE PlayerAllData::release_quest_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-  ::QuestAllData* released = _impl_.quest_data_;
-  _impl_.quest_data_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::QuestAllData* PROTOBUF_NULLABLE PlayerAllData::unsafe_arena_release_quest_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:PlayerAllData.quest_data)
-
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-  ::QuestAllData* temp = _impl_.quest_data_;
-  _impl_.quest_data_ = nullptr;
-  return temp;
-}
-inline ::QuestAllData* PROTOBUF_NONNULL PlayerAllData::_internal_mutable_quest_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.quest_data_ == nullptr) {
-    auto* p = ::google::protobuf::Message::DefaultConstruct<::QuestAllData>(GetArena());
-    _impl_.quest_data_ = reinterpret_cast<::QuestAllData*>(p);
-  }
-  return _impl_.quest_data_;
-}
-inline ::QuestAllData* PROTOBUF_NONNULL PlayerAllData::mutable_quest_data()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  ::QuestAllData* _msg = _internal_mutable_quest_data();
-  // @@protoc_insertion_point(field_mutable:PlayerAllData.quest_data)
-  return _msg;
-}
-inline void PlayerAllData::set_allocated_quest_data(::QuestAllData* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.quest_data_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-  }
-
-  _impl_.quest_data_ = reinterpret_cast<::QuestAllData*>(value);
-  // @@protoc_insertion_point(field_set_allocated:PlayerAllData.quest_data)
-}
-
-// .MailAllData mail_data = 6 [(.OptionPersistUncarried) = true];
-inline bool PlayerAllData::has_mail_data() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
-  PROTOBUF_ASSUME(!value || _impl_.mail_data_ != nullptr);
-  return value;
-}
-inline const ::MailAllData& PlayerAllData::_internal_mail_data() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::MailAllData* p = _impl_.mail_data_;
-  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::MailAllData>(&::MailAllData_globals_);
-}
-inline const ::MailAllData& PlayerAllData::mail_data() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:PlayerAllData.mail_data)
-  return _internal_mail_data();
-}
-inline void PlayerAllData::unsafe_arena_set_allocated_mail_data(
-    ::MailAllData* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.mail_data_);
-  }
-  _impl_.mail_data_ = reinterpret_cast<::MailAllData*>(value);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PlayerAllData.mail_data)
-}
-inline ::MailAllData* PROTOBUF_NULLABLE PlayerAllData::release_mail_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-  ::MailAllData* released = _impl_.mail_data_;
-  _impl_.mail_data_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::MailAllData* PROTOBUF_NULLABLE PlayerAllData::unsafe_arena_release_mail_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:PlayerAllData.mail_data)
-
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-  ::MailAllData* temp = _impl_.mail_data_;
-  _impl_.mail_data_ = nullptr;
-  return temp;
-}
-inline ::MailAllData* PROTOBUF_NONNULL PlayerAllData::_internal_mutable_mail_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.mail_data_ == nullptr) {
-    auto* p = ::google::protobuf::Message::DefaultConstruct<::MailAllData>(GetArena());
-    _impl_.mail_data_ = reinterpret_cast<::MailAllData*>(p);
-  }
-  return _impl_.mail_data_;
-}
-inline ::MailAllData* PROTOBUF_NONNULL PlayerAllData::mutable_mail_data()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  ::MailAllData* _msg = _internal_mutable_mail_data();
-  // @@protoc_insertion_point(field_mutable:PlayerAllData.mail_data)
-  return _msg;
-}
-inline void PlayerAllData::set_allocated_mail_data(::MailAllData* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.mail_data_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-  }
-
-  _impl_.mail_data_ = reinterpret_cast<::MailAllData*>(value);
-  // @@protoc_insertion_point(field_set_allocated:PlayerAllData.mail_data)
-}
-
 // uint64 last_save_seq = 7;
 inline void PlayerAllData::clear_last_save_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_save_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t PlayerAllData::last_save_seq() const {
   // @@protoc_insertion_point(field_get:PlayerAllData.last_save_seq)
@@ -747,7 +413,7 @@ inline ::uint64_t PlayerAllData::last_save_seq() const {
 }
 inline void PlayerAllData::set_last_save_seq(::uint64_t value) {
   _internal_set_last_save_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:PlayerAllData.last_save_seq)
 }
 inline ::uint64_t PlayerAllData::_internal_last_save_seq() const {

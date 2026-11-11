@@ -39,4 +39,13 @@ message GameRpcMessage
   // id != 0 的 REQUEST,服务端必须恰好回一帧 RESPONSE 或 RPC_ERROR(Empty / 0 字节响应也回)。
   // uint64:按 5 万次/s 算 uint32 约 24 小时回绕;不用原版的 fixed64,小号 varint 只占 1-3 字节。
   uint64 id = 6;
+  // 链路追踪(docs/design/distributed-tracing.md §5.2):W3C trace-context 的二进制形态,只在 REQUEST 上填。
+  // 四个字段全 0 = 没有 trace(proto3 不编码 0 值,没有 trace 的帧不多一个字节),收方开新根;
+  // trace_id 或 parent_span_id 为 0 同样当作没有。读写只经 network/rpc_trace_envelope.h。
+  // hi / lo / parent_span_id 都按大端把字节拼成整数:%016llx 打出来与日志里的 trace_id / span_id 一致。
+  // 用 fixed64 而不是 bytes:16 字节超过 MSVC 与 libstdc++ 的短串上限,bytes 每帧都要堆分配;随机值 varint 要 9-10 字节。
+  fixed64 trace_id_hi = 7;      // TraceId.bytes[0..7]
+  fixed64 trace_id_lo = 8;      // TraceId.bytes[8..15]
+  fixed64 parent_span_id = 9;   // 发送方当前 span;收方在它下面建子 span
+  uint32 trace_flags = 10;      // W3C flags,只用最低位 sampled
 }

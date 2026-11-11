@@ -5,12 +5,15 @@ import com.game.gateway.dto.LoginResponse;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import io.grpc.CallOptions;
+import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ClientCalls;
+import io.micrometer.core.instrument.binder.grpc.ObservationGrpcClientInterceptor;
+import io.micrometer.observation.ObservationRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -51,6 +54,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * created at startup and reused for every call (HTTP/2 multiplexing). This
  * is the same long-lived-connection contract the C++ {@code GrpcChannelCache}
  * holds for cpp gate→login.
+ *
+ * <p>链路追踪(docs/design/distributed-tracing.md §7):静态通道与 etcd 动态通道都挂同一个
+ * {@link ObservationGrpcClientInterceptor}。调用时在当前观测(HTTP 请求的 span)下开 client span,
+ * 往 metadata 写 {@code traceparent},login 侧 go-zero 接着同一条 trace。新增建通道的地方必须一起挂。
  */
 @Component
 @EnableConfigurationProperties(LoginGrpcProperties.class)
@@ -75,6 +82,8 @@ public class LoginRpcClient {
     private static final String METHOD_QUEUE_STATUS  = PREGATE_SERVICE + "/QueryQueueStatus";
 
     private final LoginGrpcProperties props;
+    /** 每个通道都挂的出站追踪拦截器(见类注释);注册表是 NOOP 时它原样放行,不做任何事。 */
+    private final ClientInterceptor traceInterceptor;
     private final List<ManagedChannel> channels = new ArrayList<>();
     /**
      * Zone-aware routing map: {@code zoneId -> channel}. Populated when an
@@ -113,8 +122,9 @@ public class LoginRpcClient {
     private final MethodDescriptor<AssignGateRequestProto, AssignGateResponseProto> assignGateMethod;
     private final MethodDescriptor<QueryQueueStatusRequestProto, QueryQueueStatusResponseProto> queueStatusMethod;
 
-    public LoginRpcClient(LoginGrpcProperties props) {
+    public LoginRpcClient(LoginGrpcProperties props, ObservationRegistry observationRegistry) {
         this.props = props;
+        this.traceInterceptor = new ObservationGrpcClientInterceptor(observationRegistry);
         this.loginMethod = MethodDescriptor.<LoginRequestProto, LoginResponseProto>newBuilder()
                 .setType(MethodDescriptor.MethodType.UNARY)
                 .setFullMethodName(METHOD_LOGIN)
@@ -196,6 +206,7 @@ public class LoginRpcClient {
                     .keepAliveTime(30, TimeUnit.SECONDS)
                     .keepAliveTimeout(10, TimeUnit.SECONDS)
                     .keepAliveWithoutCalls(false)
+                    .intercept(traceInterceptor)
                     .build();
             channels.add(ch);
             if (zoneTag != null) {
@@ -289,6 +300,7 @@ public class LoginRpcClient {
                 .keepAliveTime(30, TimeUnit.SECONDS)
                 .keepAliveTimeout(10, TimeUnit.SECONDS)
                 .keepAliveWithoutCalls(false)
+                .intercept(traceInterceptor)
                 .build();
         log.info("login.rpc dynamic channel up: {}", ep);
         return ch;

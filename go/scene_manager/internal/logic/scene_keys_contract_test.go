@@ -22,6 +22,7 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/redis"
 
 	"proto/scene_manager"
+	"shared/gatepick"
 	"shared/handofffence"
 	"shared/ownerepoch"
 	"shared/redisslot"
@@ -85,6 +86,7 @@ func TestControlDomainKeysCarryNoHashTag(t *testing.T) {
 		sceneAgonesGsKey(sceneID),
 		sceneTeardownJobKey(sceneID),
 		sceneTeardownPendingKey(zoneID),
+		agonesRoomHoldsKey(zoneID),
 		sceneRegistrationRecordKey(sceneID),
 		sceneDrainingKey(sceneID),
 		instanceMembersKey(sceneID),
@@ -96,6 +98,10 @@ func TestControlDomainKeysCarryNoHashTag(t *testing.T) {
 		nodeDeathAtKey(zoneID, nodeID),
 		nodeReconcileScenesKey(zoneID, nodeID),
 		nodeReconcileInstanceKey(zoneID, nodeID),
+		nodeHolderKey(zoneID, nodeID),
+		nodeHolderEpochKey(zoneID, nodeID),
+		etcdRevisionSeenKey(zoneID),
+		etcdEpochKey(zoneID),
 		activeInstancesKey(zoneID),
 		worldChannelsKey(zoneID, confID),
 		worldDrainingSetKey(zoneID, confID),
@@ -109,7 +115,8 @@ func TestControlDomainKeysCarryNoHashTag(t *testing.T) {
 		deadNodeReconcileTasksKey(zoneID),
 		LeaderLockKey(zoneID),
 		fmt.Sprintf(worldInitLockKeyFmt, zoneID),
-		fmt.Sprintf(gateDrainingKeyFmt, uint32(5)),
+		gatepick.DrainingKey(5),
+		gatepick.StaleKey(5),
 	} {
 		assert.False(t, redisslot.HasHashTag(key), "控制域键 %s 不得带 hash tag", key)
 	}

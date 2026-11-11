@@ -125,6 +125,16 @@ zone-probe:
   status-ttl-ms: 15000
   gate-stale-threshold-seconds: 30
 
+# 本副本负责的区(2026-11-11,服务器缺口清单第 29 条;HomeZoneProperties)。替某个区往共享存储发布东西的组件
+# (健康汇总、区服策略,都写 etcd)只发布这些区,每个区的写入方只有本区的网关副本。这里是本机缺省:
+# 一个网关进程服务本机全部区,与上面 login.grpc.endpoints 的三个区一致。K8s 的网关 ConfigMap 写 [<本 zone>],
+# 列表整体替换这一段。区号必须为正且不重复,否则拒绝启动。写成块式序列:部署脚本与契约测试的 YAML 拍平只认块式。
+gateway:
+  home-zone-ids:
+    - 1
+    - 2
+    - 3
+
 # CDN
 cdn:
   base-url: "https://cdn.example.com"
@@ -185,6 +195,12 @@ management:
           include: livenessState
         readiness:
           include: readinessState
+  # 链路追踪(2026-11-11,docs/design/distributed-tracing.md §3.4、§7):头部采样一律采,Spring Boot 默认只采 0.1。
+  # 没有导出器,span 不出进程,采样标记只随 traceparent 传给 login,没有额外成本。
+  # 公网 HTTP 入口不接受客户端带来的 trace 头,由 UntrustedTraceHeaderFilter 在观测过滤器之前藏掉,每个请求都开新根。
+  tracing:
+    sampling:
+      probability: 1.0
 
 # 日志:控制台按 logstash 风格输出一行一条 JSON(@timestamp / level / logger_name /
 # thread_name / message / stack_trace),与 Go 侧 go-zero 的 JSON 一致,由
@@ -202,4 +218,7 @@ logging:
 mmorpg:
   run-mode: ${MMORPG_RUN_MODE:prod}
   sql:
+    # tidb | mysql(AuthorityDataSource.Backend.resolve):mysql 是 MySQL 主从省钱档,每条物理连接核对端是可写的 MySQL 主库。
+    backend: ${MMORPG_SQL_BACKEND:tidb}
+    # 只对 tidb 档有意义;false 关掉 TiDB 强会话核验,只许 run-mode dev / test。
     require-tidb: ${MMORPG_SQL_REQUIRE_TIDB:true}

@@ -30,6 +30,8 @@ import (
 //     **按 player_id 的每一条读写都必须同时带 route_shard**,片一律经 placement.RouteRowShard 算;
 //   - zone_merged_into:合服映射(源区 → 目标区)的永久记录,由 merge_zone 的合服 / 撤销写入与删除;
 //     别名合服之后它就是合服的全部写入:玩家行和路由行都不动(docs/design/player-data-tidb-scaling-plan.md §7.1);
+//   - zone_merge_history:合服 / 撤销的历史,只增不改,merge_zone 在写映射的同一个事务里追加(提案 §16);
+//     data_service 只建表(迁移),不读不写;
 //   - route_meta:开关表,单行(id=1),writable=0 = 全体映射写者拒写;很少写,冻结与解冻走 shared/authoritysql 的 Catalog。
 //
 // 写入方:data_service 进程内只有本文件(route_store_test.go 的 TestNoPlayerRouteWritesOutsideRouteStore /
@@ -58,12 +60,13 @@ import (
 const (
 	// PlayerRouteTableName 等是路由表名(= proto 的 OptionTableName);建表语句在 schema.go,
 	// 形状守卫的事实源是 rollback_database_table.proto 的同名 message(schema.go 的 routeTableMessages)。
-	PlayerRouteTableName    = "player_route"
-	ZoneMergedIntoTableName = "zone_merged_into"
-	RouteMetaTableName      = "route_meta"
+	PlayerRouteTableName      = "player_route"
+	ZoneMergedIntoTableName   = "zone_merged_into"
+	ZoneMergeHistoryTableName = "zone_merge_history"
+	RouteMetaTableName        = "route_meta"
 
 	// RouteHomeZoneMax 是 home_zone 的上限,= playerRouteBootstrapDDL 里 chk_route_home 的 999999
-	// (与 placement.MaxZoneStorageID 同值:zone id 与 zone 库编号是同一个空间)。
+	// (与 placement.MaxZoneID 同值;区号只是玩法分组,不派生存档库,总体方案 §7.2)。
 	// 应用层在写之前就拒绝,CHECK 只兜底(TiDB < 7.2 或没开 tidb_enable_check_constraint 时 CHECK 不生效)。
 	RouteHomeZoneMax uint32 = 999999
 

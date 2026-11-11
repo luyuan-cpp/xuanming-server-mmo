@@ -29,8 +29,8 @@ package data
 //   - 候选**普通读**(按 player_id / guild_id 找申请、成员 id、状态行是否存在、每人待审计数、审批通过前的申请预读):不加锁,
 //     走哪个索引只影响性能不影响锁集。"不带锁定子句"由下面的 TestGuildLockingStatementShapes 静态钉住。
 //   - INSERT(建状态行、插成员 / 申请 / 帮会):EXPLAIN INSERT 不给访问路径,锁由插入行的主键 / 唯一键值决定。
-//   - TransferLeader 的 `UPDATE guild SET leader_id = ? WHERE guild_id = ?`、UpdateGuildScore 的两条 guild 语句:
-//     guild 表上 guild_id 只有 PRIMARY 一条路可走,且本批未改动。
+//   - TransferLeader 的 `UPDATE guild SET leader_id = ? WHERE guild_id = ?`:guild 表上 guild_id 只有 PRIMARY 一条路可走,
+//     且本批未改动。UpdateGuildScore 的两条语句(2026-11-10 加 score_version 时改过)在下面的用例表里。
 
 import (
 	"strings"
@@ -75,6 +75,8 @@ func TestGuildLockingStatementsArePrimaryKeyPointLookups(t *testing.T) {
 		{"sqlLockGuild", sqlLockGuild, []any{guildID}, "guild", lockRead},
 		{"sqlUpdateAnnouncement", sqlUpdateAnnouncement, []any{"lock-plan", guildID}, "guild", pointWrite},
 		{"sqlDeleteGuild", sqlDeleteGuild, []any{guildID}, "guild", pointWrite},
+		{"sqlLockGuildScore", sqlLockGuildScore, []any{guildID}, "guild", lockRead},
+		{"sqlUpdateGuildScore", sqlUpdateGuildScore, []any{7, 1, guildID}, "guild", pointWrite},
 
 		// guild_player_state(位置 2):玩家守卫。
 		{"sqlLockPlayerState", sqlLockPlayerState, []any{member}, "guild_player_state", lockRead},
@@ -156,6 +158,8 @@ func TestGuildLockingStatementShapes(t *testing.T) {
 		assert.Contains(t, s.query, "WHERE guild_id = ? AND player_id = ?", "%s 必须按完整主键定位:%s", s.name, s.query)
 	}
 	assert.Contains(t, sqlLockGuild, "WHERE guild_id = ? FOR UPDATE")
+	assert.Contains(t, sqlLockGuildScore, "WHERE guild_id = ? FOR UPDATE")
+	assert.Contains(t, sqlUpdateGuildScore, "WHERE guild_id = ?")
 	assert.Contains(t, sqlDeleteGuild, "WHERE guild_id = ?")
 	assert.Contains(t, sqlLockPlayerState, "WHERE player_id = ? FOR UPDATE")
 	// 申请插入查重必须直接取 X(IODKU),不许退回普通 INSERT 的"先 S 后 X"升级(取锁规则 H2)。

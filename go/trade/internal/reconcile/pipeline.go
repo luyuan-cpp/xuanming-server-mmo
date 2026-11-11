@@ -67,6 +67,11 @@ const (
 	// 提交后业务线程会**立刻**自己投一次;让重投循环在这段时间内看不到这一行,两边就不会
 	// 抢同一行(§4.19 seq.go 末段)。与 loopLease 同值。
 	commitDeliveryDelay = loopLease
+
+	// assetOpWorkKind 是资产指令重投按片分工的归属键前缀:片号 = player_id % 64(缺口清单第 25 条,
+	// docs/design/assetop-redelivery-sharding-20261110.md)。同一份成员表还给合同推进(trade-commerce)和
+	// 收据 ACK(trade-receipt-ack)用,类别键各不相同才各自独立分工。
+	assetOpWorkKind = "trade-assetop"
 )
 
 // LeaseDuration 是重投循环每领一行持有的租约时长。人工终结工具(cmd/assetopfix)按它和 assetop.ManualQuietFloor
@@ -276,6 +281,19 @@ func (p *Pipeline) Run(ctx context.Context) {
 		p.recovery.OfflineAfterAttempts, p.recovery.OfflineBackoff, p.recovery.AbandonAfter, p.recovery.AuditInterval)
 	p.loop.Run(ctx)
 	logx.Info("[trade] Asset redelivery loop stopped")
+}
+
+// BindWorkOwner 让重投循环的到期扫描只读本副本负责的片(缺口清单第 25 条,
+// docs/design/assetop-redelivery-sharding-20261110.md)。owns 是本 zone stable trade 实例的成员表判定
+// (svc 的 workshard.Membership.Owns,与合同推进同一份):成员表为空时全部归本副本,不在表里时一片都不归。
+// 只影响后台 Tick;提交后的同步投递、落地唤醒、日对账与自动放弃都不看归属。
+//
+// 必须在 Run 之前调用(assetop.Loop.BindWorkOwner 的约束)。nil 管线回 ErrSignerMissing;owns 为 nil 回错误。
+func (p *Pipeline) BindWorkOwner(owns func(key string) bool) error {
+	if p == nil {
+		return ErrSignerMissing
+	}
+	return p.loop.BindWorkOwner(assetOpWorkKind, owns)
 }
 
 // WakePlayer 立即重投某个玩家的全部 PENDING 行(落地唤醒,docs/design/landing-recovery-sync-digest.md §5.3),

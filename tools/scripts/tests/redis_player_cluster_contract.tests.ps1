@@ -47,7 +47,7 @@ $CatalogPath = New-SqlWriterCatalogFixture -Root (Join-Path $TempRoot 'catalog')
 function Invoke-ClusterDryRun {
     param([Parameter(Mandatory = $true)][string[]]$Arguments, [hashtable]$Env = @{})
     if ($Arguments -notcontains '-DryRun') { throw '本套夹具只允许显式 -DryRun,禁止连接或写集群。' }
-    $fixtureEnv = @{ MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,zone_2_db,zone_101_db,zone_102_db'; MMORPG_SQL_K8S_BOOT_CATALOG = $CatalogPath }
+    $fixtureEnv = @{ MMORPG_DB_ALLOWED_DATABASES = $PlayerStoreAllowlistFixture; MMORPG_SQL_K8S_BOOT_CATALOG = $CatalogPath }
     foreach ($key in $Env.Keys) { $fixtureEnv[$key] = $Env[$key] }
     return Invoke-CapturedPwsh -ScriptPath (Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1') -Arguments $Arguments -Env $fixtureEnv
 }
@@ -64,6 +64,14 @@ function Get-WorkloadBlock {
     $found = @(Get-ManifestBlocks -Output $Output | Where-Object { $_ -cmatch "(?m)^kind: $Kind\s*$" -and $_ -cmatch ('(?m)^  name: ' + [regex]::Escape($Name) + '\s*$') })
     if ($found.Count -ne 1) { throw "DryRun 输出里 $Kind $Name 应当恰好 1 份,实际 $($found.Count) 份" }
     return $found[0]
+}
+
+# SQL 写者都是 StatefulSet:Pod 序号就是写者名册的槽位(docs/design/writer-roster-exhaustion-20261106.md §5.5);其余 Go 服务是 Deployment。
+# 名单同 k8s_deploy.ps1 的 $script:SqlWriterGoSvcs。
+function Get-ServiceWorkloadKind {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    if (@('db', 'data-service', 'login', 'chat', 'friend', 'guild', 'mail', 'rank', 'match', 'trade', 'player-inbox') -ccontains $Name) { return 'StatefulSet' }
+    return 'Deployment'
 }
 
 function Get-ThrownMessage([scriptblock]$Action) {
@@ -115,7 +123,8 @@ $ProdEnv = @{
     MMORPG_REDIS_PASSWORD           = 'contract-test-redis-pw-01'
     MMORPG_GATEWAY_DB_USER          = 'gateway_app'
     MMORPG_GATEWAY_DB_PASSWORD      = 'contract-test-gwdb-pw-01'
-    MMORPG_INTERNAL_AUTH_SECRET     = 'contract-test-internal-auth-0123456789abcdef'
+    MMORPG_INTERNAL_AUTH_SIGNING_KEY = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60'
+    MMORPG_INTERNAL_AUTH_PUBLIC_KEYS = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
     MMORPG_GATEWAY_ADMIN_API_KEY    = 'contract-test-gw-admin-key-0123456789abcdef'
     MMORPG_LOGIN_QUEUE_TOKEN_SECRET = 'contract-test-queue-token-0123456789abcdef'
     MMORPG_SPECTATE_TOKEN_SECRET    = 'contract-test-spectate-token-0123456789abcdef'
@@ -379,7 +388,11 @@ Test-Case '控制域总账:没建集群时这些池记在控制域;建了集群�
     Assert-Equal -Expected '0/0/1' -Actual ('{0}/{1}/{2}' -f $smSplit.ConfiguredPoolConns, $smSplit.Fixed, $smSplit.DefaultPools) -Because '铸造通道搬到玩家域,控制域只剩 go-zero 缺省池'
     $guildSplit = @(& $rowOf $split 'guild')[0]
     $guildControl = [int](Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'RedisClient.PoolSize') + [int](Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'PlayerLocatorRedis.PoolSize')
-    Assert-Equal -Expected "$guildControl/0" -Actual ('{0}/{1}' -f $guildSplit.ConfiguredPoolConns, $guildSplit.Fixed) -Because 'guild 的两个控制域池留下,玩家域句柄、摘要池搬走'
+    # 入帮申请配额专用池(go/guild/internal/logic/application_quota.go 的 ApplicationQuotaRedisPoolSize)连核心库,拆了玩家域也留下。
+    $quotaSource = [IO.File]::ReadAllText((Join-Path $RepoRoot 'go/guild/internal/logic/application_quota.go'))
+    $quotaPool = [int][regex]::Match($quotaSource, '(?m)^\s*(?:const\s+)?ApplicationQuotaRedisPoolSize\s*=\s*(\d+)\s*$').Groups[1].Value
+    Assert-True -Condition ($quotaPool -gt 0) -Because "写死的配额池上限要从源码读到(实际 $quotaPool),写法变了同步本用例"
+    Assert-Equal -Expected "$guildControl/$quotaPool" -Actual ('{0}/{1}' -f $guildSplit.ConfiguredPoolConns, $guildSplit.Fixed) -Because 'guild 的两个控制域池与申请配额池留下,玩家域句柄、摘要池搬走'
     $plan = @{ ZoneCount = 1; CppZoneProcesses = 6; BattleProcesses = 1; RolloutExtraPodsPerDeployment = 2; OpsReserve = 50; WarnRatio = 0.8 }
     Assert-True -Condition ((Get-RedisConnectionLedger -Inputs $split @plan).Steady -lt (Get-RedisConnectionLedger -Inputs $unsplit @plan).Steady) -Because '搬走之后控制域的账变小,而且没有 0 条的行让总账函数拒绝'
 }
@@ -469,8 +482,8 @@ Test-Case '-PlayerRedisMasters 3 的 infra-up:全局服务的 PlayerRedis 写种
         Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'Cluster')) -Because "$service 的 PlayerRedis"
         Assert-Equal -Expected 'PLAYER_REDIS_PASSWORD' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'PasswordEnv')) -Because "$service 的 PlayerRedis 只写变量名"
         Assert-True -Condition (-not $flat.Scalars.Contains($prefix + 'Password')) -Because "$service 的 PlayerRedis 不写口令值"
-        $deployment = Get-WorkloadBlock -Output $out -Kind 'Deployment' -Name $service
-        Assert-Match -Text $deployment -Pattern '- name: PLAYER_REDIS_PASSWORD\s+valueFrom:\s+secretKeyRef:\s+name: redis-player-auth\s+key: password' -Because "$service 容器要有口令:没有的话只有一屏 NOAUTH"
+        $workload = Get-WorkloadBlock -Output $out -Kind (Get-ServiceWorkloadKind -Name $service) -Name $service
+        Assert-Match -Text $workload -Pattern '- name: PLAYER_REDIS_PASSWORD\s+valueFrom:\s+secretKeyRef:\s+name: redis-player-auth\s+key: password' -Because "$service 容器要有口令:没有的话只有一屏 NOAUTH"
     }
     foreach ($service in $SignedIdentityServices) {
         $leftover = @(Get-LoginSessionKeys -Flat (Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config") -Prefix $ServiceConfigs[$service])
@@ -478,7 +491,7 @@ Test-Case '-PlayerRedisMasters 3 的 infra-up:全局服务的 PlayerRedis 写种
     }
     $chatFlat = Get-ConfigFlat -Output $out -ConfigMap 'go-svc-chat-config'
     Assert-Equal -Expected 0 -Actual @($chatFlat.Scalars.Keys | Where-Object { ([string]$_).StartsWith($ServiceConfigs['chat'] + 'PlayerRedis', [System.StringComparison]::Ordinal) }).Count -Because 'chat 没有玩家域段'
-    Assert-NotMatch -Text (Get-WorkloadBlock -Output $out -Kind 'Deployment' -Name 'chat') -Pattern 'PLAYER_REDIS_PASSWORD' -Because 'chat 不连 Redis,容器不拿玩家域口令'
+    Assert-NotMatch -Text (Get-WorkloadBlock -Output $out -Kind (Get-ServiceWorkloadKind -Name 'chat') -Name 'chat') -Pattern 'PLAYER_REDIS_PASSWORD' -Because 'chat 不连 Redis,容器不拿玩家域口令'
 }
 
 Test-Case '-PlayerRedisMasters 3 的 zone-up:node-config 写 player_redis,scene 有口令与配置指纹,gate 没有;zone 的 Go 服务写种子;WAITAOF 取 1' {
@@ -501,7 +514,7 @@ Test-Case '-PlayerRedisMasters 3 的 zone-up:node-config 写 player_redis,scene 
         $flat = Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config"
         Assert-Equal -Expected $Seeds[0] -Actual (Get-FlatValue -Flat $flat -KeyPath ($ServiceConfigs[$service] + 'PlayerRedis.Addrs[0]')) -Because "$service 的种子"
         Assert-Equal -Expected 'PLAYER_REDIS_PASSWORD' -Actual (Get-FlatValue -Flat $flat -KeyPath ($ServiceConfigs[$service] + 'PlayerRedis.PasswordEnv')) -Because "$service 只写变量名"
-        Assert-Match -Text (Get-WorkloadBlock -Output $out -Kind 'Deployment' -Name $service) -Pattern '- name: PLAYER_REDIS_PASSWORD\s+valueFrom:' -Because "$service 容器要有口令"
+        Assert-Match -Text (Get-WorkloadBlock -Output $out -Kind (Get-ServiceWorkloadKind -Name $service) -Name $service) -Pattern '- name: PLAYER_REDIS_PASSWORD\s+valueFrom:' -Because "$service 容器要有口令"
     }
     $sceneManager = Get-ConfigFlat -Output $out -ConfigMap 'go-svc-scene-manager-config'
     Assert-Equal -Expected '1' -Actual (Get-FlatValue -Flat $sceneManager -KeyPath 'data.scene_manager_service.yaml.OwnerEpochMint.WaitAOFNumReplicas') -Because '铸造的键在集群上,每主至少 1 副本'

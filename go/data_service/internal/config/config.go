@@ -8,9 +8,11 @@ import (
 
 	"shared/dbplacement"
 	"shared/dirshard"
+	"shared/kafkautil"
 	"shared/playerredis"
 	"shared/redisauth"
 	"shared/rolefence"
+	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/discov"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -40,6 +42,10 @@ type Config struct {
 	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里两段的口令写空串。不写 = 照用字面量(本机)。
 	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
 	SharedRedisPasswordEnv string `json:",optional"`
+	// MySQLPasswordEnv 是 SnapshotMySQL 口令所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md)。
+	// 写了它,SnapshotMySQL.Password 必须写成空串(不写这一键会落回缺省值 apppass123,被当成字面量而拒启);不写 = 照用字面量(本机)。
+	// 由 ResolveMySQLPassword 在加载配置后、任何入口连库之前填好,变量缺失或为空即拒启。
+	MySQLPasswordEnv string `json:",optional"`
 	// PlayerRedis 是玩家域:读位置键 player:{id}:location。没写 Addrs 时指向 SharedRedis。只有 Recall.Enabled=true 时才连。
 	PlayerRedis playerredis.Config `json:",optional"`
 
@@ -236,6 +242,18 @@ func (c Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) (
 	return c, nil
 }
 
+// ResolveMySQLPassword 按 MySQLPasswordEnv 填 SnapshotMySQL.Password,返回填好的副本;规则见 secretenv.Fill。
+// -migrate、-route-tool 与常驻启动都连库,所以在 conf.MustLoad 之后、分流到各入口之前调用(data_service.go);
+// 迁移与 route-tool 的 Job 同样注入这个变量。
+func (c Config) ResolveMySQLPassword(lookup func(string) (string, bool)) (Config, error) {
+	err := secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
+		secretenv.Target{Field: "SnapshotMySQL.Password", Value: &c.SnapshotMySQL.Password})
+	if err != nil {
+		return Config{}, err
+	}
+	return c, nil
+}
+
 // RoleFenceConfig 是角色护栏协调者的配置(docs/design/horizontal-scale-logical-db.md §3.5)。
 type RoleFenceConfig struct {
 	// Participants 必须逐个对上 rolefence.Participants。少配一个就是漏冻结,所以不是「配了几个问几个」。
@@ -314,6 +332,42 @@ type IdIssuerConfig struct {
 	// 地域码绑定和第三份预留记录都在这里。生产必须配,地址不能和 PrimaryEtcd、SecondaryEtcd 有交集。
 	// dev 可以不写,回落到 PrimaryEtcd(再回落到 Etcd.Hosts),放不同的键。
 	RegistryEtcd []string `json:",optional"`
+
+	// RegistryTLS 是连登记处的双向 TLS(docs/ops/id-issuer-runbook.md §1)。登记处跨集群经私网访问:
+	// 它只收世界 CA 签的客户端证书;发号器也只认世界 CA 签的服务端证书,连到别的环境误起的登记处,握手就失败。
+	// 生产(AllowAutoSeed=false)三项必填;dev、test 的登记处在自己的 etcd 上,不开 TLS,三项必须为空(RegistryTLSFiles)。
+	RegistryTLS RegistryTLSConfig `json:",optional"`
+}
+
+// RegistryTLSConfig 是登记处双向 TLS 的三个 PEM 文件:世界 CA、本地域的客户端证书和私钥。
+// K8s 上由 Secret id-registry-client-tls 挂到 /etc/mmorpg/id-registry-tls/(ca.crt、tls.crt、tls.key)。
+type RegistryTLSConfig struct {
+	CAFile   string `json:",optional"`
+	CertFile string `json:",optional"`
+	KeyFile  string `json:",optional"`
+}
+
+// RegistryTLSFiles 核对登记处的 TLS 配置并返回三个路径。dev、test(AllowAutoSeed=true)返回空值:不开 TLS。
+func (c IdSegmentConfig) RegistryTLSFiles() (RegistryTLSConfig, error) {
+	files := c.Issuer.RegistryTLS
+	set := 0
+	for _, path := range []string{files.CAFile, files.CertFile, files.KeyFile} {
+		if strings.TrimSpace(path) != "" {
+			set++
+		}
+	}
+	if c.AllowAutoSeed {
+		if set != 0 {
+			return RegistryTLSConfig{}, errors.New("IdSegment.Issuer.RegistryTLS must be empty when AllowAutoSeed=true: " +
+				"a dev or test id registry is a key on its own plain etcd")
+		}
+		return RegistryTLSConfig{}, nil
+	}
+	if set != 3 {
+		return RegistryTLSConfig{}, errors.New("IdSegment.Issuer.RegistryTLS needs CAFile, CertFile and KeyFile when AllowAutoSeed=false: " +
+			"the shared id registry only accepts mutual TLS (docs/ops/id-issuer-runbook.md §1)")
+	}
+	return files, nil
 }
 
 // DefaultIdSegmentTags 是走号段的永久身份清单。
@@ -337,15 +391,20 @@ func (c IdSegmentConfig) EffectiveTags() []string {
 func (c IdSegmentConfig) IssuerEndpoints(fallback []string) (primary, secondary, registry []string, err error) {
 	primary, secondary, registry = c.Issuer.PrimaryEtcd, c.Issuer.SecondaryEtcd, c.Issuer.RegistryEtcd
 	if c.AllowAutoSeed {
+		// AllowAutoSeed 跳过独立性和地域码绑定的核对,登记处没有这个码就在第一次预留时直接认领,不走「下一个可认领的码」。
+		// 这样的发号器连上共用登记处,就成了在用地域码的第二个发号环境(交接 docs/handoff/global-id-issuer-registry-20261105.md §7.3),
+		// 所以 dev、test 的登记处只能放在自己的 etcd 上,显式给地址一律拒绝。部署脚本的 dev 档同样拒绝 -IdRegistryEtcd。
+		if len(registry) != 0 {
+			return nil, nil, nil, errors.New("IdSegment.Issuer.RegistryEtcd must be empty when AllowAutoSeed=true: " +
+				"a dev or test issuer skips the region code binding checks, so its id registry stays on its own etcd and never on the shared one")
+		}
 		if len(primary) == 0 {
 			primary = fallback
 		}
 		if len(secondary) == 0 {
 			secondary = primary
 		}
-		if len(registry) == 0 {
-			registry = primary
-		}
+		registry = primary
 		if len(primary) == 0 {
 			return nil, nil, nil, errors.New("IdSegment.Issuer: no etcd endpoints (neither PrimaryEtcd nor Etcd.Hosts is set)")
 		}
@@ -639,14 +698,9 @@ func (k KafkaConfig) EffectiveSnapshotTopic() string {
 // topicForGeneration 拼 `<base>_g<N>`。base 为空时返回空,交给 kafka.Start 的 validate
 // 报错,而不是拼出一个只有后缀的名字。generation=0 只可能来自"整段 Kafka 未出现"
 // (go-zero 不回填未出现结构里的 default),此时按第一代 1 处理:名字保持规范。
+// 2026-11-11 起 go/db 的审计发件箱转发是这两个 topic 的生产者,两边共用 kafkautil.AuditTopicName,不各拼各的。
 func topicForGeneration(base string, generation uint32) string {
-	if base == "" {
-		return ""
-	}
-	if generation == 0 {
-		generation = 1
-	}
-	return fmt.Sprintf("%s_g%d", base, generation)
+	return kafkautil.AuditTopicName(base, generation)
 }
 
 type SnapshotMySQLConfig struct {

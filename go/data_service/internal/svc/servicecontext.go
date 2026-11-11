@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"data_service/internal/clusteridentity"
 	"data_service/internal/config"
 	"data_service/internal/idissuer"
 	"data_service/internal/metrics"
@@ -279,11 +281,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // 门禁必须在构造前确定；prepared SOURCE 与正常服务复用同一 SQL boot，不能运行中换 gate。
 func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Session) *ServiceContext {
 	if root == nil || relay == nil || root == relay {
-		panic("data_service 缺独立 SOURCE/RELAY 门禁")
+		panic("data_service missing independent SOURCE/RELAY admission gates")
 	}
 	resolved, err := c.ResolveGlobalAuthority(os.Getenv)
 	if err != nil {
-		panic(fmt.Sprintf("全球SQL装配拒绝: %v", err))
+		panic(fmt.Sprintf("global SQL wiring rejected: %v", err))
 	}
 	c = resolved
 	if err := validateGlobalCallerSecrets(os.Getenv); err != nil {
@@ -304,23 +306,23 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	// 常驻进程没有 schema 凭据。历史上缺省启动迁移的行为在这里收口，
 	// 显式要求自动迁移则拒启；未配置时仅使用部署阶段已准备的表。
 	if c.Schema.AutoMigrate != nil && *c.Schema.AutoMigrate {
-		panic("常驻 data_service 禁止 Schema.AutoMigrate，请使用独立 -migrate 部署入口")
+		panic("resident data_service forbids Schema.AutoMigrate; use the standalone -migrate deployment entry")
 	}
 	if mysqlCfg.Host != "" {
 		// 全部 store 共用一个映射 Watcher,先于消费一次性写资格:etcd 读不到时不白烧 boot grant。
 		dbPlacement, err := dbplacement.Start(context.Background(), c.SnapshotMySQL.DbPlacement)
 		if err != nil {
-			panic(fmt.Sprintf("data_service 逻辑库映射读取失败: %v", err))
+			panic(fmt.Sprintf("data_service failed to read logical database placement: %v", err))
 		}
 		mysqlCfg.PoolOptions = dbPlacement.OpenOptions()
 		// 目录各片、流水库、存档库各一份写资格。
 		writers, err := authoritysql.LoadWriterConfigs(os.Getenv)
 		if err != nil {
-			panic(fmt.Sprintf("data_service 写者启动授权拒绝: %v", err))
+			panic(fmt.Sprintf("data_service writer boot authorization rejected: %v", err))
 		}
 		schemas, err := c.WriterSchemas()
 		if err != nil {
-			panic(fmt.Sprintf("data_service 逻辑库清单无效: %v", err))
+			panic(fmt.Sprintf("data_service invalid logical database list: %v", err))
 		}
 		if err := checkWriterSchemas(writers, schemas); err != nil {
 			panic(fmt.Sprintf("data_service %v", err))
@@ -338,7 +340,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		}
 	}
 	schemaReady := true
-	logx.Info("[ServiceContext] 常驻启动只读核对表形状；schema 必须由独立 -migrate 入口预建")
+	logx.Info("[ServiceContext] Resident startup only verifies table shapes read-only; schema must be pre-created by the standalone -migrate entry")
 
 	var (
 		snapshotStore       SnapshotStore
@@ -491,7 +493,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		s.AccountRoleTrades = store.NewAccountRoleTradeStore(directory, verifier)
 		s.RoleAdmissions = store.NewAccountRoleAdmissionStore(directory)
 		if auth, err := serviceauth.New(map[string]string{"scene_manager": os.Getenv("MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER")}); err != nil {
-			logx.Error("[account-directory] scene_manager独立只读密钥不可用；仅其Lookup关闭")
+			logx.Error("[account-directory] scene_manager dedicated read-only key unavailable; only its Lookup is disabled")
 		} else {
 			s.SceneManagerDirectoryAuth = auth
 		}
@@ -627,7 +629,7 @@ func newPlayerRouteStore(c config.Config, mysqlCfg store.MySQLConfig, directory 
 	}
 	if err := checkEmptyRouteBootstrap(context.Background(), rs, directory, c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs); err != nil {
 		_ = rs.Close()
-		logx.Errorf("[route-bootstrap] 全球路由启动拒绝: %v", err)
+		logx.Errorf("[route-bootstrap] global route startup rejected: %v", err)
 		return nil
 	}
 	logx.Infof("[ServiceContext] route store ready: max_open_conn=%d max_idle_conn=%d", c.RouteStore.MaxOpenConn, c.RouteStore.MaxIdleConn)
@@ -651,19 +653,20 @@ const (
 	idIssuerSecondaryKey = "/id_issuer/counter/secondary"
 )
 
-// envExpectedIdRegion 是部署脚本注入的地域码(k8s_deploy.ps1 的 -Region)。
+// envExpectedIdRegion 是部署脚本注入的发号器地域码(k8s_deploy.ps1 的 -IdIssuerRegion,缺省等于 -Region;
+// 换码之后两者不同,见 docs/ops/id-issuer-runbook.md §4.5)。
 const envExpectedIdRegion = "MMORPG_ID_ISSUER_EXPECTED_REGION"
 
 // checkExpectedRegion 比部署参数和配置里的地域码。staging、prod 的配置来自运维预置的 Secret,抄错了不报错,只会和别的地域撞号。
 // 本机路径没有这个环境变量,不比。
 func checkExpectedRegion(expected string, region uint32) error {
 	if expected != "" && expected != fmt.Sprint(region) {
-		return fmt.Errorf("IdSegment.Issuer.Region = %d but the deployment says -Region %s: fix the runtime config", region, expected)
+		return fmt.Errorf("IdSegment.Issuer.Region = %d but the deployment's id issuer region (-IdIssuerRegion, defaults to -Region) is %s: fix the runtime config", region, expected)
 	}
 	return nil
 }
 
-// NewIdIssuer 按配置装配发号器。只校验配置,不连 etcd。服务启动和 -id-issuer-init 共用。
+// NewIdIssuer 按配置装配发号器。只校验配置、读登记处的 TLS 证书文件,不连 etcd。服务启动和 -id-issuer-init 共用。
 func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if c.IdSegment.Issuer.Region > uint32(idissuer.MaxRegion) {
 		return nil, fmt.Errorf("IdSegment.Issuer.Region = %d exceeds %d", c.IdSegment.Issuer.Region, idissuer.MaxRegion)
@@ -683,6 +686,17 @@ func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 登记处只走双向 TLS(生产);dev、test 的登记处是本地 etcd 上的键,不开 TLS。证书在建任何连接之前读,错了在装配时就报。
+	registryTLSFiles, err := c.IdSegment.RegistryTLSFiles()
+	if err != nil {
+		return nil, err
+	}
+	var registryTLS *tls.Config
+	if registryTLSFiles.CAFile != "" {
+		if registryTLS, err = idissuer.LoadRegistryTLS(registryTLSFiles.CAFile, registryTLSFiles.CertFile, registryTLSFiles.KeyFile); err != nil {
+			return nil, err
+		}
+	}
 	primary, err := idissuer.NewEtcdStore(primaryHosts, idIssuerPrimaryKey)
 	if err != nil {
 		return nil, err
@@ -691,9 +705,15 @@ func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if err != nil {
 		return nil, errors.Join(err, primary.Close())
 	}
-	registry, err := idissuer.NewEtcdRegistry(registryHosts)
+	registry, err := idissuer.NewEtcdRegistry(registryHosts, registryTLS)
 	if err != nil {
 		return nil, errors.Join(err, primary.Close(), secondary.Close())
+	}
+	// 地域码绑定到本部署环境(K8s 集群)的身份,运行期从集群读(internal/clusteridentity);dev 不核绑定,不读。
+	// 这里只接上读取器、不读:构造不做 IO,第一次预留或运维操作才读,读不到那一次失败,不写任何记录。
+	var deployment func(context.Context) (string, error)
+	if !c.IdSegment.AllowAutoSeed {
+		deployment = clusteridentity.InCluster().Read
 	}
 	issuer, err := idissuer.New(idissuer.Options{
 		Primary:        primary,
@@ -702,6 +722,7 @@ func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 		Region:         uint8(c.IdSegment.Issuer.Region),
 		AllowBootstrap: c.IdSegment.AllowAutoSeed,
 		Tags:           c.IdSegment.EffectiveTags(),
+		Deployment:     deployment,
 		OnReserve:      metrics.ObserveIdIssuerReserve,
 	})
 	if err != nil {
@@ -769,7 +790,7 @@ func (s *ServiceContext) CloseRootAndRelayIngress() {
 // Close 保留旧入口，但不能把未完成的关闭结果吞成成功或提前销毁 SQL。
 func (s *ServiceContext) Close() {
 	if err := s.CloseAndReport(); err != nil {
-		logx.Errorf("data_service 关闭 HOLD，保留未决 owner/SQL: %v", err)
+		logx.Errorf("data_service shutdown HOLD, retaining pending owner/SQL: %v", err)
 	}
 }
 

@@ -15,6 +15,7 @@
 #include "network/rpc_channel_stats.h"
 #include "network/rpc_controller.h"
 #include "network/rpc_done_callback.h"
+#include "network/rpc_trace_envelope.h"
 #include "network/traffic_statistics.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
 
@@ -116,20 +117,13 @@ size_t LogIfMessageTooLarge(const GameRpcMessage &rpcMessage)
     return messageSize;
 }
 
-// 一次派发的 trace:新根,退出时恢复派发前的 trace。以前直接 tracing::Set(NewRoot()) 且从不恢复,
-// TLS 里的 trace 会一直留到下一次派发,之后在同一线程上跑的回包回调、超时回调都会挂到它下面。
-class ScopedDispatchTrace
+// 请求信封上的 trace(docs/design/distributed-tracing.md §5.2)。没带或不合法时返回无效值,派发据此开新根。
+tracing::TraceContext IncomingTraceOf(const GameRpcMessage &request)
 {
-public:
-    ScopedDispatchTrace() : previous_(tracing::Current()) { tracing::Set(tracing::NewRoot()); }
-    ~ScopedDispatchTrace() { tracing::Set(previous_); }
-
-    ScopedDispatchTrace(const ScopedDispatchTrace &) = delete;
-    ScopedDispatchTrace &operator=(const ScopedDispatchTrace &) = delete;
-
-private:
-    tracing::TraceContext previous_;
-};
+    tracing::TraceContext incoming;
+    (void)ReadTraceFromRpcEnvelope(request, incoming);
+    return incoming;
+}
 
 void RecordOutcome(const RpcStatus &status)
 {
@@ -659,6 +653,7 @@ void RpcChannel::CallMethodWithResponseType(uint32_t messageId, const ProtobufMe
     GameRpcMessage message;
     message.set_type(REQUEST);
     message.set_message_id(messageId);
+    WriteTraceToRpcEnvelope(tracing::Current(), message);
     if (!SerializeMessage(request, message.mutable_request()))
     {
         return notSent("request serialization failed");
@@ -718,6 +713,7 @@ bool RpcChannel::SendRequest(uint32_t messageId, const ProtobufMessage &request)
     GameRpcMessage message;
     message.set_type(REQUEST);
     message.set_message_id(messageId);
+    WriteTraceToRpcEnvelope(tracing::Current(), message);
     if (!SerializeMessage(request, message.mutable_request()))
     {
         return reject("request serialization failed");
@@ -1103,7 +1099,9 @@ void RpcChannel::OnRpcError(const GameRpcMessage &message)
 
 void RpcChannel::CallServiceMethod(const TcpConnectionPtr &connection, const GameRpcMessage &message)
 {
-    ScopedDispatchTrace dispatchTrace;
+    // 派发期间接续信封上的 trace(合法就建子 span,否则开新根),退出时恢复派发前的值。早年这里直接 Set(NewRoot())
+    // 且从不恢复,TLS 里的 trace 一直留到下一次派发,之后同一线程上跑的回包回调、超时回调都挂到它下面。
+    const tracing::ScopedIncoming dispatchTrace(IncomingTraceOf(message));
 
     const uint32_t messageId = message.message_id();
     if (!IsDispatchableMessageId(messageId))

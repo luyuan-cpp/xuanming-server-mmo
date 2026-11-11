@@ -30,11 +30,9 @@ func (na *NodeAllocator) WithRegistry(reg *etcd.NodeRegistry) *NodeAllocator {
 	return na
 }
 
-// buildAllocationKey returns the global-uniqueness CAS key for (nodeType, nodeID).
-// It's intentionally zone-independent so that two zones cannot both claim the
-// same (nodeType, nodeID) pair: the per-type global lock prevents the Snowflake
-// seed collision we observed when zone 3 and zone 4 Login nodes both ended up
-// with node_id=1 after a transient z3 lease drop.
+// buildAllocationKey 返回 (nodeType, nodeID) 的全局唯一 CAS 键。键里刻意不带 zone,
+// 两个 zone 不可能同时占到同一对 (nodeType, nodeID)。最早是为了堵 snowflake 种子撞号:
+// 当时 zone 3、zone 4 的 login 在 z3 租约短暂丢失后都拿到了 node_id=1。
 func buildAllocationKey(prefix string, nodeType, nodeID uint32) string {
 	return fmt.Sprintf("%s/allocated/node_type/%d/node_id/%d", prefix, nodeType, nodeID)
 }
@@ -43,11 +41,9 @@ func buildAllocationKey(prefix string, nodeType, nodeID uint32) string {
 // (node_type) across all zones. Reuses free slots (lease expired) by scanning
 // the allocation registry for gaps.
 //
-// Invariant: within a given node_type, every live node has a distinct node_id,
-// regardless of zone. This is required because the Snowflake PlayerId seed
-// uses node_id directly — if two zones both see node_id=1 they generate
-// identical PlayerIds and the reverse `player_id → account` index mis-routes
-// EnterGame requests across zones.
+// 不变量:同一 node_type 下,所有活着的节点 node_id 互不相同,不分 zone。这条最早是给
+// snowflake PlayerId 种子定的;PlayerId 现在只由发号器发(svc/player_id_minter.go),
+// 与 node_id 无关,不变量照旧保留。
 func (na *NodeAllocator) TryAllocateNodeID(ctx context.Context, info *login_proto.NodeInfo, leaseID clientv3.LeaseID) (uint32, error) {
 	// Scan the global allocation registry for this node_type. We use a
 	// dedicated sub-prefix so this lookup is O(live nodes of one type),

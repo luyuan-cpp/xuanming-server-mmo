@@ -175,18 +175,26 @@ def scan_source(relative_path, text):
         if line in raw_lines:
             continue  # 同一行的多个直读只判一次
         raw_lines.add(line)
+        # 诊断文案按 AGENTS.md §2 用英文;标记本身是代码注释,保持中文
         if line not in markers:
             result.violations.append(
-                (line, "直读 LevelComp.level() 没有经 playerlevel::CappedLevel,也不在白名单内(同一行缺 `// 直读存储等级:<场合>`)")
+                (line, "raw LevelComp.level() read bypasses playerlevel::CappedLevel and is not whitelisted "
+                       "(missing a same-line `// 直读存储等级:<place>` marker)")
             )
         elif markers[line] is None:
-            result.violations.append((line, "直读标记的场合只能是:加载器 / 存盘 / GmSetLevel / 管理端 dump"))
+            result.violations.append(
+                (line, "raw-read marker must name one of the places: 加载器 / 存盘 / GmSetLevel / 管理端 dump")
+            )
         elif markers[line] not in allowed:
-            result.violations.append((line, f"「{markers[line]}」不是这个文件允许的直读场合;四处白名单见 ALLOWED_MARKERS"))
+            result.violations.append(
+                (line, f"place '{markers[line]}' is not allowed in this file; see ALLOWED_MARKERS for the four places")
+            )
 
     for line in sorted(markers):
         if line not in raw_lines:
-            result.violations.append((line, "陈旧的直读标记:这一行没有直读 LevelComp.level(),删掉标记"))
+            result.violations.append(
+                (line, "stale raw-read marker: this line no longer reads LevelComp.level() directly; remove the marker")
+            )
     return result
 
 
@@ -274,9 +282,9 @@ class LevelReadDetectorTest(unittest.TestCase):
     def test_marker_allows_a_raw_read_only_in_its_own_file_and_place(self):
         source = "const auto& lc = registry.emplace<LevelComp>(p);\nconst uint32_t stored = lc.level();  // 直读存储等级:加载器"
         self.assertEqual([], self.violations(source, self.LOADER))
-        self.assertEqual(1, len(self.violations(source, self.OTHER)), "别的文件不能借标记直读")
+        self.assertEqual(1, len(self.violations(source, self.OTHER)), "a marker cannot whitelist a raw read in another file")
         wrong_place = source.replace("加载器", "GmSetLevel")
-        self.assertEqual(1, len(self.violations(wrong_place, self.LOADER)), "场合与文件要对得上")
+        self.assertEqual(1, len(self.violations(wrong_place, self.LOADER)), "the marker's place must match its file")
         unknown_place = source.replace("加载器", "随便")
         self.assertEqual(1, len(self.violations(unknown_place, self.LOADER)))
 
@@ -289,19 +297,19 @@ class RepositoryLevelReadContractTest(unittest.TestCase):
     def test_allowed_places_still_exist(self):
         for relative_path in ALLOWED_MARKERS:
             with self.subTest(path=relative_path):
-                self.assertTrue((REPO / relative_path).is_file(), "白名单文件已移动或删除,同步 ALLOWED_MARKERS")
+                self.assertTrue((REPO / relative_path).is_file(), "whitelisted file moved or deleted; update ALLOWED_MARKERS")
 
     def test_stored_level_is_read_raw_only_in_the_four_allowed_places(self):
         sources = list(level_comp_sources())
-        self.assertGreater(len(sources), 5, "必须扫描整个 cpp/libs 与 cpp/nodes,不能只扫一个目录")
+        self.assertGreater(len(sources), 5, "must scan all of cpp/libs and cpp/nodes, not a single directory")
         wrapped = 0
         problems = []
         for relative_path, text in sources:
             result = scan_source(relative_path, text)
             wrapped += len(result.wrapped_lines)
             problems += [f"{relative_path}:{line}: {reason}" for line, reason in result.violations]
-        self.assertGreaterEqual(wrapped, 5, "识别规则失效:一个经 CappedLevel 的读点都没认出来")
-        self.assertEqual([], problems, "\n" + "\n".join(problems) + "\n规则见 player_level_rules.h 文件头")
+        self.assertGreaterEqual(wrapped, 5, "detector broken: fewer than 5 reads wrapped in CappedLevel were recognized")
+        self.assertEqual([], problems, "\n" + "\n".join(problems) + "\nSee the header comment of player_level_rules.h")
 
 
 if __name__ == "__main__":

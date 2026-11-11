@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -303,7 +304,7 @@ func TestGateCommandFailsClosed(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := sc.SendBindSessionToGate(tc.gateID, tc.instanceID, &kafkapb.BindSessionEvent{SessionId: 1, PlayerId: 2})
+			err := sc.SendBindSessionToGate(context.Background(), tc.gateID, tc.instanceID, &kafkapb.BindSessionEvent{SessionId: 1, PlayerId: 2})
 			if err == nil {
 				t.Fatal("SendBindSessionToGate: want error, got nil (command would be unroutable/unfilterable)")
 			}
@@ -311,7 +312,7 @@ func TestGateCommandFailsClosed(t *testing.T) {
 				t.Errorf("SendBindSessionToGate error = %q, want it to mention %q", err, tc.wantSubstr)
 			}
 
-			err = sc.KickSessionOnGate(tc.gateID, tc.instanceID, 1, 2, 3)
+			err = sc.KickSessionOnGate(context.Background(), tc.gateID, tc.instanceID, 1, 2, 3)
 			if err == nil {
 				t.Fatal("KickSessionOnGate: want error, got nil (command would be unroutable/unfilterable)")
 			}
@@ -319,7 +320,7 @@ func TestGateCommandFailsClosed(t *testing.T) {
 				t.Errorf("KickSessionOnGate error = %q, want it to mention %q", err, tc.wantSubstr)
 			}
 
-			err = sc.PushTipToSession(tc.gateID, tc.instanceID, 1, 2, uint32(table.SceneError_kEnterSceneFailed))
+			err = sc.PushTipToSession(context.Background(), tc.gateID, tc.instanceID, 1, 2, uint32(table.SceneError_kEnterSceneFailed))
 			if err == nil {
 				t.Fatal("PushTipToSession: want error, got nil (command would be unroutable/unfilterable)")
 			}
@@ -327,7 +328,7 @@ func TestGateCommandFailsClosed(t *testing.T) {
 				t.Errorf("PushTipToSession error = %q, want it to mention %q", err, tc.wantSubstr)
 			}
 
-			err = sc.PushTipToUnboundSession(tc.gateID, tc.instanceID, 1, 2, uint32(table.SceneError_kEnterSceneFailed))
+			err = sc.PushTipToUnboundSession(context.Background(), tc.gateID, tc.instanceID, 1, 2, uint32(table.SceneError_kEnterSceneFailed))
 			if err == nil {
 				t.Fatal("PushTipToUnboundSession: want error, got nil (command would be unroutable/unfilterable)")
 			}
@@ -479,7 +480,7 @@ func TestPushTipRejectsZeroPlayerID(t *testing.T) {
 	}
 
 	sc := &ServiceContext{}
-	if err := sc.PushTipToSession("300", "b0a1-uuid", 4242, 0, tipID); err == nil ||
+	if err := sc.PushTipToSession(context.Background(), "300", "b0a1-uuid", 4242, 0, tipID); err == nil ||
 		!strings.Contains(err.Error(), "zero player_id") {
 		t.Fatalf("PushTipToSession with player 0: err = %v, want a zero player_id rejection", err)
 	}
@@ -489,7 +490,7 @@ func TestPushTipRejectsZeroPlayerID(t *testing.T) {
 		!strings.Contains(err.Error(), "zero player_id") {
 		t.Fatalf("buildPushTipToUnboundSessionCommand with player 0: err = %v, want a zero player_id rejection", err)
 	}
-	if err := sc.PushTipToUnboundSession("300", "b0a1-uuid", 4242, 0, tipID); err == nil ||
+	if err := sc.PushTipToUnboundSession(context.Background(), "300", "b0a1-uuid", 4242, 0, tipID); err == nil ||
 		!strings.Contains(err.Error(), "zero player_id") {
 		t.Fatalf("PushTipToUnboundSession with player 0: err = %v, want a zero player_id rejection", err)
 	}

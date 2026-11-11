@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"fmt"
 	"testing"
 
 	"shared/releasetrack"
@@ -82,6 +83,48 @@ func TestPickRandomForTrackFallbackIsOneWay(t *testing.T) {
 	onlyCanary.Upsert("k/c1", NodeEntry{NodeId: 3, ZoneId: 1, Endpoint: "guild-canary-a", Track: releasetrack.Canary})
 	_, ok = onlyCanary.PickRandomForTrack(releasetrack.Stable)
 	require.False(t, ok, "stable 会话不能退到 canary 实例")
+}
+
+// pickedForTrack 挑 picks 次,返回挑到过的 endpoint 集合。
+func pickedForTrack(t *testing.T, w *NodeWatcher, session releasetrack.Track, picks int) map[string]bool {
+	t.Helper()
+	seen := map[string]bool{}
+	for i := 0; i < picks; i++ {
+		entry, ok := w.PickRandomForTrack(session)
+		require.True(t, ok)
+		seen[entry.Endpoint] = true
+	}
+	return seen
+}
+
+// 设了子集之后,全服池类型只在本路由服那段弧上挑(subset.go);轨道的选法(canary 优先、stable 不进 canary)不变;
+// 之后镜像再变,沿用同一组参数重算。
+func TestPickRandomForTrackStaysInArc(t *testing.T) {
+	w := NewNodeWatcher("ChatNodeService", "ChatNodeService.rpc/", nil, nil)
+	for i := 0; i < 8; i++ {
+		uuid := fmt.Sprintf("s%d", i)
+		w.Upsert("k/"+uuid, NodeEntry{NodeId: uint32(i + 1), ZoneId: 1, NodeUuid: uuid, Endpoint: "chat-" + uuid})
+	}
+	w.Upsert("k/c0", NodeEntry{NodeId: 20, ZoneId: 1, NodeUuid: "c0", Endpoint: "chat-c0", Track: releasetrack.Canary})
+
+	// 同轨道 4 台路由服、本路由服排第 1、k = 2:m = round(2×4/8) = 1,弧是第 [8, 16) 格,每台目标占 4 格 → 环上的 s2、s3。
+	w.SetSubset(1, 4, 2)
+	require.Equal(t, map[string]bool{"chat-s2": true, "chat-s3": true}, pickedForTrack(t, w, releasetrack.Stable, 400),
+		"stable 会话只在本路由服那段弧上挑")
+	require.Equal(t, map[string]bool{"chat-c0": true}, pickedForTrack(t, w, releasetrack.Canary, 50),
+		"canary 组只有 1 台(不多于 k),canary 会话只能用它")
+
+	// canary 实例下线:canary 会话退回 stable,同样只在 stable 那段弧上挑。
+	w.handleEvent(&clientv3.Event{Type: clientv3.EventTypeDelete, Kv: &mvccpb.KeyValue{Key: []byte("k/c0")}})
+	require.Equal(t, map[string]bool{"chat-s2": true, "chat-s3": true}, pickedForTrack(t, w, releasetrack.Canary, 400))
+
+	// 新实例 s8 上线:T = 9,m 仍为 1,弧是第 [9, 18) 格,每台目标占 4 格 → s2、s3、s4。
+	w.Upsert("k/s8", NodeEntry{NodeId: 9, ZoneId: 1, NodeUuid: "s8", Endpoint: "chat-s8"})
+	require.Equal(t, map[string]bool{"chat-s2": true, "chat-s3": true, "chat-s4": true}, pickedForTrack(t, w, releasetrack.Stable, 600))
+
+	// 不取子集(size = 0):回到全部实例。
+	w.SetSubset(1, 4, 0)
+	require.Len(t, pickedForTrack(t, w, releasetrack.Stable, 900), 9)
 }
 
 // etcd DELETE 事件:节点出镜像并触发 onRemove(清连接缓存)。

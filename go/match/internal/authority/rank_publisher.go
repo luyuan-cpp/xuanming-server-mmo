@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	rankpb "proto/rank"
 	"shared/serviceauth"
+	"shared/tracing"
 )
 
 // RunRankPublisher 只从已提交 outbox 按片顺发；RPC超时不推进本地游标，重试同业务ID/载荷仅更新认证时间。
@@ -29,9 +30,11 @@ func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string, ad
 			return
 		}
 	}
-	conn, e := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// 裸客户端不经 zrpc,traceparent 由 shared/tracing 的拦截器写(docs/design/distributed-tracing.md §6.2)。
+	conn, e := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(tracing.UnaryClientInterceptor()))
 	if e != nil {
-		logx.Error("评级投榜连接初始化失败")
+		logx.Error("rating rank publisher connection initialization failed")
 		return
 	}
 	defer func() {
@@ -68,7 +71,7 @@ func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string, ad
 		}()
 		cancel()
 		if e != nil && ctx.Err() == nil {
-			logx.Errorf("评级投榜等待恢复: %v", e)
+			logx.Errorf("rating rank publishing awaiting recovery: %v", e)
 		}
 		select {
 		case <-ctx.Done():

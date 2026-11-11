@@ -12,7 +12,7 @@
 # 不要手工 kubectl apply 本文件。
 #   JOB_NAME                 data-service-route-tool-<运行号>(每次一个新名字,不删上一次的 Job,日志可回看)
 #   RUN_ID                   运行号(yyyyMMdd-HHmmss-<4 位十六进制>),与报告目录同名
-#   IMAGE / PULL_POLICY      缺省取在役 deployment/data-service 的镜像与拉取策略(同一二进制、同一份配置)
+#   IMAGE / PULL_POLICY      缺省取在役 statefulset/data-service 的镜像与拉取策略(同一二进制、同一份配置)
 #   ACTIVE_DEADLINE_SECONDS  脚本的 -TimeoutSeconds:到点 K8s 杀掉 Pod、Job 判 Failed(DeadlineExceeded)
 #   ROUTE_TOOL_ARGS          ["-f", "/app/etc/data_service.yaml", "-route-tool", <子命令>, <参数>…](JSON 数组,逐项转义)
 #
@@ -54,6 +54,11 @@ spec:
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
+            # MySQL 口令:data-service 的配置(MySQLPasswordEnv)指名这个变量;Secret mysql-auth 由 k8s_deploy.ps1 先于本 Job 在本 namespace 建好
+            # (工作负载密钥目录,docs/design/workload-secrets-via-k8s-secret.md)。不写 optional:Secret 缺失时 Pod 起不来,不带空口令去连库。
+            - name: MMORPG_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: mysql-auth, key: password, optional: false}
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
             # 标记行带运行号:stderr 里碰巧出现同样的字样也切不错。

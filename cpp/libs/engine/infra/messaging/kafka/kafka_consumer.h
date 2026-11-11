@@ -38,6 +38,7 @@
 #include <vector>
 
 #include <rdkafkacpp.h>
+#include "core/tracing/trace_context.h"
 #include "proto/common/database/rollback_database_table.pb.h"
 
 namespace muduo { namespace net { class EventLoop; } }
@@ -113,7 +114,8 @@ public:
 
 private:
 	void backgroundPollLoop();
-	void dispatch(const std::string& topic, std::string payload);
+	// trace 是消息头上带来的上下文(无效 = 没带或不合法),回调在它下面执行(docs/design/distributed-tracing.md §5.4)。
+	void dispatch(const std::string& topic, std::string payload, const tracing::TraceContext& trace);
 	void consumeOnce(bool blocking);
 	// 向 broker 查 topic 的分区数。查不到返回 -1(区别于"查到 0")。
 	int32_t queryTopicPartitionCount(const std::string& topic);

@@ -1,15 +1,15 @@
 # guild-smoke 配置:三个机器人对公会服务 go/guild 做「按 zone 隔离」端到端冒烟
 # (docs/design/guild-zone-client-access.md §6)
 #
-# 流程:A 建帮(请求体 zone 填错)→ 帮会落在 zone_a → A 重复建帮被拒 → B 在本区榜上看到
+# 流程:A 建帮(请求体不带区)→ 帮会落在 zone_a → A 重复建帮被拒 → B 在本区榜上看到
 #       → C(zone_b)看不见 / 查不到名次 / 加不进 / 同名被拒 → B 未入帮改公告被拒 → B 加入
-#       → A 改公告、B 读到;超长公告被拒 → B 伪造 player_id=A 退帮,服务端按会话让 B 退出
+#       → A 改公告、B 读到;超长公告被拒 → B 退帮(请求体不带身份,服务端按会话让 B 退出)
 #       → A 直调 UpdateGuildScore(第 9 步)期望等满约 10s 超时、随后查榜积分仍为 0 → A 解散。
 #       第 9 步的口径依据 docs/design/client-rpc-callback.md §7 R4:UpdateGuildScore 标了 CLIENT_RPC_SERVER_ONLY,
 #       不进 gate 上行白名单,gate 按非法包丢弃(计一次非法包,单发一次远低于踢线阈值)、不回包,请求到不了
 #       路由服与 guild,它们的日志里不应出现这次请求。收到信封拒绝(如 kServiceUnavailable)即说明 gate 不是 R4
 #       重新生成后编出的版本;收到业务回包说明内部方法对客户端开放。两种都判失败。
-#       guild 会话拦截器的方法级白名单(ClientMethods)是第二道防线,经 gate 走不到,由单测证明:
+#       guild 的入口准入(roleidentity.EntryInterceptor,按生成的客户端方法集合判定)是第二道防线,经 gate 走不到,由单测证明:
 #       go/guild/internal/session 的 TestClientCannotCallInternalMethod、go/guild 的 TestSessionGateWiredIntoUnaryChain。
 #       (R4 之前这一步期望 kServiceUnavailable 信封、核对路由服 code=PermissionDenied 日志,现已不适用。)
 #       解散之后(第 11 步,docs/design/client-request-ordering.md §6.4):A 另建临时帮、B 入帮 → B 带过期

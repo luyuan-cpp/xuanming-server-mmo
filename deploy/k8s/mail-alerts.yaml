@@ -1,6 +1,8 @@
 # Prometheus alert rules for the mail service(邮件,go/mail)。
 #
-# 来源:docs/design/mail-system.md §4.7(告警)、§4.6(sweep 指标)、§12.2 偏差第 10 条(invalid_rows 计数器带 _total)。
+# 来源:docs/design/mail-system.md §4.7(告警)、§4.6(sweep 指标)、§12.2 偏差第 10 条(invalid_rows 计数器带 _total);
+#       2026-11-11 sweep 按 mail_id 分片、MailSweepStalled 改按副本判(docs/design/assetop-redelivery-sharding-20261110.md §14),
+#       截断告警 MailSystemListTruncated 删除(ListMails 已没有截断路径,docs/design/mail-system.md 文末 2026-11-11 节)。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 player-inbox-alerts.yaml / owner-epoch-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/mail-alerts.yaml
@@ -10,9 +12,10 @@
 #     集群里要有 ServiceMonitor / PodMonitor(或按注解抓取的 job)指向它,否则本文件的规则一条都不会触发。
 #
 # 聚合口径:
-#   - mail 多副本各跑各的 sweep(不选主),每个副本都写 mail_sweep_last_run_unixtime → 规则一律 max() 聚合:
-#     只要有一个副本还在推进就不算卡死(DELETE … LIMIT 天然可并发,一个副本的 sweep 足够);
-#   - 计数器每个副本各报一份 → sum(increase(...)) 跨副本求和;
+#   - sweep 按 mail_id 分 64 片,分给本 zone 注册的 stable 副本(与附件重投同一份成员表),每个副本只清自己的片;
+#     mail_sweep_last_run_unixtime 只在清理循环运行时有序列(canary 不跑清理,没有序列)→ MailSweepStalled 按副本逐条判,不聚合:
+#     一个副本卡住,它名下的片就没人清,别的副本还在推进,max() 看不出来;
+#   - 计数器每个副本各报一份 → sum(increase(...)) 跨副本求和(无效行抽样也按片分了,各副本样本不重叠);
 #   - label 只用有限枚举,不用 player_id(AGENTS §9);
 #   - mail 的 CounterVec 在进程启动时按封闭集合预建 0 值序列(internal/metrics 的 Register),increase(...) 从第一次就能看见。
 #
@@ -36,23 +39,26 @@ spec:
     - name: mail.sweep
       interval: 60s
       rules:
-        # sweep 循环卡死或停止调度:每轮结束(含失败、含 0 行、含 report_only)都写 mail_sweep_last_run_unixtime,
-        # 进程启动时也先写一次,所以它长期不前进只可能是循环卡住 / 崩掉之后没再调度。
+        # sweep 循环卡住:清理循环起来时写一次 mail_sweep_last_run_unixtime,之后每轮跑完(含失败、含 0 行、含 report_only)
+        # 写这一轮结束的时刻,循环退出时删掉序列。它在某个副本上长期不前进,只可能是那个副本的循环卡在某一轮里。
+        # 按副本判、不聚合:sweep 按 mail_id 分片之后,卡住的副本名下的片没人清,别的副本照常推进(设计
+        # docs/design/assetop-redelivery-sharding-20261110.md §14.3)。
         # 阈值 = 3 × Sweep.Interval。ConfigMap 里 Sweep.Interval 取自 go/mail/etc/mail.yaml(当前 5m = 300s);
-        # 改 Interval 时同步改这里的 900。
-        # 后果:过期邮件不再被物理删除,而 ListMails 读系统有效集要靠 sweep 保持有界(§4.7)。
+        # 改 Interval 时同步改这里的 900(k8s_deploy_contract.tests.ps1 钉住两者)。首轮之前至多一个周期的随机抖动,由起来时那次写入盖住。
+        # 后果:卡住副本名下那些片的过期邮件不再被物理删除,ListMails 每次要多扫这些行(§4.7)。
         - alert: MailSweepStalled
           expr: |
-            time() - max(mail_sweep_last_run_unixtime) > 900
+            time() - mail_sweep_last_run_unixtime > 900
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "mail sweep 已超过 3 个周期没有跑完一轮"
+            summary: "mail 副本 {{ $labels.pod }} 的过期清理已超过 3 个周期没有跑完一轮"
             description: >-
-              所有 mail 副本的 mail_sweep_last_run_unixtime 都停在 {{ $value | printf "%.0f" }} 秒之前。
-              查 mail 日志里 "[mail] Sweep" 的最后一行与 safego_panic_total{point=~"mail.expired_sweep.*"};
-              sweep 的单轮预算是 30 秒,一轮跑不完会在下一轮继续,不会长期卡住 —— 长期不前进说明循环本身停了。
+              这个副本的 mail_sweep_last_run_unixtime 停在 {{ $value | printf "%.0f" }} 秒之前,它名下那些片的过期邮件没人清。
+              sweep 的单轮预算是 30 秒,一轮跑不完会在下一轮接着清,正常不会长期不前进 —— 长期不前进说明这个副本的清理循环卡住了
+              (一轮里 panic 会让进程退出,不会停在这里)。看这个副本的 goroutine 栈与 "[mail] bounded sweep failed" 日志,
+              再重启它或把它缩掉:它从 etcd 摘掉之后,它的片由别的副本接手。
 
         # expire_ms = 0 的行:发件校验要求 expire_ms > sent_ms,出现这种行只能是有人绕过发件路径直接写库。
         # sweep 对它们只计数不删(fail-closed),不处理就会永远留着。
@@ -67,20 +73,3 @@ spec:
             description: >-
               过去 1 小时 sweep 看到约 {{ $value | printf "%.0f" }} 行 expire_ms = 0(按表看 label table)。
               这些行不会被自动删除。查清写入来源(发件校验被绕过、手工 SQL)后人工处理。
-
-    - name: mail.read
-      interval: 60s
-      rules:
-        # 有效系统邮件超过 Mail.MaxActiveSystemMails:ListMails 只读最新的那么多封,更早的系统邮件玩家看不到。
-        - alert: MailSystemListTruncated
-          expr: |
-            sum(increase(mail_list_truncated_total[10m])) > 0
-          for: 0m
-          labels:
-            severity: warning
-          annotations:
-            summary: "有效系统邮件超过上限,玩家少看到系统邮件"
-            description: >-
-              过去 10 分钟 ListMails 有约 {{ $value | printf "%.0f" }} 次撞到 Mail.MaxActiveSystemMails 的读上限。
-              发件侧本有同一上限(软上限,并发发件可能略超);持续出现说明有效系统邮件太多 ——
-              等过期、或调低发件节奏;调高上限前先评估 ListMails 每次读系统有效集的开销(docs/design/mail-system.md §3.1)。

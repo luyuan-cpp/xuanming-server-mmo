@@ -55,9 +55,11 @@ const (
 	// DefaultEnterLookupTimeout 是 EnterGame 那一次 GetPlayerHomeZone 的默认预算。
 	// EnterGame 链路本身异步(5 分钟预算),可以比角色列表宽松。
 	DefaultEnterLookupTimeout = 1500 * time.Millisecond
-	// DefaultRegisterTimeout 是 CreatePlayer 写映射的默认预算。写失败建角整体失败,
-	// 所以与 DataServiceRpc.Timeout(3s)对齐,不抢先超时。
-	DefaultRegisterTimeout = 3 * time.Second
+	// DefaultRegisterTimeout 是 CreatePlayer 写映射的默认预算,也是这一跳在建角截止分摊里的上限与下限
+	// (login/internal/logic/pkg/createbudget):与 SQL 账号目录提交同档的单条写 RPC 预算,四跳加起来放进
+	// zrpc Timeout(4000)。原先是 3s(与 DataServiceRpc.Timeout 对齐),名义上就超出了整个 handler 预算,
+	// 前面慢了还会带着所剩无几的时间发出去;2026-11-10 改为 800ms,login 启动门禁核对各跳之和。
+	DefaultRegisterTimeout = 800 * time.Millisecond
 
 	// unmappedErrText 是老版 data_service 对缺失映射返回的错误消息片段
 	// (go/data_service/internal/routing/router.go GetPlayerHomeZone)。

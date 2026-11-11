@@ -2,12 +2,13 @@
 
 #include <cstdint>
 #include <string_view>
+#include <utility>
 
 #include "core/tracing/trace_context.h"
 
 // 每线程一份日志上下文:当前 trace 与当前玩家(docs/design/distributed-tracing.md §4)。
 //
-// 安装只用 RAII 作用域(ScopedSpan、ScopedPlayerId,以及各入口自己的派发作用域),离开作用域恢复进入前的值。
+// 安装只用 RAII 作用域(ScopedSpan、ScopedRoot、ScopedIncoming、ScopedPlayerId),离开作用域恢复进入前的值。
 // 入口不得裸调 Set() 而不恢复:那样会把上一个请求的上下文留给之后在同一线程上跑的回调(§4.2)。
 // 异步续跑由投递方捕获 Current()、执行方用 ScopedSpan(captured) 装回(§4.3)。
 //
@@ -66,6 +67,50 @@ private:
     TraceContext previous_;
 };
 
+// 作用域内开一条新根(不看当前有没有 trace),退出时恢复进入前的值。只给「本进程就是起点」的入口用:
+// gate 收到的客户端消息、建连与断线事件(设计 §3.3)。这些入口按定义不属于任何别的请求,
+// 不接当前 trace,免得接上同一线程上残留的上下文。
+class ScopedRoot {
+public:
+    ScopedRoot()
+        : previous_(detail::tlsTrace)
+    {
+        detail::tlsTrace = NewRoot();
+    }
+
+    ~ScopedRoot() { detail::tlsTrace = previous_; }
+
+    ScopedRoot(const ScopedRoot&) = delete;
+    ScopedRoot& operator=(const ScopedRoot&) = delete;
+    ScopedRoot(ScopedRoot&&) = delete;
+    ScopedRoot& operator=(ScopedRoot&&) = delete;
+
+private:
+    TraceContext previous_;
+};
+
+// 作用域内接续收到的上下文:incoming 合法就在它下面建子 span,不合法就开新根;退出时恢复进入前的值。
+// 给带上下文的入站用(RPC0 派发、gRPC 派发、Kafka 消费,设计 §4.2 第 2 条):不接线程上碰巧在场的上下文;
+// 收到的上下文不合法也绝不拒绝请求。
+class ScopedIncoming {
+public:
+    explicit ScopedIncoming(const TraceContext& incoming)
+        : previous_(detail::tlsTrace)
+    {
+        detail::tlsTrace = incoming.IsValid() ? ChildSpan(incoming) : NewRoot();
+    }
+
+    ~ScopedIncoming() { detail::tlsTrace = previous_; }
+
+    ScopedIncoming(const ScopedIncoming&) = delete;
+    ScopedIncoming& operator=(const ScopedIncoming&) = delete;
+    ScopedIncoming(ScopedIncoming&&) = delete;
+    ScopedIncoming& operator=(ScopedIncoming&&) = delete;
+
+private:
+    TraceContext previous_;
+};
+
 // 作用域内把当前玩家设成 playerId(0 表示没有玩家),退出时恢复进入前的值。
 class ScopedPlayerId {
 public:
@@ -85,5 +130,18 @@ public:
 private:
     uint64_t previous_;
 };
+
+// 把一次性回调包一层:记下此刻的 trace,执行时用 ScopedSpan(captured) 装回,执行完恢复(设计 §4.3)。
+// 此刻没有 trace 时,回调执行期间也没有 trace,不会接上执行线程上碰巧在场的上下文。
+// 只用于一次性续跑:queueInLoop、runAfter、协程恢复。周期定时器(runEvery)不要用它:
+// 发起它的那个请求的 trace 会挂在之后每一次 tick 上。返回的可调用对象在 callback 可拷贝时才可拷贝。
+template <typename F>
+auto Bind(F&& callback)
+{
+    return [captured = Current(), bound = std::forward<F>(callback)](auto&&... args) mutable -> decltype(auto) {
+        ScopedSpan restore(captured);
+        return bound(std::forward<decltype(args)>(args)...);
+    };
+}
 
 } // namespace tracing

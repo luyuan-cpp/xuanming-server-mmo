@@ -347,8 +347,12 @@ rmb_delivering:
   - 充值 SKU：迟到付款让订单复活（充值稿 §10.1）；
   - 挂单商品：迟到付款**只退款、不复活**，因为东西可能已经卖给了别人。
   - 扫描器由谁负责，在第 1 步登记表里定。如果归充值会话，那么**挂单分支已上线**就是第 7 步的硬前置：没有扫描器，未付款的挂单订单会一直占着库存，卖家撤单和到期都会一直卡在 LOCKED。
-- **新增"异常付款"表**：同一订单的第二笔付款、金额不符的迟到付款都记进去，再交给支付适配器退款。现在这两种情况会被唯一约束或 409 直接拒掉，钱停在渠道那边（`schema.sql:51`、`:74`；`CommerceStore.java:123-131`）。
-  - 2026-11-05 第二笔付款已落码（未编译）：记成 `order_sn` 为 NULL 的付款回执加 `commerce_duplicate_payment`，退款待办与退款回执改按被退付款的 `(channel, transaction_id)` 识别，来源 `DUPLICATE_PAYMENT`；退款回执须带 `paymentTransactionId`。验收用例 `SecondPaymentRecordedAndRefunded` 对应 `CommerceStoreTest` 的「已付订单再收到另一笔付款」「重复付款的退款回执只终结那一笔」两例。金额不符的迟到付款仍回 409，未做。
+- **新增"异常付款"表**：同一订单的第二笔付款、金额或币种与订单不符的付款都记进去，再交给支付适配器退款。原来这两种情况会被唯一约束或 409 直接拒掉，钱停在渠道那边。
+  - 已落码（未编译），表名 `commerce_abnormal_payment`，带 `reason` 列。两类付款都记成 `order_sn` 为 NULL 的付款回执加异常付款一行，回 200，订单、库存、交付都不动：
+    - 第二笔付款：2026-11-05 落码，原因 `DUPLICATE_PAYMENT`；
+    - 金额或币种不符：2026-11-10 落码，原因 `AMOUNT_MISMATCH` / `CURRENCY_MISMATCH`，任何订单状态下都不绑定订单。
+  - 退款待办与退款回执按被退付款的 `(channel, transaction_id)` 识别，退款回执须带 `paymentTransactionId`。付款应答的 `refundReason` 告诉支付适配器这笔要退及原因，适配器以被退付款的交易号作渠道退款幂等键（充值稿 §8.2 第 1、9 点）。
+  - 验收用例 `SecondPaymentRecordedAndRefunded` 对应 `CommerceStoreTest` 的「已付订单再收到另一笔付款」「重复付款的退款回执只终结那一笔」；金额币种不符对应「付款金额与订单不符」「付款币种与订单不符」「金额不符的同一流水重放幂等」及两条并发用例。
 - **新增 listing 签名身份和第四把密钥**（`HmacAuthentication.java:36` 的路由集合）。四把密钥必须互不相同，否则拒绝启动。
 - **未付单上限**：每个买家最多 5 张未付单（`CommerceProperties.java:17`），要不要按订单用途分开计数，第 1 步定。
 - **迁移**：V4（加固），以登记表为准；同步改 `schema.sql` 和 `SchemaVerifier`。

@@ -573,6 +573,7 @@ func (f *Fixture) PrepareOwnedSchema(ctx context.Context, schema string, prepare
 
 // registerBoot每次形成永久新身份；释放后从不重新激活旧writer或复用消费标记。
 // schemas 里每个逻辑库各注册一份，同一身份、同一账号，写进一个grant集合文件，和真实进程的启动形状相同。
+// 夹具的账号就是一个槽位:每次登记是这个槽位的下一代,序号取各库已有最大号 + 1,和注册器同一规则(writer-roster-exhaustion-20261106.md §5.3)。
 func (f *Fixture) registerBoot(ctx context.Context, runID []byte, schemas []string) error {
 	opts := f.bootOptions
 	writerID, err := randomBytes(16)
@@ -582,6 +583,17 @@ func (f *Fixture) registerBoot(ctx context.Context, runID []byte, schemas []stri
 	instance, err := randomBytes(16)
 	if err != nil {
 		return err
+	}
+	principal := []byte(f.user + "@%")
+	bootSeq := uint64(1)
+	for _, schema := range schemas {
+		latest, err := f.catalogs[schema].LatestBoot(ctx, principal)
+		if err != nil {
+			return err
+		}
+		if latest != nil && latest.BootSeq >= bootSeq {
+			bootSeq = latest.BootSeq + 1
+		}
 	}
 	registeredMs := uint64(time.Now().UnixMilli())
 	deployment := "fixture-" + hex.EncodeToString(instance)
@@ -602,7 +614,7 @@ func (f *Fixture) registerBoot(ctx context.Context, runID []byte, schemas []stri
 		if err != nil {
 			return err
 		}
-		writer := &pb.SqlWriterRegistry{WriterKey: writerID, Generation: f.Generation, InstanceId: instance, SqlPrincipal: []byte(f.user + "@%"), State: pb.SqlWriterRegistry_ACTIVE, RegisteredMs: registeredMs}
+		writer := &pb.SqlWriterRegistry{WriterKey: writerID, Generation: f.Generation, InstanceId: instance, SqlPrincipal: principal, State: pb.SqlWriterRegistry_ACTIVE, RegisteredMs: registeredMs, BootSeq: bootSeq}
 		request := &pb.SqlWriterLifecycleReceipt_Request{RequestId: requestID, Kind: pb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: schema, ProtectedSchemas: []string{schema}, DeploymentDigest: f.physical, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256, MaintenanceRunId: bytes.Clone(runID)}
 		request, err = authoritysql.CanonicalRegistrationRequest(request)
 		if err != nil {

@@ -270,7 +270,7 @@ function Invoke-EntryDryRun {
     $allArgs = @($Arguments) + @('-DryRun')
     # 全局 SQL 入口、存档库白名单、写者计划是部署 Go 服务的必填输入,本套测的不是它们。虚构值只用于 DryRun,不解析也不连接;用例显式给了就用它的。
     if ($allArgs -notcontains '-GlobalAuthorityTiDBHost') { $allArgs += @('-GlobalAuthorityTiDBHost', 'tidb.invalid:4000') }
-    $fixtureEnv = @{ MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,zone_2_db,zone_101_db,zone_102_db'; MMORPG_SQL_K8S_BOOT_CATALOG = $SqlWriterCatalogPath }
+    $fixtureEnv = @{ MMORPG_DB_ALLOWED_DATABASES = $PlayerStoreAllowlistFixture; MMORPG_SQL_K8S_BOOT_CATALOG = $SqlWriterCatalogPath }
     foreach ($key in $Env.Keys) { $fixtureEnv[$key] = $Env[$key] }
     $reachesPodipGate =(($allArgs -contains 'zone-up') -or ($allArgs -contains 'all-up')) -and -not ($allArgs -contains 'external')
     if ($reachesPodipGate -and -not $RefusedAtEntry -and $LibCallDefects.Count -gt 0) {
@@ -401,9 +401,12 @@ Test-Case '库:模式切换清单 —— 会踢人的条目带 CurrentShape / Ke
     Assert-True -Condition ($external[0].KicksPlayers -and $external[0].KeepHint -eq '-ClientEntryMode podip') -Because '删 gate Deployment = 整台踢人,报错要告诉操作者保持现状传什么'
     Assert-True -Condition (-not $external[1].KicksPlayers) -Because 'gate-entry 残留删了不踢人'
     $toFleet = Get-BattleObsoleteResources -BattleOrchestrator agones
-    Assert-True -Condition ($toFleet.Count -eq 1 -and $toFleet[0].Kind -eq 'deployment' -and $toFleet[0].KicksPlayers) -Because 'battle 切 Fleet:删 Deployment 形态,在打的局作废'
+    Assert-True -Condition ($toFleet.Count -eq 2 -and $toFleet[0].Kind -eq 'deployment' -and $toFleet[0].KicksPlayers) -Because 'battle 切 Fleet:删 Deployment 形态,在打的局作废'
+    Assert-Equal -Expected 'deployment battle|deployment battle-canary' -Actual (($toFleet | ForEach-Object { "$($_.Kind) $($_.Name)" }) -join '|') -Because '金丝雀 battle 池(发布轨道设计 §2.6)随稳定版一起切换形态,另一种 kind 的那份一起删'
+    Assert-True -Condition ($toFleet[1].KicksPlayers -and $toFleet[1].KeepHint -eq '-BattleOrchestrator deployment') -Because '删金丝雀池同样作废在打的局,要过同一道闸'
     $toDeployment = Get-BattleObsoleteResources -BattleOrchestrator deployment
-    Assert-True -Condition ($toDeployment.Count -eq 1 -and $toDeployment[0].Kind -eq 'fleets.agones.dev' -and $toDeployment[0].ApiGroup -eq 'agones.dev') -Because '切回 Deployment 删 Fleet;集群没装 Agones 时按 ApiGroup 跳过'
+    Assert-True -Condition ($toDeployment.Count -eq 2 -and $toDeployment[0].Kind -eq 'fleets.agones.dev' -and $toDeployment[0].ApiGroup -eq 'agones.dev') -Because '切回 Deployment 删 Fleet;集群没装 Agones 时按 ApiGroup 跳过'
+    Assert-True -Condition ($toDeployment[1].Name -eq 'battle-canary' -and $toDeployment[1].Kind -eq 'fleets.agones.dev' -and $toDeployment[1].ApiGroup -eq 'agones.dev' -and $toDeployment[1].KicksPlayers) -Because '金丝雀 battle 池的 Fleet 同样删、同样按 ApiGroup 跳过'
     if ($LibCallDefects.Count -gt 0) { throw "podip 分支未执行:$($LibCallDefects -join '; ')" }
     foreach ($case in @(@{ Replicas = 2; Count = 5; Entry = $true }, @{ Replicas = 1; Count = 4; Entry = $false })) {
         $podip = Get-GateObsoleteResources -ClientEntryMode podip -GateReplicas $case.Replicas
@@ -419,9 +422,11 @@ Test-Case '库:模式切换清单 —— 会踢人的条目带 CurrentShape / Ke
 # ─────────────────────────────────────────────────────────────────
 
 $LibPodCommon = New-TestPodCommon
+# 验证方公钥列表(RFC 8032 §7.1 TEST 1 的公钥,形状合格):gate 也带它,启动时核对私钥配对(gate-online-identity.md §10.1)。
+$LibInternalAuthPublicKeys = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
 $LibNodePortPlan = Resolve-GateClientEndpointPlan -ServiceType NodePort -Replicas 2 -ServicePort 18000 -NodePortBase 30000 -ClientPublicHost '127.0.0.1' -ZoneName 'z1'
 $LibLbPlan = Resolve-GateClientEndpointPlan -ServiceType LoadBalancer -Replicas 2 -ServicePort 18000 -ClientHostTemplate 'gate-{ordinal}.{zone}.example.com' -ZoneName 'z1'
-$LibGateSts = ConvertTo-LfText (New-GateStatefulSetYaml -PodCommon $LibPodCommon -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1')
+$LibGateSts = ConvertTo-LfText (New-GateStatefulSetYaml -PodCommon $LibPodCommon -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys)
 
 Test-Case '库:gate StatefulSet 的形态 —— Parallel + OnDelete + governing headless,副本数取自地址计划' {
     Assert-Match -Text $LibGateSts -Pattern '(?m)^kind: StatefulSet$' -Because 'external 的 gate 是 StatefulSet(D87)'
@@ -454,14 +459,16 @@ Test-Case '库:gate StatefulSet 的 env —— static 来源 + REQUIRED=1 + 生�
 }
 
 Test-Case '库:gate StatefulSet 带内部身份签名密钥 —— secretKeyRef 指向契约里的 Secret(optional: false),env 名与 C++ caller_auth.h 一致;给了 SecretName 不给 SecretKey 即 throw' {
-    # gate main.cpp 在 MMORPG_INTERNAL_AUTH_SECRET 缺失或不足 32 字节时拒绝启动。2026-11-05 只给 Deployment 形态补了它,
-    # external 的 StatefulSet 漏掉,gate Pod 会一直崩溃重启。
+    # gate main.cpp 在签名私钥缺失、格式不对或与公钥列表不配对时拒绝启动(gate-online-identity.md §10.1)。
+    # 2026-11-05 只给 Deployment 形态补了私钥,external 的 StatefulSet 漏掉,gate Pod 会一直崩溃重启。
     $c = Get-ClientEntryContract
     $callerAuth = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'cpp' 'libs' 'engine' 'core' 'security' 'caller_auth.h') -Raw
-    Assert-Match -Text $callerAuth -Pattern ('kSecretEnv\[\] = "' + [regex]::Escape($c.InternalAuthSecretEnv) + '"') -Because '契约里的 env 名必须就是 C++ gate 读的那个(caller_auth::kSecretEnv)'
+    Assert-Match -Text $callerAuth -Pattern ('kSigningKeyEnv\[\] = "' + [regex]::Escape($c.InternalAuthSecretEnv) + '"') -Because '契约里的私钥 env 名必须就是 C++ gate 读的那个(caller_auth::kSigningKeyEnv)'
+    Assert-Match -Text $callerAuth -Pattern ('kPublicKeysEnv\[\] = "' + [regex]::Escape($c.InternalAuthPublicKeysEnv) + '"') -Because '契约里的公钥 env 名必须就是 C++ gate 读的那个(caller_auth::kPublicKeysEnv)'
     $main = Get-MainContainerSection -Doc $LibGateSts
     Assert-True -Condition (Test-EnvSecretRef -Text $main -Name $c.InternalAuthSecretEnv -SecretName $c.InternalAuthSecretName -SecretKey $c.InternalAuthSecretKey) -Because "gate 容器必须经 Secret $($c.InternalAuthSecretName) 拿到 $($c.InternalAuthSecretEnv),且不是 optional"
-    Assert-True -Condition ($null -eq (Get-EnvLiteral -Text $main -Name $c.InternalAuthSecretEnv)) -Because '密钥只经 Secret 进容器,不写成字面值'
+    Assert-True -Condition ($null -eq (Get-EnvLiteral -Text $main -Name $c.InternalAuthSecretEnv)) -Because '私钥只经 Secret 进容器,不写成字面值'
+    Assert-Equal -Expected $LibInternalAuthPublicKeys -Actual (Get-EnvLiteral -Text $main -Name $c.InternalAuthPublicKeysEnv) -Because '公钥列表不是密钥,明文写进 gate 的 env,供启动时核对私钥配对'
     $message = ''
     try { $null = Get-ClientEntryEnvYaml -Entries @(@{ Name = 'X'; SecretName = 'some-secret' }) -ItemIndent '  ' } catch { $message = $_.Exception.Message }
     Assert-Match -Text $message -Pattern 'SecretKey' -Because '缺 key 的 secretKeyRef 会被 API server 拒收,生成期就要 throw'
@@ -599,7 +606,7 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
     # 拷贝语义:打包之后再改调用方的字典,不影响已打包的 PodCommon(下面断言里仍是 0123456789ab)。
     $extra['mmorpg.io/zone-redis-auth-hash'] = 'ffffffffffff'
     $renderers = @(
-        @{ Name = 'gate StatefulSet'; Indent = '      '; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' } }
+        @{ Name = 'gate StatefulSet'; Indent = '      '; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys } }
         @{ Name = 'battle Fleet'; Indent = '          '; Render = { param($pc) New-BattleFleetYaml -PodCommon $pc -Replicas 2 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode podip -Health $LibFleetHealth -BuildLabel '0123456789ab' } }
         @{ Name = 'battle hostPort'; Indent = '      '; Render = { param($pc) New-BattleHostPortDeploymentYaml -PodCommon $pc -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' } }
     )
@@ -625,7 +632,7 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
         $badArgs = $bad.Args
         $pc = New-ClientEntryPodCommon @commonArgs @badArgs -PodAnnotations $bad.Extra
         $err = $null
-        try { New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' | Out-Null } catch { $err = $_.Exception.Message }
+        try { New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys | Out-Null } catch { $err = $_.Exception.Message }
         Assert-Match -Text $err -Pattern $bad.Pattern -Because "$($bad.Why):必须在渲染时 throw,不能写出坏的 YAML 或重复键"
     }
 }
@@ -641,7 +648,7 @@ Test-Case '库:-SecretEnv 渲染成 secretKeyRef(optional: false)、接在公共
     # 拷贝语义:打包之后再改调用方的列表,不影响已打包的 PodCommon。
     $secretEnv[0]['SecretName'] = 'changed-after-pack'
     $renderers = @(
-        @{ Name = 'gate StatefulSet'; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' } }
+        @{ Name = 'gate StatefulSet'; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys } }
         @{ Name = 'battle Fleet'; Render = { param($pc) New-BattleFleetYaml -PodCommon $pc -Replicas 2 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode podip -Health $LibFleetHealth -BuildLabel '0123456789ab' } }
         @{ Name = 'battle hostPort'; Render = { param($pc) New-BattleHostPortDeploymentYaml -PodCommon $pc -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' } }
     )
@@ -1401,7 +1408,9 @@ Test-Case '端到端 -LoginDevPasswordAuth(dev):login.yaml 写 DevPasswordAuth,�
     Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.DevPasswordAuth.Enabled') -Because '开关打开'
     Assert-Equal -Expected 'LOGIN_DEV_PASSWORD_SHARED_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.DevPasswordAuth.SharedSecretEnv') -Because 'ConfigMap 只写环境变量名'
     Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Mode') -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Mode') -Because 'DevPasswordAuth 只在 go-zero Mode 为 dev / test 时生效,否则 login 启动即 panic'
-    $login = Select-ManifestDoc -Output $out -Kind 'Deployment' -Name 'login'
+    # login 是 SQL 写者,是 StatefulSet(Pod 序号就是写者名册的槽位,docs/design/writer-roster-exhaustion-20261106.md §5.5)。
+    $login = Select-ManifestDoc -Output $out -Kind 'StatefulSet' -Name 'login'
+    Assert-True -Condition ($null -ne $login) -Because "DryRun 输出里要有 StatefulSet/login。输出: $out"
     Assert-Match -Text $login -Pattern '- name: LOGIN_DEV_PASSWORD_SHARED_SECRET\s+valueFrom:\s+secretKeyRef:\s+name: login-dev-password\s+key: shared-secret\s' -Because '口令只经 Secret 进容器'
     # 只看这把口令:同一容器的 LoginAdmin 运维令牌是另一回事,没有它时运维面停用,manifest 里写的就是 optional: true。
     Assert-NotMatch -Text $login -Pattern 'name: login-dev-password\s+key: shared-secret\s+optional:\s*true' -Because 'Secret 缺失时要卡在 CreateContainerConfigError,不能带着空口令起来'
@@ -1735,7 +1744,8 @@ foreach ($case in $NoDriftCases) {
 $ProdSecretEnv = @{
     MMORPG_GATE_TOKEN_SECRET    = 'contract-ce-gate-token-0123456789abcdef0123'
     MMORPG_SPECTATE_TOKEN_SECRET = 'contract-ce-spectate-token-0123456789abcdef'
-    MMORPG_INTERNAL_AUTH_SECRET = 'contract-ce-internal-auth-0123456789abcdef'
+    MMORPG_INTERNAL_AUTH_SIGNING_KEY = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60'
+    MMORPG_INTERNAL_AUTH_PUBLIC_KEYS = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
     MMORPG_MYSQL_USER           = 'contract_ce_app'
     MMORPG_MYSQL_PASSWORD       = 'contract-ce-mysql-pw-01'
     MMORPG_REDIS_PASSWORD       = 'contract-ce-redis-pw-01'
@@ -1858,7 +1868,7 @@ $RedisSplitWrapperKeys = @('RedisSplit', 'ConfirmRedisSplitSwitch', 'RedisQueueM
 # 玩家域 Redis Cluster 三条包装链都透传的键(给了才传)。不粘滞:漏传 = staging / prod 被拒,dev 则把服务渲染回单实例。
 $PlayerRedisWrapperKeys = @('PlayerRedisMasters', 'PlayerRedisReplicasPerMaster', 'PlayerRedisMaxMemory', 'PlayerRedisStorage')
 # 逻辑库只走 dev_tools → k8s_deploy(给了才传):k8s_image.ps1 不部署 Go 服务,用不到它们。不粘滞:漏传 = staging / prod 被拒。
-$LogicalDbWrapperKeys = @('DirectoryLogicalShards', 'Region', 'SqlClusters', 'SqlDefaultCluster')
+$LogicalDbWrapperKeys = @('DirectoryLogicalShards', 'Region', 'IdIssuerRegion', 'PlayerStoreShards', 'SqlClusters', 'SqlDefaultCluster')
 $WrapperPairs = @(
     @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sDeploy'; Downstream = 'k8s_deploy.ps1'
         Forwarded = $ClientEntryWrapperKeys + @('GatewayIngressHost', 'GatewayIngressClassName', 'GatewayIngressTlsSecret', 'GatewayTrustedProxies', 'LoginDevPasswordAuth', 'GateRouterMode',

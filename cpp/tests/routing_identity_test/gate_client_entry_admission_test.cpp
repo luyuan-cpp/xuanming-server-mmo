@@ -72,6 +72,12 @@ TEST(GateSynthesizedOnly, DisconnectIsRejectedAtClientEntry)
 	EXPECT_TRUE(gate_login_admission::IsGateSynthesizedOnly(ClientPlayerLoginDisconnectMessageId));
 }
 
+// 排空迁移的要票请求同样只由 gate 合成:客户端自己发就能绕开迁移限速拿到换 gate 的票。
+TEST(GateSynthesizedOnly, GateMigrationRequestIsRejectedAtClientEntry)
+{
+	EXPECT_TRUE(gate_login_admission::IsGateSynthesizedOnly(ClientPlayerLoginRequestGateMigrationMessageId));
+}
+
 // 客户端能发起的 login 方法照常进入口。
 TEST(GateSynthesizedOnly, ClientInitiatedLoginMethodsAreNotAffected)
 {

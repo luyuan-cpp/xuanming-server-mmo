@@ -1,0 +1,66 @@
+{
+  "_lens": "fault-clock-upgrade：按故障查时钟回拨与跳变，以及滚动升级混版（换视角查找第 3 轮，2026-11-10，只读代理原样返回，约 55.2 万子代理 token）",
+  "findings": [
+    {
+      "title": "scene 比 go/db 新时（违反发布顺序、zone-up 期间 go/db 还有旧 Pod、或回退 go/db）：LoadAndClaim 不核对 go/db 认识的世代，照常认领；带新行种的存盘先被 go/db 的 kind 白名单判成 INVALID，走不到 SCHEMA_TOO_NEW；scene 按确定性拒绝处置，玩家下线即不存盘销毁",
+      "severity": "low",
+      "kind": "新问题",
+      "related": ["第一轮 §4-2（同一处置路径：确定性拒绝后，退出时回到上次提交）", "混版本持久字段保护 C1/C2 的设计意图在新 player_store 路径上的缺口"],
+      "locations": [
+        "go/db/internal/playerstore/decide.go:59-72（decideClaim 只比较 row.schemaGen > binarySchemaGen，:67；不比较 knownGen）",
+        "go/db/internal/playerstore/store.go:112-137（validateSave；:121 按本二进制的 storepb.PlayerStoreKind_name 判未知 kind，回 INVALID）",
+        "go/db/internal/playerstore/store.go:144-146、:156（validate 在 decideSave 之前；SCHEMA_TOO_NEW 只在 decide.go:48-49）",
+        "go/db/internal/playerstore/store.go:194（decideClaim 调用时没有传 knownGen）；go/db/player_store_wiring.go:78（KnownGen: persistschema.Gen）",
+        "cpp/libs/services/scene/player/system/player_lifecycle.cpp:4877（认领请求带 binary_schema_gen = kPersistSchemaGen）",
+        "cpp/libs/services/scene/player/system/player_store_client.cpp:469-477（只有 TOO_NEW 会重试）、:479-501（default：INVALID 按明确未提交处理，:486 把发过的行种并入 uncertain，之后每一笔都带这个行种）",
+        "cpp/libs/services/scene/player/system/player_lifecycle.cpp:5211（default→HandlePlayerSaveRefused）、:5379-5406（DisposeRefusedSave：退出中直接 DestroyDeposedPlayer，不存盘）、:4990（停机时还没结论的存盘由 drain 看门狗放弃，metric=player_store_shutdown_unsettled）。该文件正被并行改动，行号会漂移，按函数名定位",
+        "docs/design/mixed-version-persist-field-protection.md:464、:474（写着「顺序被违反只会延后或失败，不会丢数据」「go/db 回滚更低不丢数据」）",
+        "docs/design/player-save-direct-commit.md:225、:228、:243",
+        "docs/design/release-track-gray-canary.md:119；docs/ops/release-track-canary-runbook.md:18（发布顺序只是人工前提）；tools/scripts/k8s_deploy.ps1:853-859（zone-up 的 Go 服务 tag 跟随 NodeImage，没有世代预检）"
+      ],
+      "trigger": "① 某版本 R2 新增持久字段，放进新行种 K（PlayerStoreKind 新值），世代由 N 升到 N+1。② zone z 的 scene 先换成 R2，而服务这个 zone 的 go/db 还有 R1 实例：可能是违反了「go/db 全部 zone 先升」，可能是 zone-up 同 tag 同时滚动时 go/db 旧 Pod 还没换完，也可能是回退了 go/db。③ 玩家 P 登录到 R2 scene。LoadAndClaim 落到 R1 go/db，decideClaim 只比较库里世代 N 与 scene 世代 N+1，判 CLAIMED，写权行被抬到这个 R2 实例，旧持有者随即被围住。④ P 用了新功能，K 行变脏。存盘落到 R1 go/db，validateSave 发现 K 不在 PlayerStoreKind_name 里，回 INVALID，decideSave 的 TOO_NEW 根本没机会判。⑤ C++ 默认分支按确定性拒绝处理，把 K 并入 uncertain，之后每一笔存盘都带 K、都是 INVALID。在线期间一笔也落不了盘。⑥ P 下线：退出存盘同样 INVALID，DisposeRefusedSave 直接 DestroyDeposedPlayer，认领以来的进度全部丢失，含本局掉落、交易所得、消耗。没碰到 K 的玩家每笔都是 SCHEMA_TOO_NEW，会一直重试；只要 scene 进程在 go/db 换回之前退出（滚动、扩缩、崩溃），15s 看门狗就放弃，同样丢失。",
+      "reachability": "默认配置没有开关，只在混版窗口出现：scene 世代或行种比服务它的 go/db 新。可能的触发：①人为违反 mixed-version-persist-field-protection.md §8.2 要求的「DDL → go/db 全部 zone → login → scene」顺序（release-track-gray-canary.md:119 也只是人工前提）；②zone-up 让 go/db 与 scene 用同一个 tag 一起滚动，滚动期间旧 go/db Pod 还在；③在 R2 scene 已上线、数据还没盖 N+1 戳的时候回退 go/db，这在 §8.3 的规则里是允许的。k8s_deploy.ps1 没有运行期世代核对（§8.2「可选项（第 4 批）」未做）。项目未上线，首次上线整批起步，不会触发。属于混版加人为顺序问题，按规则定 low。",
+      "registered": "未登记。设计文档反而断言「顺序如果被违反，C1 / C2 只会延后或失败，不会丢数据」（mixed-version-persist-field-protection.md:464），以及 go/db 回滚「不丢数据」（:474）。player-save-direct-commit.md:225 只把 SCHEMA_TOO_NEW 列为「重试，属发布顺序问题」，:228 把 INVALID 只理解成「kind 非法」，:243 的认领只拒「库里世代比本进程新」。这几条都是旧 Redis 路径的结论：那时有父快照兜底；新路径里 scene 内存是唯一副本。",
+      "fix": "① decideClaim 加一格：req.binary_schema_gen > knownGen 时回 LOAD_AND_CLAIM_SCHEMA_TOO_NEW（或新增「go/db 过旧」结局），不抬代次，新 scene 就拿不到旧 go/db 的写权。② validateSave 遇到本二进制不认识的正值 kind 时回 SCHEMA_TOO_NEW（或把未知 kind 的判断挪到世代判定之后：schema_gen > knownGen 一律 TOO_NEW），INVALID 只留给 0、重复和 OWNER。③ 改正两份设计文档里「不丢数据」的说法；发布预检核 go/db 世代 ≥ scene 世代（go/db 能力心跳带世代）。④ 补用例：knownGen=N 的 Store 分别收 binary_schema_gen=N+1 的认领、带未知 kind 且 schema_gen=N+1 的存盘，期望都回 TOO_NEW、不改库。",
+      "confidence": "很可能",
+      "refute_attempt": "逐条核对过：decideClaim 不比较 knownGen（decide.go:59-72）；validateSave 在 decideSave 之前按编译进来的枚举判 kind（store.go:121、:144），所以 TOO_NEW（decide.go:48-49）到不了；C++ 只有 NO_OWNER、TOO_NEW、UNSPECIFIED 三种结局会重试，其余走 default，按确定性拒绝处理并把行种并入 uncertain（player_store_client.cpp:469-501）；退出中被拒就直接 DestroyDeposedPlayer（player_lifecycle.cpp DisposeRefusedSave）。部署侧：zone-up 的 Go tag 跟随 NodeImage，没有 go/db 先于 scene 的机械保证，tools/scripts 里也没有世代运行期核对。新行种只会随新持久字段一起出现，因为生成器禁止换组，所以场景成立。旧 scene 认领新世代行会被 decide.go:67 拒掉，这个反方向是安全的，不在本条里。没推翻。"
+    }
+  ],
+  "excluded": [
+    "owner_epoch G3a 墙钟地板 max(obs+1,now)（scene_manager/internal/logic/owner_epoch.go:199-211）：SM 副本时钟偏差或回拨只丢掉「越过 Redis 回退前铸造」这一保证，并计 clockBehind。单调性由 Lua 十进制比较（:218-238）和只 INCR 的回滚（:358-419）保证。前提已写在包注释 :42-45 与 zone-redis-regression-guard §4.3.1。not_durable 回滚被采纳的问题已由 owner-epoch-claude-review 第 1 条登记；工作区 ownerepoch.go 的 pending: 两段回执是半成品，未评",
+    "handoff_fence（E|S|N|A|K|T）没有时间字段，代次纯数值比较（shared/handofffence/handoff_fence.go:35-88）。handoff 标记的 saved_at_ms 只用作本族识别后缀，要撞上必须墙钟恰好回拨到同一毫秒，可忽略",
+    "IsDeposedOnReentry「恰好 +1 才复用」在 G3a 之后几乎每次都判废黜（player_exit_intent.h:225-257），方向安全：重存超限被保留的实体不写 A1′（player_lifecycle.cpp kRetainExhausted 分支），location 不会被 LeaveScene 删，同节点重登不铸造，照常复用。只是注释里「MySQL 补齐由存盘意图补投承担」引用了已删的 saveoutbox，属文档问题",
+    "save_seq 发号 max(last+1, now<<10)，Observe 上界 60s（save_seq.h）：时钟超前主机发出的种子只挂成个人下限；OLDER_SEQ 时抬号重存。新持有者先认领、抬代次，序号只在同 E、同实例内比较",
+    "发号器 timeFloor（data_service/internal/idissuer/issuer.go:684-707）只抬起点，跳得远只告警，时钟越界就不用下限；唯一性靠三份记录的 CAS",
+    "收件箱 seq = max(next_seq, now<<12)（player_inbox/internal/inbox/seq.go:24-30），流内单调靠 next_seq。签发时间窗（store_enqueue.go:137、:306-313）：战斗原件的 issued_at 取 match 的 TiDB 钟，inbox 主机慢 5 分钟以上时只会被拒，match 发件箱按错误退避重试（match/internal/authority/completion.go:730-776），只延迟不丢。判重先于时间窗；终态行永久保留（store_maintenance.go:18-23）",
+    "assetop 的租约、last_send_ms、人工安静、自动放弃：lease_until_ms 与 last_send_ms 都取业务服务重投副本的本机钟（shared/assetop/reconcile.go:126-157、:565）；判定时刻分别取自领取副本、assetopfix 所在主机（guild/trade cmd/assetopfix main.go:443、:608）、data_service（recall_logic.go:699）。Lease 10s、ManualQuietGap 30min、AbandonSafetyGap 1h（reconcile.go:361-371、manual_evidence.go:88）。偏差超过 10s 只会造成并发投递，scene 按 seq 账本判重，Finalize 按令牌 CAS。要误判「安静」或误放弃，偏差得超过 30min / 1h，还要恰好卡在玩家秒级重登的窗口里，不报",
+    "assetop 到期改发 Abort 用判定方本机钟（reconcile.go:1141）：按 I7 由 scene 裁决，Apply 与 Abort 并发时由 scene 串行，对侧账只认已落盘的结局",
+    "match 的 SQL 时刻全部取 TiDB 钟（authority/store.go:121-128、:604-607、:867-872，completion.go:43-44）。原件 CreatedAtMs 已改取 max(本机, 成局)，并注明多个 tidb-server 之间也有时钟差（logic/gather.go:281-287）；结束时刻不跨主机比较（completion.go:407）。battle 节点用本机钟跑 deadline（battle_room_manager.cpp:550-596），比 TiDB 慢 60s 以上时结果晚于宽限会被 ABORT，属已登记 #78 一族，由在途批「到期 ABORT 前先问 battle」处理",
+    "scene 的 FIGHTING 冻结、续冻上限、战斗锁 EX：用 scene 本机钟对比 TiDB 定的 deadline，到期先查 SQL 终局再决定是否续冻（player_battle.h:316-335、player_battle.cpp:572-586），锁 EX 比冻结最晚到期时刻多 60s。只有跨 scene 主机偏差超过 60s 才会出现锁先于组件过期；熬过续冻上限后解冻已登记在 turn-battle-gap-closure.md:654-660",
+    "再入屏障 death_at 用 SM 副本墙钟（reentry_barrier.go:101、:172），留了 5s 余量（constants/reentry_barrier.go:65-81），未来时刻按「刚开始」处理。正确性由 TiDB 写权行兜底（只丢不盖），偏差最多丢疏散的最后一笔，常量注释里已写明",
+    "LeaveScene 的等待计时已改用 Redis TIME（leave_release.go:148-171），而且等待本身不再授权删除，forced 已不再返回（:41-42、:76-84）",
+    "guild 历练大厅与 launch 全用 SQL 钟（trial_lobby_sql.go:106-113、:260-276）；周期键 gameday 固定 UTC+8（shared/gameday/gameday.go:26-30）；商店限购按 (player,kind,goods,period_key) 主键分行计数（economy_repo.go:95-99），回拨换了周期键也不会清零旧行；计数清理截止至少 8 天前（asset_store.go:137-149），只有本机钟前跳 8 天以上才会提前清",
+    "神秘商人轮次 = floor(now/interval)（scene_manager/internal/logic/mystery_merchant.go:293-299），写入只升版本，回拨不会覆盖新一轮（:540-545），与第一轮排除项一致",
+    "mail 的过期判定与清理用 mail 本机钟（data/inbox.go:165、:199，claim.go:45，maintenance/sweep.go:108），清理排除在途领取和未终结的资产指令（data/sweep.go:19-21）。rank 奖励过期时刻在封榜时写定，另留 24h 余量（rank/internal/data/repo.go:350-354）",
+    "trade 合同的 ExpiresMs 用本机钟写（commerce/engine.go:314、:326、:335），确认与 plan 用 TiDB 钟比（engine.go:377-386、:860-863），Due 用本机钟选行（data/commerce_repo.go:189-193）。偏差只会让窗口平移或空转一会儿，腿的结局才是权威，退款只认已终结的腿",
+    "serviceauth 签名窗 ±5min（shared/serviceauth/auth.go:137-139）：主机钟偏差超过 5 分钟时，该主机所有签名 RPC 都被拒；scene 存盘按结果未知重试，和 go/db 不可达是同一类可用性问题，不是新问题",
+    "data_service 名字释放窗口用本机钟，另外还要求「角色未提交」的证明（player_name_logic.go:314-330、:440-470）",
+    "login 旧 PlayerIDGen 用锚点加单调钟（login/internal/svc/player_id_gen.go），C++ SnowFlake 高水位不回退（snow_flake.h:85-145），属已登记第一轮 §4-20 / §4-22 一族",
+    "空副本回收（instance_lifecycle.go:91-130）在脚本里复核 SCARD，时钟快只会提前回收空副本",
+    "player_inbox 混版：遇到未知类型或版本错位时停用该域，不记终态 REJECTED（player_inbox_system.cpp:936-1000）；Go 入箱拒收带未知字段的战斗原件（store_enqueue.go:277），match 重试",
+    "资产通道混版：未知流号回 UNKNOWN，Go 侧走 ActionAlert，永不终结（asset_op_system.cpp:1297-1305、shared/assetop/decide.go:26-31）；未知币种或欠款带未知字段时回 RETRY（asset_op_system.cpp:821-825、:1502-1507）；protobuf-go 解码保留未知字段，再编码时带回；旧版不维护 last_send_ms 的问题已在 guild.yaml:161 写明「升级前先关闭放弃」",
+    "旧 scene 认领新世代行时 decideClaim 回 SCHEMA_TOO_NEW（decide.go:67-68），不会读到新数据再盖回去。代价是：金丝雀 zone 回退后，或玩家从升了世代的金丝雀 zone 跨 zone 去 stable zone，会被挡在外面。这是可用性问题；release-track-gray-canary.md:124「不会出现一段有状态流程跨两个版本」对跨 zone 传送不成立，只是文档说法不准",
+    "旧 scene 收到新 go/db 新增的 SavePlayerResult 枚举值时，会按「明确没提交」处置（player_store_client.cpp:479-501）。目前没有新增值，属假设性的前向兼容问题，不报",
+    "发布轨道选实例（shared/releasetrack/releasetrack.go:105-121）只决定由哪个版本处理请求，不参与提交判定；全局后台工作只在 stable 上跑（:96-99）",
+    "match 角色冻结前的挂起检查全用 SQL 钟（authority/role_fence_pending.go:12-52）；角色交易封存没有墙钟到期（role_admission_system.cpp:644-689）"
+  ],
+  "unread": [
+    "在途批（未提交，多为半成品），只看了是否改时钟口径：go/match/internal/authority 的 completion / manual_abort / terminal_abort / ready_recovery / store / terminal_read 改动，以及 logic/global_deadline_evidence.go；go/shared/assetop 的 reconcile / types / metrics 分片改动；go/guild 的 asset_store / guild_repo / guild_logic；go/mail 的 campaign / policy / repo；cpp item_hold.h 与 player_item_hold_comp.proto；go/login 的 createplayerlogic / home_zone；go/player_locator 的 session_reconciler / slot_shard / index_pass；go/scene_manager 的 node_holder / load_reporter；go/match/internal/logic/release_track.go；java/mall_game；工作区 ownerepoch.go 的 pending 两段回执",
+    "enterscenelogic.go 的 not_durable 与回滚分支全文；unqualified_holder_revoke.go 的宽限计时细节",
+    "player_battle.cpp 的 reaper / 续冻实现全文（只读了接口注释与 TTL 计算）；battle_room_manager.cpp 只读了 CreateBattle / deadline 部分",
+    "trade auction.go、chat、friend、login 的 loginqueue / gatedrain、kafkautil group_lag、drainproof：时钟用法只扫了 grep 结果",
+    "C++ buff / cooldown / skill 等玩法时间未逐个核",
+    "Java 版仓库未读"
+  ],
+  "coverage": "视角：时钟回拨与跳变，加滚动升级混版。先 grep 全仓墙钟来源：Go 的 time.Now / UnixMilli（约 110 个文件），SQL 时钟 UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) / NOW(3)（match、guild 历练、trade、chat、data_service、rolefence、authoritysql），Redis TIME（login 口令限频、LeaveScene 等待、同步摘要），C++ 的 TimeSystem / system_clock / steady_clock（约 45 个文件）。逐个过的比较点（比较点 → 两边时钟各出自哪台机器 → 偏差或回拨时的后果）：owner_epoch 铸造：SM 副本钟，比较走 Redis 十进制 → 只失去越过 Redis 回退的保证，单调不破；回滚 INCR / C++ ≥+2 判据：纯数值；handoff_fence：无时间字段；save_seq：scene 钟，种子超出 60s 上界时挂个人下限 → OLDER_SEQ 抬号重存；发号器：data_service 钟，只抬起点；inbox seq：inbox 钟，流内单调；inbox 签发窗：match 的 TiDB 钟对 inbox 钟 ±5min → 只延迟；assetop 租约 / last_send / 安静 / 放弃：各业务副本钟对 CLI 或 data_service 钟，间隔 10s / 30min / 1h → 并发投递由 seq 判重，误判需超过 30min 偏差；match 成局 / 截止 / 宽限 / 票 / 邀请 / 编队：全部 TiDB 钟（B1 修复处已核）；battle 本机钟跑 TiDB 截止 → 慢 60s 以上结果被 ABORT，已登记 #78，在途批处理；scene 冻结 / 续冻 / 锁 EX：scene 钟对 TiDB 截止，到期查 SQL 终局；再入屏障：SM 钟，5s 余量，写权行兜底；LeaveScene：Redis TIME，且不再授权删除；guild 大厅 / launch：SQL 钟，限购按周期键分行，清理至少 8 天；神秘商人：轮次只升版本；mail / rank：本机钟加 24h 余量，在途领取不清；trade：本机钟写、TiDB 钟比，腿结局权威；serviceauth ±5min：只造成拒绝；名字释放：另有证明；旧 ID 源：已登记。本机钟与 TiDB 钟混用的 B1 同类只找到 trade 合同过期一处，无数据后果；guild 历练已全用 SQL 钟。混版按四条线过：player_store（找到本条：认领不核 knownGen，未知行种判 INVALID 先于 TOO_NEW）、收件箱（停域不记终态）、match 终局协议（带未知字段一律拒，fail-closed）、资产通道（未知流号 Alert、未知币种 RETRY、未知字段保留）；另看了发布轨道选点与后台归属。没有发现 high 或 medium。未编译、未运行任何东西（AGENTS §10.1），未创建或修改任何文件。"
+}

@@ -1,4 +1,5 @@
-// gate 客户端连接存活判定的纯逻辑单测(services/gate/session/comp/client_liveness.h,docs/design/gate-client-heartbeat.md)。
+// 客户端连接存活判定的纯逻辑单测(engine/core/network/client_liveness.h,docs/design/gate-client-heartbeat.md)。
+// gate 的检查点堆与 battle 直连的每连接检查(DecideIdleCheck)共用这份判定,所以两边的用例都在这里。
 //
 // 不进 gate.vcxproj,登记在 cpp/tests/routing_identity_test/routing_identity_test.vcxproj,与同工程其余用例共用 main。
 // 被测头文件只依赖 STL:时刻全部是合成的,不读时钟、不等待;会话表用一个 std::map 假冒,两种关连接的回调只记录。
@@ -12,20 +13,21 @@
 #include <utility>
 #include <vector>
 
-#include "session/comp/client_liveness.h"
+#include "network/client_liveness.h"
 
 namespace
 {
-	using gate_liveness::AdmitHeartbeat;
-	using gate_liveness::ClientLiveness;
-	using gate_liveness::ClientLivenessPolicy;
-	using gate_liveness::HeartbeatAction;
-	using gate_liveness::IdleVerdict;
-	using gate_liveness::IsValidLivenessPolicy;
-	using gate_liveness::JudgeIdle;
-	using gate_liveness::kClientLiveness;
-	using gate_liveness::LivenessSweeper;
-	using gate_liveness::SteadyTime;
+	using client_liveness::AdmitHeartbeat;
+	using client_liveness::ClientLiveness;
+	using client_liveness::ClientLivenessPolicy;
+	using client_liveness::DecideIdleCheck;
+	using client_liveness::HeartbeatAction;
+	using client_liveness::IdleVerdict;
+	using client_liveness::IsValidLivenessPolicy;
+	using client_liveness::JudgeIdle;
+	using client_liveness::kClientLiveness;
+	using client_liveness::LivenessSweeper;
+	using client_liveness::SteadyTime;
 	using std::chrono::milliseconds;
 	using std::chrono::nanoseconds;
 	using std::chrono::seconds;
@@ -257,6 +259,85 @@ TEST(ClientLivenessJudge, LateCheckDefersInsteadOfKilling)
 	const SteadyTime last = At(seconds(0));
 	EXPECT_EQ(JudgeIdle(last, last + kTimeout, true, kTimeout), IdleVerdict::kDeferred);
 	EXPECT_EQ(JudgeIdle(last, last + kTimeout - nanoseconds(1), true, kTimeout), IdleVerdict::kAlive);
+}
+
+// ---- 每连接一个检查定时器(battle 直连,DecideIdleCheck) ----
+
+// 跟踪中、刚开始跟踪的连接:第一次检查在「开始 + 阈值」到期,准时执行即判死;任何一帧都把下一次检查推到「上一帧 + 阈值」。
+TEST(ClientLivenessIdleCheck, OnTimeCheckClosesSilentConnectionAndReschedulesFromTheLastFrame)
+{
+	ClientLiveness liveness;
+	const SteadyTime start = At(seconds(0));
+	ASSERT_TRUE(liveness.StartTracking(start));
+	const SteadyTime due = start + kTimeout;
+
+	const auto silent = DecideIdleCheck(liveness, due, due, kClientLiveness);
+	EXPECT_EQ(silent.verdict, IdleVerdict::kDead);
+
+	liveness.NoteInbound(start + seconds(12));
+	const auto alive = DecideIdleCheck(liveness, due, due, kClientLiveness);
+	EXPECT_EQ(alive.verdict, IdleVerdict::kAlive);
+	EXPECT_EQ(alive.nextCheckAt, start + seconds(12) + kTimeout) << "下一次检查按上一帧重新计时";
+	EXPECT_GT(alive.nextCheckAt, due) << "活着的连接下一次检查一定在本次之后,不会原地空转";
+}
+
+// 定时器晚到两个节拍以内照常判;晚到超过两个节拍说明本端 loop 卡过,推迟一个节拍,准时的下一次才判死。
+TEST(ClientLivenessIdleCheck, LateTimerDefersOneCheckPeriodAndTheNextOnTimeCheckCloses)
+{
+	ClientLiveness liveness;
+	const SteadyTime start = At(seconds(0));
+	ASSERT_TRUE(liveness.StartTracking(start));
+	const SteadyTime due = start + kTimeout;
+
+	EXPECT_EQ(DecideIdleCheck(liveness, due, due + 2 * kPeriod, kClientLiveness).verdict, IdleVerdict::kDead)
+		<< "恰好晚两个节拍不算卡顿";
+
+	const SteadyTime stalledAt = due + 2 * kPeriod + nanoseconds(1);
+	const auto deferred = DecideIdleCheck(liveness, due, stalledAt, kClientLiveness);
+	EXPECT_EQ(deferred.verdict, IdleVerdict::kDeferred);
+	EXPECT_EQ(deferred.nextCheckAt, stalledAt + kPeriod);
+
+	EXPECT_EQ(DecideIdleCheck(liveness, deferred.nextCheckAt, deferred.nextCheckAt, kClientLiveness).verdict,
+			  IdleVerdict::kDead);
+}
+
+// 卡顿恢复后读到了积压的帧:推迟之后的那次检查看到新的上一帧,活着,不误关。
+TEST(ClientLivenessIdleCheck, FrameReadAfterAStallSavesTheConnection)
+{
+	ClientLiveness liveness;
+	const SteadyTime start = At(seconds(0));
+	ASSERT_TRUE(liveness.StartTracking(start));
+	const SteadyTime due = start + kTimeout;
+
+	const SteadyTime stalledAt = due + seconds(5);
+	const auto deferred = DecideIdleCheck(liveness, due, stalledAt, kClientLiveness);
+	ASSERT_EQ(deferred.verdict, IdleVerdict::kDeferred);
+
+	liveness.NoteInbound(stalledAt + milliseconds(10)); // loop 恢复后先读到了积压的心跳
+	const auto after = DecideIdleCheck(liveness, deferred.nextCheckAt, deferred.nextCheckAt, kClientLiveness);
+	EXPECT_EQ(after.verdict, IdleVerdict::kAlive);
+	EXPECT_EQ(after.nextCheckAt, stalledAt + milliseconds(10) + kTimeout);
+}
+
+// 按通告节奏发心跳的连接永远不被关:每次检查都活着,检查之间至少隔一个心跳间隔。
+TEST(ClientLivenessIdleCheck, HeartbeatsEveryIntervalKeepTheConnectionAlive)
+{
+	ClientLiveness liveness;
+	const SteadyTime start = At(seconds(0));
+	ASSERT_TRUE(liveness.StartTracking(start));
+	SteadyTime due = start + kTimeout;
+	SteadyTime nextHeartbeat = start + kInterval;
+	for (int checks = 0; checks < 20; ++checks)
+	{
+		for (; nextHeartbeat <= due; nextHeartbeat += kInterval)
+		{
+			liveness.NoteInbound(nextHeartbeat);
+		}
+		const auto check = DecideIdleCheck(liveness, due, due, kClientLiveness);
+		ASSERT_EQ(check.verdict, IdleVerdict::kAlive) << "第 " << checks << " 次检查";
+		EXPECT_GE(check.nextCheckAt - due, kInterval);
+		due = check.nextCheckAt;
+	}
 }
 
 // ---- 握手期限 ----

@@ -33,7 +33,6 @@ type RankBoardRecord struct {
 	Generation      uint64                 `protobuf:"varint,6,opt,name=generation,proto3" json:"generation,omitempty"`
 	Producer        string                 `protobuf:"bytes,7,opt,name=producer,proto3" json:"producer,omitempty"`
 	SourceEpoch     uint64                 `protobuf:"varint,8,opt,name=source_epoch,json=sourceEpoch,proto3" json:"source_epoch,omitempty"`
-	CommittedCursor uint64                 `protobuf:"varint,9,opt,name=committed_cursor,json=committedCursor,proto3" json:"committed_cursor,omitempty"` // 本代已落账的批次总数(各片之和),封榜按它核齐;各片游标看 rank_input_receipt。
 	Ascending       uint32                 `protobuf:"varint,10,opt,name=ascending,proto3" json:"ascending,omitempty"`
 	State           uint32                 `protobuf:"varint,11,opt,name=state,proto3" json:"state,omitempty"`
 	SettlementId    uint64                 `protobuf:"varint,12,opt,name=settlement_id,json=settlementId,proto3" json:"settlement_id,omitempty"`
@@ -42,11 +41,8 @@ type RankBoardRecord struct {
 	CreatedMs       uint64                 `protobuf:"varint,15,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
 	SealedMs        uint64                 `protobuf:"varint,16,opt,name=sealed_ms,json=sealedMs,proto3" json:"sealed_ms,omitempty"`
 	DeletedMs       uint64                 `protobuf:"varint,17,opt,name=deleted_ms,json=deletedMs,proto3" json:"deleted_ms,omitempty"`
-	// 本代榜上现有的实体数(2026-11-05,缺口清单第 18 条):Submit 新增实体时加、Remove 删行时减,都在榜行锁里改,
-	// 与 rank_score 同事务提交。读路径的总数直接取它,不再对全榜 COUNT。
-	Entries       uint64 `protobuf:"varint,18,opt,name=entries,proto3" json:"entries,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RankBoardRecord) Reset() {
@@ -135,13 +131,6 @@ func (x *RankBoardRecord) GetSourceEpoch() uint64 {
 	return 0
 }
 
-func (x *RankBoardRecord) GetCommittedCursor() uint64 {
-	if x != nil {
-		return x.CommittedCursor
-	}
-	return 0
-}
-
 func (x *RankBoardRecord) GetAscending() uint32 {
 	if x != nil {
 		return x.Ascending
@@ -198,7 +187,81 @@ func (x *RankBoardRecord) GetDeletedMs() uint64 {
 	return 0
 }
 
-func (x *RankBoardRecord) GetEntries() uint64 {
+// 一张榜一代里一个来源片的游标与计数(2026-11-11,缺口清单第 17 条)。拆成片行,是为了让不同片的 Submit 互不等待:
+// Submit 只锁自己那一片的行;本片第一次写入时在榜行锁里建行。封榜、移除、隐藏整代先锁榜行,再按片号升序锁全部片行,
+// 与在途批次互斥。设计见 docs/design/leaderboard-system.md「2026-11-11 同榜写入按来源片并行」。
+type RankBoardShardRecord struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	BoardId         uint64                 `protobuf:"varint,1,opt,name=board_id,json=boardId,proto3" json:"board_id,omitempty"`
+	Generation      uint64                 `protobuf:"varint,2,opt,name=generation,proto3" json:"generation,omitempty"`
+	SourceShard     uint32                 `protobuf:"varint,3,opt,name=source_shard,json=sourceShard,proto3" json:"source_shard,omitempty"`
+	CommittedCursor uint64                 `protobuf:"varint,4,opt,name=committed_cursor,json=committedCursor,proto3" json:"committed_cursor,omitempty"` // 本片已落账到的游标:同片无缺口、从 1 起。封榜时各片之和与生产者的最终游标之和比对。
+	// 记在本片行上的实体数。各片之和 = 本代榜上现有的实体数(读路径的总数)。某个实体记在哪一片行上没有业务含义:
+	// Submit 把本批新上榜的实体记在本片行上;Remove 删到一行时,从片号最小、计数大于 0 的片行上减一(持全部片行锁,和不变)。
+	Entries       uint64 `protobuf:"varint,5,opt,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RankBoardShardRecord) Reset() {
+	*x = RankBoardShardRecord{}
+	mi := &file_proto_rank_rank_table_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankBoardShardRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankBoardShardRecord) ProtoMessage() {}
+
+func (x *RankBoardShardRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_rank_rank_table_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankBoardShardRecord.ProtoReflect.Descriptor instead.
+func (*RankBoardShardRecord) Descriptor() ([]byte, []int) {
+	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *RankBoardShardRecord) GetBoardId() uint64 {
+	if x != nil {
+		return x.BoardId
+	}
+	return 0
+}
+
+func (x *RankBoardShardRecord) GetGeneration() uint64 {
+	if x != nil {
+		return x.Generation
+	}
+	return 0
+}
+
+func (x *RankBoardShardRecord) GetSourceShard() uint32 {
+	if x != nil {
+		return x.SourceShard
+	}
+	return 0
+}
+
+func (x *RankBoardShardRecord) GetCommittedCursor() uint64 {
+	if x != nil {
+		return x.CommittedCursor
+	}
+	return 0
+}
+
+func (x *RankBoardShardRecord) GetEntries() uint64 {
 	if x != nil {
 		return x.Entries
 	}
@@ -223,7 +286,7 @@ type RankScoreRecord struct {
 
 func (x *RankScoreRecord) Reset() {
 	*x = RankScoreRecord{}
-	mi := &file_proto_rank_rank_table_proto_msgTypes[1]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -235,7 +298,7 @@ func (x *RankScoreRecord) String() string {
 func (*RankScoreRecord) ProtoMessage() {}
 
 func (x *RankScoreRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_rank_rank_table_proto_msgTypes[1]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -248,7 +311,7 @@ func (x *RankScoreRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RankScoreRecord.ProtoReflect.Descriptor instead.
 func (*RankScoreRecord) Descriptor() ([]byte, []int) {
-	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{1}
+	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RankScoreRecord) GetBoardId() uint64 {
@@ -323,7 +386,7 @@ type RankInputReceiptRecord struct {
 
 func (x *RankInputReceiptRecord) Reset() {
 	*x = RankInputReceiptRecord{}
-	mi := &file_proto_rank_rank_table_proto_msgTypes[2]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -335,7 +398,7 @@ func (x *RankInputReceiptRecord) String() string {
 func (*RankInputReceiptRecord) ProtoMessage() {}
 
 func (x *RankInputReceiptRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_rank_rank_table_proto_msgTypes[2]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -348,7 +411,7 @@ func (x *RankInputReceiptRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RankInputReceiptRecord.ProtoReflect.Descriptor instead.
 func (*RankInputReceiptRecord) Descriptor() ([]byte, []int) {
-	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{2}
+	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RankInputReceiptRecord) GetBoardId() uint64 {
@@ -417,7 +480,7 @@ type RankSettlementRecord struct {
 
 func (x *RankSettlementRecord) Reset() {
 	*x = RankSettlementRecord{}
-	mi := &file_proto_rank_rank_table_proto_msgTypes[3]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -429,7 +492,7 @@ func (x *RankSettlementRecord) String() string {
 func (*RankSettlementRecord) ProtoMessage() {}
 
 func (x *RankSettlementRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_rank_rank_table_proto_msgTypes[3]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -442,7 +505,7 @@ func (x *RankSettlementRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RankSettlementRecord.ProtoReflect.Descriptor instead.
 func (*RankSettlementRecord) Descriptor() ([]byte, []int) {
-	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{3}
+	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RankSettlementRecord) GetSettlementId() uint64 {
@@ -521,7 +584,7 @@ type RankSnapshotRecord struct {
 
 func (x *RankSnapshotRecord) Reset() {
 	*x = RankSnapshotRecord{}
-	mi := &file_proto_rank_rank_table_proto_msgTypes[4]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -533,7 +596,7 @@ func (x *RankSnapshotRecord) String() string {
 func (*RankSnapshotRecord) ProtoMessage() {}
 
 func (x *RankSnapshotRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_rank_rank_table_proto_msgTypes[4]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -546,7 +609,7 @@ func (x *RankSnapshotRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RankSnapshotRecord.ProtoReflect.Descriptor instead.
 func (*RankSnapshotRecord) Descriptor() ([]byte, []int) {
-	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{4}
+	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RankSnapshotRecord) GetSettlementId() uint64 {
@@ -612,7 +675,7 @@ type RankMailRewardRecord struct {
 
 func (x *RankMailRewardRecord) Reset() {
 	*x = RankMailRewardRecord{}
-	mi := &file_proto_rank_rank_table_proto_msgTypes[5]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -624,7 +687,7 @@ func (x *RankMailRewardRecord) String() string {
 func (*RankMailRewardRecord) ProtoMessage() {}
 
 func (x *RankMailRewardRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_rank_rank_table_proto_msgTypes[5]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -637,7 +700,7 @@ func (x *RankMailRewardRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RankMailRewardRecord.ProtoReflect.Descriptor instead.
 func (*RankMailRewardRecord) Descriptor() ([]byte, []int) {
-	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{5}
+	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RankMailRewardRecord) GetRewardId() uint64 {
@@ -751,7 +814,7 @@ type RankMutationRecord struct {
 
 func (x *RankMutationRecord) Reset() {
 	*x = RankMutationRecord{}
-	mi := &file_proto_rank_rank_table_proto_msgTypes[6]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -763,7 +826,7 @@ func (x *RankMutationRecord) String() string {
 func (*RankMutationRecord) ProtoMessage() {}
 
 func (x *RankMutationRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_rank_rank_table_proto_msgTypes[6]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -776,7 +839,7 @@ func (x *RankMutationRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RankMutationRecord.ProtoReflect.Descriptor instead.
 func (*RankMutationRecord) Descriptor() ([]byte, []int) {
-	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{6}
+	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RankMutationRecord) GetRequestHash() string {
@@ -827,7 +890,7 @@ type RankRemovedEntryRecord struct {
 
 func (x *RankRemovedEntryRecord) Reset() {
 	*x = RankRemovedEntryRecord{}
-	mi := &file_proto_rank_rank_table_proto_msgTypes[7]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -839,7 +902,7 @@ func (x *RankRemovedEntryRecord) String() string {
 func (*RankRemovedEntryRecord) ProtoMessage() {}
 
 func (x *RankRemovedEntryRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_rank_rank_table_proto_msgTypes[7]
+	mi := &file_proto_rank_rank_table_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -852,7 +915,7 @@ func (x *RankRemovedEntryRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RankRemovedEntryRecord.ProtoReflect.Descriptor instead.
 func (*RankRemovedEntryRecord) Descriptor() ([]byte, []int) {
-	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{7}
+	return file_proto_rank_rank_table_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RankRemovedEntryRecord) GetBoardId() uint64 {
@@ -887,7 +950,7 @@ var File_proto_rank_rank_table_proto protoreflect.FileDescriptor
 
 const file_proto_rank_rank_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/rank/rank_table.proto\x12\x06rankpb\x1a\x1bproto/db/proto_option.proto\"\x8e\x05\n" +
+	"\x1bproto/rank/rank_table.proto\x12\x06rankpb\x1a\x1bproto/db/proto_option.proto\"\xd5\x04\n" +
 	"\x0fRankBoardRecord\x12\x19\n" +
 	"\bboard_id\x18\x01 \x01(\x04R\aboardId\x12\x1d\n" +
 	"\n" +
@@ -899,8 +962,7 @@ const file_proto_rank_rank_table_proto_rawDesc = "" +
 	"generation\x18\x06 \x01(\x04R\n" +
 	"generation\x12\x1a\n" +
 	"\bproducer\x18\a \x01(\tR\bproducer\x12!\n" +
-	"\fsource_epoch\x18\b \x01(\x04R\vsourceEpoch\x12)\n" +
-	"\x10committed_cursor\x18\t \x01(\x04R\x0fcommittedCursor\x12\x1c\n" +
+	"\fsource_epoch\x18\b \x01(\x04R\vsourceEpoch\x12\x1c\n" +
 	"\tascending\x18\n" +
 	" \x01(\rR\tascending\x12\x14\n" +
 	"\x05state\x18\v \x01(\rR\x05state\x12#\n" +
@@ -911,9 +973,17 @@ const file_proto_rank_rank_table_proto_rawDesc = "" +
 	"created_ms\x18\x0f \x01(\x04R\tcreatedMs\x12\x1b\n" +
 	"\tsealed_ms\x18\x10 \x01(\x04R\bsealedMs\x12\x1d\n" +
 	"\n" +
-	"deleted_ms\x18\x11 \x01(\x04R\tdeletedMs\x12\x18\n" +
-	"\aentries\x18\x12 \x01(\x04R\aentries:L\x8a\x92\xf4\x01\n" +
-	"rank_board\x92\x92\xf4\x01\bboard_id\xe2\x92\xf4\x01+board_type,scope,scope_id,period,generation\"\xf2\x02\n" +
+	"deleted_ms\x18\x11 \x01(\x04R\tdeletedMs:L\x8a\x92\xf4\x01\n" +
+	"rank_board\x92\x92\xf4\x01\bboard_id\xe2\x92\xf4\x01+board_type,scope,scope_id,period,generationJ\x04\b\t\x10\n" +
+	"J\x04\b\x12\x10\x13\"\xf5\x01\n" +
+	"\x14RankBoardShardRecord\x12\x19\n" +
+	"\bboard_id\x18\x01 \x01(\x04R\aboardId\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x02 \x01(\x04R\n" +
+	"generation\x12!\n" +
+	"\fsource_shard\x18\x03 \x01(\rR\vsourceShard\x12)\n" +
+	"\x10committed_cursor\x18\x04 \x01(\x04R\x0fcommittedCursor\x12\x18\n" +
+	"\aentries\x18\x05 \x01(\x04R\aentries::\x8a\x92\xf4\x01\x10rank_board_shard\x92\x92\xf4\x01 board_id,generation,source_shard\"\xf2\x02\n" +
 	"\x0fRankScoreRecord\x12\x19\n" +
 	"\bboard_id\x18\x01 \x01(\x04R\aboardId\x12\x1e\n" +
 	"\n" +
@@ -1009,16 +1079,17 @@ func file_proto_rank_rank_table_proto_rawDescGZIP() []byte {
 	return file_proto_rank_rank_table_proto_rawDescData
 }
 
-var file_proto_rank_rank_table_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_proto_rank_rank_table_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_rank_rank_table_proto_goTypes = []any{
 	(*RankBoardRecord)(nil),        // 0: rankpb.RankBoardRecord
-	(*RankScoreRecord)(nil),        // 1: rankpb.RankScoreRecord
-	(*RankInputReceiptRecord)(nil), // 2: rankpb.RankInputReceiptRecord
-	(*RankSettlementRecord)(nil),   // 3: rankpb.RankSettlementRecord
-	(*RankSnapshotRecord)(nil),     // 4: rankpb.RankSnapshotRecord
-	(*RankMailRewardRecord)(nil),   // 5: rankpb.RankMailRewardRecord
-	(*RankMutationRecord)(nil),     // 6: rankpb.RankMutationRecord
-	(*RankRemovedEntryRecord)(nil), // 7: rankpb.RankRemovedEntryRecord
+	(*RankBoardShardRecord)(nil),   // 1: rankpb.RankBoardShardRecord
+	(*RankScoreRecord)(nil),        // 2: rankpb.RankScoreRecord
+	(*RankInputReceiptRecord)(nil), // 3: rankpb.RankInputReceiptRecord
+	(*RankSettlementRecord)(nil),   // 4: rankpb.RankSettlementRecord
+	(*RankSnapshotRecord)(nil),     // 5: rankpb.RankSnapshotRecord
+	(*RankMailRewardRecord)(nil),   // 6: rankpb.RankMailRewardRecord
+	(*RankMutationRecord)(nil),     // 7: rankpb.RankMutationRecord
+	(*RankRemovedEntryRecord)(nil), // 8: rankpb.RankRemovedEntryRecord
 }
 var file_proto_rank_rank_table_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1039,7 +1110,7 @@ func file_proto_rank_rank_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_rank_rank_table_proto_rawDesc), len(file_proto_rank_rank_table_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

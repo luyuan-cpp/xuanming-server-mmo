@@ -1,0 +1,61 @@
+{
+  "_lens": "entry-consumers-timers：按入口查周期任务与多副本分工（换视角查找第 3 轮，2026-11-10，只读代理原样返回，约 61.0 万子代理 token）",
+  "findings": [
+    {
+      "title": "收件箱终态行已改为永久收据（SweepTerminal 是空操作），但 loops.go 头注释、设计 §9.1 / §4 状态表 / §7 判重推导、player_inbox.yaml 注释仍写「终态行 30 天后物理删除、领导者清理循环逐行 DELETE」；设计 :48 只说容量随 GM 处置数增长，漏了战斗结算域（每局每人一行）也永久保留",
+      "severity": "low",
+      "kind": "新问题",
+      "related": ["r2-doc#1（同类注释与文档漂移）", "dsweep-round2-results/fault-kafka-crash.json 排除项里「收件箱终态行保留 30 天」的说法同样过时"],
+      "locations": [
+        "go/player_inbox/internal/inbox/store_maintenance.go:16-23（SweepTerminal 恒返回 0，不删行）",
+        "go/player_inbox/internal/inbox/loops.go:22-26（注释说清理只删终态行、重叠执行时删除幂等）",
+        "go/player_inbox/internal/inbox/loops.go:128-130、177、346-378（仍校验 TerminalRetention 必须大于 7 天，领导者照常起 sweep 循环空转）",
+        "docs/design/player-inbox-service.md:48（已写明改为永久收据、不再物删）",
+        "docs/design/player-inbox-service.md:491、:519、:532、:831、:1245-1249（仍写 30 天后物理删除、清理循环逐行 DELETE、量级假设为保留期内不超过数百行、判重靠 30 天保留期）",
+        "go/player_inbox/etc/player_inbox.yaml:131-133（注释：终态行保留 30 天）"
+      ],
+      "trigger": "1. 运维或后续开发者读 §9.1 与 yaml 注释，以为 TerminalRetentionDays 能控制容量、30 天后终态行会被删。2. 实际上代码永不删除，战斗结算域每打一局全球对局就给每名成员永久留下一行，容量增长远快于 :48 写的「随 GM 处置数增长」。3. 有人照 §9.1 把删除「恢复」回去，就会重新打开 :48 封住的口子：换主之后，旧实例或过了原保留期的同一个 request_id 可以再次入箱。",
+      "reachability": "只是文档问题，跟配置无关。代码侧没有任何删除入口（全仓 grep 不到删 player_inbox_item 的语句）。Fetch 走 (shard,player_id,state) 索引（proto/player_inbox/player_inbox_table.proto:59），行数增长不影响 Fetch 的正确性。ReconcilePlayer 单玩家读上限 5000 行（store_maintenance.go:219），老玩家会被截断成「部分核对」。",
+      "registered": "设计 :48 记了「改为永久收据」，但 §9.1 正文、:491、:532、:831 与 yaml 注释没跟着改，没有作为文档问题登记过。设计 player-inbox-service.md 与手册正被别的会话改（未提交），改的段落不涉及 §9.1。",
+      "fix": "按 :48 重写 §9.1、:491、:532、:831、yaml 注释与 loops.go:22-26，容量说明补上战斗结算域；TerminalRetention / SweepInterval 要么删除，要么在 Validate 里标成保留字段；ReconcilePlayer 的 5000 行上限改为按 seq 分页，或在手册里写明会截断。",
+      "confidence": "确定",
+      "refute_attempt": "找过别的删除路径：按分片清理、data_service 侧、迁移脚本、tools 下的工具，都没有，SweepTerminal 是唯一入口而且是空操作。也核过行数增长会不会带出数据问题：判重先于签发时间窗，永久保留只会让判重更严；挂起护栏和 Fetch 都走 state 索引。所以推翻不了「文档与代码不一致」，但也找不到资产后果，只能算 low 文档问题。"
+    }
+  ],
+  "excluded": [
+    "player_inbox 定时对账按分片（shardowner，HRW）分给各 stable 副本，换主时两个副本可能同读一片：ReconcileShards 一个字节都不写（reconcile.go:189-190），只影响 gauge 和日志，不存在两个副本同时处理同一玩家的写。shardowner 没有 workshard 那样的成员过期，etcd 长时间断开时死副本的片会漏读，只是监控空档。",
+    "player_inbox 清理、提醒补发、扫描型 gauge 只在领导者上跑：清理是空操作；补发的推迟与清零按 next_seq CAS（store_maintenance.go:98-110），并发最多多发一次提醒。丢掉领导权后在途那一轮用 WithoutCancel 续跑最多 2 分钟（loops.go:200），同样没有写冲突。",
+    "assetop 重投（HEAD 不分片，每个副本扫同一个到期队头）：Claim 按 lease_until 加令牌 CAS，Reschedule 带令牌，Finalize 只有 status=PENDING 的 CAS 影响 1 行才做对侧账。跨副本时钟偏差要超过约 7.5s（Lease 减 OpBudget 再减余量）才会两个副本同领一行；就算同领，scene 按 seq 只回原结局，Finalize 也只做一次对侧账。按片分工的在途改动（reconcile.go 的 BindWorkOwner / ListDueOwned，未提交）没复审，只注明。",
+    "assetop 自动放弃（RunMaintenance，领导者上跑，多副本同跑也只靠 Claim CAS 与令牌，abandon.go:287-306、417-436）：要求写权行 released=1、距最后一次可能的发送不少于 1 小时、SQL 账本确定没见过这条 seq。判死释放或无资格撤销把 released 置 1 时，旧持有者内存里应用过的 seq 随实体丢弃，它的存盘被 STALE_OWNER 拒，和「没见过→退款」一致。",
+    "assetop 离线读账本（tryPersistedLedger，reconcile.go:1273-1305）只拿 SQL 已见的结局终结，没见过不自判中止。过了截止时刻才改发 Abort，由 scene 按 seq 记账，Go 与 scene 的时钟偏差造不出「Go 退款、scene 发货」。",
+    "guild 待入队物品循环每个副本都跑：AllocateSeq 锁住 seq 行串行，插入指令行后按主键删待入队行并核对 RowsAffected==1，否则整笔回滚（activity_repo.go:1831-1885），不会生成两份指令。",
+    "guild 资产终结 terminate：对侧账在 status CAS 影响 1 行之后才做（asset_store.go:776-830），重投、唤醒、放弃、人工终结并发时只有一方入账。终态 op 行与计数行 30 天清理只删四种终态，退限购时计数行已删只影响 0 行，无害。",
+    "mail 清扫：缺省 report_only（mail.yaml:51-52）。delete 模式下候选只有过期 7 天以上、没有在途领取、没有未终结 op 的邮件，事务内 FOR UPDATE 再复核一遍。领取入口对过期邮件回 ErrExpired（claim.go:45-46），state 被删后重建也领不到。",
+    "mail 附件重投：Finalize 之前要求 SQL 提交证据，锁 mail_state 再锁 op，并核对 current_op_id、claim_version 与 claim_state=2；Reschedule 带令牌（asset_store.go:96-170）。不开自动放弃、不开停放、不订阅唤醒，离线玩家的未决领取每 60 秒读一次账本，这是负载问题，不是数据问题。",
+    "friend 清扫：缺省 report_only，只删申请终态行和零好友容量行，不碰资产。",
+    "data_service GM 回收派发每个副本都跑：持 role_fence 行锁分配 seq，UPDATE … WHERE status=PLANNED 影响 0 行就整笔回滚（recall_store.go:586-640），seq 不会被白占，也不会重复派发。门控是 Recall.Enabled。",
+    "data_service 角色收尾（删角续做、撤销超时 PREPARING、清陈旧账号索引）每个副本每分钟跑：都在角色行 FOR UPDATE 下复核令牌或收据状态，写墓碑之前先找提交证据（account_role_ref.go 文件头）。PREPARING 只来自角色交易，而 trade 资产通道在所有部署档都固定关闭（trade.yaml:160-164）。",
+    "data_service 审计保留期清理只删 180 天之外的流水和 30 天之外的快照。回收计划用的「已提交账本」证据窗口只有 1024 条，180 天之外的指令本来就证明不了，不会因为流水被删而重复回收。快照消费只写审计快照，按 snapshot_guid 去重，回档入口没接线。",
+    "trade 合同推进按片分工（HEAD 与在途改动；engine.go、schedule.go、commerce_repo.go 在审计期间被别的会话改动）：advance 在合同行与角色行锁内重读，按版本 Save 或 RescheduleTx，Defer 也按版本。收据 ACK 幂等。Mall / RMB 拉取每个副本都跑，靠唯一 request_key 去重。整套功能在所有部署档固定关闭，最高 low，没发现新问题。",
+    "match 按池撮合（poolowner，HRW）：成员表不一致时两个副本会同撮一个池，提交点 claimTx 的行锁与代次复核保证同一玩家不进两局。准入恢复靠原件与行锁。到期终局恢复车道和发件箱属于 r2-battle#2 修复，没复审。",
+    "match 投榜按 (模式, 片) 分工，rank 按 (榜, 片, 游标) 幂等，版本防旧值覆盖（rank_publisher.go:129-137）。rank 奖励投递靠认领令牌加邮件请求号幂等（r2-mail#2 修复，没复审）。",
+    "scene_manager 的全部周期任务（LoadReporter 全量同步、死节点收尾、空闲副本回收、拆除任务扫描、频道 rebalance / 扩缩容 / 孤儿清理、分线目录、神秘商人、成员集合对账）都不写玩家的 location、owner_epoch 或 handoff_fence：grep 写这些键的只有 RPC 路径文件。判死释放与无资格撤销只由 LeaveScene / EnterScene 触发（由 player_locator 租约监视器每拍重试驱动），都先围 TiDB 写权行再跑 Lua，重试幂等（unqualified_holder_revoke.go:313-345）。",
+    "成员集合对账有 2 分钟宽限，摘除之后再读一次 location，指向这里就加回去（scene_member_reconcile.go:25-34）。误摘最多让人数少算一个，空闲回收由 Lua 复核人数。拆除任务扫描与认领方同做副作用：DestroyScene 幂等，Agones 归还按条目删，世界频道走放置代次。",
+    "C++ scene 归属核对只在身份确认时跑：连续 2 次读到不归本节点，再加 60 秒宽限，才排空。排空时先存盘、把住户改派走，还有绑定就不销毁（scene_lifecycle.cpp:28-60）。已被废黜的实体存盘被 STALE_OWNER 拒，不会旧数据盖新数据。",
+    "player_locator 会话对账、死 gate 清扫、租约监视：状态转换只走整字节 CAS，玩家重连改写了会话字节就落空。之后的 LeaveScene 走会话结束凭证与持有节点释放门，不会踢掉新会话。在途的 index_pass 只改补建和审计的分工。",
+    "C++ 定时存盘的「只顺带」推迟：只有位置行脏，而且没有在途或排队、没有未决、没有 release、代次已提交时才推迟，最多 300 秒（player_store_client.cpp:230-260）。release、强制写、加载后第一笔都不推迟；推迟的快照不进状态机、不放行流水，崩溃最多丢位置。",
+    "C++ RunIdentityAtRiskSaves（在途改动只是改成成员函数）：身份不确认时按槽每 5 秒给可改玩家存一次，用 SavePlayer，会把位置一起写；冻结、交接、退出中的实体不在其内。",
+    "C++ 收件箱 Tick：每个实体一个单线程状态机，回包按 correlation_id 与入场身份原件过滤。发确认前要求快照已提交、本批结局都在快照里（player_inbox_system.cpp:617-678）；战斗域先 CompleteInboxSettlement 再确认。在途超时后重拉，靠账本回放，不会重复应用。",
+    "C++ 战斗锁写入与续期重试：重发那一刻按 player_id 现取实体、现判门禁，闭包只捕获 id 与字节。FIGHTING 到期续冻属于 r2-v1#1 / J 批修复，没复审。关键进度存盘定时器只捕获 Guid，实体重建后旧定时器最多提前存一笔。组队跟随只在同一场景内按队形改坐标，不跨场景、不发交接。",
+    "shared/leader 选主：续期按发出时刻计，第二个出错拍之内自降级。Redis 切主丢锁之后重叠窗口不超过一个心跳间隔，各领导者任务都走 CAS 或认领脚本。workshard 成员表 30 秒读不到就做全部片，不在表里就一片都不做：这只影响分工，各使用者的提交点都有行锁、版本或租约。成员在册但循环已停（维护排空中）只会让那几片暂停推进，不丢也不复制。"
+  ],
+  "unread": [
+    "trade commerce 的 rmb.go deliver / returned、mall.go accept 正文。审计期间 engine.go、schedule.go、market.go、rmb.go、commerce_repo.go 正被别的会话改动，只读了当时工作区里的 plan / advance / Tick / Defer。",
+    "match 的 ready_recovery / terminal_abort / completion / store（在途批次，按要求没复审）和 team/sql_recovery.go 正文。",
+    "C++ player_lifecycle.cpp 的交接与退出段：审计期间被改了约 370 行，只核了 RunIdentityAtRiskSaves 与 EnforceTravelFreezeCaps。另外 role_admission_system.cpp 的 CloseOrAck / SendFence 正文、gm_sanction_inbox_executor.cpp、battle 节点 battle_room_manager 的定时器都没读。",
+    "scene_manager 的 world_init / world_autoscale / orphan_cleanup / reentry_barrier 正文（只读了文件头；reentry_barrier.go、instance_lifecycle.go、scene_teardown_job.go 审计期间也有在途改动），以及世界频道放置代次的 C++ 侧 scene_placement_fence。",
+    "player_locator 的 gate_sweep.go / slot_shard.go 正文，login 的 loginqueue dispatcher 与 gatedrain_monitor 正文。",
+    "data_service 的 account_role_ref.go reapRef、account_role_removal.go finishRemoval / abortRemoval 正文，guild 历练巡检的结算路径（r2-guild#1 范围）。"
+  ],
+  "coverage": "视角是按入口查周期任务与多副本分工。基线是当前工作区（HEAD e0790ad40 加未提交改动），审计期间工作区还在被并行改（player_lifecycle.cpp、owner_epoch.go、reentry_barrier.go、instance_lifecycle.go、scene_teardown_job.go、player_store_access.go、trade commerce 多个文件），这些文件的行号可能漂移。只读，没跑任何构建和测试。任务表（任务｜谁在跑｜改什么｜换主或并发时靠什么互斥｜和玩家在线写的先后）：player_inbox 对账｜每个 stable 副本按 HRW 分片｜只读｜不需要｜不涉及；player_inbox 清理 / 补发 / gauge｜领导者｜清理是空操作；补发写 notify_due｜next_seq CAS｜不涉及；assetop 重投 Tick（guild 缺省开、mail、data_service 回收、trade 关）｜每个副本（按片分工在途）｜op 行、对侧账｜Claim 租约令牌 CAS、Finalize 的 status CAS｜scene 单线程按 seq 判重，只认 SQL 已提交账本；assetop 落地唤醒｜抢到去重键的副本｜同上；assetop 自动放弃 / 日对账｜领导者｜op 行与对侧账 / 只读｜Claim CAS 加令牌｜要求写权行 released=1、安静 1 小时、账本未见；guild 待入队物品循环｜每个副本｜插 op、删待入队行｜seq 行锁加删除影响行数，否则回滚；guild 巡检｜Redis 租约加幂等｜历练结算｜SETTLED 闸门与帮会行锁（r2-guild#1，没复审）；guild / trade / mail 终态清理、计数清理｜条件删除；mail 清扫｜每个副本，缺省 report_only｜FOR UPDATE 复核；friend 清扫｜report_only｜无资产；rank 奖励投递｜认领令牌加请求号幂等；match 发件箱 / 投榜 / 准入恢复 / 到期终局车道 / 观战清理｜行锁、租约 CAS、(榜, 片, 游标) 幂等；match 按池撮合｜按池 HRW｜claimTx 行锁加代次；data_service 回收派发｜role_fence 行锁加 status CAS；data_service 角色收尾｜角色行锁、nonce、墓碑；data_service 审计保留期 / 快照消费｜条件删除 / 按 guid 去重；trade 合同推进 / 收据 ACK / Mall / RMB｜合同行锁、版本、唯一请求键，功能固定关闭；scene_manager 领导者任务｜CAS、认领脚本、放置代次，不写玩家权威键；scene_manager 判死释放 / 无资格撤销｜RPC 路径，由 player_locator 每拍重试驱动｜三列比较或 E−1 围栏，Lua 原子复核，先围存档再交出 location；player_locator 会话对账 / 死 gate 清扫 / 租约监视｜整字节 CAS、认领脚本；C++ 定时存盘、只顺带推迟、身份不确认补存、关键进度存盘｜go/db 按 (E, holder, seq) 判定，同一线程串行；C++ 收件箱 Tick｜correlation_id 加入场身份原件，快照提交后才确认；C++ 战斗 reaper / 锁重试｜按锁值条件写，重发前现判门禁；C++ scene 归属核对｜连续两次加宽限，先存盘改派；C++ RoleAdmission Tick｜内部正文没读完；C++ 组队跟随｜只改坐标。结论：没有新的 high / medium，只有 1 条 low 文档问题（收件箱永久收据与清理文档不一致）；推翻与排除的 24 组见 excluded。"
+}

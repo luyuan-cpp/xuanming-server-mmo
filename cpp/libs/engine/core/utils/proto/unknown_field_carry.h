@@ -1,7 +1,12 @@
 #pragma once
 
+// Windows SDK 的同名宏会改写 protobuf 反射方法；仅在本头内屏蔽，结束后恢复调用方环境。
+#pragma push_macro("GetMessage")
+#undef GetMessage
+
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/message.h>
@@ -113,4 +118,72 @@ template <typename IsRetired>
     return ContainsNewerVersionFields(messageFullName, parsed);
 }
 
+// 整棵消息树里有没有更新版本才有的字段(2026-11-11,混版本设计 §12「载荷新字段」)。
+//
+// 给读进来、执行完就丢的命令载荷用:收件箱载荷、资产通道请求。它们不像持久对象那样让未知字段跟着对象走 ——
+// 旧版本照常执行,新字段的语义就丢了,还会记成已生效。所以调用方见到 true 一律按版本错位处理:不执行、不记终态,
+// 等落到认识这些字段的版本再执行。
+//
+// 逐层看每个已设置的子消息(含 repeated 与 map 的条目)。bytes 字段不往里解:命令里按设计原样携带的持久对象
+// (资产包的 instance_proto)放在 bytes 里,它们的未知字段是要带走的数据,不是命令的新语义(§4.2)。
+//
+// 退役判据:字段号落在该层消息的 reserved 段里,或在持久 schema 台账的退役清单里。两者是同一件事的两种表示 ——
+// 删字段必须写 reserved(AGENTS §4),台账的 retired 行就是据此记下的;载荷类消息不进台账,只能看 reserved 段。
+// 退役字段的残留不代表更新版本的语义,不算。
+//
+// where 非空时填第一个新字段的位置「消息全名#字段号」,只进日志。
+[[nodiscard]] inline bool TreeCarriesNewerVersionFields(const google::protobuf::Message &message, std::string *where = nullptr)
+{
+    const auto *descriptor = message.GetDescriptor();
+    const auto *reflection = message.GetReflection();
+    const auto &unknown = reflection->GetUnknownFields(message);
+    if (!unknown.empty())
+    {
+        const auto fullName = descriptor->full_name();
+        const std::string_view name(fullName.data(), fullName.size());
+        for (int i = 0; i < unknown.field_count(); ++i)
+        {
+            const int number = unknown.field(i).number();
+            if (descriptor->IsReservedNumber(number) || persist_schema::IsRetiredField(name, number))
+            {
+                continue;
+            }
+            if (where != nullptr)
+            {
+                *where = std::string(name) + "#" + std::to_string(number);
+            }
+            return true;
+        }
+    }
+
+    std::vector<const google::protobuf::FieldDescriptor *> fields;
+    reflection->ListFields(message, &fields);
+    for (const auto *field : fields)
+    {
+        if (field->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE)
+        {
+            continue;
+        }
+        if (!field->is_repeated())
+        {
+            if (TreeCarriesNewerVersionFields(reflection->GetMessage(message, field), where))
+            {
+                return true;
+            }
+            continue;
+        }
+        const int size = reflection->FieldSize(message, field);
+        for (int i = 0; i < size; ++i)
+        {
+            if (TreeCarriesNewerVersionFields(reflection->GetRepeatedMessage(message, field, i), where))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 } // namespace unknown_field_carry
+
+#pragma pop_macro("GetMessage")

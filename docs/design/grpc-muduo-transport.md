@@ -1902,3 +1902,23 @@ Linux 安装契约固定为 `/usr/local`：先构建固定 zlib，再由 `build_
 2026-10-26 后续协作说明：上述 Windows 成功后，共享主仓合入了另一批架构源码。原构建证据仅绑定原 1620 项输入；当前新主线由其协调聊天先正规生成、构建，本任务的运行回归和 Linux 三节点验证须基于完整新来源接续，不沿用旧成功冒充新主线验收。Linux 依赖层已在独立快照中完成，未消费该主线中途生成的应用产物。
 
 2026-10-27 备份清理：负责人明确要求不保留旧 gRPC 备份后，已物理删除旧源码及构建产物备份、127 个旧库归档和闲置的 `.git/modules/third_party/grpc`，并清除本地过期子模块配置。删除后目标路径及登记均不存在，四个独立依赖的关键文件和 Git HEAD/config 保持原字节；只保留删除证明及既有验证日志。首次两次文件占用中断原件与最终成功记录均在上述证据目录，不代表应用剩余验收已完成。
+
+## 18. 拦截钩子（2026-11-10，给链路追踪用；未编译、未测试）
+
+传输层加了两个通用钩子。muduo_grpc 不依赖 engine，所以不在里面读线程局部上下文，而是由 engine 注册实现（[distributed-tracing.md](distributed-tracing.md) §5.3）。两个钩子都只对 unary 调用生效，双向流不经过它们。
+
+- **出站：`ChannelOptions::unaryInterceptor`**（类型 `UnaryCallInterceptor`）。
+  - 每次 `StartUnaryCall` 在调用线程上执行一次，位置紧接在判空 `done` 之后，早于停机、在途上限、消息大小、metadata 校验和截止检查。所以这些本地拒绝也走包装后的回调。
+  - 它可以往 `request.metadata` 追加键，返回值替换完成回调。包装必须恰好调用一次原回调，§16.1 的完成契约（恰好一次、只在 loop 上、从不在 Send 栈内同步执行）不变。
+  - 返回空回调是编程错误，按 `LOG_FATAL` 处理。
+- **入站：`ServerOptions::dispatchInterceptor`**（类型 `UnaryDispatchInterceptor`）。
+  - 派发泵每次调用 handler 时包一层，参数是本次调用的 metadata 和 `invoke`。metadata 只能在调用 `invoke` 之前读：handler 可能同步完成，并随调用记录释放它。
+  - 钩子多调 `invoke` 的被忽略；一次都没调的，服务端补调一次并打 ERROR。所以 handler 总是恰好执行一次，与「恰好一次由 `Server::CompleteCall` 裁决」同口径。
+- **注册点**：
+  - 业务通道在 `node_connector.cpp`，装 `grpc_tracing::InjectTraceIntoUnaryCall`。
+  - 节点服务端在 `node.cpp`，装 `grpc_tracing::DispatchUnderIncomingTrace`。
+  - etcd 通道不装。
+- **不经通道的本地完成**：生成客户端缺通道、序列化失败这类本地完成走 `QueueGrpcLocalCompletion`，不经过出站钩子。所以那里另用 `tracing::Bind` 包了一层，回调同样回到发起时的 trace。
+- **测试**：
+  - 传输层：`cpp/tests/muduo_grpc_test/server_test.cpp` 末尾 4 条——追加 metadata 与包装顺序、本地拒绝也走包装、多调 `invoke` 只执行一次、不调 `invoke` 由服务端补调。
+  - engine 层的追踪行为：`cpp/tests/rpc_controller_test/grpc_client_loopback_test.cpp` 末尾的 `GrpcTraceLoopbackTest`。

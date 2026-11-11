@@ -98,6 +98,7 @@
 #include "contracts_kafka_match_event_event_id.h"
 #include "contracts_kafka_gate_event_event_id.h"
 #include "contracts_kafka_player_event_event_id.h"
+#include "common_event_player_placement_event_event_id.h"
 #include "common_event_player_inbox_event_event_id.h"
 #include "common_event_team_event_event_id.h"
 
@@ -243,6 +244,8 @@ namespace match{void SendMatchInternalGetBattleCompletionErased(entt::registry& 
 namespace match{void SendMatchInternalGetBattleTerminalDecisionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalListStrandedFormationsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalResolveStrandedFormationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalListPendingBattleScriptsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalReviewBattleScriptErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetNetworkProbePlanErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceCommitNetworkProbeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceJoinQueueErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -257,6 +260,10 @@ namespace match{void SendMatchServiceRequestBattleTicketErased(entt::registry& ,
 namespace match{void SendMatchServiceListWatchableBattlesErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceListBattleReportsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetBattleReportErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceListBattleScriptsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceSubmitBattleScriptErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceDeleteBattleScriptErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceSetBattleScriptLoadoutErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxFetchItemsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxAckItemsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxEnqueueBattleSettlementErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -354,7 +361,7 @@ namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::ent
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 387,
+static_assert(kMaxRpcMethodCount == 393,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1157,6 +1164,16 @@ void InitMessageInfo()
         std::make_unique<::match::ResolveStrandedFormationRequest>(),
         std::make_unique<::match::ResolveStrandedFormationResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalResolveStrandedFormationErased, "/match.MatchInternal/ResolveStrandedFormation"};
+    gRpcMethodRegistry[MatchInternalListPendingBattleScriptsMessageId] = RpcMethodMeta{
+        "MatchInternal", "ListPendingBattleScripts",
+        std::make_unique<::match::ListPendingBattleScriptsRequest>(),
+        std::make_unique<::match::ListPendingBattleScriptsResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalListPendingBattleScriptsErased, "/match.MatchInternal/ListPendingBattleScripts"};
+    gRpcMethodRegistry[MatchInternalReviewBattleScriptMessageId] = RpcMethodMeta{
+        "MatchInternal", "ReviewBattleScript",
+        std::make_unique<::match::ReviewBattleScriptRequest>(),
+        std::make_unique<::match::ReviewBattleScriptResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalReviewBattleScriptErased, "/match.MatchInternal/ReviewBattleScript"};
 
     // --- MatchService ---
     gRpcMethodRegistry[MatchServiceGetNetworkProbePlanMessageId] = RpcMethodMeta{
@@ -1229,6 +1246,26 @@ void InitMessageInfo()
         std::make_unique<::match::GetBattleReportRequest>(),
         std::make_unique<::match::GetBattleReportResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetBattleReportErased, "/match.MatchService/GetBattleReport"};
+    gRpcMethodRegistry[MatchServiceListBattleScriptsMessageId] = RpcMethodMeta{
+        "MatchService", "ListBattleScripts",
+        std::make_unique<::match::ListBattleScriptsRequest>(),
+        std::make_unique<::match::ListBattleScriptsResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceListBattleScriptsErased, "/match.MatchService/ListBattleScripts"};
+    gRpcMethodRegistry[MatchServiceSubmitBattleScriptMessageId] = RpcMethodMeta{
+        "MatchService", "SubmitBattleScript",
+        std::make_unique<::match::SubmitBattleScriptRequest>(),
+        std::make_unique<::match::SubmitBattleScriptResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceSubmitBattleScriptErased, "/match.MatchService/SubmitBattleScript"};
+    gRpcMethodRegistry[MatchServiceDeleteBattleScriptMessageId] = RpcMethodMeta{
+        "MatchService", "DeleteBattleScript",
+        std::make_unique<::match::DeleteBattleScriptRequest>(),
+        std::make_unique<::match::DeleteBattleScriptResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceDeleteBattleScriptErased, "/match.MatchService/DeleteBattleScript"};
+    gRpcMethodRegistry[MatchServiceSetBattleScriptLoadoutMessageId] = RpcMethodMeta{
+        "MatchService", "SetBattleScriptLoadout",
+        std::make_unique<::match::SetBattleScriptLoadoutRequest>(),
+        std::make_unique<::match::SetBattleScriptLoadoutResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceSetBattleScriptLoadoutErased, "/match.MatchService/SetBattleScriptLoadout"};
 
     // --- PlayerInbox ---
     gRpcMethodRegistry[PlayerInboxFetchItemsMessageId] = RpcMethodMeta{
@@ -2288,6 +2325,10 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceListWatchableBattlesMessageId:
 	case MatchServiceListBattleReportsMessageId:
 	case MatchServiceGetBattleReportMessageId:
+	case MatchServiceListBattleScriptsMessageId:
+	case MatchServiceSubmitBattleScriptMessageId:
+	case MatchServiceDeleteBattleScriptMessageId:
+	case MatchServiceSetBattleScriptLoadoutMessageId:
 	case ClientPlayerRankGetRankPageMessageId:
 	case ClientPlayerRankGetRankAroundMessageId:
 	case SceneActivityClientPlayerGetActivityListMessageId:

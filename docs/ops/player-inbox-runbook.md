@@ -70,11 +70,11 @@ NotifyResendIntervalSeconds, GaugeIntervalSeconds, ReconcileIntervalMinutes, Rec
 | 步 | 动作 | 验收 |
 |---|---|---|
 | 1 | 收件箱库与表就位(K8s:`infra-up` 的 `player-inbox-migrate` Job;本地:启动期 AutoMigrate 或 `player_inbox -f etc/player_inbox.yaml -migrate`);TiDB 上做 §12 的索引预切 | `plan` 只出现 `inbox_ledger`(以及已放行的 `fence_*`)的 ADD COLUMN;`SHOW COLUMNS FROM zone_<N>_db.player_database` 末列是 `inbox_ledger`;`kubectl -n mmorpg-infra get job player-inbox-migrate` 为 1/1;`-migrate` 输出里有 `row shard layout check OK` |
-| 2 | 全部 zone 的 go/db 升到认识新字段的版本 | `kubectl get deploy db -o jsonpath='{..image}'` 各 zone 一致 |
+| 2 | 全部 zone 的 go/db 升到认识新字段的版本 | `kubectl get statefulset db -o jsonpath='{..image}'` 各 zone 一致 |
 | 3 | 部署收件箱服务,`EnqueueTypes` **为空** | `player-inbox` 两副本 Ready;etcd 有 `PlayerInboxNodeService.rpc/...` 键;`GmSanctionPlayer` 返回 `kPlayerInboxDisabled`;写路径打印 `player-inbox consumer gate: consumer_enabled=false ... enqueue_types=0 ... OK` |
 | 4 | 全部 scene 升级,`consumer_enabled=false`(`bin/etc/game_config.yaml` 仓库默认是 `true`,要走这一步先改成 `false` 并提交;K8s:逐 zone `zone-up`) | **这就是回滚下限**。存档能原样往返 `inbox_ledger`,scene 不发 Fetch(收件箱 `player_inbox_fetch_total` 不涨)。每个 scene 启动时打一行 WARN `[PlayerInbox] metric=inbox_consumer_disabled`,之后每 5 分钟补打一行:这一步出现它是预期的 |
 | 5 | 打开消费:把 `bin/etc/game_config.yaml` 的 `player_inbox.consumer_enabled` 改成 `true` 并提交,再逐 zone `zone-up` 并滚动 scene(ConfigMap 变了不会自己重启 C++ 进程)。可以加 `-PlayerInboxConsumer on`,把预期写进命令(§2.1) | 门禁行变为 `consumer_enabled=true`;scene 启动行变为 INFO `[PlayerInbox] consumer_enabled=1 ...`,`metric=inbox_consumer_disabled` 不再出现;`player_inbox_fetch_total{path="fast"}` 随登录上涨,`fence` 以 `NO_STREAM` 为主 |
-| 6 | 打开入箱:改服务 yaml 的 `PlayerInbox.EnqueueTypes` 并提交,重跑 `infra-up`。**GM 域只能填** `PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN`、`PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN`、`PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN`、`PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN`(按需填其中几种)。第 5 步没做完(有 zone 线上 node-config 还是 `false`),门禁会拒绝(§2.1) | 门禁行为 `enqueue_types=2 ... live=zones_consumer_enabled=N/N OK`(N = 线上 zone 数,两个数相等);生成期打印的 ConfigMap 里 `EnqueueTypes` 有值;一次测试处置能入箱并在测试账号上生效 |
+| 6 | 打开入箱:改服务 yaml 的 `PlayerInbox.EnqueueTypes` 并提交,重跑 `infra-up`。**GM 域只能填** `PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN`、`PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN`、`PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN`、`PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN`(按需填其中几种)。第 5 步没做完(有 zone 线上 node-config 还是 `false`),门禁会拒绝(§2.1)。<br>交易资产通道开着时,还要知道:被封禁获取的玩家参与的托管交易,成交所得那条腿会被拒,合同转人工,解封后要 `commercefix reissue` 补发。退回本人托管的资产不受影响(2026-11-10,数据覆写审计 r2-trade#1);「交付先买家后卖家、被拒自动退回」做完之前,这一点都成立,见聚宝斋设计 §6.2 末 | 门禁行为 `enqueue_types=2 ... live=zones_consumer_enabled=N/N OK`(N = 线上 zone 数,两个数相等);生成期打印的 ConfigMap 里 `EnqueueTypes` 有值;一次测试处置能入箱并在测试账号上生效 |
 
 **v1 不开 `GM_ATTACH_CURRENCY_DEBT`**(原因见 §1):
 - 白名单里出现它,`config.Validate` 与装配层都拒启(`config.ParseEnqueueTypes`)。
@@ -359,9 +359,10 @@ scene 对一条投递的判定顺序是:先按账本分类,只有新条目才看
 
 **A′. 版本错位**(`metric=inbox_halted reason=version_skew`,前一行 ERROR `Executor reported version skew` 带 `seq` / `type` / `request_id`;2026-10-19 起)
 
-scene 认识这个类型,但本版本不能安全执行这一条。GM 处置域有两个来源,先按日志分开:
+scene 认识这个类型,但本版本不能安全执行这一条。先按日志分开来源(前两个只出现在 GM 处置域):
 - **欠款带新字段**:挂欠款时,玩家同币种的既有欠款带着更新版本的字段(更新版本的 scene 写下的,见 `mixed-version-persist-field-protection.md` §4.4)。日志 `AttachCurrencyDebt version skew: existing debt carries fields unknown to this version`。
 - **新币种**(2026-10-23 起):载荷里的币种不在本版本 scene 的取值表内,日志 `metric=persist_version_skew where=inbox_currency`,带 `executor` / `currency_type`。收件箱入箱已按 `proto/common/base/currency_type.proto` 拒绝写错的值,所以这只可能是更新版本加的币种:GM 在 scene 全量升级之前就对新币种下了处置(发布纪律不允许)。处置同下面第 1、2 条;第 3 条不适用,升级到认识这个币种的版本即解除。
+- **载荷带新字段**(2026-11-11 起,所有域都适用,包括战斗结算):载荷里有本版本 scene 不认识、也不是已退役(reserved)的字段,日志 `metric=persist_version_skew where=inbox_payload`,带 `type` / `field=<消息全名#字段号>`。这一条不调执行器。来源是更新版本的生产者(Go 各服务、battle 节点)在 scene 全量之前就写了新字段,违反了发布次序(`mixed-version-persist-field-protection.md` §13 第 7 条)。处置同下面第 1、2 条,升级到认识这个字段的版本即解除。
 
 **先排除版本错位再处理毒消息**:同一名玩家在几台旧版本节点之间换图或重建实体,每次重拉都会让这一行的 `delivery_count` +1,可能触发 `PlayerInboxPoisonSuspect`。告警指引的 `VoidItem(reason=QUARANTINED)` 会把一条合法处置作废:先查该玩家 scene 日志里有没有 `reason=version_skew` 或上面两种日志,有就按本节处理。
 出现在新旧 scene 混跑(滚动发布、金丝雀)期间;整体回滚到不认识这些字段的版本之后不会自行消失(见第 3 条)。这一条不记账、不确认,已定的前缀照常确认,行留在收件箱 PENDING。同域排在它后面的处置(例如 `GM_BLOCK_CURRENCY_GAIN`)也一起停住。
@@ -527,8 +528,23 @@ COMPLETE 而结算还没到本地、有可裁决原件而终局还没落定(NONE
 (只可能是旧版本或缺陷留下的异常,这一域本来只收 APPLIED),不算收尾,照旧续冻到上限再告警,按本节处置让原件真正执行成功。
 FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直不来的局,这名玩家最多约 15 分钟内排不了队。
 续到上限打 ERROR `metric=battle_freeze_hold_cap_reached terminal=not_queried_past_cap` 后照常解冻(越过上限的那一拍不再查询):按日志里的 `battle_id` 走上面的步骤查这一局的收件箱条目与 Match 侧
-`match_battle_settlement_source`,结算之后再到会按当时持有量夹紧消耗。`terminal=UNKNOWN` 持续出现(`metric=battle_terminal_query_unknown`)
+`match_battle_settlement_source`。解冻只放开人,这一局带进战斗的道具仍被预留押着(下一段),结算之后再到照样从预留里扣。`terminal=UNKNOWN` 持续出现(`metric=battle_terminal_query_unknown`)
 先查 scene 的 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE`、match 节点发现与 match 是否可达。
+
+**战斗道具预留(2026-11-10,`docs/design/battle-item-reservation.md`)**:备战时把快照里的道具按配置号与数量押住
+(存档 `player_database.item_holds`),结算只从这份预留里扣,扣完释放;备战取消、SQL 终局 ABORT、或没有可裁决原件时整份释放
+(INFO `metric=battle_item_hold_released reason=`)。冻结解开之后,押着的道具交易、帮会捐献、强化、镶嵌、GM 回收都暂不可用
+(资产通道回 RETRY + `kAssetInBattle`,日志 `metric=asset_debit_items_held` / `asset_recall_items_held`),玩家其余照常。
+
+- **冻结已不在的预留**由 scene 的 reaper 每 30 秒复核:到了冻结到期时刻、玩家此刻可改,就向 match 查 SQL 终局,ABORT / NO_ORIGINAL 释放,
+  COMPLETE / PENDING / UNKNOWN 留着,**没有上限**。越过「冻结到期 + 15 分钟」仍没收尾,每 10 分钟一行 ERROR `metric=battle_item_hold_overdue`
+  (值班查询 `count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_overdue" [10m]) > 0`)。
+- **处置**:按日志里的 `battle_id` 查结算为什么没到,走本节上面的步骤 —— 发件箱积压看下面「Match 个人结算首投积压」;
+  条目已在收件箱而整笔延后看上面的原因表(两包都满就让玩家腾位、取回临时格);match 查不到看 `battle_terminal_query_unknown` 的处置。
+  结算一应用,预留随之释放,不需要人工放。
+- **禁止**手改 `player_database.item_holds` 或用 GM 放掉预留来「解卡」:押着的就是结算要扣的东西,放掉等于让玩家把药白喝;
+  结算若确实永远到不了(原件损坏),按事故上报负责人,走存档修复流程。
+- 玩家离线时被取消的备战只删锁,预留留在存档里,下次加载后按 SQL 终局收尾;这段时间这些道具押着,属预期。
 
 **条目根本没进收件箱**:如果 `ListItems` 查不到这局,而 Match 侧该玩家的 `match_battle_settlement_source` 一直停在 `inbox_seq=0`
 (Match 指标 `match_outcome_outbox_backlog_rows{kind="first"}` 不降、`match_outcome_outbox_delivery_total{kind="first",outcome="failed"}` 在涨),先看收件箱的
@@ -543,7 +559,7 @@ FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直�
 | 告警 | 条件 | 含义 |
 |---|---|---|
 | `MatchSettlementInboxLagging`(warning) | 超过 60 秒,持续 2 分钟 | 打满时限的局到期时结算还没到,scene 正在续冻这些玩家(上面一段的 `battle_freeze_held terminal=COMPLETE`),结算一到自动解冻,不需要人工放 |
-| `MatchSettlementInboxStalled`(critical) | 超过 300 秒,持续 1 分钟 | 离 scene 的续冻上限(冻结到期后 15 分钟,约 COMPLETE 之后 16 分钟)还剩约 10 分钟;到上限照常解冻,之后才到的结算按持有量夹紧消耗 |
+| `MatchSettlementInboxStalled`(critical) | 超过 300 秒,持续 1 分钟 | 离 scene 的续冻上限(冻结到期后 15 分钟,约 COMPLETE 之后 16 分钟)还剩约 10 分钟;到上限照常解冻,之后这一局带进战斗的道具仍被预留押着(交易、捐献、强化暂不可用),积压一直不消玩家就一直拿不走它们 |
 
 处置顺序:
 

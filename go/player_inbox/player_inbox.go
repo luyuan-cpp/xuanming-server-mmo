@@ -106,6 +106,12 @@ func main() {
 	var c config.Config
 	// conf.MustLoad 会自动调用 (*Config).Validate(go-zero v1.10.0),不合法即 Fatalf 退出。
 	conf.MustLoad(*configFile, &c)
+	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入)。-migrate 与常驻启动都连库,所以放在迁移分支之前;
+	// 迁移 Job 同样注入这个变量。退出码与迁移入口的 ExitFailed 一致。
+	if err := c.ResolveMySQLPassword(os.LookupEnv); err != nil {
+		fmt.Fprintf(os.Stderr, "[player_inbox] %v\n", err)
+		os.Exit(schemamigrate.ExitFailed)
+	}
 
 	if *migrateOnly {
 		os.Exit(runMigration(c, *allowModify, svc.OpenSchemaMySQL, migrateUp, checkRowShardLayout))
@@ -337,7 +343,7 @@ func runPlayerInbox(c config.Config) (runErr error) {
 			}
 			return &serverbase.PreparedPublication{NoConsumers: true}, nil
 		}); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("player_inbox 排空 HOLD: %v", err)
+			logx.Errorf("player_inbox drain HOLD: %v", err)
 		}
 	}()
 	defer func() { cancelControl(); <-controlDone }()
@@ -581,7 +587,7 @@ func logReport(stage string, r schemamigrate.Report) {
 // schemaModeLabel 是横幅里的建表策略描述。
 func schemaModeLabel(c config.Config) string {
 	if c.ShouldAutoMigrate() {
-		return "拒绝常驻自动迁移；请先执行独立 -migrate"
+		return "resident auto-migration refused; run standalone -migrate first"
 	}
 	return "plan-only (tables owned by " + migrateRemedyCommand + ")"
 }

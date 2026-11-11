@@ -49,6 +49,7 @@ KillSwitchPrefix: ""
 # 库由 deploy/mysql-init/00_init_zone_dbs.sql 预建(存量卷需手工执行那两行);表由 schemamigrate 按
 # proto/trade/trade_table.proto 建。DBName 必须等于代码常量 mmorpg_trade(config.Validate 断言)。
 # 本地凭据与 go/data_service/etc/data_service.yaml 的 SnapshotMySQL 同账号;K8s 由 ConfigMap 注入。
+# 会话锁等待上限钉在代码里、不在这里配置(svc/session_lock_wait.go):行锁 1 s、mysql 档元数据锁 1 s,启动时读回核对,不符拒启。
 MySQL:
   Host: 127.0.0.1:3306
   User: appuser

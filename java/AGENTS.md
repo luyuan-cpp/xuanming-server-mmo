@@ -12,7 +12,7 @@ java/
 │   │   ├── controller/              # Client APIs + Admin APIs
 │   │   ├── dto/                     # Request/Response DTOs, enums
 │   │   ├── entity/                  # JPA entities (ZoneConfig, ZoneWhitelist, Announcement)
-│   │   ├── etcd/                    # GateWatcher, NodeInfoRecord, NodeType
+│   │   ├── etcd/                    # GateWatcher, EtcdPrefixMirror, ZoneHealthRecord/Watcher, LeasedEtcdWriter
 │   │   ├── repository/              # JPA repositories
 │   │   └── service/                 # Zone probe, server list, gate assign, CDN sign
 │   └── src/test/                    # Unit tests
@@ -26,10 +26,10 @@ java/
 | Zone directory / gateway | `gateway_node/` | Maven Spring Boot app (port 8081) |
 | Server list API | `gateway_node/.../controller/ServerListController.java` | GET /api/server-list |
 | Gate assignment API | `gateway_node/.../controller/AssignGateController.java` | POST /api/assign-gate |
-| Zone health probing | `gateway_node/.../service/ZoneHealthProbeService.java` | @Scheduled etcd+Redis check |
+| Zone health probing | `gateway_node/.../service/ZoneHealthPublisher.java`、`ZoneHealthProbeService.java` | 本 zone 发布健康汇总到 etcd,全部网关读汇总(docs/design/gateway-zone-health-publish-20261111.md) |
 | Admin zone management | `gateway_node/.../controller/AdminZoneController.java` | CRUD + maintenance/open |
 | Admin API key filter | `gateway_node/.../config/AdminApiKeyFilter.java` | X-Admin-Key header for /admin/** |
-| etcd gate/scene watcher | `gateway_node/.../etcd/GateWatcher.java` | jetcd-based node discovery |
+| etcd gate/scene watcher | `gateway_node/.../etcd/GateWatcher.java` | jetcd list + watch;gate / scene 只读本副本负责的 zone,login 读全服 |
 | Dependency/runtime wiring | `gateway_node/pom.xml` | Spring Boot, jetcd, Redis |
 | Tests | `*/src/test/` | Maven test entry |
 | Example/starter | `springboot_satoken_auth_starter/` | Standalone example, not main repo runtime |

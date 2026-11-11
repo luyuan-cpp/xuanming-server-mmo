@@ -35,6 +35,8 @@ Producers:
   admin: MAIL_PRODUCER_SECRET_ADMIN
   rank: MAIL_PRODUCER_SECRET_RANK
   guild: MAIL_PRODUCER_SECRET_GUILD
+  # C++ scene 把两包都放不下的战斗掉落寄进邮箱(docs/design/battle-overflow-mail.md),sender_kind = 5。
+  battle: MAIL_PRODUCER_SECRET_BATTLE
 Log:
   ServiceName: mail
   Mode: console
@@ -46,6 +48,8 @@ Mail:
   MaxActiveSystemMails: 100
   MaxPersonalMailTtlDays: 30
   MaxSystemMailTtlDays: 30
+  # 每个帮会同时有效的帮会邮件上限,按帮计数,不占全服的 MaxActiveSystemMails(缺口清单第 27 条)
+  MaxActiveGuildMailsPerGuild: 20
 Sweep:
   Mode: report_only
   Interval: 5m

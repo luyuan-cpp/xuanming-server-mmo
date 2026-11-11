@@ -77,7 +77,7 @@ func (l *ChatLogic) SendChat(in *chatpb.SendChatRequest) (*chatpb.SendChatRespon
 		if errors.Is(err, authority.ErrInvalid) || errors.Is(err, authority.ErrConflict) {
 			return reject(rejectBadRequest)
 		}
-		l.Error("聊天SQL发送未确认，保留原request_id重放")
+		l.Error("Chat SQL send unconfirmed; keep the original request_id for replay")
 		return reject(rejectStorage)
 	}
 	if result.Tip != 0 {
@@ -123,7 +123,7 @@ func (l *ChatLogic) PullChatHistory(in *chatpb.PullChatHistoryRequest) (*chatpb.
 		if errors.Is(err, authority.ErrInvalid) {
 			return reject(rejectBadRequest)
 		}
-		l.Error("聊天SQL读取未确认，未返回窗口内容")
+		l.Error("Chat SQL read unconfirmed; window content not returned")
 		return reject(rejectStorage)
 	}
 	svc.ObservePull(label, svc.OutcomeOK)

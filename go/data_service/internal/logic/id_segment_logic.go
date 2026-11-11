@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
+	"data_service/internal/config"
 	"data_service/internal/constants"
 	"data_service/internal/idissuer"
 	"data_service/internal/metrics"
@@ -33,11 +35,7 @@ func AllocateIdSegment(ctx context.Context, svcCtx *svc.ServiceContext, req *All
 		metrics.ObserveIdSegmentAllocate("invalid", "invalid")
 		return &AllocateIdSegmentResp{ErrorCode: constants.ErrCodeInvalidRequest}, nil
 	}
-	// 指标 label 只收合法 tag,其余一律记成 "invalid"(label 基数必须有界)。
-	tagLabel := "invalid"
-	if idissuer.IsValidBizTag(req.BizTag) {
-		tagLabel = req.BizTag
-	}
+	tagLabel := bizTagLabel(svcCtx, req.BizTag)
 	if svcCtx == nil || svcCtx.IdSegmentStore == nil {
 		metrics.ObserveIdSegmentAllocate(tagLabel, "source_error")
 		return &AllocateIdSegmentResp{ErrorCode: constants.ErrCodeIdSegmentSourceError},
@@ -73,9 +71,10 @@ func AllocateIdSegment(ctx context.Context, svcCtx *svc.ServiceContext, req *All
 		logx.Errorf("[IdSegment] REFUSED biz_tag=%s: %v", req.BizTag, err)
 		return &AllocateIdSegmentResp{ErrorCode: constants.ErrCodeIdSegmentUnknownTag}, nil
 
-	case errors.Is(err, idissuer.ErrBindingMismatch), errors.Is(err, idissuer.ErrRegionRetired):
-		// 不写任何记录。这两套 etcd 不是登记处给这个地域码绑的那两套(重复部署、克隆、换了 etcd 没有 rebind),
-		// 或者这个码已退役。重试不会变好,要人处理。
+	case errors.Is(err, idissuer.ErrBindingMismatch), errors.Is(err, idissuer.ErrRegionRetired),
+		errors.Is(err, idissuer.ErrSameCluster), errors.Is(err, idissuer.ErrRegionMismatch):
+		// 不写任何记录。这个部署环境或这两套 etcd 不是登记处给这个地域码绑的那一份(重复部署、克隆、换了 etcd 没有 rebind),
+		// 这个码已退役,或者配置错了(两份记录落在同一套 etcd、记录里的地域和配置不一致)。重试不会变好,要人处理。
 		metrics.ObserveIdSegmentAllocate(tagLabel, "refused")
 		logx.Errorf("[IdSegment] REFUSED biz_tag=%s: %v", req.BizTag, err)
 		return &AllocateIdSegmentResp{ErrorCode: constants.ErrCodeIdSegmentUnknownTag}, nil
@@ -85,4 +84,20 @@ func AllocateIdSegment(ctx context.Context, svcCtx *svc.ServiceContext, req *All
 		logx.Errorf("[IdSegment] allocate biz_tag=%s step=%d failed: %v", req.BizTag, req.Step, err)
 		return &AllocateIdSegmentResp{ErrorCode: constants.ErrCodeIdSegmentSourceError}, err
 	}
+}
+
+// bizTagLabel 是指标的 biz_tag label。label 基数必须有界:只有登记进 IdSegment.Tags 的 tag 原样做 label;
+// 格式合法但没登记的记成 "unregistered"(调用方可以随便编 tag,原样记就是无界的);格式都不对的记成 "invalid"。
+func bizTagLabel(svcCtx *svc.ServiceContext, tag string) string {
+	if !idissuer.IsValidBizTag(tag) {
+		return "invalid"
+	}
+	var cfg config.IdSegmentConfig
+	if svcCtx != nil {
+		cfg = svcCtx.Config.IdSegment
+	}
+	if slices.Contains(cfg.EffectiveTags(), tag) {
+		return tag
+	}
+	return "unregistered"
 }

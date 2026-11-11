@@ -119,9 +119,9 @@ func globalWatchBattle(l *WatchBattleLogic, in *pb.WatchBattleRequest, player ui
 	verdict := result.verdict
 	switch {
 	case verdict.fault:
-		l.Errorf("全局观战失败 player=%d request=%s outcome=%s: %v", player, in.RequestId, verdict.outcome, result.cause)
+		l.Errorf("global spectate failed player=%d request=%s outcome=%s: %v", player, in.RequestId, verdict.outcome, result.cause)
 	case result.cause != nil:
-		l.Infof("全局观战未准入 player=%d request=%s outcome=%s: %v", player, in.RequestId, verdict.outcome, result.cause)
+		l.Infof("global spectate not admitted player=%d request=%s outcome=%s: %v", player, in.RequestId, verdict.outcome, result.cause)
 	}
 	metrics.ObserveWatchBattle(verdict.outcome)
 	resp := &pb.WatchBattleResponse{BattleId: result.battleID, Delivery: result.delivery, SpectateTicket: result.ticket}
@@ -198,7 +198,12 @@ func (l *WatchBattleLogic) prepareGlobalWatch(in *pb.WatchBattleRequest, player 
 	battle := in.BattleId
 	if battle == 0 {
 		// 随机选场只在首次 prepare 固定进原件；之后遇到满员等拒绝也不换场，一个 request_id 只有一份原件。
-		if battle, err = pickRandomBattle(s); err != nil {
+		// 发布轨道(设计 §2.6):stable 观众不会被随机到 canary 对局上(pickRandomBattleFor 按成局原件跳过)。
+		viewerTrack, trackErr := sessionReleaseTrack(l.ctx)
+		if trackErr != nil {
+			return nil, globalWatchFailure(fmt.Errorf("read the viewer release track: %w", trackErr))
+		}
+		if battle, err = pickRandomBattleFor(l.ctx, s, viewerTrack); err != nil {
 			return nil, globalWatchFailure(err)
 		}
 		if battle == 0 {
@@ -277,6 +282,16 @@ func (l *WatchBattleLogic) locateGlobalWatch(battle, player uint64) (target glob
 		removeSpectateBattle(s, battle)
 		return target, constants.ErrBattleNotWatchable, nil
 	}
+	// 发布轨道(设计 §2.6):stable 会话不看 canary 对局,否则会被连到 canary battle 节点上;canary 会话两条轨道都能看。
+	// 按成局原件记的轨道判(viewerMayWatch),不看实时节点镜像。不摘观战索引:这场对 canary 会话仍可看。
+	// 轨道读不出是内部链路故障,不算结论。
+	viewerTrack, err := sessionReleaseTrack(l.ctx)
+	if err != nil {
+		return target, 0, fmt.Errorf("read the viewer release track: %w", err)
+	}
+	if !viewerMayWatch(viewerTrack, formation.GetReleaseTrack()) {
+		return target, constants.ErrBattleNotWatchable, nil
+	}
 	session, err := loadPlayerSession(s, player)
 	if err != nil {
 		return target, 0, err
@@ -313,7 +328,7 @@ func (l *WatchBattleLogic) admitGlobalLobby(player uint64, target globalWatchTar
 		if roomMissing {
 			removeSpectateBattle(l.svcCtx, target.formation.GetBattleId())
 		}
-		l.Infof("全局观战中继准入被battle拒绝 battle=%d battle_tip=%d close_tip=%d", target.formation.GetBattleId(), admission.rejectTip, closeTip)
+		l.Infof("global spectate relay admission rejected by battle battle=%d battle_tip=%d close_tip=%d", target.formation.GetBattleId(), admission.rejectTip, closeTip)
 		return admission, closeTip, nil
 	}
 	return admission, 0, err
@@ -643,7 +658,7 @@ func resumeGlobalSpectator(ctx context.Context, s *svc.ServiceContext, original 
 	if err != nil {
 		// ACK未知保留相同Add/截止，不能清SQL占用；UNKNOWN本身也在恢复索引中。
 		if _, persistErr := advanceGlobalSpectator(ctx, s, original, 4, expectedHead); persistErr != nil && !errors.Is(persistErr, authority.ErrSpectatorBusy) {
-			logx.Error("全局观战ACK未知，原SQL占用仍保留")
+			logx.Error("global spectate ACK unknown; the original SQL occupancy is kept")
 		}
 		return err
 	}
@@ -656,7 +671,7 @@ func resumeGlobalSpectator(ctx context.Context, s *svc.ServiceContext, original 
 		// 代价是 outcome 不细分：房间不存在与 battle 的其它拒绝同落 16018，记 not_found，与
 		// Java 版对其它拒绝记 rejected 的口径不同；要细分须给意图另存关闭类别。原始 battle 码只进这条 Info 日志。
 		closeTip, _, roomMissing := spectateRejectVerdict(battleTip)
-		logx.Infof("全局观战被battle拒绝 battle=%d battle_tip=%d close_tip=%d", original.BattleId, battleTip, closeTip)
+		logx.Infof("global spectate rejected by battle battle=%d battle_tip=%d close_tip=%d", original.BattleId, battleTip, closeTip)
 		if roomMissing {
 			// 成局 state 4 只说明建房成功,结束后不一定翻成 5,这场不能再留在观战列表与随机选场里(与 admitGlobalLobby 同口径)。
 			removeSpectateBattle(s, original.BattleId)
@@ -762,7 +777,7 @@ func StartGlobalSpectatorRecovery(ctx context.Context, s *svc.ServiceContext) {
 					cancel()
 					if time.Since(lastWarning) >= 10*time.Second {
 						lastWarning = time.Now()
-						logx.Error("全局观战恢复高水位读取失败")
+						logx.Error("global spectate recovery failed to read the high-water mark")
 					}
 					continue
 				}
@@ -773,7 +788,7 @@ func StartGlobalSpectatorRecovery(ctx context.Context, s *svc.ServiceContext) {
 			if err != nil {
 				if time.Since(lastWarning) >= 10*time.Second {
 					lastWarning = time.Now()
-					logx.Error("全局观战恢复读取失败")
+					logx.Error("global spectate recovery read failed")
 				}
 				continue
 			}
@@ -798,7 +813,7 @@ func StartGlobalSpectatorRecovery(ctx context.Context, s *svc.ServiceContext) {
 						operationWarningMu.Lock()
 						if time.Since(lastOperationWarning) >= 10*time.Second {
 							lastOperationWarning = time.Now()
-							logx.Info("全局观战原件尚未获得终局证明")
+							logx.Info("global spectate original has not yet obtained a terminal proof")
 						}
 						operationWarningMu.Unlock()
 					}

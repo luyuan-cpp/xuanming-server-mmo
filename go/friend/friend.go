@@ -57,6 +57,7 @@ import (
 	"shared/roleidentity"
 	"shared/serverbase"
 	"shared/sqlpoolstats"
+	"shared/workshard"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -116,6 +117,12 @@ func main() {
 	var c config.Config
 	// conf.MustLoad 会自动调用 (*Config).Validate(go-zero v1.10.0),不合法即 Fatalf 退出,理由同 trade.go。
 	conf.MustLoad(*configFile, &c)
+	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入)。-migrate 与常驻启动都连库,所以放在迁移分支之前;
+	// 迁移 Job 同样注入这个变量。退出码与迁移入口的 ExitFailed 一致。
+	if err := c.ResolveMySQLPassword(os.LookupEnv); err != nil {
+		fmt.Fprintf(os.Stderr, "[friend] %v\n", err)
+		os.Exit(schemamigrate.ExitFailed)
+	}
 
 	if *migrateOnly {
 		openAuthority := func(mysqlConf config.MySQLConf) (*sql.DB, error) {
@@ -255,8 +262,15 @@ func runFriend(c config.Config) (runErr error) {
 	// 停机和正式排空均须等待 sweep 的实际停止；
 	// 关闭只停止下一轮；已接纳轮次使用自己的预算，必须在关闭 SQL 池之前真实返回。
 	// canary 副本不起清理(发布轨道设计 §2.5):不起就不绑停止函数,CloseSource 对没绑的情况本来就安全。
+	//
+	// 按片分工(2026-11-11,消除单节点总纲 §9):成员表圈本 zone 注册的 friend 实例。K8s 上 friend 是全局服务,
+	// 全部副本同一份 ConfigMap(同一个 ZoneId)、同一个好友库,圈得住全部清理者;本机每个 zone 各起一份、
+	// 连同一个库但注册前缀不同,各自做全部片,只是重复(与 mail 的附件重投同一判断)。
+	// 本副本的身份在下面注册成功之后 SetSelf;canary 不起清理,sweepShards 留 nil,SetSelf 对 nil 是空操作。
+	var sweepShards *workshard.Membership
 	if releaseTrack.RunsGlobalBackgroundWork() {
-		stopSweep := logic.StartSweep(ctx, deps)
+		sweepShards = workshard.NewMembership(sweepMembersPrefix(c.ZoneId))
+		stopSweep := logic.StartSweep(ctx, deps, sweepShards)
 		if err := svcCtx.BindSourceStop(stopSweep); err != nil {
 			return err
 		}
@@ -350,6 +364,8 @@ func runFriend(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+	// 注册之后才知道本副本在成员表里的身份;NodeUUID 进程内不变,失租换 node_id 重注册也不变。
+	sweepShards.SetSelf(nr.NodeUUID)
 
 	controlCtx, cancelControl := context.WithCancel(ctx)
 	controlDone := make(chan struct{})
@@ -365,7 +381,7 @@ func runFriend(c config.Config) (runErr error) {
 			// friend 没有 Kafka consumer；RPC 与 sweep 共用 prepared SOURCE 门禁。
 			return &serverbase.PreparedPublication{NoConsumers: true}, nil
 		}); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("friend 排空 HOLD: %v", err)
+			logx.Errorf("friend drain HOLD: %v", err)
 		}
 	}()
 	defer func() { cancelControl(); <-controlDone }()
@@ -392,8 +408,8 @@ func runFriend(c config.Config) (runErr error) {
 	fmt.Printf("  player_redis:  %s\n", playerRedisConf.Describe())
 	fmt.Printf("  quota:         friends=%d blocks=%d pending_out=%d pending_in=%d\n",
 		c.Friend.MaxFriends, c.Friend.MaxBlocks, c.Friend.MaxPendingRequests, c.Friend.MaxIncomingRequests)
-	fmt.Printf("  sweep:         mode=%s interval=%v retention=%dd\n",
-		c.Friend.Sweep.Mode, c.Friend.Sweep.Interval, c.Friend.Sweep.RetentionDays)
+	fmt.Printf("  sweep:         mode=%s interval=%v retention=%dd sharded=%t\n",
+		c.Friend.Sweep.Mode, c.Friend.Sweep.Interval, c.Friend.Sweep.RetentionDays, sweepShards != nil)
 	if c.MetricsListenAddr != "" {
 		fmt.Printf("  metrics:       %s\n", c.MetricsListenAddr)
 	}
@@ -487,12 +503,8 @@ func schemaOptions() schemamigrate.Options {
 	}
 }
 
-// missingIndexWarningPrefix 是 schemamigrate 那条"缺索引"告警的前缀,逐字取自
-// go/schemamigrate/plan.go(`缺索引(不会自动建):<表> 上没有 proto 声明的索引 <名>`)。
-// 提成常量是为了让 friend_test.go 能引用同一份字面量,而不是在测试里抄第二份。
-const missingIndexWarningPrefix = "缺索引"
-
-// missingIndexWarnings 挑出"缺索引"告警。
+// missingIndexWarnings 挑出缺普通索引的告警原文。判断按 schemamigrate 报告项的结构化类别
+// (Report.MissingIndexes),不匹配告警文案:文案只给人看,改措辞不能改变拒启行为。
 //
 // schemamigrate 对**已存在的表**只 ADD COLUMN,不会补建 proto 新声明的普通索引 —— 它把这件事
 // 记成 Warning,而 Warning 不进 ExitCode。放过去等于带着缺索引的表对外服务:friend 这边最直接的
@@ -502,10 +514,8 @@ const missingIndexWarningPrefix = "缺索引"
 // 口径与 guild 一致(go/guild/guild.go 的同名函数),别在 friend 这边单独放宽。
 func missingIndexWarnings(r schemamigrate.Report) []string {
 	var missing []string
-	for _, w := range r.Warnings {
-		if strings.HasPrefix(w, missingIndexWarningPrefix) {
-			missing = append(missing, w)
-		}
+	for _, f := range r.MissingIndexes() {
+		missing = append(missing, f.Message)
 	}
 	return missing
 }
@@ -642,9 +652,15 @@ func logReport(stage string, r schemamigrate.Report) {
 // schemaModeLabel 是横幅里的建表策略描述。
 func schemaModeLabel(c config.Config) string {
 	if c.ShouldAutoMigrate() {
-		return "拒绝常驻自动迁移；请先执行独立 -migrate"
+		return "resident auto-migration refused; run standalone -migrate first"
 	}
 	return "plan-only (tables owned by " + migrateRemedyCommand + ")"
+}
+
+// sweepMembersPrefix 是清理按片分工的成员表圈住的 etcd 前缀:本 zone 注册的 friend 实例
+// (FriendNodeService.rpc/zone/<z>/),与下面注册时用的前缀同形。圈法的理由见 runFriend 里起清理的那段注释。
+func sweepMembersPrefix(zoneID uint32) string {
+	return noderegistry.RpcZonePrefix(base.ENodeType_name[int32(nodeType)]+".rpc", zoneID)
 }
 
 // nodeInfoValueBuilder 返回 noderegistry 的 BuildValue 回调:按 C++ NodeInfo 约定生成 protojson。

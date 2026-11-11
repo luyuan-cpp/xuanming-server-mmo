@@ -10,13 +10,24 @@ import (
 	"scene_manager/internal/constants"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/redisslot"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
+// sceneControlTag 是 zone 的控制域 hash tag「{ctl:<zone>}」(docs/design/redis-cluster-all-domains-20261110.md §3)。
+//
+// 控制域的每把键都把它写在原来 zone 段的位置(键格式里标着「tag」的 %s):同一个 zone 的键落在同一个槽,
+// 脚本、MGET 与 pipeline 在 Redis Cluster 上才能原子执行;不同 zone 散到不同槽,加主节点就能扩写入。
+// 只经这里生成,不手拼;族前缀表在 shared/redisslot,与 C++ redis_slot.h 逐字一致。
+func sceneControlTag(zoneID uint32) string {
+	return redisslot.ZoneControlTag(redisslot.ControlFamilySceneControl, zoneID)
+}
+
 // Redis key for the active-instance sorted set (score = create timestamp).
+// 键格式里第一个 %s 是 sceneControlTag(zone)。
 const (
-	ActiveInstancesKeyFmt = "instances:zone:%d:active"
+	ActiveInstancesKeyFmt = "instances:%s:active"
 	SceneNodeKeyFmt       = "scene:%d:node"
 	SceneZoneKeyFmt       = "scene:%d:zone"
 	// SceneMirrorFlagKeyFmt marks a scene as a mirror so the lifecycle
@@ -37,7 +48,7 @@ const (
 	// scene node. Populated by the scene registration scripts
 	// (scene_registration.go), drained by every destroy path.
 	// Used by the node-death reconciliation loop to find orphan instances.
-	NodeScenesKeyFmt = "node:zone:%d:%s:scenes"
+	NodeScenesKeyFmt = "node:%s:%s:scenes"
 )
 
 func sceneMirrorFlagKey(sceneID uint64) string {
@@ -53,7 +64,7 @@ func sceneMirrorsKey(sourceSceneID uint64) string {
 }
 
 func nodeScenesKey(zoneID uint32, nodeID string) string {
-	return fmt.Sprintf(NodeScenesKeyFmt, zoneID, nodeID)
+	return fmt.Sprintf(NodeScenesKeyFmt, sceneControlTag(zoneID), nodeID)
 }
 
 func sceneZoneKey(sceneID uint64) string {
@@ -61,7 +72,7 @@ func sceneZoneKey(sceneID uint64) string {
 }
 
 func activeInstancesKey(zoneID uint32) string {
-	return fmt.Sprintf(ActiveInstancesKeyFmt, zoneID)
+	return fmt.Sprintf(ActiveInstancesKeyFmt, sceneControlTag(zoneID))
 }
 
 func sceneNodeKey(sceneID uint64) string {
@@ -274,9 +285,19 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 		}
 	}
 
-	// 选节点。Agones 模式下这一步同时在 Agones 侧原子预占一个 rooms 名额,
-	// 返回的 placement 带 GameServerName —— 后面所有回滚都靠它。
-	targetNode, placement, err := l.resolveInstancePlacement(in)
+	// 失租后发号器被 fence,建场景整体失败:用一个已被别人接管的 worker id 铸号会撞号。
+	// 先铸号再要名额:Agones 名额的条目里要有 scene_id(agones_room_ledger.go)。后面分配失败浪费一个号,无害。
+	sceneId, err := l.svcCtx.SceneIDGen.Generate()
+	if err != nil {
+		return &scene_manager.CreateSceneResponse{
+			ErrorCode:    constants.ErrRedis,
+			ErrorMessage: fmt.Sprintf("scene id generator unavailable: %v", err),
+		}, nil
+	}
+
+	// 选节点。Agones 模式下这一步同时在 Agones 侧原子预占一个 rooms 名额(写了在途占用),
+	// 返回的 placement 带 GameServer 与条目 —— 登记要把它写进记录,后面所有归还都靠它。
+	targetNode, placement, err := l.resolveInstancePlacement(in, sceneId)
 	if err != nil {
 		l.Logger.Errorf("[Instance] No instance-hosting node for zone %d (strict=%v agones=%v): %v",
 			in.ZoneId, l.svcCtx.Config.StrictNodeTypeSeparation, AgonesEnabled(l.svcCtx), err)
@@ -287,19 +308,6 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 			code = constants.ErrNoNodeForPurpose
 		}
 		return &scene_manager.CreateSceneResponse{ErrorCode: code, ErrorMessage: err.Error()}, nil
-	}
-
-	// 失租后发号器被 fence,建场景整体失败:用一个已被别人接管的 worker id 铸号会撞号。
-	sceneId, err := l.svcCtx.SceneIDGen.Generate()
-	if err != nil {
-		// Redis 还没写任何东西,只需要把 Agones 名额还回去。
-		if placement != nil {
-			ReleaseAgonesRoom(l.ctx, l.svcCtx, placement.Namespace, placement.GameServerName, "scene_id_unavailable")
-		}
-		return &scene_manager.CreateSceneResponse{
-			ErrorCode:    constants.ErrRedis,
-			ErrorMessage: fmt.Sprintf("scene id generator unavailable: %v", err),
-		}, nil
 	}
 
 	// 实例的全部 Redis 状态由一段脚本登记(scene_registration.go),必须在调 C++ CreateScene **之前**:
@@ -316,11 +324,11 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 		reg.SourceSceneID = 0 // 不登记成别的 zone 场景的子镜像(见函数开头)
 	}
 	if placement != nil {
-		reg.AgonesGs = placement.GameServerName
+		reg.AgonesRoom = placement.room()
 	}
 	if outcome := registerInstance(l.svcCtx, reg); outcome != registrationRegistered {
-		if placement != nil && outcome.releasesReservation() {
-			ReleaseAgonesRoom(l.ctx, l.svcCtx, placement.Namespace, placement.GameServerName, "scene_registration_"+outcome.String())
+		if outcome.releasesReservation() {
+			abandonAgonesPlacement(l.ctx, l.svcCtx, in.ZoneId, placement, "scene_registration_"+outcome.String())
 		}
 		code := constants.ErrRedis
 		if outcome == registrationConflict {
@@ -386,7 +394,9 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 // 这条约束比"由 Agones 挑进程"更硬。所以 Agones 模式下镜像仍然按源节点
 // 共置,但仍然要向那个**具体的** GameServer 预占名额 —— 见
 // acquireRoomOnSpecificNode。共置失败时才回落到 GSA 自由选择。
-func (l *CreateSceneLogic) resolveInstancePlacement(in *scene_manager.CreateSceneRequest) (string, *agonesPlacement, error) {
+//
+// sceneId 是已经铸好的号:名额条目里要有它(agones_room_ledger.go)。
+func (l *CreateSceneLogic) resolveInstancePlacement(in *scene_manager.CreateSceneRequest, sceneId uint64) (string, *agonesPlacement, error) {
 	if !AgonesEnabled(l.svcCtx) {
 		node, err := l.pickInstanceNode(in)
 		return node, nil, err
@@ -394,7 +404,7 @@ func (l *CreateSceneLogic) resolveInstancePlacement(in *scene_manager.CreateScen
 
 	// 显式指定节点 / 镜像共置:目标节点是被业务规则钉死的,不能交给 GSA 挑。
 	if pinned, reason := l.pinnedInstanceNode(in); pinned != "" {
-		placement, err := l.acquireRoomOnSpecificNode(pinned, in.ZoneId)
+		placement, err := l.acquireRoomOnSpecificNode(pinned, in.ZoneId, sceneId)
 		if err == nil {
 			return pinned, placement, nil
 		}
@@ -404,7 +414,7 @@ func (l *CreateSceneLogic) resolveInstancePlacement(in *scene_manager.CreateScen
 			pinned, reason, err)
 	}
 
-	placement, err := AcquireAgonesPlacement(l.ctx, l.svcCtx, in.ZoneId, constants.NodePurposeInstance)
+	placement, err := AcquireAgonesPlacement(l.ctx, l.svcCtx, in.ZoneId, sceneId, constants.NodePurposeInstance)
 	if err != nil {
 		return "", nil, err
 	}
@@ -430,14 +440,14 @@ func (l *CreateSceneLogic) pinnedInstanceNode(in *scene_manager.CreateSceneReque
 	return "", ""
 }
 
-// acquireRoomOnSpecificNode 在一个**指定**的 scene node 上预占房间名额。
+// acquireRoomOnSpecificNode 在一个**指定**的 scene node 上为 sceneID 预占房间名额。
 //
 // GameServerAllocation 无法指向某一个具体 GameServer,所以这里的做法是:
-// 反查该 node 对应的 GameServer 名字(通过 PodIP),再直接对它的 rooms
-// 计数做一次带 CAS 的 +1。反查不到就当作"这个节点不受 Agones 管理",
+// 反查该 node 对应的 GameServer 名字(通过 PodIP),再直接在它的 rooms
+// 列表里加一个条目(带 CAS)。反查不到就当作"这个节点不受 Agones 管理",
 // fail-closed 交给调用方回落。
-func (l *CreateSceneLogic) acquireRoomOnSpecificNode(nodeID string, zoneID uint32) (*agonesPlacement, error) {
-	return AcquireAgonesRoomOnNode(l.ctx, l.svcCtx, nodeID, zoneID)
+func (l *CreateSceneLogic) acquireRoomOnSpecificNode(nodeID string, zoneID uint32, sceneID uint64) (*agonesPlacement, error) {
+	return AcquireAgonesRoomOnNode(l.ctx, l.svcCtx, nodeID, zoneID, sceneID)
 }
 
 // rollbackInstanceAllocation 精确撤销一次失败的实例创建。
@@ -446,9 +456,9 @@ func (l *CreateSceneLogic) acquireRoomOnSpecificNode(nodeID string, zoneID uint3
 // 反向索引 + Agones 房间名额。不碰任何已经交付给玩家的东西。
 //
 // Redis 状态由一段脚本原子撤销(atomicRollbackInstanceAllocation),同一步写下拆除任务;认领到了才做其余副作用
-// (runRollbackTeardown):向节点补一次 DestroyScene,按登记时记下的 agones_gs 还名额。回错或认领落空都不还:
-// 脚本已执行时拆除任务在待办里,由扫描做完;没执行时场景还在,由空闲回收或别的销毁路径按 agones_gs 归还,
-// 这里再还就是双还。
+// (runRollbackTeardown):向节点补一次 DestroyScene,按登记时记下的 agones_gs 删名额条目。回错或认领落空都不在这里删:
+// 脚本已执行时拆除任务在待办里,由扫描做完;没执行时场景还在,由空闲回收或别的销毁路径按 agones_gs 归还。
+// (条目按身份删,这里再删一次也只是幂等;不删是为了让「谁认领、谁归还」只有一条路径。)
 func (l *CreateSceneLogic) rollbackInstanceAllocation(
 	sceneId uint64,
 	targetNode string,
@@ -465,11 +475,11 @@ func (l *CreateSceneLogic) rollbackInstanceAllocation(
 		l.Logger.Infof("[Instance] rollback of scene %d skipped: it no longer belongs to this allocation on node %s", sceneId, targetNode)
 		return
 	}
-	// 登记脚本与映射同一步写 agones_gs(scene_registration.go),两者不该不同;不同说明登记之后有人改写过它。
-	// 按记下的那个还:它才是 Redis 里这个场景占用的名额。
-	if placement != nil && claim.AgonesGs != placement.GameServerName {
-		l.Logger.Errorf("[Instance] rollback of scene %d: recorded GameServer %q differs from the one reserved for it (%q); releasing the recorded one",
-			sceneId, claim.AgonesGs, placement.GameServerName)
+	// 登记脚本与映射同一步写 agones_gs(scene_registration.go),两者不该不同;不同说明登记之后有人改写过它
+	// (改派转移)。按记下的那个还:它才是 Redis 里这个场景占用的名额;这次占的那条若已不是记录,转移时已删过。
+	if placement != nil && claim.AgonesGs != placement.room().record() {
+		l.Logger.Errorf("[Instance] rollback of scene %d: recorded room %q differs from the one reserved for it (%q); releasing the recorded one",
+			sceneId, claim.AgonesGs, placement.room().record())
 	}
 
 	job := sceneTeardownJob{ZoneID: in.ZoneId, SceneID: sceneId, Kind: teardownKindRollback, Reason: "create_rpc_failed", Claim: claim}
@@ -482,7 +492,7 @@ func (l *CreateSceneLogic) rollbackInstanceAllocation(
 //   - 向这次分配的节点补发 DestroyScene:CreateScene 回错不等于节点上没建(超时的那次可能已经建好),不补就留下
 //     没有 Redis 状态的实体。节点已死时跳过,实体随进程没了。
 //   - 从镜像源的子集合摘掉自己:源取快照里登记时写下的 scene:{id}:source(源在别的 zone 时登记没写,这里也就不碰)。
-//   - 按登记时记下的 agones_gs 还名额,一个任务至多一次。
+//   - 按登记时记下的 agones_gs 删名额条目,删失败任务留着,扫描重做到成功(releaseTeardownRoom)。
 func runRollbackTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job sceneTeardownJob) error {
 	var deferred []string
 	if node := job.Claim.NodeID; node != "" && IsNodeAlive(svcCtx, job.ZoneID, node) {
@@ -495,7 +505,7 @@ func runRollbackTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job sc
 		deferred = append(deferred, "unlink from the source's mirror set")
 	}
 	if err := releaseTeardownRoom(ctx, svcCtx, job); err != nil {
-		deferred = append(deferred, "take the Agones release step")
+		deferred = append(deferred, "release the Agones room")
 	}
 	return teardownDeferred(deferred)
 }

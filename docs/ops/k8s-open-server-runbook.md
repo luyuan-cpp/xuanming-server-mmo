@@ -10,26 +10,28 @@
 - C++、全部启用的 Go 服务与 Java gateway 镜像都已构建、验证,并由有权限的发布者推到目标仓库。AI 不执行推送。Go 侧包括 `go_svc_image.ps1` 目录里的两个工具镜像:`mmorpg-writer-authority`(写者 Pod 的 init)、`mmorpg-db-migrate`(`db-migrate` Job)。
 - 写者 Pod 回收 CronJob 用官方镜像 `registry.k8s.io/kubectl`,版本钉在 `-SqlWriterReaperImage` 的缺省值。集群拉不到外网时推到内部仓库,部署时给这个参数。
 - 使用明确的 `ReleaseProfile=prod` 或 `staging`;默认 `dev` 不代表生产档。先完成该档位的 `release_preflight.ps1` 门禁。
-- 发布环境通过受控方式注入密钥,不把值写进本文、Git 文件、命令历史或日志。部署脚本使用 `MMORPG_GATE_TOKEN_SECRET`、`MMORPG_INTERNAL_AUTH_SECRET`、`MMORPG_BATTLE_TOKEN_SECRET`、`MMORPG_SPECTATE_TOKEN_SECRET`、`MMORPG_LOGIN_QUEUE_TOKEN_SECRET`、`MMORPG_GATEWAY_ADMIN_API_KEY`,以及 `MMORPG_MYSQL_USER/PASSWORD`、`MMORPG_GATEWAY_DB_USER/PASSWORD`、`MMORPG_REDIS_PASSWORD`。HMAC 与管理密钥至少 32 字符,数据库 / Redis 密码至少 12 字符;用途不同的密钥不得复用。数据库账号必须已在目标实例正确创建并授权,各业务服务的其他专用凭据按其配置准备。
+- 发布环境通过受控方式注入密钥,不把值写进本文、Git 文件、命令历史或日志。部署脚本使用 `MMORPG_GATE_TOKEN_SECRET`、`MMORPG_INTERNAL_AUTH_SIGNING_KEY`(gate 会话身份签名私钥,64 个十六进制字符,与公钥列表 `MMORPG_INTERNAL_AUTH_PUBLIC_KEYS` 成对注入,在 `go/shared` 下执行 `go run ./cmd/identitykeygen` 一次生成一对,见 docs/design/gate-online-identity.md §4)、`MMORPG_BATTLE_TOKEN_SECRET`、`MMORPG_SPECTATE_TOKEN_SECRET`、`MMORPG_LOGIN_QUEUE_TOKEN_SECRET`、`MMORPG_GATEWAY_ADMIN_API_KEY`,以及 `MMORPG_MYSQL_USER/PASSWORD`、`MMORPG_GATEWAY_DB_USER/PASSWORD`、`MMORPG_REDIS_PASSWORD`。HMAC 与管理密钥至少 32 字符,数据库 / Redis 密码至少 12 字符;用途不同的密钥不得复用。数据库账号必须已在目标实例正确创建并授权,各业务服务的其他专用凭据按其配置准备。
 - `ZonesConfigPath` 要包含实际区服,不能把示例区服直接当成已审批规划;`ClusterId` 是部署级常量,已有环境不得随意改值。
 - 写者闸门每个逻辑库一份([设计 §2](../design/horizontal-scale-logical-db.md))。`maintenance_drain.ps1 render-roles` 的计划按逻辑库各写一份:`authoritySchema` 和 `schemaDatabases` 都是这个库,`registrationRequestFile` 是这个库的 REGISTER;每个目录片的计划再加 `directorySchema: <全局库名>_00` 和 `directoryShard: true`(只有第 0 片有 `zone_merged_into`,合服工具的授权由 `directorySchema` 带出;`directoryShard` 带出 schema 账号种 `directory_shard` 的权限;K=1 时第 0 片就是 `<全局库名>`)。写者账号只要自己要写的库的闸门表权限(SELECT,LOCK_TOUCH 档再加 `writer_slot.lock_touch` 的 UPDATE),不再有跨库授权。唯一的例外是 data_service 在存档库的表:`player_store` 读写,`player_centre_database`、`user_accounts` 只读(空路由启动判据)。各服务的 `role_fence` 在本服务的库里,授权跟着本库的业务表走。流水库的计划要列全 `transaction_log`、`player_snapshot`、`rollback_audit_log`、`gm_recall_batch`、`gm_recall_op`、`gm_recall_seq`、`gm_recall_source`、`role_fence`,操作都是 `SELECT,INSERT,UPDATE,DELETE`。少了回收存储就起不来,`Store.Required=true` 时 data_service 拒启;`Recall.Enabled=false` 也一样,护栏要靠这个存储判挂起。
 - **授权分两步,顺序不能反**。表级 `GRANT` 对不存在的表报 1146(MySQL、TiDB 都是),空库上只有 schema 账号的授权执行得了:
-  1. 迁移之前,每个逻辑库跑一次 `maintenance_drain.ps1 -MaintenanceCommand render-schema-role -PlanPath <计划> -OutputPath <输出>`,把输出的 SQL 执行掉。计划只要 `authoritySchema`、`schemaPrincipal`、`schemaDatabases`,目录片再加 `directoryShard: true`。这时还没有 generation,也就没有 REGISTER 原件,所以不用 `render-roles`。`mmorpg` 的表来自 `gateway_tables.sql`,不走这一步。
+  1. 迁移之前,每个逻辑库跑一次 `maintenance_drain.ps1 -MaintenanceCommand render-schema-role -PlanPath <计划> -OutputPath <输出>`,把输出的 SQL 执行掉。计划只要 `authoritySchema`、`schemaPrincipal`、`schemaDatabases`,目录片再加 `directoryShard: true`。这时还没有 generation,也就没有 REGISTER 原件,所以不用 `render-roles`。`mmorpg` 同样要跑:2026-11-10 起它和其余逻辑库一样在全球权威入口上,表由 `gateway-schema` Job 建(§5);只有 dev 用集群内 MySQL 时由 `gateway_tables.sql` 建、不走这一步。
   2. 迁移之后(§5),`render-roles` 输出的 JSON 里 `operator`、`runtime` 两段再执行,它们都是表级授权。`schema` 段和第 1 步是同一份,不用再执行。
-- 有限名册(`rosterFile`)的每条 entry 是一个 boot:`requests` 里每个要写的逻辑库一份 REGISTER,`authoritySchema` 是这个库,`protectedSchemas` 只有这个库,`writer` 身份和账号相同;`generation` 取这个库 `route_meta` 的值,由 `-migrate` 随机生成,所以要先跑迁移 Job 才能定名册,顺序见 §5。REGISTER 不带 `expectedEpoch`:每次搬库或回滚 epoch 都变,名册绑了它就废了,收据记落地时的实际 epoch。写了这个字段的请求会被拒绝。go/db 要写几个落点库就几份,`gateway` 写 `mmorpg`。注册账号的连接串指哪个库都行,`writer_authority` 按 REGISTER 的库名切换;所有库要在这个连接串的集群上。
-- **名册要留余量**。一条 entry 是一个 boot,只能用一次:每次 Pod 启动烧一条,一次滚动发布换一遍副本,写过之后崩溃的写者 Pod 被回收 CronJob 删掉再烧一条(§9),节点驱逐也烧一条。还没写过就退出的进程(依赖没就绪)原地重启,不烧。
-  - 怎么算:`k8s_deploy.ps1` 要求条数 ≥ 副本数 × 6,上限 1024,不够就在 apply 之前拒绝。6 = 当前这一代 1 + 一次滚动发布 1 + 每个副本 4 次崩溃或驱逐的余量。这是下限。两次换名册之间预计还有 N 次发布,就再加 副本数 × N;依赖长时间不就绪时进程退出、Pod 被换,同样在烧,崩溃多的环境多给。
-  - 用完了会怎样:还活着的 Pod 不受影响。新 Pod 的 init 报 `有限roster全部已由其它明确boot消费`,停在 Init,回收 CronJob 不删它,告警 `SqlWriterRegistrarFailing` 响。在这之前少掉的副本补不回来。
-  - 怎么办:写一份新名册(新的 writer 身份和账号,`generation` 不变,账号按上面的第 2 步授权),更新目录的 `rosterFile`、`rosterSha256`,重新部署,这会滚动这个服务。
+- 写者名册(`rosterFile`,格式 `SQL_WRITER_BOOT_ROSTER_V2`)的每条 entry 是一个**槽位**,下标就是 StatefulSet 序号(Pod 名 `<服务>-<序号>`,写者服务都是 StatefulSet):`requests` 里每个要写的逻辑库一份 REGISTER 模板,`authoritySchema` 是这个库,`protectedSchemas` 只有这个库,`writer` 里只写这个槽位的账号(`sqlPrincipal`)、`generation` 和 `state: ACTIVE`;`generation` 取这个库 `route_meta` 的值,由 `-migrate` 随机生成,所以要先跑迁移 Job 才能定名册,顺序见 §5。模板**不写身份**:`requestId`、`deploymentId`、`writerKey`、`instanceId`、`registrationDigest`、`registeredMs`、`bootSeq` 由 init 里的 `writer_authority` 每次启动现场生成,模板里写了就整份拒绝。也不带 `expectedEpoch`、`expectedCatalogRevision`:每次搬库或回滚 epoch 都变,收据记落地时的实际值。go/db 要写几个落点库就几份,`gateway` 写 `mmorpg`。注册账号的连接串指哪个库都行,`writer_authority` 按 REGISTER 的库名切换;所有库要在这个连接串的集群上。
+- **每个槽位一个专用 SQL 账号**。同一名册的槽位之间、不同工作负载(含 `<svc>-canary`)之间、不同 zone 的名册之间都不许重复:同一账号上的两个 Pod 会互相换代,谁都写不稳。`k8s_deploy.ps1` 在 apply 之前核全部名册,有重复就拒绝。账号按上面的第 2 步授权,一个槽位授权一次,之后不随启动变。
+- **槽位数就是副本数上限**。每次启动(滚动发布、写过之后崩溃被回收 CronJob 删掉、节点驱逐)都是这个槽位的下一代:新一代在每个库的注册事务里把上一代退休,名册不消耗,不用留余量([写者名册换代](../design/writer-roster-exhaustion-20261106.md) §5)。
+  - `k8s_deploy.ps1` 要求槽位数 ≥ 副本数、≤ 1024,不够就在 apply 之前拒绝。
+  - 扩容:先给名册加槽位(新账号按第 2 步授权,更新目录的 `rosterFile`、`rosterSha256`),再调副本数。名册 SHA 在 Pod 模板里,换名册会滚动这个服务。
+  - 缩容:缩掉的序号最后一代留着 ACTIVE(没有下一代来退休它),再扩回来时被换代。下一次排空之前按非 run 的 RETIRE 退休(§9)。
 - go/db 认领前调 data_service 的 `GetPlayerRoute` 选库,不连目录([设计 §7](../design/horizontal-scale-logical-db.md)):配置 `DataServiceRpc` 必填,两边都要有 `MMORPG_ROLE_FENCE_SECRET_DB`,缺了 go/db 拒绝启动。
 - **TiDB 档先开 `tidb_enable_check_constraint`,再建库**:`SET GLOBAL tidb_enable_check_constraint = ON;`。`player_route` 的唯一性靠 CHECK,TiDB 默认不执行,建完表才打开不一定补上约束。`data_service -migrate` 建表之前查这个开关,没开就拒绝。开了就不要再关。MySQL 档不用管。
-- 目录按 `Directory.LogicalShards` 分片,流水和快照在 `<全局库名>_ledger`([设计 §1、§5.1](../design/horizontal-scale-logical-db.md))。`-DirectoryLogicalShards`:prod 必须显式 64,staging 必须显式(64 的约数),dev 缺省 1。K 上线后不能改。这些库 `-migrate` 之前要建好,要是空库;MySQL 档由 `infra-up` 的 `mysql-init-sql` 预建,TiDB 档由运维预建片库 `<全局库名>_00..63`、`<全局库名>_ledger` 和各业务库。
+- 目录按 `Directory.LogicalShards` 分片,流水和快照在 `<全局库名>_ledger`([设计 §1、§5.1](../design/horizontal-scale-logical-db.md))。`-DirectoryLogicalShards`:prod 必须显式 64,staging 必须显式(64 的约数),dev 缺省 1。K 上线后不能改。这些库 `-migrate` 之前要建好,要是空库;TiDB 档由运维预建片库 `<全局库名>_00..63`、`<全局库名>_ledger` 和各业务库(`mmorpg` 也在其中,显式写排序规则)。MySQL 档在 staging、prod 指向外部 MySQL 主库,库同样由运维预建;`infra-up` 的 `mysql-init-sql` 只在 dev 用集群内单实例 MySQL 时部署,staging、prod 把入口写成它会被拒绝(部署目录说明「`mmorpg` 库在全球权威入口上」)。
+- 玩家存档在本地域的 K 个存档库 `player_store_<1000000 + 地域码×1000 + 片号>_db`(片号 0..K-1,[总体方案 §7.2](../design/player-data-tidb-scaling-plan.md)),和区无关。`-PlayerStoreShards`:staging、prod 必须显式(1..1000,TiDB 档初值 64),dev 缺省 1,上线后不能改。这 K 个库和各区的本区主库 `zone_<n>_db` 一样由运维预建、空库,`MMORPG_DB_ALLOWED_DATABASES` 要恰好列出这 K 个存档库外加各区主库:少一个、多一个(地域码或 K 填错)部署脚本都在写之前拒绝。dev 的集群内 MySQL 由 `mysql-init-sql` 预建 `player_store_1000000_db`。项目上线前切到这套落点时清库,不迁移旧的 zone 库存档。
 - data_service 的 boot 名册(`rosterFile`)每条 entry 的 `requests` 要恰好是片库、流水库和 `MMORPG_DB_ALLOWED_DATABASES` 列出的全部存档库,一共 K+1+存档库数份,多一份少一份都拒绝启动。`k8s_deploy.ps1` 在 apply 之前核一次,对不上就拒绝。
 - `-Region` 是地域码,写进 ConfigMap 模板的 `IdSegment.Issuer.Region`,同时注入 data-service 主容器的 `MMORPG_ID_ISSUER_EXPECTED_REGION`。常驻进程读的是 Secret 里抄的配置,抄错了 data_service 比对这个变量,拒绝启动。staging、prod 必须显式给 1..63,0 只给 dev。一旦发号不能改,不能和别的地域重复。开新地域见 [开新地域手册](open-new-region-runbook.md)。
 - `-IdRegistryEtcd` 是全局号源登记处的地址(`host:port`,全世界共用一套),写进 ConfigMap 模板的 `IdSegment.Issuer.RegistryEtcd`。staging、prod 必须给,不能是本集群的 `etcd` 或 `etcd-id-secondary`;托管登记处的那一个集群用 `-HostIdRegistry`(`infra-up` 部署 `etcd-id-registry`,地址取本集群的 Service)。Secret 里的配置要抄上同样的 `RegistryEtcd`。见[发号器运维手册](id-issuer-runbook.md) §1、§2。
 - 合服映射只在目录第 0 片,各服务经 `GetMergedZones` 读,不连目录。合服工具的写权限在操作员角色 `deploy/sql/authority_operator_role.sql` 里,不进运行账号。
-- **运维预置的每 boot 配置要带上新段**。常驻进程的配置来自 `runtimeConfigSecret`,schema Job 来自 `schemaConfigSecret`,`k8s_deploy.ps1` 渲染的 ConfigMap 是模板:把 ConfigMap 里的 `Directory`、`RoleFence`、`Recall`、`SharedRedis`、`PlayerRedis`、`MethodTimeouts`、`DbPlacement`、`IdSegment.Issuer`(`Region`、两套本地 etcd、`RegistryEtcd`)、`DataServiceRpc`、`GuildRpc`、`MatchRpc` 抄进去,再填账号。两边不一致时以 Secret 为准,配置缺了服务拒绝启动。staging、prod 的 `schemaConfigSecret` 必须带 `DbPlacement`,没有时 `-migrate` 拒绝运行(`MMORPG_DB_PLACEMENT_REQUIRED`):它靠这一段看库是不是在搬。go/db 的 `db-migrate` Job 同样注入;手工跑 `cmd/migrate -command up` 时自己设这个环境变量,配置文件同样带这一段。
-- **schema Job 的账号**。目录条目的 `schemaPermissionSecret` 有两个键,必须是同一个账号:`principal` 所有 Job 都读(`MMORPG_SQL_SCHEMA_PRINCIPAL`);`dsn` 只有 guild、mail、rank 读,这三个服务的连接串走环境变量。两边对不上时 Job 报 `权威SQL受限主体不匹配`。其余服务的账号在 `schemaConfigSecret` 的配置里(chat 是 `chat-authority-secrets` 的 `migration-dsn`,match 是 `domain-service-secrets` 的 `match-migration-user`、`match-migration-password`),同样要等于这个 `principal`。`schemaConfigSecret` 的键名是配置文件名(`db.yaml`、`data_service.yaml` 等),内容从 `-DryRun` 渲染的 ConfigMap 抄。
+- **运维预置的每 boot 配置要带上新段**。常驻进程的配置来自 `runtimeConfigSecret`,schema Job 来自 `schemaConfigSecret`,`k8s_deploy.ps1` 渲染的 ConfigMap 是模板:把 ConfigMap 里的 `Directory`、`RoleFence`、`Recall`、`SharedRedis`、`PlayerRedis`、`MethodTimeouts`、`DbPlacement`、`IdSegment.Issuer`(`Region`、两套本地 etcd、`RegistryEtcd`)、`DataServiceRpc`、`GuildRpc`、`MatchRpc` 抄进去,再填账号。两边不一致时以 Secret 为准,配置缺了服务拒绝启动。staging、prod 的 `schemaConfigSecret` 必须带 `DbPlacement`,没有时 `-migrate` 拒绝运行(`MMORPG_DB_PLACEMENT_REQUIRED`):它靠这一段看库是不是在搬。go/db 的 `db-migrate` Job 同样注入;手工跑 `cmd/migrate -command up` 时自己设这个环境变量,配置文件同样带这一段。gateway 的 `runtimeConfigSecret` 从 `java-svc-gateway-config` 抄:JDBC URL 指向全球权威入口,`mmorpg.sql.backend` 跟 `-DatabaseBackend`(tidb 或 mysql),`mmorpg.run-mode: prod`,tidb 档 `mmorpg.sql.require-tidb: true`;login 的同理按 TiDB 入口重做。
+- **schema Job 的账号**。目录条目的 `schemaPermissionSecret` 有两个键,必须是同一个账号:`principal` 所有 Job 都读(`MMORPG_SQL_SCHEMA_PRINCIPAL`);`dsn` 只有 guild、mail、rank 和 gateway 的 `gateway-schema` 读,它们的连接串走环境变量(gateway 的 `dsn` 指向 `mmorpg`)。两边对不上时 Job 报 `权威SQL受限主体不匹配`。其余服务的账号在 `schemaConfigSecret` 的配置里(chat 是 `chat-authority-secrets` 的 `migration-dsn`,match 是 `domain-service-secrets` 的 `match-migration-user`、`match-migration-password`),同样要等于这个 `principal`。`schemaConfigSecret` 的键名是配置文件名(`db.yaml`、`data_service.yaml` 等),内容从 `-DryRun` 渲染的 ConfigMap 抄。
 - **预置 Secret `domain-service-secrets` 的角色护栏密钥**。值由运维生成,不进仓库、不进日志;每把至少 32 字节,互不相同(data_service 拒绝跨用途复用),同名 key 在各 namespace 同值。manifest 都是 `optional: false`,缺一个 key 对应的 Pod 卡在 `CreateContainerConfigError`:
 
   | key | 环境变量 | 放在哪 | 谁用 |
@@ -46,6 +48,7 @@
   | `role-fence-chat` | `MMORPG_ROLE_FENCE_SECRET_CHAT` | 同上 | chat 读权威状态(只读,不是参与者) |
   | `role-fence-db` | `MMORPG_ROLE_FENCE_SECRET_DB` | 每个 zone namespace | go/db 调 `GetPlayerRoute`,data-service 验 |
   | `match-internal-guild` | `MMORPG_MATCH_INTERNAL_SECRET_GUILD` | infra namespace | guild 和 match 同值:开局、占用、读终局都验它 |
+  | `mail-producer-battle` | `MAIL_PRODUCER_SECRET_BATTLE` | infra namespace(mail)、每个 zone namespace(scene) | scene 签、mail 验,两边同值:两包都放不下的战斗掉落改投邮件([battle-overflow-mail.md](../design/battle-overflow-mail.md))。缺它 mail 与 scene 都起不来 |
 
 - 参与者经 infra namespace 的 K8s Service 直连(`guild.<infra>:50300`、`trade.<infra>:50800`、`mail.<infra>:50900`、`match.<infra>:50500`、`player-inbox.<infra>:50950`、`friend.<infra>:50400`),`k8s_deploy.ps1` 按 `-InfraNamespace` 渲染。`-NetworkPolicies on` 时 guild、match 的放行名单已含 data-service。任何一个参与者不可达,过户和删角一律拒绝,其余功能不受影响。
 - 告警装 `deploy/k8s/logical-db-alerts.yaml`,安装方式和抓取前提写在文件头。闸门冻结时长没有指标,要查库。
@@ -87,6 +90,9 @@ $Deploy = @{
   DirectoryLogicalShards = 64
   # 地域码 1..63,0 只给 dev。一旦发号不能改,不能和别的地域重复,见开新地域手册。
   Region = <地域码>
+  # 本地域的存档库数 K(TiDB 档初值 64),上线后不能改。MMORPG_DB_ALLOWED_DATABASES 要恰好列出
+  # player_store_<1000000 + 地域码×1000 + 0..K-1>_db 这 K 个库,别的库一个都不许有(zone 库已退役,写了直接拒绝)。
+  PlayerStoreShards = 64
   # 全局号源登记处,全世界共用一套。托管它的集群改用 HostIdRegistry = $true。
   IdRegistryEtcd = "<登记处的 host:port>"
   NodeImage = "<镜像仓库>/mmorpg-node:<不可变 tag>"
@@ -117,7 +123,7 @@ kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig get nodes
 & ./tools/scripts/k8s_deploy.ps1 -Command infra-up @Deploy
 ```
 
-本步骤生成 MySQL 初始化 ConfigMap、预建审计 / 命令 topic,并在 infra namespace 部署全局 Go 服务(包括 client-rpc-router)与 battle。必须给出 `GoSvcRegistry` 且不带 `SkipGoSvc`;留空会跳过 Go 服务,不是自动复用节点镜像。上例 `Gateway*` 参数在 infra-up 只会提示被忽略,它们在下一步 zone-up 随 Java gateway 生效。
+本步骤预建审计 / 命令 topic(dev 用集群内 MySQL 时还部署它和初始化 ConfigMap),并在 infra namespace 部署全局 Go 服务(包括 client-rpc-router)与 battle。必须给出 `GoSvcRegistry` 且不带 `SkipGoSvc`;留空会跳过 Go 服务,不是自动复用节点镜像。上例 `Gateway*` 参数在 infra-up 只会提示被忽略,它们在下一步 zone-up 随 Java gateway 生效。
 
 全新集群上,全局服务里除 client-rpc-router 以外,本步骤只写 ConfigMap、跑迁移 Job,进程要等第一个 zone 的 data-service 就绪才能起(启动依赖见部署目录说明「全局服务的部署顺序」),输出里有告警 `[GlobalGoSvc]Deferred:`。第一个 zone 就绪之后再跑一次本节命令,它们才起来。
 
@@ -126,21 +132,21 @@ kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig get nodes
 名册要按迁移 Job 种下的 `route_meta.generation` 写,所以 Job 和进程分两遍跑。Job 重复跑是幂等的:已经齐全的库跳过,不换 generation。
 
 1. 建库(TiDB 档先开 `tidb_enable_check_constraint`,见 §1)。按 §1 给 schema 账号授权(`render-schema-role`),预置 `schemaConfigSecret`、`schemaPermissionSecret`。
-2. 写部署目录 `MMORPG_SQL_K8S_BOOT_CATALOG`。这一遍每个写者的条目只要 `schemaConfigSecret`、`schemaPermissionSecret` 两个字段。
+2. 写部署目录 `MMORPG_SQL_K8S_BOOT_CATALOG`。这一遍每个写者的条目只要 `schemaConfigSecret`、`schemaPermissionSecret` 两个字段;gateway 另要 `registrarImage`(按摘要固定):网关没有自己的迁移镜像,`gateway-schema` Job 跑它里面的 `writer_authority`。
 3. 跑迁移 Job,不起写者进程:
 
    ```powershell
    & ./tools/scripts/k8s_deploy.ps1 -Command all-up -SqlSchemaOnly @Deploy
    ```
 
-   它做的是:infra、全局服务的 ConfigMap 与迁移 Job,client-rpc-router 的进程,然后每个 zone 的 `db-migrate`、`data-service-migrate`。`db-migrate` 迁 `MMORPG_DB_ALLOWED_DATABASES` 列出的全部存档库。这一步恒等 Job 结束,失败或超时就中断,看 `kubectl -n <namespace> logs job/<服务>-migrate`。只加一个 zone 时用 `zone-up -ZoneName <zone> -ZoneId <id> -SqlSchemaOnly`。
+   它做的是:infra、全局服务的 ConfigMap 与迁移 Job,client-rpc-router 的进程,然后每个 zone 的 `db-migrate`、`data-service-migrate`,tidb 档再加 `gateway-schema`(建 `mmorpg` 的闸门表、区目录、公告、白名单和种子行;每个 zone 各跑一次,幂等)。`db-migrate` 迁 `MMORPG_DB_ALLOWED_DATABASES` 列出的全部存档库。这一步恒等 Job 结束,失败或超时就中断,看 `kubectl -n <namespace> logs job/<服务>-migrate`。只加一个 zone 时用 `zone-up -ZoneName <zone> -ZoneId <id> -SqlSchemaOnly`。
 4. 逐库读 generation,目录各片、流水库、全部存档库、各业务库都要读,`mmorpg` 也要:
 
    ```sql
    SELECT generation FROM route_meta WHERE id = 1;
    ```
 
-5. 写每个写者的 REGISTER 原件和名册(§1,条数按「名册要留余量」),`render-roles` 之后执行 `operator`、`runtime` 两段,把 boot 的 Secret 预置好,目录条目补全 `requestSecret`、`registrarSecret`、`registrarImage`、`physicalAuthoritySha256`、`runtimeConfigSecret`、`replicas`、`rosterFile`、`rosterSha256`。
+5. 写每个写者的 REGISTER 模板和槽位名册(§1,一个副本一个槽位、一个账号),`render-roles` 之后执行 `operator`、`runtime` 两段,把 boot 的 Secret 预置好,目录条目补全 `requestSecret`、`registrarSecret`、`registrarImage`、`physicalAuthoritySha256`、`runtimeConfigSecret`、`replicas`、`rosterFile`、`rosterSha256`。
 6. 起进程,顺序由脚本排好(§6):
 
    ```powershell
@@ -148,7 +154,7 @@ kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig get nodes
    & ./tools/scripts/k8s_deploy.ps1 -Command infra-up @Deploy
    ```
 
-   第一条跑一遍 Job(都是跳过),再起 zone 里的进程;第二条看到 data-service 就绪,起其余全局服务。也可以不分开,一条不带 `SkipInfra` 的 `all-up`。`@Deploy` 带 `WaitReady` 时第一条会等到 scene 就绪,而 scene 等发号器:等 `deploy/data-service` 就绪之后另开一个终端做第 7 步的初始化,或者这一遍去掉 `WaitReady`。
+   第一条跑一遍 Job(都是跳过),再起 zone 里的进程;第二条看到 data-service 就绪,起其余全局服务。也可以不分开,一条不带 `SkipInfra` 的 `all-up`。`@Deploy` 带 `WaitReady` 时第一条会等到 scene 就绪,而 scene 等发号器:等 `statefulset/data-service` 就绪之后另开一个终端做第 7 步的初始化,或者这一遍去掉 `WaitReady`。
 7. 初始化发号器(§6.1),验收(§7),然后才放流量。
 
 目录里缺名册时,不带 `SqlSchemaOnly` 的 `zone-up` 在写任何东西之前拒绝,报错点名这个服务。
@@ -178,7 +184,7 @@ kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig get nodes
 
 ```powershell
 kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig -n <zone-namespace> `
-  exec deploy/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-init
+  exec statefulset/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-init
 ```
 
 输出 `region code claimed in the id registry and both reservation records created` 就完成了,重复执行是安全的。码被别的环境认领过、已退役时拒绝,不写任何东西;已经发过号的地域丢了记录走 `-id-issuer-recover`,不要重新初始化。mail、rank 不因为它卡启动,它们的发号器预领失败只记日志。没初始化时建角和发号报错,scene 的号段门禁不放行,所以 zone 就绪不了。初始化之后不用重启任何服务,客户端按退避自动重试。详见[发号器运维手册](id-issuer-runbook.md) §2。
@@ -198,9 +204,9 @@ kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig `
 
 ```powershell
 kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig -n mmorpg-zone-yesterday `
-  exec deploy/data-service -- grep -n 'Region:' /app/etc/private/data_service.yaml
+  exec statefulset/data-service -- grep -n 'Region:' /app/etc/private/data_service.yaml
 kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig -n mmorpg-zone-yesterday `
-  exec deploy/data-service -- printenv MMORPG_ID_ISSUER_EXPECTED_REGION
+  exec statefulset/data-service -- printenv MMORPG_ID_ISSUER_EXPECTED_REGION
 ```
 
 核对 `kubectl -n <namespace> get cronjob sql-writer-pod-reaper` 在每个 zone namespace 和 infra namespace 都有。
@@ -236,9 +242,10 @@ kubectl get svc -n mmorpg-zone-yesterday
 
 写者 Pod(db、data-service、login、gateway 和 infra namespace 的全局服务):
 
-- **`Init:Error` / `Init:CrashLoopBackOff`**:看 `kubectl logs <pod> -c sql-writer-registrar --previous`。`有限roster全部已由其它明确boot消费` 是名册用完了(§1)。闸门表缺失是迁移 Job 没跑或没覆盖这个库,`generation` 不符是名册按错的库写的。这种 Pod 回收 CronJob 不删,告警是 `SqlWriterRegistrarFailing`。闸门冻结(排空、搬库)时 init 什么也不写,解冻后自己过去。
-- **主容器崩溃、被 OOMKill**:写资格一次性,写过之后容器原地重启读到消费标记就拒启,入口脚本以退出码 78 退出,这个 Pod 自己恢复不了。`sql-writer-pod-reaper` 每分钟删一次主容器上一次以 78 退出的写者 Pod,ReplicaSet 建的新 Pod 领名册下一条。不用人工删。还没写过就退出的进程没有消费标记,原地重启,不删。看它删了什么:`kubectl -n <namespace> logs job/<job> -c select-restarted-writers`(删之前)、`-c delete-restarted-writers`(删之后),两边都写明 namespace 和 Pod 名。
-- **被删的 Pod 留下一个没有进程的写者**:它在各逻辑库的注册还在,和注册完就崩的 Pod 一样,下一次排空之前按非 run 的 RETIRE 退休([设计 §2](../design/horizontal-scale-logical-db.md))。
+- **`Init:Error` / `Init:CrashLoopBackOff`**:看 `kubectl logs <pod> -c sql-writer-registrar --previous`。`pod <名字> is slot N but the roster has M slots` 是副本数比名册槽位多,先加槽位(§1)。`cannot register boot N of this slot yet` 后面跟 denied:这个槽位已经有同号或更新的一代,多半是节点失联之后强删过 Pod、旧节点上的 Pod 还在(见下面「节点失联」);确认旧 Pod 没了,删掉这个 Pod,StatefulSet 重建时取更大的号。`the boot record of this pod does not belong to this roster slot and pod` 是启动记录和名册对不上,同样删 Pod 重建。闸门表缺失是迁移 Job 没跑或没覆盖这个库,`generation` 不符是名册按错的库写的。这种 Pod 回收 CronJob 不删,告警是 `SqlWriterRegistrarFailing`。闸门冻结(排空、搬库)时 init 什么也不写,解冻后自己过去。
+- **主容器崩溃、被 OOMKill**:写资格一次性,写过之后容器原地重启读到消费标记就拒启,入口脚本以退出码 78 退出,这个 Pod 自己恢复不了。`sql-writer-pod-reaper` 每分钟删一次主容器上一次以 78 退出的写者 Pod,StatefulSet 按同一序号重建,新 Pod 在同一槽位上换代、把上一代退休,名册不消耗。不用人工删。还没写过就退出的进程没有消费标记,原地重启,不删。看它删了什么:`kubectl -n <namespace> logs job/<job> -c select-restarted-writers`(删之前)、`-c delete-restarted-writers`(删之后),两边都写明 namespace 和 Pod 名。
+- **没有进程的写者**:被删 Pod 的那一代由同序号的新 Pod 在换代时退休,不用人工。例外是缩容:被缩掉的序号最后一代留着 ACTIVE,下一次排空之前按非 run 的 RETIRE 退休([设计 §2](../design/horizontal-scale-logical-db.md))。RETIRE 原件的 `writer` 原样复制这一代 REGISTER 收据里的 `writer`(含 `bootSeq`),缺 `bootSeq` 的请求会被拒绝([写者名册换代](../design/writer-roster-exhaustion-20261106.md) §5.2)。
+- **节点失联**:StatefulSet 不会在别的节点自动重建同序号的 Pod,要等节点对象被删,或者人工 `kubectl -n <namespace> delete pod <pod> --force --grace-period=0`。强删是安全的:新 Pod 换代之后,旧节点上的进程就算还活着,下一笔写也会被闸门拒绝(写不进去,不会写坏数据)。
 - **Job 或 CronJob 起不来**:`sql-writer-pod-reaper` 的镜像拉不到时只是这一分钟没回收,不影响别的 Pod。看 `kubectl -n <namespace> describe job <job>`。
 
 C++ node business logs are **not** on stdout. Apart from gRPC / abseil / librdkafka's own

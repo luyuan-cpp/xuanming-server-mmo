@@ -33,6 +33,7 @@
 #include "modules/id_segment/guid_segment_registry.h"
 #include "proto/common/component/item_base_comp.pb.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
+#include "proto/common/database/mysql_database_table.pb.h" // player_database:带 reserved 段的消息,给整棵树判定用
 #include "services/scene/player/system/bag_marshal.h"
 #include "table/code/equipslot_table.h"
 #include "table/code/item_table.h"
@@ -1170,6 +1171,46 @@ TEST(UnknownFieldCarryTest, OnlyUnretiredUnknownFieldsCountAsNewerVersionFields)
 	EXPECT_FALSE(unknown_field_carry::CarriesNewerVersionFields("ItemComp", std::string{}));
 	// 携带的字节坏了只可能是内存被破坏:按"带着"处理,守卫拒绝即 fail-closed。
 	EXPECT_TRUE(unknown_field_carry::CarriesNewerVersionFields("ItemComp", std::string("\x0b", 1)));
+}
+
+// 命令载荷(收件箱载荷、资产通道请求)用整棵树判(设计 §12「载荷新字段」,2026-11-11):逐层看已设置的子消息,
+// repeated 条目也看;字段号落在该层 reserved 段里的是退役残留,不算。bytes 字段不往里解,由资产通道用例
+// CompleteItemEscrowReplayAndCreditKeepIdentityGrowthAndUnknownFields 钉住(实例字节里的未知字段照常入账)。
+TEST(UnknownFieldCarryTest, TreeCheckWalksSubMessagesAndSkipsReservedNumbers)
+{
+	constexpr int kRetiredOnPlayerDatabase = 10; // mysql_database_table.proto:player_database 的 reserved 10
+	constexpr int kNewNumber = 412345;
+	ASSERT_TRUE(player_database::descriptor()->IsReservedNumber(kRetiredOnPlayerDatabase)) << "前提:10 号已退役";
+
+	player_database db;
+	db.set_player_id(1);
+	db.mutable_currency()->add_debts()->set_owed(5);
+	std::string where;
+	EXPECT_FALSE(unknown_field_carry::TreeCarriesNewerVersionFields(db, &where));
+	EXPECT_TRUE(where.empty());
+
+	db.mutable_unknown_fields()->AddVarint(kRetiredOnPlayerDatabase, 1);
+	EXPECT_FALSE(unknown_field_carry::TreeCarriesNewerVersionFields(db)) << "退役残留不算更新版本的字段";
+
+	// repeated 子消息里的新字段。
+	auto *debt = db.mutable_currency()->mutable_debts(0);
+	debt->mutable_unknown_fields()->AddVarint(kNewNumber, 1);
+	EXPECT_TRUE(unknown_field_carry::TreeCarriesNewerVersionFields(db, &where));
+	EXPECT_EQ("CurrencyDebtEntry#412345", where);
+
+	// 单个子消息里的新字段。
+	debt->mutable_unknown_fields()->Clear();
+	db.mutable_currency()->mutable_unknown_fields()->AddVarint(kNewNumber, 1);
+	where.clear();
+	EXPECT_TRUE(unknown_field_carry::TreeCarriesNewerVersionFields(db, &where));
+	EXPECT_EQ("CurrencyComp#412345", where);
+
+	// 本层既有退役残留又有新字段:按新字段算,位置指向新字段。
+	db.mutable_currency()->mutable_unknown_fields()->Clear();
+	db.mutable_unknown_fields()->AddVarint(kNewNumber, 1);
+	where.clear();
+	EXPECT_TRUE(unknown_field_carry::TreeCarriesNewerVersionFields(db, &where));
+	EXPECT_EQ("player_database#412345", where);
 }
 
 // 行为级:入包并堆、整理(早退判据与合并)、reserve 侧的空余估算都不碰这种堆,未知字段原样留在实例上。

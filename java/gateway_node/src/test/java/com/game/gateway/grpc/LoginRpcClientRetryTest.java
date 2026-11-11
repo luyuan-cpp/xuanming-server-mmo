@@ -8,6 +8,7 @@ import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ServerCalls;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,7 +45,8 @@ class LoginRpcClientRetryTest {
         props.setEndpoints("1=127.0.0.1:" + server.getPort());
         props.setTimeoutMs(1000);
         props.setRetry(3);
-        client = new LoginRpcClient(props);
+        // 重试语义与追踪无关:NOOP 注册表下出站追踪拦截器原样放行。
+        client = new LoginRpcClient(props, ObservationRegistry.NOOP);
         client.start();
     }
 

@@ -5,7 +5,9 @@
 #include <muduo/net/TcpConnection.h>
 #include <algorithm>
 #include <optional>
+#include <set>
 #include <string>
+#include <vector>
 
 // Re-export common::base types at global scope for backward compatibility.
 using common::base::eNodeProtocolType;
@@ -134,6 +136,24 @@ namespace NodeUtils
 	// 纯函数,只按字面精确匹配 "<eNodeType 名>.rpc",不做子串匹配。
 	std::string DiscoveryPrefixFor(const std::string &configuredPrefix, uint32_t zoneId);
 
+	// 配置的一个发现前缀对应的节点类型:只认字面精确的 "<eNodeType 名>.rpc",认不出返回 nullopt。
+	std::optional<uint32_t> NodeTypeOfDiscoveryPrefix(const std::string &configuredPrefix);
+
+	// 本节点实际要 Range / watch 的前缀(docs/design/connection-fanout-subsetting-20261106.md §3.4)。
+	// 配置的前缀表只回答「部署里有哪些服务」;本节点只看其中属于自己发现集合的类型,zone-scoped 类型再收窄到本 zone
+	// (DiscoveryPrefixFor)。纯函数。自身类型不在发现集合里时本节点自己那条发现键另由 ServiceDiscoveryManager 加上。
+	struct DiscoveryScopePlan
+	{
+		// 要 Range / watch 的前缀,按配置里的顺序,去重。
+		std::vector<std::string> scopes;
+		// 配置里有、但不属于发现集合(或认不出)的前缀:本节点不看。
+		std::vector<std::string> skippedPrefixes;
+		// 发现集合里有、配置里没有的类型:部署里没有这个服务,读它的调用方照旧报找不到。
+		std::vector<uint32_t> missingTypes;
+	};
+	DiscoveryScopePlan PlanDiscoveryScopes(const std::vector<std::string> &configuredPrefixes,
+										   const std::set<uint32_t> &discoverTypes, uint32_t zoneId);
+
 	// 全局池节点类型:实例不分 zone,任一 zone 的调用方都可以路由过去。
 	// gate 的 PickRandomNode 对这两类**不比对 zone**(设计文档
 	// cross-zone-matchmaking.md D11):match 是无状态编排者、battle 是纯内存房间,
@@ -149,10 +169,11 @@ namespace NodeUtils
 
 	// 纯 gRPC 协议的 C++ 节点:不对外提供节点间 muduo TCP RPC 服务,注册进 etcd 的
 	// NodeInfo.protocol_type 必须是 PROTOCOL_GRPC —— C++ 发现方(node_connector)
-	// 按 protocol_type 分派连接方式;所有 C++ 节点共用 base_deploy_config 的发现前缀,
-	// 都 watch BattleNodeService.rpc,标错成 TCP 会让它们用 RpcCodec 反复去拨 battle
-	// 的 TCP 端口(那里挂的是客户端战斗直连面,走客户端 ProtobufCodec 帧而非节点间
-	// RpcCodec),而且永远建不出 gRPC stub。
+	// 按 protocol_type 分派连接方式;哪个 C++ 节点的建连白名单里有 battle,标错成 TCP 就会让它
+	// 用 RpcCodec 反复去拨 battle 的 TCP 端口(那里挂的是客户端战斗直连面,走客户端 ProtobufCodec
+	// 帧而非节点间 RpcCodec),而且永远建不出 gRPC stub。现在没有 C++ 节点连 battle:各节点的发现
+	// 集合都不含 Battle,battle 自己只看自己那一条发现键(docs/design/connection-fanout-subsetting-20261106.md
+	// §3.4);判定照旧保留,它决定 battle 以 PROTOCOL_GRPC 注册。
 	// Go match 只认 grpc_endpoint,不受 protocol_type 影响。
 	// TCP 端口照常分配(gRPC 端口 = TCP + 30000 的派生规则依赖它,见
 	// node_allocator.cpp),且不是空闲占位:battle 自身在上面挂载客户端战斗直连面

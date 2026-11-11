@@ -10,7 +10,7 @@
 | 请求入口 | [ServerListController](../../java/gateway_node/src/main/java/com/game/gateway/controller/ServerListController.java) 直接返回列表 DTO，不经过登录和分配 Gate 的前置限流器；控制器未实现 ETag、条件请求 304 或 CDN 缓存策略。 |
 | 运营目录 | [ServerListService](../../java/gateway_node/src/main/java/com/game/gateway/service/ServerListService.java) 从 SQL `zone_config` 读行，按 `sort_order` 升序。每个 Gateway 副本缓存成功读取的行 1 秒，从查库完成计时，不缓存最终 JSON，也不因管理接口更新主动失效。过期并发请求合并为一次查询。 |
 | 失败与超时 | 查库失败不缓存，也不返回过期目录作为成功。等待方最多等 3000ms；超时不取消正在查库的请求。查库方另受 JDBC 配置约束，`socketTimeout=10000` 是 socket 读超时，不是整个 HTTP 请求的硬截止。 |
-| 展示状态 | 组装响应时读取 [区服探测快照](../../java/gateway_node/src/main/java/com/game/gateway/service/ZoneHealthProbeService.java)，并重新判断新服。手工关闭、维护、预告优先；手工 OPEN 遇探测 DOWN 显示维护，探测 UNKNOWN 时仍显示 OPEN、但不附负载。展示为 OPEN 不代表一定可进入。 |
+| 展示状态 | 组装响应时读取 [区服健康快照](../../java/gateway_node/src/main/java/com/game/gateway/service/ZoneHealthProbeService.java)，并重新判断新服。手工关闭、维护、预告优先；手工 OPEN 遇探测 DOWN 显示维护，探测 UNKNOWN 时仍显示 OPEN、但不附负载。展示为 OPEN 不代表一定可进入。2026-11-11 起快照的来源是各 zone 网关发布到 etcd 的健康汇总，每个网关不再自己 watch 全服 gate / scene，见[网关区服健康汇总](gateway-zone-health-publish-20261111.md)。 |
 | 机器人 | 通用登录在 `zone_id=0` 时调用 Gateway 动态接口，取首个推荐区或第一项；显式指定区号则不读取列表。读取失败时机器人仍尝试传 0，但当前 Gateway 无法据此分配 Gate。没有本地文件或 CDN 读取模式，见 [robot 选区说明](../../robot/README.md#网关与选区)。 |
 
 响应为 `{"zones":[...]}`，按 [ZoneInfoDto](../../java/gateway_node/src/main/java/com/game/gateway/dto/ZoneInfoDto.java) 输出
@@ -51,6 +51,8 @@
 1. **发布一致性**：从已提交目录生成并校验快照，定义并发发布的版本顺序；新快照成功后再切当前版本。
    保留可回滚版本与内部审计，分别处理上传、切换和 CDN 刷新失败。涉及探测态、负载和新服标记时，
    需先决定是否发布、由什么触发更新以及陈旧时如何展示；目录变更触发本身不覆盖探测变化。
+   探测态与负载可直接读各 zone 的健康汇总记录（`/mmorpg/zone_health/zone/`，只在显示变化时写），
+   不必让发布任务自己 watch 全服节点。
 2. **旧快照和回退**：规定客户端接收的版本与最大陈旧时间、各级超时及总预算。验证主备同时不可用或对象过期时，
    Gateway 能承受回流；区服已关闭但静态缓存仍显示开放时，以动态准入查询的手工状态为准，并验证准入短缓存的生效窗口。
 3. **运维与容量**：用冷启动与回流场景测 Gateway、SQL、缓存命中和故障恢复，再确定是否需要静态化、

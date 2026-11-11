@@ -31,14 +31,18 @@ $RepoRoot = Get-RepoRoot
 $Infra = 'logical-infra'
 $Zone = 'logical-test'
 $ZoneNamespace = "mmorpg-zone-$Zone"
-$AllowedDatabases = 'zone_1_db,zone_2_db,zone_101_db,zone_102_db'
+# 存档库清单夹具写占位值;Invoke-CapturedPwsh 按本次的地域码和 K 换成本地域的存档库(lib/deploy_capture.ps1 Add-PlayerStoreAllowlistFixture)。
+# dev 缺省地域 0、K=1,换上的就是这一个;A17c 起清单里只有存档库(设计 player-data-tidb-scaling-plan.md §7.2)。
+$AllowedDatabases = $PlayerStoreAllowlistFixture
+$DevAllowedDatabases = 'player_store_1000000_db'
 $AuthorityHost = 'tidb.invalid:4000'
 
 $parseErrors = $null
 $deployAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$parseErrors)
 if ($parseErrors.Count -gt 0) { throw "部署脚本语法错误: $($parseErrors[0].Message)" }
 $deployFunctions = @(
-    'Resolve-DirectoryLogicalShards', 'Resolve-IdIssuerRegion', 'Resolve-IdRegistryEtcd', 'Get-DataServiceWriterSchemas', 'Get-DataServiceRosterProblems', 'Get-SqlWriterRosterMinimumEntries',
+    'Resolve-DirectoryLogicalShards', 'Resolve-RegionCode', 'Resolve-IdIssuerRegion', 'Resolve-IdRegistryEtcd', 'Get-DataServiceWriterSchemas', 'Get-DataServiceRosterProblems', 'Get-SqlWriterRosterMinimumEntries',
+    'Resolve-PlayerStoreShards', 'Assert-PlayerStoreAllowlist', 'Get-RoleProofStorageIds',
     'Get-DbPlacementPlan', 'New-DbPlacementYaml', 'ConvertTo-DbPlacementJson',
     'Get-AuthoritativeScalar', 'Get-MysqlConnectionPlan', 'Get-MysqlMaxConnectionsFromManifest', 'Get-ManifestDeploymentReplicas',
     'Get-AccountDirectoryPoolMaxOpen', 'Get-MysqlConnectionLedgerInputs', 'Get-MysqlConnectionLedger'
@@ -76,8 +80,9 @@ function Get-ConfigBlock {
 
 function Get-DeploymentBlock {
     param([Parameter(Mandatory = $true)][string]$Output, [Parameter(Mandatory = $true)][string]$Name)
-    $found = @(Get-ManifestBlocks -Output $Output | Where-Object { $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch ('(?m)^  name: ' + [regex]::Escape($Name) + '\s*$') })
-    if ($found.Count -ne 1) { throw "DryRun 输出里 Deployment $Name 应当恰好 1 份,实际 $($found.Count) 份" }
+    # SQL 写者是 StatefulSet(槽位 = 序号,writer-roster-exhaustion-20261106.md §5.5),其余是 Deployment:按名字挑工作负载,两种都认。
+    $found = @(Get-ManifestBlocks -Output $Output | Where-Object { $_ -cmatch '(?m)^kind: (?:Deployment|StatefulSet)\s*$' -and $_ -cmatch ('(?m)^  name: ' + [regex]::Escape($Name) + '\s*$') })
+    if ($found.Count -ne 1) { throw "DryRun 输出里工作负载 $Name 应当恰好 1 份,实际 $($found.Count) 份" }
     return $found[0]
 }
 
@@ -124,7 +129,8 @@ $ProdEnv = @{
     MMORPG_REDIS_PASSWORD           = 'contract-test-redis-pw-01'
     MMORPG_GATEWAY_DB_USER          = 'gateway_app'
     MMORPG_GATEWAY_DB_PASSWORD      = 'contract-test-gwdb-pw-01'
-    MMORPG_INTERNAL_AUTH_SECRET     = 'contract-test-internal-auth-0123456789abcdef'
+    MMORPG_INTERNAL_AUTH_SIGNING_KEY = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60'
+    MMORPG_INTERNAL_AUTH_PUBLIC_KEYS = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
     MMORPG_GATEWAY_ADMIN_API_KEY    = 'contract-test-gw-admin-key-0123456789abcdef'
     MMORPG_LOGIN_QUEUE_TOKEN_SECRET = 'contract-test-queue-token-0123456789abcdef'
     MMORPG_SPECTATE_TOKEN_SECRET    = 'contract-test-spectate-token-0123456789abcdef'
@@ -139,7 +145,11 @@ $devZoneRun = Invoke-LogicalDbDryRun -Arguments $ZoneArgs
 $devMysqlZoneRun = Invoke-LogicalDbDryRun -Arguments ($ZoneArgs + @('-DatabaseBackend', 'mysql'))
 $prodZoneRun = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7')) -Env $ProdEnv
 $devInfraRun = Invoke-LogicalDbDryRun -Arguments $InfraArgs -Env $InfraEnv
-$shardedInfraRun = Invoke-LogicalDbDryRun -Arguments ($InfraArgs + @('-DirectoryLogicalShards', '64')) -Env $InfraEnv
+# 集群内单实例 MySQL(mysql.yaml、mysql-init-sql)只在 dev 档、入口就是它的 mysql 档部署(Test-InfraMysqlInUse)。mysql-init 的用例用这一形态。
+$InClusterMysqlHost = "mysql.${Infra}:3306"
+$InfraMysqlArgs = @($InfraArgs | ForEach-Object { if ($_ -ceq $AuthorityHost) { $InClusterMysqlHost } else { $_ } }) + @('-DatabaseBackend', 'mysql')
+$devInfraMysqlRun = Invoke-LogicalDbDryRun -Arguments $InfraMysqlArgs -Env $InfraEnv
+$shardedInfraMysqlRun = Invoke-LogicalDbDryRun -Arguments ($InfraMysqlArgs + @('-DirectoryLogicalShards', '64')) -Env $InfraEnv
 
 # ──────────────────────────────────────────────
 # 1. 闸(纯函数)
@@ -167,6 +177,14 @@ Test-Case '-Region:dev 缺省 0,staging 和 prod 必须显式且不能用 0,范�
         Assert-Match -Text (Get-ThrownMessage { Resolve-IdIssuerRegion -Requested 0 -ReleaseProfileName $profileName }) -Pattern 'reserved for dev' -Because "$profileName 不能用 dev 的地域码,漏写也是 0"
     }
     Assert-Match -Text (Get-ThrownMessage { Resolve-IdIssuerRegion -Requested 64 -ReleaseProfileName 'dev' }) -Pattern 'out of range' -Because '超界'
+}
+
+Test-Case '-IdIssuerRegion:缺省等于 -Region;给了只换发号器地域码,规则与 -Region 相同;存档地域只认 -Region' {
+    Assert-Equal -Expected 7 -Actual (Resolve-IdIssuerRegion -Requested 7 -ReleaseProfileName 'prod' -IssuerOverride -1) -Because '没给 -IdIssuerRegion 就是 -Region'
+    Assert-Equal -Expected 9 -Actual (Resolve-IdIssuerRegion -Requested 7 -ReleaseProfileName 'prod' -IssuerOverride 9) -Because '换码之后发号器用新码'
+    Assert-Equal -Expected 7 -Actual (Resolve-RegionCode -Requested 7 -ReleaseProfileName 'prod') -Because '存档地域只认 -Region,不跟着换码变'
+    Assert-Match -Text (Get-ThrownMessage { Resolve-IdIssuerRegion -Requested 7 -ReleaseProfileName 'prod' -IssuerOverride 0 }) -Pattern 'cannot use -IdIssuerRegion 0' -Because '生产不能把发号器地域码换成 dev 的 0,报错点名 -IdIssuerRegion'
+    Assert-Match -Text (Get-ThrownMessage { Resolve-IdIssuerRegion -Requested 7 -ReleaseProfileName 'dev' -IssuerOverride 64 }) -Pattern '-IdIssuerRegion 64 is out of range' -Because '超界'
 }
 
 Test-Case '-IdRegistryEtcd:dev 不写,staging 和 prod 必须给或者本集群托管,不能是本集群两套发号 etcd' {
@@ -258,19 +276,19 @@ Test-Case '每片池上限:K=1 不动,K 大按片摊开,每片至少 2 条' {
 }
 
 Test-Case 'data_service 名册:恰好是片库、流水库和全部存档库,多一份少一份重复都点名' {
-    $expected = Get-DataServiceWriterSchemas -Base 'g' -LogicalShards 2 -PlayerDatabases @('zone_1_db', 'zone_2_db')
-    Assert-Equal -Expected 'g_00,g_01,g_ledger,zone_1_db,zone_2_db' -Actual (@($expected) -join ',') -Because '顺序和 config.WriterSchemas 一样'
-    $single = Get-DataServiceWriterSchemas -Base 'g' -LogicalShards 1 -PlayerDatabases @('zone_1_db')
-    Assert-Equal -Expected 'g,g_ledger,zone_1_db' -Actual (@($single) -join ',') -Because 'K=1 基名就是目录库,不会和流水库连成一个字符串'
+    $expected = Get-DataServiceWriterSchemas -Base 'g' -LogicalShards 2 -PlayerDatabases @('player_store_1000000_db', 'player_store_1000001_db')
+    Assert-Equal -Expected 'g_00,g_01,g_ledger,player_store_1000000_db,player_store_1000001_db' -Actual (@($expected) -join ',') -Because '顺序和 config.WriterSchemas 一样'
+    $single = Get-DataServiceWriterSchemas -Base 'g' -LogicalShards 1 -PlayerDatabases @('player_store_1000000_db')
+    Assert-Equal -Expected 'g,g_ledger,player_store_1000000_db' -Actual (@($single) -join ',') -Because 'K=1 基名就是目录库,不会和流水库连成一个字符串'
 
     function New-Roster([string[]]$Schemas) {
         return [ordered]@{ entries = @([ordered]@{ requests = @($Schemas | ForEach-Object { [ordered]@{ authoritySchema = $_ } }) }) }
     }
     Assert-Equal -Expected 0 -Actual @(Get-DataServiceRosterProblems -Roster (New-Roster -Schemas $expected) -ExpectedSchemas $expected).Count -Because '恰好覆盖就过'
-    $missing = @(Get-DataServiceRosterProblems -Roster (New-Roster -Schemas @('g_00', 'g_ledger', 'zone_1_db', 'zone_2_db')) -ExpectedSchemas $expected)
+    $missing = @(Get-DataServiceRosterProblems -Roster (New-Roster -Schemas @('g_00', 'g_ledger', 'player_store_1000000_db', 'player_store_1000001_db')) -ExpectedSchemas $expected)
     Assert-Match -Text ($missing -join ';') -Pattern 'entry 0 is missing: g_01' -Because '少一片'
-    $extra = @(Get-DataServiceRosterProblems -Roster (New-Roster -Schemas (@($expected) + 'zone_3_db')) -ExpectedSchemas $expected)
-    Assert-Match -Text ($extra -join ';') -Pattern 'entry 0 has extra: zone_3_db' -Because '多一个库'
+    $extra = @(Get-DataServiceRosterProblems -Roster (New-Roster -Schemas (@($expected) + 'player_store_1000002_db')) -ExpectedSchemas $expected)
+    Assert-Match -Text ($extra -join ';') -Pattern 'entry 0 has extra: player_store_1000002_db' -Because '多一个库'
     $repeated = @(Get-DataServiceRosterProblems -Roster (New-Roster -Schemas (@($expected) + 'g_00')) -ExpectedSchemas $expected)
     Assert-Match -Text ($repeated -join ';') -Pattern 'entry 0 repeats: g_00' -Because '重复'
     Assert-Equal -Expected 0 -Actual @(Get-DataServiceRosterProblems -Roster ([ordered]@{ entries = @(@{}, @{}) }) -ExpectedSchemas $expected).Count -Because '空 entry 这里不核,真正的 registrar 会拒绝'
@@ -284,19 +302,24 @@ Test-Case 'DryRun:data-service 的名册和这次的 K、存档库清单对不�
         param([string[]]$Schemas)
         $requests = @($Schemas | ForEach-Object { [ordered]@{ authoritySchema = $_; protectedSchemas = @($_) } })
         $rosterPath = Join-Path $root 'data-service-roster.json'
-        $roster = [ordered]@{ format = 'SQL_WRITER_BOOT_ROSTER_V1'; entries = @(1..12 | ForEach-Object { [ordered]@{ requests = $requests } }) }
+        $roster = [ordered]@{ format = 'SQL_WRITER_BOOT_ROSTER_V2'; entries = @(1..12 | ForEach-Object { [ordered]@{ requests = $requests } }) }
         [IO.File]::WriteAllText($rosterPath, (ConvertTo-Json -InputObject $roster -Depth 6 -Compress), [Text.UTF8Encoding]::new($false))
         $catalog["$ZoneNamespace/data-service"].rosterFile = $rosterPath
         $catalog["$ZoneNamespace/data-service"].rosterSha256 = (Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
         [IO.File]::WriteAllText($catalogFile, (ConvertTo-Json -InputObject $catalog -Depth 8 -Compress), [Text.UTF8Encoding]::new($false))
     }
     # 少了流水库:G1 之前的旧名册就是这样。
-    & $writeRoster @('mmorpg_global', 'zone_1_db', 'zone_2_db', 'zone_101_db', 'zone_102_db')
+    & $writeRoster @('mmorpg_global', 'player_store_1000000_db')
     $bad = Invoke-LogicalDbDryRun -Arguments $ZoneArgs -Env @{ MMORPG_SQL_K8S_BOOT_CATALOG = $catalogFile }
     Assert-True -Condition ($bad.ExitCode -ne 0) -Because "名册缺流水库必须拒绝。输出: $($bad.Output)"
     Assert-Match -Text $bad.Output -Pattern 'boot roster.*does not match' -Because '点名名册'
     Assert-Match -Text $bad.Output -Pattern 'mmorpg_global_ledger' -Because '点名缺哪个库'
-    & $writeRoster @('mmorpg_global', 'mmorpg_global_ledger', 'zone_1_db', 'zone_2_db', 'zone_101_db', 'zone_102_db')
+    # 少了地域存档库:清单里有它(dev 地域 0、K=1),data_service 要给它发写资格。
+    & $writeRoster @('mmorpg_global', 'mmorpg_global_ledger')
+    $noStore = Invoke-LogicalDbDryRun -Arguments $ZoneArgs -Env @{ MMORPG_SQL_K8S_BOOT_CATALOG = $catalogFile }
+    Assert-True -Condition ($noStore.ExitCode -ne 0) -Because "名册缺地域存档库必须拒绝。输出: $($noStore.Output)"
+    Assert-Match -Text $noStore.Output -Pattern 'missing: player_store_1000000_db' -Because '点名缺哪个存档库'
+    & $writeRoster @('mmorpg_global', 'mmorpg_global_ledger', 'player_store_1000000_db')
     $good = Invoke-LogicalDbDryRun -Arguments $ZoneArgs -Env @{ MMORPG_SQL_K8S_BOOT_CATALOG = $catalogFile }
     Assert-Equal -Expected 0 -Actual $good.ExitCode -Because "名册对得上就过。输出: $($good.Output)"
 }
@@ -340,10 +363,11 @@ Test-Case 'dev zone-up:K=1、地域 0,池就是服务 yaml 的值,入口打印�
         Assert-Equal -Expected (Get-EtcValue -RelativePath $source -KeyPath $key) -Actual (Get-FlatValue -Flat $flat -KeyPath "data.data_service.yaml.$key") -Because "K=1 时 $key 镜像服务 yaml"
     }
     Assert-Match -Text $devZoneRun.Output -Pattern 'Logical databases: directory_shards=1 directory=mmorpg_global ledger=mmorpg_global_ledger id_region=0' -Because '入口打印一行本次形态'
-    Assert-Match -Text $devZoneRun.Output -Pattern 'MySQL connection ledger by logical db: logical_shards=1 limit=mysql_manifest' -Because 'K=1 按 mysql.yaml 从严'
+    Assert-Match -Text $devZoneRun.Output -Pattern 'MySQL connection ledger by logical db: logical_shards=1 limit=tidb_budget' -Because 'tidb 档 K=1 也对照 TiDB 预算:mmorpg 迁走之后这一档没有 MySQL'
+    Assert-Match -Text $devMysqlZoneRun.Output -Pattern 'MySQL connection ledger by logical db: logical_shards=1 limit=mysql_manifest' -Because 'mysql 档照旧对照 mysql.yaml'
 }
 
-Test-Case 'prod zone-up K=64:片数、每片池、地域码进 ConfigMap,上限换 TiDB 预算,存档库池不收窄' {
+Test-Case 'prod zone-up K=64:片数、每片池、地域码进 ConfigMap,上限换 TiDB 预算,存档库池按存档库数摊开' {
     Assert-Equal -Expected 0 -Actual $prodZoneRun.ExitCode -Because "输出: $($prodZoneRun.Output)"
     $flat = Get-ConfigFlat -Output $prodZoneRun.Output -ConfigMap 'go-svc-data-service-config'
     $source = 'go/data_service/etc/data_service.yaml'
@@ -355,7 +379,8 @@ Test-Case 'prod zone-up K=64:片数、每片池、地域码进 ConfigMap,上限�
     foreach ($key in @('PlayerName.MaxIdleConn', 'RouteStore.MaxIdleConn')) {
         Assert-True -Condition ([int](Get-FlatValue -Flat $flat -KeyPath "data.data_service.yaml.$key") -le 2) -Because "$key 不能超过每片上限,否则 Validate 拒启"
     }
-    Assert-Equal -Expected (Get-EtcValue -RelativePath $source -KeyPath 'Directory.StoragePools.MaxOpenConn') -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.data_service.yaml.Directory.StoragePools.MaxOpenConn') -Because '存档库的池按存档库算,和 K 无关'
+    # 存档库的池按地域存档库数(夹具给 prod 补的 -PlayerStoreShards 64)摊开,和目录片数无关(设计 player-data-tidb-scaling-plan.md §7.2)。
+    Assert-Equal -Expected ([string](Get-PlayerStorePoolLimit -Base ([int](Get-EtcValue -RelativePath $source -KeyPath 'Directory.StoragePools.MaxOpenConn')) -Shards 64)) -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.data_service.yaml.Directory.StoragePools.MaxOpenConn') -Because '存档库的池按存档库数摊开,和目录片数无关'
     Assert-Match -Text $prodZoneRun.Output -Pattern 'Logical databases: directory_shards=64 directory=mmorpg_global_00\.\.63 ledger=mmorpg_global_ledger id_region=7' -Because '入口打印一行本次形态'
     Assert-Match -Text $prodZoneRun.Output -Pattern 'MySQL connection ledger by logical db: logical_shards=64 limit=tidb_budget data_service_per_instance=\d+ directory_shard=\d+ ledger=\d+ player_store=\d+' -Because '按片、按逻辑库拆开'
 }
@@ -368,20 +393,54 @@ Test-Case 'staging 可以用小一点的 K,同样进 ConfigMap' {
     Assert-Equal -Expected '3' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.data_service.yaml.IdSegment.Issuer.Region') -Because '地域码'
 }
 
-Test-Case 'mysql-init:K=1 建基名和流水库,K=64 建全部片库和流水库,基名不再是库' {
-    Assert-Equal -Expected 0 -Actual $devInfraRun.ExitCode -Because "输出: $($devInfraRun.Output)"
-    Assert-Equal -Expected 0 -Actual $shardedInfraRun.ExitCode -Because "输出: $($shardedInfraRun.Output)"
-    $single = Select-ManifestByName -Output $devInfraRun.Output -Name 'mysql-init-sql'
+Test-Case 'mysql-init(dev 用集群内 MySQL):K=1 建基名和流水库,K=64 建全部片库和流水库,基名不再是库' {
+    Assert-Equal -Expected 0 -Actual $devInfraMysqlRun.ExitCode -Because "输出: $($devInfraMysqlRun.Output)"
+    Assert-Equal -Expected 0 -Actual $shardedInfraMysqlRun.ExitCode -Because "输出: $($shardedInfraMysqlRun.Output)"
+    $single = Select-ManifestByName -Output $devInfraMysqlRun.Output -Name 'mysql-init-sql'
     Assert-Match -Text $single -Pattern ([regex]::Escape('CREATE DATABASE IF NOT EXISTS `mmorpg_global`;')) -Because 'K=1 目录库是基名'
     Assert-Match -Text $single -Pattern ([regex]::Escape('CREATE DATABASE IF NOT EXISTS `mmorpg_global_ledger`;')) -Because '流水库单独一个'
     Assert-NotMatch -Text $single -Pattern 'mmorpg_globalmmorpg_global' -Because '库名不能连成一个字符串'
-    $sharded = Select-ManifestByName -Output $shardedInfraRun.Output -Name 'mysql-init-sql'
+    $sharded = Select-ManifestByName -Output $shardedInfraMysqlRun.Output -Name 'mysql-init-sql'
     foreach ($database in @('mmorpg_global_00', 'mmorpg_global_31', 'mmorpg_global_63', 'mmorpg_global_ledger')) {
         Assert-Match -Text $sharded -Pattern ([regex]::Escape("CREATE DATABASE IF NOT EXISTS ``$database``;")) -Because "要建 $database,-migrate 不建库"
-        Assert-Match -Text $sharded -Pattern ([regex]::Escape("GRANT ALL PRIVILEGES ON ``$database``.*")) -Because "$database 和 zone 库同一口径授权"
+        Assert-Match -Text $sharded -Pattern ([regex]::Escape("GRANT ALL PRIVILEGES ON ``$database``.*")) -Because "$database 和存档库同一口径授权"
     }
     Assert-NotMatch -Text $sharded -Pattern ([regex]::Escape('CREATE DATABASE IF NOT EXISTS `mmorpg_global`;')) -Because 'K>1 基名不是库'
     Assert-Equal -Expected 65 -Actual ([regex]::Matches($sharded, 'CREATE DATABASE IF NOT EXISTS `mmorpg_global_').Count) -Because '64 片加流水库'
+    # 地域存档库(设计 player-data-tidb-scaling-plan.md §7.2):dev 缺省地域 0、K=1,预建的就是清单里那一个,与 Assert-PlayerStoreAllowlist 同一公式。
+    foreach ($initSql in @($single, $sharded)) {
+        Assert-Match -Text $initSql -Pattern ([regex]::Escape('CREATE DATABASE IF NOT EXISTS `player_store_1000000_db`;')) -Because 'dev 预建地域 0 的 0 号存档库,db-migrate 不建库'
+        Assert-Match -Text $initSql -Pattern ([regex]::Escape('GRANT ALL PRIVILEGES ON `player_store_1000000_db`.*')) -Because '存档库预建之后授权'
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($initSql, 'CREATE DATABASE IF NOT EXISTS `player_store_').Count) -Because 'K=1 只有一个存档库'
+        Assert-NotMatch -Text $initSql -Pattern 'CREATE DATABASE IF NOT EXISTS `?zone_' -Because 'zone 库已退役(A17c),mysql-init 一个都不建'
+    }
+}
+
+Test-Case '集群内单实例 MySQL 只在 dev 的 mysql 档、入口就是它时部署;staging/prod 或 tidb 档把入口指到它都在写之前拒绝' {
+    Assert-Equal -Expected 0 -Actual $devInfraRun.ExitCode -Because "输出: $($devInfraRun.Output)"
+    Assert-NotMatch -Text $devInfraRun.Output -Pattern '(?m)^  name: mysql(-init-sql)?\s*$' -Because 'tidb 档的入口是外部 TiDB,不在集群里留一台没人用的单实例 MySQL'
+    Assert-Match -Text $devInfraMysqlRun.Output -Pattern '(?m)^  name: mysql\s*$' -Because 'dev 的 mysql 档入口就是它,照旧部署'
+    Assert-Match -Text $devInfraMysqlRun.Output -Pattern '(?m)^  name: mysql-init-sql\s*$' -Because 'initdb 脚本跟着它走'
+
+    $prodArgs = @($ProdZoneArgs | ForEach-Object { if ($_ -ceq $AuthorityHost) { $InClusterMysqlHost } else { $_ } }) + @('-DirectoryLogicalShards', '64', '-Region', '7', '-DatabaseBackend', 'mysql', '-SkipJavaSvc')
+    $prod = Invoke-LogicalDbDryRun -Arguments $prodArgs -Env $ProdEnv
+    Assert-True -Condition ($prod.ExitCode -ne 0) -Because "prod 不能用 1 副本、没有主从的集群内 MySQL。输出: $($prod.Output)"
+    Assert-Match -Text $prod.Output -Pattern 'is the in-cluster MySQL' -Because '点名原因'
+    Assert-NotMatch -Text $prod.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写路径入口拒绝'
+
+    $mismatch = Invoke-LogicalDbDryRun -Arguments @($ZoneArgs | ForEach-Object { if ($_ -ceq $AuthorityHost) { $InClusterMysqlHost } else { $_ } })
+    Assert-True -Condition ($mismatch.ExitCode -ne 0) -Because "入口是 MySQL、档位却是 tidb,服务启动核对引擎必然失败。输出: $($mismatch.Output)"
+    Assert-Match -Text $mismatch.Output -Pattern 'but -DatabaseBackend is tidb' -Because '点名缺 -DatabaseBackend mysql'
+    Assert-NotMatch -Text $mismatch.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写路径入口拒绝'
+
+    foreach ($manifest in @('data-service-migrate.yaml', 'db-migrate.yaml', 'friend-migrate.yaml', 'player-inbox-migrate.yaml', 'trade-migrate.yaml')) {
+        $text = Read-RepoText "deploy/k8s/manifests/go-svc/$manifest"
+        Assert-Match -Text $text -Pattern 'nc -z -w 3 "\$SQL_HOST" "\$SQL_PORT"' -Because "$manifest 等的是实际 SQL 入口"
+        Assert-NotMatch -Text $text -Pattern 'mysql\.__INFRA_NAMESPACE__|\b3306\b' -Because "$manifest 不再写死集群内 MySQL"
+    }
+    $dbJob = @(Get-ManifestBlocks -Output $devZoneRun.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: db-migrate\s*$' })[0]
+    Assert-Match -Text $dbJob -Pattern 'name: SQL_HOST\s+value: "tidb\.invalid"' -Because 'tidb 档等外部 TiDB'
+    Assert-Match -Text $dbJob -Pattern 'name: SQL_PORT\s+value: "4000"' -Because '端口跟着入口'
 }
 
 Test-Case 'DbPlacement 段的位置和 Go 的配置结构一致' {
@@ -535,27 +594,38 @@ Test-Case '本机开发密钥库的名单和 manifest 一致,go_services 接线,
 # ──────────────────────────────────────────────
 # 5. 连接总账
 # ──────────────────────────────────────────────
-Test-Case 'K=64 规划档峰值不超 TiDB 预算,K=1 规划档不超 mysql.yaml,按逻辑库拆开的账对得上' {
+Test-Case 'TiDB 档(目录 64 片、存档库 64 个)峰值不超 TiDB 预算,MySQL 档不超 mysql.yaml,按逻辑库拆开的账对得上' {
     $plan = Get-MysqlConnectionPlan
     $inputs = Get-MysqlConnectionLedgerInputs
-    $shape = @{ ZoneCount = $plan.ZoneCount; ExtraZoneStores = $plan.ExtraZoneStores; NonZoneStores = $plan.NonZoneStores; RolloutExtraPodsPerDeployment = $plan.RolloutExtraPodsPerDeployment; OpsReserve = $plan.OpsReserve }
+    # MySQL 档:目录 1 片,存档库取规划档的小 K(设计 player-data-tidb-scaling-plan.md §7.2);mysql.yaml 的 max_connections 按这一档取值。
+    $shape = @{ ZoneCount = $plan.ZoneCount; PlayerStoreShards = $plan.PlayerStoreShards; RolloutExtraPodsPerDeployment = $plan.RolloutExtraPodsPerDeployment; OpsReserve = $plan.OpsReserve }
     $single = Get-MysqlConnectionLedger -Inputs $inputs @shape
-    Assert-True -Condition ($single.Peak -le $single.MaxConnections) -Because "K=1 规划档峰值 $($single.Peak) 超过 mysql.yaml 的 $($single.MaxConnections)"
+    Assert-True -Condition ($single.Peak -le $single.MaxConnections) -Because "MySQL 档规划峰值 $($single.Peak) 超过 mysql.yaml 的 $($single.MaxConnections)"
     Assert-Equal -Expected 1 -Actual $single.LogicalShards -Because '缺省 K=1'
+    Assert-True -Condition (-not $plan.Contains('ExtraZoneStores')) -Because 'zone 库已退役(A17c),规划档没有 zone 库这一项'
 
-    $sharded = Get-MysqlConnectionLedger -Inputs $inputs @shape -LogicalShards 64
+    # TiDB 档:目录 64 片,存档库取 TidbPlayerStoreShards(生产初值 64),每库的池按 Get-PlayerStorePoolLimit 摊开。
+    $tidbShape = @{} + $shape
+    $tidbShape['PlayerStoreShards'] = $plan.TidbPlayerStoreShards
+    $sharded = Get-MysqlConnectionLedger -Inputs $inputs @tidbShape -LogicalShards 64
     Assert-Equal -Expected 6 -Actual $sharded.DirectoryPerShard -Because 'K=64 时三个目录池每片各 2 条'
-    $stores = $plan.ExtraZoneStores + 1 + $plan.NonZoneStores
-    $expectedPerInstance = [int]$inputs.DsAuditStorePools * [int]$inputs.DsAuditMaxOpen + 64 * 6 + $stores * [int]$inputs.DsStoragePoolMaxOpen
-    Assert-Equal -Expected $expectedPerInstance -Actual $sharded.DsPerInstance -Because 'ds 每实例 = 流水库池 + K × 每片 + 存档库数 × 存档库池'
-    Assert-True -Condition ($sharded.Peak -le $plan.TidbConnectionBudget) -Because "K=64 规划档峰值 $($sharded.Peak) 超过 TiDB 预算 $($plan.TidbConnectionBudget),要收窄每片上限或加 tidb-server"
+    $dbStorePool = Get-PlayerStorePoolLimit -Base ([int]$inputs.DbStoreMaxOpen) -Shards $plan.TidbPlayerStoreShards
+    $dsStorePool = Get-PlayerStorePoolLimit -Base ([int]$inputs.DsStoragePoolMaxOpen) -Shards $plan.TidbPlayerStoreShards
+    Assert-Equal -Expected "$dbStorePool/$dsStorePool" -Actual "$($sharded.DbStorePool)/$($sharded.DsStorePool)" -Because '每库存档池与 ConfigMap 同一条摊开规则'
+    $expectedPerInstance = [int]$inputs.DsAuditStorePools * [int]$inputs.DsAuditMaxOpen + 64 * 6 + $plan.TidbPlayerStoreShards * $dsStorePool
+    Assert-Equal -Expected $expectedPerInstance -Actual $sharded.DsPerInstance -Because 'ds 每实例 = 流水库池 + K × 每片 + 存档库数 × 每库存档池'
+    Assert-Equal -Expected ($plan.TidbPlayerStoreShards * $dbStorePool) -Actual $sharded.DbPerInstance -Because 'db 每实例 = 存档库数 × 每库存档池(A17c 起 go/db 没有本区库)'
+    Assert-True -Condition ($sharded.Peak -le $plan.TidbConnectionBudget) -Because "TiDB 档规划峰值 $($sharded.Peak) 超过 TiDB 预算 $($plan.TidbConnectionBudget),要收窄每片、每库上限或加 tidb-server"
     Assert-Equal -Expected ([int][Math]::Floor(($plan.TidbServers - 1) * $plan.TidbMaxConnectionsPerServer / $plan.TidbImbalanceFactor)) -Actual $plan.TidbConnectionBudget -Because '预算 = (N−1) × 每台上限 / 不均衡系数'
 
     foreach ($database in @('directory_shard', 'ledger', 'player_store', 'mmorpg', 'mmorpg_friend', 'mmorpg_trade', 'mmorpg_player_inbox', 'mmorpg_guild', 'mmorpg_mail', 'mmorpg_rank', 'mmorpg_chat', 'mmorpg_match')) {
         Assert-True -Condition ($sharded.PerLogicalDb.Contains($database) -and [int]$sharded.PerLogicalDb[$database] -gt 0) -Because "按逻辑库的账要有 $database"
     }
+    Assert-True -Condition (-not $sharded.PerLogicalDb.Contains('zone_store')) -Because 'zone 库已退役(A17c),按逻辑库的账里没有 zone 主库'
     $dsInstances = $plan.ZoneCount * [int]$inputs.DsReplicas + $plan.RolloutExtraPodsPerDeployment
+    $dbInstances = $plan.ZoneCount * [int]$inputs.DbReplicas + $plan.RolloutExtraPodsPerDeployment
     Assert-Equal -Expected ($dsInstances * 6) -Actual $sharded.PerLogicalDb['directory_shard'] -Because '每片的峰值 = data_service 实例数 × 每片连接'
+    Assert-Equal -Expected ($dbInstances * $dbStorePool + $dsInstances * $dsStorePool) -Actual $sharded.PerLogicalDb['player_store'] -Because '每个地域存档库的峰值 = 全地域 go/db、data_service 实例数 × 每库存档池(搬库之前按它算目标集群的预算)'
     Assert-Match -Text (Get-ThrownMessage { Get-MysqlConnectionLedger -Inputs $inputs @shape -LogicalShards 5 }) -Pattern 'divisor of 64' -Because '片数非法拒绝'
 }
 
@@ -566,7 +636,7 @@ Test-Case '告警:规则名单和形状,指标名与取值从 Go 源码核对,�
     $alerts = Read-RepoText 'deploy/k8s/logical-db-alerts.yaml'
     $names = @([regex]::Matches($alerts, '(?m)^\s+- alert: (\S+)') | ForEach-Object { $_.Groups[1].Value })
     Assert-Equal -Expected 'DbPlacementRejected,DbPlacementSyncFailing,DbPlacementVersionLagging,RoleFencePrepareStale,RoleFencePrepareUnreachable,RoleFencePushFailing,SqlWriterRegistrarFailing,WriterGateFrozenTooLong' -Actual (($names | Sort-Object) -join ',') -Because '规则名单'
-    Assert-Match -Text $alerts -Pattern 'kube_pod_init_container_status_restarts_total\{container="sql-writer-registrar"\}' -Because '回收 CronJob 不删 init 反复失败的 Pod,要靠这条发现,名册用完也在这里'
+    Assert-Match -Text $alerts -Pattern 'kube_pod_init_container_status_restarts_total\{container="sql-writer-registrar"\}' -Because '回收 CronJob 不删 init 反复失败的 Pod,要靠这条发现,副本数比名册槽位多也在这里'
     Assert-Match -Text (Read-RepoText 'deploy/k8s/manifests/go-svc/data-service.yaml') -Pattern '(?m)^        - name: sql-writer-registrar\s*$' -Because '告警里的 init 容器名和清单一致'
     Assert-Match -Text $alerts -Pattern 'kube-state-metrics' -Because '抓取前提写明白,没有它这条是哑的'
     Assert-Equal -Expected $names.Count -Actual ([regex]::Matches($alerts, '(?m)^\s+for: \d+m\s*$').Count) -Because '每条都有 for'
@@ -622,7 +692,7 @@ Test-Case '旧键从脚本、调试栈和渲染产物里清零' {
 }
 
 Test-Case '包装入口:dev_tools 把逻辑库参数转到底,不粘滞' {
-    $names = @('DirectoryLogicalShards', 'Region', 'SqlClusters', 'SqlDefaultCluster')
+    $names = @('DirectoryLogicalShards', 'Region', 'IdIssuerRegion', 'PlayerStoreShards', 'SqlClusters', 'SqlDefaultCluster')
     foreach ($script in @('k8s_deploy.ps1', 'dev_tools.ps1')) {
         $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) $script), [ref]$null, [ref]$null)
         $declared = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
@@ -707,22 +777,26 @@ Test-Case 'registrar 带 MMORPG_SQL_BACKEND:全部写者跟 -DatabaseBackend(log
 # ──────────────────────────────────────────────
 # 8b. mmorpg 在全球权威入口上(docs/design/no-single-node-horizontal-scaling-20261001.md §6)
 # ──────────────────────────────────────────────
-Test-Case '网关的 mmorpg 跟全球权威入口:tidb 档开 TiDB 强核验,dev 的 mysql 档关;不给入口、staging/prod 的 mysql 档都在写之前拒绝' {
-    $source = Read-RepoText 'java/gateway_node/src/main/java/com/game/gateway/config/AuthorityDatabaseConfiguration.java'
-    Assert-Match -Text $source -Pattern 'getProperty\("mmorpg\.sql\.require-tidb",Boolean\.class,true\)' -Because '键名和缺省值以网关为准(前提)'
-    Assert-Match -Text $source -Pattern '!required&&!Set\.of\("dev","test"\)\.contains\(mode\)' -Because '只有 dev / test 能关强核验,这是非 dev 的 mysql 档要拒绝的理由'
+Test-Case '网关的 mmorpg 跟全球权威入口:档位写成 mmorpg.sql.backend,tidb 档核对 TiDB,mysql 档(含 prod)核对 MySQL 主库;不给入口在写之前拒绝' {
+    $gatewaySource = Read-RepoText 'java/gateway_node/src/main/java/com/game/gateway/config/AuthorityDatabaseConfiguration.java'
+    Assert-Match -Text $gatewaySource -Pattern 'AuthorityDataSource\.Backend\.resolve\(\s*environment\.getProperty\("mmorpg\.sql\.backend","tidb"\)' -Because '网关按 mmorpg.sql.backend 取档位(前提)'
+    $authoritySource = Read-RepoText 'java/authority_jdbc/src/main/java/com/game/authority/AuthorityDataSource.java'
+    Assert-Match -Text $authoritySource -Pattern 'case "mysql":\s+return MYSQL;' -Because 'mysql 档在任何运行模式下都按主库严格核对(规则只在 Backend.resolve)'
+    Assert-Match -Text $authoritySource -Pattern 'Set\.of\("dev","test"\)\.contains\(runMode\)' -Because 'tidb 档关掉强核验仍只许 dev / test'
     foreach ($case in @(
-            @{ Label = 'tidb 档'; Run = $devZoneRun; RequireTidb = 'true'; RunMode = 'prod' }
-            @{ Label = 'dev 的 mysql 档'; Run = $devMysqlZoneRun; RequireTidb = 'false'; RunMode = 'dev' }
+            @{ Label = 'tidb 档'; Run = $devZoneRun; Backend = 'tidb'; RequireTidb = 'true' }
+            @{ Label = 'dev 的 mysql 档'; Run = $devMysqlZoneRun; Backend = 'mysql'; RequireTidb = 'false' }
         )) {
         Assert-Equal -Expected 0 -Actual $case.Run.ExitCode -Because "$($case.Label) 输出: $($case.Run.Output)"
         $flat = Get-ConfigFlat -Output $case.Run.Output -ConfigMap 'java-svc-gateway-config'
         $url = Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.spring.datasource.url'
         Assert-True -Condition ($url.StartsWith("jdbc:mysql://$AuthorityHost/mmorpg?")) -Because "$($case.Label):网关连的就是 login 登记的那个 mmorpg,实际 $url"
-        Assert-Equal -Expected $case.RequireTidb -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.sql.require-tidb') -Because "$($case.Label) 的强核验"
-        Assert-Equal -Expected $case.RunMode -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.run-mode') -Because "$($case.Label) 的 run-mode"
+        Assert-Equal -Expected $case.Backend -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.sql.backend') -Because "$($case.Label) 的核对档位"
+        Assert-Equal -Expected $case.RequireTidb -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.sql.require-tidb') -Because "$($case.Label):require-tidb 只对 tidb 档有意义"
+        Assert-Equal -Expected 'prod' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.run-mode') -Because "$($case.Label):不靠 dev 模式放宽核验"
     }
     $prodFlat = Get-ConfigFlat -Output $prodZoneRun.Output -ConfigMap 'java-svc-gateway-config'
+    Assert-Equal -Expected 'tidb' -Actual (Get-FlatValue -Flat $prodFlat -KeyPath 'data.application.yaml.mmorpg.sql.backend') -Because 'prod 的 tidb 档'
     Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $prodFlat -KeyPath 'data.application.yaml.mmorpg.sql.require-tidb') -Because 'prod 的 tidb 档同样开强核验'
 
     # 不给入口:Go 服务那边早就所有档位都要显式入口;只部署网关(-SkipGoSvc)时同样拒绝,不回落 infra MySQL,否则 mmorpg 分成两份。
@@ -734,13 +808,18 @@ Test-Case '网关的 mmorpg 跟全球权威入口:tidb 档开 TiDB 强核验,dev
     Assert-Match -Text $noHost.Output -Pattern 'every release profile needs -GlobalAuthorityTiDBHost' -Because '点名缺的参数'
     Assert-NotMatch -Text $noHost.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写路径入口拒绝'
 
+    # MySQL 主从省钱档在 prod 也能部署网关:Java 的 mysql 档逐条物理连接核对端是可写的 MySQL 主库。入口是外部主库,建表 Job 照跑。
     $prodMysql = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-DatabaseBackend', 'mysql')) -Env $ProdEnv
-    Assert-True -Condition ($prodMysql.ExitCode -ne 0) -Because "prod 的 mysql 档网关起不来,要拒绝。输出: $($prodMysql.Output)"
-    Assert-Match -Text $prodMysql.Output -Pattern 'needs the mmorpg database on TiDB' -Because '点名原因'
-    Assert-NotMatch -Text $prodMysql.Output -Pattern '--- BEGIN MANIFEST ---' -Because 'gate、scene、Go 服务都不能已经 apply 了才失败'
+    Assert-Equal -Expected 0 -Actual $prodMysql.ExitCode -Because "prod 的 mysql 档。输出: $($prodMysql.Output)"
+    $prodMysqlFlat = Get-ConfigFlat -Output $prodMysql.Output -ConfigMap 'java-svc-gateway-config'
+    Assert-Equal -Expected 'mysql' -Actual (Get-FlatValue -Flat $prodMysqlFlat -KeyPath 'data.application.yaml.mmorpg.sql.backend') -Because 'prod 的 mysql 档按主库核对'
+    Assert-Equal -Expected 'prod' -Actual (Get-FlatValue -Flat $prodMysqlFlat -KeyPath 'data.application.yaml.mmorpg.run-mode') -Because '不靠 dev 模式放宽'
+    $prodMysqlJob = @(Get-ManifestBlocks -Output $prodMysql.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: gateway-schema\s*$' })
+    Assert-Equal -Expected 1 -Actual $prodMysqlJob.Count -Because '外部 MySQL 主库上同样要建表'
+    Assert-Match -Text $prodMysqlJob[0] -Pattern 'name: MMORPG_SQL_BACKEND\s+value: "mysql"' -Because 'writer_authority 按 mysql 档连'
 }
 
-Test-Case 'tidb 档网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就是网关的 schema.sql,先于网关 Deployment;mysql 档不渲染' {
+Test-Case '网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就是网关的 schema.sql,先于网关 Deployment;只有入口是集群内 MySQL 时不渲染' {
     Assert-Match -Text (Read-RepoText 'go/data_service/cmd/writer_authority/main.go') -Pattern 'flags\.String\("ddl-file"' -Because 'writer_authority 有 -ddl-file(前提)'
     $jobs = @(Get-ManifestBlocks -Output $devZoneRun.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: gateway-schema\s*$' })
     Assert-Equal -Expected 1 -Actual $jobs.Count -Because 'tidb 档恰好一份'
@@ -771,7 +850,17 @@ Test-Case 'tidb 档网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就�
     $applied = $devZoneRun.Output.IndexOf('[applied] gateway-schema -> fixture.invalid/registrar@sha256:')
     Assert-True -Condition ($applied -ge 0) -Because '打印镜像'
     Assert-True -Condition ($applied -lt $devZoneRun.Output.IndexOf('[applied] gateway -> ')) -Because 'Job 先于网关 Deployment:网关按 ddl-auto: validate 启动,表要先在'
-    Assert-NotMatch -Text $devMysqlZoneRun.Output -Pattern '(?m)^  name: gateway-schema(-sql)?\s*$' -Because 'mysql 档(dev,infra MySQL)由 mysql-init 建这个库,不跑 Job'
+
+    # mysql 档的入口是外部主库(这里是 $AuthorityHost):照样建表,writer_authority 按 mysql 档连。
+    $mysqlJob = @(Get-ManifestBlocks -Output $devMysqlZoneRun.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: gateway-schema\s*$' })
+    Assert-Equal -Expected 1 -Actual $mysqlJob.Count -Because '外部 MySQL 主库没有 mysql-init,建表要靠这个 Job'
+    Assert-Match -Text $mysqlJob[0] -Pattern 'name: MMORPG_SQL_BACKEND\s+value: "mysql"' -Because '档位跟 -DatabaseBackend'
+    # 入口就是集群内单实例 MySQL(只在 dev):mysql-init 的 gateway_tables.sql 建这个库,不跑 Job。
+    $inCluster = Invoke-LogicalDbDryRun -Arguments (@($ZoneArgs | ForEach-Object { if ($_ -ceq $AuthorityHost) { $InClusterMysqlHost } else { $_ } }) + @('-DatabaseBackend', 'mysql'))
+    Assert-Equal -Expected 0 -Actual $inCluster.ExitCode -Because "dev 用集群内 MySQL。输出: $($inCluster.Output)"
+    Assert-NotMatch -Text $inCluster.Output -Pattern '(?m)^  name: gateway-schema(-sql)?\s*$' -Because '集群内 MySQL 由 mysql-init 建这个库'
+    $inClusterFlat = Get-ConfigFlat -Output $inCluster.Output -ConfigMap 'java-svc-gateway-config'
+    Assert-Equal -Expected 'mysql' -Actual (Get-FlatValue -Flat $inClusterFlat -KeyPath 'data.application.yaml.mmorpg.sql.backend') -Because '集群内 MySQL 同样按主库核对'
 }
 
 Test-Case '-Region 注入 data-service 主容器,所有档位都写;go/db 注入 POD_IP;dev 的 Schema.AutoMigrate 也是 false' {
@@ -796,8 +885,91 @@ Test-Case 'MMORPG_DB_ALLOWED_DATABASES 在写路径入口核:没给、不合规�
     $bad = Invoke-LogicalDbDryRun -Arguments $ZoneArgs -Env @{ MMORPG_DB_ALLOWED_DATABASES = 'mmorpg_global' }
     Assert-True -Condition ($bad.ExitCode -ne 0) -Because "不是存档库的名字要拒绝。输出: $($bad.Output)"
     Assert-NotMatch -Text $bad.Output -Pattern '--- BEGIN MANIFEST ---' -Because '同样在任何清单之前'
+    # 存档库是别的地域的(地域码填错):dev 是地域 0,清单里却是地域 1 的库(设计 player-data-tidb-scaling-plan.md §7.2)。
+    $wrongRegion = Invoke-LogicalDbDryRun -Arguments $ZoneArgs -Env @{ MMORPG_DB_ALLOWED_DATABASES = 'player_store_1001000_db' }
+    Assert-True -Condition ($wrongRegion.ExitCode -ne 0) -Because "别的地域的存档库要拒绝。输出: $($wrongRegion.Output)"
+    Assert-Match -Text $wrongRegion.Output -Pattern 'must list exactly the 1 player store databases of region 0 \(player_store_1000000_db\.\.player_store_1000000_db\)' -Because '点名本地域该有哪些库'
+    Assert-Match -Text $wrongRegion.Output -Pattern 'missing 1: player_store_1000000_db; unexpected 1: player_store_1001000_db' -Because '点名少了哪个、多了哪个'
+    Assert-NotMatch -Text $wrongRegion.Output -Pattern '--- BEGIN MANIFEST ---' -Because '同样在任何清单之前'
+    # zone 库已退役(设计 §7.2 A17c):清单里还有 zone 库说明部署没跟上,点名拒绝。
+    $zoneDb = Invoke-LogicalDbDryRun -Arguments $ZoneArgs -Env @{ MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,player_store_1000000_db' }
+    Assert-True -Condition ($zoneDb.ExitCode -ne 0) -Because "清单里有 zone 库要拒绝。输出: $($zoneDb.Output)"
+    Assert-Match -Text $zoneDb.Output -Pattern "names 'zone_1_db': zone databases are retired" -Because '点名是哪个 zone 库'
+    Assert-NotMatch -Text $zoneDb.Output -Pattern '--- BEGIN MANIFEST ---' -Because '同样在任何清单之前'
     $infra = Invoke-LogicalDbDryRun -Arguments $InfraArgs -Env ($InfraEnv + @{ MMORPG_DB_ALLOWED_DATABASES = '' })
     Assert-Equal -Expected 0 -Actual $infra.ExitCode -Because "infra-up 不部署 db、data-service,不要这份清单。输出: $($infra.Output)"
+}
+
+Test-Case '存档库清单:恰好是本地域的 K 个库,zone 库拒绝;K 与地域码 dev 缺省 1 / 0,staging、prod 必须显式' {
+    # 纯函数按 AST 抽出(本节点名单在文件头)。
+    Assert-Equal -Expected 'player_store_1007000_db,player_store_1007001_db,player_store_1007002_db' -Actual ((Assert-PlayerStoreAllowlist -DatabaseNames 'player_store_1007002_db,player_store_1007000_db,player_store_1007001_db' -RegionCode 7 -Shards 3) -join ',') -Because '顺序无关,返回按片号排的本地域库名'
+    foreach ($case in @(
+            @{ Names = 'zone_1_db,player_store_1000000_db'; Region = 0; Shards = 1; Pattern = "names 'zone_1_db': zone databases are retired"; Why = 'zone 库已退役(A17c),清单里出现就拒绝并点名' }
+            @{ Names = 'player_store_1007000_db,player_store_1007001_db'; Region = 7; Shards = 3; Pattern = 'missing 1: player_store_1007002_db'; Why = '少一个片' }
+            @{ Names = 'player_store_1007000_db,player_store_1007001_db,player_store_1007002_db,player_store_1007003_db'; Region = 7; Shards = 3; Pattern = 'unexpected 1: player_store_1007003_db'; Why = 'K 填小了(清单多一个片)' }
+            @{ Names = 'player_store_1000000_db'; Region = 7; Shards = 1; Pattern = 'unexpected 1: player_store_1000000_db'; Why = '地域码填错' }
+        )) {
+        Assert-Match -Text (Get-ThrownMessage { Assert-PlayerStoreAllowlist -DatabaseNames $case.Names -RegionCode $case.Region -Shards $case.Shards }) -Pattern ([regex]::Escape($case.Pattern)) -Because $case.Why
+    }
+    Assert-Match -Text (Get-ThrownMessage { Assert-PlayerStoreAllowlist -DatabaseNames 'player_store_1000000_db,player_store_1000000_db' -RegionCode 0 -Shards 1 }) -Pattern 'names storage 1000000 twice' -Because '库名形状与重复仍由 Get-RoleProofStorageIds 核'
+    Assert-Equal -Expected 1 -Actual (Resolve-PlayerStoreShards -Requested 0 -ReleaseProfileName 'dev') -Because 'dev 缺省 1'
+    Assert-Equal -Expected 64 -Actual (Resolve-PlayerStoreShards -Requested 64 -ReleaseProfileName 'prod') -Because '显式给就用它'
+    foreach ($profileName in @('staging', 'prod')) {
+        Assert-Match -Text (Get-ThrownMessage { Resolve-PlayerStoreShards -Requested 0 -ReleaseProfileName $profileName }) -Pattern 'must pass -PlayerStoreShards explicitly' -Because "$profileName 没有回落值"
+    }
+    Assert-Match -Text (Get-ThrownMessage { Resolve-PlayerStoreShards -Requested 1001 -ReleaseProfileName 'dev' }) -Pattern 'out of range' -Because 'K 上限 1000(placement.RegionStorageStride)'
+}
+
+Test-Case 'DryRun:login 的 Placement 按地域码和 K 渲染,存档库池按 K 摊开,MySQL 初始化预建本地域的存档库' {
+    # dev:地域 0、K=1,login 只能落 player_store_1000000_db;两类存档库池就是服务 yaml 的 K=1 预算。
+    $devLogin = Get-ConfigFlat -Output $devZoneRun.Output -ConfigMap 'go-svc-login-config'
+    Assert-Equal -Expected '0/1' -Actual ('{0}/{1}' -f $devLogin.Scalars['data.login.yaml.Placement.Region'], $devLogin.Scalars['data.login.yaml.Placement.StorageShards']) -Because 'dev 缺省地域 0、K=1'
+    Assert-Equal -Expected 0 -Actual @($devLogin.Scalars.Keys | Where-Object { $_ -like 'data.login.yaml.Placement.NewPlayerStorageId*' }).Count -Because '旧键 NewPlayerStorageId 已删,login 见到会拒启'
+    Assert-Match -Text $devZoneRun.Output -Pattern 'Player store databases: region=0 shards=1 databases=player_store_1000000_db\.\.player_store_1000000_db' -Because '入口打印本次存档库'
+    $devDb = Get-ConfigFlat -Output $devZoneRun.Output -ConfigMap 'go-svc-db-config'
+    Assert-Equal -Expected (Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'Placement.StoreMaxOpenConn') -Actual $devDb.Scalars['data.db.yaml.Placement.StoreMaxOpenConn'] -Because 'K=1 时每库就是服务 yaml 的预算'
+
+    # prod:地域 7、K=64(夹具补的 K),login 写同一对值;每库的池按 K 摊开,与连接总账同一条规则。
+    $prodLogin = Get-ConfigFlat -Output $prodZoneRun.Output -ConfigMap 'go-svc-login-config'
+    Assert-Equal -Expected '7/64' -Actual ('{0}/{1}' -f $prodLogin.Scalars['data.login.yaml.Placement.Region'], $prodLogin.Scalars['data.login.yaml.Placement.StorageShards']) -Because 'Region 与 data-service 的 IdSegment.Issuer.Region 同源,K 取 -PlayerStoreShards'
+    $prodDb = Get-ConfigFlat -Output $prodZoneRun.Output -ConfigMap 'go-svc-db-config'
+    $prodDs = Get-ConfigFlat -Output $prodZoneRun.Output -ConfigMap 'go-svc-data-service-config'
+    $dbBudget = [int](Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'Placement.StoreMaxOpenConn')
+    $dsBudget = [int](Get-AuthoritativeScalar -RelativePath 'go/data_service/etc/data_service.yaml' -KeyPath 'Directory.StoragePools.MaxOpenConn')
+    Assert-Equal -Expected (Get-PlayerStorePoolLimit -Base $dbBudget -Shards 64) -Actual ([int]$prodDb.Scalars['data.db.yaml.Placement.StoreMaxOpenConn']) -Because 'go/db 每个存档库的池按 K 摊开'
+    Assert-True -Condition ([int]$prodDb.Scalars['data.db.yaml.Placement.StoreMaxIdleConn'] -le [int]$prodDb.Scalars['data.db.yaml.Placement.StoreMaxOpenConn']) -Because '空闲数不超过摊开后的上限'
+    Assert-Equal -Expected (Get-PlayerStorePoolLimit -Base $dsBudget -Shards 64) -Actual ([int]$prodDs.Scalars['data.data_service.yaml.Directory.StoragePools.MaxOpenConn']) -Because 'data_service 每个存档库的池按 K 摊开'
+    Assert-Match -Text $prodZoneRun.Output -Pattern 'Player store databases: region=7 shards=64 databases=player_store_1007000_db\.\.player_store_1007063_db' -Because '入口打印本次存档库'
+
+    # 缺 K:staging、prod 在任何清单之前拒绝。
+    $noShards = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-PlayerStoreShards', '0')) -Env $ProdEnv
+    Assert-True -Condition ($noShards.ExitCode -ne 0) -Because "prod 没给 -PlayerStoreShards 必须拒绝。输出: $($noShards.Output)"
+    Assert-Match -Text $noShards.Output -Pattern 'must pass -PlayerStoreShards explicitly' -Because '点名参数'
+    Assert-NotMatch -Text $noShards.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在任何清单之前'
+}
+
+Test-Case 'DryRun:-IdIssuerRegion 只换发号器地域码,存档库和 login 的 Placement 仍按 -Region(换码之后老玩家的存档库不动)' {
+    $run = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-IdIssuerRegion', '9')) -Env $ProdEnv
+    Assert-True -Condition ($run.ExitCode -eq 0) -Because "换码之后照常部署。输出: $($run.Output)"
+    $ds = Get-ConfigFlat -Output $run.Output -ConfigMap 'go-svc-data-service-config'
+    Assert-Equal -Expected '9' -Actual (Get-FlatValue -Flat $ds -KeyPath 'data.data_service.yaml.IdSegment.Issuer.Region') -Because '发号器用新码'
+    Assert-Match -Text (Get-DeploymentBlock -Output $run.Output -Name 'data-service') -Pattern 'name: MMORPG_ID_ISSUER_EXPECTED_REGION\s+value: "9"' -Because 'data_service 启动比对的是发号器地域码'
+    $login = Get-ConfigFlat -Output $run.Output -ConfigMap 'go-svc-login-config'
+    Assert-Equal -Expected '7' -Actual $login.Scalars['data.login.yaml.Placement.Region'] -Because '新号仍落本地域原来的存档库'
+    Assert-Match -Text $run.Output -Pattern 'Player store databases: region=7 shards=64 databases=player_store_1007000_db\.\.player_store_1007063_db' -Because '存档库清单按 -Region 核'
+    Assert-Match -Text $run.Output -Pattern 'Id issuer: region=9 ' -Because '入口打印发号器地域码'
+}
+
+Test-Case 'DryRun:staging/prod 的 data-service ConfigMap 写登记处双向 TLS 的三个证书路径并核对客户端证书 Secret,dev 不写' {
+    $prod = Get-ConfigFlat -Output $prodZoneRun.Output -ConfigMap 'go-svc-data-service-config'
+    foreach ($pair in @(@('CAFile', 'ca.crt'), @('CertFile', 'tls.crt'), @('KeyFile', 'tls.key'))) {
+        Assert-Equal -Expected "/etc/mmorpg/id-registry-tls/$($pair[1])" -Actual (Get-FlatValue -Flat $prod -KeyPath "data.data_service.yaml.IdSegment.Issuer.RegistryTLS.$($pair[0])") `
+            -Because "RegistryTLS.$($pair[0]) 指向 data-service.yaml 挂载的客户端证书"
+    }
+    Assert-Match -Text $prodZoneRun.Output -Pattern '\[dry-run\] would check that Secret id-registry-client-tls in namespace \S+ has ca\.crt, tls\.crt and tls\.key' -Because 'DryRun 打出将要核对的预置 Secret'
+    $dev = Get-ConfigFlat -Output $devZoneRun.Output -ConfigMap 'go-svc-data-service-config'
+    Assert-Equal -Expected 0 -Actual @($dev.Scalars.Keys | Where-Object { $_ -like 'data.data_service.yaml.IdSegment.Issuer.RegistryTLS*' }).Count -Because 'dev 的登记处在自己的 etcd 上,没有 TLS'
+    Assert-NotMatch -Text $devZoneRun.Output -Pattern 'would check that Secret id-registry-client-tls' -Because 'dev 不核客户端证书'
 }
 
 Test-Case '回收 CronJob:zone 和 infra 各一份,先于写者,只有 pods 的三个动词,非 root,只认主容器的退出码 78' {
@@ -820,7 +992,7 @@ Test-Case '回收 CronJob:zone 和 infra 各一份,先于写者,只有 pods 的�
     Assert-Match -Text $text -Pattern 'runAsNonRoot: true' -Because '有的集群禁 root 容器;官方镜像默认 root,要显式钉'
     Assert-Match -Text $text -Pattern 'runAsUser: 10001' -Because '非 root 的 uid'
     Assert-Match -Text $text -Pattern '--selector=mmorpg\.io/sql-writer=true' -Because '只处理带 label 的 Pod'
-    Assert-Match -Text $text -Pattern 'if eq \(printf "%v" \.lastState\.terminated\.exitCode\) "78"' -Because '判据是主容器上一次以 78 退出:写资格已消费。还没写过就退出的进程能原地接着起,不删、不烧名册;initContainerStatuses 不看,init 反复失败时删了白烧名册'
+    Assert-Match -Text $text -Pattern 'if eq \(printf "%v" \.lastState\.terminated\.exitCode\) "78"' -Because '判据是主容器上一次以 78 退出:这一代的写资格已消费,删掉后 StatefulSet 按同序号重建、在槽位上换代。还没写过就退出的进程能原地接着起,不删;initContainerStatuses 不看,init 反复失败时删了也是同样原因再失败'
     Assert-NotMatch -Text $text -Pattern 'initContainerStatuses:?\}|range \.status\.initContainerStatuses' -Because 'init 的重启次数不算'
     Assert-Match -Text $text -Pattern 'if \.metadata\.deletionTimestamp' -Because '已经在删的跳过'
     Assert-Match -Text $text -Pattern 'deleting pod \{\{\$pod\.metadata\.name\}\} in namespace \{\{\$pod\.metadata\.namespace\}\}' -Because '删除前的日志写明 namespace 和 Pod 名'
@@ -843,26 +1015,44 @@ Test-Case '回收 CronJob:zone 和 infra 各一份,先于写者,只有 pods 的�
     }
 }
 
-Test-Case '名册要留余量:最少 副本数 × 6;目录缺名册时 -SqlSchemaOnly 能跑 Job,不带这个开关在写之前拒绝' {
-    Assert-Equal -Expected 12 -Actual (Get-SqlWriterRosterMinimumEntries -Replicas 2) -Because '两副本:当前 2 + 一次滚动 2 + 每副本 4 条余量'
+Test-Case '名册按槽位:最少 副本数 个槽位;目录缺名册时 -SqlSchemaOnly 能跑 Job,不带这个开关在写之前拒绝' {
+    Assert-Equal -Expected 2 -Actual (Get-SqlWriterRosterMinimumEntries -Replicas 2) -Because '两副本两个槽位:同一序号每次启动在槽位上换代,重启、回收、滚动都不消耗槽位'
     $root = Join-Path $TempRoot 'schema-only'
     $null = New-Item -ItemType Directory -Path $root
     $catalog = @{}
     foreach ($service in @('db', 'data-service', 'login', 'gateway')) { $catalog["$ZoneNamespace/$service"] = @{ schemaConfigSecret = 'fixture-schema-config'; schemaPermissionSecret = 'fixture-schema-permission' } }
+    # 网关没有自己的迁移镜像,mmorpg 的建表 Job 跑 registrar 镜像里的 writer_authority:gateway 条目还要 registrarImage。
+    # 镜像不依赖 generation,名册之前就能定。
+    $gatewayRegistrarImage = 'fixture.invalid/registrar@sha256:' + ('c' * 64)
+    $catalog["$ZoneNamespace/gateway"].registrarImage = $gatewayRegistrarImage
     $catalogFile = Join-Path $root 'catalog.json'
     [IO.File]::WriteAllText($catalogFile, (ConvertTo-Json -InputObject $catalog -Depth 4 -Compress), [Text.UTF8Encoding]::new($false))
     $schemaOnly = Invoke-LogicalDbDryRun -Arguments ($ZoneArgs + @('-SqlSchemaOnly')) -Env @{ MMORPG_SQL_K8S_BOOT_CATALOG = $catalogFile }
-    Assert-Equal -Expected 0 -Actual $schemaOnly.ExitCode -Because "目录只有 schema Secret 也能跑 Job。输出: $($schemaOnly.Output)"
+    Assert-Equal -Expected 0 -Actual $schemaOnly.ExitCode -Because "目录只有 schema Secret(gateway 另加 registrar 镜像)也能跑 Job。输出: $($schemaOnly.Output)"
     foreach ($job in @('db-migrate', 'data-service-migrate')) {
         $block = @(Get-ManifestBlocks -Output $schemaOnly.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch ('(?m)^  name: ' + $job + '\s*$') })
         Assert-Equal -Expected 1 -Actual $block.Count -Because "$job 要渲染"
         Assert-Match -Text $block[0] -Pattern 'secretName: fixture-schema-config' -Because "$job 读 schema 账号的配置"
         Assert-Match -Text $block[0] -Pattern 'name: MMORPG_SQL_SCHEMA_PRINCIPAL\s+valueFrom: \{secretKeyRef: \{name: fixture-schema-permission, key: principal, optional: false\}\}' -Because "$job 的主体"
     }
-    Assert-NotMatch -Text $schemaOnly.Output -Pattern '(?m)^kind: Deployment\s*$' -Because 'gate、scene、写者都不起'
+    $gatewayJob = @(Get-ManifestBlocks -Output $schemaOnly.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: gateway-schema\s*$' })
+    Assert-Equal -Expected 1 -Actual $gatewayJob.Count -Because 'tidb 档 mmorpg 的建表 Job 同样在名册之前跑:login、gateway 的名册要读它种下的 route_meta.generation'
+    Assert-Match -Text $gatewayJob[0] -Pattern ('(?m)^\s+image: ' + [regex]::Escape($gatewayRegistrarImage) + '\s*$') -Because '镜像取 gateway 条目的 registrarImage'
+    Assert-Match -Text $gatewayJob[0] -Pattern 'name: MMORPG_SQL_SCHEMA_PRINCIPAL\s+valueFrom: \{secretKeyRef: \{name: fixture-schema-permission, key: principal, optional: false\}\}' -Because 'gateway-schema 的主体'
+    Assert-True -Condition ($schemaOnly.Output.IndexOf('[applied] gateway-schema ->') -gt $schemaOnly.Output.IndexOf('name: data-service-migrate')) -Because 'Go 服务的 Job 先跑,网关的建表 Job 随后'
+    Assert-NotMatch -Text $schemaOnly.Output -Pattern '(?m)^kind: (?:Deployment|StatefulSet)\s*$' -Because 'gate、scene、写者都不起'
+
+    # gateway 条目缺 registrar 镜像:先渲染网关的建表 Job,一个 Job 都还没跑就拒绝。
+    $catalog["$ZoneNamespace/gateway"].Remove('registrarImage')
+    $noImageFile = Join-Path $root 'catalog-no-gateway-image.json'
+    [IO.File]::WriteAllText($noImageFile, (ConvertTo-Json -InputObject $catalog -Depth 4 -Compress), [Text.UTF8Encoding]::new($false))
+    $noImage = Invoke-LogicalDbDryRun -Arguments ($ZoneArgs + @('-SqlSchemaOnly')) -Env @{ MMORPG_SQL_K8S_BOOT_CATALOG = $noImageFile }
+    Assert-True -Condition ($noImage.ExitCode -ne 0) -Because "没有镜像跑不了 writer_authority。输出: $($noImage.Output)"
+    Assert-Match -Text $noImage.Output -Pattern 'needs a registrarImage pinned by digest' -Because '点名缺什么'
+    Assert-NotMatch -Text $noImage.Output -Pattern '--- BEGIN MANIFEST ---' -Because 'db-migrate、data-service-migrate 也还没 apply'
     $dbJob = @(Get-ManifestBlocks -Output $schemaOnly.Output | Where-Object { $_ -cmatch '(?m)^  name: db-migrate\s*$' })[0]
     Assert-Match -Text $dbJob -Pattern 'image: registry\.invalid/test/mmorpg-db-migrate:' -Because 'cmd/migrate 不在服务二进制里,单独的镜像'
-    Assert-Match -Text $dbJob -Pattern ('name: DB_ALLOWED_DATABASES\s+value: "' + [regex]::Escape($AllowedDatabases) + '"') -Because '逐库迁全部存档库:data_service 的写资格覆盖它们'
+    Assert-Match -Text $dbJob -Pattern ('name: DB_ALLOWED_DATABASES\s+value: "' + [regex]::Escape($DevAllowedDatabases) + '"') -Because '逐库迁全部存档库(本地域的存档库):data_service 的写资格覆盖它们'
     Assert-NotMatch -Text $dbJob -Pattern 'PLACEHOLDER_|__INFRA_NAMESPACE__' -Because '占位全部替换'
 
     $refused = Invoke-LogicalDbDryRun -Arguments $ZoneArgs -Env @{ MMORPG_SQL_K8S_BOOT_CATALOG = $catalogFile }
@@ -877,15 +1067,15 @@ Test-Case '名册要留余量:最少 副本数 × 6;目录缺名册时 -SqlSchem
     $small = New-SqlWriterCatalogFixture -Root (Join-Path $root 'small') -Namespaces @($ZoneNamespace, $Infra)
     $smallCatalog = Get-Content -LiteralPath $small -Raw | ConvertFrom-Json -AsHashtable
     $smallRoster = Join-Path $root 'small-roster.json'
-    [IO.File]::WriteAllText($smallRoster, '{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[{},{}]}', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($smallRoster, '{"format":"SQL_WRITER_BOOT_ROSTER_V2","entries":[{}]}', [Text.UTF8Encoding]::new($false))
     foreach ($key in @($smallCatalog.Keys)) {
         $smallCatalog[$key].rosterFile = $smallRoster
         $smallCatalog[$key].rosterSha256 = (Get-FileHash -LiteralPath $smallRoster -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     [IO.File]::WriteAllText($small, (ConvertTo-Json -InputObject $smallCatalog -Depth 6 -Compress), [Text.UTF8Encoding]::new($false))
     $tooSmall = Invoke-LogicalDbDryRun -Arguments $ZoneArgs -Env @{ MMORPG_SQL_K8S_BOOT_CATALOG = $small }
-    Assert-True -Condition ($tooSmall.ExitCode -ne 0) -Because '条数只够副本数不够:每次 Pod 启动都永久烧一条'
-    Assert-Match -Text $tooSmall.Output -Pattern '2 replicas need at least 12 entries' -Because '点名要多少条'
+    Assert-True -Condition ($tooSmall.ExitCode -ne 0) -Because '槽位比副本少:多出来的序号选不到槽位'
+    Assert-Match -Text $tooSmall.Output -Pattern '2 replicas need at least 2 slots' -Because '点名要多少个槽位'
     Assert-NotMatch -Text $tooSmall.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写之前拒绝'
 }
 
@@ -922,7 +1112,7 @@ Test-Case '手册:开新地域的手册写清地域码的约束,docs/README 登�
     }
     Assert-Match -Text $openServer -Pattern 'DirectoryLogicalShards = 64' -Because '部署参数示例'
     Assert-Match -Text $openServer -Pattern 'Region = ' -Because '部署参数示例'
-    foreach ($pattern in @('-id-issuer-init', 'tidb_enable_check_constraint', 'render-schema-role', '-SqlSchemaOnly', 'db-migrate', 'sql-writer-pod-reaper', '副本数 × 6', 'SqlWriterRegistrarFailing', 'schemaPermissionSecret', 'MMORPG_ID_ISSUER_EXPECTED_REGION')) {
+    foreach ($pattern in @('-id-issuer-init', 'tidb_enable_check_constraint', 'render-schema-role', '-SqlSchemaOnly', 'db-migrate', 'sql-writer-pod-reaper', '槽位数 ≥ 副本数', 'SqlWriterRegistrarFailing', 'schemaPermissionSecret', 'MMORPG_ID_ISSUER_EXPECTED_REGION')) {
         Assert-Match -Text $openServer -Pattern $pattern -Because "开服手册要写 $pattern"
     }
     # 顺序:TiDB 开关在建库之前,发号器初始化在 data-service 就绪之后、放流量之前。
@@ -933,7 +1123,7 @@ Test-Case '手册:开新地域的手册写清地域码的约束,docs/README 登�
         Assert-Match -Text $doc -Pattern '/app/etc/private/data_service\.yaml -id-issuer-init' -Because '写者的配置在私有子目录,手册里的命令要跟着走'
         Assert-NotMatch -Text $doc -Pattern '/app/etc/data_service\.yaml -id-issuer-init' -Because '旧路径已经不存在'
     }
-    Assert-Match -Text $runbook -Pattern 'exec deploy/data-service -- grep -n ''Region:'' /app/etc/private/data_service\.yaml' -Because '核 Pod 里生效的配置,不核 ConfigMap 模板'
+    Assert-Match -Text $runbook -Pattern 'exec statefulset/data-service -- grep -n ''Region:'' /app/etc/private/data_service\.yaml' -Because '核 Pod 里生效的配置,不核 ConfigMap 模板;data-service 是 StatefulSet(写者名册的槽位)'
     Assert-NotMatch -Text $runbook -Pattern 'get configmap go-svc-data-service-config' -Because 'ConfigMap 只是模板,核它看不出 Secret 抄错'
     Assert-NotMatch -Text (Read-RepoText 'deploy/k8s/README.md') -Pattern '靠 K8s 重启收敛|K8s 下一次重启就恢复' -Because '主容器重启过的写者 Pod 由回收 CronJob 换新,不是原地恢复'
 }

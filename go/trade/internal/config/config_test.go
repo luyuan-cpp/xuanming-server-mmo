@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -8,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	basepb "proto/common/base"
+	"shared/currencytype"
 	"shared/playerredis"
 	"trade/internal/data"
 
@@ -404,5 +407,20 @@ func TestEffectivePlayerRedis(t *testing.T) {
 	c.PlayerRedis = playerredis.Config{Cluster: true}
 	if err := c.Validate(); err == nil {
 		t.Error("Cluster=true 没写种子地址应拒绝")
+	}
+}
+
+// 交易白名单只点名取值表常量:银两、灵石可交易;绑定灵石禁售;表外的值(下一个新币种、越界值)一律不可交易。
+// svc 装配人民币寄售与配置校验调的是同一个函数,这里一处钉住。
+func TestIsTradableCurrencyIsGoldAndDiamondOnly(t *testing.T) {
+	for _, c := range []uint32{currencytype.Gold, currencytype.Diamond} {
+		if !IsTradableCurrency(c) {
+			t.Errorf("IsTradableCurrency(%d) = false, want true", c)
+		}
+	}
+	for _, c := range []uint32{currencytype.BindDiamond, uint32(len(basepb.CurrencyType_name)), math.MaxUint32} {
+		if IsTradableCurrency(c) {
+			t.Errorf("IsTradableCurrency(%d) = true, want false", c)
+		}
 	}
 }

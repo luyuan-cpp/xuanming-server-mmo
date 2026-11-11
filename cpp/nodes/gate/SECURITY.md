@@ -276,9 +276,8 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 > 应急首选是调低上限（检查直接通过），不是开豁免。
 > ② `LogLevel: 2` 在 muduo 枚举里是 **INFO 而非注释所写的 WARN**，而 `TcpServer` 对每条连接的
 > 建立与移除各有一行无条件 `LOG_INFO`——本节称道的采样纪律被上游抵消；
-> （2026-10-22：注释已按 muduo 枚举改正，值仍为 2；K8s 的 node-config 原先写死 1 = DEBUG，现改为从 `bin/etc` 镜像。
-> 这两行 INFO 仍在打，结论不变。见设计文档 P0-3 的同日说明。）
-> （2026-10-30 更正：上一句只对 Linux 构建成立。`third_party/muduo-linux`（即 K8s）这两行是 `LOG_INFO`，照打；
-> Windows 构建用的 `muduo_windows` 与 `third_party/muduo` 自 `52ebf9e5d` 起已是 `LOG_TRACE`，本机看不到。）
+> （2026-11-10 状态：已修。注释已按 muduo 枚举改正，生产值定为 2 = INFO；K8s 的 node-config 原先写死 1 = DEBUG，2026-10-22 起从 `bin/etc` 镜像。
+> 这两行连接日志两个平台都已降为 `LOG_TRACE`：Windows 构建自 `52ebf9e5d`，Linux 构建（`third_party/muduo-linux`，即 K8s）经
+> `tools/archived/muduo_linux_overlay/muduo/net/TcpServer.cc`，2026-11-10 落码、未编译。② 所说的抵消随之消除，详见设计文档 P0-3。）
 > ③ 补上「未认证连接独立预算 + 死线」约 20 行、不需要改 muduo，是投入产出比最高的一条。
 > **（2026-11-06）** 死线一半已落码(10 秒,见上);独立预算一半未做,要先按重连风暴实测定预算大小,见设计文档 P0-2。

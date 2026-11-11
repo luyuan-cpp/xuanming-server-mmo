@@ -138,7 +138,7 @@ func (s *ProtoSource) Drift(ctx context.Context, q Queryer, database string) (Mi
 		columns, ok := existing[table]
 		if !ok {
 			// 基线已经跑过还查不到,说明建表被跳过或权限不足,必须显式报出来。
-			warnings = append(warnings, fmt.Sprintf("表 %s 在 information_schema 里查不到,基线建表可能失败", table))
+			warnings = append(warnings, fmt.Sprintf("table %s not found in information_schema; baseline table creation may have failed", table))
 			continue
 		}
 
@@ -160,22 +160,22 @@ func (s *ProtoSource) Drift(ctx context.Context, q Queryer, database string) (Mi
 				continue
 			}
 			warnings = append(warnings, fmt.Sprintf(
-				"列类型漂移(未自动修改):%s.%s 现为 %q,proto 期望 %q。确认无误后加 -allow-modify 重跑",
+				"column type drift (not modified automatically): %s.%s is %q, proto expects %q. Rerun with -allow-modify after confirming",
 				table, col.Name, current, col.Type))
 		}
 		for name := range columns {
 			if _, ok := declared[name]; !ok {
 				warnings = append(warnings, fmt.Sprintf(
-					"多余列(不会删除):%s.%s 不在 proto 声明里", table, name))
+					"extra column (will not be dropped): %s.%s is not declared in proto", table, name))
 			}
 		}
 
 		if pk := declaredPrimaryKey(s.Model, t); pk != "" {
 			if _, ok := primaries[table]; !ok {
 				warnings = append(warnings, fmt.Sprintf(
-					"缺主键:%s 按 proto 应有 PRIMARY KEY (%s),实际没有。"+
-						"存盘(proto2mysql Save:按主键 UPDATE,0 行再 INSERT)没有主键时不会撞 1062,内容未变或并发首写都会追加新行,"+
-						"需人工 ALTER TABLE 补主键", table, pk))
+					"missing primary key: %s should have PRIMARY KEY (%s) per proto, but has none. "+
+						"Without a primary key, saves (proto2mysql Save: UPDATE by primary key, INSERT when 0 rows) never hit 1062, so unchanged content or concurrent first writes append new rows; "+
+						"add the primary key manually with ALTER TABLE", table, pk))
 			}
 		}
 	}

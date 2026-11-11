@@ -67,6 +67,15 @@ public:
     static void Unfollow(entt::entity watcher, entt::entity target, const AoiFollowSource& source,
                          AoiVisibilityChanges* changes = nullptr);
 
+    // ── 容量变化 ────────────────────────────────────────────────────────────
+
+    // 按当前有效容量校正 watcher 的显示名额,容量因服务器压力或客户端设置变化之后调用:
+    //   - 已显示的超出容量:按权重从低到高、同权重先远后近裁掉。只剩空间来源的删除并打补回标记
+    //     (容量回升后由 AoiSystem 重扫补回),有显式来源的转暂隐、关系保留;
+    //   - 有空名额:按权重补上暂隐的显式关注。
+    // 返回这次裁掉的条目数。没有兴趣表时无操作。
+    static std::size_t ApplyCapacity(entt::entity watcher, AoiVisibilityChanges* changes = nullptr);
+
     // ── 可见条件变化与离场 ──────────────────────────────────────────────────
 
     // 目标隐身状态变化后,按反向索引重判它的每个观察者:不再满足条件的暂停显示

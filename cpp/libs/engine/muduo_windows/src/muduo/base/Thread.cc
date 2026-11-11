@@ -201,7 +201,7 @@ void Thread::start()
   catch (const std::system_error& ex)
   {
     started_ = false;
-    LOG_FATAL << "创建线程失败：" << ex.what();
+    LOG_FATAL << "Failed to create thread: " << ex.what();
   }
   latch_.wait();
   assert(tid_ > 0);

@@ -77,6 +77,8 @@ func tipCodes() map[string]uint32 {
 		"ErrTrialInviteDeclined":         ErrTrialInviteDeclined,
 		"ErrTrialInviteCooldown":         ErrTrialInviteCooldown,
 		"ErrTrialServiceBusy":            ErrTrialServiceBusy,
+		// 2026-11-11:作废释放时大厅的结束原因。
+		"ErrTrialBattleAborted": ErrTrialBattleAborted,
 	}
 }
 
@@ -313,6 +315,8 @@ func TestActivityTipCodesVerdict(t *testing.T) {
 		"ErrTrialInviteDeclined":         serverbase.VerdictBizReject,
 		"ErrTrialInviteCooldown":         serverbase.VerdictBizReject,
 		"ErrTrialServiceBusy":            serverbase.VerdictFault,
+		// 2026-11-11:对局被作废是业务结果,不进故障指标。
+		"ErrTrialBattleAborted": serverbase.VerdictBizReject,
 	}
 	for name, verdict := range want {
 		code, ok := all[name]

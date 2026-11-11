@@ -21,7 +21,7 @@ import (
 //
 // 之所以让环境变量压过 yaml:K8s 里 yaml 通常是镜像内的模板 + ConfigMap 覆盖,
 // 而「这套实例被允许写哪些库」是部署面的事实,应该由 Deployment 直接钉死,
-// 不经过任何模板渲染环节 —— 渲染环节正是 ZoneId 填错的地方。
+// 不经过任何模板渲染环节 —— 渲染环节正是库编号填错的地方。
 const AllowedDatabasesEnv = "DB_ALLOWED_DATABASES"
 
 // ErrDatabaseNotAllowed 表示实际连上的库不在白名单内。启动路径必须据此拒启。
@@ -51,7 +51,7 @@ type Allowlist struct {
 func (a Allowlist) Empty() bool { return len(a.Names) == 0 }
 
 // Contains 判断库名是否被允许。MySQL 在 Linux 上库名默认大小写敏感,
-// 这里按原样比较,不做大小写折叠 —— 折叠会让 Zone_1_DB 和 zone_1_db 互通,
+// 这里按原样比较,不做大小写折叠 —— 折叠会让 Player_Store_1000000_DB 和 player_store_1000000_db 互通,
 // 而它们在服务端是两个库。
 func (a Allowlist) Contains(name string) bool {
 	for _, n := range a.Names {
@@ -131,10 +131,10 @@ type RowQuerier interface {
 
 // AssertOptions 控制断言的严格程度。
 type AssertOptions struct {
-	// Expected 是本进程按 ZoneId 推导出来的库名。非空时要求它与服务端
+	// Expected 是本进程按存档库编号推导出来的库名。非空时要求它与服务端
 	// 实际的 DATABASE() 完全一致 —— 这一条抓的是「连错实例 / DSN 被改」。
 	Expected string
-	// Allow 是外部注入的白名单,抓的是「ZoneId 本身就填错了」。
+	// Allow 是外部注入的白名单,抓的是「编号本身就填错了」。
 	Allow Allowlist
 	// RelaxEmptyAllowlist 只在 dev/local 模式下为 true:白名单为空时放行并
 	// 打一条显眼的 WARN,而不是拒启。生产必须为 false。
@@ -158,7 +158,7 @@ func AssertDatabase(ctx context.Context, q RowQuerier, opts AssertOptions) (stri
 	name := actual.String
 
 	if opts.Expected != "" && opts.Expected != name {
-		return name, fmt.Errorf("%w: connected=%q but this process derived %q from its ZoneId",
+		return name, fmt.Errorf("%w: connected=%q but this process derived %q from its storage id",
 			ErrDatabaseNotAllowed, name, opts.Expected)
 	}
 
@@ -168,7 +168,7 @@ func AssertDatabase(ctx context.Context, q RowQuerier, opts AssertOptions) (stri
 				ErrAllowlistMissing, AllowedDatabasesEnv, name)
 		}
 		if opts.Warnf != nil {
-			opts.Warnf("DB-ALLOWLIST: Allowlist empty; permitting connected=%q in dev/test mode. Production must inject %s, otherwise incorrect ZoneId silently writes to a new database",
+			opts.Warnf("DB-ALLOWLIST: Allowlist empty; permitting connected=%q in dev/test mode. Production must inject %s, otherwise a mistyped storage id silently writes to a new database",
 				name, AllowedDatabasesEnv)
 		}
 		return name, nil

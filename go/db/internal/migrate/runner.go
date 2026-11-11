@@ -42,7 +42,7 @@ type Options struct {
 	Allow dbguard.Allowlist
 	// RelaxEmptyAllowlist 只在本地 dev 为 true。
 	RelaxEmptyAllowlist bool
-	// ExpectedDatabase 是调用方按 ZoneId 推导出的库名,非空时必须与
+	// ExpectedDatabase 是调用方按 -storage-id 推导出的库名,非空时必须与
 	// 服务端 DATABASE() 一致。
 	ExpectedDatabase string
 	// DryRun 只打印不执行:不建台账表、不写台账行,对库零持久化写入。
@@ -306,7 +306,7 @@ func (r *Runner) acquireAdvisoryLock(ctx context.Context, conn *sql.Conn, databa
 		defer cancel()
 		var released sql.NullInt64
 		if err := conn.QueryRowContext(releaseCtx, "SELECT RELEASE_LOCK(?)", name).Scan(&released); err != nil {
-			r.opts.logf("release migration advisory lock %q failed (MySQL 会在连接断开时自动释放): %v", name, err)
+			r.opts.logf("release migration advisory lock %q failed (MySQL releases it automatically when the connection closes): %v", name, err)
 		}
 	}, nil
 }
@@ -398,7 +398,7 @@ func (r *Runner) applyOne(ctx context.Context, conn *sql.Conn, connID uint64, m 
 		if prev.Checksum != m.Checksum {
 			// 基线的 checksum 只算表名集合,列变更走漂移迁移,所以这里出现
 			// 差异意味着「表增删了」。不自动重跑,交人工确认。
-			r.opts.logf("WARN: 迁移 version=%d 已应用但 checksum 变了(台账=%s 当前=%s);不重跑,请人工确认表清单变更",
+			r.opts.logf("WARN: migration version=%d already applied but checksum changed (ledger=%s current=%s); not rerunning, confirm the table list change manually",
 				m.Version, prev.Checksum, m.Checksum)
 		}
 		return false, nil
@@ -410,7 +410,7 @@ func (r *Runner) applyOne(ctx context.Context, conn *sql.Conn, connID uint64, m 
 	}
 
 	if r.opts.DryRun {
-		r.opts.logf("[dry-run] version=%d name=%s 共 %d 条语句:", m.Version, m.Name, len(m.Statements))
+		r.opts.logf("[dry-run] version=%d name=%s %d statement(s):", m.Version, m.Name, len(m.Statements))
 		for _, s := range m.Statements {
 			r.opts.logf("[dry-run]   %s", collapse(s))
 		}
@@ -421,7 +421,7 @@ func (r *Runner) applyOne(ctx context.Context, conn *sql.Conn, connID uint64, m 
 		return false, err
 	}
 	for _, stmt := range m.Statements {
-		r.opts.logf("version=%d 执行: %s", m.Version, collapse(stmt))
+		r.opts.logf("version=%d executing: %s", m.Version, collapse(stmt))
 		if err := r.execDDL(ctx, conn, connID, stmt, false); err != nil {
 			// 刻意保留 dirty=1:下一次 Up 会直接拒绝,逼人工核对而不是在
 			// 未知结构上继续叠加 DDL。
@@ -504,10 +504,10 @@ func (r *Runner) killQuery(connID uint64) {
 	killCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if _, err := r.db.ExecContext(killCtx, fmt.Sprintf("KILL QUERY %d", connID)); err != nil {
-		r.opts.logf("KILL QUERY %d failed: %v(服务端可能仍在执行该 DDL,需人工确认)", connID, err)
+		r.opts.logf("KILL QUERY %d failed: %v (server may still be executing the DDL; manual confirmation required)", connID, err)
 		return
 	}
-	r.opts.logf("KILL QUERY %d sent: 语句超过 %s 硬超时", connID, r.opts.StatementTimeout)
+	r.opts.logf("KILL QUERY %d sent: statement exceeded the %s hard timeout", connID, r.opts.StatementTimeout)
 }
 
 // collapse 把多行 DDL 压成一行,方便进日志。

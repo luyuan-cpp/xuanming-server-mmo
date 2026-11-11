@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
@@ -38,12 +39,12 @@ type recordedTipPush struct {
 	unbound        bool // 走的是 PushTipToUnboundSession
 }
 
-func (p *recordingTipPusher) PushTipToSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
+func (p *recordingTipPusher) PushTipToSession(_ context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
 	p.calls = append(p.calls, recordedTipPush{gateID, gateInstanceID, sessionID, playerID, tipID, false})
 	return p.err
 }
 
-func (p *recordingTipPusher) PushTipToUnboundSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
+func (p *recordingTipPusher) PushTipToUnboundSession(_ context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
 	p.calls = append(p.calls, recordedTipPush{gateID, gateInstanceID, sessionID, playerID, tipID, true})
 	return p.err
 }
@@ -77,7 +78,7 @@ func TestNotifyEnterGameFailed_PushesEnterSceneFailedToOwnSession(t *testing.T) 
 				before := failureNotifyCount(t, stage, notifyOutcomeSent)
 				pusher := &recordingTipPusher{}
 
-				notifyEnterGameFailed(pusher, gateAddressedState(), stage, bindSent)
+				notifyEnterGameFailed(context.Background(), pusher, gateAddressedState(), stage, bindSent)
 
 				if len(pusher.calls) != 1 {
 					t.Fatalf("push calls = %d, want exactly 1 (no retry, no fan-out)", len(pusher.calls))
@@ -102,15 +103,21 @@ func TestNotifyEnterGameFailed_PushesEnterSceneFailedToOwnSession(t *testing.T) 
 }
 
 // bindRecorder 是 sessionBindSender 的假实现:记调用次数,按 err 应答,不碰 Kafka。
+// traceID 记最后一次调用时 ctx 里的 trace(没有记空串),供 entergame_trace_test.go 核对后台链没丢 trace。
 type bindRecorder struct {
-	err   error
-	calls int
-	last  *kafkapb.BindSessionEvent
+	err     error
+	calls   int
+	last    *kafkapb.BindSessionEvent
+	traceID string
 }
 
-func (b *bindRecorder) SendBindSessionToGate(_ string, _ string, event *kafkapb.BindSessionEvent) error {
+func (b *bindRecorder) SendBindSessionToGate(ctx context.Context, _ string, _ string, event *kafkapb.BindSessionEvent) error {
 	b.calls++
 	b.last = proto.Clone(event).(*kafkapb.BindSessionEvent)
+	b.traceID = ""
+	if sc := trace.SpanContextFromContext(ctx); sc.HasTraceID() {
+		b.traceID = sc.TraceID().String()
+	}
 	return b.err
 }
 
@@ -179,7 +186,7 @@ func TestNotifyEnterGameFailed_PushErrorIsCountedNotRetried(t *testing.T) {
 	beforeSent := failureNotifyCount(t, notifyStageApply, notifyOutcomeSent)
 	pusher := &recordingTipPusher{err: errors.New("kafka unavailable")}
 
-	notifyEnterGameFailed(pusher, gateAddressedState(), notifyStageApply, true)
+	notifyEnterGameFailed(context.Background(), pusher, gateAddressedState(), notifyStageApply, true)
 
 	if len(pusher.calls) != 1 {
 		t.Fatalf("PushTipToSession calls = %d, want 1 (a push to a possibly-gone session must not be retried)", len(pusher.calls))
@@ -207,7 +214,7 @@ func TestNotifyEnterGameFailed_SkipsWithoutGateAddress(t *testing.T) {
 			mutate(&state)
 			pusher := &recordingTipPusher{}
 
-			notifyEnterGameFailed(pusher, state, notifyStageApply, false)
+			notifyEnterGameFailed(context.Background(), pusher, state, notifyStageApply, false)
 
 			if len(pusher.calls) != 0 {
 				t.Fatalf("PushTipToSession calls = %d, want 0", len(pusher.calls))

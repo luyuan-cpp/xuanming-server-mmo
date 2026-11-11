@@ -1,0 +1,66 @@
+{
+  "_lens": "asset-item：按资产追踪物品、装备、宠物的完整生命周期（换视角查找第 2 轮，2026-11-10，只读代理原样返回，约 78.3 万子代理 token）",
+  "findings": [
+    {
+      "title": "单玩家物品/货币获取封禁让交易托管的交付腿和退回腿都记 REJECTED,合同整单转人工,钱和货分别停在对方手里和 trade 库,自动退款走不通",
+      "severity": "low",
+      "kind": "新问题",
+      "related": "无直接编号;口径对照 r2-v1#2 / cpp-economy#1(战斗与资产通道对被封部分是「只跳过」,交易这一路没有对应处理)",
+      "locations": [
+        "cpp/libs/services/scene/player/system/asset_op_system.cpp:1031-1062(ApplyCredit 的 (a)/(a′):货币封禁或物品获取封禁命中就 RejectAndRecord(kAssetBlocked),完整实例的转入也算在内)",
+        "go/trade/internal/commerce/engine.go:616-628、:733-752(seller_return / buyer_return / 撤单退回腿,都是 stream 4 的 credit)",
+        "go/trade/internal/commerce/engine.go:754-758(有发放腿 REJECTED 时 finalCredits 回 ready&&!ok,合同 markManual(final_credit_failed))",
+        "go/trade/internal/commerce/manual.go:297-316、:360-364(refund 只要有一条发放腿 applied 就拒绝;reissue 原样重发,封禁期间还是被拒)",
+        "go/player_inbox/etc/player_inbox.yaml:122-130(EnqueueTypes 缺省只有 BATTLE_SETTLEMENT,GM 封禁四个类型是注释掉的)",
+        "cpp/libs/modules/gain_block/gain_block_service.cpp:48(全服 BlockGlobal 在生产代码里没有调用方)",
+        "docs/design/jubaozhai-market.md:142(写的是「GM 封禁 → 终局拒绝 → 退款 + 告警」)",
+        "docs/design/player-inbox-service.md:317(只登记了「交易托管交付 → REJECTED kAssetBlocked」)"
+      ],
+      "trigger": "前提:运维把 GM_BLOCK_ITEM_GAIN(或 GM_BLOCK_CURRENCY_GAIN)加进 EnqueueTypes,并对玩家 P 下了配置 X(或币种 C)的封禁,scene 已执行。买家情形:① P 在聚宝斋买下一件含 X 的商品。trade 看不到单玩家封禁,照常受理。② buyer_debit(P 的货币)APPLIED,合同进 deliver,同一步发出 buyer_receive(X 的完整实例)和 seller_receive(卖家货款)。③ scene ApplyCredit 在 (a′) 判中封禁,buyer_receive 记 REJECTED kAssetBlocked;seller_receive 正常 APPLIED。④ finalCredits 判定有腿没到账,合同转 Manual。refund 因为 seller_receive 已到账被拒,reissue 在封禁期间同样被拒。结果:P 的钱已经到了卖家手里,X 停在 trade 库,只能等 GM 解封后人工 reissue。卖家情形:① 被封 X 的 P 照样能上架 X,扣出不受获取封禁约束。② 商品过期或撤单,seller_return 把 P 自己托管的 X 退回,又被 (a′) 拒成 REJECTED。③ 合同转人工,refund 生成的退回腿同样被拒,X 一直停在托管里。货币封禁同理:被封金币的卖家成交后 seller_receive 被拒,买家已经拿到货,货款停在托管里,和设计里写的「退款」对不上。",
+      "reachability": "缺省配置不可达。单玩家封禁只能经收件箱 GM 域下达,而 PlayerInbox.EnqueueTypes 缺省是 [PLAYER_INBOX_MSG_BATTLE_SETTLEMENT](go/player_inbox/etc/player_inbox.yaml:130,GM 类型在 :122-126 是注释);全服封禁 BlockGlobal 没有生产调用方。运维一旦打开 GM 封禁处置,只要被封玩家参与相关交易就会触发,不需要故障。",
+      "registered": "部分登记。player-inbox-service.md:317 写了交易托管交付会被记 REJECTED kAssetBlocked,但没写交易一侧会整单转人工、钱货分离,也没写玩家自己托管物品的退回同样被当成「新增获得」拒掉。jubaozhai-market.md:142 说货币封禁走「退款 + 告警」,与引擎实际行为不符。其余审计文档里搜 封禁 / 托管 / final_credit 都没有对应条目。",
+      "fix": "按「搬运不算获得」的口径,把交易的退回腿(seller_return、buyer_return、bid_return、人工 refund 腿)排除在单玩家获取封禁之外。做法可以是给这些腿换一个专用 tx 类型,由 ApplyCredit 的 (a)/(a′) 放行,与临时格取回同一口径。买家交付:trade 在扣款前经 data_service 的 GetPlayerItemGainBlock 预检;或者把 seller_receive 排在 buyer_receive APPLIED 之后再发,这样交付被拒时能自动退回买家货款和卖家物品,不必转人工。同步更正 jubaozhai-market.md:142,并在 player-inbox-runbook 的封禁处置一节写明对在途交易的影响。",
+      "confidence": "很可能",
+      "refute_attempt": "逐项排除了以下可能:① trade 下单或扣款前是否查单玩家封禁:go/trade 里没有任何 GainBlock 相关调用,只有生成的消息号表。② REJECTED 的发放腿会不会自动重试或自动补偿:不会,REJECTED 是终态,finalCredits 直接转人工,engine.go:754-758。③ 人工 refund 能否退回买家货款:manual.go:360-364 只要有发放腿已到账就拒绝。④ 退回腿是否不经封禁闸:ApplyCredit 对所有 credit 流的 items 和 item_instances 一律判封禁,没有按 tx 类型豁免。⑤ 缺省能否触发:不能,所以定为门控 low。不会丢数据或复制资产,影响只是资产冻在托管里、必须人工处理。"
+    }
+  ],
+  "excluded": [
+    "C++ GuidSegmentClient 超时后迟到的响应会清掉 inflight_,可能同时有多个领段请求在途。每次 Allocate 由发号器在锁内切出不相交的区间,客户端再查最近 16 段是否重叠、两段都满就丢弃,不会重发同一个号。",
+    "发号器 reserve / Init / Recover:主记录、副记录、登记处三份 CAS 全部成功才发号,写序固定;单飞预留;Recover 只取幸存记录作上界,拿不到就拒;时间下限只会把起点往上抬。登记处丢失、且两份本地记录同时回档属于三重故障,手册 §4.3 / §7a 已按安全事件处理。AllowBootstrap 只在 dev / test 开。",
+    "MixGuid(C++)与 MixID(Go)逐位相同且是双射,所有种类共用一个计数器,宠物也走 item 号段;item、宠物、player、guild、battle、trade op 的发号都只走号段,没有 snowflake 回退。",
+    "Bag::AddItems 对预设 guid 只查本包:生产里没有调用方给它传预设 guid(BagService::AddItems(vector) 无生产调用方),资产通道的完整实例走 PutInstance,先用 PlayerBagsComp::ContainsGuid 跨全部包(含携带的未知包类型)查重。",
+    "MoveInstancesTo(临时格取回)只查目标包有没有同 guid:同一玩家各包之间 guid 本来唯一;两包在候选上改完一起发布;整堆并进别的堆时原 guid 退役并记数量 0 的流水。战斗中允许取回,但人物背包只进不出,结算按持有量夹紧时只会多扣、不会少扣。",
+    "ConsumeInventoryAndGrant:主包放不下时在 PlanEviction 就拒,铸号之前就拒,所以最多只铸一份所需号,一份余量够转投临时格;两包都在候选上改,beforeCommit(发币)排在提交前;任何拒绝都不留半笔。",
+    "资产通道 debit / credit:Go 丢弃在线回包里的快照,只认 SQL 已提交账本里的收据(reconcile.go 的 verifySQLCommit / resultWithReceipt)。持有者被废黜时没提交的那一笔,由新持有者在旧快照上再应用一次,只生效一次。AckReceipt 要等交易 SQL 已存原件才发。",
+    "ApplyDebit 部分成功时,收据快照列出全部 guid、实际只销毁了一部分:只有在 ReserveForBatchRemove 预检之后又失败(编程错误)才会走到;结局是 APPLIED partial,交易侧转人工,不会整单处理。",
+    "流 epoch 重置会抹掉还没 ACK 的实例收据:epoch 只在 seq 行建行时定,只有重建 seq 表才会变;每条流只有一个服务(SYSTEM_CREDIT 只有 mail),各服务都是单个逻辑库、不分片。",
+    "player_store Save / LoadAndClaim:写权判定和全部脏行在同一个事务里;EQUAL 只可能是同一实例、同一序号、同一内容;结果未知的 kind 下一笔必写;kWallet 行最坏约 0.6 MiB(收据摘要 6 流 × 1024 条,外加实例快照 256 KiB),低于单行 1 MiB 上限。",
+    "data_service ReadPlayerStoreAsset:写权行和钱包行在同一条语句里读出;路由每次直读 SQL、不缓存;人工判定要求行安静 30 分钟,搬库造成的陈旧路由窗口影响不到判定。",
+    "战斗进行中能不能从人物背包移走消耗品:强化、镶嵌、穿脱、神秘商人、资产通道、整理都按在战拒绝,局中没有出包路径。",
+    "两包都满导致整笔延后、熬过续冻上限解冻后转走药品:已登记,见 turn-battle-gap-closure.md:654-660(2026-11-10 复核,等负责人拍板方案 A / B)。",
+    "收件箱战斗域同一局换新 seq 重投:靠最近 32 条结局环兜住,已登记(全球经济评审 C-1)。终态行作为永久收据不删(SweepTerminal 是空操作),同一 request_id 不会再生成新 seq。",
+    "邮件附件领取:partial 转人工(claim_state 4);REJECTED / ABORTED 恢复为可领。SYSTEM_CREDIT 只有 mail 一个写者。",
+    "帮会商店与捐献:按处置表退帮贡、退次数、退限购;partial 不入账也不退,转人工;帮会没有物品仓库。",
+    "别名合服:聚宝斋市场按 zones.Members / Final 解析合服映射;永久 id 由发号器发,高位带地域码,跨区不会撞 guid;campaign 邮件按收件人清单投递,与 zone 无关。",
+    "建角初始行只有资料行,首次进场只初始化等级和技能,都不发物品。",
+    "神秘商人、任务领奖、活跃度领奖:同一次同步调用里先发物、再扣钱 / 记领取,候选提交被拒就是零改动;客户端请求幂等键账本满 32 条后挤出旧键,迟到的重发仍受限购和余额约束。",
+    "穿脱装备的 TakeInstance / PutInstance 回滚;强化先扣后写等级;取下宝石先退物、再抹孔位。丢件分支都只有编程错误才走得到,并打 [INSTANCE_LOST] 日志。",
+    "GM 回收物品:不可叠加物品按线索 guid 回收,可叠加物品按数量回收,临时格和装备栏都在回收顺序里;已托管、扣不到的部分记缺口,方向是少扣不是多扣。",
+    "dynamicBags_ 在生产里从不创建;全服 GainBlock(BlockGlobal)没有生产写入点。",
+    "注释不一致,不算数据问题:player_bag_handler.cpp:273 说取回「战斗中拒绝」,实际 PlayerBagSystem::RetrieveTemporary(player_feature_snapshot.cpp:198-204)按 11-06 评审放行战斗中。",
+    "工作区相对 HEAD 有 67 个文件的未提交改动,比任务说明里的多;其中 player_lifecycle.cpp / .h 的差异只是把 RunIdentityAtRiskSaves 改成成员函数、状态可重置,不涉及物品。"
+  ],
+  "unread": [
+    "go/trade/internal/commerce/engine.go 只读了 plan / finalCredits / transferLeg 段,auction.go、rmb.go、rmb_mall.go、tick_isolation.go 和 trade 的 data/asset_op_repo.go 都没读",
+    "go/guild/internal/data/asset_store.go 只读了 applyCounterparty 和状态映射;guild assetopfix 与 ResolveManuallyIfQuiet 正文没读",
+    "go/shared/assetop 的 manual_evidence.go、abandon.go、reconcile.go 的派发与重排部分没读",
+    "go/data_service/internal/logic/recall_logic.go、store/recall_store.go、transaction_log_store.go 正文没读,recall_plan.go 只读了前 140 行",
+    "go/player_inbox/internal/inbox 的 store_consume.go、reconcile.go、shard.go、role_authority.go、fence.go,以及 internal/shardowner",
+    "go/shared/idsegment/client.go 只读了文件头;idissuer/etcd_store.go 没读",
+    "cpp/libs/modules/transaction_log/transaction_log_system.cpp 的排队与放行实现;player_lifecycle.cpp 的交接段与 HandlePlayerAsyncSaved",
+    "handoff_fence / owner_epoch / scene_manager 交接链(不属于本视角,未读)",
+    "tools/merge_zone、tools/dbmove、kafkautil.BoundConsumerGroup 及其使用者",
+    "go/mail/internal/data/claim.go 的领取事务正文"
+  ],
+  "coverage": "按「物品 / 装备 / 宠物资产追踪」视角,以当前工作区为准(HEAD e0790ad40 加未提交改动,只读)。读完的链路:C++ 号段客户端与注册表、data_service 发号器(issuer.go)与 AllocateIdSegment、MixGuid 对拍;ItemStore / Bag / BagService 全部入包、扣除、整理、穿脱搬运、临时格取回、还原路径;bag_marshal、player_store_projection、PlayerStoreClient 状态机、go/db playerstore 的 Save / LoadAndClaim / decide;资产通道 Decide / ApplyDebit / ApplyCredit / ApplyRecall / AckReceipt / 账本窗口;收件箱 ApplyPending / Ack / 战斗结算执行器 ApplySettlementToEntity;装备强化、镶嵌、取下;宠物发放、交易扣出与还原;神秘商人、任务、活跃度领奖;GM 封禁执行器与查询;data_service 存档读;mail 资产终结;guild 对侧账;trade 的 plan / manual / market 撮合与 home_zone 合服解析;Go 各 minter。新问题只有 1 条 low(门控在 GM 封禁处置开关):获取封禁让交易托管的交付与退回整单转人工。其余推翻 24 项,见 excluded。没有发现 guid 重发、同一实例两处并存、数量不守恒或旧快照盖新的新时序。"
+}

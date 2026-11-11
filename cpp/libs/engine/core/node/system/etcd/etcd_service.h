@@ -2,6 +2,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <chrono>
 #include <deque>
 #include <memory>
@@ -20,6 +21,9 @@ class EtcdService final : public EtcdResponseSink {
 public:
     // 重试回调捕获 this;已武装的定时器可移动,宿主地址仍必须固定。
     EtcdService() = default;
+    // 注册任务归 registrationTasks_(LoopTaskScope),它的析构要在所属 EventLoop 线程上停止本地等待:
+    // 析构必须在注册 loop 的线程上、且早于该 EventLoop 析构。生产里 Node 是 loop 线程上的栈对象,天然满足;
+    // 在别的线程析构 Node(~Node 里 EventLoop 外析构的分支)会撞 assertInLoopThread 而终止。
     ~EtcdService() override;
     EtcdService(const EtcdService&) = delete;
     EtcdService& operator=(const EtcdService&) = delete;
@@ -31,6 +35,13 @@ public:
 
     // EtcdHelper 的唯一出口。Init 之前 / Shutdown 之后返回 nullptr(调用方丢弃请求)。
     EtcdTransport* Transport() { return transport_.get(); }
+
+    // 发现范围(scope)默认是前缀;登记成精确键之后,这个范围的 Range 与 watch 都只覆盖这一个键(range_end 为空)。
+    // 本节点自身类型不在发现集合里时,只看自己那一条发现键(ServiceDiscoveryManager::WatchOwnRegistrationKey,
+    // docs/design/connection-fanout-subsetting-20261106.md §3.4)。只在 loop 线程调用。
+    void AddExactDiscoveryKey(const std::string& key);
+    // Range 一个发现范围:精确键只取这一个键,其余按前缀。应答到了走 OnPrefixRange:对账,当前流上还没有 watch 就建。
+    void RangeDiscoveryScope(const std::string& scope);
 
     // 拿一个新 lease 并把端口 / 分配 / 服务三把 key 改挂上去,node_id 不变。
     // 触发源:健康监控发现本节点快照消失、keepalive 返回 TTL<=0、本地 ACK 超时。
@@ -154,6 +165,8 @@ private:
     // 取消后待重拉的前缀(去重、按到达顺序),与每个前缀当前的退避秒数;建成 watch 时清掉该前缀的退避。
     std::vector<std::string> canceledPrefixesToRetry_;
     std::unordered_map<std::string, double> cancelRetryBackoffSeconds_;
+    // 按精确键 Range / watch 的发现范围(AddExactDiscoveryKey)。不在这里的范围按前缀。
+    std::unordered_set<std::string> exactDiscoveryKeys_;
 	TimerTaskComp cancelRetryTimer_;
     // 先停止注册等待，再析构传输；传输回调不持有注册任务。
     std::unique_ptr<EtcdTransport> transport_;

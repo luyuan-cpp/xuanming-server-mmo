@@ -2,14 +2,14 @@
 
 package main
 
-// 真库用例:合并、幂等、拒绝成环、拒绝合进已合走的区、撤销、并发。
+// 真库用例:合并、幂等、拒绝成环、拒绝合进已合走的区、撤销、并发、合服历史(提案 §16)。
 //
 // 运行:go test -tags merge_integration -count=1 -v ./...
 //   - MERGE_ZONE_IT_DSN:本机实例基址,数字 loopback TCP、无库名无参数,例如 root:pw@tcp(127.0.0.1:4000)/。
 //   - MMORPG_SQL_BACKEND:tidb(缺省)或 mysql,和实例对上,两档都要跑。
 //   - MERGE_ZONE_IT_REQUIRE=1:依赖缺失时 FAIL;默认 SKIP。验收必须设 1,SKIP 不能算通过。
 //
-// 每个用例建一个 merge_zone_it_<随机> 库,结束时删掉,不碰别的库。表结构用权威 DDL:zone_merged_into 从
+// 每个用例建一个 merge_zone_it_<随机> 库,结束时删掉,不碰别的库。表结构用权威 DDL:zone_merged_into、zone_merge_history 从
 // go/data_service/internal/store/schema.go 解析,route_meta 取 authoritysql.CatalogBootstrapStatements。
 
 import (
@@ -37,11 +37,12 @@ import (
 )
 
 const (
-	itDSNEnv        = "MERGE_ZONE_IT_DSN"
-	itTimeout       = 30 * time.Second
-	itSchemaPrefix  = "merge_zone_it_"
-	itGeneration    = "902dbe90d01a4706be0c33fa3f8cb901"
-	itZoneDDLSymbol = "zoneMergedIntoBootstrapDDL"
+	itDSNEnv           = "MERGE_ZONE_IT_DSN"
+	itTimeout          = 30 * time.Second
+	itSchemaPrefix     = "merge_zone_it_"
+	itGeneration       = "902dbe90d01a4706be0c33fa3f8cb901"
+	itZoneDDLSymbol    = "zoneMergedIntoBootstrapDDL"
+	itHistoryDDLSymbol = "zoneMergeHistoryBootstrapDDL"
 )
 
 // requireIT:依赖没有配置时按 MERGE_ZONE_IT_REQUIRE 决定 FAIL 还是 SKIP。
@@ -77,8 +78,8 @@ func itLoopbackBase(t *testing.T) *mysql.Config {
 	return cfg
 }
 
-// itZoneDDL 从 data_service 的 schema.go 读 zone_merged_into 的建表语句。
-func itZoneDDL(t *testing.T) string {
+// itSchemaDDL 从 data_service 的 schema.go 读名为 symbol 的建表语句常量(zone_merged_into / zone_merge_history)。
+func itSchemaDDL(t *testing.T, symbol string) string {
 	t.Helper()
 	path := filepath.Join("..", "..", "go", "data_service", "internal", "store", "schema.go")
 	file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
@@ -92,7 +93,7 @@ func itZoneDDL(t *testing.T) string {
 		}
 		for _, spec := range gen.Specs {
 			value, ok := spec.(*ast.ValueSpec)
-			if !ok || len(value.Names) != 1 || value.Names[0].Name != itZoneDDLSymbol || len(value.Values) != 1 {
+			if !ok || len(value.Names) != 1 || value.Names[0].Name != symbol || len(value.Values) != 1 {
 				continue
 			}
 			ddl, err := itStringConst(value.Values[0])
@@ -102,7 +103,7 @@ func itZoneDDL(t *testing.T) string {
 			return ddl
 		}
 	}
-	t.Fatalf("%s not found in %s", itZoneDDLSymbol, path)
+	t.Fatalf("%s not found in %s", symbol, path)
 	return ""
 }
 
@@ -127,11 +128,12 @@ func itStringConst(expr ast.Expr) (string, error) {
 
 // itEnv 是一个一次性库:raw 造数据、核对结果;newStore 按操作员权限开工具自己的连接。
 type itEnv struct {
-	ctx      context.Context
-	raw      *sql.DB
-	dsn      string
-	backend  authoritysql.Backend
-	operator authoritysql.Permission
+	ctx       context.Context
+	raw       *sql.DB
+	dsn       string
+	backend   authoritysql.Backend
+	operator  authoritysql.Permission
+	principal string // 这个库上 CURRENT_USER() 的原值,历史的 sql_principal 应当等于它
 }
 
 func newITEnv(t *testing.T) *itEnv {
@@ -180,7 +182,7 @@ func newITEnv(t *testing.T) *itEnv {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = raw.Close() })
-	for _, ddl := range []string{itZoneDDL(t), authoritysql.CatalogBootstrapStatements()["route_meta"]} {
+	for _, ddl := range []string{itSchemaDDL(t, itZoneDDLSymbol), itSchemaDDL(t, itHistoryDDLSymbol), authoritysql.CatalogBootstrapStatements()["route_meta"]} {
 		if _, err := raw.ExecContext(ctx, ddl); err != nil {
 			t.Fatal(err)
 		}
@@ -192,7 +194,7 @@ func newITEnv(t *testing.T) *itEnv {
 	if err := raw.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&principal); err != nil {
 		t.Fatal(err)
 	}
-	return &itEnv{ctx: ctx, raw: raw, dsn: dsn, backend: backend, operator: authoritysql.Operator(principal)}
+	return &itEnv{ctx: ctx, raw: raw, dsn: dsn, backend: backend, operator: authoritysql.Operator(principal), principal: principal}
 }
 
 func (e *itEnv) newStore(t *testing.T) *routeStore {
@@ -219,6 +221,49 @@ func (e *itEnv) merges(t *testing.T) map[uint32]uint32 {
 		t.Fatal(err)
 	}
 	return mergesOf(rows)
+}
+
+// history 读出全部合服历史,按源区、序号排序(与工具审计的时间序无关,便于逐条核对)。
+func (e *itEnv) history(t *testing.T) []historyRow {
+	t.Helper()
+	rows, err := e.raw.QueryContext(e.ctx,
+		"SELECT src_zone, event_seq, action, dst_zone, run_id, sql_principal, at_ms FROM zone_merge_history ORDER BY src_zone, event_seq")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []historyRow
+	for rows.Next() {
+		var h historyRow
+		if err := rows.Scan(&h.Src, &h.Seq, &h.Action, &h.Dst, &h.RunID, &h.Principal, &h.AtMs); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, h)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// dbNowMs 读库时钟:历史的 at_ms 取的是它,不是测试进程的钟。
+func (e *itEnv) dbNowMs(t *testing.T) uint64 {
+	t.Helper()
+	var now uint64
+	if err := e.raw.QueryRowContext(e.ctx, "SELECT "+routeDBNowMsSQL).Scan(&now); err != nil {
+		t.Fatal(err)
+	}
+	return now
+}
+
+// runID 读 src 当前映射行的 run_id。
+func (e *itEnv) runID(t *testing.T, src uint32) string {
+	t.Helper()
+	var runID string
+	if err := e.raw.QueryRowContext(e.ctx, "SELECT run_id FROM zone_merged_into WHERE src_zone = ?", src).Scan(&runID); err != nil {
+		t.Fatal(err)
+	}
+	return runID
 }
 
 func (e *itEnv) run(store mappingStore, mode string, src, dst uint32, dryRun bool) (string, error) {
@@ -387,7 +432,93 @@ func TestIT_DryRunAndAuditWithReaderPermission(t *testing.T) {
 		t.Fatalf("dry-run wrote: %v", merges)
 	}
 	out, err := env.run(reader, modeAudit, 0, 0, false)
-	if err != nil || !strings.Contains(out, "merged zones: 1") || !strings.Contains(out, "final zone 902 includes zones [901 902]") {
+	if err != nil || !strings.Contains(out, "merged zones: 1") || !strings.Contains(out, "final zone 902 includes zones [901 902]") ||
+		!strings.Contains(out, "merge history: 1 event(s)") {
+		t.Fatalf("audit: out=%q err=%v", out, err)
+	}
+}
+
+// 每次真改了映射,同一个事务里留一条历史,撤销之后也查得到;幂等重跑、没东西可删都不留;序号按源区各自从 1 排;
+// sql_principal 是库侧 CURRENT_USER(),at_ms 落在库时钟的窗口里(提案 §16)。
+func TestIT_HistoryRecordsEveryChange(t *testing.T) {
+	requireIT(t)
+	env := newITEnv(t)
+	store := env.newStore(t)
+	step := func(mode string, src, dst uint32) {
+		t.Helper()
+		if _, err := env.run(store, mode, src, dst, false); err != nil {
+			t.Fatalf("%s %d -> %d: %v", mode, src, dst, err)
+		}
+	}
+	before := env.dbNowMs(t)
+	step(modeMerge, 901, 902)
+	first := env.runID(t, 901)
+	step(modeMerge, 901, 902) // 幂等:不留历史
+	step(modeUnmerge, 901, 902)
+	step(modeUnmerge, 901, 902) // 没东西可删:不留历史
+	step(modeMerge, 901, 903)
+	second := env.runID(t, 901)
+	step(modeMerge, 902, 903)
+	third := env.runID(t, 902)
+	after := env.dbNowMs(t)
+
+	var got []string
+	for _, h := range env.history(t) {
+		if h.Principal != env.principal {
+			t.Fatalf("history %d#%d sql_principal = %q, want CURRENT_USER() %q", h.Src, h.Seq, h.Principal, env.principal)
+		}
+		if h.AtMs < before || h.AtMs > after {
+			t.Fatalf("history %d#%d at_ms = %d, outside the db clock window [%d, %d]", h.Src, h.Seq, h.AtMs, before, after)
+		}
+		got = append(got, fmt.Sprintf("%d#%d %s %d %s", h.Src, h.Seq, h.Action, h.Dst, h.RunID))
+	}
+	want := []string{
+		"901#1 merge 902 " + first,
+		"901#2 unmerge 902 " + first,
+		"901#3 merge 903 " + second,
+		"902#1 merge 903 " + third,
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("history =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	out, err := env.run(store, modeAudit, 0, 0, false)
+	if err != nil || !strings.Contains(out, "merge history: 4 event(s)") || strings.Contains(out, "untracked mapping") {
+		t.Fatalf("audit: out=%q err=%v", out, err)
+	}
+}
+
+// 历史写不进去(这里把历史表删掉)时,映射的插入 / 删除跟着回滚:报失败、不算拒绝,映射表不变。
+func TestIT_HistoryFailureRollsBackMapping(t *testing.T) {
+	requireIT(t)
+	env := newITEnv(t)
+	store := env.newStore(t)
+	if _, err := env.run(store, modeMerge, 901, 902, false); err != nil {
+		t.Fatal(err)
+	}
+	env.exec(t, "DROP TABLE zone_merge_history")
+	if _, err := env.run(store, modeMerge, 903, 904, false); err == nil || errors.Is(err, errRefused) {
+		t.Fatalf("merge without the history table: err = %v, want a failure", err)
+	}
+	if _, err := env.run(store, modeUnmerge, 901, 902, false); err == nil || errors.Is(err, errRefused) {
+		t.Fatalf("unmerge without the history table: err = %v, want a failure", err)
+	}
+	if merges := env.merges(t); len(merges) != 1 || merges[901] != 902 {
+		t.Fatalf("a failed history append left the mapping changed: %v", merges)
+	}
+}
+
+// 审计把不经工具写进映射表的行列为来历不明,按拒绝退出。
+func TestIT_AuditFlagsMappingWithoutHistory(t *testing.T) {
+	requireIT(t)
+	env := newITEnv(t)
+	store := env.newStore(t)
+	if _, err := env.run(store, modeMerge, 901, 902, false); err != nil {
+		t.Fatal(err)
+	}
+	env.exec(t, "INSERT INTO zone_merged_into (src_zone, dst_zone, run_id, merged_at_ms) VALUES (905, 906, 'by-hand', 0)")
+	out, err := env.run(store, modeAudit, 0, 0, false)
+	if !errors.Is(err, errRefused) || !strings.Contains(out, "untracked mapping: zone 905 -> zone 906 (run_id by-hand)") ||
+		strings.Contains(out, "untracked mapping: zone 901") {
 		t.Fatalf("audit: out=%q err=%v", out, err)
 	}
 }
@@ -432,5 +563,9 @@ func TestIT_ConcurrentMergesSerializeOnRouteMeta(t *testing.T) {
 		if err == nil && merges[901] != uint32(902+i) {
 			t.Fatalf("worker %d succeeded but the row says %d", i, merges[901])
 		}
+	}
+	// 历史与映射同一个事务:只有写成的那一次留下历史,序号是 1。
+	if h := env.history(t); len(h) != 1 || h[0].Src != 901 || h[0].Seq != 1 || h[0].Action != historyActionMerge || h[0].Dst != merges[901] {
+		t.Fatalf("history = %+v, want exactly the one successful merge", h)
 	}
 }

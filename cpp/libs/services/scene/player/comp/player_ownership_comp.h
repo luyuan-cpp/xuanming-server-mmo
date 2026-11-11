@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "engine/infra/storage/redis_cluster/redis_slot.h"
 
@@ -15,14 +16,17 @@
 // 是"这份数据归谁、由谁持有、正在交给谁",而这三件事只由 scene_manager 的
 // EnterScene 闸口决定,节点只缓存、只校验、不铸造。
 // 唯一的非路由写入口(GO-2 §12.8 判定表 B5):源端 ResolveTravelOutcome 在交接被 scene_manager 单调回滚到本节点时,
-// 采纳 Redis 里回滚后的 owner_epoch(E+2)。三条前提写死,缺一不可:同一段原子脚本先删掉本次交接这一族标记;
-// location.rollback_receipt 逐字节等于本次标记原文;location 指回本节点本 zone(且 epoch 恰好前进两格)。
+// 采纳 Redis 里回滚后的 owner_epoch(≥ E+2)。三条前提写死,缺一不可:同一段原子脚本先删掉本次交接这一族标记;
+// location.rollback_receipt 逐字节等于本次标记原文(正式回执);location 指回本节点本 zone(且 epoch 至少前进两格)。
+// 回执是待确认形态(kPendingRollbackReceiptPrefix + 标记原文)时一律不采纳(判定表 B5′):那次回滚还没确认落盘。
 // 以后任何"读 Redis 采纳 epoch"的新代码都必须同时满足这三条(scene-owner-reentry-barrier.md §3.3)。
 //
 // ── Redis 键契约(Go 与 C++ 两边必须一字不差,改任何一边都要同步另一边)──
-//   player:{player_id}:owner_epoch  纯十进制整数字符串。只由 scene_manager 用 INCR
-//                                    推进,单调递增、只进不退 —— 推路由失败后的回滚也是再 INCR 一格(N+1 → N+2),
-//                                    任何值都不会被铸两次。节点存盘时用它做 CAS 守卫。
+//   player:{player_id}:owner_epoch  纯十进制整数字符串(< 2^53)。只由 scene_manager 推进,单调递增、只进不退:铸造取
+//                                    max(当前值 + 1, 墙钟毫秒)(zone-redis-regression-guard-20261022.md §4.3.1),不保证
+//                                    恰好 +1;推路由失败或铸造没确认落盘之后的回滚再 INCR 一格(铸出值 M → M+1),无资格
+//                                    撤销也 INCR 一格;任何值都不会被铸两次。节点在入场登记、写交接 / 释放标记、取证与恢复
+//                                    资格时按它做条件比对;存盘的写权由 TiDB 写权行判,不再比这个键。
 //   player:{player_id}:handoff      值 "{epoch}:{saved_at_ms}",语义 = 这一刻的状态已落盘、写它的节点
 //                                    不再持有;EX 300 秒。scene_manager 只比对、从不删除。
 //                                    **写入方与删除方不止一处**(完整清单与理由见 exit_release_mark.h 开头):
@@ -41,7 +45,10 @@
 //                                    只有 A2′ 能保证新持有期间不留有效标记。
 //   player:{player_id}:location     PlayerLocation proto 二进制(Go 写),含 owner_epoch;路由失败回滚恢复出的那一条
 //                                    还带 rollback_receipt(被回滚那次铸造所凭的标记原文,与 INCR 同一段 Lua 原子写入,
-//                                    任何新落点整条重写 location 时随之消失)。C++ 读 location 的地方:ResolveTravelOutcome
+//                                    任何新落点整条重写 location 时随之消失)。回执有两种形态(zone-redis-regression-guard-
+//                                    20261022.md §4.3.4 两段回执):正式回执 = 标记原文,只在回滚后的 epoch 已确认落盘时出现;
+//                                    待确认回执 = kPendingRollbackReceiptPrefix + 标记原文,回滚还在等落盘确认,不得采纳。
+//                                    C++ 读 location 的地方:ResolveTravelOutcome
 //                                    (唯一读 rollback_receipt 的)、队伍跟随、改派确认的只读核实(只读 zone / node / scene,
 //                                    不读回执、不采纳 epoch)。
 //
@@ -81,6 +88,18 @@ namespace player_ownership
 	inline std::string HandoffRedisValue(uint64_t epoch, uint64_t savedAtMs)
 	{
 		return std::to_string(epoch) + ":" + std::to_string(savedAtMs);
+	}
+
+	// 待确认回执的前缀(见文件头的 location 契约)。与 Go shared/ownerepoch.PendingRollbackReceiptPrefix 逐字一致,
+	// go/scene_manager owner_epoch_crosslang_test.go 按下面这一行原文核对,改写法要两边同改。
+	// 标记原文只由数字与一个冒号组成,带这个前缀的串不可能等于任何标记原文。
+	inline constexpr std::string_view kPendingRollbackReceiptPrefix = "pending:";
+
+	// 本次标记 "{epoch}:{saved_at_ms}" 的待确认回执:scene_manager 的凭标记回滚(推路由失败,或铸造没确认落盘)先写这一形态,
+	// 回滚确认落盘才改成标记原文(正式回执)。取证读到它说明这次回滚还没确认落盘,不得采纳(判定表 B5′)。
+	inline std::string PendingRollbackReceiptValue(uint64_t epoch, uint64_t savedAtMs)
+	{
+		return std::string(kPendingRollbackReceiptPrefix) + HandoffRedisValue(epoch, savedAtMs);
 	}
 
 	// 交接标记 TTL。放行后标记已无意义,300s 足够覆盖"源存盘落地 → 客户端重定向 →
@@ -173,6 +192,11 @@ struct PlayerOwnerEpochComp
 // destroyDeferralReported
 //               "handoff 标记已发出、该销毁了,但还有未落地的存盘,推迟销毁"(ConcludeHandoffAfterMarkSent)的
 //               ERROR 与 destroy_deferred_unsettled_save 计数每次交接只打 / 只计一次;随组件销毁。
+// serverInitiated
+//               服务器替玩家发起的交接(组队跟随换到本 zone 别的节点,team-follow-server-trail.md §3.7):玩家没在等结果,
+//               交接未成只记日志、不回失败 tip(AbortTravelHandoff)。离线托管中的角色只能由服务器发起,交接的重发改为
+//               托管落点(不带 gate,player-connection-lost-hold.md §4.2)。"标记已发出、归属核实不了"仍按原规则踢线 ——
+//               那是数据一致性的收口,与谁发起无关。只由 StartTravelHandoff 写。
 struct PlayerTravelHandoffComp
 {
 	uint32_t targetZoneId{0};
@@ -180,6 +204,7 @@ struct PlayerTravelHandoffComp
 	uint32_t sceneConfigId{0};
 	uint64_t requestedAtMs{0};
 	uint64_t markEpoch{0};
+	bool serverInitiated{false};
 	bool hasRecordedEvidence{false};
 	uint8_t recordedEvidence{0};
 	uint64_t enterSceneCorrelationId{0};
@@ -222,8 +247,9 @@ struct PlayerTravelHandoffComp
 //                  PlayerLifecycleSystem::RequestSceneChange 写入,经它登记的恒非 0;默认值 0 = 未登记。
 //
 // playerRequested  这次换图是不是玩家自己要的。true(默认)= 客户端在等结果:18 要起交接,其它失败
-//                  要回 tip。false = 服务器替他发的队伍跟随:玩家没在等,被拒只记日志、队员留在原
-//                  场景(跟随不跨节点拉人,team-system.md DV-6),不起交接、不回 tip ——
+//                  要回 tip。false = 服务器替他发的队伍跟随:玩家没在等,18(队长在本 zone 别的节点)起
+//                  服务器发起的交接(PlayerTravelHandoffComp.serverInitiated,2026-11-10 起取代 team-system.md
+//                  DV-6 的"跟随不跨节点"),其它被拒只记日志、队员留在原场景,都不回 tip ——
 //                  否则玩家会凭空收到一条"进入场景失败"。
 struct PlayerSceneChangeInFlightComp
 {

@@ -110,6 +110,15 @@ def test_vocabulary_is_parsed_from_proto(env):
     assert "CFG_SHAPE_SET" in vocab.enums["CfgShape"]
 
 
+def test_permanent_ids_option_is_read_from_table_options(env):
+    """(cfg_ids_permanent) 是表级 option,没写就是 False;门禁本身见 core/permanent_ids.py。"""
+    schema_dir, xlsx = env
+    assert build_table_schema(schema_dir / "demo_table.proto", xlsx).ids_permanent is False
+    _mutate(schema_dir, 'option (cfg_primary_key) = "id"',
+            'option (cfg_primary_key) = "id";\n  option (cfg_ids_permanent) = true')
+    assert build_table_schema(schema_dir / "demo_table.proto", xlsx).ids_permanent is True
+
+
 @pytest.mark.parametrize("old,new,needle", [
     # option 名拼错 -> 从前静默忽略,该列悄悄按默认 owner 进产物
     ('(cfg_index) = true', '(cfg_indx) = true', "未知 option"),

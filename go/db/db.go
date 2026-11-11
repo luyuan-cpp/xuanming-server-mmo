@@ -65,6 +65,10 @@ func main() {
 
 	// Load config
 	conf.MustLoad(*configFile, &config.AppConfig)
+	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入):指名了变量却没有值就拒启,不带空口令去连库。
+	if err := config.AppConfig.ResolveMySQLPassword(os.LookupEnv); err != nil {
+		panic(fmt.Sprintf("config rejected: %v", err))
+	}
 	// 回填 optional 段的默认值(迁移超时、连接池)。见 config.Normalize 注释。
 	config.AppConfig.Normalize()
 
@@ -73,45 +77,42 @@ func main() {
 		panic(fmt.Sprintf("config rejected: %v", err))
 	}
 
-	// Derive the zone-specific database name from ZoneId
+	// ZoneId 只用于注册发现(scene 按区找 go/db 分摊负载);go/db 不再有本区库,不从它派生任何库名
+	// (docs/design/player-data-tidb-scaling-plan.md §7.2 A17c)。
 	if config.AppConfig.ZoneId == 0 {
 		panic("ZoneId must be set in config (> 0)")
 	}
-	config.AppConfig.ServerConfig.Database.DBName = config.ZoneDBName(config.AppConfig.ZoneId)
 
 	var maintenanceRuntime *drainproof.Runtime
 	if *maintenancePlan != "" {
 		var err error
 		maintenanceRuntime, err = drainproof.LoadRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
 		if err != nil {
-			panic(fmt.Sprintf("维护runtime原件拒绝: %v", err))
+			panic(fmt.Sprintf("maintenance runtime artifact rejected: %v", err))
 		}
 	} else if *maintenanceDir != "" || *maintenanceSHA != "" {
-		panic("维护参数必须完整提供")
+		panic("maintenance parameters must be provided in full")
 	}
 	ctx := svc.NewServiceContext()
 
-	// InitDB 默认**不跑任何 DDL**,并且会断言实际连上的 DATABASE() 落在外部
-	// 注入的白名单里 —— 不在就拒启,而不是静默建库把玩家数据写进去。
-	// 建表/补列由部署阶段的 `go run ./cmd/migrate -command up` 负责,
-	// 运维步骤见 go/db/README.md。
+	// InitDB 只装配写资格(每个存档库一份,都必须是地域存档库)和逻辑库映射,不连任何库,**不跑任何 DDL**。
+	// 建表/补列由部署阶段的 `go run ./cmd/migrate -storage-id <编号> -command up` 负责,运维步骤见 go/db/README.md。
 	if err := proto_sql.InitDB(); err != nil {
 		panic(fmt.Sprintf("database init rejected: %v", err))
 	}
 
-	// 落点库注册表(docs/design/player-storage-placement.md §6.1):本 zone 库登记为落点 ZoneId,
-	// 其余落点库在第一次被指向时按需打开(只 Ping + 只读 schema 闸,从不建库)。
-	// 必须在 InitDB 之后(拿本 zone 库做种子)。
+	// 存档库注册表(docs/design/player-storage-placement.md §6.1):建出来是空的,每个存档库在第一次被指向时
+	// 按需打开(只 Ping + 断言连上的库 + 只读 schema 闸,从不建库);库名清单里有 zone 库名就拒启。必须在 InitDB 之后。
 	stores, err := proto_sql.NewStoreRegistryFromConfig()
 	if err != nil {
 		panic(fmt.Sprintf("placement store registry rejected: %v", err))
 	}
 	defer func() {
 		if err := stores.Close(); err != nil {
-			logx.Errorf("DB物理池关闭失败，不能据此宣称UNKNOWN撤销: %v", err)
+			logx.Errorf("Failed to close DB physical pools; UNKNOWN cannot be declared withdrawn on this basis: %v", err)
 		}
 	}()
-	// 连接池指标(mmorpg_sql_pool_*{sql_client="db"},G2b):按本 zone 库 / 额外 zone 家族库 / 非 zone 落点库三类聚合,
+	// 连接池指标(mmorpg_sql_pool_*{sql_client="db",pool="store"},G2b):所有地域存档库的池聚合成一类,
 	// 每次抓取时现取 sql.DBStats。必须在 metrics.Start 之前注册;注册失败只记日志,不挡落库。
 	metrics.RegisterSQLPools(stores.PoolSamples)
 	// 库级冷却(L-04):db_store_cooldown_stores 在每次抓取时按注册表现算,同样必须在 metrics.Start 之前注册。
@@ -120,17 +121,17 @@ func main() {
 	if maintenanceRuntime != nil {
 		writerConfigs, err := proto_sql.CurrentWriterConfigs()
 		if err != nil {
-			panic(fmt.Sprintf("维护writer身份HOLD: %v", err))
+			panic(fmt.Sprintf("maintenance writer identity HOLD: %v", err))
 		}
 		if err = bindMaintenanceRuntime(maintenanceRuntime, writerConfigs); err != nil {
-			panic(fmt.Sprintf("维护同boot身份HOLD: %v", err))
+			panic(fmt.Sprintf("maintenance same-boot identity HOLD: %v", err))
 		}
 	}
 	if maintenanceRuntime != nil && maintenanceRuntime.Request.RunPhase != databasepb.SqlWriterDrainRun_SQL_RELEASED {
 		maintenanceCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		if err := dbdrain.Run(maintenanceCtx, maintenanceRuntime, stores); err != nil {
-			panic(fmt.Sprintf("维护排空HOLD: %v", err))
+			panic(fmt.Sprintf("maintenance drain HOLD: %v", err))
 		}
 		return
 	}
@@ -223,7 +224,7 @@ func main() {
 			digest := sha256.Sum256([]byte("DB_PLAYER_STORE_READY_V1"))
 			ready, err := maintenanceRuntime.Readiness("SOURCE", digest[:])
 			if err != nil {
-				logx.Errorf("维护新boot正式身份HOLD: %v", err)
+				logx.Errorf("maintenance new-boot formal identity HOLD: %v", err)
 				return
 			}
 			if err = maintenanceRuntime.AwaitOpen(context.Background(), ready, func(ctx context.Context) ([]byte, error) {
@@ -235,7 +236,7 @@ func main() {
 				}
 				return rootAdmission.SnapshotDigest(), nil
 			}); err != nil {
-				logx.Errorf("维护新boot开放HOLD: %v", err)
+				logx.Errorf("maintenance new-boot open HOLD: %v", err)
 			}
 		}()
 	}
@@ -246,7 +247,7 @@ func main() {
 			if err != nil {
 				if controlCtx.Err() == nil {
 					rootAdmission.CloseAdmission()
-					logx.Errorf("维护控制输入HOLD: %v", err)
+					logx.Errorf("maintenance control input HOLD: %v", err)
 				}
 				return
 			}
@@ -256,7 +257,7 @@ func main() {
 			}
 			if err != nil {
 				rootAdmission.CloseAdmission()
-				logx.Errorf("维护同boot控制身份HOLD: %v", err)
+				logx.Errorf("maintenance same-boot control identity HOLD: %v", err)
 				return
 			}
 			if err = dbdrain.RunExisting(controlCtx, runtime, stores, func(ctx context.Context) ([]byte, error) {
@@ -267,7 +268,7 @@ func main() {
 				return rootAdmission.SettledDigest(ctx)
 			}); err != nil {
 				rootAdmission.CloseAdmission()
-				logx.Errorf("维护同boot排空HOLD: %v", err)
+				logx.Errorf("maintenance same-boot drain HOLD: %v", err)
 			}
 		}()
 	}
@@ -283,11 +284,10 @@ func main() {
 		fmt.Printf("  etcd:        %v\n", config.AppConfig.Etcd.Hosts)
 	}
 	pc := config.AppConfig.Placement
-	fmt.Printf("  placement:   storeFamilies=%v zoneStorePool=%d/%d nonZoneStorePool=%d/%d extraStoreIdleTimeout=%v\n",
-		pc.StoreFamiliesAllowed(),
-		pc.ZoneStoreMaxOpenConn, pc.ZoneStoreMaxIdleConn, pc.NonZoneStoreMaxOpenConn, pc.NonZoneStoreMaxIdleConn,
-		time.Duration(pc.ExtraStoreConnMaxIdleSeconds)*time.Second)
-	fmt.Printf("  mysql:       %s@%s/%s\n", config.AppConfig.ServerConfig.Database.User, config.AppConfig.ServerConfig.Database.Hosts, config.AppConfig.ServerConfig.Database.DBName)
+	fmt.Printf("  placement:   storeFamilies=%v storePool=%d/%d storeIdleTimeout=%v (player stores open on demand)\n",
+		pc.StoreFamiliesAllowed(), pc.StoreMaxOpenConn, pc.StoreMaxIdleConn,
+		time.Duration(pc.StoreConnMaxIdleSeconds)*time.Second)
+	fmt.Printf("  mysql:       %s@%s\n", config.AppConfig.ServerConfig.Database.User, config.AppConfig.ServerConfig.Database.Hosts)
 	fmt.Println("=============================================================")
 	// 不要对 quit 调 signal.Stop / signal.Reset:Linux 上 go-zero 收到 SIGTERM 后会在约 5.5 秒后向自身重发一次
 	// (core/proc 的 gracefulStop)。quit 仍在注册时信号只进这个通道,不会走默认处理杀掉进程。

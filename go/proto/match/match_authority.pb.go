@@ -38,6 +38,16 @@ const (
 	// 只给过了截止加宽限、没有任何终局行、持久 Create 原件过不了终局核对的成局；同一事务另写一行 match_manual_resolution 审计。
 	// 同样没有 Battle 原字节，format_version 为 0。
 	MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT MatchBattleCompletionSourceKind = 5
+	// 原执行实例提交的终局原件内容本身不合格、永远提交不了 COMPLETE 时，Match 在权威截止加终局提交宽限之后、
+	// 收到它的下一次重放时写的 ABORT（2026-11-11，go/match/internal/authority/rejected_original_abort.go）。
+	// battle 冻结的终局只会原样重放，这份原件被确定性规则拒收就不会再有别的结果；版本错位类拒收（未知字段等）不算。
+	// 同样没有 Battle 原字节，format_version 为 0。
+	MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_REJECTED_ORIGINAL_ABORT MatchBattleCompletionSourceKind = 6
+	// 原执行进程确定已不在时 Match 提前写的 ABORT（2026-11-11，go/match/internal/authority/instance_gone.go，
+	// docs/design/battle-instance-loss-early-abort.md §4）：两次确定证据（原地址上是另一个实例 / 原端口拒连 /
+	// K8s 里原 IP 已没有 Pod）相隔不少于复核间隔，期间原实例从没亲口应答过。截止之前也可以写。
+	// 同样没有 Battle 原字节，format_version 为 0。
+	MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_INSTANCE_GONE_ABORT MatchBattleCompletionSourceKind = 7
 )
 
 // Enum value maps for MatchBattleCompletionSourceKind.
@@ -49,14 +59,18 @@ var (
 		3: "MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT",
 		4: "MATCH_BATTLE_COMPLETION_SOURCE_MATCH_NO_ROOM_ABORT",
 		5: "MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT",
+		6: "MATCH_BATTLE_COMPLETION_SOURCE_MATCH_REJECTED_ORIGINAL_ABORT",
+		7: "MATCH_BATTLE_COMPLETION_SOURCE_MATCH_INSTANCE_GONE_ABORT",
 	}
 	MatchBattleCompletionSourceKind_value = map[string]int32{
-		"MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED":          0,
-		"MATCH_BATTLE_COMPLETION_SOURCE_KAFKA":                1,
-		"MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC":           2,
-		"MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT": 3,
-		"MATCH_BATTLE_COMPLETION_SOURCE_MATCH_NO_ROOM_ABORT":  4,
-		"MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT":         5,
+		"MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED":                   0,
+		"MATCH_BATTLE_COMPLETION_SOURCE_KAFKA":                         1,
+		"MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC":                    2,
+		"MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT":          3,
+		"MATCH_BATTLE_COMPLETION_SOURCE_MATCH_NO_ROOM_ABORT":           4,
+		"MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT":                  5,
+		"MATCH_BATTLE_COMPLETION_SOURCE_MATCH_REJECTED_ORIGINAL_ABORT": 6,
+		"MATCH_BATTLE_COMPLETION_SOURCE_MATCH_INSTANCE_GONE_ABORT":     7,
 	}
 )
 
@@ -94,8 +108,11 @@ type MatchNetworkProfile struct {
 	Receipts       []*NetworkProbeReceipt `protobuf:"bytes,3,rep,name=receipts,proto3" json:"receipts,omitempty"`
 	OwnerAccount   string                 `protobuf:"bytes,4,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"` // 服务端捕获的原会话账号；不得由当前目录反查补权。
 	OwnerRevision  uint64                 `protobuf:"varint,5,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 写计划时服务端按会话轨道记下（x-release-track，取值 "stable" / "canary"；空串是本字段之前的档案，按 stable 算）。
+	// 回执提交沿用计划里的值，不接受客户端自带。成局时全员都是 canary 才放 canary battle（docs/design/release-track-gray-canary.md §2.6）。
+	ReleaseTrack  string `protobuf:"bytes,6,opt,name=release_track,json=releaseTrack,proto3" json:"release_track,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchNetworkProfile) Reset() {
@@ -161,6 +178,13 @@ func (x *MatchNetworkProfile) GetOwnerRevision() uint64 {
 		return x.OwnerRevision
 	}
 	return 0
+}
+
+func (x *MatchNetworkProfile) GetReleaseTrack() string {
+	if x != nil {
+		return x.ReleaseTrack
+	}
+	return ""
 }
 
 // 全局观战占用与匹配票在同P事务内互斥；时间到期不意味着远端已取消。
@@ -1316,10 +1340,13 @@ func (x *MatchGlobalPolicyRecord) GetContractDigest() []byte {
 }
 
 type MatchFormationMember struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Ticket        string                 `protobuf:"bytes,2,opt,name=ticket,proto3" json:"ticket,omitempty"`
-	TeamIndex     uint32                 `protobuf:"varint,3,opt,name=team_index,json=teamIndex,proto3" json:"team_index,omitempty"` // PVP_TEAM成局时持久化0/1分边，恢复不能重新排序或拆散原队伍。
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId  uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Ticket    string                 `protobuf:"bytes,2,opt,name=ticket,proto3" json:"ticket,omitempty"`
+	TeamIndex uint32                 `protobuf:"varint,3,opt,name=team_index,json=teamIndex,proto3" json:"team_index,omitempty"` // PVP_TEAM成局时持久化0/1分边，恢复不能重新排序或拆散原队伍。
+	// 整队开局的发起人(该队队长)。成局时由撮合按 TeamLaunchRecord.actor_id 写入,单排成员恒为 false;
+	// 建房时每一方的战斗剧本按队长的选用,没有队长按阵位第一的成员(docs/design/battle-script.md §5.2)。
+	Captain       bool `protobuf:"varint,4,opt,name=captain,proto3" json:"captain,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1375,6 +1402,13 @@ func (x *MatchFormationMember) GetTeamIndex() uint32 {
 	return 0
 }
 
+func (x *MatchFormationMember) GetCaptain() bool {
+	if x != nil {
+		return x.Captain
+	}
+	return false
+}
+
 type MatchFormationRecord struct {
 	state                         protoimpl.MessageState   `protogen:"open.v1"`
 	BattleId                      uint64                   `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
@@ -1399,8 +1433,11 @@ type MatchFormationRecord struct {
 	PreflightInstanceId           string                   `protobuf:"bytes,20,opt,name=preflight_instance_id,json=preflightInstanceId,proto3" json:"preflight_instance_id,omitempty"`                                  // 发任何Create之前与完整version1正文同事务保存。
 	AdoptedOutcomeProtocolVersion uint32                   `protobuf:"varint,21,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"` // 独立保存真实Create/PRESENT回执，不能由能力推算。
 	AdoptedOutcomeObserved        bool                     `protobuf:"varint,22,opt,name=adopted_outcome_observed,json=adoptedOutcomeObserved,proto3" json:"adopted_outcome_observed,omitempty"`                        // 未回包与原身份明确回显0不同；首个实际回执永久不变。
-	unknownFields                 protoimpl.UnknownFields
-	sizeCache                     protoimpl.SizeCache
+	// 这局所在 battle 节点的发布轨道（"stable" / "canary"），选点时按选中节点记下，之后不变（docs/design/release-track-gray-canary.md §2.6）。
+	// 观战入口、观战列表与随机选场按它判 stable 观众能不能看，不看实时节点镜像。空串（本字段之前的原件，迁移补列后读出 NULL）按 stable。
+	ReleaseTrack  string `protobuf:"bytes,23,opt,name=release_track,json=releaseTrack,proto3" json:"release_track,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchFormationRecord) Reset() {
@@ -1585,6 +1622,13 @@ func (x *MatchFormationRecord) GetAdoptedOutcomeObserved() bool {
 		return x.AdoptedOutcomeObserved
 	}
 	return false
+}
+
+func (x *MatchFormationRecord) GetReleaseTrack() string {
+	if x != nil {
+		return x.ReleaseTrack
+	}
+	return ""
 }
 
 type MatchPreparedEndpoint struct {
@@ -2557,17 +2601,332 @@ func (x *MatchPlayerBattleReportRecord) GetSummary() []byte {
 	return nil
 }
 
+// 玩家上传的剧本:一份一行,只存「当前提交版」与「审核通过版」两份正文。
+// 改一次 = 新版本、重新待审;审过之前对局一直用上一份通过版(approved_*),审核看的永远是 content 那一版。
+// 正文都是确定性序列化的 battle.BattleScript(script_id 恒为 0,身份是本行 script_id)。
+type MatchBattleScriptRecord struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ScriptId         uint64                 `protobuf:"varint,1,opt,name=script_id,json=scriptId,proto3" json:"script_id,omitempty"` // 发号器永久 ID(只当身份用,不比大小)
+	OwnerPlayerId    uint64                 `protobuf:"varint,2,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
+	Revision         uint32                 `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`                                         // 每次提交 +1,从 1 起;客户端改、删、审核都按它做 CAS
+	Content          []byte                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`                                            // 当前提交版正文
+	ReviewState      uint32                 `protobuf:"varint,5,opt,name=review_state,json=reviewState,proto3" json:"review_state,omitempty"`                // BattleScriptReviewState(match_service.proto):当前提交版的审核状态
+	ApprovedRevision uint32                 `protobuf:"varint,6,opt,name=approved_revision,json=approvedRevision,proto3" json:"approved_revision,omitempty"` // 最近一次通过的版本号;0 = 从未通过,不能选用
+	ApprovedContent  []byte                 `protobuf:"bytes,7,opt,name=approved_content,json=approvedContent,proto3" json:"approved_content,omitempty"`     // 最近一次通过的那一版正文;建房只用它
+	RejectReason     string                 `protobuf:"bytes,8,opt,name=reject_reason,json=rejectReason,proto3" json:"reject_reason,omitempty"`              // 最近一次驳回的原因(给作者看)
+	SubmittedMs      uint64                 `protobuf:"varint,9,opt,name=submitted_ms,json=submittedMs,proto3" json:"submitted_ms,omitempty"`                // match 库时间:当前版本提交时刻;待审列表按它排
+	ReviewedMs       uint64                 `protobuf:"varint,10,opt,name=reviewed_ms,json=reviewedMs,proto3" json:"reviewed_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *MatchBattleScriptRecord) Reset() {
+	*x = MatchBattleScriptRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchBattleScriptRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchBattleScriptRecord) ProtoMessage() {}
+
+func (x *MatchBattleScriptRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchBattleScriptRecord.ProtoReflect.Descriptor instead.
+func (*MatchBattleScriptRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *MatchBattleScriptRecord) GetScriptId() uint64 {
+	if x != nil {
+		return x.ScriptId
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptRecord) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptRecord) GetRevision() uint32 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptRecord) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *MatchBattleScriptRecord) GetReviewState() uint32 {
+	if x != nil {
+		return x.ReviewState
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptRecord) GetApprovedRevision() uint32 {
+	if x != nil {
+		return x.ApprovedRevision
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptRecord) GetApprovedContent() []byte {
+	if x != nil {
+		return x.ApprovedContent
+	}
+	return nil
+}
+
+func (x *MatchBattleScriptRecord) GetRejectReason() string {
+	if x != nil {
+		return x.RejectReason
+	}
+	return ""
+}
+
+func (x *MatchBattleScriptRecord) GetSubmittedMs() uint64 {
+	if x != nil {
+		return x.SubmittedMs
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptRecord) GetReviewedMs() uint64 {
+	if x != nil {
+		return x.ReviewedMs
+	}
+	return 0
+}
+
+// 审核流水:每审一次一行,与剧本行的状态变更同一事务写入,只增不改(审计、追责、事后核对审的是哪一版正文)。
+type MatchBattleScriptReviewRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ScriptId      uint64                 `protobuf:"varint,1,opt,name=script_id,json=scriptId,proto3" json:"script_id,omitempty"`
+	Revision      uint32                 `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
+	OwnerPlayerId uint64                 `protobuf:"varint,3,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
+	Approved      bool                   `protobuf:"varint,4,opt,name=approved,proto3" json:"approved,omitempty"`
+	Reviewer      string                 `protobuf:"bytes,5,opt,name=reviewer,proto3" json:"reviewer,omitempty"`                        // 审核员名,≤64 字节
+	Reason        string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`                            // 驳回原因或通过备注,≤191 字节
+	ReviewedMs    uint64                 `protobuf:"varint,7,opt,name=reviewed_ms,json=reviewedMs,proto3" json:"reviewed_ms,omitempty"` // match 库时间
+	Content       []byte                 `protobuf:"bytes,8,opt,name=content,proto3" json:"content,omitempty"`                          // 审的那一版正文
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MatchBattleScriptReviewRecord) Reset() {
+	*x = MatchBattleScriptReviewRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchBattleScriptReviewRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchBattleScriptReviewRecord) ProtoMessage() {}
+
+func (x *MatchBattleScriptReviewRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchBattleScriptReviewRecord.ProtoReflect.Descriptor instead.
+func (*MatchBattleScriptReviewRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *MatchBattleScriptReviewRecord) GetScriptId() uint64 {
+	if x != nil {
+		return x.ScriptId
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptReviewRecord) GetRevision() uint32 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptReviewRecord) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptReviewRecord) GetApproved() bool {
+	if x != nil {
+		return x.Approved
+	}
+	return false
+}
+
+func (x *MatchBattleScriptReviewRecord) GetReviewer() string {
+	if x != nil {
+		return x.Reviewer
+	}
+	return ""
+}
+
+func (x *MatchBattleScriptReviewRecord) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *MatchBattleScriptReviewRecord) GetReviewedMs() uint64 {
+	if x != nil {
+		return x.ReviewedMs
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptReviewRecord) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+// 玩家对某种对局选用的剧本:(玩家, 模式, 副本) 一行,模式 / 副本为 0 表示任意;查找按 具体 → 通用 取第一条。
+// 只记引用,不存正文:官方剧本随 match 发布,玩家剧本建房时读审核通过版。
+type MatchBattleScriptLoadoutRecord struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId         uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	MatchMode        uint32                 `protobuf:"varint,2,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`
+	BattleConfigId   uint32                 `protobuf:"varint,3,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`
+	Origin           uint32                 `protobuf:"varint,4,opt,name=origin,proto3" json:"origin,omitempty"`                                               // battle.eBattleScriptOrigin:1 官方 / 2 玩家
+	OfficialScriptId uint32                 `protobuf:"varint,5,opt,name=official_script_id,json=officialScriptId,proto3" json:"official_script_id,omitempty"` // origin = 官方
+	PlayerScriptId   uint64                 `protobuf:"varint,6,opt,name=player_script_id,json=playerScriptId,proto3" json:"player_script_id,omitempty"`       // origin = 玩家:只能是本人的剧本
+	UpdatedMs        uint64                 `protobuf:"varint,7,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *MatchBattleScriptLoadoutRecord) Reset() {
+	*x = MatchBattleScriptLoadoutRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchBattleScriptLoadoutRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchBattleScriptLoadoutRecord) ProtoMessage() {}
+
+func (x *MatchBattleScriptLoadoutRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchBattleScriptLoadoutRecord.ProtoReflect.Descriptor instead.
+func (*MatchBattleScriptLoadoutRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *MatchBattleScriptLoadoutRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptLoadoutRecord) GetMatchMode() uint32 {
+	if x != nil {
+		return x.MatchMode
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptLoadoutRecord) GetBattleConfigId() uint32 {
+	if x != nil {
+		return x.BattleConfigId
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptLoadoutRecord) GetOrigin() uint32 {
+	if x != nil {
+		return x.Origin
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptLoadoutRecord) GetOfficialScriptId() uint32 {
+	if x != nil {
+		return x.OfficialScriptId
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptLoadoutRecord) GetPlayerScriptId() uint64 {
+	if x != nil {
+		return x.PlayerScriptId
+	}
+	return 0
+}
+
+func (x *MatchBattleScriptLoadoutRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
 var File_proto_match_match_authority_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\n" +
-	"!proto/match/match_authority.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1fproto/match/match_network.proto\x1a proto/match/match_internal.proto\"\xdb\x01\n" +
+	"!proto/match/match_authority.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1fproto/match/match_network.proto\x1a proto/match/match_internal.proto\"\x80\x02\n" +
 	"\x13MatchNetworkProfile\x12\x17\n" +
 	"\aplan_id\x18\x01 \x01(\tR\x06planId\x12'\n" +
 	"\x0fsession_binding\x18\x02 \x01(\tR\x0esessionBinding\x126\n" +
 	"\breceipts\x18\x03 \x03(\v2\x1a.match.NetworkProbeReceiptR\breceipts\x12#\n" +
 	"\rowner_account\x18\x04 \x01(\tR\fownerAccount\x12%\n" +
-	"\x0eowner_revision\x18\x05 \x01(\x04R\rownerRevision\"\xa6\x04\n" +
+	"\x0eowner_revision\x18\x05 \x01(\x04R\rownerRevision\x12#\n" +
+	"\rrelease_track\x18\x06 \x01(\tR\freleaseTrack\"\xa6\x04\n" +
 	"\x14MatchSpectatorRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId\x12\x1b\n" +
@@ -2693,12 +3052,13 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\tbattle_id\x18\f \x01(\x04R\bbattleId:\xa5\x01\x8a\x92\xf4\x01\x1amatch_challenge_invitation\x92\x92\xf4\x01\fchallenge_idڒ\xf4\x01atarget_player_id,state,expires_ms,challenge_id;challenger_player_id,state,expires_ms,challenge_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x87\x01\n" +
 	"\x17MatchGlobalPolicyRecord\x12\x1b\n" +
 	"\tpolicy_id\x18\x01 \x01(\rR\bpolicyId\x12'\n" +
-	"\x0fcontract_digest\x18\x02 \x01(\fR\x0econtractDigest:&\x8a\x92\xf4\x01\x13match_global_policy\x92\x92\xf4\x01\tpolicy_id\"j\n" +
+	"\x0fcontract_digest\x18\x02 \x01(\fR\x0econtractDigest:&\x8a\x92\xf4\x01\x13match_global_policy\x92\x92\xf4\x01\tpolicy_id\"\x84\x01\n" +
 	"\x14MatchFormationMember\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\x12\x1d\n" +
 	"\n" +
-	"team_index\x18\x03 \x01(\rR\tteamIndex\"\xff\a\n" +
+	"team_index\x18\x03 \x01(\rR\tteamIndex\x12\x18\n" +
+	"\acaptain\x18\x04 \x01(\bR\acaptain\"\xa4\b\n" +
 	"\x14MatchFormationRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId\x12\x14\n" +
@@ -2724,7 +3084,8 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x1bpreflight_supported_version\x18\x13 \x01(\rR\x19preflightSupportedVersion\x122\n" +
 	"\x15preflight_instance_id\x18\x14 \x01(\tR\x13preflightInstanceId\x12G\n" +
 	" adopted_outcome_protocol_version\x18\x15 \x01(\rR\x1dadoptedOutcomeProtocolVersion\x128\n" +
-	"\x18adopted_outcome_observed\x18\x16 \x01(\bR\x16adoptedOutcomeObserved:8\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x01\x11state,retry_at_ms\"P\n" +
+	"\x18adopted_outcome_observed\x18\x16 \x01(\bR\x16adoptedOutcomeObserved\x12#\n" +
+	"\rrelease_track\x18\x17 \x01(\tR\freleaseTrack:8\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x01\x11state,retry_at_ms\"P\n" +
 	"\x15MatchPreparedEndpoint\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1a\n" +
 	"\bendpoint\x18\x02 \x01(\tR\bendpoint\"\xec\x01\n" +
@@ -2824,14 +3185,49 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\n" +
 	"created_ms\x18\x02 \x01(\x04R\tcreatedMs\x12\x1b\n" +
 	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\x12\x18\n" +
-	"\asummary\x18\x04 \x01(\fR\asummary:B\x8a\x92\xf4\x01\x1amatch_player_battle_report\x92\x92\xf4\x01\x1eplayer_id,created_ms,battle_id*\xcc\x02\n" +
+	"\asummary\x18\x04 \x01(\fR\asummary:B\x8a\x92\xf4\x01\x1amatch_player_battle_report\x92\x92\xf4\x01\x1eplayer_id,created_ms,battle_id\"\xe2\x03\n" +
+	"\x17MatchBattleScriptRecord\x12\x1b\n" +
+	"\tscript_id\x18\x01 \x01(\x04R\bscriptId\x12&\n" +
+	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x1a\n" +
+	"\brevision\x18\x03 \x01(\rR\brevision\x12\x18\n" +
+	"\acontent\x18\x04 \x01(\fR\acontent\x12!\n" +
+	"\freview_state\x18\x05 \x01(\rR\vreviewState\x12+\n" +
+	"\x11approved_revision\x18\x06 \x01(\rR\x10approvedRevision\x12)\n" +
+	"\x10approved_content\x18\a \x01(\fR\x0fapprovedContent\x12#\n" +
+	"\rreject_reason\x18\b \x01(\tR\frejectReason\x12!\n" +
+	"\fsubmitted_ms\x18\t \x01(\x04R\vsubmittedMs\x12\x1f\n" +
+	"\vreviewed_ms\x18\n" +
+	" \x01(\x04R\n" +
+	"reviewedMs:h\x8a\x92\xf4\x01\x13match_battle_script\x92\x92\xf4\x01\tscript_idڒ\xf4\x01=owner_player_id,script_id;review_state,submitted_ms,script_id\"\xc3\x02\n" +
+	"\x1dMatchBattleScriptReviewRecord\x12\x1b\n" +
+	"\tscript_id\x18\x01 \x01(\x04R\bscriptId\x12\x1a\n" +
+	"\brevision\x18\x02 \x01(\rR\brevision\x12&\n" +
+	"\x0fowner_player_id\x18\x03 \x01(\x04R\rownerPlayerId\x12\x1a\n" +
+	"\bapproved\x18\x04 \x01(\bR\bapproved\x12\x1a\n" +
+	"\breviewer\x18\x05 \x01(\tR\breviewer\x12\x16\n" +
+	"\x06reason\x18\x06 \x01(\tR\x06reason\x12\x1f\n" +
+	"\vreviewed_ms\x18\a \x01(\x04R\n" +
+	"reviewedMs\x12\x18\n" +
+	"\acontent\x18\b \x01(\fR\acontent:6\x8a\x92\xf4\x01\x1amatch_battle_script_review\x92\x92\xf4\x01\x12script_id,revision\"\xe1\x02\n" +
+	"\x1eMatchBattleScriptLoadoutRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
+	"\n" +
+	"match_mode\x18\x02 \x01(\rR\tmatchMode\x12(\n" +
+	"\x10battle_config_id\x18\x03 \x01(\rR\x0ebattleConfigId\x12\x16\n" +
+	"\x06origin\x18\x04 \x01(\rR\x06origin\x12,\n" +
+	"\x12official_script_id\x18\x05 \x01(\rR\x10officialScriptId\x12(\n" +
+	"\x10player_script_id\x18\x06 \x01(\x04R\x0eplayerScriptId\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\a \x01(\x04R\tupdatedMs:J\x8a\x92\xf4\x01\x1bmatch_battle_script_loadout\x92\x92\xf4\x01%player_id,match_mode,battle_config_id*\xcc\x03\n" +
 	"\x1fMatchBattleCompletionSourceKind\x12.\n" +
 	"*MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED\x10\x00\x12(\n" +
 	"$MATCH_BATTLE_COMPLETION_SOURCE_KAFKA\x10\x01\x12-\n" +
 	")MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC\x10\x02\x127\n" +
 	"3MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT\x10\x03\x126\n" +
 	"2MATCH_BATTLE_COMPLETION_SOURCE_MATCH_NO_ROOM_ABORT\x10\x04\x12/\n" +
-	"+MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT\x10\x05B\rZ\vproto/matchb\x06proto3"
+	"+MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT\x10\x05\x12@\n" +
+	"<MATCH_BATTLE_COMPLETION_SOURCE_MATCH_REJECTED_ORIGINAL_ABORT\x10\x06\x12<\n" +
+	"8MATCH_BATTLE_COMPLETION_SOURCE_MATCH_INSTANCE_GONE_ABORT\x10\aB\rZ\vproto/matchb\x06proto3"
 
 var (
 	file_proto_match_match_authority_proto_rawDescOnce sync.Once
@@ -2846,7 +3242,7 @@ func file_proto_match_match_authority_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_match_match_authority_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_proto_match_match_authority_proto_goTypes = []any{
 	(MatchBattleCompletionSourceKind)(0),      // 0: match.MatchBattleCompletionSourceKind
 	(*MatchNetworkProfile)(nil),               // 1: match.MatchNetworkProfile
@@ -2873,22 +3269,25 @@ var file_proto_match_match_authority_proto_goTypes = []any{
 	(*MatchManualResolutionRecord)(nil),       // 22: match.MatchManualResolutionRecord
 	(*MatchBattleReportRecord)(nil),           // 23: match.MatchBattleReportRecord
 	(*MatchPlayerBattleReportRecord)(nil),     // 24: match.MatchPlayerBattleReportRecord
-	(*NetworkProbeReceipt)(nil),               // 25: match.NetworkProbeReceipt
-	(BattleOutcomeDecision)(0),                // 26: match.BattleOutcomeDecision
-	(StrandedFormationMode)(0),                // 27: match.StrandedFormationMode
-	(StrandedFormationClass)(0),               // 28: match.StrandedFormationClass
+	(*MatchBattleScriptRecord)(nil),           // 25: match.MatchBattleScriptRecord
+	(*MatchBattleScriptReviewRecord)(nil),     // 26: match.MatchBattleScriptReviewRecord
+	(*MatchBattleScriptLoadoutRecord)(nil),    // 27: match.MatchBattleScriptLoadoutRecord
+	(*NetworkProbeReceipt)(nil),               // 28: match.NetworkProbeReceipt
+	(BattleOutcomeDecision)(0),                // 29: match.BattleOutcomeDecision
+	(StrandedFormationMode)(0),                // 30: match.StrandedFormationMode
+	(StrandedFormationClass)(0),               // 31: match.StrandedFormationClass
 }
 var file_proto_match_match_authority_proto_depIdxs = []int32{
-	25, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
+	28, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
 	2,  // 1: match.MatchDirectIntentRecord.spectator_exits:type_name -> match.MatchSpectatorRecord
 	14, // 2: match.MatchDirectStartOriginal.formation:type_name -> match.MatchFormationRecord
 	6,  // 3: match.MatchDirectStartOriginal.tickets:type_name -> match.MatchAuthorityTicketRecord
 	13, // 4: match.MatchFormationRecord.members:type_name -> match.MatchFormationMember
 	15, // 5: match.MatchFormationRecord.prepared:type_name -> match.MatchPreparedEndpoint
-	26, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
+	29, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
 	0,  // 7: match.MatchBattleCompletionRecord.source_kind:type_name -> match.MatchBattleCompletionSourceKind
-	27, // 8: match.MatchManualResolutionRecord.action:type_name -> match.StrandedFormationMode
-	28, // 9: match.MatchManualResolutionRecord.formation_class:type_name -> match.StrandedFormationClass
+	30, // 8: match.MatchManualResolutionRecord.action:type_name -> match.StrandedFormationMode
+	31, // 9: match.MatchManualResolutionRecord.formation_class:type_name -> match.StrandedFormationClass
 	6,  // 10: match.MatchManualResolutionRecord.tickets_before:type_name -> match.MatchAuthorityTicketRecord
 	11, // [11:11] is the sub-list for method output_type
 	11, // [11:11] is the sub-list for method input_type
@@ -2910,7 +3309,7 @@ func file_proto_match_match_authority_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_authority_proto_rawDesc), len(file_proto_match_match_authority_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   24,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

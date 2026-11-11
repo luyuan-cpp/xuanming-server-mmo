@@ -912,7 +912,7 @@ Java 仓 `PARITY.md` 已补登一行「Java 待做」（§9 要求的那一行�
 
 - **收件箱版本错位停用的周期补打**：`Halt` 只打一次，`[10m]` 窗口过后告警熄灭，停用却对实体一直有效。做法：对 `reason=version_skew`（以及同样不会自愈的 `unknown_type`）按 `kSceneLogAlertWindowMs` 节拍补打，与 `ledger_invalid` 同口径；`player-inbox-alerts.yaml` 的 PoisonSuspect 描述补一句"先排除 version_skew"（runbook A′ 已写）。10-30 时 `player_inbox_system.cpp`、`player_inbox_runtime_comp.h`、`player-inbox-alerts.yaml` 都有别的会话未提交的改动（C-1 / C-4），所以没动。
 - **战斗结算收件箱执行器**：载荷币种不认识时回 `kDefer`（`player_battle.cpp` 的 `CollectSettlementCurrencyGains` 失败分支），与 GM 执行器的 `kVersionSkew` 不一致；DEFER 在会话内只会空转。同一函数的 `>= kCurrencyMax` 判据也还没改调 `IsKnownCurrencyType`。该文件正被战斗结算的在途改动占用，没动，留给那项工作的负责人。
-- **交易 Go 侧三处币种字面量**（DRY，行为正确）：`commerce/engine.go` 与 `commerce/rmb.go` 的 `== 2`（绑定币禁售）、`svc/role_trade.go` 的 `c > 1`。改为引用 `currencytype.BindDiamond` / `isTradableCurrency`。
+- ~~**交易 Go 侧三处币种字面量**（DRY，行为正确）：`commerce/engine.go` 与 `commerce/rmb.go` 的 `== 2`（绑定币禁售）、`svc/role_trade.go` 的 `c > 1`。改为引用 `currencytype.BindDiamond` / `isTradableCurrency`。~~ 2026-11-10 已改，见 §23。
 - 设计 §13 第 10 条三项待拍板；R5 仍未守的场景见设计 §4.4 与 R5 行。
 - ~~`ValidateDebitBundle` 只要求可叠加、不看 `equip_kind`：装备行被误配成可叠加时，交易按数量扣出会让装备属性无声丢失。这是既有行为，交负责人决定是否收紧。~~ 2026-11-05 已收紧，见 §21。
 - `asset-channel-alerts.yaml` 其余 `{app=...}` 选择器仍匹配不到流（既有问题，契约测试注释已记），本批新加的那条已按正确写法。
@@ -1092,7 +1092,7 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 
 - 运行期字段集合指纹没做（设计 §13 第 11 条）。部署绕过发布流程时（用未封存分支的产物上线），封存门禁管不到。
 - 14.4 里其余待办照旧：
-  - 交易 Go 侧三处币种字面量。`engine.go`、`rmb.go` 这两个文件当前有别的会话的改动，本批没动。
+  - ~~交易 Go 侧三处币种字面量。`engine.go`、`rmb.go` 这两个文件当前有别的会话的改动，本批没动。~~ 2026-11-10 已改，见 §23。
   - 设计 §13 第 10 条三项待拍板。
   - ~~`ValidateDebitBundle` 不看 `equip_kind`~~，11-05 已做，见 §21。
   - ~~`asset-channel-alerts.yaml` 其余 `{app=...}` 选择器~~，11-05 已改，见 §21。
@@ -1178,7 +1178,7 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 | 契约测试说明「封存不跑生成后钩子」证明不了（低） | 成立 | 说明改为「只调用一次生成器」，同时覆盖 seal / verify 两条命令 |
 | 单项模式也会起 pprof（低） | 成立 | 条件加上两个台账开关 |
 | 封存只封台账、不核 proto（低，推测） | 成立 | `release-checklist.md` §2.1 ① 写明封存前先跑一次生成，并确认台账与产物无改动 |
-| 范围外：`market.go` 选对手单只按 status=3，托管阶段（stage=escrow）的单子也是 3，会被选为最优对手；`matchMarket` 发现阶段不对就本轮不成交 | 未核实到底 | `market.go` 与 `engine.go` 当前有别的会话未提交的改动，本批不动，列入下面的待办 |
+| 范围外：`market.go` 选对手单只按 status=3，托管阶段（stage=escrow）的单子也是 3，会被选为最优对手；`matchMarket` 发现阶段不对就本轮不成交 | ~~未核实到底~~ 成立（2026-11-10 核实） | ~~`market.go` 与 `engine.go` 当前有别的会话未提交的改动，本批不动，列入下面的待办~~ 2026-11-10 已修，见 §23 |
 
 **存储分组门禁（数据覆写审计 R2 的 N1，「数据覆写审计 R2 交接」会话转来）**
 
@@ -1210,7 +1210,7 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 **待办 / 风险（在 §17 之外新增）**
 
 - ~~生成器单测不在 CI 的 Go 模块扫描里~~，11-05 已处理，见 §21。
-- 交易盘口：托管阶段的材料订单会被当成最优对手单，挡住同价位的撮合（复核的范围外观察，未核实到底）。`market.go` / `engine.go` 正被别的会话改，留给交易线负责人。
+- ~~交易盘口：托管阶段的材料订单会被当成最优对手单，挡住同价位的撮合（复核的范围外观察，未核实到底）。`market.go` / `engine.go` 正被别的会话改，留给交易线负责人。~~ 2026-11-10 核实成立并已修，见 §23。
 
 **本节文件清单**（在 §17 清单之外新增或再改；除台账表头那一处外已进整仓提交）
 - 生成器：`tools/proto_generator/protogen/internal/persistschema/{schema.go,ledger.go,apply.go,generate.go,persistschema_test.go}`、`cmd/root.go`；
@@ -1324,3 +1324,234 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
   - 本文（§14.4 表、§17 / §19 待办、§19 的状态与表头说明）；
   - `docs/PROGRESS.md`；
 - Java 对账本：`D:\luyuan\xuanming-server-mmo\PARITY.md`「通用资产通道 scene 侧」行。
+
+## 22. 续：等级读点线的验证核对与日志英文化（2026-11-10，补等级读点用例的会话，接 §16 / §18 / §20）
+
+> 本节只追加，不改上文。
+
+- **C++ 已有运行证据**：Codex 11-08 的命名统一运行（`build/verification/naming-audit-20261108/`）全量跑了 bag_test、skill_test、buff_test，三个工程都全绿：932 / 80 / 37 条通过。
+  - 本线 12 条用例逐条在 stdout 里是 `[       OK ]`：§16 的 6 条、§18 的 5 条，以及 §18 改过的 `PlayerSkillSystemTest.SanitizeSkillListKeepsUnknownSkillsInactiveAndRemovesDuplicates`。
+  - 回执 `completion-receipt.json`：`verifiedUtc` 2026-11-08T14:35Z，`cppPassed` 2935，`allRequiredChecksPassed` true。
+  - 运行之后源码没变：在 `implementation-final-hashes.json` 清单里的 6 个相关文件，现在的 SHA256 与清单一致；不在清单里的，最后一次提交在 11-06，早于这次运行，命名提交 `74b097888` 也没碰它们；工作区当时没有未提交改动。
+- **契约测试还没跑过**：`build/verification` 下搜不到 `test_cpp_level_comp_reads` 的任何运行记录。
+- **本节改动**（AGENTS.md §2：服务与脚本的日志文案、诊断输出用英文；注释与错误字符串保持中文）：
+  - `player_mission.cpp`：§18 加的那条 `LOG_ERROR` 原先是中文，改成英文 `[PlayerMission] Level-condition accept rejected: LevelComp missing (load invariant broken), entity=… mission=…`。只改了文案，判断与返回码不变。同文件里别处原有的中文日志不是本线写的，没动。
+  - `test_cpp_level_comp_reads.py`：违规原因与断言消息改成英文。注释、文档字符串和标记文字 `直读存储等级:<场合>` 保持中文；诊断里原样引用标记文字，方便照抄。识别规则与判定逻辑不变。
+- **给 Codex**（仓库根目录）：
+  1. 契约测试：`python tools/scripts/tests/test_cpp_level_comp_reads.py -v`。通过标准：退出 0，15 条全是 ok。失败时保留完整输出，误报回报给 Claude，不要为了变绿去改规则或补标记。
+  2. 日志文案改动随下一次整解构建一起确认能编过即可：`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`。不需要单独为它重跑 bag_test，没有用例断言日志文本。
+- **状态**：本线服务端代码已完成。C++ 用例已有运行证据；契约测试与这次的日志改动待 Codex。Java 仍待做，`PARITY.md` 原有那一行已登记。
+
+## 23. 续：交易盘口只收已托管订单、交易币种字面量换具名常量（2026-11-10，交易盘口会话，接 §14.4 / §17 / §19）
+
+> **状态**：已落码，未编译、未测试，在工作区未提交。本节只追加；§14.4、§17、§19 里对应的待办已划掉并指向本节。Java 版待做（PARITY 已登记）。
+
+**1. 盘口对手单选择（§19 的范围外观察，核实成立）**
+
+- **核实路径**（从选单 SQL 读到撮合提交点）：
+  - 选单 `market.go` 的 `marketCounterparty` 只按 `status=3`、剩余量、价格、不同玩家过滤。
+  - 材料订单下单时就是 `status=3, stage=escrow`（`PlaceMarket`）。托管扣款落地后，`plan` 只把 stage 改成 `market_open`，status 不变。阶段只在 `workflow_proto` 里，SQL 分不出两者。
+  - 撮合事务在锁内重读同一条 SQL，锁住两单后判 `aw.Stage != "market_open" || bw.Stage != "market_open"`，直接 `return nil`：不成交、不报错、不唤醒。
+- **影响比当时写的大**：挡住的不只是同价位。价格更优的托管中订单会挡住 taker 与后面所有已上盘、价格可成交的对手单。
+  - 新单只在进入 `market_open` 那一步撮一次，之后按 1 小时复查（设计 §15.8），买卖两边会交叉挂着。
+  - 材料订单托管腿没有截止。托管扣款一直回 RETRY 时（§14.1 ② 的托管阶段撤单就是为这种情况留的出口），这本盘口一直撮不动。
+  - 深度查询同样只按 status=3 聚合，把托管中的订单算进挂单量。
+- **修法**（理由见设计 `jubaozhai-market.md` §15.9）：
+  - `trade_commerce` 新增列 `on_book`（`proto/trade/trade_table.proto` 字段 22），盘口索引改为 `kind,market_id,item_config_id,side,status,on_book,unit_price,commerce_id`。
+  - 判定只在 `data.OnBook` 一处：kind=4、side≠0、stage=market_open。`CommerceRepo.Insert` / `Save` 按要写的 workflow 现算，与 `workflow_proto` 同一条语句写出，不取记录上的旧值。`SaveStatus` 不动它，状态列已把转人工的行挡在盘口外。
+  - 选对手单（预读与锁内重读）和 `GetMarketDepth` 都加 `on_book=1`。
+  - `matchMarket` 的 taker 预检加 `!taker.OnBook`：托管中的订单不发起撮合，不发成交号，不抢盘口 guard 行锁。
+  - 提交点照旧在锁内按 workflow 复核两边的 stage、撤单与剩余量（AGENTS §11.3），只加了一行注释。
+  - 不改 status：它是客户端可见的 `CommerceOrderState`，改它要两版同批改客户端契约。
+- **已有开发库**：项目未上线，清库重建。不清库时 `schemamigrate` 补出 `on_book` 列，存量行都是 0；同名的盘口索引不会被改成新列序。存量挂单要等下一次重存才回到盘口上。
+
+**2. 交易 Go 侧币种字面量（§14.4 第 3 条）**
+
+- `commerce/engine.go`：`Policy.Selection` 的 `== 2` 与 `validPrice` 的 `!= 2` 改为 `currencytype.BindDiamond`。
+- `commerce/rmb.go`：`selection` 的 `== 2` 改为 `currencytype.BindDiamond`。没配 `CurrencyTypes` 时的默认 `[]uint32{0}` 是同一类字面量，一并改为 `currencytype.Gold`。
+- `svc/role_trade.go`：`initRmb` 的 `c > 1` 改调 `config.IsTradableCurrency`。原 `isTradableCurrency` 改为导出，白名单只在 `config.go` 这一份，配置校验与 `svc` 都调它。
+- **没改**：`engine.go` 的 `v.CurrencyType != 0` 与 `rmb.go` 的 `v.GetCurrencyType() != 0` 判的是「没填币种」（proto3 零值），不是拿某个币种做比较。
+- **行为不变**：对现有取值表（0 / 1 / 2），新旧写法接受与拒绝的集合完全相同；表外的值 `c > 1` 拒绝，白名单也拒绝。
+
+**用例**
+
+- data 包，不连库：新文件 `go/trade/internal/data/commerce_repo_test.go`，复用 `asset_op_recovery_test.go` 的录制驱动。
+  - `TestOnBookIsOnlyABookOrderInMarketOpen`
+  - `TestCommerceSaveWritesOnBookFromTheWorkflow`
+  - `TestCommerceInsertDerivesOnBookFromTheStoredWorkflow`
+  - `TestScanCommerceReadsOnBook`
+- commerce 包，不连库：
+  - 新增 `TestBindDiamondIsNotTradableEvenWhenConfigured`（`engine_test.go`）；
+  - `TestRmbSelectionRejectsMixedKindsBoundCurrencyAndUnconfiguredDiamond` 改用具名常量，补「绑定灵石被配进白名单也拒绝」一段；
+  - `rmbRuntime` 夹具的 `CurrencyTypes` 改为 `currencytype.Gold`，值不变。
+- config 包，不连库：新增 `TestIsTradableCurrencyIsGoldAndDiamondOnly`。
+- 真库：新增 `TestTiDBOrderBookSkipsOrdersStillInEscrow`（`engine_tidb_test.go` 末尾）。修复之前它卡在「托管中的更优价不能挡住已上盘的对手单」那条断言。
+- 原有 `TestTiDBOrderBookPriceTimePartialCancelWaitsForChildren`、`TestRealDBUntradableCounterpartyIsTakenOffTheBook` 不用改：前者的订单都经 `advance` 进盘口，后者的坏对手单用 `Insert` 直接插入 `market_open` 的行，`on_book` 照样算出 1。
+
+**给 Codex**（工作目录仓库根 `D:\luyuan\xuanming-server-mmo-cpp`，pwsh 7；日志放 `build/verification/trade-book-escrow/`）
+
+1. **生成**：本批改了 `proto/trade/trade_table.proto`，先重生成：
+   ```
+   pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml
+   ```
+   - 通过标准：退出 0；`go/proto/trade/trade_table.pb.go` 的 `TradeCommerceRecord` 多出 `OnBook`（字段 22）；`cpp/generated/proto/trade/trade_table.pb.{h,cc}` 同步变化。别的会话的 proto 改动带来的差异照常归属。
+   - 生成器源码本批没变，不需要 `proto-gen-build`。
+2. **Go**（在 `go/trade` 下）：
+   ```
+   go test -count=1 ./... ; go vet ./...
+   ```
+   通过标准：两条都退出 0；上面 data、commerce、config 包的不连库用例在列且通过。
+3. **交易真库用例**（需要一次性 TiDB，不要借 codex-* 容器，口径同 §17 第 5 步）：设置 `COMMERCE_TEST_DSN` 与 `COMMERCE_REQUIRE_TIDB=1`，在 `go/trade` 下执行：
+   ```
+   go test -count=1 -run 'TestTiDBOrderBookSkipsOrdersStillInEscrow|TestTiDBOrderBookPriceTimePartialCancelWaitsForChildren|TestTiDBSellerCancelsMarketOrderStillInEscrow|TestRealDBUntradableCounterpartyIsTakenOffTheBook' ./internal/commerce/
+   ```
+   - 通过标准：4 条都通过。没有 DSN 时会 Skip，Skip 不算通过。
+   - 夹具每例新建随机库并经 `schemamigrate.Up` 建表，新列与新索引随建表出来，不需要手工 DDL。
+4. **其余模块**：
+   - C++ 只有生成文件变了，没有调用方，随下一次整解构建确认能编过即可。
+   - robot 不用 `TradeCommerceRecord`，vendor 里的绑定随它下次 `go mod vendor` 同步，本批不要求。
+5. **失败时**：保留首个编译错误与失败用例原文，不改断言重跑。下列文件上同时有别的会话的改动，失败先按行号归因，不要回退任何一方：
+   - 「Turn battle gap closure handoff」会话（缺口清单第 16 条：事件唤醒）：`engine.go` 的 `advance`、`schedule.go`、`schedule_test.go`、`engine_tidb_test.go` 的 `settleLegs` 与商城那条用例、`tick_isolation_db_test.go` 末尾、`commerce_repo.go` 的 `Wake`；
+   - 别的会话：`asset_op_repo.go`、`reconcile/`、`svc/servicecontext.go`、`svc/assetchannel.go`；「全仓服务日志改英文（AGENTS §2）」会话在改 `commerce_logic.go` 等文件的日志文案。
+
+**Java 版（AGENTS §12）**：盘口待做，Java 仓 `PARITY.md` 新增「2026-11-10 聚宝斋材料盘口只收已托管订单」一节。Java 的 `CommerceMatching` 选单与 `CommerceClientService` 深度查询是同样的写法。币种字面量只是 Go 内部写法，行为不变，Java 不登记。
+
+**本节文件清单**（工作区，未提交）
+
+- proto：`proto/trade/trade_table.proto`；
+- Go：
+  - `go/trade/internal/data/commerce_repo.go`（`CommerceColumns`、`ScanCommerce`、`OnBook`、`Insert`、`Save`）；
+  - `go/trade/internal/commerce/market.go`、`rmb.go`，以及 `engine.go`（只动 import、`Policy.Selection`、`validPrice`）；
+  - `go/trade/internal/logic/commerce_logic.go`（`GetMarketDepth`）、`go/trade/internal/config/config.go`、`go/trade/internal/svc/role_trade.go`；
+- 测试：`go/trade/internal/data/commerce_repo_test.go`（新）、`go/trade/internal/commerce/{engine_test.go,rmb_test.go,engine_tidb_test.go}`、`go/trade/internal/config/config_test.go`；
+- 文档：`docs/design/jubaozhai-market.md`（§15 一句、新增 §15.9）、本文（§14.4、§17、§19 划线与本节）、`docs/PROGRESS.md`；
+- 仓外：Java 仓 `PARITY.md`。
+
+## 24. 续：第 8 批：载荷新字段判版本错位、Item / Pet 表行只增不删、§13 第 10 条定案（2026-11-11，第 6 批会话，接 §19 / §21）
+
+> **状态**：已落码，未编译、未测试，在 main 工作区未提交（没开分支）。负责人 11-11 要求「没做完就按最标准的方式做完」，据此把设计 §13 第 10 条的三项待拍板按有依据的标准做法直接定案，并做完 §12 载荷行写明「开启收件箱消费之前必须修」的载荷新字段。设计见 v0.12 与 §9 第 8 批。
+
+**此前各批的验证状态（11-11 按用例名核对 `build/verification`）**
+
+- 已过：第 7 批与 §21 的 C++ 用例，在 11-06 两次 Codex 运行里都通过（`build/verification/aps-1106-014851/resume/`、`build/verification/battle-handoff-20261106-r4/`）：
+  - `PlayerBattleSettlementTest.InboxSettlementWithCurrencyUnknownToThisVersionReportsVersionSkew`；
+  - `PlayerInboxSystemTest.HaltedDomainRelogsOnTheIntervalWhileTheEntityLives`；
+  - `AssetOpSystemTest.QuantityDebitRejectsEquipmentEvenWhenMisconfiguredAsStackable`。
+- 找不到运行记录（仍要跑）：
+  - §17 第 2 步、§19 的生成器单测（protogen `internal/persistschema`）；
+  - §17 第 3 步的两份 PowerShell 契约测试（`dev_tools_proto_gen_exit.tests.ps1`、`release_common_version.tests.ps1`）；
+  - §21 的 `k8s_deploy_contract.tests.ps1`「LogQL 契约」。
+  - 旁证：11-05 23:47 之后，用新生成器做的 proto 生成已经跑过多次（台账补上了 `group=`，后续字段 25、26 也照常登记），说明生成器能编译、台账门禁能放行正常改动；但这不能代替单测。
+
+**1. 载荷新字段判版本错位（§12 载荷行）**
+
+- **问题**：旧版 scene 照常执行带新字段的收件箱条目、资产通道请求，新字段的语义静默丢失，还记成 APPLIED。
+- **判据**：`cpp/libs/engine/core/utils/proto/unknown_field_carry.h` 新增 `TreeCarriesNewerVersionFields`。
+  - 逐层看已设置的子消息，repeated、map 条目也看。
+  - 字段号落在该层 reserved 段里，或在台账退役清单里，算退役残留，不计入。
+  - bytes 字段不往里解，所以资产包 `instance_proto` 里原样携带的实例照旧带着未知字段入账（§4.2）。
+- **收件箱**：
+  - `player_inbox_registry::PayloadCarriesNewerVersionFields` 按类型规格的 `payload_message` 解码整棵载荷。解不开的载荷返回 false，交给执行器判坏载荷。
+  - `player_inbox_system.cpp` 在调执行器之前判；带新字段就按 `kVersionSkew` 停用本域，不调执行器。
+  - 日志 `metric=persist_version_skew where=inbox_payload field=<消息#字段号>`，之后照旧是 `Executor reported version skew` 与 `metric=inbox_halted reason=version_skew`。
+  - 同局重投不执行，所以不判。
+- **资产通道**：第 8b 步先判这一项，`where=asset_request`，回 RETRY + 1006、不记账。中止（第 6 步）与已见 seq 的回放都在它之前，不受影响。
+- **用例**：
+  - `UnknownFieldCarryTest.TreeCheckWalksSubMessagesAndSkipsReservedNumbers`（bag_test）；
+  - `PlayerInboxSystemTest.PayloadCarryingFieldsFromNewerVersionHaltsWithoutExecuting`（currency_test）；
+  - `AssetOpSystemTest.RequestCarryingFieldsFromNewerVersionRetriesWithoutRecording`（currency_test）。
+- **回归守卫**（现有用例，必须照旧通过）：
+  - `AssetOpSystemTest.CompleteItemEscrowReplayAndCreditKeepIdentityGrowthAndUnknownFields`：实例字节里的未知字段不能被误判成版本错位；
+  - 收件箱截断载荷那条：坏载荷仍记终态 REJECTED，不被新判据拦成版本错位。
+
+**2. §13 第 10 条定案**
+
+- **第 1 项：Item / Pet 表行 id 只增不删**。
+  - `data/schema/cfg_options.proto` 新增表级 option `cfg_ids_permanent`（60005），`item_table.proto`、`pet_table.proto` 写上。
+  - 导表器新模块 `tools/data_table_exporter/core/permanent_ids.py`：
+    - 台账 `tools/data_table_exporter/state/permanent_ids/<表名小写>_ids.txt`；
+    - 表里少了台账里的 id，在外键 / 主键同一位置整批不产出；
+    - 生成阶段追加新 id；
+    - 台账缺失时按当前表初始化并打 WARNING；台账格式坏了 fail-closed。
+  - 规范写进 `data/AGENTS.md`。
+- **资产通道「查不到表」改判版本错位**：
+  - 第 8 步不再判"行存在"，只判配置号非 0；依赖行内容的规则（按数量扣出要可叠加、不是装备，整件实例要不可叠加）只在行查得到时判。
+  - 第 8b 步新增 `where=asset_config`，覆盖物品、整件物品、宝宝三处，回 RETRY + 1006、不记账。
+  - 原来的 `CreditUnknownItemRejected` 改名为 `CreditWithItemConfigUnknownToThisNodeRetriesWithoutRecording`，期望改为 RETRY，并补上配置号 0 记终态拒绝。
+  - 新增 `DuplicateItemConfigUnknownToThisNodeIsStillRejected`、`QuantityDebitOfItemConfigUnknownToThisNodeRetriesWithoutRecording`、`CompleteInstanceWithConfigUnknownToThisNodeRetriesWithoutRecording`。
+  - `AssetOpRecallTest.InvalidBundlesAreRejectedAndRecorded` 里那段 unknownConfig 改为期望 RETRY，并补上配置号 0 记终态拒绝。
+  - 附带的安全改进：本节点物品表没加载成功时，带物品的入账一律 RETRY；原先会被逐条记成终态拒绝。
+  - `docs/design/guild-phase2/04-asset-channel.md` §4.9 第 8 / 8b 步同步改写；`asset-channel-alerts.yaml` 补上两种 `where=`。
+- **第 2 项（GM 对新币种按 ID 透明执行）**：维持现状，不改代码，理由写进设计 §13 第 10 条。
+- **第 3 项（新币种启用开关）**：第一次新增币种时再做（YAGNI），不改代码。
+
+**3. 没做：战斗结算 C-2 改整笔 DEFER（留给战斗线）**
+
+- **现状**：`player_battle.cpp` 对查不到表的掉落 / 消耗按 C-2 剔除这一项、记 ERROR（`metric=battle_inbox_item_effect_skipped`），交人工补偿。
+- **为什么要改**：
+  - C-2 的前提是「配置行可能被热更删掉」。表行只增不删之后，查不到只可能是尚未热更到本节点、或来自更新版本的行。
+  - 剔除就是丢掉玩家这一局的掉落，应改为整笔 DEFER。整笔 DEFER 零副作用，热更到这一行之后本地续做即可成功，与号段不足、跨区冻结同一条路。
+- **为什么本批没改**：11-11 01:50 这个文件还有别的会话在写，C-2 的几处都在别人的未提交改动范围里。
+- **要改的地方**：
+  - 删 `DropItemsWithoutConfigRow` 与应用成功后逐项记 ERROR 的循环；
+  - `ApplySettlementToEntity` 在算候选之前，见到查不到表的配置就整笔返回 DEFER（打 `metric=persist_version_skew where=battle_item`）；
+  - `HasUnsupportedInboxConsumption` 里那句「行不存在不是版本错位」的注释改掉；
+  - `player_battle_settlement_test.cpp` 里两条 C-2 用例（掉落、消耗）改为期望 DEFER、零副作用，热更补上这一行后重试即 APPLIED。
+- **Java**：同样要做，PARITY 里一并登记。
+
+**4. 客户端核对（设计 §12.2 末段「客户端可见的语义变化」；原登记见本文 761 行附近的客户端待确认项）**
+
+负责人 11-11 授权改客户端代码，核对了 `D:\luyuan\mmorpg-client`：
+- **属性面板、宝宝面板**：剩余点、重置费用都直接用服务端下发的 `Remaining` / `RemainingPoints` / `ResetCostGold`（`AttributePanel.cs`、`PetPanel.cs`）。池不生效时服务端给 0，客户端显示为不可加点、免费重置，不需要改。
+- **技能书修习**：能否修习同时看 `RankLimit` 与 `maxRank`（`SkillBookModels.cs` 的 `CanUpgrade`），存储重数超上限时不发请求；修习请求带存储重数，与服务端 `expected_rank` 口径一致，不需要改。
+- **改了一处显示**：`Assets/Scripts/UI/Ugui/Skills/SkillPanel.cs` 列表行原来显示 `{存储重数}/{maxRank}`，回滚窗口里会出现「12/10」。现在按上限封顶显示，与服务端「按本版本上限生效」一致。
+  - 新增用例 `SkillPanelPresentationTests.StoredRankAboveTheCurrentMaxIsShownCappedAndCannotBeUpgraded`（`Assets/Tests/EditMode/Battle/`）。
+  - 两个文件都保持 CRLF。已被客户端仓 11-11 02:06 的整仓提交 `0ef7a0a6` 收进（不是本会话提交的）。
+
+**给 Codex**（日志放 `build/verification/persist-batch8/`）
+
+1. **导表器单测**，在 `tools/data_table_exporter` 下：
+   ```
+   py -m pytest -q
+   ```
+   - 通过标准：全绿；`tests/test_permanent_ids.py` 7 条（含参数化 2 条）与 `tests/test_schema_proto.py::test_permanent_ids_option_is_read_from_table_options` 在列。
+2. **导表一次**，在仓库根目录执行 `dev.bat gen`：
+   - 预期日志里 Item、Pet 各有一条 `Permanent row-id ledger is missing; initializing it from the current table`；
+   - 预期新增 `tools/data_table_exporter/state/permanent_ids/{item,pet}_ids.txt`，与产物一起提交；
+   - 本批不应让任何生成产物出现差异（option 只给导表器读）。有差异先报告，不要提交。
+   - 另跑 `py tools/data_table_exporter/tools/verify_schema_parity.py`，通过标准是 0 差异。
+3. **C++**：`asset_op_system.cpp`、`player_inbox_*` 都在库里，`run_cpp_tests.ps1 -Build` 不重编库。所以先串行 `/m:1` 编 `game.sln`，再执行：
+   ```
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter currency_test -LogDir build/verification/persist-batch8
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter bag_test -LogDir build/verification/persist-batch8
+   ```
+   - 通过标准：上面「用例」与「回归守卫」点名的都在列且通过，`AssetOpSystemTest.*`、`AssetOpRecallTest.*`、`PlayerInboxSystemTest.*`、`UnknownFieldCarryTest.*` 全绿。
+   - 失败时保留 gtest 输出。不要为了变绿去改期望，先判断是不是这批改动的问题。
+4. **补跑此前没有运行记录的三项**：§17 第 2 步（protogen 单测与 vet）、§17 第 3 步两份 PowerShell 契约测试、§21 第 2 步 `k8s_deploy_contract.tests.ps1`。
+5. **客户端**：在 `D:\luyuan\mmorpg-client` 用 Unity 命令行跑 EditMode 测试程序集 `MmorpgClient.Tests.EditMode.Battle`（`-runTests -testPlatform EditMode`，按客户端仓现有口径）。
+   - 通过标准：`SkillPanelPresentationTests` 全绿，新用例在列。
+   - 编译通过不能代替运行。
+
+**Java 版（AGENTS §12）**：本轮不写 Java 代码。已在 Java 仓 `PARITY.md` 登记待做：
+- 收件箱载荷 / 资产通道请求带新字段时按版本错位处理；
+- 资产通道「查不到表」改判 RETRY；
+- 战斗结算查不到表的掉落改整笔延后。
+导表器的行 id 门禁两版共用（Java 读同一份导表产物），不另做。
+
+**本节文件清单**（main 工作区，未提交）
+- C++：
+  - `cpp/libs/engine/core/utils/proto/unknown_field_carry.h`；
+  - `cpp/libs/services/scene/player/system/{player_inbox_registry.h,player_inbox_registry.cpp,player_inbox_system.cpp,asset_op_system.cpp}`；
+  - 测试 `cpp/tests/bag_test/bag_instance_data_test.cpp`、`cpp/tests/currency_test/{player_inbox_system_test.cpp,asset_op_system_test.cpp}`。
+  - `asset_op_system.cpp`、`player_battle_settlement_test.cpp` 等文件里另有别的会话的未提交改动，本节只做了定点修改。
+- 配表与导表器：
+  - `data/schema/{cfg_options,item_table,pet_table}.proto`、`data/AGENTS.md`；
+  - `tools/data_table_exporter/core/{permanent_ids.py（新）,schema.py,schema_proto.py,orchestrator.py}`；
+  - `tools/data_table_exporter/tests/{test_permanent_ids.py（新）,test_schema_proto.py}`。
+- 文档与告警：
+  - `docs/design/mixed-version-persist-field-protection.md`（§9、§12 载荷行、§13 第 7 / 10 条、v0.12）；
+  - `docs/design/guild-phase2/04-asset-channel.md`（§4.9 第 8 / 8b 步）；
+  - `docs/ops/player-inbox-runbook.md`（A′）、`deploy/k8s/asset-channel-alerts.yaml`（描述）；
+  - 本文、`docs/PROGRESS.md`。
+- Java 对账本：`D:\luyuan\xuanming-server-mmo\PARITY.md`。
+- 客户端（`D:\luyuan\mmorpg-client`，已随 `0ef7a0a6` 入库）：`Assets/Scripts/UI/Ugui/Skills/SkillPanel.cs`、`Assets/Tests/EditMode/Battle/SkillPanelPresentationTests.cs`。Java 对账本的登记已随 Java 仓 `7f29da40` 入库。

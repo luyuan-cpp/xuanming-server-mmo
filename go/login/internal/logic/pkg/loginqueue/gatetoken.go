@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	mathrand "math/rand/v2"
 	"time"
 
@@ -56,6 +57,14 @@ type GateCandidate struct {
 	// Draining:运维标了排空(gate:<id>:draining,见 MarkDrainingGates)。排空中的 gate 仍在候选里,容量记账照数它上面的人;
 	// 挑 gate 时由 eligibleGates 分档,只有没有完全合格的 gate 时才会用到它。
 	Draining bool
+	// Inflight 是本 login 进程在交票宽限(20s)内交给这台 gate、还没反映进 PlayerCount 的票数(GateInflight.Annotate 填)。
+	// 只参与挑选时比负载(load),不进容量记账、不参与满载判定。
+	Inflight uint32
+}
+
+// load 是挑 gate 时比的负载:上报人数加本进程在途票数。用 uint64 相加,接近 uint32 上限时也不回绕。
+func (c GateCandidate) load() uint64 {
+	return uint64(c.PlayerCount) + uint64(c.Inflight)
 }
 
 // PickAndSignGateToken selects a gate from the candidate list (already
@@ -77,20 +86,28 @@ type GateCandidate struct {
 // cause — admit could sit in Redis for 4-5 minutes and burn the token's
 // 5-min TTL before the client redeemed it).
 // (2026-11-05)取走现签之前还会复核放行时选定的 gate,不合格就用 PickGate 的规则重挑,见 admit_recheck.go 的 NewAdmitSigner。
-func PickAndSignGateToken(candidates []GateCandidate, secret []byte, ttl time.Duration) (*AdmitToken, error) {
+//
+// 签票成功后给选中的 gate 记一张在途票(inflight 为 nil 时不记),本进程后面的挑选会把它算进那台的负载,见 gate_inflight.go。
+func PickAndSignGateToken(candidates []GateCandidate, inflight *GateInflight, secret []byte, ttl time.Duration) (*AdmitToken, error) {
 	gate, err := PickGate(candidates)
 	if err != nil {
 		return nil, err
 	}
-	return SignGateToken(gate, secret, ttl)
+	admit, err := SignGateToken(gate, secret, ttl)
+	if err != nil {
+		return nil, err
+	}
+	inflight.Record(gate.NodeID)
+	return admit, nil
 }
 
 // PickGate is the gate-selection half of PickAndSignGateToken — chooses
 // a candidate without signing. Returned value carries the minimum endpoint
 // info needed for a later SignGateToken call to produce a fresh-TTL token.
 //
-// 快速通道的挑法(2026-10-18 起):在候选里随机抽两台不同的 gate,取人数少的那台,同人数取第一次抽中的那台;
-// 只有一台就是它,恰好两台时等于取最少。不改调用方的切片,不跨调用记账。
+// 快速通道的挑法(2026-10-18 起):在候选里随机抽两台不同的 gate,取负载少的那台,同负载取第一次抽中的那台;
+// 只有一台就是它,恰好两台时等于取最少。不改调用方的切片。负载 = 上报人数 + 本进程在途票数(GateCandidate.load,
+// 2026-11-11 起;在途票由调用方经 GateInflight 记,本函数不记)。
 // 同人数不能按 NodeID 定胜负:开新区第一个上报窗口里所有 gate 都报 0,按 NodeID 定会让小号 gate 拿双倍份额、
 // NodeID 最大的那台一个人都分不到。抽样是均匀的有序对,同人数时两台各一半,全体就是均匀的。
 //
@@ -110,7 +127,10 @@ func PickGate(candidates []GateCandidate) (*GateCandidate, error) {
 // (生产用 math/rand/v2 的全局源,并发安全)。单测传固定序列钉住结果。
 // 挑选规则本身在 shared/gatepick(scene_manager 跨 zone 重定向共用同一份),这里只做 GateCandidate 的适配。
 func pickTwoChoices(candidates []GateCandidate, intn func(int) int) (*GateCandidate, error) {
-	i, ok := gatepick.TwoChoices(candidates, func(c GateCandidate) uint32 { return c.PlayerCount }, intn)
+	i, ok := gatepick.TwoChoices(candidates, func(c GateCandidate) uint32 {
+		// TwoChoices 按 uint32 比;上报人数加在途票超过 uint32 只会出现在畸形数据上,封顶即可,不影响相对大小。
+		return uint32(min(c.load(), uint64(math.MaxUint32)))
+	}, intn)
 	if !ok {
 		return nil, fmt.Errorf("no gate candidates")
 	}
@@ -118,13 +138,14 @@ func pickTwoChoices(candidates []GateCandidate, intn func(int) int) (*GateCandid
 	return &gate, nil
 }
 
-// gatePicker 在一份候选快照上连续挑 gate,挑一次记一次账:负载 = PlayerCount + 本快照上已分给它的人数,
-// 取负载最少的,同负载取 NodeID 最小的。结果确定,看 dispatcher 日志时能推出为什么挑中了某台 gate;
+// gatePicker 在一份候选快照上连续挑 gate,挑一次记一次账:负载 = 上报人数 + 本进程在途票数(GateCandidate.load)
+// + 本快照上已分给它的人数,取负载最少的,同负载取 NodeID 最小的。结果确定,看 dispatcher 日志时能推出为什么挑中了某台 gate;
 // 负载与 NodeID 都相同(重复候选)时取靠前的那个。
 //
 // 为什么要记账:PlayerCount 来自 etcd,gate 每 10s 才上报一次,一拍之内不变。只按 PlayerCount 挑,
 // 一拍放的 N 个人会全部落在同一台 gate 上;把本拍已分出去的人数算进负载,一拍的放行先填最闲的 gate,
-// 填平之后在各台之间轮转。账只记在这份快照里,不跨拍:下一拍重新取候选,从 gate 上报的人数重新算起。
+// 填平之后在各台之间轮转。快照上的账不跨拍;跨拍由在途票接上(2026-11-11 起):dispatcher 挑定的每一台都记进
+// GateInflight(recordPicks),下一拍取候选时已带上,不会再从同一份滞后人数起算。
 //
 // 构造时复制候选,之后调用方改原切片不影响记账。不是并发安全的:dispatcher 经 PopAdmit 逐条串行调用。
 type gatePicker struct {
@@ -159,8 +180,8 @@ func (p *gatePicker) pick() (*GateCandidate, error) {
 // lighter 报告第 i 个候选是否严格排在第 j 个之前:负载少的在前,同负载 NodeID 小的在前。
 // 负载用 uint64 相加,PlayerCount 接近 uint32 上限时也不回绕。
 func (p *gatePicker) lighter(i, j int) bool {
-	loadI := uint64(p.candidates[i].PlayerCount) + p.assigned[i]
-	loadJ := uint64(p.candidates[j].PlayerCount) + p.assigned[j]
+	loadI := p.candidates[i].load() + p.assigned[i]
+	loadJ := p.candidates[j].load() + p.assigned[j]
 	if loadI != loadJ {
 		return loadI < loadJ
 	}

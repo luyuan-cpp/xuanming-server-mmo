@@ -32,7 +32,7 @@ const (
 	// 它停摆的表现是崩溃留下的残留成员摘不掉:实例不销毁、选线躲着它。
 	SafePointSceneMemberReconcile = "scene_manager.scene_member_reconcile"
 
-	// SafePointAgonesReconcile 是 Agones rooms 计数与 Redis 映射的周期比对。
+	// SafePointAgonesReconcile 是 Agones rooms 名额条目与 Redis 名额记录的周期对账(agones_reconcile.go)。
 	SafePointAgonesReconcile = "scene_manager.agones_reconcile"
 
 	// SafePointSceneTeardownSweep 是拆除任务的周期扫描(scene_teardown_job.go)。
@@ -42,4 +42,9 @@ const (
 	// SafePointReleasePlayer 是跨节点交接时对老节点的异步 ReleasePlayer
 	// (含重试链)。它是**每次调用起一条**的短命 goroutine,不是常驻循环。
 	SafePointReleasePlayer = "scene_manager.release_player"
+
+	// SafePointDrainMigration 是排空中 scene 节点的频道迁移协程(node_drain.go):每个 (zone, node) 至多一条,
+	// 节点名下没有世界频道、不再排空或本副本不再是领导者时退出。它停摆的表现是排空节点上的玩家等到自疏散时刻
+	// 才被搬走,而且落到同图别的频道而不是原频道。
+	SafePointDrainMigration = "scene_manager.drain_migration"
 )

@@ -94,8 +94,11 @@ type MatchNetworkProfile struct {
 	Receipts       []*NetworkProbeReceipt `protobuf:"bytes,3,rep,name=receipts,proto3" json:"receipts,omitempty"`
 	OwnerAccount   string                 `protobuf:"bytes,4,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"` // 服务端捕获的原会话账号；不得由当前目录反查补权。
 	OwnerRevision  uint64                 `protobuf:"varint,5,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 写计划时服务端按会话轨道记下（x-release-track，取值 "stable" / "canary"；空串是本字段之前的档案，按 stable 算）。
+	// 回执提交沿用计划里的值，不接受客户端自带。成局时全员都是 canary 才放 canary battle（docs/design/release-track-gray-canary.md §2.6）。
+	ReleaseTrack  string `protobuf:"bytes,6,opt,name=release_track,json=releaseTrack,proto3" json:"release_track,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchNetworkProfile) Reset() {
@@ -161,6 +164,13 @@ func (x *MatchNetworkProfile) GetOwnerRevision() uint64 {
 		return x.OwnerRevision
 	}
 	return 0
+}
+
+func (x *MatchNetworkProfile) GetReleaseTrack() string {
+	if x != nil {
+		return x.ReleaseTrack
+	}
+	return ""
 }
 
 // 全局观战占用与匹配票在同P事务内互斥；时间到期不意味着远端已取消。
@@ -1399,8 +1409,11 @@ type MatchFormationRecord struct {
 	PreflightInstanceId           string                   `protobuf:"bytes,20,opt,name=preflight_instance_id,json=preflightInstanceId,proto3" json:"preflight_instance_id,omitempty"`                                  // 发任何Create之前与完整version1正文同事务保存。
 	AdoptedOutcomeProtocolVersion uint32                   `protobuf:"varint,21,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"` // 独立保存真实Create/PRESENT回执，不能由能力推算。
 	AdoptedOutcomeObserved        bool                     `protobuf:"varint,22,opt,name=adopted_outcome_observed,json=adoptedOutcomeObserved,proto3" json:"adopted_outcome_observed,omitempty"`                        // 未回包与原身份明确回显0不同；首个实际回执永久不变。
-	unknownFields                 protoimpl.UnknownFields
-	sizeCache                     protoimpl.SizeCache
+	// 这局所在 battle 节点的发布轨道（"stable" / "canary"），选点时按选中节点记下，之后不变（docs/design/release-track-gray-canary.md §2.6）。
+	// 观战入口、观战列表与随机选场按它判 stable 观众能不能看，不看实时节点镜像。空串（本字段之前的原件，迁移补列后读出 NULL）按 stable。
+	ReleaseTrack  string `protobuf:"bytes,23,opt,name=release_track,json=releaseTrack,proto3" json:"release_track,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchFormationRecord) Reset() {
@@ -1585,6 +1598,13 @@ func (x *MatchFormationRecord) GetAdoptedOutcomeObserved() bool {
 		return x.AdoptedOutcomeObserved
 	}
 	return false
+}
+
+func (x *MatchFormationRecord) GetReleaseTrack() string {
+	if x != nil {
+		return x.ReleaseTrack
+	}
+	return ""
 }
 
 type MatchPreparedEndpoint struct {
@@ -2561,13 +2581,14 @@ var File_proto_match_match_authority_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\n" +
-	"!proto/match/match_authority.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1fproto/match/match_network.proto\x1a proto/match/match_internal.proto\"\xdb\x01\n" +
+	"!proto/match/match_authority.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1fproto/match/match_network.proto\x1a proto/match/match_internal.proto\"\x80\x02\n" +
 	"\x13MatchNetworkProfile\x12\x17\n" +
 	"\aplan_id\x18\x01 \x01(\tR\x06planId\x12'\n" +
 	"\x0fsession_binding\x18\x02 \x01(\tR\x0esessionBinding\x126\n" +
 	"\breceipts\x18\x03 \x03(\v2\x1a.match.NetworkProbeReceiptR\breceipts\x12#\n" +
 	"\rowner_account\x18\x04 \x01(\tR\fownerAccount\x12%\n" +
-	"\x0eowner_revision\x18\x05 \x01(\x04R\rownerRevision\"\xa6\x04\n" +
+	"\x0eowner_revision\x18\x05 \x01(\x04R\rownerRevision\x12#\n" +
+	"\rrelease_track\x18\x06 \x01(\tR\freleaseTrack\"\xa6\x04\n" +
 	"\x14MatchSpectatorRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId\x12\x1b\n" +
@@ -2698,7 +2719,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\x12\x1d\n" +
 	"\n" +
-	"team_index\x18\x03 \x01(\rR\tteamIndex\"\xff\a\n" +
+	"team_index\x18\x03 \x01(\rR\tteamIndex\"\xa4\b\n" +
 	"\x14MatchFormationRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId\x12\x14\n" +
@@ -2724,7 +2745,8 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x1bpreflight_supported_version\x18\x13 \x01(\rR\x19preflightSupportedVersion\x122\n" +
 	"\x15preflight_instance_id\x18\x14 \x01(\tR\x13preflightInstanceId\x12G\n" +
 	" adopted_outcome_protocol_version\x18\x15 \x01(\rR\x1dadoptedOutcomeProtocolVersion\x128\n" +
-	"\x18adopted_outcome_observed\x18\x16 \x01(\bR\x16adoptedOutcomeObserved:8\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x01\x11state,retry_at_ms\"P\n" +
+	"\x18adopted_outcome_observed\x18\x16 \x01(\bR\x16adoptedOutcomeObserved\x12#\n" +
+	"\rrelease_track\x18\x17 \x01(\tR\freleaseTrack:8\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x01\x11state,retry_at_ms\"P\n" +
 	"\x15MatchPreparedEndpoint\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1a\n" +
 	"\bendpoint\x18\x02 \x01(\tR\bendpoint\"\xec\x01\n" +

@@ -55,21 +55,8 @@ Middlewares:
     IgnoreContentMethods:
       - /chatpb.ClientPlayerChat/SendChat
 
-# ---- 既有可丢缓存配置(当前SQL合同见设计§19)----
-# Redis仅保留框架/缓存配置；发送决定、限速与历史读取均在TiDB，不读旧LIST。
-#   这是 zrpc.RpcServerConf 自带的 Redis(RedisKeyConf)段:Key 仅在 Auth=true 时使用,
-#   但字段不是 optional,Redis 段存在时必须显式写(空串即可),否则加载报 "Redis.Key" is not set。
-#   不写 DB(契约 §4)。
-Redis:
-  Host: 127.0.0.1:6379
-  Type: node
-  Key: ""
-
-# ChatRedis保留旧部署配置；正式Send/Pull不向它读写或回落。
-# Host为既有六节点缓存种子，缓存丢失或旧快照不改变SQL已接受消息。
-ChatRedis:
-  Host: 127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005
-  Type: cluster
+# chat 不连 Redis:发送决定、限速与历史读取都在 SQL 原件库(当前合同见设计§19)。
+# zrpc.RpcServerConf 自带的 Redis 段是 optional,只在 Auth=true 时用,chat 不开 Auth,所以不写;ChatRedis 段已删。
 
 # etcd 注册路径 <Prefix>/zone/<z>/... 用的 zone id;必填非 0。chat 是全局服务,
 # zone 只影响注册路径,业务代码禁止读它做分支(契约 §0)。K8s 由 ConfigMap 注入 CurrentZoneId。

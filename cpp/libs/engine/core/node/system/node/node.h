@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <memory>
 #include <muduo/base/AsyncLogging.h>
 #include <muduo/net/TcpServer.h>
@@ -58,6 +59,9 @@ public:
     using RpcServerPtr = std::unique_ptr<muduo::net::RpcServer>;
     using ServiceList = std::vector<::google::protobuf::Service *>;
     using CanConnectNodeTypeList = std::set<uint32_t>;
+    // 本节点从 etcd 发现(Range / watch)哪些节点类型(docs/design/connection-fanout-subsetting-20261106.md §3.4)。
+    // 必须包含建连白名单;自身类型不在里面时只看本节点自己那一条发现键。
+    using DiscoveryNodeTypeList = std::set<uint32_t>;
 
     using PartitionClassIds = std::vector<int32_t>;
 
@@ -78,9 +82,11 @@ public:
 
     // Full construction: derives log dir from nodeType (e.g. GateNodeService -> "logs/gate").
     // Calls Initialize() and registers thread observability.
+    // discover 必须包含 connectTo,否则拒启(连不上没发现的类型)。
     Node(muduo::net::EventLoop *loop,
          uint32_t nodeType,
          CanConnectNodeTypeList connectTo,
+         DiscoveryNodeTypeList discover,
          ::google::protobuf::Service *rpcService = nullptr);
 
     virtual ~Node();
@@ -98,6 +104,28 @@ public:
     virtual google::protobuf::Service *GetNodeRpcService() { return rpcService_ ? &rpcService_->get() : nullptr; }
     muduo::AsyncLogging &Log() { return logSystem; }
     CanConnectNodeTypeList &GetTargetNodeTypeWhitelist() { return targetNodeTypeWhitelist; }
+    const DiscoveryNodeTypeList &GetDiscoveryNodeTypes() const { return discoveryNodeTypes_; }
+    bool DiscoversNodeType(uint32_t nodeType) const { return discoveryNodeTypes_.contains(nodeType); }
+
+    // 连接与发现的三处接缝(docs/design/connection-fanout-subsetting-20261106.md §3.2),都只在 loop 线程用。
+    //
+    // 建连准入:白名单类型 nodeType 的节点在建连前再过这一道判定(例如 gate 只连本 zone 子集里的路由服)。
+    // 不设 = 白名单里的节点一律建连(原行为)。判定同步调用,只读状态,不得在里面建连或拆连;
+    // 在首次 ConnectAllNodes(StartRpcServer)之前设好。
+    using ConnectionAdmissionFn = std::function<bool(const NodeInfo &)>;
+    // 发现快照里 nodeType 的成员变了(加入、更新、摘除)之后同步调用,调用时快照已是新状态。
+    // 回调里可以建连(NodeConnector::ConnectToNode,先判 IsServiceStarted)或排延后拆连(DropUnadmittedConnection)。
+    using DiscoveryObserverFn = std::function<void()>;
+    Node &SetConnectionAdmission(uint32_t nodeType, ConnectionAdmissionFn fn);
+    Node &SetDiscoveryObserver(uint32_t nodeType, DiscoveryObserverFn fn);
+    // 该不该连这个节点:类型在白名单里,且没装准入或准入通过。AddServiceNode 与 ConnectAllNodes 都经这里。
+    bool AdmitsConnection(const NodeInfo &node) const;
+    // 发现层在快照变了之后调用(ServiceDiscoveryManager::AddServiceNode、ExecuteNodeRemoval)。
+    void NotifyDiscoveryChanged(uint32_t nodeType);
+    // 拆掉本节点到 nodeUuid 的一条已不被准入的连接:先摘 gRPC 通道(在途调用以 UNAVAILABLE 完成),再发 OnNodeRemoveEvent、
+    // 销毁实体,与节点摘除共用一段代码;不动发现快照,之后它又被准入时按普通发现路径重新建连。
+    // 排到下一轮执行,执行时再判一次准入:那时又被准入就保留连接。停机开始后不做,连接由停机流程统一关。
+    void DropUnadmittedConnection(uint32_t nodeType, const std::string &nodeUuid);
     NodeHandshakeManager &GetNodeHandshakeManager() { return nodeHandshakeManager; }
     ServiceDiscoveryManager &GetServiceDiscoveryManager() { return serviceDiscoveryManager; }
     EtcdManager &GetEtcdManager() { return etcdManager; }
@@ -147,6 +175,23 @@ public:
         conflictDrainCompleteFn_ = std::move(fn);
         return *this;
     }
+
+    // ── 计划排空(docs/design/scene-node-planned-drain.md §4.1)──────────────────────────────────────────────
+    // 计划下线(SIGTERM、Agones 排空标签)先进计划排空阶段:进程照常服务(Kafka、RPC、gRPC 都不停),begin 让业务开始
+    // 把工作交给别的节点;之后每 200ms 问一次 isComplete,完成或到预算才进普通停机(ShutdownInLoop,剩下的工作走
+    // beforeShutdown 钩子)。没登记的节点 SIGTERM 行为不变(直接停机)。
+    // defaultBudget:环境变量 MMORPG_PLANNED_DRAIN_BUDGET_SECONDS 没设时的预算;环境变量为 0 时关闭计划排空,非法时拒启
+    // (node_planned_drain.h)。在 StartRpcServer() 之前、loop 线程上登记。begin / isComplete 都在 loop 线程上调用。
+    using PlannedDrainBeginFn = std::function<void(Node &)>;
+    using PlannedDrainCompleteFn = std::function<bool(Node &)>;
+    Node &SetPlannedDrain(PlannedDrainBeginFn begin, PlannedDrainCompleteFn isComplete, std::chrono::seconds defaultBudget);
+    // 进入计划排空。任意线程可调(投递到 loop)。没登记、预算为 0、已在停机、维护流程已关源时退回普通停机;重复调用幂等。
+    void RequestPlannedStop();
+    // 计划排空是否已开始。只在 loop 线程读。
+    bool PlannedDrainStarted() const { return plannedDrainStarted_; }
+    // 生效的计划排空预算(SetPlannedDrain 之后才有意义;0 = 关闭)。业务据此安排排空内部的时刻(scene 的自疏散时刻)。
+    std::chrono::seconds PlannedDrainBudget() const { return plannedDrainBudget_; }
+
     bool HasDiscoveredServiceNode(uint32_t nodeType) const
     {
         return serviceDiscoveryManager.ServiceNodes().HasNodesOfType(nodeType);
@@ -279,6 +324,9 @@ protected:
     void MaybeFinalizeShutdownInLoop();
 
     void ShutdownInLoop();
+    // 计划排空(SetPlannedDrain):进入阶段与每拍检查,都在 loop 线程。
+    void BeginPlannedDrainInLoop();
+    void PollPlannedDrainInLoop();
     void InitMaintenanceControl();
     void PollMaintenanceControl();
     void CloseMaintenanceSource();
@@ -300,6 +348,13 @@ protected:
     // 纯粹是影子成员,读代码的人会以为取消它就停住了重试,其实什么也没停。已删除。
     TimerTaskComp conflictDrainTimer;
     TimerTaskComp shutdownDrainTimer;
+    // 计划排空(SetPlannedDrain):登记的业务钩子、生效的预算、阶段是否已开始与截止时刻、每拍检查的定时器。
+    PlannedDrainBeginFn plannedDrainBeginFn_;
+    PlannedDrainCompleteFn plannedDrainCompleteFn_;
+    std::chrono::seconds plannedDrainBudget_{0};
+    bool plannedDrainStarted_{false};
+    std::chrono::steady_clock::time_point plannedDrainDeadline_{};
+    TimerTaskComp plannedDrainTimer;
     TimerTaskComp maintenanceControlTimer_;
     std::unique_ptr<NodeMaintenanceControl> maintenanceControl_;
     BeforeShutdownFn maintenanceSourceClose_;
@@ -309,6 +364,11 @@ protected:
     // The producer is non-blocking and flushes via KafkaManager::Shutdown.
     // No EventLoop timer is required for either path.
     CanConnectNodeTypeList targetNodeTypeWhitelist;
+    // 构造时给定,之后不变(构造里 InitEtcdService 就按它 Range)。
+    DiscoveryNodeTypeList discoveryNodeTypes_;
+    // 按节点类型的建连准入与发现观察者(SetConnectionAdmission / SetDiscoveryObserver),空 = 没装。
+    std::array<ConnectionAdmissionFn, eNodeType_ARRAYSIZE> connectionAdmission_;
+    std::array<DiscoveryObserverFn, eNodeType_ARRAYSIZE> discoveryObservers_;
     std::unordered_map<std::string, int64_t> revision;
     bool hasSentRange{false};
     bool hasSentWatch{false};
@@ -411,6 +471,15 @@ struct DependencyGate
                     double probeIntervalSec = 1.0,
                     uint32_t logEveryNTicks = 5)
     {
+        // 要等的类型必须在本节点的发现集合里,否则永远等不到(docs/design/connection-fanout-subsetting-20261106.md §3.4)。
+        for (const uint32_t nodeType : requiredNodeTypes)
+        {
+            if (!node.DiscoversNodeType(nodeType))
+            {
+                LOG_FATAL << nodeName << " waits for " << eNodeType_Name(static_cast<eNodeType>(nodeType))
+                          << ", which is not in this node's discovery set";
+            }
+        }
         probeTimer.RunEvery(probeIntervalSec,
                             [this, &node, requiredNodeTypes, onReady = std::move(onReady), nodeName, logEveryNTicks]
                             {

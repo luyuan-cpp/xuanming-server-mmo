@@ -77,6 +77,11 @@ func TestValidate(t *testing.T) {
 			c.Middlewares.Stat = false
 			return c
 		}(), wantErr: false},
+		// 全服池子集:0 = 不取子集,2 起可用;1 台时它一重启本路由服对该类目标全部失败,负数无意义。
+		{name: "GlobalTargetSubsetSize 为 0", cfg: Config{ForwardTimeoutMs: 5000, GlobalTargetSubsetSize: 0}, wantErr: false},
+		{name: "GlobalTargetSubsetSize 为 1", cfg: Config{ForwardTimeoutMs: 5000, GlobalTargetSubsetSize: 1}, wantErr: true},
+		{name: "GlobalTargetSubsetSize 为 2", cfg: Config{ForwardTimeoutMs: 5000, GlobalTargetSubsetSize: 2}, wantErr: false},
+		{name: "GlobalTargetSubsetSize 为负", cfg: Config{ForwardTimeoutMs: 5000, GlobalTargetSubsetSize: -1}, wantErr: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -101,6 +106,7 @@ func TestRepoYamlLoadsAndValidates(t *testing.T) {
 	require.Equal(t, uint32(1), c.ZoneId)
 	require.Equal(t, int64(60), c.LeaseTTL)
 	require.Equal(t, []string{"LoginNodeService"}, c.ZoneScopedNodeTypes)
+	require.Equal(t, 4, c.GlobalTargetSubsetSize, "全服池子集大小与设计稿 §3.3 的缺省一致")
 	require.Equal(t, "", c.MetricsListenAddr, "dev 默认关闭 /metrics")
 	// go-zero 的 Stat 默认 true;yaml 必须把 Forward 列进 IgnoreContentMethods,
 	// 否则每次转发都会把客户端原包(含登录密码)整包 JSON 打进 INFO 日志。

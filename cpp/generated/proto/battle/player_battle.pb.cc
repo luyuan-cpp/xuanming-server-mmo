@@ -815,11 +815,11 @@ constexpr BattleTokenVerifyResponse::ParseTableT_ BattleTokenVerifyResponse::Int
     {
       PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -831,26 +831,40 @@ constexpr BattleTokenVerifyResponse::ParseTableT_ BattleTokenVerifyResponse::Int
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // bool success = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleTokenVerifyResponse, _impl_.success_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleTokenVerifyResponse, _impl_.success_), 1>(),
+       {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.success_)}},
       // string error = 2;
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.error_)}},
       // uint64 battle_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleTokenVerifyResponse, _impl_.battle_id_), 1>(),
-       {24, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleTokenVerifyResponse, _impl_.battle_id_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.battle_id_)}},
+      // uint32 heartbeat_interval_ms = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleTokenVerifyResponse, _impl_.heartbeat_interval_ms_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.heartbeat_interval_ms_)}},
+      // uint32 heartbeat_timeout_ms = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleTokenVerifyResponse, _impl_.heartbeat_timeout_ms_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.heartbeat_timeout_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // bool success = 1;
-      {PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.success_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.success_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // string error = 2;
       {PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.error_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 battle_id = 3;
-      {PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.battle_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.battle_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 heartbeat_interval_ms = 4;
+      {PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.heartbeat_interval_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 heartbeat_timeout_ms = 5;
+      {PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.heartbeat_timeout_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -869,8 +883,10 @@ inline constexpr BattleTokenVerifyResponse::Impl_::Impl_(
         error_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        success_{false},
+        heartbeat_interval_ms_{0u},
         battle_id_{::uint64_t{0u}},
-        success_{false} {}
+        heartbeat_timeout_ms_{0u} {}
 
 template <typename>
 constexpr BattleTokenVerifyResponse::BattleTokenVerifyResponse(::_pbi::ConstantInitialized,
@@ -3822,13 +3838,17 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleTokenVerifyResponse, _impl_._has_bits_),
-        6, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattleTokenVerifyResponse, _impl_.success_),
         PROTOBUF_FIELD_OFFSET(::BattleTokenVerifyResponse, _impl_.error_),
         PROTOBUF_FIELD_OFFSET(::BattleTokenVerifyResponse, _impl_.battle_id_),
-        2,
-        0,
+        PROTOBUF_FIELD_OFFSET(::BattleTokenVerifyResponse, _impl_.heartbeat_interval_ms_),
+        PROTOBUF_FIELD_OFFSET(::BattleTokenVerifyResponse, _impl_.heartbeat_timeout_ms_),
         1,
+        0,
+        3,
+        2,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleAssignedS2C, _impl_._has_bits_),
         10, // hasbit index offset
@@ -3919,11 +3939,11 @@ static const ::_pbi::MigrationSchema
         {106, sizeof(::BattleTicketPayload)},
         {123, sizeof(::BattleTokenVerifyRequest)},
         {130, sizeof(::BattleTokenVerifyResponse)},
-        {139, sizeof(::BattleAssignedS2C)},
-        {156, sizeof(::RequestBattleTicketRequest)},
-        {161, sizeof(::RequestBattleTicketResponse)},
-        {168, sizeof(::BattleReplay)},
-        {197, sizeof(::BattleReplayEnvelope)},
+        {143, sizeof(::BattleAssignedS2C)},
+        {160, sizeof(::RequestBattleTicketRequest)},
+        {165, sizeof(::RequestBattleTicketResponse)},
+        {172, sizeof(::BattleReplay)},
+        {201, sizeof(::BattleReplayEnvelope)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3992,62 +4012,63 @@ const char descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto[] 
     "re_at_ms\030\005 \001(\004\022 \n\004role\030\006 \001(\0162\022.eBattleTi"
     "cketRole\022\036\n\026spectator_operation_id\030\007 \001(\t"
     "\">\n\030BattleTokenVerifyRequest\022\017\n\007payload\030"
-    "\001 \001(\014\022\021\n\tsignature\030\002 \001(\014\"N\n\031BattleTokenV"
-    "erifyResponse\022\017\n\007success\030\001 \001(\010\022\r\n\005error\030"
-    "\002 \001(\t\022\021\n\tbattle_id\030\003 \001(\004\"\252\001\n\021BattleAssig"
-    "nedS2C\022\021\n\tbattle_id\030\001 \001(\004\022\014\n\004host\030\002 \001(\t\022"
-    "\014\n\004port\030\003 \001(\r\022\025\n\rtoken_payload\030\004 \001(\014\022\027\n\017"
-    "token_signature\030\005 \001(\014\022\024\n\014expire_at_ms\030\006 "
-    "\001(\004\022 \n\004role\030\007 \001(\0162\022.eBattleTicketRole\"/\n"
-    "\032RequestBattleTicketRequest\022\021\n\tbattle_id"
-    "\030\001 \001(\004\"m\n\033RequestBattleTicketResponse\022&\n"
-    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022&\n"
-    "\nassignment\030\002 \001(\0132\022.BattleAssignedS2C\"\375\002"
-    "\n\014BattleReplay\022\021\n\tbattle_id\030\001 \001(\004\022\022\n\nmat"
-    "ch_mode\030\002 \001(\r\022\030\n\020battle_config_id\030\003 \001(\r\022"
-    "\025\n\rstarted_at_ms\030\004 \001(\004\022\026\n\016finished_at_ms"
-    "\030\005 \001(\004\022 \n\007outcome\030\006 \001(\0162\017.eBattleOutcome"
-    "\022+\n\nend_reason\030\007 \001(\0162\027.eBattleReplayEndR"
-    "eason\022\024\n\014total_rounds\030\010 \001(\r\022\031\n\021table_fin"
-    "gerprint\030\t \001(\t\022$\n\013start_state\030\n \001(\0132\017.Ba"
-    "ttleStateS2C\022\036\n\006rounds\030\013 \003(\0132\016.TurnResul"
-    "tS2C\022$\n\013final_state\030\014 \001(\0132\017.BattleStateS"
-    "2C\022\021\n\ttruncated\030\r \001(\010\"v\n\024BattleReplayEnv"
-    "elope\022\026\n\016format_version\030\001 \001(\r\022\"\n\005codec\030\002"
-    " \001(\0162\023.eBattleReplayCodec\022\021\n\traw_bytes\030\003"
-    " \001(\r\022\017\n\007payload\030\004 \001(\014*\246\001\n\022eSpectateEndRe"
-    "ason\022\025\n\021SPECTATE_END_NONE\020\000\022 \n\034SPECTATE_"
-    "END_BATTLE_FINISHED\020\001\022\037\n\033SPECTATE_END_BA"
-    "TTLE_ABORTED\020\002\022\030\n\024SPECTATE_END_REMOVED\020\003"
-    "\022\034\n\030SPECTATE_END_SOURCE_LOST\020\004*u\n\021eBattl"
-    "eTicketRole\022\033\n\027BATTLE_TICKET_ROLE_NONE\020\000"
-    "\022\"\n\036BATTLE_TICKET_ROLE_PARTICIPANT\020\001\022\037\n\033"
-    "BATTLE_TICKET_ROLE_OBSERVER\020\002*P\n\022eBattle"
-    "ReplayCodec\022\034\n\030BATTLE_REPLAY_CODEC_NONE\020"
-    "\000\022\034\n\030BATTLE_REPLAY_CODEC_GZIP\020\001*\200\001\n\026eBat"
-    "tleReplayEndReason\022!\n\035BATTLE_REPLAY_END_"
-    "UNSPECIFIED\020\000\022\036\n\032BATTLE_REPLAY_END_FINIS"
-    "HED\020\001\022#\n\037BATTLE_REPLAY_END_DEADLINE_DRAW"
-    "\020\0022\345\005\n\022BattleClientPlayer\022M\n\022SubmitBattl"
-    "eAction\022\032.SubmitBattleActionRequest\032\033.Su"
-    "bmitBattleActionResponse\0229\n\016GetBattleSta"
-    "te\022\026.GetBattleStateRequest\032\017.BattleState"
-    "S2C\0223\n\021NotifyBattleStart\022\017.BattleStartS2"
-    "C\032\006.Empty\"\005\210\231\310\001\002\0221\n\020NotifyTurnResult\022\016.T"
-    "urnResultS2C\032\006.Empty\"\005\210\231\310\001\002\022/\n\017NotifyBat"
-    "tleEnd\022\r.BattleEndS2C\032\006.Empty\"\005\210\231\310\001\002\022;\n\025"
-    "NotifyBattleReconnect\022\023.BattleReconnectS"
-    "2C\032\006.Empty\"\005\210\231\310\001\002\022D\n\017StopWatchBattle\022\027.S"
-    "topWatchBattleRequest\032\030.StopWatchBattleR"
-    "esponse\022>\n\rSetAutoBattle\022\025.SetAutoBattle"
-    "Request\032\026.SetAutoBattleResponse\0227\n\023Notif"
-    "ySpectateState\022\021.SpectateStateS2C\032\006.Empt"
-    "y\"\005\210\231\310\001\002\0229\n\030NotifySpectateTurnResult\022\016.T"
-    "urnResultS2C\032\006.Empty\"\005\210\231\310\001\002\0223\n\021NotifySpe"
-    "ctateEnd\022\017.SpectateEndS2C\032\006.Empty\"\005\210\231\310\001\002"
-    "\0229\n\024NotifyBattleAssigned\022\022.BattleAssigne"
-    "dS2C\032\006.Empty\"\005\210\231\310\001\002\032\005\210\250\303\001\001B\014Z\006battle\230\324a\036"
-    "b\006proto3"
+    "\001 \001(\014\022\021\n\tsignature\030\002 \001(\014\"\213\001\n\031BattleToken"
+    "VerifyResponse\022\017\n\007success\030\001 \001(\010\022\r\n\005error"
+    "\030\002 \001(\t\022\021\n\tbattle_id\030\003 \001(\004\022\035\n\025heartbeat_i"
+    "nterval_ms\030\004 \001(\r\022\034\n\024heartbeat_timeout_ms"
+    "\030\005 \001(\r\"\252\001\n\021BattleAssignedS2C\022\021\n\tbattle_i"
+    "d\030\001 \001(\004\022\014\n\004host\030\002 \001(\t\022\014\n\004port\030\003 \001(\r\022\025\n\rt"
+    "oken_payload\030\004 \001(\014\022\027\n\017token_signature\030\005 "
+    "\001(\014\022\024\n\014expire_at_ms\030\006 \001(\004\022 \n\004role\030\007 \001(\0162"
+    "\022.eBattleTicketRole\"/\n\032RequestBattleTick"
+    "etRequest\022\021\n\tbattle_id\030\001 \001(\004\"m\n\033RequestB"
+    "attleTicketResponse\022&\n\rerror_message\030\001 \001"
+    "(\0132\017.TipInfoMessage\022&\n\nassignment\030\002 \001(\0132"
+    "\022.BattleAssignedS2C\"\375\002\n\014BattleReplay\022\021\n\t"
+    "battle_id\030\001 \001(\004\022\022\n\nmatch_mode\030\002 \001(\r\022\030\n\020b"
+    "attle_config_id\030\003 \001(\r\022\025\n\rstarted_at_ms\030\004"
+    " \001(\004\022\026\n\016finished_at_ms\030\005 \001(\004\022 \n\007outcome\030"
+    "\006 \001(\0162\017.eBattleOutcome\022+\n\nend_reason\030\007 \001"
+    "(\0162\027.eBattleReplayEndReason\022\024\n\014total_rou"
+    "nds\030\010 \001(\r\022\031\n\021table_fingerprint\030\t \001(\t\022$\n\013"
+    "start_state\030\n \001(\0132\017.BattleStateS2C\022\036\n\006ro"
+    "unds\030\013 \003(\0132\016.TurnResultS2C\022$\n\013final_stat"
+    "e\030\014 \001(\0132\017.BattleStateS2C\022\021\n\ttruncated\030\r "
+    "\001(\010\"v\n\024BattleReplayEnvelope\022\026\n\016format_ve"
+    "rsion\030\001 \001(\r\022\"\n\005codec\030\002 \001(\0162\023.eBattleRepl"
+    "ayCodec\022\021\n\traw_bytes\030\003 \001(\r\022\017\n\007payload\030\004 "
+    "\001(\014*\246\001\n\022eSpectateEndReason\022\025\n\021SPECTATE_E"
+    "ND_NONE\020\000\022 \n\034SPECTATE_END_BATTLE_FINISHE"
+    "D\020\001\022\037\n\033SPECTATE_END_BATTLE_ABORTED\020\002\022\030\n\024"
+    "SPECTATE_END_REMOVED\020\003\022\034\n\030SPECTATE_END_S"
+    "OURCE_LOST\020\004*u\n\021eBattleTicketRole\022\033\n\027BAT"
+    "TLE_TICKET_ROLE_NONE\020\000\022\"\n\036BATTLE_TICKET_"
+    "ROLE_PARTICIPANT\020\001\022\037\n\033BATTLE_TICKET_ROLE"
+    "_OBSERVER\020\002*P\n\022eBattleReplayCodec\022\034\n\030BAT"
+    "TLE_REPLAY_CODEC_NONE\020\000\022\034\n\030BATTLE_REPLAY"
+    "_CODEC_GZIP\020\001*\200\001\n\026eBattleReplayEndReason"
+    "\022!\n\035BATTLE_REPLAY_END_UNSPECIFIED\020\000\022\036\n\032B"
+    "ATTLE_REPLAY_END_FINISHED\020\001\022#\n\037BATTLE_RE"
+    "PLAY_END_DEADLINE_DRAW\020\0022\345\005\n\022BattleClien"
+    "tPlayer\022M\n\022SubmitBattleAction\022\032.SubmitBa"
+    "ttleActionRequest\032\033.SubmitBattleActionRe"
+    "sponse\0229\n\016GetBattleState\022\026.GetBattleStat"
+    "eRequest\032\017.BattleStateS2C\0223\n\021NotifyBattl"
+    "eStart\022\017.BattleStartS2C\032\006.Empty\"\005\210\231\310\001\002\0221"
+    "\n\020NotifyTurnResult\022\016.TurnResultS2C\032\006.Emp"
+    "ty\"\005\210\231\310\001\002\022/\n\017NotifyBattleEnd\022\r.BattleEnd"
+    "S2C\032\006.Empty\"\005\210\231\310\001\002\022;\n\025NotifyBattleReconn"
+    "ect\022\023.BattleReconnectS2C\032\006.Empty\"\005\210\231\310\001\002\022"
+    "D\n\017StopWatchBattle\022\027.StopWatchBattleRequ"
+    "est\032\030.StopWatchBattleResponse\022>\n\rSetAuto"
+    "Battle\022\025.SetAutoBattleRequest\032\026.SetAutoB"
+    "attleResponse\0227\n\023NotifySpectateState\022\021.S"
+    "pectateStateS2C\032\006.Empty\"\005\210\231\310\001\002\0229\n\030Notify"
+    "SpectateTurnResult\022\016.TurnResultS2C\032\006.Emp"
+    "ty\"\005\210\231\310\001\002\0223\n\021NotifySpectateEnd\022\017.Spectat"
+    "eEndS2C\032\006.Empty\"\005\210\231\310\001\002\0229\n\024NotifyBattleAs"
+    "signed\022\022.BattleAssignedS2C\032\006.Empty\"\005\210\231\310\001"
+    "\002\032\005\210\250\303\001\001B\014Z\006battle\230\324a\036b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto_deps[4] = {
@@ -4060,7 +4081,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fplayer_5fbattle_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto = {
     false,
     false,
-    3808,
+    3870,
     descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto,
     "proto/battle/player_battle.proto",
     &descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto_once,
@@ -8273,12 +8294,12 @@ BattleTokenVerifyResponse::BattleTokenVerifyResponse(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, battle_id_),
+               offsetof(Impl_, success_),
            reinterpret_cast<const char*>(&from._impl_) +
-               offsetof(Impl_, battle_id_),
-           offsetof(Impl_, success_) -
-               offsetof(Impl_, battle_id_) +
-               sizeof(Impl_::success_));
+               offsetof(Impl_, success_),
+           offsetof(Impl_, heartbeat_timeout_ms_) -
+               offsetof(Impl_, success_) +
+               sizeof(Impl_::heartbeat_timeout_ms_));
 
   // @@protoc_insertion_point(copy_constructor:BattleTokenVerifyResponse)
 }
@@ -8291,11 +8312,11 @@ PROTOBUF_NDEBUG_INLINE BattleTokenVerifyResponse::Impl_::Impl_(
 inline void BattleTokenVerifyResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, battle_id_),
+               offsetof(Impl_, success_),
            0,
-           offsetof(Impl_, success_) -
-               offsetof(Impl_, battle_id_) +
-               sizeof(Impl_::success_));
+           offsetof(Impl_, heartbeat_timeout_ms_) -
+               offsetof(Impl_, success_) +
+               sizeof(Impl_::heartbeat_timeout_ms_));
 }
 BattleTokenVerifyResponse::~BattleTokenVerifyResponse() {
   // @@protoc_insertion_point(destructor:BattleTokenVerifyResponse)
@@ -8349,10 +8370,10 @@ PROTOBUF_NOINLINE void BattleTokenVerifyResponse::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.error_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
-    ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.success_) -
-        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.success_));
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+    ::memset(&_impl_.success_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.heartbeat_timeout_ms_) -
+        reinterpret_cast<char*>(&_impl_.success_)) + sizeof(_impl_.heartbeat_timeout_ms_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -8378,7 +8399,7 @@ PROTOBUF_NOINLINE void BattleTokenVerifyResponse::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // bool success = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_success() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -8397,11 +8418,29 @@ PROTOBUF_NOINLINE void BattleTokenVerifyResponse::Clear() {
   }
 
   // uint64 battle_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_battle_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           3, this_._internal_battle_id(), target);
+    }
+  }
+
+  // uint32 heartbeat_interval_ms = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_heartbeat_interval_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_heartbeat_interval_ms(), target);
+    }
+  }
+
+  // uint32 heartbeat_timeout_ms = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_heartbeat_timeout_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_heartbeat_timeout_ms(), target);
     }
   }
 
@@ -8430,7 +8469,7 @@ PROTOBUF_NOINLINE void BattleTokenVerifyResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string error = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_error().empty()) {
@@ -8438,17 +8477,31 @@ PROTOBUF_NOINLINE void BattleTokenVerifyResponse::Clear() {
                                         this_._internal_error());
       }
     }
-    // uint64 battle_id = 3;
+    // bool success = 1;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_success() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 heartbeat_interval_ms = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_heartbeat_interval_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_heartbeat_interval_ms());
+      }
+    }
+    // uint64 battle_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_battle_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_battle_id());
       }
     }
-    // bool success = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (this_._internal_success() != 0) {
-        total_size += 2;
+    // uint32 heartbeat_timeout_ms = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_heartbeat_timeout_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_heartbeat_timeout_ms());
       }
     }
   }
@@ -8469,7 +8522,7 @@ void BattleTokenVerifyResponse::MergeImpl(::google::protobuf::MessageLite& to_ms
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_error().empty()) {
         _this->_internal_set_error(from._internal_error());
@@ -8480,13 +8533,23 @@ void BattleTokenVerifyResponse::MergeImpl(::google::protobuf::MessageLite& to_ms
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_success() != 0) {
+        _this->_impl_.success_ = from._impl_.success_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_heartbeat_interval_ms() != 0) {
+        _this->_impl_.heartbeat_interval_ms_ = from._impl_.heartbeat_interval_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_battle_id() != 0) {
         _this->_impl_.battle_id_ = from._impl_.battle_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_success() != 0) {
-        _this->_impl_.success_ = from._impl_.success_;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_heartbeat_timeout_ms() != 0) {
+        _this->_impl_.heartbeat_timeout_ms_ = from._impl_.heartbeat_timeout_ms_;
       }
     }
   }
@@ -8511,11 +8574,11 @@ void BattleTokenVerifyResponse::InternalSwap(BattleTokenVerifyResponse* PROTOBUF
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.error_, &other->_impl_.error_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.success_)
-      + sizeof(BattleTokenVerifyResponse::_impl_.success_)
-      - PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.battle_id_)>(
-          reinterpret_cast<char*>(&_impl_.battle_id_),
-          reinterpret_cast<char*>(&other->_impl_.battle_id_));
+      PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.heartbeat_timeout_ms_)
+      + sizeof(BattleTokenVerifyResponse::_impl_.heartbeat_timeout_ms_)
+      - PROTOBUF_FIELD_OFFSET(BattleTokenVerifyResponse, _impl_.success_)>(
+          reinterpret_cast<char*>(&_impl_.success_),
+          reinterpret_cast<char*>(&other->_impl_.success_));
 }
 
 ::google::protobuf::Metadata BattleTokenVerifyResponse::GetMetadata() const {

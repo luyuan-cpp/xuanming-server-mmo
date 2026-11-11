@@ -8,7 +8,7 @@
 #   REDIS_STORAGE     PVC 大小(脚本常量:volumeClaimTemplates 创建后不可改,所以不随 maxmemory 变)
 # 有占位没替换就拒绝 apply(k8s_deploy.ps1 的 Assert-InfraManifestPlaceholdersReplaced)。
 #
-# 里面放什么:login 的 Node.QueueRedis(排队 queue:* / 准入 admit:* / 在线 admitted:* 与放行锁)和 Java gateway 的 Bucket4j 限流桶
+# 里面放什么:login 的 Node.QueueRedis(排队 queue:* / 准入 admit:* / 在线 admitted:* 与放行锁)和 Java gateway 的限流令牌桶(Lua 脚本 RedisRateLimitStore)
 # (rl:zone / rl:ip)。gate 排空标记、会话、锁、映射、存盘控制面等其余一切都在核心 redis(redis.yaml),不在这里。这些键都带 TTL:
 # 实例重启期间只影响本组 zone 的新登录(排队打开时新登录失败;排队关着时 login 不碰它,gateway 限流 fail-open),已在游戏里的玩家不受影响。
 #

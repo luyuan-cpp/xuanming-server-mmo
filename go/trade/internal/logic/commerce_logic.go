@@ -126,7 +126,7 @@ func (l *JubaozhaiLogic) commerceCall(fn func(context.Context, uint64, *commerce
 	}
 	r, err := fn(l.ctx, me, l.deps.Commerce)
 	if err != nil && commerceCode(err) == constants.ErrServiceUnavailable {
-		l.Errorf("交易业务调用失败: %v", err)
+		l.Errorf("trade business call failed: %v", err)
 	}
 	out := orderAnswer(r, err)
 	if err == nil && r != nil {
@@ -391,7 +391,8 @@ func (l *JubaozhaiLogic) GetMarketDepth(in *tradepb.GetMarketDepthRequest) (*tra
 		if side == 1 {
 			order = "DESC"
 		}
-		rows, err := l.deps.Commerce.Repo.DB.QueryContext(l.ctx, "SELECT unit_price,SUM(quantity-filled_quantity) FROM trade_commerce WHERE kind=4 AND side=? AND market_id=? AND item_config_id=? AND currency_type=? AND status=3 AND filled_quantity<quantity GROUP BY unit_price ORDER BY unit_price "+order+" LIMIT ?", side, expected, in.GetItemConfigId(), l.deps.Commerce.Policy.Currencies[0], limit)
+		// 深度与撮合选单同一本盘口(on_book=1):托管还没完成的订单撮合不到,不能显示成可成交的挂单量。
+		rows, err := l.deps.Commerce.Repo.DB.QueryContext(l.ctx, "SELECT unit_price,SUM(quantity-filled_quantity) FROM trade_commerce WHERE kind=4 AND side=? AND market_id=? AND item_config_id=? AND currency_type=? AND status=3 AND on_book=1 AND filled_quantity<quantity GROUP BY unit_price ORDER BY unit_price "+order+" LIMIT ?", side, expected, in.GetItemConfigId(), l.deps.Commerce.Policy.Currencies[0], limit)
 		if err != nil {
 			out.ErrorMessage = tipOf(constants.ErrServiceUnavailable)
 			return out, nil

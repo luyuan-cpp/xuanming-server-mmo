@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"slices"
+	"strings"
 
 	base "proto/common/base"
 	dspb "proto/data_service"
@@ -126,6 +129,143 @@ func (e *Engine) checkContractIdentities(ctx context.Context, tx *sql.Tx, r *tra
 		}
 	}
 	return nil
+}
+
+// ownerChanged 判参与方的角色是否已不可逆地不归合同里的原身份(jubaozhai-market.md §15.7.1 第 1 类):
+// 副本修订号已超过原身份,或修订号相同而账号不同。owner_revision 只增不减,这两种复查多少次都不会变回来。
+// 副本修订号落后于原身份是副本要自愈,不算;角色已删(Ownership 回 ErrConflict)由调用方另判。
+func ownerChanged(owned *dspb.AccountRoleOwnership, identity *tradepb.TradeRoleIdentity) bool {
+	return owned.GetOwnerRevision() > identity.GetOwnerRevision() ||
+		owned.GetOwnerRevision() == identity.GetOwnerRevision() && owned.GetAccount() != identity.GetAccount()
+}
+
+// 合同的两方。改绑(redirect)按名字点名,转人工记录也用这两个名字。
+const (
+	partySeller = "seller"
+	partyBuyer  = "buyer"
+)
+
+// contractParty 是合同的一方:它的角色与合同里存的原身份。
+type contractParty struct {
+	name     string
+	player   uint64
+	identity *tradepb.TradeRoleIdentity
+}
+
+// contractParties 是合同的卖方与买方(没有的一方不列),按 player_id 升序,证据与留痕的顺序因此稳定。
+func contractParties(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) []contractParty {
+	parties := make([]contractParty, 0, 2)
+	if r.GetSellerPlayerId() != 0 {
+		parties = append(parties, contractParty{name: partySeller, player: r.GetSellerPlayerId(), identity: w.GetSellerIdentity()})
+	}
+	if r.GetBuyerPlayerId() != 0 {
+		parties = append(parties, contractParty{name: partyBuyer, player: r.GetBuyerPlayerId(), identity: w.GetBuyerIdentity()})
+	}
+	if len(parties) == 2 && parties[1].player < parties[0].player {
+		parties[0], parties[1] = parties[1], parties[0]
+	}
+	return parties
+}
+
+// partyPlayers 是合同两方的角色(没有的一方是 0,readRoleFacts 会跳过)。
+func partyPlayers(r *tradepb.TradeCommerceRecord) []uint64 {
+	return []uint64{r.GetSellerPlayerId(), r.GetBuyerPlayerId()}
+}
+
+// roleFact 是锁内读到的一名角色的归属。
+type roleFact struct {
+	owned   *dspb.AccountRoleOwnership // 角色已删、副本缺行时为 nil
+	deleted bool                       // 账号已清空(删角墓碑)
+	unknown bool                       // 副本缺行,判不了
+}
+
+// readRoleFacts 在调用方的事务里按 player_id 升序读一组角色的护栏副本。Ownership 自带行锁,所以这就是加锁:
+// 与 advance、acceptBid 同一锁序,先角色,后 guard 与合同行。
+//   - heal=true:副本缺行回 *rolefence.StaleError,由 RoleLocker.RunTx 读权威状态写入副本之后整笔重跑(人工处理用);
+//   - heal=false:副本缺行记成 unknown(引擎的推迟路径只有 tickDeferBudget,不在那里读目录)。
+//
+// 存储错误原样返回。
+func readRoleFacts(ctx context.Context, tx *sql.Tx, roles RoleLocker, players []uint64, heal bool) (map[uint64]roleFact, error) {
+	sorted := make([]uint64, 0, len(players))
+	for _, player := range players {
+		if player != 0 {
+			sorted = append(sorted, player)
+		}
+	}
+	slices.Sort(sorted)
+	sorted = slices.Compact(sorted)
+	facts := make(map[uint64]roleFact, len(sorted))
+	for _, player := range sorted {
+		owned, err := roles.Ownership(ctx, tx, player)
+		var stale *rolefence.StaleError
+		switch {
+		case err == nil:
+			facts[player] = roleFact{owned: owned}
+		case errors.As(err, &stale):
+			if heal {
+				return nil, err
+			}
+			facts[player] = roleFact{unknown: true}
+		case errors.Is(err, ErrConflict):
+			// Ownership 只在账号已清空(删角墓碑)时回 ErrConflict;player 为 0 的已在上面跳过。
+			facts[player] = roleFact{deleted: true}
+		default:
+			return nil, err
+		}
+	}
+	return facts, nil
+}
+
+// partyRoleChange 是一方的角色已不可逆地不归原身份的证据,写进转人工记录与改绑留痕。不带账号原文,只说账号是否相同。
+type partyRoleChange struct {
+	party       string
+	player      uint64
+	deleted     bool   // 角色已删(账号清空)
+	revision    uint64 // 副本里现在的修订号(删角时为 0)
+	contractRev uint64 // 合同里原身份的修订号
+	sameAccount bool
+}
+
+func (c partyRoleChange) String() string {
+	if c.deleted {
+		return fmt.Sprintf("%s player=%d role deleted (contract owner_revision=%d)", c.party, c.player, c.contractRev)
+	}
+	return fmt.Sprintf("%s player=%d owner_revision=%d (contract %d) same_account=%t", c.party, c.player, c.revision, c.contractRev, c.sameAccount)
+}
+
+// describeRoleChanges 把几方的证据拼成一行,写进转人工记录的 detail。
+func describeRoleChanges(changes []partyRoleChange) string {
+	parts := make([]string, 0, len(changes))
+	for _, c := range changes {
+		parts = append(parts, c.String())
+	}
+	return strings.Join(parts, "; ")
+}
+
+// partyChange 判一方是否已不可逆地不归原身份(纯函数):角色已删,或 ownerChanged。
+// 副本缺行判不了、合同缺原身份(坏数据,由 checkContractIdentities 按 corrupt 隔离)时回 nil。
+func partyChange(p contractParty, fact roleFact) *partyRoleChange {
+	switch {
+	case p.identity == nil || fact.unknown:
+		return nil
+	case fact.deleted:
+		return &partyRoleChange{party: p.name, player: p.player, deleted: true, contractRev: p.identity.GetOwnerRevision()}
+	case fact.owned == nil || !ownerChanged(fact.owned, p.identity):
+		return nil
+	}
+	return &partyRoleChange{party: p.name, player: p.player, revision: fact.owned.GetOwnerRevision(), contractRev: p.identity.GetOwnerRevision(),
+		sameAccount: fact.owned.GetAccount() == p.identity.GetAccount()}
+}
+
+// partyChanges 是合同里已不可逆地不归原身份的几方,按 player_id 升序。facts 要覆盖合同两方(readRoleFacts 读 partyPlayers)。
+func partyChanges(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, facts map[uint64]roleFact) []partyRoleChange {
+	var out []partyRoleChange
+	for _, p := range contractParties(r, w) {
+		if change := partyChange(p, facts[p.player]); change != nil {
+			out = append(out, *change)
+		}
+	}
+	return out
 }
 
 // OwnsRecord 用持久原账号/修订筛选私有历史，角色的新主人不会继承旧主的合同身份。

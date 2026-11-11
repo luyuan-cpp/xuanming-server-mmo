@@ -48,7 +48,7 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 		if err != nil {
 			return s.respond(ctx, caller, ErrInternal, 0)
 		}
-		s.mutateEffects(caller, methodStartTeamMatch, result)
+		s.mutateEffects(ctx, caller, methodStartTeamMatch, result)
 		if result.Outcome == OutcomeCommitted {
 			continue
 		}
@@ -96,7 +96,7 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 			return s.respond(ctx, caller, pinned.Code, pinned.CodeParam)
 		}
 		if pinned.Commit != nil {
-			s.publish(caller, []*CommitResult{pinned.Commit})
+			s.publish(ctx, caller, []*CommitResult{pinned.Commit})
 		}
 		return s.resumeSQLTeamLaunch(ctx, caller, created)
 	}

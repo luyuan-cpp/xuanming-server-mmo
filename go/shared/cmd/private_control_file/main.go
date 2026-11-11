@@ -51,7 +51,7 @@ func run(args []string, input io.Reader, output io.Writer) error {
 }
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, "私有控制文件操作未确认")
+		fmt.Fprintln(os.Stderr, "Private control file operation not confirmed")
 		os.Exit(1)
 	}
 }

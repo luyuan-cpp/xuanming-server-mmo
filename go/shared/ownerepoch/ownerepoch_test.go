@@ -93,3 +93,26 @@ func TestParseHandoffDistinguishesMissingFromMalformed(t *testing.T) {
 		}
 	}
 }
+
+// 待确认回执与正式回执是同一条 location 字段的两种形态(zone-redis-regression-guard-20261022.md §4.3.4):
+// 前缀与 C++ 一字不差,待确认形态绝不等于任何标记原文(C++ B5 按原文逐字节比对,认不出它就不会采纳)。
+func TestPendingRollbackReceiptRoundTrip(t *testing.T) {
+	marker := Handoff{Epoch: 1762800000000, SavedAtMs: 1757000000000}.String()
+	pending := PendingRollbackReceipt(marker)
+	if pending != "pending:1762800000000:1757000000000" {
+		t.Fatalf("PendingRollbackReceipt = %q", pending)
+	}
+	if !IsPendingRollbackReceipt(pending) || IsPendingRollbackReceipt(marker) || IsPendingRollbackReceipt("") {
+		t.Fatalf("IsPendingRollbackReceipt misclassified pending=%q marker=%q", pending, marker)
+	}
+	if _, err := ParseHandoff(pending); !errors.Is(err, ErrMalformedHandoff) {
+		t.Fatalf("pending receipt must never parse as a handoff marker, got %v", err)
+	}
+	final, ok := FinalRollbackReceipt(pending)
+	if !ok || final != marker {
+		t.Fatalf("FinalRollbackReceipt(%q) = %q, %v", pending, final, ok)
+	}
+	if _, ok := FinalRollbackReceipt(marker); ok {
+		t.Fatalf("a final receipt must not be reported as pending")
+	}
+}

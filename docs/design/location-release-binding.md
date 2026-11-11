@@ -174,20 +174,24 @@ scene 侧 `PlayerLifecycleSystem::HandleSessionEndedRelease(playerId, expectedOw
 
 ### 3.5 gate
 
-**LeaveGame**:`DispatchClientRpcMessage` 在协议分派前对 `ClientPlayerLoginLeaveGame(17)` 调
-`gate_scene_entry::OnClientLeaveGame`:
+**LeaveGame**:LeaveGame(17)**发出时**调 `gate_scene_entry::OnClientLeaveGame`(2026-11-11 起;路由模式由路由 lane 的发出钩子
+`ApplyLoginTransition` 在轮到这条请求发出时调用,直连模式收包即发出,由 `DispatchClientRpcMessage` 在收包点调用,见
+[client-request-ordering.md](client-request-ordering.md) §4.4):
 
 1. `GateClientSessionHandler::NotifySceneExitGame`(从 `HandleConnectionDisconnection` 抽出的同一段代码,带 player_id 反向
    身份栅栏)向会话绑定的 scene 代发 ExitGame;
 2. `gate_scene_route::ResetSceneRoute` 清空节点指向、sceneId、待入场登录类型、欠账、lastSceneRoute、ownerEpoch、
    homeZoneId、forwardedOwnerEpoch;保留 playerId、loginGeneration、sessionVersion(下一次 BindSession 按既有规则处理)。
 
-在收包时做而不是等 login 回包:直连 / 路由两种模式共用一个点;LeaveGame 在 login 侧失败时实体退出、location 保留,
-下一次 EnterGame 走同落点重连或换手门(均不回档),是良性的。"之后同连接的 Bind 按 LeaveGame 之前的旧路由补发"这类
+在发出时做而不是等 login 回包(2026-11-11 订正:原文是「在收包时做」;直连模式收包即发出,两者相同):LeaveGame 发出之后在 login 侧失败时
+实体退出、location 保留,下一次 EnterGame 走同落点重连或换手门(均不回档),是良性的。路由模式改在发出时做,是因为收包时做
+在 lane 拒绝这条 LeaveGame(满 32、已重定向、排队超时)时回执说「没执行」,实体却已退出;排在它前面、还没发出的请求也会因原账号
+被清而被拒。LeaveGame 还排在 lane 里时,不经 lane 的请求回 1003、经 lane 的请求快照不带原账号,只拒绝新请求、不提前退出实体
+(client-request-ordering.md §4.1 LeaveGame 屏障)。"之后同连接的 Bind 按 LeaveGame 之前的旧路由补发"这类
 陈旧补发因此消失:Bind 先到时 `lastSceneRoute.sceneId == 0`,等新路由到达再一起转发。
 
 **重置之后迟到的旧路由**(2026-10-19 静态评审复核成立后补):LeaveGame 之前那条登录链发出的路由可能晚于重置才到 gate
-(已在 Kafka 里的跨节点换图;路由模式下钩子在收包时就跑,lane 里更早的 EnterGame 的路由随后才到)。它不会被转发(会话已没有
+(已在 Kafka 里的跨节点换图;LeaveGame 发出之前那条 EnterGame 的路由随后才到)。它不会被转发(会话已没有
 场景、也没有登录类型),但若照常写会话,会重新填上 `lastSceneRoute` / `ownerEpoch`,下一次 BindSession 就按它、带旧 epoch
 补发,让已释放(甚至已发过凭证)的旧节点按旧代重新载入玩家。所以 `ResetSceneRoute` 同时置位 `sceneRouteResetPending` 并记下
 此刻的登录代次 `loginGenerationAtReset`;`RoutePlayerEventHandler` 在写任何会话字段之前用 `IsRouteFromBeforeLeaveGame` 判:
@@ -198,15 +202,16 @@ scene 侧 `PlayerLifecycleSystem::HandleSessionEndedRelease(playerId, expectedOw
 且 login 实例时钟偏差使新代次不大于旧值时同理(fence §3.2 已登记的时钟窗口)。
 
 **旧链的 Bind 晚于 LeaveGame 到达**(第二轮审计 r2-gate#1,2026-10-19 复核成立后补):上面只按代次认旧链有缝。EnterGame 已被
-login 受理、它的 Bind(gE)还在 Kafka 里时客户端就发了 LeaveGame,gate 收包重置记下的是旧代次 g0;随后 Bind(gE) 与路由(gE)
+login 受理、它的 Bind(gE)还在 Kafka 里时客户端就发了 LeaveGame,gate 重置记下的是旧代次 g0;随后 Bind(gE) 与路由(gE)
 代次都大于 g0,被当成新登录收下:Bind 把登录类型挂回会话、保留重置标记,路由带着登录类型转发到旧节点 X 并清掉标记。之后
 session_ended 释放退掉 X 上的实体、location 被删;同一连接再 EnterGame(gF) 时 Bind 先到,按这条旧路由带 E 补发到 X,而
 scene_manager 铸了 E+1 落到 Y(幽灵实体,或 X 回 3023 并耗掉登录类型)。修法(只改 gate):
 
 1. **在客户端再次 EnterGame 之前,一律是旧链**。login 只在处理 EnterGame 时发 Bind(`entergamelogic.go` `SendBindSessionToGate`
-   是唯一调用点),所以重置之后、本连接下一次 EnterGame 收包之前到达的 Bind / 路由不可能属于新登录,不看代次、不看角色全部丢。
-   `DispatchClientRpcMessage` 在与 LeaveGame 同一个收包点对 `ClientPlayerLoginEnterGame(26)` 调 `gate_scene_entry::OnClientEnterGame`
-   置 `enterGameSentAfterLeave`;按收包顺序置位,路由模式下 lane 里排在 LeaveGame 之前的 EnterGame 不会把它置上。
+   是唯一调用点),所以重置之后、本连接下一次 EnterGame 发出之前到达的 Bind / 路由不可能属于新登录,不看代次、不看角色全部丢。
+   EnterGame(26)发出时调 `gate_scene_entry::OnClientEnterGame` 置 `enterGameSentAfterLeave`,与 LeaveGame 同一个发出点(路由模式是
+   lane 的发出钩子,直连模式收包即发出)。按发出顺序置位(2026-11-11 订正,原文「按收包顺序」):lane 里排在 LeaveGame 之前的
+   EnterGame 先发出、先置位,随后被 LeaveGame 的重置清掉,不会被误当成新的一次。
    `BindSessionEventHandler` 新增 `IsBindFromBeforeLeaveGame`,在 `ApplyLoginBinding` 之前丢旧链 Bind(以前 Bind 不过滤)。
 2. **之后按代次认,且代次跟着丢弃抬高**。被离开的那条链记成 (`playerIdAtReset`, `loginGenerationAtReset`):重置时取会话当时的
    角色与代次;会话那时还没绑角色(第一次登录就回选角)时取第一条被丢弃事件的角色。每丢一条旧链事件就把它的代次记进去
@@ -221,8 +226,8 @@ scene_manager 铸了 E+1 落到 Y(幽灵实体,或 X 回 3023 并耗掉登录类
 被丢弃的旧链 Bind / 路由不进会话,旧节点 X 收不到这次进场,不建实体;scene_manager 那边 location 指向 X,LeaveScene 照 §3.2
 请 X 按会话结束释放,X 不持有 → 写凭证(§3.3 第 2 条)→ 下一拍删 location,或下一次登录过换手门拿到凭证放行。
 
-残余:旧链的 Bind 与路由**都**晚于客户端下一次 EnterGame 收包、又早于新登录的任何 Bind / 路由到达时,代次比任何已知值都大,
-认不出,退回修复前的行为。要 Kafka 消费延迟超过"LeaveGame 回包 → 玩家再点进入 → gate 收包"的整个往返;scene 侧的入场
+残余:旧链的 Bind 与路由**都**晚于客户端下一次 EnterGame 在 gate 发出、又早于新登录的任何 Bind / 路由到达时,代次比任何已知值都大,
+认不出,退回修复前的行为。要 Kafka 消费延迟超过"LeaveGame 回包 → 玩家再点进入 → gate 发出 EnterGame"的整个往返;scene 侧的入场
 栅栏与 owner CAS 仍把损失限制在旧节点上的幽灵实体与毫秒级操作丢失。彻底收口需要 login 把"被离开的那条链的代次"交给 gate
 (LeaveGame 回包或单独的 gate 命令),属客户端契约 / 跨服务改动,未做。
 
@@ -687,7 +692,7 @@ Java 不改。本次 proto 改动只在服务端内部,不涉及客户端契约;
 
 | 编号 | 复核 | 修法 | 代码 |
 |---|---|---|---|
-| r2-gate#1 | 成立。LeaveGame 先于本次登录的 Bind 到达时,重置记下的是旧代次,旧链的 Bind / 路由代次更大、照常收下 | 客户端再次 EnterGame 之前到达的 Bind / 路由一律丢;之后按被离开的那条链(角色 + 随丢弃抬高的代次)与会话已见过的更新登录认旧链(§3.5) | `session_info_comp.h`(`enterGameSentAfterLeave` / `playerIdAtReset`)、`scene_route_helper.h`(`ResetSceneRoute`、`NoteEnterGameRequested`、`IsLoginGenerationSupersededSinceLeave`、`IsRouteFromBeforeLeaveGame`、`IsBindFromBeforeLeaveGame`、`NoteDroppedFromBeforeLeaveGame`)、`gate_event_handler.cpp`(RoutePlayer / BindSession 守护段)、`scene_entry_dispatch.{h,cpp}`(`OnClientEnterGame`)、`client_session_handler.cpp`(EnterGame 收包钩子) |
+| r2-gate#1 | 成立。LeaveGame 先于本次登录的 Bind 到达时,重置记下的是旧代次,旧链的 Bind / 路由代次更大、照常收下 | 客户端再次 EnterGame 之前到达的 Bind / 路由一律丢;之后按被离开的那条链(角色 + 随丢弃抬高的代次)与会话已见过的更新登录认旧链(§3.5) | `session_info_comp.h`(`enterGameSentAfterLeave` / `playerIdAtReset`)、`scene_route_helper.h`(`ResetSceneRoute`、`NoteEnterGameRequested`、`IsLoginGenerationSupersededSinceLeave`、`IsRouteFromBeforeLeaveGame`、`IsBindFromBeforeLeaveGame`、`NoteDroppedFromBeforeLeaveGame`)、`gate_event_handler.cpp`(RoutePlayer / BindSession 守护段)、`scene_entry_dispatch.{h,cpp}`(`OnClientEnterGame`)、`client_session_handler.cpp`(EnterGame 钩子;2026-11-11 起路由模式改在 lane 发出时调用) |
 | r2-sm#3 | 成立。负载键缺失时 `playerLocationOwnerGone` 对活节点返回 true,LeaveScene 按 `owner_dead` 立刻删 | 释放证据 2 只认 `playerLocationOwnerDead`(etcd 注册表正面消失 + 屏障);EnterScene 的陈旧位置判定本批不动(同日另批修,§14.5) | `leavescenelogic.go` `judgeHolderRelease` |
 | r2-sm#1 | 成立。计数与 forced ERROR 在删除 Lua 结果出来之前就记 | 移到 `outcome == deleted` 之后;没删成只打 INFO | `leavescenelogic.go` `LeaveScene` 尾部 |
 | r2-sm#2 | 成立。`first_ms` 与求差用各副本墙钟 | 读、比 scope、登记、求差合进一段 Lua,时钟取 Redis `TIME`(§3.6 时钟语义) | `leave_release.go` `luaNoteLeaveReleaseWait` / `noteLeaveReleaseWait`(删了 `parseLeaveReleaseWait`) |
@@ -710,7 +715,7 @@ miniredis 的服务端时钟(`mr.SetTime`),不再依赖真实墙钟;`routing_ide
 
 ### 14.3 残余
 
-- r2-gate#1:旧链的 Bind 与路由都晚于客户端下一次 EnterGame 收包、又早于新登录的任何事件到达时认不出(§3.5 末段)。
+- r2-gate#1:旧链的 Bind 与路由都晚于客户端下一次 EnterGame 在 gate 发出、又早于新登录的任何事件到达时认不出(§3.5 末段)。
 - r2-sm#2:Redis 服务端时钟往前跳变仍会提前 forced(单一时钟,§3.6)。
 - r2-sm#3:EnterScene 的陈旧位置判定(`playerLocationOwnerGone`,换手门放行)当时仍认"zone 负载集为空",负载键丢失的那一拍里同样会
   误判。它不在本批四条之内,也不是本文修复引入的(第二轮审计把它记为"本来就用同一判据")。**同日另批复核成立并已修**(未编译、未测试),见 §14.5。
@@ -802,9 +807,9 @@ Lookup是缓存修复的观察点，不与Redis合并成角色授权事务。Loo
 补正前次只读推导：不能仅凭“旧R曾写到无实体节点”断言永久HandoffPending；现有enter_holder_release路径会按原E请求持有节点，节点无实体时也可按原epoch条件补写真实释放标记。此接缝保留，不为软调度创建第二份永久SQL head。*（2026-10-23 批注：r2-lc#2 之后这条补写改为带围栏的凭证 —— 读本进程实例在原 E 下登记的 `handoff_fence` 原件、重核本节点仍完全不持有后以原件 CAS，见 §3.3 第 2 项的更正；本节点从未为原 E 登记成功时拿不出资格，见那里的残余 1。）*新增回归源码覆盖旧done拒绝、目录未知/冻结、2^53相邻及uint64最大R、raw+tag竞态、未知原件不补权、R2前缀后的迟到回滚、同R bump/keep及回滚重放不复活handoff。尚未运行编译/测试。
 
 
-## 17. 2026-10-24 无资格持有者的收口：权威方带围栏撤销（2026-10-30 落码，11-05 补「先围存档写权行」；未编译、未测试）
+## 17. 2026-10-24 无资格持有者的收口：权威方带围栏撤销（2026-10-30 落码，11-05 补「先围存档写权行」；11-06 Codex 复验通过）
 
-负责人 2026-10-24 要求给 r2-lc 修复后的 `no_qualification` 残余加收口机制，按最标准的方式设计并落码。§17.1–§17.7 是 10-24 的设计（原文保留，只有「原件 E ≠ E」一处 11-05 按评审改成了「< E」，见 §17.9 差异 7）；落码因周额度推迟到 10-29 重置之后，§17.8 是当时的接手说明，**2026-10-30 已按它落码**：I-1 核对结论、实现、与设计正文的差异、用例与验证命令见 §17.9。代码与用例在工作区，**未编译、未测试，待 Codex 验证**。
+负责人 2026-10-24 要求给 r2-lc 修复后的 `no_qualification` 残余加收口机制，按最标准的方式设计并落码。§17.1–§17.7 是 10-24 的设计（原文保留，只有「原件 E ≠ E」一处 11-05 按评审改成了「< E」，见 §17.9 差异 7）；落码因周额度推迟到 10-29 重置之后，§17.8 是当时的接手说明，**2026-10-30 已按它落码**：I-1 核对结论、实现、与设计正文的差异、用例与验证命令见 §17.9。代码与用例 11-05 随 `0f484db0d` 进主干。**11-06 Codex 复验通过**：`go/scene_manager` 的 build、vet 与 `./internal/logic/...` 全量 756 个顶层用例 PASS、0 FAIL、0 SKIP，含本节全部用例，跨语言钉住用例没有 SKIP（PROGRESS 2026-11-06「修正 scene_manager 五项旧夹具」）。
 
 ### 17.1 问题
 
@@ -882,7 +887,7 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 5. 交 Codex：`go/scene_manager` 的 gofmt、`go vet ./internal/logic`、定向与全量 `go test ./internal/logic`；没有 C++ 或 proto 变更。
 6. Java 版：不适用。Java 的交接是一笔 MySQL 交出事务（PARITY 有意差异 D1），没有 location 标记链与 owner_epoch 铸造。按约定不登记 PARITY。
 
-### 17.9 落码记录（2026-10-30 落码，11-05 按存档直写与玩家域 Redis 补一轮；未编译、未测试，待 Codex 验证）
+### 17.9 落码记录（2026-10-30 落码，11-05 按存档直写与玩家域 Redis 补一轮；11-06 Codex 复验通过）
 
 10-31 起两处底层变了，本节按 11-05 的代码写：玩家存档改为直写 TiDB，存盘与认领由写权行（`player_store` 的 kind 0 行）挡旧写，见 [player-save-direct-commit.md](player-save-direct-commit.md) §4；交接资格从 `save_barrier` 搬到独立 hash `player:{id}:handoff_fence`，玩家键都带 `{id}`，走玩家域句柄；场景人数改为成员集合，放在控制域。撤销实现由那次改造的会话随 `65c69f4a9` / `e33b99351` 适配过（键、成员、句柄），11-05 本会话补上撤销之前先围存档写权行这一步（「数据覆写审计 R2 交接」会话按存档直写之后的代码复核时提出）。同日一次独立的对抗评审（只读子代理）之后又收紧四处：预判只认 owner_epoch 键原值；原件代次 > E 不撤销；等待计时键的 TTL 盖住宽限；摘成员没做完改由成员集合对账兜底。见下面差异 2、3、7 与残余 4。评审对着的是同日先写的「撤销后补释放 + 发件箱」版本，结论按改后的代码逐条复核过；只针对发件箱的几条随方案作废。
 
@@ -929,6 +934,16 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
   - 万一 Redis 回退丢了 X 的资格写、而 X 其实已在 E 下认领过，这一步「库里已比它新就不动」，不会把真持有者在真源上围掉。
 
   **为什么写权行在前**：TiDB 是真源，先在真源上推进令牌是标准做法；这一步幂等、对任何以 ≥ E 代次的合法认领无害，失败时什么都没撤，所以不需要发件箱或补做通道。反过来先撤 Redis 再补写权行，两步之间没有原子性，写权行那一步失败就要另记欠账去补。
+
+  **为什么不像判死释放那样先向 etcd 复核持有实例**（11-10 补）：11-06 起判死释放改成三步（`dead_holder_release.go`）：读写权行；向 etcd 线性一致读，复核持有实例 H 仍不在册；按读到的那一份比较并写。两边的证据不同。
+  - 判死的依据是「持有进程不在了」。镜像可能滞后，进程也可能失租后以同一 UUID 重注册，玩家同节点重连、复用实体接着在 E 下玩，所以释放前要复核它确实不在册。
+  - 撤销的依据是 Redis 上的正证：owner_epoch 已是 E，E 下没有任何资格（§17.3）。写权行的持有者只可能停在 ≤ E−1 的代次上，铸出 E 那一刻就已被判出局，在不在册都改变不了这一点。X 自己没有 E 下的实体（I-1），之后按 E 载入、认领（持有者为空，放行）。
+  - ≤ E−1 的实体只剩三种：
+    1. 交接源的冻结实体：冻结硬上限 70s 后不存盘销毁，冻结快照早已提交。
+    2. 断线保留与退出存盘中的实体：`connection_lost_hold.h` 保留 25s，到期存盘后销毁。
+    3. 判死 / GO-3 误判留下、没退出的进程：正是认领要围住的，代价同上一段。
+
+    宽限下界 85s 长于前两种的寿命，宽限走完时这一步能挡到的只有第三种。前两种拖过宽限的唯一情形见残余 7。
 - **调用点**：
   - `leavescenelogic.go`：判 `pending` 时，在保留 location、请释放之前先检查（`revokeUnqualifiedHolderOnLeave`，返回 `(done, err)`）。location 没了（撤销成功，或已被删）即清理完成；摘成员没做完回错误（不是 FailedPrecondition），成员由对账摘（见上「收尾」）。围写权行失败按没撤销处理：照常请释放、回 FailedPrecondition。期望 E 用 owner_epoch 键原值（`holderReleaseJudgement.observedEpoch`，缺键为 0），不用释放判定退回 location 记值之后的 `epoch`（差异 3）。
   - `enterscenelogic.go` 第 3 步：换手门以 18 拒绝、`requestHolderReleaseForLogin` 判 eligible 并已请过释放之后检查。该函数改为返回是否请过。撤销与否都照回 18；围写权行给 1s（登录链预算有限），超时或失败就这次不撤销。
@@ -958,6 +973,14 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 4. location 已删而摘场景成员没做成：控制域出错，或撤销 EVAL 已执行而应答丢了（玩家域句柄不自动重发）。后一种这次按没撤销处理，LeaveScene 回 FailedPrecondition、登录照回 18，日志是 `check failed; treating as not revoked`。之后 player_locator 看到没有 location 就收工，下一次登录按无持有者落点；旧场景与节点的成员由成员集合对账摘掉（见实现「收尾」），这段时间旧场景多算一人，选线可能少放一个人进去，无害；指标少计一次。写权行此前已围好，不受影响。不在这里加「应答丢了就重发」：重发同一条 CAS 脚本本身安全（已执行就回 0），但收益只是早一两分钟摘成员、指标准一次，删除路径同样靠对账兜底，保持一个口径。
 5. 写权行围好、撤销 Lua 随后落空时，写权行停在「E、无持有者、released=1」，直到有人以 ≥ E 的代次认领。这段时间待放弃的资产操作可能把这名玩家当作已离线处理；它们以写权行为准提交，之后的认领与载入读到的就是处理之后的状态，与「下线后立刻重登」同一种先后。
 6. data_service 在旧存档路径上对 `ReleaseDeadPlayerStoreHolder` 回 Unavailable（两边开关不一致），这时围写权行一直失败、撤销一直不发生，location 照旧等释放证据；与判死释放同一个前提，靠发布时七份开关一致的核对（player-save-direct-commit.md §5.4）保证。
+7. 复用实体与围写权行的竞态（11-10 补）。要同时满足下面几条才会出事：
+   - 宽限走完时 X 上还留着这名玩家 E−1 下的实体：存档库长时间不可用，退出存盘一直在重试。
+   - 玩家恰好在本服务读资格原件与调 data_service 之间重登落回 X，并在 E 下登记成功。
+   - E 正好是 E−1+1。墙钟落后时才会铸出 +1，否则 ≥ +2 会废黜重载、按 E 认领。
+
+   这时 X 复用实体，不调认领（`player_lifecycle.cpp` 第 3 步「恰好 +1 照旧复用」）。写权行原本停在 (E−1, X)，它按 E 存盘本会被放行并抬代次；这一步先把写权行抬成 (E、无持有者)，它的存盘就回 NOT_HOLDER，按被废黜销毁，没落盘的进度丢失。撤销 Lua 随后因资格原件已变而落空，location 不动。
+
+   这几条要同时成立：存档库恰在这一刻恢复，墙钟落后，重登又落在一次 RPC 的窗口里。它与判死释放的同类残余同根（`dead_holder_release.go` 文件头残余第 2 条：复用实体不调认领，claim_seq 不变，比较并写也挡不住）。读写权行再比较并写同样闭合不了。完全闭合要让复用实体也在写权行上留痕，属 handover-single-writer-v#1 的「失租冻结」，不在这一处做。
 
 **用例**（`go/scene_manager/internal/logic/unqualified_holder_revoke_test.go`；miniredis，钉死 Redis 服务端时钟，按 Redis 实际执行顺序重放）：
 
@@ -980,4 +1003,7 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 | EnterScene 一侧围写权行失败：不撤销、照回 18、状态不变 | `TestEnterScene_LoginRevokeWaitsWhenPlayerStoreFenceFails` |
 | scene 自发的 18 不撤销 | `TestEnterScene_SceneInitiatedRejectionNeverRevokes` |
 
-**验证（Codex）**：命令见 `docs/PROGRESS.md` 2026-11-05「§17 无资格撤销订正」条目（它取代同日「location 无资格持有者带围栏撤销（§17）落码收尾」条目里的发件箱描述与验证命令）。运维观测与演练见 `docs/ops/cross-zone-failure-test-runbook.md` v3.2 / v3.3（§2.3、§2.4、场景 UQ）。
+**验证（Codex）**：
+- 命令见 `docs/PROGRESS.md` 2026-11-05「§17 无资格撤销订正」条目。它取代同日「location 无资格持有者带围栏撤销（§17）落码收尾」条目里的发件箱描述与验证命令。
+- 11-06 的 scene_manager 全量复验已覆盖这些用例，结果见本节开头。
+- 11-10 之后只改了注释与文档（`svc/role_directory.go`、`svc/servicecontext.go` 两处注释，外加后者一行 gofmt 对齐），改动文件 `gofmt -l` 无输出。运维观测与演练见 `docs/ops/cross-zone-failure-test-runbook.md` v3.2 / v3.3（§2.3、§2.4、场景 UQ）。

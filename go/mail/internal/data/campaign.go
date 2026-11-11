@@ -59,13 +59,9 @@ func (r *Repo) createCampaign(ctx context.Context, caller string, kind mailpb.Ma
 		if replayed, e := replay(); e != nil || replayed {
 			return e
 		}
-		// 软上限:并发建活动可能略超,理由同 Send。
-		var active uint64
-		if e := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_message WHERE owner_player_id=0 AND kind IN (0,2,3) AND expire_ms>?", now).Scan(&active); e != nil {
+		// 软上限:并发建活动可能略超,理由同 Send。系统活动按全服计数,帮会活动按帮计数(checkSharedMailCapacity)。
+		if e := checkSharedMailCapacity(ctx, tx, in.GuildId, now, r.limits.Defaults()); e != nil {
 			return e
-		}
-		if active >= uint64(r.limits.Defaults().MaxActiveSystemMails) {
-			return ErrBoxFull
 		}
 		// kind=0仅保留全频道共享的发件幂等键；可见查询明确排除它。
 		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_message ("+messageColumns+") VALUES (?,0,?,0,?,?,?,?,?,?,?,?,?,?)", id, in.GuildId, in.SenderKind, in.RequestId, digest, in.Title, in.Body, payload, now, expire, in.CampaignId, in.ManifestGeneration); e != nil {

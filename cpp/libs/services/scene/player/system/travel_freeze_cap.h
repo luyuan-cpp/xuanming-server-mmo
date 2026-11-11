@@ -134,6 +134,7 @@ namespace travel_freeze_cap
 		kNoGateSession,   // SET 已 OK,却发现没有 gate 会话可带(RequestTravelEnterScene)
 		kNoSceneManager,  // SET 已 OK,却发现没有可达的 scene_manager(RequestTravelEnterScene)
 		kReceiptAnomaly,  // 取证读到本次标记原文的回滚回执,其余交叉校验却不成立(ResolveTravelOutcome,GO-2 判定表 B6)
+		kRollbackUnconfirmed, // 取证读到本次标记原文的待确认回执:那次回滚还没确认落盘,不得采纳(判定表 B5′,两段回执)
 
 		kCount
 	};
@@ -148,6 +149,7 @@ namespace travel_freeze_cap
 		"travel_no_gate_session",
 		"travel_no_scene_manager",
 		"travel_receipt_anomaly",
+		"travel_rollback_unconfirmed",
 	};
 	static_assert(std::size(kMarkSentSiteNames) == kMarkSentSiteCount,
 				  "kMarkSentSiteNames 必须与 MarkSentSite 一一对应");

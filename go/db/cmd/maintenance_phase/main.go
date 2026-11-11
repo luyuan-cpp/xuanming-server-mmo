@@ -81,7 +81,7 @@ func writeNew(path string, body []byte) error {
 func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) int {
 	fail := func(err error) int { fmt.Fprintln(errOut, err); return 2 }
 	if !filepath.IsAbs(o.authorityOutput) {
-		return fail(errors.New("authority结果必须为独立绝对新路径"))
+		return fail(errors.New("authority output must be a separate absolute new path"))
 	}
 	if o.authorityPhase == "collect-kafka-catalog" {
 		budget, cancel := context.WithTimeout(ctx, 60*time.Second)
@@ -90,7 +90,7 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 		for i := range brokers {
 			brokers[i] = strings.TrimSpace(brokers[i])
 			if brokers[i] == "" {
-				return fail(errors.New("Kafka broker目录缺失"))
+				return fail(errors.New("Kafka broker list missing"))
 			}
 		}
 		prober, err := kafkautil.NewGroupLagProber(brokers)
@@ -123,7 +123,7 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 		for i := range brokers {
 			brokers[i] = strings.TrimSpace(brokers[i])
 			if brokers[i] == "" {
-				return fail(errors.New("Kafka broker目录缺失"))
+				return fail(errors.New("Kafka broker list missing"))
 			}
 		}
 		prober, err := kafkautil.NewGroupLagProber(brokers)
@@ -210,7 +210,7 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 		if err = writeNew(o.authorityOutput, raw); err != nil {
 			return fail(err)
 		}
-		fmt.Fprintln(out, "P0完整typed原件已绑定实际C0/L0；未执行SQL阶段变更")
+		fmt.Fprintln(out, "P0 complete typed original artifact bound to actual C0/L0; no SQL phase change executed")
 		return 0
 	}
 	if o.authorityPhase == "collect-kafka" {
@@ -218,7 +218,7 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 		for i := range brokers {
 			brokers[i] = strings.TrimSpace(brokers[i])
 			if brokers[i] == "" {
-				return fail(errors.New("Kafka broker目录缺失"))
+				return fail(errors.New("Kafka broker list missing"))
 			}
 		}
 		start := uint64(time.Now().UnixMilli())
@@ -234,7 +234,7 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 			err = maintenancephase.ReadAuthorityProto(maintenancephase.ReleaseFile{Path: o.authorityRequest, SHA256: o.authorityRequestSHA}, input)
 			manifestSum := sha256.Sum256(runtime.Request.PlanProto)
 			if err == nil && (input.Evidence == nil || input.Evidence.GetNonSqlClosure() == nil || !bytes.Equal(input.RunId, runtime.Plan.RunId) || !bytes.Equal(input.PlanProto, runtime.Request.PlanProto) || !bytes.Equal(input.Evidence.ManifestDigest, manifestSum[:])) {
-				err = errors.New("manual P3原件输入没有绑定同run原manifest")
+				err = errors.New("manual P3 original input is not bound to the same run's original manifest")
 			}
 			if err == nil {
 				manual, leaderRaw, manualBefore, manualAfter, err = prober.DrainManualConsumers(budget, runtime.Plan.ManualAssignments, input.Evidence.GetNonSqlClosure().SourceEvidence)
@@ -288,7 +288,7 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 		if err = writeNew(o.authorityOutput, raw); err != nil {
 			return fail(err)
 		}
-		fmt.Fprintln(out, "Kafka正式原件已采集；仍须同owner完整nonSQL核验")
+		fmt.Fprintln(out, "Kafka formal original artifact collected; complete non-SQL verification by the same owner still required")
 		return 0
 	}
 	request := &databasepb.SqlWriterMaintenanceReceipt{}
@@ -304,11 +304,11 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 	}
 	if o.authorityPhase == "seal-request" {
 		if request.Evidence == nil || !bytes.Equal(request.RunId, runtime.Plan.RunId) || !bytes.Equal(request.PlanProto, runtime.Request.PlanProto) {
-			return fail(errors.New("待封请求未绑定原完整run/manifest"))
+			return fail(errors.New("request to seal is not bound to the original complete run/manifest"))
 		}
 		sum := sha256.Sum256(request.PlanProto)
 		if !bytes.Equal(request.Evidence.ManifestDigest, sum[:]) || !bytes.Equal(request.Evidence.OperationId, request.RunId) {
-			return fail(errors.New("待封请求evidence身份不符"))
+			return fail(errors.New("request to seal has mismatched evidence identity"))
 		}
 		if publication := request.Evidence.GetPublication(); publication != nil && request.RunPhase != databasepb.SqlWriterDrainRun_PLAN_FIXED {
 			seeds := runtime.Plan.RootIssuers
@@ -336,7 +336,7 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 		if err = writeNew(o.authorityOutput, raw); err != nil {
 			return fail(err)
 		}
-		fmt.Fprintln(out, "正式请求已确定性封装；未执行SQL变更")
+		fmt.Fprintln(out, "Formal request deterministically sealed; no SQL change executed")
 		return 0
 	}
 	permission, err := authoritysql.LoadOperatorPermission(os.Getenv)
@@ -401,20 +401,20 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 				return fail(err)
 			}
 		}
-		fmt.Fprintln(out, "原request/run/ticket已强读；未执行变更")
+		fmt.Fprintln(out, "Original request/run/ticket strongly read; no change executed")
 		return 0
 	}
 	// attempt文件在SQL前持久CreateNew；重复调用只允许read，不能以无收据推断旧事务未执行。
 	attempt := filepath.Join(runtime.Directory, "attempt-"+hex.EncodeToString(request.RequestId)+".started")
 	if len(request.RequestId) != 16 {
-		return fail(errors.New("authority request_id非法"))
+		return fail(errors.New("authority request_id invalid"))
 	}
 	if err = writeNew(attempt, []byte(hex.EncodeToString(request.RequestDigest)+"\n")); err != nil {
-		return fail(errors.New("原动作已尝试或标记未知；仅可authority-phase read"))
+		return fail(errors.New("original action already attempted or marked unknown; only authority-phase read is allowed"))
 	}
 	receipt, err := maintenancephase.AuthorityPhase(budget, catalog, runtime, o.authorityPhase, request, ticket)
 	if err != nil {
-		fmt.Fprintln(errOut, "authority动作未获完整确认；保持所有维护闸，按原ID只读核验")
+		fmt.Fprintln(errOut, "authority action not fully confirmed; keep all maintenance gates and verify read-only with the original ID")
 		return 1
 	}
 	raw, err := (protojson.MarshalOptions{EmitUnpopulated: true}).Marshal(receipt)
@@ -424,6 +424,6 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 	if err = writeNew(o.authorityOutput, raw); err != nil {
 		return fail(err)
 	}
-	fmt.Fprintln(out, "原authority阶段收据已保存；不自动放流")
+	fmt.Fprintln(out, "Original authority phase receipt saved; traffic is not released automatically")
 	return 0
 }

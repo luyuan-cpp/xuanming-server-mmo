@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -92,17 +94,114 @@ func TestFoldMergedZoneRanks_MovesOldEntriesAndDeletesTheOldKey(t *testing.T) {
 	assert.EqualValues(t, 0, repo.rdb.Exists(ctx, guildRankLockKey).Val(), "维护锁要释放")
 }
 
-// 合服之后的新分数已经写进最终区的榜:旧榜里同一个公会的旧分数不能盖掉它。
-func TestFoldMergedZoneRanks_NewScoreIsNotOverwrittenByOldScore(t *testing.T) {
+// 折叠按版本合并:合服之后写进最终区的分数版本更新,旧榜里同一个公会的旧分数不能盖掉它。
+func TestFoldMergedZoneRanks_NewerVersionInTheFinalZoneIsKept(t *testing.T) {
+	repo, mr := newRankRepo(t)
+	bindMergedZones(t, repo, map[uint32]uint32{5: 6})
+	seedVersioned(t, repo, 5, 501, 10, 1)
+	seedVersioned(t, repo, 6, 501, 999, 2)
+
+	folded, err := repo.FoldMergedZoneRanks(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, folded, "旧项比目标区旧,照样从源区摘掉")
+	score, version, _ := rankedScore(t, repo, 6, 501)
+	assert.Equal(t, float64(999), score)
+	assert.Equal(t, "2", version)
+	assert.False(t, mr.Exists(zoneRankKey(5)))
+	assert.False(t, mr.Exists(zoneRankVersionKey(5)))
+}
+
+// 反过来,源区的版本更新(映射缓存还没刷新的副本合服之后又往源区写过)就盖掉目标区的旧分。
+// 改之前用 ZADD NX,目标区已有这个公会就不动,这里会留下更旧的 20。
+func TestFoldMergedZoneRanks_NewerVersionInTheSourceZoneWins(t *testing.T) {
 	repo, _ := newRankRepo(t)
 	bindMergedZones(t, repo, map[uint32]uint32{5: 6})
-	zadd(t, repo, 5, 501, 10)
-	zadd(t, repo, 6, 501, 999)
+	seedVersioned(t, repo, 6, 501, 20, 2)
+	seedVersioned(t, repo, 5, 501, 50, 3)
 
 	_, err := repo.FoldMergedZoneRanks(context.Background())
 
 	require.NoError(t, err)
-	assert.Equal(t, float64(999), zscore(t, repo, 6, 501))
+	score, version, _ := rankedScore(t, repo, 6, 501)
+	assert.Equal(t, float64(50), score)
+	assert.Equal(t, "3", version)
+}
+
+// 已解散的帮会:源区旧键上还留着它的项(摘榜失败过),折叠时被墓碑挡住,不并进目标区,源区的项照样摘掉。
+func TestFoldMergedZoneRanks_DoesNotResurrectADisbandedGuild(t *testing.T) {
+	repo, mr := newRankRepo(t)
+	ctx := context.Background()
+	bindMergedZones(t, repo, map[uint32]uint32{5: 6})
+	seedVersioned(t, repo, 5, 501, 10, 1)
+	buryInZone(t, repo, 6, 501) // 解散时墓碑立在合服组,目标区有
+
+	_, err := repo.FoldMergedZoneRanks(ctx)
+
+	require.NoError(t, err)
+	_, _, ok := rankedScore(t, repo, 6, 501)
+	assert.False(t, ok)
+	assert.False(t, mr.Exists(zoneRankKey(5)))
+}
+
+// afterHeadReadHook 在被测客户端第一次成功读完源区榜头之后跑一次 inject。
+type afterHeadReadHook struct {
+	srcKey string
+	once   sync.Once
+	fired  bool
+	inject func()
+}
+
+func (h *afterHeadReadHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+
+func (h *afterHeadReadHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h *afterHeadReadHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		err := next(ctx, cmd)
+		// 折叠里单条发出、带源区键的脚本只有读榜头这一个;合并与摘除都在 pipeline 里。
+		if err == nil && (cmd.Name() == "eval" || cmd.Name() == "evalsha") && slices.Contains(cmd.Args(), any(h.srcKey)) {
+			h.once.Do(func() {
+				h.fired = true
+				h.inject()
+			})
+		}
+		return err
+	}
+}
+
+// 折叠读完一页之后,映射缓存还没刷新的副本又往源区写了更新的版本:按版本摘不掉它,它留在源区,随后再并,不丢。
+// 改之前整页并完就整键 DEL 源区,这次写入会跟着旧键一起被删掉,目标区留下的是旧分 10。
+func TestFoldMergedZoneRanks_KeepsAnEntryRewrittenDuringTheFold(t *testing.T) {
+	mr := miniredis.RunT(t)
+	reader := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	writer := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() {
+		reader.Close()
+		writer.Close()
+	})
+	repo := NewGuildRepo(reader, nil, time.Minute)
+	other := NewGuildRepo(writer, nil, time.Minute)
+	bindMergedZones(t, repo, map[uint32]uint32{5: 6})
+	seedVersioned(t, other, 5, 501, 10, 1)
+	seedVersioned(t, other, 5, 502, 20, 1)
+	hook := &afterHeadReadHook{srcKey: zoneRankKey(5), inject: func() { seedVersioned(t, other, 5, 501, 77, 2) }}
+	reader.AddHook(hook)
+
+	folded, err := repo.FoldMergedZoneRanks(context.Background())
+
+	require.NoError(t, err)
+	require.True(t, hook.fired)
+	assert.Equal(t, 2, folded)
+	score, version, ok := rankedScore(t, other, 6, 501)
+	require.True(t, ok)
+	assert.Equal(t, float64(77), score, "读完之后写进源区的新版本最终并进目标区")
+	assert.Equal(t, "2", version)
+	score, _, _ = rankedScore(t, other, 6, 502)
+	assert.Equal(t, float64(20), score)
+	assert.False(t, mr.Exists(zoneRankKey(5)))
 }
 
 // 连续合服:4→5→6 的两张旧榜都直接并进最终区 6,不经过中间的 5。
@@ -148,7 +247,7 @@ func TestFoldMergedZoneRanks_LargeRank(t *testing.T) {
 	repo, _ := newRankRepo(t)
 	ctx := context.Background()
 	bindMergedZones(t, repo, map[uint32]uint32{5: 6})
-	const members = 2*rankFoldPageSize + 7
+	const members = 2*rankBatchSize + 7
 	z := make([]redis.Z, 0, members)
 	for i := range members {
 		z = append(z, redis.Z{Score: float64(i), Member: 100000 + i})

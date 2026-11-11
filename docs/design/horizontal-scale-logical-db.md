@@ -57,21 +57,28 @@
 - 维护排空(`maintenance_drain.ps1`、`go/db/internal/maintenancephase`)逐逻辑库做:一个 run 只管一个库。进程持多份写资格时,run 绑 Plan 指的那一份;进程退出后,其余库各按非 run 的 RETIRE 退休(`Catalog.Retire` 在那些库没有 run 时允许)。
 - 闸门被冻结时返回可区分的错误 `authoritysql.ErrWriterFrozen`(包住 `ErrWriterDenied`),RPC 层映射成可重试的 `Unavailable`。资格不符仍是 `ErrWriterDenied`。
 
-**启动形状**:`MMORPG_SQL_WRITER_GRANT_FILE` 指向的文件是一个 boot 的写资格集合(`sql_writer_boot_grant_set`,每个逻辑库一份),环境变量和挂载路径不变。名册的一条 entry 是一个 boot:`requests` 里每个逻辑库一份 Request,writer 身份和账号相同,任一份被别的 boot 消费过,整条就算用掉。`writer_authority` 一次注册写完全部份。注册、维护账号的连接串按 Request / Plan 的逻辑库改库名(`DSNForSchema`),同集群的库共用一条;库放到别的集群时地址按映射给(环境变量 `MMORPG_DB_PLACEMENT`,§8.1),连接串里的账号在目标集群提前建好。物理身份摘要 `MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256` 按部署一份,不按集群,搬库不换。
+**启动形状**:`MMORPG_SQL_WRITER_GRANT_FILE` 指向的文件是一个 boot 的写资格集合(`sql_writer_boot_grant_set`,每个逻辑库一份),环境变量和挂载路径不变。名册(`SQL_WRITER_BOOT_ROSTER_V2`,2026-11-10 起)的一条 entry 是一个槽位,下标就是 StatefulSet 序号:`requests` 里每个逻辑库一份 REGISTER 模板,账号固定、身份留空。每次启动是这个槽位的一代,`writer_authority` 现场生成 writer 身份,在每个库各注册一份,新一代在注册事务里原子退休上一代([写者名册换代](writer-roster-exhaustion-20261106.md) §5)。注册、维护账号的连接串按 Request / Plan 的逻辑库改库名(`DSNForSchema`),同集群的库共用一条;库放到别的集群时地址按映射给(环境变量 `MMORPG_DB_PLACEMENT`,§8.1),连接串里的账号在目标集群提前建好。物理身份摘要 `MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256` 按部署一份,不按集群,搬库不换。
 
 **冻结映射**:
 
 - 连接层在闸门上看到 `writable=0` 或 epoch 变了就回 `ErrWriterFrozen`,并置上请求 ctx 的观察位(`ObserveWriterFrozen`)。主体、世代不符或写者已退休仍回 `ErrWriterDenied`。
 - `serverbase.UnaryInterceptor`(match 用 `WriterFrozenInterceptor`)看观察位:handler 报告失败时(返回错误或带内错误码非 0)回 `Unavailable`。handler 常把存储错误翻成带内错误码,哨兵到不了拦截器,所以不靠错误链。handler 吞掉冻结错误、照常回成功时不改。
 - go/db 存盘冻结时回 `Unavailable`,不记未知结局。scene 的 `PlayerStoreClient` 对 `Unavailable` 本来就按原序号退避重试,不用改。
-- **读写都暂停**。写者池上的读也开自动事务、也过闸门,窗口里回 `ErrWriterFrozen`。不改这个语义:窗口是秒级,回可重试错误最简单,放开读就要回答读到的是不是冻结点之后的数据。不经闸门的只读连接池(`Reader` 权限)照常读,读到冻结时的数据。
+- **读写都暂停**。窗口里写者池上的读也回 `ErrWriterFrozen`:窗口是秒级,回可重试错误最简单;放开读就要回答读到的是不是冻结点之后的数据(搬库切换之后还连着源库的读,读到的是已被目标库超过的旧数据)。不经闸门的只读连接池(`Reader` 权限)照常读,读到冻结时的数据。
+- **事务外的纯读只过读闸门**(2026-11-06,缺口清单第 21 条;`writerGate.admitRead`):写者池上不在事务里的读语句(`SELECT` / `SHOW` / `DESCRIBE`)先在同一条物理连接上读一次 `route_meta`:世代相符、`writable=1` 就直接读,不开事务、不锁不改 `writer_slot`、不读注册表;冻结回 `ErrWriterFrozen`(启动阶段照下面「启动路径扛冻结」放行),世代不符或写资格已关闭回 `ErrWriterDenied`。
+  - 这里的「启动阶段」不按时间算,指本 boot 还没有写事务过过闸门(`admitted` 只由写事务置位)。以读为主的池可能一直处在这个阶段,事务外的纯读遇冻结一直放行,比如 data_service 的存档库池。
+  - 搬库翻转之后、映射监听滞后时,这类读可能读到旧集群冻结时刻的已提交数据。依赖它们下结论的地方都另有保护:自动放弃、人工终结要求安静间隔并带见证 CAS,回收与强制作废用的证据只增不减,读旧只会更保守。判死释放的写步骤仍过闸门。
+  - 新增依赖事务外读下结论的地方,要按这个口径自查(2026-11-10,数据覆写审计第 2 轮 Go 入口一路的核对)。
+  - 为什么可以:读不需要写资格(主体、注册、slot 是写的前提),数据都在主库上,谁读都是同一份已提交数据。以前每条读都开一个自动事务:读 `route_meta` 两次、锁或改写一个 `writer_slot`(LOCK_TOUCH 档下是一次真正的写)、读注册表、提交,所有实例的读都在改写这张小表(第 20 条的热点之一)。
+  - 为什么不丢一致性:先核后读是两条自动提交语句。核的那一刻库可写、之后才冻结时,读到的不晚于冻结那一刻的数据(冻结之后源库不再有写),线性化到核的那一刻;核到冻结就挡回去,所以读不到切换之后的旧库。
+  - 显式事务里的读、走 `Query` 的写照旧走事务闸门,提交点语义不变。读到可写时清掉 `writer_frozen_seconds` 的计时,但不算「过过闸门」,启动阶段的放行规则不受只读流量影响。
 - **结局分类**:`authoritysql.IsWriterFrozen(err)` 判「冻结,这次确定没写」,要求错误树的每个叶子都是冻结,混进别的失败(尤其 `ErrOutcomeUnknown`)就不算。`ClassifyOutcome(err)` 分成 `OutcomeOK`、`OutcomeFrozen`、`OutcomeUnknown`、`OutcomeFailed`,结局未知优先。后台循环对冻结不打排空 HOLD:trade 恢复循环和清理、`shared/assetop` 重投、player_inbox 清理和提醒、rank 发奖、mail、friend、guild 的清理和历练巡检、match 的 relay 工作。match 结果消费者撞冻结不占重试次数,否则窗口稍长消费者就停了。RPC 路径的判定在 serverbase。
 - **trade 恢复循环的判定更宽**:`commerce.OutcomeKnown(err)` 在冻结之外还放过事务回滚之后的拒绝(`errRolePreparing`、`errRoleConflict`、`Rejection`、`rolefence.ErrUnavailable`、`ErrRoleNotFound`)和只读步骤的失败(拉商城待办、读合同、读目录)。这些在产生错误的地方标记(`rolledBack`、`noWrite`),判定走错误树,每个分支都要确定才算。没标的都算未知:回报商城失败、提交失败。只读步骤的语句被连接层报成 `ErrOutcomeUnknown` 也标成确定:连接层不分读写,这条语句本来没写。合同推进的单行失败照旧由 `deferCommerce` 推迟,不回给调用方,所以单行提交结局未知在这里也不 Hold:连接层把事务里被取消的语句也报成结局未知,按它 Hold 的话,行锁等待超过子预算就会打 Hold。
-- **观测**:`writer_frozen_seconds{logical_db}`,这个进程观察到闸门连续冻结了多久,解冻后第一笔过闸归零,15 秒没再撞到也归零(没有写流量的进程不受影响,也不上报)。第一次撞到才注册序列。告警 `WriterGateFrozenTooLong`:超过 2 分钟,多半是工具被杀或翻转结局未知,处置见手册 §6。
+- **观测**:`writer_frozen_seconds{logical_db}`,这个进程观察到闸门连续冻结了多久,解冻后第一笔过闸、或第一条事务外的读读到可写就归零,15 秒没再撞到也归零(没有流量的进程不受影响,也不上报)。第一次撞到才注册序列。告警 `WriterGateFrozenTooLong`:超过 2 分钟,多半是工具被杀或翻转结局未知,处置见手册 §6。
 
-**写资格什么时候消费**:写资格是一次性的,因为进程写过之后崩了,重启时内存里的 boot 状态没了,排空证明也接不上。进程还没写过就退出没有东西丢,所以 `LoadWriterConfigs` 只核消费标记不存在,**第一条写语句之前才写标记**(`grantMarker`,纯读不写)。启动时依赖没就绪(合服映射、Redis、Kafka)、读到一半退出,同一个 Pod 重启接着用这份,不烧名册。Go 服务都是这样;Java 的 `WriterAuthority` 还是读的时候就消费,比这严。
+**写资格什么时候消费**:一次性的是**一代**,不是一个账号。进程写过之后崩了,重启时内存里的 boot 状态没了,排空证明也接不上,所以这一代的写资格不能再用。进程还没写过就退出没有东西丢,所以 `LoadWriterConfigs` 只核消费标记不存在,**第一条写语句之前才写标记**(`grantMarker`,纯读不写)。启动时依赖没就绪(合服映射、Redis、Kafka)、读到一半退出,同一个 Pod 重启接着用这一代。Go 服务都是这样;Java 的 `WriterAuthority` 还是读的时候就消费,比这严。
 
-写过之后崩溃的进程,容器重启读到标记以退出码 78 拒启,只有删 Pod 换名册下一条。这件事由 `sql-writer-pod-reaper` 自动做(`deploy/k8s/README.md`)。
+写过之后崩溃的进程,容器重启读到标记以退出码 78 拒启,只有删 Pod 重建。这件事由 `sql-writer-pod-reaper` 自动做(`deploy/k8s/README.md`):StatefulSet 按同一序号建新 Pod,新 Pod 在同一个槽位上换代,名册不消耗。
 
 **启动路径扛冻结**:启动撞上窗口也不能退出,不然 Pod 反复重启,窗口过去才恢复:
 
@@ -87,17 +94,17 @@
 - **闸门靠 slot,不靠请求**:写者事务持自己的 slot 行锁,核 slot epoch 等于 meta epoch、`writable=1`。新写者的 slot 在持 meta 行锁的事务里按读到的 epoch 建,和现有 ACTIVE slot 同 epoch,所以它和别的写者走同一道判定。请求里的 epoch 从来不参与这个判定。
 - **和冻结串行**:`changeGate` 锁全部 slot → meta,再读 ACTIVE 全集,和预读不一致就拒绝,工具在预算内重试。REGISTER 持 meta 行锁插入。所以 REGISTER 要么排在冻结前,它的 slot 被冻结一起推进,写者全集不漏;要么排在冻结后,读到 `writable=0` 回 `ErrWriterFrozen`,什么都没写。不存在 slot 留在旧 epoch 又被放行的状态。
 - **和排空串行**:run 开着时 `freeze_run_id` 非空,只有同 run、`SQL_RELEASED` 的请求能注册,这一支继续核 release 收据的 `AfterEpoch`。排空的证明不靠请求里的 epoch。
-- **放宽的是什么**:排空彻底结束之后,排空之前渲染的、还没用过的名册条目还能注册。原来 epoch 挡着,现在靠部署:旧 Deployment 的名册随它下线。要强制作废一批名册就换 generation。
+- **放宽的是什么**:排空彻底结束之后,排空之前渲染的名册模板还能用来注册新一代(槽位模板本来就反复用)。原来 epoch 挡着,现在靠部署:旧工作负载的名册随它下线。要强制作废一批名册就换 generation。
 
-**多库 entry 的结局**(一个 boot 每个逻辑库一份 Request,不在一个事务里):
+**多库的一代怎么收尾**(一代在每个逻辑库各注册一份,不在一个事务里;2026-11-10 起按槽位换代,见[写者名册换代](writer-roster-exhaustion-20261106.md) §5.6):
 
 | 情形 | 结局 |
 |---|---|
-| 注册第一份之前的预检 | 逐库核 `RegistrationReady`。有一个库不行就一份都不写,不留尝试记录,这条 entry 不算用掉 |
-| 提交时撞上冻结 | 事务已回滚,确定没写。撤掉这一份的尝试记录,否则重试按「结局未定」处理。回可重试 |
-| 部分库已注册,进程还活着 | init 重启,deployment-id 不变,不算别的 boot 消费。已注册的按原请求查收据,没注册的接着注册 |
-| 部分库已注册,Pod 没了 | 新 Pod 看到这条 entry 被别的 boot 消费,换下一条。已注册的几份是没有进程的写者,和注册完就崩的 Pod 一样,按 §2 的非 run RETIRE 退休 |
-| 结局未知 | 留尝试记录,不重发,只查原请求,和原来一样 |
+| 注册第一份之前的预检 | 逐库核 `RegistrationReady`。有一个库不行就一份都不写,也不写启动记录,init 退出原地重试 |
+| 提交时撞上冻结 | 事务已回滚,确定没写。启动记录留着,重试时重发同一请求,回可重试 |
+| 部分库已注册,进程还活着 | init 重启,读启动记录,还是同一代。已注册的查到收据,没注册的接着注册 |
+| 部分库已注册,Pod 没了 | 同序号的新 Pod 是下一代,在每个库的注册事务里把上一代退休,不用人工 |
+| 结局未知 | 重发同一请求:注册事务在锁内先查收据,`boot_seq` CAS 挡住陈旧请求,同一请求最多落地一次 |
 
 **`route_meta` 的两层意思**:这张表的 `writable` 同时是闸门开关和路由写者开关,是同一列,不是两个开关。
 
@@ -604,6 +611,7 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 - 鉴权:`ServiceCallAuth`,caller 是 `db`,密钥 `MMORPG_ROLE_FENCE_SECRET_DB`,和角色护栏的调用方同一命名。data_service 没配密钥时这个 RPC 回 `Unavailable`,其余照常;配了就不能和别的调用方共用。go/db 缺配置或缺密钥拒绝启动。go/db 不在启动时读一次:data_service 可能还没起来。
 - `storage_id` 建角后不变,所以不在写事务里核路由。物理位置由 §8 的映射决定,闸门在同一事务里拦住旧位置的写。
 - **不做按玩家搬库**。负责人要的是搬物理库,§8 覆盖。要做按玩家搬库时,必须在写权行加「已搬走」墓碑并在 `decideSave`、`decideClaim` 里判,这条记在这里。`player_route.frozen_run_id` 没有用处,删除。
+- **go/db 不缓存落点**(2026-11-06,缺口清单第 21 条)。每次认领都调一次 `GetPlayerRoute`,只是一跳 RPC 加目录分片上一条主键点读;这条读走 §2 的读闸门(一条 `route_meta` 加一条点读,不开事务、不碰 `writer_slot`),随 data_service 副本数与目录分片数水平扩展。storage_id 写一次不变,现在加缓存不会错,但省下的只有这一跳,将来做按玩家搬库时还要为它补失效协议(上一条的墓碑)。压测证明这一跳是瓶颈再做,做时按上一条的墓碑让存储侧复核。
 
 一个进程要写多个存档库时,各库一份闸门(§2),库可以在不同集群。
 

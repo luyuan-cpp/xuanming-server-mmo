@@ -219,7 +219,7 @@ cobalt::task<void> RegisterFenceAttempt(Guid playerId) {
         auto& role = it->second;
         if (!role.waitingFence || role.fenceInFlight) co_return;
         if (Now() >= role.registerDeadline || role.fenceAttempts >= 3) {
-            const auto session = role.context.enterInfo.session_id();
+            const auto session = role.context.NotifiableSessionId();
             role.waitingFence = false;
             CancelPendingFence(playerId);
             Reject(playerId, session);
@@ -318,7 +318,7 @@ cobalt::task<void> RegisterFenceAttempt(Guid playerId) {
     if (!role.waitingFence) co_return;
     if (result.prior && !role.fencePrior) role.fencePrior = std::move(result.prior);
     if (Now() >= role.registerDeadline || generation <= role.closedThrough || generation <= role.sealedThrough) {
-        const auto session = role.context.enterInfo.session_id();
+        const auto session = role.context.NotifiableSessionId();
         role.waitingFence = false;
         CancelPendingFence(playerId);
         Reject(playerId, session);
@@ -344,7 +344,7 @@ cobalt::task<void> RegisterAdmissionAttempt(Guid playerId) {
         if (!role.waitingRegister) co_return;
         if (Now() >= role.registerDeadline) {
             role.waitingRegister = false;
-            Reject(playerId, role.context.enterInfo.session_id());
+            Reject(playerId, role.context.NotifiableSessionId());
             co_return;
         }
         if (role.registerCalls != 0 || role.attempts >= 3) co_return;
@@ -396,7 +396,7 @@ cobalt::task<void> RegisterAdmissionAttempt(Guid playerId) {
         role.retryAt = Now() + std::chrono::seconds(1);
         if (Now() >= role.registerDeadline) {
             role.waitingRegister = false;
-            Reject(playerId, role.context.enterInfo.session_id());
+            Reject(playerId, role.context.NotifiableSessionId());
             co_return;
         }
         const auto& reply = result->reply;
@@ -404,7 +404,7 @@ cobalt::task<void> RegisterAdmissionAttempt(Guid playerId) {
             || reply->closed_through() >= generation) {
             if (role.attempts >= 3) {
                 role.waitingRegister = false;
-                Reject(playerId, role.context.enterInfo.session_id());
+                Reject(playerId, role.context.NotifiableSessionId());
             }
             co_return; // 未知结果只重放原 generation。
         }
@@ -520,7 +520,10 @@ RoleAdmissionSystem::ScopedDependencies::~ScopedDependencies() { state = std::mo
 
 void RoleAdmissionSystem::RequestEnter(Guid playerId, PlayerEnterContext context) {
     ArmTimer();
+    // session 是本次入场的登录身份(托管落点时是断开的那次登录,照样登记进 SQL 原件);notify 是被拒时能推提示的会话,
+    // 托管落点没有在场的客户端,为 0(player-connection-lost-hold.md §4.2)。
     const auto session = context.enterInfo.session_id();
+    const auto notify = context.NotifiableSessionId();
     const auto scene = PlayerSceneSystem::FindSceneById(context.enterInfo.scene_id());
     const auto entity = tlsEcs.GetPlayer(playerId);
     const auto allowedScene = entity == entt::null ? PlayerSceneSystem::CheckEnterScene(playerId, scene)
@@ -529,27 +532,28 @@ void RoleAdmissionSystem::RequestEnter(Guid playerId, PlayerEnterContext context
     if (playerId == 0 || context.ownerRevision == 0 || context.ownerEpoch == 0 || context.loginGeneration == 0 || session == 0
         || allowedScene != kSuccess || local.instanceId.empty() || state->nextGeneration == UINT64_MAX
         || !enter_fence::Admits(PlayerLifecycleSystem::JudgeEnter(playerId, session, context.loginGeneration))) {
-        Reject(playerId, session); return;
+        Reject(playerId, notify); return;
     }
-    if (!SceneTaskScope::IsDurableAccepting()) { Reject(playerId, session); return; }
+    if (!SceneTaskScope::IsDurableAccepting()) { Reject(playerId, notify); return; }
     state->hasDurableAdmissions = true;
     auto& role = state->roles[playerId];
-    if (role.controlInFlight || (role.seal && !role.drained)) { Reject(playerId, session); return; }
+    if (role.controlInFlight || (role.seal && !role.drained)) { Reject(playerId, notify); return; }
     if (role.waitingRegister || role.waitingFence) {
-        // 原未知登记不得换世代重建；相同原路由由计时器重投。
+        // 原未知登记不得换世代重建；相同原路由由计时器重投。托管落点与 gate 路由不是同一条原路由(一个绑会话、一个不绑)。
         if (role.context.ownerRevision != context.ownerRevision || role.context.ownerEpoch != context.ownerEpoch
-            || role.context.loginGeneration != context.loginGeneration || role.context.enterInfo.SerializeAsString() != context.enterInfo.SerializeAsString()) {
-            Reject(playerId, session);
+            || role.context.loginGeneration != context.loginGeneration || role.context.hostedPlacement != context.hostedPlacement
+            || role.context.enterInfo.SerializeAsString() != context.enterInfo.SerializeAsString()) {
+            Reject(playerId, notify);
         }
         return;
     }
-    if (role.registerCalls != 0 || role.fenceInFlight || role.pendingFenceRevoke) { Reject(playerId, session); return; }
+    if (role.registerCalls != 0 || role.fenceInFlight || role.pendingFenceRevoke) { Reject(playerId, notify); return; }
     context.roleAdmissionGeneration = ++state->nextGeneration;
     const auto admissionToken = handoff_sql_barrier::NewFenceToken();
     const auto candidate = handoff_sql_barrier::EncodeFence({context.ownerEpoch, local.instanceId,
         context.roleAdmissionGeneration, admissionToken, handoff_sql_barrier::FenceState::kHeld,
         handoff_sql_barrier::NewFenceToken()});
-    if (!candidate) { Reject(playerId, session); return; }
+    if (!candidate) { Reject(playerId, notify); return; }
     context.handoffFence = *candidate;
     role.context = context; role.waitingRegister = true; role.attempts = 0;
     role.waitingFence = false; role.fenceInFlight = false; role.fenceAttempts = 0; role.fencePrior.reset();

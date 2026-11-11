@@ -166,6 +166,33 @@ bool ValidateCommandTarget(const std::string& topic,
     return true;
 }
 
+// 这条命令是不是发给本节点的。RegisterKafkaCommandHandler 只派发判为 true 的命令,读放大计数
+// (node_command_consume_stats.h)按它记 own / foreign,两处用同一个判定。
+//
+// requireExactTarget 是维护受控启动(Node::RequiresMaintenanceTargetIdentity):P8 之后共享的手工分区必须精确寻址到
+// 本次启动的实例,node_id 与实例号都得填且都等于自己;不把「没填」的兼容位当成发给本实例。之后仍过 ValidateCommandTarget。
+template <typename CommandT>
+bool IsCommandForThisNode(const std::string& topic,
+    const CommandT& command,
+    uint32_t nodeId,
+    const std::string& nodeInstanceId,
+    const KafkaCommandTargetFilter& filter,
+    bool requireExactTarget)
+{
+    if (requireExactTarget) {
+        uint64_t targetNodeId = 0;
+        std::string nodeIdFieldName;
+        std::string targetInstanceId;
+        std::string instanceFieldName;
+        if (!TryReadUintField(command, filter.nodeIdFieldNames, targetNodeId, nodeIdFieldName) ||
+            !TryReadStringField(command, filter.instanceIdFieldNames, targetInstanceId, instanceFieldName) ||
+            targetNodeId != nodeId || targetInstanceId != nodeInstanceId) {
+            return false;
+        }
+    }
+    return ValidateCommandTarget(topic, command, nodeId, nodeInstanceId, filter);
+}
+
 } // namespace detail
 
 } // namespace node::kafka

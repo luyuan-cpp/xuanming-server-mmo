@@ -718,6 +718,32 @@ function Resolve-InjectedSecret {
     return $value
 }
 
+# gate 会话身份密钥的形状检查(docs/design/gate-online-identity.md §10.1),与 go/shared/callerauth 的
+# ParseSeedHex / ParsePublicKeys 同一规则:私钥是恰好 64 个十六进制字符;公钥列表逗号分隔、至少一项、
+# 每项恰好 64 个十六进制字符、不许空项与重复。PowerShell 算不了 Ed25519,私钥与公钥是否配对由 gate 启动时核对。
+# 报错只点变量名,不回显值。
+function Assert-InternalIdentityKeyShape {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$SigningKey,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$PublicKeys
+    )
+    if ($SigningKey -cnotmatch '^[0-9a-fA-F]{64}$') {
+        throw "MMORPG_INTERNAL_AUTH_SIGNING_KEY must be exactly 64 hex characters (a 32-byte Ed25519 seed); generate a pair with: Push-Location go/shared; go run ./cmd/identitykeygen; Pop-Location"
+    }
+    $items = $PublicKeys -split ','
+    $seen = @{}
+    foreach ($item in $items) {
+        if ($item -cnotmatch '^[0-9a-fA-F]{64}$') {
+            throw "MMORPG_INTERNAL_AUTH_PUBLIC_KEYS must be a comma-separated list of 64-hex-character Ed25519 public keys with no blanks or empty items"
+        }
+        $normalized = $item.ToLowerInvariant()
+        if ($seen.ContainsKey($normalized)) {
+            throw "MMORPG_INTERNAL_AUTH_PUBLIC_KEYS lists the same public key twice"
+        }
+        $seen[$normalized] = $true
+    }
+}
+
 # ── 逻辑库命名与每片连接池(docs/design/horizontal-scale-logical-db.md §1、§5.1)──
 # 与 go/shared/dirshard 同一规则。部署脚本、本机写者启动目录、连接总账、本地 reset 都从这里取,不各写一份库名规则。
 
@@ -789,7 +815,7 @@ function Get-RegionPlayerStoreDbNames {
 
 # 每个存档库连接池的上限:服务 yaml 写的是 K=1 的预算(地域只有一个库时全部存盘都走它),K 大的时候按库摊开,
 # 规则同 Get-DirectoryShardPoolLimit,每库至少 2 条。新号按 player_id % K 落库,发号打散之后每个库分到约 1/K 的流量。
-# go/db 的 Placement.NonZoneStore* 和 data_service 的 Directory.StoragePools 都按它渲染,连接总账读同一条规则。
+# go/db 的 Placement.Store* 和 data_service 的 Directory.StoragePools 都按它渲染,连接总账读同一条规则。
 function Get-PlayerStorePoolLimit {
     param(
         [Parameter(Mandatory = $true)][int]$Base,
@@ -799,4 +825,16 @@ function Get-PlayerStorePoolLimit {
     Assert-RegionPlayerStoreShape -Region 0 -Shards $Shards
     if ($Shards -eq 1) { return $Base }
     return [int][Math]::Max(2, [Math]::Ceiling($Base / [double]$Shards))
+}
+
+# login 配置 Placement(地域码、每地域存档库数 K)对应的存档库库名,下标就是片号。新号按 player_id % K 落在这几个库里,
+# 本机建库、迁移、清库都按它找玩家数据(A17c 起 zone 库已退役)。读不到或不是整数就拒绝,不猜。
+function Get-LoginPlayerStoreDbNames {
+    param([Parameter(Mandatory = $true)][string]$LoginConfigPath)
+    $region = Get-YamlScalar -Path $LoginConfigPath -KeyPath 'Placement.Region'
+    $shards = Get-YamlScalar -Path $LoginConfigPath -KeyPath 'Placement.StorageShards'
+    if (-not $region.Found -or -not $shards.Found -or [string]$region.Value -cnotmatch '\A(0|[1-9][0-9]*)\z' -or [string]$shards.Value -cnotmatch '\A[1-9][0-9]*\z') {
+        throw "Cannot read Placement.Region / Placement.StorageShards as integers from $LoginConfigPath; refusing to guess the player store databases."
+    }
+    return [string[]]@(Get-RegionPlayerStoreDbNames -Region ([int]$region.Value) -Shards ([int]$shards.Value))
 }

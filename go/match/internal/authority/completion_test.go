@@ -64,7 +64,7 @@ func terminalResultFixtureWithDeadline(t *testing.T, s *Store, deadlineDelta int
 	f.RetryAtMs = f.CreatedMs
 	members, err := proto.Marshal(&pb.MatchFormationRecord{Members: f.Members})
 	require.NoError(t, err)
-	_, err = s.DB.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", f.BattleId, f.OperationId, f.State, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, members, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, []byte{}, false, []byte{}, uint32(0), uint32(0), "", uint32(0), false)
+	_, err = s.DB.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", f.BattleId, f.OperationId, f.State, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, members, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, []byte{}, false, []byte{}, uint32(0), uint32(0), "", uint32(0), false, f.ReleaseTrack)
 	require.NoError(t, err)
 	for _, r := range []*pb.MatchAuthorityTicketRecord{a, b} {
 		_, err = s.DB.ExecContext(ctx, "UPDATE match_authority_ticket SET owner_account=?,owner_revision=1,state=2,formation_id=901 WHERE player_id=? AND ticket=?", "original-owner", r.PlayerId, r.Ticket)
@@ -225,9 +225,10 @@ func TestTerminalTiDBObservedZeroCannotBePromotedByLaterReply(t *testing.T) {
 	tx, locked, _, err := s.terminalFormation(ctx, f.BattleId)
 	require.NoError(t, err)
 	defer tx.Rollback()
-	d, written, err := s.abortTerminalTx(ctx, tx, locked)
+	// 即使原实例给出了「没有房间」的证据,原件不可裁决的局也不写 ABORT(证据只决定时机,不放宽原件判据)。
+	d, verdict, err := s.abortTerminalTx(ctx, tx, locked, DeadlineEvidenceNoRoom)
 	require.NoError(t, err)
-	require.False(t, written)
+	require.False(t, verdict.abort)
 	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, d, "能力1不能追认明确采用0为安全ABORT")
 }
 
@@ -292,7 +293,9 @@ func TestTerminalTiDBCancelledFormationDistinguishesUnissuedAndPersistedCreate(t
 			receipt, err := s.CancelActivity(ctx, key, body)
 			terminal, readErr := readTerminal(ctx, s.DB, f.BattleId)
 			require.NoError(t, readErr)
-			if kind == "旧创建原件" || kind == "明确旧采用" {
+			// 2026-11-06 起「新协议原件」也一样拒绝:缺终局的 state 5 只来自旧代码,截止 ABORT 与到期恢复同一判据
+			// (autoTerminalOriginal 要求在途),不再给它补签 ABORT(原先会补)。项目未上线,不兼容旧状态。
+			if kind != "发房前" {
 				require.Error(t, err, "旧state5不能冒SQL ABORT签发安全取消收据")
 				require.Nil(t, receipt)
 				require.Nil(t, terminal)
@@ -311,14 +314,8 @@ func TestTerminalTiDBCancelledFormationDistinguishesUnissuedAndPersistedCreate(t
 			}
 			require.NoError(t, err)
 			require.EqualValues(t, 5, receipt.FormationState)
-			if kind == "发房前" {
-				require.Nil(t, terminal)
-				require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, receipt.TerminalDecision)
-			} else {
-				require.NotNil(t, terminal)
-				require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, terminal.Decision)
-				require.Equal(t, terminal.Decision, receipt.TerminalDecision)
-			}
+			require.Nil(t, terminal)
+			require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, receipt.TerminalDecision)
 		})
 	}
 }
@@ -368,7 +365,9 @@ func TestTerminalTiDBAbortAndCompleteHaveOneWinner(t *testing.T) {
 	var people int
 	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_battle_settlement_source WHERE battle_id=?", f.BattleId).Scan(&people))
 	if row.Decision == pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
-		require.Zero(t, people)
+		// ABORT 也给每名成员写一份作废结算(battle-instance-loss-early-abort.md §5.1),不是 COMPLETE 的个人原件。
+		require.Equal(t, 2, people)
+		requireVoidSettlementSources(t, s, f, "original-owner", 1)
 		d, err := s.CommitBattleOutcome(ctx, r)
 		require.NoError(t, err)
 		require.Equal(t, row.Decision, d)

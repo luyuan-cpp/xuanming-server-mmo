@@ -78,6 +78,25 @@ message DropTable {
 
 生成的头文件里写着同一条契约，改动那段注释前先想清楚。
 
+### 行 id 只增不删（`(cfg_ids_permanent)`，2026-11-11）
+
+玩家存档、在途的资产通道指令按 id 引用的表（目前是 `Item`、`Pet`），在主消息上写表级 option：
+
+```proto
+message ItemTable {
+  option (cfg_sheet)         = "Item";
+  option (cfg_ids_permanent) = true;
+  ...
+}
+```
+
+- 导表器把这张表出现过的全部 id 记在台账 `tools/data_table_exporter/state/permanent_ids/<表名小写>_ids.txt`（进 git），
+  表里少了台账里的 id 就**整批不产出**（`core/permanent_ids.py`）。新 id 在导表时自动追加，台账与产物同一次提交。
+- 不再产出某个物品 / 宝宝：去掉掉落、商店、奖励里对它的引用，**表行保留**，已持有的照常生效。
+- 只在开发期存在、从未发布过的行要删：在同一次提交里从台账删掉这个 id，提交说明写明理由。
+- 为什么：scene 遇到本节点表里查不到的 id 时，只有表行永不删除，才能判定它是更新版本或尚未热更到的行、
+  回 RETRY 等它出现，而不是把引用它的资产当坏数据拒掉（`docs/design/mixed-version-persist-field-protection.md` §13 第 10 条）。
+
 ### 改字段号 / 删字段
 - **字段号是 wire 契约**。`.pb` 是入库的二进制，改号 = 让所有存量数据那一段被错读，
   而且 `ParseFromString` 不会报错。
@@ -94,6 +113,7 @@ message DropTable {
 - ❌ 复用退休的字段号，或为了「让号连续」而重排字段号。
 - ❌ 改了表不跑 `gen_schema_index.py`：腐坏的索引比没有索引更坏。
 - ❌ **把表行的指针/引用存起来**——热更那一刻就是野指针（C++），或永久陈旧（Go/Java）。只存 id。
+- ❌ 删 `(cfg_ids_permanent)` 表（`Item`、`Pet`）的行：导表会失败。不再产出就去掉引用，表行保留。
 - ❌ 给可重复主键的表加 `(cfg_bit_index)`：位序对重复 ID 没有定义，会被拒。
 - ❌ 把枚举定义粘进注释（历史上 `Buff.buff_type` 就是一整段 C++ enum）——proto 里可以直接写 `enum`。
 
@@ -161,7 +181,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **GuildRule** | `GuildRule.xlsx` | `guildrule_table.proto` | 10 | 10 | 1 | — | — | — | — | — | — | — |
 | **GuildShop** | `GuildShop.xlsx` | `guildshop_table.proto` | 9 | 9 | 11 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
 | **Item** | `Item.xlsx` | `item_table.proto` | 19 | 14 | 77 | — | — | `affix_rule` | `affix_rule→EquipAffixRule.id` | — | — | `base_attr` |
-| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 87 | — | — | — | — | — | — | — |
+| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 89 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
 | **Monster** | `Monster.xlsx` | `monster_table.proto` | 16 | 10 | 16 | — | — | — | — | — | — | `drop` |
@@ -170,6 +190,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **MysteryMerchantSpot** | `MysteryMerchantSpot.xlsx` | `mysterymerchantspot_table.proto` | 6 | 6 | 6 | — | — | `scene_config_id` | — | — | — | — |
 | **Pet** | `Pet.xlsx` | `pet_table.proto` | 22 | 13 | 22 | — | — | — | — | — | — | — |
 | **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 6 | 6 | 1 | — | — | — | — | — | — | — |
+| **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 5 | 5 | 6 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **Reward** | `Reward.xlsx` | `reward_table.proto` | 5 | 2 | 7 | — | — | — | — | `id` | — | `reward` |
 | **RoleNameRule** | `RoleNameRule.xlsx` | `rolenamerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
 | **Skill** | `Skill.xlsx` | `skill_table.proto` | 68 | 46 | 46 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
@@ -177,7 +198,8 @@ cd tools/data_table_exporter && py -m pytest -q
 | **Test** | `Test.xlsx` | `test_table.proto` | 24 | 6 | 6 | — | — | — | — | — | — | `testobj` |
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
+| **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **47** 张表、**514** 个物理列、**370** 个进产物的字段。
+合计 **49** 张表、**524** 个物理列、**379** 个进产物的字段。
 
 <!-- END GENERATED -->

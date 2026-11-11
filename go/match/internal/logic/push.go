@@ -37,10 +37,11 @@ var errPlayerOffline = playercontract.ErrPlayerOffline
 
 // pushToPlayer 把 S2C 消息经 Kafka gate-cmd_g<N> 的 gate_node_id % P 号分区推给玩家客户端
 // (设计决策 D6 下行路径;共享收口 kafkautil.PushToPlayer 会 fail-closed
-// 拒绝空 gate_instance_id,防僵尸不变量)。预算固定 pushTimeout,不继承请求 ctx。
+// 拒绝空 gate_instance_id,防僵尸不变量)。预算固定 pushTimeout,不继承请求 ctx 的取消与截止,
+// 只经 context.WithoutCancel 继承它的值:trace 随推送命令带到 gate(docs/design/distributed-tracing.md §6.2)。
 // 指标口径与改造前一致:成功记 ok,其余(读会话失败 / 不在线 / 序列化失败 / Kafka 失败)记 error。
-func pushToPlayer(svcCtx *svc.ServiceContext, playerId uint64, messageId uint32, msg proto.Message) error {
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
+func pushToPlayer(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64, messageId uint32, msg proto.Message) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), pushTimeout)
 	defer cancel()
 	if err := playercontract.PushToPlayer(ctx, svcCtx, playerId, messageId, msg); err != nil {
 		metrics.ObserveKafkaPush("error")

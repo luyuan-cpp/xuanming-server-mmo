@@ -62,7 +62,7 @@ const usageText = `commercefix:转人工的交易合同的人工恢复工具
       -operator <名字> -reason <依据> -confirm <id> [-execute]
 
 resolve 默认只打印计划,加 -execute 才写库。-expect-version 填 show 里看到的版本;合同之后被推进或处理过就拒绝。
-前置条件见 show 的「能否处理」一栏。维护排空期间不要运行。
+前置条件见 show 的「actionable」一栏。维护排空期间不要运行。
 
 退出码:0 成功;1 执行出错;2 参数 / 前置条件不满足;3 合同版本已变,未改动。
 `
@@ -154,6 +154,11 @@ func withStore(configPath string, readOnly bool, stderr io.Writer, fn func(ctx c
 	var c config.Config
 	if err := conf.Load(configPath, &c); err != nil {
 		fmt.Fprintf(stderr, "Failed to load configuration %s: %v\n", configPath, err)
+		return exitError
+	}
+	// MySQL 口令(MySQLPasswordEnv):本工具在 trade Pod 里跑,读同一份 ConfigMap,口令从 Secret mysql-auth 注入的环境变量取。
+	if err := c.ResolveMySQLPassword(os.LookupEnv); err != nil {
+		fmt.Fprintf(stderr, "Failed to resolve the MySQL password: %v\n", err)
 		return exitError
 	}
 	logConf := c.Log
@@ -282,7 +287,7 @@ func runShow(ctx context.Context, store contractStore, id uint64, stdout, stderr
 		fmt.Fprintf(stdout, "history: action=%s operator=%s at_ms=%d version_before=%d new_legs=%v superseded=%v reason=%q\n",
 			a.Action, a.Operator, a.AtMs, a.VersionBefore, a.NewLegs, a.SupersededLegs, a.Reason)
 	}
-	fmt.Fprintln(stdout, "能否处理:")
+	fmt.Fprintln(stdout, "actionable:")
 	for _, action := range []commerce.ManualAction{commerce.ManualResume, commerce.ManualReissue, commerce.ManualRefund} {
 		plan, err := commerce.PlanManualReadOnly(ctx, r, store.LegOutcome, action)
 		if err != nil {

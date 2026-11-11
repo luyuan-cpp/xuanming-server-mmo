@@ -30,7 +30,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 
 | 类别 | 判据 | 典型组件 | 在哪里创建 | 读路径拿不到时 |
 |---|---|---|---|---|
-| **持久数据** | 会写进 DB / Redis | `CurrencyComp`、`PlayerCurrencyComp`、资产与结算账本、`LevelComp`、`BaseAttributesComp`、`PlayerPetComp`、背包、任务、`PlayerItemGainBlockComp` | **只在加载时**(`*MessageFieldsUnmarshal` / `InitPlayerFromAllData`) | 不变量被破坏:`LOG_ERROR` + fail-closed,**绝不补默认值**(`PlayerItemGainBlockComp` 的读路径例外见下文「单玩家物品获取封禁」一段) |
+| **持久数据** | 会写进 DB / Redis | `CurrencyComp`、`PlayerCurrencyComp`、资产与结算账本、`LevelComp`、`BaseAttributesComp`、`PlayerPetComp`、背包、任务、`PlayerItemGainBlockComp`、`PlayerItemHoldComp` | **只在加载时**(`*MessageFieldsUnmarshal` / `InitPlayerFromAllData`) | 不变量被破坏:`LOG_ERROR` + fail-closed,**绝不补默认值**(`PlayerItemGainBlockComp`、`PlayerItemHoldComp` 的读路径例外见下文「单玩家物品获取封禁」「物品数量预留」两段) |
 | **按需状态**(延迟初始化) | 「没有」本身有明确含义:空、未激活、无冷却、不脏 | `CooldownTimeListComp`、`SkillContextCompMap`、`AoiListComp`、`SceneGridListComp`、施法阶段定时器、属性脏标记 | **该功能写入口第一次写时**,集中在一个命名函数里;结束时可以 `remove` | 正常分支:当作空 / 未激活处理,不是错误 |
 | **派生运行时数据** | 由其他组件算出来,实体存在期间必须有 | `DerivedAttributesComp`、`CombatStateFlagsComp` | 加载 / 创建流程直接调用初始化函数,在首个通知前创建并计算;后续重算只更新 | `LOG_ERROR` + 跳过本次处理;有返回码的请求明确失败 |
 
@@ -54,7 +54,12 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 | `BuffListComp` | `BuffSystem::AddOrUpdateBuff`,完成驱散 / 免疫等判断后首次真正插入时 | 帧末摘除空列表 |
 | `AoiListComp` | `InterestSystem::AddAoiEntity`(空间来源被接纳)或 `InterestSystem::Follow`(显式关注登记),完成实体 / 容量 / 同场景校验后首次建立关系时 | 移除观察关系;无表表示无观察对象 |
 | `AoiWatchersComp` | `InterestSystem` 第一次登记以该实体为目标的关系时;与观察者的 `AoiListComp` 条目一一对应 | 关系删除时同步摘除;无表表示没有观察者 |
-| `SceneGridListComp` | `AoiSystem::UpdateGridState`,首次写入场景格子时 | 场景销毁时随实体销毁;空场景可无表 |
+| `SceneGridListComp` | `AoiSystem::UpdateGridMembership`,首次写入场景格子时 | 场景销毁时随实体销毁;空场景可无表 |
+| `AoiEvaluatedAtComp` | `AoiSystem::ReevaluateVisibility`,实体第一次做空间关注评估(首次入格)时;之后只覆盖评估用的位置与视野半径 | 不摘:实体销毁自然清理;换场景、同场景瞬移后按首次入格重新评估并覆盖。`Update` 的重判判断只用 `try_get` 读,缺失 = 还没评估过、立即评估 |
+| `AoiNearbyRefillComp`(空标记) | `interest.cpp` 的 `MarkNearbyRefill`:附近候选因名额被拒收、被挤掉,或容量收缩时被裁掉,且只剩空间来源时(2026-11-10;裁表 2026-11-11) | `AoiSystem::ReevaluateVisibility` 开始时摘掉,重扫中再被拒会重新打上;`Update` 只用 `any_of` 判,缺失 = 名额空出后不用重扫 |
+| `CombatEngagementComp` | `combat_engagement.cpp` 的 `EngageOneSide`,经 `RecordDamage` / `RecordHeal`(含一起打怪、治疗仇恨推出的交手),双方都存活且同场景时(2026-11-10,[AOI 单向关注](aoi-directed-interest.md)「战斗关注」) | 最后一份交手记录结束(脱战、死亡、对方离场)时摘除;实体销毁自然清理。缺失 = 没有在交手 |
+| `CombatAllyRosterComp`(只挂 NPC) | `combat_engagement.cpp` 的 `ShareFight`,第一个非 NPC 实体和这个 NPC 敌对交手时(2026-11-11,同文「仇恨名单」) | 最后一个成员的交手记录结束时摘除;NPC 销毁时随实体清理。缺失 = 没人在打它 |
+| `ScenePressureComp`(scene 实体) | `AoiSystem::ApplyServerPressure`,压力监控每秒一次写进本线程的每个场景时(2026-11-11,同文「服务器压力」);也是唯一写入口 | 场景销毁时随实体销毁。`InterestSystem::GetEffectiveCapacity` 只用 `try_get` 读,缺失 = 不受压(新建的场景最多 1 秒后拿到) |
 | `CastingTimerComp` | `SetupCastingTimer`,进入前摇时 | 前摇结束 / 打断时摘除 |
 | `RecoveryTimerComp` | `SkillSystem::HandleSkillRecovery`,进入后摇时 | 后摇结束 / 打断时摘除 |
 | `ChannelFinishTimerComp`、`ChannelIntervalTimerComp` | `SkillSystem::HandleChannelSkillSpell`,开始引导时 | 引导结束 / 打断时一起摘除 |
@@ -64,7 +69,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 | `BattleFreezeExpiredComp`(`player_battle.cpp` 内部,单槽 battle_id) | `RememberExpiredFightingBattle`,reaper 判定 FIGHTING 到期的收尾 `ReleaseExpiredFightingFreeze` 里、条件删锁之前(2026-10-19) | 不摘:下一次 FIGHTING 到期覆盖;实体销毁自然清理。按锁重建的两个入口只读它 |
 | `BattleLoginRecheckComp`(`player_battle.cpp` 内部空标记) | `MarkLoginRecheck`,登录钩子读挂起结算 / 读战斗锁没问到时(空应答、读记录 ERROR、命令没发出去、Redis 不可用;2026-10-16) | reaper 的 `RunLoginRechecks` 在 Redis 可用时摘除并重跑登录检查,又没问到就重新挂上;实体销毁自然清理 |
 | `BattleResultAwaitingCommitComp`(`player_battle.cpp` 内部,待公开的 battle_id) | `RecordBattleResult`,`ApplySettlementToEntity` 把本人结果写进近期结果的同一帧(2026-11-05,[战斗结果重登恢复](battle-result-recovery.md) §4.3) | `CompleteInboxSettlement` 在存档确认提交之后摘对应 battle_id,空了摘组件;结果被淘汰时一并摘。查询与确认只读它;缺失 = 没有待公开的结果。同功能的持久组件 `PlayerBattleResultComp` 属持久数据,只在加载时创建 |
-| `PlayerConnectionLostComp`(`connection_lost_hold.h`) | `PlayerLifecycleSystem::HandleClientConnectionLost`,gate 报连接意外断开、判定可以保留时(先 valid;2026-11-05,[断线保留](player-connection-lost-hold.md) §4) | 新会话接回(`EnterScene` 第 0.1 步 `ResumeConnectionLostHold`)、保留到期(`ExpireConnectionLostHolds`)、任何退出发起(`HandleExitGameNode` 入口)时摘;实体销毁自然清理。读路径只用 `try_get` / `any_of`,缺失 = 连接正常或不在保留中 |
+| `PlayerConnectionLostComp`(`connection_lost_hold.h`) | `PlayerLifecycleSystem::HandleClientConnectionLost`,gate 报连接意外断开、判定可以保留时(先 valid;2026-11-05,[断线保留](player-connection-lost-hold.md) §4);托管落点入场之后 `EnterHostedHold`(`EnterScene` 第 3.0 步,实体没有保留、也没有活会话时按"断开的那次登录"重建;2026-11-10,同文 §4.2) | 新会话接回(`EnterScene` 第 0.1 步 `ResumeConnectionLostHold`)、保留到期(`ExpireConnectionLostHolds`)、任何退出发起(`HandleExitGameNode` 入口)时摘;实体销毁自然清理。读路径只用 `try_get` / `any_of`,缺失 = 连接正常或不在保留中 |
 | `SceneOwnershipCheckComp`(scene 实体,`world/scene_ownership_reconciler.h`) | `scene_ownership::CollectChecks`,归属对账第一次核对到这个场景实体时(2026-11-06,[场景归属对账](scene-node-ownership-reconcile.md) §4.2) | CreateScene 按号命中已有实体时 `SceneLifecycle::ReuseExistingScene` 摘掉、下一轮重新登记;实体销毁自然清理。应答回来与指标采集只用 `try_get` / 视图读,缺失 = 还没核对过 |
 
 `PlayerMirrorCreateInFlightComp` 是按需状态。由 `RequestEnterMirrorScene` 发起的 `CreateMirrorAndEnter` 任务在发送之前登记，恢复后按令牌认领。`IsSceneChangeBusy` 只读它，缺失或过 TTL 表示没有建镜像在途。过期、UTC 回拨或本地停止只摘本次令牌并丢弃结果。普通换图、交接、退出提交或权威落点成功时也主动摘掉旧镜像组件，永久取消旧请求的提示和自动进场资格。
@@ -125,6 +130,8 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 内部 SkillContext/Buff 暂仍以 uint64 本地句柄及 0 表示空来源，因此保留 actor 的 0 号句柄退役兼容。该历史约束不再承担客户端编号职责。AOI 容量、压力和策略组件缺失时采用既定默认值，`Npc` 标签保留给未来生成入口。
 
 单玩家物品获取封禁(2026-11-05,[收件箱设计](player-inbox-service.md) §2.2)是持久数据 `PlayerItemGainBlockComp`(`player_database.item_gain_block`):唯一创建点是加载,存盘缺它整份拒存;唯一写入方是收件箱 GM 域执行器,经 `GainBlockService::BlockPlayerItemGain / UnblockPlayerItemGain` 写,缺组件即拒绝、不补建。各物品获得入口只经 `GainBlockService::IsItemGainBlocked` 读它。**读路径是持久数据「读缺失即 fail-closed」的一处有记录的例外**:无效句柄只判全服,有效实体缺组件按「没有单人封禁」回答、不补建。理由与代价见收件箱设计 §2.2「读缺失的口径」:`BagService` 接受没有玩家上下文的容器级调用;缺组件的实体存盘被整份拒绝、资产通道与收件箱只在落盘后终结,发出的物品成不了盘上事实。2026-10-15 删除的旧 `PlayerItemBlockList` 及 `blockList` 参数没有恢复。
+
+物品数量预留(2026-11-10,[战斗道具预留](battle-item-reservation.md))是持久数据 `PlayerItemHoldComp`(`player_database.item_holds`,字段 26):唯一创建点是加载,存盘缺它整份拒存。规则在 `item_hold.h`,唯一的执行点是 `BagService`:写入口 `PlaceHold` 缺组件即拒绝(回 `kServiceUnavailable`,备战据此整笔拒绝)、不补建;`ReleaseHold` 缺组件是空操作。各出包入口只经 `BagService::HeldCount / RemovableCount / CheckRemovable` 读它。**读路径是与上一段同一类有记录的例外**:实体无效、传入的不是这名玩家的人物背包、或有效实体缺组件,都按「没有预留」回答、不补建。理由相同:`BagService` 接受没有玩家上下文的容器级调用;缺组件的实体存盘被整份拒绝,这时放出去的物品成不了盘上事实。
 
 上述规则包含第 6 批审查修复；生成产物与运行验证状态以 [任务总索引](../handoff/ecs-refactor/README.md) 及本批回执为准，不能用静态阅读代替构建或测试证据。
 

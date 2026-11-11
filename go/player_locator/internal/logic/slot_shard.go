@@ -109,6 +109,14 @@ func (s *slotShard) OwnedSlots() []uint16 {
 	return nil
 }
 
+// OwnedSegments 返回当前持有的段号(升序、只读)。补建 / 审计按段记进度(index_pass.go)。
+func (s *slotShard) OwnedSegments() []int {
+	if p := s.segments.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
+
 // Run 按周期调整持有的段,直到 ctx 结束。第一周期立即执行,N=1 时启动后马上持有全部段。
 func (s *slotShard) Run(ctx context.Context) {
 	ticker := time.NewTicker(shardCycleInterval)

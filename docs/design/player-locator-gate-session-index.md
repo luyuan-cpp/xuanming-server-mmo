@@ -27,7 +27,7 @@
 | `player:locator_shard:<role>:members:{afps}` | ZSET | 存活副本,分数 = 到期毫秒 | 分片心跳(§4.1) |
 | `player:locator_shard:<role>:segment:{<SlotTag(64c)>}` | STRING + PX 30s | 段 c 的持有者 | 分片 |
 
-控制域(`ServiceContext.RedisClient`,不带 tag,全服一份,只由 leader 读写,不和玩家键进同一段脚本):
+控制域(`ServiceContext.RedisClient`,不带 tag,全服一份,不和玩家键进同一段脚本。除了按段推进的进度,只由 leader 读写):
 
 | 键 | 类型 | 内容 |
 |---|---|---|
@@ -36,6 +36,9 @@
 | `player:gate_index:last_audit` | STRING | 上次完整补建 / 审计完成的 unix 秒 |
 | `player:gate_index:audit_cooldown` | STRING + EX | `1`(审计失败后的冷却,默认 1 小时,审计周期更短时取审计周期) |
 | `player_locator:session_reconciler:leader` | STRING + TTL 30s | 选主锁(shared/leader) |
+| `player:gate_index:pass` | STRING | 玩家域是 Cluster 时当前这一遍补建 / 审计:`<编号>\|<backfill 或 audit>\|<发布时的代次>`(§4.5),leader 建、删 |
+| `player:gate_index:pass_seq` | STRING(整数) | 一遍的编号计数器 |
+| `player:gate_index:pass_progress` | HASH | 字段是段号,值是这一段在哪一遍、下一个要做的 slot 和累计统计;各副本按比较后写入推进自己的段 |
 
 etcd:`/mmorpg/capability/player_locator/gate_session_index/v2/<node_uuid>`,KV,挂节点租约,值 `1`(能力键),写者是每个新版 locator 的注册事务。
 
@@ -77,12 +80,13 @@ etcd:`/mmorpg/capability/player_locator/gate_session_index/v2/<node_uuid>`,KV,�
 
 - **死 gate 清扫**:每个副本跑,只扫分给自己的 slot(§4.2,`gate_sweep.go`)。不选主:16384 个 slot 的登记集一个 leader 读不动,一个 leader 看不清 etcd 就是全服停摆。
 - **LeaseMonitor**:每个副本按段租约探测自己的 slot(`leasemonitor.go`,§10 的 `Lease.ScanRoundSeconds`)。
-- **写者检查、就绪标记、补建 / 审计**:全服一个 leader(`shared/leader`,控制域 Redis 锁,TTL 30s)。选主只为削减负载,**不是正确性 fence**:两个 leader 短暂重叠时,所有动作都走整字节 CAS 或字节守卫 Lua,重叠无害。
+- **写者检查、就绪标记、补建 / 审计的调度**:全服一个 leader(`shared/leader`,控制域 Redis 锁,TTL 30s)。选主只为削减负载,**不是正确性 fence**:两个 leader 短暂重叠时,所有动作都走整字节 CAS 或字节守卫 Lua,重叠无害。
+- **补建 / 审计的扫描**:玩家域是 Cluster 时按死 gate 清扫的段分给各副本做,leader 只发布一遍、等它做完(§4.5,`index_pass.go`);单实例玩家域(只在 dev)由 leader 自己扫(§4.4)。
 - **分片**(`slot_shard.go`,总设计 §5.4 同一套办法):256 段,每段 64 个连续 slot。每 10s 一周期:在成员 ZSET 上续心跳并清过期成员,存活成员数 N 取这里的计数;读全部 256 把段租约键;持有的续约;公平份额 `ceil(256 / N)`,超过的释放,不足的接管无主段。全员持满份额时总量不小于 256,所以只要有一个副本活着,无主段都会在一个周期内被接管。读失败的段这一周期不算持有(不续、不扫),到期后归能连上它的副本;有段读失败的副本这一周期也不算成员(撤销登记,照常持有读得到的段),否则它占着一份份额却接不了那些段,别的副本持满份额之后那些段就一直没人扫。所有副本都读不全时成员数按 1 算,各自接管读得到的。段租约只是分担负载,不是正确性 fence。
 - **两个角色各一套键**:`lease_monitor` 只依赖 Redis,`gate_sweep` 还依赖 etcd。分开之后 etcd 不可达只让清扫让出段,断线租约照常到期。
 - **让出段**:清扫连续 3 拍失败或 3 拍内没有一次成功,退出 `gate_sweep` 分片(释放段、撤销成员登记),其余副本接手;之后每拍照常试一次,第一次成功就回来。LeaseMonitor 一拍卡得比段租约周期(30s,拍长很长时按 3 拍放宽)还久,同样退出 `lease_monitor` 分片。这是总设计 §5.4 的「续约前提」。
 - **leader 让位**:写者检查连续 3 拍失败或距上次成功超过 3 拍,返回 whileLeader,选主器带属主校验释放锁;本进程再竞选前多等一个 TTL(30s),让健康副本先抢到。
-- 只由 leader 产出的 gauge(`legacy_writers`、`gate_index_ready`、`last_success` 的 writers / repair / audit)在进程启动时预置 0,任期开始、卸任与任期结束时清零;优雅退出经 `proc.AddShutdownListener` 主动让位、释放段。
+- 只由 leader 产出的 gauge(`legacy_writers`、`gate_index_ready`、`gate_index_pass_segments_done`、`last_success` 的 writers / repair / audit)在进程启动时预置 0,任期开始、卸任与任期结束时清零;优雅退出经 `proc.AddShutdownListener` 主动让位、释放段。
 - **为什么轮询而不是 watch etcd DELETE**:去抖语义与旧实现一致(连续两拍缺席),实现简单,watch 断流重建复杂;检测延迟 60~180s,与旧实现相同。
 
 ### 4.2 死 gate 清扫(每个副本,每拍,顺序固定)
@@ -127,14 +131,33 @@ last_success{index} 按「完成一拍」推进:预算截断、被跳过的单�
 
 ### 4.4 完整扫描(补建与审计共用)
 
+下面是单实例玩家域(只在 dev)的做法:leader 自己扫完整个玩家域。玩家域是 Cluster 时,每个 slot 做的事和判据相同,只是按段分给各副本做,见 §4.5。
+
 1. `playerredis.ScanEachMaster` 逐主节点限速 SCAN `player:session:{*}`(`ScanCount` / `ScanPagesPerSecond`,回调串行),每页按 slot 分组 MGET,对 ONLINE 且 gate 非空的候选做一次 SISMEMBER pipeline;缺失的经守卫脚本补(会话已不是扫描时那一版返回 -1,不补:新写入自己维护过索引)。已是成员的,确认其 gate 在本 slot 的登记集里(I2;登记集被局部清库删掉时,不补的话这个 gate 死了也没人处理)。
 2. 逐个 slot 读登记集,逐把索引键 SSCAN,按字节守卫摘不符的成员(**含存活 gate**)。真在这个 gate 上 ONLINE 的成员原样保留。第一页就扫完且没有成员的键移出登记集。限速把 `ScanCount` 把索引键算一页:一把键平均一两个成员,逐键限速一遍要走一天以上。
 3. 只补索引、清成员,**不转换会话**:补进来的死 gate 成员由清扫在两拍内处理,转换只有一条路径。
 4. **一遍之内的容错**:
-   - 单页处理失败(MGET、SISMEMBER、脚本、SSCAN 的传输错误或实例级错误)做有上限的指数退避重试(1s 起翻倍、封顶 30s,最多 5 次,随任期取消;SSCAN 重试同一游标);连续 5 次失败才放弃这一遍。页内的写都是幂等的字节守卫脚本 / SADD,重做一页不会重复生效。只有一个 leader 在扫,不加抖动。
+   - 单页处理失败(MGET、SISMEMBER、脚本、SSCAN 的传输错误或实例级错误)做有上限的指数退避重试(1s 起翻倍、封顶 30s,最多 5 次,随任期取消;SSCAN 重试同一游标);连续 5 次失败才放弃这一遍。页内的写都是幂等的字节守卫脚本 / SADD,重做一页不会重复生效。退避加抖动(等 d/2 再加 [0, d/2) 的随机值):Cluster 下各副本同时在扫,主从切换会让它们同一刻失败,不能同一刻一起重试。
    - **SCAN 本身失败整遍作废**:ScanEachMaster 是 fail-closed 的,任何一个节点出错就整体失败(残余风险 3)。
    - 单个候选上的 WRONGTYPE(某把索引键或登记集类型不对)跳过并计 `member_error` / `gate_error`,这一遍照常扫完;补建遍里有候选被跳过就不设标记(见 §4.3)。全键扫描不设单键错误上限:一个坏索引键会让它上面的每个候选都报错,设上限会让整遍提前中止、其余键永远扫不到。
    - **扫描期间拓扑或节点身份变了就整遍作废**:SCAN「开始时就在的元素都扫到」只在同一个 Redis 进程、同一份 slot 分布上成立。ScanEachMaster 扫描前后各取一次指纹(逐主节点的节点 ID、`run_id`、持有的 slot 段,有无进行中的迁移),不一致返回 `ErrTopologyChanged`。读不到 `run_id`(INFO 被禁用、托管 Redis 不返回该字段)按出错处理,fail-closed,代价见 §8。第 2 阶段的 SSCAN 不核指纹:漏扫的只是脏成员,下一遍审计再清(I3)。
+
+### 4.5 玩家域是 Cluster 时:一遍按段分给各副本(2026-11-10,去单点总纲 §9 的 C2;未编译、未测试)
+
+一遍完整扫描在 2000 万在线时要十几个小时(§7),只有 leader 一个副本在扫就是容量单点,日审计也排不开。所以 Cluster 下拆开做:
+
+- **leader 只调度**:什么时候跑、跑哪一种、结束时设不设就绪标记 / 记不记审计时刻,判据与 §4.3 完全相同(`runRepairPass`、`runAuditPass` 没变)。它不再自己扫:发布一遍 `player:gate_index:pass`(编号、种类、当时的代次),每拍读一次各段进度,256 段都做完就删掉这一遍和进度、汇总统计交回调用方。卸任时这一遍和进度原样留着。
+- **各副本做自己那些段**:复用死 gate 清扫的段租约(`gate_sweep` 角色,§4.1),不另起一套分片。每拍读当前这一遍,对持有的、还没做完的段,从断点逐个 slot 做:
+  1. 用 `playerredis.SlotKeys` 列出这个 slot 的全部键(在持有它的主节点上执行 `CLUSTER COUNTKEYSINSLOT` 与 `CLUSTER GETKEYSINSLOT`),按 `ScanCount` 一页、按 §4.4 第 1 步补漏成员;
+  2. 读这个 slot 的登记集,逐把索引键按 §4.4 第 2 步清脏成员;
+  3. 用比较后写入的脚本把这一段的进度推进到下一个 slot。这一遍已经结束或被换掉、或这一段的进度已被别的副本推进过,写入失败,本副本让出这一段。
+- **断点续做**:换主后新 leader 发布时,种类与代次都没变就接着用原来那一遍,已做完的段不重做;代次变了(期间看到过旧写者)或种类变了,换新编号、清空进度。副本重启、段换了主人,新主人从这一段记下的 slot 接着做。
+- **列一个 slot 为什么用 GETKEYSINSLOT**:SCAN 只能逐节点扫整个键空间,没法按 slot 拆;GETKEYSINSLOT 是一条命令,拿到的是那一刻这个 slot 的全部键,没有游标,也就没有「游标跨了进程或拓扑」的问题。要核的只是执行它的节点那一刻确实持有这个 slot:前后各读一次这个节点的 myself 行和 `run_id`,不持有、有进行中的迁移、前后不一致都按 `ErrTopologyChanged` 处理,这个 slot 下一拍重试(并刷新客户端的拓扑缓存)。它没有游标,所以不截断:一个 slot 的键数加余量 64 超过 10 万就报错,这一段停在那个 slot,补建 / 审计的 last_success 告警会响。2000 万在线时一个 slot 只有几千个键。
+- **重叠无害**:两个副本短暂做同一个 slot,补成员、摘成员都走字节守卫脚本(I3),进度只有一个写得进。
+- **限速**:`ScanPagesPerSecond` 是每个副本自己的上限。一遍的总速度是「持有段的副本数 × 它」:2 个副本时比单 leader 快一倍,256 个副本时一遍约几分钟,玩家域各主节点上的压力随之变大,要按压测调这个值。
+- **容错**:一个 slot 失败(单页重试用完、列键失败、拓扑变化)只停这一段,下一拍从这个 slot 重试,别的段照常;不再有「整遍作废」。卡死的段让这一遍一直做不完,leader 一直在等,由 last_success 的告警(§9)发现,日志点名段和 slot。
+- **滚动升级**:还没有这套代码的旧副本也持有清扫的段,但不做这一遍,它们的段要等它们退出、段换到新副本手里才往下做;升级期间这一遍会慢,不会出错。
+- **指标**:`gate_index_pass_segments_done`(leader 专属,当前这一遍做完了几段)、`reconcile_pass_slots_total{result}`(每个副本做了几个 slot,ok | redis_error)。
 
 ## 5. 自愈
 
@@ -173,7 +196,7 @@ allocator 是 guild / scene_manager / match / client_rpc_router / data_service �
 | 分片 | — | 每个副本每 10s:2 个角色 ×(1 次心跳 + 256 GET + 持有段数次续约)。2Z = 890 个副本时全服约 4.6 万 GET/s,散在玩家域各主节点上 [I] |
 | 租约探测 | — | 全服 2 × 16384 / `ScanRoundSeconds` ≈ 2048 ZCOUNT/s,与副本数无关;租约到期后最迟晚一个 ScanRound(默认 16s)才被认领 [I] |
 | 一轮耗时 | 单副本 Z=1 时 22~108 分钟(交接 E2,[D]);多副本争用下更长,「连续两拍缺席」随之拖到小时级 | 一拍内完成;死 gate 处理受预算与限速约束 |
-| 补建 / 审计 | 无 | 第 1 阶段 K/ScanCount ≈ 6.5e6 页,200 页/s 约 9 小时 [I];第 2 阶段逐把索引键 SSCAN + MGET,约 1.75e7 把键 × 2 个往返,约 10 小时 [I]。一遍接近 19 小时,日审计已偏紧,后续可把第 2 阶段按批走 pipeline |
+| 补建 / 审计 | 无 | 单 leader 扫时:第 1 阶段 K/ScanCount ≈ 6.5e6 页,200 页/s 约 9 小时 [I];第 2 阶段逐把索引键 SSCAN + MGET,约 1.75e7 把键 × 2 个往返,约 10 小时 [I],一遍接近 19 小时。Cluster 下按段分给持段副本(§4.5):一遍的耗时约等于 19 小时 ÷ 持段副本数,256 个副本时几分钟 [I];玩家域的总压力按同一个倍数变大,`ScanPagesPerSecond` 要按压测调 |
 | 大面积 gate 故障 | — | 丢一个可用区约 6.7e6 会话:每个持段副本每拍只用半拍去转换,每个会话约 4 个往返,一拍约 7500 个,持续约 125/s(`MaxTransitionsPerSecond` / 2 是另一道上限)。256 个持段副本合计约 3.2 万/s,约 3.5 分钟转换完 [I];副本少时按副本数线性变慢,这么大的规模不会只有几个副本。下游压力由 LeaseMonitor 的 BatchSize 限住 |
 | 索引常驻内存 | 0 | 约 1.75e7 把索引键(4444 个 gate × 每个 gate 约 3900 个 slot)+ 同样多的登记集成员,约 3~4 GB,散在玩家域各主节点上 [I],需实测 MEMORY USAGE。比全局索引(1~1.6 GB)多,这是按 slot 分桶的代价:一把键只有一两个成员,键本身的开销占大头 |
 

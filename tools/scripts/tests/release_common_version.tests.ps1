@@ -384,7 +384,6 @@ try {
     Test-Case "预检不给 -ReleaseVersion 时不出现任何 release.* 检查项(既有调用方行为不变)" {
         $run = Invoke-Preflight -Arguments @('-ImageTag', $script:Commit)
         Assert-Match -Text $run.Output -Pattern 'release preflight \(profile=dev\)' -Because '预检必须真的跑完并打印汇总'
-        Assert-Match -Text $run.Output -Pattern '[一-龥]' -Because '子进程中文输出必须无损带回(否则后面断错误文本的用例全是假红)'
         Assert-NotMatch -Text $run.Output -Pattern '\] release\.' -Because '不给 -ReleaseVersion 时 H 节整节不跑'
     }
 
@@ -392,6 +391,8 @@ try {
         $run = Invoke-Preflight -Arguments @('-ReleaseVersion', '1.2.3', '-ImageTag', $script:Commit)
         Assert-True -Condition ($run.ExitCode -ne 0) -Because '存在 FAIL 时退出码非 0'
         Assert-Match -Text $run.Output -Pattern '\[FAIL\]\s+release\.version\b' -Because '版本号检查项必须判 FAIL'
+        # 预检自己的明细 2026-11-11 起是英文;release_common 返回的原因文本仍是中文,编码守卫放在这里。
+        Assert-Match -Text $run.Output -Pattern '[一-龥]' -Because '子进程中文输出必须无损带回(否则后面断错误文本的用例全是假红)'
         Assert-Match -Text $run.Output -Pattern '小写 v' -Because '错误文本说明原因'
         Assert-NotMatch -Text $run.Output -Pattern '\] release\.artifact\.' -Because '版本号非法时不再做依赖版本号的制品检查'
     }
@@ -402,7 +403,7 @@ try {
         Assert-True -Condition ($run.ExitCode -ne 0) -Because '存在 FAIL 时退出码非 0'
         Assert-Match -Text $run.Output -Pattern '\[PASS\]\s+release\.version\b' -Because '合法版本号'
         Assert-Match -Text $run.Output -Pattern '\[FAIL\]\s+release\.artifact\.dir\b' -Because '版本目录不存在必须 FAIL'
-        Assert-Match -Text $run.Output -Pattern '版本目录不存在' -Because '错误文本'
+        Assert-Match -Text $run.Output -Pattern 'Version directory not found' -Because '错误文本'
         Assert-Match -Text $run.Output -Pattern '\[FAIL\]\s+release\.manifest\b' -Because 'manifest 不存在必须 FAIL'
         Assert-Match -Text $run.Output -Pattern '\[FAIL\]\s+release\.imagetag\.commit\b' -Because 'build-info 不可读时无法核对 tag,fail-safe'
     }
@@ -427,7 +428,7 @@ try {
         Assert-Match -Text $run.Output -Pattern '\[FAIL\]\s+release\.artifact\.sha256sums\b' -Because '制品被改过必须 FAIL'
         Assert-Match -Text $run.Output -Pattern '哈希不符' -Because '错误文本来自 Test-Sha256Sums'
         Assert-Match -Text $run.Output -Pattern '\[FAIL\]\s+release\.imagetag\.commit\b' -Because 'tag 不是这个版本号'
-        Assert-Match -Text $run.Output -Pattern '必须形如 v9\.9\.9-<12 位小写 commit>' -Because '错误文本说明期望形状'
+        Assert-Match -Text $run.Output -Pattern 'must look like v9\.9\.9-<12-char lowercase commit>' -Because '错误文本说明期望形状'
     }
 
     Test-Case "负向:预检 build-info.dirty=true 与 tag commit 不等于 build-info.commit 各自 FAIL" {
@@ -437,7 +438,7 @@ try {
         Assert-Match -Text $run.Output -Pattern '\[PASS\]\s+release\.artifact\.sha256sums\b' -Because '制品本身完整'
         Assert-Match -Text $run.Output -Pattern '\[FAIL\]\s+release\.buildinfo\.clean\b' -Because '脏树产物不能发布'
         Assert-Match -Text $run.Output -Pattern '\[FAIL\]\s+release\.imagetag\.commit\b' -Because 'tag 指向别的提交'
-        Assert-Match -Text $run.Output -Pattern '要部署的镜像不是这份制品' -Because '错误文本'
+        Assert-Match -Text $run.Output -Pattern 'the image to deploy is not this artifact' -Because '错误文本'
     }
 }
 finally {

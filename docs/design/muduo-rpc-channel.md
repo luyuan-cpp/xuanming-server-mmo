@@ -90,11 +90,18 @@ enum GameErrorCode {
 message GameRpcMessage {
   GameMessageType type = 1; bytes request = 2; bytes response = 3; GameErrorCode error = 4; uint32 message_id = 5;
   uint64 id = 6;          // 调用号(= muduo RpcMessage.id):发起方 channel 内单调递增、从 1 开始;0 = 单向
+  // 链路追踪(distributed-tracing.md §5.2):只在 REQUEST 上填,全 0 = 没有 trace
+  fixed64 trace_id_hi = 7; fixed64 trace_id_lo = 8; fixed64 parent_span_id = 9; uint32 trace_flags = 10;
 }
 ```
 
 - 字段号:1–5 已占,原版的 `fixed64 id = 2` 不能照搬,取 6(AGENTS §4.3 不复用)。类型 uint64 varint:uint32 按 5 万次/s 约 24h 回绕;
   不用 fixed64 是因为本仓不做 balancer_raw 式原地改写 id,varint 小号只占 1–3 字节;id=0 时 proto3 不序列化,单向推送(AOI 广播是最大流量路径)零开销。
+- 字段 7–10(2026-11-10 起,未编译验证):W3C trace-context 的二进制形态,读写只经 `network/rpc_trace_envelope.h`。
+  - 发送方(`CallMethodWithResponseType`、`SendRequest`)在 REQUEST 上写发起时的当前 trace;RESPONSE / RPC_ERROR / HEARTBEAT 不写,回包由调用方恢复自己捕获的上下文。
+  - 服务端派发(`CallServiceMethod` 开头的 `tracing::ScopedIncoming`)时,合法就在它下面建子 span;不合法(trace_id 全 0 或 parent_span_id 为 0)就开新根,照常派发,绝不据此拒绝。
+  - 开销:全 0 时 proto3 不编码,没有 trace 的帧不多一个字节;有 trace 时多 29 字节。这里用 fixed64,与上一条 id 用 varint 的理由相反:trace 是随机值,varint 要 9–10 字节,fixed64 恒为 8 字节。
+  - 细节见 [distributed-tracing.md](distributed-tracing.md) §5.2。
 - **REQUEST `id != 0`:服务端必须恰好回一帧**——成功回 RESPONSE(同 id、同 message_id;Empty / 0 字节响应也回),失败回 RPC_ERROR(同 id、同 message_id + error)。
 - **REQUEST `id == 0`:单向**(调用方声明不要应答,按次决定)。终态:服务端永不回 RESPONSE / RPC_ERROR,只计数。
   过渡期(§11):服务端对 id==0 保持旧规则(响应非 Empty 且非 0 字节才回、回包不带 id),只为服务尚未迁移的调用方;收口批删除。
@@ -211,7 +218,9 @@ struct OutstandingCall {
 - 测试接缝:`SweepTimeouts(SteadyTime now)` 公开(loop 线程调用),单测不依赖墙钟:CallMethod 前后取 t0/t1,真实截止必在 `[t0+T, t1+T]`;
   `SweepTimeouts(t0+T-1ns)` 必不过期、`SweepTimeouts(t1+T)` 必过期;用例超时一律设 1h,真实 tick 永不误触发。
 - 数值(命名常量,注释写推导):`kDefaultRpcCallTimeout = 10s`(与 gRPC `kDefaultGrpcCallDeadlineMs` 同值);
-  `kGateToSceneClientCallTimeout = 12s`,不变式 **I5**:scene 侧下游最大 deadline(10000)+ 1000 ≤ T ≤ 客户端请求超时(15000)− 1000
+  `kGateToSceneClientCallTimeout = 12s`,不变式 **I5**:scene 客户端消息 handler 在回包前会等待的下游的最大 deadline + 1000 ≤ T ≤ 客户端请求超时(15000)− 1000
+  (2026-11-11 订正:原写「scene 侧下游最大 deadline(10000)」,scene 已直连 PlayerStore(14000)等下游,按字面不再成立;PlayerStore 不得在客户端 handler 里等待,
+  适用范围与约束见 `client-request-ordering.md` §5.2 I5)
   (对齐 `client-request-ordering.md` §5 的 I4;登记 I5 由该文档 owner 同意后补);`kNodeHandshakeCallTimeout = 3s`(今天握手按 0.5s 节奏重试)。
   A→B→C:`T(B→C) + B 自身处理 < T(A→B)`,否则 B 的回复到 A 时已过期,只会被计数丢弃(结果未知,与 gRPC 口径一致)。
 - 每 channel 在途上限 `kMaxOutstandingCalls = 65536`(与 `muduo_grpc::ChannelOptions::maxOutstandingCalls` 同值),超限 `kNotSent` 并计数。
@@ -853,7 +862,7 @@ WARN 的条数和 message_id.txt 的 diff(只改行、只追加、不删行)。
 **双版本(AGENTS §12)**:墓碑格式与 Route 一族删除涉及客户端契约文件(message_id.txt 与 proto),Java 侧读墓碑已在 `15058ad` 完成,ContractSync 待主仓提交后重跑;
 四个方法的退役、RpcSession / 握手 / dev_tools 都是 C++ 服务端内部,Java 不适用。Java 仓 `PARITY.md` 已登记。
 
-## 21. 链路心跳:检测半开连接(2026-11-05,未编译,待 Codex 验证)
+## 21. 链路心跳:检测半开连接(2026-11-05 落码;11-08 Codex 编译通过、17 个单测全过;冒烟未跑,见 §21.11)
 
 §8.3 的握手只在建连时确认一次对端身份,之后链路是否还活着没有人检测。本节补上传输层的存活检测。它纯属传输层,不触发任何业务逻辑(§8.3「重连为什么不需要业务逻辑」)。
 
@@ -981,9 +990,13 @@ Java 版节点链路已有等价机制,具体是:
 
 Java 侧不需要改代码,只剩一项待做:同步 `game-proto` 里 `rpc_message.proto` 的副本(新增一个枚举值;Java 不解析 RPC0 信封)。已在 Java 仓 `PARITY.md` 末尾登记。
 
-### 21.11 给 Codex 的验证步骤
+### 21.11 验证状态
 
-见 `docs/PROGRESS.md` 2026-11-05「节点链路应用层心跳」条目:proto 生成 → 串行编译 → 单测 → 冒烟,另有可选的进程挂起演练。
+验证步骤见 `docs/PROGRESS.md` 2026-11-05「节点链路应用层心跳」条目:proto 生成 → 串行编译 → 单测 → 冒烟,另有可选的进程挂起演练。截至 2026-11-10:
+
+- **编译**:已通过。2026-11-08 Codex 主仓整解 `msbuild game.sln /m:1` exit 0,所在 HEAD `c17837c9c` 含本节全部代码;gate、scene、battle 的 Linux Debug 镜像 11-06 已构建通过。
+- **单测**:已通过。2026-11-08 Codex 在快照 `f6fddb466` 上全量运行 `rpc_controller_test`,328 PASS、0 FAIL,另有 2 个既有的 DISABLED 基准;本节 17 个用例全部 OK。原始日志在 `build/verification/muduo-minimal-linux-interop-20261022/resume-20261106T025137191Z/windows-tests-current/rpc_controller_test.stdout.log`。该快照与 main `e0790ad40` 的心跳相关源码逐文件零差异。
+- **未做**:冒烟(`[RpcChannel] summary` 的 `link_idle_closed` / `link_idle_deferred` 为 0)与可选的进程挂起演练,即上述条目的第 4、5 步。
 
 ## 附录 A:主要事实证据
 

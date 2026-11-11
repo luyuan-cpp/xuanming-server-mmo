@@ -57,6 +57,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::zone_merged_into
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto, /* tracker*/ nullptr,},
+        // ::zone_merge_history
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::route_meta
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::account_directory
@@ -305,6 +307,201 @@ const ::_pbi::ClassData* zone_merged_into_get_class_data() {
   return zone_merged_into_globals_.GetClassData();
 #else
   return zone_merged_into_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class zone_merge_history::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<zone_merge_history>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_._has_bits_);
+};
+
+constexpr zone_merge_history::ParseTableT_ zone_merge_history::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_._has_bits_),
+      0, // no _extensions_
+      7, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967168,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      7,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::zone_merge_history>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 src_zone = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(zone_merge_history, _impl_.src_zone_), 4>(),
+       {8, 4, 0,
+        PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.src_zone_)}},
+      // uint64 event_seq = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(zone_merge_history, _impl_.event_seq_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.event_seq_)}},
+      // string action = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.action_)}},
+      // uint32 dst_zone = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(zone_merge_history, _impl_.dst_zone_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.dst_zone_)}},
+      // string run_id = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 1, 0,
+        PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.run_id_)}},
+      // string sql_principal = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 2, 0,
+        PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.sql_principal_)}},
+      // uint64 at_ms = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(zone_merge_history, _impl_.at_ms_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.at_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 src_zone = 1;
+      {PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.src_zone_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 event_seq = 2;
+      {PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.event_seq_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string action = 3;
+      {PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.action_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 dst_zone = 4;
+      {PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.dst_zone_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string run_id = 5;
+      {PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.run_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string sql_principal = 6;
+      {PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.sql_principal_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 at_ms = 7;
+      {PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.at_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\22\0\0\6\0\6\15\0"
+      "zone_merge_history"
+      "action"
+      "run_id"
+      "sql_principal"
+    }},
+  };
+}
+
+
+inline constexpr zone_merge_history::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        action_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        run_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        sql_principal_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        event_seq_{::uint64_t{0u}},
+        src_zone_{0u},
+        dst_zone_{0u},
+        at_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr zone_merge_history::zone_merge_history(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL zone_merge_history::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) zone_merge_history(arena);
+}
+constexpr auto zone_merge_history::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(zone_merge_history), alignof(zone_merge_history));
+}
+constexpr auto zone_merge_history::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &zone_merge_history::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<zone_merge_history>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &zone_merge_history::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<zone_merge_history>(), &zone_merge_history::ByteSizeLong,
+              &zone_merge_history::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[14],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct zone_merge_historyGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr zone_merge_historyGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 zone_merge_history_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(zone_merge_history::InternalGenerateClassData_(
+            _default, &zone_merge_history_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<zone_merge_history>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~zone_merge_historyGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) zone_merge_history _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<zone_merge_history>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(zone_merge_historyGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST zone_merge_historyGlobalsTypeInternal zone_merge_history_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* zone_merge_history_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return zone_merge_history_globals_.GetClassData();
+#else
+  return zone_merge_history_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -694,7 +891,7 @@ constexpr auto sql_writer_slot::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[24],
+      &file_reflection_data[25],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -757,11 +954,11 @@ constexpr sql_writer_registry::ParseTableT_ sql_writer_registry::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -793,8 +990,8 @@ constexpr sql_writer_registry::ParseTableT_ sql_writer_registry::InternalGenerat
        {42, 4, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.registration_digest_)}},
       // .sql_writer_registry.State state = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(sql_writer_registry, _impl_.state_), 9>(),
-       {48, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(sql_writer_registry, _impl_.state_), 10>(),
+       {48, 10, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.state_)}},
       // uint64 registered_ms = 7;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(sql_writer_registry, _impl_.registered_ms_), 7>(),
@@ -812,7 +1009,10 @@ constexpr sql_writer_registry::ParseTableT_ sql_writer_registry::InternalGenerat
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(sql_writer_registry, _impl_.retired_ms_), 8>(),
        {80, 8, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.retired_ms_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 boot_seq = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(sql_writer_registry, _impl_.boot_seq_), 9>(),
+       {88, 9, 0,
+        PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.boot_seq_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -831,7 +1031,7 @@ constexpr sql_writer_registry::ParseTableT_ sql_writer_registry::InternalGenerat
       // bytes registration_digest = 5;
       {PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.registration_digest_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // .sql_writer_registry.State state = 6;
-      {PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.state_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.state_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint64 registered_ms = 7;
       {PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.registered_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bytes retirement_request_id = 8;
@@ -840,6 +1040,8 @@ constexpr sql_writer_registry::ParseTableT_ sql_writer_registry::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.retirement_digest_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // uint64 retired_ms = 10;
       {PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.retired_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 boot_seq = 11;
+      {PROTOBUF_FIELD_OFFSET(sql_writer_registry, _impl_.boot_seq_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -878,6 +1080,7 @@ inline constexpr sql_writer_registry::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         registered_ms_{::uint64_t{0u}},
         retired_ms_{::uint64_t{0u}},
+        boot_seq_{::uint64_t{0u}},
         state_{static_cast< ::sql_writer_registry_State >(0)} {}
 
 template <typename>
@@ -921,7 +1124,7 @@ constexpr auto sql_writer_registry::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[23],
+      &file_reflection_data[24],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -1103,7 +1306,7 @@ constexpr auto sql_writer_maintenance_receipt_TicketEvidence::InternalGenerateCl
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[40],
+      &file_reflection_data[41],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -1258,7 +1461,7 @@ constexpr auto sql_writer_maintenance_receipt_SourcePin::InternalGenerateClassDa
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[33],
+      &file_reflection_data[34],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -1486,7 +1689,7 @@ constexpr auto sql_writer_maintenance_receipt_RedisKeyClosure::InternalGenerateC
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[36],
+      &file_reflection_data[37],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -1750,7 +1953,7 @@ constexpr auto sql_writer_maintenance_receipt_ManualConsumerAssignment::Internal
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[44],
+      &file_reflection_data[45],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -1972,7 +2175,7 @@ constexpr auto sql_writer_maintenance_receipt_KafkaPartitionClosure::InternalGen
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[35],
+      &file_reflection_data[36],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -2173,7 +2376,7 @@ constexpr auto sql_writer_lifecycle_receipt::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[26],
+      &file_reflection_data[27],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -2466,7 +2669,7 @@ constexpr auto sql_writer_freeze_ticket::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[30],
+      &file_reflection_data[31],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -2701,7 +2904,7 @@ constexpr auto sql_writer_drain_run::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[29],
+      &file_reflection_data[30],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -2867,7 +3070,7 @@ constexpr auto sql_writer_boot_roster_RuntimeEnvironment::InternalGenerateClassD
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[53],
+      &file_reflection_data[54],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -3151,7 +3354,7 @@ constexpr auto sql_writer_boot_grant::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[27],
+      &file_reflection_data[28],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -3336,7 +3539,7 @@ constexpr auto route_meta::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -6226,7 +6429,7 @@ constexpr auto account_role_transfer_receipt::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -6413,7 +6616,7 @@ constexpr auto account_role_trade_holder::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[22],
+      &file_reflection_data[23],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -6638,7 +6841,7 @@ constexpr auto account_role_trade::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -6805,7 +7008,7 @@ constexpr auto account_role_removal::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -7000,7 +7203,7 @@ constexpr auto account_role_ref::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -7221,7 +7424,7 @@ constexpr auto account_role_admission::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[22],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -7432,7 +7635,7 @@ constexpr auto account_role::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[18],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -7585,7 +7788,7 @@ constexpr auto account_directory::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -7840,7 +8043,7 @@ constexpr auto sql_writer_maintenance_receipt_SourceOpenAck::InternalGenerateCla
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[48],
+      &file_reflection_data[49],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -8066,7 +8269,7 @@ constexpr auto sql_writer_maintenance_receipt_RedisTargetClosure::InternalGenera
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[37],
+      &file_reflection_data[38],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -8293,7 +8496,7 @@ constexpr auto sql_writer_maintenance_receipt_ManualConsumerEvidence::InternalGe
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[45],
+      &file_reflection_data[46],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -8463,7 +8666,7 @@ constexpr auto sql_writer_maintenance_receipt_LaunchClosure::InternalGenerateCla
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[32],
+      &file_reflection_data[33],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -8694,7 +8897,7 @@ constexpr auto sql_writer_maintenance_receipt_IssuerReadiness::InternalGenerateC
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[47],
+      &file_reflection_data[48],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -8929,7 +9132,7 @@ constexpr auto sql_writer_maintenance_receipt_IssuerClosure::InternalGenerateCla
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[34],
+      &file_reflection_data[35],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -9125,7 +9328,7 @@ constexpr auto sql_writer_maintenance_receipt_EmergencyEvidence::InternalGenerat
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[41],
+      &file_reflection_data[42],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -9364,7 +9567,7 @@ constexpr auto sql_writer_maintenance_receipt_ConsumerGroupReadiness::InternalGe
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[43],
+      &file_reflection_data[44],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -9427,11 +9630,11 @@ constexpr sql_writer_lifecycle_receipt_Request::ParseTableT_ sql_writer_lifecycl
     {
       PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_._has_bits_),
       0, // no _extensions_
-      12, 120,  // max_field_number, fast_idx_mask
+      13, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294963200,  // skipmap
+      4294959104,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      12,  // num_field_entries
+      13,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -9447,20 +9650,20 @@ constexpr sql_writer_lifecycle_receipt_Request::ParseTableT_ sql_writer_lifecycl
        {10, 1, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.request_id_)}},
       // .sql_writer_lifecycle_receipt.Kind kind = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(sql_writer_lifecycle_receipt_Request, _impl_.kind_), 10>(),
-       {16, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(sql_writer_lifecycle_receipt_Request, _impl_.kind_), 11>(),
+       {16, 11, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.kind_)}},
       // .sql_writer_registry writer = 3;
       {::_pbi::TcParser::FastMtS1,
-       {26, 7, 0,
+       {26, 8, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.writer_)}},
       // uint64 expected_epoch = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(sql_writer_lifecycle_receipt_Request, _impl_.expected_epoch_), 8>(),
-       {32, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(sql_writer_lifecycle_receipt_Request, _impl_.expected_epoch_), 9>(),
+       {32, 9, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.expected_epoch_)}},
       // uint64 expected_catalog_revision = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(sql_writer_lifecycle_receipt_Request, _impl_.expected_catalog_revision_), 9>(),
-       {40, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(sql_writer_lifecycle_receipt_Request, _impl_.expected_catalog_revision_), 10>(),
+       {40, 10, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.expected_catalog_revision_)}},
       // string authority_schema = 6;
       {::_pbi::TcParser::FastUS1,
@@ -9483,14 +9686,17 @@ constexpr sql_writer_lifecycle_receipt_Request::ParseTableT_ sql_writer_lifecycl
        {82, 5, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.deployment_id_)}},
       // .sql_writer_boot_grant.LockPrimitive lock_primitive = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(sql_writer_lifecycle_receipt_Request, _impl_.lock_primitive_), 11>(),
-       {88, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(sql_writer_lifecycle_receipt_Request, _impl_.lock_primitive_), 12>(),
+       {88, 12, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.lock_primitive_)}},
       // bytes lock_qualification_sha256 = 12;
       {::_pbi::TcParser::FastBS1,
        {98, 6, 0,
         PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.lock_qualification_sha256_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bytes successor_request_id = 13;
+      {::_pbi::TcParser::FastBS1,
+       {106, 7, 0,
+        PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.successor_request_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -9499,13 +9705,13 @@ constexpr sql_writer_lifecycle_receipt_Request::ParseTableT_ sql_writer_lifecycl
       // bytes request_id = 1;
       {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.request_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // .sql_writer_lifecycle_receipt.Kind kind = 2;
-      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.kind_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.kind_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // .sql_writer_registry writer = 3;
-      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.writer_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.writer_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 expected_epoch = 4;
-      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.expected_epoch_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.expected_epoch_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 expected_catalog_revision = 5;
-      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.expected_catalog_revision_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.expected_catalog_revision_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string authority_schema = 6;
       {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.authority_schema_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // repeated string protected_schemas = 7;
@@ -9517,9 +9723,11 @@ constexpr sql_writer_lifecycle_receipt_Request::ParseTableT_ sql_writer_lifecycl
       // string deployment_id = 10;
       {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.deployment_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // .sql_writer_boot_grant.LockPrimitive lock_primitive = 11;
-      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.lock_primitive_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.lock_primitive_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // bytes lock_qualification_sha256 = 12;
       {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.lock_qualification_sha256_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // bytes successor_request_id = 13;
+      {PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.successor_request_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -9564,6 +9772,9 @@ inline constexpr sql_writer_lifecycle_receipt_Request::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         lock_qualification_sha256_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        successor_request_id_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         writer_{nullptr},
@@ -9613,7 +9824,7 @@ constexpr auto sql_writer_lifecycle_receipt_Request::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[25],
+      &file_reflection_data[26],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -9776,7 +9987,7 @@ constexpr auto sql_writer_boot_grant_set::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[28],
+      &file_reflection_data[29],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -9961,7 +10172,7 @@ constexpr auto sql_writer_maintenance_receipt_PublicationReadiness::InternalGene
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[49],
+      &file_reflection_data[50],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -10138,7 +10349,7 @@ constexpr auto sql_writer_maintenance_receipt_PublicationEvidence::InternalGener
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[38],
+      &file_reflection_data[39],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -10493,7 +10704,7 @@ constexpr auto sql_writer_maintenance_receipt_Plan::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[31],
+      &file_reflection_data[32],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -10771,7 +10982,7 @@ constexpr auto sql_writer_maintenance_receipt_NonSqlClosureEvidence::InternalGen
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[39],
+      &file_reflection_data[40],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -10938,7 +11149,7 @@ constexpr auto sql_writer_maintenance_receipt_ConsumerReadiness::InternalGenerat
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[46],
+      &file_reflection_data[47],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -11126,7 +11337,7 @@ constexpr auto sql_writer_boot_roster_Entry::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[52],
+      &file_reflection_data[53],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -11312,7 +11523,7 @@ constexpr auto sql_writer_maintenance_receipt_ReleaseReadiness::InternalGenerate
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[42],
+      &file_reflection_data[43],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -11475,7 +11686,7 @@ constexpr auto sql_writer_boot_roster::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[54],
+      &file_reflection_data[55],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -11674,7 +11885,7 @@ constexpr auto sql_writer_maintenance_receipt_Evidence::InternalGenerateClassDat
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[50],
+      &file_reflection_data[51],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -11967,7 +12178,7 @@ constexpr auto sql_writer_maintenance_receipt::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[51],
+      &file_reflection_data[52],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
@@ -12374,6 +12585,23 @@ const ::uint32_t
         0,
         3,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::zone_merge_history, _impl_._has_bits_),
+        10, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::zone_merge_history, _impl_.src_zone_),
+        PROTOBUF_FIELD_OFFSET(::zone_merge_history, _impl_.event_seq_),
+        PROTOBUF_FIELD_OFFSET(::zone_merge_history, _impl_.action_),
+        PROTOBUF_FIELD_OFFSET(::zone_merge_history, _impl_.dst_zone_),
+        PROTOBUF_FIELD_OFFSET(::zone_merge_history, _impl_.run_id_),
+        PROTOBUF_FIELD_OFFSET(::zone_merge_history, _impl_.sql_principal_),
+        PROTOBUF_FIELD_OFFSET(::zone_merge_history, _impl_.at_ms_),
+        4,
+        3,
+        0,
+        5,
+        1,
+        2,
+        6,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::route_meta, _impl_._has_bits_),
         9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::route_meta, _impl_.id_),
@@ -12534,7 +12762,7 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::sql_writer_registry, _impl_._has_bits_),
-        13, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::sql_writer_registry, _impl_.writer_key_),
         PROTOBUF_FIELD_OFFSET(::sql_writer_registry, _impl_.generation_),
         PROTOBUF_FIELD_OFFSET(::sql_writer_registry, _impl_.instance_id_),
@@ -12545,16 +12773,18 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::sql_writer_registry, _impl_.retirement_request_id_),
         PROTOBUF_FIELD_OFFSET(::sql_writer_registry, _impl_.retirement_digest_),
         PROTOBUF_FIELD_OFFSET(::sql_writer_registry, _impl_.retired_ms_),
+        PROTOBUF_FIELD_OFFSET(::sql_writer_registry, _impl_.boot_seq_),
         0,
         1,
         2,
         3,
         4,
-        9,
+        10,
         7,
         5,
         6,
         8,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::sql_writer_slot, _impl_._has_bits_),
         9, // hasbit index offset
@@ -12572,7 +12802,7 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::sql_writer_lifecycle_receipt_Request, _impl_._has_bits_),
-        15, // hasbit index offset
+        16, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::sql_writer_lifecycle_receipt_Request, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::sql_writer_lifecycle_receipt_Request, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::sql_writer_lifecycle_receipt_Request, _impl_.writer_),
@@ -12585,18 +12815,20 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::sql_writer_lifecycle_receipt_Request, _impl_.deployment_id_),
         PROTOBUF_FIELD_OFFSET(::sql_writer_lifecycle_receipt_Request, _impl_.lock_primitive_),
         PROTOBUF_FIELD_OFFSET(::sql_writer_lifecycle_receipt_Request, _impl_.lock_qualification_sha256_),
+        PROTOBUF_FIELD_OFFSET(::sql_writer_lifecycle_receipt_Request, _impl_.successor_request_id_),
         1,
-        10,
-        7,
+        11,
         8,
         9,
+        10,
         2,
         0,
         3,
         4,
         5,
-        11,
+        12,
         6,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::sql_writer_lifecycle_receipt, _impl_._has_bits_),
         11, // hasbit index offset
@@ -13178,47 +13410,48 @@ static const ::_pbi::MigrationSchema
         {307, sizeof(::directory_shard)},
         {316, sizeof(::player_route)},
         {337, sizeof(::zone_merged_into)},
-        {348, sizeof(::route_meta)},
-        {363, sizeof(::account_directory)},
-        {370, sizeof(::account_role_ref)},
-        {389, sizeof(::account_role)},
-        {410, sizeof(::account_role_removal)},
-        {421, sizeof(::account_role_trade)},
-        {446, sizeof(::account_role_transfer_receipt)},
-        {469, sizeof(::account_role_admission)},
-        {492, sizeof(::account_role_trade_holder)},
-        {507, sizeof(::sql_writer_registry)},
-        {530, sizeof(::sql_writer_slot)},
-        {545, sizeof(::sql_writer_lifecycle_receipt_Request)},
-        {572, sizeof(::sql_writer_lifecycle_receipt)},
-        {591, sizeof(::sql_writer_boot_grant)},
-        {626, sizeof(::sql_writer_boot_grant_set)},
-        {633, sizeof(::sql_writer_drain_run)},
-        {658, sizeof(::sql_writer_freeze_ticket)},
-        {695, sizeof(::sql_writer_maintenance_receipt_Plan)},
-        {730, sizeof(::sql_writer_maintenance_receipt_LaunchClosure)},
-        {739, sizeof(::sql_writer_maintenance_receipt_SourcePin)},
-        {746, sizeof(::sql_writer_maintenance_receipt_IssuerClosure)},
-        {769, sizeof(::sql_writer_maintenance_receipt_KafkaPartitionClosure)},
-        {792, sizeof(::sql_writer_maintenance_receipt_RedisKeyClosure)},
-        {813, sizeof(::sql_writer_maintenance_receipt_RedisTargetClosure)},
-        {832, sizeof(::sql_writer_maintenance_receipt_PublicationEvidence)},
-        {841, sizeof(::sql_writer_maintenance_receipt_NonSqlClosureEvidence)},
-        {868, sizeof(::sql_writer_maintenance_receipt_TicketEvidence)},
-        {881, sizeof(::sql_writer_maintenance_receipt_EmergencyEvidence)},
-        {894, sizeof(::sql_writer_maintenance_receipt_ReleaseReadiness)},
-        {907, sizeof(::sql_writer_maintenance_receipt_ConsumerGroupReadiness)},
-        {928, sizeof(::sql_writer_maintenance_receipt_ManualConsumerAssignment)},
-        {963, sizeof(::sql_writer_maintenance_receipt_ManualConsumerEvidence)},
-        {984, sizeof(::sql_writer_maintenance_receipt_ConsumerReadiness)},
-        {991, sizeof(::sql_writer_maintenance_receipt_IssuerReadiness)},
-        {1012, sizeof(::sql_writer_maintenance_receipt_SourceOpenAck)},
-        {1039, sizeof(::sql_writer_maintenance_receipt_PublicationReadiness)},
-        {1050, sizeof(::sql_writer_maintenance_receipt_Evidence)},
-        {1071, sizeof(::sql_writer_maintenance_receipt)},
-        {1108, sizeof(::sql_writer_boot_roster_Entry)},
-        {1119, sizeof(::sql_writer_boot_roster_RuntimeEnvironment)},
-        {1128, sizeof(::sql_writer_boot_roster)},
+        {348, sizeof(::zone_merge_history)},
+        {365, sizeof(::route_meta)},
+        {380, sizeof(::account_directory)},
+        {387, sizeof(::account_role_ref)},
+        {406, sizeof(::account_role)},
+        {427, sizeof(::account_role_removal)},
+        {438, sizeof(::account_role_trade)},
+        {463, sizeof(::account_role_transfer_receipt)},
+        {486, sizeof(::account_role_admission)},
+        {509, sizeof(::account_role_trade_holder)},
+        {524, sizeof(::sql_writer_registry)},
+        {549, sizeof(::sql_writer_slot)},
+        {564, sizeof(::sql_writer_lifecycle_receipt_Request)},
+        {593, sizeof(::sql_writer_lifecycle_receipt)},
+        {612, sizeof(::sql_writer_boot_grant)},
+        {647, sizeof(::sql_writer_boot_grant_set)},
+        {654, sizeof(::sql_writer_drain_run)},
+        {679, sizeof(::sql_writer_freeze_ticket)},
+        {716, sizeof(::sql_writer_maintenance_receipt_Plan)},
+        {751, sizeof(::sql_writer_maintenance_receipt_LaunchClosure)},
+        {760, sizeof(::sql_writer_maintenance_receipt_SourcePin)},
+        {767, sizeof(::sql_writer_maintenance_receipt_IssuerClosure)},
+        {790, sizeof(::sql_writer_maintenance_receipt_KafkaPartitionClosure)},
+        {813, sizeof(::sql_writer_maintenance_receipt_RedisKeyClosure)},
+        {834, sizeof(::sql_writer_maintenance_receipt_RedisTargetClosure)},
+        {853, sizeof(::sql_writer_maintenance_receipt_PublicationEvidence)},
+        {862, sizeof(::sql_writer_maintenance_receipt_NonSqlClosureEvidence)},
+        {889, sizeof(::sql_writer_maintenance_receipt_TicketEvidence)},
+        {902, sizeof(::sql_writer_maintenance_receipt_EmergencyEvidence)},
+        {915, sizeof(::sql_writer_maintenance_receipt_ReleaseReadiness)},
+        {928, sizeof(::sql_writer_maintenance_receipt_ConsumerGroupReadiness)},
+        {949, sizeof(::sql_writer_maintenance_receipt_ManualConsumerAssignment)},
+        {984, sizeof(::sql_writer_maintenance_receipt_ManualConsumerEvidence)},
+        {1005, sizeof(::sql_writer_maintenance_receipt_ConsumerReadiness)},
+        {1012, sizeof(::sql_writer_maintenance_receipt_IssuerReadiness)},
+        {1033, sizeof(::sql_writer_maintenance_receipt_SourceOpenAck)},
+        {1060, sizeof(::sql_writer_maintenance_receipt_PublicationReadiness)},
+        {1071, sizeof(::sql_writer_maintenance_receipt_Evidence)},
+        {1092, sizeof(::sql_writer_maintenance_receipt)},
+        {1129, sizeof(::sql_writer_boot_roster_Entry)},
+        {1140, sizeof(::sql_writer_boot_roster_RuntimeEnvironment)},
+        {1149, sizeof(::sql_writer_boot_roster)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -13236,6 +13469,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::directory_shard_globals_,
         &::player_route_globals_,
         &::zone_merged_into_globals_,
+        &::zone_merge_history_globals_,
         &::route_meta_globals_,
         &::account_directory_globals_,
         &::account_role_ref_globals_,
@@ -13332,7 +13566,7 @@ const char descriptor_table_protodef_proto_2fcommon_2fdatabase_2frollback_5fdata
     "ted_ms\030\031 \001(\004\022\022\n\nupdated_ms\030\032 \001(\004\022\023\n\013fini"
     "shed_ms\030\033 \001(\004:G\212\222\364\001\017gm_recall_batch\222\222\364\001\n"
     "request_id\332\222\364\001\020state,created_ms\250\223\364\001\001\260\223\364\001"
-    "\004\270\223\364\001\004\"\375\005\n\014gm_recall_op\022\r\n\005op_id\030\001 \001(\004\022\022"
+    "\004\270\223\364\001\004\"\215\006\n\014gm_recall_op\022\r\n\005op_id\030\001 \001(\004\022\022"
     "\n\nrequest_id\030\002 \001(\004\022\021\n\tplayer_id\030\003 \001(\004\022\016\n"
     "\006stream\030\004 \001(\r\022\013\n\003seq\030\005 \001(\004\022\024\n\014stream_epo"
     "ch\030\006 \001(\004\022\016\n\006status\030\007 \001(\r\022\017\n\007payload\030\010 \001("
@@ -13346,386 +13580,393 @@ const char descriptor_table_protodef_proto_2fcommon_2fdatabase_2frollback_5fdata
     "cy_type\030\026 \001(\r\022\026\n\016item_config_id\030\027 \001(\r\022\021\n"
     "\trequested\030\030 \001(\004\022\r\n\005taken\030\031 \001(\004\022\014\n\004debt\030"
     "\032 \001(\004\022\021\n\tshortfall\030\033 \001(\004\022\023\n\013resolved_by\030"
-    "\034 \001(\t\022\026\n\016resolve_reason\030\035 \001(\t:\266\001\212\222\364\001\014gm_"
-    "recall_op\222\222\364\001\005op_id\332\222\364\001astatus,next_atte"
-    "mpt_ms;player_id,stream,stream_epoch,sta"
-    "tus,seq;player_id,status;request_id,op_i"
-    "d\342\222\364\001!player_id,stream,stream_epoch,seq\250"
-    "\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\237\001\n\rgm_recall_seq\022\021\n\tplay"
-    "er_id\030\001 \001(\004\022\016\n\006stream\030\002 \001(\r\022\020\n\010next_seq\030"
-    "\003 \001(\004\022\022\n\nupdated_ms\030\004 \001(\004\022\r\n\005epoch\030\005 \001(\004"
-    ":6\212\222\364\001\rgm_recall_seq\222\222\364\001\020player_id,strea"
-    "m\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\260\001\n\020gm_recall_source\022\r\n"
-    "\005tx_id\030\001 \001(\004\022\022\n\nrequest_id\030\002 \001(\004\022\021\n\tplay"
-    "er_id\030\003 \001(\004\022\r\n\005op_id\030\004 \001(\004\022\022\n\ncreated_ms"
-    "\030\005 \001(\004:C\212\222\364\001\020gm_recall_source\222\222\364\001\005tx_id\332"
-    "\222\364\001\020request_id;op_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\220\002\n\013"
-    "player_debt\022\021\n\tplayer_id\030\001 \001(\004\022\025\n\rcurren"
-    "cy_type\030\002 \001(\r\022\023\n\013owed_amount\030\003 \001(\004\022\023\n\013pa"
-    "id_amount\030\004 \001(\004\022\016\n\006frozen\030\005 \001(\010\022\016\n\006reaso"
-    "n\030\006 \001(\t\022\023\n\013gm_operator\030\007 \001(\t\022\022\n\ncreated_"
-    "at\030\010 \001(\004\022\022\n\nexpires_at\030\t \001(\004\022\024\n\014complete"
-    "d_at\030\n \001(\004::\212\222\364\001\013player_debt\222\222\364\001\027player_"
-    "id,currency_type\332\222\364\001\tplayer_id\"\323\002\n\016rollb"
-    "ack_audit\022\020\n\010audit_id\030\001 \001(\004\022\021\n\tplayer_id"
-    "\030\002 \001(\004\022\023\n\013snapshot_id\030\003 \001(\004\022\023\n\013target_ti"
-    "me\030\004 \001(\004\022\023\n\013executed_at\030\005 \001(\004\022\023\n\013gm_oper"
-    "ator\030\006 \001(\t\022\016\n\006reason\030\007 \001(\t\022\r\n\005scope\030\010 \001("
-    "\t\022\026\n\016items_restored\030\t \001(\r\022\025\n\ritems_skipp"
-    "ed\030\n \001(\r\022\033\n\023currencies_restored\030\013 \001(\r\022\032\n"
-    "\022currencies_skipped\030\014 \001(\r\022\021\n\tdiff_json\030\r"
-    " \001(\t:.\212\222\364\001\016rollback_audit\222\222\364\001\010audit_id\332\222"
-    "\364\001\tplayer_id\"\226\001\n\013player_name\022\021\n\tplayer_i"
-    "d\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\021\n\tname_norm\030\003 \001(\t"
-    "\022\022\n\ncreated_ms\030\004 \001(\004\022\020\n\010bound_ms\030\005 \001(\004:-"
-    "\212\222\364\001\013player_name\222\222\364\001\tname_norm\250\223\364\001\001\260\223\364\001\004"
-    "\270\223\364\001\004\"|\n\021player_name_owner\022\021\n\tplayer_id\030"
-    "\001 \001(\004\022\021\n\tname_norm\030\002 \001(\t\022\014\n\004name\030\003 \001(\t:3"
-    "\212\222\364\001\021player_name_owner\222\222\364\001\tplayer_id\250\223\364\001"
-    "\001\260\223\364\001\004\270\223\364\001\004\"`\n\017directory_shard\022\n\n\002id\030\001 \001"
-    "(\r\022\026\n\016logical_shards\030\002 \001(\r\022\014\n\004slot\030\003 \001(\r"
-    ":\033\212\222\364\001\017directory_shard\222\222\364\001\002id\"\372\001\n\014player"
-    "_route\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\thome_zone\030\002"
-    " \001(\r\022\022\n\nstorage_id\030\003 \001(\r\022\031\n\021placement_ve"
-    "rsion\030\004 \001(\004\022\013\n\003rev\030\006 \001(\004\022\022\n\nupdated_by\030\007"
-    " \001(\t\022\025\n\rcreated_at_ms\030\010 \001(\004\022\025\n\rupdated_a"
-    "t_ms\030\t \001(\004\022\023\n\013route_shard\030\n \001(\r:+\212\222\364\001\014pl"
-    "ayer_route\222\222\364\001\025route_shard,player_idJ\004\010\005"
-    "\020\006\"\200\001\n\020zone_merged_into\022\020\n\010src_zone\030\001 \001("
-    "\r\022\020\n\010dst_zone\030\002 \001(\r\022\016\n\006run_id\030\003 \001(\t\022\024\n\014m"
-    "erged_at_ms\030\004 \001(\004:\"\212\222\364\001\020zone_merged_into"
-    "\222\222\364\001\010src_zone\"\235\001\n\nroute_meta\022\n\n\002id\030\001 \001(\r"
-    "\022\022\n\ngeneration\030\002 \001(\t\022\020\n\010writable\030\003 \001(\r\022\024"
-    "\n\014writer_epoch\030\004 \001(\004\022\030\n\020catalog_revision"
-    "\030\005 \001(\004\022\025\n\rfreeze_run_id\030\006 \001(\014:\026\212\222\364\001\nrout"
-    "e_meta\222\222\364\001\002id\"\\\n\021account_directory\022\017\n\007ac"
-    "count\030\001 \001(\t\022\022\n\ncreated_ms\030\002 \001(\004:\"\212\222\364\001\021ac"
-    "count_directory\222\222\364\001\007account\"\332\001\n\020account_"
-    "role_ref\022\017\n\007account\030\001 \001(\t\022\021\n\tplayer_id\030\002"
-    " \001(\004\022\r\n\005state\030\003 \001(\r\022\r\n\005tx_id\030\004 \001(\004\022\022\n\nli"
-    "sting_id\030\005 \001(\004\022\021\n\thome_zone\030\006 \001(\r\022\r\n\005non"
-    "ce\030\007 \001(\004\022\022\n\ncreated_ms\030\010 \001(\004::\212\222\364\001\020accou"
-    "nt_role_ref\222\222\364\001\021account,player_id\250\223\364\001\001\260\223"
-    "\364\001\004\270\223\364\001\004\"\211\002\n\014account_role\022\021\n\tplayer_id\030\001"
-    " \001(\004\022\017\n\007account\030\002 \001(\t\022\022\n\nrole_proto\030\003 \001("
-    "\014\022\026\n\016owner_revision\030\004 \001(\004\022\022\n\nupdated_ms\030"
-    "\005 \001(\004\022\030\n\020trade_listing_id\030\006 \001(\004\022\035\n\025initi"
-    "al_player_commit\030\007 \001(\004\022\025\n\rfence_version\030"
-    "\010 \001(\004\022\025\n\rprepare_token\030\t \001(\004:.\212\222\364\001\014accou"
-    "nt_role\222\222\364\001\tplayer_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\236\001\n"
-    "\024account_role_removal\022\021\n\tplayer_id\030\001 \001(\004"
-    "\022\017\n\007account\030\002 \001(\t\022\026\n\016owner_revision\030\003 \001("
-    "\004\022\022\n\nstarted_ms\030\004 \001(\004:6\212\222\364\001\024account_role"
-    "_removal\222\222\364\001\tplayer_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\312\002"
-    "\n\022account_role_trade\022\022\n\nlisting_id\030\001 \001(\004"
-    "\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016seller_account\030\003 "
-    "\001(\t\022\035\n\025seller_owner_revision\030\004 \001(\004\022\026\n\016re"
-    "quest_digest\030\005 \001(\014\022\r\n\005state\030\006 \001(\r\022\027\n\017fre"
-    "eze_evidence\030\007 \001(\014\022\022\n\ncreated_ms\030\010 \001(\004\022\022"
-    "\n\nupdated_ms\030\t \001(\004\022\034\n\024required_owner_epo"
-    "ch\030\n \001(\004\022\031\n\021required_save_seq\030\013 \001(\004:5\212\222\364"
-    "\001\022account_role_trade\222\222\364\001\nlisting_id\250\223\364\001\001"
-    "\260\223\364\001\004\270\223\364\001\004\"\276\002\n\035account_role_transfer_rec"
-    "eipt\022\r\n\005tx_id\030\001 \001(\004\022\026\n\016request_digest\030\002 "
-    "\001(\014\022\022\n\nlisting_id\030\003 \001(\004\022\021\n\tplayer_id\030\004 \001"
-    "(\004\022\026\n\016seller_account\030\005 \001(\t\022\025\n\rbuyer_acco"
-    "unt\030\006 \001(\t\022\035\n\025seller_owner_revision\030\007 \001(\004"
-    "\022\034\n\024buyer_owner_revision\030\010 \001(\004\022\022\n\ncreate"
-    "d_ms\030\t \001(\004\022\022\n\nrole_proto\030\n \001(\014:;\212\222\364\001\035acc"
-    "ount_role_transfer_receipt\222\222\364\001\005tx_id\250\223\364\001"
-    "\001\260\223\364\001\004\270\223\364\001\004\"\312\002\n\026account_role_admission\022\021"
-    "\n\tplayer_id\030\001 \001(\004\022\031\n\021scene_instance_id\030\002"
-    " \001(\t\022\032\n\022highest_generation\030\003 \001(\004\022\026\n\016clos"
-    "ed_through\030\004 \001(\004\022\026\n\016identity_proto\030\005 \001(\014"
-    "\022\026\n\016request_digest\030\006 \001(\014\022\034\n\024required_own"
-    "er_epoch\030\007 \001(\004\022\031\n\021required_save_seq\030\010 \001("
-    "\004\022\024\n\014close_digest\030\t \001(\014\022\022\n\nupdated_ms\030\n "
-    "\001(\004:;\212\222\364\001\026account_role_admission\222\222\364\001\033pla"
-    "yer_id,scene_instance_id\"\330\001\n\031account_rol"
-    "e_trade_holder\022\022\n\nlisting_id\030\001 \001(\004\022\031\n\021sc"
-    "ene_instance_id\030\002 \001(\t\022\022\n\nseal_proto\030\003 \001("
-    "\014\022\017\n\007drained\030\004 \001(\r\022\022\n\nack_digest\030\005 \001(\014\022\022"
-    "\n\nupdated_ms\030\006 \001(\004:\?\212\222\364\001\031account_role_tr"
-    "ade_holder\222\222\364\001\034listing_id,scene_instance"
-    "_id\"\360\002\n\023sql_writer_registry\022\022\n\nwriter_ke"
-    "y\030\001 \001(\014\022\022\n\ngeneration\030\002 \001(\t\022\023\n\013instance_"
-    "id\030\003 \001(\014\022\025\n\rsql_principal\030\004 \001(\014\022\033\n\023regis"
-    "tration_digest\030\005 \001(\014\022)\n\005state\030\006 \001(\0162\032.sq"
-    "l_writer_registry.State\022\025\n\rregistered_ms"
-    "\030\007 \001(\004\022\035\n\025retirement_request_id\030\010 \001(\014\022\031\n"
-    "\021retirement_digest\030\t \001(\014\022\022\n\nretired_ms\030\n"
-    " \001(\004\"3\n\005State\022\021\n\rSTATE_UNKNOWN\020\000\022\n\n\006ACTI"
-    "VE\020\001\022\013\n\007REVOKED\020\002:#\212\222\364\001\017writer_registry\222"
-    "\222\364\001\nwriter_key\"\302\001\n\017sql_writer_slot\022\022\n\nwr"
-    "iter_key\030\001 \001(\014\022\014\n\004slot\030\002 \001(\r\022\022\n\ngenerati"
-    "on\030\003 \001(\t\022\024\n\014writer_epoch\030\004 \001(\004\022)\n\005state\030"
-    "\005 \001(\0162\032.sql_writer_registry.State\022\022\n\nloc"
-    "k_touch\030\006 \001(\r:$\212\222\364\001\013writer_slot\222\222\364\001\017writ"
-    "er_key,slot\"\261\006\n\034sql_writer_lifecycle_rec"
-    "eipt\022\022\n\nrequest_id\030\001 \001(\014\0220\n\004kind\030\002 \001(\0162\""
-    ".sql_writer_lifecycle_receipt.Kind\022\022\n\nge"
-    "neration\030\003 \001(\t\022\026\n\016request_digest\030\004 \001(\014\022\025"
-    "\n\rrequest_proto\030\005 \001(\014\022\026\n\016previous_epoch\030"
-    "\006 \001(\004\022\027\n\017resulting_epoch\030\007 \001(\004\022\030\n\020catalo"
-    "g_revision\030\010 \001(\004\032\224\003\n\007Request\022\022\n\nrequest_"
-    "id\030\001 \001(\014\0220\n\004kind\030\002 \001(\0162\".sql_writer_life"
-    "cycle_receipt.Kind\022$\n\006writer\030\003 \001(\0132\024.sql"
-    "_writer_registry\022\026\n\016expected_epoch\030\004 \001(\004"
-    "\022!\n\031expected_catalog_revision\030\005 \001(\004\022\030\n\020a"
-    "uthority_schema\030\006 \001(\t\022\031\n\021protected_schem"
-    "as\030\007 \003(\t\022\031\n\021deployment_digest\030\010 \001(\014\022\032\n\022m"
-    "aintenance_run_id\030\t \001(\014\022\025\n\rdeployment_id"
-    "\030\n \001(\t\022<\n\016lock_primitive\030\013 \001(\0162$.sql_wri"
-    "ter_boot_grant.LockPrimitive\022!\n\031lock_qua"
-    "lification_sha256\030\014 \001(\014\"D\n\004Kind\022\020\n\014KIND_"
-    "UNKNOWN\020\000\022\014\n\010REGISTER\020\001\022\n\n\006RETIRE\020\002\"\004\010\003\020"
-    "\003\"\004\010\004\020\004\"\004\010\005\020\005:`\212\222\364\001\030writer_lifecycle_rec"
-    "eipt\222\222\364\001\nrequest_id\332\222\364\001/kind,request_dig"
-    "est;catalog_revision,request_id\"\214\004\n\025sql_"
-    "writer_boot_grant\022\016\n\006format\030\001 \001(\t\022\022\n\nwri"
-    "ter_key\030\002 \001(\014\022\023\n\013instance_id\030\003 \001(\014\022\022\n\nge"
-    "neration\030\004 \001(\t\022\030\n\020authority_schema\030\005 \001(\t"
-    "\022\031\n\021protected_schemas\030\006 \003(\t\022\025\n\rsql_princ"
-    "ipal\030\007 \001(\014\022\033\n\023registration_digest\030\010 \001(\014\022"
-    "\025\n\rdeployment_id\030\t \001(\t\022\020\n\010grant_id\030\n \001(\014"
-    "\022\022\n\ngranted_ms\030\013 \001(\004\022\022\n\npermission\030\014 \001(\t"
-    "\022!\n\031physical_authority_sha256\030\r \001(\014\022\032\n\022m"
-    "aintenance_run_id\030\016 \001(\014\022<\n\016lock_primitiv"
-    "e\030\017 \001(\0162$.sql_writer_boot_grant.LockPrim"
-    "itive\022!\n\031lock_qualification_sha256\030\020 \001(\014"
-    "\"L\n\rLockPrimitive\022\032\n\026LOCK_PRIMITIVE_UNKN"
-    "OWN\020\000\022\017\n\013SELECT_ONLY\020\001\022\016\n\nLOCK_TOUCH\020\002\"S"
-    "\n\031sql_writer_boot_grant_set\022\016\n\006format\030\001 "
-    "\001(\t\022&\n\006grants\030\002 \003(\0132\026.sql_writer_boot_gr"
-    "ant\"\332\004\n\024sql_writer_drain_run\022\024\n\014operatio"
-    "n_id\030\001 \001(\014\022\026\n\016request_digest\030\002 \001(\014\022\022\n\nge"
-    "neration\030\003 \001(\t\022\030\n\020attempt_revision\030\004 \001(\004"
-    "\022\026\n\016manifest_proto\030\005 \001(\014\022\027\n\017manifest_dig"
-    "est\030\006 \001(\014\022*\n\005phase\030\007 \001(\0162\033.sql_writer_dr"
-    "ain_run.Phase\022\035\n\025latest_receipt_digest\030\010"
-    " \001(\014\022\031\n\021frozen_request_id\030\t \001(\014\022\022\n\nupdat"
-    "ed_ms\030\n \001(\004\022\031\n\021latest_receipt_id\030\013 \001(\014\"\363"
-    "\001\n\005Phase\022\013\n\007UNKNOWN\020\000\022\016\n\nPLAN_FIXED\020\001\022\020\n"
-    "\014ROOTS_CLOSED\020\003\022\014\n\010DRAINING\020\004\022\022\n\016NON_SQL"
-    "_CLOSED\020\005\022\025\n\021FREEZE_AUTHORIZED\020\006\022\016\n\nSQL_"
-    "FROZEN\020\007\022\021\n\rRELEASE_READY\020\010\022\020\n\014SQL_RELEA"
-    "SED\020\t\022\030\n\024PUBLICATION_REOPENED\020\n\022\022\n\016ABORT"
-    "ED_CLOSED\020\013\022\031\n\025EMERGENCY_FROZEN_HOLD\020\014\"\004"
-    "\010\002\020\002:*\212\222\364\001\024sql_writer_drain_run\222\222\364\001\014oper"
-    "ation_id\"\347\005\n\030sql_writer_freeze_ticket\022\021\n"
-    "\tticket_id\030\001 \001(\014\022\024\n\014operation_id\030\002 \001(\014\022\030"
-    "\n\020attempt_revision\030\003 \001(\004\022\022\n\ngeneration\030\004"
-    " \001(\t\022\027\n\017manifest_digest\030\005 \001(\014\022\036\n\026non_sql"
-    "_receipt_digest\030\006 \001(\014\022\031\n\021freeze_request_"
-    "id\030\007 \001(\014\022\035\n\025freeze_request_digest\030\010 \001(\014\022"
-    "\025\n\rnot_before_ms\030\t \001(\004\022\022\n\nexpires_ms\030\n \001"
-    "(\004\022.\n\005state\030\013 \001(\0162\037.sql_writer_freeze_ti"
-    "cket.State\022\037\n\027consumed_receipt_digest\030\014 "
-    "\001(\014\022\031\n\021revocation_digest\030\r \001(\014\022\022\n\nupdate"
-    "d_ms\030\016 \001(\004\022G\n\022authorization_kind\030\017 \001(\0162+"
-    ".sql_writer_freeze_ticket.AuthorizationK"
-    "ind\022\030\n\020grant_receipt_id\030\020 \001(\014\022\034\n\024grant_r"
-    "eceipt_digest\030\021 \001(\014\"D\n\005State\022\021\n\rSTATE_UN"
-    "KNOWN\020\000\022\r\n\tAVAILABLE\020\001\022\014\n\010CONSUMED\020\002\022\013\n\007"
-    "REVOKED\020\003\"b\n\021AuthorizationKind\022\031\n\025AUTHOR"
-    "IZATION_UNKNOWN\020\000\022\027\n\023NORMAL_DRAIN_FREEZE"
-    "\020\001\022\031\n\025EMERGENCY_HOLD_FREEZE\020\002:+\212\222\364\001\030sql_"
-    "writer_freeze_ticket\222\222\364\001\tticket_id\"\3456\n\036s"
-    "ql_writer_maintenance_receipt\022\022\n\nrequest"
-    "_id\030\001 \001(\014\022\026\n\016request_digest\030\002 \001(\014\022\016\n\006run"
-    "_id\030\003 \001(\014\022\022\n\ngeneration\030\004 \001(\t\022\024\n\014before_"
-    "epoch\030\005 \001(\004\022\023\n\013after_epoch\030\006 \001(\004\022\030\n\020cata"
-    "log_revision\030\007 \001(\004\0224\n\005phase\030\010 \001(\0162%.sql_"
-    "writer_maintenance_receipt.Phase\022\022\n\nplan"
-    "_proto\030\t \001(\014\022\024\n\014committed_ms\030\n \001(\004\0222\n\004ki"
-    "nd\030\013 \001(\0162$.sql_writer_maintenance_receip"
-    "t.Kind\022.\n\trun_phase\030\014 \001(\0162\033.sql_writer_d"
-    "rain_run.Phase\022\030\n\020attempt_revision\030\r \001(\004"
-    "\022\030\n\020prior_receipt_id\030\016 \001(\014\022\034\n\024prior_rece"
-    "ipt_digest\030\017 \001(\014\022:\n\010evidence\030\020 \001(\0132(.sql"
-    "_writer_maintenance_receipt.Evidence\022\026\n\016"
-    "receipt_digest\030\021 \001(\014\032\255\006\n\004Plan\022!\n\031physica"
-    "l_cluster_identity\030\001 \001(\014\022\030\n\020authority_sc"
-    "hema\030\002 \001(\t\022\031\n\021protected_schemas\030\003 \003(\t\022\032\n"
-    "\022active_writer_keys\030\004 \003(\014\022\024\n\014before_epoc"
-    "h\030\005 \001(\004\022\030\n\020catalog_revision\030\006 \001(\004\022\016\n\006run"
-    "_id\030\007 \001(\014\022\037\n\027prior_freeze_request_id\030\010 \001"
-    "(\014\022C\n\014root_issuers\030\n \003(\0132-.sql_writer_ma"
-    "intenance_receipt.IssuerClosure\022E\n\016queue"
-    "_mutators\030\013 \003(\0132-.sql_writer_maintenance"
-    "_receipt.IssuerClosure\022O\n\020kafka_partitio"
-    "ns\030\014 \003(\01325.sql_writer_maintenance_receip"
-    "t.KafkaPartitionClosure\022I\n\rredis_targets"
-    "\030\r \003(\01322.sql_writer_maintenance_receipt."
-    "RedisTargetClosure\022>\n\013source_pins\030\016 \003(\0132"
-    ").sql_writer_maintenance_receipt.SourceP"
-    "in\022@\n\tlaunchers\030\017 \003(\0132-.sql_writer_maint"
-    "enance_receipt.LaunchClosure\022J\n\023maintena"
-    "nce_issuers\030\020 \003(\0132-.sql_writer_maintenan"
-    "ce_receipt.IssuerClosure\022T\n\022manual_assig"
-    "nments\030\021 \003(\01328.sql_writer_maintenance_re"
-    "ceipt.ManualConsumerAssignmentJ\004\010\t\020\n\032\200\001\n"
-    "\rLaunchClosure\022\023\n\013launcher_id\030\001 \001(\014\022>\n\013s"
-    "ource_pins\030\002 \003(\0132).sql_writer_maintenanc"
-    "e_receipt.SourcePin\022\032\n\022permanent_fence_i"
-    "d\030\003 \001(\014\0322\n\tSourcePin\022\025\n\rabsolute_path\030\001 "
-    "\001(\t\022\016\n\006sha256\030\002 \001(\014\032\317\002\n\rIssuerClosure\022\021\n"
-    "\tissuer_id\030\001 \001(\014\022\023\n\013instance_id\030\002 \001(\014\022\033\n"
-    "\023physical_writer_key\030\003 \001(\014\022\024\n\014logical_ro"
-    "le\030\004 \001(\t\022\"\n\032permanent_revival_fence_id\030\005"
-    " \001(\014\022\033\n\023accepting_closed_ms\030\006 \001(\004\022\033\n\023acc"
-    "epted_settled_ms\030\007 \001(\004\022 \n\030accepted_front"
-    "ier_digest\030\010 \001(\014\022\037\n\027unresolved_publicati"
-    "ons\030\t \001(\004\022B\n\017source_evidence\030\n \003(\0132).sql"
-    "_writer_maintenance_receipt.SourcePin\032\376\001"
-    "\n\025KafkaPartitionClosure\022\022\n\ncluster_id\030\001 "
-    "\001(\014\022\020\n\010topic_id\030\002 \001(\014\022\022\n\ntopic_name\030\003 \001("
-    "\t\022\r\n\005group\030\004 \001(\t\022\021\n\tpartition\030\005 \001(\r\022!\n\031p"
-    "rotected_committed_floor\030\006 \001(\003\022\030\n\020initia"
-    "l_earliest\030\007 \001(\003\022\026\n\016final_earliest\030\010 \001(\003"
-    "\022\033\n\023final_exclusive_end\030\t \001(\003\022\027\n\017final_c"
-    "ommitted\030\n \001(\003\032\245\001\n\017RedisKeyClosure\022\013\n\003ke"
-    "y\030\001 \001(\t\022\014\n\004kind\030\002 \001(\t\022\r\n\005topic\030\003 \001(\t\022\022\n\n"
-    "redis_type\030\004 \001(\t\022\017\n\007pttl_ms\030\005 \001(\003\022\r\n\005cou"
-    "nt\030\006 \001(\004\022\017\n\007members\030\007 \003(\014\022\016\n\006values\030\010 \003("
-    "\014\022\023\n\013dump_sha256\030\t \001(\014\032\220\002\n\022RedisTargetCl"
-    "osure\022\014\n\004role\030\001 \001(\t\022\017\n\007address\030\002 \001(\t\022\n\n\002"
-    "db\030\003 \001(\005\022\025\n\rserver_run_id\030\004 \001(\014\022\031\n\021maint"
-    "enance_nonce\030\005 \001(\014\022\r\n\005zones\030\006 \003(\r\022E\n\014obs"
-    "ervations\030\007 \003(\0132/.sql_writer_maintenance"
-    "_receipt.RedisKeyClosure\022G\n\024scan_source_"
-    "evidence\030\010 \003(\0132).sql_writer_maintenance_"
-    "receipt.SourcePin\032\300\001\n\023PublicationEvidenc"
-    "e\022D\n\rlogical_roles\030\001 \003(\0132-.sql_writer_ma"
-    "intenance_receipt.IssuerClosure\022\037\n\027issue"
-    "r_inventory_digest\030\002 \001(\014\022B\n\017source_evide"
-    "nce\030\003 \003(\0132).sql_writer_maintenance_recei"
-    "pt.SourcePin\032\367\004\n\025NonSqlClosureEvidence\022E"
-    "\n\016queue_mutators\030\001 \003(\0132-.sql_writer_main"
-    "tenance_receipt.IssuerClosure\022O\n\020kafka_p"
-    "artitions\030\002 \003(\01325.sql_writer_maintenance"
-    "_receipt.KafkaPartitionClosure\022I\n\rredis_"
-    "targets\030\003 \003(\01322.sql_writer_maintenance_r"
-    "eceipt.RedisTargetClosure\022\036\n\026root_closed"
-    "_receipt_id\030\004 \001(\014\022\"\n\032root_closed_receipt"
-    "_digest\030\005 \001(\014\022!\n\031relay_quiesced_receipt_"
-    "id\030\006 \001(\014\022%\n\035relay_quiesced_receipt_diges"
-    "t\030\007 \001(\014\022#\n\033historical_inventory_digest\030\010"
-    " \001(\014\022\031\n\021observed_start_ms\030\t \001(\004\022\027\n\017obser"
-    "ved_end_ms\030\n \001(\004\022B\n\017source_evidence\030\013 \003("
-    "\0132).sql_writer_maintenance_receipt.Sourc"
-    "ePin\022P\n\020manual_consumers\030\014 \003(\01326.sql_wri"
-    "ter_maintenance_receipt.ManualConsumerEv"
-    "idence\032\232\001\n\016TicketEvidence\022\021\n\tticket_id\030\001"
-    " \001(\014\022\030\n\020bound_request_id\030\002 \001(\014\022\034\n\024bound_"
-    "request_digest\030\003 \001(\014\022\036\n\026authority_operat"
-    "ion_id\030\004 \001(\014\022\035\n\025ticket_request_digest\030\005 "
-    "\001(\014\032\350\001\n\021EmergencyEvidence\022\016\n\006reason\030\001 \001("
-    "\t\022\031\n\021danger_receipt_id\030\002 \001(\014\022\035\n\025danger_r"
-    "eceipt_digest\030\003 \001(\014\022B\n\017source_evidence\030\004"
-    " \003(\0132).sql_writer_maintenance_receipt.So"
-    "urcePin\022E\n\rauthorization\030\005 \001(\0132..sql_wri"
-    "ter_maintenance_receipt.TicketEvidence\032\212"
-    "\002\n\020ReleaseReadiness\022\"\n\032original_freeze_r"
-    "eceipt_id\030\001 \001(\014\022&\n\036original_freeze_recei"
-    "pt_digest\030\002 \001(\014\022!\n\031non_sql_closed_receip"
-    "t_id\030\004 \001(\014\022%\n\035non_sql_closed_receipt_dig"
-    "est\030\005 \001(\014\022T\n\027maintenance_publication\030\007 \001"
-    "(\01323.sql_writer_maintenance_receipt.Publ"
-    "icationEvidenceJ\004\010\003\020\004J\004\010\006\020\007\032\320\002\n\026Consumer"
-    "GroupReadiness\022\024\n\014operation_id\030\001 \001(\014\022\027\n\017"
-    "manifest_digest\030\002 \001(\014\022\021\n\tissuer_id\030\003 \001(\014"
-    "\022\023\n\013instance_id\030\004 \001(\014\022\r\n\005group\030\005 \001(\t\022\025\n\r"
-    "generation_id\030\006 \001(\005\022\021\n\tmember_id\030\007 \001(\t\022R"
-    "\n\023expected_partitions\030\010 \003(\01325.sql_writer"
-    "_maintenance_receipt.KafkaPartitionClosu"
-    "re\022R\n\023assigned_partitions\030\t \003(\01325.sql_wr"
-    "iter_maintenance_receipt.KafkaPartitionC"
-    "losure\032\364\002\n\030ManualConsumerAssignment\022\021\n\ti"
-    "ssuer_id\030\001 \001(\014\022\023\n\013instance_id\030\002 \001(\014\022\023\n\013c"
-    "onsumer_id\030\003 \001(\t\022\022\n\ncluster_id\030\004 \001(\014\022\020\n\010"
-    "topic_id\030\005 \001(\014\022\022\n\ntopic_name\030\006 \001(\t\022\027\n\017pa"
-    "rtition_count\030\007 \001(\r\022\021\n\tpartition\030\010 \001(\r\022\026"
-    "\n\016target_node_id\030\t \001(\r\022\032\n\022target_instanc"
-    "e_id\030\n \001(\014\022\033\n\023assignment_revision\030\013 \001(\004\022"
-    "\024\n\014start_offset\030\014 \001(\003\022\020\n\010position\030\r \001(\003\022"
-    "\020\n\010earliest\030\016 \001(\003\022\025\n\rexclusive_end\030\017 \001(\003"
-    "\022\023\n\013observed_ms\030\020 \001(\004\032\316\002\n\026ManualConsumer"
-    "Evidence\022\024\n\014operation_id\030\001 \001(\014\022\027\n\017manife"
-    "st_digest\030\002 \001(\014\022M\n\013assignments\030\003 \003(\01328.s"
-    "ql_writer_maintenance_receipt.ManualCons"
-    "umerAssignment\022\030\n\020accepting_closed\030\004 \001(\010"
-    "\022\030\n\020callbacks_joined\030\005 \001(\010\022\020\n\010accepted\030\006"
-    " \001(\004\022\017\n\007settled\030\007 \001(\004\022\037\n\027unresolved_publ"
-    "ications\030\010 \001(\004\022>\n\013source_pins\030\t \003(\0132).sq"
-    "l_writer_maintenance_receipt.SourcePin\032\257"
-    "\001\n\021ConsumerReadiness\022F\n\006groups\030\001 \003(\01326.s"
-    "ql_writer_maintenance_receipt.ConsumerGr"
-    "oupReadiness\022R\n\022manual_assignments\030\002 \003(\013"
-    "26.sql_writer_maintenance_receipt.Manual"
-    "ConsumerEvidence\032\266\002\n\017IssuerReadiness\022\021\n\t"
-    "issuer_id\030\001 \001(\014\022\023\n\013instance_id\030\002 \001(\014\022\033\n\023"
-    "physical_writer_key\030\003 \001(\014\022\024\n\014logical_rol"
-    "e\030\004 \001(\t\022\037\n\027registration_receipt_id\030\005 \001(\014"
-    "\022#\n\033registration_receipt_digest\030\006 \001(\014\022\032\n"
-    "\022prepared_closed_ms\030\007 \001(\004\022&\n\036consumer_re"
-    "ady_frontier_digest\030\010 \001(\014\022>\n\013source_pins"
-    "\030\t \003(\0132).sql_writer_maintenance_receipt."
-    "SourcePin\032\355\002\n\rSourceOpenAck\022\021\n\tissuer_id"
-    "\030\001 \001(\014\022\023\n\013instance_id\030\002 \001(\014\022\033\n\023physical_"
-    "writer_key\030\003 \001(\014\022\024\n\014logical_role\030\004 \001(\t\022\037"
-    "\n\027registration_receipt_id\030\005 \001(\014\022#\n\033regis"
-    "tration_receipt_digest\030\006 \001(\014\022\024\n\014operatio"
-    "n_id\030\007 \001(\014\022\027\n\017manifest_digest\030\010 \001(\014\022\021\n\to"
-    "pened_ms\030\t \001(\004\022\027\n\017open_request_id\030\n \001(\014\022"
-    " \n\030accepted_frontier_digest\030\013 \001(\014\022>\n\013sou"
-    "rce_pins\030\014 \003(\0132).sql_writer_maintenance_"
-    "receipt.SourcePin\032\340\001\n\024PublicationReadine"
-    "ss\022\032\n\022release_receipt_id\030\001 \001(\014\022\036\n\026releas"
-    "e_receipt_digest\030\002 \001(\014\022G\n\016prepared_boots"
-    "\030\003 \003(\0132/.sql_writer_maintenance_receipt."
-    "IssuerReadiness\022C\n\020source_open_acks\030\004 \003("
-    "\0132).sql_writer_maintenance_receipt.Sourc"
-    "ePin\032\221\004\n\010Evidence\022\024\n\014operation_id\030\001 \001(\014\022"
-    "\027\n\017manifest_digest\030\002 \001(\014\022J\n\013publication\030"
-    "\n \001(\01323.sql_writer_maintenance_receipt.P"
-    "ublicationEvidenceH\000\022P\n\017non_sql_closure\030"
-    "\013 \001(\01325.sql_writer_maintenance_receipt.N"
-    "onSqlClosureEvidenceH\000\022@\n\006ticket\030\014 \001(\0132."
-    ".sql_writer_maintenance_receipt.TicketEv"
-    "idenceH\000\022F\n\temergency\030\r \001(\01321.sql_writer"
-    "_maintenance_receipt.EmergencyEvidenceH\000"
-    "\022M\n\021release_readiness\030\016 \001(\01320.sql_writer"
-    "_maintenance_receipt.ReleaseReadinessH\000\022"
-    "U\n\025publication_readiness\030\017 \001(\01324.sql_wri"
-    "ter_maintenance_receipt.PublicationReadi"
-    "nessH\000B\010\n\006detail\"4\n\005Phase\022\021\n\rPHASE_UNKNO"
-    "WN\020\000\022\n\n\006FROZEN\020\001\022\014\n\010RELEASED\020\002\"\245\001\n\004Kind\022"
-    "\020\n\014KIND_UNKNOWN\020\000\022\n\n\006FREEZE\020\001\022\013\n\007RELEASE"
-    "\020\002\022\017\n\013PHASE_EVENT\020\003\022\017\n\013ROLE_CLOSED\020\004\022\022\n\016"
-    "RELAY_QUIESCED\020\005\022\022\n\016TICKET_GRANTED\020\006\022\022\n\016"
-    "TICKET_REVOKED\020\007\022\024\n\020EMERGENCY_FREEZE\020\010:2"
-    "\212\222\364\001\036sql_writer_maintenance_receipt\222\222\364\001\n"
-    "request_id\"\356\002\n\026sql_writer_boot_roster\022\016\n"
-    "\006format\030\001 \001(\t\022.\n\007entries\030\002 \003(\0132\035.sql_wri"
-    "ter_boot_roster.Entry\032\305\001\n\005Entry\0227\n\010reque"
-    "sts\030\001 \003(\0132%.sql_writer_lifecycle_receipt"
-    ".Request\022\033\n\023runtime_config_path\030\002 \001(\t\022\035\n"
-    "\025runtime_config_sha256\030\003 \001(\014\022G\n\023runtime_"
-    "environment\030\004 \003(\0132*.sql_writer_boot_rost"
-    "er.RuntimeEnvironment\032L\n\022RuntimeEnvironm"
-    "ent\022\014\n\004name\030\001 \001(\t\022\022\n\nvalue_path\030\002 \001(\t\022\024\n"
-    "\014value_sha256\030\003 \001(\014*p\n\022GmRecallBatchStat"
-    "e\022\037\n\033GM_RECALL_BATCH_UNSPECIFIED\020\000\022\033\n\027GM"
-    "_RECALL_BATCH_RUNNING\020\001\022\034\n\030GM_RECALL_BAT"
-    "CH_FINISHED\020\002*\205\002\n\020GmRecallOpStatus\022\034\n\030GM"
-    "_RECALL_OP_UNSPECIFIED\020\000\022\030\n\024GM_RECALL_OP"
-    "_PENDING\020\001\022\030\n\024GM_RECALL_OP_APPLIED\020\002\022\031\n\025"
-    "GM_RECALL_OP_REJECTED\020\003\022\030\n\024GM_RECALL_OP_"
-    "ABORTED\020\004\022\030\n\024GM_RECALL_OP_PARTIAL\020\005\022\030\n\024G"
-    "M_RECALL_OP_PLANNED\020\006\022\032\n\026GM_RECALL_OP_CA"
-    "NCELLED\020\007\022\032\n\026GM_RECALL_OP_ROLE_GONE\020\010B\021Z"
-    "\017common/databaseb\006proto3"
+    "\034 \001(\t\022\026\n\016resolve_reason\030\035 \001(\t:\306\001\212\222\364\001\014gm_"
+    "recall_op\222\222\364\001\005op_id\332\222\364\001qstatus,next_atte"
+    "mpt_ms,op_id,player_id;player_id,stream,"
+    "stream_epoch,status,seq;player_id,status"
+    ";request_id,op_id\342\222\364\001!player_id,stream,s"
+    "tream_epoch,seq\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\237\001\n\rgm_re"
+    "call_seq\022\021\n\tplayer_id\030\001 \001(\004\022\016\n\006stream\030\002 "
+    "\001(\r\022\020\n\010next_seq\030\003 \001(\004\022\022\n\nupdated_ms\030\004 \001("
+    "\004\022\r\n\005epoch\030\005 \001(\004:6\212\222\364\001\rgm_recall_seq\222\222\364\001"
+    "\020player_id,stream\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\260\001\n\020gm_"
+    "recall_source\022\r\n\005tx_id\030\001 \001(\004\022\022\n\nrequest_"
+    "id\030\002 \001(\004\022\021\n\tplayer_id\030\003 \001(\004\022\r\n\005op_id\030\004 \001"
+    "(\004\022\022\n\ncreated_ms\030\005 \001(\004:C\212\222\364\001\020gm_recall_s"
+    "ource\222\222\364\001\005tx_id\332\222\364\001\020request_id;op_id\250\223\364\001"
+    "\001\260\223\364\001\004\270\223\364\001\004\"\220\002\n\013player_debt\022\021\n\tplayer_id"
+    "\030\001 \001(\004\022\025\n\rcurrency_type\030\002 \001(\r\022\023\n\013owed_am"
+    "ount\030\003 \001(\004\022\023\n\013paid_amount\030\004 \001(\004\022\016\n\006froze"
+    "n\030\005 \001(\010\022\016\n\006reason\030\006 \001(\t\022\023\n\013gm_operator\030\007"
+    " \001(\t\022\022\n\ncreated_at\030\010 \001(\004\022\022\n\nexpires_at\030\t"
+    " \001(\004\022\024\n\014completed_at\030\n \001(\004::\212\222\364\001\013player_"
+    "debt\222\222\364\001\027player_id,currency_type\332\222\364\001\tpla"
+    "yer_id\"\323\002\n\016rollback_audit\022\020\n\010audit_id\030\001 "
+    "\001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\023\n\013snapshot_id\030\003 "
+    "\001(\004\022\023\n\013target_time\030\004 \001(\004\022\023\n\013executed_at\030"
+    "\005 \001(\004\022\023\n\013gm_operator\030\006 \001(\t\022\016\n\006reason\030\007 \001"
+    "(\t\022\r\n\005scope\030\010 \001(\t\022\026\n\016items_restored\030\t \001("
+    "\r\022\025\n\ritems_skipped\030\n \001(\r\022\033\n\023currencies_r"
+    "estored\030\013 \001(\r\022\032\n\022currencies_skipped\030\014 \001("
+    "\r\022\021\n\tdiff_json\030\r \001(\t:.\212\222\364\001\016rollback_audi"
+    "t\222\222\364\001\010audit_id\332\222\364\001\tplayer_id\"\226\001\n\013player_"
+    "name\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\021\n"
+    "\tname_norm\030\003 \001(\t\022\022\n\ncreated_ms\030\004 \001(\004\022\020\n\010"
+    "bound_ms\030\005 \001(\004:-\212\222\364\001\013player_name\222\222\364\001\tnam"
+    "e_norm\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"|\n\021player_name_own"
+    "er\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\tname_norm\030\002 \001(\t"
+    "\022\014\n\004name\030\003 \001(\t:3\212\222\364\001\021player_name_owner\222\222"
+    "\364\001\tplayer_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"`\n\017directory"
+    "_shard\022\n\n\002id\030\001 \001(\r\022\026\n\016logical_shards\030\002 \001"
+    "(\r\022\014\n\004slot\030\003 \001(\r:\033\212\222\364\001\017directory_shard\222\222"
+    "\364\001\002id\"\372\001\n\014player_route\022\021\n\tplayer_id\030\001 \001("
+    "\004\022\021\n\thome_zone\030\002 \001(\r\022\022\n\nstorage_id\030\003 \001(\r"
+    "\022\031\n\021placement_version\030\004 \001(\004\022\013\n\003rev\030\006 \001(\004"
+    "\022\022\n\nupdated_by\030\007 \001(\t\022\025\n\rcreated_at_ms\030\010 "
+    "\001(\004\022\025\n\rupdated_at_ms\030\t \001(\004\022\023\n\013route_shar"
+    "d\030\n \001(\r:+\212\222\364\001\014player_route\222\222\364\001\025route_sha"
+    "rd,player_idJ\004\010\005\020\006\"\200\001\n\020zone_merged_into\022"
+    "\020\n\010src_zone\030\001 \001(\r\022\020\n\010dst_zone\030\002 \001(\r\022\016\n\006r"
+    "un_id\030\003 \001(\t\022\024\n\014merged_at_ms\030\004 \001(\004:\"\212\222\364\001\020"
+    "zone_merged_into\222\222\364\001\010src_zone\"\301\001\n\022zone_m"
+    "erge_history\022\020\n\010src_zone\030\001 \001(\r\022\021\n\tevent_"
+    "seq\030\002 \001(\004\022\016\n\006action\030\003 \001(\t\022\020\n\010dst_zone\030\004 "
+    "\001(\r\022\016\n\006run_id\030\005 \001(\t\022\025\n\rsql_principal\030\006 \001"
+    "(\t\022\r\n\005at_ms\030\007 \001(\004:.\212\222\364\001\022zone_merge_histo"
+    "ry\222\222\364\001\022src_zone,event_seq\"\235\001\n\nroute_meta"
+    "\022\n\n\002id\030\001 \001(\r\022\022\n\ngeneration\030\002 \001(\t\022\020\n\010writ"
+    "able\030\003 \001(\r\022\024\n\014writer_epoch\030\004 \001(\004\022\030\n\020cata"
+    "log_revision\030\005 \001(\004\022\025\n\rfreeze_run_id\030\006 \001("
+    "\014:\026\212\222\364\001\nroute_meta\222\222\364\001\002id\"\\\n\021account_dir"
+    "ectory\022\017\n\007account\030\001 \001(\t\022\022\n\ncreated_ms\030\002 "
+    "\001(\004:\"\212\222\364\001\021account_directory\222\222\364\001\007account\""
+    "\332\001\n\020account_role_ref\022\017\n\007account\030\001 \001(\t\022\021\n"
+    "\tplayer_id\030\002 \001(\004\022\r\n\005state\030\003 \001(\r\022\r\n\005tx_id"
+    "\030\004 \001(\004\022\022\n\nlisting_id\030\005 \001(\004\022\021\n\thome_zone\030"
+    "\006 \001(\r\022\r\n\005nonce\030\007 \001(\004\022\022\n\ncreated_ms\030\010 \001(\004"
+    "::\212\222\364\001\020account_role_ref\222\222\364\001\021account,play"
+    "er_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\211\002\n\014account_role\022\021\n"
+    "\tplayer_id\030\001 \001(\004\022\017\n\007account\030\002 \001(\t\022\022\n\nrol"
+    "e_proto\030\003 \001(\014\022\026\n\016owner_revision\030\004 \001(\004\022\022\n"
+    "\nupdated_ms\030\005 \001(\004\022\030\n\020trade_listing_id\030\006 "
+    "\001(\004\022\035\n\025initial_player_commit\030\007 \001(\004\022\025\n\rfe"
+    "nce_version\030\010 \001(\004\022\025\n\rprepare_token\030\t \001(\004"
+    ":.\212\222\364\001\014account_role\222\222\364\001\tplayer_id\250\223\364\001\001\260\223"
+    "\364\001\004\270\223\364\001\004\"\236\001\n\024account_role_removal\022\021\n\tpla"
+    "yer_id\030\001 \001(\004\022\017\n\007account\030\002 \001(\t\022\026\n\016owner_r"
+    "evision\030\003 \001(\004\022\022\n\nstarted_ms\030\004 \001(\004:6\212\222\364\001\024"
+    "account_role_removal\222\222\364\001\tplayer_id\250\223\364\001\001\260"
+    "\223\364\001\004\270\223\364\001\004\"\312\002\n\022account_role_trade\022\022\n\nlist"
+    "ing_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016selle"
+    "r_account\030\003 \001(\t\022\035\n\025seller_owner_revision"
+    "\030\004 \001(\004\022\026\n\016request_digest\030\005 \001(\014\022\r\n\005state\030"
+    "\006 \001(\r\022\027\n\017freeze_evidence\030\007 \001(\014\022\022\n\ncreate"
+    "d_ms\030\010 \001(\004\022\022\n\nupdated_ms\030\t \001(\004\022\034\n\024requir"
+    "ed_owner_epoch\030\n \001(\004\022\031\n\021required_save_se"
+    "q\030\013 \001(\004:5\212\222\364\001\022account_role_trade\222\222\364\001\nlis"
+    "ting_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\276\002\n\035account_role_"
+    "transfer_receipt\022\r\n\005tx_id\030\001 \001(\004\022\026\n\016reque"
+    "st_digest\030\002 \001(\014\022\022\n\nlisting_id\030\003 \001(\004\022\021\n\tp"
+    "layer_id\030\004 \001(\004\022\026\n\016seller_account\030\005 \001(\t\022\025"
+    "\n\rbuyer_account\030\006 \001(\t\022\035\n\025seller_owner_re"
+    "vision\030\007 \001(\004\022\034\n\024buyer_owner_revision\030\010 \001"
+    "(\004\022\022\n\ncreated_ms\030\t \001(\004\022\022\n\nrole_proto\030\n \001"
+    "(\014:;\212\222\364\001\035account_role_transfer_receipt\222\222"
+    "\364\001\005tx_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\312\002\n\026account_role"
+    "_admission\022\021\n\tplayer_id\030\001 \001(\004\022\031\n\021scene_i"
+    "nstance_id\030\002 \001(\t\022\032\n\022highest_generation\030\003"
+    " \001(\004\022\026\n\016closed_through\030\004 \001(\004\022\026\n\016identity"
+    "_proto\030\005 \001(\014\022\026\n\016request_digest\030\006 \001(\014\022\034\n\024"
+    "required_owner_epoch\030\007 \001(\004\022\031\n\021required_s"
+    "ave_seq\030\010 \001(\004\022\024\n\014close_digest\030\t \001(\014\022\022\n\nu"
+    "pdated_ms\030\n \001(\004:;\212\222\364\001\026account_role_admis"
+    "sion\222\222\364\001\033player_id,scene_instance_id\"\330\001\n"
+    "\031account_role_trade_holder\022\022\n\nlisting_id"
+    "\030\001 \001(\004\022\031\n\021scene_instance_id\030\002 \001(\t\022\022\n\nsea"
+    "l_proto\030\003 \001(\014\022\017\n\007drained\030\004 \001(\r\022\022\n\nack_di"
+    "gest\030\005 \001(\014\022\022\n\nupdated_ms\030\006 \001(\004:\?\212\222\364\001\031acc"
+    "ount_role_trade_holder\222\222\364\001\034listing_id,sc"
+    "ene_instance_id\"\202\003\n\023sql_writer_registry\022"
+    "\022\n\nwriter_key\030\001 \001(\014\022\022\n\ngeneration\030\002 \001(\t\022"
+    "\023\n\013instance_id\030\003 \001(\014\022\025\n\rsql_principal\030\004 "
+    "\001(\014\022\033\n\023registration_digest\030\005 \001(\014\022)\n\005stat"
+    "e\030\006 \001(\0162\032.sql_writer_registry.State\022\025\n\rr"
+    "egistered_ms\030\007 \001(\004\022\035\n\025retirement_request"
+    "_id\030\010 \001(\014\022\031\n\021retirement_digest\030\t \001(\014\022\022\n\n"
+    "retired_ms\030\n \001(\004\022\020\n\010boot_seq\030\013 \001(\004\"3\n\005St"
+    "ate\022\021\n\rSTATE_UNKNOWN\020\000\022\n\n\006ACTIVE\020\001\022\013\n\007RE"
+    "VOKED\020\002:#\212\222\364\001\017writer_registry\222\222\364\001\nwriter"
+    "_key\"\302\001\n\017sql_writer_slot\022\022\n\nwriter_key\030\001"
+    " \001(\014\022\014\n\004slot\030\002 \001(\r\022\022\n\ngeneration\030\003 \001(\t\022\024"
+    "\n\014writer_epoch\030\004 \001(\004\022)\n\005state\030\005 \001(\0162\032.sq"
+    "l_writer_registry.State\022\022\n\nlock_touch\030\006 "
+    "\001(\r:$\212\222\364\001\013writer_slot\222\222\364\001\017writer_key,slo"
+    "t\"\317\006\n\034sql_writer_lifecycle_receipt\022\022\n\nre"
+    "quest_id\030\001 \001(\014\0220\n\004kind\030\002 \001(\0162\".sql_write"
+    "r_lifecycle_receipt.Kind\022\022\n\ngeneration\030\003"
+    " \001(\t\022\026\n\016request_digest\030\004 \001(\014\022\025\n\rrequest_"
+    "proto\030\005 \001(\014\022\026\n\016previous_epoch\030\006 \001(\004\022\027\n\017r"
+    "esulting_epoch\030\007 \001(\004\022\030\n\020catalog_revision"
+    "\030\010 \001(\004\032\262\003\n\007Request\022\022\n\nrequest_id\030\001 \001(\014\0220"
+    "\n\004kind\030\002 \001(\0162\".sql_writer_lifecycle_rece"
+    "ipt.Kind\022$\n\006writer\030\003 \001(\0132\024.sql_writer_re"
+    "gistry\022\026\n\016expected_epoch\030\004 \001(\004\022!\n\031expect"
+    "ed_catalog_revision\030\005 \001(\004\022\030\n\020authority_s"
+    "chema\030\006 \001(\t\022\031\n\021protected_schemas\030\007 \003(\t\022\031"
+    "\n\021deployment_digest\030\010 \001(\014\022\032\n\022maintenance"
+    "_run_id\030\t \001(\014\022\025\n\rdeployment_id\030\n \001(\t\022<\n\016"
+    "lock_primitive\030\013 \001(\0162$.sql_writer_boot_g"
+    "rant.LockPrimitive\022!\n\031lock_qualification"
+    "_sha256\030\014 \001(\014\022\034\n\024successor_request_id\030\r "
+    "\001(\014\"D\n\004Kind\022\020\n\014KIND_UNKNOWN\020\000\022\014\n\010REGISTE"
+    "R\020\001\022\n\n\006RETIRE\020\002\"\004\010\003\020\003\"\004\010\004\020\004\"\004\010\005\020\005:`\212\222\364\001\030"
+    "writer_lifecycle_receipt\222\222\364\001\nrequest_id\332"
+    "\222\364\001/kind,request_digest;catalog_revision"
+    ",request_id\"\214\004\n\025sql_writer_boot_grant\022\016\n"
+    "\006format\030\001 \001(\t\022\022\n\nwriter_key\030\002 \001(\014\022\023\n\013ins"
+    "tance_id\030\003 \001(\014\022\022\n\ngeneration\030\004 \001(\t\022\030\n\020au"
+    "thority_schema\030\005 \001(\t\022\031\n\021protected_schema"
+    "s\030\006 \003(\t\022\025\n\rsql_principal\030\007 \001(\014\022\033\n\023regist"
+    "ration_digest\030\010 \001(\014\022\025\n\rdeployment_id\030\t \001"
+    "(\t\022\020\n\010grant_id\030\n \001(\014\022\022\n\ngranted_ms\030\013 \001(\004"
+    "\022\022\n\npermission\030\014 \001(\t\022!\n\031physical_authori"
+    "ty_sha256\030\r \001(\014\022\032\n\022maintenance_run_id\030\016 "
+    "\001(\014\022<\n\016lock_primitive\030\017 \001(\0162$.sql_writer"
+    "_boot_grant.LockPrimitive\022!\n\031lock_qualif"
+    "ication_sha256\030\020 \001(\014\"L\n\rLockPrimitive\022\032\n"
+    "\026LOCK_PRIMITIVE_UNKNOWN\020\000\022\017\n\013SELECT_ONLY"
+    "\020\001\022\016\n\nLOCK_TOUCH\020\002\"S\n\031sql_writer_boot_gr"
+    "ant_set\022\016\n\006format\030\001 \001(\t\022&\n\006grants\030\002 \003(\0132"
+    "\026.sql_writer_boot_grant\"\332\004\n\024sql_writer_d"
+    "rain_run\022\024\n\014operation_id\030\001 \001(\014\022\026\n\016reques"
+    "t_digest\030\002 \001(\014\022\022\n\ngeneration\030\003 \001(\t\022\030\n\020at"
+    "tempt_revision\030\004 \001(\004\022\026\n\016manifest_proto\030\005"
+    " \001(\014\022\027\n\017manifest_digest\030\006 \001(\014\022*\n\005phase\030\007"
+    " \001(\0162\033.sql_writer_drain_run.Phase\022\035\n\025lat"
+    "est_receipt_digest\030\010 \001(\014\022\031\n\021frozen_reque"
+    "st_id\030\t \001(\014\022\022\n\nupdated_ms\030\n \001(\004\022\031\n\021lates"
+    "t_receipt_id\030\013 \001(\014\"\363\001\n\005Phase\022\013\n\007UNKNOWN\020"
+    "\000\022\016\n\nPLAN_FIXED\020\001\022\020\n\014ROOTS_CLOSED\020\003\022\014\n\010D"
+    "RAINING\020\004\022\022\n\016NON_SQL_CLOSED\020\005\022\025\n\021FREEZE_"
+    "AUTHORIZED\020\006\022\016\n\nSQL_FROZEN\020\007\022\021\n\rRELEASE_"
+    "READY\020\010\022\020\n\014SQL_RELEASED\020\t\022\030\n\024PUBLICATION"
+    "_REOPENED\020\n\022\022\n\016ABORTED_CLOSED\020\013\022\031\n\025EMERG"
+    "ENCY_FROZEN_HOLD\020\014\"\004\010\002\020\002:*\212\222\364\001\024sql_write"
+    "r_drain_run\222\222\364\001\014operation_id\"\347\005\n\030sql_wri"
+    "ter_freeze_ticket\022\021\n\tticket_id\030\001 \001(\014\022\024\n\014"
+    "operation_id\030\002 \001(\014\022\030\n\020attempt_revision\030\003"
+    " \001(\004\022\022\n\ngeneration\030\004 \001(\t\022\027\n\017manifest_dig"
+    "est\030\005 \001(\014\022\036\n\026non_sql_receipt_digest\030\006 \001("
+    "\014\022\031\n\021freeze_request_id\030\007 \001(\014\022\035\n\025freeze_r"
+    "equest_digest\030\010 \001(\014\022\025\n\rnot_before_ms\030\t \001"
+    "(\004\022\022\n\nexpires_ms\030\n \001(\004\022.\n\005state\030\013 \001(\0162\037."
+    "sql_writer_freeze_ticket.State\022\037\n\027consum"
+    "ed_receipt_digest\030\014 \001(\014\022\031\n\021revocation_di"
+    "gest\030\r \001(\014\022\022\n\nupdated_ms\030\016 \001(\004\022G\n\022author"
+    "ization_kind\030\017 \001(\0162+.sql_writer_freeze_t"
+    "icket.AuthorizationKind\022\030\n\020grant_receipt"
+    "_id\030\020 \001(\014\022\034\n\024grant_receipt_digest\030\021 \001(\014\""
+    "D\n\005State\022\021\n\rSTATE_UNKNOWN\020\000\022\r\n\tAVAILABLE"
+    "\020\001\022\014\n\010CONSUMED\020\002\022\013\n\007REVOKED\020\003\"b\n\021Authori"
+    "zationKind\022\031\n\025AUTHORIZATION_UNKNOWN\020\000\022\027\n"
+    "\023NORMAL_DRAIN_FREEZE\020\001\022\031\n\025EMERGENCY_HOLD"
+    "_FREEZE\020\002:+\212\222\364\001\030sql_writer_freeze_ticket"
+    "\222\222\364\001\tticket_id\"\3456\n\036sql_writer_maintenanc"
+    "e_receipt\022\022\n\nrequest_id\030\001 \001(\014\022\026\n\016request"
+    "_digest\030\002 \001(\014\022\016\n\006run_id\030\003 \001(\014\022\022\n\ngenerat"
+    "ion\030\004 \001(\t\022\024\n\014before_epoch\030\005 \001(\004\022\023\n\013after"
+    "_epoch\030\006 \001(\004\022\030\n\020catalog_revision\030\007 \001(\004\0224"
+    "\n\005phase\030\010 \001(\0162%.sql_writer_maintenance_r"
+    "eceipt.Phase\022\022\n\nplan_proto\030\t \001(\014\022\024\n\014comm"
+    "itted_ms\030\n \001(\004\0222\n\004kind\030\013 \001(\0162$.sql_write"
+    "r_maintenance_receipt.Kind\022.\n\trun_phase\030"
+    "\014 \001(\0162\033.sql_writer_drain_run.Phase\022\030\n\020at"
+    "tempt_revision\030\r \001(\004\022\030\n\020prior_receipt_id"
+    "\030\016 \001(\014\022\034\n\024prior_receipt_digest\030\017 \001(\014\022:\n\010"
+    "evidence\030\020 \001(\0132(.sql_writer_maintenance_"
+    "receipt.Evidence\022\026\n\016receipt_digest\030\021 \001(\014"
+    "\032\255\006\n\004Plan\022!\n\031physical_cluster_identity\030\001"
+    " \001(\014\022\030\n\020authority_schema\030\002 \001(\t\022\031\n\021protec"
+    "ted_schemas\030\003 \003(\t\022\032\n\022active_writer_keys\030"
+    "\004 \003(\014\022\024\n\014before_epoch\030\005 \001(\004\022\030\n\020catalog_r"
+    "evision\030\006 \001(\004\022\016\n\006run_id\030\007 \001(\014\022\037\n\027prior_f"
+    "reeze_request_id\030\010 \001(\014\022C\n\014root_issuers\030\n"
+    " \003(\0132-.sql_writer_maintenance_receipt.Is"
+    "suerClosure\022E\n\016queue_mutators\030\013 \003(\0132-.sq"
+    "l_writer_maintenance_receipt.IssuerClosu"
+    "re\022O\n\020kafka_partitions\030\014 \003(\01325.sql_write"
+    "r_maintenance_receipt.KafkaPartitionClos"
+    "ure\022I\n\rredis_targets\030\r \003(\01322.sql_writer_"
+    "maintenance_receipt.RedisTargetClosure\022>"
+    "\n\013source_pins\030\016 \003(\0132).sql_writer_mainten"
+    "ance_receipt.SourcePin\022@\n\tlaunchers\030\017 \003("
+    "\0132-.sql_writer_maintenance_receipt.Launc"
+    "hClosure\022J\n\023maintenance_issuers\030\020 \003(\0132-."
+    "sql_writer_maintenance_receipt.IssuerClo"
+    "sure\022T\n\022manual_assignments\030\021 \003(\01328.sql_w"
+    "riter_maintenance_receipt.ManualConsumer"
+    "AssignmentJ\004\010\t\020\n\032\200\001\n\rLaunchClosure\022\023\n\013la"
+    "uncher_id\030\001 \001(\014\022>\n\013source_pins\030\002 \003(\0132).s"
+    "ql_writer_maintenance_receipt.SourcePin\022"
+    "\032\n\022permanent_fence_id\030\003 \001(\014\0322\n\tSourcePin"
+    "\022\025\n\rabsolute_path\030\001 \001(\t\022\016\n\006sha256\030\002 \001(\014\032"
+    "\317\002\n\rIssuerClosure\022\021\n\tissuer_id\030\001 \001(\014\022\023\n\013"
+    "instance_id\030\002 \001(\014\022\033\n\023physical_writer_key"
+    "\030\003 \001(\014\022\024\n\014logical_role\030\004 \001(\t\022\"\n\032permanen"
+    "t_revival_fence_id\030\005 \001(\014\022\033\n\023accepting_cl"
+    "osed_ms\030\006 \001(\004\022\033\n\023accepted_settled_ms\030\007 \001"
+    "(\004\022 \n\030accepted_frontier_digest\030\010 \001(\014\022\037\n\027"
+    "unresolved_publications\030\t \001(\004\022B\n\017source_"
+    "evidence\030\n \003(\0132).sql_writer_maintenance_"
+    "receipt.SourcePin\032\376\001\n\025KafkaPartitionClos"
+    "ure\022\022\n\ncluster_id\030\001 \001(\014\022\020\n\010topic_id\030\002 \001("
+    "\014\022\022\n\ntopic_name\030\003 \001(\t\022\r\n\005group\030\004 \001(\t\022\021\n\t"
+    "partition\030\005 \001(\r\022!\n\031protected_committed_f"
+    "loor\030\006 \001(\003\022\030\n\020initial_earliest\030\007 \001(\003\022\026\n\016"
+    "final_earliest\030\010 \001(\003\022\033\n\023final_exclusive_"
+    "end\030\t \001(\003\022\027\n\017final_committed\030\n \001(\003\032\245\001\n\017R"
+    "edisKeyClosure\022\013\n\003key\030\001 \001(\t\022\014\n\004kind\030\002 \001("
+    "\t\022\r\n\005topic\030\003 \001(\t\022\022\n\nredis_type\030\004 \001(\t\022\017\n\007"
+    "pttl_ms\030\005 \001(\003\022\r\n\005count\030\006 \001(\004\022\017\n\007members\030"
+    "\007 \003(\014\022\016\n\006values\030\010 \003(\014\022\023\n\013dump_sha256\030\t \001"
+    "(\014\032\220\002\n\022RedisTargetClosure\022\014\n\004role\030\001 \001(\t\022"
+    "\017\n\007address\030\002 \001(\t\022\n\n\002db\030\003 \001(\005\022\025\n\rserver_r"
+    "un_id\030\004 \001(\014\022\031\n\021maintenance_nonce\030\005 \001(\014\022\r"
+    "\n\005zones\030\006 \003(\r\022E\n\014observations\030\007 \003(\0132/.sq"
+    "l_writer_maintenance_receipt.RedisKeyClo"
+    "sure\022G\n\024scan_source_evidence\030\010 \003(\0132).sql"
+    "_writer_maintenance_receipt.SourcePin\032\300\001"
+    "\n\023PublicationEvidence\022D\n\rlogical_roles\030\001"
+    " \003(\0132-.sql_writer_maintenance_receipt.Is"
+    "suerClosure\022\037\n\027issuer_inventory_digest\030\002"
+    " \001(\014\022B\n\017source_evidence\030\003 \003(\0132).sql_writ"
+    "er_maintenance_receipt.SourcePin\032\367\004\n\025Non"
+    "SqlClosureEvidence\022E\n\016queue_mutators\030\001 \003"
+    "(\0132-.sql_writer_maintenance_receipt.Issu"
+    "erClosure\022O\n\020kafka_partitions\030\002 \003(\01325.sq"
+    "l_writer_maintenance_receipt.KafkaPartit"
+    "ionClosure\022I\n\rredis_targets\030\003 \003(\01322.sql_"
+    "writer_maintenance_receipt.RedisTargetCl"
+    "osure\022\036\n\026root_closed_receipt_id\030\004 \001(\014\022\"\n"
+    "\032root_closed_receipt_digest\030\005 \001(\014\022!\n\031rel"
+    "ay_quiesced_receipt_id\030\006 \001(\014\022%\n\035relay_qu"
+    "iesced_receipt_digest\030\007 \001(\014\022#\n\033historica"
+    "l_inventory_digest\030\010 \001(\014\022\031\n\021observed_sta"
+    "rt_ms\030\t \001(\004\022\027\n\017observed_end_ms\030\n \001(\004\022B\n\017"
+    "source_evidence\030\013 \003(\0132).sql_writer_maint"
+    "enance_receipt.SourcePin\022P\n\020manual_consu"
+    "mers\030\014 \003(\01326.sql_writer_maintenance_rece"
+    "ipt.ManualConsumerEvidence\032\232\001\n\016TicketEvi"
+    "dence\022\021\n\tticket_id\030\001 \001(\014\022\030\n\020bound_reques"
+    "t_id\030\002 \001(\014\022\034\n\024bound_request_digest\030\003 \001(\014"
+    "\022\036\n\026authority_operation_id\030\004 \001(\014\022\035\n\025tick"
+    "et_request_digest\030\005 \001(\014\032\350\001\n\021EmergencyEvi"
+    "dence\022\016\n\006reason\030\001 \001(\t\022\031\n\021danger_receipt_"
+    "id\030\002 \001(\014\022\035\n\025danger_receipt_digest\030\003 \001(\014\022"
+    "B\n\017source_evidence\030\004 \003(\0132).sql_writer_ma"
+    "intenance_receipt.SourcePin\022E\n\rauthoriza"
+    "tion\030\005 \001(\0132..sql_writer_maintenance_rece"
+    "ipt.TicketEvidence\032\212\002\n\020ReleaseReadiness\022"
+    "\"\n\032original_freeze_receipt_id\030\001 \001(\014\022&\n\036o"
+    "riginal_freeze_receipt_digest\030\002 \001(\014\022!\n\031n"
+    "on_sql_closed_receipt_id\030\004 \001(\014\022%\n\035non_sq"
+    "l_closed_receipt_digest\030\005 \001(\014\022T\n\027mainten"
+    "ance_publication\030\007 \001(\01323.sql_writer_main"
+    "tenance_receipt.PublicationEvidenceJ\004\010\003\020"
+    "\004J\004\010\006\020\007\032\320\002\n\026ConsumerGroupReadiness\022\024\n\014op"
+    "eration_id\030\001 \001(\014\022\027\n\017manifest_digest\030\002 \001("
+    "\014\022\021\n\tissuer_id\030\003 \001(\014\022\023\n\013instance_id\030\004 \001("
+    "\014\022\r\n\005group\030\005 \001(\t\022\025\n\rgeneration_id\030\006 \001(\005\022"
+    "\021\n\tmember_id\030\007 \001(\t\022R\n\023expected_partition"
+    "s\030\010 \003(\01325.sql_writer_maintenance_receipt"
+    ".KafkaPartitionClosure\022R\n\023assigned_parti"
+    "tions\030\t \003(\01325.sql_writer_maintenance_rec"
+    "eipt.KafkaPartitionClosure\032\364\002\n\030ManualCon"
+    "sumerAssignment\022\021\n\tissuer_id\030\001 \001(\014\022\023\n\013in"
+    "stance_id\030\002 \001(\014\022\023\n\013consumer_id\030\003 \001(\t\022\022\n\n"
+    "cluster_id\030\004 \001(\014\022\020\n\010topic_id\030\005 \001(\014\022\022\n\nto"
+    "pic_name\030\006 \001(\t\022\027\n\017partition_count\030\007 \001(\r\022"
+    "\021\n\tpartition\030\010 \001(\r\022\026\n\016target_node_id\030\t \001"
+    "(\r\022\032\n\022target_instance_id\030\n \001(\014\022\033\n\023assign"
+    "ment_revision\030\013 \001(\004\022\024\n\014start_offset\030\014 \001("
+    "\003\022\020\n\010position\030\r \001(\003\022\020\n\010earliest\030\016 \001(\003\022\025\n"
+    "\rexclusive_end\030\017 \001(\003\022\023\n\013observed_ms\030\020 \001("
+    "\004\032\316\002\n\026ManualConsumerEvidence\022\024\n\014operatio"
+    "n_id\030\001 \001(\014\022\027\n\017manifest_digest\030\002 \001(\014\022M\n\013a"
+    "ssignments\030\003 \003(\01328.sql_writer_maintenanc"
+    "e_receipt.ManualConsumerAssignment\022\030\n\020ac"
+    "cepting_closed\030\004 \001(\010\022\030\n\020callbacks_joined"
+    "\030\005 \001(\010\022\020\n\010accepted\030\006 \001(\004\022\017\n\007settled\030\007 \001("
+    "\004\022\037\n\027unresolved_publications\030\010 \001(\004\022>\n\013so"
+    "urce_pins\030\t \003(\0132).sql_writer_maintenance"
+    "_receipt.SourcePin\032\257\001\n\021ConsumerReadiness"
+    "\022F\n\006groups\030\001 \003(\01326.sql_writer_maintenanc"
+    "e_receipt.ConsumerGroupReadiness\022R\n\022manu"
+    "al_assignments\030\002 \003(\01326.sql_writer_mainte"
+    "nance_receipt.ManualConsumerEvidence\032\266\002\n"
+    "\017IssuerReadiness\022\021\n\tissuer_id\030\001 \001(\014\022\023\n\013i"
+    "nstance_id\030\002 \001(\014\022\033\n\023physical_writer_key\030"
+    "\003 \001(\014\022\024\n\014logical_role\030\004 \001(\t\022\037\n\027registrat"
+    "ion_receipt_id\030\005 \001(\014\022#\n\033registration_rec"
+    "eipt_digest\030\006 \001(\014\022\032\n\022prepared_closed_ms\030"
+    "\007 \001(\004\022&\n\036consumer_ready_frontier_digest\030"
+    "\010 \001(\014\022>\n\013source_pins\030\t \003(\0132).sql_writer_"
+    "maintenance_receipt.SourcePin\032\355\002\n\rSource"
+    "OpenAck\022\021\n\tissuer_id\030\001 \001(\014\022\023\n\013instance_i"
+    "d\030\002 \001(\014\022\033\n\023physical_writer_key\030\003 \001(\014\022\024\n\014"
+    "logical_role\030\004 \001(\t\022\037\n\027registration_recei"
+    "pt_id\030\005 \001(\014\022#\n\033registration_receipt_dige"
+    "st\030\006 \001(\014\022\024\n\014operation_id\030\007 \001(\014\022\027\n\017manife"
+    "st_digest\030\010 \001(\014\022\021\n\topened_ms\030\t \001(\004\022\027\n\017op"
+    "en_request_id\030\n \001(\014\022 \n\030accepted_frontier"
+    "_digest\030\013 \001(\014\022>\n\013source_pins\030\014 \003(\0132).sql"
+    "_writer_maintenance_receipt.SourcePin\032\340\001"
+    "\n\024PublicationReadiness\022\032\n\022release_receip"
+    "t_id\030\001 \001(\014\022\036\n\026release_receipt_digest\030\002 \001"
+    "(\014\022G\n\016prepared_boots\030\003 \003(\0132/.sql_writer_"
+    "maintenance_receipt.IssuerReadiness\022C\n\020s"
+    "ource_open_acks\030\004 \003(\0132).sql_writer_maint"
+    "enance_receipt.SourcePin\032\221\004\n\010Evidence\022\024\n"
+    "\014operation_id\030\001 \001(\014\022\027\n\017manifest_digest\030\002"
+    " \001(\014\022J\n\013publication\030\n \001(\01323.sql_writer_m"
+    "aintenance_receipt.PublicationEvidenceH\000"
+    "\022P\n\017non_sql_closure\030\013 \001(\01325.sql_writer_m"
+    "aintenance_receipt.NonSqlClosureEvidence"
+    "H\000\022@\n\006ticket\030\014 \001(\0132..sql_writer_maintena"
+    "nce_receipt.TicketEvidenceH\000\022F\n\temergenc"
+    "y\030\r \001(\01321.sql_writer_maintenance_receipt"
+    ".EmergencyEvidenceH\000\022M\n\021release_readines"
+    "s\030\016 \001(\01320.sql_writer_maintenance_receipt"
+    ".ReleaseReadinessH\000\022U\n\025publication_readi"
+    "ness\030\017 \001(\01324.sql_writer_maintenance_rece"
+    "ipt.PublicationReadinessH\000B\010\n\006detail\"4\n\005"
+    "Phase\022\021\n\rPHASE_UNKNOWN\020\000\022\n\n\006FROZEN\020\001\022\014\n\010"
+    "RELEASED\020\002\"\245\001\n\004Kind\022\020\n\014KIND_UNKNOWN\020\000\022\n\n"
+    "\006FREEZE\020\001\022\013\n\007RELEASE\020\002\022\017\n\013PHASE_EVENT\020\003\022"
+    "\017\n\013ROLE_CLOSED\020\004\022\022\n\016RELAY_QUIESCED\020\005\022\022\n\016"
+    "TICKET_GRANTED\020\006\022\022\n\016TICKET_REVOKED\020\007\022\024\n\020"
+    "EMERGENCY_FREEZE\020\010:2\212\222\364\001\036sql_writer_main"
+    "tenance_receipt\222\222\364\001\nrequest_id\"\356\002\n\026sql_w"
+    "riter_boot_roster\022\016\n\006format\030\001 \001(\t\022.\n\007ent"
+    "ries\030\002 \003(\0132\035.sql_writer_boot_roster.Entr"
+    "y\032\305\001\n\005Entry\0227\n\010requests\030\001 \003(\0132%.sql_writ"
+    "er_lifecycle_receipt.Request\022\033\n\023runtime_"
+    "config_path\030\002 \001(\t\022\035\n\025runtime_config_sha2"
+    "56\030\003 \001(\014\022G\n\023runtime_environment\030\004 \003(\0132*."
+    "sql_writer_boot_roster.RuntimeEnvironmen"
+    "t\032L\n\022RuntimeEnvironment\022\014\n\004name\030\001 \001(\t\022\022\n"
+    "\nvalue_path\030\002 \001(\t\022\024\n\014value_sha256\030\003 \001(\014*"
+    "p\n\022GmRecallBatchState\022\037\n\033GM_RECALL_BATCH"
+    "_UNSPECIFIED\020\000\022\033\n\027GM_RECALL_BATCH_RUNNIN"
+    "G\020\001\022\034\n\030GM_RECALL_BATCH_FINISHED\020\002*\205\002\n\020Gm"
+    "RecallOpStatus\022\034\n\030GM_RECALL_OP_UNSPECIFI"
+    "ED\020\000\022\030\n\024GM_RECALL_OP_PENDING\020\001\022\030\n\024GM_REC"
+    "ALL_OP_APPLIED\020\002\022\031\n\025GM_RECALL_OP_REJECTE"
+    "D\020\003\022\030\n\024GM_RECALL_OP_ABORTED\020\004\022\030\n\024GM_RECA"
+    "LL_OP_PARTIAL\020\005\022\030\n\024GM_RECALL_OP_PLANNED\020"
+    "\006\022\032\n\026GM_RECALL_OP_CANCELLED\020\007\022\032\n\026GM_RECA"
+    "LL_OP_ROLE_GONE\020\010B\021Z\017common/databaseb\006pr"
+    "oto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto_deps[4] = {
@@ -13738,13 +13979,13 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fdatabase_2frollback_5
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto = {
     false,
     false,
-    17824,
+    18084,
     descriptor_table_protodef_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
     "proto/common/database/rollback_database_table.proto",
     &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto_once,
     descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto_deps,
     4,
-    55,
+    56,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto::offsets,
@@ -20283,6 +20524,399 @@ void zone_merged_into::InternalSwap(zone_merged_into* PROTOBUF_RESTRICT PROTOBUF
 }
 // ===================================================================
 
+zone_merge_history::zone_merge_history(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, zone_merge_history_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:zone_merge_history)
+}
+PROTOBUF_NDEBUG_INLINE zone_merge_history::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::zone_merge_history& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        action_(arena, from.action_),
+        run_id_(arena, from.run_id_),
+        sql_principal_(arena, from.sql_principal_) {}
+
+zone_merge_history::zone_merge_history(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const zone_merge_history& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, zone_merge_history_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  zone_merge_history* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, event_seq_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, event_seq_),
+           offsetof(Impl_, at_ms_) -
+               offsetof(Impl_, event_seq_) +
+               sizeof(Impl_::at_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:zone_merge_history)
+}
+PROTOBUF_NDEBUG_INLINE zone_merge_history::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        action_(arena),
+        run_id_(arena),
+        sql_principal_(arena) {}
+
+inline void zone_merge_history::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, event_seq_),
+           0,
+           offsetof(Impl_, at_ms_) -
+               offsetof(Impl_, event_seq_) +
+               sizeof(Impl_::at_ms_));
+}
+zone_merge_history::~zone_merge_history() {
+  // @@protoc_insertion_point(destructor:zone_merge_history)
+  SharedDtor(*this);
+}
+inline void zone_merge_history::SharedDtor(MessageLite& self) {
+  zone_merge_history& this_ = static_cast<zone_merge_history&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.action_.Destroy();
+  this_._impl_.run_id_.Destroy();
+  this_._impl_.sql_principal_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull zone_merge_history_class_data_ =
+        zone_merge_history::InternalGenerateClassData_(zone_merge_history_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+zone_merge_history::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&zone_merge_history_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(zone_merge_history_class_data_.tc_table);
+  return zone_merge_history_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+zone_merge_history::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&zone_merge_history_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&zone_merge_history_globals_));
+  return zone_merge_history_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const zone_merge_history::ParseTableT_
+    zone_merge_history::_table_ =
+        zone_merge_history::InternalGenerateParseTable_(zone_merge_history_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void zone_merge_history::Clear() {
+// @@protoc_insertion_point(message_clear_start:zone_merge_history)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.action_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.run_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.sql_principal_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000078U)) {
+    ::memset(&_impl_.event_seq_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.at_ms_) -
+        reinterpret_cast<char*>(&_impl_.event_seq_)) + sizeof(_impl_.at_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL zone_merge_history::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const zone_merge_history& this_ = static_cast<const zone_merge_history&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL zone_merge_history::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const zone_merge_history& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:zone_merge_history)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 src_zone = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_src_zone() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_src_zone(), target);
+    }
+  }
+
+  // uint64 event_seq = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_event_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_event_seq(), target);
+    }
+  }
+
+  // string action = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_action().empty()) {
+      const ::std::string& _s = this_._internal_action();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "zone_merge_history.action");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint32 dst_zone = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_dst_zone() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_dst_zone(), target);
+    }
+  }
+
+  // string run_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_run_id().empty()) {
+      const ::std::string& _s = this_._internal_run_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "zone_merge_history.run_id");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // string sql_principal = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_sql_principal().empty()) {
+      const ::std::string& _s = this_._internal_sql_principal();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "zone_merge_history.sql_principal");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  // uint64 at_ms = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_at_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:zone_merge_history)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t zone_merge_history::ByteSizeLong(const MessageLite& base) {
+  const zone_merge_history& this_ = static_cast<const zone_merge_history&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t zone_merge_history::ByteSizeLong() const {
+  const zone_merge_history& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:zone_merge_history)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    // string action = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_action().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_action());
+      }
+    }
+    // string run_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_run_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_run_id());
+      }
+    }
+    // string sql_principal = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_sql_principal().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_sql_principal());
+      }
+    }
+    // uint64 event_seq = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_event_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_event_seq());
+      }
+    }
+    // uint32 src_zone = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_src_zone() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_src_zone());
+      }
+    }
+    // uint32 dst_zone = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_dst_zone() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_dst_zone());
+      }
+    }
+    // uint64 at_ms = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_at_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void zone_merge_history::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<zone_merge_history*>(&to_msg);
+  auto& from = static_cast<const zone_merge_history&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:zone_merge_history)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_action().empty()) {
+        _this->_internal_set_action(from._internal_action());
+      } else {
+        if (_this->_impl_.action_.IsDefault()) {
+          _this->_internal_set_action("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_run_id().empty()) {
+        _this->_internal_set_run_id(from._internal_run_id());
+      } else {
+        if (_this->_impl_.run_id_.IsDefault()) {
+          _this->_internal_set_run_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_sql_principal().empty()) {
+        _this->_internal_set_sql_principal(from._internal_sql_principal());
+      } else {
+        if (_this->_impl_.sql_principal_.IsDefault()) {
+          _this->_internal_set_sql_principal("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_event_seq() != 0) {
+        _this->_impl_.event_seq_ = from._impl_.event_seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_src_zone() != 0) {
+        _this->_impl_.src_zone_ = from._impl_.src_zone_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_dst_zone() != 0) {
+        _this->_impl_.dst_zone_ = from._impl_.dst_zone_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_at_ms() != 0) {
+        _this->_impl_.at_ms_ = from._impl_.at_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void zone_merge_history::CopyFrom(const zone_merge_history& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:zone_merge_history)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void zone_merge_history::InternalSwap(zone_merge_history* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.action_, &other->_impl_.action_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.run_id_, &other->_impl_.run_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.sql_principal_, &other->_impl_.sql_principal_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.at_ms_)
+      + sizeof(zone_merge_history::_impl_.at_ms_)
+      - PROTOBUF_FIELD_OFFSET(zone_merge_history, _impl_.event_seq_)>(
+          reinterpret_cast<char*>(&_impl_.event_seq_),
+          reinterpret_cast<char*>(&other->_impl_.event_seq_));
+}
+
+::google::protobuf::Metadata zone_merge_history::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 route_meta::route_meta(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, route_meta_get_class_data()) {
@@ -23940,7 +24574,7 @@ PROTOBUF_NOINLINE void sql_writer_registry::Clear() {
     }
   }
   _impl_.registered_ms_ = ::uint64_t{0u};
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     ::memset(&_impl_.retired_ms_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.state_) -
         reinterpret_cast<char*>(&_impl_.retired_ms_)) + sizeof(_impl_.state_));
@@ -24011,7 +24645,7 @@ PROTOBUF_NOINLINE void sql_writer_registry::Clear() {
   }
 
   // .sql_writer_registry.State state = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_state() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -24050,6 +24684,15 @@ PROTOBUF_NOINLINE void sql_writer_registry::Clear() {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           10, this_._internal_retired_ms(), target);
+    }
+  }
+
+  // uint64 boot_seq = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_boot_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_boot_seq(), target);
     }
   }
 
@@ -24136,7 +24779,7 @@ PROTOBUF_NOINLINE void sql_writer_registry::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint64 retired_ms = 10;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_retired_ms() != 0) {
@@ -24144,8 +24787,15 @@ PROTOBUF_NOINLINE void sql_writer_registry::Clear() {
             this_._internal_retired_ms());
       }
     }
-    // .sql_writer_registry.State state = 6;
+    // uint64 boot_seq = 11;
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_boot_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_boot_seq());
+      }
+    }
+    // .sql_writer_registry.State state = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_state() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_state());
@@ -24239,13 +24889,18 @@ void sql_writer_registry::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_retired_ms() != 0) {
         _this->_impl_.retired_ms_ = from._impl_.retired_ms_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_boot_seq() != 0) {
+        _this->_impl_.boot_seq_ = from._impl_.boot_seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_state() != 0) {
         _this->_impl_.state_ = from._impl_.state_;
       }
@@ -24675,7 +25330,8 @@ PROTOBUF_NDEBUG_INLINE sql_writer_lifecycle_receipt_Request::Impl_::Impl_(
         deployment_digest_(arena, from.deployment_digest_),
         maintenance_run_id_(arena, from.maintenance_run_id_),
         deployment_id_(arena, from.deployment_id_),
-        lock_qualification_sha256_(arena, from.lock_qualification_sha256_) {}
+        lock_qualification_sha256_(arena, from.lock_qualification_sha256_),
+        successor_request_id_(arena, from.successor_request_id_) {}
 
 sql_writer_lifecycle_receipt_Request::sql_writer_lifecycle_receipt_Request(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -24692,7 +25348,7 @@ sql_writer_lifecycle_receipt_Request::sql_writer_lifecycle_receipt_Request(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.writer_ = (CheckHasBit(cached_has_bits, 0x00000080U))
+  _impl_.writer_ = (CheckHasBit(cached_has_bits, 0x00000100U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.writer_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
@@ -24719,7 +25375,8 @@ PROTOBUF_NDEBUG_INLINE sql_writer_lifecycle_receipt_Request::Impl_::Impl_(
         deployment_digest_(arena),
         maintenance_run_id_(arena),
         deployment_id_(arena),
-        lock_qualification_sha256_(arena) {}
+        lock_qualification_sha256_(arena),
+        successor_request_id_(arena) {}
 
 inline void sql_writer_lifecycle_receipt_Request::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -24747,6 +25404,7 @@ inline void sql_writer_lifecycle_receipt_Request::SharedDtor(MessageLite& self) 
   this_._impl_.maintenance_run_id_.Destroy();
   this_._impl_.deployment_id_.Destroy();
   this_._impl_.lock_qualification_sha256_.Destroy();
+  this_._impl_.successor_request_id_.Destroy();
   delete this_._impl_.writer_;
   this_._impl_.~Impl_();
 }
@@ -24808,11 +25466,14 @@ PROTOBUF_NOINLINE void sql_writer_lifecycle_receipt_Request::Clear() {
       _impl_.lock_qualification_sha256_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      ABSL_DCHECK(_impl_.writer_ != nullptr);
-      _impl_.writer_->Clear();
+      _impl_.successor_request_id_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    ABSL_DCHECK(_impl_.writer_ != nullptr);
+    _impl_.writer_->Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001e00U)) {
     ::memset(&_impl_.expected_epoch_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.lock_primitive_) -
         reinterpret_cast<char*>(&_impl_.expected_epoch_)) + sizeof(_impl_.lock_primitive_));
@@ -24849,7 +25510,7 @@ PROTOBUF_NOINLINE void sql_writer_lifecycle_receipt_Request::Clear() {
   }
 
   // .sql_writer_lifecycle_receipt.Kind kind = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_kind() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -24858,14 +25519,14 @@ PROTOBUF_NOINLINE void sql_writer_lifecycle_receipt_Request::Clear() {
   }
 
   // .sql_writer_registry writer = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         3, *this_._impl_.writer_, this_._impl_.writer_->GetCachedSize(), target,
         stream);
   }
 
   // uint64 expected_epoch = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_expected_epoch() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -24874,7 +25535,7 @@ PROTOBUF_NOINLINE void sql_writer_lifecycle_receipt_Request::Clear() {
   }
 
   // uint64 expected_catalog_revision = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_expected_catalog_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -24929,7 +25590,7 @@ PROTOBUF_NOINLINE void sql_writer_lifecycle_receipt_Request::Clear() {
   }
 
   // .sql_writer_boot_grant.LockPrimitive lock_primitive = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_lock_primitive() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -24942,6 +25603,14 @@ PROTOBUF_NOINLINE void sql_writer_lifecycle_receipt_Request::Clear() {
     if (!this_._internal_lock_qualification_sha256().empty()) {
       const ::std::string& _s = this_._internal_lock_qualification_sha256();
       target = stream->WriteBytesMaybeAliased(12, _s, target);
+    }
+  }
+
+  // bytes successor_request_id = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (!this_._internal_successor_request_id().empty()) {
+      const ::std::string& _s = this_._internal_successor_request_id();
+      target = stream->WriteBytesMaybeAliased(13, _s, target);
     }
   }
 
@@ -25022,36 +25691,43 @@ PROTOBUF_NOINLINE void sql_writer_lifecycle_receipt_Request::Clear() {
                                         this_._internal_lock_qualification_sha256());
       }
     }
-    // .sql_writer_registry writer = 3;
+    // bytes successor_request_id = 13;
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (!this_._internal_successor_request_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_successor_request_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    // .sql_writer_registry writer = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.writer_);
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint64 expected_epoch = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_expected_epoch() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_expected_epoch());
       }
     }
     // uint64 expected_catalog_revision = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_expected_catalog_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_expected_catalog_revision());
       }
     }
     // .sql_writer_lifecycle_receipt.Kind kind = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_kind() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_kind());
       }
     }
     // .sql_writer_boot_grant.LockPrimitive lock_primitive = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_lock_primitive() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_lock_primitive());
@@ -25137,6 +25813,17 @@ void sql_writer_lifecycle_receipt_Request::MergeImpl(::google::protobuf::Message
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (!from._internal_successor_request_id().empty()) {
+        _this->_internal_set_successor_request_id(from._internal_successor_request_id());
+      } else {
+        if (_this->_impl_.successor_request_id_.IsDefault()) {
+          _this->_internal_set_successor_request_id("");
+        }
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       ABSL_DCHECK(from._impl_.writer_ != nullptr);
       if (_this->_impl_.writer_ == nullptr) {
         _this->_impl_.writer_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.writer_);
@@ -25144,24 +25831,22 @@ void sql_writer_lifecycle_receipt_Request::MergeImpl(::google::protobuf::Message
         _this->_impl_.writer_->MergeFrom(*from._impl_.writer_);
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_expected_epoch() != 0) {
         _this->_impl_.expected_epoch_ = from._impl_.expected_epoch_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_expected_catalog_revision() != 0) {
         _this->_impl_.expected_catalog_revision_ = from._impl_.expected_catalog_revision_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_kind() != 0) {
         _this->_impl_.kind_ = from._impl_.kind_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_lock_primitive() != 0) {
         _this->_impl_.lock_primitive_ = from._impl_.lock_primitive_;
       }
@@ -25193,6 +25878,7 @@ void sql_writer_lifecycle_receipt_Request::InternalSwap(sql_writer_lifecycle_rec
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.maintenance_run_id_, &other->_impl_.maintenance_run_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.deployment_id_, &other->_impl_.deployment_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.lock_qualification_sha256_, &other->_impl_.lock_qualification_sha256_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.successor_request_id_, &other->_impl_.successor_request_id_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(sql_writer_lifecycle_receipt_Request, _impl_.lock_primitive_)
       + sizeof(sql_writer_lifecycle_receipt_Request::_impl_.lock_primitive_)

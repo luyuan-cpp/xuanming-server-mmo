@@ -128,25 +128,25 @@ function Test-SecretValue {
     $r = Get-YamlScalar -Path $full -KeyPath $KeyPath
     if (-not $r.Found) {
         # fail-safe:查不到 != 通过
-        Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail ("查不到该键,按 fail-safe 判 FAIL。" + $r.Reason)
+        Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail ("Key not found; FAIL per fail-safe. " + $r.Reason)
         return $null
     }
 
     $value = $r.Value
     if ([string]::IsNullOrWhiteSpace($value)) {
-        Add-Result -Id $Id -Status $Severity -Target $target -Detail "值为空。空密钥 = 校验被关掉,不是'默认安全'。"
+        Add-Result -Id $Id -Status $Severity -Target $target -Detail "Value is empty. An empty secret disables verification; it is not 'secure by default'."
         return $value
     }
     if (Test-PlaceholderSecret -Value $value) {
-        Add-Result -Id $Id -Status $Severity -Target $target -Detail "值仍是占位串 '$value',上线前必须替换成强随机值。"
+        Add-Result -Id $Id -Status $Severity -Target $target -Detail "Value is still the placeholder '$value'; replace it with a strong random value before launch."
         return $value
     }
     if ($value.Length -lt $MinLength) {
-        Add-Result -Id $Id -Status $Severity -Target $target -Detail "长度 $($value.Length) < 要求的 $MinLength。"
+        Add-Result -Id $Id -Status $Severity -Target $target -Detail "Length $($value.Length) < required $MinLength."
         return $value
     }
 
-    Add-Result -Id $Id -Status 'PASS' -Target $target -Detail "非空、非占位、长度 $($value.Length) >= $MinLength。"
+    Add-Result -Id $Id -Status 'PASS' -Target $target -Detail "Non-empty, not a placeholder, length $($value.Length) >= $MinLength."
     return $value
 }
 
@@ -168,20 +168,20 @@ function Test-NumericFloor {
     $target = "${RelativePath}:${KeyPath}"
     $r = Get-YamlScalar -Path $full -KeyPath $KeyPath
     if (-not $r.Found) {
-        Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail ("查不到该键,按 fail-safe 判 FAIL。" + $r.Reason)
+        Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail ("Key not found; FAIL per fail-safe. " + $r.Reason)
         return
     }
 
     $num = 0.0
     if (-not [double]::TryParse($r.Value, [ref]$num)) {
-        Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail "值 '$($r.Value)' 不是数字。"
+        Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail "Value '$($r.Value)' is not a number."
         return
     }
     if ($num -lt $Floor) {
-        Add-Result -Id $Id -Status $Severity -Target $target -Detail "值 $num < 下界 $Floor。$Why"
+        Add-Result -Id $Id -Status $Severity -Target $target -Detail "Value $num < floor $Floor. $Why"
         return
     }
-    Add-Result -Id $Id -Status 'PASS' -Target $target -Detail "值 $num >= 下界 $Floor。"
+    Add-Result -Id $Id -Status 'PASS' -Target $target -Detail "Value $num >= floor $Floor."
 }
 
 <#
@@ -202,14 +202,14 @@ function Test-ListFloor {
     $target = "${RelativePath}:${KeyPath}"
     $r = Get-YamlListCount -Path $full -KeyPath $KeyPath
     if (-not $r.Found) {
-        Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail ("查不到该序列,按 fail-safe 判 FAIL。" + $r.Reason)
+        Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail ("Sequence not found; FAIL per fail-safe. " + $r.Reason)
         return
     }
     if ([int]$r.Value -lt $Floor) {
-        Add-Result -Id $Id -Status $Severity -Target $target -Detail "元素数 $($r.Value) < 下界 $Floor。$Why"
+        Add-Result -Id $Id -Status $Severity -Target $target -Detail "Element count $($r.Value) < floor $Floor. $Why"
         return
     }
-    Add-Result -Id $Id -Status 'PASS' -Target $target -Detail "元素数 $($r.Value) >= 下界 $Floor。"
+    Add-Result -Id $Id -Status 'PASS' -Target $target -Detail "Element count $($r.Value) >= floor $Floor."
 }
 
 <#
@@ -234,19 +234,19 @@ function Test-SwitchOff {
     $r = Get-YamlScalar -Path $full -KeyPath $KeyPath
     if (-not $r.Found) {
         if ($MissingPolicy -eq 'pass-off') {
-            Add-Result -Id $Id -Status 'PASS' -Target $target -Detail "键不存在 = 采用代码默认值(关)。$Why"
+            Add-Result -Id $Id -Status 'PASS' -Target $target -Detail "Key absent = code default (off). $Why"
         }
         else {
-            Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail ("查不到该键,按 fail-safe 判 FAIL。" + $r.Reason)
+            Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail ("Key not found; FAIL per fail-safe. " + $r.Reason)
         }
         return
     }
 
     if ($r.Value.Trim().ToLowerInvariant() -eq 'true') {
-        Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail "开关为 true,生产必须关断。$Why"
+        Add-Result -Id $Id -Status 'FAIL' -Target $target -Detail "Switch is true; production must turn it off. $Why"
         return
     }
-    Add-Result -Id $Id -Status 'PASS' -Target $target -Detail "开关为 '$($r.Value)'(关)。"
+    Add-Result -Id $Id -Status 'PASS' -Target $target -Detail "Switch is '$($r.Value)' (off)."
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -272,16 +272,16 @@ foreach ($t in $GateSecretTargets) {
 if ($gateSecretValues.Count -ge 2) {
     $distinct = @($gateSecretValues.Values | Sort-Object -Unique)
     if ($distinct.Count -gt 1) {
-        Add-Result -Id 'secret.gate.consistency' -Status 'FAIL' -Target 'GateTokenSecret (跨 5 个文件)' `
-            -Detail "共出现 $($distinct.Count) 个不同取值,gate 验签会整片 fail。涉及文件: $(($gateSecretValues.Keys | Sort-Object) -join ', ')"
+        Add-Result -Id 'secret.gate.consistency' -Status 'FAIL' -Target 'GateTokenSecret (across 5 files)' `
+            -Detail "Found $($distinct.Count) distinct values; gate token verification will fail across the board. Files: $(($gateSecretValues.Keys | Sort-Object) -join ', ')"
     }
     else {
-        Add-Result -Id 'secret.gate.consistency' -Status 'PASS' -Target 'GateTokenSecret (跨 5 个文件)' -Detail "$($gateSecretValues.Count) 处取值一致。"
+        Add-Result -Id 'secret.gate.consistency' -Status 'PASS' -Target 'GateTokenSecret (across 5 files)' -Detail "All $($gateSecretValues.Count) values match."
     }
 }
 else {
-    Add-Result -Id 'secret.gate.consistency' -Status 'FAIL' -Target 'GateTokenSecret (跨 5 个文件)' `
-        -Detail "只读到 $($gateSecretValues.Count) 处可比对的取值,无法完成一致性比对,按 fail-safe 判 FAIL。"
+    Add-Result -Id 'secret.gate.consistency' -Status 'FAIL' -Target 'GateTokenSecret (across 5 files)' `
+        -Detail "Only $($gateSecretValues.Count) comparable values were read; cannot complete the consistency check; FAIL per fail-safe."
 }
 
 # Admin API key(Java Gateway 管理面)
@@ -304,10 +304,10 @@ Test-SecretValue -Id 'secret.redis.login'   -RelativePath 'go/login/etc/login.ya
 if ([string]::IsNullOrWhiteSpace($ImageTag) -and $ImageRef.Count -eq 0) {
     # fail-safe:没人告诉我要发什么 tag,不能当"没问题"
     Add-Result -Id 'image.tag.provided' -Status 'FAIL' -Target '-ImageTag / -ImageRef' `
-        -Detail "调用方没有传入待发布的镜像 tag,无法判定其可变性,按 fail-safe 判 FAIL。"
+        -Detail "The caller passed no image tag to release; cannot judge its mutability; FAIL per fail-safe."
 }
 else {
-    Add-Result -Id 'image.tag.provided' -Status 'PASS' -Target '-ImageTag / -ImageRef' -Detail "已传入待校验的镜像标识。"
+    Add-Result -Id 'image.tag.provided' -Status 'PASS' -Target '-ImageTag / -ImageRef' -Detail "Image identifiers to check were provided."
 }
 
 # 可变 tag 在 dev 只是提醒(本地 minikube 天天用 latest);
@@ -317,7 +317,7 @@ $ImageTagSeverity = if ($ReleaseProfile -eq 'dev') { 'WARN' } else { 'FAIL' }
 if (-not [string]::IsNullOrWhiteSpace($ImageTag)) {
     $chk = Test-ImmutableImageTag -Tag $ImageTag -RejectDirty:$RejectDirtyTag
     if ($chk.Ok) {
-        Add-Result -Id 'image.tag.immutable' -Status 'PASS' -Target "tag=$ImageTag" -Detail "不可变 tag,rollout undo 能真的换 digest。"
+        Add-Result -Id 'image.tag.immutable' -Status 'PASS' -Target "tag=$ImageTag" -Detail "Immutable tag; rollout undo really switches the digest."
     }
     else {
         Add-Result -Id 'image.tag.immutable' -Status $ImageTagSeverity -Target "tag=$ImageTag" -Detail $chk.Reason
@@ -329,7 +329,7 @@ foreach ($ref in $ImageRef) {
     $tag = Get-ImageTagFromRef -ImageRef $ref
     $chk = Test-ImmutableImageTag -Tag $tag -RejectDirty:$RejectDirtyTag
     if ($chk.Ok) {
-        Add-Result -Id 'image.ref.immutable' -Status 'PASS' -Target $ref -Detail "tag='$tag' 不可变。"
+        Add-Result -Id 'image.ref.immutable' -Status 'PASS' -Target $ref -Detail "tag='$tag' is immutable."
     }
     else {
         Add-Result -Id 'image.ref.immutable' -Status $ImageTagSeverity -Target $ref -Detail $chk.Reason
@@ -340,7 +340,7 @@ foreach ($ref in $ImageRef) {
 # D. Kafka broker 数下界
 # ─────────────────────────────────────────────────────────────────
 
-$kafkaWhy = "单 broker 无 ISR 冗余,broker 一挂就是全区停写(release-checklist §F.B-2)。"
+$kafkaWhy = "A single broker has no ISR redundancy; losing it stops writes for the whole zone (release-checklist §F.B-2)."
 Test-ListFloor -Id 'kafka.brokers.cpp'      -RelativePath 'bin/etc/base_deploy_config.yaml'            -KeyPath 'Kafka.Brokers'               -Floor $MinKafkaBrokers -Why $kafkaWhy -Severity $SecretSeverity
 Test-ListFloor -Id 'kafka.brokers.login'    -RelativePath 'go/login/etc/login.yaml'                    -KeyPath 'Kafka.Brokers'               -Floor $MinKafkaBrokers -Why $kafkaWhy -Severity $SecretSeverity
 Test-ListFloor -Id 'kafka.brokers.db'       -RelativePath 'go/db/etc/db.yaml'                          -KeyPath 'ServerConfig.Kafka.Brokers'  -Floor $MinKafkaBrokers -Why $kafkaWhy -Severity $SecretSeverity
@@ -351,14 +351,14 @@ $loginPart = Get-YamlScalar -Path (Resolve-RepoPath 'go/login/etc/login.yaml') -
 $dbPart = Get-YamlScalar -Path (Resolve-RepoPath 'go/db/etc/db.yaml') -KeyPath 'ServerConfig.Kafka.PartitionCnt'
 if (-not $loginPart.Found -or -not $dbPart.Found) {
     Add-Result -Id 'kafka.partition.match' -Status 'FAIL' -Target 'Kafka.PartitionCnt (login vs db)' `
-        -Detail "至少一侧查不到,按 fail-safe 判 FAIL。login: $($loginPart.Reason) db: $($dbPart.Reason)"
+        -Detail "At least one side not found; FAIL per fail-safe. login: $($loginPart.Reason) db: $($dbPart.Reason)"
 }
 elseif ($loginPart.Value -ne $dbPart.Value) {
     Add-Result -Id 'kafka.partition.match' -Status 'FAIL' -Target 'Kafka.PartitionCnt (login vs db)' `
-        -Detail "login=$($loginPart.Value) db=$($dbPart.Value) 不一致,db 启动门禁会 fail-closed。"
+        -Detail "login=$($loginPart.Value) db=$($dbPart.Value) differ; the db startup gate fails closed."
 }
 else {
-    Add-Result -Id 'kafka.partition.match' -Status 'PASS' -Target 'Kafka.PartitionCnt (login vs db)' -Detail "两侧均为 $($loginPart.Value)。"
+    Add-Result -Id 'kafka.partition.match' -Status 'PASS' -Target 'Kafka.PartitionCnt (login vs db)' -Detail "Both sides are $($loginPart.Value)."
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -366,10 +366,10 @@ else {
 # ─────────────────────────────────────────────────────────────────
 
 Test-NumericFloor -Id 'locator.lease.disconnect' -RelativePath 'go/player_locator/etc/player_locator.yaml' -KeyPath 'Lease.DefaultTTLSeconds' `
-    -Floor $MinLeaseTtlSeconds -Why "断线重连窗口就是这个值,小于 30s 会让 30s 重连约定失效(release-checklist §A.2)。"
+    -Floor $MinLeaseTtlSeconds -Why "This is the reconnect window; below 30s breaks the 30s reconnect promise (release-checklist §A.2)."
 
 Test-NumericFloor -Id 'locator.lease.etcd' -RelativePath 'go/player_locator/etc/player_locator.yaml' -KeyPath 'Node.LeaseTTL' `
-    -Floor $MinLeaseTtlSeconds -Why "etcd lease TTL(秒),过小会让节点在 GC 抖动时被误判下线。"
+    -Floor $MinLeaseTtlSeconds -Why "etcd lease TTL (seconds); too small and nodes are wrongly marked offline during GC pauses."
 
 # ─────────────────────────────────────────────────────────────────
 # F. 限流默认值
@@ -378,34 +378,34 @@ Test-NumericFloor -Id 'locator.lease.etcd' -RelativePath 'go/player_locator/etc/
 $rlPath = 'java/gateway_node/src/main/resources/application.yaml'
 $rlFull = Resolve-RepoPath -Relative $rlPath
 
-Test-NumericFloor -Id 'ratelimit.zone.rps'   -RelativePath $rlPath -KeyPath 'gate.rate-limit.zone-default-rps'   -Floor 1 -Why "限流阈值 <= 0 等于把闸门焊死,开服直接全量 429。"
-Test-NumericFloor -Id 'ratelimit.zone.burst' -RelativePath $rlPath -KeyPath 'gate.rate-limit.zone-default-burst' -Floor 1 -Why "同上。"
-Test-NumericFloor -Id 'ratelimit.ip.rps'     -RelativePath $rlPath -KeyPath 'gate.rate-limit.ip-rps'             -Floor 1 -Why "同上。"
-Test-NumericFloor -Id 'ratelimit.queue.timeout' -RelativePath $rlPath -KeyPath 'gate.rate-limit.queue-timeout-ms' -Floor 1000 -Why "排队超时过小会把正常排队的玩家直接踢掉。"
+Test-NumericFloor -Id 'ratelimit.zone.rps'   -RelativePath $rlPath -KeyPath 'gate.rate-limit.zone-default-rps'   -Floor 1 -Why "A rate limit <= 0 welds the gate shut; every request gets 429 at launch."
+Test-NumericFloor -Id 'ratelimit.zone.burst' -RelativePath $rlPath -KeyPath 'gate.rate-limit.zone-default-burst' -Floor 1 -Why "Same as above."
+Test-NumericFloor -Id 'ratelimit.ip.rps'     -RelativePath $rlPath -KeyPath 'gate.rate-limit.ip-rps'             -Floor 1 -Why "Same as above."
+Test-NumericFloor -Id 'ratelimit.queue.timeout' -RelativePath $rlPath -KeyPath 'gate.rate-limit.queue-timeout-ms' -Floor 1000 -Why "Too small a queue timeout kicks out players who are queueing normally."
 
 $rps = Get-YamlScalar -Path $rlFull -KeyPath 'gate.rate-limit.zone-default-rps'
 $burst = Get-YamlScalar -Path $rlFull -KeyPath 'gate.rate-limit.zone-default-burst'
 if (-not $rps.Found -or -not $burst.Found) {
-    Add-Result -Id 'ratelimit.burst.ge.rps' -Status 'FAIL' -Target "${rlPath}:gate.rate-limit" -Detail "rps/burst 至少一侧查不到,按 fail-safe 判 FAIL。"
+    Add-Result -Id 'ratelimit.burst.ge.rps' -Status 'FAIL' -Target "${rlPath}:gate.rate-limit" -Detail "At least one of rps/burst not found; FAIL per fail-safe."
 }
 elseif ([double]$burst.Value -lt [double]$rps.Value) {
-    Add-Result -Id 'ratelimit.burst.ge.rps' -Status 'FAIL' -Target "${rlPath}:gate.rate-limit" -Detail "burst=$($burst.Value) < rps=$($rps.Value),令牌桶配置自相矛盾。"
+    Add-Result -Id 'ratelimit.burst.ge.rps' -Status 'FAIL' -Target "${rlPath}:gate.rate-limit" -Detail "burst=$($burst.Value) < rps=$($rps.Value); the token bucket config contradicts itself."
 }
 else {
-    Add-Result -Id 'ratelimit.burst.ge.rps' -Status 'PASS' -Target "${rlPath}:gate.rate-limit" -Detail "burst=$($burst.Value) >= rps=$($rps.Value)。"
+    Add-Result -Id 'ratelimit.burst.ge.rps' -Status 'PASS' -Target "${rlPath}:gate.rate-limit" -Detail "burst=$($burst.Value) >= rps=$($rps.Value)."
 }
 
 # enabled 本身是灰度决策(§C T+0 要求默认关),这里只提醒不阻断;
 # 但键必须存在 —— 缺键意味着走 Java 侧默认值,那是没人决策过的状态。
 $rlEnabled = Get-YamlScalar -Path $rlFull -KeyPath 'gate.rate-limit.enabled'
 if (-not $rlEnabled.Found) {
-    Add-Result -Id 'ratelimit.enabled.declared' -Status 'FAIL' -Target "${rlPath}:gate.rate-limit.enabled" -Detail "键不存在,限流开关必须是显式决策,按 fail-safe 判 FAIL。"
+    Add-Result -Id 'ratelimit.enabled.declared' -Status 'FAIL' -Target "${rlPath}:gate.rate-limit.enabled" -Detail "Key absent; the rate-limit switch must be an explicit decision; FAIL per fail-safe."
 }
 elseif ($rlEnabled.Value.Trim().ToLowerInvariant() -ne 'true') {
-    Add-Result -Id 'ratelimit.enabled.declared' -Status 'WARN' -Target "${rlPath}:gate.rate-limit.enabled" -Detail "当前为 '$($rlEnabled.Value)'。灰度 T+0 按 checklist §C 就该是关的;开服日必须先开(§D.1 波次)。"
+    Add-Result -Id 'ratelimit.enabled.declared' -Status 'WARN' -Target "${rlPath}:gate.rate-limit.enabled" -Detail "Currently '$($rlEnabled.Value)'. Per checklist §C it should be off at canary T+0; turn it on before launch day (§D.1 waves)."
 }
 else {
-    Add-Result -Id 'ratelimit.enabled.declared' -Status 'PASS' -Target "${rlPath}:gate.rate-limit.enabled" -Detail "限流已开。"
+    Add-Result -Id 'ratelimit.enabled.declared' -Status 'PASS' -Target "${rlPath}:gate.rate-limit.enabled" -Detail "Rate limiting is on."
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -414,19 +414,19 @@ else {
 
 # show-sql 会把每条 SQL 打进日志,生产开着既是性能问题也是数据泄漏面
 Test-SwitchOff -Id 'debug.jpa.showsql' -RelativePath $rlPath -KeyPath 'spring.jpa.show-sql' -MissingPolicy 'fail' `
-    -Why "JPA show-sql 会把全部 SQL(含参数)打进日志。"
+    -Why "JPA show-sql writes every SQL statement (with parameters) to the log."
 
 # DevPasswordAuth 是"绕过账号库口令体系"的开发后门。
 # go/login/internal/config/config.go:30 是 optional,零值 Enabled=false,
 # 所以键缺失 = 关断,这里用 pass-off。
 Test-SwitchOff -Id 'debug.login.devpassword' -RelativePath 'go/login/etc/login.yaml' -KeyPath 'DevPasswordAuth.Enabled' -MissingPolicy 'pass-off' `
-    -Why "DevPasswordAuth 绕过账号库口令体系,只允许 dev/test。"
+    -Why "DevPasswordAuth bypasses the account password system; dev/test only."
 
 # Actuator 暴露面
 $actuator = Get-YamlScalar -Path $rlFull -KeyPath 'management.endpoints.web.exposure.include'
 if (-not $actuator.Found) {
     Add-Result -Id 'debug.actuator.exposure' -Status 'FAIL' -Target "${rlPath}:management.endpoints.web.exposure.include" `
-        -Detail "键不存在,Actuator 暴露面必须是显式决策(Spring 默认会暴露 health/info 之外的端点),按 fail-safe 判 FAIL。"
+        -Detail "Key absent; Actuator exposure must be an explicit decision (Spring exposes endpoints beyond health/info by default); FAIL per fail-safe."
 }
 else {
     $dangerous = @('*', 'env', 'heapdump', 'threaddump', 'configprops', 'beans', 'shutdown', 'loggers')
@@ -434,10 +434,10 @@ else {
     $hit = @($items | Where-Object { $dangerous -contains $_ })
     if ($hit.Count -gt 0) {
         Add-Result -Id 'debug.actuator.exposure' -Status 'FAIL' -Target "${rlPath}:management.endpoints.web.exposure.include" `
-            -Detail "暴露了危险端点: $($hit -join ', ')。生产只应暴露 health/info。"
+            -Detail "Dangerous endpoints exposed: $($hit -join ', '). Production should expose only health/info."
     }
     else {
-        Add-Result -Id 'debug.actuator.exposure' -Status 'PASS' -Target "${rlPath}:management.endpoints.web.exposure.include" -Detail "仅暴露 '$($actuator.Value)'。"
+        Add-Result -Id 'debug.actuator.exposure' -Status 'PASS' -Target "${rlPath}:management.endpoints.web.exposure.include" -Detail "Exposes only '$($actuator.Value)'."
     }
 }
 
@@ -447,7 +447,7 @@ else {
 # K8s 的 node-config ConfigMap 由 k8s_deploy.ps1 从同一个键镜像(同日起不再写死),所以这里查到的就是集群里生效的值;
 # 0..5 的结构校验在 k8s_deploy.ps1 生成期做。
 Test-NumericFloor -Id 'debug.cpp.loglevel' -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'LogLevel' -Floor 2 `
-    -Why "muduo 枚举 0=TRACE、1=DEBUG,生产开着会在 AOI / 移动 / 存盘等热点路径上产生海量日志。"
+    -Why "muduo enum 0=TRACE, 1=DEBUG; in production they flood the log from hot paths such as AOI, movement and saves."
 
 # ─────────────────────────────────────────────────────────────────
 # H. 制品与版本(仅在给了 -ReleaseVersion 时检查)
@@ -477,7 +477,7 @@ function Test-PersistSchemaLedgerSealed {
     $ledgerPath = Join-Path $RepoRoot 'proto/persist_schema_gen.txt'
     $severity = if ($ReleaseProfile -eq 'dev') { 'WARN' } else { 'FAIL' }
     if (-not [System.IO.File]::Exists($ledgerPath)) {
-        Add-Result -Id 'release.persist_schema.sealed' -Status 'FAIL' -Target $ledgerPath -Detail "台账不存在,按 fail-safe 判 FAIL。"
+        Add-Result -Id 'release.persist_schema.sealed' -Status 'FAIL' -Target $ledgerPath -Detail "Ledger not found; FAIL per fail-safe."
         return
     }
     $maxGen = 0
@@ -492,27 +492,27 @@ function Test-PersistSchemaLedgerSealed {
             $lastSealGen = [int64]$Matches[1]
         }
         elseif ($text.StartsWith('sealed=')) {
-            Add-Result -Id 'release.persist_schema.sealed' -Status 'FAIL' -Target $ledgerPath -Detail "封存行格式不对:'$text'。不要手改台账,用 dev_tools.ps1 -Command persist-schema-seal 重新封存。"
+            Add-Result -Id 'release.persist_schema.sealed' -Status 'FAIL' -Target $ledgerPath -Detail "Malformed seal line: '$text'. Do not edit the ledger by hand; reseal with dev_tools.ps1 -Command persist-schema-seal."
             return
         }
     }
     if ($maxGen -eq 0) {
-        Add-Result -Id 'release.persist_schema.sealed' -Status 'FAIL' -Target $ledgerPath -Detail "台账里没有任何字段行,按 fail-safe 判 FAIL。"
+        Add-Result -Id 'release.persist_schema.sealed' -Status 'FAIL' -Target $ledgerPath -Detail "The ledger has no field lines; FAIL per fail-safe."
         return
     }
     if ($lastSealGen -ne $maxGen) {
-        $sealed = if ($lastSealGen -eq 0) { '还没有封存过' } else { "最后封存到世代 $lastSealGen" }
+        $sealed = if ($lastSealGen -eq 0) { 'never sealed' } else { "last sealed at generation $lastSealGen" }
         Add-Result -Id 'release.persist_schema.sealed' -Status $severity -Target $ledgerPath `
-            -Detail "台账最大世代 $maxGen 尚未封存($sealed):发布前在主干运行 pwsh -File tools/scripts/dev_tools.ps1 -Command persist-schema-seal 并提交,再出版本(docs/ops/release-checklist.md §2.1 ①)。"
+            -Detail "Ledger max generation $maxGen is not sealed ($sealed): before releasing, run pwsh -File tools/scripts/dev_tools.ps1 -Command persist-schema-seal on main and commit it, then cut the release (docs/ops/release-checklist.md §2.1 ①)."
         return
     }
     $verify = Invoke-PersistSchemaLedgerVerify
     if ($verify.Ok) {
-        Add-Result -Id 'release.persist_schema.sealed' -Status 'PASS' -Target $ledgerPath -Detail "台账已封存到最大世代 $maxGen,生成器核对全部封存成立。"
+        Add-Result -Id 'release.persist_schema.sealed' -Status 'PASS' -Target $ledgerPath -Detail "Ledger sealed up to max generation $maxGen; the generator verified every seal."
         return
     }
     Add-Result -Id 'release.persist_schema.sealed' -Status $severity -Target $ledgerPath `
-        -Detail "台账封存到了最大世代 $maxGen,但生成器核对没通过:$($verify.Reason)。按生成器提示修台账(多半是合并带进了已封存世代的行),不要改封存行。"
+        -Detail "Ledger is sealed up to max generation $maxGen, but generator verification failed: $($verify.Reason). Fix the ledger as the generator says (usually a merge brought rows into a sealed generation); do not edit seal lines."
 }
 
 # 运行生成器的只核不写模式。PROTO_GEN_CONFIG_PATH 只用来定位台账;用 no-unity 配置,不碰客户端仓。
@@ -521,7 +521,7 @@ function Invoke-PersistSchemaLedgerVerify {
     $ErrorActionPreference = 'Continue'
     $go = Get-Command go -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $go) {
-        return @{ Ok = $false; Reason = '找不到 go,无法运行生成器核对封存' }
+        return @{ Ok = $false; Reason = 'go not found; cannot run the generator to verify seals' }
     }
     $generatorDir = Join-Path $RepoRoot 'tools/proto_generator/protogen'
     $configPath = Join-Path $generatorDir 'etc/proto_gen.no-unity.yaml'
@@ -540,7 +540,7 @@ function Invoke-PersistSchemaLedgerVerify {
         return @{ Ok = $true; Reason = '' }
     }
     $tail = (@($output -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) | Select-Object -Last 3) -join ' | '
-    return @{ Ok = $false; Reason = "go run ./cmd --persist-schema-verify 退出 ${exitCode}:$tail" }
+    return @{ Ok = $false; Reason = "go run ./cmd --persist-schema-verify exited ${exitCode}: $tail" }
 }
 
 <#
@@ -561,13 +561,13 @@ function Invoke-ReleaseArtifactChecks {
         Add-Result -Id 'release.version' -Status 'FAIL' -Target $versionTarget -Detail $versionCheck.Reason
         return
     }
-    Add-Result -Id 'release.version' -Status 'PASS' -Target $versionTarget -Detail "合法的发布版本号。"
+    Add-Result -Id 'release.version' -Status 'PASS' -Target $versionTarget -Detail "Valid release version."
 
     # 版本号四处一致之一:CHANGELOG 段落(与 make_release.ps1 同口径,找不到或为空都算失败)
     $changelog = Test-ChangelogReleaseSection -ChangelogPath (Join-Path $RepoRoot 'CHANGELOG.md') -Version $ReleaseVersion
     $changelogTarget = "CHANGELOG.md $($changelog.Heading)"
     if ($changelog.Ok) {
-        Add-Result -Id 'release.changelog' -Status 'PASS' -Target $changelogTarget -Detail "段落存在且非空。"
+        Add-Result -Id 'release.changelog' -Status 'PASS' -Target $changelogTarget -Detail "Section exists and is not empty."
     }
     else {
         Add-Result -Id 'release.changelog' -Status 'FAIL' -Target $changelogTarget -Detail $changelog.Reason
@@ -576,7 +576,7 @@ function Invoke-ReleaseArtifactChecks {
     # 制品库按需加载:不给 -ReleaseVersion 的既有调用方不依赖它
     $libPath = Join-Path $ScriptDir 'lib' 'artifacts_lib.ps1'
     if (-not (Test-Path -LiteralPath $libPath -PathType Leaf)) {
-        Add-Result -Id 'release.artifact.dir' -Status 'FAIL' -Target $libPath -Detail "制品库脚本缺失,无法定位与校验制品,按 fail-safe 判 FAIL。"
+        Add-Result -Id 'release.artifact.dir' -Status 'FAIL' -Target $libPath -Detail "Artifact library script missing; cannot locate or verify artifacts; FAIL per fail-safe."
         return
     }
     . $libPath
@@ -585,7 +585,7 @@ function Invoke-ReleaseArtifactChecks {
         $channelRoot = Get-ChannelRoot -Channel release -Override $ArtifactRoot
     }
     catch {
-        Add-Result -Id 'release.artifact.dir' -Status 'FAIL' -Target "-ArtifactRoot=$ArtifactRoot" -Detail "解析制品根失败:$($_.Exception.Message)"
+        Add-Result -Id 'release.artifact.dir' -Status 'FAIL' -Target "-ArtifactRoot=$ArtifactRoot" -Detail "Failed to resolve the artifact root: $($_.Exception.Message)"
         return
     }
 
@@ -595,14 +595,14 @@ function Invoke-ReleaseArtifactChecks {
 
     if (-not [System.IO.Directory]::Exists($versionDir)) {
         Add-Result -Id 'release.artifact.dir' -Status 'FAIL' -Target $versionDir `
-            -Detail "版本目录不存在:还没用 publish_images.ps1 -Version $ReleaseVersion 发布过,或 -ArtifactRoot / MMORPG_ARTIFACT_ROOT 指错了地方。"
+            -Detail "Version directory not found: not yet published with publish_images.ps1 -Version $ReleaseVersion, or -ArtifactRoot / MMORPG_ARTIFACT_ROOT points to the wrong place."
     }
     else {
-        Add-Result -Id 'release.artifact.dir' -Status 'PASS' -Target $versionDir -Detail "版本目录存在。"
+        Add-Result -Id 'release.artifact.dir' -Status 'PASS' -Target $versionDir -Detail "Version directory exists."
 
         try {
             Test-Sha256Sums -Dir $versionDir | Out-Null
-            Add-Result -Id 'release.artifact.sha256sums' -Status 'PASS' -Target $versionDir -Detail "目录内文件与 sha256sums.txt 完全一致。"
+            Add-Result -Id 'release.artifact.sha256sums' -Status 'PASS' -Target $versionDir -Detail "Files in the directory match sha256sums.txt exactly."
         }
         catch {
             Add-Result -Id 'release.artifact.sha256sums' -Status 'FAIL' -Target $versionDir -Detail $_.Exception.Message
@@ -614,28 +614,28 @@ function Invoke-ReleaseArtifactChecks {
         }
         catch {
             $buildInfo = $null
-            Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.json 缺失或不是合法 JSON:$($_.Exception.Message)"
+            Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.json is missing or not valid JSON: $($_.Exception.Message)"
         }
 
         if ($null -ne $buildInfo) {
             # app_version 接受带 v 与不带 v 两种写法:两者指同一个版本,不存在歧义
             $appVersion = [string]$buildInfo.app_version
             if ([string]::IsNullOrWhiteSpace($appVersion)) {
-                Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.app_version 为空,无法证明这份制品就是 $ReleaseVersion。"
+                Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.app_version is empty; cannot prove this artifact is $ReleaseVersion."
             }
             elseif ($appVersion -cne $ReleaseVersion -and $appVersion -cne $versionCheck.Normalized) {
-                Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.app_version='$appVersion' 与 -ReleaseVersion=$ReleaseVersion 不一致:版本目录名与制品内容对不上。"
+                Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.app_version='$appVersion' differs from -ReleaseVersion=$ReleaseVersion: the version directory name does not match the artifact content."
             }
             else {
-                Add-Result -Id 'release.buildinfo.version' -Status 'PASS' -Target $buildInfoPath -Detail "app_version='$appVersion'。"
+                Add-Result -Id 'release.buildinfo.version' -Status 'PASS' -Target $buildInfoPath -Detail "app_version='$appVersion'."
             }
 
             $dirty = $buildInfo.dirty
             if ($dirty -is [bool] -and -not $dirty) {
-                Add-Result -Id 'release.buildinfo.clean' -Status 'PASS' -Target $buildInfoPath -Detail "dirty=false。"
+                Add-Result -Id 'release.buildinfo.clean' -Status 'PASS' -Target $buildInfoPath -Detail "dirty=false."
             }
             else {
-                Add-Result -Id 'release.buildinfo.clean' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.dirty='$dirty'(缺失或不是 false 一律拒):脏树产物无法从 commit 还原,不能发布。"
+                Add-Result -Id 'release.buildinfo.clean' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.dirty='$dirty' (missing or anything other than false is rejected): a dirty-tree artifact cannot be rebuilt from its commit and must not be released."
             }
 
             # 上面 A~G 节读的是**当前工作树**的配置文件。工作树不在制品 commit 上时,那些结论不代表
@@ -643,39 +643,39 @@ function Invoke-ReleaseArtifactChecks {
             $artifactCommit = [string]$buildInfo.commit
             $stamp = Get-GitReleaseStamp -RepoRoot $RepoRoot
             if (-not $stamp.Ok) {
-                Add-Result -Id 'release.buildinfo.commit' -Status 'WARN' -Target $buildInfoPath -Detail "读不到当前工作树 commit($($stamp.Reason)),无法确认上面的配置检查对应该版本。"
+                Add-Result -Id 'release.buildinfo.commit' -Status 'WARN' -Target $buildInfoPath -Detail "Cannot read the working tree commit ($($stamp.Reason)); cannot confirm the config checks above match this version."
             }
             elseif ($artifactCommit -cne $stamp.Commit) {
-                Add-Result -Id 'release.buildinfo.commit' -Status 'WARN' -Target $buildInfoPath -Detail "制品 commit='$artifactCommit',当前工作树 HEAD=$($stamp.Commit):上面的配置检查读的是当前工作树,结论不代表该版本。请在发布 commit 上重跑预检。"
+                Add-Result -Id 'release.buildinfo.commit' -Status 'WARN' -Target $buildInfoPath -Detail "Artifact commit='$artifactCommit', working tree HEAD=$($stamp.Commit): the config checks above read the working tree, so they do not speak for this version. Rerun preflight on the release commit."
             }
             elseif ($stamp.Dirty) {
-                Add-Result -Id 'release.buildinfo.commit' -Status 'WARN' -Target $buildInfoPath -Detail "当前工作树有未提交改动:上面的配置检查读到的可能不是该版本提交的配置。"
+                Add-Result -Id 'release.buildinfo.commit' -Status 'WARN' -Target $buildInfoPath -Detail "The working tree has uncommitted changes: the config checks above may not have read the config committed for this version."
             }
             else {
-                Add-Result -Id 'release.buildinfo.commit' -Status 'PASS' -Target $buildInfoPath -Detail "制品 commit 与当前工作树 HEAD 一致且工作树干净。"
+                Add-Result -Id 'release.buildinfo.commit' -Status 'PASS' -Target $buildInfoPath -Detail "Artifact commit matches working tree HEAD and the tree is clean."
             }
         }
     }
 
     # manifest JSON 是 make_release.ps1 最后才写的"已发布"哨兵:存在即说明 release 记录完整落盘
     if (-not [System.IO.File]::Exists($manifestPath)) {
-        Add-Result -Id 'release.manifest' -Status 'FAIL' -Target $manifestPath -Detail "release manifest 不存在:还没跑 make_release.ps1 -Version $ReleaseVersion,或它中途失败。"
+        Add-Result -Id 'release.manifest' -Status 'FAIL' -Target $manifestPath -Detail "release manifest not found: make_release.ps1 -Version $ReleaseVersion has not run, or it failed midway."
     }
     else {
         $manifestText = [System.IO.File]::ReadAllText($manifestPath)
         $manifestOk = $false
-        $manifestReason = "文件为空。"
+        $manifestReason = "file is empty."
         if (-not [string]::IsNullOrWhiteSpace($manifestText)) {
             try {
                 $manifestText | ConvertFrom-Json | Out-Null
                 $manifestOk = $true
             }
             catch {
-                $manifestReason = "不是合法 JSON:$($_.Exception.Message)"
+                $manifestReason = "is not valid JSON: $($_.Exception.Message)"
             }
         }
         if ($manifestOk) {
-            Add-Result -Id 'release.manifest' -Status 'PASS' -Target $manifestPath -Detail "manifest 存在且是合法 JSON。"
+            Add-Result -Id 'release.manifest' -Status 'PASS' -Target $manifestPath -Detail "manifest exists and is valid JSON."
         }
         else {
             Add-Result -Id 'release.manifest' -Status 'FAIL' -Target $manifestPath -Detail "release manifest $manifestReason"
@@ -687,16 +687,16 @@ function Invoke-ReleaseArtifactChecks {
         $tagTarget = "tag=$ImageTag"
         $tagMatch = [regex]::Match($ImageTag, '^' + [regex]::Escape($ReleaseVersion) + '-([0-9a-f]{12})\z')
         if (-not $tagMatch.Success) {
-            Add-Result -Id 'release.imagetag.commit' -Status 'FAIL' -Target $tagTarget -Detail "版本发布的镜像 tag 必须形如 $ReleaseVersion-<12 位小写 commit>(Get-ReleaseImageTag 口径)。"
+            Add-Result -Id 'release.imagetag.commit' -Status 'FAIL' -Target $tagTarget -Detail "A release image tag must look like $ReleaseVersion-<12-char lowercase commit> (per Get-ReleaseImageTag)."
         }
         elseif ($null -eq $buildInfo) {
-            Add-Result -Id 'release.imagetag.commit' -Status 'FAIL' -Target $tagTarget -Detail "build-info.json 不可读,无法核对 tag 里的 commit,按 fail-safe 判 FAIL。"
+            Add-Result -Id 'release.imagetag.commit' -Status 'FAIL' -Target $tagTarget -Detail "build-info.json is unreadable; cannot check the commit in the tag; FAIL per fail-safe."
         }
         elseif ($tagMatch.Groups[1].Value -cne [string]$buildInfo.commit) {
-            Add-Result -Id 'release.imagetag.commit' -Status 'FAIL' -Target $tagTarget -Detail "tag 里的 commit=$($tagMatch.Groups[1].Value) 与 build-info.commit='$($buildInfo.commit)' 不一致:要部署的镜像不是这份制品。"
+            Add-Result -Id 'release.imagetag.commit' -Status 'FAIL' -Target $tagTarget -Detail "Tag commit=$($tagMatch.Groups[1].Value) differs from build-info.commit='$($buildInfo.commit)': the image to deploy is not this artifact."
         }
         else {
-            Add-Result -Id 'release.imagetag.commit' -Status 'PASS' -Target $tagTarget -Detail "tag 的 commit 与 build-info.commit 一致。"
+            Add-Result -Id 'release.imagetag.commit' -Status 'PASS' -Target $tagTarget -Detail "Tag commit matches build-info.commit."
         }
     }
 
@@ -745,7 +745,7 @@ if ($failCount -gt 0) {
     }
 }
 else {
-    Write-Host "release preflight PASSED (warn=$warnCount)。" -ForegroundColor Green
+    Write-Host "release preflight PASSED (warn=$warnCount)." -ForegroundColor Green
 }
 
 exit 0

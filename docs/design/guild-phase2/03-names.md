@@ -446,7 +446,7 @@ C++ 全节点加载全部表,导表器不改构建清单,手工登记:`cpp/gener
 ```go
 var ErrUnavailable = errors.New("player name registry unavailable") // 未配置:一个 RPC 都没发
 const (
-	DefaultReserveTimeout = 1000 * time.Millisecond
+	DefaultReserveTimeout = 800 * time.Millisecond // 2026-11-11 由 1000ms 改为 800ms,见 §3.11 订正
 	DefaultReleaseTimeout = 1000 * time.Millisecond
 	DefaultLookupTimeout  = 500 * time.Millisecond
 	DelayedReleaseAfter   = 10 * time.Second
@@ -497,12 +497,12 @@ login 回 `kRoleNameInvalid` 时 `TipInfoMessage.parameters = [min_chars, max_ch
 
 ### reservePlayerName
 
-- 整体预算 `ctx, cancel := context.WithTimeout(l.ctx, 3*time.Second)`;每次 RPC 再套 `DefaultReserveTimeout`(1s)。
+- 整体预算 `ctx, cancel := context.WithTimeout(l.ctx, 3*time.Second)`;每次 RPC 再套 `DefaultReserveTimeout`(1s)。(2026-11-11 订正,未编译:整体预算改由建角截止分摊给出,名字这一跳上限 1700ms = 两个单次预算 + 100ms 调度余量、下限 800ms;`DefaultReserveTimeout` 由 1s 改为 800ms。见 [client-request-ordering.md](../client-request-ordering.md) §6.1 的 login CreatePlayer 条与 `go/login/internal/logic/pkg/createbudget`。)
 - `requested != ""`:`Reserve(id, requested)`
   - `Code 0` → 返回;`Code 1` → `kRoleNameTaken` + owner(未插入,不释放);`Code 2` → ERROR(login 与 data_service 规则版本错配)+ `kRoleNameInvalid`。
   - `ErrUnavailable`(一个 RPC 都没发)→ `kLoginDataSerializeFailed`,**不 Release、不计孤儿**。
   - `codes.FailedPrecondition`(同 id 已有别名)→ ERROR,不 Release(会删掉另一角色的名字),`kLoginDataSerializeFailed`。
-  - 其它错误(超时 / Unavailable 等,结果未知)→ 剩余预算 ≥1s 则**同名重试一次**(同 id 同名幂等:在途 INSERT 若已提交,重试等锁后得 AlreadyOwned=0;若连接被杀、语句回滚,重试直接插入)。重试 0 → 返回;重试 1 → Taken(先前那次必未插入);仍是未知错误 → `l.releaseName(id, requested, true)`,`kLoginDataSerializeFailed`。
+  - 其它错误(超时 / Unavailable 等,结果未知)→ 名字这一跳剩余预算 ≥ `DefaultReserveTimeout`(800ms;2026-11-11 前为 ≥1s)则**同名重试一次**(同 id 同名幂等:在途 INSERT 若已提交,重试等锁后得 AlreadyOwned=0;若连接被杀、语句回滚,重试直接插入)。重试 0 → 返回;重试 1 → Taken(先前那次必未插入);仍是未知错误 → `l.releaseName(id, requested, true)`,`kLoginDataSerializeFailed`。
 - `requested == ""`:最多 `attempts` 次 `playername.Generate(rand.Reader, spec)`;`1` → 换名再试;`0` → 返回;`2` → ERROR + `kLoginDataSerializeFailed`;未知错误按上面"同名重试一次 → releaseName(uncertain=true)"处理并结束;用尽 → `kLoginDataSerializeFailed`。
 
 ### releaseName(account, id, name, uncertain)(落码首参多 `account`:孤儿日志要带账号)

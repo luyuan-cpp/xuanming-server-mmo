@@ -5,7 +5,7 @@ zones:
     gateNodePortBase: 30000
     replicas:
       centre: 1
-      gate: 2
+      gate: 3
       # Role-split scene pools (matches scene_manager StrictNodeTypeSeparation=true).
       scene_world: 2    # SceneNodeType=0, persistent main world channels
       scene_instance: 2 # SceneNodeType=1, on-demand dungeons / battlegrounds
@@ -15,14 +15,19 @@ zones:
     gateNodePortBase: 30010
     replicas:
       centre: 1
-      gate: 2
+      gate: 3
       scene_world: 2
       scene_instance: 2
 
 # Ops recommendation:
 # 1. Keep centre=1 unless you have already validated multi-centre semantics.
-# 2. Start with gate=2 and scene_world=2 / scene_instance=2 per zone for basic
-#    redundancy and rollout safety. Legacy `scene: 4` still works if the
+# 2. Start with gate=3 and scene_world=2 / scene_instance=2 per zone. gate=3 is the
+#    smallest count that holds the default zone capacity (zone_config.capacity
+#    45000): each gate takes 90% of GateMaxConnections 20000 = 18000 before the
+#    login queue starts holding players, and 2 gates top out at 36000 (2026-11-10,
+#    docs/design/zone-full-handling.md). Size gates as
+#    replicas * 18000 >= zone_config.capacity, or lower the zone capacity.
+#    Legacy `scene: 4` still works if the
 #    orchestration script you use does not yet understand the split form;
 #    in that case set scene_manager StrictNodeTypeSeparation=false during
 #    the transition window.

@@ -64,6 +64,7 @@
 - **坐标/Transform 用 double**：`Location` / `Rotation` / `Scale` / `Vector3` / `Velocity` / `Acceleration` 的 x/y/z 必须 `double`，匹配 UE 客户端精度
 - **BaseAttributesComp 用 uint64**：`strength` / `stamina` / `health` / `mana` / `critchance` / `armor` / `resistance` / `speed` 必须 `uint64`，避免战斗公式 cast 时窄化
 - **SnowFlake GUID 用 uint64**：`player_id` / `entity` / `scene_id` / `item_id` / `buff_id` / `skill_id`（运行时实例）/ `tx_id` / `snapshot_id` 必须 `uint64`
+- **单调计数 / 代次用 uint64**：`session_incarnation` / `gate_call_seq`
 - **Unix 时间戳用 uint64/int64**：`created_at` / `expires_at` / `castTime` / `last_time` / `start` 等必须 64-bit
 - **货币用 uint64**：`CurrencyComp.values` / `owed` / `paid` / `balance_before/after`
 - **可用 uint32**：`session_id` / `session_version` / `attack_power` / `defense_power` / `max_health` / `skill_table_id`（表查 key）/ `current_frame`
@@ -131,7 +132,7 @@
    - `bwmarrin/snowflake`：**13-bit** node / 9-bit step / **毫秒**级 epoch。只有 login 的旧号源是这套，新角色已不用它。
    - **发号器发的永久 ID**（player_id、guild_id、物品 guid、流水号、battle_id、challenge_id、team_id 等，`data_service.AllocateIdSegment`）：打散过的计数器值，63 位以内，不单调、不连续、没有位布局。**不能用 `ParseSnowflakeGuid` 解析，不能靠大小判断先后**（排序和翻页用时间列），Lua 里只当字符串，不进有序集合的分数。没有回退号源，发号失败就是操作失败。详见 [发号器设计](docs/design/player-data-tidb-scaling-plan.md) §6 与 [运维手册](docs/ops/id-issuer-runbook.md)。
    **强规定(负责人 2026-10-31 定)**:发号器的预留记录必须写两套独立的 etcd,两份都写成功才发号。任何生产环境、任何预算档都不许省掉第二套,也不许把两份放在同一套;只有 `Mode=dev`、`test` 例外。
-   2026-11-05 起另有第三份记录在全世界共用的全局号源登记处,三份都写成功才发号;它同时把每个地域码唯一绑定到一对本地 etcd。登记处不许从备份恢复,首次初始化和事故恢复是两个入口,见[发号器运维手册](docs/ops/id-issuer-runbook.md)。
+   2026-11-05 起另有第三份记录在全世界共用的全局号源登记处,三份都写成功才发号;它同时把每个地域码唯一绑定到一个 K8s 集群(部署身份,运行期读 kube-system 的 UID)里的一对本地 etcd。登记处只走双向 TLS(世界 CA 签的证书),地域码只能按顺序认领;换码只换发号码(`-IdIssuerRegion`),存档库编号 `-Region` 不变。登记处不许从备份恢复,首次初始化和事故恢复是两个入口,见[发号器运维手册](docs/ops/id-issuer-runbook.md)。
 2. **Kafka 防僵尸**：发往 `{type}-{id}` topic 的消息必须填 `target_instance_id`（目标节点 UUID），空值则关闭过滤
 3. **kafka topic key = 业务实体 ID**（同一玩家 / 同一对局事件有序）
 4. **proto 字段编号上线后不复用**（见 §4）
@@ -186,6 +187,7 @@
 
 - 默认直接执行：完成会话启动门禁 → 明确范围 → 改代码/proto/yaml/脚本/文档 → 由有权限的执行者跑受影响的 build/test/lint → 汇报改动范围、验证证据、未验证项和剩余风险。需要 commit 时等用户明确发话。
 - 动手前先检查工作区和相关文件的既有改动；不覆盖、回退或顺手整理他人的工作，不夹带任务外改动。
+- **写回主工作区（负责人 2026-11-10 定）**：会话自己的 worktree 已删、桌面应用的守卫仍拦对主工作区的编辑时，在草稿目录改副本；写回前核对主仓文件与复制时逐字节相同，不同就用 `git merge-file` 三方合并，有冲突即停下；`docs/PROGRESS.md` 只纯追加。写回后用 `git diff` 逐文件核对只多了自己的改动，交付说明写明是这样写回的。不要跳过核对，直接用重定向、`sed -i` 或移动文件覆盖主仓文件。
 - 失败时不假装成功；命令失败后不连续自动重试，不注释断言或跳过测试，不用 `git reset` / `git checkout --` 销毁进度。保留关键错误与日志摘要并报告，等待决策。
 - 请求触犯 §9 禁令，或任务范围明显扩大、遗漏关键文件、规范文档冲突、预计改动 30+ 文件、需要安装/升级工具、修改系统环境、关闭防火墙、写 secrets、触碰生产、build 损坏其他服务或即将 push 时，立即停止并报告，等待授权或决策。
 
@@ -235,7 +237,7 @@
 - 能在副作用前安全完成的纯校验应先完成；提交点仍须用同一并发控制机制原子复核权限、版本和状态，不能让预检代替提交校验。跨存储、跨服务或异步流程必须明确原子范围、提交点、回滚/补偿、重试与幂等语义。
 - 重试只能用于可重试且幂等的操作，必须有超时、次数上限、退避与必要的抖动；支持取消并释放文件、锁、连接、线程与定时器等资源。
 - 并发代码必须写清状态所有者、同步方式和生命周期；共享可变状态不得依赖“通常不会并发”的假设。进程内耗时和超时预算用单调时钟与截止时间；跨进程绝对截止时间使用协议约定的时钟和格式，并明确时钟偏差与过期语义。不得用“重试次数 × sleep”代替时间预算。
-- 安全遵循最小权限、默认拒绝、纵深防御和敏感信息最少暴露；真实 secret、token 和密钥值不得硬编码或进入日志、指标、错误响应。主体标识只在确有诊断需要时最小化、脱敏并受控记录，不得外发给无权调用者。
+- 安全遵循最小权限、默认拒绝、纵深防御和敏感信息最少暴露；真实 secret、token 和密钥值不得硬编码或进入日志、指标、错误响应。主体标识只在确有诊断需要时最小化、脱敏并受控记录，不得外发给无权调用者。K8s 上工作负载的密钥只放 Secret：ConfigMap 与 `-DryRun` 输出里只出现变量名，经 `secretKeyRef` 注入，各档位同一条注入路径，细则见 `deploy/k8s/AGENTS.md`（2026-11-10~11）。
 - 已发布协议、持久化数据、外部配置和滚动升级接缝优先向后兼容。破坏性变更必须有版本、迁移、灰度与回滚方案，并验证新旧版本并存窗口。
 - 关键路径提供结构化日志、低基数指标和必要追踪；日志通过受控关联标识定位请求、阶段和结果，但不得使用 `player_id` 等高基数值作指标 label。
 - 性能优化必须由 profiling、benchmark 或压测数据驱动；先修算法、I/O 和数据结构瓶颈，不以牺牲正确性和可读性换未经测量的微优化。

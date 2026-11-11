@@ -12,7 +12,7 @@ type ServiceContext struct {
 
 func NewServiceContext() *ServiceContext {
 	if err := config.AppConfig.ValidateGlobalAuthority(); err != nil {
-		panic(fmt.Errorf("全球DB配置拒绝启动: %w", err))
+		panic(fmt.Errorf("global DB configuration rejected; refusing to start: %w", err))
 	}
 	return &ServiceContext{Config: config.AppConfig}
 }

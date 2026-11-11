@@ -2,7 +2,8 @@ package data
 
 // 请求截止之后不再提交(docs/design/client-request-ordering.md §6.1 / O11 / §14 第 4 条)的回归测试(不连库)。
 //
-// 客户端请求路径上 trade 只有收藏两处写(SetFavorite → InsertFavorite / DeleteFavorite)。gate 对同一会话的
+// 挂牌(listing)这一侧客户端请求路径上只有收藏两处写(SetFavorite → InsertFavorite / DeleteFavorite);
+// 合同(commerce:寄售、拍卖、材料挂单、面对面交易、人民币寄售)的客户端写见 commerce/request_deadline_fence_test.go。gate 对同一会话的
 // 路由类请求单飞,路由服回超时就放行下一条:截止之后才落库的「收藏」会晚于紧随其后的「取消收藏」,
 // 玩家看到取消成功、商品却仍在收藏里。
 //

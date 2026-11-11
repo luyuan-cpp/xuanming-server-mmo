@@ -8,6 +8,7 @@ import (
 	"login/internal/config"
 	loginlogic "login/internal/logic/clientplayerlogin"
 	loginauth "login/internal/logic/pkg/callerauth"
+	"login/internal/logic/pkg/createbudget"
 	"login/internal/logic/pkg/node"
 	"login/internal/rpclogging"
 	loginserver "login/internal/server/clientplayerlogin"
@@ -27,7 +28,7 @@ import (
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
-	"shared/snowflakealloc"
+	"shared/tracing"
 	"strconv"
 	"syscall"
 	"time"
@@ -55,20 +56,6 @@ var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 
 const nodeType = login_proto.ENodeType_LoginNodeService
 
-// playerIDWatermarkLeadMs 是 PlayerId 毫秒水位的**前推量**,必须 > 写入间隔(1s)。
-// 水位契约:任何时刻已持久化的水位 ≥ 本进程可能铸到的最大毫秒时间戳。
-// 写入间隔 1s、前推 2s ⇒ 即使某次写入失败,上一次写的 (now+2000) 仍覆盖着这段时间
-// 内能铸到的毫秒,继任者只需等墙钟越过水位即可,无需再加猜测性余量。
-const playerIDWatermarkLeadMs = 2000
-
-// PlayerId 的 bwmarrin node 段固定 13 位,切成 [cluster3][slot10](设计稿 §5)。
-// 存量 PlayerId 的 node 值 ≤ 几百 = 新布局 cluster 0 的 slot,逐位不撞;两个常量与
-// 配置里的 Snowflake.NodeBits 必须一致,启动时校验,不一致就拒绝起服。
-const (
-	playerIDNodeBits    = 13
-	playerIDClusterBits = 3
-)
-
 func main() {
 	flag.Parse()
 	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
@@ -85,11 +72,17 @@ func main() {
 	// 照旧文档写成 "${VAR}" 的字面量由下面的 ResolveSecrets 拒绝启动(config/auth_providers.go)。
 	conf.MustLoad(*configFile, &config.AppConfig)
 	if err := config.AppConfig.ValidateGlobalAuthority(os.Getenv); err != nil {
-		panic(fmt.Errorf("全球Login配置拒绝启动: %w", err))
+		panic(fmt.Errorf("global Login configuration rejected; refusing to start: %w", err))
 	}
 	// 新角色的存档库(总体方案 §7.2):地域码、存档库数不合法就拒绝启动,不建出落到错误库的角色。
 	if err := config.AppConfig.Placement.Validate(); err != nil {
-		panic(fmt.Errorf("Placement 配置拒绝启动: %w", err))
+		panic(fmt.Errorf("Placement configuration rejected; refusing to start: %w", err))
+	}
+	// 建角各跳按 handler 截止分摊(docs/design/client-request-ordering.md §5.3):本地余量 + 各跳上限 + 跳间间隙
+	// 放不进 zrpc Timeout 就拒绝启动,不让「名义预算之和超过 handler 预算」再静默上线。
+	if err := createbudget.New(config.AppConfig.HomeZone.RegisterTimeout).Validate(
+		time.Duration(config.AppConfig.Timeout) * time.Millisecond); err != nil {
+		panic(fmt.Errorf("CreatePlayer budget configuration rejected; refusing to start: %w", err))
 	}
 
 	// 密钥门禁必须跑在**任何外部连接之前**(Kafka / Redis / etcd 都在下面)。
@@ -100,12 +93,12 @@ func main() {
 		logx.Errorf("SECURITY WARNING: %s", w)
 	}
 	if err != nil {
-		panic(fmt.Sprintf("HMAC 密钥配置不合格,拒绝启动: %v", err))
+		panic(fmt.Sprintf("HMAC secret configuration invalid; refusing to start: %v", err))
 	}
 	config.ActiveSecrets = secrets
 	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入):同样要在任何外部连接之前填好。
 	if err := config.AppConfig.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
-		panic(fmt.Errorf("共享 Redis 口令配置不合格,拒绝启动: %w", err))
+		panic(fmt.Errorf("shared Redis password configuration invalid; refusing to start: %w", err))
 	}
 
 	// 控制面命令 topic(gate-cmd_g<N> / scene-cmd_g<N>)**刻意不在这里建**:
@@ -120,16 +113,16 @@ func main() {
 	if *maintenancePlan != "" {
 		maintenanceRuntime, err = drainproof.LoadRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
 		if err != nil {
-			panic(fmt.Errorf("维护runtime拒绝: %w", err))
+			panic(fmt.Errorf("maintenance runtime rejected: %w", err))
 		}
 	} else if *maintenanceDir != "" || *maintenanceSHA != "" {
-		panic("维护参数必须完整提供")
+		panic("maintenance parameters must be provided in full")
 	}
 	var ctx *svc.ServiceContext
 	if maintenanceRuntime != nil {
 		ctx, err = svc.NewServiceContextForDrain(maintenanceRuntime)
 		if err != nil {
-			panic(fmt.Errorf("维护boot身份拒绝: %w", err))
+			panic(fmt.Errorf("maintenance boot identity rejected: %w", err))
 		}
 	} else {
 		ctx = svc.NewServiceContext()
@@ -146,7 +139,7 @@ func main() {
 		maintenanceCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		if err := runMaintenanceLogin(maintenanceCtx, maintenanceRuntime, ctx); err != nil {
-			panic(fmt.Errorf("login维护排空HOLD: %w", err))
+			panic(fmt.Errorf("login maintenance drain HOLD: %w", err))
 		}
 		return
 	}
@@ -159,16 +152,16 @@ func main() {
 			digest, err := ctx.PreparedFrontier(prepareCtx)
 			cancel()
 			if err != nil {
-				logx.Errorf("维护新boot准备HOLD: %v", err)
+				logx.Errorf("maintenance new-boot prepare HOLD: %v", err)
 				return
 			}
 			ready, err := maintenanceRuntime.Readiness("SOURCE", digest)
 			if err != nil {
-				logx.Errorf("维护新boot身份HOLD: %v", err)
+				logx.Errorf("maintenance new-boot identity HOLD: %v", err)
 				return
 			}
 			if err = maintenanceRuntime.AwaitOpen(controlCtx, ready, ctx.OpenPreparedRoot); err != nil {
-				logx.Errorf("维护新boot开放HOLD: %v", err)
+				logx.Errorf("maintenance new-boot open HOLD: %v", err)
 			}
 		})
 	}
@@ -178,18 +171,18 @@ func main() {
 			if err != nil {
 				if controlCtx.Err() == nil {
 					ctx.CloseRootAdmission()
-					logx.Errorf("维护控制输入HOLD: %v", err)
+					logx.Errorf("maintenance control input HOLD: %v", err)
 				}
 				return
 			}
 			if err = runtime.BindBoot(ctx.BootInstance(), nil); err != nil {
 				ctx.CloseRootAdmission()
-				logx.Errorf("维护同boot身份HOLD: %v", err)
+				logx.Errorf("maintenance same-boot identity HOLD: %v", err)
 				return
 			}
 			if err = runMaintenanceLogin(controlCtx, runtime, ctx); err != nil {
 				ctx.CloseRootAdmission()
-				logx.Errorf("维护同boot排空HOLD: %v", err)
+				logx.Errorf("maintenance same-boot drain HOLD: %v", err)
 			}
 		})
 	}
@@ -234,144 +227,15 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 
 	logx.Infof("Login node registered: %+v", loginNode.Info.String())
 
-	// PlayerId 的机器位由 shared/snowflakealloc 独立分配,**不再用 NodeInfo.NodeId**。
-	//
-	// 旧做法的问题:NodeInfo.NodeId 与它的 etcd 租约绑在一起,租约一丢 etcd 就把
-	// allocKey 删掉、别的副本随时可以抢走同一个号;而 login 这边既不停发也不重夺
-	// (reRegister 是空操作,见下),于是会永久用一个已被释放的机器位继续铸 PlayerId。
-	// login 是 replicas=2 部署,两副本拿到同一机器位时 bwmarrin 在新毫秒把 step 归零,
-	// 同毫秒的首个号逐位相同。DB 也兜不住:proto 声明了 PRIMARY KEY(player_id)
-	// (旧注释说"没有唯一索引"仅对按陈旧 go/db/model/*.sql 预建表的环境成立),
-	// 但写路径是 INSERT ... ON DUPLICATE KEY UPDATE —— 重复 PlayerId 不报错,
-	// 而是**静默改写另一个玩家的行**(串档),比报错更糟。唯一性必须在铸号侧保证。
-	//
-	// 与 guild / scene_manager 同一套机制:独立 lease + hostname 亲和 + 隔离期选号 +
-	// 水位年龄自 fence。kind="login-player" 是全球唯一的 PlayerId 号源。
-	// ⚠️ 位宽必须显式告诉分配器:bwmarrin 的 13 位 node 段切成 [cluster3][slot10]
-	// (设计稿 §5),槽号 ≤ 1023,worker id = cluster<<10 | slot 直接喂给 bwmarrin。
-	// snowflakealloc 默认按 shared/snowflake 的 [cluster5][slot12] 切,喂给 13 位的
-	// bwmarrin 会溢出。
-	etcdCli, err := node.NewEtcdClient() // 复用 login 既有的 etcd 客户端工厂,不另拼一份配置
+	// 这条 etcd 连接给热关停规则的 watch 用(newKillSwitch);复用 login 既有的 etcd 客户端工厂,不另拼一份配置。
+	// PlayerId 只由发号器发(svc/player_id_minter.go,data_service.AllocateIdSegment):login 不申领 snowflake 槽位、
+	// 不写水位,也没有失槽退出(2026-11-11 删)。
+	etcdCli, err := node.NewEtcdClient()
 	if err != nil {
-		logx.Errorf("Failed to create etcd client for snowflake worker id: %v", err)
+		logx.Errorf("Failed to create etcd client: %v", err)
 		return err
 	}
 	defer etcdCli.Close()
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		logx.Errorf("Failed to get hostname: %v", err)
-		return err
-	}
-	if config.AppConfig.Snowflake.NodeBits != playerIDNodeBits {
-		err = fmt.Errorf("Snowflake.NodeBits=%d but the PlayerId cluster/slot layout is fixed at %d bits "+
-			"(cluster%d/slot%d); changing NodeBits would invalidate every existing PlayerId",
-			config.AppConfig.Snowflake.NodeBits, playerIDNodeBits, playerIDClusterBits, playerIDNodeBits-playerIDClusterBits)
-		logx.Errorf("%v", err)
-		return err
-	}
-	sfCtx, sfCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	sfHandle, err := snowflakealloc.AllocateWithKeepAlive(sfCtx, etcdCli, "login-player", hostname,
-		snowflakealloc.Options{
-			LeaseTTL:     60,
-			ClusterID:    config.AppConfig.ClusterId,
-			ClusterBits:  playerIDClusterBits,
-			SlotBits:     playerIDNodeBits - playerIDClusterBits,
-			LegacyPrefix: "/login",
-			// 缓存文件名带监听端口:本地按 -Zone 起的两个 login 各自一份,不互相覆盖。
-			CachePath: snowflakealloc.DefaultCachePath(config.AppConfig.SnowflakeCacheDir, "login-player",
-				fmt.Sprintf("%s_%d", hostname, port)),
-		})
-	sfCancel()
-	if err != nil {
-		logx.Errorf("Failed to allocate snowflake worker id: %v", err)
-		return err
-	}
-	defer sfHandle.Close()
-	logx.Infof("Login snowflake %s worker_id=%d (host=%s)", sfHandle.LogFields(), sfHandle.WorkerID, hostname)
-
-	// 毫秒级水位地板:防"墙钟回拨 + 重启"跨进程重放 PlayerId。
-	//
-	// bwmarrin 进程内靠单调时钟免疫回拨,但**跨重启**会以当前墙钟重新锚定:
-	// 墙钟被回拨 N 秒后重启,新进程以同一 worker id(hostname 亲和)重走旧进程
-	// 最后 N 秒的毫秒序列,同毫秒 step 从 0 重数 —— 逐位相同的 PlayerId,
-	// 而 player_database.player_id 没有唯一索引兜底。snowflakealloc 的秒级
-	// GuardEpochSec 是 shared/snowflake epoch 口径,塞不进 bwmarrin 毫秒层,
-	// 所以这里用独立的 Unix 毫秒水位:启动时把前任写的水位当硬地板,
-	// 墙钟没越过它就不许构造发号器(fail-closed,等待时长 = 实际回拨幅度)。
-	// 水位由下面的 goroutine 以 1s 节拍**前推** playerIDWatermarkLeadMs 写入,
-	// 正常重启(墙钟没回拨)时启动等待恒为零。
-	wm, err := sfHandle.ReadMsWatermark(context.Background())
-	if err != nil {
-		logx.Errorf("Failed to read player id ms watermark: %v", err)
-		return err
-	}
-	for {
-		nowMs := uint64(time.Now().UnixMilli())
-		if nowMs > wm {
-			break
-		}
-		logx.Errorf("PlayerId watermark floor not passed yet: wall_clock_ms=%d watermark_ms=%d (clock was "+
-			"rolled back?); waiting %dms before minting", nowMs, wm, wm-nowMs+1)
-		time.Sleep(time.Duration(min(wm-nowMs+1, 2000)) * time.Millisecond)
-	}
-
-	ctx.SetNodeId(int64(sfHandle.WorkerID))
-
-	// 水位年龄自 fence(设计稿 §3.4):PlayerIDGen 与 shared/snowflake.Node 共用同一个
-	// FenceClock —— 距上次水位写成功超过 F(2h)就拒发,判定放在 Generate() 里。
-	// 同时把发号器登记到 Handle:Close() / 失去所有权时先 Fence 它。
-	ctx.SnowFlake.SetFenceClock(sfHandle.FenceClock())
-	sfHandle.AttachFencer(ctx.SnowFlake)
-
-	// **同步写一次水位再开始服务**:否则从这里到下面 goroutine 的第一个 tick 之间
-	// (≤1s)已经能铸 PlayerId,而 etcd 里还是前任的旧水位 —— 这段发出的号不被任何
-	// 地板覆盖,崩溃 + 时钟回拨即可被继任者重放。秒级水位(隔离期用)与毫秒水位
-	// (bwmarrin 地板)各写一次;写失败只告警,但闸不 Ack ⇒ 发号器拒发到写成功为止。
-	if !sfHandle.SyncWatermark(context.Background()) {
-		logx.Error("Initial PlayerId slot watermark write failed; minting stays fenced until a watermark write succeeds")
-	}
-	if err := sfHandle.PutMsWatermark(context.Background(),
-		ctx.SnowFlake.NowUnixMs()+playerIDWatermarkLeadMs); err != nil {
-		logx.Errorf("Initial PlayerId ms watermark write failed (the first second of minting is "+
-			"not covered by any floor for the next holder): %v", err)
-	}
-
-	// 水位写入循环:每秒把"发号器时钟 + 前推量"写进 etcd。前推量(2s)>
-	// 写入间隔(1s),保证前任崩溃前可能发出的最大时间戳恒 < 最后一次写入的
-	// 水位值,继任者只需等墙钟越过水位即可,无需再加猜测性余量。
-	// 写失败只告警(与 snowflakealloc.advanceGuard 同理:水位是下一任的地板,
-	// 本进程自己的唯一性不依赖它),连续失败会让地板变陈旧,靠告警可见。
-	safego.Go("login.player_id_watermark", func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-sfHandle.Lost():
-				return
-			case <-ticker.C:
-				target := ctx.SnowFlake.NowUnixMs() + playerIDWatermarkLeadMs
-				if err := sfHandle.PutMsWatermark(context.Background(), target); err != nil {
-					logx.Errorf("PlayerId ms watermark write failed (floor for the next holder is getting stale): %v", err)
-				}
-			}
-		}
-	})
-
-	// Lost() = 本进程**确认**不再拥有这个槽(slots key 被挂到了别的 uuid 上),必须立刻
-	// 停止铸 PlayerId。lease 抖动 / etcd 不可达不会走到这里(分配器自己 reclaim),那段
-	// 时间由 Generate() 里的水位年龄判定兜住(ErrWatermarkStale,暂态)。
-	// **不能只靠停服**:go-zero 的 zrpc.RpcServer.Stop() 实测只有一行 logx.Close(),
-	// 既不拒新请求也不排空在途。所以正确性由 Fence() 保证(之后 Generate 一律失败,
-	// 建角整体失败),可用性由进程退出 + 编排重拉保证。
-	safego.Go("login.snowflake_lease_fence", func() {
-		<-sfHandle.Lost()
-		ctx.SnowFlake.Fence() // ① 先关闸
-		logx.Error("Login snowflake slot ownership lost; player id generator fenced, exiting to let the " +
-			"orchestrator restart (zrpc Stop() only closes the logger and cannot stop serving)")
-		logx.Close() // ② 冲掉日志缓冲
-		os.Exit(1)   // ③ 退出;重启后拿新 worker id
-	})
 
 	// 热关停 watch 的生命周期:随本函数返回而结束。
 	// startServer 里的 server.Start() 是阻塞的,它返回就意味着服务在停,
@@ -383,8 +247,8 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 	defer ksCancel()
 
 	// Start gRPC server
-	// etcdCli 直接复用上面为 snowflake 建的那一个 —— login 到 etcd 只该有
-	// 这一条业务连接,再 New 一个既多一份 keepalive 心跳,也多一处会漏关的资源。
+	// etcdCli 直接复用上面建的那一个 —— login 到 etcd 只该有这一条业务连接,
+	// 再 New 一个既多一份 keepalive 心跳,也多一处会漏关的资源。
 	if err := startServer(ksCtx, cfg, ctx, etcdCli); err != nil {
 		logx.Errorf("Failed to start gRPC server: %v", err)
 		return err
@@ -398,19 +262,20 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 // 这里替换掉的旧实现是全仓最严重的 P0:它把 metadata 里的
 // x-session-detail-bin 解出来就当可信身份写进 ctx,没有任何校验 ——
 // 任何能连到 login gRPC 端口的进程都可以自称是任意会话的任意玩家。
-// 现在改成 fail-closed:带了身份声明就必须带 HMAC 签名,验不过直接
+// 现在改成 fail-closed:带了身份声明就必须带 gate 的 Ed25519 签名,验不过直接
 // Unauthenticated;不带声明的调用(Java Gateway 新链路)行为不变。
 //
 // 任何运行模式都强制:gate 已对全部会话身份签名,dev/test 不再保留「告警放行」档,
-// 与在线域的 callerauth.GateInterceptor 一致。
-func newSessionInterceptor(cfg config.Config) grpc.UnaryServerInterceptor {
-	var secrets callerauth.SecretVerifier
-	if config.ActiveSecrets != nil {
-		secrets = config.ActiveSecrets.InternalAuth
+// 与在线域的 callerauth.GateInterceptor 一致。login 只持公钥(callerauth.PublicKeysEnv),
+// 签不出名;公钥缺失或格式不对时拒绝启动(docs/design/gate-online-identity.md §10.1)。
+func newSessionInterceptor(cfg config.Config, getenv func(string) string) (grpc.UnaryServerInterceptor, error) {
+	keys, err := callerauth.ParsePublicKeys(getenv(callerauth.PublicKeysEnv))
+	if err != nil {
+		return nil, fmt.Errorf("%s is missing or malformed: %w", callerauth.PublicKeysEnv, err)
 	}
 
 	return loginauth.UnaryServerInterceptor(callerauth.NewVerifier(callerauth.Options{
-		Secrets:         secrets,
+		Keys:            keys,
 		Enforce:         true,
 		MaxClockSkew:    cfg.InternalAuth.MaxClockSkew,
 		MaxNonceEntries: cfg.InternalAuth.MaxNonceEntries,
@@ -419,7 +284,7 @@ func newSessionInterceptor(cfg config.Config) grpc.UnaryServerInterceptor {
 			loginauth.RecordNonceOverflow()
 			logx.Error("callerauth nonce table exceeded MaxNonceEntries and rotated early; replay window temporarily shortened, increase InternalAuth.MaxNonceEntries")
 		},
-	}))
+	})), nil
 }
 
 // newKillSwitch 构造 RPC 级热关停闸门,并挂上 etcd list-watch。
@@ -531,9 +396,15 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	if adminToken != "" && len(adminToken) < loginadminserver.MinAdminTokenBytes {
 		return fmt.Errorf("%s is shorter than %d bytes", loginadminserver.AdminTokenEnv, loginadminserver.MinAdminTokenBytes)
 	}
+	sessionInterceptor, err := newSessionInterceptor(cfg, os.Getenv)
+	if err != nil {
+		return err
+	}
 	interceptors = append(interceptors,
 		loginadminserver.AdminAuthInterceptor(adminToken),
-		newSessionInterceptor(cfg),
+		sessionInterceptor,
+		// 请求顶层带 player_id 的方法,handler 与 serverbase 的日志都带上它(docs/design/distributed-tracing.md §6.2)。
+		tracing.PlayerFieldInterceptor(),
 		serverbase.UnaryInterceptor(serverbase.Options{}),
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
 	)

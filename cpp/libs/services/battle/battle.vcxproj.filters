@@ -36,6 +36,9 @@
     <ClInclude Include="system\battle_replay_recorder.h">
       <Filter>system</Filter>
     </ClInclude>
+    <ClInclude Include="system\battle_script.h">
+      <Filter>system</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="data\battle_table_fingerprint.cpp">
@@ -48,6 +51,9 @@
       <Filter>system</Filter>
     </ClCompile>
     <ClCompile Include="system\battle_replay_recorder.cpp">
+      <Filter>system</Filter>
+    </ClCompile>
+    <ClCompile Include="system\battle_script.cpp">
       <Filter>system</Filter>
     </ClCompile>
   </ItemGroup>

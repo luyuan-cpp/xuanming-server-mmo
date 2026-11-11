@@ -27,9 +27,13 @@
 #                       and drop binaries under bin/)
 #
 # Required environment:
-#   - MMORPG_INTERNAL_AUTH_SECRET  shared internal identity signing secret
-#                       (>=32 bytes, same value for gate / login / online
-#                       services); start refuses to run without it
+#   - MMORPG_INTERNAL_AUTH_SIGNING_KEY  gate's Ed25519 signing seed
+#                       (64 hex characters)
+#   - MMORPG_INTERNAL_AUTH_PUBLIC_KEYS  verifier public key list
+#                       (comma-separated, 64 hex characters each; must list
+#                       the key paired with the seed). Generate a pair with
+#                       'cd go/shared && go run ./cmd/identitykeygen';
+#                       start refuses to run without both
 #
 # Usage examples:
 #   ./tools/scripts/deploy-staging.sh start
@@ -116,16 +120,19 @@ check_cpp_node_started() {
   grep '\[open_file_limit\]' "$logfile" 2>/dev/null | while read -r line; do log "  $node: $line"; done || true
 }
 
-# 内部身份签名密钥(docs/design/gate-online-identity.md §4):gate 对发往 Go 服务的会话身份签名,login 与在线服务验签,
-# 三方必须是同一把。gate 缺它或不足 32 字节直接拒启,所以在擦 Redis、起任何进程之前先查,缺了就停,不留半截部署。
-# 本脚本不生成、不落盘、不打印密钥:由操作员在 start 前 export,子进程继承环境变量。
+# 会话身份密钥(docs/design/gate-online-identity.md §4、§10.1):gate 用 Ed25519 私钥对发往 Go 服务的会话身份签名,
+# login 与在线服务只用公钥列表验签,gate 启动时核对私钥与公钥列表配对。缺了或形状不对,gate / 验证方直接拒启,
+# 所以在擦 Redis、起任何进程之前先查,缺了就停,不留半截部署。
+# 本脚本不生成、不落盘、不打印密钥:由操作员在 start 前 export,子进程继承环境变量。单机 staging 上各进程同一用户,
+# 环境变量不是进程间的安全边界;「验证方拿不到私钥」靠 K8s(私钥只进 gate 引用的 Secret)保证。
 require_internal_auth_secret() {
-  local secret="${MMORPG_INTERNAL_AUTH_SECRET:-}"
-  local LC_ALL=C # 让 ${#secret} 按字节计,与 gate 的 32 字节下限同一口径
-  [[ -n "$secret" ]] || die "MMORPG_INTERNAL_AUTH_SECRET is not set: export the shared internal identity signing secret (>=32 bytes, same value for gate, login and the online services) before '$0 start'"
-  (( ${#secret} >= 32 )) || die "MMORPG_INTERNAL_AUTH_SECRET must be at least 32 bytes; gate refuses to start otherwise"
-  [[ ! "$secret" =~ ^[[:space:]] && ! "$secret" =~ [[:space:]]$ ]] || die "MMORPG_INTERNAL_AUTH_SECRET must not have leading or trailing whitespace; the Go verifiers reject such keys"
-  export MMORPG_INTERNAL_AUTH_SECRET
+  local seed="${MMORPG_INTERNAL_AUTH_SIGNING_KEY:-}"
+  local keys="${MMORPG_INTERNAL_AUTH_PUBLIC_KEYS:-}"
+  [[ -n "$seed" ]] || die "MMORPG_INTERNAL_AUTH_SIGNING_KEY is not set: export the gate signing key (64 hex characters; generate a pair with 'cd go/shared && go run ./cmd/identitykeygen') before '$0 start'"
+  [[ "$seed" =~ ^[0-9a-fA-F]{64}$ ]] || die "MMORPG_INTERNAL_AUTH_SIGNING_KEY must be exactly 64 hex characters; gate refuses to start otherwise"
+  [[ -n "$keys" ]] || die "MMORPG_INTERNAL_AUTH_PUBLIC_KEYS is not set: export the verifier public key list (comma-separated, 64 hex characters each) before '$0 start'"
+  [[ "$keys" =~ ^[0-9a-fA-F]{64}(,[0-9a-fA-F]{64})*$ ]] || die "MMORPG_INTERNAL_AUTH_PUBLIC_KEYS must be a comma-separated list of 64-hex-character keys; login and the online services refuse to start otherwise"
+  export MMORPG_INTERNAL_AUTH_SIGNING_KEY MMORPG_INTERNAL_AUTH_PUBLIC_KEYS
 }
 
 # ── Subcommands ────────────────────────────────────────────────────

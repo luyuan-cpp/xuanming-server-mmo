@@ -1,5 +1,8 @@
 #include "battle_client_edge.h"
 
+#include <algorithm>
+#include <chrono>
+
 #include <boost/any.hpp>
 #include <openssl/rand.h>
 #include "network_probe_security.h"
@@ -67,6 +70,10 @@ BattleClientEdge::BattleClientEdge()
         { OnClientRequest(conn, request, ts); });
     dispatcher_.registerMessageCallback<match::NetworkProbeStart>([this](const auto& conn,const auto& request,auto ts){OnProbeStart(conn,request,ts);});
     dispatcher_.registerMessageCallback<match::NetworkProbeEcho>([this](const auto& conn,const auto& request,auto ts){OnProbeEcho(conn,request,ts);});
+    dispatcher_.registerMessageCallback<::ClientHeartbeatRequest>(
+        [this](const muduo::net::TcpConnectionPtr &conn,
+               const std::shared_ptr<::ClientHeartbeatRequest> &request, muduo::Timestamp ts)
+        { OnHeartbeat(conn, request, ts); });
 }
 
 void BattleClientEdge::Install(muduo::net::TcpServer &server)
@@ -126,6 +133,7 @@ void BattleClientEdge::DisconnectAll(const char *reason)
     for (auto &[connId, session] : sessions_)
     {
         session.handshakeTimer.Cancel();
+        session.idleTimer.Cancel();
         // BeginRoomShutdown 已对有房间的直连 shutdown()(终局包排空后 FIN)+ 延迟强关;
         // 这些连接 connected()==false,再 forceClose 会立刻关 fd,把还在用户态输出缓冲里
         // 的 SpectateEnd 字节丢掉。只强关仍 connected 的(未验证 / 空闲)连接。
@@ -295,6 +303,7 @@ void BattleClientEdge::HandleClosed(const muduo::net::TcpConnectionPtr &conn)
     }
     DirectSession &session = it->second;
     session.handshakeTimer.Cancel();
+    session.idleTimer.Cancel();
     if (session.verified)
     {
         // 只解绑"仍指向本连接"的直连,晚到的旧连接 FIN 不能把重连后的新连接摘掉
@@ -320,6 +329,14 @@ void BattleClientEdge::SendVerifyReply(const muduo::net::TcpConnectionPtr &conn,
         reply.set_error(error);
     }
     reply.set_battle_id(battleId);
+    if (success)
+    {
+        // 闸 6 的通告:与 gate 验签回包同一份参数。客户端收到就在本直连上按间隔发心跳;
+        // 调用方随后调 StartLivenessTracking,从这一刻起按读空闲判死。失败应答不填。
+        const auto &policy = client_liveness::kClientLiveness;
+        reply.set_heartbeat_interval_ms(static_cast<uint32_t>(policy.interval.count()));
+        reply.set_heartbeat_timeout_ms(static_cast<uint32_t>(policy.idleTimeout.count()));
+    }
     Send(conn, reply);
 }
 
@@ -334,6 +351,7 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
         conn->forceClose();
         return;
     }
+    NoteInboundFrame(*session);
 
     const auto rejectAndClose = [&](const char *reason, const std::string &clientError)
     {
@@ -346,7 +364,7 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
 
     if (session->verified)
     {
-        // 重复握手幂等:回成功即可,不重新绑定
+        // 重复握手幂等:回成功即可,不重新绑定。应答照样带心跳参数;第一次握手时已开始跟踪,这里不重复武装。
         SendVerifyReply(conn, true, "", session->battleId);
         return;
     }
@@ -421,6 +439,8 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
     session->handshakeTimer.Cancel();
 
     SendVerifyReply(conn, true, "", payload.battle_id());
+    // 应答里已通告心跳参数:从这一刻起这条直连按读空闲判死(闸 6)。
+    StartLivenessTracking(*session);
     LOG_INFO << "battle direct connection handshake succeeded: battle_id=" << payload.battle_id()
              << " player_id=" << payload.player_id()
              << " role=" << ::eBattleTicketRole_Name(payload.role())
@@ -471,6 +491,7 @@ void BattleClientEdge::OnClientRequest(const muduo::net::TcpConnectionPtr &conn,
         conn->forceClose();
         return;
     }
+    NoteInboundFrame(*session);
     if (!session->verified)
     {
         // 闸 4:握手前一切业务消息都是不可信来源,直接关(不回应答,别给探测者放大器)
@@ -592,7 +613,7 @@ void BattleClientEdge::OnUnknownMessage(const muduo::net::TcpConnectionPtr &conn
                                         const std::shared_ptr<::google::protobuf::Message> &message,
                                         muduo::Timestamp)
 {
-    // 直连面只认两种类型:握手包与 ClientRequest。别的类型名合法但不在此面的消息
+    // 直连面只认握手包、ClientRequest、心跳与网络探测四类。别的类型名合法但不在此面的消息
     // (比如客户端把大厅那条连接的 ClientTokenVerifyRequest 发错了连接)一律关。
     // 只走采样日志:这一步在握手之前就可到达,逐条 WARN 就是按建连速率放大的日志 I/O
     //(gate client_session_handler.cpp 刚修过同类问题);类型名不进日志,采样行有 peer 够排障。
@@ -600,4 +621,135 @@ void BattleClientEdge::OnUnknownMessage(const muduo::net::TcpConnectionPtr &conn
     LogRejectionSampled("unknown_message_type", conn);
     conn->shutdown();
     conn->forceCloseWithDelay(0.1);
+}
+
+// ---- 应用层心跳与空闲超时(闸 6,docs/design/gate-client-heartbeat.md §14) ----
+
+void BattleClientEdge::NoteInboundFrame(DirectSession &session)
+{
+    if (session.liveness.tracked)
+    {
+        session.liveness.NoteInbound(std::chrono::steady_clock::now());
+    }
+}
+
+void BattleClientEdge::OnHeartbeat(const muduo::net::TcpConnectionPtr &conn,
+                                   const std::shared_ptr<::ClientHeartbeatRequest> &request,
+                                   muduo::Timestamp)
+{
+    DirectSession *session = FindSession(conn);
+    if (session == nullptr)
+    {
+        LogRejectionSampled("heartbeat_missing_session", conn);
+        conn->forceClose();
+        return;
+    }
+    // muduo 的 receiveTime 是墙钟,不能拿来算超时;这里取单调时钟。
+    const auto now = std::chrono::steady_clock::now();
+    session->liveness.NoteInbound(now);
+
+    const auto &policy = client_liveness::kClientLiveness;
+    switch (client_liveness::AdmitHeartbeat(session->liveness, session->verified, now, policy))
+    {
+    case client_liveness::HeartbeatAction::kRejectUnverified:
+        // 与闸 4 同一处置:握手前除握手包外一律关,不回应答。
+        LogRejectionSampled("heartbeat_before_verify", conn);
+        conn->forceClose();
+        return;
+    case client_liveness::HeartbeatAction::kExcess:
+        // 正常客户端每 10s 一条,断网恢复后积压的几条也在窗口上限之内。超出的不回,与超限、坏号、限流同一个非法包计数。
+        LogRejectionSampled("heartbeat_over_rate", conn);
+        RegisterIllegalPacket(*session, conn, "heartbeat_over_rate");
+        return;
+    case client_liveness::HeartbeatAction::kAnswerAndStartTracking:
+        // 握手成功时已开始跟踪(StartLivenessTracking),正常走不到这里;走到了也补武装空闲检查,不让这条直连漏判。
+        ScheduleIdleCheck(*session, now + policy.idleTimeout);
+        break;
+    case client_liveness::HeartbeatAction::kAnswer:
+        break;
+    }
+
+    ::ClientHeartbeatResponse reply;
+    reply.set_seq(request->seq());
+    Send(conn, reply);
+}
+
+void BattleClientEdge::StartLivenessTracking(DirectSession &session)
+{
+    const auto now = std::chrono::steady_clock::now();
+    if (session.liveness.StartTracking(now))
+    {
+        ScheduleIdleCheck(session, now + client_liveness::kClientLiveness.idleTimeout);
+    }
+}
+
+void BattleClientEdge::ScheduleIdleCheck(DirectSession &session, const client_liveness::SteadyTime due)
+{
+    // 回调只持 weak 自己、connId 与到期时刻,到期时重查会话(与握手期限同一写法,AGENTS §11.7);
+    // 不持连接。RunAfter 先取消本会话尚未触发的那一次,所以每条连接至多一个待触发的空闲检查。
+    const double delaySeconds = std::chrono::duration<double>(due - std::chrono::steady_clock::now()).count();
+    const uint64_t connId = session.connId;
+    const auto weakSelf = weak_from_this();
+    const bool armed = session.idleTimer.RunAfter(std::max(delaySeconds, 0.0), [weakSelf, connId, due]
+                                                  {
+        if (const auto self = weakSelf.lock())
+        {
+            self->CheckIdle(connId, due, std::chrono::steady_clock::now());
+        } });
+    if (!armed)
+    {
+        // 只在没有 EventLoop 时发生(直连面总在 battle 主 loop 上):不静默放过,这条直连从此不会被判死。
+        LOG_ERROR << "battle direct connection idle check not scheduled: battle_id=" << session.battleId
+                  << " player_id=" << session.playerId << " conn_id=" << connId;
+    }
+}
+
+void BattleClientEdge::CheckIdle(const uint64_t connId, const client_liveness::SteadyTime due,
+                                 const client_liveness::SteadyTime now)
+{
+    const auto it = sessions_.find(connId);
+    if (it == sessions_.end() || !it->second.liveness.tracked)
+    {
+        return;
+    }
+    DirectSession &session = it->second;
+    const auto &policy = client_liveness::kClientLiveness;
+    const auto check = client_liveness::DecideIdleCheck(session.liveness, due, now, policy);
+    switch (check.verdict)
+    {
+    case client_liveness::IdleVerdict::kAlive:
+        ScheduleIdleCheck(session, check.nextCheckAt);
+        return;
+    case client_liveness::IdleVerdict::kDeferred:
+    {
+        // 定时器比到期时刻晚了两个节拍以上,说明本端 loop 卡过:客户端的帧可能还在接收缓冲里没读。
+        // 这一次不关,约 1s 后再判。这是该看的服务端问题,但卡一次会让很多连接同时走到这里,所以采样。
+        static uint64_t deferredCount = 0;
+        if ((deferredCount++ & 0x3FF) == 0)
+        {
+            LOG_WARN << "battle direct connection liveness verdict deferred, local loop stalled(sampled): late_ms="
+                     << std::chrono::duration_cast<std::chrono::milliseconds>(now - due).count()
+                     << " deferred_total=" << deferredCount;
+        }
+        ScheduleIdleCheck(session, check.nextCheckAt);
+        return;
+    }
+    case client_liveness::IdleVerdict::kDead:
+        break;
+    }
+
+    // 静默满阈值:只关连接。断开回调(HandleClosed → DetachDirectConnection)照常解绑;观众按既有规则进席位宽限,
+    // 参战者的回合照常按超时自动出招,这里不加任何战斗逻辑。客户端掉线是正常事件,打 INFO;
+    // 只有验证过的直连才会走到这里,条数以参战与观战人数为界,逐条打。
+    LOG_INFO << "battle direct connection idle timeout;disconnecting: battle_id=" << session.battleId
+             << " player_id=" << session.playerId << " role=" << ::eBattleTicketRole_Name(session.role)
+             << " silent_ms="
+             << std::chrono::duration_cast<std::chrono::milliseconds>(now - session.liveness.lastInboundAt).count()
+             << " heartbeat_timeout_ms=" << policy.idleTimeout.count();
+    // 只关仍 connected 的连接,与 DisconnectAll 同一条规则:房间收尾时已 shutdown() 的直连正在排空终局包,
+    // 由它自己的延迟强关收尾,这里再 forceClose 会立刻关 fd,把输出缓冲里的终局包丢掉。
+    if (const auto conn = session.conn.lock(); conn && conn->connected())
+    {
+        conn->forceClose();
+    }
 }

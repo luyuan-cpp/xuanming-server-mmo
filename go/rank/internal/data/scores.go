@@ -3,8 +3,11 @@ package data
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	rankpb "proto/rank"
 )
 
@@ -44,15 +47,22 @@ type storedScore struct {
 	version  uint64
 }
 
-// scoreWrite 是 Submit 合并后要写回的一行。
+// scoreWrite 是 Submit 合并后要写回的一行。existed:本代原来就有这一行(已被 loadScores 锁住)。
 type scoreWrite struct {
 	entity   uint64
 	score    int64
 	achieved uint64
 	version  uint64
+	existed  bool
 }
 
-// loadScores 一次读出这一批里(没被移除的)实体在本代的现有行。调用方持榜行锁:同榜写入已串行,读到的就是提交点的值。
+// errScoreInsertRace:这一批要新插入的实体,刚被别的片的批次抢先插入了(唯一键冲突)。整笔事务回滚重试即可:
+// 重试时那一行已经存在,会被 loadScores 锁住、按它的现值合并,不会拿旧值盖掉对方的分数。
+var errScoreInsertRace = errors.New("排行榜实体被并发插入")
+
+// loadScores 一次读出这一批里(没被移除的)实体在本代的现有行,并锁住它们(FOR UPDATE,按 entity_id 升序)。
+// 同榜不同片的批次可以并行(缺口清单第 17 条),同一实体的合并靠这把行锁串行:锁住之后读到的就是提交点的值。
+// 本代还没有的实体不在结果里,由 writeScores 普通 INSERT,撞唯一键回 errScoreInsertRace。
 func loadScores(ctx context.Context, tx *sql.Tx, board, generation uint64, entries []*rankpb.RankScoreInput, removed map[uint64]bool) (map[uint64]storedScore, error) {
 	ids := make([]any, 0, len(entries))
 	for _, entry := range entries {
@@ -65,7 +75,7 @@ func loadScores(ctx context.Context, tx *sql.Tx, board, generation uint64, entri
 		return existing, nil
 	}
 	args := append([]any{board, generation}, ids...)
-	rows, err := tx.QueryContext(ctx, "SELECT entity_id,score,achieved_ms,score_version FROM rank_score WHERE board_id=? AND generation=? AND entity_id IN ("+placeholders(len(ids))+")", args...)
+	rows, err := tx.QueryContext(ctx, "SELECT entity_id,score,achieved_ms,score_version FROM rank_score WHERE board_id=? AND generation=? AND entity_id IN ("+placeholders(len(ids))+") FOR UPDATE", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -81,11 +91,44 @@ func loadScores(ctx context.Context, tx *sql.Tx, board, generation uint64, entri
 	return existing, rows.Err()
 }
 
-// upsertScores 一条多行语句写回这一批合并后的结果。值都是调用方在榜行锁里按现有行算好的,所以重复键时直接覆盖。
-func upsertScores(ctx context.Context, tx *sql.Tx, b *rankpb.RankBoardRecord, cursor uint64, writes []scoreWrite) error {
-	if len(writes) == 0 {
-		return nil
+// writeScores 写回这一批合并后的结果,至多两条多行语句:
+//   - 原来就有的行(本事务已锁住):值是按锁住的现值算好的,重复键时直接覆盖;
+//   - 新实体:普通 INSERT,不带 ON DUPLICATE KEY。别的片的批次可能刚插入同一个实体,撞唯一键(1062)回
+//     errScoreInsertRace 让整笔重试,而不是拿没锁住的旧值把对方的分数盖掉。
+func writeScores(ctx context.Context, tx *sql.Tx, b *rankpb.RankBoardRecord, cursor uint64, writes []scoreWrite) error {
+	var existed, fresh []scoreWrite
+	for _, w := range writes {
+		if w.existed {
+			existed = append(existed, w)
+		} else {
+			fresh = append(fresh, w)
+		}
 	}
+	if len(existed) > 0 {
+		values, args := scoreRows(b, cursor, existed)
+		if _, err := tx.ExecContext(ctx, "INSERT INTO rank_score ("+scoreColumns+") VALUES "+values+
+			" ON DUPLICATE KEY UPDATE score=VALUES(score),order_key=VALUES(order_key),achieved_ms=VALUES(achieved_ms),source_cursor=VALUES(source_cursor),score_version=VALUES(score_version)",
+			args...); err != nil {
+			return err
+		}
+	}
+	if len(fresh) > 0 {
+		values, args := scoreRows(b, cursor, fresh)
+		_, err := tx.ExecContext(ctx, "INSERT INTO rank_score ("+scoreColumns+") VALUES "+values, args...)
+		var duplicate *mysql.MySQLError
+		if errors.As(err, &duplicate) && duplicate.Number == 1062 {
+			return fmt.Errorf("%w: %v", errScoreInsertRace, err)
+		}
+		return err
+	}
+	return nil
+}
+
+// scoreColumns 与 scoreRows 的列序一致。
+const scoreColumns = "board_id,generation,entity_id,score,order_key,achieved_ms,source_cursor,score_version"
+
+// scoreRows 拼多行 VALUES 与实参,列序同 scoreColumns。
+func scoreRows(b *rankpb.RankBoardRecord, cursor uint64, writes []scoreWrite) (string, []any) {
 	const columns = 8
 	args := make([]any, 0, len(writes)*columns)
 	rowsSQL := make([]string, 0, len(writes))
@@ -93,11 +136,7 @@ func upsertScores(ctx context.Context, tx *sql.Tx, b *rankpb.RankBoardRecord, cu
 		rowsSQL = append(rowsSQL, "("+placeholders(columns)+")")
 		args = append(args, b.BoardId, b.Generation, w.entity, w.score, orderKey(b.Ascending, w.score), w.achieved, cursor, w.version)
 	}
-	_, err := tx.ExecContext(ctx, "INSERT INTO rank_score (board_id,generation,entity_id,score,order_key,achieved_ms,source_cursor,score_version) VALUES "+
-		strings.Join(rowsSQL, ",")+
-		" ON DUPLICATE KEY UPDATE score=VALUES(score),order_key=VALUES(order_key),achieved_ms=VALUES(achieved_ms),source_cursor=VALUES(source_cursor),score_version=VALUES(score_version)",
-		args...)
-	return err
+	return strings.Join(rowsSQL, ","), args
 }
 
 func placeholders(n int) string {

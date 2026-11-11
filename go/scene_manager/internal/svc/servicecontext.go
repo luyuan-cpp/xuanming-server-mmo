@@ -62,7 +62,7 @@ type ServiceContext struct {
 	// 调用方按「本地单区联调」处理(归属 = gate zone,WARN 计数)。
 	HomeZone      HomeZoneClient
 	RoleDirectory RoleDirectory
-	// PlayerStoreHolders:持有节点判死后释放写权。生产恒非 nil(与 RoleDirectory 同一个客户端)。
+	// PlayerStoreHolders:无资格撤销之前按 E−1 围写权行(logic.fenceUnclaimedPlayerStore)。生产恒非 nil(与 RoleDirectory 同一个客户端)。
 	PlayerStoreHolders PlayerStoreHolderReleaser
 	// PlayerStoreDeadHolders:LeaveScene 判死释放的「读写权行 → 比较并写」两步(logic.releaseDeadPlayerStoreHolder)。
 	// 生产恒非 nil(同一个客户端);PlayerStoreHolders 非 nil 而它为 nil 时判死释放 fail-closed。
@@ -73,7 +73,7 @@ type ServiceContext struct {
 	SceneIDGen     *snowflake.Node
 	// RedirectGateRevisions 记跨 zone 重定向每次直读到的 gate 注册记录版本,判 gate 停写用(logic.AssignGateForZone),零值可用。
 	RedirectGateRevisions gatepick.RevisionTracker
-	snowflakeHd      *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
+	snowflakeHd           *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
 	// ownerEpochMintRedis 是 OwnerEpochMint 的生产实现本体,只为 Stop 时关闭它的专用连接池。
 	ownerEpochMintRedis *RedisOwnerEpochMinter
 	stopOnce            sync.Once
@@ -86,19 +86,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	roleSecret := configuredRoleDirectorySecret(c)
 	// 铸造落盘确认的取值越界同样在占用任何外部资源之前拒启(fail-closed,口径同 go/db 的 RedisClient.WaitAOF*)。
 	if err := c.OwnerEpochMint.Validate(); err != nil {
-		panic("scene_manager 配置非法: " + err.Error())
+		panic("scene_manager invalid configuration: " + err.Error())
 	}
 	// 无资格持有者撤销的宽限(location-release-binding.md §17.4):短于在途入场登记与交接冻结之和会打断它们,同样拒启。
 	if err := c.ValidateUnqualifiedHolderRevokeGrace(); err != nil {
-		panic("scene_manager 配置非法: " + err.Error())
+		panic("scene_manager invalid configuration: " + err.Error())
 	}
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
-		panic("scene_manager 配置非法: PlayerRedis: " + err.Error())
+		panic("scene_manager invalid configuration: PlayerRedis: " + err.Error())
 	}
 	playerRedisConf := c.EffectivePlayerRedis()
 	playerRedis, err := playerredis.New(playerRedisConf)
 	if err != nil {
-		panic("scene_manager 配置非法: " + err.Error())
+		panic("scene_manager invalid configuration: " + err.Error())
 	}
 	logx.Infof("[scene_manager] player redis %s", playerRedisConf.Describe())
 	// keepalive:发现所连 etcd 成员掉电留下的半开连接,LoadReporter 的 watch 不会静默停住(etcdwatch 包注释)。
@@ -185,20 +185,22 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		// 旧路由。改由 writer 自身的一次有界 produce 决定终态。
 		MaxAttempts:  1,
 		WriteTimeout: kafkaWriteTimeout,
-		// kafka.Writer 结构体的 RequiredAcks 零值是 RequireNone(协议级
-		// fire-and-forget),显式提到 RequireOne:路由命令丢了玩家就进不去
-		// 场景,只能靠客户端重试兜底。
-		RequiredAcks: kafka.RequireOne,
+		// kafka.Writer 结构体的 RequiredAcks 零值是 RequireNone(协议级 fire-and-forget)。路由与重定向是控制面提交点,
+		// 要 acks=all(RequireAll):集群按副本 3、min.insync.replicas 2 部署(deploy/k8s/manifests/infra/kafka.yaml),
+		// 只有写进 ISR 的消息才经得起 leader 切换。RequireOne 时 broker 滚动重启 / 宕机切 leader 那一刻,
+		// 已 ACK 却还没复制的路由会被截掉 —— EnterScene 已回成功,gate 却永远收不到,玩家卡在进场
+		// (docs/design/scene-node-planned-drain.md:疏散靠这条路由把人送到新节点)。
+		RequiredAcks: kafka.RequireAll,
 		// 路由与重定向属于控制面提交点：只有 broker ACK 后 EnterScene 才能
 		// 返回并缓存成功。Async=true 会让 WriteMessages 恒返回 nil，导致
-		// broker 故障也被去重缓存成成功，故必须同步等待 RequireOne ACK。
+		// broker 故障也被去重缓存成成功，故必须同步等待 ACK。
 		Async:      false,
 		Completion: sc.handleKafkaCompletion,
 	}
 	rpc := newHomeZoneClient(c.DataServiceRpc)
 	sc.HomeZone = rpc
 	if rpc == nil {
-		panic("scene_manager必须配置DataServiceRpc以强读原角色修订")
+		panic("scene_manager requires DataServiceRpc to strongly read the original role revision")
 	}
 	directory := &roleDirectoryClient{rpc: rpc, secret: roleSecret}
 	sc.RoleDirectory = directory

@@ -3,10 +3,12 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	assetpb "proto/common/asset"
 	"shared/assetop"
+	"shared/workshard"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -194,4 +196,60 @@ func TestRecallOpRowStates(t *testing.T) {
 func TestRecallPlaceholders(t *testing.T) {
 	assert.Equal(t, "?,?,?", placeholders(3))
 	assert.Equal(t, "?", placeholders(1))
+}
+
+// 回收重投的到期扫描按玩家分片(缺口清单第 25 条第二批):两段都带同一个分片条件,位置在 ORDER BY / LIMIT 之前;
+// 占位符个数与 ListDueOwned 传的实参一致(PENDING、now、now、FreshAttemptLimit、片号……、LIMIT);零值条件是恒真 1=1。纯函数,不连库。
+func TestRecallListDueQueryPutsShardFilterBeforeLimit(t *testing.T) {
+	const kind = "gm-recall-assetop"
+	owned := workshard.SQLFilter(func(key string) bool { return key == workshard.ShardKey(kind, 9) }, kind, "player_id")
+	for _, comparison := range []string{"<", ">="} {
+		query := recallListDueQuery(comparison, owned)
+		assert.True(t, strings.HasSuffix(query, " AND attempts "+comparison+" ? AND MOD(player_id,64) IN(?) ORDER BY next_attempt_ms,op_id LIMIT ?"),
+			"%s 段的分片条件必须在 ORDER BY / LIMIT 之前:%s", comparison, query)
+		assert.Equal(t, 4+len(owned.Args())+1, strings.Count(query, "?"), "%s 段:4 个到期条件 + 片号 + LIMIT", comparison)
+		assert.NotContains(t, strings.ToUpper(query), "FOR UPDATE", "%s 段是候选读,必须是普通读", comparison)
+		assert.True(t, strings.HasSuffix(recallListDueQuery(comparison, workshard.Filter{}), " ? AND 1=1 ORDER BY next_attempt_ms,op_id LIMIT ?"),
+			"%s 段:零值条件不过滤", comparison)
+	}
+}
+
+// limit 非正时不发 SQL:store 的 db 是 nil,走到查询就会 panic。
+func TestRecallListDueOwned_NonPositiveLimitSkipsSQL(t *testing.T) {
+	s := &RecallStore{}
+	for _, limit := range []int{0, -1} {
+		ids, err := s.ListDueOwned(context.Background(), 1, limit, workshard.Filter{})
+		require.NoError(t, err)
+		assert.Empty(t, ids)
+		ids, err = s.ListDue(context.Background(), 1, limit)
+		require.NoError(t, err)
+		assert.Empty(t, ids)
+	}
+}
+
+// GM 回收派发按玩家分片(缺口清单第 25 条第四批,设计 §14.2):分片条件在 ORDER BY / LIMIT 之前,占位符个数与 ListPlannedOwned
+// 传的实参一致(PLANNED、now、片号……、LIMIT),片号按升序只走绑定参数;零值条件是恒真 1=1;候选读是普通读。纯函数,不连库。
+func TestRecallListPlannedQueryPutsShardFilterBeforeLimit(t *testing.T) {
+	const kind = "gm-recall-dispatch"
+	owned := workshard.SQLFilter(func(key string) bool {
+		return key == workshard.ShardKey(kind, 63) || key == workshard.ShardKey(kind, 5)
+	}, kind, "player_id")
+	query := recallListPlannedQuery(owned)
+	assert.True(t, strings.HasSuffix(query, " AND next_attempt_ms<=? AND MOD(player_id,64) IN(?,?) ORDER BY next_attempt_ms,op_id LIMIT ?"),
+		"分片条件必须在 ORDER BY / LIMIT 之前:%s", query)
+	assert.Equal(t, 2+len(owned.Args())+1, strings.Count(query, "?"), "2 个到期条件 + 片号 + LIMIT")
+	assert.Equal(t, []any{5, 63}, owned.Args(), "片号按升序只走绑定参数")
+	assert.NotContains(t, strings.ToUpper(query), "FOR UPDATE", "派发的候选读必须是普通读,互斥靠 Dispatch 的状态 CAS")
+	assert.True(t, strings.HasSuffix(recallListPlannedQuery(workshard.Filter{}), " AND next_attempt_ms<=? AND 1=1 ORDER BY next_attempt_ms,op_id LIMIT ?"),
+		"零值条件不过滤")
+}
+
+// limit 非正时不发 SQL:store 的 db 是 nil,走到查询就会 panic。
+func TestRecallListPlannedOwned_NonPositiveLimitSkipsSQL(t *testing.T) {
+	s := &RecallStore{}
+	for _, limit := range []int{0, -1} {
+		planned, err := s.ListPlannedOwned(context.Background(), 1, limit, workshard.Filter{})
+		require.NoError(t, err)
+		assert.Empty(t, planned)
+	}
 }

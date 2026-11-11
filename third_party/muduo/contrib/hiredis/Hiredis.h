@@ -33,6 +33,8 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
   class LocalReference;
  public:
   // 命令关闭与接受共用锁；正常回复且业务回调返回后才计完成。跨连接销毁保留 UNKNOWN。
+  // 只按命令记账：建连失败与断线本身不记 UNKNOWN。建连完成前 command() 一律拒收；断线时 hiredis 先以空应答
+  // 回调全部在途命令，各条按自己的结局记账。连接、断线回调抛异常仍记 UNKNOWN。
   class MaintenanceState {
    public:
     bool Begin();
@@ -77,11 +79,15 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
   // redisAsyncContext* context() { return context_; }
   bool connected() const;
   const char* errstr() const;
+  // 当前连接的原生 socket，只给诊断与测试用：不要直接读写或关闭它。只能在 connect() 之后、断开之前调用。
+  int fd() const;
 
   void setConnectCallback(const ConnectCallback& cb) { connectCb_ = cb; }
   void setDisconnectCallback(const DisconnectCallback& cb) { disconnectCb_ = cb; }
 
   void connect();
+  // 干净断开：不再接收新命令，已发出命令的应答都回来后再拆连接（没有在途命令时当场拆）。
+  // I/O 分发期间调用时推迟到本轮 pending 阶段才开始，那之前发出的命令照常发送并等到应答。
   void disconnect();
 
   int command(const CommandCallback& cb, muduo::StringArg cmd, ...);
@@ -109,7 +115,6 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
   void handleRead(muduo::Timestamp receiveTime);
   void handleWrite();
 
-  int fd() const;
   void logConnection(bool up) const;
   void setChannel();
   void removeChannel();
@@ -142,6 +147,8 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
   std::shared_ptr<muduo::net::Channel> channel_;
   ConnectCallback connectCb_;
   DisconnectCallback disconnectCb_;
+  // 每条新连接加一，只在 loop 线程读写；推迟执行的 disconnect() 靠它认出请求时的那条连接。
+  std::uint64_t connectionGeneration_ = 0;
 };
 
 }  // namespace hiredis

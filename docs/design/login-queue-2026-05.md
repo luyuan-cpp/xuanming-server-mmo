@@ -307,14 +307,60 @@ service LoginPreGate {
 >
 > **八、Java 版**:待做,由主会话在 Java 仓库 `PARITY.md` 登记。
 
+> **(2026-11-11 更正,上面「二、查询」第 3 步「`GETDEL` 取到」与「`admit_window_passed`」两支、「一、出队」的「重叠 leader / 多副本」一条、「五、残余风险」第 1 条;原文保留;已落码,未编译、未测试,待 Codex 验证。对应 [infra-reconnect-overview.md](infra-reconnect-overview.md) §4.1 R7、R8)**
+>
+> - **重取窗口(R8)。** `lookupScript` 取走放行槽时,在同一段里把放行槽 JSON 与重取截止(取走时刻 + 交票后宽限 G,login 进程时钟)写进 meta,字段 `taken_slot`、`retake_until`。meta 是 hash 时才写,`HSET` 不改 TTL。之后放行槽不在、meta 有 `admitted_at` 时:截止之前回「重取」,同一个槽现签一张新票、ADMITTED,占位改为 `now + G`;过了截止才回 EXPIRED(`admit_window_passed`)。
+>   - 为什么:取走那次的回包丢了(go-redis 读超时后重发同一条 `EVALSHA`、客户端重试),旧版第二次只能拿到 `admit_window_passed`,排到号的玩家拿不到票、从队尾重排。取走时签票失败(`signFn` 报错)同样能在窗口里重试。
+>   - 宽限取 G:截止之前,取走时写下的占位(`now + G`)一定还在,重取不会签出没有名额兜着的票。截止在取走那次写死、重取不推后它,所以占位最晚到取走时刻 + 2G,一直轮询也不会让它永不到期。
+>   - 窗口里同一令牌能多拿几张票,不扩大危害面:gate 票不是一次性的(C++ gate 只验签名、gate 号与过期,不记用过没有),一张票在有效期里本来就能被重复使用。重取同样先核对 token 索引,改写过的令牌拿不到。
+>   - 重取不再记等待时长(第一次取走时记过),每次打一行 INFO `admit slot re-signed within the retake window`。
+> - **名额进放行脚本(R7)。** `PopAdmit` 多一个参数 `budget`(容量 − 在线,与快速通道 `TryReserveFastPathSlot` 同一口径)。放行脚本在 META_GONE / ALREADY 两支之后、`HSET` 之前数一次 `ZCOUNT 占位键 (now +inf`,已到 `budget` 就回 OVER_BUDGET(6):什么都不写,条目留在队列,不计数,本批在这一块之后停下,不算错误。
+>   - `ZCOUNT` 是只读命令,不破坏写满时的 fail-closed;「分数 > now」与 `AdmittedCount` 清掉 ≤ now 之后的集合相同。
+>   - 重叠 leader 各按同一份快照放满时,在途上界从 2×(capacity − online) 收紧到 capacity − online;两边快照的 budget 不同时取较大的那个。
+>   - `budget` 为 0 时一个都不放、不碰 Redis。
+> - **残余风险第 1 条不再可达。** `ZCOUNT` 在 `HSET` 之前读同一个占位键,类型不对时脚本在那里就报 `WRONGTYPE`、什么都没写;ALREADY 分支留作纵深防御。
+> - **用例**:新增 `TestPoll_RetakeInsideWindow_ReturnsSameSlot`、`TestPoll_LookupResentAfterTake_ReturnsSameSlot`、`TestPoll_SignFailureThenRetryInsideRetakeWindow_SameSlot`、`TestPopAdmit_BudgetCapsInFlightAcrossOverlappingLeaders`、`TestPopAdmit_BudgetSharesFastPathPlaceholdersAndSkipsExpired`、`TestPopAdmit_OverBudgetStopsAfterTheChunk`、`TestPopAdmit_ZeroBudgetAdmitsNothingWithoutTouchingRedis`、`TestPopAdmit_AdmittedAtWhileQueued_CleanedAsAlready`、`TestDispatchOnce_OverlappingLeadersSameSnapshot_CappedByBudget`。改名:`TestConsume_RepeatPollDoesNotExtendPlaceholder` → `TestConsume_RepeatPollExtendsPlaceholderOnlyInsideRetakeWindow`,`TestPopAdmit_ScriptErrorStopsBatch_PartialWriteCleanedAsAlready` → `…_WrongTypePlaceholderWritesNothing`。原先断言「取走后立刻再查回 EXPIRED」的几条改为拨过窗口再查;`TestIntegration_DualLeadersSameZone_NoLossBoundedOverAdmit` 的上界收紧到 cap。
+> - **混跑。** 键名与键值格式不变,只是 meta 多两个字段。新旧 login 混跑时,旧版取走不写重取记录(那张票照旧找不回来),旧版放行不判名额(上界照旧);都不写坏数据。项目未上线,排队关着滚即可。
+> - **Java 版**:Java 的 `LoginQueue` 放行脚本本来就在脚本里按名额放(`DISPATCH`),查询脚本按请求号认得 Redisson 的重发;客户端换请求重试仍回过期,这一点与本版不同,待做,由主会话决定是否登记。
+
 ### FreeSlots 公式
 
 ```
-online       = Σ(gate.PlayerCount for gate in GateWatcher.FetchAllNodes() if gate.zoneId == z)
-capacity     = Queue.ZoneCapacityOverride[z] || ceil(max(online, 1) * SoftCapMultiplier)
+online       = Σ(gate.PlayerCount for gate in 本 zone 的全部 gate 候选)
+ceiling      = zone_config.capacity(区服目录,经 etcd 读) || floor(max(online, 1) * SoftCapMultiplier)   // 读不到区服策略时才用软上限
+gate_cap     = Σ ceil(gate.max_connections × 90%) for gate in 在接客的那一档   // gatepick.AdmissionCapacity
+capacity     = min(ceiling, gate_cap)      // 在接客的 gate 里有 max_connections = 0 的(没声明上限)时 capacity = ceiling
 admitted_inflight = 清掉过期成员后的 ZCARD admitted:zset:zone:{z}
 free         = max(0, capacity - online - admitted_inflight)
 ```
+
+**区容量按 gate 承载封顶(2026-11-10 起;已落码,未编译、未测试,待 Codex 验证)**。代码在 `go/login/internal/logic/pkg/loginqueue/capacity.go`
+的 `capByGates`,规则在 `go/shared/gatepick/capacity.go`。快速通道的 `FreeSlots` 与 dispatcher 的 `freeSlotsFromCandidates` 走同一处,
+快速通道的占位预算 `capacity − online` 也用封顶之后的值。
+
+- **区容量只有一个来源(2026-11-10 起)**:网关区服目录 `zone_config.capacity`(运维经 `PUT /admin/zones/<id>` 改,缺省 45000)。
+  本区网关把它写到 etcd `/mmorpg/zone_policy/zone/<id>`,本区 login 每 2 秒读一次(`go/login/internal/logic/pkg/zonepolicy`),区服列表的
+  负载档用的也是这一行。此前 login 另有 `Queue.ZoneCapacityOverride`(K8s 由 `k8s_deploy.ps1` 的 `LoginQueueZoneCapacity` 渲染),
+  与区服目录各写一份,已删。读不到区服策略时(网关还没发布、etcd 读失败且起服后一次都没读到)退回软上限,仍按 gate 承载封顶。
+  完整的满员处理见 [zone-full-handling.md](./zone-full-handling.md)。
+- **为什么要按 gate 封顶**:区容量与 gate 台数写在两处,没有机械关联。区服目录缺省每区 45000,当时的默认清单 `deploy/k8s/zones.json`
+  每区 2 台 gate、每台 `GateMaxConnections = 20000`,硬上限合计 40000,到挑 gate 的水位(90%)只有 36000;`zones.10zones.yaml` 每区只有 1 台。
+  排队一打开,第 40001 到 45000 名会被正常放行、拿到票,连上 gate 才被拒;gate 拒连是 `forceClose`,不回任何提示,玩家看到的只是断线。
+  gate 挂掉一台时同样:剩下的 gate 装不下,排队却还按 45000 放。2026-11-10 起默认清单与运维模板改为每区 3 台(54000)。
+- **水位取 90%**:与挑 gate 判满载同一条线(`gatepick.FullPercent`,`WatermarkCapacity` 恰是 `Full` 第一次成立的人数,单测钉住),
+  区级准入与挑 gate 对「满」的口径一致,余下 10% 照旧给人数上报滞后;在途占位(`admitted_inflight`)仍覆盖「票交出去、gate 还没上报」那一段。
+- **数哪些 gate**:分档同 `gatepick.Eligible`,只是不看人数(到水位的 gate 只是已经接满,水位容量照样算):有没停写、没排空的就只数它们;
+  没有时数没停写的(这时新玩家会被分给排空中的 gate);全部停写时数全部。`online` 仍数全部候选:排空中、停写的 gate 上的人稍后要挪到
+  在接客的 gate 上,容量只数在接客的、在线数全部,两边一减正好留出他们要挪过去的位置。
+- **不封顶的情况**:数进来的 gate 里有没声明上限的(dev 下 `GateMaxConnections = 0`、旧版 gate 不报 `max_connections`)时整体不封顶,与之前相同。
+- **观测**:`login_queue_capacity{zone}`(封顶之后实际用的容量)与 `login_queue_configured_capacity{zone}`(区服目录的容量,0 = 读不到区服策略),
+  每次算容量时写,排队关着时没有序列。前者小于后者持续 10 分钟报 `LoginQueueCapacityLimitedByGates`(warning,`deploy/k8s/login-alerts.yaml`
+  组 `login.queue-capacity`);同时 login 每 10 分钟至多一条 ERROR `admission capacity is limited by its gates`,带配置值、gate 承载与候选台数。
+  软上限(没配容量)被封顶是常态,不报也不打日志。
+- **配置怎么对齐**:要让区容量真的到 45000,每区至少 3 台 gate(3 × 18000 = 54000);每区 2 台时实际只到 36000。
+  封顶只保证不放出会被 gate 拒掉的票,不替代按目标容量配 gate 副本;zone 清单(`deploy/k8s/zones*.json|yaml`)的默认值已改为 3 台。
+- **排队关着时**(当前所有环境,`$script:LoginQueueMergeGateCleared = $false`):快速通道不判容量,本条不起作用;
+  人数超过 gate 承载时只能靠 gate 的硬上限拒连,挑 gate 的 `LoginGatePickFallbackDegraded{reason="full"}` 会报。
 
 **关键安全属性 — admitted_inflight 必须减**:dispatcher 写出 admit 后,该玩家从 ZSET 中 popped(不在 ZCARD)、从 gate.PlayerCount 中也未出现(他还没真连上),如果 FreeSlots 不算这部分,下一拍会再放出一批,**一秒内超发数倍 admit token**,gate 那边玩家 token 验证全失败。取走后占位再留 20s(2026-10-13 起为 15s,10-15 改 20s),覆盖「票已交出、gate 还没把人数报上来」这一段(G4b-G;此前取走即撤占位,这一段漏计,见下一小节)。
 
@@ -532,7 +578,7 @@ if lock.IsLocked() {
 > - **只写一次。** 两个 leader 可能 `ZRANGE` 到同一批。放行脚本先 `ZSCORE` 判成员仍在队列,并在同一段里 `ZREM`,所以每个 queueId 只被写一次,后到的拿到 GONE。
 > - **挑 gate 失败。** 条目只被跳过、从未离开队列,不再有「放回」。
 > - **不丢人。** 后半句列出的「既有丢条目路径」已全部消除,所以双 leader 与单 leader 一样不丢人。
-> - **第 2 条不变。** 超发上界仍是 ≤ 2×(cap − online)。
+> - **第 2 条不变。** 超发上界仍是 ≤ 2×(cap − online)。(2026-11-11 起收紧为 ≤ cap − online:名额进了放行脚本,见 §5 决策树后的 2026-11-11 更正。)
 > - **用例。** `TestIntegration_DualLeadersSameZone_NoLossBoundedOverAdmit` 的快照改用 `TxPipelined` 原子地读两个 `ZRange`:条目现在原子地从队列移进占位,非原子快照会看到同一条出现两次。另有 `TestPopAdmit_OverlappingLeaders_SameEntryAdmittedOnce` 钉住「只写一次」。
 > - **混跑。** 本版本与旧版混跑(排队开着)时「不丢人」不成立,只能排队关着滚,见 §5「新旧版本混跑与部署顺序」后的 10-18 更正。
 
@@ -595,13 +641,11 @@ Queue:
                                     # 取走后占位只再留 20s(代码常量 loginqueue.defaultHandoffGrace,不是配置;10-15 前为 15s);
                                     # 排队开着时也可以滚动调整(整键 TTL 只延长不缩短,§5)
   QueueEntryTTL: 1h                 # ZSET / meta / token-index 的 TTL 上限
-  SoftCapMultiplier: 1.5            # 没配 ZoneCapacityOverride 时,用 max(online,1) * mult
+  SoftCapMultiplier: 1.5            # 读不到区服策略(区服目录的容量)时,用 max(online,1) * mult
   DefaultRetryAfterMs: 2000         # 客户端轮询间隔建议
   DispatcherLockTTL: 30s            # leader 锁 TTL
   DispatcherLockKey: "dispatcher:lock:login_queue"  # 锁键前缀;实际 = <前缀>:zone:<Node.ZoneId>,每 zone 一个 leader
-  ZoneCapacityOverride:             # 推荐生产配死,不靠 SoftCapMultiplier 估算
-    "1": 5000
-    "2": 5000
+  # 区容量不在这里配(2026-11-10 起):只认网关区服目录 zone_config.capacity,见上文「FreeSlots 公式」。
 ```
 
 > **(2026-10-18 更正,上面 `QueueEntryTTL` 一行的注释;原文保留;未编译、未测试)** 「ZSET / meta / token-index 的 TTL 上限」改读如下。
@@ -620,11 +664,11 @@ Queue:
   每个 zone 仍恰好一把锁;§3、§15 与 `docs/ops/login-queue-stress-runbook.md` 写的 `dispatcher:lock:login_queue:zone:<id>` 是本地 / compose 默认配置下的键名,在 K8s 上排查时按带两段 zone 的键查。
   显式带 zone 是纵深防御:`kubectl rollout undo` 把 login 退回 §7.1 之前的镜像、而 ConfigMap 仍是开排队的这一份时,旧镜像原样使用配置值,照样按 zone 隔离,
   不会退回「全集群一个 leader、其它 zone 只进不出」。login 若改成「一个 leader 覆盖全部 zone」,这一行必须删掉,否则 N 个 leader 同时出队。
-- `ZoneCapacityOverride` 只写本 zone 一项,开服档起步值 `5000`(**待压测确认**;单一来源是 `k8s_deploy.ps1` 的 `$script:PeakShavingLaunchTier.LoginQueueZoneCapacity`)。
-  每个 zone 的 login 只出队本 zone,用不到别的 zone 的值。必须配:不配会落到 `max(online, 1) × SoftCapMultiplier` 的回落公式,代码里是向下取整
-  (`loginqueue/capacity.go`),在线 0 / 1 人时容量只有 1,队列非空后可能长期放不出人。它是**同时在线上限**,不是速率:对已在运行的 zone 首次打开排队前,
-  先核对该 zone 当前在线(各 gate 自报的 `player_count` 之和)低于这个值,否则新登录全部入队,直到在线降下来。
-- `Secrets.QueueToken.Value` = 环境变量 `MMORPG_LOGIN_QUEUE_TOKEN_SECRET`(staging / prod 必填:≥32、非占位、与 `MMORPG_GATE_TOKEN_SECRET` / `MMORPG_INTERNAL_AUTH_SECRET` 不同,
+- 不写区容量(2026-11-10 起;此前写本 zone 一项 `ZoneCapacityOverride`,值取 `$script:PeakShavingLaunchTier.LoginQueueZoneCapacity`,两者都已删)。
+  区容量只来自网关区服目录 `zone_config.capacity`,经 etcd 发布给本区 login;它是**同时在线上限**,不是速率。对已在运行的 zone 首次打开排队前,
+  先核对该 zone 当前在线(各 gate 自报的 `player_count` 之和)低于 `login_queue_capacity`,否则新登录全部入队,直到在线降下来;
+  再核对本区网关在发布(login 日志 `[ZonePolicy] zone <id> policy loaded`,`login_zone_policy_refresh_total{outcome="ok"}` 在涨)。
+- `Secrets.QueueToken.Value` = 环境变量 `MMORPG_LOGIN_QUEUE_TOKEN_SECRET`(staging / prod 必填:≥32、非占位、与 `MMORPG_GATE_TOKEN_SECRET` / `MMORPG_INTERNAL_AUTH_SIGNING_KEY` 不同,
   不满足在部署的任何写操作之前拒绝;dev 可不设,此时不写、login 回落 GateToken,见 §6 更正)。写明文 `Value` 而不是 `secrets.go` 建议的 `Env`,与兄弟项 `InternalAuth` 一致。
 - 开关、`Queue` 段与排队密钥都进 login Pod 模板的 `mmorpg.io/peak-shaving-hash` 注解,任一变化 login 自动滚动。参数与运维要点见 `deploy/k8s/README.md` Optional Flags「削峰(G4b)」。
 
@@ -733,7 +777,15 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
    - 放行:第一条单发探路,之后每块至多 128 条放进一个 pipeline,一块一次往返;每条仍是独立的一段 `admitEntryScript`,写满与部分写入的语义逐条不变。
    - 轮询:token 核对、取放行槽、读状态与续期合成一段 `lookupScript`,排队中一次轮询从三次往返降到一次。
    - 排队实例按 zone 组分开:G4a 第 1a 批已有(`k8s_deploy.ps1 -RedisSplit queue`,每组一个 `redis-queue-g<N>`),首次上线显式带上(`shared-redis-split-by-purpose.md` §25.3),本条没有改部署脚本。
-   - **没做**:盘点修法方向里的「名次改用入队序号差加进程内缓存」。它把客户端看到的名次从精确值改成上界(中途离队的人仍被算在前面),也改了空闲续期的触发方式,只为省 Redis CPU;按「性能靠实测」,等压测证明单台 redis-queue 扛不住 10 万人排队的轮询再做。轮询合并之后 Redis 侧每次执行的命令数与此前大致相同,省下的是往返与命令解析。
+   - **名次改用「入队序号差加进程内缓存」:不做(2026-11-11 定案,缺口清单第 14 条残余)。** 原文记作「等压测证明扛不住再做」,负责人 11-11 要求不等压测、现在定案:
+     - 它省不了往返:轮询已是一段 `lookupScript` 一次往返,ZRANK 就在这段脚本里,O(log N),10 万人排队时十几次比较;改序号差只省这一条命令的 CPU。
+     - 代价是客户端可见语义:名次从精确值变成上界(中途离队的人仍被算在前面),名次会停住、跳变;空闲续期的触发方式也要跟着改,两版客户端要同批改。
+     - 10 万人排队真正的压力是轮询次数(每人每 2 秒一次约 5 万段脚本/s,一个 zone 的排队键只能在一个主节点上)。标准做法是服务端按名次拉长下发的
+       `RetryAfterMs`,名次与总数的定义不变。**2026-11-11 已落码(未编译、未测试)**:`loginqueue.RetryAfterForRank`(`retry_after.go`):0 基名次小于 2000 的按
+       `DefaultRetryAfterMs`;之后与名次成正比(base × (rank+1) / 2000);上限 min(30s, AdmitTTL/2),不短于 base。AssignGate 入队、带令牌重入与
+       QueryQueueStatus 三处回包共用它。10 万人时轮询约 6000 次/s,约为固定 2 秒的八分之一。客户端不遵守时退回固定间隔,不影响正确性
+       (放行槽、续期、过期都不看间隔);Java 网关原样透传 `retry_after_ms`(0 时按 2000),HTTP 客户端契约本来就按它轮询(`AssignGateRequest` 的
+       queueToken 注释:基础间隔 = max(retry_after_ms, 下限))。这条规则原排在第 34 条(全部 Redis 上 Cluster)第 4 批,提前在这里落,第 4 批不用再做。
    - Java 版:已有等价,不加 `PARITY.md` 行。game-gateway 的 `LoginQueue` 放行是一段 Lua(`DISPATCH`)放一批,查询是一段 Lua(`LOOKUP`)一次往返(Java 仓 `game-gateway/.../queue/LoginQueue.java`)。
 
 ---

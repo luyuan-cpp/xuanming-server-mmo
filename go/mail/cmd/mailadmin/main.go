@@ -47,7 +47,7 @@ func run(args []string, getenv func(string) string, out, errOut io.Writer) int {
 	methods := map[string]string{"personal": mailpb.MailAdmin_SendPersonalMail_FullMethodName, "system": mailpb.MailAdmin_SendSystemMail_FullMethodName, "import": mailpb.MailAdmin_ImportMailRecipients_FullMethodName, "seal": mailpb.MailAdmin_SealMailCampaign_FullMethodName}
 	method, ok := methods[kind]
 	if !ok {
-		fmt.Fprintln(errOut, "用法: mailadmin personal|system|import|seal [参数]")
+		fmt.Fprintln(errOut, "Usage: mailadmin personal|system|import|seal [flags]")
 		return exitUsage
 	}
 	fs := flag.NewFlagSet("mailadmin "+kind, flag.ContinueOnError)
@@ -73,7 +73,7 @@ func run(args []string, getenv func(string) string, out, errOut io.Writer) int {
 	}
 	secret := strings.TrimSpace(getenv(*secretEnv))
 	if len([]byte(secret)) < 32 {
-		fmt.Fprintln(errOut, "admin签名密钥未注入或不足32字节")
+		fmt.Fprintln(errOut, "admin signing secret not injected or shorter than 32 bytes")
 		return exitUsage
 	}
 	var request proto.Message
@@ -88,25 +88,25 @@ func run(args []string, getenv func(string) string, out, errOut io.Writer) int {
 	if *file != "" {
 		source, err := os.Open(*file)
 		if err != nil {
-			fmt.Fprintln(errOut, "请求文件不可读")
+			fmt.Fprintln(errOut, "request file is not readable")
 			return exitUsage
 		}
 		bytes, err := io.ReadAll(io.LimitReader(source, (4<<20)+1))
 		_ = source.Close()
 		if err != nil {
-			fmt.Fprintln(errOut, "请求文件不可读")
+			fmt.Fprintln(errOut, "request file is not readable")
 			return exitUsage
 		}
 		if len(bytes) > 4<<20 {
-			fmt.Fprintln(errOut, "请求文件超限")
+			fmt.Fprintln(errOut, "request file exceeds the size limit")
 			return exitUsage
 		}
 		if err := protojson.Unmarshal(bytes, request); err != nil {
-			fmt.Fprintln(errOut, "请求JSON不符合现役协议")
+			fmt.Fprintln(errOut, "request JSON does not match the current protocol")
 			return exitUsage
 		}
 	} else if kind == "import" || kind == "seal" {
-		fmt.Fprintln(errOut, "名单导入/封存必须提供-file")
+		fmt.Fprintln(errOut, "recipient list import/seal requires -file")
 		return exitUsage
 	}
 	switch in := request.(type) {
@@ -157,7 +157,7 @@ func run(args []string, getenv func(string) string, out, errOut io.Writer) int {
 			return exitUsage
 		}
 		in.RequestId, in.ExpireMs = requestKey, expireMs
-		fmt.Fprintf(out, "request_id=%d expire_ms=%d（未知结果按相同请求原样重试）\n", in.RequestId, in.ExpireMs)
+		fmt.Fprintf(out, "request_id=%d expire_ms=%d (on an unknown outcome, retry the same request unchanged)\n", in.RequestId, in.ExpireMs)
 	case *mailpb.ImportMailRecipientsRequest:
 		if in.SenderKind != 0 && in.SenderKind != 1 {
 			return exitUsage
@@ -206,10 +206,10 @@ func run(args []string, getenv func(string) string, out, errOut io.Writer) int {
 	switch verdict := serverbase.TipVerdict(code); verdict {
 	case serverbase.VerdictOK:
 	case serverbase.VerdictBizReject:
-		fmt.Fprintf(errOut, "业务码=%d\n", code)
+		fmt.Fprintf(errOut, "tip_code=%d\n", code)
 		return exitRejected
 	default:
-		fmt.Fprintf(errOut, "业务码=%d\n", code)
+		fmt.Fprintf(errOut, "tip_code=%d\n", code)
 		fmt.Fprintf(errOut, "mail returned tip code %d (%s), outcome unknown; retry with exactly this command, changing nothing (including the -file content):\n%s\n", code, verdict, retryCommand(kind, fs, request))
 		return exitError
 	}

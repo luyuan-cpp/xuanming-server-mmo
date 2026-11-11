@@ -155,7 +155,7 @@ match:{mq}:size{N}:lock:{mode}:{config}       同档的凑单锁
   旧 matcher 还会按上限去凑人数档队列(把 2 人档里的人攒到 5 个才弹),而且用的是不带人数段的锁、与新实例不互斥。
   项目未上线,没有做新旧混跑的兼容。
   - K8s:match 是 2 副本、默认滚动更新,常规发布必然新旧并存。本次发布先
-    `kubectl -n mmorpg-infra scale deploy/match --replicas=0`,等旧 Pod 真正消失
+    `kubectl -n mmorpg-infra scale statefulset/match --replicas=0`,等旧 Pod 真正消失
     (`kubectl -n mmorpg-infra wait --for=delete pod -l app=match --timeout=60s`)再 apply 新镜像;
     或本次临时给 match 的 Deployment 加 `strategy: {type: Recreate}`,发布后去掉(常态要保留 2 副本滚动)。
   - 本机多实例:用 go_services 全停再起,确认没有旧 match 进程。

@@ -10,7 +10,7 @@
 #
 # 消费者语义(go/shared/kafkautil 的 BoundConsumerGroup):逐条处理、逐条同步提交;遇再均衡与暂时失败(TiDB 抖动、协调者切换)
 # 不停 —— 代次还在就有界退避原地重试同一条,代次结束就交还 Kafka 由新属主重投(入账与来源归档有 SQL 收据,幂等)。
-# 只有不变量破坏、组内提交点越过保留期,或维护排空时仍有没结清的记录,才 HOLD 并永久停止取新(日志「结果消费者 HOLD」)。
+# 只有不变量破坏、组内提交点越过保留期,或维护排空时仍有没结清的记录,才 HOLD 并永久停止取新(日志「[rating] result consumer HOLD」)。
 # 高负载时积压在探测时刻常常不为 0,这不说明有问题;有问题的是有积压的分区上组内已提交位点不再前进(消费者停了 / 卡在一条上 / 持续失败的 SQL)。
 ---
 apiVersion: monitoring.coreos.com/v1
@@ -44,8 +44,8 @@ spec:
             description: >-
               评分与完整结算来源归档跟着停:排行、封榜奖励、离线玩家的个人结算都晚到。
               先查 match 日志:`[kafka-bound]` 行是原地重试(看 stage 与错误,TiDB 故障先修库,恢复后自动追上);
-              「结果消费者 HOLD」是 owner 永久停止取新(不变量破坏 / 提交点越过保留期 / 排空期间没结清),修复后要重启 match;
-              同一条 offset 反复处理失败(日志「结果处理未确认」)时位点不会自己越过它,按 cross-zone-matchmaking.md 的结果处置人工处理。
+              「[rating] result consumer HOLD」是 owner 永久停止取新(不变量破坏 / 提交点越过保留期 / 排空期间没结清),修复后要重启 match;
+              同一条 offset 反复处理失败(日志「[rating] result handling unconfirmed」)时位点不会自己越过它,按 cross-zone-matchmaking.md 的结果处置人工处理。
               对照合计积压 match_result_consumer_lag_messages 与单分区最大积压 match_result_consumer_lag_max_partition_messages:
               两者接近 = 卡在一个分区。topic 只保留 7 天,积压到那之前必须处置,否则 MatchResultConsumerRetentionGap 会响(结果已丢)。
 

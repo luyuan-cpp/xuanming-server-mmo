@@ -327,7 +327,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameRpcMessage final : public ::goo
     kTypeFieldNumber = 1,
     kErrorFieldNumber = 4,
     kIdFieldNumber = 6,
+    kTraceIdHiFieldNumber = 7,
     kMessageIdFieldNumber = 5,
+    kTraceFlagsFieldNumber = 10,
+    kTraceIdLoFieldNumber = 8,
+    kParentSpanIdFieldNumber = 9,
   };
   // bytes request = 2;
   void clear_request() ;
@@ -389,6 +393,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameRpcMessage final : public ::goo
   void _internal_set_id(::uint64_t value);
 
   public:
+  // fixed64 trace_id_hi = 7;
+  void clear_trace_id_hi() ;
+  [[nodiscard]] ::uint64_t trace_id_hi() const;
+  void set_trace_id_hi(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_trace_id_hi() const;
+  void _internal_set_trace_id_hi(::uint64_t value);
+
+  public:
   // uint32 message_id = 5;
   void clear_message_id() ;
   [[nodiscard]] ::uint32_t message_id() const;
@@ -399,11 +413,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameRpcMessage final : public ::goo
   void _internal_set_message_id(::uint32_t value);
 
   public:
+  // uint32 trace_flags = 10;
+  void clear_trace_flags() ;
+  [[nodiscard]] ::uint32_t trace_flags() const;
+  void set_trace_flags(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trace_flags() const;
+  void _internal_set_trace_flags(::uint32_t value);
+
+  public:
+  // fixed64 trace_id_lo = 8;
+  void clear_trace_id_lo() ;
+  [[nodiscard]] ::uint64_t trace_id_lo() const;
+  void set_trace_id_lo(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_trace_id_lo() const;
+  void _internal_set_trace_id_lo(::uint64_t value);
+
+  public:
+  // fixed64 parent_span_id = 9;
+  void clear_parent_span_id() ;
+  [[nodiscard]] ::uint64_t parent_span_id() const;
+  void set_parent_span_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_parent_span_id() const;
+  void _internal_set_parent_span_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:GameRpcMessage)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -437,7 +481,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameRpcMessage final : public ::goo
     int type_;
     int error_;
     ::uint64_t id_;
+    ::uint64_t trace_id_hi_;
     ::uint32_t message_id_;
+    ::uint32_t trace_flags_;
+    ::uint64_t trace_id_lo_;
+    ::uint64_t parent_span_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -640,7 +688,7 @@ inline void GameRpcMessage::_internal_set_error(::GameErrorCode value) {
 inline void GameRpcMessage::clear_message_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.message_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t GameRpcMessage::message_id() const {
   // @@protoc_insertion_point(field_get:GameRpcMessage.message_id)
@@ -648,7 +696,7 @@ inline ::uint32_t GameRpcMessage::message_id() const {
 }
 inline void GameRpcMessage::set_message_id(::uint32_t value) {
   _internal_set_message_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:GameRpcMessage.message_id)
 }
 inline ::uint32_t GameRpcMessage::_internal_message_id() const {
@@ -682,6 +730,102 @@ inline ::uint64_t GameRpcMessage::_internal_id() const {
 inline void GameRpcMessage::_internal_set_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = value;
+}
+
+// fixed64 trace_id_hi = 7;
+inline void GameRpcMessage::clear_trace_id_hi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trace_id_hi_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t GameRpcMessage::trace_id_hi() const {
+  // @@protoc_insertion_point(field_get:GameRpcMessage.trace_id_hi)
+  return _internal_trace_id_hi();
+}
+inline void GameRpcMessage::set_trace_id_hi(::uint64_t value) {
+  _internal_set_trace_id_hi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:GameRpcMessage.trace_id_hi)
+}
+inline ::uint64_t GameRpcMessage::_internal_trace_id_hi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trace_id_hi_;
+}
+inline void GameRpcMessage::_internal_set_trace_id_hi(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trace_id_hi_ = value;
+}
+
+// fixed64 trace_id_lo = 8;
+inline void GameRpcMessage::clear_trace_id_lo() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trace_id_lo_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t GameRpcMessage::trace_id_lo() const {
+  // @@protoc_insertion_point(field_get:GameRpcMessage.trace_id_lo)
+  return _internal_trace_id_lo();
+}
+inline void GameRpcMessage::set_trace_id_lo(::uint64_t value) {
+  _internal_set_trace_id_lo(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:GameRpcMessage.trace_id_lo)
+}
+inline ::uint64_t GameRpcMessage::_internal_trace_id_lo() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trace_id_lo_;
+}
+inline void GameRpcMessage::_internal_set_trace_id_lo(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trace_id_lo_ = value;
+}
+
+// fixed64 parent_span_id = 9;
+inline void GameRpcMessage::clear_parent_span_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.parent_span_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t GameRpcMessage::parent_span_id() const {
+  // @@protoc_insertion_point(field_get:GameRpcMessage.parent_span_id)
+  return _internal_parent_span_id();
+}
+inline void GameRpcMessage::set_parent_span_id(::uint64_t value) {
+  _internal_set_parent_span_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:GameRpcMessage.parent_span_id)
+}
+inline ::uint64_t GameRpcMessage::_internal_parent_span_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.parent_span_id_;
+}
+inline void GameRpcMessage::_internal_set_parent_span_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.parent_span_id_ = value;
+}
+
+// uint32 trace_flags = 10;
+inline void GameRpcMessage::clear_trace_flags() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trace_flags_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t GameRpcMessage::trace_flags() const {
+  // @@protoc_insertion_point(field_get:GameRpcMessage.trace_flags)
+  return _internal_trace_flags();
+}
+inline void GameRpcMessage::set_trace_flags(::uint32_t value) {
+  _internal_set_trace_flags(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:GameRpcMessage.trace_flags)
+}
+inline ::uint32_t GameRpcMessage::_internal_trace_flags() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trace_flags_;
+}
+inline void GameRpcMessage::_internal_set_trace_flags(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trace_flags_ = value;
 }
 
 #ifdef __GNUC__

@@ -296,6 +296,19 @@ func (f *fakeMySQL) dropTable(name string) {
 	delete(f.tables, name)
 }
 
+func (f *fakeMySQL) dropIndex(table, index string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	tbl := f.tables[table]
+	kept := tbl.indexes[:0]
+	for _, name := range tbl.indexes {
+		if name != index {
+			kept = append(kept, name)
+		}
+	}
+	tbl.indexes = kept
+}
+
 func (f *fakeMySQL) hasTable(name string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -524,7 +537,8 @@ func TestUpReportsReappearedDriftAsManual(t *testing.T) {
 	if code := ExitCode(report, err); code != ExitManual {
 		t.Fatalf("ExitCode = %d, want %d", code, ExitManual)
 	}
-	if len(report.Statements) != 0 || len(report.Manual) != 1 || !containsAll(report.Manual[0], "已在台账", "version=2") {
+	if len(report.Statements) != 0 || len(report.Manual) != 1 || !containsAll(report.Manual[0], "recorded as completed", "version=2") ||
+		len(report.Findings) != 1 || report.Findings[0].Kind != FindingDriftReappeared {
 		t.Fatalf("已记账的漂移重现必须交人工且不重跑,got %+v", report)
 	}
 	for _, w := range writesAfter(rec, from) {
@@ -548,8 +562,9 @@ func TestUpTreatsTablesRemovedFromListAsWarnings(t *testing.T) {
 	if err != nil || ExitCode(report, err) != ExitOK || len(report.Manual) != 0 {
 		t.Fatalf("多余表不能阻断: report=%+v err=%v", report, err)
 	}
-	if len(report.Warnings) != 1 || !containsAll(report.Warnings[0], "多余表", "trade_favorite") {
-		t.Fatalf("多余表应进 Warnings,got %v", report.Warnings)
+	if len(report.Warnings) != 1 || !strings.Contains(report.Warnings[0], "trade_favorite") ||
+		len(report.Findings) != 1 || report.Findings[0].Kind != FindingExtraTable || report.Findings[0].Table != "trade_favorite" {
+		t.Fatalf("多余表应进 Warnings,got %+v", report)
 	}
 	plan, err := Plan(ctx, db, testOpts(t, listing))
 	if err != nil || !plan.Clean() {
@@ -557,6 +572,34 @@ func TestUpTreatsTablesRemovedFromListAsWarnings(t *testing.T) {
 	}
 	if !f.hasTable("trade_favorite") {
 		t.Fatal("本包永不删表")
+	}
+}
+
+// 缺普通索引端到端:只进 Warnings、ExitCode 仍为 0、不生成语句,结构化项带表名与索引名。
+// friend / guild / mail / rank 靠 Report.MissingIndexes 把它升级成拒启,这里钉住 Plan 与 Up 都会填它。
+func TestMissingIndexIsReportedAsStructuredWarning(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeMySQL(testDatabase)
+	db, _ := openFake(t, f)
+	listing := listingTable().build(t)
+
+	if _, err := Up(ctx, db, testOpts(t, listing)); err != nil {
+		t.Fatalf("baseline Up: %v", err)
+	}
+	f.dropIndex("trade_listing", "idx_trade_listing_1")
+
+	for i, run := range []func(context.Context, *sql.DB, Options) (Report, error){Plan, Up} {
+		report, err := run(ctx, db, testOpts(t, listing))
+		if err != nil || ExitCode(report, err) != ExitOK || len(report.Statements) != 0 || len(report.Manual) != 0 {
+			t.Fatalf("run#%d: 缺普通索引只是 Warning,不生成语句: report=%+v err=%v", i, report, err)
+		}
+		missing := report.MissingIndexes()
+		if len(missing) != 1 || missing[0].Table != "trade_listing" || missing[0].Index != "idx_trade_listing_1" {
+			t.Fatalf("run#%d: MissingIndexes = %+v", i, missing)
+		}
+		if len(report.Warnings) != 1 || report.Warnings[0] != missing[0].Message {
+			t.Fatalf("run#%d: Warnings 应与结构化项逐字对应: warnings=%v findings=%+v", i, report.Warnings, report.Findings)
+		}
 	}
 }
 
@@ -670,7 +713,8 @@ func TestTypeDriftIsManualAndNeverModifiedByDefault(t *testing.T) {
 	if code := ExitCode(report, err); code != ExitManual {
 		t.Fatalf("ExitCode = %d, want %d", code, ExitManual)
 	}
-	if len(report.Statements) != 0 || len(report.Manual) != 1 || !containsAll(report.Manual[0], "列类型漂移", "trade_listing.price_fen") {
+	if len(report.Statements) != 0 || len(report.Manual) != 1 || !strings.Contains(report.Manual[0], "trade_listing.price_fen") ||
+		len(report.Findings) != 1 || report.Findings[0].Kind != FindingColumnTypeDrift {
 		t.Fatalf("类型漂移应只进 Manual,got %+v", report)
 	}
 	for _, s := range rec.Statements()[from:] {
@@ -853,8 +897,8 @@ func TestExitCode(t *testing.T) {
 		want   int
 	}{
 		{"成功", Report{Statements: []string{"CREATE TABLE ..."}}, nil, ExitOK},
-		{"只有 Warnings", Report{Warnings: []string{"多余列"}}, nil, ExitOK},
-		{"需人工", Report{Manual: []string{"列类型漂移"}}, nil, ExitManual},
+		{"只有 Warnings", Report{Warnings: []string{"extra column"}}, nil, ExitOK},
+		{"需人工", Report{Manual: []string{"column type drift"}}, nil, ExitManual},
 		{"锁忙", Report{}, wrappedBusy, ExitLockBusy},
 		{"锁忙优先于需人工", Report{Manual: []string{"x"}}, wrappedBusy, ExitLockBusy},
 		{"dirty", Report{}, fmt.Errorf("wrap: %w", ErrDirty), ExitFailed},
@@ -872,7 +916,7 @@ func TestExitCode(t *testing.T) {
 }
 
 func TestReportClean(t *testing.T) {
-	if !(Report{Warnings: []string{"多余列"}}).Clean() {
+	if !(Report{Warnings: []string{"extra column"}}).Clean() {
 		t.Fatal("只有 Warnings 仍算 Clean")
 	}
 	if (Report{Statements: []string{"x"}}).Clean() || (Report{Manual: []string{"x"}}).Clean() {

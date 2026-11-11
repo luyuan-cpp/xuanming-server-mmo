@@ -532,8 +532,22 @@ type PlayerDatabase struct {
 	// 加载时无条件挂组件、校验不过挂失效标签(带键请求一律 fail-closed),存盘缺它整份拒存(持久数据)。
 	// 取下一个空闲号 25;下一个新字段从 26 起。
 	ClientRequestLedger *component.ClientRequestLedgerComp `protobuf:"bytes,25,opt,name=client_request_ledger,json=clientRequestLedger,proto3" json:"client_request_ledger,omitempty"` // WALLET
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 物品数量预留(docs/design/battle-item-reservation.md):备战时把带进战斗的道具按配置号与数量占住,结算只从这里扣,
+	// 作废或取消时释放。必须与 bag_component 同一次存盘提交 —— 「预留落了、背包没落」会把玩家的东西占住而没有对应的战斗,
+	// 「背包落了、预留没落」会让晚到的结算按持有量夹紧(药白喝)。一次存盘的所有脏行同事务(player-save-direct-commit.md §1.1),
+	// 所以不必与背包同组;它小、只在备战与结算时变,放 PROFILE 行,不让每一次背包写入都带上它。
+	// 加载时无条件挂组件、存盘时缺它整份拒存(持久数据,ecs-component-access-rules.md)。
+	// 取下一个空闲号 26;下一个新字段从 27 起。
+	ItemHolds *component.PlayerItemHoldComp `protobuf:"bytes,26,opt,name=item_holds,json=itemHolds,proto3" json:"item_holds,omitempty"` // PROFILE
+	// 待寄邮件(docs/design/battle-overflow-mail.md):战斗结算两包都放不下时整批改投邮件,还没交到邮件服务的那几封。
+	// 必须与扣消耗、入账同一次存盘提交 —— 「结算落了、待寄没落」物品就没了,「待寄落了、结算没落」结算重做时会再发一份。
+	// 一次存盘的所有脏行同事务(player-save-direct-commit.md §1.1),所以不必与背包同组;它是欠玩家的资产,与 asset_op_ledger、
+	// inbox_ledger 一样放 WALLET 行。正常为空,只在改投与寄出时变。
+	// 加载时无条件挂组件、存盘时缺它整份拒存(持久数据,ecs-component-access-rules.md)。
+	// 取下一个空闲号 27;下一个新字段从 28 起。
+	MailOutbox    *component.PlayerMailOutboxComp `protobuf:"bytes,27,opt,name=mail_outbox,json=mailOutbox,proto3" json:"mail_outbox,omitempty"` // WALLET
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlayerDatabase) Reset() {
@@ -713,6 +727,20 @@ func (x *PlayerDatabase) GetClientRequestLedger() *component.ClientRequestLedger
 	return nil
 }
 
+func (x *PlayerDatabase) GetItemHolds() *component.PlayerItemHoldComp {
+	if x != nil {
+		return x.ItemHolds
+	}
+	return nil
+}
+
+func (x *PlayerDatabase) GetMailOutbox() *component.PlayerMailOutboxComp {
+	if x != nil {
+		return x.MailOutbox
+	}
+	return nil
+}
+
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:
 // kind 0 是写权行,其余每个 kind 一行(player_store.PlayerStoreKind),payload 是 player_database
 // 按字段投影出来的一段序列化结果。一条语句就能读出一个玩家的全部行。
@@ -826,11 +854,107 @@ func (x *PlayerStore) GetClaimSeq() uint64 {
 	return 0
 }
 
+// 审计发件箱(docs/design/player-audit-outbox.md,断线重连 R13):和 player_store 在同一个存档库。
+// go/db 在提交一笔存档的同一个事务里写入随这一笔交来的审计记录,转发循环投 Kafka、broker 确认之后按主键删除。
+// 「这里有这条」等于「它描述的改动已提交」。只有 go/db 读写;读写语句在 go/db/internal/playerstore 与 internal/auditoutbox 里手写。
+// 主键片内按时间排:插入即删的队列在 TiDB 里留 MVCC 墓碑,转发从「上一轮最老的未投记录」附近往后扫,跨不过整片的墓碑(设计 §3、§7.2)。
+type PlayerAuditOutbox struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Shard         uint32                 `protobuf:"varint,1,opt,name=shard,proto3" json:"shard,omitempty"`                          // player_id % 16:转发按 (存档库, 片) 分工、按片扫描
+	Kind          uint32                 `protobuf:"varint,2,opt,name=kind,proto3" json:"kind,omitempty"`                            // playerstore.PlayerAuditKind:1 流水、2 快照
+	CreatedMs     uint64                 `protobuf:"varint,3,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"` // 写入它的 go/db 在提交事务里取的墙钟毫秒;片内按它扫,积压年龄按它算
+	PlayerId      uint64                 `protobuf:"varint,4,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`    // Kafka key
+	RecordId      uint64                 `protobuf:"varint,5,opt,name=record_id,json=recordId,proto3" json:"record_id,omitempty"`    // tx_id 或 snapshot_id
+	SaveSeq       uint64                 `protobuf:"varint,6,opt,name=save_seq,json=saveSeq,proto3" json:"save_seq,omitempty"`       // 带它提交的那一笔存盘的序号,只供排查
+	Payload       []byte                 `protobuf:"bytes,7,opt,name=payload,proto3" json:"payload,omitempty"`                       // Kafka 消息体原样:序列化的 TransactionLogEntry / PlayerSnapshotEntry
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerAuditOutbox) Reset() {
+	*x = PlayerAuditOutbox{}
+	mi := &file_proto_common_database_mysql_database_table_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerAuditOutbox) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerAuditOutbox) ProtoMessage() {}
+
+func (x *PlayerAuditOutbox) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_mysql_database_table_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerAuditOutbox.ProtoReflect.Descriptor instead.
+func (*PlayerAuditOutbox) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_mysql_database_table_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *PlayerAuditOutbox) GetShard() uint32 {
+	if x != nil {
+		return x.Shard
+	}
+	return 0
+}
+
+func (x *PlayerAuditOutbox) GetKind() uint32 {
+	if x != nil {
+		return x.Kind
+	}
+	return 0
+}
+
+func (x *PlayerAuditOutbox) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *PlayerAuditOutbox) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *PlayerAuditOutbox) GetRecordId() uint64 {
+	if x != nil {
+		return x.RecordId
+	}
+	return 0
+}
+
+func (x *PlayerAuditOutbox) GetSaveSeq() uint64 {
+	if x != nil {
+		return x.SaveSeq
+	}
+	return 0
+}
+
+func (x *PlayerAuditOutbox) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
 var File_proto_common_database_mysql_database_table_proto protoreflect.FileDescriptor
 
 const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a7proto/common/component/client_request_ledger_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
+	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a7proto/common/component/client_request_ledger_comp.proto\x1a2proto/common/component/player_item_hold_comp.proto\x1a4proto/common/component/player_mail_outbox_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
 	"\x04user\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x19\n" +
@@ -870,7 +994,7 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x16player_centre_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x126\n" +
 	"\n" +
-	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb2\v\n" +
+	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xac\f\n" +
 	"\x0fplayer_database\x12\"\n" +
 	"\tplayer_id\x18\x01 \x01(\x04B\x05\xc8\xfe\xa4\x02\x00R\bplayerId\x12/\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
@@ -896,7 +1020,11 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x10mystery_merchant\x18\x16 \x01(\v2\x1a.PlayerMysteryMerchantCompB\x05\xc8\xfe\xa4\x02\aR\x0fmysteryMerchant\x12E\n" +
 	"\x0ebattle_results\x18\x17 \x01(\v2\x17.PlayerBattleResultCompB\x05\xc8\xfe\xa4\x02\x04R\rbattleResults\x12G\n" +
 	"\x0fitem_gain_block\x18\x18 \x01(\v2\x18.PlayerItemGainBlockCompB\x05\xc8\xfe\xa4\x02\x04R\ritemGainBlock\x12S\n" +
-	"\x15client_request_ledger\x18\x19 \x01(\v2\x18.ClientRequestLedgerCompB\x05\xc8\xfe\xa4\x02\aR\x13clientRequestLedger:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
+	"\x15client_request_ledger\x18\x19 \x01(\v2\x18.ClientRequestLedgerCompB\x05\xc8\xfe\xa4\x02\aR\x13clientRequestLedger\x129\n" +
+	"\n" +
+	"item_holds\x18\x1a \x01(\v2\x13.PlayerItemHoldCompB\x05\xc8\xfe\xa4\x02\x04R\titemHolds\x12=\n" +
+	"\vmail_outbox\x18\x1b \x01(\v2\x15.PlayerMailOutboxCompB\x05\xc8\xfe\xa4\x02\aR\n" +
+	"mailOutbox:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
 	"\x10\vJ\x04\b\x11\x10\x12J\x04\b\x12\x10\x13J\x04\b\x13\x10\x14\"\xbc\x02\n" +
 	"\fplayer_store\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
@@ -909,7 +1037,16 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x0fholder_instance\x18\x06 \x01(\fR\x0eholderInstance\x12\x1a\n" +
 	"\breleased\x18\a \x01(\rR\breleased\x12\x18\n" +
 	"\apayload\x18\b \x01(\fR\apayload\x12\x1b\n" +
-	"\tclaim_seq\x18\t \x01(\x04R\bclaimSeq:$\x8a\x92\xf4\x01\fplayer_store\x92\x92\xf4\x01\x0eplayer_id,kindB\x17Z\x15proto/common/databaseb\x06proto3"
+	"\tclaim_seq\x18\t \x01(\x04R\bclaimSeq:$\x8a\x92\xf4\x01\fplayer_store\x92\x92\xf4\x01\x0eplayer_id,kind\"\x95\x02\n" +
+	"\x13player_audit_outbox\x12\x14\n" +
+	"\x05shard\x18\x01 \x01(\rR\x05shard\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\rR\x04kind\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\x03 \x01(\x04R\tcreatedMs\x12\x1b\n" +
+	"\tplayer_id\x18\x04 \x01(\x04R\bplayerId\x12\x1b\n" +
+	"\trecord_id\x18\x05 \x01(\x04R\brecordId\x12\x19\n" +
+	"\bsave_seq\x18\x06 \x01(\x04R\asaveSeq\x12\x18\n" +
+	"\apayload\x18\a \x01(\fR\apayload:F\x8a\x92\xf4\x01\x13player_audit_outbox\x92\x92\xf4\x01)shard,kind,created_ms,player_id,record_idB\x17Z\x15proto/common/databaseb\x06proto3"
 
 var (
 	file_proto_common_database_mysql_database_table_proto_rawDescOnce sync.Once
@@ -923,7 +1060,7 @@ func file_proto_common_database_mysql_database_table_proto_rawDescGZIP() []byte 
 	return file_proto_common_database_mysql_database_table_proto_rawDescData
 }
 
-var file_proto_common_database_mysql_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_common_database_mysql_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*User)(nil),                                // 0: user
 	(*UserOauth)(nil),                           // 1: user_oauth
@@ -934,55 +1071,60 @@ var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*PlayerCentreDatabase)(nil),                // 6: player_centre_database
 	(*PlayerDatabase)(nil),                      // 7: player_database
 	(*PlayerStore)(nil),                         // 8: player_store
-	(*base.AccountSimplePlayerList)(nil),        // 9: AccountSimplePlayerList
-	(*component.PlayerSceneContextComp)(nil),    // 10: PlayerSceneContextComp
-	(*component.Transform)(nil),                 // 11: Transform
-	(*component.PlayerUint64Comp)(nil),          // 12: PlayerUint64Comp
-	(*component.PlayerSkillListComp)(nil),       // 13: PlayerSkillListComp
-	(*component.PlayerUint32Comp)(nil),          // 14: PlayerUint32Comp
-	(*component.BaseAttributesComp)(nil),        // 15: BaseAttributesComp
-	(*component.LevelComp)(nil),                 // 16: LevelComp
-	(*component.CurrencyComp)(nil),              // 17: CurrencyComp
-	(*component.PlayerStressTestProbe)(nil),     // 18: PlayerStressTestProbe
-	(*component.PlayerAttributeComp)(nil),       // 19: PlayerAttributeComp
-	(*component.PlayerPetComp)(nil),             // 20: PlayerPetComp
-	(*BagAllData)(nil),                          // 21: BagAllData
-	(*QuestAllData)(nil),                        // 22: QuestAllData
-	(*component.PlayerProfileComp)(nil),         // 23: PlayerProfileComp
-	(*component.PlayerAssetOpLedgerComp)(nil),   // 24: PlayerAssetOpLedgerComp
-	(*component.PlayerInboxLedgerComp)(nil),     // 25: PlayerInboxLedgerComp
-	(*component.PlayerMysteryMerchantComp)(nil), // 26: PlayerMysteryMerchantComp
-	(*component.PlayerBattleResultComp)(nil),    // 27: PlayerBattleResultComp
-	(*component.PlayerItemGainBlockComp)(nil),   // 28: PlayerItemGainBlockComp
-	(*component.ClientRequestLedgerComp)(nil),   // 29: ClientRequestLedgerComp
+	(*PlayerAuditOutbox)(nil),                   // 9: player_audit_outbox
+	(*base.AccountSimplePlayerList)(nil),        // 10: AccountSimplePlayerList
+	(*component.PlayerSceneContextComp)(nil),    // 11: PlayerSceneContextComp
+	(*component.Transform)(nil),                 // 12: Transform
+	(*component.PlayerUint64Comp)(nil),          // 13: PlayerUint64Comp
+	(*component.PlayerSkillListComp)(nil),       // 14: PlayerSkillListComp
+	(*component.PlayerUint32Comp)(nil),          // 15: PlayerUint32Comp
+	(*component.BaseAttributesComp)(nil),        // 16: BaseAttributesComp
+	(*component.LevelComp)(nil),                 // 17: LevelComp
+	(*component.CurrencyComp)(nil),              // 18: CurrencyComp
+	(*component.PlayerStressTestProbe)(nil),     // 19: PlayerStressTestProbe
+	(*component.PlayerAttributeComp)(nil),       // 20: PlayerAttributeComp
+	(*component.PlayerPetComp)(nil),             // 21: PlayerPetComp
+	(*BagAllData)(nil),                          // 22: BagAllData
+	(*QuestAllData)(nil),                        // 23: QuestAllData
+	(*component.PlayerProfileComp)(nil),         // 24: PlayerProfileComp
+	(*component.PlayerAssetOpLedgerComp)(nil),   // 25: PlayerAssetOpLedgerComp
+	(*component.PlayerInboxLedgerComp)(nil),     // 26: PlayerInboxLedgerComp
+	(*component.PlayerMysteryMerchantComp)(nil), // 27: PlayerMysteryMerchantComp
+	(*component.PlayerBattleResultComp)(nil),    // 28: PlayerBattleResultComp
+	(*component.PlayerItemGainBlockComp)(nil),   // 29: PlayerItemGainBlockComp
+	(*component.ClientRequestLedgerComp)(nil),   // 30: ClientRequestLedgerComp
+	(*component.PlayerItemHoldComp)(nil),        // 31: PlayerItemHoldComp
+	(*component.PlayerMailOutboxComp)(nil),      // 32: PlayerMailOutboxComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
-	9,  // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
-	10, // 1: player_centre_database.scene_info:type_name -> PlayerSceneContextComp
-	11, // 2: player_database.transform:type_name -> Transform
-	12, // 3: player_database.uint64_pb_component:type_name -> PlayerUint64Comp
-	13, // 4: player_database.skill_list:type_name -> PlayerSkillListComp
-	14, // 5: player_database.uint32_pb_component:type_name -> PlayerUint32Comp
-	15, // 6: player_database.derived_attributes_component:type_name -> BaseAttributesComp
-	16, // 7: player_database.level_component:type_name -> LevelComp
-	17, // 8: player_database.currency:type_name -> CurrencyComp
-	18, // 9: player_database.stress_test_probe:type_name -> PlayerStressTestProbe
-	19, // 10: player_database.attribute_component:type_name -> PlayerAttributeComp
-	20, // 11: player_database.pet_component:type_name -> PlayerPetComp
-	21, // 12: player_database.bag_component:type_name -> BagAllData
-	22, // 13: player_database.mission_component:type_name -> QuestAllData
-	23, // 14: player_database.profile_component:type_name -> PlayerProfileComp
-	24, // 15: player_database.asset_op_ledger:type_name -> PlayerAssetOpLedgerComp
-	25, // 16: player_database.inbox_ledger:type_name -> PlayerInboxLedgerComp
-	26, // 17: player_database.mystery_merchant:type_name -> PlayerMysteryMerchantComp
-	27, // 18: player_database.battle_results:type_name -> PlayerBattleResultComp
-	28, // 19: player_database.item_gain_block:type_name -> PlayerItemGainBlockComp
-	29, // 20: player_database.client_request_ledger:type_name -> ClientRequestLedgerComp
-	21, // [21:21] is the sub-list for method output_type
-	21, // [21:21] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	10, // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
+	11, // 1: player_centre_database.scene_info:type_name -> PlayerSceneContextComp
+	12, // 2: player_database.transform:type_name -> Transform
+	13, // 3: player_database.uint64_pb_component:type_name -> PlayerUint64Comp
+	14, // 4: player_database.skill_list:type_name -> PlayerSkillListComp
+	15, // 5: player_database.uint32_pb_component:type_name -> PlayerUint32Comp
+	16, // 6: player_database.derived_attributes_component:type_name -> BaseAttributesComp
+	17, // 7: player_database.level_component:type_name -> LevelComp
+	18, // 8: player_database.currency:type_name -> CurrencyComp
+	19, // 9: player_database.stress_test_probe:type_name -> PlayerStressTestProbe
+	20, // 10: player_database.attribute_component:type_name -> PlayerAttributeComp
+	21, // 11: player_database.pet_component:type_name -> PlayerPetComp
+	22, // 12: player_database.bag_component:type_name -> BagAllData
+	23, // 13: player_database.mission_component:type_name -> QuestAllData
+	24, // 14: player_database.profile_component:type_name -> PlayerProfileComp
+	25, // 15: player_database.asset_op_ledger:type_name -> PlayerAssetOpLedgerComp
+	26, // 16: player_database.inbox_ledger:type_name -> PlayerInboxLedgerComp
+	27, // 17: player_database.mystery_merchant:type_name -> PlayerMysteryMerchantComp
+	28, // 18: player_database.battle_results:type_name -> PlayerBattleResultComp
+	29, // 19: player_database.item_gain_block:type_name -> PlayerItemGainBlockComp
+	30, // 20: player_database.client_request_ledger:type_name -> ClientRequestLedgerComp
+	31, // 21: player_database.item_holds:type_name -> PlayerItemHoldComp
+	32, // 22: player_database.mail_outbox:type_name -> PlayerMailOutboxComp
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_mysql_database_table_proto_init() }
@@ -997,7 +1139,7 @@ func file_proto_common_database_mysql_database_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_database_mysql_database_table_proto_rawDesc), len(file_proto_common_database_mysql_database_table_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

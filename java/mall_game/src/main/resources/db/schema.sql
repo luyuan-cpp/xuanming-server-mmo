@@ -50,8 +50,9 @@ CREATE TABLE IF NOT EXISTS commerce_official_owner (
   buyer_owner_revision VARBINARY(20) NOT NULL,
   INDEX idx_official_owner(buyer_account,buyer_owner_revision,order_sn)
 );
--- 商城收到的每一笔付款都在这里占一行，(channel, transaction_id) 全局唯一。order_sn 是这笔付款绑定的订单，一单至多绑定一笔；
--- 为 NULL 表示已付订单又收到的另一笔，没有绑定任何订单，归属与退款见 commerce_duplicate_payment / commerce_refund_intent。
+-- 商城收到的每一笔付款都在这里占一行，(channel, transaction_id) 全局唯一；amount_minor / currency 是渠道实收值。
+-- order_sn 是这笔付款绑定的订单，一单至多绑定一笔；为 NULL 表示异常付款，没有绑定任何订单，
+-- 冲的是哪张订单、为什么没绑定见 commerce_abnormal_payment，退款见 commerce_refund_intent。
 CREATE TABLE IF NOT EXISTS commerce_payment_receipt (
   channel VARBINARY(32) NOT NULL,
   transaction_id VARBINARY(128) NOT NULL,
@@ -60,16 +61,19 @@ CREATE TABLE IF NOT EXISTS commerce_payment_receipt (
   currency VARCHAR(16) NOT NULL,
   PRIMARY KEY (channel, transaction_id), UNIQUE (order_sn)
 );
--- 已付订单的重复付款(2026-11-05，第一轮数据审计 §4 第 19 条)：只记它冲的是哪张订单，金额币种在上表那一行；
--- 退款走 commerce_refund_intent(source=DUPLICATE_PAYMENT)，订单、库存与交付都不动。
-CREATE TABLE IF NOT EXISTS commerce_duplicate_payment (
+-- 异常付款：钱进了渠道却不能算作订单的付款，上表 order_sn 为 NULL 的每一行在这里恰有一行，同一事务写入。
+-- reason：DUPLICATE_PAYMENT 订单已由另一笔付清(2026-11-05，第一轮数据审计 §4 第 19 条)；
+-- AMOUNT_MISMATCH / CURRENCY_MISMATCH 金额或币种与订单冻结值不符(2026-11-10，第二轮数据审计评审 R3)。
+-- 金额币种在上表那一行；退款走 commerce_refund_intent(source 与 reason 相同)，订单、库存与交付都不动。
+CREATE TABLE IF NOT EXISTS commerce_abnormal_payment (
   channel VARBINARY(32) NOT NULL,
   transaction_id VARBINARY(128) NOT NULL,
   order_sn VARCHAR(36) NOT NULL,
+  reason VARCHAR(24) NOT NULL,
   created_ms BIGINT NOT NULL,
   PRIMARY KEY (channel, transaction_id),
-  INDEX idx_commerce_duplicate_order (order_sn),
-  CHECK (created_ms >= 0)
+  INDEX idx_commerce_abnormal_order (order_sn),
+  CHECK (reason IN ('DUPLICATE_PAYMENT','AMOUNT_MISMATCH','CURRENCY_MISMATCH')), CHECK (created_ms >= 0)
 );
 CREATE TABLE IF NOT EXISTS commerce_delivery_intent (
   order_sn VARCHAR(36) PRIMARY KEY,
@@ -93,8 +97,9 @@ CREATE TABLE IF NOT EXISTS commerce_sku_grant (sku_id BIGINT PRIMARY KEY,item_co
 CREATE TABLE IF NOT EXISTS commerce_order_grant (order_sn VARCHAR(36) PRIMARY KEY,item_config_id INT NOT NULL,count_per_unit INT NOT NULL,title VARCHAR(128) NOT NULL);
 CREATE TABLE IF NOT EXISTS commerce_delivery_receipt (order_sn VARCHAR(36) PRIMARY KEY,trade_order_id VARCHAR(20) NOT NULL,state VARCHAR(24) NOT NULL,proof VARCHAR(64) NOT NULL);
 -- 退款待办与退款回执按被退的那笔付款 (channel, transaction_id) 识别(2026-11-05 起；之前按 order_sn，一单只能退一笔)：
--- 一张订单可以同时有订单本身的退款和重复付款的退款。source 决定退款回执是否推进订单：CANCELLED_LATE(取消后迟到的付款)
--- 与 DELIVERY_REJECTED(交付被拒)退的是订单绑定的那笔，回执把订单 5→6；DUPLICATE_PAYMENT 只终结自己的待办，不碰订单。
+-- 一张订单可以同时有订单本身的退款和几笔异常付款的退款。source 决定退款回执是否推进订单(取值即 CommerceApi.RefundReason)：
+-- CANCELLED_LATE(取消后迟到的付款)与 DELIVERY_REJECTED(交付被拒)退的是订单绑定的那笔，回执把订单 5→6；
+-- DUPLICATE_PAYMENT / AMOUNT_MISMATCH / CURRENCY_MISMATCH 退的是异常付款，只终结自己的待办，不碰订单。
 CREATE TABLE IF NOT EXISTS commerce_refund_intent (
   channel VARBINARY(32) NOT NULL,
   transaction_id VARBINARY(128) NOT NULL,
@@ -103,7 +108,8 @@ CREATE TABLE IF NOT EXISTS commerce_refund_intent (
   status VARCHAR(24) NOT NULL,
   PRIMARY KEY (channel, transaction_id),
   INDEX idx_commerce_refund_pending (status, order_sn),
-  CHECK (source IN ('CANCELLED_LATE','DELIVERY_REJECTED','DUPLICATE_PAYMENT')), CHECK (status IN ('PENDING','REFUNDED'))
+  CHECK (source IN ('CANCELLED_LATE','DELIVERY_REJECTED','DUPLICATE_PAYMENT','AMOUNT_MISMATCH','CURRENCY_MISMATCH')),
+  CHECK (status IN ('PENDING','REFUNDED'))
 );
 -- payment_transaction_id 是被退的那笔付款，transaction_id 是渠道的退款流水；一笔付款只认一条退款流水。
 CREATE TABLE IF NOT EXISTS commerce_refund_receipt (
@@ -238,4 +244,5 @@ CREATE TABLE IF NOT EXISTS commerce_mock_payout (
   CHECK(amount_fen>0), CHECK(successful IN (0,1)), CHECK(applied IN (0,1))
 );
 
-INSERT INTO commerce_schema_version(version,storage_contract) VALUES (1,'mall-game-official-sku-v1-minor-units');
+-- 合同戳须与 SchemaVerifier.STORAGE_CONTRACT 一致；2026-11-10 起换新，之前装的库(退款待办 CHECK 认不出金额币种不符)须重装。
+INSERT INTO commerce_schema_version(version,storage_contract) VALUES (1,'mall-game-official-sku-v1-minor-units-abnormal-payment');

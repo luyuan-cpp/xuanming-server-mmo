@@ -164,7 +164,7 @@ func TestTypesCompatible(t *testing.T) {
 func TestDriftCleanWhenLiveMatchesProto(t *testing.T) {
 	sch := mustSchema(t, listingTable().build(t), favoriteTable().build(t), receiptTable().build(t))
 	d := sch.drift(liveMatching(sch), driftOptions{CreateMissingTables: true})
-	if !d.migration.Empty() || len(d.warnings) != 0 || len(d.manual) != 0 {
+	if !d.migration.Empty() || len(d.findings) != 0 {
 		t.Fatalf("一致的库不应产生任何语句或报告项: %+v", d)
 	}
 }
@@ -193,8 +193,8 @@ func TestDriftAddsMissingColumns(t *testing.T) {
 	if d.migration.Checksum == "" || d.migration.Name != driftNamePrefix+d.migration.Checksum[:12] {
 		t.Fatalf("drift identity must come from its checksum, got name=%s checksum=%s", d.migration.Name, d.migration.Checksum)
 	}
-	if len(d.warnings) != 0 || len(d.manual) != 0 {
-		t.Fatalf("pure additions must not need review: warnings=%v manual=%v", d.warnings, d.manual)
+	if len(d.findings) != 0 {
+		t.Fatalf("pure additions must not need review: %+v", d.findings)
 	}
 }
 
@@ -209,14 +209,18 @@ func TestDriftReportsTypeMismatchAsManualInsteadOfModifying(t *testing.T) {
 	if !d.migration.Empty() {
 		t.Fatalf("type drift must not be auto-applied without AllowModifyColumn: %v", d.migration.Statements)
 	}
-	if len(d.manual) != 1 || !containsAll(d.manual[0], "列类型漂移", "trade_listing.price_fen") {
-		t.Fatalf("type drift must be reported as manual, got %v", d.manual)
+	r := reportOf(d.findings)
+	if len(r.Manual) != 1 || len(r.Warnings) != 0 || !strings.Contains(r.Manual[0], "trade_listing.price_fen") {
+		t.Fatalf("type drift must be reported as manual, got %+v", r)
+	}
+	if f := d.findings[0]; f.Kind != FindingColumnTypeDrift || f.Table != "trade_listing" || f.Column != "price_fen" {
+		t.Fatalf("类型漂移应带类别与位置,got %+v", f)
 	}
 
 	// 显式授权后才生成 MODIFY COLUMN。
 	d = sch.drift(live, driftOptions{CreateMissingTables: true, AllowModifyColumn: true})
-	if len(d.manual) != 0 {
-		t.Fatalf("授权后类型漂移不应再进 Manual: %v", d.manual)
+	if len(d.findings) != 0 {
+		t.Fatalf("授权后类型漂移不应再报告: %+v", d.findings)
 	}
 	if len(d.migration.Statements) != 1 || !strings.HasPrefix(d.migration.Statements[0], "ALTER TABLE `trade_listing` MODIFY COLUMN `price_fen` bigint unsigned") {
 		t.Fatalf("AllowModifyColumn must emit MODIFY COLUMN, got %v", d.migration.Statements)
@@ -231,19 +235,26 @@ func TestDriftReportsPrimaryKeyProblemsAndExtraColumns(t *testing.T) {
 	live["trade_favorite"].primaryKey = []string{"listing_id", "player_id"}
 
 	d := sch.drift(live, driftOptions{CreateMissingTables: true})
-	manual := strings.Join(d.manual, "\n")
-	if !containsAll(manual, "缺主键", "trade_listing") {
-		t.Fatalf("missing primary key must be manual, got %v", d.manual)
+	if got := findingsOf(d.findings, FindingMissingPrimaryKey); len(got) != 1 || got[0].Table != "trade_listing" {
+		t.Fatalf("missing primary key must be reported, got %+v", d.findings)
 	}
-	if !containsAll(manual, "主键列不符", "trade_favorite") {
-		t.Fatalf("primary key column mismatch must be manual, got %v", d.manual)
+	if got := findingsOf(d.findings, FindingPrimaryKeyMismatch); len(got) != 1 || got[0].Table != "trade_favorite" {
+		t.Fatalf("primary key column mismatch must be reported, got %+v", d.findings)
 	}
-	warnings := strings.Join(d.warnings, "\n")
-	if !containsAll(warnings, "多余列", "trade_listing.legacy_column") {
-		t.Fatalf("extra columns must be reported (and never dropped), got %v", d.warnings)
+	extra := findingsOf(d.findings, FindingExtraColumn)
+	if len(extra) != 1 || extra[0].Table != "trade_listing" || extra[0].Column != "legacy_column" {
+		t.Fatalf("extra columns must be reported (and never dropped), got %+v", d.findings)
+	}
+	r := reportOf(d.findings)
+	manual := strings.Join(r.Manual, "\n")
+	if len(r.Manual) != 2 || !containsAll(manual, "trade_listing", "trade_favorite") {
+		t.Fatalf("主键问题必须进 Manual,got %v", r.Manual)
+	}
+	if len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "trade_listing.legacy_column") {
+		t.Fatalf("多余列必须进 Warnings,got %v", r.Warnings)
 	}
 	if strings.Contains(manual, "legacy_column") {
-		t.Fatalf("多余列不能阻断(回滚到旧版本时是正常形态): %v", d.manual)
+		t.Fatalf("多余列不能阻断(回滚到旧版本时是正常形态): %v", r.Manual)
 	}
 	if !d.migration.Empty() {
 		t.Fatalf("主键问题与多余列都不能生成语句: %v", d.migration.Statements)
@@ -257,11 +268,21 @@ func TestDriftReportsMissingIndexesAndUniqueKey(t *testing.T) {
 	delete(live["trade_receipt"].indexes, "uk_trade_receipt")
 
 	d := sch.drift(live, driftOptions{CreateMissingTables: true})
-	if !containsAll(strings.Join(d.warnings, "\n"), "缺索引", "idx_trade_listing_1") {
-		t.Fatalf("missing index must be a warning, got %v", d.warnings)
+	r := reportOf(d.findings)
+	if len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "idx_trade_listing_1") {
+		t.Fatalf("missing index must be a warning, got %v", r.Warnings)
 	}
-	if !containsAll(strings.Join(d.manual, "\n"), "缺唯一键", "uk_trade_receipt") {
-		t.Fatalf("missing unique key must be manual, got %v", d.manual)
+	if len(r.Manual) != 1 || !strings.Contains(r.Manual[0], "uk_trade_receipt") {
+		t.Fatalf("missing unique key must be manual, got %v", r.Manual)
+	}
+	// friend / guild / mail / rank 按类别把缺索引升级成拒启,靠的就是这两个结构化字段。
+	missing := r.MissingIndexes()
+	if len(missing) != 1 || missing[0].Table != "trade_listing" || missing[0].Index != "idx_trade_listing_1" {
+		t.Fatalf("MissingIndexes 应恰好报出 trade_listing 的 idx_trade_listing_1,got %+v", missing)
+	}
+	unique := findingsOf(d.findings, FindingMissingUniqueKey)
+	if len(unique) != 1 || unique[0].Table != "trade_receipt" || unique[0].Index != "uk_trade_receipt" {
+		t.Fatalf("缺唯一键应带类别与位置,got %+v", d.findings)
 	}
 	if !d.migration.Empty() {
 		t.Fatalf("索引问题不自动修: %v", d.migration.Statements)
@@ -277,8 +298,8 @@ func TestDriftCreatesTablesMissingFromLiveSchema(t *testing.T) {
 	if len(d.migration.Statements) != 1 || d.migration.Statements[0] != sch.tables[1].createSQL {
 		t.Fatalf("缺失的表必须按 proto 建出来,got %v", d.migration.Statements)
 	}
-	if len(d.manual) != 0 || len(d.warnings) != 0 {
-		t.Fatalf("后加表是正常演进,不应有报告项: warnings=%v manual=%v", d.warnings, d.manual)
+	if len(d.findings) != 0 {
+		t.Fatalf("后加表是正常演进,不应有报告项: %+v", d.findings)
 	}
 
 	// 基线尚未执行的 Plan:缺的表由基线建,漂移不重复列出。
@@ -294,12 +315,68 @@ func TestDriftTreatsExtraTablesAsWarnings(t *testing.T) {
 	live.addColumn(SchemaMigrationsTable, "version", "bigint unsigned")
 
 	d := sch.drift(live, driftOptions{CreateMissingTables: true})
-	if len(d.manual) != 0 {
-		t.Fatalf("多余表不能阻断(回滚到旧版本二进制时是正常形态): %v", d.manual)
+	r := reportOf(d.findings)
+	if len(r.Manual) != 0 {
+		t.Fatalf("多余表不能阻断(回滚到旧版本二进制时是正常形态): %v", r.Manual)
 	}
-	if len(d.warnings) != 1 || !containsAll(d.warnings[0], "多余表", "trade_favorite") {
-		t.Fatalf("多余表必须进 Warnings,台账表本身不算,got %v", d.warnings)
+	if len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "trade_favorite") ||
+		d.findings[0].Kind != FindingExtraTable || d.findings[0].Table != "trade_favorite" {
+		t.Fatalf("多余表必须进 Warnings,台账表本身不算,got %+v", d.findings)
 	}
+}
+
+// 每类报告项进哪一边是启动门禁的契约:Manual 让 ExitCode=4,Warnings 不阻断。
+// 没归类的类别(零值、将来新增的)必须按需人工处理,不能静默落进 Warnings。
+func TestReportAddRoutesFindingsByKind(t *testing.T) {
+	warningKinds := []FindingKind{FindingExtraColumn, FindingExtraTable, FindingMissingIndex}
+	manualKinds := []FindingKind{FindingColumnTypeDrift, FindingMissingPrimaryKey, FindingPrimaryKeyMismatch,
+		FindingMissingUniqueKey, FindingDriftReappeared, FindingKind(0), FindingKind(255)}
+	for _, kind := range warningKinds {
+		r := reportOf([]Finding{{Kind: kind, Message: "m"}})
+		if len(r.Warnings) != 1 || len(r.Manual) != 0 || len(r.Findings) != 1 || ExitCode(r, nil) != ExitOK {
+			t.Errorf("kind %d 应只进 Warnings: %+v", kind, r)
+		}
+	}
+	for _, kind := range manualKinds {
+		r := reportOf([]Finding{{Kind: kind, Message: "m"}})
+		if len(r.Manual) != 1 || len(r.Warnings) != 0 || len(r.Findings) != 1 || ExitCode(r, nil) != ExitManual {
+			t.Errorf("kind %d 应进 Manual: %+v", kind, r)
+		}
+	}
+}
+
+// 缺索引只按类别判断:服务据此拒启,文案改措辞(例如英文化)不能改变判断结果。
+func TestMissingIndexesJudgesByKindNotText(t *testing.T) {
+	r := reportOf([]Finding{
+		{Kind: FindingExtraColumn, Table: "t", Column: "c", Message: "missing index lookalike"},
+		{Kind: FindingMissingIndex, Table: "t", Index: "idx_t_0", Message: "any wording"},
+	})
+	if got := r.MissingIndexes(); len(got) != 1 || got[0].Table != "t" || got[0].Index != "idx_t_0" {
+		t.Fatalf("MissingIndexes 只看类别,got %+v", got)
+	}
+	if got := (Report{Warnings: []string{"missing index (not created automatically): table t lacks index idx_t_0 declared in proto"}}).MissingIndexes(); len(got) != 0 {
+		t.Fatalf("只有文案、没有结构化项时不能判成缺索引,got %+v", got)
+	}
+}
+
+// reportOf 按 run 的同一个入口(Report.add)把报告项分进 Warnings / Manual。
+func reportOf(findings []Finding) Report {
+	var r Report
+	for _, f := range findings {
+		r.add(f)
+	}
+	return r
+}
+
+// findingsOf 挑出类别为 kind 的报告项。
+func findingsOf(findings []Finding, kind FindingKind) []Finding {
+	var out []Finding
+	for _, f := range findings {
+		if f.Kind == kind {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func TestDriftChecksumIsOrderIndependent(t *testing.T) {

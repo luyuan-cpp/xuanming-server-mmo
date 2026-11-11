@@ -2,6 +2,7 @@ package handler
 
 import (
 	"reflect"
+	"sync/atomic"
 
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -34,11 +35,31 @@ var messageHandlers = map[uint32]handlerFunc{
 {{- end }}
 }
 
+// envelopeErrorsDropped 数 MessageBodyHandler 丢弃的信封错误。多条连接的 RecvLoop 并发调用,用原子计数。
+var envelopeErrorsDropped atomic.Uint64
+
+// EnvelopeErrorsDropped 返回 MessageBodyHandler 至今丢弃的信封错误条数(诊断与单测用)。
+func EnvelopeErrorsDropped() uint64 { return envelopeErrorsDropped.Load() }
+
 func MessageBodyHandler(client *pkg.GameClient, response *base.MessageContent) {
 	zap.L().Debug("Received message body",
 		zap.Uint32("message_id", response.GetMessageId()),
 		zap.Int("body_bytes", len(response.GetSerializedMessage())),
 	)
+
+	// 信封错误(gate / 路由服 / battle 在 MessageContent.error_message 里拒绝了这次请求)不交给类型化 handler:
+	// 它的 body 为空,解出来是一份全零响应,看上去像受理(例如 ListSkills 的 handler 会把已拥有技能清空)。
+	// 判据与 pkg.GameClient 认领回包一致(error_message.id != 0 即 pkg.ServerTipError);拒绝由发请求的一方
+	// 按请求号处理(Call 的 done、smokeCaller.callDispatch),这里只记日志与计数(docs/design/client-request-ordering.md O6)。
+	if tip := response.GetErrorMessage().GetId(); tip != 0 {
+		envelopeErrorsDropped.Add(1)
+		zap.L().Warn("Envelope error dropped by generic dispatch",
+			zap.Uint64("player_id", client.PlayerId),
+			zap.Uint32("message_id", response.GetMessageId()),
+			zap.Uint32("tip_id", tip),
+		)
+		return
+	}
 
 	player, ok := gameobject.PlayerList.Get(client.PlayerId)
 	if !ok {

@@ -212,9 +212,29 @@ spec:
               节点确实死了:不用处置,看 scene_manager_dead_node_reconcile_pending 回落。节点其实还活着:立刻修 etcd。
               节点失租后会按原 node_id 重新注册;在再入屏障放行、收尾动手之前回来的,收尾任务认得出是同一代进程、会撤掉
               (scene_manager_dead_node_reconcile_total{outcome="instance_back"})。失联比屏障更久的节点,名下实例此前
-              已被拆掉、世界频道已被改派;它重新注册后约 20 秒内自己把这些本地实体排空销毁(scene 节点的
-              scene_ownership_releases_total 增长,docs/design/scene-node-ownership-reconcile.md),不用逐个核对。
+              已被拆掉、世界频道已被改派;它不等重新注册,屏障放行后约 20 秒内就自己把这些本地实体按住户预算排空销毁(scene 节点的
+              scene_ownership_releases_total 增长,告警见 scene-ownership-alerts.yaml,docs/design/scene-node-ownership-reconcile.md),
+              不用逐个核对。
             runbook_url: docs/ops/scene-node-role-split.md
+
+        # etcd 修订号倒退:领导者全量同步读到的 etcd 当前修订号小于本 zone 记下的水位,只可能是 etcd 换成了新集群或从备份
+        # 恢复(同一个 etcd 的修订号只增不减)。领导者已自动换了节点号持有者的纪元(go/scene_manager/internal/logic/node_holder.go,
+        # docs/design/scene-node-ownership-reconcile.md §4.6);告警是让运维确认这次倒退是计划内的,并按换集群的流程重启节点。
+        - alert: SceneManagerEtcdRevisionRegressed
+          expr: |
+            sum(increase(scene_manager_etcd_revision_regressions_total[15m])) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "scene_manager 发现 etcd 修订号倒退:etcd 换了集群或从备份恢复过"
+            description: |
+              日志 "[NodeHolder] etcd revision went back in zone N: current revision C is below the recorded W" 带 zone、当前修订号与
+              倒退前的水位。etcd 的历史没了:租约、节点号分配与注册都从头来。计划内的换集群或恢复,换完之后各 zone 亮一次是预期的;
+              不是计划内的,先查清是谁把 etcd 指到了别的集群或旧备份。按 docs/ops/etcd-maintenance-runbook.md §7a 重启全部 scene 节点:
+              不重启的老进程认不出自己的节点号已被新进程接走。节点号持有者记录不用手工清:快照里在册的号当场改写,
+              其余的号在下一次登记时覆盖。
+            runbook_url: docs/ops/etcd-maintenance-runbook.md
 
         - alert: SceneManagerLoadRefreshFailing
           expr: |
@@ -627,16 +647,19 @@ spec:
             runbook_url: docs/ops/cross-zone-failure-test-runbook.md
 
         # --- 死节点收尾任务(scene_manager_dead_node_reconcile_total / _pending,R1)------
-        # 节点判死时,摘出负载集与写收尾任务在同一次 Lua 里完成。任务由两个键组成:任务表
-        # scene_manager:dead_node_reconcile(ZSET,全服一张,成员 "{zone}/{node}",分数 = 首次入队毫秒),
-        # 和收尾范围 node:zone:{z}:{n}:reconcile_scenes(判死时刻的场景快照,处理完一个摘一个)。
-        # 领导者每 5s 一拍,另在每次 fullSync 时,对屏障(默认 20s,只能调高)已过的任务做一轮
-        # (internal/logic/reentry_barrier.go「被屏障推迟的死节点收尾」)。outcome:
-        #   completed  收尾范围已空,死节点计数删掉、任务出队。正常,不告警;
-        #   retry      这一轮有场景没结论(Redis 出错),任务留着,下一拍只重试剩下的。故障期间每条任务每拍 +1,不单独告警;
-        #   abandoned  本进程从第一次没做完起满 10 分钟仍做不完,放弃:计数与任务删掉,没结论的场景留在
-        #              反向索引 node:zone:{z}:{n}:scenes 里,只有同一 node_id 再次判死或空闲回收才会处理。
-        # 两个指标都只由领导者发出,降级的副本把自己发过的 pending 写回 0。代码未编译、未实测。
+        # 节点判死时,摘出负载集与写收尾任务在同一次 Lua 里完成。任务由三个键组成:任务表
+        # scene_manager:dead_node_reconcile:zone:{z}(ZSET,每个 zone 一张,成员 "{zone}/{node}",分数 = 首次入队毫秒);
+        # 收尾范围 node:zone:{z}:{n}:reconcile_scenes(判死时刻的场景快照,处理完一个摘一个);
+        # node:zone:{z}:{n}:reconcile_instance(判死的那一代进程的 node_uuid,不知道时没有)。
+        # 选主按 zone(2026-11-05),本 zone 的领导者每 5s 一拍,另在每次 fullSync 时,对本 zone 的任务做一轮
+        # (internal/logic/reentry_barrier.go「被屏障推迟的死节点收尾」):先看判死的那一代是不是又注册回来了,
+        # 是就撤任务;否则等屏障(默认 20s,只能调高)过后逐个强制销毁孤儿实例。outcome:
+        #   completed      收尾范围已空,死节点计数删掉、任务出队。正常,不告警;
+        #   instance_back  判死的那一代(同一个 node_uuid)失租后又注册上来,任务撤掉,实例与计数原样。正常,不告警;
+        #   retry          这一轮有场景没结论(Redis 出错),任务留着,下一拍只重试剩下的。故障期间每条任务每拍 +1,不单独告警;
+        #   abandoned      本进程从第一次没做完起满 10 分钟仍做不完,放弃:计数与任务删掉,没结论的场景留在
+        #                  反向索引 node:zone:{z}:{n}:scenes 里,只有同一 node_id 再次判死或空闲回收才会处理。
+        # 两个指标都只由本 zone 的领导者发出,降级的副本把自己发过的 pending 写回 0。代码未编译、未实测。
         #
         # abandoned 健康时恒 0,不需要基线:任一次即告警(> 0),不设 for,写法同
         # SceneManagerNodeDetachWithoutDeathMark。increase() 看不到序列从「不存在」到 1 的第一次跳变,所以
@@ -662,12 +685,14 @@ spec:
               看实例是否还挂着。
             runbook_url: docs/ops/cross-zone-failure-test-runbook.md
 
-        # pending 是 Redis 任务表里还没收完的任务数,按 zone 计,只由领导者每拍发布。健康时一条任务只活一个
+        # pending 是本 zone 任务表里还没收完的任务数,只由本 zone 的领导者每拍发布。健康时一条任务只活一个
         # 屏障加一拍;Redis 出错时最多重试 10 分钟就放弃,那一支由上一条告警覆盖。
         # for: 15m = 屏障 20s + 放弃期限 10m + 约 4.5 分钟余量。调高屏障(SceneReentryBarrierSeconds)时把 for 同步调高。
         # 连续 15 分钟每次评估都非 0,说明有任务既没做完、也没走到放弃。常见原因:
         #   - 屏障一直挡着:读 death_at 失败按屏障未到处理(fail-closed),这一支既不记 retry,也不计放弃期限;
         #     death_at 写坏了要等标记 TTL(10 分钟)过期;同一 node_id 反复判死,death_at 被覆盖写,屏障一再顺延;
+        #   - 同一 node_id 又注册上来了,但比对是不是判死那一代的撤销脚本一直报错("Dead node cleanup paused this tick"):
+        #     不知道拆下去的是不是活实例,这一拍不收,同样不记 retry、不计放弃期限;
         #   - 领导者频繁更换:放弃期限只在进程内计时,新领导者从头计时,换得比 10 分钟还勤时永远走不到放弃;
         #   - 收尾没在跑:没有领导者,或领导者卡在 fullSync 重试循环,gauge 停在最后一次发布的值
         #     (SceneManagerLoadRefreshStalled 会同时响);
@@ -687,16 +712,17 @@ spec:
           annotations:
             summary: "zone {{ $labels.zone_id }} 有死节点收尾任务 15 分钟没收完({{ $value }} 条)"
             description: |
-              任务表 scene_manager:dead_node_reconcile 里这个 zone 的任务连续 15 分钟不为 0,而且没有走到
+              本 zone 的任务表 scene_manager:dead_node_reconcile:zone:{z} 连续 15 分钟不为 0,而且没有走到
               放弃(放弃会触发 SceneManagerDeadNodeReconcileAbandoned)。死节点名下的孤儿实例一直没被销毁,
               死节点的 scene_count / members 也一直没删。
-              排查:ZRANGE scene_manager:dead_node_reconcile 0 -1 WITHSCORES 看是哪些 "{zone}/{node}"、
-              什么时候入的队;SMEMBERS node:zone:{z}:{n}:reconcile_scenes 看还剩哪些场景;
-              GET node:zone:{z}:{n}:death_at 看屏障起点。
+              排查(在本 zone 的控制域 Redis 上):ZRANGE scene_manager:dead_node_reconcile:zone:{z} 0 -1 WITHSCORES
+              看是哪些 "{zone}/{node}"、什么时候入的队;SMEMBERS node:zone:{z}:{n}:reconcile_scenes 看还剩哪些场景;
+              GET node:zone:{z}:{n}:death_at 看屏障起点;GET node:zone:{z}:{n}:reconcile_instance 看判死的是哪一代。
               再按指标分辨原因:scene_manager_reentry_barrier_blocked_total{site="dead_node_cleanup"} 在涨,
               说明屏障一直挡着(读 death_at 失败,或节点反复判死);本 zone 的 sum by (namespace) (scene_manager_is_leader) 变化频繁,
               说明领导者在换;SceneManagerLoadRefreshStalled 同时响,说明收尾没在跑。
-              领导者日志搜 "[ReentryBarrier] Dead node cleanup" 与 "dead_node_cleanup: previous owner just declared dead"。
+              领导者日志搜 "[ReentryBarrier] Dead node cleanup" 与 "dead_node_cleanup: previous owner just declared dead";
+              每拍都有 "Dead node cleanup paused this tick",说明同一 node_id 又注册上来、但比对是不是同一代的脚本一直报错。
             runbook_url: docs/ops/cross-zone-failure-test-runbook.md
 
         - alert: SceneManagerSceneOrphanReconcileSpike
@@ -848,9 +874,13 @@ spec:
         # --- 新场景登记(scene_manager_scene_registration_total,go/scene_manager/internal/logic/scene_registration.go)---
         # 新场景的全部 Redis 状态由一段脚本登记。kind 为 instance / world_channel;outcome:
         #   registered  正常;
-        #   aborted     EVAL 回错,作废成功,名额已还。Redis 抖动时会有,不单独告警;
-        #   conflict    新铸的 scene_id 已有映射或别人的记录,一个键都没写、名额不还;
-        #   unknown     作废也失败,结局未知,名额不还(可能多占一份)。
+        #   aborted     EVAL 回错,作废成功,这次占的 Agones 名额条目已放弃。Redis 抖动时会有,不单独告警;
+        #   conflict    新铸的 scene_id 已有映射或别人的记录,一个键都没写,这次占的名额条目已放弃;
+        #   fenced      这次占的名额拖过了在途占用的截止时刻、已被对账取消,一个键都没写。不单独告警,
+        #               持续出现说明从占名额到登记慢过 5 分钟,查 Redis 与 K8s API 延迟;
+        #   unknown     作废也失败,结局未知,名额条目与在途占用都留着,过期之后由 Agones rooms 对账按记录判。
+        # (名额是 GameServer 上 rooms 列表里按身份的条目,放弃只删自己那一条,见
+        #  docs/design/agones-scene-node-high-density.md §13。)
         # 两个告警健康时恒 0:任一次即告警,不设 for。每次登记都给同 zone、同 kind 预建这两条值为 0 的序列,
         # increase() 能看到第一次跳变。代码未编译、未实测。
         - alert: SceneManagerSceneRegistrationConflict
@@ -865,7 +895,7 @@ spec:
               建实例回 ErrDuplicateScene,铺频道跳过这一个。两种来历:发号器重复发号(worker id 被两个进程同时持有、
               时钟回拨),或这次登记其实已落地、随后场景马上被销毁或改派(死节点收尾),go-redis 的重发或作废查询晚到。
               处置:scene_manager 日志搜 "[SceneRegistration]",拿 scene_id 查 GET scene:{id}:node 与 scene:{id}:registration;
-              查发号器(SceneIDGen)的 worker 租约日志。conflict 时不还 Agones 名额,对照 scene_manager_agones_counter_drift。
+              查发号器(SceneIDGen)的 worker 租约日志。conflict 时这次占的 Agones 名额条目已放弃,不会多占。
             runbook_url: docs/design/scene-creation-architecture.md
 
         - alert: SceneManagerSceneRegistrationUnknown
@@ -876,12 +906,36 @@ spec:
           annotations:
             summary: "zone {{ $labels.zone_id }} 新场景登记结局未知({{ $labels.kind }},10 分钟内 {{ $value }} 次)"
             description: |
-              登记脚本与作废脚本都回错,不知道登记有没有落地。预占的 Agones 名额没还:登记已落地时空闲回收会按 agones_gs 归还;
-              没落地时这份名额一直占着,scene_manager_agones_counter_drift 会显示出来。
+              登记脚本与作废脚本都回错,不知道登记有没有落地。预占的 Agones 名额条目与它的在途占用都留着:在途占用
+              5 分钟后过期,Agones rooms 对账按记录判 —— 登记已落地(记录指向这一条)就留着,没落地就取消在途占用、删掉条目。
+              不用人工还名额。
               处置:先查控制域 Redis(连接数、慢日志、主从切换、go-zero 熔断日志);scene_manager 日志搜
-              "[SceneRegistration] COUNTER DRIFT risk",行里有 scene_id、节点和 GameServer。Redis 恢复后,GET scene:{id}:node
-              不存在而 GameServer 的 rooms 计数偏高,就是这一份没还。
+              "[SceneRegistration]" 与 "outcome stays unknown",行里有 scene_id、节点和名额记录。Redis 恢复后看
+              scene_manager_agones_rooms_reconciled_total 是否把这一份收掉。
             runbook_url: docs/design/scene-creation-architecture.md
+
+        # --- Agones rooms 名额对账(scene_manager_agones_*,go/scene_manager/internal/logic/agones_reconcile.go)---
+        # 名额是 GameServer 上 rooms 列表里按身份的条目,本 zone 的领导者每 ReconcileIntervalSeconds(缺省 60s)逐条对账:
+        # 删孤儿条目、取消过期的在途占用、补加记录指向却缺失的条目、把改派时没转过来的名额转过来
+        # (docs/design/agones-scene-node-high-density.md §13.5)。agones_counter_drift 是一轮结束时仍没收敛的条目与场景数,
+        # 只由领导者发布,跟随者写 0,所以取 max。偶尔一轮不为 0(读写失败、GameServer 满了)下一轮会再试;
+        # 持续 15 分钟说明有一类不一致对账收不回来。代码未编译、未实测。
+        - alert: SceneManagerAgonesRoomsNotConverging
+          expr: |
+            max by (zone) (scene_manager_agones_counter_drift) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "zone {{ $labels.zone }} 的 Agones rooms 名额对账 15 分钟仍没收敛({{ $value }} 条)"
+            description: |
+              一轮对账结束时仍有 {{ $value }} 个名额条目或场景对不上。常见原因:
+              GameServer 满了,补不上缺失条目或转不过来改派后的名额(看 scene_manager_agones_rooms_reconciled_total
+              的 missing_no_capacity / rehome_no_capacity,同时节点在被超卖);K8s API 或控制域 Redis 读写失败;
+              rooms 列表里有不是 scene_manager 写的条目(有人手工改过 GameServer);条目属于登记在别的 zone 的场景。
+              处置:scene_manager 日志搜 "[AgonesReconcile]",逐条看是哪台 GameServer、哪个条目或场景;
+              kubectl get gs -n <zone ns> -o yaml 对照 status.lists.rooms.values 与 Redis 的 scene:{id}:agones_gs。
+            runbook_url: docs/design/agones-scene-node-high-density.md
 
         # --- 场景拆除任务(scene_manager_scene_teardown_*,go/scene_manager/internal/logic/scene_teardown_job.go)---
         # 销毁认领在提交的同一步写下拆除任务,镜像级联、C++ DestroyScene、Agones 归还等副作用做完才删;认领方没做完的

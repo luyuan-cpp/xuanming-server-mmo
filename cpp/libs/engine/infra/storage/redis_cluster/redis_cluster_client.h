@@ -58,6 +58,9 @@ struct RedisClusterOptions
 	RedisConnectOptions connect;
 	// 玩家域句柄取 kAllKeys(§5.1 的接缝规则)。
 	redis_cluster::HashTagPolicy hashTagPolicy = redis_cluster::HashTagPolicy::kMultiKeyOnly;
+	// 句柄所属的域,决定带着的 tag 必须是哪一种(docs/design/redis-cluster-all-domains-20261110.md §3.1):
+	// 玩家域句柄取 kPlayer,控制集群句柄取 kControl。
+	redis_cluster::KeyDomain keyDomain = redis_cluster::KeyDomain::kUnrestricted;
 	redis_cluster::RetryPolicy retry;
 	redis_cluster::QueueLimits limits;
 	redis_cluster::Duration topologyRefreshPeriod = std::chrono::seconds(30);

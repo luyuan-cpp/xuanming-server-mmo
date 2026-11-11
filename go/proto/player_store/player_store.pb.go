@@ -13,6 +13,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	base "proto/common/base"
+	rollback "proto/common/rollback"
 	_ "proto/db"
 	reflect "reflect"
 	sync "sync"
@@ -181,6 +182,57 @@ func (SavePlayerResult) EnumDescriptor() ([]byte, []int) {
 	return file_proto_player_store_player_store_proto_rawDescGZIP(), []int{1}
 }
 
+// player_audit_outbox.kind 的取值(表声明在 proto/common/database/mysql_database_table.proto)。
+// 号只增不复用;转发循环只读自己认识的 kind,滚动升级时新版本写的新 kind 留给新版本投。
+type PlayerAuditKind int32
+
+const (
+	PlayerAuditKind_PLAYER_AUDIT_KIND_UNSPECIFIED     PlayerAuditKind = 0
+	PlayerAuditKind_PLAYER_AUDIT_KIND_TRANSACTION_LOG PlayerAuditKind = 1 // 序列化的 TransactionLogEntry,投 transaction_log_topic
+	PlayerAuditKind_PLAYER_AUDIT_KIND_PLAYER_SNAPSHOT PlayerAuditKind = 2 // 序列化的 PlayerSnapshotEntry,投 player_snapshot_topic
+)
+
+// Enum value maps for PlayerAuditKind.
+var (
+	PlayerAuditKind_name = map[int32]string{
+		0: "PLAYER_AUDIT_KIND_UNSPECIFIED",
+		1: "PLAYER_AUDIT_KIND_TRANSACTION_LOG",
+		2: "PLAYER_AUDIT_KIND_PLAYER_SNAPSHOT",
+	}
+	PlayerAuditKind_value = map[string]int32{
+		"PLAYER_AUDIT_KIND_UNSPECIFIED":     0,
+		"PLAYER_AUDIT_KIND_TRANSACTION_LOG": 1,
+		"PLAYER_AUDIT_KIND_PLAYER_SNAPSHOT": 2,
+	}
+)
+
+func (x PlayerAuditKind) Enum() *PlayerAuditKind {
+	p := new(PlayerAuditKind)
+	*p = x
+	return p
+}
+
+func (x PlayerAuditKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PlayerAuditKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_player_store_player_store_proto_enumTypes[2].Descriptor()
+}
+
+func (PlayerAuditKind) Type() protoreflect.EnumType {
+	return &file_proto_player_store_player_store_proto_enumTypes[2]
+}
+
+func (x PlayerAuditKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PlayerAuditKind.Descriptor instead.
+func (PlayerAuditKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_player_store_player_store_proto_rawDescGZIP(), []int{2}
+}
+
 type LoadAndClaimResult int32
 
 const (
@@ -226,11 +278,11 @@ func (x LoadAndClaimResult) String() string {
 }
 
 func (LoadAndClaimResult) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_player_store_player_store_proto_enumTypes[2].Descriptor()
+	return file_proto_player_store_player_store_proto_enumTypes[3].Descriptor()
 }
 
 func (LoadAndClaimResult) Type() protoreflect.EnumType {
-	return &file_proto_player_store_player_store_proto_enumTypes[2]
+	return &file_proto_player_store_player_store_proto_enumTypes[3]
 }
 
 func (x LoadAndClaimResult) Number() protoreflect.EnumNumber {
@@ -239,7 +291,7 @@ func (x LoadAndClaimResult) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use LoadAndClaimResult.Descriptor instead.
 func (LoadAndClaimResult) EnumDescriptor() ([]byte, []int) {
-	return file_proto_player_store_player_store_proto_rawDescGZIP(), []int{2}
+	return file_proto_player_store_player_store_proto_rawDescGZIP(), []int{3}
 }
 
 type PlayerStoreRow struct {
@@ -295,18 +347,25 @@ func (x *PlayerStoreRow) GetPayload() []byte {
 }
 
 type SavePlayerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Auth          *base.ServiceCallAuth  `protobuf:"bytes,1,opt,name=auth,proto3" json:"auth,omitempty"`
-	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	StorageId     uint32                 `protobuf:"varint,3,opt,name=storage_id,json=storageId,proto3" json:"storage_id,omitempty"` // 认领时返回的落点;0 只用于实体已没的空行释放,由 go/db 查落点
-	OwnerEpoch    uint64                 `protobuf:"varint,4,opt,name=owner_epoch,json=ownerEpoch,proto3" json:"owner_epoch,omitempty"`
-	SaveSeq       uint64                 `protobuf:"varint,5,opt,name=save_seq,json=saveSeq,proto3" json:"save_seq,omitempty"`
-	SchemaGen     uint32                 `protobuf:"varint,6,opt,name=schema_gen,json=schemaGen,proto3" json:"schema_gen,omitempty"`
-	InstanceId    []byte                 `protobuf:"bytes,7,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"` // scene_instance_id
-	Rows          []*PlayerStoreRow      `protobuf:"bytes,8,rep,name=rows,proto3" json:"rows,omitempty"`                               // 有变化的片段,可以为空
-	Release       bool                   `protobuf:"varint,9,opt,name=release,proto3" json:"release,omitempty"`                        // 最终存盘:提交后释放写权
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Auth       *base.ServiceCallAuth  `protobuf:"bytes,1,opt,name=auth,proto3" json:"auth,omitempty"`
+	PlayerId   uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	StorageId  uint32                 `protobuf:"varint,3,opt,name=storage_id,json=storageId,proto3" json:"storage_id,omitempty"` // 认领时返回的落点;0 只用于实体已没的空行释放,由 go/db 查落点
+	OwnerEpoch uint64                 `protobuf:"varint,4,opt,name=owner_epoch,json=ownerEpoch,proto3" json:"owner_epoch,omitempty"`
+	SaveSeq    uint64                 `protobuf:"varint,5,opt,name=save_seq,json=saveSeq,proto3" json:"save_seq,omitempty"`
+	SchemaGen  uint32                 `protobuf:"varint,6,opt,name=schema_gen,json=schemaGen,proto3" json:"schema_gen,omitempty"`
+	InstanceId []byte                 `protobuf:"bytes,7,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"` // scene_instance_id
+	Rows       []*PlayerStoreRow      `protobuf:"bytes,8,rep,name=rows,proto3" json:"rows,omitempty"`                               // 有变化的片段,可以为空
+	Release    bool                   `protobuf:"varint,9,opt,name=release,proto3" json:"release,omitempty"`                        // 最终存盘:提交后释放写权
+	// 审计发件箱(docs/design/player-audit-outbox.md,断线重连 R13):这名玩家水位不大于这份快照的审计记录。
+	// COMMITTED 时 go/db 在提交存档的同一个事务里把它们写进本存档库的 player_audit_outbox,再由转发循环投 Kafka。
+	// 审计内容不会让存盘被拒:坏的单条记录跳过并计数(设计 §6.3)。
+	TransactionLogs []*rollback.TransactionLogEntry `protobuf:"bytes,10,rep,name=transaction_logs,json=transactionLogs,proto3" json:"transaction_logs,omitempty"` // 原样进发件箱,tx_id 是去重键
+	// 快照请求:只用 snapshot_id、trigger、schema_version、zone_id。player_database_blob、snapshot_time、total_bytes、
+	// player_id 由 go/db 按这一笔写完之后的全部数据行在事务里填,请求里带了也会被覆盖。
+	AuditSnapshots []*rollback.PlayerSnapshotEntry `protobuf:"bytes,11,rep,name=audit_snapshots,json=auditSnapshots,proto3" json:"audit_snapshots,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SavePlayerRequest) Reset() {
@@ -402,13 +461,30 @@ func (x *SavePlayerRequest) GetRelease() bool {
 	return false
 }
 
+func (x *SavePlayerRequest) GetTransactionLogs() []*rollback.TransactionLogEntry {
+	if x != nil {
+		return x.TransactionLogs
+	}
+	return nil
+}
+
+func (x *SavePlayerRequest) GetAuditSnapshots() []*rollback.PlayerSnapshotEntry {
+	if x != nil {
+		return x.AuditSnapshots
+	}
+	return nil
+}
+
 type SavePlayerResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Result        SavePlayerResult       `protobuf:"varint,1,opt,name=result,proto3,enum=playerstore.SavePlayerResult" json:"result,omitempty"`
 	RowOwnerEpoch uint64                 `protobuf:"varint,2,opt,name=row_owner_epoch,json=rowOwnerEpoch,proto3" json:"row_owner_epoch,omitempty"` // 拒绝时带回库里的值
 	RowSaveSeq    uint64                 `protobuf:"varint,3,opt,name=row_save_seq,json=rowSaveSeq,proto3" json:"row_save_seq,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 认识字段 10、11 的 go/db 在 COMMITTED、EQUAL 时置真。只为新旧混跑兜底:旧 go/db 不认识审计字段,存档照样提交、审计静默丢掉,
+	// scene 看到带了审计却没置真就不放行这些记录,随下一笔再交(设计 §4、§5.2)。
+	AuditOutboxWritten bool `protobuf:"varint,4,opt,name=audit_outbox_written,json=auditOutboxWritten,proto3" json:"audit_outbox_written,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *SavePlayerResponse) Reset() {
@@ -460,6 +536,13 @@ func (x *SavePlayerResponse) GetRowSaveSeq() uint64 {
 		return x.RowSaveSeq
 	}
 	return 0
+}
+
+func (x *SavePlayerResponse) GetAuditOutboxWritten() bool {
+	if x != nil {
+		return x.AuditOutboxWritten
+	}
+	return false
 }
 
 type LoadAndClaimRequest struct {
@@ -626,10 +709,10 @@ var File_proto_player_store_player_store_proto protoreflect.FileDescriptor
 
 const file_proto_player_store_player_store_proto_rawDesc = "" +
 	"\n" +
-	"%proto/player_store/player_store.proto\x12\vplayerstore\x1a)proto/common/base/service_call_auth.proto\x1a\x1bproto/db/proto_option.proto\"\\\n" +
+	"%proto/player_store/player_store.proto\x12\vplayerstore\x1a)proto/common/base/service_call_auth.proto\x1a+proto/common/rollback/player_snapshot.proto\x1a+proto/common/rollback/transaction_log.proto\x1a\x1bproto/db/proto_option.proto\"\\\n" +
 	"\x0ePlayerStoreRow\x120\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x1c.playerstore.PlayerStoreKindR\x04kind\x12\x18\n" +
-	"\apayload\x18\x02 \x01(\fR\apayload\"\xc8\x02\n" +
+	"\apayload\x18\x02 \x01(\fR\apayload\"\xc8\x03\n" +
 	"\x11SavePlayerRequest\x120\n" +
 	"\x04auth\x18\x01 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1d\n" +
@@ -643,12 +726,16 @@ const file_proto_player_store_player_store_proto_rawDesc = "" +
 	"\vinstance_id\x18\a \x01(\fR\n" +
 	"instanceId\x12/\n" +
 	"\x04rows\x18\b \x03(\v2\x1b.playerstore.PlayerStoreRowR\x04rows\x12\x18\n" +
-	"\arelease\x18\t \x01(\bR\arelease\"\x95\x01\n" +
+	"\arelease\x18\t \x01(\bR\arelease\x12?\n" +
+	"\x10transaction_logs\x18\n" +
+	" \x03(\v2\x14.TransactionLogEntryR\x0ftransactionLogs\x12=\n" +
+	"\x0faudit_snapshots\x18\v \x03(\v2\x14.PlayerSnapshotEntryR\x0eauditSnapshots\"\xc7\x01\n" +
 	"\x12SavePlayerResponse\x125\n" +
 	"\x06result\x18\x01 \x01(\x0e2\x1d.playerstore.SavePlayerResultR\x06result\x12&\n" +
 	"\x0frow_owner_epoch\x18\x02 \x01(\x04R\rrowOwnerEpoch\x12 \n" +
 	"\frow_save_seq\x18\x03 \x01(\x04R\n" +
-	"rowSaveSeq\"\xd2\x01\n" +
+	"rowSaveSeq\x120\n" +
+	"\x14audit_outbox_written\x18\x04 \x01(\bR\x12auditOutboxWritten\"\xd2\x01\n" +
 	"\x13LoadAndClaimRequest\x120\n" +
 	"\x04auth\x18\x01 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1f\n" +
@@ -688,7 +775,11 @@ const file_proto_player_store_player_store_proto_rawDesc = "" +
 	"\x1cSAVE_PLAYER_SCHEMA_REGRESSED\x10\t\x12\x1e\n" +
 	"\x1aSAVE_PLAYER_SCHEMA_TOO_NEW\x10\n" +
 	"\x12\x19\n" +
-	"\x15SAVE_PLAYER_TOO_LARGE\x10\v*\xf2\x01\n" +
+	"\x15SAVE_PLAYER_TOO_LARGE\x10\v*\x82\x01\n" +
+	"\x0fPlayerAuditKind\x12!\n" +
+	"\x1dPLAYER_AUDIT_KIND_UNSPECIFIED\x10\x00\x12%\n" +
+	"!PLAYER_AUDIT_KIND_TRANSACTION_LOG\x10\x01\x12%\n" +
+	"!PLAYER_AUDIT_KIND_PLAYER_SNAPSHOT\x10\x02*\xf2\x01\n" +
 	"\x12LoadAndClaimResult\x12%\n" +
 	"!LOAD_AND_CLAIM_RESULT_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16LOAD_AND_CLAIM_CLAIMED\x10\x01\x12\x1b\n" +
@@ -714,36 +805,41 @@ func file_proto_player_store_player_store_proto_rawDescGZIP() []byte {
 	return file_proto_player_store_player_store_proto_rawDescData
 }
 
-var file_proto_player_store_player_store_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_proto_player_store_player_store_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_proto_player_store_player_store_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_player_store_player_store_proto_goTypes = []any{
-	(PlayerStoreKind)(0),         // 0: playerstore.PlayerStoreKind
-	(SavePlayerResult)(0),        // 1: playerstore.SavePlayerResult
-	(LoadAndClaimResult)(0),      // 2: playerstore.LoadAndClaimResult
-	(*PlayerStoreRow)(nil),       // 3: playerstore.PlayerStoreRow
-	(*SavePlayerRequest)(nil),    // 4: playerstore.SavePlayerRequest
-	(*SavePlayerResponse)(nil),   // 5: playerstore.SavePlayerResponse
-	(*LoadAndClaimRequest)(nil),  // 6: playerstore.LoadAndClaimRequest
-	(*LoadAndClaimResponse)(nil), // 7: playerstore.LoadAndClaimResponse
-	(*base.ServiceCallAuth)(nil), // 8: common.base.ServiceCallAuth
+	(PlayerStoreKind)(0),                 // 0: playerstore.PlayerStoreKind
+	(SavePlayerResult)(0),                // 1: playerstore.SavePlayerResult
+	(PlayerAuditKind)(0),                 // 2: playerstore.PlayerAuditKind
+	(LoadAndClaimResult)(0),              // 3: playerstore.LoadAndClaimResult
+	(*PlayerStoreRow)(nil),               // 4: playerstore.PlayerStoreRow
+	(*SavePlayerRequest)(nil),            // 5: playerstore.SavePlayerRequest
+	(*SavePlayerResponse)(nil),           // 6: playerstore.SavePlayerResponse
+	(*LoadAndClaimRequest)(nil),          // 7: playerstore.LoadAndClaimRequest
+	(*LoadAndClaimResponse)(nil),         // 8: playerstore.LoadAndClaimResponse
+	(*base.ServiceCallAuth)(nil),         // 9: common.base.ServiceCallAuth
+	(*rollback.TransactionLogEntry)(nil), // 10: TransactionLogEntry
+	(*rollback.PlayerSnapshotEntry)(nil), // 11: PlayerSnapshotEntry
 }
 var file_proto_player_store_player_store_proto_depIdxs = []int32{
-	0, // 0: playerstore.PlayerStoreRow.kind:type_name -> playerstore.PlayerStoreKind
-	8, // 1: playerstore.SavePlayerRequest.auth:type_name -> common.base.ServiceCallAuth
-	3, // 2: playerstore.SavePlayerRequest.rows:type_name -> playerstore.PlayerStoreRow
-	1, // 3: playerstore.SavePlayerResponse.result:type_name -> playerstore.SavePlayerResult
-	8, // 4: playerstore.LoadAndClaimRequest.auth:type_name -> common.base.ServiceCallAuth
-	2, // 5: playerstore.LoadAndClaimResponse.result:type_name -> playerstore.LoadAndClaimResult
-	3, // 6: playerstore.LoadAndClaimResponse.rows:type_name -> playerstore.PlayerStoreRow
-	6, // 7: playerstore.PlayerStore.LoadAndClaim:input_type -> playerstore.LoadAndClaimRequest
-	4, // 8: playerstore.PlayerStore.SavePlayer:input_type -> playerstore.SavePlayerRequest
-	7, // 9: playerstore.PlayerStore.LoadAndClaim:output_type -> playerstore.LoadAndClaimResponse
-	5, // 10: playerstore.PlayerStore.SavePlayer:output_type -> playerstore.SavePlayerResponse
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	0,  // 0: playerstore.PlayerStoreRow.kind:type_name -> playerstore.PlayerStoreKind
+	9,  // 1: playerstore.SavePlayerRequest.auth:type_name -> common.base.ServiceCallAuth
+	4,  // 2: playerstore.SavePlayerRequest.rows:type_name -> playerstore.PlayerStoreRow
+	10, // 3: playerstore.SavePlayerRequest.transaction_logs:type_name -> TransactionLogEntry
+	11, // 4: playerstore.SavePlayerRequest.audit_snapshots:type_name -> PlayerSnapshotEntry
+	1,  // 5: playerstore.SavePlayerResponse.result:type_name -> playerstore.SavePlayerResult
+	9,  // 6: playerstore.LoadAndClaimRequest.auth:type_name -> common.base.ServiceCallAuth
+	3,  // 7: playerstore.LoadAndClaimResponse.result:type_name -> playerstore.LoadAndClaimResult
+	4,  // 8: playerstore.LoadAndClaimResponse.rows:type_name -> playerstore.PlayerStoreRow
+	7,  // 9: playerstore.PlayerStore.LoadAndClaim:input_type -> playerstore.LoadAndClaimRequest
+	5,  // 10: playerstore.PlayerStore.SavePlayer:input_type -> playerstore.SavePlayerRequest
+	8,  // 11: playerstore.PlayerStore.LoadAndClaim:output_type -> playerstore.LoadAndClaimResponse
+	6,  // 12: playerstore.PlayerStore.SavePlayer:output_type -> playerstore.SavePlayerResponse
+	11, // [11:13] is the sub-list for method output_type
+	9,  // [9:11] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_proto_player_store_player_store_proto_init() }
@@ -756,7 +852,7 @@ func file_proto_player_store_player_store_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_player_store_player_store_proto_rawDesc), len(file_proto_player_store_player_store_proto_rawDesc)),
-			NumEnums:      3,
+			NumEnums:      4,
 			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,

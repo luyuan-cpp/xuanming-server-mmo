@@ -132,10 +132,12 @@ var (
 	enterSceneRejectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_rejected_total",
-		// reason 取值必须与 enterscenelogic.go / home_zone.go / channel_pick.go 里实际传入的字面量一致;
+		// reason 取值必须与 enterscenelogic.go / home_zone.go / channel_pick.go / enter_hosted_placement.go 里实际传入的字面量一致;
 		// 旧的 unsafe_handoff / handoff_pending 已无调用点(换手门拒绝细分成了
 		// no_marker / stale_marker / withdrawn 三种),按旧名配的告警会恒为空而不报错。
-		Help: "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|home_zone_unmapped_travel|travel_map_unavailable|pending_map_fallback|scene_gone|channel_closing|channel_conf_mismatch|channel_switch_disabled|channel_full|channel_switch_cooldown|session_stale|session_conflict).",
+		// hosted_placement_*(托管落点,docs/design/player-connection-lost-hold.md §4.2):malformed / cross_zone 按构造应恒 0;
+		// no_instance 是本副本镜像里拿不到目标节点唯一实例号,节点刚起或镜像重同步时偶发,scene 侧下一次跟随检查会重试。
+		Help: "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|home_zone_unmapped_travel|travel_map_unavailable|pending_map_fallback|scene_gone|channel_closing|channel_conf_mismatch|channel_switch_disabled|channel_full|channel_switch_cooldown|session_stale|session_conflict|hosted_placement_malformed|hosted_placement_cross_zone|hosted_placement_no_instance).",
 	}, []string{"zone_id", "reason"})
 
 	// placementIdentityTotal 统计落点会话身份的每一次裁决(docs/design/scene-enter-chain-residuals.md §3.3):
@@ -299,10 +301,12 @@ var (
 		Buckets:   []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
 	}, []string{"zone", "role"})
 
+	// 名字沿用 rooms 还是 Counter 时的叫法;2026-11-10 起 rooms 是按条目的 List(docs/design/agones-scene-node-high-density.md §13),
+	// 一次归还是删一个条目,幂等,失败的可以重试,不再重试的由对账收(agonesRoomsReconciledTotal)。
 	agonesCounterRollbackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "agones_counter_rollback_total",
-		Help:      "rooms counter rollback attempts by outcome (ok|failed). failed means the counter is now drifted and needs reconcile.",
+		Help:      "Agones room releases (removing one entry from a GameServer's rooms list) by outcome (ok|failed). Releases are idempotent; a failed one is retried by its caller or reclaimed by the rooms reconciler.",
 	}, []string{"outcome"})
 
 	agonesMappingFailureTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -311,11 +315,29 @@ var (
 		Help:      "Allocations whose PodIP could not be mapped to a registered scene node, by reason (no_pod_ip|unknown_pod_ip|zone_mismatch|role_mismatch).",
 	}, []string{"zone", "reason"})
 
+	// agonesCounterDrift 是对账(agones_reconcile.go)一轮结束时仍没收敛的条目与场景数:读写失败跳过的、登记在
+	// 别的 zone 的、条目格式认不出的、GameServer 满了补不上或转不过来的。只由本 zone 的领导者发布,降级的副本写回 0。
+	// 持续大于 0 就是对账收不回来,见告警 SceneManagerAgonesRoomsNotConverging。名字沿用 rooms 还是 Counter 时的叫法。
 	agonesCounterDrift = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "agones_counter_drift",
-		Help:      "Per-zone count of GameServers whose Agones rooms counter disagrees with the Redis scene mapping.",
+		Help:      "Per-zone count of Agones room entries and scenes the rooms reconciler could not bring into agreement with the Redis room records in its last round (published by the zone leader; followers report 0).",
 	}, []string{"zone"})
+
+	// agonesRoomsReconciledTotal 是对账每次动手改一方的次数,action:
+	//   orphan_removed        删掉没有记录、拆除任务、在途占用指向的条目
+	//   hold_expired_removed  在途占用过期:同一步取消它,删掉条目
+	//   hold_canceled         过期的在途占用,条目不在任何一台 GameServer 上:取消
+	//   missing_added         记录指向的条目不在它的 GameServer 上:补加
+	//   missing_no_capacity   同上,GameServer 满了补不上
+	//   rehomed               场景在这个节点、名额记在别的 GameServer 上:转过来
+	//   rehome_no_capacity    同上,这个节点的 GameServer 满了转不过来
+	// 健康时只有零星的 hold_canceled / orphan_removed(进程在占名额之后崩溃),其余恒 0。
+	agonesRoomsReconciledTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "agones_rooms_reconciled_total",
+		Help:      "Agones rooms reconciler fixes by action (orphan_removed|hold_expired_removed|hold_canceled|missing_added|missing_no_capacity|rehomed|rehome_no_capacity).",
+	}, []string{"zone", "action"})
 
 	worldAutoscaleTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
@@ -399,6 +421,25 @@ var (
 		Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2},
 	}, []string{"result"})
 
+	// ownerEpochRollbackReceiptTotal 是两段回执的结果(docs/design/zone-redis-regression-guard-20261022.md §4.3.4)。
+	// site:
+	//   rollback  凭标记的 bump 回滚之后的落盘确认(推路由失败或铸造没确认落盘,logic rollbackPlacementAfterPushFailure)
+	//   enter     EnterScene 要下发一条带待确认回执的 location 记的 epoch 之前的确认(logic confirmPendingRollbackLocation)
+	// result:
+	//   confirmed   回滚(或观察到的待确认回滚)已确认落盘,回执已改成正式回执:源端可凭它采纳,epoch 可以下发
+	//   pending     落盘没确认:回执留在待确认形态。rollback 处源端按"标记已发出"收口(踢线、不存盘销毁);enter 处回 7 不下发
+	//   not_sent    确认一条都没发出去(剩余预算不够发 WAITAOF / 铸造通道取不到连接 / 没装铸造通道)。rollback 处回滚已经经共享
+	//               连接池生效,回执留在待确认形态;enter 处一个字节都没写,回 3
+	//   superseded  复核或改写时 epoch / location 已被并发推进,什么都没写(enter 处回 19)
+	//   error       Redis 出错或回复无法解读:rollback 处回执停在待确认形态或回滚结果未知;enter 处回 ErrRedis
+	// 健康时只有 rollback/confirmed 随 not_durable 与推路由失败一起增长;pending 持续增长 = 刷盘或副本持续落后;
+	// rollback/not_sent 成批出现多半是 Kafka 写满超时、留给确认的预算不够。起服预置全部组合为 0。
+	ownerEpochRollbackReceiptTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "owner_epoch_rollback_receipt_total",
+		Help:      "Two-phase rollback receipts after an unconfirmed owner_epoch mint, by site (rollback|enter) and result (confirmed|pending|not_sent|superseded|error).",
+	}, []string{"site", "result"})
+
 	// reentryBarrierBlockedTotal 统计因「老属主节点刚判死、再入屏障未到」而被
 	// 拒绝的改派/销毁/清理次数。site 是**代码里写死的常量点位名**
 	// (resolve_scene|rebalance|reassign|world_channel_lazy|orphan_cleanup|
@@ -467,8 +508,8 @@ var (
 		Help:      "etcd re-checks made while deciding whether a player's holding scene process was replaced by a new process reusing its node id, by result.",
 	}, []string{"zone_id", "result"})
 
-	// deadNodeReconcilePending 是还没收完的死节点收尾任务数(Redis 任务表 scene_manager:dead_node_reconcile 按 zone 计,
-	// 含屏障未过的与有成员没结论、等下一拍重试的),只由领导者发布,降级的副本把自己发过的 zone 写回 0。
+	// deadNodeReconcilePending 是本 zone 还没收完的死节点收尾任务数(Redis 任务表 scene_manager:dead_node_reconcile:zone:{z},
+	// 含屏障未过的与有成员没结论、等下一拍重试的),只由本 zone 的领导者发布,降级的副本把自己发过的 zone 写回 0。
 	// 它应该在一个屏障时长内回到 0;长期不为 0 = 收尾链路卡住了,看 dead_node_reconcile_total 的 retry / abandoned。
 	deadNodeReconcilePending = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
@@ -483,7 +524,7 @@ var (
 	//   abandoned      本进程从第一次没做完起满 10 分钟仍做不完,放弃:计数与任务删掉,没结论的场景留在反向索引里
 	//   instance_back  判死的那一代进程(同一个 node_uuid)已按原 node_id 重新注册:它名下的实例都还活着,任务撤掉,
 	//                  一个场景都不拆、计数不删(节点失租后重新拿租约,etcd_service.cpp OnKeepAliveResponse)
-	// retry / abandoned 健康时恒 0;instance_back 只在节点失租又回来时出现。只有领导者会发出。
+	// retry / abandoned 健康时恒 0;instance_back 只在节点失租又回来时出现。只有本 zone 的领导者会发出。
 	deadNodeReconcileTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "dead_node_reconcile_total",
@@ -608,7 +649,7 @@ var (
 	sceneRegistrationTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "scene_registration_total",
-		Help:      "New scene registration script outcomes by kind (instance|world_channel) and outcome (registered|conflict|aborted|unknown).",
+		Help:      "New scene registration script outcomes by kind (instance|world_channel) and outcome (registered|conflict|aborted|fenced|unknown). fenced: the Agones room hold expired and was reclaimed before the registration ran.",
 	}, []string{"zone_id", "kind", "outcome"})
 
 	// sceneTeardownJobsTotal:拆除任务(internal/logic/scene_teardown_job.go)的结局。
@@ -725,9 +766,10 @@ func register() {
 			releasePlayerTotal, enterSceneStageSeconds,
 			agonesAllocationTotal, agonesAllocationLatency,
 			agonesCounterRollbackTotal, agonesMappingFailureTotal,
-			agonesCounterDrift, worldAutoscaleTotal,
+			agonesCounterDrift, agonesRoomsReconciledTotal, worldAutoscaleTotal,
 			kafkaDeliveryTotal, enterSceneRollbackTotal, enterSceneMintReplayRecognizedTotal,
 			ownerEpochMintClockBehindTotal, ownerEpochMintDurableTotal, ownerEpochMintDurableSeconds,
+			ownerEpochRollbackReceiptTotal,
 			reentryBarrierBlockedTotal, deadNodeReconcilePending, deadNodeReconcileTotal,
 			ownershipReadUnknownTotal,
 			enterSceneOwnerDeadTakeoverTotal, enterSceneOwnerReplacedTakeoverTotal, enterSceneHandoffAdmittedTotal,
@@ -745,8 +787,10 @@ func register() {
 			sceneRegistrationTotal,
 			sceneTeardownJobsTotal, sceneTeardownOldestPendingSeconds,
 			nodeViewHolding, nodeViewReleasedTotal, // node_view.go
+			etcdRevisionRegressionsTotal,           // node_holder.go
 			gateRedirectExcludedTotal, gateRedirectFallbackTotal,
 			foreignZoneRegistryReadsTotal, foreignZoneSkipsTotal,
+			evacuationResolveTotal, // planned_drain.go
 		)
 		for _, outcome := range loadRefreshOutcomes {
 			loadRefreshTotal.WithLabelValues(outcome).Add(0)
@@ -757,6 +801,11 @@ func register() {
 		for _, result := range ownerEpochMintDurableResults {
 			ownerEpochMintDurableTotal.WithLabelValues(result).Add(0)
 			ownerEpochMintDurableSeconds.WithLabelValues(result)
+		}
+		for _, site := range ownerEpochRollbackReceiptSites {
+			for _, result := range ownerEpochRollbackReceiptResults {
+				ownerEpochRollbackReceiptTotal.WithLabelValues(site, result).Add(0)
+			}
 		}
 		for _, result := range deadHolderReleaseResults {
 			deadHolderReleaseTotal.WithLabelValues(result).Add(0)
@@ -789,6 +838,40 @@ func ObserveOwnerEpochMintDurable(result string, d time.Duration) {
 	register()
 	ownerEpochMintDurableTotal.WithLabelValues(result).Inc()
 	ownerEpochMintDurableSeconds.WithLabelValues(result).Observe(d.Seconds())
+}
+
+// owner_epoch_rollback_receipt_total 的 site / result 标签取值(含义见 ownerEpochRollbackReceiptTotal)。**必须是常量**。
+const (
+	OwnerEpochRollbackReceiptSiteRollback = "rollback"
+	OwnerEpochRollbackReceiptSiteEnter    = "enter"
+
+	OwnerEpochRollbackReceiptConfirmed  = "confirmed"
+	OwnerEpochRollbackReceiptPending    = "pending"
+	OwnerEpochRollbackReceiptNotSent    = "not_sent"
+	OwnerEpochRollbackReceiptSuperseded = "superseded"
+	OwnerEpochRollbackReceiptError      = "error"
+)
+
+// ownerEpochRollbackReceiptSites / Results 是注册时预置为 0 的全部组合,新增取值时同步加在这里。
+var (
+	ownerEpochRollbackReceiptSites = [...]string{
+		OwnerEpochRollbackReceiptSiteRollback,
+		OwnerEpochRollbackReceiptSiteEnter,
+	}
+	ownerEpochRollbackReceiptResults = [...]string{
+		OwnerEpochRollbackReceiptConfirmed,
+		OwnerEpochRollbackReceiptPending,
+		OwnerEpochRollbackReceiptNotSent,
+		OwnerEpochRollbackReceiptSuperseded,
+		OwnerEpochRollbackReceiptError,
+	}
+)
+
+// ObserveOwnerEpochRollbackReceipt 记一次两段回执的结果(site 取 OwnerEpochRollbackReceiptSite*,result 取
+// OwnerEpochRollbackReceipt* 的其余常量)。
+func ObserveOwnerEpochRollbackReceipt(site, result string) {
+	register()
+	ownerEpochRollbackReceiptTotal.WithLabelValues(site, result).Inc()
 }
 
 // load_refresh_total 的 outcome 标签取值。**必须是常量**:它们直接变成 Prometheus label。
@@ -1141,12 +1224,28 @@ func ObserveAgonesAllocation(zone, role, outcome string, d time.Duration) {
 	agonesAllocationLatency.WithLabelValues(zone, role).Observe(d.Seconds())
 }
 
-// ObserveAgonesCounterRollback 记一次 rooms 计数回滚结果。
-// outcome=="failed" 表示计数已经漂移,需要 reconcile 才能发现,
-// 应当配一条告警而不是只留日志。
+// ObserveAgonesCounterRollback 记一次 rooms 名额归还(删一个条目)的结果。
+// outcome=="failed" 时调用方可以重试,不重试的由对账收回。
 func ObserveAgonesCounterRollback(outcome string) {
 	register()
 	agonesCounterRollbackTotal.WithLabelValues(outcome).Inc()
+}
+
+// Agones rooms 对账的动作,取值见 agonesRoomsReconciledTotal。
+const (
+	AgonesRoomsOrphanRemoved      = "orphan_removed"
+	AgonesRoomsHoldExpiredRemoved = "hold_expired_removed"
+	AgonesRoomsHoldCanceled       = "hold_canceled"
+	AgonesRoomsMissingAdded       = "missing_added"
+	AgonesRoomsMissingNoCapacity  = "missing_no_capacity"
+	AgonesRoomsRehomed            = "rehomed"
+	AgonesRoomsRehomeNoCapacity   = "rehome_no_capacity"
+)
+
+// ObserveAgonesRoomsReconciled 记一次对账动作,action 取上面的常量。
+func ObserveAgonesRoomsReconciled(zone, action string) {
+	register()
+	agonesRoomsReconciledTotal.WithLabelValues(zone, action).Inc()
 }
 
 // ObserveAgonesMappingFailure 记一次 "GSA 成功但映射不回本地节点" 的失败。
@@ -1155,7 +1254,7 @@ func ObserveAgonesMappingFailure(zone, reason string) {
 	agonesMappingFailureTotal.WithLabelValues(zone, reason).Inc()
 }
 
-// SetAgonesCounterDrift 设置某 zone 当前的计数漂移条数(reconcile 写入)。
+// SetAgonesCounterDrift 设置某 zone 上一轮对账结束时仍没收敛的条目与场景数,见 agonesCounterDrift。
 func SetAgonesCounterDrift(zone string, count int) {
 	register()
 	agonesCounterDrift.WithLabelValues(zone).Set(float64(count))

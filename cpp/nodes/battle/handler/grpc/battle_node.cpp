@@ -41,11 +41,32 @@ boost::cobalt::task<void> CreateBattleWithPermit(muduo::net::EventLoop& loop,
                 [done](Permit value) { done(std::make_unique<Permit>(std::move(value))); });
             return true;
         }, nullptr);
-    // 所有者停止、许可拒绝和等候期间关闸均走原拒绝契约。
-    if (!permit || (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none ||
-        !*permit || !**permit || !AdmissionOpen(gate))
+    // 三种拒绝都回 UNAVAILABLE battle_not_allocatable(match 换节点重试一次),日志按原因分开记,与改造前的回调一致。
+    const auto battleId = call->request().battle_id();
+    if (!permit || (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none)
     {
-        LOG_WARN << "CreateBattle rejected while awaiting allocation permission, battle_id=" << call->request().battle_id();
+        // CloseAdmission 关闸时停掉了等许可的任务:停机已开始。
+        LOG_WARN << "CreateBattle rejected: admission closed while awaiting allocation permission, battle_id=" << battleId
+                 << ",returning UNAVAILABLE " << kBattleNotAllocatableMessage;
+        call->Reject(NotAllocatable());
+        co_return;
+    }
+    if (!*permit || !**permit)
+    {
+        const auto &lifecycle = agones::GameServerLifecycle::Instance();
+        LOG_WARN << "CreateBattle rejected: this instance is not allocatable, battle_id=" << battleId
+                 << " agones_state=" << agones::ToString(lifecycle.State())
+                 << " draining=" << (lifecycle.IsDraining() ? 1 : 0)
+                 << ",returning UNAVAILABLE " << kBattleNotAllocatableMessage;
+        call->Reject(NotAllocatable());
+        co_return;
+    }
+    // 第 3 道:许可回到 loop 后复核准入闸。等许可期间 SetBeforeShutdown 可能已关闸并作废全部房间,
+    // 放行的话房间会在进程退出时无声丢失。拒绝时许可随协程帧析构,零房间时自动收口回 Ready。
+    if (!AdmissionOpen(gate))
+    {
+        LOG_WARN << "CreateBattle rejected: shutdown started during dispatch(rechecked in loop), battle_id=" << battleId
+                 << ",returning UNAVAILABLE " << kBattleNotAllocatableMessage;
         call->Reject(NotAllocatable());
         co_return;
     }
@@ -228,8 +249,12 @@ void BattleNodeImpl::CreateBattle(const std::shared_ptr<CreateBattleCall>& call)
     // 2) 分配许可(集群外入口 D82)。拿不到(排空标签在、allocate 未确认、lifecycle 已停 / 仍在 Starting、等待超时)即拒绝:
     //    此刻还没进 Handle*,房间、定时器、推送、Kafka 事件一概没有发生。非 Agones 环境许可恒放行(启停窗口由第 1、3 道兜住)。
     //    回调只捕获 call 与 weak 闸,不捕获 this(AGENTS §11.7)。
-    if (!creationTasks_.Start(CreateBattleWithPermit(loop_, call, admission_), "战斗创建许可"))
+    if (!creationTasks_.Start(CreateBattleWithPermit(loop_, call, admission_), "BattleCreationPermit"))
+    {
+        LOG_WARN << "CreateBattle rejected: admission closed before awaiting allocation permission, battle_id="
+                 << request->battle_id() << ",returning UNAVAILABLE " << kBattleNotAllocatableMessage;
         call->Reject(NotAllocatable());
+    }
     return;
     ///<<< END WRITING YOUR CODE
     call->Proceed();

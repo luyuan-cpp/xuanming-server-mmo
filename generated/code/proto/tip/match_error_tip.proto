@@ -61,4 +61,20 @@ enum match_error {
 
   kMatchBattleReportNotFound = 16025;
 
+  kMatchBattleScriptInvalid = 16026;
+
+  kMatchBattleScriptNotFound = 16027;
+
+  kMatchBattleScriptLimitReached = 16028;
+
+  kMatchBattleScriptRevisionConflict = 16029;
+
+  kMatchBattleScriptNotApproved = 16030;
+
+  kMatchBattleScriptTooLarge = 16031;
+
+  kMatchBattleScriptLoadoutInvalid = 16032;
+
+  kMatchBattleScriptLoadoutFull = 16033;
+
 };

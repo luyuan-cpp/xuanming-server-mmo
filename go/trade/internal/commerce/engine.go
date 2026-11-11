@@ -13,10 +13,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"math"
 	assetpb "proto/common/asset"
-	rollbackpb "proto/common/rollback"
 	tradepb "proto/trade"
 	"shared/assetop"
 	"shared/authoritysql"
+	"shared/currencytype"
 	"shared/generated/pb/table"
 	"shared/roleidentity"
 	"sort"
@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 	"trade/internal/data"
+
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 const (
@@ -81,7 +83,8 @@ func (p Policy) Selection(v *tradepb.TradeAssetSelection) error {
 	if v.CurrencyAmount == 0 && v.CurrencyType != 0 || v.CurrencyAmount > math.MaxInt64 {
 		return ErrInvalid
 	}
-	if v.CurrencyAmount > 0 && (v.CurrencyType == 2 || !contains(p.Currencies, v.CurrencyType)) {
+	// 绑定灵石不论 Currencies 怎么配都不可交易(配置校验 config.IsTradableCurrency 本就拒绝它进白名单)。
+	if v.CurrencyAmount > 0 && (v.CurrencyType == currencytype.BindDiamond || !contains(p.Currencies, v.CurrencyType)) {
 		return ErrNotTradable
 	}
 	var total uint64
@@ -314,7 +317,7 @@ func (e *Engine) CreatePlayerTrade(ctx context.Context, me uint64, in *tradepb.C
 	return e.Create(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 2, Status: Escrowing, SellerPlayerId: me, BuyerPlayerId: in.BuyerPlayerId, ExpiresMs: e.now() + 15*60*1000}, &tradepb.TradeCommerceWorkflow{SellerAssets: in.SellerAssets, BuyerAssets: in.BuyerAssets, Stage: "offer_escrow"})
 }
 func validPrice(p uint64, c uint32, policy Policy) bool {
-	return p > 0 && p <= math.MaxInt64 && c != 2 && contains(policy.Currencies, c)
+	return p > 0 && p <= math.MaxInt64 && c != currencytype.BindDiamond && contains(policy.Currencies, c)
 }
 func (e *Engine) CreateConsignment(ctx context.Context, me uint64, in *tradepb.CreateConsignmentRequest) (*tradepb.TradeCommerceRecord, error) {
 	if err := e.Policy.Selection(in.GetAssets()); err != nil {
@@ -349,7 +352,7 @@ func (e *Engine) PlaceMarket(ctx context.Context, me uint64, in *tradepb.PlaceMa
 }
 func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, requestID ...string) (*tradepb.TradeCommerceRecord, error) {
 	var result *tradepb.TradeCommerceRecord
-	before, err := e.Repo.Get(ctx, id)
+	before, err := e.clientContract(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -480,13 +483,29 @@ func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, reque
 		result = r
 		return nil
 	})
-	return result, err
+	if err != nil {
+		// 没有提交(截止后 Commit 不发、提交失败、重跑后被拒):result 是某次尝试在内存里改出来的副本,不是库里的状态,
+		// 不能随错误回给客户端当成订单视图(client-request-ordering §6.1)。
+		return nil, err
+	}
+	return result, nil
 }
-func (e *Engine) Get(ctx context.Context, me, id uint64) (*tradepb.TradeCommerceRecord, error) {
+
+// clientContract 读客户端按单号点名的合同(查询、撤单、确认、购买、出价的预读)。查不到就是单号不存在,回业务码 ErrMissing,
+// 与锁内复读查不到、合同对调用者不可见同一个码;其它读失败原样上抛,logic 按故障定性。
+// 只给客户端入口用:后台推进与商城意图读不到合同是数据坏了,不能当成「不存在」吞掉。合同行不删,预读查到之后锁内复读不会再查不到。
+func (e *Engine) clientContract(ctx context.Context, id uint64) (*tradepb.TradeCommerceRecord, error) {
 	r, err := e.Repo.Get(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrMissing
 	}
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+func (e *Engine) Get(ctx context.Context, me, id uint64) (*tradepb.TradeCommerceRecord, error) {
+	r, err := e.clientContract(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -559,6 +578,32 @@ func finalCredits(w *tradepb.TradeCommerceWorkflow) (bool, bool) {
 		}
 	}
 	return true, true
+}
+
+// marketRemainder 是市场单托管里还没被成交划走的部分:卖单是剩余数量的物品,买单是剩余数量按单价折成的货币。
+// 成交的那部分在撮合时已划给成交子单,由子单的腿交付。玩家撤单(plan)与人工整单退回(manual.go)共用这一个算法。
+// 全部成交时回空包;已成交量超过总量是持久数据自相矛盾,回错误,不能用回绕的无符号减法算出一笔巨款。
+func marketRemainder(r *tradepb.TradeCommerceRecord) (*assetpb.AssetBundle, error) {
+	if r.FilledQuantity > r.Quantity {
+		return nil, fmt.Errorf("市场单已成交量 %d 超过总量 %d", r.FilledQuantity, r.Quantity)
+	}
+	remaining := r.Quantity - r.FilledQuantity
+	switch {
+	case remaining == 0:
+		return &assetpb.AssetBundle{}, nil
+	case r.Side == 1:
+		if r.UnitPrice > math.MaxInt64/uint64(remaining) {
+			return nil, fmt.Errorf("市场单剩余货币溢出: 单价 %d × 剩余 %d", r.UnitPrice, remaining)
+		}
+		return &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: r.CurrencyType, Amount: uint64(remaining) * r.UnitPrice}}}, nil
+	default:
+		return &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: r.ItemConfigId, Count: remaining}}}, nil
+	}
+}
+
+// emptyBundle 报告资产包里什么都没有(不用发)。
+func emptyBundle(b *assetpb.AssetBundle) bool {
+	return len(b.GetCurrencies())+len(b.GetItems())+len(b.GetItemInstances())+len(b.GetItemUuids()) == 0 && b.GetPetInstance() == nil && b.GetPetId() == 0
 }
 
 // maxNewLegsPerStep 是 advance 一步最多发出的新腿数(一步预取这么多 op_id)。人工处理一次加的腿也不能超过它。
@@ -738,16 +783,11 @@ func (e *Engine) plan(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWo
 			return err
 		}
 		if r.Kind == 4 {
-			remaining := r.Quantity - r.FilledQuantity
-			if remaining == 0 {
-				b = &assetpb.AssetBundle{}
-			} else if r.Side == 1 {
-				b = &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: r.CurrencyType, Amount: uint64(remaining) * r.UnitPrice}}}
-			} else {
-				b = &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: r.ItemConfigId, Count: remaining}}}
+			if b, err = marketRemainder(r); err != nil {
+				return err
 			}
 		}
-		if len(b.Currencies)+len(b.Items)+len(b.ItemInstances) > 0 || b.PetInstance != nil {
+		if !emptyBundle(b) {
 			addLeg(w, "seller_return", r.SellerPlayerId, 4, b)
 		}
 	}
@@ -791,7 +831,11 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			return err
 		}
 	}
-	return e.roleTx(ctx, func(tx *sql.Tx) error {
+	// parentToWake 是这一步让哪张市场成交子单收尾了时它的母单号,提交之后唤醒母单(filledParentToWake)。
+	// 事务体可能被重跑,每次进入先清零。
+	var parentToWake uint64
+	err = e.roleTx(ctx, func(tx *sql.Tx) error {
+		parentToWake = 0
 		if err := e.lockRoles(ctx, tx, 0, old.SellerPlayerId, old.BuyerPlayerId, w.HighestBidder); err != nil {
 			return err
 		}
@@ -804,7 +848,8 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			return corrupt(err)
 		}
 		// 锁内读到的原样:推进完拿它判这一步有没有任何变化,没变化就不重存(缺口清单第 16 条,见 schedule.go)。
-		lockedRecord, lockedWorkflow := proto.Clone(r), proto.Clone(w)
+		lockedRecord := proto.Clone(r).(*tradepb.TradeCommerceRecord)
+		lockedWorkflow := proto.Clone(w).(*tradepb.TradeCommerceWorkflow)
 		if r.SellerPlayerId != old.SellerPlayerId || r.BuyerPlayerId != old.BuyerPlayerId {
 			// Due 之后有人买下 / 换了参与者:角色锁是按旧参与者拿的,不能在这把锁下推进。下一轮按新行重来。
 			return staleObservation()
@@ -839,6 +884,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 					return err
 				}
 				markManual(r, w, manualReasonAppliedPartial, fmt.Sprintf("腿 %s op_id=%d 部分发放", l.Role, l.OpId), e.now())
+				parentToWake = filledParentToWake(lockedRecord, r)
 				return e.Repo.Save(ctx, tx, r, w, e.now())
 			}
 			if err := recordLegOutcome(l, out); err != nil {
@@ -899,10 +945,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			if l.Stream == 3 {
 				kind = tradepb.TradeAssetOpKind_TRADE_ASSET_OP_KIND_ESCROW_DEBIT
 			}
-			txType := uint32(rollbackpb.TransactionType_TX_AUCTION_BUY)
-			if l.Stream == 3 {
-				txType = uint32(rollbackpb.TransactionType_TX_AUCTION_SELL)
-			}
+			txType := legTxType(l) // 退回腿带 TX_AUCTION_RETURN,不受获取封禁约束(leg_tx_type.go)
 			l.OpId = ids[i]
 			deadline := uint64(0)
 			if l.Stream == 3 {
@@ -925,8 +968,17 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			// 合同与 workflow 都在锁内比较,别的写者在拿锁之前提交的变化这里读得到,之后的要等这把锁。
 			return e.Repo.RescheduleTx(ctx, tx, r.CommerceId, r.Version, nextDueMs(r, w, e.now()))
 		}
+		parentToWake = filledParentToWake(lockedRecord, r)
 		return e.Repo.Save(ctx, tx, r, w, e.now())
 	})
+	if err == nil && parentToWake != 0 {
+		// 子单收尾已提交:唤醒在 marketBarrier 里等它的母单(缺口清单第 16 条)。单独执行,不在子单的事务里锁母单行。
+		// 尽力而为:失败时母单最晚在 inFlightRecheck 之后自己到期。
+		if wakeErr := e.Repo.Wake(ctx, parentToWake, e.now()); wakeErr != nil {
+			logx.Errorf("[Commerce] Could not wake parent market order %d after its fill settled, it rechecks on its own schedule: %v", parentToWake, wakeErr)
+		}
+	}
+	return err
 }
 
 // Tick 推进一批到期合同,再轮转发一页收据 ACK。由 svc 的单个 goroutine(trade.commerce.reconcile)每秒调用一次;

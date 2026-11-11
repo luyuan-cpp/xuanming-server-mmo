@@ -181,7 +181,7 @@ func main() {
 	}
 
 	// Guild-smoke 模式:三个机器人做「公会按 zone 隔离」端到端冒烟
-	// (建帮 zone 由服务端决定 → 同区可见 / 可加入 → 别区不可见 / 不可加入 / 同名被拒 → 公告权限 → 身份伪造与内部方法被拒 → 解散)。
+	// (建帮 zone 由服务端决定 → 同区可见 / 可加入 → 别区不可见 / 不可加入 / 同名被拒 → 公告权限 → 按会话身份退帮、内部方法被拒 → 解散)。
 	// 见 guild_smoke_scenario.go 与 docs/design/guild-zone-client-access.md;前置条件写在 etc/guild_smoke.yaml 文件头。
 	if cfg.Mode == "guild-smoke" {
 		RunGuildSmoke(cfg)
@@ -216,6 +216,14 @@ func main() {
 	// 补位成组同场开战。见 team_backfill_smoke_scenario.go 与 docs/design/team-backfill-matching.md §7.3。
 	if cfg.Mode == "team-backfill-smoke" {
 		RunTeamBackfillSmoke(cfg)
+		return
+	}
+
+	// 人数档真人 PVP 计分组排(1V1～5V5):组队凑人、车队对等、评分窗口与分边、两条组队限制、按模式结算。
+	// 先 phase=prepare 写评分夹具、go/match/cmd/ratingfixture 写库,再 phase=run 跑全部情况。
+	// 见 pvp_team_smoke_scenario.go 与 docs/design/global-match-hierarchical-pools.md §12.5;前置条件写在 etc/pvp_team_smoke.yaml 文件头。
+	if cfg.Mode == "pvp-team-smoke" {
+		RunPvpTeamSmoke(cfg)
 		return
 	}
 
@@ -512,8 +520,8 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 		gc.RecvLoop(func(client *pkg.GameClient, msg *base.MessageContent) {
 			stats.MsgRecv()
 			// 这里只收推送与 id = 0 的回包。ListSkills 只经 startListOwnedSkills 带请求号发出,它的 id = 0 回包说明服务端
-			// 没回显请求号,丢弃(那次调用将以超时收场);AI 循环仍以 SendRequest 发的请求(ReleaseSkill / EnterScene 等)
-			// 回包照旧交 handler。
+			// 没回显请求号,丢弃(那次调用将以超时收场)。AI 的 ReleaseSkill / EnterScene / SendChat 已走 RobotAI.sendAction 的
+			// Call,按请求号认领,回包不到这里(成功回包由 onActionReply 交 handler)。
 			if msg.GetMessageId() == game.SceneSkillClientPlayerListSkillsMessageId {
 				smokeDropUncorrelatedReply(client.Account, msg)
 				return

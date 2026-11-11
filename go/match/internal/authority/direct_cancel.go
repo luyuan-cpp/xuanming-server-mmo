@@ -20,8 +20,11 @@ func (s *Store) CancelActivity(ctx context.Context, key *pb.MatchDirectIntentRec
 	}
 	// 首次读与Start可竞争；只有发现刚提交的新原件时重取一次完整P集合，
 	// 原取消PK永久保留，因此第二次不会再次由缺失变为存在。
+	// 截止作废的证据一次调用至多取一次,各次尝试(含 Fenced 自愈后的重跑)共用(评审修正 2026-11-06):每次尝试都取的话最多
+	// 问四次、每次最长 DeadlineProbeTimeout,battle 连不上时取消会顶到 match 的 zrpc 服务端超时(etc/match_service.yaml 4 秒)。
+	evidence := &cancelEvidence{}
 	for attempt := 0; attempt < 2; attempt++ {
-		out, changed, err := s.cancelActivityAttempt(ctx, key, payload)
+		out, changed, err := s.cancelActivityAttempt(ctx, key, payload, evidence)
 		if err != nil || !changed {
 			return out, err
 		}
@@ -29,12 +32,39 @@ func (s *Store) CancelActivity(ctx context.Context, key *pb.MatchDirectIntentRec
 	return nil, errors.New("活动原件并发变化，需复用原取消请求重试")
 }
 
-func (s *Store) cancelActivityAttempt(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte) (out *pb.CancelActivityBattleResponse, changed bool, err error) {
-	err = s.Fenced(ctx, func() (e error) { out, changed, e = s.cancelActivityOnce(ctx, key, payload); return e })
+// cancelEvidence 是一次 CancelActivity 调用里各次尝试共用的截止作废证据:第一次读到带 battle_id 的意图时取一次
+// (deadlineEvidenceOf),之后的尝试直接复用。证据说的是原执行实例的事实(房间在不在、进程在不在),与某次尝试读到的
+// 角色副本、意图版本无关;只用于同一 battle_id。只在发起调用的 goroutine 里用,不加锁。
+type cancelEvidence struct {
+	taken    bool
+	battle   uint64
+	evidence DeadlineAbortEvidence
+}
+
+// of 返回 battle 的证据:还没取过就取一次;battle 为 0(意图还没成局)时不取。取证读库失败原样返回,不记为已取。
+func (c *cancelEvidence) of(ctx context.Context, s *Store, battle uint64) (DeadlineAbortEvidence, error) {
+	if battle == 0 {
+		return DeadlineEvidenceUndetermined, nil
+	}
+	if !c.taken {
+		evidence, err := s.deadlineEvidenceOf(ctx, battle)
+		if err != nil {
+			return DeadlineEvidenceUndetermined, err
+		}
+		c.taken, c.battle, c.evidence = true, battle, evidence
+	}
+	if c.battle != battle {
+		return DeadlineEvidenceUndetermined, nil
+	}
+	return c.evidence, nil
+}
+
+func (s *Store) cancelActivityAttempt(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte, evidenceOnce *cancelEvidence) (out *pb.CancelActivityBattleResponse, changed bool, err error) {
+	err = s.Fenced(ctx, func() (e error) { out, changed, e = s.cancelActivityOnce(ctx, key, payload, evidenceOnce); return e })
 	return out, changed, err
 }
 
-func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte) (*pb.CancelActivityBattleResponse, bool, error) {
+func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte, evidenceOnce *cancelEvidence) (*pb.CancelActivityBattleResponse, bool, error) {
 	observed, err := s.DirectAdmission(ctx, key)
 	if err != nil {
 		return nil, false, err
@@ -44,6 +74,13 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 		if start, err = DecodeDirectStart(observed); err != nil {
 			return nil, false, err
 		}
+	}
+	// 截止作废的证据只能在事务之前取(事务里不调 RPC,2026-11-06)。意图一旦带上 battle_id 就不再变;锁内读到的成局不是这一局时
+	// 不用这份证据。
+	evidenceBattle := observed.GetBattleId()
+	evidence, err := evidenceOnce.of(ctx, s, evidenceBattle)
+	if err != nil {
+		return nil, false, err
 	}
 	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
@@ -70,7 +107,7 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 	}
 	battle, cancelled := current.BattleId, current.Cancelled
 	out := &pb.CancelActivityBattleResponse{BattleId: battle}
-	abortWritten := false // 本事务写下了截止 ABORT(而不是回放既有终局),提交成功后计数
+	var verdict deadlineAbortVerdict // verdict.abort:本事务写下了截止 ABORT(而不是回放既有终局),提交成功后计数
 	if battle == 0 {
 		if start != nil {
 			err = closeDirectPendingTx(ctx, tx, current, start.Tickets)
@@ -93,7 +130,10 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 		if start == nil || start.Formation.BattleId != formation.BattleId || start.Formation.OperationId != formation.OperationId {
 			return nil, false, ErrDirectConflict
 		}
-		out.TerminalDecision, abortWritten, err = s.abortTerminalTx(ctx, tx, formation)
+		if formation.BattleId != evidenceBattle {
+			evidence = DeadlineEvidenceUndetermined
+		}
+		out.TerminalDecision, verdict, err = s.abortTerminalTx(ctx, tx, formation, evidence)
 		if err != nil {
 			return nil, false, err
 		}
@@ -112,8 +152,8 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 	if err = tx.Commit(); err != nil {
 		return nil, false, err
 	}
-	if abortWritten {
-		observeTerminalAbort(battle, terminalAbortCancel)
+	if verdict.abort {
+		observeDeadlineAbort(battle, verdict, evidence, terminalAbortCancel)
 	}
 	return out, false, nil
 }

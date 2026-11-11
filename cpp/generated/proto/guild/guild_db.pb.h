@@ -1981,6 +1981,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildTrialLaunchRecord final : publ
     kOriginalProtoFieldNumber = 4,
     kRequestDigestFieldNumber = 5,
     kCancelReceiptFieldNumber = 8,
+    kRealtimeEndTipFieldNumber = 11,
     kRequestIdFieldNumber = 1,
     kBattleIdFieldNumber = 2,
     kCreatedMsFieldNumber = 6,
@@ -2032,6 +2033,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildTrialLaunchRecord final : publ
   const ::std::string& _internal_cancel_receipt() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_cancel_receipt(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_cancel_receipt();
+
+  public:
+  // bytes realtime_end_tip = 11;
+  void clear_realtime_end_tip() ;
+  [[nodiscard]] const ::std::string& realtime_end_tip() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_realtime_end_tip(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_realtime_end_tip();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_realtime_end_tip();
+  void set_allocated_realtime_end_tip(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_realtime_end_tip() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_realtime_end_tip(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_realtime_end_tip();
 
   public:
   // uint64 request_id = 1;
@@ -2108,7 +2124,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildTrialLaunchRecord final : publ
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2140,6 +2156,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildTrialLaunchRecord final : publ
     ::google::protobuf::internal::ArenaStringPtr original_proto_;
     ::google::protobuf::internal::ArenaStringPtr request_digest_;
     ::google::protobuf::internal::ArenaStringPtr cancel_receipt_;
+    ::google::protobuf::internal::ArenaStringPtr realtime_end_tip_;
     ::uint64_t request_id_;
     ::uint64_t battle_id_;
     ::uint64_t created_ms_;
@@ -2645,6 +2662,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRecord final : public ::google
     kCreateTimeMsFieldNumber = 6,
     kScoreFieldNumber = 9,
     kFundsFieldNumber = 10,
+    kScoreVersionFieldNumber = 12,
     kZoneIdFieldNumber = 8,
   };
   // string name = 2;
@@ -2762,6 +2780,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRecord final : public ::google
   void _internal_set_funds(::uint64_t value);
 
   public:
+  // uint64 score_version = 12;
+  void clear_score_version() ;
+  [[nodiscard]] ::uint64_t score_version() const;
+  void set_score_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_score_version() const;
+  void _internal_set_score_version(::uint64_t value);
+
+  public:
   // uint32 zone_id = 8;
   void clear_zone_id() ;
   [[nodiscard]] ::uint32_t zone_id() const;
@@ -2776,7 +2804,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRecord final : public ::google
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
+      ::google::protobuf::internal::TcParseTable<4, 12,
                           0, 61,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2815,6 +2843,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRecord final : public ::google
     ::uint64_t create_time_ms_;
     ::int64_t score_;
     ::uint64_t funds_;
+    ::uint64_t score_version_;
     ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -6408,7 +6437,7 @@ inline void GuildRecord::_internal_set_max_members(::uint32_t value) {
 inline void GuildRecord::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t GuildRecord::zone_id() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildRecord.zone_id)
@@ -6416,7 +6445,7 @@ inline ::uint32_t GuildRecord::zone_id() const {
 }
 inline void GuildRecord::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:guildpb.GuildRecord.zone_id)
 }
 inline ::uint32_t GuildRecord::_internal_zone_id() const {
@@ -6538,6 +6567,30 @@ inline void GuildRecord::set_allocated_name_norm(::std::string* PROTOBUF_NULLABL
     _impl_.name_norm_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:guildpb.GuildRecord.name_norm)
+}
+
+// uint64 score_version = 12;
+inline void GuildRecord::clear_score_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.score_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint64_t GuildRecord::score_version() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildRecord.score_version)
+  return _internal_score_version();
+}
+inline void GuildRecord::set_score_version(::uint64_t value) {
+  _internal_set_score_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildRecord.score_version)
+}
+inline ::uint64_t GuildRecord::_internal_score_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.score_version_;
+}
+inline void GuildRecord::_internal_set_score_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.score_version_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -9695,7 +9748,7 @@ inline void GuildTrialLaunchOriginal::_internal_set_created_ms(::uint64_t value)
 inline void GuildTrialLaunchRecord::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t GuildTrialLaunchRecord::request_id() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.request_id)
@@ -9703,7 +9756,7 @@ inline ::uint64_t GuildTrialLaunchRecord::request_id() const {
 }
 inline void GuildTrialLaunchRecord::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.request_id)
 }
 inline ::uint64_t GuildTrialLaunchRecord::_internal_request_id() const {
@@ -9719,7 +9772,7 @@ inline void GuildTrialLaunchRecord::_internal_set_request_id(::uint64_t value) {
 inline void GuildTrialLaunchRecord::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t GuildTrialLaunchRecord::battle_id() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.battle_id)
@@ -9727,7 +9780,7 @@ inline ::uint64_t GuildTrialLaunchRecord::battle_id() const {
 }
 inline void GuildTrialLaunchRecord::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.battle_id)
 }
 inline ::uint64_t GuildTrialLaunchRecord::_internal_battle_id() const {
@@ -9743,7 +9796,7 @@ inline void GuildTrialLaunchRecord::_internal_set_battle_id(::uint64_t value) {
 inline void GuildTrialLaunchRecord::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t GuildTrialLaunchRecord::state() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.state)
@@ -9751,7 +9804,7 @@ inline ::uint32_t GuildTrialLaunchRecord::state() const {
 }
 inline void GuildTrialLaunchRecord::set_state(::uint32_t value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.state)
 }
 inline ::uint32_t GuildTrialLaunchRecord::_internal_state() const {
@@ -9895,7 +9948,7 @@ inline void GuildTrialLaunchRecord::set_allocated_request_digest(::std::string* 
 inline void GuildTrialLaunchRecord::clear_created_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t GuildTrialLaunchRecord::created_ms() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.created_ms)
@@ -9903,7 +9956,7 @@ inline ::uint64_t GuildTrialLaunchRecord::created_ms() const {
 }
 inline void GuildTrialLaunchRecord::set_created_ms(::uint64_t value) {
   _internal_set_created_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.created_ms)
 }
 inline ::uint64_t GuildTrialLaunchRecord::_internal_created_ms() const {
@@ -9919,7 +9972,7 @@ inline void GuildTrialLaunchRecord::_internal_set_created_ms(::uint64_t value) {
 inline void GuildTrialLaunchRecord::clear_updated_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t GuildTrialLaunchRecord::updated_ms() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.updated_ms)
@@ -9927,7 +9980,7 @@ inline ::uint64_t GuildTrialLaunchRecord::updated_ms() const {
 }
 inline void GuildTrialLaunchRecord::set_updated_ms(::uint64_t value) {
   _internal_set_updated_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.updated_ms)
 }
 inline ::uint64_t GuildTrialLaunchRecord::_internal_updated_ms() const {
@@ -10007,7 +10060,7 @@ inline void GuildTrialLaunchRecord::set_allocated_cancel_receipt(::std::string* 
 inline void GuildTrialLaunchRecord::clear_next_check_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_check_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t GuildTrialLaunchRecord::next_check_ms() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.next_check_ms)
@@ -10015,7 +10068,7 @@ inline ::uint64_t GuildTrialLaunchRecord::next_check_ms() const {
 }
 inline void GuildTrialLaunchRecord::set_next_check_ms(::uint64_t value) {
   _internal_set_next_check_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.next_check_ms)
 }
 inline ::uint64_t GuildTrialLaunchRecord::_internal_next_check_ms() const {
@@ -10031,7 +10084,7 @@ inline void GuildTrialLaunchRecord::_internal_set_next_check_ms(::uint64_t value
 inline void GuildTrialLaunchRecord::clear_check_attempts() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.check_attempts_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t GuildTrialLaunchRecord::check_attempts() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.check_attempts)
@@ -10039,7 +10092,7 @@ inline ::uint32_t GuildTrialLaunchRecord::check_attempts() const {
 }
 inline void GuildTrialLaunchRecord::set_check_attempts(::uint32_t value) {
   _internal_set_check_attempts(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.check_attempts)
 }
 inline ::uint32_t GuildTrialLaunchRecord::_internal_check_attempts() const {
@@ -10049,6 +10102,70 @@ inline ::uint32_t GuildTrialLaunchRecord::_internal_check_attempts() const {
 inline void GuildTrialLaunchRecord::_internal_set_check_attempts(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.check_attempts_ = value;
+}
+
+// bytes realtime_end_tip = 11;
+inline void GuildTrialLaunchRecord::clear_realtime_end_tip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.realtime_end_tip_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& GuildTrialLaunchRecord::realtime_end_tip() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.realtime_end_tip)
+  return _internal_realtime_end_tip();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GuildTrialLaunchRecord::set_realtime_end_tip(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.realtime_end_tip_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.realtime_end_tip)
+}
+inline ::std::string* PROTOBUF_NONNULL GuildTrialLaunchRecord::mutable_realtime_end_tip()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_realtime_end_tip();
+  // @@protoc_insertion_point(field_mutable:guildpb.GuildTrialLaunchRecord.realtime_end_tip)
+  return _s;
+}
+inline const ::std::string& GuildTrialLaunchRecord::_internal_realtime_end_tip() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.realtime_end_tip_.Get();
+}
+inline void GuildTrialLaunchRecord::_internal_set_realtime_end_tip(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.realtime_end_tip_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GuildTrialLaunchRecord::_internal_mutable_realtime_end_tip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.realtime_end_tip_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GuildTrialLaunchRecord::release_realtime_end_tip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.GuildTrialLaunchRecord.realtime_end_tip)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.realtime_end_tip_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.realtime_end_tip_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GuildTrialLaunchRecord::set_allocated_realtime_end_tip(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.realtime_end_tip_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.realtime_end_tip_.IsDefault()) {
+    _impl_.realtime_end_tip_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:guildpb.GuildTrialLaunchRecord.realtime_end_tip)
 }
 
 // -------------------------------------------------------------------

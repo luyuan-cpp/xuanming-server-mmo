@@ -345,6 +345,8 @@ lib 的三个模板经新参数 `New-ClientEntryPodCommon -SecretEnv` 注入。d
 
 前置:清掉 `MMORPG_*` 环境变量(dev 基线用例假定都没设):`Get-ChildItem Env:MMORPG_* | ForEach-Object { Remove-Item "Env:$($_.Name)" }`。
 每条记下通过数 / 失败数与退出码;与本节无关的红按文件归属单独汇报(同一工作区有其他会话的在途改动)。
+已有证据(11-10 核对):11-08 Codex 命名审查复验(PROGRESS 同日「剩余三处 Go 测试获准适配,相关检查全部通过」)里,shared、login、scene_manager、data_service
+的生产 build 与完整 `go vet ./...` 均 exit 0,本节在这四个模块里的改动(vet 也编译 `_test.go`)随之过了编译与 vet。本节的单测、其余六个服务(player_locator、match、trade、friend、player_inbox、guild)、部署契约与回归没有运行记录,仍按下列各步执行。
 
 1. 格式:仓库根 `gofmt -l go/shared/redisauth go/login go/data_service go/player_locator go/scene_manager go/match go/trade go/friend go/player_inbox go/guild` 应无输出。
 2. Go(在各模块目录分别执行,任一失败就停下报告):
@@ -360,12 +362,22 @@ lib 的三个模板经新参数 `New-ClientEntryPodCommon -SecretEnv` 注入。d
 4. 回归,不应新增失败:`k8s_migrate_gate.tests.ps1`、`lobby_authority_render.tests.ps1`、`k8s_redis_split_contract.tests.ps1`、`redis_player_cluster_contract.tests.ps1`、
    `k8s_client_entry_contract.tests.ps1`、`logical_db_deploy_contract.tests.ps1`、`login_metrics_contract.tests.ps1`、`k8s_gate_drain.tests.ps1`、
    `k8s_login_auth_provider_guard.tests.ps1`。
-5. dev 档逐字不变的直接证据(建议做):补丁 11-06 已直接打入主工作区,打入前没有留 DryRun 基线,改用比对脚本
-   `docs/handoff/shared-redis-secret-20261106/shared-redis-secret-dev-compare.ps1`,在仓库根执行 `pwsh -NoProfile -File <该路径>`(11-06 会话 worktree 删除前已把补丁、比对脚本和它要用的 `k8s_deploy.ps1` 备份按原相对布局挪到这里)。
-   - 脚本用打入前的 `k8s_deploy.ps1` 备份,以及「备份 + 本补丁」两份脚本,各跑一次 dev zone-up 与带全局 Go 服务的 dev infra-up(只用 `-DryRun`),逐字比对输出。
-   - 两份只差本补丁,其他会话之后对主工作区的改动不会混进来。临时目录名与临时脚本名先归一。
-   - 通过的标志是两组都打印 `IDENTICAL`、退出码 0;不同时打印第一处差异的行号,两份全文留在 `%TEMP%`。
-   - 脚本、补丁及所需备份已保留在上述交接目录,删除原 worktree 不影响这一步;备份脚本已单独解除 Git 忽略,后续提交时应连同交接附件一起纳入。
+5. dev 档生成物不变的直接证据(建议做):补丁 11-06 已直接打入主工作区,打入前没有留 DryRun 基线,改用比对脚本
+   `docs/handoff/shared-redis-secret-20261106/shared-redis-secret-dev-compare.ps1`(补丁、比对脚本和它要用的 `k8s_deploy.ps1` 备份按原相对布局放在这里,11-06 已随 `1194c4d46` 入库)。在仓库根依次执行:
+   - 重判 11-06 留存的输出(不跑 DryRun,几秒;`build/` 不入库,这个目录被清掉就只做下一条):`pwsh -NoProfile -File docs/handoff/shared-redis-secret-20261106/shared-redis-secret-dev-compare.ps1 -SavedOutputDir build/redis-secret-finish-20261106`。
+   - 现跑一次:`pwsh -NoProfile -File docs/handoff/shared-redis-secret-20261106/shared-redis-secret-dev-compare.ps1 -ControlRun`。
+     脚本用打入前的 `k8s_deploy.ps1` 备份,以及「备份 + 本补丁」两份脚本,各跑一次 dev zone-up 与带全局 Go 服务的 dev infra-up(只用 `-DryRun`)。
+     两份只差本补丁,其他会话之后对 `k8s_deploy.ps1` 的改动不会混进来;临时目录名与临时脚本名先归一。`-ControlRun` 另把改前那份再跑一次,打印它与自己第一次的输出内容、顺序是否相同。
+     两份 11-06 的脚本读的是主工作区当前的 lib、manifest 与服务 yaml:若改前、改后两次 DryRun 报同一个错,是这些输入后来改了、旧脚本跑不动,不算本补丁失败,报告错误、以上一条的结果为准。
+   - 判据(11-10 改):每份 manifest 逐字相同、份数相同,manifest 之外的输出行也一一对应,先后不计。通过的标志是两组都打印 `IDENTICAL CONTENT`、退出码 0;
+     不同时列出只出现在一边的 manifest(kind/name)与输出行。现跑的两份全文在 `%TEMP%\shared-redis-dev-{zone-up,infra-up}-{before,after}.txt`。
+   - 为什么不按全文顺序比:`Apply-GlobalGoSvcManifests` 按 `Get-GlobalGoSvcNames` 遍历 `$GoSvcCatalogue`,`Apply-JavaSvcManifests` 遍历 `$JavaSvcCatalogue.Keys`,两份目录都是普通哈希表 `@{}`。
+     哈希表按键的哈希值分桶,.NET 的字符串哈希每个进程随机取种子,同一份脚本跑两次,这几个服务的先后就可能不同。补丁没改这两处,也没改两份目录。
+   - 11-06 的结果:Codex 用旧判据(按全文顺序逐字比)跑了一次,四次 DryRun 都退出 0,两组都判 DIFFERENT,第一处差异在第 2561 / 2670 行(`build/redis-secret-finish-20261106/dev-compare.log`)。
+     Codex 当时按 manifest 内容哈希与出现次数做了只读核查:zone-up 20 份、infra-up 40 份清单一致,其余输出行及次数也一致,差别在服务渲染先后;按原门禁没有算通过。
+     11-10 Claude 逐行复核同一组留存全文,结论相同:zone-up 两边各 20 份 manifest、87 行其余输出,infra-up 各 40 份、154 行,一一对应。
+     zone-up 第一处换位是 auth 缺 manifest 的告警与 gateway 的 apply 谁先,infra-up 第一处是全局服务 chat / friend / player-inbox / match 的 ConfigMap 与迁移 Job 谁先。
+     门禁因此改成上面的判据;读留存文件只是核对,不算运行证据,以 Codex 按上面两条命令跑出的结果为准。
 6. 可选,要拉镜像,先征得负责人同意:kind 上带 `MMORPG_REDIS_PASSWORD` 跑全新 `infra-up` 与一个 `zone-up`,核对各 Go 服务与 gateway 都能连上 Redis(无 NOAUTH),
    并确认 `@(kubectl get cm -n <ns> -o yaml | Select-String -SimpleMatch -Pattern $env:MMORPG_REDIS_PASSWORD).Count` 为 0(口令从环境变量取,不敲在命令行上);
    再只换口令重跑,确认各 Deployment 滚动、新 Pod 用新口令。
@@ -374,9 +386,12 @@ lib 的三个模板经新参数 `New-ClientEntryPodCommon -SecretEnv` 注入。d
 
 - Secret 注入、指纹滚动、Spring 嵌套占位的解析都没有在集群上跑过(§9.5 第 6 步)。Spring 那一条与 `admin.api-key` 的既有先例一样,只按文档核对过。
 - Spring 会把占位解析出来的值再当占位解析一遍:口令里含 `${…}` 会被改写或解析失败。这是既有行为(以前写明文时同样如此),Go 与 C++ 不受影响。
-  字符集检查没有拦 `$`,本批不改;生成口令时不要用 `$`。
-- 同一批 ConfigMap 里还有别的明文:MySQL 口令(`MMORPG_MYSQL_PASSWORD`)、gateway 数据源口令、`GateTokenSecret`、`Secrets.InternalAuth`、排队令牌密钥。
-  属同类问题,不在本批范围,建议另立任务按同一套做法迁移。
-- 玩家域 Redis 口令(`PLAYER_REDIS_PASSWORD`)给 Go 服务注入了环境变量,但 Go 服务的 Pod 模板没有对应指纹,只换玩家域口令时 Go 服务不滚动(既有缺口,本批没动)。
+  11-11 起部署 gateway 时由 `Assert-SpringPlaceholderSafe` 拒绝含 `${` 的共享 Redis 口令(以及 gate 令牌、数据源口令、管理面口令),
+  单独的 `$` 不受影响(`docs/design/workload-secrets-via-k8s-secret.md` §4.3)。
+- 同一批 ConfigMap 里别的明文(MySQL 口令、gateway 数据源口令、`GateTokenSecret`、`Secrets.InternalAuth`、排队令牌,以及盘点时又找到的 battle / 观战令牌、
+  match 运营入口密钥):11-10 起按同一套做法改走 Secret,见 `docs/design/workload-secrets-via-k8s-secret.md`(未编译、未测试)。
+- 玩家域 Redis 口令(`PLAYER_REDIS_PASSWORD`)的 Go 服务指纹:11-10 补上 `mmorpg.io/player-redis-auth-hash`(同上设计文档批 4),只换玩家域口令时 Go 服务也滚动。
+- 部署脚本的 DryRun 输出与 apply 先后不固定:11-10 已把 `Get-GlobalGoSvcNames` 与两处 `$JavaSvcCatalogue.Keys` 遍历改为按名字排序(同上设计文档批 1)。
+  本节比对脚本按内容比的判据不变:它比的是 11-06 的旧脚本,旧脚本仍是乱序。
 - Java 版(AGENTS.md §12):核对了 `D:\luyuan\xuanming-server-mmo`,`deploy/` 下只有 compose、docker、sql、ci,没有 K8s 清单、ConfigMap 或 `secretKeyRef`。
   本批是本仓库 K8s 部署侧与 Go 配置加载的改动,**不适用**,不往 PARITY 加行。本仓库的 `java/gateway_node` 属于 C++/Go 版,代码不用改。

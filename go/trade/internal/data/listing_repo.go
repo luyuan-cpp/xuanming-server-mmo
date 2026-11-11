@@ -331,7 +331,8 @@ func (r *ListingRepo) DeleteFavorite(ctx context.Context, playerID, listingID ui
 //
 // 为什么收藏的两条写都不许自动提交(客户端请求按会话保序,docs/design/client-request-ordering.md §6.1):
 // 请求截止时 go-sql-driver 只断开连接、不发 KILL QUERY。自动提交的语句若正排在这一行的锁后面,服务端会一直等到
-// 拿到锁或 innodb_lock_wait_timeout(trade 的连接串没设,MySQL 缺省 50 s),拿到锁后照样执行并**自动提交** ——
+// 拿到锁或 innodb_lock_wait_timeout(当时连接没设,MySQL 缺省 50 s;现由 authoritysql 逐连接设为 1 s,见 svc/session_lock_wait.go,
+// 上限只缩短等待,不阻止拿到锁之后照常执行),拿到锁后照样执行并**自动提交** ——
 // 此时路由服早已回超时、gate 已放行同一会话的下一条,这条写就晚于下一条落地。例如"取消收藏"超时后紧接着"收藏":
 // 收藏的存在性预读看到行还在、直接回成功,迟到的 DELETE 随后落地,商品已不在收藏里,客户端却以为在。
 // 放进显式事务后,没走到 COMMIT 就不会提交:语句跑过截止时 database/sql 回滚并丢弃连接,服务端在连接断开时

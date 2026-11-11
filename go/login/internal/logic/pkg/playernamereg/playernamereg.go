@@ -11,7 +11,7 @@
 // 唯一性的提交点,**结果未知**(超时 / 连接断)与**确定没写**(未配置 / 被拒)必须能被
 // 调用方区分开:前者要补偿释放,后者一释放就可能删掉别人的登记。所以本包刻意做得很薄:
 // 不套超时、不重试、不吞错、不打日志、不出指标 —— 这些都属于调用方的编排
-// (建角要 1s 单次 + 3s 总预算 + 同名重试一次,读侧只要 500ms 且失败即放行),
+// (建角要 800ms 单次 + 按截止分摊的名字一跳 + 同名重试一次,读侧只要 500ms 且失败即放行),
 // 包在这里只会让调用方拿不到它需要的那一层错误信息。
 //
 // 设计:docs/design/guild-phase2/03-names.md §3.10 / §3.11。
@@ -36,9 +36,11 @@ import (
 var ErrUnavailable = errors.New("player name registry unavailable")
 
 const (
-	// DefaultReserveTimeout 是单次 ReservePlayerName 的预算。一次登记 = 一条走唯一键的
-	// INSERT,稳态远低于 1s;给到 1s 是为了让建角的 3s 总预算里放得下「一次 + 同名重试一次」。
-	DefaultReserveTimeout = 1000 * time.Millisecond
+	// DefaultReserveTimeout 是单次 ReservePlayerName 的预算,也是建角名字这一跳的下限与同名重试的门槛。
+	// 一次登记 = 一条走唯一键的 INSERT,稳态在毫秒级。名字这一跳的上限是「一次 + 同名重试一次」= 2 × 本值 + 100ms
+	// (login/internal/logic/pkg/createbudget.NameCap),四跳加起来要放进 zrpc Timeout(4000),所以从原先的
+	// 1000ms(配原先 3s 的名字总预算)收到 800ms,与 player_route 登记、SQL 账号目录提交两条写 RPC 同档(2026-11-10)。
+	DefaultReserveTimeout = 800 * time.Millisecond
 	// DefaultReleaseTimeout 是单次 ReleasePlayerName(建角补偿)的预算。
 	DefaultReleaseTimeout = 1000 * time.Millisecond
 	// DefaultLookupTimeout 是读侧 BatchGetPlayerName 的预算。它串在登录 / 进游戏上,

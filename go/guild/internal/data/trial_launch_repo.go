@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"guild/internal/constants"
+	base "proto/common/base"
 	pb "proto/guild"
 	matchpb "proto/match"
 	"shared/accountdirectory"
@@ -26,10 +27,13 @@ const trialLaunchColumns = "request_id,battle_id,state,original_proto,request_di
 const (
 	// trialSettledLobbyEndTip:结算 / 标毒同事务关大厅。这一局有结果,客户端按结果显示,不写结束原因。
 	trialSettledLobbyEndTip uint32 = 0
-	// trialCancelledLobbyEndTip:作废释放(核签的零 battle 取消墓碑,或 formation=5 的发房前中止 / SQL ABORT)写的结束原因
-	// (2026-11-05 修复,r2-guild#1 评审第 5 条)。暂用已有的 kGuildTrialServiceBusy:取消墓碑就是「开战没成」,文案准确;
-	// 开局后战斗作废还没有专用码 —— Tip.xlsx 加 kGuildTrialBattleAborted 并导表之后,只改这一行。
-	trialCancelledLobbyEndTip = constants.ErrTrialServiceBusy
+	// 作废释放写的默认结束原因(2026-11-05 修复,r2-guild#1 评审第 5 条;2026-11-11 按回执拆成两个,见 cancelledTrialLobbyEnd):
+	// trialNotStartedLobbyEndTip:核签的零 battle 取消墓碑(Start 没发出、被拒或结局未知后被取消)而实时路径没记下具体原因,
+	// 「开战没成」,沿用 kGuildTrialServiceBusy;
+	// trialBattleAbortedLobbyEndTip:回执带对局(formation=5 的发房前中止或 SQL ABORT),这一局作废、结果不计,用专用码
+	// kGuildTrialBattleAborted(此前也写「服务繁忙」,与事实不符)。
+	trialNotStartedLobbyEndTip    = constants.ErrTrialServiceBusy
+	trialBattleAbortedLobbyEndTip = constants.ErrTrialBattleAborted
 )
 
 func (r *ActivityRepo) TrialLaunchEnabled() bool {
@@ -191,7 +195,7 @@ func (r *ActivityRepo) PrepareTrialLaunch(ctx context.Context, requestID uint64,
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO guild_trial_launch("+trialLaunchColumns+",next_check_ms) VALUES(?,0,1,?,?,?,?,?,?)", requestID, raw, sum[:], nowMs, nowMs, []byte{}, trialFirstCheckMs(lobby.LaunchDeadlineMs, sqlNowMs))
+		_, err = tx.ExecContext(ctx, "INSERT INTO guild_trial_launch("+trialLaunchColumns+",next_check_ms,realtime_end_tip) VALUES(?,0,1,?,?,?,?,?,?,?)", requestID, raw, sum[:], nowMs, nowMs, []byte{}, trialFirstCheckMs(lobby.LaunchDeadlineMs, sqlNowMs), []byte{})
 		if err != nil {
 			return err
 		}
@@ -244,7 +248,7 @@ func (r *ActivityRepo) lockTrialLaunch(ctx context.Context, tx *sql.Tx, battle T
 	}
 	if row.State == 3 {
 		if terminal {
-			return closeProvenTrialLobby(ctx, tx, lobby, trialSettledLobbyEndTip, nowMs)
+			return closeProvenTrialLobby(ctx, tx, lobby, trialSettledLobbyEndTip, nil, nowMs)
 		}
 		return ErrWriteConflict
 	}
@@ -275,7 +279,7 @@ func (r *ActivityRepo) lockTrialLaunch(ctx context.Context, tx *sql.Tx, battle T
 				return err
 			}
 		}
-		return closeProvenTrialLobby(ctx, tx, lobby, trialSettledLobbyEndTip, nowMs)
+		return closeProvenTrialLobby(ctx, tx, lobby, trialSettledLobbyEndTip, nil, nowMs)
 	}
 	return nil
 }
@@ -341,6 +345,9 @@ const (
 	// 只对从未认领(check_attempts=0)、仍是 state1 且没有 battle 的原件生效,且只往前提、不往后推:重复调用、
 	// 原件已被认领或已登记对局 / 已终结时影响 0 行,调度回到认领与退避。
 	sqlExpediteTrialLaunchCheck = "UPDATE guild_trial_launch SET next_check_ms=" + trialSQLNowMs + " WHERE request_id=? AND state=1 AND battle_id=0 AND check_attempts=0 AND next_check_ms>" + trialSQLNowMs
+	// sqlRecordTrialLaunchEndTip:记下实时路径的结束原因,自动提交、只改这一列。只写一次(已有记录不覆盖),只对还没登记对局、
+	// 没终结的 state1 原件写 —— 与提前检查同一前提;原件已登记对局或已终结时影响 0 行。
+	sqlRecordTrialLaunchEndTip = "UPDATE guild_trial_launch SET realtime_end_tip=? WHERE request_id=? AND state=1 AND battle_id=0 AND LENGTH(realtime_end_tip)=0"
 )
 
 // trialFirstCheckMs 是新原件的首次检查时刻(SQL 时钟毫秒):开局截止与 Prepare 提交时刻两者较晚者,再加 TrialRecoveryGrace。
@@ -367,6 +374,45 @@ func (r *ActivityRepo) ExpediteTrialLaunchCheck(ctx context.Context, requestID u
 	}
 	_, err := r.db.ExecContext(ctx, sqlExpediteTrialLaunchCheck, requestID)
 	return err
+}
+
+// RecordTrialLaunchEndReason 由实时开局路径在「match 已确定地没有开成这一局」时、提前检查之前调用(2026-11-11,r2-guild#1 残余):
+// 把回给发起人的结束原因(tip id 与参数,如「某人离线」)记在 launch 原件上。原件在途时大厅结束不了(endPendingLobby 拒绝),
+// 大厅由恢复器凭取消墓碑释放时才关;没有这条记录,名单上其他人看到的是默认的「服务繁忙」。只影响展示,不参与释放判定;
+// 写失败调用方只打日志,释放照常,只是原因退回默认。幂等,只写一次;没有这一行(Prepare 未提交)时影响 0 行,返回 nil。
+func (r *ActivityRepo) RecordTrialLaunchEndReason(ctx context.Context, requestID uint64, tip *base.TipInfoMessage) error {
+	if r.guilds == nil || r.guilds.fence == nil {
+		return nil
+	}
+	if requestID == 0 || tip.GetId() == 0 {
+		return ErrWriteConflict
+	}
+	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(tip)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx, sqlRecordTrialLaunchEndTip, raw, requestID)
+	return err
+}
+
+// cancelledTrialLobbyEnd 是作废释放写进大厅的结束原因与参数:
+//   - 回执带对局(开局后 SQL ABORT,或发房前中止):trialBattleAbortedLobbyEndTip,这一局作废、结果不计;
+//   - 零 battle 的取消墓碑(Start 被 match 拒绝、根本没发,或结局未知后被取消)且实时路径记下了原因(realtime_end_tip):
+//     用它,名单上所有人看到与发起人同一个具体原因;没有记录时 trialNotStartedLobbyEndTip。
+// 调用方已持这一行的 FOR UPDATE 锁。原字节解不开或 tip 为 0 时退回默认(只影响展示,不让坏的展示数据挡住释放)。
+func cancelledTrialLobbyEnd(ctx context.Context, tx *sql.Tx, requestID uint64, receipt *matchpb.CancelActivityBattleResponse) (uint32, []string, error) {
+	if receipt.GetBattleId() != 0 {
+		return trialBattleAbortedLobbyEndTip, nil, nil
+	}
+	var raw []byte
+	if err := tx.QueryRowContext(ctx, "SELECT realtime_end_tip FROM guild_trial_launch WHERE request_id=?", requestID).Scan(&raw); err != nil {
+		return 0, nil, err
+	}
+	tip := &base.TipInfoMessage{}
+	if len(raw) == 0 || proto.Unmarshal(raw, tip) != nil || tip.GetId() == 0 {
+		return trialNotStartedLobbyEndTip, nil, nil
+	}
+	return tip.GetId(), tip.GetParameters(), nil
 }
 
 // trialRecheckDelay 是第 attempts 次认领(从 0 数)之后到下一次检查的间隔。jitter 取 [0,1),由调用方给(单测可固定)。
@@ -484,8 +530,8 @@ func TrialCancelReceiptIsTerminal(receipt *matchpb.CancelActivityBattleResponse)
 // receipt仅由显式注入且验证match回复签名/原请求摘要的适配器传入，客户端无此入口。
 // 终局证明与ACTIVE解除同事务保存；未知提交重读原launch，不发新Start/新名单。
 // 多副本同时拿到同一份终态回执时只有一次真正迁移：原 launch 行 FOR UPDATE，已是 state3 的重放只关闭大厅、不再改任何行。
-// 同一事务里:大厅写 ENDED 并带结束原因 trialCancelledLobbyEndTip;帮会还在时对局行经 settleCancelledTrialBattle 记 SETTLED/LOSS,
-// 帮会已解散时不碰对局行。锁序 P→G→大厅/slot→launch→role→T。
+// 同一事务里:大厅写 ENDED 并带结束原因(cancelledTrialLobbyEnd:实时路径记下的业务拒绝原因,没有则按回执取 trialNotStartedLobbyEndTip / trialBattleAbortedLobbyEndTip);
+// 帮会还在时对局行经 settleCancelledTrialBattle 记 SETTLED/LOSS,帮会已解散时不碰对局行。锁序 P→G→大厅/slot→launch→role→T。
 func (r *ActivityRepo) FinishCancelledTrialLaunch(ctx context.Context, original *pb.GuildTrialLaunchOriginal, receipt *matchpb.CancelActivityBattleResponse, nowMs uint64) error {
 	if original == nil || !TrialCancelReceiptIsTerminal(receipt) {
 		return ErrWriteConflict
@@ -516,8 +562,12 @@ func (r *ActivityRepo) FinishCancelledTrialLaunch(ctx context.Context, original 
 		if !proto.Equal(saved, original) || row.BattleId != 0 && row.BattleId != receipt.BattleId {
 			return ErrWriteConflict
 		}
+		endTip, endParams, err := cancelledTrialLobbyEnd(ctx, tx, saved.RequestId, receipt)
+		if err != nil {
+			return err
+		}
 		if row.State == 3 {
-			return closeProvenTrialLobby(ctx, tx, lobby, trialCancelledLobbyEndTip, nowMs)
+			return closeProvenTrialLobby(ctx, tx, lobby, endTip, endParams, nowMs)
 		}
 		if err := r.verifyTrialOwners(ctx, tx, saved); err != nil {
 			return err
@@ -546,7 +596,7 @@ func (r *ActivityRepo) FinishCancelledTrialLaunch(ctx context.Context, original 
 				return err
 			}
 		}
-		return closeProvenTrialLobby(ctx, tx, lobby, trialCancelledLobbyEndTip, nowMs)
+		return closeProvenTrialLobby(ctx, tx, lobby, endTip, endParams, nowMs)
 	})
 	if err == nil {
 		r.guilds.releaseTrialOccupancy(ctx, original.RequestId, launchPlayers(original))

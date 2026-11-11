@@ -19,15 +19,13 @@ import (
 // 覆盖正式清单中的全部表和生产注册入口;不打开数据库,不执行任何 SQL。
 // 存量账号键必须继续使用有界完整列,不能随依赖替换退化成 TEXT 前缀主键。
 func TestRegisteredTableSchemaContract(t *testing.T) {
-	previousDB := DB
 	previousJSONPath := config.AppConfig.ServerConfig.JsonPath
 	t.Cleanup(func() {
-		DB = previousDB
 		config.AppConfig.ServerConfig.JsonPath = previousJSONPath
 	})
 	config.AppConfig.ServerConfig.JsonPath = filepath.Join("..", "..", "..", "..", "..", "..", "generated", "data", "mysql_database_table_list.json")
-	DB = &GameDB{SqlModel: proto2mysql.NewDB()}
-	tables, err := RegisterTables()
+	model := proto2mysql.NewDB()
+	tables, err := RegisterTables(model)
 	if err != nil {
 		t.Fatalf("注册正式表清单: %v", err)
 	}
@@ -44,7 +42,7 @@ func TestRegisteredTableSchemaContract(t *testing.T) {
 			if got := proto2mysql.GetTableName(table); got != name {
 				t.Fatalf("运行期表名 %q 与声明 %q 不一致", got, name)
 			}
-			ddl := DB.SqlModel.GetCreateTableSQL(table)
+			ddl := model.GetCreateTableSQL(table)
 			primary, _ := proto.GetExtension(md.Options(), dbopts.E_OptionPrimaryKey).(string)
 			if primary == "" {
 				t.Fatal("正式表缺少声明的主键")

@@ -5,11 +5,12 @@
 #include "hexagons_grid.h"
 #include "view.h"
 #include "proto/common/component/actor_comp.pb.h"
+#include "spatial/constants/view.h"
 
 #include <modules/scene/comp/scene_comp.h>
 #include <thread_context/ecs_context.h>
 
-const Point kDefaultSize(20.0, 20.0);
+const Point kDefaultSize(kAoiHexSize, kAoiHexSize);
 const Point kOrigin(0.0, 0.0);
 const auto kHexLayout = Layout(layout_flat, kDefaultSize, kOrigin);
 

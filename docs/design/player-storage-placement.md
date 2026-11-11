@@ -1,6 +1,6 @@
 # 玩家存储落点(Placement):归属与存储拆分、单玩家搬库、Phase 2 全局库
 
-> **2026-11-06 现状(先读)**:新号的落点规则已改为「每地域固定 K 个地域存档库,按 `player_id % K` 选库」,和区无关,决定与拆批见[总体方案 §7.2](./player-data-tidb-scaling-plan.md)。本文的落点编号、库名规则(§4.2)、目录只记 `storage_id`、go/db 只按目录选库这几条仍然成立;「新号钉全局库 `player_store_1000000_db`、存量按 zone 冻结式搬库」(Phase 2)和 `NewPlayerStorageId` 已被取代:按玩家搬库不做(10-31 定),扩容靠整库搬集群;本机与 docker 调试栈的新号落 `player_store_1000000_db`(地域 0 的唯一地域库,A17a),K8s 在 A17b 之前仍落本区库。下面各节保留当时的推导,正文按 §7.2 重写列在 A17c。
+> **2026-11-06 现状(先读)**:新号的落点规则已改为「每地域固定 K 个地域存档库,按 `player_id % K` 选库」,和区无关,决定与拆批见[总体方案 §7.2](./player-data-tidb-scaling-plan.md)。本文的落点编号、库名规则(§4.2)、目录只记 `storage_id`、go/db 只按目录选库这几条仍然成立;「新号钉全局库 `player_store_1000000_db`、存量按 zone 冻结式搬库」(Phase 2)和 `NewPlayerStorageId` 已被取代:按玩家搬库不做(10-31 定),扩容靠整库搬集群;本机与 docker 调试栈的新号落 `player_store_1000000_db`(地域 0 的唯一地域库,A17a);K8s 按 `-Region`、`-PlayerStoreShards` 落本地域的 K 个存档库,login 没配 `StorageShards` 拒绝启动,`NewPlayerStorageId` 已删(A17b,2026-11-10 落码未编译)。下面各节保留当时的推导,正文按 §7.2 重写列在 A17c。
 > **状态**: v2.4 — 2026-10-12(v2.4 只做现状校准,设计不变:运行状态、启用状态、§8.2 / §10.4 / §11.4 与事实对齐,见 §16)。v1 经 5 视角对抗评审(42 条成立,含 2 条 blocker)后重写,见 §16;v2.1 按同批落码的实现汇报修订了与实现不符之处(各节标「实现口径」);v2.2 同步复核修复的行为变化(标「v2.2」);v2.3 只改 §4.3 / §9 / §10.1 的能力标记参数口径。汇总见 §16。
 > **运行状态(2026-10-12)**:代码随 `4493b3c9f`(2026-09-29)进 main;同日跑过一轮验证(Go 各模块 build / vet / test 全过、merge_zone 集成测试 83 条 PASS(67 个顶层 + 16 个子用例)、data_service Redis 集成 31 个 PASS、C++ `cross_zone_test` 105/105),由 Claude 按用户指示执行、不是 Codex(PROGRESS.md「2026-09-28 玩家存储落点」条目的「运行验证」)。`-race`、压测、真实集群演练从未做;C++ 整方案编译被与本方案无关的既有问题挡住。**之后 `be6b4ab1d`(10-08)改了 go/db 的重试队列认领与 `tools/merge_zone` 的预检 / 审计,均未编译,当前 HEAD 待按 [placement-reverify-checklist-20261012.md](../handoff/placement-reverify-checklist-20261012.md) 复验。**
 > **启用状态(2026-10-12)**:所有环境 `PinOnCreate=false`、`Required=false`,K8s ConfigMap 不写 `Placement` 段;没有执行过 pin 合服 / pin-placement / relocate 的记录;`player_store_1000000_db` 没有在任何部署里建过;玩家主库全部在 MySQL(dev `127.0.0.1:3306`,K8s `mysql:8.0`),TiDB 只有 dev 的 `deploy/docker-compose.tidb.yml`。所以现网的有效落点 = home_zone 对应的 `zone_{home}_db`,逻辑归属与物理库仍一一对应。
@@ -141,10 +141,10 @@ TiDB 决策 D1 的「映射持久化兜底表」仍是遗留项(§11.4)。
   按需打开**从不建库**,只 Ping + 只读 schema 闸;白名单防「ZoneId 填错静默建新库」的原有语义不变。
 - 前提:所有落点库与 go/db 的 `Database.Hosts` 在同一 MySQL 实例 / TiDB 集群(与合服工具同一前提)。
 - 每库独立 `*sql.DB` + proto2mysql 模型(proto2mysql 靠 DSN 默认库选库)。不设库数上限。
-  额外库(本 zone 库之外)的连接池按库所属家族分两组旋钮(2026-10-13 G2b 批 C:已落码,未编译、未测试;本 zone 库仍用 `ServerConfig.Database.MaxOpenConn` / `MaxIdleConn`):
-  - `Placement.ZoneStoreMaxOpenConn` / `ZoneStoreMaxIdleConn`:**每个**额外 zone 家族库 `zone_{1..999999}_db` 的池(冷缓存访客读、合服 pin 后的源区库);
-  - `Placement.NonZoneStoreMaxOpenConn` / `NonZoneStoreMaxIdleConn`:**每个**非 zone 落点库 `player_store_{≥1000000}_db` 的池(Phase 2);
-  - `Placement.ExtraStoreConnMaxIdleSeconds`(默认 60):两类额外库池共用的 `SetConnMaxIdleTime`,空闲超过这么多秒的连接即关闭,冷库的池回到 0 条,不再按 MaxIdleConn 常驻。
+  连接池只有一类(2026-11-11 A17c:go/db 不再有本区库,zone 存档库家族已退役,[总体方案 §7.2](./player-data-tidb-scaling-plan.md)):
+  - `Placement.StoreMaxOpenConn` / `StoreMaxIdleConn`:**每个**地域存档库 `player_store_{≥1000000}_db` 的池,服务 yaml 写的是本地域只有一个库时的预算,K8s 按 `max(2, ceil(预算 / K))` 摊到每个库;
+  - `Placement.StoreConnMaxIdleSeconds`(默认 60):存档库池的 `SetConnMaxIdleTime`,空闲超过这么多秒的连接即关闭,冷库的池回到 0 条,不再按 MaxIdleConn 常驻。
+  - 更早的 `ZoneStore*` / `NonZoneStore*` / `ExtraStore*` 与本区库池 `ServerConfig.Database.MaxOpenConn` / `MaxIdleConn` 都已删除。
     `ConnMaxLifetime` 仍是 5 分钟,所以本值大于 300 等于不生效;
   - 旧键 `Placement.ExtraStoreMaxOpenConn` / `ExtraStoreMaxIdleConn` 仍认,但只作回落:新键没写(≤ 0)时两类库都取旧键的值,旧键也没写再取默认 8 / 2
     (`go/db/internal/config/config.go` 的 `Normalize`,优先级 新键 > 旧键 > 默认;「只写旧键」的旧部署两类库维持原来的大小)。新配置不要再写旧键。
@@ -395,7 +395,7 @@ TiDB 决策 D1 的「映射持久化兜底表」仍是遗留项(§11.4)。
 - 真实集群演练:pin 合服 + relocate + 反向 relocate,各跑一次并记录耗时。
 - 压测:go/db 每条写多一次 MGET、落库后一次 GET,按 AGENTS.md §6 出对比表后再下性能结论。
 - data_service 号段水位地板在 `player_database` 与全局库同库时才生效(`store/schema.go`、`id_segment_store.go`),全局库落地后要复核。
-- 同表结构副本(`go/player_locator/mysql_database_table.sql`)与按 `zone_<N>_db` 清库的脚本(`stress_round19.ps1`、`currency_crash_window.ps1`)在混库后要改。
+- 同表结构副本(`go/player_locator/mysql_database_table.sql`)在混库后要改;清库脚本(`stress_round19.ps1`、`currency_crash_window.ps1`)2026-11-11 已改成按 go/login 的 `Placement` 逐个清本地域的存档库(A17c)。
 - (v2.1 补)pin 合服在 src / dst 分属不同 data Redis 集群时的 blob 处置(§10.4),目前工具要求这类部署改用 copy 模式。**已定(负责人 2026-09-28,2026-10-12 同步)**:保留拒绝,不再是待拍板项;限制本身仍在,只要部署真的拆成多个 data Redis 集群,就得先回到这一条。
 - (v2.1 补)删号流程与 `player:placement` 的关系:`DeletePlayerZone*` 只删 `player:zone`,残留的落点记录会在同 id 重新登记时被保留(§8.1)。
 - (v2.1 补)钉到非 zone 库的新号在 Redis 整体丢失后无法恢复(§4.4),依赖 D1 兜底表。

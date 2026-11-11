@@ -87,7 +87,7 @@ function Initialize-SdkBuild {
     $englishMessages = Join-Path $toolset.FullName "bin/Hostx64/$Architecture/1033/clui.dll"
     $effectiveUseVS = [bool]$UseVSGenerator -or -not (Test-Path -LiteralPath $englishMessages -PathType Leaf)
     if ($effectiveUseVS -and -not $UseVSGenerator) {
-        Write-Host '[SDK] 当前 MSVC 没有英文诊断包，使用已有 VS 生成器保证依赖跟踪。'
+        Write-Host '[SDK] This MSVC has no English diagnostics pack; using the installed VS generator to keep dependency tracking.'
     }
     $generatorSuffix = if ($effectiveUseVS) { 'vs' } else { 'ninja' }
     $buildPath = Resolve-SdkArtifactPath $repoRoot (Join-Path $artifactRoot ".build_${sdkSuffix}_$generatorSuffix")
@@ -154,7 +154,7 @@ function Invoke-SdkCMake {
     param([hashtable]$Context, [string]$Source, [string]$Build,
         [string[]]$Options = @(), [string[]]$Targets = @())
     $cmake = $Context.CMake
-    Write-Host "[SDK] $Source；$($Context.Configuration)/$($Context.Architecture)；$Build"
+    Write-Host "[SDK] $Source; $($Context.Configuration)/$($Context.Architecture); $Build"
     & $cmake -S $Source -B $Build @($Context.ConfigureArgs) @Options
     if ($LASTEXITCODE -ne 0) { throw "SDK 配置失败，退出码 $LASTEXITCODE；保留现场：$Build" }
     $buildArgs = @('--build', $Build, '--config', $Context.Configuration, '--parallel', '1')
@@ -171,5 +171,5 @@ function Assert-SdkArtifacts([hashtable]$Context, [string[]]$Files) {
         $path = Join-Path $Context.InstallPath $relative
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "SDK 安装缺少预期产物：$path" }
     }
-    Write-Host "[完成] $($Context.Configuration)/$($Context.Architecture) SDK 已安装：$($Context.InstallPath)"
+    Write-Host "[done] $($Context.Configuration)/$($Context.Architecture) SDK installed: $($Context.InstallPath)"
 }

@@ -4,6 +4,7 @@
 
 #include "node/system/node/node_entry.h"
 #include "node/system/etcd/etcd_transport.h"
+#include "network/client_message_sender.h"
 #include "infra/agones/agones_gameserver_lifecycle.h"
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "handler/rpc/scene_handler.h"
@@ -11,6 +12,7 @@
 #include "core/config/config.h"
 #include "world/world.h"
 #include "world/scene_ownership_reconciler.h"
+#include "spatial/system/aoi_load.h"
 #include "core/system/redis.h"
 #include "core/system/scene_task_scope.h"
 #include "frame/manager/frame_time.h"
@@ -20,12 +22,15 @@
 #include "player/system/player_save_metrics.h"
 #include "player/system/player_equip.h"
 #include "player/system/player_inbox_system.h"
+#include "player/system/player_mail_outbox.h"
 #include "player/system/player_mystery_merchant.h"
 #include "battle/system/player_battle.h"
 #include "services/battle/data/battle_table_fingerprint.h"
 #include "proto/contracts/kafka/scene_command.pb.h"
 #include "handler/event/scene_kafka_command_router.h"
 #include "id_segment_bootstrap.h"
+#include "scene_planned_drain.h"
+#include "world/scene_planned_drain_rules.h"
 #include "modules/id_segment/guid_segment_registry.h"
 
 #include <chrono>
@@ -38,6 +43,8 @@ using namespace muduo::net;
 
 namespace
 {
+    // Agones 排空标签键,与 battle 同一个(main.cpp kAgonesDrainLabelKey、k8s 部署脚本)。
+    constexpr char kAgonesDrainLabelKey[] = "mmorpg.io/drain";
 
     struct SceneRuntimeContext
     {
@@ -45,6 +52,9 @@ namespace
         // 玩家持久收件箱的 1 秒 tick(PlayerInboxSystem::Tick)。刻意不挂在 DependencyGate 之后:
         // 收件箱不可用不得阻断进场(IB-7),它自己按退避处理"没有 READY 节点"。
         TimerTaskComp playerInboxTimer;
+        // 待寄邮件的 1 秒 tick(PlayerMailOutboxSystem::Tick,docs/design/battle-overflow-mail.md)。同样不挂在
+        // DependencyGate 之后:邮件不可用只让条目按退避留着。与收件箱 tick 同一组停机路径取消。
+        TimerTaskComp mailOutboxTimer;
         DependencyGate dependencyGate;
         SceneNodeGrpcImpl grpcService;
         PlayerTeamFollowScope teamFollow;
@@ -60,6 +70,8 @@ namespace
         bool shutdownDrainLogged = false;
         // 本次停机里"drain 只剩改派待确认表"的逐条清单已经打过(每次停机只打一次)。
         bool relocateBacklogLogged = false;
+        // 计划排空编排(scene_planned_drain.h)。定时器回调捕获 Node,三条停机路径与拆除钩子都会先 Stop()。
+        ScenePlannedDrain plannedDrain;
 
         explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop), teamFollow(loop), tasks(loop) {}
         // 启动途中抛异常也必须在局部 EventLoop 销毁前收掉 TLS 中的任务所有者。
@@ -116,10 +128,19 @@ int main(int argc, char *argv[])
         // TeamNodeService:队伍成员权威读取由 Match 同端口提供，只在需要刷新队伍时使用。
         // MatchNodeService:FIGHTING 冻结到期时只读查这一局的 SQL 终局(MatchInternal.GetBattleTerminalDecision,
         // 全局池,不限当前 zone;docs/design/turn-battle-gap-closure.md §11)。只在 reaper 判出冻结到期时调用。
+        // MailNodeService:两包都放不下的战斗掉落改投邮件,以 battle 身份调 MailAdmin.SendPersonalMail
+        // (全服一份、多副本,不限当前 zone;docs/design/battle-overflow-mail.md)。弱依赖:不进 DependencyGate,
+        // 发现不到只让待寄条目按退避留着,不阻断进场。
+        // 发现集合(docs/design/connection-fanout-subsetting-20261106.md §3.4)= 建连白名单 + Gate + 自身 Scene。
+        // Gate:gate 主动连进来,入站登记(registration_manager.cpp)查快照里的 gate 登记,广播用 ResolveLocalZoneGateEntity;
+        // Scene:本 zone 的同类,注册自检、劫持检测与选号要看。scene 不读 Battle、ClientRpcRouter、Login、Friend、Guild,不再看它们。
         Node node(&loop, SceneNodeService,
                   Node::CanConnectNodeTypeList{ SceneManagerNodeService, DataServiceNodeService,
                                                 PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService,
-                                                MatchNodeService },
+                                                MatchNodeService, MailNodeService },
+                  Node::DiscoveryNodeTypeList{ SceneManagerNodeService, DataServiceNodeService,
+                                               PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService,
+                                               MatchNodeService, MailNodeService, GateNodeService, SceneNodeService },
                   &handler);
 
         node::entry::detail::ApplyPostConstructionHooks<SceneNodeHooks>(node);
@@ -142,6 +163,10 @@ int main(int argc, char *argv[])
         RegisterPlayerSaveMetrics();
         // 场景归属对账的计数(scene_ownership_reconciler.h),同一个出口。
         RegisterSceneOwnershipMetrics();
+        // 每次广播发给了几台 gate 的直方图(network/broadcast_fanout_stats.h),同一个出口。
+        RegisterBroadcastFanoutMetrics();
+        // 服务器压力监控的读数:模拟步利用率、AOI 压力、因容量收缩裁掉的关注条目(spatial/system/aoi_load.h)。
+        RegisterAoiLoadMetrics();
 
         // context 先于 node 构造、晚于 node 析构:方法表闭包捕获 grpcService 的 this,服务必须活过 Node。
         node.RegisterGrpcService(context->grpcService);
@@ -165,6 +190,8 @@ int main(int argc, char *argv[])
         // 先复制实体列表,再逐个走完整 HandleExitGameNode 流程。
         auto exitAllPlayers = [&context](Node &)
         {
+            // 计划排空(如果走过)到此结束:剩下的人按停机原因存盘下线。先停它的定时器,它的回调捕获着 Node。
+            context->plannedDrain.Stop();
             context->tasks.Stop();
             context->grpcService.CloseCreationAdmission();
             // 停机后不再续段(定时器取消、不再发 gRPC);手里的号照常发完。
@@ -175,9 +202,15 @@ int main(int argc, char *argv[])
             // 顺序不能反:worker 还在跑的时候进程正在退出,health / ready 请求
             // 会打到一个正在拆的对象上。
             //
-            // 刻意**不**在这里调 POST /shutdown —— SIGTERM 通常正是 Agones
+            // SIGTERM 触发的停机刻意**不**调 POST /shutdown —— SIGTERM 通常正是 Agones
             // 删 Pod 发出来的,再回敬一个 /shutdown 就是递归触发删除。
-            // 只有进程自己决定自我终止时才调 RequestShutdown()。
+            // 只有进程自己决定自我终止时才调 RequestShutdown():Agones 排空标签触发的计划排空就是
+            // (docs/design/scene-node-planned-drain.md §4.1),请 Agones 删掉本 GameServer、由 Fleet 按当前模板补一台。
+            // Stop() 之前收下的 /shutdown 一定发出(GameServerLifecycle::RequestShutdown 的注释)。
+            if (context->plannedDrain.TriggeredByAgonesLabel())
+            {
+                agones::GameServerLifecycle::Instance().RequestShutdown();
+            }
             agones::GameServerLifecycle::Instance().Stop();
 			context->dependencyGate.probeTimer.Cancel();
 			context->worldTimer.Cancel();
@@ -213,10 +246,29 @@ int main(int argc, char *argv[])
 			}
 			LOG_INFO << "Shutdown save initiated; waiting for Redis ACK and Kafka producer flush.";
         };
+        // 拆除前收尾:业务排空之后、释放 Redis 与传输之前执行,日志 / ECS 都还活着,把没落定的存盘留一行证据(带玩家号)。
+        // 两条停机路径各挂一次:普通停机由 SetBeforeTeardown 调;维护路径(P3)关闭中继时 Node 只调 SetMaintenanceRelayStop
+        // 的钩子,随即置 beforeTeardownRan_、释放本地所有者,不再调 SetBeforeTeardown 的钩子。两处必须是同一段收尾,
+        // 否则维护路径释放 Hiredis 时持久任务还在等回包,号段传输和归属对账也没停(2026-11-11 订正,此前 P3 只停两个定时器)。
+        const auto beforeTeardown = [&context](Node &)
+        {
+            context->plannedDrain.Stop();
+            context->tasks.StopAll();
+            context->grpcService.CloseCreationAdmission();
+            StopGuidSegmentTransport();
+            context->playerInboxTimer.Cancel();
+            context->mailOutboxTimer.Cancel();
+            context->ownershipReconciler.Stop();
+            PlayerLifecycleSystem::LogUnsettledPlayerStoreSaves();
+        };
         node.SetMaintenanceInboundRelay(); // gate/Go已接收链的下游，保留到P3；根是本机世界/玩家输入。
         node.SetMaintenanceSourceClose(exitAllPlayers);
-        node.SetMaintenanceRelayStop([&context](Node &) { context->playerInboxTimer.Cancel(); });
-        node.SetBeforeShutdown([&context, exitAllPlayers](Node &n) { context->playerInboxTimer.Cancel(); exitAllPlayers(n); });
+        node.SetMaintenanceRelayStop(beforeTeardown);
+        node.SetBeforeShutdown([&context, exitAllPlayers](Node &n) {
+            context->playerInboxTimer.Cancel();
+            context->mailOutboxTimer.Cancel();
+            exitAllPlayers(n);
+        });
 
 		// 每次轮询都重新扫描在线实体。P1保留Kafka/RPC下游推进，P3才停止并join；gRPC在OnGrpcServerDrained前仍在排空,
 		// 已收完的调用照常派发,停机瞬间已经排入 EventLoop 的请求也会执行,都可能晚一拍创建玩家;不能只信首次快照。
@@ -309,16 +361,8 @@ int main(int argc, char *argv[])
 			}
 			return drained; });
 
-        // 拆除前钩子(Node::SetBeforeTeardown):日志 / ECS 都还活着,把没落定的存盘留一行证据(带玩家号)。
-        node.SetBeforeTeardown([&context](Node &)
-                               {
-                                   context->tasks.StopAll();
-                                   context->grpcService.CloseCreationAdmission();
-                                   StopGuidSegmentTransport();
-                                   context->playerInboxTimer.Cancel();
-                                   context->ownershipReconciler.Stop();
-                                   PlayerLifecycleSystem::LogUnsettledPlayerStoreSaves();
-                               });
+        // 普通停机的拆除前钩子,与维护路径的中继关闭共用 beforeTeardown(见其定义处)。
+        node.SetBeforeTeardown(beforeTeardown);
 
         // 身份冲突(etcd 租约过期 / node_id 被别人抢走)和普通 SIGTERM 不是一回事:
         // 这台节点马上就不再是 node_id 的合法持有者,但玩家的 gate 会话还连着。
@@ -329,6 +373,8 @@ int main(int argc, char *argv[])
         // 反过来做的话,新节点认领时会从 TiDB 读到存盘前的旧数据(回档)。
         node.SetOnConflictShutdown([&context](Node &, NodeIdConflictReason)
                                    {
+            // 计划排空中撞上身份冲突:整节点疏散接管(它不限速),排空的定时器不再推进。
+            context->plannedDrain.Stop();
             context->tasks.Stop();
             context->grpcService.CloseCreationAdmission();
             // 整节点疏散接管全部玩家,不再按单个场景的归属排空。
@@ -342,6 +388,18 @@ int main(int argc, char *argv[])
         // 到期兜底(go/db / SceneManager 卡住时)由 Node 的看门狗负责,不会无限等。
         node.SetConflictDrainComplete([](Node &)
                                       { return PlayerLifecycleSystem::IsEmergencyRelocateDrained(); });
+
+        // 计划排空(docs/design/scene-node-planned-drain.md):SIGTERM(K8s 滚动、缩容、删 Pod)与 Agones 排空标签先把玩家
+        // 疏散到别的节点 —— 关建场景准入、发布 admission = CLOSED,scene_manager 把本节点的世界频道迁走后发 DestroyScene,
+        // 住户按限速存盘、带着原频道号改派;副本与没赶上迁移的到自疏散时刻由本节点自己疏散。完成或到预算才进普通停机,
+        // 剩下的人由 exitAllPlayers 存盘下线。预算由部署按 Pod 宽限期注入(MMORPG_PLANNED_DRAIN_BUDGET_SECONDS)。
+        node.SetPlannedDrain(
+            [&context](Node &n)
+            { context->plannedDrain.Begin(n, [&context]
+                                          { context->grpcService.CloseCreationAdmission(); }); },
+            [&context](Node &n)
+            { return context->plannedDrain.IsComplete(n); },
+            scene_planned_drain::kDefaultBudget);
 
         node.SetAfterStart([&context, idSegmentKinds](Node& n) {
             // 路由 node_id 到这里已是终值(StartRpcServer 打完 banner 才调 afterStartFn_),
@@ -358,8 +416,9 @@ int main(int argc, char *argv[])
             // AGONES_SDK_HTTP_PORT,或 Windows 构建拿不到 curl 传输层,
             // 都会退化成 Disabled —— 不起线程、不发 HTTP、所有 gate 直接放行。
             //
-            // scene 用默认 LifecycleOptions:不开 EventLoop 心跳绑定(D84)、不开排空标签(D83),
-            // 行为与下沉前的 SceneLifecycle 一致;这两项目前只有 battle 开启。
+            // scene 不开 EventLoop 心跳绑定(D84);开排空标签(D83,与 battle 同键 mmorpg.io/drain):标签出现时 lifecycle
+            // 拒绝新的分配许可,ScenePlannedDrain 每秒看一眼它的判定,看到就进计划排空(docs/design/scene-node-planned-drain.md
+            // §4.1)。标签由运维 / 部署脚本给旧构建的 Allocated GameServer 打,或由 Fleet 缩容时的 allocationOverflow 打。
             {
                 const auto agonesEnv = agones::ReadAgonesEnv();
                 std::unique_ptr<agones::HttpTransport> transport;
@@ -375,8 +434,11 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
+                    agones::LifecycleOptions options;
+                    options.drainLabelKey = kAgonesDrainLabelKey;
                     agones::GameServerLifecycle::Instance().Start(
-                        std::move(transport), agonesEnv.BaseUrl(), agones::LifecycleOptions{});
+                        std::move(transport), agonesEnv.BaseUrl(), std::move(options));
+                    context->plannedDrain.WatchAgonesDrainLabel(n);
                 }
             }
 
@@ -397,13 +459,17 @@ int main(int argc, char *argv[])
             // 玩家持久收件箱的 tick(docs/design/player-inbox-service.md §7.4):每秒处理到期的检查、在线兜底、
             // 等落盘与补确认。不进 DependencyGate(IB-7):收件箱没连上时 tick 只会按退避记一次延后。
             context->playerInboxTimer.RunEvery(PlayerInboxSystem::kTickIntervalSec, PlayerInboxSystem::Tick);
+            // 待寄邮件的 tick(docs/design/battle-overflow-mail.md):每秒把已确认落盘的待寄条目交给邮件服务,
+            // 每名玩家至多一封在途。只寄已提交的存档快照里已有的条目,所以不必等别的启动依赖。
+            context->mailOutboxTimer.RunEvery(PlayerMailOutboxSystem::kTickIntervalSec, PlayerMailOutboxSystem::Tick);
             // 神秘商人:每 5 秒从 zone Redis 读一次「这一轮商人在哪、卖什么」(scene_manager 写入),
             // 读到新的一轮就向本节点玩家发出现公告(docs/design/mystery-merchant.md §5.1)。不进 20FPS World::Update。
             PlayerMysteryMerchantSystem::Start(n.GetLoop());
-            // 场景归属对账(缺口清单第 33 条,docs/design/scene-node-ownership-reconcile.md):etcd 身份确认有效时每 10s
-            // 经场景控制域读本地各场景的 scene:{id}:node,不再指向本节点的实体排空后销毁 —— 与 etcd 单边失联超过屏障
-            // 才回来时,scene_manager 已把它们改派或拆掉。身份探针与 A1′ 同一个;捕获的 node 由三条停机路径的 Stop 在
-            // 它析构之前解开。node_id 到这里已是终值。不进 DependencyGate:它只读控制域 Redis,不依赖 SceneManager 连接。
+            // 场景归属对账(缺口清单第 33 条,docs/design/scene-node-ownership-reconcile.md):每 10s 经场景控制域读本地
+            // 各场景的 scene:{id}:node 与本节点号的持有者,不归本进程的实体按住户预算排空后销毁 —— 与 etcd 单边失联、被判死之后,
+            // scene_manager 已把它们改派、拆掉,或交给了接走这个号的新进程。核对不看 etcd 身份(失联期间照样收敛);身份探针
+            // 与 A1′ 同一个函数,只用来解读持有者记录。捕获的 node 由三条停机路径的 Stop 在它析构之前解开。node_id 与
+            // node_uuid 到这里已是终值。不进 DependencyGate:它只读控制域 Redis,不依赖 SceneManager 连接。
             context->ownershipReconciler.Start([&n]()
                 { return n.GetServiceDiscoveryManager().etcdService.IsIdentityConfirmedFresh(); });
 

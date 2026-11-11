@@ -144,8 +144,9 @@ func callListBlocks(ctx context.Context, repo *FriendRepo, me uint64) ([]BlockEn
 // callSweep —— 规格 §3.8 的 SQL 侧。report_only 只 COUNT,delete 才真删;
 // 两个模式都返回"本轮看到的待清理行数"与"实际删除行数",让调用方与测试都能分辨。
 // nowMs 由调用方给(data 层不自己取 time.Now),所以保留期用例不依赖墙钟。
+// 不分工(owns = nil):这些用例验的是全表口径;按片分工另由 sweep_repo_test.go 的 TestSweep_*Shard* 验。
 func callSweep(ctx context.Context, repo *FriendRepo, mode string, retentionDays, batchLimit int, nowMs int64) (pending int64, deleted int64, err error) {
-	return repo.SweepTerminalRequests(ctx, mode, retentionDays, batchLimit, nowMs)
+	return repo.SweepTerminalRequests(ctx, mode, retentionDays, batchLimit, nowMs, nil)
 }
 
 // ── 公共夹具 ────────────────────────────────────────────────────

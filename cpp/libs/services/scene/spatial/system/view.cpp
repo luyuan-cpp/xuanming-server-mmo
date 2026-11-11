@@ -186,23 +186,28 @@ bool ViewSystem::IsStealthed(entt::entity entity)
 bool ViewSystem::CanSee(entt::entity observer, entt::entity target)
 {
     // Distance check first (cheapest).
-    if (!IsWithinViewRadius(observer, target))
-        return false;
+    return IsWithinViewRadius(observer, target, GetMaxViewRadius(observer)) && PassesStealthRule(observer, target);
+}
 
+bool ViewSystem::CanKeepSeeing(entt::entity observer, entt::entity target)
+{
+    return IsWithinViewRadius(observer, target, GetMaxViewRadius(observer) * kAoiLeaveRadiusFactor) &&
+           PassesStealthRule(observer, target);
+}
+
+bool ViewSystem::PassesStealthRule(entt::entity observer, entt::entity target)
+{
+    if (!IsStealthed(target))
+    {
+        return true;
+    }
     // 隐身目标只对持有侦测授权的观察者可见:授权登记在观察者对它的显式关注来源上,
     // 由技能等玩法明确给出;普通关注、队伍关系或空间邻近都不能看穿隐身。
-    if (IsStealthed(target))
+    const auto *aoiList = tlsEcs.actorRegistry.try_get<AoiListComp>(observer);
+    if (aoiList == nullptr)
     {
-        const auto *aoiList = tlsEcs.actorRegistry.try_get<AoiListComp>(observer);
-        if (aoiList == nullptr)
-            return false;
-
-        const auto it = aoiList->entries.find(target);
-        if (it == aoiList->entries.end() || !it->second.RevealsStealth())
-        {
-            return false;
-        }
+        return false;
     }
-
-    return true;
+    const auto it = aoiList->entries.find(target);
+    return it != aoiList->entries.end() && it->second.RevealsStealth();
 }

@@ -1,0 +1,65 @@
+{
+  "_lens": "fault-kafka-crash：按故障查 Kafka 重投、乱序、再均衡、位点回退，以及节点在两步之间崩溃（换视角查找第 2 轮，2026-11-10，只读代理原样返回，约 67.6 万子代理 token）",
+  "findings": [
+    {
+      "title": "结果主题和资产流水的注释、日志还按旧机制写：battle 直发 match-results、scene 在提交前发流水、guild_id 走 snowflake",
+      "severity": "low",
+      "kind": "新问题",
+      "related": "TL（流水跟着存盘提交走，一致性保证图 §6.3 第 1 条）；r2 §6 H/H2 两轮过时文档清理",
+      "locations": [
+        "go/guild/internal/kafka/trial_result_consumer.go:5",
+        "go/guild/internal/kafka/trial_result_consumer.go:77",
+        "go/match/internal/kafka/result_consumer.go:27",
+        "go/match/internal/kafka/result_consumer.go:182",
+        "go/data_service/internal/logic/recall_plan.go:24",
+        "docs/design/exploit_loss_prevention_zh.md:117",
+        "go/guild/internal/svc/guild_id_minter.go:37"
+      ],
+      "trigger": "属文档问题，运行时不会触发。① 两个结果消费者的文件头写的是「battle 节点打完一局，把 BattleResultEvent 发到 match-results」，并要求与 battle 的 kMatchResultsTopic、battle 端分区数一致。cpp 全仓已经 grep 不到 match-results 或 kMatchResultsTopic。唯一的生产者是 match 终局发件箱（go/match/internal/svc/servicecontext.go:419-421 → outcome_outbox.go:306-327），它只发 decision=COMPLETE 的局；ABORT 局写的是 result_published=1（terminal_abort.go:34），不进 topic。按注释排障会去 battle 侧找丢失的结果，还会以为 guild-trial 组能从 Kafka 看到中止局。② recall_plan.go:24-27 和设计 exploit_loss_prevention_zh.md:117 还写着「scene 在内存改动时就发流水，早于存盘提交，重投会多出同 correlation_id、不同 tx_id 的流水」。2026-11-05 起，开了提交闸门的进程只在 COMMITTED/EQUAL 之后放行（transaction_log_system.h:31-43，player_store_client.cpp:522-553）。这种双流水现在只会出现在混版窗口和没开闸门的进程里。逻辑本身仍按最坏情况兜住了，只是写的理由不对。③ guild 的 IdSegment.Enabled=false 时，日志打的是 guild_id minting: snowflake-only。实际上 NewGuildIDMinter 拿到的 Segment 是 nil，Mint 回 ErrNoIDSource，建帮全部失败（guild_id_minter.go:68-75，shared/idsegment/minter.go:28-33）",
+      "reachability": "缺省配置下注释就是这样写的；任何数据结局都不受影响",
+      "registered": "未登记。同一设计文档的 exploit_loss_prevention_zh.md:157 已按新口径改写，:117 和 recall_plan.go 文件头没跟着改",
+      "fix": "改三处注释和一处日志文案：结果生产者改写为「match 终局发件箱，只发 COMPLETE」；recall_plan.go 文件头和设计 :117 改为「只在 2026-11-05 之前或混版窗口出现，开闸门后提交了才发」；guild 日志改为 id segment disabled, guild creation fails",
+      "confidence": "确定",
+      "refute_attempt": "核过：C++ 全仓和 bin/etc 都没有 match-results 的生产者或配置；exploit_loss_prevention_zh.md:157 已改、:117 没改；NewGuildIDMinter 和 Minter.Mint 没有 snowflake 回退。问题只影响阅读和排障，不是数据问题，所以只报 low"
+    }
+  ],
+  "excluded": [
+    "match 发件箱写完 Kafka、还没标记 result_published 就崩溃，或租约过期被另一个副本重投：重投的是同一个 battle_id、同一份原字节。match-rating 侧 ArchiveCompletion 按主键加原字节比对（go/match/internal/authority/completion.go:84-104），ApplyRating 的收据 match_rating_applied 和评分在同一事务里，评分行加了 FOR UPDATE（authority/rating.go:112-150）；guild 侧的 SETTLED 闸门在帮会行锁事务里（go/guild/internal/logic/activity_trial.go:942-1016），都挡得住。go/match 里没有任何 DELETE 收据或完成行的语句",
+    "消费组位点过期或回退，从 FirstOffset 重放 7 天的消息：同样被上面三道闸门挡住。历练对局行只在帮会解散时删 STARTED 状态的行（go/guild/internal/data/activity_repo.go:2084-2095），重放只会得到 Duplicate 或 GuildGone，不会重复发奖",
+    "BoundConsumerGroup 再均衡时旧属主的回调还没跑完，新属主又投了同一条：回调不继承取消（go/shared/kafkautil/group_lag.go:1471-1482），代次结束时不提交、把记录交还 Kafka（:1406-1467）。两边都走 SQL 事务内的收据或行锁，最多一方生效",
+    "data_service 流水消费者（手动模式）拿旧代次提交：代次要等已交付的记录结清才关（group_lag.go:1319-1321），CommitMessages 只认本代次交付的记录（:2003-2092），提交失败就交还重投；落库是按 tx_id 的 INSERT IGNORE、落库之后才提交（go/data_service/internal/kafka/txlog_consumer.go:255-317），重投和乱序都无害",
+    "gate-cmd_g1、scene-cmd_g1 两个控制面命令 topic 的位点回退或重放：C++ 只 assign 自己的分区，每次启动从末尾读，不提交位点（cpp/libs/engine/core/node/system/node/node_kafka_command_handler.h:114-121），不存在回退；C++ 生产者开了幂等（cpp/libs/engine/infra/messaging/kafka/kafka_producer.cpp:108）。login 用 sarama，内部重试可能写出重复消息，gate 侧的 Bind、Kick、Route 按会话和代次判定，属于已登记的 r2-gate#1 一族",
+    "scene 收到重复或迟到的 BattleConfirmedEvent：按 InBattleComp 状态和锁值做条件续期（cpp/libs/services/scene/battle/system/player_battle.cpp:1349-1496）。结算后 CompleteInboxSettlement 会条件删锁（:2076-2092），之后到的确认读不到锁，不会重建冻结。PlayerInboxNotifyEvent 和 PlayerTeamRefreshEvent 只是提醒，不带权威数据",
+    "AGENTS §7 第 2、3 条：所有命令生产者都填了 target_instance_id，空值直接拒发。涉及 battle_room_manager.cpp:100-106 和 :178-183，go/player_inbox/internal/inbox/notify.go:166-177，go/match/internal/team/notify.go 的空 uuid 拒发，login gate_command.go:81，mail、guild、friend 的命令构造器，scene_manager 的 RoutePlayer 和 Redirect。key 都是 player_id 或 battle_id（go/match/internal/svc/servicecontext.go:420）",
+    "player_store Save 已提交但回包丢了：用同 E、同 q、同内容重试，得到 EQUAL（go/db/internal/playerstore/decide.go:42-43）。旧的那次尝试晚到时，库里 q 更大回 OLDER_SEQ，代次更大回 STALE_OWNER，不会旧数据盖新数据（store.go:143-173）。在途请求回 OLDER_SEQ 时，scene 会把发号器抬到库里的值再存一次，不会被判废黜（cpp/libs/services/scene/player/system/player_lifecycle.cpp:5043-5071）",
+    "LoadAndClaim 结果未知后重试：认领是幂等的，重试时取最新的待入场 E（player_store_client.cpp:705-717）；存盘还没落定时 Seed 拒绝（:137-142、:764-769），迟到的存盘改不到重载之后的状态",
+    "同一进程里两个 PlayerStoreClient 同时持有同一名玩家：PlayerStoreClient 是 thread_local（player_lifecycle.cpp:4772-4787），而 scene 的业务状态只在一个 EventLoop 上（docs/design/scene-node-threading-model.md §1），同一进程不会出现第二个状态机",
+    "判死释放在 TiDB 释放之后、删 location 之前崩溃：释放按三列比较并写，重跑时库里已经是 E+1，判为「已比它新」，幂等（go/data_service/internal/store/player_store_dead_holder.go:51-98，go/scene_manager/internal/logic/dead_holder_release.go:39-96）。新持有者用 E+1 认领、持有者为空时照常 CLAIMED（decide.go:59-72）",
+    "无资格撤销已经围住 TiDB 写权行，Redis 撤销 Lua 却失败：写权行停在「代次 E、无持有者、released=1」，用 E 或更大代次的合法认领都能成功；重试时代次已经 ≥E，不会再动（player_store_access.go:308-336，unqualified_holder_revoke.go:20-60）",
+    "交接目标登记了资格、还没认领就崩溃：源端看到 owner 已推进就收尾，存档停在源端的最终存盘。玩家重登时 EnterScene 判死接管、铸新代次认领，读到的是完整的最终存盘，不丢也不覆盖",
+    "发号器两套 etcd 加登记处只写成部分或结局未知：三份都 CAS 成功才发块，中途失败整块作废，已写的那几份只抬高水位，下一块从三份里的最大值起（go/data_service/internal/idissuer/issuer.go:472-538）。并发副本任何一份 CAS 冲突，整轮重来。MixID 是 63 位上的双射（go/shared/idsegment/mix.go）",
+    "收件箱已应用、还没 Ack 就崩溃：账本和效果在同一份快照里提交，落盘之后才确认（player-inbox-service.md §7.7），重载后回放账本补确认。Battle 域非 APPLIED 的报告一律回 CONFLICT、不销账（go/player_inbox/internal/inbox/store_consume.go:371-375）；而且票要等 APPLIED 才放，同一时刻只会有一局待结，32 条的结局环挤不掉这一局",
+    "match 首投 Enqueue 的回包丢了：下一轮 inbox_seq 仍为 0，再发一次 Enqueue，按 (producer, request_id=battle_id) 加内容摘要回 DUPLICATE 和原 seq（store_enqueue.go:226-242、:298-303）。收件箱终态行保留 30 天，远长于发件箱 5 秒到 5 分钟的等待退避",
+    "GM 回收在冻结和派发之间崩溃：批次、各行、已消费的流水、审计在同一个事务里（go/data_service/internal/logic/recall_logic.go:435-487），重放时按 request_id 回现状。Kafka 积压导致同一指令的流水分批到达时，按 (to_player, correlation_id) 归并，并读不限时间窗的兄弟流水，任何一条已消费就整条剔除（recall_plan.go:175-242）",
+    "流水提交闸门和存盘结局的对应：只在 COMMITTED/EQUAL，或快照与已确认内容相同时放行（player_store_client.cpp:298-304、:522-553），被拒、结果未知、被取代都不放行；能绕过闸门的双玩家流水入口 LogItemTransfer 没有调用方（cpp/libs/modules/transaction_log/transaction_log_system.cpp:53）",
+    "历练结果消费在 ValidateTrialTerminal 失败时原地无限重试：launch 行只增不删（trial_launch_repo.go 里没有 DELETE），只有伪造或外来的结果才会永久失败；登记过的局另有巡检器从 match 的 SQL 终局兜底",
+    "C++ 命令消费者 OFFSET_END 是惰性定位，etcd 却已先发布了新实例：发给新实例的命令要等它开始服务 RPC、有玩家进来之后才会产生；即使错过，后果也只是一次进场或登录要重试，不涉及数据",
+    "无状态释放结果未知、又在同节点重新认领之后晚到提交，把 released 写成 1：已登记（player-save-direct-commit.md §9 第 9 条），加载后第一笔是强制写，会把它清掉",
+    "match 结果消费里 ArchiveCompletion 的旧路径插入归档行：dispatch_state 缺省为 0，表示旧归档（proto/match/match_authority.proto:325），发件箱不投递，不会多发一次个人结算"
+  ],
+  "unread": [
+    "go/shared/kafkautil/group_lag.go 的 CloseAndReport、PreparedFrontier、ReportProcessingFailure、waitDelivered、releaseUncommitted 正文",
+    "go/data_service/internal/kafka 的 snapshot_consumer.go、snapshot_worker.go、partition_workers.go、start.go 正文",
+    "C++ gate 的 Bind/Kick/Route/LeaseExpired 处理对重复命令的判定（r2-gate#1 一族，未复核）",
+    "C++ player_inbox_system.cpp、gm_sanction_inbox_executor.cpp 全文",
+    "C++ player_lifecycle.cpp 的交接与退出段（BeginTravelHandoff、FinishExitAfterPersist、会话结束凭证）、role_admission_system.cpp、handoff_sql_barrier.h、release_fence.h、exit_release_mark.h、relocate_confirm.h",
+    "go/scene_manager 的 owner_epoch.go（铸造与回滚 Lua）、reentry_barrier.go 全文",
+    "别名合服：tools/merge_zone/route_store.go、data_service route_store.go 与 directory_shards.go、shared/mergedzone、shared/placement/merged_zone.go、match merged_zones.go（只读了 merge.go 与手册 §1-§3）",
+    "发号器 etcd_store.go、Init/Recover/Retire 入口、shared/idsegment/client.go、C++ guid_segment_client.cpp",
+    "shared/assetop 的 manual_evidence/receipt_identity/abandon/decide/reconcile、guild 与 trade 的 assetopfix、transaction_log_store.go",
+    "player_inbox 的 reconcile.go、loops.go、shardowner、store_admin.go（VoidItem 强制模式）、role_authority.go",
+    "match completion.go 的 CommitBattleOutcome 与 ready_recovery 等全球流程（属 r2-battle#2 修复范围，按要求未复审）",
+    "data_service account_role_dead_holder.go 与 cmd/admission_recover 正文（只核了缺省 -mode plan）"
+  ],
+  "coverage": "视角是按故障查：Kafka 重投、乱序、再均衡、位点回退，以及节点在两步之间崩溃。基线是当前工作区；读到的未提交文件有 go/match/match_service.go 和 go/match/internal/svc/servicecontext.go（canary battle 节点监视，与本审计路径无关），以及 player_lifecycle.cpp（RunIdentityAtRiskSaves 改为可测，不影响存盘语义）。Kafka 清单（topic、生产者、消费者、key、幂等闸门）：1）match-results：3 分区，保留 7 天，RF3、minISR2。生产者是 match 终局发件箱，流程是认领租约 CAS、写 Kafka、按同一租约标记已发布，两步之间崩溃就是原字节重投。消费者一是 match-rating 组（BoundConsumerGroup，原字节归档加评分收据，同一事务、行锁），二是 guild-trial 组（SETTLED 闸门加帮会行锁，奖励指令同事务插入）。key 是 battle_id。2）gate-cmd_g1：256 分区，node_id%P 显式分区。生产者有 login（sarama，acks=all）、scene_manager、battle、mail、guild、friend、player_locator。消费者是 C++ gate，只 assign 自己的分区、从末尾读、不提交位点，靠 target_instance_id 防僵尸。key 是 player_id。3）scene-cmd_g1：生产者有 battle（确认事件，幂等续期）、player_inbox（提醒）、match 队伍（信号）。消费者是 C++ scene，读法同上。4）transaction_log_topic_g<N>：生产者是 scene，提交闸门放行之后才发。消费者是 data_service-transaction-log 组，按 tx_id INSERT IGNORE，落库后才提交。key 是 player_id。5）player_snapshot_topic_g<N>：消费者是 data_service-player-snapshot 组，按 snapshot_guid 去重，只服务还没接线的回档。6）chat-world-bcast_g1 与观战广播、中继：只有展示，没有资产。7）anomaly_alert_topic：仓内没有消费者。两步之间崩溃查了这些路径：player_store 的 Save 和 LoadAndClaim 与 scene 回调之间；无状态释放；判死释放（读三列、etcd 复核、比较并写、删 location）；无资格撤销（先围 TiDB 再撤 Redis）；交接资格登记与认领之间；发号器三份 CAS；收件箱的应用、落盘、Ack；match 首投与等待 APPLIED；GM 回收冻结；流水提交闸门；历练结算事务。本轮没有发现新的丢失、复制、部分提交、ID 冲突或旧数据覆盖新数据，只有一条注释和日志漂移（low）。按「连续两轮无新发现才停」的规则，本视角这一轮算无新发现"
+}
