@@ -307,6 +307,35 @@ class AdminZoneControllerTest {
         verify(repo, never()).insertIfAbsent(any(), any());
     }
 
+    // 暂停 / 恢复创建新角色(2026-11-10):同样先加锁判存在,再只改这一列,再回读;其余列不动。
+    @Test
+    void createRoleTogglesLockThenWriteOnlyThatColumnThenReadBack() {
+        when(repo.lockZoneIdForUpdate(ZONE)).thenReturn(List.of(ZONE));
+        when(repo.findById(ZONE)).thenReturn(Optional.of(zone(ZONE, "z")));
+
+        assertEquals(HttpStatus.OK, controller.closeRoleCreation(ZONE).getStatusCode());
+        assertEquals(HttpStatus.OK, controller.openRoleCreation(ZONE).getStatusCode());
+
+        InOrder order = inOrder(repo);
+        order.verify(repo).lockZoneIdForUpdate(ZONE);
+        order.verify(repo).updateCreateRoleClosed(ZONE, true, NOW);
+        order.verify(repo).findById(ZONE);
+        order.verify(repo).lockZoneIdForUpdate(ZONE);
+        order.verify(repo).updateCreateRoleClosed(ZONE, false, NOW);
+        order.verify(repo).findById(ZONE);
+        verifyNoMoreInteractions(repo);
+    }
+
+    @Test
+    void createRoleTogglesReturnNotFoundWhenRowAbsent() {
+        // 加锁点查没命中(mock 缺省返回空列表):回 404,开关不写、也不插入。
+        assertEquals(HttpStatus.NOT_FOUND, controller.closeRoleCreation(ZONE).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, controller.openRoleCreation(ZONE).getStatusCode());
+        verify(repo, times(2)).lockZoneIdForUpdate(ZONE);
+        verify(repo, never()).updateCreateRoleClosed(anyLong(), anyBoolean(), any());
+        verify(repo, never()).insertIfAbsent(any(), any());
+    }
+
     @Test
     void updatePathsDoNotRetryDeadlockClassifiedFailures() {
         // update 路径的第一把锁是加锁点查,之后的 UPDATE 改同一条已持锁的记录、不再等锁,不可能是死锁牺牲者;

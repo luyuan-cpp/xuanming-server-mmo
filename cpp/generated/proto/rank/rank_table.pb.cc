@@ -31,6 +31,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
         // ::rankpb::RankBoardRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2frank_2frank_5ftable_2eproto, /* tracker*/ nullptr,},
+        // ::rankpb::RankBoardShardRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2frank_2frank_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::rankpb::RankScoreRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2frank_2frank_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::rankpb::RankInputReceiptRecord
@@ -170,7 +172,7 @@ constexpr auto RankSnapshotRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frank_2frank_5ftable_2eproto,
@@ -379,7 +381,7 @@ constexpr auto RankSettlementRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[3],
+      &file_reflection_data[4],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frank_2frank_5ftable_2eproto,
@@ -569,7 +571,7 @@ constexpr auto RankScoreRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[1],
+      &file_reflection_data[2],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frank_2frank_5ftable_2eproto,
@@ -731,7 +733,7 @@ constexpr auto RankRemovedEntryRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frank_2frank_5ftable_2eproto,
@@ -908,7 +910,7 @@ constexpr auto RankMutationRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frank_2frank_5ftable_2eproto,
@@ -1144,7 +1146,7 @@ constexpr auto RankMailRewardRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[6],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frank_2frank_5ftable_2eproto,
@@ -1333,7 +1335,7 @@ constexpr auto RankInputReceiptRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[2],
+      &file_reflection_data[3],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frank_2frank_5ftable_2eproto,
@@ -1384,6 +1386,178 @@ const ::_pbi::ClassData* RankInputReceiptRecord_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class RankBoardShardRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RankBoardShardRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_._has_bits_);
+};
+
+constexpr RankBoardShardRecord::ParseTableT_ RankBoardShardRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::rankpb::RankBoardShardRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 board_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardShardRecord, _impl_.board_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.board_id_)}},
+      // uint64 generation = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardShardRecord, _impl_.generation_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.generation_)}},
+      // uint32 source_shard = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RankBoardShardRecord, _impl_.source_shard_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.source_shard_)}},
+      // uint64 committed_cursor = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardShardRecord, _impl_.committed_cursor_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.committed_cursor_)}},
+      // uint64 entries = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardShardRecord, _impl_.entries_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.entries_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 board_id = 1;
+      {PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.board_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 generation = 2;
+      {PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.generation_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 source_shard = 3;
+      {PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.source_shard_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 committed_cursor = 4;
+      {PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.committed_cursor_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 entries = 5;
+      {PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.entries_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr RankBoardShardRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        board_id_{::uint64_t{0u}},
+        generation_{::uint64_t{0u}},
+        committed_cursor_{::uint64_t{0u}},
+        entries_{::uint64_t{0u}},
+        source_shard_{0u} {}
+
+template <typename>
+constexpr RankBoardShardRecord::RankBoardShardRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RankBoardShardRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RankBoardShardRecord(arena);
+}
+constexpr auto RankBoardShardRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(RankBoardShardRecord), alignof(RankBoardShardRecord));
+}
+constexpr auto RankBoardShardRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RankBoardShardRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RankBoardShardRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RankBoardShardRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RankBoardShardRecord>(), &RankBoardShardRecord::ByteSizeLong,
+              &RankBoardShardRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[1],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2frank_2frank_5ftable_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RankBoardShardRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RankBoardShardRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RankBoardShardRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RankBoardShardRecord::InternalGenerateClassData_(
+            _default, &RankBoardShardRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RankBoardShardRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RankBoardShardRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RankBoardShardRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RankBoardShardRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RankBoardShardRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RankBoardShardRecordGlobalsTypeInternal RankBoardShardRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RankBoardShardRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RankBoardShardRecord_globals_.GetClassData();
+#else
+  return RankBoardShardRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class RankBoardRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<RankBoardRecord>()._impl_._has_bits_);
@@ -1396,11 +1570,11 @@ constexpr RankBoardRecord::ParseTableT_ RankBoardRecord::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_._has_bits_),
       0, // no _extensions_
-      18, 248,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294705152,  // skipmap
+      4294836480,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      18,  // num_field_entries
+      16,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1443,46 +1617,40 @@ constexpr RankBoardRecord::ParseTableT_ RankBoardRecord::InternalGenerateParseTa
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardRecord, _impl_.source_epoch_), 8>(),
        {64, 8, 0,
         PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.source_epoch_)}},
-      // uint64 committed_cursor = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardRecord, _impl_.committed_cursor_), 9>(),
-       {72, 9, 0,
-        PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.committed_cursor_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 ascending = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RankBoardRecord, _impl_.ascending_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RankBoardRecord, _impl_.ascending_), 9>(),
+       {80, 9, 0,
         PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.ascending_)}},
       // uint32 state = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RankBoardRecord, _impl_.state_), 11>(),
-       {88, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RankBoardRecord, _impl_.state_), 10>(),
+       {88, 10, 0,
         PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.state_)}},
       // uint64 settlement_id = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardRecord, _impl_.settlement_id_), 12>(),
-       {96, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardRecord, _impl_.settlement_id_), 11>(),
+       {96, 11, 0,
         PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.settlement_id_)}},
       // uint64 open_request_id = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardRecord, _impl_.open_request_id_), 13>(),
-       {104, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardRecord, _impl_.open_request_id_), 12>(),
+       {104, 12, 0,
         PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.open_request_id_)}},
       // string open_request_hash = 14;
       {::_pbi::TcParser::FastUS1,
        {114, 2, 0,
         PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.open_request_hash_)}},
       // uint64 created_ms = 15;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardRecord, _impl_.created_ms_), 14>(),
-       {120, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankBoardRecord, _impl_.created_ms_), 13>(),
+       {120, 13, 0,
         PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.created_ms_)}},
       // uint64 sealed_ms = 16;
       {::_pbi::TcParser::FastV64S2,
-       {384, 15, 0,
+       {384, 14, 0,
         PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.sealed_ms_)}},
       // uint64 deleted_ms = 17;
       {::_pbi::TcParser::FastV64S2,
-       {392, 16, 0,
+       {392, 15, 0,
         PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.deleted_ms_)}},
-      // uint64 entries = 18;
-      {::_pbi::TcParser::FastV64S2,
-       {400, 17, 0,
-        PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.entries_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1515,30 +1683,26 @@ constexpr RankBoardRecord::ParseTableT_ RankBoardRecord::InternalGenerateParseTa
       {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.producer_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 source_epoch = 8;
       {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.source_epoch_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 committed_cursor = 9;
-      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.committed_cursor_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 ascending = 10;
-      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.ascending_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.ascending_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 state = 11;
-      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.state_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.state_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 settlement_id = 12;
-      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.settlement_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.settlement_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 open_request_id = 13;
-      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.open_request_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.open_request_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string open_request_hash = 14;
       {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.open_request_hash_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 created_ms = 15;
-      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.created_ms_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.created_ms_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 sealed_ms = 16;
-      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.sealed_ms_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.sealed_ms_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 deleted_ms = 17;
-      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.deleted_ms_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 entries = 18;
-      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.entries_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.deleted_ms_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
-      "\26\0\0\0\0\6\0\10\0\0\0\0\0\0\21\0\0\0\0\0\0\0\0\0"
+      "\26\0\0\0\0\6\0\10\0\0\0\0\0\21\0\0\0\0\0\0\0\0\0\0"
       "rankpb.RankBoardRecord"
       "period"
       "producer"
@@ -1567,15 +1731,13 @@ inline constexpr RankBoardRecord::Impl_::Impl_(
         scope_id_{::uint64_t{0u}},
         generation_{::uint64_t{0u}},
         source_epoch_{::uint64_t{0u}},
-        committed_cursor_{::uint64_t{0u}},
         ascending_{0u},
         state_{0u},
         settlement_id_{::uint64_t{0u}},
         open_request_id_{::uint64_t{0u}},
         created_ms_{::uint64_t{0u}},
         sealed_ms_{::uint64_t{0u}},
-        deleted_ms_{::uint64_t{0u}},
-        entries_{::uint64_t{0u}} {}
+        deleted_ms_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr RankBoardRecord::RankBoardRecord(::_pbi::ConstantInitialized,
@@ -1679,7 +1841,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_._has_bits_),
-        21, // hasbit index offset
+        19, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.board_id_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.board_type_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.scope_),
@@ -1688,7 +1850,6 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.generation_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.producer_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.source_epoch_),
-        PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.committed_cursor_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.ascending_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.state_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.settlement_id_),
@@ -1697,7 +1858,6 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.created_ms_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.sealed_ms_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.deleted_ms_),
-        PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardRecord, _impl_.entries_),
         3,
         4,
         5,
@@ -1710,12 +1870,23 @@ const ::uint32_t
         10,
         11,
         12,
-        13,
         2,
+        13,
         14,
         15,
-        16,
-        17,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardShardRecord, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardShardRecord, _impl_.board_id_),
+        PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardShardRecord, _impl_.generation_),
+        PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardShardRecord, _impl_.source_shard_),
+        PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardShardRecord, _impl_.committed_cursor_),
+        PROTOBUF_FIELD_OFFSET(::rankpb::RankBoardShardRecord, _impl_.entries_),
+        0,
+        1,
+        4,
+        2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rankpb::RankScoreRecord, _impl_._has_bits_),
         11, // hasbit index offset
@@ -1846,17 +2017,19 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::rankpb::RankBoardRecord)},
-        {39, sizeof(::rankpb::RankScoreRecord)},
-        {58, sizeof(::rankpb::RankInputReceiptRecord)},
-        {75, sizeof(::rankpb::RankSettlementRecord)},
-        {96, sizeof(::rankpb::RankSnapshotRecord)},
-        {109, sizeof(::rankpb::RankMailRewardRecord)},
-        {140, sizeof(::rankpb::RankMutationRecord)},
-        {153, sizeof(::rankpb::RankRemovedEntryRecord)},
+        {35, sizeof(::rankpb::RankBoardShardRecord)},
+        {48, sizeof(::rankpb::RankScoreRecord)},
+        {67, sizeof(::rankpb::RankInputReceiptRecord)},
+        {84, sizeof(::rankpb::RankSettlementRecord)},
+        {105, sizeof(::rankpb::RankSnapshotRecord)},
+        {118, sizeof(::rankpb::RankMailRewardRecord)},
+        {149, sizeof(::rankpb::RankMutationRecord)},
+        {162, sizeof(::rankpb::RankRemovedEntryRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::rankpb::RankBoardRecord_globals_,
+        &::rankpb::RankBoardShardRecord_globals_,
         &::rankpb::RankScoreRecord_globals_,
         &::rankpb::RankInputReceiptRecord_globals_,
         &::rankpb::RankSettlementRecord_globals_,
@@ -1868,62 +2041,66 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2frank_2frank_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\033proto/rank/rank_table.proto\022\006rankpb\032\033p"
-    "roto/db/proto_option.proto\"\305\003\n\017RankBoard"
+    "roto/db/proto_option.proto\"\246\003\n\017RankBoard"
     "Record\022\020\n\010board_id\030\001 \001(\004\022\022\n\nboard_type\030\002"
     " \001(\r\022\r\n\005scope\030\003 \001(\r\022\020\n\010scope_id\030\004 \001(\004\022\016\n"
     "\006period\030\005 \001(\t\022\022\n\ngeneration\030\006 \001(\004\022\020\n\010pro"
-    "ducer\030\007 \001(\t\022\024\n\014source_epoch\030\010 \001(\004\022\030\n\020com"
-    "mitted_cursor\030\t \001(\004\022\021\n\tascending\030\n \001(\r\022\r"
-    "\n\005state\030\013 \001(\r\022\025\n\rsettlement_id\030\014 \001(\004\022\027\n\017"
-    "open_request_id\030\r \001(\004\022\031\n\021open_request_ha"
-    "sh\030\016 \001(\t\022\022\n\ncreated_ms\030\017 \001(\004\022\021\n\tsealed_m"
-    "s\030\020 \001(\004\022\022\n\ndeleted_ms\030\021 \001(\004\022\017\n\007entries\030\022"
-    " \001(\004:L\212\222\364\001\nrank_board\222\222\364\001\010board_id\342\222\364\001+b"
-    "oard_type,scope,scope_id,period,generati"
-    "on\"\232\002\n\017RankScoreRecord\022\020\n\010board_id\030\001 \001(\004"
-    "\022\022\n\ngeneration\030\002 \001(\004\022\021\n\tentity_id\030\003 \001(\004\022"
-    "\r\n\005score\030\004 \001(\003\022\023\n\013achieved_ms\030\005 \001(\004\022\025\n\rs"
-    "ource_cursor\030\006 \001(\004\022\025\n\rscore_version\030\007 \001("
-    "\004\022\021\n\torder_key\030\010 \001(\003:i\212\222\364\001\nrank_score\222\222\364"
-    "\001\035board_id,generation,entity_id\332\222\364\0013boar"
-    "d_id,generation,order_key,achieved_ms,en"
-    "tity_id\"\367\001\n\026RankInputReceiptRecord\022\020\n\010bo"
-    "ard_id\030\001 \001(\004\022\022\n\ngeneration\030\002 \001(\004\022\025\n\rsour"
-    "ce_cursor\030\003 \001(\004\022\022\n\nrequest_id\030\004 \001(\004\022\024\n\014r"
-    "equest_hash\030\005 \001(\t\022\024\n\014committed_ms\030\006 \001(\004\022"
-    "\024\n\014source_shard\030\007 \001(\r:J\212\222\364\001\022rank_input_r"
-    "eceipt\222\222\364\001.board_id,generation,source_sh"
-    "ard,source_cursor\"\222\002\n\024RankSettlementReco"
-    "rd\022\025\n\rsettlement_id\030\001 \001(\004\022\020\n\010board_id\030\002 "
-    "\001(\004\022\022\n\ngeneration\030\003 \001(\004\022\024\n\014source_epoch\030"
-    "\004 \001(\004\022\024\n\014final_cursor\030\005 \001(\004\022\022\n\nrequest_i"
-    "d\030\006 \001(\004\022\024\n\014request_hash\030\007 \001(\t\022\024\n\014winner_"
-    "count\030\010 \001(\004\022\021\n\tsealed_ms\030\t \001(\004:>\212\222\364\001\017ran"
-    "k_settlement\222\222\364\001\rsettlement_id\342\222\364\001\023board"
-    "_id,generation\"\233\001\n\022RankSnapshotRecord\022\025\n"
-    "\rsettlement_id\030\001 \001(\004\022\014\n\004rank\030\002 \001(\004\022\021\n\ten"
-    "tity_id\030\003 \001(\004\022\r\n\005score\030\004 \001(\003\022\023\n\013achieved"
-    "_ms\030\005 \001(\004:)\212\222\364\001\rrank_snapshot\222\222\364\001\022settle"
-    "ment_id,rank\"\206\003\n\024RankMailRewardRecord\022\021\n"
-    "\treward_id\030\001 \001(\004\022\025\n\rsettlement_id\030\002 \001(\004\022"
-    "\021\n\tplayer_id\030\003 \001(\004\022\014\n\004rank\030\004 \001(\004\022\023\n\013atta"
-    "chments\030\005 \001(\014\022\016\n\006status\030\006 \001(\r\022\017\n\007mail_id"
-    "\030\007 \001(\004\022\027\n\017next_attempt_ms\030\010 \001(\004\022\026\n\016lease"
-    "_until_ms\030\t \001(\004\022\023\n\013lease_token\030\n \001(\004\022\020\n\010"
-    "attempts\030\013 \001(\r\022\022\n\ncreated_ms\030\014 \001(\004\022\022\n\nup"
-    "dated_ms\030\r \001(\004\022\021\n\texpire_ms\030\016 \001(\004:Z\212\222\364\001\020"
-    "rank_mail_reward\222\222\364\001\treward_id\332\222\364\001\026statu"
-    "s,next_attempt_ms\342\222\364\001\027settlement_id,play"
-    "er_id\"\257\001\n\022RankMutationRecord\022\024\n\014request_"
-    "hash\030\001 \001(\t\022\020\n\010board_id\030\002 \001(\004\022\022\n\ngenerati"
-    "on\030\003 \001(\004\022\022\n\nrequest_id\030\004 \001(\004\022\022\n\ncreated_"
-    "ms\030\005 \001(\004:5\212\222\364\001\rrank_mutation\222\222\364\001\036board_i"
-    "d,generation,request_id\"\240\001\n\026RankRemovedE"
-    "ntryRecord\022\020\n\010board_id\030\001 \001(\004\022\022\n\ngenerati"
-    "on\030\002 \001(\004\022\021\n\tentity_id\030\003 \001(\004\022\022\n\nremoved_m"
-    "s\030\004 \001(\004:9\212\222\364\001\022rank_removed_entry\222\222\364\001\035boa"
-    "rd_id,generation,entity_idB\021Z\017rank/proto"
-    "/rankb\006proto3"
+    "ducer\030\007 \001(\t\022\024\n\014source_epoch\030\010 \001(\004\022\021\n\tasc"
+    "ending\030\n \001(\r\022\r\n\005state\030\013 \001(\r\022\025\n\rsettlemen"
+    "t_id\030\014 \001(\004\022\027\n\017open_request_id\030\r \001(\004\022\031\n\021o"
+    "pen_request_hash\030\016 \001(\t\022\022\n\ncreated_ms\030\017 \001"
+    "(\004\022\021\n\tsealed_ms\030\020 \001(\004\022\022\n\ndeleted_ms\030\021 \001("
+    "\004:L\212\222\364\001\nrank_board\222\222\364\001\010board_id\342\222\364\001+boar"
+    "d_type,scope,scope_id,period,generationJ"
+    "\004\010\t\020\nJ\004\010\022\020\023\"\271\001\n\024RankBoardShardRecord\022\020\n\010"
+    "board_id\030\001 \001(\004\022\022\n\ngeneration\030\002 \001(\004\022\024\n\014so"
+    "urce_shard\030\003 \001(\r\022\030\n\020committed_cursor\030\004 \001"
+    "(\004\022\017\n\007entries\030\005 \001(\004::\212\222\364\001\020rank_board_sha"
+    "rd\222\222\364\001 board_id,generation,source_shard\""
+    "\232\002\n\017RankScoreRecord\022\020\n\010board_id\030\001 \001(\004\022\022\n"
+    "\ngeneration\030\002 \001(\004\022\021\n\tentity_id\030\003 \001(\004\022\r\n\005"
+    "score\030\004 \001(\003\022\023\n\013achieved_ms\030\005 \001(\004\022\025\n\rsour"
+    "ce_cursor\030\006 \001(\004\022\025\n\rscore_version\030\007 \001(\004\022\021"
+    "\n\torder_key\030\010 \001(\003:i\212\222\364\001\nrank_score\222\222\364\001\035b"
+    "oard_id,generation,entity_id\332\222\364\0013board_i"
+    "d,generation,order_key,achieved_ms,entit"
+    "y_id\"\367\001\n\026RankInputReceiptRecord\022\020\n\010board"
+    "_id\030\001 \001(\004\022\022\n\ngeneration\030\002 \001(\004\022\025\n\rsource_"
+    "cursor\030\003 \001(\004\022\022\n\nrequest_id\030\004 \001(\004\022\024\n\014requ"
+    "est_hash\030\005 \001(\t\022\024\n\014committed_ms\030\006 \001(\004\022\024\n\014"
+    "source_shard\030\007 \001(\r:J\212\222\364\001\022rank_input_rece"
+    "ipt\222\222\364\001.board_id,generation,source_shard"
+    ",source_cursor\"\222\002\n\024RankSettlementRecord\022"
+    "\025\n\rsettlement_id\030\001 \001(\004\022\020\n\010board_id\030\002 \001(\004"
+    "\022\022\n\ngeneration\030\003 \001(\004\022\024\n\014source_epoch\030\004 \001"
+    "(\004\022\024\n\014final_cursor\030\005 \001(\004\022\022\n\nrequest_id\030\006"
+    " \001(\004\022\024\n\014request_hash\030\007 \001(\t\022\024\n\014winner_cou"
+    "nt\030\010 \001(\004\022\021\n\tsealed_ms\030\t \001(\004:>\212\222\364\001\017rank_s"
+    "ettlement\222\222\364\001\rsettlement_id\342\222\364\001\023board_id"
+    ",generation\"\233\001\n\022RankSnapshotRecord\022\025\n\rse"
+    "ttlement_id\030\001 \001(\004\022\014\n\004rank\030\002 \001(\004\022\021\n\tentit"
+    "y_id\030\003 \001(\004\022\r\n\005score\030\004 \001(\003\022\023\n\013achieved_ms"
+    "\030\005 \001(\004:)\212\222\364\001\rrank_snapshot\222\222\364\001\022settlemen"
+    "t_id,rank\"\206\003\n\024RankMailRewardRecord\022\021\n\tre"
+    "ward_id\030\001 \001(\004\022\025\n\rsettlement_id\030\002 \001(\004\022\021\n\t"
+    "player_id\030\003 \001(\004\022\014\n\004rank\030\004 \001(\004\022\023\n\013attachm"
+    "ents\030\005 \001(\014\022\016\n\006status\030\006 \001(\r\022\017\n\007mail_id\030\007 "
+    "\001(\004\022\027\n\017next_attempt_ms\030\010 \001(\004\022\026\n\016lease_un"
+    "til_ms\030\t \001(\004\022\023\n\013lease_token\030\n \001(\004\022\020\n\010att"
+    "empts\030\013 \001(\r\022\022\n\ncreated_ms\030\014 \001(\004\022\022\n\nupdat"
+    "ed_ms\030\r \001(\004\022\021\n\texpire_ms\030\016 \001(\004:Z\212\222\364\001\020ran"
+    "k_mail_reward\222\222\364\001\treward_id\332\222\364\001\026status,n"
+    "ext_attempt_ms\342\222\364\001\027settlement_id,player_"
+    "id\"\257\001\n\022RankMutationRecord\022\024\n\014request_has"
+    "h\030\001 \001(\t\022\020\n\010board_id\030\002 \001(\004\022\022\n\ngeneration\030"
+    "\003 \001(\004\022\022\n\nrequest_id\030\004 \001(\004\022\022\n\ncreated_ms\030"
+    "\005 \001(\004:5\212\222\364\001\rrank_mutation\222\222\364\001\036board_id,g"
+    "eneration,request_id\"\240\001\n\026RankRemovedEntr"
+    "yRecord\022\020\n\010board_id\030\001 \001(\004\022\022\n\ngeneration\030"
+    "\002 \001(\004\022\021\n\tentity_id\030\003 \001(\004\022\022\n\nremoved_ms\030\004"
+    " \001(\004:9\212\222\364\001\022rank_removed_entry\222\222\364\001\035board_"
+    "id,generation,entity_idB\021Z\017rank/proto/ra"
+    "nkb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2frank_2frank_5ftable_2eproto_deps[1] = {
@@ -1933,13 +2110,13 @@ static ::absl::once_flag descriptor_table_proto_2frank_2frank_5ftable_2eproto_on
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2frank_2frank_5ftable_2eproto = {
     false,
     false,
-    2253,
+    2410,
     descriptor_table_protodef_proto_2frank_2frank_5ftable_2eproto,
     "proto/rank/rank_table.proto",
     &descriptor_table_proto_2frank_2frank_5ftable_2eproto_once,
     descriptor_table_proto_2frank_2frank_5ftable_2eproto_deps,
     1,
-    8,
+    9,
     schemas,
     file_message_globals,
     TableStruct_proto_2frank_2frank_5ftable_2eproto::offsets,
@@ -1986,9 +2163,9 @@ RankBoardRecord::RankBoardRecord(
                offsetof(Impl_, board_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, board_id_),
-           offsetof(Impl_, entries_) -
+           offsetof(Impl_, deleted_ms_) -
                offsetof(Impl_, board_id_) +
-               sizeof(Impl_::entries_));
+               sizeof(Impl_::deleted_ms_));
 
   // @@protoc_insertion_point(copy_constructor:rankpb.RankBoardRecord)
 }
@@ -2005,9 +2182,9 @@ inline void RankBoardRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, board_id_),
            0,
-           offsetof(Impl_, entries_) -
+           offsetof(Impl_, deleted_ms_) -
                offsetof(Impl_, board_id_) +
-               sizeof(Impl_::entries_));
+               sizeof(Impl_::deleted_ms_));
 }
 RankBoardRecord::~RankBoardRecord() {
   // @@protoc_insertion_point(destructor:rankpb.RankBoardRecord)
@@ -2078,13 +2255,8 @@ PROTOBUF_NOINLINE void RankBoardRecord::Clear() {
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.source_epoch_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.sealed_ms_) -
-        reinterpret_cast<char*>(&_impl_.source_epoch_)) + sizeof(_impl_.sealed_ms_));
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
-    ::memset(&_impl_.deleted_ms_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.entries_) -
-        reinterpret_cast<char*>(&_impl_.deleted_ms_)) + sizeof(_impl_.entries_));
+        reinterpret_cast<char*>(&_impl_.deleted_ms_) -
+        reinterpret_cast<char*>(&_impl_.source_epoch_)) + sizeof(_impl_.deleted_ms_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2183,17 +2355,8 @@ PROTOBUF_NOINLINE void RankBoardRecord::Clear() {
     }
   }
 
-  // uint64 committed_cursor = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-    if (this_._internal_committed_cursor() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          9, this_._internal_committed_cursor(), target);
-    }
-  }
-
   // uint32 ascending = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_ascending() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2202,7 +2365,7 @@ PROTOBUF_NOINLINE void RankBoardRecord::Clear() {
   }
 
   // uint32 state = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_state() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2211,7 +2374,7 @@ PROTOBUF_NOINLINE void RankBoardRecord::Clear() {
   }
 
   // uint64 settlement_id = 12;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_settlement_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2220,7 +2383,7 @@ PROTOBUF_NOINLINE void RankBoardRecord::Clear() {
   }
 
   // uint64 open_request_id = 13;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_open_request_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2239,7 +2402,7 @@ PROTOBUF_NOINLINE void RankBoardRecord::Clear() {
   }
 
   // uint64 created_ms = 15;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_created_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2248,7 +2411,7 @@ PROTOBUF_NOINLINE void RankBoardRecord::Clear() {
   }
 
   // uint64 sealed_ms = 16;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_sealed_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2257,20 +2420,11 @@ PROTOBUF_NOINLINE void RankBoardRecord::Clear() {
   }
 
   // uint64 deleted_ms = 17;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_deleted_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           17, this_._internal_deleted_ms(), target);
-    }
-  }
-
-  // uint64 entries = 18;
-  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
-    if (this_._internal_entries() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          18, this_._internal_entries(), target);
     }
   }
 
@@ -2365,69 +2519,53 @@ PROTOBUF_NOINLINE void RankBoardRecord::Clear() {
             this_._internal_source_epoch());
       }
     }
-    // uint64 committed_cursor = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (this_._internal_committed_cursor() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_committed_cursor());
-      }
-    }
     // uint32 ascending = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_ascending() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_ascending());
       }
     }
     // uint32 state = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_state() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_state());
       }
     }
     // uint64 settlement_id = 12;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_settlement_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_settlement_id());
       }
     }
     // uint64 open_request_id = 13;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_open_request_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_open_request_id());
       }
     }
     // uint64 created_ms = 15;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_created_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_created_ms());
       }
     }
     // uint64 sealed_ms = 16;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_sealed_ms() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_sealed_ms());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
     // uint64 deleted_ms = 17;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_deleted_ms() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_deleted_ms());
-      }
-    }
-    // uint64 entries = 18;
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
-      if (this_._internal_entries() != 0) {
-        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
-                                        this_._internal_entries());
       }
     }
   }
@@ -2509,50 +2647,38 @@ void RankBoardRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (from._internal_committed_cursor() != 0) {
-        _this->_impl_.committed_cursor_ = from._impl_.committed_cursor_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_ascending() != 0) {
         _this->_impl_.ascending_ = from._impl_.ascending_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_state() != 0) {
         _this->_impl_.state_ = from._impl_.state_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_settlement_id() != 0) {
         _this->_impl_.settlement_id_ = from._impl_.settlement_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_open_request_id() != 0) {
         _this->_impl_.open_request_id_ = from._impl_.open_request_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_created_ms() != 0) {
         _this->_impl_.created_ms_ = from._impl_.created_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_sealed_ms() != 0) {
         _this->_impl_.sealed_ms_ = from._impl_.sealed_ms_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_deleted_ms() != 0) {
         _this->_impl_.deleted_ms_ = from._impl_.deleted_ms_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
-      if (from._internal_entries() != 0) {
-        _this->_impl_.entries_ = from._impl_.entries_;
       }
     }
   }
@@ -2579,14 +2705,305 @@ void RankBoardRecord::InternalSwap(RankBoardRecord* PROTOBUF_RESTRICT PROTOBUF_N
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.producer_, &other->_impl_.producer_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.open_request_hash_, &other->_impl_.open_request_hash_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.entries_)
-      + sizeof(RankBoardRecord::_impl_.entries_)
+      PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.deleted_ms_)
+      + sizeof(RankBoardRecord::_impl_.deleted_ms_)
       - PROTOBUF_FIELD_OFFSET(RankBoardRecord, _impl_.board_id_)>(
           reinterpret_cast<char*>(&_impl_.board_id_),
           reinterpret_cast<char*>(&other->_impl_.board_id_));
 }
 
 ::google::protobuf::Metadata RankBoardRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+RankBoardShardRecord::RankBoardShardRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RankBoardShardRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:rankpb.RankBoardShardRecord)
+}
+RankBoardShardRecord::RankBoardShardRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RankBoardShardRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RankBoardShardRecord_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE RankBoardShardRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void RankBoardShardRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, board_id_),
+           0,
+           offsetof(Impl_, source_shard_) -
+               offsetof(Impl_, board_id_) +
+               sizeof(Impl_::source_shard_));
+}
+RankBoardShardRecord::~RankBoardShardRecord() {
+  // @@protoc_insertion_point(destructor:rankpb.RankBoardShardRecord)
+  SharedDtor(*this);
+}
+inline void RankBoardShardRecord::SharedDtor(MessageLite& self) {
+  RankBoardShardRecord& this_ = static_cast<RankBoardShardRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RankBoardShardRecord_class_data_ =
+        RankBoardShardRecord::InternalGenerateClassData_(RankBoardShardRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RankBoardShardRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RankBoardShardRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RankBoardShardRecord_class_data_.tc_table);
+  return RankBoardShardRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RankBoardShardRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RankBoardShardRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RankBoardShardRecord_globals_));
+  return RankBoardShardRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RankBoardShardRecord::ParseTableT_
+    RankBoardShardRecord::_table_ =
+        RankBoardShardRecord::InternalGenerateParseTable_(RankBoardShardRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void RankBoardShardRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:rankpb.RankBoardShardRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    ::memset(&_impl_.board_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.source_shard_) -
+        reinterpret_cast<char*>(&_impl_.board_id_)) + sizeof(_impl_.source_shard_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RankBoardShardRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RankBoardShardRecord& this_ = static_cast<const RankBoardShardRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RankBoardShardRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RankBoardShardRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:rankpb.RankBoardShardRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 board_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_board_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_board_id(), target);
+    }
+  }
+
+  // uint64 generation = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_generation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_generation(), target);
+    }
+  }
+
+  // uint32 source_shard = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_source_shard() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_source_shard(), target);
+    }
+  }
+
+  // uint64 committed_cursor = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_committed_cursor() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_committed_cursor(), target);
+    }
+  }
+
+  // uint64 entries = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_entries() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_entries(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:rankpb.RankBoardShardRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RankBoardShardRecord::ByteSizeLong(const MessageLite& base) {
+  const RankBoardShardRecord& this_ = static_cast<const RankBoardShardRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RankBoardShardRecord::ByteSizeLong() const {
+  const RankBoardShardRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:rankpb.RankBoardShardRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // uint64 board_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_board_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_board_id());
+      }
+    }
+    // uint64 generation = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_generation() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_generation());
+      }
+    }
+    // uint64 committed_cursor = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_committed_cursor() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_committed_cursor());
+      }
+    }
+    // uint64 entries = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_entries() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_entries());
+      }
+    }
+    // uint32 source_shard = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_source_shard() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_source_shard());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RankBoardShardRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<RankBoardShardRecord*>(&to_msg);
+  auto& from = static_cast<const RankBoardShardRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:rankpb.RankBoardShardRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_board_id() != 0) {
+        _this->_impl_.board_id_ = from._impl_.board_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_generation() != 0) {
+        _this->_impl_.generation_ = from._impl_.generation_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_committed_cursor() != 0) {
+        _this->_impl_.committed_cursor_ = from._impl_.committed_cursor_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_entries() != 0) {
+        _this->_impl_.entries_ = from._impl_.entries_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_source_shard() != 0) {
+        _this->_impl_.source_shard_ = from._impl_.source_shard_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RankBoardShardRecord::CopyFrom(const RankBoardShardRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:rankpb.RankBoardShardRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RankBoardShardRecord::InternalSwap(RankBoardShardRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.source_shard_)
+      + sizeof(RankBoardShardRecord::_impl_.source_shard_)
+      - PROTOBUF_FIELD_OFFSET(RankBoardShardRecord, _impl_.board_id_)>(
+          reinterpret_cast<char*>(&_impl_.board_id_),
+          reinterpret_cast<char*>(&other->_impl_.board_id_));
+}
+
+::google::protobuf::Metadata RankBoardShardRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

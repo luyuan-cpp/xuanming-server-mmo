@@ -7,7 +7,7 @@ zones:
     gateNodePortBase: 30000
     replicas:
       centre: 1
-      gate: 2
+      gate: 3
       # scene: N  - legacy single-pool. 生成一个名为 scene 的 Deployment,
       #           显式带 env SCENE_NODE_TYPE=0(全部 pod 都是主世界角色)。
       #           脚本仍然接受这个字段;当 scene_manager_service.yaml 里
@@ -16,11 +16,11 @@ zones:
 
   - name: today
     zoneId: 102
-    # 与上一个 zone 的 [30000-30001] 错开;每 zone 留 10 个口,gate 扩到 10 副本前都不用改。
+    # 与上一个 zone 的 [30000-30002] 错开;每 zone 留 10 个口,gate 扩到 10 副本前都不用改。
     gateNodePortBase: 30010
     replicas:
       centre: 1
-      gate: 2
+      gate: 3
       # Split form: two scene Deployments share one zone namespace and one image.
       #   scene_world    -> Deployment with env SCENE_NODE_TYPE=0, hosts persistent
       #                     main-world channels for all players.

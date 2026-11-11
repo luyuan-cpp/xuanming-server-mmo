@@ -311,18 +311,21 @@ func (GuildTrialSettleResult) EnumDescriptor() ([]byte, []int) {
 }
 
 type GuildRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	GuildId       uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`    // data_service 号段 biz_tag=guild
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                          // 展示名:TrimSpace 后原样保存,不建索引;≤ MaxGuildNameRunes=24
-	LeaderId      uint64                 `protobuf:"varint,3,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"` // 与 guild_member.role=3 同事务维护
-	Level         uint32                 `protobuf:"varint,4,opt,name=level,proto3" json:"level,omitempty"`                       // 建帮写 1;B5 升级改写
-	Announcement  string                 `protobuf:"bytes,5,opt,name=announcement,proto3" json:"announcement,omitempty"`          // ≤ MaxAnnouncementBytes=600
-	CreateTimeMs  uint64                 `protobuf:"varint,6,opt,name=create_time_ms,json=createTimeMs,proto3" json:"create_time_ms,omitempty"`
-	MaxMembers    uint32                 `protobuf:"varint,7,opt,name=max_members,json=maxMembers,proto3" json:"max_members,omitempty"` // 建帮写入;B5 起按 GuildLevel.max_members 改写
-	ZoneId        uint32                 `protobuf:"varint,8,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`             // 帮会归属 zone;merge_zone 步骤 3 改写
-	Score         int64                  `protobuf:"varint,9,opt,name=score,proto3" json:"score,omitempty"`                             // 排行分权威副本;Redis ZSET 由 RebuildRanks 重建
-	Funds         uint64                 `protobuf:"varint,10,opt,name=funds,proto3" json:"funds,omitempty"`                            // 帮会资金;B1 恒为 0,B5 起写入
-	NameNorm      string                 `protobuf:"bytes,11,opt,name=name_norm,json=nameNorm,proto3" json:"name_norm,omitempty"`       // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于列长 VARCHAR(191),uk_guild 是整列索引)
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	GuildId      uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`    // data_service 号段 biz_tag=guild
+	Name         string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                          // 展示名:TrimSpace 后原样保存,不建索引;≤ MaxGuildNameRunes=24
+	LeaderId     uint64                 `protobuf:"varint,3,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"` // 与 guild_member.role=3 同事务维护
+	Level        uint32                 `protobuf:"varint,4,opt,name=level,proto3" json:"level,omitempty"`                       // 建帮写 1;B5 升级改写
+	Announcement string                 `protobuf:"bytes,5,opt,name=announcement,proto3" json:"announcement,omitempty"`          // ≤ MaxAnnouncementBytes=600
+	CreateTimeMs uint64                 `protobuf:"varint,6,opt,name=create_time_ms,json=createTimeMs,proto3" json:"create_time_ms,omitempty"`
+	MaxMembers   uint32                 `protobuf:"varint,7,opt,name=max_members,json=maxMembers,proto3" json:"max_members,omitempty"` // 建帮写入;B5 起按 GuildLevel.max_members 改写
+	ZoneId       uint32                 `protobuf:"varint,8,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`             // 建帮时的归属区,此后不改写;合服只登记映射 zone_merged_into,按区比较、查询先解析到最终区
+	Score        int64                  `protobuf:"varint,9,opt,name=score,proto3" json:"score,omitempty"`                             // 排行分权威副本;Redis ZSET 由 RebuildRanks 重建
+	Funds        uint64                 `protobuf:"varint,10,opt,name=funds,proto3" json:"funds,omitempty"`                            // 帮会资金;B1 恒为 0,B5 起写入
+	NameNorm     string                 `protobuf:"bytes,11,opt,name=name_norm,json=nameNorm,proto3" json:"name_norm,omitempty"`       // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于列长 VARCHAR(191),uk_guild 是整列索引)
+	// score 的版本:建帮写 0,UpdateGuildScore 在写 score 的同一事务里 +1。Redis 分区榜按它做条件写入,
+	// 只接受不比已记版本旧的分数,所以写榜不用抢全服锁(docs/design/guild_ranking_architecture_zh.md §3)。
+	ScoreVersion  uint64 `protobuf:"varint,12,opt,name=score_version,json=scoreVersion,proto3" json:"score_version,omitempty"` // 追加区:从 13 起。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -432,6 +435,13 @@ func (x *GuildRecord) GetNameNorm() string {
 		return x.NameNorm
 	}
 	return ""
+}
+
+func (x *GuildRecord) GetScoreVersion() uint64 {
+	if x != nil {
+		return x.ScoreVersion
+	}
+	return 0
 }
 
 type GuildPlayerStateRecord struct {
@@ -1903,8 +1913,12 @@ type GuildTrialLaunchRecord struct {
 	// 恢复器调度(2026-11-05,r2-guild#1 评审;go/guild/internal/data/trial_launch_repo.go「恢复器的到期认领」)。只决定何时、由哪个副本去查,不参与释放判定。
 	NextCheckMs   uint64 `protobuf:"varint,9,opt,name=next_check_ms,json=nextCheckMs,proto3" json:"next_check_ms,omitempty"`      // 下一次检查时刻(SQL 时钟毫秒):新原件 = max(开局截止, Prepare 提交) + 30s;每次认领改成 SQL 现在 + 退避间隔
 	CheckAttempts uint32 `protobuf:"varint,10,opt,name=check_attempts,json=checkAttempts,proto3" json:"check_attempts,omitempty"` // 认领次数(只增不减),决定退避间隔
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 实时开局路径拿到 match 的确定答复而没开成时的结束原因(2026-11-11):base.TipInfoMessage 的确定性原字节(tip id 与参数,
+	// 如「某人离线」)。只用于恢复器作废释放时写回大厅,让名单上所有人看到与发起人同一个具体原因;不参与任何释放判定。
+	// 空 = 没有记录(Start 结局未知、开局后作废),释放时写默认原因。只写一次,只对还没登记对局的 state1 原件写。
+	RealtimeEndTip []byte `protobuf:"bytes,11,opt,name=realtime_end_tip,json=realtimeEndTip,proto3" json:"realtime_end_tip,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GuildTrialLaunchRecord) Reset() {
@@ -2005,6 +2019,13 @@ func (x *GuildTrialLaunchRecord) GetCheckAttempts() uint32 {
 		return x.CheckAttempts
 	}
 	return 0
+}
+
+func (x *GuildTrialLaunchRecord) GetRealtimeEndTip() []byte {
+	if x != nil {
+		return x.RealtimeEndTip
+	}
+	return nil
 }
 
 // 原件的可索引投影；与launch同事务写入/终结，防止角色过户漏过尚未发奖的对局。
@@ -2291,7 +2312,7 @@ var File_proto_guild_guild_db_proto protoreflect.FileDescriptor
 
 const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\n" +
-	"\x1aproto/guild/guild_db.proto\x12\aguildpb\x1a\x1bproto/db/proto_option.proto\"\x88\x03\n" +
+	"\x1aproto/guild/guild_db.proto\x12\aguildpb\x1a\x1bproto/db/proto_option.proto\"\xad\x03\n" +
 	"\vGuildRecord\x12\x19\n" +
 	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -2305,7 +2326,8 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x05score\x18\t \x01(\x03R\x05score\x12\x14\n" +
 	"\x05funds\x18\n" +
 	" \x01(\x04R\x05funds\x12\x1b\n" +
-	"\tname_norm\x18\v \x01(\tR\bnameNorm:J\x8a\x92\xf4\x01\x05guild\x92\x92\xf4\x01\bguild_idڒ\xf4\x01\x11zone_id;leader_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x8a\x01\n" +
+	"\tname_norm\x18\v \x01(\tR\bnameNorm\x12#\n" +
+	"\rscore_version\x18\f \x01(\x04R\fscoreVersion:J\x8a\x92\xf4\x01\x05guild\x92\x92\xf4\x01\bguild_idڒ\xf4\x01\x11zone_id;leader_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x8a\x01\n" +
 	"\x16GuildPlayerStateRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -2330,7 +2352,7 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\bnext_seq\x18\x03 \x01(\x04R\anextSeq\x12\x1d\n" +
 	"\n" +
 	"updated_ms\x18\x04 \x01(\x04R\tupdatedMs\x12\x14\n" +
-	"\x05epoch\x18\x05 \x01(\x04R\x05epoch:<\x8a\x92\xf4\x01\x13guild_player_op_seq\x92\x92\xf4\x01\x10player_id,stream\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xe6\b\n" +
+	"\x05epoch\x18\x05 \x01(\x04R\x05epoch:<\x8a\x92\xf4\x01\x13guild_player_op_seq\x92\x92\xf4\x01\x10player_id,stream\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xf6\b\n" +
 	"\x12GuildAssetOpRecord\x12\x13\n" +
 	"\x05op_id\x18\x01 \x01(\x04R\x04opId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x16\n" +
@@ -2370,7 +2392,7 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"resolvedBy\x12%\n" +
 	"\x0eresolve_reason\x18\x1c \x01(\tR\rresolveReason\x12 \n" +
 	"\flast_send_ms\x18\x1d \x01(\x04R\n" +
-	"lastSendMs:\xa5\x01\x8a\x92\xf4\x01\x0eguild_asset_op\x92\x92\xf4\x01\x05op_idڒ\xf4\x01Nstatus,next_attempt_ms;guild_id,op_id;player_id,stream,stream_epoch,status,seq\xe2\x92\xf4\x01!player_id,stream,stream_epoch,seq\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xd2\x02\n" +
+	"lastSendMs:\xb5\x01\x8a\x92\xf4\x01\x0eguild_asset_op\x92\x92\xf4\x01\x05op_idڒ\xf4\x01^status,next_attempt_ms,op_id,player_id;guild_id,op_id;player_id,stream,stream_epoch,status,seq\xe2\x92\xf4\x01!player_id,stream,stream_epoch,seq\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xd2\x02\n" +
 	"\x17GuildDailyCounterRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12A\n" +
 	"\fcounter_kind\x18\x02 \x01(\x0e2\x1e.guildpb.GuildDailyCounterKindR\vcounterKind\x12\x15\n" +
@@ -2469,7 +2491,7 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"dungeon_id\x18\a \x01(\rR\tdungeonId\x127\n" +
 	"\x06roster\x18\b \x03(\v2\x1f.guildpb.GuildTrialRoleIdentityR\x06roster\x12\x1d\n" +
 	"\n" +
-	"created_ms\x18\t \x01(\x04R\tcreatedMs\"\xd2\x03\n" +
+	"created_ms\x18\t \x01(\x04R\tcreatedMs\"\xfc\x03\n" +
 	"\x16GuildTrialLaunchRecord\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x1b\n" +
@@ -2484,7 +2506,8 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x0ecancel_receipt\x18\b \x01(\fR\rcancelReceipt\x12\"\n" +
 	"\rnext_check_ms\x18\t \x01(\x04R\vnextCheckMs\x12%\n" +
 	"\x0echeck_attempts\x18\n" +
-	" \x01(\rR\rcheckAttempts:h\x8a\x92\xf4\x01\x12guild_trial_launch\x92\x92\xf4\x01\n" +
+	" \x01(\rR\rcheckAttempts\x12(\n" +
+	"\x10realtime_end_tip\x18\v \x01(\fR\x0erealtimeEndTip:h\x8a\x92\xf4\x01\x12guild_trial_launch\x92\x92\xf4\x01\n" +
 	"request_idڒ\xf4\x01.state,updated_ms;battle_id;state,next_check_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa9\x02\n" +
 	"\x1aGuildTrialLaunchRoleRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +

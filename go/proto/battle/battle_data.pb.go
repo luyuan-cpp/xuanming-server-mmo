@@ -284,6 +284,10 @@ const (
 	EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN EBattleOutcome = 1 // team_index 0 胜
 	EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN EBattleOutcome = 2
 	EBattleOutcome_BATTLE_OUTCOME_DRAW       EBattleOutcome = 3 // 回合打满等平局情形(PVE 中进攻方判负走 SIDE_B_WIN)
+	// 作废:Match 为这一局写了唯一的 ABORT(执行进程失效、截止作废、帮会取消、人工处置等),全员没有任何效果。
+	// 只由 Match 在 ABORT 事务里写进「作废结算」,battle 引擎永远不产出;客户端收到后退出战斗、提示本局作废
+	// (docs/design/battle-instance-loss-early-abort.md §5、§6)。
+	EBattleOutcome_BATTLE_OUTCOME_VOID EBattleOutcome = 4
 )
 
 // Enum value maps for EBattleOutcome.
@@ -293,12 +297,14 @@ var (
 		1: "BATTLE_OUTCOME_SIDE_A_WIN",
 		2: "BATTLE_OUTCOME_SIDE_B_WIN",
 		3: "BATTLE_OUTCOME_DRAW",
+		4: "BATTLE_OUTCOME_VOID",
 	}
 	EBattleOutcome_value = map[string]int32{
 		"BATTLE_OUTCOME_ONGOING":    0,
 		"BATTLE_OUTCOME_SIDE_A_WIN": 1,
 		"BATTLE_OUTCOME_SIDE_B_WIN": 2,
 		"BATTLE_OUTCOME_DRAW":       3,
+		"BATTLE_OUTCOME_VOID":       4,
 	}
 )
 
@@ -2445,12 +2451,13 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11BATTLE_HIT_NORMAL\x10\x00\x12\x14\n" +
 	"\x10BATTLE_HIT_COMBO\x10\x01\x12\x16\n" +
 	"\x12BATTLE_HIT_COUNTER\x10\x02\x12\x16\n" +
-	"\x12BATTLE_HIT_REFLECT\x10\x03*\x83\x01\n" +
+	"\x12BATTLE_HIT_REFLECT\x10\x03*\x9c\x01\n" +
 	"\x0eeBattleOutcome\x12\x1a\n" +
 	"\x16BATTLE_OUTCOME_ONGOING\x10\x00\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_A_WIN\x10\x01\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_B_WIN\x10\x02\x12\x17\n" +
-	"\x13BATTLE_OUTCOME_DRAW\x10\x03*Z\n" +
+	"\x13BATTLE_OUTCOME_DRAW\x10\x03\x12\x17\n" +
+	"\x13BATTLE_OUTCOME_VOID\x10\x04*Z\n" +
 	"\x13eBattleActivityKind\x12\x1d\n" +
 	"\x19BATTLE_ACTIVITY_KIND_NONE\x10\x00\x12$\n" +
 	" BATTLE_ACTIVITY_KIND_GUILD_TRIAL\x10\x01*{\n" +

@@ -1,0 +1,147 @@
+syntax = "proto3";
+option go_package = "db/proto/battle";
+
+import "proto/battle/battle_data.proto";
+
+// 战斗剧本(docs/design/battle-script.md)。
+//
+// 剧本是数据,不是代码:一份剧本 = 若干「角色位」,每个角色位一串「规则」(条件 → 目标 → 行动)。
+// 引擎每回合按角色位顺序、规则优先级逐条求值,取第一条能执行的;不循环、不掷骰、只读出手方本来就看得到的状态。
+// 选出来的行动和手动提交的一样要过 CheckActionPrerequisites:手动做不到的,剧本也做不到。
+//
+// 唯一决策点是 match:官方剧本(match 内置的 BattleScriptConfig,protobuf JSON)、玩家选用、玩家上传并经人工审核的剧本,
+// 都由 match 在开局时解析出「每队用哪一份」,按值冻结进 CreateBattleRequest.team_scripts;battle 不读任何剧本配置,
+// 开局按自己的配表再校验一遍,不合法整份忽略、该队出手照旧。剧本因此是建房原件的一部分,回放与重算的输入都在原件里。
+//
+// 契约纪律:
+//   * 参数一律 uint32:玩家上传时 varint 短,整包受 gate 1KB 上限约束(configurable-templates.md §8.3);
+//   * 集合顺序不靠下标:角色位按 order、规则按 priority(AGENTS §11.6);
+//   * 条件 / 筛选 / 排序的种类只在枚举末尾追加,编号上线后不复用(AGENTS §4)。
+
+// 剧本作用于哪一方
+enum eBattleScriptSide {
+  BATTLE_SCRIPT_SIDE_UNSPECIFIED = 0;
+  BATTLE_SCRIPT_SIDE_PLAYER = 1;   // 玩家组成的一方:PVE 的进攻方、PVP 的两方
+  BATTLE_SCRIPT_SIDE_MONSTER = 2;  // PVE 的怪物方
+}
+
+// 规则的前置条件:看出手者自己和战局
+enum eBattleScriptCondition {
+  BATTLE_SCRIPT_COND_NONE = 0;                  // 非法值,出现即校验失败
+  BATTLE_SCRIPT_COND_SELF_HP_BELOW = 1;         // 自己气血比例 < p1 万分比(1..10000)
+  BATTLE_SCRIPT_COND_ROUND_AT_LEAST = 2;        // 当前回合 >= p1
+  BATTLE_SCRIPT_COND_ROUND_EVERY = 3;           // 从第 p2 回合起每 p1 回合一次:回合 >= p2 且 (回合 - p2) % p1 == 0
+  BATTLE_SCRIPT_COND_ENEMY_COUNT_AT_LEAST = 4;  // 存活敌方单位数 >= p1
+}
+
+// 目标从哪一边挑
+enum eBattleScriptTargetSide {
+  BATTLE_SCRIPT_TARGET_UNSPECIFIED = 0;
+  BATTLE_SCRIPT_TARGET_SELF = 1;
+  BATTLE_SCRIPT_TARGET_ENEMY = 2;
+  BATTLE_SCRIPT_TARGET_ALLY = 3;         // 同队存活单位,含自己
+  BATTLE_SCRIPT_TARGET_ENGINE_PICK = 4;  // 不指定目标(target_id = 0),交给引擎现有规则:普攻打随机存活敌人、职业技能由引擎选
+}
+
+// 目标筛选:全部成立才算候选
+enum eBattleScriptTargetFilter {
+  BATTLE_SCRIPT_FILTER_NONE = 0;             // 非法值
+  BATTLE_SCRIPT_FILTER_HP_BELOW = 1;         // 目标气血比例 < p1 万分比
+  BATTLE_SCRIPT_FILTER_HAS_BUFF_TYPE = 2;    // 目标身上有 Buff.buff_type == p1 的状态:封 = 30 眩晕 / 31 沉默,毒 = 50,冰 = 52
+  BATTLE_SCRIPT_FILTER_HAS_BUFF = 3;         // 目标身上有 Buff 表 id == p1 的状态
+  BATTLE_SCRIPT_FILTER_IS_MONSTER = 4;       // 目标是 Monster 表 id == p1 的怪(「先打哪个怪」)
+  BATTLE_SCRIPT_FILTER_IS_CLASS = 5;         // 目标是职业 p1 的玩家
+  BATTLE_SCRIPT_FILTER_IS_ACTOR_TYPE = 6;    // 目标的单位类型 == p1(eBattleActorType:1 玩家 2 怪物 3 宝宝)
+  BATTLE_SCRIPT_FILTER_CLAIMED_BY_ROLE = 7;  // 本回合角色位 p1 已经选它当目标(p1 = 0 指自己所在的角色位):组合技、集火、不重复封同一个
+}
+
+// 候选排序:取第一个能出手的。同分一律按阵位、再按 actor_id 无符号升序
+enum eBattleScriptTargetOrder {
+  BATTLE_SCRIPT_ORDER_FORMATION = 0;        // 阵位
+  BATTLE_SCRIPT_ORDER_HP_LOWEST = 1;        // 气血最少
+  BATTLE_SCRIPT_ORDER_HP_HIGHEST = 2;       // 气血最多
+  BATTLE_SCRIPT_ORDER_HP_RATIO_LOWEST = 3;  // 气血比例最低(治疗)
+  BATTLE_SCRIPT_ORDER_SPEED_HIGHEST = 4;    // 速度最快(先封快的)
+}
+
+message BattleScriptCondition {
+  eBattleScriptCondition kind = 1;
+  uint32 p1 = 2;
+  uint32 p2 = 3;    // 只有 ROUND_EVERY 用,其余必须 0
+  bool negate = 4;  // 取反:如 ROUND_AT_LEAST 3 + negate = 「第 3 回合之前」
+}
+
+message BattleScriptTargetFilter {
+  eBattleScriptTargetFilter kind = 1;
+  uint32 p1 = 2;
+  bool negate = 3;  // 取反:如 HAS_BUFF_TYPE 52 + negate = 「还没被冰住的」
+}
+
+message BattleScriptTarget {
+  eBattleScriptTargetSide side = 1;
+  repeated BattleScriptTargetFilter filters = 2;  // 全部成立(AND);只有 ENEMY / ALLY 能带
+  eBattleScriptTargetOrder order = 3;             // 只对 ENEMY / ALLY 有意义,其余必须是 FORMATION
+}
+
+message BattleScriptRule {
+  uint32 priority = 1;                            // 角色位内唯一,小的先判
+  repeated BattleScriptCondition conditions = 2;  // 全部成立(AND);可以为空 = 恒真
+  eBattleActionType action = 3;                   // 只收 ATTACK / SKILL / DEFEND
+  uint32 skill_id = 4;                            // SKILL 必填,其余必须 0
+  BattleScriptTarget target = 5;
+  string note = 6;                                // 给人看的说明(审核、排障),引擎不读
+}
+
+message BattleScriptRole {
+  uint32 role_id = 1;  // 剧本内唯一、非 0;CLAIMED_BY_ROLE 引用它
+  // 剧本内唯一。开局认领单位和每回合决策都按它从小到大:
+  // 职业、怪物这类具体的角色位排在前面先认领,「其余单位」放最后;
+  // 先决策的角色位先定下目标,后决策的才能跟着打(组合技、集火)。
+  uint32 order = 2;
+  string name = 3;                  // 「封系」「输出」……给人看
+  eBattleActorType actor_type = 4;  // 认领哪类单位;NONE = 不限
+  uint32 class_id = 5;              // 只认这个职业的玩家;0 = 不限
+  uint32 monster_id = 6;            // 只认这个 Monster 表 id 的怪;0 = 不限
+  uint32 max_members = 7;           // 最多认领几个单位;0 = 不限
+  repeated BattleScriptRule rules = 8;
+}
+
+message BattleScript {
+  uint32 schema_version = 1;  // 只接受 1
+  uint32 script_id = 2;       // 官方剧本 id:非 0、配置内唯一;玩家剧本恒为 0(身份是 BattleTeamScript.player_script_id)
+  string name = 3;
+  string description = 4;
+  repeated BattleScriptRole roles = 5;
+}
+
+// 剧本来源(审计与排障;引擎不按来源区别对待)
+enum eBattleScriptOrigin {
+  BATTLE_SCRIPT_ORIGIN_UNSPECIFIED = 0;
+  BATTLE_SCRIPT_ORIGIN_OFFICIAL = 1;  // 官方剧本:match 内置配置里的绑定或玩家选用的官方剧本
+  BATTLE_SCRIPT_ORIGIN_PLAYER = 2;    // 玩家上传、人工审核通过的剧本
+}
+
+// 某一队这一局用的剧本:match 解析后按值冻结进 CreateBattleRequest.team_scripts
+message BattleTeamScript {
+  uint32 team_index = 1;             // 0 = A 方(进攻),1 = B 方;每队至多一份
+  BattleScript script = 2;           // 正文
+  eBattleScriptOrigin origin = 3;
+  uint64 player_script_id = 4;       // origin = PLAYER 时:玩家剧本 id(发号器永久 ID,只当身份用)
+  uint32 player_script_revision = 5; // origin = PLAYER 时:审核通过的那一版
+  uint64 chooser_player_id = 6;      // 这一队按谁的选择定的剧本(队长或单人);官方绑定为 0
+}
+
+// 官方剧本绑定:哪种对局的哪一方用哪份剧本。
+// 查找顺序 (模式, 副本) → (模式, 任意) → (任意, 副本) → (任意, 任意),取第一份;都没有 = 这一方出手照旧。
+message BattleScriptBinding {
+  uint32 match_mode = 1;        // MatchMode 数值(proto/match/match_service.proto);0 = 任意模式
+  uint32 battle_config_id = 2;  // Dungeon 表 id;0 = 任意
+  eBattleScriptSide side = 3;
+  uint32 script_id = 4;
+}
+
+// 官方剧本配置的根(match 内置的 protobuf JSON)
+message BattleScriptConfig {
+  repeated BattleScript scripts = 1;
+  repeated BattleScriptBinding bindings = 2;
+}

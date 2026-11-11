@@ -5,6 +5,8 @@
 #include "core/node/system/etcd/etcd_service.h"
 
 #include <boost/cobalt/task.hpp>
+#include <cstdio>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -214,3 +216,58 @@ TEST(EtcdRegistrationWaitTest, SuccessfulLeaseThenStopDuringSubmissionDoesNotSta
 	EXPECT_FALSE(service.RegistrationInFlight());
 	EXPECT_FALSE(probe.txn);
 }
+
+#if GTEST_HAS_DEATH_TEST
+namespace
+{
+// muduo 日志默认写 stdout,EXPECT_DEATH 只匹配 stderr,所以在子进程里先把日志改写到 stderr。
+void RouteEtcdLogToStderr()
+{
+	muduo::Logger::setOutput([](const char* msg, int len) {
+		std::fwrite(msg, 1, static_cast<std::size_t>(len), stderr);
+		std::fflush(stderr);
+	});
+}
+
+// 时长非法时 TimerTaskComp::RunAfter 拒绝排定时器,与本线程没有 EventLoop 是同一条失败路径。
+constexpr double kUnarmableSeconds = std::numeric_limits<double>::infinity();
+
+boost::cobalt::task<void> AwaitWithUnarmableBudget(EventLoop& loop, TimerTaskComp& timer)
+{
+	(void)co_await etcd_registration::AwaitReply<int>(loop, timer, kUnarmableSeconds, [](Completion) {});
+}
+
+boost::cobalt::task<void> DelayWithUnarmableBackoff(EventLoop& loop, TimerTaskComp& timer)
+{
+	(void)co_await etcd_registration::Delay(loop, timer, kUnarmableSeconds);
+}
+}
+
+// 注册的应答预算排不上是装配错误。修复前它按「预算内没有应答」立即交付,注册循环在同一个栈上空转,子进程不死,用例红。
+TEST(EtcdRegistrationWaitDeathTest, UnarmableResponseBudgetIsFatal)
+{
+	EXPECT_DEATH(
+		{
+			RouteEtcdLogToStderr();
+			EventLoop loop;
+			LoopTaskScope tasks(loop);
+			TimerTaskComp timer;
+			(void)tasks.Start(AwaitWithUnarmableBudget(loop, timer), "etcd-budget-probe");
+		},
+		"etcd registration could not arm its response budget timer");
+}
+
+// 重试退避排不上同样终止。修复前它交拒绝值 false,注册静默结束,子进程不死,用例红。
+TEST(EtcdRegistrationWaitDeathTest, UnarmableRetryBackoffIsFatal)
+{
+	EXPECT_DEATH(
+		{
+			RouteEtcdLogToStderr();
+			EventLoop loop;
+			LoopTaskScope tasks(loop);
+			TimerTaskComp timer;
+			(void)tasks.Start(DelayWithUnarmableBackoff(loop, timer), "etcd-backoff-probe");
+		},
+		"etcd registration could not arm its retry backoff timer");
+}
+#endif // GTEST_HAS_DEATH_TEST

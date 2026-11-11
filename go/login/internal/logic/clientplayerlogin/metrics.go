@@ -227,7 +227,7 @@ var createPlayerStageBuckets = []float64{
 // 锁 TTL 是按它们的耗时之和估的(login.yaml Locker.AccountLockTTL;不是硬上界,理由见那边的注释),
 // 哪一步拖长了要能直接看出来。
 const (
-	createStageMint         = "mint"          // 发号(号段 / snowflake)
+	createStageMint         = "mint"          // 发号(号段)
 	createStageName         = "name"          // 名字登记(含同名重试、生成名换名重试)
 	createStageRegister     = "register"      // player_route 归属登记
 	createStageAccountWrite = "account_write" // 围栏写账号 blob(含写未确认后的回读)

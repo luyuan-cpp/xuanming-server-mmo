@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS zone_config (
     open_time      DATETIME DEFAULT NULL,
     recommended    BIT(1) DEFAULT 0,
     sort_order     INT DEFAULT 0,
+    create_role_closed BIT(1) NOT NULL DEFAULT 0 COMMENT '1 = 暂停创建新角色;只经 /admin/zones/{id}/create-role/close|open 改',
     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

@@ -67,7 +67,8 @@
         "RoleNameTaken": 2033,
         "RoleNameSensitive": 2034,
         "LoginAuthProviderUnavailable": 2035,
-        "LoginTokenIssueFailed": 2036
+        "LoginTokenIssueFailed": 2036,
+        "LoginZoneCreateRoleClosed": 2037
       }
     },
     "scene_error": {
@@ -289,7 +290,8 @@
         "GuildTrialInviteExpired": 14038,
         "GuildTrialInviteDeclined": 14039,
         "GuildTrialInviteCooldown": 14040,
-        "GuildTrialServiceBusy": 14041
+        "GuildTrialServiceBusy": 14041,
+        "GuildTrialBattleAborted": 14042
       }
     },
     "friend_error": {

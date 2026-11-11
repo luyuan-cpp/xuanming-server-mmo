@@ -5,6 +5,7 @@ import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
 import "proto/common/base/empty.proto";
 import "proto/battle/battle_data.proto";
+import "proto/battle/battle_script.proto";
 import "proto/battle/player_battle.proto";
 
 // 本契约由 muduo_grpc 承载，只生成普通 Protobuf 消息，不启用 cc_generic_services。
@@ -58,6 +59,10 @@ message CreateBattleRequest {
   // 缺省 false = 不录,老发送方和漏填一律不录。只有 match 让录,battle 才在终局请求里带 replay:
   // match 把带未知字段的终局请求当永久冲突拒收。
   bool record_replay = 16;
+  // 每队的战斗剧本(docs/design/battle-script.md):match 按「队长 / 单人选用 > 官方绑定」解析后按值冻结,每队至多一份。
+  // 没有 = 该队出手走现行默认。battle 开局按自己的配表再校验,不合法整份忽略并记 ERROR(剧本只影响出招,不碰资产,
+  // 按 AGENTS §11.3 选 fail-open);校验通过的剧本整场不变,回放与按指令流重算的输入都在本原件里。
+  repeated BattleTeamScript team_scripts = 17;
 }
 
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):

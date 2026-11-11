@@ -14,6 +14,11 @@ public class ZoneInfoDto {
     private Long openTime;       // epoch seconds, null if not PREVIEW
     private boolean isNew;
     private boolean recommended;
+    /**
+     * 本区暂停创建新角色(2026-11-10,JSON {@code create_role_closed}):已有角色照常进,新角色只能建在别的区。
+     * 客户端在区服列表上标「暂停创角」;旧客户端不认识这个字段,照旧可选,建角时由 login 拒绝(tip kLoginZoneCreateRoleClosed)。
+     */
+    private boolean createRoleClosed;
 
     public long getZoneId() { return zoneId; }
     public void setZoneId(long zoneId) { this.zoneId = zoneId; }
@@ -41,4 +46,7 @@ public class ZoneInfoDto {
 
     public boolean isRecommended() { return recommended; }
     public void setRecommended(boolean recommended) { this.recommended = recommended; }
+
+    public boolean isCreateRoleClosed() { return createRoleClosed; }
+    public void setCreateRoleClosed(boolean createRoleClosed) { this.createRoleClosed = createRoleClosed; }
 }

@@ -98,7 +98,9 @@ real fork()), but the numbers won't match a bare-metal Linux staging
 cluster. Use this for relative comparisons and contract-level smoke,
 not for cliff measurement.
 
-## Bucket4j ON
+## Gateway rate limit ON
+
+(2026-11-11 改标题:网关限流 2026-11-05 起是一段 Redis Lua 令牌桶,原标题里的 Bucket4j 已不再使用。)
 
 2026-10-15 修订:基础 Compose 把容器内 `GATE_RATE_LIMIT_ENABLED` 固定为 `false`,直接在宿主命令前写同名环境变量不会覆盖它,RPS / burst 也不会自动传入。用本地临时 Compose override 显式改 gateway 的容器环境:
 

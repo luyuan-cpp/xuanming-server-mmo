@@ -231,9 +231,15 @@ func RunRankSmoke(cfg *config.Config) {
 		zap.Uint64("b_rank", afterB.GetRank()), zap.Uint64("b_achieved_ms", afterB.GetAchievedMs()), zap.Int64("b_score", afterB.GetScore()))
 
 	// ---- 步骤 4:断言 ----
+	// 精确名次只数到回包的 rank_limit(缺口清单第 18 条),之后的人 rank = 0、beyond_rank_limit = true。下面按名次翻页、
+	// 比名次先后都要精确名次,所以两人都得在上限之内:冒烟只在人数少于上限的榜上跑。
+	if afterA.GetBeyondRankLimit() || afterB.GetBeyondRankLimit() {
+		fail("rank-limit", "A (beyond=%v) or B (beyond=%v) is past the exact rank limit; run the smoke on a board with fewer entries than the limit",
+			afterA.GetBeyondRankLimit(), afterB.GetBeyondRankLimit())
+	}
 	// 胜负方向:只有两人打之前都在榜上才有可信的"打之前分数"(未上榜时 match 侧可能早有评分,不能假定 1500)。
 	decisive := outcome == battle.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN || outcome == battle.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN
-	if decisive && beforeA.GetRank() != 0 && beforeB.GetRank() != 0 {
+	if decisive && rankSmokeOnBoard(beforeA) && rankSmokeOnBoard(beforeB) {
 		upA := afterA.GetScore() > beforeA.GetScore()
 		upB := afterB.GetScore() > beforeB.GetScore()
 		if upA == upB {
@@ -271,7 +277,7 @@ func RunRankSmoke(cfg *config.Config) {
 			"rank's BatchGetPlayerName failed for at least one of them (check rank_name_lookup_total{outcome=\"error\"} and data_service reachability)",
 			pageOfA, sc.ZoneA, entryA.GetName(), sc.ZoneB, pageResp.GetSelf().GetName())
 	}
-	if pageResp.GetSelf().GetEntityId() != b.gc.PlayerId || pageResp.GetSelf().GetRank() == 0 {
+	if pageResp.GetSelf().GetEntityId() != b.gc.PlayerId || !rankSmokeOnBoard(pageResp.GetSelf()) {
 		fail("cross-zone-name", "B's self entry is player %d rank %d, want player %d ranked (B just played a match)",
 			pageResp.GetSelf().GetEntityId(), pageResp.GetSelf().GetRank(), b.gc.PlayerId)
 	}
@@ -294,7 +300,7 @@ func RunRankSmoke(cfg *config.Config) {
 	if neverResp.GetErrorMessage().GetId() != 0 {
 		fail("self-unranked", "unranked caller got tip=%d, expected none (not being ranked is not an error)", neverResp.GetErrorMessage().GetId())
 	}
-	if neverResp.GetSelf().GetRank() != 0 {
+	if rankSmokeOnBoard(neverResp.GetSelf()) {
 		fail("self-unranked", "%s never queued but self.rank=%d (first character must never have played 1V1)", rankSmokeAccountNever, neverResp.GetSelf().GetRank())
 	}
 	if len(neverResp.GetEntries()) == 0 {
@@ -321,12 +327,18 @@ func RunRankSmoke(cfg *config.Config) {
 	_ = zap.L().Sync()
 }
 
+// rankSmokeOnBoard:这个条目在榜上。名次精确时 rank ≥ 1;排在精确名次上限之后时 rank 为 0、beyond_rank_limit 为 true
+// (缺口清单第 18 条),同样在榜上。不在榜上是 self 为空或两者都不成立。
+func rankSmokeOnBoard(e *rankpb.RankEntry) bool {
+	return e.GetRank() != 0 || e.GetBeyondRankLimit()
+}
+
 // rankSmokePlayedOneMore 判断"打之后"是否恰好比"打之前"多记了一局:之前在榜 → games 恰好 +1;之前不在榜 → 上榜且 games ≥ 1。
 func rankSmokePlayedOneMore(before, after *rankpb.RankEntry) bool {
-	if after.GetRank() == 0 {
+	if !rankSmokeOnBoard(after) {
 		return false
 	}
-	if before.GetRank() == 0 {
+	if !rankSmokeOnBoard(before) {
 		return after.GetAchievedMs() > 0
 	}
 	return after.GetAchievedMs() > before.GetAchievedMs()
@@ -337,7 +349,7 @@ func rankSmokeCheckPage(resp *rankpb.GetRankPageResponse, wantPage, size uint32)
 	if resp.GetPage() != wantPage {
 		return fmt.Errorf("asked page %d, got page %d (page_count=%d)", wantPage, resp.GetPage(), resp.GetPageCount())
 	}
-	if resp.GetTotalCount() == 0 && len(resp.GetEntries()) == 0 && resp.GetSelf().GetRank() == 0 {
+	if resp.GetTotalCount() == 0 && len(resp.GetEntries()) == 0 && !rankSmokeOnBoard(resp.GetSelf()) {
 		return nil
 	}
 	if resp.GetPageCount() < 1 || uint64(resp.GetPage()) > resp.GetPageCount() {
@@ -485,7 +497,7 @@ func (b *rankSmokeBot) selfEntry() (*rankpb.RankEntry, error) {
 	if self == nil {
 		self = &rankpb.RankEntry{}
 	}
-	if self.GetRank() != 0 && self.GetEntityId() != b.gc.PlayerId {
+	if rankSmokeOnBoard(self) && self.GetEntityId() != b.gc.PlayerId {
 		return nil, fmt.Errorf("self entry belongs to player %d, expected %d (rank must take \"me\" from the session, D-9)", self.GetEntityId(), b.gc.PlayerId)
 	}
 	return self, nil

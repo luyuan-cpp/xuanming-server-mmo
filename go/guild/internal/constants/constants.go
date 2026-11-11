@@ -166,6 +166,10 @@ const (
 	// 本组唯一 fault=1 的码:要进故障指标让人看见;但仍以 tip 回客户端而不是 gRPC 错误,
 	// 否则一次 match 抖动就让整个帮会界面进重连隔离(06 契约偏差 16)。
 	ErrTrialServiceBusy = uint32(table.GuildError_kGuildTrialServiceBusy)
+	// ErrTrialBattleAborted(2026-11-11):历练已经登记了对局,之后被 match 作废(开局后 SQL ABORT,或发房前中止),
+	// 结果不计;只作为恢复器作废释放时大厅的结束原因写进视图的 end_tip_id。业务结果,不是服务端故障(fault 列留空):
+	// 作废本身由 match 的权威终局决定,原因(截止、原件不合格、原实例失联)另有 match 侧的计数与日志。
+	ErrTrialBattleAborted = uint32(table.GuildError_kGuildTrialBattleAborted)
 )
 
 // MaxShopBuyCount:帮会商店单次兑换的份数上限(05-economy.md §5.11.2)。

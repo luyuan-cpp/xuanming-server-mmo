@@ -82,7 +82,7 @@ func readTrialBattleRow(t *testing.T, ctx context.Context, db *sql.DB, battleID 
 //   - 作废写 LOSS 走与结算 / 标毒 / 巡检同一个带状态与 guild_id 闸门的写入口:巡检已判 EXPIRED 的行同样收成 SETTLED/LOSS;
 //     对局行登记在别的帮名下时拒绝、什么都不释放;帮会已解散时不碰对局行(解散后留下的 EXPIRED 历史行保持原样);
 //   - 发房前中止回执(formation=5、TerminalDecision=UNKNOWN、带 battle)配已登记的 STARTED 行同样释放并记 LOSS;
-//   - 大厅 ENDED 带结束原因 trialCancelledLobbyEndTip,客户端不再停在 LAUNCHED 而不知原因。
+//   - 大厅 ENDED 带结束原因(回执都带对局:2026-11-11 起是 trialBattleAbortedLobbyEndTip),客户端不再停在 LAUNCHED 而不知原因。
 //
 // 2026-11-05 复审追加「从未登记」:实时路径没登记对局(Start 回包丢失或超时),launch 停在 state1、没有对局行,
 // 回执是带 battle 的发房前中止 —— 作废写入口补一行 SETTLED/LOSS(改回裸 UPDATE 时这一行不会出现,用例变红)。
@@ -192,7 +192,7 @@ func TestTiDBTrialStartedBattleReleasesOnlyOnSignedSQLAbort(t *testing.T) {
 			ended, err := store.Load(ctx, requestID)
 			require.NoError(t, err)
 			require.Equal(t, pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_ENDED, ended.State)
-			require.Equal(t, trialCancelledLobbyEndTip, ended.EndTipID, "作废的大厅带结束原因")
+			require.Equal(t, trialBattleAbortedLobbyEndTip, ended.EndTipID, "回执带对局:大厅写「历练战斗已作废」")
 
 			// 多副本拿到同一份回执、或提交结果未知后重放：只释放一次，不再改任何行。
 			require.NoError(t, activities.FinishCancelledTrialLaunch(ctx, prepared, c.receipt, testNowMs+4))

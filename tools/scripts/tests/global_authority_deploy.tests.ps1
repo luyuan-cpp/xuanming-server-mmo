@@ -73,9 +73,12 @@ Test-Case 'scene-manager只继承独立Lookup密钥，不继承目录写与角�
         }
     } finally { Restore-AccountDirectoryDevSecrets $saved }
 }
-Test-Case 'SQL角色证明从独立正规玩家库清单反解，拒绝畸形/重复/超界' {
-    Assert-Equal -Expected '101,102,1000000' -Actual ((Get-RoleProofStorageIds -DatabaseNames 'zone_102_db,player_store_1000000_db,zone_101_db') -join ',') -Because '反解正规storage并按unsigned排序'
-    foreach ($value in @('', 'zone_0_db', 'zone_01_db', 'mmorpg_global', 'player_store_999999_db', 'player_store_4294967296_db', 'zone_1_db,zone_1_db', (('zone_1_db,'*1024)+'zone_2_db'))) {
+Test-Case 'SQL角色证明从独立正规玩家库清单反解，拒绝 zone 库/畸形/重复/超界' {
+    Assert-Equal -Expected '1000000,1000101,1000102' -Actual ((Get-RoleProofStorageIds -DatabaseNames 'player_store_1000102_db,player_store_1000000_db,player_store_1000101_db') -join ',') -Because '反解正规storage并按unsigned排序'
+    # 1025 个互不相同的存档库:只超总数,不重复。
+    $tooMany = @(0..1024 | ForEach-Object { 'player_store_{0}_db' -f (1000000 + $_) }) -join ','
+    # zone 库已退役(player-data-tidb-scaling-plan.md §7.2 A17c):单写 zone 库、和存档库混写都拒绝。
+    foreach ($value in @('', 'zone_1_db', 'zone_102_db,player_store_1000000_db', 'mmorpg_global', 'player_store_999999_db', 'player_store_4294967296_db', 'player_store_01000000_db', 'player_store_1000000_db,player_store_1000000_db', $tooMany)) {
         $denied=$false;try{$null=Get-RoleProofStorageIds -DatabaseNames $value}catch{$denied=$true}
         Assert-True -Condition $denied -Because '不能从畸形/重复/超过1024的玩家存储清单授权跨schema强读'
     }

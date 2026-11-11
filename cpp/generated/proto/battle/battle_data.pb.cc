@@ -4355,19 +4355,19 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "_EVENT_MANA\020\016\022\027\n\023BATTLE_EVENT_RESIST\020\017*m"
     "\n\016eBattleHitKind\022\025\n\021BATTLE_HIT_NORMAL\020\000\022"
     "\024\n\020BATTLE_HIT_COMBO\020\001\022\026\n\022BATTLE_HIT_COUN"
-    "TER\020\002\022\026\n\022BATTLE_HIT_REFLECT\020\003*\203\001\n\016eBattl"
+    "TER\020\002\022\026\n\022BATTLE_HIT_REFLECT\020\003*\234\001\n\016eBattl"
     "eOutcome\022\032\n\026BATTLE_OUTCOME_ONGOING\020\000\022\035\n\031"
     "BATTLE_OUTCOME_SIDE_A_WIN\020\001\022\035\n\031BATTLE_OU"
     "TCOME_SIDE_B_WIN\020\002\022\027\n\023BATTLE_OUTCOME_DRA"
-    "W\020\003*Z\n\023eBattleActivityKind\022\035\n\031BATTLE_ACT"
-    "IVITY_KIND_NONE\020\000\022$\n BATTLE_ACTIVITY_KIN"
-    "D_GUILD_TRIAL\020\001*{\n\023eSpectateVisibility\022#"
-    "\n\037SPECTATE_VISIBILITY_UNSPECIFIED\020\000\022\037\n\033S"
-    "PECTATE_VISIBILITY_PRIVATE\020\001\022\036\n\032SPECTATE"
-    "_VISIBILITY_PUBLIC\020\002*_\n\reSpectateTier\022\030\n"
-    "\024SPECTATE_TIER_DIRECT\020\000\022\027\n\023SPECTATE_TIER"
-    "_RELAY\020\001\022\033\n\027SPECTATE_TIER_BROADCAST\020\002B\010Z"
-    "\006battleb\006proto3"
+    "W\020\003\022\027\n\023BATTLE_OUTCOME_VOID\020\004*Z\n\023eBattleA"
+    "ctivityKind\022\035\n\031BATTLE_ACTIVITY_KIND_NONE"
+    "\020\000\022$\n BATTLE_ACTIVITY_KIND_GUILD_TRIAL\020\001"
+    "*{\n\023eSpectateVisibility\022#\n\037SPECTATE_VISI"
+    "BILITY_UNSPECIFIED\020\000\022\037\n\033SPECTATE_VISIBIL"
+    "ITY_PRIVATE\020\001\022\036\n\032SPECTATE_VISIBILITY_PUB"
+    "LIC\020\002*_\n\reSpectateTier\022\030\n\024SPECTATE_TIER_"
+    "DIRECT\020\000\022\027\n\023SPECTATE_TIER_RELAY\020\001\022\033\n\027SPE"
+    "CTATE_TIER_BROADCAST\020\002B\010Z\006battleb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_deps[2] = {
@@ -4378,7 +4378,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto = {
     false,
     false,
-    5375,
+    5400,
     descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto,
     "proto/battle/battle_data.proto",
     &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_once,
@@ -4425,7 +4425,7 @@ eBattleOutcome_descriptor() {
   return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[4];
 }
 PROTOBUF_CONSTINIT const uint32_t eBattleOutcome_internal_data_[] = {
-    262144u, 0u, };
+    327680u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eBattleActivityKind_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);

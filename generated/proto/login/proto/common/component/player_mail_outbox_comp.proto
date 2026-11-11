@@ -1,0 +1,33 @@
+syntax = "proto3";
+option go_package = "login/proto/common/component";
+
+// 待寄邮件(docs/design/battle-overflow-mail.md)。
+//
+// 一条 = 「这些物品已经属于这名玩家,还没有交到邮件服务」。今天唯一的来源是战斗结算:人物背包与临时格都放不下
+// 这一局的掉落时,整批改投邮件。条目与结算的其余效果同一帧写入、随同一次存档提交(一次存盘的所有脏行同事务,
+// player-save-direct-commit.md §1.1);存档确认提交之后,scene 才以 battle 身份调 MailAdmin.SendPersonalMail,
+// 邮件按 (sender_kind, request_id) 判重,回了 mail_id 才删条目。物品因此要么在背包、要么在这里、要么在邮件里,不丢不重。
+// 持久数据:只在加载时创建(PlayerDatabaseMessageFieldsUnmarshal),存盘缺它整份拒存(docs/design/ecs-component-access-rules.md)。
+// 标题、正文与物品都进邮件的载荷摘要,所以原样存下:重寄时逐字节相同,换了版本也不会把在途的请求判成冲突。
+// 位置与顺序没有语义(AGENTS §11.6):按 request_id 查找,存放顺序只为确定性序列化。字段号上线后不复用(AGENTS §4)。
+
+// 一种物品的数量。
+message MailOutboxItem {
+  uint32 config_id = 1;
+  uint64 count = 2;  // > 0
+}
+
+// 一封待寄的邮件。
+message MailOutboxEntry {
+  uint64 request_id = 1;              // 邮件的幂等键(sender_kind = battle);发号器的流水号(txlog 段),全服唯一
+  uint32 source = 2;                  // MailOutboxSource(mail_outbox_rules.h):1 = 战斗结算两包都放不下
+  uint64 source_id = 3;               // 来源的号:战斗结算 = battle_id(只进日志与对账)
+  string title = 4;
+  string body = 5;
+  repeated MailOutboxItem items = 6;  // 按 config_id 升序、互不重复、count > 0;一封至多 16 种、合计至多 4096 件(邮件附件的上限)
+  uint64 created_at_ms = 7;           // 建立时刻(UTC 毫秒),只进日志
+}
+
+message PlayerMailOutboxComp {
+  repeated MailOutboxEntry entries = 1;  // 同时至多 mail_outbox_rules::kMaxEntries 条;正常 0 条
+}

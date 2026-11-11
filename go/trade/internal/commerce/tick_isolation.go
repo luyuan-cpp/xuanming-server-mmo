@@ -12,6 +12,7 @@ package commerce
 // 2026-10-22 按复核意见修正:单行子预算改为从父 ctx 截止时刻推出(rowBudgetFor),卡住的行先撞上自己的子预算、
 // 父 ctx 还来得及推迟它,并给收据 ACK 留出预算;乐观冲突(conflict)不推迟、角色冲突(role_conflict)分钟级复查;
 // 隔离时截止合同名下仍在途的托管扣款;撮合失败不再走 deferCommerce。
+// 2026-11-11:角色冲突里不可逆的那种(参与方换主、删角)当场转人工,原因 owner_changed(quarantineOwnerChanged,§15.7.1 第 1 类)。
 // 设计说明见 docs/design/jubaozhai-market.md §15.3,人工处理见 docs/ops/trade-commerce-quarantine-runbook.md。
 
 import (
@@ -375,6 +376,22 @@ func (e *Engine) deferCommerce(parent context.Context, r *tradepb.TradeCommerceR
 		}
 		// 隔离落空(版本已变)或失败:退回普通推迟,下一轮按新版本重判。
 	}
+	if class == failureRoleConflict {
+		// 角色冲突分两种(2026-11-11,jubaozhai-market.md §15.7.1 第 1 类):冻结、投票中会自己解除,照旧分钟级复查;
+		// 换主、删角不可逆(owner_revision 只增不减),与坏数据同样当场转人工,人工用 commercefix redirect 改绑。
+		stage, detail, quarantined, err := e.quarantineOwnerChanged(ctx, r)
+		if err == nil && quarantined {
+			quarantinedTotal.Inc()
+			logx.Errorf("[Commerce] Contract quarantined as manual because a party role changed owner or was deleted commerce_id=%d kind=%d status=%d version=%d stage=%q: %s",
+				r.CommerceId, r.Kind, r.Status, r.Version, stage, detail)
+			return
+		}
+		if err != nil {
+			logx.Errorf("[Commerce] Failed to check party role owners commerce_id=%d version=%d: %v (step error: %v)",
+				r.CommerceId, r.Version, err, cause)
+		}
+		// 没换主(冻结、投票中)、副本判不了或版本已变:照旧推迟。
+	}
 	untilMs := tickFailureBackoff(e.now(), cause, rand.Float64)
 	deferred, err := e.Repo.Defer(ctx, r.CommerceId, r.Version, untilMs)
 	if err != nil {
@@ -433,6 +450,52 @@ func (e *Engine) quarantine(ctx context.Context, r *tradepb.TradeCommerceRecord,
 		return nil
 	})
 	return stage, quarantined, err
+}
+
+// quarantineOwnerChanged 判合同的参与方是否已不可逆地换主或删角(partyChanges),是就隔离为 Manual,原因 owner_changed,
+// detail 写是哪一方、修订号前后、账号是否相同(不写账号原文)。只在行仍是 r.Version、还没转人工时生效。
+// 返回原 stage 与写进记录的证据,供日志取证。
+//
+// 锁序与 advance 相同:先按 player_id 升序锁两方的角色护栏副本(readRoleFacts),再锁合同行。副本缺行时判不了,
+// 不在这里读目录(推迟路径只有 tickDeferBudget),照旧推迟,下一轮 advance 的 lockRoles 会自愈副本。
+// 人民币寄售(kind 6)卖的就是角色本身,换主是它的正常流程,不走这条。
+func (e *Engine) quarantineOwnerChanged(ctx context.Context, r *tradepb.TradeCommerceRecord) (string, string, bool, error) {
+	if e.Roles == nil || r.Kind == 6 {
+		return "", "", false, nil
+	}
+	w, err := data.Workflow(r)
+	if err != nil {
+		return "", "", false, nil // 解不开是坏数据,由 corrupt 一类隔离
+	}
+	stage, detail, quarantined := "", "", false
+	err = e.Repo.Tx(ctx, func(tx *sql.Tx) error {
+		stage, detail, quarantined = "", "", false
+		facts, err := readRoleFacts(ctx, tx, e.Roles, partyPlayers(r), false)
+		if err != nil {
+			return err
+		}
+		changes := partyChanges(r, w, facts)
+		if len(changes) == 0 {
+			return nil
+		}
+		cur, err := e.Repo.Lock(ctx, tx, r.CommerceId)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if cur.Version != r.Version || cur.Status == Manual {
+			return nil // 版本已变:参与方可能也变了,下一轮按新行重判
+		}
+		detail = describeRoleChanges(changes)
+		if stage, err = e.quarantineLockedTx(ctx, tx, cur, manualReasonOwnerChanged, detail); err != nil {
+			return err
+		}
+		quarantined = true
+		return nil
+	})
+	return stage, detail, quarantined, err
 }
 
 // quarantineLockedTx 在调用方已锁住合同行 cur 的事务里把它隔离为 Manual,返回原 stage 供日志取证。

@@ -229,13 +229,6 @@ Activity:
 # 恢复:etcdctl del 对应的 key。
 KillSwitchPrefix: ""
 
-# 部署级集群号(snowflake worker 段的 cluster 位,0..31)。运维按集群一次性设定,策划不碰;
-# 单集群 / 存量布局保持 0。两个集群共用一个 etcd 也不撞号。
-ClusterId: 0
-
-# snowflake 槽位本地缓存目录:etcd 启动时不可达、缓存在 2h 内则用缓存的槽起服。留空关闭。
-SnowflakeCacheDir: ../../run/snowflake
-
 # Prometheus 抓取端点,由 go-zero core/service 自带的 agent 暴露(不要另起 promhttp)。
 # 端口分工:login 9101 / scene_manager 9150 / db 9160 / friend 9180 / player_locator 9190 /
 # client_rpc_router 9200 / chat 9210 / guild 9220(原 9170 与 match 撞号,本机同时起两者时后起者的

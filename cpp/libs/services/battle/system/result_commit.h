@@ -28,8 +28,10 @@ inline constexpr std::size_t kMaxCompleteResultBytes = 960 * 1024;
 inline bool FreezeBattleSettlementSource(contracts::kafka::BattleResultEvent& event,
                                         std::vector<::BattleSettlementData> settlements)
 {
+    // VOID 只由 Match 的 ABORT 产生(battle-instance-loss-early-abort.md §6),battle 冻结的终局只能是 A 胜 / B 胜 / 平局;
+    // Match 的终局核对同样只收这三种(completion.go 的结局区间校验)。
     if (event.battle_id() == 0 || !::eBattleOutcome_IsValid(event.outcome()) ||
-        event.outcome() == ::BATTLE_OUTCOME_ONGOING || settlements.empty() ||
+        event.outcome() == ::BATTLE_OUTCOME_ONGOING || event.outcome() == ::BATTLE_OUTCOME_VOID || settlements.empty() ||
         event.settlement_format_version() != 0 || event.settlements_size() != 0)
         return false;
     std::map<uint64_t, uint32_t> members;

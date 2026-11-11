@@ -87,7 +87,7 @@ func (SnapshotTrigger) EnumDescriptor() ([]byte, []int) {
 // Stored in a dedicated table, isolated from live data.
 type PlayerSnapshotEntry struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
-	SnapshotId   uint64                 `protobuf:"varint,1,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"` // Unique ID (SnowFlake)
+	SnapshotId   uint64                 `protobuf:"varint,1,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"` // Unique ID: issuer "snapshot" segment, scrambled by MixGuid (not monotonic; never compare by size)
 	PlayerId     uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	SnapshotTime uint64                 `protobuf:"varint,3,opt,name=snapshot_time,json=snapshotTime,proto3" json:"snapshot_time,omitempty"` // Unix seconds when snapshot was taken
 	Trigger      SnapshotTrigger        `protobuf:"varint,4,opt,name=trigger,proto3,enum=SnapshotTrigger" json:"trigger,omitempty"`

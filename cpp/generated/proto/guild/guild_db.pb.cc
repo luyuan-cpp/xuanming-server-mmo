@@ -1005,11 +1005,11 @@ constexpr GuildTrialLaunchRecord::ParseTableT_ GuildTrialLaunchRecord::InternalG
     {
       PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1021,16 +1021,16 @@ constexpr GuildTrialLaunchRecord::ParseTableT_ GuildTrialLaunchRecord::InternalG
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 request_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildTrialLaunchRecord, _impl_.request_id_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildTrialLaunchRecord, _impl_.request_id_), 4>(),
+       {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.request_id_)}},
       // uint64 battle_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildTrialLaunchRecord, _impl_.battle_id_), 4>(),
-       {16, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildTrialLaunchRecord, _impl_.battle_id_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.battle_id_)}},
       // uint32 state = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildTrialLaunchRecord, _impl_.state_), 6>(),
-       {24, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildTrialLaunchRecord, _impl_.state_), 7>(),
+       {24, 7, 0,
         PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.state_)}},
       // bytes original_proto = 4;
       {::_pbi::TcParser::FastBS1,
@@ -1041,26 +1041,29 @@ constexpr GuildTrialLaunchRecord::ParseTableT_ GuildTrialLaunchRecord::InternalG
        {42, 1, 0,
         PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.request_digest_)}},
       // uint64 created_ms = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildTrialLaunchRecord, _impl_.created_ms_), 5>(),
-       {48, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildTrialLaunchRecord, _impl_.created_ms_), 6>(),
+       {48, 6, 0,
         PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.created_ms_)}},
       // uint64 updated_ms = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildTrialLaunchRecord, _impl_.updated_ms_), 8>(),
-       {56, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildTrialLaunchRecord, _impl_.updated_ms_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.updated_ms_)}},
       // bytes cancel_receipt = 8;
       {::_pbi::TcParser::FastBS1,
        {66, 2, 0,
         PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.cancel_receipt_)}},
       // uint64 next_check_ms = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildTrialLaunchRecord, _impl_.next_check_ms_), 9>(),
-       {72, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildTrialLaunchRecord, _impl_.next_check_ms_), 10>(),
+       {72, 10, 0,
         PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.next_check_ms_)}},
       // uint32 check_attempts = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildTrialLaunchRecord, _impl_.check_attempts_), 7>(),
-       {80, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildTrialLaunchRecord, _impl_.check_attempts_), 8>(),
+       {80, 8, 0,
         PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.check_attempts_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bytes realtime_end_tip = 11;
+      {::_pbi::TcParser::FastBS1,
+       {90, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.realtime_end_tip_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1069,25 +1072,27 @@ constexpr GuildTrialLaunchRecord::ParseTableT_ GuildTrialLaunchRecord::InternalG
       65535, 65535
     }}, {{
       // uint64 request_id = 1;
-      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.request_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.request_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 battle_id = 2;
-      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.battle_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.battle_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 state = 3;
-      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.state_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.state_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bytes original_proto = 4;
       {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.original_proto_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // bytes request_digest = 5;
       {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.request_digest_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // uint64 created_ms = 6;
-      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.created_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.created_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 updated_ms = 7;
-      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.updated_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.updated_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bytes cancel_receipt = 8;
       {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.cancel_receipt_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // uint64 next_check_ms = 9;
-      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.next_check_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.next_check_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 check_attempts = 10;
-      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.check_attempts_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.check_attempts_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bytes realtime_end_tip = 11;
+      {PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.realtime_end_tip_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
@@ -1107,6 +1112,9 @@ inline constexpr GuildTrialLaunchRecord::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         cancel_receipt_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        realtime_end_tip_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         request_id_{::uint64_t{0u}},
@@ -1443,11 +1451,11 @@ constexpr GuildRecord::ParseTableT_ GuildRecord::InternalGenerateParseTable_(con
     {
       PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_._has_bits_),
       0, // no _extensions_
-      11, 120,  // max_field_number, fast_idx_mask
+      12, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294965248,  // skipmap
+      4294963200,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      11,  // num_field_entries
+      12,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1487,8 +1495,8 @@ constexpr GuildRecord::ParseTableT_ GuildRecord::InternalGenerateParseTable_(con
        {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.max_members_)}},
       // uint32 zone_id = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildRecord, _impl_.zone_id_), 10>(),
-       {64, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildRecord, _impl_.zone_id_), 11>(),
+       {64, 11, 0,
         PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.zone_id_)}},
       // int64 score = 9;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildRecord, _impl_.score_), 8>(),
@@ -1502,7 +1510,10 @@ constexpr GuildRecord::ParseTableT_ GuildRecord::InternalGenerateParseTable_(con
       {::_pbi::TcParser::FastUS1,
        {90, 2, 0,
         PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.name_norm_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 score_version = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildRecord, _impl_.score_version_), 10>(),
+       {96, 10, 0,
+        PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.score_version_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1524,13 +1535,15 @@ constexpr GuildRecord::ParseTableT_ GuildRecord::InternalGenerateParseTable_(con
       // uint32 max_members = 7;
       {PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.max_members_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 zone_id = 8;
-      {PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.zone_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.zone_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // int64 score = 9;
       {PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.score_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // uint64 funds = 10;
       {PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.funds_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string name_norm = 11;
       {PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.name_norm_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 score_version = 12;
+      {PROTOBUF_FIELD_OFFSET(GuildRecord, _impl_.score_version_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1564,6 +1577,7 @@ inline constexpr GuildRecord::Impl_::Impl_(
         create_time_ms_{::uint64_t{0u}},
         score_{::int64_t{0}},
         funds_{::uint64_t{0u}},
+        score_version_{::uint64_t{0u}},
         zone_id_{0u} {}
 
 template <typename>
@@ -3921,7 +3935,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildRecord, _impl_._has_bits_),
-        14, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildRecord, _impl_.guild_id_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildRecord, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildRecord, _impl_.leader_id_),
@@ -3933,6 +3947,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildRecord, _impl_.score_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildRecord, _impl_.funds_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildRecord, _impl_.name_norm_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildRecord, _impl_.score_version_),
         3,
         0,
         4,
@@ -3940,10 +3955,11 @@ const ::uint32_t
         1,
         7,
         6,
-        10,
+        11,
         8,
         9,
         2,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildPlayerStateRecord, _impl_._has_bits_),
         5, // hasbit index offset
@@ -4211,7 +4227,7 @@ const ::uint32_t
         8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildTrialLaunchRecord, _impl_._has_bits_),
-        13, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildTrialLaunchRecord, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildTrialLaunchRecord, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildTrialLaunchRecord, _impl_.state_),
@@ -4222,16 +4238,18 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildTrialLaunchRecord, _impl_.cancel_receipt_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildTrialLaunchRecord, _impl_.next_check_ms_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildTrialLaunchRecord, _impl_.check_attempts_),
-        3,
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildTrialLaunchRecord, _impl_.realtime_end_tip_),
         4,
-        6,
+        5,
+        7,
         0,
         1,
-        5,
-        8,
-        2,
+        6,
         9,
-        7,
+        2,
+        10,
+        8,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildTrialLaunchRoleRecord, _impl_._has_bits_),
         8, // hasbit index offset
@@ -4280,25 +4298,25 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::guildpb::GuildRecord)},
-        {25, sizeof(::guildpb::GuildPlayerStateRecord)},
-        {32, sizeof(::guildpb::GuildMemberRecord)},
-        {49, sizeof(::guildpb::GuildApplicationRecord)},
-        {60, sizeof(::guildpb::GuildPlayerOpSeqRecord)},
-        {73, sizeof(::guildpb::GuildAssetOpRecord)},
-        {134, sizeof(::guildpb::GuildDailyCounterRecord)},
-        {149, sizeof(::guildpb::GuildActivityProgressRecord)},
-        {166, sizeof(::guildpb::GuildTrialBattleRecord)},
-        {193, sizeof(::guildpb::GuildTrialRoleIdentity)},
-        {202, sizeof(::guildpb::GuildTrialLobbyConsent)},
-        {209, sizeof(::guildpb::GuildTrialLobbyOriginal)},
-        {226, sizeof(::guildpb::GuildTrialLobbyConsents)},
-        {231, sizeof(::guildpb::GuildTrialLobbyRecord)},
-        {260, sizeof(::guildpb::GuildTrialLobbySlotRecord)},
-        {269, sizeof(::guildpb::GuildTrialLaunchOriginal)},
-        {290, sizeof(::guildpb::GuildTrialLaunchRecord)},
-        {313, sizeof(::guildpb::GuildTrialLaunchRoleRecord)},
-        {326, sizeof(::guildpb::GuildTrialRewardOwedRecord)},
-        {345, sizeof(::guildpb::GuildClientRequestRecord)},
+        {27, sizeof(::guildpb::GuildPlayerStateRecord)},
+        {34, sizeof(::guildpb::GuildMemberRecord)},
+        {51, sizeof(::guildpb::GuildApplicationRecord)},
+        {62, sizeof(::guildpb::GuildPlayerOpSeqRecord)},
+        {75, sizeof(::guildpb::GuildAssetOpRecord)},
+        {136, sizeof(::guildpb::GuildDailyCounterRecord)},
+        {151, sizeof(::guildpb::GuildActivityProgressRecord)},
+        {168, sizeof(::guildpb::GuildTrialBattleRecord)},
+        {195, sizeof(::guildpb::GuildTrialRoleIdentity)},
+        {204, sizeof(::guildpb::GuildTrialLobbyConsent)},
+        {211, sizeof(::guildpb::GuildTrialLobbyOriginal)},
+        {228, sizeof(::guildpb::GuildTrialLobbyConsents)},
+        {233, sizeof(::guildpb::GuildTrialLobbyRecord)},
+        {262, sizeof(::guildpb::GuildTrialLobbySlotRecord)},
+        {271, sizeof(::guildpb::GuildTrialLaunchOriginal)},
+        {292, sizeof(::guildpb::GuildTrialLaunchRecord)},
+        {317, sizeof(::guildpb::GuildTrialLaunchRoleRecord)},
+        {330, sizeof(::guildpb::GuildTrialRewardOwedRecord)},
+        {349, sizeof(::guildpb::GuildClientRequestRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4326,165 +4344,166 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\032proto/guild/guild_db.proto\022\007guildpb\032\033p"
-    "roto/db/proto_option.proto\"\240\002\n\013GuildReco"
+    "roto/db/proto_option.proto\"\267\002\n\013GuildReco"
     "rd\022\020\n\010guild_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\021\n\tle"
     "ader_id\030\003 \001(\004\022\r\n\005level\030\004 \001(\r\022\024\n\014announce"
     "ment\030\005 \001(\t\022\026\n\016create_time_ms\030\006 \001(\004\022\023\n\013ma"
     "x_members\030\007 \001(\r\022\017\n\007zone_id\030\010 \001(\r\022\r\n\005scor"
     "e\030\t \001(\003\022\r\n\005funds\030\n \001(\004\022\021\n\tname_norm\030\013 \001("
-    "\t:J\212\222\364\001\005guild\222\222\364\001\010guild_id\332\222\364\001\021zone_id;l"
-    "eader_id\342\222\364\001\tname_norm\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"u\n"
-    "\026GuildPlayerStateRecord\022\021\n\tplayer_id\030\001 \001"
-    "(\004\022\022\n\nupdated_ms\030\002 \001(\004:4\212\222\364\001\022guild_playe"
-    "r_state\222\222\364\001\tplayer_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\365\001\n"
-    "\021GuildMemberRecord\022\020\n\010guild_id\030\001 \001(\004\022\021\n\t"
-    "player_id\030\002 \001(\004\022\014\n\004role\030\003 \001(\r\022\024\n\014join_ti"
-    "me_ms\030\004 \001(\004\022\026\n\016last_active_ms\030\005 \001(\004\022\032\n\022c"
-    "ontribution_total\030\006 \001(\004\022\034\n\024contribution_"
-    "balance\030\007 \001(\004:E\212\222\364\001\014guild_member\222\222\364\001\022gui"
-    "ld_id,player_id\342\222\364\001\tplayer_id\250\223\364\001\001\260\223\364\001\004\270"
-    "\223\364\001\004\"\270\001\n\026GuildApplicationRecord\022\020\n\010guild"
-    "_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\020\n\010apply_ms"
-    "\030\003 \001(\004\022\021\n\texpire_ms\030\004 \001(\004:T\212\222\364\001\021guild_ap"
-    "plication\222\222\364\001\022guild_id,player_id\332\222\364\001\023pla"
-    "yer_id;expire_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\256\001\n\026Guil"
-    "dPlayerOpSeqRecord\022\021\n\tplayer_id\030\001 \001(\004\022\016\n"
-    "\006stream\030\002 \001(\r\022\020\n\010next_seq\030\003 \001(\004\022\022\n\nupdat"
-    "ed_ms\030\004 \001(\004\022\r\n\005epoch\030\005 \001(\004:<\212\222\364\001\023guild_p"
-    "layer_op_seq\222\222\364\001\020player_id,stream\250\223\364\001\001\260\223"
-    "\364\001\004\270\223\364\001\004\"\256\006\n\022GuildAssetOpRecord\022\r\n\005op_id"
-    "\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\016\n\006stream\030\003 \001("
-    "\r\022\013\n\003seq\030\004 \001(\004\022\020\n\010guild_id\030\005 \001(\004\022\'\n\004kind"
-    "\030\006 \001(\0162\031.guildpb.GuildAssetOpKind\022+\n\006sta"
-    "tus\030\007 \001(\0162\033.guildpb.GuildAssetOpStatus\022\017"
-    "\n\007durable\030\010 \001(\r\022\020\n\010attempts\030\t \001(\r\022\027\n\017nex"
-    "t_attempt_ms\030\n \001(\004\022\023\n\013deadline_ms\030\013 \001(\004\022"
-    "\017\n\007payload\030\014 \001(\014\022\016\n\006ref_id\030\r \001(\r\022\021\n\tref_"
-    "count\030\016 \001(\r\022\022\n\nperiod_key\030\017 \001(\r\022\032\n\022contr"
-    "ibution_delta\030\020 \001(\004\022\023\n\013funds_delta\030\021 \001(\004"
-    "\022\025\n\rreason_tip_id\030\022 \001(\r\022\022\n\ncreated_ms\030\023 "
-    "\001(\004\022\022\n\nupdated_ms\030\024 \001(\004\022\026\n\016lease_until_m"
-    "s\030\025 \001(\004\022\023\n\013lease_token\030\026 \001(\004\022\017\n\007tx_type\030"
-    "\027 \001(\r\022\024\n\014last_outcome\030\030 \001(\r\022\023\n\013last_reas"
-    "on\030\031 \001(\r\022\024\n\014stream_epoch\030\032 \001(\004\022\023\n\013resolv"
-    "ed_by\030\033 \001(\t\022\026\n\016resolve_reason\030\034 \001(\t\022\024\n\014l"
-    "ast_send_ms\030\035 \001(\004:\245\001\212\222\364\001\016guild_asset_op\222"
-    "\222\364\001\005op_id\332\222\364\001Nstatus,next_attempt_ms;gui"
-    "ld_id,op_id;player_id,stream,stream_epoc"
-    "h,status,seq\342\222\364\001!player_id,stream,stream"
-    "_epoch,seq\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\223\002\n\027GuildDaily"
-    "CounterRecord\022\021\n\tplayer_id\030\001 \001(\004\0224\n\014coun"
-    "ter_kind\030\002 \001(\0162\036.guildpb.GuildDailyCount"
-    "erKind\022\016\n\006ref_id\030\003 \001(\r\022\022\n\nperiod_key\030\004 \001"
-    "(\r\022\022\n\nused_count\030\005 \001(\r\022\022\n\nupdated_ms\030\006 \001"
-    "(\004:c\212\222\364\001\023guild_daily_counter\222\222\364\001(player_"
-    "id,counter_kind,ref_id,period_key\332\222\364\001\npe"
-    "riod_key\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\212\002\n\033GuildActivit"
-    "yProgressRecord\022\020\n\010guild_id\030\001 \001(\004\022\023\n\013act"
-    "ivity_id\030\002 \001(\r\022\022\n\nperiod_key\030\003 \001(\r\022\026\n\016pr"
-    "ogress_count\030\004 \001(\r\022\034\n\024threshold_reached_"
-    "ms\030\005 \001(\004\022\025\n\rfunds_granted\030\006 \001(\r\022\022\n\nupdat"
-    "ed_ms\030\007 \001(\004:O\212\222\364\001\027guild_activity_progres"
-    "s\222\222\364\001\037guild_id,activity_id,period_key\250\223\364"
-    "\001\001\260\223\364\001\004\270\223\364\001\004\"\271\003\n\026GuildTrialBattleRecord\022"
-    "\021\n\tbattle_id\030\001 \001(\004\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013"
-    "activity_id\030\003 \001(\r\022\022\n\nperiod_key\030\004 \001(\r\022\030\n"
-    "\020guild_period_key\030\005 \001(\r\022\033\n\023initiator_pla"
-    "yer_id\030\006 \001(\004\022-\n\005state\030\007 \001(\0162\036.guildpb.Gu"
-    "ildTrialBattleState\0226\n\rsettle_result\030\010 \001"
-    "(\0162\037.guildpb.GuildTrialSettleResult\022\026\n\016r"
-    "ewarded_count\030\t \001(\r\022\022\n\ncreated_ms\030\n \001(\004\022"
-    "\022\n\nsettled_ms\030\013 \001(\004\022\031\n\021launch_request_id"
-    "\030\014 \001(\004:X\212\222\364\001\022guild_trial_battle\222\222\364\001\tbatt"
-    "le_id\332\222\364\001\037guild_id,state;state,created_m"
-    "s\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"T\n\026GuildTrialRoleIdenti"
-    "ty\022\021\n\tplayer_id\030\001 \001(\004\022\017\n\007account\030\002 \001(\t\022\026"
-    "\n\016owner_revision\030\003 \001(\004\"]\n\026GuildTrialLobb"
-    "yConsent\022\020\n\010lobby_id\030\001 \001(\004\0221\n\010identity\030\002"
-    " \001(\0132\037.guildpb.GuildTrialRoleIdentity\"\310\001"
-    "\n\027GuildTrialLobbyOriginal\022\020\n\010lobby_id\030\001 "
-    "\001(\004\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013activity_id\030\003 \001"
-    "(\r\022\033\n\023initiator_player_id\030\004 \001(\004\022/\n\006roste"
-    "r\030\005 \003(\0132\037.guildpb.GuildTrialRoleIdentity"
-    "\022\022\n\ncreated_ms\030\006 \001(\004\022\022\n\nexpires_ms\030\007 \001(\004"
-    "\"L\n\027GuildTrialLobbyConsents\0221\n\010consents\030"
-    "\001 \003(\0132\037.guildpb.GuildTrialLobbyConsent\"\243"
-    "\003\n\025GuildTrialLobbyRecord\022\020\n\010lobby_id\030\001 \001"
+    "\t\022\025\n\rscore_version\030\014 \001(\004:J\212\222\364\001\005guild\222\222\364\001"
+    "\010guild_id\332\222\364\001\021zone_id;leader_id\342\222\364\001\tname"
+    "_norm\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"u\n\026GuildPlayerState"
+    "Record\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nupdated_ms\030"
+    "\002 \001(\004:4\212\222\364\001\022guild_player_state\222\222\364\001\tplaye"
+    "r_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\365\001\n\021GuildMemberRecor"
+    "d\022\020\n\010guild_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\014"
+    "\n\004role\030\003 \001(\r\022\024\n\014join_time_ms\030\004 \001(\004\022\026\n\016la"
+    "st_active_ms\030\005 \001(\004\022\032\n\022contribution_total"
+    "\030\006 \001(\004\022\034\n\024contribution_balance\030\007 \001(\004:E\212\222"
+    "\364\001\014guild_member\222\222\364\001\022guild_id,player_id\342\222"
+    "\364\001\tplayer_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\270\001\n\026GuildApp"
+    "licationRecord\022\020\n\010guild_id\030\001 \001(\004\022\021\n\tplay"
+    "er_id\030\002 \001(\004\022\020\n\010apply_ms\030\003 \001(\004\022\021\n\texpire_"
+    "ms\030\004 \001(\004:T\212\222\364\001\021guild_application\222\222\364\001\022gui"
+    "ld_id,player_id\332\222\364\001\023player_id;expire_ms\250"
+    "\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\256\001\n\026GuildPlayerOpSeqRecor"
+    "d\022\021\n\tplayer_id\030\001 \001(\004\022\016\n\006stream\030\002 \001(\r\022\020\n\010"
+    "next_seq\030\003 \001(\004\022\022\n\nupdated_ms\030\004 \001(\004\022\r\n\005ep"
+    "och\030\005 \001(\004:<\212\222\364\001\023guild_player_op_seq\222\222\364\001\020"
+    "player_id,stream\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\276\006\n\022Guil"
+    "dAssetOpRecord\022\r\n\005op_id\030\001 \001(\004\022\021\n\tplayer_"
+    "id\030\002 \001(\004\022\016\n\006stream\030\003 \001(\r\022\013\n\003seq\030\004 \001(\004\022\020\n"
+    "\010guild_id\030\005 \001(\004\022\'\n\004kind\030\006 \001(\0162\031.guildpb."
+    "GuildAssetOpKind\022+\n\006status\030\007 \001(\0162\033.guild"
+    "pb.GuildAssetOpStatus\022\017\n\007durable\030\010 \001(\r\022\020"
+    "\n\010attempts\030\t \001(\r\022\027\n\017next_attempt_ms\030\n \001("
+    "\004\022\023\n\013deadline_ms\030\013 \001(\004\022\017\n\007payload\030\014 \001(\014\022"
+    "\016\n\006ref_id\030\r \001(\r\022\021\n\tref_count\030\016 \001(\r\022\022\n\npe"
+    "riod_key\030\017 \001(\r\022\032\n\022contribution_delta\030\020 \001"
+    "(\004\022\023\n\013funds_delta\030\021 \001(\004\022\025\n\rreason_tip_id"
+    "\030\022 \001(\r\022\022\n\ncreated_ms\030\023 \001(\004\022\022\n\nupdated_ms"
+    "\030\024 \001(\004\022\026\n\016lease_until_ms\030\025 \001(\004\022\023\n\013lease_"
+    "token\030\026 \001(\004\022\017\n\007tx_type\030\027 \001(\r\022\024\n\014last_out"
+    "come\030\030 \001(\r\022\023\n\013last_reason\030\031 \001(\r\022\024\n\014strea"
+    "m_epoch\030\032 \001(\004\022\023\n\013resolved_by\030\033 \001(\t\022\026\n\016re"
+    "solve_reason\030\034 \001(\t\022\024\n\014last_send_ms\030\035 \001(\004"
+    ":\265\001\212\222\364\001\016guild_asset_op\222\222\364\001\005op_id\332\222\364\001^sta"
+    "tus,next_attempt_ms,op_id,player_id;guil"
+    "d_id,op_id;player_id,stream,stream_epoch"
+    ",status,seq\342\222\364\001!player_id,stream,stream_"
+    "epoch,seq\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\223\002\n\027GuildDailyC"
+    "ounterRecord\022\021\n\tplayer_id\030\001 \001(\004\0224\n\014count"
+    "er_kind\030\002 \001(\0162\036.guildpb.GuildDailyCounte"
+    "rKind\022\016\n\006ref_id\030\003 \001(\r\022\022\n\nperiod_key\030\004 \001("
+    "\r\022\022\n\nused_count\030\005 \001(\r\022\022\n\nupdated_ms\030\006 \001("
+    "\004:c\212\222\364\001\023guild_daily_counter\222\222\364\001(player_i"
+    "d,counter_kind,ref_id,period_key\332\222\364\001\nper"
+    "iod_key\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\212\002\n\033GuildActivity"
+    "ProgressRecord\022\020\n\010guild_id\030\001 \001(\004\022\023\n\013acti"
+    "vity_id\030\002 \001(\r\022\022\n\nperiod_key\030\003 \001(\r\022\026\n\016pro"
+    "gress_count\030\004 \001(\r\022\034\n\024threshold_reached_m"
+    "s\030\005 \001(\004\022\025\n\rfunds_granted\030\006 \001(\r\022\022\n\nupdate"
+    "d_ms\030\007 \001(\004:O\212\222\364\001\027guild_activity_progress"
+    "\222\222\364\001\037guild_id,activity_id,period_key\250\223\364\001"
+    "\001\260\223\364\001\004\270\223\364\001\004\"\271\003\n\026GuildTrialBattleRecord\022\021"
+    "\n\tbattle_id\030\001 \001(\004\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013a"
+    "ctivity_id\030\003 \001(\r\022\022\n\nperiod_key\030\004 \001(\r\022\030\n\020"
+    "guild_period_key\030\005 \001(\r\022\033\n\023initiator_play"
+    "er_id\030\006 \001(\004\022-\n\005state\030\007 \001(\0162\036.guildpb.Gui"
+    "ldTrialBattleState\0226\n\rsettle_result\030\010 \001("
+    "\0162\037.guildpb.GuildTrialSettleResult\022\026\n\016re"
+    "warded_count\030\t \001(\r\022\022\n\ncreated_ms\030\n \001(\004\022\022"
+    "\n\nsettled_ms\030\013 \001(\004\022\031\n\021launch_request_id\030"
+    "\014 \001(\004:X\212\222\364\001\022guild_trial_battle\222\222\364\001\tbattl"
+    "e_id\332\222\364\001\037guild_id,state;state,created_ms"
+    "\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"T\n\026GuildTrialRoleIdentit"
+    "y\022\021\n\tplayer_id\030\001 \001(\004\022\017\n\007account\030\002 \001(\t\022\026\n"
+    "\016owner_revision\030\003 \001(\004\"]\n\026GuildTrialLobby"
+    "Consent\022\020\n\010lobby_id\030\001 \001(\004\0221\n\010identity\030\002 "
+    "\001(\0132\037.guildpb.GuildTrialRoleIdentity\"\310\001\n"
+    "\027GuildTrialLobbyOriginal\022\020\n\010lobby_id\030\001 \001"
     "(\004\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013activity_id\030\003 \001("
-    "\r\022\033\n\023initiator_player_id\030\004 \001(\004\022\r\n\005state\030"
-    "\005 \001(\r\022\022\n\nview_proto\030\006 \001(\014\022\026\n\016original_pr"
-    "oto\030\007 \001(\014\022\025\n\rconsent_proto\030\010 \001(\014\022\022\n\nexpi"
-    "res_ms\030\t \001(\004\022\032\n\022launch_deadline_ms\030\n \001(\004"
-    "\022\021\n\tbattle_id\030\013 \001(\004\022\022\n\ncreated_ms\030\014 \001(\004\022"
-    "\022\n\nupdated_ms\030\r \001(\004:w\212\222\364\001\021guild_trial_lo"
-    "bby\222\222\364\001\010lobby_id\332\222\364\001@guild_id,state,lobb"
-    "y_id;state,updated_ms,lobby_id;state,lob"
-    "by_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\254\001\n\031GuildTrialLobby"
-    "SlotRecord\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010lobby_i"
-    "d\030\002 \001(\004\022\031\n\021cooldown_until_ms\030\003 \001(\004:O\212\222\364\001"
-    "\026guild_trial_lobby_slot\222\222\364\001\tplayer_id\332\222\364"
-    "\001\022lobby_id,player_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\371\001\n\030"
-    "GuildTrialLaunchOriginal\022\022\n\nrequest_id\030\001"
-    " \001(\004\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013activity_id\030\003 "
-    "\001(\r\022\022\n\nperiod_key\030\004 \001(\r\022\030\n\020guild_period_"
-    "key\030\005 \001(\r\022\033\n\023initiator_player_id\030\006 \001(\004\022\022"
-    "\n\ndungeon_id\030\007 \001(\r\022/\n\006roster\030\010 \003(\0132\037.gui"
-    "ldpb.GuildTrialRoleIdentity\022\022\n\ncreated_m"
-    "s\030\t \001(\004\"\327\002\n\026GuildTrialLaunchRecord\022\022\n\nre"
-    "quest_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001(\004\022\r\n\005sta"
-    "te\030\003 \001(\r\022\026\n\016original_proto\030\004 \001(\014\022\026\n\016requ"
-    "est_digest\030\005 \001(\014\022\022\n\ncreated_ms\030\006 \001(\004\022\022\n\n"
-    "updated_ms\030\007 \001(\004\022\026\n\016cancel_receipt\030\010 \001(\014"
-    "\022\025\n\rnext_check_ms\030\t \001(\004\022\026\n\016check_attempt"
-    "s\030\n \001(\r:h\212\222\364\001\022guild_trial_launch\222\222\364\001\nreq"
-    "uest_id\332\222\364\001.state,updated_ms;battle_id;s"
-    "tate,next_check_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\365\001\n\032Gu"
-    "ildTrialLaunchRoleRecord\022\021\n\tplayer_id\030\001 "
-    "\001(\004\022\022\n\nrequest_id\030\002 \001(\004\022\017\n\007account\030\003 \001(\t"
-    "\022\026\n\016owner_revision\030\004 \001(\004\022\r\n\005state\030\005 \001(\r:"
-    "x\212\222\364\001\027guild_trial_launch_role\222\222\364\001\024player"
-    "_id,request_id\332\222\364\001/request_id,player_id;"
-    "player_id,state,request_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001"
-    "\004\"\210\002\n\032GuildTrialRewardOwedRecord\022\021\n\tplay"
-    "er_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001(\004\022\020\n\010guild_"
-    "id\030\003 \001(\004\022\023\n\013activity_id\030\004 \001(\r\022\022\n\nperiod_"
-    "key\030\005 \001(\r\022\017\n\007payload\030\006 \001(\014\022\020\n\010attempts\030\007"
-    " \001(\r\022\022\n\ncreated_ms\030\010 \001(\004:R\212\222\364\001\027guild_tri"
-    "al_reward_owed\222\222\364\001\023player_id,battle_id\332\222"
-    "\364\001\ncreated_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\304\001\n\030GuildCl"
-    "ientRequestRecord\022\021\n\tplayer_id\030\001 \001(\004\022\031\n\021"
-    "client_request_id\030\002 \001(\004\022\r\n\005op_id\030\003 \001(\004\022\022"
-    "\n\ncreated_ms\030\004 \001(\004:W\212\222\364\001\024guild_client_re"
-    "quest\222\222\364\001\033player_id,client_request_id\332\222\364"
-    "\001\ncreated_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004*\230\002\n\022GuildAss"
-    "etOpStatus\022%\n!GUILD_ASSET_OP_STATUS_UNSP"
-    "ECIFIED\020\000\022!\n\035GUILD_ASSET_OP_STATUS_PENDI"
-    "NG\020\001\022!\n\035GUILD_ASSET_OP_STATUS_APPLIED\020\002\022"
-    "\"\n\036GUILD_ASSET_OP_STATUS_REJECTED\020\003\022!\n\035G"
-    "UILD_ASSET_OP_STATUS_ABORTED\020\004\022)\n%GUILD_"
-    "ASSET_OP_STATUS_APPLIED_PARTIAL\020\005\022#\n\037GUI"
-    "LD_ASSET_OP_STATUS_ABANDONED\020\006*\236\001\n\020Guild"
-    "AssetOpKind\022#\n\037GUILD_ASSET_OP_KIND_UNSPE"
-    "CIFIED\020\000\022\036\n\032GUILD_ASSET_OP_KIND_DONATE\020\001"
-    "\022\034\n\030GUILD_ASSET_OP_KIND_SHOP\020\002\022\'\n#GUILD_"
-    "ASSET_OP_KIND_ACTIVITY_REWARD\020\003*\260\001\n\025Guil"
-    "dDailyCounterKind\022(\n$GUILD_DAILY_COUNTER"
-    "_KIND_UNSPECIFIED\020\000\022#\n\037GUILD_DAILY_COUNT"
-    "ER_KIND_DONATE\020\001\022!\n\035GUILD_DAILY_COUNTER_"
-    "KIND_SHOP\020\002\022%\n!GUILD_DAILY_COUNTER_KIND_"
-    "ACTIVITY\020\003*\263\001\n\025GuildTrialBattleState\022(\n$"
-    "GUILD_TRIAL_BATTLE_STATE_UNSPECIFIED\020\000\022$"
-    "\n GUILD_TRIAL_BATTLE_STATE_STARTED\020\001\022$\n "
-    "GUILD_TRIAL_BATTLE_STATE_SETTLED\020\002\022$\n GU"
-    "ILD_TRIAL_BATTLE_STATE_EXPIRED\020\003*\210\002\n\026Gui"
-    "ldTrialSettleResult\022)\n%GUILD_TRIAL_SETTL"
-    "E_RESULT_UNSPECIFIED\020\000\022!\n\035GUILD_TRIAL_SE"
-    "TTLE_RESULT_WIN\020\001\022\"\n\036GUILD_TRIAL_SETTLE_"
-    "RESULT_LOSS\020\002\022(\n$GUILD_TRIAL_SETTLE_RESU"
-    "LT_GUILD_GONE\020\003\022,\n(GUILD_TRIAL_SETTLE_RE"
-    "SULT_CONFIG_MISSING\020\004\022$\n GUILD_TRIAL_SET"
-    "TLE_RESULT_POISON\020\005B\023Z\021guild/proto/guild"
-    "b\006proto3"
+    "\r\022\033\n\023initiator_player_id\030\004 \001(\004\022/\n\006roster"
+    "\030\005 \003(\0132\037.guildpb.GuildTrialRoleIdentity\022"
+    "\022\n\ncreated_ms\030\006 \001(\004\022\022\n\nexpires_ms\030\007 \001(\004\""
+    "L\n\027GuildTrialLobbyConsents\0221\n\010consents\030\001"
+    " \003(\0132\037.guildpb.GuildTrialLobbyConsent\"\243\003"
+    "\n\025GuildTrialLobbyRecord\022\020\n\010lobby_id\030\001 \001("
+    "\004\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013activity_id\030\003 \001(\r"
+    "\022\033\n\023initiator_player_id\030\004 \001(\004\022\r\n\005state\030\005"
+    " \001(\r\022\022\n\nview_proto\030\006 \001(\014\022\026\n\016original_pro"
+    "to\030\007 \001(\014\022\025\n\rconsent_proto\030\010 \001(\014\022\022\n\nexpir"
+    "es_ms\030\t \001(\004\022\032\n\022launch_deadline_ms\030\n \001(\004\022"
+    "\021\n\tbattle_id\030\013 \001(\004\022\022\n\ncreated_ms\030\014 \001(\004\022\022"
+    "\n\nupdated_ms\030\r \001(\004:w\212\222\364\001\021guild_trial_lob"
+    "by\222\222\364\001\010lobby_id\332\222\364\001@guild_id,state,lobby"
+    "_id;state,updated_ms,lobby_id;state,lobb"
+    "y_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\254\001\n\031GuildTrialLobbyS"
+    "lotRecord\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010lobby_id"
+    "\030\002 \001(\004\022\031\n\021cooldown_until_ms\030\003 \001(\004:O\212\222\364\001\026"
+    "guild_trial_lobby_slot\222\222\364\001\tplayer_id\332\222\364\001"
+    "\022lobby_id,player_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\371\001\n\030G"
+    "uildTrialLaunchOriginal\022\022\n\nrequest_id\030\001 "
+    "\001(\004\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013activity_id\030\003 \001"
+    "(\r\022\022\n\nperiod_key\030\004 \001(\r\022\030\n\020guild_period_k"
+    "ey\030\005 \001(\r\022\033\n\023initiator_player_id\030\006 \001(\004\022\022\n"
+    "\ndungeon_id\030\007 \001(\r\022/\n\006roster\030\010 \003(\0132\037.guil"
+    "dpb.GuildTrialRoleIdentity\022\022\n\ncreated_ms"
+    "\030\t \001(\004\"\361\002\n\026GuildTrialLaunchRecord\022\022\n\nreq"
+    "uest_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001(\004\022\r\n\005stat"
+    "e\030\003 \001(\r\022\026\n\016original_proto\030\004 \001(\014\022\026\n\016reque"
+    "st_digest\030\005 \001(\014\022\022\n\ncreated_ms\030\006 \001(\004\022\022\n\nu"
+    "pdated_ms\030\007 \001(\004\022\026\n\016cancel_receipt\030\010 \001(\014\022"
+    "\025\n\rnext_check_ms\030\t \001(\004\022\026\n\016check_attempts"
+    "\030\n \001(\r\022\030\n\020realtime_end_tip\030\013 \001(\014:h\212\222\364\001\022g"
+    "uild_trial_launch\222\222\364\001\nrequest_id\332\222\364\001.sta"
+    "te,updated_ms;battle_id;state,next_check"
+    "_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\365\001\n\032GuildTrialLaunchR"
+    "oleRecord\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nrequest_"
+    "id\030\002 \001(\004\022\017\n\007account\030\003 \001(\t\022\026\n\016owner_revis"
+    "ion\030\004 \001(\004\022\r\n\005state\030\005 \001(\r:x\212\222\364\001\027guild_tri"
+    "al_launch_role\222\222\364\001\024player_id,request_id\332"
+    "\222\364\001/request_id,player_id;player_id,state"
+    ",request_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\210\002\n\032GuildTria"
+    "lRewardOwedRecord\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\t"
+    "battle_id\030\002 \001(\004\022\020\n\010guild_id\030\003 \001(\004\022\023\n\013act"
+    "ivity_id\030\004 \001(\r\022\022\n\nperiod_key\030\005 \001(\r\022\017\n\007pa"
+    "yload\030\006 \001(\014\022\020\n\010attempts\030\007 \001(\r\022\022\n\ncreated"
+    "_ms\030\010 \001(\004:R\212\222\364\001\027guild_trial_reward_owed\222"
+    "\222\364\001\023player_id,battle_id\332\222\364\001\ncreated_ms\250\223"
+    "\364\001\001\260\223\364\001\004\270\223\364\001\004\"\304\001\n\030GuildClientRequestReco"
+    "rd\022\021\n\tplayer_id\030\001 \001(\004\022\031\n\021client_request_"
+    "id\030\002 \001(\004\022\r\n\005op_id\030\003 \001(\004\022\022\n\ncreated_ms\030\004 "
+    "\001(\004:W\212\222\364\001\024guild_client_request\222\222\364\001\033playe"
+    "r_id,client_request_id\332\222\364\001\ncreated_ms\250\223\364"
+    "\001\001\260\223\364\001\004\270\223\364\001\004*\230\002\n\022GuildAssetOpStatus\022%\n!G"
+    "UILD_ASSET_OP_STATUS_UNSPECIFIED\020\000\022!\n\035GU"
+    "ILD_ASSET_OP_STATUS_PENDING\020\001\022!\n\035GUILD_A"
+    "SSET_OP_STATUS_APPLIED\020\002\022\"\n\036GUILD_ASSET_"
+    "OP_STATUS_REJECTED\020\003\022!\n\035GUILD_ASSET_OP_S"
+    "TATUS_ABORTED\020\004\022)\n%GUILD_ASSET_OP_STATUS"
+    "_APPLIED_PARTIAL\020\005\022#\n\037GUILD_ASSET_OP_STA"
+    "TUS_ABANDONED\020\006*\236\001\n\020GuildAssetOpKind\022#\n\037"
+    "GUILD_ASSET_OP_KIND_UNSPECIFIED\020\000\022\036\n\032GUI"
+    "LD_ASSET_OP_KIND_DONATE\020\001\022\034\n\030GUILD_ASSET"
+    "_OP_KIND_SHOP\020\002\022\'\n#GUILD_ASSET_OP_KIND_A"
+    "CTIVITY_REWARD\020\003*\260\001\n\025GuildDailyCounterKi"
+    "nd\022(\n$GUILD_DAILY_COUNTER_KIND_UNSPECIFI"
+    "ED\020\000\022#\n\037GUILD_DAILY_COUNTER_KIND_DONATE\020"
+    "\001\022!\n\035GUILD_DAILY_COUNTER_KIND_SHOP\020\002\022%\n!"
+    "GUILD_DAILY_COUNTER_KIND_ACTIVITY\020\003*\263\001\n\025"
+    "GuildTrialBattleState\022(\n$GUILD_TRIAL_BAT"
+    "TLE_STATE_UNSPECIFIED\020\000\022$\n GUILD_TRIAL_B"
+    "ATTLE_STATE_STARTED\020\001\022$\n GUILD_TRIAL_BAT"
+    "TLE_STATE_SETTLED\020\002\022$\n GUILD_TRIAL_BATTL"
+    "E_STATE_EXPIRED\020\003*\210\002\n\026GuildTrialSettleRe"
+    "sult\022)\n%GUILD_TRIAL_SETTLE_RESULT_UNSPEC"
+    "IFIED\020\000\022!\n\035GUILD_TRIAL_SETTLE_RESULT_WIN"
+    "\020\001\022\"\n\036GUILD_TRIAL_SETTLE_RESULT_LOSS\020\002\022("
+    "\n$GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE\020\003"
+    "\022,\n(GUILD_TRIAL_SETTLE_RESULT_CONFIG_MIS"
+    "SING\020\004\022$\n GUILD_TRIAL_SETTLE_RESULT_POIS"
+    "ON\020\005B\023Z\021guild/proto/guildb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_deps[1] = {
@@ -4494,7 +4513,7 @@ static ::absl::once_flag descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fguild_2fguild_5fdb_2eproto = {
     false,
     false,
-    6368,
+    6433,
     descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto,
     "proto/guild/guild_db.proto",
     &descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_once,
@@ -4672,7 +4691,7 @@ PROTOBUF_NOINLINE void GuildRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.create_time_ms_) -
         reinterpret_cast<char*>(&_impl_.guild_id_)) + sizeof(_impl_.create_time_ms_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     ::memset(&_impl_.score_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.zone_id_) -
         reinterpret_cast<char*>(&_impl_.score_)) + sizeof(_impl_.zone_id_));
@@ -4766,7 +4785,7 @@ PROTOBUF_NOINLINE void GuildRecord::Clear() {
   }
 
   // uint32 zone_id = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_zone_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4799,6 +4818,15 @@ PROTOBUF_NOINLINE void GuildRecord::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "guildpb.GuildRecord.name_norm");
       target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // uint64 score_version = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_score_version() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          12, this_._internal_score_version(), target);
     }
   }
 
@@ -4885,7 +4913,7 @@ PROTOBUF_NOINLINE void GuildRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // int64 score = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_score() != 0) {
@@ -4900,8 +4928,15 @@ PROTOBUF_NOINLINE void GuildRecord::Clear() {
             this_._internal_funds());
       }
     }
-    // uint32 zone_id = 8;
+    // uint64 score_version = 12;
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_score_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_score_version());
+      }
+    }
+    // uint32 zone_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_zone_id());
@@ -4979,7 +5014,7 @@ void GuildRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_score() != 0) {
         _this->_impl_.score_ = from._impl_.score_;
@@ -4991,6 +5026,11 @@ void GuildRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_score_version() != 0) {
+        _this->_impl_.score_version_ = from._impl_.score_version_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_zone_id() != 0) {
         _this->_impl_.zone_id_ = from._impl_.zone_id_;
       }
@@ -10458,7 +10498,8 @@ PROTOBUF_NDEBUG_INLINE GuildTrialLaunchRecord::Impl_::Impl_(
         _cached_size_{0},
         original_proto_(arena, from.original_proto_),
         request_digest_(arena, from.request_digest_),
-        cancel_receipt_(arena, from.cancel_receipt_) {}
+        cancel_receipt_(arena, from.cancel_receipt_),
+        realtime_end_tip_(arena, from.realtime_end_tip_) {}
 
 GuildTrialLaunchRecord::GuildTrialLaunchRecord(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -10490,7 +10531,8 @@ PROTOBUF_NDEBUG_INLINE GuildTrialLaunchRecord::Impl_::Impl_(
       : _cached_size_{0},
         original_proto_(arena),
         request_digest_(arena),
-        cancel_receipt_(arena) {}
+        cancel_receipt_(arena),
+        realtime_end_tip_(arena) {}
 
 inline void GuildTrialLaunchRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -10515,6 +10557,7 @@ inline void GuildTrialLaunchRecord::SharedDtor(MessageLite& self) {
   this_._impl_.original_proto_.Destroy();
   this_._impl_.request_digest_.Destroy();
   this_._impl_.cancel_receipt_.Destroy();
+  this_._impl_.realtime_end_tip_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -10552,7 +10595,7 @@ PROTOBUF_NOINLINE void GuildTrialLaunchRecord::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.original_proto_.ClearNonDefaultToEmpty();
     }
@@ -10562,16 +10605,19 @@ PROTOBUF_NOINLINE void GuildTrialLaunchRecord::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.cancel_receipt_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.realtime_end_tip_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.request_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.check_attempts_) -
-        reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.check_attempts_));
+        reinterpret_cast<char*>(&_impl_.state_) -
+        reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.state_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
-    ::memset(&_impl_.updated_ms_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.check_attempts_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.next_check_ms_) -
-        reinterpret_cast<char*>(&_impl_.updated_ms_)) + sizeof(_impl_.next_check_ms_));
+        reinterpret_cast<char*>(&_impl_.check_attempts_)) + sizeof(_impl_.next_check_ms_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -10597,7 +10643,7 @@ PROTOBUF_NOINLINE void GuildTrialLaunchRecord::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 request_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_request_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10606,7 +10652,7 @@ PROTOBUF_NOINLINE void GuildTrialLaunchRecord::Clear() {
   }
 
   // uint64 battle_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_battle_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10615,7 +10661,7 @@ PROTOBUF_NOINLINE void GuildTrialLaunchRecord::Clear() {
   }
 
   // uint32 state = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_state() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10640,7 +10686,7 @@ PROTOBUF_NOINLINE void GuildTrialLaunchRecord::Clear() {
   }
 
   // uint64 created_ms = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_created_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10649,7 +10695,7 @@ PROTOBUF_NOINLINE void GuildTrialLaunchRecord::Clear() {
   }
 
   // uint64 updated_ms = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_updated_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10666,7 +10712,7 @@ PROTOBUF_NOINLINE void GuildTrialLaunchRecord::Clear() {
   }
 
   // uint64 next_check_ms = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_next_check_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10675,11 +10721,19 @@ PROTOBUF_NOINLINE void GuildTrialLaunchRecord::Clear() {
   }
 
   // uint32 check_attempts = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_check_attempts() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           10, this_._internal_check_attempts(), target);
+    }
+  }
+
+  // bytes realtime_end_tip = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_realtime_end_tip().empty()) {
+      const ::std::string& _s = this_._internal_realtime_end_tip();
+      target = stream->WriteBytesMaybeAliased(11, _s, target);
     }
   }
 
@@ -10730,52 +10784,59 @@ PROTOBUF_NOINLINE void GuildTrialLaunchRecord::Clear() {
                                         this_._internal_cancel_receipt());
       }
     }
-    // uint64 request_id = 1;
+    // bytes realtime_end_tip = 11;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_realtime_end_tip().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_realtime_end_tip());
+      }
+    }
+    // uint64 request_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_request_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_request_id());
       }
     }
     // uint64 battle_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_battle_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_battle_id());
       }
     }
     // uint64 created_ms = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_created_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_created_ms());
       }
     }
     // uint32 state = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_state() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_state());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint32 check_attempts = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_check_attempts() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_check_attempts());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     // uint64 updated_ms = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_updated_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_updated_ms());
       }
     }
     // uint64 next_check_ms = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_next_check_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_next_check_ms());
@@ -10828,38 +10889,47 @@ void GuildTrialLaunchRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_realtime_end_tip().empty()) {
+        _this->_internal_set_realtime_end_tip(from._internal_realtime_end_tip());
+      } else {
+        if (_this->_impl_.realtime_end_tip_.IsDefault()) {
+          _this->_internal_set_realtime_end_tip("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_request_id() != 0) {
         _this->_impl_.request_id_ = from._impl_.request_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_battle_id() != 0) {
         _this->_impl_.battle_id_ = from._impl_.battle_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_created_ms() != 0) {
         _this->_impl_.created_ms_ = from._impl_.created_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_state() != 0) {
         _this->_impl_.state_ = from._impl_.state_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_check_attempts() != 0) {
         _this->_impl_.check_attempts_ = from._impl_.check_attempts_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_updated_ms() != 0) {
         _this->_impl_.updated_ms_ = from._impl_.updated_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_next_check_ms() != 0) {
         _this->_impl_.next_check_ms_ = from._impl_.next_check_ms_;
       }
@@ -10887,6 +10957,7 @@ void GuildTrialLaunchRecord::InternalSwap(GuildTrialLaunchRecord* PROTOBUF_RESTR
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.original_proto_, &other->_impl_.original_proto_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.request_digest_, &other->_impl_.request_digest_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.cancel_receipt_, &other->_impl_.cancel_receipt_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.realtime_end_tip_, &other->_impl_.realtime_end_tip_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(GuildTrialLaunchRecord, _impl_.next_check_ms_)
       + sizeof(GuildTrialLaunchRecord::_impl_.next_check_ms_)

@@ -83,4 +83,6 @@ enum login_error {
 
   kLoginTokenIssueFailed = 2036;
 
+  kLoginZoneCreateRoleClosed = 2037;
+
 };

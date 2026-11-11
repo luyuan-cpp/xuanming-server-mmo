@@ -40,25 +40,37 @@ namespace
 		return info != nullptr ? info->node_uuid() : std::string{};
 	}
 
-	// 本次 RPC 所在连接对应的 scene 进程实例号。scene 经 gate 拨过去的那条连接回推;通信层必须确认
+	// 本次 RPC 所在连接对应的 scene 节点实体(gate 节点注册表)。scene 经 gate 拨过去的那条连接回推;通信层必须确认
 	// 传入的这条连接就是已核验对端身份的当前链路。同地址换了进程、旧 RpcClient 重连后未就绪时,
-	// 不能拿注册表里的旧 uuid 认发送方。认不出返回空(按 kDeliverUnverified 照发)。
-	// 只在踢线这条罕见消息上遍历,不进普通推送的热路径。
-	std::string SenderSceneInstance(const muduo::net::TcpConnectionPtr &conn)
+	// 不能拿注册表里的旧实体认发送方。认不出返回 entt::null。
+	// 只在踢线与场景广播这两种罕见消息上遍历,不进普通推送的热路径。
+	entt::entity SenderSceneNode(const muduo::net::TcpConnectionPtr &conn)
 	{
 		if (!conn)
 		{
-			return {};
+			return entt::null;
 		}
 		auto &sceneNodeRegistry = tlsNodeContextManager.GetRegistry(common::base::SceneNodeService);
 		for (const auto &[entity, client, info] : sceneNodeRegistry.view<RpcClientPtr, NodeInfo>().each())
 		{
 			if (client && client->IsReadyOn(conn))
 			{
-				return info.node_uuid();
+				return entity;
 			}
 		}
-		return {};
+		return entt::null;
+	}
+
+	// 本次 RPC 所在连接对应的 scene 进程实例号(踢线来源栅栏用)。认不出返回空(按 kDeliverUnverified 照发)。
+	std::string SenderSceneInstance(const muduo::net::TcpConnectionPtr &conn)
+	{
+		const auto sender = SenderSceneNode(conn);
+		if (sender == entt::null)
+		{
+			return {};
+		}
+		const auto *info = tlsNodeContextManager.GetRegistry(common::base::SceneNodeService).try_get<NodeInfo>(sender);
+		return info != nullptr ? info->node_uuid() : std::string{};
 	}
 
 	// 踢线来源栅栏:34 只认会话当前绑定的 scene 进程(session_identity_fence.h ClassifySceneKickSource)。
@@ -129,7 +141,10 @@ void GateHandler::BroadcastToScene(::google::protobuf::RpcController* controller
 {
 	///<<< BEGIN WRITING YOUR CODE
 	// 只推本场景内已绑定玩家的会话,scene_id 为 0 整条拒绝;与 Kafka 版 BroadcastToScene 同一份实现。
-	gate_push::DeliverToScene(gate_push::Path::kRpc, request->scene_id(), gate_push::ContentOf(*request));
+	// 认得出发送方 scene 时只推会话当前指向它的那些:计划排空窗口里同一个 scene_id 在新旧两台各有一份实例
+	// (docs/design/scene-node-planned-drain.md §4.3),只按 scene_id 匹配会串到另一份实例的玩家。
+	gate_push::DeliverToScene(gate_push::Path::kRpc, request->scene_id(), gate_push::ContentOf(*request),
+							  SenderSceneNode(RpcController::From(controller).conn()));
 	///<<< END WRITING YOUR CODE
 
 }

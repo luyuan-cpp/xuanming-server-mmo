@@ -292,9 +292,9 @@ func TestTiDBShardedSourceCursorsAndVersionsSurviveOutOfOrderDelivery(t *testing
 	first, err := r.Submit(ctx, "match", batch(9, 1, 15, 400, 4))
 	require.NoError(t, err, "没投过的片从 1 起")
 	require.False(t, first.Duplicated)
-	// 榜上的总数 = 三片合计 5 批,封榜按总数核齐。
+	// 本代已落账的批次总数 = 三片片行的游标之和 5,封榜按它核齐(2026-11-11 起游标在 rank_board_shard 上)。
 	var total uint64
-	require.NoError(t, db.QueryRowContext(ctx, "SELECT committed_cursor FROM rank_board WHERE board_id=?", board.BoardId).Scan(&total))
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COALESCE(SUM(committed_cursor),0) FROM rank_board_shard WHERE board_id=? AND generation=1", board.BoardId).Scan(&total))
 	require.EqualValues(t, 5, total)
 	freeze := &rankpb.FreezeRankGenerationRequest{BoardId: board.BoardId, Generation: 1, SourceEpoch: 11, ExpectedSourceCursor: 6, RequestId: 20, TopN: 1, Rewards: []*rankpb.RankRewardTier{{FirstRank: 1, LastRank: 1, Attachments: &mailpb.MailAttachments{Currencies: []*mailpb.MailCurrency{{CurrencyType: 0, Amount: 10}}}}}}
 	_, err = r.Freeze(ctx, "match", freeze)

@@ -28,6 +28,9 @@
 #include "muduo_grpc/server_call.h"
 #include "muduo_grpc/status.h"
 
+#include "core/tracing/player_field.h"
+#include "thread_context/trace_context_tls.h"
+
 // muduo 头放在标准库头之后(它的 Windows 适配头 #define 了 off_t / pid_t 等名字;server_call.h 还会带进 <chrono> /
 // <optional> / <thread>)。
 #include "muduo/base/Logging.h"
@@ -107,7 +110,13 @@ public:
         }
         // 先置位再调业务:handler 里即使再次走到 Proceed(重入)也不会执行第二次。
         businessStarted_ = true;
-        handler_(&request_, &response_);
+        {
+            // 业务日志带上请求顶层的 player_id(docs/design/distributed-tracing.md §5.5),口径同 Go 的
+            // tracing.PlayerFieldInterceptor;没有这个字段的请求装 0,不沿用执行线程上残留的玩家。
+            // 只覆盖 handler 的同步部分;trace 由派发钩子(grpc_trace_hooks)按 traceparent 接续。
+            const tracing::ScopedPlayerId player(tracing::TopLevelPlayerId(request_));
+            handler_(&request_, &response_);
+        }
 
         std::string responseBytes;
         if (!response_.SerializeToString(&responseBytes))

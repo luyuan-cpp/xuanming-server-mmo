@@ -93,4 +93,6 @@ enum guild_error {
 
   kGuildTrialServiceBusy = 14041;
 
+  kGuildTrialBattleAborted = 14042;
+
 };

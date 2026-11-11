@@ -5,7 +5,6 @@ go 1.27.2
 require (
 	github.com/IBM/sarama v1.46.2
 	github.com/alicebob/miniredis/v2 v2.35.0
-	github.com/bwmarrin/snowflake v0.3.0
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
 	github.com/panjf2000/ants/v2 v2.12.0

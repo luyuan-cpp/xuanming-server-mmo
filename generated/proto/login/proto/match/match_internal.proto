@@ -272,18 +272,18 @@ message StrandedFormation {
 }
 
 // 列出已过截止加宽限、仍停在 state 2/3/4 且带持久 Create 原件的成局(含原件合格、等自动恢复的局),只读、不加锁。
-// 沿 (state,retry_at_ms) 索引按 (retry_at_ms, battle_id) 升序翻页,与到期恢复同一顺序。
+// 按 battle_id 升序翻页(2026-11-11 起;retry_at_ms 会随取证排期变化,按它翻页会重复列出同一局)。
 message ListStrandedFormationsRequest {
-  uint64 after_retry_at_ms = 1;  // 游标;两者都为 0 从头开始
-  uint64 after_battle_id = 2;
+  uint64 after_retry_at_ms = 1;  // 保留不用(2026-11-11 起服务端忽略、回包恒为 0);游标只看 after_battle_id
+  uint64 after_battle_id = 2;    // 游标;0 从头开始
   uint32 limit = 3;              // 1..100
   common.base.ServiceCallAuth auth = 4;
 }
 message ListStrandedFormationsResponse {
   bool retry = 1;                // true = 这一次没读成,其余字段无意义
   repeated StrandedFormation formations = 2;
-  uint64 next_retry_at_ms = 3;   // 两者都为 0 = 已到末尾
-  uint64 next_battle_id = 4;
+  uint64 next_retry_at_ms = 3;   // 保留不用,恒为 0(2026-11-11)
+  uint64 next_battle_id = 4;     // 下一页游标;0 = 已到末尾
   uint64 now_ms = 5;             // TiDB 时刻
   string target = 6;             // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
 }

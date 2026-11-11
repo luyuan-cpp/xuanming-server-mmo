@@ -1865,12 +1865,12 @@ func (x *StrandedFormation) GetTickets() []*StrandedFormationTicket {
 }
 
 // 列出已过截止加宽限、仍停在 state 2/3/4 且带持久 Create 原件的成局(含原件合格、等自动恢复的局),只读、不加锁。
-// 沿 (state,retry_at_ms) 索引按 (retry_at_ms, battle_id) 升序翻页,与到期恢复同一顺序。
+// 按 battle_id 升序翻页(2026-11-11 起;retry_at_ms 会随取证排期变化,按它翻页会重复列出同一局)。
 type ListStrandedFormationsRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	AfterRetryAtMs uint64                 `protobuf:"varint,1,opt,name=after_retry_at_ms,json=afterRetryAtMs,proto3" json:"after_retry_at_ms,omitempty"` // 游标;两者都为 0 从头开始
-	AfterBattleId  uint64                 `protobuf:"varint,2,opt,name=after_battle_id,json=afterBattleId,proto3" json:"after_battle_id,omitempty"`
-	Limit          uint32                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"` // 1..100
+	AfterRetryAtMs uint64                 `protobuf:"varint,1,opt,name=after_retry_at_ms,json=afterRetryAtMs,proto3" json:"after_retry_at_ms,omitempty"` // 保留不用(2026-11-11 起服务端忽略、回包恒为 0);游标只看 after_battle_id
+	AfterBattleId  uint64                 `protobuf:"varint,2,opt,name=after_battle_id,json=afterBattleId,proto3" json:"after_battle_id,omitempty"`      // 游标;0 从头开始
+	Limit          uint32                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`                                             // 1..100
 	Auth           *base.ServiceCallAuth  `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
@@ -1938,10 +1938,10 @@ type ListStrandedFormationsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Retry         bool                   `protobuf:"varint,1,opt,name=retry,proto3" json:"retry,omitempty"` // true = 这一次没读成,其余字段无意义
 	Formations    []*StrandedFormation   `protobuf:"bytes,2,rep,name=formations,proto3" json:"formations,omitempty"`
-	NextRetryAtMs uint64                 `protobuf:"varint,3,opt,name=next_retry_at_ms,json=nextRetryAtMs,proto3" json:"next_retry_at_ms,omitempty"` // 两者都为 0 = 已到末尾
-	NextBattleId  uint64                 `protobuf:"varint,4,opt,name=next_battle_id,json=nextBattleId,proto3" json:"next_battle_id,omitempty"`
-	NowMs         uint64                 `protobuf:"varint,5,opt,name=now_ms,json=nowMs,proto3" json:"now_ms,omitempty"` // TiDB 时刻
-	Target        string                 `protobuf:"bytes,6,opt,name=target,proto3" json:"target,omitempty"`             // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
+	NextRetryAtMs uint64                 `protobuf:"varint,3,opt,name=next_retry_at_ms,json=nextRetryAtMs,proto3" json:"next_retry_at_ms,omitempty"` // 保留不用,恒为 0(2026-11-11)
+	NextBattleId  uint64                 `protobuf:"varint,4,opt,name=next_battle_id,json=nextBattleId,proto3" json:"next_battle_id,omitempty"`      // 下一页游标;0 = 已到末尾
+	NowMs         uint64                 `protobuf:"varint,5,opt,name=now_ms,json=nowMs,proto3" json:"now_ms,omitempty"`                             // TiDB 时刻
+	Target        string                 `protobuf:"bytes,6,opt,name=target,proto3" json:"target,omitempty"`                                         // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

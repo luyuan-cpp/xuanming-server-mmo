@@ -2062,7 +2062,7 @@ const char descriptor_table_protodef_proto_2fmail_2fmail_5ftable_2eproto[] ABSL_
     "pSeqRecord\022\021\n\tplayer_id\030\001 \001(\004\022\016\n\006stream\030"
     "\002 \001(\r\022\020\n\010next_seq\030\003 \001(\004\022\022\n\nupdated_ms\030\004 "
     "\001(\004\022\r\n\005epoch\030\005 \001(\004:,\212\222\364\001\022mail_player_op_"
-    "seq\222\222\364\001\020player_id,stream\"\237\005\n\021MailAssetOp"
+    "seq\222\222\364\001\020player_id,stream\"\257\005\n\021MailAssetOp"
     "Record\022\r\n\005op_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004"
     "\022\016\n\006stream\030\003 \001(\r\022\013\n\003seq\030\004 \001(\004\022\024\n\014stream_"
     "epoch\030\005 \001(\004\022\017\n\007mail_id\030\006 \001(\004\022\025\n\rclaim_ve"
@@ -2074,17 +2074,18 @@ const char descriptor_table_protodef_proto_2fmail_2fmail_5ftable_2eproto[] ABSL_
     "ble\030\021 \001(\r\022\025\n\rreason_tip_id\030\022 \001(\r\022\022\n\ncrea"
     "ted_ms\030\023 \001(\004\022\022\n\nupdated_ms\030\024 \001(\004\022\024\n\014last"
     "_send_ms\030\025 \001(\004\022\023\n\013resolved_by\030\026 \001(\t\022\026\n\016r"
-    "esolve_reason\030\027 \001(\t:\304\001\212\222\364\001\rmail_asset_op"
-    "\222\222\364\001\005op_id\332\222\364\001nstatus,next_attempt_ms;pl"
-    "ayer_id,stream,stream_epoch,status,seq;p"
-    "layer_id,mail_id,claim_version;mail_id,s"
-    "tatus\342\222\364\001!player_id,stream,stream_epoch,"
-    "seq\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004*\273\001\n\021MailAssetOpStatus"
-    "\022\035\n\031MAIL_ASSET_OP_UNSPECIFIED\020\000\022\031\n\025MAIL_"
-    "ASSET_OP_PENDING\020\001\022\031\n\025MAIL_ASSET_OP_APPL"
-    "IED\020\002\022\032\n\026MAIL_ASSET_OP_REJECTED\020\003\022\030\n\024MAI"
-    "L_ASSET_OP_MANUAL\020\004\022\033\n\027MAIL_ASSET_OP_ABA"
-    "NDONED\020\005B\021Z\017mail/proto/mailb\006proto3"
+    "esolve_reason\030\027 \001(\t:\324\001\212\222\364\001\rmail_asset_op"
+    "\222\222\364\001\005op_id\332\222\364\001~status,next_attempt_ms,op"
+    "_id,player_id;player_id,stream,stream_ep"
+    "och,status,seq;player_id,mail_id,claim_v"
+    "ersion;mail_id,status\342\222\364\001!player_id,stre"
+    "am,stream_epoch,seq\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004*\273\001\n\021M"
+    "ailAssetOpStatus\022\035\n\031MAIL_ASSET_OP_UNSPEC"
+    "IFIED\020\000\022\031\n\025MAIL_ASSET_OP_PENDING\020\001\022\031\n\025MA"
+    "IL_ASSET_OP_APPLIED\020\002\022\032\n\026MAIL_ASSET_OP_R"
+    "EJECTED\020\003\022\030\n\024MAIL_ASSET_OP_MANUAL\020\004\022\033\n\027M"
+    "AIL_ASSET_OP_ABANDONED\020\005B\021Z\017mail/proto/m"
+    "ailb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmail_2fmail_5ftable_2eproto_deps[1] = {
@@ -2094,7 +2095,7 @@ static ::absl::once_flag descriptor_table_proto_2fmail_2fmail_5ftable_2eproto_on
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmail_2fmail_5ftable_2eproto = {
     false,
     false,
-    2915,
+    2931,
     descriptor_table_protodef_proto_2fmail_2fmail_5ftable_2eproto,
     "proto/mail/mail_table.proto",
     &descriptor_table_proto_2fmail_2fmail_5ftable_2eproto_once,

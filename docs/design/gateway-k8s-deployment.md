@@ -13,13 +13,14 @@
 | Hotfix | `POST /api/hotfix-check`:按 `hotfix.platforms.<platform>` 的发布线比较版本(`latest-version`、`min-version`、`patch-url`、`changelog`),配错拒绝启动,没配的平台回不用更新 |
 | CDN | CDN URL signing |
 | Admin | zone config, whitelist, announcement management |
-| Health | zone health probe (periodic gate liveness check) |
+| Health | 区服健康:每个 zone 的网关副本发布本 zone 的健康汇总,所有网关读汇总(2026-11-11,见 [gateway-zone-health-publish-20261111.md](gateway-zone-health-publish-20261111.md)) |
 
 ### Key Services
-- `ServerListService` — zone list from MySQL `zone_config` table + etcd gate discovery
+- `ServerListService` — zone list from MySQL `zone_config` table + 区服健康快照
 - `AssignGateService` — least-load gate selection + HMAC token signing
-- `ZoneHealthProbeService` — periodic check, marks zones offline if no gate heartbeat
-- `GateWatcher` — etcd watcher for `GateNodeService.rpc/` prefix
+- `ZoneHealthPublisher` — 本副本负责的 zone(`gateway.home-zone-ids`)的健康汇总写进 etcd(`/mmorpg/zone_health/zone/<z>/publisher/<实例>`,挂进程租约)
+- `ZoneHealthProbeService` — 读全部 zone 的汇总与 login 登记,生成列表用的健康快照;没有汇总的 zone 在 login 也不在时判 DOWN
+- `GateWatcher` — etcd list + watch:gate / scene 只读本副本负责的 zone(`<Svc>.rpc/zone/<z>/`),login 读全服
 - `AnnouncementService`, `CdnSignService`, `HotfixCheckService`
 
 ### Config: `application.yaml`
@@ -31,7 +32,7 @@
 - Superseded by Java version for richer admin/ops features
 
 ## Design Decisions (still apply)
-- **Zone-agnostic prefix**: Gateway uses `GateNodeService.rpc/` to discover ALL gates globally
+- **按 zone 读 gate / scene**(2026-11-11 改,原为「Gateway uses `GateNodeService.rpc/` to discover ALL gates globally」):每个网关副本只 watch 本副本负责的 zone 的 gate / scene,别的 zone 读健康汇总;全服 watch 时每台 gate 每 10 秒一次的心跳要送到每一个网关副本,事件量随 zone 数平方增长(服务器缺口清单第 29 条)。login 仍读全服:任一网关都要能把任一 zone 的 assign-gate 转给那个 zone 的 login
 - **etcd FQDN fix**: `ETCD_ADVERTISE_CLIENT_URLS` must use `etcd.mmorpg-infra.svc.cluster.local:2379` (not short name) to prevent cross-namespace resolution failures
 - **HMAC token**: same algorithm shared between gateway and gate node for token verification
 
@@ -48,6 +49,8 @@
   (`service/ZoneHealthProbeService.java:76-77`);② 它同时是 `LoginNodeDiscovery` 读 login 节点的 etcd 客户端(`fetchAllLoginNodes`,`GateWatcher.java:76`;
   `grpc/LoginNodeDiscovery.java:37`、`:44`、`:58`,只用 `endpoint` 找 login)。两者都不读 `client_endpoint`;`NodeInfoRecord` 忽略未知字段
   (`@JsonIgnoreProperties(ignoreUnknown = true)`),NodeInfo 新增的 `client_endpoint=11` 不影响它。所以集群外入口(D76–D93)**不改 Java 代码**。
+  (2026-11-11:① 已改成按 zone 读 `fetchZoneGateNodes` / `fetchZoneSceneNodes`,只供 `ZoneHealthPublisher` 发布本 zone 的健康汇总;
+  `ZoneHealthProbeService` 改读汇总记录,另读 login 登记判断整个 zone 是否还在。见 [gateway-zone-health-publish-20261111.md](gateway-zone-health-publish-20261111.md)。)
 - **K8s 上的 HTTP 入口(集群外入口 D91,未上集群)**:`k8s_deploy.ps1 -GatewayIngressHost` 非空时由 `zone-up` 随 gateway 生成 Ingress `gateway`
   (后端 `gateway:8081`,**只路由 `/api`**,`/admin` 与 `/actuator` 不出集群),可配 `-GatewayIngressClassName`(默认 `nginx`)与 `-GatewayIngressTlsSecret`。
   启用 Ingress 时 `-GatewayTrustedProxies` 必填(写进 `gate.rate-limit.trusted-proxies`),否则全体玩家都被记在 Ingress controller 名下、共用一个限流桶。

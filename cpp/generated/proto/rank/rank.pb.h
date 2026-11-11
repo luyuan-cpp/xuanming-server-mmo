@@ -367,6 +367,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankEntry final : public ::google::
     kEntityIdFieldNumber = 2,
     kScoreFieldNumber = 3,
     kAchievedMsFieldNumber = 4,
+    kBeyondRankLimitFieldNumber = 6,
   };
   // string name = 5;
   void clear_name() ;
@@ -423,11 +424,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankEntry final : public ::google::
   void _internal_set_achieved_ms(::uint64_t value);
 
   public:
+  // bool beyond_rank_limit = 6;
+  void clear_beyond_rank_limit() ;
+  [[nodiscard]] bool beyond_rank_limit() const;
+  void set_beyond_rank_limit(bool value);
+
+  private:
+  bool _internal_beyond_rank_limit() const;
+  void _internal_set_beyond_rank_limit(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:rankpb.RankEntry)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 29,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -461,6 +472,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankEntry final : public ::google::
     ::uint64_t entity_id_;
     ::int64_t score_;
     ::uint64_t achieved_ms_;
+    bool beyond_rank_limit_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -878,6 +890,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankPageResponse final : public 
     kPageFieldNumber = 5,
     kPageSizeFieldNumber = 6,
     kPageCountFieldNumber = 7,
+    kRankLimitFieldNumber = 10,
     kStateFieldNumber = 9,
   };
   // repeated .rankpb.RankEntry entries = 3;
@@ -989,6 +1002,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankPageResponse final : public 
   void _internal_set_page_count(::uint64_t value);
 
   public:
+  // uint64 rank_limit = 10;
+  void clear_rank_limit() ;
+  [[nodiscard]] ::uint64_t rank_limit() const;
+  void set_rank_limit(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rank_limit() const;
+  void _internal_set_rank_limit(::uint64_t value);
+
+  public:
   // .rankpb.RankGenerationState state = 9;
   void clear_state() ;
   [[nodiscard]] ::rankpb::RankGenerationState state() const;
@@ -1003,7 +1026,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankPageResponse final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           4, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1040,6 +1063,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankPageResponse final : public 
     ::uint32_t page_;
     ::uint32_t page_size_;
     ::uint64_t page_count_;
+    ::uint64_t rank_limit_;
     int state_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -1431,6 +1455,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankAroundResponse final : publi
     kErrorMessageFieldNumber = 1,
     kBoardFieldNumber = 2,
     kSelfFieldNumber = 4,
+    kRankLimitFieldNumber = 5,
   };
   // repeated .rankpb.RankEntry entries = 3;
   [[nodiscard]] int entries_size()
@@ -1501,11 +1526,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankAroundResponse final : publi
   ::rankpb::RankEntry* PROTOBUF_NONNULL _internal_mutable_self();
 
   public:
+  // uint64 rank_limit = 5;
+  void clear_rank_limit() ;
+  [[nodiscard]] ::uint64_t rank_limit() const;
+  void set_rank_limit(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rank_limit() const;
+  void _internal_set_rank_limit(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:rankpb.GetRankAroundResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           4, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1538,6 +1573,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankAroundResponse final : publi
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::rankpb::RankBoardKey* PROTOBUF_NULLABLE board_;
     ::rankpb::RankEntry* PROTOBUF_NULLABLE self_;
+    ::uint64_t rank_limit_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2101,6 +2137,30 @@ inline void RankEntry::set_allocated_name(::std::string* PROTOBUF_NULLABLE value
     _impl_.name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:rankpb.RankEntry.name)
+}
+
+// bool beyond_rank_limit = 6;
+inline void RankEntry::clear_beyond_rank_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.beyond_rank_limit_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline bool RankEntry::beyond_rank_limit() const {
+  // @@protoc_insertion_point(field_get:rankpb.RankEntry.beyond_rank_limit)
+  return _internal_beyond_rank_limit();
+}
+inline void RankEntry::set_beyond_rank_limit(bool value) {
+  _internal_set_beyond_rank_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:rankpb.RankEntry.beyond_rank_limit)
+}
+inline bool RankEntry::_internal_beyond_rank_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.beyond_rank_limit_;
+}
+inline void RankEntry::_internal_set_beyond_rank_limit(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.beyond_rank_limit_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -2701,7 +2761,7 @@ inline void GetRankPageResponse::set_allocated_self(::rankpb::RankEntry* PROTOBU
 inline void GetRankPageResponse::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::rankpb::RankGenerationState GetRankPageResponse::state() const {
   // @@protoc_insertion_point(field_get:rankpb.GetRankPageResponse.state)
@@ -2709,7 +2769,7 @@ inline ::rankpb::RankGenerationState GetRankPageResponse::state() const {
 }
 inline void GetRankPageResponse::set_state(::rankpb::RankGenerationState value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:rankpb.GetRankPageResponse.state)
 }
 inline ::rankpb::RankGenerationState GetRankPageResponse::_internal_state() const {
@@ -2719,6 +2779,30 @@ inline ::rankpb::RankGenerationState GetRankPageResponse::_internal_state() cons
 inline void GetRankPageResponse::_internal_set_state(::rankpb::RankGenerationState value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = value;
+}
+
+// uint64 rank_limit = 10;
+inline void GetRankPageResponse::clear_rank_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_limit_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t GetRankPageResponse::rank_limit() const {
+  // @@protoc_insertion_point(field_get:rankpb.GetRankPageResponse.rank_limit)
+  return _internal_rank_limit();
+}
+inline void GetRankPageResponse::set_rank_limit(::uint64_t value) {
+  _internal_set_rank_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:rankpb.GetRankPageResponse.rank_limit)
+}
+inline ::uint64_t GetRankPageResponse::_internal_rank_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rank_limit_;
+}
+inline void GetRankPageResponse::_internal_set_rank_limit(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_limit_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -3193,6 +3277,30 @@ inline void GetRankAroundResponse::set_allocated_self(::rankpb::RankEntry* PROTO
 
   _impl_.self_ = reinterpret_cast<::rankpb::RankEntry*>(value);
   // @@protoc_insertion_point(field_set_allocated:rankpb.GetRankAroundResponse.self)
+}
+
+// uint64 rank_limit = 5;
+inline void GetRankAroundResponse::clear_rank_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_limit_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t GetRankAroundResponse::rank_limit() const {
+  // @@protoc_insertion_point(field_get:rankpb.GetRankAroundResponse.rank_limit)
+  return _internal_rank_limit();
+}
+inline void GetRankAroundResponse::set_rank_limit(::uint64_t value) {
+  _internal_set_rank_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:rankpb.GetRankAroundResponse.rank_limit)
+}
+inline ::uint64_t GetRankAroundResponse::_internal_rank_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rank_limit_;
+}
+inline void GetRankAroundResponse::_internal_set_rank_limit(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_limit_ = value;
 }
 
 #ifdef __GNUC__

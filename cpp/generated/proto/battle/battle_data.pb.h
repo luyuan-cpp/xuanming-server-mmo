@@ -444,6 +444,7 @@ enum eBattleOutcome : int {
   BATTLE_OUTCOME_SIDE_A_WIN = 1,
   BATTLE_OUTCOME_SIDE_B_WIN = 2,
   BATTLE_OUTCOME_DRAW = 3,
+  BATTLE_OUTCOME_VOID = 4,
   eBattleOutcome_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   eBattleOutcome_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -454,11 +455,11 @@ extern const uint32_t eBattleOutcome_internal_data_[];
 inline constexpr eBattleOutcome eBattleOutcome_MIN =
     static_cast<eBattleOutcome>(0);
 inline constexpr eBattleOutcome eBattleOutcome_MAX =
-    static_cast<eBattleOutcome>(3);
+    static_cast<eBattleOutcome>(4);
 [[nodiscard]] inline bool eBattleOutcome_IsValid(int value) {
-  return 0 <= value && value <= 3;
+  return 0 <= value && value <= 4;
 }
-inline constexpr int eBattleOutcome_ARRAYSIZE = 3 + 1;
+inline constexpr int eBattleOutcome_ARRAYSIZE = 4 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eBattleOutcome_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(eBattleOutcome) {
@@ -473,7 +474,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& eBattleOutcome_Name(eBattleOutcome value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<eBattleOutcome_descriptor, 0, 3>(
+  return ::google::protobuf::internal::NameOfDenseEnum<eBattleOutcome_descriptor, 0, 4>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool eBattleOutcome_Parse(
