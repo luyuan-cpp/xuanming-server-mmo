@@ -427,9 +427,9 @@ try {
         $login = Get-AccountBlock -User (Get-BootUser -Summary $summary -Key 'login')
         Assert-NotMatch $login 'mmorpg_friend|zone_1_db' 'login 没有业务表'
         $text = Get-SqlText
-        Assert-Match $text "GRANT SELECT,INSERT ON ``mmorpg_global``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号按 operator 模板'
+        Assert-Match $text "GRANT SELECT,INSERT,UPDATE ON ``mmorpg_global``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号按 operator 模板:换代要退休上一代,带 UPDATE'
         Assert-Match $text "GRANT SELECT,INSERT,UPDATE ON ``mmorpg_global``\.``sql_writer_drain_run`` TO 'mmorpg_local_maintenance'@'%'" '维护账号按 operator 模板'
-        Assert-Match $text "GRANT SELECT,INSERT ON ``mmorpg_friend``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号逐逻辑库授权'
+        Assert-Match $text "GRANT SELECT,INSERT,UPDATE ON ``mmorpg_friend``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号逐逻辑库授权'
         Assert-Match $text "GRANT SELECT,INSERT,DELETE ON ``mmorpg_global``\.``zone_merged_into`` TO 'mmorpg_local_maintenance'@'%'" '合服工具的映射表只在目录库'
         Assert-NotMatch $text "ON ``mmorpg_friend``\.``zone_merged_into``" '别的库没有合服映射表'
         Assert-NotMatch $text "TO 'root'@'%'" '本机 schema 身份就是 root,不再给 root 授权'

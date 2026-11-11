@@ -151,8 +151,8 @@ uint32_t PlayerMissionSystem::CheckAccept(entt::entity player, uint32_t scope,
         // 被破坏:在写任务之前拒绝,不接下之后再静默跳过、留下一条缺了当前等级进度的任务(组件访问规则「校验前置」)。
         if (condition->condition_category() == static_cast<uint32_t>(eConditionType::kConditionLevelUp) &&
             !tlsEcs.actorRegistry.all_of<LevelComp>(player)) {
-            LOG_ERROR << "接取等级条件任务被拒:缺少持久等级组件 entity=" << entt::to_integral(player)
-                      << " mission=" << missionId;
+            LOG_ERROR << "[PlayerMission] Level-condition accept rejected: LevelComp missing (load invariant broken), entity="
+                      << entt::to_integral(player) << " mission=" << missionId;
             return kServiceUnavailable;
         }
         if (condition->quantity_type() > 1 ||

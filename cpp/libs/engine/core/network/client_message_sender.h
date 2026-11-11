@@ -33,3 +33,7 @@ void BroadcastToSceneClients(uint32_t messageId, const google::protobuf::Message
 // 向当前线程 Gate 注册表中拥有 RpcSession 的 Gate 发广播，由各 Gate 转发给其上已绑定玩家的客户端会话（未登录的连接不收）。
 // 覆盖范围取决于本节点已登记的 Gate，不保证覆盖其他节点或 zone 的客户端。
 void BroadcastToKnownGateClients(uint32_t messageId, const google::protobuf::Message &message);
+
+// 把上面两种按玩家 / 按场景的广播每次发给了几台 Gate 的直方图（scene_broadcast_gate_fanout，broadcast_fanout_stats.h）
+// 登记进 /metrics。节点启动时调一次；重复登记只打一行 ERROR。
+void RegisterBroadcastFanoutMetrics();

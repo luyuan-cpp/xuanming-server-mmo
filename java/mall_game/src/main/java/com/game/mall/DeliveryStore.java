@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -136,9 +137,9 @@ public final class DeliveryStore {
             if (in.state().equals("MANUAL"))
                 jdbc.update("UPDATE oms_order SET status=7 WHERE order_sn=? AND status=1", in.orderId());
             if (in.state().equals("REFUND_PENDING")) {
-                // 交付被拒:退的是订单绑定的那笔付款,退款待办按它的交易键建(一张订单可能另有重复付款的待办)。
+                // 交付被拒:退的是订单绑定的那笔付款,退款待办按它的交易键建(一张订单可能另有异常付款的待办)。
                 int intents = jdbc.update("INSERT INTO commerce_refund_intent(channel,transaction_id,order_sn,source,status) "
-                    + "SELECT channel,transaction_id,order_sn,'" + REFUND_DELIVERY_REJECTED + "','PENDING' "
+                    + "SELECT channel,transaction_id,order_sn,'" + CommerceApi.RefundReason.DELIVERY_REJECTED.name() + "','PENDING' "
                     + "FROM commerce_payment_receipt WHERE order_sn=?", in.orderId());
                 if (intents != 1) { throw new CommerceException(503, "交付退款缺订单付款回执"); }
                 jdbc.update("UPDATE oms_order SET status=5 WHERE order_sn=? AND status=1", in.orderId());
@@ -147,30 +148,23 @@ public final class DeliveryStore {
     }
 
     /**
-     * 退款待办的来源(commerce_refund_intent.source)。前两种退的是订单绑定的那笔付款,退款回执把订单 5→6;
-     * 重复付款退的是没有绑定订单的另一笔,回执不碰订单(第一轮数据审计 §4 第 19 条)。
+     * 待退款的付款,每条是要退的那一笔(退款原因见 CommerceApi.RefundReason):交易键取待办自己的,金额币种取那笔付款回执的实收值。
+     * 异常付款的回执没有绑定订单(order_sn 为 NULL),订单号取待办上的。适配器以 transactionId 作渠道退款的幂等键(CommerceApi.PendingRefund)。
      */
-    static final String REFUND_CANCELLED_LATE = "CANCELLED_LATE";
-    static final String REFUND_DELIVERY_REJECTED = "DELIVERY_REJECTED";
-    static final String REFUND_DUPLICATE_PAYMENT = "DUPLICATE_PAYMENT";
-
-    /**
-     * 待退款的付款,每条是要退的那一笔:交易键取待办自己的,金额币种取那笔付款回执。重复付款的回执没有绑定订单
-     * (order_sn 为 NULL),订单号取待办上的。
-     */
-    public List<CommerceApi.Payment> refunds() {
-        return jdbc.query("SELECT r.order_sn,p.channel,p.transaction_id,p.amount_minor,p.currency FROM "
+    public List<CommerceApi.PendingRefund> refunds() {
+        return jdbc.query("SELECT r.order_sn,p.channel,p.transaction_id,p.amount_minor,p.currency,r.source FROM "
                 + "commerce_refund_intent r JOIN commerce_payment_receipt p ON p.channel=r.channel AND p.transaction_id=r.transaction_id "
                 + "WHERE r.status='PENDING' ORDER BY r.order_sn,r.channel,r.transaction_id LIMIT 100",
             (r, n)
-                -> new CommerceApi.Payment(
-                    r.getString(1), r.getString(2), r.getString(3), r.getLong(4), r.getString(5)));
+                -> new CommerceApi.PendingRefund(r.getString(1), r.getString(2), r.getString(3), r.getLong(4), r.getString(5),
+                    CommerceApi.RefundReason.stored(r.getString(6))));
     }
 
     /**
      * 渠道报告某一笔付款已退款。按被退付款的交易键 (channel, paymentTransactionId) 定位退款待办并幂等:
-     * 同一笔付款只认一条退款流水,重放同一条回 200,换一条回 409。只有订单本身的退款(CANCELLED_LATE /
-     * DELIVERY_REJECTED)把订单 5→6;重复付款的退款只终结它自己的待办,订单和订单绑定的那笔付款都不动。
+     * 同一笔付款只认一条退款流水,重放同一条回 200,换一条回 409;一条退款流水已了结别的付款也回 409。
+     * 只有订单本身的退款(CANCELLED_LATE / DELIVERY_REJECTED)把订单 5→6;异常付款(重复付款、金额或币种不符)的退款
+     * 只终结它自己的待办,订单和订单绑定的那笔付款都不动。
      */
     public void refunded(CommerceApi.Refund in) {
         if (in == null || in.orderId() == null || !in.orderId().matches(PaymentPolicy.ORDER)
@@ -178,6 +172,15 @@ public final class DeliveryStore {
             || in.paymentTransactionId() == null || !in.paymentTransactionId().matches("[A-Za-z0-9_-]{1,128}")
             || in.transactionId() == null || !in.transactionId().matches("[A-Za-z0-9_-]{1,128}"))
             throw new CommerceException(400, "退款回执非法");
+        try {
+            settleRefund(in);
+        } catch (DuplicateKeyException reused) {
+            // 退款流水 (channel, transaction_id) 唯一:渠道的一条退款只能了结一笔付款。不映射的话会以 500 冒出,适配器会一直重试。
+            throw new CommerceException(409, "退款流水已用于其他付款");
+        }
+    }
+
+    private void settleRefund(CommerceApi.Refund in) {
         tx.executeWithoutResult(status -> {
             // 锁序与付款、取消、交付回执相同:先单表按唯一键锁原 OMS 订单行(唯一键索引→订单记录,与mock原件同序;
             // JOIN可能先锁记录再等索引而成环),再按主键锁这笔付款的退款待办。
@@ -198,8 +201,8 @@ public final class DeliveryStore {
             if (((Number) row.get("amount_minor")).longValue() != in.amountMinor()
                 || !row.get("currency").equals(in.currency()))
                 throw new CommerceException(409, "退款金额币种不符");
-            // 订单本身的退款 ⇔ 退的是订单绑定的那笔;重复付款从不绑定订单。两者对不上说明存储已损坏,拒绝而不是猜。
-            boolean ordersOwnPayment = !REFUND_DUPLICATE_PAYMENT.equals(intent.get("source"));
+            // 订单本身的退款 ⇔ 退的是订单绑定的那笔;异常付款从不绑定订单。两者对不上说明存储已损坏,拒绝而不是猜。
+            boolean ordersOwnPayment = CommerceApi.RefundReason.stored((String) intent.get("source")).refundsOrdersOwnPayment();
             if (ordersOwnPayment != in.orderId().equals(row.get("order_sn")))
                 throw new CommerceException(503, "退款待办来源与付款绑定不一致");
             paymentPolicy.refund(in);

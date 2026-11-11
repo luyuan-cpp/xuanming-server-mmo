@@ -47,8 +47,9 @@ func auditGlobalOutcomes(ctx context.Context, a globalOutcomeAuditor, gauges glo
 	auditOutcomeOutboxBacklog(ctx, a, gauges)
 }
 
-// auditStrandedExpired 报告过了权威截止、却进不了到期终局恢复的成局。AcquireWork 的门禁（awaitsExpiredOutcome）让它们
-// 领不到租约，RecoverExpiredOutcomes 又因候选形状不合格不选它们，票据静默停在 state 2/3。这里不尝试修复：形状不合格说明
+// auditStrandedExpired 报告过了权威截止加宽限、却进不了到期终局恢复的成局(口径与 formationfix 列表里 shape_invalid 一类相同,
+// 含 state 4 与终局协议不是 1 的局,2026-11-06)。AcquireWork 的门禁（awaitsExpiredOutcome）让它们领不到租约，
+// RecoverExpiredOutcomes 又因候选形状不合格不选它们，票据静默停在 state 2/3/4。这里不尝试修复：形状不合格说明
 // 原件或能力证据有问题，自动 ABORT 会在证据不足时作废可能已经打完的一局。处置见 cross-zone-matchmaking.md §13.3。
 // 事件计数进 global_flow_total{stage=recover,outcome=expired_unrecoverable}（不带 battle_id），明细由值班按文档里的 SQL 查;
 // 存量写 gauge(0 也写:处置之后读数要能回落;读失败则保留上一次读数,不伪造 0)。
@@ -69,7 +70,7 @@ func auditStrandedExpired(ctx context.Context, a globalOutcomeAuditor, gauges gl
 		return
 	}
 	metrics.ObserveGlobalFlow("recover", "expired_unrecoverable")
-	logx.Errorf("global formations past deadline cannot reach expired-outcome recovery: count=%d,tickets stay in state 2/3;"+
+	logx.Errorf("global formations past deadline cannot reach expired-outcome recovery: count=%d,tickets stay occupied;"+
 		"outcome shape check failed(list and handle them with go/match/cmd/formationfix, see docs/ops/match-formation-manual-abort-runbook.md)", stranded)
 }
 

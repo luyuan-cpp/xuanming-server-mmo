@@ -582,6 +582,8 @@ func (c *Catalog) validatePlan(plan *pb.SqlWriterMaintenanceReceipt_Plan) error 
 }
 
 // foldRetirements只承认连续、同run、同E的永久RETIRE；P0的正文、目录版本及ACTIVE初值始终不变。
+// 换代退休(带 successor_request_id、没有 run)不在这段版本里:run 开着时 Register 拒绝换代,run 之前换代的结果已经是 P0 的 ACTIVE 全集。
+// 它真出现了就过不了下面的同 run 比对,按目录被改过拒绝(writer-roster-exhaustion-20261106.md §4.2)。
 func (c *Catalog) foldRetirements(plan *pb.SqlWriterMaintenanceReceipt_Plan, revision uint64, receipts []*pb.SqlWriterLifecycleReceipt) ([][]byte, error) {
 	if err := c.validatePlan(plan); err != nil {
 		return nil, err

@@ -37,6 +37,10 @@
 // 必须与 currency / bag_component 同记录同一次落盘,否则「效果落了、记录没落」会让带原键的重发再执行一次。
 #include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "client_request_ledger.h"
+// 物品数量预留(docs/design/battle-item-reservation.md):与 bag_component 同一次存盘提交,
+// 否则「预留落了、背包没落」会占住没有对应战斗的东西,「背包落了、预留没落」会让晚到的结算按持有量夹紧。
+#include "proto/common/component/player_item_hold_comp.pb.h"
+#include "modules/bag/item_hold.h"
 #include "asset_op_ledger.h"
 #include "asset_op_system.h"
 #include "player/comp/player_inbox_runtime_comp.h" // PlayerInboxLedgerInvalidComp
@@ -200,6 +204,16 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 				  << " reason=" << err << "; keyed requests refused for this player until the ledger is repaired";
 		tlsEcs.actorRegistry.emplace_or_replace<ClientRequestLedgerInvalidComp>(player);
 	}
+	// 物品数量预留(字段 26)跟着同一条 player_database 记录回来;旧存档没有这个字段 = 没有预留,合法。
+	// 唯一创建点:无条件挂上、原样携带,不在加载时整理或清除。校验不过只打 ERROR:不合法的记录照样计入占用
+	// (item_hold::Validate 的说明)—— 清掉它等于把可能还在等结算的道具放出去,而它是不是坏数据要人看。
+	// 读路径(BagService 的出包入口)缺它按「没有预留」;写路径(BagService::PlaceHold)缺它即拒绝;存盘缺它整份拒存。
+	const auto& itemHolds = tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player, message.item_holds());
+	if (auto err = item_hold::Validate(itemHolds); !err.empty()) {
+		LOG_ERROR << "[ItemHold] metric=item_hold_invalid source=loader player_id=" << message.player_id()
+				  << " reason=" << err << " holds=" << itemHolds.holds_size()
+				  << "; holds carried as-is and still counted, repair needs a human";
+	}
 	tlsEcs.actorRegistry.emplace<CurrencyComp>(player, message.currency());
 	// 补缴欠款(debts)是 PlayerCurrencyComp 的运行时结构,持久化载体是
 	// CurrencyComp.debts。这一对 LoadFromProto/SaveToProto 之前从未被调用过 ——
@@ -255,6 +269,8 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	const auto* battleResults = FindPersistedComp<PlayerBattleResultComp>(player, "PlayerBattleResultComp", missing);
 	// 幂等键账本缺失同样整份拒存:补一本空账本落盘,等于让已经执行过的请求在重发时再执行一次。
 	const auto* clientRequests = FindPersistedComp<ClientRequestLedgerComp>(player, "ClientRequestLedgerComp", missing);
+	// 物品数量预留缺失同样整份拒存:补一份空表落盘,等于把还押在未结算战斗里的道具放出去。
+	const auto* itemHolds = FindPersistedComp<PlayerItemHoldComp>(player, "PlayerItemHoldComp", missing);
 	const auto* currency = FindPersistedComp<CurrencyComp>(player, "CurrencyComp", missing);
 	const auto* currencyRuntime = FindPersistedComp<PlayerCurrencyComp>(player, "PlayerCurrencyComp", missing);
 	// 顶层未知字段缺了载体同样整份拒存:补空等于把新版本写进来的整列抹掉(混版本设计 §4.2 L1)。
@@ -307,6 +323,8 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_battle_results()->CopyFrom(*battleResults);
 	// 幂等键账本:与它保护的效果同一次 Marshal、同一次提交(不变量 I3);位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
 	message.mutable_client_request_ledger()->CopyFrom(*clientRequests);
+	// 物品数量预留:与 bag_component 同一次 Marshal、同一次提交;位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
+	message.mutable_item_holds()->CopyFrom(*itemHolds);
 	message.mutable_currency()->CopyFrom(*currency);
 	// 必须在 CopyFrom 之后:CopyFrom 会覆盖整个 currency 子消息(含 debts),
 	// 反序会把刚写进去的欠款抹掉。

@@ -1793,17 +1793,17 @@ DBTask TopicGeneration 换代的排空集合同时包含旧代 Kafka、retry 与
 
 本节约束本批隔离候选；尚未正规生成、编译、测试或通过真实环境验收，不能据此执行线上维护。两版各自实现内部协议。物理目标为本任务已核 TiDB 8.5.8 维护构建；锁原语必须由该目标实际最小权限资格原件选定。
 
-每个进程启动使用预先固定的 writer key、instance、独立 SQL principal 与 REGISTER 全文。主体和 instance 永久唯一，重启不能复用旧身份。normal 装配一次消费私有 grant，连接池共享同一 WriterConfig；只有独立 Schema/Operator 装配持有预建或维护能力。normal 不建表、不注册、不冻结、不解冻。fresh-prestart 遇已有表或部分失败残留就拒绝，保留现场。Windows 使用真实 ACL、无 reparse 路径与本地 NTFS 的耐久独占创建；该平台候选尚待合并与实际验证，不能把 Mode().Perm() 当作 Windows ACL。
+每个进程启动是一代：writer key、instance 与 REGISTER 全文每代都新，永久唯一，REVOKED 永久，重启不能复用旧的一代。SQL principal 按槽位（StatefulSet 序号）预先批准，同一槽位上下两代共用，同一逻辑库里同一账号同一时刻至多一代 ACTIVE；新一代在注册事务里原子退休上一代（2026-11-10 缺口第 22 条改，原来是「每次启动一个新账号」，见[写者名册换代](writer-roster-exhaustion-20261106.md) §5）。normal 装配一次消费私有 grant，连接池共享同一 WriterConfig；只有独立 Schema/Operator 装配持有预建或维护能力。normal 不建表、不注册、不冻结、不解冻。fresh-prestart 遇已有表或部分失败残留就拒绝，保留现场。Windows 使用真实 ACL、无 reparse 路径与本地 NTFS 的耐久独占创建；该平台候选尚待合并与实际验证，不能把 Mode().Perm() 当作 Windows ACL。
 
 维护职责按逻辑角色划分：P1 永久关闭 SOURCE 并等待已接收集合确定收敛。兼任 RELAY 的同一物理 writer 保留原 SQL handle，直到 P3 的消费、重试、补投、回调和最终存盘全部确定结束。无 RELAY 的 writer 可在 P1 退役；兼任者只能在 P3 同轮退役。退役先锁自身全部 64 个 slot，再锁 meta/run，核对永久 ROLE_CLOSED / RELAY_QUIESCED 原件中的同 boot、同角色、复活围栏和已收敛前沿，最后原子 REVOKE registry/slots、增加 catalog_revision 并追加 RETIRE 全文收据。超时、取消、purge、PID 消失及 UNKNOWN 不生成成功闭合事实。
 
-P0 的 ManifestProto、初始 ACTIVE 全集、E 和 catalog_revision 永久不回写。初始角色的物理 key 并集必须覆盖 ACTIVE 全集。后续按 (catalog_revision, request_id) 有界读取 P0 之后的永久生命周期收据，只接受连续版本、同 run、同原 E、完整摘要匹配、每 key 恰一次的 RETIRE。预期 ACTIVE 等于初始集合减去这些合法退役；出现新 REGISTER、外来 run、版本缺口、重复或未知 key 都拒绝。正常 NON_SQL_CLOSED 要求全部旧 writer 已退役，紧急 HOLD 则可保留尚在途的精确 ACTIVE 集。
+P0 的 ManifestProto、初始 ACTIVE 全集、E 和 catalog_revision 永久不回写。初始角色的物理 key 并集必须覆盖 ACTIVE 全集。后续按 (catalog_revision, request_id) 有界读取 P0 之后的永久生命周期收据，只接受连续版本、同 run、同原 E、完整摘要匹配、每 key 恰一次的 RETIRE。换代退休（带 `successor_request_id` 的非 run RETIRE）不会出现在这段里：run 开着时注册事务拒绝换代，run 之前换代的结果就是 P0 的 ACTIVE 全集。预期 ACTIVE 等于初始集合减去这些合法退役；出现新 REGISTER、外来 run、版本缺口、重复或未知 key 都拒绝。正常 NON_SQL_CLOSED 要求全部旧 writer 已退役，紧急 HOLD 则可保留尚在途的精确 ACTIVE 集。
 
 冻结固定锁序为 R 的 slots→reconcile→meta→run→ticket、J 的 slots→meta→run→ticket。锁前推导预期 ACTIVE，锁后按同一实际目录版本重新折叠并核精确等集；全部退役后的空集仍须原子推进 E 和 writable。正常票据只能消费同轮 NON_SQL_CLOSED，票据 ID、目标冻结请求及完整时间窗均进入授权请求摘要。冻结原请求的 prior 固定为 grant 之前已知的排空/危险收据；事务通过 ticket.grant_receipt 核验真正的授权收据及其 prior，避免冻结摘要与尚未生成的 grant 收据互相依赖。
 
 正常解冻只消费原 NORMAL frozen ticket、原冻结收据和 RELEASE_READY 的完整恢复审核。Plan 的 E 始终是 P0 值；冻结前 E、解冻前 E+1、解冻后 E+2。R 的 route_watermark_floor_ms 由原审核证据固定，并在已有 reconcile 锁内与 writable 同一事务取 GREATEST；J 无此行时要求该字段为 0。紧急冻结只进入 EMERGENCY_FROZEN_HOLD，不能自动升级为正常成功或自动解冻。
 
-SQL_RELEASED 后只允许同 run 的全新预批准身份注册。新 boot 先准备消费者、保持 SOURCE 关闭；实际 open 产生正式 ACK 后才追加 PUBLICATION_REOPENED。旧 boot 不重新开闸。缺少真实应用 admission/join/ACK 接缝的入口必须继续保留维护状态，不能用部署脚本、日志或进程退出替应用事实。所有未完成接缝统一进入精确范围清单。
+SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的槽位账号，身份由注册器现场生成，上一代已在排空中退休，所以这一步只注册、不换代。新 boot 先准备消费者、保持 SOURCE 关闭；实际 open 产生正式 ACK 后才追加 PUBLICATION_REOPENED。旧 boot 不重新开闸。缺少真实应用 admission/join/ACK 接缝的入口必须继续保留维护状态，不能用部署脚本、日志或进程退出替应用事实。所有未完成接缝统一进入精确范围清单。
 
 本批新增回归覆盖：P1/P3 合法退役、共享 boot 提前退役拒绝、连续目录折叠与空 ACTIVE 冻结、外来目录变化拒绝、票据换参拒绝、UNKNOWN 不返回成功收据，以及 Schema 专用的既有迁移语句边界。这里只记录用例源码；执行证据仍为零。
 

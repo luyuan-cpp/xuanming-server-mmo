@@ -160,7 +160,7 @@ func buildGateDrainMigrationCommand(gateID string, gateInstanceID string,
 	event *kafkapb.GateDrainMigrationEvent,
 ) (gateCommandMessage, error) {
 	if event == nil {
-		return gateCommandMessage{}, fmt.Errorf("迁移许可事件不能为空")
+		return gateCommandMessage{}, fmt.Errorf("GateDrainMigrationEvent must not be nil (gate=%s)", gateID)
 	}
 	eventPayload, err := proto.Marshal(event)
 	if err != nil {

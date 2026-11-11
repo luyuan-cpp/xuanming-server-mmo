@@ -136,11 +136,15 @@ type deadlineAbortVerdict struct {
 
 // deadlineAbortCapMs 是「没有证据也作废」的起点:截止 + 终局宽限 + 硬上限,上溢饱和。
 func deadlineAbortCapMs(deadlineMs uint64) uint64 {
-	const after = terminalOutcomeGraceMs + deadlineAbortHardCapMs
-	if deadlineMs > math.MaxUint64-after {
+	return saturatingAddMs(deadlineMs, terminalOutcomeGraceMs+deadlineAbortHardCapMs)
+}
+
+// saturatingAddMs 是 a + b,上溢时饱和到 uint64 上界(截止作废的时刻都是 TiDB 毫秒,临近上界只在坏数据里出现)。
+func saturatingAddMs(a, b uint64) uint64 {
+	if a > math.MaxUint64-b {
 		return math.MaxUint64
 	}
-	return deadlineMs + after
+	return a + b
 }
 
 // judgeDeadlineAbort 是截止 ABORT 的全部时间判据,纯函数;到期恢复与帮会取消都在锁内只调它(经 abortTerminalTx)。
@@ -165,11 +169,11 @@ func judgeDeadlineAbort(deadlineMs, stampMs, retryAtMs uint64, evidence Deadline
 	capAt := deadlineAbortCapMs(deadlineMs)
 	switch {
 	case stampMs < capAt:
-		return deadlineAbortVerdict{nextProbeMs: min(stampMs+deadlineProbeBackoffMs, capAt)}
+		return deadlineAbortVerdict{nextProbeMs: min(saturatingAddMs(stampMs, deadlineProbeBackoffMs), capAt)}
 	case retryAtMs > capAt && stampMs < retryAtMs:
 		return deadlineAbortVerdict{}
 	case evidence == DeadlineEvidenceBattleStillHolds && retryAtMs <= capAt:
-		return deadlineAbortVerdict{nextProbeMs: stampMs + deadlineHeldPatienceMs}
+		return deadlineAbortVerdict{nextProbeMs: saturatingAddMs(stampMs, deadlineHeldPatienceMs)}
 	}
 	return deadlineAbortVerdict{abort: true, capped: true}
 }

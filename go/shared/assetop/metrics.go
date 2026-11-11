@@ -41,6 +41,11 @@ type Metrics struct {
 	pendingClassOldestAge *prometheus.GaugeVec
 	abandonedTotal        *prometheus.CounterVec
 	abandonSkippedTotal   *prometheus.CounterVec
+
+	// ownedShards 是缺口清单第 25 条追加(docs/design/assetop-redelivery-sharding-20261110.md):本副本此刻负责的
+	// 到期扫描片数。用不带可变 label 的 GaugeVec 而不是 Gauge:Gauge 一注册就报 0,没绑分工的循环(mail、回收)
+	// 会显得「一片都不负责」,实际它们扫的是全部行;GaugeVec 在第一次 Set 之前没有序列。
+	ownedShards *prometheus.GaugeVec
 }
 
 // NewMetrics 在 reg 上注册本包的全部指标。
@@ -168,6 +173,12 @@ func newMetrics(reg prometheus.Registerer, service string) *Metrics {
 				" / redis_unverified(Redis 副本未通过实例身份核验,等玩家下次登录)",
 			ConstLabels: labels,
 		}, []string{"reason"}),
+		ownedShards: f.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "assetop_owned_shards",
+			Help: "本副本此刻负责的到期扫描分片数(0..64,按 player_id 分片);各 stable 副本加起来应为 64," +
+				"成员表变化的几秒里会多或少几片。只有绑了按片分工的重投循环才报",
+			ConstLabels: labels,
+		}, nil),
 	}
 }
 
@@ -310,6 +321,14 @@ func (m *Metrics) setPendingOldestAge(stream assetpb.AssetOpStream, seconds floa
 		return
 	}
 	m.pendingOldestAge.WithLabelValues(StreamLabel(stream)).Set(seconds)
+}
+
+// setOwnedShards 记本副本本轮负责的到期扫描片数(Loop.listDue,只在绑了分工时调)。
+func (m *Metrics) setOwnedShards(n int) {
+	if m == nil {
+		return
+	}
+	m.ownedShards.WithLabelValues().Set(float64(n))
 }
 
 // WakeResult 是 assetop_wake_total 的 result label(docs/design/landing-recovery-sync-digest.md §5.3)。

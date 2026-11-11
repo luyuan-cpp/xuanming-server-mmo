@@ -156,7 +156,10 @@ void OnReply(SessionId sessionId, uint64_t incarnation, Guid expectedPlayer, Can
 		++tlsCounters.offered;
 		return;
 	}
+	// 没推出去(连接已释放、身份不符,或没装出口):票作废,这条会话照常退避,不在下一拍立刻再要一张。
+	// 推送出口只写连接、不改会话表,session 仍有效。
 	++tlsCounters.pushDropped;
+	session.drainMigrationRetryAt = now + kRetryBackoff;
 }
 
 } // namespace
@@ -263,8 +266,9 @@ void Tick(SteadyTime now)
 		--budget;
 		// 结构化绑定用 init-capture 拷一份(MSVC 对直接捕获结构化绑定的支持不稳,见 copilot-instructions 的 C3495 一节)。
 		const bool sent = tlsSender(sessionId, session,
-			[id = sessionId, incarnation = session.incarnation, expectedPlayer, kind](const RequestReply &reply)
-			{ OnReply(id, incarnation, expectedPlayer, kind, reply, std::chrono::steady_clock::now()); });
+			[id = sessionId, incarnation = session.incarnation, expectedPlayer, kind](const RequestReply &reply,
+																					SteadyTime receivedAt)
+			{ OnReply(id, incarnation, expectedPlayer, kind, reply, receivedAt); });
 		if (!sent)
 		{
 			// 没发出:回调不会来,在这里收回在途状态并退避。出口只返回、不改会话表,session 仍有效。

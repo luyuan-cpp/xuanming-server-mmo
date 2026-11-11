@@ -341,7 +341,7 @@ type AgonesConfig struct {
 	Namespace string `json:",optional"`
 
 	// RoomCapacity 只用于**生成部署模板时**的参考值,SceneManager 运行时
-	// 不依赖它(容量是 GameServer 对象上的 status.counters.rooms.capacity)。
+	// 不依赖它(容量是 GameServer 对象上的 status.lists.rooms.capacity)。
 	// 这里保留一个字段是为了让配置与压测结论有个落点。
 	//
 	// 注意:不要硬编码"一个 Scene Node 能承载多少房间"。C++ Scene Node 是
@@ -353,18 +353,17 @@ type AgonesConfig struct {
 	// 滚动升级期间通常留空,否则新旧版本会互相看不见。
 	BuildLabel string `json:",optional"`
 
-	// CounterRollbackRetries / CounterRollbackBackoffMs 控制回滚 rooms 计数
-	// 时的乐观并发重试(409 冲突是正常现象)。
+	// CounterRollbackRetries / CounterRollbackBackoffMs 控制按条目增删 rooms 列表时的乐观并发重试
+	// (409 冲突是正常现象)。键名沿用 rooms 还是 Counter 时的叫法,语义见 agones.K8sAllocatorOptions。
 	CounterRollbackRetries   int   `json:",default=5"`
 	CounterRollbackBackoffMs int64 `json:",default=100"`
 
 	// RequestTimeoutMs 单次 K8s API 调用超时。
 	RequestTimeoutMs int64 `json:",default=5000"`
 
-	// ReconcileIntervalSeconds: 周期性比对 Agones rooms 计数、Redis Scene
-	// 映射与节点上报数量。0 = 关闭。
-	// 第一版发现不一致**只告警和记指标**,不自动覆盖计数 —— 证据不完整时
-	// 自动"修正"很可能把对的一方改错。
+	// ReconcileIntervalSeconds: 领导者按条目对账 Agones rooms 列表与 Redis 名额记录的周期
+	// (docs/design/agones-scene-node-high-density.md §13.5)。对账会删孤儿条目、补缺失条目、把改派时
+	// 没转过来的名额转过来;崩溃留下的名额靠它收回,高密度模式下不要关。0 = 关闭。
 	ReconcileIntervalSeconds int64 `json:",default=60"`
 }
 

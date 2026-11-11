@@ -152,7 +152,7 @@ class CatalogAdminStoreTest {
             var adjusted = store.adjustStock(ACTOR, new CatalogAdminApi.AdjustStock("freeze-stock-001", 1, 2, -4));
             assertEquals(16, adjusted.stock());
             assertEquals(3, adjusted.lockedStock(), "差额调整不能抹掉两个原订单的预占");
-            var paid = f.store.recordTrustedPayment(new CommerceApi.Payment(first.orderId(), "test", "frozen-pay-001", 250, "CNY"));
+            var paid = f.store.recordTrustedPayment(new CommerceApi.Payment(first.orderId(), "test", "frozen-pay-001", 250, "CNY")).order();
             assertEquals("DELIVERY_PENDING", paid.state());
             assertEquals(250, paid.amountMinor());
             assertEquals("CNY", paid.currency());

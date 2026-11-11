@@ -26,12 +26,20 @@ public:
         return !NodesOfType(nodeType).empty();
     }
 
+    // 这一类的成员每变一次(加入、更新、摘除)加一,从 0 起。按快照算派生结果的调用方(如 gate 的路由服子集)
+    // 拿它判断缓存是否过期;非法类型恒为 0。
+    uint64_t Generation(uint32_t nodeType) const
+    {
+        return nodeType < generations_.size() ? generations_[nodeType] : 0;
+    }
+
     UpsertResult Upsert(uint32_t nodeType, const NodeInfo &node)
     {
         if (nodeType >= byType_.size())
         {
             return UpsertResult::kRejected;
         }
+        ++generations_[nodeType];
         auto &nodes = byType_[nodeType];
         for (auto &existing : nodes)
         {
@@ -62,9 +70,14 @@ public:
                 ++removed;
             }
         }
+        if (removed > 0)
+        {
+            ++generations_[nodeType];
+        }
         return removed;
     }
 
 private:
     std::array<NodeList, common::base::eNodeType_ARRAYSIZE> byType_;
+    std::array<uint64_t, common::base::eNodeType_ARRAYSIZE> generations_{};
 };

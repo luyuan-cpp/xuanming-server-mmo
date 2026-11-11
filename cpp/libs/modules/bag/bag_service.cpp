@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
 #include <optional>
 #include <tuple>
 #include <type_traits>
@@ -258,9 +259,136 @@ namespace
     }
 }
 
+// ── 物品数量预留(bag_service.h「物品数量预留」一段;docs/design/battle-item-reservation.md)──────────────────
+// 读缺失一律按「没有预留」:实体无效、bag 不是这名玩家的人物背包、或没有 PlayerItemHoldComp(头文件里写了理由)。
+// 判「是不是他的人物背包」比的是地址:候选副本(ConsumeInventoryAndGrant 的 nextInventory)不算,调用方必须拿原包问。
+
+uint64_t BagService::HeldCount(entt::entity playerEntity, const Bag &bag, const uint32_t configId, const uint64_t exceptHoldId)
+{
+	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		return 0;
+	}
+	const auto *bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
+	if (bags == nullptr || &bag != &bags->bags[kInventory])
+	{
+		return 0;
+	}
+	const auto *holds = tlsEcs.actorRegistry.try_get<PlayerItemHoldComp>(playerEntity);
+	return holds != nullptr ? item_hold::HeldCount(*holds, configId, exceptHoldId) : 0;
+}
+
+uint64_t BagService::RemovableCount(entt::entity playerEntity, const Bag &bag, const uint32_t configId,
+									const uint64_t exceptHoldId)
+{
+	const uint64_t total = bag.GetTotalItemCount(configId);
+	const uint64_t held = HeldCount(playerEntity, bag, configId, exceptHoldId);
+	return total > held ? total - held : 0;
+}
+
+BagService::RemovalVerdict BagService::CheckRemovable(entt::entity playerEntity, const Bag &bag,
+													  const ItemCountMap &quantities)
+{
+	switch (bag.CheckQuantities(quantities))
+	{
+	case ItemStore::QuantityVerdict::kInsufficient:
+		return RemovalVerdict::kInsufficient;
+	case ItemStore::QuantityVerdict::kVersionSkew:
+		return RemovalVerdict::kVersionSkew;
+	case ItemStore::QuantityVerdict::kEnough:
+		break;
+	}
+	for (const auto &[configId, count] : quantities)
+	{
+		if (count > RemovableCount(playerEntity, bag, configId))
+		{
+			return RemovalVerdict::kHeld;
+		}
+	}
+	return RemovalVerdict::kEnough;
+}
+
+BagService::RemovalVerdict BagService::CheckRemovableInstances(entt::entity playerEntity, Bag &bag,
+															   const std::vector<Guid> &guids)
+{
+	// 只有可计数的单位进预留口径(不可计数的堆不计入 GetTotalItemCount,拿走它不减少可计数总量)。
+	std::map<uint32_t, uint64_t> removing;
+	for (const auto guid : guids)
+	{
+		const auto *item = bag.ContainsGuid(guid) ? bag.GetItemCompByGuid(guid) : nullptr;
+		if (item == nullptr || !ItemStore::IsCountableByConfig(*item))
+		{
+			continue;
+		}
+		removing[item->config_id()] += item->size();
+	}
+	for (const auto &[configId, count] : removing)
+	{
+		if (count > RemovableCount(playerEntity, bag, configId))
+		{
+			return RemovalVerdict::kHeld;
+		}
+	}
+	return RemovalVerdict::kEnough;
+}
+
+uint32_t BagService::PlaceHold(entt::entity playerEntity, const uint64_t holdId, const item_hold::ItemHoldKind kind,
+							   const item_hold::HoldLines &lines, const uint64_t createdAtMs, const uint64_t reviewAfterMs)
+{
+	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		return kInvalidParameter;
+	}
+	const uint64_t playerId = tlsEcs.GetPlayerId(playerEntity);
+	auto *holds = tlsEcs.actorRegistry.try_get<PlayerItemHoldComp>(playerEntity);
+	const auto *bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
+	if (holds == nullptr || bags == nullptr)
+	{
+		// 持久数据只在加载时创建,缺了是加载不变量被破坏:不补建,拒绝建预留(调用方据此拒绝备战)。
+		LOG_ERROR << "BagService::PlaceHold: persisted PlayerItemHoldComp or PlayerBagsComp missing (load invariant broken);"
+				  << " hold refused. player_id=" << playerId << " hold_id=" << holdId
+				  << " holds_present=" << (holds != nullptr) << " bags_present=" << (bags != nullptr);
+		return kServiceUnavailable;
+	}
+	const auto &inventory = bags->bags[kInventory];
+	for (const auto &[configId, count] : lines)
+	{
+		const uint64_t removable = RemovableCount(playerEntity, inventory, configId);
+		if (count > removable)
+		{
+			LOG_WARN << "BagService::PlaceHold: requested quantity exceeds what can still be held; hold refused."
+					 << " player_id=" << playerId << " hold_id=" << holdId << " config_id=" << configId
+					 << " requested=" << count << " removable=" << removable;
+			return kBagInsufficientItems;
+		}
+	}
+	const auto verdict = item_hold::Add(*holds, holdId, kind, lines, createdAtMs, reviewAfterMs);
+	if (verdict != item_hold::AddVerdict::kAdded)
+	{
+		LOG_WARN << "BagService::PlaceHold: hold refused. player_id=" << playerId << " hold_id=" << holdId
+				 << " kind=" << item_hold::ItemHoldKindName(static_cast<uint32_t>(kind)) << " lines=" << lines.size()
+				 << " existing_holds=" << holds->holds_size() << " verdict=" << static_cast<uint32_t>(verdict);
+		return kInvalidParameter;
+	}
+	LOG_INFO << "BagService::PlaceHold: hold placed. player_id=" << playerId << " hold_id=" << holdId
+			 << " kind=" << item_hold::ItemHoldKindName(static_cast<uint32_t>(kind)) << " lines=" << lines.size()
+			 << " review_after_ms=" << reviewAfterMs;
+	return kSuccess;
+}
+
+bool BagService::ReleaseHold(entt::entity playerEntity, const uint64_t holdId)
+{
+	if (holdId == 0 || !tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		return false;
+	}
+	auto *holds = tlsEcs.actorRegistry.try_get<PlayerItemHoldComp>(playerEntity);
+	return holds != nullptr && item_hold::Remove(*holds, holdId) > 0;
+}
+
 uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     const ItemCountMap& consumed, const ItemCountMap& gained, uint64_t correlationId,
-    const std::string& extra, const std::function<uint32_t()>& beforeCommit)
+    const std::string& extra, const std::function<uint32_t()>& beforeCommit, const uint64_t consumeFromHoldId)
 {
     if (!tlsEcs.actorRegistry.valid(playerEntity) || !PlayerLifecycleSystem::IsPlayerMutable(playerEntity)) return kInvalidParameter;
     const auto playerId = tlsEcs.GetPlayerId(playerEntity);
@@ -320,9 +448,16 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     };
     Bag nextInventory, nextTemporary;
     if (!clone(inventory, nextInventory) || !clone(temporary, nextTemporary)) return kInvalidParameter;
+    // 「实际持有」= 可计数总量 - 别的预留(consumeFromHoldId 那一份可以动用)。必须拿原包问:候选副本的地址不是他的人物背包。
+    // 夹到 0 的项不交给容器(容器把 0 数量当编程错误)。
+    ItemCountMap consumable;
+    for (const auto& [config, count] : consumed) {
+        const uint64_t allowed = std::min<uint64_t>(count, RemovableCount(playerEntity, inventory, config, consumeFromHoldId));
+        if (allowed > 0) consumable[config] = static_cast<uint32_t>(allowed);
+    }
     std::vector<DrainedInstance> drained;
-    if (!consumed.empty()) {
-        const auto result = nextInventory.RemoveItemsClamped(consumed, &drained);
+    if (!consumable.empty()) {
+        const auto result = nextInventory.RemoveItemsClamped(consumable, &drained);
         if (result != kSuccess) return result;
     }
     std::vector<DestroyedInstance> evicted;
@@ -458,6 +593,15 @@ uint32_t BagService::RemoveItem(
 	{
 		capturedConfigId = itemComp->config_id();
 		capturedSize = itemComp->size();
+		// 物品数量预留:人物背包里的可计数实例,拿走之后不得低于被预留占住的数量(bag_service.h「物品数量预留」)。
+		if (ItemStore::IsCountableByConfig(*itemComp) &&
+			capturedSize > RemovableCount(playerEntity, bag, capturedConfigId))
+		{
+			LOG_ERROR << "BagService::RemoveItem rejected: the instance is part of quantities held for an unsettled battle."
+					  << " guid=" << guid << " config_id=" << capturedConfigId << " size=" << capturedSize
+					  << " player=" << bag.PlayerGuid();
+			return PrintStackAndReturnError(kBagInsufficientItems);
+		}
 	}
 
 	auto result = bag.RemoveItem(guid);
@@ -491,8 +635,20 @@ uint32_t BagService::RemoveItemsClamped(
 		return PrintStackAndReturnError(kInvalidParameter);
 	}
 
+	// 物品数量预留:人物背包里「实际持有」按可出包数量算,被预留占住的那部分不扣(bag_service.h「物品数量预留」)。
+	// 夹到 0 的项不交给容器。
+	ItemCountMap removable;
+	for (const auto &[configId, count] : itemsToRemove)
+	{
+		const uint64_t allowed = std::min<uint64_t>(count, RemovableCount(playerEntity, bag, configId));
+		if (allowed > 0)
+		{
+			removable[configId] = static_cast<uint32_t>(allowed);
+		}
+	}
+
 	std::vector<DrainedInstance> drained;
-	const auto result = bag.RemoveItemsClamped(itemsToRemove, &drained);
+	const auto result = removable.empty() ? uint32_t{kSuccess} : bag.RemoveItemsClamped(removable, &drained);
 
 	// 逐条落流水:一条回执一个 item_uuid。这里不能像入包那样只记第一个 guid ——
 	// 一笔消耗可能横跨好几堆,少记一条就是少一条追溯线索。
@@ -558,6 +714,16 @@ uint32_t BagService::RemoveItemsExact(
 	// 的闸只许放在玩法入口层。强化 / 镶嵌的入口自己判
 	// (docs/design/equipment-enhance-inlay.md §5 不变量 5)。
 
+	// ── 物品数量预留:扣掉别的预留之后不够,一件不扣(bag_service.h「物品数量预留」)───────
+	// 这不是战斗闸:只看数量,不看 InBattleComp。调用方应先用 CheckRemovable 预检,走到这里说明预检与提交之间状态变了。
+	if (CheckRemovable(playerEntity, bag, itemsToRemove) == RemovalVerdict::kHeld)
+	{
+		LOG_ERROR << "BagService::RemoveItemsExact rejected: request reaches into quantities held for an unsettled battle"
+				  << " (caller should precheck with CheckRemovable); nothing removed. player=" << bag.PlayerGuid()
+				  << " tx_type=" << static_cast<int>(txType) << " correlation_id=" << correlationId;
+		return PrintStackAndReturnError(kBagInsufficientItems);
+	}
+
 	// ── 全或无扣除:任何一种不够就整体失败,一件不扣 ─────────────────────
 	// 不够时 Bag 层已经打过 ERROR 与调用栈;drained 此时保持为空,下面不会落任何流水。
 	std::vector<DrainedInstance> drained;
@@ -612,6 +778,16 @@ uint32_t BagService::RemoveItemsByGuid(
 	// ⚠ 这里**刻意不判 InBattleComp**(D48 红线)。"局中挡一切背包写"的闸只许放在
 	// 资产 RPC 入口层;下沉到 BagService,战斗结算自己的扣物就会被自己拦住,结算
 	// 永久卡死。局中不许寄售这条业务规则由调用方(交易会话的资产 RPC 入口)负责。
+
+	// ── 物品数量预留:这批实例会动到被预留占住的数量就整批拒,一件不扣(bag_service.h「物品数量预留」)──
+	// 只看数量、不看 InBattleComp,所以不碰上面那条红线。预留在结算或作废之后才释放,这是会自己消失的条件:
+	// 回 RETRY 类的 kAssetInBattle,资产通道据此重投;回 REJECTED 类会把玩家的寄售永久拒掉。
+	if (CheckRemovableInstances(playerEntity, bag, guids) == RemovalVerdict::kHeld)
+	{
+		LOG_WARN << "BagService::RemoveItemsByGuid rejected: instances are part of quantities held for an unsettled battle."
+				 << " player=" << bag.PlayerGuid() << " guids=" << guids.size() << " correlation_id=" << correlationId;
+		return kAssetInBattle;
+	}
 
 	// ── reserve:纯预检,零副作用。过了这一关,下面的销毁不会再失败 ─────────
 	std::vector<DestroyedInstance> removable;

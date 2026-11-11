@@ -162,14 +162,18 @@ void ServiceDiscoveryManager::AddServiceNode(const std::string &nodeJson, uint32
 		LOG_TRACE << "Node updated from service discovery event, uuid=" << discoveredNode.node_uuid();
 	}
 
+	// 快照已是新状态:按快照派生的选择(gate 的路由服子集,docs/design/connection-fanout-subsetting-20261106.md §3.2)
+	// 先对账,它可能连上别的节点或排掉出子集的节点延后关闭;下面再按准入决定连不连这一台。
+	gNode->NotifyDiscoveryChanged(nodeType);
+
 	if (gNode->IsCurrentNode(discoveredNode))
 	{
 		LOG_TRACE << "Node has same lease_id as self, skip adding node. Self uuid: " << discoveredNode.node_uuid();
 		return;
 	}
 
-	const auto &whitelist = gNode->GetTargetNodeTypeWhitelist();
-	if (!whitelist.contains(nodeType))
+	// 白名单之外再过一道按类型的准入(没装准入的类型 = 只看白名单,与原行为相同)。
+	if (!gNode->AdmitsConnection(discoveredNode))
 		return;
 	if (NodeUtils::IsNodeTracked(nodeType, discoveredNode))
 	{

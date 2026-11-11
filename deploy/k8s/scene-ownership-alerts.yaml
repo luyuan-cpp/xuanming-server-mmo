@@ -1,0 +1,107 @@
+# scene 节点场景归属对账的告警(缺口清单第 33 条,docs/design/scene-node-ownership-reconcile.md §8)。
+#
+# 指标由 scene 的 Prometheus 出口导出(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400,
+# 抓取注解随 Pod 模板渲染),定义在 cpp/libs/services/scene/world/scene_ownership_reconciler.cpp。每个取值在进程启动时都以 0 导出,
+# increase() 抓得到第一次,不需要「新序列」分支。instance = 被抓取的 scene Pod。
+# 规则引用的指标名与标签取值由 tools/scripts/tests/scene_ownership_alerts_contract.tests.ps1 对照 C++ 源码钉住。
+# 处置见 docs/ops/scene-node-role-split.md「场景归属对账告警」。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: scene-ownership-alerts
+  labels:
+    app: scene
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: scene.ownership
+      interval: 30s
+      rules:
+        # 有节点托管过控制面已改派、已拆掉或已交给接走它节点号的新进程的场景,正在排空。单个节点与 etcd 失联后被判死、
+        # 个别 DestroyScene 丢失都会走到这里;对账本身已在处理,这条告诉值班「这件事发生过」。
+        - alert: SceneOwnershipUnownedScenesReleased
+          expr: |
+            sum by (namespace, instance) (increase(scene_ownership_releases_total{stage="drain_started"}[15m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene {{ $labels.instance }} 15 分钟内开始排空 {{ $value | printf \"%.0f\" }} 个已不归它的场景"
+            description: >-
+              节点读到本地场景的 scene:{id}:node 已不是自己,或自己的节点号已被新进程接走,正在把住户改派走、销毁本地实体。
+              看这个 Pod 的 `[SceneOwnership] ... is no longer owned by this process` 日志里的 observed:other_node / no_mapping 多半是它
+              与 etcd 失联后被判死(对照 scene_manager 的 death_at 与 dead_node_reconcile 指标),superseded 见 SceneOwnershipNodeIdTakenOver。
+              只有一两个场景、且不反复出现时多是个别 DestroyScene 丢失,不用处置。
+            runbook_url: docs/ops/scene-node-role-split.md
+
+        # 同一个 namespace 十分钟内一半以上的场景都被判不归本节点:不像个别节点被判死,更像控制域 Redis 丢了数据
+        # (被清空、换成空实例、主从切换丢写入),或整个 zone 的节点同时被判死。
+        - alert: SceneOwnershipMassRelease
+          expr: |
+            (
+              sum by (namespace) (increase(scene_ownership_releases_total{stage="drain_started"}[10m]))
+                > 0.5 * sum by (namespace) (max_over_time(scene_ownership_tracked_scenes[10m]))
+            )
+            and
+            sum by (namespace) (increase(scene_ownership_releases_total{stage="drain_started"}[10m])) >= 10
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 十分钟内过半场景被判不归本节点({{ $value | printf \"%.0f\" }} 个)"
+            description: >-
+              先查本 zone 的控制域 Redis(redis-ctl-g<N>):DBSIZE 是否骤降、最近有没有主从切换或被清空,scene_manager 是否刚以空数据重建世界频道;
+              再查 scene_manager 是否同时判死了大量节点(scene_manager_node_view_released_total、dead_node_reconcile 指标)。
+              排空按每节点每轮 200 名住户限速,玩家会分批改派到 scene_manager 重建的频道,不需要手工干预排空本身;要做的是找出控制域为什么丢了状态。
+            runbook_url: docs/ops/scene-node-role-split.md
+
+        # 节点读到自己的节点号已被更新的登记(另一个进程)接走:这个进程已不是这个号,本地场景正全部排空。
+        - alert: SceneOwnershipNodeIdTakenOver
+          expr: |
+            max by (namespace, instance) (scene_ownership_superseded) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene {{ $labels.instance }} 的节点号已被别的进程接走"
+            description: >-
+              这个 Pod 与 etcd 失联、租约过期之后,它的 node_id 被新起的进程按最小空闲 id 拿走了,它正在把本地场景全部排空。
+              查这个 Pod 到 etcd 的网络;排空完成(scene_ownership_releasing_scenes 回到 0)之后重启它,它会以新进程重新登记。
+              它重新连上 etcd 时也会因分配键冲突自行疏散退出。
+            runbook_url: docs/ops/scene-node-role-split.md
+
+        # 已判定不归本节点的场景长时间没收完:住户迟迟不走(改派一直失败),或住户预算一直不够(排空积压)。
+        - alert: SceneOwnershipReleaseBacklog
+          expr: |
+            max by (namespace, instance) (scene_ownership_releasing_scenes + scene_ownership_release_deferred_scenes) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene {{ $labels.instance }} 有 {{ $value | printf \"%.0f\" }} 个不归它的场景 15 分钟还没收完"
+            description: >-
+              release_deferred_scenes 高:住户预算(每轮 200 名)不够,积压在排;持续不降说明预算偏小,按压测里 EnterScene 与 go/db 的余量调大
+              kMaxRelocationsPerSweep。releasing_scenes 高:住户改派没有收敛,看这个 Pod 的 [RelocateConfirm] 与 [SceneDrain] 日志,
+              以及 scene_manager 是否可达。
+            runbook_url: docs/ops/scene-node-role-split.md
+
+        # 对账一直读不到控制域:这段时间失联回来的节点不会排空多余的场景。控制域 Redis 本身的告警在 redis-alerts.yaml。
+        - alert: SceneOwnershipReconcileBlind
+          expr: |
+            sum by (namespace, instance) (increase(scene_ownership_sweeps_total{outcome=~"redis_unavailable|previous_in_flight|send_failed"}[10m])) >= 30
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene {{ $labels.instance }} 的归属对账十分钟里过半轮次读不到控制域"
+            description: >-
+              每 10 秒一轮,十分钟 60 轮里有 30 轮以上没有读成(redis_unavailable / previous_in_flight / send_failed)。
+              查这个 Pod 到本 zone 控制域 Redis(scene_control_redis)的连接:日志里的 metric=zone_redis_liveness_timeout、AUTH 失败、DNS。
+            runbook_url: docs/ops/scene-node-role-split.md

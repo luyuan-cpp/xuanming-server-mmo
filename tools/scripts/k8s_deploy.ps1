@@ -112,6 +112,23 @@ param(
 	# 留空 = 写 infra namespace 里的 Loki(deploy/k8s/manifests/infra/loki.yaml)。
 	# 指向集群外 / 已有的 Loki 时写完整 push 地址,例如 http://loki.observability:3100/loki/api/v1/push。
 	[string]$LokiPushUrl = "",
+	# 集群内 Loki 的副本数(docs/design/no-single-node-horizontal-scaling-20261001.md §10):0 = 按档位,判据同 -KafkaBrokers(非 dev 或非 custom 取 3,其余取 1)。
+	# 只认 1 和 3。1 = 单副本加本地盘(loki.yaml,只给 dev、kind);3 = 单体模式 3 副本加共享对象存储(loki-ha.yaml),要下面的 -LokiS3*。
+	[int]$LokiReplicas = 0,
+	# 3 副本形态的对象存储:只认 S3 接口,本仓库不部署生产级对象存储。云上用云厂商的对象存储,自建机房用平台层的 Rook-Ceph RGW。
+	# Endpoint 写 host:port,不带 scheme、不带凭据;访问密钥经环境变量 MMORPG_LOKI_S3_ACCESS_KEY_ID、MMORPG_LOKI_S3_SECRET_ACCESS_KEY 注入成 Secret。
+	[string]$LokiS3Endpoint = "",
+	[string]$LokiS3Bucket = "",
+	# 留空取 us-east-1(Ceph RGW、多数兼容实现不看这个值)。
+	[string]$LokiS3Region = "",
+	# 按路径寻址(http://endpoint/bucket),Ceph RGW 与多数自建存储要开;AWS S3 用虚拟主机寻址,不开。
+	[switch]$LokiS3ForcePathStyle,
+	# 走 http 而不是 https。只给集群内的测试夹具或可信内网,staging / prod 拒绝。
+	[switch]$LokiS3Insecure,
+	# 只在 dev:起单进程 SeaweedFS(manifests/infra/seaweedfs-dev.yaml)当 S3 测试夹具,用来在 kind 上验证 3 副本形态。不进 staging、prod。
+	[switch]$LokiS3DevFixture,
+	# Loki 从 1 副本换成 3 副本要显式确认:旧 PVC 里的日志不迁移(PVC 留着供手工导出),Deployment 换成 StatefulSet 期间收不到日志。
+	[switch]$ConfirmLokiTopologyChange,
 	# 写者 Pod 回收 CronJob 的镜像(deploy/k8s/manifests/go-svc/sql-writer-pod-reaper.yaml)。官方 kubectl 镜像,钉具体版本;走内部镜像仓库时改这里。
 	# 这个镜像是 distroless,没有 shell,清单只用它自带的 /go-runner 和 /bin/kubectl。换版本或换镜像之前先核这两个路径,以及 kubectl delete 的输出还带不带 namespace。
 	[string]$SqlWriterReaperImage = "registry.k8s.io/kubectl:v1.35.10",
@@ -6498,6 +6515,199 @@ function Get-LiveStatefulSetReplicas {
 		throw "线上 StatefulSet $Name 的 spec.replicas 读出来不是整数:'$text'"
 	}
 	return $replicas
+}
+
+# ── 集群内 Loki 的形态(docs/design/no-single-node-horizontal-scaling-20261001.md §10) ─────────────────────────
+# 1 副本:loki.yaml,Deployment 加 PVC 和本地盘,只给 dev、kind。3 副本:loki-ha.yaml,单体模式(-target=all)的 StatefulSet,
+# memberlist 组环、replication_factor 3,日志块与 TSDB 索引放共享 S3,每个 Pod 的 WAL 放自己的 PVC。两种形态的 Service 都叫 loki:3100,
+# C++ 日志 sidecar 和 Grafana 不用改。Get-LokiTopologyFor、Get-LokiTopologyChangeVerdict 是纯函数,契约测试按 AST 抽出直接调用。
+
+# 副本数 → 形态(纯函数)。只认 1 和 3:两个副本凑不出 replication_factor 3 的多数,更多副本按需再议(单体模式能横向加,见 §10)。
+function Get-LokiTopologyFor {
+	param([Parameter(Mandatory = $true)][int]$Replicas)
+
+	if ($Replicas -ne 1 -and $Replicas -ne 3) {
+		throw "-LokiReplicas must be 1 (one replica with a local disk, loki.yaml) or 3 (monolithic mode on shared S3, loki-ha.yaml), got $Replicas. Two replicas cannot hold a quorum of replication_factor 3. Nothing was written."
+	}
+	$ha = ($Replicas -eq 3)
+	return [pscustomobject]@{
+		Replicas         = $Replicas
+		HighAvailability = $ha
+		Manifest         = if ($ha) { 'loki-ha.yaml' } else { 'loki.yaml' }
+	}
+}
+
+# 按命令行与档位解析出本次部署的 Loki 形态。0(缺省)= 按档位,判据与 Get-KafkaTopology 相同。
+function Get-LokiTopology {
+	$replicas = $LokiReplicas
+	if ($replicas -le 0) {
+		$replicas = if ($ReleaseProfile -ne 'dev' -or $OpsProfile -ne 'custom') { 3 } else { 1 }
+	}
+	return Get-LokiTopologyFor -Replicas $replicas
+}
+
+# 3 副本形态的对象存储参数,核过才返回 @{ Endpoint; Bucket; Region; ForcePathStyle; Insecure; DevFixture };1 副本返回 $null。
+# 1 副本时给了任何 -LokiS3* 都拒绝:参数不生效却不报错,部署的人会以为日志进了对象存储。
+# -LokiS3DevFixture 只在 dev:地址、桶、寻址方式由夹具定,不能再手写 -LokiS3Endpoint / -LokiS3Bucket。
+function Get-LokiS3Settings {
+	param([Parameter(Mandatory = $true)]$Topology)
+
+	$explicit = (-not [string]::IsNullOrWhiteSpace($LokiS3Endpoint)) -or (-not [string]::IsNullOrWhiteSpace($LokiS3Bucket)) -or
+		(-not [string]::IsNullOrWhiteSpace($LokiS3Region)) -or [bool]$LokiS3ForcePathStyle -or [bool]$LokiS3Insecure
+	if (-not $Topology.HighAvailability) {
+		if ($explicit -or [bool]$LokiS3DevFixture) {
+			throw "-LokiS3* only applies to -LokiReplicas 3; the one-replica Loki keeps its chunks on its own disk. Nothing was written."
+		}
+		return $null
+	}
+	if ($LokiS3DevFixture) {
+		if ($ReleaseProfile -ne 'dev') {
+			throw "-LokiS3DevFixture is a single-process SeaweedFS test fixture for dev and kind only; $ReleaseProfile needs an external S3 compatible store (-LokiS3Endpoint, -LokiS3Bucket). Nothing was written."
+		}
+		if ($explicit) {
+			throw "-LokiS3DevFixture sets the S3 endpoint, bucket and addressing itself; drop the other -LokiS3* parameters. Nothing was written."
+		}
+		return [pscustomobject]@{ Endpoint = "seaweedfs-s3.${InfraNamespace}:8333"; Bucket = 'loki'; Region = 'us-east-1'; ForcePathStyle = $true; Insecure = $true; DevFixture = $true }
+	}
+	if ($LokiS3Endpoint -notmatch '\A(?:[A-Za-z0-9][A-Za-z0-9.-]*|\[[0-9A-Fa-f:]+\]):([0-9]{1,5})\z' -or [int]$Matches[1] -lt 1 -or [int]$Matches[1] -gt 65535) {
+		throw "-LokiReplicas 3 needs -LokiS3Endpoint as host:port of an S3 compatible store (no scheme, no credentials), got '$LokiS3Endpoint'. Nothing was written."
+	}
+	if ($LokiS3Bucket -cnotmatch '\A[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]\z') {
+		throw "-LokiReplicas 3 needs -LokiS3Bucket, an S3 bucket name (3 to 63 lowercase letters, digits, dots and dashes), got '$LokiS3Bucket'. Nothing was written."
+	}
+	$region = if ([string]::IsNullOrWhiteSpace($LokiS3Region)) { 'us-east-1' } else { $LokiS3Region }
+	if ($region -cnotmatch '\A[a-z0-9-]{1,32}\z') {
+		throw "-LokiS3Region must look like an S3 region (lowercase letters, digits and dashes), got '$region'. Nothing was written."
+	}
+	if ($LokiS3Insecure -and $ReleaseProfile -ne 'dev') {
+		throw "-LokiS3Insecure sends the log data and the S3 signature over plain http; $ReleaseProfile must use https. Nothing was written."
+	}
+	return [pscustomobject]@{ Endpoint = $LokiS3Endpoint; Bucket = $LokiS3Bucket; Region = $region; ForcePathStyle = [bool]$LokiS3ForcePathStyle; Insecure = [bool]$LokiS3Insecure; DevFixture = $false }
+}
+
+# 3 副本 Loki 的对象存储访问密钥:Initialize-LokiS3Credentials 在写路径入口解析,Apply-Infra 写成 Secret loki-s3 的两个键。
+# 夹具(只在 dev)缺省用固定的开发值,同一对值也写进夹具自己的身份配置;外部存储没有回落值。
+$script:LokiS3AccessKeyId = ''
+$script:LokiS3SecretAccessKey = ''
+# 两个单键 Secret:loki-s3(键 access-key-id)与 loki-s3-secret(键 secret-access-key),loki-ha.yaml 按这两个名字引用。
+$script:LokiS3SecretName = 'loki-s3'
+$script:SeaweedFsDevConfigSecretName = 'seaweedfs-dev-s3-config'
+
+# SeaweedFS 夹具的 S3 身份配置(weed server -s3.config):只有一个身份,就是 Loki 用的那对开发密钥。只进 Secret。
+function New-SeaweedFsDevS3Config {
+	$identity = [ordered]@{
+		name        = 'loki'
+		credentials = @([ordered]@{ accessKey = $script:LokiS3AccessKeyId; secretKey = $script:LokiS3SecretAccessKey })
+		actions     = @('Admin', 'Read', 'Write', 'List', 'Tagging')
+	}
+	return (ConvertTo-Json -InputObject ([ordered]@{ identities = @($identity) }) -Depth 6 -Compress)
+}
+
+function Initialize-LokiS3Credentials {
+	if (-not (Test-InClusterLokiDeployed)) { return }
+	$s3 = Get-LokiS3Settings -Topology (Get-LokiTopology)
+	if ($null -eq $s3) { return }
+	$idFallback = if ($s3.DevFixture) { 'mmorpg-loki-dev' } else { '' }
+	$keyFallback = if ($s3.DevFixture) { 'mmorpg-loki-dev-secret-0123456789' } else { '' }
+	$script:LokiS3AccessKeyId = Resolve-InjectedSecret -EnvName 'MMORPG_LOKI_S3_ACCESS_KEY_ID' -DevFallback $idFallback `
+		-ReleaseProfile $ReleaseProfile -Purpose 'Loki S3 access key id' -MinLength 3
+	$script:LokiS3SecretAccessKey = Resolve-InjectedSecret -EnvName 'MMORPG_LOKI_S3_SECRET_ACCESS_KEY' -DevFallback $keyFallback `
+		-ReleaseProfile $ReleaseProfile -Purpose 'Loki S3 secret access key' -MinLength 8
+	if ([string]::IsNullOrWhiteSpace($script:LokiS3AccessKeyId) -or [string]::IsNullOrWhiteSpace($script:LokiS3SecretAccessKey)) {
+		throw "-LokiReplicas 3 needs MMORPG_LOKI_S3_ACCESS_KEY_ID and MMORPG_LOKI_S3_SECRET_ACCESS_KEY for the S3 store at $($s3.Endpoint). Nothing was written."
+	}
+}
+
+# 本次是否部署集群内 Loki:Apply-Infra 跑、C++ 日志 sidecar 开着、又没指向外部 Loki。
+function Test-InClusterLokiDeployed {
+	$deploysInfra = ($Command -eq 'infra-up') -or ($Command -eq 'all-up' -and -not $SkipInfra)
+	return ($deploysInfra -and $script:CppLogSidecarEnabled -and [string]::IsNullOrWhiteSpace($LokiPushUrl))
+}
+
+# 写路径入口(早于任何写操作):集群内 Loki 的形态与对象存储参数核一遍。不部署集群内 Loki 时给了 -LokiReplicas / -LokiS3* 一律拒绝,
+# 参数不生效却不报错比报错更糟。
+function Assert-LokiDeployPreflight {
+	$given = ($LokiReplicas -ne 0) -or (-not [string]::IsNullOrWhiteSpace($LokiS3Endpoint)) -or (-not [string]::IsNullOrWhiteSpace($LokiS3Bucket)) -or
+		(-not [string]::IsNullOrWhiteSpace($LokiS3Region)) -or [bool]$LokiS3ForcePathStyle -or [bool]$LokiS3Insecure -or [bool]$LokiS3DevFixture -or [bool]$ConfirmLokiTopologyChange
+	if (-not (Test-InClusterLokiDeployed)) {
+		if ($given) {
+			throw "-LokiReplicas, -LokiS3* and -ConfirmLokiTopologyChange only apply when this command deploys the in-cluster Loki (infra-up or all-up without -SkipInfra, the C++ log sidecar on, no -LokiPushUrl). Nothing was written."
+		}
+		return
+	}
+	$topology = Get-LokiTopology
+	$null = Get-LokiS3Settings -Topology $topology
+}
+
+# 线上 Loki 的形态 → 目标副本数,这次变更算哪一类(纯函数,契约测试直接喂值;写法同 Get-RedisTopologyChangeVerdict):
+#   absent     线上没有 Loki(全新集群)
+#   unchanged  形态不变(Deployment 对 1,StatefulSet 对 3)
+#   upgrade    Deployment(1)→ StatefulSet(3):要显式确认,旧 PVC 里的日志不迁移
+#   refuse     StatefulSet → 1:3 副本的日志在对象存储里,单副本的本地盘接不住;以及线上 Deployment 不是 1 副本、StatefulSet 不是 3 副本这类
+#              本脚本从不产生的形态
+function Get-LokiTopologyChangeVerdict {
+	param(
+		[AllowNull()]$LiveDeploymentReplicas,
+		[AllowNull()]$LiveStatefulSetReplicas,
+		[Parameter(Mandatory = $true)][int]$DesiredReplicas
+	)
+
+	if ($null -ne $LiveDeploymentReplicas -and $null -ne $LiveStatefulSetReplicas) { return 'refuse' }
+	if ($null -ne $LiveStatefulSetReplicas) {
+		if ([int]$LiveStatefulSetReplicas -eq 3 -and $DesiredReplicas -eq 3) { return 'unchanged' }
+		return 'refuse'
+	}
+	if ($null -ne $LiveDeploymentReplicas) {
+		if ([int]$LiveDeploymentReplicas -ne 1) { return 'refuse' }
+		if ($DesiredReplicas -eq 1) { return 'unchanged' }
+		return 'upgrade'
+	}
+	return 'absent'
+}
+
+# 线上 Deployment 的 spec.replicas;不存在返回 $null。DryRun 不连集群,一律当不存在。
+function Get-LiveDeploymentReplicas {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$Name
+	)
+
+	if ($DryRun) { return $null }
+	$allArgs = @()
+	$allArgs += Build-KubectlBaseArgs
+	$allArgs += @("get", "deployment", $Name, "-n", $Namespace, "--ignore-not-found", "-o", "jsonpath={.spec.replicas}")
+	$out = & kubectl @allArgs
+	if ($LASTEXITCODE -ne 0) {
+		throw "Failed to read deployment $Name in namespace $Namespace. Fail-closed: without the live shape this change cannot be judged safe."
+	}
+	$text = ([string]($out | Out-String)).Trim()
+	if ([string]::IsNullOrEmpty($text)) { return $null }
+	$replicas = 0
+	if (-not [int]::TryParse($text, [ref]$replicas)) {
+		throw "spec.replicas of deployment $Name is not an integer: '$text'"
+	}
+	return $replicas
+}
+
+# apply Loki 之前调用(Apply-Infra 里,早于任何写操作)。拒绝的变更 throw;返回判定,upgrade 时 Apply-Infra 先删旧 Deployment(PVC 留着)。
+function Assert-LokiTopologyChangeIsSafe {
+	param([Parameter(Mandatory = $true)]$Topology)
+
+	$liveDeployment = Get-LiveDeploymentReplicas -Namespace $InfraNamespace -Name 'loki'
+	$liveStatefulSet = Get-LiveStatefulSetReplicas -Namespace $InfraNamespace -Name 'loki'
+	$verdict = Get-LokiTopologyChangeVerdict -LiveDeploymentReplicas $liveDeployment -LiveStatefulSetReplicas $liveStatefulSet -DesiredReplicas $Topology.Replicas
+	switch ($verdict) {
+		'upgrade' {
+			if (-not $ConfirmLokiTopologyChange) {
+				throw "Loki 1 -> 3 replaces deployment/loki with a 3-replica statefulset on shared S3. Logs in the old PVC loki-data-pvc are not migrated (the PVC is kept for a manual export) and no logs are accepted while the pods switch. Re-run with -ConfirmLokiTopologyChange, or keep one replica this time with -LokiReplicas 1. Nothing was written."
+			}
+			Write-Warning "[LokiTopology]Upgrade:deployment/loki is replaced by statefulset/loki (3 replicas, shared S3). PVC loki-data-pvc is kept with the old logs and is no longer mounted; delete it after any export."
+		}
+		'refuse' {
+			throw "Refusing to change the in-cluster Loki: live deployment/loki replicas=$liveDeployment, statefulset/loki replicas=$liveStatefulSet, desired $($Topology.Replicas). Only 1 -> 3 is supported. Going back to one replica would drop the logs kept in object storage, and shapes this script never creates are not guessed at. Nothing was written."
+		}
+	}
+	return $verdict
 }
 
 # 线上 broker 数 → 目标 broker 数,这次变更算哪一类(纯函数,契约测试直接喂值):
@@ -15147,6 +15357,18 @@ function Apply-Infra {
 	$redisCtlManifests = @(New-RedisCtlInstanceManifests)
 	# 玩家域 Redis Cluster(-PlayerRedisMasters):同样在任何写操作之前渲染完;没开集群时是 $null,下面的 apply 与等待都是空操作。
 	$redisPlayerManifest = New-RedisPlayerClusterManifest
+	# 集群内 Loki(-LokiReplicas,见 Get-LokiTopology):1 副本 apply loki.yaml,3 副本 apply loki-ha.yaml,两份的 Service loki 与
+	# ConfigMap loki-config 同名,同一时刻只 apply 其中一份。形态变更闸在任何写操作之前:1 → 3 要 -ConfirmLokiTopologyChange,3 → 1 拒绝。
+	$lokiTopology = $null
+	$lokiS3 = $null
+	$lokiVerdict = $null
+	if (Test-InClusterLokiDeployed) {
+		$lokiTopology = Get-LokiTopology
+		$lokiS3 = Get-LokiS3Settings -Topology $lokiTopology
+		$lokiVerdict = Assert-LokiTopologyChangeIsSafe -Topology $lokiTopology
+		Write-Host ("Loki: replicas={0} manifest={1} object_store={2}" -f $lokiTopology.Replicas, $lokiTopology.Manifest,
+			$(if ($null -eq $lokiS3) { 'local-disk' } elseif ($lokiS3.DevFixture) { "s3://$($lokiS3.Bucket)@$($lokiS3.Endpoint) (dev fixture)" } else { "s3://$($lokiS3.Bucket)@$($lokiS3.Endpoint)" }))
+	}
 	Write-Host "Deploying shared infrastructure to namespace $InfraNamespace"
 	Write-Host "Kafka profile: $KafkaProfile (broker_retention_ms=$KafkaBrokerRetentionMs)"
 	Ensure-Namespace -Namespace $InfraNamespace
@@ -15176,8 +15398,12 @@ function Apply-Infra {
 	if ($HostIdRegistry) {
 		$infraManifests += "etcd-id-registry.yaml"
 	}
-	if ($script:CppLogSidecarEnabled -and [string]::IsNullOrWhiteSpace($LokiPushUrl)) {
-		$infraManifests += "loki.yaml"
+	if ($null -ne $lokiTopology) {
+		# 夹具排在 Loki 前面:Loki 起来的时候桶要已经能写。
+		if ($null -ne $lokiS3 -and $lokiS3.DevFixture) {
+			$infraManifests += "seaweedfs-dev.yaml"
+		}
+		$infraManifests += $lokiTopology.Manifest
 	}
 
 	foreach ($manifest in $infraManifests) {
@@ -15309,8 +15535,35 @@ function Apply-Infra {
 			}
 		}
 
+		if ($manifest -eq "seaweedfs-dev.yaml") {
+			$seaweedConfig = New-SeaweedFsDevS3Config
+			$manifestContent = $manifestContent.Replace("__SEAWEEDFS_S3_CONFIG_HASH__", (Get-InjectedSecretFingerprint -SecretName $script:SeaweedFsDevConfigSecretName -Value $seaweedConfig))
+			$manifestContent = $manifestContent.Replace("__LOKI_S3_BUCKET__", $lokiS3.Bucket)
+		}
+		if ($manifest -eq "loki-ha.yaml") {
+			$manifestContent = $manifestContent.Replace("__LOKI_S3_ENDPOINT__", $lokiS3.Endpoint).Replace("__LOKI_S3_BUCKET__", $lokiS3.Bucket).Replace("__LOKI_S3_REGION__", $lokiS3.Region)
+			$manifestContent = $manifestContent.Replace("__LOKI_S3_FORCE_PATH_STYLE__", $(if ($lokiS3.ForcePathStyle) { 'true' } else { 'false' }))
+			$manifestContent = $manifestContent.Replace("__LOKI_S3_INSECURE__", $(if ($lokiS3.Insecure) { 'true' } else { 'false' }))
+			# 访问密钥只进 Secret;Pod 模板带它们的指纹,轮换密钥时 Pod 自动滚动(只改 Secret 时模板不变,apply 是 no-op)。
+			$manifestContent = $manifestContent.Replace("__LOKI_S3_CREDENTIALS_HASH__",
+				(Get-InjectedSecretFingerprint -SecretName $script:LokiS3SecretName -Value ($script:LokiS3AccessKeyId + "`n" + $script:LokiS3SecretAccessKey)))
+		}
+
 		# fail-closed:任何 __XXX__ 形态的占位没被替换就拒绝 apply(Assert-InfraManifestPlaceholdersReplaced,queue 实例共用同一份检查)。
 		Assert-InfraManifestPlaceholdersReplaced -ManifestName $manifest -Content $manifestContent
+
+		if ($manifest -eq "seaweedfs-dev.yaml") {
+			# 夹具的身份配置里有访问密钥,只进 Secret(DryRun 输出里值隐去)。
+			Apply-InjectedSecret -Namespace $InfraNamespace -Name $script:SeaweedFsDevConfigSecretName -Key 's3.json' -Value $seaweedConfig -AppLabel 'seaweedfs'
+		}
+		if ($manifest -eq "loki-ha.yaml") {
+			if ($lokiVerdict -eq 'upgrade') {
+				# Deployment 换成 StatefulSet:先删旧 Deployment,PVC loki-data-pvc 留着供手工导出(Assert-LokiTopologyChangeIsSafe 已经确认过)。
+				Invoke-Kubectl -Args @("delete", "deployment", "loki", "-n", $InfraNamespace, "--ignore-not-found")
+			}
+			Apply-InjectedSecret -Namespace $InfraNamespace -Name $script:LokiS3SecretName -Key 'access-key-id' -Value $script:LokiS3AccessKeyId -AppLabel 'loki'
+			Apply-InjectedSecret -Namespace $InfraNamespace -Name "$($script:LokiS3SecretName)-secret" -Key 'secret-access-key' -Value $script:LokiS3SecretAccessKey -AppLabel 'loki'
+		}
 
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $manifestContent
 	}
@@ -15468,6 +15721,8 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	Assert-RedisPlayerPreflight
 	# 逻辑库:没给 -DirectoryLogicalShards、-Region(staging、prod 必须显式),或 -SqlClusters 不合法,在这里拒绝(设计 §5.1、§8.1、§9)。
 	Assert-LogicalDbPreflight
+	# 集群内 Loki:-LokiReplicas 不是 1 / 3、3 副本缺对象存储参数、夹具用在非 dev,或本次根本不部署集群内 Loki 却给了这些参数,在这里拒绝。
+	Assert-LokiDeployPreflight
 	# 全局服务金丝雀副本(-CanaryServices):本次不部署全局 Go 服务,或写 SQL 的服务缺 <ns>/<svc>-canary 条目、副本数对不上,在这里拒绝。
 	Assert-GlobalGoSvcCanaryPreflight
 	# 削峰(G4b)的开关与起步值打一行,关着 / 没配可信代理时告警;只打印、不阻断。例外是生成器自检,在这里就 throw:常量表被改坏
@@ -15477,6 +15732,8 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	# -AssetOps / -NetworkPolicies 的组合校验(资产通道打开必须同时设 gRPC 口准入),排在密钥解析之前:报的是组合原因而不是「缺环境变量」。
 	Assert-AssetOpsSwitchPreflight
 	Initialize-InjectedSecrets
+	# 3 副本 Loki 的对象存储访问密钥(只进 Secret,不进 ConfigMap 与日志)。
+	Initialize-LokiS3Credentials
 	# 资产通道签名方(guild / trade)与验签方(scene)的跨命令核对:顺序反了、密钥对不上就在任何写操作之前拒绝(只读 kubectl;DryRun 跳过)。
 	Assert-AssetOpClusterConsistency
 	# C++ gRPC deadline ≥ 目标 Go 服务 zrpc Timeout + 2000(上游比下游宽)。放在任何集群写操作之前:

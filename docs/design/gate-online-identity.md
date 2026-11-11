@@ -153,7 +153,7 @@ nonce 签进了 canonical，同一进程内截获的签名头不论原样重放�
 - **login 签发、gate 只转交的非对称身份票据。** 能防 §7.4 的持钥冒充，但要配票据过期、续签与撤销，当前不值得；上线前做安全评估时再看。
 - **合并 `callerauth` 与 `serviceauth`。** 两套内部签名长期应收敛成一套，不在本方案；新服务不要再造第三套。
 
-### 9.6 剩余（2026-11-06 记）
+### 9.6 剩余（2026-11-06 记；2026-11-10 三条都已落码，未编译）
 
 1. **guild 三个读方法的无会话分支**（2026-11-06 已删，未编译，验收见 [执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 第 7 节）：GetGuild、GetGuildRank、GetGuildRankByGuild 原先对不带会话的调用不查归属区、沿用请求体 `zone_id`（全服榜 `zone_id=0`）、不夹页长。生产里入口准入早已拒绝这类调用，只有单测故意走这条路径。现在三个方法与四个写方法一样先过 `requireClientSession`，区一律取 `clientZone`，榜单页长夹到 `MaxRankPageSize`。随之没有调用者的两处一并收掉：`viewerOf`（只为无会话调用回 0，CreateGuild / SetAnnouncement / GetGuild 现在直接传会话里的 player_id）与 `visibleIn` 的「`zoneID==0` 不按区过滤」；`expected_guild.go` 里「只给客户端来源计 absent」的判断同理删掉（五个调用方都只受理客户端来源）。测试改成客户端来源：请求者用本区旁观者（不在被查的帮里），`guildInfoFor` 不给他现算待审数，所以不需要待审数替身，也不用为测试给 `GuildLogic` 新开接缝；「内部调用保留全服榜」改为断言无会话被拒，另加三个读方法无会话被拒的表驱动用例。运维要全服榜，另设带 `serviceauth` 的内部 RPC，不复活这条分支。
 2. **guild 请求体里的身份与区字段**（2026-11-10 已删，未编译，验收见 [执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 第 8 节）：CreateGuild 的 `player_id` / `zone_id`，LeaveGuild、DisbandGuild、SetAnnouncement 的 `player_id`，GetGuildRank、GetGuildRankByGuild 的 `zone_id`，服务端早已一律忽略（身份取会话、区取归属）。项目未上线，按标准做法从协议删掉并把字段号写成 `reserved`，不再给读代码的人留「也许会被采信」的误会。唯一还带 `player_id` 的客户端请求是 GetPlayerGuild，只在不带会话的内部只读调用（mail 领附件）时采信。仓库内的 robot 冒烟同步：建帮不再故意填错区、别区查榜不再伪造区、第 8 步改为按会话身份退帮。这是客户端契约变更：Unity 客户端与协议生成由 Codex 处理；Java 版本轮只在 `PARITY.md` 记 TODO（§8）。

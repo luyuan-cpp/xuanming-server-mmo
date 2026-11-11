@@ -17,6 +17,7 @@
 #include "handler/rpc/client_request_lane.h"
 #include "handler/rpc/drain_migration.h"
 #include "handler/rpc/router_muduo_forward.h"
+#include "handler/rpc/router_subset.h"
 #include "muduo_grpc/channel.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "thread_context/node_context_manager.h"
@@ -217,6 +218,9 @@ namespace
         // 观战订阅中心(spectate/gate_spectate_hub.h)。定时器与 Kafka 回调都不捕获对象,经 gate_spectate_client.h 的入口
         // 按弱引用找到它;在 Node 之后析构,这时 Kafka 消费已经停了。
         std::shared_ptr<gate_spectate::SpectateHub> spectateHub;
+        // 路由模式下本 zone 的路由服子集(handler/rpc/router_subset.h)。Node 上的准入与发现观察者只弱持有它;
+        // context 比 Node 活得久(node_entry 先建 context 后建 Node),延后关闭的扫描定时器随它析构取消。
+        std::shared_ptr<gate_router_subset::Subsetter> routerSubset;
         TimerTaskComp spectateSweepTimer;
         // 客户端连接的存活扫描:握手期限与空闲超时(handler/rpc/client_heartbeat.cpp,docs/design/gate-client-heartbeat.md §5.4)。
         // 回调不捕获任何对象;必须主动扫:死掉的客户端不会再发任何东西来触发检查。没有到期的检查点时每轮只做一次堆顶比较。
@@ -462,8 +466,10 @@ int main(int argc, char *argv[])
     //   * ClientRpcRouterNodeService — 客户端 RPC 路由服(Go gRPC,全局池,不分 zone;
     //     docs/design/client-rpc-router.md D29–D34)。GATE_CLIENT_RPC_ROUTER=1 时它是
     //     gate **唯一**的 gRPC 目标:白名单收成 {Scene(TCP), ClientRpcRouter},gate 对
-    //     login / scene_manager / match **零 stub、零 channel**,gRPC 连接数 =
-    //     路由服副本数,与业务服务数量无关 —— 以后加 chat / friend / guild 不再碰 gate。
+    //     login / scene_manager / match **零 stub、零 channel**,与业务服务数量无关 —— 以后加
+    //     chat / friend / guild 不再碰 gate。gate 只连本 zone 的 k 台路由服(HRW 子集,k 由
+    //     GATE_ROUTER_SUBSET_SIZE 给、缺省 3;canary gate 另连 stable 组的 k 台作退回),gRPC 连接数
+    //     不随路由服副本数增长(handler/rpc/router_subset.h,docs/design/connection-fanout-subsetting-20261106.md §3.2)。
     //     旧模式(默认,未设或非 1/true/on)完全不连路由服,除战斗(两种模式都不经 gate,
     //     见上)外行为与改前一致;所以路由服可以先于 gate 切换单独上线,回退 = 去掉环境
     //     变量再滚动(设计文档 §6 灰度)。
@@ -493,6 +499,12 @@ int main(int argc, char *argv[])
             // 观战订阅中心。hub 先建好:客户端消息、会话关闭与 Kafka 回调都经 gate_spectate_client.h 的入口找它。
             context.spectateHub = gate_spectate::InstallHub(
                 *node.GetLoop(), gNodeConfigManager.GetBaseDeployConfig().spectate_token_secret());
+            // 路由模式:只连、只挑本 zone 子集里的路由服。准入与发现观察者必须在 StartRpcServer 的 ConnectAllNodes
+            // 之前装好(这里早于 loop 运行,etcd 应答都还没处理);GATE_ROUTER_SUBSET_SIZE 非法在这里拒启。
+            if (routerMode)
+            {
+                context.routerSubset = gate_router_subset::Install(node);
+            }
             // 覆盖 node_entry 按 GateNodeHooks 装的默认钩子:gate-cmd 的注册不变,同一时机追加两个观战帧消费者。
             node.SetKafkaHandlers([](Node &n)
                                   { return RegisterGateKafkaConsumers(n); });

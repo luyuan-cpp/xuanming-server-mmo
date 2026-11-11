@@ -168,6 +168,138 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 
 第 3 批文件：`go/guild/internal/logic/guild_logic.go`、`guild_manage_logic.go`、`expected_guild.go`、`player_name_resolver.go`（只改注释）、`client_zone_test.go`、`guild_logic_names_test.go`、`expected_guild_integration_test.go`（只改注释）；文档 `docs/design/gate-online-identity.md`（顶部状态与 §9.6）、本目录 `PLAN.md` 与本文件、`docs/PROGRESS.md`。
 
+## 8. 第 4 批：删 guild 请求体里被忽略的字段与全服帮会榜（2026-11-10 落码，未编译）
+
+设计 §9.6 第 2、3 条，计划见 [PLAN.md](PLAN.md) 第 6 节。负责人 2026-11-10：项目未上线、数据可以清空，两条都按标准做法直接删；全服榜运维和 GM 也不要（这条答复由「删除只写不读的全服帮会榜 guild_rank」会话记进设计文档）。在第 1～3 批之后执行；第 1、3 批也改过 `guild_logic.go` 与 `client_zone_test.go`，失败按本节末尾的文件清单判归属。本批只对改动的 Go 文件跑过 `gofmt -l`（无输出），没有生成协议、没有编译、没有运行任何测试。
+
+改了什么：
+
+- **协议（客户端契约变更）**：`proto/guild/guild.proto` 删掉 6 个请求里服务端早已不采信的字段，字段号写成 `reserved`：
+  - CreateGuildRequest：`player_id = 1`、`zone_id = 3`
+  - LeaveGuildRequest、DisbandGuildRequest：`player_id = 1`
+  - SetAnnouncementRequest：`player_id = 2`
+  - GetGuildRankRequest：`zone_id = 3`
+  - GetGuildRankByGuildRequest：`zone_id = 2`
+
+  保留 GetPlayerGuildRequest 的 `player_id`（mail 不带会话的只读调用要用）和 UpdateGuildScoreRequest 的 `zone_id`（服务端内部推分）。方法和消息号都不变。
+- **guild 逻辑**：`internal/logic/guild_logic.go` 的四个写方法改为 `callerOf(ctx, 0)` 取身份，不再读请求体；其余只改注释。`go/guild/guild.go` 只改启动重建的注释。
+- **全服帮会榜**：`internal/data/guild_repo.go` 删掉全服 ZSET `guild_rank` 和常量 `guildRankKey`。
+  - `UpdateGuildScore` 只写分区榜，每次推分少一次 ZADD。
+  - `RebuildRanks` 只重建分区榜，不再删除或改名全服键。
+  - `RemoveGuildFromRank` 只从各分区榜摘除；一张分区榜都没有时直接返回。
+  - `GetGuildRankPage` / `GetGuildRank` 不给区（`zoneID == 0`）时，在访问 Redis 之前回新错误 `ErrRankZoneRequired`。逻辑层的区来自 `clientZone`，不会是 0。
+  - `zone_id = 0` 的帮会行是坏数据（帮会都按归属区建）：写分时分数照常落库，但不进任何榜，并打英文错误日志；重建时跳过，计数后打日志。
+- **测试**：
+  - `internal/data`：
+    - `rank_page_test.go` 只播种分区榜，新增 `TestGuildRankReadsRequireZone`。
+    - `rank_read_snapshot_test.go` 改读分区榜。
+    - `rank_zone_integration_test.go`（`integration` 标签）删掉 3 处全服键断言，改用 `assertNoGlobalRank`，并新增 `TestUnzonedGuildIsPersistedButNeverRanked`。
+  - `internal/logic`：`client_zone_test.go` 的请求体不再填被删字段，`seedGuild` 不再写全服键；`expected_guild_integration_test.go` 同步。
+- **robot**：
+  - `guild_smoke_scenario.go`：第 1 步不再故意填错区；第 4 步查别区榜时不再伪造区；第 8 步改为「B 退帮，身份只取会话」（失败步骤名 `member-leave*`）；删掉不再使用的 `tipGuildLeaderCantLeave`。
+  - `main.go`、`etc/guild_smoke.yaml` 只改注释。
+- 不变的部分：C++ 手写代码、Java 网关、`go/shared/generated/clientrpc/methods.go`。
+
+1. **生成**（仓库根）。客户端可见的协议变了。负责人 2026-11-10 把「客户端代码和协议生成 编译冒烟交给codex」，所以本节用**默认配置**，它会同时写同级客户端仓 `../mmorpg-client`。单独跑本节时先跑 `proto-gen-build`。
+
+   ```powershell
+   git status --short > $env:TEMP\gate-simplify-b4-before.txt
+   pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run
+   Push-Location robot; go mod vendor; Pop-Location
+   git status --short > $env:TEMP\gate-simplify-b4-after.txt
+   rg -n 'func \(x \*(CreateGuildRequest|LeaveGuildRequest|DisbandGuildRequest|SetAnnouncementRequest)\) GetPlayerId|func \(x \*(CreateGuildRequest|GetGuildRankRequest|GetGuildRankByGuildRequest)\) GetZoneId' go/proto/guild robot/vendor/proto/guild
+   rg -n 'func \(x \*GetPlayerGuildRequest\) GetPlayerId|func \(x \*UpdateGuildScoreRequest\) GetZoneId' go/proto/guild robot/vendor/proto/guild
+   ```
+
+   - robot 用 `-mod=vendor` 构建，`robot/vendor/proto` 是 `go/proto` 的副本，生成器不会补它（见 `tools/proto_generator/protogen/internal/prototools/retired_outputs.go` 的说明），所以要跑 `go mod vendor`。它会把其他会话从 10-20 以来的协议改动一并带进 vendor；这些差异只记录，不回退。
+   - 通过标准：
+     - 第一条 rg 无输出。
+     - 第二条共命中 4 处（两个目录里 GetPlayerGuildRequest、UpdateGuildScoreRequest 各一处）。
+     - `cpp/generated/proto/guild/guild.pb.h` 里这 6 个请求已没有被删字段的访问器。
+     - `go/shared/generated/clientrpc/methods.go` 无差异。
+     - 其它新差异按第 1 节的口径处理。
+
+2. **客户端**（`../mmorpg-client`，由 Codex 改）：
+   - 按客户端仓自己的口径编译。会报错的只有引用了被删字段的地方，删掉这些赋值即可，服务端早已不采信它们。
+   - 客户端如果有「全服帮会榜」入口（发 `zone_id = 0`），服务端从 11-06 起已经按本区榜答复，本批起协议里也没有区字段了，把这个入口删掉。
+   - 回执写明改了客户端哪些文件。本会话没有读、也没有改客户端（AGENTS.md §9）。
+
+3. **静态检查**（仓库根）：
+
+   ```powershell
+   rg -n -w 'guildRankKey' go/guild
+   rg -n -F '"guild_rank"' go/guild robot tools
+   rg -n 'CreateGuildRequest\{[^}]*(PlayerId|ZoneId)|GetGuildRank(ByGuild)?Request\{[^}]*ZoneId|(LeaveGuild|DisbandGuild|SetAnnouncement)Request\{[^}]*PlayerId' go robot --glob '*.go' --glob '!**/vendor/**' --glob '!go/proto/**'
+   gofmt -l go/guild robot/guild_smoke_scenario.go robot/main.go
+   ```
+
+   通过标准：
+   - 第一、三条无输出。
+   - 第二条只命中 `rank_zone_integration_test.go` 的 `assertNoGlobalRank`。
+   - `gofmt -l` 只列出本批之前就不干净的 4 个文件，只记录，不改：
+     - `go/guild/internal/data/economy_repo_test.go`
+     - `go/guild/internal/data/trial_launch_repo.go`
+     - `go/guild/internal/data/trial_lobby_sql.go`
+     - `robot/guild_smoke_scenario.go`：HEAD 上就有 3 处 `//(` 注释行差异。
+
+4. **构建、vet 与测试**（串行）：
+
+   ```powershell
+   Push-Location go/guild
+   go build ./...
+   go vet ./...
+   go vet -tags integration ./...
+   go test -count=1 ./...
+   Pop-Location
+   Push-Location go/mail; go build ./... ; go vet ./... ; Pop-Location
+   Push-Location robot; go build ./... ; go vet ./... ; Pop-Location
+   msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64
+   pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-build -GoServices guild,mail
+   ```
+
+   - `go/mail` 经 `GuildRPCDirectory` 引用 guild 协议，所以要一起编。C++ 只需编译通过，因为手写代码不引用被删字段，不需要跑 C++ 测试；必须串行 `/m:1`。
+   - 通过标准：build / vet 无输出，test 全绿，跳过数与上一轮回执对比。失败保留完整输出，不自动重试，不改断言。
+   - 重点用例：
+     - `internal/data`：
+       - 新增的 `TestGuildRankReadsRequireZone`：不给区时两条读都回 `ErrRankZoneRequired`，且 miniredis 命令计数为 0，说明拒绝发生在访问 Redis 之前。
+       - 以下用例断言没改，只是改读分区榜：`TestGetGuildRankPageHandlesPaginationBoundaries`、`TestGetGuildRankPageUsesOneSnapshotDuringRemoval`、`TestGetGuildRankUsesOneSnapshotDuringScoreChange`、`TestGetGuildRankUsesOneSnapshotDuringRemoval`。
+     - `internal/logic`：以下用例只改了请求体，断言没改：`TestCreateGuild_ClientIdentityAndZoneComeFromServer`、`TestLegacyWritesWithoutSessionAreRefused`、`TestLegacyReadsWithoutSessionAreRefused`、`TestGetGuildRank_ClientSeesOnlyHomeZone`、`TestGetGuildRankByGuild_ClientOnlyRanksInHomeZone`。
+   - 有 MySQL 时加 `-tags integration` 跑。用例会建一次性库，用 `GUILD_IT_MYSQL_DSN` 指向能建库的账号；自己起一个一次性 MySQL，别借 `codex-*` 容器。
+
+     ```powershell
+     Push-Location go/guild
+     go test -count=1 -tags integration ./internal/data/... ./internal/logic/...
+     Pop-Location
+     ```
+
+     - 重点：
+       - `TestUpdateGuildScore_WritesTheFinalZoneRank`、`TestRebuildRanks_FollowsTheCurrentMapping`：都加了 `assertNoGlobalRank`。
+       - 新增的 `TestUnzonedGuildIsPersistedButNeverRanked`：zone 0 的帮会分数落库、不进任何榜；重建后只剩正常帮会所在区的榜键。
+       - 原有的 `TestRemoveGuildFromRank_*`、`TestDisbandPath_*`。
+     - MySQL 不可达时这些用例会 Skip。Skip 不算通过，回执写「未跑」。
+
+5. **红证据**：本批不做。新用例引用的 `ErrRankZoneRequired` 在 HEAD 上不存在，放到 HEAD 上只会编译失败，不构成行为上的红证据。替代验证有两条：
+   - `TestGuildRankReadsRequireZone` 的命令计数断言，证明拒绝发生在访问 Redis 之前；
+   - 集成用例的 `assertNoGlobalRank`，证明写分和重建都不再建全服键。
+
+6. **本机冒烟**（接第 5 节的环境，guild、gate、路由服先换上本批二进制）：
+   1. 机器人公会冒烟：在 `robot/` 下先 `go build -o robot.exe .`，再 `.\robot.exe -c etc/guild_smoke.yaml`，前置条件见该文件头。通过标准：退出码 0，日志里有 `GUILD_SMOKE_OK`，以及第 8 步的 `member left the guild using the session identity`。
+   2. 在帮会用的 Redis（见 `go/guild/etc/guild.yaml`）上执行 `EXISTS guild_rank`，应为 0。旧环境如果残留这个键（本批起没人再写，也没人删），先手工 `DEL guild_rank` 一次再跑。
+   3. Unity 客户端按新生成物编出来以后，手动建帮、退帮、解散、改公告、看本区榜各一次，都应成功。没有客户端环境就写「未跑」。
+
+7. **回执注明**：
+   - 客户端契约变了：6 个请求删了字段。
+   - 全服帮会榜已删：Redis 上少一个键，每次写分少一次 ZADD。
+   - 不宣称性能变化，因为没有压测对比（AGENTS.md §6）。
+
+第 4 批文件：
+
+- 协议：`proto/guild/guild.proto`
+- go/guild：`guild.go`（只改注释）、`internal/data/guild_repo.go`、`rank_page_test.go`、`rank_read_snapshot_test.go`、`rank_zone_integration_test.go`、`internal/logic/guild_logic.go`、`client_zone_test.go`、`expected_guild_integration_test.go`
+- robot：`guild_smoke_scenario.go`、`main.go`（只改注释）、`etc/guild_smoke.yaml`（只改注释）
+- 文档：`docs/design/gate-online-identity.md`（顶部状态、§8、§9 标题、§9.6 第 2 条）、本目录 `PLAN.md` 第 6 节第 2 条与本文件、`docs/PROGRESS.md`，以及 Java 仓 `PARITY.md` 的 TODO
+- 以下由「删除只写不读的全服帮会榜 guild_rank」会话改：§9.6 第 3 条、PLAN.md 第 6 节第 3 条、帮会排行三份架构文档、`guild_friend_service_notes_zh.md`、`leaderboard-system.md`
+
 ## 回执与范围
 
 - 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批还是第 1～4 批中的哪一批。

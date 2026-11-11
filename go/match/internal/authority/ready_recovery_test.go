@@ -382,3 +382,33 @@ func TestReadyTiDBCompletionEvidenceAndOriginalTicketCAS(t *testing.T) {
 	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT state FROM match_authority_ticket WHERE player_id=11").Scan(&state))
 	require.Equal(t, uint32(3), state)
 }
+
+// 已建房票巡检按片分工(2026-11-06,global-match-hierarchical-pools.md §5.2):片号 = player_id % WorkShards,条件在 SQL 里、
+// LIMIT 之前。没绑归属(单测)= 全部片;只负责一片就只读这一片;一片都不负责什么都不读;归属换了(成员表变化),
+// 下一次读就按新的归属,接手的片不会没人扫。
+func TestReadyTiDBReadyAfterReadsOnlyOwnedShards(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	const first, second = uint64(1), uint64(66) // 片 1 与片 2
+	for _, pid := range []uint64{first, second} {
+		ticket := testJoin(t, s, pid)
+		_, err := s.DB.ExecContext(ctx, "UPDATE match_authority_ticket SET state=3,formation_id=?,enqueued_ms=100 WHERE player_id=? AND ticket=?", 900+pid, pid, ticket.Ticket)
+		require.NoError(t, err)
+	}
+	readyIDs := func() []uint64 {
+		rows, err := s.ReadyAfter(ctx, 0, 0)
+		require.NoError(t, err)
+		ids := make([]uint64, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.PlayerId)
+		}
+		return ids
+	}
+	require.ElementsMatch(t, []uint64{first, second}, readyIDs(), "没绑归属:全部片")
+	s.BindWorkOwner(func(key string) bool { return key == workShardKey(workReadyTicket, int(second%WorkShards)) })
+	require.Equal(t, []uint64{second}, readyIDs())
+	s.BindWorkOwner(func(string) bool { return false })
+	require.Empty(t, readyIDs(), "一片都不负责:交给负责的副本")
+	s.BindWorkOwner(func(key string) bool { return key == workShardKey(workReadyTicket, int(first%WorkShards)) })
+	require.Equal(t, []uint64{first}, readyIDs(), "归属换了,下一次读就按新的归属")
+}

@@ -64,7 +64,7 @@ class OfficialOrderOwnershipTest {
             var input = create("official-full-uint64", ORIGINAL, MAX_REVISION);
             var order = f.store.create("18446744073709551615", input);
             assertEquals("AWAITING_PAYMENT", order.state());
-            var paid = f.store.recordTrustedPayment(new CommerceApi.Payment(order.orderId(), "test", "official-max-payment", 100, "CNY"));
+            var paid = f.store.recordTrustedPayment(new CommerceApi.Payment(order.orderId(), "test", "official-max-payment", 100, "CNY")).order();
             // 原身份、金额和期限不变；查询及原请求重放应反映已提交支付后的当前状态。
             assertEquals(new CommerceApi.Order(order.orderId(), order.buyerId(), order.skuId(), order.quantity(),
                 order.amountMinor(), order.currency(), "DELIVERY_PENDING", order.paymentDeadlineMs()), paid);

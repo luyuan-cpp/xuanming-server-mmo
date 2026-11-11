@@ -167,6 +167,9 @@ func main() {
 	svcCtx.LaunchRelayTask("match.watch.battle.canary", func() { svcCtx.CanaryBattleNodes.Run(ctx, svcCtx.Etcd) })
 	// match 实例自身的注册:按池撮合用它作成员表,决定每个池由哪个副本负责(internal/poolowner)。
 	svcCtx.LaunchRelayTask("match.watch.match", func() { svcCtx.MatchNodes.Run(ctx, svcCtx.Etcd) })
+	// 截止作废先向原 battle 实例取证(2026-11-06,cross-zone-matchmaking.md §13.3):到期恢复与帮会取消都读它,必须在起后台循环、
+	// 注册 RPC 之前接好;stable 与 canary 都接(帮会取消是 RPC)。取证读上面的 battle 镜像。
+	matchlogic.BindDeadlineAbortEvidence(svcCtx)
 
 	// 结果来源归档独立于评分开关，PVE与不计分局也必须保全完整个人原件。
 	// 启动接线先于matcher与RPC注册；来源归档必须同步装配成功。

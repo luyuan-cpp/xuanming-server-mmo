@@ -1,5 +1,9 @@
 package com.game.mall;
 
+import static com.game.mall.CommerceApi.RefundReason.AMOUNT_MISMATCH;
+import static com.game.mall.CommerceApi.RefundReason.CANCELLED_LATE;
+import static com.game.mall.CommerceApi.RefundReason.CURRENCY_MISMATCH;
+import static com.game.mall.CommerceApi.RefundReason.DUPLICATE_PAYMENT;
 import static org.junit.jupiter.api.Assertions.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -10,15 +14,27 @@ import org.junit.jupiter.api.Test;
 class CommerceStoreTest {
     private CommerceApi.CreateOrder request(String key, long sku, int quantity) { return new CommerceApi.CreateOrder(key, sku, quantity, "测试账号", "1"); }
     private CommerceApi.Payment payment(CommerceApi.Order order, String transaction) { return new CommerceApi.Payment(order.orderId(), "test", transaction, order.amountMinor(), order.currency()); }
+    /** 渠道实收的金额币种与订单冻结值不同的一笔。 */
+    private static CommerceApi.Payment payment(CommerceApi.Order order, String transaction, long amount, String currency) {
+        return new CommerceApi.Payment(order.orderId(), "test", transaction, amount, currency);
+    }
     private static CommerceApi.OwnedOrder owned(CommerceApi.Order order) { return new CommerceApi.OwnedOrder(order.orderId(), "测试账号", "1"); }
     /** 渠道退款回执:paymentTransaction 是被退的那笔付款,refundTransaction 是渠道退款流水。 */
     private static CommerceApi.Refund refund(CommerceApi.Order order, String paymentTransaction, String refundTransaction) {
         return new CommerceApi.Refund(order.orderId(), "test", paymentTransaction, refundTransaction, order.amountMinor(), order.currency());
     }
+    private static CommerceApi.PendingRefund pending(CommerceApi.Order order, String transaction, long amount, String currency,
+            CommerceApi.RefundReason reason) {
+        return new CommerceApi.PendingRefund(order.orderId(), "test", transaction, amount, currency, reason);
+    }
     private static byte[] ascii(String value) { return value.getBytes(StandardCharsets.US_ASCII); }
     private static List<List<String>> refundIntents(CommerceFixture f, String orderId) {
         return f.jdbc.query("SELECT transaction_id,source,status FROM commerce_refund_intent WHERE order_sn=? ORDER BY transaction_id",
             (row, n) -> List.of(row.getString(1), row.getString(2), row.getString(3)), orderId);
+    }
+    private static List<List<String>> abnormalPayments(CommerceFixture f, String orderId) {
+        return f.jdbc.query("SELECT transaction_id,reason FROM commerce_abnormal_payment WHERE order_sn=? ORDER BY transaction_id",
+            (row, n) -> List.of(row.getString(1), row.getString(2)), orderId);
     }
 
     @Test void 支付只读查单保留冻结金额和终态_不修改订单或库存() {
@@ -35,7 +51,7 @@ class CommerceStoreTest {
             assertEquals(orders, f.jdbc.queryForList(orderProjection));
             assertEquals(stocks, f.jdbc.queryForList("SELECT * FROM pms_sku_stock ORDER BY id"));
             assertEquals(grants, f.jdbc.queryForList("SELECT * FROM commerce_order_grant ORDER BY order_sn"));
-            var paid = f.store.recordTrustedPayment(payment(first, "payment-view-paid"));
+            var paid = f.store.recordTrustedPayment(payment(first, "payment-view-paid")).order();
             assertEquals(paid, f.store.paymentOrderView(first.orderId()));
             assertEquals("DELIVERY_PENDING", paid.state());
             assertEquals(1, f.count("commerce_payment_receipt"));
@@ -122,12 +138,13 @@ class CommerceStoreTest {
         try (var f = new CommerceFixture()) {
             f.sku(1, 3, 100); var order = f.store.create("1", request("payment-001", 1, 2));
             var paid = f.store.recordTrustedPayment(payment(order, "paid-001"));
+            assertNull(paid.refundReason(), "订单本身那笔不退款");
             assertEquals(paid, f.store.recordTrustedPayment(payment(order, "paid-001")));
-            assertEquals("DELIVERY_PENDING", paid.state()); assertEquals(1, f.value("pms_sku_stock", "stock"));
+            assertEquals("DELIVERY_PENDING", paid.order().state()); assertEquals(1, f.value("pms_sku_stock", "stock"));
             assertEquals(1, f.count("commerce_delivery_intent")); assertEquals(1, f.count("commerce_payment_receipt"));
             assertEquals(409, assertThrows(CommerceException.class, () -> f.store.cancel("1", new CommerceApi.OwnedOrder(order.orderId(), "测试账号", "1"))).status());
             // 不同流水不再回 409(第一轮数据审计 §4 第 19 条),但同样不扣第二次库存、不发第二份交付;细节见下面的专门用例。
-            assertEquals(paid, f.store.recordTrustedPayment(payment(order, "paid-002")));
+            assertEquals(new CommerceApi.PaymentOutcome(paid.order(), DUPLICATE_PAYMENT), f.store.recordTrustedPayment(payment(order, "paid-002")));
             assertEquals(1, f.value("pms_sku_stock", "stock")); assertEquals(1, f.count("commerce_delivery_intent"));
         }
     }
@@ -137,26 +154,26 @@ class CommerceStoreTest {
             f.sku(1, 3, 100); var order = f.store.create("1", request("duplicate-001", 1, 2));
             var paid = f.store.recordTrustedPayment(payment(order, "dup-first"));
             var second = f.store.recordTrustedPayment(payment(order, "dup-second"));
-            assertEquals(paid, second, "应答仍是订单视图,状态不变:第二笔不绑定订单");
-            assertEquals("DELIVERY_PENDING", second.state());
+            assertEquals(paid.order(), second.order(), "订单视图不变:第二笔不绑定订单");
+            assertEquals(DUPLICATE_PAYMENT, second.refundReason(), "适配器靠 refundReason 认出这笔要退、为什么退");
+            assertEquals("DELIVERY_PENDING", second.order().state());
             assertEquals(1, f.value("pms_sku_stock", "stock"), "库存只扣一次");
             assertEquals(1, f.count("commerce_delivery_intent"), "只交付一次");
             assertEquals("dup-first", f.jdbc.queryForObject("SELECT transaction_id FROM commerce_payment_receipt WHERE order_sn=?", String.class, order.orderId()));
             assertEquals(1, f.jdbc.queryForObject("SELECT COUNT(*) FROM commerce_payment_receipt WHERE order_sn IS NULL", Integer.class),
                 "第二笔记成未绑定的付款回执,与绑定的回执共用交易键主键");
-            assertEquals(List.of(order.orderId()), f.jdbc.queryForList("SELECT order_sn FROM commerce_duplicate_payment WHERE channel=? AND transaction_id=?",
-                String.class, ascii("test"), ascii("dup-second")));
+            assertEquals(List.of(List.of("dup-second", "DUPLICATE_PAYMENT")), abnormalPayments(f, order.orderId()));
             assertEquals(List.of(List.of("dup-second", "DUPLICATE_PAYMENT", "PENDING")), refundIntents(f, order.orderId()));
             var delivery = new DeliveryStore(f.jdbc, f.manager, f.props);
-            assertEquals(List.of(new CommerceApi.Payment(order.orderId(), "test", "dup-second", order.amountMinor(), order.currency())), delivery.refunds(),
-                "退款待办列出要退的那一笔,不是订单绑定的那笔");
+            assertEquals(List.of(pending(order, "dup-second", order.amountMinor(), order.currency(), DUPLICATE_PAYMENT)), delivery.refunds(),
+                "退款待办列出要退的那一笔与原因,不是订单绑定的那笔");
 
-            assertEquals(paid, f.store.recordTrustedPayment(payment(order, "dup-second")), "同一重复流水重放幂等");
+            assertEquals(second, f.store.recordTrustedPayment(payment(order, "dup-second")), "同一重复流水重放幂等");
             assertEquals(paid, f.store.recordTrustedPayment(payment(order, "dup-first")), "原付款重放幂等");
-            assertEquals(2, f.count("commerce_payment_receipt")); assertEquals(1, f.count("commerce_duplicate_payment")); assertEquals(1, f.count("commerce_refund_intent"));
+            assertEquals(2, f.count("commerce_payment_receipt")); assertEquals(1, f.count("commerce_abnormal_payment")); assertEquals(1, f.count("commerce_refund_intent"));
 
-            assertEquals(paid, f.store.recordTrustedPayment(payment(order, "dup-third")));
-            assertEquals(2, f.count("commerce_duplicate_payment")); assertEquals(2, delivery.refunds().size(), "每一笔多付的钱各有一条待退款");
+            assertEquals(second, f.store.recordTrustedPayment(payment(order, "dup-third")));
+            assertEquals(2, f.count("commerce_abnormal_payment")); assertEquals(2, delivery.refunds().size(), "每一笔多付的钱各有一条待退款");
             assertEquals(1, f.value("pms_sku_stock", "stock")); assertEquals(1, f.count("commerce_delivery_intent"));
         }
     }
@@ -195,7 +212,7 @@ class CommerceStoreTest {
             assertEquals(409, assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(payment(unpaid, "owner-extra"))).status(),
                 "未付单也不能拿别单的重复付款流水来绑定");
             assertEquals("AWAITING_PAYMENT", f.store.get("3", owned(unpaid)).state());
-            assertEquals(3, f.count("commerce_payment_receipt")); assertEquals(1, f.count("commerce_duplicate_payment")); assertEquals(1, f.count("commerce_refund_intent"));
+            assertEquals(3, f.count("commerce_payment_receipt")); assertEquals(1, f.count("commerce_abnormal_payment")); assertEquals(1, f.count("commerce_refund_intent"));
             assertEquals(3, f.value("pms_sku_stock", "stock"), "两张已付单各扣一次"); assertEquals(1, f.value("pms_sku_stock", "lock_stock"), "未付单的预占还在");
         }
     }
@@ -203,8 +220,9 @@ class CommerceStoreTest {
         try (var f = new CommerceFixture()) {
             f.sku(1, 3, 100); var order = f.store.create("1", request("duplicate-race-001", 1, 1));
             var paid = f.store.recordTrustedPayment(payment(order, "race-first"));
-            parallel(8, index -> assertEquals(paid, f.store.recordTrustedPayment(payment(order, index % 2 == 0 ? "race-second" : "race-third"))));
-            assertEquals(2, f.count("commerce_duplicate_payment")); assertEquals(2, f.count("commerce_refund_intent"));
+            var duplicate = new CommerceApi.PaymentOutcome(paid.order(), DUPLICATE_PAYMENT);
+            parallel(8, index -> assertEquals(duplicate, f.store.recordTrustedPayment(payment(order, index % 2 == 0 ? "race-second" : "race-third"))));
+            assertEquals(2, f.count("commerce_abnormal_payment")); assertEquals(2, f.count("commerce_refund_intent"));
             assertEquals(3, f.count("commerce_payment_receipt")); assertEquals(1, f.count("commerce_delivery_intent"));
             assertEquals(2, f.value("pms_sku_stock", "stock"));
         }
@@ -220,8 +238,141 @@ class CommerceStoreTest {
                 catch (CommerceException refused) { assertEquals(409, refused.status()); }
             });
             assertEquals(1, success.get());
-            assertEquals(1, f.count("commerce_duplicate_payment")); assertEquals(1, f.count("commerce_refund_intent"));
+            assertEquals(1, f.count("commerce_abnormal_payment")); assertEquals(1, f.count("commerce_refund_intent"));
             assertEquals(3, f.count("commerce_payment_receipt"));
+        }
+    }
+    // 第二轮数据审计评审 R3:金额或币种与订单不符的付款,旧实现回 409、什么都不落 —— 钱已经进了渠道,系统里却没有记录,也没有退款。
+    // 现在与重复付款同形:回 200,记成不绑定订单的回执、异常付款与同原因的退款待办,订单、库存、交付都不动。
+    @Test void 付款金额与订单不符_落异常付款与待退款_订单库存交付都不动() {
+        try (var f = new CommerceFixture()) {
+            f.sku(1, 3, 100); var order = f.store.create("1", request("mismatch-amount-001", 1, 2));
+            var underpaid = f.store.recordTrustedPayment(payment(order, "amount-short", 199, "CNY"));
+            assertEquals(new CommerceApi.PaymentOutcome(order, AMOUNT_MISMATCH), underpaid, "订单视图不变,refundReason 说明这笔要退、为什么退");
+            assertEquals(2, f.value("pms_sku_stock", "lock_stock"), "预占不动"); assertEquals(3, f.value("pms_sku_stock", "stock"), "库存不扣");
+            assertEquals(0, f.count("commerce_delivery_intent"), "不交付");
+            assertEquals(1, f.jdbc.queryForObject("SELECT COUNT(*) FROM commerce_payment_receipt WHERE order_sn IS NULL", Integer.class),
+                "记成不绑定订单的回执");
+            assertEquals(199L, f.jdbc.queryForObject("SELECT amount_minor FROM commerce_payment_receipt WHERE channel=? AND transaction_id=?",
+                Long.class, ascii("test"), ascii("amount-short")), "回执记渠道实收值");
+            assertEquals(List.of(List.of("amount-short", "AMOUNT_MISMATCH")), abnormalPayments(f, order.orderId()));
+            assertEquals(List.of(List.of("amount-short", "AMOUNT_MISMATCH", "PENDING")), refundIntents(f, order.orderId()));
+
+            assertEquals(AMOUNT_MISMATCH, f.store.recordTrustedPayment(payment(order, "amount-over", 201, "CNY")).refundReason(), "多付同样不收");
+            var delivery = new DeliveryStore(f.jdbc, f.manager, f.props);
+            assertEquals(List.of(pending(order, "amount-over", 201, "CNY", AMOUNT_MISMATCH), pending(order, "amount-short", 199, "CNY", AMOUNT_MISMATCH)),
+                delivery.refunds(), "退的是玩家实付的金额,不是订单价");
+
+            var exact = f.store.recordTrustedPayment(payment(order, "amount-exact"));
+            assertNull(exact.refundReason()); assertEquals("DELIVERY_PENDING", exact.order().state(), "不符的钱不占订单,金额对的那笔照常付清");
+            assertEquals(1, f.value("pms_sku_stock", "stock")); assertEquals(0, f.value("pms_sku_stock", "lock_stock"));
+            assertEquals(1, f.count("commerce_delivery_intent"));
+
+            assertEquals(409, assertThrows(CommerceException.class, () -> delivery.refunded(refund(order, "amount-short", "refund-short-at-price"))).status(),
+                "退款金额必须等于那笔实付,不是订单价");
+            delivery.refunded(new CommerceApi.Refund(order.orderId(), "test", "amount-short", "refund-short", 199, "CNY"));
+            assertEquals("DELIVERY_PENDING", f.store.get("1", owned(order)).state(), "退异常付款不碰订单");
+            assertEquals(List.of(pending(order, "amount-over", 201, "CNY", AMOUNT_MISMATCH)), delivery.refunds());
+            assertEquals(List.of("amount-exact", "amount-over", "amount-short"), f.jdbc.queryForList(
+                "SELECT transaction_id FROM commerce_payment_receipt ORDER BY transaction_id", String.class), "三笔各占一行回执");
+        }
+    }
+    @Test void 付款币种与订单不符_币种先于金额与订单状态判定() {
+        try (var f = new CommerceFixture()) {
+            f.sku(1, 5, 100);
+            var unpaid = f.store.create("1", request("mismatch-currency-001", 1, 1));
+            assertEquals(new CommerceApi.PaymentOutcome(unpaid, CURRENCY_MISMATCH), f.store.recordTrustedPayment(payment(unpaid, "currency-usd", 100, "USD")),
+                "数字相同也不收:不同币种的金额不可比");
+            assertEquals(CURRENCY_MISMATCH, f.store.recordTrustedPayment(payment(unpaid, "currency-and-amount", 99, "USD")).refundReason(),
+                "币种和金额都不符时记币种不符");
+
+            var settled = f.store.create("2", request("mismatch-currency-002", 1, 1));
+            f.store.recordTrustedPayment(payment(settled, "currency-settled-first"));
+            assertEquals(AMOUNT_MISMATCH, f.store.recordTrustedPayment(payment(settled, "currency-settled-short", 99, "CNY")).refundReason(),
+                "已付订单收到金额不符的一笔:记金额不符,不是重复付款");
+
+            var cancelled = f.store.create("3", request("mismatch-currency-003", 1, 1));
+            f.store.cancel("3", owned(cancelled));
+            var stray = f.store.recordTrustedPayment(payment(cancelled, "currency-cancelled", 100, "EUR"));
+            assertEquals(CURRENCY_MISMATCH, stray.refundReason());
+            assertEquals("CANCELLED", stray.order().state(), "不符的钱不绑定已取消的订单,订单不转退款中");
+            var late = f.store.recordTrustedPayment(payment(cancelled, "currency-cancelled-late"));
+            assertEquals(CANCELLED_LATE, late.refundReason()); assertEquals("REFUND_PENDING", late.order().state(), "金额币种对的迟到付款照旧绑定原单");
+
+            assertEquals(List.of(List.of("currency-and-amount", "CURRENCY_MISMATCH"), List.of("currency-usd", "CURRENCY_MISMATCH")), abnormalPayments(f, unpaid.orderId()));
+            assertEquals(List.of(List.of("currency-settled-short", "AMOUNT_MISMATCH")), abnormalPayments(f, settled.orderId()));
+            assertEquals(List.of(List.of("currency-cancelled", "CURRENCY_MISMATCH")), abnormalPayments(f, cancelled.orderId()));
+            assertEquals(5, f.count("commerce_refund_intent"), "要退的钱每笔一条待办");
+            assertEquals(1, f.count("commerce_delivery_intent"));
+            assertEquals(4, f.value("pms_sku_stock", "stock")); assertEquals(1, f.value("pms_sku_stock", "lock_stock"), "未付单的预占还在");
+
+            var delivery = new DeliveryStore(f.jdbc, f.manager, f.props);
+            assertEquals(409, assertThrows(CommerceException.class, () -> delivery.refunded(
+                new CommerceApi.Refund(unpaid.orderId(), "test", "currency-usd", "refund-usd-as-cny", 100, "CNY"))).status(), "按实付币种退");
+            delivery.refunded(new CommerceApi.Refund(unpaid.orderId(), "test", "currency-usd", "refund-usd", 100, "USD"));
+            assertEquals("AWAITING_PAYMENT", f.store.get("1", owned(unpaid)).state());
+        }
+    }
+    @Test void 金额不符的同一流水重放幂等_改报金额币种或别单回409() {
+        try (var f = new CommerceFixture()) {
+            f.sku(1, 5, 100);
+            var order = f.store.create("1", request("mismatch-replay-001", 1, 1));
+            var other = f.store.create("2", request("mismatch-replay-002", 1, 1));
+            var first = f.store.recordTrustedPayment(payment(order, "replay-short", 99, "CNY"));
+            assertEquals(first, f.store.recordTrustedPayment(payment(order, "replay-short", 99, "CNY")), "原样重放幂等");
+            assertEquals(409, assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(payment(order, "replay-short"))).status(),
+                "同一流水改报成订单价也不能变成订单的付款");
+            assertEquals(409, assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(payment(order, "replay-short", 99, "USD"))).status());
+            assertEquals(409, assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(payment(other, "replay-short", 99, "CNY"))).status(),
+                "一笔渠道交易只属于一张订单");
+            assertEquals("AWAITING_PAYMENT", f.store.get("1", owned(order)).state()); assertEquals("AWAITING_PAYMENT", f.store.get("2", owned(other)).state());
+            assertEquals(1, f.count("commerce_payment_receipt")); assertEquals(1, f.count("commerce_abnormal_payment")); assertEquals(1, f.count("commerce_refund_intent"));
+            assertEquals(2, f.value("pms_sku_stock", "lock_stock"));
+
+            // 订单之后被正常付清,这笔不符的流水再来:结论不变,订单视图是当前状态。
+            f.store.recordTrustedPayment(payment(order, "replay-exact"));
+            var later = f.store.recordTrustedPayment(payment(order, "replay-short", 99, "CNY"));
+            assertEquals(AMOUNT_MISMATCH, later.refundReason()); assertEquals("DELIVERY_PENDING", later.order().state());
+            assertEquals(1, f.count("commerce_abnormal_payment")); assertEquals(1, f.count("commerce_refund_intent"));
+        }
+    }
+    @Test void 同一笔金额不符的流水并发回调只落一笔记录与一条待退款() throws Exception {
+        try (var f = new CommerceFixture()) {
+            f.sku(1, 3, 100); var order = f.store.create("1", request("mismatch-race-001", 1, 1));
+            var expected = new CommerceApi.PaymentOutcome(order, AMOUNT_MISMATCH);
+            parallel(8, index -> assertEquals(expected, f.store.recordTrustedPayment(
+                index % 2 == 0 ? payment(order, "race-short", 99, "CNY") : payment(order, "race-over", 101, "CNY"))));
+            assertEquals(2, f.count("commerce_payment_receipt")); assertEquals(2, f.count("commerce_abnormal_payment")); assertEquals(2, f.count("commerce_refund_intent"));
+            assertEquals("AWAITING_PAYMENT", f.store.get("1", owned(order)).state());
+            assertEquals(1, f.value("pms_sku_stock", "lock_stock")); assertEquals(0, f.count("commerce_delivery_intent"));
+        }
+    }
+    @Test void 两张订单并发报同一笔金额不符的流水_交易键主键只让一张记成异常付款() throws Exception {
+        try (var f = new CommerceFixture()) {
+            f.sku(1, 5, 100);
+            var first = f.store.create("1", request("mismatch-two-001", 1, 1)); var second = f.store.create("2", request("mismatch-two-002", 1, 1));
+            AtomicInteger success = new AtomicInteger();
+            parallel(2, index -> {
+                try { f.store.recordTrustedPayment(payment(index == 0 ? first : second, "two-short", 99, "CNY")); success.incrementAndGet(); }
+                catch (CommerceException refused) { assertEquals(409, refused.status()); }
+            });
+            assertEquals(1, success.get());
+            assertEquals(1, f.count("commerce_payment_receipt")); assertEquals(1, f.count("commerce_abnormal_payment")); assertEquals(1, f.count("commerce_refund_intent"));
+            assertEquals(2, f.value("pms_sku_stock", "lock_stock"), "两张订单都还待付款");
+        }
+    }
+    @Test void 一条渠道退款流水只能了结一笔付款_换一笔复用回409() {
+        try (var f = new CommerceFixture()) {
+            f.sku(1, 3, 100); var order = f.store.create("1", request("refund-reuse-001", 1, 1));
+            f.store.recordTrustedPayment(payment(order, "reuse-short", 99, "CNY"));
+            f.store.recordTrustedPayment(payment(order, "reuse-over", 101, "CNY"));
+            var delivery = new DeliveryStore(f.jdbc, f.manager, f.props);
+            delivery.refunded(new CommerceApi.Refund(order.orderId(), "test", "reuse-short", "refund-reuse", 99, "CNY"));
+            assertEquals(409, assertThrows(CommerceException.class, () -> delivery.refunded(
+                new CommerceApi.Refund(order.orderId(), "test", "reuse-over", "refund-reuse", 101, "CNY"))).status(),
+                "同一条退款流水不能再记到另一笔付款上");
+            assertEquals(List.of(pending(order, "reuse-over", 101, "CNY", AMOUNT_MISMATCH)), delivery.refunds(), "另一笔仍待退");
+            assertEquals(1, f.count("commerce_refund_receipt"));
         }
     }
     @Test void cancelIsIdempotentAndLatePaymentRequiresRefundHandling() {
@@ -229,7 +380,9 @@ class CommerceStoreTest {
             f.sku(1, 2, 100); var order = f.store.create("1", request("cancel-001", 1, 1));
             assertEquals(f.store.cancel("1", new CommerceApi.OwnedOrder(order.orderId(), "测试账号", "1")), f.store.cancel("1", new CommerceApi.OwnedOrder(order.orderId(), "测试账号", "1")));
             assertEquals(0, f.value("pms_sku_stock", "lock_stock")); assertEquals(2, f.value("pms_sku_stock", "stock"));
-            assertEquals("REFUND_PENDING", f.store.recordTrustedPayment(payment(order, "late-payment")).state());
+            var late = f.store.recordTrustedPayment(payment(order, "late-payment"));
+            assertEquals("REFUND_PENDING", late.order().state());
+            assertEquals(CANCELLED_LATE, late.refundReason(), "迟到的那笔仍绑定订单,随订单退");
             assertEquals(1, f.count("commerce_payment_receipt"));
             assertEquals(1,f.count("commerce_refund_intent"));
         }
@@ -238,8 +391,9 @@ class CommerceStoreTest {
         try (var f = new CommerceFixture()) {
             f.sku(1, 2, 100); var order = f.store.create("1", request("cancel-dup-001", 1, 1));
             f.store.cancel("1", owned(order));
-            assertEquals("REFUND_PENDING", f.store.recordTrustedPayment(payment(order, "late-first")).state());
-            assertEquals("REFUND_PENDING", f.store.recordTrustedPayment(payment(order, "late-second")).state());
+            assertEquals("REFUND_PENDING", f.store.recordTrustedPayment(payment(order, "late-first")).order().state());
+            var second = f.store.recordTrustedPayment(payment(order, "late-second"));
+            assertEquals("REFUND_PENDING", second.order().state()); assertEquals(DUPLICATE_PAYMENT, second.refundReason());
             assertEquals(List.of(List.of("late-first", "CANCELLED_LATE", "PENDING"), List.of("late-second", "DUPLICATE_PAYMENT", "PENDING")),
                 refundIntents(f, order.orderId()));
             var delivery = new DeliveryStore(f.jdbc, f.manager, f.props);
@@ -252,14 +406,14 @@ class CommerceStoreTest {
             assertEquals(2, f.value("pms_sku_stock", "stock"), "取消单的库存一直不扣");
         }
     }
-    @Test void wrongAmountAndBrokenReservationRollbackAllPaymentFacts() {
+    // 原用例 wrongAmountAndBrokenReservationRollbackAllPaymentFacts 还断言金额币种不符回 409、什么都不落 —— 那正是缺陷行为
+    // (钱停在渠道里,见上面几例);这里只留库存预占损坏时整笔回滚。
+    @Test void brokenReservationRollsBackAllPaymentFacts() {
         try (var f = new CommerceFixture()) {
             f.sku(1, 2, 100); var order = f.store.create("1", request("rollback-001", 1, 1));
-            assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(new CommerceApi.Payment(order.orderId(), "test", "bad-amount", 99, "CNY")));
-            assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(new CommerceApi.Payment(order.orderId(), "test", "bad-currency", 100, "USD")));
             f.jdbc.update("UPDATE pms_sku_stock SET lock_stock=0 WHERE id=1");
-            assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(payment(order, "broken-reservation")));
-            assertEquals(0, f.count("commerce_payment_receipt")); assertEquals(0, f.count("commerce_delivery_intent"));
+            assertEquals(409, assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(payment(order, "broken-reservation"))).status());
+            assertEquals(0, f.count("commerce_payment_receipt")); assertEquals(0, f.count("commerce_delivery_intent")); assertEquals(0, f.count("commerce_refund_intent"));
             assertEquals("AWAITING_PAYMENT", f.store.get("1", new CommerceApi.OwnedOrder(order.orderId(), "测试账号", "1")).state()); assertEquals(2, f.value("pms_sku_stock", "stock"));
         }
     }

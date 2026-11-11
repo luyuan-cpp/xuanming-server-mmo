@@ -5,8 +5,10 @@
 #include <unordered_set>
 #include <vector>
 
+#include "broadcast_fanout_stats.h"
 #include "broadcast_target_codec.h"
 #include "engine/core/type_define/player_guid_comp.h"
+#include "metrics/metrics_registry.h"
 #include "muduo/base/Logging.h"
 #include "network_utils.h"
 #include "proto/common/component/player_network_comp.pb.h"
@@ -131,6 +133,7 @@ void BroadcastToPlayerClientsImpl(uint32_t messageId, const google::protobuf::Me
 
 	const std::string serializedMessage = message.SerializeAsString();
 
+	uint64_t gatesSent = 0;
 	for (auto &&[gateEntity, broadcastTargets] : targetsByGateEntity)
 	{
 		auto *gateRpcSession = gateNodeRegistry.try_get<RpcSession>(gateEntity);
@@ -147,7 +150,9 @@ void BroadcastToPlayerClientsImpl(uint32_t messageId, const google::protobuf::Me
 		broadcast_targets::Encode(request, broadcastTargets);
 
 		gateRpcSession->SendRequest(GateBroadcastToPlayersMessageId, request);
+		++gatesSent;
 	}
+	broadcast_fanout_stats::Record(broadcast_fanout_stats::Kind::kPlayers, gatesSent);
 }
 
 template <typename PlayerEntityContainer>
@@ -174,13 +179,16 @@ void BroadcastToSceneClientsImpl(uint32_t messageId, const google::protobuf::Mes
 	request.mutable_message_content()->set_message_id(messageId);
 	request.mutable_message_content()->set_serialized_message(message.SerializeAsString());
 
+	uint64_t gatesSent = 0;
 	for (const auto gateEntity : sceneGateEntities)
 	{
 		auto *gateRpcSession = gateNodeRegistry.try_get<RpcSession>(gateEntity);
 		if (!gateRpcSession)
 			continue;
 		gateRpcSession->SendRequest(GateBroadcastToSceneMessageId, request);
+		++gatesSent;
 	}
+	broadcast_fanout_stats::Record(broadcast_fanout_stats::Kind::kScene, gatesSent);
 }
 
 } // namespace
@@ -222,5 +230,13 @@ void BroadcastToKnownGateClients(uint32_t messageId, const google::protobuf::Mes
 	{
 		auto &gateRpcSession = gateSessions.get<RpcSession>(gateEntity);
 		gateRpcSession.SendRequest(GateBroadcastToAllMessageId, request);
+	}
+}
+
+void RegisterBroadcastFanoutMetrics()
+{
+	if (!GlobalMetricsRegistry().Register("scene_broadcast_fanout", &broadcast_fanout_stats::Collect))
+	{
+		LOG_ERROR << "[Metrics] collector scene_broadcast_fanout is already registered";
 	}
 }

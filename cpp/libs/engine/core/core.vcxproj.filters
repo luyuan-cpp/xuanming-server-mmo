@@ -64,6 +64,7 @@
     <ClInclude Include="node\system\etcd\etcd_stream_backoff.h" />
     <ClInclude Include="node\system\discovery\discovery_key_index.h" />
     <ClInclude Include="node\system\discovery\discovery_resync_policy.h" />
+    <ClInclude Include="node\system\discovery\rendezvous_subset.h" />
     <ClInclude Include="node\system\node\node.h" />
     <ClInclude Include="node\system\node\node_allocator.h" />
     <ClInclude Include="node\system\node\node_connector.h" />
@@ -98,6 +99,7 @@
     <ClInclude Include="network\network_constants.h" />
     <ClInclude Include="network\network_utils.h" />
     <ClInclude Include="network\client_message_sender.h" />
+    <ClInclude Include="network\broadcast_fanout_stats.h" />
     <ClInclude Include="network\process_info.h" />
     <ClInclude Include="network\rpc_client.h" />
     <ClInclude Include="network\rpc_server.h" />
@@ -122,6 +124,7 @@
     <ClInclude Include="utils\proto\message_util.h" />
     <ClInclude Include="node\system\grpc_call_deadline.h" />
     <ClInclude Include="node\system\node\node_kafka_command_handler.h" />
+    <ClInclude Include="node\system\node\node_command_consume_stats.h" />
     <ClInclude Include="node\system\node\node_entry.h" />
     <ClInclude Include="node\system\node\thread_observability.h" />
     <ClInclude Include="network\traffic_statistics.h" />

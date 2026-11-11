@@ -17,13 +17,16 @@ import (
 	"guild/internal/config"
 	"guild/internal/data"
 	assetpb "proto/common/asset"
+	base "proto/common/base"
 	dspb "proto/data_service"
 	"shared/assetop"
 	"shared/assetopwake"
 	"shared/idsegment"
 	"shared/leader"
+	"shared/noderegistry"
 	"shared/safego"
 	"shared/scenenode"
+	"shared/workshard"
 )
 
 // 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §S4)在 guild 侧的装配(B5b,05-economy.md §5.29)。
@@ -57,7 +60,18 @@ const (
 	// (docs/design/guild-phase2/07-rollback-fail-closed.md §7.8.3)。调用方传入的是投递预算的剩余部分,
 	// 单次读不值得吃掉其中的大头:读不到只是本轮不终结、下轮再读;data_service 一次 Redis 读远小于它。
 	persistedLedgerReadTimeout = 300 * time.Millisecond
+
+	// assetOpWorkKind 是资产指令重投按片分工的归属键前缀:片号 = player_id % 64(缺口清单第 25 条,
+	// docs/design/assetop-redelivery-sharding-20261110.md)。成员表只给这一类工作用,写死成常量,不进配置。
+	assetOpWorkKind = "guild-assetop"
 )
+
+// assetShardMembersPrefix 是重投分工的成员表圈住的 etcd 前缀:本 zone 注册的 guild 实例(GuildNodeService.rpc/zone/<z>/)。
+// 与 internal/node 注册时的路径同形(rpcPrefix + /zone/<z>/node_type/…),那边改了路径,这里会读到空成员表、各副本做全部片,
+// 只是重复,不会漏片。只圈本 zone 的理由见设计 §2.3:成员表只能圈住连同一个库的副本,圈多了某些片没人做,圈少了只是重复做。
+func assetShardMembersPrefix(zoneID uint32) string {
+	return noderegistry.RpcZonePrefix(base.ENodeType_name[int32(base.ENodeType_GuildNodeService)]+".rpc", zoneID)
+}
 
 // ErrAssetSecretMissing:没配 AssetOpSecretEnv,或密钥去首尾空白后短于 32 字节。
 // AssetOp.Enabled=true 时它是**启动致命错**(guild.go 里 logx.Must):资产路径 fail-closed,
@@ -155,7 +169,7 @@ func msToDuration(ms int) time.Duration {
 // 重投循环,以及落地恢复追加的落地唤醒订阅与"日对账 + 自动放弃"的选主维护(设计 §5.3 / §6)。
 // Loop 同时供 logic 的同步投递使用(EconomyDeps.Loop)。
 //
-// 生命周期:NewAssetPipeline → AttachPersistedLedger / AttachMaintenanceLeader → Start → Stop。
+// 生命周期:NewAssetPipeline → AttachPersistedLedger / AttachMaintenanceLeader / AttachWorkShards → Start → Stop。
 // Stop 会等全部后台 goroutine 真正退出,**必须先于** etcd 客户端、Redis 与 MySQL 的关闭(guild.go 的 defer 顺序)。
 type AssetPipeline struct {
 	// Loop 重投循环;构造后只读。
@@ -171,6 +185,9 @@ type AssetPipeline struct {
 	// maintenance 是对账 + 放弃的选主器(go/shared/leader);只有当选副本跑 Loop.RunMaintenance。
 	// 由 AttachMaintenanceLeader 在 Start 之前设置,之后只读;nil = 本副本不跑维护。受 mu 保护的只是"Start 之前才能设"这一约束。
 	maintenance *leader.Elector
+	// members 是重投循环按片分工的成员表(本 zone 注册的 stable guild 实例,缺口清单第 25 条)。
+	// 由 AttachWorkShards 在 Start 之前设置,之后只读;nil = 不分工,重投循环扫全部行。
+	members *workshard.Membership
 
 	// mu 只保护 started / stopped / cancel(以及 Start 之前的 Attach*),让 Start 与 Stop 的先后无论怎么交错都不会
 	// 在 Stop 的 wg.Wait 之后再 wg.Add(WaitGroup 不允许 Add 与 Wait 并发)。
@@ -336,6 +353,39 @@ func (p *AssetPipeline) AttachPersistedLedger(client dspb.DataServiceClient) {
 		persistedLedgerReadTimeout)
 }
 
+// AttachWorkShards 让重投循环的到期扫描按玩家分片,分给本 zone 注册的 stable guild 副本(缺口清单第 25 条,
+// docs/design/assetop-redelivery-sharding-20261110.md):每个副本只扫自己负责的片,不再都读同一个到期队头、在 Claim 上空撞。
+// 正确性仍由 Claim 的租约 CAS 与 Finalize 的 status CAS 保证,分工只省重复劳动。
+//
+// zoneID、self 是本副本注册 etcd 用的 Node.ZoneId 与 node_uuid(guild 在建资产管线之前就已注册)。成员表在 Start 里
+// 随重投循环一起起(canary 副本两样都不起),每 5 秒整表读一次;读到之前、或连续 30 秒读不到时成员表为空,本副本做全部片。
+//
+// 必须在 Start 之前调用(Loop 的分工字段没有锁):Start / Stop 之后调用、self 为空、Store 不支持按片列到期行
+// (assetop.OwnedDueLister)都回错误,装配方据此拒启。self 为空会让本副本在成员表不空时一片都不做,所以不放过。
+// nil 接收者回 nil:没有资产管线就没有要分工的循环。
+func (p *AssetPipeline) AttachWorkShards(zoneID uint32, self string) error {
+	if p == nil {
+		return nil
+	}
+	if self == "" {
+		return errors.New("guild: AttachWorkShards needs the registered node uuid")
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.started || p.stopped {
+		return errors.New("guild: AttachWorkShards must be called before the asset channel starts")
+	}
+	prefix := assetShardMembersPrefix(zoneID)
+	members := workshard.NewMembership(prefix)
+	members.SetSelf(self)
+	if err := p.Loop.BindWorkOwner(assetOpWorkKind, members.Owns); err != nil {
+		return fmt.Errorf("guild: shard asset redelivery: %w", err)
+	}
+	p.members = members
+	logx.Infof("[guild] Asset redelivery due scan sharded by player_id: kind=%s members_prefix=%s", assetOpWorkKind, prefix)
+	return nil
+}
+
 // Start 起 scene 节点镜像与重投循环两个后台 goroutine,以及(装配了的话)维护选主与落地唤醒订阅。
 // ctx 取消或 Stop 都会让它们退出;重复调用、Stop 之后再调都是空操作;nil 接收者安全。
 //
@@ -344,6 +394,7 @@ func (p *AssetPipeline) AttachPersistedLedger(client dspb.DataServiceClient) {
 // 投递发不出去(fail-closed),循环照跑但这些行都留在 PENDING。
 // 自动放弃不看节点镜像:写权行和账本都来自 data_service。要停掉放弃只能把 AssetOp.AbandonAfterDays 写 0。
 // 唤醒订阅最后起:它调的 Loop.WakePlayer 与 Tick 共用 Workers 预算,早起晚起都不改变任何正确性论证(设计 L-4)。
+// 装配了重投分工(AttachWorkShards)时另起一个成员表整表读的 goroutine(guild.asset_op_members),与重投循环同生共死。
 //
 // globalBackground 为 false(发布轨道 canary,docs/design/release-track-gray-canary.md §2.5)时只起 scene 节点镜像:
 // 捐献、兑换、活动奖励提交后的同步投递(Loop.ProcessOne)要靠它定位 scene;outbox 重投、维护选主与唤醒订阅是全局作用域的后台,
@@ -380,6 +431,23 @@ func (p *AssetPipeline) Start(ctx context.Context, etcdCli *clientv3.Client, glo
 		logx.Info("[guild] Asset channel on a canary replica: scene node mirror only; redelivery, maintenance and wake run on stable replicas")
 		return
 	}
+	if members := p.members; members != nil {
+		// 重投分工的成员表(AttachWorkShards)先于重投循环起:第一拍读到之前成员表为空,本副本做全部片(保活优先)。
+		// etcdCli 为 nil 时 Run 打 ERROR 后返回,成员表一直为空,同样是全部片。
+		p.wg.Add(1)
+		safego.Go("guild.asset_op_members", func() {
+			defer p.wg.Done()
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					if p.Loop != nil && p.Loop.Relay != nil {
+						p.Loop.Relay.Hold()
+					}
+					panic(recovered)
+				}
+			}()
+			members.Run(runCtx, etcdCli)
+		})
+	}
 	p.wg.Add(1)
 	safego.Go("guild.asset_op_reconcile", func() {
 		defer p.wg.Done()
@@ -411,8 +479,8 @@ func (p *AssetPipeline) Start(ctx context.Context, etcdCli *clientv3.Client, glo
 		})
 	}
 	p.wake.Start(runCtx) // nil 接收者安全:Wake 关闭时什么都不做
-	logx.Infof("[guild] Asset channel started: goroutine guild.scene_node_watch + guild.asset_op_reconcile(caller=%s) maintenance_election=%t landing_wake=%t",
-		AssetOpCaller, p.maintenance != nil, p.wake != nil)
+	logx.Infof("[guild] Asset channel started: goroutine guild.scene_node_watch + guild.asset_op_reconcile(caller=%s) maintenance_election=%t landing_wake=%t work_shards=%t",
+		AssetOpCaller, p.maintenance != nil, p.wake != nil, p.members != nil)
 }
 
 // Stop 取消全部后台 goroutine、**等它们退出**,再关到各 scene 节点的连接。幂等;nil 接收者安全;

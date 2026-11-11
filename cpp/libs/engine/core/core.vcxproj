@@ -376,6 +376,7 @@
     <ClInclude Include="log\system\console_log.h" />
     <ClInclude Include="message_limiter\message_limiter.h" />
     <ClInclude Include="macros\return_define.h" />
+    <ClInclude Include="network\broadcast_fanout_stats.h" />
     <ClInclude Include="network\broadcast_target_codec.h" />
     <ClInclude Include="network\codec\codec.h" />
     <ClInclude Include="network\codec\dispatcher.h" />
@@ -413,6 +414,7 @@
     <ClInclude Include="node\system\etcd\etcd_stream_backoff.h" />
     <ClInclude Include="node\system\discovery\discovery_key_index.h" />
     <ClInclude Include="node\system\discovery\discovery_resync_policy.h" />
+    <ClInclude Include="node\system\discovery\rendezvous_subset.h" />
     <ClInclude Include="node\system\grpc_call_deadline.h" />
     <ClInclude Include="node\system\node\node.h" />
     <ClInclude Include="node\system\node\node_allocator.h" />
@@ -421,6 +423,7 @@
     <ClInclude Include="node\system\node\open_file_limit.h" />
     <ClInclude Include="node\system\node\release_track.h" />
     <ClInclude Include="node\system\node\node_entry.h" />
+    <ClInclude Include="node\system\node\node_command_consume_stats.h" />
     <ClInclude Include="node\system\node\node_command_route.h" />
     <ClInclude Include="node\system\node\node_command_topic.h" />
     <ClInclude Include="node\system\node\node_kafka_command_filter.h" />

@@ -89,7 +89,7 @@ class DeliveryStoreTest {
   f.sku(1,5,100);var order=f.store.create("1",new CommerceApi.CreateOrder("refund-001",1,1, "测试账号", "1"));f.store.recordTrustedPayment(new CommerceApi.Payment(order.orderId(),"test","payment-refund",100,"CNY"));
   var store=new DeliveryStore(f.jdbc,f.manager,f.props);store.receipt(new DeliveryApi.Receipt(order.orderId(),"123","REFUND_PENDING","b".repeat(64)));
   // 交付被拒:退款待办挂在订单绑定的那笔付款上(按交易键),来源记 DELIVERY_REJECTED。
-  assertEquals(List.of(new CommerceApi.Payment(order.orderId(),"test","payment-refund",100,"CNY")),store.refunds());
+  assertEquals(List.of(new CommerceApi.PendingRefund(order.orderId(),"test","payment-refund",100,"CNY",CommerceApi.RefundReason.DELIVERY_REJECTED)),store.refunds());
   assertEquals("DELIVERY_REJECTED",f.jdbc.queryForObject("SELECT source FROM commerce_refund_intent WHERE order_sn=?",String.class,order.orderId()));
   assertThrows(CommerceException.class,()->store.refunded(new CommerceApi.Refund(order.orderId(),"test","payment-refund","refund-01",99,"CNY")));
   assertEquals(400,assertThrows(CommerceException.class,()->store.refunded(new CommerceApi.Refund(order.orderId(),"test",null,"refund-01",100,"CNY"))).status(),"回执必须指明退的是哪一笔付款");

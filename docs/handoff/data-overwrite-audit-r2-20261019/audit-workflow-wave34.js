@@ -53,7 +53,7 @@ const PRE = [
   '覆盖回档：旧数据盖新数据、双写者、乱序或重试旧载荷、加载旧快照后再存盘。',
   '项目尚未上线（负责人 2026-10-18 确认），玩家数据可以清空，首次上线整批起步。只在混版、滚动升级、降级窗口出现的问题照报，但标明"仅混版窗口"，严重度降一级。',
   '',
-  '【已知问题不要重报】开工前先读：docs/design/data-overwrite-rollback-audit-20261018.md 的 §2～§4（第一轮）；docs/design/data-overwrite-rollback-audit-r2-20261019.md 的 §3、§4 与 §5.0（本轮各波、已排除与最终状态）；docs/design/data-consistency-guarantee-map-20261020.md 的 §2～§4 与 §6（含 11-05 player_store 新路径复查）。报之前再到 docs/handoff/global-economy-review-20261021.md、global-economy-claude-review-20261022.md、owner-epoch-claude-review-20261106.md、redis-login-ledger-review-20261106.md 里 grep 关键词，确认没登记过。已登记条目不重报；若发现已登记条目的修复本身有缺陷，或是已登记条目的新变种，要报，并在 related 里写关联编号。',
+  '【已知问题不要重报】开工前先读下面的已知问题清单（换视角查找时附在任务里，原件是 docs/handoff/data-overwrite-audit-r2-20261019/dsweep-round<N>-args.json）和 r2 文档 docs/design/data-overwrite-rollback-audit-r2-20261019.md 的 §5.0（最终状态）；前几轮换视角查找的排除项见 r2 文档 §3.9、§3.10 与 dsweep-round2-results/*.json 的 excluded。不必通读大文档，报之前按关键词 grep 确认没登记过：docs/design/data-overwrite-rollback-audit-20261018.md、data-overwrite-rollback-audit-r2-20261019.md、data-consistency-guarantee-map-20261020.md，docs/handoff/global-economy-review-20261021.md、global-economy-claude-review-20261022.md、owner-epoch-claude-review-20261106.md、redis-login-ledger-review-20261106.md。已登记条目不重报；若发现已登记条目的修复本身有缺陷，或是已登记条目的新变种，要报，并在 related 里写关联编号。',
   '',
   '【严重度】high = 默认配置下可达的资产复制，或回档 / 丢失资产；medium = 默认可达的丢进度，或需特定故障才可达的资产问题，或门控功能里的严重问题；low = 其余。运维工具需要人为误用才触发的，最高 low，除非缺省参数就会出错。',
   '',
@@ -291,9 +291,9 @@ const D_ROUNDS = [
     { key: 'entry-go-admin', lens: '按入口：Go 服务的 gRPC / HTTP 入口与 admin / GM 接口（login、data_service、db、scene_manager、player_locator、player_inbox、guild、mail、trade、match、rank，以及 java/gateway_node 的 admin API），关注鉴权、幂等、对玩家数据或资产的直接写。新路径里的 data_service GM 回收（recall）、ReleaseDeadPlayerStoreHolder、player_store 读接口、player_inbox admin、发号器接口要逐个过。' },
   ],
   [
-    { key: 'asset-guild-mail-reward', lens: '按资产追踪：帮会资金与玩家帮会贡献、邮件附件、任务奖励、成就与活动奖励的完整生命周期。' },
-    { key: 'fault-clock-upgrade', lens: '按故障：时钟回拨与跳变（所有用墙钟做比较、过期、排序、去重、限购刷新的地方），以及滚动升级混版（新旧 scene / go/db / login / gate / scene_manager 并存时各协议字段的语义）。混版问题按规则降一级。' },
-    { key: 'entry-consumers-timers', lens: '按入口：Kafka 消费者与周期任务入口（每个 consumer、每个 sweeper / reconciler / leader 任务 / 定时器），关注重复执行、并发执行（多副本）、与玩家在线写的竞态。' },
+    { key: 'asset-guild-mail-reward', lens: '按资产追踪：帮会资金与玩家帮会贡献、邮件附件、任务奖励、成就与活动奖励的完整生命周期。新路径：帮会经资产通道的对侧账（go/guild/internal/data/asset_store.go 的 applyCounterparty、ResolveManuallyIfQuiet，go/guild/cmd/assetopfix，go/shared/assetop/manual_evidence.go 的 JudgeManual / RowQuiet、receipt_identity.go、abandon.go）；帮会历练奖励（match-results → SETTLED 闸门 → 奖励指令）；邮件领取（go/mail/internal/data/claim.go 与 SYSTEM_CREDIT 流）与 rank 封榜奖励转邮件；C++ 活跃度、任务、成就领奖；GM 回收对这些收益的回收口径（recall_plan.go 的 needs_review）。追每笔奖励是否恰好一次、失败与人工终结是否以已提交账本为准、帮会库与玩家存档两边是否一致。' },
+    { key: 'fault-clock-upgrade', lens: '按故障：时钟回拨与跳变（所有用墙钟做比较、过期、排序、去重、限购刷新的地方），以及滚动升级混版（新旧 scene / go/db / login / gate / scene_manager 并存时各协议字段的语义）。混版问题按规则降一级。新路径里用墙钟的地方逐个过：owner_epoch 按 max(观察+1, 当前毫秒) 铸造（go/scene_manager/internal/logic/owner_epoch.go 的铸造与回滚 Lua、go/shared/ownerepoch）与交接资格 handoff_fence 的代次比较；发号器的时间下限（go/data_service/internal/idissuer）；资产人工终结 RowQuiet / ManualQuietGap 与自动放弃 AbandonSafetyGap 用的 last_send_ms、lease_until_ms 出自谁的钟；收件箱签发时间窗与终态保留；本机钟与 TiDB 钟混用的比较（11-10 r2-battle#2 B1 修过 match 的一处，别处有没有同类）；FIGHTING 冻结续冻上限与战斗锁 TTL。混版：发布轨道金丝雀（go/shared/releasetrack）让新旧版本同时在线，player_store 的 schema_gen 与 SCHEMA_TOO_NEW / SCHEMA_REGRESSED，新增 proto 字段在旧节点上的语义。' },
+    { key: 'entry-consumers-timers', lens: '按入口：Kafka 消费者与周期任务入口（每个 consumer、每个 sweeper / reconciler / leader 任务 / 定时器），关注重复执行、并发执行（多副本）、与玩家在线写的竞态。Kafka 消费者第 2 轮按故障视角已逐个过（docs/handoff/data-overwrite-audit-r2-20261019/dsweep-round2-results/fault-kafka-crash.json），这一轮重点放在周期任务与多副本分工：player_inbox 的 loops.go / reconcile.go / shard.go 与 internal/shardowner（分片换主时两个副本会不会同时处理同一玩家）、trade 合同推进按片分工、assetop 自动放弃与重投循环、scene_manager 判死释放与无资格撤销任务、player_locator 会话对账、世界频道回收与放置代次、mail / friend 清扫、data_service 快照消费与 GM 回收派发、C++ 定时器（RunIdentityAtRiskSaves、战斗 reaper、收件箱 Tick、定时存盘与只顺带推迟）。逐个看：多副本或换主时会不会重复执行、和玩家在线写的先后、失败后的重试是否有界。' },
   ],
   [
     { key: 'asset-crosszone-idseg', lens: '按资产追踪：跨区与合服、号段（item / mail / player / snapshot / txlog）的全链路，关注撞号、重发号、跨区资产复制。' },

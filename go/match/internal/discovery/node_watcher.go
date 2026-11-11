@@ -51,6 +51,8 @@ type NodeWatcher struct {
 	nodes    map[string]NodeEntry
 	onCount  func(kind string, count int) // 镜像规模变化上报(指标)
 	onRemove func(entry NodeEntry)        // 节点消失回调(清连接缓存)
+	// synced:fullSync 成功过至少一次,与 nodes 同受 mu 保护,见 Synced。
+	synced bool
 	// keepTrack 非空时只收这条轨道的节点,别的在解析时就丢掉,见 StableOnly / CanaryOnly。
 	keepTrack *releasetrack.Track
 }
@@ -131,6 +133,7 @@ func (w *NodeWatcher) fullSync(ctx context.Context, etcd *clientv3.Client) (int6
 	w.mu.Lock()
 	prev := w.nodes
 	w.nodes = next
+	w.synced = true
 	count := len(next)
 	w.mu.Unlock()
 
@@ -282,6 +285,15 @@ func (w *NodeWatcher) Snapshot() []NodeEntry {
 		out = append(out, n)
 	}
 	return out
+}
+
+// Synced 报告镜像是否已从 etcd 全量同步过至少一次(2026-11-06,截止作废取证用)。没同步过的空镜像不能当「节点不在」的证据:
+// match 刚启动、或 etcd 从启动起就连不上时镜像是空的。同步过之后 etcd 断开时镜像保留最后一次的登记,仍为 true。
+// Upsert(测试直接灌节点)不置它。
+func (w *NodeWatcher) Synced() bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.synced
 }
 
 func (w *NodeWatcher) reportCount(count int) {

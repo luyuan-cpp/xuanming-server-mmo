@@ -434,7 +434,7 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 | `mmorpg` 库（Java 网关的区目录、公告、白名单与写者闸门，login 的口令表） | 只在 infra 的单实例 MySQL 上。`k8s_deploy.ps1` 把 login、gateway 的写者档位写死为 mysql，网关的 JDBC 地址写死 `mysql.<infra>` | 迁到 TiDB，见 §6 | 批 A 11-10 已落码，未编译 |
 | 控制域 Redis 全服单主 | 所有 zone 的场景路由、世界频道和选主锁在一个主节点上 | 按 zone 组分实例，见[控制面按 zone 化](control-plane-zone-scoping-20261105.md)第 5 条 | 另一会话在做 |
 | scene_manager 全服一个 leader，C++ 每 2 秒全量读 etcd | 同上 | 按 zone 选主、只发现本 zone，同一设计第 4 条 | 另一会话在做，4a、4b 已落码未编译 |
-| 选主的后台任务 | 见 §9 | 两处改分片，一把挂在请求路径上的全服锁缩小范围，其余保持单 leader | 批 C，待落码 |
+| 选主的后台任务 | 见 §9 | 两处改分片（C1、C2），其余保持单 leader；帮会榜维护锁核对后暂不改（§9） | C1、C2 已落码未编译 |
 | 排行榜 Redis | rank 自 10-19 起以 SQL 为权威，不连 Redis。`redis-rank.yaml` 只作历史保留，部署脚本不 apply 它，契约测试「R2b Redis清单保留历史，现役SQL排行不自动部署旧写榜存储」守着 | 不是单点，不用改 | — |
 | Loki | 单副本加本地盘 | 单体模式 3 副本加共享对象存储，见 §10 | 批 B，待落码 |
 
@@ -449,8 +449,10 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 | `player_inbox:maintenance:leader` 下的清理、补发、gauge | 全服 | 清理已空转；补发只扫到期未通知的行；gauge 是两条聚合查询 | 近零、异常、在途量 | 保持 |
 | 同一把锁下的定时对账 | 全服 | 每小时读 24 小时内由消费方终结的行，每轮最多 2000 名玩家，超出就截断 | 业务量（战斗结算也进对账） | **改分片**（11-06 已落码，未编译）：64 个逻辑片用 HRW 分给 etcd 里注册的 stable 副本（与 match 的 poolowner 同法），每个副本只对账自己的分片，gauge 按本副本的分片求和，告警仍取 max() > 0。做法见[收件箱设计](player-inbox-service.md) §9.3「分片归属」 |
 | `player_locator:session_reconciler:leader` 下的写者检查 | 全服 | 每 60 秒一次 etcd 只读 Txn | 节点数 | 保持 |
-| 同一把锁下的补建与日审计 | 全服 | 全键 SCAN 加逐 slot SSCAN，限速 200 页/秒 | 在线会话数；2000 万在线时一遍约 19 小时（[会话索引设计](player-locator-gate-session-index.md) §7） | **改分片**：复用死 gate 清扫已有的 256 段租约（`slot_shard.go`），按段分给副本，游标按段持久化 |
-| `guild_rank:maintenance_lock` | 全服互斥，挂在请求路径上 | 帮会积分写入、解散和启动重建都抢它；不续期，持锁者崩溃最长堵 5 分钟 | 积分写入量 | **缩小范围**：只让整表重建与合区折叠独占，积分写入不再抢全服锁（[容量模型](capacity-model-hok-scale.md)第 949 行已指出加副本解决不了） |
+| 同一把锁下的补建与日审计 | 全服 | 全键 SCAN 加逐 slot SSCAN，限速 200 页/秒 | 在线会话数；2000 万在线时一遍约 19 小时（[会话索引设计](player-locator-gate-session-index.md) §7） | **改分片**（11-10 已落码，未编译）：玩家域是 Cluster 时复用死 gate 清扫的 256 段租约，每个副本逐 slot 用 `CLUSTER GETKEYSINSLOT` 列键补成员、清脏成员，进度按段记在控制域；leader 只发布一遍、等它做完，就绪与审计的判据不变。单实例玩家域（dev）仍由 leader 自己扫。做法见会话索引设计 §4.5 |
+| `guild_rank:maintenance_lock` | 全服互斥，挂在请求路径上 | 帮会积分写入、解散和启动重建都抢它；不续期，持锁者崩溃最长堵 5 分钟 | 积分写入量 | **暂不改**（11-10 核对后定）：积分写入现在只有建帮时写一次初始 0 分，`UpdateGuildScore` 这个内部 RPC 在 Go、C++ 里都没有调用方，锁上的流量就是建帮、解散的量，不是容量问题。11-10 全服榜已整体删除，剩下的只有本区榜。等有了真实的积分来源（活跃度、战绩）再改，做法见表下 |
+
+`guild_rank:maintenance_lock` 以后要改时的做法（有了真实的积分来源时）：`guild` 行加 `score_version`，在写分的同一个事务里递增；榜上用 Lua 条件写入，只接受比已记版本更新的分数（版本记在同一区的 HASH 里），乱序到达的旧写入被丢弃，积分写入就不用抢锁。整表重建按快照里的版本做同样的条件合并，不再整键 RENAME 覆盖；只有合区折叠和重建之间仍要互斥。现在就做等于给一个不存在的负载加一套版本协议，按 AGENTS.md §11.2 的 YAGNI 不做。
 | login 出队 `dispatcher:lock:login_queue:zone:<z>` | 按 zone | 每秒放行一批，受空位封顶 | 排队人数 | 保持按 zone |
 | guild 历练巡检 `guild:trial:sweep:lease` | 全服 | 每 60 秒只扫超时的对局，每轮最多 200 条 | 异常 | 保持 |
 
@@ -481,6 +483,6 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 |---|---|---|---|
 | A | `mmorpg` 迁 TiDB（§6） | 实际约 20 个文件 | A1～A5 11-06～10 已落码，未编译 |
 | B | Loki 3 副本加外部 S3；dev 档可选单进程 SeaweedFS 做测试夹具 | 6～10 个文件 | 待落码 |
-| C | §9 的三处：player_inbox 对账分片（C1）、player_locator 补建与审计分片（C2）、guild 排行锁缩小范围（C3，要加分数版本号，先确认有没有真实调用方再定） | 10～15 个文件 | C1 11-06 已落码未编译；C2、C3 待做 |
+| C | §9 的三处：player_inbox 对账分片（C1）、player_locator 补建与审计分片（C2）、guild 排行锁缩小范围（C3，要加分数版本号，先确认有没有真实调用方再定） | 10～15 个文件 | C1 11-06、C2 11-10 已落码未编译；C3 11-10 核对后定暂不改，理由与以后的做法见 §9 |
 
 `k8s_deploy.ps1` 和它的契约测试同时有发布轨道（批 2b）、控制面按 zone 化等会话在改。动之前先给对方发消息，每次改前重读要改的那一段。Java 版（0.1.0-SNAPSHOT）只在 `PARITY.md` 登记待做。

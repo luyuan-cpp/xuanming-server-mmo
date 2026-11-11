@@ -141,10 +141,10 @@ func main() {
 	// 宁可这个 Pod 起不来(K8s 会 CrashLoopBackOff 并告警)。
 	if c.Agones.Enabled {
 		allocator, err := agones.NewK8sAllocatorInCluster(agones.K8sAllocatorOptions{
-			HighDensity:            c.Agones.HighDensityEnabled,
-			CounterRollbackRetries: c.Agones.CounterRollbackRetries,
-			CounterRollbackBackoff: time.Duration(c.Agones.CounterRollbackBackoffMs) * time.Millisecond,
-			RequestTimeout:         time.Duration(c.Agones.RequestTimeoutMs) * time.Millisecond,
+			HighDensity:     c.Agones.HighDensityEnabled,
+			ConflictRetries: c.Agones.CounterRollbackRetries,
+			ConflictBackoff: time.Duration(c.Agones.CounterRollbackBackoffMs) * time.Millisecond,
+			RequestTimeout:  time.Duration(c.Agones.RequestTimeoutMs) * time.Millisecond,
 		})
 		if err != nil {
 			panic(fmt.Sprintf("Agones.Enabled=true but allocator init failed: %v", err))

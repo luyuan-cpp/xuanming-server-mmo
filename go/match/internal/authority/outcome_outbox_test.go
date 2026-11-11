@@ -192,7 +192,7 @@ func TestUnrecoverableFormationIsReportedButStaysUnknown(t *testing.T) {
 	ctx := context.Background()
 	s := &Store{}
 	require.True(t, recoverableOutcomeShape(formation()), "形状只看成局字段,不看 Create 正文")
-	decision, err := s.recoverExpiredOutcome(ctx, formation())
+	decision, err := s.recoverExpiredOutcome(ctx, formation(), DeadlineEvidenceNoRoom)
 	require.ErrorIs(t, err, ErrUnrecoverableFormation)
 	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, decision)
 
@@ -211,7 +211,7 @@ func TestUnrecoverableFormationIsReportedButStaysUnknown(t *testing.T) {
 		f := formation()
 		edit(f)
 		require.False(t, recoverableOutcomeShape(f), name)
-		decision, err := s.recoverExpiredOutcome(ctx, f)
+		decision, err := s.recoverExpiredOutcome(ctx, f, DeadlineEvidenceNoRoom)
 		require.NoError(t, err, name)
 		require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, decision, name)
 	}

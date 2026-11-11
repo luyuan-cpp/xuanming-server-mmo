@@ -23,7 +23,9 @@ func TestOwnerDependsOnlyOnMemberSet(t *testing.T) {
 // 固定的相邻副本名和短数字后缀也应分散到各副本，不能让一份前缀分数支配整组分片。
 func TestOwnerSpreadsShortShardKeysAcrossMembers(t *testing.T) {
 	members := []string{"uuid-00", "uuid-01", "uuid-02", "uuid-03", "uuid-new"}
-	for _, prefix := range []string{"", "3:", "formation:", "team-launch:", "team-idle:", "ready-ticket:", "rank-source:3:", "trade-commerce:", "trade-receipt-ack:"} {
+	for _, prefix := range []string{"", "3:", "formation:", "team-launch:", "team-idle:", "ready-ticket:", "rank-source:3:", "trade-commerce:", "trade-receipt-ack:",
+		// 缺口清单第 25 条:资产指令重投与终局发件箱的类别键。
+		"trade-assetop:", "guild-assetop:", "outcome-result:", "outcome-settlement:"} {
 		t.Run(prefix, func(t *testing.T) {
 			counts := make(map[string]int, len(members))
 			for shard := 0; shard < Shards; shard++ {

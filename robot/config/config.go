@@ -83,6 +83,9 @@ type Config struct {
 	// TeamBackfillSmoke 是 "team-backfill-smoke" 模式的子开关(见 TeamBackfillSmokeConfig / team_backfill_smoke_scenario.go)。
 	TeamBackfillSmoke TeamBackfillSmokeConfig `yaml:"team_backfill_smoke"`
 
+	// PvpTeamSmoke 是 "pvp-team-smoke" 模式的子开关(见 PvpTeamSmokeConfig / pvp_team_smoke_scenario.go)。
+	PvpTeamSmoke PvpTeamSmokeConfig `yaml:"pvp_team_smoke"`
+
 	// TravelSmoke 是 "travel-smoke" 模式的子开关(见 TravelSmokeConfig / travel_smoke_scenario.go)。
 	TravelSmoke TravelSmokeConfig `yaml:"travel_smoke"`
 
@@ -595,6 +598,83 @@ func (c *TeamBackfillSmokeConfig) validate() error {
 	return nil
 }
 
+// PvpTeamSmokeConfig 配置 "pvp-team-smoke" 模式(docs/design/global-match-hierarchical-pools.md 开头「人数档真人 PVP
+// 与计分组排」与 §12.5 第 4 步):全部账号登同一个 zone,按人数档分组并发跑组排的全部情况。
+//
+// 规则参数必须与被测 match 的配置相同:场景用它们算「这段时间内不该成局」的窗口和评分夹具。0 = 用 match 的缺省值。
+type PvpTeamSmokeConfig struct {
+	// Zone 必须非 0:全部账号要在同一个 zone(同 zone 立即可成;0 会被 server-list 自动选区顶掉)。
+	Zone uint32 `yaml:"zone"`
+	// BattleConfigId 是开放了 PVP_TEAM 的模板(PlayMode 表第 6 行是 1),必须非 0。
+	BattleConfigId uint32 `yaml:"battle_config_id"`
+	// Phase:prepare = 登录要写评分的账号、写评分夹具文件后退出;run = 读夹具核对后跑全部情况。
+	Phase string `yaml:"phase"`
+	// FixturePath 是评分夹具文件:prepare 写、run 读;go/match/cmd/ratingfixture 按它写 match_rating。
+	FixturePath string `yaml:"fixture_path"`
+	// Cases 只跑列出的情况(排障用),空 = 全部。名字见 pvp_team_smoke_scenario.go 的 pvpSmokeCases。
+	Cases []string `yaml:"cases"`
+
+	PremadeGapStepSeconds      uint32 `yaml:"premade_gap_step_seconds"`      // = GlobalMatch.PremadeGapStepSeconds,缺省 10
+	PartyRatingGapMax          uint32 `yaml:"party_rating_gap_max"`          // = GlobalMatch.PartyRatingGapMax,缺省 500
+	RatingToleranceBase        uint32 `yaml:"rating_tolerance_base"`         // = RatingToleranceBase,缺省 100
+	RatingToleranceStepSeconds uint32 `yaml:"rating_tolerance_step_seconds"` // = RatingToleranceStepSeconds,缺省 5
+	RatingToleranceStepDelta   uint32 `yaml:"rating_tolerance_step_delta"`   // = RatingToleranceStepDelta,缺省 100
+}
+
+// PvpTeamSmokePhasePrepare 与 PvpTeamSmokePhaseRun 是 Phase 的两个取值。
+const (
+	PvpTeamSmokePhasePrepare = "prepare"
+	PvpTeamSmokePhaseRun     = "run"
+)
+
+// GapStepSeconds 返回车队差的放宽步长(秒)。
+func (c *PvpTeamSmokeConfig) GapStepSeconds() uint32 {
+	return orDefaultUint32(c.PremadeGapStepSeconds, 10)
+}
+
+// RatingGapMax 返回组队成员评分差上限(评分点)。
+func (c *PvpTeamSmokeConfig) RatingGapMax() uint32 {
+	return orDefaultUint32(c.PartyRatingGapMax, 500)
+}
+
+// ToleranceBase 返回容差曲线的起始容差(评分点)。
+func (c *PvpTeamSmokeConfig) ToleranceBase() uint32 {
+	return orDefaultUint32(c.RatingToleranceBase, 100)
+}
+
+// ToleranceStepSeconds 返回容差曲线每放宽一档要等的秒数。
+func (c *PvpTeamSmokeConfig) ToleranceStepSeconds() uint32 {
+	return orDefaultUint32(c.RatingToleranceStepSeconds, 5)
+}
+
+// ToleranceStepDelta 返回容差曲线每档放宽的评分点。
+func (c *PvpTeamSmokeConfig) ToleranceStepDelta() uint32 {
+	return orDefaultUint32(c.RatingToleranceStepDelta, 100)
+}
+
+func orDefaultUint32(value, fallback uint32) uint32 {
+	if value == 0 {
+		return fallback
+	}
+	return value
+}
+
+func (c *PvpTeamSmokeConfig) validate() error {
+	if c.Zone == 0 {
+		return fmt.Errorf("zone must be set (non-zero)")
+	}
+	if c.BattleConfigId == 0 {
+		return fmt.Errorf("battle_config_id must be set (non-zero)")
+	}
+	if c.Phase != PvpTeamSmokePhasePrepare && c.Phase != PvpTeamSmokePhaseRun {
+		return fmt.Errorf("phase must be %q or %q, got %q", PvpTeamSmokePhasePrepare, PvpTeamSmokePhaseRun, c.Phase)
+	}
+	if strings.TrimSpace(c.FixturePath) == "" {
+		return fmt.Errorf("fixture_path must be set")
+	}
+	return nil
+}
+
 // teamSmokeMinFollowSceneConfigs 是换图候选的最少个数(见 FollowSceneConfigIds 注释)。
 const teamSmokeMinFollowSceneConfigs = 3
 
@@ -987,10 +1067,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "equip-smoke", "equip-forge-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "team-follow-smoke", "team-backfill-smoke", "travel-smoke", "friend-smoke", "mail-smoke", "rank-smoke", "channel-smoke", "ordering-smoke", "sync-smoke", "features-smoke", "merchant-smoke", "mall-arrival-smoke", "heartbeat-idle-smoke", "equip-forge-topup", "asset-arrival-prepare":
+	case "", "stress", "login-test", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "equip-smoke", "equip-forge-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "team-follow-smoke", "team-backfill-smoke", "pvp-team-smoke", "travel-smoke", "friend-smoke", "mail-smoke", "rank-smoke", "channel-smoke", "ordering-smoke", "sync-smoke", "features-smoke", "merchant-smoke", "mall-arrival-smoke", "heartbeat-idle-smoke", "equip-forge-topup", "asset-arrival-prepare":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, equip-smoke, equip-forge-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, team-follow-smoke, team-backfill-smoke, travel-smoke, friend-smoke, mail-smoke, rank-smoke, channel-smoke, ordering-smoke, sync-smoke, features-smoke, merchant-smoke, mall-arrival-smoke, heartbeat-idle-smoke, equip-forge-topup, or asset-arrival-prepare)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, equip-smoke, equip-forge-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, team-follow-smoke, team-backfill-smoke, pvp-team-smoke, travel-smoke, friend-smoke, mail-smoke, rank-smoke, channel-smoke, ordering-smoke, sync-smoke, features-smoke, merchant-smoke, mall-arrival-smoke, heartbeat-idle-smoke, equip-forge-topup, or asset-arrival-prepare)", c.Mode)
 	}
 	if c.Mode == "asset-arrival-prepare" {
 		return c.ValidateAssetArrivalPrepare()
@@ -1042,6 +1122,11 @@ func (c *Config) validate() error {
 	if c.Mode == "team-backfill-smoke" {
 		if err := c.TeamBackfillSmoke.validate(); err != nil {
 			return fmt.Errorf("team_backfill_smoke: %w", err)
+		}
+	}
+	if c.Mode == "pvp-team-smoke" {
+		if err := c.PvpTeamSmoke.validate(); err != nil {
+			return fmt.Errorf("pvp_team_smoke: %w", err)
 		}
 	}
 	if c.Mode == "team-smoke" {

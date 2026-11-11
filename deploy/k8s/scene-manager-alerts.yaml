@@ -212,8 +212,9 @@ spec:
               节点确实死了:不用处置,看 scene_manager_dead_node_reconcile_pending 回落。节点其实还活着:立刻修 etcd。
               节点失租后会按原 node_id 重新注册;在再入屏障放行、收尾动手之前回来的,收尾任务认得出是同一代进程、会撤掉
               (scene_manager_dead_node_reconcile_total{outcome="instance_back"})。失联比屏障更久的节点,名下实例此前
-              已被拆掉、世界频道已被改派;它重新注册后约 20 秒内自己把这些本地实体排空销毁(scene 节点的
-              scene_ownership_releases_total 增长,docs/design/scene-node-ownership-reconcile.md),不用逐个核对。
+              已被拆掉、世界频道已被改派;它不等重新注册,屏障放行后约 20 秒内就自己把这些本地实体按住户预算排空销毁(scene 节点的
+              scene_ownership_releases_total 增长,告警见 scene-ownership-alerts.yaml,docs/design/scene-node-ownership-reconcile.md),
+              不用逐个核对。
             runbook_url: docs/ops/scene-node-role-split.md
 
         - alert: SceneManagerLoadRefreshFailing

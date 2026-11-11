@@ -86,7 +86,7 @@ bool OnRouterReply(const SessionDetails &echoed, const ::google::protobuf::Messa
 // 失败桥:sent 是本次发出时的 SessionDetails。语义同 OnRouterReply;认领成功时回带请求 id 的 1003
 // (结果未知:下游可能已经执行,有副作用的请求靠业务侧栅栏与幂等兜底)。
 // 路由服节点摘除也走这里:node.cpp 先 remove<MuduoGrpcChannelPtr>(~Channel 把在途调用以 UNAVAILABLE 排进下一轮),
-// 再触发 OnNodeRemoveEvent、DestroyEntity;下一轮失败回调到达时被摘实体已销毁,放行下一条时 PickRandomNode
+// 再触发 OnNodeRemoveEvent、DestroyEntity;下一轮失败回调到达时被摘实体已销毁,放行下一条时 PickRouter
 // 要求实体挂着通道,不会再选中它。
 bool OnRouterCallFailed(const SessionDetails &sent);
 

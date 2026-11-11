@@ -15,7 +15,9 @@ import (
 const globalOutcomeRecoverInterval = time.Second
 
 // globalOutcomeRecoverBudget 是一拍到期终局恢复(车道页,每圈第一拍再加一页全量页,各至多 8 局)的时间预算。
-const globalOutcomeRecoverBudget = 3 * time.Second
+// 2026-11-06 起每页先在锁外并行向各局原 battle 实例取证(authority.DeadlineProbeTimeout,原实例连不上时要等满),
+// 两页各多一个取证期限;循环是串行的(ticker 丢掉跑不完的拍),预算变长只让下一拍晚到,不会叠出并发轮次。
+const globalOutcomeRecoverBudget = 3*time.Second + 2*authority.DeadlineProbeTimeout
 
 // expiredOutcomeRecoverer 是到期终局恢复循环要的能力(生产实现 *authority.Store),收窄成接口便于替身测试。
 type expiredOutcomeRecoverer interface {

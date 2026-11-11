@@ -358,7 +358,7 @@ SCAN 遍历的是整个共享库,开服规模(数十亿键,推算未实测)下�
 | `SceneManagerSceneOrphanReconcileSpike` | warning | 单 zone 孤儿场景对账 `scene_manager_scene_orphans_reconciled_total` 超过 50 个/分钟、持续 5 分钟 —— 多半是某个 scene 节点 Pod 挂了(CrashLoopBackOff / OOMKilled);反复出现说明节点在抖。那些实例里的玩家已被断开,预期随后有一波重连 |
 | `SceneManagerLoadRefreshStalled` | warning | (2026-10-16 新增,阈值待压测基线)`sum(increase(scene_manager_load_refresh_total[2m])) == 0 or absent(...)` 持续 5 分钟 —— 没有领导者在刷新负载分(选主失败 / 全部副本 `LeaderEligible=false` / 领导者卡在 fullSync 重试循环)。查 `sum(scene_manager_is_leader)` 与领导者的 `[LoadReporter] full sync failed` 日志。滚动升级期间领导者若还是旧版本会误报,升级窗口内加 silence |
 | `SceneManagerNodeViewHeld` | critical | (2026-11-05 落码,代码与规则未编译、未实测)`max(scene_manager_node_view_holding) > 0` 持续 2 分钟。背景(决策清单 B1-1):fullSync 拿到的 etcd 快照为空,或某个 zone 已知节点(旧镜像 ∪ 领导者读到的负载集)不少于 4 个且缺席过半时,整轮作废、每 3s 重试,不换镜像、不清扫、不补频道;缺席数稳定 60s 才放行,变了从头计时,空快照永远不放行(`go/scene_manager/internal/logic/node_view_gate.go`)。压住期间 watch 与每拍刷新都停,压满 5 分钟 `SceneManagerLoadRefreshStalled` 也会亮,先按本条处置。查日志 `[LoadReporter] full sync failed: scene node view held by the liveness gate`(带 zone、held_empty / held_drop、已知数与缺席数);`etcdctl get SceneNodeService.rpc/ --prefix --keys-only` 的注册数与在跑的 scene Pod 数对照:注册少很多 = etcd 回档 / 重建 / 连错,修 etcd;一致 = 真的死了一大半节点,等它自动放行 |
-| `SceneManagerNodeViewReleased` | critical | (同上)15 分钟内 `scene_manager_node_view_released_total` 有增加,不设 for。闸门放行了一次骤降,缺席的节点从这一轮起按消失处理:写 death_at、摘负载集、屏障之后拆它们名下的实例、改派世界频道。节点确实死了不用处置;节点其实还活着(etcd 视图错了)要立刻修 etcd。在再入屏障放行、收尾动手之前按原 node_id 重新注册的同一代进程,收尾任务会撤掉(`scene_manager_dead_node_reconcile_total{outcome="instance_back"}`);失联比屏障更久的节点,名下实例此前已被拆掉、世界频道已被改派,它重新注册后约 20 秒内自己把这些本地实体排空销毁(scene 节点的 `scene_ownership_releases_total` 增长,[scene-node-ownership-reconcile.md](../design/scene-node-ownership-reconcile.md)),不用逐个核对 |
+| `SceneManagerNodeViewReleased` | critical | (同上)15 分钟内 `scene_manager_node_view_released_total` 有增加,不设 for。闸门放行了一次骤降,缺席的节点从这一轮起按消失处理:写 death_at、摘负载集、屏障之后拆它们名下的实例、改派世界频道。节点确实死了不用处置;节点其实还活着(etcd 视图错了)要立刻修 etcd。在再入屏障放行、收尾动手之前按原 node_id 重新注册的同一代进程,收尾任务会撤掉(`scene_manager_dead_node_reconcile_total{outcome="instance_back"}`);失联比屏障更久的节点,名下实例此前已被拆掉、世界频道已被改派(号还可能被新进程接走),它不等重新注册,屏障放行后约 20 秒内就自己把这些本地实体按住户预算排空销毁(scene 节点的 `scene_ownership_releases_total` 增长,下面「场景归属对账告警」,[scene-node-ownership-reconcile.md](../design/scene-node-ownership-reconcile.md)),不用逐个核对 |
 | `SceneManagerLoadRefreshFailing` | warning | (同上)10 分钟内 `outcome` 为 `read_failed` / `write_failed` 的刷新有增加,持续 10 分钟。`read_failed` 只记传输层失败(熔断拒绝 / 取连接 / 网络 / 超时),只按错误类型判、与批怎么切无关。查 Redis 与领导者 `[LoadRefresh]` 日志;个别键的回复错误或坏值(WRONGTYPE / 空串 / 非数字)不论批多大都只记 `partial`,不在本规则里,由下面的 `SceneManagerLoadRefreshNodeErrors` 盯 |
 | `SceneManagerLoadRefreshSlow` | warning | (同上)一拍刷新 p99 > 2s(拍长 5s)持续 15 分钟 —— Redis 慢,或全服节点数增长到单领导者扛不住(A1:按 zone 选主) |
 | `SceneManagerLoadRefreshNodeErrors` | warning | (同上)`sum(increase(scene_manager_load_refresh_node_errors_total[10m])) > 0` 持续 30 分钟 —— 有节点的计数持续读不到。这些节点保留旧分或一直挂着哨兵分(选点排最后,等于少了一份容量),每节点序列停在旧值(见 §4.2)。领导者日志 `[LoadRefresh] ... node counter reads failed` 的 `first` 给出 zone / node,用 `redis-cli TYPE` / `GET` 查 `node:zone:{z}:{node}:scene_count` 与 `player_count` |
@@ -372,6 +372,25 @@ kubectl apply -n observability -f deploy/k8s/scene-manager-alerts.yaml
 Thresholds are starting points — tune `SceneManagerWorldNodeSaturated`
 against your actual per-pod player cap and the `RebalanceFailureRate`
 ratio against your observed steady-state failure rate.
+
+### 7.1 场景归属对账告警(scene 节点侧,2026-11-10)
+
+`deploy/k8s/scene-ownership-alerts.yaml`(PrometheusRule,与 `owner-epoch-alerts.yaml` 同法安装;规则与代码未编译、未实测)读 scene 节点自己的
+`scene_ownership_*` 指标(scene 的 Prometheus 出口,`-CppMetricsPort` 缺省 9400)。scene 节点每 10 秒读本地场景的 `scene:{id}:node` 与本节点号的
+持有者 `node:zone:{z}:{n}:holder`,不归本进程的场景按每轮 200 名住户的预算排空销毁,不看 etcd 身份
+([scene-node-ownership-reconcile.md](../design/scene-node-ownership-reconcile.md))。`instance` = 被抓取的 scene Pod。
+
+| Alert | Severity | Trigger 与处置 |
+|-------|----------|---------|
+| `SceneOwnershipUnownedScenesReleased` | warning | 某个 scene Pod 15 分钟内开始排空过场景。看它的 `[SceneOwnership] ... is no longer owned by this process` 日志里的 observed:`other_node` / `no_mapping` 多半是它与 etcd 失联后被判死(对照 `SceneManagerNodeViewReleased`、death_at 与 dead_node_reconcile 指标);一两个且不反复出现多是个别 DestroyScene 丢失,不用处置 |
+| `SceneOwnershipMassRelease` | critical | 一个 namespace 10 分钟内开始排空的场景超过它场景总数的一半(至少 10 个)。不像个别节点被判死,先查本 zone 的控制域 Redis(`redis-ctl-g<N>`):DBSIZE 是否骤降、有没有主从切换或被清空,scene_manager 是否刚以空数据重建世界频道;再查是不是整 zone 的节点同时被判死。排空本身按预算分批进行,不用手工干预 |
+| `SceneOwnershipNodeIdTakenOver` | critical | 某个 scene Pod 读到自己的节点号已被更新的登记(别的进程)接走,正在把本地场景全部排空。查这个 Pod 到 etcd 的网络;`scene_ownership_releasing_scenes` 回到 0 之后重启它。它重连 etcd 时也会因分配键冲突自行疏散退出 |
+| `SceneOwnershipReleaseBacklog` | warning | 某个 Pod 排空中与等预算的场景数持续 15 分钟大于 0。`release_deferred_scenes` 高 = 住户预算不够(按压测余量调大 `kMaxRelocationsPerSweep`);`releasing_scenes` 高 = 住户改派不收敛,看 `[RelocateConfirm]` / `[SceneDrain]` 日志与 scene_manager 是否可达 |
+| `SceneOwnershipReconcileBlind` | warning | 某个 Pod 10 分钟里过半轮次读不到控制域,持续 5 分钟。查它到 `scene_control_redis` 的连接(`metric=zone_redis_liveness_timeout`、AUTH 失败、DNS);控制域 Redis 本身的告警在 `redis-alerts.yaml` |
+
+```
+kubectl apply -n observability -f deploy/k8s/scene-ownership-alerts.yaml
+```
 
 ## 8. Verifying the pipeline in CI
 

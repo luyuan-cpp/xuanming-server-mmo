@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 #include <hiredis/hiredis.h>
@@ -11,6 +12,8 @@
 #include "muduo/base/Logging.h"
 
 #include "engine/core/metrics/metrics_registry.h"
+#include "engine/core/type_define/player_guid_comp.h"
+#include "modules/scene/comp/scene_comp.h"
 #include "network/node_utils.h"
 #include "proto/common/base/node.pb.h"
 #include "proto/scene/scene_info.pb.h"
@@ -45,6 +48,36 @@ struct Release
 std::string SelfNodeId()
 {
 	return std::to_string(GetNodeInfo().node_id());
+}
+
+// 每个本地场景实体上绑定的玩家数,与 BeginSceneDrain 改派的范围同一个口径(SceneEntityComp + PlayerGuidComp)。
+std::unordered_map<SceneEntity, std::size_t> CountResidents()
+{
+	std::unordered_map<SceneEntity, std::size_t> counts;
+	for (const auto entity : tlsEcs.actorRegistry.view<SceneEntityComp, PlayerGuidComp>())
+	{
+		++counts[tlsEcs.actorRegistry.get<SceneEntityComp>(entity).sceneEntity];
+	}
+	return counts;
+}
+
+OwnerReading ReadingOf(const redisReply *element)
+{
+	OwnerReading reading;
+	if (element == nullptr)
+	{
+		return reading;
+	}
+	if (element->type == REDIS_REPLY_NIL)
+	{
+		reading.kind = OwnerReading::Kind::kMissing;
+	}
+	else if (element->type == REDIS_REPLY_STRING)
+	{
+		reading.kind = OwnerReading::Kind::kValue;
+		reading.value.assign(element->str, element->len);
+	}
+	return reading;
 }
 } // namespace
 
@@ -86,40 +119,30 @@ void RestartCheck(SceneEntity scene)
 	}
 }
 
-std::vector<OwnerReading> ReadingsOf(const redisReply *reply, std::size_t sceneCount)
+BatchReadings ReadBatch(const redisReply *reply, std::size_t sceneCount)
 {
-	std::vector<OwnerReading> readings(sceneCount); // 缺省 kUnreadable
-	if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY || reply->elements != sceneCount)
+	BatchReadings readings;
+	readings.owners.resize(sceneCount); // 缺省 kUnreadable
+	if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY || reply->elements != sceneCount + 1)
 	{
 		return readings;
 	}
+	readings.holder = ReadingOf(reply->element[0]);
 	for (std::size_t i = 0; i < sceneCount; ++i)
 	{
-		const redisReply *element = reply->element[i];
-		if (element == nullptr)
-		{
-			continue;
-		}
-		if (element->type == REDIS_REPLY_NIL)
-		{
-			readings[i].kind = OwnerReading::Kind::kMissing;
-		}
-		else if (element->type == REDIS_REPLY_STRING)
-		{
-			readings[i].kind = OwnerReading::Kind::kValue;
-			readings[i].value.assign(element->str, element->len);
-		}
+		readings.owners[i] = ReadingOf(reply->element[i + 1]);
 	}
 	return readings;
 }
 
-ApplyOutcome ApplyReadings(const std::vector<PendingCheck> &checks, const std::vector<OwnerReading> &readings,
-						   std::string_view selfNodeId, Clock::time_point issuedAt)
+ApplyOutcome ApplyReadings(const std::vector<PendingCheck> &checks, const std::vector<OwnerReading> &owners,
+						   std::string_view selfNodeId, SlotHolder slotHolder, Clock::time_point issuedAt,
+						   ReleaseBudget &budget)
 {
 	ApplyOutcome outcome;
-	if (readings.size() != checks.size())
+	if (owners.size() != checks.size())
 	{
-		LOG_ERROR << "[SceneOwnership] " << readings.size() << " owner reading(s) for " << checks.size()
+		LOG_ERROR << "[SceneOwnership] " << owners.size() << " owner reading(s) for " << checks.size()
 				  << " scene(s); batch discarded";
 		CountObservation(Observation::kUnknown, checks.size());
 		return outcome;
@@ -144,24 +167,30 @@ ApplyOutcome ApplyReadings(const std::vector<PendingCheck> &checks, const std::v
 			continue;
 		}
 
-		const Observation observation = Classify(readings[i], selfNodeId);
+		// 本节点号已被别的进程接走时,映射里的号指的是那个进程,一律不归本进程。
+		const Observation observation =
+			slotHolder == SlotHolder::kAnotherProcess ? Observation::kSuperseded : Classify(owners[i], selfNodeId);
 		CountObservation(observation);
 		if (Advance(tracked->state, observation, issuedAt) != Decision::kRelease)
 		{
-			// 排空途中映射又回到本节点(scene_manager 把它迁了回来):不再排空,已改派走的住户由 scene_manager 重新落点。
-			if (observation == Observation::kSelf && tracked->releaseStarted)
+			// 映射又回到本节点(scene_manager 把它迁了回来):不再排空、不再等预算,已改派走的住户由 scene_manager 重新落点。
+			if (observation == Observation::kSelf && (tracked->releaseStarted || tracked->releaseDeferred))
 			{
 				tracked->releaseStarted = false;
+				tracked->releaseDeferred = false;
 				LOG_INFO << "[SceneOwnership] scene " << check.sceneId
 						 << " is mapped to this node again; stopped releasing it";
 			}
 			continue;
 		}
 		releases.push_back(Release{
-			check, observation, readings[i].value, tracked->state.notMineStreak,
+			check, observation, owners[i].value, tracked->state.notMineStreak,
 			std::chrono::duration_cast<std::chrono::seconds>(issuedAt - tracked->state.graceStartedAt).count()});
 	}
 
+	// 第二遍:已在排空的照常重调 DestroyScene(住户早已登记改派,不占预算);还没开始的按住户预算开始(§4.7)。
+	std::unordered_map<SceneEntity, std::size_t> residents;
+	bool residentsCounted = false;
 	for (const Release &release : releases)
 	{
 		// 前一个实体的排空可能同步改了别的实体,逐个重新核对。
@@ -175,17 +204,31 @@ ApplyOutcome ApplyReadings(const std::vector<PendingCheck> &checks, const std::v
 			continue;
 		}
 		const bool firstRelease = !tracked->releaseStarted;
-		tracked->releaseStarted = true;
 		if (firstRelease)
 		{
+			if (!residentsCounted)
+			{
+				residents = CountResidents();
+				residentsCounted = true;
+			}
+			const auto found = residents.find(release.check.scene);
+			const std::size_t residentCount = found != residents.end() ? found->second : 0;
+			if (!budget.TryStart(residentCount))
+			{
+				tracked->releaseDeferred = true;
+				++outcome.deferred;
+				continue;
+			}
+			tracked->releaseDeferred = false;
+			tracked->releaseStarted = true;
 			++outcome.releaseStarted;
 			++tlsStats.releaseStarted;
 			// muduo 的 LogStream 不接受 string_view,转成 string。
 			LOG_WARN << "[SceneOwnership] scene " << release.check.sceneId
-					 << " is no longer mapped to this node: observed=" << std::string(ObservationName(release.observation))
+					 << " is no longer owned by this process: observed=" << std::string(ObservationName(release.observation))
 					 << " owner=\"" << release.owner << "\" self_node=" << std::string(selfNodeId)
 					 << " streak=" << static_cast<unsigned>(release.streak)
-					 << " tracked_seconds=" << release.trackedSeconds
+					 << " tracked_seconds=" << release.trackedSeconds << " residents=" << residentCount
 					 << "; relocating its residents and destroying the local entity";
 		}
 		// 与 scene_manager 发来的 DestroyScene 同一条路径:先排空住户(存盘后改派回大世界),没有绑定了才销毁。
@@ -195,13 +238,19 @@ ApplyOutcome ApplyReadings(const std::vector<PendingCheck> &checks, const std::v
 		{
 			++outcome.destroyed;
 			++tlsStats.destroyed;
-			LOG_INFO << "[SceneOwnership] destroyed unmapped scene " << release.check.sceneId;
+			LOG_INFO << "[SceneOwnership] destroyed unowned scene " << release.check.sceneId;
 		}
 		else if (firstRelease)
 		{
 			LOG_WARN << "[SceneOwnership] scene " << release.check.sceneId << " kept until its " << remainingBindings
-					 << " scene binding(s) leave; retried every sweep while it stays unmapped";
+					 << " scene binding(s) leave; retried every sweep while it stays unowned";
 		}
+	}
+	if (outcome.deferred > 0)
+	{
+		LOG_INFO << "[SceneOwnership] " << outcome.deferred
+				 << " unowned scene(s) wait for the relocation budget; " << budget.remainingResidents
+				 << " relocation(s) left this sweep";
 	}
 	return outcome;
 }
@@ -230,32 +279,54 @@ void CollectSceneOwnership(prometheus_text::Writer &writer)
 		writer.Sample({{"outcome", scene_ownership::kSweepOutcomeNames[i]}}, stats.sweeps[i]);
 	}
 	writer.BeginFamily("scene_ownership_observations_total",
-					   "Owner readings of local scenes (scene:{id}:node in the zone control Redis), by result.",
+					   "Ownership readings of local scenes (scene:{id}:node and this node id's holder record in the zone "
+					   "control Redis), by result.",
 					   prometheus_text::MetricType::kCounter);
 	for (std::size_t i = 0; i < stats.observations.size(); ++i)
 	{
 		writer.Sample({{"result", scene_ownership::kObservationNames[i]}}, stats.observations[i]);
 	}
 	writer.BeginFamily("scene_ownership_releases_total",
-					   "Local scenes found no longer mapped to this node: drain started, and entities destroyed. "
-					   "Any increase means this node kept scenes the control plane had moved or torn down.",
+					   "Local scenes found no longer owned by this process: drain started, and entities destroyed. "
+					   "Any increase means this node kept scenes the control plane had moved, torn down, or handed to "
+					   "the process that took over this node id.",
 					   prometheus_text::MetricType::kCounter);
 	writer.Sample({{"stage", "drain_started"}}, stats.releaseStarted);
 	writer.Sample({{"stage", "destroyed"}}, stats.destroyed);
 
+	std::uint64_t tracked = 0;
 	std::uint64_t releasing = 0;
+	std::uint64_t deferred = 0;
 	for (const auto &[scene, check] : tlsEcs.sceneRegistry.view<SceneOwnershipCheckComp>().each())
 	{
 		(void)scene;
+		++tracked;
 		if (check.releaseStarted)
 		{
 			++releasing;
 		}
+		if (check.releaseDeferred)
+		{
+			++deferred;
+		}
 	}
+	writer.BeginFamily("scene_ownership_tracked_scenes",
+					   "Local scenes currently tracked by the ownership reconcile.",
+					   prometheus_text::MetricType::kGauge);
+	writer.Sample({}, tracked);
 	writer.BeginFamily("scene_ownership_releasing_scenes",
-					   "Local scenes already found unmapped and still waiting for their residents to leave.",
+					   "Local scenes already being released and still waiting for their residents to leave.",
 					   prometheus_text::MetricType::kGauge);
 	writer.Sample({}, releasing);
+	writer.BeginFamily("scene_ownership_release_deferred_scenes",
+					   "Local scenes found unowned but not released yet because this sweep's relocation budget ran out.",
+					   prometheus_text::MetricType::kGauge);
+	writer.Sample({}, deferred);
+	writer.BeginFamily("scene_ownership_superseded",
+					   "1 when the latest holder record shows this node id taken over by a newer registration of "
+					   "another process.",
+					   prometheus_text::MetricType::kGauge);
+	writer.Sample({}, stats.superseded ? 1 : 0);
 }
 } // namespace
 
@@ -274,6 +345,8 @@ struct SceneOwnershipReconciler::Session
 	// 已发出、应答还没回来的 MGET 条数。大于 0 时下一轮不发:Redis 卡住时不叠加读,
 	// 断线时 hiredis 对在途命令逐个回空应答,这里会归零。
 	std::size_t readsInFlight{0};
+	// 跨轮记着本进程自己那次登记的修订号,用来判断持有者记录是不是更新的别人(§4.6)。
+	scene_ownership::HolderTracker holder;
 
 	bool IdentityConfirmed() const { return identityConfirmed && identityConfirmed(); }
 };
@@ -299,12 +372,13 @@ void SceneOwnershipReconciler::Start(IdentityProbe identityConfirmed)
 	if (!armed)
 	{
 		LOG_ERROR << "[SceneOwnership] reconcile timer was not armed (no EventLoop on this thread?); "
-				  << "scenes moved away while this node was out of etcd will not be released";
+				  << "scenes the control plane moved away from this node will not be released";
 		return;
 	}
 	LOG_INFO << "[SceneOwnership] reconcile started: interval=" << scene_ownership::kSweepInterval.count()
 			 << "s confirmations=" << static_cast<unsigned>(scene_ownership::kNotMineConfirmations)
-			 << " grace=" << scene_ownership::kCreateGrace.count() << "s";
+			 << " grace=" << scene_ownership::kCreateGrace.count()
+			 << "s relocations_per_sweep=" << scene_ownership::kMaxRelocationsPerSweep;
 }
 
 void SceneOwnershipReconciler::Stop()
@@ -317,22 +391,25 @@ void SceneOwnershipReconciler::Stop()
 	}
 }
 
-scene_ownership::SweepOutcome SceneOwnershipReconciler::SweepOnce()
+std::optional<scene_ownership::SweepOutcome> SceneOwnershipReconciler::SweepOnce()
 {
 	if (!session_)
 	{
-		return scene_ownership::SweepOutcome::kIdentityUnconfirmed;
+		return std::nullopt;
 	}
 	return Sweep(session_);
 }
 
 bool SceneOwnershipReconciler::SendOwnerRead(hiredis::Hiredis &redis, const std::shared_ptr<Session> &session,
 											 std::vector<scene_ownership::PendingCheck> batch,
-											 const std::string &selfNodeId, scene_ownership::Clock::time_point issuedAt)
+											 const std::string &holderKey, const std::string &selfNodeId,
+											 const std::string &selfUuid, scene_ownership::Clock::time_point issuedAt,
+											 const std::shared_ptr<scene_ownership::ReleaseBudget> &budget)
 {
-	// MGET scene:{id}:node ...:键名按长度传参,不经格式串。
+	// MGET <本节点号持有者> scene:{id}:node ...:键名按长度传参,不经格式串。
 	std::vector<std::string> keys;
-	keys.reserve(batch.size());
+	keys.reserve(batch.size() + 1);
+	keys.push_back(holderKey);
 	for (const auto &check : batch)
 	{
 		keys.push_back(scene_ownership::SceneNodeKey(check.sceneId));
@@ -356,11 +433,11 @@ bool SceneOwnershipReconciler::SendOwnerRead(hiredis::Hiredis &redis, const std:
 	{
 		return false;
 	}
-	// 回调只按值捕获:Session 的 weak_ptr、这一批的实体句柄与核对状态号、发读时的节点号与时刻(AGENTS.md §11.7)。
-	// MGET 不改数据:任何结局(含断线时的空应答)都不在维护前沿留下 UNKNOWN。
+	// 回调只按值捕获:Session 的 weak_ptr、这一批的实体句柄与核对状态号、发读时的节点号 / uuid / 时刻、本轮预算
+	// (AGENTS.md §11.7)。MGET 不改数据:任何结局(含断线时的空应答)都不在维护前沿留下 UNKNOWN。
 	const int ret = redis.formattedCommand(
-		[weak = std::weak_ptr<Session>(session), batch = std::move(batch), selfNodeId,
-		 issuedAt](hiredis::Hiredis *, redisReply *reply)
+		[weak = std::weak_ptr<Session>(session), batch = std::move(batch), selfNodeId, selfUuid, issuedAt,
+		 budget](hiredis::Hiredis *, redisReply *reply)
 		{
 			const auto live = weak.lock();
 			if (!live)
@@ -371,13 +448,36 @@ bool SceneOwnershipReconciler::SendOwnerRead(hiredis::Hiredis &redis, const std:
 			{
 				--live->readsInFlight;
 			}
-			// 应答回来时身份仍须确认有效、仍是同一个节点号,否则这批读数不当证据。
-			if (!live->IdentityConfirmed() || scene_ownership::SelfNodeId() != selfNodeId)
+			// 应答回来时仍须是发读时的节点号,否则这批读数比的是别的号。
+			if (scene_ownership::SelfNodeId() != selfNodeId)
 			{
 				scene_ownership::CountObservation(scene_ownership::Observation::kUnknown, batch.size());
 				return;
 			}
-			scene_ownership::ApplyReadings(batch, scene_ownership::ReadingsOf(reply, batch.size()), selfNodeId, issuedAt);
+			const auto readings = scene_ownership::ReadBatch(reply, batch.size());
+			const auto slotHolder = live->holder.Observe(readings.holder, selfUuid, live->IdentityConfirmed());
+			// 读不到持有者记录时不改上一次的判定(指标与日志只跟着有信息的读数走)。
+			if (readings.holder.kind != scene_ownership::OwnerReading::Kind::kUnreadable)
+			{
+				const bool superseded = slotHolder == scene_ownership::SlotHolder::kAnotherProcess;
+				if (superseded != scene_ownership::tlsStats.superseded)
+				{
+					if (superseded)
+					{
+						LOG_ERROR << "[SceneOwnership] node id " << selfNodeId << " is held by a newer registration of another "
+								  << "process (holder=\"" << readings.holder.value << "\", this process uuid=" << selfUuid
+								  << " registration revision=" << live->holder.ownRevision
+								  << "); releasing every local scene";
+					}
+					else
+					{
+						LOG_WARN << "[SceneOwnership] node id " << selfNodeId << " is no longer reported as taken over "
+								 << "(holder=\"" << readings.holder.value << "\")";
+					}
+				}
+				scene_ownership::tlsStats.superseded = superseded;
+			}
+			scene_ownership::ApplyReadings(batch, readings.owners, selfNodeId, slotHolder, issuedAt, *budget);
 		},
 		formatted, static_cast<std::size_t>(length), &hiredis::Hiredis::hasNoSideEffect);
 	::redisFreeCommand(formatted);
@@ -393,11 +493,8 @@ scene_ownership::SweepOutcome SceneOwnershipReconciler::Sweep(const std::shared_
 		return outcome;
 	};
 
-	// 身份不确认时不核对:失联期间本节点分不清「etcd 整体故障」与「只有我连不上」,排空要走的改派链路也被身份闸挡着。
-	if (!session->IdentityConfirmed())
-	{
-		return finish(SweepOutcome::kIdentityUnconfirmed);
-	}
+	// 不看本节点的 etcd 身份:「映射不是本节点号」与「本节点号被更新的登记接走」都不依赖 etcd 就成立。etcd 整体故障时
+	// scene_manager 不会判任何节点死亡、映射不变,读到的都是本节点,什么也不做;只有本节点单边失联、被判死之后,映射才会变。
 	auto &redis = tlsSceneControlRedis.GetConnection();
 	if (!redis || !redis->connected())
 	{
@@ -415,6 +512,10 @@ scene_ownership::SweepOutcome SceneOwnershipReconciler::Sweep(const std::shared_
 		return finish(SweepOutcome::kNoScenes);
 	}
 	const std::string selfNodeId = scene_ownership::SelfNodeId();
+	const std::string selfUuid = GetNodeInfo().node_uuid();
+	const std::string holderKey = scene_ownership::NodeHolderKey(GetZoneId(), selfNodeId);
+	// 本轮全部批次共用一份住户预算;应答按发出顺序回来,先回来的批次先用。
+	const auto budget = std::make_shared<scene_ownership::ReleaseBudget>();
 
 	bool anyNotSent = false;
 	for (std::size_t begin = 0; begin < checks.size(); begin += scene_ownership::kMaxScenesPerRead)
@@ -423,7 +524,7 @@ scene_ownership::SweepOutcome SceneOwnershipReconciler::Sweep(const std::shared_
 		std::vector<scene_ownership::PendingCheck> batch(checks.begin() + static_cast<std::ptrdiff_t>(begin),
 														 checks.begin() + static_cast<std::ptrdiff_t>(end));
 		const std::size_t batchSize = batch.size();
-		if (SendOwnerRead(*redis, session, std::move(batch), selfNodeId, issuedAt))
+		if (SendOwnerRead(*redis, session, std::move(batch), holderKey, selfNodeId, selfUuid, issuedAt, budget))
 		{
 			++session->readsInFlight;
 			continue;
@@ -433,7 +534,7 @@ scene_ownership::SweepOutcome SceneOwnershipReconciler::Sweep(const std::shared_
 	}
 	if (anyNotSent)
 	{
-		LOG_WARN << "[SceneOwnership] owner read not accepted by hiredis for some scenes; retrying next sweep";
+		LOG_WARN << "[SceneOwnership] ownership read not accepted by hiredis for some scenes; retrying next sweep";
 		return finish(SweepOutcome::kSendFailed);
 	}
 	return finish(SweepOutcome::kSent);

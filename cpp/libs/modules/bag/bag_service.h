@@ -7,6 +7,7 @@
 #include "engine/core/type_define/type_define.h"
 
 #include "bag_system.h"
+#include "item_hold.h"
 #include "proto/common/rollback/transaction_log.pb.h"
 
 // Orchestration layer for bag operations.
@@ -77,9 +78,68 @@ public:
     // beforeCommit只给同帧外层的另一份零失败后置效果（当前为货币）：失败必须零副作用；不得yield、
     // 抛异常或修改背包。它返回成功之后，只做不抛出的两层swap及流水发布，不再有业务失败分支。
     // 策略只在本同步调用内借用原只读对象；返回时不保留任何连接、实体或策略引用。
+    // 物品数量预留(下面「物品数量预留」一段):「实际持有」= 可计数总量 - 别的预留;consumeFromHoldId 指的那一份预留
+    // 不算在内,也就是说这一笔消耗可以动用它(战斗结算传 battle_id,扣的正是备战时为这一局占住的道具)。0 = 不动用任何预留。
+    // 本函数不释放那份预留:调用方在本函数返回成功之后、同一帧里调 ReleaseHold(结算没有物品时不经过这里,释放点只能在调用方)。
     static uint32_t ConsumeInventoryAndGrant(entt::entity playerEntity,
         const ItemCountMap& consumed, const ItemCountMap& gained, uint64_t correlationId,
-        const std::string& extra, const std::function<uint32_t()>& beforeCommit = {});
+        const std::string& extra, const std::function<uint32_t()>& beforeCommit = {},
+        uint64_t consumeFromHoldId = 0);
+
+    // ── 物品数量预留(docs/design/battle-item-reservation.md)──────────────────────────────────
+    // 一份预留 = 「人物背包里这几种物品各有这么多已被某件事占住」,数据在持久组件 PlayerItemHoldComp,规则在 item_hold.h。
+    // 只约束**这名玩家的人物背包**里可按配置号计数的单位(ItemStore::IsCountableByConfig,与 GetTotalItemCount、
+    // 战斗快照、结算扣消耗同一口径);仓库、装备栏、临时格、动态包不受影响。
+    //
+    // 执行点只有本类:RemoveItem / RemoveItemsClamped / RemoveItemsExact / RemoveItemsByGuid 一律不拿走被预留占住的数量
+    // (前两种按「可出包数量」夹紧或拒绝,后两种整批拒绝、一件不扣);唯一能动用某份预留的是
+    // ConsumeInventoryAndGrant(consumeFromHoldId = 那份预留的号)。整理、取回临时格、入包不改数量,不受影响。
+    // 这**不是**「局中挡一切背包写」的战斗闸(D48 红线照旧:战斗闸只放在玩法入口层):预留只管数量,不看 InBattleComp;
+    // 战斗结算扣的正是它自己那份预留,不会被自己拦住。
+    //
+    // 读缺失的口径(与 GainBlockService 读 PlayerItemGainBlockComp 是同一类例外,docs/design/ecs-component-access-rules.md):
+    // 实体无效、bag 不是这名玩家的人物背包、或玩家身上没有 PlayerItemHoldComp,一律按「没有预留」回答、不补建。
+    // 理由:本类接受没有玩家上下文的容器级调用;缺组件的实体存盘被整份拒绝,资产通道与收件箱只在落盘后终结,
+    // 拿出去的东西成不了盘上事实。写入口 PlaceHold 缺组件即拒绝。
+    //
+    // 线程模型同本类其余入口:只在 scene loop 线程调用。
+
+    // 按数量出包的预检结论。底层类型按枚举项个数选;kCount 恒为最后一项。
+    // 优先级:确定不足 > 版本错位 > 被预留占住 > 够。
+    enum class RemovalVerdict : uint8_t
+    {
+        kEnough,       // 每一项都够,而且不碰任何预留
+        kHeld,         // 不算预留时够,扣掉别的预留就不够:暂时状态,预留释放之后可重试(资产通道回 RETRY)
+        kVersionSkew,  // 同 ItemStore::QuantityVerdict::kVersionSkew:可重试
+        kInsufficient, // 同 ItemStore::QuantityVerdict::kInsufficient:确定不足
+
+        kCount
+    };
+
+    // 这名玩家在 bag 里 configId 被预留占住的数量(除 exceptHoldId 那一份)。bag 不是他的人物背包时恒为 0。只读。
+    [[nodiscard]] static uint64_t HeldCount(entt::entity playerEntity, const Bag &bag, uint32_t configId,
+                                            uint64_t exceptHoldId = 0);
+    // 可出包数量 = bag.GetTotalItemCount(configId) - HeldCount(...),不足为 0。只读。
+    [[nodiscard]] static uint64_t RemovableCount(entt::entity playerEntity, const Bag &bag, uint32_t configId,
+                                                 uint64_t exceptHoldId = 0);
+    // 按数量出包的静默预检(不打日志),出包调用方用它代替 Bag::CheckQuantities。需求为 0 的项视为满足。只读。
+    [[nodiscard]] static RemovalVerdict CheckRemovable(entt::entity playerEntity, const Bag &bag,
+                                                       const ItemCountMap &quantities);
+    // 按实例出包(RemoveItemsByGuid)的预留预检:这批实例里可计数的单位按配置号求和,超过可出包数量即 kHeld,否则 kEnough。
+    // 不在包里、重复、不可叠加之类的问题不在这里判(Bag::ReserveForBatchRemove 判)。只读(bag 非 const 只因按 guid 取实例)。
+    [[nodiscard]] static RemovalVerdict CheckRemovableInstances(entt::entity playerEntity, Bag &bag,
+                                                                const std::vector<Guid> &guids);
+    // 建一份预留:lines 里每一项都不得超过人物背包此刻的可出包数量。不改背包,只改 PlayerItemHoldComp。
+    // 返回:
+    //   * kSuccess
+    //   * kServiceUnavailable   —— 玩家身上缺 PlayerItemHoldComp 或 PlayerBagsComp(加载不变量被破坏,打 ERROR)
+    //   * kBagInsufficientItems —— 至少一项超过可出包数量(调用方算清单时没扣掉别的预留,或期间被拿走了)
+    //   * kInvalidParameter     —— 实体无效、号为 0、种类不合法、清单为空 / 含 0、这个号已有预留、或已有 item_hold::kMaxHolds 份
+    // 任何非 kSuccess 都一字不改。createdAtMs / reviewAfterMs 由调用方给(UTC 毫秒),本类不读时钟。
+    static uint32_t PlaceHold(entt::entity playerEntity, uint64_t holdId, item_hold::ItemHoldKind kind,
+                              const item_hold::HoldLines &lines, uint64_t createdAtMs, uint64_t reviewAfterMs);
+    // 释放一份预留,返回它原先在不在。幂等;实体无效、没有组件、号为 0 都回 false。
+    static bool ReleaseHold(entt::entity playerEntity, uint64_t holdId);
 
     // 两包都放不下而整批被拒时 metric=bag_grant_overflow_rejected 的 WARN 节拍:首次打一条,之后每连续这么多次再打一条,
     // 其余 DEBUG,都不带调用栈(玩家能造出来、能维持很久的状态,不是故障)。连续次数挂在玩家实体上,整批发放成功即归 0。
@@ -131,7 +191,8 @@ public:
 		TransactionType txType = TX_SYSTEM_GRANT);
 
 	// Orchestrated RemoveItem:
-	//   capture item info → Bag::RemoveItem → transaction log
+	//   capture item info → 预留检查 → Bag::RemoveItem → transaction log
+	// 人物背包里的可计数实例:拿走之后这一配置号的总量不得低于被预留占住的数量,否则回 kBagInsufficientItems、一件不动。
 	static uint32_t RemoveItem(
 		entt::entity playerEntity,
 		Bag &bag,
@@ -150,6 +211,8 @@ public:
 	// drainedOut(可为 nullptr)按 config_id 升序、同 config 内槽位号升序
 	// 给出被扣的 (guid, config, 数量),同槽位按实例序打破平局;
 	// 调用方把它的总量与请求量一比,就知道夹紧了多少、要不要告警。
+	//
+	// 人物背包里「实际持有」按可出包数量算(RemovableCount:扣掉被预留占住的数量),预留的那部分不扣。
 	//
 	// 返回:跨 zone 冻结期返回 kInvalidParameter(一件不扣);其余恒 kSuccess。
 	static uint32_t RemoveItemsClamped(
@@ -179,10 +242,11 @@ public:
 	//   * **不判战斗**(D48 红线):局中拦一切背包写的闸只许放在玩法入口层(scene 是
 	//     PlayerEquipSystem 的写入口),不许下沉到这里。
     //   * 被扣光的实例与槽位立即成对释放，其余实例不挪位；调用方不得跨写持有实例指针。
-	//   * 常规的"不够"请调用方先用静默的 Bag::CheckItemsAvailable 预检,并按三个码分支:
-	//     kSuccess;kFeatureUnavailable 是版本错位(只有算上带更新版本字段的单位才够,可重试,
-	//     不得当终态);kBagInsufficientItems 是确定不足。本函数内部的不足分支会打 ERROR 与
-	//     调用栈 —— 那是给"预检过了却还是不够"这种不该发生的情形留的,不该被玩家随手点出来。
+	//   * 常规的"不够"请调用方先用静默的 BagService::CheckRemovable 预检(它在 Bag::CheckQuantities 之上
+	//     再扣掉被预留占住的数量),并按四个结论分支:kEnough;kHeld 是被未结算的战斗占住(可重试,不得当终态);
+	//     kVersionSkew 是版本错位(只有算上带更新版本字段的单位才够,可重试,不得当终态);kInsufficient 是确定不足。
+	//     本函数内部的不足分支会打 ERROR 与调用栈 —— 那是给"预检过了却还是不够"这种不该发生的情形留的,
+	//     不该被玩家随手点出来。
 	//   * 计数与扣除只认 ItemStore::IsCountableByConfig 的单位:带本版本不认识字段的堆不计、不扣
 	//     (混版本设计 §4.4 第 6 批),预检与提交是同一口径。
 	//   * 按 config 抽数量**不看是不是装备**(不查表,也不看 has_equip()):调用方必须保证
@@ -200,6 +264,7 @@ public:
 	//   * 空表 / 含 0 数量的条目    -> kInvalidParameter(一件不扣)
 	//   * 跨 zone 冻结期            -> kInvalidParameter(一件不扣)
 	//   * 任何一种持有量不够        -> kBagInsufficientItems(一件不扣)
+	//   * 扣掉预留之后不够          -> kBagInsufficientItems(一件不扣,打 ERROR:调用方应先用 CheckRemovable 预检)
 	//   * 其余                      -> kSuccess(每种恰好扣掉请求的数量)
 	static uint32_t RemoveItemsExact(
 		entt::entity playerEntity,
@@ -241,6 +306,8 @@ public:
 	//
 	// 返回:
 	//   * 跨 zone 冻结期            -> kAssetFrozen(RETRY 类,一件不扣,mutated=false)
+	//   * 会动到被预留占住的数量    -> kAssetInBattle(RETRY 类,一件不扣,mutated=false):这些物品还押在一局未结算的
+	//                                 战斗里(CheckRemovableInstances),结算或作废之后才放得出来
 	//   * 预检不过                  -> kAssetInvalidBundle(REJECTED 类,一件不扣,mutated=false)
 	//   * commit 段中途失败         -> Bag 层原始错误码(kBagDeleteItemFindGuid 等),
 	//                                 **批次已半截且无回滚**,mutated=true;预检已排除

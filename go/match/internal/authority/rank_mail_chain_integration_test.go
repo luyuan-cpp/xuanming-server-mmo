@@ -497,7 +497,7 @@ func chainBootEnvironment(t *testing.T, ctx context.Context, fixture *sqltest.Fi
 	meta, err := catalog.CurrentMeta(ctx)
 	require.NoError(t, err)
 	deployment := "chain-" + hex.EncodeToString(instance[:])
-	writer := &dbpb.SqlWriterRegistry{WriterKey: writerID[:], InstanceId: instance[:], Generation: fixture.Generation, SqlPrincipal: []byte(normal.User + "@%"), State: dbpb.SqlWriterRegistry_ACTIVE, RegisteredMs: uint64(time.Now().UnixMilli())}
+	writer := &dbpb.SqlWriterRegistry{WriterKey: writerID[:], InstanceId: instance[:], Generation: fixture.Generation, SqlPrincipal: []byte(normal.User + "@%"), State: dbpb.SqlWriterRegistry_ACTIVE, RegisteredMs: uint64(time.Now().UnixMilli()), BootSeq: 1}
 	request := &dbpb.SqlWriterLifecycleReceipt_Request{RequestId: requestID[:], Kind: dbpb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: database, ProtectedSchemas: []string{database}, DeploymentDigest: opts.PhysicalAuthoritySHA256, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
 	request, err = authoritysql.CanonicalRegistrationRequest(request)
 	require.NoError(t, err)

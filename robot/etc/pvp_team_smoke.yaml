@@ -1,0 +1,54 @@
+# pvp-team-smoke 配置:人数档真人 PVP(PVP_TEAM,1V1～5V5)计分组排的端到端冒烟
+# (docs/design/global-match-hierarchical-pools.md 开头「人数档真人 PVP 与计分组排」;§12.5 第 4 步)。
+#
+# 覆盖的情况(名字可填进 pvp_team_smoke.cases 只跑其中几种):
+#   1v1 / 1v1-rating-window(1500 对 1700,容差放宽一档后成局)
+#   2v2-duo-plus-solos(双排同侧;打完核对 PVP_TEAM 榜上的 Elo,1V1 榜上没有他们)/ 2v2-duo-vs-duo /
+#   2v2-party-too-big(3 人队开 2V2 被拒)/ 2v2-rating-gap(评分差超上限被拒、等于上限可排、排队中离队整队撤单)/
+#   2v2-rated-balance(1500/1600/1400/1500,两个 1500 同侧)
+#   3v3-duo-solo-vs-solos(立即成局)/ 3v3-trio-waits-for-solos(车队差 2,单人等满一个步长)
+#   4v4-four-stack(4 人队开 5V5 被拒;开 4V4 对单人等满两个步长)
+#   5v5-trio-duo-vs-trio-duo / 5v5-duos-split / 5v5-stack-vs-stack / 5v5-stack-waits-for-solos(等满三个步长)
+#
+# 前置:
+#   1. 清空 redis / mysql / etcd 后起服(AGENTS.md §6.2);match 已导表(team_error 段有 TeamPvpPartySizeNotAllowed、
+#      TeamRatingGapTooLarge),PlayMode 表里 PVP_TEAM 开放了 battle_config_id(本地第 6 行是 1,每侧上限 5)。
+#   2. match 的计分组排参数与下面 pvp_team_smoke 里的规则参数相同(缺省都一样:组队加成 25、车队差步长 10 秒、
+#      组队评分差上限 500、容差 100 / 5 秒 / 100)。
+#   3. rank 链路就绪(match 投榜、rank SQL、DataService 名字读取),2v2-duo-plus-solos 要读 PVP_TEAM(board_type 3)与 1V1(1)的榜。
+#   4. gate 以路由服模式启动;MessageLimiter 已导出 team 与 rank 的额度。
+#   5. 没有别的机器人在 PVP_TEAM 的池里排队(否则会被凑进本场景的局,同局、同侧断言失败);本场景独占 robot_8701～8799。
+#   6. 从 robot/ 目录运行(table_dir、fixture_path 是相对路径);battle 公网端口从 robot 所在机器可达(地域探测与战斗直连)。
+#
+# 用法(三步,前两步每轮都要做:换库后 player_id 会变,上一轮打完评分也变了):
+#   1. robot/ 目录:.\robot.exe -c etc/pvp_team_smoke.yaml(phase: prepare)→ 日志 PVP_TEAM_SMOKE_PREPARED,写出 fixture_path
+#   2. go/match 目录:go run ./cmd/ratingfixture -f etc/match_service.yaml -in ../../robot/logs/pvp_team_smoke_fixture.json
+#   3. robot/ 目录:把 phase 改成 run 再跑一次 → 全过日志有 PVP_TEAM_SMOKE_OK,退出码 0;任一失败 PVP_TEAM_SMOKE_FAIL case=… reason=…,退出码 1
+# 不同人数档的情况并发跑,同一人数档顺序跑;最长的是 5V5 一组(5 人队等单人 30 秒 + 四局战斗),整轮约 5 分钟。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 本模式用 pvp_team_smoke.zone 选区
+robot_count: 82 # 语义占位:本模式固定账号 robot_8701～8799 里的 82 个
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号
+password: "123456"
+skill_ids: [] # 战斗走服务端回合引擎 + 自动战斗
+table_dir: "../generated/tables"
+action_interval: 3
+report_interval: 5
+
+mode: "pvp-team-smoke"
+
+pvp_team_smoke:
+  zone: 1 # 全部账号登同一个 zone
+  battle_config_id: 1 # PlayMode 表里开放了 PVP_TEAM 的模板
+  phase: "prepare" # prepare → 写评分夹具;run → 跑全部情况
+  fixture_path: "logs/pvp_team_smoke_fixture.json"
+  cases: [] # 空 = 全部;排障时填名字只跑其中几种(prepare 与 run 要填同一组)
+  # 以下与被测 match 的配置一一对应,0 = match 的缺省值
+  premade_gap_step_seconds: 10 # GlobalMatch.PremadeGapStepSeconds
+  party_rating_gap_max: 500 # GlobalMatch.PartyRatingGapMax
+  rating_tolerance_base: 100 # RatingToleranceBase
+  rating_tolerance_step_seconds: 5 # RatingToleranceStepSeconds
+  rating_tolerance_step_delta: 100 # RatingToleranceStepDelta
+
+auth_type: "password"

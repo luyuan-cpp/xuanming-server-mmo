@@ -1,6 +1,6 @@
 # owner_epoch 铸造持久化：交 Claude Code 独立审核
 
-最新状态（2026-11-08）：当前主仓 Debug/x64 串行增量整解通过，exit 0，日志汇总 0 warning / 0 error。随后用主仓产物重跑归属定向 10/10、真实 Redis 7.2.16 与 8.10.2 各 3/3，全部零失败、零跳过。本次沿用已验证的任务专属 TEMP，未新增生产代码修改；仍未压测，Claude 独立审核待进行。
+最新状态（2026-11-10）：Claude Code 已完成静态独立审核（未编译、未运行），结论见文末「Claude Code 审核结论（2026-11-10）」。没有发现会造成覆盖或同值重铸的缺陷。有两项待处理：not_durable 回滚值被源端采纳的设计缺口，要负责人定方案；Go 铸造通道缺真实 Redis 证据，要 Codex 补测。最近一次运行证据仍是 11-08 的结果，对应 HEAD `c17837c9c`：主仓整解 exit 0（0 warning / 0 error），归属定向 10/10，真实 Redis 7.2.16 与 8.10.2 各 3/3。仍未压测。
 
 ## 用户要求与范围
 
@@ -114,4 +114,106 @@ build/cpp/tests/currency_test.exe --gtest_filter=CurrencyTest.*AgainstRealRedis
 
 请按你自己的推理审核源码、契约和证据适用范围。报告实质问题、理由和可定位的源码行；若未发现问题，也请明确实际审阅范围与未覆盖项。需要修复或补测的内容交回 Codex，不要仅依据本文已有结论判定通过。
 
-2026-11-06 的 Claude Code 桌面观察显示周额度 100%，恢复时间为 11 月 12 日 15:00；当时输入框有其他任务草稿，Codex 未覆盖，也未成功发送本线审核。11 月 8 日仅更新本地交接，未重新查看桌面或发送消息；上述额度信息不是实时状态，仍不能称 Claude 已接手或审核完成。
+2026-11-10 Claude Code 已接手并完成静态审核，结论见下节。11-06、11-08 记的「额度用尽、审核未发送」已经过时。
+
+## Claude Code 审核结论（2026-11-10）
+
+**方式与范围**：只做静态审阅，没有编译或运行任何东西（AGENTS §10.1）。审阅时 HEAD 为 `e0790ad40`，工作区里有他方未提交的改动（见第 6 条）。
+
+- 逐段读过的 Go 代码：
+  - `logic/owner_epoch.go` 全文；
+  - `svc/owner_epoch_mint.go` 全文；
+  - `shared/playerredis/{pinned,playerredis,noreplay}.go`；
+  - `changesceneutil.go` 的落点函数；
+  - `location_revision.go` 的修订检查；
+  - `enterscenelogic.go` 的两处铸造调用点和 not_durable 分支。
+- 逐段读过的 C++ 代码：`travel_outcome::ClassifyOwnership`、B5 采纳分支、`ResumeTravelAfterRevocation`、`kResumeFenceLua` 及其十进制辅助函数、`kPublishMarkDirectLua`。
+- WAITAOF 与重试语义按源码核对：go-redis v9.17.3（模块缓存），以及 `third_party/redis`（8.10.2）。
+
+**总体结论**：G3a 与 G3b 按设计落码，没有发现会造成旧盖新或同值重铸的缺陷。下面第 1、2 条要处理，第 3、4 条是低级问题，第 5、6 条只是提示。
+
+1. **【中，设计缺口】回滚值没有确认落盘，就被源端采纳了。所以「副本落后之后主节点宕机」这种情况下 G3b 不起作用。**
+   - 现状：
+     - 铸造没确认落盘时（`enterscenelogic.go:881-889`、`:1352-1358`），回滚经共享连接池执行，不等 WAITAOF（`owner_epoch.go:726-731`）；
+     - C++ 源端取证读到回执，走 B5 采纳回滚之后的 epoch（`player_lifecycle.cpp:6710-6746`）；
+     - 采纳之后立即强制存盘（`:7395`），把 TiDB 写权行抬到这个值。
+   - 后果：铸造确认不足，多半正是因为刷盘或副本落后。随后如果主节点宕机、落后的副本被提升，铸造与回滚会一起丢。此时源端拿着一个 Redis 已经不认识的代次继续持有玩家。这正是 G3b 要防的状态，只是受害者从目标节点换成了源端。
+   - 静态推演出的表现：
+     - 同节点换图照常；
+     - 跨节点与跨 zone 交接全部被拒：`kPublishMarkDirectLua` 要求 owner_epoch 等于缓存值，见 `handoff_sql_barrier.h:326`，这里回 -1；
+     - 另一端登录时，如果旧标记还在 TTL 内，会凭它过门并铸出更大的代次。新持有者认领之后，源端下一次存盘被写权行拒为 STALE_OWNER，丢掉上次存盘以来的进度。
+   - 与设计不符的两处：
+     - 设计 §3 表格「持有者不会拿到会丢的 epoch」、§4.3.3 拓扑表「不可用，但不回退」，在这个分支上不成立；
+     - §4.3.3 把它列为「确认不足与切主叠加」的偶发残余，但这两件事正相关，不是独立事件。
+   - 可选方案，请负责人定：
+     - A：两段回执。not_durable 分支的回滚先写「待确认」回执；SM 在铸造通道上对回滚补一次 WAITAOF，确认之后再按 CAS 改成正式回执。C++ B5 只认正式回执；见到待确认回执，按 B6 收口。源端冻结时的状态已经落盘，不丢数据；代价是确认不了的时候多踢一次线。要同时改 Go、C++、跨语言金样和设计。
+     - B：接受这条残余，但按现在的真实后果改写 §3、§4.3.3（含第 4 条），并在 runbook 写清处置办法。
+2. **【中，证据缺口】Go 铸造通道从没在真实 Redis 上跑过。**
+   - svc 层测试全部连 miniredis，而 miniredis 不认 WAITAOF（`svc/owner_epoch_mint_test.go:23`、`:108-110`）。所以只走得到「WAITAOF 被拒」这一支，「确认落盘」从来没出现过。
+   - logic 层用的是替身 `fakeOwnerEpochMinter`（`logic/owner_epoch_mint_test.go:31-37`）。
+   - 真实 Redis 的 3 个 C++ 用例（`currency_test.cpp:745`、`:1083`、`:1140`）测的是交接资格与标记的 Lua，不经过铸造通道。
+   - 所以下面这些结论目前只有替身证据，单实例也没有验证过：
+     - 同一条 pipeline 里的 WAITAOF 能覆盖铸造；
+     - 重放分支「写回原值」能让新连接的 WAITAOF 覆盖首发那次写；
+     - 预算与读超时能配合服务端阻塞的 WAITAOF；
+     - 启动探针在正确配置下能通过。
+   - 补测要求见下面的「交 Codex」。
+3. **【低】启动探针查不出「副本没开 AOF」。**
+   - 探针在新连接上发 WAITAOF，这时连接的写偏移是 0（`networking.c:222`）。副本没开 AOF 时不发 FACK（`replication.c:4616-4630`），主节点记的副本刷盘偏移停在初值 0（`networking.c:208`），而 0 ≥ 0 照样计数（`replication.c:4878-4891`、`:4951-4952`）。
+   - 结果是 `numreplicas ≥ 1` 时探针照样通过，到运行期每一次铸造都判 not_durable，所有首登与换节点都回 7。`owner_epoch_mint.go:343-376` 的注释说探针就是要在启动时拦住这一类配置错误。
+   - 现有清单所有 Pod 都写了 `appendonly yes`，所以这只是纵深防御上的缺口。建议探针先在同一条连接上写一个探针键（Cluster 下每个主节点各写一个落在本节点 slot 的键），再发 WAITAOF。
+4. **【低，注释与文档过时】**
+   - `owner_epoch.go:449-450`、`config/config.go:720-722` 写的后果是「持有者下一次存盘被等值 CAS 拒掉、按废黜销毁（丢 ≤300s）」。这条已经不成立：
+     - Redis 存档路径和它的 owner CAS 已经删除（`cpp/libs/services/scene/core/system/redis.cpp:227`）；
+     - TiDB 写权行对同一持有者 E ≥ Er 照常放行（`player-save-direct-commit.md` §4）；
+     - 真实后果见第 1 条。
+   - `owner_epoch_mint.go:57`、`:118`、`:383-384` 与 `config.go:724`、`:730-731`、`:738` 引用的东西都已不存在：go/db 的 `durable_enqueue.go`、data_service 的 `route_publish.go`、`Get-RouteStoreWaitAOFNumReplicas`。设计 §4.3.2、§4.3.3 也引用了它们。
+   - 现状是：WAITAOF 只剩 scene_manager 在用；K8s 的副本数取 `Get-OwnerEpochMintWaitAOFNumReplicas`，建了玩家域集群时固定取 1（`k8s_deploy.ps1`，另有会话正在改这个文件，行号在变）。「几处要改一起改」指向的文件已经没了。
+5. **【提示，R-b】`WaitAOFNumReplicas=1` 时的可用性。**
+   - 铸造截止 = 请求截止 −（Kafka 5s + 300ms），所以按现值铸造必须在请求开始后约 2.7s 内完成（`owner_epoch.go:469-475`，yaml Timeout 8000）。
+   - 进场前面的 RPC（角色目录强读、归属 zone 查询，后者上限 1500ms）如果用掉约 1.5s，WAITAOF 只剩约 1.1s。
+   - 按 §4.3.3 自己的低负载模型（等待 = P，若 P < F 则为 P + 1s，P 与 F 独立且在 [0, 1s) 上均匀分布），超过 1.1s 的概率 = P(0.1s < P < F) = ∫_{0.1}^{1}(1−p)dp ≈ 0.405。
+   - 结论：正确性不受影响（会回滚并让客户端重试），但可用性会掉。R-b 要加一个「前置 RPC 变慢」的场景。
+6. **【提示，证据新鲜度】11-08 的运行证据不覆盖当前的工作树。**
+   - 11-08 的证据对应 `c17837c9c`。之后 `74b097888` 在 `player_lifecycle.{h,cpp}`、`cross_zone_test.cpp`、`currency_test.cpp`、`enterscenelogic.go` 做了改名（如 `IsCrossZoneFrozen` → `IsPlayerFrozen`）。
+   - 工作区里还有他方未提交的 `player_lifecycle.{h,cpp}` 改动（`RunIdentityAtRiskSaves` 提成成员函数）和 `cross_zone_test.cpp` 改动。
+   - 静态看都不碰本线逻辑，但宣称通过之前要在当前树上重跑。
+
+**核对过、没有发现问题的部分**：
+
+- G3a 的目标值：Go 一次算好；Lua 按十进制串逐字节比较，上限 2^53−2（`9007199254740990`）。重放识别比的是 ARGV[9]，回滚 INCR 之后的值仍在 double 的精确范围内。
+- 修订检查对重发是兼容的：location 与修订标签都已经是本次的值时放行（`location_revision.go:157-165`），所以重放分支走得到。
+- 节点客户端不会自动重发：Cluster 层传 −1，`ClusterOptions.init` 保留 −1；节点 `Options.init` 把 −1 换成 0（`osscluster.go:201-202`、`:376`，`options.go:354-358`）。所以 WAITAOF 读失败时不会把已生效的 EVAL 再发一遍。
+- 错误分类正确：
+  - go-redis 9.17 的类型化错误保留原文，`ClassifyNotExecuted` 能按首词判断；
+  - `noReplayHook` 把网络错误包成非 `redis.Error`，`isRedisErrorReply` 不会把它误判成确定性错误。
+- WAITAOF 的语义与设计一致：
+  - `call()` 在传播之后才更新本连接的写偏移（`server.c:4257-4260`）；
+  - 没有副本、没有 backlog 时，复制偏移照样递增（`replication.c:672-679`）；
+  - 对副本发 WAITAOF 会被拒（`:4941-4944`）；
+  - 副本只在每秒一次的 cron 或收到 GETACK 时上报刷盘偏移（`replication.c:193-197`、`:1576-1578`）。
+- C++ 三处「≥ +2」口径一致，都有溢出防护：`ClassifyOwnership` 用 `UINT64_MAX − 2`；`ResumeTravelAfterRevocation` 在 `:7366`；`kResumeFenceLua` 用 `plus2` / `cmp`，进位与 20 位上限都对。
+- 毫秒级 epoch 没有被窄化：在 scene_manager、`shared/ownerepoch`、`shared/handofffence`、data_service、go/db 与 C++ 玩家路径里，grep 不到对 epoch 的 uint32 / int 转换。
+- K8s 侧没问题：建了玩家域集群时副本数取 1；各清单都开着 AOF。
+
+**未覆盖**：
+
+- `enterscenelogic.go` 其余分支；
+- LeaveScene、无资格撤销、改派路径（第 1 条后果的细节要按这些路径再推一遍）；
+- 真实 Cluster 切主与迁槽；
+- R-b 与连接池定容；
+- Java 版（按本线范围不适用）。
+
+**交 Codex**：第 1 条在负责人定方案之前不动代码。第 3、4 条可以与第 2 条同批改。第 2 条按下面补测（测试文件尚未写），7.2 与 8.x 各跑一轮：
+
+- 环境：各起一个一次性的单实例 Redis，参数 `--appendonly yes --appendfsync everysec`，用唯一容器名、随机 loopback 端口、无共享卷，口径同 11-08。设置 `MMORPG_TEST_REDIS_ADDR=127.0.0.1:<端口>`。
+- 用例：放在 `go/scene_manager/internal/svc` 新建的真实 Redis 测试里，没设环境变量时 Skip。测试入口要构造 `RedisOwnerEpochMinter`，经 `EvalAndConfirm` / `Probe` 执行，不能只直接发命令：
+  - (a) `1 0` 时铸造回 Confirmed，回复等于目标值；
+  - (b) 单实例配 `1 1` 时，在预算内回 NotDurable，且耗时不超过 WAITAOF 的等待上限加 200ms；
+  - (c) 探针：`1 0` 通过，`1 1` 失败；
+  - (d) 重放：首发生效之后，在新连接上原样重发，回复为 −目标值；前后读 `INFO replication` 的 `master_repl_offset`，必须增加（证明写回原值确实传播了）；
+  - (e) 回 0 / −1 的分支前后，`master_repl_offset` 不变。
+- 命令：在仓库根下运行 `cd go/scene_manager && go test ./internal/svc -run RealRedis -count=1 -v`。
+- 通过标准：设了环境变量时 0 FAIL、0 SKIP；结束后容器按任务标签清理干净。
+- 失败时保留：失败用例名、断言输出、`redis-server --version`、`go version`。
+- 可选：在 `deploy/compose.redis-cluster.yml` 上补一例 MOVED 之后改投 slot 主节点的验证。

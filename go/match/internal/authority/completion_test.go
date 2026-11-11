@@ -225,9 +225,10 @@ func TestTerminalTiDBObservedZeroCannotBePromotedByLaterReply(t *testing.T) {
 	tx, locked, _, err := s.terminalFormation(ctx, f.BattleId)
 	require.NoError(t, err)
 	defer tx.Rollback()
-	d, written, err := s.abortTerminalTx(ctx, tx, locked)
+	// 即使原实例给出了「没有房间」的证据,原件不可裁决的局也不写 ABORT(证据只决定时机,不放宽原件判据)。
+	d, verdict, err := s.abortTerminalTx(ctx, tx, locked, DeadlineEvidenceNoRoom)
 	require.NoError(t, err)
-	require.False(t, written)
+	require.False(t, verdict.abort)
 	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, d, "能力1不能追认明确采用0为安全ABORT")
 }
 
@@ -292,7 +293,9 @@ func TestTerminalTiDBCancelledFormationDistinguishesUnissuedAndPersistedCreate(t
 			receipt, err := s.CancelActivity(ctx, key, body)
 			terminal, readErr := readTerminal(ctx, s.DB, f.BattleId)
 			require.NoError(t, readErr)
-			if kind == "旧创建原件" || kind == "明确旧采用" {
+			// 2026-11-06 起「新协议原件」也一样拒绝:缺终局的 state 5 只来自旧代码,截止 ABORT 与到期恢复同一判据
+			// (autoTerminalOriginal 要求在途),不再给它补签 ABORT(原先会补)。项目未上线,不兼容旧状态。
+			if kind != "发房前" {
 				require.Error(t, err, "旧state5不能冒SQL ABORT签发安全取消收据")
 				require.Nil(t, receipt)
 				require.Nil(t, terminal)
@@ -311,14 +314,8 @@ func TestTerminalTiDBCancelledFormationDistinguishesUnissuedAndPersistedCreate(t
 			}
 			require.NoError(t, err)
 			require.EqualValues(t, 5, receipt.FormationState)
-			if kind == "发房前" {
-				require.Nil(t, terminal)
-				require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, receipt.TerminalDecision)
-			} else {
-				require.NotNil(t, terminal)
-				require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, terminal.Decision)
-				require.Equal(t, terminal.Decision, receipt.TerminalDecision)
-			}
+			require.Nil(t, terminal)
+			require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, receipt.TerminalDecision)
 		})
 	}
 }

@@ -12,7 +12,7 @@
 - 已有认领、重置时先核落到哪一步:第 22 条(「服务器代码缺口补完」认领),第 25、26 条(原归「灰度发布、金丝雀发布和水平扩展」,该会话已结束);
 - 只做了一部分:第 17、19、27、28 条的剩余部分;
 - 设计已写、待落码:第 30 条;
-- 已落码条目的「仍剩」:第 16、24 条;第 1 条的 Agones 名额收敛(11-10 补登,原文在第 1 条「仍剩」;**11-10 由「按缺口清单做完服务器代码(11-05 额度重置后)」会话认领**,先写设计再落码);第 7 条的「跨 zone 重定向第一次判不出停写」(11-10 补登,原文在第 7 条「仍剩」,还没人认领;做法已定,见 `gate-load-balancing-design.md`「还没做」该条);
+- 已落码条目的「仍剩」:第 16、24 条;第 1 条的 Agones 名额收敛(11-10 补登,原文在第 1 条「仍剩」;11-10 先由「按缺口清单做完服务器代码(11-05 额度重置后)」会话认领并写了设计(`agones-scene-node-high-density.md` §13),还没落码;**同日负责人让「场景销毁认领:回滚原子化与重发幂等」会话现在做,改由该会话接手落码**,设计按 §13 修订后落码);第 7 条的「跨 zone 重定向第一次判不出停写」(11-10 补登,原文在第 7 条「仍剩」;**11-10 由「按缺口清单做完服务器代码(11-05 额度重置后)」会话认领落码**;做法已定,见 `gate-load-balancing-design.md`「还没做」该条);
 - 第 23 条复核后暂不改,重置时再确认一次理由还成立。
 
 做法照旧:动手前在本表对应行认领;先写设计再落码;每批不超过 30 个文件;编译、测试与冒烟交 Codex;Java 只登记待做。
@@ -56,7 +56,7 @@
      - 拆除任务里归还是「至多一次」,置位之后、调用 K8s 之前进程退出;
      - 归还调用本身失败(K8s API 在有界重试内一直不可用,或请求其实已生效、回包丢了)。为了不多还,这一份也不再重试,只记 `scene_manager_agones_counter_rollback_total{outcome="failed"}` 与 `COUNTER DRIFT` 日志。
      - 三者都是多记(容量浪费,不会超卖),由 `agones_reconcile.go` 的漂移 gauge 告警暴露。对账按设计只告警、不改写任何一方:计数没有逐个名额的身份,分不清哪一份是漏的。
-     - **11-10 由「按缺口清单做完服务器代码(11-05 额度重置后)」会话认领。** 标准做法(先写设计):让每个名额在 GameServer 上有按 scene_id 的条目,增删按条目幂等、可以放心重试;对账逐个条目与 Redis 的登记比对,登记已不存在且超过建场景时限的条目收回。条目可以用 Agones 原生的 Lists(分配时同一步加值,删值天然幂等),也可以保留计数、在同一次带 resourceVersion 的更新里写按场景号的注解。要动 Agones 分配、登记、拆除、对账与 Fleet 配置,跨「按缺口清单」会话的登记代码。
+     - **11-10 认领:先由「按缺口清单做完服务器代码(11-05 额度重置后)」会话写了设计(高密度设计稿 §13),同日负责人让「场景销毁认领:回滚原子化与重发幂等」会话现在落码,改由该会话接手。** 标准做法(先写设计):让每个名额在 GameServer 上有按 scene_id 的条目,增删按条目幂等、可以放心重试;对账逐个条目与 Redis 的登记比对,登记已不存在且超过建场景时限的条目收回。条目可以用 Agones 原生的 Lists(分配时同一步加值,删值天然幂等),也可以保留计数、在同一次带 resourceVersion 的更新里写按场景号的注解。要动 Agones 分配、登记、拆除、对账与 Fleet 配置,跨「按缺口清单」会话的登记代码。
    - **验证状态(11-10 核对)**:Codex 11-06 全量跑过 scene_manager(build、vet、`./internal/logic/...` 756 PASS,见 PROGRESS 同日「修正 scene_manager 五项旧夹具」),本条各批 Go 用例都在内;11-08 命名统一后相关检查也通过。各批 PROGRESS 条目写的变异取红都还没跑。
    - **(11-06 已落码,未编译,验证见 `docs/PROGRESS.md` 2026-11-06「销毁路径只改本 zone 的键」)销毁只改本 zone 的键**:认领脚本在同一步比对 `scene:{id}:zone`,不是认领方的 zone(或记录损坏)就一个键都不动;镜像级联与源迁移级联跳过登记在别的 zone 的子镜像;镜像只从本 zone(或本实例里没有 zone 记录)的源的子集合摘自己;显式 DestroyScene 只接本进程 zone 的请求,`zone_id` 没填按本进程的 zone。设计见 `scene-creation-architecture.md`「销毁只改本 zone 的键」,回归 `teardown_zone_scope_test.go`。
    - **仍剩(11-06 补记)**:建实例回滚补发的 DestroyScene 若早于节点处理完在途的 CreateScene,实体仍会留在节点上、没有映射。scene_manager 一侧收不了,由第 33 条「节点侧按 `scene:{id}:node` 对账」收:节点连续两次读到映射不是自己、过 60 秒宽限就排空销毁(11-06 已落码;11-08 Codex 命名统一那轮 `game.sln` 增量构建通过,`cross_zone_test` 里它的 `SceneOwnership*` 20 条与放置代次 `ScenePlacementFence.*` 8 条全 PASS,日志在 `build/verification/naming-audit-20261108/cpp-tests/cross_zone_test/`;真机冒烟没做)。
@@ -73,7 +73,7 @@
 
 ### 挡水平扩展
 
-4. **(11-05 已落码,未编译,设计与验证见 [control-plane-zone-scoping-20261105.md](../design/control-plane-zone-scoping-20261105.md) §8)控制面没有按 zone 化(B0-5 A1),30~45 个文件。**
+4. **(11-05 已落码;Go 11-06、C++ 11-08 已由 Codex 跑通,部署契约与 kind 冒烟未跑,见 [control-plane-zone-scoping-20261105.md](../design/control-plane-zone-scoping-20261105.md) §8)控制面没有按 zone 化(B0-5 A1),30~45 个文件。**
    - 落码:C++ zone-scoped 类型(含 SceneManager)只 Range / watch 本 zone 前缀,兜底全量 Range 2s → 60s±20%,watch 取消按前缀退避重拉;gate 10s 写 etcd 保留(它是第 7 条停写判定的心跳),扇出随监听方收窄到本 zone;scene_manager 按 zone 选主(`scene_manager:leader:lock:zone:<z>`)、只 watch 本 zone、领导者循环只处理 `ZoneId`;别的 zone 的持有者判定改为 etcd 直读加本副本首次观察屏障;K8s 上 go-zero 发现键按 zone 加 `.z<zone>`。残余见设计稿 §6。
    - 以下是 11-01 的原文。
    - C++ 每 2 秒全前缀 Range(`service_discovery_manager.cpp:16`、`:29-32`),gate 每 10 秒把人数写 etcd(`cpp/nodes/gate/main.cpp:559-563`)。
@@ -81,7 +81,8 @@
    - scene 和 gate 连接全部 scene_manager 实例(`cpp/nodes/scene/main.cpp:107`、`cpp/nodes/gate/main.cpp:371`)。
    - 后果:etcd 读量约按进程数平方增长,容量模型算 S2 档是参照值的 6.9~134 倍(`docs/design/capacity-model-hok-scale.md:449-457`)。收窄 watch 前要先改 `load_reporter.go:197-198` 的判定。
 
-5. **(11-05 已落码,未编译,设计与验证见 [control-plane-zone-scoping-20261105.md](../design/control-plane-zone-scoping-20261105.md) §4、§8)控制域 Redis 全服单主,15~25 个文件,依赖第 4 条。**
+5. **(11-05 已落码;11-10 修两处缺陷并补齐连接总账与 redis-split-status,这一轮未运行;部署契约与 kind 冒烟未跑,见 [control-plane-zone-scoping-20261105.md](../design/control-plane-zone-scoping-20261105.md) §4、§7 末尾、§8)控制域 Redis 全服单主,15~25 个文件,依赖第 4 条。**
+   - 11-10 修的两处缺陷:K8s 没建玩家域集群时,scene_manager 的玩家域会回落到控制域实例(改为回落到 `CoreRedis` 指向的核心);首次部署会被控制域入口闸拒绝(`$null` 被转成空串)。
    - 落码:选「按 zone 组分实例」,不上 Cluster(理由见设计稿 §4.1)。控制域实例 `redis-ctl-g<N>`,组号沿用 zones 配置的 `redisQueueGroup`,模板与形态规则复用排队实例,不受 `-RedisSplit` 控制;键名不改,选主锁与死节点收尾任务表改按 zone,zone 登记集合删除;新不变量「zone z 的控制域键只由 zone z 的 scene_manager 读写」(跨 zone 预检改用 etcd、别的 zone 的成员集合不写);C++ scene 新句柄 `scene_control_redis` 读分线目录与神秘商人,落点唤醒 PUBLISH 留在核心;gate 排空标记经 `CoreRedis` 读核心。没有跨 zone 的原子操作(设计稿 §4.4 逐脚本核对)。`player-data-tidb-scaling-plan.md` §8.3 与 progress.md「已知残余」的说法已改正。残余见设计稿 §6。
    - 以下是 11-01 的原文。
    - `k8s_deploy.ps1:3819` 只拆了排队;`:10175-10176` scene-manager 所有 zone 都连 `redis.<infra>`;`scene_atomic.go:123-129` 的键没有 hash tag。
@@ -158,9 +159,11 @@
    - 后果:单个节点失租超过 TTL(etcd 抖动、网络闪断)就能把它上面的副本全部拆掉,里面的玩家被踢出;etcd 回档造成的大面积失租会放大成大面积拆实例。存活集闸门(第 9 条)只拦 fullSync,拦不住这条。
    - 方向:收尾任务记下判死那一代的 `node_uuid`,重新注册的是同一个 uuid 就撤掉任务(场景不动),是新 uuid 才按快照收尾。涉及 `reentry_barrier.go` 的任务脚本与 `handleWatchEvent` 的 PUT 分支,与按 zone 选主的会话同文件,动手前先对段落。只读核对过代码,没有复现。
 
-33. **(11-06 登记;11-06 已落码;20 条 C++ 用例在 11-08 Codex 的 `cross_zone_test` 全集里全过,见 `docs/PROGRESS.md` 2026-11-10「核对存活集闸门(B1-1)与缺口第 9、32、33 条的验证证据」;设计与给 Codex 的验证见 [scene-node-ownership-reconcile.md](../design/scene-node-ownership-reconcile.md) §10,`docs/PROGRESS.md` 2026-11-06「scene 节点回来之后的场景归属对账」)失联超过屏障又回来的节点,还托管着已被改派的场景。**
-   - **已改**:scene 节点在 etcd 身份确认有效时每 10 秒用 MGET 读本地全部场景的 `scene:{id}:node`(`tlsSceneControlRedis`,只读);连续两次不是本节点、且距第一次核对或最近一次 CreateScene 按号命中满 60 秒,就调 `SceneLifecycle::DestroyScene`(先 `BeginSceneDrain` 改派住户,没有绑定才销毁)。CreateScene 去重命中已有实体时 `SceneLifecycle::ReuseExistingScene` 把宽限期从头算(盖住 scene_manager「先建后改」迁回本节点的预建)。跨 zone 类型与镜像的口径与普通场景相同(设计稿 §5)。顺带收掉其他「有实体没映射」的孤儿,包括 11-05「场景拆除任务」残余里「回滚补发的 DestroyScene 早于在途 CreateScene」那一条(设计稿 §7)。
-   - **残余**:一直连不上 etcd 的节点不对账,分裂持续到 etcd 恢复;控制域丢数据时会大面积排空;还没有告警规则(设计稿 §9)。
+33. **(11-06 登记;11-06 初版已落码,20 条 C++ 用例在 11-08 Codex 的 `cross_zone_test` 全集里全过,见 `docs/PROGRESS.md` 2026-11-10「核对存活集闸门(B1-1)与缺口第 9、32、33 条的验证证据」;11-10 补完三项残余,已落码,未编译、未测试,用例改为 27 条 C++、新增 8 条 Go,验证见 [scene-node-ownership-reconcile.md](../design/scene-node-ownership-reconcile.md) §10 与 `docs/PROGRESS.md` 2026-11-10「场景归属对账补完」)失联超过屏障又回来的节点,还托管着已被改派的场景。**
+   - **11-10 补完**:去掉「etcd 身份确认有效才核对」,与 etcd 失联期间也按映射收敛(etcd 整体故障时 scene_manager 不判死、映射不变,不会误排空);scene_manager 把每个节点号最近一次登记的进程写进 `node:zone:{z}:{n}:holder`(按 etcd ModRevision 单调,`node_holder.go`),节点读到自己的号被更新的另一代接走就把本地场景全部排空;开始排空按每轮每节点 200 名住户的预算限速,控制域丢数据时分批改派;新增 `deploy/k8s/scene-ownership-alerts.yaml` 五条告警与契约测试。
+   - **11-10 之后仍剩**(设计稿 §9):本进程登记之后 scene_manager 一次都没写过它的持有者记录时认不出被接走,退回重连 etcd 时的冲突疏散;住户预算 200 是没有压测基线的初值;告警没过 promtool、没装进集群。
+   - **11-06 初版**(当时只在 etcd 身份确认有效时核对,11-10 去掉了这道门禁):scene 节点每 10 秒用 MGET 读本地全部场景的 `scene:{id}:node`(`tlsSceneControlRedis`,只读);连续两次不是本节点、且距第一次核对或最近一次 CreateScene 按号命中满 60 秒,就调 `SceneLifecycle::DestroyScene`(先 `BeginSceneDrain` 改派住户,没有绑定才销毁)。CreateScene 去重命中已有实体时 `SceneLifecycle::ReuseExistingScene` 把宽限期从头算(盖住 scene_manager「先建后改」迁回本节点的预建)。跨 zone 类型与镜像的口径与普通场景相同(设计稿 §5)。顺带收掉其他「有实体没映射」的孤儿,包括 11-05「场景拆除任务」残余里「回滚补发的 DestroyScene 早于在途 CreateScene」那一条(设计稿 §7)。
+   - **11-06 初版的残余**(11-10 已补,见上):一直连不上 etcd 的节点不对账,分裂持续到 etcd 恢复;控制域丢数据时会大面积排空;还没有告警规则。
    - 以下是 11-06 登记时的原文。
    - 条件:节点与 etcd 单边失联(仍连着 gate 和 Redis,玩家还在上面玩)超过租约 180s 加屏障 20s。
    - 这时 scene_manager 已经把它判死:

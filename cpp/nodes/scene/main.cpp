@@ -4,6 +4,7 @@
 
 #include "node/system/node/node_entry.h"
 #include "node/system/etcd/etcd_transport.h"
+#include "network/client_message_sender.h"
 #include "infra/agones/agones_gameserver_lifecycle.h"
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "handler/rpc/scene_handler.h"
@@ -142,6 +143,8 @@ int main(int argc, char *argv[])
         RegisterPlayerSaveMetrics();
         // 场景归属对账的计数(scene_ownership_reconciler.h),同一个出口。
         RegisterSceneOwnershipMetrics();
+        // 每次广播发给了几台 gate 的直方图(network/broadcast_fanout_stats.h),同一个出口。
+        RegisterBroadcastFanoutMetrics();
 
         // context 先于 node 构造、晚于 node 析构:方法表闭包捕获 grpcService 的 this,服务必须活过 Node。
         node.RegisterGrpcService(context->grpcService);
@@ -400,10 +403,11 @@ int main(int argc, char *argv[])
             // 神秘商人:每 5 秒从 zone Redis 读一次「这一轮商人在哪、卖什么」(scene_manager 写入),
             // 读到新的一轮就向本节点玩家发出现公告(docs/design/mystery-merchant.md §5.1)。不进 20FPS World::Update。
             PlayerMysteryMerchantSystem::Start(n.GetLoop());
-            // 场景归属对账(缺口清单第 33 条,docs/design/scene-node-ownership-reconcile.md):etcd 身份确认有效时每 10s
-            // 经场景控制域读本地各场景的 scene:{id}:node,不再指向本节点的实体排空后销毁 —— 与 etcd 单边失联超过屏障
-            // 才回来时,scene_manager 已把它们改派或拆掉。身份探针与 A1′ 同一个;捕获的 node 由三条停机路径的 Stop 在
-            // 它析构之前解开。node_id 到这里已是终值。不进 DependencyGate:它只读控制域 Redis,不依赖 SceneManager 连接。
+            // 场景归属对账(缺口清单第 33 条,docs/design/scene-node-ownership-reconcile.md):每 10s 经场景控制域读本地
+            // 各场景的 scene:{id}:node 与本节点号的持有者,不归本进程的实体按住户预算排空后销毁 —— 与 etcd 单边失联、被判死之后,
+            // scene_manager 已把它们改派、拆掉,或交给了接走这个号的新进程。核对不看 etcd 身份(失联期间照样收敛);身份探针
+            // 与 A1′ 同一个函数,只用来解读持有者记录。捕获的 node 由三条停机路径的 Stop 在它析构之前解开。node_id 与
+            // node_uuid 到这里已是终值。不进 DependencyGate:它只读控制域 Redis,不依赖 SceneManager 连接。
             context->ownershipReconciler.Start([&n]()
                 { return n.GetServiceDiscoveryManager().etcdService.IsIdentityConfirmedFresh(); });
 

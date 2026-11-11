@@ -25557,3 +25557,302 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
   - `docs/README.md`（一行）
   - 本文件
   - 未提交。
+
+## 2026-11-10 Claude：AOI 空间关注改为按距离重判（冒烟：同一组格子里走近永远看不见；未编译；Java 0.1.0-SNAPSHOT 已按同一口径实现）
+
+- **现象（负责人冒烟）**：移动进入新的一组格子（本格 + 六邻格）时被 `ViewSystem::CanSee` 挡住，没给双方发创建；之后在格子里怎么走，别人都看不见。
+- **根因**：距离只在跨格那一刻判一次。
+  - 格子 20 m（格心到顶点）、视野 10 m：跨格时新格子里的人至少在 20 m 外，`CanSee` 必然不过。
+  - 同一组格子里的靠近（包括走进对方所在格，它早已是邻格）不再判。
+  - 出视野只看是否离开七格（20～73 m），满表时远处旧关系还会挤掉近处新人。
+  - Java 契约 `docs/reference/mmorpg-client-contract-aoi.md` §7 缺口 3、§8「C++ 仍只在跨格时重判」记的就是这一条。
+- **改法（口径与 Java 版一致，客户端可见）**：
+  - 进视野：三维距离 ≤ 10 m（含等号），候选取本格及六邻格。
+  - 出视野：三维距离 > 20 m（视野半径 × `kAoiLeaveRadiusFactor`），与格子无关；中间是滞后区间。
+  - 重判时机：每个模拟步比较当前位置与上次评估位置。静止的（速度为零、没有 `Velocity` 的 NPC）位置一变就判；移动中的累计位移 ≥ 1 m 才判；首次入格立即判。
+  - 每次重判两个方向都处理：先撤超出离开半径的空间来源（显式关注不动），再在七格里补进入视野半径的。
+  - 满表被拒的候选在任一方下一次重判时补上；同场景瞬移仍走 `ResetEntityVisibility`（旧位置观察者立刻移除，不按滞后区间留着）。
+  - 设计与推导写在 `docs/design/aoi-directed-interest.md` 新增的「空间关注的评估时机」一节。
+- **代码**：
+  - `spatial/constants/view.h`：新增 `kAoiLeaveRadiusFactor`（2.0）、`kAoiReevaluateDistance`（1.0）、`kAoiHexSize`（20，`grid.cpp` 改用它），`static_assert` 视野半径不超过格子尺寸。
+  - `spatial/system/aoi.{h,cpp}`：`UpdateGridState` + `HandleEntityVisibility`（跨格进出）改为 `UpdateGridMembership`（只挪格子成员）+ `ReevaluateVisibility`（按距离重判）；`RebuildNearbyObservers` 复用同一判定。
+  - `spatial/system/view.{h,cpp}`：新增 `CanKeepSeeing`（离开半径），隐身规则抽成 `PassesStealthRule`，`CanSee` 语义不变。
+  - `spatial/comp/scene_node_scene_comp.h`：`AoiListComp::HasSpatialSource`；新按需组件 `AoiEvaluatedAtComp`（上次评估位置，唯一创建点 `ReevaluateVisibility`，已登记 `ecs-component-access-rules.md`）。
+  - `spatial/system/interest.cpp`：`EvictForWeight` 权重为 0 时直接拒绝（原逻辑同样必拒，只是不再扫表；重判频率变高后满表人群走这里）。
+  - 注释改正：`player/system/player_team.h`（`ShouldRegroup` 的理由）、`player/system/player_scene.cpp`（引用的函数名）。
+  - 没改协议、没新增 .cpp，vcxproj / CMake 不用动。
+- **测试**：`cpp/tests/aoi_delivery_test/aoi_delivery_test.cpp` 新增「空间关注按距离重判」一节 7 个用例：同格走近、跨格后走近（冒烟复现）、滞后区间、每步与停步重判、满表自愈、按距离移除不撤显式关注、重判不绕过隐身。
+  - 已逐个核对既有 `aoi_test` / `aoi_delivery_test` 用例：它们都用 `Update(0)`，在新规则下结论不变（静态推演，未运行）。
+- **文档**：`aoi-directed-interest.md`、`aoi_priority_design{,_zh,_en}.md`（删去「后续计划：滞后/缓冲期」，已实现）、`ecs-component-access-rules.md`、`team-system.md` V.1 事实 2 与 V.2 第 4 条、`world-channel-switch.md` 联机验收第 7 步。
+- **Codex 验证**（仓库根目录，VS 2026 Developer PowerShell，串行 `/m:1`）：
+  1. 先编库：`msbuild cpp/libs/services/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`。`aoi_test` 链接预编好的 `scene.lib`，不先编库会跑旧代码。
+  2. 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_delivery_test`，再依次 `-Filter aoi_test`、`-Filter cross_zone_test`、`-Filter buff_test`、`-Filter skill_test`。通过标准：全部用例通过，其中包括新增的 7 个。失败时保留 gtest 输出里失败用例的名字和断言行。
+  3. 编 Scene 节点：`msbuild cpp/nodes/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`，期望 0 错误。
+  4. 冒烟由负责人做：两个客户端同场景，一人站着，另一人从 15 m 外走近；走到 10 m 内双方互相可见，走到 20 m 外消失，15 m 左右来回走不闪。
+- **Java 版**：已按同一口径实现（`game-scene` `ViewIndex`，进 ≤ 10 m / 出 > 20 m / 移动中每 1 m、静止下一帧重判），不用改代码。Java 仓 `PARITY.md`「视野（AOI）进出通知」行已补一句 mmorpg 现状；契约 §8 表里「C++ 仍只在跨格时重判」等 Codex 验证通过后再改。
+- **未提交，未编译，未测试。**
+
+## 2026-11-10 Claude:控制域分实例复查,修两处缺陷并补齐连接总账与 redis-split-status(缺口清单第 4、5 条收尾;未运行,待 Codex 验证)
+
+- **起因**:负责人问第 4、5 条服务器代码是否做完。先核对已有运行证据:
+  - Go:Codex 11-06 跑过 scene_manager,`go vet ./...` 通过,`go test ./... -count=1` 788 个顶层用例 PASS、0 FAIL。
+  - C++:11-08 命名统一那轮整解之后,`cross_zone_test` 458 条全 PASS,其中 `DiscoveryZoneScopeTest.*` 5 条(`build/verification/naming-audit-20261108/cpp-tests/cross_zone_test/cross_zone_test.stdout.log`)。
+  - 部署契约 `k8s_redis_ctl_contract` 与 kind 冒烟至今没有运行记录。
+  - 设计稿 §6 的残余里,第 10 条(合服)已由「死节点收尾告警」那条定为不删,第 11 条(player-locator 的 `SceneManagerRpc`)已由断线重连 R20 补上,只剩第 8、9 条。复查 5c 时又发现下面两处缺陷。
+- **缺陷 1(数据一致性)**:K8s 没建玩家域集群时,scene-manager ConfigMap 的 `PlayerRedis` 只写池上限,`EffectivePlayerRedis` 回落到 `Redis` 段。5c 把 `Redis` 段指向 `redis-ctl-g<N>` 之后,scene_manager 的 location、owner_epoch、handoff 落在控制域实例。login、player_locator、data_service 等服务与 C++ scene(node-config 不写 `player_redis` 时沿用 zoneredis)仍在核心,两份各写各的。
+  - 修复:`go/scene_manager/internal/config/config.go` 的 `EffectivePlayerRedis` 改为回落到 `EffectiveCoreRedis()`。开发环境三者是同一个实例,行为不变。
+  - 注释同步:`CoreRedis` 字段、`PlayerRedis` 字段、`ResolveSharedRedisPassword`,以及 `k8s_deploy.ps1` 生成 PlayerRedis 段处与 scene-manager ConfigMap 模板的注释。
+  - 测试:新增 `config_test.go` `TestEffectivePlayerRedisFallsBackToCoreNotControlInstance`(K8s 形状:控制域与核心分开,地址与身份取核心);`shared_redis_password_test.go` 那条断言加核对地址。
+- **缺陷 2(首次部署被拒)**:`ConvertFrom-RedisCtlLiveYaml` 的参数标了 `[string]`。PowerShell 把传入的 `$null`(ConfigMap 不存在)转成空串,判成「在而读不出地址」,结果是 `refuse`。不带 `-ConfirmRedisCtlSwitch` 的首次 zone-up / all-up 全部被拦。参数改为不标类型(同 `ConvertFrom-RedisPurposeLiveYaml`)。
+- **补齐残余第 8、9 条**(`tools/scripts/k8s_deploy.ps1`):
+  - 连接总账:新增 `Get-RedisCtlConnectionLedgerInputs`、`Write-RedisCtlConnectionLedger`,由 `Write-RedisConnectionLedger` 调用,每组打一行 `Redis ctl connection ledger:`。
+    - 计数:每个 scene-manager 副本一个 go-zero 缺省池,按 20 条计;每个 scene 进程 1 条。
+    - 规划档按全部 zone 落在同一组算。高可用形态另打 `Redis ctl proxy ledger:`。超水位以 `[RedisCtlConnectionLedger]` 告警,不阻断。
+    - 核心总账 scene-manager 那一行不变:那一池现在是 `CoreRedis`,地址不同,go-zero 另建一个池。
+  - `redis-split-status`:每个 zone 先查控制域一段(`Get-RedisCtlZoneStatus`):
+    - scene-manager 的 `Redis.Host` 与 node-config 的 `scene_control_redis.host` 都要是本组实例;
+    - `deployment/scene-manager` 要滚完;
+    - 本组 `redis-ctl-g<N>` 要在且就绪,同组只查一次。
+    - 不满足退出码 1;两份 ConfigMap 都不存在只打 `<absent>`。控制域放在每个 zone 的最前面,排队那段读失败 `continue` 时不会把它跳过。
+  - 新增的辅助函数:`Read-LiveConfigMapData`(入口闸与状态命令共用,原入口闸的内联读取改用它)、`ConvertFrom-RedisCtlNodeConfigYaml`、`Get-RedisCtlZoneProblems`。
+- **诊断文案改英文(AGENTS §2)**:控制域一段的 throw、告警、问题文本;`ConvertFrom-RedisQueueInstanceLive` 的 7 条问题文本,同时去掉写死的「login / gateway 指向的实例」(控制域实例也用它)。
+- **测试**:
+  - `tools/scripts/tests/k8s_redis_ctl_contract.tests.ps1` 新增 5 条用例:
+    - PlayerRedis 不写 Addrs、`CoreRedis` 是核心、C++ zoneredis 是核心;
+    - zone-up / infra-up 的总账行,`steady = scene-manager 副本数 × 20 + scene 进程数`;
+    - `Write-RedisCtlConnectionLedger` 按组合计,数字逐项写死;
+    - 超水位告警;
+    - 无数据键的 ConfigMap 判 present。
+  - `k8s_redis_split_contract.tests.ps1`:
+    - 9 条问题文本匹配改英文;
+    - `Show-RedisSplitStatus` 用例补控制域替身与断言;
+    - DryRun 用例补两条断言;
+    - 新增 `Get-RedisCtlZoneProblems` 用例;
+    - `$GoSvcCatalogue` 从部署脚本 AST 取同一条赋值。
+  - 三个 ps1 用 PowerShell 解析器检查 0 错误,`gofmt -l internal/config/` 无输出(只是静态检查,不是测试)。
+- **文档**:
+  - 设计稿 `control-plane-zone-scoping-20261105.md`:§4.2 玩家域那一行;§6 第 8、9、11 条改写;§7 末尾加「2026-11-10 订正」;§8 写明已有证据、新增用例和冒烟步骤(全新集群不带确认开关必须放行,加玩家域只在核心的核对)。
+  - `deploy/k8s/README.md`:总账、`redis-split-status` 各加一段,`redis-wipe` 的清单补 `redis-ctl-g<N>`。
+  - 缺口清单第 4、5 条的状态行。
+- **给 Codex**(仓库根目录,PowerShell 7;按顺序,失败保留用例名与断言输出,不改弱断言,不连续重试):
+  1. `cd go/scene_manager; $env:GOTOOLCHAIN='local'; $env:GOPROXY='off'; go vet ./...; go test ./internal/config/ -count=1 -v -run 'TestEffectivePlayerRedis|TestResolveSharedRedisPassword'`:全绿,`TestEffectivePlayerRedisFallsBackToCoreNotControlInstance` 在列;再 `go test ./... -count=1` 全量不回归。
+  2. `pwsh -NoProfile -File tools/scripts/tests/k8s_redis_ctl_contract.tests.ps1`:fail=0(这套从没跑过,11-05 的用例和本轮新增的一起首次验证)。
+  3. `pwsh -NoProfile -File tools/scripts/tests/k8s_redis_split_contract.tests.ps1`:fail=0。
+  4. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 与 `k8s_client_entry_contract.tests.ps1`:回报总数与 fail。写路径多了 `Redis ctl connection ledger:` 一行,按前缀找核心总账的断言不受影响。若 fail 与本轮无关(11-06 那轮记过发布轨道的 3 条既有失败),写明是哪几条。
+  5. 回归核对(可选):把 `EffectivePlayerRedis` 的回落临时改回 `c.Redis`,第 1 步那条新用例应红;把 `ConvertFrom-RedisCtlLiveYaml` 的参数临时改回 `[string]`,第 2 步的 absent 用例应红。核对完还原。
+  6. kind 冒烟按设计稿 §8 第 5 步:全新集群 `all-up -RedisSplit queue` 不带 `-ConfirmRedisCtlSwitch` 必须放行;`redis-split-status` 退出码 0;robot 进场后核心 `redis-0` 上有该玩家的 `player:{<id>}:location`,`redis-ctl-g0` 上没有 `player:*`。
+- **未验证**:以上都没运行。Go 只改了 `internal/config` 一个函数和两个测试文件,C++ 没动。
+- **Java 版(AGENTS §12)**:不加新行。两处缺陷与总账、状态命令都是本仓 K8s 部署与 scene_manager 配置的问题,Java 版没有 K8s 生产形态;控制面按 zone 化本身已在 Java 仓 `PARITY.md` 登记待做(2026-11-05 条目),对应 0.1.0-SNAPSHOT。
+- **提交情况**:未提交。
+
+## 2026-11-10 Claude：owner_epoch 铸造持久化独立审核（静态，未编译、未运行）
+
+- **范围**：Codex 11-08 交来的 G3a 墙钟地板、G3b 铸造后同连接 WAITAOF，以及 C++ 对回滚凭据「≥ +2」的采纳与恢复。审阅时 HEAD 为 `e0790ad40`，按源码静态审阅。WAITAOF 与重试语义对照 go-redis v9.17.3 与 `third_party/redis`（8.10.2）的源码核对。没有改生产代码或测试。
+- **结论**：没有发现会造成旧盖新或同值重铸的缺陷。下面两条要处理：
+  1. **设计缺口**：铸造没确认落盘时会回滚，回滚值同样没确认，却被 C++ 源端 B5 采纳，并随强制存盘抬高 TiDB 写权行。「副本落后之后主节点宕机」时，铸造与回滚一起丢，源端拿着 Redis 不认识的代次继续持有，之后的跨节点交接被 `kPublishMarkDirectLua` 拒掉。设计里「持有者不会拿到会丢的 epoch」这一句在该分支上不成立。方案 A（两段回执）与 B（接受并改写残余）待负责人定。
+  2. **证据缺口**：Go 铸造通道从没在真实 Redis 上执行过。svc 测试用 miniredis（不认 WAITAOF），logic 测试用替身，真实 Redis 的 3 个 C++ 用例不经过铸造通道。
+- **低级问题**：
+  - 启动探针用新连接，写偏移为 0，查不出副本没开 AOF；
+  - 两处注释仍写「持有者下一次存盘被等值 CAS 拒、按废黜销毁」，这条在 Redis 存档路径删除之后已不成立；
+  - 多处注释与设计引用的 go/db、data_service WAITAOF 实现已不存在。
+- **R-b 提示**：前置 RPC 用掉约 1.5s 时，`numreplicas=1` 下按设计自己的模型，约 40% 的铸造会判 not_durable。正确性不受影响，可用性会掉。
+- **证据新鲜度**：11-08 的运行证据对应 `c17837c9c`，不覆盖之后的改名与工作区里的他方改动。
+- **详情与交 Codex 的补测清单**：[交接文档「Claude Code 审核结论（2026-11-10）」](handoff/owner-epoch-claude-review-20261106.md)。内容包括：用例 (a)–(e)、命令、通过标准，7.2 与 8.x 各跑一轮。第 1 条在负责人定方案之前不动代码。
+- **Java 版**：Java 的 owner_epoch 在 SQL 事务内递增，本线不适用，不新增待办。
+- **文件**：
+  - `docs/handoff/owner-epoch-claude-review-20261106.md`（状态行、过时的额度段落、新增审核结论一节）；
+  - 本文件；
+  - 未提交。
+
+## 2026-11-10 Claude：去单点批 C2（player_locator 补建与审计按段分摊）与 C3 结论（未编译、未测试，待 Codex 验证）
+
+- **起因与设计**：`docs/design/no-single-node-horizontal-scaling-20261001.md` §9；做法写在 `docs/design/player-locator-gate-session-index.md` 新增的 §4.5。一遍完整扫描在 2000 万在线时约 19 小时，只有 leader 一个副本在扫。
+- **C2 做法**：
+  - 玩家域是 Cluster 时，leader 只调度：发布一遍（控制域 `player:gate_index:pass`），每拍读各段进度，256 段都做完就结束、汇总。就绪标记与审计时刻的判据不变（`runRepairPass`、`runAuditPass` 没改）。
+  - 各副本复用死 gate 清扫的段租约做自己那些段：逐个 slot 用新函数 `playerredis.SlotKeys`（`CLUSTER COUNTKEYSINSLOT` + `GETKEYSINSLOT`，前后核节点持有 slot 与 `run_id`）列键补成员，再读登记集清脏成员；做完一个 slot 用比较后写入的脚本推进本段进度。
+  - 换主、重启、段换主人都从断点接着做；代次或种类变了就换一遍。单实例玩家域（dev）仍由 leader 自己整库扫。
+  - 单页重试的退避加了抖动（各副本同时在扫）；单测不注入抖动，原有退避序列的断言不变。
+- **代码**：
+  - 新增 `go/shared/playerredis/slotkeys.go`、`slotkeys_test.go`。
+  - 新增 `go/player_locator/internal/logic/index_pass.go`、`index_pass_test.go`（8 条：与单机同结果、审计、换主续做、发布复用规则、进度比较后写入、段换主人即停、单 slot 失败下拍续做、被换掉的一遍作废）。
+  - 改 `session_reconciler.go`（依赖 `listSlotKeys`、`jitter`，`fullPass` 分派，Cluster 时起 worker）、`slot_shard.go`（`OwnedSegments`）、`keys.go`（三把控制域键）、`reconcile_metrics.go`（`gate_index_pass_segments_done`、`reconcile_pass_slots_total`）。
+- **C3 结论**：`guild_rank:maintenance_lock` 暂不改。积分写入现在只有建帮时的初始 0 分，`UpdateGuildScore` 内部 RPC 在 Go、C++ 里都没有调用方，不是容量问题。以后有真实积分来源时的做法（分数版本号加条件写入）写在总纲 §9 表下。
+- **Codex 验证**（仓库根）：
+  1. `cd go/shared; go vet ./playerredis/; go test ./playerredis/ -count=1`：全绿，含 `TestSlotKeysRejectsStandaloneAndBadArguments`、`TestSlotOwnershipRanges`。
+  2. `cd go/player_locator; go vet ./...; go test ./internal/logic/ -count=1`：全绿，含 `index_pass_test.go` 的 8 条；原有补建、审计、退避用例照旧通过。注意 3 条整遍用例各跑 16384 个 slot，耗时比别的用例长，属正常。
+  3. `cd go/player_locator; go test ./... -count=1 -race`：没有数据竞争。
+  4. 可选，真 Redis Cluster（`deploy/debug` 里的玩家域集群，或自起 3 主）：玩家域写入一些会话后跑一遍补建，看日志「index pass … segment … done」覆盖 256 段、`player:gate_index:ready` 被设上；再手工 `CLUSTER SETSLOT` 迁一个 slot 期间跑审计，那个 slot 报 `ErrTopologyChanged` 后下一拍补上。没有现成用例，结果写回本条下面。
+- **滚动升级**：没有这套代码的旧副本也持有清扫的段，但不做这一遍；升级期间这一遍会慢，不会出错（设计 §4.5）。
+- **Java 版**：只登记待做。
+
+## 2026-11-10 Claude：Gate 在线身份简化第 4 批——删 guild 请求体里被忽略的字段与全服帮会榜（设计 §9.6 第 2、3 条；未编译、未测试，待 Codex 验证；Java 0.1.0-SNAPSHOT 待做）
+
+- **负责人要求（2026-11-10）**：
+  - 项目未上线，玩家数据可以清空。
+  - 服务器代码按最标准的方式做完；客户端代码、协议生成、编译和冒烟交给 Codex；Java 留到 TODO。
+  - 所有改动都在 main 上做，不开分支。
+
+  据此把 §9.6 剩下的第 2、3 条都做完。第 3 条（全服榜）的负责人答复与文档改正，由「删除只写不读的全服帮会榜 guild_rank」会话负责，见同日条目；代码和测试两条同批，都在本条。
+- **§9.6 第 2 条：删 guild 请求体里被忽略的字段**（客户端契约变更）。`proto/guild/guild.proto` 里 6 个请求删掉字段，字段号写成 `reserved`：
+  - CreateGuildRequest：`player_id = 1`、`zone_id = 3`
+  - LeaveGuildRequest、DisbandGuildRequest：`player_id = 1`
+  - SetAnnouncementRequest：`player_id = 2`
+  - GetGuildRankRequest：`zone_id = 3`
+  - GetGuildRankByGuildRequest：`zone_id = 2`
+
+  这些字段服务端早已不采信：身份取会话，区取归属。保留的只有两个：GetPlayerGuildRequest 的 `player_id`（mail 不带会话的只读调用要用）和 UpdateGuildScoreRequest 的 `zone_id`（服务端内部推分）。
+
+  四个写方法改为 `callerOf(ctx, 0)`。原计划等 Java 对齐两版同批删，负责人要求现在就做。
+- **§9.6 第 3 条：删全服帮会榜**（`go/guild/internal/data/guild_repo.go`）：
+  - 删掉 `guildRankKey`。
+  - `UpdateGuildScore`、`RebuildRanks`、`RemoveGuildFromRank` 只维护分区榜。
+  - `GetGuildRankPage` / `GetGuildRank` 不给区时，在访问 Redis 之前回 `ErrRankZoneRequired`。
+  - `zone_id = 0` 的坏行：分数照常落库，不进任何榜，打英文错误日志。
+- **测试**：
+  - `rank_page_test.go`：新增 `TestGuildRankReadsRequireZone`，断言 miniredis 命令计数为 0。原先断言 `Keys` 为空，按对方会话的评审改成计数，因为读命令不建键，`Keys` 为空证明不了没访问 Redis。
+  - 集成标签：新增 `TestUnzonedGuildIsPersistedButNeverRanked`，并在写分与重建用例里加 `assertNoGlobalRank`。
+  - 其余用例只改请求体和播种数据，断言没改。
+- **robot 公会冒烟**：
+  - 第 1 步不再故意填错区，第 4 步查别区榜不再伪造区，第 8 步改为按会话身份退帮。
+  - `etc/guild_smoke.yaml` 文件头同步。
+  - robot 构建用的是 vendor 里的协议副本，Codex 生成协议后要在 `robot/` 跑 `go mod vendor`。
+- **注释改正**：
+  - `guild_logic.go`：文件头和三个查询方法。
+  - `guild.go`：启动重建。
+  - `guild_repo.go`：榜单说明。
+- **影响**：
+  - 客户端要按新协议重新生成，并删掉对被删字段的赋值，由 Codex 做。
+  - C++ 生成物 `cpp/generated/proto/guild/guild.pb.*` 会变，要重编；手写代码不引用这些字段。
+  - 每次写分少一次 ZADD。没有压测，不宣称性能变化。
+- **验证**：只对改动的 Go 文件跑过 `gofmt -l`，无输出。未生成协议，未编译，未测试。
+  - Codex 按 `docs/handoff/gate-online-identity-simplify-20261105/CODEX.md` 第 8 节执行，覆盖：
+    - 生成，含客户端；
+    - robot vendor；
+    - 客户端编译；
+    - 静态检查；
+    - go/guild、go/mail、robot 的 build / vet / test，包括 `-tags integration`；
+    - C++ 整解；
+    - 机器人公会冒烟。
+  - 同一文件第 1 节里 MatchService 的客户端方法数，顺手由 10 改正为 12。
+- **Java 版（0.1.0-SNAPSHOT）**：本轮不写 Java 代码，在 Java 仓 `PARITY.md` 文末登记了 TODO：
+  - 同步 `guild.proto` 删字段；
+  - 删 `GuildService` 里四处 `bodyIdentity`；
+  - 改掉设置这些字段的测试与 `GuildScenario`。
+
+  「帮会核心」行有意差异⑩里的全服榜部分，已改为「不再是差异」。
+- **文件**：
+  - 协议：`proto/guild/guild.proto`
+  - go/guild：
+    - `guild.go`（只改注释）
+    - `internal/data/{guild_repo,rank_page_test,rank_read_snapshot_test,rank_zone_integration_test}.go`
+    - `internal/logic/{guild_logic,client_zone_test,expected_guild_integration_test}.go`
+  - robot：`guild_smoke_scenario.go`、`main.go`（只改注释）、`etc/guild_smoke.yaml`（只改注释）
+  - 文档：
+    - `docs/design/gate-online-identity.md`：顶部状态、§8、§9 标题、§9.6 第 2 条
+    - `docs/handoff/gate-online-identity-simplify-20261105/`：`PLAN.md` 第 6 节第 2 条、`CODEX.md`（第 8 节、第 1 节两处、开头与回执范围）
+    - 本文件
+  - Java 仓：`PARITY.md`
+  - 未提交。
+
+## 2026-11-10 Claude：等级读点线验证核对与日志英文化（改了一条日志文案与契约测试的诊断输出，未编译，待 Codex 执行）
+
+- **核对结论**：Codex 11-08 的命名统一运行（`build/verification/naming-audit-20261108/`）已覆盖本线全部 C++ 用例。bag_test 932、skill_test 80、buff_test 37 条全过；本线 12 条在 stdout 里逐条是 OK。之后源码没变：按该运行的最终哈希清单与提交记录核对过。
+- **契约测试** `tools/scripts/tests/test_cpp_level_comp_reads.py` 还没有运行记录。
+- **本条改动**（AGENTS.md §2：日志与诊断输出用英文）：
+  - `player_mission.cpp`：本线加的接任务拒绝日志改成英文，判断与返回码不变；
+  - 契约测试的违规原因与断言消息改成英文，规则不变。
+- **给 Codex**：在仓库根目录执行 `python tools/scripts/tests/test_cpp_level_comp_reads.py -v`，期望退出 0、15 条全 ok。日志文案改动随下一次 `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64` 一起确认能编过即可。详见交接 `docs/handoff/mixed-version-persist-handoff-20261019.md` §22。
+- **Java 版（AGENTS §12）**：0.1.0-SNAPSHOT，待做，`PARITY.md` 原有那一行已登记，不另加行。
+
+## 2026-11-10 Claude：数据审计遗留·商城付款金额或币种不符（未编译、未测试，待 Codex 验证）
+
+- **起因**：第二轮数据审计评审 R3。本仓 `java/mall_game` 付款回调的金额或币种与订单不符时只回 409、什么都不落。钱已经进了渠道，系统里却没有记录，也没有退款。11-05 修重复付款时没顺带修，按周额度约定推到这次。
+- **修法**：照 11-05 重复付款的形状。
+  - 判定顺序：
+    - 交易键已记过，走重放；
+    - 币种不同，记 `CURRENCY_MISMATCH`，不再比金额；
+    - 币种相同、金额不同，记 `AMOUNT_MISMATCH`；
+    - 都对且订单已付，记 `DUPLICATE_PAYMENT`。
+  - 金额币种先于订单状态判定：对不上的钱在任何状态下都不绑定订单。未付单保留预占、仍可正常付清；已取消单不转退款中。
+  - 异常付款在同一事务里写三行，订单、库存、交付都不动：
+    - `order_sn` 为 NULL 的付款回执，交易键是主键，金额币种记实收值；
+    - `commerce_abnormal_payment` 一行，记冲的订单和原因；
+    - 一条同原因的退款待办。
+  - 表改名：11-05 的 `commerce_duplicate_payment` 改名 `commerce_abnormal_payment`，加 `reason` 列。项目未上线，不写迁移。
+  - 重放：同一订单、同一金额币种，回原结论；报给别的订单或改了金额币种，回 409。
+  - 并发：同一订单的回调在订单行锁上排队；两张订单报同一交易键，在回执主键上撞键，只有一张记下。
+  - 应答：`/internal/payments` 改回 `{order, refundReason}`（`CommerceApi.PaymentOutcome`），200 表示已落库。
+    - `refundReason` 为 null：这笔是订单本身的付款；
+    - 非 null：这笔已排进退款，值是原因。适配器据此区分重复付款与金额 / 币种不符，11-05 残余「重复付款的应答适配器分不出来」一并解决；
+    - mock 付款接口仍回订单视图。
+  - 退款：
+    - 原因取值集中到 `CommerceApi.RefundReason`，带「是否退订单本身那笔」，`DeliveryStore` 不再自持字符串常量；
+    - `/internal/refunds/poll` 每项改为 `PendingRefund`，带原因；
+    - 一条退款流水已了结别的付款时回 409。原来撞唯一键冒 500，适配器会一直重试。
+  - 适配器契约写进 `CommerceApi.PendingRefund` 与设计 §8.2 第 9 点：渠道退款的幂等键取被退那笔付款的交易号，不能用订单号。
+- **文件**：
+  - mall：`CommerceApi`、`CommerceStore`、`CommerceController`、`DeliveryStore`、`DeliveryController`、`MockPaymentStore`、`SchemaVerifier`、`schema.sql`。`PaymentPolicy` 不用改：渠道与 mock 原件守卫现在先于金额判定执行，mock 原件按冻结值生成，不会出现不符。
+  - 测试：
+    - `CommerceStoreTest` 新增 6 例：金额不符、币种不符、重放幂等、同单并发、两单并发、退款流水复用；
+    - 原 `wrongAmountAndBrokenReservationRollbackAllPaymentFacts` 断言不符回 409，正是缺陷行为，改为只验预占损坏回滚（`brokenReservationRollsBackAllPaymentFacts`）；
+    - `CommerceHttpFlowTest` 补真实 HTTP 下的应答形状，以及金额不符回 200；
+    - `StorageAndAuthTest` 补 11-05 布局拒启；
+    - `DeliveryStoreTest`、`CatalogAdminStoreTest`、`OfficialOrderOwnershipTest` 跟着应答改形。
+  - 文档：
+    - `payment-recharge.md`：§7、§8.0、§8.2 第 1、7、9 点、§21、§20 v5.1；
+    - `java/README.md`；
+    - `jubaozhai-rmb-consignment-plan.md` §3.6。
+- **交 Codex**（工作目录 `java/`，串行执行）：
+  1. `mvn -pl mall_game -am test`，全绿、0 跳过。
+  2. 有本机 TiDB 时，按 `java/README.md` 真实 TiDB 一段配好环境变量，在 `java/mall_game` 下跑：
+     - `mvn '-Dtest=CommerceStoreTest,TiDbEnvironmentIT' '-Dcommerce.it.tidb=jdbc:mysql://127.0.0.1:4000/' test`
+     - `mvn '-Dtest=CommerceTiDBHttpIT' '-Dcommerce.it.tidb=jdbc:mysql://127.0.0.1:4000/' test`
+
+     `CommerceTiDBHttpIT` 继承 `CommerceHttpFlowTest`，会连带验金额不符的 HTTP 路径。
+  3. 已装的开发商城库须按 `schema.sql` 重装（新表名、新列），否则 `SchemaVerifier` 拒启。
+  - 失败时保留 surefire-reports，不连续重试。
+- **残余**：
+  - 充值 SKU（V3）的金额不符怎么处理，随 V3 定。收据式渠道没有开发者退款接口，退款待办要配「渠道不支持退款」关闭回执（设计 §8.2 第 9 点，未做）。
+  - 退款待办领取仍没有游标与租约（同上，未做）。
+  - 第二轮审计 r2 文档 §1、§5.0 与交接 README §1 第 2 条的状态，留给「数据覆写审计换视角查找第 2 轮」会话更新。r2 文档在主工作区正被它改着，本次没碰。
+- **Java 版（AGENTS §12）**：`game-mall` 的 `MallOrderStore.recordTrustedPayment` 同样回 409，已在 Java 仓 `PARITY.md` 登记 2026-11-10「商城付款金额或币种不符」待做，与 11-06 登记的重复付款一起做。只登记，没改 Java 代码，也没跑 Java 构建。
+
+## 2026-11-10 Codex：全局号源登记处修复与 Claude Code 独立审核交接
+
+- **修复范围**：11-06 已修 `EtcdRegistry.Open` 扫描/提交竞态，G→P→S 读取和登记处条件复核避免正常并发被误报回档，复核失败零写入并拒绝发号；部署登记处参数改为写入前预检。补确定交错与真实 etcd 回归，存档池告警对齐既有固定 K 设计。上述代码已被其他会话收录至 `de6891478`，本线未执行提交或推送；当前只补设计、手册和交接，保留工作区其他会话改动。
+- **验证通过**：852 文件固定副本的 data_service build、普通/带标签 vet 通过；idissuer/config/logic 顶层单测 57/47/96，svc/入口 4 个顶层通过。完整真实 etcd 首轮 4/5（一项超时，同刻 WAL 同步 8.326 秒）；用户授权串行复跑一次后 5/5、0 SKIP，原超时与断言未改。11-10 当前工作区 idissuer 再测 57/57、部署契约 10/10，核心源码与固定副本一致。真库镜像是 etcd 3.5.15，不代替当前部署 3.6.16 验证。
+- **未完成项**：旧部署大套中断，仅落盘 311 项（285 PASS、26 FAIL），没有最终退出码/结束哈希，后五套未启动，不宣称当前大套通过。修复版快照演练 A 段及 P/S 快照通过，B/恢复/C 尚未执行；11-10 Docker Desktop 因 Secrets Engine socket 重命名错误退出，未重置系统或修改凭据。容器/卷清理没有最终回执，确切清单和快照保留；race、当前整包再验、staging 与 dev 冒烟未执行。
+- **证据与审核入口**：`build/verification/idissuer-fix-20261106-a3181b57/`；[原交接 §5](handoff/global-id-issuer-registry-20261105.md#5-2026-11-06-修复与-2026-11-10-交接收尾) 已写实际命令、红绿证据、哈希、版本边界、Docker 阻塞、清理步骤和可复制审核请求。按用户要求由 Claude Code 自选审核思路、不预设结论；尚无 Claude 审核结果。Java 继续仅待办，本次未实现。
+- **同日收尾补充**：最终文档状态再次执行登记处部署契约为 10/10、exit 0，但运行期间其他会话修改了 k8s_deploy.ps1，18 份输入中仅其余 17 份稳定；末轮不构成最新脚本固定版本验收。此前同日 18 份输入稳定的 10/10 结果仍单独保留，未循环重试；交接 §5 已同步该边界。
+
+## 2026-11-10 Claude:gate 排空迁移批 B(gate 一侧)落码(未编译、未测试;Java 待做)
+
+- **范围**:负责人 11-10 要求全部改动在 main 上做、不开分支,只写服务端代码,客户端、协议生成、编译与冒烟交给 Codex,Java 留到待做。接 2026-11-06「gate 排空迁移批 A」。设计 `docs/design/gate-drain-session-migration.md`,落码记录在它的 §18。服务端到这里功能完整;迁移开关 `GateDrain.Migrate.Enabled` 仍默认关,行为与原来相同,打开前要等客户端跳数清零上线、robot 集成跑过(设计 §10 第 2 条、§12 第 1 条)。
+- **行为**(开关打开、某台 gate 被标排空之后):
+  - login 每个判定周期给它发迁移许可;gate 每秒至多按 `RatePerSecond` 个挑已登录的连接,向 login 要一张换 gate 的票(`ClientPlayerLogin.RequestGateMigration`,路由模式经路由服、直连模式直发 login,都不进路由 lane),在途不超过 2 × 速率;
+  - 要到票就推 msg 124(与跨 zone 传送同一个收口 `gate_redirect::PushRedirect`,补了身份栅栏);客户端换到同 zone 另一台 gate,在断线保留的租约内回原场景;
+  - 合格的连接:验过票、登录成功、没推过 124;游戏中的要有场景路由、不在进场途中;选角界面的要最近 5 分钟没发过 EnterGame(对齐 login `enterGameChainBudget`);应答到达时按同一份判定复核,会话换了、开始进场、换了角色就丢弃这张票;
+  - login 回 `NOT_DRAINING` / `DISABLED` 或许可到期就停;`NO_TARGET`、调用失败、没发出、推送没到客户端都退避 10 秒;
+  - 推过 124 的会话被踢时不推「账号在别处登录」、直接关;推过 124 满 60 秒仍连着就关掉(滞留关闭,跨 zone 传送同样生效,与 Java 版 `game.gate.redirect-linger` 一致);
+  - 客户端自己发这个新消息号按非法包拒绝(`IsGateSynthesizedOnly`)。
+- **文件**(这些文件里有别的会话未提交的改动,只动了下面这些段落;`client_session_handler.cpp`、`main.cpp`、`gate.vcxproj` 同时有「路由服子集」会话的改动,它的 `PickRouter` 已接在本批抽出的 `PickRouterChannel` 里):
+  - 新文件:`cpp/nodes/gate/handler/rpc/drain_migration.{h,cpp}`、`cpp/nodes/gate/handler/gate_redirect_delivery.{h,cpp}`、`cpp/nodes/gate/tests/drain_migration_test.cpp`;
+  - 改:`cpp/nodes/gate/handler/event/gate_event_handler.cpp`(三个守护段)、`cpp/nodes/gate/handler/rpc/client_session_handler.cpp`、`cpp/nodes/gate/handler/rpc/router_muduo_forward.{h,cpp}`(新增 `SendForwardForInternalReply`,与 `SendForward` 共用 `PrepareForwardCall`)、`cpp/nodes/gate/handler/rpc/login_admission.h`、`cpp/libs/services/gate/session/comp/session_info_comp.h`、`cpp/nodes/gate/main.cpp`、`cpp/nodes/gate/gate.vcxproj` 与 `.filters`、`cpp/tests/routing_identity_test/{routing_identity_test.vcxproj,gate_client_entry_admission_test.cpp}`;
+  - 批 A 收尾:`go/login/internal/svc/gate_command.go` 的空事件报错与 `tools/scripts/k8s_gate_drain.ps1` 两条迁移配置的 throw 改成英文(AGENTS §2);`go/login/internal/logic/pkg/loginqueue/{gatedrain.go,gatedrain_monitor.go}` 文件头按现状改写(只改注释);
+  - 文档:设计稿(开头状态、§4.3、§8、§11、§15、§17.3、新增 §18)、`docs/design/k8s-client-entry.md`(gate 排空一节加「排空期间迁移」,「明确不做」那一条改写)、`docs/design/node-lifecycle-elasticity-release-20261023.md` §3 gate 一行、`docs/README.md` 索引行、本条。
+- **验证**:没有编译,没有运行任何测试、冒烟或格式化工具。协议生成物在动手前已随主干快照提交(`login_grpc_client.h` 有 `SendClientPlayerLoginRequestGateMigration`,`login_service_metadata.h` 有 `ClientPlayerLoginRequestGateMigrationMessageId = 375`,`gate_event.pb.h` 有 `GateDrainMigrationEvent`),本批没有改 proto。
+- **交 Codex**(仓库根 `D:\luyuan\xuanming-server-mmo-cpp`,按顺序执行;红了保留第一个错误的完整输出,不改断言、不连续重试;落在别的会话改动上的失败如实标出;日志放 `build/verification/gate-drain-migration-20261110/`):
+  1. 生成物核对:上面三处生成物在,就不用重跑协议生成。缺了才按 2026-11-06 批 A 条目第 1 步重跑(`-ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`,不写客户端仓)。
+  2. C++ 整解:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`(必须串行),0 个 `error C` / `LNK`。`session_info_comp.h` 在 gate 库里,gtest 工程链接预编好的库,这一步不能省。
+  3. gate 单测:`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter routing_identity_test -LogDir build/verification/gate-drain-migration-20261110/cpp-tests`,fail=0。新用例要在输出里能找到:`DrainMigration.*` 20 例、`DrainMigrationLinger.*` 2 例、`GateSynthesizedOnly.GateMigrationRequestIsRejectedAtClientEntry`;同工程原有的 `GatePushDelivery.*`、`GateClientHeartbeat.*` 等照常要绿。
+  4. 会话结构加了字段,建议再跑一遍全部 gtest 工程:`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -LogDir build/verification/gate-drain-migration-20261110/cpp-tests-all`,与最近一次全量运行逐工程对比,只报新增的失败。
+  5. Go 与 robot:按 2026-11-06 批 A 条目第 2 步全部执行(`GOTOOLCHAIN=local`;`go/login` 的 build、vet、三组定向测试与 `go test -count=1 ./...`,`go/client_rpc_router` 的 build,robot 的 `TestFollowRedirect`)。本批改了 `gate_command.go` 的报错文本,`GateDrainMigrationCommand` 一组要照常过。
+  6. PowerShell:`pwsh -NoProfile -File tools/scripts/tests/k8s_gate_drain.tests.ps1`,fail=0(两条迁移配置的拒绝用例按键名匹配,文案改英文不影响)。
+  7. 本地冒烟(建议做,开关只在本地打开):一个 zone 起两台 gate(A、B),`go/login/etc/login.yaml` 把 `GateDrain.Migrate.Enabled` 置 true,起 robot 若干全部落在 A 上并进场;`redis-cli SET gate:<A 的 node_id>:draining <当前 Unix 秒> EX 1800` 标记 A。期望:
+     - A 的日志先有 `[DrainMigration] started`,之后每 10 秒一行 `[DrainMigration] progress`,`offered` 逐步涨到 robot 数,`failed` / `push_dropped` 为 0;
+     - robot 全部跟随到 B、场景 id 不变,没有 robot 会话失败;scene 日志有 `[ConnectionLostHold] player <id> resumed by a new session`;A 上没有被迁会话的 `KickPlayer: kicked` 行(被踢只会出现 `closed redirected session without kick notice`);
+     - login 写出 `gate:<A>:drained` = `below_threshold`;
+     - 之后 `DEL gate:<A>:draining gate:<A>:drained`,15 秒内(3 × 判定周期)A 打 `[DrainMigration] stopped: reason=lease expired`。
+     - 冒烟完把 `login.yaml` 改回默认关。
+- **未做**:客户端跳数清零与设计 §10 的其余核实项(另开获授权的客户端任务);默认打开迁移、用压测定默认速率(§12);Java 版。
+- **Java 版(AGENTS §12)**:`0.1.0-SNAPSHOT` 待做。Java 仓 `PARITY.md` 2026-11-06 那一条已改成「主仓批 A、批 B 已落码未编译,Java 待做」,并补了 gate 一侧的行为要点;没有改 Java 代码。

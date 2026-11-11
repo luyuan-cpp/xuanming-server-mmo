@@ -100,6 +100,7 @@ import (
 	"shared/assetop"
 	"shared/gameday"
 	"shared/safego"
+	"shared/workshard"
 )
 
 // Store 各方法的子预算(90 part2 §2 第 8 条)。
@@ -188,12 +189,13 @@ var (
 )
 
 const (
-	sqlListDueSegmentFresh = "SELECT `op_id` FROM " + guildAssetOpTable +
-		" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ? AND `attempts` < ?" +
-		" ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"
-	sqlListDueSegmentAged = "SELECT `op_id` FROM " + guildAssetOpTable +
-		" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ? AND `attempts` >= ?" +
-		" ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"
+	// 到期扫描的两段(ListDueOwned):新行 `attempts` < ?、老行 `attempts` >= ?,其后接分片条件(workshard.Filter,
+	// 零值是恒真 1=1),再接公共的排序与 LIMIT。分片条件必须在 LIMIT 之前(缺口清单第 25 条),拼法只有 listDueQuery 一处。
+	sqlListDueFreshHead = "SELECT `op_id` FROM " + guildAssetOpTable +
+		" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ? AND `attempts` < ? AND "
+	sqlListDueAgedHead = "SELECT `op_id` FROM " + guildAssetOpTable +
+		" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ? AND `attempts` >= ? AND "
+	sqlListDueTail = " ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"
 
 	// sqlLockAssetOp:op 行的主键点锁(死锁复核 C5 / V1)。**只许**是完整主键等值 + FOR UPDATE、不带任何复核条件:
 	// TiDB 只有这种形状才走 Point_Get 快路径,加锁顺序固定为"PRIMARY key → 行 key";复核条件留在随后的点改 / 点删里。
@@ -421,6 +423,7 @@ var (
 	_ assetop.PlayerPendingLister = (*GuildAssetStore)(nil)
 	_ assetop.PendingClassCounter = (*GuildAssetStore)(nil)
 	_ assetop.Abandoner           = (*GuildAssetStore)(nil)
+	_ assetop.OwnedDueLister      = (*GuildAssetStore)(nil)
 )
 
 // NewGuildAssetStore。guilds 为 nil 时报错:对侧账要用它的缓存失效,连接池也取自它。
@@ -433,27 +436,38 @@ func NewGuildAssetStore(guilds *GuildRepo) (*GuildAssetStore, error) {
 
 // ── assetop.Store ────────────────────────────────────────────
 
-// ListDue 非加锁一致性读,只回主键,走 idx_guild_asset_op_0 (status, next_attempt_ms)。
+// ListDue 扫全部片的到期行,即不带分片条件的 ListDueOwned。重投循环绑了按片分工(assetop.Loop.BindWorkOwner)
+// 之后不再调它;assetopfix 之类不分工的调用方照旧用它。
+func (s *GuildAssetStore) ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error) {
+	return s.ListDueOwned(ctx, nowMs, limit, workshard.Filter{})
+}
+
+// ListDueOwned 非加锁一致性读,只回主键,走 idx_guild_asset_op_0 (status, next_attempt_ms)。
 //
 // **两段查询**(X-03 防饿死,契约见 assetop.Store.ListDue):第一段只取新行(attempts < FreshAttemptLimit)并占满
 // limit;只有它不够时才发第二段取老行,且只补缺口。写成一条 SQL,退避封顶在 MaxBackoff 的老行永远"早就到期",
 // 会霸占整批名额,新提交的捐献 / 兑换一次也轮不上。两段是两次独立的非锁读,期间 attempts 可能从 2 跳到 3,
 // 同一行两段都出现,所以按 op_id 去重;第一段的 id 排前面,让 Claim 先抢新行。
-func (s *GuildAssetStore) ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error) {
+//
+// owned 是本副本负责的片(片号 = player_id % 64,assetop.OwnedDueLister;缺口清单第 25 条),两段都接在 WHERE 里、
+// LIMIT 之前:别的副本的行再早到期也不占本副本的名额。零值不过滤。idx_0 不含 player_id,分片条件和 lease_until_ms、
+// attempts 一样在回表那一步判,每查一行的代价不变;积压大时本副本要跳过别的副本的行才凑满一批
+// (docs/design/assetop-redelivery-sharding-20261110.md §2.4)。
+func (s *GuildAssetStore) ListDueOwned(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]uint64, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, storeReadBudget)
 	defer cancel()
 
-	fresh, err := s.listDueSegment(ctx, sqlListDueSegmentFresh, nowMs, limit)
+	fresh, err := s.listDueSegment(ctx, listDueQuery(sqlListDueFreshHead, owned), owned, nowMs, limit)
 	if err != nil {
 		return nil, err
 	}
 	if len(fresh) >= limit {
 		return fresh, nil
 	}
-	aged, err := s.listDueSegment(ctx, sqlListDueSegmentAged, nowMs, limit-len(fresh))
+	aged, err := s.listDueSegment(ctx, listDueQuery(sqlListDueAgedHead, owned), owned, nowMs, limit-len(fresh))
 	if err != nil {
 		return nil, err
 	}
@@ -470,8 +484,16 @@ func (s *GuildAssetStore) ListDue(ctx context.Context, nowMs uint64, limit int) 
 	return fresh, nil
 }
 
-func (s *GuildAssetStore) listDueSegment(ctx context.Context, query string, nowMs uint64, limit int) ([]uint64, error) {
-	rows, err := s.db.QueryContext(ctx, query, PendingStatus(), nowMs, nowMs, assetop.FreshAttemptLimit, limit)
+// listDueQuery 拼一段到期扫描:head 是新行或老行那一段的开头,owned 是分片条件,最后是公共的排序与 LIMIT。
+// 条件文本只来自 workshard.SQLFilter(列名写死、片号只走绑定参数),不含外部输入。
+func listDueQuery(head string, owned workshard.Filter) string {
+	return head + owned.SQL() + sqlListDueTail
+}
+
+// listDueSegment 跑一段到期扫描。实参顺序与 listDueQuery 的占位符一致:四个到期条件、分片条件的片号、LIMIT。
+func (s *GuildAssetStore) listDueSegment(ctx context.Context, query string, owned workshard.Filter, nowMs uint64, limit int) ([]uint64, error) {
+	args := append([]any{PendingStatus(), nowMs, nowMs, assetop.FreshAttemptLimit}, owned.Args()...)
+	rows, err := s.db.QueryContext(ctx, query, append(args, limit)...)
 	if err != nil {
 		return nil, fmt.Errorf("list due %s: %w", guildAssetOpTable, err)
 	}

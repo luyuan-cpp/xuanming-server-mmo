@@ -1,8 +1,9 @@
 # gate 排空时把在线玩家迁到同 zone 的其他 gate
 
 > **状态**：设计稿 2026-11-05（Claude）。负责人在问答「gate 重启或灰度、金丝雀发布时 IP 和端口变了怎么办」之后点了「写设计稿」，11-06 点了「按建议落批 A」，§12 四项按本文的建议值执行。
-> - **批 A（login、协议、robot、排空脚本）**：11-06 已落码，**未生成协议、未编译、未测试**，Codex 验证清单在 `docs/PROGRESS.md` 2026-11-06 同名条目。落码与本文的差异见 §17。
-> - **批 B（gate）**：待做。批 B 落码之前，login 发出的迁移许可会被 gate 按 Kafka 命令白名单丢弃；迁移开关默认也是关的，所以批 A 上线后行为与原来相同。
+> - **批 A（login、协议、robot、排空脚本）**：11-06 已落码，落码与本文的差异见 §17。协议生成物已随主干快照提交（`a8af9372d` 等），**仍未编译、未测试**，Codex 验证清单在 `docs/PROGRESS.md` 2026-11-06 同名条目。
+> - **批 B（gate）**：11-10 已落码（负责人要求全部在 main 上做完），**未编译、未测试**，落码记录与验证清单见 §18 与 `docs/PROGRESS.md` 2026-11-10 同名条目。服务端到这里功能完整；迁移开关 `GateDrain.Migrate.Enabled` 默认关，打开前要等客户端的跳数清零（§10 第 2 条）上线、robot 集成跑过（§12 第 1 条）。
+> - **Java 版**：待做，已在 Java 仓 `PARITY.md` 登记（§15）。
 > **核对基线**：HEAD `961f334a0` 加 11-05 工作区。当天二十多个会话同时在改，`gate_redirect.go`、`player_lifecycle.cpp`、`client_session_handler.cpp` 等文件都有别人未提交的改动，文中位置按函数名找，不写行号。
 > **上线状态**：未上线（见 [存盘围栏设计](db-write-fencing-mysql.md) 文末）。不为旧部署补兼容；新旧版本并存只考虑本功能自己滚动上线的那一段（§9）。
 > **客户端**：本次没有读、没有改独立客户端仓 `../mmorpg-client`（AGENTS §9）。文中的客户端行为全部引自本仓文档与本仓 robot 代码，要由客户端任务核实的点集中在 §10。
@@ -97,27 +98,28 @@ G1     在线数降到阈值 → login 写 drained=below_threshold → 脚本删
 
 ### 4.3 gate：限速、挑会话、推 124
 
-新组件 `GateDrainMigration`（`cpp/nodes/gate/` 下新文件）。状态全在 gate 的 EventLoop 上，不加线程。
+调度在 `gate_drain_migration`（`cpp/nodes/gate/handler/rpc/drain_migration.{h,cpp}`），推 124 的共用函数在 `gate_redirect::PushRedirect`（`cpp/nodes/gate/handler/gate_redirect_delivery.{h,cpp}`）。状态全在 gate 的 EventLoop 上（`thread_local` 加会话里的几个字段），不加线程。要票与推 124 是两个函数指针出口，由 `GateClientSessionHandler` 构造时注入（同 `gate_lane::SetRouterSender` 的做法），单测注入替身。
 
-**许可**：收到 `GateDrainMigrationEvent` 时记下 `deadline = 当前单调时刻 + lease_ms`，以及 `rate`、`drain_marked_at`。`rate = 0` 立即停。许可到期没续上也停：排空取消、已排空或开关关闭后 login 不再发，最多 `lease_ms` 之后 gate 自然停下。
+**许可**：收到 `GateDrainMigrationEvent` 时记下 `deadline = 当前单调时刻 + lease_ms`，以及 `rate`、`drain_marked_at`。`rate = 0` 或 `lease_ms = 0` 立即停。许可到期没续上也停：排空取消、已排空或开关关闭后 login 不再发，最多 `lease_ms` 之后 gate 自然停下。
 
-**每秒一拍**（只在许可有效时挂定时器）：
+**每秒一拍**（`GateRuntimeContext::drainMigrationTimer`，常驻；没有许可时只做下面滞留关闭的到期检查）：
 
 1. 遍历会话表，挑至多 `rate` 个合格会话；在途请求总数不超过 `2 × rate`。
-2. 合格的会话分两类，都要求还没推过 124，且本轮没请求过或上次失败已过退避（10 秒）：
+2. 合格的会话分两类，都要求验过票、`loginSucceeded` 为真、还没推过 124，且不在请求途中、不在退避期（10 秒）：
    - **已进游戏**：`HasBoundRole(session)` 为真（已绑定角色，且不在 LeaveGame 之后的选角期），已有场景路由，没有待补发的进场（`pendingSceneEntry` 为空）。票据绑定本人。
-   - **停在选角界面**：`loginSucceeded` 为真、`HasBoundRole` 为假。票据不绑玩家（`player_id = 0`），客户端换过去重新 Login 之后回到选角界面（§10 第 6 条）。这一类也要迁：判定用的在线数把它们算在里面（§3），不迁的话这台 gate 迁完游戏中的玩家后照样要等满期限。
-   - 其余会话（还没验票、Login 途中、进场途中）这一拍跳过，状态变了之后的拍子再看。最后仍剩下的连接挡住 `below_threshold` 时，照旧按期限处理；运维也可以把 `DrainedBelowPlayers` 调成一个小正数。
-3. 对每个合格会话发 `RequestGateMigration`。回调只捕获 `session_id` 与会话代次 `incarnation`，不捕获任何指针（AGENTS §11.7）。
-   - 直连模式：用生成的 login 调用桩，带回调。
-   - 路由模式：照 Disconnect 的先例合成请求，经 `SendViaRouter` 发出。不同的是 Disconnect 不看应答，这里要接应答，所以 `SendViaRouter` 要支持一个可选的完成回调。
-   - 迁移请求与 Disconnect 一样不进会话的路由 lane。
+   - **停在选角界面**：`HasBoundRole` 为假，且最近 5 分钟内没有转发过 EnterGame。票据不绑玩家（`player_id = 0`），客户端换过去重新 Login 之后回到选角界面（§10 第 6 条）。这一类也要迁：判定用的在线数把它们算在里面（§3），不迁的话这台 gate 迁完游戏中的玩家后照样要等满期限。5 分钟对齐 login EnterGame 后台链的总预算（`entergamelogic.go` 的 `enterGameChainBudget`）：这段时间里 login 可能还在给这条连接绑角色，迁走会让新连接上的 EnterGame 撞上「登录中」。EnterGame 的时刻在客户端入口收包时记（直连与路由两种模式共用一个点）。
+   - 其余会话（还没验票、Login 途中、进场途中、刚发过 EnterGame）这一拍跳过，状态变了之后的拍子再看。最后仍剩下的连接挡住 `below_threshold` 时，照旧按期限处理；运维也可以把 `DrainedBelowPlayers` 调成一个小正数。
+3. 对每个合格会话发 `RequestGateMigration`（`client_session_handler.cpp` 的 `SendGateMigrationRequest`）。会话身份用与断线通知同一个 `BuildSessionDetails`，带会话代次。回调只捕获 `session_id`、会话代次，以及请求时的角色与类别这几个值，不捕获指针、不持有连接（AGENTS §11.7）。
+   - 直连模式：用生成的 login 调用桩，metadata 与客户端请求的直连转发相同（会话、轨道、调用方签名）。
+   - 路由模式：照 Disconnect 的先例合成一条 `ClientRequest`，经路由服 Forward 发出。Disconnect 不看应答，这里要接应答，所以新增 `gate_router_muduo::SendForwardForInternalReply`：与 `SendForward` 共用同一份请求构造（路径、两层 base64 的会话 metadata、调用方签名、截止），应答不进回包桥、不推给客户端，交给迁移模块。
+   - 迁移请求与 Disconnect 一样不进会话的路由 lane：不占客户端请求的单飞槽，也不排在客户端请求后面。
+   - 出口没发出（没有路由服或 login 实例、缺通道、签名失败）时当场收回在途状态，这条会话退避。
 
-**应答**：
+**应答**（到达时刻由出口传入，调度模块自己不读时钟）：
 
-- `OK`：按 `session_id` 找会话。会话没了、`incarnation` 变了、已推过 124、绑定的角色变了，都丢弃并计数；否则调与 `RedirectToGateEventHandler` 共用的投递函数，即 `OnSessionRedirected` 加推 124。共用函数顺手补上身份栅栏：票据玩家不为 0 时必须等于会话当前角色（R13）。跨 zone 的 Kafka 路径同样受益。
+- `OK`：按 `session_id` 找会话。会话没了、`incarnation` 变了，丢弃并计数；再按同一份选人判定复核，已推过 124、开始进场、绑定的角色变了、刚发过 EnterGame，都丢弃这张票，下一拍按新状态重新判。复核通过才调 `PushRedirect`：身份栅栏（票据玩家不为 0 时必须等于会话当前角色，R13，与其他推送同一口径）→ `OnSessionRedirected` → 推 124 → 登记滞留关闭。跨 zone 的 Kafka 路径（`RedirectToGateEventHandler`）改调同一个函数，同样补上身份栅栏。推送没到客户端（连接已释放、身份不符）时票作废，这条会话退避。
 - `NOT_DRAINING` 或 `DISABLED`：本 gate 不在排空，或 login 上的迁移开关已关，停掉本轮迁移，防止迟到的许可误迁。
-- `NO_TARGET`、超时或其他错误：该会话进入退避，之后的拍子再试。
+- `NO_TARGET`、调用失败、应答解不出或其他结果：该会话进入退避，之后的拍子再试。
 
 **滞留关闭**：推过 124 的会话，60 秒后连接还在就由 gate 关闭，不推提示。客户端不跟随时，这个会话的路由请求已经一律回 1003，留着只会让玩家卡住；关掉之后走断线保留，与到期删 Pod 的结果相同。
 
@@ -126,9 +128,9 @@ G1     在线数降到阈值 → login 写 drained=below_threshold → 脚本删
 
 **踢线不弹提示**：`KickPlayerEventHandler` 对已推过 124 的会话直接 `shutdown`，不推「账号在别处登录」。ReplaceLogin 踢旧会话时，客户端已经在换连接（第一个 yield 之前就摘掉了旧连接的处理器），这条提示即使送到也不该被看到。这条对跨 zone 重定向同样成立。
 
-**关机**：在 `beforeShutdown` 里取消定时器，与 gate 其他定时器放在一起（`cpp/nodes/gate/main.cpp`）。
+**关机**：在关源（`disconnectAllClients`，停机、维护关源与节点号冲突三处共用）时取消定时器：全部连接马上要关，不再要票，也不必再做滞留关闭；拆除前再取消一次，与 gate 其他定时器放在一起（`cpp/nodes/gate/main.cpp`）。
 
-**客户端不能自己发**：`login_admission.h` 的 `IsGateSynthesizedOnly` 加上新消息号。客户端发这个号按非法包处理，与 Disconnect 相同。
+**客户端不能自己发**：`login_admission.h` 的 `IsGateSynthesizedOnly` 加上新消息号。客户端发这个号按非法包处理，与 Disconnect 相同；不拦的话客户端能绕开 gate 的限速与选人条件，直接拿到一张换 gate 的票。
 
 ### 4.4 login：发许可、选目标、签票
 
@@ -238,11 +240,11 @@ GateDrain:
 
 只用低基数标签，不带 player_id（AGENTS §9）：
 
-- gate：
-  - `gate_drain_migration_total{result}`，result 取 `requested`、`offered`、`not_draining`、`no_target`、`failed`、`stale_reply`；
-  - `gate_drain_migration_active`（0 或 1）；
-  - `gate_redirect_linger_closed_total`：推过 124 满 60 秒仍未断开、由 gate 关闭的会话数（迁移与跨 zone 共用）；
-  - 许可开始与停止各打一行 INFO（带 `drain_marked_at` 与速率），其余每 10 秒一行汇总。
+- gate：C++ 节点还没有 Prometheus 出口（`client_request_lane.cpp` 的 `[lane]` 汇总、`scene_entry_dispatch.cpp` 的计数都只走日志），本功能同样只走日志，前缀 `[DrainMigration]`：
+  - 许可开始一行 INFO（`drain_marked_at`、速率、`lease_ms`、当时的会话数），停止一行 INFO（原因：到期、`rate` 或 `lease` 为 0、`NOT_DRAINING`、`DISABLED`）并带一行累计汇总；
+  - 迁移进行中每 10 秒一行汇总：`requested`、`offered`、`no_target`、`failed`、`not_sent`、`stale_reply`、`push_dropped`、`linger_closed`，以及当前在途数；
+  - 滞留关闭逐条一行 INFO（迁移与跨 zone 共用，只带 `session_id`）。
+  - 计数是进程累计值（`gate_drain_migration::GetCounters`），等 gate 接上 `/metrics` 时直接登记成 `gate_drain_migration_total{result}` 与 `gate_redirect_linger_closed_total`，不按玩家分维度。
 - login：`login_gate_migration_sign_total{result}`；排空判定发许可的日志按 gate 节流。
 - 效果直接看现有信号：
   - 被排空 gate 的在线数曲线；
@@ -278,14 +280,15 @@ GateDrain:
   - 目标剔除调用方、排空、停写、满载，全部不合格时回 `NO_TARGET`，不回落；
   - 票据的 `player_id` 等于会话玩家（选角界面的会话为 0），`target_zone_id = 0`；
   - 配置整块缺失时取默认值。
-- C++ gate：
-  - 许可续期与到期，`rate = 0` 时停止；
-  - 每拍不超过速率，在途请求不超过上限；
-  - 合格判定的每一条，包括已进游戏与停在选角界面两类，以及跳过 Login 途中的会话；
-  - 应答到达时会话已换、已推过 124、角色已变，都丢弃；
-  - 共用投递函数的身份栅栏；
-  - 推过 124 的会话被踢时不推提示；
-  - 滞留关闭。
+- C++ gate（`cpp/nodes/gate/tests/drain_migration_test.cpp`，编进 `routing_identity_test`）：
+  - 许可续期与到期，`rate = 0` 或 `lease_ms = 0` 时停止；
+  - 每拍不超过速率，在途请求不超过上限，在途的会话不重复要票；
+  - 合格判定的每一条，包括已进游戏与停在选角界面两类、EnterGame 之后 5 分钟的避让、LeaveGame 之后按选角界面处理，以及跳过没验票、没登录成功、进场途中、已推过 124 的会话；
+  - 应答到达时会话已换、开始进场、角色已变，都丢弃；`OK` 的票据字段原样进 124，游戏中绑定本人、选角界面为 0；
+  - `NOT_DRAINING`、`DISABLED` 停许可；`NO_TARGET`、调用失败、没发出、推送没到客户端都退避；
+  - 滞留关闭：满 60 秒关真实的回环连接，会话已不在或号已复用时不关。
+  - 客户端入口拒绝客户端自发的新消息号（`gate_client_entry_admission_test.cpp`）。
+  - 单测进不去的两处：`PushRedirect` 的身份栅栏（依赖路由 lane 的实现文件 `client_request_lane.cpp`）与「推过 124 的会话被踢时不推提示」（在 `gate_event_handler.cpp`，拖着节点注册表与场景入口），都不在测试工程里，靠核对调用点与下面的 robot 集成验证。
 - 跨语言：许可事件与新 RPC 的字段两边各放一份固定样例对拍，做法同发布轨道的对拍单测。
 
 集成（本地或 kind，用 robot）：
@@ -341,7 +344,7 @@ GateDrain:
 
 待做。Java 版（`D:\luyuan\xuanming-server-mmo`）的 gate 已有「推过 124 之后只收口、不再转发」的会话状态，以及 `game.gate.redirect-linger`（缺省 60 秒，到点关闭、不推提示）；gate 排空同样允许到期断开；断线保留也还是待做（[断线保留](player-connection-lost-hold.md) §9）。
 
-Java 要实现同一组行为：排空时按限速推 124，选角界面的连接也迁；游戏中的会话票据绑定本人，所有迁移票据都不钉 zone；到达走租约内重连并回原场景；跳数在成功进场后清零。本文是设计稿，定稿后再在 Java 仓 `PARITY.md` 登记待做。
+Java 要实现同一组行为：排空时按限速推 124，选角界面的连接也迁（EnterGame 之后 5 分钟内不迁）；游戏中的会话票据绑定本人，所有迁移票据都不钉 zone；到达走租约内重连并回原场景；推过 124 的会话被踢不弹提示；客户端不能自己发迁移请求；跳数在成功进场后清零。11-06 已在 Java 仓 `PARITY.md` 登记待做，11-10 主仓批 B 落码后更新了那一行。
 
 ## 16. 参考
 
@@ -376,10 +379,44 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 - **签票直读排空标记**，不用登录挑 gate 的 1 秒缓存，理由见 §4.4 第 2 条（正文已按落码改写）。
 - **选角界面的连接签票前核对登录态**、**调用方要在本 zone 目录里对得上实例 uuid**，两条都已写进 §4.4 正文。
 
-### 17.3 批 B 要接上的点
+### 17.3 交给批 B 的点
 
-- gate 处理 `GateDrainMigrationEvent`（白名单、续期、`rate = 0` 停）；
-- 每秒一拍的挑会话与在途上限，`RequestGateMigration` 的发送与应答（路由模式下 `SendViaRouter` 要能接应答）；
-- 与 `RedirectToGateEventHandler` 共用的投递函数，补身份栅栏；
-- 推过 124 的会话被踢不推提示，60 秒滞留关闭；
-- `IsGateSynthesizedOnly` 加新消息号。
+批 A 当时列给 gate 的五件事（许可事件、每秒一拍与在途上限、要票的发送与应答、共用投递函数补身份栅栏、踢线不弹提示与滞留关闭、`IsGateSynthesizedOnly`）已全部由批 B 接上，见 §18。路由模式「接应答」没有改 `SendViaRouter`，而是新增了 `SendForwardForInternalReply`（§4.3 第 3 步）。
+
+## 18. 批 B 落码记录（2026-11-10，未编译、未测试）
+
+负责人 11-10 要求：全部改动在 main 上做，不开分支；只写服务端代码，客户端、协议生成、编译与冒烟交给 Codex；Java 只登记待做。协议生成物在动手前已随主干快照提交，批 B 没有改 proto。
+
+### 18.1 改了什么
+
+| 位置 | 内容 |
+|---|---|
+| `cpp/nodes/gate/handler/rpc/drain_migration.{h,cpp}`（新） | 调度：许可（开始、续期、到期、`rate`/`lease` 为 0 停）；每秒一拍按速率与在途上限挑会话；选人判定 `Classify`（应答到达时复核用同一份）；应答处置与退避；滞留关闭队列；`[DrainMigration]` 日志与进程累计计数。两个出口是函数指针，只能在 gate 的 EventLoop 线程调用 |
+| `cpp/nodes/gate/handler/gate_redirect_delivery.{h,cpp}`（新） | `PushRedirect`：推 124 的唯一收口，跨 zone 与排空迁移共用。找会话 → 身份栅栏（`ClassifyPush`）→ lock 连接 → `OnSessionRedirected` → 推送 → 登记滞留关闭 |
+| `cpp/nodes/gate/handler/event/gate_event_handler.cpp` | `GateDrainMigrationEventHandler` → `OnLease`；`RedirectToGateEventHandler` 改调 `PushRedirect`（新增身份栅栏丢弃的 WARN）；`KickPlayerEventHandler` 对推过 124 的会话直接 `shutdown`、不推「账号在别处登录」 |
+| `cpp/nodes/gate/handler/rpc/client_session_handler.cpp` | `SendGateMigrationRequest`（直连 / 路由两种出站）；路由服选点拆成 `PickRouterChannel` 与 `MakeForwardRequest` 两个辅助，`SendRawViaRouter` 改用它们、行为不变；构造时注入两个出口；EnterGame 收包点调 `NoteEnterGameForwarded` |
+| `cpp/nodes/gate/handler/rpc/router_muduo_forward.{h,cpp}` | 新增 `SendForwardForInternalReply`；与 `SendForward` 共用抽出来的 `PrepareForwardCall`，线上字节两条路径逐字相同 |
+| `cpp/nodes/gate/handler/rpc/login_admission.h` | `IsGateSynthesizedOnly` 加 `ClientPlayerLoginRequestGateMigrationMessageId` |
+| `cpp/libs/services/gate/session/comp/session_info_comp.h` | 会话上的迁移状态：在途标记、退避截止、最近一次 EnterGame 时刻、推 124 的时刻 |
+| `cpp/nodes/gate/main.cpp` | `drainMigrationTimer` 每秒一拍；关源与拆除前取消 |
+| `cpp/nodes/gate/gate.vcxproj`、`.filters` | 登记两组新文件。`CMakeLists.txt` 由 `build_linux.sh` 按 vcxproj 生成，没有手改 |
+| 单测 | `cpp/nodes/gate/tests/drain_migration_test.cpp`（新，22 例：调度 20 例、滞留关闭真连接 2 例）；`cpp/tests/routing_identity_test/gate_client_entry_admission_test.cpp` 加 1 例；`routing_identity_test.vcxproj` 登记被测源码与新测试（仅 Debug\|x64，同 gate 其他被测源码的做法） |
+| 批 A 收尾 | `go/login/internal/svc/gate_command.go` 的空事件报错、`tools/scripts/k8s_gate_drain.ps1` 两条迁移配置的 throw 改成英文（AGENTS §2：服务与脚本的诊断文案用英文；测试按键名匹配，不受影响） |
+
+### 18.2 与上文的差异与补充决定
+
+- **应答回调带到达时刻。** `ReplyCallback` 的第二个参数是应答到达的单调时刻，由出口在回调点读取：退避从这里起算，调度模块自己不读时钟，单测全部用给定时刻。
+- **推送没到客户端也退避。** 设计稿只写了 `NO_TARGET` 与错误退避；连接已释放或身份不符时票作废，不退避的话下一拍会立刻再要一张。
+- **滞留关闭的定时器常驻。** 设计稿写「只在许可有效时挂定时器」；跨 zone 推过 124 的会话也要做滞留关闭，所以定时器常驻，没有许可时每拍只看一次队首。
+- **gate 只走日志，不出指标**（§8 已改写）：C++ 节点还没有 `/metrics` 出口。
+- **直连模式的迁移请求带轨道 metadata**，与客户端请求的直连转发一致；路由模式由路由服按 `ForwardRequest.release_track` 写同一个键。
+
+### 18.3 验证（交 Codex，AGENTS §10.1）
+
+步骤与命令写在 `docs/PROGRESS.md` 2026-11-10 同名条目：整解编译、`routing_identity_test` 全量、批 A 的 Go 与脚本测试、robot 单测，以及按 §11 的本地两台 gate 迁移冒烟（`GateDrain.Migrate.Enabled=true`）。没有运行结果之前，本节所有内容都只是静态落码。
+
+### 18.4 还没做的
+
+- **客户端**：跳数在成功进场后清零（§10 第 2 条）与 §10 其余核实项，要另开获授权的客户端任务；robot 已在批 A 改好。
+- **默认打开迁移**：等客户端改完、robot 集成跑过之后再改 `Migrate.Enabled` 的默认值（§12 第 1 条）；默认速率等压测（§12 第 2 条）。
+- **Java 版**：待做（§15）。

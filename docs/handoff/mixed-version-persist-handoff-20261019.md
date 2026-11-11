@@ -1324,3 +1324,20 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
   - 本文（§14.4 表、§17 / §19 待办、§19 的状态与表头说明）；
   - `docs/PROGRESS.md`；
 - Java 对账本：`D:\luyuan\xuanming-server-mmo\PARITY.md`「通用资产通道 scene 侧」行。
+
+## 22. 续：等级读点线的验证核对与日志英文化（2026-11-10，补等级读点用例的会话，接 §16 / §18 / §20）
+
+> 本节只追加，不改上文。
+
+- **C++ 已有运行证据**：Codex 11-08 的命名统一运行（`build/verification/naming-audit-20261108/`）全量跑了 bag_test、skill_test、buff_test，三个工程都全绿：932 / 80 / 37 条通过。
+  - 本线 12 条用例逐条在 stdout 里是 `[       OK ]`：§16 的 6 条、§18 的 5 条，以及 §18 改过的 `PlayerSkillSystemTest.SanitizeSkillListKeepsUnknownSkillsInactiveAndRemovesDuplicates`。
+  - 回执 `completion-receipt.json`：`verifiedUtc` 2026-11-08T14:35Z，`cppPassed` 2935，`allRequiredChecksPassed` true。
+  - 运行之后源码没变：在 `implementation-final-hashes.json` 清单里的 6 个相关文件，现在的 SHA256 与清单一致；不在清单里的，最后一次提交在 11-06，早于这次运行，命名提交 `74b097888` 也没碰它们；工作区当时没有未提交改动。
+- **契约测试还没跑过**：`build/verification` 下搜不到 `test_cpp_level_comp_reads` 的任何运行记录。
+- **本节改动**（AGENTS.md §2：服务与脚本的日志文案、诊断输出用英文；注释与错误字符串保持中文）：
+  - `player_mission.cpp`：§18 加的那条 `LOG_ERROR` 原先是中文，改成英文 `[PlayerMission] Level-condition accept rejected: LevelComp missing (load invariant broken), entity=… mission=…`。只改了文案，判断与返回码不变。同文件里别处原有的中文日志不是本线写的，没动。
+  - `test_cpp_level_comp_reads.py`：违规原因与断言消息改成英文。注释、文档字符串和标记文字 `直读存储等级:<场合>` 保持中文；诊断里原样引用标记文字，方便照抄。识别规则与判定逻辑不变。
+- **给 Codex**（仓库根目录）：
+  1. 契约测试：`python tools/scripts/tests/test_cpp_level_comp_reads.py -v`。通过标准：退出 0，15 条全是 ok。失败时保留完整输出，误报回报给 Claude，不要为了变绿去改规则或补标记。
+  2. 日志文案改动随下一次整解构建一起确认能编过即可：`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`。不需要单独为它重跑 bag_test，没有用例断言日志文本。
+- **状态**：本线服务端代码已完成。C++ 用例已有运行证据；契约测试与这次的日志改动待 Codex。Java 仍待做，`PARITY.md` 原有那一行已登记。

@@ -180,6 +180,9 @@ void NodeConnector::ConnectAllNodes()
 
 		for (const auto &serviceNode : serviceNodes.NodesOfType(nodeType))
 		{
+			// 按类型的建连准入(例如 gate 只连本 zone 子集里的路由服);没装准入的类型只看白名单。
+			if (!gNode->AdmitsConnection(serviceNode))
+				continue;
 			if (NodeUtils::IsNodeTracked(nodeType, serviceNode))
 				continue;
 

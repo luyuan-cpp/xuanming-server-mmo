@@ -54,7 +54,8 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 | `BuffListComp` | `BuffSystem::AddOrUpdateBuff`,完成驱散 / 免疫等判断后首次真正插入时 | 帧末摘除空列表 |
 | `AoiListComp` | `InterestSystem::AddAoiEntity`(空间来源被接纳)或 `InterestSystem::Follow`(显式关注登记),完成实体 / 容量 / 同场景校验后首次建立关系时 | 移除观察关系;无表表示无观察对象 |
 | `AoiWatchersComp` | `InterestSystem` 第一次登记以该实体为目标的关系时;与观察者的 `AoiListComp` 条目一一对应 | 关系删除时同步摘除;无表表示没有观察者 |
-| `SceneGridListComp` | `AoiSystem::UpdateGridState`,首次写入场景格子时 | 场景销毁时随实体销毁;空场景可无表 |
+| `SceneGridListComp` | `AoiSystem::UpdateGridMembership`,首次写入场景格子时 | 场景销毁时随实体销毁;空场景可无表 |
+| `AoiEvaluatedAtComp` | `AoiSystem::ReevaluateVisibility`,实体第一次做空间关注评估(首次入格)时;之后只覆盖位置 | 不摘:实体销毁自然清理;换场景、同场景瞬移后按首次入格重新评估并覆盖。`Update` 的重判判断只用 `try_get` 读,缺失 = 还没评估过、立即评估 |
 | `CastingTimerComp` | `SetupCastingTimer`,进入前摇时 | 前摇结束 / 打断时摘除 |
 | `RecoveryTimerComp` | `SkillSystem::HandleSkillRecovery`,进入后摇时 | 后摇结束 / 打断时摘除 |
 | `ChannelFinishTimerComp`、`ChannelIntervalTimerComp` | `SkillSystem::HandleChannelSkillSpell`,开始引导时 | 引导结束 / 打断时一起摘除 |

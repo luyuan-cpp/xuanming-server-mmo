@@ -1212,6 +1212,17 @@ rank 与 trade / mail 同形:全局池服务(`$GoSvcCatalogue.rank`,`Global = $t
 - **合服**:榜按全局唯一的 player_id 存、没有 zone 维度,合服不搬不改;audit auditor 不适用(结论不是遗漏)。
 - **上线顺序**:没有开关,`infra-up` 一次部署 rank 与 match。rank 还没起来时 match 的投分 RPC 失败、游标不推进,rank 起来之后接着投。
 
+## scene 节点场景归属对账告警(2026-11-10,缺口清单第 33 条;未编译、未在集群上验证)
+
+- scene 节点每 10 秒读本地场景的 `scene:{id}:node` 与本节点号持有者 `node:zone:{z}:{n}:holder`(都在本 zone 的控制域 Redis,scene_manager 写),
+  不归本进程的场景按每轮 200 名住户的预算排空销毁,与 etcd 失联期间照常收敛。设计见 `docs/design/scene-node-ownership-reconcile.md`。
+- **告警**:`deploy/k8s/scene-ownership-alerts.yaml`(PrometheusRule,与 `owner-epoch-alerts.yaml` 同法安装),读 scene 的 Prometheus 出口
+  (`-CppMetricsPort`,缺省 9400;传 0 时没有出口,这组告警永远不响)。处置见 `docs/ops/scene-node-role-split.md` §7.1:
+  ```
+  kubectl apply -n observability -f deploy/k8s/scene-ownership-alerts.yaml
+  ```
+- 没有新开关、没有新部署参数;持有者键随 scene_manager 升级自动写,不需要迁移(项目尚未上线)。
+
 ## MySQL 连接总账(2026-10-13,G2b:docs/handoff/launch-readiness-20261013/spec_G2b.md)
 
 > 状态(2026-10-17):已完成本地 DryRun 与连接总账契约验证,结果见 `docs/PROGRESS.md` 的邮件合并验证条目。**未在运行集群应用配置**;本节所有数值(`max_connections` 2600(2026-10-31 起,此前 2100)、6Gi、各池大小、余量、告警阈值)都是按公式推算或凭经验取的,**待压测确认**,不能据此下容量结论(AGENTS §6)。

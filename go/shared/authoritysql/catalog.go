@@ -175,26 +175,53 @@ func (c *Catalog) lockSlots(ctx context.Context, tx *sql.Tx, keys [][]byte, epoc
 		if len(key) != 16 || i > 0 && bytes.Compare(keys[i-1], key) >= 0 {
 			return ErrWriterDenied
 		}
-		// 锁顺序精确按(writer_key,slot)，不把meta/registry JOIN入首锁。
-		for slot := uint32(0); slot < WriterSlotCount; slot++ {
-			row := &databasepb.SqlWriterSlot{}
-			err := tx.QueryRowContext(ctx, "SELECT generation,writer_epoch,state FROM "+c.table("writer_slot")+" WHERE writer_key=? AND slot=? FOR UPDATE", key, slot).Scan(&row.Generation, &row.WriterEpoch, &row.State)
-			if err != nil {
-				return err
-			}
-			if row.Generation != c.config.Generation || row.WriterEpoch != epoch || row.State != databasepb.SqlWriterRegistry_ACTIVE {
-				return ErrWriterDenied
-			}
-		}
-		var count int
-		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+c.table("writer_slot")+" WHERE writer_key=?", key).Scan(&count); err != nil {
+		rows, err := c.lockSlotRows(ctx, tx, key)
+		if err != nil {
 			return err
 		}
-		if count != WriterSlotCount {
+		if !c.activeSlotsAt(rows, epoch) {
 			return ErrWriterDenied
 		}
 	}
 	return nil
+}
+
+// lockSlotRows 按 slot 号顺序锁住一个写者的全部 64 行并原样返回,行数不是 64 就拒绝。
+// 锁顺序精确按(writer_key,slot)，不把meta/registry JOIN入首锁:所有改写者全集的事务都是 slot → meta,换代(Register)也一样。
+func (c *Catalog) lockSlotRows(ctx context.Context, tx *sql.Tx, key []byte) ([]*databasepb.SqlWriterSlot, error) {
+	if len(key) != 16 {
+		return nil, ErrWriterDenied
+	}
+	rows := make([]*databasepb.SqlWriterSlot, 0, WriterSlotCount)
+	for slot := uint32(0); slot < WriterSlotCount; slot++ {
+		row := &databasepb.SqlWriterSlot{WriterKey: bytes.Clone(key), Slot: slot}
+		err := tx.QueryRowContext(ctx, "SELECT generation,writer_epoch,state FROM "+c.table("writer_slot")+" WHERE writer_key=? AND slot=? FOR UPDATE", key, slot).Scan(&row.Generation, &row.WriterEpoch, &row.State)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	var count int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+c.table("writer_slot")+" WHERE writer_key=?", key).Scan(&count); err != nil {
+		return nil, err
+	}
+	if count != WriterSlotCount {
+		return nil, ErrWriterDenied
+	}
+	return rows, nil
+}
+
+// activeSlotsAt 核一个写者锁住的 64 行都是本世代、这个 epoch、ACTIVE。
+func (c *Catalog) activeSlotsAt(rows []*databasepb.SqlWriterSlot, epoch uint64) bool {
+	if len(rows) != WriterSlotCount {
+		return false
+	}
+	for _, row := range rows {
+		if row.Generation != c.config.Generation || row.WriterEpoch != epoch || row.State != databasepb.SqlWriterRegistry_ACTIVE {
+			return false
+		}
+	}
+	return true
 }
 func checkedIncrement(v uint64) (uint64, error) {
 	if v == 0 || v == math.MaxUint64 {
@@ -262,6 +289,14 @@ func (c *Catalog) validateLifecycle(request *databasepb.SqlWriterLifecycleReceip
 	if len(request.Writer.InstanceId) != 16 || !validPrincipal(string(request.Writer.SqlPrincipal)) || len(request.Writer.RegistrationDigest) != 32 || request.Writer.State != databasepb.SqlWriterRegistry_ACTIVE || len(request.MaintenanceRunId) != 0 && len(request.MaintenanceRunId) != 16 {
 		return nil, nil, ErrWriterDenied
 	}
+	// 每一代都有槽位上的序号(writer-roster-exhaustion-20261106.md §5.1)。
+	if request.Writer.BootSeq == 0 {
+		return nil, nil, ErrWriterDenied
+	}
+	// successor_request_id 只出现在换代退休里:由同一槽位新一代的注册事务写,没有维护 run。
+	if len(request.SuccessorRequestId) != 0 && (kind != databasepb.SqlWriterLifecycleReceipt_RETIRE || len(request.SuccessorRequestId) != 16 || len(request.MaintenanceRunId) != 0) {
+		return nil, nil, ErrWriterDenied
+	}
 	raw, err := deterministic(request)
 	if err != nil {
 		return nil, nil, err
@@ -285,7 +320,7 @@ func CanonicalRegistrationRequest(input *databasepb.SqlWriterLifecycleReceipt_Re
 	if input != nil && hasUnknownControl(input) {
 		return nil, ErrWriterDenied
 	}
-	if input == nil || input.Writer == nil || input.Kind != databasepb.SqlWriterLifecycleReceipt_REGISTER || len(input.RequestId) != 16 || len(input.Writer.WriterKey) != 16 || len(input.Writer.InstanceId) != 16 || input.DeploymentId == "" || len(input.LockQualificationSha256) != 32 || (input.LockPrimitive != databasepb.SqlWriterBootGrant_SELECT_ONLY && input.LockPrimitive != databasepb.SqlWriterBootGrant_LOCK_TOUCH) {
+	if input == nil || input.Writer == nil || input.Kind != databasepb.SqlWriterLifecycleReceipt_REGISTER || len(input.RequestId) != 16 || len(input.Writer.WriterKey) != 16 || len(input.Writer.InstanceId) != 16 || input.Writer.BootSeq == 0 || len(input.SuccessorRequestId) != 0 || input.DeploymentId == "" || len(input.LockQualificationSha256) != 32 || (input.LockPrimitive != databasepb.SqlWriterBootGrant_SELECT_ONLY && input.LockPrimitive != databasepb.SqlWriterBootGrant_LOCK_TOUCH) {
 		return nil, ErrWriterDenied
 	}
 	request := proto.Clone(input).(*databasepb.SqlWriterLifecycleReceipt_Request)
@@ -299,44 +334,6 @@ func CanonicalRegistrationRequest(input *databasepb.SqlWriterLifecycleReceipt_Re
 	return request, nil
 }
 
-// RegistrationConsumedByOtherDeployment 仅供有限预批准roster跳过已被其它boot消费的同一entry。
-// 任何静态字段漂移或未知收据都拒绝，不能把普通ErrWriterDenied解释为可选下一身份。
-func (c *Catalog) RegistrationConsumedByOtherDeployment(ctx context.Context, input *databasepb.SqlWriterLifecycleReceipt_Request) (bool, error) {
-	if _, _, err := c.validateLifecycle(input, databasepb.SqlWriterLifecycleReceipt_REGISTER); err != nil {
-		return false, err
-	}
-	receipt, err := c.LifecycleReceipt(ctx, input.RequestId)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	prior := &databasepb.SqlWriterLifecycleReceipt_Request{}
-	if err = proto.Unmarshal(receipt.RequestProto, prior); err != nil {
-		return false, ErrWriterDenied
-	}
-	_, digest, err := c.validateLifecycle(prior, databasepb.SqlWriterLifecycleReceipt_REGISTER)
-	if err != nil || receipt.Kind != databasepb.SqlWriterLifecycleReceipt_REGISTER || !bytes.Equal(digest, receipt.RequestDigest) {
-		return false, ErrWriterDenied
-	}
-	if prior.DeploymentId == input.DeploymentId {
-		if !proto.Equal(prior, input) {
-			return false, ErrWriterDenied
-		}
-		return false, nil
-	}
-	a := proto.Clone(prior).(*databasepb.SqlWriterLifecycleReceipt_Request)
-	b := proto.Clone(input).(*databasepb.SqlWriterLifecycleReceipt_Request)
-	a.DeploymentId = ""
-	b.DeploymentId = ""
-	a.Writer.RegistrationDigest = nil
-	b.Writer.RegistrationDigest = nil
-	if !proto.Equal(a, b) {
-		return false, ErrWriterDenied
-	}
-	return true, nil
-}
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -353,11 +350,70 @@ func (c *Catalog) insertLifecycle(ctx context.Context, tx *sql.Tx, request *data
 	return err
 }
 
-// RegistrationReady 只读核这份 REGISTER 此刻能不能落地:世代、闸门、维护 run。
-// 一个 boot 要注册几个逻辑库时先逐库过一遍,第一份写下去之前就知道有没有注定失败的库,少留半套注册。
-// 闸门冻结回 ErrWriterFrozen,重试就好;别的不符回 ErrWriterDenied。提交点仍是 Register 自己持 meta 锁再判一次。
+// registryColumns 是读一行注册的列,顺序与 scanRegistry 一致。
+const registryColumns = "writer_key,generation,instance_id,sql_principal,registration_digest,state,registered_ms,boot_seq"
+
+func scanRegistry(row interface{ Scan(...any) error }) (*databasepb.SqlWriterRegistry, error) {
+	r := &databasepb.SqlWriterRegistry{}
+	if err := row.Scan(&r.WriterKey, &r.Generation, &r.InstanceId, &r.SqlPrincipal, &r.RegistrationDigest, &r.State, &r.RegisteredMs, &r.BootSeq); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// validRegistry 核从库里读出的一行注册:身份长度、本世代、状态、槽位序号。
+func (c *Catalog) validRegistry(row *databasepb.SqlWriterRegistry) bool {
+	return row != nil && len(row.WriterKey) == 16 && row.Generation == c.config.Generation && len(row.InstanceId) == 16 && validPrincipal(string(row.SqlPrincipal)) && len(row.RegistrationDigest) == 32 && row.BootSeq != 0 &&
+		(row.State == databasepb.SqlWriterRegistry_ACTIVE || row.State == databasepb.SqlWriterRegistry_REVOKED)
+}
+
+// LatestBoot 读这个账号(槽位)在本逻辑库最新的一代,即 boot_seq 最大的那一行;从没注册过回 nil。
+// 只读、不加锁:注册器拿它定新一代的 boot_seq,Register 持锁之后复核(writer-roster-exhaustion-20261106.md §5.2)。
+func (c *Catalog) LatestBoot(ctx context.Context, principal []byte) (*databasepb.SqlWriterRegistry, error) {
+	if !validPrincipal(string(principal)) {
+		return nil, ErrWriterDenied
+	}
+	row, err := scanRegistry(c.db.QueryRowContext(ctx, "SELECT "+registryColumns+" FROM "+c.table("writer_registry")+" WHERE sql_principal=? ORDER BY boot_seq DESC LIMIT 1", principal))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !c.validRegistry(row) {
+		return nil, ErrWriterDenied
+	}
+	return row, nil
+}
+
+// landedRegistration 查同 request_id 的收据:在且全文、摘要都相同,就是这份请求已经落地(幂等重放);
+// 在而不同,说明 request_id 被别的请求占了,拒绝。q 是连接池或事务。
+func (c *Catalog) landedRegistration(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, id, raw, digest []byte) (*databasepb.SqlWriterLifecycleReceipt, bool, error) {
+	previous, err := c.readLifecycleReceipt(ctx, q, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if previous.Kind != databasepb.SqlWriterLifecycleReceipt_REGISTER || !bytes.Equal(previous.RequestDigest, digest) || !bytes.Equal(previous.RequestProto, raw) {
+		return nil, false, ErrWriterDenied
+	}
+	return previous, true, nil
+}
+
+// RegistrationReady 只读核这份 REGISTER 此刻能不能落地:世代、闸门、维护 run、槽位序号。
+// 一代要注册几个逻辑库时先逐库过一遍,第一份写下去之前就知道有没有注定失败的库,少留半套注册。
+// 这份请求已经落地(同 request_id、同全文的收据在)回 nil:init 重跑时,已经注册过的库不算失败。
+// 闸门冻结回 ErrWriterFrozen,重试就好;别的不符回 ErrWriterDenied。提交点仍是 Register 自己持锁再判一次。
 func (c *Catalog) RegistrationReady(ctx context.Context, request *databasepb.SqlWriterLifecycleReceipt_Request) error {
-	if _, _, err := c.validateLifecycle(request, databasepb.SqlWriterLifecycleReceipt_REGISTER); err != nil {
+	raw, digest, err := c.validateLifecycle(request, databasepb.SqlWriterLifecycleReceipt_REGISTER)
+	if err != nil {
+		return err
+	}
+	if _, found, err := c.landedRegistration(ctx, c.db, request.RequestId, raw, digest); err != nil || found {
 		return err
 	}
 	meta, err := c.CurrentMeta(ctx)
@@ -370,67 +426,103 @@ func (c *Catalog) RegistrationReady(ctx context.Context, request *databasepb.Sql
 	if !bytes.Equal(meta.FreezeRunId, request.MaintenanceRunId) {
 		return ErrWriterDenied
 	}
+	latest, err := c.LatestBoot(ctx, request.Writer.SqlPrincipal)
+	if err != nil || latest == nil {
+		return err
+	}
+	var active *databasepb.SqlWriterRegistry
+	if latest.State == databasepb.SqlWriterRegistry_ACTIVE {
+		active = latest
+	}
+	return succession(latest.BootSeq, active, latest.WriterKey, request.Writer, meta)
+}
+
+// succession 判新一代 next 能不能接在槽位当前状态后面。Register 持锁时判一次,RegistrationReady 预检时用同一条规则:
+//   - next 的 boot_seq 要大于这个账号已有的最大号 maxSeq(CAS):陈旧请求、同序号另一个 Pod 抢先注册之后的重放都回拒绝;
+//   - 有 ACTIVE 的上一代时要换代:它必须就是调用方锁住的那一代(lockedKey),而且维护 run 没开(排空期间不换代)。
+func succession(maxSeq uint64, active *databasepb.SqlWriterRegistry, lockedKey []byte, next *databasepb.SqlWriterRegistry, meta *databasepb.RouteMeta) error {
+	if next == nil || meta == nil || next.BootSeq <= maxSeq {
+		return ErrWriterDenied
+	}
+	if active == nil {
+		return nil
+	}
+	if !bytes.Equal(active.WriterKey, lockedKey) || len(meta.FreezeRunId) != 0 {
+		return ErrWriterDenied
+	}
 	return nil
 }
 
-// Register只在metaX后INSERT全新key；不查修旧slot，不等待旧slot前缀。
+// Register 注册一个槽位的新一代(缺口清单第 22 条,writer-roster-exhaustion-20261106.md §5.2)。
+// 槽位就是 SQL 账号:这个账号的上一代还 ACTIVE,就在同一事务里把它退休(换代),所以一个账号在本逻辑库至多一代 ACTIVE。
 //
-// 不核请求里的 epoch:新写者的 slot 按持 meta 锁读到的当前 epoch 建,收据记这个实际值,安全性论证见规格 §2。
+// 锁序与 Retire、冻结相同:上一代的 64 个 slot → route_meta → 本账号的注册行。上一代的在途事务持着自己的 slot 行锁,
+// 换代要等它们提交;提交之后,上一代下一笔事务在闸门上读到 slot 已 REVOKED,写不进去。
+// 请求的 boot_seq 必须大于本账号已有的全部 boot_seq(CAS)。同一请求重放幂等:事务外、拿到锁之后各查一次同 request_id 的收据,
+// 所以 init 重跑、上一次提交结局未知时可以原样重发,最多落地一次。
+// 不核请求里的 epoch:新一代的 slot 按持 meta 锁读到的当前 epoch 建,收据记这个实际值,安全性论证见规格 §2。
 // 闸门冻结回 ErrWriterFrozen:事务已回滚,确定没有落地,调用方可以用同一请求重试。
 func (c *Catalog) Register(ctx context.Context, request *databasepb.SqlWriterLifecycleReceipt_Request) (*databasepb.SqlWriterLifecycleReceipt, error) {
 	raw, digest, err := c.validateLifecycle(request, databasepb.SqlWriterLifecycleReceipt_REGISTER)
 	if err != nil {
 		return nil, err
 	}
-	writer := request.Writer
-	if len(writer.InstanceId) != 16 || !validPrincipal(string(writer.SqlPrincipal)) || len(writer.RegistrationDigest) != 32 || writer.State != databasepb.SqlWriterRegistry_ACTIVE {
-		return nil, ErrWriterDenied
+	if previous, found, err := c.landedRegistration(ctx, c.db, request.RequestId, raw, digest); err != nil || found {
+		return previous, err
 	}
-	if old, readErr := c.LifecycleReceipt(ctx, request.RequestId); readErr == nil {
-		if bytes.Equal(old.RequestDigest, digest) && bytes.Equal(old.RequestProto, raw) {
-			return old, nil
-		}
-		return nil, ErrWriterDenied
-	} else if !errors.Is(readErr, sql.ErrNoRows) {
-		return nil, readErr
+	// 预读只为知道要锁谁的 slot;事务里持锁复核。
+	head, err := c.LatestBoot(ctx, request.Writer.SqlPrincipal)
+	if err != nil {
+		return nil, err
 	}
+	var predecessorKey []byte
+	if head != nil && head.State == databasepb.SqlWriterRegistry_ACTIVE {
+		predecessorKey = head.WriterKey
+	}
+	var replayed *databasepb.SqlWriterLifecycleReceipt
 	err = c.transaction(ctx, func(tx *sql.Tx) error {
+		var predecessorSlots []*databasepb.SqlWriterSlot
+		if predecessorKey != nil {
+			rows, err := c.lockSlotRows(ctx, tx, predecessorKey)
+			if err != nil {
+				return err
+			}
+			predecessorSlots = rows
+		}
 		meta, err := c.meta(ctx, tx, true)
 		if err != nil {
 			return err
 		}
-		if meta.Writable != 1 {
-			return ErrWriterFrozen
+		// 并发重放、上一次提交结局未知:持锁之后,同 request_id 的收据要么已经在,要么不会再出现。
+		previous, found, err := c.landedRegistration(ctx, tx, request.RequestId, raw, digest)
+		if err != nil {
+			return err
 		}
-		if request.ExpectedCatalogRevision != 0 && meta.CatalogRevision != request.ExpectedCatalogRevision {
-			return ErrWriterDenied
+		if found {
+			replayed = previous
+			return nil
 		}
-		if len(meta.FreezeRunId) != 0 {
-			if len(request.MaintenanceRunId) != 16 || !bytes.Equal(request.MaintenanceRunId, meta.FreezeRunId) {
-				return ErrWriterDenied
-			}
-			run, err := c.readRun(ctx, tx, request.MaintenanceRunId, true)
-			if err != nil {
-				return err
-			}
-			if run.Phase != databasepb.SqlWriterDrainRun_SQL_RELEASED || run.Generation != c.config.Generation {
-				return ErrWriterDenied
-			}
-			release, err := c.readReceipt(ctx, tx, run.LatestReceiptId)
-			if err != nil {
-				return err
-			}
-			if release.Kind != databasepb.SqlWriterMaintenanceReceipt_RELEASE || release.Phase != databasepb.SqlWriterMaintenanceReceipt_RELEASED || !bytes.Equal(release.ReceiptDigest, run.LatestReceiptDigest) || release.AfterEpoch != meta.WriterEpoch {
-				return ErrWriterDenied
-			}
-		} else if len(request.MaintenanceRunId) != 0 {
+		if err = c.registrationGate(ctx, tx, meta, request); err != nil {
+			return err
+		}
+		maxSeq, active, err := c.slotHead(ctx, tx, request.Writer.SqlPrincipal)
+		if err != nil {
+			return err
+		}
+		// 只退休持锁的那一代:ACTIVE 的换了人说明预读之后目录变了,回拒绝,调用方重试。
+		// 排空期间不换代:run 的 ACTIVE 记账只认同 run 的退休(db-write-fencing-mysql.md 2026-10-26 节)。
+		if err = succession(maxSeq, active, predecessorKey, request.Writer, meta); err != nil {
+			return err
+		}
+		if active != nil && !c.activeSlotsAt(predecessorSlots, meta.WriterEpoch) {
 			return ErrWriterDenied
 		}
 		revision, err := checkedIncrement(meta.CatalogRevision)
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO "+c.table("writer_registry")+"(writer_key,generation,instance_id,sql_principal,registration_digest,state,registered_ms,retirement_request_id,retirement_digest,retired_ms) VALUES(?,?,?,?,?,1,?,?,?,0)", writer.WriterKey, writer.Generation, writer.InstanceId, writer.SqlPrincipal, writer.RegistrationDigest, writer.RegisteredMs, []byte{}, []byte{})
+		writer := request.Writer
+		_, err = tx.ExecContext(ctx, "INSERT INTO "+c.table("writer_registry")+"(writer_key,generation,instance_id,sql_principal,registration_digest,state,registered_ms,retirement_request_id,retirement_digest,retired_ms,boot_seq) VALUES(?,?,?,?,?,1,?,?,?,0,?)", writer.WriterKey, writer.Generation, writer.InstanceId, writer.SqlPrincipal, writer.RegistrationDigest, writer.RegisteredMs, []byte{}, []byte{}, writer.BootSeq)
 		if err != nil {
 			return err
 		}
@@ -439,20 +531,152 @@ func (c *Catalog) Register(ctx context.Context, request *databasepb.SqlWriterLif
 				return err
 			}
 		}
-		if _, err = tx.ExecContext(ctx, "UPDATE "+c.table("route_meta")+" SET catalog_revision=? WHERE id=1", revision); err != nil {
+		if err = c.insertLifecycle(ctx, tx, request, raw, digest, meta.WriterEpoch, revision); err != nil {
 			return err
 		}
-		return c.insertLifecycle(ctx, tx, request, raw, digest, meta.WriterEpoch, revision)
+		// RETIRE 排在 REGISTER 之后:带 expected_catalog_revision 的 REGISTER 仍满足「收据版本 = 期望 + 1」。同一事务,外面看不到先后。
+		if active != nil {
+			if revision, err = c.retireSuperseded(ctx, tx, request, active, meta.WriterEpoch, revision); err != nil {
+				return err
+			}
+		}
+		_, err = tx.ExecContext(ctx, "UPDATE "+c.table("route_meta")+" SET catalog_revision=? WHERE id=1", revision)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
+	if replayed != nil {
+		return replayed, nil
+	}
 	return c.LifecycleReceipt(ctx, request.RequestId)
 }
+
+// registrationGate 是注册在 meta 锁下的闸门条件:可写、目录版本(请求绑了才核)、维护 run(run 开着时只有同 run 的 SQL_RELEASED 能注册)。
+func (c *Catalog) registrationGate(ctx context.Context, tx *sql.Tx, meta *databasepb.RouteMeta, request *databasepb.SqlWriterLifecycleReceipt_Request) error {
+	if meta.Writable != 1 {
+		return ErrWriterFrozen
+	}
+	if request.ExpectedCatalogRevision != 0 && meta.CatalogRevision != request.ExpectedCatalogRevision {
+		return ErrWriterDenied
+	}
+	if len(meta.FreezeRunId) == 0 {
+		if len(request.MaintenanceRunId) != 0 {
+			return ErrWriterDenied
+		}
+		return nil
+	}
+	if len(request.MaintenanceRunId) != 16 || !bytes.Equal(request.MaintenanceRunId, meta.FreezeRunId) {
+		return ErrWriterDenied
+	}
+	run, err := c.readRun(ctx, tx, request.MaintenanceRunId, true)
+	if err != nil {
+		return err
+	}
+	if run.Phase != databasepb.SqlWriterDrainRun_SQL_RELEASED || run.Generation != c.config.Generation {
+		return ErrWriterDenied
+	}
+	release, err := c.readReceipt(ctx, tx, run.LatestReceiptId)
+	if err != nil {
+		return err
+	}
+	if release.Kind != databasepb.SqlWriterMaintenanceReceipt_RELEASE || release.Phase != databasepb.SqlWriterMaintenanceReceipt_RELEASED || !bytes.Equal(release.ReceiptDigest, run.LatestReceiptDigest) || release.AfterEpoch != meta.WriterEpoch {
+		return ErrWriterDenied
+	}
+	return nil
+}
+
+// slotHead 在 meta 锁下读本账号(槽位)的当前状态:已有的最大 boot_seq,和 ACTIVE 的那一代(锁住)。
+// 不变量:ACTIVE 至多一行,有的话就是 boot_seq 最大的那一行。不符合就拒绝,不替它修。
+func (c *Catalog) slotHead(ctx context.Context, tx *sql.Tx, principal []byte) (uint64, *databasepb.SqlWriterRegistry, error) {
+	var maxSeq uint64
+	err := tx.QueryRowContext(ctx, "SELECT boot_seq FROM "+c.table("writer_registry")+" WHERE sql_principal=? ORDER BY boot_seq DESC LIMIT 1", principal).Scan(&maxSeq)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, nil, err
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT "+registryColumns+" FROM "+c.table("writer_registry")+" WHERE state=1 AND sql_principal=? FOR UPDATE", principal)
+	if err != nil {
+		return 0, nil, err
+	}
+	var active []*databasepb.SqlWriterRegistry
+	for rows.Next() {
+		row, scanErr := scanRegistry(rows)
+		if scanErr != nil {
+			return 0, nil, errors.Join(scanErr, rows.Close())
+		}
+		active = append(active, row)
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return 0, nil, err
+	}
+	switch {
+	case len(active) == 0:
+		return maxSeq, nil, nil
+	case len(active) == 1 && c.validRegistry(active[0]) && active[0].BootSeq == maxSeq:
+		return maxSeq, active[0], nil
+	default:
+		return 0, nil, ErrWriterDenied
+	}
+}
+
+// retireSuperseded 在换代事务里退休上一代:64 个 slot 与注册行置 REVOKED,追加一份 RETIRE 全文收据,版本 revision+1,返回这个新版本。
+// 收据的 successor_request_id 指向这次 REGISTER,deployment_id 是新一代的部署;没有维护 run(排空期间不换代)。
+func (c *Catalog) retireSuperseded(ctx context.Context, tx *sql.Tx, register *databasepb.SqlWriterLifecycleReceipt_Request, predecessor *databasepb.SqlWriterRegistry, epoch, revision uint64) (uint64, error) {
+	retire := successionRetirement(register, predecessor, epoch, revision)
+	raw, digest, err := c.validateLifecycle(retire, databasepb.SqlWriterLifecycleReceipt_RETIRE)
+	if err != nil {
+		return 0, err
+	}
+	next, err := checkedIncrement(revision)
+	if err != nil {
+		return 0, err
+	}
+	result, err := tx.ExecContext(ctx, "UPDATE "+c.table("writer_slot")+" SET state=2 WHERE writer_key=? AND generation=? AND writer_epoch=? AND state=1", predecessor.WriterKey, c.config.Generation, epoch)
+	if err != nil {
+		return 0, err
+	}
+	if err = affected(result, WriterSlotCount); err != nil {
+		return 0, err
+	}
+	result, err = tx.ExecContext(ctx, "UPDATE "+c.table("writer_registry")+" SET state=2,retirement_request_id=?,retirement_digest=?,retired_ms=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) WHERE writer_key=? AND generation=? AND instance_id=? AND sql_principal=? AND registration_digest=? AND boot_seq=? AND state=1", retire.RequestId, digest, predecessor.WriterKey, c.config.Generation, predecessor.InstanceId, predecessor.SqlPrincipal, predecessor.RegistrationDigest, predecessor.BootSeq)
+	if err != nil {
+		return 0, err
+	}
+	if err = affected(result, 1); err != nil {
+		return 0, err
+	}
+	if err = c.insertLifecycle(ctx, tx, retire, raw, digest, epoch, next); err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
+// successionRetirement 是换代退休的 RETIRE 全文:退休上一代原样的注册行,由这次 REGISTER 发起。
+// request_id 由 REGISTER 的 request_id 派生,一次换代只对应一份;expected_catalog_revision 是 REGISTER 落地之后的版本。
+func successionRetirement(register *databasepb.SqlWriterLifecycleReceipt_Request, predecessor *databasepb.SqlWriterRegistry, epoch, revision uint64) *databasepb.SqlWriterLifecycleReceipt_Request {
+	id := sha256.Sum256(append([]byte("mmorpg-sql-writer-succession-retire\x00"), register.RequestId...))
+	return &databasepb.SqlWriterLifecycleReceipt_Request{
+		RequestId:               bytes.Clone(id[:16]),
+		Kind:                    databasepb.SqlWriterLifecycleReceipt_RETIRE,
+		Writer:                  proto.Clone(predecessor).(*databasepb.SqlWriterRegistry),
+		ExpectedEpoch:           epoch,
+		ExpectedCatalogRevision: revision,
+		AuthoritySchema:         register.AuthoritySchema,
+		ProtectedSchemas:        append([]string(nil), register.ProtectedSchemas...),
+		DeploymentDigest:        bytes.Clone(register.DeploymentDigest),
+		DeploymentId:            register.DeploymentId,
+		SuccessorRequestId:      bytes.Clone(register.RequestId),
+	}
+}
+
+// Retire 是人工(非 run)与排空(同 run)的退休。换代退休只由 Register 在同一事务里写,这里拒绝带 successor_request_id 的请求。
 func (c *Catalog) Retire(ctx context.Context, request *databasepb.SqlWriterLifecycleReceipt_Request) (*databasepb.SqlWriterLifecycleReceipt, error) {
 	raw, digest, err := c.validateLifecycle(request, databasepb.SqlWriterLifecycleReceipt_RETIRE)
 	if err != nil {
 		return nil, err
+	}
+	if len(request.SuccessorRequestId) != 0 {
+		return nil, ErrWriterDenied
 	}
 	if old, readErr := c.LifecycleReceipt(ctx, request.RequestId); readErr == nil {
 		if bytes.Equal(old.RequestDigest, digest) && bytes.Equal(old.RequestProto, raw) {
@@ -502,7 +726,7 @@ func (c *Catalog) Retire(ctx context.Context, request *databasepb.SqlWriterLifec
 		if err = affected(result, WriterSlotCount); err != nil {
 			return err
 		}
-		result, err = tx.ExecContext(ctx, "UPDATE "+c.table("writer_registry")+" SET state=2,retirement_request_id=?,retirement_digest=?,retired_ms=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) WHERE writer_key=? AND generation=? AND instance_id=? AND sql_principal=? AND registration_digest=? AND state=1", request.RequestId, digest, request.Writer.WriterKey, c.config.Generation, request.Writer.InstanceId, request.Writer.SqlPrincipal, request.Writer.RegistrationDigest)
+		result, err = tx.ExecContext(ctx, "UPDATE "+c.table("writer_registry")+" SET state=2,retirement_request_id=?,retirement_digest=?,retired_ms=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) WHERE writer_key=? AND generation=? AND instance_id=? AND sql_principal=? AND registration_digest=? AND boot_seq=? AND state=1", request.RequestId, digest, request.Writer.WriterKey, c.config.Generation, request.Writer.InstanceId, request.Writer.SqlPrincipal, request.Writer.RegistrationDigest, request.Writer.BootSeq)
 		if err != nil {
 			return err
 		}
@@ -769,7 +993,8 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 		columns []string
 		unique  bool
 	}{
-		{"writer_registry", []string{"sql_principal"}, true},
+		// 槽位账号的各代共用账号,唯一的是 (账号, 代次)。
+		{"writer_registry", []string{"sql_principal", "boot_seq"}, true},
 		{"writer_registry", []string{"instance_id"}, true},
 		{"sql_writer_freeze_ticket", []string{"operation_id", "attempt_revision"}, true},
 		{"sql_writer_freeze_ticket", []string{"freeze_request_id"}, true},
@@ -908,9 +1133,11 @@ const catalogWriterRegistryBootstrapDDL = `CREATE TABLE IF NOT EXISTS writer_reg
  retirement_request_id VARBINARY(16) NOT NULL DEFAULT '' COMMENT 'pb:8',
  retirement_digest VARBINARY(32) NOT NULL DEFAULT '' COMMENT 'pb:9',
  retired_ms BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:10',
- PRIMARY KEY(writer_key), UNIQUE KEY uk_writer_principal(sql_principal), UNIQUE KEY uk_writer_instance(instance_id),
+ boot_seq BIGINT UNSIGNED NOT NULL COMMENT 'pb:11',
+ PRIMARY KEY(writer_key), UNIQUE KEY uk_writer_principal_boot(sql_principal,boot_seq), UNIQUE KEY uk_writer_instance(instance_id),
  KEY idx_writer_state(state,writer_key),
- CONSTRAINT chk_writer_state CHECK(state IN (1,2))
+ CONSTRAINT chk_writer_state CHECK(state IN (1,2)),
+ CONSTRAINT chk_writer_boot_seq CHECK(boot_seq>0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='writer_registry';`
 
 const catalogWriterSlotBootstrapDDL = `CREATE TABLE IF NOT EXISTS writer_slot (

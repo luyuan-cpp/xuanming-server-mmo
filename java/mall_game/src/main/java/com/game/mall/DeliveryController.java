@@ -27,12 +27,13 @@ public final class DeliveryController {
         check(request);
         store.receipt(input);
     }
+    // 每项是要退的一笔付款与原因;适配器以这笔付款的交易号作渠道退款的幂等键(契约见 CommerceApi.PendingRefund)。
     @PostMapping("/internal/refunds/poll")
-    public List<CommerceApi.Payment> refunds(HttpServletRequest request) {
+    public List<CommerceApi.PendingRefund> refunds(HttpServletRequest request) {
         payment(request);
         return store.refunds();
     }
-    // 回执必须带 paymentTransactionId(被退的是哪一笔):一张订单可能同时有本单付款和重复付款两笔待退。
+    // 回执必须带 paymentTransactionId(被退的是哪一笔):一张订单可能同时有本单付款和几笔异常付款待退。
     @PostMapping("/internal/refunds/receipt")
     public void refunded(HttpServletRequest request, @RequestBody CommerceApi.Refund input) {
         payment(request);

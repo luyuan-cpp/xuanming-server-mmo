@@ -101,7 +101,8 @@ public final class MockPaymentStore {
     private CommerceApi.Order applyPayment(PaymentPolicy.Fact fact, Budget budget) {
         props.requireMockPayment();
         // 三个阶段各自REQUIRES_NEW；任何外层事务也不能把提供方原件与OMS提交合并，崩溃后可恢复。
-        var order = transaction(budget, () -> orders.recordTrustedPayment(fact.receipt()));
+        // mock原件按冻结金额币种生成，不会出现金额币种不符；mock付款接口沿用订单视图应答。
+        var order = transaction(budget, () -> orders.recordTrustedPayment(fact.receipt()).order());
         markApplied(fact, budget);
         return order;
     }

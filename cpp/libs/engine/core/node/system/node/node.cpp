@@ -2315,6 +2315,41 @@ void Node::CancelPendingNodeRemoval(const std::string &nodeUuid)
 	pendingNodeRemovals_.erase(it);
 }
 
+namespace
+{
+	// 拆本节点到 nodeUuid 的网络实体(节点摘除与 DropUnadmittedConnection 共用),返回是否找到。只在 loop 线程、
+	// 排队任务里调用:直接在 etcd watch 回调里销毁会让正在派发的 channel 失效。
+	//
+	// TCP 与 gRPC 节点实体都按 uuid 找:TCP 实体以前按 `entt::entity{node_id}` 分配(ConnectToTcpNode 的 uuid 重构之前),
+	// 会把不同 zone 的同号节点叠到同一个槽,还要另一条摘除路径;现在两种连接都自动分配实体、按 uuid 去重,摘除一律按 uuid 扫。
+	bool DestroyNodeEntityByUuid(uint32_t nodeType, const std::string &nodeUuid)
+	{
+		entt::registry &nodeRegistry = tlsNodeContextManager.GetRegistry(nodeType);
+		for (const auto &[entity, nodeInfo] : nodeRegistry.view<NodeInfo>().each())
+		{
+			if (!NodeUtils::IsSameNode(nodeInfo.node_uuid(), nodeUuid))
+			{
+				continue;
+			}
+
+			OnNodeRemoveEvent nodeRemovedEvent;
+			nodeRemovedEvent.node = entity;
+			nodeRemovedEvent.nodeType = nodeType;
+			// 先摘掉 gRPC 通道:通知里的后续选点不能再挑中正在摘除的节点(HasUsableGrpcClient 看通道)。
+			// ~Channel 把在途调用以 UNAVAILABLE 排进队列,完成回调在实体销毁之后才执行,不捕获实体(§14.2)。
+			nodeRegistry.remove<MuduoGrpcChannelPtr>(entity);
+			tlsEcs.dispatcher.trigger(nodeRemovedEvent);
+
+			if (nodeRegistry.valid(entity))
+			{
+				DestroyEntity(nodeRegistry, entity);
+			}
+			return true;
+		}
+		return false;
+	}
+} // namespace
+
 void Node::ExecuteNodeRemoval(const NodeInfo &stoppedNode)
 {
 	// 先移除发现快照,网络实体的关闭仍走下面既有的延后收尾。
@@ -2330,50 +2365,96 @@ void Node::ExecuteNodeRemoval(const NodeInfo &stoppedNode)
 	else
 	{
 		LOG_INFO << "Removed " << removedSnapshotCount << " stale node record(s) for uuid=" << stoppedNode.node_uuid();
+		// 快照已是新状态:按快照派生的选择(gate 的路由服子集)先对账。被摘的这一台实体还在,由下面排队的销毁拆。
+		NotifyDiscoveryChanged(stoppedNode.node_type());
 	}
 
 	const auto stoppedNodeType = stoppedNode.node_type();
 	const auto stoppedNodeId = stoppedNode.node_id();
 	const auto stoppedNodeUuid = stoppedNode.node_uuid();
-	const auto stoppedProtocolType = stoppedNode.protocol_type();
 
 	// Important: destroy network entities after current channel dispatch cycle.
 	// Direct destroy inside etcd watch callback can invalidate activeChannels_.
-	GetLoop()->queueInLoop([stoppedNodeType, stoppedNodeId, stoppedNodeUuid, stoppedProtocolType]()
+	GetLoop()->queueInLoop([stoppedNodeType, stoppedNodeId, stoppedNodeUuid]()
 						   {
-		entt::registry& nodeRegistry = tlsNodeContextManager.GetRegistry(stoppedNodeType);
+		if (!DestroyNodeEntityByUuid(stoppedNodeType, stoppedNodeUuid))
+		{
+			LOG_WARN << "Service node stop: entity not found for uuid=" << stoppedNodeUuid
+				<< ", node_type=" << stoppedNodeType
+				<< ", node_id=" << stoppedNodeId;
+		} });
+	LOG_INFO << "Service node stopped : " << stoppedNode.DebugString();
+}
 
-		// Both TCP and gRPC nodes are now keyed by uuid: TCP entities used to
-		// be allocated as `entt::entity{node_id}` (see ConnectToTcpNode pre-
-		// uuid-refactor) but that scheme aliased nodes from different zones
-		// onto the same slot and required a parallel removal path. With both
-		// node_connector paths using auto-assigned entity ids and uuid for
-		// dedup, removal is uniformly a uuid scan.
-		(void)stoppedProtocolType;
-		(void)stoppedNodeId;
-		for (const auto& [entity, nodeInfo] : nodeRegistry.view<NodeInfo>().each()) {
-			if (!NodeUtils::IsSameNode(nodeInfo.node_uuid(), stoppedNodeUuid)) {
-				continue;
-			}
+Node &Node::SetConnectionAdmission(uint32_t nodeType, ConnectionAdmissionFn fn)
+{
+	eventLoop.assertInLoopThread();
+	if (nodeType >= connectionAdmission_.size())
+	{
+		LOG_FATAL << "SetConnectionAdmission: invalid node type " << nodeType;
+	}
+	connectionAdmission_[nodeType] = std::move(fn);
+	return *this;
+}
 
-			OnNodeRemoveEvent nodeRemovedEvent;
-			nodeRemovedEvent.node = entity;
-			nodeRemovedEvent.nodeType = stoppedNodeType;
-			// 先摘掉 gRPC 通道:通知里的后续选点不能再挑中正在摘除的节点(HasUsableGrpcClient 看通道)。
-			// ~Channel 把在途调用以 UNAVAILABLE 排进队列,完成回调在实体销毁之后才执行,不捕获实体(§14.2)。
-			nodeRegistry.remove<MuduoGrpcChannelPtr>(entity);
-			tlsEcs.dispatcher.trigger(nodeRemovedEvent);
+Node &Node::SetDiscoveryObserver(uint32_t nodeType, DiscoveryObserverFn fn)
+{
+	eventLoop.assertInLoopThread();
+	if (nodeType >= discoveryObservers_.size())
+	{
+		LOG_FATAL << "SetDiscoveryObserver: invalid node type " << nodeType;
+	}
+	discoveryObservers_[nodeType] = std::move(fn);
+	return *this;
+}
 
-			if (nodeRegistry.valid(entity))
-			{
-				DestroyEntity(nodeRegistry, entity);
-			}
+bool Node::AdmitsConnection(const NodeInfo &node) const
+{
+	const uint32_t nodeType = node.node_type();
+	if (!targetNodeTypeWhitelist.contains(nodeType) || nodeType >= connectionAdmission_.size())
+	{
+		return false;
+	}
+	const auto &admit = connectionAdmission_[nodeType];
+	return !admit || admit(node);
+}
+
+void Node::NotifyDiscoveryChanged(uint32_t nodeType)
+{
+	eventLoop.assertInLoopThread();
+	if (nodeType < discoveryObservers_.size() && discoveryObservers_[nodeType])
+	{
+		discoveryObservers_[nodeType]();
+	}
+}
+
+void Node::DropUnadmittedConnection(uint32_t nodeType, const std::string &nodeUuid)
+{
+	eventLoop.assertInLoopThread();
+	if (shutdownStarted.load(std::memory_order_acquire))
+	{
+		return;
+	}
+	// 与节点摘除一样排到下一轮再拆:调用方可能正处在 etcd 回调或定时器回调里。
+	GetLoop()->queueInLoop([nodeType, nodeUuid]()
+						   {
+		if (gNode == nullptr || gNode->shutdownStarted.load(std::memory_order_acquire))
+		{
 			return;
 		}
-		LOG_WARN << "Service node stop: entity not found for uuid=" << stoppedNodeUuid
-			<< ", node_type=" << stoppedNodeType
-			<< ", node_id=" << stoppedNodeId; });
-	LOG_INFO << "Service node stopped : " << stoppedNode.DebugString();
+		const auto entity = NodeUtils::FindNodeEntityByUuid(nodeType, nodeUuid);
+		if (!entity)
+		{
+			return; // 已经拆了(节点摘除先到),无事可做
+		}
+		const auto *nodeInfo = tlsNodeContextManager.GetRegistry(nodeType).try_get<NodeInfo>(*entity);
+		if (nodeInfo != nullptr && gNode->AdmitsConnection(*nodeInfo))
+		{
+			// 排队期间它又被准入(例如路由服子集变回来):保留连接。
+			return;
+		}
+		LOG_INFO << "Dropping a connection that is no longer admitted, node_type=" << nodeType << ", uuid=" << nodeUuid;
+		DestroyNodeEntityByUuid(nodeType, nodeUuid); });
 }
 
 void Node::StartNodeRegistrationHealthMonitor()

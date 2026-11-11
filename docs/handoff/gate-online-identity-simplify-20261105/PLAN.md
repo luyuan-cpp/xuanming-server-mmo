@@ -67,5 +67,10 @@ Codex 跑一次，回执逐条记红 / 绿；与上表不符就停下报告，�
 ## 6. 剩余
 
 1. **已落码（第 3 批，2026-11-06，未编译）**：guild 的 GetGuild、GetGuildRank、GetGuildRankByGuild 删掉无会话分支，与四个写方法一样先过 `requireClientSession`，区一律取 `clientZone`，榜单页长夹到 `MaxRankPageSize`；随之删 `viewerOf`、`visibleIn` 的 `zoneID==0` 口径与 `expected_guild.go` 里恒真的「只计客户端来源」判断。`guild_logic_names_test.go` 6 处改成客户端来源（`clientCtx` + `fakeHomeZones`）；请求者用本区旁观者，`guildInfoFor` 不给他现算待审数，所以没有加待审数替身，也没有为测试新开接缝。`client_zone_test.go`「内部调用保留全服榜」改为断言无会话被拒，新增 `TestLegacyReadsWithoutSessionAreRefused`。文件清单与验收见 CODEX.md 第 7 节（设计 §9.6 第 1 条）。
-2. guild 四个写方法请求体里被忽略的 `player_id` / `zone_id` 是客户端契约，随 Java 对齐两版同批删；GetGuildRank / GetGuildRankByGuild 请求体里的 `zone_id` 第 3 批之后也一律忽略，一并删（设计 §9.6 第 2 条）。
+2. **已落码（第 4 批，2026-11-10，未编译）**：guild 请求体里服务端早已不采信的字段从 `guild.proto` 删掉，字段号写成 `reserved`，涉及六个请求：
+   - CreateGuild 的 `player_id` / `zone_id`；
+   - LeaveGuild、DisbandGuild、SetAnnouncement 的 `player_id`；
+   - GetGuildRank、GetGuildRankByGuild 的 `zone_id`。
+
+   原计划等 Java 对齐两版同批删；负责人 11-10 要求现在就按标准做法做，Java 本轮只在 `PARITY.md` 记 TODO。四个写方法改为 `callerOf(ctx, 0)`。robot 公会冒烟同步：第 1 步不再填错区，第 4 步不再伪造区，第 8 步改为按会话身份退帮。客户端重新生成与编译交给 Codex。与第 3 条同批，验收见 CODEX.md 第 8 节（设计 §9.6 第 2 条）。
 3. **已落码（2026-11-10，未编译）**：负责人 2026-11-10 定运维 / GM 不需要全服帮会榜，删掉，不等第 3 批回执。`UpdateGuildScore` / `RebuildRanks` / `RemoveGuildFromRank` 只维护分区榜 `guild_rank:zone:*`；data 层读榜不给区回 `ErrRankZoneRequired`；三份帮会排行架构文档按只有分区榜重写。代码与测试由「Gate 在线身份传递实现审核」会话与第 2 条同批落码，验收见 CODEX.md 第 8 节（设计 §9.6 第 3 条）。

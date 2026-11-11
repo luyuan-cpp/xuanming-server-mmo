@@ -20,6 +20,7 @@ import (
 	componentpb "proto/common/component"
 
 	"shared/safego"
+	"shared/workshard"
 )
 
 // 重投循环(规格 §4.19 reconcile.go、§4.37「领取改两步、有界并发、毒行跳过」、§4.38)。
@@ -169,6 +170,30 @@ type Store interface {
 	// 唯一证据,业务方各写各的会把它抹掉。
 	Reschedule(ctx context.Context, op Op, nextAttemptMs uint64, res Result, nowMs uint64) error
 }
+
+// OwnedDueLister 是 Store 的**可选**能力:只列本副本负责的片里的到期行(缺口清单第 25 条,
+// docs/design/assetop-redelivery-sharding-20261110.md)。绑了 Loop.BindWorkOwner 时 Tick 用它代替 ListDue。
+//
+// 契约与 ListDue 完全相同(两段读、只回主键、不加锁、按 op_id 去重、总条数 <= limit),只多一个条件:
+// owned 用 AND 接进**两段** SQL 的 WHERE,放在 ORDER BY / LIMIT 之前,绑定参数按条件在语句里出现的位置接入
+// (owned.SQL() / owned.Args())。条件由 Loop 按 player_id 生成(片号 = player_id % 64,见 dueShardColumn),
+// 所以 {op} 表要有 player_id 列;实现不解释、不改写条件。零值 owned 不过滤,结果与 ListDue 相同,实现可以让 ListDue 委托它。
+//
+// 为什么条件必须在 LIMIT 之前:先 LIMIT 再在内存里过滤,队头被别的副本的片占满时本副本一行都拿不到;
+// 写在 WHERE 里,各副本只看自己的片,一个副本积压的行占不住别的副本的名额。
+//
+// 不放进 Store 主接口:Store 的生产实现除 guild、trade 外还有 mail 与 data_service 的回收,它们不在这次分工的范围里,
+// 不该为此同批改(同 PlayerPendingLister 的理由)。没实现它的 Store 绑不上分工(BindWorkOwner 回错误),照旧扫全部行。
+type OwnedDueLister interface {
+	ListDueOwned(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]uint64, error)
+}
+
+// dueShardColumn 是到期扫描分片用的列:片号 = player_id % 64(workshard.SQLFilter 的 MOD(column, Shards))。
+//
+// 按玩家分而不按 op_id 分:同一玩家同一条流的指令按 seq 递增,按玩家分之后同一个玩家的未决行只归一个副本,
+// 不会两个副本各推进一部分;落地唤醒(WakePlayer)也是按玩家处理的。player_id 是发号器发的打散值
+// (AGENTS.md §7 不变量 1),取模足够均匀。写死在这里而不是让各 Store 自报:列名进 SQL,不能是外部输入。
+const dueShardColumn = "player_id"
 
 // Applier 是「把一条指令投给 scene」的能力。生产实现是 *Caller,单测注入假的。
 type Applier interface {
@@ -441,6 +466,9 @@ type Loop struct {
 	// ProcessOne 的同步投递不经过它,与引入唤醒之前一致。
 	slots chan struct{}
 
+	// shards 是 Tick 到期扫描的按片分工(BindWorkOwner);零值 = 不分工,扫全部行。Run 之前写一次,之后只读。
+	shards dueShards
+
 	// abandonMu 串行化 AbandonOnce,并保护 abandonCursor(下一轮从哪个 op_id 之后接着翻页)。
 	abandonMu     sync.Mutex
 	abandonCursor uint64
@@ -473,6 +501,38 @@ func NewLoop(cfg LoopConfig, store Store, applier Applier, m *Metrics, now func(
 		now:     now,
 		slots:   make(chan struct{}, cfg.Workers),
 	}, nil
+}
+
+// dueShards 是 BindWorkOwner 记下的分工:kind 是归属键前缀,owns 判本副本是否负责某个归属键,
+// lister 是 Store 上实现了 OwnedDueLister 的那一面(绑定时已核过,Tick 不再做类型断言)。
+type dueShards struct {
+	kind   string
+	owns   func(key string) bool
+	lister OwnedDueLister
+}
+
+// BindWorkOwner 让 Tick 的到期扫描只读本副本负责的片(缺口清单第 25 条,docs/design/assetop-redelivery-sharding-20261110.md)。
+//
+// 片号 = player_id % 64,第 n 片的归属键是 workshard.ShardKey(kind, n)。kind 由装配方写死,与本服务别的分片工作不同名
+// (trade 的成员表还给合同推进用);owns 判本副本是否负责某个归属键,生产是 workshard.Membership.Owns:
+// 成员表为空时全部归本副本(保活优先),成员表不空而本副本不在其中时一片都不归。
+//
+// 只影响 Tick。同步投递(ProcessOne)、落地唤醒(WakePlayer)、对账与自动放弃(RunMaintenance)、最老未决年龄都不看归属:
+// 唤醒在任一副本上处理某个玩家的全部未决行,与分片无关。正确性也不靠它:领取仍是 Claim 的租约 CAS,终结仍是 Finalize 的
+// status CAS;成员表变化的几秒里某一片两个副本都扫、或暂时没人扫,结果都一样,只是空 CAS 多几次或晚一拍。
+//
+// 必须在 Run 之前调用(与 Ledger 等可选字段同一约束:Tick 读这些字段不加锁)。Store 没实现 OwnedDueLister、kind 为空
+// 或 owns 为 nil 时回错误,装配方据此拒启:绑了分工却悄悄扫全部行,扩副本时看不出分工没生效。
+func (l *Loop) BindWorkOwner(kind string, owns func(key string) bool) error {
+	if kind == "" || owns == nil {
+		return errors.New("assetop: BindWorkOwner needs a non-empty kind and a non-nil owns func")
+	}
+	lister, ok := l.store.(OwnedDueLister)
+	if !ok {
+		return fmt.Errorf("assetop: store %T does not implement OwnedDueLister, due rows cannot be sharded", l.store)
+	}
+	l.shards = dueShards{kind: kind, owns: owns, lister: lister}
+	return nil
 }
 
 // CheckWiring 在可选字段(Ledger 等)挂好之后、Run / ProcessOne 之前调用:要求的依赖缺了就回错误,
@@ -575,8 +635,9 @@ func (l *Loop) RunMaintenance(ctx context.Context) {
 // 并发严格受 Workers 限制,原因见 LoopConfig.Workers。Tick 等所有 worker 结束才返回,
 // 于是「同时在途的资产 RPC」在一个副本内恒 <= Workers,不会因为上一轮没跑完就叠加;
 // 每个 worker 处理每一行前还要从 slots 拿名额,与同时进行的 WakePlayer 共用这份预算。
+// 绑了按片分工(BindWorkOwner)时这一批只来自本副本负责的片,见 listDue。
 func (l *Loop) Tick(ctx context.Context) int {
-	ids, err := l.store.ListDue(ctx, l.nowMs(), l.cfg.Batch)
+	ids, err := l.listDue(ctx, l.nowMs())
 	if err != nil {
 		l.metrics.incStoreError("list")
 		logx.Errorf("[AssetOp] Failed to list due rows: %v", err)
@@ -609,6 +670,30 @@ func (l *Loop) Tick(ctx context.Context) int {
 	}
 	wg.Wait()
 	return int(processed.Load())
+}
+
+// listDue 读 Tick 的一批到期行。没绑分工时扫全部行(ListDue)。绑了分工时只读本副本负责的片:条件在 SQL 的 LIMIT 之前,
+// 本轮负责的片数报到 assetop_owned_shards。一片都不归本副本时条件恒假,照常发一次查询、读回空:
+// 成员表随时会变,不在这里缓存「本副本没活」。
+func (l *Loop) listDue(ctx context.Context, nowMs uint64) ([]uint64, error) {
+	if l.shards.lister == nil {
+		return l.store.ListDue(ctx, nowMs, l.cfg.Batch)
+	}
+	owned := workshard.SQLFilter(l.shards.owns, l.shards.kind, dueShardColumn)
+	l.metrics.setOwnedShards(ownedShardCount(l.shards.kind, l.shards.owns))
+	return l.shards.lister.ListDueOwned(ctx, nowMs, l.cfg.Batch, owned)
+}
+
+// ownedShardCount 数本副本此刻负责几片,只给 assetop_owned_shards。它与 SQL 条件各问一遍 owns:
+// 成员表恰好在两次之间变了,这一轮的 gauge 会差几片,下一轮就对上。
+func ownedShardCount(kind string, owns func(key string) bool) int {
+	n := 0
+	for shard := 0; shard < workshard.Shards; shard++ {
+		if owns(workshard.ShardKey(kind, shard)) {
+			n++
+		}
+	}
+	return n
 }
 
 // drain 是一条 worker 的主体:逐个领取并处理,直到队列空或 ctx 结束。

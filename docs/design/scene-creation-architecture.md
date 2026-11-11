@@ -618,9 +618,11 @@ Invariants (comment block in `reentry_barrier.go`, 「被屏障推迟的死节�
   照旧收尾。记的是最近一次判死的那一代:更早的一代不可能再回来(新一代占了分配键,旧一代重注册的 CAS 必然失败)。
   两次判死之间换过代、回来的是后一代时,前一代的孤儿实例随任务一起撤掉不拆,宁可留孤儿也不拆活实例。撤销脚本报错时
   这一拍不收。`luaFinishDeadNodeReconcile` 同时加了守卫:任务已不在表里就一个键都不动,免得领导者重叠时拿着旧列表的
-  一方删掉回来那一代的计数。只覆盖「在屏障放行、drain 动手之前回来」的情形:失联超过屏障再回来的节点,实例此前已被拆掉、
-  世界频道已被改派,由 scene 节点自己按期望状态对账:读到 `scene:{id}:node` 不再是本节点就排空并销毁本地实体
-  ([scene-node-ownership-reconcile.md](scene-node-ownership-reconcile.md),缺口清单第 33 条,2026-11-06 落码,未编译)。
+  一方删掉回来那一代的计数。只覆盖「在屏障放行、drain 动手之前回来」的情形:失联超过屏障的节点(不论回没回来),实例此前已被拆掉、
+  世界频道已被改派,由 scene 节点自己按期望状态对账:读到 `scene:{id}:node` 不再是本节点,或本节点号的持有者
+  `node:zone:{z}:{n}:holder`(watch PUT 与全量同步按 etcd ModRevision 单调写,`node_holder.go`)已换成更新的另一代进程,就按住户预算
+  排空并销毁本地实体,不看 etcd 身份([scene-node-ownership-reconcile.md](scene-node-ownership-reconcile.md),缺口清单第 33 条,
+  2026-11-06 初版、2026-11-10 补完,未编译)。
 
 `reentry_barrier.go::drainPendingDeadNodeReconciles` runs on every 5s
 loadTicker and in fullSync's leader branch. For each task whose barrier

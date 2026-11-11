@@ -81,8 +81,8 @@ kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc
 | `result="one_record_missing"` | 一份本地记录不存在,已按另外两份继续并补上 | 发号不受影响。查那套 etcd 为什么丢数据,§4.1 |
 | `result="record_behind"` | 两份本地记录不相等 | 预留中途崩溃也会这样,下一块就恢复。持续增长或差很多,查是不是有一套被回退了 |
 | `result="records_behind_registry"` | 两份本地记录都落后登记处:本地两套都被旧数据覆盖过 | 发号不受影响,下一块已经在登记处水位之上。按 §4.1 复盘,查是谁恢复了两套 etcd |
-| `result="registry_behind"` 偶尔增长 | 登记处落后一块以内:预留写完本地、写登记处之前中断,或两个副本同时预留 | 无 |
-| `result="registry_behind"` 且日志 `more than one block behind` | 登记处被回档过 | 发号不受影响。查是谁恢复了登记处,§4.3。登记处不许从备份恢复 |
+| `result="registry_behind"` 偶尔增长 | 复核登记处版本未变后,仍落后本地一块以内:此前预留中断,或另一副本尚未写登记处 | 无 |
+| `result="registry_behind"` 且日志 `more than one block behind` | 可能是登记处回档,也可能是多次预留没完成登记处写入 | 发号不受影响。核对三套 etcd 的写失败与恢复记录,§4.3;不能仅凭差距判定回档。登记处不许从备份恢复 |
 | `result="store_error"` 持续增长 | 读写三套 etcd 中的某一套失败 | 手里的块还能发,按峰值也有一小时以上。先修 etcd 或到登记处的网络。用完就 fail-closed |
 | `result="refused"`、`outcome="records_missing"` | 登记处没有这个码,或者本地两份都不存在 | 新地域走 §2.2;否则是 ID 安全事件,按日志走 §4.2 或 §4.3 |
 | `result="refused"`、`outcome="refused"` | 这两套 etcd 不是登记处给这个码绑的那两套,或者码已退役 | 日志 `not the ones bound`:重复部署、克隆、或换了 etcd 没有 rebind,§4.2;日志 `retired`:这个地域不该再发号 |
@@ -140,7 +140,7 @@ kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc
 
 ### 4.3 登记处丢了数据或被回档
 
-- **登记处被回档、本地完好**:不用处理,发号器按本地记录继续并把登记处抬上去,指标 `registry_behind`、日志 `more than one block behind`。查清楚是谁恢复了登记处。
+- **登记处被回档、本地完好**:不用手工修改水位,发号器按本地记录继续并把登记处抬上去,指标 `registry_behind`。差距超过一块时日志含 `more than one block behind`,但多次未完成的预留也会产生这条日志,须结合写失败和恢复记录判断,不能只凭日志断言回档。确认回档后查清楚是谁恢复了登记处。
 - **登记处丢了一个码**:这个地域预留和初始化都拒绝,日志 `not registered`。在这个地域跑 `-id-issuer-recover`(不带 rebind),按本地两份记录的最大值重新登记,输出 `re-registered region <码>`。
 - **登记处整个丢了**:所有地域拒绝新块,新地域初始化报 `not opened`。重建,不从备份恢复:
   1. 重新部署登记处 etcd(托管集群 `infra-up -HostIdRegistry`),数据目录是空的。

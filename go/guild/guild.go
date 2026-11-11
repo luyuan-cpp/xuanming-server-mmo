@@ -378,6 +378,11 @@ func main() {
 		// 同样必须在 Start 之前接上。竞选者标识用节点 uuid(每个进程实例唯一,与历练巡检租约的持有者标识同源)。
 		// 自动放弃另需 Loop.Ledger(上一行)。
 		assetPipe.AttachMaintenanceLeader(svcCtx.RedisClient, n.Info.NodeUuid)
+		// 重投循环的到期扫描按玩家分片,分给本 zone 注册的 stable guild 副本(缺口清单第 25 条,
+		// docs/design/assetop-redelivery-sharding-20261110.md)。同样必须在 Start 之前;身份取上面注册拿到的 zone 与 uuid。
+		if err := assetPipe.AttachWorkShards(n.Info.ZoneId, n.Info.NodeUuid); err != nil {
+			logx.Must(fmt.Errorf("guild asset redelivery sharding: %w", err))
+		}
 		if finish, err := relay.Enter(); err == nil {
 			func() { defer finish(); svcCtx.WarmAssetOpIDSegment() }()
 		}

@@ -377,13 +377,13 @@ function ConvertFrom-LoginDrainConfig {
     if ($migrateEnabledText -ieq 'true') { $migrateEnabled = $true }
     elseif ($migrateEnabledText -ieq 'false') { $migrateEnabled = $false }
     elseif (-not [string]::IsNullOrEmpty($migrateEnabledText)) {
-        throw "$Source 的 GateDrain.Migrate.Enabled='$migrateEnabledText' 不是 true / false"
+        throw "$Source GateDrain.Migrate.Enabled='$migrateEnabledText' is not true / false"
     }
     $migrateRate = [long]$contract.DefaultMigrateRatePerSecond
     $migrateRateText = [string]$scalars['GateDrain.Migrate.RatePerSecond']
     if (-not [string]::IsNullOrWhiteSpace($migrateRateText)) {
         if ($migrateRateText -notmatch '^\d{1,10}$' -or [uint64]$migrateRateText -gt [uint32]::MaxValue) {
-            throw "$Source 的 GateDrain.Migrate.RatePerSecond='$migrateRateText' 非法"
+            throw "$Source GateDrain.Migrate.RatePerSecond='$migrateRateText' is not an integer in [0, 4294967295]"
         }
         $migrateRate = [long]$migrateRateText
     }

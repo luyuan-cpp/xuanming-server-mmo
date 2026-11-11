@@ -46,6 +46,7 @@
     <ClInclude Include="bag\container_layout.h" />
     <ClInclude Include="bag\eviction_policy.h" />
     <ClInclude Include="bag\item_store.h" />
+    <ClInclude Include="bag\item_hold.h" />
     <ClInclude Include="bag\comp\player_bags_comp.h" />
     <ClInclude Include="condition\condition_util.h" />
     <ClInclude Include="id_segment\guid_segment_client.h" />

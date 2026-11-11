@@ -46,6 +46,7 @@ import (
 
 	"shared/assetop"
 	"shared/gameday"
+	"shared/workshard"
 
 	"guild/internal/constants"
 )
@@ -280,6 +281,24 @@ func TestEconomyCandidateReadsTakeNoLocks(t *testing.T) {
 	// 事务内建 seq 行必须仍是"已存在即空操作"的 INSERT IGNORE、next_seq 从 1 起(与 assetop.EnsureSeqRow 同义)。
 	assert.True(t, strings.HasPrefix(sqlEnsureSeqRow, "INSERT IGNORE INTO "+guildPlayerOpSeqTable+" "), sqlEnsureSeqRow)
 	assert.Contains(t, sqlEnsureSeqRow, "VALUES (?, ?, 1, ?, ?)")
+}
+
+// TestListDueQueryPutsShardFilterBeforeLimit:到期扫描两段的分片条件(缺口清单第 25 条)都接在 WHERE 末尾、
+// ORDER BY / LIMIT 之前,片号只走占位符;零值条件是恒真 1=1,与分片前的语句等价。纯字符串,不连库。
+func TestListDueQueryPutsShardFilterBeforeLimit(t *testing.T) {
+	const kind = "guild-assetop"
+	owned := workshard.SQLFilter(func(key string) bool { return key == workshard.ShardKey(kind, 5) }, kind, "player_id")
+	for name, head := range map[string]string{"fresh": sqlListDueFreshHead, "aged": sqlListDueAgedHead} {
+		query := listDueQuery(head, owned)
+		assert.True(t, strings.HasSuffix(query, " AND MOD(player_id,64) IN(?) ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"),
+			"%s 段的分片条件必须在 ORDER BY / LIMIT 之前:%s", name, query)
+		assert.Equal(t, 6, strings.Count(query, "?"), "%s 段:4 个到期条件 + 1 个片号 + LIMIT", name)
+		assert.True(t, strings.HasSuffix(listDueQuery(head, workshard.Filter{}), " AND 1=1 ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?"),
+			"%s 段:零值条件不过滤", name)
+		assert.NotContains(t, strings.ToUpper(query), "FOR UPDATE", "%s 段是候选读,必须是普通读", name)
+	}
+	assert.Contains(t, sqlListDueFreshHead, "`attempts` < ? AND ")
+	assert.Contains(t, sqlListDueAgedHead, "`attempts` >= ? AND ")
 }
 
 // TestCounterRefundIsTheOnlyRefundRule:退次数 / 退限购的判定只此一处(counterRefund),lockCounterparty 的 seq 行守卫
@@ -1258,6 +1277,49 @@ func TestListDue_FreshRowsFirst(t *testing.T) {
 	ids, err = f.store.ListDue(f.ctx, testNowMs, 100)
 	require.NoError(t, err)
 	assert.Equal(t, []uint64{201, 202, 101, 102, 103}, ids)
+}
+
+// TestListDue_OwnedShardsOnly:分片条件(缺口清单第 25 条,片号 = player_id % 64)在两段里都生效、都在 LIMIT 之前:
+// 别的片的行再早到期也不占本副本的名额;零值条件与 ListDue 相同;一片都不归本副本时什么都不回。
+func TestListDue_OwnedShardsOnly(t *testing.T) {
+	f := openEconomyFixture(t)
+	const kind = "guild-assetop"
+	const mine, other uint64 = 64*134 + 1, 64*134 + 2 // 片 1 与片 2
+	epoch := testNowMs - 100_000
+
+	otherFresh := econShopRecord(t, 501, other, epoch, 1) // 别的片:新行老行各一条,都比本片的更早到期,先占队头
+	otherFresh.NextAttemptMs = testNowMs - 90_000
+	otherAged := econShopRecord(t, 502, other, epoch, 2)
+	otherAged.Attempts = assetop.FreshAttemptLimit
+	otherAged.NextAttemptMs = testNowMs - 80_000
+	mineFresh := econShopRecord(t, 601, mine, epoch, 1)
+	mineAged := econShopRecord(t, 602, mine, epoch, 2)
+	mineAged.Attempts = assetop.FreshAttemptLimit + 1
+	mineAged.NextAttemptMs = testNowMs - 50_000
+	for _, rec := range []*pb.GuildAssetOpRecord{otherFresh, otherAged, mineFresh, mineAged} {
+		econInsertOp(t, f, rec)
+	}
+
+	owned := workshard.SQLFilter(func(key string) bool { return key == workshard.ShardKey(kind, workshard.ShardOf(mine)) }, kind, "player_id")
+	ids, err := f.store.ListDueOwned(f.ctx, testNowMs, 1, owned)
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{601}, ids, "别的片更早到期的行不占本副本的名额")
+
+	ids, err = f.store.ListDueOwned(f.ctx, testNowMs, 10, owned)
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{601, 602}, ids, "老行那一段同样只取本副本的片")
+
+	ids, err = f.store.ListDueOwned(f.ctx, testNowMs, 10, workshard.Filter{})
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{501, 601, 502, 602}, ids, "零值条件:全部片,新行在前")
+	all, err := f.store.ListDue(f.ctx, testNowMs, 10)
+	require.NoError(t, err)
+	assert.Equal(t, ids, all, "ListDue 就是不带条件的 ListDueOwned")
+
+	none := workshard.SQLFilter(func(string) bool { return false }, kind, "player_id")
+	ids, err = f.store.ListDueOwned(f.ctx, testNowMs, 10, none)
+	require.NoError(t, err)
+	assert.Empty(t, ids, "一片都不归本副本:什么都不回")
 }
 
 // TestClaim_ReturnsFullOpAndHoldsLease:领到的 Op 带齐纪元 / correlation(= op_id)/ 令牌 / 包;租约期内别人领不到。

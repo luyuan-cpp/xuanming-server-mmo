@@ -29,6 +29,7 @@
     <ClCompile Include="handler\rpc\client_request_lane.cpp" />
     <ClCompile Include="handler\rpc\drain_migration.cpp" />
     <ClCompile Include="handler\rpc\router_muduo_forward.cpp" />
+    <ClCompile Include="handler\rpc\router_subset.cpp" />
     <ClCompile Include="handler\rpc\rpc_reply_bridge.cpp" />
     <ClCompile Include="handler\rpc\gate_service_handler.cpp" />
     <ClCompile Include="handler\rpc\gate_client_spectate_handler.cpp" />
@@ -56,6 +57,8 @@
     <ClInclude Include="handler\rpc\client_request_lane.h" />
     <ClInclude Include="handler\rpc\drain_migration.h" />
     <ClInclude Include="handler\rpc\router_muduo_forward.h" />
+    <ClInclude Include="handler\rpc\router_subset.h" />
+    <ClInclude Include="handler\rpc\router_subset_policy.h" />
     <ClInclude Include="handler\rpc\rpc_reply_bridge.h" />
     <ClInclude Include="handler\rpc\gate_service_handler.h" />
     <ClInclude Include="handler\rpc\gate_client_spectate_handler.h" />

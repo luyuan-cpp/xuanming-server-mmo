@@ -248,7 +248,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [gateway-k8s-deployment.md](design/gateway-k8s-deployment.md) — Gateway Service Notes
 - [release-packaging-standard-20260914.md](design/release-packaging-standard-20260914.md) — 服务端发布打包标准(对标 luyuan-go/xuanming-server)
 - [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05；批 1、2、2b、3a、3b 全部已落码未编译）
-- [gate-drain-session-migration.md](design/gate-drain-session-migration.md) — gate 排空时把在线玩家按限速迁到同 zone 其他 gate（msg 124 + 租约内重连回原场景；2026-11-05 设计，11-06 批 A login 一侧已落码未编译，批 B gate 待做）
+- [gate-drain-session-migration.md](design/gate-drain-session-migration.md) — gate 排空时把在线玩家按限速迁到同 zone 其他 gate（msg 124 + 租约内重连回原场景；2026-11-05 设计，11-06 批 A login 一侧、11-10 批 B gate 一侧都已落码未编译；开关默认关，客户端跳数清零与 Java 待做）
 - [rolling-update-restart-resilience-tests.md](design/rolling-update-restart-resilience-tests.md) — Rolling Update & Node Restart Resilience Tests
 - [vs2026_cross_machine_compatibility.md](design/vs2026_cross_machine_compatibility.md) — VS2026 跨电脑兼容性维护记录 · [EN](design/vs2026_cross_machine_compatibility_en.md) · [中文](design/vs2026_cross_machine_compatibility_zh.md)
 

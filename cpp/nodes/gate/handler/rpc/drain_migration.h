@@ -61,7 +61,8 @@ struct RequestReply
 	bool delivered{false};
 	loginpb::GateMigrationResponse response;
 };
-using ReplyCallback = std::function<void(const RequestReply &)>;
+// receivedAt = 应答到达时刻(单调时钟),由出口在回调点读取后传入:退避从这里起算,本模块自己不读时钟。
+using ReplyCallback = std::function<void(const RequestReply &reply, SteadyTime receivedAt)>;
 
 // 发 RequestGateMigration 的出口。返回 true = 已发出,done 之后恰好被调用一次(可能同步调用);
 // false = 没发出,done 不会被调用。

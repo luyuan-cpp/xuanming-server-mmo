@@ -28,6 +28,7 @@
 #include "grpc_client/login/login_grpc_client.h"
 #include "handler/gate_redirect_delivery.h"
 #include "handler/rpc/router_muduo_forward.h"
+#include "handler/rpc/router_subset.h"
 #include "handler/event/scene_entry_dispatch.h"
 #include "spectate/gate_spectate_client.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
@@ -231,7 +232,8 @@ static SessionDetails BuildSessionDetails(const SessionId sessionId, const Guid 
 // 指针只在本次调用里用,不保存(通道归节点实体所有)。messageIdForLog 只进日志。
 static muduo_grpc::Channel *PickRouterChannel(const uint32_t messageIdForLog)
 {
-	const auto routerNode = PickRandomNode(eNodeType::ClientRpcRouterNodeService);
+	// 只在本 zone 的路由服子集里挑,READY 优先(router_subset.h,docs/design/connection-fanout-subsetting-20261106.md §3.2)。
+	const auto routerNode = gate_router_subset::PickRouter();
 	if (!routerNode)
 	{
 		// 路由服全部下线时这里的频率 = 全部在线玩家的 gRPC 类消息频率,必须采样;
@@ -249,7 +251,7 @@ static muduo_grpc::Channel *PickRouterChannel(const uint32_t messageIdForLog)
 	// docs/design/grpc-muduo-transport.md §14)。一次调用只发一次,失败不重发。
 	// 缺通道按「没有路由服」处理(fail-closed),绝不对缺失的组件解引用。关机阶段 0(FinalizeShutdownInLoop)清掉
 	// MuduoGrpcChannelPtr、NodeInfo 要到拆除才清,这段窗口(排空预算到期后强行 Finalize、Finalize 之后才断开的会话)
-	// 靠 PickRandomNode 的候选条件(HasUsableGrpcClient)挡住,正常关机另有排空门(main.cpp 的 SetShutdownDrainComplete:
+	// 靠 PickRouter 的候选条件(HasUsableGrpcClient)挡住,正常关机另有排空门(main.cpp 的 SetShutdownDrainComplete:
 	// beforeShutdown 记下的会话都走完断线处理、通道都空闲才 Finalize)。这里再挡一层,防选点条件日后改松时落成空指针解引用。
 	// 返回 nullptr 后 lane 回带 id 的 1003,断线通知只留痕、由 login 租约兜底。
 	auto &routerRegistry = tlsNodeContextManager.GetRegistry(eNodeType::ClientRpcRouterNodeService);
@@ -277,7 +279,7 @@ static client_rpc_router::ForwardRequest MakeForwardRequest(const ClientRequest 
 	// PickRandomNode 的 zone 过滤语义一致(D33)。
 	forwardRequest.set_zone_id(gNode->GetNodeInfo().zone_id());
 	// 会话的发布轨道就是本 gate 的轨道(发布轨道设计 §2.3):路由服按它给全局类型选实例,
-	// 与 PickRandomNode 按轨道选路由服是同一条规则。
+	// 与 PickRouter 按轨道选路由服是同一条规则。
 	forwardRequest.set_release_track(gNode->GetNodeInfo().release_track());
 	return forwardRequest;
 }
@@ -345,7 +347,7 @@ static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInf
 				result.delivered = reply != nullptr &&
 					!(reply->has_error_message() && reply->error_message().id() != 0) &&
 					result.response.ParseFromString(reply->serialized_message());
-				done(result);
+				done(result, std::chrono::steady_clock::now());
 			});
 		return true;
 	}
@@ -376,7 +378,7 @@ static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInf
 			{
 				result.response = *response;
 			}
-			done(result);
+			done(result, std::chrono::steady_clock::now());
 		},
 		options);
 	return true;
@@ -1523,7 +1525,7 @@ void GateClientSessionHandler::OnNodeRemoveEventHandler(const OnNodeRemoveEvent 
 {
 	// 路由服节点摘除不需要在这里处理路由 lane:Node 先摘掉实体上的 MuduoGrpcChannelPtr,~Channel 把其上的在途调用
 	// 以 UNAVAILABLE 经 queueInLoop 排进下一轮,再触发本事件、DestroyEntity。那些失败回调经 rpc_reply_bridge 交给
-	// gate_lane::OnRouterCallFailed 认领(恰好一次)、回 1003、放行同一会话的下一条;放行时 PickRandomNode 要求实体
+	// gate_lane::OnRouterCallFailed 认领(恰好一次)、回 1003、放行同一会话的下一条;放行时 PickRouter 要求实体
 	// 挂着通道,不会再选中被摘节点。这里只清会话上记着的目标节点。
 	for (auto &session : tlsSessionManager.sessions())
 	{
