@@ -119,7 +119,9 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 - **托管开始**(第一次确认月卡有效):调 `PlayerTeamSystem::OnOfflineHostingStarted`,在队伍里就由服务器开启组队跟随,
   不等客户端声明;下线前点过暂离的也照样跟,重连后客户端按自己当前的选择重新声明([team-follow-server-trail.md](team-follow-server-trail.md) §3.6、§5)。
 - **托管期间**:与普通保留相同 —— 没有活会话、周期存盘照常、战斗照常推进(自动行动)、被别的退出取代时照常收尾;
-  另外,同一场景里正被组队跟随驱动的,照常跟着队长走。
+  另外,同一场景里正被组队跟随驱动的,照常跟着队长走;队长换场景、换节点时跟过去(§4.2)。在队伍里却没接在队长身后的,
+  1 秒扫描每 15 秒(按玩家号错开)替他重新走一遍跟随检查(`PlayerTeamSystem::OnOfflineHostingHeartbeat`,2026-11-11),
+  相当于在线客户端没被驱动时隔几秒重新声明一次跟随,补上漏掉的信号(team-follow-server-trail.md §3.7)。
 - **结束**:新会话接回(§5,与普通保留同一判据)、月卡到期或确认不了(上面)、被别的退出取代(租约到期的会话结束释放、排空、疏散、停机、交易封存)。
 
 时序为什么成立:普通保留靠 `kHoldWindow + 1 + 4 ≤ 30` 保证保留在 login 断线租约到期前结束(§7)。托管超过 30 秒,是因为 player_locator
@@ -301,7 +303,8 @@ Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家
      已按生成器模板手写好守护段,生成时原样保留)。
    - Go(`go/scene_manager/internal/logic/enter_hosted_placement_test.go`,8 条):同节点不铸代、事件发到目标节点分区并带实例号与断开那次登录;跨节点凭标记铸代、
      先提交后派 ReleasePlayer;没有标记回 18 不写;推事件失败回滚(epoch bump 到 3);请求形状不对 / 跨 zone / 目标节点没有唯一实例号都在写之前拒;同落点重发事件。
-   - C++(`cross_zone_test`):`ConnectionLostHoldAfkPass.HostingNeedsAConfirmedPassWithTimeLeft`、`HostedPlacementEcs.*` 2 条、`HostedPlacementReentry.*` 5 条、
+   - C++(`cross_zone_test`):`ConnectionLostHoldAfkPass.HostingNeedsAConfirmedPassWithTimeLeft`、
+     `ConnectionLostHoldAfkPass.HostedFollowRecheckIsSpreadOverThePeriod`(11-11 兜底重试)、`HostedPlacementEcs.*` 2 条、`HostedPlacementReentry.*` 5 条、
      `TravelHandoffInitiatorEcs.*` 2 条;跟随侧见 team-follow-server-trail.md §8。
 
 ## 11. 改动清单

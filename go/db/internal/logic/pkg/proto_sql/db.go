@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"shared/authoritysql"
 	"shared/dbplacement"
+	"shared/placement"
 	"strconv"
 	"strings"
 	"time"
@@ -27,23 +28,27 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
+// GameDB 是一个已打开、已核对过的存档库:连接池加上注册过全部表的模型。只由 StoreRegistry 按需打开(OpenPlacementStore)。
 type GameDB struct {
-	// writers 由进程唯一启动入口消费一次：每个落点库一份，闸门跟着库走；按需落点池按库名取，不重新登记。
-	writers map[string]authoritysql.WriterConfig
-	// placement 是逻辑库映射(没配 DbPlacement 时 nil,固定连配置的地址)。和 writers 一样由启动入口装配一次,本 zone 库和按需打开的落点库共用。
-	placement authoritysql.PlacementResolver
-	SqlModel  *proto2mysql.DB
-	DB        *sql.DB
+	SqlModel *proto2mysql.DB
+	DB       *sql.DB
 	// Connector 是建这个连接池用的连接器。探活(store_health.go)用它绕过连接池新建一条连接:
 	// 池里的空闲连接可能早已失效(Windows 上驱动不做空闲连接活性检查),池满时取连接还要排队,
 	// 两种情况都会把活着的库误判成不可达。为 nil(单测里只带库名的模型)时退回连接池的 PingContext。
 	Connector driver.Connector
 }
 
-// DB 是本 zone 库(zone_{ZoneId}_db),由 InitDB 在启动期打开并过全部断言。
-// 消费者按玩家落点选库时,它被登记为落点 ZoneId 的库(NewStoreRegistryFromConfig),其余落点库由
-// StoreRegistry 按需打开;verifier / data_stress 等只读工具继续只用它。
-var DB *GameDB
+// storeBoot 是本进程启动时装配一次的写资格与逻辑库映射(docs/design/player-data-tidb-scaling-plan.md §7.2 A17c)。
+// 它不对应任何一个库的连接:go/db 不再有「本区主库」,存档库全部由 StoreRegistry 在第一次被指向时按需打开。
+type storeBoot struct {
+	// writers 由进程唯一启动入口消费一次:每个存档库一份,闸门跟着库走;按需打开时按库名取,不重新登记。
+	writers map[string]authoritysql.WriterConfig
+	// placement 是逻辑库映射(没配 DbPlacement 时 nil,固定连配置的地址)。
+	placement authoritysql.PlacementResolver
+}
+
+// boot 由 InitDB 写一次,之后只读。
+var boot *storeBoot
 
 // DDL 开关的环境变量覆盖名。
 //
@@ -124,7 +129,7 @@ func newMysqlConfig() *mysql.Config {
 	myCnf.Net = config.AppConfig.ServerConfig.Database.Net
 	myCnf.DBName = config.AppConfig.ServerConfig.Database.DBName
 	// 强制会话级严格模式:玩家权威数据是 MEDIUMBLOB 里的 protobuf,非严格模式下超长写入
-	// 会 err=nil 静默截断,下次 proto.Unmarshal 必失败且无任何日志可追溯,损失面是整个 zone。
+	// 会 err=nil 静默截断,下次 proto.Unmarshal 必失败且无任何日志可追溯,损失面是整个存档库。
 	// 用连接参数在每条连接建立时 SET(会话级覆盖 global),而非仅做启动断言——这样即使
 	// MySQL 服务端 global 未配严格模式,本服务的写入路径依然是严格的。
 	myCnf.Params = map[string]string{"sql_mode": "'STRICT_TRANS_TABLES'"}
@@ -136,7 +141,7 @@ func newMysqlConfig() *mysql.Config {
 // 迁移 runner 也会在自己的会话上单独设 lock_wait_timeout。
 func NewMysqlConfig() *mysql.Config { return newMysqlConfig() }
 
-// newServiceMysqlConfig 是业务连接池(本 zone 库与按需打开的落点库)的连接参数:在 newMysqlConfig 之上加
+// newServiceMysqlConfig 是业务连接池(按需打开的存档库)的连接参数:在 newMysqlConfig 之上加
 // 拨号 / 读 / 写超时,以及会话级的锁等待上限(docs/design/db-task-store-unavailable-deferral.md §8)。
 //
 // 没有这组超时时,MySQL 卡住(排在一条 DDL 的元数据锁后面、进程被暂停、对端不回包)会让 SQL 既不返回也不报错:
@@ -217,8 +222,8 @@ func RelaxEmptyAllowlist() bool {
 // CreateDatabase 建库。**这不是启动路径该做的事**,只保留给迁移入口与
 // 显式开了 AutoCreateDatabase 的 dev 环境。
 //
-// 库名来自 ZoneId 现拼,而 ZoneId 是最容易填错的字段:填错一位就会在生产
-// 实例上静默建出一个新库、建全套表、把玩家数据写进去且无人看到报错。所以
+// 库名由迁移入口的 -storage-id 经 placement.StoreDBName 派生,编号是最容易填错的参数:
+// 填错一位就会在生产实例上静默建出一个没人认领的新库并建全套表。所以
 // 这里强制先过外部白名单 —— 白名单不认的库名,一律不建。
 func CreateDatabase() error {
 	target := config.AppConfig.ServerConfig.Database.DBName
@@ -285,16 +290,16 @@ func isUnknownDatabaseError(err error) bool {
 }
 
 func newPlayerConnector(cfg *mysql.Config) (driver.Connector, error) {
-	if DB == nil {
-		return nil, errors.New("玩家SQL池缺少本boot已消费写资格")
+	if boot == nil {
+		return nil, errors.New("player store pool requested before this boot consumed its writer qualifications (call InitDB first)")
 	}
-	writer, ok := DB.writers[cfg.DBName]
+	writer, ok := boot.writers[cfg.DBName]
 	if !ok {
-		return nil, fmt.Errorf("本boot没有落点库 %s 的写资格", cfg.DBName)
+		return nil, fmt.Errorf("this boot has no writer qualification for player store %s", cfg.DBName)
 	}
 	backend := authoritysql.Backend(config.AppConfig.ServerConfig.Database.Backend)
-	if DB.placement != nil {
-		return authoritysql.PinPlacedSession(cfg, DB.placement, backend, authoritysql.Writer(writer))
+	if boot.placement != nil {
+		return authoritysql.PinPlacedSession(cfg, boot.placement, backend, authoritysql.Writer(writer))
 	}
 	inner, err := mysql.NewConnector(cfg)
 	if err != nil {
@@ -303,100 +308,14 @@ func newPlayerConnector(cfg *mysql.Config) (driver.Connector, error) {
 	return authoritysql.PinCurrentSession(inner, backend, authoritysql.Writer(writer))
 }
 
-func openDB(policy DDLPolicy) error {
-	mysqlConfig := newServiceMysqlConfig()
-	conn, err := newPlayerConnector(mysqlConfig)
-	if err != nil {
-		return fmt.Errorf("create MySQL connector: %w", err)
-	}
-
-	databaseHandle := sql.OpenDB(conn)
-	if err := databaseHandle.Ping(); err != nil {
-		_ = databaseHandle.Close()
-		if !isUnknownDatabaseError(err) {
-			return err
-		}
-		if !policy.AllowCreateDatabase {
-			// 这条 fail-closed 是整个治理的核心:库不存在说明「部署阶段的迁移
-			// Job 没跑」或者「ZoneId 填错了」,两种都必须让人看见,而不是顺手
-			// 建一个新库把玩家数据倒进去。
-			return fmt.Errorf("database %q does not exist and startup-path DDL is disabled (policy=%s): run `go run ./cmd/migrate -command up` in the deploy stage, or set %s=1 to restore the legacy auto-create behaviour",
-				config.AppConfig.ServerConfig.Database.DBName, policy.Source, EnvAutoCreateDatabase)
-		}
-		if err := CreateDatabase(); err != nil {
-			return err
-		}
-
-		conn, err = newPlayerConnector(mysqlConfig)
-		if err != nil {
-			return fmt.Errorf("create MySQL connector after database creation: %w", err)
-		}
-
-		databaseHandle = sql.OpenDB(conn)
-		if err := databaseHandle.Ping(); err != nil {
-			_ = databaseHandle.Close()
-			return err
-		}
-	}
-
-	if err := assertConnectedDatabase(databaseHandle); err != nil {
-		_ = databaseHandle.Close()
-		return err
-	}
-
-	checkCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := authoritysql.AssertCurrentSession(checkCtx, databaseHandle, authoritysql.Backend(config.AppConfig.ServerConfig.Database.Backend)); err != nil {
-		_ = databaseHandle.Close()
-		return err
-	}
-
-	writers, placement := DB.writers, DB.placement
-	DB = &GameDB{
-		writers:   writers,
-		placement: placement,
-		DB:        databaseHandle,
-		SqlModel:  proto2mysql.NewDB(),
-		Connector: conn,
-	}
-
-	DB.DB.SetMaxOpenConns(config.AppConfig.ServerConfig.Database.MaxOpenConn)
-	DB.DB.SetMaxIdleConns(config.AppConfig.ServerConfig.Database.MaxIdleConn)
-	DB.DB.SetConnMaxLifetime(5 * time.Minute)
-
-	return DB.SqlModel.OpenDB(DB.DB, mysqlConfig.DBName)
-}
-
-// assertConnectedDatabase 在服务碰玩家数据之前断言「我到底连上了哪个库」。
-func assertConnectedDatabase(handle *sql.DB) error {
-	allow, err := AllowlistSpec().Resolve()
-	if err != nil {
-		return fmt.Errorf("resolve database allow list: %w", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	name, err := dbguard.AssertDatabase(ctx, handle, dbguard.AssertOptions{
-		Expected:            config.AppConfig.ServerConfig.Database.DBName,
-		Allow:               allow,
-		RelaxEmptyAllowlist: RelaxEmptyAllowlist(),
-		Warnf:               logx.Errorf,
-	})
-	if err != nil {
-		return err
-	}
-	logx.Infof("database allowlist check passed: connected=%s allowed=%s", name, allow.String())
-	return nil
-}
-
-// schemaDriftCheckTimeout 是启动期只读 schema 核对的总预算。
+// schemaDriftCheckTimeout 是只读 schema 核对的总预算(按需打开存档库时用,见 store_registry.go)。
 // 核对只有几条 information_schema / 台账的只读查询,正常是毫秒级;给 30s 是为了实例繁忙时
 // 不误拒启,同时不让「库卡住」变成进程无限挂在启动阶段。
 const schemaDriftCheckTimeout = 30 * time.Second
 
-// migrateRemedyCommand 是缺列 / 缺表拒启时打印给运维的补救命令(在 go/db 目录下执行)。
-// -f 必须是本进程启动时用的同一份配置:库名由其中的 ZoneId 现拼,指错就补到别的 zone 库上。
-const migrateRemedyCommand = "go run ./cmd/migrate -f <本进程使用的 db 配置> -command up"
+// migrateRemedyCommand 是缺列 / 缺表时打印给运维的补救命令(在 go/db 目录下执行)。
+// -storage-id 是报错里那个存档库的编号(player_store_<编号>_db),-f 用本进程的同一份配置(库名清单、连接参数)。
+const migrateRemedyCommand = "go run ./cmd/migrate -f <本进程使用的 db 配置> -storage-id <存档库编号> -command up"
 
 // addColumnStmtRe 从 migrate.ProtoSource.Drift 产出的补列语句里解出「表、列」,只用于拼报错。
 // 语句形状由 internal/migrate/plan.go 的 Drift 固定为 ALTER TABLE `表` ADD COLUMN `列` <类型>;
@@ -413,7 +332,7 @@ var addColumnStmtRe = regexp.MustCompile("^ALTER TABLE `([^`]+)` ADD COLUMN `([^
 // 缺表(Error 1146,后果同上)按台账分两种:
 //   - 台账里没有干净的基线(空库、历史 AutoMigrate 建出来的库、基线跑到一半留了 dirty):
 //     up 会先跑基线(全是 CREATE TABLE IF NOT EXISTS,幂等)再补列,所以拒启并给补救命令。
-//     zone 库由 deploy/mysql-init 预建成**空库**,本地启动器与 K8s 都不跑迁移,这是最可能的真实故障;
+//     存档库由部署阶段预建成**空库**,迁移 Job 没跑或跑漏一个库时,这是最可能的真实故障;
 //   - 基线已干净应用:runner 不重跑基线(基线 checksum 只算表名集合,表清单变了也只告警),
 //     up 建不出这张表,拦下来给不出能执行的补救命令,所以只打 SCHEMA-DRIFT 错误日志、不阻断。
 //
@@ -548,16 +467,12 @@ func assertDriftKeysArePhysicalNames(tables []proto.Message) error {
 	return nil
 }
 
-// InitDB 建连接、断言库白名单、注册表映射。
+// InitDB 装配本进程的写资格与逻辑库映射,不连任何库(docs/design/player-data-tidb-scaling-plan.md §7.2 A17c)。
 //
-// **默认不跑任何 DDL**。历史实现在这里逐张跑 CreateOrUpdateTable,
-// 见 DDLPolicy 的注释。DDL 关闭时改为只读核对库结构,缺列、或缺表且迁移能补上时
-// 直接返回错误(见 assertSchemaUpToDate),调用方据此拒绝启动。
+// go/db 没有「本区主库」:存档库全部由 StoreRegistry 在第一次被指向时按需打开,打开时 Ping、核 DATABASE()、
+// 过只读 schema 闸(assertSchemaUpToDate),库不存在或缺列就报错延后,绝不建库。
+// 常驻进程**不跑任何 DDL**,表由部署阶段的 cmd/migrate 建(见 DDLPolicy 的注释)。
 func InitDB() error {
-	policy := ResolveDDLPolicy()
-	if policy.AllowCreateDatabase || policy.AllowCreateOrUpdateTable {
-		return errors.New("常驻db进程禁止启动DDL，请由独立schema入口预建")
-	}
 	writers, err := authoritysql.LoadWriterConfigs(os.Getenv)
 	if err != nil {
 		return err
@@ -565,17 +480,31 @@ func InitDB() error {
 	return InitDBWithWriters(writers)
 }
 
-// InitDBWithWriters 供进程装配与自有fixture显式复用已消费的同boot资格。必须含本 zone 库那一份，其余落点库按需打开时才用。
+// InitDBWithWriters 供进程装配与自有 fixture 显式复用已消费的同 boot 资格。
+//
+// 每份写资格都必须属于一个地域存档库 player_store_<id>_db:zone 库已经退役,清单里还有它说明部署没跟上,拒启并点名。
+// 启动时不探活存档库:库在不在、表对不对由部署阶段的迁移 Job 核,运行期由按需打开的那道闸核,
+// 一个库坏了只影响落在它上面的玩家,不挡 go/db 起来。
 func InitDBWithWriters(writers map[string]authoritysql.WriterConfig) error {
-	if _, ok := writers[config.AppConfig.ServerConfig.Database.DBName]; !ok {
-		return errors.New("玩家SQL启动缺少本 zone 库的writer资格")
+	if boot != nil {
+		return errors.New("player SQL boot is already assembled; the boot identity cannot change")
 	}
-	if DB != nil && DB.DB != nil {
-		return errors.New("玩家SQL启动已完成，禁止更换boot身份")
+	if len(writers) == 0 {
+		return errors.New("player SQL boot has no writer qualification: the boot grant lists no player store database")
+	}
+	for schema := range writers {
+		if _, ok := placement.StorageIDFromDBName(schema); !ok {
+			return fmt.Errorf("writer qualification for %q is not a player store database player_store_<id>_db; zone databases are retired "+
+				"(player-data-tidb-scaling-plan.md §7.2 A17c), list only the player stores of this region in MMORPG_DB_ALLOWED_DATABASES", schema)
+		}
 	}
 	policy := ResolveDDLPolicy()
 	if policy.AllowCreateDatabase || policy.AllowCreateOrUpdateTable {
-		return errors.New("常驻db进程禁止启动DDL，请由独立schema入口预建")
+		return fmt.Errorf("resident db process must not run startup DDL (policy=%s); tables are created by the cmd/migrate schema entry point", policy.Source)
+	}
+	// 表清单先解析一遍并过表名守卫:清单坏了是部署错误,在启动时拒绝,不拖到第一个玩家进场时才在按需打开里报。
+	if _, err := RegisterTables(proto2mysql.NewDB()); err != nil {
+		return err
 	}
 	placementCtx, placementCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer placementCancel()
@@ -583,40 +512,19 @@ func InitDBWithWriters(writers map[string]authoritysql.WriterConfig) error {
 	if err != nil {
 		return err
 	}
-	DB = &GameDB{writers: writers, placement: dbPlacement.Resolver()}
-	logx.Infof("db DDL policy: createDatabase=%v createOrUpdateTable=%v source=%s",
-		policy.AllowCreateDatabase, policy.AllowCreateOrUpdateTable, policy.Source)
-
-	if err := openDB(policy); err != nil {
-		return fmt.Errorf("open database: %w", err)
-	}
+	boot = &storeBoot{writers: writers, placement: dbPlacement.Resolver()}
+	logx.Infof("player store boot ready: %d player store writer qualifications, startup DDL disabled (policy=%s), stores open on demand",
+		len(writers), policy.Source)
 	logServicePoolTimeouts()
-
-	// 注册必须无条件执行:Save / FindOneByWhereClause 都从 SqlModel.Tables
-	// 取表结构,不注册就是运行期 ErrTableNotFound。历史实现把注册和建表写在
-	// 同一个循环里,把 DDL 摘出去时最容易连注册一起摘掉。
-	tables, err := RegisterTables()
-	if err != nil {
-		return err
-	}
-
-	if !policy.AllowCreateOrUpdateTable {
-		logx.Infof("startup-path DDL disabled; %d tables registered without schema changes", len(tables))
-		ctx, cancel := context.WithTimeout(context.Background(), schemaDriftCheckTimeout)
-		defer cancel()
-		return assertSchemaUpToDate(ctx, DB.DB, DB.SqlModel, config.AppConfig.ServerConfig.Database.DBName, tables)
-	}
-	logx.Errorf("STARTUP-DDL: Startup path executing table creation / column additions (policy=%s). This is a dev / compatibility option; production should use cmd/migrate",
-		policy.Source)
-	return CreateOrUpdateTables(tables)
+	return nil
 }
 
-// CurrentWriterConfigs 只返回同一批不可变normal能力（每个落点库一份），不含连接或operator权限。
+// CurrentWriterConfigs 只返回同一批不可变 normal 能力(每个存档库一份),不含连接或 operator 权限。
 func CurrentWriterConfigs() (map[string]authoritysql.WriterConfig, error) {
-	if DB == nil || DB.DB == nil || len(DB.writers) == 0 {
-		return nil, errors.New("本boot玩家SQL尚未装配")
+	if boot == nil || len(boot.writers) == 0 {
+		return nil, errors.New("player SQL boot is not assembled yet")
 	}
-	return DB.writers, nil
+	return boot.writers, nil
 }
 
 // Close 的调用前提是全部consumer、outbox、retry及按需开池调用已确定join。
@@ -716,16 +624,16 @@ func assertTableNameLocked(model *proto2mysql.DB, table proto.Message) error {
 	return nil
 }
 
-// RegisterTables 把表列表注册进 SqlModel(纯内存,不产生任何 SQL)。
-func RegisterTables() ([]proto.Message, error) {
-	if DB == nil || DB.SqlModel == nil {
-		return nil, errors.New("RegisterTables called before the database handle was opened")
+// RegisterTables 解析表清单并逐张注册进给定模型(纯内存,不产生任何 SQL),过表名守卫。
+func RegisterTables(model *proto2mysql.DB) ([]proto.Message, error) {
+	if model == nil {
+		return nil, errors.New("RegisterTables needs a proto2mysql model")
 	}
 	tables, err := TablesFromJSON()
 	if err != nil {
 		return nil, err
 	}
-	if err := registerTables(DB.SqlModel, tables); err != nil {
+	if err := registerTables(model, tables); err != nil {
 		return nil, err
 	}
 	return tables, nil
@@ -738,19 +646,6 @@ func registerTables(model *proto2mysql.DB, tables []proto.Message) error {
 		model.RegisterTable(table)
 		if err := assertTableNameLocked(model, table); err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-// CreateOrUpdateTables 逐张建表 / 补列。
-//
-// 只应由 dev 兼容开关或迁移入口调用 —— 它没有任何跨实例互斥与 lock 超时,
-// 真正带这些保护的路径在 internal/migrate。
-func CreateOrUpdateTables(tables []proto.Message) error {
-	for _, table := range tables {
-		if err := DB.SqlModel.CreateOrUpdateTable(table); err != nil {
-			return fmt.Errorf("create or update table %s: %w", proto2mysql.GetTableName(table), err)
 		}
 	}
 	return nil

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"player_inbox/internal/constants"
+	"shared/authoritysql"
 
 	componentpb "proto/common/component"
 	inboxpb "proto/player_inbox"
@@ -224,7 +225,8 @@ func TestIssuedWithinWindow(t *testing.T) {
 }
 
 // TestRetryClassifierCoversRequiredCodes:可重试判定必须覆盖 1213 / 1205 / 9007,且显式注入进事务参数(设计 §10;
-// assetop 的 IsRetryable 为 nil 时一次都不重试)。
+// assetop 的 IsRetryable 为 nil 时一次都不重试)。守卫判定的提交前中止(R6,COMMIT 没发、确定没写)也可整笔重跑,
+// 结局未知不行。
 func TestRetryClassifierCoversRequiredCodes(t *testing.T) {
 	for _, code := range []uint16{1213, 1205, 9007} {
 		err := fmt.Errorf("wrapped: %w", &mysql.MySQLError{Number: code})
@@ -232,9 +234,13 @@ func TestRetryClassifierCoversRequiredCodes(t *testing.T) {
 			t.Errorf("MySQL %d 应可重试", code)
 		}
 	}
+	if !IsRetryableTxError(fmt.Errorf("wrapped: %w", authoritysql.ErrTxAbortedBeforeCommit)) {
+		t.Error("aborted-before-commit must be retryable")
+	}
 	for _, err := range []error{
 		&mysql.MySQLError{Number: 1062},
 		&mysql.MySQLError{Number: 1146},
+		fmt.Errorf("commit: %w", authoritysql.ErrOutcomeUnknown),
 		errors.New("plain"),
 		nil,
 	} {

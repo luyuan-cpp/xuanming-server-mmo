@@ -34,6 +34,9 @@ dev obs-down      # 停掉上面的观测台
 打上 `job / service / zone / instance / level` 标签送进 Loki,Grafana 预置了数据源和看板「游戏服务日志总览」。
 服务本身不用改代码(Java 只加了一段 `logging.structured` 配置)。
 详细的接入方式、标签约定、常用查询和排障见 [grafana-loki-local-logs.md](grafana-loki-local-logs.md)。
+2026-11-11 起三种语言的 `trace_id` / `span_id` / `player_id` 进了结构化元数据,看板顶部多了这两个过滤框:
+一条 trace_id 能查到一次请求经过的各服务的行(网关的登录请求从 Java 网关到 login;进游戏后客户端的一条消息从 gate 到 scene),
+按 player_id 能串起一个玩家在各服务的行(设计见 [distributed-tracing.md](../design/distributed-tracing.md))。
 
 ## Production (K8s)
 
@@ -119,6 +122,9 @@ Container runtime handles log rotation automatically:
 - **这套方案采不到的东西**(别以为都进了 Loki):容器 stdout/stderr 上的 gRPC / abseil / librdkafka 输出,
   以及崩溃现场文本(glibc 断言、`terminate called`、abort 栈)—— 它们不经 muduo,不落共享卷。
   Loki 里的 `level="fatal"` 只覆盖代码里显式 `LOG_FATAL` 的分支。
+- **链路关联字段(2026-11-11)**:本机 Alloy 已把 `trace_id` / `span_id` / `player_id` 提成结构化元数据;
+  集群里的 C++ sidecar 规则**还没加**([distributed-tracing.md](../design/distributed-tracing.md) §9.2,改它会滚动重启 C++ 节点),
+  Go / Java 在集群里本来就没采。在那之前集群里按 trace 查用行内搜索 `|= "trace_id=<32 位>"`,C++ 行尾后缀里有原文。
 - **未部署**:Fluentd / Filebeat / Elasticsearch / Kibana 本项目一个都没有。
 - **本地文件只留最近一小段**:业务容器的启动命令里带一个每 5 分钟跑一次的清理循环,把
   `/app/bin/logs/cpp_nodes/*.log` 按时间排序后只留最近 8 个(≈64MiB)—— muduo 每 8MiB 滚一个新文件且**从不删旧文件**。

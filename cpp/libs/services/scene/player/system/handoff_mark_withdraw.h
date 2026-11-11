@@ -19,7 +19,8 @@ namespace handoff_mark_withdraw
 
 	// 上限只为给内存封顶:正常情况下表是空的,Redis 长时间不通时每个交接作废的玩家占一条。
 	inline constexpr std::size_t kMaxPending = 4096;
-	// 同一条目两次重试的最小间隔(重连时的强制重试不受它限制)。
+	// 同一条目两次重试的最小间隔。Redis 重连成功时也不提前重发:负责人 2026-11-05 定「重连成功不做业务逻辑」
+	// (docs/design/infra-reconnect-overview.md R14),原来重连时忽略本间隔的强制重试已删。
 	inline constexpr std::chrono::seconds kRetryInterval{5};
 	// 截止时刻在标记 TTL 之上再留的余量(本机单调时钟与 Redis 过期时钟不是同一只表)。
 	inline constexpr std::chrono::seconds kDeadlineMargin{5};
@@ -78,15 +79,15 @@ namespace handoff_mark_withdraw
 							   [playerId](const Entry &entry) { return entry.playerId == playerId; });
 		}
 
-        // 只取到期重试副本，不因标记TTL删除条目；销账必须确认同一原holder。
-		std::vector<Entry> CollectDue(Clock::time_point now, bool force, std::size_t &expiredOut)
+        // 只取到期重试副本，不因标记TTL删除条目；销账必须确认同一原holder。到期只看条目自己的 nextAttemptAt。
+		std::vector<Entry> CollectDue(Clock::time_point now, std::size_t &expiredOut)
 		{
 			expiredOut = 0; // 资格没有 TTL，未确认撤销不能因标记过期而消账。
 
 			std::vector<Entry> due;
 			for (auto &entry : entries_)
 			{
-				if (!force && entry.nextAttemptAt > now)
+				if (entry.nextAttemptAt > now)
 				{
 					continue;
 				}

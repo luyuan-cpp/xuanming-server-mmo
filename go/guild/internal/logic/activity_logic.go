@@ -489,7 +489,7 @@ func (l *GuildLogic) afterActivityCommit(ctx context.Context, d *ActivityDeps, a
 	// 只在本档期首次达阈值时推(06 §6.11.3 第 3 步):每盏灯都推会把一次点击放大成 N×M 条推送。
 	// 操作者不推,他手上的回包就是最新状态;收件人取缓存快照,最多漏推 / 多推一个刚进出的人,推送本来就是至多一次。
 	if res.ReachedNow {
-		l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_ACTIVITY_CHANGED, a.guild.GuildID, a.playerID, 0, membersExcept(a.guild, a.playerID))
+		l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_ACTIVITY_CHANGED, a.guild.GuildID, a.playerID, 0, membersExcept(a.guild, a.playerID))
 	}
 	// 摘要(landing-recovery-sync-digest.md §3.3 表第 6、9 行):
 	//   - 本人:活动页总会变(今日次数、待发奖励);GetPlayerGuild 也变了 —— personal_contribution 在同一事务里

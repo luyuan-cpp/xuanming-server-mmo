@@ -1,6 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -18,6 +22,48 @@ func TestParseFixtureAcceptsRatedRows(t *testing.T) {
 	}
 	if parsed.Mode != 7 || len(parsed.Ratings) != 2 || parsed.Ratings[1].PlayerID != 12 || parsed.Ratings[1].RatingCenti != 180000 {
 		t.Fatalf("读出的内容不对: %+v", parsed)
+	}
+}
+
+// robot 的 prepare 写出 applied_ms = 0;重复写库时读到的是上次写回的时刻。两种都要能读,旧值不影响本次写库。
+func TestParseFixtureAcceptsAppliedMs(t *testing.T) {
+	for _, applied := range []string{"0", "1762790400123"} {
+		body := `{"mode":7,"ratings":[{"account":"robot_8701","player_id":11,"rating_centi":150000}],"applied_ms":` + applied + `}`
+		if _, err := parseFixture(strings.NewReader(body)); err != nil {
+			t.Fatalf("applied_ms=%s 应能读出: %v", applied, err)
+		}
+	}
+}
+
+// 写回的夹具能被本工具与 robot 原样读回;覆盖已有文件,不留临时文件。
+func TestWriteFixtureRecordsAppliedMs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fixture.json")
+	if err := os.WriteFile(path, []byte(`{"mode":7,"ratings":[{"account":"robot_8701","player_id":11,"rating_centi":150000}],"applied_ms":0}`), 0o644); err != nil {
+		t.Fatalf("准备夹具: %v", err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("打开夹具: %v", err)
+	}
+	parsed, err := parseFixture(file)
+	_ = file.Close()
+	if err != nil {
+		t.Fatalf("读夹具: %v", err)
+	}
+	parsed.AppliedMs = 1762790400123
+	if err := writeFixture(path, parsed); err != nil {
+		t.Fatalf("写回夹具: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("读回夹具: %v", err)
+	}
+	again, err := parseFixture(bytes.NewReader(body))
+	if err != nil || !reflect.DeepEqual(again, parsed) {
+		t.Fatalf("写回后读出 = %+v, %v; want %+v", again, err, parsed)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("临时文件应已改名: %v", err)
 	}
 }
 

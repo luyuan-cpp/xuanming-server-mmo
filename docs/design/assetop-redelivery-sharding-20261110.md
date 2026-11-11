@@ -3,7 +3,8 @@
 > 状态:**已落码,未编译、未运行**,待 Codex 按 §8 验证。对应[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md)第 25 条。
 > 第二批(2026-11-11,「G4a Redis 设计稿修订应用」会话):mail 与 GM 回收的重投分片(§10)、guild / trade 终态清理分片(§11)、分片缺口告警(§12),**同样已落码,未编译、未运行**,待 Codex 按 §13.3 验证。
 > 复用 `go/shared/workshard`(先例:trade 合同推进,[聚宝斋设计](jubaozhai-market.md) §15.8)与 match 的 `svc.OwnsWork`([全服匹配设计](global-match-hierarchical-pools.md) §5.2、§12.7)。
-> 不改表、不改协议、不改 proto,不需要重新生成。
+> 第一、二批不改表、不改协议、不改 proto,不需要重新生成。第三批(2026-11-11,本会话):四张表的到期索引 `idx_0` 加 `op_id`、`player_id`(§2.4),**改了 proto 的索引选项,要先重新生成协议、删库重建**;未生成、未编译、未运行,待 Codex 按 §8 末尾「第三批」验证。
+> 第四批(2026-11-11,「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话):GM 回收派发与 mail 过期清理按片分工、三个周期循环的活性指标与按副本判的停摆告警(§14)。**已落码,未编译、未运行**,待 Codex 按 §14.7 验证。不改表、不改协议、不改 proto。
 
 ## 1. 问题
 
@@ -51,7 +52,11 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 ### 2.4 SQL 与索引
 
 - 两段(新行 `attempts < 3`、老行 `attempts >= 3`)都接分片条件,形如 `… AND attempts < ? AND MOD(player_id,64) IN(?,…) ORDER BY next_attempt_ms, op_id LIMIT ?`。列名写死,片号只走绑定参数。全部片都归本副本时条件是 `1=1`;一片都不归时是 `1=0`,MySQL 判 Impossible WHERE、TiDB 出 TableDual,不扫表。
-- 索引:扫描走 `idx_0 (status, next_attempt_ms)`,不含 player_id。但 `lease_until_ms`、`attempts` 原本就要回表判,分片条件跟它们在同一步判,每检查一行的代价不变。变的是检查的行数:积压超过 K 个批量时,本副本要跳过别的副本的行才凑满自己的一批,最坏约检查 K × Batch 行;积压不足一批时与分片前一样,把全部到期行看一遍。换来的是写:分片前 K 个副本每轮共 K × Batch 次领取 CAS,分片后每个副本约 Batch 次,几乎都能领到。读比空写便宜,先这样;压测若显示扫描成本可见,再给 `idx_0` 加 `player_id`(要改表定义、重新生成、整批重建表),不在本条做。
+- 索引(2026-11-11 定案并落码,负责人「不用等压测数据了,先写完」):四张表(`guild_asset_op`、`trade_asset_op`、`mail_asset_op`、`gm_recall_op`)的 `idx_0` 由 `(status, next_attempt_ms)` 改为 `(status, next_attempt_ms, op_id, player_id)`,改在 proto 的 `OptionIndex` 第一组,查询文本不变。
+  - `op_id`:四张表在 TiDB 上主键都是非聚簇(`OptionTiDBNonclusteredPK`),二级索引里带的是 `_tidb_rowid`、不是 `op_id`,旧索引满足不了 `ORDER BY next_attempt_ms, op_id`,积压时要把到期段整段读完、回表、再排序取前 N。显式带上 `op_id`,扫描按索引顺序走、凑满一批就停。MySQL 上 InnoDB 本来就在二级索引末尾带主键,显式写出来不多存一份。
+  - `player_id`:分片条件 `MOD(player_id,64) IN(…)` 只引用索引列,MySQL 的索引下推与 TiDB 的索引侧过滤都在索引条目上判,别的副本的行不回表。积压超过 K 个批量时,本副本跳过别的副本的行只花索引条目的代价;只有本副本的行才回表判 `lease_until_ms`、`attempts`。
+  - 不把 `lease_until_ms`、`attempts` 放进索引:它们每次领取都改,放进去每次领取都要改索引。`op_id`、`player_id` 写入之后不变,不增加更新代价。
+  - 代价:已有的表 schemamigrate 不会补建普通索引(只告警),开发、测试库要删库重建(项目未上线,`guild_db.proto` 文件头的改表纪律同此)。guild 的真库形状用例 `TestAssetTablesShape` 已改成新列。
 - scene 看到的在途上限仍是「副本数 × Workers」(`LoopConfig.Workers` 的注释),不变。积压时总吞吐随副本数增长,scene 承受的总投递量也跟着增长,这正是本条要的效果。
 
 ### 2.5 match 终局发件箱
@@ -74,7 +79,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 | 成员表变化的几秒里各副本看法不一 | 某一片可能两个副本都扫(多几次空 CAS,与分片前相同),也可能暂时没人扫(下一拍补上) |
 | 副本崩溃 | 它名下的片停到 etcd 租约过期(guild、trade 的 `LeaseTTL` 都是 60 秒),再加一次整表读(5 秒);match 用 watch,租约过期即换主。只是延迟,不丢 |
 | 副本正常停机 | trade 先注销 etcd 再排空(`trade.go`);guild 先停资产管线、后关注册(`guild.go` 的 defer 顺序),停机窗口里它名下的片要等注销之后的一次整表读 |
-| 登记着却不跑重投循环的副本(滚动修改 `AssetOp.Enabled` / `Recall.Enabled` 的窗口,或循环卡死) | 它名下的片停到它退出或恢复。兜底:提交后的同步投递照常;落地唤醒任一副本都能处理;`sum by (namespace, service) (assetop_owned_shards)` 低于 64 有告警(§12);卡死的副本还在报旧值、和仍为 64,只能看 `assetop_pending_oldest_age_seconds` 是否持续上涨 |
+| 登记着却不跑重投循环的副本(滚动修改 `AssetOp.Enabled` / `Recall.Enabled` 的窗口,或循环卡死) | 它名下的片停到它退出或恢复。兜底:提交后的同步投递照常;落地唤醒任一副本都能处理;`sum by (namespace, service) (assetop_owned_shards)` 低于 64 有告警(§12);卡死的副本还在报旧值、和仍为 64,第四批起由活性告警 `AssetOpRedeliveryLoopStalled` 按副本报出(§14.3) |
 | etcd 连续 30 秒读不到 | 成员表判过期,本副本做全部片(保活优先) |
 | 本副本还没注册完(trade 的循环起得比注册早) | 成员表不空时什么都不做,交给表里的副本;表为空时做全部片 |
 | canary 副本 | 不跑重投循环和发件箱,也不进成员表(`workshard.StableMembers` 与 `StableOnly()` 过滤) |
@@ -84,13 +89,14 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 
 ## 4. 迁移与混跑
 
-- 不改表、不改协议、不改 proto,不需要重新生成;归属不写进任何持久数据。项目未上线,整批重建部署即可,不做数据迁移;片数、类别键以后要改,也只影响分工。
+- 第一、二批不改表、不改协议、不改 proto,不需要重新生成;归属不写进任何持久数据。项目未上线,整批重建部署即可,不做数据迁移;片数、类别键以后要改,也只影响分工。
+- 第三批改了四张表 `idx_0` 的列(§2.4):先重新生成协议,开发、测试库删库重建(schemamigrate 不给已有的表补建普通索引)。查询文本不变,新老版本的二进制在两种索引上都能跑,只是旧索引上慢。
 - 滚动升级时老版本(不分片)扫全部片,新版本只扫自己的片。老副本仍覆盖全部片,不会有片没人做,只是重复;全部换成新版本后分工才生效。回滚同理。
 
 ## 5. 不做的部分与原因
 
 1. mail(`mail_asset_op`)与 data_service 的 GM 回收(`gm_recall_op`)的重投循环:第一批没做,第二批已分片,圈法与理由见 §10。
-2. 不给 `idx_0` 加 `player_id`:理由见 §2.4,等压测证据。
+2. `idx_0` 加 `op_id`、`player_id`:原定等压测证据,2026-11-11 负责人定不等,已改,见 §2.4。
 3. 不缓存「本副本没有片」,也不跳过 `1=0` 的查询:成员表随时会变,一次空查询的代价可以忽略。
 4. 落地唤醒、同步投递、日对账与自动放弃、最老未决年龄 gauge 都不改。
 5. 已建房票巡检(`ReadyAfter`)按 2026-11-06 的约定由数据覆盖审计会话接分片([全服匹配设计](global-match-hierarchical-pools.md) §5.2),本条不碰。
@@ -158,6 +164,16 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
    - 停掉一个副本,约 65 秒内另一个副本的 `assetop_owned_shards` 涨到 64,积压继续下降;
    - match 起 2 个副本,造几局结束的对局,两边日志里投递的 battle_id 不重复。
 
+**第三批(2026-11-11,到期索引加 `op_id`、`player_id`,§2.4)**,接在上面九步之后:
+
+10. 重新生成协议(仓库根目录;没有客户端任务授权,用 no-unity 配置):`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
+    通过标准:`go/proto/common/database/rollback_database_table.pb.go`、`go/proto/guild/guild_db.pb.go`、`go/proto/mail/mail_table.pb.go`、`go/proto/trade/trade_table.pb.go` 及 C++ 对应 `.pb.cc` 的描述符里,这四张表 `OptionIndex` 的第一组变成 `status,next_attempt_ms,op_id,player_id`;除描述符字符串外不应有别的生成差异。
+11. 删库重建:开发、测试环境里 guild、trade、mail 三个服务的库,以及 data_service 放 `gm_recall_op` 的库,删掉后由各服务 `-migrate` 重建(schemamigrate 不给已有的表补建普通索引)。
+12. 编译:`go/guild`、`go/trade`、`go/mail`、`go/data_service` 各跑 `go build ./...; go vet ./...`;C++ 的 proto 工程按常规 MSBuild `/m:1` 串行重编。
+13. 真库:第 4 步的 guild 真库再加 `-run 'AssetTablesShape|ListDue'`,`TestAssetTablesShape` 按新列 PASS;第 4、6 步的到期扫描用例照旧 PASS。
+14. TiDB 执行计划(一次性 TiDB,建好四张表、各插几千行到期的 PENDING 行即可):对四张表各跑一次到期扫描的 `EXPLAIN`,语句照各 store 的 `ListDueOwned` 第一段,例如 guild:`EXPLAIN SELECT op_id FROM guild_asset_op WHERE status=<PENDING 的数值> AND next_attempt_ms<=<now_ms> AND lease_until_ms<<now_ms> AND attempts<3 AND MOD(player_id,64) IN(1,2) ORDER BY next_attempt_ms ASC, op_id ASC LIMIT 100`。
+    通过标准:走 `idx_<表>_0`,`mod(...player_id, 64)` 出现在索引一侧的过滤里,没有对整段到期行的 `TopN` / `Sort`(按索引顺序取前 N)。EXPLAIN 原文贴进 PROGRESS;不满足时保留原文,不改索引,交回 Claude。
+
 ## 9. Java 版
 
 服务端内部改动,没有客户端契约。Java 版只登记待做(负责人 2026-11-05 起定 Java 留作 todo):核对 Java 的帮会 / 交易资产重投与匹配终局发件箱是否每个副本都扫同一个到期队头,是的话按同一口径分片(成员表为空时全做、本实例不在表里时不做、片号按玩家,结果行没有玩家列时按局号),条件放在 SQL 的 LIMIT 之前。第二批同样只登记待做:邮件附件与 GM 回收的重投、帮会与交易的终态清理按同一口径分片(成员表只圈连同一个库、都在跑这项工作的实例,圈不准宁可不分),以及「各实例负责片数之和应为 64」的告警。
@@ -191,7 +207,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 - **mail 的身份**:注册在 `domainhost` 里,mail 原来拿不到 node_uuid。`domainhost.ServeWithReady` 的回调改为 `func(nodeUUID string)`,注册成功后把 uuid 交给调用方(进程内不变,失租换号也不变);mail 在回调里 `members.SetSelf`,rank 忽略参数。注册之前成员表若已有别的副本,本副本一片都不做,与 trade 相同。
 - **mail 的指标**:mail 原来给 `assetop.NewLoop` 和 `Caller` 传的 metrics 是 nil,assetop_* 一条序列都没有(包括最老未决年龄)。第二批改为 `assetop.NewMetrics(prometheus.DefaultRegisterer, "mail")`,同一个句柄交给 Loop 与 Caller;domainhost 的 `/metrics` 暴露的正是默认注册表。从此 `AssetOpUnknownOutcome` 等既有规则也覆盖 mail。
 - **回收**:`RecallStore.ListDueOwned`(`internal/store/recall_store.go`,`recallListDueQuery` 拼两段);`ListDue` 委托它,limit 非正时不发 SQL。类别键 `gm-recall-assetop`。`newRecallChannel` 建成员表并 `BindWorkOwner`,绑不上就回错误(`Recall.Enabled=true` 时 `configureRecall` panic,拒启)。`Start` 里成员表先于循环起(点位 `data_service.recall.members`,panic 时 Hold)。本副本的 uuid 由 `startNodeRegistration` 的新参数 `onRegistered` 在注册成功后交给 `ServiceContext.BindRecallWorkMember`;没装配回收时是空操作。
-- **不做**:回收的派发循环(`ListPlanned` → `Dispatch`,PLANNED → PENDING)每个副本仍读同一个队头,靠 `Dispatch` 的状态 CAS 互斥;mail 的过期邮件清理(`maintenance.Run`)每个 stable 副本都跑。两者都不在第 25 条里,量都按周期跑;要分时照本节同一写法。
+- **第二批没做、第四批已分**:回收的派发循环(`ListPlanned` → `Dispatch`,PLANNED → PENDING)原来每个副本都读同一个队头,靠 `Dispatch` 的状态 CAS 互斥;mail 的过期邮件清理(`maintenance.Run`)原来每个 stable 副本都清全部候选。第四批两者都按片分了,做法与理由见 §14。
 
 ## 11. 第二批:guild / trade 终态清理去重
 
@@ -232,7 +248,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 - **按 (namespace, service) 聚合**:§5 第 7 条原式只按 service。data_service 每个 zone namespace 一份、成员表只圈本 zone,全服加起来是 Z × 64;guild、trade、mail 只在 infra namespace,加上 namespace 结果不变。
 - **与最老未决年龄配合**:片没人扫时,在线玩家没走完的行停在那里,最老年龄会持续上涨。离线停放行本来就让最老年龄常年偏高,所以第二条在实践中等于「缺片持续 35 分钟以上」的升级:成员表不会自己变,缺口不会自愈,trade 的合同推进与收据 ACK 用同一份成员表,托管资产也会停在合同里,要人处置。
 - **高于 64 不告警**:只是重复扫(某副本连续 30 秒读不到成员表就做全部片),正确性由 CAS 保证。
-- **盲区**:循环卡死的副本 gauge 停在旧值,和仍为 64,两条都不响,只能看最老未决年龄;要补需要一个每轮推进的活性指标,本批不加。
+- **盲区**:循环卡死的副本 gauge 停在旧值,和仍为 64,两条都不响。第四批补了每轮推进的活性指标 `assetop_loop_last_run_unixtime` 与按副本判的停摆告警 `AssetOpRedeliveryLoopStalled`(§14.3)。
 - **mail 的序列**:第二批之前 mail 没有任何 assetop_* 序列(§10.3),规则对 mail 永远不响;契约测试钉住四个绑了分工的循环都拿到了 metrics。
 
 ## 13. 第二批改动清单、测试与验证命令
@@ -280,3 +296,76 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 9. 仓库根目录:`pwsh -NoProfile -File tools/scripts/tests/assetop_work_shard_alerts_contract.tests.ps1`,通过:`fail=0`;`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`,通过:LogQL 契约那条(含 asset-channel-alerts.yaml)照旧 PASS。
 10. 规则语法:按 PROGRESS 2026-11-10「死节点收尾告警」条目的做法,用固定摘要的 `prom/prometheus` 容器(`--network none --rm`,只读挂载)对 `deploy/k8s/asset-channel-alerts.yaml` 提取的 `.spec` 跑 `promtool check rules`,期望 `SUCCESS`,规则数等于文件里 `- alert:` 的条数(写本条时 16)。
 11. 多副本冒烟(同 §8 第 9 步的环境):mail、data_service(同一 zone,`Recall.Enabled=true`)各起 2 个副本,`assetop_owned_shards{service="mail"}` 与 `{service="data_service"}` 两副本之和各为 64;guild / trade 开 `CleanupEnabled` 时,两副本启动日志都带 `sharded_by_player=true`,造一批保留期外的终态行后两边的 `*_cleanup_deleted_total` 合计等于造的行数、各自只删自己片里的行。
+
+## 14. 第四批:GM 回收派发与 mail 过期清理按片分工、循环活性指标(2026-11-11)
+
+「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话。**已落码,未编译、未运行**,待 Codex 按 §14.7 验证。同批的第 35 条(mail 列表截断计数)结论写在[邮件设计](mail-system.md)文末 2026-11-11 节。
+
+### 14.1 两个循环原来的样子
+
+| 循环 | 位置 | 原来 |
+|---|---|---|
+| GM 回收派发(PLANNED → PENDING) | `go/data_service/internal/svc/recall_channel.go` 的 `runDispatch` / `dispatchRound` | 装配了回收通道的每个副本(canary 也跑)每秒读一次 `gm_recall_op` 的到期 PLANNED 行(`ORDER BY next_attempt_ms, op_id LIMIT 64`),逐行 `Dispatch`:持这名玩家的 role_fence 行锁、分配 GM_RECALL 流的 seq、CAS 成 PENDING。所有副本读同一个队头,输家记 `data_service_recall_dispatch_total{result="lost"}`;同一玩家的几行被几个副本同时派,还会在这名玩家的 role_fence 行与 seq 行上排队 |
+| mail 过期清理 | `go/mail/internal/maintenance/sweep.go` → `data.Repo.Sweep` | 每个 stable 副本每 5 分钟读保留期外、可删的邮件(`ORDER BY expire_ms, mail_id LIMIT BatchLimit`),逐封点锁、复核,先删 `mail_state` 再删 `mail_message`。所有副本读同一批候选:点锁排队,输家复核落空;`expire_ms = 0` 的抽样每个副本抽同一批,`mail_sweep_invalid_rows_total` 跨副本求和按副本数重复 |
+
+### 14.2 做法
+
+**GM 回收派发**:按 `player_id` 分 64 片,类别键 `gm-recall-dispatch`。
+
+- 成员表复用回收重投那一份(本 zone 注册的 stable data_service,§10.2),圈法与理由不变。
+- `RecallStore.ListPlannedOwned(ctx, nowMs, limit, owned)` 取代 `ListPlanned`:原来只有派发这一个调用方,不留不分片的入口。片条件接在 `WHERE` 里、`ORDER BY … LIMIT` 之前,列名写死、片号只走绑定参数(`recallListPlannedQuery`)。
+- 片条件每轮开头算一次(`workshard.SQLFilter(owns, "gm-recall-dispatch", "player_id")`),一轮里不变。
+- 为什么按玩家:派发持的是这名玩家的 role_fence 行锁、分配的是这名玩家的 seq。分片之后,同一玩家的 PLANNED 行在成员表稳定时只有一个副本在派,不会几个副本在同一把行锁上排队、各派一部分。
+- 类别键不复用重投的 `gm-recall-assetop`:派发只把行改成 PENDING,投递由重投那一片的负责者做,两件事不必落在同一个副本上;另起类别键,两类工作各自均匀分布。
+- canary 照旧跑派发循环,但不进成员表(§10.2):有 stable 副本时一片都不派,成员表为空时派全部片。
+- 派发循环要用到的三个存储方法收成一个小接口 `recallDispatchStore`(`*store.RecallStore` 满足它),只为单测能注入假存储,生产只有这一个实现。
+
+**mail 过期清理**:按 `mail_id` 分 64 片,类别键 `mail-expiry-sweep`。
+
+- 成员表复用附件重投那一份(`MailNodeService.rpc/zone/<ZoneId>/` 的 stable mail)。清理本来就只在 stable 副本上跑,与重投出自同一份部署配置,§2.3 的圈法不变量成立。
+- **片号按 `mail_id` 取,不按玩家**:
+  - 清理的单位是一封邮件(点锁它、删它的 state 行、再删它),与收件人无关;
+  - 系统邮件、帮会邮件和活动邮件的 `owner_player_id` 都是 0,按收件人分会全挤进第 0 片,而一封系统邮件挂着所有交互过它的玩家的 state 行,恰是清理里最重的部分;
+  - `mail_id` 由发号器发,是打散值(AGENTS §7 不变量 1),取模均匀;它是主键,候选读走的 `(kind, expire_ms)` 二级索引条目里带着它,片条件在索引上就能判,不回表。
+- `data.Repo.Sweep` 多一个参数 `owned workshard.Filter`,候选读(`sweepCandidateQuery`)和无效行抽样(`sweepInvalidSampleQuery`)都接上,条件在 `ORDER BY … LIMIT` 之前。抽样从「全表按 `mail_id` 取前 `BatchLimit` 行」变成「本副本的片里按 `mail_id` 取前 `BatchLimit` 行」:各副本的样本不再重叠,合起来覆盖得更多,计数跨副本求和也不再重复。点锁复核与删除不变,按 `mail_id` 点查,只碰本轮候选。
+- 片条件每轮开头算一次,候选读与抽样共用同一份。
+- `maintenance.Run` 依赖的存储收成接口 `maintenance.Sweeper`(`*data.Repo` 满足它),同样只为单测。
+
+**不变量与失败推演**(与 §3 同一套,正确性不靠分工):
+
+- 派发的提交点是 role_fence 行锁下 `status = PLANNED` 的 CAS:两个副本扫到同一行,只有一方派成,另一方得 `RecallLost`。清理的提交点是 `FOR UPDATE` 点锁 + 原条件复核 + 带条件的 `DELETE`:两个副本删同一封,后到的复核落空。
+- 成员表变化的几秒里,某一片可能两个副本都做(与分片前相同),也可能暂时没人做(下一轮补上)。副本崩溃时它名下的片停到 etcd 租约过期再加一次整表读(§3):派发晚这么久,清理晚一轮。
+- 登记着却不跑、或循环卡死的副本:它名下的片一直没人做,`assetop_owned_shards` 之和照样是 64(§12 盲区)。本批的活性指标(§14.3)按副本报出来。
+- 滚动升级:老版本扫全部片,只是重复;全部换成新版本后分工才生效。不改表、不改协议、不改 proto。
+
+### 14.3 循环活性指标
+
+| 循环 | 指标(gauge,Unix 秒) | 写在哪 | 告警 |
+|---|---|---|---|
+| 资产指令重投(guild / trade / mail / data_service 回收) | `assetop_loop_last_run_unixtime`(只有 `service` 常量 label) | `assetop.Loop.Run` | `AssetOpRedeliveryLoopStalled` |
+| GM 回收派发 | `data_service_recall_dispatch_last_run_unixtime` | `RecallChannel.runDispatch` | `RecallDispatchLoopStalled` |
+| mail 过期清理 | `mail_sweep_last_run_unixtime`(原有,口径改) | `maintenance.Run` | `MailSweepStalled`(原有,改成按副本判) |
+
+三个指标同一个口径:
+
+- 循环起来时写一次;每跑完一轮写这一轮**结束**的时刻,这一轮成功、出错都写;这一轮 panic(被 safego 兜住)时不写;循环退出时删掉序列。
+  - 「有序列」= 这个副本的这个循环在跑;「值停住」= 循环卡在某一轮里,或者每一轮都 panic。
+  - 不写成「最近一次成功」:要抓的是登记在成员表里、循环却不转的副本。出错有各自的信号(重投读队头失败计 `assetop_store_errors_total{op="list"}`;派发逐行失败计 `data_service_recall_dispatch_total{result="error"}`,读队头失败只有错误日志;清理失败有错误日志,删除模式下还会打排空 HOLD),一次库故障不该同时报成每个副本的循环卡死。
+  - 退出时删序列,不置 0:没起循环的副本(canary、`Recall.Enabled=false`、单测、离线工具)和已经停掉循环的副本(停机排空)都没有序列,规则不用另外滤掉 0,也不会对正在排空的副本误报。
+- 没有可变 label,不放 player_id 之类实体 id。
+- mail 原来的 `defer metrics.MarkSweepRun(time.Now())` 在这一轮开头就求了 `time.Now()`,记下的是开始时刻,改成结束时刻;原来是 Gauge(canary 上也报 0,原规则只能 `max()` 聚合),改成不带可变 label 的 GaugeVec,与另外两个同一口径。
+
+告警按副本逐条判,不聚合:分片之后一个副本卡住,别的副本照常推进,`max()` 看不出来。
+
+| 规则 | 式子 | for | 级别 | 所在文件 |
+|---|---|---|---|---|
+| `AssetOpRedeliveryLoopStalled` | `time() - assetop_loop_last_run_unixtime > 300` | 5m | warning | `deploy/k8s/asset-channel-alerts.yaml` 新组 `asset-channel.loop-liveness` |
+| `RecallDispatchLoopStalled` | `time() - data_service_recall_dispatch_last_run_unixtime > 300` | 5m | warning | 同上 |
+| `MailSweepStalled` | `time() - mail_sweep_last_run_unixtime > 900` | 5m | warning | `deploy/k8s/mail-alerts.yaml`(原式 `time() - max(mail_sweep_last_run_unixtime) > 900`) |
+
+阈值按「一轮最长要跑多久」取若干倍:
+
+- 重投:一轮最长约 `Interval + ceil(Batch / Workers) × OpBudget`(Tick 等全部 worker 跑完才返回,每行不超过 OpBudget)。默认 2 + 13 × 2.5 ≈ 35 秒,300 秒约 8 轮。guild 允许把间隔调到 60 秒、单行预算调到 10 秒,那时最长约 190 秒,300 秒仍盖得住;再调大 `Batch` 时要复核这个阈值。契约测试按 `DefaultLoopConfig` 钉住「阈值 ≥ 5 × 默认最长一轮」。
+- 派发:间隔 1 秒,一轮的总预算 30 秒(`recallDispatchRoundLimit`),300 秒约 10 轮;契约测试钉住「阈值 ≥ 5 × 一轮总预算」。
+- mail 清理:3 × `Sweep.Interval`(当前 5 分钟 = 900 秒),沿用原有契约测试的联动。首轮之前有至多一个间隔的随机抖动,起来时先写的那一次盖住它。
+- 级别取 warning:片没人做只是延迟,不丢。处置是重启卡住的副本或把它缩掉;它从 etcd 摘掉之后,它的片由别的副本接手。

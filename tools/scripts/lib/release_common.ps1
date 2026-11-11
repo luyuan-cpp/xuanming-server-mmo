@@ -718,6 +718,32 @@ function Resolve-InjectedSecret {
     return $value
 }
 
+# gate 会话身份密钥的形状检查(docs/design/gate-online-identity.md §10.1),与 go/shared/callerauth 的
+# ParseSeedHex / ParsePublicKeys 同一规则:私钥是恰好 64 个十六进制字符;公钥列表逗号分隔、至少一项、
+# 每项恰好 64 个十六进制字符、不许空项与重复。PowerShell 算不了 Ed25519,私钥与公钥是否配对由 gate 启动时核对。
+# 报错只点变量名,不回显值。
+function Assert-InternalIdentityKeyShape {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$SigningKey,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$PublicKeys
+    )
+    if ($SigningKey -cnotmatch '^[0-9a-fA-F]{64}$') {
+        throw "MMORPG_INTERNAL_AUTH_SIGNING_KEY must be exactly 64 hex characters (a 32-byte Ed25519 seed); generate a pair with: Push-Location go/shared; go run ./cmd/identitykeygen; Pop-Location"
+    }
+    $items = $PublicKeys -split ','
+    $seen = @{}
+    foreach ($item in $items) {
+        if ($item -cnotmatch '^[0-9a-fA-F]{64}$') {
+            throw "MMORPG_INTERNAL_AUTH_PUBLIC_KEYS must be a comma-separated list of 64-hex-character Ed25519 public keys with no blanks or empty items"
+        }
+        $normalized = $item.ToLowerInvariant()
+        if ($seen.ContainsKey($normalized)) {
+            throw "MMORPG_INTERNAL_AUTH_PUBLIC_KEYS lists the same public key twice"
+        }
+        $seen[$normalized] = $true
+    }
+}
+
 # ── 逻辑库命名与每片连接池(docs/design/horizontal-scale-logical-db.md §1、§5.1)──
 # 与 go/shared/dirshard 同一规则。部署脚本、本机写者启动目录、连接总账、本地 reset 都从这里取,不各写一份库名规则。
 

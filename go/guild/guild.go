@@ -1055,14 +1055,12 @@ func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan sch
 	return missingIndexError(report)
 }
 
-// missingIndexWarnings 挑出"缺索引"告警。前缀取自 go/schemamigrate/plan.go 的文案;
-// guild_test.go 的真库用例负责守住两边一致(文案漂移时会红)。
+// missingIndexWarnings 挑出缺普通索引的告警原文。判断按 schemamigrate 报告项的结构化类别
+// (Report.MissingIndexes),不匹配告警文案:文案只给人看,改措辞不能改变拒启行为。
 func missingIndexWarnings(r schemamigrate.Report) []string {
 	var missing []string
-	for _, w := range r.Warnings {
-		if strings.HasPrefix(w, "缺索引") {
-			missing = append(missing, w)
-		}
+	for _, f := range r.MissingIndexes() {
+		missing = append(missing, f.Message)
 	}
 	return missing
 }

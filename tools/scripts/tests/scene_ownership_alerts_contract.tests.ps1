@@ -65,12 +65,13 @@ $script:ExpectedRules = [ordered]@{
     'SceneOwnershipUnownedScenesReleased' = 'warning'
     'SceneOwnershipMassRelease'           = 'critical'
     'SceneOwnershipNodeIdTakenOver'       = 'critical'
+    'SceneOwnershipOwnHolderUnknown'      = 'warning'
     'SceneOwnershipReleaseBacklog'        = 'warning'
     'SceneOwnershipReconcileBlind'        = 'warning'
 }
 
 Test-Case '夹具:C++ 导出的指标族、stage 与 outcome 取值' {
-    Assert-Equal -Expected 'scene_ownership_observations_total,scene_ownership_release_deferred_scenes,scene_ownership_releases_total,scene_ownership_releasing_scenes,scene_ownership_superseded,scene_ownership_sweeps_total,scene_ownership_tracked_scenes' `
+    Assert-Equal -Expected 'scene_ownership_observations_total,scene_ownership_own_holder_known,scene_ownership_release_deferred_scenes,scene_ownership_releases_total,scene_ownership_releasing_scenes,scene_ownership_superseded,scene_ownership_sweeps_total,scene_ownership_tracked_scenes' `
         -Actual ($script:Families -join ',') -Because '采集回调的指标族;增删指标要同步告警与本用例'
     Assert-Equal -Expected 'destroyed,drain_started' -Actual ($script:Stages -join ',') -Because 'releases_total 的 stage 取值'
     Assert-Equal -Expected 'no_scenes,previous_in_flight,redis_unavailable,send_failed,sent' -Actual ($script:Outcomes -join ',') -Because 'kSweepOutcomeNames'
@@ -134,7 +135,7 @@ Test-Case 'scene-manager-alerts.yaml:SceneManagerEtcdRevisionRegressed 的字段
     Assert-Match -Text $metricsSource -Pattern '(?m)^\s*etcdRevisionRegressionsTotal,' -Because '计数器登记在 register() 的 MustRegister 里'
 }
 
-Test-Case '本文件钉的六条告警的名字在 deploy/k8s 的全部告警文件里各只出现一次' {
+Test-Case '本文件钉的每条告警的名字在 deploy/k8s 的全部告警文件里各只出现一次' {
     $all = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*-alerts.yaml' -File | ForEach-Object {
             ([IO.File]::ReadAllText($_.FullName)) -replace "`r`n", "`n"
         } | ForEach-Object { [regex]::Matches($_, '(?m)^\s+- alert:[ ]*(\S+)[ ]*$') } | ForEach-Object { $_.Groups[1].Value })

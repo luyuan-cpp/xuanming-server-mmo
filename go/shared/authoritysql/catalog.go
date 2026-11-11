@@ -186,8 +186,11 @@ func (c *Catalog) lockSlots(ctx context.Context, tx *sql.Tx, keys [][]byte, epoc
 	return nil
 }
 
-// lockSlotRows 按 slot 号顺序锁住一个写者的全部 64 行并原样返回,行数不是 64 就拒绝。
+// lockSlotRows 按 slot 号顺序锁住一个写者的全部 64 行并原样返回。
 // 锁顺序精确按(writer_key,slot)，不把meta/registry JOIN入首锁:所有改写者全集的事务都是 slot → meta,换代(Register)也一样。
+// 一代结束(换代、人工或排空退休)时,结束它的事务把它的 64 行一起删掉(endGeneration),所以一行都没有 = 这一代已经不在役:
+// 回空集,由调用方判 —— 要求在役的(lockSlots)经 activeSlotsAt 拒绝,换代(Register)持 meta 锁复核槽位。
+// 只剩一部分行是目录坏了,拒绝。sql.ErrNoRows 不原样交出去,免得调用方把确定的拒绝当成别的失败。
 func (c *Catalog) lockSlotRows(ctx context.Context, tx *sql.Tx, key []byte) ([]*databasepb.SqlWriterSlot, error) {
 	if len(key) != 16 {
 		return nil, ErrWriterDenied
@@ -196,6 +199,9 @@ func (c *Catalog) lockSlotRows(ctx context.Context, tx *sql.Tx, key []byte) ([]*
 	for slot := uint32(0); slot < WriterSlotCount; slot++ {
 		row := &databasepb.SqlWriterSlot{WriterKey: bytes.Clone(key), Slot: slot}
 		err := tx.QueryRowContext(ctx, "SELECT generation,writer_epoch,state FROM "+c.table("writer_slot")+" WHERE writer_key=? AND slot=? FOR UPDATE", key, slot).Scan(&row.Generation, &row.WriterEpoch, &row.State)
+		if errors.Is(err, sql.ErrNoRows) {
+			break
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -205,10 +211,14 @@ func (c *Catalog) lockSlotRows(ctx context.Context, tx *sql.Tx, key []byte) ([]*
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+c.table("writer_slot")+" WHERE writer_key=?", key).Scan(&count); err != nil {
 		return nil, err
 	}
-	if count != WriterSlotCount {
+	switch {
+	case count == 0 && len(rows) == 0:
+		return nil, nil
+	case count == WriterSlotCount && len(rows) == WriterSlotCount:
+		return rows, nil
+	default:
 		return nil, ErrWriterDenied
 	}
-	return rows, nil
 }
 
 // activeSlotsAt 核一个写者锁住的 64 行都是本世代、这个 epoch、ACTIVE。
@@ -457,7 +467,7 @@ func succession(maxSeq uint64, active *databasepb.SqlWriterRegistry, lockedKey [
 // 槽位就是 SQL 账号:这个账号的上一代还 ACTIVE,就在同一事务里把它退休(换代),所以一个账号在本逻辑库至多一代 ACTIVE。
 //
 // 锁序与 Retire、冻结相同:上一代的 64 个 slot → route_meta → 本账号的注册行。上一代的在途事务持着自己的 slot 行锁,
-// 换代要等它们提交;提交之后,上一代下一笔事务在闸门上读到 slot 已 REVOKED,写不进去。
+// 换代要等它们提交;换代删掉上一代的 64 个 slot 行(endGeneration,§5.8),提交之后上一代下一笔事务在闸门上找不到自己的 slot 行,写不进去。
 // 请求的 boot_seq 必须大于本账号已有的全部 boot_seq(CAS)。同一请求重放幂等:事务外、拿到锁之后各查一次同 request_id 的收据,
 // 所以 init 重跑、上一次提交结局未知时可以原样重发,最多落地一次。
 // 不核请求里的 epoch:新一代的 slot 按持 meta 锁读到的当前 epoch 建,收据记这个实际值,安全性论证见规格 §2。
@@ -481,6 +491,8 @@ func (c *Catalog) Register(ctx context.Context, request *databasepb.SqlWriterLif
 	}
 	var replayed *databasepb.SqlWriterLifecycleReceipt
 	err = c.transaction(ctx, func(tx *sql.Tx) error {
+		// 预读之后上一代可能已被别的事务结束(人工退休、同序号另一个 Pod 先换了代),它的 slot 行随之删了,这里拿到空集;
+		// 下面持 meta 锁读槽位的真实状态再判,结局与上一代行还在时相同。
 		var predecessorSlots []*databasepb.SqlWriterSlot
 		if predecessorKey != nil {
 			rows, err := c.lockSlotRows(ctx, tx, predecessorKey)
@@ -619,7 +631,7 @@ func (c *Catalog) slotHead(ctx context.Context, tx *sql.Tx, principal []byte) (u
 	}
 }
 
-// retireSuperseded 在换代事务里退休上一代:64 个 slot 与注册行置 REVOKED,追加一份 RETIRE 全文收据,版本 revision+1,返回这个新版本。
+// retireSuperseded 在换代事务里退休上一代:结束这一代(endGeneration),追加一份 RETIRE 全文收据,版本 revision+1,返回这个新版本。
 // 收据的 successor_request_id 指向这次 REGISTER,deployment_id 是新一代的部署;没有维护 run(排空期间不换代)。
 func (c *Catalog) retireSuperseded(ctx context.Context, tx *sql.Tx, register *databasepb.SqlWriterLifecycleReceipt_Request, predecessor *databasepb.SqlWriterRegistry, epoch, revision uint64) (uint64, error) {
 	retire := successionRetirement(register, predecessor, epoch, revision)
@@ -631,24 +643,37 @@ func (c *Catalog) retireSuperseded(ctx context.Context, tx *sql.Tx, register *da
 	if err != nil {
 		return 0, err
 	}
-	result, err := tx.ExecContext(ctx, "UPDATE "+c.table("writer_slot")+" SET state=2 WHERE writer_key=? AND generation=? AND writer_epoch=? AND state=1", predecessor.WriterKey, c.config.Generation, epoch)
-	if err != nil {
-		return 0, err
-	}
-	if err = affected(result, WriterSlotCount); err != nil {
-		return 0, err
-	}
-	result, err = tx.ExecContext(ctx, "UPDATE "+c.table("writer_registry")+" SET state=2,retirement_request_id=?,retirement_digest=?,retired_ms=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) WHERE writer_key=? AND generation=? AND instance_id=? AND sql_principal=? AND registration_digest=? AND boot_seq=? AND state=1", retire.RequestId, digest, predecessor.WriterKey, c.config.Generation, predecessor.InstanceId, predecessor.SqlPrincipal, predecessor.RegistrationDigest, predecessor.BootSeq)
-	if err != nil {
-		return 0, err
-	}
-	if err = affected(result, 1); err != nil {
+	if err = c.endGeneration(ctx, tx, predecessor, epoch, retire.RequestId, digest); err != nil {
 		return 0, err
 	}
 	if err = c.insertLifecycle(ctx, tx, retire, raw, digest, epoch, next); err != nil {
 		return 0, err
 	}
 	return next, nil
+}
+
+// endGeneration 结束一代写者:删掉它的 64 个 slot 行,登记行置 REVOKED 并记下退休它的那份 RETIRE(writer-roster-exhaustion-20261106.md §5.8)。
+// 换代(retireSuperseded)、人工与排空退休(Retire)都走这里,调用时本事务已经锁齐这 64 行、核过它们在 epoch 上 ACTIVE:
+//   - 锁齐说明这一代的在途写事务都已提交或回滚:每笔写事务从进闸门到提交,一直持着自己轮到的那一行;
+//   - slot 行只有锁、epoch 和状态,不是证据。删掉之后这一代再开事务,在闸门上找不到自己的行,和读到 REVOKED 一样被拒绝;
+//     不删的话每次启动在每个逻辑库留下 64 行,随启动次数无界增长;
+//   - 登记行不删:它是 writer key、instance、(账号, 序号)唯一约束的墓碑,删了的 slot 行就不可能被同一个 writer key 再建出来;
+//     它也是这个账号 boot_seq 的高水位。收据同样不删,是这一代注册与退休的永久证明。
+//
+// 删除带 state=1 与 epoch 条件,必须正好删 64 行;登记行按全部身份字段匹配,必须正好 1 行。不符就拒绝,事务回滚。
+func (c *Catalog) endGeneration(ctx context.Context, tx *sql.Tx, writer *databasepb.SqlWriterRegistry, epoch uint64, retirementID, retirementDigest []byte) error {
+	result, err := tx.ExecContext(ctx, "DELETE FROM "+c.table("writer_slot")+" WHERE writer_key=? AND generation=? AND writer_epoch=? AND state=1", writer.WriterKey, c.config.Generation, epoch)
+	if err != nil {
+		return err
+	}
+	if err = affected(result, WriterSlotCount); err != nil {
+		return err
+	}
+	result, err = tx.ExecContext(ctx, "UPDATE "+c.table("writer_registry")+" SET state=2,retirement_request_id=?,retirement_digest=?,retired_ms=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) WHERE writer_key=? AND generation=? AND instance_id=? AND sql_principal=? AND registration_digest=? AND boot_seq=? AND state=1", retirementID, retirementDigest, writer.WriterKey, c.config.Generation, writer.InstanceId, writer.SqlPrincipal, writer.RegistrationDigest, writer.BootSeq)
+	if err != nil {
+		return err
+	}
+	return affected(result, 1)
 }
 
 // successionRetirement 是换代退休的 RETIRE 全文:退休上一代原样的注册行,由这次 REGISTER 发起。
@@ -670,6 +695,8 @@ func successionRetirement(register *databasepb.SqlWriterLifecycleReceipt_Request
 }
 
 // Retire 是人工(非 run)与排空(同 run)的退休。换代退休只由 Register 在同一事务里写,这里拒绝带 successor_request_id 的请求。
+// 退休与换代一样走 endGeneration:这一代的 slot 行删掉,登记行置 REVOKED。已经结束的一代没有 slot 行,lockSlots 回 ErrWriterDenied。
+// 同一请求重放在事务之前按收据原样返回,不受 slot 行已删影响。
 func (c *Catalog) Retire(ctx context.Context, request *databasepb.SqlWriterLifecycleReceipt_Request) (*databasepb.SqlWriterLifecycleReceipt, error) {
 	raw, digest, err := c.validateLifecycle(request, databasepb.SqlWriterLifecycleReceipt_RETIRE)
 	if err != nil {
@@ -719,18 +746,7 @@ func (c *Catalog) Retire(ctx context.Context, request *databasepb.SqlWriterLifec
 		if err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, "UPDATE "+c.table("writer_slot")+" SET state=2 WHERE writer_key=? AND generation=? AND writer_epoch=? AND state=1", request.Writer.WriterKey, c.config.Generation, meta.WriterEpoch)
-		if err != nil {
-			return err
-		}
-		if err = affected(result, WriterSlotCount); err != nil {
-			return err
-		}
-		result, err = tx.ExecContext(ctx, "UPDATE "+c.table("writer_registry")+" SET state=2,retirement_request_id=?,retirement_digest=?,retired_ms=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) WHERE writer_key=? AND generation=? AND instance_id=? AND sql_principal=? AND registration_digest=? AND boot_seq=? AND state=1", request.RequestId, digest, request.Writer.WriterKey, c.config.Generation, request.Writer.InstanceId, request.Writer.SqlPrincipal, request.Writer.RegistrationDigest, request.Writer.BootSeq)
-		if err != nil {
-			return err
-		}
-		if err = affected(result, 1); err != nil {
+		if err = c.endGeneration(ctx, tx, request.Writer, meta.WriterEpoch, request.RequestId, digest); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, "UPDATE "+c.table("route_meta")+" SET catalog_revision=? WHERE id=1", revision); err != nil {

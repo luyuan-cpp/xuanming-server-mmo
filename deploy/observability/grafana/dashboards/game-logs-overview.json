@@ -1,7 +1,7 @@
 {
   "uid": "xm-game-logs",
   "title": "游戏服务日志总览(C++ / Go / Java)",
-  "description": "本机 run/logs 下三种语言服务日志的统一视图。顶部按来源 / 服务 / zone / 级别 / 关键字过滤,下方是日志流。",
+  "description": "本机 run/logs 下三种语言服务日志的统一视图。顶部按来源 / 服务 / zone / 级别 / 关键字 / trace_id / player_id 过滤,下方是日志流。trace_id、player_id 两个框按结构化元数据精确匹配,写法 =~\"$v|$v^.*\":留空时后一支 ^.* 匹配一切,填了值时 ^ 落在值后面永远不成立,只剩精确匹配(docs/ops/grafana-loki-local-logs.md §4)。",
   "tags": [
     "xuanming",
     "logs",
@@ -161,6 +161,44 @@
           }
         ],
         "description": "直接写正则,例如 kafka|redis 或 player_id=\\d+;不要输入反引号 `"
+      },
+      {
+        "name": "trace_id",
+        "label": "trace_id(32 位,留空不过滤)",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "description": "填一条请求的 32 位 trace_id,只看这条请求经过的 C++ / Go / Java 各服务的行;按结构化元数据精确匹配,留空不过滤"
+      },
+      {
+        "name": "player_id",
+        "label": "player_id(留空不过滤)",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "description": "填玩家 id,只看带这个玩家上下文的行(C++ 行尾后缀、Go 的 player_id 字段);精确匹配,留空不过滤。没带玩家上下文、只在正文里提到这个 id 的行,用关键字框搜"
       }
     ]
   },
@@ -186,7 +224,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (service) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"$level\"} |~ `(?i)$search` [$__auto]))",
+          "expr": "sum by (service) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"$level\"} |~ `(?i)$search` | trace_id=~\"${trace_id}|${trace_id}^.*\" | player_id=~\"${player_id}|${player_id}^.*\" | drop trace_id, span_id, player_id [$__auto]))",
           "legendFormat": "{{service}}",
           "queryType": "range"
         }
@@ -239,7 +277,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (service, level) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"warn|slow|alert|error|fatal\"} |~ `(?i)$search` [$__auto]))",
+          "expr": "sum by (service, level) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"warn|slow|alert|error|fatal\"} |~ `(?i)$search` | trace_id=~\"${trace_id}|${trace_id}^.*\" | player_id=~\"${player_id}|${player_id}^.*\" | drop trace_id, span_id, player_id [$__auto]))",
           "legendFormat": "{{service}} · {{level}}",
           "queryType": "range"
         }
@@ -320,7 +358,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal\"} |~ `(?i)$search` [$__range]))",
+          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal\"} |~ `(?i)$search` | trace_id=~\"${trace_id}|${trace_id}^.*\" | player_id=~\"${player_id}|${player_id}^.*\" | drop trace_id, span_id, player_id [$__range]))",
           "queryType": "instant",
           "instant": true
         }
@@ -382,7 +420,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"warn|slow|alert\"} |~ `(?i)$search` [$__range]))",
+          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"warn|slow|alert\"} |~ `(?i)$search` | trace_id=~\"${trace_id}|${trace_id}^.*\" | player_id=~\"${player_id}|${player_id}^.*\" | drop trace_id, span_id, player_id [$__range]))",
           "queryType": "instant",
           "instant": true
         }
@@ -494,7 +532,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "topk(8, sum by (service, lang) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal\"} |~ `(?i)$search` [$__range])))",
+          "expr": "topk(8, sum by (service, lang) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal\"} |~ `(?i)$search` | trace_id=~\"${trace_id}|${trace_id}^.*\" | player_id=~\"${player_id}|${player_id}^.*\" | drop trace_id, span_id, player_id [$__range])))",
           "legendFormat": "{{service}} ({{lang}})",
           "queryType": "instant",
           "instant": true
@@ -548,7 +586,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"$level\"} |~ `(?i)$search`",
+          "expr": "{job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"$level\"} |~ `(?i)$search` | trace_id=~\"${trace_id}|${trace_id}^.*\" | player_id=~\"${player_id}|${player_id}^.*\"",
           "maxLines": 1000,
           "queryType": "range"
         }

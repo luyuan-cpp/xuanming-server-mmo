@@ -502,7 +502,7 @@ rooms 原来是一个 Counter,只有数,没有「这一份是谁的」。下面�
 1. 建场景时 Agones 预占在 Redis 登记之前,进程在两者之间崩溃(多记);
 2. 拆除任务的归还是「至多一次」(先置位再调 K8s),置位之后、调用之前进程退出(多记);
 3. 归还调用失败,或请求已生效、回包丢了;为了不多还,这一份不再重试(多记);
-4. 改派转移名额时新 GameServer 满了:旧的不还,新的没记(旧的多记,新的少记,新节点会被超卖)。
+4. 改派转移名额时新 GameServer 满了:旧的不还,新的没记(旧的多记,新的少记,新节点会被超卖)。§13.10 起改派前先占名额,目标满了就不往那里搬,这种情况不再出现。
 
 对账(原 §8.6)分不清哪一份是漏的,只能告警,运维也没有安全的手工修法。
 
@@ -555,7 +555,7 @@ rooms 原来是一个 Counter,只有数,没有「这一份是谁的」。下面�
 - **过期的在途占用,条目不在任何一台 GameServer 上**:取消。来历是分配根本没发出去,或者条目已经删了、在途占用没删掉。
 - **记录 → 条目**:按 PodIP 把 GameServer 对上本 zone 的节点,读节点的场景集合,只看属主仍是这个节点的场景:
   - 记录在这台、条目不在:补加这一条,满了记 `missing_no_capacity`;
-  - 记录在别的 GameServer(改派转移时新 GameServer 满了):按改派转移的做法转过来,满了记 `rehome_no_capacity`,下一轮再试。
+  - 记录在别的 GameServer(改派 CAS 之后、名额提交之前进程退出,或 CAS 落空时属主比对出错、这次的条目已放弃):按改派转移的做法转过来,满了记 `rehome_no_capacity`,下一轮再试。
 - 单个条目、单个场景读写失败只跳过它,计入本轮未收敛数。
 - 指标:
   - `scene_manager_agones_rooms_reconciled_total{zone,action}`,action 取 `orphan_removed`、`hold_expired_removed`、`hold_canceled`、`missing_added`、`missing_no_capacity`、`rehomed`、`rehome_no_capacity`;
@@ -605,14 +605,26 @@ rooms 原来是一个 Counter,只有数,没有「这一份是谁的」。下面�
   1. 选好目标之后,先在它的 GameServer 上占名额:写在途占用、加条目。
      - rebalance 的「换更好的家」:只认计划的目标,满了这次不搬。搬到别处就违背了这次迁移的目的。
      - 属主已死的四条路径(rebalance 的 urgent、懒改派、init 的死节点改派、EnterScene 的死节点自愈):目标满了交给 GSA,在本 zone 挑一台有空位、承载大世界的 GameServer,落点改成它对应的节点。落点偏离哈希目标的,之后由 rebalance 搬回去,与新建频道同一做法。
-     - 哪台都占不到:不搬。频道留在死节点上、暂时进不去(选频道时跳过它),玩家落到别的频道;下一拍、下一次请求再试,FleetAutoscaler 扩出空位之后就能搬。这与新建频道没有容量时 fail-closed 是同一取舍:不把房间塞进 Agones 认为已经满了的进程。EnterScene 的死节点自愈这时回错误,由上游重试。
+     - 哪台都占不到:不搬。频道留在死节点上、暂时进不去(选频道时跳过它),玩家落到别的频道;下一拍、下一次请求再试,FleetAutoscaler 扩出空位之后就能搬。这与新建频道没有容量时 fail-closed 是同一取舍:不把房间塞进 Agones 认为已经满了的进程。EnterScene 的死节点自愈这时回错误,由上游重试。GSA 挑中的 GameServer 认不出是哪个节点(Pod 没在 etcd 里登记)也算占不到,与新建频道、建副本相同。
+     - 回落分配挑中了老属主自己:也不搬,放弃这一条。GSA 按 etcd 里登记的 Pod 地址认节点,而判死看的是负载集,老属主的 Pod 还登记着、GameServer 还有空位时会被挑中;搬过去等于没搬。
+     - 落点换了的,交给调用方的也是实际落点:懒改派按它记候选、回应答,init 按它记本轮不可达,EnterScene 按它把玩家派过去。
   2. 带着放置代次在落点上建实体,再走原来的改派 CAS(`luaReassignSceneNode`,不改)。
   3. CAS 落地:用这次占的名额提交记录(`commitReservedAgonesRoom` → `commitAgonesRoomTransfer`)。属主仍是落点才改记录,同一步消费在途占用;改成了就删旧条目。
   4. 任何一步没成,就放弃这次占的条目:分配代次、建实体、读镜像集合失败,CAS 落空或被屏障挡住。落空时回收预建实体照旧。
   5. CAS 落空但属主恰是落点:别的写者挑了同一个节点,或脚本其实已执行。这时实体留着,名额照常提交:别的写者已提交的,记录已在这台上,这次的条目放弃;没提交的,这次就是那一份。两边都按条目,只会留一条。属主比对本身出错时放弃这次的条目:旧条目仍记着,总数不少,之后由对账转过来。
+- **进场请求路径上的改派按频道合并**(`joinChannelMove`,`channel_move_flight.go`):懒改派与 EnterScene 的死节点自愈跑在进场请求上,任意副本、任意并发。节点一死,它上面的玩家会一起重连、一起进同一个频道。
+  - 不合并时,每个请求都先在同一台 GameServer 上占名额(K8s 读改写同一个对象,互相冲突、重试)。并发的占用把目标临时占满,后到的回落到 GSA、在别的节点上白建实体,CAS 落空后再拆。最后只有一个 CAS 落地,K8s 写入与建拆却随请求数放大。
+  - 合并之后,同一进程里同一时刻每个频道只跑一次改派,同时到的请求等它的结果,落点以回的为准。多副本之间最多每个副本一次。
+  - 这不是锁:正确性仍由改派 CAS 与名额提交的比较并交换保证。廉价复核(重读属主、成员资格、再入屏障)每个请求自己做,带不了 `scene_conf_id` 的请求不去发起别人的那一次。
+  - 等待方按自己的 ctx 放弃等待;发起方被取消或出错时,等待方拿到同一个错误,由上游重试。
+  - rebalance 与 init 的死节点改派不进来:前者只在领导者上跑,后者在 zone 锁内,本来就不并发。
+  - `golang.org/x/sync/singleflight` 不在本模块依赖里,离线构建拿不到新模块,所以只写了用得到的最小部分。
 - **为什么不把名额记录并进改派 CAS**:改派 CAS 之后、名额提交之前,两个条目都在:旧的有记录指着,新的有在途占用护着。这时只会多记一份、不会少记,也就不会超卖。进程在这时退出,在途占用过期之后对账收:新条目按孤儿删,场景按「名额记在别的 GameServer 上」转过来。并进同一个脚本只是缩短这个窗口,却要改所有改派写者共用的脚本和它的回执格式。
 - **代码**:
   - `agones_binding.go`:`reserveAgonesRoomForWorldChannel`、`commitReservedAgonesRoom`;原来事后转名额的 `TransferAgonesRoomForScene` 删除。
   - `world_rebalance.go`:`migrateWorldChannel`;`destroyUnownedMigrationTarget` 回是否留下了实体,新增 `settleLostChannelMove`。
   - `world_init.go`:`moveWorldChannelOffDeadNode`(回实际落点)、`lazyReassignStaleWorldChannel`(回实际落点)、`commitPreCreatedWorldChannel`(带名额)。
-  - `enterscenelogic.go`:`reassignSceneOffDeadNode`、`adoptOwnerAfterLostReassign`。
+  - `enterscenelogic.go`:`reassignSceneOffDeadNode`(复核后按频道合并)、`moveChannelOffDeadNode`(搬迁一半)、`adoptOwnerAfterLostReassign`;名额的提交与放弃走 `commitAgonesRoomAfterReassign`、`abandonAgonesRoomAfterReassign`,不挂请求 ctx(限时 `deadNodeReassignFollowUpTimeout`)。
+  - `world_init.go` 的懒改派同样拆成复核(`lazyReassignStaleWorldChannel`)与搬迁(`moveStaleWorldChannel`)两半。
+  - `channel_move_flight.go`(新):`joinChannelMove`。
+- **测试**:`world_channel_reserve_before_move_test.go`(新):四条属主已死的路径各跑一遍「目标满了回落到另一台」「哪台都满了不搬」「回落挑中老属主不搬」;rebalance 换更好的家目标满了不搬、空出位子后照常搬;CAS 落空时属主恰是落点就提交、否则放弃;EnterScene 自愈与懒改派同时进同一个频道时只占一次名额、只建一次实体。`channel_move_flight_test.go`(新):合并器的等待方按自己的 ctx 放弃、发起方 panic 时等待方拿到错误、结束后不留记录。`agones_world_channel_test.go` 与 `world_channel_cas_replay_test.go` 原来调 `TransferAgonesRoomForScene` 的用例改走 `moveAgonesRoomForTest`(先占名额、CAS 之后提交)。`TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership` 的 lostScene 段改为断言这次占的那一条已放弃。

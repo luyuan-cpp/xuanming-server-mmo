@@ -299,14 +299,20 @@ type driftOptions struct {
 // driftResult 是一次漂移计算的结果。
 type driftResult struct {
 	migration migration // Version 为 0,由 runner 分配
-	warnings  []string
-	manual    []string
+	findings  []Finding // 按 Message 排序;run 经 Report.add 按类别分进 Warnings / Manual
+}
+
+// record 记一项报告,文案按 format / args 拼成英文。
+func (r *driftResult) record(f Finding, format string, args ...any) {
+	f.Message = fmt.Sprintf(format, args...)
+	r.findings = append(r.findings, f)
 }
 
 // drift 比对真实库结构与 proto 期望,产出可执行语句与报告项。
 //
 // 可执行语句只有两类:缺表 → CREATE TABLE IF NOT EXISTS;缺列 → ADD COLUMN(授权后外加 MODIFY COLUMN)。
-// 它们都不会丢数据,且在新服务的小表上代价可控。其余差异一律只报告:
+// 它们都不会丢数据,且在新服务的小表上代价可控。其余差异一律只报告,每项带结构化类别(FindingKind),
+// 进哪一边由类别决定(FindingKind.needsManual):
 //   - Manual(阻断启动,ExitCode=4):列类型漂移、缺主键、主键列不符、缺唯一键。
 //     缺唯一键会让 INSERT IGNORE / ON DUPLICATE KEY 的幂等语义失效,补唯一键前要先去重,只能人工做。
 //   - Warnings(不阻断):多余列、多余表、缺普通索引。多余列 / 多余表是回滚到旧版本二进制时的正常
@@ -337,36 +343,42 @@ func (s *schema) drift(live liveSchema, o driftOptions) driftResult {
 			case o.AllowModifyColumn:
 				alters = append(alters, fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s %s", quoteIdent(t.name), quoteIdent(col.name), col.definition))
 			default:
-				res.manual = append(res.manual, fmt.Sprintf(
-					"列类型漂移(未自动修改):%s.%s 现为 %q,proto 期望 %q;确认影响面后以 AllowModifyColumn=true 重跑,或人工 ALTER",
-					t.name, col.name, current, col.definition))
+				res.record(Finding{Kind: FindingColumnTypeDrift, Table: t.name, Column: col.name},
+					"column type drift (not modified automatically): %s.%s is %q, proto expects %q; "+
+						"rerun with AllowModifyColumn=true after assessing the impact, or ALTER it manually",
+					t.name, col.name, current, col.definition)
 			}
 		}
 		for _, name := range lt.columnOrder {
 			if _, ok := known[name]; !ok {
-				res.warnings = append(res.warnings, fmt.Sprintf("多余列(不会删除):%s.%s 不在 proto 声明里", t.name, name))
+				res.record(Finding{Kind: FindingExtraColumn, Table: t.name, Column: name},
+					"extra column (never dropped): %s.%s is not declared in proto", t.name, name)
 			}
 		}
 
 		switch {
 		case len(lt.primaryKey) == 0:
-			res.manual = append(res.manual, fmt.Sprintf(
-				"缺主键:%s 按 proto 应有 PRIMARY KEY (%s),实际没有;主键去重语义失效,需人工补主键(有重复行时先去重)",
-				t.name, strings.Join(t.primaryKey, ",")))
+			res.record(Finding{Kind: FindingMissingPrimaryKey, Table: t.name},
+				"missing primary key: table %s should have PRIMARY KEY (%s) per proto but has none; "+
+					"primary-key deduplication no longer holds, add it manually (deduplicate rows first if any are duplicated)",
+				t.name, strings.Join(t.primaryKey, ","))
 		case !slices.Equal(lt.primaryKey, t.primaryKey):
-			res.manual = append(res.manual, fmt.Sprintf(
-				"主键列不符:%s 实际 PRIMARY KEY (%s),proto 期望 (%s);需人工核对",
-				t.name, strings.Join(lt.primaryKey, ","), strings.Join(t.primaryKey, ",")))
+			res.record(Finding{Kind: FindingPrimaryKeyMismatch, Table: t.name},
+				"primary key mismatch: table %s has PRIMARY KEY (%s), proto expects (%s); review manually",
+				t.name, strings.Join(lt.primaryKey, ","), strings.Join(t.primaryKey, ","))
 		}
 		for _, idx := range t.indexes {
 			if _, ok := lt.indexes[idx]; !ok {
-				res.warnings = append(res.warnings, fmt.Sprintf("缺索引(不会自动建):%s 上没有 proto 声明的索引 %s", t.name, idx))
+				res.record(Finding{Kind: FindingMissingIndex, Table: t.name, Index: idx},
+					"missing index (not created automatically): table %s lacks index %s declared in proto", t.name, idx)
 			}
 		}
 		if t.uniqueKey != "" {
 			if _, ok := lt.indexes[t.uniqueKey]; !ok {
-				res.manual = append(res.manual, fmt.Sprintf(
-					"缺唯一键:%s 上没有 proto 声明的唯一键 %s;去重语义失效,需人工补建(有重复行时先去重)", t.name, t.uniqueKey))
+				res.record(Finding{Kind: FindingMissingUniqueKey, Table: t.name, Index: t.uniqueKey},
+					"missing unique key: table %s lacks unique key %s declared in proto; "+
+						"deduplication no longer holds, create it manually (deduplicate rows first if any are duplicated)",
+					t.name, t.uniqueKey)
 			}
 		}
 	}
@@ -376,11 +388,12 @@ func (s *schema) drift(live liveSchema, o driftOptions) driftResult {
 			continue
 		}
 		if _, ok := declared[name]; !ok {
-			res.warnings = append(res.warnings, fmt.Sprintf("多余表(不会删除):%s 不在表清单里", name))
+			res.record(Finding{Kind: FindingExtraTable, Table: name},
+				"extra table (never dropped): %s is not in the table list", name)
 		}
 	}
-	sort.Strings(res.warnings)
-	sort.Strings(res.manual)
+	// 按文案排序:Warnings / Manual 各自有序;文案以类别开头,同类项排在一起。
+	slices.SortFunc(res.findings, func(a, b Finding) int { return strings.Compare(a.Message, b.Message) })
 
 	// 执行顺序:先建缺的表,再改已有的表;两类互不依赖(不建外键)。身份按排序后的集合算,与顺序无关。
 	statements := append(creates, alters...)

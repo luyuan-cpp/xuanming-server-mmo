@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -341,10 +342,10 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 
 // moveWorldChannelOffDeadNode 是 initWorldScenesForZone 的死节点改派(发 RPC 之前已知不可达、对属主的 RPC 失败后
 // 重试,两处共用):把频道 sceneId 从已判死的 deadNode 搬到 newNode。顺序与 rebalance(migrateWorldChannel)、
-// resolveScene 的死节点自愈、懒改派相同,先建后改(2026-11-05):
+// resolveScene 的死节点自愈、懒改派相同,先占名额再搬(2026-11-11)、先建后改(2026-11-05):
 //  1. 重读属主,仍是 deadNode 才往下做,再过再入屏障。读错、属主已被别的写者改走、屏障未到,都本轮跳过:一个字节
 //     不改,也不发 RPC。这一步只为不白建白拆(屏障窗口里每一轮 init 都会走到这里),不代替 CAS —— 重读到提交之间
-//     仍可能被改,由第 3 步的 CAS 兜底。屏障在 CAS 之前还会再判一次(casReassignSceneNode),两次都记在 reassign 点位。
+//     仍可能被改,由第 4 步的 CAS 兜底。屏障在 CAS 之前还会再判一次(casReassignSceneNode),两次都记在 reassign 点位。
 //  2. 先在 newNode 的 GameServer 上占 Agones 名额(docs/design/agones-scene-node-high-density.md §13.10):属主已死、
 //     频道必须搬走,newNode 满了就让 GSA 在本 zone 另挑一台有空位的,落点改成它;哪台都占不到就本轮不搬、一个字节不改。
 //  3. 分配这次放置的代次,带着它在落点上 CreateScene(按 scene_id 幂等;本函数跑在 zone 锁内,
@@ -380,7 +381,8 @@ func moveWorldChannelOffDeadNode(ctx context.Context, svcCtx *svc.ServiceContext
 		return "", false, nil
 	}
 	if node == deadNode {
-		// 回落分配挑中了属主自己(它的 Pod 还在 etcd 里,负载集却已判死,或者本轮对它的 RPC 失败):搬过去等于没搬。
+		// 防御:回落分配挑中了属主自己就不搬,搬过去等于没搬。两个调用点都要求属主已不在注册表里,GSA 按 Pod 地址
+		// 正常认不出它;与另外三条改派路径同一判断。
 		abandonAgonesPlacement(ctx, svcCtx, zoneId, placement, "fallback_picked_old_owner")
 		logx.Errorf("[World] Scene %d stays on dead node %s this round: free allocation picked the same node", sceneId, deadNode)
 		return "", false, nil
@@ -512,13 +514,36 @@ func SelectOrRecoverWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext
 //  5. 提交名额:把第 2 步占的条目写进记录,删老 GameServer 上的旧条目(以前懒改派漏了转名额 —— agones_gs 仍指向
 //     老 GameServer,新节点的 rooms 列表不记账)。
 //
-// 第 4、5 步与 init 的死节点改派共用 commitPreCreatedWorldChannel(2026-11-05 抽出),落空回收与提交名额的 ctx 见该函数。
+// 第 1 步每个请求自己做;第 2~5 步(moveStaleWorldChannel)在本进程里按频道合并(joinChannelMove,2026-11-11):
+// 同时到的进场请求、以及同一频道上的 EnterScene 死节点自愈只跑一次,其余的等它的结果,落点可能与自己算的 targetNode
+// 不同,一律以回的落点为准。第 4、5 步与 init 的死节点改派共用 commitPreCreatedWorldChannel(2026-11-05 抽出),
+// 落空回收与提交名额的 ctx 见该函数。
 func lazyReassignStaleWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, confId, sceneId uint64,
 	targetNode string) (string, bool) {
 	oldNode, ok := staleWorldChannelOwner(svcCtx, zoneId, sceneId)
 	if !ok || oldNode == targetNode {
 		return "", false
 	}
+	movedTo, err := joinChannelMove(ctx, sceneId, func() (string, error) {
+		if node, moved := moveStaleWorldChannel(ctx, svcCtx, zoneId, confId, sceneId, oldNode, targetNode); moved {
+			return node, nil
+		}
+		return "", errStaleChannelNotMoved
+	})
+	if err != nil {
+		return "", false
+	}
+	return movedTo, true
+}
+
+// errStaleChannelNotMoved:懒改派这一次没搬成(没有名额、回落挑中老属主、分配代次或建场景失败、CAS 落空),
+// 原因已由跑的那一次记了日志。
+var errStaleChannelNotMoved = errors.New("stale world channel not moved")
+
+// moveStaleWorldChannel 是 lazyReassignStaleWorldChannel 的第 2~5 步:先占名额、建实体、改派 CAS、提交名额。
+// oldNode 是第 1 步重读到的属主(空串 = 映射不存在)。回实际落点与是否搬成。
+func moveStaleWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, confId, sceneId uint64,
+	oldNode, targetNode string) (string, bool) {
 	node, placement, reserved := reserveAgonesRoomForWorldChannel(ctx, svcCtx, zoneId, sceneId, targetNode, true)
 	if !reserved {
 		logx.Errorf("[World] Lazy-reassign: scene %d not moved: no Agones room capacity in zone %d", sceneId, zoneId)
@@ -625,6 +650,49 @@ func staleWorldChannelOwner(svcCtx *svc.ServiceContext, zoneId uint32, sceneId u
 // then performs the final least-loaded choice and member reservation in
 // one Redis Lua script.
 func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceContext, confId uint64, zoneId uint32, playerId uint64) (uint64, string, error) {
+	return reserveWorldChannelForEnter(ctx, svcCtx, confId, zoneId, playerId, worldChannelPick{})
+}
+
+// worldChannelPick 是挑频道时的额外约束(docs/design/scene-node-planned-drain.md §4.2、§4.4)。零值 = 普通进场。
+type worldChannelPick struct {
+	// evacuation:疏散请求。属主排空中的频道一律不选 —— 玩家正被从排空节点上搬走,不能搬回去;
+	// 普通进场只是把它们排到最后,别无选择时仍用(玩家能进来,随后再被疏散一次)。
+	evacuation bool
+}
+
+// tierWorldChannelCandidates 按落点偏好分层,返回第一个非空层(层内仍由 ReserveBestWorldChannel 挑最空的):
+//  1. 属主没在排空、构建不是外出构建;
+//  2. 属主没在排空;
+//  3. 属主排空中(只有普通进场才有这一层)。
+//
+// 只是在候选集合里取子集,不改候选本身;admission 是调用方取的一份快照。
+func tierWorldChannelCandidates(candidates []WorldChannelCandidate, admission nodeAdmissionView, pick worldChannelPick) []WorldChannelCandidate {
+	var preferred, open, draining []WorldChannelCandidate
+	for _, c := range candidates {
+		switch {
+		case admission.isDraining(c.NodeID):
+			draining = append(draining, c)
+		case admission.isPreferred(c.NodeID):
+			preferred = append(preferred, c)
+		default:
+			open = append(open, c)
+		}
+	}
+	if len(preferred) > 0 {
+		return preferred
+	}
+	if len(open) > 0 {
+		return open
+	}
+	if pick.evacuation {
+		return nil
+	}
+	return draining
+}
+
+// reserveWorldChannelForEnter 是 ReserveBestWorldChannelForEnter 的本体,多一个 pick 约束(疏散请求用)。
+func reserveWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceContext, confId uint64, zoneId uint32, playerId uint64,
+	pick worldChannelPick) (uint64, string, error) {
 	channelSetKey := worldChannelsKey(zoneId, confId)
 	members, err := svcCtx.Redis.Smembers(channelSetKey)
 	if err != nil || len(members) == 0 {
@@ -690,6 +758,12 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 		if unknownErr := worldChannelOwnersUnknownError(confId, zoneId, unknownOwners); unknownErr != nil {
 			return 0, "", unknownErr
 		}
+	}
+
+	// 计划排空与新版本优先(§4.2、§4.6):排空节点上的频道排最后(疏散不选),外出构建上的频道其次。
+	candidates = tierWorldChannelCandidates(candidates, snapshotNodeAdmission(zoneId), pick)
+	if len(candidates) == 0 && pick.evacuation {
+		return 0, "", fmt.Errorf("no world channel of conf %d in zone %d outside draining nodes", confId, zoneId)
 	}
 
 	sceneId, nodeId, _, err := ReserveBestWorldChannel(svcCtx, candidates, playerId)

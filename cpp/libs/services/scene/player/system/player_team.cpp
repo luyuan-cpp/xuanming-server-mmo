@@ -414,6 +414,32 @@ void PlayerTeamSystem::OnOfflineHostingStarted(entt::entity player)
 	RefreshAndFollow(player);
 }
 
+bool PlayerTeamSystem::NeedsFollowRecheck(entt::entity player)
+{
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		return false;
+	}
+	const auto* team = tlsEcs.actorRegistry.try_get<TeamId>(player);
+	if (team == nullptr || team->team_id() == 0)
+	{
+		return false; // 不在队伍里:没有可跟的人
+	}
+	// 已接在队长身后:照常被带着走,不必再读;没有跟随意图(托管开始时会挂上,缺了就是还没开始)也不读。
+	return TeamFollowSystem::WantsFollow(player) && !TeamFollowSystem::IsDriven(player);
+}
+
+void PlayerTeamSystem::OnOfflineHostingHeartbeat(entt::entity player)
+{
+	if (!NeedsFollowRecheck(player))
+	{
+		return;
+	}
+	// 战斗、交接、换图在途由跟随链自己的守卫挡(CanFollow),这里不重复判。只记 DEBUG:没接上的托管队员每个周期都会走到这里。
+	LOG_DEBUG << "[PlayerTeam] metric=team_follow_recheck reason=hosting_heartbeat player_id=" << GuidOf(player);
+	RefreshAndFollow(player);
+}
+
 void PlayerTeamSystem::RefreshAndFollow(entt::entity player)
 {
 	RefreshMembership(player, FollowMode::kFollowLeader);

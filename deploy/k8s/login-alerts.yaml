@@ -9,7 +9,10 @@
 #         reason 取 go/shared/gatepick/eligibility.go 的 Reason* 常量:stale = 全部停写,退到了全部;draining / full / mixed =
 #         没有完全合格的,在连得上的里挑,那些 gate 全在排空 / 全到水位 / 两种都有
 #       login_gate_pick_excluded_total{reason=stale|draining|full}   每次挑每台被剔除的 gate 计一次(回落时被用上的不计);
-#         剔除说明分档在起作用,本身不告警
+#         剔除说明分档在起作用,一般不告警;只有 reason=stale 持续超过租约时长才告警(login.gate-health 组)
+#   - login 排队取走时的复核(go/login/internal/logic/pkg/loginqueue/admit_recheck.go,Namespace "login_queue"):
+#       login_queue_admit_gate_recheck_total{outcome=kept|gone|stale|draining|full|unchecked}
+#         unchecked = 读不到此刻的候选,照签放行时选定的 gate;持续出现才告警(login.gate-health 组)
 #   - login 排队的区容量(2026-11-10 起,组 login.queue-capacity;go/login/internal/logic/pkg/loginqueue/metrics.go,Namespace
 #     "login_queue"):login_queue_capacity{zone} 是 FreeSlots 实际用的容量(配置值再按本区在接客的 gate 到水位的承载封顶,
 #     capacity.go 的 capByGates),login_queue_configured_capacity{zone} 是 Queue.ZoneCapacityOverride(0 = 没配)。
@@ -125,3 +128,42 @@ spec:
               停写、被标了排空、挂了。扩 gate 副本,或把 ZoneCapacityOverride 调到 gate 承载以内;
               login 日志搜 "admission capacity is limited by its gates" 看当时的两个数与 gate 台数。
             runbook_url: docs/design/login-queue-2026-05.md
+
+    # gate 健康(2026-11-11 起):两条都不影响挑 gate 本身,只说明有 gate 或复核出了持续的问题。
+    # 都按「持续」判(for > 0):go-zero 计数没有预置 0 值序列,第一次 Inc 被 increase() 漏看只会晚一拍,
+    # 持续的条件照样成立,所以不带回落规则那样的「新序列」分支。
+    - name: login.gate-health
+      interval: 30s
+      rules:
+        # 停写的 gate 超过租约时长仍在 etcd 里:卡住了却没下线,它上面的玩家多半也卡住了。
+        - alert: LoginGateStaleExcludedSustained
+          expr: |
+            sum by (namespace) (increase(login_gate_pick_excluded_total{reason="stale"}[5m])) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 有 gate 停写超过 5 分钟仍在 etcd 里,login 一直在剔除它"
+            description: >-
+              连续 5 分钟,每个 5 分钟窗口里 login 挑 gate 时都有 gate 因注册记录三个上报周期(30s)没被重写而被剔出候选。
+              gate 的注册记录挂在 etcd 租约上,进程死掉后租约到期(NodeTTL,默认 180s)记录就会消失;超过 5 分钟还在被剔除,
+              说明那台 gate 的事件循环卡住了而续约还在,或者它写不进 etcd。新玩家已经不会被分过去,但连在它上面的玩家多半卡住了。
+              按 login 日志 "[GateSelect] gates left out of the pick" 行里的 node_id 找到那台 gate:看存活探针、CPU 与日志是否还在推进,
+              卡住就重启它;gate 本身正常时查 etcd 的写延迟与 alarm list。只有有人登录时才计数,没人登录时这条不会响。
+            runbook_url: docs/design/gate-load-balancing-design.md
+
+        # 排队取走时的复核持续读不到候选:照签放行时选定的 gate,不再复核它此刻是否停写、排空或满载。
+        - alert: LoginQueueAdmitRecheckBlind
+          expr: |
+            sum by (namespace) (increase(login_queue_admit_gate_recheck_total{outcome="unchecked"}[10m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 排队取走放行时持续读不到 gate 候选,复核在空转"
+            description: >-
+              连续 10 分钟,每个 10 分钟窗口里都有排队玩家取走放行时 login 读不到本 zone 此刻的 gate 候选(读取出错或一台都没有),
+              只能照签放行时选定的 gate。复核本身不拦人,但放行到取走之间选定的 gate 停写、被排空或满载时,玩家会拿到连不上的票。
+              查 login 到 etcd 的连通性(login_gate_directory_reads_total 的 etcd_stale 是否在涨)与本 zone 的 gate 是否都已下线;
+              login 日志搜 "consume-time gate recheck skipped"。
+            runbook_url: docs/design/gate-load-balancing-design.md

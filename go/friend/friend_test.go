@@ -345,34 +345,43 @@ func (f *fakeSchemaRunner) run(_ context.Context, _ *sql.DB, opts schemamigrate.
 	return f.report, f.err
 }
 
-// missingIndexWarningSample 是 schemamigrate 那条"缺索引"告警的**逐字样本**,抄自
-// go/schemamigrate/plan.go 里生成它的那句 fmt.Sprintf。
-//
-// ⚠ 它与生产代码的联系只有一条前缀常量 missingIndexWarningPrefix(下面的用例断言样本以它开头),
-// schemamigrate 那边改文案时**本测试不会自动变红** —— 真正的机械保障是交接文档 §2 第 7a 步的真库
-// 核对("-migrate 的输出里不得出现 `缺索引(不会自动建)`")。这一点与 guild 的同类用例是同一个
-// 取舍:不为了一条文案去起真 MySQL。
-const missingIndexWarningSample = "缺索引(不会自动建):friend_capacity 上没有 proto 声明的索引 idx_friend_capacity_0"
+// missingIndexMessage 是缺索引那一项的文案样本。friend 只按结构化类别判断,文案内容不影响拒启,
+// 这里只用来核对错误里带上了原文(排查的人靠它知道是哪张表的哪条索引)。
+const missingIndexMessage = "missing index (not created automatically): table friend_capacity lacks index idx_friend_capacity_0 declared in proto"
 
-// TestMissingIndexWarningIsBlocking 钉住"缺索引不是告警,是阻断"。
+// missingIndexReport 是 schemamigrate 报出一条缺普通索引时的报告形状:结构化项进 Findings,同一条文案进 Warnings。
+func missingIndexReport() schemamigrate.Report {
+	return schemamigrate.Report{
+		Warnings: []string{missingIndexMessage},
+		Findings: []schemamigrate.Finding{{Kind: schemamigrate.FindingMissingIndex,
+			Table: "friend_capacity", Index: "idx_friend_capacity_0", Message: missingIndexMessage}},
+	}
+}
+
+// extraColumnReport 是只有一条多余列告警的报告。
+func extraColumnReport() schemamigrate.Report {
+	const msg = "extra column (never dropped): friend.legacy_col is not declared in proto"
+	return schemamigrate.Report{
+		Warnings: []string{msg},
+		Findings: []schemamigrate.Finding{{Kind: schemamigrate.FindingExtraColumn,
+			Table: "friend", Column: "legacy_col", Message: msg}},
+	}
+}
+
+// TestMissingIndexWarningIsBlocking 钉住"缺索引不是告警,是阻断",且按结构化类别判断、不看文案。
 //
 // 为什么值得单独一条用例:schemamigrate 对**已存在的表**只 ADD COLUMN,不补建 proto 新声明的
 // 普通索引,而 Warning 不进 ExitCode。friend 这边最直接的受害者是 friend_capacity 的回收
 // (依赖 (friend_count, created_ms) 复合索引),缺了它每轮候选读都是全表扫,**全程零报错**。
 func TestMissingIndexWarningIsBlocking(t *testing.T) {
-	if !strings.HasPrefix(missingIndexWarningSample, missingIndexWarningPrefix) {
-		t.Fatalf("样本告警 %q 不以生产代码的前缀 %q 开头,missingIndexWarnings 会漏判",
-			missingIndexWarningSample, missingIndexWarningPrefix)
-	}
-
-	// 只有"缺索引"那一条被挑出来:多余列之类的告警必须继续放行,否则一次无害的 schema 漂移
+	// 只有缺索引那一条被挑出来:多余列之类的告警必须继续放行,否则一次无害的 schema 漂移
 	// 就会把服务挡在启动之外。
-	report := schemamigrate.Report{Warnings: []string{
-		"extra column: friend.legacy_col 不在 proto 里",
-		missingIndexWarningSample,
-	}}
+	report := extraColumnReport()
+	missing := missingIndexReport()
+	report.Warnings = append(report.Warnings, missing.Warnings...)
+	report.Findings = append(report.Findings, missing.Findings...)
 	got := missingIndexWarnings(report)
-	if len(got) != 1 || got[0] != missingIndexWarningSample {
+	if len(got) != 1 || got[0] != missingIndexMessage {
 		t.Fatalf("应只挑出那一条缺索引告警,实际 %v", got)
 	}
 
@@ -381,18 +390,22 @@ func TestMissingIndexWarningIsBlocking(t *testing.T) {
 		t.Fatal("缺索引必须返回错误(拒绝启动 / -migrate 返回非 0)")
 	}
 	// 错误里要带上原始告警:排查的人靠它知道是哪张表的哪条索引。
-	if !strings.Contains(err.Error(), missingIndexWarningSample) {
+	if !strings.Contains(err.Error(), missingIndexMessage) {
 		t.Errorf("错误应带上原始告警原文,实际: %v", err)
 	}
 	if !strings.Contains(err.Error(), data.DatabaseName) {
 		t.Errorf("错误应点名库 %q,实际: %v", data.DatabaseName, err)
 	}
 
-	if missingIndexError(schemamigrate.Report{Warnings: []string{"extra column"}}) != nil {
+	if missingIndexError(extraColumnReport()) != nil {
 		t.Error("只有多余列告警时不得拒绝启动")
 	}
 	if missingIndexError(schemamigrate.Report{}) != nil {
 		t.Error("没有任何告警时不得拒绝启动")
+	}
+	// 判断只看结构化类别:只有文案、没有缺索引项的报告不拒启,所以文案改措辞(如英文化)不会改变拒启行为。
+	if missingIndexError(schemamigrate.Report{Warnings: []string{missingIndexMessage}}) != nil {
+		t.Error("不能按告警文案判断缺索引")
 	}
 }
 
@@ -419,13 +432,13 @@ func TestEnsureSchemaRejectsStartupWhenPlanNotClean(t *testing.T) {
 	}{
 		{name: "省略 Schema 时只读核对，缺表拒启", report: schemamigrate.Report{Statements: []string{"CREATE TABLE friend ..."}}, wantErr: true, wantRemedy: true},
 		{name: "显式 true,库已是最新", autoMigrate: &yes, wantUp: true},
-		{name: "Up 只有告警照常启动", autoMigrate: &yes, report: schemamigrate.Report{Warnings: []string{"extra column"}}, wantUp: true},
+		{name: "Up 只有告警照常启动", autoMigrate: &yes, report: extraColumnReport(), wantUp: true},
 		{name: "Up 出错拒绝启动", autoMigrate: &yes, err: schemamigrate.ErrLockBusy, wantUp: true, wantErr: true},
 		{name: "Up 有需人工项拒绝启动", autoMigrate: &yes, report: schemamigrate.Report{Manual: []string{"type drift"}}, wantUp: true, wantErr: true},
-		{name: "Up 缺索引拒绝启动", autoMigrate: &yes, report: schemamigrate.Report{Warnings: []string{missingIndexWarningSample}},
+		{name: "Up 缺索引拒绝启动", autoMigrate: &yes, report: missingIndexReport(),
 			wantUp: true, wantErr: true},
 		{name: "false + 库干净", autoMigrate: &no},
-		{name: "false + 只有告警", autoMigrate: &no, report: schemamigrate.Report{Warnings: []string{"extra column"}}},
+		{name: "false + 只有告警", autoMigrate: &no, report: extraColumnReport()},
 		{name: "false + 有待执行语句", autoMigrate: &no, report: schemamigrate.Report{Statements: []string{"CREATE TABLE friend_block ..."}},
 			wantErr: true, wantRemedy: true},
 		{name: "false + 需人工", autoMigrate: &no, report: schemamigrate.Report{Manual: []string{"type drift"}},
@@ -436,7 +449,7 @@ func TestEnsureSchemaRejectsStartupWhenPlanNotClean(t *testing.T) {
 		// 所以这条走的不是上面 !Clean() 那个分支,而是它之后单独那一判。
 		// 它**不带**补救命令(migrateRemedyCommand 是"去跑 -migrate",而 -migrate 同样不补建索引,
 		// 指过去只会让人白跑一趟),所以这里 wantRemedy 为 false。
-		{name: "false + 缺索引", autoMigrate: &no, report: schemamigrate.Report{Warnings: []string{missingIndexWarningSample}},
+		{name: "false + 缺索引", autoMigrate: &no, report: missingIndexReport(),
 			wantErr: true},
 	}
 	for _, tc := range cases {
@@ -517,14 +530,14 @@ func TestRunMigrationExitCodes(t *testing.T) {
 		want   int
 	}{
 		{name: "建表成功", report: schemamigrate.Report{Statements: []string{"CREATE TABLE friend ..."}}, want: schemamigrate.ExitOK},
-		{name: "只有多余列告警照常成功", report: schemamigrate.Report{Warnings: []string{"extra column"}}, want: schemamigrate.ExitOK},
-		{name: "缺索引升级成需人工", report: schemamigrate.Report{Warnings: []string{missingIndexWarningSample}}, want: schemamigrate.ExitManual},
+		{name: "只有多余列告警照常成功", report: extraColumnReport(), want: schemamigrate.ExitOK},
+		{name: "缺索引升级成需人工", report: missingIndexReport(), want: schemamigrate.ExitManual},
 		{name: "需人工项", report: schemamigrate.Report{Manual: []string{"type drift"}}, want: schemamigrate.ExitManual},
 		{name: "锁忙可重试", err: schemamigrate.ErrLockBusy, want: schemamigrate.ExitLockBusy},
 		{name: "迁移出错", err: errors.New("dial tcp: connection refused"), want: schemamigrate.ExitFailed},
 		// 迁移本身已经失败时,缺索引告警不得把退出码"改善"成 4:失败(1)比需人工(4)更要紧,
 		// Job 的重试策略也不同。runMigration 只在 ExitOK 时才做缺索引升级,这条钉住那个条件。
-		{name: "出错且缺索引仍按出错", report: schemamigrate.Report{Warnings: []string{missingIndexWarningSample}},
+		{name: "出错且缺索引仍按出错", report: missingIndexReport(),
 			err: errors.New("ddl failed"), want: schemamigrate.ExitFailed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

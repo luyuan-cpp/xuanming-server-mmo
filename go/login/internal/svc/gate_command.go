@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -244,14 +245,14 @@ func buildPushTipMessage(kind string, gateID string, gateInstanceID string,
 
 // PushTipToUnboundSession 经 gate 给尚未绑定玩家的会话推一条 tip,用于 BindSession 发出之前的进场失败提示
 // (entergamelogic.go notifyEnterGameFailed)。身份栅栏为什么可以放开见 buildPushTipToUnboundSessionCommand;
-// 其余约定同 PushTipToSession。
-func (s *ServiceContext) PushTipToUnboundSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
+// 其余约定同 PushTipToSession(含 ctx 只用来取 trace)。
+func (s *ServiceContext) PushTipToUnboundSession(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
 	msg, err := buildPushTipToUnboundSessionCommand(gateID, gateInstanceID, sessionID, playerID, tipID)
 	if err != nil {
 		return err
 	}
 
-	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+	if err := s.KafkaClient.SendToTopicPartitionContext(ctx, msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
 		return fmt.Errorf("send gate push tip to unbound session command to %s/%d: %w", msg.Topic, msg.Partition, err)
 	}
 

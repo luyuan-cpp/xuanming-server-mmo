@@ -42,4 +42,9 @@ const (
 	// SafePointReleasePlayer 是跨节点交接时对老节点的异步 ReleasePlayer
 	// (含重试链)。它是**每次调用起一条**的短命 goroutine,不是常驻循环。
 	SafePointReleasePlayer = "scene_manager.release_player"
+
+	// SafePointDrainMigration 是排空中 scene 节点的频道迁移协程(node_drain.go):每个 (zone, node) 至多一条,
+	// 节点名下没有世界频道、不再排空或本副本不再是领导者时退出。它停摆的表现是排空节点上的玩家等到自疏散时刻
+	// 才被搬走,而且落到同图别的频道而不是原频道。
+	SafePointDrainMigration = "scene_manager.drain_migration"
 )

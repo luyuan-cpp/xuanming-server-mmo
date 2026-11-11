@@ -137,7 +137,7 @@ func (s *RmbConsignments) save(ctx context.Context, old *tradepb.TradeCommerceRe
 	})
 }
 func (s *RmbConsignments) Cancel(ctx context.Context, account string, id uint64) error {
-	r, err := s.Engine.Repo.Get(ctx, id)
+	r, err := s.Engine.clientContract(ctx, id)
 	if err != nil {
 		return err
 	}

@@ -37,6 +37,7 @@ namespace redis_cluster
 			{"ZRANGE", KeyLayout::kFirstArg},
 			{"ZREM", KeyLayout::kFirstArg},
 			{"EXPIRE", KeyLayout::kFirstArg},
+			{"SPUBLISH", KeyLayout::kFirstArg},
 			{"DEL", KeyLayout::kAllArgs},
 			{"EXISTS", KeyLayout::kAllArgs},
 			{"MGET", KeyLayout::kAllArgs},
@@ -140,6 +141,17 @@ namespace redis_cluster
 			route.commandName = commandName;
 			return route;
 		}
+
+		// 按域检查一个键(或显式路由键)的 tag 形状。不带 tag 的键这里放行:哪些键必须带 tag 由 HashTagPolicy 与多键规则决定。
+		bool TagFitsDomain(std::string_view key, KeyDomain domain)
+		{
+			if (domain == KeyDomain::kUnrestricted || !redis_slot::HasHashTag(key))
+			{
+				return true;
+			}
+			const bool controlTag = redis_slot::IsControlTag(redis_slot::HashTagContent(key));
+			return domain == KeyDomain::kControl ? controlTag : !controlTag;
+		}
 	}
 
 	std::optional<std::vector<std::string_view>> ParseFormattedCommand(std::string_view formatted)
@@ -180,7 +192,8 @@ namespace redis_cluster
 		return args;
 	}
 
-	CommandRoute ResolveCommandRoute(std::string_view formatted, std::optional<std::string_view> routingKey, HashTagPolicy tagPolicy)
+	CommandRoute ResolveCommandRoute(std::string_view formatted, std::optional<std::string_view> routingKey, HashTagPolicy tagPolicy,
+		KeyDomain keyDomain)
 	{
 		const std::optional<std::vector<std::string_view>> parsed = ParseFormattedCommand(formatted);
 		if (!parsed)
@@ -256,17 +269,36 @@ namespace redis_cluster
 			{
 				return Reject(RouteRejectReason::kMissingHashTag, name, *routingKey);
 			}
+			if (!TagFitsDomain(*routingKey, keyDomain))
+			{
+				return Reject(RouteRejectReason::kWrongDomainTag, name, *routingKey);
+			}
 			return RouteToSlot(redis_slot::HashSlot(*routingKey), name);
 		}
 
-		const uint16_t slot = redis_slot::HashSlot(args[firstKey]);
-		if (keyCount > 1 || tagPolicy == HashTagPolicy::kAllKeys)
+		for (std::size_t i = firstKey; i < firstKey + keyCount; ++i)
 		{
+			if (!TagFitsDomain(args[i], keyDomain))
+			{
+				return Reject(RouteRejectReason::kWrongDomainTag, name, args[i]);
+			}
+		}
+		const uint16_t slot = redis_slot::HashSlot(args[firstKey]);
+		const bool multiKey = keyCount > 1;
+		if (multiKey || tagPolicy == HashTagPolicy::kAllKeys)
+		{
+			const std::string_view firstTag = redis_slot::HashTagContent(args[firstKey]);
 			for (std::size_t i = firstKey; i < firstKey + keyCount; ++i)
 			{
 				if (!redis_slot::HasHashTag(args[i]))
 				{
 					return Reject(RouteRejectReason::kMissingHashTag, name, args[i]);
+				}
+				// 控制集群的原子操作只在一个族、一个身份之内:不同的 tag 碰巧同 slot 也拒绝,
+				// 否则换一个 zone 号或帮会号就变成 CROSSSLOT。
+				if (multiKey && keyDomain == KeyDomain::kControl && redis_slot::HashTagContent(args[i]) != firstTag)
+				{
+					return Reject(RouteRejectReason::kMixedTags, name, args[i]);
 				}
 				if (redis_slot::HashSlot(args[i]) != slot)
 				{
@@ -274,9 +306,16 @@ namespace redis_cluster
 				}
 			}
 		}
-		if (routingKey && redis_slot::HashSlot(*routingKey) != slot)
+		if (routingKey)
 		{
-			return Reject(RouteRejectReason::kRoutingKeyMismatch, name, *routingKey);
+			if (!TagFitsDomain(*routingKey, keyDomain))
+			{
+				return Reject(RouteRejectReason::kWrongDomainTag, name, *routingKey);
+			}
+			if (redis_slot::HashSlot(*routingKey) != slot)
+			{
+				return Reject(RouteRejectReason::kRoutingKeyMismatch, name, *routingKey);
+			}
 		}
 		return RouteToSlot(slot, name);
 	}

@@ -735,6 +735,87 @@ TEST_F(HiredisCommandLifecycle, NoSideEffectCommandNullReplyKeepsFrontierKnown)
     EXPECT_TRUE(maintenance_->Frontier(frontier));
 }
 
+// 2026-11-11 起出错断线本身不进维护账:断线时 hiredis 先用空应答回调完全部在途命令,各条按自己的结局记账。
+// 在途只有无副作用命令时,断线后维护前沿仍可证明。旧实现在断线回调里按连接事件再记一次 UNKNOWN,本例为红。
+TEST_F(HiredisCommandLifecycle, ErrorDisconnectWithOnlyNoSideEffectCommandKeepsFrontierKnown)
+{
+    struct Observed
+    {
+        std::promise<void> disconnected;
+        int disconnectCalls = 0;
+        int disconnectStatus = REDIS_OK;
+        int nullReplies = 0;
+    };
+    // 回调按值持有观察结果:用例中途失败提前返回时,夹具收尾析构连接触发的回调也不会写到已析构的栈变量。
+    const auto observed = std::make_shared<Observed>();
+    auto done = observed->disconnected.get_future();
+    const std::string ping = "*1\r\n$4\r\nPING\r\n";
+    RunInLoopAndWait([&] {
+        // 收到命令就关连接、不回 RESP:客户端读到 EOF,走出错断线,在途的 PING 以空应答收尾。
+        serverMessageCallback_ = [](const muduo::net::TcpConnectionPtr& connection,
+                                    muduo::net::Buffer* input, muduo::Timestamp) {
+            input->retrieveAll();
+            connection->forceClose();
+        };
+        redis_->setDisconnectCallback([observed](hiredis::Hiredis*, int status) {
+            if (++observed->disconnectCalls == 1)
+            {
+                observed->disconnectStatus = status;
+                observed->disconnected.set_value();
+            }
+        });
+        ASSERT_EQ(redis_->formattedCommand([observed](hiredis::Hiredis*, redisReply* reply) {
+            if (reply == nullptr) ++observed->nullReplies;
+        }, ping.c_str(), ping.size(), &hiredis::Hiredis::hasNoSideEffect), REDIS_OK);
+    });
+    ASSERT_EQ(done.wait_for(5s), std::future_status::ready) << "a real EOF never reached the disconnect callback";
+    maintenance_->Close();
+    DestroyRedis();
+    RunInLoopAndWait([] {});
+    EXPECT_EQ(observed->disconnectCalls, 1);
+    EXPECT_EQ(observed->disconnectStatus, REDIS_ERR) << "EOF is an error disconnect, not an explicit one";
+    EXPECT_EQ(observed->nullReplies, 1);
+    EXPECT_TRUE(maintenance_->Joined());
+    std::string frontier;
+    EXPECT_TRUE(maintenance_->Frontier(frontier))
+        << "an error disconnect with only side-effect-free commands in flight must keep the frontier provable";
+}
+
+// 上一例的对照:在途有可能改数据的命令时,出错断线后它的空应答照样记 UNKNOWN,放宽连接事件不能漏记命令结局。
+TEST_F(HiredisCommandLifecycle, ErrorDisconnectWithSideEffectCommandInFlightStaysUnknown)
+{
+    struct Observed
+    {
+        std::promise<void> disconnected;
+        int disconnectCalls = 0;
+        int nullReplies = 0;
+    };
+    const auto observed = std::make_shared<Observed>();
+    auto done = observed->disconnected.get_future();
+    RunInLoopAndWait([&] {
+        serverMessageCallback_ = [](const muduo::net::TcpConnectionPtr& connection,
+                                    muduo::net::Buffer* input, muduo::Timestamp) {
+            input->retrieveAll();
+            connection->forceClose();
+        };
+        redis_->setDisconnectCallback([observed](hiredis::Hiredis*, int) {
+            if (++observed->disconnectCalls == 1) observed->disconnected.set_value();
+        });
+        ASSERT_EQ(redis_->command([observed](hiredis::Hiredis*, redisReply* reply) {
+            if (reply == nullptr) ++observed->nullReplies;
+        }, "SET maintenance-test-key 1"), REDIS_OK);
+    });
+    ASSERT_EQ(done.wait_for(5s), std::future_status::ready) << "a real EOF never reached the disconnect callback";
+    maintenance_->Close();
+    DestroyRedis();
+    RunInLoopAndWait([] {});
+    EXPECT_EQ(observed->disconnectCalls, 1);
+    EXPECT_EQ(observed->nullReplies, 1);
+    EXPECT_TRUE(maintenance_->Joined());
+    std::string frontier;
+    EXPECT_FALSE(maintenance_->Frontier(frontier)) << "a write with an unknown outcome must leave the frontier UNKNOWN";
+}
+
 TEST_F(HiredisCommandLifecycle, ErrorReplyDoesNotBecomeSuccessfulFrontier)
 {
     std::promise<void> replied;
@@ -832,7 +913,9 @@ TEST_F(HiredisCommandLifecycle, FailedConnectCallbackCannotReenterNativeConnect)
     EXPECT_EQ(calls, 1);
     EXPECT_TRUE(maintenance_->Joined());
     std::string frontier;
-    EXPECT_FALSE(maintenance_->Frontier(frontier));
+    // 2026-11-11 起建连失败不进维护账:建连完成前 command() 一律拒收,这条连接上没有结果未知的命令。
+    // 旧实现在这里记 UNKNOWN,进程里只要有过一次建连失败,维护排空的 Redis 前沿就再也过不了。
+    EXPECT_TRUE(maintenance_->Frontier(frontier)) << "a failed connect must not leave the maintenance frontier UNKNOWN forever";
 }
 
 TEST_F(HiredisCommandLifecycle, ReplyCallbackDerivedCommandRemainsInAcceptedSet)

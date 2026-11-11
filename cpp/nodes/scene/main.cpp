@@ -22,6 +22,7 @@
 #include "player/system/player_save_metrics.h"
 #include "player/system/player_equip.h"
 #include "player/system/player_inbox_system.h"
+#include "player/system/player_mail_outbox.h"
 #include "player/system/player_mystery_merchant.h"
 #include "battle/system/player_battle.h"
 #include "services/battle/data/battle_table_fingerprint.h"
@@ -47,6 +48,9 @@ namespace
         // 玩家持久收件箱的 1 秒 tick(PlayerInboxSystem::Tick)。刻意不挂在 DependencyGate 之后:
         // 收件箱不可用不得阻断进场(IB-7),它自己按退避处理"没有 READY 节点"。
         TimerTaskComp playerInboxTimer;
+        // 待寄邮件的 1 秒 tick(PlayerMailOutboxSystem::Tick,docs/design/battle-overflow-mail.md)。同样不挂在
+        // DependencyGate 之后:邮件不可用只让条目按退避留着。与收件箱 tick 同一组停机路径取消。
+        TimerTaskComp mailOutboxTimer;
         DependencyGate dependencyGate;
         SceneNodeGrpcImpl grpcService;
         PlayerTeamFollowScope teamFollow;
@@ -118,16 +122,19 @@ int main(int argc, char *argv[])
         // TeamNodeService:队伍成员权威读取由 Match 同端口提供，只在需要刷新队伍时使用。
         // MatchNodeService:FIGHTING 冻结到期时只读查这一局的 SQL 终局(MatchInternal.GetBattleTerminalDecision,
         // 全局池,不限当前 zone;docs/design/turn-battle-gap-closure.md §11)。只在 reaper 判出冻结到期时调用。
+        // MailNodeService:两包都放不下的战斗掉落改投邮件,以 battle 身份调 MailAdmin.SendPersonalMail
+        // (全服一份、多副本,不限当前 zone;docs/design/battle-overflow-mail.md)。弱依赖:不进 DependencyGate,
+        // 发现不到只让待寄条目按退避留着,不阻断进场。
         // 发现集合(docs/design/connection-fanout-subsetting-20261106.md §3.4)= 建连白名单 + Gate + 自身 Scene。
         // Gate:gate 主动连进来,入站登记(registration_manager.cpp)查快照里的 gate 登记,广播用 ResolveLocalZoneGateEntity;
         // Scene:本 zone 的同类,注册自检、劫持检测与选号要看。scene 不读 Battle、ClientRpcRouter、Login、Friend、Guild,不再看它们。
         Node node(&loop, SceneNodeService,
                   Node::CanConnectNodeTypeList{ SceneManagerNodeService, DataServiceNodeService,
                                                 PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService,
-                                                MatchNodeService },
+                                                MatchNodeService, MailNodeService },
                   Node::DiscoveryNodeTypeList{ SceneManagerNodeService, DataServiceNodeService,
                                                PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService,
-                                               MatchNodeService, GateNodeService, SceneNodeService },
+                                               MatchNodeService, MailNodeService, GateNodeService, SceneNodeService },
                   &handler);
 
         node::entry::detail::ApplyPostConstructionHooks<SceneNodeHooks>(node);
@@ -225,10 +232,28 @@ int main(int argc, char *argv[])
 			}
 			LOG_INFO << "Shutdown save initiated; waiting for Redis ACK and Kafka producer flush.";
         };
+        // 拆除前收尾:业务排空之后、释放 Redis 与传输之前执行,日志 / ECS 都还活着,把没落定的存盘留一行证据(带玩家号)。
+        // 两条停机路径各挂一次:普通停机由 SetBeforeTeardown 调;维护路径(P3)关闭中继时 Node 只调 SetMaintenanceRelayStop
+        // 的钩子,随即置 beforeTeardownRan_、释放本地所有者,不再调 SetBeforeTeardown 的钩子。两处必须是同一段收尾,
+        // 否则维护路径释放 Hiredis 时持久任务还在等回包,号段传输和归属对账也没停(2026-11-11 订正,此前 P3 只停两个定时器)。
+        const auto beforeTeardown = [&context](Node &)
+        {
+            context->tasks.StopAll();
+            context->grpcService.CloseCreationAdmission();
+            StopGuidSegmentTransport();
+            context->playerInboxTimer.Cancel();
+            context->mailOutboxTimer.Cancel();
+            context->ownershipReconciler.Stop();
+            PlayerLifecycleSystem::LogUnsettledPlayerStoreSaves();
+        };
         node.SetMaintenanceInboundRelay(); // gate/Go已接收链的下游，保留到P3；根是本机世界/玩家输入。
         node.SetMaintenanceSourceClose(exitAllPlayers);
-        node.SetMaintenanceRelayStop([&context](Node &) { context->playerInboxTimer.Cancel(); });
-        node.SetBeforeShutdown([&context, exitAllPlayers](Node &n) { context->playerInboxTimer.Cancel(); exitAllPlayers(n); });
+        node.SetMaintenanceRelayStop(beforeTeardown);
+        node.SetBeforeShutdown([&context, exitAllPlayers](Node &n) {
+            context->playerInboxTimer.Cancel();
+            context->mailOutboxTimer.Cancel();
+            exitAllPlayers(n);
+        });
 
 		// 每次轮询都重新扫描在线实体。P1保留Kafka/RPC下游推进，P3才停止并join；gRPC在OnGrpcServerDrained前仍在排空,
 		// 已收完的调用照常派发,停机瞬间已经排入 EventLoop 的请求也会执行,都可能晚一拍创建玩家;不能只信首次快照。
@@ -321,16 +346,8 @@ int main(int argc, char *argv[])
 			}
 			return drained; });
 
-        // 拆除前钩子(Node::SetBeforeTeardown):日志 / ECS 都还活着,把没落定的存盘留一行证据(带玩家号)。
-        node.SetBeforeTeardown([&context](Node &)
-                               {
-                                   context->tasks.StopAll();
-                                   context->grpcService.CloseCreationAdmission();
-                                   StopGuidSegmentTransport();
-                                   context->playerInboxTimer.Cancel();
-                                   context->ownershipReconciler.Stop();
-                                   PlayerLifecycleSystem::LogUnsettledPlayerStoreSaves();
-                               });
+        // 普通停机的拆除前钩子,与维护路径的中继关闭共用 beforeTeardown(见其定义处)。
+        node.SetBeforeTeardown(beforeTeardown);
 
         // 身份冲突(etcd 租约过期 / node_id 被别人抢走)和普通 SIGTERM 不是一回事:
         // 这台节点马上就不再是 node_id 的合法持有者,但玩家的 gate 会话还连着。
@@ -409,6 +426,9 @@ int main(int argc, char *argv[])
             // 玩家持久收件箱的 tick(docs/design/player-inbox-service.md §7.4):每秒处理到期的检查、在线兜底、
             // 等落盘与补确认。不进 DependencyGate(IB-7):收件箱没连上时 tick 只会按退避记一次延后。
             context->playerInboxTimer.RunEvery(PlayerInboxSystem::kTickIntervalSec, PlayerInboxSystem::Tick);
+            // 待寄邮件的 tick(docs/design/battle-overflow-mail.md):每秒把已确认落盘的待寄条目交给邮件服务,
+            // 每名玩家至多一封在途。只寄已提交的存档快照里已有的条目,所以不必等别的启动依赖。
+            context->mailOutboxTimer.RunEvery(PlayerMailOutboxSystem::kTickIntervalSec, PlayerMailOutboxSystem::Tick);
             // 神秘商人:每 5 秒从 zone Redis 读一次「这一轮商人在哪、卖什么」(scene_manager 写入),
             // 读到新的一轮就向本节点玩家发出现公告(docs/design/mystery-merchant.md §5.1)。不进 20FPS World::Update。
             PlayerMysteryMerchantSystem::Start(n.GetLoop());

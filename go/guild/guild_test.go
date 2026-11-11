@@ -367,9 +367,14 @@ func TestEnsureSchemaStrategy(t *testing.T) {
 	t.Cleanup(func() { lockBusyRetryDelay = old })
 
 	clean := schemamigrate.Report{}
-	missingIndex := schemamigrate.Report{Warnings: []string{"缺索引(不会自动建):guild 上没有 proto 声明的索引 idx_guild_1"}}
-	extraColumn := schemamigrate.Report{Warnings: []string{"多余列(不会删除):guild.legacy_col"}}
-	manual := schemamigrate.Report{Manual: []string{"列类型漂移:guild.funds"}}
+	// 缺索引与多余列都只在 Warnings 里;guild 按 Findings 的结构化类别区分两者,不看文案。
+	const missingIndexMsg = "missing index (not created automatically): table guild lacks index idx_guild_1 declared in proto"
+	const extraColumnMsg = "extra column (never dropped): guild.legacy_col is not declared in proto"
+	missingIndex := schemamigrate.Report{Warnings: []string{missingIndexMsg}, Findings: []schemamigrate.Finding{
+		{Kind: schemamigrate.FindingMissingIndex, Table: "guild", Index: "idx_guild_1", Message: missingIndexMsg}}}
+	extraColumn := schemamigrate.Report{Warnings: []string{extraColumnMsg}, Findings: []schemamigrate.Finding{
+		{Kind: schemamigrate.FindingExtraColumn, Table: "guild", Column: "legacy_col", Message: extraColumnMsg}}}
+	manual := schemamigrate.Report{Manual: []string{"column type drift (not modified automatically): guild.funds"}}
 	pending := schemamigrate.Report{Statements: []string{"ALTER TABLE guild ADD COLUMN funds bigint unsigned"}}
 
 	cases := []struct {

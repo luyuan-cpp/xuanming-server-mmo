@@ -25,8 +25,8 @@ func TestPlacementStorageIDForNewPlayerUsesRegionStorage(t *testing.T) {
 		if got != want {
 			t.Fatalf("player %d: storage %d, want %d", playerID, got, want)
 		}
-		if placement.IsZoneStorage(got) {
-			t.Fatalf("player %d landed in the zone family (%d)", playerID, got)
+		if got <= placement.MaxZoneID {
+			t.Fatalf("player %d landed in the zone id range (%d)", playerID, got)
 		}
 	}
 	// 同一个号算两次落点相同:落点只由地域、K 和 player_id 决定。

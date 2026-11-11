@@ -25,7 +25,7 @@ import (
 // docs/design/scene-owner-reentry-barrier.md §3.2。
 //
 // 本文件提供四样东西:
-//  1. 死亡时刻打点(markNodeDeath / clearNodeDeath)——只在 etcd 事件、fullSync 陈旧清扫与
+//  1. 死亡时刻打点(markNodeDeath / clearNodeDeathForInstance)——只在 etcd 事件、fullSync 陈旧清扫与
 //     推迟摘除重试(retryDeferredNodeDetaches)里调用;
 //  2. 判定入口(reentryBarrierBlocks)——**所有**会改派 / 销毁 / 清理场景归属
 //     的分支在动手前都要过它;
@@ -106,48 +106,99 @@ func markNodeDeath(svcCtx *svc.ServiceContext, zoneID uint32, nodeID string) err
 	return nil
 }
 
-// clearNodeDeath 在节点重新注册(etcd PUT)时抹掉死亡标记。
+// clearNodeDeathForInstance 在节点(重新)注册时处理它上一次的死亡(watch PUT 分支调用;
+// docs/design/infra-reconnect-overview.md §4.1 R15):回来的就是判死的那一代进程(node_uuid 相同)时,在同一步里撤掉
+// 它的收尾任务、抹掉 death_at;换了一代或认不出是哪一代时都留着(withdrawDeadNodeForReturningInstance)。
 //
-// 不清的话,一个「死了又活过来」的 node_id 会被上一次死亡时刻继续压着 ——
-// 虽然屏障总会走完,但那段时间里它作为**老属主**的场景无法被改派,而它此刻
-// 其实是活的,IsNodeAlive 也说活,判定结果自相矛盾。
-// clearNodeDeathForInstanceScript:只有这次注册的 node_uuid 等于判死那一代时才删 death_at。
-// KEYS[1] = node:zone:{z}:{n}:death_at,KEYS[2] = node:zone:{z}:{n}:reconcile_instance(同一个 zone,同一个控制域实例,
-// 与收尾入队脚本同一口径);ARGV[1] = 这次注册的 node_uuid。
-// 返回 1 = 删了;0 = 判死的不是这一代或不知道是谁,屏障留着;-1 = 本来就没有 death_at。重放安全。
-const clearNodeDeathForInstanceScript = `
-if redis.call('EXISTS', KEYS[1]) == 0 then
-  return -1
-end
-local dead = redis.call('GET', KEYS[2])
-if dead and dead ~= '' and dead == ARGV[1] then
-  redis.call('DEL', KEYS[1])
-  return 1
-end
-return 0
-`
-
-// clearNodeDeathForInstance 在节点(重新)注册时抹掉死亡标记,但只在回来的就是判死的那一代进程(node_uuid 相同)时抹
-// (docs/design/infra-reconnect-overview.md §4.1 R15)。
+// 只由领导者做,与写 death_at、建收尾任务的是同一个角色(removeNodeFromRedis 在领导者闸门之后)。2026-11-11 之前每个
+// 副本收到 PUT 都会清 death_at,而收尾判断「判死的那一代回来没有」看的是领导者自己的注册表镜像:别的副本先清掉标记、
+// 领导者的镜像还没收到 PUT 时,屏障提前放行,收尾按判死时刻的快照拆掉回来的活实例,还向它发 DestroyScene。现在清标记与
+// 撤任务跟着领导者自己的事件顺序走:领导者的镜像先写、再到这里,收尾前的「回来没有」与屏障读到的是同一份事实;
+// 收尾已经进行到一半时,逐个认领核对任务身份(luaSceneClaimDeadNodeTaskCheck),任务一撤,剩下的一个都不拆。
+// 跟随者什么都不写:标记多留一会儿只会让它们晚一点改派这个节点的场景,而这些场景此刻正属于活着的它。领导者缺位时
+// 回来的,由新领导者 fullSync 之后的收尾按镜像撤销(cancelDeadNodeReconcileIfInstanceBack)。
+//
+// 同一代进程回来时要抹:不抹的话,屏障走完之前它名下的场景无法改派(包括 rebalance 迁出),而它此刻是活的,
+// IsNodeAlive 也说活,两个判定针对同一个进程却自相矛盾。
 // 新进程按「最小空闲号」接走同一个 node_id 时,它的注册不能删老实例的 death_at:否则 CanReclaimDeadNode 走
 // 「没有 death_at ⇒ 放行」,老实例 20 秒的再入屏障对死节点收尾、world_init、改派、rebalance、孤儿清理全部失效,
 // 老进程最后几秒的存盘会被 owner_epoch 挡掉 —— 这正是屏障(GO-6)要防的情形。
 // 不知道判死那一代是谁(没有 reconcile_instance 记录)时同样留着:屏障只会让接管多等一会儿,删错了才会丢进度。
 // 留着时 IsNodeAlive 说新进程活着、而老实例名下的场景还被屏障压着,这两个判定针对的是两代进程,不矛盾。
 func clearNodeDeathForInstance(svcCtx *svc.ServiceContext, zoneID uint32, nodeID, nodeUUID string) {
-	if nodeID == "" {
+	if nodeID == "" || !isLeader() {
 		return
 	}
-	res, err := svcCtx.Redis.Eval(clearNodeDeathForInstanceScript,
-		[]string{nodeDeathAtKey(zoneID, nodeID), nodeReconcileInstanceKey(zoneID, nodeID)}, nodeUUID)
+	verdict, err := withdrawDeadNodeForReturningInstance(svcCtx, zoneID, nodeID, nodeUUID)
 	if err != nil {
-		logx.Errorf("[ReentryBarrier] Failed to clear death_at: zone=%d node=%s err=%v", zoneID, nodeID, err)
+		// 镜像已经写了这次注册,收尾在动手之前还会按镜像再判一次(cancelDeadNodeReconcileIfInstanceBack),不会因此拆它。
+		logx.Errorf("[ReentryBarrier] Failed to clear death_at on re-registration; the dead node cleanup checks the registry mirror again before destroying anything: zone=%d node=%s err=%v",
+			zoneID, nodeID, err)
 		return
 	}
-	if kept, _ := res.(int64); kept == 0 {
+	switch verdict {
+	case withdrawnReturningInstance:
+		logx.Infof("[ReentryBarrier] The instance declared dead re-registered: death_at cleared and its dead node cleanup withdrawn, scenes and counters kept: zone=%d node=%s instance=%s",
+			zoneID, nodeID, nodeUUID)
+	case keptDeathOfOtherInstance:
 		logx.Infof("[ReentryBarrier] Kept death_at on re-registration: zone=%d node=%s uuid=%s is not the instance that was declared dead; its reentry barrier still applies",
 			zoneID, nodeID, nodeUUID)
 	}
+}
+
+// withdrawDeadNodeVerdict 是 luaWithdrawDeadNodeForReturningInstance 的结论。
+type withdrawDeadNodeVerdict int64
+
+const (
+	// noDeathToWithdraw:不是判死的那一代(或认不出),也没有 death_at。平常的注册刷新都落在这里。
+	noDeathToWithdraw withdrawDeadNodeVerdict = -1
+	// keptDeathOfOtherInstance:不是判死的那一代(或认不出),death_at 与收尾任务原样留着。
+	keptDeathOfOtherInstance withdrawDeadNodeVerdict = 0
+	// withdrawnReturningInstance:判死的那一代回来了,收尾任务、收尾范围、实例号记录与 death_at 已在同一步删掉。
+	withdrawnReturningInstance withdrawDeadNodeVerdict = 1
+)
+
+// luaWithdrawDeadNodeForReturningInstance:注册上来的 node_uuid 就是判死的那一代(reconcile_instance)时,同一步撤掉它的
+// 收尾任务、删收尾范围与实例号记录、抹掉 death_at(R1-I5、R15)。不碰场景、不碰计数(scene_count / members 属于回来的
+// 这一代),也不碰反向索引。不是那一代、或不知道判死的是哪一代时一个键都不动。
+//
+// KEYS[1] = 任务表  KEYS[2] = 收尾范围  KEYS[3] = 判死那一代的实例号  KEYS[4] = death_at(同一个 zone,同一个控制域实例,
+// 与收尾入队脚本同一口径)
+// ARGV[1] = 任务成员  ARGV[2] = 注册上来的 node_uuid
+// 返回值见 withdrawDeadNodeVerdict。先读后写,只会在第一次写之前因键类型错报错,报错时什么都没改。重放安全。
+const luaWithdrawDeadNodeForReturningInstance = `
+local dead = redis.call('GET', KEYS[3])
+if ARGV[2] ~= '' and dead and dead == ARGV[2] then
+    redis.call('ZREM', KEYS[1], ARGV[1])
+    redis.call('DEL', KEYS[2], KEYS[3], KEYS[4])
+    return 1
+end
+if redis.call('EXISTS', KEYS[4]) == 1 then
+    return 0
+end
+return -1
+`
+
+// withdrawDeadNodeForReturningInstance 跑 luaWithdrawDeadNodeForReturningInstance。只由领导者调用:watch PUT 分支
+// (clearNodeDeathForInstance)与收尾前按镜像的判断(cancelDeadNodeReconcileIfInstanceBack)。撤了就记一次 instance_back。
+func withdrawDeadNodeForReturningInstance(svcCtx *svc.ServiceContext, zoneID uint32, nodeID, nodeUUID string) (withdrawDeadNodeVerdict, error) {
+	member := pendingDeadNodeKey(zoneID, nodeID)
+	keys := []string{
+		deadNodeReconcileTasksKey(zoneID),
+		nodeReconcileScenesKey(zoneID, nodeID),
+		nodeReconcileInstanceKey(zoneID, nodeID),
+		nodeDeathAtKey(zoneID, nodeID),
+	}
+	raw, err := svcCtx.Redis.Eval(luaWithdrawDeadNodeForReturningInstance, keys, member, nodeUUID)
+	if err != nil {
+		return keptDeathOfOtherInstance, fmt.Errorf("withdraw dead node cleanup for a returning instance: zone=%d node=%s: %w", zoneID, nodeID, err)
+	}
+	verdict := withdrawDeadNodeVerdict(toInt64(raw))
+	if verdict == withdrawnReturningInstance {
+		forgetDeadNodeReconcileRetry(member)
+		metrics.ObserveDeadNodeReconcile(zoneID, metrics.DeadNodeReconcileOutcomeInstanceBack)
+	}
+	return verdict, nil
 }
 
 // CanReclaimDeadNode 判断「老属主 nodeID 名下的场景现在能不能被接管/清理」。
@@ -266,6 +317,11 @@ func reentryBarrierBlocks(svcCtx *svc.ServiceContext, zoneID uint32, nodeID, sit
 //	      (新一代占了分配键,旧一代重注册的 CAS 必然失败、冲突关停)。两次判死之间换过代、而回来的是后一代时,
 //	      前一代留下的孤儿实例随任务一起撤掉不拆,方向是宁可留孤儿也不拆活实例;它们由空闲回收或该 node_id 下次判死时处理。
 //	      不知道判死那一代是谁(注册里没有 node_uuid 的旧版本节点;fullSync 清扫到本副本镜像里没有的节点)时照旧收尾。
+//	      撤销与清 death_at 是同一段脚本(luaWithdrawDeadNodeForReturningInstance),只由领导者跑:watch PUT 分支
+//	      (clearNodeDeathForInstance),以及收尾前按镜像判(cancelDeadNodeReconcileIfInstanceBack)。
+//	R1-I6 一轮收尾里的每一次销毁认领,与结束任务一样,都在同一步核对任务身份(成员与入队时刻,deadNodeTaskFence):
+//	      判死的那一代在一轮收尾进行到一半时回来、任务被撤(或撤销之后又判死了一次、换成了新任务),这一轮剩下的场景
+//	      一个都不拆,计数一个都不删。逐个认领之前的判断(R1-I5 与屏障)只在每条任务开始时做一次,挡不住这个窗口。
 //
 // 有界重试(AGENTS §11.3):一轮里有成员没结论(Redis 出错)时任务留着,下一拍(5s ticker / fullSync)只重试收尾
 // 范围里剩下的。本进程从第一次没做完起(单调时钟)满 deadNodeReconcileGiveUpAfter 仍做不完就放弃:删计数、删任务,
@@ -336,13 +392,16 @@ return redis.call('SCARD', KEYS[2])
 // ARGV[2] == '1'(放弃)时不看收尾范围,连同它一起删。
 //
 // KEYS[1] = 收尾范围  KEYS[2] = scene_count  KEYS[3] = members  KEYS[4] = 任务表  KEYS[5] = 判死那一代的实例号
-// ARGV[1] = 任务成员  ARGV[2] = '1' 表示放弃
+// ARGV[1] = 任务成员  ARGV[2] = '1' 表示放弃  ARGV[3] = 调用方读到的入队时刻(任务表里的分数,Unix 毫秒)
 // 返回 1 = 已出队;0 = 收尾范围不空,任务原样留着。
 //
-// 任务已不在表里时直接回 1、一个键都不动:它已被别的领导者做完,或因判死那一代回来而撤掉(R1-I5)。领导者短暂重叠时,
-// 手里还拿着旧列表的一方若照删计数,删的就是回来的那一代(或复用 node_id 的新一代)正在累计的 scene_count / members。
+// 任务已不在表里、或入队时刻对不上时直接回 1、一个键都不动:它已被别的领导者做完,或因判死那一代回来而撤掉(R1-I5);
+// 入队时刻对不上是撤掉之后同一 node_id 又判死了一次,表里那条是新任务(deadNodeTaskFence)。领导者短暂重叠时,手里还拿着
+// 旧列表的一方若照删计数,删的就是回来的那一代(或复用 node_id 的新一代)正在累计的 scene_count / members,出队的则是
+// 新任务。
 const luaFinishDeadNodeReconcile = `
-if not redis.call('ZSCORE', KEYS[4], ARGV[1]) then
+local queuedAt = redis.call('ZSCORE', KEYS[4], ARGV[1])
+if not queuedAt or tonumber(queuedAt) ~= tonumber(ARGV[3]) then
     return 1
 end
 if ARGV[2] ~= '1' and redis.call('SCARD', KEYS[1]) > 0 then
@@ -350,22 +409,6 @@ if ARGV[2] ~= '1' and redis.call('SCARD', KEYS[1]) > 0 then
 end
 redis.call('DEL', KEYS[1], KEYS[2], KEYS[3], KEYS[5])
 redis.call('ZREM', KEYS[4], ARGV[1])
-return 1
-`
-
-// luaCancelDeadNodeReconcileForLiveInstance 撤掉一条收尾任务(R1-I5):记下的判死那一代就是 ARGV[2] 时,删任务、收尾范围
-// 与实例号记录;不碰场景、不碰计数(scene_count / members 属于回来的这一代),也不碰反向索引。
-//
-// KEYS[1] = 任务表  KEYS[2] = 收尾范围  KEYS[3] = 判死那一代的实例号
-// ARGV[1] = 任务成员  ARGV[2] = 注册表里现在的 node_uuid
-// 返回 1 = 已撤掉;0 = 记录不是这一代(或没有记录、或任务已被别的领导者做完),一个键都不动。
-// 先读后写,只会在第一次写之前因键类型错报错,报错时什么都没改。
-const luaCancelDeadNodeReconcileForLiveInstance = `
-if ARGV[2] == '' or redis.call('GET', KEYS[3]) ~= ARGV[2] then
-    return 0
-end
-redis.call('ZREM', KEYS[1], ARGV[1])
-redis.call('DEL', KEYS[2], KEYS[3])
 return 1
 `
 
@@ -437,16 +480,31 @@ func enqueueDeadNodeReconcile(svcCtx *svc.ServiceContext, entry nodeEntry, detac
 
 // deadNodeReconcileTask 是从任务表里读出的一条任务。
 type deadNodeReconcileTask struct {
-	member   string // 任务表成员 "{zone}/{node}"
-	zoneID   uint32
-	nodeID   string
-	queuedAt time.Time // 首次入队时刻(墙钟),只用于日志
+	member string // 任务表成员 "{zone}/{node}"
+	zoneID uint32
+	nodeID string
+	// queuedAt 是首次入队时刻(任务表里的分数,Unix 毫秒;墙钟)。日志用它,也是任务身份的一半(fence)。
+	queuedAt time.Time
 }
 
 func (t deadNodeReconcileTask) entry() nodeEntry {
 	e := nodeEntry{nodeID: t.nodeID}
 	e.reg.ZoneId = t.zoneID
 	return e
+}
+
+// deadNodeTaskFence 是一条收尾任务的身份:任务表里的成员与入队时刻(分数)。撤销之后同一 node_id 再次判死时成员相同、
+// 入队时刻不同(入队脚本用 ZADD NX,成员已在表里才保留旧分数),所以两样一起才认得出「还是不是这一次判死」。
+// 一轮收尾里逐个认领(luaSceneClaimDeadNodeTaskCheck)与结束任务(luaFinishDeadNodeReconcile)都在同一步核对它:
+// 判死的那一代回来、任务被撤之后,这一轮剩下的场景一个都不拆,计数一个都不删。
+type deadNodeTaskFence struct {
+	tasksKey   string
+	member     string
+	queuedAtMs int64
+}
+
+func (t deadNodeReconcileTask) fence() deadNodeTaskFence {
+	return deadNodeTaskFence{tasksKey: deadNodeReconcileTasksKey(t.zoneID), member: t.member, queuedAtMs: t.queuedAt.UnixMilli()}
 }
 
 // listDeadNodeReconcileTasks 读本 zone 的任务表,按入队先后返回。解析不了的成员(不是本代码写的,对不上任何节点),
@@ -547,32 +605,23 @@ const (
 
 // cancelDeadNodeReconcileIfInstanceBack:判死的那一代进程又在注册表里了,就撤掉它的收尾任务(R1-I5)。
 //
-// 看的是本副本的注册表镜像:watch PUT 先写镜像、后清 death_at,所以屏障因重新注册而放行的那一拍,镜像里一定已经有它;
-// fullSync 补上的注册同样先进镜像。镜像里这个 (zone,node) 一条注册都没有 → instanceNotBack。有注册时逐个拿它们的
-// node_uuid 去比任务记下的那一代;比对与撤销在同一段脚本里,不会撤掉刚被别的领导者改写过的任务。都对不上
-// (换了一代进程、或任务不知道是哪一代)照常收尾。脚本报错时这一拍不收:node_id 又注册上来了,却不知道是不是
-// 原来那一代,拆下去可能拆的是活实例;下一拍再判。
+// 看的是本副本(领导者)的注册表镜像。watch PUT 在领导者上先写镜像、再撤任务并清 death_at(clearNodeDeathForInstance),
+// 跟随者不清,所以屏障只会因为领导者自己看到了这次注册而放行,那时镜像里一定已经有它;fullSync 补上的注册同样先进镜像。
+// 这里兜的是 PUT 那一步没撤成的情形:当时不是领导者(领导者缺位、新领导者经 fullSync 才看到它),或撤销脚本报错。
+// 镜像里这个 (zone,node) 一条注册都没有 → instanceNotBack。有注册时逐个拿它们的 node_uuid 去比任务记下的那一代;比对与
+// 撤销在同一段脚本里(与 PUT 分支同一段),不会撤掉刚被别的领导者改写过的任务。都对不上(换了一代进程、或任务不知道是
+// 哪一代)照常收尾。脚本报错时这一拍不收:node_id 又注册上来了,却不知道是不是原来那一代,拆下去可能拆的是活实例;
+// 下一拍再判。
 func cancelDeadNodeReconcileIfInstanceBack(svcCtx *svc.ServiceContext, task deadNodeReconcileTask) instanceBackVerdict {
-	instances := registeredInstancesOf(task.zoneID, task.nodeID)
-	if len(instances) == 0 {
-		return instanceNotBack
-	}
-	keys := []string{
-		deadNodeReconcileTasksKey(task.zoneID),
-		nodeReconcileScenesKey(task.zoneID, task.nodeID),
-		nodeReconcileInstanceKey(task.zoneID, task.nodeID),
-	}
-	for _, instance := range instances {
-		raw, err := svcCtx.Redis.Eval(luaCancelDeadNodeReconcileForLiveInstance, keys, task.member, instance)
+	for _, instance := range registeredInstancesOf(task.zoneID, task.nodeID) {
+		verdict, err := withdrawDeadNodeForReturningInstance(svcCtx, task.zoneID, task.nodeID, instance)
 		if err != nil {
 			logx.Errorf("[ReentryBarrier] Dead node cleanup paused this tick: the node_id is registered again but checking whether it is the same process failed, nothing destroyed: zone=%d node=%s instance=%s err=%v",
 				task.zoneID, task.nodeID, instance, err)
 			return instanceBackUnknown
 		}
-		if toInt64(raw) == 1 {
-			forgetDeadNodeReconcileRetry(task.member)
-			metrics.ObserveDeadNodeReconcile(task.zoneID, metrics.DeadNodeReconcileOutcomeInstanceBack)
-			logx.Infof("[ReentryBarrier] Dead node cleanup cancelled: the same process re-registered after losing its lease, its instances are alive; task removed, scenes and counters kept: zone=%d node=%s instance=%s queued_at=%s",
+		if verdict == withdrawnReturningInstance {
+			logx.Infof("[ReentryBarrier] Dead node cleanup cancelled: the same process re-registered after losing its lease, its instances are alive; task removed, death_at cleared, scenes and counters kept: zone=%d node=%s instance=%s queued_at=%s",
 				task.zoneID, task.nodeID, instance, task.queuedAt.Format(time.RFC3339))
 			return instanceBackCancelled
 		}
@@ -607,9 +656,18 @@ func reconcileDeadNodeTask(ctx context.Context, svcCtx *svc.ServiceContext, task
 	if err != nil {
 		return retryOrAbandonDeadNodeReconcile(svcCtx, task, fmt.Errorf("smembers %s: %w", scopeKey, err)), false
 	}
-	result := reconcileDeadNodeScenes(ctx, svcCtx, task.entry(), members)
+	result := reconcileDeadNodeScenes(ctx, svcCtx, task.entry(), members, task.fence())
 	if result.lostLeadership {
 		return false, true
+	}
+	if result.withdrawn {
+		// 收尾进行到一半,任务被撤了:判死的那一代回来了(撤销的一方已删掉任务与收尾范围),或撤销之后同一 node_id 又判死了
+		// 一次、表里换成了新任务。这一轮剩下的场景一个都没拆,已拆的不可恢复;不摘收尾范围、不结束任务 —— 那些键要么已删,
+		// 要么属于新任务。按已出队计,新任务下一拍从头算。
+		forgetDeadNodeReconcileRetry(task.member)
+		logx.Infof("[ReentryBarrier] Dead node cleanup stopped mid-pass: its task was withdrawn (the declared-dead instance re-registered, or the node was declared dead again); remaining scenes left untouched: zone=%d node=%s queued_at=%s",
+			task.zoneID, task.nodeID, task.queuedAt.Format(time.RFC3339))
+		return true, false
 	}
 	// 有结论的摘出收尾范围,下一拍只重试剩下的。摘失败也不要紧:重做它们只会落到 stale / world_skipped。
 	if len(result.resolved) > 0 {
@@ -684,7 +742,8 @@ func finishDeadNodeReconcile(svcCtx *svc.ServiceContext, task deadNodeReconcileT
 	if abandon {
 		abandonFlag = "1"
 	}
-	raw, err := svcCtx.Redis.Eval(luaFinishDeadNodeReconcile, keys, task.member, abandonFlag)
+	raw, err := svcCtx.Redis.Eval(luaFinishDeadNodeReconcile, keys, task.member, abandonFlag,
+		strconv.FormatInt(task.fence().queuedAtMs, 10))
 	if err != nil {
 		return false, fmt.Errorf("结束死节点收尾任务失败: zone=%d node=%s: %w", task.zoneID, task.nodeID, err)
 	}

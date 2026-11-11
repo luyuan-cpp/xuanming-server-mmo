@@ -45,6 +45,7 @@ import (
 	pb "proto/guild"
 
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/gameday"
 	"shared/workshard"
 
@@ -117,8 +118,8 @@ func TestGuildSeqTablesUsesGuildTables(t *testing.T) {
 	assert.Equal(t, PendingStatus(), tables.PendingStatus)
 }
 
-// TestIsRetryableBackground:后台写把 1213 / 1205 / 9007 当可重试(包一层也要认得),其余一律不重试 ——
-// 把撞唯一键判成可重试,会让一次注定失败的终结反复重放。
+// TestIsRetryableBackground:后台写把 1213 / 1205 / 9007 与守卫判定的提交前中止(R6,COMMIT 没发、确定没写)当可重试
+// (包一层也要认得),其余一律不重试 —— 把撞唯一键、结局未知判成可重试,会让一次注定失败或可能已生效的终结反复重放。
 func TestIsRetryableBackground(t *testing.T) {
 	cases := []struct {
 		name string
@@ -132,6 +133,8 @@ func TestIsRetryableBackground(t *testing.T) {
 		{"唯一键冲突 1062", &mysqlDriver.MySQLError{Number: 1062}, false},
 		{"包了一层的锁等待", fmt.Errorf("terminal CAS: %w", &mysqlDriver.MySQLError{Number: 1205}), true},
 		{"普通错误", errors.New("connection refused"), false},
+		{"提交前中止", fmt.Errorf("terminal CAS: %w", authoritysql.ErrTxAbortedBeforeCommit), true},
+		{"结局未知", fmt.Errorf("commit: %w", authoritysql.ErrOutcomeUnknown), false},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.want, isRetryableBackground(tc.err), tc.name)

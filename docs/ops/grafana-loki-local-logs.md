@@ -99,6 +99,10 @@ v1.10.0 记录的位置等于文件大小,解析结果和 v1.19.2 逐条一致�
 - 行长这样:`{"@timestamp":"2026-09-13T03:07:37.138-04:00","caller":"login/login.go:67","content":"...","level":"info"}`
 - Alloy 取 `@timestamp` 当日志时间,取 `level` 当标签,把 `caller` 放进结构化元数据。
   `logx.Errorw(..., logx.Field("method", ...))` 这类附加字段仍在原始 JSON 里,查询时加 `| json` 就能按字段过滤。
+- **链路追踪字段(2026-11-11 起,未在本机跑过):** 带 ctx 打的行有 `trace` / `span`,经玩家拦截器
+  (`go/shared/tracing` 的 `PlayerFieldInterceptor`)的行有 `player_id`,值是十进制字符串。Alloy 只对真带了这些键的行取值,
+  改名成 `trace_id` / `span_id` / `player_id` 放进结构化元数据(见 [distributed-tracing.md](../design/distributed-tracing.md) §9.1)。
+  写成 JSON 数字的 `player_id` 不取:`stage.json` 按 float64 解析,超过 2^53 的 id 会被悄悄改掉末几位。
 - **go-zero 没有 warn 级别。** 它实际写进日志的 `level` 是 debug / info / error / fatal / slow / stat / alert。
   `logx.Severe` / `logx.Must` 虽然叫 severe,写进日志的级别是 `fatal`(后面还跟一段 goroutine 堆栈)。
   其中 `slow` 是慢调用告警(例如 Redis slowcall),看板把它算进"警告"。
@@ -126,10 +130,11 @@ v1.10.0 记录的位置等于文件大小,解析结果和 v1.19.2 逐条一致�
   - `Build Info` 这类多行消息只有第一行带时间戳,后续行会并回同一条。
   - 级别:muduo 只输出 TRACE / DEBUG / INFO / WARN / ERROR / FATAL 六种。`LOG_SYSERR` 实际按 ERROR 输出;
     errno 不为 0 时,会在级别之后、正文之前插入 `<错误描述> (errno=N) `,行尾仍是 ` - 文件:行号`。
-  - **行尾上下文后缀(2026-11-06 起,未编译验证):** 当前线程有 trace 或玩家时,` - 文件:行号` 之后多一段
+  - **行尾上下文后缀(2026-11-06 起;拼接的单测 11-08 已过,运行期没冒烟):** 当前线程有 trace 或玩家时,` - 文件:行号` 之后多一段
     `[ctx trace_id=<32 位> span_id=<16 位> player_id=<id>]`,缺哪样就省哪样,两样都没有就不加
-    (见 [distributed-tracing.md](../design/distributed-tracing.md) §5.1)。Alloy 只按行首解析,不受影响;
-    把这几个值提成结构化元数据是该设计 §10.1 的第 7 批,在那之前用行内搜索:`{job="cpp_nodes"} |= "trace_id=<32 位>"`。
+    (见 [distributed-tracing.md](../design/distributed-tracing.md) §5.1)。级别和时间仍按行首解析,不受影响。
+    2026-11-11 起 Alloy 从这段取出 `trace_id` / `span_id` / `player_id` 放进结构化元数据:两条锚定在整条末尾的正则,
+    只在真有值时才写;多行消息的后缀跟在最后一行之后,合并之后仍在末尾。
   - **重要:stdout 写进文件时是 4096 字节整块缓冲,最新的日志会长时间看不到。** 细节和应对见 §5 排障表第一行。
 - **stderr** 里有三种非 muduo 的行,Alloy 都已分别识别:
   - gRPC / abseil:`E0913 07:40:56.694940   52672 chttp2_transport.cc:1425] ... GOAWAY ... too_many_pings`。
@@ -157,6 +162,10 @@ v1.10.0 记录的位置等于文件大小,解析结果和 v1.19.2 逐条一致�
   ```
   这是 Spring Boot 3.4 自带的结构化日志。**jar 要重新打包才生效。** 生效后控制台一行一条 JSON:
   `{"@timestamp":"...","level":"INFO","logger_name":"c.game.gateway.X","thread_name":"main","message":"...","stack_trace":"..."}`
+- **追踪字段(2026-11-11 起,gateway_node,未编译验证):** 加了 Micrometer Tracing 之后,请求里打的行多两个字段
+  `"traceId":"<32 位>","spanId":"<16 位>"`,与它调 login 时写进 gRPC 的 `traceparent` 是同一个 trace
+  (见 [distributed-tracing.md](../design/distributed-tracing.md) §7)。`@Scheduled` 任务每次执行也各有一个新 trace。
+  Alloy 把它们改名成 `trace_id` / `span_id` 放进结构化元数据,与 Go、C++ 同一套键名。`config_node` 还没接。
 - 没重新打包的旧 jar 也能采。Alloy 同时认 Spring Boot 默认的文本格式,例如
   `2026-09-05T02:13:53.989-04:00  INFO 26768 --- [gateway-node] [ main] c.game.X : 消息`,堆栈续行会并回上一条。
 - 想临时恢复文本格式,启动时加参数 `--logging.structured.format.console=`(空值)。
@@ -197,8 +206,11 @@ v1.10.0 记录的位置等于文件大小,解析结果和 v1.19.2 逐条一致�
 | Java | `trace` `debug` `info` `warn` `error` |
 
 结构化元数据不是标签,但能在行详情里看到,也能用 `| caller="..."` 过滤。Go 有 `caller`,C++ 有 `tid`,Java 有 `logger` 和 `thread`。
+三种语言还统一有 `trace_id`、`span_id`,Go 和 C++ 另有 `player_id`(2026-11-11 起),只在那一行真带了值时才有,
+来历见 §2.1 ~ §2.3 和 [distributed-tracing.md](../design/distributed-tracing.md) §3.2。
 
-标签只用上面这些低基数字段。**不要**把 player_id、session_id 之类做成标签,Loki 会被撑爆。查这类值用行内搜索:`{job=~".+"} |= "player_id=12345"`。
+标签只用上面这些低基数字段。**不要**把 trace_id、player_id、session_id 之类做成标签,Loki 会被撑爆。
+trace_id、player_id 用结构化元数据过滤(见 §4);其余这类值用行内搜索,例如 `{job=~".+"} |= "session_id=678"`。
 
 以上是**本机这条链路**的口径。k8s 上 C++ 由 sidecar 直接读 muduo 文件,标签不完全一样(没有 `instance` / `stream`,
 `filename` 挪进了结构化元数据,多出 `namespace` / `pod`),对照表见 §6.4。
@@ -222,7 +234,13 @@ v1.10.0 记录的位置等于文件大小,解析结果和 v1.19.2 逐条一致�
 # 多 zone 启动(dev.bat start-zones,Go 也带 zN_ 前缀)时才可以按 zone 收窄:
 {zone="1", service=~"gate|login"}
 
-# 某个玩家 id 在所有服务里的足迹
+# 一条请求的全链路:三种语言、跨服务,按结构化元数据精确匹配
+{job=~".+"} | trace_id="4bf92f3577b34da6a3ce929d0e0e4736"
+
+# 某个玩家在所有服务里的足迹:带玩家上下文的行(C++ 行尾后缀、Go 的 player_id 字段)
+{job=~".+"} | player_id="1837401234567890"
+
+# 没带玩家上下文、只在正文里提到这个 id 的行,仍用行内搜索
 {job=~".+"} |= "1837401234567890"
 
 # Go 的 JSON 字段过滤:某个 RPC 方法的错误(方法名取自 proto 的 package.Service/Method)
@@ -239,6 +257,12 @@ sum by (service) (count_over_time({job=~".+", level=~"error|fatal"}[1m]))
 ```
 
 看板顶部的「关键字」框直接填正则,例如 `kafka|redis`,不区分大小写。看板内部用反引号包它,所以框里不要输入反引号。
+
+看板顶部的 `trace_id`、`player_id` 两个框(2026-11-11 起)按结构化元数据精确匹配,留空不过滤:
+
+- 面板里的写法是 `| trace_id=~"$v|$v^.*"`。Loki 的标签正则整串锚定,留空时后一支 `^.*` 匹配一切;
+  填了值时后一支的 `^` 落在值后面,永远不成立,只剩前一支精确匹配。照抄到别的看板时两支都要写。
+- 统计面板在聚合前加 `| drop trace_id, span_id, player_id`。这三个值几乎每行都不同,不丢掉的话每条日志在聚合前各成一条序列。
 
 ---
 
@@ -428,6 +452,10 @@ k8s 这条链路的**流标签**:
 | `namespace` / `pod` | k8s 独有 | Downward API |
 
 **结构化元数据**(不是标签,但行详情里看得到,也能用 `| pid="..."` 过滤):`pid`、`tid`、`filename`。
+
+**还没有 `trace_id` / `span_id` / `player_id`。** sidecar 的规则要按 [distributed-tracing.md](../design/distributed-tracing.md) §9.2
+加上本机那两条行尾正则(§2.2),改它会滚动重启 C++ 节点(§6.5),要挑时机。在那之前 k8s 上按 trace 查用行内搜索:
+`{env="k8s"} |= "trace_id=<32 位>"`,muduo 文件里的行尾后缀是原文。
 
 两条链路口径不同的地方,查询时别照抄 §3:
 

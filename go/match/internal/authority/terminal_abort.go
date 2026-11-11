@@ -22,6 +22,8 @@ const (
 	terminalAbortCancel   = "abort_cancel"   // 帮会取消入口:同一截止判据与同一份证据要求,由 CancelActivity 提交
 	terminalAbortNoRoom   = "abort_no_room"  // 提前裁决:原执行实例证明这份 Create 没建、以后也不会再建
 	terminalAbortManual   = "abort_manual"   // 人工处置:formationfix 对永久 UNKNOWN 的成局写的 ABORT(manual_abort.go)
+	// 原执行实例的终局原件内容不合格、过了截止加宽限之后收到重放时写的 ABORT:terminalAbortRejectedOriginal,
+	// 定义与说明在 rejected_original_abort.go(2026-11-11)。
 	// 截止 ABORT(到期恢复或帮会取消)越过硬上限、没有证据写下的(2026-11-06):这一局可能已经打完而结果作废,另打 ERROR。
 	terminalAbortDeadlineCap = "abort_deadline_cap"
 )

@@ -359,9 +359,10 @@ scene 对一条投递的判定顺序是:先按账本分类,只有新条目才看
 
 **A′. 版本错位**(`metric=inbox_halted reason=version_skew`,前一行 ERROR `Executor reported version skew` 带 `seq` / `type` / `request_id`;2026-10-19 起)
 
-scene 认识这个类型,但本版本不能安全执行这一条。GM 处置域有两个来源,先按日志分开:
+scene 认识这个类型,但本版本不能安全执行这一条。先按日志分开来源(前两个只出现在 GM 处置域):
 - **欠款带新字段**:挂欠款时,玩家同币种的既有欠款带着更新版本的字段(更新版本的 scene 写下的,见 `mixed-version-persist-field-protection.md` §4.4)。日志 `AttachCurrencyDebt version skew: existing debt carries fields unknown to this version`。
 - **新币种**(2026-10-23 起):载荷里的币种不在本版本 scene 的取值表内,日志 `metric=persist_version_skew where=inbox_currency`,带 `executor` / `currency_type`。收件箱入箱已按 `proto/common/base/currency_type.proto` 拒绝写错的值,所以这只可能是更新版本加的币种:GM 在 scene 全量升级之前就对新币种下了处置(发布纪律不允许)。处置同下面第 1、2 条;第 3 条不适用,升级到认识这个币种的版本即解除。
+- **载荷带新字段**(2026-11-11 起,所有域都适用,包括战斗结算):载荷里有本版本 scene 不认识、也不是已退役(reserved)的字段,日志 `metric=persist_version_skew where=inbox_payload`,带 `type` / `field=<消息全名#字段号>`。这一条不调执行器。来源是更新版本的生产者(Go 各服务、battle 节点)在 scene 全量之前就写了新字段,违反了发布次序(`mixed-version-persist-field-protection.md` §13 第 7 条)。处置同下面第 1、2 条,升级到认识这个字段的版本即解除。
 
 **先排除版本错位再处理毒消息**:同一名玩家在几台旧版本节点之间换图或重建实体,每次重拉都会让这一行的 `delivery_count` +1,可能触发 `PlayerInboxPoisonSuspect`。告警指引的 `VoidItem(reason=QUARANTINED)` 会把一条合法处置作废:先查该玩家 scene 日志里有没有 `reason=version_skew` 或上面两种日志,有就按本节处理。
 出现在新旧 scene 混跑(滚动发布、金丝雀)期间;整体回滚到不认识这些字段的版本之后不会自行消失(见第 3 条)。这一条不记账、不确认,已定的前缀照常确认,行留在收件箱 PENDING。同域排在它后面的处置(例如 `GM_BLOCK_CURRENCY_GAIN`)也一起停住。

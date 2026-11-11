@@ -173,11 +173,13 @@ inline std::optional<HolderRecord> ParseHolderRecord(std::string_view value)
 // 过期之后登记,所以「别人、更新」就是证明;比修订号而不只比 uuid,是因为 scene_manager 处理新登记之前,控制域里还是更旧的记录。
 // 下面两种情况一律按映射判(kThisProcessOrUnknown),只会少拆、不会多拆:
 //   - 本节点 etcd 身份确认有效:本进程此刻持有分配键,别的记录只能是登记之前留下的旧值;
-//   - 还没见过本进程自己的记录(ownRevision == 0):比不出谁更新。scene_manager 处理本进程的 PUT 之后就会有。
+//   - 还没见过本进程自己的记录(ownRevision == 0):比不出谁更新。scene_manager 处理本进程的 PUT 之后就会有;
+//     托管着场景却一直没有,由指标 scene_ownership_own_holder_known 与告警 SceneOwnershipOwnHolderUnknown 报出来
+//     (设计稿 §9 第 1 条:不拿本进程注册时 etcd 的应答修订号顶替,理由见那里)。
 // 读不到、记录不存在、记录损坏:没有信息。
-// ownRevision 记的是最近一次见到的本进程记录,而不是历史最大值:控制域里的记录单调写,本进程的记录只会变新;
-// 唯一会变小的情形是 etcd 换成新集群、修订号从头计,scene_manager 的全量同步把记录改写成新集群里的登记,
-// 这时要跟着用新集群的修订号比,否则新集群里接走这个号的进程永远比不过旧集群的大修订号。
+// ownRevision 记的是最近一次见到的本进程记录,而不是历史最大值:同一个 etcd 纪元里记录单调写,本进程的记录只会变新;
+// 唯一会变小的情形是 etcd 修订号倒退(换成新集群、或不带 bump 从备份恢复),scene_manager 换了纪元、把记录改写成新集群里的
+// 登记,这时要跟着用新集群的修订号比,否则新集群里接走这个号的进程永远比不过旧集群的大修订号。
 struct HolderTracker
 {
 	std::uint64_t ownRevision{0}; // 最近一次见到的本进程记录的修订号;0 = 还没见到

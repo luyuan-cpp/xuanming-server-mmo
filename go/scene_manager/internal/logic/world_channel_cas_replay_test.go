@@ -20,7 +20,8 @@ package logic
 //   - heldEvalHook:第一次 EVAL 根本不发、直接回错并记下参数,用例随后原样补发,模拟「请求卡在路上、调用方先超时、
 //     请求晚到」。
 //
-// 用例只经 reassignSceneNode、reassignWorldChannelNode、TransferAgonesRoomForScene 进;回执键的形状是本次新加的,
+// 用例只经 reassignSceneNode、reassignWorldChannelNode 与改派的名额两步(moveAgonesRoomForTest:先占名额,CAS 之后
+// commitReservedAgonesRoom 提交,2026-11-11 起取代 TransferAgonesRoomForScene)进;回执键的形状是本次新加的,
 // 修复前红按 PROGRESS 2026-11-05 两条「回执」条目里的变异取。
 
 import (
@@ -192,7 +193,7 @@ func TestWorldChannel_TransferResendAfterLostReplyReleasesOldRoomOnce(t *testing
 	require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), "20"))
 	seedAgonesRoom(t, sc, alloc, sceneID, "gs-old")
 
-	TransferAgonesRoomForScene(context.Background(), sc, sceneID, "20", testZoneId)
+	require.True(t, moveAgonesRoomForTest(t, sc, sceneID, "20"))
 
 	require.True(t, hook.fired.Load(), "前提:转移的 EVAL 真的被重发了")
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-new"), "刚记账的新名额不得被还掉")
@@ -278,7 +279,7 @@ func TestWorldChannel_TransferReplyLostConfirmedByReceiptReleasesOldRoom(t *test
 	require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), "20"))
 	seedAgonesRoom(t, sc, alloc, sceneID, "gs-old")
 
-	TransferAgonesRoomForScene(context.Background(), sc, sceneID, "20", testZoneId)
+	require.True(t, moveAgonesRoomForTest(t, sc, sceneID, "20"))
 
 	require.True(t, hook.fired.Load(), "前提:转移的 EVAL 执行了、应答被换成错误")
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-new"), "新名额已记账,不得还掉")
@@ -302,7 +303,7 @@ func TestWorldChannel_TransferLateEvalAfterResolveChangesNothing(t *testing.T) {
 	require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), "20"))
 	record := seedAgonesRoom(t, sc, alloc, sceneID, "gs-old")
 
-	TransferAgonesRoomForScene(context.Background(), sc, sceneID, "20", testZoneId)
+	require.True(t, moveAgonesRoomForTest(t, sc, sceneID, "20"))
 
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-new"), "确定没改写:刚占的新名额没人记账,必须还掉")
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-old"), "旧记录没动,旧名额不得还")

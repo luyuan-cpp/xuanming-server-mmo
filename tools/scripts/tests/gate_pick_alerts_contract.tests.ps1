@@ -198,4 +198,43 @@ Test-Case 'login-alerts.yaml:login.queue-capacity 组只有 LoginQueueCapacityLi
     Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq 'LoginQueueCapacityLimitedByGates' })).Count -Because '告警名不重名'
 }
 
+Test-Case 'login-alerts.yaml:login.gate-health 组两条持续型规则,引用的计数由 loginqueue 注册,标签取值是源码里的常量' {
+    $rules = Get-AlertRules -GroupText (Get-AlertGroupText -Text $script:LoginAlerts -Group 'login.gate-health')
+    Assert-Equal -Expected 'LoginGateStaleExcludedSustained,LoginQueueAdmitRecheckBlind' -Actual ((@($rules | ForEach-Object { $_.Name }) | Sort-Object) -join ',') -Because '规则名单钉死'
+
+    $eligibility = Read-RepoText -RelativePath 'go/login/internal/logic/pkg/loginqueue/gate_eligibility.go'
+    $recheck = Read-RepoText -RelativePath 'go/login/internal/logic/pkg/loginqueue/admit_recheck.go'
+    $metricsSource = Read-RepoText -RelativePath 'go/login/internal/logic/pkg/loginqueue/metrics.go'
+    $ns = [regex]::Match($metricsSource, '(?m)^const metricNamespace = "(?<v>[a-z_]+)"').Groups['v'].Value
+    Assert-Match -Text $eligibility -Pattern '(?s)Namespace:\s*"login",\s*Subsystem:\s*"gate_pick",\s*Name:\s*"excluded_total"' -Because 'login_gate_pick_excluded_total 由 gate_eligibility.go 注册'
+    Assert-Match -Text $recheck -Pattern '(?s)Namespace:\s*metricNamespace,\s*Subsystem:\s*"",\s*Name:\s*"admit_gate_recheck_total"' -Because "${ns}_admit_gate_recheck_total 由 admit_recheck.go 注册"
+    Assert-Match -Text $recheck -Pattern '(?m)^\s*admitRecheckUnchecked\s*=\s*"unchecked"' -Because 'outcome="unchecked" 是复核读不到候选时的取值'
+
+    # 两条都按「持续」判:for 必须大于 0,严重级别分开(停写 gate 上的玩家多半卡住了,要马上有人看)。
+    $expect = @{
+        'LoginGateStaleExcludedSustained' = @{ Severity = 'critical'; Metric = 'login_gate_pick_excluded_total'; Selector = 'reason="stale"' }
+        'LoginQueueAdmitRecheckBlind'     = @{ Severity = 'warning'; Metric = "${ns}_admit_gate_recheck_total"; Selector = 'outcome="unchecked"' }
+    }
+    foreach ($rule in $rules) {
+        $want = $expect[$rule.Name]
+        Assert-Match -Text $rule.Body -Pattern ('(?m)^            severity:[ ]*{0}[ ]*$' -f $want.Severity) -Because "$($rule.Name) 的 severity 应为 $($want.Severity)"
+        Assert-Match -Text $rule.Body -Pattern '(?m)^            summary:' -Because "$($rule.Name) 要有 summary"
+        Assert-Match -Text $rule.Body -Pattern '(?m)^            description:' -Because "$($rule.Name) 要有 description"
+        Assert-Match -Text $rule.Body -Pattern '(?m)^            runbook_url:' -Because "$($rule.Name) 要有 runbook_url"
+        Assert-Match -Text $rule.Body -Pattern '(?m)^          for:[ ]*[1-9]\d*m[ ]*$' -Because "$($rule.Name) 按持续判,for 要大于 0"
+        $expr = Get-RuleExpr -Body $rule.Body
+        $referenced = @([regex]::Matches($expr, '\blogin_[a-z0-9_]+') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+        Assert-Equal -Expected $want.Metric -Actual ($referenced -join ',') -Because "$($rule.Name) 只引用一个计数"
+        Assert-Match -Text $expr -Pattern ('\b{0}\{{{1}\}}' -f [regex]::Escape($want.Metric), [regex]::Escape($want.Selector)) -Because "$($rule.Name) 只看 $($want.Selector)"
+        Assert-Match -Text $expr -Pattern '\bincrease\(' -Because "$($rule.Name) 按 increase() 判"
+    }
+
+    $all = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*-alerts.yaml' -File | ForEach-Object {
+            ([IO.File]::ReadAllText($_.FullName)) -replace "`r`n", "`n"
+        } | ForEach-Object { [regex]::Matches($_, '(?m)^\s+- alert:[ ]*(\S+)[ ]*$') } | ForEach-Object { $_.Groups[1].Value })
+    foreach ($name in @('LoginGateStaleExcludedSustained', 'LoginQueueAdmitRecheckBlind')) {
+        Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq $name })).Count -Because "$name 告警名不重名"
+    }
+}
+
 exit (Complete-TestRun -SuiteName 'gate_pick_alerts_contract')

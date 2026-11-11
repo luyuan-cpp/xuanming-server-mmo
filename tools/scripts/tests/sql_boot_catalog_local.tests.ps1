@@ -443,6 +443,9 @@ try {
         Assert-Match $text "GRANT SELECT,INSERT,UPDATE ON ``mmorpg_global``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号按 operator 模板:换代要退休上一代,带 UPDATE'
         Assert-Match $text "GRANT SELECT,INSERT,UPDATE ON ``mmorpg_global``\.``sql_writer_drain_run`` TO 'mmorpg_local_maintenance'@'%'" '维护账号按 operator 模板'
         Assert-Match $text "GRANT SELECT,INSERT,UPDATE ON ``mmorpg_friend``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号逐逻辑库授权'
+        # 一代结束时它的 slot 行随之删掉(writer-roster-exhaustion-20261106.md §5.8):注册账号换代、维护账号退休都要 DELETE;注册账号不再改写 slot 行。
+        Assert-Match $text "GRANT SELECT,INSERT,DELETE ON ``mmorpg_friend``\.``writer_slot`` TO 'mmorpg_local_registrar'@'%'" '注册账号换代时删上一代的 slot 行'
+        Assert-Match $text "GRANT SELECT,UPDATE,DELETE ON ``mmorpg_friend``\.``writer_slot`` TO 'mmorpg_local_maintenance'@'%'" '维护账号退休时删 slot 行,冻结解冻改 epoch'
         Assert-Match $text "GRANT SELECT,INSERT,DELETE ON ``mmorpg_global``\.``zone_merged_into`` TO 'mmorpg_local_maintenance'@'%'" '合服工具的映射表只在目录库'
         Assert-NotMatch $text "ON ``mmorpg_friend``\.``zone_merged_into``" '别的库没有合服映射表'
         Assert-NotMatch $text "TO 'root'@'%'" '本机 schema 身份就是 root,不再给 root 授权'

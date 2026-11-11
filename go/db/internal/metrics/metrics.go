@@ -49,7 +49,7 @@ var (
 		Help:      "On-demand placement store opens (player-storage-placement.md 6.1). result: ok | error (ping / schema gate / unknown database) | rejected (neither in the allow list nor admitted by AllowStoreFamilies).",
 	}, []string{"result"})
 
-	// placementOpenStores 是本进程当前常驻的落点库个数(含本 zone 库)。
+	// placementOpenStores 是本进程当前常驻的存档库个数。
 	placementOpenStores = prometheus.NewGauge(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "placement_open_stores",
@@ -109,7 +109,7 @@ func (c *storeCooldownCollector) Describe(ch chan<- *prometheus.Desc) { ch <- c.
 
 func (c *storeCooldownCollector) Collect(ch chan<- prometheus.Metric) {
 	counts := c.source()
-	for _, pool := range []string{PoolHome, PoolExtraZone, PoolExtraNonZone} {
+	for _, pool := range poolClasses {
 		ch <- prometheus.MustNewConstMetric(c.desc, prometheus.GaugeValue, float64(counts[pool]), pool)
 	}
 }
@@ -117,7 +117,7 @@ func (c *storeCooldownCollector) Collect(ch chan<- prometheus.Metric) {
 // NewStoreCooldownCollector 只构造不注册(单测用自己的注册表)。
 func NewStoreCooldownCollector(source func() map[string]int) prometheus.Collector {
 	desc := prometheus.NewDesc(prometheus.BuildFQName("", subsystem, "store_cooldown_stores"),
-		"Databases currently cooling down after a probe confirmed they are unreachable. pool: home | extra_zone | extra_non_zone.",
+		"Player store databases currently cooling down after a probe confirmed they are unreachable. pool: store.",
 		[]string{"pool"}, nil)
 	return &storeCooldownCollector{source: source, desc: desc}
 }
@@ -137,18 +137,19 @@ const (
 	StoreOpenRejected = "rejected"
 )
 
-// 连接池类别(mmorpg_sql_pool_*{sql_client="db",pool=...});封闭集合,不含库名(落点库数不设上限)。
-// deploy/k8s/mysql-connection-alerts.yaml 的 DbExtraStorePoolsBeyondPlan 按 extra_zone / extra_non_zone 两个取值写死,
-// 改常量必须同改告警。
+// 连接池类别(mmorpg_sql_pool_*{sql_client="db",pool=...});封闭集合,不含库名(存档库数按地域的 K 定,不设上限)。
+// go/db 没有「本区主库」,也不再有 zone 家族库(docs/design/player-data-tidb-scaling-plan.md §7.2 A17c),只剩地域存档库一类。
+// deploy/k8s/mysql-connection-alerts.yaml 的 DbStorePoolsBeyondPlan 按 store 这个取值写死,改常量必须同改告警。
 const (
-	PoolHome         = "home"           // 本 zone 库(InitDB 打开,Database.MaxOpenConn)
-	PoolExtraZone    = "extra_zone"     // 额外 zone 家族库 zone_{1..999999}_db(本 zone 库除外)
-	PoolExtraNonZone = "extra_non_zone" // 非 zone 落点库 player_store_{>=1000000}_db
+	PoolStore = "store" // 地域存档库 player_store_{>=1000000}_db,每个库一个池
 )
+
+// poolClasses 是两个按类别输出的收集器要逐项输出的全部类别(没有池时输出 0,不存在序列从无到有的漏报)。
+var poolClasses = []string{PoolStore}
 
 // NewSQLPoolCollector 只构造不注册(单测用自己的注册表)。sql_client 取本包的 subsystem("db")。
 func NewSQLPoolCollector(source sqlpoolstats.Source) prometheus.Collector {
-	return sqlpoolstats.NewCollector(subsystem, []string{PoolHome, PoolExtraZone, PoolExtraNonZone}, source)
+	return sqlpoolstats.NewCollector(subsystem, poolClasses, source)
 }
 
 // RegisterSQLPools 把连接池快照接到默认注册表(Start 暴露的那个)。进程内调一次;注册失败只记日志:

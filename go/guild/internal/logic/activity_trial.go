@@ -258,9 +258,9 @@ func trialRewardChannelTip(d *ActivityDeps, bundle *assetpb.AssetBundle) *base.T
 // notifyTrialRoster 给名单里除 actor 以外的人推一条 ACTIVITY_CHANGED(房间状态变了,去拉活动页),
 // 并给名单**全员**(含 actor 本人,摘要纪律 2)bump GUILD_ACTIVITY(landing-recovery-sync-digest.md §3.3 表第 9 行)。
 // 调用点(同意 / 拒绝 / 取消 / 开战成功 / 开战失败)都在房间写成新状态之后(开战前后两步写失败时也已尽力写过,
-// 房间随后按 EffectiveAt 折算),推送点与 bump 点恰好重合,所以放在一处。
-func (l *GuildLogic) notifyTrialRoster(lobby *data.TrialLobby, actor uint64) {
-	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_ACTIVITY_CHANGED, lobby.GuildID, actor, 0, exceptPlayer(lobby.Roster, actor))
+// 房间随后按 EffectiveAt 折算),推送点与 bump 点恰好重合,所以放在一处。ctx 只给推送取 trace(见 GuildNotifier)。
+func (l *GuildLogic) notifyTrialRoster(ctx context.Context, lobby *data.TrialLobby, actor uint64) {
+	l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_ACTIVITY_CHANGED, lobby.GuildID, actor, 0, exceptPlayer(lobby.Roster, actor))
 	l.bumpSync(lobby.Roster, scenepb.SyncDomain_SYNC_DOMAIN_GUILD_ACTIVITY)
 }
 
@@ -521,7 +521,7 @@ func (l *GuildLogic) startGuildTrial(ctx context.Context, req *pb.StartGuildTria
 	// 推送丢了也无妨:被邀请人打开活动页就能看到这张邀请(L1)。
 	lobby := created.Lobby
 	for _, invitee := range lobby.Roster[1:] {
-		l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_ACTIVITY_CHANGED, lobby.GuildID, a.playerID, invitee, []uint64{invitee})
+		l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_ACTIVITY_CHANGED, lobby.GuildID, a.playerID, invitee, []uint64{invitee})
 	}
 	// 摘要:名单全员(含发起人本人)的活动页都多了这张房间(landing-recovery-sync-digest.md §3.3 表第 9 行)。
 	l.bumpSync(lobby.Roster, scenepb.SyncDomain_SYNC_DOMAIN_GUILD_ACTIVITY)
@@ -600,10 +600,10 @@ func (l *GuildLogic) respondGuildTrialInvite(ctx context.Context, req *pb.Respon
 		}
 		return trialRespondOutcome{view: l.trialView(ctx, d, a, row, now)}, nil
 	case data.TrialLobbyRespondDeclined:
-		l.notifyTrialRoster(lobby, a.playerID)
+		l.notifyTrialRoster(ctx, lobby, a.playerID)
 		return trialRespondOutcome{view: l.trialView(ctx, d, a, row, now), result: activityResultDeclined}, nil
 	case data.TrialLobbyRespondAccepted:
-		l.notifyTrialRoster(lobby, a.playerID)
+		l.notifyTrialRoster(ctx, lobby, a.playerID)
 		return trialRespondOutcome{view: l.trialView(ctx, d, a, row, now)}, nil
 	case data.TrialLobbyRespondLaunch:
 		tip, err := l.launchTrial(ctx, d, a.playerID, lobby, now)
@@ -647,7 +647,7 @@ func (l *GuildLogic) launchTrial(ctx context.Context, d *ActivityDeps, actor uin
 	}
 	if end.failed() {
 		l.endTrialLobby(ctx, d, lobby, end)
-		l.notifyTrialRoster(lobby, actor)
+		l.notifyTrialRoster(ctx, lobby, actor)
 		if fault != nil {
 			guildActivityActionTotal.Inc(activityTypeTrial, activityActionLaunch, activityResultOf(nil, fault))
 			return nil, fault
@@ -657,7 +657,7 @@ func (l *GuildLogic) launchTrial(ctx context.Context, d *ActivityDeps, actor uin
 		return tip, nil
 	}
 	l.recordTrialLaunched(ctx, d, lobby, battle, uint64(now.UnixMilli()))
-	l.notifyTrialRoster(lobby, actor)
+	l.notifyTrialRoster(ctx, lobby, actor)
 	guildActivityActionTotal.Inc(activityTypeTrial, activityActionLaunch, activityResultOK)
 	return nil, nil
 }
@@ -1199,7 +1199,7 @@ func (l *GuildLogic) notifyTrialSettled(ctx context.Context, battle data.TrialBa
 			wholeGuild = true
 		}
 	}
-	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_ACTIVITY_CHANGED, battle.GuildID, battle.InitiatorPlayerID, 0, recipients)
+	l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_ACTIVITY_CHANGED, battle.GuildID, battle.InitiatorPlayerID, 0, recipients)
 	if wholeGuild {
 		// 得奖者是参战者的子集,已在全帮收件人里:一条 Lua 两个域号。
 		l.bumpSync(recipients, scenepb.SyncDomain_SYNC_DOMAIN_GUILD_ACTIVITY, scenepb.SyncDomain_SYNC_DOMAIN_GUILD)

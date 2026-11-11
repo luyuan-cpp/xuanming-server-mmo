@@ -388,7 +388,8 @@ bool BagService::ReleaseHold(entt::entity playerEntity, const uint64_t holdId)
 
 uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     const ItemCountMap& consumed, const ItemCountMap& gained, uint64_t correlationId,
-    const std::string& extra, const std::function<uint32_t()>& beforeCommit, const uint64_t consumeFromHoldId)
+    const std::string& extra, const std::function<uint32_t()>& beforeCommit, const uint64_t consumeFromHoldId,
+    const GrantOverflowRoute* overflowRoute)
 {
     if (!tlsEcs.actorRegistry.valid(playerEntity) || !PlayerLifecycleSystem::IsPlayerMutable(playerEntity)) return kInvalidParameter;
     const auto playerId = tlsEcs.GetPlayerId(playerEntity);
@@ -462,21 +463,40 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     }
     std::vector<DestroyedInstance> evicted;
     std::vector<GuidVector> written;
+    // 两包都放不下、整批交给 overflowRoute 的去处(战斗结算:改投邮件)。为真时两包只发布消耗,获得一件不进包。
+    bool routed = false;
     if (!gained.empty()) {
         auto result = nextInventory.AddItems(gained, &evicted, &written, InstalledItemInstanceInitializer());
         if (result != kSuccess) {
             if (!sameSource()) return kInvalidParameter;
             evicted.clear(); written.clear();
             result = nextTemporary.AddItems(gained, &evicted, &written, InstalledItemInstanceInitializer());
-            // 临时格满了不淘汰(2026-11-05 起,审计 cpp-economy#2):整笔在任何副作用之前拒绝,候选一起丢掉,
-            // 消耗、beforeCommit(货币)与两个包都没动;来源保留(战斗结算整笔延后,玩家取回腾位后重试即应用)。
-            // 两包都放不下是玩家能造出来的状态,按玩家限频打 WARN(首次,之后每 kGrantOverflowWarnEveryRejections 次);
+            // 临时格满了不淘汰(2026-11-05 起,审计 cpp-economy#2)。两包都放不下时:
+            //   - 有去处(overflowRoute)就问它能不能接住这一整批(docs/design/battle-overflow-mail.md):接住了,
+            //     失败的 AddItems 不改候选,获得一件不进包,照常往下扣消耗、跑 beforeCommit、发布;
+            //   - 没有去处或接不住:整笔在任何副作用之前拒绝,候选一起丢掉,消耗、beforeCommit(货币)与两个包都没动;
+            //     来源保留(战斗结算整笔延后,玩家取回腾位后重试即应用)。
+            // 两包都放不下而被拒是玩家能造出来的状态,按玩家限频打 WARN(首次,之后每 kGrantOverflowWarnEveryRejections 次);
             // 其余失败码是故障,Bag::AddItems 里已按 ERROR 打过,这里不再记。
-            if (result == kBagItemNotStacked)
-                NoteGrantOverflowRejected(playerEntity, playerId, correlationId, temporary);
+            if (result == kBagItemNotStacked) {
+                if (overflowRoute != nullptr && overflowRoute->accept && overflowRoute->commit) {
+                    const auto accepted = overflowRoute->accept(gained);
+                    if (accepted == kSuccess) {
+                        if (!sameSource()) return kInvalidParameter; // accept 不得动背包;动了就整笔作废
+                        evicted.clear(); written.clear();
+                        routed = true;
+                        result = kSuccess;
+                    } else {
+                        NoteGrantOverflowRejected(playerEntity, playerId, correlationId, temporary);
+                        result = accepted;
+                    }
+                } else {
+                    NoteGrantOverflowRejected(playerEntity, playerId, correlationId, temporary);
+                }
+            }
         }
         if (result != kSuccess) return result;
-        if (written.size() != gained.size()) return kInvalidParameter;
+        if (!routed && written.size() != gained.size()) return kInvalidParameter;
     }
     if (!sameSource()) return kInvalidParameter;
     if (firstBlockedGain().has_value()) return kAssetBlocked;
@@ -488,14 +508,19 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     static_assert(std::is_nothrow_move_assignable_v<ItemStore>);
     inventory.store_ = std::move(nextInventory.store_); inventory.layout_ = std::move(nextInventory.layout_);
     temporary.store_ = std::move(nextTemporary.store_); temporary.layout_ = std::move(nextTemporary.layout_);
+    // 改投的那一批与两包的发布在同一段:之后不再有失败分支(GrantOverflowRoute::commit 不得失败)。
+    if (routed) overflowRoute->commit(gained);
     for (const auto& entry : drained)
         TransactionLogSystem::LogItemDestroy(playerEntity, entry.guid, entry.configId, entry.amount, correlationId, extra);
     LogEvictedInstances(playerEntity, evicted);
-    const auto ordered = SortedByConfigId(gained);
-    for (std::size_t i = 0; i < ordered.size(); ++i) {
-        const auto& [config, count] = ordered[i];
-        LogItemsCreated(playerEntity, written[i], config, count, TX_ITEM_AWARD, correlationId, extra);
-        AnomalyDetector::RecordItemGain(playerEntity, config, count);
+    // 改投的那一批没有进包:不记获得流水与异常获得,在去处兑现时(邮件附件领取经资产通道入包)才记。
+    if (!routed) {
+        const auto ordered = SortedByConfigId(gained);
+        for (std::size_t i = 0; i < ordered.size(); ++i) {
+            const auto& [config, count] = ordered[i];
+            LogItemsCreated(playerEntity, written[i], config, count, TX_ITEM_AWARD, correlationId, extra);
+            AnomalyDetector::RecordItemGain(playerEntity, config, count);
+        }
     }
     // 这一笔整批发放成功:「连续放不下」到此为止,下一段卡住重新从首次打 WARN(GrantOverflowRejectStreakComp 的说明)。
     if (tlsEcs.actorRegistry.any_of<GrantOverflowRejectStreakComp>(playerEntity))

@@ -5,7 +5,10 @@
 //  1. **一把钥匙开全楼**:gate token 与排队 token 原来共用同一个
 //     GateTokenSecret(理由记在 docs/design/login-queue-2026-05.md:194),
 //     信任域没拆 —— 任何一侧泄露,另一侧同时失守。现在按用途拆成
-//     GateToken / QueueToken / InternalAuth 三把,生产模式下禁止复用。
+//     GateToken / QueueToken 两把,生产模式下禁止复用。
+//     (2026-11-11)原来的第三把 InternalAuth 已删:内部身份声明改由 gate 用 Ed25519 私钥签名,
+//     login 与在线域服务只持公钥(环境变量 callerauth.PublicKeysEnv),公钥不是密钥,不归这里管
+//     (docs/design/gate-online-identity.md §10.1)。
 //  2. **换不了钥匙**:配置类型是单个 string,轮换必须停服。现在每把钥匙
 //     都是「主密钥 + 若干只验不签的附加密钥」,支持三段式不停服轮换:
 //     ① 新密钥先进 Additional(全部实例都能验) →
@@ -107,9 +110,6 @@ type SecretsConf struct {
 	// QueueToken 是登录排队的不透明 token,login 自签自验,
 	// Additional 在轮换期真正起作用。
 	QueueToken SecretConf `json:"QueueToken,optional"`
-	// InternalAuth 是内部调用方身份声明的签名密钥(SessionInterceptor 用)。
-	// login 只验不签,Additional 让上游可以先切新密钥再摘旧密钥。
-	InternalAuth SecretConf `json:"InternalAuth,optional"`
 }
 
 // SecretSet 是一把密钥解析后的运行期形态:一条主密钥 + 若干只验不签的旧密钥。
@@ -243,6 +243,9 @@ func (c SecretConf) resolve(name string, lookup func(string) (string, bool)) (*S
 // 但只要配了,强度检查一视同仁:一条弱的**附加**密钥同样能签出可信凭据,
 // 所以附加密钥和主密钥用同一把尺子量。
 func (s *SecretSet) validate(name string, relaxed, required bool) (warnings []string, err error) {
+	// fail 的文案一份两用:宽松模式进 SECURITY WARNING 日志,生产模式是返回的启动错误(只进 login.go 的启动 panic)。
+	// 返回的 error 按 2026-11-10 日志英文化口径不译,所以保持中文;拆成「英文告警 + 中文错误」两份会让同一事实
+	// 有两份文案、改一边漏一边,不拆。ResolveSecrets 里主密钥复用那条同理。没有测试或文档按原文匹配,将来统一译时两种模式一起改。
 	fail := func(format string, a ...any) {
 		msg := fmt.Sprintf(format, a...)
 		if relaxed {
@@ -279,9 +282,8 @@ func (s *SecretSet) validate(name string, relaxed, required bool) (warnings []st
 
 // ResolvedSecrets 是解析 + 校验之后的全部运行期密钥。
 type ResolvedSecrets struct {
-	GateToken    *SecretSet
-	QueueToken   *SecretSet
-	InternalAuth *SecretSet
+	GateToken  *SecretSet
+	QueueToken *SecretSet
 	// AuthProviders 是第三方登录(微信 / QQ)的凭据,由 svc.InitAuthProviders 消费(auth_providers.go)。
 	AuthProviders AuthProviderSecrets
 }
@@ -318,12 +320,6 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 	}
 	collect(w)
 
-	internal, w, err := cfg.Secrets.InternalAuth.resolve("InternalAuth", lookup)
-	if err != nil {
-		return nil, warnings, err
-	}
-	collect(w)
-
 	// 兼容旧部署:顶层 GateTokenSecret(单个 string)仍然可用,但只回落给
 	// gate token 这一把。deploy/*.yaml 与 k8s_deploy.ps1 目前还在写这个字段,
 	// 删掉它会让那些部署静默变成「没配密钥」。
@@ -345,7 +341,7 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 	// 谁是必需的:
 	//   - GateToken:AssignGate 每次都要签票据,恒必需。
 	//   - QueueToken:只有开了登录排队才会签/验排队 token。
-	//   - InternalAuth:任何模式都强制验签,恒必需(dev/test 可用 yaml 里的开发值)。
+	// 内部身份声明的验签公钥不在这里:由 login.go 的 newSessionInterceptor 读 callerauth.PublicKeysEnv,缺了拒启。
 	var firstErr error
 	keep := func(w []string, e error) {
 		collect(w)
@@ -355,7 +351,6 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 	}
 	keep(gate.validate("GateToken", relaxed, true))
 	keep(queue.validate("QueueToken", relaxed, cfg.Queue.Enabled))
-	keep(internal.validate("InternalAuth", relaxed, true))
 	if firstErr != nil {
 		return nil, warnings, firstErr
 	}
@@ -367,14 +362,12 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 	}
 
 	// 不同用途不许复用同一把主密钥。生产直接拒绝启动;开发只打 WARN
-	// (本地经常图省事三把填一样)。
+	// (本地经常图省事两把填一样)。
 	pairs := []struct {
 		a, b string
 		x, y *SecretSet
 	}{
 		{"GateToken", "QueueToken", gate, queue},
-		{"GateToken", "InternalAuth", gate, internal},
-		{"QueueToken", "InternalAuth", queue, internal},
 	}
 	for _, p := range pairs {
 		if !p.x.Configured() || !p.y.Configured() {
@@ -391,5 +384,5 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 		return nil, warnings, fmt.Errorf("%s", msg)
 	}
 
-	return &ResolvedSecrets{GateToken: gate, QueueToken: queue, InternalAuth: internal, AuthProviders: authProviders}, warnings, nil
+	return &ResolvedSecrets{GateToken: gate, QueueToken: queue, AuthProviders: authProviders}, warnings, nil
 }

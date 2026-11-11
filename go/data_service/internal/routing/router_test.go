@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"data_service/internal/store"
+	"shared/placement"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -126,7 +127,7 @@ func TestRegisterPlayerZone_Outcomes(t *testing.T) {
 	}
 }
 
-// 参数非法不碰库:player_id 为 0、home 为 0 或越界、没有落点。
+// 参数非法不碰库:player_id 为 0、home 为 0 或越界、没有落点、落点不是地域存档库(zone 库已退役,总体方案 §7.2 A17c)。
 func TestRegisterPlayerZone_InvalidArgsNeverReachStore(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -138,6 +139,8 @@ func TestRegisterPlayerZone_InvalidArgsNeverReachStore(t *testing.T) {
 		{"home 0", 42, 0, 1000000},
 		{"home 越界", 42, store.RouteHomeZoneMax + 1, 1000000},
 		{"没有落点", 42, 5, 0},
+		{"落点是区号", 42, 5, 5},
+		{"落点是区号上限", 42, 5, placement.MaxZoneID},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fake := &fakeRouteStore{}

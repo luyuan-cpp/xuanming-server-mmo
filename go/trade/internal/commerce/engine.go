@@ -353,7 +353,7 @@ func (e *Engine) PlaceMarket(ctx context.Context, me uint64, in *tradepb.PlaceMa
 }
 func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, requestID ...string) (*tradepb.TradeCommerceRecord, error) {
 	var result *tradepb.TradeCommerceRecord
-	before, err := e.Repo.Get(ctx, id)
+	before, err := e.clientContract(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -491,11 +491,22 @@ func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, reque
 	}
 	return result, nil
 }
-func (e *Engine) Get(ctx context.Context, me, id uint64) (*tradepb.TradeCommerceRecord, error) {
+
+// clientContract 读客户端按单号点名的合同(查询、撤单、确认、购买、出价的预读)。查不到就是单号不存在,回业务码 ErrMissing,
+// 与锁内复读查不到、合同对调用者不可见同一个码;其它读失败原样上抛,logic 按故障定性。
+// 只给客户端入口用:后台推进与商城意图读不到合同是数据坏了,不能当成「不存在」吞掉。合同行不删,预读查到之后锁内复读不会再查不到。
+func (e *Engine) clientContract(ctx context.Context, id uint64) (*tradepb.TradeCommerceRecord, error) {
 	r, err := e.Repo.Get(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrMissing
 	}
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+func (e *Engine) Get(ctx context.Context, me, id uint64) (*tradepb.TradeCommerceRecord, error) {
+	r, err := e.clientContract(ctx, id)
 	if err != nil {
 		return nil, err
 	}

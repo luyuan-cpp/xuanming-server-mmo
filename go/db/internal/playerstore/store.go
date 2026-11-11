@@ -108,7 +108,13 @@ func (s *Store) VerifySchema(ctx context.Context) error {
 	return nil
 }
 
-// validateSave 是进事务前的确定性拒绝,不碰库。返回 UNSPECIFIED 表示通过。
+// validateSave 是进事务前的拒绝,不碰库。返回 UNSPECIFIED 表示通过。
+//
+// INVALID 只给请求本身坏了的情形(身份为空、行种为 0 或负数、重复),scene 收到后按确定性拒绝处置,退出时不再等这一笔。
+// 本二进制不认识的正数行种不是请求坏了:行种的号只增不复用,scene 也发不出它自己不认识的号,所以它只会来自
+// 和本 go/db 版本不一致的 scene(发布顺序不对,或回退了 go/db)。这时回可重试的 SCHEMA_TOO_NEW,scene 保留实体、
+// 等版本对齐后照常提交。回 INVALID 的话,scene 下线时不存盘就销毁,认领以来的进度全丢(数据覆写审计 r2-ps#11)。
+// 这一条不能只靠认领时的世代判定兜住:go/db 新旧副本混跑时,在新副本上认领的玩家,下一笔存盘可能落到旧副本。
 func (s *Store) validateSave(req *storepb.SavePlayerRequest) storepb.SavePlayerResult {
 	if req.GetPlayerId() == 0 || req.GetOwnerEpoch() == 0 || req.GetSaveSeq() == 0 ||
 		len(req.GetInstanceId()) == 0 || len(req.GetInstanceId()) > maxInstanceBytes {
@@ -118,8 +124,11 @@ func (s *Store) validateSave(req *storepb.SavePlayerRequest) storepb.SavePlayerR
 	total := 0
 	for _, row := range req.GetRows() {
 		kind := int32(row.GetKind())
-		if _, known := storepb.PlayerStoreKind_name[kind]; !known || kind == ownerKind {
+		if kind <= ownerKind { // 0 是写权行,负数不是任何版本会发的号
 			return storepb.SavePlayerResult_SAVE_PLAYER_INVALID
+		}
+		if _, known := storepb.PlayerStoreKind_name[kind]; !known {
+			return storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW
 		}
 		if _, duplicate := seen[kind]; duplicate {
 			return storepb.SavePlayerResult_SAVE_PLAYER_INVALID
@@ -191,7 +200,7 @@ func (s *Store) LoadAndClaim(ctx context.Context, req *storepb.LoadAndClaimReque
 	if err != nil {
 		return nil, err
 	}
-	result := decideClaim(row, req.GetOwnerEpoch(), req.GetInstanceId(), req.GetBinarySchemaGen())
+	result := decideClaim(row, req.GetOwnerEpoch(), req.GetInstanceId(), req.GetBinarySchemaGen(), s.knownGen)
 	resp := &storepb.LoadAndClaimResponse{Result: result}
 	if row != nil {
 		resp.OwnerEpoch, resp.SaveSeq, resp.SchemaGen = row.ownerEpoch, row.saveSeq, row.schemaGen

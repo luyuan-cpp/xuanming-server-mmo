@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -87,8 +88,6 @@ func (c *fakeClock) advance(d time.Duration) {
 func newTestRegistry(t *testing.T, opener *fakeOpener, allow dbguard.Allowlist, families bool, clock *fakeClock) *StoreRegistry {
 	t.Helper()
 	opts := StoreRegistryOptions{
-		HomeStorageID: 1,
-		Home:          storeNamed("zone_1_db"),
 		Allow:         allow,
 		AllowFamilies: families,
 		Open:          opener.open,
@@ -104,8 +103,9 @@ func newTestRegistry(t *testing.T, opener *fakeOpener, allow dbguard.Allowlist, 
 	return registry
 }
 
+// 只剩存档库一个家族(docs/design/player-data-tidb-scaling-plan.md §7.2 A17c):已退役的 zone 库名不再被家族放行。
 func TestAdmitStore(t *testing.T) {
-	allow := dbguard.Allowlist{Names: []string{"zone_1_db", "mmorpg_custom_db"}, Source: "test"}
+	allow := dbguard.Allowlist{Names: []string{"player_store_1001000_db", "mmorpg_custom_db"}, Source: "test"}
 	cases := []struct {
 		name     string
 		families bool
@@ -113,13 +113,13 @@ func TestAdmitStore(t *testing.T) {
 		wantVia  string
 		wantOK   bool
 	}{
-		{name: "allow list wins even with families off", families: false, db: "zone_1_db", wantVia: StoreAdmittedByAllowlist, wantOK: true},
+		{name: "allow list wins even with families off", families: false, db: "player_store_1001000_db", wantVia: StoreAdmittedByAllowlist, wantOK: true},
 		{name: "non-family name only via allow list", families: true, db: "mmorpg_custom_db", wantVia: StoreAdmittedByAllowlist, wantOK: true},
-		{name: "zone family", families: true, db: "zone_102_db", wantVia: StoreAdmittedByFamily, wantOK: true},
 		{name: "player_store family", families: true, db: "player_store_1000000_db", wantVia: StoreAdmittedByFamily, wantOK: true},
-		{name: "families off rejects a family name outside the allow list", families: false, db: "zone_102_db"},
-		{name: "outside both families", families: true, db: "mmorpg_guild"},
-		{name: "zone id outside the zone range is not a zone-family name", families: true, db: "zone_1000000_db"},
+		{name: "families off rejects a family name outside the allow list", families: false, db: "player_store_1000007_db"},
+		{name: "outside the family", families: true, db: "mmorpg_guild"},
+		{name: "a retired zone database is not a family name", families: true, db: "zone_102_db"},
+		{name: "an id below the store range is not a family name", families: true, db: "player_store_999999_db"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -131,41 +131,24 @@ func TestAdmitStore(t *testing.T) {
 	}
 }
 
-func TestNewStoreRegistryRejectsInconsistentSeeds(t *testing.T) {
-	opener := newFakeOpener()
-	cases := []struct {
-		name string
-		opts StoreRegistryOptions
-	}{
-		{name: "zone outside the zone storage range",
-			opts: StoreRegistryOptions{HomeStorageID: 1000000, Home: storeNamed("zone_1000000_db"), Open: opener.open}},
-		{name: "zone 0", opts: StoreRegistryOptions{HomeStorageID: 0, Home: storeNamed("zone_0_db"), Open: opener.open}},
-		{name: "home not opened", opts: StoreRegistryOptions{HomeStorageID: 1, Open: opener.open}},
-		{name: "home name diverges from the derived name",
-			opts: StoreRegistryOptions{HomeStorageID: 1, Home: storeNamed("zone_2_db"), Open: opener.open}},
-		{name: "no opener", opts: StoreRegistryOptions{HomeStorageID: 1, Home: storeNamed("zone_1_db")}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if _, err := NewStoreRegistry(tc.opts); err == nil {
-				t.Fatal("inconsistent seed must be rejected at startup")
-			}
-		})
+func TestNewStoreRegistryNeedsAnOpener(t *testing.T) {
+	if _, err := NewStoreRegistry(StoreRegistryOptions{AllowFamilies: true}); err == nil {
+		t.Fatal("a registry without an opener must be rejected at startup")
 	}
 }
 
-func TestStoreRegistryServesHomeWithoutOpening(t *testing.T) {
+// go/db 没有本区库(A17c):注册表建出来是空的,第一次被指向的库才打开。
+func TestStoreRegistryStartsEmpty(t *testing.T) {
 	opener := newFakeOpener()
 	registry := newTestRegistry(t, opener, dbguard.Allowlist{}, true, nil)
-	store, err := registry.Store(context.Background(), 1)
-	if err != nil {
-		t.Fatalf("home store: %v", err)
+	if samples := registry.PoolSamples(); len(samples) != 0 {
+		t.Fatalf("a new registry must hold no store, got %v", samples)
 	}
-	if store.SqlModel.DBName != "zone_1_db" {
-		t.Fatalf("home store = %q", store.SqlModel.DBName)
+	if _, err := registry.Store(context.Background(), 1000000); err != nil {
+		t.Fatalf("first use: %v", err)
 	}
-	if n := opener.count("zone_1_db"); n != 0 {
-		t.Fatalf("the zone's own database was opened by InitDB; the registry must not open it again (opened %d times)", n)
+	if n := opener.count("player_store_1000000_db"); n != 1 {
+		t.Fatalf("the first use must open the store once, opened %d times", n)
 	}
 }
 
@@ -202,7 +185,7 @@ func TestStoreRegistryConcurrentFirstUseOpensOnce(t *testing.T) {
 		go func(i int) {
 			defer done.Done()
 			started.Done()
-			results[i], errs[i] = registry.Store(context.Background(), 102)
+			results[i], errs[i] = registry.Store(context.Background(), 1000102)
 		}(i)
 	}
 	started.Wait()
@@ -217,7 +200,7 @@ func TestStoreRegistryConcurrentFirstUseOpensOnce(t *testing.T) {
 			t.Fatalf("caller %d got a different store instance", i)
 		}
 	}
-	if n := opener.count("zone_102_db"); n != 1 {
+	if n := opener.count("player_store_1000102_db"); n != 1 {
 		t.Fatalf("concurrent first use must open the store exactly once, opened %d times", n)
 	}
 }
@@ -225,19 +208,19 @@ func TestStoreRegistryConcurrentFirstUseOpensOnce(t *testing.T) {
 func TestStoreRegistryAdmission(t *testing.T) {
 	t.Run("families off and not in the allow list: rejected without dialing", func(t *testing.T) {
 		opener := newFakeOpener()
-		registry := newTestRegistry(t, opener, dbguard.Allowlist{Names: []string{"zone_1_db"}, Source: "test"}, false, nil)
-		_, err := registry.Store(context.Background(), 102)
+		registry := newTestRegistry(t, opener, dbguard.Allowlist{Names: []string{"player_store_1000000_db"}, Source: "test"}, false, nil)
+		_, err := registry.Store(context.Background(), 1000102)
 		if !errors.Is(err, ErrStoreUnavailable) {
 			t.Fatalf("err = %v, want ErrStoreUnavailable", err)
 		}
-		if n := opener.count("zone_102_db"); n != 0 {
+		if n := opener.count("player_store_1000102_db"); n != 0 {
 			t.Fatalf("a rejected store must never be dialed, opened %d times", n)
 		}
 	})
 	t.Run("families off but in the allow list: opened", func(t *testing.T) {
 		opener := newFakeOpener()
-		registry := newTestRegistry(t, opener, dbguard.Allowlist{Names: []string{"zone_1_db", "zone_102_db"}, Source: "test"}, false, nil)
-		if _, err := registry.Store(context.Background(), 102); err != nil {
+		registry := newTestRegistry(t, opener, dbguard.Allowlist{Names: []string{"player_store_1000000_db", "player_store_1000102_db"}, Source: "test"}, false, nil)
+		if _, err := registry.Store(context.Background(), 1000102); err != nil {
 			t.Fatalf("allow-listed store: %v", err)
 		}
 	})
@@ -247,6 +230,47 @@ func TestStoreRegistryAdmission(t *testing.T) {
 			t.Fatalf("err = %v, want ErrStoreUnavailable", err)
 		}
 	})
+	t.Run("a zone id names no database", func(t *testing.T) {
+		opener := newFakeOpener()
+		registry := newTestRegistry(t, opener, dbguard.Allowlist{}, true, nil)
+		if _, err := registry.Store(context.Background(), 102); !errors.Is(err, ErrStoreUnavailable) {
+			t.Fatalf("err = %v, want ErrStoreUnavailable", err)
+		}
+		if n := opener.count("zone_102_db"); n != 0 {
+			t.Fatalf("a retired zone database must never be dialed, opened %d times", n)
+		}
+	})
+}
+
+// 库名清单只许列地域存档库:zone 库名在清单里就拒启,报错点名(A17c)。
+func TestNewStoreRegistryFromConfigRejectsZoneDatabasesInTheAllowList(t *testing.T) {
+	t.Setenv(dbguard.AllowedDatabasesEnv, "player_store_1000000_db,zone_1_db")
+	_, err := NewStoreRegistryFromConfig()
+	if err == nil || !strings.Contains(err.Error(), `"zone_1_db"`) || !strings.Contains(err.Error(), "zone databases are retired") {
+		t.Fatalf("a zone database in the allow list must be refused by name, got %v", err)
+	}
+}
+
+// 写资格同理:boot 授予的每个库都必须是地域存档库,否则拒启,boot 不装配。
+func TestInitDBWithWritersRejectsNonStoreQualifications(t *testing.T) {
+	if boot != nil {
+		t.Fatal("test precondition: no boot assembled in this process")
+	}
+	for name, writers := range map[string]map[string]authoritysql.WriterConfig{
+		"no qualification":  {},
+		"a zone database":   {"player_store_1000000_db": {}, "zone_1_db": {}},
+		"a foreign schema":  {"mmorpg_guild": {}},
+		"below store range": {"player_store_999999_db": {}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := InitDBWithWriters(writers); err == nil {
+				t.Fatalf("InitDBWithWriters(%v) must be rejected", writers)
+			}
+			if boot != nil {
+				t.Fatal("a rejected boot must not be assembled")
+			}
+		})
+	}
 }
 
 // 打开失败:返回 ErrStoreUnavailable;冷却期内不再拨号,直接复用上次的错误;冷却期过后再试,成功后常驻。
@@ -319,23 +343,21 @@ func TestStoreRegistryFrozenGateDoesNotBackOff(t *testing.T) {
 
 func TestStoreRegistryRejectsAnOpenerThatLandsOnAnotherDatabase(t *testing.T) {
 	registry, err := NewStoreRegistry(StoreRegistryOptions{
-		HomeStorageID: 1,
-		Home:          storeNamed("zone_1_db"),
 		AllowFamilies: true,
 		Open: func(context.Context, string) (*GameDB, error) {
-			return storeNamed("zone_7_db"), nil
+			return storeNamed("player_store_1000007_db"), nil
 		},
 	})
 	if err != nil {
 		t.Fatalf("NewStoreRegistry: %v", err)
 	}
-	if _, err := registry.Store(context.Background(), 102); !errors.Is(err, ErrStoreUnavailable) {
+	if _, err := registry.Store(context.Background(), 1000102); !errors.Is(err, ErrStoreUnavailable) {
 		t.Fatalf("err = %v, want ErrStoreUnavailable", err)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// 连接池:指标快照与按家族选池(G2b)
+// 连接池:指标快照(G2b)
 // ---------------------------------------------------------------------------
 
 // storeWithPool 造一个带真连接池句柄的库(dbtest 假驱动;Stats() 不下发语句,nil handler 不会被调用)。
@@ -348,16 +370,14 @@ func storeWithPool(t *testing.T, name string, maxOpen int) *GameDB {
 	return store
 }
 
-// PoolSamples 按三类(本 zone 库 / 额外 zone 家族库 / 非 zone 落点库)报每个已打开库的池;没有连接的库跳过。
-func TestStoreRegistryPoolSamplesClassifiesByFamily(t *testing.T) {
+// PoolSamples 给每个已打开的存档库报一个池,类别只有 store;没有连接的库跳过。
+func TestStoreRegistryPoolSamplesReportsEveryStorePool(t *testing.T) {
 	opened := map[string]*GameDB{
-		"zone_2_db":               storeWithPool(t, "zone_2_db", 8),
-		"player_store_1000000_db": storeWithPool(t, "player_store_1000000_db", 16),
-		"zone_3_db":               storeNamed("zone_3_db"), // 无连接:PoolSamples 跳过
+		"player_store_1000000_db": storeWithPool(t, "player_store_1000000_db", 8),
+		"player_store_1000001_db": storeWithPool(t, "player_store_1000001_db", 16),
+		"player_store_1000002_db": storeNamed("player_store_1000002_db"), // 无连接:PoolSamples 跳过
 	}
 	registry, err := NewStoreRegistry(StoreRegistryOptions{
-		HomeStorageID: 1,
-		Home:          storeWithPool(t, "zone_1_db", 60),
 		AllowFamilies: true,
 		Open: func(_ context.Context, name string) (*GameDB, error) {
 			store, ok := opened[name]
@@ -370,64 +390,23 @@ func TestStoreRegistryPoolSamplesClassifiesByFamily(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStoreRegistry: %v", err)
 	}
-	for _, id := range []uint32{2, 1000000, 3} {
+	for _, id := range []uint32{1000000, 1000001, 1000002} {
 		if _, err := registry.Store(context.Background(), id); err != nil {
 			t.Fatalf("open storage %d: %v", id, err)
 		}
 	}
 
-	got := map[string][]int{}
 	samples := registry.PoolSamples()
+	var maxOpen []int
 	for _, s := range samples {
-		got[s.Pool] = append(got[s.Pool], s.Stats.MaxOpenConnections)
-	}
-	want := map[string]int{metrics.PoolHome: 60, metrics.PoolExtraZone: 8, metrics.PoolExtraNonZone: 16}
-	if len(samples) != len(want) {
-		t.Fatalf("samples = %v, want one pool per class %v (the connection-less zone_3_db must be skipped)", got, want)
-	}
-	for pool, maxOpen := range want {
-		if len(got[pool]) != 1 || got[pool][0] != maxOpen {
-			t.Fatalf("pool %q max open = %v, want [%d] (all: %v)", pool, got[pool], maxOpen, got)
+		if s.Pool != metrics.PoolStore {
+			t.Fatalf("pool class = %q, want %q (the only class left)", s.Pool, metrics.PoolStore)
 		}
+		maxOpen = append(maxOpen, s.Stats.MaxOpenConnections)
 	}
-}
-
-// 按库名家族选池:zone 家族走 Zone,非 zone 落点库走 NonZone。
-func TestStorePoolForPicksPoolByFamily(t *testing.T) {
-	pools := extraStorePools{
-		Zone:    StorePoolOptions{MaxOpenConn: 4, MaxIdleConn: 1, ConnMaxIdleTime: time.Minute},
-		NonZone: StorePoolOptions{MaxOpenConn: 32, MaxIdleConn: 8, ConnMaxIdleTime: 2 * time.Minute},
-	}
-	cases := []struct {
-		db   string
-		want StorePoolOptions
-	}{
-		{db: "zone_2_db", want: pools.Zone},
-		{db: "zone_999999_db", want: pools.Zone},
-		{db: "player_store_1000000_db", want: pools.NonZone},
-		{db: "player_store_4000000000_db", want: pools.NonZone},
-	}
-	for _, tc := range cases {
-		got, err := pools.storePoolFor(tc.db)
-		if err != nil {
-			t.Fatalf("storePoolFor(%q): %v", tc.db, err)
-		}
-		if got != tc.want {
-			t.Fatalf("storePoolFor(%q) = %+v, want %+v", tc.db, got, tc.want)
-		}
-	}
-}
-
-// 库名不属于任何家族是编程错误:报错,不猜一个池(经 openOnce 包成 ErrStoreUnavailable)。
-func TestStorePoolForRejectsNonPlacementName(t *testing.T) {
-	pools := extraStorePools{
-		Zone:    StorePoolOptions{MaxOpenConn: 4},
-		NonZone: StorePoolOptions{MaxOpenConn: 32},
-	}
-	for _, name := range []string{"", "mmorpg_guild", "zone_1000000_db", "player_store_1_db", "zone_02_db"} {
-		if got, err := pools.storePoolFor(name); err == nil {
-			t.Fatalf("storePoolFor(%q) = %+v, want an error", name, got)
-		}
+	sort.Ints(maxOpen)
+	if len(maxOpen) != 2 || maxOpen[0] != 8 || maxOpen[1] != 16 {
+		t.Fatalf("pool max open = %v, want [8 16] (the connection-less store must be skipped)", maxOpen)
 	}
 }
 
@@ -473,15 +452,15 @@ func assertNoDDL(t *testing.T, rec *dbtest.Recorder) {
 func TestPreparePlacementStoreOpensReadOnly(t *testing.T) {
 	msg := &dbpb.PlayerSnapshot{}
 	table := proto2mysql.GetTableName(msg)
-	db, rec := dbtest.Open(t, placementStoreHandler("zone_102_db",
+	db, rec := dbtest.Open(t, placementStoreHandler("player_store_1000102_db",
 		declaredColumnRows(msg, "bigint unsigned", ""), [][]driver.Value{{table}}))
 
-	store, err := preparePlacementStore(context.Background(), db, "zone_102_db", []proto.Message{msg})
+	store, err := preparePlacementStore(context.Background(), db, "player_store_1000102_db", []proto.Message{msg})
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
-	if store.DB != db || store.SqlModel == nil || store.SqlModel.DBName != "zone_102_db" {
-		t.Fatalf("store must own its pool and a model bound to zone_102_db, got %+v", store)
+	if store.DB != db || store.SqlModel == nil || store.SqlModel.DBName != "player_store_1000102_db" {
+		t.Fatalf("store must own its pool and a model bound to player_store_1000102_db, got %+v", store)
 	}
 	if store.SqlModel.GetCreateTableSQL(msg) == "" {
 		t.Fatal("tables must be registered on the store's own model")
@@ -491,16 +470,16 @@ func TestPreparePlacementStoreOpensReadOnly(t *testing.T) {
 
 func TestPreparePlacementStoreRejectsAPoolOnAnotherDatabase(t *testing.T) {
 	msg := &dbpb.PlayerSnapshot{}
-	db, rec := dbtest.Open(t, placementStoreHandler("zone_999_db", nil, nil))
+	db, rec := dbtest.Open(t, placementStoreHandler("player_store_1000999_db", nil, nil))
 
-	_, err := preparePlacementStore(context.Background(), db, "zone_102_db", []proto.Message{msg})
+	_, err := preparePlacementStore(context.Background(), db, "player_store_1000102_db", []proto.Message{msg})
 	if !errors.Is(err, dbguard.ErrDatabaseNotAllowed) {
 		t.Fatalf("err = %v, want ErrDatabaseNotAllowed", err)
 	}
 	assertNoDDL(t, rec)
 }
 
-// 缺列与启动期同一道闸;报错必须提示给迁移命令追加 -storage-id,否则照抄补救命令迁的是本 zone 库。
+// 缺列时拒绝打开;报错必须点名这个库的 -storage-id,照抄补救命令迁的就是这个库。
 func TestPreparePlacementStoreRejectsMissingColumnWithStorageHint(t *testing.T) {
 	msg := &dbpb.PlayerSnapshot{}
 	table := proto2mysql.GetTableName(msg)

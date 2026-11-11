@@ -1,13 +1,15 @@
 package main
 
-// pvp-team-smoke 场景里不依赖服务端的部分:情况表本身是否自洽、评分夹具、Elo 预言、等待窗口。
+// pvp-team-smoke 场景里不依赖服务端的部分:情况表本身是否自洽、评分夹具、Elo 预言、本局榜条目的判定、等待窗口。
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
+	rankpb "proto/rank"
 	"robot/config"
 )
 
@@ -55,22 +57,137 @@ func TestPvpSmokeCasesAreConsistent(t *testing.T) {
 		if c.settleRatings && !c.formsBattle {
 			t.Fatalf("%s: 不成局的情况没有结算可核对", c.name)
 		}
+		if c.ratings != nil {
+			mine := map[int]bool{}
+			for _, unit := range c.units {
+				for _, number := range unit {
+					mine[number] = true
+				}
+			}
+			for number := range c.ratings(&config.PvpTeamSmokeConfig{}) {
+				if !mine[number] {
+					t.Fatalf("%s: 给不属于本情况的账号 %d 指定了评分", c.name, number)
+				}
+			}
+		}
 	}
 }
 
-func TestPvpSmokeSeedsFollowConfigDefaults(t *testing.T) {
-	seeds := pvpSmokeSeeds(pvpSmokeCases(), &config.PvpTeamSmokeConfig{})
-	want := map[int]int64{
+func TestPvpSmokeSeedsCoverEveryAccount(t *testing.T) {
+	cases := pvpSmokeCases()
+	seeds := pvpSmokeSeeds(cases, &config.PvpTeamSmokeConfig{})
+	accounts := pvpSmokeAccounts(cases)
+	if len(seeds) != len(accounts) {
+		t.Fatalf("夹具应覆盖全部 %d 个参战账号,实际 %d 个", len(accounts), len(seeds))
+	}
+	custom := map[int]int64{
 		8703: 150_000, 8704: 170_000, // 起始容差 100 + 一档 100
+		8711: 150_000, 8712: 150_000, 8713: 155_000, 8714: 155_000, // 单人高半个起始容差:两侧平均分不等
 		8722: 120_000, 8723: 180_000, 8724: 170_000, // 上限 500:超出 100 被拒、恰好等于上限放行
 		8725: 150_000, 8726: 160_000, 8727: 140_000, 8728: 150_000, // 极差 200 = 一档之后的容差
 	}
-	if !reflect.DeepEqual(seeds, want) {
-		t.Fatalf("评分夹具 = %v, want %v", seeds, want)
+	for _, number := range accounts {
+		want, ok := custom[number]
+		if !ok {
+			want = pvpSmokeDefaultRating // 没指定的每轮重置回 1500,上一轮的结算不带进下一轮
+		}
+		if seeds[number] != want {
+			t.Fatalf("账号 %d 的赛前评分 = %d, want %d", number, seeds[number], want)
+		}
 	}
-	custom := pvpSmokeSeeds(pvpSmokeCases(), &config.PvpTeamSmokeConfig{PartyRatingGapMax: 300, RatingToleranceBase: 50, RatingToleranceStepDelta: 150})
-	if custom[8723] != 160_000 || custom[8724] != 150_000 || custom[8704] != 170_000 || custom[8726] != 160_000 {
-		t.Fatalf("评分夹具应跟着配置走: %v", custom)
+	configured := pvpSmokeSeeds(cases, &config.PvpTeamSmokeConfig{PartyRatingGapMax: 300, RatingToleranceBase: 50, RatingToleranceStepDelta: 150})
+	if configured[8723] != 160_000 || configured[8724] != 150_000 || configured[8704] != 170_000 || configured[8726] != 160_000 || configured[8713] != 152_500 {
+		t.Fatalf("评分夹具应跟着配置走: %v", configured)
+	}
+	if tiny := pvpSmokeSeeds(cases, &config.PvpTeamSmokeConfig{RatingToleranceBase: 1}); tiny[8713] != 150_100 {
+		t.Fatalf("起始容差只有 1 分时单人也至少高 1 分,两侧平均分才不等: %d", tiny[8713])
+	}
+}
+
+// 要核对结算的情况:不论撮合把单位怎么分边、结果是胜负还是平局,每个人的分数都要变——
+// 不变的话 match 沿用写库时刻当 achieved_ms,榜上分不出本局有没有入账。
+func TestPvpSmokeSettledCasesChangeEveryScore(t *testing.T) {
+	for _, cfg := range []*config.PvpTeamSmokeConfig{{}, {RatingToleranceBase: 1}, {RatingToleranceBase: 300}} {
+		seeds := pvpSmokeSeeds(pvpSmokeCases(), cfg)
+		for _, c := range pvpSmokeCases() {
+			if !c.settleRatings {
+				continue
+			}
+			splits := 0
+			for mask := 0; mask < 1<<len(c.units); mask++ {
+				ratings, sides := map[uint64]int64{}, map[uint64]uint32{}
+				var people [2]uint32
+				for i, unit := range c.units {
+					side := uint32(mask >> i & 1)
+					for _, number := range unit {
+						ratings[uint64(number)], sides[uint64(number)] = seeds[number], side
+						people[side]++
+					}
+				}
+				if people[0] != c.perSide || people[1] != c.perSide {
+					continue
+				}
+				splits++
+				for _, scoreA := range []float64{0, 0.5, 1} {
+					for player, after := range pvpSmokeExpectedRatings(ratings, sides, scoreA) {
+						if after == ratings[player] {
+							t.Fatalf("%s(容差 %d):账号 %d 在分边 %b、得分 %.1f 时评分不变", c.name, cfg.ToleranceBase(), player, mask, scoreA)
+						}
+					}
+				}
+			}
+			if splits == 0 {
+				t.Fatalf("%s: 没有一种分边能让两侧各 %d 人", c.name, c.perSide)
+			}
+		}
+	}
+}
+
+func TestPvpSmokeIsThisBattle(t *testing.T) {
+	const applied = 5_000
+	accept := []int64{151_783, 150_183}
+	for _, tc := range []struct {
+		name  string
+		entry *rankpb.RankEntry
+		want  bool
+	}{
+		{"本局写的", &rankpb.RankEntry{Rank: 3, Score: 150_183, AchievedMs: 9_000}, true},
+		{"写库之前的旧条目分数碰巧一样", &rankpb.RankEntry{Rank: 3, Score: 151_783, AchievedMs: 4_000}, false},
+		{"写库时刻本身:分数没变时 match 沿用它", &rankpb.RankEntry{Rank: 3, Score: 151_783, AchievedMs: applied}, false},
+		{"写库之后但分数对不上", &rankpb.RankEntry{Rank: 3, Score: 148_217, AchievedMs: 9_000}, false},
+		{"不在榜上", &rankpb.RankEntry{}, false},
+	} {
+		if got := pvpSmokeIsThisBattle(tc.entry, applied, accept); got != tc.want {
+			t.Fatalf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestPvpSmokeCheckFixture(t *testing.T) {
+	seeds := map[int]int64{8701: 150_000, 8704: 170_000}
+	players := map[int]uint64{8701: 11, 8704: 14}
+	good := func() pvpSmokeFixture {
+		return pvpSmokeFixture{Mode: 7, AppliedMs: 1_000, Ratings: []pvpSmokeFixtureEntry{
+			{Account: "robot_8701", PlayerID: 11, RatingCenti: 150_000},
+			{Account: "robot_8704", PlayerID: 14, RatingCenti: 170_000},
+			{Account: "robot_8799", PlayerID: 99, RatingCenti: 150_000}, // prepare 跑了更多情况:多出来的不碍事
+		}}
+	}
+	if err := pvpSmokeCheckFixture(good(), players, seeds); err != nil {
+		t.Fatalf("合格的夹具被拒: %v", err)
+	}
+	for name, mutate := range map[string]func(*pvpSmokeFixture){
+		"不是 PVP_TEAM":      func(f *pvpSmokeFixture) { f.Mode = 3 },
+		"还没写库或已被上一轮用掉":     func(f *pvpSmokeFixture) { f.AppliedMs = 0 },
+		"换库后 player_id 变了": func(f *pvpSmokeFixture) { f.Ratings[0].PlayerID = 12 },
+		"改了配置评分变了":         func(f *pvpSmokeFixture) { f.Ratings[1].RatingCenti = 160_000 },
+		"少了一个参战账号":         func(f *pvpSmokeFixture) { f.Ratings = f.Ratings[1:] },
+	} {
+		fixture := good()
+		mutate(&fixture)
+		if err := pvpSmokeCheckFixture(fixture, players, seeds); err == nil {
+			t.Fatalf("%s: 应拒绝", name)
+		}
 	}
 }
 
@@ -137,12 +254,23 @@ func TestPvpSmokeQuietDeadline(t *testing.T) {
 
 func TestPvpSmokeFixtureRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "fixture.json")
-	want := pvpSmokeFixture{Mode: 7, Ratings: []pvpSmokeFixtureEntry{{Account: "robot_8722", PlayerID: 11, RatingCenti: 120_000}}}
+	want := pvpSmokeFixture{Mode: 7, AppliedMs: 1_700_000_000_123, Ratings: []pvpSmokeFixtureEntry{{Account: "robot_8722", PlayerID: 11, RatingCenti: 120_000}}}
 	if err := pvpSmokeWriteFixture(path, want); err != nil {
 		t.Fatalf("写夹具: %v", err)
 	}
 	got, err := pvpSmokeReadFixture(path)
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("读回的夹具 = %+v, %v", got, err)
+	}
+	// run 取用后清零写回:覆盖已有文件,不留临时文件。
+	want.AppliedMs = 0
+	if err := pvpSmokeWriteFixture(path, want); err != nil {
+		t.Fatalf("覆盖夹具: %v", err)
+	}
+	if got, err = pvpSmokeReadFixture(path); err != nil || got.AppliedMs != 0 {
+		t.Fatalf("覆盖后读回 = %+v, %v", got, err)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("临时文件应已改名: %v", err)
 	}
 }

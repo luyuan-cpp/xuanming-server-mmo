@@ -255,6 +255,17 @@ Java `game-gate` 完整 362 项通过，`game-robot` 完整 695 项中 692 项�
 
 本仓证据：`build/verification/client-heartbeat-20261106/`；Unity：`../mmorpg-client/.codex-artifacts/heartbeat-20261106/`；Java：`../xuanming-server-mmo/build/heartbeat-20261106/`。主机在纽约时间 03:23 意外重启，未结束的 C++ 构建和 Java 全测保留原始日志，不计作通过；恢复后的验证单独记账。
 
+### 11.1 2026-11-11 真实 gate 断线重连验收通过
+
+使用正式启动入口恢复已初始化的 `xuanming-debug-current`，保留原容器和数据卷、按正常流程更新五个写者授权，没有重跑迁移。gate/scene 为 2026-11-10 同批 Linux Debug 镜像 `sha256:462f023c93f25c593b7027fe6d2ad8c1d1bfdece0f36a5d8967a363af4829ebf`，其二进制 SHA-256 与构建清单一致；robot 从本次当前源码重新编译，运行前后关键源码摘要一致。
+
+- `heartbeat-idle-smoke` 实际退出 0，H1–H6 全部通过。验签通告 10000/30000，首条心跳收到回应；裸 TCP 静默后 30449ms 被关闭；主角色停止发送满 34 秒后重新登录，`player_id=6548592681756925430`、`scene_id=88260933687705600`、`entity=4294967297` 均保持一致，旧连接未收到顶号踢线。
+- 服务端独立证据：旧会话 `131074` 静默 30930ms 后被 gate 强关，断线通知成功送达 scene；角色进入保留，4906ms 后新会话 `131076` 接回。登录代次由 `1794377200064` 变为 `1794377235832`，同场景同实体保留。gate/scene 运行身份及启动时刻全程不变，排除了节点重启后编号复用。
+- 边界探针：建连后不验签，10.676s 收到 EOF；第 5 秒发送一个不完整帧字节，仍在建连后 10.999s 收到 EOF；验签成功后从未发送任何心跳，30.748s 收到 EOF。未验签负向探针与主冒烟分开计时，其预期握手拒绝不算正常客户端异常。
+- 冒烟结束后测试会话正常关闭，scene 已销毁测试实体并写入退出释放标记；临时带凭据配置已删除，证据日志不含凭据。
+
+证据目录 `build/verification/client-heartbeat-e2e-20261111/`：`heartbeat-result.json`、`server-heartbeat-evidence.json` / `.log`、`handshake-result.json`、`verified-idle-result.json`、`runtime-provenance.json`。本次补齐的是 11-06 gate 心跳交接的真实静默判死、保留和原实体接回，可据此归档该任务；不将既有镜像验收扩大为 11-11 全部未提交源码、Java 全栈、移动实机或 §14 后续 battle 直连任务的通过证明。
+
 ## 12. 残余
 
 - **未认证连接的独立预算、LRU 淘汰、按概率早拒没做**(准入控制文档 P0-2 的其余部分)。有了 10 秒握手期限,占槽的未验签连接每条最多活 10 秒,但持续高速建连仍能把槽位占满。预算的大小要按重连风暴实测:gate 重启或网络抖动后,成千上万个客户端同时重连,它们都短暂处于未验签状态,预算定小了会把正在握手的合法客户端淘汰掉,而断线保留恰恰依赖这些客户端能马上重连回来。所以留给准入控制那一项,带压测一起做。
@@ -347,7 +358,10 @@ Java `game-gate` 完整 362 项通过，`game-robot` 完整 695 项中 692 项�
   - 卡顿恢复后读到积压的帧,不误关;
   - 按节奏发心跳的连接每次检查都活着。
 - robot:`TestBattleVerifyStartsHeartbeatOnTheDirectConnection`、`TestBattleWithoutAdvertSendsNoHeartbeat`。
-- 不覆盖 `BattleClientEdge` 的接线:注册回调、三处记帧、应答通告、定时器。走到这些代码要真实的票据握手(节点身份、房间名单),现有测试工程起不来,由 `docs/PROGRESS.md` 2026-11-10 条的冒烟覆盖。
+- `BattleClientEdge` 的接线(注册回调、三处记帧、应答通告、定时器)没有单测:走到这些代码要真实的票据握手(节点身份、房间名单),现有测试工程起不来。由冒烟覆盖:
+  - 2026-11-11 起 `battle-smoke` 断言参战方与观众的直连各自至少收到一条心跳回包(`a-direct-heartbeat` / `b-direct-heartbeat`),直连摘要行带 `heartbeat_replies=`。这条覆盖「应答通告 → robot 发心跳 → battle 处理并回包」;
+  - 心跳处理器没注册时,robot 的心跳会落进未知消息处理、直连被断开,其余直连投递断言也会失败。
+- 判死(停发心跳 30s 后直连被断开)没有端到端演练:PVE solo 一回合就结束(冒烟实测约 100ms,不开自动战斗也只撑到第一个回合超时 25s),对局活不到判死阈值。判死的端到端交给 Unity 同批验收(断网 30–31s 内直连被断开,恢复后凭票重连、补拉全量);判定本身与 gate 共用,gate 一侧 2026-11-11 已端到端验过(§11.1)。
 
 ### 14.6 Java 版(0.1.0-SNAPSHOT 待做)
 

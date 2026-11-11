@@ -96,7 +96,8 @@ func trialLaunchChecksLeft(ctx context.Context) int {
 // ACTIVITY_CHANGED 并 bump GUILD_ACTIVITY(与 launchTrial 的结尾一致),否则名单上的人停在 LAUNCHED,要自己刷新才知道
 // 这一局已作废。
 func newTrialLaunchRecovery(l *GuildLogic) *trialLaunchRecovery {
-	return &trialLaunchRecovery{d: l.activities, notify: func(lobby *data.TrialLobby) { l.notifyTrialRoster(lobby, 0) }}
+	// 恢复任务不属于哪个请求,推送不带 trace(docs/design/distributed-tracing.md §3.3「后台任务不挂 trace」)。
+	return &trialLaunchRecovery{d: l.activities, notify: func(lobby *data.TrialLobby) { l.notifyTrialRoster(context.Background(), lobby, 0) }}
 }
 
 // trialLaunchRecovery 是历练 launch 恢复器(06 §6.21「2026-11-05 修复」)。每个副本都跑;哪一条由哪个副本查、什么时候查,

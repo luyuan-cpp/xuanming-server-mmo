@@ -175,6 +175,23 @@ public:
         conflictDrainCompleteFn_ = std::move(fn);
         return *this;
     }
+
+    // ── 计划排空(docs/design/scene-node-planned-drain.md §4.1)──────────────────────────────────────────────
+    // 计划下线(SIGTERM、Agones 排空标签)先进计划排空阶段:进程照常服务(Kafka、RPC、gRPC 都不停),begin 让业务开始
+    // 把工作交给别的节点;之后每 200ms 问一次 isComplete,完成或到预算才进普通停机(ShutdownInLoop,剩下的工作走
+    // beforeShutdown 钩子)。没登记的节点 SIGTERM 行为不变(直接停机)。
+    // defaultBudget:环境变量 MMORPG_PLANNED_DRAIN_BUDGET_SECONDS 没设时的预算;环境变量为 0 时关闭计划排空,非法时拒启
+    // (node_planned_drain.h)。在 StartRpcServer() 之前、loop 线程上登记。begin / isComplete 都在 loop 线程上调用。
+    using PlannedDrainBeginFn = std::function<void(Node &)>;
+    using PlannedDrainCompleteFn = std::function<bool(Node &)>;
+    Node &SetPlannedDrain(PlannedDrainBeginFn begin, PlannedDrainCompleteFn isComplete, std::chrono::seconds defaultBudget);
+    // 进入计划排空。任意线程可调(投递到 loop)。没登记、预算为 0、已在停机、维护流程已关源时退回普通停机;重复调用幂等。
+    void RequestPlannedStop();
+    // 计划排空是否已开始。只在 loop 线程读。
+    bool PlannedDrainStarted() const { return plannedDrainStarted_; }
+    // 生效的计划排空预算(SetPlannedDrain 之后才有意义;0 = 关闭)。业务据此安排排空内部的时刻(scene 的自疏散时刻)。
+    std::chrono::seconds PlannedDrainBudget() const { return plannedDrainBudget_; }
+
     bool HasDiscoveredServiceNode(uint32_t nodeType) const
     {
         return serviceDiscoveryManager.ServiceNodes().HasNodesOfType(nodeType);
@@ -307,6 +324,9 @@ protected:
     void MaybeFinalizeShutdownInLoop();
 
     void ShutdownInLoop();
+    // 计划排空(SetPlannedDrain):进入阶段与每拍检查,都在 loop 线程。
+    void BeginPlannedDrainInLoop();
+    void PollPlannedDrainInLoop();
     void InitMaintenanceControl();
     void PollMaintenanceControl();
     void CloseMaintenanceSource();
@@ -328,6 +348,13 @@ protected:
     // 纯粹是影子成员,读代码的人会以为取消它就停住了重试,其实什么也没停。已删除。
     TimerTaskComp conflictDrainTimer;
     TimerTaskComp shutdownDrainTimer;
+    // 计划排空(SetPlannedDrain):登记的业务钩子、生效的预算、阶段是否已开始与截止时刻、每拍检查的定时器。
+    PlannedDrainBeginFn plannedDrainBeginFn_;
+    PlannedDrainCompleteFn plannedDrainCompleteFn_;
+    std::chrono::seconds plannedDrainBudget_{0};
+    bool plannedDrainStarted_{false};
+    std::chrono::steady_clock::time_point plannedDrainDeadline_{};
+    TimerTaskComp plannedDrainTimer;
     TimerTaskComp maintenanceControlTimer_;
     std::unique_ptr<NodeMaintenanceControl> maintenanceControl_;
     BeforeShutdownFn maintenanceSourceClose_;

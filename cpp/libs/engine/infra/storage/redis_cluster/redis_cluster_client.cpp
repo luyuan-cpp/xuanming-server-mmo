@@ -240,7 +240,7 @@ public:
 		command->formattedLength = static_cast<std::size_t>(length);
 
 		const CommandRoute route = redis_cluster::ResolveCommandRoute(
-			std::string_view(raw, command->formattedLength), routingKey, options_.hashTagPolicy);
+			std::string_view(raw, command->formattedLength), routingKey, options_.hashTagPolicy, options_.keyDomain);
 		if (route.kind == RouteKind::kRejected)
 		{
 			++stats_.rejectedByGuard;

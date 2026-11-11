@@ -1,5 +1,9 @@
 #include "player_lifecycle.h"
 #include "player_mutability.h"
+#include "services/scene/player/system/relocate_target.h"
+#include "services/scene/world/scene_planned_drain_rules.h"
+#include <deque>
+#include <unordered_set>
 #include "core/async/coroutine_callback.h"
 #include <boost/cobalt/task.hpp>
 #include "core/system/scene_task_scope.h"
@@ -124,6 +128,9 @@ struct EmergencyRelocateTicket
 	// 票据随后按值进 Redis 回调,EnterScene 在 TrackRelocateDispatch → SendEmergencyRelocateEnterScene 里才发出(实体已销毁)。
 	uint64_t loginGeneration{0};
 	uint64_t ownerRevision{0};
+	// 改派的去向提示(relocate_target.h,docs/design/scene-node-planned-drain.md §4.4):发票时按玩家此刻所在的场景算好,
+	// 实体销毁之后就拿不到了。
+	relocate_target::Target target;
 };
 
 thread_local bool tlsEmergencyRelocating = false;
@@ -140,10 +147,23 @@ thread_local std::size_t tlsExitReleaseMarksInFlight = 0;
 // 有结论为止(已在别处 / 已落回本节点 / 已踢线 / 已放弃)。
 // 线程模型:只在 scene 逻辑线程上读写 —— 登记(FinishExitAfterPersist → DispatchEmergencyRelocate)、写标记的 Redis
 // 回调、EnterScene 的应答 / 传输失败(muduo_grpc 通道在节点 EventLoop 上经 queueInLoop 投递)、进场路由(PlayerEnterGameNode)、
-// 核实的 Redis 回调、RedisSystem 的重连回调与 1s 定时器,都跑在同一个 EventLoop 上,不需要锁。认领靠的 EnterScene
+// 核实的 Redis 回调、RedisSystem 的 1s 定时器,都跑在同一个 EventLoop 上,不需要锁。认领靠的 EnterScene
 // 关联号也是线程内发号(tlsEnterSceneCorrelationSeq),两者作用域一致:号只在发出它的线程上有意义。
 // 不随 tlsEcs.Clear() 清空;进程退出丢表无害(只是少踢,玩家自己重登)。
 thread_local relocate_confirm::Table tlsRelocateConfirms;
+
+// 计划排空(docs/design/scene-node-planned-drain.md §4.7):开始之后 BeginSceneDrain 不再当场疏散全部住户,而是把他们放进
+// 这个队列,由 PumpPlannedEvacuations 按 Pacer 限速取出 —— 一台节点上几千人同时存盘、改派、在新节点载入会压垮后端。
+// 出队时按玩家那一刻所在的场景重新算去向(EnqueueRelocateTicket 读的是实体当时的状态)。
+// 线程模型同 tlsRelocateConfirms:只在 scene 逻辑线程上读写。进程只排空一次,不复位。
+struct PlannedDrainState
+{
+	bool active{false};
+	scene_planned_drain::Pacer pacer;
+	std::deque<Guid> queue;
+	std::unordered_set<Guid> queued;
+};
+thread_local PlannedDrainState tlsPlannedDrain;
 
 namespace
 {
@@ -420,8 +440,9 @@ namespace
 	// 第一次发起交接时在当前线程的 EventLoop 上挂一次(thread_local armed 防重复),没有 loop(单测宿主)直接返回;
 	// 回调不捕获任何对象、只按 id 回查实体,loop 析构时定时器随之销毁,不需要保存 TimerId 去取消。
 	// 为什么自挂、不借 RedisSystem 的 1s 节拍:那条节拍上的"不分家"(cross-zone-scene-travel.md §12.6.10 第 16 条)
-	// 针对的是 Redis 命令的重试(撤回、A2′)—— 它们要与重连回调成对驱动、排在加载重试之前。本扫描是生命周期截止时刻:
-	// 不发 Redis 命令、不需要重连回调,也不该随 RedisSystem::BeginShutdown / Shutdown 一起被取消(Redis 不可用恰恰
+	// 针对的是 Redis 命令的重试(撤回、A2′)—— 它们只由这一条节拍驱动,Redis 重连成功时不提前补发(负责人 2026-11-05
+	// 定「重连成功不做业务逻辑」,infra-reconnect-overview.md R14)。本扫描是生命周期截止时刻:
+	// 不发 Redis 命令,也不该随 RedisSystem::BeginShutdown / Shutdown 一起被取消(Redis 不可用恰恰
 	// 是上限要兜的情形)。平时交接实体为 0 到几个,空扫描只是一次空 view。
 	void EnsureTravelFreezeCapTimer()
 	{
@@ -730,7 +751,7 @@ namespace
 	}
 
 	// handoff 标记的待撤回表(契约见 handoff_mark_withdraw.h)。只在 scene 逻辑线程上读写:
-	// 登记(WithdrawHandoffMark)、Redis 回调销账、RedisSystem 的重连回调与 1s 定时器重试,
+	// 登记(WithdrawHandoffMark)、Redis 回调销账、RedisSystem 的 1s 定时器重试,
 	// 都跑在同一个 EventLoop 上,不需要锁。
 	thread_local handoff_mark_withdraw::Queue tlsHandoffWithdrawQueue;
 
@@ -834,17 +855,18 @@ namespace
 		travel_handoff_stats::Inc(travel_handoff_stats::Get().withdrawDeferred);
 	}
 
-	// 丢弃过了截止时刻的条目,并把到期该重试的逐条发出去。force = true 忽略重试间隔(重连时用)。
+	// 丢弃过了截止时刻的条目,并把到期该重试的逐条发出去。到期只看条目自己的重试时刻:原来重连时用的 force(忽略重试
+	// 间隔)已删,负责人 2026-11-05 定「重连成功不做业务逻辑」(infra-reconnect-overview.md R14)。
 	// 放弃是安全的:截止时刻 = 登记时刻 + 标记 TTL + 余量,而登记不早于写标记,此刻 Redis 侧的标记
 	// 必然已经过期;但它说明 Redis 连续 300s 以上不可用,必须留下 ERROR 与计数。
-	void FlushDueHandoffWithdrawals(bool force, const char *site)
+	void FlushDueHandoffWithdrawals(const char *site)
 	{
 		if (tlsHandoffWithdrawQueue.size() == 0)
 		{
 			return;
 		}
 		std::size_t expired = 0;
-		const auto due = tlsHandoffWithdrawQueue.CollectDue(handoff_mark_withdraw::Clock::now(), force, expired);
+		const auto due = tlsHandoffWithdrawQueue.CollectDue(handoff_mark_withdraw::Clock::now(), expired);
 		if (expired > 0)
 		{
 			LOG_ERROR << "[ZoneTravel][WithdrawMark] gave up on " << expired
@@ -991,7 +1013,7 @@ namespace
 	// ── 断线释放标记(A1′)与载入时清标记(A2′)的粘合代码 ─────────────────────────────
 	// 判定、Lua 与结果枚举见 exit_release_mark.h;设计见 cross-zone-scene-travel.md §12.6.3 第二步 / 第三步。
 	// 全部只在 scene 逻辑线程上跑(FinishExitAfterPersist、PlayerEnterGameNode、HandlePlayerAsyncLoaded、Redis 回调、
-	// RedisSystem 的重连回调与 1s 定时器同一个 EventLoop),不需要锁。
+	// RedisSystem 的 1s 定时器同一个 EventLoop),不需要锁。
 	// Redis 回调一律只按值捕获 id / 代际 / 标记原文,不绑对象、不持连接(AGENTS §11.7)。
 
 	// 本节点身份探针(M3),由节点入口经 PlayerLifecycleSystem::SetNodeIdentityProbe 注入。
@@ -3657,6 +3679,7 @@ void PlayerLifecycleSystem::ExpireConnectionLostHolds(connection_lost_hold::Cloc
 	};
 	std::vector<Guid> due;
 	std::vector<entt::entity> probe;
+	std::vector<entt::entity> followRecheck;
 	auto view = tlsEcs.actorRegistry.view<PlayerConnectionLostComp>();
 	for (const auto entity : view)
 	{
@@ -3666,7 +3689,8 @@ void PlayerLifecycleSystem::ExpireConnectionLostHolds(connection_lost_hold::Cloc
 			// 只由 HandleClientConnectionLost 与托管落点入场(EnterHostedHold)挂,两处都要求实体有 Guid;没有 Guid 的实体回查不到也处置不了。
 			continue;
 		}
-		switch (verdictOf(view.get<PlayerConnectionLostComp>(entity)))
+		const auto &held = view.get<PlayerConnectionLostComp>(entity);
+		switch (verdictOf(held))
 		{
 		case connection_lost_hold::HoldVerdict::kExit:
 			due.push_back(guid->value);
@@ -3677,11 +3701,22 @@ void PlayerLifecycleSystem::ExpireConnectionLostHolds(connection_lost_hold::Cloc
 		default:
 			break;
 		}
+		// 托管中的队员到了自己的那一秒:替他重新检查一次跟随(没接在队长身后的才真发读,见 OnOfflineHostingHeartbeat)。
+		if (connection_lost_hold::IsHosting(held.hostingStarted, held.afkPass, held.afkPassExpiresAtSec, nowUnixSec) &&
+			connection_lost_hold::IsHostedFollowRecheckDue(guid->value, nowUnixSec))
+		{
+			followRecheck.push_back(entity);
+		}
 	}
 	// 查月卡只改保留组件的字段、不增删组件,遍历结束后统一发。
 	for (const auto entity : probe)
 	{
 		AfkHostingSystem::Probe(entity);
+	}
+	// 跟随检查只发异步读、不增删本系统的组件,同样在遍历之后、处置到期退出之前发(team-follow-server-trail.md §3.7)。
+	for (const auto entity : followRecheck)
+	{
+		PlayerTeamSystem::OnOfflineHostingHeartbeat(entity);
 	}
 
 	auto &counters = tlsConnectionLostHoldCounters;
@@ -4040,16 +4075,37 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 	DestroyPlayer(playerId);
 }
 
+namespace
+{
+	// 玩家此刻所在场景的改派去向提示(relocate_target.h,docs/design/scene-node-planned-drain.md §4.4)。
+	// 没有场景绑定(载入中、绑定已摘)或读不到场景信息时按副本处理:回默认大世界。只读,不懒建。
+	relocate_target::Target RelocateTargetOf(const entt::entity playerEntity)
+	{
+		const auto *binding = tlsEcs.actorRegistry.try_get<SceneEntityComp>(playerEntity);
+		if (binding == nullptr || !tlsEcs.sceneRegistry.valid(binding->sceneEntity))
+		{
+			return relocate_target::Target{};
+		}
+		const auto *info = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(binding->sceneEntity);
+		if (info == nullptr)
+		{
+			return relocate_target::Target{};
+		}
+		return relocate_target::ForScene(info->scene_id(), info->scene_config_id(), info->mirror_config_id(),
+										 info->dungeon_config_id());
+	}
+} // namespace
+
 // 抄一份改派票据并把玩家推进退出流程。
 //
-// 票据必须在实体销毁前抄:改派要用的 gate / session 挂在实体上,
+// 票据必须在实体销毁前抄:改派要用的 gate / session 与去向提示都挂在实体上,
 // HandleExitGameNode 的存盘回调会把实体销毁掉。
 //
 // 返回 true 表示登记了票据(玩家有活着的 gate 会话,稍后会被改派);
 // false 表示玩家已经断线,只存盘不改派。
 //
-// 供两条路径共用:整节点疏散(身份冲突)与单场景排空(频道缩容)。
-// 两者对玩家的处理完全一样 —— 存盘、改派到大世界、销毁本地实体 ——
+// 供三条路径共用:整节点疏散(身份冲突)、单场景排空(频道缩容、迁移拆老实体、归属对账)与计划排空的限速出队。
+// 对玩家的处理完全一样 —— 存盘、带着去向提示改派、销毁本地实体 ——
 // 区别只在于**范围**,以及节点自己要不要跟着退出。所以逻辑只写一份。
 bool PlayerLifecycleSystem::EnqueueRelocateTicket(entt::entity playerEntity, const char *reasonTag, ExitCause cause)
 {
@@ -4072,6 +4128,7 @@ bool PlayerLifecycleSystem::EnqueueRelocateTicket(entt::entity playerEntity, con
 		ticket.sessionId = session->gate_session_id();
 		ticket.gateNodeId = GetGateNodeId(session->gate_session_id());
 		ticket.gateInstanceId = ResolveGateInstanceId(session->gate_session_id());
+		ticket.target = RelocateTargetOf(playerEntity);
 		tlsEmergencyRelocateTickets.insert_or_assign(guid->value, std::move(ticket));
 		ticketed = true;
 	}
@@ -4101,7 +4158,7 @@ void PlayerLifecycleSystem::BeginEmergencyRelocateAll()
 	std::vector<entt::entity> players(view.begin(), view.end());
 
 	LOG_WARN << "[EmergencyRelocate] node identity lost; persisting and relocating "
-			 << players.size() << " online player(s) to the main world";
+			 << players.size() << " online player(s) off this node";
 
 	for (auto entity : players)
 	{
@@ -4127,17 +4184,118 @@ std::size_t PlayerLifecycleSystem::BeginSceneDrain(SceneEntity sceneEntity)
 	}
 
 	LOG_WARN << "[SceneDrain] draining scene entity " << entt::to_integral(sceneEntity)
-			 << ": relocating " << residents.size() << " player(s) to the main world";
+			 << ": relocating " << residents.size() << " player(s)" << (tlsPlannedDrain.active ? " (paced)" : "");
 
 	std::size_t relocating = 0;
 	for (auto entity : residents)
 	{
-		if (EnqueueRelocateTicket(entity, "SceneDrain", ExitCause::kSceneDrain))
+		// 计划排空期间排队限速(PumpPlannedEvacuations 出队时再发票);平时当场发票。
+		const bool counted = tlsPlannedDrain.active ? QueuePlannedEvacuation(entity)
+													: EnqueueRelocateTicket(entity, "SceneDrain", ExitCause::kSceneDrain);
+		if (counted)
 		{
 			++relocating;
 		}
 	}
 	return relocating;
+}
+
+// ── 计划排空(docs/design/scene-node-planned-drain.md §4.7)─────────────────────────────────────────────────────
+
+void PlayerLifecycleSystem::BeginPlannedDrain(const uint32_t relocationsPerSecond)
+{
+	if (tlsPlannedDrain.active)
+	{
+		return;
+	}
+	tlsPlannedDrain.active = true;
+	tlsPlannedDrain.pacer = scene_planned_drain::Pacer(relocationsPerSecond);
+	LOG_INFO << "[PlannedDrain] evacuations are paced: relocations_per_second="
+			 << (relocationsPerSecond == 0 ? std::string("unlimited") : std::to_string(relocationsPerSecond));
+}
+
+bool PlayerLifecycleSystem::QueuePlannedEvacuation(const entt::entity playerEntity)
+{
+	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		return false;
+	}
+	const auto *guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(playerEntity);
+	if (guid == nullptr || guid->value == kInvalidGuid)
+	{
+		return false;
+	}
+	// 已经登记了改派票据(出队过、或别的路径发过)、或已在队里:不重复排。
+	if (tlsEmergencyRelocateTickets.find(guid->value) != tlsEmergencyRelocateTickets.end() ||
+		!tlsPlannedDrain.queued.insert(guid->value).second)
+	{
+		return false;
+	}
+	tlsPlannedDrain.queue.push_back(guid->value);
+	return true;
+}
+
+std::size_t PlayerLifecycleSystem::QueueAllPlayersForPlannedDrain()
+{
+	if (!tlsPlannedDrain.active)
+	{
+		return 0;
+	}
+	std::size_t queued = 0;
+	for (const auto entity : tlsEcs.actorRegistry.view<Player>())
+	{
+		const auto *guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(entity);
+		// 正在退出的(下线、交接、已排过)由各自的收尾处理,不再排。
+		if (guid == nullptr || IsPlayerExitPending(guid->value))
+		{
+			continue;
+		}
+		if (QueuePlannedEvacuation(entity))
+		{
+			++queued;
+		}
+	}
+	return queued;
+}
+
+void PlayerLifecycleSystem::PumpPlannedEvacuations(const std::chrono::steady_clock::time_point now)
+{
+	if (!tlsPlannedDrain.active || tlsPlannedDrain.queue.empty())
+	{
+		return;
+	}
+	std::size_t allowance = tlsPlannedDrain.pacer.Take(now, tlsPlannedDrain.queue.size());
+	while (allowance > 0 && !tlsPlannedDrain.queue.empty())
+	{
+		const Guid playerId = tlsPlannedDrain.queue.front();
+		tlsPlannedDrain.queue.pop_front();
+		tlsPlannedDrain.queued.erase(playerId);
+		const auto entity = tlsEcs.GetPlayer(playerId);
+		if (!tlsEcs.actorRegistry.valid(entity))
+		{
+			continue; // 排队期间已经走了(下线、换到别的节点):不占名额
+		}
+		--allowance;
+		EnqueueRelocateTicket(entity, "PlannedDrain", ExitCause::kSceneDrain);
+	}
+}
+
+std::size_t PlayerLifecycleSystem::PlannedEvacuationsQueued()
+{
+	return tlsPlannedDrain.queue.size();
+}
+
+std::size_t PlayerLifecycleSystem::LocalPlayerCount()
+{
+	return tlsEcs.actorRegistry.view<Player>().size();
+}
+
+bool PlayerLifecycleSystem::IsPlannedDrainSettled()
+{
+	// 与 IsEmergencyRelocateDrained 同一组条件,另加限速队列为空:本地不再持有任何玩家,每一次改派都已发出并有了结论。
+	return tlsPlannedDrain.queue.empty() && tlsEmergencyRelocateTickets.empty() &&
+		   tlsRelocateHandoffMarksInFlight == 0 && tlsExitReleaseMarksInFlight == 0 && tlsRelocateConfirms.size() == 0 &&
+		   tlsEcs.actorRegistry.view<Player>().size() == 0;
 }
 
 bool PlayerLifecycleSystem::IsEmergencyRelocateDrained()
@@ -4494,9 +4652,13 @@ uint64_t PlayerLifecycleSystem::SendEmergencyRelocateEnterScene(Guid playerId, c
 	}
 	::scene_manager::EnterSceneRequest req;
 	req.set_player_id(playerId);
-	// scene_id / scene_conf_id 都留 0:让 SceneManager 按它自己的世界频道表挑一个
-	// **存活节点**上的大世界频道。C++ 侧不复制一份地图/频道选择规则(权威只有一份),
-	// 于是"副本节点挂了"与"大世界节点挂了"落到完全相同的一条路径。
+	// 去向提示 + 疏散标志(docs/design/scene-node-planned-drain.md §4.4):scene_id 是原频道(副本、镜像为 0),
+	// scene_conf_id 是原地图(副本为 0),发票时按玩家当时所在的场景算好。落到哪由 SceneManager 决定 —— 原频道
+	// (排空迁移之后它在别的节点上)→ 同图最空的频道 → 默认大世界,不选排空中的节点;C++ 侧不复制一份地图 / 频道
+	// 选择规则(权威只有一份)。以前两项都留 0,玩家一律落到默认大世界,换了地图。
+	req.set_scene_id(ticket.target.sceneId);
+	req.set_scene_conf_id(ticket.target.sceneConfId);
+	req.set_evacuation(true);
 	req.set_session_id(ticket.sessionId);
 	req.set_gate_id(std::to_string(ticket.gateNodeId));
 	req.set_gate_instance_id(ticket.gateInstanceId);
@@ -4532,8 +4694,9 @@ uint64_t PlayerLifecycleSystem::SendEmergencyRelocateEnterScene(Guid playerId, c
 	}
 	SendCorrelatedEnterScene(smEntity, req, correlationId, std::move(done));
 
-	LOG_INFO << "[EmergencyRelocate] requested main-world re-home for player " << playerId
-			 << " (session=" << ticket.sessionId << ", gate=" << ticket.gateNodeId << ", corr=" << correlationId << ")";
+	LOG_INFO << "[EmergencyRelocate] requested evacuation for player " << playerId << " (scene_hint="
+			 << ticket.target.sceneId << ", conf_hint=" << ticket.target.sceneConfId << ", session=" << ticket.sessionId
+			 << ", gate=" << ticket.gateNodeId << ", corr=" << correlationId << ")";
 	return correlationId;
 }
 
@@ -4609,7 +4772,7 @@ void PlayerLifecycleSystem::ReconcileRelocateOnReentry(Guid playerId, SessionId 
 	}
 }
 
-void PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::time_point now, bool reconnected)
+void PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::time_point now)
 {
 	if (tlsRelocateConfirms.size() == 0)
 	{
@@ -4617,7 +4780,7 @@ void PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::time_
 	}
 	auto &stats = relocate_confirm_stats::Get();
 	// CollectDue 只归类、只给出 (playerId, seq);逐个处置时会结清条目,所以每一个都重新对号,不持有表内指针。
-	const relocate_confirm::Table::Due due = tlsRelocateConfirms.CollectDue(now, reconnected);
+	const relocate_confirm::Table::Due due = tlsRelocateConfirms.CollectDue(now);
 	if (due.markWriteTimedOut > 0)
 	{
 		stats.markWriteTimeout.fetch_add(due.markWriteTimedOut, std::memory_order_relaxed);
@@ -6517,7 +6680,10 @@ boost::cobalt::task<void> PlayerLifecycleSystem::PublishAndEnterTravel(TravelMar
 				attempt.holderFence.data(), attempt.holderFence.size(), attempt.publishedFence.data(), attempt.publishedFence.size());
 			if (ret != REDIS_OK) return false;
 			// Redis 接纳之后才记录标记代次。即使回包重入，业务也在提交返回后才恢复。
-			if (auto* current = currentAttempt(); current != nullptr) current->markEpoch = attempt.ownerEpoch;
+			// 这里与上面占住 requestedAtMs 同在协程首段的同步栈上，组件必然还在，直接写，不经 currentAttempt：
+			// 撤销在途(cancellationPending)时也要记。撤销脚本若以 ERROR 拒绝、这次发布又成功，作废交接要靠
+			// "{markEpoch}:{requestedAtMs}" 还原标记原文做条件撤回；留 0 就撤不回(2026-11-11 恢复改造前的无条件记录)。
+			tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(attempt.player).markEpoch = attempt.ownerEpoch;
 			return true;
 		}, {});
 	if (!reply || (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none)
@@ -7203,12 +7369,12 @@ void PlayerLifecycleSystem::WithdrawHandoffMark(Guid playerId, uint64_t markEpoc
 		travel_handoff_stats::Inc(travel_handoff_stats::Get().withdrawExpired);
 	}
 	// 新条目登记时 nextAttemptAt = now,这里立刻把它(连同其它到期条目)发出去。
-	FlushDueHandoffWithdrawals(/*force=*/false, site);
+	FlushDueHandoffWithdrawals(site);
 }
 
-void PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(bool reconnected)
+void PlayerLifecycleSystem::RetryPendingHandoffWithdrawals()
 {
-	FlushDueHandoffWithdrawals(/*force=*/reconnected, reconnected ? "reconnect" : "retry");
+	FlushDueHandoffWithdrawals("retry");
 }
 
 void PlayerLifecycleSystem::BeginInheritedMarkClear(Guid playerId)
@@ -7248,14 +7414,13 @@ void PlayerLifecycleSystem::BeginInheritedMarkClear(Guid playerId)
 	SendInheritClear(playerId);
 }
 
-void PlayerLifecycleSystem::RetryInheritedMarkClears(bool reconnected)
+void PlayerLifecycleSystem::RetryInheritedMarkClears(exit_release_mark::Clock::time_point now)
 {
 	if (tlsPendingEnterMap.empty())
 	{
 		return;
 	}
 	// 先收集、后处理:拒绝会擦待入场条目,重发失败也可能拒绝,遍历中不能改表。
-	const auto now = exit_release_mark::Clock::now();
 	std::vector<Guid> toRefuse;
 	std::vector<Guid> toResend;
 	for (const auto &[playerId, ctx] : tlsPendingEnterMap)
@@ -7274,7 +7439,8 @@ void PlayerLifecycleSystem::RetryInheritedMarkClears(bool reconnected)
 			toRefuse.push_back(playerId);
 			continue;
 		}
-		if (waiting && (reconnected || now >= state.nextRetryAt))
+		// 只看条目自己的重试时刻:Redis 重连成功时也不提前补发(R14,见头文件)。
+		if (waiting && now >= state.nextRetryAt)
 		{
 			toResend.push_back(playerId);
 		}
@@ -7306,8 +7472,10 @@ namespace
 	// 所以本节点身份不再确认时(IsNodeIdentityConfirmed 为假:keepalive 应答超过半个租约没来、重注册中、紧急疏散中),
 	// 每 kIdentityAtRiskSaveIntervalSec 秒给所有还能改的玩家存一次,身份恢复后回到定时存盘的节奏。身份不确认比租约到期
 	// 早半个租约,再加上 scene_manager 的再入屏障,接管之前通常已经补存过很多轮,丢失上限缩到这个间隔。
-	// 这是缩短窗口,不是围栏:最后一次补存到接管之间的改动照样会丢(冻结所有玩家才能做到零丢失,代价是一次 etcd 抖动
-	// 就让整个节点停摆,暂不这样做)。
+	// 这是缩短窗口,不是围栏:最后一次补存到接管之间的改动照样会丢。要做到零丢失,只能在失租时冻结或疏散全部玩家;
+	// 2026-09-08 起明确不这样做(node.h NodeIdConflictReason:失租只重注册,不关停):etcd 整体抖动或故障恢复时,
+	// 所有节点会同时冻结或疏散,整个集群停摆,代价远大于单边失联时最多丢的这一个间隔。
+	// 要改这个取舍,需要负责人决定(保障地图 data-consistency-guarantee-map-20261020.md §6.4 记了可选做法)。
 	//
 	// 用 SavePlayer 不用 SavePlayerPeriodic:要把位置也写进去,接管的节点才从这里最后的位置接着走。
 	// 只存可改的玩家(IsPlayerMutable):冻结、交接、退出中的实体已经在自己的存盘流程里,再插一笔只会打乱它们的收尾判定。

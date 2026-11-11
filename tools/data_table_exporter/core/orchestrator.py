@@ -13,6 +13,7 @@ from core.table_source import TableSourceError, read_all_tables
 from core.file_utils import ensure_dirs, md5_copy, report_orphans
 from core.foreign_key import ForeignKeyReport, validate_foreign_keys
 from core.manifest import generate_manifest
+from core.permanent_ids import PermanentIdsReport, record_permanent_ids, validate_permanent_ids
 from core.primary_key import PrimaryKeyReport, validate_primary_keys
 from core.generators.bit_index_gen import BitIndexStateError, generate_bit_indexes
 from core.generators.comp_gen import generate_comp_headers
@@ -86,6 +87,16 @@ def run(cfg: ExporterConfig) -> None:
         logger.error("Primary-key validation failed: %d errors; export aborted and outputs were not written", len(pk.errors))
         sys.exit(1)
 
+    # 声明了 (cfg_ids_permanent) 的表:台账里的行 id 不许从表里消失(core/permanent_ids.py 的说明)。
+    # 与外键、主键同一位置,失败一律整批不产出;台账在生成阶段才追加。
+    permanent: PermanentIdsReport = validate_permanent_ids(tables, cfg)
+    if not permanent.ok:
+        for msg in permanent.errors:
+            logger.error("Permanent row ids: %s", msg)
+        logger.error("Permanent row-id validation failed: %d errors; export aborted and outputs were not written",
+                     len(permanent.errors))
+        sys.exit(1)
+
     # Generate
     generate_json(cfg, tables)
     generate_proto_files(cfg, tables)
@@ -103,6 +114,7 @@ def run(cfg: ExporterConfig) -> None:
     generate_table_ids(cfg, tables)
     generate_constants(cfg, tables)
     generate_bit_indexes(cfg, tables)
+    record_permanent_ids(tables, cfg)
 
     # 批次清单必须在所有表数据产物写完之后生成——它记的是产物 sha256,早一步就对不上。
     generate_manifest(cfg, tables)

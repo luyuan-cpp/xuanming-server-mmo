@@ -78,7 +78,7 @@ bool PrepareForwardCall(const client_rpc_router::ForwardRequest &request, const 
     }
     const char *fullMethod = gRpcMethodRegistry[messageId].grpcFullMethod;
     return fullMethod != nullptr && fullMethod[0] != '\0' &&
-           caller_auth::Append(call.metadata, fullMethod, sessionDetailsBin, std::getenv(caller_auth::kSecretEnv));
+           caller_auth::Append(call.metadata, fullMethod, sessionDetailsBin);
 }
 
 } // namespace

@@ -41,7 +41,8 @@ const ownershipFaultSourceZone uint32 = 990017
 
 const ownershipFaultTargetZone uint32 = 990018
 
-const ownershipFaultPlayerDB = "zone_990017_db"
+// 本机多区演练只有一个地域存档库(dev 地域 0、K=1):两个区的号都落在这里,zone 库已退役(player-data-tidb-scaling-plan.md §7.2 A17c)。
+const ownershipFaultPlayerDB = "player_store_1000000_db"
 
 const ownershipFaultKindOwner = uint32(pspb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER)
 

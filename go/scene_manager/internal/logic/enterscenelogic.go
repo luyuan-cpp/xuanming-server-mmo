@@ -587,7 +587,15 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	if resumeSceneID != 0 {
 		requestedSceneID = resumeSceneID
 	}
-	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(requestedSceneID, sceneConfID, targetZoneId, in.PlayerId)
+	// 疏散请求(源 scene 节点把玩家从要没了的场景里搬走,docs/design/scene-node-planned-drain.md §4.4)单独解析:
+	// 原频道 → 同图 → 默认大世界,不选排空中的节点。它带 zone_id,不走上面的短重连回原场景;也不在等待落点上。
+	resolveTarget := func() (uint64, string, bool, error) {
+		if in.GetEvacuation() {
+			return l.resolveEvacuationTarget(in, evacuationSourceNode(currentLoc, currentZoneID, targetZoneId), targetZoneId)
+		}
+		return l.resolveSceneForEnter(requestedSceneID, sceneConfID, targetZoneId, in.PlayerId)
+	}
+	sceneId, nodeId, reserved, err := resolveTarget()
 	if err != nil && resumeSceneID != 0 && !errors.Is(err, ErrReentryBarrierPending) {
 		metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonResumeSceneFallback)
 		l.Logger.Infof("[Reconnect] Previous scene unavailable; falling back to default world: player=%d zone=%d scene=%d node=%s err=%v",
@@ -1635,6 +1643,9 @@ const deadNodeReassignFollowUpTimeout = 3 * time.Second
 // 另一个副本上的 EnterScene、rebalance、initWorldScenesForZone、懒改派,CAS 保证只有一个落地。
 // 记账(属主映射、两侧 node:zone:{z}:{n}:scenes、两侧 scene_count)由 CAS 脚本同批改,与
 // scene_registration.go 登记新场景时写的三项一致。
+//
+// 成员资格与屏障之后的搬迁(moveChannelOffDeadNode)在本进程里按频道合并(joinChannelMove,channel_move_flight.go):
+// 同时到的自愈与懒改派只跑一次,其余请求等它的结果。
 func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, zoneId uint32, deadNode string) (uint64, string, error) {
 	if sceneConfId == 0 {
 		return 0, "", fmt.Errorf("scene %d is on dead node %s and cannot be recreated without scene_conf_id", sceneId, deadNode)
@@ -1659,21 +1670,36 @@ func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, 
 		return 0, "", fmt.Errorf("scene %d 的属主节点 %s 刚判死,再入屏障未到: %w",
 			sceneId, deadNode, ErrReentryBarrierPending)
 	}
+	// 同一进程里同时到的自愈按频道合并成一次(joinChannelMove,2026-11-11):节点一死,它上面的玩家会一起重连进这个
+	// 频道,每个请求各占一次名额、各建一次实体,只会放大 K8s 写入与白建白拆。上面的廉价复核每个请求自己做:
+	// 带不了 scene_conf_id、不是这张图的频道的请求不去发起或带坏别人的那一次。
+	newNodeId, err := joinChannelMove(l.ctx, sceneId, func() (string, error) {
+		return l.moveChannelOffDeadNode(sceneId, sceneConfId, zoneId, deadNode)
+	})
+	if err != nil {
+		return 0, "", err
+	}
+	return sceneId, newNodeId, nil
+}
+
+// moveChannelOffDeadNode 是 reassignSceneOffDeadNode 的搬迁一半(调用方已做完成员资格与再入屏障的复核):挑节点、
+// 先占名额、建实体、改派 CAS、提交名额,回频道此刻的属主。CAS 落空时回 adoptOwnerAfterLostReassign 重读到的属主。
+func (l *EnterSceneLogic) moveChannelOffDeadNode(sceneId, sceneConfId uint64, zoneId uint32, deadNode string) (string, error) {
 	// 频道只能落在能承载大世界的节点上(仅承载副本的节点会在 C++ EnterScene 按类型拒绝)。
 	bestNodeId, err := GetBestNodeForPurpose(l.ctx, l.svcCtx, zoneId, constants.NodePurposeWorld)
 	if err != nil {
-		return 0, "", fmt.Errorf("scene %d mapped to dead node %s and no live world-hosting node: %w", sceneId, deadNode, err)
+		return "", fmt.Errorf("scene %d mapped to dead node %s and no live world-hosting node: %w", sceneId, deadNode, err)
 	}
 	// 先占名额:挑中的节点满了时落点换成回落分配挑的节点(见函数注释)。
 	newNodeId, placement, ok := reserveAgonesRoomForWorldChannel(l.ctx, l.svcCtx, zoneId, sceneId, bestNodeId, true)
 	if !ok {
-		return 0, "", fmt.Errorf("scene %d on dead node %s: no Agones room capacity in zone %d, ownership unchanged",
+		return "", fmt.Errorf("scene %d on dead node %s: no Agones room capacity in zone %d, ownership unchanged",
 			sceneId, deadNode, zoneId)
 	}
 	if newNodeId == deadNode {
 		// 回落分配挑中了属主自己(它的 Pod 还在 etcd 里,负载集却已判死):搬过去等于没搬。
 		l.abandonAgonesRoomAfterReassign(zoneId, placement, "fallback_picked_old_owner")
-		return 0, "", fmt.Errorf("scene %d on dead node %s: free allocation picked the dead owner, ownership unchanged",
+		return "", fmt.Errorf("scene %d on dead node %s: free allocation picked the dead owner, ownership unchanged",
 			sceneId, deadNode)
 	}
 	// 再分配这次放置的代次,带着它建实体,挂请求 ctx(docs/design/world-channel-placement-generation.md)。
@@ -1683,18 +1709,19 @@ func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, 
 	generation, err := allocatePlacementGeneration(l.svcCtx, zoneId)
 	if err != nil {
 		l.abandonAgonesRoomAfterReassign(zoneId, placement, "placement_generation_unavailable")
-		return 0, "", fmt.Errorf("scene %d on dead node %s, ownership unchanged: %w", sceneId, deadNode, err)
+		return "", fmt.Errorf("scene %d on dead node %s, ownership unchanged: %w", sceneId, deadNode, err)
 	}
 	if _, err := RequestNodeCreateSceneAtGeneration(l.ctx, l.svcCtx, zoneId, newNodeId, uint32(sceneConfId), sceneId, generation); err != nil {
 		l.abandonAgonesRoomAfterReassign(zoneId, placement, "create_scene_failed")
-		return 0, "", fmt.Errorf("scene %d on dead node %s: CreateScene on %s failed, ownership unchanged: %w", sceneId, deadNode, newNodeId, err)
+		return "", fmt.Errorf("scene %d on dead node %s: CreateScene on %s failed, ownership unchanged: %w", sceneId, deadNode, newNodeId, err)
 	}
 	if !reassignWorldChannelNode(l.svcCtx, zoneId, sceneId, deadNode, newNodeId, worldChannelsKey(zoneId, sceneConfId), generation) {
-		return l.adoptOwnerAfterLostReassign(sceneId, sceneConfId, zoneId, deadNode, newNodeId, generation, placement)
+		_, owner, err := l.adoptOwnerAfterLostReassign(sceneId, sceneConfId, zoneId, deadNode, newNodeId, generation, placement)
+		return owner, err
 	}
 	l.Logger.Infof("resolveScene: world channel %d was on dead node %s, reassigned to %s", sceneId, deadNode, newNodeId)
 	l.commitAgonesRoomAfterReassign(sceneId, zoneId, newNodeId, placement)
-	return sceneId, newNodeId, nil
+	return newNodeId, nil
 }
 
 // adoptOwnerAfterLostReassign 处理 reassignSceneOffDeadNode 的 CAS 落空。此时 triedNode 上已经按放置代次 generation

@@ -14,6 +14,11 @@
 //   stream   = stdout | stderr
 //   level    = trace / debug / info / warn / error / fatal / stat ... 统一小写
 //   filename = 采集的文件路径(Alloy 自动加)
+//
+// 结构化元数据(不是标签,不进索引,高基数没关系;查询用 | key="value" 过滤):
+//   caller(Go)、tid(C++)、logger / thread(Java);
+//   trace_id / span_id / player_id:三种语言同一套键名(docs/design/distributed-tracing.md §3.2、§9.1),
+//   只在那一行真带了值时才写,Java 没有 player_id。这三个值绝不能做成标签,Loki 会被撑爆。
 // ============================================================================
 
 logging {
@@ -119,6 +124,37 @@ loki.process "go_services" {
     }
     stage.structured_metadata {
       values = { caller = "" }
+    }
+  }
+
+  // 链路追踪字段(docs/design/distributed-tracing.md §3.2、§9.1):go-zero 带 ctx 打的行有 "trace" / "span",
+  // 经 tracing.PlayerFieldInterceptor 的行有 "player_id"。只对真带了这些键的行取值,不给其余的行写空值。
+  // player_id 只认字符串形态("player_id":"123"):写成 JSON 数字的 id 会被 stage.json 按 float64 解析,
+  // 超过 2^53 时末几位被悄悄改掉,宁可不取也不能取错。选择器里的 "键":" 不会命中 content 里转义过的 \"键\":。
+  stage.match {
+    selector = `{job="go_services"} |~ "^\\{" |= "\"trace\":\""`
+
+    stage.json {
+      expressions = {
+        trace_id = "trace",
+        span_id  = "span",
+      }
+    }
+    stage.structured_metadata {
+      values = {
+        trace_id = "",
+        span_id  = "",
+      }
+    }
+  }
+  stage.match {
+    selector = `{job="go_services"} |~ "^\\{" |= "\"player_id\":\""`
+
+    stage.json {
+      expressions = { player_id = "player_id" }
+    }
+    stage.structured_metadata {
+      values = { player_id = "" }
     }
   }
 
@@ -256,6 +292,16 @@ loki.process "cpp_nodes" {
     stage.regex {
       expression = `^(?P<ts>\d{8} \d{2}:\d{2}:\d{2}\.\d{6}) +(?P<tid>\d+) (?P<level>[A-Z]+) `
     }
+    // 行尾的上下文后缀(docs/design/distributed-tracing.md §5.1、§9.1):
+    //   ... - node.cpp:366 [ctx trace_id=<32 位> span_id=<16 位> player_id=<id>]
+    // 缺哪样就省哪样,两样都没有就没有这段。trace 与玩家分两条正则取:正则整条匹配才写取值,
+    // 所以只在真有值时写结构化元数据,不写空串。锚定在整条末尾:多行消息的后缀跟在最后一行之后,合并后仍在末尾。
+    stage.regex {
+      expression = `\[ctx trace_id=(?P<trace_id>[0-9a-f]{32}) span_id=(?P<span_id>[0-9a-f]{16})(?: player_id=\d+)?\]\s*$`
+    }
+    stage.regex {
+      expression = `\[ctx(?: trace_id=[0-9a-f]{32} span_id=[0-9a-f]{16})? player_id=(?P<player_id>\d+)\]\s*$`
+    }
     stage.timestamp {
       source            = "ts"
       format            = "20060102 15:04:05.000000"
@@ -270,7 +316,12 @@ loki.process "cpp_nodes" {
       values = { level = "" }
     }
     stage.structured_metadata {
-      values = { tid = "" }
+      values = {
+        tid       = "",
+        trace_id  = "",
+        span_id   = "",
+        player_id = "",
+      }
     }
   }
 
@@ -435,6 +486,25 @@ loki.process "java" {
       values = {
         logger = "",
         thread = "",
+      }
+    }
+  }
+
+  // A 的链路追踪字段(docs/design/distributed-tracing.md §3.2、§9.1):Micrometer Tracing 把 traceId / spanId
+  // 放进 MDC,logstash 格式把 MDC 写成顶层字段。只对真带了 traceId 的行取值,统一改名成 trace_id / span_id。
+  stage.match {
+    selector = `{job="java"} |~ "^\\{" |= "\"traceId\":\""`
+
+    stage.json {
+      expressions = {
+        trace_id = "traceId",
+        span_id  = "spanId",
+      }
+    }
+    stage.structured_metadata {
+      values = {
+        trace_id = "",
+        span_id  = "",
       }
     }
   }

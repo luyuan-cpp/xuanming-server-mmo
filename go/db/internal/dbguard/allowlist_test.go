@@ -83,20 +83,20 @@ func TestAllowlistResolvePrecedence(t *testing.T) {
 func TestAllowlistResolveMissingFileIsFatal(t *testing.T) {
 	// 显式配了文件却读不到 = 部署事故,绝不能静默回落到 yaml 内联清单,
 	// 否则「我收紧了白名单」会被镜像里的旧 yaml 悄悄放宽。
-	_, err := AllowlistSpec{File: filepath.Join(t.TempDir(), "missing.txt"), Inline: []string{"zone_1_db"}}.Resolve()
+	_, err := AllowlistSpec{File: filepath.Join(t.TempDir(), "missing.txt"), Inline: []string{"player_store_1000001_db"}}.Resolve()
 	if err == nil {
 		t.Fatal("missing allow list file must be fatal, not silently ignored")
 	}
 }
 
 func TestAssertDatabaseRejectsUnlisted(t *testing.T) {
-	db, _ := dbtest.Open(t, selectDatabaseHandler("zone_11_db"))
+	db, _ := dbtest.Open(t, selectDatabaseHandler("player_store_1000011_db"))
 
-	// 这就是 ZoneId 填错一位的场景:进程自己推导出 zone_11_db 并连上了它,
-	// 但部署侧注入的清单里只有 zone_1_db。必须拒启。
+	// 这就是编号填错一位的场景:进程自己推导出 player_store_1000011_db 并连上了它,
+	// 但部署侧注入的清单里只有 player_store_1000001_db。必须拒启。
 	_, err := AssertDatabase(context.Background(), db, AssertOptions{
-		Expected: "zone_11_db",
-		Allow:    Allowlist{Names: []string{"zone_1_db"}, Source: "test"},
+		Expected: "player_store_1000011_db",
+		Allow:    Allowlist{Names: []string{"player_store_1000001_db"}, Source: "test"},
 	})
 	if !errors.Is(err, ErrDatabaseNotAllowed) {
 		t.Fatalf("expected ErrDatabaseNotAllowed, got %v", err)
@@ -104,27 +104,27 @@ func TestAssertDatabaseRejectsUnlisted(t *testing.T) {
 }
 
 func TestAssertDatabaseAcceptsListed(t *testing.T) {
-	db, _ := dbtest.Open(t, selectDatabaseHandler("zone_1_db"))
+	db, _ := dbtest.Open(t, selectDatabaseHandler("player_store_1000001_db"))
 
 	name, err := AssertDatabase(context.Background(), db, AssertOptions{
-		Expected: "zone_1_db",
-		Allow:    Allowlist{Names: []string{"zone_1_db", "zone_2_db"}, Source: "test"},
+		Expected: "player_store_1000001_db",
+		Allow:    Allowlist{Names: []string{"player_store_1000001_db", "player_store_1000002_db"}, Source: "test"},
 	})
 	if err != nil {
 		t.Fatalf("listed database must pass: %v", err)
 	}
-	if name != "zone_1_db" {
+	if name != "player_store_1000001_db" {
 		t.Fatalf("unexpected connected name %q", name)
 	}
 }
 
 func TestAssertDatabaseRejectsMismatchWithDerivedName(t *testing.T) {
 	// 服务端实际选中的库和进程推导出来的不一致(DSN 被改 / 连错实例)。
-	db, _ := dbtest.Open(t, selectDatabaseHandler("zone_2_db"))
+	db, _ := dbtest.Open(t, selectDatabaseHandler("player_store_1000002_db"))
 
 	_, err := AssertDatabase(context.Background(), db, AssertOptions{
-		Expected: "zone_1_db",
-		Allow:    Allowlist{Names: []string{"zone_1_db", "zone_2_db"}, Source: "test"},
+		Expected: "player_store_1000001_db",
+		Allow:    Allowlist{Names: []string{"player_store_1000001_db", "player_store_1000002_db"}, Source: "test"},
 	})
 	if !errors.Is(err, ErrDatabaseNotAllowed) {
 		t.Fatalf("expected mismatch to be rejected even when both names are allowed, got %v", err)
@@ -132,20 +132,20 @@ func TestAssertDatabaseRejectsMismatchWithDerivedName(t *testing.T) {
 }
 
 func TestAssertDatabaseEmptyAllowlistIsFatalByDefault(t *testing.T) {
-	db, _ := dbtest.Open(t, selectDatabaseHandler("zone_1_db"))
+	db, _ := dbtest.Open(t, selectDatabaseHandler("player_store_1000001_db"))
 
-	_, err := AssertDatabase(context.Background(), db, AssertOptions{Expected: "zone_1_db"})
+	_, err := AssertDatabase(context.Background(), db, AssertOptions{Expected: "player_store_1000001_db"})
 	if !errors.Is(err, ErrAllowlistMissing) {
 		t.Fatalf("empty allowlist must be fail-closed, got %v", err)
 	}
 }
 
 func TestAssertDatabaseEmptyAllowlistRelaxedWarns(t *testing.T) {
-	db, _ := dbtest.Open(t, selectDatabaseHandler("zone_1_db"))
+	db, _ := dbtest.Open(t, selectDatabaseHandler("player_store_1000001_db"))
 
 	var warned int
 	_, err := AssertDatabase(context.Background(), db, AssertOptions{
-		Expected:            "zone_1_db",
+		Expected:            "player_store_1000001_db",
 		RelaxEmptyAllowlist: true,
 		Warnf:               func(string, ...any) { warned++ },
 	})
@@ -163,7 +163,7 @@ func TestAssertDatabaseRejectsNoDefaultSchema(t *testing.T) {
 	})
 
 	if _, err := AssertDatabase(context.Background(), db, AssertOptions{
-		Allow: Allowlist{Names: []string{"zone_1_db"}},
+		Allow: Allowlist{Names: []string{"player_store_1000001_db"}},
 	}); err == nil {
 		t.Fatal("a connection without a default schema must be rejected")
 	}

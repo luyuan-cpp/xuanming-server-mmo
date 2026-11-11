@@ -14,6 +14,7 @@ import (
 	rollbackpb "proto/common/rollback"
 	rfpb "proto/role_fence"
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/idsegment"
 	"shared/rolefence"
 	"shared/workshard"
@@ -246,7 +247,13 @@ func (s *RecallStore) Configure(auditIDs idsegment.Source, reader rolefence.Stat
 	return nil
 }
 
+// isRecallTxRetryable 判「事务已整体回滚,整笔重跑是安全的」:1213 死锁、1205 锁等待超时、9007 TiDB 写冲突,
+// 以及权威 SQL 守卫判定的「提交前中止」(authoritysql.IsAbortedBeforeCommit,R6):事务里只发过纯 DML、COMMIT 还没发时
+// 连接断开或调用取消,库会回滚未提交的事务,确定没写,换一条连接整笔重跑。错误树里混有结局未知时它回假,照旧不重试。
 func isRecallTxRetryable(err error) bool {
+	if authoritysql.IsAbortedBeforeCommit(err) {
+		return true
+	}
 	var me *mysql.MySQLError
 	if !errors.As(err, &me) {
 		return false
@@ -555,10 +562,17 @@ func (s *RecallStore) ListOps(ctx context.Context, requestID uint64) ([]*RecallO
 
 // ── 派发 ────────────────────────────────────────────────────────────────────
 
-// ListPlanned 读到期的 PLANNED 行。
-func (s *RecallStore) ListPlanned(ctx context.Context, nowMs uint64, limit int) ([]RecallPlanned, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT op_id,player_id FROM gm_recall_op WHERE status=? AND next_attempt_ms<=? ORDER BY next_attempt_ms,op_id LIMIT ?",
-		recallStatusPlanned, nowMs, limit)
+// ListPlannedOwned 读本副本负责的片里到期的 PLANNED 行,最多 limit 行,按 (next_attempt_ms, op_id) 升序。
+//
+// owned 是派发按 player_id 分片的条件(缺口清单第 25 条第四批,docs/design/assetop-redelivery-sharding-20261110.md §14.2),
+// 接在 WHERE 里、LIMIT 之前:别的副本的行再早到期也不占本副本的名额。零值不过滤(成员表为空、或全部片都归本副本)。
+// 普通读、不加锁:派不派得成由 Dispatch 在 role_fence 行锁下的状态 CAS 决定。limit 非正时不发 SQL。
+func (s *RecallStore) ListPlannedOwned(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]RecallPlanned, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	args := append([]any{recallStatusPlanned, nowMs}, owned.Args()...)
+	rows, err := s.db.QueryContext(ctx, recallListPlannedQuery(owned), append(args, limit)...)
 	if err != nil {
 		return nil, err
 	}
@@ -572,6 +586,13 @@ func (s *RecallStore) ListPlanned(ctx context.Context, nowMs uint64, limit int) 
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// recallListPlannedQuery 拼派发的到期扫描。分片条件只来自 workshard.SQLFilter(列名写死、片号只走绑定参数),
+// 不含外部输入,位置在 ORDER BY / LIMIT 之前。实参顺序与占位符一致:PLANNED、now、片号……、LIMIT。
+func recallListPlannedQuery(owned workshard.Filter) string {
+	return "SELECT op_id,player_id FROM gm_recall_op WHERE status=? AND next_attempt_ms<=? AND " + owned.SQL() +
+		" ORDER BY next_attempt_ms,op_id LIMIT ?"
 }
 
 // DeferPlanned 把一行 PLANNED 推迟到 until。

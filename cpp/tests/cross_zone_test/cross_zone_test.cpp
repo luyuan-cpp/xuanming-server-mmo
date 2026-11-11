@@ -580,7 +580,7 @@ TEST(HandoffMarkWithdrawQueue, DuplicateAddKeepsOriginalDeadline)
     ASSERT_TRUE(queue.Add(kWithdrawPlayerA, "7:100", WithdrawT0(), kWithdrawTtl, evicted));
     EXPECT_FALSE(queue.Add(kWithdrawPlayerA, "7:100", WithdrawT0() + std::chrono::seconds(100), kWithdrawTtl, evicted));
     std::size_t expired = 0;
-    const auto due = queue.CollectDue(WithdrawT0() + kWithdrawTtl, false, expired);
+    const auto due = queue.CollectDue(WithdrawT0() + kWithdrawTtl, expired);
     EXPECT_EQ(0u, expired); ASSERT_EQ(1u, due.size());
     EXPECT_EQ(1u, queue.size()) << "资格不能因标记TTL到期消账";
 }
@@ -592,18 +592,19 @@ TEST(HandoffMarkWithdrawQueue, CollectDueRespectsNextAttempt)
     ASSERT_TRUE(queue.Add(kWithdrawPlayerA, "7:100", WithdrawT0(), kWithdrawTtl, evicted));
 
     std::size_t expired = 0;
-    auto due = queue.CollectDue(WithdrawT0(), /*force=*/false, expired);
+    auto due = queue.CollectDue(WithdrawT0(), expired);
     ASSERT_EQ(due.size(), 1u) << "新登记的条目立刻到期,第一次撤回由它发出";
     EXPECT_EQ(due[0].playerId, kWithdrawPlayerA);
     EXPECT_EQ(due[0].markValue, "7:100");
     EXPECT_EQ(due[0].attempts, 1u) << "首发 = 1:调用方只在首发失败时打 ERROR";
     EXPECT_EQ(expired, 0u);
 
-    due = queue.CollectDue(WithdrawT0() + hmw::kRetryInterval - std::chrono::seconds(1), /*force=*/false, expired);
+    due = queue.CollectDue(WithdrawT0() + hmw::kRetryInterval - std::chrono::seconds(1), expired);
     EXPECT_TRUE(due.empty()) << "重试间隔之内不重发";
 
-    due = queue.CollectDue(WithdrawT0() + hmw::kRetryInterval - std::chrono::seconds(1), /*force=*/true, expired);
-    ASSERT_EQ(due.size(), 1u) << "重连时 force 忽略重试间隔";
+    // 原来这里用重连的 force 越过重试间隔;重连补发已删(R14),改为把时刻推进到条目的重试时刻。
+    due = queue.CollectDue(WithdrawT0() + hmw::kRetryInterval, expired);
+    ASSERT_EQ(due.size(), 1u) << "到了重试间隔才重发";
     EXPECT_EQ(due[0].attempts, 2u) << "间隔内被跳过的那一轮不计次,真正取走才加一";
 
     EXPECT_EQ(queue.size(), 1u) << "CollectDue 只取副本,销账只能靠 Confirm";
@@ -616,7 +617,7 @@ TEST(HandoffMarkWithdrawQueue, UnconfirmedRevocationNeverExpiresByMarkTTL)
     std::optional<hmw::Entry> evicted;
     ASSERT_TRUE(queue.Add(kWithdrawPlayerA, "7:100", WithdrawT0(), kWithdrawTtl, evicted));
     std::size_t expired = 99;
-    const auto due = queue.CollectDue(WithdrawT0() + kWithdrawTtl + std::chrono::seconds(1), true, expired);
+    const auto due = queue.CollectDue(WithdrawT0() + kWithdrawTtl + std::chrono::seconds(1), expired);
     EXPECT_EQ(0u, expired); ASSERT_EQ(1u, due.size());
     EXPECT_EQ(1u, queue.size()); EXPECT_TRUE(queue.HasPlayer(kWithdrawPlayerA));
 }
@@ -3067,10 +3068,13 @@ TEST(ExitReleaseEcs, FailingClearKeepsTheLoadThenRefusesWhenExhausted)
     }
 
     const auto before = exit_release_stats::Read();
-    // 重连触发的补发忽略退避;每次都失败,第 kInheritClearMaxAttempts 次失败后拒绝。
+    // 每次重发都失败,第 kInheritClearMaxAttempts 次失败后拒绝。原来靠重连补发忽略退避来连发;重连补发已删(R14),
+    // 重发只在条目自己的重试时刻之后发生,所以注入合成时刻:第 i 次失败后的退避是 InheritClearRetryDelay(i),
+    // 取「现在 + 这段退避」。条目的 nextRetryAt = 失败当刻 + 同一段退避,失败当刻不晚于这里的现在,必然已到;
+    // 离首发最多约 1s,碰不到 5s 的截止,耗尽来自次数上限。
     for (uint32_t i = 1; i < erm::kInheritClearMaxAttempts; ++i)
     {
-        PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/true);
+        PlayerLifecycleSystem::RetryInheritedMarkClears(erm::Clock::now() + erm::InheritClearRetryDelay(i));
     }
     EXPECT_EQ(PlayerLifecycleSystem::GetPendingEnterMap().count(kReleasePlayerId), 0u) << "重发耗尽:拒建实体";
     EXPECT_EQ(tlsEcs.playerList.count(kReleasePlayerId), 0u);
@@ -5186,10 +5190,10 @@ TEST(RelocateConfirmTable, MarkWritingPastDeadlineVerifiesAsNotSent)
     ASSERT_NE(entry, nullptr);
     const uint64_t seq = entry->seq;
 
-    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(kT0 + 30s - 1ms, /*reconnected=*/false)));
+    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(kT0 + 30s - 1ms)));
     EXPECT_EQ(entry->phase, rc::Phase::kMarkWriting);
 
-    const auto due = table.CollectDue(kT0 + 30s, /*reconnected=*/false);
+    const auto due = table.CollectDue(kT0 + 30s);
     ASSERT_EQ(due.toVerify.size(), 1u) << "写标记的回调一直不来(半开连接):按没发出去转核实";
     EXPECT_EQ(due.toVerify[0], RelocateKey(kRelocatePlayerA, seq));
     EXPECT_EQ(due.markWriteTimedOut, 1u);
@@ -5218,9 +5222,9 @@ TEST(RelocateConfirmTable, SendRestartsReplyAndSettleClocks)
     EXPECT_TRUE(entry->settleAt == kT0 + 18s) << "settle 从发送时刻重新起算";
     EXPECT_FALSE(entry->completionSeen);
 
-    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(kT0 + 30s, /*reconnected=*/false))) << "写标记的截止不再生效";
+    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(kT0 + 30s))) << "写标记的截止不再生效";
 
-    const auto due = table.CollectDue(kT0 + 33s, /*reconnected=*/false);
+    const auto due = table.CollectDue(kT0 + 33s);
     ASSERT_EQ(due.toVerify.size(), 1u) << "完成通知永远不来:按 no_reply 转核实";
     EXPECT_EQ(due.toVerify[0], RelocateKey(kRelocatePlayerA, seq));
     EXPECT_EQ(due.replyTimedOut, 1u);
@@ -5246,27 +5250,28 @@ TEST(RelocateConfirmTable, VerifyPacingSettleAndDeadlineAreMutuallyExclusive)
     const uint64_t seq = entry->seq;
     const auto t = kT0 + 1s;
 
-    // 1. 核实在途:不重发,重连也不重发。
+    // 1. 核实在途:到了重试时刻(BeginVerify 把 nextVerifyAt 置为 t)也不重发。
     rc::Table::BeginVerify(*entry, t, rc::Evidence::kNotSent, rc::Expectation::kAtSource);
     EXPECT_TRUE(entry->deadline == t + 10s);
     EXPECT_EQ(rc::Table::MarkVerifySent(*entry), 1u);
     EXPECT_TRUE(entry->verifyInFlight);
-    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(t + 2s, /*reconnected=*/true)));
+    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(t + 2s)));
 
-    // 2. 这次没读到:1s 后重试;重连可以提前。
+    // 2. 这次没读到:1s 后重试,不提前。原来 Redis 重连时可以提前重发;重连补发已删(R14),
+    //    改为把时刻推进到条目的重试时刻,验证到点就重发。
     rc::Table::MarkVerifyDeferred(*entry, t + 2s);
     EXPECT_TRUE(entry->nextVerifyAt == t + 3s);
     EXPECT_TRUE(entry->retryPending);
     EXPECT_FALSE(entry->verifyInFlight);
-    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(t + 2500ms, /*reconnected=*/false)));
+    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(t + 2500ms)));
     {
-        const auto due = table.CollectDue(t + 2500ms, /*reconnected=*/true);
-        ASSERT_EQ(due.toVerify.size(), 1u) << "重连:上次没读到的条目立刻重发";
+        const auto due = table.CollectDue(t + 3s);
+        ASSERT_EQ(due.toVerify.size(), 1u) << "到了重试时刻:上次没读到的条目重发";
         EXPECT_EQ(due.toVerify[0], RelocateKey(kRelocatePlayerA, seq));
         EXPECT_TRUE(due.verifyExpired.empty());
     }
 
-    // 3. 读到没变但还不许踢:等到 settleAt 再读;重连不绕过 settle。
+    // 3. 读到没变但还不许踢:等到 settleAt 再读。
     EXPECT_EQ(rc::Table::MarkVerifySent(*entry), 2u);
     EXPECT_FALSE(entry->retryPending);
     const auto deadlineBeforeWait = entry->deadline;
@@ -5276,17 +5281,16 @@ TEST(RelocateConfirmTable, VerifyPacingSettleAndDeadlineAreMutuallyExclusive)
     EXPECT_TRUE(entry->deadline == kT0 + 25s) << "本轮核实的截止顺延到 settle 之后一整轮";
     EXPECT_FALSE(entry->verifyInFlight);
     EXPECT_FALSE(entry->retryPending);
-    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(entry->settleAt - 1ms, /*reconnected=*/true)))
-        << "重连只对「上次没读到」的条目生效,不绕过 settle 等待";
+    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(entry->settleAt - 1ms))) << "settle 之前不读";
     {
-        const auto due = table.CollectDue(entry->settleAt, /*reconnected=*/false);
+        const auto due = table.CollectDue(entry->settleAt);
         ASSERT_EQ(due.toVerify.size(), 1u) << "到 settleAt 再读一次";
         EXPECT_TRUE(due.verifyExpired.empty());
     }
 
     // 4. 到期只进 verifyExpired,不同时进 toVerify;在途也照样到期(黑洞连接不会回空应答)。
     {
-        const auto due = table.CollectDue(entry->deadline, /*reconnected=*/true);
+        const auto due = table.CollectDue(entry->deadline);
         ASSERT_EQ(due.verifyExpired.size(), 1u);
         EXPECT_EQ(due.verifyExpired[0], RelocateKey(kRelocatePlayerA, seq));
         EXPECT_TRUE(due.toVerify.empty());
@@ -5294,7 +5298,7 @@ TEST(RelocateConfirmTable, VerifyPacingSettleAndDeadlineAreMutuallyExclusive)
     }
     rc::Table::MarkVerifySent(*entry);
     {
-        const auto due = table.CollectDue(entry->deadline, /*reconnected=*/false);
+        const auto due = table.CollectDue(entry->deadline);
         EXPECT_EQ(due.verifyExpired.size(), 1u);
         EXPECT_TRUE(due.toVerify.empty());
     }
@@ -5325,8 +5329,8 @@ TEST(RelocateConfirmTable, TransportFailureWaitsForSettleBeforeTheFirstRead)
     EXPECT_FALSE(entry->verifyInFlight);
     EXPECT_EQ(entry->verifyGen, 0u) << "一次都没读过";
 
-    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(kT0 + 16s - 1ms, /*reconnected=*/true))) << "重连也不提前读";
-    const auto due = table.CollectDue(kT0 + 16s, /*reconnected=*/false);
+    EXPECT_TRUE(RelocateDueIsEmpty(table.CollectDue(kT0 + 16s - 1ms))) << "settle 之前不提前读";
+    const auto due = table.CollectDue(kT0 + 16s);
     ASSERT_EQ(due.toVerify.size(), 1u);
     EXPECT_EQ(due.toVerify[0], RelocateKey(kRelocatePlayerA, seq));
     EXPECT_TRUE(due.verifyExpired.empty());
@@ -5356,14 +5360,14 @@ TEST(RelocateConfirmTable, LandingEntriesAreReportedAndVerifyGenerationAdvances)
     EXPECT_FALSE(rc::AcceptsVerifyReply(*entry, gen)) << "在途的旧核实应答从此作废";
 
     {
-        const auto due = table.CollectDue(t + 1s, /*reconnected=*/false);
+        const auto due = table.CollectDue(t + 1s);
         ASSERT_EQ(due.landingToCheck.size(), 1u) << "落地条目每拍都报:实体建出来没有由调用方看";
         EXPECT_EQ(due.landingToCheck[0], RelocateKey(kRelocatePlayerA, seq));
         EXPECT_TRUE(due.toVerify.empty());
         EXPECT_TRUE(due.verifyExpired.empty());
     }
     {
-        const auto due = table.CollectDue(t + 60s + 1h, /*reconnected=*/true);
+        const auto due = table.CollectDue(t + 60s + 1h);
         EXPECT_EQ(due.landingToCheck.size(), 1u) << "过了截止也只是报出来:超时由 DecideLanding 判";
         EXPECT_TRUE(due.toVerify.empty());
         EXPECT_TRUE(due.verifyExpired.empty());
@@ -5666,8 +5670,8 @@ void DrainRelocateConfirms()
     PlayerLifecycleSystem::ReconcileRelocateOnReentry(kExitPlayerId, 0);
     // ② 别的玩家的残留条目(本节不产生,防御):第一拍把各阶段都推到「核实读不到」,第二拍让那一轮核实到期。
     const auto farFuture = rc::Clock::now() + std::chrono::hours(1);
-    PlayerLifecycleSystem::SweepRelocateConfirms(farFuture, /*reconnected=*/false);
-    PlayerLifecycleSystem::SweepRelocateConfirms(farFuture + rc::kVerifyBudget + 1s, /*reconnected=*/false);
+    PlayerLifecycleSystem::SweepRelocateConfirms(farFuture);
+    PlayerLifecycleSystem::SweepRelocateConfirms(farFuture + rc::kVerifyBudget + 1s);
     // ③
     ASSERT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 0u);
 }
@@ -5868,7 +5872,7 @@ TEST(RelocateConfirmEcs, DrainWithoutSceneManagerIsVerifiedThenKicked)
         << "票据被消费:这次的标记归改派负责,A1′ 不写";
 
     // 一轮核实到期仍读不到:没发出去 + 没有请求结局未定 → 踢(读不到,所以不补写凭证);宿主没有 gate,推不出去。
-    PlayerLifecycleSystem::SweepRelocateConfirms(rc::Clock::now() + rc::kVerifyBudget + 1s, /*reconnected=*/false);
+    PlayerLifecycleSystem::SweepRelocateConfirms(rc::Clock::now() + rc::kVerifyBudget + 1s);
 
     EXPECT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 0u);
     ++expected.outcomes[RelocateIndex(rc::Outcome::kKickUnverified)];
@@ -5955,7 +5959,7 @@ TEST(RelocateConfirmEcs, ReentryOnSameSessionWaitsForTheLoadThenResolves)
 
     // 2. 载入在途(待入场表里有他):每拍只是等。
     pendingEnter[kExitPlayerId] = PlayerEnterContext{};
-    PlayerLifecycleSystem::SweepRelocateConfirms(rc::Clock::now() + 1s, /*reconnected=*/false);
+    PlayerLifecycleSystem::SweepRelocateConfirms(rc::Clock::now() + 1s);
     {
         const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
         ASSERT_TRUE(entry.has_value());
@@ -5975,7 +5979,7 @@ TEST(RelocateConfirmEcs, ReentryOnSameSessionWaitsForTheLoadThenResolves)
 
     // 4. 载入结束,下一拍看到实体:结清,不踢、不推 gate。
     pendingEnter.erase(kExitPlayerId);
-    PlayerLifecycleSystem::SweepRelocateConfirms(rc::Clock::now() + 2s, /*reconnected=*/false);
+    PlayerLifecycleSystem::SweepRelocateConfirms(rc::Clock::now() + 2s);
     EXPECT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 0u);
     auto expected = before;
     ++expected.outcomes[RelocateIndex(rc::Outcome::kLandedHere)];
@@ -5999,7 +6003,7 @@ TEST(RelocateConfirmEcs, AbandonedLandingIsVerifiedThenKicked)
 
     // 待入场表里没有他 = 载入已被放弃。
     const auto t1 = rc::Clock::now() + 1s;
-    PlayerLifecycleSystem::SweepRelocateConfirms(t1, /*reconnected=*/false);
+    PlayerLifecycleSystem::SweepRelocateConfirms(t1);
     {
         const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
         ASSERT_TRUE(entry.has_value());
@@ -6012,7 +6016,7 @@ TEST(RelocateConfirmEcs, AbandonedLandingIsVerifiedThenKicked)
     ++expected.verifyDeferred; // 宿主没有 Redis
     ExpectRelocateStats(RelocateStats(), expected);
 
-    PlayerLifecycleSystem::SweepRelocateConfirms(t1 + rc::kVerifyBudget + 1s, /*reconnected=*/false);
+    PlayerLifecycleSystem::SweepRelocateConfirms(t1 + rc::kVerifyBudget + 1s);
     EXPECT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 0u);
     ++expected.outcomes[RelocateIndex(rc::Outcome::kKickUnverified)];
     ++expected.push[RelocateIndex(rc::GatePushResult::kGateGone)];
@@ -6030,7 +6034,7 @@ TEST(RelocateConfirmEcs, KickIsWithheldWhenTheEntityIsBackOnThisNode)
     ASSERT_NO_FATAL_FAILURE(RegisterNotSentRelocate());
     PlayerLifecycleSystem::ReconcileRelocateOnReentry(kExitPlayerId, kSessionAtExit);
     const auto t1 = rc::Clock::now() + 1s;
-    PlayerLifecycleSystem::SweepRelocateConfirms(t1, /*reconnected=*/false);
+    PlayerLifecycleSystem::SweepRelocateConfirms(t1);
     {
         const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
         ASSERT_TRUE(entry.has_value());
@@ -6042,7 +6046,7 @@ TEST(RelocateConfirmEcs, KickIsWithheldWhenTheEntityIsBackOnThisNode)
     // 手工建出实体(会话就是票据那一条),不经 Reconcile:条目仍在核实阶段。
     const auto player = MakeOnlinePlayer(kSessionAtExit);
 
-    PlayerLifecycleSystem::SweepRelocateConfirms(t1 + rc::kVerifyBudget + 1s, /*reconnected=*/false);
+    PlayerLifecycleSystem::SweepRelocateConfirms(t1 + rc::kVerifyBudget + 1s);
 
     EXPECT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 0u);
     auto expected = before;
@@ -6195,7 +6199,7 @@ TEST(RelocateConfirmEcs, EarlierHandoffEnterSceneIsRecordedOnTheEntry)
     EXPECT_TRUE(entry->settleAt - entry->createdAt == budgets.settleWindow) << "没发出去:settle 仍从登记时刻起算";
     EXPECT_TRUE(entry->nextVerifyAt == entry->settleAt) << "首次核实排到 settleAt";
     EXPECT_TRUE(entry->deadline == entry->settleAt + rc::kVerifyBudget) << "settle 之后还有一整轮核实";
-    EXPECT_FALSE(entry->retryPending) << "不是「没读到等重试」:重连不绕过 settle 等待";
+    EXPECT_FALSE(entry->retryPending) << "不是「没读到等重试」:还没读过,是在等 settle";
 
     auto expected = before;
     ++expected.ticketDecisions[RelocateIndex(rc::TicketDecision::kDispatch)];
@@ -6204,8 +6208,9 @@ TEST(RelocateConfirmEcs, EarlierHandoffEnterSceneIsRecordedOnTheEntry)
     ExpectRelocateStats(RelocateStats(), expected);
 
     EXPECT_FALSE(rc::MayKickBeforeSettle(rc::Evidence::kNotSent, rc::RequestOutcomeUnsettled(*entry)));
-    PlayerLifecycleSystem::SweepRelocateConfirms(rc::Clock::now() + 1s, /*reconnected=*/true);
-    EXPECT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 1u) << "settle 之前一拍(含重连)什么都不做";
+    // 原来这一拍按「Redis 重连」扫,验证重连也不绕过 settle;重连补发已删(R14),这里验证 settle 之前的定时一拍。
+    PlayerLifecycleSystem::SweepRelocateConfirms(rc::Clock::now() + 1s);
+    EXPECT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 1u) << "settle 之前一拍什么都不做";
     ExpectRelocateStats(RelocateStats(), expected);
 
     DrainRelocateConfirms();
@@ -7700,9 +7705,11 @@ TEST(EnterFenceEcs, AbandonedLoadOnlyErasesOwnMapping)
     ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
     ASSERT_EQ(EnterGameNode(FenceEnter(kShared, kGenA)), PlayerLifecycleSystem::EnterGameNodeOutcome::kLoadRequired);
     SessionMap()[kShared] = kFenceOtherPlayerId;
+    // 入口已发过首发(宿主没有 Redis,失败等重发)。重发只在条目自己的重试时刻之后发生(重连补发已删,R14),
+    // 合成时刻的取法同 ExitReleaseEcs.FailingClearKeepsTheLoadThenRefusesWhenExhausted。
     for (uint32_t i = 1; i < erm::kInheritClearMaxAttempts; ++i)
     {
-        PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/true);
+        PlayerLifecycleSystem::RetryInheritedMarkClears(erm::Clock::now() + erm::InheritClearRetryDelay(i));
     }
     EXPECT_EQ(PendingEnter(), nullptr) << "重发耗尽:拒建实体";
     EXPECT_EQ(SessionMap().at(kShared), kFenceOtherPlayerId);
@@ -8613,6 +8620,20 @@ TEST_F(LifecycleCoroutineTest, TravelPublishesBeforeEnterAndLateReplyCannotMoveP
     RunPending();
     EXPECT_TRUE(tlsEcs.actorRegistry.valid(player));
     EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+}
+
+// 存盘看门狗在发布之前作废交接(requestedAtMs 还是 0)时,撤销脚本在途、cancellationPending 为真;迟到的存盘落地后照常发布。
+// 发布被 Redis 接纳就要记下 markEpoch:撤销若被拒、这次发布又成功,作废交接要靠它还原标记原文做条件撤回。
+// 修复前协程只在「当前尝试」里记,而当前尝试要求没有撤销在途,markEpoch 留在 0(2026-11-11)。
+TEST_F(LifecycleCoroutineTest, TravelPublishRecordsMarkEpochWhileCancellationIsPending)
+{
+    const auto player = FrozenPlayer();
+    tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(player).cancellationPending = true;
+    PlayerLifecycleSystem::BeginTravelHandoff(kExitPlayerId);
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return redis->commands.size() == 1; }));
+    EXPECT_EQ(redis->commands.front().at(1), handoff_sql_barrier::kPublishMarkDirectLua);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(player).markEpoch, kDirectEpoch);
+    EXPECT_TRUE(sceneManager.pending->empty());
 }
 
 TEST_F(LifecycleCoroutineTest, TravelUnknownMarkDoesNotSendEnterScene)
@@ -9902,6 +9923,28 @@ TEST(ConnectionLostHoldAfkPass, HostingNeedsAConfirmedPassWithTimeLeft)
     // 与 JudgeHold 判"托管继续"是同一个条件。
     EXPECT_EQ(clh::JudgeHold(std::chrono::hours(1), clh::AfkPass::kActive, kNow + lead + 1, kNow, false), clh::HoldVerdict::kKeep);
     EXPECT_NE(clh::JudgeHold(std::chrono::hours(1), clh::AfkPass::kActive, kNow + lead, kNow, false), clh::HoldVerdict::kKeep);
+}
+
+// 托管中的兜底重试(team-follow-server-trail.md §3.7):每名玩家每个周期恰好一秒到期,同一秒的到期按玩家号错开。
+TEST(ConnectionLostHoldAfkPass, HostedFollowRecheckIsSpreadOverThePeriod)
+{
+    const auto period = static_cast<uint64_t>(clh::kHostedFollowRecheckPeriod.count());
+    constexpr uint64_t kNow = 1'800'000'000;
+    for (const uint64_t player : {uint64_t{950200001}, uint64_t{7}, uint64_t{1} << 62})
+    {
+        int dueSeconds = 0;
+        for (uint64_t second = kNow; second < kNow + period; ++second)
+        {
+            dueSeconds += clh::IsHostedFollowRecheckDue(player, second) ? 1 : 0;
+        }
+        EXPECT_EQ(dueSeconds, 1) << "每个周期恰好一秒到期:player=" << player;
+    }
+    int duePlayers = 0;
+    for (uint64_t player = 950200001; player < 950200001 + period; ++player)
+    {
+        duePlayers += clh::IsHostedFollowRecheckDue(player, kNow) ? 1 : 0;
+    }
+    EXPECT_EQ(duePlayers, 1) << "同一秒里,一个周期长度的连续玩家号只有一个到期:同节点的托管角色不在同一秒集中发读";
 }
 
 TEST(HostedPlacementEcs, OfflineHostedIdentityOnlyWhileHosting)

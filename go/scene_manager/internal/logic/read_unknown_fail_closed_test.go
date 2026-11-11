@@ -173,8 +173,15 @@ func TestLazyReassignStaleWorldChannel_RechecksOwnerBeforeWrite(t *testing.T) {
 		require.NoError(t, err)
 		return sc, mr
 	}
+	// 没开 Agones:落点就是目标 "20",成功时一并核对回的落点。
 	reassign := func(sc *svc.ServiceContext) bool {
-		return lazyReassignStaleWorldChannel(context.Background(), sc, testZoneId, readUnknownWorldConf, 502, "20")
+		movedTo, ok := lazyReassignStaleWorldChannel(context.Background(), sc, testZoneId, readUnknownWorldConf, 502, "20")
+		if ok {
+			assert.Equal(t, "20", movedTo, "成功时回实际落点")
+		} else {
+			assert.Empty(t, movedTo, "没搬时不回落点")
+		}
+		return ok
 	}
 
 	t.Run("read error leaves ownership alone", func(t *testing.T) {

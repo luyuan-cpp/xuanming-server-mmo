@@ -7,6 +7,10 @@ package logic
 // 快照把这些实例强制销毁,节点已回到负载集,还会收到 DestroyScene。修复后收尾任务记下判死那一代的 node_uuid,
 // 同一代回来就撤任务(reentry_barrier.go R1-I5)。
 //
+// 2026-11-10 起(infra-reconnect-overview.md §4.1 R15),只有判死的那一代回来才清 death_at;换了一代或认不出是哪一代时
+// death_at 留着,老实例的再入屏障照常走完。所以这几种情形下,重新注册之后先断言屏障压着、实例原样,再用 elapseBarrier
+// 推过屏障,断言照常收尾。
+//
 // 判死与重新注册都从 watch 事件进(handleWatchEvent),与生产同一条路径;实例、计数的布置与断言复用
 // dead_node_reconcile_takeover_test.go 的 takeoverCase。节点号 8771~8778、场景号 877xx 不与别的用例重名,
 // 本文件内也各用各的(进程内还留着「本副本看到它消失」的记录)。
@@ -96,7 +100,7 @@ func TestDeadNodeReregister_SameInstanceKeepsItsInstances(t *testing.T) {
 	c.requireIntact(t, "撤掉之后不再处理")
 }
 
-// 换了一代进程复用同一个 node_id(node_uuid 不同):旧一代的实例照常收尾。
+// 换了一代进程复用同一个 node_id(node_uuid 不同):新一代的注册不清 death_at,屏障走完之后旧一代的实例照常收尾。
 func TestDeadNodeReregister_NewInstanceReusingNodeIDStillCleansUp(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	c := newTakeoverCase(t, sc, mr, "8772", 87721)
@@ -104,13 +108,15 @@ func TestDeadNodeReregister_NewInstanceReusingNodeIDStillCleansUp(t *testing.T) 
 	deleteNodeRegistrationForTest(t, sc, mr, c.node)
 
 	putNodeRegistrationForTest(t, sc, c.node, "inst-new")
+	requireBarrierHoldsAfterReregistration(t, c, "换了一代")
 
+	c.elapseBarrier(t)
 	assert.Equal(t, 1, c.drain())
 	c.requireCleanedUp(t, "旧一代的孤儿实例照常销毁")
 	assert.False(t, mr.Exists(nodeReconcileInstanceKey(takeoverZone, c.node)), "实例号记录随任务删掉")
 }
 
-// 不知道判死的是哪一代(没有 node_uuid 的条目入队):认不出回来的是谁,照旧收尾。
+// 不知道判死的是哪一代(没有 node_uuid 的条目入队):认不出回来的是谁,death_at 留着,屏障走完之后照旧收尾。
 func TestDeadNodeReregister_UnknownInstanceKeepsOldBehavior(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	c := newTakeoverCase(t, sc, mr, "8773", 87731)
@@ -118,7 +124,9 @@ func TestDeadNodeReregister_UnknownInstanceKeepsOldBehavior(t *testing.T) {
 	assert.False(t, mr.Exists(nodeReconcileInstanceKey(takeoverZone, c.node)))
 
 	putNodeRegistrationForTest(t, sc, c.node, "inst-a")
+	requireBarrierHoldsAfterReregistration(t, c, "不知道判死的是哪一代")
 
+	c.elapseBarrier(t)
 	assert.Equal(t, 1, c.drain())
 	c.requireCleanedUp(t, "不知道是哪一代时照旧收尾")
 }
@@ -135,8 +143,22 @@ func TestDeadNodeReregister_UnknownLatestDeathForgetsTheOlderInstance(t *testing
 	assert.False(t, mr.Exists(nodeReconcileInstanceKey(takeoverZone, c.node)), "最近一次判死不知道是哪一代:记录删掉")
 
 	putNodeRegistrationForTest(t, sc, c.node, "inst-a")
+	requireBarrierHoldsAfterReregistration(t, c, "最近一次判死认不出是哪一代")
+
+	c.elapseBarrier(t)
 	assert.Equal(t, 1, c.drain())
 	c.requireCleanedUp(t, "认不出时照旧收尾")
+}
+
+// requireBarrierHoldsAfterReregistration:重新注册的不是判死那一代(或认不出)时,death_at 留着(R15),
+// 屏障没过的这一拍任务不出队、实例与计数原样。why 进每条断言信息。
+func requireBarrierHoldsAfterReregistration(t *testing.T, c *takeoverCase, why string) {
+	t.Helper()
+	assert.True(t, c.mr.Exists(nodeDeathAtKey(takeoverZone, c.node)), "%s: 重新注册不得清掉 death_at", why)
+	assert.Equal(t, 0, c.drain(), "%s: 屏障没过,任务不出队", why)
+	c.requireIntact(t, why+": 屏障没过,不得收尾")
+	_, queued := pendingDeadNodeForTest(t, c.mr, takeoverZone, c.node)
+	assert.True(t, queued, "%s: 收尾任务留在表里,等屏障过后再做", why)
 }
 
 // fullSync 的陈旧清扫从旧镜像补上判死那一代:同一进程随后回来,任务一样认得出它。

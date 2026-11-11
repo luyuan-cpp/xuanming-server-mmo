@@ -340,15 +340,19 @@ Java：本次修复属于本仓 PowerShell 部署总账，Java 版没有同一�
   - `docs/design/data-consistency-guarantee-map-20261020.md` 第 58 行把组队状态和聊天历史合成一行，记为 best-effort。聊天历史改到 SQL 之后，这一行早就过时了，要按 SQL 原件的一致性重写，归保障地图的维护者。
 - **其他会话在 go/chat 里的在途改动没碰**：日志改英文、`least_privilege_tidb_test.go`、`chat_logic.go`。对方刚把 `NewRedisHandles` 里的一条日志改成英文，那条日志随函数一起删掉了。
 
-### 顺带发现的疑点（没改）
+### 顺带发现的疑点（11-11 已改）
 
 - **现象**：`tools/scripts/start_game.ps1` 的 `Test-UsesKafkaCommandContract` 名单里没有 chat。
-- **为什么可能有问题**：
-  - chat 的世界频道推送写 `chat-world-bcast_g<N>`，代号同样取自启动器注入的 `KAFKA_COMMAND_TOPIC_GENERATION`。
+- **为什么是问题**：
+  - chat 的世界频道推送写 `chat-world-bcast_g<N>`，代号同样取自启动器注入的 `KAFKA_COMMAND_TOPIC_GENERATION`。`shared/kafkacmd` 用 `sync.Once` 在进程内只读一次这个变量，主题在启动时就定了。
   - 这份名单的用途，是在复用已在跑的进程之前核对它的代号。
-- **可能的后果**：换代后复用旧的 chat 进程，世界频道推送会写进旧代号的主题，gate 收不到，玩家只能靠拉历史看到新消息。
-- **范围**：只影响本机启动器；K8s 每次滚动都会重新注入代号。
-- **处理**：注释已改为只陈述事实。要不要把 chat 加进名单，归世界频道推送那条线确认。
+- **后果**：换代后复用旧的 chat 进程，世界频道推送会写进旧代号的主题，gate 收不到，玩家只能靠拉历史看到新消息。
+- **范围**：只影响本机启动器。K8s 不受影响：`Add-GoSvcCommandTopicEnv` 对每个 Go 服务（含 chat）都注入代号，每次滚动都重新注入。
+- **处理**：负责人回复「加进名单」，已改：
+  - `start_game.ps1`：名单末尾加上 `chat`，上方注释写明原因。chat 由 `Start-LocalGoServices` 拉起，exe 名就是 `chat`，所以起服后的记录（`Save-LocalCommandContract`）和复用前的核对（`Assert-RunningCommandContract`）都会覆盖它。
+  - `tools/scripts/tests/start_game_command_contract.tests.ps1`：chat 从「没有命令主题生产链的服务」那组移到生产者那组，跑同样三类用例——缺记录拒绝复用、保存后可复用、四个字段任一不匹配都拒绝。
+  - `docs/design/chat-world-channel-fanout.md` 第 4 节「分区」一条补了一句。
+- **一次性影响**：第一次用新脚本时，如果还有旧脚本拉起的 chat 在跑，启动器会拒绝复用，提示先有序停止旧进程。名单里其他服务也是同样的行为。
 
 ### 静态检查（Claude 实际做了的）
 
@@ -372,6 +376,12 @@ Java：本次修复属于本仓 PowerShell 部署总账，Java 版没有同一�
      - `pwsh -NoProfile -File tools/scripts/tests/redis_player_cluster_contract.tests.ps1`
      - `pwsh -NoProfile -File tools/scripts/tests/logical_db_deploy_contract.tests.ps1`
      - `pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1`
+   - `pwsh -NoProfile -File tools/scripts/tests/start_game_command_contract.tests.ps1`：全部 PASS。其中 chat 的用例必须都在：
+     - 「chat 缺少可信启动记录时拒绝复用」；
+     - 「chat 保存契约后可按 PID/启动时间/generation/分区复用」；
+     - 「chat 拒绝不匹配的 Generation / Partitions / ProcessId / StartTimeUtcTicks」四条。
+
+     「没有命令主题生产链的服务不检查或写契约」这条也要 PASS，它的名单里已经去掉了 chat。
 3. **本机冒烟**（可选）：
    - `pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-start` 起 chat；
    - 启动不报配置错，尤其不能出现 `Redis.Key is not set` 这类加载错误；横幅里没有 `chat_redis` 一行；

@@ -209,10 +209,9 @@ void Hiredis::connect()
     lastError_ = context_ && context_->errstr ? context_->errstr : "hiredis context allocation failed";
     if (context_) ::redisAsyncFree(context_);
     context_ = NULL;
-    const auto state = maintenance_;
+    // 建连失败不进维护账：建连完成前 command() 一律拒收，这条连接上没有任何已接收的命令。
     CallbackPhase phase(callbackActive_);
     const ConnectCallback callback = connectCb_;
-    state->MarkUnknown();
     if (callback) callback(this, REDIS_ERR);
     return;
   }
@@ -355,10 +354,11 @@ void Hiredis::connectCallback(int status)
   if (status != REDIS_OK)
   {
     // native context 随回调返回自动释放；先存错误并清指针，回调后不再访问 wrapper。
+    // 建连失败不进维护账，理由同 connect() 的同步失败。
     lastError_ = context_->errstr ? context_->errstr : "";
     context_ = NULL;
-    state->MarkUnknown();
   }
+  // 回调抛异常仍记 UNKNOWN：业务处理没有走完，无法证明它发起的写有确定结局。
   try { if (callback) callback(this, status); }
   catch (...) { state->MarkUnknown(); throw; }
 }
@@ -380,7 +380,9 @@ void Hiredis::disconnectCallback(int status)
   lastError_ = context_->errstr ? context_->errstr : "";
   // 先清旧 context；同一 wrapper 的回调内重连由 CallbackPhase 拒绝，调用方可在下一轮显式重连。
   context_ = NULL;
-  if (status != REDIS_OK) state->MarkUnknown();
+  // 出错断线本身不进维护账：hiredis 在调本回调之前，已用空应答回调完全部在途命令，各条按自己的结局记过账
+  // （没有被 notExecuted 判为未执行的记 UNKNOWN）。只按连接事件再记一次，会让一次没有在途命令的断线
+  // 永久卡住维护排空。回调抛异常仍记 UNKNOWN，理由同 connectCallback。
   try { if (callback) callback(this, status); }
   catch (...) { state->MarkUnknown(); throw; }
 }

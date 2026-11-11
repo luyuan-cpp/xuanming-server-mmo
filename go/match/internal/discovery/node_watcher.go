@@ -22,6 +22,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -149,6 +150,12 @@ func (w *NodeWatcher) fullSync(ctx context.Context, etcd *clientv3.Client) (int6
 			}
 		}
 	}
+	// 新上线的节点(新 key,或同 key 换了 endpoint):丢掉它的 endpoint 上停在 TRANSIENT_FAILURE 的旧缓存连接,见 dropStaleEndpointConn。
+	for key, entry := range next {
+		if prevEntry, had := prev[key]; !had || prevEntry.Endpoint != entry.Endpoint {
+			dropStaleEndpointConn(entry.Endpoint)
+		}
+	}
 	w.reportCount(count)
 	logx.Infof("[NodeWatcher:%s] Full synchronization complete: %d nodes, rev=%d", w.name, count, resp.Header.Revision)
 	return resp.Header.Revision, nil
@@ -216,7 +223,8 @@ func (w *NodeWatcher) handleEvent(ev *clientv3.Event) {
 
 // Upsert 把一条节点登记写进镜像(etcd PUT 事件的落库路径;测试也用它直接
 // 灌节点,不必起 etcd)。同 key 重复登记且 endpoint 变了(重启换端口)会先
-// 通过 onRemove 废弃旧连接。
+// 通过 onRemove 废弃旧连接。新上线(新 key 或换了 endpoint)时还会丢掉新 endpoint 上
+// 停在 TRANSIENT_FAILURE 的旧缓存连接(dropStaleEndpointConn)。
 func (w *NodeWatcher) Upsert(key string, entry NodeEntry) {
 	w.mu.Lock()
 	prev, existed := w.nodes[key]
@@ -226,6 +234,9 @@ func (w *NodeWatcher) Upsert(key string, entry NodeEntry) {
 	// 重启后 endpoint 可能变了,旧连接必须废弃。
 	if existed && w.onRemove != nil && prev.Endpoint != entry.Endpoint {
 		w.onRemove(prev)
+	}
+	if !existed || prev.Endpoint != entry.Endpoint {
+		dropStaleEndpointConn(entry.Endpoint)
 	}
 	if !existed {
 		logx.Infof("[NodeWatcher:%s] Node online: zone=%d node=%d endpoint=%s",
@@ -434,4 +445,32 @@ func RemoveEndpointConn(endpoint string) {
 		delete(connCache, endpoint)
 		logx.Infof("[discovery] Removed node connection %s", endpoint)
 	}
+}
+
+// dropStaleEndpointConn:有节点在 endpoint 上新上线时,丢掉这个 endpoint 上停在 TRANSIENT_FAILURE 的缓存连接(2026-11-11,
+// cross-zone-matchmaking.md §13.3 B5 残余「老路径缓存死连接」)。
+//
+// 为什么:节点摘册时 onRemove 清过一次缓存,之后仍有调用方对已摘册的原地址 DialEndpoint(申请战斗票据、观战、恢复路径),
+// 连接又回到缓存里,在死地址上反复重连失败,退避一路涨到 gRPC 上限(约 120 秒)。pick_first 停在 TRANSIENT_FAILURE 期间,
+// 不带 WaitForReady 的调用当场回 Unavailable,直到重新 READY。新进程在同一 ip:port 上来时,镜像里是新条目、不触发 onRemove,
+// 撮合与观战就一直拿着这条旧连接,新节点最长约两分钟不可用。
+//
+// 只丢 TRANSIENT_FAILURE 的:READY / CONNECTING / IDLE 的连接可能正被同一进程的在途调用使用(同一进程换 key 重新登记时
+// 旧 key 还在镜像里),关掉会打断它们;停在 TRANSIENT_FAILURE 的连接上调用本来就当场失败,丢掉不会更糟。查状态与摘除
+// 在同一把锁里,并发的 DialEndpoint 要么拿到旧连接(当场失败,与不丢一样),要么新建。下次 DialEndpoint 新建连接,
+// 首个调用在 CONNECTING 里等建连,不再当场失败。任何 watcher 都可以调:缓存按 endpoint 全进程共用,没缓存时是空操作。
+func dropStaleEndpointConn(endpoint string) {
+	if endpoint == "" {
+		return
+	}
+	connMu.Lock()
+	conn, ok := connCache[endpoint]
+	if !ok || conn.GetState() != connectivity.TransientFailure {
+		connMu.Unlock()
+		return
+	}
+	delete(connCache, endpoint)
+	connMu.Unlock()
+	_ = conn.Close()
+	logx.Infof("[discovery] Dropped stale node connection %s in TRANSIENT_FAILURE after a node came online there", endpoint)
 }

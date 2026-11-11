@@ -156,8 +156,12 @@ spec:
             - name: ETCD_INITIAL_CLUSTER_STATE
               value: "new"
             # 引导令牌:防止两套同名 etcd(比如两个 namespace 各一套)误把对方当成员。
+            # etcd 的集群号只由成员 peer 地址和这个令牌算出,而 peer 地址只由命名空间推出:令牌也只带命名空间的话,
+            # 同一份清单部署到两个 K8s 集群,集群号完全相同。发号器的主记录在这套 etcd 上,地域码按集群号绑定(设计 §6.3),
+            # 所以令牌还要带上本 K8s 集群的身份 __KUBE_CLUSTER_UID__(kube-system 命名空间的 UID),由 k8s_deploy.ps1 Apply-Infra
+            # 在第一个写操作之前读取并替换。只在首次引导时生效:已有数据的成员忽略它,改它只触发一次滚动重启,集群号不变。
             - name: ETCD_INITIAL_CLUSTER_TOKEN
-              value: "mmorpg-etcd-__INFRA_NAMESPACE__"
+              value: "mmorpg-etcd-__INFRA_NAMESPACE__-__KUBE_CLUSTER_UID__"
             # MVCC 历史压缩与空间配额(P0-C 阶段 2),与 compose 同值;etcd_maintenance_contract.tests.ps1 守住。
             # 配额 3GiB 满足「配额 × 2 + 1Gi ≤ 下面的 PVC」,给 defrag 的临时文件留余量。
             - name: ETCD_AUTO_COMPACTION_MODE

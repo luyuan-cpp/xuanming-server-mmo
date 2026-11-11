@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"data_service/internal/clusteridentity"
 	"data_service/internal/config"
 	"data_service/internal/idissuer"
 	"data_service/internal/metrics"
@@ -695,6 +696,12 @@ func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if err != nil {
 		return nil, errors.Join(err, primary.Close(), secondary.Close())
 	}
+	// 地域码绑定到本部署环境(K8s 集群)的身份,运行期从集群读(internal/clusteridentity);dev 不核绑定,不读。
+	// 这里只接上读取器、不读:构造不做 IO,第一次预留或运维操作才读,读不到那一次失败,不写任何记录。
+	var deployment func(context.Context) (string, error)
+	if !c.IdSegment.AllowAutoSeed {
+		deployment = clusteridentity.InCluster().Read
+	}
 	issuer, err := idissuer.New(idissuer.Options{
 		Primary:        primary,
 		Secondary:      secondary,
@@ -702,6 +709,7 @@ func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 		Region:         uint8(c.IdSegment.Issuer.Region),
 		AllowBootstrap: c.IdSegment.AllowAutoSeed,
 		Tags:           c.IdSegment.EffectiveTags(),
+		Deployment:     deployment,
 		OnReserve:      metrics.ObserveIdIssuerReserve,
 	})
 	if err != nil {

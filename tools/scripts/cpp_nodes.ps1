@@ -125,6 +125,9 @@ $LegacyPidFile = Join-Path $RepoRoot "bin\cpp_nodes.pid.json"
 # 否则每一次资产 RPC 都回 27008(AssetAuthFailed)。密钥值不写进仓库,见该文件的说明。
 . (Join-Path $ScriptDir "lib\assetop_dev_secret.ps1")
 . (Join-Path $ScriptDir "lib\account_directory_dev_secret.ps1")
+# 邮件生产者签名:scene 以 battle 身份把两包都放不下的战斗掉落寄进邮箱(docs/design/battle-overflow-mail.md),
+# 与 go_services.ps1 起的 mail 取同一把(run/secrets/producer-dev.env)。
+. (Join-Path $ScriptDir "lib\producer_dev_secret.ps1")
 . (Join-Path $ScriptDir "lib\match_dev_secret.ps1")
 . (Join-Path $ScriptDir "lib\gate_identity_environment.ps1")
 
@@ -417,6 +420,7 @@ function Invoke-Start {
             $prevAssetOpSecrets = $null
             $injectAssetOpSecrets = ($name -eq 'scene')
             $previousAccountDirectorySecrets = $null
+            $previousProducerSecrets = $null
             $previousAuthorityEnvironment=$null
             # 全球匹配：探测与终局证明由 battle 签、match 验，两端要同一把；机房号决定 match 能不能把局放到这个节点。
             # 值取自 run/secrets/match-dev.env，只在没设时兜底、不回显、finally 里还原；部署链（k8s_deploy.ps1）从不调用这里。
@@ -424,11 +428,13 @@ function Invoke-Start {
             $previousGateIdentityEnvironment = $null
             try {
                 if ($name -eq 'gate') {
-                    $previousGateIdentityEnvironment = Enter-LocalGateIdentityEnvironment -RepoRoot $RepoRoot -AllowDevelopmentDefault ($env:GATE_RUN_MODE -in @('dev','test'))
+                    $previousGateIdentityEnvironment = Enter-LocalGateIdentityEnvironment -RepoRoot $RepoRoot -AllowDevelopmentDefault ($env:GATE_RUN_MODE -in @('dev','test')) -IncludeSigningKey
                 }
                 if ($name -eq 'scene') {
                     $previousAccountDirectorySecrets = Backup-AccountDirectoryDevSecrets -Service 'scene'
                     Initialize-AccountDirectoryDevSecrets -RepoRoot $RepoRoot -Service 'scene'
+                    $previousProducerSecrets = Backup-ProducerDevSecrets -Service 'scene'
+                    Initialize-ProducerDevSecrets -RepoRoot $RepoRoot -Service 'scene'
                 }
                 if ($injectAssetOpSecrets) {
                     # Backup 必须在 try **之内**：Initialize 抛错时环境变量可能已经被改了一半，
@@ -460,6 +466,7 @@ function Invoke-Start {
                 # 没注入过就没什么可还原的（$prevAssetOpSecrets 仍是 $null）。
                 if ($injectAssetOpSecrets) { Restore-AssetOpDevSecrets $prevAssetOpSecrets }
                 Restore-AccountDirectoryDevSecrets $previousAccountDirectorySecrets
+                Restore-ProducerDevSecrets $previousProducerSecrets
                 Restore-MatchDevSecrets $previousMatchDevSecrets
                 if ($null -ne $previousGateIdentityEnvironment) { Restore-LocalGateIdentityEnvironment $previousGateIdentityEnvironment }
                 Restore-SqlWriterBootEnvironment $previousAuthorityEnvironment

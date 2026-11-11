@@ -2,8 +2,10 @@ package idissuer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -18,6 +20,13 @@ var mintCounter atomic.Uint64
 
 func mintAuthority() (string, error) {
 	return fmt.Sprintf("%032x", mintCounter.Add(1)), nil
+}
+
+// deploymentCounter 让每个 harness 代表的部署环境(一个 K8s 集群)身份互不相同。
+var deploymentCounter atomic.Uint64
+
+func mintDeployment() string {
+	return fmt.Sprintf("k8s:cluster-%d", deploymentCounter.Add(1))
 }
 
 // memStore 是内存里的一份本地预留记录,可以注入回退、丢失和写失败。
@@ -215,6 +224,9 @@ func (m *memRegistry) ClaimNew(_ context.Context, region uint8, claim Claim) (bo
 	if uint32(region) < m.next {
 		return false, fmt.Errorf("%w: code %d is below the next claimable code %d", ErrRegionClaimed, region, m.next)
 	}
+	if uint32(region) > m.next {
+		return false, fmt.Errorf("%w: the next claimable code is %d, this deployment is configured with %d", ErrRegionOutOfOrder, m.next, region)
+	}
 	if _, ok := m.entries[region]; ok {
 		return false, nil
 	}
@@ -274,6 +286,17 @@ func (m *memRegistry) setHighWater(region uint8, value uint64) {
 	m.entries[region] = e
 }
 
+// setDeployment 直接改一个码绑定的部署身份,模拟本字段出现之前写的记录。
+func (m *memRegistry) setDeployment(region uint8, deployment string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e := m.entries[region]
+	e.claim.Deployment = deployment
+	m.revision++
+	e.revision = m.revision
+	m.entries[region] = e
+}
+
 func (m *memRegistry) drop(region uint8) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -321,24 +344,39 @@ var testNow = time.Unix(epochUnix+26_000_000, 0)
 
 const testBlock = uint64(1) << 26 // 大于 MaxStep,比默认小,方便测试跨块;一块 = 4 秒的序号预算
 
-// harness 是一个部署环境:两套本地 etcd,加一个登记处(可以和别的 harness 共用)。
+// harness 是一个部署环境:一个 K8s 集群(deployment 是它的身份)、两套本地 etcd,加一个登记处(可以和别的 harness 共用)。
 type harness struct {
-	t         *testing.T
-	primary   *memStore
-	secondary *memStore
-	registry  *memRegistry
-	now       time.Time
-	mu        sync.Mutex
+	t          *testing.T
+	primary    *memStore
+	secondary  *memStore
+	registry   *memRegistry
+	deployment string
+	now        time.Time
+	mu         sync.Mutex
 }
 
 func newHarness(t *testing.T) *harness {
-	return &harness{t: t, primary: &memStore{clusterID: 1}, secondary: &memStore{clusterID: 2}, registry: newMemRegistry(3), now: testNow}
+	return &harness{t: t, primary: &memStore{clusterID: 1}, secondary: &memStore{clusterID: 2}, registry: newMemRegistry(3),
+		deployment: mintDeployment(), now: testNow}
 }
 
-// sibling 是另一个部署环境:自己的两套本地 etcd(集群号不同),和 h 共用同一个登记处。
+// sibling 是另一个 K8s 集群里的部署环境:自己的两套本地 etcd(集群号由参数给),和 h 共用同一个登记处。
 func (h *harness) sibling(primaryCluster, secondaryCluster uint64) *harness {
 	return &harness{t: h.t, primary: &memStore{clusterID: primaryCluster}, secondary: &memStore{clusterID: secondaryCluster},
-		registry: h.registry, now: h.clock()}
+		registry: h.registry, deployment: mintDeployment(), now: h.clock()}
+}
+
+// elsewhere 是同一份清单部署到另一个 K8s 集群的环境。两套本地 etcd 是空的,集群号却和 h 完全相同:
+// etcd 集群号只由成员 peer 地址和引导令牌算出,清单相同就相同。只有部署身份不同。和 h 共用同一个登记处。
+func (h *harness) elsewhere() *harness {
+	return h.sibling(h.primary.clusterID, h.secondary.clusterID)
+}
+
+// identity 是生产形态的 Options.Deployment:读本部署环境的身份。
+func (h *harness) identity(context.Context) (string, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.deployment, nil
 }
 
 func (h *harness) clock() time.Time {
@@ -382,6 +420,7 @@ func (h *harness) prodIssuer(region uint8, mut func(*Options)) *Issuer {
 	return h.issuer(func(o *Options) {
 		o.AllowBootstrap = false
 		o.Region = region
+		o.Deployment = h.identity
 		if mut != nil {
 			mut(o)
 		}
@@ -1099,9 +1138,28 @@ func TestInit_RefusesACodeBelowTheNextClaimableOne(t *testing.T) {
 	}
 }
 
+// 码大于下一个可认领的码(比如 5 写成 50):拒绝,什么都不写,下一个可认领的码不动,中间的码一个都没烧掉。
+func TestInit_RefusesACodeAboveTheNextClaimableOne(t *testing.T) {
+	h := newHarness(t)
+	iss := h.prodIssuer(5, nil)
+	if _, err := iss.OpenRegistry(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if created, err := iss.Init(context.Background()); created || !errors.Is(err, ErrRegionOutOfOrder) {
+		t.Fatalf("init: created=%v err=%v, want ErrRegionOutOfOrder", created, err)
+	}
+	if _, claimed := h.registry.get(5); claimed || h.primary.has() || h.secondary.has() {
+		t.Fatal("a refused claim must not write anything")
+	}
+	if created, err := h.prodIssuer(1, nil).Init(context.Background()); err != nil || !created {
+		t.Fatalf("the next claimable code 1 must still be claimable: created=%v err=%v", created, err)
+	}
+}
+
 // ── 地域码绑定(问题 2)────────────────────────────────────────────────────
 
-// 两套各自独立的本地 etcd 配了同一个地域码:最多一套取得发号资格。另一套初始化、发号、恢复都拒绝,不写任何东西。
+// 另一个 K8s 集群里的部署(部署身份不同,本地 etcd 的集群号也不同)配了同一个地域码:最多一套取得发号资格。
+// 另一套初始化、发号、恢复都拒绝,不写任何东西。集群号相同的默认部署形态见 AnotherKubernetesClusterWithIdenticalEtcd。
 func TestBinding_SecondDeploymentWithTheSameCodeIsRefused(t *testing.T) {
 	first := newHarness(t)
 	second := first.sibling(11, 12)
@@ -1128,7 +1186,8 @@ func TestBinding_SecondDeploymentWithTheSameCodeIsRefused(t *testing.T) {
 	a.take(first.prodIssuer(1, nil), 100)
 }
 
-// 克隆旧配置和快照:新环境从原环境的 etcd 快照恢复出两份记录(世系相同,集群号不同)。拿不到第二份资格。
+// 克隆旧配置和快照:新环境从原环境的 etcd 快照恢复出两份记录(世系相同,集群号和部署身份都不同)。拿不到第二份资格。
+// 数据目录原样恢复、集群号也相同的情形见 BackupRestoredIntoAnotherKubernetesCluster。
 func TestBinding_ClonedConfigAndSnapshotIsRefused(t *testing.T) {
 	origin := newHarness(t)
 	a := &allocated{t: t}
@@ -1152,6 +1211,141 @@ func TestBinding_ClonedConfigAndSnapshotIsRefused(t *testing.T) {
 		t.Fatal("the clone must not change the claim")
 	}
 	a.take(origin.prodIssuer(1, nil), 100)
+}
+
+// 同一份清单部署到另一个 K8s 集群:本地 etcd 的集群号和原环境完全相同,只有部署身份不同(审核交接 §6.2 的默认部署形态)。
+// 码发过号之后,另一个集群初始化报「已被认领」,而不是「本地两份记录都丢了」;发号和不带 rebind 的恢复都拒绝,什么都不写。
+func TestBinding_AnotherKubernetesClusterWithIdenticalEtcdIsRefused(t *testing.T) {
+	first := newHarness(t)
+	second := first.elsewhere()
+	if second.primary.clusterID != first.primary.clusterID || second.secondary.clusterID != first.secondary.clusterID {
+		t.Fatal("fixture: the other cluster must report the same etcd cluster ids")
+	}
+	a := &allocated{t: t}
+	a.take(first.production(1), 100)
+	before, _ := first.registry.get(1)
+
+	dup := second.prodIssuer(1, nil)
+	if created, err := dup.Init(context.Background()); created || !errors.Is(err, ErrRegionClaimed) {
+		t.Fatalf("init: created=%v err=%v, want ErrRegionClaimed", created, err)
+	}
+	if _, _, err := dup.Allocate(context.Background(), "player", 100); !errors.Is(err, ErrBindingMismatch) {
+		t.Fatalf("allocate: err=%v, want ErrBindingMismatch", err)
+	}
+	if _, err := dup.Recover(context.Background(), false); !errors.Is(err, ErrRebindRequired) {
+		t.Fatalf("recover: err=%v, want ErrRebindRequired", err)
+	}
+	if second.primary.has() || second.secondary.has() {
+		t.Fatal("the other cluster must not write local records")
+	}
+	if after, _ := first.registry.get(1); after != before {
+		t.Fatalf("the other cluster changed the claim: %+v -> %+v", before, after)
+	}
+	a.take(first.prodIssuer(1, nil), 100)
+}
+
+// 码认领了但还没发过号(Blocks=0):另一个 K8s 集群不能借「接着做完没做完的初始化」拿到资格。
+func TestBinding_AnotherKubernetesClusterCannotFinishAnUnusedClaim(t *testing.T) {
+	first := newHarness(t)
+	first.production(1)
+	before, _ := first.registry.get(1)
+	if before.Blocks != 0 {
+		t.Fatalf("fixture: the code must not have issued yet, blocks=%d", before.Blocks)
+	}
+	second := first.elsewhere()
+	dup := second.prodIssuer(1, nil)
+	if created, err := dup.Init(context.Background()); created || !errors.Is(err, ErrRegionClaimed) {
+		t.Fatalf("init: created=%v err=%v, want ErrRegionClaimed", created, err)
+	}
+	if _, err := dup.Recover(context.Background(), false); !errors.Is(err, ErrRebindRequired) {
+		t.Fatalf("recover: err=%v, want ErrRebindRequired", err)
+	}
+	if second.primary.has() || second.secondary.has() {
+		t.Fatal("the other cluster must not write local records")
+	}
+	if after, _ := first.registry.get(1); after != before {
+		t.Fatalf("the other cluster changed the claim: %+v -> %+v", before, after)
+	}
+}
+
+// 集群级备份恢复到另一个 K8s 集群:etcd 数据目录原样恢复,世系和集群号都和原环境相同,只有部署身份不同。拿不到第二份资格。
+func TestBinding_BackupRestoredIntoAnotherKubernetesClusterIsRefused(t *testing.T) {
+	origin := newHarness(t)
+	a := &allocated{t: t}
+	a.take(origin.production(1), 100)
+	restored := origin.elsewhere()
+	restored.primary = origin.primary.snapshot().clone(origin.primary.clusterID)
+	restored.secondary = origin.secondary.snapshot().clone(origin.secondary.clusterID)
+	before, _ := origin.registry.get(1)
+
+	iss := restored.prodIssuer(1, nil)
+	if _, _, err := iss.Allocate(context.Background(), "player", 100); !errors.Is(err, ErrBindingMismatch) {
+		t.Fatalf("allocate: err=%v, want ErrBindingMismatch", err)
+	}
+	if _, err := iss.Init(context.Background()); !errors.Is(err, ErrRegionClaimed) {
+		t.Fatalf("init: err=%v, want ErrRegionClaimed", err)
+	}
+	if _, err := iss.Recover(context.Background(), false); !errors.Is(err, ErrRebindRequired) {
+		t.Fatalf("recover: err=%v, want ErrRebindRequired", err)
+	}
+	if after, _ := origin.registry.get(1); after != before {
+		t.Fatal("the restored copy must not change the claim")
+	}
+	a.take(origin.prodIssuer(1, nil), 100)
+}
+
+// 灾备:原 K8s 集群还在跑,新集群用同一份清单部署(集群号相同)。rebind 之后资格转到新集群,原集群发完手里的块,
+// 再预留就被拒;新集群从全部历史预留之上开始,两边发过的段互不重叠。
+func TestBinding_RebindToAnotherKubernetesClusterFencesTheOldOne(t *testing.T) {
+	old := newHarness(t)
+	a := &allocated{t: t}
+	running := old.production(1)
+	a.take(running, 100)
+	historical := old.registry.highWater(1)
+
+	standby := old.elsewhere()
+	if _, err := standby.prodIssuer(1, nil).Recover(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := old.registry.get(1); c.Deployment != standby.deployment {
+		t.Fatalf("binding not moved to the standby cluster: %+v", c)
+	}
+	a.take(running, 100)
+	exhaust(running)
+	if _, _, err := running.Allocate(context.Background(), "player", 100); !errors.Is(err, ErrBindingMismatch) {
+		t.Fatalf("old cluster after the rebind: err=%v, want ErrBindingMismatch", err)
+	}
+	lo, _ := a.take(standby.prodIssuer(1, nil), 100)
+	if lo < historical {
+		t.Fatalf("lo=%d below the high water %d", lo, historical)
+	}
+}
+
+// 没有部署身份的码(本字段出现之前写的记录):生产预留拒绝,不带 rebind 的恢复也拒绝;rebind 之后补上身份,照常发号,不低于原水位。
+func TestBinding_ClaimWithoutDeploymentNeedsRebind(t *testing.T) {
+	h := newHarness(t)
+	a := &allocated{t: t}
+	a.take(h.production(1), 100)
+	h.registry.setDeployment(1, "")
+	historical := h.registry.highWater(1)
+
+	iss := h.prodIssuer(1, nil)
+	if _, _, err := iss.Allocate(context.Background(), "player", 100); !errors.Is(err, ErrBindingMismatch) {
+		t.Fatalf("allocate: err=%v, want ErrBindingMismatch", err)
+	}
+	if _, err := iss.Recover(context.Background(), false); !errors.Is(err, ErrRebindRequired) {
+		t.Fatalf("recover: err=%v, want ErrRebindRequired", err)
+	}
+	if _, err := iss.Recover(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := h.registry.get(1); c.Deployment != h.deployment {
+		t.Fatalf("rebind must record the deployment: %+v", c)
+	}
+	lo, _ := a.take(h.prodIssuer(1, nil), 100)
+	if lo < historical {
+		t.Fatalf("lo=%d below the high water %d", lo, historical)
+	}
 }
 
 // 同一对 etcd 的多个副本是合法的,并发发号互不重叠。
@@ -1193,11 +1387,11 @@ func TestBinding_RetiredCodeCannotBeReused(t *testing.T) {
 	a := &allocated{t: t}
 	running := h.production(1)
 	a.take(running, 100)
-	retired, err := running.Retire(context.Background())
+	retired, err := running.Retire(context.Background(), false)
 	if err != nil || !retired {
 		t.Fatalf("retire: %v %v", retired, err)
 	}
-	if again, err := running.Retire(context.Background()); again || err != nil {
+	if again, err := running.Retire(context.Background(), false); again || err != nil {
 		t.Fatalf("second retire: %v %v", again, err)
 	}
 	a.take(running, 100) // 手里的块照样发完
@@ -1221,11 +1415,54 @@ func TestRetire_WritesATombstoneForAnUnknownCode(t *testing.T) {
 	if _, err := iss.OpenRegistry(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
-	if retired, err := iss.Retire(context.Background()); err != nil || !retired {
+	if retired, err := iss.Retire(context.Background(), false); err != nil || !retired {
 		t.Fatalf("retire: %v %v", retired, err)
 	}
 	if _, err := iss.Init(context.Background()); !errors.Is(err, ErrRegionRetired) {
 		t.Fatalf("init: err=%v, want ErrRegionRetired", err)
+	}
+}
+
+// 在用的码只能从绑定它的部署环境退役(审核交接 §6.3)。另一个 K8s 集群(集群号相同也一样)、或者复制了别的地域配置、
+// 只把地域码改掉的环境,都拒绝,登记处不变,原地域照常发号。
+func TestRetire_ACodeInUseIsRefusedFromAnUnboundDeployment(t *testing.T) {
+	east := newHarness(t)
+	a := &allocated{t: t}
+	a.take(east.production(1), 100)
+	west := east.sibling(11, 12)
+	a.take(west.production(2), 100)
+	before, _ := east.registry.get(1)
+
+	for name, iss := range map[string]*Issuer{
+		"another kubernetes cluster with identical etcd": east.elsewhere().prodIssuer(1, nil),
+		"another region's config with the code changed":  west.prodIssuer(1, nil),
+	} {
+		if retired, err := iss.Retire(context.Background(), false); retired || !errors.Is(err, ErrBindingMismatch) {
+			t.Fatalf("%s: retired=%v err=%v, want ErrBindingMismatch", name, retired, err)
+		}
+	}
+	if after, _ := east.registry.get(1); after != before {
+		t.Fatalf("a refused retire changed the claim: %+v -> %+v", before, after)
+	}
+	a.take(east.prodIssuer(1, nil), 100)
+}
+
+// 绑定它的地域已经不在:运维确认之后用 unbound 放行,码照样永久退役;原环境(假如还在)发完手里的块就停。
+func TestRetire_UnboundNeedsTheExplicitSwitch(t *testing.T) {
+	h := newHarness(t)
+	running := h.production(1)
+	a := &allocated{t: t}
+	a.take(running, 100)
+	elsewhere := h.elsewhere().prodIssuer(1, nil)
+	if retired, err := elsewhere.Retire(context.Background(), true); err != nil || !retired {
+		t.Fatalf("retire with the explicit switch: %v %v", retired, err)
+	}
+	if c, _ := h.registry.get(1); c.State != ClaimRetired {
+		t.Fatalf("the code must be retired: %+v", c)
+	}
+	exhaust(running)
+	if _, _, err := running.Allocate(context.Background(), "player", 100); !errors.Is(err, ErrRegionRetired) {
+		t.Fatalf("allocate after retire: err=%v, want ErrRegionRetired", err)
 	}
 }
 
@@ -1430,6 +1667,77 @@ func TestAllocate_PrefetchesNextBlockAtHalfway(t *testing.T) {
 	a.take(iss, 1)
 }
 
+// ── 部署身份 ────────────────────────────────────────────────────────────
+
+// 读不到部署身份(K8s API 不可达、没有权限):这次预留什么都不写,单独上报 identity_error;读到之后照常预留,
+// 而且成功一次就缓存,之后的预留不再读。
+func TestReserve_DeploymentIdentityFailureWritesNothingAndSuccessIsCached(t *testing.T) {
+	h := newHarness(t)
+	h.production(1)
+	primaryBefore, secondaryBefore, registryBefore := h.primary.get(), h.secondary.get(), h.registry.highWater(1)
+	down := errors.New("kubernetes api unreachable")
+	var reads atomic.Int32
+	var failing atomic.Bool
+	failing.Store(true)
+	obs := newObserver()
+	iss := h.prodIssuer(1, func(o *Options) {
+		o.OnReserve = obs.record
+		o.Deployment = func(ctx context.Context) (string, error) {
+			reads.Add(1)
+			if failing.Load() {
+				return "", down
+			}
+			return h.identity(ctx)
+		}
+	})
+	mono := time.Unix(1000, 0)
+	var monoMu sync.Mutex
+	iss.monoNow = func() time.Time {
+		monoMu.Lock()
+		defer monoMu.Unlock()
+		return mono
+	}
+
+	if _, _, err := iss.Allocate(context.Background(), "player", 100); !errors.Is(err, down) {
+		t.Fatalf("allocate: err=%v, want the identity error", err)
+	}
+	if h.primary.get() != primaryBefore || h.secondary.get() != secondaryBefore || h.registry.highWater(1) != registryBefore {
+		t.Fatal("nothing may be written without the deployment identity")
+	}
+	if obs.count(ReserveIdentityError) != 1 || obs.count(ReserveOK) != 0 {
+		t.Fatalf("observed %v", obs.seen)
+	}
+
+	failing.Store(false)
+	monoMu.Lock()
+	mono = mono.Add(reserveRetryBackoff)
+	monoMu.Unlock()
+	a := &allocated{t: t}
+	a.take(iss, 100)
+	exhaust(iss)
+	a.take(iss, 100)
+	if got := reads.Load(); got != 2 {
+		t.Fatalf("identity reads=%d, want 2: one failure, then cached after the first success", got)
+	}
+}
+
+// 读到的部署身份格式不对:初始化拒绝,什么都不写。
+func TestDeployment_MalformedIdentityIsRefused(t *testing.T) {
+	h := newHarness(t)
+	iss := h.prodIssuer(1, func(o *Options) {
+		o.Deployment = func(context.Context) (string, error) { return "Not A Valid Identity", nil }
+	})
+	if _, err := iss.OpenRegistry(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := iss.Init(context.Background()); err == nil || !strings.Contains(err.Error(), "malformed deployment identity") {
+		t.Fatalf("init: err=%v, want a malformed identity error", err)
+	}
+	if _, ok := h.registry.get(1); ok || h.primary.has() || h.secondary.has() {
+		t.Fatal("nothing may be written with a malformed identity")
+	}
+}
+
 // ── 地域、构造、并发、关闭 ──────────────────────────────────────────────
 
 func TestRegion_InHighBits(t *testing.T) {
@@ -1469,21 +1777,27 @@ func TestRegion_RegistryMismatchRefused(t *testing.T) {
 
 func TestNew_RejectsBadOptions(t *testing.T) {
 	p, s, g := &memStore{}, &memStore{}, newMemRegistry(0)
+	deployment := func(context.Context) (string, error) { return "k8s:cluster-a", nil }
 	cases := []Options{
-		{Secondary: s, Registry: g, Tags: []string{"a"}},
-		{Primary: p, Registry: g, Tags: []string{"a"}},
-		{Primary: p, Secondary: s, Tags: []string{"a"}},
-		{Primary: p, Secondary: s, Registry: g},
-		{Primary: p, Secondary: s, Registry: g, Tags: []string{"Bad Tag"}},
-		{Primary: p, Secondary: s, Registry: g, Tags: []string{"a"}, Region: MaxRegion + 1},
-		{Primary: p, Secondary: s, Registry: g, Tags: []string{"a"}, BlockSize: 1},
+		{Secondary: s, Registry: g, Tags: []string{"a"}, Deployment: deployment},
+		{Primary: p, Registry: g, Tags: []string{"a"}, Deployment: deployment},
+		{Primary: p, Secondary: s, Tags: []string{"a"}, Deployment: deployment},
+		{Primary: p, Secondary: s, Registry: g, Deployment: deployment},
+		{Primary: p, Secondary: s, Registry: g, Tags: []string{"Bad Tag"}, Deployment: deployment},
+		{Primary: p, Secondary: s, Registry: g, Tags: []string{"a"}, Region: MaxRegion + 1, Deployment: deployment},
+		{Primary: p, Secondary: s, Registry: g, Tags: []string{"a"}, BlockSize: 1, Deployment: deployment},
+		// 生产形态没有部署身份:地域码绑定退回只比 etcd 集群号,分不出两个 K8s 集群。
+		{Primary: p, Secondary: s, Registry: g, Tags: []string{"a"}},
 	}
 	for i, opt := range cases {
 		if _, err := New(opt); err == nil {
 			t.Errorf("case %d must be rejected", i)
 		}
 	}
-	iss, err := New(Options{Primary: p, Secondary: s, Registry: g, Tags: []string{"a"}})
+	if _, err := New(Options{Primary: p, Secondary: s, Registry: g, Tags: []string{"a"}, AllowBootstrap: true}); err != nil {
+		t.Fatalf("dev may run without a deployment identity: %v", err)
+	}
+	iss, err := New(Options{Primary: p, Secondary: s, Registry: g, Tags: []string{"a"}, Deployment: deployment})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1575,6 +1889,7 @@ func TestDecodeStrict(t *testing.T) {
 func TestValidClaim(t *testing.T) {
 	for _, c := range []Claim{
 		{State: ClaimActive, Authority: testAuthority, HighWater: 1},
+		{State: ClaimActive, Authority: testAuthority, Deployment: "k8s:5b1e6c4a-0d2f-4c3b-9a8e-7f6d5c4b3a21", HighWater: 1},
 		{State: ClaimRetired},
 		{State: ClaimRetired, Authority: testAuthority, HighWater: 9},
 	} {
@@ -1587,6 +1902,8 @@ func TestValidClaim(t *testing.T) {
 		{State: ClaimActive, Authority: testAuthority},
 		{State: "paused", Authority: testAuthority, HighWater: 1},
 		{State: ClaimRetired, Authority: "not-hex"},
+		{State: ClaimActive, Authority: testAuthority, Deployment: "Not A Valid Identity", HighWater: 1},
+		{State: ClaimRetired, Deployment: "k8s:" + strings.Repeat("a", 200)},
 	} {
 		if validClaim(c) {
 			t.Errorf("%+v must be invalid", c)
@@ -1594,5 +1911,24 @@ func TestValidClaim(t *testing.T) {
 	}
 	if RegistryKey(7) != "/id_registry/v1/region/07" {
 		t.Fatalf("registry key %q", RegistryKey(7))
+	}
+}
+
+// 登记处记录的 JSON 带上部署身份,读回来逐字段相同;本字段出现之前写的记录没有它,照样能读,身份为空。
+func TestClaimJSON_CarriesTheDeployment(t *testing.T) {
+	want := Claim{State: ClaimActive, Authority: testAuthority, Deployment: "k8s:cluster-a", PrimaryCluster: 1,
+		SecondaryCluster: 2, HighWater: 9, Blocks: 3}
+	raw, err := json.Marshal(toClaimJSON(want))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body claimJSON
+	if err := decodeStrict(raw, &body); err != nil || body != toClaimJSON(want) {
+		t.Fatalf("round trip: %s -> %+v %v", raw, body, err)
+	}
+	var legacy claimJSON
+	old := `{"state":"active","authority":"` + testAuthority + `","primary_cluster":1,"secondary_cluster":2,"high_water":9,"blocks":3}`
+	if err := decodeStrict([]byte(old), &legacy); err != nil || legacy.Deployment != "" || legacy.HighWater != 9 {
+		t.Fatalf("a record without the deployment field: %+v %v", legacy, err)
 	}
 }

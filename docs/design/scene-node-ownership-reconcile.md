@@ -193,8 +193,8 @@ A 判死时没被改派(比如 B 在屏障走完之前就登记了,这个号看�
 
 判据里没有时间推断,只有「别人、比我那次登记更新」这一条证明,所以不会因为 scene_manager 迟迟没处理某次 PUT 而误判:新进程接走号
 之后、scene_manager 写下它的记录之前,控制域里是更旧的记录,新进程自己的身份也确认有效,两道都不会让它把刚分到的场景排空。
-代价是本进程登记之后 scene_manager 一次都没写过它的持有者记录(ownRevision 一直是 0)时认不出被接走,退回到 A 重连 etcd 时分配键冲突、
-疏散退出那条老路(§9 第 1 条)。
+代价是本进程一直没读到自己的持有者记录(ownRevision 一直是 0)时认不出被接走,退回到 A 重连 etcd 时分配键冲突、疏散退出那条老路。
+这种状态由指标 `scene_ownership_own_holder_known` 与告警 `SceneOwnershipOwnHolderUnknown` 报出来(§9 第 1 条)。
 
 本进程那次登记的修订号也可以从自己注册时 etcd 应答头里拿,不必等 scene_manager 写回来。没有这样做:要改 `etcd_service.cpp` 的注册路径
 并多注入一个探针,而它能补的只是上面那一种「scene_manager 一次都没写过」的情形;从持有者记录学到的修订号与 scene_manager 用的是同一个
@@ -297,6 +297,7 @@ CreateScene 命中(或第一次核对)已满 60 秒。逐条对照:
 | `scene_ownership_releasing_scenes` | gauge | 已开始排空、还在等住户离开的本地实体数 |
 | `scene_ownership_release_deferred_scenes` | gauge | 已判定不归本进程、在等住户预算的本地实体数 |
 | `scene_ownership_superseded` | gauge | 1 = 最近一次读到本节点号已被别的进程接走 |
+| `scene_ownership_own_holder_known` | gauge | 1 = 本进程读到过自己的持有者记录;托管着场景却一直是 0 时认不出被接走(§9 第 1 条) |
 
 **告警**(`deploy/k8s/scene-ownership-alerts.yaml`,PrometheusRule,与 `owner-epoch-alerts.yaml` 同法安装;处置见
 `docs/ops/scene-node-role-split.md`「场景归属对账告警」;规则引用的指标名与取值由 `tools/scripts/tests/scene_ownership_alerts_contract.tests.ps1` 对照 C++ 源码钉住):
@@ -306,6 +307,7 @@ CreateScene 命中(或第一次核对)已满 60 秒。逐条对照:
 | `SceneOwnershipUnownedScenesReleased` | warning | 某个 scene Pod 15 分钟内开始排空过任何场景 |
 | `SceneOwnershipMassRelease` | critical | 一个 namespace 10 分钟内开始排空的场景数超过它场景总数的一半,且至少 10 个 |
 | `SceneOwnershipNodeIdTakenOver` | critical | 某个 scene Pod 读到自己的节点号已被别的进程接走 |
+| `SceneOwnershipOwnHolderUnknown` | warning | 某个 scene Pod 托管着场景,却持续 10 分钟没读到自己的节点号持有者记录 |
 | `SceneOwnershipReleaseBacklog` | warning | 某个 scene Pod 排空中与等预算的实体数持续 15 分钟大于 0 |
 | `SceneOwnershipReconcileBlind` | warning | 某个 scene Pod 10 分钟里过半轮次读不到控制域,持续 5 分钟 |
 
@@ -315,9 +317,18 @@ scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_tot
 
 ## 9. 残余与风险
 
-1. **认不出被接走的一种情形**:本进程登记之后 scene_manager 一次都没写过它的持有者记录(这段时间没有 scene_manager 在跑,或写入一直失败),
-   ownRevision 一直是 0。这时号被接走、频道留在这个号上的那一类实体要等本进程重连 etcd、分配键冲突、疏散退出才收掉。
-   只要 scene_manager 处理过一次本进程的 PUT 或做过一次全量同步就不会出现。
+1. **本进程一直没读到自己的持有者记录时,认不出被接走**(接受;有指标、告警与退路,2026-11-11 定):ownRevision 只从持有者记录里学。
+   本进程登记之后 scene_manager 一直没写成它的记录、或者本进程一直读不到控制域时,ownRevision 一直是 0;这时号被接走、频道留在这个号上的
+   那一类实体,要等本进程重连 etcd、分配键冲突、疏散退出才收掉。
+   - **为什么罕见**:节点托管着场景,说明 scene_manager 已经处理过它的注册,处理时就写持有者;写不成时全量同步约每分钟重写一次。
+     号要被接走,本进程得先失租(租约 180 秒),这期间至少还有两三次重写,节点每 10 秒读一次。要连续几分钟写不成或读不到,才会走到这里。
+   - **为什么不拿本进程注册时 etcd 应答里的修订号顶替**:etcd 修订号倒退之后、换纪元之前,控制域里还留着旧纪元的大修订号记录
+     (存活集闸门压着全量同步时,这段可能有几分钟)。节点拿新集群的小修订号去比,本节点身份恰好不确认的那几轮,会把旧记录当成
+     「别人更新的登记」,把本地场景误排空。现在的写法只会少拆、不会多拆(§6),这条残余也是同一方向。
+   - **兜底**:节点导出 `scene_ownership_own_holder_known`(读到过自己的记录为 1)。托管着场景却持续 10 分钟是 0 时告警
+     `SceneOwnershipOwnHolderUnknown`(warning):先修 scene_manager 到控制域的写入或节点的读;修不好、而这个节点又与 etcd 失联时,
+     按 `docs/ops/scene-node-role-split.md` 的处置核对这个节点号现在登记的进程,不是它就重启它。号真被接走时,
+     本进程重连 etcd 也照常因分配键冲突疏散退出。
 2. **不在任何场景里的玩家实体不归对账管**:节点号被接走时,对账只排空场景;在途换图等不绑定场景的玩家实体由它们自己的超时与
    重连 etcd 时的整节点疏散收掉。
 3. **住户预算是没有压测基线的初值**(200 名 / 轮 / 节点):偏小时排空积压(`SceneOwnershipReleaseBacklog` 会响),偏大时控制域丢数据后
@@ -328,10 +339,16 @@ scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_tot
    时改成按槽分批,持有者键单独读。
 6. **排空期间每轮重调一次 DestroyScene**,`BeginSceneDrain` 每次打一行 WARN;与 scene_manager 重发 DestroyScene 的频率同量级。
 7. **断线保留中的玩家会被直接退出**(只存盘不改派):与频道缩容排空同一口径。短重连时 scene_manager 按 location 回到同号场景的新属主。
-8. **告警规则没有过 promtool,也没有装进任何集群**(§10 第 7 步)。
-9. **水位丢了的那一轮认不出倒退**:修订号水位只在控制域丢数据(或有人手工删键)时才会没有,没有水位的那一轮只建立水位。水位刚丢、etcd 又
-   恰在这一轮之前倒退,这次倒退认不出来:旧记录里修订号大于新登记的,要等过期(不再续期,最长一天)才让位,期间这些号认不出顶替。
-   只少一层识别,不会误判排空。
+8. **告警规则没有过 promtool,也没有装进任何集群**:交 Codex,§10 第 7 步(promtool)与第 7a 步(本机 dev 集群)。
+9. **水位丢了的那一轮认不出倒退**(接受;有手工退路,2026-11-11 定):没有水位的那一轮只建立水位。水位刚丢、etcd 又恰在这一轮之前倒退,
+   这次倒退认不出来:旧记录里修订号大于新登记的,要等过期(不再续期,最长一天)才让位,期间这些号认不出顶替。只少一层识别,不会误判排空。
+   - **为什么接受**:水位只在控制域丢数据时才会没有。整个实例丢数据(被清空、换成空实例)时,持有者记录跟着一起没了,没有残留可防;
+     从备份恢复时,水位与还没过期的持有者记录出自同一份快照;主从切换只丢最后一瞬的写入,而水位第一次写成之后只升不降,
+     丢掉的最多是一次抬升,不会变成没有。剩下只有人手工删键,etcd 运维手册 §7a 写明不要删。
+   - **为什么不另做「从持有者记录反推水位」**:那要每轮多读一遍在册节点的持有者与纪元旁记,只为覆盖手工删键这一种情形,得不偿失。
+   - **退路**:计划内的换集群之后,某个 zone 没亮 `SceneManagerEtcdRevisionRegressed`(按手册每个 zone 应亮一次),确认 etcd 确实倒退之后,
+     在那个 zone 的控制域实例上手工 `INCR scene_manager:etcd_epoch:zone:<z>`。效果与自动换纪元相同:该 zone 全部持有者记录让位给
+     下一次登记。不需要时多做一次,也只是全部记录重写一遍,不会误判排空。
 10. **倒退时没重启的老进程认不出被接走**:它记着倒退之前的大修订号,新集群里接走它节点号的登记修订号更小。所以 etcd 运维手册 §7a
     要求修订号倒退后重启全部 scene 节点;告警 `SceneManagerEtcdRevisionRegressed` 提醒这一步。
 
@@ -361,7 +378,7 @@ scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_tot
 2. `msbuild cpp/nodes/scene/scene.vcxproj /m:1 /p:Configuration=Debug /p:Platform=x64`
 3. `msbuild cpp/tests/cross_zone_test/cross_zone_test.vcxproj /m:1 /p:Configuration=Debug /p:Platform=x64`(测试工程链接预编好的库,第 1 步不能省)
 4. `build\cpp\tests\cross_zone_test.exe --gtest_filter=SceneOwnership*`:`SceneOwnershipRules.*` 11 条、`SceneOwnershipReply.*` 2 条、
-   `SceneOwnershipEcs.*` 14 条,共 27 条全部 PASS;再跑 `--gtest_filter=RelocateConfirmEcs.*:ExitPersistEcs.*` 与 `cross_zone_test.exe` 全量,原有用例不回归。
+   `SceneOwnershipEcs.*` 15 条,共 28 条全部 PASS;再跑 `--gtest_filter=RelocateConfirmEcs.*:ExitPersistEcs.*` 与 `cross_zone_test.exe` 全量,原有用例不回归。
 5. Go,工作目录 `go/scene_manager`,`GOTOOLCHAIN=local`、`GOPROXY=off`:
    - `gofmt -l internal/logic/node_holder.go internal/logic/node_holder_test.go internal/logic/load_reporter.go internal/logic/scene_keys_contract_test.go internal/metrics/node_holder.go internal/metrics/metrics.go` 无输出;
    - `go vet ./internal/logic/ ./internal/metrics/`、`go build ./...`;
@@ -369,8 +386,20 @@ scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_tot
      其中 `node_holder_test.go` 的 15 条(`TestApplyNodeSnapshot_WithoutAWatermarkOnlyRecordsIt` 含 2 个子用例)全部 PASS;
    - `go test ./... -count=1`,既有失败逐条点名归因。
 6. `pwsh -NoProfile -File tools/scripts/tests/scene_ownership_alerts_contract.tests.ps1`:5 个 Test-Case 全绿。
-7. `promtool check rules` 分别校验 `deploy/k8s/scene-ownership-alerts.yaml` 与 `deploy/k8s/scene-manager-alerts.yaml`(先按 PrometheusRule 取出
-   `spec` 下的 `groups`,与其他告警文件的校验方法相同):0 error。
+7. 规则语法:按 `docs/PROGRESS.md` 2026-11-10「死节点收尾告警」条目的做法,分别把 `deploy/k8s/scene-ownership-alerts.yaml` 与
+   `deploy/k8s/scene-manager-alerts.yaml` 的 `.spec` 取成单独文件(`yq '.spec' <文件>`),跑 `promtool check rules`。期望退出 0:
+   前者 `SUCCESS: 6 rules found`;后者的条数等于 `grep -c -- '- alert:' deploy/k8s/scene-manager-alerts.yaml`(写本条时 38,别的会话可能还在加)。
+   本机没有 yq / promtool 时,用固定摘要的 `prom/prometheus@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e`
+   (promtool 3.15.0,`--entrypoint promtool --network none --rm`,只读挂载)与 `mikefarah/yq`,回报镜像标签;不安装宿主工具。
+7a. 入集群,只在本机或负责人指定的 dev 集群,不碰生产(AGENTS.md §9):
+   - `kubectl get crd prometheusrules.monitoring.coreos.com`。没有这个 CRD(集群里没装 Prometheus Operator)就报告「未入集群」,
+     不要为此安装 Operator(AGENTS.md §10.2)。
+   - `kubectl apply -n observability -f deploy/k8s/scene-ownership-alerts.yaml`,`kubectl apply -n observability -f deploy/k8s/scene-manager-alerts.yaml`;
+     `kubectl get prometheusrule -n observability scene-ownership-alerts scene-manager-alerts` 两条都在。
+   - `kubectl get prometheus -A` 找到 Operator 管的那个 Prometheus,port-forward 它的 9090,`GET /api/v1/rules`:组 `scene.ownership`
+     有 6 条规则,组 `scene-manager.node-role-split` 里有 `SceneManagerEtcdRevisionRegressed`,每条 `health` 为 `ok`、`lastError` 为空。
+     组没出现时,如实报告那个 Prometheus 的 `ruleSelector` / `ruleNamespaceSelector`(本仓的规则带 `role: alert-rules`、`prometheus: kube-prometheus`)。
+   - 集群里有带指标出口的 scene Pod 时,`GET /api/v1/query?query=scene_ownership_own_holder_known`,每个 scene Pod 一条序列。
 8. Linux:`build_linux.sh` 按 vcxproj 重新生成 CMakeLists 后编 scene 库与 scene 节点,0 error。
 9. **变异取红**:在工作树里逐个改,只改所列的那一处,重编(C++ 第 1、3 步;Go 直接跑)再跑对应过滤器,跑完立即手工改回,用 `git diff -- <文件>`
    核对与改前一致。这几个文件别的会话也在改,不要用 `git checkout` / `git stash` 恢复。
@@ -409,6 +438,7 @@ scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_tot
      `TestStartNewEtcdEpoch_ComparesAndSets` 红。
    - M18(Go):`luaStartNewEtcdEpoch` 里把 `INCR` 与 `SET` 两行对调。期望 `TestStartNewEtcdEpoch_ComparesAndSets` 红(纪元没换成,水位却降了)。
    - M19(Go):`publishSnapshotHolders` 里删掉 `&& isLeader()`。期望 `TestPublishSnapshotHolders_NonLeaderDoesNotStartANewEpoch` 红。
+   - M21:`ObserveHolder` 里删掉 `tlsStats.ownHolderKnown = holder.ownRevision != 0;`。期望 `HolderReadingsTrackTheOwnRecordAndTheTakeover` 红。
    - M20(Go):`luaRaiseEtcdRevisionSeen` 里删掉 `and not generation_after(ARGV[1], current)`(水位能降)。期望
      `TestPublishSnapshotHolders_NonLeaderDoesNotStartANewEpoch` 红。
 10. **冒烟**(本机 `dev-start`,一个 zone、两个 scene 节点,`MMORPG_METRICS_PORT` 打开):
@@ -422,7 +452,7 @@ scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_tot
       `scene_ownership_superseded` 变 1;
     - 对照组:断开不到 180 秒就恢复,之后没有任何 `[SceneOwnership]` 排空日志。
 
-**通过标准**:第 1~3、8 步 0 error;第 4 步 27 条、第 5 步 `node_holder_test.go` 15 条全绿,原有用例不回归;第 6 步全绿;第 7 步 0 error;第 9 步每个变异的红绿
+**通过标准**:第 1~3、8 步 0 error;第 4 步 28 条、第 5 步 `node_holder_test.go` 15 条全绿,原有用例不回归;第 6 步全绿;第 7 步两份规则都 SUCCESS;第 7a 步规则健康(或明确报告未入集群);第 9 步每个变异的红绿
 与上面一致;第 10 步日志与指标符合描述(或明确报告未冒烟)。失败时保留:第一条编译错误原文;失败用例单跑的完整输出;冒烟时 A 的
 scene 日志与 scene_manager 日志中 T0 到恢复后 60 秒的片段。
 

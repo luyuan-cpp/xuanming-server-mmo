@@ -154,12 +154,14 @@ message GuildAssetOpRecord {                  // 锁序位置 6
   option(OptionTableName) = "guild_asset_op";
   option(OptionPrimaryKey) = "op_id";
   option(OptionUniqueKey) = "player_id,stream,stream_epoch,seq";  // 生成 uk_guild_asset_op;同一序号只可能有一条指令
-  // idx_guild_asset_op_0 = 到期领取 / 终态清理 / 回档前检查(B5d);
+  // idx_guild_asset_op_0 = 到期领取 / 终态清理 / 回档前检查(B5d);列是 (status, next_attempt_ms, op_id, player_id)
+  //   (2026-11-11,缺口清单第 25 条):op_id 让 ORDER BY next_attempt_ms, op_id 直接走索引顺序(TiDB 上主键非聚簇,
+  //   不带它就要整段读完再排序),player_id 让按玩家分片的条件在索引上判,别的副本的行不回表;
   // idx_guild_asset_op_1 = 按帮查;
   // idx_guild_asset_op_2 = AllocateSeq 对未决行加锁读、离帮提前截止、本人待结算列表(只扫未决行)、
   //   落地唤醒按玩家列未决行(GuildAssetStore.ListPendingByPlayer,非加锁读)。
   // 索引名从 0 起编号,组只能追加到末尾、不得调序(见文件头改表纪律)。
-  option(OptionIndex) = "status,next_attempt_ms;guild_id,op_id;player_id,stream,stream_epoch,status,seq";
+  option(OptionIndex) = "status,next_attempt_ms,op_id,player_id;guild_id,op_id;player_id,stream,stream_epoch,status,seq";
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;

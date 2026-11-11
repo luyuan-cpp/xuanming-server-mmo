@@ -460,7 +460,7 @@ func TestNewGuildNotifierNilSafe(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			require.IsType(t, NoopNotifier{}, tc.notifier)
 			assert.NotPanics(t, func() {
-				tc.notifier.Notify(&pb.GuildChangedS2C{
+				tc.notifier.Notify(context.Background(), &pb.GuildChangedS2C{
 					Kind:    pb.GuildChangeKind_GUILD_CHANGE_KIND_DISBANDED,
 					GuildId: 9,
 				}, []uint64{1, 2})

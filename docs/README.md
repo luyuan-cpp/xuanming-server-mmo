@@ -111,6 +111,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
+- [battle-instance-loss-early-abort.md](design/battle-instance-loss-early-abort.md) — 战斗进程失效的提前作废与作废通知：原进程确定不在时约 1 分钟内判作废，所有作废经结算链送到场景服并通知客户端（2026-11-11 方案已定案，未落码）
 - [battle-item-reservation.md](design/battle-item-reservation.md) — 战斗道具预留：备战时押住带进战斗的道具，结算从预留里扣，作废或取消时释放；冻结解开后晚到的结算不再按持有量夹紧（2026-11-10 已落码，未编译）
 - [battle-report-replay.md](design/battle-report-replay.md) — 回合制战斗战报回放：只录 PVP，观众版帧随终局原件同事务存进 match 库，每名玩家保留最近 100 条（2026-11-06 已落码，未编译）
 - [battle-result-recovery.md](design/battle-result-recovery.md) — 战斗结果重登恢复：近期战斗结果随结算同一次存档提交，客户端落地查询（2026-11-05，未编译）
@@ -220,7 +221,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 #### 基础设施与中间件
 
-- [distributed-tracing.md](design/distributed-tracing.md) — 分布式日志关联与链路追踪(todo.md #152;阶段一第 1~5 批已落码:第 1 批 11-08 已验证,第 2~5 批待 Codex 验证)
+- [distributed-tracing.md](design/distributed-tracing.md) — 分布式日志关联与链路追踪(todo.md #152;阶段一第 1~7 批全部落码:第 1 批 11-08 已验证,第 2~7 批待 Codex 验证;K8s 采集是阶段二,未开始)
 - [double-buffer-queue-optimizations.md](design/double-buffer-queue-optimizations.md) — DoubleBufferQueue Optimizations (2026-04-16)
 - [error-reporting.md](design/error-reporting.md) — Error Aggregation & Reporting — Design (todo.md #250)
 - [go-zero-rpc-timeout-fix.md](design/go-zero-rpc-timeout-fix.md) — go-zero RPC Client Timeout Fix

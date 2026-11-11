@@ -30,7 +30,7 @@
 #       部署 exporter 时逐个对着它的 /metrics 核对,对不上就改这里 —— 指标名写错的规则不报错,只是永远不响。
 #
 # 池指标 mmorpg_sql_pool_*{sql_client,pool} 由 go/shared/sqlpoolstats 导出,按池类别聚合,不含库名:
-#   sql_client="db"            pool = home | extra_zone | extra_non_zone(go/db/internal/metrics 的 Pool* 常量)
+#   sql_client="db"            pool = store(go/db/internal/metrics 的 PoolStore:go/db 只连地域存档库,A17c 起没有本区库)
 #   sql_client="data_service"  pool = snapshot | transaction_log | player_name | player_route(go/data_service/internal/metrics 的 Pool* 常量)
 #   sql_client="chat" | "friend" | "guild" | "mail" | "match" | "rank" | "trade"  pool = primary(各服务只有本服务逻辑库这一个池,
 #                              sqlpoolstats.PrimaryPool)
@@ -98,7 +98,7 @@ spec:
               scene 日志 metric=player_store_save_retry 给出玩家与序号。上限恢复前不要重启 scene:
               停机时没落定的玩家会丢掉最后一次提交之后的进度(日志 metric=player_store_shutdown_unsettled 列出这些玩家)。
               ③ 找根因 —— 对照部署日志的 `MySQL connection ledger` 一行与 tools/scripts/k8s_deploy.ps1 的 Get-MysqlConnectionLedger,
-              看是 zone 数 / 额外落点库数超了规划档(DbExtraStorePoolsBeyondPlan),还是多个 zone 同时在滚动发布。
+              看是 zone 数 / 打开的存档库数超了规划档(DbStorePoolsBeyondPlan),还是多个 zone 同时在滚动发布。
 
         # 连接数逼近上限:过去 5 分钟的 Threads_connected 峰值超过 max_connections 的 80%,并持续 5 分钟。Refused 之前的预警。
         # 用 max_over_time 而不是瞬时值:连接数在滚动发布 / 登录潮时是尖峰,瞬时值一回落 for 就被打断,攒不满 5 分钟。
@@ -120,7 +120,7 @@ spec:
               {{ $labels.instance }} 过去 5 分钟的连接数峰值已占 max_connections 的 {{ $value | printf "%.2f" }}(1 = 满)。
               再涨就是 1040,玩家存盘会卡在 scene 的重试里、进场会失败(见 MysqlConnectionsRefused)。
               先看是不是正在滚动发布、迁移或备份(这些是临时的);不是的话对照部署日志的 `MySQL connection ledger` 一行,
-              结合 SqlPoolSaturated / DbExtraStorePoolsBeyondPlan 判断是 zone 数、额外落点库数还是某个池涨了。
+              结合 SqlPoolSaturated / DbStorePoolsBeyondPlan 判断是 zone 数、打开的存档库数还是某个池涨了。
               调上限的做法与内存约束见 deploy/k8s/manifests/infra/mysql.yaml 的「连接上限」注释。
 
     # ── 客户端侧(连接池)──────────────────────────────────────────────────
@@ -130,7 +130,7 @@ spec:
       interval: 30s
       rules:
         # 取连接在排队而且排得久:过去 5 分钟平均每次等待 > 100ms,并且每秒排队超过 1 次,持续 10 分钟。
-        # 两个条件都要:只看平均值会被偶尔一次慢等待触发;只看次数会被 go/db home 池的正常限流触发(见下一条)。
+        # 两个条件都要:只看平均值会被偶尔一次慢等待触发;只看次数会被 go/db 存档库池的正常限流触发(见下一条)。
         # 没人排队时分母为 0,商是 NaN,比较为假,不触发。
         # wait_* 是类别内求和的 counter,靠「池常驻不删」保持单调(go/shared/sqlpoolstats/collector.go 包注释);
         # 以后给池加回收,求和回退会被当成 counter reset,这条要跟着改口径。
@@ -157,7 +157,7 @@ spec:
               每个池 × 副本数 × zone 数都压在同一台 MySQL 的 max_connections 上。
 
         # 池长期用满:in_use / max_open > 0.9 持续 15 分钟。只作趋势信号。
-        # go/db 的 home 池实际就是限流点(存盘 RPC 的并发多于 MaxOpenConn 时在池上排队,超过方法预算 12s 就是结果未知、scene 重试),
+        # go/db 的存档库池实际就是限流点(存盘 RPC 的并发多于每库池上限时在池上排队,超过方法预算 12s 就是结果未知、scene 重试),
         # 高负载下常满属预期;真正要动手的信号是上一条 SqlPoolSlowAcquire。
         # 任一池不限(MaxOpenConn = 0)时 max_open 导出为 +Inf,商为 0;类别里没有池时是 0 / 0 = NaN:两种都不触发。
         # 这里按 (namespace, sql_client, pool) 对各副本求和后再比:一个副本满、另一个闲时会被摊平,
@@ -174,35 +174,31 @@ spec:
             summary: "{{ $labels.sql_client }} 的 {{ $labels.pool }} 连接池长期用满(占比 {{ $value | printf \"%.2f\" }})"
             description: >-
               {{ $labels.namespace }} 里 {{ $labels.sql_client }} 的 {{ $labels.pool }} 池在用连接占上限的 {{ $value | printf "%.2f" }}(1 = 满),已持续 15 分钟。
-              go/db 的 home 池实际就是限流点,高负载下常满属预期;其它池长期用满、或同时出现 SqlPoolSlowAcquire 时才需要处理。
+              go/db 的存档库池实际就是限流点,高负载下常满属预期;其它池长期用满、或同时出现 SqlPoolSlowAcquire 时才需要处理。
               要调池先重算 MySQL 连接总账(tools/scripts/k8s_deploy.ps1 的 Get-MysqlConnectionLedger)。
 
-        # 存档库已和区脱钩(docs/design/player-data-tidb-scaling-plan.md §7.2):每地域固定 K 个存档逻辑库,每库一个常驻池。
-        #   extra_zone     —— 旧 zone_*_db 存档库已退役,规划为 0;仍打开它说明目录或旧环境没有清理完成。
-        #   extra_non_zone —— player_store_*_db 存档库,本规则按生产 TiDB 规划档 K=64 判断。
-        # MySQL 小 K 档仍按本次部署的 K 核算连接总账;这条生产阈值不替代各档位的容量核算。
-        # 两个阈值与 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionPlan 的 ExtraZoneStores / TidbNonZoneStores 同源,
+        # 存档库已和区脱钩、zone 库已退役(docs/design/player-data-tidb-scaling-plan.md §7.2,A17c):每地域固定 K 个存档逻辑库
+        # player_store_<id>_db,go/db 每打开一个就建一个常驻池,pool="store" 的池数就是打开的存档库数。
+        # 本规则按生产 TiDB 规划档 K=64 判断;MySQL 小 K 档仍按本次部署的 K 核算连接总账,这条生产阈值不替代各档位的容量核算。
+        # 阈值与 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionPlan 的 TidbPlayerStoreShards 同源,
         # 契约测试(tools/scripts/tests/k8s_deploy_contract.tests.ps1)按行用正则提取后与规划档核对:
-        # **每个阈值必须单独占一行,不要合并或改写成别的形状**;改规划档必须同改这两行(反之亦然),并重算 max_connections。
-        # pool 的两个取值写死为 go/db/internal/metrics 的 PoolExtraZone / PoolExtraNonZone,改常量必须同改这里。
+        # **阈值必须单独占一行,不要改写成别的形状**;改规划档必须同改这一行(反之亦然),并重算连接预算。
+        # pool 的取值写死为 go/db/internal/metrics 的 PoolStore,改常量必须同改这里。
         # mmorpg_sql_pool_pools 对声明的类别每次抓取都输出(没有池时为 0),不存在序列从无到有的漏报。
         # 这是事后信号:库已经打开、池已经建好才会响。阈值来自规划档,规划档本身待压测确认。
-        - alert: DbExtraStorePoolsBeyondPlan
+        - alert: DbStorePoolsBeyondPlan
           expr: |
-            max by (namespace, instance) (mmorpg_sql_pool_pools{sql_client="db", pool="extra_zone"}) > 0
-            or
-            max by (namespace, instance) (mmorpg_sql_pool_pools{sql_client="db", pool="extra_non_zone"}) > 64
+            max by (namespace, instance) (mmorpg_sql_pool_pools{sql_client="db", pool="store"}) > 64
           for: 10m
           labels:
             severity: warning
           annotations:
-            summary: "go/db 打开的存档库池数偏离生产规划"
+            summary: "go/db 打开的存档库池数超过生产规划"
             description: >-
-              {{ $labels.namespace }} / {{ $labels.instance }} 的 go/db 有一类额外落点库已打开 {{ $value | printf "%.0f" }} 个(每个库一个常驻连接池),
-              超过规划档(tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionPlan 的 ExtraZoneStores / TidbNonZoneStores)。
-              按 pool 查 mmorpg_sql_pool_pools{sql_client="db"}:extra_zone 非 0 表示仍在使用已退役的 zone 存档库,
-              应核查目录落点和旧环境清理;extra_non_zone 超过 64 表示打开的存档库多于生产 TiDB 规划档,
-              应核对本地域固定 K 与目录映射。继续扩容前重算连接总账、max_connections 和数据库内存预算。
+              {{ $labels.namespace }} / {{ $labels.instance }} 的 go/db 已打开 {{ $value | printf "%.0f" }} 个存档库(每个库一个常驻连接池),
+              超过规划档(tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionPlan 的 TidbPlayerStoreShards)。
+              go/db 正常只打开本地域固定的 K 个存档库;多出来说明目录里有落点指向别的地域,或 -Region / -PlayerStoreShards 填错,
+              按目录映射与部署参数核对。继续扩容前重算连接总账和数据库连接预算。
 
     # ── Java gateway(Hikari 连接池)──────────────────────────────────────────
     # gateway 在管理端口 8082 的 /actuator/prometheus 上导出 Micrometer 的 hikaricp_connections_*{pool="gateway"}(文件头 Scrape prerequisites)。

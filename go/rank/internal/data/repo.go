@@ -40,13 +40,14 @@ func New(db *sql.DB, boardIDs, settlementIDs, rewardIDs NextID, itemExists func(
 	return &Repo{db: db, boardIDs: boardIDs, settlementIDs: settlementIDs, rewardIDs: rewardIDs, now: time.Now, itemExists: itemExists, rewardMailWindow: MaxRewardMailWindow}
 }
 
-const boardColumns = "board_id,board_type,scope,scope_id,period,generation,producer,source_epoch,committed_cursor,ascending,state,settlement_id,open_request_id,open_request_hash,created_ms,sealed_ms,deleted_ms,entries"
+// 本代已落账的批次总数与现有实体数不在榜行上,是各片行之和(rank_board_shard,见 shards.go)。
+const boardColumns = "board_id,board_type,scope,scope_id,period,generation,producer,source_epoch,ascending,state,settlement_id,open_request_id,open_request_hash,created_ms,sealed_ms,deleted_ms"
 
 type scanner interface{ Scan(...any) error }
 
 func scanBoard(row scanner) (*rankpb.RankBoardRecord, error) {
 	b := &rankpb.RankBoardRecord{}
-	err := row.Scan(&b.BoardId, &b.BoardType, &b.Scope, &b.ScopeId, &b.Period, &b.Generation, &b.Producer, &b.SourceEpoch, &b.CommittedCursor, &b.Ascending, &b.State, &b.SettlementId, &b.OpenRequestId, &b.OpenRequestHash, &b.CreatedMs, &b.SealedMs, &b.DeletedMs, &b.Entries)
+	err := row.Scan(&b.BoardId, &b.BoardType, &b.Scope, &b.ScopeId, &b.Period, &b.Generation, &b.Producer, &b.SourceEpoch, &b.Ascending, &b.State, &b.SettlementId, &b.OpenRequestId, &b.OpenRequestHash, &b.CreatedMs, &b.SealedMs, &b.DeletedMs)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -65,8 +66,7 @@ func (r *Repo) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 			return err
 		} // 提交结果未知不自动重做业务。
 		_ = tx.Rollback()
-		var mysqlErr *mysql.MySQLError
-		if !errors.As(err, &mysqlErr) || (mysqlErr.Number != 1213 && mysqlErr.Number != 1205) || attempt == 2 {
+		if !retryableTxError(err) || attempt == 2 {
 			return err
 		}
 		timer := time.NewTimer(time.Duration(attempt+1) * 15 * time.Millisecond)
@@ -78,6 +78,16 @@ func (r *Repo) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 		}
 	}
 	return ErrConflict
+}
+
+// retryableTxError:整笔回滚之后原样重做是安全的失败。死锁(1213)与锁等待超时(1205)由库判;errScoreInsertRace 是
+// 别的片的批次抢先插入了同一个实体,重做时它已是已有行,会被锁住再合并。
+func retryableTxError(err error) bool {
+	if errors.Is(err, errScoreInsertRace) {
+		return true
+	}
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && (mysqlErr.Number == 1213 || mysqlErr.Number == 1205)
 }
 
 func validBoard(b *rankpb.RankBoardKey) bool {
@@ -99,7 +109,7 @@ func (r *Repo) Open(ctx context.Context, caller string, in *rankpb.OpenRankGener
 	}
 	now := uint64(r.now().UnixMilli())
 	b := in.Board
-	_, err = r.db.ExecContext(ctx, "INSERT INTO rank_board ("+boardColumns+") VALUES (?,?,?,?,?,?,?,?,0,?,1,0,?,?,?,0,0,0)", id, b.BoardType, uint32(b.Scope), b.ScopeId, b.Period, b.Generation, caller, in.SourceEpoch, boolInt(in.Ascending), in.RequestId, digest, now)
+	_, err = r.db.ExecContext(ctx, "INSERT INTO rank_board ("+boardColumns+") VALUES (?,?,?,?,?,?,?,?,?,1,0,?,?,?,0,0)", id, b.BoardType, uint32(b.Scope), b.ScopeId, b.Period, b.Generation, caller, in.SourceEpoch, boolInt(in.Ascending), in.RequestId, digest, now)
 	if err == nil {
 		return &rankpb.OpenRankGenerationResponse{BoardId: id}, nil
 	}
@@ -125,7 +135,7 @@ func boolInt(value bool) uint32 {
 
 func (r *Repo) Submit(ctx context.Context, caller string, in *rankpb.SubmitRankScoresRequest) (result *rankpb.SubmitRankScoresResponse, err error) {
 	defer func() { observeWrite(metrics.OperationSubmit, err, result.GetDuplicated()) }()
-	if in == nil || in.BoardId == 0 || in.Generation == 0 || in.SourceEpoch == 0 || in.SourceCursor == 0 || in.RequestId == 0 || len(in.Entries) == 0 || len(in.Entries) > 128 || in.Mode < rankpb.RankSubmitMode_RANK_SUBMIT_SET_IF_HIGHER || in.Mode > rankpb.RankSubmitMode_RANK_SUBMIT_INCREMENT {
+	if in == nil || in.BoardId == 0 || in.Generation == 0 || in.SourceEpoch == 0 || in.SourceCursor == 0 || in.RequestId == 0 || in.SourceShard >= maxSourceShards || len(in.Entries) == 0 || len(in.Entries) > 128 || in.Mode < rankpb.RankSubmitMode_RANK_SUBMIT_SET_IF_HIGHER || in.Mode > rankpb.RankSubmitMode_RANK_SUBMIT_INCREMENT {
 		return nil, ErrInvalid
 	}
 	entries := append([]*rankpb.RankScoreInput(nil), in.Entries...)
@@ -146,9 +156,26 @@ func (r *Repo) Submit(ctx context.Context, caller string, in *rankpb.SubmitRankS
 	}
 	result = &rankpb.SubmitRankScoresResponse{}
 	err = r.tx(ctx, func(tx *sql.Tx) error {
-		b, err := scanBoard(tx.QueryRowContext(ctx, "SELECT "+boardColumns+" FROM rank_board WHERE board_id=? FOR UPDATE", in.BoardId))
+		// 先锁本片的片行:同片的批次由它串行,不同片的批次互不等待(2026-11-11,缺口清单第 17 条;锁序见 shards.go)。
+		shard, err := lockShard(ctx, tx, in.BoardId, in.Generation, in.SourceShard)
 		if err != nil {
 			return err
+		}
+		// 本片还没有片行:要在榜行锁里建,和封榜等整代操作互斥。已有片行时榜行只做普通读:事务是读已提交,
+		// 持片行锁之后读到的就是最新提交的榜行;封榜、移除要先拿到全部片行锁才能提交,在途的会等本事务结束。
+		boardQuery := "SELECT " + boardColumns + " FROM rank_board WHERE board_id=?"
+		if shard == nil {
+			boardQuery += " FOR UPDATE"
+		}
+		b, err := scanBoard(tx.QueryRowContext(ctx, boardQuery, in.BoardId))
+		if err != nil {
+			return err
+		}
+		if shard == nil {
+			// 拿到榜行锁之后再看一次:同一片的另一笔重放可能刚建好片行。
+			if shard, err = lockShard(ctx, tx, in.BoardId, in.Generation, in.SourceShard); err != nil {
+				return err
+			}
 		}
 		if b.Producer != caller {
 			return ErrDenied
@@ -156,11 +183,10 @@ func (r *Repo) Submit(ctx context.Context, caller string, in *rankpb.SubmitRankS
 		if b.Generation != in.Generation || b.SourceEpoch != in.SourceEpoch || b.DeletedMs != 0 {
 			return ErrConflict
 		}
-		// 游标按片各自连续:幂等键是 (shard, cursor)。上面的 board 行锁把同榜的 Submit 串行了,
-		// 这里读到的 MAX 就是提交点的值;收据保留到本代结束,MAX 不会因清理回退。
+		// 游标按片各自连续:幂等键是 (shard, cursor),本片已落账到哪一批记在片行上。
 		var committed uint64
-		if err := tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(source_cursor),0) FROM rank_input_receipt WHERE board_id=? AND generation=? AND source_shard=?", in.BoardId, in.Generation, in.SourceShard).Scan(&committed); err != nil {
-			return err
+		if shard != nil {
+			committed = shard.committed
 		}
 		if in.SourceCursor <= committed {
 			var existing string
@@ -184,8 +210,8 @@ func (r *Repo) Submit(ctx context.Context, caller string, in *rankpb.SubmitRankS
 		if err != nil {
 			return err
 		}
-		// 一批最多 128 个实体:整批一次读、一次写(2026-11-05,缺口清单第 17 条)。以前逐个实体一读一写,一批要两百多次往返,
-		// 全都压在上面那把榜行锁里,同一张榜的写入吞吐被往返时延封顶。合并规则不变,只是改在内存里逐个算。
+		// 一批最多 128 个实体:整批一次读(并锁住已有行)、至多两条语句写(2026-11-05 起;11-11 起不再持榜行锁)。
+		// 合并规则不变,在内存里逐个算;同一实体被别的片的批次同时改,靠 loadScores 的行锁串行。
 		existing, err := loadScores(ctx, tx, in.BoardId, in.Generation, entries, removed)
 		if err != nil {
 			return err
@@ -217,26 +243,38 @@ func (r *Repo) Submit(ctx context.Context, caller string, in *rankpb.SubmitRankS
 			if !found || next != old.score || entry.ScoreVersion != 0 {
 				achieved = entry.AchievedMs
 			}
-			writes = append(writes, scoreWrite{entity: entry.EntityId, score: next, achieved: achieved, version: entry.ScoreVersion})
+			writes = append(writes, scoreWrite{entity: entry.EntityId, score: next, achieved: achieved, version: entry.ScoreVersion, existed: found})
 			if !found {
 				inserted++
 			}
 		}
-		if err := upsertScores(ctx, tx, b, in.SourceCursor, writes); err != nil {
+		if err := writeScores(ctx, tx, b, in.SourceCursor, writes); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, "INSERT INTO rank_input_receipt (board_id,generation,source_shard,source_cursor,request_id,request_hash,committed_ms) VALUES (?,?,?,?,?,?,?)", in.BoardId, in.Generation, in.SourceShard, in.SourceCursor, in.RequestId, digest, uint64(r.now().UnixMilli())); err != nil {
 			return err
 		}
-		// 榜上的 committed_cursor 是各片批次总数,封榜时与生产者的各片最终游标之和比对;entries 加上这一批新上榜的实体数
-		// (榜行锁把同榜写入串行了,上面「没读到」的实体就是本事务新插入的,计数精确)。
-		if _, err := tx.ExecContext(ctx, "UPDATE rank_board SET committed_cursor=committed_cursor+1,entries=entries+? WHERE board_id=?", inserted, in.BoardId); err != nil {
+		// 本片游标推进到这一批;这一批新上榜的实体记在本片行上。新插入的行都由 writeScores 普通 INSERT 写成
+		// (别的片抢先插入时整笔重试),所以 inserted 精确。各片行之和 = 本代已落账的批次总数与现有实体数。
+		if err := advanceShard(ctx, tx, in, shard == nil, inserted); err != nil {
 			return err
 		}
 		result.CommittedCursor = in.SourceCursor
 		return nil
 	})
 	return result, err
+}
+
+// advanceShard 把本片的片行推进到 in.SourceCursor,并加上这一批新上榜的实体数;create 时本片还没有片行,调用方持榜行锁。
+func advanceShard(ctx context.Context, tx *sql.Tx, in *rankpb.SubmitRankScoresRequest, create bool, inserted uint64) error {
+	if create {
+		_, err := tx.ExecContext(ctx, "INSERT INTO rank_board_shard (board_id,generation,source_shard,committed_cursor,entries) VALUES (?,?,?,?,?)",
+			in.BoardId, in.Generation, in.SourceShard, in.SourceCursor, inserted)
+		return err
+	}
+	_, err := tx.ExecContext(ctx, "UPDATE rank_board_shard SET committed_cursor=?,entries=entries+? WHERE board_id=? AND generation=? AND source_shard=?",
+		in.SourceCursor, inserted, in.BoardId, in.Generation, in.SourceShard)
+	return err
 }
 
 // Freeze在一笔事务内留下完整快照与全部邮件意图，不依赖后续补扫生成缺失奖励。
@@ -314,7 +352,13 @@ func (r *Repo) Freeze(ctx context.Context, caller string, in *rankpb.FreezeRankG
 		if b.State != uint32(rankpb.RankGenerationState_RANK_GENERATION_OPEN) {
 			return ErrClosed
 		}
-		if b.CommittedCursor != in.ExpectedSourceCursor {
+		// 持榜行锁再按片号升序锁全部片行:在途的批次都已提交或还没开始,之后的批次读到封榜状态被拒(shards.go 的锁序)。
+		shards, err := lockAllShards(ctx, tx, b.BoardId, b.Generation)
+		if err != nil {
+			return err
+		}
+		finalCursor := committedTotal(shards)
+		if finalCursor != in.ExpectedSourceCursor {
 			return ErrCursor
 		}
 		// 顺着名次索引取前 N(order_key 已把升降序统一成同一方向,见 orderKey),不整榜排序。
@@ -339,7 +383,7 @@ func (r *Repo) Freeze(ctx context.Context, caller string, in *rankpb.FreezeRankG
 			return err
 		}
 		now := uint64(r.now().UnixMilli())
-		if _, err := tx.ExecContext(ctx, "INSERT INTO rank_settlement (settlement_id,board_id,generation,source_epoch,final_cursor,request_id,request_hash,winner_count,sealed_ms) VALUES (?,?,?,?,?,?,?,?,?)", settlement, b.BoardId, b.Generation, b.SourceEpoch, b.CommittedCursor, in.RequestId, digest, len(winners), now); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO rank_settlement (settlement_id,board_id,generation,source_epoch,final_cursor,request_id,request_hash,winner_count,sealed_ms) VALUES (?,?,?,?,?,?,?,?,?)", settlement, b.BoardId, b.Generation, b.SourceEpoch, finalCursor, in.RequestId, digest, len(winners), now); err != nil {
 			return err
 		}
 		for index, winner := range winners {

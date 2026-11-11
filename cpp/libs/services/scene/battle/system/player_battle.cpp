@@ -45,6 +45,7 @@
 #include "combat/buff/constants/buff.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/item_hold.h" // 战斗道具预留(docs/design/battle-item-reservation.md)
+#include "player/system/player_mail_outbox.h" // 两包都放不下时掉落改投邮件(docs/design/battle-overflow-mail.md)
 #include "modules/bag/comp/player_bags_comp.h"
 #include "table/proto/tip/bag_error_tip.pb.h" // kBagItemNotStacked:两包都放不下的 DEFER 原因(收件箱定向唤醒)
 #include "modules/currency/comp/player_currency_comp.h"
@@ -424,7 +425,8 @@ namespace
 	// 标记之后由 reaper 节拍(RunLoginRechecks,30 秒)在 Redis 可用时重新读锁。重读之前先摘标记,这一轮又没问到就重新挂上,
 	// 所以同一玩家同一时刻最多一条复查在途。
 	// 纯运行时标记:不入库(实体重建时登录钩子本来就会重跑),随实体销毁。唯一写入口 MarkLoginRecheck,
-	// 唯一消费口 RunLoginRechecks。没有用 Redis 重连回调触发:那是 RedisSystem 独占的单槽,复查等一个 reaper 节拍足够。
+	// 唯一消费口 RunLoginRechecks。不由 Redis 重连成功触发:负责人 2026-11-05 定「重连成功不做业务逻辑」(RedisSystem
+	// 也不挂重连回调,infra-reconnect-overview.md R14),复查等一个 reaper 节拍足够。
 	struct BattleLoginRecheckComp
 	{
 	};
@@ -730,7 +732,8 @@ namespace
 					(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu %llu %b").c_str(),
 					op == kLockOpWrite ? kWriteBattleLockScript : kRenewBattleLockIfMatchScript,
 					playerId, playerId, battleId, ttlSec, payload.data(), payload.size()) == REDIS_OK;
-			}, LockReply{});
+			// 没发出去与空回复同样按「没问到」重试,但日志要分得开:前者是 Redis 未就绪 / 命令被本地拒绝,后者是连接上丢了回复。
+			}, LockReply{battle_lock::ReplyShape::kNoReply, 0, "not sent (Redis not ready or command rejected locally)"});
 	}
 
 	void ResolveRebuiltFreezeRecheck(uint64_t playerId, uint64_t battleId, uint32_t attemptNumber,
@@ -762,12 +765,23 @@ namespace
 				const auto* current = CurrentFreezeOf(playerId, battleId, present);
 				if (renew)
 				{
-					if (present && (!current || current->state() != IN_BATTLE_STATE_FIGHTING)) co_return;
+					if (present && (!current || current->state() != IN_BATTLE_STATE_FIGHTING))
+					{
+						LOG_INFO << "[PlayerBattle] Conditional renewal retry abandoned: battle no longer fighting on this entity, player_id="
+								 << playerId << " battle_id=" << battleId;
+						co_return;
+					}
 					if (present) { deadlineMs = current->deadline_ms(); payload = SerializeBattleCtx(*current); }
 				}
 				else
 				{
-					if (!current) co_return;
+					if (!current)
+					{
+						// 写锁首发由调用方刚核对过冻结,走到这里只会是重试。
+						LOG_INFO << "[PlayerBattle] Battle lock retry abandoned: freeze no longer belongs to this battle, op=" << op
+								 << " player_id=" << playerId << " battle_id=" << battleId << " attempt=" << attempt.number;
+						co_return;
+					}
 					ttlSec = LockTtlSecOf(*current, TimeSystem::NowMillisecondsUTC());
 					payload = SerializeBattleCtx(*current);
 				}
@@ -2188,7 +2202,8 @@ PlayerInboxExecResult PlayerBattleSystem::ApplyInboxSettlement(entt::entity play
             return {PlayerInboxExecKind::kVersionSkew, 0};
     // 两包都放不下而延后时把 kBagItemNotStacked 当作 DEFER 的原因带回(2026-11-06,bag-rule-policy-layering.md §6.6):
     // 收件箱记在本域上,玩家从临时格取回之后 PlayerInboxSystem::OnBagSpaceFreed 只提前这一类延后。判据是这一次调用里
-    // 「连续放不下」的计数涨了 —— 只有 ConsumeInventoryAndGrant 两包都放不下那一支会加它。其余延后原因不带,照常退避。
+    // 「连续放不下」的计数涨了 —— 只有 ConsumeInventoryAndGrant 两包都放不下、改投邮件也接不住(待寄队列满、请求号暂缺;
+    // docs/design/battle-overflow-mail.md)那一支会加它。其余延后原因不带,照常退避。
     const uint32_t overflowBefore = BagService::ConsecutiveGrantOverflowRejections(player);
     if (!ApplySettlementToEntity(player, settlement)) {
         const bool bagsFull = BagService::ConsecutiveGrantOverflowRejections(player) > overflowBefore;
@@ -2402,10 +2417,27 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             return kInvalidParameter;
         return creditCurrencies();
     };
+    // 两包都放不下时这一局的掉落整批改投邮件(docs/design/battle-overflow-mail.md):在任何副作用之前备好待寄条目
+    // (分封、取请求号、核待寄队列余量),与扣消耗、入账在同一段写进存档;存档确认提交之后才寄出(PlayerMailOutboxSystem)。
+    // 接不住(待寄队列满、请求号暂缺)就与以前一样整笔延后。mailed 只在 accept 接住时非空,结算成功时它们已经写进存档。
+    PlayerMailOutboxSystem::PreparedMails mailed;
+    const BagService::GrantOverflowRoute toMail{
+        [&](const ItemCountMap& items) {
+            mail_outbox_rules::MailItems mailItems;
+            for (const auto& [config, count] : items) mailItems[config] += count;
+            return PlayerMailOutboxSystem::PrepareBattleOverflow(player, battleId, mailItems, mailed);
+        },
+        [&](const ItemCountMap&) {
+            PlayerMailOutboxSystem::CommitPrepared(player, battleId, mailed, TimeSystem::NowMillisecondsUTC());
+        }};
     const auto result = inboxConsumed.empty() && inboxGained.empty() ? credit() :
         BagService::ConsumeInventoryAndGrant(player, inboxConsumed, inboxGained, battleId,
-            "{\"source\":\"battle-inbox\"}", credit, /*consumeFromHoldId=*/battleId);
+            "{\"source\":\"battle-inbox\"}", credit, /*consumeFromHoldId=*/battleId, &toMail);
     if (result != kSuccess) return false;
+    for (const auto& mail : mailed)
+        LOG_INFO << "[PlayerBattle] metric=battle_items_mailed player_id=" << playerId << " battle_id=" << battleId
+                 << " request_id=" << mail.requestId << " item_lines=" << mail.items.size()
+                 << ";both bags were full, this battle's drops were queued for mail";
     // 这一局的道具预留到此为止:消耗已从预留里扣出,余量随之放开(battle-item-reservation.md)。与扣消耗同一帧、
     // 同一次存档提交(结算随存档确认之后才公开),两条分支(有没有物品)都走这里。没有预留(没带道具)时是空操作。
     if (BagService::ReleaseHold(player, battleId))
@@ -2513,8 +2545,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         }
     }
     // 本人近期战斗结果:与上面全部效果同一帧写入,随同一次存档提交;存档确认提交之后由 CompleteInboxSettlement 公开
-    // (docs/design/battle-result-recovery.md §5)。记实际入账:剔除配置行已删项与被封禁项之后的掉落、未被封禁的币种、
-    // 按实际持有夹紧的消耗。
+    // (docs/design/battle-result-recovery.md §5)。记实际入账:剔除配置行已删项与被封禁项之后的掉落(两包都放不下而改投邮件的
+    // 那一批也算:它已经是玩家的,经邮件领取)、未被封禁的币种、按实际持有夹紧的消耗。
     RecordBattleResult(player, playerId, settlement, currencyGains, inboxGained, actualConsumption);
     return true; // 永久Inbox域水位由调用方与本次效果同帧记入同一快照。
 }

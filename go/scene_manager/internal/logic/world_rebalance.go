@@ -23,6 +23,10 @@ type rebalanceReason string
 const (
 	reasonNodeGone   rebalanceReason = "node_gone"   // old node is dead / no longer world-hosting
 	reasonBetterHome rebalanceReason = "better_home" // opportunistic; old node still alive
+	// reasonNodeDraining:老节点活着但自报排空(NodeInfo.admission = CLOSED,计划下线)。频道有人也迁:老节点的那份实例
+	// 在住户走光之前一直保留,住户按疏散链路存盘后到新属主上重新载入(docs/design/scene-node-planned-drain.md §4.3)。
+	// 由排空迁移协程执行(node_drain.go),不占每拍的迁移名额。
+	reasonNodeDraining rebalanceReason = "node_draining"
 )
 
 // channelMigration describes one proposed channel move. Exposed for
@@ -54,7 +58,12 @@ type channelMigration struct {
 // prioritised (those mappings are already broken for new players); empty
 // channels on still-live nodes are only moved if the budget allows.
 func RebalanceWorldChannelsForZone(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, confIds []uint64) {
+	// 排空中节点的频道由排空迁移协程迁(node_drain.go):有时限,不占本拍名额,也不受 rebalance 关闭影响。
+	// 这里只负责把协程拉起来 —— watch 事件之外的兜底(本副本刚当选、协程意外退出),规划结果里也不再执行它们。
+	ensureDrainMigrationsForZone(ctx, svcCtx, zoneId)
+
 	urgent, opportunistic, budget := PlanWorldChannelRebalance(svcCtx, zoneId, confIds)
+	urgent = withoutDrainingMoves(urgent)
 
 	// Publish queue depth every invocation so dashboards see "queue is
 	// stable at 0" when nothing changed, not just when migrations fire.
@@ -115,6 +124,18 @@ func max0(v int) int {
 	return v
 }
 
+// withoutDrainingMoves 去掉 node_draining 项:它们归排空迁移协程(node_drain.go),这里再跑一遍只会与协程
+// 抢同一个频道(CAS 让输的一边白建一次实体)。
+func withoutDrainingMoves(list []channelMigration) []channelMigration {
+	kept := list[:0:0]
+	for _, c := range list {
+		if c.Reason != reasonNodeDraining {
+			kept = append(kept, c)
+		}
+	}
+	return kept
+}
+
 // PlanWorldChannelRebalance returns the urgent and opportunistic migration
 // lists that RebalanceWorldChannelsForZone would act on, plus the effective
 // per-tick budget. Split out from the action path so tests can assert the
@@ -134,14 +155,30 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 	if budget < 0 {
 		budget = 10
 	}
+	urgent, opportunistic = planChannelMoves(svcCtx, zoneId, confIds)
+	return urgent, opportunistic, budget
+}
 
-	nodes := getNodesForPurpose(svcCtx, zoneId, constants.NodePurposeWorld)
-	if len(nodes) == 0 {
-		return nil, nil, budget
+// planChannelMoves 是规划器本体:按当前开放的世界节点重算每个频道应在哪,列出要迁的。不看每拍名额,
+// rebalance(PlanWorldChannelRebalance)与排空迁移(node_drain.go planDrainMigrations)共用。
+//
+// 一致性哈希只在 placementRing 上做:开放节点里不在外出构建上的那些,一个都没有才退回全部开放节点
+// (docs/design/scene-node-planned-drain.md §4.6);liveSet 是全部开放节点。没在排空的节点上的频道照旧只在没人时
+// 才迁(better_home)。属主排空中(活着、自报 CLOSED)的频道列为 node_draining 紧急项,有人也迁(§4.3);属主不在
+// 开放集合里、也不是排空中的,照旧按「已死 / 不再托主世界」处理。
+func planChannelMoves(svcCtx *svc.ServiceContext, zoneId uint32, confIds []uint64) (urgent, opportunistic []channelMigration) {
+	if len(confIds) == 0 {
+		return nil, nil
 	}
+	openNodes := getNodesForPurpose(svcCtx, zoneId, constants.NodePurposeWorld)
+	if len(openNodes) == 0 {
+		return nil, nil
+	}
+	view := snapshotNodeAdmission(zoneId)
+	nodes := append([]string(nil), view.placementRing(openNodes)...)
 	sort.Strings(nodes)
-	liveSet := make(map[string]struct{}, len(nodes))
-	for _, n := range nodes {
+	liveSet := make(map[string]struct{}, len(openNodes))
+	for _, n := range openNodes {
 		liveSet[n] = struct{}{}
 	}
 
@@ -177,6 +214,15 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 				continue
 			}
 			if _, alive := liveSet[curNode]; !alive {
+				// 计划下线(自报排空、仍在负载集):有人也迁。老节点的那份实例要等住户走光才销毁,住户按疏散链路存盘、
+				// 到新属主上重新载入 —— 搬的是人,不是内存里的场景状态。老节点活着,不过再入屏障(屏障管的是死节点的残留写)。
+				if curNode != "" && view.isDraining(curNode) && IsNodeAlive(svcCtx, zoneId, curNode) {
+					urgent = append(urgent, channelMigration{
+						ConfId: confId, SceneId: sceneId,
+						OldNode: curNode, NewNode: target, Reason: reasonNodeDraining,
+					})
+					continue
+				}
 				// "不在 world pool" 同时包含两种情况：进程真死了，以及进程
 				// 仍活着但 role 刚被改成非 world。后者若还有玩家，直接换
 				// scene:{id}:node 就是未实现的跨节点热迁移，必须 fail-closed。
@@ -230,7 +276,7 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 			})
 		}
 	}
-	return urgent, opportunistic, budget
+	return urgent, opportunistic
 }
 
 // migrateWorldChannel performs the create-swap-destroy dance for a single
@@ -270,7 +316,9 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 		return false
 	}
 
-	target, placement, ok := reserveAgonesRoomForWorldChannel(ctx, svcCtx, zoneId, sceneId, newNode, reason == reasonNodeGone)
+	// 老节点已不在或正在计划下线时频道必须搬走:计划的目标满了就让 GSA 另挑一台有空位的。
+	mustMove := reason == reasonNodeGone || reason == reasonNodeDraining
+	target, placement, ok := reserveAgonesRoomForWorldChannel(ctx, svcCtx, zoneId, sceneId, newNode, mustMove)
 	if !ok {
 		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: no Agones room capacity for moving it to %s (%s); not migrating this round",
 			zoneId, confId, sceneId, newNode, reason)

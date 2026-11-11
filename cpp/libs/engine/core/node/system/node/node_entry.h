@@ -95,7 +95,11 @@ namespace detail
 {
 
 #ifdef __linux__
+    // SIGINT(人工 Ctrl+C):立即走普通停机。
     inline volatile std::sig_atomic_t gShutdownSignalPending = 0;
+    // SIGTERM(K8s 删 Pod、滚动、缩容):先走计划排空(Node::RequestPlannedStop),没登记计划排空的节点等同 SIGINT
+    // (docs/design/scene-node-planned-drain.md §4.1)。
+    inline volatile std::sig_atomic_t gPlannedStopSignalPending = 0;
 
     // POSIX 信号上下文只允许异步信号安全操作;Node::Shutdown()、
     // 日志、内存分配和 EventLoop 唤醒都禁止在 handler 内执行。
@@ -103,30 +107,43 @@ namespace detail
     {
         gShutdownSignalPending = 1;
     }
+
+    inline void HandlePlannedStopSignal(int) noexcept
+    {
+        gPlannedStopSignalPending = 1;
+    }
 #endif
 
-    // 安装操作系统信号 handler, SIGTERM/SIGINT 转入优雅停机。
+    // 安装操作系统信号 handler:SIGTERM 转入计划排空(没登记就是优雅停机),SIGINT 转入优雅停机。
     inline void InstallSignalHandlers(muduo::net::EventLoop &loop)
     {
 #ifdef __linux__
         // 在正常 EventLoop 上下文轮询 sig_atomic_t 标志。100ms 有界延迟
-        // 换来实际信号 handler 严格异步信号安全。
+        // 换来实际信号 handler 严格异步信号安全。两个都到了时立即停机优先:人工中断不该再等排空。
         loop.runEvery(0.1, [&loop]
                       {
-            if (gShutdownSignalPending == 0)
+            const bool shutdownNow = gShutdownSignalPending != 0;
+            const bool plannedStop = gPlannedStopSignalPending != 0;
+            if (!shutdownNow && !plannedStop)
             {
                 return;
             }
             gShutdownSignalPending = 0;
-            if (gNode)
+            gPlannedStopSignalPending = 0;
+            if (!gNode)
+            {
+                loop.quit();
+                return;
+            }
+            if (shutdownNow)
             {
                 gNode->RequestShutdown();
             }
             else
             {
-                loop.quit();
+                gNode->RequestPlannedStop();
             } });
-        ::signal(SIGTERM, &HandleShutdownSignal);
+        ::signal(SIGTERM, &HandlePlannedStopSignal);
         ::signal(SIGINT, &HandleShutdownSignal);
 #else
         // Windows: use SetConsoleCtrlHandler for Ctrl+C / service stop.

@@ -239,6 +239,9 @@ func TestIdSegmentIssuerEndpoints(t *testing.T) {
 			wantSecondary: a,
 			wantRegistry:  a,
 		},
+		// dev / test 跳过地域码绑定的核对,连上共用登记处就会成为在用码的第二个发号环境:显式给登记处地址一律拒绝。
+		{name: "dev refuses an explicit registry", cfg: IdSegmentConfig{AllowAutoSeed: true, Issuer: IdIssuerConfig{RegistryEtcd: r}}, wantErr: true},
+		{name: "dev refuses an explicit registry even with own records", cfg: IdSegmentConfig{AllowAutoSeed: true, Issuer: IdIssuerConfig{PrimaryEtcd: a, RegistryEtcd: r}}, wantErr: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

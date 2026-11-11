@@ -1,6 +1,6 @@
-# mmorpg 逻辑库(Java 网关的区目录、公告、白名单与写者闸门)在 TiDB 上的建表 Job
-# (docs/design/no-single-node-horizontal-scaling-20261001.md §6.3)。只在 tidb 档由 k8s_deploy.ps1 的 Apply-GatewaySchemaJob 渲染、apply,
-# mysql 档不跑:infra MySQL 由 mysql-init 的 gateway_tables.sql 建这个库。
+# mmorpg 逻辑库(Java 网关的区目录、公告、白名单与写者闸门)的建表 Job(docs/design/no-single-node-horizontal-scaling-20261001.md §6.3)。
+# k8s_deploy.ps1 的 New-GatewaySchemaJobManifests / Invoke-GatewaySchemaJob 渲染、apply:tidb 档与外部 MySQL 主库(mysql 档)都跑,
+# MMORPG_SQL_BACKEND 跟着档位;只有入口就是集群内单实例 MySQL(只在 dev)时不跑,那台由 mysql-init 的 gateway_tables.sql 建这个库。
 #
 # 网关没有 Go 的 -migrate,所以:
 #   - 闸门表由 writer_authority -command prepare-schema 走与其余逻辑库同一份 authoritysql.EnsureCatalogSchema 建,不复制第三份闸门 DDL;
@@ -39,7 +39,7 @@ spec:
             - name: MMORPG_SQL_SCHEMA_PRINCIPAL
               valueFrom: {secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: principal, optional: false}}
             - name: MMORPG_SQL_BACKEND
-              value: "tidb"
+              value: "PLACEHOLDER_SQL_BACKEND"
             - name: MMORPG_DB_PLACEMENT
               value: 'PLACEHOLDER_DB_PLACEMENT_JSON'
             - name: MMORPG_DB_PLACEMENT_REQUIRED

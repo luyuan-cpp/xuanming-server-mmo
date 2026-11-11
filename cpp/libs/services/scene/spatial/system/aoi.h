@@ -16,10 +16,12 @@ public:
     // 每个模拟步调用一次。对每个在场实体:
     //   1. 按当前位置更新它所在的格子(格子只用来找进视野的候选);
     //   2. 位置自上次评估变了、到了该评估的时候(规则见 spatial/constants/view.h 的 kAoiReevaluateDistance),
-    //      或者这是它第一次入格,或者它有附近候选因名额被拒、现在又有空名额(AoiNearbyRefillComp),
+    //      视野半径变了,或者这是它第一次入格,或者它有附近候选因名额被拒、现在又有空名额(AoiNearbyRefillComp),
     //      就重新评估它与附近实体的空间关注,两个方向都判:
     //      距离超出离开半径的撤掉,本格及邻格里进入视野半径的建立。
+    //   3. 这一帧所有变化合成一批,帧末统一下发。
     // 距离是连续变化的,所以必须按位移重判,不能只在跨格时判:否则同一组格子里从 15 m 走到 5 m 永远进不了视野。
+    // 隐身、侦测授权这类不随位移变化的条件各有立即生效的入口(RefreshTargetVisibility、Follow / Unfollow)。
     static void Update(double delta);
 
     // 玩法建立显式关注:watcher 的客户端显示 target 并接收它的移动、属性与技能广播,
@@ -63,8 +65,9 @@ private:
     // 首次真实入格时延迟创建 SceneGridListComp;位置所在格不变时不创建空表。
     static bool UpdateGridMembership(entt::entity entity, SceneEntity sceneEntity, const Hex& currentHex);
 
-    // 按 entity 的当前位置重新评估它与附近实体的空间关注(两个方向),下发变化,并记下评估位置。
-    static void ReevaluateVisibility(entt::entity entity, const Transform& transform);
+    // 按 entity 的当前位置重新评估它与附近实体的空间关注(两个方向),变化记进 changes(由调用方统一下发),
+    // 并记下这次评估用的位置与视野半径。
+    static void ReevaluateVisibility(entt::entity entity, const Transform& transform, AoiVisibilityChanges& changes);
 
     static void RemoveEntityFromGrid(const Hex& hex, SceneGridListComp& gridList, entt::entity entity);
 

@@ -103,6 +103,10 @@ spec:
             - name: MAIL_PRODUCER_SECRET_GUILD
               valueFrom:
                 secretKeyRef: {name: domain-service-secrets, key: mail-producer-guild, optional: false}
+            # scene 寄两包都放不下的战斗掉落(docs/design/battle-overflow-mail.md);与 scene Pod 的同名变量同值。
+            - name: MAIL_PRODUCER_SECRET_BATTLE
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: mail-producer-battle, optional: false}
             - name: MMORPG_ASSET_OP_SECRET_MAIL
               valueFrom:
                 secretKeyRef: {name: domain-service-secrets, key: asset-mail, optional: false}

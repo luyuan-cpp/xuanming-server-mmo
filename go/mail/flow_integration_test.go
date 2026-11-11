@@ -34,7 +34,7 @@ import (
 // fixtureGateIdentity 是夹具服务端的 gate 验签闸门,与生产 domainhost 装配一样放在拦截器链最外层。
 // 在线域原账号只认 gate 签名原件,不读 login Redis;夹具和调用方共用 callerauthtest 的测试密钥。
 func fixtureGateIdentity() grpc.UnaryServerInterceptor {
-	return callerauth.SessionInterceptor(callerauth.NewVerifier(callerauth.Options{Secrets: callerauthtest.Key{}, Enforce: true, AllowedCallers: []string{"gate"}}))
+	return callerauth.SessionInterceptor(callerauth.NewVerifier(callerauth.Options{Keys: callerauthtest.Key{}, Enforce: true, AllowedCallers: []string{"gate"}}))
 }
 
 func mailMainFixtureEndpoint(address string) error {

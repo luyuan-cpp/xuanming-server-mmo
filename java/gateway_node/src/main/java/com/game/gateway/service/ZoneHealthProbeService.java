@@ -65,6 +65,12 @@ public class ZoneHealthProbeService {
     /** 连续失败达到该轮数后升级为 ERROR(默认探测间隔 5s → 约 15s 无新鲜数据)。 */
     private static final int STALE_ALERT_THRESHOLD = 3;
 
+    /**
+     * gate 人数到自报连接上限的这个百分比就算到水位,与 login 挑 gate、排队区容量封顶同一条线
+     * (go/shared/gatepick/eligibility.go 的 FullPercent)。ZoneHealthProbeServiceTest 从 Go 源码核对两边相等。
+     */
+    static final int GATE_FULL_PERCENT = 90;
+
     @Scheduled(fixedDelayString = "${zone-probe.interval-ms:5000}")
     public void probe() {
         try {
@@ -83,6 +89,7 @@ public class ZoneHealthProbeService {
             Map<Long, AutoZoneStatus> nextStatuses = new HashMap<>();
             Map<Long, LoadLevel> nextLoadLevels = new HashMap<>();
             Map<Long, Long> nextOnlineCounts = new HashMap<>();
+            Map<Long, Long> nextCapacities = new HashMap<>();
 
             for (ZoneConfig zone : zones) {
                 long zoneId = zone.getZoneId();
@@ -95,14 +102,17 @@ public class ZoneHealthProbeService {
 
                 // Calculate load
                 long totalPlayers = gates.stream().mapToLong(NodeInfoRecord::getPlayerCount).sum();
+                long capacity = effectiveCapacity(zone.getCapacity(), gates);
                 nextOnlineCounts.put(zoneId, totalPlayers);
-                nextLoadLevels.put(zoneId, calculateLoadLevel(totalPlayers, zone.getCapacity()));
+                nextCapacities.put(zoneId, capacity);
+                nextLoadLevels.put(zoneId, calculateLoadLevel(totalPlayers, capacity));
             }
 
             snapshot = new ProbeSnapshot(
                     Map.copyOf(nextStatuses),
                     Map.copyOf(nextLoadLevels),
                     Map.copyOf(nextOnlineCounts),
+                    Map.copyOf(nextCapacities),
                     nowMs.getAsLong());
             consecutiveProbeFailures = 0;
             log.debug("Zone probe completed: {} zones checked", zones.size());
@@ -151,12 +161,44 @@ public class ZoneHealthProbeService {
         return AutoZoneStatus.HEALTHY;
     }
 
-    private LoadLevel calculateLoadLevel(long totalPlayers, int capacity) {
+    private LoadLevel calculateLoadLevel(long totalPlayers, long capacity) {
         if (capacity <= 0) return LoadLevel.SMOOTH;
         double ratio = (double) totalPlayers / capacity;
         if (ratio < 0.5) return LoadLevel.SMOOTH;
         if (ratio < 0.8) return LoadLevel.BUSY;
         return LoadLevel.FULL;
+    }
+
+    /**
+     * 负载档的分母:区服目录的 capacity 再按本区 gate 到水位一共能接的人数封顶(2026-11-10 起),与 login 排队的区容量
+     * 同一口径(go/login/internal/logic/pkg/loginqueue/capacity.go 的 capByGates)。不封顶的话,gate 台数装不下目录容量时
+     * 列表还显示「流畅 / 繁忙」,玩家点进去却在排队。
+     * <ul>
+     *   <li>有 gate 没声明连接上限(maxConnections = 0:dev 下不设上限、旧版 gate)时不封顶;没有 gate 时区服本来就判 DOWN,
+     *       这里也不封顶。</li>
+     *   <li>目录 capacity ≤ 0(没配)时只看 gate;两边都没有上限时返回 0,负载档恒为流畅,同改动前。</li>
+     *   <li>网关看不到 gate 的排空标记与停写判定(它们在 login 读的 Redis 标记与 etcd 版本里),这里数全部 gate,login 只数在接客的:
+     *       排空、卡住期间列表会比排队乐观一点。排空是分钟级的计划内动作,停写的 gate 租约到期就从目录消失,接受这点偏差。</li>
+     * </ul>
+     */
+    static long effectiveCapacity(int directoryCapacity, List<NodeInfoRecord> gates) {
+        long directory = Math.max(directoryCapacity, 0);
+        if (gates.isEmpty()) {
+            return directory;
+        }
+        long gateCapacity = 0;
+        for (NodeInfoRecord gate : gates) {
+            if (gate.getMaxConnections() <= 0) {
+                return directory;
+            }
+            gateCapacity += watermarkCapacity(gate.getMaxConnections());
+        }
+        return directory == 0 ? gateCapacity : Math.min(directory, gateCapacity);
+    }
+
+    /** 一台自报上限为 maxConnections 的 gate 到水位时的人数:ceil(maxConnections × 90 / 100),同 gatepick.WatermarkCapacity。 */
+    static long watermarkCapacity(long maxConnections) {
+        return (maxConnections * GATE_FULL_PERCENT + 99) / 100;
     }
 
     private Map<Long, List<NodeInfoRecord>> groupByZone(List<NodeInfoRecord> nodes) {
@@ -191,6 +233,25 @@ public class ZoneHealthProbeService {
         return current.onlineCounts().getOrDefault(zoneId, 0L);
     }
 
+    /**
+     * 负载率 = 在线人数 / 负载档的分母(见 {@link #effectiveCapacity}),推荐区挑「最空的开放区」用。
+     * 探测态不新鲜、或这个区不在快照里(刚加进目录)时返回 null;分母为 0(没有上限)时返回 0。
+     */
+    public Double getLoadRatio(long zoneId) {
+        ProbeSnapshot current = snapshot;
+        if (!hasFreshSnapshot(current)) {
+            return null;
+        }
+        Long capacity = current.capacities().get(zoneId);
+        if (capacity == null) {
+            return null;
+        }
+        if (capacity <= 0) {
+            return 0.0;
+        }
+        return (double) current.onlineCounts().getOrDefault(zoneId, 0L) / capacity;
+    }
+
     private long snapshotAgeMs() {
         return snapshotAgeMs(snapshot);
     }
@@ -216,9 +277,10 @@ public class ZoneHealthProbeService {
     private record ProbeSnapshot(Map<Long, AutoZoneStatus> statuses,
                                  Map<Long, LoadLevel> loadLevels,
                                  Map<Long, Long> onlineCounts,
+                                 Map<Long, Long> capacities,
                                  long capturedAtMs) {
         private static ProbeSnapshot empty() {
-            return new ProbeSnapshot(Map.of(), Map.of(), Map.of(), 0L);
+            return new ProbeSnapshot(Map.of(), Map.of(), Map.of(), Map.of(), 0L);
         }
     }
 }

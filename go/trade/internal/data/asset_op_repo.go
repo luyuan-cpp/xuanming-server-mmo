@@ -14,6 +14,7 @@ import (
 	tradepb "proto/trade"
 
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/safego"
 	"shared/workshard"
 
@@ -513,8 +514,9 @@ func (r *AssetOpRepo) ListDue(ctx context.Context, nowMs uint64, limit int) ([]u
 // 都取到,所以仍要按 op_id 去重。第一段的 id 排在前面,让 Claim 先抢新行。
 //
 // owned 是本副本负责的片(片号 = player_id % 64,assetop.OwnedDueLister;缺口清单第 25 条),两段都接在 WHERE 里、
-// LIMIT 之前:别的副本的行再早到期也不占本副本的名额。零值不过滤。索引不含 player_id,分片条件和 lease_until_ms、
-// attempts 一样在回表那一步判(docs/design/assetop-redelivery-sharding-20261110.md §2.4)。
+// LIMIT 之前:别的副本的行再早到期也不占本副本的名额。零值不过滤。idx_trade_asset_op_0 是
+// (status, next_attempt_ms, op_id, player_id)(2026-11-11):按索引顺序扫、凑满就停;分片条件在索引条目上判,
+// 别的副本的行不回表,只有本副本的行才回表判 lease_until_ms、attempts(docs/design/assetop-redelivery-sharding-20261110.md §2.4)。
 func (r *AssetOpRepo) ListDueOwned(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]uint64, error) {
 	if limit <= 0 {
 		return nil, nil
@@ -1600,7 +1602,13 @@ const txRetryAttempts = 2
 // 分类由调用方注入(§4.37);取值与 guild 一致:
 //
 //	1213 死锁 / 1205 锁等待超时 / 9007 TiDB 写冲突。
+//
+// 另认权威 SQL 守卫判定的「提交前中止」(authoritysql.IsAbortedBeforeCommit,R6):事务里只发过纯 DML、COMMIT 还没发时
+// 连接断开或调用取消,库会回滚未提交的事务,确定没写,换一条连接整笔重跑是安全的。错误树里混有结局未知时它回假,照旧不重试。
 func IsRetryableTxError(err error) bool {
+	if authoritysql.IsAbortedBeforeCommit(err) {
+		return true
+	}
 	var myErr *mysql.MySQLError
 	if !errors.As(err, &myErr) {
 		return false

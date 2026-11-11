@@ -649,7 +649,7 @@ Queue:
   每个 zone 的 login 只出队本 zone,用不到别的 zone 的值。必须配:不配会落到 `max(online, 1) × SoftCapMultiplier` 的回落公式,代码里是向下取整
   (`loginqueue/capacity.go`),在线 0 / 1 人时容量只有 1,队列非空后可能长期放不出人。它是**同时在线上限**,不是速率:对已在运行的 zone 首次打开排队前,
   先核对该 zone 当前在线(各 gate 自报的 `player_count` 之和)低于这个值,否则新登录全部入队,直到在线降下来。
-- `Secrets.QueueToken.Value` = 环境变量 `MMORPG_LOGIN_QUEUE_TOKEN_SECRET`(staging / prod 必填:≥32、非占位、与 `MMORPG_GATE_TOKEN_SECRET` / `MMORPG_INTERNAL_AUTH_SECRET` 不同,
+- `Secrets.QueueToken.Value` = 环境变量 `MMORPG_LOGIN_QUEUE_TOKEN_SECRET`(staging / prod 必填:≥32、非占位、与 `MMORPG_GATE_TOKEN_SECRET` / `MMORPG_INTERNAL_AUTH_SIGNING_KEY` 不同,
   不满足在部署的任何写操作之前拒绝;dev 可不设,此时不写、login 回落 GateToken,见 §6 更正)。写明文 `Value` 而不是 `secrets.go` 建议的 `Env`,与兄弟项 `InternalAuth` 一致。
 - 开关、`Queue` 段与排队密钥都进 login Pod 模板的 `mmorpg.io/peak-shaving-hash` 注解,任一变化 login 自动滚动。参数与运维要点见 `deploy/k8s/README.md` Optional Flags「削峰(G4b)」。
 

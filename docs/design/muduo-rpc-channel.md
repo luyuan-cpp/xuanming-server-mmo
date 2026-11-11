@@ -218,7 +218,9 @@ struct OutstandingCall {
 - 测试接缝:`SweepTimeouts(SteadyTime now)` 公开(loop 线程调用),单测不依赖墙钟:CallMethod 前后取 t0/t1,真实截止必在 `[t0+T, t1+T]`;
   `SweepTimeouts(t0+T-1ns)` 必不过期、`SweepTimeouts(t1+T)` 必过期;用例超时一律设 1h,真实 tick 永不误触发。
 - 数值(命名常量,注释写推导):`kDefaultRpcCallTimeout = 10s`(与 gRPC `kDefaultGrpcCallDeadlineMs` 同值);
-  `kGateToSceneClientCallTimeout = 12s`,不变式 **I5**:scene 侧下游最大 deadline(10000)+ 1000 ≤ T ≤ 客户端请求超时(15000)− 1000
+  `kGateToSceneClientCallTimeout = 12s`,不变式 **I5**:scene 客户端消息 handler 在回包前会等待的下游的最大 deadline + 1000 ≤ T ≤ 客户端请求超时(15000)− 1000
+  (2026-11-11 订正:原写「scene 侧下游最大 deadline(10000)」,scene 已直连 PlayerStore(14000)等下游,按字面不再成立;PlayerStore 不得在客户端 handler 里等待,
+  适用范围与约束见 `client-request-ordering.md` §5.2 I5)
   (对齐 `client-request-ordering.md` §5 的 I4;登记 I5 由该文档 owner 同意后补);`kNodeHandshakeCallTimeout = 3s`(今天握手按 0.5s 节奏重试)。
   A→B→C:`T(B→C) + B 自身处理 < T(A→B)`,否则 B 的回复到 A 时已过期,只会被计数丢弃(结果未知,与 gRPC 口径一致)。
 - 每 channel 在途上限 `kMaxOutstandingCalls = 65536`(与 `muduo_grpc::ChannelOptions::maxOutstandingCalls` 同值),超限 `kNotSent` 并计数。

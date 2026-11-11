@@ -65,7 +65,7 @@
 	                                    [-SidecarContainerYaml ''] [-SidecarVolumeYaml ''] [-SidecarConfigHash '']
 	                                    [-PodAnnotations $null] [-OpenFileLimitMode ''(B0-4 豁免开关,留空不写)]
 	                                    [-SecretEnv @()(经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey })]
-	    New-GateStatefulSetYaml         -PodCommon -Plan -RpcPort -StartCommand -ConfigMapName -GateRouterMode
+	    New-GateStatefulSetYaml         -PodCommon -Plan -RpcPort -StartCommand -ConfigMapName -GateRouterMode -InternalAuthPublicKeys
 	                                    [-TerminationGracePeriodSeconds 30]
 	    New-GateOrdinalServicesYaml     -Plan [-ExternalTrafficPolicy Local]              → gate-<i> 用 --- 连接
 	    New-GateHeadlessServiceYaml     -ServicePort
@@ -222,13 +222,15 @@ function Get-ClientEntryContract {
 		# 金丝雀 Pod 的标签(发布轨道设计 §5.3):和上面的 env 同一判据,只有 canary 才写,stable 不写(模板逐字不变,不触发滚动)。
 		# 用来 kubectl -l 筛金丝雀 Pod,以及 Prometheus 把它映射成目标标签(没有这个标签 = stable,见 docs/ops/release-track-canary-runbook.md)。
 		ReleaseTrackPodLabel       = 'mmorpg.io/release-track'
-		# gate 出站调用的内部身份签名密钥(cpp/libs/engine/core/security/caller_auth.h kSecretEnv)。gate main.cpp 在它缺失
-		# 或不足 32 字节时拒绝启动,所以两种入口形态都必须带:本库 New-GateStatefulSetYaml(external)与 k8s_deploy.ps1
-		# New-NodeDeploymentYaml 的 gate 分支(podip)都按这三个名字写 secretKeyRef,Apply-Zone 按同名先于 gate 建 Secret。
-		# login 等验签方的 Go 服务引用同一个 Secret(k8s_deploy.ps1 Apply-OneGoSvc)。
-		InternalAuthSecretEnv      = 'MMORPG_INTERNAL_AUTH_SECRET'
+		# gate 出站调用的会话身份签名私钥(cpp/libs/engine/core/security/caller_auth.h kSigningKeyEnv,32 字节 Ed25519 种子的十六进制)
+		# 与验证方公钥列表(kPublicKeysEnv)。gate main.cpp 在私钥缺失、格式不对或与公钥列表不配对时拒绝启动,所以两种入口形态都必须带:
+		# 本库 New-GateStatefulSetYaml(external)与 k8s_deploy.ps1 New-NodeDeploymentYaml 的 gate 分支(podip)都按这些名字写,
+		# 私钥走 secretKeyRef(Apply-Zone 按同名先于 gate 建 Secret),公钥不是密钥,明文写进 env。
+		# login 等验签方只拿公钥(k8s_deploy.ps1 Apply-OneGoSvc),不引用这个 Secret(docs/design/gate-online-identity.md §10.1)。
+		InternalAuthSecretEnv      = 'MMORPG_INTERNAL_AUTH_SIGNING_KEY'
 		InternalAuthSecretName     = 'gate-identity-auth'
-		InternalAuthSecretKey      = 'secret'
+		InternalAuthSecretKey      = 'signing-key'
+		InternalAuthPublicKeysEnv  = 'MMORPG_INTERNAL_AUTH_PUBLIC_KEYS'
 	}
 }
 
@@ -994,8 +996,9 @@ function Get-ClientEntryPodAnnotationBlock {
 	    (GATE_CLIENT_HOST_TEMPLATE / CLIENT_PUBLIC_HOST / GATE_CLIENT_PORT_MODE / GATE_NODE_PORT_BASE | GATE_CLIENT_PORT,
 	    C++ 不读),启动 shell 前缀由它们算出 CLIENT_ENDPOINT_HOST / PORT。
 	  - args 改用块标量:地址片段含双引号,塞进流式标量要层层转义。
-	两种形态共有的内部身份签名密钥(契约 InternalAuthSecretEnv,secretKeyRef 到 InternalAuthSecretName)同样写在这里:
-	缺了它 gate 拒绝启动。Secret 由 k8s_deploy.ps1 Apply-Zone 先于本清单建好。
+	两种形态共有的会话身份签名私钥(契约 InternalAuthSecretEnv,secretKeyRef 到 InternalAuthSecretName)与验证方公钥列表
+	(契约 InternalAuthPublicKeysEnv,明文)同样写在这里:私钥缺失或与公钥列表不配对,gate 拒绝启动。
+	Secret 由 k8s_deploy.ps1 Apply-Zone 先于本清单建好。
 	副本数取自 Plan.Ordinals 的个数,与每序号 Service 同源。
 #>
 function New-GateStatefulSetYaml {
@@ -1008,6 +1011,9 @@ function New-GateStatefulSetYaml {
 		[Parameter(Mandatory = $true)][string]$ConfigMapName,
 		# 原样写进 GATE_CLIENT_RPC_ROUTER(k8s_deploy.ps1 -GateRouterMode,D75 默认 "1")。
 		[Parameter(Mandatory = $true)][ValidateSet('0', '1')][string]$GateRouterMode,
+		# 验证方公钥列表(k8s_deploy.ps1 Initialize-InjectedSecrets 解析出的 MMORPG_INTERNAL_AUTH_PUBLIC_KEYS)。
+		# gate 启动时核对自己的私钥配对的公钥在列表里,所以 gate 也要带这一份。
+		[Parameter(Mandatory = $true)][string]$InternalAuthPublicKeys,
 		[ValidateRange(0, 3600)][int]$TerminationGracePeriodSeconds = 30
 	)
 
@@ -1018,6 +1024,7 @@ function New-GateStatefulSetYaml {
 	$envEntries += @(
 		@{ Name = 'GATE_CLIENT_RPC_ROUTER'; Value = $GateRouterMode },
 		@{ Name = $contract.InternalAuthSecretEnv; SecretName = $contract.InternalAuthSecretName; SecretKey = $contract.InternalAuthSecretKey },
+		@{ Name = $contract.InternalAuthPublicKeysEnv; Value = $InternalAuthPublicKeys },
 		@{ Name = 'POD_NAME'; FieldPath = 'metadata.name' },
 		@{ Name = 'HOST_IP'; FieldPath = 'status.hostIP' },
 		@{ Name = $contract.ClientEndpointSourceEnv; Value = $contract.ClientEndpointSourceStatic },

@@ -49,7 +49,11 @@
   - 快照:`player_id; snapshot_guid; zone_id,shard,created_at; shard,created_at`。`schema.go` 的 `extraIndexes` 里那条兜底的 `(zone_id, created_at)` 删掉,否则存量库上它会被补回来。
 - 查询:按时间、`tx_type`、`item_config_id` 走的查询加 `shard IN (0..15)`,优化器按 16 段区间扫;按玩家、按物品 uuid 的查询不变。
 - 每条按时间的写入从「一条索引的末尾」变成「16 段各自的末尾」,分到 16 个 Region 上。
-- 没做:`snapshot_guid` 普通索引与 `uk_snapshot_guid_nz` 唯一键同样按 SnowFlake 单调增长。唯一键是去重的唯一实现、手写 DDL 有 MySQL / TiDB 两种形态,改它要连去重路径与回滚方案一起重做;快照写入量比流水小一个量级,先看压测的 TiDB 热点视图(KeyViz)再定(同第 20 条「先测」)。
+- **`snapshot_guid` 不分桶(2026-11-11 定案,缺口清单第 15 条残余)**:本节初稿写「`snapshot_guid` 普通索引与 `uk_snapshot_guid_nz` 唯一键同样按 SnowFlake 单调增长」,前提不成立。
+  C++ 的快照号早已改走发号器的 snapshot 号段(`cpp/libs/modules/snapshot/snapshot_system.cpp` 的 `GuidKind::kSnapshot`,`node-id-overhaul-plan-20260908.md` §7.5 第 1 条),
+  `GuidSegmentClient::TryNext` 发出的是 `MixGuid(计数器值)`(`cpp/libs/modules/id_segment/guid_mix.h`,与 Go `idsegment.MixID` 同一个双射),不单调;
+  号段领不到时快照直接不发,没有 SnowFlake 回退。所以两条 guid 索引的写入本来就散在整个键空间,不存在尾部热点,去重路径与 DDL 都不用动。
+  这与 Spanner「位反转序列」、TiDB「`AUTO_RANDOM` / 打散主键」是同一类标准做法。proto 与 `snapshot_store.go` 里写着 SnowFlake 的注释已同步改正。
 - 项目未上线、玩家数据可以清空:新库按新索引建;已有开发库要重建流水库(proto2mysql 对已存在的表只补列、不删旧索引)。
 
 ### D. 清理按桶分工:一个桶同一时刻只有一个实例在删
@@ -59,7 +63,15 @@
 - 每个副本照旧每轮都跑(随机错开起步),每张表从随机一个桶起轮一圈,每个桶每轮最多 32 批(16 × 32 ≈ 改动前一张表一轮 500 批)。几个副本的轮次重叠时各删各的桶,删除吞吐随副本数增长;不重叠时一个副本删完全部桶。
 - 进程崩溃、连接断开、语句超时导致驱动关掉连接时,服务端随之释放锁,不会卡死。锁只为不重复干活、不承担正确性:万一两个实例同删一个桶,删除本身是幂等的。
 - 设计初稿是「整轮一把锁、拿到的实例开 4 路并行删」,落码时改成每桶一把锁:单锁让删除吞吐封顶在一个实例,4 路并行又要多占 3 条连接(流水池缺省 5 条,还要留给消费者与 GM 读)。
-- 没做:按天分区 + `DROP PARTITION`。它是这类追加表最省的清理方式(不逐行删、不给 TiDB 留 MVCC 垃圾),但 proto2mysql 表达不了分区表,而且分区表要求主键与唯一键都带分区列,`uk_snapshot_guid_nz` 这条全局去重在 MySQL 上做不到;等清理速度跟不上(看 `data_service_audit_retention_*` 指标)再整体换建表方式。
+- **按天分区 + `DROP PARTITION` 不做(2026-11-11 定案,缺口清单第 15 条残余)**。它是这类追加表最省的清理方式(不逐行删、不给 TiDB 留 MVCC 垃圾),不做的理由:
+  - 水平扩展已经成立:删除按 16 个桶分工、各副本各删各的桶,删除吞吐随 data_service 副本数线性涨;删除量等于写入量,TiKV 照样随节点扩。分区省的是成本,不是扩展性。
+  - 代价高、换来的是未经测量的性能(AGENTS.md §11 的取舍顺序把它排在正确性与简单之后):
+    - proto2mysql 表达不了分区表,两张表要改成手写建表(同路由表的 bootstrap DDL),MySQL 与 TiDB 两套形态;
+    - 分区表要求主键与唯一键都带分区列:`uk_snapshot_guid_nz` 要变成 (guid, 时间) 才能建,判重从「全局唯一」变成「同一时刻唯一」(重投的消息时间戳相同,结论仍对,但论证与回归都要重做);
+    - 要新增一个建未来分区、删过期分区的定时任务:预建失败会让写入失败、审计消费卡住,多了一个新的故障面;
+    - 按 `player_id`、`item_uuid` 查的 GM 与回档查询要逐个分区探本地索引,快照 30 个分区、流水 180 个分区,读放大几十到上百倍。
+  - 改用 TiDB 的 TTL 表也不划算:它同样是后台 DELETE,只是换成 TiDB 来调度,省不了删除量,还丢掉了 MySQL 开发环境的同构。
+  - 清理跟不上时的处置:先加 data_service 副本(删除吞吐线性涨),再调 `AuditRetention` 的批量;都不够才整体换成按天分区的建表方式,那时按上面四条一起设计。
 
 ## 3. 兼容与回滚
 

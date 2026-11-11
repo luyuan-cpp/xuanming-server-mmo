@@ -128,6 +128,13 @@ message EnterSceneRequest {
   // - 只限本 zone:跨 zone 没有 gate 可重定向,预检时拒绝。
   // - 进 request_id 指纹(业务语义);proto3 不序列化 false,不带它的请求指纹与加字段前逐字节相同。
   bool hosted_placement = 14;
+  // 疏散(docs/design/scene-node-planned-drain.md §4.4):源 scene 节点要把玩家从自己身上搬走 —— 计划排空、
+  // 整节点疏散、频道缩容与归属对账的单场景排空。只由 scene 节点的改派出口置位,服务端内部字段,客户端不可见。
+  // - scene_id / scene_conf_id 是去向提示:原频道(副本为 0)与原地图(副本为 0)。
+  // - scene_manager 按「原频道 → 同图最空频道 → 默认大世界」依次解析,一律排除 location 记的源节点与排空中的节点;
+  //   都没有就回 ErrNoAvailableNode。
+  // - 进 request_id 指纹(业务语义);疏散请求不带 request_id(理由见 scene 侧 SendEmergencyRelocateEnterScene)。
+  bool evacuation = 15;
 }
 
 message EnterSceneResponse {

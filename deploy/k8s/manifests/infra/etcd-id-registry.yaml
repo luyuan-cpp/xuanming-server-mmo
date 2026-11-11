@@ -147,8 +147,10 @@ spec:
               value: "etcd-id-registry-0=http://etcd-id-registry-0.etcd-id-registry-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380,etcd-id-registry-1=http://etcd-id-registry-1.etcd-id-registry-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380,etcd-id-registry-2=http://etcd-id-registry-2.etcd-id-registry-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380"
             - name: ETCD_INITIAL_CLUSTER_STATE
               value: "new"
+            # 引导令牌带上托管它的 K8s 集群的身份(kube-system 的 UID,k8s_deploy.ps1 Apply-Infra 替换 __KUBE_CLUSTER_UID__):
+            # 误在第二个集群带 -HostIdRegistry 起出来的登记处,集群号和真的那一套不同(设计 §6.3)。
             - name: ETCD_INITIAL_CLUSTER_TOKEN
-              value: "mmorpg-etcd-id-registry-__INFRA_NAMESPACE__"
+              value: "mmorpg-etcd-id-registry-__INFRA_NAMESPACE__-__KUBE_CLUSTER_UID__"
             # 每个地域码一个键,写入极少。留 1000 个历史版本足够,配额给 512MiB(满足「配额 × 2 + 1Gi ≤ 盘」)。
             - name: ETCD_AUTO_COMPACTION_MODE
               value: "revision"

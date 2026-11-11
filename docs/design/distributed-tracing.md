@@ -1,6 +1,6 @@
 # 分布式日志关联与链路追踪（todo.md #152）
 
-> **状态：** 2026-11-06 按代码现状重写，取代 2026-05-14 版的分片计划（那一版只落了 W3C 原语和线程局部上下文）。**阶段一第 1 批（§5.7、§4.1、§5.1）2026-11-06 已落码，11-08 Codex 全量运行 rpc_controller_test 时本批 20 条用例全部通过（证据 `build/verification/naming-audit-20261108/cpp-tests/rpc_controller_test/`）；第 2 批（§5.2）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 3 批（§5.5、§5.6，外加 `ScopedRoot` 与 `Bind`）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 4 批（§5.3、§5.5 路由 lane、§6.2 第 1 项）2026-11-10 已落码，未编译、未测试，待 Codex 验证，其中 client_rpc_router 的裸客户端与 scene_manager 的玩家拦截器留待对应文件空出来再接（§6.2）；第 5 批（§5.4、§6.2 的 Kafka 载体与第 2 项）2026-11-11 已落码，未编译、未测试，待 Codex 验证，其中 login 发往 gate 的调用方切换和另外几处 Go 生产、消费点留待对应文件空出来再接，几处不继承请求 ctx 的发送要另改（§6.2）；其余各批尚未落码。**
+> **状态：** 2026-11-06 按代码现状重写，取代 2026-05-14 版的分片计划（那一版只落了 W3C 原语和线程局部上下文）。**阶段一第 1 批（§5.7、§4.1、§5.1）2026-11-06 已落码，11-08 Codex 全量运行 rpc_controller_test 时本批 20 条用例全部通过（证据 `build/verification/naming-audit-20261108/cpp-tests/rpc_controller_test/`）；第 2 批（§5.2）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 3 批（§5.5、§5.6，外加 `ScopedRoot` 与 `Bind`）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 4 批（§5.3、§5.5 路由 lane、§6.2 第 1 项）2026-11-10 已落码，未编译、未测试，待 Codex 验证，其中 client_rpc_router 的裸客户端与 scene_manager 的玩家拦截器留待对应文件空出来再接（§6.2）；第 5 批（§5.4、§6.2 的 Kafka 载体与第 2 项）2026-11-11 已落码，未编译、未测试，待 Codex 验证，其中 login 发往 gate 的调用方切换和另外几处 Go 生产、消费点留待对应文件空出来再接，几处不继承请求 ctx 的发送要另改（§6.2）；第 6 批（§7，gateway_node）2026-11-11 已落码，未编译、未测试，待 Codex 验证，config_node 排在后面；第 7 批（§9.1 本地 Alloy、§9.3 看板与文档）2026-11-11 已改完配置，没有试跑，待 Codex 校验与冒烟。阶段一到此全部落码；阶段二（§10.2，K8s 采集）、阶段三（§10.3）没有开始。**
 > **范围：** 本仓的 C++ 节点、Go 微服务、`java/gateway_node`。Java 版服务器守同一份约定、自己实现，见 §12。
 > **相关：** 现有采集链路见 [grafana-loki-local-logs.md](../ops/grafana-loki-local-logs.md)；RPC0 信封见 [muduo-rpc-channel.md](muduo-rpc-channel.md) §4.1；muduo_grpc 见 [grpc-muduo-transport.md](grpc-muduo-transport.md)。
 
@@ -64,7 +64,7 @@
 |---|---|---|---|---|
 | `trace_id` | 32 位小写十六进制 | `trace_id=` | `trace`（go-zero 固定键名） | `traceId`（Micrometer 的 MDC 键） |
 | `span_id` | 16 位小写十六进制 | `span_id=` | `span` | `spanId` |
-| `player_id` | 十进制 | `player_id=` | `player_id` | 不涉及 |
+| `player_id` | 十进制 | `player_id=` | `player_id`（写成十进制字符串，见 §9.1） | 不涉及 |
 
 - 三种语言的原始键名不同，由 Alloy 统一改名（§9.1），不在各语言里硬改：go-zero 的键名改不了。
 - 三个字段只进**结构化元数据**，不做 Loki 标签，也不做 Prometheus label（AGENTS §9）。
@@ -250,12 +250,19 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 
 ## 7. Java（本仓 `java/gateway_node`）
 
-- 加 `micrometer-tracing-bridge-otel`，版本由 Spring Boot 3.4.3 的 BOM 管理；不加导出器。
-- 设 `management.tracing.sampling.probability: 1.0`。
-- logstash 结构化日志会自动带上 MDC 里的 `traceId` / `spanId`，日志代码不用改。
-- grpc-java 客户端挂 Micrometer 的 `ObservationGrpcClientInterceptor`（micrometer-core 自带），出站写 `traceparent`。
-- 公网 HTTP 入口不接受外部 `traceparent`。做法二选一：在观测过滤器之前加一个过滤器，剥掉 `traceparent`、`tracestate`、`baggage`；或者把传播配成只产出、不消费。落码时选一种，并写测试。
-- `config_node` 同样处理，可以排在后面。
+第 6 批已做（gateway_node）：
+
+- **依赖**：`pom.xml` 加 `micrometer-tracing-bridge-otel`，版本由 Spring Boot 3.4.3 的 BOM 管理；不加导出器，span 不出进程。
+- **采样**：`application.yaml` 设 `management.tracing.sampling.probability: 1.0`。K8s 的 ConfigMap 挂在 `/app/config`，按属性覆盖 jar 里的配置，没写这一项就沿用 jar 里的值，部署脚本不用改。
+- **日志**：Spring Boot 3.4 的 logstash 结构化日志把 MDC 原样写成顶层字段，Micrometer 往 MDC 放 `traceId` / `spanId`，日志代码不用改。
+- **出站 gRPC**：`LoginRpcClient` 构造时注入 `ObservationRegistry`，建一个 Micrometer 的 `ObservationGrpcClientInterceptor`（micrometer-core 自带）。静态通道和 etcd 动态通道两处建通道的地方都挂上，调用时在当前观测下开 client span，往 metadata 写 `traceparent`。注册表是 NOOP 时拦截器原样放行。顺带多一组低基数的 `grpc.client` 计时指标（按服务、方法、状态码）。
+- **公网入口不接受外部 trace**：选了过滤器那条路。`UntrustedTraceHeaderFilter`（`config` 包）排在 Spring Boot 的 `ServerHttpObservationFilter`（`HIGHEST_PRECEDENCE + 1`）之前，把请求包一层，读不到 Spring Boot 能消费的传播头：W3C 的 `traceparent`、`tracestate`、`baggage`，B3 单头 `b3`，B3 多头 `X-B3-*`。每个请求都开新根。
+  - 没选「只产出、不消费」的配置：`management.tracing.propagation.consume` 默认消费 W3C、B3、B3 多头三种，配成空列表是否真能清空要看配置绑定的细节，配错了是静默放行；过滤器的行为由单测直接钉住。
+  - 以后若配置 `management.tracing.baggage.remote-fields`，那些字段名也要加进过滤器的名单。
+- **定时任务**：Spring Boot 3.2 起会给每次 `@Scheduled` 执行开一个观测，所以区域探测、login 节点发现每跑一次各有一条新 trace。这和 §3.3「后台任务不挂 trace」的本意不冲突：那条防的是挂上别的请求的 trace，每次新开的根不会挂错。
+- **没接的**：
+  - `MallAdminClient` 用 JDK 自带的 `HttpClient` 调商城后台，不经 Spring 的观测，请求不带 `traceparent`。商城后台不在这份约定的链路里，暂不接。
+  - `config_node` 平时不启动，排在后面。
 
 ## 8. 成本与兼容
 
@@ -283,11 +290,20 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 
 ### 9.1 Alloy 规则（本地 `deploy/observability/alloy/config.alloy`）
 
-- **Go**：`stage.json` 加 `trace_id = "trace"`、`span_id = "span"`、`player_id = "player_id"`，并加进 `stage.structured_metadata`。
-- **C++**：在 muduo 行的规则里再加一条锚定行尾的正则，提取的值进结构化元数据：
-  `\[ctx(?: trace_id=(?P<trace_id>[0-9a-f]{32}) span_id=(?P<span_id>[0-9a-f]{16}))?(?: player_id=(?P<player_id>\d+))?\]\s*$`
-- **Java**：`stage.json` 加 `trace_id = "traceId"`、`span_id = "spanId"`。
-- 改完先按 grafana-loki-local-logs.md §5.1、§5.2 校验配置、不入库试跑。
+第 7 批已做。三种语言统一成 `trace_id` / `span_id` / `player_id` 三个结构化元数据键，**只在那一行真带了值时才写**，不给其余的行写空值。所以每种取值都放在只命中「真带了这个键」的规则里：
+
+- **Go**：在 go-zero 的规则之后加两段 `stage.match`。
+  - 选择器 `|= "\"trace\":\""` 命中的行，用 `stage.json` 取 `trace` / `span`。
+  - 选择器 `|= "\"player_id\":\""` 命中的行，取 `player_id`。
+  - 带引号的 `"键":"` 不会命中 content 里转义过的 `\"键\":`。
+  - `player_id` 只认字符串形态：`stage.json` 把 JSON 数字按 float64 解析，超过 2^53 的 id 会被悄悄改掉末几位。所以第 4 批的 `PlayerFieldInterceptor` 改成写十进制字符串（第 7 批一起改，见 §3.2），写成数字的 `player_id`（别处代码打的）宁可不取。
+- **C++**：在 muduo 行的规则里加两条锚定在整条末尾的正则，trace 与玩家分开取。正则整条匹配才写取值，这样只带玩家、没有 trace 的行不会写出空的 `trace_id`，反过来也一样：
+  - `\[ctx trace_id=(?P<trace_id>[0-9a-f]{32}) span_id=(?P<span_id>[0-9a-f]{16})(?: player_id=\d+)?\]\s*$`
+  - `\[ctx(?: trace_id=[0-9a-f]{32} span_id=[0-9a-f]{16})? player_id=(?P<player_id>\d+)\]\s*$`
+
+  多行消息的后缀跟在最后一行之后，多行合并之后仍在整条末尾。
+- **Java**：JSON 规则之后加一段 `stage.match`，选择器 `|= "\"traceId\":\""`，`traceId` / `spanId` 改名成 `trace_id` / `span_id`。
+- 改完先按 grafana-loki-local-logs.md §5.1、§5.2 校验配置、不入库试跑。Loki 本机配置早已是 tsdb v13 加 `allow_structured_metadata: true`，不用改。
 
 ### 9.2 K8s
 
@@ -298,8 +314,11 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 
 - 一条请求的全链路：`{job=~".+"} | trace_id="<32 位>"`
 - 一个玩家的足迹：`{job=~".+"} | player_id="<id>"`
-- Grafana 看板「游戏服务日志总览」加 `trace_id`、`player_id` 两个文本框变量。
-- 落码时同步更新文档：grafana-loki-local-logs.md 的 §3 标签表、§4 常用查询和 §6.4，以及 log-management.md 的「This Project」一节。
+- Grafana 看板「游戏服务日志总览」（`deploy/observability/grafana/dashboards/game-logs-overview.json`）第 7 批已加 `trace_id`、`player_id` 两个文本框变量，留空不过滤。带关键字过滤的 6 个面板都接上了这两个过滤。
+  - 写法是 `| trace_id=~"${trace_id}|${trace_id}^.*"`。Loki 的标签正则整串锚定：留空时后一支 `^.*` 匹配一切；填了值时后一支的 `^` 落在值后面，永远不成立，只剩前一支精确匹配。
+  - 不用 `.*` 作默认值的文本框，是因为那样清空输入就变成只看不带 trace 的行。
+  - 统计面板在聚合前 `| drop trace_id, span_id, player_id`：这三个值几乎每行都不同，不丢掉的话每条日志在聚合前各成一条序列。
+- 文档已同步：grafana-loki-local-logs.md 的 §2.1 ~ §2.3、§3、§4、§6.4，以及 log-management.md 的本地一节和「This Project」一节。K8s 上还没有这三个字段（§9.2 属于阶段二），两份文档都写明了。
 
 ## 10. 分批落地
 
@@ -314,8 +333,8 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 | 3 | §5.5 入口开根与玩家上下文，§5.6 协程（`AwaitCallback` 与执行器），`ScopedRoot`、`Bind` | 单测通过；客户端一条消息从 gate 到 scene 是同一个 trace，两边日志都带 `player_id`；co_await 之后 trace 不变；周期任务不带 trace |
 | 4 | §5.3 gRPC 钩子，§6.2 第 1 项的客户端拦截器与玩家拦截器，§5.5 路由 lane 排队项带 trace | C++ → Go、Go → C++ 都接得上；login 的日志带 `player_id`；路由模式下排队发出的请求挂自己的 trace，不挂前一条的。补尾：client_rpc_router 的 `DialEndpoint` 与 scene_manager 的玩家拦截器（§6.2） |
 | 5 | §5.4 与 §6.2 的 Kafka 载体和第 2 项 | scene → Kafka → data_service 接得上；login → Kafka → gate 接得上。补尾：login 调用方切换、mail / match / guild 等几处生产消费点、几处不继承请求 ctx 的发送（§6.2） |
-| 6 | §7 Java gateway_node | 外部带 `traceparent` 的 HTTP 请求被开新根；出站 gRPC 接得上 |
-| 7 | §9.1 本地 Alloy 规则，§9.3 看板变量与文档同步 | 本机登录一次，一条 `trace_id` 查询能看到 Java、gate、login、data_service、scene 的行 |
+| 6 | §7 Java gateway_node | 外部带 `traceparent` 的 HTTP 请求被开新根；出站 gRPC 接得上。补尾：config_node（§7） |
+| 7 | §9.1 本地 Alloy 规则，§9.3 看板变量与文档同步 | 本机登录并进游戏一次。网关 `/api/login` 的一条 `trace_id` 查得到 Java 网关、login 以及 login 经 zrpc 调到的服务的行；进游戏后客户端一条消息的 `trace_id` 查得到 gate、scene 的行；按 `player_id` 串得起这个玩家在 gate、scene、login 的行。两段不是同一条 trace：gate 对每条客户端消息开根（§3.3），原先写的「一条 trace_id 看到 Java、gate、login、data_service、scene」按设计做不到，2026-11-11 改正 |
 
 ### 10.2 阶段二：补齐 K8s 采集
 
@@ -350,16 +369,32 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 
 **Go**（`go test`）：
 
-- `go/shared/tracing`（第 4 批已写 4 条）：拦截器写入 `traceparent` 并保留已有的签名 metadata；调用方没有 span 时开根；`PlayerFieldInterceptor` 只在 `GetPlayerId` 非零时加字段。
+- `go/shared/tracing`（第 4 批已写 4 条）：拦截器写入 `traceparent` 并保留已有的签名 metadata；调用方没有 span 时开根；`PlayerFieldInterceptor` 只在 `GetPlayerId` 非零时加字段。第 7 批把它改成写十进制字符串，加 1 条 2^62+1 的大 id 用例，根包共 5 条。
 - Kafka 载体（第 5 批已写）：
   - `go/shared/tracing/kafkagotrace` 6 条：对固定 id 写出的值与 C++ 用例的字面值逐字相同；往返后消费端拿到同一个 trace、且标为远端；ctx 里没有 trace 时不写头；没有、坏值、全零、别的键都不产生 trace；同名键取最后一个；`logx.WithContext(ContextFrom(…))` 打的行带生产端的 trace_id。
   - `go/shared/tracing/saramatrace` 2 条：写出同一个字面值；没有 trace 时不写头。
   - 子包的用例自己设 W3C 传播器、结束时恢复，不依赖 go-zero 的 init。
 - Go 客户端带 `traceparent` 调 muduo_grpc 服务端的跨语言互通：C++ 侧已由 `grpc_client_loopback_test` 覆盖解析，Go 侧由上面的拦截器用例覆盖写入；真跨进程的核对放在冒烟里（`go/shared/grpcinterop` 的互通用例没扩展）。
 
-**Java**（`mvn -pl gateway_node test`）：外部 `traceparent` 不被采信；出站 gRPC 带 `traceparent`；JSON 日志带 `traceId`。
+**Java**（在 `java/gateway_node` 下 `mvn test`，第 6 批已写）：
 
-**采集**：按 grafana-loki-local-logs.md §5.2，拿三种语言新旧格式的样例行不入库试跑，核对结构化元数据；旧格式的行解析不受影响。
+- `config/UntrustedTraceHeaderFilterTest` 2 条：过滤器交给下游的请求读不到任何一种传播头（换大小写、`getHeaders`、`getIntHeader`、`getDateHeader`、`getHeaderNames` 都读不到）；其余的头原样传下去。
+- `integration/GatewayTracingIntegrationTest` 4 条，起完整上下文并用 `@AutoConfigureObservability` 打开追踪（测试默认关）。login 换成进程内的假 gRPC 服务，服务端拦截器记下收到的 `traceparent`：
+  - 带伪造 `traceparent` 和 B3 头的公网请求，调 login 时带的不是伪造的 trace；
+  - 两次不带头的请求，各是一条新根；
+  - 在调用方的 span 里经静态通道调 RefreshToken、经动态通道调 Login，两次都带调用方的 trace，parent-id 是 client span 而不是调用方的 span；
+  - span 里打的一行 JSON 日志带同一个 `traceId` 和 `spanId`。
+- `grpc/LoginRpcClientRetryTest` 改为传 `ObservationRegistry.NOOP`，重试语义不变。
+
+**采集**（第 7 批）：按 grafana-loki-local-logs.md §5.1、§5.2 校验 Alloy 配置并不入库试跑。拿一个只有几行的样本目录挂成 `/host/run/logs`，三种语言的新旧行型都放进去，逐行核对结构化元数据：
+
+- 带 trace 的行有 `trace_id`、`span_id`；带玩家的行有 `player_id`。
+- 两样都没有的行，三个键都没有，不是空值。
+- 只带玩家的 C++ 行没有 `trace_id`。
+- 写成 JSON 数字的 Go `player_id` 不取。
+- 旧格式的行解析不受影响：级别、时间、caller / tid / logger / thread 照旧。
+
+看板的两个过滤框靠冒烟核对，没有自动化用例。
 
 **端到端**：本机起服，机器人登录一次，用 `trace_id` 查询，核对 §10.1 第 7 批的验收；再按 AGENTS §6 跑一轮登录压测，出对比表。
 

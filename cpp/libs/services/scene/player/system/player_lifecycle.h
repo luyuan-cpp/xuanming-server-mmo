@@ -1339,11 +1339,11 @@ public:
 	// owner_epoch 的标记,闸门同样等它确认(复审 ownership-major)。待入场条目不存在时 no-op。
 	static void BeginInheritedMarkClear(Guid playerId);
 
-	// 有上限地重发失败的 A2′,并对超过截止时刻的(失败或在途)拒建实体。由 RedisSystem 驱动:
-	//   reconnected = true  → Redis 重连回调里调,忽略退避;
-	//   reconnected = false → 1s 周期定时器里调,只发退避已到的。
-	// 待入场表为空时零开销。
-	static void RetryInheritedMarkClears(bool reconnected);
+	// 有上限地重发失败的 A2′,并对超过截止时刻的(失败或在途)拒建实体。由 RedisSystem 的 1s 定时器驱动,只重发退避已到
+	// (now >= 条目的 nextRetryAt)的。Redis 重连成功时不提前补发:负责人 2026-11-05 定「重连成功不做业务逻辑」
+	// (docs/design/infra-reconnect-overview.md R14),原来区分重连回调的 reconnected 参数(重连时忽略退避)已删。
+	// now 显式传入(单调时钟,AGENTS §11.2;单测注入合成时刻)。待入场表为空时零开销。
+	static void RetryInheritedMarkClears(exit_release_mark::Clock::time_point now);
 
 	// 已发出、应答未到的断线释放标记条件写数(A1′、A2′ 放弃补写,以及改派踢线前的凭证补写,R6)。计入停机 drain 谓词
 	// (main.cpp 的 drained 条件)与 IsEmergencyRelocateDrained,受 Node drain 看门狗约束。
@@ -1543,11 +1543,11 @@ public:
 	// UTC 回拨同样视为失效;发送侧闸一旦因此放行,旧镜像完成只能摘自己的槽,不得提示或自动进场。
 	static bool IsSceneChangeRequestWithinTtl(uint64_t sentAtMs);
 
-	// 重试还没确认的 handoff 标记撤回,并丢弃过了截止时刻的条目。由 RedisSystem 驱动:
-	//   reconnected = true  → Redis 重连回调里调,忽略重试间隔、全部立刻重发;
-	//   reconnected = false → 1s 周期定时器里调,只发到了重试间隔的。
+	// 重试还没确认的 handoff 标记撤回,并丢弃过了截止时刻的条目。由 RedisSystem 的 1s 定时器驱动,只发到了重试间隔的。
+	// Redis 重连成功时不提前补发:负责人 2026-11-05 定「重连成功不做业务逻辑」(infra-reconnect-overview.md R14),
+	// 原来的 reconnected 参数(重连时忽略重试间隔、全部立刻重发)已删。
 	// 表为空时零开销。没有初始化 RedisSystem 的宿主(单测)只登记、不重试。
-	static void RetryPendingHandoffWithdrawals(bool reconnected);
+	static void RetryPendingHandoffWithdrawals();
 
 	// 冻结硬上限扫描(travel_freeze_cap.h):遍历所有挂着 PlayerTravelHandoffComp 的实体(**包括退出中的**:
 	// 骨架没有给退出开例外),冻结满 travel_freeze_cap::kFreezeCap 的按 travel_freeze_cap::DecideFreezeCap 处置 ——
@@ -1693,11 +1693,27 @@ public:
 	//   2. **不**设 tlsEmergencyRelocating —— 节点自己不退出,还要继续服务
 	//      别的场景。把它标成"疏散中"会让 Node 的 drain 看门狗误判。
 	//
-	// 返回登记了改派票据的玩家数(已断线的玩家只存盘、不计入)。
+	// 返回登记了改派票据的玩家数(已断线的玩家只存盘、不计入);计划排空期间返回新排进限速队列的人数。
 	// 调用方不应假设返回后玩家已经走完:改派是异步的,要靠"下一拍再看
 	// 场景空没空"来收敛。
 	// 每个被消费的票据同样登记进待确认表:改派被拒 / 没发出去 / 落回本节点后载入没成时,核实后踢线让客户端重登。
+	// 票据带去向提示(relocate_target.h):原频道与原地图,由 scene_manager 按「原频道 → 同图 → 默认大世界」解析。
 	static std::size_t BeginSceneDrain(SceneEntity sceneEntity);
+
+	// ── 计划排空(docs/design/scene-node-planned-drain.md §4.7)──────────────────────────────────────────
+	// 计划排空开始:此后 BeginSceneDrain 把住户放进限速队列,由 PumpPlannedEvacuations 按 relocationsPerSecond(0 = 不限)
+	// 取出发起疏散。进程只排空一次,重复调用 no-op。以下几个函数都只在 scene 逻辑线程上调。
+	static void BeginPlannedDrain(uint32_t relocationsPerSecond);
+	// 把本节点全部在线、不在退出中的玩家排进疏散队列(自疏散时刻,§4.5)。返回新排进的人数。计划排空没开始时 no-op。
+	static std::size_t QueueAllPlayersForPlannedDrain();
+	// 按限速取出排队的玩家、发起疏散(出队时按玩家那一刻所在的场景算去向)。now 用单调时钟,由调用方的定时器传入。
+	static void PumpPlannedEvacuations(std::chrono::steady_clock::time_point now);
+	// 疏散队列里还有多少人(进度日志用)。
+	static std::size_t PlannedEvacuationsQueued();
+	// 本节点此刻持有的玩家实体数(进度日志用)。
+	static std::size_t LocalPlayerCount();
+	// 计划排空是否收敛:队列空、票据清空、交接标记与断线释放标记没有在途、待确认表清空、本地没有玩家实体。
+	static bool IsPlannedDrainSettled();
 
 	// 疏散是否收敛:所有玩家都存盘完成、改派请求都已派发、本地实体都已销毁,并且待确认表已清空
 	// (每一次改派都有了结论:已在别处 / 已落回本节点 / 已踢线 / 已放弃)。
@@ -1727,12 +1743,12 @@ public:
 	// 没有票据也没有条目时 no-op。
 	static void ReconcileRelocateOnReentry(Guid playerId, SessionId sessionId);
 
-	// 推进待确认表:各阶段的截止时刻、核实的首发与重发、落地条目看实体建出来没有、读不到时的处置。由 RedisSystem 驱动,
-	// 与标记撤回、A2′ 重发同一个节拍:
-	//   reconnected = true  → Redis 重连回调里调:上次没读到、在等重试的核实立刻重发(不绕过 settle 等待);
-	//   reconnected = false → 1s 周期定时器里调。
+	// 推进待确认表:各阶段的截止时刻、核实的首发与重发、落地条目看实体建出来没有、读不到时的处置。由 RedisSystem 的
+	// 1s 定时器驱动,与标记撤回、A2′ 重发同一个节拍。核实只在条目自己的 nextVerifyAt 到了才(重)发:Redis 重连成功时
+	// 不提前补发(负责人 2026-11-05 定「重连成功不做业务逻辑」,infra-reconnect-overview.md R14),原来的 reconnected
+	// 参数已删。
 	// now 显式传入(单调时钟,AGENTS §11.2;单测注入时间)。表空时直接返回。只在 scene 逻辑线程上调。
-	static void SweepRelocateConfirms(relocate_confirm::Clock::time_point now, bool reconnected);
+	static void SweepRelocateConfirms(relocate_confirm::Clock::time_point now);
 
 	// 待确认表里还有多少条。计入停机 drain 谓词(nodes/scene/main.cpp)与 IsEmergencyRelocateDrained。
 	static std::size_t RelocateConfirmsPending();
@@ -1785,8 +1801,10 @@ private:
 
 	// 抄改派票据 + 推进退出流程。整节点疏散与单场景排空共用。
 	// 返回 true 表示登记了票据(玩家有活着的 gate 会话)。
-	// cause:整节点疏散传 kIdentityConflict,单场景排空传 kSceneDrain(原样交给 HandleExitGameNode)。
+	// cause:整节点疏散传 kIdentityConflict,单场景排空与计划排空传 kSceneDrain(原样交给 HandleExitGameNode)。
 	static bool EnqueueRelocateTicket(entt::entity playerEntity, const char *reasonTag, ExitCause cause);
+	// 计划排空期间把玩家放进限速队列。已在队里或已有改派票据时不重复排,返回 false。
+	static bool QueuePlannedEvacuation(entt::entity playerEntity);
 
 	// 已排队与已落盘相等是两种成功证据;拒绝保存不能被当成它们中的任一种。
 	// 已发起交接时,完整状态已经在写标记之前落盘,本节点不得再写;退出按原交接裁决收尾。

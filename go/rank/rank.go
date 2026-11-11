@@ -159,10 +159,11 @@ func run(c config, migrate bool) (runErr error) {
 		return errors.New("排行榜结构未部署，请先运行rank -migrate")
 	}
 	for _, warning := range report.Warnings {
-		if strings.Contains(warning, "索引") {
-			return errors.New("排行榜必要索引缺失")
-		}
 		logx.Info(warning)
+	}
+	// 缺普通索引在 schemamigrate 里只是 Warning(不进 ExitCode);排行榜依赖这些索引,按结构化类别升级成拒启,不匹配文案。
+	if len(report.MissingIndexes()) > 0 {
+		return errors.New("排行榜必要索引缺失")
 	}
 	if migrate {
 		return nil

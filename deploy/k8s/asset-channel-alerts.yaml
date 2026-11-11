@@ -68,8 +68,12 @@
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "[AssetOp]" |= "metric=persist_version_skew" [10m]) > 0
 #             (2026-10-30,混版本持久字段保护第 6 批)资产通道遇到本版本解释不了的东西,回 RETRY + reason 1006
 #             (kFeatureUnavailable)、不记账:where=asset_debit 是按数量扣出只有算上带更新版本字段的物品才够,
-#             where=asset_currency 是包里的币种本版本不认识。Go 行上表现为 PENDING、last_reason=1006。
-#             滚动发布期间属预期,升级走完自然收口;发布已走完仍持续 → 查是否有 scene 停在旧版本或被回滚。
+#             where=asset_currency 是包里的币种本版本不认识;2026-11-11 起另有 where=asset_request(请求带本版本
+#             不认识的字段,行里带 field=<消息#字段号>)与 where=asset_config(物品 / 宝宝配置号不在本节点的 Item / Pet
+#             表里,带 table / config_id;表行只增不删,只可能是更新版本或尚未热更到本节点的行)。
+#             Go 行上表现为 PENDING、last_reason=1006。
+#             滚动发布或热更期间属预期,升级 / 热更走完自然收口;发布已走完仍持续 → 查是否有 scene 停在旧版本、被回滚,
+#             或(asset_config)这个节点的配置没有热更到。
 #             不要人工终结这类行:入账没有 Abort 栅栏,人工终结还会在流上留下永久的洞(04 §4.38)。聚宝斋托管卡在这里时,
 #             卖家可以撤单收口。
 #

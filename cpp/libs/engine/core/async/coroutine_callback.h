@@ -17,6 +17,9 @@ namespace loop_async
 // 把已有单次异步接口接入 Cobalt，不添加超时或重试。
 // submit 和回调都属于 loop；true 承诺回调，false 表示未接纳且不会再回调。
 // T 必须拥有结果，不能携带借用的回复指针。nullopt 专指本地停止。
+// nullopt 只交付给停止那一刻正在等待的这一次。停止之后同一任务再 co_await(包括再调本函数)会在挂起前抛
+// boost::system::system_error(operation_aborted)，那是 Cobalt 的 throw_if_cancelled，抛点之后的代码不再执行。
+// 所以拿到 nullopt 就直接 co_return；拿到真实结果后若同步代码可能重入停止，下一次等待前先查 this_coro::cancelled。
 // 协程挂起时记下当前 trace，完成时装回(docs/design/distributed-tracing.md §5.6)：协程从完成回调里继续，
 // 不论就地恢复还是经执行器投递，日志都挂在发起它的请求上；完成回调自己的上下文(Redis、etcd 回包一般没有)不影响协程。
 template<class T, class Submit>

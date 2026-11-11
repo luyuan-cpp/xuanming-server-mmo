@@ -406,19 +406,20 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 // 这里替换掉的旧实现是全仓最严重的 P0:它把 metadata 里的
 // x-session-detail-bin 解出来就当可信身份写进 ctx,没有任何校验 ——
 // 任何能连到 login gRPC 端口的进程都可以自称是任意会话的任意玩家。
-// 现在改成 fail-closed:带了身份声明就必须带 HMAC 签名,验不过直接
+// 现在改成 fail-closed:带了身份声明就必须带 gate 的 Ed25519 签名,验不过直接
 // Unauthenticated;不带声明的调用(Java Gateway 新链路)行为不变。
 //
 // 任何运行模式都强制:gate 已对全部会话身份签名,dev/test 不再保留「告警放行」档,
-// 与在线域的 callerauth.GateInterceptor 一致。
-func newSessionInterceptor(cfg config.Config) grpc.UnaryServerInterceptor {
-	var secrets callerauth.SecretVerifier
-	if config.ActiveSecrets != nil {
-		secrets = config.ActiveSecrets.InternalAuth
+// 与在线域的 callerauth.GateInterceptor 一致。login 只持公钥(callerauth.PublicKeysEnv),
+// 签不出名;公钥缺失或格式不对时拒绝启动(docs/design/gate-online-identity.md §10.1)。
+func newSessionInterceptor(cfg config.Config, getenv func(string) string) (grpc.UnaryServerInterceptor, error) {
+	keys, err := callerauth.ParsePublicKeys(getenv(callerauth.PublicKeysEnv))
+	if err != nil {
+		return nil, fmt.Errorf("%s is missing or malformed: %w", callerauth.PublicKeysEnv, err)
 	}
 
 	return loginauth.UnaryServerInterceptor(callerauth.NewVerifier(callerauth.Options{
-		Secrets:         secrets,
+		Keys:            keys,
 		Enforce:         true,
 		MaxClockSkew:    cfg.InternalAuth.MaxClockSkew,
 		MaxNonceEntries: cfg.InternalAuth.MaxNonceEntries,
@@ -427,7 +428,7 @@ func newSessionInterceptor(cfg config.Config) grpc.UnaryServerInterceptor {
 			loginauth.RecordNonceOverflow()
 			logx.Error("callerauth nonce table exceeded MaxNonceEntries and rotated early; replay window temporarily shortened, increase InternalAuth.MaxNonceEntries")
 		},
-	}))
+	})), nil
 }
 
 // newKillSwitch 构造 RPC 级热关停闸门,并挂上 etcd list-watch。
@@ -539,9 +540,13 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	if adminToken != "" && len(adminToken) < loginadminserver.MinAdminTokenBytes {
 		return fmt.Errorf("%s is shorter than %d bytes", loginadminserver.AdminTokenEnv, loginadminserver.MinAdminTokenBytes)
 	}
+	sessionInterceptor, err := newSessionInterceptor(cfg, os.Getenv)
+	if err != nil {
+		return err
+	}
 	interceptors = append(interceptors,
 		loginadminserver.AdminAuthInterceptor(adminToken),
-		newSessionInterceptor(cfg),
+		sessionInterceptor,
 		// 请求顶层带 player_id 的方法,handler 与 serverbase 的日志都带上它(docs/design/distributed-tracing.md §6.2)。
 		tracing.PlayerFieldInterceptor(),
 		serverbase.UnaryInterceptor(serverbase.Options{}),

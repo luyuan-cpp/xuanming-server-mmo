@@ -165,12 +165,13 @@ public class AssignGateRateLimiter {
         } catch (RuntimeException e) {
             bypassUntilMs.set(now + FAIL_OPEN_HOLD_MS);
             storeErrors.increment();
-            log.warn("rate-limit fail-open:限流存储出错,{} ms 内不再访问 Redis、放过令牌桶: {}", FAIL_OPEN_HOLD_MS, e.toString());
+            log.warn("rate-limit fail-open: store error, bypassing token buckets without touching Redis for {} ms: {}",
+                    FAIL_OPEN_HOLD_MS, e.toString());
             return Admission.ok();
         }
         // 只清自己写下的探测标记:探测期间若别的请求又出错、重新熔断,标记已被改写,CAS 不成功,熔断照旧。
         if (probeMark != NOT_BYPASSING && bypassUntilMs.compareAndSet(probeMark, NOT_BYPASSING)) {
-            log.info("限流存储恢复,重新开始限流");
+            log.info("rate-limit store recovered, token buckets enforced again");
         }
         return admission;
     }

@@ -4,16 +4,17 @@ package main
 //
 // 合服只写一条映射:目录第 0 片 zone_merged_into 的「源区 → 目标区」。玩家、公会、商品、榜单一行都不动,各服务读的时候
 // 把记录里的原始区解析成最终区(placement.MergedZones)。没有数据搬动,就没有「搬动期间的一致性」问题,
-// 所以这里没有清单、没有前置门禁、不踢人,也不碰 Redis。
+// 所以这里没有清单、没有前置门禁、不踢人,也不碰 Redis。映射每变一次,同一个事务里往 zone_merge_history 追加一条
+// 历史(谁、什么时候、合进 / 撤出哪个区),撤销合服删掉映射行之后仍查得到(提案 docs/design/player-route-mapping-durability-proposal.md §16)。
 //
 //	-mode merge   -source-zone S -target-zone T [-dry-run]   写 S → T
 //	-mode unmerge -source-zone S -target-zone T [-dry-run]   删 S → T
-//	-mode audit                                              只读,列出所有映射和每个源区的最终区
+//	-mode audit                                              只读,列出所有映射、每个源区的最终区和合服历史
 //
 // 退出码:
 //
 //	0  完成(含幂等:映射本来就是这样)
-//	1  拒绝:参数或校验不过,什么都没写;审计时表示映射表本身解析不通
+//	1  拒绝:参数或校验不过,什么都没写;审计时表示映射表本身解析不通,或有映射行在历史里找不到对应的合服记录
 //	2  没做成或结局未知:连不上库、SQL 失败、提交没有回音。重跑同一条命令是安全的
 //
 // 连接规范与其它运维工具相同:全局库走 authoritysql(MMORPG_SQL_BACKEND 选档位),真写要操作员身份

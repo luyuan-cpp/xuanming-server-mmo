@@ -41,8 +41,8 @@ import (
 // 各自的理由写在对应的常量注释里:
 //   - bootstrapTables 清单里的表:整表预建,之后不再交给 proto2mysql 同步,只做形状守卫,守卫的事实源都是 proto。
 //     id_segment、player_name:proto 字段都有同名列 + 单列唯一键;
-//     路由表 player_route / zone_merged_into / route_meta
-//     (docs/design/player-route-mapping-durability-proposal.md §3.2、§15;2026-10-19 补 proto,取代原手写的 routeTableShapes):
+//     路由表 player_route / zone_merged_into / zone_merge_history / route_meta
+//     (docs/design/player-route-mapping-durability-proposal.md §3.2、§15、§16;2026-10-19 补 proto,取代原手写的 routeTableShapes):
 //     proto 字段都有同名列 + 主键列序等于 proto 的 OptionPrimaryKey(assertRouteTableShapes)。
 //   - nullableUniqueKeys 清单里的可空唯一列(player_snapshot.snapshot_guid_nz +
 //     uk_snapshot_guid_nz):表仍全程由 proto 驱动,只在同步之后**追加**一列 + 一个键。
@@ -146,9 +146,10 @@ const playerNameOwnerBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name_own
 // MEDIUMTEXT、标量一律 NOT NULL DEFAULT 0(TEXT 列不能做无前缀主键,MySQL 错误 1170)。列漂移守卫的事实源是
 // proto/common/database/rollback_database_table.proto 的同名 message(routeTableMessages):它们进 TableMessages
 // 只为表名守卫,同步循环跳过它们,形状由 ensureRouteTables 守。改了 DDL 就要同步改 proto,反之亦然。
-// 三张表每列的注释 pb:N 都等于 proto 字段号(route_store_test 的 TestRouteBootstrapDDLContract 钉住):player_route 的
-// pb:1..10 是第 1a 批预留的(route_shard 是 10,player_id 仍是 1;pb:5 原是 frozen_run_id,已删,proto 里 reserved);另外两张是 2026-10-20 补 proto 时按列序新定、同时补进
-// DDL 的。CREATE TABLE IF NOT EXISTS 不改已存在的表,所以补注释前建过表的库列上仍没有这些注释:形状守卫只按列名比对,
+// 四张表每列的注释 pb:N 都等于 proto 字段号(route_store_test 的 TestRouteBootstrapDDLContract 钉住):player_route 的
+// pb:1..10 是第 1a 批预留的(route_shard 是 10,player_id 仍是 1;pb:5 原是 frozen_run_id,已删,proto 里 reserved);zone_merged_into、
+// route_meta 是 2026-10-20 补 proto 时按列序新定、同时补进 DDL 的;zone_merge_history 是 2026-11-11 新建,DDL 与 proto 同批写。
+// CREATE TABLE IF NOT EXISTS 不改已存在的表,所以补注释前建过表的库列上仍没有这些注释:形状守卫只按列名比对,
 // 不受影响;项目尚未上线,只是这类库的 SHOW CREATE TABLE 与新建库差在列注释上。
 //
 // 读写只在 route_store.go(RouteStore);表名常量也在那里。TiDB 上的预切与防合并在 route_tidb.go(PrepareTiDB)。
@@ -213,6 +214,30 @@ const zoneMergedIntoBootstrapDDL = "CREATE TABLE IF NOT EXISTS `zone_merged_into
 	"  PRIMARY KEY (`src_zone`)\n" +
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='zone_merged_into';"
 
+// zoneMergeHistoryBootstrapDDL 是合服 / 撤销合服的历史(提案 §16),只增不改,和 zone_merged_into 一样只在第 0 片。
+// 撤销合服会把 zone_merged_into 那一行整行删掉,事后要回答「这个区什么时候、被谁合进过哪个区,又是什么时候撤的」
+// 只能靠这张表。写者只有 tools/merge_zone/route_store.go:与映射行的插入 / 删除在同一个事务里追加一行,
+// 历史写不进去映射也不变。操作员账号对它只有 SELECT、INSERT(maintenance_drain.ps1 的 MERGE_ZONE_GRANT),
+// 改不了也删不了已有的历史。
+//
+// 主键 (src_zone, event_seq):event_seq 是这个源区的第几次变更,写者持 route_meta(id=1) 的行锁取最大值 +1,
+// 所有写者都串行在那把锁上。不用自增列:TiDB 的自增值跨 tidb-server 不单调,两种引擎上「按号排先后」的口径会不同,
+// 按源区编号则两边一样。绕开锁的写者会撞主键而失败,不会静默插成两条同号历史。
+// sql_principal 取库侧 CURRENT_USER()(MySQL 账号 32 + 1 + 主机 255 = 288),
+// 不取工具自报的身份;at_ms 取库时钟(route_store.go 的 dbNowMsSQL 同口径)。
+const zoneMergeHistoryBootstrapDDL = "CREATE TABLE IF NOT EXISTS `zone_merge_history` (\n" +
+	"  `src_zone` int unsigned NOT NULL COMMENT 'pb:1',\n" +
+	"  `event_seq` bigint unsigned NOT NULL COMMENT 'pb:2',\n" +
+	"  `action` varchar(8) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'pb:3',\n" +
+	"  `dst_zone` int unsigned NOT NULL COMMENT 'pb:4',\n" +
+	"  `run_id` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'pb:5',\n" +
+	"  `sql_principal` varchar(288) NOT NULL COMMENT 'pb:6',\n" +
+	"  `at_ms` bigint unsigned NOT NULL COMMENT 'pb:7',\n" +
+	"  PRIMARY KEY (`src_zone`, `event_seq`) /*T![clustered_index] CLUSTERED */,\n" +
+	"  CONSTRAINT `chk_merge_history_action` CHECK (`action` IN ('merge', 'unmerge')),\n" +
+	"  CONSTRAINT `chk_merge_history_seq` CHECK (`event_seq` >= 1)\n" +
+	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='zone_merge_history';"
+
 // routeMetaBootstrapDDL 是开关表,单行(id=1):库世代与可写开关。行由迁移种(bootstrapRouteMetaRow,ODKU no-op,
 // 已存在不改);writable=0 = 全体映射写者拒写。很少写(只有维护流程经 Catalog 写它),而每次 W1 都普通读 writable(R1)。
 var routeMetaBootstrapDDL = authoritysql.CatalogBootstrapStatements()["route_meta"]
@@ -263,6 +288,7 @@ var bootstrapTables = map[string]string{
 	PlayerNameOwnerTableName:         playerNameOwnerBootstrapDDL,
 	PlayerRouteTableName:             playerRouteBootstrapDDL,
 	ZoneMergedIntoTableName:          zoneMergedIntoBootstrapDDL,
+	ZoneMergeHistoryTableName:        zoneMergeHistoryBootstrapDDL,
 	RouteMetaTableName:               routeMetaBootstrapDDL,
 }
 
@@ -287,10 +313,10 @@ const playerRouteG1aShapeHint = "if this is the pre-G1a shape of the 1a batch (n
 // proto2mysql 的类型映射(string → MEDIUMTEXT、标量 NOT NULL)与这几张表的 DDL 本来就不同,按类型比只会误报;
 // 类型、可空与 CHECK 由 DDL 常量和 route_store_test 的 DDL 契约钉住。
 func routeTableMessages() []proto.Message {
-	return append(shardRouteTableMessages(), &dbpb.ZoneMergedInto{})
+	return append(shardRouteTableMessages(), &dbpb.ZoneMergeHistory{}, &dbpb.ZoneMergedInto{})
 }
 
-// shardRouteTableMessages 是目录每片都有的路由表。zone_merged_into 只在第 0 片。
+// shardRouteTableMessages 是目录每片都有的路由表。zone_merged_into 与 zone_merge_history 只在第 0 片。
 func shardRouteTableMessages() []proto.Message {
 	return []proto.Message{&dbpb.PlayerRoute{}, &dbpb.RouteMeta{}}
 }

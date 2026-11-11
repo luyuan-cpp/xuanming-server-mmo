@@ -1,17 +1,20 @@
 package main
 
-// 目录第 0 片上的映射读写。zone_merged_into 只在第 0 片(docs/design/horizontal-scale-logical-db.md §1),DSN 指错片时因为缺表报错。
+// 目录第 0 片上的映射读写。zone_merged_into 与 zone_merge_history 只在第 0 片(docs/design/horizontal-scale-logical-db.md §1),
+// DSN 指错片时因为缺表报错。
 //
 // merge_zone 是独立 module,import 不了 go/data_service/internal/store;表结构归 data_service 的迁移。
-// 本工具对路由表的全部写只有 zone_merged_into 一张表,且都在本文件(route_store_test.go 的
-// TestNoRouteTableWritesOutsideMergeRouteStore 守住);route_meta 只读和加锁,不写。
+// 本工具对路由表的全部写只有 zone_merged_into 的插入 / 删除和 zone_merge_history 的追加,且都在本文件
+// (route_store_test.go 的 TestNoRouteTableWritesOutsideMergeRouteStore 守住);route_meta 只读和加锁,不写。
 //
 // 不变量:
 //  1. 所有映射写者串行在 route_meta(id=1) 的行锁上。判定和写在同一个事务里,事务外读到的东西不算数。
-//  2. 锁序:route_meta → zone_merged_into(zone 升序)。
+//  2. 锁序:route_meta → zone_merged_into(zone 升序)→ zone_merge_history(源区)。
 //  3. 会话由 authoritysql 固定:READ-COMMITTED、innodb_lock_wait_timeout=1、严格 sql_mode,tidb 档再加当前强读。
 //     锁等待超时、死锁、写冲突不在这里重试:工具是人跑的,报错后重跑同一条命令,结论不会错。
 //  4. 错误信息不回显 DSN:ParseDSN 的错误不往外传,authoritysql 的错误是固定文案。
+//  5. 映射每变一次,同一个事务里给源区追加一条历史(提案 §16);历史写不进去,事务回滚,映射也不变。
+//     历史只增不改:本工具对它只有 INSERT,操作员账号也只授 SELECT、INSERT。
 
 import (
 	"context"
@@ -36,10 +39,21 @@ const (
 	routeMetaReadSQL = "SELECT writable FROM route_meta WHERE id = 1"
 
 	mappingLockSQL = "SELECT dst_zone FROM zone_merged_into WHERE src_zone = ? FOR UPDATE"
-	mappingListSQL = "SELECT src_zone, dst_zone, run_id, merged_at_ms FROM zone_merged_into ORDER BY src_zone"
+	// 撤销前取被删那一行的 run_id 写进历史,说明撤的是哪一次合服。行已被 Locked 锁住,这里仍用加锁读:判定只认加锁读。
+	mappingRunIDSQL = "SELECT run_id FROM zone_merged_into WHERE src_zone = ? AND dst_zone = ? FOR UPDATE"
+	mappingListSQL  = "SELECT src_zone, dst_zone, run_id, merged_at_ms FROM zone_merged_into ORDER BY src_zone"
 	// 撞主键不吞:持着 route_meta 的锁还能撞,说明有绕开这把锁的写者,这次按失败报出来,重跑时走幂等分支或拒绝。
 	mappingInsertSQL = "INSERT INTO zone_merged_into (src_zone, dst_zone, run_id, merged_at_ms) VALUES (?, ?, ?, " + routeDBNowMsSQL + ")"
 	mappingDeleteSQL = "DELETE FROM zone_merged_into WHERE src_zone = ? AND dst_zone = ?"
+
+	// 历史的序号:加锁读这个源区最大的 event_seq,+1。持着 route_meta 的锁,不会和别的写者算出同一个号;
+	// 真撞了(有绕开锁的写者)就是主键冲突,按失败报,整个事务回滚。
+	historyLastSeqSQL = "SELECT event_seq FROM zone_merge_history WHERE src_zone = ? ORDER BY event_seq DESC LIMIT 1 FOR UPDATE"
+	// 操作员取库侧 CURRENT_USER(),时间取库时钟:都不用工具进程自报的值。
+	historyInsertSQL = "INSERT INTO zone_merge_history (src_zone, event_seq, action, dst_zone, run_id, sql_principal, at_ms)" +
+		" VALUES (?, ?, ?, ?, ?, CURRENT_USER(), " + routeDBNowMsSQL + ")"
+	historyListSQL = "SELECT src_zone, event_seq, action, dst_zone, run_id, sql_principal, at_ms FROM zone_merge_history" +
+		" ORDER BY at_ms, src_zone, event_seq"
 )
 
 // routeStore 是 mappingStore 的 SQL 实现。
@@ -121,6 +135,27 @@ func (s *routeStore) Snapshot(ctx context.Context) (bool, []mappingRow, error) {
 	return writable, rows, nil
 }
 
+// History 见 mappingStore。
+func (s *routeStore) History(ctx context.Context) ([]historyRow, error) {
+	rows, err := s.db.QueryContext(ctx, historyListSQL)
+	if err != nil {
+		return nil, fmt.Errorf("read zone_merge_history: %w", err)
+	}
+	defer rows.Close()
+	var out []historyRow
+	for rows.Next() {
+		var row historyRow
+		if err := rows.Scan(&row.Src, &row.Seq, &row.Action, &row.Dst, &row.RunID, &row.Principal, &row.AtMs); err != nil {
+			return nil, fmt.Errorf("read zone_merge_history: %w", err)
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read zone_merge_history: %w", err)
+	}
+	return out, nil
+}
+
 // Locked 见 mappingStore。提交失败的结局未知(可能已经落库),错误文案让人重跑:判定在锁内重做,写过了就走幂等分支。
 func (s *routeStore) Locked(ctx context.Context, zones []uint32, body func(mappingTx) error) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -167,10 +202,18 @@ func (t sqlMappingTx) Insert(ctx context.Context, src, dst uint32, runID string)
 	if _, err := t.tx.ExecContext(ctx, mappingInsertSQL, src, dst, runID); err != nil {
 		return fmt.Errorf("insert zone_merged_into(%d -> %d): %w", src, dst, err)
 	}
-	return nil
+	return t.appendHistory(ctx, src, historyActionMerge, dst, runID)
 }
 
 func (t sqlMappingTx) Delete(ctx context.Context, src, dst uint32) (bool, error) {
+	var runID string
+	err := t.tx.QueryRowContext(ctx, mappingRunIDSQL, src, dst).Scan(&runID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read zone_merged_into(%d -> %d): %w", src, dst, err)
+	}
 	res, err := t.tx.ExecContext(ctx, mappingDeleteSQL, src, dst)
 	if err != nil {
 		return false, fmt.Errorf("delete zone_merged_into(%d -> %d): %w", src, dst, err)
@@ -179,5 +222,24 @@ func (t sqlMappingTx) Delete(ctx context.Context, src, dst uint32) (bool, error)
 	if err != nil {
 		return false, fmt.Errorf("delete zone_merged_into(%d -> %d): %w", src, dst, err)
 	}
-	return n == 1, nil
+	if n != 1 {
+		// 刚加锁读到这一行却删不到:有绕开 route_meta 锁的写者。按失败报,事务回滚,不写历史。
+		return false, fmt.Errorf("delete zone_merged_into(%d -> %d): %d rows affected right after the locking read found the row", src, dst, n)
+	}
+	if err := t.appendHistory(ctx, src, historyActionUnmerge, dst, runID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// appendHistory 给 src 追加一条历史。调用方持着 route_meta 的行锁,序号取这个源区已有的最大值 +1。
+func (t sqlMappingTx) appendHistory(ctx context.Context, src uint32, action string, dst uint32, runID string) error {
+	var last uint64
+	if err := t.tx.QueryRowContext(ctx, historyLastSeqSQL, src).Scan(&last); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("read zone_merge_history(%d): %w", src, err)
+	}
+	if _, err := t.tx.ExecContext(ctx, historyInsertSQL, src, last+1, action, dst, runID); err != nil {
+		return fmt.Errorf("append zone_merge_history(zone %d #%d %s -> zone %d): %w", src, last+1, action, dst, err)
+	}
+	return nil
 }

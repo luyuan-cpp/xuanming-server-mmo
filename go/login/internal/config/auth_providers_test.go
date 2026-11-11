@@ -244,7 +244,6 @@ func TestResolveSecretsIncludesAuthProviders(t *testing.T) {
 	cfg := &Config{}
 	cfg.Mode = service.ProMode
 	cfg.Secrets.GateToken.Value = "a3f9c2e17b6d40f8a1c5e9b2d7f4038e"
-	cfg.Secrets.InternalAuth.Value = "4e8b1d6f2a9c07e35b1f8d4a6c2e9071"
 	cfg.AuthProviders.WeChat = weChatConf()
 
 	resolved, _, err := ResolveSecrets(cfg, envLookup(map[string]string{"LOGIN_WECHAT_APP_SECRET": testWeChatSecret}))

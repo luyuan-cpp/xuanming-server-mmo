@@ -5,16 +5,20 @@ package main
 //
 // 两个阶段(pvp_team_smoke.phase):
 //
-//	prepare:只登录要写评分的账号(首次登录即建角),把「账号 → player_id → 本模式评分」写进 fixture_path 后退出;
-//	         之后由 go/match/cmd/ratingfixture 把夹具写进 match_rating(评分按 (player_id, mode) 存,R5)。
-//	run:    登录全部账号,读夹具核对 player_id 与评分没变,清掉上一轮残留的队伍与排队,按人数档分组并发跑全部情况。
+//	prepare:登录全部参战账号(首次登录即建角),把「账号 → player_id → 本模式赛前评分」写进 fixture_path 后退出:
+//	         情况指定的评分照写,其余一律 1500。之后由 go/match/cmd/ratingfixture 把夹具写进 match_rating
+//	         (评分按 (player_id, mode) 存,R5),并把写库时刻(数据库时钟)写回夹具的 applied_ms。
+//	run:    登录全部账号,读夹具核对 player_id、评分与已写库,随即把 applied_ms 清零:一次写库只够跑一轮,
+//	         这一轮打完评分就变了,重跑要先重做 ratingfixture(换库或改了配置才要重做 prepare)。
+//	         然后清掉上一轮残留的队伍与排队,按人数档分组并发跑全部情况。
 //	         人数档不同就是不同的匹配池,互不干扰;同一人数档里的情况顺序跑,前一种全员开战之后池里不剩人。
 //
-// 情况(每种情况用自己的账号,账号之间不共用;评分夹具每轮都重写,所以看评分的情况可以反复跑):
+// 情况(每种情况用自己的账号,账号之间不共用;每个参战账号的赛前评分每轮都由夹具重置,所以不用清库也能反复跑):
 //
 //	1v1                        单人对单人(每侧 1 人档也走 PVP_TEAM)
 //	1v1-rating-window          1500 对 1700:起始容差 ±100 不成局,锚点等满一档、容差放宽到 ±200 后成局
-//	2v2-duo-plus-solos         双排 + 两个单人:双排在同一侧;打完后全员在 PVP_TEAM 的榜上按 Elo 结算,1V1 的榜上没有他们
+//	2v2-duo-plus-solos         双排(1500 × 2)+ 两个单人(1550):双排在同一侧;打完后全员在 PVP_TEAM 的榜上按 Elo 结算,
+//	                           1V1 的榜上没有他们(两侧平均分不等,胜、负、平都会改分,榜上一定出现本局写的条目)
 //	2v2-duo-vs-duo             双排对双排
 //	2v2-party-too-big          3 人队开 2V2:TeamSizeExceeded,没人进队列
 //	2v2-rating-gap             队员评分差超过上限:TeamRatingGapTooLarge;差恰好等于上限的另一组可以排队,排队中队员离队整队撤单
@@ -47,6 +51,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -88,6 +93,8 @@ const (
 	pvpSmokeDefaultRating int64 = 150_000
 	// 评分差那组的队长评分;另两人按组队评分差上限往上加。
 	pvpSmokeGapBaseRating int64 = 120_000
+	// 看评分的情况不符合预期时附在失败原因后面:run 已经核对过夹具写了库,剩下最常见的原因是写进了另一个库。
+	pvpSmokeFixtureHint = "(was go/match/cmd/ratingfixture run with the config the running match instance loads?)"
 )
 
 // tip id 一律读导表器生成的枚举,不写字面量(AGENTS.md §7 不变量 5)。
@@ -136,7 +143,13 @@ func pvpSmokeCases() []*pvpSmokeCase {
 				// 分差 = 起始容差 + 一档:起始容差内配不上,锚点等满一档就配上。
 				return map[int]int64{8703: pvpSmokeDefaultRating, 8704: pvpSmokeDefaultRating + pvpSmokeCenti(cfg.ToleranceBase()+cfg.ToleranceStepDelta())}
 			}},
-		{name: "2v2-duo-plus-solos", perSide: 2, units: [][]int{{8711, 8712}, {8713}, {8714}}, formsBattle: true, settleRatings: true},
+		{name: "2v2-duo-plus-solos", perSide: 2, units: [][]int{{8711, 8712}, {8713}, {8714}}, formsBattle: true, settleRatings: true,
+			ratings: func(cfg *config.PvpTeamSmokeConfig) map[int]int64 {
+				// 两个单人比双排成员高半个起始容差:双排的单位评分另带组队加成,与单人仍在起始容差内,立即成局;
+				// 两侧平均分不等,胜、负、平都会改分,榜上的条目一定是本局写的(checkSettlement)。
+				solo := pvpSmokeDefaultRating + pvpSmokeCenti(max(cfg.ToleranceBase()/2, 1))
+				return map[int]int64{8711: pvpSmokeDefaultRating, 8712: pvpSmokeDefaultRating, 8713: solo, 8714: solo}
+			}},
 		{name: "2v2-duo-vs-duo", perSide: 2, units: [][]int{{8715, 8716}, {8717, 8718}}, formsBattle: true},
 		{name: "2v2-party-too-big", perSide: 2, units: [][]int{{8719, 8720, 8721}}, run: (*pvpSmokeCaseRun).partyTooBig},
 		{name: "2v2-rating-gap", perSide: 2, units: [][]int{{8722, 8723}, {8724}}, run: (*pvpSmokeCaseRun).ratingGap,
@@ -198,15 +211,23 @@ func pvpSmokeSelectCases(all []*pvpSmokeCase, names []string) ([]*pvpSmokeCase, 
 	return selected, nil
 }
 
-// pvpSmokeSeeds 汇总所选情况要写的评分(账号编号 → ×100)。
+// pvpSmokeSeeds 汇总所选情况每个参战账号的赛前评分(账号编号 → ×100):情况指定的照用,其余一律默认 1500。
+// 全部账号都进夹具、每轮重置,上一轮的 Elo 结算不会带进下一轮(不清库重跑也确定)。
 func pvpSmokeSeeds(cases []*pvpSmokeCase, cfg *config.PvpTeamSmokeConfig) map[int]int64 {
 	seeds := map[int]int64{}
 	for _, c := range cases {
-		if c.ratings == nil {
-			continue
+		var custom map[int]int64
+		if c.ratings != nil {
+			custom = c.ratings(cfg)
 		}
-		for number, rating := range c.ratings(cfg) {
-			seeds[number] = rating
+		for _, unit := range c.units {
+			for _, number := range unit {
+				rating, ok := custom[number]
+				if !ok {
+					rating = pvpSmokeDefaultRating
+				}
+				seeds[number] = rating
+			}
 		}
 	}
 	return seeds
@@ -392,10 +413,12 @@ func pvpSmokeForEach(n int, fn func(int)) {
 
 // ---- 评分夹具 ----
 
-// pvpSmokeFixture 是评分夹具文件的格式,与 go/match/cmd/ratingfixture 读的一致。
+// pvpSmokeFixture 是评分夹具文件的格式,与 go/match/cmd/ratingfixture 读写的一致。
 type pvpSmokeFixture struct {
 	Mode    uint32                 `json:"mode"`
 	Ratings []pvpSmokeFixtureEntry `json:"ratings"`
+	// AppliedMs:ratingfixture 写库的时刻(数据库时钟,与 match 结算记 achieved_ms 同一口径);0 = 还没写库,或已被一轮 run 用掉。
+	AppliedMs uint64 `json:"applied_ms"`
 }
 
 type pvpSmokeFixtureEntry struct {
@@ -404,6 +427,7 @@ type pvpSmokeFixtureEntry struct {
 	RatingCenti int64  `json:"rating_centi"`
 }
 
+// pvpSmokeWriteFixture 先写临时文件再改名,中途失败不会留下半个夹具。
 func pvpSmokeWriteFixture(path string, fixture pvpSmokeFixture) error {
 	body, err := json.MarshalIndent(fixture, "", "  ")
 	if err != nil {
@@ -412,7 +436,11 @@ func pvpSmokeWriteFixture(path string, fixture pvpSmokeFixture) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(body, '\n'), 0o644)
+	temp := path + ".tmp"
+	if err := os.WriteFile(temp, append(body, '\n'), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(temp, path)
 }
 
 func pvpSmokeReadFixture(path string) (pvpSmokeFixture, error) {
@@ -425,7 +453,7 @@ func pvpSmokeReadFixture(path string) (pvpSmokeFixture, error) {
 	return fixture, err
 }
 
-// prepare 登录要写评分的账号,写出评分夹具。
+// prepare 登录全部参战账号,写出评分夹具(applied_ms = 0,等 ratingfixture 写库)。
 func (s *pvpSmokeSession) prepare(cfg *config.Config, sc *config.PvpTeamSmokeConfig, seeds map[int]int64) {
 	numbers := pvpSmokeSortedNumbers(seeds)
 	if err := s.loginAll(cfg, sc.Zone, numbers); err != nil {
@@ -433,8 +461,7 @@ func (s *pvpSmokeSession) prepare(cfg *config.Config, sc *config.PvpTeamSmokeCon
 	}
 	fixture := pvpSmokeFixture{Mode: uint32(match.MatchMode_MATCH_MODE_PVP_TEAM)}
 	for _, number := range numbers {
-		bot := s.bots[number]
-		fixture.Ratings = append(fixture.Ratings, pvpSmokeFixtureEntry{Account: bot.account, PlayerID: bot.gc.PlayerId, RatingCenti: seeds[number]})
+		fixture.Ratings = append(fixture.Ratings, pvpSmokeFixtureEntry{Account: pvpSmokeAccount(number), PlayerID: s.bots[number].gc.PlayerId, RatingCenti: seeds[number]})
 	}
 	if err := pvpSmokeWriteFixture(sc.FixturePath, fixture); err != nil {
 		s.fail("prepare-write-fixture", fmt.Errorf("write %s: %w", sc.FixturePath, err))
@@ -444,41 +471,63 @@ func (s *pvpSmokeSession) prepare(cfg *config.Config, sc *config.PvpTeamSmokeCon
 	_ = zap.L().Sync()
 }
 
-// verifyFixture 核对夹具文件覆盖了本轮要的每个评分,且 player_id 与评分都没变(换库或改了配置都要重跑 prepare)。
-// 夹具是否已经写进 match_rating 从客户端看不到;没写的话看评分的情况会失败,失败原因里带提示。
-func (s *pvpSmokeSession) verifyFixture(path string, seeds map[int]int64) error {
-	if len(seeds) == 0 {
-		return nil
-	}
-	fixture, err := pvpSmokeReadFixture(path)
-	if err != nil {
-		return fmt.Errorf("read rating fixture %s (run phase=prepare and go/match/cmd/ratingfixture first): %w", path, err)
-	}
+// pvpSmokeCheckFixture 核对夹具:是本模式的;已由 ratingfixture 写库(applied_ms 非 0);覆盖本轮每个参战账号,
+// player_id 与赛前评分都对得上(换库后 player_id 会变,改了配置评分会变,都要重跑 prepare)。
+// players 是账号编号 → 本轮登录拿到的 player_id。
+func pvpSmokeCheckFixture(fixture pvpSmokeFixture, players map[int]uint64, seeds map[int]int64) error {
 	if fixture.Mode != uint32(match.MatchMode_MATCH_MODE_PVP_TEAM) {
-		return fmt.Errorf("rating fixture %s has mode=%d, expected PVP_TEAM=%d", path, fixture.Mode, match.MatchMode_MATCH_MODE_PVP_TEAM)
+		return fmt.Errorf("mode=%d, expected PVP_TEAM=%d", fixture.Mode, match.MatchMode_MATCH_MODE_PVP_TEAM)
+	}
+	if fixture.AppliedMs == 0 {
+		return errors.New("not applied to the database, or already used by a previous run: " +
+			"run go/match/cmd/ratingfixture, then phase=run (one application is good for one run)")
 	}
 	byAccount := map[string]pvpSmokeFixtureEntry{}
 	for _, entry := range fixture.Ratings {
 		byAccount[entry.Account] = entry
 	}
 	for _, number := range pvpSmokeSortedNumbers(seeds) {
-		bot := s.bots[number]
-		entry, ok := byAccount[bot.account]
-		if !ok || entry.PlayerID != bot.gc.PlayerId || entry.RatingCenti != seeds[number] {
-			return fmt.Errorf("rating fixture %s is stale for %s (fixture player_id=%d rating=%d, expected player_id=%d rating=%d): "+
-				"rerun phase=prepare and go/match/cmd/ratingfixture", path, bot.account, entry.PlayerID, entry.RatingCenti, bot.gc.PlayerId, seeds[number])
+		account := pvpSmokeAccount(number)
+		entry, ok := byAccount[account]
+		if !ok || entry.PlayerID != players[number] || entry.RatingCenti != seeds[number] {
+			return fmt.Errorf("stale for %s (fixture player_id=%d rating=%d, expected player_id=%d rating=%d): "+
+				"rerun phase=prepare and go/match/cmd/ratingfixture", account, entry.PlayerID, entry.RatingCenti, players[number], seeds[number])
 		}
 	}
 	return nil
 }
 
-// runCases 登录、核对夹具、清场,然后按人数档分组并发跑。
+// takeFixture 读夹具并核对(pvpSmokeCheckFixture),再把 applied_ms 清零写回:一次写库只够跑一轮——这一轮打完评分就变了,
+// 忘了重做 ratingfixture 的重跑会在这里直接失败,而不是带着上一轮的评分跑出难懂的结果。
+// 返回写库时刻:结算核对只认 achieved_ms 比它新的榜条目。
+func (s *pvpSmokeSession) takeFixture(path string, seeds map[int]int64) (uint64, error) {
+	fixture, err := pvpSmokeReadFixture(path)
+	if err != nil {
+		return 0, fmt.Errorf("read rating fixture %s (run phase=prepare and go/match/cmd/ratingfixture first): %w", path, err)
+	}
+	players := make(map[int]uint64, len(seeds))
+	for number := range seeds {
+		players[number] = s.bots[number].gc.PlayerId
+	}
+	if err := pvpSmokeCheckFixture(fixture, players, seeds); err != nil {
+		return 0, fmt.Errorf("rating fixture %s: %w", path, err)
+	}
+	appliedMs := fixture.AppliedMs
+	fixture.AppliedMs = 0
+	if err := pvpSmokeWriteFixture(path, fixture); err != nil {
+		return 0, fmt.Errorf("mark rating fixture %s as used: %w", path, err)
+	}
+	return appliedMs, nil
+}
+
+// runCases 登录、取用夹具、清场,然后按人数档分组并发跑。
 func (s *pvpSmokeSession) runCases(cfg *config.Config, sc *config.PvpTeamSmokeConfig, cases []*pvpSmokeCase, seeds map[int]int64) {
 	numbers := pvpSmokeAccounts(cases)
 	if err := s.loginAll(cfg, sc.Zone, numbers); err != nil {
 		s.fail("login", err)
 	}
-	if err := s.verifyFixture(sc.FixturePath, seeds); err != nil {
+	appliedMs, err := s.takeFixture(sc.FixturePath, seeds)
+	if err != nil {
 		s.fail("fixture", err)
 	}
 	if err := s.reset(numbers); err != nil {
@@ -503,7 +552,8 @@ func (s *pvpSmokeSession) runCases(cfg *config.Config, sc *config.PvpTeamSmokeCo
 			defer wg.Done()
 			for _, c := range group {
 				started := time.Now()
-				run := &pvpSmokeCaseRun{cfg: sc, c: c, session: s, tids: make([]uint64, len(c.units)), marks: map[uint64]int{}}
+				run := &pvpSmokeCaseRun{cfg: sc, c: c, session: s, seeds: seeds, appliedMs: appliedMs,
+					tids: make([]uint64, len(c.units)), marks: map[uint64]int{}}
 				body := c.run
 				if body == nil {
 					body = (*pvpSmokeCaseRun).standard
@@ -530,12 +580,15 @@ func (s *pvpSmokeSession) runCases(cfg *config.Config, sc *config.PvpTeamSmokeCo
 // pvpSmokeCaseRun 是一种情况的执行状态,只由跑这种情况的那个 goroutine 读写(战斗阶段每名机器人各一个 goroutine,
 // 只读这里的字段)。
 type pvpSmokeCaseRun struct {
-	cfg      *config.PvpTeamSmokeConfig
-	c        *pvpSmokeCase
-	session  *pvpSmokeSession
-	tids     []uint64       // 每个单位的队伍 id;单人为 0
-	marks    map[uint64]int // player_id → 入队之前的推送留底位置
-	battleId uint64
+	cfg     *config.PvpTeamSmokeConfig
+	c       *pvpSmokeCase
+	session *pvpSmokeSession
+	// seeds 与 appliedMs 是全部情况共享的只读数据:账号编号 → 赛前评分(×100),评分夹具的写库时刻。
+	seeds     map[int]int64
+	appliedMs uint64
+	tids      []uint64       // 每个单位的队伍 id;单人为 0
+	marks     map[uint64]int // player_id → 入队之前的推送留底位置
+	battleId  uint64
 }
 
 func (r *pvpSmokeCaseRun) unit(i int) []*teamSmokeBot {
@@ -557,10 +610,6 @@ func (r *pvpSmokeCaseRun) allBots() []*teamSmokeBot {
 // standard:组队 → 入队 →(要等规则放宽的)确认阈值之前没成局 → 全员进同一局 → 核对分边 → 打到终局 →(需要的)核对评分结算。
 func (r *pvpSmokeCaseRun) standard() error {
 	if err := r.formParties(); err != nil {
-		return err
-	}
-	before, err := r.ratingsBefore()
-	if err != nil {
 		return err
 	}
 	firstAt, lastAt, err := r.enqueue()
@@ -586,7 +635,7 @@ func (r *pvpSmokeCaseRun) standard() error {
 		return err
 	}
 	if r.c.settleRatings {
-		return r.checkSettlement(before, sides, outcome)
+		return r.checkSettlement(sides, outcome)
 	}
 	return nil
 }
@@ -609,7 +658,7 @@ func (r *pvpSmokeCaseRun) ratingGap() error {
 	x, y, z := pair[0], pair[1], r.unit(1)[0]
 	tid := r.tids[0]
 	if err := pvpSmokeStartRejected(pair, tid, r.cfg.BattleConfigId, r.c.perSide, tipTeamRatingGapTooLarge); err != nil {
-		return fmt.Errorf("%w (was the rating fixture applied with go/match/cmd/ratingfixture?)", err)
+		return fmt.Errorf("%w %s", err, pvpSmokeFixtureHint)
 	}
 	if err := y.expect(game.ClientPlayerTeamLeaveTeamMessageId, &teampb.LeaveTeamRequest{ExpectedTeamId: tid}, &teampb.TeamResponse{}, 0); err != nil {
 		return fmt.Errorf("%s leave: %w", y.name, err)
@@ -714,8 +763,8 @@ func (r *pvpSmokeCaseRun) quietDeadline(firstAt, lastAt time.Time) (time.Time, s
 		return lastAt.Add(threshold - pvpSmokeQuietMargin), fmt.Sprintf("the weaker side waited %s for the premade gap", threshold), true
 	case r.c.wait.toleranceSteps > 0:
 		threshold := time.Duration(r.c.wait.toleranceSteps*r.cfg.ToleranceStepSeconds()) * time.Second
-		return firstAt.Add(threshold - pvpSmokeQuietMargin), fmt.Sprintf("the anchor waited %s for the rating tolerance to widen "+
-			"(was the rating fixture applied with go/match/cmd/ratingfixture?)", threshold), true
+		return firstAt.Add(threshold - pvpSmokeQuietMargin), fmt.Sprintf("the anchor waited %s for the rating tolerance to widen %s",
+			threshold, pvpSmokeFixtureHint), true
 	}
 	return time.Time{}, "", false
 }
@@ -852,26 +901,17 @@ func (r *pvpSmokeCaseRun) fight() (battle.EBattleOutcome, error) {
 
 // ---- 评分结算 ----
 
-// ratingsBefore 在入队之前读一次 PVP_TEAM 榜上的 self(只在要核对结算的情况读):没上榜按默认 1500。
-func (r *pvpSmokeCaseRun) ratingsBefore() (map[uint64]*rankpb.RankEntry, error) {
-	if !r.c.settleRatings {
-		return nil, nil
-	}
-	before := map[uint64]*rankpb.RankEntry{}
-	for _, bot := range r.allBots() {
-		entry, err := pvpSmokeRankSelf(bot, pvpSmokeBoardPvpTeam)
-		if err != nil {
-			return nil, err
-		}
-		before[bot.gc.PlayerId] = entry
-	}
-	return before, nil
-}
-
-// checkSettlement 核对按模式结算:全员在 PVP_TEAM 的榜上新记了一局,分数等于按两队平均分算的 Elo(K = 32);
-// 1V1 的榜上没有他们。battle 判的胜负 match 可能按回合上限改判平局(R5 的 ratedScoreA),所以分出胜负的局
-// 也接受「整局按平局结算」,但全员必须按同一种结果结算。
-func (r *pvpSmokeCaseRun) checkSettlement(before map[uint64]*rankpb.RankEntry, sides map[uint64]uint32, outcome battle.EBattleOutcome) error {
+// checkSettlement 核对按模式结算:全员在 PVP_TEAM 的榜上出现本局写的条目,分数等于按两队赛前平均分算的 Elo(K = 32);
+// 1V1 的榜上没有他们。
+//
+// 赛前评分取评分夹具(ratingfixture 每轮写库重置),不读榜:榜上是上一轮结算后的分数。
+// 「本局写的条目」= achieved_ms 晚于夹具写库时刻、分数是本局可能的结果之一(pvpSmokeIsThisBattle):match 改了分就把
+// achieved_ms 记成结算时刻,夹具写库之前的旧条目和上一轮迟到的批次都早于写库时刻。所以要求每种可能的结果都改分——
+// 分数不变时 match 沿用写库时刻,榜上分不出本局有没有入账;情况的赛前评分让两侧平均分不等,改不了分就是情况写错了。
+//
+// battle 判的胜负 match 可能按回合上限改判平局(R5 的 ratedScoreA),所以分出胜负的局也接受「整局按平局结算」,
+// 但全员必须按同一种结果结算。
+func (r *pvpSmokeCaseRun) checkSettlement(sides map[uint64]uint32, outcome battle.EBattleOutcome) error {
 	var scoreA float64
 	switch outcome {
 	case battle.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN:
@@ -885,21 +925,25 @@ func (r *pvpSmokeCaseRun) checkSettlement(before map[uint64]*rankpb.RankEntry, s
 	}
 	ratings := map[uint64]int64{}
 	players := map[uint64]uint32{}
-	for _, bot := range r.allBots() {
-		player := bot.gc.PlayerId
-		players[player] = sides[player]
-		ratings[player] = pvpSmokeDefaultRating
-		if entry := before[player]; entry.GetRank() != 0 {
-			ratings[player] = entry.GetScore()
+	for i, unit := range r.c.units {
+		for j, bot := range r.unit(i) {
+			player := bot.gc.PlayerId
+			players[player] = sides[player]
+			ratings[player] = r.seeds[unit[j]]
 		}
 	}
 	decided, draw := pvpSmokeExpectedRatings(ratings, players, scoreA), pvpSmokeExpectedRatings(ratings, players, 0.5)
+	for _, bot := range r.allBots() {
+		player := bot.gc.PlayerId
+		if decided[player] == ratings[player] || draw[player] == ratings[player] {
+			return fmt.Errorf("%s would keep rating %d under one of the possible results of battle_id=%d, so the board could not tell "+
+				"whether the battle was rated: give the two sides of %s different average ratings", bot.name, ratings[player], r.battleId, r.c.name)
+		}
+	}
 	matchesDecided, matchesDraw := true, true
 	for _, bot := range r.allBots() {
 		player := bot.gc.PlayerId
-		// 已在榜上、按平局结算又不改分的人,入账后分数与 achieved_ms 都不变,榜上看不出新记了一局。
-		unchangedAllowed := before[player].GetRank() != 0 && draw[player] == ratings[player]
-		after, err := pvpSmokeWaitRanked(bot, before[player], unchangedAllowed)
+		after, err := pvpSmokeWaitRanked(bot, r.appliedMs, decided[player], draw[player])
 		if err != nil {
 			return err
 		}
@@ -941,24 +985,28 @@ func pvpSmokeExpectedRatings(ratings map[uint64]int64, sides map[uint64]uint32, 
 	return expected
 }
 
-// pvpSmokeWaitRanked 轮询 PVP_TEAM 榜上的 self,直到比 before 新记了一局(写榜是异步的)。
-// unchangedAllowed:这个人这局可能按不改分结算(榜上看不出来),超时时分数没变就按已结算返回,由调用方核对分数。
-func pvpSmokeWaitRanked(bot *teamSmokeBot, before *rankpb.RankEntry, unchangedAllowed bool) (*rankpb.RankEntry, error) {
+// pvpSmokeIsThisBattle:榜条目是本局结算写的——在榜上,achieved_ms 晚于评分夹具写库时刻 appliedMs,分数是 accept 之一。
+// 上一轮迟到的批次 achieved_ms 早于写库时刻;本局之前的别的写入分数对不上。两条都满足才算。
+func pvpSmokeIsThisBattle(entry *rankpb.RankEntry, appliedMs uint64, accept []int64) bool {
+	return entry.GetRank() != 0 && entry.GetAchievedMs() > appliedMs && slices.Contains(accept, entry.GetScore())
+}
+
+// pvpSmokeWaitRanked 轮询 PVP_TEAM 榜上的 self,直到出现本局写的条目(pvpSmokeIsThisBattle)。
+// 写榜是异步的:评分入账 → 投榜 outbox → rank 写榜。
+func pvpSmokeWaitRanked(bot *teamSmokeBot, appliedMs uint64, accept ...int64) (*rankpb.RankEntry, error) {
 	deadline := time.Now().Add(pvpSmokeRankTimeout)
 	for {
 		after, err := pvpSmokeRankSelf(bot, pvpSmokeBoardPvpTeam)
 		if err != nil {
 			return nil, err
 		}
-		if rankSmokePlayedOneMore(before, after) {
-			return after, nil
-		}
-		if !time.Now().Before(deadline) && unchangedAllowed && after.GetRank() != 0 && after.GetScore() == before.GetScore() {
+		if pvpSmokeIsThisBattle(after, appliedMs, accept) {
 			return after, nil
 		}
 		if !time.Now().Before(deadline) {
-			return nil, fmt.Errorf("%s did not get a new PVP_TEAM board entry within %s (rank=%d achieved_ms=%d, before rank=%d achieved_ms=%d)",
-				bot.name, pvpSmokeRankTimeout, after.GetRank(), after.GetAchievedMs(), before.GetRank(), before.GetAchievedMs())
+			return nil, fmt.Errorf("%s has no PVP_TEAM board entry from this battle within %s "+
+				"(rank=%d score=%d achieved_ms=%d; expected achieved_ms > %d and score in %v) %s",
+				bot.name, pvpSmokeRankTimeout, after.GetRank(), after.GetScore(), after.GetAchievedMs(), appliedMs, accept, pvpSmokeFixtureHint)
 		}
 		time.Sleep(pvpSmokeRankPollInterval)
 	}

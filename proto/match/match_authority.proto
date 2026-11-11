@@ -286,6 +286,11 @@ enum MatchBattleCompletionSourceKind {
   // 只给过了截止加宽限、没有任何终局行、持久 Create 原件过不了终局核对的成局；同一事务另写一行 match_manual_resolution 审计。
   // 同样没有 Battle 原字节，format_version 为 0。
   MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT = 5;
+  // 原执行实例提交的终局原件内容本身不合格、永远提交不了 COMPLETE 时，Match 在权威截止加终局提交宽限之后、
+  // 收到它的下一次重放时写的 ABORT（2026-11-11，go/match/internal/authority/rejected_original_abort.go）。
+  // battle 冻结的终局只会原样重放，这份原件被确定性规则拒收就不会再有别的结果；版本错位类拒收（未知字段等）不算。
+  // 同样没有 Battle 原字节，format_version 为 0。
+  MATCH_BATTLE_COMPLETION_SOURCE_MATCH_REJECTED_ORIGINAL_ABORT = 6;
 }
 
 // 唯一终局与原结果outbox；RPC来源不伪造Kafka位点。

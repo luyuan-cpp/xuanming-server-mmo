@@ -149,17 +149,91 @@ type Report struct {
 	// Statements:Plan 为待执行语句(基线 + 漂移);Up 为本次真正执行成功的语句。
 	// 台账表自身的建表语句不计入。
 	Statements []string
-	// Warnings 只报告不阻断(如多余列,本包永不删列)。
+	// Warnings 只报告不阻断(如多余列,本包永不删列)。每项是给人看的英文文案。
 	Warnings []string
 	// Manual 需人工处理,非空时 ExitCode=4:列类型漂移、缺主键或主键列不符、缺唯一键,
 	// 以及表清单异常 —— 台账记着某条漂移(建表 / 加列)已完成,库里却又缺了(表或列被人工删除 / 回退)。
 	// 表清单本身写错(缺表名、重名、非整数主键等)不在这里,是 Plan / Up 直接返回错误(ExitCode=1)。
+	// 本包写入的项是给人看的英文文案;调用方可以再追加自己的需人工项(如 match 迁移后的候选索引核对)。
 	Manual []string
+	// Findings 是本包写进 Warnings / Manual 的每一项的结构化形式,与那两份文案一一对应;
+	// 调用方自己追加进 Manual 的项不在这里。要按类别加严(如把缺普通索引升级成拒启)就看这里的 Kind,
+	// 不要匹配 Warnings / Manual 的文案:文案只给人看,改措辞不能改变启动行为。
+	Findings []Finding
 }
 
 // Clean 表示没有待执行语句、也没有需人工项。
 func (r Report) Clean() bool {
 	return len(r.Statements) == 0 && len(r.Manual) == 0
+}
+
+// MissingIndexes 返回缺普通索引的项。本包只把缺索引记成 Warning、不进 ExitCode(只影响性能,也不自动建);
+// 依赖这些索引、要把缺索引升级成拒启的服务(friend / guild / mail / rank)用它判断。
+func (r Report) MissingIndexes() []Finding {
+	var out []Finding
+	for _, f := range r.Findings {
+		if f.Kind == FindingMissingIndex {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// add 记一项报告:结构化形式进 Findings,文案按类别进 Manual 或 Warnings。本包只经这里写这三个切片,
+// 所以 Findings 与两份文案不会对不上。
+func (r *Report) add(f Finding) {
+	r.Findings = append(r.Findings, f)
+	if f.Kind.needsManual() {
+		r.Manual = append(r.Manual, f.Message)
+		return
+	}
+	r.Warnings = append(r.Warnings, f.Message)
+}
+
+// Finding 是 Warnings / Manual 里一项的结构化形式。
+type Finding struct {
+	Kind FindingKind
+	// Table 是涉及的表;FindingDriftReappeared 为空(一条漂移迁移可能跨多张表)。
+	Table string
+	// Column 只有 FindingExtraColumn / FindingColumnTypeDrift 填。
+	Column string
+	// Index 只有 FindingMissingIndex / FindingMissingUniqueKey 填。
+	Index string
+	// Message 与 Warnings / Manual 里对应的那一行逐字相同,只供展示与日志。
+	Message string
+}
+
+// FindingKind 是一项报告的类别,决定它进 Warnings 还是 Manual(见 needsManual)。
+type FindingKind uint8
+
+const (
+	// FindingExtraColumn 多余列:库里有、proto 没声明。进 Warnings,本包永不删列。
+	FindingExtraColumn FindingKind = iota + 1
+	// FindingExtraTable 多余表:库里有、表清单里没有。进 Warnings,本包永不删表。
+	FindingExtraTable
+	// FindingMissingIndex 缺普通索引:proto 声明了、库里没有。进 Warnings,本包不自动建。
+	FindingMissingIndex
+	// FindingColumnTypeDrift 列类型漂移,且没有 AllowModifyColumn 授权。进 Manual。
+	FindingColumnTypeDrift
+	// FindingMissingPrimaryKey 缺主键。进 Manual。
+	FindingMissingPrimaryKey
+	// FindingPrimaryKeyMismatch 主键列与 proto 不符。进 Manual。
+	FindingPrimaryKeyMismatch
+	// FindingMissingUniqueKey 缺唯一键。进 Manual。
+	FindingMissingUniqueKey
+	// FindingDriftReappeared 漂移迁移在台账里记为完成,库结构却仍与 proto 不符(表或列被人工删除 / 回退)。进 Manual。
+	FindingDriftReappeared
+)
+
+// needsManual 报告这一类项进 Manual(ExitCode=4)还是 Warnings。只点名不阻断的三类,
+// 其余(含将来新增却忘了归类的)一律按需人工:漏归类宁可多拦,不能放行。
+func (k FindingKind) needsManual() bool {
+	switch k {
+	case FindingExtraColumn, FindingExtraTable, FindingMissingIndex:
+		return false
+	default:
+		return true
+	}
 }
 
 var (
@@ -303,16 +377,18 @@ func run(ctx context.Context, db *sql.DB, opts Options, apply bool) (Report, err
 		// 漂移里再算一遍会让计划重复。Up 路径上基线已经执行完,此时查不到的表就是真缺。
 		CreateMissingTables: apply || !baselinePending,
 	})
-	report.Warnings = d.warnings
-	report.Manual = d.manual
+	for _, f := range d.findings {
+		report.add(f)
+	}
 
 	if !d.migration.Empty() {
 		if prev, ok := findChecksum(applied, d.migration.Checksum); ok {
 			// 同一组语句台账说执行过,库结构却仍然不符:重跑会掩盖「有人删了表 / 列」的事故,
 			// 静默跳过会让服务带着缺表缺列启动,两种都不对,交人工。
-			report.Manual = append(report.Manual, fmt.Sprintf(
-				"漂移迁移 %s 已在台账 version=%d 记为完成,但库结构仍与 proto 不符(表或列可能被人工删除 / 回退),未重跑;待执行语句:%s",
-				d.migration.Name, prev.Version, strings.Join(collapseAll(d.migration.Statements), "; ")))
+			report.add(Finding{Kind: FindingDriftReappeared, Message: fmt.Sprintf(
+				"drift migration %s is recorded as completed at ledger version=%d, but the schema still differs from proto "+
+					"(a table or column may have been dropped or reverted manually); not rerun. Pending statements: %s",
+				d.migration.Name, prev.Version, strings.Join(collapseAll(d.migration.Statements), "; "))})
 		} else if !apply {
 			report.Statements = append(report.Statements, d.migration.Statements...)
 		} else {

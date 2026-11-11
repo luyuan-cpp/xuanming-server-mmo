@@ -47,7 +47,26 @@
 - **格子只负责找候选。** 格心到顶点 20 m 时，本格加六邻格对格内任意一点至少覆盖 20 m，所以 10 m 内的目标一定在候选里（`spatial/constants/view.h` 用 `static_assert` 守住视野半径不超过格子尺寸）。离开按距离判，滞后区间不受格子形状影响。
 - **同场景瞬移仍走 `ResetEntityVisibility`。** 位移重判按滞后区间处理，旧位置 20 m 内的观察者会继续看见；瞬移不是走过去的，旧位置的观察者要立刻收到移除，新位置只按进视野半径重建。
 - **隐身结束不等位移。** `RefreshTargetVisibility` 当场让附近能看见它的实体补上空间来源。
-- 口径常量集中在 `spatial/constants/view.h`：`kMaxViewRadius`、`kAoiLeaveRadiusFactor`、`kAoiReevaluateDistance`、`kAoiHexSize`。上次评估位置存在按需组件 `AoiEvaluatedAtComp`。
+- 口径常量集中在 `spatial/constants/view.h`：`kMaxViewRadius`、`kAoiLeaveRadiusFactor`、`kAoiReevaluateDistance`、`kAoiHexSize`。上次评估用的位置与视野半径存在按需组件 `AoiEvaluatedAtComp`。
+- **一帧合并下发**：`AoiSystem::Update` 把这一帧所有重判的变化记进同一批，帧末统一下发。同一观察者这一帧新看见、看不见的几个目标合成一条列表消息；Update 期间位置不变，批内不会来回翻转，下发也早于随后的移动广播。
+
+### 可见性判定的输入与触发
+
+`CanSee` 当时返回 false 可以完全正确，问题只在条件变了之后有没有人再判一次。所以判定用到的每个输入，都必须有一个入口在它变化时触发重判：
+
+| 输入 | 变化时由谁重判 | 范围 |
+| --- | --- | --- |
+| 观察者或目标的位置 | `AoiSystem::Update` 按位移重判（静止的下一帧、移动中每 1 m） | 位置变化的一方，两个方向都判，含按离开半径撤销 |
+| 观察者的视野半径（`ViewRadius`） | `AoiSystem::Update`：与上次评估用的半径不同就立即重判 | 它看别人的方向 |
+| 首次入场、换场景、同场景瞬移 | `AoiSystem::Update` 的首次入格分支；瞬移先经 `ResetEntityVisibility` 清掉旧位置的空间来源 | 两个方向 |
+| 目标隐身开始、结束 | `BuffSystem` 在第一个隐身效果开始、最后一个结束时调 `AoiSystem::RefreshTargetVisibility`：开始时没侦测授权的观察者移除一次；结束时恢复暂隐的显式关注，并重查附近七格的观察者，不只看此刻还关注它的人 | 别人看它的方向；它看别人不受影响 |
+| 观察者的侦测授权 | 带 `revealsStealth` 的显式来源登记、撤销时，`InterestSystem::Follow` / `Unfollow` 当场校正 | 这一对 |
+| 观察者的容量（名额空出、压力变化） | 名额空出：补回标记让 `Update` 重扫；压力：`AoiSystem::ApplyServerPressure` 当场裁表或补回 | 这个观察者 |
+| 交手关系 | `CombatEngagementSystem` 登记、续期、脱战、死亡时经 `AoiSystem::Follow` / `Unfollow` | 这一对 |
+
+不留「被拒的候选」名单：被拒只影响这一次的显示结果，之后任何一个输入变化都会重查网格，被拒的目标自然再被检查。只发状态变化：原先没显示、这次该显示的发创建（带当前状态）；原先显示、这次不该显示的发移除；其余不发。
+
+`ViewRadius` 目前只在玩家进场时写一次（取 `kMaxViewRadius`），按半径重判这一条给以后改视野的效果用。半径不能超过 `kAoiHexSize`，否则半径内的目标可能不在候选格里；更远的视野（鹰眼术）用显式关注。
 
 ## 关注列表优先于格子
 
@@ -158,6 +177,9 @@
 | 怪死了 | 打它的人各收一次它的移除；彼此之间的友方关系按脱战时间结束 |
 | 第 41 个人打一个已有 40 人的怪 | 看得见怪，但不和名单里的人互相关注；名单里有人死了，它下一次出手补进名单 |
 | 场景线程持续满负荷 | 压力升到顶，容量降到 20：权重高的留下，同权重近的留下，其余各收一次移除；负载回落后补回 |
+| A、B 都不动，B 隐身再显形 | 隐身时 A 收一次移除、B 照样看得见 A；隐身期间 B 走动也不会被加回来；还有别的隐身效果时不显形；最后一个结束时 A 收一次创建 |
+| A 不动，视野半径从 10 改成 15、再改成 5 | 14 m 外的 B：改成 15 的下一帧创建，改成 5 的下一帧移除；B 看 A 不受影响 |
+| 同一帧两个人走近同一个观察者 | 观察者只收一条列表创建，里面两个人都在 |
 
 ## 实现
 
@@ -210,7 +232,7 @@
 未编译。交给 Codex，在仓库根目录用 VS 2026 Developer PowerShell 串行执行：
 
 1. 先编库：`msbuild cpp/libs/modules/modules.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`，再 `msbuild cpp/libs/services/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`。测试工程链接预编好的库，改了库不先编库就会跑旧代码。
-2. 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_test`、`-Filter aoi_delivery_test`、`-Filter cross_zone_test`、`-Filter buff_test`、`-Filter skill_test`。通过标准为全部用例通过，新增用例见 `aoi_delivery_test.cpp` 与 `aoi_system_test.cpp` 中「显式关注」「正反索引一致性」相关用例；2026-11-10 位移重判的用例在 `aoi_delivery_test.cpp`「空间关注按距离重判」一节（同格走近、跨格后走近、滞后区间、每步与停步重判、名额空出后补回、名额满时不重扫、显式关注不随距离移除、隐身）；战斗关注的用例在「战斗关注」一节（远处交手互相可见、脱战与续期、附近交手脱战不移除、死亡、交手挤掉任务 NPC 并在脱战后补回、打完架站着不动也补回附近的人、离场、无效交手）；`aoi_system_test.cpp` 的权重表用例按 `kCombat` 改写。2026-11-11 的用例在「仇恨名单」一节（一起打怪互相算友方、治疗仇恨、玩家混战不推友方、怪死后友方按脱战结束、名单上限与补位）与「服务器压力」一节（压力升降、每秒决定一次与防抖、按权重和距离裁表并在回落后补回、新建场景拿到当前压力）；`aoi_delivery_test.vcxproj` 加编了 `combat_engagement.cpp` 与 `aoi_load.cpp`。
+2. 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_test`、`-Filter aoi_delivery_test`、`-Filter cross_zone_test`、`-Filter buff_test`、`-Filter skill_test`。通过标准为全部用例通过，新增用例见 `aoi_delivery_test.cpp` 与 `aoi_system_test.cpp` 中「显式关注」「正反索引一致性」相关用例；2026-11-10 位移重判的用例在 `aoi_delivery_test.cpp`「空间关注按距离重判」一节（同格走近、跨格后走近、滞后区间、每步与停步重判、名额空出后补回、名额满时不重扫、显式关注不随距离移除、隐身）；战斗关注的用例在「战斗关注」一节（远处交手互相可见、脱战与续期、附近交手脱战不移除、死亡、交手挤掉任务 NPC 并在脱战后补回、打完架站着不动也补回附近的人、离场、无效交手）；`aoi_system_test.cpp` 的权重表用例按 `kCombat` 改写。2026-11-11 的用例在「仇恨名单」一节（一起打怪互相算友方、治疗仇恨、玩家混战不推友方、怪死后友方按脱战结束、名单上限与补位）与「服务器压力」一节（压力升降、每秒决定一次与防抖、按权重和距离裁表并在回落后补回、新建场景拿到当前压力）；`aoi_delivery_test.vcxproj` 加编了 `combat_engagement.cpp` 与 `aoi_load.cpp`。同日对照另一份分析补的用例：双方都不动的隐身再显形、视野半径变化触发重判、同一帧的变化合成一条消息。
 3. 编 Scene 节点，确认 `actor_state_attribute_sync.cpp`、`buff.cpp`、`movement.cpp` 链接无误。
 
 旧 `Pin/Unpin` 的删除见[第六批修复记录](../handoff/ecs-refactor/batch6-review-fixes.md) T3.4，那次删掉的是只在离场时全节点扫描的远端清理；现在由反向索引承担同一职责。

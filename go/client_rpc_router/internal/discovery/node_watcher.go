@@ -25,6 +25,7 @@ import (
 
 	"shared/etcdwatch"
 	"shared/releasetrack"
+	"shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -431,8 +432,12 @@ func newConnPool(now func() time.Duration, dial func(endpoint string) (*grpc.Cli
 }
 
 // defaultConnPool 是生产用的那一份。内网 overlay,insecure transport(与 scene_manager defaultNodeDialer 同口径)。
+// 挂 tracing.UnaryClientInterceptor:转发只抄应用层前缀的 metadata,不抄 traceparent,由它在路由服的 span 下
+// 开 client span 再写头,后端接着 gate 那条 trace(docs/design/distributed-tracing.md §6.2)。
 var defaultConnPool = newConnPool(monotonicSinceStart(), func(endpoint string) (*grpc.ClientConn, error) {
-	return grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	return grpc.NewClient(endpoint,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(tracing.UnaryClientInterceptor()))
 })
 
 // monotonicSinceStart 返回进程内单调时钟:time.Since 用的是 time.Now 自带的单调读数,不受墙钟调整影响。

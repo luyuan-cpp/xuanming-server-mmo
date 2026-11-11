@@ -211,7 +211,12 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 
 1. 跨 zone 传送预检在目标 zone 刚起的几秒内会放过(§4.3 第 2 条)。
 2. 位置落在别的 zone、持有节点已死时,玩家要多等一个再入屏障(§3.5)。
-3. 只给场景号、不给 zone 的 EnterScene 只能解析本组的场景。生产调用方都同时给了 zone(C++ 五处都填 `zone_id`,login 恒给 0 号场景),robot 与 GM 工具的写法未逐个核对。
+3. 只给场景号、不给 zone 的 EnterScene 只能解析本组的场景。2026-11-11 核对过全部调用方,没有人这样调:
+   - `SceneManager.EnterScene` 的 gRPC 调用方只有 C++ scene 与 login,go 其余服务、`tools/`、`robot/`、Java 网关里都没有。
+   - C++ 的请求都填 `zone_id`(例如 `player_scene_handler.cpp` 的 `req.set_zone_id(GetZoneId())`)。
+   - login 的 `SceneId` 恒为 0(`resolveEnterSceneRoute`):要么给本 zone 或归属 zone,要么 `ZoneId` 也为 0,由 scene_manager 按 location 决定去向。
+   - robot 走客户端协议,经 gate 到 scene,最后是上面 C++ 那条路径。
+   以后新增调用方必须同时给 zone。
 4. zone 换组只能停写迁移(§4.1)。
 5. 跨 zone 重定向挑 gate 仍是每次直读 etcd(第 7 条会话加了停写过滤),不在本设计范围。
 6. 全局池服务(data_service、match、battle、client-rpc-router、player_inbox、team)仍是全服 watch。它们实例少、键很少变,读量随 N_cpp 线性增长,不是平方项。

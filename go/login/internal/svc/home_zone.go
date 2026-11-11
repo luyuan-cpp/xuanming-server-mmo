@@ -33,8 +33,13 @@ func (s *ServiceContext) initHomeZoneResolver() {
 		"role_list_timeout=%s enter_timeout=%s register_timeout=%s",
 		!hz.RefreshRoleListDisabled, hz.RedirectOnEnterEnabled,
 		s.HomeZone.RoleListTimeout, s.HomeZone.EnterTimeout, s.HomeZone.RegisterTimeout)
-	// 新角色落点的规则打一行,这行是运维核对的依据(总体方案 §7.2)。配置在 login.go 启动时已由 Placement.Validate 核过。
+	// 新角色落点的规则打一行,这行是运维核对的依据(总体方案 §7.2)。login.go 启动时已由 Placement.Validate 拒绝没配 K 的配置;
+	// 只有不经过 main 的装配(单测)会带着 0 走到这里,这时建角在 registerHomeZone 里同样被拒。
 	p := config.AppConfig.Placement
+	if p.StorageShards == 0 {
+		logx.Errorf("[placement] Placement.StorageShards is not set: CreatePlayer will be REJECTED")
+		return
+	}
 	logx.Infof("[placement] new players go to region %d storage shards 0..%d (player_store_%d.._db, by player_id %% %d)",
 		p.Region, p.StorageShards-1, 1000000+p.Region*1000, p.StorageShards)
 }

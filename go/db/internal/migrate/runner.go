@@ -42,7 +42,7 @@ type Options struct {
 	Allow dbguard.Allowlist
 	// RelaxEmptyAllowlist 只在本地 dev 为 true。
 	RelaxEmptyAllowlist bool
-	// ExpectedDatabase 是调用方按 ZoneId 推导出的库名,非空时必须与
+	// ExpectedDatabase 是调用方按 -storage-id 推导出的库名,非空时必须与
 	// 服务端 DATABASE() 一致。
 	ExpectedDatabase string
 	// DryRun 只打印不执行:不建台账表、不写台账行,对库零持久化写入。

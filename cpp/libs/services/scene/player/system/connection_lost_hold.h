@@ -256,6 +256,20 @@ namespace connection_lost_hold
 			   nowUnixSec + static_cast<uint64_t>(kHostingExitLead.count()) < passExpiresAtSec;
 	}
 
+	// 托管中、想跟队长却没接在队长身后的队员,服务器多久替他重新走一遍跟随检查(team-follow-server-trail.md §3.7)。
+	// 客户端在线时它自己做这件事:没被驱动就每 5 秒重新声明一次跟随(客户端 TeamRegroupPolicy.RetrySeconds)。托管中没有
+	// 客户端,由服务器兜底。正常路径(队长离开本节点、队长回到本节点的扇出、战斗结束、托管开始)都是当场触发,这里只补
+	// 漏掉的信号,周期放宽到 15 秒:每次是一次组队读加至多两次 Redis GET,只对没接上的托管队员发。
+	inline constexpr std::chrono::seconds kHostedFollowRecheckPeriod{15};
+
+	// 这一秒要不要替这名托管中的角色重新检查一次跟随。按玩家号错开(玩家号是打散过的发号器值,取模均匀),同一节点上的
+	// 托管角色不在同一秒集中发读;每名玩家每个周期恰好一秒到期。nowUnixSec 是墙钟 Unix 秒,由 1 秒扫描传入;扫描
+	// 偶尔跳过一秒时那一轮顺延到下一个周期,只晚不错。
+	constexpr bool IsHostedFollowRecheckDue(uint64_t playerId, uint64_t nowUnixSec)
+	{
+		return (playerId + nowUnixSec) % static_cast<uint64_t>(kHostedFollowRecheckPeriod.count()) == 0;
+	}
+
 	// 判定只看传入的事实:heldFor 是单调时钟的保留时长,nowUnixSec 是墙钟 Unix 秒(与月卡到期时刻同一口径)。
 	//   托管中:离到期还远 → 保留;快到期(剩下不到 kHostingExitLead)→ 查一次是不是续了(ParseAfkPass 按续没续
 	//           改成 kActive / kInactive);到期后 kHostingUnconfirmedGrace 仍确认不了 → 退出。

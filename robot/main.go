@@ -520,8 +520,8 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 		gc.RecvLoop(func(client *pkg.GameClient, msg *base.MessageContent) {
 			stats.MsgRecv()
 			// 这里只收推送与 id = 0 的回包。ListSkills 只经 startListOwnedSkills 带请求号发出,它的 id = 0 回包说明服务端
-			// 没回显请求号,丢弃(那次调用将以超时收场);AI 循环仍以 SendRequest 发的请求(ReleaseSkill / EnterScene 等)
-			// 回包照旧交 handler。
+			// 没回显请求号,丢弃(那次调用将以超时收场)。AI 的 ReleaseSkill / EnterScene / SendChat 已走 RobotAI.sendAction 的
+			// Call,按请求号认领,回包不到这里(成功回包由 onActionReply 交 handler)。
 			if msg.GetMessageId() == game.SceneSkillClientPlayerListSkillsMessageId {
 				smokeDropUncorrelatedReply(client.Account, msg)
 				return

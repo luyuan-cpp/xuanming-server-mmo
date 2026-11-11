@@ -33,9 +33,10 @@ import (
 // 回收对象是 `friend_count = 0 AND created_ms < 截止点` 的行,走 (friend_count, created_ms) 复合索引;
 // 保留期、批大小、模式与终态申请清理共用同一份 Friend.Sweep 配置,不新增配置键。
 // ⚠ "走索引、扫描量恒等于命中行数"的前提是该索引**真实存在**:go/schemamigrate 对已存在的表只
-// ADD COLUMN,缺普通索引只出一条 warning"缺索引(不会自动建)"、退出码仍是 0(见 plan.go 的 drift)。
-// 本批之前已经建过 friend_capacity 的环境,重跑 -migrate 只会补 created_ms 列,候选读会静默退化成
-// 每轮全表扫(report_only 下也会执行)。补救:手工执行
+// ADD COLUMN,缺普通索引只出一条 warning(类别 schemamigrate.FindingMissingIndex)、退出码仍是 0(见 plan.go 的 drift);
+// friend 按这个类别把它升级成拒启 / -migrate 退出 4(friend.go 的 missingIndexWarnings),不让候选读静默退化成
+// 每轮全表扫(report_only 下也会执行)。本批之前已经建过 friend_capacity 的环境,重跑 -migrate 只会补 created_ms 列、
+// 索引仍缺,friend 因此起不来。补救:手工执行
 // `ALTER TABLE friend_capacity ADD INDEX idx_friend_capacity_0 (friend_count, created_ms)`
 // (索引名以 -migrate 的 warning 原文为准);friend 未上线、无存量,也可以直接删库重建。
 //

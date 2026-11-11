@@ -6,9 +6,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// TestSQLPoolCollectorDeclaresDbPools 钉住 go/db 的连接池类别:没有任何池时(nil source)三类各输出一组序列,
-// 常量 label sql_client="db"。告警 DbExtraStorePoolsBeyondPlan 按 pool="extra_zone" / "extra_non_zone" 写死,
-// 类别名一改,告警会静默落空 —— 这条用例让改名先在这里红。
+// TestSQLPoolCollectorDeclaresDbPools 钉住 go/db 的连接池类别:没有任何池时(nil source)唯一的类别 store 也输出一组序列,
+// 常量 label sql_client="db"。告警 DbStorePoolsBeyondPlan 按 pool="store" 写死,类别名一改,告警会静默落空 ——
+// 这条用例让改名先在这里红(A17c 之后没有本区库和 zone 家族库,只剩这一类)。
 func TestSQLPoolCollectorDeclaresDbPools(t *testing.T) {
 	reg := prometheus.NewPedanticRegistry()
 	if err := reg.Register(NewSQLPoolCollector(nil)); err != nil {
@@ -38,7 +38,7 @@ func TestSQLPoolCollectorDeclaresDbPools(t *testing.T) {
 			}
 			seen[pool] = m.GetGauge().GetValue()
 		}
-		want := []string{PoolHome, PoolExtraZone, PoolExtraNonZone}
+		want := []string{PoolStore}
 		if len(seen) != len(want) {
 			t.Fatalf("pools = %v, want exactly %v", seen, want)
 		}
@@ -47,9 +47,8 @@ func TestSQLPoolCollectorDeclaresDbPools(t *testing.T) {
 				t.Fatalf("mmorpg_sql_pool_pools{pool=%q} = %v (present=%v), want 0", pool, v, ok)
 			}
 		}
-		if PoolExtraZone != "extra_zone" || PoolExtraNonZone != "extra_non_zone" {
-			t.Fatalf("pool class names are pinned by deploy/k8s/mysql-connection-alerts.yaml, got %q / %q",
-				PoolExtraZone, PoolExtraNonZone)
+		if PoolStore != "store" {
+			t.Fatalf("the pool class name is pinned by deploy/k8s/mysql-connection-alerts.yaml, got %q", PoolStore)
 		}
 		return
 	}
@@ -84,18 +83,18 @@ func gatherByLabel(t *testing.T, reg *prometheus.Registry, family, label string)
 	return out
 }
 
-// TestStoreCooldownCollector_EmitsAllPools(launch-todo §2.3 第 11 条):三类连接池每次都各出一条序列,
-// 没有冷却记录的类别为 0;source 返回 nil map 时三类全为 0。告警按 pool 的取值写,少一条就会静默落空。
+// TestStoreCooldownCollector_EmitsAllPools(launch-todo §2.3 第 11 条):每个类别(只剩 store)每次都出一条序列,
+// 没有冷却记录时为 0;source 返回 nil map 时也为 0。告警按 pool 的取值写,少一条就会静默落空。
 func TestStoreCooldownCollector_EmitsAllPools(t *testing.T) {
 	cases := []struct {
 		name   string
 		source map[string]int
 		want   map[string]float64
 	}{
-		{name: "home cooling", source: map[string]int{PoolHome: 2},
-			want: map[string]float64{PoolHome: 2, PoolExtraZone: 0, PoolExtraNonZone: 0}},
+		{name: "store cooling", source: map[string]int{PoolStore: 2},
+			want: map[string]float64{PoolStore: 2}},
 		{name: "nil map", source: nil,
-			want: map[string]float64{PoolHome: 0, PoolExtraZone: 0, PoolExtraNonZone: 0}},
+			want: map[string]float64{PoolStore: 0}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

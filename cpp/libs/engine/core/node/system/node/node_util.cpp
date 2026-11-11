@@ -34,7 +34,10 @@ const std::unordered_map<eNodeType, std::string> nodeTypeNameMap = {
 	{eNodeType::PlayerInboxNodeService, eNodeType_Name(PlayerInboxNodeService)},
 	// 玩家存盘:etcd 前缀 PlayerStoreNodeService.rpc;scene 调 LoadAndClaim / SavePlayer,只连本 zone 的 go/db
 	// (docs/design/player-save-direct-commit.md §5.2)。
-	{eNodeType::PlayerStoreNodeService, eNodeType_Name(PlayerStoreNodeService)}};
+	{eNodeType::PlayerStoreNodeService, eNodeType_Name(PlayerStoreNodeService)},
+	// 邮件(Go-Zero,全服一份、多副本):etcd 前缀 MailNodeService.rpc;scene 以 battle 身份调 MailAdmin.SendPersonalMail,
+	// 把两包都放不下的战斗掉落寄进邮箱(docs/design/battle-overflow-mail.md)。不进 IsZoneScopedNodeType:任一副本都行。
+	{eNodeType::MailNodeService, eNodeType_Name(MailNodeService)}};
 
 eNodeType NodeUtils::GetServiceTypeFromPrefix(const std::string &prefix)
 {

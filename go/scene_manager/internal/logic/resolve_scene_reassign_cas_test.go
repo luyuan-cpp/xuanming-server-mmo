@@ -12,7 +12,7 @@ package logic
 //   - 用请求带来的 scene_conf_id 重建任何场景:副本 / 镜像被重建成空壳,对不上的 conf 能把场景建成别的地图。
 //
 // 现在只重建在役的大世界频道(以 world_channels 成员资格确认 conf,提交时在 CAS 脚本里再核对一次),
-// 先建实体、再 CAS、最后转名额。
+// 先占名额、再建实体、再 CAS、最后提交名额(先占名额的各种结局见 world_channel_reserve_before_move_test.go)。
 //
 // 交错用确定的顺序复现(与 reassign_cas_test.go 单元层同一手法):先用 reassignSceneNode 提交「另一写者」,
 // 再拿陈旧的属主观察(dead)直接调用 reassignSceneOffDeadNode —— 与 resolveScene 读完属主、提交之前被
@@ -22,8 +22,8 @@ package logic
 // scene:{id}:node 之后注入另一写者,从入口复现同样的交错;这里没有用。)
 //
 // 修复前红的取法(按变异,修复前的代码没有这些方法,新用例编不过):
-//   - 变异 A:把 reassignSceneOffDeadNode 里的
-//     `if !reassignWorldChannelNode(...) { return l.adoptOwnerAfterLostReassign(...) }`
+//   - 变异 A:把 moveChannelOffDeadNode(reassignSceneOffDeadNode 的搬迁一半,2026-11-11 拆出)里的
+//     `if !reassignWorldChannelNode(...) { ... l.adoptOwnerAfterLostReassign(...) ... }`
 //     换回无条件的 `l.svcCtx.Redis.Set(sceneNodeKey(sceneId), newNodeId)`。
 //     AnotherWriterFirst、ScriptFailure、MovesIndexAndSceneCount、AgonesRoom 红;CreateSceneFailure 的后半段
 //     (重试成功后的反向索引 / scene_count 断言)也红,共 5 条。
@@ -322,10 +322,11 @@ func TestResolveScene_DeadOwner_BarrierPendingChangesNothing(t *testing.T) {
 	require.EqualValues(t, 0, c.first.fake.createCalls.Load())
 }
 
-// Agones 名额只跟着归属走:
-//   - lostScene:CAS 落空、属主是别的节点 —— 一个名额都不动,那是改派成功的写者的事;
-//   - adoptScene:CAS 落空、属主恰是本次挑中的节点,而先提交的写者没转名额 —— 由这里补转;
-//   - wonScene:改派成功 —— 名额转到新节点,死节点 GameServer 上还掉一份。
+// Agones 名额只跟着归属走(先占名额再搬,docs/design/agones-scene-node-high-density.md §13.10:每次改派之前都先在
+// 挑中的 late 上占一条):
+//   - lostScene:CAS 落空、属主是别的节点 —— 这次在 late 上占的那一条放弃,死节点的名额与记录不动,那是改派成功的写者的事;
+//   - adoptScene:CAS 落空、属主恰是本次挑中的节点,而先提交的写者没提交名额 —— 这次占的那一条照常提交;
+//   - wonScene:改派成功 —— 名额提交到新节点,死节点 GameServer 上删一条。
 //
 // 修复前:实例与频道在这条路径上都不转名额,新节点永远少记一份。
 //
@@ -356,19 +357,20 @@ func TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership(t *testing.T) {
 	}
 	logic := NewEnterSceneLogic(context.Background(), sc)
 
-	// 落空,属主是 first:名额一个都不动。
+	// 落空,属主是 first:这次在 late 上占的那一条放弃,死节点的名额与记录不动。
 	require.True(t, reassignSceneNode(sc, resolveCASZone, lostScene, resolveNodeDead, resolveNodeFirst, freshPlacementGeneration(t, sc, resolveCASZone)))
 	_, nid, err := logic.reassignSceneOffDeadNode(lostScene, resolveCASConfID, resolveCASZone, resolveNodeDead)
 	require.NoError(t, err)
 	require.Equal(t, resolveNodeFirst, nid)
-	_, release, acquireOnGs := alloc.stats()
-	require.Zero(t, acquireOnGs, "属主不是本次挑中的节点,不得在任何节点上占名额")
-	require.Zero(t, release, "属主不是本次挑中的节点,不得归还死节点的名额")
+	require.EqualValues(t, 0, alloc.roomsOf("gs-late"), "属主不是本次挑中的节点,这次占的那一条必须放弃")
+	require.EqualValues(t, 0, alloc.roomsOf("gs-first"), "first 的名额归改派成功的写者")
+	require.EqualValues(t, 3, alloc.roomsOf("gs-dead"), "不得归还死节点的名额,那是改派成功的写者的事")
+	require.Empty(t, agonesHoldsOf(t, sc, resolveCASZone), "放弃时在途占用一起删")
 	gs, err := mr.Get(sceneAgonesGsKey(lostScene))
 	require.NoError(t, err)
 	require.Equal(t, records[lostScene], gs)
 
-	// 落空,属主恰是 late,先提交的写者没转名额:由这里补转。
+	// 落空,属主恰是 late,先提交的写者没提交名额:这次占的那一条照常提交。
 	require.True(t, reassignSceneNode(sc, resolveCASZone, adoptScene, resolveNodeDead, resolveNodeLate, freshPlacementGeneration(t, sc, resolveCASZone)))
 	_, nid, err = logic.reassignSceneOffDeadNode(adoptScene, resolveCASConfID, resolveCASZone, resolveNodeDead)
 	require.NoError(t, err)
@@ -377,7 +379,7 @@ func TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership(t *testing.T) {
 	require.EqualValues(t, 2, alloc.roomsOf("gs-dead"))
 	requireAgonesRecordOn(t, sc, alloc, adoptScene, "gs-late")
 
-	// 改派成功:名额跟到 late,死节点 GameServer 上再还一份。
+	// 改派成功:名额提交到 late,死节点 GameServer 上再删一条。
 	_, nid, err = logic.resolveScene(wonScene, resolveCASConfID, resolveCASZone)
 	require.NoError(t, err)
 	require.Equal(t, resolveNodeLate, nid)

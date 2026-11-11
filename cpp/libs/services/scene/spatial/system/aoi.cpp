@@ -81,12 +81,18 @@ bool IsMoving(entt::entity entity)
     return velocity != nullptr && (velocity->x() != 0.0 || velocity->y() != 0.0 || velocity->z() != 0.0);
 }
 
-// 位置自上次评估之后要不要重新评估。没变不评估;静止的(刚停步、被挪位)立即评估,
-// 停下来的那一刻一定按精确位置判一次;移动中的累计位移到 kAoiReevaluateDistance 才评估。
+// 自上次评估之后要不要重新评估。
+//   - 视野半径变了(以后的鹰眼、致盲之类改 ViewRadius):不用等位移,下一帧就按新半径判;
+//   - 位置没变不评估;静止的(刚停步、被挪位)立即评估,停下来的那一刻一定按精确位置判一次;
+//     移动中的累计位移到 kAoiReevaluateDistance 才评估。
 bool IsReevaluationDue(entt::entity entity, const Transform& transform)
 {
     const auto* evaluatedAt = tlsEcs.actorRegistry.try_get<AoiEvaluatedAtComp>(entity);
     if (evaluatedAt == nullptr)
+    {
+        return true;
+    }
+    if (ViewSystem::GetMaxViewRadius(entity) != evaluatedAt->viewRadius)
     {
         return true;
     }
@@ -223,6 +229,10 @@ void RebuildNearbyObservers(entt::entity target, AoiVisibilityChanges& changes)
 } // namespace
 
 void AoiSystem::Update(double delta) {
+    // 这一帧所有重判的可见性变化合成一批,帧末统一下发:同一观察者这一帧新看见、看不见的几个目标
+    // 合成一条列表消息。Update 里只记变化、不发别的 AOI 消息,位置在 Update 期间也不变,所以批内不会来回翻转;
+    // 帧末下发早于随后 MovementSystem 的移动广播,先创建、后移动的顺序不变。
+    AoiVisibilityChanges changes;
     for (auto&& [entity, transform, sceneComp] : tlsEcs.actorRegistry.view<Transform, SceneEntityComp>().each()) {
         // Skip invalid scenes
         if (!tlsEcs.sceneRegistry.valid(sceneComp.sceneEntity)) {
@@ -233,9 +243,10 @@ void AoiSystem::Update(double delta) {
         const bool firstEntry = UpdateGridMembership(entity, sceneComp.sceneEntity,
                                                      GridSystem::CalculateHexPosition(transform));
         if (firstEntry || IsReevaluationDue(entity, transform) || IsNearbyRefillDue(entity)) {
-            ReevaluateVisibility(entity, transform);
+            ReevaluateVisibility(entity, transform, changes);
         }
     }
+    SendVisibilityChanges(changes);
 }
 
 bool AoiSystem::UpdateGridMembership(const entt::entity entity, const SceneEntity sceneEntity, const Hex& currentHex) {
@@ -270,22 +281,23 @@ bool AoiSystem::UpdateGridMembership(const entt::entity entity, const SceneEntit
     return false;
 }
 
-void AoiSystem::ReevaluateVisibility(const entt::entity entity, const Transform& transform) {
+void AoiSystem::ReevaluateVisibility(const entt::entity entity, const Transform& transform,
+                                     AoiVisibilityChanges& changes) {
     // 这次评估会扫一遍附近候选,待补回的标记在此消费;评估中再被拒会由 InterestSystem 重新打上。
     tlsEcs.actorRegistry.remove<AoiNearbyRefillComp>(entity);
 
     // 先撤后建:走远的先让出名额,同一次评估里走近的就能用上。两个方向各自判定距离、容量与来源。
-    AoiVisibilityChanges changes;
     DropDistantSpatialSources(entity, changes);
     AddNearbySpatialSources(entity, changes);
-    SendVisibilityChanges(changes);
 
-    // 此处延迟创建:AoiEvaluatedAtComp 的唯一创建点,之后的评估只覆盖位置。
+    // 此处延迟创建:AoiEvaluatedAtComp 的唯一创建点,之后的评估只覆盖。
+    // 记下这次评估用的位置与视野半径:任何一个变了,下一帧都要按新值重判。
     auto& evaluatedAt = tlsEcs.actorRegistry.get_or_emplace<AoiEvaluatedAtComp>(entity);
     const auto& location = transform.location();
     evaluatedAt.x = location.x();
     evaluatedAt.y = location.y();
     evaluatedAt.z = location.z();
+    evaluatedAt.viewRadius = ViewSystem::GetMaxViewRadius(entity);
 }
 
 bool AoiSystem::Follow(entt::entity watcher, entt::entity target, const AoiFollowGrant& grant) {

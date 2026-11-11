@@ -153,7 +153,7 @@ message SavePlayerResponse {
 事务(`storage_id` 选库后,读已提交 + 悲观锁):
 
 ```
-进事务前校验(确定性拒绝,不碰库):E、q、实例非空,kind 是已知值、非 0、不重复 → 否则 INVALID;payload 超预算 → TOO_LARGE
+进事务前校验(不碰库):E、q、实例非空,kind 为正、不重复 → 否则 INVALID;kind 是本 go/db 不认识的正数 → SCHEMA_TOO_NEW(scene 比 go/db 新,可重试,见 §4);payload 超预算 → TOO_LARGE
 SELECT owner_epoch, save_seq, schema_gen, holder_instance, released
   FROM player_store WHERE player_id=? AND kind=0 FOR UPDATE
 按 §4 判定;拒绝或幂等成功就回滚并返回
@@ -206,7 +206,7 @@ COMMIT
 ```
 
 - 写权行不存在 = 角色不存在或未建完,回 `NO_OWNER`,不造空档(今天的规则 [C])。
-- 世代比本进程新 = `SCHEMA_TOO_NEW`,拒绝加载(今天的 C2)。
+- 世代比本进程新 = `SCHEMA_TOO_NEW`,拒绝加载(今天的 C2)。scene 的世代比本 go/db 认识的新,同样回 `SCHEMA_TOO_NEW`、不抬代次(§4)。
 - scene 把片段拼接后 `ParseFromString`,再把 E、q、世代填回元数据字段,`InitPlayerFromAllData` 不改。q 按 `max(本进程发号, 响应 save_seq)` 播种。
 
 ## 4. 写权判定表
@@ -226,7 +226,12 @@ COMMIT
 | 世代 > go/db 认识的世代 | `SCHEMA_TOO_NEW` | 重试,属发布顺序问题(今天的 C1) |
 | 其余 | 写入,`COMMITTED`。E>Er 时把 Er 抬到 E,`released` 按请求重写 | 提交成功 |
 
-**`Save` 进事务前的确定性拒绝:** `INVALID`(E、q、实例为空,或 kind 非法、重复)、`TOO_LARGE`(payload 超预算)。不碰库。scene 告警,这笔的 q 作废,等下一次变化重试;退出时遇到它就记告警并放弃这一笔,不无限等。E=0 的无 guard 路径删除。
+**`Save` 进事务前的确定性拒绝:** `INVALID`(E、q、实例为空,或 kind 为 0、负数、重复)、`TOO_LARGE`(payload 超预算)。不碰库。scene 告警,这笔的 q 作废,等下一次变化重试;退出时遇到它就记告警并放弃这一笔,不无限等。E=0 的无 guard 路径删除。
+
+**本 go/db 不认识的行种回 `SCHEMA_TOO_NEW`,不回 `INVALID`(2026-11-10,数据覆写审计 r2-ps#11)。**
+- 行种的号只增不复用,scene 也发不出它自己不认识的号,所以这只会来自比 go/db 新的 scene(发布顺序不对,或回退了 go/db)。这是版本问题,不是请求坏了,按上表的 `SCHEMA_TOO_NEW` 重试。
+- 原先回 `INVALID`。新 scene 的存盘拼装给每个持久组件都设了存在位,新行种第一笔就脏;于是窗口期内新 scene 上几乎每个玩家下线时都不存盘就销毁,认领以来的进度全丢。
+- 这一条不能只靠认领时的世代判定兜住:go/db 新旧副本混跑时,在新副本上认领的玩家,下一笔存盘可能落到旧副本。
 
 **三条要点:**
 
@@ -242,6 +247,7 @@ COMMIT
 | E < Er | `STALE_OWNER`(路由过期,上层按进场失败处理) |
 | E = Er,持有者非空且 ≠ 实例 | `NOT_HOLDER`(今天 `kRegisterFenceLua` 拒同 E 跨实例的语义) |
 | 库里世代比本进程新 | `SCHEMA_TOO_NEW`,不抬代次(今天的 C2) |
+| scene 世代比本 go/db 认识的新 | `SCHEMA_TOO_NEW`,不抬代次(2026-11-10,审计 r2-ps#11:不拦的话,新 scene 经旧 go/db 认领成功,旧持有者被围住,新 scene 却一笔也存不进) |
 | E = Er,其余 | 认领成功(同实例重进,或新号初行) |
 | E > Er | 认领成功,抬代次(换持有者或接管) |
 

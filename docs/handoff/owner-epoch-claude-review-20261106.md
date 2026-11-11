@@ -447,3 +447,30 @@ build/cpp/tests/currency_test.exe --gtest_filter=CurrencyTest.*AgainstRealRedis
 - R-b 压测与连接池定容（负责人说先不压测）；
 - 同节点 epoch 0 铸造没确认之后的 keep 回滚：只有存量 epoch 0 玩家走得到，数据清空后走不到，记为低级残余；
 - Java：owner_epoch 在 SQL 事务内递增，不适用，不登记 PARITY。
+
+## 运行证据核对（2026-11-11，Claude Code，只读）
+
+负责人问上面交 Codex 的几步做了没有。按 Codex 留下的原件逐项核对，结论如下。服务端代码这边没有要修的，剩下的都是运行验证。
+
+| 步骤 | 状态 | 证据 |
+|---|---|---|
+| Go 单测（不设环境变量） | 本线用例都过了。Codex 11-11 00:45 在 scene_manager 跑 `go test ./... -count=1 -v`，本线 15 条新增或改写的用例和 `TestProbe` 全部 PASS，9 条真实 Redis 用例按门控 SKIP。整套退出 1，3 条失败都是 `TestDeadNodeReregister_*`，属于缺口第 32 条，与本线无关；那三条测试已由别的会话按 R15 新行为改写（PROGRESS 11-11「缺口第 32 条的 3 条回归用例」），还没运行 | `artifacts/validation/gate-stale-20261110-232423/finish-20261111-004436/scene-synced-full.log`；PROGRESS 11-11「跨 zone 停写标记验证结果」 |
+| Go vet | 只跑了 `go vet ./internal/logic/`，`./internal/svc` 没跑 | 同上 |
+| `go/shared/ownerepoch` 单测 | 没跑 | — |
+| 真实 Redis 7.2 / 8.x，9 条 | 没跑 | — |
+| C++ 串行整解 | 11-11 00:58 的 `game.sln` 整解退出 0，已经包含本线的 C++ 改动：输入审计显示本线改的三个文件在 scene 库和 cross_zone_test 开编之前就改完了，日志里两者都编过。之后别的会话在 01:44~01:50 又改了 `player_lifecycle.{h,cpp}` 和 `cross_zone_test.cpp`；01:32 那次增量构建失败在别线的 `mail_outbox_rules.h:19`（C1083，找不到生成头 `proto/common/component/player_mail_outbox_comp.pb.h`，要先跑 proto 生成）。所以当前工作区还没有一次通过的整解 | `build/verification/release-track-20261110/round2/cpp-solution.log`、`cpp-input-audit-summary.json`、`cpp-incremental-final.log` |
+| cross_zone 定向、全量 | 没跑。最近一次是 11-08，在本线改动之前 | `build/verification/naming-audit-20261108/cpp-tests/cross_zone_test/` |
+| currency 真实 Redis 回归 | 没跑 | — |
+
+**交 Codex 的顺序**（命令口径与上面「2026-11-08 主仓整解续验」「方案 A 落码」「Claude Code 收尾」三节相同）：
+
+1. 先按 AGENTS.md §4 跑 proto 生成，补出别线新增的生成头，再在仓库根目录执行 `msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64 /p:CL_MPCount=1`，要求 0 error。还卡在别线文件上时，保留首个错误和文件归属，不在本线改。
+2. cross_zone 先跑定向，再跑全量：
+   - 定向：`build/cpp/tests/cross_zone_test.exe --gtest_filter=TravelOwnership.*:TravelOwnershipEcs.*:PlayerStoreDirectEcs.ClaimFillsTheMetadataBackIntoTheLoad`
+   - 必须包含本线两条新用例 `TravelOwnership.PendingRollbackReceiptIsNeverAdopted` 和 `TravelOwnershipEcs.PendingRollbackReceiptConcludesWithoutAdopting`，以及 `player_ownership_metrics_test.cpp` 里多了 `rollback_unconfirmed` 的那条。
+3. currency 真实 Redis：Redis 7.2 和 8.x 各跑一次 `build/cpp/tests/currency_test.exe --gtest_filter=CurrencyTest.*AgainstRealRedis`，要求 3/3。
+4. Go 的格式、vet 和单测：
+   - `go/scene_manager` 下执行 `gofmt -l ./internal`、`go vet ./...`、`go test ./... -count=1`；
+   - `go/shared` 下执行 `go test ./ownerepoch/ -count=1`；
+   - 失败的用例按文件归属分开记。
+5. 真实 Redis 7.2 和 8.x 各起一个一次性单实例，在 `go/scene_manager` 下执行 `go test ./internal/svc ./internal/logic -run RealRedis -count=1 -v`，要求两轮都是 9 条 PASS、0 SKIP。容器参数见上面「Claude Code 收尾」第 1 项。

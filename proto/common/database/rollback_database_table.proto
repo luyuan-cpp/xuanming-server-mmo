@@ -70,7 +70,8 @@ message player_snapshot
   // WHERE zone_id=? AND shard IN (0..15) AND created_at<=?);(shard, created_at) 给按时间的清理。
   // 时间列前的 shard(字段 11)同 transaction_log:created_at 单调增长,不分桶时全服快照写都落在索引末尾同一个
   // TiKV Region(2026-11-06,docs/design/audit-pipeline-horizontal-scale-20261106.md §2.C)。
-  // snapshot_guid 同样随 SnowFlake 单调增长,但它是去重键,分桶要连去重路径一起重做,先看压测热点再定(设计 §2.C「没做」)。
+  // snapshot_guid 不用分桶:它是 C++ 从发号器 snapshot 号段领的号、经 MixGuid 打散,不单调,唯一键与普通索引的写入本来就散在
+  // 整个键空间(2026-11-11 核对 snapshot_system.cpp,缺口清单第 15 条;设计 §2.C)。
   option(OptionIndex) = "player_id;snapshot_guid;zone_id,shard,created_at;shard,created_at";
   // 主键是应用向发号器申请的打散行号(player-data-tidb-scaling-plan.md §6.4),不依赖库的自增。
   // 行数据按 _tidb_rowid 存,所以 §D3 的 NONCLUSTERED + 打散照旧保留。
@@ -86,7 +87,7 @@ message player_snapshot
   string reason = 6;         // Reason / description
   string operator = 7;       // GM operator who created it
   bytes  data = 8;           // Serialized snapshot data (proto SnapshotData)
-  // C++ scene 经 Kafka 送来的 PlayerSnapshotEntry.snapshot_id(SnowFlake)。GM 行为 0。
+  // C++ scene 经 Kafka 送来的 PlayerSnapshotEntry.snapshot_id(发号器 snapshot 号段,经 MixGuid 打散,不单调、不能按大小判先后)。GM 行为 0。
   // 不改主键:rollback_audit_log.snapshot_id_used 引用的是 id,换主键等于篡改历史审计。
   uint64 snapshot_guid = 9;
   // 来源:0 = GM/data_service 直接写入(data 列是 Redis 字段图 JSON),
@@ -197,7 +198,10 @@ message gm_recall_op
   option(OptionPrimaryKey) = "op_id";
   // PLANNED 行没有 seq,stream_epoch = 0、seq = op_id 占唯一键:真实纪元恒非 0,不会和已派发的行撞。
   option(OptionUniqueKey) = "player_id,stream,stream_epoch,seq";
-  option(OptionIndex) = "status,next_attempt_ms;player_id,stream,stream_epoch,status,seq;player_id,status;request_id,op_id";
+  // idx_gm_recall_op_0 = 重投到期扫描 (status, next_attempt_ms, op_id, player_id)(2026-11-11,缺口清单第 25 条):
+  // op_id 让 ORDER BY next_attempt_ms, op_id 直接走索引顺序(TiDB 上主键非聚簇,不带它就要整段读完再排序);
+  // player_id 让按玩家分片的条件在索引上判,别的副本的行不回表。
+  option(OptionIndex) = "status,next_attempt_ms,op_id,player_id;player_id,stream,stream_epoch,status,seq;player_id,status;request_id,op_id";
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -392,16 +396,16 @@ message directory_shard
 }
 
 // ============================================================================
-// 路由表(玩家归属与落点映射持久化 D1,docs/design/player-route-mapping-durability-proposal.md §3.2 / §13)。
+// 路由表(玩家归属与落点映射持久化 D1,docs/design/player-route-mapping-durability-proposal.md §15 / §16)。
 //
-// 下面五个 message **只作列漂移守卫的事实源**(与 player_name 同一模式):
+// 下面四个 message **只作列漂移守卫的事实源**(与 player_name 同一模式):
 // 表由 go/data_service/internal/store/schema.go 的 bootstrap DDL 预建(要 VARCHAR、可空列、CHECK、
 // 带片前缀的二级索引,proto2mysql 都生成不了),**不交给 proto2mysql 建表或同步**。迁移期按这里的字段名
 // 查线上表的列齐不齐、按 OptionPrimaryKey 查主键列序(schema.go 的 assertRouteTableShapes)。
 // 所以:改了这里必须同步改 bootstrap DDL,反之亦然,否则启动期迁移直接拒绝。
 //
 // 字段号:player_route 沿用 DDL 列注释里预留的 pb:1..10(route_shard 是 10,player_id 仍是 1);
-// 另外四张的字段号按 DDL 列序新定,并同步写进 DDL 的列注释 pb:N(route_store_test 钉住两边一致)。
+// 另外三张的字段号按 DDL 列序新定,并同步写进 DDL 的列注释 pb:N(route_store_test 钉住两边一致)。
 // 与 §4.3 同规矩:上线后不复用,删字段写 reserved。
 // 库里可为 NULL 的列在这里用零值表达(0 / 空串 = NULL),与 store.RouteRow 的约定一致;
 // 本 message 不是读写载体,读写只在 store 的 SQL 里,所以不用 optional。
@@ -438,6 +442,23 @@ message zone_merged_into
   uint32 dst_zone     = 2;
   string run_id       = 3;
   uint64 merged_at_ms = 4;  // 库时钟 Unix 毫秒
+}
+
+// zone_merge_history:合服 / 撤销合服的历史,只增不改(提案 §16)。zone_merged_into 撤销时整行删除,
+// 没有这张表就查不到「谁、什么时候合过、又撤过」。merge_zone 在写映射的同一个事务里追加一行;
+// 操作员账号对它只有 SELECT、INSERT(tools/scripts/maintenance_drain.ps1 的 MERGE_ZONE_GRANT)。只在目录第 0 片。
+message zone_merge_history
+{
+  option(OptionTableName) = "zone_merge_history";
+  option(OptionPrimaryKey) = "src_zone,event_seq";
+
+  uint32 src_zone      = 1;
+  uint64 event_seq     = 2;  // 本源区的第几次变更,从 1 起,持 route_meta 行锁取最大值 +1
+  string action        = 3;  // "merge" 或 "unmerge"(chk_merge_history_action)
+  uint32 dst_zone      = 4;
+  string run_id        = 5;  // merge 是新映射行的 run_id;unmerge 是被删那一行的 run_id
+  string sql_principal = 6;  // 库侧 CURRENT_USER(),不取工具自报的身份
+  uint64 at_ms         = 7;  // 库时钟 Unix 毫秒
 }
 
 // route_meta:开关表,单行(id=1),库世代与可写开关。

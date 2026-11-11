@@ -163,6 +163,7 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 2. **先记下部署参数,再停写。** 部署参数不粘滞,namespace 删掉之后 `k8s_deploy.ps1` 没有现状可比,防误关和形态核对都不会触发,漏传的参数会静默落回默认值。所以先从发布记录取出上一次部署的完整命令,对照线上核实,至少包括 `-ReleaseProfile`、`-Region`、`-DirectoryLogicalShards`、`-PlayerStoreShards`、`-SqlClusters`、`-GateRouterMode`、`-ClientEntryMode` 和入口地址、`-RedisSplit`、`-PlayerRedisMasters`、`-NodeOpenFileLimitMode`、`-Login*`。然后逐个 zone 跑 `dev_tools.ps1 -Command k8s-zone-down -ZoneName <zone>`,再用 `kubectl get namespace` 确认已删除。这个命令失败时不报错,不能只看退出码。单独部署的全局服务也要停。
 3. **恢复。** TiDB 档按 §4.1b,MySQL 档按 §4.1。先恢复到影子库或新集群核对,原库保留到开流量之后。T 之后搬过库的,恢复到映射现在指向的集群,但备份要用 T 时刻那个集群的。
 4. **核对闸门。** 每个逻辑库执行 `SELECT writable,HEX(freeze_run_id) FROM route_meta`,结果应该是可写、没有冻结标记。
+   **再核对合服映射**:对目录第 0 片跑 `pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRouteDbDsn <第 0 片 DSN>`,退出码应为 0:映射能解析,而且每一行映射在 `zone_merge_history` 里都有对应的合服记录(两张表同库、同一个事务写,回到同一个 T 之后仍然成对)。退出码 1 说明恢复出来的映射表有坏行或来历不明的行,按[不停服合服手册](merge-zone-runbook.md) §5 处理之后再起服。
 5. **跳过 `match-results` 的积压。** T 之后的对局结果和数据库一起丢弃。起服之前把 `match-rating`、`guild-trial` 两个消费组的位点都重置到最新:
 
    ```powershell
@@ -481,7 +482,7 @@ go run ./cmd/save_barrier_restore -mode apply -schema zone_17_db -zone 17 `
 - 玩家存档只在 `player_store`，`player:{id}:save_barrier` 已删除，恢复之后不用从 SQL 重建屏障（见上方 2026-10-30 说明）。
 - 工具已改名 `go/db/cmd/maintenance_phase`，`-allow-home-fallback` 和全部 `-mode` 都已删除。
 
-合过服的环境（撤没撤销都一样）要回档，做法和没合过服的相同：整体回档按 §4.0，`zone_merged_into` 在目录第 0 片，随目录回到同一个 T；只修一个库按 §4.1a。旧的「屏障重建」步骤只留在[停服版旧手册](../archive/merge-zone-runbook-stop-the-world.md) §10.1 作历史，不要照做。
+合过服的环境（撤没撤销都一样）要回档，做法和没合过服的相同：整体回档按 §4.0，`zone_merged_into` 与合服历史 `zone_merge_history` 都在目录第 0 片，同一个事务写入，随目录回到同一个 T；T 之后的合服和撤销连同它们的历史一起丢弃，要重做就按合服手册再执行一遍。只修一个库按 §4.1a。旧的「屏障重建」步骤只留在[停服版旧手册](../archive/merge-zone-runbook-stop-the-world.md) §10.1 作历史，不要照做。
 
 ### 2026-10-18 第二批：db_first、独立映射和全局落点（实现后须核本批验证收据）
 

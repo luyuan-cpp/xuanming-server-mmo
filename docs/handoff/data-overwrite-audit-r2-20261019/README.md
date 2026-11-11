@@ -180,10 +180,14 @@
 | 第一轮 §2.5 social-match-battle#0 | 已落码（上线阻塞）；无原件短路、过截止不再续租 | 评审必修项已修 |
 | 第一轮 §2.5 go-asset-services#0 / #1 | 已落码；单行隔离、预算从父截止推出、放弃腿补偿 | 评审必修项已修 |
 | r2-ds#1 / #2 | 已落码；本地标记证明、Redis run_id 不再算证明、重铸代次补屏障令牌；账号目录疑点不成立 | 评审必修项已修 |
-| r2-battle#2 / r2-guild#1 | 已落码（上线阻塞），主路径依赖并行「v1 终局接缝」轨道整批落地 | **独立评审未跑**（周额度 81% 时推迟） |
+| r2-battle#2 / r2-guild#1 | 已落码（上线阻塞）。2026-11-05~11 补完：独立评审与修正 B1~B4、B6，人工作废工具 `formationfix`，收尾批 B5（截止作废先向原 battle 取证、`autoTerminalOriginal` 单一判据、ReadyAfter 分片、非 v1 停止续租） | 独立评审 5 路、B5 评审加独立核验共两轮，必修项全部已修；全部未编译，待 Codex。命令见 PROGRESS「2026-11-10 Claude：r2-battle#2 / r2-guild#1 独立评审与修正」与「2026-11-11 Claude：go/match 全球局终局协议收尾批 B5 落码与第一轮评审修正」 |
 
-还开着的：
-- r2-battle#2 / r2-guild#1 的独立语义评审，以及 r2-guild#1 修复方向里的「带审计的人工释放 CLI」。
-- 截止竞态（强制平局的 COMPLETE 与到期 ABORT 抢同一主键）归并行 v1 轨道，须在其验收前加宽限。
+还开着的（2026-11-11 更新）：
+- 上面全部条目待 Codex 按 PROGRESS 命令验证（proto 生成、match / guild / battle 编译、纯单测、真 TiDB、C++ 回归）。
+- 截止竞态已由 B5 关闭：截止 ABORT 前先要原 battle 的证据，原实例仍持有房间就等到硬上限，晚到的 COMPLETE 先落库。
+- 记在设计文档 §13.3 B5 段的残余：
+  - COMPLETE 被永久拒收时没有持久记号，要等到截止约 + 14 分钟；
+  - 一条车道积压超过一页时上限不等式不保证；
+  - 业务拒绝的具体原因没写回帮会大厅。
 - cross-service-assets#1（player_battle.cpp 在线无组件分支把锁不在当作废而删 pending）由另一会话修，它是 r2-battle#4 低频阶段对在线成员生效的前置条件。
 - Java 待做项已登记 Java 仓 `PARITY.md`：§2.4 行补 r2-battle#1/#4 要求、交易单行预算余量、debug 导入 Redis 身份闸、全球成局无原件出口、全球局 v1 终局与帮会占用释放。

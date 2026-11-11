@@ -25,6 +25,7 @@ import (
 	"shared/leader"
 	"shared/safego"
 	"shared/serverbase"
+	"shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -348,6 +349,11 @@ func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor
 				//                               见 logic/channel_pick.go
 			),
 		}),
+
+		// ④ 日志上下文紧贴 handler:请求顶层带 player_id 的方法(EnterScene 等),handler 里经
+		//    logx.WithContext(ctx) 打的日志带上它(docs/design/distributed-tracing.md §6.2)。
+		//    只往 ctx 加日志字段,不改请求、不改响应,前三层的行为不受影响。
+		tracing.PlayerFieldInterceptor(),
 	}
 }
 

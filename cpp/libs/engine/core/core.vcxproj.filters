@@ -73,6 +73,9 @@
     <ClInclude Include="node\system\node\client_endpoint.h" />
     <ClInclude Include="node\system\node\open_file_limit.h" />
     <ClInclude Include="node\system\node\release_track.h" />
+    <ClInclude Include="node\system\node\node_planned_drain.h" />
+    <ClInclude Include="node\system\node\node_admission_advertise.h" />
+    <ClInclude Include="node\system\node\node_admission_publisher.h" />
     <ClInclude Include="node\system\node\node_util.h" />
     <ClInclude Include="node\system\registration\registration_manager.h" />
     <ClInclude Include="node\system\discovery\service_discovery_manager.h" />

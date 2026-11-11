@@ -26,6 +26,21 @@ func TestCheckExpectedRegion(t *testing.T) {
 	require.ErrorContains(t, checkExpectedRegion("6", 5), "fix the runtime config")
 }
 
+// 生产形态(AllowAutoSeed=false)必须接上部署身份的读取器:漏接时 idissuer.New 拒绝,这里就会报错。
+// 构造不读身份,也不等 etcd 连上(客户端不设 DialTimeout,拨号在后台)。
+func TestNewIdIssuer_ProductionWiresTheDeploymentIdentity(t *testing.T) {
+	t.Setenv(envExpectedIdRegion, "1")
+	var c config.Config
+	c.Mode = service.ProMode
+	c.IdSegment.Issuer.Region = 1
+	c.IdSegment.Issuer.PrimaryEtcd = []string{"127.0.0.1:1"}
+	c.IdSegment.Issuer.SecondaryEtcd = []string{"127.0.0.1:2"}
+	c.IdSegment.Issuer.RegistryEtcd = []string{"127.0.0.1:3"}
+	issuer, err := NewIdIssuer(c)
+	require.NoError(t, err)
+	_ = issuer.Close()
+}
+
 // 这些配置过了地域码这一关。它们没给 etcd 地址,会停在地址校验,不连 etcd。
 func TestNewIdIssuer_RegionAccepted(t *testing.T) {
 	for _, tc := range []struct {

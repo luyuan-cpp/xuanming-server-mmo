@@ -10,10 +10,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"proto/common/base"
 	"scene_manager/internal/constants"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 	"shared/etcdwatch"
+	"shared/nodeinfo"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -71,6 +73,10 @@ type sceneNodeRegistration struct {
 	// NodeUuid 是 C++ 进程启动时生成的实例号(NodeInfo.node_uuid):同一个 node_id 被重启后的新进程复用时,
 	// 只有它能区分两代进程。交接资格里盖的就是它(owner_replaced.go,GO-3)。旧版本注册可能不带。
 	NodeUuid string `json:"nodeUuid"`
+	// Draining:节点自报计划排空中(NodeInfo.admission = CLOSED);Build:部署构建标识(NodeInfo.build)。
+	// 不经 encoding/json 映射(枚举按 protojson 写名字),由 parseNodeEntry 走 shared/nodeinfo 另取。只是选点提示(node_drain.go)。
+	Draining bool   `json:"-"`
+	Build    string `json:"-"`
 }
 
 // nodeEntry stores a parsed node with its string ID.
@@ -118,8 +124,9 @@ func isKnownNodeIdentityAmbiguous(zoneID uint32, nodeID string) bool {
 // 为什么 Redis 里已经有 death_at 还要再记一份进程本地的:death_at 只有 leader 写。
 // leader 缺位的窗口里节点丢了租约,没有人写 death_at,而「没有 death_at」在
 // CanReclaimDeadNode 里的语义是放行 —— 跟随者若据此接管玩家,正好撞上老进程冲突关停
-// (仅重注册失败时才有,有界 15s)的疏散存盘,老进程最后一笔进度会被写权行拒掉而丢失(PUT 分支提前 clearNodeDeath 也是同一类缺口;markNodeDeath 的 Setex 失败
-// 已不再摘负载集,见 retryDeferredNodeDetaches)。
+// (仅重注册失败时才有,有界 15s)的疏散存盘,老进程最后一笔进度会被写权行拒掉而丢失。同号新进程的 PUT 抹掉老实例的
+// death_at 曾是同一类缺口,R15 起 PUT 分支只在同一代进程回来时才清(clearNodeDeathForInstance);markNodeDeath 的
+// Setex 失败已不再摘负载集,见 retryDeferredNodeDetaches。
 // 本地这一份不依赖任何人写 Redis:只要本副本看到了它消失,屏障就从那一刻起算。
 // 本副本没看到(进程在那之后才启动)时没有记录,退回只看 Redis 的 death_at。
 var (
@@ -218,6 +225,17 @@ func parseNodeEntry(value []byte) (nodeEntry, bool) {
 			"expected 0=MainWorld, 1=Instance, 2=MainWorldCross, 3=InstanceCross. "+
 			"Check SCENE_NODE_TYPE env / game_config.yaml",
 			reg.SceneNodeType, reg.NodeId, reg.ZoneId)
+	}
+	// 计划排空与构建标识(docs/design/scene-node-planned-drain.md §4.2、§4.6):admission 是枚举,protojson 写名字,
+	// 走与 match 发现同一个解析入口(名字与数字都认,未知字段忽略)。解析不出来只记日志,按「开放、没上报构建」处理:
+	// 两者都只是选点提示,scene 自己的建场景准入仍会拒绝排空期间的 CreateScene。
+	var info base.NodeInfo
+	if err := nodeinfo.Unmarshal(value, &info); err != nil {
+		logx.Errorf("[LoadReporter] admission/build of node %d (zone %d) not parsed; treating it as open: %v",
+			reg.NodeId, reg.ZoneId, err)
+	} else {
+		reg.Draining = info.GetAdmission() == base.NodeAdmission_NODE_ADMISSION_CLOSED
+		reg.Build = info.GetBuild()
 	}
 	return nodeEntry{
 		reg:    reg,
@@ -390,6 +408,9 @@ type deadNodeReconcileResult struct {
 	indexUnlinkFailed bool
 	// lostLeadership:中途失去领导权,剩下的成员没处理,反向索引一个都没摘。
 	lostLeadership bool
+	// withdrawn:中途发现收尾任务已被撤(判死的那一代回来了)或换成了新的一次判死,剩下的成员没处理,反向索引一个都没摘
+	// (R1-I6,reentry_barrier.go)。
+	withdrawn bool
 }
 
 // reconcileDeadNodeScenes force-destroys the orphaned instance scenes of a node
@@ -429,7 +450,10 @@ type deadNodeReconcileResult struct {
 //	here would force players to re-enter a different scene and lose
 //	their in-world context. Instances are per-run disposable, so
 //	destroying an orphan is the right default.
-func reconcileDeadNodeScenes(ctx context.Context, svcCtx *svc.ServiceContext, entry nodeEntry, members []string) deadNodeReconcileResult {
+//
+// task 是这条收尾任务的身份。每个场景的销毁认领都在同一步核对它(destroyOrphanOfDeadNode):一轮收尾进行到一半时
+// 判死的那一代回来了、任务被撤,剩下的一个都不拆,反向索引也一个都不摘 —— 它们与回来的那一代一起活着(R1-I6)。
+func reconcileDeadNodeScenes(ctx context.Context, svcCtx *svc.ServiceContext, entry nodeEntry, members []string, task deadNodeTaskFence) deadNodeReconcileResult {
 	var result deadNodeReconcileResult
 	setKey := nodeScenesKey(entry.reg.ZoneId, entry.nodeID)
 	if len(members) == 0 {
@@ -483,8 +507,15 @@ func reconcileDeadNodeScenes(ctx context.Context, svcCtx *svc.ServiceContext, en
 
 		logx.Infof("[Reconcile] Force-destroying orphan instance %d (was on dead node %s, zone %d)",
 			sceneId, entry.nodeID, zoneId)
-		ok, err := destroyOrphanOfDeadNode(ctx, svcCtx, zoneId, sceneId, entry.nodeID)
+		ok, err := destroyOrphanOfDeadNode(ctx, svcCtx, zoneId, sceneId, entry.nodeID, task)
 		switch {
+		case errors.Is(err, errDeadNodeCleanupWithdrawn):
+			// 一个键都没动。不摘反向索引:这一轮里判成世界频道的那些,此刻正由回来的那一代托管着。
+			metrics.ObserveSceneOrphansReconciled(zoneId, destroyed)
+			logx.Infof("[Reconcile] Node %s (zone %d): cleanup task withdrawn at scene %d; stopped with destroyed=%d of total=%d, nothing else touched",
+				entry.nodeID, zoneId, sceneId, destroyed, len(members))
+			result.withdrawn = true
+			return result
 		case err != nil:
 			// 已在 destroyOrphanOfDeadNode 里记了错误;不计入 destroyed,免得指标多报;留在反向索引里(见函数注释)。
 			failedMembers = append(failedMembers, s)
@@ -1039,8 +1070,9 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 			}
 		}
 
-		// 节点(重新)注册 = 它此刻是活的,上一次的死亡标记要抹掉,否则 IsNodeAlive 说活、再入屏障却还压着它名下的场景。
-		// 只在回来的就是判死的那一代进程时才抹:同号换了新进程,老实例的屏障要照常走完(R15,见 clearNodeDeathForInstance)。
+		// 节点(重新)注册 = 它此刻是活的,上一次的死亡要了结,否则 IsNodeAlive 说活、再入屏障却还压着它名下的场景。
+		// 只在回来的就是判死的那一代进程时才了结,且只由领导者做:同一步撤掉它的收尾任务、抹掉 death_at。同号换了新进程,
+		// 老实例的屏障要照常走完(R15,见 clearNodeDeathForInstance)。镜像已在上面写好,所以收尾前按镜像的判断与这里一致。
 		clearNodeDeathForInstance(svcCtx, entry.reg.ZoneId, entry.nodeID, entry.reg.NodeUuid)
 		// 这个节点号此刻由这一代进程持有。失联之后号被接走的老进程靠它认出自己已不是这个号(node_holder.go)。
 		publishNodeHolder(svcCtx, nodeHolderRecord{
@@ -1087,6 +1119,13 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 			roleChanged := existed && prev.reg.SceneNodeType != entry.reg.SceneNodeType
 			if constants.IsWorldHostingType(entry.reg.SceneNodeType) && (!existed || roleChanged || identityChanged) {
 				RebalanceWorldChannelsForZone(ctx, svcCtx, entry.reg.ZoneId, wids)
+			}
+			// 节点转为计划排空(自报 admission = CLOSED,docs/design/scene-node-planned-drain.md §4.3):把它名下的
+			// 世界频道迁走。迁移在独立协程里跑,不堵 watch;同一节点重复 PUT 不会再起一条。
+			if entry.reg.Draining && (!existed || !prev.reg.Draining) {
+				logx.Infof("[LoadReporter] Zone %d: node %s started a planned drain (build=%q)",
+					entry.reg.ZoneId, entry.nodeID, entry.reg.Build)
+				ensureDrainMigration(ctx, svcCtx, entry.reg.ZoneId, entry.nodeID)
 			}
 		}
 

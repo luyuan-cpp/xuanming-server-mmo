@@ -2,11 +2,9 @@ package callerauth
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"strings"
+	"fmt"
 
 	base "proto/common/base"
 
@@ -19,11 +17,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// SecretEnv 与既有部署的内部身份密钥同源；不复用客户端 gate 票据密钥。
-const SecretEnv = "MMORPG_INTERNAL_AUTH_SECRET"
-
 // 在线域验签闸门的指标。label 只放 Reason 的有限枚举，绝不放 caller 或玩家标识（低基数纪律）。
-// 稳态下 result!="ok" 应恒 0：非 0 说明 gate 与服务密钥不一致、时钟漂移超窗、签名格式被改写或有伪造调用。
+// 稳态下 result!="ok" 应恒 0：非 0 说明 gate 的签名私钥与服务的公钥列表不配对、时钟漂移超窗、签名格式被改写或有伪造调用。
 var (
 	sessionVerifyTotal = metric.NewCounterVec(&metric.CounterVecOpts{
 		Namespace: "caller_auth",
@@ -97,38 +92,17 @@ func SessionInterceptor(v *Verifier) grpc.UnaryServerInterceptor {
 	}
 }
 
-type gateSecrets struct{ keys [][]byte }
-
-func (s gateSecrets) Verify(mac, data []byte) bool {
-	for _, key := range s.keys {
-		m := hmac.New(sha256.New, key)
-		_, _ = m.Write(data)
-		if hmac.Equal(mac, m.Sum(nil)) {
-			return true
-		}
-	}
-	return false
-}
-
-// GateInterceptor 从装配层注入的环境读取固定用途密钥，启动时缺失即拒绝。
-// Additional 只验不签，逗号分隔环境变量名，支持先分发验钥再切签钥的轮换。
+// GateInterceptor 从装配层注入的环境读取验签公钥（PublicKeysEnv），缺失或格式不对即拒绝启动。
+// 本进程只持公钥，签不出名。轮换不需要专门的开关：公钥列表里同时放新旧两把即可（keys.go）。
 func GateInterceptor(getenv func(string) string) (grpc.UnaryServerInterceptor, error) {
 	if getenv == nil {
-		return nil, errors.New("内部会话验签缺少环境读取器")
+		return nil, errors.New("callerauth: no environment reader for internal session verification")
 	}
-	names := []string{SecretEnv}
-	if additional := strings.TrimSpace(getenv(SecretEnv + "_ADDITIONAL_ENVS")); additional != "" {
-		names = append(names, strings.Split(additional, ",")...)
+	keys, err := ParsePublicKeys(getenv(PublicKeysEnv))
+	if err != nil {
+		return nil, fmt.Errorf("callerauth: %s is missing or malformed: %w", PublicKeysEnv, err)
 	}
-	secrets := gateSecrets{}
-	for _, name := range names {
-		key := getenv(strings.TrimSpace(name))
-		if len([]byte(key)) < 32 || key != strings.TrimSpace(key) {
-			return nil, errors.New("内部会话验签密钥未注入或不足32字节")
-		}
-		secrets.keys = append(secrets.keys, []byte(key))
-	}
-	return SessionInterceptor(NewVerifier(Options{Secrets: secrets, Enforce: true, AllowedCallers: []string{"gate"},
+	return SessionInterceptor(NewVerifier(Options{Keys: keys, Enforce: true, AllowedCallers: []string{"gate"},
 		// 超限提前翻代只会缩短重放窗口、不会放行验签失败的请求；必须看得见，才知道该调上限还是有异常流量。
 		OnNonceOverflow: func() {
 			sessionNonceOverflowTotal.Inc()

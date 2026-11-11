@@ -340,6 +340,8 @@ func TestLogicalDatabaseTablePlacement(t *testing.T) {
 	first, other := names(0), names(1)
 	require.True(t, first[ZoneMergedIntoTableName], "zone_merged_into 留第 0 片")
 	require.False(t, other[ZoneMergedIntoTableName])
+	require.True(t, first[ZoneMergeHistoryTableName], "zone_merge_history 与映射同库,留第 0 片")
+	require.False(t, other[ZoneMergeHistoryTableName])
 	for _, table := range []string{PlayerRouteTableName, RouteMetaTableName, PlayerNameTableName, PlayerNameOwnerTableName, AccountRoleTableName, AccountRoleRefTableName, AccountDirectoryTableName, AccountRoleTradeTableName, AccountRoleTransferTableName, AccountRoleAdmissionTableName, AccountRoleTradeHolderTableName, AccountRoleRemovalTableName, DirectoryShardTableName, "writer_slot"} {
 		require.Truef(t, first[table], "第 0 片缺 %s", table)
 		require.Truef(t, other[table], "别的片缺 %s", table)

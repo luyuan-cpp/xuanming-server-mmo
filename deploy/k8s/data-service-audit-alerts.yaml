@@ -106,20 +106,22 @@ spec:
               kafka-go 静默跳到日志起点,没有那一行,看同一分区的 `starting at offset A` 与 `seeking to offset B` 两行
               (A 非负且 B 大于 A 时,两者之差即丢失条数)。
               积压收尾时日志条数仍为 0,多为消费者已读入、尚未提交的消息所在段被删(没丢,但积压已在删除线上;见 runbook §7)。
-              记录条数与时间段上报回档负责人。根因通常是积压超过了每分区 log.retention.bytes(prod 512MiB),
-              见 runbook「保留期与积压」一节;放宽保留策略是负责人拍板项(G2a 规格 Q-1)。
+              记录条数与时间段上报回档负责人。根因通常是积压超过了审计 topic 每分区的 retention.bytes
+              (prod / prod-like 4GiB,按扛住 2 小时消费中断定;dev 128MiB),见 runbook「保留期与积压」一节。
 
         # 积压。比的是**单分区最大积压**(lag_max_partition_messages),不是全部分区合计(lag_messages):broker 的 retention.bytes
         # 按分区执行,积压集中在少数分区时(持有它的实例卡住 / 毒丸行卡住所在分区,G2a 规格 Q-3)合计还远没到线,那个分区已经开始被删。
         # 阈值与 for 必须按「离删除线还有多少**时间**」定,不能按条数拍:
-        #   单分区删除线(条)≈ retention.bytes ÷ 平均快照字节;prod 512MiB、~300KB 时约 1750 条,与分区数无关
-        #   (各分区均匀积压时合计约为它的 P 倍,P=3 约 5300 条)。开服示例速率 R=128/s、P=3 时单分区进水约 43 条/s,约 41 秒就到。
-        #   取单分区删除线的 30% ≈ 520 条、for 2m(retention.check.interval 为 2 分钟)。
-        #   520 只是 512MiB、300KB 的占位值:拿到实测快照大小(message_bytes)后按 runbook §4 的公式重算并在这里写明出处;
-        #   阈值按单分区计,换代扩分区本身不用重算。放宽 retention.bytes(Q-1)后同步放宽本阈值。
+        #   单分区删除线(条)≈ 审计 topic 的 retention.bytes ÷ 平均快照字节,与分区数无关(各分区均匀积压时合计约为它的 P 倍)。
+        #   审计 topic 的 retention.bytes 2026-11-11 定为 4GiB(缺口清单第 3 条,k8s_deploy.ps1 的 Apply-KafkaProfileDefaults,
+        #   prod 与 prod-like 同值;推导见 deploy/k8s/README.md「审计 topic 的 retention.bytes」)。快照大小按保守的 300KB 算,
+        #   删除线约 4GiB ÷ 300KB ≈ 14000 条,取 30% ≈ 4200 → 4000 条、for 2m(retention.check.interval 为 2 分钟)。
+        #   快照实际只有 15KB 时删除线约 28 万条,本阈值会早早响(按 15KB、单分区约 33 条/s 算,积压约 2 分钟就到 4000 条),偏早不偏晚。
+        #   拿到实测快照大小(message_bytes)后按 runbook §4 的公式重算并在这里写明出处;阈值按单分区计,扩分区本身不用重算。
+        #   改审计 topic 的 retention.bytes 时同步改本阈值(dev 档沿用 broker 缺省 128MiB,本规则不按 dev 定)。
         - alert: DataServiceAuditLagHigh
           expr: |
-            max by (consumer) (data_service_kafka_consumer_lag_max_partition_messages{consumer="player_snapshot"}) > 520
+            max by (consumer) (data_service_kafka_consumer_lag_max_partition_messages{consumer="player_snapshot"}) > 4000
           for: 2m
           labels:
             severity: critical

@@ -76,6 +76,8 @@ namespace
 		options.connect.password = config.password();
 		// 玩家域只接受带 hash tag 的键(§5.1):控制域的键发到这个句柄当场拒绝,单实例开发时也一样。
 		options.hashTagPolicy = redis_cluster::HashTagPolicy::kAllKeys;
+		// 控制集群的键也带 tag(全部 Redis 上 Cluster §3.1),只看「有没有 tag」拦不住它们,再按 tag 的形状拒绝。
+		options.keyDomain = redis_cluster::KeyDomain::kPlayer;
 		return true;
 	}
 
@@ -137,7 +139,8 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 	//   - A2′ 的闸门只认 A2′ 的应答(exit_release_mark.h);
 	//   - 改派核实的补写在 Lua 里原子复核 owner_epoch 与原 H(handoff_fence)。
 	// 去掉回调的代价只是:Redis 恢复后,条目要等到各自的下一次重试时刻才重发,而不是立刻抢发。
-	// 三个函数的 reconnected 参数在生产代码里已恒为 false,留待下次改 player_lifecycle 时一并删除。
+	// 下面三个函数原来用来区分「重连回调 / 定时器」的 reconnected 参数(重连时忽略重试间隔)已于 2026-11-11 删掉,
+	// 到期只看各条目自己的重试时刻。
     tlsPlayerRedis.Connect(loop, std::move(playerRedisOptions));
 
 	// 本 zone 的场景控制域(docs/design/control-plane-zone-scoping-20261105.md §4.5):scene_manager 写在本 zone 所属组控制域实例
@@ -164,16 +167,16 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     static constexpr double kRetryIntervalSec = 1.0;
     retryTimerId_ = loop->runEvery(kRetryIntervalSec, []()
                                    {
-        // A2′ 的有上限重发与截止拒绝(单调时钟,见 exit_release_mark.h)搭这个 1s 节拍。
+        // A2′ 的有上限重发与截止拒绝(单调时钟,见 exit_release_mark.h)搭这个 1s 节拍,时刻在这里取、显式传入。
         // 待入场表为空时直接返回。静态函数,不引入新的绑定。
-        PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/false);
+        PlayerLifecycleSystem::RetryInheritedMarkClears(exit_release_mark::Clock::now());
         // 没确认的 handoff 标记撤回也搭这个 1s 节拍重试(表为空时直接返回;条目自带 5s 重试间隔
         // 与"标记 TTL + 余量"的截止时刻,见 handoff_mark_withdraw.h)。静态函数,不引入新的绑定。
-        PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(/*reconnected=*/false);
+        PlayerLifecycleSystem::RetryPendingHandoffWithdrawals();
         // 改派待确认表的各阶段截止、核实的首发 / 重发、落地条目的检查,与撤回表、A2′ 用同一个 1s 节拍(单调时钟的
         // 时刻在这里取一次、显式传入)。表空时直接返回。静态函数,不引入新的绑定。
         // BeginShutdown 只取消周期存盘,本定时器在停机 drain 期间仍在跑:停机谓词等待确认表清空靠的就是它。
-        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now(), /*reconnected=*/false); });
+        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now()); });
     retryTimerActive_ = true;
 
     // 每 30 秒打一轮计数快照。

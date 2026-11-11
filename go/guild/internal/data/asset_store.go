@@ -98,6 +98,7 @@ import (
 	pb "proto/guild"
 
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/gameday"
 	"shared/safego"
 	"shared/workshard"
@@ -402,8 +403,11 @@ func isTerminalRecord(st pb.GuildAssetOpStatus) bool {
 // isRetryableBackground:后台写的重试分类 = 1213 / 9007 / errRetryTx(isRetryableTxError)再加 1205。
 // 与请求路径不同,后台写**重试** 1205:它没有玩家在等"稍后重试"的提示,锁等待超时之后再排一次队
 // 比把一个已定的终局留在内存里、等下一轮重投再投一次 scene 划算得多。
+// 另认权威 SQL 守卫判定的「提交前中止」(authoritysql.IsAbortedBeforeCommit,R6):事务里只发过纯 DML、COMMIT 还没发时
+// 连接断开或调用取消,库会回滚未提交的事务,确定没写,换一条连接整笔重跑是安全的。错误树里混有结局未知时它回假,照旧不重试。
+// 只加在这里,不加进 isRetryableTxError:那个还给请求路径的 retryOnDeadlock 计死锁指标、给 classifyCommitErr 分 COMMIT 错误用。
 func isRetryableBackground(err error) bool {
-	return isRetryableTxError(err) || isLockWaitTimeout(err)
+	return isRetryableTxError(err) || isLockWaitTimeout(err) || authoritysql.IsAbortedBeforeCommit(err)
 }
 
 // FinalizedOp 是一次**本次**终结的摘要,供提交后的推送使用。
@@ -452,7 +456,7 @@ func (s *GuildAssetStore) ListDue(ctx context.Context, nowMs uint64, limit int) 
 	return s.ListDueOwned(ctx, nowMs, limit, workshard.Filter{})
 }
 
-// ListDueOwned 非加锁一致性读,只回主键,走 idx_guild_asset_op_0 (status, next_attempt_ms)。
+// ListDueOwned 非加锁一致性读,只回主键,走 idx_guild_asset_op_0 (status, next_attempt_ms, op_id, player_id)。
 //
 // **两段查询**(X-03 防饿死,契约见 assetop.Store.ListDue):第一段只取新行(attempts < FreshAttemptLimit)并占满
 // limit;只有它不够时才发第二段取老行,且只补缺口。写成一条 SQL,退避封顶在 MaxBackoff 的老行永远"早就到期",
@@ -460,8 +464,8 @@ func (s *GuildAssetStore) ListDue(ctx context.Context, nowMs uint64, limit int) 
 // 同一行两段都出现,所以按 op_id 去重;第一段的 id 排前面,让 Claim 先抢新行。
 //
 // owned 是本副本负责的片(片号 = player_id % 64,assetop.OwnedDueLister;缺口清单第 25 条),两段都接在 WHERE 里、
-// LIMIT 之前:别的副本的行再早到期也不占本副本的名额。零值不过滤。idx_0 不含 player_id,分片条件和 lease_until_ms、
-// attempts 一样在回表那一步判,每查一行的代价不变;积压大时本副本要跳过别的副本的行才凑满一批
+// LIMIT 之前:别的副本的行再早到期也不占本副本的名额。零值不过滤。idx_0 带着 op_id 与 player_id(2026-11-11):
+// 按索引顺序扫、凑满就停;分片条件在索引条目上判,别的副本的行不回表,只有本副本的行才回表判 lease_until_ms、attempts
 // (docs/design/assetop-redelivery-sharding-20261110.md §2.4)。
 func (s *GuildAssetStore) ListDueOwned(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]uint64, error) {
 	if limit <= 0 {

@@ -69,11 +69,16 @@ var idIssuerInit = flag.Bool("id-issuer-init", false, "claim a never-used region
 // idIssuerRecover 在事故之后修复记录,上界只取幸存的记录;没有可信上界就拒绝,不猜起点。
 var idIssuerRecover = flag.Bool("id-issuer-recover", false, "repair the id issuer records from the surviving ones after an incident and exit")
 
-// idIssuerRebind 只和 -id-issuer-recover 一起用:允许把这个地域码的发号资格转到配置里的这两套 etcd 上。
-var idIssuerRebind = flag.Bool("id-issuer-rebind", false, "with -id-issuer-recover: move this region code to the configured etcd clusters")
+// idIssuerRebind 只和 -id-issuer-recover 一起用:允许把这个地域码的发号资格转到本部署环境和配置里的这两套 etcd 上。
+var idIssuerRebind = flag.Bool("id-issuer-rebind", false, "with -id-issuer-recover: move this region code to this deployment and the configured etcd clusters")
 
 // idIssuerRetire 让配置里的地域码永久退役:登记处留墓碑,之后这个码预留、初始化、恢复全部拒绝。
+// 码还在用时只能在绑定它的那个地域执行,否则拒绝。
 var idIssuerRetire = flag.Bool("id-issuer-retire", false, "retire the configured region code in the id registry forever and exit")
+
+// idIssuerRetireUnbound 只和 -id-issuer-retire 一起用:绑定这个码的地域已经不在、没法在那里执行时,确认之后从别处退役。
+var idIssuerRetireUnbound = flag.Bool("id-issuer-retire-unbound", false,
+	"with -id-issuer-retire: retire a code that is in use from a deployment it is not bound to, once the bound region is confirmed gone")
 
 // idRegistryOpen 开启全局号源登记处:写入第一个可认领的码。只在世界第一次部署(-id-registry-next 1),
 // 或登记处整个丢了数据重建时跑(-id-registry-next 取台账里用过的最大码 +1)。
@@ -102,18 +107,20 @@ const (
 
 // entryFlags 是选入口要看的 flag。
 type entryFlags struct {
-	migrate       bool
-	routeTool     bool
-	issuerInit    bool
-	issuerRecover bool
-	issuerRebind  bool
-	issuerRetire  bool
-	registryOpen  bool
+	migrate             bool
+	routeTool           bool
+	issuerInit          bool
+	issuerRecover       bool
+	issuerRebind        bool
+	issuerRetire        bool
+	issuerRetireUnbound bool
+	registryOpen        bool
 }
 
 // selectEntry 按 flag 选入口(纯函数,data_service_entry_test.go 表驱动钉住)。args 是 flag.Args()(第一个非 flag 参数起)。
 //   - -migrate、-route-tool、-id-issuer-init、-id-issuer-recover、-id-issuer-retire、-id-registry-open 同时给多个:拒绝(一次只做一件事);
 //   - -id-issuer-rebind 不和 -id-issuer-recover 一起:拒绝,它只是恢复的一个确认开关;
+//   - -id-issuer-retire-unbound 不和 -id-issuer-retire 一起:拒绝,它只是退役的一个确认开关;
 //   - -route-tool 但没有子命令:拒绝;
 //   - 没有 -route-tool 却带位置参数:拒绝 —— 以前这些参数被静默忽略,`data_service -f x.yaml freeze` 会被当成一次普通启动、
 //     起一个服务进发现池,而运维以为自己跑的是冻结。
@@ -129,6 +136,8 @@ func selectEntry(f entryFlags, args []string) (entryMode, error) {
 		return entryServe, errors.New("-migrate, -route-tool, -id-issuer-init, -id-issuer-recover, -id-issuer-retire and -id-registry-open are mutually exclusive")
 	case f.issuerRebind && !f.issuerRecover:
 		return entryServe, errors.New("-id-issuer-rebind only works together with -id-issuer-recover")
+	case f.issuerRetireUnbound && !f.issuerRetire:
+		return entryServe, errors.New("-id-issuer-retire-unbound only works together with -id-issuer-retire")
 	case f.routeTool && len(args) == 0:
 		return entryServe, errors.New("-route-tool needs a subcommand: data_service -f <yaml> -route-tool <subcommand> [flags]")
 	case f.routeTool:
@@ -176,13 +185,14 @@ const nodeRegisterListenPoll = 100 * time.Millisecond
 func main() {
 	flag.Parse()
 	entry, err := selectEntry(entryFlags{
-		migrate:       *migrateOnly,
-		routeTool:     *routeTool,
-		issuerInit:    *idIssuerInit,
-		issuerRecover: *idIssuerRecover,
-		issuerRebind:  *idIssuerRebind,
-		issuerRetire:  *idIssuerRetire,
-		registryOpen:  *idRegistryOpen,
+		migrate:             *migrateOnly,
+		routeTool:           *routeTool,
+		issuerInit:          *idIssuerInit,
+		issuerRecover:       *idIssuerRecover,
+		issuerRebind:        *idIssuerRebind,
+		issuerRetire:        *idIssuerRetire,
+		issuerRetireUnbound: *idIssuerRetireUnbound,
+		registryOpen:        *idRegistryOpen,
 	}, flag.Args())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "data_service: %v\n", err)
@@ -227,7 +237,10 @@ func main() {
 			return issuer.Recover(ctx, rebind)
 		}))
 	case entryIdIssuerRetire:
-		os.Exit(runIdIssuerTool(c, "id issuer retire", idIssuerRetireOp))
+		unbound := *idIssuerRetireUnbound
+		os.Exit(runIdIssuerTool(c, "id issuer retire", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
+			return idIssuerRetireOp(ctx, issuer, unbound)
+		}))
 	case entryIdRegistryOpen:
 		next := *idRegistryNext
 		os.Exit(runIdIssuerTool(c, "id registry open", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
@@ -663,14 +676,15 @@ func idIssuerInitOp(ctx context.Context, issuer *idissuer.Issuer) (string, error
 		return "", err
 	}
 	if !created {
-		return "this region code is already initialized on these etcd clusters, nothing changed", nil
+		return "this region code is already initialized by this deployment on these etcd clusters, nothing changed", nil
 	}
 	return "region code claimed in the id registry and both reservation records created", nil
 }
 
-// idIssuerRetireOp 是 -id-issuer-retire。已退役时什么也不做。
-func idIssuerRetireOp(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
-	retired, err := issuer.Retire(ctx)
+// idIssuerRetireOp 是 -id-issuer-retire。已退役时什么也不做。码还在用时只能在绑定它的地域执行;
+// unbound(-id-issuer-retire-unbound)是那个地域已经不在时的确认开关。
+func idIssuerRetireOp(ctx context.Context, issuer *idissuer.Issuer, unbound bool) (string, error) {
+	retired, err := issuer.Retire(ctx, unbound)
 	if err != nil {
 		return "", err
 	}

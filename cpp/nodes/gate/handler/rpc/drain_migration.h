@@ -48,7 +48,7 @@ inline constexpr std::chrono::minutes kEnterGameSettle{5};
 // 一个会话这一拍按什么身份迁。票据绑不绑玩家由 login 按 SessionDetails 的 player_id 判,gate 只决定迁不迁。
 enum class Candidate : uint8_t
 {
-	kSkip,       // 不迁:没验票、没登录成功、进场途中、选角界面但刚转发过 EnterGame、已推过 124
+	kSkip,       // 不迁:没验票、没登录成功、进场途中、选角界面但刚转发过 EnterGame、已推过 124、路由 lane 有在途或排队的请求
 	kInGame,     // 已进游戏:已绑角色、有场景路由、没有待补发的进场。票据绑定本人
 	kRoleSelect, // 停在选角界面:登录过、没绑角色、距上次 EnterGame 已满 kEnterGameSettle。票据不绑玩家
 };
@@ -91,7 +91,8 @@ void OnLease(const contracts::kafka::GateDrainMigrationEvent &event, SteadyTime 
 // 每秒一拍:先做滞留关闭,再在许可有效时发起至多 rate 个要票请求(在途不超过 2 × rate)。
 void Tick(SteadyTime now);
 
-// 客户端 EnterGame 被转发之前调用(client_session_handler.cpp 的 EnterGame 收包点,两种模式共用)。
+// 客户端 EnterGame 发给 login 的那一刻调用(client_session_handler.cpp ApplyLoginTransition):直连模式收包即发出,在收包点记;
+// 路由模式在 lane 真正发出 EnterGame 时由发出钩子记,还排在 lane 里的 EnterGame 由 Classify 的「lane 有在途或排队」挡住。
 void NoteEnterGameForwarded(SessionInfo &session, SteadyTime now);
 
 // 会话刚被推了 124(PushRedirect 推送成功后调):记下时刻,登记滞留关闭。同一会话只登记第一次。

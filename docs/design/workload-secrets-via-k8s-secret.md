@@ -20,7 +20,7 @@
 | 观战凭证 | `MMORPG_SPECTATE_TOKEN_SECRET` | node-config `SpectateTokenSecret`;match `Spectate.TicketSecret` | C++ gate(验)、match(签) | zone;match 在 infra |
 | battle 直连票据 | `MMORPG_BATTLE_TOKEN_SECRET` | battle-node-config `BattleTokenSecret` | C++ battle | infra |
 | match 运营入口 | `MMORPG_MATCH_OPS_CALLER_SECRET`(可不给 = 入口关闭) | match `Spectate.OpsCallerSecret` | match | infra |
-| 内部调用方验签 | `MMORPG_INTERNAL_AUTH_SECRET` | login `Secrets.InternalAuth.Value` | login(gate 侧早已经 Secret `gate-identity-auth` 注入) | zone |
+| 会话身份签名私钥(2026-11-11 起取代共用的 HMAC 验签密钥 `MMORPG_INTERNAL_AUTH_SECRET`,见 gate-online-identity.md §10.1) | `MMORPG_INTERNAL_AUTH_SIGNING_KEY` | 无(不进任何 ConfigMap) | 只有 gate,Secret `gate-identity-auth`(键 `signing-key`);login 与在线服务只拿公钥列表 `MMORPG_INTERNAL_AUTH_PUBLIC_KEYS`(不是密钥,明文 env) | zone |
 | 登录排队令牌 | `MMORPG_LOGIN_QUEUE_TOKEN_SECRET`(排队开才有) | login `Secrets.QueueToken.Value` | login | zone |
 | MySQL 口令 | `MMORPG_MYSQL_PASSWORD` | db `Database.Passwd`;data-service `SnapshotMySQL.Password`;trade / friend / player-inbox `MySQL.Password` | 这五个服务与各自的 `-migrate` Job | db、data-service 在 zone;其余在 infra |
 | gateway 数据源口令 | `MMORPG_GATEWAY_DB_PASSWORD` | gateway `spring.datasource.password` | gateway | zone |
@@ -42,7 +42,7 @@ C++ scene 读 node-config 但不用这几把令牌,不注入。用户名(`MMORPG
 ### 4.1 C++
 
 `cpp/libs/engine/config/config.cpp` 的 `readBaseDeployConfig` 对三把令牌加环境变量覆盖:变量非空就覆盖 yaml 的值,与 `ZONE_REDIS_PASSWORD` 同一模式,日志只记「已覆盖」不记值。
-变量名是固定的(C++ 侧其余密钥也都是固定名,如 `MMORPG_INTERNAL_AUTH_SECRET`)。缺变量时取 yaml(K8s 上为空串),生产档由各节点既有的空密钥校验拒启
+变量名是固定的(C++ 侧其余密钥也都是固定名,如 `MMORPG_INTERNAL_AUTH_SIGNING_KEY`)。缺变量时取 yaml(K8s 上为空串),生产档由各节点既有的空密钥校验拒启
 (gate `ValidateGateTokenSecretOrDie`、battle `ClassifyTokenSecret`、gate 的观战密钥校验)。
 
 ### 4.2 Go
@@ -79,8 +79,10 @@ gateway 启动期校验令牌密钥(拒绝占位与过短值)是既有缺口(以
 - `$script:WorkloadSecretCatalog`([ordered],键 = Secret 名):`Env`(变量名)、`SecretKey`、`Value`(脚本块,写路径上 `Initialize-InjectedSecrets` 之后求值;
   返回空串 = 本次不注入,如排队关、运营入口没开)、`Consumers`(Go / Java 服务名,C++ 写 `cpp:gate` / `cpp:battle`)。条目:`gate-token`、`spectate-token`、
   `battle-token`(取值抽成 `Resolve-BattleTokenSecret`,与 node-config 生成器共用校验)、`match-ops-caller`、`login-queue-token`、`mysql-auth`、`gateway-db-auth`。
-- 内部调用方验签不进表:login(以及 chat、friend、guild、trade、match、mail、rank)的容器早已经 `gate-identity-auth` 注入 `MMORPG_INTERNAL_AUTH_SECRET`
-  (`Apply-OneGoSvc` 开头那段),login 的 ConfigMap 只要改成 `Secrets.InternalAuth.Env`。
+- 会话身份签名不进表(2026-11-11 起,gate-online-identity.md §10.1):
+  - 私钥 `MMORPG_INTERNAL_AUTH_SIGNING_KEY` 只有 gate 引用,Secret `gate-identity-auth` 由 Apply-Zone 在 gate 之前建;
+  - login 与 chat、friend、guild、trade、match、mail、rank 只拿公钥列表 `MMORPG_INTERNAL_AUTH_PUBLIC_KEYS`,由 `Apply-OneGoSvc` 明文注入;
+  - login 的 ConfigMap 不再有 `Secrets.InternalAuth`。
 - `Sync-WorkloadSecrets -Namespace -Consumer`:对这个消费者用到、值非空的条目 `Apply-InjectedSecret`;同一次运行里同一个 namespace 的同一把只建一次。
 - `Add-WorkloadSecretsToManifest -Consumer -SvcName -ManifestContent`:`Add-GoSvcSecretEnv` 注入 env,`Add-PodTemplateAnnotationEntry` 追加指纹。
 - `Get-CppNodeWorkloadSecretEnvEntries -Role` / `Get-CppNodeWorkloadSecretAnnotations -Role`:C++ 三种工作负载形态共用(见 5.2)。

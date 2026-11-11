@@ -10,6 +10,21 @@
 > 两个存盘脚本常量与本线用例都没变。
 > **覆盖范围**:B0-2、B0-5、B0-4、B0-3 两批、B0-1,外加 S5a 投递账本的 C++ 用例(交接 §3 第 6 项最后一条)。**D1 1b-1 不在本单里**:D1 的文件现归落点线,验证单由 [placement-line-handoff-20261019.md](../placement-line-handoff-20261019.md) §4 第 2 步重写。
 
+## 0′. 2026-11-11 现状(先读这节)
+
+本单写于 10-20。到 11-11,大部分对象已被后来的改造删掉或重写,**只有下表标「仍要跑」的部分还有效**,其余各节只作历史记录保留:
+
+| 节 | 对象 | 11-11 现状 | 还要不要跑本节 |
+|---|---|---|---|
+| §8 B0-2 | 存盘 Lua 的 `dirty_keys_set` 写入 | 玩家存档 10-31 起只存 TiDB,`kSaveLuaScript` / `kSaveIfGuardLuaScript`、`MessageSyncRedisClient` 与死工程 `redis_test` 都已不在树里 | 不用,对象已删 |
+| §6 B0-3 | task:result 读回执分频道 | `go/shared/taskresult`、login 的 dispatcher、`DBTask.reply_instance` 都已随读回执链路删除 | 不用,对象已删 |
+| §9 S5a | 投递账本 `DbTaskDispatch*` | `db_task_dispatch_test.cpp` 与 `DbTaskDispatchSystem` 已随存盘改直写删除 | 不用,对象已删 |
+| §4 B0-5 | scene_manager 按 zone 批量刷新 | 已被「控制面按 zone 化」(缺口清单第 4、5 条)重写,`zone_registry.go` 已删;按 zone 选主、只 watch 本 zone、换 zone 分支走领导者收尾都已落地。验证以 `docs/design/control-plane-zone-scoping-20261105.md` §8 为准(Go 11-06、C++ 11-08 已跑通,部署契约与 kind 冒烟未跑) | 不用,改跑那边的 §8 |
+| §7 B0-1 | player_locator 按 gate 建索引 | 已改成按 slot 分片的死 gate 清扫(`gate_sweep.go`),存活集合理性闸门(清单 B1-1)也已落码。验证以 PROGRESS「2026-10-31 玩家态 Redis 集群化第 7 批」「2026-11-10 去单点批 C2」两条为准 | 不用,改跑那两条 |
+| §5 B0-4 | nofile 启动门槛 | `open_file_limit.h` 与 `open_file_limit_test.cpp` 字节未变(`node.cpp`、vcxproj 有他人改动)。Windows 侧:Codex 11-04 的整套运行里 `OpenFileLimit.*` 21/21 通过(`build/verification/loglevel-no-popup-20261105T021421360Z/client_endpoint_test/client_endpoint_test.stdout.log`)。**Linux 分支从未编译、运行过** | **仍要跑**:§5 第 4~8 步,都要先取得授权(Docker 构建、容器、kind) |
+| 部署接线 | `-NodeOpenFileLimitMode`、`maxUnavailable: 0`、`-WaitReady` 捞拒启行 | 已落码,命令在 PROGRESS「2026-10-22 B0-4 部署侧后续项」「B0-4 部署侧:包装入口透传 -NodeOpenFileLimitMode」两条;回滚脚本那部分已随 `k8s_zone_rollback.ps1` 退役 | **仍要跑**:按那两条执行 |
+| 新增 | login 注释与 CRITICAL 日志文案(11-11) | 见 PROGRESS「2026-11-11 开服线收尾核对」 | **仍要跑**:按那一条执行 |
+
 ## 0. 为什么重写
 
 只读核对(各项一名核查员,B0-5 另配一名复核)的结论:五项落码在当前树里**都完整生效**,fc3ff045e 合并没有带回旧逻辑,`k8s_deploy.ps1` 也没有重复函数定义。但原命令照着跑会误报:

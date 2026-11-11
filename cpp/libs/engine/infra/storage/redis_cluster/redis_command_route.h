@@ -6,10 +6,15 @@
 // 只认下面这些命令(按当前 C++ 代码实际用到的核对),其它一律 fail-closed:不知道键在哪,就不知道该发给谁。
 // 新增命令在 .cpp 的 kCommandKeySpecs 里加一行。
 //   键在第 1 个参数:GET SET HGET HSET HMGET HGETALL ZADD ZRANGE ZREM EXPIRE
+//                    SPUBLISH(分片频道按频道名路由;普通 PUBLISH 不登记,Cluster 下它广播到全部节点,
+//                    不随节点数扩展,docs/design/redis-cluster-all-domains-20261110.md §4.6)
 //   全部参数都是键:DEL EXISTS MGET
 //   按 numkeys 取键:EVAL EVALSHA
 //   无键,必须显式给路由键:PING
 //   发往任一已连接节点:SCRIPT LOAD
+//
+// 除了「哪些键必须带 tag」(HashTagPolicy),还按句柄所属的域检查 tag 的形状(KeyDomain,同上设计 §3.1):
+// 控制集群的族 tag 不能发到玩家域句柄,玩家域的 tag 也不能发到控制集群句柄。
 
 #include <cstddef>
 #include <cstdint>
@@ -42,6 +47,8 @@ namespace redis_cluster
 		kMissingHashTag,            // 多键命令有键没带 hash tag
 		kCrossSlot,                 // 多键命令的键不同 slot
 		kRoutingKeyMismatch,        // 显式路由键与命令自身的键不同 slot
+		kWrongDomainTag,            // 键或路由键的 tag 属于另一个 Redis 域(KeyDomain)
+		kMixedTags,                 // 控制集群的多键命令带着不同的 tag(碰巧同 slot 也拒绝,不让代码依赖哈希巧合)
 
 		kCount,
 	};
@@ -56,6 +63,8 @@ namespace redis_cluster
 		"missing_hash_tag",
 		"cross_slot",
 		"routing_key_mismatch",
+		"wrong_domain_tag",
+		"mixed_tags",
 	};
 	static_assert(std::size(kRouteRejectReasonNames) == static_cast<std::size_t>(RouteRejectReason::kCount),
 		"kRouteRejectReasonNames must list every RouteRejectReason");
@@ -82,8 +91,17 @@ namespace redis_cluster
 		                 // 单实例开发时两个句柄指向同一个实例,不查的话这种错要到上集群才暴露,而且表现是读写落在两边
 	};
 
+	// 键属于哪个 Redis 域,按 hash tag 的形状判(redis_slot::IsControlTag),与 Go 的 clusterredis.KeyPolicy 同一口径。
+	// 与 HashTagPolicy 正交:HashTagPolicy 管「哪些键必须带 tag」,KeyDomain 管「带着的 tag 必须是哪一种」。不带 tag 的键不归它管。
+	enum class KeyDomain : uint8_t
+	{
+		kUnrestricted,   // 不看 tag 的形状(缺省)
+		kPlayer,         // 玩家域与登录域:tag 不得是控制集群的族 tag。与 HashTagPolicy::kAllKeys 合用
+		kControl,        // 控制集群:tag 只能是登记过的族 tag;多键命令的每个键都带 tag,且是同一个 tag。与 kMultiKeyOnly 合用
+	};
+
 	// routingKey 为空表示按命令自身的键路由(command());非空表示调用方显式指定(commandForKey())。
-	// 带键的命令同样过多键检查,且路由键必须与键同 slot,显式路由不能绕开守卫。
+	// 带键的命令同样过多键检查,且路由键必须与键同 slot、同样按域检查,显式路由不能绕开守卫。
 	CommandRoute ResolveCommandRoute(std::string_view formatted, std::optional<std::string_view> routingKey = std::nullopt,
-		HashTagPolicy tagPolicy = HashTagPolicy::kMultiKeyOnly);
+		HashTagPolicy tagPolicy = HashTagPolicy::kMultiKeyOnly, KeyDomain keyDomain = KeyDomain::kUnrestricted);
 }

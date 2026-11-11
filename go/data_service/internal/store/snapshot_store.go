@@ -49,7 +49,7 @@ type SnapshotRow struct {
 	Reason       string
 	Operator     string
 	Data         []byte // source=0: JSON snapshotData; source=1: raw PlayerSnapshotEntry bytes
-	SnapshotGuid uint64 // source=1: C++ SnapshotId (SnowFlake); 0 for GM rows
+	SnapshotGuid uint64 // source=1: C++ SnapshotId (issuer snapshot segment, MixGuid-scrambled, not monotonic); 0 for GM rows
 	Source       uint32 // SnapshotSourceDataService | SnapshotSourceSceneKafka
 }
 
@@ -363,8 +363,10 @@ func (s *SnapshotStore) InsertSnapshot(ctx context.Context, row *SnapshotRow) (u
 //
 // **被消掉的那一类:两个写者在同一段间隙上互等插入意向锁。**
 // 老写法的 NOT EXISTS 子查询在 RR 下是**加锁读**:guid 不存在时锁住它所在的整段间隙。
-// snapshot_guid 是 SnowFlake、单调递增,新 guid 几乎总比表里所有 guid 都大,那段间隙几乎总是
-// (max_guid, +∞)。于是任意两个并发写者 —— **同 guid 或不同 guid 都一样** —— 都会:
+// 写这段时 snapshot_guid 还按 SnowFlake 单调递增,新 guid 几乎总比表里所有 guid 都大,那段间隙几乎总是
+// (max_guid, +∞)。(2026-11-11 更正:现在 snapshot_guid 是发号器 snapshot 号段经 MixGuid 打散的号,不单调,
+// 不同 guid 落进同一段间隙的概率随表变大而变小;同 guid 的并发写者仍落同一段间隙,下面的结论对它们照旧成立。)
+// 按当时的单调 guid,任意两个并发写者 —— **同 guid 或不同 guid 都一样** —— 都会:
 // 各拿到同一段间隙上的 S 锁(间隙 S 锁彼此兼容)→ 各自申请插入意向锁 → 各被对方的 S 间隙锁挡住
 // → 成环,一方收到 1213。也就是说,连"两个不同 guid 的写者"都会互杀,而它们本来毫无冲突。
 // 普通 INSERT 不做加锁读:重复键检查在唯一键上进行,查不到就只在目标间隙上取插入意向锁,

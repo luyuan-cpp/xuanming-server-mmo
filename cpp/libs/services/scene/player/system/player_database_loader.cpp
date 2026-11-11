@@ -41,6 +41,10 @@
 // 否则「预留落了、背包没落」会占住没有对应战斗的东西,「背包落了、预留没落」会让晚到的结算按持有量夹紧。
 #include "proto/common/component/player_item_hold_comp.pb.h"
 #include "modules/bag/item_hold.h"
+// 待寄邮件(docs/design/battle-overflow-mail.md):与扣消耗、入账同一次存盘提交,
+// 否则「结算落了、待寄没落」物品就没了,「待寄落了、结算没落」结算重做时会再发一份。
+#include "proto/common/component/player_mail_outbox_comp.pb.h"
+#include "mail_outbox_rules.h"
 #include "asset_op_ledger.h"
 #include "asset_op_system.h"
 #include "player/comp/player_inbox_runtime_comp.h" // PlayerInboxLedgerInvalidComp
@@ -214,6 +218,16 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 				  << " reason=" << err << " holds=" << itemHolds.holds_size()
 				  << "; holds carried as-is and still counted, repair needs a human";
 	}
+	// 待寄邮件(字段 27)跟着同一条 player_database 记录回来;旧存档没有这个字段 = 没有待寄,合法。
+	// 唯一创建点:无条件挂上、原样携带。校验不过只打 ERROR:条目照样留着、照样尝试寄送(邮件不收就一直留着),
+	// 删掉它等于把欠玩家的物品抹掉,而它是不是坏数据要人看(mail_outbox_rules::Validate 的说明)。
+	// 写路径(PlayerMailOutboxSystem::PrepareBattleOverflow)缺它即拒绝;存盘缺它整份拒存。
+	const auto& mailOutbox = tlsEcs.actorRegistry.emplace<PlayerMailOutboxComp>(player, message.mail_outbox());
+	if (auto err = mail_outbox_rules::Validate(mailOutbox); !err.empty()) {
+		LOG_ERROR << "[MailOutbox] metric=mail_outbox_invalid source=loader player_id=" << message.player_id()
+				  << " reason=" << err << " entries=" << mailOutbox.entries_size()
+				  << "; entries carried as-is and still retried, repair needs a human";
+	}
 	tlsEcs.actorRegistry.emplace<CurrencyComp>(player, message.currency());
 	// 补缴欠款(debts)是 PlayerCurrencyComp 的运行时结构,持久化载体是
 	// CurrencyComp.debts。这一对 LoadFromProto/SaveToProto 之前从未被调用过 ——
@@ -271,6 +285,8 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	const auto* clientRequests = FindPersistedComp<ClientRequestLedgerComp>(player, "ClientRequestLedgerComp", missing);
 	// 物品数量预留缺失同样整份拒存:补一份空表落盘,等于把还押在未结算战斗里的道具放出去。
 	const auto* itemHolds = FindPersistedComp<PlayerItemHoldComp>(player, "PlayerItemHoldComp", missing);
+	// 待寄邮件缺失同样整份拒存:补一份空表落盘,等于把已经属于玩家、还没寄出的物品抹掉。
+	const auto* mailOutbox = FindPersistedComp<PlayerMailOutboxComp>(player, "PlayerMailOutboxComp", missing);
 	const auto* currency = FindPersistedComp<CurrencyComp>(player, "CurrencyComp", missing);
 	const auto* currencyRuntime = FindPersistedComp<PlayerCurrencyComp>(player, "PlayerCurrencyComp", missing);
 	// 顶层未知字段缺了载体同样整份拒存:补空等于把新版本写进来的整列抹掉(混版本设计 §4.2 L1)。
@@ -325,6 +341,8 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_client_request_ledger()->CopyFrom(*clientRequests);
 	// 物品数量预留:与 bag_component 同一次 Marshal、同一次提交;位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
 	message.mutable_item_holds()->CopyFrom(*itemHolds);
+	// 待寄邮件:与扣消耗、入账同一次 Marshal、同一次提交;位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
+	message.mutable_mail_outbox()->CopyFrom(*mailOutbox);
 	message.mutable_currency()->CopyFrom(*currency);
 	// 必须在 CopyFrom 之后:CopyFrom 会覆盖整个 currency 子消息(含 debts),
 	// 反序会把刚写进去的欠款抹掉。

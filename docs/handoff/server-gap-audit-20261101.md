@@ -12,9 +12,9 @@
 - 已有认领、重置时先核落到哪一步:第 22 条(「服务器代码缺口补完」认领),第 25、26 条(原归「灰度发布、金丝雀发布和水平扩展」,该会话已结束);
 - 只做了一部分:第 17、19、27、28 条的剩余部分;
 - 设计已写、待落码:第 30 条(11-10 四批都已落码、未编译,待 Codex 验证;剩场景亲和与命令 topic 换代,等批 4 两项计数的压测数据再定,见第 30 行);
-- 已落码条目的「仍剩」:第 16、24 条;第 1 条的 Agones 名额收敛(11-10 补登,原文在第 1 条「仍剩」;11-10 先由「按缺口清单做完服务器代码(11-05 额度重置后)」会话认领并写了设计(`agones-scene-node-high-density.md` §13),还没落码;**同日负责人让「场景销毁认领:回滚原子化与重发幂等」会话现在做,已由该会话落码,未编译**,验证见 `docs/PROGRESS.md` 2026-11-10「Agones rooms 名额改为按身份的 List 条目」);第 7 条的「跨 zone 重定向第一次判不出停写」(11-10 补登,原文在第 7 条「仍剩」;11-10 先由「按缺口清单做完服务器代码(11-05 额度重置后)」会话认领,没动代码;**同日负责人让「玩家切换zone和gate链接」会话现在做,已由该会话落码,未编译**,验证见 `docs/PROGRESS.md` 2026-11-10「跨 zone 重定向读 login 发布的停写标记」);
+- 已落码条目的「仍剩」:第 16、24 条;第 1 条的 Agones 名额收敛(11-10 补登,原文在第 1 条「仍剩」;11-10 先由「按缺口清单做完服务器代码(11-05 额度重置后)」会话认领并写了设计(`agones-scene-node-high-density.md` §13),还没落码;**同日负责人让「场景销毁认领:回滚原子化与重发幂等」会话现在做,已由该会话落码,未编译**,验证见 `docs/PROGRESS.md` 2026-11-10「Agones rooms 名额改为按身份的 List 条目」;剩下的「改派挑目标不看容量」11-11 由同一会话改为改派前先占名额,未编译,验证见 2026-11-11「世界频道改派前先占名额」);第 7 条的「跨 zone 重定向第一次判不出停写」(11-10 补登,原文在第 7 条「仍剩」;11-10 先由「按缺口清单做完服务器代码(11-05 额度重置后)」会话认领,没动代码;**同日负责人让「玩家切换zone和gate链接」会话现在做,已由该会话落码,未编译**,验证见 `docs/PROGRESS.md` 2026-11-10「跨 zone 重定向读 login 发布的停写标记」);
 - 第 23 条:负责人 11-10 看过「暂不改」后要求现在就改,11-11 由「帮会榜积分写入去掉全服维护锁(C3)」会话落码,未编译,验证见 `docs/PROGRESS.md` 2026-11-11「帮会积分写入不再抢全服锁」。
-- 11-10 负责人新增第 34 条(全部 Redis 上 Cluster):「Redis 分布式水平扩展」会话认领,设计已写,7 批都没开工。
+- 11-10 负责人新增第 34 条(全部 Redis 上 Cluster):「Redis 分布式水平扩展」会话认领,设计已写;11-11 第 1 批已落码、未编译,第 2a 批起未开工。
 
 做法照旧:动手前在本表对应行认领;先写设计再落码;每批不超过 30 个文件;编译、测试与冒烟交 Codex;Java 只登记待做。
 
@@ -33,6 +33,48 @@
   - 第 24 条热池;
   - 第 30 条的场景亲和与命令 topic 换代;
   - 第 15 条的 `snapshot_guid` 分桶与按天分区。
+
+**11-11 核对(第 1~34 条;只对文档与代码核对,没有编译)**:
+
+- 第 1~33 条的主体都已落码或已结论不改,绝大多数未编译;各行写明的残余照旧。11-10 晚之后又落了三项,都未编译:
+  - 第 1 条最后一项「世界频道改派前先占名额」,见 `docs/PROGRESS.md` 2026-11-11 同名条目;
+  - 第 24 条的 `ReadyAfter` 已接同一分片条件(`go/match/internal/authority/work_owner.go` 的 `workReadyTicket`);
+  - 第 25 条「仍剩」三项,见 `docs/PROGRESS.md` 2026-11-11「资产指令重投分片第二批」。
+- 没落码的只剩第 34 条(全部 Redis 上 Cluster,7 批约 170~200 个文件):11-11 起由「服务器代码缺口补完」[37a1b5] 从批 1 做,`docs/PROGRESS.md` 里还没有任何一批的落码条目。(11-11 补记:[37a1b5] 写完 Go 的 `clusterredis` 拷贝与族表之后不在了;「Redis 分布式水平扩展」会话没有结束,只是重启后换了标识,现为 [3204dc]。它补完第 1 批并落码,未编译,见 PROGRESS 2026-11-11「全部 Redis 上 Cluster 第 1 批」。)
+- 第 32 条的回归用例 11-11 变红,同日已由另一个会话按下面的修法改好 `dead_node_reregister_test.go`(只改测试,未运行,待 Codex 重跑 scene_manager 全量)。Codex 11-11 跑 scene_manager 全量,`TestDeadNodeReregister_*` 里有 3 条失败(`docs/PROGRESS.md` 2026-11-11「跨 zone 停写标记验证结果」及其首错补充)。
+  - 原因(只读代码判断,没有运行):11-10 断线重连第三轮的 R15 改了重新注册时的处理(`clearNodeDeathForInstance`):换了进程,或认不出是哪一代时,保留 `death_at`,让老实例的 20 秒屏障走完。
+  - 这 3 条用例还按旧行为写,以为重新注册会当场清掉 `death_at`、收尾当拍就跑,所以期望出队 1 个,实际 0 个。
+  - 修法只改 `dead_node_reregister_test.go`:重新注册之后,先断言屏障压着、实例原样;再用现成的 `elapseBarrier` 推过屏障;最后断言照常收尾。业务代码不用改。
+- 除上面「等压测证据再定」的各项,下面这些残余也要压测数据才能定:
+  - 第 3 条审计 topic 的 `retention.bytes`;
+  - 第 14 条排队名次;
+  - 第 18 条深名次计数;
+  - 第 25 条到期索引加不加 `player_id`;
+  - 第 33 条住户预算 200。
+- 清单之外:负责人 11-11 要求所有节点都能随时无感重启、无感升级。核对结论是还做不到,记在 `node-lifecycle-elasticity-release-20261023.md` §3.7,没有编进本清单。
+
+**11-11 归属核对(会话「服务器代码缺口清单」逐条核对;负责人要求每一条剩下的事都要有窗口)**:下表是 11-11 全部条目里还没收尾的部分。「Codex」表示剩下的只是编译、测试、冒烟、部署契约或压测执行;「Java」表示只剩 Java 版,已在 Java 仓 `PARITY.md` 登记待做。新开的窗口都在 main 上做、不开分支。
+
+| 条目 | 还剩什么 | 归谁 |
+|---|---|---|
+| 全部已落码条目 | 编译、测试、冒烟(大部分没有运行证据) | Codex |
+| 1 | Agones 真集群的三条假设(设计 §13.8) | Codex 上集群前核对;落码会话「场景销毁认领:回滚原子化与重发幂等」 |
+| 2 | 四类情形没有工具出口、没有管理 RPC | **11-11 新开「缺口第 2 条残余:交易人工判定的工具出口」** |
+| 3、14、15、24(热池)、30(场景亲和、命令 topic)、33(住户预算) | 原为等压测证据定案;**负责人 11-11 改口径:「不用等压测数据了,先写完」**,改为现在按标准做法定案、落码,压测留作之后的验证 | **11-11 新开「缺口清单压测项:统一压测方案与定案」**(原定先写统一压测方案交 Codex;新口径已于 11-11 转告该会话) |
+| 17、18(rank 按片拆游标、深名次与深页) | 同上,现在定案、落码 | 「Turn battle gap closure handoff」11-11 接手(原在上一行,两会话 11-11 商定改归它) |
+| 20、25(到期索引) | 同上,现在定案、落码 | 「Turn battle gap closure handoff」11-11 认领(第 20 条测量方案与第 25 条重投分片都是它写的) |
+| 4、5、11 | 部署契约、kind 冒烟、告警入集群 | Codex;第 5 条的 Cluster 化并入第 34 条 |
+| 7、16、18、19、21、27 | 只剩 Java 版 | Java |
+| 9 | watch 的 DELETE 风暴 | 已由第 32、33 条覆盖 |
+| 22 | REVOKED 登记行与 slot 不回收(设计稿 §5.8) | **11-11 新开「缺口第 22 条残余:写者名册 REVOKED 行回收」** |
+| 24 | 已建房票巡检 `ReadyAfter` 分片 | 「数据覆盖审计交接文档」会话(约定它改完那个文件后接) |
+| 25 | 回收派发循环与 mail 过期清理的分工、循环卡死的活性指标 | **11-11 新开「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」** |
+| 29 | 网关全服前缀 watch 的扇出随 zone 数平方增长 | **11-11 新开「缺口第 29 条残余:网关健康探测的全服扇出」** |
+| 33 | 设计稿 §9 的残余 | **11-11 已收尾(未编译)**,原落码会话「Returning scene node: drain scenes no longer mapped to it」做的:持有者记录一直读不到、丢水位那一轮两条定为接受,前者加了指标 `scene_ownership_own_holder_known` 与告警,两条的人工退路写进 etcd 运维手册 §7a;告警的 promtool 与入集群写进 Codex 命令。验证见 `docs/PROGRESS.md` 2026-11-11「缺口第 33 条残余收尾」;住户预算归压测会话 |
+| 34 | 全部 Redis 上 Cluster,7 批 | 「服务器代码缺口补完」local_6cb05561(11-11 从批 1 开始) |
+| 35 | mail 截断告警永远不触发 | **11-11 新开**,同第 25 条那个会话 |
+
+清单之外、11-06 之后 PROGRESS 里的「新发现」也核过:断线重连 R13 已有「审计流水与玩家快照改走事务性发件箱」会话,R6、R7 归断线重连会话,战斗直连心跳已落码,全服帮会榜负责人定为删除且已删,数据覆写审计的新发现由「数据覆写审计换视角查找第 2 轮(11-12 额度重置后)」接着跑,chat 缺 kafka-go 依赖已补,排空迁移的纵深防御确认直读 Redis。
 
 结论:**没有全部做完。** 下面「未做」的项还在。负责人要求按最标准的方式做完;2026-11-01 暂停在这里是因为每周额度已用 94%(5 个会话共用,4 天后重置),不是判断它们不用做。
 
@@ -71,7 +113,7 @@
    - **(11-10 已落码,未编译,验证见 `docs/PROGRESS.md` 2026-11-10「Agones rooms 名额改为按身份的 List 条目」)Agones 名额收敛**:原来 rooms 是计数,三个来源会多记、收不回来(预占在登记之前崩溃;拆除任务的归还「至多一次」,置位之后退出或调用本身失败),改派时新 GameServer 满了还会让新节点少记;对账只告警。
      - 做法(设计见 `agones-scene-node-high-density.md` §13):rooms 改为 Agones List,每次占用一个按身份的条目(scene_id 加随机串),记录 `scene:{id}:agones_gs` 写「GameServer/条目」;要名额之前先写在途占用 `agones_rooms:zone:{z}:holds`,登记与改派转移的脚本在同一步消费它,对账只取消过期的在途占用(取消之后晚到的提交被挡住,回 `fenced`);增删按条目幂等,拆除任务的归还改为失败重做到成功;对账逐条判,两个方向都收敛(删孤儿、取消过期在途占用、补缺失条目、把改派时没转过来的名额转过来)。
      - 11-10 先由「按缺口清单做完服务器代码(11-05 额度重置后)」会话写了设计初稿;同日负责人让「场景销毁认领:回滚原子化与重发幂等」会话现在做,落码时改了两处(条目每次占用一个、不用裸 scene_id;在途占用代替「两轮加宽限期」),原因写在 §13.7。
-     - **仍剩**:真集群上的三条假设没核对(GSA 列表字段形状、直接 Update 改 `status.lists`、FleetAutoscaler 的 List 策略,§13.8);GameServer 满了时补不上、转不过来的只能告警(`SceneManagerAgonesRoomsNotConverging`)。根因是世界频道改派(rebalance、懒改派、死节点改派与自愈)挑目标不看容量、事后才转名额,目标满了那台就被超卖一份;标准改法是改派与新建一样「先占名额再搬」,要动世界频道 / 放置代次那条线的改派代码,还要定「属主已死、哪台都满」时搬不搬,写在 §13.10。**11-11 负责人让「场景销毁认领:回滚原子化与重发幂等」会话在这里做,已认领,在做。**
+     - **仍剩**:真集群上的三条假设没核对(GSA 列表字段形状、直接 Update 改 `status.lists`、FleetAutoscaler 的 List 策略,§13.8);GameServer 满了时补不上、转不过来的只能告警(`SceneManagerAgonesRoomsNotConverging`)。根因是世界频道改派(rebalance、懒改派、死节点改派与自愈)挑目标不看容量、事后才转名额,目标满了那台就被超卖一份。**(11-11 已落码,未编译,验证见 `docs/PROGRESS.md` 2026-11-11「世界频道改派前先占名额」)** 负责人让「场景销毁认领:回滚原子化与重发幂等」会话在这里做:改派与新建一样「先占名额再搬」,换更好的家满了不搬,属主已死时满了交给 GSA 另挑一台,哪台都满就不搬(与新建频道 fail-closed 同一取舍),设计写在 §13.10。之后对账「转过来」只收进程在改派 CAS 与名额提交之间退出留下的那一种。
    - **验证状态(11-10 核对)**:Codex 11-06 全量跑过 scene_manager(build、vet、`./internal/logic/...` 756 PASS,见 PROGRESS 同日「修正 scene_manager 五项旧夹具」),本条各批 Go 用例都在内;11-08 命名统一后相关检查也通过。各批 PROGRESS 条目写的变异取红都还没跑。
    - **(11-06 已落码,未编译,验证见 `docs/PROGRESS.md` 2026-11-06「销毁路径只改本 zone 的键」)销毁只改本 zone 的键**:认领脚本在同一步比对 `scene:{id}:zone`,不是认领方的 zone(或记录损坏)就一个键都不动;镜像级联与源迁移级联跳过登记在别的 zone 的子镜像;镜像只从本 zone(或本实例里没有 zone 记录)的源的子集合摘自己;显式 DestroyScene 只接本进程 zone 的请求,`zone_id` 没填按本进程的 zone。设计见 `scene-creation-architecture.md`「销毁只改本 zone 的键」,回归 `teardown_zone_scope_test.go`。
    - **仍剩(11-06 补记)**:建实例回滚补发的 DestroyScene 若早于节点处理完在途的 CreateScene,实体仍会留在节点上、没有映射。scene_manager 一侧收不了,由第 33 条「节点侧按 `scene:{id}:node` 对账」收:节点连续两次读到映射不是自己、过 60 秒宽限就排空销毁(11-06 已落码;11-08 Codex 命名统一那轮 `game.sln` 增量构建通过,`cross_zone_test` 里它的 `SceneOwnership*` 20 条与放置代次 `ScenePlacementFence.*` 8 条全 PASS,日志在 `build/verification/naming-audit-20261108/cpp-tests/cross_zone_test/`;真机冒烟没做)。
@@ -79,7 +121,7 @@
 2. **(11-05 已落码,未编译,验证见 progress.md §16「清单第 2 条后半」)交易卡死资产指令的终结工具和 Manual 合同的恢复入口。**
    - 终结工具:`go/trade/cmd/assetopfix`(11-01)。
    - 恢复入口:`go/trade/cmd/commercefix`(list、show、resolve),动作 resume、reissue、refund,只改合同行,新腿由引擎发号。转人工时把原阶段和原因记进 workflow。设计见 `jubaozhai-market.md` §15.7,手册 §4.2。
-   - 残余:原主已换、部分发放、竞价与拍品互相引用、已部分成交的市场单没有工具出口,要人工判定;没有 RPC 和管理后台。
+   - 残余:原主已换、部分发放、竞价与拍品互相引用、已部分成交的市场单没有工具出口,要人工判定;没有 RPC 和管理后台。**11-11 起由「交易 Manual 合同残余处置(缺口第 2 条)」会话接残余**(先在 `jubaozhai-market.md` §15.7 下写定处置,再落码)。
 
 3. **(11-05 剩余部分也已落码,未编译,验证见 progress.md §16「清单第 3 条剩余与第 6 条」)审计快照管道(X-4、L-07)。**
    - 11-02:C++ 生产者 `message.max.bytes` 16MiB、lz4;快照 topic 的 `max.message.bytes` 16MiB;发送失败带 `metric=audit_snapshot_send_failed`;`store.RunAuditRetention` 分批删过期行(快照 30 天、流水 180 天),索引、指标、告警。
@@ -155,11 +197,11 @@
 | 22 | 写者名册 | 每启动一次 Pod 永久用掉一条,上限 1024;频繁扩缩容或重启会用完 | `tools/scripts/k8s_deploy.ps1`「Every Pod start uses one entry」一段(该文件在改,行号会变) | 名册回收或按 StatefulSet 序号复用 | **11-11 落码完毕,未生成、未编译、未测试,待 Codex 验证**(命令、顺序与通过标准见 `docs/PROGRESS.md` 2026-11-11「写者名册按槽位换代」):账号按槽位、每次启动在槽位上换代(`writer_registry.boot_seq`,注册事务里把上一代退休),名册不再随启动消耗;12 个写者改 StatefulSet,槽位 = 序号;`TestFrequentRestartsNeverExhaustRoster` 守住「同一槽位启动 1100 次」。残余见设计稿 §5.8(REVOKED 行不清理);Java 只登记待做。**11-10 定案(设计稿 §4):账号按槽位、每次启动换代;槽位 = StatefulSet 序号;分 4 批落码。11-10 起由「缺口第 22 条:写者名册回收」会话(「核对其余 worktree 停着的修复有没有进 main」派出)接手,原认领会话「服务器代码缺口补完」已告知。** 以下是 11-06 的分析:**11-06 由「服务器代码缺口补完」会话认领;分析与方案已写,未落码,等负责人拍板**:[writer-roster-exhaustion-20261106.md](../design/writer-roster-exhaustion-20261106.md)。两种修法都要改写者闸门 2026-10-26 的不变量「主体和 instance 永久唯一」(理由是写后崩溃的 boot 排空证明接不上),预计 30 个文件以上。推荐「槽位身份 + 每次启动换代」:名册按槽位批准,每次启动在槽位上原子退休上一代、注册新一代(writer key 与 instance 仍每代唯一,闸门不用改),顺带解决死写者要人工逐个退休。待定:是否放宽「每次启动一个新 SQL 账号」;槽位按 StatefulSet 序号分还是按租约领 |
 | 23 | guild 排行缓存 | 改分、重建、解散摘榜、合服折叠都要持全服一把 Redis 锁(SETNX,20ms 轮询,TTL 5 分钟),全服公会改分串行;锁是为了让缓存重建与改分不互相覆盖 | `guild/internal/data/guild_repo.go:608`、`:666`、`:759`、`:861`、`:914-944`(抽查) | 改分走带版本的 Lua 写入(版本落一张 hash,解散写墓碑),重建按版本合并而不是整键替换,热路径不再拿锁 | **11-11 已落码,未编译**(负责人 11-10 看过 11-05 的「暂不改」后要求现在就改;验证见 `docs/PROGRESS.md` 2026-11-11「帮会积分写入不再抢全服锁」):`guild` 表加 `score_version`(改分事务里 +1);改分、建帮上榜、重建合并、折叠合并都走同一段「版本不比已记的旧才写」的脚本;解散在帮会合服组的每个区立墓碑,墓碑按区存、带到期时刻,24 小时后过期,不要清理任务;重建按版本逐条合并,删条目之前回库复核;折叠按版本合并、按读到的版本摘源区。写分、解散摘榜不再拿锁,维护锁只留给重建与折叠互斥,没有删。与左栏原方案的两处不同:不给所有榜键加一个 `{guild_rank}` tag,那会把全部区挤进一个槽;改成每个脚本只碰一个区的键,上 Cluster 时按区打 tag。墓碑不写「最大版本」,改成按区的到期集合,这样不用清理任务。设计见 `docs/design/guild_ranking_architecture_zh.md` §3、§5、§7 |
 | 24 | match | 一个池只归一个副本,热池上限就是单副本能力;Pending 全局先 LIMIT 32 再按归属过滤;5 个队伍维护循环每个副本都跑,每 500ms 给每支排队整队开一个锁全员票的事务;投榜没选主,每个副本都串行投全部 64 片 | `match/internal/logic/global_pool_matcher.go:40,80-86`、`authority/store.go:980`、`team/sql_recovery.go:85-145`、`authority/team_maintenance.go:30-66`、`authority/rank_publisher.go:174-218` | 热池拆归属键;Pending 按归属查;维护循环与投榜套用 poolowner 分工 | **11-06 由「全服匹配方案讨论」会话接手并落码(未编译,验证见 `global-match-hierarchical-pools.md` §12.7)**:撮合池、成局推进、整队维护(prepared / queued / forming / completed 四个循环)、闲置队伍到期、投榜共用一条归属规则 `svc.OwnsWork`(成员表为空时全部副本都做);成局推进按 battle_id、整队按发起者、闲置按 team_id 分 64 片,条件放在 SQL 的 LIMIT 之前;投榜按 (模式, 来源片) 分工。残余:已建房票巡检 `ReadyAfter` 同类,文件正由数据覆盖审计会话改,约定其落完后接同一分片条件;热池仍单写者,拆法按压测证据定(设计 §5.2 末条) |
-| 25 | 资产重投 | guild / trade 的 assetop 与 match 终局发件箱,所有副本读同一个到期队头,靠租约 CAS 互斥,空 CAS 随副本数增长 | `shared/assetop/reconcile.go:577-611`、`match/internal/authority/outcome_outbox.go:159,293` | 按玩家分片归属 | **11-10 已落码(未编译,「Turn battle gap closure handoff」会话)**,设计见 [assetop-redelivery-sharding-20261110.md](../design/assetop-redelivery-sharding-20261110.md),验证见 `docs/PROGRESS.md` 2026-11-10「资产指令重投与终局发件箱按玩家分片」:assetop 加可选能力 `OwnedDueLister` 与 `Loop.BindWorkOwner`,guild / trade 的重投到期扫描按 `player_id` 分 64 片(本 zone 的 stable 副本,成员表为空时做全部);match 终局发件箱整局结果按 `battle_id`、个人结算按 `player_id`,走 `OwnsWork`;条件都在 `LIMIT` 之前;新指标 `assetop_owned_shards`。**仍剩**:mail 与 data_service 回收的重投循环没分片(成员表怎么圈要另核);到期索引不含 `player_id`,积压大时多扫行,加不加列等压测;guild / trade 的终态行清理每个 stable 副本都跑(重复执行,另记);没加告警规则(设计里给了式子)。**11-10 「仍剩」三项由「G4a Redis 设计稿修订应用」会话认领**(原落码会话「Turn battle gap closure handoff」确认不做)。**11-11 这三项已落码(未编译、未运行,同一会话)**,设计见同一设计稿 §10~§13,验证见 `docs/PROGRESS.md` 2026-11-11「资产指令重投分片第二批」:mail(`mail-assetop`)与 GM 回收(`gm-recall-assetop`)的重投都按 `player_id` 分片、成员表都只圈本 zone(回收的流水库虽全集群一份,但 data_service 随 zone 部署、配置各 zone 自有,圈全服会漏片);guild / trade 终态清理的候选读都能把片条件放在 `LIMIT` 之前,改为复用重投成员表按 `player_id` 分片(类别键 `guild-assetop-cleanup` / `trade-assetop-cleanup`),不改单领导者;告警 `AssetOpOwnedShardsMissing`(`sum by (namespace, service) (assetop_owned_shards) < 64` 持续 5 分钟)与升级规则 `AssetOpOwnedShardsMissingBacklogAging`(再与最老未决年龄 > 30 分钟同时持续 30 分钟)。mail 原先没有任何 assetop 指标,已补。仍不做:到期索引加 `player_id`(等压测)、回收派发循环与 mail 过期清理的分工、循环卡死的活性指标 |
+| 25 | 资产重投 | guild / trade 的 assetop 与 match 终局发件箱,所有副本读同一个到期队头,靠租约 CAS 互斥,空 CAS 随副本数增长 | `shared/assetop/reconcile.go:577-611`、`match/internal/authority/outcome_outbox.go:159,293` | 按玩家分片归属 | **11-10 已落码(未编译,「Turn battle gap closure handoff」会话)**,设计见 [assetop-redelivery-sharding-20261110.md](../design/assetop-redelivery-sharding-20261110.md),验证见 `docs/PROGRESS.md` 2026-11-10「资产指令重投与终局发件箱按玩家分片」:assetop 加可选能力 `OwnedDueLister` 与 `Loop.BindWorkOwner`,guild / trade 的重投到期扫描按 `player_id` 分 64 片(本 zone 的 stable 副本,成员表为空时做全部);match 终局发件箱整局结果按 `battle_id`、个人结算按 `player_id`,走 `OwnsWork`;条件都在 `LIMIT` 之前;新指标 `assetop_owned_shards`。**仍剩**:mail 与 data_service 回收的重投循环没分片(成员表怎么圈要另核);到期索引不含 `player_id`,积压大时多扫行,加不加列等压测;guild / trade 的终态行清理每个 stable 副本都跑(重复执行,另记);没加告警规则(设计里给了式子)。**11-10 「仍剩」三项由「G4a Redis 设计稿修订应用」会话认领**(原落码会话「Turn battle gap closure handoff」确认不做)。**11-11 这三项已落码(未编译、未运行,同一会话)**,设计见同一设计稿 §10~§13,验证见 `docs/PROGRESS.md` 2026-11-11「资产指令重投分片第二批」:mail(`mail-assetop`)与 GM 回收(`gm-recall-assetop`)的重投都按 `player_id` 分片、成员表都只圈本 zone(回收的流水库虽全集群一份,但 data_service 随 zone 部署、配置各 zone 自有,圈全服会漏片);guild / trade 终态清理的候选读都能把片条件放在 `LIMIT` 之前,改为复用重投成员表按 `player_id` 分片(类别键 `guild-assetop-cleanup` / `trade-assetop-cleanup`),不改单领导者;告警 `AssetOpOwnedShardsMissing`(`sum by (namespace, service) (assetop_owned_shards) < 64` 持续 5 分钟)与升级规则 `AssetOpOwnedShardsMissingBacklogAging`(再与最老未决年龄 > 30 分钟同时持续 30 分钟)。mail 原先没有任何 assetop 指标,已补。仍不做:到期索引加 `player_id`(等压测)、回收派发循环与 mail 过期清理的分工、循环卡死的活性指标。**11-11 起由「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话接后两项**(回收派发循环与 mail 过期清理的分工、循环卡死的活性指标);到期索引归「Turn battle gap closure handoff」(见文首「11-11 归属核对」),本会话不碰 |
 | 26 | player_inbox | 入箱、拉取能扩;补发与对账只在单个 leader 上串行(`SweepTerminal` 恒回 0 是有意的:终态行是永久幂等收据) | `player_inbox/internal/inbox/loops.go:22,339-357` | 64 片分给各副本 | **11-10 核对,不再改**:对账已按 64 片分给各 stable 副本(`internal/shardowner`,11-06 落码,验证见 `docs/PROGRESS.md` 当天条目);清理、补发、gauge 有意保持单领导者:它们的活只随异常增长,单领导者加快速接任就够(`loops.go` 包注释、[消除单节点总纲](../design/no-single-node-horizontal-scaling-20261001.md) §9) |
 | 27 | mail | 帮会邮件计入全服活跃上限 100(还没有调用方);活动导入逐片锁活动行再全量 COUNT,名单越大越接近平方 | `mail/internal/data/repo.go:254-261`、`campaign.go:129,157` | 按帮计数;片表累加 | **11-05 活动导入已落码(未编译)**:已导入数改用片行 `recipient_count` 之和,整片一条多行 INSERT、撞主键按冲突整片拒绝(`campaign.go`,用例 `campaign_import_integration_test.go`);帮会邮件计入全服上限(还没有调用方)**11-10 已落码(未编译,「Turn battle gap closure handoff」会话)**:系统邮件仍按全服 `MaxActiveSystemMails`,帮会邮件按帮计 `MaxActiveGuildMailsPerGuild`(缺省 20),发件与建活动共用 `checkSharedMailCapacity`;设计见 `mail-system.md` 文末 2026-11-10 节,验证见 `docs/PROGRESS.md` 同日条目 |
 | 28 | client_rpc_router | 每个请求扫描并拷贝全服镜像选目标,开销随全服实例数增长;连全服全部目标 | `client_rpc_router/internal/discovery/node_watcher.go:269-300`、`:313-344` | 按 zone 建索引 + 原子快照,选点 O(1) | **11-05 选点已落码(未编译)**:镜像每变一次在写锁里重建只读索引(按 zone、按发布轨道各一份)并原子替换,选点无锁 O(1);轨道退回仍由 `releasetrack.Select` 在轨道组之间判断,语义不变(用例 `TestPickIndexFollowsEveryMirrorChange`)。「连全服全部目标」**11-10 已落码(未编译,第 30 条批 1)**:全服池目标改用确定性 aperture(同轨道路由服按 node_uuid 排名、在目标环上均匀各占一段,每台约连 `GlobalTargetSubsetSize`=4 台,各目标份额相等、一台不漏;没用设计初稿的 HRW,理由见该文 §5),连接缓存空闲满 10 分钟回收,`ForwardTimeoutMs` 必须短于回收时长;zone-scoped 目标随 gate 侧的 zone 子集收敛(批 2)。见 [connection-fanout-subsetting-20261106.md](../design/connection-fanout-subsetting-20261106.md) §3.3,验证命令在 `docs/PROGRESS.md` 11-10「连接扇出第 30 条批 1、批 4」 |
-| 29 | Java 网关 | assign-gate 限流每 zone 一把 Bucket4j 键、CAS 版,副本越多冲突越多,热键超 500ms 即放行;健康探测每副本每 5s 全前缀读全服 gate + scene | `java/gateway_node/.../AssignGateRateLimiter.java:97-104,167`、`RateLimitConfig.java:6,91-96`、`ZoneHealthProbeService.java:68-77` | 限流改单条 Lua 原子扣减;探测改 watch 或共享快照 | **11-05 已落码(未编译)**:限流改成一段 Lua 同时判 IP 桶与区桶(`ratelimit/RedisRateLimitStore.java`),先 IP 后区、区桶空不扣 IP 令牌(顺带了结开服限流设计 R13 / J1),拒绝路径只读、键在补满时过期,阈值随调用传入、滚动即生效;Redis 出错 fail-open 并熔断 5 秒,进程内冷却照判;新增 `gateway_rate_limit_decisions_total` / `gateway_rate_limit_fail_open_total`;去掉 Bucket4j 依赖。健康探测与 login 发现改为 list + watch 镜像(`etcd/NodeInfoMirror.java`),稳态不整段读,watch 出错或满 5 分钟才重新整段读。剩余:全服前缀的 watch 仍是每副本一份,事件扇出随 zone 数平方增长(只有变更,gate 每 10 秒一条);再要降,改由一个发布者汇总成每 zone 一条健康记录。`k8s_deploy.ps1` 与两份 ps1 契约测试的注释仍写着「Bucket4j」(键名与连法没变,只是叫法旧)。Java 版限流已是 Lua(等价),gateway 全服共用、探测读量随 zone 线性增长,不适用 |
+| 29 | Java 网关 | assign-gate 限流每 zone 一把 Bucket4j 键、CAS 版,副本越多冲突越多,热键超 500ms 即放行;健康探测每副本每 5s 全前缀读全服 gate + scene | `java/gateway_node/.../AssignGateRateLimiter.java:97-104,167`、`RateLimitConfig.java:6,91-96`、`ZoneHealthProbeService.java:68-77` | 限流改单条 Lua 原子扣减;探测改 watch 或共享快照 | **11-05 已落码(未编译)**:限流改成一段 Lua 同时判 IP 桶与区桶(`ratelimit/RedisRateLimitStore.java`),先 IP 后区、区桶空不扣 IP 令牌(顺带了结开服限流设计 R13 / J1),拒绝路径只读、键在补满时过期,阈值随调用传入、滚动即生效;Redis 出错 fail-open 并熔断 5 秒,进程内冷却照判;新增 `gateway_rate_limit_decisions_total` / `gateway_rate_limit_fail_open_total`;去掉 Bucket4j 依赖。健康探测与 login 发现改为 list + watch 镜像(`etcd/NodeInfoMirror.java`),稳态不整段读,watch 出错或满 5 分钟才重新整段读。剩余:全服前缀的 watch 仍是每副本一份,事件扇出随 zone 数平方增长(只有变更,gate 每 10 秒一条);再要降,改由一个发布者汇总成每 zone 一条健康记录。`k8s_deploy.ps1` 与两份 ps1 契约测试的注释仍写着「Bucket4j」(键名与连法没变,只是叫法旧)。Java 版限流已是 Lua(等价),gateway 全服共用、探测读量随 zone 线性增长,不适用。**11-11 起由「缺口第 29 条残余:网关健康探测的全服扇出」会话接残余**(全服前缀 watch 的扇出;先写设计再落码) |
 | 30 | gate | 连本 zone 全部 scene 和全服全部路由服(G×S + G×R);场景广播给每台 gate 各发一条整包,login 挑 gate 不看场景亲和;gate-cmd 固定 256 分区,每个节点解码全分区再过滤;每台 battle watch 全部同类节点 | `cpp/nodes/gate/main.cpp:376-378`、`cpp/libs/engine/core/.../client_message_sender.cpp:134-150`、`node_command_topic.h:39`、`cpp/nodes/battle/main.cpp:133` | 每台只连 k 个路由服;按场景亲和挑 gate;命令 topic 按 zone 拆或换代扩分区 | **11-06 设计稿已写,待落码**:[connection-fanout-subsetting-20261106.md](../design/connection-fanout-subsetting-20261106.md)。gate→路由服按 zone 取 HRW 子集(k=3);每类 C++ 节点只发现自己用到的类型,battle 只看自己的键;gate↔scene 的 zone 内全连接保持;命令 topic 每节点只 assign 一个分区,先加读放大计数再决定换代;场景亲和先测,要做时按 gatepick 的一维加(挑 gate 规则以「玩家切换zone和gate链接」会话为准)。分 4 批,见该文 §6。**11-10 按批分工**:批 1(路由服全服池子集与空闲回收,含第 28 条「连全服全部目标」)与批 4(读放大与扇出计数)归「服务器代码缺口补完」;批 2(gate 路由服子集与连接准入钩子)与批 3(每类节点的发现集合)原归「Turn battle gap closure handoff」,该会话未动手;**11-10 负责人改派给「缺口第 30 条:gate 连接与解码扇出」会话**,先补设计稿(批 3 补上 node_id 与端口分配对同类快照的依赖)再落码。**11-10 批 1、批 4 已落码(未编译,「服务器代码缺口补完」)**:批 1 见第 28 条;批 4 加了命令 topic 读放大计数 `node_command_consumed_total{node_type,topic,target}` 与告警 `deploy/k8s/node-command-topic-alerts.yaml`,以及广播扇出直方图 `scene_broadcast_gate_fanout{kind}`(Prometheus 写出器补了 histogram 类型)。Java 只登记批 1 的同类问题(gate 经 Dubbo 连全部提供者),验证命令在 `docs/PROGRESS.md` 11-10「连接扇出第 30 条批 1、批 4」。**11-10 批 2、批 3 已落码(未编译、未测试,「缺口第 30 条:gate 连接与解码扇出」;验证命令与通过标准见 `docs/PROGRESS.md` 11-10「连接扇出第 30 条批 2、批 3」与 11-11「……批 2、批 3 补」,后者多一条部署契约测试)**:gate 按 zone 号做 HRW,只连、只挑 k 台路由服(`GATE_ROUTER_SUBSET_SIZE`,缺省 3),掉出子集的过调用期限加 1 秒再拆,选点 READY 优先;每类 C++ 节点按 `main.cpp` 声明的发现集合 Range / watch(不再看 Friend、Guild、用不到的全服池类型),battle 只看自己那一条发现键;顺带修了 11-05 发现前缀按 zone 收窄后的逐个撞号:分配键 CAS 失败时同一个 txn 读回全服已分配的号,下次选号跳过。Java 已核对:批 2 的对应项就是上面 Java 登记的那条,批 3 已有等价或不适用(设计稿 §8)。**第 30 条仍剩**:场景亲和与命令 topic 换代,按设计先看批 4 两项计数的压测数据再定 |
 | 31 | 每次 AssignGate | 两次 MGET 读控制域 Redis 的排空标记 | `login/internal/logic/pkg/loginqueue/gatedrain.go:77`、`login/internal/svc/servicecontext.go:540` | 排空标记进 gate 目录镜像 | **11-05 已落码(未编译)**:没把标记搬进 etcd(要改 `k8s_gate_drain.ps1` 的原子标记脚本与 scene_manager 的读法),改成 login 进程内按 zone 的读穿透缓存 `loginqueue.DrainMarkCache`:选 gate 的各条路径(快速通道、容量判断、dispatcher、放行复核)共用一份,每个 login 实例每个 zone 每秒至多一次 MGET;并发过期只查一次,查询失败照旧按没人排空放行且同样缓存 1 秒。标记最多晚 1 秒生效,与排空流程本来就容忍的晚到玩家(标记前签出的票、gate 每 10 秒才报在线数)同一类。scene_manager 跨 zone 重定向的 `drainingGateIDs` 调用量小,没改。另一会话的设计稿 `gate-drain-session-migration.md`(未落码)第 2 步「读调用方 gate 的 draining 标记」是纵深防御,落码时要直读 Redis,不要走这份缓存 |
 
@@ -175,9 +217,14 @@
    - 后果:单个节点失租超过 TTL(etcd 抖动、网络闪断)就能把它上面的副本全部拆掉,里面的玩家被踢出;etcd 回档造成的大面积失租会放大成大面积拆实例。存活集闸门(第 9 条)只拦 fullSync,拦不住这条。
    - 方向:收尾任务记下判死那一代的 `node_uuid`,重新注册的是同一个 uuid 就撤掉任务(场景不动),是新 uuid 才按快照收尾。涉及 `reentry_barrier.go` 的任务脚本与 `handleWatchEvent` 的 PUT 分支,与按 zone 选主的会话同文件,动手前先对段落。只读核对过代码,没有复现。
 
-33. **(11-06 登记;11-06 初版已落码,20 条 C++ 用例在 11-08 Codex 的 `cross_zone_test` 全集里全过,见 `docs/PROGRESS.md` 2026-11-10「核对存活集闸门(B1-1)与缺口第 9、32、33 条的验证证据」;11-10 补完三项残余,已落码,未编译、未测试,用例改为 27 条 C++、新增 15 条 Go(含 etcd 修订号倒退后换纪元的持有者修正,11-10 按父会话评审重做),验证见 [scene-node-ownership-reconcile.md](../design/scene-node-ownership-reconcile.md) §10 与 `docs/PROGRESS.md` 2026-11-10「场景归属对账补完」)失联超过屏障又回来的节点,还托管着已被改派的场景。**
+33. **(11-06 登记;11-06 初版已落码,20 条 C++ 用例在 11-08 Codex 的 `cross_zone_test` 全集里全过,见 `docs/PROGRESS.md` 2026-11-10「核对存活集闸门(B1-1)与缺口第 9、32、33 条的验证证据」;11-10 补完三项残余,已落码,未编译、未测试,用例改为 28 条 C++(11-11 加 1 条)、新增 15 条 Go(含 etcd 修订号倒退后换纪元的持有者修正,11-10 按父会话评审重做),验证见 [scene-node-ownership-reconcile.md](../design/scene-node-ownership-reconcile.md) §10 与 `docs/PROGRESS.md` 2026-11-10「场景归属对账补完」)失联超过屏障又回来的节点,还托管着已被改派的场景。**
    - **11-10 补完**:去掉「etcd 身份确认有效才核对」,与 etcd 失联期间也按映射收敛(etcd 整体故障时 scene_manager 不判死、映射不变,不会误排空);scene_manager 把每个节点号最近一次登记的进程写进 `node:zone:{z}:{n}:holder`(按 etcd ModRevision 单调,`node_holder.go`),节点读到自己的号被更新的另一代接走就把本地场景全部排空;etcd 修订号倒退(换集群、不带 bump 恢复)时领导者按「先读本 zone 水位、后线性一致读 etcd 当前修订号」认出来,换一次 etcd 纪元,倒退之前的记录让位给新登记(告警 `SceneManagerEtcdRevisionRegressed`,处置见 etcd 运维手册 §7a);开始排空按每轮每节点 200 名住户的预算限速,控制域丢数据时分批改派;新增 `deploy/k8s/scene-ownership-alerts.yaml` 五条告警与契约测试。
-   - **11-10 之后仍剩**(设计稿 §9):本进程登记之后 scene_manager 一次都没写过它的持有者记录时认不出被接走,退回重连 etcd 时的冲突疏散;住户预算 200 是没有压测基线的初值;告警没过 promtool、没装进集群;控制域刚丢了修订号水位的那一轮认不出 etcd 倒退;倒退后没重启的老进程认不出被接走(etcd 运维手册 §7a 要求全部重启)。
+   - **11-10 之后仍剩**(设计稿 §9),**11-11 起由「场景归属对账」窗口(本条的落码会话)逐条收尾**,代码与文档都写完,未编译、未测试,验证见 `docs/PROGRESS.md` 2026-11-11「缺口第 33 条残余收尾」:
+     ① 本进程一直没读到自己的持有者记录时认不出被接走:**接受,加了兜底**。不拿本进程注册时 etcd 的应答修订号顶替,因为 etcd 倒退之后、换纪元之前会把旧纪元记录当成「别人更新的登记」误排空;节点新增指标 `scene_ownership_own_holder_known`,托管着场景却持续 10 分钟是 0 时告警 `SceneOwnershipOwnHolderUnknown`;退路是修写入或读,修不好且节点与 etcd 失联时核对登记后重启它,号真被接走时节点重连 etcd 也照常疏散(设计稿 §9 第 1 条)。
+     ② 控制域刚丢了修订号水位的那一轮认不出 etcd 倒退:**接受,有手工退路**。水位只在控制域丢数据时才会没有:整实例丢数据时持有者一起没了;备份恢复时两者出自同一份快照;主从切换只丢最后一次抬升。剩下只有人手工删键,手册写明不要删。退路是在那个 zone 的控制域上手工 `INCR scene_manager:etcd_epoch:zone:<z>`,写进 etcd 运维手册 §7a 第 4 步(设计稿 §9 第 9 条)。
+     ③ 告警的 promtool 与入集群:**交 Codex**,命令在设计稿 §10 第 7、7a 步(两份规则文件;入集群只在本机或指定的 dev 集群,没有 Prometheus Operator 就报告未入集群)。
+     ④ 住户预算 200 的初值:**交「缺口清单压测项:统一压测方案与定案」会话**,本窗口不管。
+     ⑤ 倒退后没重启的老进程认不出被接走:**按 etcd 运维手册 §7a 处理**,11-11 补写了原因与「逐个核对 scene Pod 启动时间晚于换集群时刻」一步。
    - **11-06 初版**(当时只在 etcd 身份确认有效时核对,11-10 去掉了这道门禁):scene 节点每 10 秒用 MGET 读本地全部场景的 `scene:{id}:node`(`tlsSceneControlRedis`,只读);连续两次不是本节点、且距第一次核对或最近一次 CreateScene 按号命中满 60 秒,就调 `SceneLifecycle::DestroyScene`(先 `BeginSceneDrain` 改派住户,没有绑定才销毁)。CreateScene 去重命中已有实体时 `SceneLifecycle::ReuseExistingScene` 把宽限期从头算(盖住 scene_manager「先建后改」迁回本节点的预建)。跨 zone 类型与镜像的口径与普通场景相同(设计稿 §5)。顺带收掉其他「有实体没映射」的孤儿,包括 11-05「场景拆除任务」残余里「回滚补发的 DestroyScene 早于在途 CreateScene」那一条(设计稿 §7)。
    - **11-06 初版的残余**(11-10 已补,见上):一直连不上 etcd 的节点不对账,分裂持续到 etcd 恢复;控制域丢数据时会大面积排空;还没有告警规则。
    - 以下是 11-06 登记时的原文。
@@ -199,7 +246,8 @@
 
 ### 11-10 新发现:挡水平扩展
 
-34. **(11-10 负责人要求;「Redis 分布式水平扩展」会话认领;设计已写、未落码,见 [redis-cluster-all-domains-20261110.md](../design/redis-cluster-all-domains-20261110.md))服务器里的 Redis 没有全部分布式水平扩展。**
+34. **(11-10 负责人要求;「Redis 分布式水平扩展」会话认领;设计已写、未落码,见 [redis-cluster-all-domains-20261110.md](../design/redis-cluster-all-domains-20261110.md))服务器里的 Redis 没有全部分布式水平扩展。** **11-11 接手**:原认领会话已结束(PROGRESS 11-11 有记),由「服务器代码缺口补完」[37a1b5] 接手,从批 1 开始按设计稿 §10 逐批落码;同名会话 [aca21c] 及其他会话要动第 34 条,先找它对分工。
+   - **11-11 第 1 批落码,未编译**:[37a1b5] 写了 `go/shared/clusterredis`(从 playerredis 拷来,加两种键策略)与 `go/shared/redisslot/control_keys.go` 之后不在了。「Redis 分布式水平扩展」会话(现为 [3204dc],负责人 11-11 让它开工)接着补完:`playerredis` 改成只剩别名、控制策略用例、C++ 族表镜像、`KeyDomain` 与 `SPUBLISH` 登记。第 2a 批起由 [3204dc] 继续,要动第 34 条的会话先找它。验证命令见 PROGRESS 2026-11-11「全部 Redis 上 Cluster 第 1 批」。
    - 负责人原话:「我要分布式水平扩展」。按 zone 组分单主实例(`redis-queue-g<N>`、`redis-ctl-g<N>`)和核心单主都不算完成,所有 Redis 都要能加主节点扩写入。
    - 现状(11-10 只读盘点):
      - 只有玩家域集群(玩家 + 登录域,已落码未运行)和 match 私有集群是 Cluster;排队、控制域每个 zone 组一个主;核心 `redis` 全服一个主,上面有 gate 标记、唤醒频道、四个服务的选主锁、guild 与 friend 私有键、player_locator 控制键、名字缓存。
@@ -210,6 +258,10 @@
      - 退役核心、queue、ctl 实例。单个 zone 的控制域与排队仍各在一个主节点上(设计 §6.2)。
    - 分 7 批,每批不超过 30 个文件,合计约 170~200 个文件。断线重连清单的 R8 并入句柄替换批,R7 归断线重连会话(11-10 两边约定,设计 §13)。
    - 依赖:唤醒订阅只订本副本分片,要等第 25 条;排队按名次拉长轮询间隔,要先核对客户端遵守 `RetryAfterMs`。
+
+### 11-11 新发现
+
+35. **(11-11 登记;出处 `docs/PROGRESS.md` 2026-11-10「缺口清单第 27 条帮会邮件按帮计数、第 20 条写者闸门加测量指标」的「顺带发现」)mail 的截断告警永远不会触发。**`go/mail/internal/metrics/metrics.go` 的 `ObserveListTruncated` 没有任何调用方,告警 `MailSystemListTruncated` 依赖它,所以 ListMails 读系统有效集撞上限时没有任何信号。方向:按代码事实二选一——在撞上限的路径调用它,或确认没有这条路径后删掉指标与告警。**11-11 起由「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话接。**
 
 ### 待确认
 

@@ -322,12 +322,14 @@ function Invoke-Dev([string]$Label, [string[]]$Arguments) {
     if ($reply.Code -ne 0) { throw "$Label 启动失败，查看 $logDir 下同名日志。" }
 }
 # friend / guild / mail 的异步推送经 shared/kafkautil 写 gate-cmd,必须与 gate 使用同一代主题。
-# chat 不写 gate-cmd / scene-cmd,但世界频道推送写 chat-world-bcast_g<N>,代号同样取 KAFKA_COMMAND_TOPIC_GENERATION,目前不在名单里;
+# chat 的世界频道推送写 chat-world-bcast_g<N>,代号同样取 KAFKA_COMMAND_TOPIC_GENERATION(shared/kafkacmd 在进程内只读一次);
+# 换代后复用旧 chat 进程,推送会写进旧代号的主题、gate 收不到,所以也纳入。
 # trade 资产通道走 gRPC,db/router 也不生产命令主题;不纳入此契约。
 # 校验与落记录共用名单,防止服务被复用后才在第一次推送时暴露旧 generation。
 function Test-UsesKafkaCommandContract([string]$Name) {
     # player_inbox:在线提醒(PlayerInboxNotifyEvent)发往 scene-cmd,与 guild / friend 的推送同为命令主题生产者。
-    return $Name -in @('gate','scene','battle','login','scene_manager','player_locator','match','guild','friend','mail','player_inbox')
+    # chat:世界频道广播 chat-world-bcast_g<N> 与命令主题同一代号。
+    return $Name -in @('gate','scene','battle','login','scene_manager','player_locator','match','guild','friend','mail','player_inbox','chat')
 }
 # 已运行进程不会重新读取进程环境；记录本启动器实际拉起的 PID 与启动时间，防止换代后复用旧进程。
 function Assert-RunningCommandContract($Process) {

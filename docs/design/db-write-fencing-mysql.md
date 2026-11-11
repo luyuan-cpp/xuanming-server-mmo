@@ -1866,22 +1866,36 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
 
 首次上线直接以「go/db `dual` + scene / login 严格提交屏障」整批起步，缺省配置即可正常登录。上面这些机制保留，供上线之后的回退、混跑与回档使用；届时再按 §8.3、§8.6 的门禁执行。上线后本段作废，改以当时的线上状态为准。
 
-### 2026-11-10 写事务闸门的开销与热点：先测再改（缺口清单第 20 条，未编译、未运行）
+### 2026-11-10 写事务闸门的开销与热点（缺口清单第 20 条；11-11 定案并落码，未编译、未运行）
 
 **问题**（11-05 全链路水平扩展盘点）：每笔写事务过闸门要多发几条语句，而且所有实例的写事务都改写本逻辑库同一张小表 `writer_slot`。在 TiDB 上，这张表很可能只落在一个 Region 里，成为单 Region 写热点，加副本也提不高写吞吐。
 
-**每笔写事务的闸门语句**（`go/shared/authoritysql/writer.go`，11-10 核对）：
+**每笔写事务的闸门语句**（`go/shared/authoritysql/writer.go`，11-11 落码之后）：
 
 1. BEGIN 之前点读一次 `route_meta(id=1)`（`beforeBegin`），核世代、可写和 epoch。这一次必须在 BEGIN 之前，不能挪进 RR 快照（`driver.go` `beginLocked` 的注释）。
-2. BEGIN 之后，锁住本实例轮到的那个 slot 行（每个实例 64 行轮转）。按锁原语二选一：
-   - `LOCK_TOUCH`：先按第 1 步读到的 epoch 做条件改写 `UPDATE writer_slot SET lock_touch=1-lock_touch WHERE … writer_epoch=? …`，再普通读这一行；
+2. BEGIN 之后，锁住本实例轮到的那个 slot 行（每个实例 64 行轮转，`lockSlot`）。按锁原语二选一：
+   - `LOCK_TOUCH`：按第 1 步读到的 epoch 做条件改写 `UPDATE writer_slot SET lock_touch=1-lock_touch WHERE … writer_epoch=? …`。命中就不再读这一行：命中说明它此刻的世代、epoch、状态与条件逐列相同，以前紧跟着的那次普通读读到的就是本事务刚写的这一版。没命中才读一次，分清是资格没了（拒绝）还是 epoch 被推进了（冻结）；
    - `SELECT_ONLY`：直接 `SELECT … FOR UPDATE` 这一行。
-3. 再读一次 `route_meta`，核可写，以及 epoch 与 slot 行一致。
-4. 读 `writer_registry`，核注册摘要、主体和 instance。
+3. 一条普通读同时取 `route_meta` 与 `writer_registry`（`readGateView`，以 `route_meta` 为驱动表左连注册行），核可写、epoch 与 slot 行一致，以及注册摘要、主体和 instance。
 
-合计每笔写事务多出 4～5 个往返；在 `LOCK_TOUCH` 档，每笔写事务还都写一次 `writer_slot`。事务外的纯读从 11-06 起只过读闸门：一次 `route_meta` 点读，不开事务，也不碰 `writer_slot`（第 21 条）。
+合计每笔写事务在事务内只发两条闸门语句；11-10 之前 `LOCK_TOUCH` 档是四条、`SELECT_ONLY` 档是三条。另有 BEGIN 之前那一次点读。`LOCK_TOUCH` 档每笔写事务仍写一次 `writer_slot`。事务外的纯读从 11-06 起只过读闸门：一次 `route_meta` 点读，不开事务，也不碰 `writer_slot`（第 21 条）。
 
-**先测**（交 Codex，按 AGENTS §6 全流程，对比表用 `stress_summarize.ps1` 出）：
+**11-11 定案**（负责人 11-11：「不用等压测数据了，先写完」；下面「之后的压测验证」改为定案之后的验证，不再是动手的前提）：
+
+1. **已落码：事务内的读合成一条，命中的条件写不再回读。** 每笔写事务省一到两个往返，闸门判定不变：
+   - `route_meta` 与 `writer_registry` 两条普通读本来就落在同一个事务快照上，合成一条读到的是同一版。
+   - 退休与冻结都要先拿到 slot 行锁才能落地，所以锁之后的这条读只是复核。
+   - 注册行不在时，左连出来的后五列是 NULL，判资格不符；这与分两条读时「注册行读不到 → 拒绝」相同。
+   - 注册行的核对规则收成一个函数 `registrationMatchesGrant`，开池时的启动核对与每笔写事务共用。
+2. **不做：预切分 `writer_slot`。** 理由：
+   - 收益有上限。每个逻辑库的写者只有几个；主键是 `(writer_key, slot)`，一个写者的 64 行连在一起。按 `writer_key` 切，最多把这几个写者分开，切不开单个写者的负载。
+   - 权限不对口。TiDB 的 `SPLIT TABLE` 要求表的 `INSERT` 权限，`writer_slot` 只有注册账号有；防合并的 `ALTER TABLE … ATTRIBUTES 'merge_option=deny'` 要 `ALTER`，只有迁移账号有。为预切分给迁移账号 `writer_slot` 的 `INSERT`，会放宽写者资格表的最小权限。
+   - 不能按写者切。每次启动都换一个新的 `writer_key`，在注册时按写者切，再禁合并，Region 会随启动次数无限增长。
+   - 真要做，路线是：迁移时由迁移账号设 `merge_option=deny`；注册提交之后，由注册账号按 `writer_key` 首字节做固定的 16 段切分（尽力而为，失败只告警）。触发条件是：KeyViz 或 `tidb_hot_regions` 显示 `writer_slot` 所在 Region 是本库最热的写 Region，同时加副本后存档 TPS 不再上涨。
+3. **加库是扩写吞吐的手段**：玩家档每 zone 一个库，是 `NewPlayerStorageId` 的静态规则。写热点按库分摊，加库按[玩家数据 TiDB 扩容方案](player-data-tidb-scaling-plan.md)的分库办法做，不提高单个闸门的吞吐。
+4. **不做：去掉 BEGIN 之前那次 `route_meta` 读。** 它给 `LOCK_TOUCH` 档的条件写提供 epoch，这是一次当前读的 epoch 校验；挪进事务就落进了 RR 快照（见 `beginLocked` 注释）。要动它，得连锁原语资格一起重新论证。
+
+**之后的压测验证**（交 Codex，按 AGENTS §6 全流程，对比表用 `stress_summarize.ps1` 出）：
 
 - **负载**：以玩家存盘（go/db）为主的写负载，单 zone、单存档库。存档副本数按 1 → 2 → 4 阶梯加，每档稳态不少于 5 分钟。
 - **客户端侧**：用新指标 `writer_gate_seconds{logical_db, phase}`（phase 取 `before_begin`、`enter`、`read`），和同一个库的写事务总耗时对比（go/db 存盘接口已有耗时直方图）。
@@ -1889,28 +1903,22 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
   - 在 `information_schema.cluster_statements_summary` 里按语句摘要，看 `route_meta` 点读、`writer_slot` 改写或加锁读、`writer_registry` 读的执行次数与平均耗时，并与业务语句对比；
   - 用 Dashboard 的流量可视化（KeyViz）看 `writer_slot`、`route_meta` 所在 Region 的读写热度；
   - 用 `information_schema.tidb_hot_regions` 和 `SHOW TABLE writer_slot REGIONS` 看这几张表落在几个 Region、leader 在哪几台 TiKV 上。
-- **判据**（任一成立就改）：
-  - 加副本后，存档 TPS 没有随副本数近似线性增长，同时热点 Region 的写 QPS 顶住不涨；
-  - `before_begin` 与 `enter` 两段的 p50 之和，超过写事务 p50 的 20%。
-- 两条都不成立就不改，结论记在本节。不预先宣称有提升。
+- **看什么**：
+  - 加副本后，存档 TPS 是否随副本数近似线性增长，热点 Region 的写 QPS 是否顶住不涨（顶住就按上面第 2 条的路线重新评估预切分）；
+  - `before_begin` 与 `enter` 两段的 p50 之和占写事务 p50 的比例，与 11-10 之前的四条 / 三条语句相比降了多少。
+- 不预先宣称有提升，对比表出来之后结论记在本节。
 
-**改法候选**（测出问题后从上往下取，风险依次升高）：
+**落码**：
 
-1. **事务内两条普通读合成一条**：`route_meta` 和 `writer_registry` 用一条只读语句一起读。两种锁原语都适用，这条读不加锁。
-   - 等价性：两条读都发生在 slot 行锁之后；退休与冻结都要先拿到 slot 行锁才能落地。所以锁之后读一个快照，与读两个快照判出的结果相同。
-   - 收益：每笔写事务省 1 个往返。
-   - `SELECT_ONLY` 档的加锁读不能一起并进来：`FOR UPDATE` 会把 `route_meta` 也锁上，本库全部写事务就被串行化了。
-2. **预切分 `writer_slot`**：按 `writer_key` 前缀切成多个 Region，让各实例的 slot 行分到不同 TiKV 上，消除单 Region 写热点。不改闸门语义，只改建表（TiDB 的 SPLIT TABLE 或建表选项）。项目未上线，迁移按整批重建。
-3. **加库，而不是提高单个闸门的吞吐**：玩家档每 zone 一个库，是 `NewPlayerStorageId` 的静态规则。写热点按库分摊，加库按[玩家数据 TiDB 扩容方案](player-data-tidb-scaling-plan.md)的分库办法做。
-4. **不做：去掉 BEGIN 之前那次 `route_meta` 读。** 它给 `LOCK_TOUCH` 档的条件写提供 epoch，这是一次当前读的 epoch 校验；挪进事务就落进了 RR 快照（见 `beginLocked` 注释）。要动它，得连锁原语资格一起重新论证。
-
-**本轮落码**：只加测量用的 `writer_gate_seconds`，闸门判定不变。
-
-- 定义在 `go/shared/authoritysql/metrics.go`；
-- 三个观察点在 `writer.go` 的 `beforeBegin`、`enter`、`admitRead`；
-- 单测 `metrics_gate_test.go`。
+- 11-10：测量用的 `writer_gate_seconds`，闸门判定不变。定义在 `go/shared/authoritysql/metrics.go`；三个观察点在 `writer.go` 的 `beforeBegin`、`enter`、`admitRead`；单测 `metrics_gate_test.go`。
+- 11-11：`writer.go` 的 `enter` 拆出 `lockSlot`、`readSlotRow`、`readGateView`、`registrationMatchesGrant`、`parseRawMeta`；`verifyBootRegistration` 改用 `registrationMatchesGrant`。单测 `writer_frozen_test.go`：假连接认得合并读并数语句；新增 `TestGateEnterSendsTwoStatements`、`TestGateDeniesWhenRegistrationRowIsMissing`、`TestGateLockTouchEpochAdvancedDuringEnterIsFrozen`；原有的冻结与拒绝分类用例不改，照样要过。
 
 **验证**（交 Codex）：
 
-1. 在 `go/shared` 下（`GOTOOLCHAIN=local`）跑 `go vet ./authoritysql/` 与 `go test -count=1 ./authoritysql/`。
-2. 真库闸门用例按 `writer_gate_tidb_test.go` 文件头的门控跑一遍，确认判定不变。
+1. 在 `go/shared` 下（`GOTOOLCHAIN=local`）跑 `gofmt -l authoritysql/`（应无输出）、`go vet ./authoritysql/` 与 `go test -count=1 ./authoritysql/`。上面三条新用例与 `TestGateClassifiesFrozenApartFromDenied` 全部要过。
+2. 真库闸门用例：合并读用了 `LEFT JOIN`，要在真库上走一遍。MySQL 与 TiDB 各跑一轮，两种锁原语（`MMORPG_SQL_FIXTURE_LOCK_PRIMITIVE`）都要跑。门控按 `writer_gate_tidb_test.go`、`writer_tidb_test.go`、`writer_succession_tidb_test.go` 文件头：设 `MMORPG_SQL_FIXTURE_ADMIN_DSN` 等夹具变量，再带上 `MAIL_RANK_REQUIRE_TESTS=1`，没配齐就直接失败、不跳过。
+3. 变异取红（在 `%TEMP%` 副本里改，不动主仓），每项都要红在目标断言上、不是编译错误：
+   - 把 `lockSlot` 的 `LOCK_TOUCH` 命中分支改成仍去读 slot 行：`TestGateEnterSendsTwoStatements/LOCK_TOUCH` 红；
+   - 删掉 `enter` 里的 `registrationMatchesGrant` 判定：`TestGateDeniesWhenRegistrationRowIsMissing` 与 `TestGateClassifiesFrozenApartFromDenied/registry_主体不符是资格问题` 红；
+   - 删掉 `enter` 里的 `|| meta.WriterEpoch != epoch`：`TestGateLockTouchEpochAdvancedDuringEnterIsFrozen` 红。
+   - 合并读改成内连接之后，注册行缺失时一行都读不到，同样判拒绝。单测的假连接不解析 SQL，这一点只能由第 2 步的真库用例覆盖。

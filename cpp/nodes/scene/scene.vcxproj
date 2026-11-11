@@ -260,5 +260,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="id_segment_request_table.h" />
+    <ClInclude Include="id_segment_transport.h" />
   </ItemGroup>
 </Project>

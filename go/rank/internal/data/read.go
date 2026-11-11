@@ -96,7 +96,8 @@ func scanEntries(rows *sql.Rows) ([]*rankpb.RankEntry, error) {
 }
 
 // Page 回一页与本人名次,同一快照(readTx)。页码 / 页长的钳制与以前相同:0→1、0→20、>50→50,越界页码钳到末页,
-// 空榜 page_count = 1。总数取榜行上维护的 entries;这一页顺着名次索引 LIMIT / OFFSET 取,开销随页码增长、与榜长无关。
+// 空榜 page_count = 1。总数是各片行 entries 之和(boardEntries,一代至多 maxSourceShards 行);这一页顺着名次索引
+// LIMIT / OFFSET 取,开销随页码增长、与榜长无关。
 func (r *Repo) Page(ctx context.Context, player uint64, in *rankpb.GetRankPageRequest) (*rankpb.GetRankPageResponse, error) {
 	if in == nil || player == 0 {
 		return nil, ErrInvalid
@@ -118,7 +119,11 @@ func (r *Repo) Page(ctx context.Context, player uint64, in *rankpb.GetRankPageRe
 		if err != nil {
 			return err
 		}
-		pages := (b.Entries + uint64(size) - 1) / uint64(size)
+		total, err := boardEntries(ctx, tx, b.BoardId, b.Generation)
+		if err != nil {
+			return err
+		}
+		pages := (total + uint64(size) - 1) / uint64(size)
 		if pages == 0 {
 			pages = 1
 		}
@@ -126,7 +131,7 @@ func (r *Repo) Page(ctx context.Context, player uint64, in *rankpb.GetRankPageRe
 		result = &rankpb.GetRankPageResponse{
 			Board:      boardKey(b),
 			State:      rankpb.RankGenerationState(b.State),
-			TotalCount: b.Entries,
+			TotalCount: total,
 			Page:       uint32(selected),
 			PageSize:   size,
 			PageCount:  pages,

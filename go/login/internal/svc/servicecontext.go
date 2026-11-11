@@ -365,9 +365,8 @@ func activeSecrets() *config.ResolvedSecrets {
 		return config.ActiveSecrets
 	}
 	return &config.ResolvedSecrets{
-		GateToken:    &config.SecretSet{},
-		QueueToken:   &config.SecretSet{},
-		InternalAuth: &config.SecretSet{},
+		GateToken:  &config.SecretSet{},
+		QueueToken: &config.SecretSet{},
 	}
 }
 
@@ -751,7 +750,11 @@ func (c *ServiceContext) SetNodeId(nodeId int64) {
 // 寻址与两道 fail-closed 守卫都在 buildGateCommandMessage 里(gate_command.go),
 // 这里只负责组业务字段并把算好的 (topic, partition) 原样交给生产者。
 // loginGeneration 是本条登录链铸出的代次,随 BindSessionEvent 下发给 gate(scene-enter-session-fence.md §4)。
-func (s *ServiceContext) SendBindSessionToGate(gateID string, gateInstanceID string,
+//
+// ctx 只用来取 trace 写进消息头(docs/design/distributed-tracing.md §6.2),gate 处理这条命令时接上同一次 EnterGame;
+// 它不控制发送超时(sarama 同步发送不收 ctx,上界由生产者自身的超时配置决定),已取消的 ctx 也照常发送。
+// 本文件里 KickSessionOnGate、PushTipToSession 与 gate_command.go 的 PushTipToUnboundSession 同口径。
+func (s *ServiceContext) SendBindSessionToGate(ctx context.Context, gateID string, gateInstanceID string,
 	event *kafkapb.BindSessionEvent) error {
 
 	msg, err := buildBindSessionCommand(gateID, gateInstanceID, event)
@@ -759,7 +762,7 @@ func (s *ServiceContext) SendBindSessionToGate(gateID string, gateInstanceID str
 		return err
 	}
 
-	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+	if err := s.KafkaClient.SendToTopicPartitionContext(ctx, msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
 		return fmt.Errorf("send gate bind session command to %s/%d: %w", msg.Topic, msg.Partition, err)
 	}
 
@@ -771,13 +774,13 @@ func (s *ServiceContext) SendBindSessionToGate(gateID string, gateInstanceID str
 // playerID 是被踢会话所属玩家,loginGeneration 是发起踢线、已提交的那条登录链铸出的代次;
 // 两者都写进 KickPlayerEvent payload,由 gate 的 ClassifyKick 核对后才踢
 // (docs/design/scene-enter-chain-residuals.md §2.2 ③④)。调用方只能在会话记录提交之后调用。
-func (s *ServiceContext) KickSessionOnGate(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, loginGeneration uint64) error {
+func (s *ServiceContext) KickSessionOnGate(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, loginGeneration uint64) error {
 	msg, err := buildKickPlayerCommand(gateID, gateInstanceID, sessionID, playerID, loginGeneration)
 	if err != nil {
 		return err
 	}
 
-	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+	if err := s.KafkaClient.SendToTopicPartitionContext(ctx, msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
 		return fmt.Errorf("send gate kick command to %s/%d: %w", msg.Topic, msg.Partition, err)
 	}
 
@@ -793,13 +796,13 @@ func (s *ServiceContext) KickSessionOnGate(gateID string, gateInstanceID string,
 // 与 Bind / Kick 同一个生产者、同一条寻址收口(buildGateCommandMessage 的三道 fail-closed
 // 守卫照样生效)。发送是同步的,时长上界由 sarama 生产者自身的超时与重试配置决定,这里不另加
 // 重试:目标会话可能已经断开,重发没有意义。tipID 必须来自导表器生成的枚举,不许手写数字。
-func (s *ServiceContext) PushTipToSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
+func (s *ServiceContext) PushTipToSession(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
 	msg, err := buildPushTipCommand(gateID, gateInstanceID, sessionID, playerID, tipID)
 	if err != nil {
 		return err
 	}
 
-	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+	if err := s.KafkaClient.SendToTopicPartitionContext(ctx, msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
 		return fmt.Errorf("send gate push tip command to %s/%d: %w", msg.Topic, msg.Partition, err)
 	}
 

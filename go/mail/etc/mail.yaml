@@ -35,6 +35,8 @@ Producers:
   admin: MAIL_PRODUCER_SECRET_ADMIN
   rank: MAIL_PRODUCER_SECRET_RANK
   guild: MAIL_PRODUCER_SECRET_GUILD
+  # C++ scene 把两包都放不下的战斗掉落寄进邮箱(docs/design/battle-overflow-mail.md),sender_kind = 5。
+  battle: MAIL_PRODUCER_SECRET_BATTLE
 Log:
   ServiceName: mail
   Mode: console

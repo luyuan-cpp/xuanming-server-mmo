@@ -786,4 +786,37 @@ TEST_F(SceneOwnershipEcs, MetricsExposeTheCountersAndGauges)
 	EXPECT_NE(text.find("scene_ownership_releasing_scenes 2\n"), std::string::npos) << text;
 	EXPECT_NE(text.find("scene_ownership_release_deferred_scenes 1\n"), std::string::npos) << text;
 	EXPECT_NE(text.find("scene_ownership_superseded 0\n"), std::string::npos) << text;
+	EXPECT_NE(text.find("scene_ownership_own_holder_known 0\n"), std::string::npos) << text;
+}
+
+// 持有者读数更新两项进程级状态:读到本进程自己的记录之后 own_holder_known 为 1,被更新的另一代接走之后仍是 1;
+// 被接走时 superseded 为 1;读不到时两项都不改。托管着场景而 own_holder_known 一直是 0,就是设计稿 §9 第 1 条
+// 那种认不出被接走的状态(告警 SceneOwnershipOwnHolderUnknown)。
+TEST_F(SceneOwnershipEcs, HolderReadingsTrackTheOwnRecordAndTheTakeover)
+{
+	so::HolderTracker holder;
+	const auto observe = [&holder](const so::OwnerReading &reading)
+	{ return so::ObserveHolder(holder, reading, kSelf, kSelfUuid, /*identityConfirmed=*/false); };
+
+	EXPECT_EQ(observe(Missing()), so::SlotHolder::kThisProcessOrUnknown);
+	EXPECT_EQ(observe(Value("20:uuid-other")), so::SlotHolder::kThisProcessOrUnknown) << "没见过自己的记录,比不出谁更新";
+	EXPECT_FALSE(so::ReadStats().ownHolderKnown);
+	EXPECT_FALSE(so::ReadStats().superseded);
+
+	EXPECT_EQ(observe(Value("30:uuid-self")), so::SlotHolder::kThisProcessOrUnknown);
+	EXPECT_TRUE(so::ReadStats().ownHolderKnown);
+	EXPECT_FALSE(so::ReadStats().superseded);
+
+	EXPECT_EQ(observe(Value("40:uuid-other")), so::SlotHolder::kAnotherProcess);
+	EXPECT_TRUE(so::ReadStats().superseded);
+	EXPECT_TRUE(so::ReadStats().ownHolderKnown) << "被接走之后仍记着自己见过的那条";
+
+	EXPECT_EQ(observe(Unreadable()), so::SlotHolder::kThisProcessOrUnknown);
+	EXPECT_TRUE(so::ReadStats().superseded) << "读不到时不改上一次的判定";
+	EXPECT_TRUE(so::ReadStats().ownHolderKnown);
+
+	RegisterSceneOwnershipMetrics(); // 重复登记被注册表按名字拒绝,只打一行 ERROR
+	const std::string text = GlobalMetricsRegistry().Render();
+	EXPECT_NE(text.find("scene_ownership_own_holder_known 1\n"), std::string::npos) << text;
+	EXPECT_NE(text.find("scene_ownership_superseded 1\n"), std::string::npos) << text;
 }

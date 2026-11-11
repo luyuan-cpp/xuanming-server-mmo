@@ -317,9 +317,14 @@ func (c *battleDirectConn) Close() {
 	}
 }
 
-// summary 给日志 / 断言用的一行摘要。
+// summary 给日志 / 断言用的一行摘要。heartbeat_replies 是直连上认领到的心跳回包数(gate-client-heartbeat.md §14):
+// battle 在握手应答里通告了心跳,robot 当场发第一条,所以健康的直连上它恒 ≥ 1。
 func (c *battleDirectConn) summary() string {
-	return fmt.Sprintf("total=%d state_replies=%d turn_results=%d battle_ends=%d spectate_states=%d spectate_turns=%d spectate_ends=%d",
+	var heartbeatReplies uint64
+	if c.gc != nil { // 单测里有不带连接的 battleDirectConn,只用来记数
+		heartbeatReplies = c.gc.HeartbeatReplies()
+	}
+	return fmt.Sprintf("total=%d state_replies=%d turn_results=%d battle_ends=%d spectate_states=%d spectate_turns=%d spectate_ends=%d heartbeat_replies=%d",
 		c.total.Load(), c.stateReplies.Load(), c.turnResults.Load(), c.battleEnds.Load(),
-		c.spectateStates.Load(), c.spectateTurns.Load(), c.spectateEnds.Load())
+		c.spectateStates.Load(), c.spectateTurns.Load(), c.spectateEnds.Load(), heartbeatReplies)
 }

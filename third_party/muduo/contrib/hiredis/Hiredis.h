@@ -33,6 +33,8 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
   class LocalReference;
  public:
   // 命令关闭与接受共用锁；正常回复且业务回调返回后才计完成。跨连接销毁保留 UNKNOWN。
+  // 只按命令记账：建连失败与断线本身不记 UNKNOWN。建连完成前 command() 一律拒收；断线时 hiredis 先以空应答
+  // 回调全部在途命令，各条按自己的结局记账。连接、断线回调抛异常仍记 UNKNOWN。
   class MaintenanceState {
    public:
     bool Begin();

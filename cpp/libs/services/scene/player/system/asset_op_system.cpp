@@ -3,6 +3,7 @@
 #include <array>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -14,6 +15,7 @@
 
 #include "battle/system/player_battle.h"
 #include "engine/core/time/system/time.h"
+#include "engine/core/utils/proto/unknown_field_carry.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
@@ -419,6 +421,28 @@ const ::CurrencyAmount* FindCurrencyUnknownToThisVersion(const ::AssetBundle& bu
 	return nullptr;
 }
 
+// 包里第一个本节点表里查不到的物品 / 宝宝配置号;都查得到时返回 nullopt(2026-11-11,混版本设计 §13 第 10 条)。
+// Item / Pet 表行只增不删(data/schema 里的 cfg_ids_permanent,导表器守住),查不到只可能是更新版本或尚未热更到
+// 本节点的行:是版本错位,不是坏包。所以第 8 步的确定性校验不判"行存在",只判配置号非 0,
+// 依赖行内容的规则只在行存在时才判。
+struct ConfigUnknownToThisVersion
+{
+	const char* table; // 只进日志
+	uint32_t id;
+};
+
+std::optional<ConfigUnknownToThisVersion> FindConfigUnknownToThisVersion(const ::AssetBundle& bundle)
+{
+	const auto& items = ItemTableManager::Instance();
+	for (const auto& item : bundle.items())
+		if (!items.Exists(item.config_id())) return ConfigUnknownToThisVersion{"Item", item.config_id()};
+	for (const auto& transfer : bundle.item_instances())
+		if (!items.Exists(transfer.config_id())) return ConfigUnknownToThisVersion{"Item", transfer.config_id()};
+	if (bundle.has_pet_instance() && !PetTableManager::Instance().Exists(bundle.pet_instance().pet_table_id()))
+		return ConfigUnknownToThisVersion{"Pet", bundle.pet_instance().pet_table_id()};
+	return std::nullopt;
+}
+
 bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
 {
 	if (HasUnsupportedP2Fields(bundle))
@@ -442,9 +466,13 @@ bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
 		if (!IsCurrencyAmountValid(currency) || !types.insert(currency.currency_type()).second) { why = "invalid debit currency"; return false; }
 	for (const auto& item : bundle.items())
 	{
+		if (item.config_id() == 0 || item.count() == 0 || item.count() > 4096 || !configs.insert(item.config_id()).second)
+		{ why = "quantity debit requires distinct non-zero configurations with a count in [1, 4096]"; return false; }
+		// 本节点表里查不到的配置由第 8b 步按版本错位处理(FindConfigUnknownToThisVersion)。
 		const auto* row = ItemTableManager::Instance().FindByIdSilent(item.config_id()).first;
-		if (item.count() == 0 || item.count() > 4096 || row == nullptr || row->max_stack_size() <= 1 || !configs.insert(item.config_id()).second)
-		{ why = "quantity debit requires distinct stackable configurations"; return false; }
+		if (row == nullptr) continue;
+		if (row->max_stack_size() <= 1)
+		{ why = "quantity debit requires stackable configurations"; return false; }
 		// 装备行被误配成可叠加时也不按数量扣:强化、镶嵌、随机属性都在实例上,按数量扣出、再按数量发给对侧,
 		// 这些属性会无声丢失。装备只按 guid 转移(item_uuids)。确定性失败,记终态拒绝(AGENTS §11.3 资产路径 fail-closed)。
 		if (row->equip_kind() != 0)
@@ -497,34 +525,34 @@ bool ValidateCreditBundle(const ::AssetBundle& bundle, std::string& why)
 			why = "credit item count is 0";
 			return false;
 		}
-		if (!seenConfigIds.insert(item.config_id()).second)
+		if (item.config_id() == 0 || !seenConfigIds.insert(item.config_id()).second)
 		{
-			why = "credit contains duplicate item config_id";
+			why = "credit contains item config_id 0 or a duplicate config_id";
 			return false;
 		}
-		if (ItemTableManager::Instance().FindByIdSilent(item.config_id()).first == nullptr)
-		{
-			why = "credit item config_id is absent from Item table";
-			return false;
-		}
+		// 本节点表里查不到的配置由第 8b 步按版本错位处理(FindConfigUnknownToThisVersion)。
 	}
 	std::unordered_set<uint64_t> identities;
 	for (const auto& transfer : bundle.item_instances())
 	{
 		ItemComp item;
+		// 行查不到时不判堆叠上限,留给第 8b 步;行在时实例必须是不可叠加配置。
 		const auto* row = ItemTableManager::Instance().FindByIdSilent(transfer.config_id()).first;
 		if (transfer.instance_proto().size() > kInstanceBytesLimit || !item.ParseFromString(transfer.instance_proto()) ||
-			item.item_id() == 0 || item.item_id() != transfer.item_uuid() || item.config_id() != transfer.config_id() ||
-			item.size() != 1 || transfer.stack_size() != 1 || row == nullptr || row->max_stack_size() != 1 || !identities.insert(item.item_id()).second)
+			item.item_id() == 0 || item.item_id() != transfer.item_uuid() || transfer.config_id() == 0 ||
+			item.config_id() != transfer.config_id() ||
+			item.size() != 1 || transfer.stack_size() != 1 || (row != nullptr && row->max_stack_size() != 1) ||
+			!identities.insert(item.item_id()).second)
 		{ why = "invalid complete item instance"; return false; }
 	}
 	if (bundle.has_pet_instance())
 	{
+		// 种类在本节点表里查不到由第 8b 步按版本错位处理;这里只判与版本无关的身份一致性。
 		const auto& transfer = bundle.pet_instance();
 		PetInstance pet;
 		if (transfer.instance_proto().size() > kInstanceBytesLimit || !pet.ParseFromString(transfer.instance_proto()) ||
-			pet.pet_id() == 0 || pet.pet_id() != transfer.pet_id() || pet.pet_table_id() != transfer.pet_table_id() ||
-			pet.level() != transfer.level() || pet.name() != transfer.name() || PetTableManager::Instance().FindByIdSilent(pet.pet_table_id()).first == nullptr)
+			pet.pet_id() == 0 || pet.pet_id() != transfer.pet_id() || transfer.pet_table_id() == 0 ||
+			pet.pet_table_id() != transfer.pet_table_id() || pet.level() != transfer.level() || pet.name() != transfer.name())
 		{ why = "invalid complete pet instance"; return false; }
 	}
 	return true;
@@ -554,10 +582,11 @@ bool ValidateRecallBundle(const ::AssetBundle& bundle, std::string& why)
 		why = "recall needs exactly one currency or one item config";
 		return false;
 	}
+	// 本节点表里查不到的配置由第 8b 步按版本错位处理(FindConfigUnknownToThisVersion);ApplyRecall 只见得到查得到的行。
 	const auto& item = bundle.items(0);
-	if (item.count() == 0 || ItemTableManager::Instance().FindByIdSilent(item.config_id()).first == nullptr)
+	if (item.config_id() == 0 || item.count() == 0)
 	{
-		why = "recall item count is 0 or config_id is absent from Item table";
+		why = "recall item config_id or count is 0";
 		return false;
 	}
 	if (bundle.item_uuids_size() > kAssetOpMaxRecallHints)
@@ -1494,17 +1523,39 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 		RejectAndRecord(player, *ledgerComp, request, kAssetInvalidBundle, nowMs, response);
 		return;
 	}
-	// 8b. 本二进制不认识的币种:版本错位,回 RETRY、不记账、不存盘。Go 各入口已按同一张取值表
-	// (proto/common/base/currency_type.proto)拒绝写错的值,这里只可能是更新版本加的币种;记成终态
-	// 会让对侧白白退款或中止,等玩家落到认识它的节点再应用(混版本设计 §12)。
-	// 排在中止(第 6 步)与所有确定性包校验之后:截止时刻照常能关门,与版本无关的坏包仍先记终态;
-	// 排在任何改动之前:ApplyDebit / ApplyCredit 从此见不到不认识的币种。
+	// 8b. 版本错位:回 RETRY、不记账、不存盘,等玩家落到认识它的节点再应用;记成终态会让对侧白白退款或中止
+	// (混版本设计 §12)。排在中止(第 6 步)与所有确定性包校验之后:截止时刻照常能关门,与版本无关的坏包仍先记终态;
+	// 排在任何改动之前:ApplyDebit / ApplyCredit / ApplyRecall 从此见不到本版本解释不了的请求。三种来源:
+	//   - 请求带本二进制不认识的字段(更新版本的 Go 写的,2026-11-11):照常应用会丢掉新字段的语义。
+	//     instance_proto 是 bytes,里面原样携带的实例不往里解,实例的未知字段照旧跟着实例走(§4.2);
+	//   - 本二进制不认识的币种:Go 各入口已按同一张取值表(proto/common/base/currency_type.proto)拒绝写错的值,
+	//     这里只可能是更新版本加的币种;
+	//   - 本节点表里查不到的物品 / 宝宝配置(2026-11-11,§13 第 10 条):表行只增不删,查不到只可能是更新版本
+	//     或尚未热更到本节点的行。之后的应用段因此可以假定每个配置号都查得到行。
+	if (std::string newerField; unknown_field_carry::TreeCarriesNewerVersionFields(request, &newerField))
+	{
+		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_request rpc=" << RpcName(rpc)
+				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
+				 << " seq=" << request.seq() << " field=" << newerField
+				 << "; request carries fields unknown to this version, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
+	}
 	if (const auto* unknown = FindCurrencyUnknownToThisVersion(request.bundle()); unknown != nullptr)
 	{
 		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_currency rpc=" << RpcName(rpc)
 				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
 				 << " seq=" << request.seq() << " currency_type=" << unknown->currency_type()
 				 << "; currency unknown to this version, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
+	}
+	if (const auto unknownConfig = FindConfigUnknownToThisVersion(request.bundle()); unknownConfig.has_value())
+	{
+		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_config rpc=" << RpcName(rpc)
+				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
+				 << " seq=" << request.seq() << " table=" << unknownConfig->table << " config_id=" << unknownConfig->id
+				 << "; config row not on this node (newer version or pending hot reload), answering RETRY";
 		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
 		return;
 	}

@@ -16,8 +16,10 @@
 //
 // # 修法
 //
-// 调用方必须对身份声明附一条 HMAC-SHA256 签名。canonical 串把下面这些
-// 全绑进去,少一样都会留下可利用的缝:
+// gate 必须用自己的 Ed25519 私钥(RFC 8032)对身份声明签名,验证方只持公钥。
+// 公钥签不出名:任何一个验证方被攻破,都冒充不了 gate 去调别的服务
+// (2026-11-11 起;之前是全体共用一把 HMAC 密钥,见 docs/design/gate-online-identity.md §10.1)。
+// canonical 串把下面这些全绑进去,少一样都会留下可利用的缝:
 //
 //	行1  版本前缀      钉死算法与串格式,将来换版本不会被降级重放
 //	行2  调用方标识    知道是谁在声明(可选白名单)
@@ -28,14 +30,16 @@
 //
 // 具体串形(LF 分隔,**末尾无换行**):
 //
-//	mmorpg-login-caller-auth/v1\n
+//	mmorpg-gate-identity/v2\n
 //	<caller>\n
 //	<fullMethod>\n
 //	<lowercase-hex(sha256(subject))>\n
 //	<timestampMs 十进制>\n
 //	<nonce>
 //
-//	signature = lowercase-hex( HMAC-SHA256(secret, canonical) )
+//	signature = lowercase-hex( Ed25519-Sign(gate 私钥, canonical) )   // 64 字节,128 个十六进制字符
+//
+// 密钥:gate 读 SigningKeyEnv(32 字节种子),验证方读 PublicKeysEnv(公钥列表,轮换期新旧并列),见 keys.go。
 //
 // # 上游怎么接(cpp gate / Java gateway 照这个实现)
 //
@@ -44,7 +48,7 @@
 //	x-caller-id     调用方标识,如 "gate"
 //	x-caller-ts     毫秒时间戳,十进制
 //	x-caller-nonce  每次调用现取的随机串(建议 16 字节随机数转 hex)
-//	x-caller-sig    上面 canonical 串的 HMAC 十六进制小写
+//	x-caller-sig    上面 canonical 串的 Ed25519 签名,十六进制小写
 //
 // ⚠️ `x-session-detail-bin` 的取值口径**保持不动**:仍然是
 // base64(SessionDetails 序列化字节)。gRPC 对 `-bin` 后缀的 key 自己还会再套
@@ -54,11 +58,12 @@
 //
 // # 边界
 //
-// nonce 表是**进程内**的。login 是多副本部署,理论上同一条签名可以在时间窗内
-// 重放到另一个副本。这里刻意不上 Redis:每个 RPC 加一次 Redis 往返会把
-// 登录热路径的 P99 直接抬上去,而时间窗(默认 30s)+ 方法绑定 + 主体绑定
+// nonce 表是**进程内**的。多副本部署时,理论上同一条签名可以在时间窗内
+// 重放到另一个副本。这里刻意不上共享 nonce 存储:每个 RPC 加一次 Redis 往返会把
+// 热路径的 P99 直接抬上去,而时间窗(默认 30s)+ 方法绑定 + 主体绑定
 // 已经把可利用面压到「同一条签名在 30s 内对另一个副本重复同一个方法同一个
-// 会话」。要彻底闭合需要共享 nonce 存储,那是独立一件事,记在这里别忘。
+// 会话」。前提是先截获签名头,这一面在网络层闭合(Pod 间透明加密与端口白名单,
+// docs/design/gate-online-identity.md §10.2、§10.3),不在签名上加层。
 package callerauth
 
 import (
@@ -74,9 +79,9 @@ import (
 )
 
 // canonicalVersion 是 canonical 串的第一行,钉死串格式与算法。
-// 将来要换算法(比如上 Ed25519)必须换这个前缀,让旧签名验不过去,
-// 免得被降级重放。
-const canonicalVersion = "mmorpg-login-caller-auth/v1"
+// 换算法必须换这个前缀,让旧签名验不过去,免得被降级重放:v1 是 HMAC-SHA256(已删除),
+// v2 是 Ed25519。C++ gate(cpp/libs/engine/core/security/caller_auth.h)写的是同一条字面量。
+const canonicalVersion = "mmorpg-gate-identity/v2"
 
 // gRPC metadata key。全小写 —— gRPC 会把 key 统一小写,写成大写会取不到。
 const (
@@ -88,7 +93,7 @@ const (
 	MetaTimestamp = "x-caller-ts"
 	// MetaNonce 是本次调用的随机串。
 	MetaNonce = "x-caller-nonce"
-	// MetaSignature 是 canonical 串的 HMAC 十六进制小写。
+	// MetaSignature 是 canonical 串的 Ed25519 签名,十六进制小写(128 个字符)。
 	MetaSignature = "x-caller-sig"
 )
 
@@ -142,15 +147,16 @@ func Reason(err error) string {
 	}
 }
 
-// Signer 是签名侧只需要的能力(config.SecretSet 实现了它)。
-// 这里用接口而不是直接依赖 config,是为了让本包能被单测独立驱动。
+// Signer 是签名侧只需要的能力:对 canonical 串出签名。生产里唯一的签名方是 C++ gate;
+// Go 侧的实现(Ed25519Signer)只给测试与密钥工具用,Go 服务都不持私钥。
 type Signer interface {
 	Sign(data []byte) []byte
 }
 
-// Verifier 是验签侧只需要的能力:轮换期要能用「主密钥 + 若干旧密钥」逐一验。
-type SecretVerifier interface {
-	Verify(mac, data []byte) bool
+// KeySet 是验签侧只需要的能力:用公钥集合核一条签名,轮换期集合里新旧公钥并列(PublicKeys 实现了它)。
+// 验证方只持公钥,持公钥签不出名,这是 2026-11-11 换掉共用 HMAC 密钥的原因(gate-online-identity.md §10.1)。
+type KeySet interface {
+	Verify(signature, data []byte) bool
 }
 
 // Canonical 拼出待签名串。签验两侧必须逐字节一致,所以它是这个包里

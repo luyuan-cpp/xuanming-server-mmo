@@ -9,10 +9,15 @@
 // 二者必然同槽,所以一名玩家的键与它所在 slot 的索引可以放进同一段 Lua。
 //
 // 只做纯计算,无 I/O、无全局可变状态(slot-tag 表是首次使用时构造的只读函数局部静态量,线程安全)。
+//
+// 文件末尾另有控制集群的族 tag(docs/design/redis-cluster-all-domains-20261110.md §3),与 Go 的
+// go/shared/redisslot/control_keys.go 逐项一致;两个域靠 tag 的形状区分。
 
 #include <array>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <string_view>
 
@@ -163,5 +168,100 @@ namespace redis_slot
 	inline std::string SlotIndexTag(uint16_t slot)
 	{
 		return "{" + SlotTag(slot) + "}";
+	}
+
+	// ---- 控制集群的 hash tag(docs/design/redis-cluster-all-domains-20261110.md §3)----
+	//
+	// 控制集群放玩家域、登录域与 match 私有键之外的全部 Redis 用途。同一个多键操作的键共用一个 tag,形状是
+	// {<族前缀>:<身份>}。族表与 Go 的 go/shared/redisslot/control_keys.go 逐项、同序一致(Go 的 TestControlFamiliesMatchCpp
+	// 读本头核对),改任何一项都要两侧同批改;上线后不得改(改前缀会让存量键换槽)。
+	//
+	// 两个域靠 tag 的形状区分(IsControlTag):控制集群的 tag 是登记过的族前缀加冒号再加非空身份;玩家域的 tag 是十进制
+	// 玩家 id、纯小写字母的 slot-tag,或登录连接身份 "<gate 实例号>:<序号>"。前两种不含冒号;gate 实例号是进程启动时
+	// 生成的唯一串,不会恰好等于某个族前缀。
+
+	enum class ControlFamily : uint8_t
+	{
+		kSceneControl,        // scene_manager 控制域全部键,身份是 zone
+		kLoginQueue,          // login 排队、准入与放行锁,身份是 zone
+		kGateMark,            // gate 排空 / 停写标记,身份是 zone
+		kAssetWake,           // 落点唤醒的分片频道,身份是 player_id % 64
+		kGuild,               // 帮会缓存与代次键,身份是 guild_id
+		kPlayerGuild,         // 玩家所在帮会的缓存与代次键,身份是 player_id
+		kGuildRank,           // 帮会榜、同区的版本 HASH 与墓碑、维护锁,身份是 zone
+		kPlayerLocator,       // player_locator 的 gate 索引控制键,身份固定是 kControlPlayerLocatorIdentity
+		kFriend,              // 好友私有键,身份是 player_id
+		kFriendRequestQuota,  // 好友申请配额,身份是 player_id
+		kFriendDirectory,     // 好友目录配额,身份是 player_id
+		kGuildApply,          // 帮会申请配额,身份是 player_id
+
+		kCount,
+	};
+
+	// 与 ControlFamily 一一对应。数组里不写注释:Go 侧的契约测试按引号取前缀。
+	inline constexpr std::string_view kControlFamilyPrefixes[] = {
+		"ctl",
+		"q",
+		"gm",
+		"aw",
+		"g",
+		"pg",
+		"gr",
+		"pl",
+		"f",
+		"rq",
+		"directory",
+		"apply",
+	};
+	static_assert(std::size(kControlFamilyPrefixes) == static_cast<std::size_t>(ControlFamily::kCount),
+		"every ControlFamily needs exactly one prefix");
+
+	// player_locator 那一族的固定身份:它的 7 把控制键共用一个 tag,访问是 10 秒级的低频。
+	inline constexpr std::string_view kControlPlayerLocatorIdentity = "gix";
+
+	constexpr std::string_view ControlFamilyPrefix(ControlFamily family)
+	{
+		return kControlFamilyPrefixes[static_cast<std::size_t>(family)];
+	}
+
+	// tag 内容(不含花括号)是不是控制集群登记过的族 tag:<族前缀>:<非空身份>。与 Go 的 redisslot.IsControlTag 同一判定。
+	constexpr bool IsControlTag(std::string_view tag)
+	{
+		const auto colon = tag.find(':');
+		if (colon == std::string_view::npos || colon + 1 == tag.size())
+		{
+			return false;
+		}
+		const std::string_view prefix = tag.substr(0, colon);
+		for (const std::string_view known : kControlFamilyPrefixes)
+		{
+			if (prefix == known)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// 控制集群的 hash tag(含花括号),例如 ControlTag(ControlFamily::kSceneControl, "7") == "{ctl:7}"。
+	// 身份不得为空、不得含花括号(花括号会截断 tag,键落到别的 slot);违反是调用方的实现错误。
+	inline std::string ControlTag(ControlFamily family, std::string_view identity)
+	{
+		assert(!identity.empty() && identity.find_first_of("{}") == std::string_view::npos);
+		const std::string_view prefix = ControlFamilyPrefix(family);
+		std::string tag;
+		tag.reserve(prefix.size() + identity.size() + 3);
+		tag += '{';
+		tag += prefix;
+		tag += ':';
+		tag += identity;
+		tag += '}';
+		return tag;
+	}
+
+	// 按 zone 打 tag 的族(kSceneControl、kLoginQueue、kGateMark、kGuildRank)的简写,例如 ZoneControlTag(kLoginQueue, 3) == "{q:3}"。
+	inline std::string ZoneControlTag(ControlFamily family, uint32_t zone)
+	{
+		return ControlTag(family, std::to_string(zone));
 	}
 }

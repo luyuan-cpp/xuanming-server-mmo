@@ -174,20 +174,24 @@ scene 侧 `PlayerLifecycleSystem::HandleSessionEndedRelease(playerId, expectedOw
 
 ### 3.5 gate
 
-**LeaveGame**:`DispatchClientRpcMessage` 在协议分派前对 `ClientPlayerLoginLeaveGame(17)` 调
-`gate_scene_entry::OnClientLeaveGame`:
+**LeaveGame**:LeaveGame(17)**发出时**调 `gate_scene_entry::OnClientLeaveGame`(2026-11-11 起;路由模式由路由 lane 的发出钩子
+`ApplyLoginTransition` 在轮到这条请求发出时调用,直连模式收包即发出,由 `DispatchClientRpcMessage` 在收包点调用,见
+[client-request-ordering.md](client-request-ordering.md) §4.4):
 
 1. `GateClientSessionHandler::NotifySceneExitGame`(从 `HandleConnectionDisconnection` 抽出的同一段代码,带 player_id 反向
    身份栅栏)向会话绑定的 scene 代发 ExitGame;
 2. `gate_scene_route::ResetSceneRoute` 清空节点指向、sceneId、待入场登录类型、欠账、lastSceneRoute、ownerEpoch、
    homeZoneId、forwardedOwnerEpoch;保留 playerId、loginGeneration、sessionVersion(下一次 BindSession 按既有规则处理)。
 
-在收包时做而不是等 login 回包:直连 / 路由两种模式共用一个点;LeaveGame 在 login 侧失败时实体退出、location 保留,
-下一次 EnterGame 走同落点重连或换手门(均不回档),是良性的。"之后同连接的 Bind 按 LeaveGame 之前的旧路由补发"这类
+在发出时做而不是等 login 回包(2026-11-11 订正:原文是「在收包时做」;直连模式收包即发出,两者相同):LeaveGame 发出之后在 login 侧失败时
+实体退出、location 保留,下一次 EnterGame 走同落点重连或换手门(均不回档),是良性的。路由模式改在发出时做,是因为收包时做
+在 lane 拒绝这条 LeaveGame(满 32、已重定向、排队超时)时回执说「没执行」,实体却已退出;排在它前面、还没发出的请求也会因原账号
+被清而被拒。LeaveGame 还排在 lane 里时,不经 lane 的请求回 1003、经 lane 的请求快照不带原账号,只拒绝新请求、不提前退出实体
+(client-request-ordering.md §4.1 LeaveGame 屏障)。"之后同连接的 Bind 按 LeaveGame 之前的旧路由补发"这类
 陈旧补发因此消失:Bind 先到时 `lastSceneRoute.sceneId == 0`,等新路由到达再一起转发。
 
 **重置之后迟到的旧路由**(2026-10-19 静态评审复核成立后补):LeaveGame 之前那条登录链发出的路由可能晚于重置才到 gate
-(已在 Kafka 里的跨节点换图;路由模式下钩子在收包时就跑,lane 里更早的 EnterGame 的路由随后才到)。它不会被转发(会话已没有
+(已在 Kafka 里的跨节点换图;LeaveGame 发出之前那条 EnterGame 的路由随后才到)。它不会被转发(会话已没有
 场景、也没有登录类型),但若照常写会话,会重新填上 `lastSceneRoute` / `ownerEpoch`,下一次 BindSession 就按它、带旧 epoch
 补发,让已释放(甚至已发过凭证)的旧节点按旧代重新载入玩家。所以 `ResetSceneRoute` 同时置位 `sceneRouteResetPending` 并记下
 此刻的登录代次 `loginGenerationAtReset`;`RoutePlayerEventHandler` 在写任何会话字段之前用 `IsRouteFromBeforeLeaveGame` 判:
@@ -198,15 +202,16 @@ scene 侧 `PlayerLifecycleSystem::HandleSessionEndedRelease(playerId, expectedOw
 且 login 实例时钟偏差使新代次不大于旧值时同理(fence §3.2 已登记的时钟窗口)。
 
 **旧链的 Bind 晚于 LeaveGame 到达**(第二轮审计 r2-gate#1,2026-10-19 复核成立后补):上面只按代次认旧链有缝。EnterGame 已被
-login 受理、它的 Bind(gE)还在 Kafka 里时客户端就发了 LeaveGame,gate 收包重置记下的是旧代次 g0;随后 Bind(gE) 与路由(gE)
+login 受理、它的 Bind(gE)还在 Kafka 里时客户端就发了 LeaveGame,gate 重置记下的是旧代次 g0;随后 Bind(gE) 与路由(gE)
 代次都大于 g0,被当成新登录收下:Bind 把登录类型挂回会话、保留重置标记,路由带着登录类型转发到旧节点 X 并清掉标记。之后
 session_ended 释放退掉 X 上的实体、location 被删;同一连接再 EnterGame(gF) 时 Bind 先到,按这条旧路由带 E 补发到 X,而
 scene_manager 铸了 E+1 落到 Y(幽灵实体,或 X 回 3023 并耗掉登录类型)。修法(只改 gate):
 
 1. **在客户端再次 EnterGame 之前,一律是旧链**。login 只在处理 EnterGame 时发 Bind(`entergamelogic.go` `SendBindSessionToGate`
-   是唯一调用点),所以重置之后、本连接下一次 EnterGame 收包之前到达的 Bind / 路由不可能属于新登录,不看代次、不看角色全部丢。
-   `DispatchClientRpcMessage` 在与 LeaveGame 同一个收包点对 `ClientPlayerLoginEnterGame(26)` 调 `gate_scene_entry::OnClientEnterGame`
-   置 `enterGameSentAfterLeave`;按收包顺序置位,路由模式下 lane 里排在 LeaveGame 之前的 EnterGame 不会把它置上。
+   是唯一调用点),所以重置之后、本连接下一次 EnterGame 发出之前到达的 Bind / 路由不可能属于新登录,不看代次、不看角色全部丢。
+   EnterGame(26)发出时调 `gate_scene_entry::OnClientEnterGame` 置 `enterGameSentAfterLeave`,与 LeaveGame 同一个发出点(路由模式是
+   lane 的发出钩子,直连模式收包即发出)。按发出顺序置位(2026-11-11 订正,原文「按收包顺序」):lane 里排在 LeaveGame 之前的
+   EnterGame 先发出、先置位,随后被 LeaveGame 的重置清掉,不会被误当成新的一次。
    `BindSessionEventHandler` 新增 `IsBindFromBeforeLeaveGame`,在 `ApplyLoginBinding` 之前丢旧链 Bind(以前 Bind 不过滤)。
 2. **之后按代次认,且代次跟着丢弃抬高**。被离开的那条链记成 (`playerIdAtReset`, `loginGenerationAtReset`):重置时取会话当时的
    角色与代次;会话那时还没绑角色(第一次登录就回选角)时取第一条被丢弃事件的角色。每丢一条旧链事件就把它的代次记进去
@@ -221,8 +226,8 @@ scene_manager 铸了 E+1 落到 Y(幽灵实体,或 X 回 3023 并耗掉登录类
 被丢弃的旧链 Bind / 路由不进会话,旧节点 X 收不到这次进场,不建实体;scene_manager 那边 location 指向 X,LeaveScene 照 §3.2
 请 X 按会话结束释放,X 不持有 → 写凭证(§3.3 第 2 条)→ 下一拍删 location,或下一次登录过换手门拿到凭证放行。
 
-残余:旧链的 Bind 与路由**都**晚于客户端下一次 EnterGame 收包、又早于新登录的任何 Bind / 路由到达时,代次比任何已知值都大,
-认不出,退回修复前的行为。要 Kafka 消费延迟超过"LeaveGame 回包 → 玩家再点进入 → gate 收包"的整个往返;scene 侧的入场
+残余:旧链的 Bind 与路由**都**晚于客户端下一次 EnterGame 在 gate 发出、又早于新登录的任何 Bind / 路由到达时,代次比任何已知值都大,
+认不出,退回修复前的行为。要 Kafka 消费延迟超过"LeaveGame 回包 → 玩家再点进入 → gate 发出 EnterGame"的整个往返;scene 侧的入场
 栅栏与 owner CAS 仍把损失限制在旧节点上的幽灵实体与毫秒级操作丢失。彻底收口需要 login 把"被离开的那条链的代次"交给 gate
 (LeaveGame 回包或单独的 gate 命令),属客户端契约 / 跨服务改动,未做。
 
@@ -687,7 +692,7 @@ Java 不改。本次 proto 改动只在服务端内部,不涉及客户端契约;
 
 | 编号 | 复核 | 修法 | 代码 |
 |---|---|---|---|
-| r2-gate#1 | 成立。LeaveGame 先于本次登录的 Bind 到达时,重置记下的是旧代次,旧链的 Bind / 路由代次更大、照常收下 | 客户端再次 EnterGame 之前到达的 Bind / 路由一律丢;之后按被离开的那条链(角色 + 随丢弃抬高的代次)与会话已见过的更新登录认旧链(§3.5) | `session_info_comp.h`(`enterGameSentAfterLeave` / `playerIdAtReset`)、`scene_route_helper.h`(`ResetSceneRoute`、`NoteEnterGameRequested`、`IsLoginGenerationSupersededSinceLeave`、`IsRouteFromBeforeLeaveGame`、`IsBindFromBeforeLeaveGame`、`NoteDroppedFromBeforeLeaveGame`)、`gate_event_handler.cpp`(RoutePlayer / BindSession 守护段)、`scene_entry_dispatch.{h,cpp}`(`OnClientEnterGame`)、`client_session_handler.cpp`(EnterGame 收包钩子) |
+| r2-gate#1 | 成立。LeaveGame 先于本次登录的 Bind 到达时,重置记下的是旧代次,旧链的 Bind / 路由代次更大、照常收下 | 客户端再次 EnterGame 之前到达的 Bind / 路由一律丢;之后按被离开的那条链(角色 + 随丢弃抬高的代次)与会话已见过的更新登录认旧链(§3.5) | `session_info_comp.h`(`enterGameSentAfterLeave` / `playerIdAtReset`)、`scene_route_helper.h`(`ResetSceneRoute`、`NoteEnterGameRequested`、`IsLoginGenerationSupersededSinceLeave`、`IsRouteFromBeforeLeaveGame`、`IsBindFromBeforeLeaveGame`、`NoteDroppedFromBeforeLeaveGame`)、`gate_event_handler.cpp`(RoutePlayer / BindSession 守护段)、`scene_entry_dispatch.{h,cpp}`(`OnClientEnterGame`)、`client_session_handler.cpp`(EnterGame 钩子;2026-11-11 起路由模式改在 lane 发出时调用) |
 | r2-sm#3 | 成立。负载键缺失时 `playerLocationOwnerGone` 对活节点返回 true,LeaveScene 按 `owner_dead` 立刻删 | 释放证据 2 只认 `playerLocationOwnerDead`(etcd 注册表正面消失 + 屏障);EnterScene 的陈旧位置判定本批不动(同日另批修,§14.5) | `leavescenelogic.go` `judgeHolderRelease` |
 | r2-sm#1 | 成立。计数与 forced ERROR 在删除 Lua 结果出来之前就记 | 移到 `outcome == deleted` 之后;没删成只打 INFO | `leavescenelogic.go` `LeaveScene` 尾部 |
 | r2-sm#2 | 成立。`first_ms` 与求差用各副本墙钟 | 读、比 scope、登记、求差合进一段 Lua,时钟取 Redis `TIME`(§3.6 时钟语义) | `leave_release.go` `luaNoteLeaveReleaseWait` / `noteLeaveReleaseWait`(删了 `parseLeaveReleaseWait`) |
@@ -710,7 +715,7 @@ miniredis 的服务端时钟(`mr.SetTime`),不再依赖真实墙钟;`routing_ide
 
 ### 14.3 残余
 
-- r2-gate#1:旧链的 Bind 与路由都晚于客户端下一次 EnterGame 收包、又早于新登录的任何事件到达时认不出(§3.5 末段)。
+- r2-gate#1:旧链的 Bind 与路由都晚于客户端下一次 EnterGame 在 gate 发出、又早于新登录的任何事件到达时认不出(§3.5 末段)。
 - r2-sm#2:Redis 服务端时钟往前跳变仍会提前 forced(单一时钟,§3.6)。
 - r2-sm#3:EnterScene 的陈旧位置判定(`playerLocationOwnerGone`,换手门放行)当时仍认"zone 负载集为空",负载键丢失的那一拍里同样会
   误判。它不在本批四条之内,也不是本文修复引入的(第二轮审计把它记为"本来就用同一判据")。**同日另批复核成立并已修**(未编译、未测试),见 §14.5。

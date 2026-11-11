@@ -111,9 +111,11 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 
 第 2 批文件：`go/friend/friend.go`、`friend_test.go`、`internal/logic/friend_logic.go`、`internal/logic/role_not_verified_test.go`（新增）、`internal/data/role_identity.go`、`role_identity_test.go`、`role_identity_tidb_test.go`、`internal/session/entry_test.go`（新增）；删除 `internal/session/identity.go`、`identity_test.go`；`go/shared/serverbase/interceptor.go`（只改注释）。
 
-## 7. 第 3 批：guild 三个读方法删无会话分支（2026-11-06 落码，未编译）
+## 7. 第 3 批：guild 三个读方法删无会话分支（2026-11-06 落码，2026-11-10 单测已过）
 
-设计 §9.6 第 1 条，计划见 [PLAN.md](PLAN.md) 第 6 节。在第 1、2 批之后执行：第 1 批也改过 `go/guild/internal/logic/guild_logic.go` 与 `client_zone_test.go`，失败按本节末尾的文件清单判归属。本批只对改动文件跑过 `gofmt -l`（无输出），没有编译、没有运行任何测试。
+设计 §9.6 第 1 条，计划见 [PLAN.md](PLAN.md) 第 6 节。在第 1、2 批之后执行：第 1 批也改过 `go/guild/internal/logic/guild_logic.go` 与 `client_zone_test.go`，失败按本节末尾的文件清单判归属。落码时只对改动文件跑过 `gofmt -l`（无输出）。
+
+**验证状态（2026-11-11 核对）**：Codex 2026-11-10 23:56–23:58 的发布轨道第二轮后台校验在 `go/guild` 跑了 `go build ./...`、`go vet ./...`、`go test ./...`，三个退出码都是 0（`build/verification/release-track-20261110/round2/go-background-validation/guild.{build,vet,test}.exit.txt`）。下面第 2 步列的新用例 `TestLegacyReadsWithoutSessionAreRefused`（3 个子用例）、改过的 6 个取名用例、`TestGetGuildRank_ClientSeesOnlyHomeZone` 以及「要保持绿」的各条，在同目录 `guild.test.jsonl` 里全部 pass。本节文件清单里的 7 个文件在那次运行之后都没再改；之后 `go/guild` 里再改的是 data 层与 `proto/guild/guild_db.proto`，归第 8 节和 PROGRESS 11-11「帮会积分写入不再抢全服锁」验证。第 1 步的静态检查 2026-11-11 由 Claude 复核，仍无输出。**还没跑**：第 2 步末条的 `-tags integration`（要 guild 集成环境），以及第 3 步可选的红证据。合并验证时第 2 步照常随 `go/guild` 全量重跑即可。
 
 改了什么：
 
@@ -219,10 +221,11 @@ git worktree remove --force $env:TEMP\gate-simplify-red
      - `go/shared/generated/clientrpc/methods.go` 无差异。
      - 其它新差异按第 1 节的口径处理。
 
-2. **客户端**（`../mmorpg-client`，由 Codex 改）：
-   - 按客户端仓自己的口径编译。会报错的只有引用了被删字段的地方，删掉这些赋值即可，服务端早已不采信它们。
-   - 客户端如果有「全服帮会榜」入口（发 `zone_id = 0`），服务端从 11-06 起已经按本区榜答复，本批起协议里也没有区字段了，把这个入口删掉。
-   - 回执写明改了客户端哪些文件。本会话没有读、也没有改客户端（AGENTS.md §9）。
+2. **客户端**（`../mmorpg-client`，代码 2026-11-11 已由 Claude 改好，Codex 只生成、编译、测试，不再改代码）：
+   - 第 1 步按默认配置生成后，在客户端仓跑 `tools/client_compile_check.ps1`，应无错误。
+   - Unity EditMode：`MmorpgClient.Tests.EditMode.Net.GameClientReconnectTests` 全类（新增 `RecoveryRetriesPastAStoppedGateWithinTheBudget`、`DefinitiveAssignGateResultEndsRecoveryWithoutRetry`，原有用例不应变化）与 `MmorpgClient.Tests.EditMode.Guild` 全部（`GuildUiTests.ZoneAndNameRejectionsKeepTheEmptyStateWithReadableMessages` 已改为不带区）。有本机栈时跑 PlayMode GuildNetwork 冒烟（`MMORPG_GUILD_SMOKE_ZONE` 照旧）。
+   - 改动文件：`Assets/Scripts/Game/Guild/GuildClient.cs`（帮会榜 / 建帮不带区与身份，公告去 `PlayerId`；退帮、解散、任免、踢人、转让带 `ExpectedGuildId`，退帮与解散被拒走 `AcceptWrite` 排队重拉）、`Assets/Scripts/UI/Ugui/Guild/GuildUiRoot.cs`、`Assets/Scripts/Game/GameClient.cs`（`ConnectAndEnter` 记录本连接 gate 已接受票据）、`Assets/Scripts/Game/GameClient.Reconnect.cs`（gate 断线重连在 20 秒期限内对还没连上新 gate 的暂时故障退避重试）、`Assets/Tests/EditMode/Guild/GuildUiTests.cs`、`Assets/Tests/PlayMode/GuildNetwork/GuildEconomyNetworkSmokeTests.cs`（只改第 112 行）、`Assets/Tests/EditMode/Net/GameClientReconnectTests.cs`。`GuildClient.cs` 与两份帮会测试里另有「帮会恢复结论」会话未提交的改动，不属本批；失败时按这份清单判归属。
+   - 客户端没有「全服帮会榜」入口，不用删界面。
 
 3. **静态检查**（仓库根）：
 

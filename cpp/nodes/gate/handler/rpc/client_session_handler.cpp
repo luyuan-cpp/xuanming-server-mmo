@@ -369,7 +369,7 @@ static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInf
 	options.metadata.emplace_back(release_track::kMetadataKey, GetNodeInfo().release_track());
 	if (!caller_auth::Append(options.metadata,
 		gRpcMethodRegistry[ClientPlayerLoginRequestGateMigrationMessageId].grpcFullMethod,
-		sessionDetailsBin, std::getenv(caller_auth::kSecretEnv)))
+		sessionDetailsBin))
 	{
 		LOG_ERROR << "Gate migration request not sent: caller signature failed, session_id=" << sessionId;
 		return false;
@@ -451,8 +451,25 @@ static void ApplyLoginTransition(const SessionId sessionId, SessionInfo &session
 // (scene 的 TCP 消息、gate 本地的观战订阅)排不到它后面,照常处理就是在登出之前执行了客户端在登出之后才发的请求。所以不处理,
 // 回带请求 id 的 1003(确定未执行,重试安全;与 LeaveGame 生效后 scene 路由已清时客户端看到的同码,应答为 Empty 的移动号同样回)。
 // 直连模式 lane 恒空,这里恒不成立。返回 true = 已回执,调用方不再处理。
+//
+// 同一处还拦重定向之后的请求(2026-11-11,O4 / O9):推 124 之后,经 lane 的请求由 gate_lane::Admit 回 1003,
+// 不经 lane 的(scene TCP、gate 本地观战)原先照常处理、没有统一回执。会话已重定向就不再执行任何请求,回带 id 的 1003
+// (确定未执行,到新 gate 重试安全),与 Java 版「124 之后新到的请求回 1003」对齐。OnSessionRedirected 两种模式都会调,
+// 所以直连模式的 TCP / 观战请求也覆盖;直连模式的 gRPC 请求(HandleGrpcNodeMessage)仍按 O7 维持现状。
 static bool RejectedBehindQueuedLeaveGame(const SessionId sessionId, SessionInfo &session, const ClientRequest &request)
 {
+	if (session.routerLane.Redirected())
+	{
+		static uint64_t redirectedCount = 0;
+		if ((redirectedCount++ & 0x3FF) == 0)
+		{
+			LOG_INFO << "Request arrived after the session was redirected; rejected with 1003 (sampled)"
+					 << " latest_session_id=" << sessionId << " latest_message_id=" << request.message_id()
+					 << " rejected_total=" << redirectedCount;
+		}
+		gate_lane::SendEnvelope(session, request.id(), request.message_id(), kServiceUnavailable);
+		return true;
+	}
 	if (!gate_lane::HasQueuedRequest(session, ClientPlayerLoginLeaveGameMessageId))
 	{
 		return false;
@@ -827,7 +844,7 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 				}
 				if (caller_auth::Append(options.metadata,
 					gRpcMethodRegistry[ClientPlayerLoginDisconnectMessageId].grpcFullMethod,
-					bin, std::getenv(caller_auth::kSecretEnv)))
+					bin))
 				{
 				loginpb::SendClientPlayerLoginDisconnect(
 					tlsNodeContextManager.GetRegistry(eNodeType::LoginNodeService), *loginNode, request,
@@ -1245,8 +1262,7 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 		// 会话轨道交给目标服务(发布轨道设计 §2.6,match 据此决定战斗放在哪条轨道的 battle 上)。直连时会话就挂在本 gate 上,
 		// 会话轨道等于本 gate 的轨道;路由模式由路由服按 ForwardRequest.release_track 写同一个键(见 SendRawViaRouter)。
 		options.metadata.emplace_back(release_track::kMetadataKey, GetNodeInfo().release_track());
-		if (!caller_auth::Append(options.metadata, rpcHandlerMeta.grpcFullMethod, serializedSessionDetails,
-			std::getenv(caller_auth::kSecretEnv)))
+		if (!caller_auth::Append(options.metadata, rpcHandlerMeta.grpcFullMethod, serializedSessionDetails))
 		{
 			SendRequestErrorEnvelope(conn, *request, kServiceUnavailable);
 			return;

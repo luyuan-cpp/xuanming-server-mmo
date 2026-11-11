@@ -422,9 +422,11 @@ Test-Case '库:模式切换清单 —— 会踢人的条目带 CurrentShape / Ke
 # ─────────────────────────────────────────────────────────────────
 
 $LibPodCommon = New-TestPodCommon
+# 验证方公钥列表(RFC 8032 §7.1 TEST 1 的公钥,形状合格):gate 也带它,启动时核对私钥配对(gate-online-identity.md §10.1)。
+$LibInternalAuthPublicKeys = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
 $LibNodePortPlan = Resolve-GateClientEndpointPlan -ServiceType NodePort -Replicas 2 -ServicePort 18000 -NodePortBase 30000 -ClientPublicHost '127.0.0.1' -ZoneName 'z1'
 $LibLbPlan = Resolve-GateClientEndpointPlan -ServiceType LoadBalancer -Replicas 2 -ServicePort 18000 -ClientHostTemplate 'gate-{ordinal}.{zone}.example.com' -ZoneName 'z1'
-$LibGateSts = ConvertTo-LfText (New-GateStatefulSetYaml -PodCommon $LibPodCommon -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1')
+$LibGateSts = ConvertTo-LfText (New-GateStatefulSetYaml -PodCommon $LibPodCommon -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys)
 
 Test-Case '库:gate StatefulSet 的形态 —— Parallel + OnDelete + governing headless,副本数取自地址计划' {
     Assert-Match -Text $LibGateSts -Pattern '(?m)^kind: StatefulSet$' -Because 'external 的 gate 是 StatefulSet(D87)'
@@ -457,14 +459,16 @@ Test-Case '库:gate StatefulSet 的 env —— static 来源 + REQUIRED=1 + 生�
 }
 
 Test-Case '库:gate StatefulSet 带内部身份签名密钥 —— secretKeyRef 指向契约里的 Secret(optional: false),env 名与 C++ caller_auth.h 一致;给了 SecretName 不给 SecretKey 即 throw' {
-    # gate main.cpp 在 MMORPG_INTERNAL_AUTH_SECRET 缺失或不足 32 字节时拒绝启动。2026-11-05 只给 Deployment 形态补了它,
-    # external 的 StatefulSet 漏掉,gate Pod 会一直崩溃重启。
+    # gate main.cpp 在签名私钥缺失、格式不对或与公钥列表不配对时拒绝启动(gate-online-identity.md §10.1)。
+    # 2026-11-05 只给 Deployment 形态补了私钥,external 的 StatefulSet 漏掉,gate Pod 会一直崩溃重启。
     $c = Get-ClientEntryContract
     $callerAuth = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'cpp' 'libs' 'engine' 'core' 'security' 'caller_auth.h') -Raw
-    Assert-Match -Text $callerAuth -Pattern ('kSecretEnv\[\] = "' + [regex]::Escape($c.InternalAuthSecretEnv) + '"') -Because '契约里的 env 名必须就是 C++ gate 读的那个(caller_auth::kSecretEnv)'
+    Assert-Match -Text $callerAuth -Pattern ('kSigningKeyEnv\[\] = "' + [regex]::Escape($c.InternalAuthSecretEnv) + '"') -Because '契约里的私钥 env 名必须就是 C++ gate 读的那个(caller_auth::kSigningKeyEnv)'
+    Assert-Match -Text $callerAuth -Pattern ('kPublicKeysEnv\[\] = "' + [regex]::Escape($c.InternalAuthPublicKeysEnv) + '"') -Because '契约里的公钥 env 名必须就是 C++ gate 读的那个(caller_auth::kPublicKeysEnv)'
     $main = Get-MainContainerSection -Doc $LibGateSts
     Assert-True -Condition (Test-EnvSecretRef -Text $main -Name $c.InternalAuthSecretEnv -SecretName $c.InternalAuthSecretName -SecretKey $c.InternalAuthSecretKey) -Because "gate 容器必须经 Secret $($c.InternalAuthSecretName) 拿到 $($c.InternalAuthSecretEnv),且不是 optional"
-    Assert-True -Condition ($null -eq (Get-EnvLiteral -Text $main -Name $c.InternalAuthSecretEnv)) -Because '密钥只经 Secret 进容器,不写成字面值'
+    Assert-True -Condition ($null -eq (Get-EnvLiteral -Text $main -Name $c.InternalAuthSecretEnv)) -Because '私钥只经 Secret 进容器,不写成字面值'
+    Assert-Equal -Expected $LibInternalAuthPublicKeys -Actual (Get-EnvLiteral -Text $main -Name $c.InternalAuthPublicKeysEnv) -Because '公钥列表不是密钥,明文写进 gate 的 env,供启动时核对私钥配对'
     $message = ''
     try { $null = Get-ClientEntryEnvYaml -Entries @(@{ Name = 'X'; SecretName = 'some-secret' }) -ItemIndent '  ' } catch { $message = $_.Exception.Message }
     Assert-Match -Text $message -Pattern 'SecretKey' -Because '缺 key 的 secretKeyRef 会被 API server 拒收,生成期就要 throw'
@@ -602,7 +606,7 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
     # 拷贝语义:打包之后再改调用方的字典,不影响已打包的 PodCommon(下面断言里仍是 0123456789ab)。
     $extra['mmorpg.io/zone-redis-auth-hash'] = 'ffffffffffff'
     $renderers = @(
-        @{ Name = 'gate StatefulSet'; Indent = '      '; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' } }
+        @{ Name = 'gate StatefulSet'; Indent = '      '; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys } }
         @{ Name = 'battle Fleet'; Indent = '          '; Render = { param($pc) New-BattleFleetYaml -PodCommon $pc -Replicas 2 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode podip -Health $LibFleetHealth -BuildLabel '0123456789ab' } }
         @{ Name = 'battle hostPort'; Indent = '      '; Render = { param($pc) New-BattleHostPortDeploymentYaml -PodCommon $pc -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' } }
     )
@@ -628,7 +632,7 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
         $badArgs = $bad.Args
         $pc = New-ClientEntryPodCommon @commonArgs @badArgs -PodAnnotations $bad.Extra
         $err = $null
-        try { New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' | Out-Null } catch { $err = $_.Exception.Message }
+        try { New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys | Out-Null } catch { $err = $_.Exception.Message }
         Assert-Match -Text $err -Pattern $bad.Pattern -Because "$($bad.Why):必须在渲染时 throw,不能写出坏的 YAML 或重复键"
     }
 }
@@ -644,7 +648,7 @@ Test-Case '库:-SecretEnv 渲染成 secretKeyRef(optional: false)、接在公共
     # 拷贝语义:打包之后再改调用方的列表,不影响已打包的 PodCommon。
     $secretEnv[0]['SecretName'] = 'changed-after-pack'
     $renderers = @(
-        @{ Name = 'gate StatefulSet'; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' } }
+        @{ Name = 'gate StatefulSet'; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys } }
         @{ Name = 'battle Fleet'; Render = { param($pc) New-BattleFleetYaml -PodCommon $pc -Replicas 2 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode podip -Health $LibFleetHealth -BuildLabel '0123456789ab' } }
         @{ Name = 'battle hostPort'; Render = { param($pc) New-BattleHostPortDeploymentYaml -PodCommon $pc -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' } }
     )
@@ -1740,7 +1744,8 @@ foreach ($case in $NoDriftCases) {
 $ProdSecretEnv = @{
     MMORPG_GATE_TOKEN_SECRET    = 'contract-ce-gate-token-0123456789abcdef0123'
     MMORPG_SPECTATE_TOKEN_SECRET = 'contract-ce-spectate-token-0123456789abcdef'
-    MMORPG_INTERNAL_AUTH_SECRET = 'contract-ce-internal-auth-0123456789abcdef'
+    MMORPG_INTERNAL_AUTH_SIGNING_KEY = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60'
+    MMORPG_INTERNAL_AUTH_PUBLIC_KEYS = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
     MMORPG_MYSQL_USER           = 'contract_ce_app'
     MMORPG_MYSQL_PASSWORD       = 'contract-ce-mysql-pw-01'
     MMORPG_REDIS_PASSWORD       = 'contract-ce-redis-pw-01'

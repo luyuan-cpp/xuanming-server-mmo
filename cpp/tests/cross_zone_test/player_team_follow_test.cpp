@@ -892,4 +892,21 @@ TEST_F(TeamFollowDriveTest, WaitingForTheLeaderGivesUpAfterTheTimeout)
     EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty());
     frameTime.set_current_frame(savedFrame);
 }
+
+// 托管中的兜底重试(§3.7,2026-11-11):只替"在队伍里、想跟却没接在队长身后"的人再走一遍跟随检查。
+TEST_F(TeamFollowDriveTest, OnlyADetachedMemberWhoWantsToFollowNeedsARecheck)
+{
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "已接在队长身后:照常被带着走,不发读";
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(leader_)) << "队长没有跟随意图";
+
+    TeamFollowSystem::Detach(follower_, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW); // 例如严格导航拒了一步:意图还在
+    EXPECT_TRUE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "想跟却没接上:兜底重试替他再走一遍跟随检查";
+
+    tlsEcs.actorRegistry.get<TeamId>(follower_).set_team_id(0);
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "不在队伍里:没有可跟的人";
+    tlsEcs.actorRegistry.get<TeamId>(follower_).set_team_id(kTeamId);
+
+    TeamFollowSystem::SetFollowIntent(follower_, false);
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "暂离:不替他跟";
+}
 } // namespace

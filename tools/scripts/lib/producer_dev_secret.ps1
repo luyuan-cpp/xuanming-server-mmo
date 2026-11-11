@@ -3,14 +3,17 @@
 # 这样后起的对端（rank 签、mail 验）拿到的是同一把。
 #
 # MAIL_PRODUCER_SECRET_ADMIN 不在这里：运维 CLI 和 robot 也要它，由 mail_admin_dev_token.ps1 单独管。
+# MAIL_PRODUCER_SECRET_BATTLE：C++ scene 签、mail 验，两包都放不下的战斗掉落改投邮件（docs/design/battle-overflow-mail.md）；
+# scene 由 cpp_nodes.ps1 起，同样经本文件取同一把。
 function Get-ProducerDevSecretAllNames {
-    @('MAIL_PRODUCER_SECRET_RANK', 'MAIL_PRODUCER_SECRET_GUILD', 'RANK_PRODUCER_SECRET_ADMIN')
+    @('MAIL_PRODUCER_SECRET_RANK', 'MAIL_PRODUCER_SECRET_GUILD', 'RANK_PRODUCER_SECRET_ADMIN', 'MAIL_PRODUCER_SECRET_BATTLE')
 }
 function Get-ProducerDevSecretNames {
-    param([Parameter(Mandatory)][ValidateSet('mail', 'rank')][string]$Service)
+    param([Parameter(Mandatory)][ValidateSet('mail', 'rank', 'scene')][string]$Service)
     switch ($Service) {
-        'mail' { 'MAIL_PRODUCER_SECRET_RANK'; 'MAIL_PRODUCER_SECRET_GUILD' }
+        'mail' { 'MAIL_PRODUCER_SECRET_RANK'; 'MAIL_PRODUCER_SECRET_GUILD'; 'MAIL_PRODUCER_SECRET_BATTLE' }
         'rank' { 'MAIL_PRODUCER_SECRET_RANK'; 'RANK_PRODUCER_SECRET_ADMIN' }
+        'scene' { 'MAIL_PRODUCER_SECRET_BATTLE' }
     }
 }
 function Backup-ProducerDevSecrets {

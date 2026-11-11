@@ -17,6 +17,7 @@ import "proto/common/component/currency_comp.proto";
 import "proto/common/component/player_item_gain_block_comp.proto";
 import "proto/common/component/client_request_ledger_comp.proto";
 import "proto/common/component/player_item_hold_comp.proto";
+import "proto/common/component/player_mail_outbox_comp.proto";
 import "proto/common/database/bag_quest_mail_data.proto";
 
 // ------------------- User basic info table -------------------
@@ -190,6 +191,13 @@ message player_database
   // 加载时无条件挂组件、存盘时缺它整份拒存(持久数据,ecs-component-access-rules.md)。
   // 取下一个空闲号 26;下一个新字段从 27 起。
   PlayerItemHoldComp item_holds = 26 [(OptionPersistGroup) = 4];  // PROFILE
+  // 待寄邮件(docs/design/battle-overflow-mail.md):战斗结算两包都放不下时整批改投邮件,还没交到邮件服务的那几封。
+  // 必须与扣消耗、入账同一次存盘提交 —— 「结算落了、待寄没落」物品就没了,「待寄落了、结算没落」结算重做时会再发一份。
+  // 一次存盘的所有脏行同事务(player-save-direct-commit.md §1.1),所以不必与背包同组;它是欠玩家的资产,与 asset_op_ledger、
+  // inbox_ledger 一样放 WALLET 行。正常为空,只在改投与寄出时变。
+  // 加载时无条件挂组件、存盘时缺它整份拒存(持久数据,ecs-component-access-rules.md)。
+  // 取下一个空闲号 27;下一个新字段从 28 起。
+  PlayerMailOutboxComp mail_outbox = 27 [(OptionPersistGroup) = 7];  // WALLET
 }
 
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:
@@ -210,6 +218,23 @@ message player_store
   uint32 released = 7;         // 只写权行用:1 = 持有者已最终存盘并释放
   bytes payload = 8;
   uint64 claim_seq = 9;        // 只写权行用:每次认领加 1。同实例同代次重新认领时 (owner_epoch, holder_instance) 不变,判死靠它比得出来
+}
+
+// 审计发件箱(docs/design/player-audit-outbox.md,断线重连 R13):和 player_store 在同一个存档库。
+// go/db 在提交一笔存档的同一个事务里写入随这一笔交来的审计记录,转发循环投 Kafka、broker 确认之后按主键删除。
+// 「这里有这条」等于「它描述的改动已提交」。只有 go/db 读写;读写语句在 go/db/internal/playerstore 与 internal/auditoutbox 里手写。
+// 主键片内按时间排:插入即删的队列在 TiDB 里留 MVCC 墓碑,转发从「上一轮最老的未投记录」附近往后扫,跨不过整片的墓碑(设计 §3、§7.2)。
+message player_audit_outbox
+{
+  option(OptionTableName) = "player_audit_outbox";
+  option(OptionPrimaryKey) = "shard,kind,created_ms,player_id,record_id";
+  uint32 shard = 1;        // player_id % 16:转发按 (存档库, 片) 分工、按片扫描
+  uint32 kind = 2;         // playerstore.PlayerAuditKind:1 流水、2 快照
+  uint64 created_ms = 3;   // 写入它的 go/db 在提交事务里取的墙钟毫秒;片内按它扫,积压年龄按它算
+  uint64 player_id = 4;    // Kafka key
+  uint64 record_id = 5;    // tx_id 或 snapshot_id
+  uint64 save_seq = 6;     // 带它提交的那一笔存盘的序号,只供排查
+  bytes payload = 7;       // Kafka 消息体原样:序列化的 TransactionLogEntry / PlayerSnapshotEntry
 }
 
 // player_database_1 已于 2026-11-05 删除(docs/design/player-save-direct-commit.md §1.2):它只剩 player_id、压测探针、

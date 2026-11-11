@@ -4,7 +4,8 @@ import "testing"
 
 // TestSelectEntry 钉住 main 的入口选择(映射持久化第 1b-1 批):-route-tool 必须带子命令、不能与 -migrate 同时给;
 // 没有 -route-tool 却带位置参数一律拒绝 —— 以前这些参数被静默忽略,`data_service -f x.yaml freeze` 会起成一个普通服务。
-// 发号器的运维入口(初始化、恢复、退役、开启登记处)彼此互斥,-id-issuer-rebind 只能跟着 -id-issuer-recover。
+// 发号器的运维入口(初始化、恢复、退役、开启登记处)彼此互斥,-id-issuer-rebind 只能跟着 -id-issuer-recover,
+// -id-issuer-retire-unbound 只能跟着 -id-issuer-retire。
 func TestSelectEntry(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -31,6 +32,9 @@ func TestSelectEntry(t *testing.T) {
 		{name: "init and recover", flags: entryFlags{issuerInit: true, issuerRecover: true}, wantErr: true},
 		{name: "id issuer retire", flags: entryFlags{issuerRetire: true}, want: entryIdIssuerRetire},
 		{name: "retire and recover", flags: entryFlags{issuerRetire: true, issuerRecover: true}, wantErr: true},
+		{name: "id issuer retire unbound", flags: entryFlags{issuerRetire: true, issuerRetireUnbound: true}, want: entryIdIssuerRetire},
+		{name: "retire-unbound alone", flags: entryFlags{issuerRetireUnbound: true}, wantErr: true},
+		{name: "retire-unbound with recover", flags: entryFlags{issuerRecover: true, issuerRetireUnbound: true}, wantErr: true},
 		{name: "id registry open", flags: entryFlags{registryOpen: true}, want: entryIdRegistryOpen},
 		{name: "registry open and init", flags: entryFlags{registryOpen: true, issuerInit: true}, wantErr: true},
 		{name: "positional arguments with recover", flags: entryFlags{issuerRecover: true}, args: []string{"x"}, wantErr: true},

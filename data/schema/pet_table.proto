@@ -17,6 +17,8 @@ message PetTable {
   option (cfg_sheet)       = "Pet";
   option (cfg_source_file) = "Pet.xlsx";
   option (cfg_primary_key) = "id";
+  // 行 id 只增不删:宝宝存档、在途的资产通道指令按种类 id 引用(混版本持久字段保护设计 §13 第 10 条)。
+  option (cfg_ids_permanent) = true;
 
   // 宝宝种类 id
   uint32 id = 1;

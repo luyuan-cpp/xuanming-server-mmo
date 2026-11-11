@@ -167,7 +167,7 @@ func cleanupZoneIdleInstances(ctx context.Context, svcCtx *svc.ServiceContext, z
 // destroyOrphanOfDeadNode (expected owner = the dead node); see
 // destroyInstanceInternal for the shared contract.
 func destroyInstance(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) {
-	destroyInstanceInternal(ctx, svcCtx, zoneId, sceneId, false, "", "idle")
+	destroyInstanceInternal(ctx, svcCtx, zoneId, sceneId, false, "", "idle", nil)
 }
 
 // destroyInstanceForce force-destroys a scene even if it still has members,
@@ -184,7 +184,7 @@ func destroyInstanceForce(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 	if reason == "" {
 		reason = "explicit"
 	}
-	return destroyInstanceInternal(ctx, svcCtx, zoneId, sceneId, true, "", reason)
+	return destroyInstanceInternal(ctx, svcCtx, zoneId, sceneId, true, "", reason, nil)
 }
 
 // destroyOrphanOfDeadNode 是死节点收尾(reason=node_death)专用的 force 销毁:不看人数(持有这些玩家的
@@ -199,17 +199,25 @@ func destroyInstanceForce(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 // 由拆除任务保证做完,而且只做一次(scene_teardown_job.go)。
 // 返回 (false, nil):属主已不是 deadNode(读完之后被改派,或映射已被别的路径删掉),一个键都没动。
 // 映射不存在时不当作可认领:删映射的那条路径负责其余清理,这里再抹会与它双还 Agones 名额。
+// 返回 (false, errDeadNodeCleanupWithdrawn):task 这条收尾任务已被撤(判死的那一代回来了),或撤销之后同一 node_id
+// 又判死了一次、表里换成了新任务,一个键都没动。调用方停掉这一轮,剩下的场景一个都不再拆(R1-I6,reentry_barrier.go)。
 // 返回 (false, err):Redis 出错(结论未知),或 deadNode 为空(什么都没做);两种都已记日志。认领脚本其实已执行时,
 // 拆除任务在待办里,由扫描做完副作用;再次收尾时认领落空,按 stale 计。
 // deadNode 为空时拒绝而不是照常销毁:空串表示「谁是属主都拆」,会退化成修复前的无条件销毁。
-func destroyOrphanOfDeadNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, deadNode string) (bool, error) {
+//
+// 任务身份与属主比对、删除在同一个脚本里核:收尾在每条任务开始时判过「判死的那一代回来没有」,但一轮要逐个认领
+// 许多场景,判断之后它才回来的话,只有认领时的核对拦得住(luaSceneClaimDeadNodeTaskCheck)。
+func destroyOrphanOfDeadNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, deadNode string, task deadNodeTaskFence) (bool, error) {
 	if deadNode == "" {
 		err := fmt.Errorf("destroyOrphanOfDeadNode: empty dead node for scene %d (zone %d)", sceneId, zoneId)
 		logx.Errorf("[InstanceLifecycle] %v; refusing to force-destroy without an expected owner", err)
 		return false, err
 	}
-	return destroyInstanceInternal(ctx, svcCtx, zoneId, sceneId, true, deadNode, "node_death")
+	return destroyInstanceInternal(ctx, svcCtx, zoneId, sceneId, true, deadNode, "node_death", &task)
 }
+
+// errDeadNodeCleanupWithdrawn:死节点收尾的认领发现任务已被撤或换成了新的一次判死,一个键都没动(destroyOrphanOfDeadNode)。
+var errDeadNodeCleanupWithdrawn = errors.New("dead node cleanup task withdrawn")
 
 // destroyInstanceInternal 返回本次是否认领到了这次销毁。认领在脚本里一步提交:删场景的状态键、扣属主的 scene_count、
 // 摘属主的反向索引、写拆除任务。之后的副作用由拆除任务保证做完(runInstanceTeardown;这次没做完的由扫描补,见
@@ -222,13 +230,16 @@ func destroyOrphanOfDeadNode(ctx context.Context, svcCtx *svc.ServiceContext, zo
 // force=true:luaAtomicDestroyInstanceForce 不看人数。expectedOwner 为空时谁是属主都拆(explicit / cascade /
 // source_migrated / source_scaled_in 经 destroyInstanceForce);非空时只拆属主仍为它的场景(node_death,经
 // destroyOrphanOfDeadNode)。expectedOwner 只对 force 生效。
+// deadNodeTask 非空时(只有 destroyOrphanOfDeadNode 传)改用 luaAtomicDestroyOrphanOfDeadNode:在同一步再核对这条
+// 死节点收尾任务仍是这一次判死,不是就回 errDeadNodeCleanupWithdrawn、一个键都不动。其余调用方传 nil。
 //
 // reason ∈ idle | explicit | cascade | node_death | source_migrated | source_scaled_in,作为
 // scene_manager_instance_destroyed_total 与 Agones 归还的 reason。
 //
 // 调用方一律经上面三个包装进来,不要直接传 force / expectedOwner(两个相邻的 string 参数写反也能编过)。
 // 镜像级联(cascadeDestroyMirrors)也经 destroyInstanceForce 递归进来。
-func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, force bool, expectedOwner, reason string) (bool, error) {
+func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, force bool, expectedOwner, reason string,
+	deadNodeTask *deadNodeTaskFence) (bool, error) {
 	// 镜像子集合 scene:{id}:mirrors 是**提交前必须读到**的(2026-10-22/23):它决定级联范围,销毁脚本不碰它,
 	// 提交之后才发现读不到就没有补救了。提交后仍以重读为准,预读只在重读失败时充当快照(见 cascadeDestroyMirrors)。
 	// 读不到就本轮不销毁、什么都不改,回 (false, err)。各调用方的后果:
@@ -263,12 +274,22 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 			logx.Errorf("[InstanceLifecycle] AtomicDestroy failed for scene %d: %v", sceneId, err)
 			return false, err
 		}
+	} else if deadNodeTask != nil {
+		claim, err = atomicClaimOrphanOfDeadNode(svcCtx, zoneId, sceneId, expectedOwner, *deadNodeTask)
+		if err != nil {
+			logx.Errorf("[InstanceLifecycle] Dead node orphan claim failed for scene %d: %v", sceneId, err)
+			return false, err
+		}
 	} else {
 		claim, err = AtomicDestroyForce(svcCtx, zoneId, sceneId, expectedOwner, reason)
 		if err != nil {
 			logx.Errorf("[InstanceLifecycle] AtomicDestroyForce failed for scene %d: %v", sceneId, err)
 			return false, err
 		}
+	}
+	if claim.Withdrawn {
+		// 死节点收尾任务已被撤(判死的那一代回来了)或换成了新的一次判死:认领脚本一个键都没动(R1-I6)。
+		return false, errDeadNodeCleanupWithdrawn
 	}
 	if claim.Foreign {
 		// 场景登记在别的 zone:它的键只由那个 zone 的 scene_manager 读写,认领脚本一个键都没动。不该发生(各条销毁

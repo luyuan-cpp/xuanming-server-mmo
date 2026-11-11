@@ -48,7 +48,7 @@ func (v *SQLRoleFreezeVerifier) ReadFrozenEvidence(ctx context.Context, r *dbpb.
 		return nil, fmt.Errorf("角色存盘证据缺权威落点: %w", accountdirectory.ErrMissing)
 	}
 	// 建角恒写落点,和 go/db 一样不回落 home_zone:猜一个库做证明,比拒绝更糟。
-	if route.HomeZone == 0 || route.HomeZone > placement.MaxZoneStorageID || route.Rev == 0 || !route.HasPlacement() || route.PlacementVersion == 0 {
+	if route.HomeZone == 0 || route.HomeZone > placement.MaxZoneID || route.Rev == 0 || !route.HasPlacement() || route.PlacementVersion == 0 {
 		return nil, accountdirectory.ErrConflict
 	}
 	if !v.allowed[route.StorageID] {

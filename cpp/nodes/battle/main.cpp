@@ -16,6 +16,7 @@
 #include "client/battle_client_edge.h"
 #include "client/network_probe_security.h"
 #include "battle_admission_advertise.h"
+#include "node/system/node/node_admission_publisher.h"
 #include "battle_security.h"
 #include "node_config_manager.h"
 #include "time/comp/timer_task_comp.h"
@@ -101,72 +102,20 @@ namespace
         lifecycle.Start(std::move(transport), agonesEnv.BaseUrl(), std::move(options));
     }
 
-    // battle_admission::Advertised 与 proto NodeAdmission 的映射(纯头文件 battle_admission_advertise.h 不依赖 protobuf)。
-    NodeAdmission ToNodeAdmission(const battle_admission::Advertised advertised)
-    {
-        switch (advertised)
-        {
-        case battle_admission::Advertised::kOpen:
-            return NODE_ADMISSION_OPEN;
-        case battle_admission::Advertised::kClosed:
-            return NODE_ADMISSION_CLOSED;
-        case battle_admission::Advertised::kUnspecified:
-            return NODE_ADMISSION_UNSPECIFIED;
-        }
-        return NODE_ADMISSION_UNSPECIFIED;
-    }
-
-    battle_admission::Advertised FromNodeAdmission(const NodeAdmission admission)
-    {
-        switch (admission)
-        {
-        case NODE_ADMISSION_OPEN:
-            return battle_admission::Advertised::kOpen;
-        case NODE_ADMISSION_CLOSED:
-            return battle_admission::Advertised::kClosed;
-        default:
-            // UNSPECIFIED,以及更新版本才有的取值:都按「没有上报」处理,与期望值不一致即重写。
-            return battle_admission::Advertised::kUnspecified;
-        }
-    }
-
-    // etcd 回读:发现快照里本节点(同 uuid)的登记。battle 只 watch 自己那一条发现键(劫持检测与注册自检,
-    // ServiceDiscoveryManager::WatchOwnRegistrationKey),快照里的自身登记就是 etcd 里此刻的值;回读里还看不到自己的键
-    // (首发未回、已失租)返回 nullopt。只在 loop 线程调用。
-    std::optional<battle_admission::Advertised> ObservedAdvertised(Node &node)
-    {
-        for (const auto &registered : node.GetServiceDiscoveryManager().ServiceNodes().NodesOfType(node.GetNodeType()))
-        {
-            if (node.IsCurrentNode(registered))
-            {
-                return FromNodeAdmission(registered.admission());
-            }
-        }
-        return std::nullopt;
-    }
-
-    // 一拍可分配状态对账(battle_admission_advertise.h)。内存里的 NodeInfo 恒为期望值:首发与重注册整份发布它,带上的
-    // 就是最新状态;etcd 里的值按回读对账,只在不一致且注册链空闲时写(UpdateNodeInfo:带租约的整份 Put)。
-    // 只在 loop 线程调用(MutableNodeInfo 断言 loop 线程)。
+    // 一拍可分配状态对账。写 etcd 与回读对账在 core(node_admission_publisher.h,与 scene 共用);battle 只决定期望值,
+    // 并按自己的上下文打日志。只在 loop 线程调用(MutableNodeInfo 断言 loop 线程)。
     void ReconcileAdvertisedAdmission(Node &node, const battle_admission::AdmissionPhase phase,
                                       battle_admission::AdvertisePolicy &policy)
     {
         const bool grantsPermits = BattleNodeImpl::LifecycleGrantsPermits();
         const auto desired = battle_admission::DesiredAdvertised(phase, grantsPermits);
-        node.MutableNodeInfo().set_admission(ToNodeAdmission(desired));
-
-        auto &etcd = node.GetServiceDiscoveryManager().etcdService;
-        // 传输为空 = etcd 服务还没起或已经停了(停机收尾 CloseTransportOwnersInLoop 之后),写了也只会被丢弃。
-        const bool registrationIdle = etcd.Transport() != nullptr && etcd.IsIdentityConfirmedFresh() &&
-                                        !etcd.RegistrationInFlight();
-        const auto observed = ObservedAdvertised(node);
-        const auto action = policy.Decide(desired, observed, registrationIdle, std::chrono::steady_clock::now());
-        if (action == battle_admission::AdvertiseAction::kNone)
+        const auto result = node_admission::Reconcile(node, desired, policy);
+        if (result.action == battle_admission::AdvertiseAction::kNone)
         {
             return;
         }
-        const char *observedName = observed ? battle_admission::ToString(*observed) : "absent";
-        if (action == battle_admission::AdvertiseAction::kResend)
+        const char *observedName = result.observed ? battle_admission::ToString(*result.observed) : "absent";
+        if (result.action == battle_admission::AdvertiseAction::kResend)
         {
             // 上次写出 kResendAfter 之后回读仍不一致:多半是 Put 静默丢了(etcd 抖动、传输流重建),也可能是 watch 回读滞后。
             LOG_WARN << "battle admission readback still stale; re-advertising to etcd: admission="
@@ -178,7 +127,6 @@ namespace
                      << " observed=" << observedName << " gate=" << battle_admission::ToString(phase)
                      << " lifecycle_grants_permits=" << (grantsPermits ? 1 : 0);
         }
-        node.GetEtcdManager().UpdateNodeInfo();
     }
 
     // battle 节点运行时状态:match 控制面 gRPC 服务 + 客户端直连面。
@@ -372,7 +320,7 @@ int main(int argc, char *argv[])
         Node::CanConnectNodeTypeList{common::base::MatchNodeService},
         // 只发现 Match(docs/design/connection-fanout-subsetting-20261106.md §3.4)。自身类型 Battle 不在里面:battle 是全服
         // 一个池,按前缀看同类每台都要看全部 battle(B² 项);这里只看本节点自己那一条发现键,劫持检测、注册自检与
-        // ObservedAdvertised 的回读都只找自己。选号读全服分配清单,不靠同类快照。
+        // 可分配状态对账的回读(node_admission::Observed)都只找自己。选号读全服分配清单,不靠同类快照。
         Node::DiscoveryNodeTypeList{common::base::MatchNodeService},
         [](Node &node, BattleRuntimeContext &context)
         {

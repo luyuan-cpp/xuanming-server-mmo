@@ -264,6 +264,35 @@ void ResetStatsForTest()
 {
 	tlsStats = Stats{};
 }
+
+SlotHolder ObserveHolder(HolderTracker &holder, const OwnerReading &reading, std::string_view selfNodeId,
+						 std::string_view selfUuid, bool identityConfirmed)
+{
+	const auto slotHolder = holder.Observe(reading, selfUuid, identityConfirmed);
+	tlsStats.ownHolderKnown = holder.ownRevision != 0;
+	// 读不到持有者记录时不改上一次的判定(指标与日志只跟着有信息的读数走)。
+	if (reading.kind == OwnerReading::Kind::kUnreadable)
+	{
+		return slotHolder;
+	}
+	const bool superseded = slotHolder == SlotHolder::kAnotherProcess;
+	if (superseded != tlsStats.superseded)
+	{
+		if (superseded)
+		{
+			LOG_ERROR << "[SceneOwnership] node id " << std::string(selfNodeId) << " is held by a newer registration of "
+					  << "another process (holder=\"" << reading.value << "\", this process uuid=" << std::string(selfUuid)
+					  << " registration revision=" << holder.ownRevision << "); releasing every local scene";
+		}
+		else
+		{
+			LOG_WARN << "[SceneOwnership] node id " << std::string(selfNodeId) << " is no longer reported as taken over "
+					 << "(holder=\"" << reading.value << "\")";
+		}
+	}
+	tlsStats.superseded = superseded;
+	return slotHolder;
+}
 } // namespace scene_ownership
 
 namespace
@@ -327,6 +356,11 @@ void CollectSceneOwnership(prometheus_text::Writer &writer)
 					   "another process.",
 					   prometheus_text::MetricType::kGauge);
 	writer.Sample({}, stats.superseded ? 1u : 0u);
+	writer.BeginFamily("scene_ownership_own_holder_known",
+					   "1 once this process has read its own node id holder record (written by scene_manager when it sees "
+					   "this registration). While 0 with local scenes, this node cannot tell that its node id was taken over.",
+					   prometheus_text::MetricType::kGauge);
+	writer.Sample({}, stats.ownHolderKnown ? 1u : 0u);
 }
 } // namespace
 
@@ -455,28 +489,8 @@ bool SceneOwnershipReconciler::SendOwnerRead(hiredis::Hiredis &redis, const std:
 				return;
 			}
 			const auto readings = scene_ownership::ReadBatch(reply, batch.size());
-			const auto slotHolder = live->holder.Observe(readings.holder, selfUuid, live->IdentityConfirmed());
-			// 读不到持有者记录时不改上一次的判定(指标与日志只跟着有信息的读数走)。
-			if (readings.holder.kind != scene_ownership::OwnerReading::Kind::kUnreadable)
-			{
-				const bool superseded = slotHolder == scene_ownership::SlotHolder::kAnotherProcess;
-				if (superseded != scene_ownership::tlsStats.superseded)
-				{
-					if (superseded)
-					{
-						LOG_ERROR << "[SceneOwnership] node id " << selfNodeId << " is held by a newer registration of another "
-								  << "process (holder=\"" << readings.holder.value << "\", this process uuid=" << selfUuid
-								  << " registration revision=" << live->holder.ownRevision
-								  << "); releasing every local scene";
-					}
-					else
-					{
-						LOG_WARN << "[SceneOwnership] node id " << selfNodeId << " is no longer reported as taken over "
-								 << "(holder=\"" << readings.holder.value << "\")";
-					}
-				}
-				scene_ownership::tlsStats.superseded = superseded;
-			}
+			const auto slotHolder = scene_ownership::ObserveHolder(live->holder, readings.holder, selfNodeId, selfUuid,
+																   live->IdentityConfirmed());
 			scene_ownership::ApplyReadings(batch, readings.owners, selfNodeId, slotHolder, issuedAt, *budget);
 		},
 		formatted, static_cast<std::size_t>(length), &hiredis::Hiredis::hasNoSideEffect);

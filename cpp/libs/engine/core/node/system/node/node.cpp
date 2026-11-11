@@ -42,6 +42,7 @@
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "node/system/node/client_endpoint.h"
 #include "node/system/node/open_file_limit.h"
+#include "node/system/node/node_planned_drain.h"
 #include "node/system/node/release_track.h"
 #include "engine/config/node_log_level.h"
 #include "thread_context/node_context_manager.h"
@@ -1140,6 +1141,10 @@ void Node::InitRpcServer()
 	}
 	localNodeInfo.set_release_track(std::string(release_track::Name(*releaseTrack)));
 	LOG_INFO << "Node release track: " << localNodeInfo.release_track();
+	// 部署构建标识(docs/design/scene-node-planned-drain.md §4.6):与 Pod 标签 mmorpg.io/build 同值,只作选点偏好,
+	// 同样要在首次发布 NodeInfo 之前定下。不设(本机开发)留空;不校验取值,选点只比相等。
+	localNodeInfo.set_build(planned_drain::BuildLabelFromEnv());
+	LOG_INFO << "Node build label: " << (localNodeInfo.build().empty() ? std::string("(not set)") : localNodeInfo.build());
 
 	localNodeInfo.set_node_uuid(boost::uuids::to_string(uuidGenerator()));
 
@@ -1874,6 +1879,104 @@ void Node::ReleaseLocalOwnersInLoop()
         rpcServer.reset(); tlsNodeContextManager.Clear();
         eventLoop.queueInLoop([this] { eventLoop.queueInLoop([this] { rpcNativeJoined_ = true; }); });
     });
+}
+
+Node &Node::SetPlannedDrain(PlannedDrainBeginFn begin, PlannedDrainCompleteFn isComplete, std::chrono::seconds defaultBudget)
+{
+	const auto budget = planned_drain::BudgetFromEnv();
+	switch (budget.kind)
+	{
+	case planned_drain::BudgetKind::kInvalid:
+		FatalStartupConfig("planned drain", std::string(planned_drain::kBudgetEnvVar) +
+												" must be 0 (disabled) or a whole number of seconds up to " +
+												std::to_string(planned_drain::kMaxBudget.count()));
+	case planned_drain::BudgetKind::kDisabled:
+		plannedDrainBudget_ = std::chrono::seconds{0};
+		break;
+	case planned_drain::BudgetKind::kSeconds:
+		plannedDrainBudget_ = budget.seconds;
+		break;
+	default:
+		plannedDrainBudget_ = defaultBudget;
+		break;
+	}
+	plannedDrainBeginFn_ = std::move(begin);
+	plannedDrainCompleteFn_ = std::move(isComplete);
+	LOG_INFO << "Planned drain configured: budget_s=" << plannedDrainBudget_.count()
+			 << (plannedDrainBudget_.count() == 0 ? " (disabled; SIGTERM shuts down directly)" : "");
+	return *this;
+}
+
+void Node::RequestPlannedStop()
+{
+	if (shutdownStarted.load(std::memory_order_acquire))
+	{
+		return;
+	}
+	if (eventLoop.isInLoopThread())
+	{
+		BeginPlannedDrainInLoop();
+		return;
+	}
+	eventLoop.queueInLoop([this]
+						   { BeginPlannedDrainInLoop(); });
+}
+
+void Node::BeginPlannedDrainInLoop()
+{
+	eventLoop.assertInLoopThread();
+	if (shutdownStarted.load(std::memory_order_acquire) || plannedDrainStarted_)
+	{
+		return;
+	}
+	// 退回普通停机的三种情形:没登记(这类节点的 SIGTERM 本来就是直接停机)、预算为 0(部署关掉了计划排空)、
+	// 维护流程已关源(节点的生命周期归维护流程的 P1 / P3,不另起一套交接)。
+	const bool registered = plannedDrainBeginFn_ && plannedDrainCompleteFn_;
+	const bool maintenanceOwnsLifecycle = maintenanceControl_ && maintenanceControl_->sourceClosed;
+	if (!registered || plannedDrainBudget_.count() == 0 || maintenanceOwnsLifecycle)
+	{
+		ShutdownInLoop();
+		return;
+	}
+
+	plannedDrainStarted_ = true;
+	plannedDrainDeadline_ = std::chrono::steady_clock::now() + plannedDrainBudget_;
+	LOG_INFO << "Planned drain started; the node keeps serving while its work is handed over. budget_s="
+			 << plannedDrainBudget_.count();
+	plannedDrainBeginFn_(*this);
+
+	// 每拍现场重查业务状态,不锁存:排空期间仍可能有晚到的工作(例如选点提示还没传到的进场)。
+	constexpr double kPlannedDrainPollIntervalSec = 0.2;
+	plannedDrainTimer.RunEvery(kPlannedDrainPollIntervalSec, [this]
+							   { PollPlannedDrainInLoop(); });
+}
+
+void Node::PollPlannedDrainInLoop()
+{
+	eventLoop.assertInLoopThread();
+	// 计划排空期间也可能被别的入口直接停机(SIGINT、身份冲突关停、GM 停服):那条路接管,这里不再检查。
+	if (shutdownStarted.load(std::memory_order_acquire))
+	{
+		plannedDrainTimer.Cancel();
+		return;
+	}
+	const auto verdict = planned_drain::Decide(plannedDrainCompleteFn_(*this), std::chrono::steady_clock::now(),
+											   plannedDrainDeadline_);
+	if (verdict == planned_drain::Verdict::kWait)
+	{
+		return;
+	}
+	plannedDrainTimer.Cancel();
+	if (verdict == planned_drain::Verdict::kDrained)
+	{
+		LOG_INFO << "Planned drain complete; shutting down.";
+	}
+	else
+	{
+		LOG_ERROR << "Planned drain budget expired with work remaining; shutting down through the normal path. budget_s="
+				  << plannedDrainBudget_.count();
+	}
+	ShutdownInLoop();
 }
 
 void Node::RequestShutdown()

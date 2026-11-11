@@ -11,8 +11,9 @@ package logic
 //     Kafka 写失败不重试 —— 错过的人打开帮会界面 / 手动刷新时照样拿到最新状态。
 //  3. **绝不影响 RPC 结果**。推送失败只记指标与日志;把已经提交成功的写报成失败,
 //     会让客户端以为操作没生效并重复操作,代价远大于少一条提示。
-//  4. **不占 RPC 预算**。整批在 safego 协程里跑,自带独立超时,**不继承请求 ctx**
-//     (请求返回即 cancel,继承等于必然写不出去)。
+//  4. **不占 RPC 预算**。整批在 safego 协程里跑,自带独立超时,**不继承请求 ctx 的取消与截止**
+//     (请求返回即 cancel,继承等于必然写不出去),只经 context.WithoutCancel 继承它的值:
+//     trace 随推送命令带到 gate(docs/design/distributed-tracing.md §6.2)。
 
 import (
 	"context"
@@ -67,16 +68,18 @@ var guildPushTotal = metric.NewCounterVec(&metric.CounterVecOpts{
 //   - 至多一次、异步,Notify 立即返回,不阻塞 RPC;
 //   - 失败 / 离线只记日志与指标,绝不影响 RPC 结果;
 //   - 收件人去重、丢弃 0;
-//   - 载荷只有 GuildChangedS2C 四个字段,客户端据此拉取,不下发快照。
+//   - 载荷只有 GuildChangedS2C 四个字段,客户端据此拉取,不下发快照;
+//   - ctx 是触发这次推送的请求 ctx(恢复任务等没有请求的路径传 context.Background()),只取它的值(trace),
+//     不受它的取消与截止约束。
 type GuildNotifier interface {
-	Notify(change *pb.GuildChangedS2C, recipients []uint64)
+	Notify(ctx context.Context, change *pb.GuildChangedS2C, recipients []uint64)
 }
 
 // NoopNotifier:未配 Kafka(Brokers 为空 → svcCtx.KafkaWriter 为 nil)或单测时使用。
 // 客户端此时靠拉取刷新,功能降级但不出错。
 type NoopNotifier struct{}
 
-func (NoopNotifier) Notify(*pb.GuildChangedS2C, []uint64) {}
+func (NoopNotifier) Notify(context.Context, *pb.GuildChangedS2C, []uint64) {}
 
 // KafkaGuildNotifier 走 Kafka gate-cmd → gate → TCP 这条既有下行链路(设计决策 D6),
 // 与 match / friend 的推送共用 shared/kafkautil 的收口。
@@ -119,7 +122,9 @@ func NewGuildNotifier(w *kafkago.Writer, b kafkautil.GateCommandBuilder, session
 	}
 }
 
-func (n *KafkaGuildNotifier) Notify(change *pb.GuildChangedS2C, recipients []uint64) {
+func (n *KafkaGuildNotifier) Notify(ctx context.Context, change *pb.GuildChangedS2C, recipients []uint64) {
+	// 起协程之前就去掉取消:请求马上就要返回,协程里只要它的值(纪律 4)。
+	detached := context.WithoutCancel(ctx)
 	ids := uniqueNonZero(recipients)
 	if len(ids) == 0 {
 		return
@@ -154,7 +159,7 @@ func (n *KafkaGuildNotifier) Notify(change *pb.GuildChangedS2C, recipients []uin
 				panic(recovered)
 			}
 		}()
-		ctx, cancel := context.WithTimeout(context.Background(), guildPushBudget)
+		ctx, cancel := context.WithTimeout(detached, guildPushBudget)
 		defer cancel()
 
 		online, offline, err := loadGateInfos(ctx, n.sessions, ids)
@@ -312,8 +317,8 @@ func changeKindLabel(kind pb.GuildChangeKind) string {
 //
 // guildID 显式传参而不是从快照里取:解散之后已经没有快照可取了,而收件人恰恰需要知道
 // 是哪个帮散了。actor / target 的取值见 §14 推送矩阵,**操作者一律不在收件人里**
-// (他的响应已经带着最新状态,再推一条只会让客户端多拉一次)。
-func (l *GuildLogic) notify(kind pb.GuildChangeKind, guildID, actor, target uint64, recipients []uint64) {
+// (他的响应已经带着最新状态,再推一条只会让客户端多拉一次)。ctx 是触发推送的请求 ctx,只取它的 trace(见 GuildNotifier)。
+func (l *GuildLogic) notify(ctx context.Context, kind pb.GuildChangeKind, guildID, actor, target uint64, recipients []uint64) {
 	if l.notifier == nil {
 		// 正常路径不会发生(NewGuildLogic 的默认值是 NoopNotifier{})。
 		// 这里宁可记一条 Error 也不让它 panic:notify 跑在提交**之后**,
@@ -321,7 +326,7 @@ func (l *GuildLogic) notify(kind pb.GuildChangeKind, guildID, actor, target uint
 		logx.Errorf("[guild] Notifier not wired; push dropped kind=%s guild=%d", changeKindLabel(kind), guildID)
 		return
 	}
-	l.notifier.Notify(&pb.GuildChangedS2C{
+	l.notifier.Notify(ctx, &pb.GuildChangedS2C{
 		Kind:           kind,
 		GuildId:        guildID,
 		ActorPlayerId:  actor,

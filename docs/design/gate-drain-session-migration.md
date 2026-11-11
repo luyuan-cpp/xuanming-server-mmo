@@ -204,7 +204,7 @@ GateDrain:
   - 迟到的旧 ExitGame 在 scene 因会话不符被丢弃；
   - 旧会话迟到的会话结束释放按代次判 `kSkipNewerLogin`。
   - 各种到达顺序的组合见 [断线保留](player-connection-lost-hold.md) §7 与 [入场会话栅栏](scene-enter-session-fence.md) §5。
-- **在途请求。** 推 124 时 gate 丢掉排队的路由请求，在途那一条照常执行；它的应答发往旧连接，连接已关就丢。这与跨 zone 重定向相同。会改资产的请求靠各业务的幂等、查询与快照恢复，迁移不放宽任何提交判定。直连模式没有路由 lane 这层保护，现状与跨 zone 相同。
+- **在途请求。** 迁移只挑路由 lane 为空（没有在途、没有排队）的会话，要票期间 lane 变忙也不推（`Classify`，2026-11-10~11 客户端请求保序收口补的，见 [客户端请求保序](client-request-ordering.md) O9 与 §4.6）。万一推 124 时仍有排队项（跨 zone 重定向不看 lane），gate 按收包顺序对每条回带请求 id 的 1003、不再发出，在途那一条照常执行，应答发往旧连接，连接已关就丢；推 124 之后新到的请求在入口回 1003：路由模式全部拦，直连模式拦 scene TCP 与 gate 本地观战，直连的 gRPC 请求没有 lane、维持现状（与跨 zone 相同，`client_session_handler.cpp` 的重定向拦截一节）。会改资产的请求靠各业务的幂等、查询与快照恢复，迁移不放宽任何提交判定。
 - **已知竞态。** 旧 gate 的断线通知恰好落在新连接那次 EnterGame 的 GetSession 与 SetSession 之间时，SetSession 因版本不符失败。login 复读确认没有提交，不踢旧会话，给新连接推 3023，客户端按 3023 的现有契约处理（§10 第 4 条）。这个窗口是毫秒级的：RedirectFlow 先关旧连接，再验票、再 Login，旧 gate 的断线通知通常早于新的 EnterGame 到达 login。
 
 ## 6. 水平扩展与容量

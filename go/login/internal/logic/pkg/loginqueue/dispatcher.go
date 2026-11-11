@@ -339,7 +339,7 @@ func (d *Dispatcher) dispatchOnce(ctx context.Context) {
 		return
 	}
 	// 没有候选时这里回「no gates for zone」:报 ERROR、不出队,条目原样留在队列里。
-	free, _, _, _, err := freeSlotsFromCandidates(ctx, candidates, d.provider, d.queue, zoneID, d.softCapMultiplier)
+	free, capacity, online, _, err := freeSlotsFromCandidates(ctx, candidates, d.provider, d.queue, zoneID, d.softCapMultiplier)
 	if err != nil {
 		logx.Errorf("[loginqueue] freeSlots zone=%d queueLen=%d err=%v", zoneID, queueLen, err)
 		return
@@ -348,9 +348,13 @@ func (d *Dispatcher) dispatchOnce(ctx context.Context) {
 		return
 	}
 
+	// free 只是快照,决定这一拍最多试几条;名额本身(容量 − 在线,与快速通道同一口径)交给放行脚本,每条写放行之前在
+	// 同一段里数一次未到期的占位(2026-11-11,infra-reconnect-overview.md §4.1 R7)。重叠 leader 各按同一份快照放满时,
+	// 在途上界因此是 capacity − online,不再是它的两倍。free > 0 意味着 capacity > online + 占位,减法不会下溢。
+	budget := capacity - online
 	batch := min(free, queueLen)
 
-	admitted, err := d.queue.PopAdmit(ctx, zoneID, int(batch), newBatchPickFn(candidates))
+	admitted, err := d.queue.PopAdmit(ctx, zoneID, int(batch), budget, newBatchPickFn(candidates))
 	// PopAdmit 出错时已放行数仍然有效(2026-10-18 起):先记账,再判错误。此前出错直接返回,本拍已放行的人不计入。
 	recordAdmit(zoneID, admitted)
 	if admitted > 0 {

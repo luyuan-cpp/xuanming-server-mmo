@@ -4,6 +4,7 @@ import (
 	"testing"
 )
 
+// 只剩地域存档库一个家族(总体方案 §7.2 A17c):区号的值域 1..MaxZoneID 不派生任何库名,zone 库已经退役。
 func TestStoreDBNameRoundTrip(t *testing.T) {
 	cases := []struct {
 		id   uint32
@@ -11,10 +12,11 @@ func TestStoreDBNameRoundTrip(t *testing.T) {
 		ok   bool
 	}{
 		{0, "", false},
-		{1, "zone_1_db", true},
-		{102, "zone_102_db", true},
-		{MaxZoneStorageID, "zone_999999_db", true},
-		{FirstNonZoneStorageID, "player_store_1000000_db", true},
+		{1, "", false},
+		{102, "", false},
+		{MaxZoneID, "", false},
+		{FirstStorageID, "player_store_1000000_db", true},
+		{1001007, "player_store_1001007_db", true},
 	}
 	for _, c := range cases {
 		name, ok := StoreDBName(c.id)
@@ -33,8 +35,10 @@ func TestStoreDBNameRoundTrip(t *testing.T) {
 
 func TestStorageIDFromDBNameRejectsOutsideFamilies(t *testing.T) {
 	for _, name := range []string{
-		"", "zone__db", "zone_0_db", "zone_01_db", "zone_1000000_db", "player_store_5_db",
-		"player_store__db", "mmorpg_guild", "zone_1_dbx", "xzone_1_db", "zone_-1_db", "zone_1 _db",
+		"", "zone__db", "zone_0_db", "zone_01_db", "zone_1000000_db", "player_store_5_db", "player_store_999999_db",
+		"player_store__db", "player_store_01000000_db", "mmorpg_guild", "zone_1_dbx", "xzone_1_db", "zone_-1_db", "zone_1 _db",
+		// 已退役的 zone 库:名字形状对,也不再是落点库。
+		"zone_1_db", "zone_102_db", "zone_999999_db",
 	} {
 		if id, ok := StorageIDFromDBName(name); ok {
 			t.Fatalf("StorageIDFromDBName(%q) = %d, want rejection", name, id)
@@ -42,7 +46,7 @@ func TestStorageIDFromDBNameRejectsOutsideFamilies(t *testing.T) {
 	}
 }
 
-// 地域存档库的编号(总体方案 §7.2):地域 0 的 0 号库就是 DefaultGlobalStorageID,库名走 StoreDBName 的非 zone 家族。
+// 地域存档库的编号(总体方案 §7.2):地域 0 的 0 号库就是 DefaultGlobalStorageID,库名走 StoreDBName。
 func TestRegionStorageIDLayout(t *testing.T) {
 	cases := []struct {
 		region, shard uint32
@@ -61,8 +65,8 @@ func TestRegionStorageIDLayout(t *testing.T) {
 		if name, ok := StoreDBName(got); !ok || name != c.name {
 			t.Fatalf("StoreDBName(%d) = (%q,%v), want %q", got, name, ok, c.name)
 		}
-		if IsZoneStorage(got) {
-			t.Fatalf("region storage %d must not fall into the zone family", got)
+		if got <= MaxZoneID {
+			t.Fatalf("region storage %d must not fall into the zone id range", got)
 		}
 	}
 	for _, c := range []struct{ region, shard uint32 }{{MaxRegionCode + 1, 0}, {0, RegionStorageStride}} {

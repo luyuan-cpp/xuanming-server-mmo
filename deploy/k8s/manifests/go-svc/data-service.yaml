@@ -56,6 +56,10 @@ spec:
         prometheus.io/port: "9260"
         prometheus.io/path: "/metrics"
     spec:
+      # 发号器在运行期经 K8s API 读本集群的身份(kube-system 命名空间的 UID),地域码绑定在它上面(设计 §6.3)。
+      # 权限在 data-service-identity-rbac.yaml,k8s_deploy.ps1 先于本 StatefulSet apply。令牌就是读身份的凭据,
+      # 所以不能关 automountServiceAccountToken。
+      serviceAccountName: data-service
       affinity:
         podAntiAffinity:
           # 两个副本尽量不落同一节点,否则单节点故障等于这个 zone 的发号 / 审计落库全停

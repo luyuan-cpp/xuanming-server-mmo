@@ -143,11 +143,18 @@
 
 ### 4.1 scene_manager 控制域
 
-- **键**:12 种 `scene:<id>:*`、`instance:<id>:members`、9 种 `node:zone:<z>:<n>:*`、世界频道 6 种、分线目录与线号、神秘商人、Agones 名额、拆除任务、死节点收尾表、`world_init` 锁、选主锁,全部改 `{ctl:<z>}`。
+- **键**:12 种 `scene:<id>:*`、`instance:<id>:members`、9 种 `node:zone:<z>:<n>:*`、世界频道 6 种、分线目录与线号、神秘商人、Agones 名额、拆除任务、死节点收尾表、`world_init` 锁、选主锁、etcd 修订号水位与纪元,全部改 `{ctl:<z>}`。
+  - 9 种节点级键按 11-11 工作区的代码是 `scenes`、`scene_count`、`scene_node_type`、`members`、`death_at`、`reconcile_scenes`、`reconcile_instance`、`holder`、`holder_epoch`;其中 `holder`、`holder_epoch` 在 `node_holder.go`,写本稿时还没提交。
+  - 修订号水位 `scene_manager:etcd_revision_seen:zone:<z>`、纪元 `scene_manager:etcd_epoch:zone:<z>` 是 11-11 为节点号持有者加的(缺口第 33 条,`node_holder.go`)。它们和 `holder`、`holder_epoch` 出现在同一段脚本里,必须同 tag。
   - 拼键约 185 处:177 次私有构造函数调用,加 8 处裸串或裸 Sprintf,散在约 14 个文件里 [C]。
   - 第 2a 批先把构造集中到一个键包,再统一改形。
   - 四个跨语言键(`node:…:holder`、`scene:…:node`、分线目录、神秘商人)在同一批里改两种语言。
 - **原子操作**:25 段 Lua、3 处 MGET、2 处 pipeline,以及 Lua 里的 SUNIONSTORE、多键 DEL / EXISTS,全部只碰一个 zone 的键;没有 MULTI、WATCH、SCAN、阻塞命令或 Pub/Sub [C]。改名之后自然同槽,脚本逻辑不动。
+  - 11-10 盘点之后新增或改成多键的脚本有 4 段,同样只碰一个 zone 的键:
+    - `node_holder.go` 的持有者发布 `luaPublishNodeHolder`,三键:`holder`、`holder_epoch`、纪元;
+    - 换纪元 `luaStartNewEtcdEpoch`,两键:水位、纪元;
+    - 抬水位 `luaRaiseEtcdRevisionSeen`,单键;
+    - `reentry_barrier.go` 的按实例清死亡标记 `clearNodeDeathForInstanceScript`,两键:`death_at`、`reconcile_instance`(断线重连 R15)。
   - 控制面设计稿 §4.4 漏了约 10 段脚本,§4.2 漏了 `teardown`、`registration`、`placement_gen`、两种 `*_receipt:<token>`、`agones_rooms:…:holds`、`scene_teardown:…:pending`、`placement_seq`,还列了已经不存在的 `scene:<id>:claim`。第 2a 批的金样表以代码为准。
 - **跨键先后**:`death_at` 必须先于「摘出负载集」落地(`load_reporter.go:316-340`)。同槽才在同一条复制流里,切主时不会留下「已摘出、death_at 却丢了」的组合。按 zone 打 tag 正好满足。
 - **pipeline**:`load_refresh.go` 的整批判定是按单节点 pipeline 写的(`:46-54`、`:312-356`)。改名后整批同槽、落在同一个节点,语义不变,第 2b 批核对并加断言。
@@ -235,7 +242,7 @@
 ### 4.7 选主锁与 shared/leader
 
 - **集群下可用**:`go/shared/leader` 只有单键 `SET NX EX` 和单键 Lua(`leader.go:41-62`),没有 WAITAOF,也没有同连接假设 [C]。
-- **缺口**:`NewGoRedisStore` 只收 `*redis.Client`(`store_goredis.go:19`),要补一个 UniversalClient 版本(`UniversalMaxCallDuration` 已有)。shared/leader 的内部改动归断线重连会话(R7),这一处谁先动谁做,动手前互发文件清单(§13)。
+- **缺口**:`NewGoRedisStore` 只收 `*redis.Client`(`store_goredis.go:19`),要补一个 UniversalClient 版本(`UniversalMaxCallDuration` 已有)。放在第 2b 批做,那时 scene_manager 是它的第一个调用方;第 1 批没有调用方,不提前加。shared/leader 的内部改动归断线重连会话(R7),这一处谁先动谁做,动手前互发文件清单(§13)。
 - **锁键 tag**:
   - scene_manager 的锁改成 `scene_manager:leader:lock:{ctl:<z>}`,与本 zone 的控制域键同槽;
   - login 的放行锁改成 `dispatcher:lock:login_queue:{q:<z>}`。
@@ -294,6 +301,9 @@
 
 - `RedisClusterClient` 已经支持单机与集群同一条路径,同 slot 停等保序,错误归类,只放行登记过的命令 [C]。
 - 本稿只加两件事:控制集群键策略(登记过的族前缀、多键同 tag),以及 `SPUBLISH` 的登记。
+  - 键策略是 `RedisClusterOptions::keyDomain`(`redis_cluster::KeyDomain`),与原有的 `hashTagPolicy` 正交:`hashTagPolicy` 管「哪些键必须带 tag」,`keyDomain` 管「带着的 tag 必须是哪一种」。
+  - 玩家域句柄取 `kAllKeys` + `kPlayer`:控制集群的族 tag 发过来拒绝(`wrong_domain_tag`)。控制集群句柄取 `kMultiKeyOnly` + `kControl`:玩家域的 tag 拒绝,多键命令带不同 tag 拒绝(`mixed_tags`,碰巧同 slot 也拒绝)。
+  - 缺省 `kUnrestricted` 不看 tag 形状,既有调用方与用例不变。
 - 每个 scene loop 线程一个 `tlsControlRedis`,每个控制集群主节点一条连接;gate、battle 不连。
 
 ### 5.3 Java 网关
@@ -396,9 +406,9 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 | 批 | 内容 | 约文件数 | 依赖与协调 | 状态 |
 |---|---|---|---|---|
 | 0 | 本设计稿;缺口清单第 34 条;索引与 PROGRESS | 6 | — | 已写(2026-11-10) |
-| 1 | `shared/clusterredis`(从 playerredis 迁出,留别名)与两种键策略;控制集群族前缀表 `shared/redisslot/control_keys.go` 与 C++ `redis_slot.h` 镜像;C++ 控制集群键策略与 `SPUBLISH` 登记;shared/leader 的 UniversalClient store;金样与守卫测试 | 15–20 | shared/leader 一处与断线重连会话对清单 | 未开工 |
+| 1 | `shared/clusterredis`(从 playerredis 迁出,`New(c, KeyPolicy)` 两种键策略),`shared/playerredis` 只剩别名;控制集群族前缀表 `shared/redisslot/control_keys.go` 与 C++ `redis_slot.h` 镜像;C++ `KeyDomain` 与 `SPUBLISH` 登记,玩家域句柄设 `kPlayer`;金样与守卫测试 | 约 25(含 9 个挪走的旧文件) | — | 已落码,未编译(2026-11-11;「服务器代码缺口补完」写了 Go 拷贝与族表,本会话补完别名层、控制策略用例与 C++ 一侧,见 PROGRESS 2026-11-11) |
 | 2a | scene_manager 键构造集中化与改形(§4.1),连同四个跨语言键的 C++ 常量;删 `scene:<id>:zone`;只给场景号的入口收敛(§3.3);CreateScene 的 zone 0 | 25–30 | 1;与「场景销毁认领」「Returning scene node」会话对段落 | 未开工 |
-| 2b | scene_manager 句柄换 UniversalClient(go-zero 调用改写)、选主 store、`load_refresh` 核对、契约测试重写 | 25–30 | 2a | 未开工 |
+| 2b | scene_manager 句柄换 UniversalClient(go-zero 调用改写)、shared/leader 补 UniversalClient 版 store(§4.7)、`load_refresh` 核对、契约测试重写 | 25–30 | 2a;shared/leader 一处与断线重连会话对清单 | 未开工 |
 | 3 | C++ `tlsControlRedis`;三处读与归属对账;SPUBLISH 与 Go `assetopwake` 的 64 路 SSUBSCRIBE、`ChannelWithSubscriptions`(跨语言同批);CreateScene 校验 zone(内部协议加字段,先跑协议生成);gate、battle 去掉 Redis 连接 | 20–25 | 1、2a;「Hiredis 生命周期收尾审核」会话 | 未开工 |
 | 4 | login 排队与 gate 标记(键改形、UniversalClient、放行改节点客户端 pipeline、按名次拉长轮询间隔、删 `QueueShardCount`);scene_manager 读 gate 标记;`k8s_gate_drain.ps1`;`gatepick`;Java 网关限流两段单键脚本与 Lettuce 集群 | 25–30 | 1;gate 排空迁移相关会话、「Zone 人数满的处理」会话 | 未开工 |
 | 5 | guild(缓存 tag、榜按 zone、去 SCAN、锁按 zone、assetopfix);friend 换句柄;player_locator 控制键 tag;data_service(唤醒、名字缓存 `MGetBySlot`);trade、player_inbox 换句柄;chat 删无用句柄;R8 收口;`tools/data_consistency_check` | 25–30 | 1;唤醒只订本副本分片依赖第 25 条 | 未开工 |
@@ -406,6 +416,32 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 | 7 | 文档改写:控制面设计稿 §4 / §5,玩家域设计 §5.1 域表,TiDB 总体方案 §2.1 / §8.4,G4a 设计稿(标历史),AGENTS.md §6 压测口径,`deploy/k8s/README.md`,`tools/scripts/README.md` | ~10 | 6 | 未开工 |
 
 合计约 170~200 个文件。
+
+### 10.1 第 2a 批动手前的协调记录(2026-11-11)
+
+11-11 凌晨有四个会话在改 scene_manager 与 C++ 的控制域文件,第 2a 批先逐个对了文件与键:
+
+- **「场景销毁认领:回滚原子化与重发幂等」**:
+  - 还在改的:`world_init.go` 的懒改派、`enterscenelogic.go` 里 `resolveScene` 的一处调用、新文件 `channel_move_flight.go` 与测试。约 02:30 收尾,收尾后通知。不新增控制域键。
+  - 已交出、可以改:`scene_atomic.go`、`scene_teardown_job.go`、`agones_room_ledger.go`、`agones_binding.go`、`agones_reconcile.go`、`world_rebalance.go`。
+  - 它近两天新增或改过形状的键,同批改形:`agones_rooms:zone:<z>:holds`(ZSET,成员是条目,分数是截止毫秒);`scene:<id>:agones_gs`(值改为「GameServer/条目」);两种回执键;`scene:<id>:teardown` 与 `scene_teardown:zone:<z>:pending`;`scene:<id>:placement_gen`。
+  - `luaJudgeAgonesRoomEntry` 删掉 `foreign` 分支后,找不到场景的条目按孤儿处理:只删 Agones 列表里那一项,不销毁场景。
+  - `scene_keys_contract_test.go` 登记了 `agonesRoomHoldsKey`,键模式要同批改。
+- **「无感升级和重启方案」**(计划排空 / 疏散):
+  - scene_manager 已写完,不再动。新文件 `node_drain.go`、`node_drain_test.go`、`enter_evacuation.go`、`metrics/planned_drain.go`;小改 `load_reporter.go`、`node_selection.go`、`world_rebalance.go`、`world_init.go`、`enterscenelogic.go`、`safe_points.go`、`metrics.go`。都未编译,要等协议生成(`NodeInfo.build=16`、`EnterSceneRequest.evacuation=15`)。
+  - 不新增 Redis 键:`drainWorkerKey` 只是进程内 map 的键,不改形。
+  - 改法提示:`enter_evacuation.go` 的 `evacuationOwnerOf` 手里有 zoneID,可以直接传;`node_drain_test.go` 里的 `sceneNodeKey(555)` 改用 `testZoneId`。
+- **「Returning scene node」**(缺口第 33 条残余):
+  - 代码已改完,不再动;Codex 报错要回改时先找第 2a 批。只剩文档在改:收尾以 PROGRESS 出现「缺口第 33 条残余收尾」条目为准,之前不要动它的文档。
+  - 新增三把控制域键,同批改形:`node:zone:<z>:<n>:holder_epoch`(与 holder 同写同过期,只有 scene_manager 读写)、`scene_manager:etcd_revision_seen:zone:<z>`、`scene_manager:etcd_epoch:zone:<z>`。
+  - 同槽约束:`luaPublishNodeHolder` 的 KEYS 是 [holder, holder_epoch, etcd_epoch],`luaStartNewEtcdEpoch` 是 [etcd_revision_seen, etcd_epoch],同一个 zone 都用 `{ctl:<z>}` 就同槽。
+  - 要跟着改的用例:`TestNodeHolderKeyShape`、`TestControlDomainKeysCarryNoHashTag` 的名单、C++ 的 `SceneOwnershipRules.KeysMatchTheSceneManagerKeys`。
+  - 写着这些键名、要跟着改的文档:`scene-node-ownership-reconcile.md` §4.6 / §9 / §10、`docs/ops/etcd-maintenance-runbook.md` §7a(含手工 `INCR scene_manager:etcd_epoch:zone:<z>` 的退路)、`docs/ops/scene-node-role-split.md` 告警表、控制面设计稿 §4.2 表、`deploy/k8s/README.md`。
+- **「Scene manager zone selection and etcd threshold」**:
+  - 只改了注释,已收尾,不再动 scene_manager 与 C++,没有新加键。改过的注释在 `reentry_barrier.go` 文件头与 `clearNodeDeathForInstance`、`load_reporter.go` 的 `nodeGoneObservedAt`。
+  - 经负责人同意,在本稿 §4.1 补了两处:「键」下列出 9 种节点级键、修订号水位与纪元;「原子操作」下列出 11-10 盘点之后新增的 4 段脚本。
+  - 另报:断线重连会话在 `reentry_barrier.go` 加了 `clearNodeDeathForInstanceScript`,两键 `death_at`、`reconcile_instance`,同样要进 `{ctl:<z>}`。
+- **结论**:四个会话的 Go 代码都已交出,只剩「场景销毁认领」在 `world_init.go` 与 `enterscenelogic.go` 的一处,收尾后通知。第 33 条会话的 `node_holder.go` 与 C++ 持有者几处,动之前先找它对一下,它还在改指标、告警与文档。
 
 ## 11. Java 版(AGENTS.md §12)
 
@@ -436,3 +472,4 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 ## 修订记录
 
 - 2026-11-10:初稿。依据三路只读盘点与断线重连会话的分工约定。
+- 2026-11-11:第 1 批落码(未编译)。§5.2 补 C++ `KeyDomain` 的取值;shared/leader 的 UniversalClient store 从第 1 批挪到第 2b 批(第 1 批没有调用方)。

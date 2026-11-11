@@ -28,7 +28,7 @@ $MatchTiDBHost = $GlobalAuthorityTiDBHost; $PhysicalRegion = 7
 $DatabaseBackend = 'tidb'
 $KafkaBrokers = 3; $OpsProfile = 'custom'
 $script:MysqlUser = 'fixture'; $script:MysqlPassword = ''; $script:RedisPassword = ''
-$script:GateTokenSecret = ''; $script:InternalAuthSecret = ''
+$script:GateTokenSecret = ''; $script:InternalAuthSigningKey = ''; $script:InternalAuthPublicKeys = ''
 $NodeImage = 'fixture.invalid/game:fixed'; $ImagePullPolicy = 'IfNotPresent'
 $SnowflakeCacheDir = '/run/snowflake'; $GrpcServerMaxPollers = 0; $GateRouterMode = '1'
 $RequireClientEndpoint = 'auto'; $ClientEntryMode = 'podip'; $NodeOpenFileLimitMode = ''

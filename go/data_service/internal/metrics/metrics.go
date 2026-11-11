@@ -130,17 +130,18 @@ var (
 	idSegmentAllocateTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "id_segment_allocate_total",
-		Help:      "AllocateIdSegment outcomes by biz_tag (ok|invalid|exhausted|unknown_tag|records_missing|refused|source_error).",
+		Help:      "AllocateIdSegment outcomes by biz_tag (a tag listed in IdSegment.Tags, unregistered or invalid) and outcome (ok|invalid|exhausted|unknown_tag|records_missing|refused|source_error).",
 	}, []string{"biz_tag", "outcome"})
 
 	// idIssuerReserveTotal 是发号器预留块的结果。ok 正常很少发生;one_record_missing / record_behind
 	// 说明某一份本地记录丢失或回退过,records_behind_registry 说明本地两套 etcd 都被旧数据覆盖过,
-	// registry_behind 持续出现说明登记处被回档过,ahead_of_clock 说明时钟曾跳到未来,都要人看一眼。
+	// registry_behind 持续出现说明登记处被回档过,ahead_of_clock 说明时钟曾跳到未来,
+	// identity_error 说明读不到本部署环境的身份(K8s API 或 RBAC),都要人看一眼。
 	idIssuerReserveTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "id_issuer_reserve_total",
 		Help: "Id issuer block reservations by result (ok|conflict|store_error|refused|one_record_missing|record_behind|" +
-			"records_behind_registry|registry_behind|ahead_of_clock).",
+			"records_behind_registry|registry_behind|ahead_of_clock|identity_error).",
 	}, []string{"result"})
 
 	// ── 玩家名字注册表(设计 docs/design/guild-phase2/03-names.md §3.6)────
@@ -503,8 +504,8 @@ func ObserveKafkaConsumerIsolation(consumer, result string) {
 	kafkaConsumerIsolationTotal.WithLabelValues(consumer, result).Inc()
 }
 
-// ObserveIdSegmentAllocate records one AllocateIdSegment outcome. biz_tag cardinality is
-// bounded by the store's tag validation and the handful of real tags (player/guild/item).
+// ObserveIdSegmentAllocate records one AllocateIdSegment outcome. biz_tag cardinality is bounded by the caller
+// (logic.bizTagLabel): only tags listed in IdSegment.Tags are recorded as-is, anything else is "unregistered" or "invalid".
 func ObserveIdSegmentAllocate(bizTag, outcome string) {
 	register()
 	idSegmentAllocateTotal.WithLabelValues(bizTag, outcome).Inc()

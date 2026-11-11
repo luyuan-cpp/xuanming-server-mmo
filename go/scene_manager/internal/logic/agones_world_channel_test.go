@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"scene_manager/internal/constants"
+	"scene_manager/internal/svc"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -98,10 +99,25 @@ func TestWorldChannel_InertWhenAgonesDisabled(t *testing.T) {
 	assert.Equal(t, "", gs)
 }
 
-// ── 频道迁移时的名额转移 ────────────────────────────────────────────────
+// ── 频道换节点时的名额:先占名额再搬 ────────────────────────────────────────
 //
-// 契约:调用 TransferAgonesRoomForScene 之前,场景归属已经改到新节点(reassignSceneNode 成功之后),
-// 所以这些用例都先把 scene:{id}:node 摆成新节点。
+// 改派与新建频道一样先占名额再搬(docs/design/agones-scene-node-high-density.md §13.10):改派之前在新节点上占名额,
+// 改派 CAS 落地之后提交(moveAgonesRoomForTest)。提交时归属已经是新节点,所以这些用例都先把 scene:{id}:node
+// 摆成新节点。四条改派路径各自的占名额 / 回落 / 放弃见 world_channel_reserve_before_move_test.go。
+
+// moveAgonesRoomForTest 走一遍改派路径的名额两步:改派之前在 newNode 上占名额(不回落,同 rebalance 换更好的家),
+// 改派 CAS 落地之后提交。占不到时回 false,什么都没提交。
+func moveAgonesRoomForTest(t *testing.T, sc *svc.ServiceContext, sceneID uint64, newNode string) bool {
+	t.Helper()
+	ctx := context.Background()
+	node, placement, ok := reserveAgonesRoomForWorldChannel(ctx, sc, testZoneId, sceneID, newNode, false)
+	if !ok {
+		return false
+	}
+	require.Equal(t, newNode, node, "不回落时落点就是指定节点")
+	commitReservedAgonesRoom(ctx, sc, testZoneId, sceneID, newNode, placement)
+	return true
+}
 
 // 搬家:新节点占上、旧节点还回去、记录改到新节点的那一条。
 func TestWorldChannel_TransferMovesRoomToNewNode(t *testing.T) {
@@ -117,7 +133,7 @@ func TestWorldChannel_TransferMovesRoomToNewNode(t *testing.T) {
 	require.NoError(t, sc.Redis.Set(sceneNodeKey(5005), "20"))
 	seedAgonesRoom(t, sc, alloc, 5005, "gs-old")
 
-	TransferAgonesRoomForScene(context.Background(), sc, 5005, "20", testZoneId)
+	require.True(t, moveAgonesRoomForTest(t, sc, 5005, "20"))
 
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-old"), "旧节点的名额必须还回去,否则容量凭空蒸发")
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-new"), "新节点必须记账,否则容量被超卖")
@@ -125,44 +141,50 @@ func TestWorldChannel_TransferMovesRoomToNewNode(t *testing.T) {
 	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId), "CAS 在同一步消费了在途占用")
 }
 
-// 新节点占不到 -> **不释放旧的**。
-// 释放了等于这个频道不占任何容量,比多占一份更糟。之后由对账每轮重试转过来(agones_reconcile_test.go)。
-func TestWorldChannel_TransferKeepsOldReservationWhenNewNodeIsFull(t *testing.T) {
+// 新节点满了 -> 占不到就不搬:旧名额与记录原封不动,也不留在途占用。
+// 以前先改归属、事后才转名额,满了就把名额留在旧 GameServer 上:整个 Fleet 的总数对,却记错了台,GSA 按新的那台
+// 「还有空位」继续往里放,那台进程超出压测定下的容量(§13.10)。
+func TestWorldChannel_MoveRefusesAFullTargetWithoutFallback(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 
 	alloc := newFakeAllocator(
 		&fakeGameServer{name: "gs-old", podIP: "10.0.0.8", state: "Allocated", capacity: 4},
 		&fakeGameServer{name: "gs-new", podIP: "10.0.0.9", state: "Allocated", count: 2, capacity: 2},
+		&fakeGameServer{name: "gs-spare", podIP: "10.0.0.7", state: "Ready", capacity: 4},
 	)
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(5006), "20"))
+	bindPodIP(t, "30", "10.0.0.7", testZoneId, constants.SceneNodeTypeMainWorld)
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(5006), "10"))
 	record := seedAgonesRoom(t, sc, alloc, 5006, "gs-old")
 
-	TransferAgonesRoomForScene(context.Background(), sc, 5006, "20", testZoneId)
+	require.False(t, moveAgonesRoomForTest(t, sc, 5006, "20"), "目标满了就不搬")
 
-	assert.EqualValues(t, 1, alloc.roomsOf("gs-old"), "占不到新的就不能释放旧的")
+	assert.EqualValues(t, 1, alloc.roomsOf("gs-old"), "没搬就不能释放旧的")
 	assert.EqualValues(t, 2, alloc.roomsOf("gs-new"), "满了的节点不能被超卖")
+	assert.EqualValues(t, 0, alloc.roomsOf("gs-spare"), "不回落时不交给 GSA 另挑")
+	allocations, _, _ := alloc.stats()
+	assert.Zero(t, allocations)
 	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5006))
 	assert.Equal(t, record, gs, "记录必须仍指向真正持有名额的那一条")
 	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId), "没占到名额就不留在途占用")
 }
 
-// Agones 关闭时转移是 no-op。
+// Agones 关闭时占名额与提交都是 no-op。
 func TestWorldChannel_TransferInertWhenAgonesDisabled(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 	require.NoError(t, sc.Redis.Set(sceneNodeKey(5007), "20"))
 	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(5007), "gs-old"))
 
-	TransferAgonesRoomForScene(context.Background(), sc, 5007, "20", testZoneId)
+	require.True(t, moveAgonesRoomForTest(t, sc, 5007, "20"))
 
 	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5007))
 	assert.Equal(t, "gs-old", gs)
 }
 
-// 转移在 K8s 往返期间,场景被销毁(销毁方已按旧记录删过条目)或被另一个写者再次搬走:属主已不是
-// 新节点。只删这次刚占的那一条,旧记录一个字节都不动。
+// 占名额之后、提交之前,场景被销毁(销毁方已按旧记录删过条目)或被另一个写者再次搬走:属主已不是
+// 新节点。只删这次占的那一条,旧记录一个字节都不动。
 // 修复前预读旧记录后无条件覆盖:销毁后重建出一把孤儿 agones_gs、新名额永久泄漏,旧名额被还第二次。
 func TestWorldChannel_TransferBacksOutWhenOwnerMovedOn(t *testing.T) {
 	cases := []struct {
@@ -190,9 +212,9 @@ func TestWorldChannel_TransferBacksOutWhenOwnerMovedOn(t *testing.T) {
 			}
 			oldRooms := alloc.roomsOf("gs-old")
 
-			TransferAgonesRoomForScene(context.Background(), sc, tc.sceneID, "20", testZoneId)
+			require.True(t, moveAgonesRoomForTest(t, sc, tc.sceneID, "20"))
 
-			assert.EqualValues(t, 0, alloc.roomsOf("gs-new"), "属主已不是新节点,刚占的那一条必须删掉")
+			assert.EqualValues(t, 0, alloc.roomsOf("gs-new"), "属主已不是新节点,这次占的那一条必须删掉")
 			assert.EqualValues(t, oldRooms, alloc.roomsOf("gs-old"), "旧名额归属主或销毁方处理,这里不得再还")
 			gs, err := sc.Redis.Get(sceneAgonesGsKey(tc.sceneID))
 			require.NoError(t, err)
@@ -202,8 +224,8 @@ func TestWorldChannel_TransferBacksOutWhenOwnerMovedOn(t *testing.T) {
 	}
 }
 
-// 同一目标重复转移(两个写者先后把同一场景搬到同一节点,或 CAS 结论未知时补转一次):第二次
-// 读到记录已在新节点的 GameServer 上,删掉自己这次占的那一条,净结果只记一次。
+// 同一目标重复提交(两个写者先后把同一场景搬到同一节点,各占了一条):第二次读到记录已在新节点的
+// GameServer 上,删掉自己这次占的那一条,净结果只记一次。
 func TestWorldChannel_TransferIsIdempotentForSameTarget(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 	alloc := newFakeAllocator(
@@ -216,8 +238,8 @@ func TestWorldChannel_TransferIsIdempotentForSameTarget(t *testing.T) {
 	require.NoError(t, sc.Redis.Set(sceneNodeKey(5010), "20"))
 	seedAgonesRoom(t, sc, alloc, 5010, "gs-old")
 
-	TransferAgonesRoomForScene(context.Background(), sc, 5010, "20", testZoneId)
-	TransferAgonesRoomForScene(context.Background(), sc, 5010, "20", testZoneId)
+	require.True(t, moveAgonesRoomForTest(t, sc, 5010, "20"))
+	require.True(t, moveAgonesRoomForTest(t, sc, 5010, "20"))
 
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-new"), "重复转移只记一次")
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-old"), "旧名额只还一次")

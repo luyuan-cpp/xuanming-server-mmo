@@ -1410,6 +1410,35 @@ TEST_F(PlayerInboxSystemTest, ExecutorVersionSkewHaltsAfterConfirmingThePrefixAn
 	EXPECT_EQ(1u, g_sentAcks.size());
 }
 
+// 载荷带本版本不认识的字段(更新版本的生产者写的,混版本持久字段保护设计 §12「载荷新字段」,2026-11-11):
+// 照常执行会丢掉新字段的语义、还记成 APPLIED。与执行器报版本错位同口径:停用本域,已定前缀照常确认,
+// 这一条不执行、不记账、不确认。
+TEST_F(PlayerInboxSystemTest, PayloadCarryingFieldsFromNewerVersionHaltsWithoutExecuting)
+{
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+
+	player_inbox::GmCurrencyGainPayload newer;
+	newer.set_currency_type(kGold);
+	newer.mutable_unknown_fields()->AddVarint(412345, 1); // 新版本给载荷加的字段
+	PlayerInboxSystem::OnFetchReply(
+		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
+		FetchReplyFor(fetch, {BlockGold(10, 1001), MakeItem(11, kUnblockType, 1101, newer.SerializeAsString()),
+				MakeItem(12, kUnblockType, 1201, GainPayload(kGold))}));
+	ASSERT_NE(nullptr, GmState(player_));
+	EXPECT_TRUE(GmState(player_)->halted);
+	EXPECT_EQ(PlayerInboxHaltReason::kVersionSkew, GmState(player_)->haltReason);
+	EXPECT_EQ(10u, DecidedThrough(player_)) << "停在带新字段的这一条:不记账,绝不当成 APPLIED";
+	EXPECT_TRUE(GoldBlocked(player_)) << "带新字段的解封没有执行,停用点之后的条目也不执行";
+	EXPECT_TRUE(GmState(player_)->pendingItems.empty()) << "不留本地副本";
+
+	// 已定的前缀照常落盘后确认;带新字段的这一条不在确认里。
+	player_inbox::AckPlayerInboxRequest ack;
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_EQ(1, ack.decisions_size());
+	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 1001);
+}
+
 // 停用对当前实体一直有效、不会自愈:停用那一刻打一条 ERROR,之后每 kHaltedDomainRelogIntervalMs 补打同一个
 // metric=inbox_halted,[10m] 日志告警在实体存活期间一直亮着(混版本持久字段保护第 6 批对抗复核)。节拍本身由
 // player_inbox_rules.h 的 static_assert 钉住;这里钉接线与「差 1ms 不到点、到点只打一条」。

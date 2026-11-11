@@ -12,7 +12,7 @@ import (
 )
 
 func (e *Engine) PlaceBid(ctx context.Context, me, lotID uint64, in *tradepb.PlaceAuctionBidRequest) (*tradepb.TradeCommerceRecord, error) {
-	lot, err := e.Repo.Get(ctx, lotID)
+	lot, err := e.clientContract(ctx, lotID)
 	if err != nil {
 		return nil, err
 	}

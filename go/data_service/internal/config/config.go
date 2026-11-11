@@ -354,15 +354,20 @@ func (c IdSegmentConfig) EffectiveTags() []string {
 func (c IdSegmentConfig) IssuerEndpoints(fallback []string) (primary, secondary, registry []string, err error) {
 	primary, secondary, registry = c.Issuer.PrimaryEtcd, c.Issuer.SecondaryEtcd, c.Issuer.RegistryEtcd
 	if c.AllowAutoSeed {
+		// AllowAutoSeed 跳过独立性和地域码绑定的核对,登记处没有这个码就在第一次预留时直接认领,不走「下一个可认领的码」。
+		// 这样的发号器连上共用登记处,就成了在用地域码的第二个发号环境(交接 docs/handoff/global-id-issuer-registry-20261105.md §7.3),
+		// 所以 dev、test 的登记处只能放在自己的 etcd 上,显式给地址一律拒绝。部署脚本的 dev 档同样拒绝 -IdRegistryEtcd。
+		if len(registry) != 0 {
+			return nil, nil, nil, errors.New("IdSegment.Issuer.RegistryEtcd must be empty when AllowAutoSeed=true: " +
+				"a dev or test issuer skips the region code binding checks, so its id registry stays on its own etcd and never on the shared one")
+		}
 		if len(primary) == 0 {
 			primary = fallback
 		}
 		if len(secondary) == 0 {
 			secondary = primary
 		}
-		if len(registry) == 0 {
-			registry = primary
-		}
+		registry = primary
 		if len(primary) == 0 {
 			return nil, nil, nil, errors.New("IdSegment.Issuer: no etcd endpoints (neither PrimaryEtcd nor Etcd.Hosts is set)")
 		}

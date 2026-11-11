@@ -32,7 +32,7 @@ $parseErrors = $null
 $deployAst = [System.Management.Automation.Language.Parser]::ParseFile($script:DeployPath, [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count -gt 0) { throw "k8s_deploy.ps1 解析失败: $($parseErrors[0].Message)" }
 foreach ($fn in $deployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
-    if (@('Get-KafkaDiskBudgetConstants', 'Get-KafkaDiskPlan') -contains $fn.Name) {
+    if (@('Get-KafkaDiskBudgetConstants', 'Get-KafkaDiskPlan', 'Apply-KafkaProfileDefaults') -contains $fn.Name) {
         Set-Item -Path "Function:script:$($fn.Name)" -Value $fn.Body.GetScriptBlock()
     }
 }
@@ -64,6 +64,35 @@ Test-Case '放宽审计 retention.bytes 时盘预算按它算' {
     Assert-Equal -Expected 2147483648 -Actual $plan.AuditRetentionBytes -Because '预算要带回实际用的值'
 }
 
+# 档位缺省值(缺口清单第 3 条 2026-11-11 定案)。Apply-KafkaProfileDefaults 只读写脚本级变量,喂一组全 0 的输入就能直接跑。
+function Invoke-ProfileDefaults {
+    param([Parameter(Mandatory = $true)][string]$Tier, [long]$AuditRetentionBytes = 0)
+    $script:KafkaProfile = $Tier
+    $script:KafkaBrokerRetentionMs = 0
+    $script:KafkaRetentionCheckIntervalMs = 0
+    $script:KafkaRetentionBytes = [long]0
+    $script:KafkaSegmentBytes = [long]0
+    $script:KafkaHeapOpts = ''
+    $script:KafkaOtherTopicsReserveGi = 0
+    $script:AuditKafkaRetentionBytes = $AuditRetentionBytes
+    Apply-KafkaProfileDefaults
+}
+
+Test-Case '审计 retention.bytes 的档位缺省:prod / prod-like 4GiB(扛住 2 小时消费中断),dev 沿用 broker 缺省;显式值不被覆盖' {
+    foreach ($case in @(
+        @{ Tier = 'prod'; Want = [long]4294967296 }
+        @{ Tier = 'prod-like'; Want = [long]4294967296 }
+        @{ Tier = 'dev'; Want = [long]134217728 }
+    )) {
+        Invoke-ProfileDefaults -Tier $case.Tier
+        Assert-Equal -Expected $case.Want -Actual ([long]$script:AuditKafkaRetentionBytes) -Because "$($case.Tier) 档的审计 retention.bytes(渲染出来不能是 0)"
+    }
+    Invoke-ProfileDefaults -Tier 'prod' -AuditRetentionBytes 2147483648
+    Assert-Equal -Expected ([long]2147483648) -Actual ([long]$script:AuditKafkaRetentionBytes) -Because '显式 -AuditKafkaRetentionBytes 不被档位缺省覆盖'
+    $plan = New-ProdDiskPlan -AuditRetentionBytes 4294967296
+    Assert-Equal -Expected 80 -Actual $plan.RequiredGi -Because 'prod 档缺省:1.3 × (9 × (4096 + 32)MiB + 512 × 32MiB + 4GiB) ≈ 73.2GiB,取到 80'
+}
+
 Test-Case '审计 retention.bytes 为负时拒绝' {
     $thrown = $null
     try { New-ProdDiskPlan -AuditRetentionBytes -1 | Out-Null } catch { $thrown = $_.Exception.Message }
@@ -75,7 +104,6 @@ Test-Case 'data-service 的 Kafka 段渲染两个审计 topic 的 retention.byte
     Assert-Match -Text $deploy -Pattern '(?m)^  TxLogRetentionBytes: \$\{AuditKafkaRetentionBytes\}\s*$' -Because '漏了 data-service 就按 broker 缺省建 topic'
     Assert-Match -Text $deploy -Pattern '(?m)^  SnapshotRetentionBytes: \$\{AuditKafkaRetentionBytes\}\s*$' -Because '快照 topic 同一个值'
     Assert-Match -Text $deploy -Pattern '-AuditRetentionBytes \$AuditKafkaRetentionBytes' -Because '盘预算要和渲染进 topic 的值相同'
-    Assert-Match -Text $deploy -Pattern 'if \(\$AuditKafkaRetentionBytes -le 0\) \{ \$script:AuditKafkaRetentionBytes = \$script:KafkaRetentionBytes \}' -Because '不给时沿用 broker 缺省,渲染出来不是 0'
     $configGo = Read-RepoText $script:DataServiceConfigGo
     Assert-Match -Text $configGo -Pattern 'TxLogRetentionBytes\s+int64' -Because 'data_service 要认这个键'
     Assert-Match -Text $configGo -Pattern 'SnapshotRetentionBytes\s+int64' -Because 'data_service 要认这个键'

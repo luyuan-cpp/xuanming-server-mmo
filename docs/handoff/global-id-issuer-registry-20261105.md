@@ -1,6 +1,6 @@
 # 交接:发号器三份记录与全局号源登记处(交 Codex 验证,2026-11-05)
 
-> 状态:**Codex 已修复 §4.1 三项问题并补回归；最新证据见 §5。Go 固定副本构建、单测及真 etcd 回归通过；部署大套和本轮快照演练尚未全部完成。Claude Code 11-10 独立审核见 §6：发现 1 个高危问题（同命名空间部署出的 etcd 集群号相同，地域码绑定分不出两套环境），整体验收不通过，待用户决定是否修复。11-11 第二轮独立审核见 §7：同意 §6，另补修法限制与 4 个新问题（1 个中低、3 个低）。** Java 版本轮不实现(用户 11-05:「java 先不要实现」),只在 Java 仓 `PARITY.md` 记待做。
+> 状态:**Codex 已修复 §4.1 三项问题并补回归；最新证据见 §5。Go 固定副本构建、单测及真 etcd 回归通过；部署大套和本轮快照演练尚未全部完成。Claude Code 11-10 独立审核见 §6：发现 1 个高危问题（同命名空间部署出的 etcd 集群号相同，地域码绑定分不出两套环境），整体验收不通过，待用户决定是否修复。11-11 第二轮独立审核见 §7：同意 §6，另补修法限制与 4 个新问题（1 个中低、3 个低）。11-11 已按「令牌 + 运行期部署身份」修 §6.2、§6.3，见 §8，未编译、未运行，待 Codex 验证。** Java 版本轮不实现(用户 11-05:「java 先不要实现」),只在 Java 仓 `PARITY.md` 记待做。
 > 需求来源:用户 11-05 贴的三个问题(两套 etcd 同时回档会重发、地域码防重靠人工、Java 版未对齐)和 [10-28 交接](./global-id-prelaunch-claude-20261028.md)。10-28 交接写的是 SQL `id_segment` 号段,10-30 起发号器已换成 etcd,本轮按当前代码修。
 > 设计以 [总体方案](../design/player-data-tidb-scaling-plan.md) §6.3 为准,运维以 [发号器运维手册](../ops/id-issuer-runbook.md) 为准。
 
@@ -526,3 +526,192 @@ go test -mod=readonly -tags etcd_integration -count=1 -v -timeout 2m -run 'TestE
   - 从没绑定的环境退役在用码，被拒；
   - `next=1` 时初始化 5，被拒，登记处不变；
   - `AllowAutoSeed` 带显式 `RegistryEtcd`，配置报错。
+
+## 8. 2026-11-11 §6.2、§6.3 修复（未编译，待 Codex 验证）
+
+用户 11-11 选「按令牌 + 运行期身份修」§6.2。用户在另一个会话「全球同服发号三个问题修复」也要求修 §6.2、§6.3，两个会话这样分工：
+
+- 本会话「永久ID发号器与全局号源审核」：Go 代码（含 §6.3 退役保护）、设计、两本手册、AGENTS §7.1 一句。
+- 另一个会话：部署侧，即 RBAC 清单、`data-service.yaml`、`k8s_deploy.ps1`、部署契约测试，见 §8.4。
+
+没有编译，没有运行任何测试（AGENTS §10.1）。Java 不涉及：Java 版没有发号器和登记处，`PARITY.md` 里已有的发号器待做项照旧。
+
+### 8.1 改了什么
+
+绑定从「世系 + 两套本地 etcd 的集群号」改成「世系 + 部署身份 + 两套本地 etcd 的集群号」。部署身份是 `k8s:<kube-system 命名空间的 UID>`，data-service 运行期经 K8s API 读。
+
+| 文件 | 改动 |
+|---|---|
+| `go/data_service/internal/idissuer/issuer.go` | 部署身份接入：<br>• `Options.Deployment` 是身份读取器，生产必须给，`New` 拒绝缺省；登记处记录新增 `Claim.Deployment`。<br>• `boundHere` 同时比身份和两个集群号，空身份不算绑定。<br>• `Init`、`Recover`（rebind 与重新登记）和预留都写入、核对身份。<br>• 身份第一次需要时读，成功后缓存；读失败不写任何记录，上报 `identity_error`。<br>退役保护（§6.3）：<br>• 签名改为 `Retire(ctx, unbound)`。<br>• 码在用时，`retirableHere` 要求本地记录的地域和世系、部署身份、集群号都对得上；`unbound` 跳过核对。<br>• 登记处没有这个码时照旧写墓碑。 |
+| `.../idissuer/etcd_store.go` | 登记处 JSON 加可缺省的 `deployment` 字段，有值时校验格式；没有这个字段的旧记录照读，身份为空 |
+| `.../idissuer/issuer_test.go` | 夹具：每个 harness 一个部署身份，`elsewhere()` 是集群号相同、身份不同的另一个 K8s 集群。新增 10 个用例，见下；`TestNew_RejectsBadOptions`、`TestValidClaim` 补了身份的情形 |
+| `.../idissuer/etcd_integration_test.go` | 每个环境一个身份。`SecondPair` 用例记下两对 etcd 的集群号是否相同，设了 `MMORPG_ID_ISSUER_IT_SECOND_PAIR_SAME_TOKENS=1` 时断言相同。演练状态文件带身份，没有身份的旧状态拒绝续跑。`StoreContract` 验证 `deployment` 在真 etcd 上往返 |
+| `go/data_service/internal/clusteridentity/`（新） | 只用标准库：带 ServiceAccount 令牌、只信任集群 CA，`GET /api/v1/namespaces/kube-system`，返回 `k8s:<uid>`。单测 5 个，用 `httptest` 的 TLS 服务 |
+| `go/data_service/internal/svc/servicecontext.go`、`id_issuer_region_test.go` | `AllowAutoSeed=false` 时接上 `clusteridentity.InCluster().Read`，dev 不接。新增接线用例 `TestNewIdIssuer_ProductionWiresTheDeploymentIdentity` |
+| `go/data_service/data_service.go`、`data_service_entry_test.go` | 新开关 `-id-issuer-retire-unbound`，只能和 `-id-issuer-retire` 一起用；rebind、init 的输出带部署身份；`TestSelectEntry` 加 3 行 |
+| `go/data_service/internal/metrics/metrics.go` | 预留结果的帮助文本加 `identity_error` |
+| 文档 | 设计 §6.1~§6.3；发号器手册的状态行、§1、§2.2、§3、§4、§4.6、§4.7、§5；开新地域手册 §1、§6；AGENTS §7.1 一句 |
+
+新增的 10 个 `idissuer` 用例：
+
+- `TestBinding_AnotherKubernetesClusterWithIdenticalEtcdIsRefused`：§6.2 默认形态，码已发号，另一个集群初始化报 `ErrRegionClaimed` 而不是 `ErrCounterMissing`；
+- `TestBinding_AnotherKubernetesClusterCannotFinishAnUnusedClaim`：码已认领、`Blocks=0`；
+- `TestBinding_BackupRestoredIntoAnotherKubernetesClusterIsRefused`：数据目录原样恢复到另一个集群；
+- `TestBinding_RebindToAnotherKubernetesClusterFencesTheOldOne`：灾备 rebind 后原集群被拒，两边的段不重叠；
+- `TestBinding_ClaimWithoutDeploymentNeedsRebind`；
+- `TestReserve_DeploymentIdentityFailureWritesNothingAndSuccessIsCached`；
+- `TestDeployment_MalformedIdentityIsRefused`；
+- `TestRetire_ACodeInUseIsRefusedFromAnUnboundDeployment`；
+- `TestRetire_UnboundNeedsTheExplicitSwitch`；
+- `TestClaimJSON_CarriesTheDeployment`。
+
+`clusteridentity` 的 5 个用例：成功、不在 K8s 里、403 点名缺的权限、对象不对、证书不是集群 CA 签的。
+
+### 8.2 设计取舍
+
+- **身份为什么运行期读、不由部署脚本渲染**：渲染进 ConfigMap、Secret、环境变量的值，会和 PVC 一起被集群级备份恢复带走（§7.2）。kube-system 的 UID 由 API server 建集群时生成，按对象恢复出来的是新 UID。这是 K8s 生态里常用的集群标识。
+- **为什么不用 client-go**：data_service 只要这一个字段。client-go 在 data_service 的 go.mod 里只是间接依赖，提成直接依赖会牵连一串传递包的校验和，而服务按 `-mod=readonly` 构建。
+- **K8s API 是软依赖**：构造不做 IO，第一次预留或运维操作才读，成功后缓存到进程结束。读不到那次失败、不写任何记录；手里的块照发，下一次预留再读。
+- **etcd 令牌也带上 kube-system UID**：这是加固，判定靠部署身份。同一个 K8s 集群里的不同命名空间，令牌本来就带命名空间，集群号不同。
+- **兼容**：
+  - 11-11 之前写的登记处记录没有身份，生产预留拒绝，`-id-issuer-recover -id-issuer-rebind` 补上。项目未上线，没有存量；dev 不核绑定。
+  - 新旧二进制不能混跑：旧二进制按严格 JSON 读到 `deployment` 字段会当作记录损坏，fail-closed。
+  - 11-06 的演练 A 段状态没有身份，`TestEtcdDrill` 的 B、C 段会明确拒绝，演练要从 A 段重来。旧证据保留不动。
+- **仍然拦不住**：
+  - 整个 K8s 控制面连同 kube-system 一起从备份克隆出第二个集群；
+  - 同一个 K8s 集群里拷贝 etcd 数据目录、强制起成另一套。
+
+  两种都要有人刻意操作，这时两边只能靠登记处水位串行，登记处完好时不重号，已写进设计 §6.3。
+
+### 8.3 交 Codex 验证（Go 与真 etcd）
+
+工作目录 `go/data_service`，沿用 §5.3 的 `GOTOOLCHAIN=local`、`-mod=readonly`。整模块构建会带上工作区里其他会话的未提交改动；发号器以外的编译失败单独报告，不要顺手修。
+
+```powershell
+gofmt -l ./internal/idissuer ./internal/clusteridentity ./internal/svc ./internal/metrics ./data_service.go ./data_service_entry_test.go
+go build -mod=readonly ./...
+go vet -mod=readonly ./internal/idissuer/ ./internal/clusteridentity/ ./internal/svc/ ./internal/logic/ ./internal/metrics/ .
+go vet -mod=readonly -tags etcd_integration ./internal/idissuer/
+go test -mod=readonly -count=1 -v -timeout 3m ./internal/idissuer/ ./internal/clusteridentity/
+go test -mod=readonly -count=1 -v -timeout 2m -run 'TestNewIdIssuer|TestCheckExpectedRegion|TestSelectEntry' ./internal/svc/ .
+go test -mod=readonly -count=1 ./internal/logic/ ./internal/config/
+```
+
+通过标准：
+
+- 全部 exit 0，`gofmt -l` 没有输出；
+- §8.1 列的新用例都实际运行并 PASS，`idissuer`、`clusteridentity` 两个包 0 SKIP；
+- Windows 上报 Access denied 时，改用 `go test -c` 再运行。
+
+有 CGO 的环境再跑一遍：`go test -race -count=1 ./internal/idissuer/ ./internal/clusteridentity/`。
+
+**真 etcd 回归，用部署的默认形态**：第二对的成员名和引导令牌与第一对相同，peer 地址本来就相同，所以集群号相同。Docker 修好之后，按 §5.4 先核实并清理旧资源，再起五个节点：
+
+```powershell
+$img = 'quay.io/coreos/etcd:v3.5.15'
+$nodes = @(
+  @{ c = 'p';  name = 'p'; token = 'idissuer-it-p'; port = 24791 },
+  @{ c = 's';  name = 's'; token = 'idissuer-it-s'; port = 24792 },
+  @{ c = 'r';  name = 'r'; token = 'idissuer-it-r'; port = 24793 },
+  @{ c = 'p2'; name = 'p'; token = 'idissuer-it-p'; port = 24794 },
+  @{ c = 's2'; name = 's'; token = 'idissuer-it-s'; port = 24795 }
+)
+foreach ($x in $nodes) {
+  docker run -d --name "idissuer-it-$($x.c)" -p "127.0.0.1:$($x.port):2379" $img /usr/local/bin/etcd --name $x.name --data-dir /etcd-data `
+    --listen-client-urls http://0.0.0.0:2379 --advertise-client-urls "http://127.0.0.1:$($x.port)" `
+    --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://127.0.0.1:2380 `
+    --initial-cluster "$($x.name)=http://127.0.0.1:2380" --initial-cluster-token $x.token
+}
+$env:MMORPG_ID_ISSUER_IT_PRIMARY = '127.0.0.1:24791'
+$env:MMORPG_ID_ISSUER_IT_SECONDARY = '127.0.0.1:24792'
+$env:MMORPG_ID_ISSUER_IT_REGISTRY = '127.0.0.1:24793'
+$env:MMORPG_ID_ISSUER_IT_PRIMARY2 = '127.0.0.1:24794'
+$env:MMORPG_ID_ISSUER_IT_SECONDARY2 = '127.0.0.1:24795'
+$env:MMORPG_ID_ISSUER_IT_SECOND_PAIR_SAME_TOKENS = '1'
+go test -mod=readonly -tags etcd_integration -count=1 -v -timeout 2m -run 'TestEtcdIntegration' ./internal/idissuer/
+```
+
+通过标准：
+
+- 5 条 `TestEtcdIntegration_*` 全部 PASS、0 SKIP；
+- 日志里有 `the second pair reports the same etcd cluster ids as the first: true`。这一行同时证明 §6.2 的 H1：令牌和地址相同，集群号就相同。
+
+用完按上面五个名字删容器。H2（修复前的失败形态）不再需要单独复现：修复前的代码在这个环境里会在 `Init` 报 `ErrCounterMissing`。
+
+**快照回档演练**按 §2.5 从 A 段重来。用新的状态文件路径和新的命名卷，不覆盖 11-06 的 `drill/` 证据。§7.5 的 H3（数据目录不变、换令牌重启，集群号不变）照旧可以跑，它证明的是「只改令牌挡不住数据级克隆」，与本次修复的结论一致。
+
+### 8.4 部署侧（「全球同服发号三个问题修复」会话负责）
+
+本会话和它约定的名字与行为：
+
+- **RBAC 清单** `deploy/k8s/manifests/go-svc/data-service-identity-rbac.yaml`：
+  - 每个 zone 命名空间一个 ServiceAccount `data-service`；
+  - 全集群一个 ClusterRole，只允许 get `namespaces`，`resourceNames: ["kube-system"]`；
+  - 每个 zone 一个 ClusterRoleBinding，名字带上 zone 命名空间。
+
+  `data-service.yaml` 的 Pod 用这个 ServiceAccount，不关闭令牌挂载。NetworkPolicy 如果限制出口，要放行到 API server。RBAC 必须先于 data-service 的 StatefulSet apply。
+- **etcd 引导令牌**：形态是 `mmorpg-etcd-__INFRA_NAMESPACE__-__KUBE_CLUSTER_UID__`，secondary 和 registry 同样追加。
+  - `Apply-Infra` 在第一个写操作之前用 `kubectl get namespace kube-system -o jsonpath={.metadata.uid}` 读取，按 UUID 校验，读不到就拒绝、什么都不写；
+  - DryRun 用固定标记值；
+  - 已有数据的 etcd 忽略令牌，改它只触发一次滚动重启。
+
+**部署侧回执（2026-11-11，「全球同服发号三个问题修复」会话写；未运行任何测试）**
+
+改动文件：
+
+| 文件 | 改动 |
+|---|---|
+| `deploy/k8s/manifests/go-svc/data-service-identity-rbac.yaml`（新） | ServiceAccount `data-service`；ClusterRole `mmorpg-cluster-identity-reader`，只有 get `namespaces`、`resourceNames: ["kube-system"]`；ClusterRoleBinding `mmorpg-cluster-identity-__ZONE_NAMESPACE__`，subject 写明命名空间 |
+| `deploy/k8s/manifests/go-svc/data-service.yaml` | Pod 模板加 `serviceAccountName: data-service`，不关令牌挂载 |
+| `deploy/k8s/manifests/infra/etcd.yaml`、`etcd-id-secondary.yaml`、`etcd-id-registry.yaml` | `ETCD_INITIAL_CLUSTER_TOKEN` 追加 `-__KUBE_CLUSTER_UID__` |
+| `tools/scripts/k8s_deploy.ps1` | 新函数 `Get-KubeClusterUid`：读 `kube-system` 的 UID，只认小写 UUID，读不到抛错并写明 `Nothing was written.`，DryRun 返回全零标记。<br>`Apply-Infra`：在 `Ensure-Namespace` 之前调用它，打一行 `Kubernetes cluster uid: …`，循环里替换 `__KUBE_CLUSTER_UID__`。<br>新函数 `New-DataServiceIdentityRbacYaml`：按 zone 命名空间渲染，占位没换干净就抛错。<br>`Apply-OneGoSvc`：只给 data-service 渲染（在 Secret、ConfigMap 写入之前），在稳定版和金丝雀的工作负载之前 apply。<br>`Remove-Zone`：删命名空间后再删本 zone 的 ClusterRoleBinding（`--ignore-not-found`）；共用的 ClusterRole 不删 |
+| `tools/scripts/tests/id_issuer_deploy_contract.tests.ps1` | 改两条旧令牌断言，新增 6 条：三套令牌的形态、`Apply-Infra` 读取先于第一个写操作、`Get-KubeClusterUid` 的成功 / 四种拒绝 / DryRun（按 AST 抽函数，kubectl 用同名函数替身）、RBAC 清单形状与 data-service 的 ServiceAccount、RBAC 渲染与占位拒绝、`Apply-OneGoSvc` 的渲染与 apply 顺序和 `Remove-Zone` |
+| `tools/scripts/tests/k8s_migrate_gate.tests.ps1` | 恢复真函数 `New-DataServiceIdentityRbacYaml`；kubectl 替身认 ClusterRoleBinding 清单，记 `apply:IdentityRbac`；data-service 用例断言 RBAC 先于工作负载、绑定名和 subject 带 `audit-zone`、Pod 用 `serviceAccountName: data-service`；Prepare 用例断言不 apply RBAC |
+| `tools/scripts/tests/k8s_deploy_contract.tests.ps1` | 末尾新增 2 条，复用已有的 DryRun 输出：zone-up 里 RBAC 先于 data-service 的 StatefulSet、绑定落在 `mmorpg-zone-contract-test`；infra-up 里主 etcd 的令牌是 `mmorpg-etcd-contract-battle-infra-00000000-0000-0000-0000-000000000000`，不留占位 |
+| `deploy/k8s/README.md`、`deploy/k8s/AGENTS.md` | 新增「地域码绑定到 K8s 集群」一条，AGENTS 的发号器一条补一句 |
+
+DryRun 输出里的样子（默认 `-InfraNamespace mmorpg-infra`）：
+
+```text
+Kubernetes cluster uid: 00000000-0000-0000-0000-000000000000 [dry-run marker] (carried by the etcd bootstrap tokens)
+value: "mmorpg-etcd-mmorpg-infra-00000000-0000-0000-0000-000000000000"
+value: "mmorpg-etcd-id-secondary-mmorpg-infra-00000000-0000-0000-0000-000000000000"     # staging / prod
+value: "mmorpg-etcd-id-registry-mmorpg-infra-00000000-0000-0000-0000-000000000000"      # -HostIdRegistry
+```
+
+真部署时全零换成 `kubectl get namespace kube-system -o jsonpath={.metadata.uid}` 读到的值。部署账号要能读 `namespaces/kube-system`，还要能建 ClusterRole / ClusterRoleBinding（一般就是集群管理员）。已有数据的 etcd 忽略引导令牌，改令牌只触发一次滚动重启；有 C++ 节点在跑的集群，主 etcd 的这次滚动放进全栈维护窗口。项目未上线，首次部署没有这个问题。
+
+**交 Codex（部署侧，仓库根目录，按顺序；失败保留完整输出，不连续重试）**：
+
+```powershell
+pwsh -NoProfile -Command "`$e = `$null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'tools/scripts/k8s_deploy.ps1'), [ref]`$null, [ref]`$e); if (`$e) { `$e | ForEach-Object { `$_.ToString() }; exit 1 }"
+pwsh -NoProfile -File tools/scripts/tests/id_issuer_deploy_contract.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/etcd_maintenance_contract.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/logical_db_deploy_contract.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1
+```
+
+通过标准：
+
+- 解析无错误；`id_issuer_deploy_contract`、`k8s_migrate_gate`、`etcd_maintenance_contract` 全部 PASS、退出 0。
+- `k8s_deploy_contract` 末尾两条新用例 PASS。§5.4 记过这套在别的领域有既有失败，逐条列出失败名，按是否涉及 data-service、RBAC、etcd 令牌分开报告，不要改断言放行。
+- 后两套是回归：zone-up 的 DryRun 多了一块 RBAC 清单，若有按块计数的用例变红，报出用例名和输出。
+
+可选 kind 冒烟（`kind-mmorpg` 上 `infra-up`、`zone-up` 之后）：
+
+```powershell
+kubectl --context kind-mmorpg get namespace kube-system -o jsonpath='{.metadata.uid}'
+kubectl --context kind-mmorpg -n mmorpg-infra get sts etcd -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="ETCD_INITIAL_CLUSTER_TOKEN")].value}'
+kubectl --context kind-mmorpg auth can-i get namespaces/kube-system --as=system:serviceaccount:<zone 命名空间>:data-service
+kubectl --context kind-mmorpg auth can-i list namespaces --as=system:serviceaccount:<zone 命名空间>:data-service
+```
+
+期望：令牌以第一条读到的 UID 结尾；第三条 `yes`，第四条 `no`。dev 档 data-service 不读身份，Go 侧读取逻辑由 `clusteridentity` 单测覆盖。PROGRESS 由本会话单独追加。
+
+### 8.5 仍未解决
+
+- §6.4 没改：staging 演练第 6 步仍是在共用登记处上手工删键。第 5、7 步只做会被拒绝的尝试，不写登记处。
+- §6 低危「地域配置没钉住登记处是哪一套」没做。
+- §7.3 四项没做：换码与存档库命名冲突（要负责人定口径）、认领允许跳号、dev/test 档可指向共用登记处、指标 label 基数。

@@ -302,14 +302,12 @@ Secrets:
   QueueToken:
     # Env: "LOGIN_QUEUE_TOKEN_SECRET"
     Value: "local-dev-queue-token-secret-0123456789abcdef"
-  # InternalAuth:内部调用方身份声明(x-session-detail-bin)的验签密钥。
-  # 上游(cpp gate / Java gateway)必须用同一把密钥按 callerauth 规范签名。
-  InternalAuth:
-    Env: "MMORPG_INTERNAL_AUTH_SECRET"
-    Value: "local-dev-internal-auth-secret-0123456789abcdef"
 
 # 内部调用方验签策略。
 # **任何运行模式都强制验签,这里没有开关能关掉它**(dev/test 与生产同一条路径)。
+# 验签公钥不在这份配置里:login 读环境变量 MMORPG_INTERNAL_AUTH_PUBLIC_KEYS(gate 的 Ed25519 公钥列表),
+# 缺了拒绝启动。本机由 tools/scripts/lib/gate_identity_environment.ps1 注入开发公钥,K8s 由部署脚本注入
+# (docs/design/gate-online-identity.md §4、§10.1)。
 InternalAuth:
   MaxClockSkew: 30s
   MaxNonceEntries: 500000

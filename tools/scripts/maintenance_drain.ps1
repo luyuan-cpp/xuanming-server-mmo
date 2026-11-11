@@ -546,7 +546,8 @@ function ConvertTo-AuthorityRoleSql {
     if($qualification.Length -ne 32 -or (Get-MaintenanceSha256 -Path $Plan.lockQualificationFile) -cne [Convert]::ToHexString($qualification).ToLowerInvariant()){throw '锁资格不是已固定I3原件SHA'}
     if([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($registration.writer.sqlPrincipal)) -cne $Plan.runtimePrincipal){throw '角色主体与正式REGISTER原件不一致'}
     if($registration.authoritySchema -cne $Plan.authoritySchema -or @($registration.protectedSchemas).Count -ne 1 -or @($registration.protectedSchemas)[0] -cne $Plan.authoritySchema){throw '正式REGISTER原件必须绑定本逻辑库的闸门，受保护库只有它自己'}
-    if($Plan.Contains('directorySchema') -and $Plan.directorySchema -ceq $Plan.authoritySchema){$values.MERGE_ZONE_GRANT="GRANT SELECT,INSERT,DELETE ON $($values.AUTHORITY_SCHEMA).``zone_merged_into`` TO $($values.MAINTENANCE_ACCOUNT);"}
+    # 合服历史只增不改(提案 §16):操作员对 zone_merge_history 只有 SELECT、INSERT,改不了也删不了已有的历史。
+    if($Plan.Contains('directorySchema') -and $Plan.directorySchema -ceq $Plan.authoritySchema){$values.MERGE_ZONE_GRANT="GRANT SELECT,INSERT,DELETE ON $($values.AUTHORITY_SCHEMA).``zone_merged_into`` TO $($values.MAINTENANCE_ACCOUNT);`nGRANT SELECT,INSERT ON $($values.AUTHORITY_SCHEMA).``zone_merge_history`` TO $($values.MAINTENANCE_ACCOUNT);"}
     if ($registration.lockPrimitive -ceq 'LOCK_TOUCH') { $values.LOCK_TOUCH_GRANT="GRANT UPDATE (lock_touch) ON $($values.AUTHORITY_SCHEMA).``writer_slot`` TO $($values.RUNTIME_ACCOUNT);" }
     $business = [Collections.Generic.List[string]]::new()
     $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)

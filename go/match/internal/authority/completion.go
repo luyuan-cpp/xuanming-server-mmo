@@ -528,6 +528,8 @@ func decodeTerminalRequest(req *pb.CommitBattleOutcomeRequest) (*kafkapb.BattleR
 // 2026-11-05 修复:先复读既有终局,再判原件冲突。另一副本可能刚在截止后提交了 ABORT(同一事务把票置 4、formation 置 5);
 // 原件即使永久不合格(个人结算超 Inbox 上限、版本错位带未知字段),battle 也要拿到这份 ABORT 才能收尾删房,
 // 不能永远收到 FailedPrecondition、把房间占到 30 小时本地清理。既有 COMPLETE 照旧逐字节比对,不会因此放过别的原件。
+// 2026-11-11:原执行实例的原件内容不合格、且已过权威截止加宽限时,这次重放直接在锁内写 ABORT 并回 ABORT
+// (rejected_original_abort.go),不再等截止作废取证到硬上限;截止之前与版本错位类拒收照旧回原件冲突。
 func (s *Store) CommitBattleOutcome(ctx context.Context, req *pb.CommitBattleOutcomeRequest) (pb.BattleOutcomeDecision, error) {
 	if s == nil || s.DB == nil {
 		return 0, errors.New("终局权威未装配")
@@ -554,7 +556,7 @@ func (s *Store) CommitBattleOutcome(ctx context.Context, req *pb.CommitBattleOut
 		return decision, replayErr
 	}
 	if originalErr != nil {
-		return 0, originalErr
+		return s.settleRejectedOriginal(ctx, req, originalErr)
 	}
 	return s.commitBattleOutcomeLocked(ctx, req, event)
 }
@@ -592,7 +594,8 @@ func (s *Store) commitBattleOutcomeLocked(ctx context.Context, req *pb.CommitBat
 		return 0, fmt.Errorf("%w: 终局原操作、实例或成局状态不符", ErrBattleOutcomeOriginal)
 	}
 	if err = validateTerminalResult(f, event, req.RawResultPayload); err != nil {
-		return 0, fmt.Errorf("%w: %v", ErrBattleOutcomeOriginal, err)
+		// 原执行实例的原件内容不合格:过了截止加宽限就在这把锁里作废(rejected_original_abort.go),否则照旧回原件冲突。
+		return s.abortRejectedOriginalLocked(ctx, tx, f, req, fmt.Errorf("%w: %v", ErrBattleOutcomeOriginal, err))
 	}
 	stamp, err := now(ctx, tx)
 	if err != nil {

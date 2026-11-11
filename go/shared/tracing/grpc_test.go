@@ -88,8 +88,21 @@ func TestPlayerFieldInterceptorAddsPlayerIDToContextLogs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(collector.String(), `"player_id":42`) {
+	if !strings.Contains(collector.String(), `"player_id":"42"`) {
 		t.Fatalf("log line misses player_id: %s", collector.String())
+	}
+}
+
+// 2^62+1 按 float64 会变成 2^62:写成字符串才保住末位,Alloy 取到的才是这个玩家。
+func TestPlayerFieldInterceptorWritesLargeIDsExactly(t *testing.T) {
+	collector := logtest.NewCollector(t)
+	const largeID = uint64(1)<<62 + 1
+	_, err := PlayerFieldInterceptor()(context.Background(), playerRequest{playerID: largeID}, &grpc.UnaryServerInfo{}, logOnce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(collector.String(), `"player_id":"4611686018427387905"`) {
+		t.Fatalf("log line must carry the exact id as a string: %s", collector.String())
 	}
 }
 

@@ -158,16 +158,27 @@ func (s *Store) RecoverExpiredOutcomes(ctx context.Context, afterRetryMs, afterB
 // 全部在硬上限上作废才轮到,凭证据本可立即作废的局被拖上十分钟以上。回零值后下一页从最早到期的局重扫:改了排期的局在排期到之前
 // 不进页;卡住不动的局(原件不符、已有终局行、读失败)不改排期,游标照常越过它们,所以仍会推进。
 // 不退休旧调度字段(那是全量扫描,只在 RecoverExpiredOutcomes 里做)。
+// 只要游标、不关心本页之后还有没有活的调用方用它;恢复循环用 RecoverExpiredOutcomeLanePage。
 func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint64, cursor ExpiredOutcomeCursor) (ExpiredOutcomeCursor, error) {
+	next, _, err := s.RecoverExpiredOutcomeLanePage(ctx, lanes, lane, cursor)
+	return next, err
+}
+
+// RecoverExpiredOutcomeLanePage 与 RecoverExpiredOutcomeLane 同一页、同一游标语义,多回一个 more:这一页是满的
+// (ExpiredOutcomePageSize 局,后面可能还有),或这一页在锁内改了取证排期(游标回零值,改了排期的局已离开到期集合,
+// 从头再扫一页可能还有别的到期局)。more 为真时立刻再扫一页可能还有活,恢复循环据此在本拍预算之内把这条车道连续扫空
+// (2026-11-11,logic/global_outcome_recover.go;修复前一拍只扫一页,一条车道同时到期超过一页时要隔一两圈才轮到后面的局)。
+// 空页、出错、ctx 到期时 more 为假。
+func (s *Store) RecoverExpiredOutcomeLanePage(ctx context.Context, lanes, lane uint64, cursor ExpiredOutcomeCursor) (ExpiredOutcomeCursor, bool, error) {
 	if lanes == 0 || lane >= lanes {
-		return cursor, fmt.Errorf("到期终局恢复车道无效 lanes=%d lane=%d", lanes, lane)
+		return cursor, false, fmt.Errorf("到期终局恢复车道无效 lanes=%d lane=%d", lanes, lane)
 	}
 	stamp, err := s.Now(ctx)
 	if err != nil {
-		return cursor, err
+		return cursor, false, err
 	}
 	if stamp < terminalOutcomeGraceMs {
-		return ExpiredOutcomeCursor{}, nil
+		return ExpiredOutcomeCursor{}, false, nil
 	}
 	// 先减宽限再绑定SQL参数，避免deadline+grace的uint64溢出；锁内仍重新读SQL时钟。
 	// 车道条件只读 battle_id(二级索引里本就带主键),在索引侧就能过滤,车道页的回表约为全量页的 1/lanes(由索引结构推算,未压测)。
@@ -176,7 +187,7 @@ func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint6
 	// (评审修正 2026-11-06)。按主键点查,与 NOT EXISTS 同代价。
 	rows, err := s.DB.QueryContext(ctx, "SELECT f.retry_at_ms,f.battle_id,EXISTS(SELECT 1 FROM match_battle_completion c WHERE c.battle_id=f.battle_id) FROM match_formation f WHERE f.state IN(2,3,4) AND "+recoverableOutcomeShapeSQL+" AND f.retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND f.deadline_ms>0 AND f.deadline_ms<=? AND f.battle_id%?=? AND (f.retry_at_ms>? OR (f.retry_at_ms=? AND f.battle_id>?)) AND NOT EXISTS(SELECT 1 FROM match_battle_completion c WHERE "+matchingOutcomeTerminalSQL+") ORDER BY f.retry_at_ms,f.battle_id LIMIT "+strconv.Itoa(ExpiredOutcomePageSize), stamp-terminalOutcomeGraceMs, lanes, lane, cursor.AfterRetryMs, cursor.AfterRetryMs, cursor.AfterBattle)
 	if err != nil {
-		return cursor, err
+		return cursor, false, err
 	}
 	type candidate struct {
 		retryMs, battle uint64
@@ -187,17 +198,17 @@ func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint6
 		var f candidate
 		if err := rows.Scan(&f.retryMs, &f.battle, &f.hasTerminal); err != nil {
 			rows.Close()
-			return cursor, err
+			return cursor, false, err
 		}
 		formations = append(formations, f)
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return cursor, err
+		return cursor, false, err
 	}
 	if len(formations) == 0 {
-		return ExpiredOutcomeCursor{}, nil
+		return ExpiredOutcomeCursor{}, false, nil
 	}
 	// 先用独立标量游标读整行、再解析完整原件:损坏的一条记失败、不卡住整页,页尾游标照样推进到最后一个候选。
 	type visit struct {
@@ -209,7 +220,7 @@ func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint6
 	var visits []visit
 	for _, c := range formations {
 		if err := ctx.Err(); err != nil {
-			return cursor, errors.Join(append(failures, err)...)
+			return cursor, false, errors.Join(append(failures, err)...)
 		}
 		original, err := s.Formation(ctx, c.battle)
 		if err != nil {
@@ -237,7 +248,7 @@ func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint6
 			if restart {
 				cursor = ExpiredOutcomeCursor{}
 			}
-			return cursor, errors.Join(append(failures, err)...)
+			return cursor, false, errors.Join(append(failures, err)...)
 		}
 		cursor = v.at
 		_, rescheduled, err := s.recoverExpiredOutcomeReported(ctx, v.f, evidence[i])
@@ -247,10 +258,10 @@ func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint6
 		restart = restart || rescheduled
 	}
 	if restart {
-		return ExpiredOutcomeCursor{}, errors.Join(failures...)
+		return ExpiredOutcomeCursor{}, true, errors.Join(failures...)
 	}
 	last := formations[len(formations)-1]
-	return ExpiredOutcomeCursor{AfterRetryMs: last.retryMs, AfterBattle: last.battle}, errors.Join(failures...)
+	return ExpiredOutcomeCursor{AfterRetryMs: last.retryMs, AfterBattle: last.battle}, len(formations) == ExpiredOutcomePageSize, errors.Join(failures...)
 }
 
 // RecoverExpiredOutcome 不根据节点死亡猜终局。原发房前能力与完整 v1 Create证明所有个人效果必须先过本SQL门；

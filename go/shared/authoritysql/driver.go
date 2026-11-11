@@ -80,6 +80,7 @@ const (
 )
 
 // 分类属于驱动协议，不是领域fault map。没有明确证据的类别不可升级为确定。
+// classify只看这一条语句的回包；事务层面的确定性(R6：事务里只执行过纯DML、COMMIT还没发)由failLocked在分类之后另判。
 type serverOutcomePolicy interface{ classify(error) serverOutcome }
 type mysqlStatementPolicy struct{}
 
@@ -181,6 +182,11 @@ type guardedTx struct {
 	automatic bool
 	done      bool
 	failure   error
+	// implicitCommitRisk:这笔事务里发过不是纯 DML 的语句(plainDMLStatement 为假,比如 DDL、LOCK TABLES、BEGIN),
+	// 那条语句可能已经隐式提交了当前事务,「COMMIT 没发就不可能提交」不再成立。置上之后 COMMIT 之前的失败
+	// 仍按原规则判结局未知;没置上时 failLocked / endLocked 按 R6 判确定中止。只在 execLocked / queryLocked 发语句之前置,
+	// 闸门自己在事务里发的语句(锁 slot 的 SELECT ... FOR UPDATE / UPDATE、读 route_meta 与注册表)都是纯 DML,不置。
+	implicitCommitRisk bool
 }
 
 func (c *guardedConn) usableLocked() error {
@@ -259,6 +265,17 @@ func (c *guardedConn) beginLocked(ctx context.Context, opts driver.TxOptions, au
 // 确定的语句拒绝保留显式Tx及此前业务/slot，交caller继续处理；auto-owned则回滚。
 // 确定Tx-abort结束Tx，防下一条SQL脱离slot落入autocommit；未知结果隔离。
 // 修正记录：初稿“所有错误终止Tx”破坏既有1062转读语义，已撤销该设计。
+//
+// R6(2026-11-10，docs/design/infra-reconnect-overview.md §4.1)：分类判不了(结局未知)的失败，事务里只执行过纯DML
+// (tx.implicitCommitRisk没置上)时改判「事务已中止」。本函数只在COMMIT发出之前被调用，COMMIT只在endLocked里发，
+// 连接断开时库会回滚未提交的事务，所以这笔不可能已经提交。分两支：
+//   - 原因不是直接的服务端回包(*mysql.MySQLError，类型断言、不拆Join，与classify同一口径)：连接断开、调用取消、
+//     混合错误等，记为「传输中止」。连接状态不明，隔离；结果用ErrTxAbortedBeforeCommit，不置结局未知的观察位；
+//   - 服务端回包：连接是好的，原样返回原错误，与1205/1213/9007同一支(显式事务置abortedTx，自动事务不置)。
+//
+// 随后回滚失败时endLocked同样按R6回ErrTxAbortedBeforeCommit并隔离连接，不会把这笔改写成结局未知。
+// 请求级不改，不调NoteNoWriteRetry：一个请求里可能先提交了一笔、后一笔才中止，按「这次请求确定没写」让客户端重试，
+// 会把已提交的那笔再做一遍。是否整笔重跑由事务的调用方用IsAbortedBeforeCommit判(比如assetop.WithTxRetry的isRetryable)。
 func (c *guardedConn) failLocked(tx *guardedTx, cause error) error {
 	outcome := outcomeUnknown
 	if !errors.Is(cause, driver.ErrBadConn) && !errors.Is(cause, ErrOutcomeUnknown) && c.outcomes != nil {
@@ -267,11 +284,21 @@ func (c *guardedConn) failLocked(tx *guardedTx, cause error) error {
 	if outcome != outcomeStatementRejected && outcome != outcomeTransactionAborted {
 		outcome = outcomeUnknown
 	}
+	transportAbort := false
+	if outcome == outcomeUnknown && tx != nil && !tx.done && !tx.implicitCommitRisk {
+		outcome = outcomeTransactionAborted
+		_, serverReply := cause.(*mysql.MySQLError)
+		transportAbort = !serverReply
+	}
 	if outcome == outcomeStatementRejected && tx != nil && !tx.automatic {
 		return cause
 	}
 	result := cause
-	if outcome == outcomeUnknown {
+	switch {
+	case transportAbort:
+		c.quarantined = true
+		result = ErrTxAbortedBeforeCommit
+	case outcome == outcomeUnknown:
 		c.quarantined = true
 		result = unknown("业务发送后", cause)
 		if tx != nil {
@@ -322,6 +349,12 @@ func (c *guardedConn) endLocked(tx *guardedTx, commit bool) error {
 	c.tx = nil
 	if err != nil {
 		c.quarantined = true
+		// 回滚没确认(R6)：COMMIT没发出去，事务里又只执行过纯DML，连接断开时库会回滚，这笔确定没写。
+		// 连接照旧隔离，不置结局未知的观察位。执行过可能隐式提交的语句时仍按下面的结局未知处理。
+		if !committing && !tx.implicitCommitRisk {
+			tx.failure = ErrTxAbortedBeforeCommit
+			return tx.failure
+		}
 		phase := "事务结束"
 		if committing {
 			phase = phaseCommit
@@ -511,6 +544,10 @@ func (c *guardedConn) execLocked(ctx context.Context, query string, call func() 
 			return nil, err
 		}
 	}
+	// 发出之前就记:这条语句即使失败,也可能已经隐式提交了当前事务。预编译语句的执行传的是 s.query,同样经过这里。
+	if tx != nil && !plainDMLStatement(query) {
+		tx.implicitCommitRisk = true
+	}
 	result, err := call()
 	if ctx.Err() != nil {
 		err = unknown("业务发送后取消", ctx.Err())
@@ -583,6 +620,10 @@ func (c *guardedConn) queryLocked(ctx context.Context, query string, call func()
 				return nil, err
 			}
 		}
+	}
+	// 同 execLocked:发出之前记下这条语句会不会隐式提交当前事务。
+	if tx != nil && !plainDMLStatement(query) {
+		tx.implicitCommitRisk = true
 	}
 	raw, closeStmt, err := call()
 	if ctx.Err() != nil {

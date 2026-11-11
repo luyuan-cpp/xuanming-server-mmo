@@ -77,6 +77,27 @@ spec:
               它重新连上 etcd 时也会因分配键冲突自行疏散退出。
             runbook_url: docs/ops/scene-node-role-split.md
 
+        # 节点托管着场景,却一直没读到本进程自己的节点号持有者记录:这期间它认不出自己的号被别的进程接走
+        # (docs/design/scene-node-ownership-reconcile.md §9 第 1 条)。正常情况下 scene_manager 处理本进程的注册时就写,
+        # 节点下一轮核对(10 秒内)读到;持续 10 分钟读不到,是 scene_manager 一直没写成,或者节点一直读不到控制域。
+        - alert: SceneOwnershipOwnHolderUnknown
+          expr: |
+            max by (namespace, instance) (scene_ownership_own_holder_known) == 0
+            and
+            max by (namespace, instance) (scene_ownership_tracked_scenes) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene {{ $labels.instance }} 托管着场景,却一直没读到自己的节点号持有者记录"
+            description: >-
+              这期间它的节点号要是被新进程接走,它认不出来,只能等它重连 etcd、分配键冲突、疏散退出时才收掉留在这个号上的场景。
+              先看同时有没有 SceneOwnershipReconcileBlind(节点读不到控制域);没有就查 scene_manager 的
+              `[NodeHolder] publishing the holder ... failed` 日志与它到控制域 Redis 的写入。修好之后一轮全量同步(约一分钟)
+              内恢复。修不好、而这个 Pod 又与 etcd 失联(日志里续租失败)时:用 etcdctl 看这个节点号现在登记的 node_uuid,
+              不是这个 Pod 的就重启它(它名下的场景已经改派,重启只断开还连在它上面的玩家)。
+            runbook_url: docs/ops/scene-node-role-split.md
+
         # 已判定不归本节点的场景长时间没收完:住户迟迟不走(改派一直失败),或住户预算一直不够(排空积压)。
         - alert: SceneOwnershipReleaseBacklog
           expr: |

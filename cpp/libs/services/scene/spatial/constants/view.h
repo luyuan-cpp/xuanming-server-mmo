@@ -4,7 +4,7 @@
 // Java 仓 docs/reference/mmorpg-client-contract-aoi.md §8「重判」、PARITY.md「视野(AOI)进出通知」行。
 
 // 默认视野半径:距离不超过它(含等号)才进视野。没有 ViewRadius 组件的实体用它,
-// 玩家进场时写入的 ViewRadius 也是这个值。
+// 玩家进场时也用它写 ViewRadius(PlayerLifecycleSystem,player_lifecycle.cpp)。
 constexpr double kMaxViewRadius = 10;
 
 // 离开半径 = 视野半径 × 这个系数:已建立的空间关注,距离超过它才出视野。

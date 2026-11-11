@@ -15,23 +15,44 @@ import (
 	"shared/placement"
 )
 
-// memStore 是 mappingStore 的内存替身:Locked 里的改动 body 成功才生效,失败回滚,和真事务同形。
+// memStore 是 mappingStore 的内存替身:Locked 里的改动(映射与历史)body 成功才生效,失败一起回滚,和真事务同形。
 type memStore struct {
-	rows      map[uint32]mappingRow
-	frozen    bool
-	lockErr   error // Locked 进事务就失败(连不上库、锁等待超时)
-	insertErr error
-	locked    [][]uint32 // 每次 Locked 收到的 zones
-	inserts   []mappingRow
-	deletes   int
+	rows           map[uint32]mappingRow
+	history        []historyRow
+	frozen         bool
+	lockErr        error // Locked 进事务就失败(连不上库、锁等待超时)
+	insertErr      error
+	historyErr     error      // 追加历史失败(表不在、没有 INSERT 权限):映射与历史一起回滚
+	historyReadErr error      // 审计读历史失败
+	locked         [][]uint32 // 每次 Locked 收到的 zones
+	inserts        []mappingRow
+	deletes        int
 }
 
+// newMemStore 种的映射行都当成本工具写的:每行带一条对得上的 merge 历史(run_id "seed")。
 func newMemStore(merges map[uint32]uint32) *memStore {
 	s := &memStore{rows: map[uint32]mappingRow{}}
-	for src, dst := range merges {
+	for _, src := range slices.Sorted(maps.Keys(merges)) {
+		dst := merges[src]
 		s.rows[src] = mappingRow{Src: src, Dst: dst, RunID: "seed", MergedAtMs: 1}
+		s.history = append(s.history, historyRow{Src: src, Seq: 1, Action: historyActionMerge, Dst: dst, RunID: "seed", Principal: "seed@%", AtMs: 1})
 	}
 	return s
+}
+
+// appendHistory 与 SQL 实现同形:序号是这个源区已有的最大值 +1。
+func (s *memStore) appendHistory(src uint32, action string, dst uint32, runID string) error {
+	if s.historyErr != nil {
+		return s.historyErr
+	}
+	var last uint64
+	for _, h := range s.history {
+		if h.Src == src && h.Seq > last {
+			last = h.Seq
+		}
+	}
+	s.history = append(s.history, historyRow{Src: src, Seq: last + 1, Action: action, Dst: dst, RunID: runID, Principal: "operator@%", AtMs: 2})
+	return nil
 }
 
 func (s *memStore) sorted() []mappingRow {
@@ -49,6 +70,16 @@ func (s *memStore) Snapshot(context.Context) (bool, []mappingRow, error) {
 	return !s.frozen, s.sorted(), nil
 }
 
+func (s *memStore) History(context.Context) ([]historyRow, error) {
+	if s.lockErr != nil {
+		return nil, s.lockErr
+	}
+	if s.historyReadErr != nil {
+		return nil, s.historyReadErr
+	}
+	return slices.Clone(s.history), nil
+}
+
 func (s *memStore) Locked(_ context.Context, zones []uint32, body func(mappingTx) error) error {
 	s.locked = append(s.locked, zones)
 	if s.lockErr != nil {
@@ -57,9 +88,9 @@ func (s *memStore) Locked(_ context.Context, zones []uint32, body func(mappingTx
 	if err := refuseFrozen(!s.frozen); err != nil {
 		return err
 	}
-	saved := maps.Clone(s.rows)
+	saved, savedHistory := maps.Clone(s.rows), slices.Clone(s.history)
 	if err := body(memTx{s}); err != nil {
-		s.rows = saved
+		s.rows, s.history = saved, savedHistory
 		return err
 	}
 	return nil
@@ -75,6 +106,9 @@ func (t memTx) Insert(_ context.Context, src, dst uint32, runID string) error {
 	}
 	row := mappingRow{Src: src, Dst: dst, RunID: runID, MergedAtMs: 2}
 	t.s.rows[src] = row
+	if err := t.s.appendHistory(src, historyActionMerge, dst, runID); err != nil {
+		return err
+	}
 	t.s.inserts = append(t.s.inserts, row)
 	return nil
 }
@@ -85,6 +119,9 @@ func (t memTx) Delete(_ context.Context, src, dst uint32) (bool, error) {
 		return false, nil
 	}
 	delete(t.s.rows, src)
+	if err := t.s.appendHistory(src, historyActionUnmerge, dst, row.RunID); err != nil {
+		return false, err
+	}
 	t.s.deletes++
 	return true, nil
 }
@@ -196,16 +233,83 @@ func TestRunMerge_RefusalWritesNothing(t *testing.T) {
 	}
 	for name, store := range cases {
 		t.Run(name, func(t *testing.T) {
-			before := maps.Clone(store.rows)
+			before, beforeHistory := maps.Clone(store.rows), slices.Clone(store.history)
 			_, err := runModeWith(store, modeMerge, 5, 6, false)
 			if !errors.Is(err, errRefused) {
 				t.Fatalf("err = %v, want a refusal", err)
 			}
-			if !maps.Equal(before, store.rows) || len(store.inserts) != 0 {
-				t.Fatalf("a refusal wrote something: %v", store.rows)
+			if !maps.Equal(before, store.rows) || len(store.inserts) != 0 || !slices.Equal(beforeHistory, store.history) {
+				t.Fatalf("a refusal wrote something: rows=%v history=%v", store.rows, store.history)
 			}
 		})
 	}
+}
+
+// 合服在同一个事务里追加一条 merge 历史,run_id 与映射行相同;幂等重跑不写历史。
+func TestRunMerge_AppendsOneMergeEvent(t *testing.T) {
+	store := newMemStore(nil)
+	if _, err := runModeWith(store, modeMerge, 5, 6, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runModeWith(store, modeMerge, 5, 6, false); err != nil {
+		t.Fatal(err)
+	}
+	want := []historyRow{{Src: 5, Seq: 1, Action: historyActionMerge, Dst: 6, RunID: "5-6-20261030T120000Z", Principal: "operator@%", AtMs: 2}}
+	if !slices.Equal(store.history, want) {
+		t.Fatalf("history = %+v, want %+v", store.history, want)
+	}
+	if store.rows[5].RunID != store.history[0].RunID {
+		t.Fatalf("the mapping row and its history disagree on run_id: %q vs %q", store.rows[5].RunID, store.history[0].RunID)
+	}
+}
+
+// 撤销追加一条 unmerge 历史,带被删那一行的 run_id;没东西可删时不写历史;同一源区的序号接着往下排。
+func TestRunUnmerge_AppendsUnmergeEventWithTheDeletedRunID(t *testing.T) {
+	store := newMemStore(map[uint32]uint32{5: 6})
+	if _, err := runModeWith(store, modeUnmerge, 5, 6, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][2]uint32{{5, 6}, {5, 9}} { // 再撤一次、撤一个从没合过的目标:都什么都不写
+		if _, err := runModeWith(store, modeUnmerge, args[0], args[1], false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := runModeWith(store, modeMerge, 5, 7, false); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, h := range store.history {
+		got = append(got, fmt.Sprintf("%d#%d %s %d %s", h.Src, h.Seq, h.Action, h.Dst, h.RunID))
+	}
+	want := []string{"5#1 merge 6 seed", "5#2 unmerge 6 seed", "5#3 merge 7 5-7-20261030T120000Z"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("history = %v, want %v", got, want)
+	}
+}
+
+// 历史写不进去(表不在、没有 INSERT 权限)时报原错误、不算拒绝,映射跟着回滚:不能出现没有历史的映射变更。
+func TestHistoryFailureRollsBackTheMapping(t *testing.T) {
+	boom := errors.New("Error 1146: Table 'zone_merge_history' doesn't exist")
+	t.Run("合服", func(t *testing.T) {
+		store := newMemStore(nil)
+		store.historyErr = boom
+		if _, err := runModeWith(store, modeMerge, 5, 6, false); !errors.Is(err, boom) || errors.Is(err, errRefused) {
+			t.Fatalf("err = %v, want the failure itself", err)
+		}
+		if len(store.rows) != 0 || len(store.history) != 0 || len(store.inserts) != 0 {
+			t.Fatalf("rows=%v history=%v inserts=%v, want nothing", store.rows, store.history, store.inserts)
+		}
+	})
+	t.Run("撤销", func(t *testing.T) {
+		store := newMemStore(map[uint32]uint32{5: 6})
+		store.historyErr = boom
+		if _, err := runModeWith(store, modeUnmerge, 5, 6, false); !errors.Is(err, boom) || errors.Is(err, errRefused) {
+			t.Fatalf("err = %v, want the failure itself", err)
+		}
+		if store.rows[5].Dst != 6 || len(store.history) != 1 || store.deletes != 0 {
+			t.Fatalf("rows=%v history=%v deletes=%d, want the seed untouched", store.rows, store.history, store.deletes)
+		}
+	})
 }
 
 func TestRunMerge_InfrastructureFailureIsNotARefusal(t *testing.T) {
@@ -362,8 +466,87 @@ func TestRunAudit_BrokenMappingIsAFinding(t *testing.T) {
 
 func TestRunAudit_EmptyTable(t *testing.T) {
 	out, err := runModeWith(newMemStore(nil), modeAudit, 0, 0, false)
-	if err != nil || !strings.Contains(out, "merged zones: 0") {
+	if err != nil || !strings.Contains(out, "merged zones: 0") || !strings.Contains(out, "merge history: 0 event(s)") {
 		t.Fatalf("out=%q err=%v", out, err)
+	}
+}
+
+// 撤销之后映射行没了,审计仍列得出那次合服和那次撤销:谁、什么时候、哪个区。
+func TestRunAudit_ListsHistoryAfterUnmerge(t *testing.T) {
+	store := newMemStore(nil)
+	for _, step := range []struct {
+		mode     string
+		src, dst uint32
+	}{{modeMerge, 5, 6}, {modeUnmerge, 5, 6}} {
+		if _, err := runModeWith(store, step.mode, step.src, step.dst, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := runModeWith(store, modeAudit, 0, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"merged zones: 0", "merge history: 2 event(s)", "sql_principal"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("audit output misses %q:\n%s", want, out)
+		}
+	}
+	var events []string
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 7 && (fields[1] == historyActionMerge || fields[1] == historyActionUnmerge) {
+			events = append(events, strings.Join(fields[1:], " "))
+		}
+	}
+	want := []string{"merge 5 1 6 5-6-20261030T120000Z operator@%", "unmerge 5 2 6 5-6-20261030T120000Z operator@%"}
+	if !slices.Equal(events, want) {
+		t.Fatalf("history lines = %v, want %v\n%s", events, want, out)
+	}
+}
+
+// 映射行在历史里找不到对应的 merge 记录(手改的,或建历史表之前写的):列出来并按拒绝退出,解析结果照样打印。
+func TestRunAudit_UntrackedMappingIsAFinding(t *testing.T) {
+	store := newMemStore(map[uint32]uint32{4: 5})
+	store.rows[8] = mappingRow{Src: 8, Dst: 9, RunID: "by-hand", MergedAtMs: 1}
+	out, err := runModeWith(store, modeAudit, 0, 0, false)
+	if !errors.Is(err, errRefused) || !strings.Contains(err.Error(), "no merge event in zone_merge_history") {
+		t.Fatalf("err = %v, want a refusal naming the history gap", err)
+	}
+	if !strings.Contains(out, "untracked mapping: zone 8 -> zone 9 (run_id by-hand)") || strings.Contains(out, "untracked mapping: zone 4") {
+		t.Fatalf("only zone 8 is untracked:\n%s", out)
+	}
+	if !strings.Contains(out, "final zone 9 includes zones [8 9]") {
+		t.Fatalf("the resolution must still be printed:\n%s", out)
+	}
+}
+
+// 读不到历史时审计报原错误(退出码 2),不能当成「没有历史」去判来历不明。
+func TestRunAudit_HistoryReadFailureIsNotAFinding(t *testing.T) {
+	boom := errors.New("Error 1142: SELECT command denied")
+	store := newMemStore(map[uint32]uint32{4: 5})
+	store.historyReadErr = boom
+	if _, err := runModeWith(store, modeAudit, 0, 0, false); !errors.Is(err, boom) || errors.Is(err, errRefused) {
+		t.Fatalf("err = %v, want the read failure itself", err)
+	}
+}
+
+func TestUntrackedMappings(t *testing.T) {
+	rows := []mappingRow{{Src: 1, Dst: 2, RunID: "a"}, {Src: 3, Dst: 4, RunID: "b"}, {Src: 5, Dst: 6, RunID: "c"}}
+	history := []historyRow{
+		{Src: 1, Seq: 1, Action: historyActionMerge, Dst: 2, RunID: "a"},
+		// 3 → 4 有过 merge,读历史之前刚被撤销:映射行是撤销之前读到的,不算来历不明。
+		{Src: 3, Seq: 1, Action: historyActionMerge, Dst: 4, RunID: "b"},
+		{Src: 3, Seq: 2, Action: historyActionUnmerge, Dst: 4, RunID: "b"},
+		// 5 只有一条 run_id 对不上的 merge,或只有 unmerge:都不算。
+		{Src: 5, Seq: 1, Action: historyActionMerge, Dst: 6, RunID: "other"},
+		{Src: 5, Seq: 2, Action: historyActionUnmerge, Dst: 6, RunID: "c"},
+	}
+	got := untrackedMappings(rows, history)
+	if len(got) != 1 || got[0].Src != 5 {
+		t.Fatalf("untracked = %+v, want only zone 5", got)
+	}
+	if got := untrackedMappings(rows, nil); len(got) != 3 {
+		t.Fatalf("no history: untracked = %+v, want all three", got)
 	}
 }
 

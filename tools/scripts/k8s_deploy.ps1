@@ -139,10 +139,11 @@ param(
 	[int]$KafkaBrokerRetentionMs = 0,
 	[int]$KafkaRetentionCheckIntervalMs = 0,
 	[long]$KafkaRetentionBytes = 0,
-	# 审计 topic(transaction_log、player_snapshot)每分区的 retention.bytes,0 = 沿用 broker 缺省 -KafkaRetentionBytes。
+	# 审计 topic(transaction_log、player_snapshot)每分区的 retention.bytes,0 = 按档位(Apply-KafkaProfileDefaults):
+	# prod / prod-like 4GiB(扛住 2 小时消费中断,缺口清单第 3 条 2026-11-11 定案),dev 沿用 broker 缺省 -KafkaRetentionBytes。
 	# 渲染进 data-service 的 Kafka 段,由 data_service 启动时设到 topic 上(kafkautil.TopicSpec.RetentionBytes),
-	# 并计入 Kafka 盘预算(Get-KafkaDiskPlan)。积压超过它的审计消息会被 Kafka 删掉,按 deploy/k8s/README.md「Kafka 磁盘预算」
-	# 里的审计积压公式定。
+	# 并计入 Kafka 盘预算(Get-KafkaDiskPlan)。积压超过它的审计消息会被 Kafka 删掉;推导、扩 zone 时的做法与改值时要同步的告警阈值
+	# 见 deploy/k8s/README.md「审计 topic 的 retention.bytes」。
 	[long]$AuditKafkaRetentionBytes = 0,
 	[long]$KafkaSegmentBytes = 0,
 	# Kafka 盘预算(deploy/k8s/README.md「Kafka 磁盘预算」)。下面两个参数 0 都表示「按档位 / 自动」,档位缺省值写在 Apply-KafkaProfileDefaults,公式在 Get-KafkaDiskPlan。
@@ -444,7 +445,7 @@ param(
 	# 切换会改 Pod 模板上的 mmorpg.io/peak-shaving-hash 注解,gateway / login 自动滚动,不需要手工 rollout restart。
 	[ValidateSet("auto", "on", "off")]
 	[string]$GatewayRateLimit = "auto",
-	# login 排队开时 staging / prod 必须注入 MMORPG_LOGIN_QUEUE_TOKEN_SECRET(≥32,与 GATE / INTERNAL_AUTH 两把不同)。
+	# login 排队开时 staging / prod 必须注入 MMORPG_LOGIN_QUEUE_TOKEN_SECRET(≥32,与 GATE_TOKEN、INTERNAL_AUTH_SIGNING_KEY 都不同)。
 	# 排队的出队 leader 锁按 zone 拆(G1b,login 把 Queue.DispatcherLockKey 当前缀再拼本 zone);本脚本另在 ConfigMap 里显式写
 	# 带本 zone 的 DispatcherLockKey 作纵深防御(见 New-LoginQueueYaml)。
 	# 合入门槛(2026-10-15):$script:LoginQueueMergeGateCleared 为 $false 时,auto 在任何档位都解析为关,on 在任何写操作之前拒绝
@@ -730,8 +731,8 @@ $script:SharedRedisAuthHashOnlyGoServices = @('mail')
 # 建 Secret(Sync-WorkloadSecrets)、注入 env 与写指纹(Add-WorkloadSecretsToManifest、Get-CppNodeWorkloadSecretEnvEntries / Annotations)只按这张表走。
 # ConfigMap 里写变量名的键各服务不同(MySQLPasswordEnv、GateTokenSecretEnv、login 的 Secrets.*.Env、match 的 Spectate.*Env、gateway 的 ${...}),
 # 写在各自的生成器里;那里的变量名与这里的 Env 一致由契约测试核对(生成器会被契约测试按 AST 单独抽出来跑,所以不在生成器里读这张表)。
-# 内部调用方验签(MMORPG_INTERNAL_AUTH_SECRET,Secret gate-identity-auth)不在表里:Apply-OneGoSvc 开头那段早已把它注入 login 等服务,
-# login 的 ConfigMap 只写 Secrets.InternalAuth.Env。
+# gate 的会话身份签名私钥(MMORPG_INTERNAL_AUTH_SIGNING_KEY,Secret gate-identity-auth)不在表里:只有 gate 引用它,
+# 由 Apply-Zone 在 gate 工作负载之前建;验签方只拿公钥列表(MMORPG_INTERNAL_AUTH_PUBLIC_KEYS,不是密钥,Apply-OneGoSvc 明文注入)。
 $script:WorkloadSecretCatalog = [ordered]@{
 	'gate-token'        = @{ Env = 'MMORPG_GATE_TOKEN_SECRET'; SecretKey = 'secret'; Consumers = @('cpp:gate', 'cpp:battle', 'login', 'scene-manager', 'gateway')
 		Value = { [string]$script:GateTokenSecret } }
@@ -1136,14 +1137,19 @@ function Initialize-InjectedSecrets {
 		-DevFallback "change-me-in-production-use-a-strong-random-key" `
 		-ReleaseProfile $ReleaseProfile -Purpose "Gate 连接令牌 HMAC 共享密钥" -MinLength 32
 
-	# login 的内部调用方验签密钥(Secrets.InternalAuth)。生产模式恒强制验签且
-	# 配置关不掉,缺这一项 login 直接拒绝启动 —— 以前这份 ConfigMap 根本没有它。
-	#
-	# dev 回落值刻意与 GateToken 那把**不同**:secrets.go 里有跨用途复用主密钥的
-	# 检查,填成一样在生产会被判为复用而拒启,本地也会打 WARN。
-	$script:InternalAuthSecret = Resolve-InjectedSecret -EnvName "MMORPG_INTERNAL_AUTH_SECRET" `
-		-DevFallback "change-me-in-production-internal-auth-shared-key" `
-		-ReleaseProfile $ReleaseProfile -Purpose "内部调用方身份声明验签密钥(callerauth)" -MinLength 32
+	# gate 的会话身份签名私钥(32 字节 Ed25519 种子的十六进制,只注入 gate)与验证方公钥列表
+	# (login 与 7 个在线服务、gate 自己都读;公钥不是密钥,明文写进 env)。docs/design/gate-online-identity.md §4、§10.1。
+	# 生成:Push-Location go/shared; go run ./cmd/identitykeygen; Pop-Location,一次输出一对。
+	# dev 回落是 RFC 8032 §7.1 TEST 1 的公开测试密钥对(go/shared/callerauth 的 TestEd25519Rfc8032Vector 钉住它们配对),
+	# 只给 dev 档用;staging / prod 必须注入。PowerShell 算不了 Ed25519,配对由 gate 启动时核对:公钥列表里没有
+	# 私钥配对的那一把,gate 拒绝启动。
+	$script:InternalAuthSigningKey = Resolve-InjectedSecret -EnvName "MMORPG_INTERNAL_AUTH_SIGNING_KEY" `
+		-DevFallback "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60" `
+		-ReleaseProfile $ReleaseProfile -Purpose "gate 会话身份签名私钥(Ed25519 种子)" -MinLength 64
+	$script:InternalAuthPublicKeys = Resolve-InjectedSecret -EnvName "MMORPG_INTERNAL_AUTH_PUBLIC_KEYS" `
+		-DevFallback "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a" `
+		-ReleaseProfile $ReleaseProfile -Purpose "会话身份验签公钥列表(不是密钥)" -MinLength 64
+	Assert-InternalIdentityKeyShape -SigningKey $script:InternalAuthSigningKey -PublicKeys $script:InternalAuthPublicKeys
 
 	# db 服务连 MySQL 的凭据。生成器以前写死 root/root,而
 	# deploy/k8s/manifests/infra/mysql.yaml 的 MYSQL_ROOT_PASSWORD 根本不是 root
@@ -1207,8 +1213,8 @@ function Initialize-InjectedSecrets {
 			if ($script:LoginQueueTokenSecret -ceq $script:GateTokenSecret) {
 				throw "MMORPG_LOGIN_QUEUE_TOKEN_SECRET 必须与 MMORPG_GATE_TOKEN_SECRET 不同:login 拒绝跨用途复用主密钥(go/login/internal/config/secrets.go 的复用检查),部署出来只会 CrashLoopBackOff。"
 			}
-			if ($script:LoginQueueTokenSecret -ceq $script:InternalAuthSecret) {
-				throw "MMORPG_LOGIN_QUEUE_TOKEN_SECRET 必须与 MMORPG_INTERNAL_AUTH_SECRET 不同:login 拒绝跨用途复用主密钥(go/login/internal/config/secrets.go 的复用检查),部署出来只会 CrashLoopBackOff。"
+			if ($script:LoginQueueTokenSecret -ceq $script:InternalAuthSigningKey) {
+				throw "MMORPG_LOGIN_QUEUE_TOKEN_SECRET 必须与 MMORPG_INTERNAL_AUTH_SIGNING_KEY 不同:不同用途的密钥不得复用,一处泄露不该牵连另一处。"
 			}
 		}
 	}
@@ -1245,7 +1251,7 @@ function Initialize-InjectedSecrets {
 			Assert-PlayerInboxAdminTokenEnvDeclared
 			foreach ($other in @(
 				@{ Env = 'MMORPG_GATE_TOKEN_SECRET'; Value = $script:GateTokenSecret }
-				@{ Env = 'MMORPG_INTERNAL_AUTH_SECRET'; Value = $script:InternalAuthSecret }
+				@{ Env = 'MMORPG_INTERNAL_AUTH_SIGNING_KEY'; Value = $script:InternalAuthSigningKey }
 				@{ Env = 'MMORPG_MYSQL_PASSWORD'; Value = $script:MysqlPassword }
 				@{ Env = 'MMORPG_GATEWAY_ADMIN_API_KEY'; Value = $script:GatewayAdminApiKey }
 			)) {
@@ -1275,7 +1281,7 @@ function Initialize-InjectedSecrets {
 		}
 		$otherSecrets = @(
 			@{ Env = 'MMORPG_GATE_TOKEN_SECRET'; Value = $script:GateTokenSecret }
-			@{ Env = 'MMORPG_INTERNAL_AUTH_SECRET'; Value = $script:InternalAuthSecret }
+			@{ Env = 'MMORPG_INTERNAL_AUTH_SIGNING_KEY'; Value = $script:InternalAuthSigningKey }
 			@{ Env = 'MMORPG_MYSQL_PASSWORD'; Value = $script:MysqlPassword }
 			@{ Env = 'MMORPG_REDIS_PASSWORD'; Value = $script:RedisPassword }
 			@{ Env = 'MMORPG_GATEWAY_DB_PASSWORD'; Value = $script:GatewayDbPassword }
@@ -2043,6 +2049,8 @@ function Assert-GrpcClientDeadlineBudget {
 		PlayerInboxNodeService     = 'go/player_inbox/etc/player_inbox.yaml'
 		# 玩家存盘(docs/design/player-save-direct-commit.md §5.2):go/db 的 MethodTimeouts 写在服务 yaml 与 db ConfigMap。
 		PlayerStoreNodeService     = 'go/db/etc/db.yaml'
+		# 邮件(docs/design/battle-overflow-mail.md):scene 以 battle 身份调 MailAdmin.SendPersonalMail;mail 的 ConfigMap 从服务 yaml 镜像 Timeout。
+		MailNodeService            = 'go/mail/etc/mail.yaml'
 	}
 	$notCalledFromCpp = Get-GrpcClientMethodsNotCalledFromCpp
 
@@ -6838,8 +6846,17 @@ function Apply-KafkaProfileDefaults {
 			if ($KafkaOtherTopicsReserveGi -le 0) { $script:KafkaOtherTopicsReserveGi = 4 }
 		}
 	}
-	# 审计 topic 的 retention.bytes 三档都缺省沿用 broker 缺省:要放宽就显式给 -AuditKafkaRetentionBytes,盘预算跟着算。
-	if ($AuditKafkaRetentionBytes -le 0) { $script:AuditKafkaRetentionBytes = $script:KafkaRetentionBytes }
+	# 审计 topic(transaction_log、player_snapshot)每分区的 retention.bytes(缺口清单第 3 条,2026-11-11 定案)。
+	# 目标:消费端(data_service 或流水库)中断 2 小时,未消费的审计消息不被 Kafka 删掉。
+	# 按容量模型(docs/design/capacity-model-hok-scale.md)一个 45k 在线的 zone 在峰时、现有分区数(流水 6、快照 3)下,
+	# 单分区进水最多约 0.5MB/s(快照 15KB、每人每次会话进出各一份并跨节点一次;流水按每 DAU 每天 1000 条的上沿),
+	# 2 小时约 3.6GB,取 4GiB。prod-like 与 prod 同值:data-service-audit-alerts.yaml 的 DataServiceAuditLagHigh 阈值按它算,
+	# 两档必须一致;改这个值要同步改那条阈值。dev 不承诺消费中断时审计不丢,沿用 broker 缺省。
+	# 一套 Kafka 服务多个 zone 时按 zone 数等比加审计分区(只许加,data_service 启动时原地加),单分区进水不变,本值不用改;
+	# 盘预算随分区数自动变大。推导与扩容做法见 deploy/k8s/README.md「审计 topic 的 retention.bytes」。
+	if ($AuditKafkaRetentionBytes -le 0) {
+		$script:AuditKafkaRetentionBytes = if ($KafkaProfile -eq 'dev') { $script:KafkaRetentionBytes } else { [long]4294967296 }
+	}
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -6847,7 +6864,7 @@ function Apply-KafkaProfileDefaults {
 # ─────────────────────────────────────────────────────────────────
 # 算的是每个 broker 的 Kafka PVC 至少要多大。这套 Kafka 上现役的 topic 都是全服一份,所以预算与 zone 数无关。Σ 分三项(单份数据):
 #   1. 审计 topic(transaction_log_topic_g<N> / player_snapshot_topic_g<N>):保留 30 天,topic 级 retention.bytes 由
-#      -AuditKafkaRetentionBytes 给(缺省 = broker 缺省 KAFKA_LOG_RETENTION_BYTES),每分区按它记,再加一个 segment
+#      -AuditKafkaRetentionBytes 给(缺省按档位:prod / prod-like 4GiB,dev = broker 缺省 KAFKA_LOG_RETENTION_BYTES),每分区按它记,再加一个 segment
 #      (retention 只删已关闭的 segment);
 #   2. 命令 topic(gate-cmd_g<N> / scene-cmd_g<N>):每分区按一个 segment 记。保留期 1 小时、控制面流量低、消费者 startAtEnd,
 #      按 broker 缺省上限记会高估到几百 GiB(2 × 256 个分区),所以这一项是容量估算,不是硬上限 —— 硬上限仍是 broker 缺省 retention.bytes;
@@ -7153,17 +7170,17 @@ function Write-KafkaDiskLedger {
 	$liveStsText = if ($null -eq $Plan.LiveStorageGi) { 'none' } else { [string]$Plan.LiveStorageGi }
 	$livePvcText = if ($null -eq $Plan.LivePvcGi) { 'none' } else { [string]$Plan.LivePvcGi }
 	$ledgerFormat = "Kafka disk ledger: brokers={0} rf={1} audit_partitions={2} command_partitions={3} segment_bytes={4} broker_retention_bytes={5} " +
-		"other_topics_reserve_gib={6} pvc_gib={7} pvc_source={8} required_gib={9} live_sts_gib={10} live_pvc_min_gib={11}"
+		"audit_retention_bytes={6} other_topics_reserve_gib={7} pvc_gib={8} pvc_source={9} required_gib={10} live_sts_gib={11} live_pvc_min_gib={12}"
 	Write-Host ($ledgerFormat -f $Plan.Brokers, $Plan.ReplicationFactor, $Plan.AuditPartitions, $Plan.CommandPartitions, $Plan.SegmentBytes,
-		$Plan.BrokerRetentionBytes, $Plan.OtherTopicsReserveGi, $Plan.EffectiveGi, $Plan.Source, $Plan.RequiredGi, $liveStsText, $livePvcText)
+		$Plan.BrokerRetentionBytes, $Plan.AuditRetentionBytes, $Plan.OtherTopicsReserveGi, $Plan.EffectiveGi, $Plan.Source, $Plan.RequiredGi, $liveStsText, $livePvcText)
 
 	if ($Plan.BelowRequired) {
 		# 格式串先拼好再 -f:-f 的优先级高于 +,写成一个表达式的话只有最后一段会被格式化。
-		$belowFormat = ("[KafkaDiskLedger]BelowRequired: PVC {0}Gi per broker (source={1}) is below the required {2}Gi for {3} audit partitions at broker retention.bytes={4}, " +
+		$belowFormat = ("[KafkaDiskLedger]BelowRequired: PVC {0}Gi per broker (source={1}) is below the required {2}Gi for {3} audit partitions at audit retention.bytes={4}, " +
 			"{5} command partitions and a {6} GiB reserve for other topics. Deployment continues: warning only, not blocking; audit topics can fill the disk before their retention expires. " +
 			"Expand the PVC to at least {2}Gi per broker with the runbook in deploy/k8s/README.md " +
 			"(patch each PVC kafka-data-kafka-<i>, kubectl delete statefulset kafka --cascade=orphan, then infra-up -KafkaStorageGi {2}).")
-		Write-Warning ($belowFormat -f $Plan.EffectiveGi, $Plan.Source, $Plan.RequiredGi, $Plan.AuditPartitions, $Plan.BrokerRetentionBytes, $Plan.CommandPartitions, $Plan.OtherTopicsReserveGi)
+		Write-Warning ($belowFormat -f $Plan.EffectiveGi, $Plan.Source, $Plan.RequiredGi, $Plan.AuditPartitions, $Plan.AuditRetentionBytes, $Plan.CommandPartitions, $Plan.OtherTopicsReserveGi)
 	}
 }
 
@@ -8056,6 +8073,34 @@ function Ensure-KubectlAvailable {
 	}
 }
 
+<#
+.SYNOPSIS
+	本 K8s 集群的身份:kube-system 命名空间的 UID。三套 etcd(etcd、etcd-id-secondary、etcd-id-registry)的引导令牌带上它。
+
+.DESCRIPTION
+	etcd 的集群号只由成员 peer 地址和引导令牌算出,而这两样原来只由 -InfraNamespace 推出:同一份清单部署到两个 K8s 集群,
+	集群号完全相同,发号器按集群号做的地域码绑定就分不出两套环境(docs/design/player-data-tidb-scaling-plan.md §6.3)。
+	kube-system 的 UID 由 API server 建集群时生成,每个集群不同,集群活着它就不变。
+	Apply-Infra 在第一个写操作之前调用;读不到或格式不对就 throw,什么都不写。DryRun 不连集群,返回全零的固定标记值。
+#>
+function Get-KubeClusterUid {
+	if ($DryRun) { return '00000000-0000-0000-0000-000000000000' }
+
+	$allArgs = @()
+	$allArgs += Build-KubectlBaseArgs
+	$allArgs += @('get', 'namespace', 'kube-system', '-o', 'jsonpath={.metadata.uid}')
+	$out = & kubectl @allArgs
+	$exitCode = $LASTEXITCODE
+	$uid = ([string]($out | Out-String)).Trim()
+	if ($exitCode -ne 0 -or $uid -cnotmatch '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') {
+		$shown = if ($uid.Length -gt 120) { $uid.Substring(0, 120) + '...' } else { $uid }
+		throw ("Cannot read the UID of namespace kube-system (kubectl exit code $exitCode, output '$shown'). The etcd bootstrap tokens carry it " +
+			"so that etcd clusters in different Kubernetes clusters never report the same cluster id, which the id issuer binds region codes to " +
+			"(docs/ops/id-issuer-runbook.md). The deploying identity needs get on namespaces/kube-system. Nothing was written.")
+	}
+	return $uid
+}
+
 function Ensure-Namespace {
 	param([Parameter(Mandatory = $true)][string]$Namespace)
 
@@ -8419,6 +8464,10 @@ service_discovery_prefixes:
   - "PlayerStoreNodeService.rpc"
   # 全服队伍权威读取由 Match 同端口提供，Scene 经此发现，不纳入启动硬依赖。
   - "TeamNodeService.rpc"
+  # 邮件(Go-Zero gRPC,infra namespace 全服一份):scene 以 battle 身份调 MailAdmin.SendPersonalMail,把两包都放不下的战斗掉落
+  # 寄进邮箱(docs/design/battle-overflow-mail.md)。mail 经 go/shared/noderegistry 注册 NodeInfo;弱依赖,不进 DependencyGate。
+  # 与 bin/etc/base_deploy_config.yaml 对齐。
+  - "MailNodeService.rpc"
 # 审计 topic 世代号:C++ 生产者按 `<基名>_g<N>` 拼实际 topic 名(基名 transaction_log_topic /
 # player_snapshot_topic 是 cpp/libs/modules/{transaction_log,snapshot} 里的常量,后缀由本键来),
 # 读法见 config.cpp::readBaseDeployConfig 的 AuditTopicGeneration 分支 + modules/audit/audit_topic.h。
@@ -8625,6 +8674,11 @@ function Get-SceneAccountDirectoryEnvLines {
 	"${Indent}- name: MMORPG_PLAYER_STORE_SECRET_SCENE"
 	"${Indent}  valueFrom:"
 	"${Indent}    secretKeyRef: {name: domain-service-secrets, key: player-store-scene, optional: false}"
+	# 两包都放不下的战斗掉落改投邮件时,scene 以 battle 身份签 MailAdmin.SendPersonalMail(docs/design/battle-overflow-mail.md);
+	# 与 mail 的 Producers.battle 同值。同样不写 optional: true:缺键时 Pod 起不来,而不是带着空密钥让欠玩家的物品寄不出去。
+	"${Indent}- name: MAIL_PRODUCER_SECRET_BATTLE"
+	"${Indent}  valueFrom:"
+	"${Indent}    secretKeyRef: {name: domain-service-secrets, key: mail-producer-battle, optional: false}"
 }
 
 function New-NodeDeploymentYaml {
@@ -8674,10 +8728,13 @@ function New-NodeDeploymentYaml {
 	# GRPC_SERVER_MAX_POLLERS 已退役(grpc-muduo-transport.md §15.11),不再注入。
 	$extraEnvLines = @()
 	if ($NodeName -eq 'gate') {
-		# 出站调用的内部身份签名密钥,缺了 gate 拒绝启动。名字取 lib 契约,与 external 形态的 New-GateStatefulSetYaml 同源。
+		# 出站调用的会话身份签名私钥(Secret)与验证方公钥列表(明文,gate 启动时核对两者配对),缺了或不配对 gate 拒绝启动。
+		# 名字取 lib 契约,与 external 形态的 New-GateStatefulSetYaml 同源(docs/design/gate-online-identity.md §10.1)。
 		$internalAuth = Get-ClientEntryContract
 		$extraEnvLines += "`t`t`t- name: $($internalAuth.InternalAuthSecretEnv)"
 		$extraEnvLines += "`t`t`t  valueFrom: {secretKeyRef: {name: $($internalAuth.InternalAuthSecretName), key: $($internalAuth.InternalAuthSecretKey), optional: false}}"
+		$extraEnvLines += "`t`t`t- name: $($internalAuth.InternalAuthPublicKeysEnv)"
+		$extraEnvLines += "`t`t`t  value: `"$($script:InternalAuthPublicKeys)`""
 	}
 	if ($SceneNodeType -ge 0) {
 		# 覆盖 ConfigMap 里的 SceneNodeType 基线,是角色拆分真正生效的那一步。
@@ -9745,7 +9802,7 @@ function New-ExternalGateManifests {
 		Replicas        = $Replicas
 		HeadlessService = New-GateHeadlessServiceYaml -ServicePort $GateServicePort
 		StatefulSet     = New-GateStatefulSetYaml -PodCommon $podCommon -Plan $plan -RpcPort 18000 -StartCommand "./gate" `
-			-ConfigMapName $ConfigMapName -GateRouterMode $GateRouterMode
+			-ConfigMapName $ConfigMapName -GateRouterMode $GateRouterMode -InternalAuthPublicKeys $script:InternalAuthPublicKeys
 		# 副本数为 0 时为空串,apply 时跳过。
 		OrdinalServices = New-GateOrdinalServicesYaml -Plan $plan -ExternalTrafficPolicy $GateExternalTrafficPolicy
 		Pdb             = New-GatePdbYaml
@@ -11720,16 +11777,14 @@ IdSegment:
 # Secrets:login 用到的 HMAC 密钥一律只写环境变量名(Env),值经 Secret 注入容器(docs/design/workload-secrets-via-k8s-secret.md):
 #   - GateToken:签发给客户端、由 C++ gate 校验的连接令牌(Secret gate-token)。以前写的顶层 GateTokenSecret 是只读一个值、
 #     不能轮换的兼容入口,不再写。
-#   - InternalAuth:内部调用方身份声明(x-session-detail-bin)的验签密钥(Secret gate-identity-auth,容器早已注入这个变量)。
-#     生产模式下 EnforceInternalAuth 恒为 true(config/secrets.go,配置关不掉),未配置 login 拒启。
 #   - QueueToken:排队开时才写。
-# 几把必须互不相同:secrets.go 里有跨用途复用主密钥的检查,生产复用会直接拒绝启动(一处泄露不该牵连另一处)。
+# 两把必须互不相同:secrets.go 里有跨用途复用主密钥的检查,生产复用会直接拒绝启动(一处泄露不该牵连另一处)。
 # 指名了变量却没有值,login 任何模式都拒启(SecretConf.resolve)。
+# 内部身份声明的验签不在这里:login 只持 gate 的 Ed25519 公钥,读 Apply-OneGoSvc 注入的 MMORPG_INTERNAL_AUTH_PUBLIC_KEYS,
+# 缺了拒启(docs/design/gate-online-identity.md §10.1)。
 Secrets:
   GateToken:
-    Env: MMORPG_GATE_TOKEN_SECRET
-  InternalAuth:
-    Env: MMORPG_INTERNAL_AUTH_SECRET${loginQueueTokenSecretBlock}
+    Env: MMORPG_GATE_TOKEN_SECRET${loginQueueTokenSecretBlock}
 # 下发 gate 地址时是否必须用 gate 自报的客户端可达地址(NodeInfo.client_endpoint,D78):
 # true = 缺地址的 gate 不下发;false = 回落 endpoint(PodIP)。取值见 k8s_deploy.ps1 -RequireClientEndpoint(默认跟随 -ClientEntryMode)。
 RequireClientEndpoint: ${requireClientEndpointValue}${loginDevPasswordAuthBlock}${loginQueueBlock}${loginAuthProvidersBlock}
@@ -13675,6 +13730,27 @@ function Add-SchemaPermissionManifest {
     return $Content.Substring(0,$at)+"`n"+$env+$Content.Substring($at)
 }
 
+<#
+.SYNOPSIS
+	渲染 data-service 读集群身份的 RBAC(manifests/go-svc/data-service-identity-rbac.yaml):ServiceAccount 落在 zone namespace,
+	ClusterRoleBinding 的名字和 subject 带上这个 namespace。占位没换干净就 throw,在任何写操作之前。
+
+.DESCRIPTION
+	发号器把地域码绑定到「部署身份 + 两套本地 etcd 的集群号」(docs/design/player-data-tidb-scaling-plan.md §6.3)。部署身份是
+	kube-system 命名空间的 UID,data_service 在运行期用 Pod 的 ServiceAccount 令牌经 K8s API 读取,权限就是这份清单。
+	ClusterRoleBinding 名字是 mmorpg-cluster-identity-<namespace>,Remove-Zone 按同一个名字删。
+#>
+function New-DataServiceIdentityRbacYaml {
+	param([Parameter(Mandatory = $true)][string]$Namespace)
+
+	$template = Get-Content -LiteralPath (Join-Path $GoSvcManifestsDir 'data-service-identity-rbac.yaml') -Raw
+	$rendered = $template.Replace('__ZONE_NAMESPACE__', $Namespace)
+	if ($rendered -cmatch '__[A-Z][A-Z0-9_]*__') {
+		throw "data-service-identity-rbac.yaml still has the placeholder $($Matches[0]) after rendering for namespace ${Namespace}. Nothing was written."
+	}
+	return $rendered
+}
+
 function Apply-OneGoSvc {
 	param(
 		[Parameter(Mandatory = $true)][string]$SvcName,
@@ -13717,12 +13793,12 @@ function Apply-OneGoSvc {
 		$manifestContent = Select-GoSvcCanaryDeployment -SvcName $SvcName -ManifestContent $manifestContent
 	}
 	if ($SvcName -in @('login','chat','friend','guild','trade','match','mail','rank')) {
-		$manifestContent = Add-GoSvcSecretEnv -SvcName $SvcName -ManifestContent $manifestContent `
-			-EnvName 'MMORPG_INTERNAL_AUTH_SECRET' -SecretName 'gate-identity-auth' -SecretKey 'secret'
-		if ($Stage -ne 'Prepare') {
-			Apply-InjectedSecret -Namespace $Namespace -Name 'gate-identity-auth' -Key 'secret' `
-				-Value $script:InternalAuthSecret -AppLabel 'gate-identity'
-		}
+		# 验签方只拿 gate 的公钥列表(不是密钥,明文写进 env),不引用签名私钥所在的 Secret gate-identity-auth:
+		# 持公钥签不出名,任何一个验证方被攻破都冒充不了 gate(docs/design/gate-online-identity.md §10.1)。
+		$manifestContent = Add-GoSvcEnvEntries -SvcName $SvcName -ManifestContent $manifestContent `
+			-Entries ([ordered]@{ 'MMORPG_INTERNAL_AUTH_PUBLIC_KEYS' = $script:InternalAuthPublicKeys }) `
+			-NamesLabel 'MMORPG_INTERNAL_AUTH_PUBLIC_KEYS' -Purpose '会话身份验签公钥列表' `
+			-Comment 'gate 会话身份签名的验签公钥列表,由 k8s_deploy.ps1 注入(gate-online-identity.md §10.1)'
 	}
 	# Prepare 不碰写者名册:名册按迁移 Job 种下的 route_meta.generation 写,这一步还没有。工作负载的清单这一步也不 apply。
 	if ($Stage -ne 'Prepare' -and $SvcName -in $script:SqlWriterGoSvcs) {
@@ -13923,6 +13999,15 @@ function Apply-OneGoSvc {
 		$sceneManagerAgonesRbac = Get-Content -LiteralPath (Join-Path $GoSvcManifestsDir 'scene-manager-agones-rbac.yaml') -Raw
 	}
 
+	# data-service 在运行期读本 K8s 集群的身份(kube-system 的 UID),发号器把地域码绑在它上面(docs/design/player-data-tidb-scaling-plan.md §6.3)。
+	# Pod 用 ServiceAccount data-service(写死在 data-service.yaml),权限是 data-service-identity-rbac.yaml 里只读 namespaces/kube-system 的
+	# ClusterRole 和本 zone 的 ClusterRoleBinding。所有档位都 apply:dev 不读身份,但 Pod 引用的 ServiceAccount 必须存在。
+	# 先渲染(形状不对在任何写操作之前 throw),在 StatefulSet 之前 apply:晚了的话,第一次预留读身份拿到 403(identity_error,不写记录,下次再读)。
+	$dataServiceIdentityRbac = $null
+	if ($SvcName -eq 'data-service') {
+		$dataServiceIdentityRbac = New-DataServiceIdentityRbacYaml -Namespace $Namespace
+	}
+
 	# 工作负载密钥的 Secret 先于 ConfigMap、迁移 Job 与 Deployment 写入。各 Stage 都写:全局服务的 Prepare 只起迁移 Job,它同样引用 mysql-auth;
 	# 同一次运行里重复的只写一次(Sync-WorkloadSecrets)。条件同上(按 AST 单独抽本函数的测试没有目录表)。
 	if ($script:WorkloadSecretCatalog) {
@@ -13953,6 +14038,9 @@ function Apply-OneGoSvc {
 	}
 	if ($null -ne $sceneManagerAgonesRbac) {
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $sceneManagerAgonesRbac
+	}
+	if ($null -ne $dataServiceIdentityRbac) {
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $dataServiceIdentityRbac
 	}
 
 	if ($Canary) {
@@ -15034,12 +15122,12 @@ function Apply-Zone {
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $sidecarConfigYaml
 	}
 
-	# gate 的内部身份签名密钥:两种入口形态的 gate 都按 secretKeyRef 引用它(optional: false),缺了 gate 拒绝启动,
-	# 所以先于任一形态的工作负载建好。login 等验签方随后在 Apply-OneGoSvc 里 apply 同一个 Secret(值相同,重复 apply 无副作用);
-	# 带 -SkipGoSvc 只部署 C++ 时,这里是本 namespace 唯一的来源。
+	# gate 的会话身份签名私钥:两种入口形态的 gate 都按 secretKeyRef 引用它(optional: false),缺了 gate 拒绝启动,
+	# 所以先于任一形态的工作负载建好。这是这个 Secret 唯一的来源:login 等验签方只拿公钥(Apply-OneGoSvc 明文注入),
+	# 不引用它(docs/design/gate-online-identity.md §10.1)。
 	$internalAuth = Get-ClientEntryContract
 	Apply-InjectedSecret -Namespace $namespace -Name $internalAuth.InternalAuthSecretName -Key $internalAuth.InternalAuthSecretKey `
-		-Value $script:InternalAuthSecret -AppLabel 'gate-identity'
+		-Value $script:InternalAuthSigningKey -AppLabel 'gate-identity'
 	if ($ClientEntryMode -eq "external") {
 		Apply-ExternalGate -Namespace $namespace -Manifests $externalGateManifests
 	}
@@ -15151,6 +15239,9 @@ function Remove-Zone {
 	$namespace = Get-ZoneNamespace -Name $CurrentZoneName
 	Write-Host "Deleting zone namespace: $namespace"
 	Invoke-Kubectl -Args @("delete", "namespace", $namespace) -AllowFailure
+	# data-service 读集群身份的 ClusterRoleBinding 是集群级对象,删命名空间带不走(名字见 data-service-identity-rbac.yaml)。
+	# 共用的 ClusterRole mmorpg-cluster-identity-reader 不删,别的 zone 还在用。
+	Invoke-Kubectl -Args @("delete", "clusterrolebinding", "mmorpg-cluster-identity-$namespace", "--ignore-not-found") -AllowFailure
 }
 
 function Show-ZoneStatus {
@@ -15657,7 +15748,11 @@ function Apply-Infra {
 		Write-Host ("Loki: replicas={0} manifest={1} object_store={2}" -f $lokiTopology.Replicas, $lokiTopology.Manifest,
 			$(if ($null -eq $lokiS3) { 'local-disk' } elseif ($lokiS3.DevFixture) { "s3://$($lokiS3.Bucket)@$($lokiS3.Endpoint) (dev fixture)" } else { "s3://$($lokiS3.Bucket)@$($lokiS3.Endpoint)" }))
 	}
+	# 本 K8s 集群的身份(kube-system 的 UID):三套 etcd 的引导令牌带上它(下面循环里替换 __KUBE_CLUSTER_UID__,理由见 etcd.yaml 令牌处)。
+	# 读不到在第一个写操作(Ensure-Namespace)之前 throw。
+	$kubeClusterUid = Get-KubeClusterUid
 	Write-Host "Deploying shared infrastructure to namespace $InfraNamespace"
+	Write-Host ("Kubernetes cluster uid: {0}{1} (carried by the etcd bootstrap tokens)" -f $kubeClusterUid, $(if ($DryRun) { ' [dry-run marker]' } else { '' }))
 	Write-Host "Kafka profile: $KafkaProfile (broker_retention_ms=$KafkaBrokerRetentionMs)"
 	Ensure-Namespace -Namespace $InfraNamespace
 
@@ -15784,6 +15879,8 @@ function Apply-Infra {
 		# 客户端 bootstrap 后拿到的是 broker 广播的地址再去连),而 FQDN 里带 namespace,
 		# 写死在 manifest 里换 namespace 部署就会广播一个不存在的地址。
 		$manifestContent = $manifestContent.Replace("__INFRA_NAMESPACE__", $InfraNamespace)
+		# 三套 etcd 的引导令牌带本 K8s 集群的身份(函数开头读好的 $kubeClusterUid);别的清单没有这个占位,替换是空操作。
+		$manifestContent = $manifestContent.Replace("__KUBE_CLUSTER_UID__", $kubeClusterUid)
 
 		if ($manifest -eq "kafka.yaml") {
 			$manifestContent = $manifestContent.Replace("__KAFKA_LOG_RETENTION_MS__", [string]$KafkaBrokerRetentionMs)

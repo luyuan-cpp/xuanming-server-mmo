@@ -78,6 +78,25 @@ message DropTable {
 
 生成的头文件里写着同一条契约，改动那段注释前先想清楚。
 
+### 行 id 只增不删（`(cfg_ids_permanent)`，2026-11-11）
+
+玩家存档、在途的资产通道指令按 id 引用的表（目前是 `Item`、`Pet`），在主消息上写表级 option：
+
+```proto
+message ItemTable {
+  option (cfg_sheet)         = "Item";
+  option (cfg_ids_permanent) = true;
+  ...
+}
+```
+
+- 导表器把这张表出现过的全部 id 记在台账 `tools/data_table_exporter/state/permanent_ids/<表名小写>_ids.txt`（进 git），
+  表里少了台账里的 id 就**整批不产出**（`core/permanent_ids.py`）。新 id 在导表时自动追加，台账与产物同一次提交。
+- 不再产出某个物品 / 宝宝：去掉掉落、商店、奖励里对它的引用，**表行保留**，已持有的照常生效。
+- 只在开发期存在、从未发布过的行要删：在同一次提交里从台账删掉这个 id，提交说明写明理由。
+- 为什么：scene 遇到本节点表里查不到的 id 时，只有表行永不删除，才能判定它是更新版本或尚未热更到的行、
+  回 RETRY 等它出现，而不是把引用它的资产当坏数据拒掉（`docs/design/mixed-version-persist-field-protection.md` §13 第 10 条）。
+
 ### 改字段号 / 删字段
 - **字段号是 wire 契约**。`.pb` 是入库的二进制，改号 = 让所有存量数据那一段被错读，
   而且 `ParseFromString` 不会报错。
@@ -94,6 +113,7 @@ message DropTable {
 - ❌ 复用退休的字段号，或为了「让号连续」而重排字段号。
 - ❌ 改了表不跑 `gen_schema_index.py`：腐坏的索引比没有索引更坏。
 - ❌ **把表行的指针/引用存起来**——热更那一刻就是野指针（C++），或永久陈旧（Go/Java）。只存 id。
+- ❌ 删 `(cfg_ids_permanent)` 表（`Item`、`Pet`）的行：导表会失败。不再产出就去掉引用，表行保留。
 - ❌ 给可重复主键的表加 `(cfg_bit_index)`：位序对重复 ID 没有定义，会被拒。
 - ❌ 把枚举定义粘进注释（历史上 `Buff.buff_type` 就是一整段 C++ enum）——proto 里可以直接写 `enum`。
 

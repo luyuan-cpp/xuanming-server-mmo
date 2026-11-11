@@ -40,6 +40,12 @@ extend google.protobuf.MessageOptions {
   // 这件事只由主键列上的 (cfg_multi) 决定，不设第二个说法。
   // extend 块里不能写 reserved（protoc 会报 "Expected field name"），
   // 所以退休的扩展号只能靠这条注释登记：**60004 不要复用**。
+
+  // 行 id 只增不删（2026-11-11）：这张表出现过的 id 记在导表器台账
+  // tools/data_table_exporter/state/permanent_ids/<表名小写>_ids.txt，表里少了台账里的 id 导表即失败。
+  // 玩家存档与在途指令按 id 引用这张表时才需要：scene 查不到某个 id 就能判定它是更新版本或尚未热更到的行，
+  // 回 RETRY 等它出现，而不是把引用它的资产当坏数据拒掉（混版本持久字段保护设计 §13 第 10 条）。
+  bool cfg_ids_permanent = 60005;
 }
 
 extend google.protobuf.FieldOptions {

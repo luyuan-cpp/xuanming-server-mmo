@@ -69,12 +69,28 @@ public:
 		uint64_t correlationId = 0,
 		const std::string &extra = {});
 
+    // 两包都放不下时这一整批的去处(ConsumeInventoryAndGrant 的 overflowRoute)。本类不知道去处是什么,只保证:
+    //   - accept 在任何副作用之前调用,参数就是整批新增;回非 kSuccess = 接不住,整笔照旧拒绝、不调 commit。
+    //     accept 可以取号、读状态,不得改玩家存档或背包。
+    //   - commit 在 beforeCommit 成功之后、发布两包候选的同一段里调用,恰好一次,不得失败、不得 yield;
+    //     accept 接住而之后的步骤失败(同源复核、封禁复核、beforeCommit)时不调用。
+    //   - 改投的这一批不铸号、不进任何一个包,也不记获得流水与异常获得;它们在去处兑现时(邮件附件领取经资产通道入包)才记。
+    struct GrantOverflowRoute
+    {
+        std::function<uint32_t(const ItemCountMap &items)> accept;
+        std::function<void(const ItemCountMap &items)> commit;
+    };
+
     // 同步整笔：主包按实际持有扣消耗，再把全批新增放主包或全批转临时格。先在store/layout候选中
     // 完成全部空间、发号、初始化与禁发检查；任何失败不改玩家包、不记流水。允许烧掉未提交的ID。
     // 获得封禁(全服 + 本人)在扣消耗与建候选之前判,任一项命中整笔回 kAssetBlocked;临时格兜底只用于
     // 主包放不下,封禁不会走到它。提交前(beforeCommit 之前)再复核一次。
-    // 临时格也放不下(满了不淘汰,2026-11-05 起)→ 整笔回容器的「放不下」码,两个包、消耗与 beforeCommit 都没动;
-    // 调用方(战斗结算)按延后处理,玩家从临时格取回腾位后下一次重试即应用。
+    // 临时格也放不下(满了不淘汰,2026-11-05 起):
+    //   - 调用方给了 overflowRoute(战斗结算:改投邮件,docs/design/battle-overflow-mail.md)→ 先问 accept 能不能接住这一整批,
+    //     能接就照常扣消耗、跑 beforeCommit、发布两包候选(全批新增不进任何一个包),并在发布的同一段里调 commit;
+    //     接不住就与没给 route 一样整笔拒绝,回 accept 给的码。
+    //   - 没给 route,或 accept 接不住 → 整笔回容器的「放不下」码(accept 接不住时回它的码),两个包、消耗与 beforeCommit
+    //     都没动;调用方(战斗结算)按延后处理,玩家从临时格取回腾位后下一次重试即应用。
     // beforeCommit只给同帧外层的另一份零失败后置效果（当前为货币）：失败必须零副作用；不得yield、
     // 抛异常或修改背包。它返回成功之后，只做不抛出的两层swap及流水发布，不再有业务失败分支。
     // 策略只在本同步调用内借用原只读对象；返回时不保留任何连接、实体或策略引用。
@@ -84,7 +100,7 @@ public:
     static uint32_t ConsumeInventoryAndGrant(entt::entity playerEntity,
         const ItemCountMap& consumed, const ItemCountMap& gained, uint64_t correlationId,
         const std::string& extra, const std::function<uint32_t()>& beforeCommit = {},
-        uint64_t consumeFromHoldId = 0);
+        uint64_t consumeFromHoldId = 0, const GrantOverflowRoute* overflowRoute = nullptr);
 
     // ── 物品数量预留(docs/design/battle-item-reservation.md)──────────────────────────────────
     // 一份预留 = 「人物背包里这几种物品各有这么多已被某件事占住」,数据在持久组件 PlayerItemHoldComp,规则在 item_hold.h。

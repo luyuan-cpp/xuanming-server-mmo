@@ -13,6 +13,7 @@ import (
 
 	"data_service/internal/metrics"
 	"data_service/internal/store"
+	"shared/placement"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -83,7 +84,8 @@ func NewRouter(routeStore RouteStore) *Router {
 //   - 库故障                       → ErrRouteStore。
 //
 // storageID 与 home 在同一行里原子写入(player-storage-placement.md §8.1):go/db 对没有落点的角色一律拒绝认领,所以必填。行里已有落点时不覆盖,
-// 它指向玩家数据**真正所在**的库。storageID 只校验非 0,它指向的库能不能打开由 go/db 按需打开时判定(§6.1)。
+// 它指向玩家数据**真正所在**的库。storageID 必须是地域存档库编号(placement.StoreDBName 认得;zone 库已退役,
+// 总体方案 §7.2 A17c),目录里不会出现指向 zone 库的落点;它指向的库能不能打开由 go/db 按需打开时判定(§6.1)。
 //
 // 为什么不能覆盖:见 constants.ErrCodeZoneMappingConflict 的注释。
 // 合服不影响登记(docs/design/player-data-tidb-scaling-plan.md §7.1):合服过程中在源区建号是允许的,
@@ -91,10 +93,10 @@ func NewRouter(routeStore RouteStore) *Router {
 //
 // 每次调用恰好计一次 route_register_total{outcome}。
 func (r *Router) RegisterPlayerZone(ctx context.Context, playerID uint64, homeZoneID, storageID uint32) error {
-	if playerID == 0 || homeZoneID == 0 || homeZoneID > store.RouteHomeZoneMax || storageID == 0 {
+	if _, isStore := placement.StoreDBName(storageID); playerID == 0 || homeZoneID == 0 || homeZoneID > store.RouteHomeZoneMax || !isStore {
 		metrics.ObserveRouteRegister(metrics.RouteRegisterInvalid)
-		return fmt.Errorf("%w: player_id=%d home_zone=%d storage_id=%d (want player_id > 0, home_zone in [1, %d], storage_id > 0)",
-			ErrInvalidRegistration, playerID, homeZoneID, storageID, store.RouteHomeZoneMax)
+		return fmt.Errorf("%w: player_id=%d home_zone=%d storage_id=%d (want player_id > 0, home_zone in [1, %d], storage_id a player store id >= %d)",
+			ErrInvalidRegistration, playerID, homeZoneID, storageID, store.RouteHomeZoneMax, placement.FirstStorageID)
 	}
 	if r.routeStore == nil {
 		metrics.ObserveRouteRegister(metrics.RouteRegisterStoreError)

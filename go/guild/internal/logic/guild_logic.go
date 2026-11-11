@@ -464,7 +464,7 @@ func (l *GuildLogic) LeaveGuild(ctx context.Context, req *pb.LeaveGuildRequest) 
 		return &pb.LeaveGuildResponse{ErrorMessage: tip}, err
 	}
 	// 快照已不含退帮者,所以"剩余全体"就是收件人;他自己拿的是这次响应,不必再推。
-	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_MEMBER_LEFT, guildID, who.playerID, who.playerID, membersExcept(res.Guild))
+	l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_MEMBER_LEFT, guildID, who.playerID, who.playerID, membersExcept(res.Guild))
 	// 摘要要把退帮者本人算进去(他的 GetPlayerGuild 从"在帮"变成"未入帮")。
 	l.bumpSync(membersPlus(res.Guild, who.playerID), scenepb.SyncDomain_SYNC_DOMAIN_GUILD)
 	return &pb.LeaveGuildResponse{}, nil
@@ -524,7 +524,7 @@ func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildReque
 	}
 	// target 取 0:解散没有"被作用的那个人"。只提交过申请的玩家不通知(他们的申请行已被删,
 	// 下次打开申请列表自然就没了)。
-	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_DISBANDED, guildID, who.playerID, 0, recipients)
+	l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_DISBANDED, guildID, who.playerID, 0, recipients)
 	// 摘要给解散前的全体成员(MemberIDs 含操作者本人)。申请人的 GUILD_APPLICATION 同样变了(申请行被删),
 	// 但 DisbandResult 不回这组人(改 data 层不在本批范围):他们的申请列表由打开界面时的拉取覆盖,
 	// 列表里的残留行本来也按"帮会已不存在"过滤掉(myApplicationViews)。
@@ -559,7 +559,7 @@ func (l *GuildLogic) SetAnnouncement(ctx context.Context, req *pb.SetAnnouncemen
 
 	// 响应带的是事务内快照,不再提交后回读缓存:回读会在失效失败时返回旧公告,
 	// 玩家会以为自己没改成功而反复重试。
-	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_ANNOUNCEMENT_CHANGED, req.GuildId, who.playerID, 0,
+	l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_ANNOUNCEMENT_CHANGED, req.GuildId, who.playerID, 0,
 		membersExcept(snapshot, who.playerID))
 	// 快照含操作者本人(他是 officer / leader 才过得了事务),全体即 bump 集合。
 	l.bumpSync(membersPlus(snapshot), scenepb.SyncDomain_SYNC_DOMAIN_GUILD)

@@ -23,11 +23,10 @@ import (
 
 // ───────────────────────── 落点库注册表(player-storage-placement.md §6.1)─────────────────────────
 //
-// 玩家主数据可以落在本 zone 库之外的库里(合服 pin 之后留在源区库、搬库之后在目标库、Phase 2 的全局库)。
+// 玩家主数据落在本地域的 K 个地域存档库 player_store_<id>_db 里,和 go/db 所在的区无关(docs/design/player-data-tidb-scaling-plan.md §7.2)。
 // 选库只在 go/db 一处发生(internal/playerstore 经 data_service 的 GetPlayerRoute 选),本文件负责把「落点编号」变成「一个已打开、
 // 已核对过的库」:
-//   - 本 zone 库在启动期由 InitDB 打开并过全部既有断言,这里只登记为落点 ZoneId;
-//   - 其余库第一次被指向时按需打开(同一个库并发只打开一次),之后常驻;
+//   - go/db 没有「本区主库」(A17c):注册表建出来是空的,每个存档库第一次被指向时按需打开(同一个库并发只打开一次),之后常驻;
 //   - 按需打开**从不建库、不跑 DDL**:只 Ping + 断言连上的库 + 只读 schema 闸,库不存在就报错延后,
 //     绝不会因为一条畸形的落点记录在生产实例上建出一个新库。
 
@@ -56,8 +55,8 @@ const (
 
 // AdmitStore 判定本进程能否打开名为 name 的落点库(§6.1),返回放行依据。
 //
-// 可打开 = 名字在外部注入的白名单里,或 familiesAllowed 且名字属于 zone_{1..999999}_db /
-// player_store_{>=1000000}_db 两个家族之一。cmd/migrate 的 -storage-id 与业务服务共用这一个判定,
+// 可打开 = 名字在外部注入的白名单里,或 familiesAllowed 且名字属于存档库家族 player_store_{>=1000000}_db
+// (zone 库已经退役,不属于任何家族)。cmd/migrate 的 -storage-id 与业务服务共用这一个判定,
 // 保证「迁移能动的已有库」与「服务能写的库」是同一个集合。建库不走这里:建库仍只认白名单(CreateDatabase)。
 func AdmitStore(allow dbguard.Allowlist, familiesAllowed bool, name string) (string, bool) {
 	if allow.Contains(name) {
@@ -77,9 +76,6 @@ type StoreOpener func(ctx context.Context, dbName string) (*GameDB, error)
 
 // StoreRegistryOptions 是 NewStoreRegistry 的全部依赖。时间与打开动作都显式注入,测试替身走同一条路径。
 type StoreRegistryOptions struct {
-	// HomeStorageID 是本进程的 zone(= 落点编号 ZoneId),Home 是 InitDB 打开的本 zone 库。
-	HomeStorageID uint32
-	Home          *GameDB
 	// Allow 是启动期解析好的外部白名单;AllowFamilies 对应 Placement.AllowStoreFamilies。
 	Allow         dbguard.Allowlist
 	AllowFamilies bool
@@ -99,8 +95,6 @@ type StoreRegistryOptions struct {
 
 // StoreRegistry 按落点编号给出已打开的库。并发安全:所有 worker 子分片共用一个实例。
 type StoreRegistry struct {
-	// home 是本 zone 的落点编号(= ZoneId),构造后只读;PoolSamples 据此把本 zone 库与额外 zone 家族库分开计。
-	home          uint32
 	allow         dbguard.Allowlist
 	allowFamilies bool
 	open          StoreOpener
@@ -129,25 +123,8 @@ type storeOpenFailure struct {
 	err error
 }
 
-// NewStoreRegistry 以本 zone 库为种子建注册表。
-//
-// ZoneId 必须落在 zone 落点区间(1..999999):落点编号与库名一一派生,ZoneId >= 1000000 时
-// 「本 zone 库」与同编号的非 zone 落点库撞名,选库会把无记录玩家写进 player_store_* —— 拒启。
+// NewStoreRegistry 建一个空的注册表:没有预先打开的库,每个存档库第一次被指向时按需打开(A17c)。
 func NewStoreRegistry(opts StoreRegistryOptions) (*StoreRegistry, error) {
-	if !placement.IsZoneStorage(opts.HomeStorageID) {
-		return nil, fmt.Errorf("zone %d is outside the zone storage range 1..%d; placement routing cannot derive this zone's database",
-			opts.HomeStorageID, placement.MaxZoneStorageID)
-	}
-	if opts.Home == nil || opts.Home.SqlModel == nil {
-		return nil, errors.New("placement store registry needs the zone's own database opened first (call InitDB before it)")
-	}
-	homeName, _ := placement.StoreDBName(opts.HomeStorageID)
-	if opts.Home.SqlModel.DBName != homeName {
-		// 本 zone 库的名字来自 config.ZoneDBName,落点库名来自 placement.StoreDBName;两份规则一旦分叉,
-		// 同一个编号在「本 zone 库」和「按需打开」两条路上会指向两个库。
-		return nil, fmt.Errorf("zone database is %q but placement storage %d derives %q; config.ZoneDBName and placement.StoreDBName have diverged",
-			opts.Home.SqlModel.DBName, opts.HomeStorageID, homeName)
-	}
 	if opts.Open == nil {
 		return nil, errors.New("placement store registry needs a store opener")
 	}
@@ -179,9 +156,8 @@ func NewStoreRegistry(opts StoreRegistryOptions) (*StoreRegistry, error) {
 	if ping == nil {
 		ping = pingStore
 	}
-	metrics.SetPlacementOpenStores(1)
+	metrics.SetPlacementOpenStores(0)
 	return &StoreRegistry{
-		home:          opts.HomeStorageID,
 		allow:         opts.Allow,
 		allowFamilies: opts.AllowFamilies,
 		open:          opts.Open,
@@ -193,7 +169,7 @@ func NewStoreRegistry(opts StoreRegistryOptions) (*StoreRegistry, error) {
 		jitter:        jitter,
 		ping:          ping,
 		flight:        syncx.NewSingleFlight(),
-		stores:        map[uint32]*GameDB{opts.HomeStorageID: opts.Home},
+		stores:        map[uint32]*GameDB{},
 		failures:      map[uint32]storeOpenFailure{},
 		cooling:       map[uint32]storeCooldown{},
 	}, nil
@@ -205,99 +181,64 @@ func NewStoreRegistryFromConfig() (*StoreRegistry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve database allow list: %w", err)
 	}
+	// 库名清单只许列地域存档库(A17c):zone 库已经退役,清单里还有它说明部署没跟上,拒启并点名,不留一个永远打不开的名字。
+	for _, name := range allow.Names {
+		if _, ok := placement.StorageIDFromDBName(name); !ok {
+			return nil, fmt.Errorf("database allow list entry %q is not a player store database player_store_<id>_db; zone databases are retired "+
+				"(player-data-tidb-scaling-plan.md §7.2 A17c), list only the player stores of this region in MMORPG_DB_ALLOWED_DATABASES", name)
+		}
+	}
 	pc := config.AppConfig.Placement
-	idleTimeout := time.Duration(pc.ExtraStoreConnMaxIdleSeconds) * time.Second
-	pools := extraStorePools{
-		Zone:    StorePoolOptions{MaxOpenConn: pc.ZoneStoreMaxOpenConn, MaxIdleConn: pc.ZoneStoreMaxIdleConn, ConnMaxIdleTime: idleTimeout},
-		NonZone: StorePoolOptions{MaxOpenConn: pc.NonZoneStoreMaxOpenConn, MaxIdleConn: pc.NonZoneStoreMaxIdleConn, ConnMaxIdleTime: idleTimeout},
+	pool := StorePoolOptions{
+		MaxOpenConn:     pc.StoreMaxOpenConn,
+		MaxIdleConn:     pc.StoreMaxIdleConn,
+		ConnMaxIdleTime: time.Duration(pc.StoreConnMaxIdleSeconds) * time.Second,
 	}
 	registry, err := NewStoreRegistry(StoreRegistryOptions{
-		HomeStorageID: config.AppConfig.ZoneId,
-		Home:          DB,
 		Allow:         allow,
 		AllowFamilies: pc.StoreFamiliesAllowed(),
 		Open: func(ctx context.Context, dbName string) (*GameDB, error) {
-			pool, err := pools.storePoolFor(dbName)
-			if err != nil {
-				return nil, err
-			}
 			return OpenPlacementStore(ctx, dbName, pool)
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
-	logx.Infof("[placement] store registry ready: zone=%d allowlist=%s storeFamilies=%v zoneStorePool=%d/%d nonZoneStorePool=%d/%d extraStoreIdleTimeout=%v",
-		config.AppConfig.ZoneId, allow.String(), pc.StoreFamiliesAllowed(),
-		pools.Zone.MaxOpenConn, pools.Zone.MaxIdleConn, pools.NonZone.MaxOpenConn, pools.NonZone.MaxIdleConn, idleTimeout)
+	logx.Infof("[placement] store registry ready: zone=%d allowlist=%s storeFamilies=%v storePool=%d/%d storeIdleTimeout=%v",
+		config.AppConfig.ZoneId, allow.String(), pc.StoreFamiliesAllowed(), pool.MaxOpenConn, pool.MaxIdleConn, pool.ConnMaxIdleTime)
 	return registry, nil
 }
 
 // PoolSamples 返回此刻每个已打开库的连接池快照(shared/sqlpoolstats.Source,G2b)。
-// 类别只有三种(metrics.Pool*):本 zone 库、额外 zone 家族库、非 zone 落点库。读锁内只拷出 *sql.DB,
+// 只有一类池 metrics.PoolStore(每个地域存档库一个)。读锁内只拷出 *sql.DB,
 // Stats() 在锁外取(它自己加 db.mu),不挡按需打开。没有连接的库(单测的 storeNamed)跳过。
-// 池常驻不删(见文件头),所以按类别求和的 counter 单调,满足 sqlpoolstats 的前提。
+// 池常驻不删(见文件头),所以求和的 counter 单调,满足 sqlpoolstats 的前提。
 func (r *StoreRegistry) PoolSamples() []sqlpoolstats.Sample {
-	type pooled struct {
-		pool string
-		db   *sql.DB
-	}
 	r.mu.RLock()
-	handles := make([]pooled, 0, len(r.stores))
-	for storageID, store := range r.stores {
+	handles := make([]*sql.DB, 0, len(r.stores))
+	for _, store := range r.stores {
 		if store == nil || store.DB == nil {
 			continue
 		}
-		handles = append(handles, pooled{pool: r.poolClassOf(storageID), db: store.DB})
+		handles = append(handles, store.DB)
 	}
 	r.mu.RUnlock()
 
 	samples := make([]sqlpoolstats.Sample, 0, len(handles))
-	for _, h := range handles {
-		samples = append(samples, sqlpoolstats.Sample{Pool: h.pool, Stats: h.db.Stats()})
+	for _, handle := range handles {
+		samples = append(samples, sqlpoolstats.Sample{Pool: metrics.PoolStore, Stats: handle.Stats()})
 	}
 	return samples
 }
 
-// poolClassOf 给出落点编号的连接池类别。
-func (r *StoreRegistry) poolClassOf(storageID uint32) string {
-	switch {
-	case storageID == r.home:
-		return metrics.PoolHome
-	case placement.IsZoneStorage(storageID):
-		return metrics.PoolExtraZone
-	default:
-		return metrics.PoolExtraNonZone
-	}
-}
-
-// StorePoolOptions 是一个额外落点库连接池的参数(本 zone 库的池由 InitDB 按 Database.MaxOpenConn 设,不走这里)。
+// StorePoolOptions 是每个存档库连接池的参数(Placement.StoreMaxOpenConn / StoreMaxIdleConn / StoreConnMaxIdleSeconds)。
 type StorePoolOptions struct {
 	MaxOpenConn     int
 	MaxIdleConn     int
 	ConnMaxIdleTime time.Duration
 }
 
-// extraStorePools 是两类额外落点库各自的池参数(Placement.ZoneStore* / NonZoneStore*)。
-type extraStorePools struct {
-	Zone    StorePoolOptions
-	NonZone StorePoolOptions
-}
-
-// storePoolFor 按库名所属家族选池参数。库名由 placement.StoreDBName 派生(openOnce),只可能属于两个家族之一;
-// 解析不出来是编程错误,fail-closed 报错(经 openOnce 包成 ErrStoreUnavailable,写延后、不耗重试),不猜一个池。
-func (p extraStorePools) storePoolFor(dbName string) (StorePoolOptions, error) {
-	storageID, ok := placement.StorageIDFromDBName(dbName)
-	if !ok {
-		return StorePoolOptions{}, fmt.Errorf("database %q belongs to neither placement store family; cannot pick its connection pool", dbName)
-	}
-	if placement.IsZoneStorage(storageID) {
-		return p.Zone, nil
-	}
-	return p.NonZone, nil
-}
-
-// applyStorePool 把池参数设到 handle 上;ConnMaxLifetime 与本 zone 库同为 5 分钟(proto_sql/db.go InitDB)。
+// applyStorePool 把池参数设到 handle 上;ConnMaxLifetime 固定 5 分钟。
 // ConnMaxIdleTime ≤ 0 时不设(= database/sql 默认不按空闲时长回收)。
 func applyStorePool(handle *sql.DB, pool StorePoolOptions) {
 	handle.SetMaxOpenConns(pool.MaxOpenConn)
@@ -342,6 +283,16 @@ func (r *StoreRegistry) Store(_ context.Context, storageID uint32) (*GameDB, err
 	return store, nil
 }
 
+// reject 处理一次不拨号的拒绝:记失败(退避期内同一个库直接回这个错误,不刷日志)、计数、打一行日志。
+// 这个进程的白名单和家族开关启动后不变,所以被拒的库要改部署再重启才能打开;其间这些玩家的写一直延后,不消耗重试。
+func (r *StoreRegistry) reject(storageID uint32, err error) error {
+	r.recordFailure(storageID, err)
+	metrics.CountPlacementStoreOpen(metrics.StoreOpenRejected)
+	logx.Errorf("[placement] store rejected (writes for its players stay deferred without consuming retries until the deployment is fixed): storage=%d err=%v",
+		storageID, err)
+	return err
+}
+
 // openOnce 在 singleflight 里执行:同一个库同一时刻只有一个 goroutine 走到这里。
 func (r *StoreRegistry) openOnce(storageID uint32) (*GameDB, error) {
 	// 复查:排在前面的一次打开可能在本请求读缓存与进入 singleflight 之间刚好完成或刚好失败。
@@ -356,20 +307,16 @@ func (r *StoreRegistry) openOnce(storageID uint32) (*GameDB, error) {
 		return nil, failure.err
 	}
 
-	name, ok := placement.StoreDBName(storageID)
-	if !ok {
-		// 选库时已拒绝 0,ZoneId 也不会是 0;走到这里是编程错误,照样 fail-closed。
-		return nil, fmt.Errorf("%w: storage id 0 names no database", ErrStoreUnavailable)
+	name, isStore := placement.StoreDBName(storageID)
+	if !isStore {
+		// 0 和区号的值域(zone 库已退役,A17c)不派生库名。登记落点时就拒了,走到这里说明路由行或调用方坏了。
+		return nil, r.reject(storageID, fmt.Errorf("%w: storage %d is not a player store id (want >= %d)",
+			ErrStoreUnavailable, storageID, placement.FirstStorageID))
 	}
 	via, admitted := AdmitStore(r.allow, r.allowFamilies, name)
 	if !admitted {
-		err := fmt.Errorf("%w: %s is neither in the database allow list %s nor admitted by Placement.AllowStoreFamilies=%v",
-			ErrStoreUnavailable, name, r.allow.String(), r.allowFamilies)
-		r.recordFailure(storageID, err)
-		metrics.CountPlacementStoreOpen(metrics.StoreOpenRejected)
-		logx.Errorf("[placement] store rejected (writes for its players keep being deferred without consuming retries until the allow list admits it): storage=%d err=%v",
-			storageID, err)
-		return nil, err
+		return nil, r.reject(storageID, fmt.Errorf("%w: %s is neither in the database allow list %s nor admitted by Placement.AllowStoreFamilies=%v",
+			ErrStoreUnavailable, name, r.allow.String(), r.allowFamilies))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), r.openTimeout)
@@ -427,7 +374,7 @@ func (r *StoreRegistry) recordFailure(storageID uint32, err error) {
 // 仍落在 DSN 的默认库;proto2mysql main(83fed85 起)的 OpenDB 已改为不 USE、只校验 DSN 的库。
 // 两种实现下「库由 DSN 默认库决定」都成立,所以每个落点库一个连接池,DSN 的库名就是落点库名。
 // 多个库共用一个 *sql.DB 靠 USE 切换,写会随连接复用漂到别的库上。
-// pool 由调用方按库所属家族选好(extraStorePools.storePoolFor)。
+// pool 是每个存档库连接池的参数(NewStoreRegistryFromConfig 从 Placement.Store* 取)。
 func OpenPlacementStore(ctx context.Context, dbName string, pool StorePoolOptions) (*GameDB, error) {
 	if err := validateDatabaseIdentifier(dbName); err != nil {
 		return nil, err
@@ -483,9 +430,9 @@ func preparePlacementStore(ctx context.Context, handle *sql.DB, dbName string, t
 		return nil, err
 	}
 	if err := assertSchemaUpToDate(ctx, handle, model, dbName, tables); err != nil {
-		// 闸内给出的补救命令按 ZoneId 推库名;对落点库照抄它迁的是本 zone 库,必须追加 -storage-id。
+		// 闸内的补救命令只写了占位的 -storage-id,这里把这个库的编号点名出来,照抄就是迁这个库。
 		storageID, _ := placement.StorageIDFromDBName(dbName)
-		return nil, fmt.Errorf("placement store %s failed the read-only schema gate (append `-storage-id %d` to the migrate command below, otherwise it migrates this zone's own database): %w",
+		return nil, fmt.Errorf("placement store %s failed the read-only schema gate (run the migrate command below with `-storage-id %d`): %w",
 			dbName, storageID, err)
 	}
 	if err := model.OpenDB(handle, dbName); err != nil {

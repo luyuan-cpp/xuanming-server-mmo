@@ -493,12 +493,8 @@ func schemaOptions() schemamigrate.Options {
 	}
 }
 
-// missingIndexWarningPrefix 是 schemamigrate 那条"缺索引"告警的前缀,逐字取自
-// go/schemamigrate/plan.go(`缺索引(不会自动建):<表> 上没有 proto 声明的索引 <名>`)。
-// 提成常量是为了让 friend_test.go 能引用同一份字面量,而不是在测试里抄第二份。
-const missingIndexWarningPrefix = "缺索引"
-
-// missingIndexWarnings 挑出"缺索引"告警。
+// missingIndexWarnings 挑出缺普通索引的告警原文。判断按 schemamigrate 报告项的结构化类别
+// (Report.MissingIndexes),不匹配告警文案:文案只给人看,改措辞不能改变拒启行为。
 //
 // schemamigrate 对**已存在的表**只 ADD COLUMN,不会补建 proto 新声明的普通索引 —— 它把这件事
 // 记成 Warning,而 Warning 不进 ExitCode。放过去等于带着缺索引的表对外服务:friend 这边最直接的
@@ -508,10 +504,8 @@ const missingIndexWarningPrefix = "缺索引"
 // 口径与 guild 一致(go/guild/guild.go 的同名函数),别在 friend 这边单独放宽。
 func missingIndexWarnings(r schemamigrate.Report) []string {
 	var missing []string
-	for _, w := range r.Warnings {
-		if strings.HasPrefix(w, missingIndexWarningPrefix) {
-			missing = append(missing, w)
-		}
+	for _, f := range r.MissingIndexes() {
+		missing = append(missing, f.Message)
 	}
 	return missing
 }

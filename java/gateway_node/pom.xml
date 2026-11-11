@@ -93,6 +93,15 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
+        <!-- 链路追踪(2026-11-11,docs/design/distributed-tracing.md §7):Micrometer Observation 接 OpenTelemetry。
+             HTTP 入口开 span,出站 gRPC 写 traceparent(LoginRpcClient 挂 ObservationGrpcClientInterceptor),
+             traceId / spanId 进 MDC,logstash JSON 日志自动带上。版本由 spring-boot-starter-parent 的依赖管理给出。
+             不加导出器:span 只在进程内,不发往任何采集端(导出属于设计 §10.3 阶段三)。 -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+
         <!-- 前置限流不再用 Bucket4j(2026-11-05,服务器缺口清单第 29 条):令牌桶改成一段 Redis Lua
              (ratelimit/RedisRateLimitStore),经 spring-boot-starter-data-redis 带进来的 Lettuce 直接执行,不需要额外依赖。 -->
 

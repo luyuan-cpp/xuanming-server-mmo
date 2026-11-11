@@ -21,11 +21,10 @@ ServerConfig:
     Hosts: "127.0.0.1:3306"
     User: "root"
     Passwd: "Mmorpg#2026db"
-    # ── 库名白名单(启动期硬断言)────────────────────────────────────
-    # DBName 由 ZoneId 现拼(zone_{ZoneId}_db),而 ZoneId 是最容易填错的字段:
-    # 填错一位就会在生产实例上静默建出新库、建全套表、把玩家数据写进去且无人
-    # 看到报错。所以启动时会 SELECT DATABASE() 并要求它落在这份**与 ZoneId
-    # 无关的外部清单**里,不在就拒启。
+    # ── 库名白名单 ───────────────────────────────────────────────────
+    # 能写哪些存档库是部署的决定:本地域的 K 个地域存档库 player_store_<id>_db(docs/design/player-data-tidb-scaling-plan.md §7.2)。
+    # 清单里只许有存档库名,zone 库名会让 go/db 拒启(zone 库已退役,A17c)。按需打开存档库时,
+    # 连上的 DATABASE() 必须就是被选中的那个库,不在清单里又不被 Placement.AllowStoreFamilies 放行就拒绝。
     # 解析优先级:环境变量 DB_ALLOWED_DATABASES > AllowedDatabasesFile > 本字段。
     # 生产部署请在 Deployment 上注入 DB_ALLOWED_DATABASES,不要依赖本文件。
     AllowedDatabases: []
@@ -34,14 +33,11 @@ ServerConfig:
     # 本地 go_services.ps1 会按 -Zone 改写 ZoneId,写死清单反而挡住多 zone 调试。
     # 生产配置一律不要带这一行(缺省即 strict = 拒启)。
     AllowlistEnforcement: warn
-    # ── 启动期 DDL 开关(默认全关)──────────────────────────────────
-    # 历史行为等价于两个都 true:InitDB() 会逐张跑 CreateOrUpdateTable。
-    # 多 zone × 多副本同时启动会对同一张大表并发 ALTER,MDL 阻塞会让整个 zone
-    # 的存盘停摆;proto2mysql 还会在类型不匹配时自动 MODIFY COLUMN,
-    # 无版本记录、无 lock 超时。生产改为部署阶段跑:
-    #     go run ./cmd/migrate -f etc/db.yaml -command up
-    # 本地 go_services.ps1 启动 db 时设 DB_AUTO_MIGRATE_SCHEMA=1(zone 库由 deploy/mysql-init 预建),
-    # 其余场景要临时打开也用环境变量 DB_AUTO_CREATE_DATABASE=1 / DB_AUTO_MIGRATE_SCHEMA=1。
+    # ── 启动期 DDL 开关(必须全关)──────────────────────────────────
+    # 常驻 db 进程拒绝任何启动期 DDL(两个开关任一为 true 或环境变量 DB_AUTO_CREATE_DATABASE / DB_AUTO_MIGRATE_SCHEMA
+    # 打开都拒启):多副本同时启动会对同一张大表并发 ALTER,proto2mysql 还会在类型不匹配时自动 MODIFY COLUMN,
+    # 无版本记录、无 lock 超时。建库建表在部署阶段逐库跑:
+    #     go run ./cmd/migrate -f etc/db.yaml -storage-id 1000000 -command up
     AutoCreateDatabase: false
     AutoMigrateSchema: false
     Migration:
@@ -50,7 +46,7 @@ ServerConfig:
       StatementTimeoutSeconds: 300 # 单条 DDL 硬超时,超时后旁路 KILL QUERY
       AdvisoryLockSeconds: 60      # GET_LOCK 等待:多副本同时部署时后到的排队
     # ── 业务连接池的超时与会话级锁等待 ──
-    # 本 zone 库与按需打开的落点库都用这组值;迁移入口(cmd/migrate)与建库不用(DDL 可能合法地跑几分钟)。
+    # 按需打开的每个存档库都用这组值;迁移入口(cmd/migrate)与建库不用(DDL 可能合法地跑几分钟)。
     # 不写或写 0 取默认值(即下面这几个数);写负数表示不设。K8s 的 ConfigMap 不写这几项,走默认值。
     # 会话级锁等待必须短于读超时:客户端读超时撤不回已经发出的语句,让服务端先以 1205 中止排队中的语句,
     # 超时之后才不会留下事后生效的在途写。本地打开 AutoMigrateSchema 时启动期建表 / 补列也走这个池,大表上可能撞读超时。
@@ -59,12 +55,7 @@ ServerConfig:
     WriteTimeoutSeconds: 30
     SessionLockWaitSeconds: 10       # MySQL lock_wait_timeout(元数据锁);TiDB 是否接受未核实,不接受时写 -1
     SessionInnodbLockWaitSeconds: 10 # MySQL innodb_lock_wait_timeout(行锁)
-    MaxOpenConn: 8  # 本 zone 库 zone_<ZoneId>_db 的池。存档库和区脱钩之后(docs/design/player-data-tidb-scaling-plan.md §7.2,A17b)
-                    # 这个库不再放新号,只剩写者闸门和启动核对,存盘都走下面 Placement.NonZoneStore* 的地域存档库池,所以从 60 收到 8。
-                    # 没清库的旧环境里落点还指着本 zone 库的旧号也走这个池,只会变慢。改这个值必须重算总账:
-                    # tools/scripts/k8s_deploy.ps1 的 Get-MysqlConnectionLedger(部署时打印 "MySQL connection ledger"),
-                    # 契约测试钉住「规划峰值 ≤ deploy/k8s/manifests/infra/mysql.yaml 的 max_connections」。
-    MaxIdleConn: 2
+    # 没有本区库的池了(A17c):go/db 不连固定的库,每个存档库的池参数在下面 Placement.Store*。
     Net: ""
 
 # ── 玩家存储落点(docs/design/player-storage-placement.md §6)────────────────
@@ -78,24 +69,17 @@ DataServiceRpc:
   Timeout: 2000
   NonBlock: true
 Placement:
-  # 允许按需打开 zone_{1..999999}_db / player_store_{>=1000000}_db 两个家族的库(不在上面的
-  # 库名白名单里也行)。按需打开只 Ping + 只读 schema 闸,**从不建库**,白名单防「ZoneId 填错
-  # 静默建新库」的语义不变。设 false 时,本 zone 库之外的每个落点库都必须写进白名单。
+  # 允许按需打开存档库家族 player_store_{>=1000000}_db 的库(不在上面的库名白名单里也行)。
+  # 按需打开只 Ping + 只读 schema 闸,**从不建库**。设 false 时,每个存档库都必须写进白名单。
   AllowStoreFamilies: true
-  # 额外落点库(本 zone 库之外)的连接池,**每个库一个池**,按库所属家族分两个旋钮(本 zone 库仍用上面的 Database.MaxOpenConn):
-  #   ZoneStore*    —— zone 家族库 zone_{1..999999}_db。存档库和区脱钩之后(docs/design/player-data-tidb-scaling-plan.md §7.2)
-  #                    zone 库不放新号,只有没清库的旧环境里、落点还指着别的 zone 库的旧号才会打开它,总账规划档按 0 个算。
-  #   NonZoneStore* —— 地域存档库 player_store_{>=1000000}_db,全部存盘都走它。这里写的是「本地域只有一个库」(K=1)时的预算,
-  #                    等于脱钩前本 zone 库那个池的 60 / 20;K8s 的 ConfigMap 按地域存档库数 K 摊到每个库
-  #                    (tools/scripts/k8s_deploy.ps1 Get-PlayerStorePoolLimit,每库至少 2 条),连接总账读同一条规则。调大前先重做总账规划档。
-  # 旧键 ExtraStoreMaxOpenConn / ExtraStoreMaxIdleConn 仍认:新键没写时两类库都回落到它,新配置不要再写。
-  ZoneStoreMaxOpenConn: 8
-  ZoneStoreMaxIdleConn: 2
-  NonZoneStoreMaxOpenConn: 60
-  NonZoneStoreMaxIdleConn: 20
-  # 额外落点库池里空闲超过这么多秒的连接即关闭(SetConnMaxIdleTime):冷库的池回到 0 条,不按 MaxIdleConn 常驻。
-  # ConnMaxLifetime 仍是 5 分钟,本值大于 300 等于不生效。
-  ExtraStoreConnMaxIdleSeconds: 60
+  # 每个地域存档库一个连接池(docs/design/player-data-tidb-scaling-plan.md §7.2);go/db 没有本区库,全部存盘都走它。
+  # 这里写的是「本地域只有一个库」(K=1)时的预算;K8s 的 ConfigMap 按存档库数 K 摊到每个库
+  # (tools/scripts/k8s_deploy.ps1 Get-PlayerStorePoolLimit,每库至少 2 条),连接总账读同一条规则。调大前先重做总账规划档。
+  StoreMaxOpenConn: 60
+  StoreMaxIdleConn: 20
+  # 存档库池里空闲超过这么多秒的连接即关闭(SetConnMaxIdleTime):没有流量的库的池回到 0 条,不按 MaxIdleConn 常驻。
+  # ConnMaxLifetime 是 5 分钟,本值大于 300 等于不生效。
+  StoreConnMaxIdleSeconds: 60
 
 # Prometheus /metrics endpoint. Dev default; disable for prod by setting
 # empty string. Exposes db_player_store_requests_total{op,result}, db_player_store_seconds{op},

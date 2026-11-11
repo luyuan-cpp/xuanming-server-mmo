@@ -64,11 +64,13 @@ mkdir -p run/logs/go_services run/logs/cpp_nodes run/logs/java
 read -rsp '隔离环境开发共享口令: ' LOGIN_DEV_PASSWORD_SHARED_SECRET
 echo
 export LOGIN_DEV_PASSWORD_SHARED_SECRET
-# 内部身份签名密钥(>=32 字节,gate / login / 在线服务同一把,docs/design/gate-online-identity.md §4)。
-# gate 缺它直接拒启,deploy-staging.sh start 在起任何进程前检查;不要写进文件或 shell 历史。
-read -rsp '内部身份签名密钥: ' MMORPG_INTERNAL_AUTH_SECRET
+# 会话身份密钥对(docs/design/gate-online-identity.md §4、§10.1):gate 用 Ed25519 私钥签名,login 与在线服务只用公钥验签。
+# 生成一次:cd go/shared && go run ./cmd/identitykeygen,输出私钥(64 个十六进制字符)与公钥两行。
+# 私钥缺失、格式不对或与公钥不配对,gate / 验证方直接拒启,deploy-staging.sh start 在起任何进程前检查;私钥不要写进文件或 shell 历史。
+read -rsp 'gate 签名私钥: ' MMORPG_INTERNAL_AUTH_SIGNING_KEY
 echo
-export MMORPG_INTERNAL_AUTH_SECRET
+read -rp '验签公钥列表(逗号分隔): ' MMORPG_INTERNAL_AUTH_PUBLIC_KEYS
+export MMORPG_INTERNAL_AUTH_SIGNING_KEY MMORPG_INTERNAL_AUTH_PUBLIC_KEYS
 
 # 1. infra 已由运维按实际拓扑部署并验证;本地单 broker Compose 不等于三 broker staging。
 docker compose -f deploy/docker-compose.yml ps

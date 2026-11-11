@@ -120,10 +120,16 @@ struct Stats
 	std::array<std::uint64_t, static_cast<std::size_t>(Observation::kCount)> observations{};
 	std::uint64_t releaseStarted{0};
 	std::uint64_t destroyed{0};
-	bool superseded{false}; // 最近一次读到的持有者判定:本节点号已被别的进程接走
+	bool superseded{false};     // 最近一次读到的持有者判定:本节点号已被别的进程接走
+	bool ownHolderKnown{false}; // 本进程读到过自己的持有者记录(HolderTracker::ownRevision != 0);没读到时认不出被接走
 };
 const Stats &ReadStats();
 void ResetStatsForTest();
+
+// 一次持有者读数:交给 holder 判定本节点号是不是已被别的进程接走,并更新进程级状态 ——「读到过本进程自己的记录」,
+// 与「被接走」(读不到持有者记录时不改上一次的判定);「被接走」变化时打日志。返回判定,交给 ApplyReadings。
+SlotHolder ObserveHolder(HolderTracker &holder, const OwnerReading &reading, std::string_view selfNodeId,
+						 std::string_view selfUuid, bool identityConfirmed);
 } // namespace scene_ownership
 
 // 把核对计数挂到 Prometheus 出口(engine/core/metrics;设了 MMORPG_METRICS_PORT 才有出口)。全部只有低基数标签,
@@ -135,6 +141,7 @@ void ResetStatsForTest();
 //   scene_ownership_releasing_scenes              gauge,  此刻已开始排空、还在等住户离开的本地实体数
 //   scene_ownership_release_deferred_scenes       gauge,  此刻已判定不归本进程、等住户预算的本地实体数
 //   scene_ownership_superseded                    gauge,  1 = 最近一次读到本节点号已被别的进程接走
+//   scene_ownership_own_holder_known              gauge,  1 = 本进程读到过自己的持有者记录;托管着场景却一直是 0 时认不出被接走
 // scene 启动时调用一次;重复调用只打一行 ERROR(注册表按名字拒绝)。告警在 deploy/k8s/scene-ownership-alerts.yaml。
 void RegisterSceneOwnershipMetrics();
 

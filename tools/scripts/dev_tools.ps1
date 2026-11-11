@@ -1386,7 +1386,9 @@ Other common commands:
         tools/scripts/k8s_route_tool.ps1; exits with the container's code (0 done / 2 failed).
 
 Zone merge (合服) commands, online, no downtime — full SOP: docs/ops/merge-zone-runbook.md
-    A merge writes one row to zone_merged_into and moves no data. Every merge-zone* command
+    A merge writes one row to zone_merged_into and moves no data; every real merge or unmerge also
+    appends one row to the append-only zone_merge_history in the same transaction (listed by
+    merge-zone-audit). Every merge-zone* command
     REQUIRES -MergeZoneRouteDbDsn <directory shard 0 DSN> (pass it from an env var; no default) and
     exits with merge_zone's own code: 0 done (including idempotent), 1 refused and nothing
     written, 2 not done or outcome unknown (re-running is safe). If merge_zone fails to build,

@@ -46,7 +46,7 @@
   - 处理函数先核对 `message_id` 等于 `NotifyWorldChat`,不等就丢弃并记 ERROR(纵深防御:topic 写权限之外再挡一道),再交给 `GateEventHandler::BroadcastToAllEventHandler`。
   - 维护受控启动不注册,同观战 L2。
 - **每台 gate 的转发预算**:推送开销是「世界消息数 × 本机在线人数」,刷屏或脚本把全服聊天量推高时,不设上限每台 gate 的下行按平方增长。gate 用令牌桶按每秒 10 条、突发 20 条转发,超出的那几条对本机全部会话一起不推,采样打 WARN。每台 gate 的推送开销因此只与本机在线人数成正比,与全服聊天量无关。不推的消息仍在历史里。这组数是人读得完的量级,不是压测结论,压测后按下行带宽再定。
-- **分区**:4 分区,不可变契约,改数走换代号。C++ `node_command_topic.h` 的 `kChatWorldBroadcastTopicBase` / `kChatWorldBroadcastTopicPartitions` 与 Go `shared/kafkacmd` 的 `ChatWorldBroadcastTopicBase` / `ChatWorldBroadcastTopicPartitions` 逐字相同(`chat_world_topic_test.go` 读 C++ 头文件对拍)。代号与命令 topic 同源:C++ 读 `base_deploy_config.yaml`,Go 读环境变量 `KAFKA_COMMAND_TOPIC_GENERATION`,本机、docker 调试与 K8s 都注入了。
+- **分区**:4 分区,不可变契约,改数走换代号。C++ `node_command_topic.h` 的 `kChatWorldBroadcastTopicBase` / `kChatWorldBroadcastTopicPartitions` 与 Go `shared/kafkacmd` 的 `ChatWorldBroadcastTopicBase` / `ChatWorldBroadcastTopicPartitions` 逐字相同(`chat_world_topic_test.go` 读 C++ 头文件对拍)。代号与命令 topic 同源:C++ 读 `base_deploy_config.yaml`,Go 读环境变量 `KAFKA_COMMAND_TOPIC_GENERATION`,本机、docker 调试与 K8s 都注入了。本机启动器复用已在跑的 chat 进程之前,同样核对它启动时的代号(`start_game.ps1` 的 `Test-UsesKafkaCommandContract`,2026-11-11 补上):Go 侧在进程内只读一次这个变量,换代后不核对就复用旧进程,推送会写进旧代号的主题,gate 收不到。
 - **部署**:四处预建,4 分区、保留 10 分钟(gate 从分区末尾读,不回放;漏掉的由客户端拉历史补):
   - K8s `kafka-topic-init.yaml`,占位由 `Apply-KafkaTopicInitJob` 填;
   - docker compose 的 `kafka-topic-init`;

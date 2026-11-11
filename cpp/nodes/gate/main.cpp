@@ -424,10 +424,13 @@ namespace
 
 int main(int argc, char *argv[])
 {
-	const auto* internalAuthSecret = std::getenv(caller_auth::kSecretEnv);
-	if (internalAuthSecret == nullptr || std::string_view(internalAuthSecret).size() < 32)
+	// 会话身份签名私钥在起任何线程之前装好(docs/design/gate-online-identity.md §10.1);
+	// 种子缺失、格式不对或与验证方公钥列表不配对都拒绝启动。
+	if (const auto signerError = caller_auth::InitProcessSigner(std::getenv(caller_auth::kSigningKeyEnv),
+			std::getenv(caller_auth::kPublicKeysEnv));
+		!signerError.empty())
 	{
-		LOG_ERROR << "Internal session signing secret is missing or shorter than 32 bytes, refusing to start";
+		LOG_ERROR << "Internal session signing key rejected, refusing to start: " << signerError;
 		return EXIT_FAILURE;
 	}
     // 启动首行。事故复盘第一个问题永远是"线上跑的到底是哪一版",这一行直写

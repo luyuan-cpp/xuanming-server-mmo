@@ -79,9 +79,12 @@ try {
         Assert-Match -Text $route.runtime -Pattern ([regex]::Escape('GRANT SELECT ON `authority_fixture`.`player_route`')) -Because 'go/db认领前按player_route选库，只读授权由计划tables给出'
         Assert-True -Condition (($route.runtime+$route.operator) -notmatch 'route_reconcile') -Because '对账表已删除，任何账号都不再授权'
         Assert-Match -Text $route.operator -Pattern ([regex]::Escape('GRANT SELECT,INSERT,DELETE ON `authority_fixture`.`zone_merged_into`')) -Because '合服工具的操作员身份要能写映射表'
+        Assert-Match -Text $route.operator -Pattern ([regex]::Escape('GRANT SELECT,INSERT ON `authority_fixture`.`zone_merge_history`')) -Because '合服工具在写映射的同一事务里追加合服历史'
+        Assert-True -Condition ($route.operator -cnotmatch 'GRANT [A-Z,]*(UPDATE|DELETE)[A-Z,]* ON [^ ;]*zone_merge_history') -Because '合服历史只增不改，操作员不能改写或删除已有的历史'
         $plan.directorySchema='other_directory'
         $notDirectory=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')
         Assert-True -Condition ($notDirectory.operator -notmatch 'zone_merged_into') -Because '只有目录库有合服映射表，别的逻辑库不授权'
+        Assert-True -Condition ($notDirectory.operator -notmatch 'zone_merge_history') -Because '合服历史与映射同在目录第 0 片，别的逻辑库不授权'
         $plan.directorySchema='authority_fixture'
         Assert-True -Condition ($route.runtime -notmatch 'zone_merged_into') -Because '运行账号只有计划tables列出时才有映射表的读权限，操作员的写权限不进runtime'
         $plan.tables=@(@{schema='authority_fixture';table='zone_merged_into';operations=@('SELECT')})

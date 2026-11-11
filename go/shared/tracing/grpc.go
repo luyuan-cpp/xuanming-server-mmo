@@ -5,11 +5,12 @@
 //   - 裸 grpc.NewClient 的出站拦截(Go 调 C++ 节点等,UnaryClientInterceptor);
 //   - 给 handler 日志加 player_id 的服务端拦截器(PlayerFieldInterceptor)。
 //
-// Kafka 的载体在该设计 §10.1 第 5 批加。
+// Kafka 消息头的载体按客户端库分在子包 kafkagotrace、saramatrace(第 5 批),理由见各子包的包注释。
 package tracing
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	ztrace "github.com/zeromicro/go-zero/core/trace"
@@ -71,11 +72,15 @@ type playerIDGetter interface {
 // PlayerFieldInterceptor 让 handler 里经 logx.WithContext(ctx) 打的日志带上 player_id(设计 §3.2、§6.2):
 // 请求实现了 GetPlayerId() uint64 且值非零时,用 logx.ContextWithFields 加字段。
 // 只进日志,不做 Prometheus label(AGENTS §9)。player_id 不在请求顶层的方法不受影响。
+//
+// 值写成十进制字符串("player_id":"123"),不写 JSON 数字:发号器的 id 可到 63 位,超过 2^53 的数字会被
+// 按 float64 解析的下游(Alloy 的 stage.json、jq、浏览器)悄悄改掉末几位;与 AGENTS §7 第 1 条「id 只当字符串」同口径。
+// Alloy 只从这种字符串形态取 player_id 进结构化元数据(设计 §9.1)。
 func PlayerFieldInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if getter, ok := req.(playerIDGetter); ok {
 			if playerID := getter.GetPlayerId(); playerID != 0 {
-				ctx = logx.ContextWithFields(ctx, logx.Field("player_id", playerID))
+				ctx = logx.ContextWithFields(ctx, logx.Field("player_id", strconv.FormatUint(playerID, 10)))
 			}
 		}
 		return handler(ctx, req)

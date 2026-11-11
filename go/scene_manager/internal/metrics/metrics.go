@@ -790,6 +790,7 @@ func register() {
 			etcdRevisionRegressionsTotal,           // node_holder.go
 			gateRedirectExcludedTotal, gateRedirectFallbackTotal,
 			foreignZoneRegistryReadsTotal, foreignZoneSkipsTotal,
+			evacuationResolveTotal, // planned_drain.go
 		)
 		for _, outcome := range loadRefreshOutcomes {
 			loadRefreshTotal.WithLabelValues(outcome).Add(0)

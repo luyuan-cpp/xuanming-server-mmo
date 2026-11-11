@@ -177,6 +177,13 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
   为什么不在解散那一刻就检查:那时队长的交接刚开始,location 还指着本节点的旧场景,检查只会跟回原地。最多等 90 秒
   (`kTeamFollowAwaitLeaderFrames`,盖住交接冻结上限 70 秒与退出存盘),等满就放弃,之后靠别的信号(队长回来的扇出、客户端重新声明、战斗结束)。
   没有在等的随从时这一步是一次空 view 遍历。
+- **托管中的兜底重试**(2026-11-11 补):上面都是"当场触发",漏掉一个信号(那一刻不在队形里、交接被拒、目标节点镜像还没同步……)
+  在线队员靠自己的客户端兜底 —— 没被驱动就每 5 秒重新声明一次跟随(客户端 `TeamRegroupPolicy`,队长不在线时不重试)。
+  离线托管的没有客户端,由服务器做同一件事:1 秒保留扫描(`ExpireConnectionLostHolds`)里,托管中的角色每 15 秒
+  (`connection_lost_hold::kHostedFollowRecheckPeriod`,按玩家号错开到不同的秒,`IsHostedFollowRecheckDue`)调一次
+  `PlayerTeamSystem::OnOfflineHostingHeartbeat`:在队伍里、有跟随意图、没接在队长身后的,走一遍刷新与跟随检查;已接上的不发任何读。
+  周期比客户端长,是因为正常路径都当场触发,这里只补漏;每次的代价是一次组队读加至多两次 Redis GET,只落在没接上的托管队员身上,
+  按节点分摊,不引入全局状态。
 
 **一次完整的离线托管跨节点跟随**(队长 L 与离线托管的队员 M 在节点 A,L 穿过传送点去了节点 B 的场景 S2):
 
@@ -233,7 +240,9 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
    `TeleportS2C` 不受此限,任何时候都照常吸附;驱动期间那次 `MoveAck` 迟到裁决不再把人拽回去。
 4. 远端队员(别的队伍、别的队员)不需要任何新逻辑:它们的移动本来就由服务器广播。
 
-客户端实现(2026-11-10,`mmorpg-client` 工作区,**未编译、未测试、未提交**;编译、补测试与冒烟交 Codex):
+客户端实现(`mmorpg-client` main,代码随客户端提交 `f8076ce9` 入库,11-11 补的用例与兼容说明在工作区未提交;
+**都未编译、未在 Unity 里运行**,协议生成、编译与冒烟交 Codex;客户端兼容说明见该仓 `Docs/ClientProtocolCompatibility.md`
+「组队跟随改为服务器驱动」一节):
 
 - `Assets/Scripts/Game/GameClient.TeamFollow.cs`(新增 partial):`TeamFollowDriven`、`SceneEntryEpoch`、`SendTeamFollow`,
   用生成的 `SceneMovementClientPlayerRpc.OnNotifyTeamFollowState` 注册推送;`GameClient.cs` 只加四处挂钩:
@@ -245,8 +254,8 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
   `TeamRegroupPolicy.cs`(重试节奏);`UI/Ugui/Team/TeamFollowUiRoot.cs` 不再走 `TeamClient.RequestRegroup`;
   删除客户端轨迹跟随 `TeamFollowTrail.cs`、`TeamFollowPlanner.cs` 及其测试。
 - 用例:`Assets/Tests/EditMode/Tianyong/TeamFollowDeclarationTests.cs`(新增)、`TeamRegroupPolicyTests.cs`(随接口改)。
-  还缺两组,交 Codex 补:`ActorWorld` 被驱动时按自己的移动插值、停止驱动落到最后位置之后不再挪人;
-  `GameClient` 收到 `TeamFollowStateS2C` 切换驱动、入场通知复位驱动并让入场计数加一。
+  11-11 在 `ActorWorldFoundationTests.cs` 补了服务器驱动五条:被驱动时按自己的移动外推、停止驱动落到最后位置之后不再挪人、
+  `Clear` 复位、控制器被驱动时关掉 CharacterController 且只出提示、`GameClient` 收到 382 切换驱动并在入场通知时复位、入场计数加一。
 
 旧客户端不发 `TeamFollowC2S`,服务器对它保持原来的规则(归队瞬移到队长脚下,走路跟随由客户端自己做)。
 新客户端连旧服务器:`TeamFollowC2S` 没有处理方,`driven=true` 永远不来,客户端应停在"不被驱动"的状态。
@@ -301,11 +310,15 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
     改由上面第一条新用例覆盖;别的 zone 那一项保留。
   - 托管落点本身(scene_manager 与目标节点)的用例见 player-connection-lost-hold.md §10 第 6 条。
   - 联机验收:队员开挂机卡后杀掉客户端,队长穿过传送点换图(同节点、跨节点各一次),队员跟过去并继续沿路跟;步骤见 `docs/PROGRESS.md` 同日条目。
+  - 2026-11-11 托管中的兜底重试:`cross_zone_test.cpp` 的 `ConnectionLostHoldAfkPass.HostedFollowRecheckIsSpreadOverThePeriod`(纯判定:
+    每名玩家每个周期恰好一秒到期、同一秒的到期按玩家号错开)、`player_team_follow_test.cpp` 的
+    `TeamFollowDriveTest.OnlyADetachedMemberWhoWantsToFollowNeedsARecheck`(判据 `NeedsFollowRecheck`:已接在队长身后、不在队伍里、
+    暂离的都不重试);真发出去的组队读要组队权威,单测宿主没有,留给联机验收。
 
 ## 9. 没做 / 已知边界
 
-- **客户端**:§5 已写(2026-11-10),未编译、未测试、未提交;编译、补两组用例与冒烟交 Codex。在新客户端发 `TeamFollowC2S` 之前,
-  本改动对线上行为没有影响。
+- **客户端**:§5 已写完(代码已入客户端 main,11-11 的用例与说明未提交),未编译、未在 Unity 里运行;编译、EditMode 与冒烟交 Codex。
+  在新客户端发 `TeamFollowC2S` 之前,本改动对线上行为没有影响。
 - **Java 版(AGENTS §12)**:待做,已登记 `PARITY.md`。需要对齐的客户端可见行为:`TeamFollowC2S` / `TeamFollowStateS2C`、
   服务器驱动队员沿队长轨迹走位并广播(含发给本人)、被驱动期间丢弃移动上报、队长换人时给全员发刷新、
   入场之后对仍在队形里的队员补推 `driven=true`。2026-11-10 补一行待做:队员跨节点跟随、离线托管的队员跨场景跟随(§3.7),本轮不写 Java 代码。
@@ -314,7 +327,7 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
 - 托管落点提交之后目标节点没把人建起来(事件丢了、登记被拒、载入失败):不丢数据,但他不在世界里,直到重新登录或月卡到期后租约清理
   (player-connection-lost-hold.md §8 第 9 条)。
 - 原随从的唤醒只覆盖"因队长离开本节点而解散"的那一批;那一刻不在队形里的离线托管队员(例如正在战斗)靠战斗结束时的跟随检查,
-  队长换线时他若不在队形里、也没有别的信号,就留在原地,直到队长回来或客户端重新上线。
+  其余漏掉的由托管中的兜底重试(§3.7,每 15 秒)补上,最多晚一个周期(扫描偶尔跳过一秒时晚两个周期)。
 - 掉头时队员互相穿过;绕比间距大的圈时队员跟着绕(§3.3)。
 - `ViewSystem::LookAtPosition` 写 NPC 朝向用的是弧度、x 当俯仰,与客户端口径(`Rotation.z` = 偏航角,度)不一致(§4),不在本次范围。
 - 可以进一步省的:同一支队伍同一 tick 的移动合成一条 `ActorMoveListS2C`;等压测证明广播是瓶颈再做。

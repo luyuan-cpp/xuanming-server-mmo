@@ -426,6 +426,9 @@
     <ClInclude Include="node\system\node\client_endpoint.h" />
     <ClInclude Include="node\system\node\open_file_limit.h" />
     <ClInclude Include="node\system\node\release_track.h" />
+    <ClInclude Include="node\system\node\node_planned_drain.h" />
+    <ClInclude Include="node\system\node\node_admission_advertise.h" />
+    <ClInclude Include="node\system\node\node_admission_publisher.h" />
     <ClInclude Include="node\system\node\node_entry.h" />
     <ClInclude Include="node\system\node\node_command_consume_stats.h" />
     <ClInclude Include="node\system\node\node_command_route.h" />

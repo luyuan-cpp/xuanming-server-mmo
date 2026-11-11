@@ -55,7 +55,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 | `AoiListComp` | `InterestSystem::AddAoiEntity`(空间来源被接纳)或 `InterestSystem::Follow`(显式关注登记),完成实体 / 容量 / 同场景校验后首次建立关系时 | 移除观察关系;无表表示无观察对象 |
 | `AoiWatchersComp` | `InterestSystem` 第一次登记以该实体为目标的关系时;与观察者的 `AoiListComp` 条目一一对应 | 关系删除时同步摘除;无表表示没有观察者 |
 | `SceneGridListComp` | `AoiSystem::UpdateGridMembership`,首次写入场景格子时 | 场景销毁时随实体销毁;空场景可无表 |
-| `AoiEvaluatedAtComp` | `AoiSystem::ReevaluateVisibility`,实体第一次做空间关注评估(首次入格)时;之后只覆盖位置 | 不摘:实体销毁自然清理;换场景、同场景瞬移后按首次入格重新评估并覆盖。`Update` 的重判判断只用 `try_get` 读,缺失 = 还没评估过、立即评估 |
+| `AoiEvaluatedAtComp` | `AoiSystem::ReevaluateVisibility`,实体第一次做空间关注评估(首次入格)时;之后只覆盖评估用的位置与视野半径 | 不摘:实体销毁自然清理;换场景、同场景瞬移后按首次入格重新评估并覆盖。`Update` 的重判判断只用 `try_get` 读,缺失 = 还没评估过、立即评估 |
 | `AoiNearbyRefillComp`(空标记) | `interest.cpp` 的 `MarkNearbyRefill`:附近候选因名额被拒收、被挤掉,或容量收缩时被裁掉,且只剩空间来源时(2026-11-10;裁表 2026-11-11) | `AoiSystem::ReevaluateVisibility` 开始时摘掉,重扫中再被拒会重新打上;`Update` 只用 `any_of` 判,缺失 = 名额空出后不用重扫 |
 | `CombatEngagementComp` | `combat_engagement.cpp` 的 `EngageOneSide`,经 `RecordDamage` / `RecordHeal`(含一起打怪、治疗仇恨推出的交手),双方都存活且同场景时(2026-11-10,[AOI 单向关注](aoi-directed-interest.md)「战斗关注」) | 最后一份交手记录结束(脱战、死亡、对方离场)时摘除;实体销毁自然清理。缺失 = 没有在交手 |
 | `CombatAllyRosterComp`(只挂 NPC) | `combat_engagement.cpp` 的 `ShareFight`,第一个非 NPC 实体和这个 NPC 敌对交手时(2026-11-11,同文「仇恨名单」) | 最后一个成员的交手记录结束时摘除;NPC 销毁时随实体清理。缺失 = 没人在打它 |

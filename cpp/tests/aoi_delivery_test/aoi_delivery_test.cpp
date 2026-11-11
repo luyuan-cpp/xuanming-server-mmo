@@ -832,6 +832,75 @@ TEST_F(AoiDeliveryTest, ReevaluationDoesNotRevealStealthedTarget) {
     EXPECT_EQ(1, CreatesFor(hidden, observer)) << "隐身者自己照常看见别人";
 }
 
+// 双方都不动:B 隐身时附近的普通观察者收到一次移除,B 照样看得见别人;隐身标签还在(叠了多个隐身效果、
+// 只结束了一个)时刷新不显形;最后一个隐身效果结束,不用谁走动就按附近候选重建,发创建与当前位置。
+TEST_F(AoiDeliveryTest, StealthThenRevealWithoutAnyMovementRebuildsNearbyObservers) {
+    const auto observer = Spawn(0, 0);
+    const auto hider = Spawn(0, 5);
+    AoiSystem::Update(0);
+    deliveries.clear();
+
+    tlsEcs.actorRegistry.emplace<StealthedTagComp>(hider);
+    AoiSystem::RefreshTargetVisibility(hider);
+    EXPECT_EQ(1, DestroysFor(observer, hider));
+    EXPECT_EQ(0, DestroysFor(hider, observer)) << "隐身只影响别人看它";
+    MoveTo(hider, 0, 4);
+    AoiSystem::Update(0);
+    EXPECT_EQ(0, CreatesFor(observer, hider)) << "隐身期间位移重判也不会把它加回来";
+    MoveTo(hider, 0, 5);
+    AoiSystem::Update(0);
+
+    deliveries.clear();
+    AoiSystem::RefreshTargetVisibility(hider);
+    EXPECT_TRUE(deliveries.empty()) << "标签还在就不显形";
+
+    tlsEcs.actorRegistry.remove<StealthedTagComp>(hider);
+    AoiSystem::RefreshTargetVisibility(hider);
+    EXPECT_EQ(1, CreatesFor(observer, hider)) << "最后一个隐身效果结束,立即重建附近的观察者";
+    EXPECT_EQ((EntityUnorderedSet{observer}), VisibleWatchersOf(hider));
+}
+
+// 视野半径变了也要重判,不用等谁走动(以后的鹰眼、致盲之类会改 ViewRadius);只影响它自己看别人。
+TEST_F(AoiDeliveryTest, ViewRadiusChangeTriggersReevaluationWithoutMovement) {
+    const auto observer = Spawn(0, 0);
+    const auto target = Spawn(0, 14);
+    AoiSystem::Update(0);
+    ASSERT_EQ(0, CreatesFor(observer, target)) << "前置条件:14 m 超出默认视野";
+
+    tlsEcs.actorRegistry.emplace<ViewRadius>(observer).set_radius(15);
+    AoiSystem::Update(0);
+    EXPECT_EQ(1, CreatesFor(observer, target)) << "视野放大到 15 m,下一帧就看见";
+    EXPECT_EQ(0, CreatesFor(target, observer)) << "对方的视野没变,关注是单向的";
+
+    tlsEcs.actorRegistry.get<ViewRadius>(observer).set_radius(5);
+    AoiSystem::Update(0);
+    EXPECT_EQ(1, DestroysFor(observer, target)) << "视野缩到 5 m,14 m 超出离开半径 10 m";
+}
+
+// 同一帧里两个人先后走近同一个观察者:变化帧末合成一批,观察者只收一条列表消息,里面两个人都在。
+TEST_F(AoiDeliveryTest, SameFrameChangesForOneWatcherArriveAsOneListMessage) {
+    const auto observer = Spawn(0, 0);
+    const auto north = Spawn(0, 14);
+    const auto south = Spawn(0, -14);
+    AoiSystem::Update(0);
+    deliveries.clear();
+
+    MoveTo(north, 0, 9);
+    MoveTo(south, 0, -9);
+    AoiSystem::Update(0);
+
+    int observerCreateMessages = 0;
+    for (const auto& sent : deliveries) {
+        if (sent.receiver == observer && sent.messageId == SceneSceneClientPlayerNotifyActorListCreateMessageId) {
+            ++observerCreateMessages;
+        }
+    }
+    EXPECT_EQ(1, observerCreateMessages) << "同一帧的变化合成一条";
+    EXPECT_EQ(1, CreatesFor(observer, north));
+    EXPECT_EQ(1, CreatesFor(observer, south));
+    EXPECT_EQ(0, CreatesFor(north, south)) << "两人相距 18 m,彼此不在视野里";
+}
+
 // ---------------------------------------------------------------------------
 // 战斗关注(交手关系,CombatEngagementSystem):一次伤害或一跳治疗让双方互相显式关注,
 // 离得再远也看得见;kCombatDisengageSeconds 秒不再交手就脱战撤销,死亡立即撤销。

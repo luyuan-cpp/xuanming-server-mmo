@@ -98,15 +98,16 @@ struct AoiWatchersComp
     std::unordered_map<entt::entity, bool> watchers;
 };
 
-// 实体上次视野评估时的位置(米)。按需状态,只由 AoiSystem 写:每次评估空间关注后记下,
-// 每帧拿当前位置和它比,决定要不要重新评估(规则见 spatial/constants/view.h 的 kAoiReevaluateDistance)。
-// 第一次入格评估时创建;实体销毁自然清理。换场景、同场景瞬移后实体按首次入格重新评估并覆盖它,
-// 所以不随 Hex 一起摘。
+// 实体上次视野评估时的位置(米)与视野半径。按需状态,只由 AoiSystem 写:每次评估空间关注后记下,
+// 每帧拿当前值和它比,决定要不要重新评估:视野半径变了立即评估,位置按 kAoiReevaluateDistance 的规则
+// (spatial/constants/view.h)。第一次入格评估时创建;实体销毁自然清理。换场景、同场景瞬移后实体按首次入格
+// 重新评估并覆盖它,所以不随 Hex 一起摘。
 struct AoiEvaluatedAtComp
 {
     double x = 0;
     double y = 0;
     double z = 0;
+    double viewRadius = 0;
 };
 
 // 空标记(按需状态):有附近候选因为名额被拒收,或者被权重更高的关注挤掉。

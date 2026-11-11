@@ -52,30 +52,36 @@ func TestDecideSave(t *testing.T) {
 	}
 }
 
-// 逐格覆盖规格 §4 的 LoadAndClaim 判定表。
+// 逐格覆盖规格 §4 的 LoadAndClaim 判定表。binaryGen 是 scene 二进制的世代,go/db 认识的世代固定为 testKnownGen。
 func TestDecideClaim(t *testing.T) {
 	row := func(e uint64, gen uint32, holder []byte) *ownerRow {
 		return &ownerRow{ownerEpoch: e, schemaGen: gen, holder: holder}
 	}
 	cases := []struct {
-		name     string
-		row      *ownerRow
-		e        uint64
-		instance []byte
-		want     storepb.LoadAndClaimResult
+		name      string
+		row       *ownerRow
+		e         uint64
+		instance  []byte
+		binaryGen uint32
+		want      storepb.LoadAndClaimResult
 	}{
-		{"写权行不存在", nil, 10, instanceA, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_NO_OWNER},
-		{"路由过期", row(10, 1, instanceA), 9, instanceA, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_STALE_OWNER},
-		{"同代次已被别的实例持有", row(10, 1, instanceB), 10, instanceA, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_NOT_HOLDER},
-		{"同实例重进:幂等", row(10, 1, instanceA), 10, instanceA, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
-		{"新号初行", row(1, 1, []byte{}), 1, instanceA, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
-		{"换持有者:抬代次", row(10, 1, instanceB), 11, instanceA, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
-		{"世代比本进程新", row(10, testKnownGen+1, instanceB), 11, instanceA, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},
-		{"世代等于本进程", row(10, testKnownGen, instanceB), 11, instanceA, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
+		{"写权行不存在", nil, 10, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_NO_OWNER},
+		{"路由过期", row(10, 1, instanceA), 9, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_STALE_OWNER},
+		{"同代次已被别的实例持有", row(10, 1, instanceB), 10, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_NOT_HOLDER},
+		{"同实例重进:幂等", row(10, 1, instanceA), 10, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
+		{"新号初行", row(1, 1, []byte{}), 1, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
+		{"换持有者:抬代次", row(10, 1, instanceB), 11, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
+		{"库里世代比 scene 新", row(10, testKnownGen+1, instanceB), 11, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},
+		{"库里世代等于 scene", row(10, testKnownGen, instanceB), 11, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
+		// 数据覆写审计 r2-ps#11:新 scene 先于 go/db 上线时不能拿到旧 go/db 的写权,否则旧持有者被围住、新 scene 却存不进。
+		{"scene 比 go/db 新:不抬代次", row(10, 1, instanceB), 11, instanceA, testKnownGen + 1, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},
+		{"scene 比 go/db 新:同实例重进也不放行", row(10, 1, instanceA), 10, instanceA, testKnownGen + 1, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},
+		{"scene 比 go/db 新:新号初行", row(1, 1, []byte{}), 1, instanceA, testKnownGen + 1, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},
+		{"scene 比 go/db 旧:照常认领", row(10, 1, instanceB), 11, instanceA, testKnownGen - 1, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := decideClaim(tc.row, tc.e, tc.instance, testKnownGen)
+			got := decideClaim(tc.row, tc.e, tc.instance, tc.binaryGen, testKnownGen)
 			if got != tc.want {
 				t.Fatalf("decideClaim = %v, want %v", got, tc.want)
 			}

@@ -100,7 +100,8 @@ func TestReconcileDeadNode_ReassignedAfterOwnerRead_LeavesNewOwnerIntact(t *test
 	c := newReconcileDeadOwnerCase(t, 89501)
 	ctx := context.Background()
 	seedNodeMembers(c.mr, reconcileCASZone, reconcileNodeLive, mustAtoi(reconcileLiveNodePlayers))
-	// 改派成功的写者已把名额转到 live 的 GameServer(TransferAgonesRoomForScene),映射指向新名额。
+	// 改派成功的写者已把名额转到 live 的 GameServer(改派前在 live 上占名额,CAS 之后 commitReservedAgonesRoom 提交),
+	// 映射指向新名额。
 	require.NoError(t, c.mr.Set(sceneAgonesGsKey(c.sceneID), "gs-live"))
 
 	// 收尾的那次 GET:属主仍是 dead,收尾据此决定销毁。

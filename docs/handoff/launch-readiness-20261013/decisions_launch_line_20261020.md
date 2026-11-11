@@ -16,6 +16,22 @@
 > - R9 回档工具超出授权文件数的确认;
 > - 混版本持久字段保护设计 §13 第 1~5 条。
 
+## 0′. 2026-11-11 现状(先读这节)
+
+本清单是 10-20 的快照。之后负责人陆续定了几条大方向,下列条目已被决定、已落码,或者对象已不存在;**其余未列的条目,以各自所属线的设计稿和 [server-gap-audit-20261101.md](../server-gap-audit-20261101.md) 为准,本清单不再维护**:
+
+| 条目 | 现状 | 依据 |
+|---|---|---|
+| G-1、G-2、G-3、G-6、G-9、G-13、G-17、G-21、OPS-1 | 对象已不存在。玩家存档 10-24 定为只存 TiDB,10-31 落码,核心 Redis 上已没有存盘脚本、父快照、补投意图与 `dirty_keys_set` 写入;`go/db/internal/saveoutbox` 已删,K8s 回档脚本 10-31 退役 | 总体方案 `docs/design/player-data-tidb-scaling-plan.md` |
+| G-4、G-7、G-10、G-15、G-18 | 方向已定:11-10 负责人要求全部 Redis 上 Cluster,不再按 zone 组分单主。规格与分批见设计稿,7 批都还未开工 | `docs/design/redis-cluster-all-domains-20261110.md` |
+| T-9 | 已定:永久 ID 由发号器发打散过的计数器值 | AGENTS.md §7 第 1 条;`docs/design/player-data-tidb-scaling-plan.md` §6 |
+| T-12 | 已定:逻辑库自治,一个逻辑库只归一个服务,扩容靠搬逻辑库 | AGENTS.md §7 第 6 条;`docs/design/horizontal-scale-logical-db.md` |
+| U-1 | 已落码:refresh token 改成按家族轮换,轮换过的令牌被重放时吊销整个家族;每账号最多 32 个家族,超出时淘汰最久没轮换的那个 | `go/login/internal/logic/pkg/token/{token,family}.go` |
+| U-2 | 已对齐到 45000(实测爬坡终点,待 L-14 压测确认):`k8s_deploy.ps1` 的 `LoginQueueZoneCapacity` 与 `java/gateway_node` 的 `schema.sql` 缺省值 | 同左 |
+| B1-1 | 已落码:etcd 存活集为空时一直压住;骤降超过一半时压住 30 分钟或等缺席数恢复;阈值规则在 `shared/liveview` | `go/player_locator/internal/logic/gate_sweep.go` |
+| X-3 | 已落码:stress_snap 抓 data_service(:9260)与 Redis INFO,stress_summarize 出 data_service 归属读、存盘接口、Redis 负载各表 | AGENTS.md §6.1(2026-10-23 起) |
+| X-2 | 已做:`deploy/k8s/AGENTS.md` 已加「C++ 启动壳不加 `ulimit`」(负责人 10-22 确认) | 开服线交接 §3 第 5 项 B0-4 注 |
+
 ## 0. 建议先定的几项
 
 下面几项要么卡住后续开工,要么错过时限就不可逆:
