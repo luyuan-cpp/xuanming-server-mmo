@@ -1,0 +1,5 @@
+# 一次性小夹具限制缓存，避免宿主机资源探测放大。
+[storage.block-cache]
+capacity = "256MB"
+[raftstore]
+raft-entry-max-size = "32MB"

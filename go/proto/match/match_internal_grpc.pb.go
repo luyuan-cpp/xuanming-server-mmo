@@ -29,6 +29,8 @@ const (
 	MatchInternal_GetBattleTerminalDecision_FullMethodName = "/match.MatchInternal/GetBattleTerminalDecision"
 	MatchInternal_ListStrandedFormations_FullMethodName    = "/match.MatchInternal/ListStrandedFormations"
 	MatchInternal_ResolveStrandedFormation_FullMethodName  = "/match.MatchInternal/ResolveStrandedFormation"
+	MatchInternal_ListPendingBattleScripts_FullMethodName  = "/match.MatchInternal/ListPendingBattleScripts"
+	MatchInternal_ReviewBattleScript_FullMethodName        = "/match.MatchInternal/ReviewBattleScript"
 )
 
 // MatchInternalClient is the client API for MatchInternal service.
@@ -46,6 +48,10 @@ type MatchInternalClient interface {
 	// 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方只有运维工具 formationfix,见上文消息定义处)。
 	ListStrandedFormations(ctx context.Context, in *ListStrandedFormationsRequest, opts ...grpc.CallOption) (*ListStrandedFormationsResponse, error)
 	ResolveStrandedFormation(ctx context.Context, in *ResolveStrandedFormationRequest, opts ...grpc.CallOption) (*ResolveStrandedFormationResponse, error)
+	// 运营审核玩家上传的战斗剧本(docs/design/battle-script.md §6.3;调用方只有运营工具 battlescriptreview,
+	// serviceauth 调用方 ops,与 SetSpectateFeatured 共用运营密钥)。
+	ListPendingBattleScripts(ctx context.Context, in *ListPendingBattleScriptsRequest, opts ...grpc.CallOption) (*ListPendingBattleScriptsResponse, error)
+	ReviewBattleScript(ctx context.Context, in *ReviewBattleScriptRequest, opts ...grpc.CallOption) (*ReviewBattleScriptResponse, error)
 }
 
 type matchInternalClient struct {
@@ -156,6 +162,26 @@ func (c *matchInternalClient) ResolveStrandedFormation(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *matchInternalClient) ListPendingBattleScripts(ctx context.Context, in *ListPendingBattleScriptsRequest, opts ...grpc.CallOption) (*ListPendingBattleScriptsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPendingBattleScriptsResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_ListPendingBattleScripts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchInternalClient) ReviewBattleScript(ctx context.Context, in *ReviewBattleScriptRequest, opts ...grpc.CallOption) (*ReviewBattleScriptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReviewBattleScriptResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_ReviewBattleScript_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchInternalServer is the server API for MatchInternal service.
 // All implementations must embed UnimplementedMatchInternalServer
 // for forward compatibility.
@@ -171,6 +197,10 @@ type MatchInternalServer interface {
 	// 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方只有运维工具 formationfix,见上文消息定义处)。
 	ListStrandedFormations(context.Context, *ListStrandedFormationsRequest) (*ListStrandedFormationsResponse, error)
 	ResolveStrandedFormation(context.Context, *ResolveStrandedFormationRequest) (*ResolveStrandedFormationResponse, error)
+	// 运营审核玩家上传的战斗剧本(docs/design/battle-script.md §6.3;调用方只有运营工具 battlescriptreview,
+	// serviceauth 调用方 ops,与 SetSpectateFeatured 共用运营密钥)。
+	ListPendingBattleScripts(context.Context, *ListPendingBattleScriptsRequest) (*ListPendingBattleScriptsResponse, error)
+	ReviewBattleScript(context.Context, *ReviewBattleScriptRequest) (*ReviewBattleScriptResponse, error)
 	mustEmbedUnimplementedMatchInternalServer()
 }
 
@@ -210,6 +240,12 @@ func (UnimplementedMatchInternalServer) ListStrandedFormations(context.Context, 
 }
 func (UnimplementedMatchInternalServer) ResolveStrandedFormation(context.Context, *ResolveStrandedFormationRequest) (*ResolveStrandedFormationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveStrandedFormation not implemented")
+}
+func (UnimplementedMatchInternalServer) ListPendingBattleScripts(context.Context, *ListPendingBattleScriptsRequest) (*ListPendingBattleScriptsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPendingBattleScripts not implemented")
+}
+func (UnimplementedMatchInternalServer) ReviewBattleScript(context.Context, *ReviewBattleScriptRequest) (*ReviewBattleScriptResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReviewBattleScript not implemented")
 }
 func (UnimplementedMatchInternalServer) mustEmbedUnimplementedMatchInternalServer() {}
 func (UnimplementedMatchInternalServer) testEmbeddedByValue()                       {}
@@ -412,6 +448,42 @@ func _MatchInternal_ResolveStrandedFormation_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchInternal_ListPendingBattleScripts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPendingBattleScriptsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).ListPendingBattleScripts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_ListPendingBattleScripts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).ListPendingBattleScripts(ctx, req.(*ListPendingBattleScriptsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchInternal_ReviewBattleScript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReviewBattleScriptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).ReviewBattleScript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_ReviewBattleScript_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).ReviewBattleScript(ctx, req.(*ReviewBattleScriptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchInternal_ServiceDesc is the grpc.ServiceDesc for MatchInternal service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -458,6 +530,14 @@ var MatchInternal_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveStrandedFormation",
 			Handler:    _MatchInternal_ResolveStrandedFormation_Handler,
+		},
+		{
+			MethodName: "ListPendingBattleScripts",
+			Handler:    _MatchInternal_ListPendingBattleScripts_Handler,
+		},
+		{
+			MethodName: "ReviewBattleScript",
+			Handler:    _MatchInternal_ReviewBattleScript_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

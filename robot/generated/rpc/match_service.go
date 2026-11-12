@@ -308,3 +308,95 @@ func (matchServiceRpc) decodeGetBattleReport(reply *base.MessageContent, err err
 	}
 	return resp, nil
 }
+
+// ListBattleScripts 异步调用 MatchService.ListBattleScripts(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) ListBattleScripts(c *pkg.GameClient, req *match.ListBattleScriptsRequest, timeout time.Duration, done func(*match.ListBattleScriptsResponse, error)) {
+	c.Call(game.MatchServiceListBattleScriptsMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeListBattleScripts(reply, err))
+	})
+}
+
+// ListBattleScriptsSync 同步调用 MatchService.ListBattleScripts(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) ListBattleScriptsSync(ctx context.Context, c *pkg.GameClient, req *match.ListBattleScriptsRequest, timeout time.Duration) (*match.ListBattleScriptsResponse, error) {
+	return r.decodeListBattleScripts(c.CallSync(ctx, game.MatchServiceListBattleScriptsMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeListBattleScripts(reply *base.MessageContent, err error) (*match.ListBattleScriptsResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.ListBattleScriptsResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.ListBattleScripts reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SubmitBattleScript 异步调用 MatchService.SubmitBattleScript(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) SubmitBattleScript(c *pkg.GameClient, req *match.SubmitBattleScriptRequest, timeout time.Duration, done func(*match.SubmitBattleScriptResponse, error)) {
+	c.Call(game.MatchServiceSubmitBattleScriptMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSubmitBattleScript(reply, err))
+	})
+}
+
+// SubmitBattleScriptSync 同步调用 MatchService.SubmitBattleScript(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) SubmitBattleScriptSync(ctx context.Context, c *pkg.GameClient, req *match.SubmitBattleScriptRequest, timeout time.Duration) (*match.SubmitBattleScriptResponse, error) {
+	return r.decodeSubmitBattleScript(c.CallSync(ctx, game.MatchServiceSubmitBattleScriptMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeSubmitBattleScript(reply *base.MessageContent, err error) (*match.SubmitBattleScriptResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.SubmitBattleScriptResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.SubmitBattleScript reply: %w", err)
+	}
+	return resp, nil
+}
+
+// DeleteBattleScript 异步调用 MatchService.DeleteBattleScript(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) DeleteBattleScript(c *pkg.GameClient, req *match.DeleteBattleScriptRequest, timeout time.Duration, done func(*match.DeleteBattleScriptResponse, error)) {
+	c.Call(game.MatchServiceDeleteBattleScriptMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeDeleteBattleScript(reply, err))
+	})
+}
+
+// DeleteBattleScriptSync 同步调用 MatchService.DeleteBattleScript(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) DeleteBattleScriptSync(ctx context.Context, c *pkg.GameClient, req *match.DeleteBattleScriptRequest, timeout time.Duration) (*match.DeleteBattleScriptResponse, error) {
+	return r.decodeDeleteBattleScript(c.CallSync(ctx, game.MatchServiceDeleteBattleScriptMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeDeleteBattleScript(reply *base.MessageContent, err error) (*match.DeleteBattleScriptResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.DeleteBattleScriptResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.DeleteBattleScript reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SetBattleScriptLoadout 异步调用 MatchService.SetBattleScriptLoadout(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) SetBattleScriptLoadout(c *pkg.GameClient, req *match.SetBattleScriptLoadoutRequest, timeout time.Duration, done func(*match.SetBattleScriptLoadoutResponse, error)) {
+	c.Call(game.MatchServiceSetBattleScriptLoadoutMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSetBattleScriptLoadout(reply, err))
+	})
+}
+
+// SetBattleScriptLoadoutSync 同步调用 MatchService.SetBattleScriptLoadout(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) SetBattleScriptLoadoutSync(ctx context.Context, c *pkg.GameClient, req *match.SetBattleScriptLoadoutRequest, timeout time.Duration) (*match.SetBattleScriptLoadoutResponse, error) {
+	return r.decodeSetBattleScriptLoadout(c.CallSync(ctx, game.MatchServiceSetBattleScriptLoadoutMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeSetBattleScriptLoadout(reply *base.MessageContent, err error) (*match.SetBattleScriptLoadoutResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.SetBattleScriptLoadoutResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.SetBattleScriptLoadout reply: %w", err)
+	}
+	return resp, nil
+}

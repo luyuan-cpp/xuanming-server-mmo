@@ -21,20 +21,24 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MatchService_GetNetworkProbePlan_FullMethodName   = "/match.MatchService/GetNetworkProbePlan"
-	MatchService_CommitNetworkProbe_FullMethodName    = "/match.MatchService/CommitNetworkProbe"
-	MatchService_JoinQueue_FullMethodName             = "/match.MatchService/JoinQueue"
-	MatchService_CancelQueue_FullMethodName           = "/match.MatchService/CancelQueue"
-	MatchService_GetQueueStatus_FullMethodName        = "/match.MatchService/GetQueueStatus"
-	MatchService_ChallengePlayer_FullMethodName       = "/match.MatchService/ChallengePlayer"
-	MatchService_RespondChallenge_FullMethodName      = "/match.MatchService/RespondChallenge"
-	MatchService_NotifyChallengeInvite_FullMethodName = "/match.MatchService/NotifyChallengeInvite"
-	MatchService_NotifyChallengeResult_FullMethodName = "/match.MatchService/NotifyChallengeResult"
-	MatchService_WatchBattle_FullMethodName           = "/match.MatchService/WatchBattle"
-	MatchService_RequestBattleTicket_FullMethodName   = "/match.MatchService/RequestBattleTicket"
-	MatchService_ListWatchableBattles_FullMethodName  = "/match.MatchService/ListWatchableBattles"
-	MatchService_ListBattleReports_FullMethodName     = "/match.MatchService/ListBattleReports"
-	MatchService_GetBattleReport_FullMethodName       = "/match.MatchService/GetBattleReport"
+	MatchService_GetNetworkProbePlan_FullMethodName    = "/match.MatchService/GetNetworkProbePlan"
+	MatchService_CommitNetworkProbe_FullMethodName     = "/match.MatchService/CommitNetworkProbe"
+	MatchService_JoinQueue_FullMethodName              = "/match.MatchService/JoinQueue"
+	MatchService_CancelQueue_FullMethodName            = "/match.MatchService/CancelQueue"
+	MatchService_GetQueueStatus_FullMethodName         = "/match.MatchService/GetQueueStatus"
+	MatchService_ChallengePlayer_FullMethodName        = "/match.MatchService/ChallengePlayer"
+	MatchService_RespondChallenge_FullMethodName       = "/match.MatchService/RespondChallenge"
+	MatchService_NotifyChallengeInvite_FullMethodName  = "/match.MatchService/NotifyChallengeInvite"
+	MatchService_NotifyChallengeResult_FullMethodName  = "/match.MatchService/NotifyChallengeResult"
+	MatchService_WatchBattle_FullMethodName            = "/match.MatchService/WatchBattle"
+	MatchService_RequestBattleTicket_FullMethodName    = "/match.MatchService/RequestBattleTicket"
+	MatchService_ListWatchableBattles_FullMethodName   = "/match.MatchService/ListWatchableBattles"
+	MatchService_ListBattleReports_FullMethodName      = "/match.MatchService/ListBattleReports"
+	MatchService_GetBattleReport_FullMethodName        = "/match.MatchService/GetBattleReport"
+	MatchService_ListBattleScripts_FullMethodName      = "/match.MatchService/ListBattleScripts"
+	MatchService_SubmitBattleScript_FullMethodName     = "/match.MatchService/SubmitBattleScript"
+	MatchService_DeleteBattleScript_FullMethodName     = "/match.MatchService/DeleteBattleScript"
+	MatchService_SetBattleScriptLoadout_FullMethodName = "/match.MatchService/SetBattleScriptLoadout"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -77,6 +81,15 @@ type MatchServiceClient interface {
 	ListBattleReports(ctx context.Context, in *ListBattleReportsRequest, opts ...grpc.CallOption) (*ListBattleReportsResponse, error)
 	// 取一局的回放正文:只有列表里还有这一局的玩家能取。
 	GetBattleReport(ctx context.Context, in *GetBattleReportRequest, opts ...grpc.CallOption) (*GetBattleReportResponse, error)
+	// ---- 战斗剧本(docs/design/battle-script.md §7):请求都不带 player_id,只认会话本人 ----
+	// 官方剧本 + 本人的剧本(含审核状态)+ 本人的选用,一次全给。
+	ListBattleScripts(ctx context.Context, in *ListBattleScriptsRequest, opts ...grpc.CallOption) (*ListBattleScriptsResponse, error)
+	// 新建或改写本人的剧本:校验通过即存为新版本、进入待审;审核通过前对局继续用上一份通过版。
+	SubmitBattleScript(ctx context.Context, in *SubmitBattleScriptRequest, opts ...grpc.CallOption) (*SubmitBattleScriptResponse, error)
+	// 删除本人的剧本,选用了它的条目同一事务清掉。
+	DeleteBattleScript(ctx context.Context, in *DeleteBattleScriptRequest, opts ...grpc.CallOption) (*DeleteBattleScriptResponse, error)
+	// 为某种对局选用剧本(官方剧本或本人已通过审核的剧本),或清除这条选用。
+	SetBattleScriptLoadout(ctx context.Context, in *SetBattleScriptLoadoutRequest, opts ...grpc.CallOption) (*SetBattleScriptLoadoutResponse, error)
 }
 
 type matchServiceClient struct {
@@ -227,6 +240,46 @@ func (c *matchServiceClient) GetBattleReport(ctx context.Context, in *GetBattleR
 	return out, nil
 }
 
+func (c *matchServiceClient) ListBattleScripts(ctx context.Context, in *ListBattleScriptsRequest, opts ...grpc.CallOption) (*ListBattleScriptsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBattleScriptsResponse)
+	err := c.cc.Invoke(ctx, MatchService_ListBattleScripts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) SubmitBattleScript(ctx context.Context, in *SubmitBattleScriptRequest, opts ...grpc.CallOption) (*SubmitBattleScriptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubmitBattleScriptResponse)
+	err := c.cc.Invoke(ctx, MatchService_SubmitBattleScript_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) DeleteBattleScript(ctx context.Context, in *DeleteBattleScriptRequest, opts ...grpc.CallOption) (*DeleteBattleScriptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteBattleScriptResponse)
+	err := c.cc.Invoke(ctx, MatchService_DeleteBattleScript_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) SetBattleScriptLoadout(ctx context.Context, in *SetBattleScriptLoadoutRequest, opts ...grpc.CallOption) (*SetBattleScriptLoadoutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetBattleScriptLoadoutResponse)
+	err := c.cc.Invoke(ctx, MatchService_SetBattleScriptLoadout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations must embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -267,6 +320,15 @@ type MatchServiceServer interface {
 	ListBattleReports(context.Context, *ListBattleReportsRequest) (*ListBattleReportsResponse, error)
 	// 取一局的回放正文:只有列表里还有这一局的玩家能取。
 	GetBattleReport(context.Context, *GetBattleReportRequest) (*GetBattleReportResponse, error)
+	// ---- 战斗剧本(docs/design/battle-script.md §7):请求都不带 player_id,只认会话本人 ----
+	// 官方剧本 + 本人的剧本(含审核状态)+ 本人的选用,一次全给。
+	ListBattleScripts(context.Context, *ListBattleScriptsRequest) (*ListBattleScriptsResponse, error)
+	// 新建或改写本人的剧本:校验通过即存为新版本、进入待审;审核通过前对局继续用上一份通过版。
+	SubmitBattleScript(context.Context, *SubmitBattleScriptRequest) (*SubmitBattleScriptResponse, error)
+	// 删除本人的剧本,选用了它的条目同一事务清掉。
+	DeleteBattleScript(context.Context, *DeleteBattleScriptRequest) (*DeleteBattleScriptResponse, error)
+	// 为某种对局选用剧本(官方剧本或本人已通过审核的剧本),或清除这条选用。
+	SetBattleScriptLoadout(context.Context, *SetBattleScriptLoadoutRequest) (*SetBattleScriptLoadoutResponse, error)
 	mustEmbedUnimplementedMatchServiceServer()
 }
 
@@ -318,6 +380,18 @@ func (UnimplementedMatchServiceServer) ListBattleReports(context.Context, *ListB
 }
 func (UnimplementedMatchServiceServer) GetBattleReport(context.Context, *GetBattleReportRequest) (*GetBattleReportResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBattleReport not implemented")
+}
+func (UnimplementedMatchServiceServer) ListBattleScripts(context.Context, *ListBattleScriptsRequest) (*ListBattleScriptsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBattleScripts not implemented")
+}
+func (UnimplementedMatchServiceServer) SubmitBattleScript(context.Context, *SubmitBattleScriptRequest) (*SubmitBattleScriptResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitBattleScript not implemented")
+}
+func (UnimplementedMatchServiceServer) DeleteBattleScript(context.Context, *DeleteBattleScriptRequest) (*DeleteBattleScriptResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteBattleScript not implemented")
+}
+func (UnimplementedMatchServiceServer) SetBattleScriptLoadout(context.Context, *SetBattleScriptLoadoutRequest) (*SetBattleScriptLoadoutResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetBattleScriptLoadout not implemented")
 }
 func (UnimplementedMatchServiceServer) mustEmbedUnimplementedMatchServiceServer() {}
 func (UnimplementedMatchServiceServer) testEmbeddedByValue()                      {}
@@ -592,6 +666,78 @@ func _MatchService_GetBattleReport_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_ListBattleScripts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBattleScriptsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).ListBattleScripts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_ListBattleScripts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).ListBattleScripts(ctx, req.(*ListBattleScriptsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_SubmitBattleScript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitBattleScriptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).SubmitBattleScript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_SubmitBattleScript_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).SubmitBattleScript(ctx, req.(*SubmitBattleScriptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_DeleteBattleScript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteBattleScriptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).DeleteBattleScript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_DeleteBattleScript_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).DeleteBattleScript(ctx, req.(*DeleteBattleScriptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_SetBattleScriptLoadout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetBattleScriptLoadoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).SetBattleScriptLoadout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_SetBattleScriptLoadout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).SetBattleScriptLoadout(ctx, req.(*SetBattleScriptLoadoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -654,6 +800,22 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBattleReport",
 			Handler:    _MatchService_GetBattleReport_Handler,
+		},
+		{
+			MethodName: "ListBattleScripts",
+			Handler:    _MatchService_ListBattleScripts_Handler,
+		},
+		{
+			MethodName: "SubmitBattleScript",
+			Handler:    _MatchService_SubmitBattleScript_Handler,
+		},
+		{
+			MethodName: "DeleteBattleScript",
+			Handler:    _MatchService_DeleteBattleScript_Handler,
+		},
+		{
+			MethodName: "SetBattleScriptLoadout",
+			Handler:    _MatchService_SetBattleScriptLoadout_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -1,0 +1,45 @@
+# Private, disposable Java NORMAL test authority. No existing stack resources.
+services:
+  pd:
+    image: sha256:507b401ece53aba15db9628a90a1e350c3cd1b9b39c086c708e2e88541b0e7fd
+    pull_policy: never
+    restart: "no"
+    mem_limit: 512m
+    cpus: 0.5
+    labels:
+      org.xuanming.java-fixture.owner: ${JAVA_FIXTURE_OWNER:?owner required}
+    command: ["--name=pd", "--data-dir=/data/pd", "--client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://pd:2379", "--peer-urls=http://0.0.0.0:2380", "--advertise-peer-urls=http://pd:2380", "--initial-cluster=pd=http://pd:2380"]
+    volumes: ["pd-data:/data"]
+  tikv:
+    image: sha256:cdb681d570c490424d69ecc1ecda6865999f2b86ae3b2d2cb070989bf4d2701d
+    pull_policy: never
+    restart: "no"
+    mem_limit: 1536m
+    cpus: 1
+    labels:
+      org.xuanming.java-fixture.owner: ${JAVA_FIXTURE_OWNER:?owner required}
+    command: ["--pd-endpoints=pd:2379", "--addr=0.0.0.0:20160", "--advertise-addr=tikv:20160", "--status-addr=0.0.0.0:20180", "--data-dir=/data/tikv", "--config=/etc/tikv-fixture.toml"]
+    volumes: ["tikv-data:/data", "./tikv.toml:/etc/tikv-fixture.toml:ro"]
+    depends_on: [pd]
+  tidb:
+    image: sha256:3378c71dc8b3dd39742dc0ba546c80880a5d8b0da67a9f9d116cfc33505505c3
+    pull_policy: never
+    restart: "no"
+    mem_limit: 1536m
+    cpus: 1
+    labels:
+      org.xuanming.java-fixture.owner: ${JAVA_FIXTURE_OWNER:?owner required}
+    command: ["--store=tikv", "--path=pd:2379", "--advertise-address=tidb", "-L=warn"]
+    ports: ["127.0.0.1:24000:4000"]
+    depends_on: [tikv]
+networks:
+  default:
+    labels:
+      org.xuanming.java-fixture.owner: ${JAVA_FIXTURE_OWNER:?owner required}
+volumes:
+  pd-data:
+    labels:
+      org.xuanming.java-fixture.owner: ${JAVA_FIXTURE_OWNER:?owner required}
+  tikv-data:
+    labels:
+      org.xuanming.java-fixture.owner: ${JAVA_FIXTURE_OWNER:?owner required}

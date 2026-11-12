@@ -100,7 +100,8 @@ def check_config_inputs(services: list[str]) -> None:
     for name in names:
         if recorded.get(name) != digest(REPO / name):
             raise RuntimeError("运行配置源已变化：" + name
-                + "；请先用原端口参数运行 prepare_docker_debug.py，再重编更新对应服务")
+                + "；请用 python -X utf8 -B tools/scripts/rebuild_all_docker_debug.py "
+                  "保留原栈设置、刷新配置并重编更新整套服务（Java 真库测试前置仍须具备）")
 
 
 def check(services: list[str], output: Path | None = None) -> bool:

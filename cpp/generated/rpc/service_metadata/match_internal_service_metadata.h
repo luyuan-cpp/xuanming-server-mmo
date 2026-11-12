@@ -42,3 +42,11 @@ constexpr uint32_t MatchInternalListStrandedFormationsIndex = 8;
 constexpr uint32_t MatchInternalResolveStrandedFormationMessageId = 378;
 constexpr uint32_t MatchInternalResolveStrandedFormationIndex = 9;
 #define MatchInternalResolveStrandedFormationMethod  ::MatchInternal_Stub::descriptor()->method(9)
+
+constexpr uint32_t MatchInternalListPendingBattleScriptsMessageId = 387;
+constexpr uint32_t MatchInternalListPendingBattleScriptsIndex = 10;
+#define MatchInternalListPendingBattleScriptsMethod  ::MatchInternal_Stub::descriptor()->method(10)
+
+constexpr uint32_t MatchInternalReviewBattleScriptMessageId = 388;
+constexpr uint32_t MatchInternalReviewBattleScriptIndex = 11;
+#define MatchInternalReviewBattleScriptMethod  ::MatchInternal_Stub::descriptor()->method(11)
