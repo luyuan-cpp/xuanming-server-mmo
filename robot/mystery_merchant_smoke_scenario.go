@@ -13,8 +13,14 @@ package main
 //	   每份数量)任何一项与货架不符 → kMysteryMerchantShelfChanged;
 //	M6 GM 加银两(够买两次),买 1 份:应答无错;货架上这件的 bought_count +1;背包全量里的银两 == 加钱后的余额 − 单价;
 //	   背包里出现这件物品;
+//	   随后同一个请求对象原样重发一次(步骤名 replay,docs/design/client-request-idempotency.md):应答无错且标 replayed,
+//	   银两没有再扣、物品没有再发、bought_count 不变;
 //	M7 买到限购上限(剩余名额一次买完),再买 1 份 → kMysteryMerchantLimitReached;
-//	M8 再查一次:服务端记的 bought_count == limit_count。
+//	M8 再查一次:服务端记的 bought_count == limit_count;
+//	M9 正常下线、重新登录进场,再原样发一次 M6 的请求(步骤名 replay-after-relogin):幂等键账本随存档落盘,
+//	   仍须应答无错、标 replayed、银两与物品同下线前最后一份成功应答。
+//
+// 每次购买(含 M5 的负例)都带一个新的幂等键 client_request_id;只有 replay / replay-after-relogin 复用 M6 那个请求。
 //
 // 结果约定(供外层脚本消费):
 //
@@ -65,6 +71,9 @@ const (
 	merchantSmokeSettle = 500 * time.Millisecond
 	// GM 加的银两:商品池里最贵的 4 折后约 8000,取够买两次的量。
 	merchantSmokeGrantGold int64 = 100000
+	// M9 下线之后等这么久再登录:让 scene 把下线存盘落到库里(与 equip-forge / attribute 冒烟的重登同值)。
+	// 太快重登会被当成「重连取代登出」,玩家实体还留在内存里,验不到幂等键账本随存档落盘。
+	merchantSmokeReloginWait = 2 * time.Second
 )
 
 // tip id 一律读导表器生成的枚举,不写字面量(AGENTS.md §7 不变量 5)。
@@ -150,23 +159,88 @@ func merchantQuoteOf(roundId uint64, goods *scene.MysteryMerchantGoodsInfo) merc
 	}
 }
 
-// merchantBuy 按 quote 买 count 份,返回(tip, 应答)。tip == 0 = 成功。
-func (b *channelSmokeBot) merchantBuy(quote merchantQuote, count uint32) (uint32, *scene.BuyMysteryMerchantGoodsResponse, error) {
+// merchantBuyRequest 按 quote 组一份买 count 份的请求。key 是这次购买的业务幂等键(smokeClientRequestKey):
+// 每次新的购买换新键;要重发同一次购买时留住这个请求对象,原样再交给 merchantBuy。
+func merchantBuyRequest(quote merchantQuote, count uint32, key uint64) *scene.BuyMysteryMerchantGoodsRequest {
+	return &scene.BuyMysteryMerchantGoodsRequest{
+		RoundId:              quote.roundId,
+		GoodsId:              quote.goodsId,
+		Count:                count,
+		ExpectedPrice:        quote.price,
+		ExpectedCurrencyType: quote.currencyType,
+		ExpectedItemConfigId: quote.itemConfigId,
+		ExpectedItemCount:    quote.itemCount,
+		ClientRequestId:      key,
+	}
+}
+
+// merchantBuy 发一份购买请求,返回(tip, 应答)。tip == 0 = 成功,包括带原键重发拿回的首次结果(应答标 replayed)。
+func (b *channelSmokeBot) merchantBuy(request *scene.BuyMysteryMerchantGoodsRequest) (uint32, *scene.BuyMysteryMerchantGoodsResponse, error) {
 	var response scene.BuyMysteryMerchantGoodsResponse
-	if err := b.merchantCall(game.SceneMysteryMerchantClientPlayerBuyMysteryMerchantGoodsMessageId,
-		&scene.BuyMysteryMerchantGoodsRequest{
-			RoundId:              quote.roundId,
-			GoodsId:              quote.goodsId,
-			Count:                count,
-			ExpectedPrice:        quote.price,
-			ExpectedCurrencyType: quote.currencyType,
-			ExpectedItemConfigId: quote.itemConfigId,
-			ExpectedItemCount:    quote.itemCount,
-		},
-		&response); err != nil {
+	if err := b.merchantCall(game.SceneMysteryMerchantClientPlayerBuyMysteryMerchantGoodsMessageId, request, &response); err != nil {
 		return 0, nil, err
 	}
 	return response.GetErrorMessage().GetId(), &response, nil
+}
+
+// merchantSmokeBalance 读一份背包快照里某种货币的余额。快照里没有这个槽位(货币数组比币种短,或整个 currency 缺失)时
+// 第二个返回值为 false。
+func merchantSmokeBalance(bag *scene.BagInfo, currencyType uint32) (uint64, bool) {
+	values := bag.GetCurrency().GetValues()
+	if int(currencyType) >= len(values) {
+		return 0, false
+	}
+	return values[currencyType], true
+}
+
+// merchantSmokeItemTotal 汇总一份背包快照里某个 config 的数量(同一种物品可能分几堆)。
+func merchantSmokeItemTotal(bag *scene.BagInfo, configId uint32) uint64 {
+	var total uint64
+	for _, item := range bag.GetItems() {
+		if item.GetConfigId() == configId {
+			total += uint64(item.GetCount())
+		}
+	}
+	return total
+}
+
+// merchantSmokeCheckReplay 核对一次带原键重发的购买应答(docs/design/client-request-idempotency.md §2.2;tip 由调用方先判)。
+// last 是重发之前最后一份成功的购买应答,两者之间这个账号不能再有别的扣钱发物。要求:标 replayed;
+// 这种货币的余额与这件物品的总数都同 last —— 没有再扣钱、没有再发物;货架上这件看得见时(应答 here 且仍是 roundId
+// 这一轮),已购数也同 last,没有再占限购名额。重登之后常常不在商人那条线,那时只核钱和物。
+func merchantSmokeCheckReplay(last, replay *scene.BuyMysteryMerchantGoodsResponse, roundId uint64, quote merchantQuote) error {
+	if !replay.GetReplayed() {
+		return fmt.Errorf("replayed = false: the server ran the resend as a new purchase")
+	}
+	want, ok := merchantSmokeBalance(last.GetBag(), quote.currencyType)
+	if !ok {
+		return fmt.Errorf("the last successful reply carries no balance for currency type %d", quote.currencyType)
+	}
+	got, ok := merchantSmokeBalance(replay.GetBag(), quote.currencyType)
+	if !ok {
+		return fmt.Errorf("the replayed reply carries no balance for currency type %d", quote.currencyType)
+	}
+	if got != want {
+		return fmt.Errorf("balance of currency type %d went from %d to %d: the resend was charged again", quote.currencyType, want, got)
+	}
+	if before, now := merchantSmokeItemTotal(last.GetBag(), quote.itemConfigId),
+		merchantSmokeItemTotal(replay.GetBag(), quote.itemConfigId); now != before {
+		return fmt.Errorf("config_id=%d went from x%d to x%d in the bag: the resend granted the goods again", quote.itemConfigId, before, now)
+	}
+	info := replay.GetInfo()
+	if !info.GetHere() || info.GetRoundId() != roundId {
+		return nil
+	}
+	before, now := merchantSmokeFindGoods(last.GetInfo(), quote.goodsId), merchantSmokeFindGoods(info, quote.goodsId)
+	if before == nil || now == nil {
+		return fmt.Errorf("goods_id=%d is missing from a shelf (in the last reply: %t, in the replayed reply: %t)",
+			quote.goodsId, before != nil, now != nil)
+	}
+	if now.GetBoughtCount() != before.GetBoughtCount() {
+		return fmt.Errorf("goods_id=%d bought_count went from %d to %d: the resend took another slot of the limit",
+			quote.goodsId, before.GetBoughtCount(), now.GetBoughtCount())
+	}
+	return nil
 }
 
 func merchantSmokeFindGoods(info *scene.MysteryMerchantInfo, goodsId uint32) *scene.MysteryMerchantGoodsInfo {
@@ -377,7 +451,8 @@ func RunMerchantSmoke(cfg *config.Config) {
 
 	// ---- M5:负例(都不该动钱、不该占名额)----
 	expectReject := func(step string, wantTip uint32, tampered merchantQuote, count uint32) {
-		tip, response, err := bot.merchantBuy(tampered, count)
+		// 每条负例都是一次新的操作,各带一个新键;业务拒绝不记键(client-request-idempotency.md §3.5)
+		tip, response, err := bot.merchantBuy(merchantBuyRequest(tampered, count, smokeClientRequestKey()))
 		if err != nil {
 			fail(step, "%v", err)
 		}
@@ -421,7 +496,9 @@ func RunMerchantSmoke(cfg *config.Config) {
 		fail("M6-grant", "balance %d after the grant still cannot cover unit price %d", balance, price)
 	}
 
-	tip, bought, err := bot.merchantBuy(quote, 1)
+	// 请求对象留着:replay 与 M9 的 replay-after-relogin 原样再发它(同一个键、其余字段不变)
+	buyRequest := merchantBuyRequest(quote, 1, smokeClientRequestKey())
+	tip, bought, err := bot.merchantBuy(buyRequest)
 	if err != nil {
 		fail("M6-buy", "%v", err)
 	}
@@ -434,6 +511,9 @@ func RunMerchantSmoke(cfg *config.Config) {
 	default:
 		fail("M6-buy", "Purchase rejected tip=%d%s", tip, channelSmokeTipHint(tip))
 	}
+	if bought.GetReplayed() {
+		fail("M6-buy", "the first purchase with a fresh client_request_id=%d came back replayed = true", buyRequest.GetClientRequestId())
+	}
 	after := merchantSmokeFindGoods(bought.GetInfo(), goodsId)
 	if after == nil {
 		fail("M6-buy", "the success reply has no goods_id=%d on the shelf", goodsId)
@@ -441,37 +521,51 @@ func RunMerchantSmoke(cfg *config.Config) {
 	if after.GetBoughtCount() != target.GetBoughtCount()+1 {
 		fail("M6-buy", "bought_count should go from %d to %d, got %d", target.GetBoughtCount(), target.GetBoughtCount()+1, after.GetBoughtCount())
 	}
-	values := bought.GetBag().GetCurrency().GetValues()
-	if int(target.GetCurrencyType()) >= len(values) {
-		fail("M6-buy", "the success reply bag has no balance for currency type %d (values length %d)", target.GetCurrencyType(), len(values))
+	got, ok := merchantSmokeBalance(bought.GetBag(), target.GetCurrencyType())
+	if !ok {
+		fail("M6-buy", "the success reply bag has no balance for currency type %d (values length %d)",
+			target.GetCurrencyType(), len(bought.GetBag().GetCurrency().GetValues()))
 	}
-	if got, want := values[target.GetCurrencyType()], balance-price; got != want {
+	if want := balance - price; got != want {
 		fail("M6-buy", "balance should be %d (%d - unit price %d), got %d", want, balance, price, got)
 	}
-	var itemTotal uint64
-	for _, item := range bought.GetBag().GetItems() {
-		if item.GetConfigId() == target.GetItemConfigId() {
-			itemTotal += uint64(item.GetCount())
-		}
-	}
+	itemTotal := merchantSmokeItemTotal(bought.GetBag(), target.GetItemConfigId())
 	if itemTotal < uint64(target.GetItemCount()) {
 		fail("M6-buy", "the bag holds config_id=%d x%d, fewer than the %d this bundle grants", target.GetItemConfigId(), itemTotal, target.GetItemCount())
 	}
 	balance -= price
-	pass("M6-buy", "goods_id=%d unit_price=%d discount=%d%% balance=%d item_total_in_bag=%d", goodsId, price, target.GetDiscountPercent(), balance, itemTotal)
+	pass("M6-buy", "goods_id=%d unit_price=%d discount=%d%% balance=%d item_total_in_bag=%d client_request_id=%d",
+		goodsId, price, target.GetDiscountPercent(), balance, itemTotal, buyRequest.GetClientRequestId())
+
+	// ---- 同一个请求原样重发(防重 + 幂等):回首次的结果、标 replayed,不再扣钱、不再发物、不再占名额 ----
+	tip, again, err := bot.merchantBuy(buyRequest)
+	if err != nil {
+		fail("replay", "%v", err)
+	}
+	if tip != 0 {
+		fail("replay", "resending the same purchase (client_request_id=%d) was rejected tip=%d%s; a resend with the original key must get the first result back",
+			buyRequest.GetClientRequestId(), tip, channelSmokeTipHint(tip))
+	}
+	if err := merchantSmokeCheckReplay(bought, again, roundId, quote); err != nil {
+		fail("replay", "client_request_id=%d: %v", buyRequest.GetClientRequestId(), err)
+	}
+	pass("replay", "client_request_id=%d replayed: balance=%d bought_count=%d unchanged", buyRequest.GetClientRequestId(), balance, after.GetBoughtCount())
+	// 最后一份成功的购买应答:M9 重登之后的重放拿它对账(M7 补满名额会更新它)
+	last := bought
 
 	// ---- M7:买到上限,再买被拒 ----
 	if remaining := after.GetLimitCount() - after.GetBoughtCount(); remaining > 0 {
 		// 余额只够买两次单价的量时,名额多的便宜商品仍然买得起(加的钱远大于 5 份药的价钱)。
-		tip, _, err := bot.merchantBuy(quote, remaining)
+		tip, filled, err := bot.merchantBuy(merchantBuyRequest(quote, remaining, smokeClientRequestKey()))
 		if err != nil {
 			fail("M7-fill", "%v", err)
 		}
 		if tip != 0 {
 			fail("M7-fill", "buying the remaining %d bundles in one request was rejected tip=%d%s", remaining, tip, channelSmokeTipHint(tip))
 		}
+		last = filled
 	}
-	if tip, _, err := bot.merchantBuy(quote, 1); err != nil {
+	if tip, _, err := bot.merchantBuy(merchantBuyRequest(quote, 1, smokeClientRequestKey())); err != nil {
 		fail("M7-limit", "%v", err)
 	} else if tip != tipMerchantLimitReached {
 		fail("M7-limit", "buying after reaching the limit: expected tip=%d (limit reached), got tip=%d%s", tipMerchantLimitReached, tip, channelSmokeTipHint(tip))
@@ -490,6 +584,31 @@ func RunMerchantSmoke(cfg *config.Config) {
 		}
 	}
 	pass("M8-info", "round_id=%d (round at query time %d)", roundId, final.GetRoundId())
+
+	// ---- M9:正常下线、重新登录进场,再原样发一次 M6 的请求 ----
+	// 幂等键账本是玩家存档的字段(client-request-idempotency.md §3.1),和它保护的银两、背包、限购同一次存盘:
+	// 重登之后同一个键仍要认得出。查键排在购买的一切预检之前,所以重登后不在商人那条线、离商人远、名额已满、
+	// 甚至换了轮,结论都应是重放;没认出来的话会被这些预检拒掉(tip 非 0),或者真的又买了一份。
+	cleanup()
+	bot = nil
+	time.Sleep(merchantSmokeReloginWait)
+	if bot, err = channelSmokeLogin(cfg, merchantSmokeAccount, stats); err != nil {
+		fail("replay-after-relogin", "relogin account=%s: %v", merchantSmokeAccount, err)
+	}
+	tip, again, err = bot.merchantBuy(buyRequest)
+	if err != nil {
+		fail("replay-after-relogin", "%v", err)
+	}
+	if tip != 0 {
+		fail("replay-after-relogin", "resending the M6 purchase (client_request_id=%d) after relogin was rejected tip=%d%s; "+
+			"the ledger did not survive logout, or the save did not land before relogin",
+			buyRequest.GetClientRequestId(), tip, channelSmokeTipHint(tip))
+	}
+	if err := merchantSmokeCheckReplay(last, again, roundId, quote); err != nil {
+		fail("replay-after-relogin", "client_request_id=%d: %v", buyRequest.GetClientRequestId(), err)
+	}
+	pass("replay-after-relogin", "player_id=%d client_request_id=%d replayed after relogin: here=%v round_id=%d, no second charge or grant",
+		bot.gc.PlayerId, buyRequest.GetClientRequestId(), again.GetInfo().GetHere(), again.GetInfo().GetRoundId())
 
 	zap.L().Info(fmt.Sprintf("MERCHANT_SMOKE_OK player_id=%d zone=%d round_id=%d scene_config_id=%d channel_no=%d goods_id=%d "+
 		"price=%d discount_percent=%d limit_count=%d",

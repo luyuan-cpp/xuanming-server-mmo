@@ -89,8 +89,7 @@ public class CatalogAdminStore {
             lockRevision(input.skuId(), input.expectedRevision());
             var current = read(input.skuId());
             try {
-                validate(new CatalogAdminApi.Terms(current.productId(), current.skuCode(), current.priceMinor(),
-                    current.currency(), current.published(), current.itemConfigId(), current.countPerUnit(), current.title()));
+                validate(current.terms());
             } catch (CommerceException incomplete) {
                 throw new CommerceException(409, "请先修复SKU条款和发物映射再调整库存");
             }
@@ -163,29 +162,42 @@ public class CatalogAdminStore {
     }
 
     private List<CatalogAdminApi.Sku> query(String clause, Object... parameters) {
-        return jdbc.query("SELECT s.*,g.item_config_id,g.count_per_unit,g.title FROM pms_sku_stock s "
+        return jdbc.query("SELECT s.*,g.item_config_id,g.count_per_unit,g.title,g.currency_type,g.currency_amount FROM pms_sku_stock s "
             + "LEFT JOIN commerce_sku_grant g ON g.sku_id=s.id " + clause,
             (row, index) -> new CatalogAdminApi.Sku(row.getLong("id"), row.getLong("catalog_revision"),
                 row.getLong("product_id"), row.getString("sku_code"), row.getLong("price_minor"), row.getString("currency"),
                 row.getInt("stock"), row.getInt("lock_stock"), row.getInt("published") == 1,
-                row.getInt("item_config_id"), row.getInt("count_per_unit"), row.getString("title")), parameters);
+                row.getInt("item_config_id"), row.getInt("count_per_unit"), row.getString("title"),
+                row.getInt("currency_type"), row.getLong("currency_amount")), parameters);
     }
 
     private void writeGrant(long id, CatalogAdminApi.Terms terms) {
-        jdbc.update("INSERT INTO commerce_sku_grant(sku_id,item_config_id,count_per_unit,title) VALUES(?,?,?,?) "
-            + "ON DUPLICATE KEY UPDATE item_config_id=VALUES(item_config_id),count_per_unit=VALUES(count_per_unit),title=VALUES(title)",
-            id, terms.itemConfigId(), terms.countPerUnit(), terms.title());
+        jdbc.update("INSERT INTO commerce_sku_grant(sku_id,item_config_id,count_per_unit,currency_type,currency_amount,title) VALUES(?,?,?,?,?,?) "
+            + "ON DUPLICATE KEY UPDATE item_config_id=VALUES(item_config_id),count_per_unit=VALUES(count_per_unit),"
+            + "currency_type=VALUES(currency_type),currency_amount=VALUES(currency_amount),title=VALUES(title)",
+            id, terms.itemConfigId(), terms.countPerUnit(), terms.currencyType(), terms.currencyAmount(), terms.title());
     }
 
     private static void validate(CatalogAdminApi.Terms terms) {
         if (terms == null || terms.productId() <= 0 || terms.skuCode() == null
             || !terms.skuCode().matches("[A-Za-z0-9_.-]{1,64}") || terms.priceMinor() < 1
             || terms.priceMinor() > CommerceStore.MAX_AMOUNT_MINOR || terms.currency() == null
-            || !terms.currency().matches("[A-Z][A-Z0-9_]{2,15}") || terms.itemConfigId() < 1
-            || terms.countPerUnit() < 1 || terms.countPerUnit() > 4096 || terms.title() == null
-            || terms.title().isBlank() || terms.title().length() > 128) {
+            || !terms.currency().matches("[A-Z][A-Z0-9_]{2,15}") || !(itemGrant(terms) || currencyGrant(terms))
+            || terms.title() == null || terms.title().isBlank() || terms.title().length() > 128) {
             throw new CommerceException(400, "SKU条款非法");
         }
+    }
+
+    /** 物品发放:每份 1..4096 件,货币字段为 0。与 commerce_sku_grant 的 CHECK 同一口径。 */
+    private static boolean itemGrant(CatalogAdminApi.Terms terms) {
+        return terms.itemConfigId() >= 1 && terms.countPerUnit() >= 1 && terms.countPerUnit() <= 4096
+            && terms.currencyType() == 0 && terms.currencyAmount() == 0;
+    }
+
+    /** 货币发放(充值包):每份 1..MAX_CURRENCY_GRANT,物品字段为 0;货币种类 0 是银两,有没有货币看数量。种类是否存在由 trade 收货时核对。 */
+    private static boolean currencyGrant(CatalogAdminApi.Terms terms) {
+        return terms.itemConfigId() == 0 && terms.countPerUnit() == 0 && terms.currencyType() >= 0
+            && terms.currencyAmount() >= 1 && terms.currencyAmount() <= DeliveryStore.MAX_CURRENCY_GRANT;
     }
 
     private String digest(String kind, Object input) {
@@ -217,8 +229,7 @@ public class CatalogAdminStore {
             throw new CommerceException(503, "管理请求响应缺少合法SKU");
         }
         try {
-            validate(new CatalogAdminApi.Terms(result.productId(), result.skuCode(), result.priceMinor(), result.currency(),
-                result.published(), result.itemConfigId(), result.countPerUnit(), result.title()));
+            validate(result.terms());
         } catch (CommerceException incomplete) {
             throw new CommerceException(503, "管理请求响应缺少合法条款");
         }

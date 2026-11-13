@@ -1,7 +1,8 @@
 # 交接：客户端请求幂等键——Unity 客户端（交 Codex 实施，2026-11-06）
 
 **授权：** 负责人 2026-11-06：「unity 你可以出细节让 codex 去写」。由 Codex 修改客户端仓 `D:\luyuan\mmorpg-client`（服务端仓的同级目录 `../mmorpg-client/`）。Claude 只读过客户端仓，没有改动。
-**服务端契约：** [client-request-idempotency.md](../design/client-request-idempotency.md) §2、§6。服务端三处已落码，**未编译**；本文的客户端改动要等服务端验证通过后再联调。
+**服务端契约：** [client-request-idempotency.md](../design/client-request-idempotency.md) §2、§6。服务端三处已落码，2026-11-08 Codex 跑过设计稿 §8 的单测（`bag_test` 932 条通过、0 条失败，`cross_zone_test` 458 条通过，见设计稿状态行）。
+**执行状态（2026-11-13 核对）：** §0~§7 的 Unity 改动 2026-11-12 已在客户端仓 main 落码，未生成协议、未编译、未运行（`docs/PROGRESS.md` 2026-11-12「客户端·强化期望等级与幂等键、临时格取回、进场失败后换角」条）。§8 的 robot 三个场景 2026-11-13 已改完，未编译、未运行（`docs/PROGRESS.md` 2026-11-13 条目）。§9 没做。
 **客户端现状（2026-11-06 读码，客户端仓 `b624bad2c`）：** 三个调用点都已经有单飞，回包没到时再点不会发第二个包。但请求里都没带键，结果不明时也只报错、重拉或锁住，从不重发。强化请求还没有填 R2 会话 2026-11-05 加的 `expected_level`。
 
 ## 0. 先做
@@ -26,7 +27,7 @@
 | 信封错误是别的码（1008 限流、1006 等） | 请求没有执行，结论明确，照现有逻辑处理 |
 | 带键请求收到 `KInvalidParameter` | 说明客户端把旧键用在了新操作上，属于客户端缺陷。照现有逻辑报错、重拉，另外 `Debug.LogError("[client-request] key reused for another operation: " + 方法名)` |
 
-为什么只自动重发一次、只在同一条连接上：服务端的键随玩家存档落盘（2026-11-06 起），任何时候带原键重发都只会拿到首次结果或首次执行，不会扣两次。第一版只在同一条连接上重发，是为了让客户端少做一段「跨连接保留待发请求」的逻辑：连接换了就重拉快照，让玩家看过结果再决定。跨连接、跨 App 重启的自动恢复见 §9，是可选后续。
+为什么只自动重发一次、只在同一条连接上：服务端的键随玩家存档落盘（2026-11-06 起），键还在账本里时带原键重发只会拿到首次结果或首次执行，不会扣两次。键会在两种情况下不在：同一玩家之后又成功做了 32 次以上带键的操作，把它挤了出去；账本坏了被人工清空（设计稿 §5.2）。第一版只在同一条连接上重发，是为了让客户端少做一段「跨连接保留待发请求」的逻辑：连接换了就重拉快照，让玩家看过结果再决定。跨连接、跨 App 重启的自动恢复见 §9，是可选后续。
 
 ## 2. 新文件 `Assets/Scripts/Net/ClientRequestKeys.cs`（含 `.meta`）
 
@@ -107,22 +108,23 @@ namespace MmorpgClient.Net
 3. 通过标准：全绿。失败时保留第一个失败用例名和断言原文，不改断言、不连续重试。
 4. 联调（服务端验证通过之后，可选）：dev 环境里连点强化、购买、新建方案，各点两次以上，只扣一次。在 scene 日志里能看到 `[ClientRequest] metric=client_request_replay` 的前提是确实发生了重发；单飞拦下的点击不会发包，也不会有这行日志。
 
-## 8. robot 冒烟（同样交 Codex，2026-11-06 补）
+## 8. robot 冒烟（2026-11-06 补；2026-11-13 Claude 已改完，未编译、未运行，Codex 编译并在 dev 环境跑）
 
-robot（本仓 `robot/`）也是客户端，由 Codex 改。三个现有冒烟各加一步，在真实环境里验证「同一个键只执行一次」与「随存档落盘」。
+robot（本仓 `robot/`）也是客户端。三个现有冒烟各加一步，在真实环境里验证「同一个键只执行一次」与「随存档落盘」。
 
-| 场景（在 `robot/` 下执行） | 改哪里 | 加的那一步 |
+| 场景（在 `robot/` 下执行） | 改了哪里 | 加的那一步 |
 |---|---|---|
-| `.\robot.exe -c etc/equip_forge_smoke.yaml` | `equip_forge_smoke_scenario.go` 的 `equipForgeEnhance`（:676）加一个键参数，请求带 `ClientRequestId` | 第一次强化成功后，用**同一个请求对象**原样再发一次。断言：tip 为 0，`Replayed == true`，`Success` / `EnhanceLevel` 与第一次相同，两份快照里的金币与强化石数量与第一次的应答相同（没有再扣）。之后的强化每次用新键 |
-| `.\robot.exe -c etc/merchant_smoke.yaml` | `mystery_merchant_smoke_scenario.go` 的 `merchantBuy`（:153）加一个键参数 | 第一次购买成功后原样重发：tip 为 0，`Replayed == true`，应答货架里这件的 `bought_count` 与第一次相同，货币没有再扣。**落盘验证**：随后让机器人正常下线、重新登录进场，再用同一个请求原样发一次，仍然 `Replayed == true` 且不扣钱。重登流程照场景里现有的登录辅助函数 |
-| `.\robot.exe -c etc/attribute_smoke.yaml` | `attribute_smoke_scenario.go` 步骤 10（:304）的 `CreateAttributeSchemeRequest` 带键 | 新建成功后原样重发：tip 为 0，`Replayed == true`，`SchemeId` 与第一次相同，面板里方案数与金币都没变。走「上限已满」分支时跳过这一步，并打一行说明 |
+| `.\robot.exe -c etc/equip_forge_smoke.yaml` | `equip_forge_smoke_scenario.go`：`equipForgeEnhance` 签名不变（`asset_arrival_prepare.go` 也在调它），每次调用自带一个新键；新增 `equipForgeSendEnhance` 发调用方组好的请求；第 3a 步自己组请求、留住对象；对账函数 `checkEquipForgeReplay` | 背包里那次强化之后，用**同一个请求对象**原样再发一次（`step=replay`）。断言：tip 为 0，`Replayed == true`，`Success` / `EnhanceLevel` 与第一次相同，两份快照与第一次的应答逐项相同（金币、强化石、目标都没再动）。原来那条「按强化前的等级重发」改成用新键发（`step=enhance-bag-stale-level`），验的是快照过期或旧键被挤出账本时由 `expected_level` 兜住。之后的强化每次用新键 |
+| `.\robot.exe -c etc/merchant_smoke.yaml` | `mystery_merchant_smoke_scenario.go`：`merchantBuy` 改为接收请求对象，`merchantBuyRequest(quote, count, key)` 组请求；对账函数 `merchantSmokeCheckReplay` | M6 买成之后原样重发（`step=replay`）：tip 为 0，`Replayed == true`，余额与物品数不变，应答货架里这件的 `bought_count` 不变。**落盘验证**：M8 之后正常下线、等 2 秒、重新登录进场（`channelSmokeLogin`），再把 M6 的请求原样发一次（`step=replay-after-relogin`）：仍然 tip 为 0、`Replayed == true`，余额与物品数同下线前最后一份成功应答。重登后多半不在商人那条线，看不到货架时只核钱和物 |
+| `.\robot.exe -c etc/attribute_smoke.yaml` | `attribute_smoke_scenario.go` 步骤 10：`CreateAttributeSchemeRequest` 带键，请求与应答对象留住 | 新建成功后原样重发（`step=replay`）：tip 为 0，`Replayed == true`，`SchemeId` 与第一次相同，方案数与金币都没变。走「上限已满」分支时跳过这一步并打一行说明，`ATTRIBUTE_SMOKE_OK` 行带 `create_replay=checked` 或 `create_replay=skipped_limit` |
 
-- 键用 `crypto/rand` 生成非 0 的 uint64，封成一个小函数，三个场景共用。
+- 键由新文件 `robot/smoke_client_request_key.go` 的 `smokeClientRequestKey()` 生成：`crypto/rand` 取的非 0 uint64，三个场景共用，不留时间戳退路。
 - 现有的 `*_SMOKE_OK` / `*_SMOKE_FAIL step=… reason=…` 输出格式不变，新步骤失败时 `step=` 写 `replay` 或 `replay-after-relogin`。
-- 前提：服务端与本仓 robot 的协议已按 `docs/PROGRESS.md` 2026-11-06 的条目生成并编译（robot 的 vendored proto 由同一次协议生成更新），dev 环境已起。项目未上线，跑之前可以清空玩家数据，按 `AGENTS.md` §6.2 的清理步骤做。
-- 通过标准：三个场景的退出码都是 0，日志里各有一行 `*_SMOKE_OK`。scene 日志里每个场景至少有一行 `[ClientRequest] metric=client_request_replay`，神秘商人场景至少两行（重登前后各一次）。
+- 纯函数单测：`TestSmokeClientRequestKeyIsNonZeroAndDistinct`、`TestEquipForgeReplay*`（2 个）、`TestMerchantSmoke*`（3 个，新文件 `mystery_merchant_smoke_scenario_test.go`）。
+- 前提：robot 的 vendored proto 里已经有这几个字段（2026-11-13 核对过，`robot/vendor/proto/scene/` 与 `go/proto/scene/` 的三份 `.pb.go` 逐字节相同），本批不需要重新生成协议；dev 环境已起。项目未上线，跑之前清空玩家数据，按 `AGENTS.md` §6.2 的清理步骤做：属性冒烟的账号开满方案之后就验不到新建方案的重放。
+- 通过标准：三个场景的退出码都是 0，日志里各有一行 `*_SMOKE_OK`，属性那一行是 `create_replay=checked`。scene 日志里每个场景至少有一行 `[ClientRequest] metric=client_request_replay`，`client_request_id=` 与 robot 日志里打出的键相同；神秘商人场景至少两行（重登前后各一次）。
 
 ## 9. 不在本文范围
 
 - R2 那批的客户端部分（`RetrieveTemporaryItems` 的界面与调用）。`expected_level` 和本文的同一个请求有关，§3 第 1、7 条已经顺带要求。
-- 跨连接、跨 App 重启的自动恢复（可选后续）：服务端的键已经随存档落盘（2026-11-06），客户端可以照帮会的做法，用 `DurableRequestFileStore` 把待确认的请求存到本地，重连或 App 重启后带原键重发一次。第一版不做，只在同一条连接上重发。
+- 跨连接、跨 App 重启的自动恢复（可选后续）：服务端的键已经随存档落盘（2026-11-06），客户端可以照帮会的做法，用 `DurableRequestFileStore` 把待确认的请求存到本地，重连或 App 重启后带原键重发一次。第一版不做，只在同一条连接上重发。做的时候要同时改设计稿 §5.2：那里允许在玩家离线时整体清空账本，前提正是「客户端只在同一条连接上重发」，有了跨连接恢复，清空会让待确认的那次再执行一次。

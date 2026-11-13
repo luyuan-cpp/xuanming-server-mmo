@@ -59,6 +59,10 @@ Client                  Java Gateway           Go Login            Redis
   |<-- LoginResponse{players, access_token, refresh_token} ---------|
 ```
 
+（2026-11-12 注）上图是旧 gate 凭据登录流程：分配 gate 时还没有令牌，assign-gate 不带 access token，属于匿名分配，只在
+`LegacyGateLoginEnabled` 开着时允许。现行流程先 `POST /api/login` 拿令牌，再带 `access_token` 调 `/api/assign-gate`，
+见 [登录排队](./login-queue-2026-05.md) §5 末尾的更正与[第三方登录](./third-party-login-end-to-end-design.md) §二。
+
 ### Reconnect (Within 2h)
 
 ```

@@ -19,6 +19,10 @@
 # 若报 step=display-target 且失败信息提到「实例未初始化」:那把装备是在一期掷值挂点没生效的 scene 上铸的,
 # 修好服务端之后同样要换号或清档(预备段是「已有就复用」,坏实例不会自己变好)。
 #
+# 第 3 步另验客户端幂等键(docs/design/client-request-idempotency.md):背包里那次强化之后,同一个请求原样重发
+# (step=replay)必须回首次的成败与等级并标 replayed、快照不变;scene 日志随之有一行
+# [ClientRequest] metric=client_request_replay kind=… player_id=… client_request_id=<step 3a 日志里的 replayed_client_request_id>。
+#
 # 4 级以后的强化按概率成败,两种结果冒烟都接受(失败不是错误:金币与材料照扣、等级不变、响应照常带回快照);
 # 只有预览里 success_rate = 10000 的那几级要求必须成功。所以同一个账号两轮的日志不会逐字相同,
 # 看 EQUIP_FORGE_SMOKE_OK 那一行的 enhance_in_bag / enhance_worn 就知道这一轮掷出了什么。

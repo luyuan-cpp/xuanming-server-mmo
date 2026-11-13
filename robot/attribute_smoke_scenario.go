@@ -11,7 +11,10 @@ package main
 //   5. 幂等:重发同一份"目标值"被判"无变化"(kAttributeNothingToChange),不重复扣点;
 //   6. 只增不减:提交比已分配更小的值被拒(kAttributePointsCannotDecrease);
 //      (原 7 相性池单项上限 / 8 仙魔池未解锁两步 2026-09-14 随两池删除;规则由纯规则单测覆盖)
-//   9. CreateAttributeScheme:金币按面板下发的 create_scheme_cost_gold 精确扣减;
+//   9. CreateAttributeScheme(带一个新的幂等键 client_request_id):金币按面板下发的 create_scheme_cost_gold 精确扣减;
+//      随后同一个请求对象原样重发一次(步骤名 replay,docs/design/client-request-idempotency.md):应答无错且标 replayed、
+//      scheme_id 与首次相同,方案数与金币都不变。方案已满(上一轮开满了)时没有建出新方案,这一条跳过并打一行说明,
+//      OK 行的 create_replay=skipped_limit;清掉 robot_9101 的玩家数据再跑才覆盖得到;
 //      SwitchAttributeScheme 到新方案 → 新方案是干净的(分配为 0、点数满额);
 //      等切换冷却过去后切回 → 原方案的加点原样恢复(方案互不串档);
 //  10. 下线重登:等级 / 方案数 / 当前方案 / 已分配 / 二级属性与下线前一致(attribute_component 落库往返 + db 列迁移);
@@ -300,8 +303,12 @@ func RunAttributeSmoke(cfg *config.Config) {
 	}
 	var otherSchemeId uint32
 	created := false
+	createReplay := "skipped_limit"
+	// 请求对象留着:建成之后原样重发一次(同一个键、其余字段不变)
+	createRequest := &scene.CreateAttributeSchemeRequest{ClientRequestId: smokeClientRequestKey()}
+	createResponse := &scene.CreateAttributeSchemeResponse{}
 	p, tip, err := session.callTolerant(game.SceneAttributeClientPlayerCreateAttributeSchemeMessageId,
-		&scene.CreateAttributeSchemeRequest{}, &scene.CreateAttributeSchemeResponse{}, tipAttributeSchemeLimitReached)
+		createRequest, createResponse, tipAttributeSchemeLimitReached)
 	if err != nil {
 		fail("create-scheme", "%v", err)
 	}
@@ -314,6 +321,8 @@ func RunAttributeSmoke(cfg *config.Config) {
 			}
 		}
 		zap.L().Info("[attribute-smoke] scheme limit reached, reuse existing scheme", zap.Uint32("scheme", otherSchemeId))
+		zap.L().Info("[attribute-smoke] step 10: same-key replay of CreateAttributeScheme skipped: no scheme was created; "+
+			"wipe this account's player data and rerun to cover it", zap.String("account", attributeSmokeAccount))
 	} else {
 		panel = p
 		created = true
@@ -330,6 +339,41 @@ func RunAttributeSmoke(cfg *config.Config) {
 			fail("create-cost", "Creating a scheme should deduct %d gold (panel create_scheme_cost_gold), actually deducted %d",
 				createCost, goldBeforeCreate-goldAfterCreate)
 		}
+		if createResponse.GetReplayed() {
+			fail("create-scheme", "the first create with a fresh client_request_id=%d came back replayed = true",
+				createRequest.GetClientRequestId())
+		}
+		// 同一个请求原样重发(防重 + 幂等):回首次建出的方案号与当前面板、标 replayed,不再建、不再扣。
+		// 走 call 而不是 callTolerant:重发被拒(包括方案已满)一律算失败 —— 那说明服务器把它当成了新的一次。
+		replayResponse := &scene.CreateAttributeSchemeResponse{}
+		replayPanel, err := session.call(game.SceneAttributeClientPlayerCreateAttributeSchemeMessageId, createRequest, replayResponse)
+		if err != nil {
+			fail("replay", "resending the same CreateAttributeScheme request (client_request_id=%d): %v",
+				createRequest.GetClientRequestId(), err)
+		}
+		if !replayResponse.GetReplayed() {
+			fail("replay", "client_request_id=%d: replayed = false, the server ran the resend as a new create", createRequest.GetClientRequestId())
+		}
+		if replayResponse.GetSchemeId() != createResponse.GetSchemeId() {
+			fail("replay", "client_request_id=%d: scheme_id=%d, the first create returned %d",
+				createRequest.GetClientRequestId(), replayResponse.GetSchemeId(), createResponse.GetSchemeId())
+		}
+		if len(replayPanel.Schemes) != len(panel.Schemes) {
+			fail("replay", "client_request_id=%d: %d schemes after the resend, %d after the first create (a second scheme was created)",
+				createRequest.GetClientRequestId(), len(replayPanel.Schemes), len(panel.Schemes))
+		}
+		goldAfterReplay, err := readGoldBalance(gc, player, stats, attributeSmokeRpcTimeout)
+		if err != nil {
+			fail("gold-read", "%v", err)
+		}
+		if goldAfterReplay != goldAfterCreate {
+			fail("replay", "client_request_id=%d: gold went from %d to %d, the resend was charged again",
+				createRequest.GetClientRequestId(), goldAfterCreate, goldAfterReplay)
+		}
+		createReplay = "checked"
+		zap.L().Info("[attribute-smoke] step 10: same-key replay of CreateAttributeScheme ok",
+			zap.Uint64("client_request_id", createRequest.GetClientRequestId()),
+			zap.Uint32("scheme_id", createResponse.GetSchemeId()), zap.Uint64("gold", goldAfterReplay))
 	}
 	if otherSchemeId == 0 {
 		fail("scheme-pick", "No second scheme is available to switch to: %v", panel.Schemes)
@@ -425,9 +469,9 @@ func RunAttributeSmoke(cfg *config.Config) {
 		zap.Uint32("remaining", primary.Remaining), zap.Uint64("cost", resetCost))
 
 	zap.L().Info(fmt.Sprintf(
-		"ATTRIBUTE_SMOKE_OK player_id=%d level=%d pools=%d dimensions=%d schemes=%d max_health=%d gold=%d",
+		"ATTRIBUTE_SMOKE_OK player_id=%d level=%d pools=%d dimensions=%d schemes=%d max_health=%d gold=%d create_replay=%s",
 		gc.PlayerId, panel.Level, len(panel.Pools), len(panel.Dimensions), len(panel.Schemes),
-		panel.Derived.MaxHealth, goldAfterReset))
+		panel.Derived.MaxHealth, goldAfterReset, createReplay))
 	cleanup()
 	_ = zap.L().Sync()
 }

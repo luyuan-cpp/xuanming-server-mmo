@@ -68,6 +68,10 @@ public final class CommerceProperties {
                 !value.matches("[a-z][a-z0-9_-]{1,31}") || value.equals("mock"))) {
             throw new IllegalStateException("支付渠道允许集合非法；mock只能走独立事实适配器");
         }
+        // devpay 是支付服务的本地联调渠道(go/payment,只在 dev / test 开),付款事实由同一份密钥自签,不能当真钱入账。
+        if ("prod".equals(runMode) && allowedPaymentChannels.stream().anyMatch(value -> value.equals("devpay") || value.startsWith("mock"))) {
+            throw new IllegalStateException("prod禁止允许本地联调支付渠道");
+        }
     }
     private boolean strong(String value) { return value != null && value.getBytes(StandardCharsets.UTF_8).length >= 32; }
 }

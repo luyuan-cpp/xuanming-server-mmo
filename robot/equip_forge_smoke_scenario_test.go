@@ -598,6 +598,78 @@ func TestEquipForgeEnhanceRejectsEveryBrokenLedger(t *testing.T) {
 	}
 }
 
+// equipForgeTestAccepted 把一对快照包成一次被受理的强化结果。
+func equipForgeTestAccepted(bags equipForgeBags, success bool, level uint32, replayed bool) equipForgeChange {
+	return equipForgeChange{
+		equipChange: equipChange{bag: bags.inventory, equipment: bags.equipment},
+		success:     success,
+		level:       level,
+		replayed:    replayed,
+	}
+}
+
+// 同键重发的合法形状:首次成功与首次失败(等级没变)两种,重放都回首次的结果、标 replayed、快照与首次应答相同。
+func TestEquipForgeReplayAcceptsTheFirstOutcome(t *testing.T) {
+	before := equipForgeTestBags(equipForgeTestWeapon(equipForgeTestTargetId, 0), false, 1500, 5, 1)
+	for _, test := range []struct {
+		name    string
+		success bool
+		level   uint32
+	}{
+		{"first enhance succeeded", true, 1},
+		{"first roll failed and kept the level", false, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			enhanced := equipForgeTestEnhanced(before, test.level)
+			first := equipForgeTestAccepted(enhanced, test.success, test.level, false)
+			replay := equipForgeTestAccepted(equipForgeTestClone(enhanced), test.success, test.level, true)
+			if err := checkEquipForgeReplay(first, replay); err != nil {
+				t.Fatalf("legal replay rejected: %v", err)
+			}
+		})
+	}
+}
+
+// 同键重发的每种坏形状各自被拦。基线:背包里 +0 → +1 成功,首次之后 500 金币 / 3 个强化石 / 1 颗宝石。
+func TestEquipForgeReplayRejectsEveryBrokenShape(t *testing.T) {
+	before := equipForgeTestBags(equipForgeTestWeapon(equipForgeTestTargetId, 0), false, 1500, 5, 1)
+	enhanced := equipForgeTestEnhanced(before, 1)
+	first := equipForgeTestAccepted(enhanced, true, 1, false)
+	for _, test := range []struct {
+		name   string
+		mutate func(replay *equipForgeChange)
+	}{
+		// 改之前的行为:没有键时按等级比较,重发被拒成「等级已变化」,客户端会以为第一次没成
+		{"refused like a stale-level enhance", func(replay *equipForgeChange) {
+			replay.tip, replay.bag, replay.equipment = equipForgeTipEnhanceLevelChanged, nil, nil
+		}},
+		{"not marked replayed", func(replay *equipForgeChange) { replay.replayed = false }},
+		{"roll outcome differs", func(replay *equipForgeChange) { replay.success = false }},
+		{"level differs", func(replay *equipForgeChange) { replay.level = 2 }},
+		{"charged again", func(replay *equipForgeChange) {
+			equipForgeTestSetGold(equipForgeBags{inventory: replay.bag, equipment: replay.equipment}, 0)
+		}},
+		{"material consumed again", func(replay *equipForgeChange) {
+			equipForgeTestSetCount(equipForgeBags{inventory: replay.bag, equipment: replay.equipment}, equipForgeTestStoneId, 1)
+		}},
+		{"target enhanced again", func(replay *equipForgeChange) {
+			equipForgeTestReplace(equipForgeBags{inventory: replay.bag, equipment: replay.equipment},
+				equipForgeTestWeapon(equipForgeTestTargetId, 2))
+		}},
+		{"equipment changed", func(replay *equipForgeChange) {
+			equipTestPlace(replay.equipment, equipSmokeSlotShoes, equipTestShoes(40))
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			replay := equipForgeTestAccepted(equipForgeTestClone(enhanced), true, 1, true)
+			test.mutate(&replay)
+			if err := checkEquipForgeReplay(first, replay); err == nil {
+				t.Fatal("broken replay accepted")
+			}
+		})
+	}
+}
+
 // 镶嵌 / 取下对账的合法形状:穿着与背包里、宝石剩一堆与恰好用完、取下后退回成新的一堆。
 func TestEquipForgeInlayAndRemoveAcceptLegalMoves(t *testing.T) {
 	for _, worn := range []bool{false, true} {
