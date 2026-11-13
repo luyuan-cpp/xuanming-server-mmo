@@ -47,7 +47,7 @@ package main
 //     48 / 26 / 17 / 58 每条连接各 1 次(上限 3),限流状态随会话重置。
 //   - login:同账号的 Login 由账号锁串行(冲突回 kLoginInProgress);EnterGame 的玩家锁持有到进场链收尾才放,
 //     所以 O7 每条连接断开后先隔 orderingLoginRoundGap 再开下一条。O7 每轮像真实客户端重连一样重走 AssignGate;
-//     robot 调 AssignGate 不带账号(main.go httpAssignGateRequest.Account 为空),网关的账号冷却对空账号不生效,
+//     robot 调 AssignGate 不带 access token(匿名分配,main.go resolveGateAddrLocal),网关的账号冷却只对带令牌的请求生效,
 //     开了 gate.rate-limit 时也只受 IP 桶约束(application.yaml 默认 ip-rps 5 / ip-burst 20),整场不到十次
 //     AssignGate,碰不到它。
 //

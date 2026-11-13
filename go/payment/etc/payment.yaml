@@ -1,0 +1,98 @@
+# 支付服务的本地开发配置(docs/design/payment-recharge.md §22.9)。密钥一律只写环境变量名,值不进本文件。
+# 生产与预发:Mode 固定 pro,真钱渠道要先过合规闸(§12、§22.8),密钥经 K8s Secret 注入。
+Name: payment.rpc
+ListenOn: 127.0.0.1:51200
+AdvertiseHost: 127.0.0.1
+Mode: dev
+Timeout: 3500
+ZoneId: 1
+Etcd:
+  Hosts: [127.0.0.1:2379]
+MetricsListenAddr: 127.0.0.1:9280
+KillSwitchPrefix: /mmorpg/killswitch/
+DSNEnv: MMORPG_PAYMENT_SQL_DSN
+Backend: tidb
+MaxOpenConns: 16
+AutoMigrate: false
+Log:
+  ServiceName: payment
+  Mode: console
+  Level: info
+
+Payment:
+  # 渠道回调的监听地址;本机联调直接打它,K8s 上经 Ingress 暴露为 https://<支付域名>/notify/<渠道>。
+  NotifyListenAddr: 127.0.0.1:18130
+  # 微信支付、支付宝下单时带的回调根地址(公网 https)。本机联调只开 devpay 时可以不填。
+  NotifyBaseURL: ""
+  Mall:
+    BaseURL: http://127.0.0.1:18120
+    PaymentSubject: payment-adapter
+    PaymentSecretEnv: COMMERCE_PAYMENT_SECRET
+    TimeoutMs: 2500
+  # 每种发行形态开放的渠道,按展示顺序。iOS App 只能挂 apple(苹果审核规则 3.1.1)。
+  Platforms:
+    - Platform: android_app
+      Channels: [devpay]
+    - Platform: ios_app
+      Channels: [devpay]
+    - Platform: wechat_minigame
+      Channels: [devpay]
+    - Platform: douyin_minigame
+      Channels: [devpay]
+    - Platform: desktop
+      Channels: [devpay]
+  # 商城 SKU 在按商品定价的渠道上的商品号(App Store / Google Play / 微信小游戏道具 ID);没登记的 SKU 不能走这些渠道。
+  Products: []
+  Compliance:
+    MinorSpendingGate: none
+  DevPay:
+    Enabled: true
+    SecretEnv: PAYMENT_DEVPAY_SECRET
+  WechatPay:
+    Enabled: false
+    AppID: ""
+    MchID: ""
+    MerchantSerialNo: ""
+    PlatformPublicKeyID: ""
+    PrivateKeyEnv: PAYMENT_WECHATPAY_PRIVATE_KEY
+    APIv3KeyEnv: PAYMENT_WECHATPAY_APIV3_KEY
+    PlatformPublicKeyEnv: PAYMENT_WECHATPAY_PUBLIC_KEY
+    Description: 游戏商品
+  Alipay:
+    Enabled: false
+    AppID: ""
+    SellerID: ""
+    PrivateKeyEnv: PAYMENT_ALIPAY_PRIVATE_KEY
+    PublicKeyEnv: PAYMENT_ALIPAY_PUBLIC_KEY
+    Subject: 游戏商品
+  WechatMinigame:
+    Enabled: false
+    AppID: ""
+    OfferID: ""
+    Env: 0
+    AppSecretEnv: PAYMENT_WECHAT_MINIGAME_APP_SECRET
+    AppKeyEnv: PAYMENT_WECHAT_MINIGAME_APP_KEY
+    PushTokenEnv: PAYMENT_WECHAT_MINIGAME_PUSH_TOKEN
+  DouyinMinigame:
+    Enabled: false
+    AppID: ""
+    PushTokenEnv: PAYMENT_DOUYIN_PUSH_TOKEN
+  Apple:
+    Enabled: false
+    BundleID: ""
+    AppAppleID: 0
+    IssuerID: ""
+    KeyID: ""
+    AllowSandbox: true
+    PrivateKeyEnv: PAYMENT_APPLE_PRIVATE_KEY
+    RootCertificatesEnv: PAYMENT_APPLE_ROOT_CERTIFICATES
+    Test:
+      Accept: true
+  Google:
+    Enabled: false
+    PackageName: ""
+    PushAudience: ""
+    PushServiceAccount: ""
+    ServiceAccountEnv: PAYMENT_GOOGLE_SERVICE_ACCOUNT
+    Test:
+      Accept: true

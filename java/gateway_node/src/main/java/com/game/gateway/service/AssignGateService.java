@@ -47,6 +47,8 @@ import java.util.concurrent.TimeoutException;
  *   <li>2 ERROR    → code=500-ish via {@code error} string</li>
  *   <li>3 EXPIRED  → code=410 (intentionally "Gone") so client UI knows to
  *                    restart from /assign-gate rather than retry /queue-status</li>
+ *   <li>4 UNAUTHENTICATED → code=401: access_token 无效,或没带令牌而 login 已关匿名分配;客户端重新登录
+ *                    (或先用 refresh token 换新的 access token)。不能落进 default:那里按 ADMITTED 处理,会给客户端一个空地址。</li>
  * </ul>
  */
 @Service
@@ -59,11 +61,13 @@ public class AssignGateService {
     private static final int STATUS_QUEUEING = 1;
     private static final int STATUS_ERROR    = 2;
     private static final int STATUS_EXPIRED  = 3;
+    private static final int STATUS_UNAUTHENTICATED = 4;
 
     /** HTTP-shape codes used by the existing {@link AssignGateResponse}. */
     private static final int HTTP_OK             = 0;
     private static final int HTTP_QUEUE          = 100;
     private static final int HTTP_QUEUE_EXPIRED  = 410;
+    private static final int HTTP_AUTH_REJECTED  = 401;
     private static final int HTTP_INTERNAL       = 500;
 
     /**
@@ -112,7 +116,7 @@ public class AssignGateService {
         var rpcReq = new LoginRpcClient.AssignGateRequestProto(
                 req.getZoneId(),
                 req.getQueueToken(),
-                req.getAccount(),
+                req.getAccessToken(),
                 req.getDeviceId()
         );
         try {
@@ -352,6 +356,12 @@ public class AssignGateService {
                 AssignGateResponse out = new AssignGateResponse();
                 out.setCode(HTTP_QUEUE_EXPIRED);
                 out.setError(rsp.error != null ? rsp.error : "queue_token_expired");
+                return out;
+            }
+            case STATUS_UNAUTHENTICATED: {
+                AssignGateResponse out = new AssignGateResponse();
+                out.setCode(HTTP_AUTH_REJECTED);
+                out.setError(rsp.error != null && !rsp.error.isEmpty() ? rsp.error : "unauthenticated");
                 return out;
             }
             case STATUS_ADMITTED:

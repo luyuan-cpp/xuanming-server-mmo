@@ -59,7 +59,7 @@ class AssignGateServiceZoneAdmissionTest {
     private static AssignGateRequest request(int zoneId) {
         AssignGateRequest req = new AssignGateRequest();
         req.setZoneId(zoneId);
-        req.setAccount("acc");
+        req.setAccessToken("access-token");
         req.setDeviceId("dev");
         return req;
     }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -16,11 +17,18 @@ import (
 // httpAssignGateRequest mirrors java/gateway_node AssignGateRequest. Snake
 // case matches the gateway's Jackson configuration.
 type httpAssignGateRequest struct {
-	ZoneID     uint32 `json:"zone_id"`
-	Account    string `json:"account,omitempty"`
-	DeviceID   string `json:"device_id,omitempty"`
-	QueueToken string `json:"queue_token,omitempty"`
+	ZoneID uint32 `json:"zone_id"`
+	// AccessToken 是 /api/login 签发的 access token。login 只认它解出的账号(免排队、排队身份);
+	// 空 = 匿名分配,只在 login 的旧 gate 凭据登录还开着时可用(robot 先分配 gate、连上之后才认证)。
+	// 2026-11-12 之前这里是自报的 account,login 已不再读它。
+	AccessToken string `json:"access_token,omitempty"`
+	DeviceID    string `json:"device_id,omitempty"`
+	QueueToken  string `json:"queue_token,omitempty"`
 }
+
+// errAssignGateUnauthenticated 标记 /api/assign-gate 回 code=401:带的 access token 无效(过期、已吊销),
+// 或没带令牌而 login 已关匿名分配。调用方据此丢掉令牌或停止重试,不按普通失败退避。
+var errAssignGateUnauthenticated = errors.New("assign-gate unauthenticated")
 
 // httpAssignGateResponse mirrors AssignGateResponse from Java side. The DTO
 // is shared between the initial /assign-gate response and the polling
@@ -310,6 +318,10 @@ func AssignGateWithQueue(
 			if err != nil {
 				return nil, err
 			}
+
+		case 401:
+			// 鉴权失败不是排队状态:等多久都不会变,交调用方决定丢掉令牌重来还是停止。
+			return nil, fmt.Errorf("%w: err=%q", errAssignGateUnauthenticated, rsp.Error)
 
 		default:
 			// 含 queue-status 或重入回的 503 zone_* / 404 zone_not_found(zone 不可进),以及重入回的 500:交外层。

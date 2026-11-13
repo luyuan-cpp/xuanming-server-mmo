@@ -16,6 +16,28 @@ import (
 
 const unifiedStagingDir = "_unified"
 
+// unifiedGoExcludedDirs 是不进 go/proto 统一 Go 绑定的 proto 目录(相对 proto/ 根的第一级目录名)。
+//
+// opentelemetry:官方 opentelemetry-proto 的拷贝,只给 C++ 的 span 导出器编码 OTLP 用
+// (docs/design/distributed-tracing.md §10.3)。Go 一侧用 go-zero 带进来的官方模块 go.opentelemetry.io/proto/otlp;
+// 这里再生成一份同名消息(opentelemetry.proto.*),任何 Go 程序只要同时链接两份,protobuf 的全局注册表在 init 时
+// 就会因全名冲突 panic(google.golang.org/protobuf 的缺省冲突策略)。不生成就不存在这个隐患。
+var unifiedGoExcludedDirs = []string{"opentelemetry"}
+
+// pruneUnifiedGoExcludedDirs 从暂存目录里删掉 dirs 列出的目录,之后的 go_package 改写与 protoc 都看不到它们。
+// 目录不存在不算错误。
+func pruneUnifiedGoExcludedDirs(stagingRoot string, dirs []string) error {
+	for _, dir := range dirs {
+		if dir == "" || strings.ContainsAny(dir, `/\`) || dir == "." || dir == ".." {
+			continue // 只认第一级目录名,不让配置写错删到暂存目录之外
+		}
+		if err := os.RemoveAll(filepath.Join(stagingRoot, dir)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // BuildUnifiedGoProto generates all Go proto outputs into a single shared
 // module directory (go/proto/) instead of duplicating into each service.
 //
@@ -50,6 +72,14 @@ func BuildUnifiedGoProto(wg *sync.WaitGroup) {
 			logger.Global.Fatal("Unified Go proto: failed to copy proto sources",
 				zap.String("src", _config.Global.Paths.ProtoDir),
 				zap.String("dst", stagingRoot),
+				zap.Error(err),
+			)
+		}
+
+		// 2b. 去掉不进统一 Go 绑定的目录(见 unifiedGoExcludedDirs)。
+		if err := pruneUnifiedGoExcludedDirs(stagingRoot, unifiedGoExcludedDirs); err != nil {
+			logger.Global.Fatal("Unified Go proto: failed to drop excluded proto directories",
+				zap.String("staging_root", stagingRoot),
 				zap.Error(err),
 			)
 		}

@@ -9,6 +9,11 @@ import com.game.gateway.service.AssignGateService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+
 /**
  * Two-layer admission control on {@code POST /api/assign-gate}:
  *
@@ -56,7 +61,7 @@ public class AssignGateController {
         // 重入在这里被挡住(code=100 ratelimit 或 429)时客户端回到 queue-status 轮询,不退避重调本接口,
         // 契约见 AssignGateRequest#queueToken。冷却要跳过:恢复重入常在 5s 窗口内,会被自己挡住。
         boolean reentry = req.getQueueToken() != null && !req.getQueueToken().isBlank();
-        RateLimitDecision decision = limiter.check(req.getZoneId(), ip, reentry ? null : req.getAccount());
+        RateLimitDecision decision = limiter.check(req.getZoneId(), ip, reentry ? null : cooldownKey(req.getAccessToken()));
         if (decision.isQueue()) {
             return AssignGateResponse.queueing(decision.getRetryAfterMs(), decision.getQueuePosEstimate());
         }
@@ -64,5 +69,23 @@ public class AssignGateController {
             return AssignGateResponse.rateLimited(decision.getReason());
         }
         return assignGateService.assignGate(req);
+    }
+
+    /**
+     * 账号冷却的键。请求里没有可信的账号(账号只有 login 验过令牌之后才知道),所以按 access token 的 SHA-256 摘要分桶:
+     * "tok:" + 前 16 字节的十六进制。同一次登录签出的令牌共用一个冷却。不带令牌(匿名分配)返回 null,限流器对 null
+     * 跳过冷却,与以前不带 account 的请求相同。令牌原文不进 Redis 键,也不进日志。
+     */
+    static String cooldownKey(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return null;
+        }
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(accessToken.getBytes(StandardCharsets.UTF_8));
+            return "tok:" + HexFormat.of().formatHex(digest, 0, 16);
+        } catch (NoSuchAlgorithmException e) {
+            // 每个 JDK 都必须提供 SHA-256(Java SE 规范),走到这里是运行时损坏。
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
 }

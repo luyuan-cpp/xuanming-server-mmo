@@ -231,7 +231,10 @@ private:
         uint32_t messageId{0};
         std::shared_ptr<RpcMaintenanceOperation> maintenance;
         ClientDoneCallback done;
-        tracing::TraceContext trace;    // 发起时的 trace,回调前恢复成它的子 span
+        tracing::TraceContext trace;    // 发起时的 trace,回调执行时原样装回
+        // 这次调用的 client span(docs/design/distributed-tracing.md §10.3):发出时开、Deliver 时结束;
+        // 信封上带的是它的上下文。发起时不在 trace 里则为空 span。
+        tracing::PendingSpan span;
     };
     using OutstandingBatch = std::vector<std::pair<InflightCallId, OutstandingCall>>;
 

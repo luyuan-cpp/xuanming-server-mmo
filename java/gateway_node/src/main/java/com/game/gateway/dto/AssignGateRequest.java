@@ -8,10 +8,14 @@ public class AssignGateRequest {
      */
     private int zoneId;
 
-    /** Optional account hint, used by the limiter for cooldown keying
-     *  AND by go-zero for reconnect-bypass detection.
-     *  带 queue_token 的重入不把 account 交给限流器做冷却(G4b-J0),account 仍原样转给 login。 */
-    private String account;
+    /**
+     * /api/login 签发的 access token(JSON 字段 access_token)。login 用它鉴权并解出账号:免排队判定(该账号已有在线会话)
+     * 与排队身份只认这个账号。2026-11-12 之前这里是客户端自报的 account,没有经过鉴权,报出别人的账号名就能插队。
+     * 不带(排队重入带 queue_token 的除外)= 匿名分配,只在 login 的旧 gate 凭据登录还开着时放行;带了却无效回 code=401。
+     * 网关不解析令牌(格式与密钥都在 login):限流的账号冷却按它的摘要分桶,原文不进 Redis 键(AssignGateController#cooldownKey)。
+     * 带 queue_token 的重入不参与冷却(G4b-J0),令牌照样原样转给 login。
+     */
+    private String accessToken;
 
     /** Stable client device identifier. Threaded through to the queue
      *  meta so ops can audit "which device is queue position #N". */
@@ -49,8 +53,8 @@ public class AssignGateRequest {
     public int getZoneId() { return zoneId; }
     public void setZoneId(int zoneId) { this.zoneId = zoneId; }
 
-    public String getAccount() { return account; }
-    public void setAccount(String account) { this.account = account; }
+    public String getAccessToken() { return accessToken; }
+    public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
 
     public String getDeviceId() { return deviceId; }
     public void setDeviceId(String deviceId) { this.deviceId = deviceId; }

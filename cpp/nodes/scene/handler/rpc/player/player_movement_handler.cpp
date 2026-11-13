@@ -13,7 +13,7 @@
 #include "rpc/service_metadata/player_movement_service_metadata.h"
 #include "spatial/comp/nav_comp.h"
 #include "spatial/constants/nav.h"
-#include "spatial/system/movement.h"                  // BroadcastMove / ShouldDropReportAfterTeleport
+#include "spatial/system/movement.h"                  // BroadcastMove / HaltMotion / ShouldDropReportAfterTeleport
 #include "spatial/system/nav_query.h"
 #include "spatial/system/scene_spawn.h"
 #include "proto/common/component/battle_comp.pb.h"  // InBattleComp:回合制战斗在途不收移动上报
@@ -211,15 +211,12 @@ void SceneMovementClientPlayerHandler::MoveStop(entt::entity player,const ::Move
 	{
 		return;
 	}
-	// 战斗在途同样不收;但"停"本身是安全的收敛动作,清零速度不会让玩家位移,
-	// 所以这里只跳过位置上报,仍然把速度清零(战斗结束后不至于带着旧速度继续飘)。
-	// 归属交接冻结中同理(交接未成解冻后,不至于带着冻结前的速度继续飘)。
+	// 战斗在途、归属交接冻结中同样不收位置;"停"本身是安全的收敛动作,清零速度不会让玩家位移。
+	// 进入这两种状态时服务器已经停过一次(MovementSystem::HaltMotion),这里正常是空操作;
+	// 速度万一又不为零(状态与速度不是同一个写入口),照样清掉并给旁人补一条停步。静止再停不发,与 Java 版同一口径。
 	if (tlsEcs.actorRegistry.any_of<InBattleComp, PlayerFrozenComp>(player))
 	{
-		ApplyReportedVelocity(player, Velocity());
-		// 位置没有变,但"他停了"必须让观察者知道:进战 / 冻结前的最后一次广播还带着行走速度,
-		// 不发这一条,他在别人屏幕上会一直往前跑。
-		MovementSystem::BroadcastMove(player);
+		MovementSystem::HaltMotion(player);
 		return;
 	}
 	// 瞬移后的过期上报整条丢弃;速度在瞬移时已经清零,不需要这条"停"来收敛。
