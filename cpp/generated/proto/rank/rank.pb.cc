@@ -1155,7 +1155,7 @@ const ::_pbi::ClassData* GetRankAroundRequest_get_class_data() {
 #endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace rankpb
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2frank_2frank_2eproto[2];
+    file_level_enum_descriptors_proto_2frank_2frank_2eproto[3];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2frank_2frank_2eproto = nullptr;
 const ::uint32_t
@@ -1294,12 +1294,16 @@ const char descriptor_table_protodef_proto_2frank_2frank_2eproto[] ABSL_ATTRIBUT
     "\021RANK_SCOPE_CUSTOM\020\004*l\n\023RankGenerationSt"
     "ate\022\037\n\033RANK_GENERATION_UNSPECIFIED\020\000\022\030\n\024"
     "RANK_GENERATION_OPEN\020\001\022\032\n\026RANK_GENERATIO"
-    "N_SEALED\020\0022\257\001\n\020ClientPlayerRank\022F\n\013GetRa"
-    "nkPage\022\032.rankpb.GetRankPageRequest\032\033.ran"
-    "kpb.GetRankPageResponse\022L\n\rGetRankAround"
-    "\022\034.rankpb.GetRankAroundRequest\032\035.rankpb."
-    "GetRankAroundResponse\032\005\210\250\303\001\001B\025Z\017rank/pro"
-    "to/rank\230\324a\022b\006proto3"
+    "N_SEALED\020\002*\222\001\n\rRankBoardType\022\037\n\033RANK_BOA"
+    "RD_TYPE_UNSPECIFIED\020\000\022\035\n\031RANK_BOARD_TYPE"
+    "_MATCH_1V1\020\001\022\035\n\031RANK_BOARD_TYPE_MATCH_5V"
+    "5\020\002\022\"\n\036RANK_BOARD_TYPE_MATCH_PVP_TEAM\020\0032"
+    "\257\001\n\020ClientPlayerRank\022F\n\013GetRankPage\022\032.ra"
+    "nkpb.GetRankPageRequest\032\033.rankpb.GetRank"
+    "PageResponse\022L\n\rGetRankAround\022\034.rankpb.G"
+    "etRankAroundRequest\032\035.rankpb.GetRankArou"
+    "ndResponse\032\005\210\250\303\001\001B\025Z\017rank/proto/rank\230\324a\022"
+    "b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2frank_2frank_2eproto_deps[2] = {
@@ -1310,7 +1314,7 @@ static ::absl::once_flag descriptor_table_proto_2frank_2frank_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2frank_2frank_2eproto = {
     false,
     false,
-    1459,
+    1608,
     descriptor_table_protodef_proto_2frank_2frank_2eproto,
     "proto/rank/rank.proto",
     &descriptor_table_proto_2frank_2frank_2eproto_once,
@@ -1338,6 +1342,13 @@ RankGenerationState_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t RankGenerationState_internal_data_[] = {
     196608u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+RankBoardType_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2frank_2frank_2eproto);
+  return file_level_enum_descriptors_proto_2frank_2frank_2eproto[2];
+}
+PROTOBUF_CONSTINIT const uint32_t RankBoardType_internal_data_[] = {
+    262144u, 0u, };
 // ===================================================================
 
 RankBoardKey::RankBoardKey(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)

@@ -40,12 +40,29 @@ message ProcessClientPlayerMessageRequest
   // 而新 gate 上同一个 session 号已经属于 B —— 不带玩家身份的话 B 的客户端消息
   // 会被派发到 A 的实体上执行。0 = 老 gate(灰度窗口),scene 放行不校验。
   uint64 player_id = 3;
+  // gate 收到这条消息时,会话绑的场景路由(场景实例或 scene 节点)与此刻发出时不同:它在 gate 的场景 lane 里排着
+  // 等过一次换场景或换节点,换完才发出(docs/design/client-scene-request-handoff-hold.md S13)。scene 对换节点执行
+  // 含义不变的请求照常处理;含义绑在当时那个场景上的(换图、瞬移、放技能、神秘商人、移动等)不在这里执行。
+  bool received_on_previous_route = 4;
+}
+
+// scene 在派发一条客户端消息之前的处置(docs/design/client-scene-request-handoff-hold.md §4.3)。只在 gate 与 scene 之间用,
+// 不是客户端可见契约。
+enum ClientMessageDispatchVerdict
+{
+  // 未填:已派发(应答带 message_content),或派发前确定拒绝(不带 message_content,gate 回 1003)。旧版 scene 一律是它。
+  CLIENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIED = 0;
+  // 请求确定未执行,而且等一等就能受理:玩家归属正在交接(换场景节点),或还没在本节点就绪(会话未登记、存档载入中)。
+  // gate 把这条请求放回会话队头,在有界等待内按收包顺序重投到玩家当时所在的节点。应答不带 message_content。
+  CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER = 1;
 }
 
 message ProcessClientPlayerMessageResponse
 {
   MessageContent message_content = 1;
   uint32 session_id = 2;
+  // 派发前的处置;只在没有 message_content 时有意义。0 = 旧版 scene 或确定拒绝。
+  ClientMessageDispatchVerdict dispatch_verdict = 3;
 }
 
 message SessionDisconnectRequest
@@ -76,6 +93,10 @@ message CreateSceneRequest
   // 计数器分配,同一次放置的建场景、拆场景带同一个值;init 向属主补建时带频道当前的代次。0 = 不带代次(副本、镜像、从没换过
   // 节点的频道)。scene 节点已按 >= 本值的代次拆过这个场景时拒收:不建、不复用,回空应答。
   uint64 placement_generation = 6;
+  // 场景所属的 zone(docs/design/redis-cluster-all-domains-20261110.md §3.4):scene_manager 填本进程的 zone,场景的控制域键
+  // 写在这个 zone 的 {ctl:<z>} 下。scene 节点的归属对账只按自己的 zone 拼键,所以 zone 不是本节点的就拒建
+  // (gRPC 面回 FAILED_PRECONDITION,muduo 面回空应答),0 同样拒建。只在 scene_manager 与 scene 之间用,客户端不可见。
+  uint32 zone_id = 7;
 }
 
 message CreateSceneResponse

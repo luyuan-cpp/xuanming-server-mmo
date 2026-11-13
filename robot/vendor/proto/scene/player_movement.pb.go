@@ -564,8 +564,9 @@ func (x *ActorMoveS2C) GetMoveState() uint32 {
 	return 0
 }
 
-// Batched form of ActorMoveS2C; used when a player first enters an AOI cell
-// and many actors must be synced at once.
+// Batched form of ActorMoveS2C:同一批里某个接收者要收的多条移动合成一条,客户端逐条按 ActorMoveS2C 处理,
+// 结果与分开发相同。服务器目前在组队跟随里用它:同一队形的队员同一 tick 起步、停步、拐弯、补校正时合并发出
+// (MovementSystem 旁的 ActorMoveBatch,docs/design/team-follow-server-trail.md §4)。只收一条时仍发 ActorMoveS2C。
 type ActorMoveListS2C struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Moves         []*ActorMoveS2C        `protobuf:"bytes,1,rep,name=moves,proto3" json:"moves,omitempty"`

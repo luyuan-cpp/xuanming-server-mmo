@@ -66,6 +66,7 @@ func decodeTrialLaunch(row *pb.GuildTrialLaunchRecord) (*pb.GuildTrialLaunchOrig
 	}
 	return out, nil
 }
+
 // scanTrialLaunch 按 trialLaunchColumns 的列序读一行;extra 接在后面,给多选了列的查询用(恢复器认领要多读检查时刻与次数)。
 func scanTrialLaunch(row rowScanner, extra ...any) (*pb.GuildTrialLaunchRecord, error) {
 	out := &pb.GuildTrialLaunchRecord{}
@@ -399,6 +400,7 @@ func (r *ActivityRepo) RecordTrialLaunchEndReason(ctx context.Context, requestID
 //   - 回执带对局(开局后 SQL ABORT,或发房前中止):trialBattleAbortedLobbyEndTip,这一局作废、结果不计;
 //   - 零 battle 的取消墓碑(Start 被 match 拒绝、根本没发,或结局未知后被取消)且实时路径记下了原因(realtime_end_tip):
 //     用它,名单上所有人看到与发起人同一个具体原因;没有记录时 trialNotStartedLobbyEndTip。
+//
 // 调用方已持这一行的 FOR UPDATE 锁。原字节解不开或 tip 为 0 时退回默认(只影响展示,不让坏的展示数据挡住释放)。
 func cancelledTrialLobbyEnd(ctx context.Context, tx *sql.Tx, requestID uint64, receipt *matchpb.CancelActivityBattleResponse) (uint32, []string, error) {
 	if receipt.GetBattleId() != 0 {

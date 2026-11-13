@@ -418,6 +418,62 @@ func (StrandedFormationVerdict) EnumDescriptor() ([]byte, []int) {
 	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{6}
 }
 
+// 带内拒绝:验签不过 / 参数不合法 / 审的不是当前待审版 / 库故障。业务结果都在带内,gRPC 恒返回 OK
+type BattleScriptReviewReject int32
+
+const (
+	BattleScriptReviewReject_BATTLE_SCRIPT_REVIEW_REJECT_NONE     BattleScriptReviewReject = 0
+	BattleScriptReviewReject_BATTLE_SCRIPT_REVIEW_REJECT_DENIED   BattleScriptReviewReject = 1 // 客户端来源、入口未开启(没配运营密钥)或签名无效
+	BattleScriptReviewReject_BATTLE_SCRIPT_REVIEW_REJECT_INVALID  BattleScriptReviewReject = 2 // 参数不合法(limit 越界、驳回没写原因、审核员名超长……)
+	BattleScriptReviewReject_BATTLE_SCRIPT_REVIEW_REJECT_STALE    BattleScriptReviewReject = 3 // 这一版已不是当前待审版(作者又改了、删了,或已被审过):重新拉待审列表
+	BattleScriptReviewReject_BATTLE_SCRIPT_REVIEW_REJECT_INTERNAL BattleScriptReviewReject = 4 // 库故障;只读列表可直接重试,审核提交结果未知时先重新拉列表核对
+)
+
+// Enum value maps for BattleScriptReviewReject.
+var (
+	BattleScriptReviewReject_name = map[int32]string{
+		0: "BATTLE_SCRIPT_REVIEW_REJECT_NONE",
+		1: "BATTLE_SCRIPT_REVIEW_REJECT_DENIED",
+		2: "BATTLE_SCRIPT_REVIEW_REJECT_INVALID",
+		3: "BATTLE_SCRIPT_REVIEW_REJECT_STALE",
+		4: "BATTLE_SCRIPT_REVIEW_REJECT_INTERNAL",
+	}
+	BattleScriptReviewReject_value = map[string]int32{
+		"BATTLE_SCRIPT_REVIEW_REJECT_NONE":     0,
+		"BATTLE_SCRIPT_REVIEW_REJECT_DENIED":   1,
+		"BATTLE_SCRIPT_REVIEW_REJECT_INVALID":  2,
+		"BATTLE_SCRIPT_REVIEW_REJECT_STALE":    3,
+		"BATTLE_SCRIPT_REVIEW_REJECT_INTERNAL": 4,
+	}
+)
+
+func (x BattleScriptReviewReject) Enum() *BattleScriptReviewReject {
+	p := new(BattleScriptReviewReject)
+	*p = x
+	return p
+}
+
+func (x BattleScriptReviewReject) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (BattleScriptReviewReject) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_internal_proto_enumTypes[7].Descriptor()
+}
+
+func (BattleScriptReviewReject) Type() protoreflect.EnumType {
+	return &file_proto_match_match_internal_proto_enumTypes[7]
+}
+
+func (x BattleScriptReviewReject) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use BattleScriptReviewReject.Descriptor instead.
+func (BattleScriptReviewReject) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{7}
+}
+
 type StartActivityBattleRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	BattleConfigId uint32                 `protobuf:"varint,1,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // DungeonTable id(= GuildActivity.dungeon_id);非 0
@@ -504,7 +560,7 @@ type StartActivityBattleResponse struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Reject           ActivityBattleReject   `protobuf:"varint,1,opt,name=reject,proto3,enum=match.ActivityBattleReject" json:"reject,omitempty"`
 	OffenderPlayerId uint64                 `protobuf:"varint,2,opt,name=offender_player_id,json=offenderPlayerId,proto3" json:"offender_player_id,omitempty"` // reject 为 MEMBER_OFFLINE / MEMBER_IN_BATTLE / MEMBER_NOT_READY 时非 0(名单顺序里第一个不满足的人);其余为 0
-	// reject == NONE 时非 0:match 同步生成(shared/snowflake,battle_id 唯一生产者)并已为全员建好 matched 票、
+	// reject == NONE 时非 0:match 同步从发号器领号(biz_tag=battle,match 是 battle_id 唯一生产者)并已为全员建好 matched 票、
 	// 异步启动 gather;guild 据此登记 guild_trial_battle。gather 之后失败时全员删票、不回队列,
 	// 该 battle_id 不会产生结果事件,由 guild 巡检器兜底判 EXPIRED。
 	BattleId       uint64 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
@@ -1865,12 +1921,12 @@ func (x *StrandedFormation) GetTickets() []*StrandedFormationTicket {
 }
 
 // 列出已过截止加宽限、仍停在 state 2/3/4 且带持久 Create 原件的成局(含原件合格、等自动恢复的局),只读、不加锁。
-// 沿 (state,retry_at_ms) 索引按 (retry_at_ms, battle_id) 升序翻页,与到期恢复同一顺序。
+// 按 battle_id 升序翻页(2026-11-11 起;retry_at_ms 会随取证排期变化,按它翻页会重复列出同一局)。
 type ListStrandedFormationsRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	AfterRetryAtMs uint64                 `protobuf:"varint,1,opt,name=after_retry_at_ms,json=afterRetryAtMs,proto3" json:"after_retry_at_ms,omitempty"` // 游标;两者都为 0 从头开始
-	AfterBattleId  uint64                 `protobuf:"varint,2,opt,name=after_battle_id,json=afterBattleId,proto3" json:"after_battle_id,omitempty"`
-	Limit          uint32                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"` // 1..100
+	AfterRetryAtMs uint64                 `protobuf:"varint,1,opt,name=after_retry_at_ms,json=afterRetryAtMs,proto3" json:"after_retry_at_ms,omitempty"` // 保留不用(2026-11-11 起服务端忽略、回包恒为 0);游标只看 after_battle_id
+	AfterBattleId  uint64                 `protobuf:"varint,2,opt,name=after_battle_id,json=afterBattleId,proto3" json:"after_battle_id,omitempty"`      // 游标;0 从头开始
+	Limit          uint32                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`                                             // 1..100
 	Auth           *base.ServiceCallAuth  `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
@@ -1938,10 +1994,10 @@ type ListStrandedFormationsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Retry         bool                   `protobuf:"varint,1,opt,name=retry,proto3" json:"retry,omitempty"` // true = 这一次没读成,其余字段无意义
 	Formations    []*StrandedFormation   `protobuf:"bytes,2,rep,name=formations,proto3" json:"formations,omitempty"`
-	NextRetryAtMs uint64                 `protobuf:"varint,3,opt,name=next_retry_at_ms,json=nextRetryAtMs,proto3" json:"next_retry_at_ms,omitempty"` // 两者都为 0 = 已到末尾
-	NextBattleId  uint64                 `protobuf:"varint,4,opt,name=next_battle_id,json=nextBattleId,proto3" json:"next_battle_id,omitempty"`
-	NowMs         uint64                 `protobuf:"varint,5,opt,name=now_ms,json=nowMs,proto3" json:"now_ms,omitempty"` // TiDB 时刻
-	Target        string                 `protobuf:"bytes,6,opt,name=target,proto3" json:"target,omitempty"`             // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
+	NextRetryAtMs uint64                 `protobuf:"varint,3,opt,name=next_retry_at_ms,json=nextRetryAtMs,proto3" json:"next_retry_at_ms,omitempty"` // 保留不用,恒为 0(2026-11-11)
+	NextBattleId  uint64                 `protobuf:"varint,4,opt,name=next_battle_id,json=nextBattleId,proto3" json:"next_battle_id,omitempty"`      // 下一页游标;0 = 已到末尾
+	NowMs         uint64                 `protobuf:"varint,5,opt,name=now_ms,json=nowMs,proto3" json:"now_ms,omitempty"`                             // TiDB 时刻
+	Target        string                 `protobuf:"bytes,6,opt,name=target,proto3" json:"target,omitempty"`                                         // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2203,11 +2259,327 @@ func (x *ResolveStrandedFormationResponse) GetAuditLine() string {
 	return ""
 }
 
+type ListPendingBattleScriptsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Limit         uint32                 `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"` // 1..50
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPendingBattleScriptsRequest) Reset() {
+	*x = ListPendingBattleScriptsRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPendingBattleScriptsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPendingBattleScriptsRequest) ProtoMessage() {}
+
+func (x *ListPendingBattleScriptsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPendingBattleScriptsRequest.ProtoReflect.Descriptor instead.
+func (*ListPendingBattleScriptsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ListPendingBattleScriptsRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListPendingBattleScriptsRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type PendingBattleScript struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ScriptId         uint64                 `protobuf:"varint,1,opt,name=script_id,json=scriptId,proto3" json:"script_id,omitempty"`
+	OwnerPlayerId    uint64                 `protobuf:"varint,2,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
+	Revision         uint32                 `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
+	Content          *battle.BattleScript   `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"` // 待审的这一版正文
+	SubmittedMs      uint64                 `protobuf:"varint,5,opt,name=submitted_ms,json=submittedMs,proto3" json:"submitted_ms,omitempty"`
+	ApprovedRevision uint32                 `protobuf:"varint,6,opt,name=approved_revision,json=approvedRevision,proto3" json:"approved_revision,omitempty"` // 作者上一次通过的版本;0 = 首次送审
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *PendingBattleScript) Reset() {
+	*x = PendingBattleScript{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PendingBattleScript) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PendingBattleScript) ProtoMessage() {}
+
+func (x *PendingBattleScript) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PendingBattleScript.ProtoReflect.Descriptor instead.
+func (*PendingBattleScript) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *PendingBattleScript) GetScriptId() uint64 {
+	if x != nil {
+		return x.ScriptId
+	}
+	return 0
+}
+
+func (x *PendingBattleScript) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+func (x *PendingBattleScript) GetRevision() uint32 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *PendingBattleScript) GetContent() *battle.BattleScript {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *PendingBattleScript) GetSubmittedMs() uint64 {
+	if x != nil {
+		return x.SubmittedMs
+	}
+	return 0
+}
+
+func (x *PendingBattleScript) GetApprovedRevision() uint32 {
+	if x != nil {
+		return x.ApprovedRevision
+	}
+	return 0
+}
+
+type ListPendingBattleScriptsResponse struct {
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	Reject        BattleScriptReviewReject `protobuf:"varint,1,opt,name=reject,proto3,enum=match.BattleScriptReviewReject" json:"reject,omitempty"`
+	Scripts       []*PendingBattleScript   `protobuf:"bytes,2,rep,name=scripts,proto3" json:"scripts,omitempty"` // 先提交的在前
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPendingBattleScriptsResponse) Reset() {
+	*x = ListPendingBattleScriptsResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPendingBattleScriptsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPendingBattleScriptsResponse) ProtoMessage() {}
+
+func (x *ListPendingBattleScriptsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPendingBattleScriptsResponse.ProtoReflect.Descriptor instead.
+func (*ListPendingBattleScriptsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ListPendingBattleScriptsResponse) GetReject() BattleScriptReviewReject {
+	if x != nil {
+		return x.Reject
+	}
+	return BattleScriptReviewReject_BATTLE_SCRIPT_REVIEW_REJECT_NONE
+}
+
+func (x *ListPendingBattleScriptsResponse) GetScripts() []*PendingBattleScript {
+	if x != nil {
+		return x.Scripts
+	}
+	return nil
+}
+
+type ReviewBattleScriptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ScriptId      uint64                 `protobuf:"varint,1,opt,name=script_id,json=scriptId,proto3" json:"script_id,omitempty"`
+	Revision      uint32                 `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"` // 审的是哪一版:必须仍是当前提交版且待审,否则 STALE
+	Approve       bool                   `protobuf:"varint,3,opt,name=approve,proto3" json:"approve,omitempty"`
+	Reviewer      string                 `protobuf:"bytes,4,opt,name=reviewer,proto3" json:"reviewer,omitempty"` // 1..64 字节,不含控制字符
+	Reason        string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`     // ≤191 字节;驳回必填(作者会看到)
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,6,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReviewBattleScriptRequest) Reset() {
+	*x = ReviewBattleScriptRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReviewBattleScriptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReviewBattleScriptRequest) ProtoMessage() {}
+
+func (x *ReviewBattleScriptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReviewBattleScriptRequest.ProtoReflect.Descriptor instead.
+func (*ReviewBattleScriptRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ReviewBattleScriptRequest) GetScriptId() uint64 {
+	if x != nil {
+		return x.ScriptId
+	}
+	return 0
+}
+
+func (x *ReviewBattleScriptRequest) GetRevision() uint32 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *ReviewBattleScriptRequest) GetApprove() bool {
+	if x != nil {
+		return x.Approve
+	}
+	return false
+}
+
+func (x *ReviewBattleScriptRequest) GetReviewer() string {
+	if x != nil {
+		return x.Reviewer
+	}
+	return ""
+}
+
+func (x *ReviewBattleScriptRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *ReviewBattleScriptRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type ReviewBattleScriptResponse struct {
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	Reject        BattleScriptReviewReject `protobuf:"varint,1,opt,name=reject,proto3,enum=match.BattleScriptReviewReject" json:"reject,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReviewBattleScriptResponse) Reset() {
+	*x = ReviewBattleScriptResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReviewBattleScriptResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReviewBattleScriptResponse) ProtoMessage() {}
+
+func (x *ReviewBattleScriptResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReviewBattleScriptResponse.ProtoReflect.Descriptor instead.
+func (*ReviewBattleScriptResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ReviewBattleScriptResponse) GetReject() BattleScriptReviewReject {
+	if x != nil {
+		return x.Reject
+	}
+	return BattleScriptReviewReject_BATTLE_SCRIPT_REVIEW_REJECT_NONE
+}
+
 var File_proto_match_match_internal_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\n" +
-	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/player_battle.proto\x1a)proto/common/base/service_call_auth.proto\"\x86\x02\n" +
+	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/battle_script.proto\x1a proto/battle/player_battle.proto\x1a)proto/common/base/service_call_auth.proto\"\x86\x02\n" +
 	"\x1aStartActivityBattleRequest\x12(\n" +
 	"\x10battle_config_id\x18\x01 \x01(\rR\x0ebattleConfigId\x12*\n" +
 	"\x11member_player_ids\x18\x02 \x03(\x04R\x0fmemberPlayerIds\x12A\n" +
@@ -2356,7 +2728,29 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\areplica\x18\x05 \x01(\tR\areplica\x12\x18\n" +
 	"\arefusal\x18\x06 \x01(\tR\arefusal\x12\x1d\n" +
 	"\n" +
-	"audit_line\x18\a \x01(\tR\tauditLine*\x8e\x02\n" +
+	"audit_line\x18\a \x01(\tR\tauditLine\"i\n" +
+	"\x1fListPendingBattleScriptsRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\rR\x05limit\x120\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xef\x01\n" +
+	"\x13PendingBattleScript\x12\x1b\n" +
+	"\tscript_id\x18\x01 \x01(\x04R\bscriptId\x12&\n" +
+	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x1a\n" +
+	"\brevision\x18\x03 \x01(\rR\brevision\x12'\n" +
+	"\acontent\x18\x04 \x01(\v2\r.BattleScriptR\acontent\x12!\n" +
+	"\fsubmitted_ms\x18\x05 \x01(\x04R\vsubmittedMs\x12+\n" +
+	"\x11approved_revision\x18\x06 \x01(\rR\x10approvedRevision\"\x91\x01\n" +
+	" ListPendingBattleScriptsResponse\x127\n" +
+	"\x06reject\x18\x01 \x01(\x0e2\x1f.match.BattleScriptReviewRejectR\x06reject\x124\n" +
+	"\ascripts\x18\x02 \x03(\v2\x1a.match.PendingBattleScriptR\ascripts\"\xd4\x01\n" +
+	"\x19ReviewBattleScriptRequest\x12\x1b\n" +
+	"\tscript_id\x18\x01 \x01(\x04R\bscriptId\x12\x1a\n" +
+	"\brevision\x18\x02 \x01(\rR\brevision\x12\x18\n" +
+	"\aapprove\x18\x03 \x01(\bR\aapprove\x12\x1a\n" +
+	"\breviewer\x18\x04 \x01(\tR\breviewer\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x120\n" +
+	"\x04auth\x18\x06 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"U\n" +
+	"\x1aReviewBattleScriptResponse\x127\n" +
+	"\x06reject\x18\x01 \x01(\x0e2\x1f.match.BattleScriptReviewRejectR\x06reject*\x8e\x02\n" +
 	"\x14ActivityBattleReject\x12\x1f\n" +
 	"\x1bACTIVITY_BATTLE_REJECT_NONE\x10\x00\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_INVALID_ARGUMENT\x10\x01\x12)\n" +
@@ -2397,7 +2791,13 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\"STRANDED_FORMATION_VERDICT_CHANGED\x10\x03\x12'\n" +
 	"#STRANDED_FORMATION_VERDICT_RESOLVED\x10\x04\x12(\n" +
 	"$STRANDED_FORMATION_VERDICT_NOT_FOUND\x10\x05\x12$\n" +
-	" STRANDED_FORMATION_VERDICT_RETRY\x10\x062\xf4\a\n" +
+	" STRANDED_FORMATION_VERDICT_RETRY\x10\x06*\xe2\x01\n" +
+	"\x18BattleScriptReviewReject\x12$\n" +
+	" BATTLE_SCRIPT_REVIEW_REJECT_NONE\x10\x00\x12&\n" +
+	"\"BATTLE_SCRIPT_REVIEW_REJECT_DENIED\x10\x01\x12'\n" +
+	"#BATTLE_SCRIPT_REVIEW_REJECT_INVALID\x10\x02\x12%\n" +
+	"!BATTLE_SCRIPT_REVIEW_REJECT_STALE\x10\x03\x12(\n" +
+	"$BATTLE_SCRIPT_REVIEW_REJECT_INTERNAL\x10\x042\xbc\t\n" +
 	"\rMatchInternal\x12\\\n" +
 	"\x13StartActivityBattle\x12!.match.StartActivityBattleRequest\x1a\".match.StartActivityBattleResponse\x12_\n" +
 	"\x14CancelActivityBattle\x12\".match.CancelActivityBattleRequest\x1a#.match.CancelActivityBattleResponse\x12\\\n" +
@@ -2408,7 +2808,9 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\x13GetBattleCompletion\x12!.match.GetBattleCompletionRequest\x1a\".match.GetBattleCompletionResponse\x12n\n" +
 	"\x19GetBattleTerminalDecision\x12'.match.GetBattleTerminalDecisionRequest\x1a(.match.GetBattleTerminalDecisionResponse\x12e\n" +
 	"\x16ListStrandedFormations\x12$.match.ListStrandedFormationsRequest\x1a%.match.ListStrandedFormationsResponse\x12k\n" +
-	"\x18ResolveStrandedFormation\x12&.match.ResolveStrandedFormationRequest\x1a'.match.ResolveStrandedFormationResponseB\x14\x98\xd4a\x15Z\vproto/match\x80\x01\x00b\x06proto3"
+	"\x18ResolveStrandedFormation\x12&.match.ResolveStrandedFormationRequest\x1a'.match.ResolveStrandedFormationResponse\x12k\n" +
+	"\x18ListPendingBattleScripts\x12&.match.ListPendingBattleScriptsRequest\x1a'.match.ListPendingBattleScriptsResponse\x12Y\n" +
+	"\x12ReviewBattleScript\x12 .match.ReviewBattleScriptRequest\x1a!.match.ReviewBattleScriptResponseB\x14\x98\xd4a\x15Z\vproto/match\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_match_match_internal_proto_rawDescOnce sync.Once
@@ -2422,8 +2824,8 @@ func file_proto_match_match_internal_proto_rawDescGZIP() []byte {
 	return file_proto_match_match_internal_proto_rawDescData
 }
 
-var file_proto_match_match_internal_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_proto_match_match_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_proto_match_match_internal_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
+var file_proto_match_match_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_proto_match_match_internal_proto_goTypes = []any{
 	(ActivityBattleReject)(0),                 // 0: match.ActivityBattleReject
 	(BattleOutcomeDecision)(0),                // 1: match.BattleOutcomeDecision
@@ -2432,94 +2834,111 @@ var file_proto_match_match_internal_proto_goTypes = []any{
 	(StrandedFormationClass)(0),               // 4: match.StrandedFormationClass
 	(StrandedFormationMode)(0),                // 5: match.StrandedFormationMode
 	(StrandedFormationVerdict)(0),             // 6: match.StrandedFormationVerdict
-	(*StartActivityBattleRequest)(nil),        // 7: match.StartActivityBattleRequest
-	(*StartActivityBattleResponse)(nil),       // 8: match.StartActivityBattleResponse
-	(*CancelActivityBattleRequest)(nil),       // 9: match.CancelActivityBattleRequest
-	(*CancelActivityBattleResponse)(nil),      // 10: match.CancelActivityBattleResponse
-	(*CommitBattleOutcomeRequest)(nil),        // 11: match.CommitBattleOutcomeRequest
-	(*CommitBattleOutcomeResponse)(nil),       // 12: match.CommitBattleOutcomeResponse
-	(*SetSpectateFeaturedRequest)(nil),        // 13: match.SetSpectateFeaturedRequest
-	(*SetSpectateFeaturedResponse)(nil),       // 14: match.SetSpectateFeaturedResponse
-	(*TrialOccupancyRole)(nil),                // 15: match.TrialOccupancyRole
-	(*AcquireTrialOccupancyRequest)(nil),      // 16: match.AcquireTrialOccupancyRequest
-	(*AcquireTrialOccupancyResponse)(nil),     // 17: match.AcquireTrialOccupancyResponse
-	(*ReleaseTrialOccupancyRequest)(nil),      // 18: match.ReleaseTrialOccupancyRequest
-	(*ReleaseTrialOccupancyResponse)(nil),     // 19: match.ReleaseTrialOccupancyResponse
-	(*GetBattleCompletionRequest)(nil),        // 20: match.GetBattleCompletionRequest
-	(*GetBattleCompletionResponse)(nil),       // 21: match.GetBattleCompletionResponse
-	(*GetBattleTerminalDecisionRequest)(nil),  // 22: match.GetBattleTerminalDecisionRequest
-	(*GetBattleTerminalDecisionResponse)(nil), // 23: match.GetBattleTerminalDecisionResponse
-	(*StrandedFormationTicket)(nil),           // 24: match.StrandedFormationTicket
-	(*StrandedFormation)(nil),                 // 25: match.StrandedFormation
-	(*ListStrandedFormationsRequest)(nil),     // 26: match.ListStrandedFormationsRequest
-	(*ListStrandedFormationsResponse)(nil),    // 27: match.ListStrandedFormationsResponse
-	(*ResolveStrandedFormationRequest)(nil),   // 28: match.ResolveStrandedFormationRequest
-	(*ResolveStrandedFormationResponse)(nil),  // 29: match.ResolveStrandedFormationResponse
-	(*battle.BattleActivityContext)(nil),      // 30: BattleActivityContext
-	(*base.ServiceCallAuth)(nil),              // 31: common.base.ServiceCallAuth
-	(*battle.BattleReplayEnvelope)(nil),       // 32: BattleReplayEnvelope
-	(battle.ESpectateTier)(0),                 // 33: eSpectateTier
+	(BattleScriptReviewReject)(0),             // 7: match.BattleScriptReviewReject
+	(*StartActivityBattleRequest)(nil),        // 8: match.StartActivityBattleRequest
+	(*StartActivityBattleResponse)(nil),       // 9: match.StartActivityBattleResponse
+	(*CancelActivityBattleRequest)(nil),       // 10: match.CancelActivityBattleRequest
+	(*CancelActivityBattleResponse)(nil),      // 11: match.CancelActivityBattleResponse
+	(*CommitBattleOutcomeRequest)(nil),        // 12: match.CommitBattleOutcomeRequest
+	(*CommitBattleOutcomeResponse)(nil),       // 13: match.CommitBattleOutcomeResponse
+	(*SetSpectateFeaturedRequest)(nil),        // 14: match.SetSpectateFeaturedRequest
+	(*SetSpectateFeaturedResponse)(nil),       // 15: match.SetSpectateFeaturedResponse
+	(*TrialOccupancyRole)(nil),                // 16: match.TrialOccupancyRole
+	(*AcquireTrialOccupancyRequest)(nil),      // 17: match.AcquireTrialOccupancyRequest
+	(*AcquireTrialOccupancyResponse)(nil),     // 18: match.AcquireTrialOccupancyResponse
+	(*ReleaseTrialOccupancyRequest)(nil),      // 19: match.ReleaseTrialOccupancyRequest
+	(*ReleaseTrialOccupancyResponse)(nil),     // 20: match.ReleaseTrialOccupancyResponse
+	(*GetBattleCompletionRequest)(nil),        // 21: match.GetBattleCompletionRequest
+	(*GetBattleCompletionResponse)(nil),       // 22: match.GetBattleCompletionResponse
+	(*GetBattleTerminalDecisionRequest)(nil),  // 23: match.GetBattleTerminalDecisionRequest
+	(*GetBattleTerminalDecisionResponse)(nil), // 24: match.GetBattleTerminalDecisionResponse
+	(*StrandedFormationTicket)(nil),           // 25: match.StrandedFormationTicket
+	(*StrandedFormation)(nil),                 // 26: match.StrandedFormation
+	(*ListStrandedFormationsRequest)(nil),     // 27: match.ListStrandedFormationsRequest
+	(*ListStrandedFormationsResponse)(nil),    // 28: match.ListStrandedFormationsResponse
+	(*ResolveStrandedFormationRequest)(nil),   // 29: match.ResolveStrandedFormationRequest
+	(*ResolveStrandedFormationResponse)(nil),  // 30: match.ResolveStrandedFormationResponse
+	(*ListPendingBattleScriptsRequest)(nil),   // 31: match.ListPendingBattleScriptsRequest
+	(*PendingBattleScript)(nil),               // 32: match.PendingBattleScript
+	(*ListPendingBattleScriptsResponse)(nil),  // 33: match.ListPendingBattleScriptsResponse
+	(*ReviewBattleScriptRequest)(nil),         // 34: match.ReviewBattleScriptRequest
+	(*ReviewBattleScriptResponse)(nil),        // 35: match.ReviewBattleScriptResponse
+	(*battle.BattleActivityContext)(nil),      // 36: BattleActivityContext
+	(*base.ServiceCallAuth)(nil),              // 37: common.base.ServiceCallAuth
+	(*battle.BattleReplayEnvelope)(nil),       // 38: BattleReplayEnvelope
+	(battle.ESpectateTier)(0),                 // 39: eSpectateTier
+	(*battle.BattleScript)(nil),               // 40: BattleScript
 }
 var file_proto_match_match_internal_proto_depIdxs = []int32{
-	30, // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
-	31, // 1: match.StartActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
+	36, // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
+	37, // 1: match.StartActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
 	0,  // 2: match.StartActivityBattleResponse.reject:type_name -> match.ActivityBattleReject
-	7,  // 3: match.CancelActivityBattleRequest.original:type_name -> match.StartActivityBattleRequest
-	31, // 4: match.CancelActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
-	31, // 5: match.CancelActivityBattleResponse.auth:type_name -> common.base.ServiceCallAuth
+	8,  // 3: match.CancelActivityBattleRequest.original:type_name -> match.StartActivityBattleRequest
+	37, // 4: match.CancelActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
+	37, // 5: match.CancelActivityBattleResponse.auth:type_name -> common.base.ServiceCallAuth
 	1,  // 6: match.CancelActivityBattleResponse.terminal_decision:type_name -> match.BattleOutcomeDecision
-	31, // 7: match.CommitBattleOutcomeRequest.auth:type_name -> common.base.ServiceCallAuth
-	32, // 8: match.CommitBattleOutcomeRequest.replay:type_name -> BattleReplayEnvelope
+	37, // 7: match.CommitBattleOutcomeRequest.auth:type_name -> common.base.ServiceCallAuth
+	38, // 8: match.CommitBattleOutcomeRequest.replay:type_name -> BattleReplayEnvelope
 	1,  // 9: match.CommitBattleOutcomeResponse.decision:type_name -> match.BattleOutcomeDecision
-	31, // 10: match.CommitBattleOutcomeResponse.auth:type_name -> common.base.ServiceCallAuth
-	31, // 11: match.SetSpectateFeaturedRequest.auth:type_name -> common.base.ServiceCallAuth
+	37, // 10: match.CommitBattleOutcomeResponse.auth:type_name -> common.base.ServiceCallAuth
+	37, // 11: match.SetSpectateFeaturedRequest.auth:type_name -> common.base.ServiceCallAuth
 	2,  // 12: match.SetSpectateFeaturedResponse.reject:type_name -> match.SpectateFeaturedReject
-	33, // 13: match.SetSpectateFeaturedResponse.tier:type_name -> eSpectateTier
-	15, // 14: match.AcquireTrialOccupancyRequest.roster:type_name -> match.TrialOccupancyRole
-	31, // 15: match.AcquireTrialOccupancyRequest.auth:type_name -> common.base.ServiceCallAuth
+	39, // 13: match.SetSpectateFeaturedResponse.tier:type_name -> eSpectateTier
+	16, // 14: match.AcquireTrialOccupancyRequest.roster:type_name -> match.TrialOccupancyRole
+	37, // 15: match.AcquireTrialOccupancyRequest.auth:type_name -> common.base.ServiceCallAuth
 	3,  // 16: match.AcquireTrialOccupancyResponse.reject:type_name -> match.TrialOccupancyReject
-	31, // 17: match.ReleaseTrialOccupancyRequest.auth:type_name -> common.base.ServiceCallAuth
+	37, // 17: match.ReleaseTrialOccupancyRequest.auth:type_name -> common.base.ServiceCallAuth
 	3,  // 18: match.ReleaseTrialOccupancyResponse.reject:type_name -> match.TrialOccupancyReject
-	31, // 19: match.GetBattleCompletionRequest.auth:type_name -> common.base.ServiceCallAuth
+	37, // 19: match.GetBattleCompletionRequest.auth:type_name -> common.base.ServiceCallAuth
 	3,  // 20: match.GetBattleCompletionResponse.reject:type_name -> match.TrialOccupancyReject
 	1,  // 21: match.GetBattleCompletionResponse.decision:type_name -> match.BattleOutcomeDecision
-	31, // 22: match.GetBattleTerminalDecisionRequest.auth:type_name -> common.base.ServiceCallAuth
+	37, // 22: match.GetBattleTerminalDecisionRequest.auth:type_name -> common.base.ServiceCallAuth
 	1,  // 23: match.GetBattleTerminalDecisionResponse.decision:type_name -> match.BattleOutcomeDecision
-	31, // 24: match.GetBattleTerminalDecisionResponse.auth:type_name -> common.base.ServiceCallAuth
+	37, // 24: match.GetBattleTerminalDecisionResponse.auth:type_name -> common.base.ServiceCallAuth
 	4,  // 25: match.StrandedFormation.formation_class:type_name -> match.StrandedFormationClass
 	1,  // 26: match.StrandedFormation.terminal_decision:type_name -> match.BattleOutcomeDecision
-	24, // 27: match.StrandedFormation.tickets:type_name -> match.StrandedFormationTicket
-	31, // 28: match.ListStrandedFormationsRequest.auth:type_name -> common.base.ServiceCallAuth
-	25, // 29: match.ListStrandedFormationsResponse.formations:type_name -> match.StrandedFormation
+	25, // 27: match.StrandedFormation.tickets:type_name -> match.StrandedFormationTicket
+	37, // 28: match.ListStrandedFormationsRequest.auth:type_name -> common.base.ServiceCallAuth
+	26, // 29: match.ListStrandedFormationsResponse.formations:type_name -> match.StrandedFormation
 	5,  // 30: match.ResolveStrandedFormationRequest.mode:type_name -> match.StrandedFormationMode
-	31, // 31: match.ResolveStrandedFormationRequest.auth:type_name -> common.base.ServiceCallAuth
+	37, // 31: match.ResolveStrandedFormationRequest.auth:type_name -> common.base.ServiceCallAuth
 	6,  // 32: match.ResolveStrandedFormationResponse.verdict:type_name -> match.StrandedFormationVerdict
-	25, // 33: match.ResolveStrandedFormationResponse.formation:type_name -> match.StrandedFormation
-	7,  // 34: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
-	9,  // 35: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
-	11, // 36: match.MatchInternal.CommitBattleOutcome:input_type -> match.CommitBattleOutcomeRequest
-	13, // 37: match.MatchInternal.SetSpectateFeatured:input_type -> match.SetSpectateFeaturedRequest
-	16, // 38: match.MatchInternal.AcquireTrialOccupancy:input_type -> match.AcquireTrialOccupancyRequest
-	18, // 39: match.MatchInternal.ReleaseTrialOccupancy:input_type -> match.ReleaseTrialOccupancyRequest
-	20, // 40: match.MatchInternal.GetBattleCompletion:input_type -> match.GetBattleCompletionRequest
-	22, // 41: match.MatchInternal.GetBattleTerminalDecision:input_type -> match.GetBattleTerminalDecisionRequest
-	26, // 42: match.MatchInternal.ListStrandedFormations:input_type -> match.ListStrandedFormationsRequest
-	28, // 43: match.MatchInternal.ResolveStrandedFormation:input_type -> match.ResolveStrandedFormationRequest
-	8,  // 44: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
-	10, // 45: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
-	12, // 46: match.MatchInternal.CommitBattleOutcome:output_type -> match.CommitBattleOutcomeResponse
-	14, // 47: match.MatchInternal.SetSpectateFeatured:output_type -> match.SetSpectateFeaturedResponse
-	17, // 48: match.MatchInternal.AcquireTrialOccupancy:output_type -> match.AcquireTrialOccupancyResponse
-	19, // 49: match.MatchInternal.ReleaseTrialOccupancy:output_type -> match.ReleaseTrialOccupancyResponse
-	21, // 50: match.MatchInternal.GetBattleCompletion:output_type -> match.GetBattleCompletionResponse
-	23, // 51: match.MatchInternal.GetBattleTerminalDecision:output_type -> match.GetBattleTerminalDecisionResponse
-	27, // 52: match.MatchInternal.ListStrandedFormations:output_type -> match.ListStrandedFormationsResponse
-	29, // 53: match.MatchInternal.ResolveStrandedFormation:output_type -> match.ResolveStrandedFormationResponse
-	44, // [44:54] is the sub-list for method output_type
-	34, // [34:44] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	26, // 33: match.ResolveStrandedFormationResponse.formation:type_name -> match.StrandedFormation
+	37, // 34: match.ListPendingBattleScriptsRequest.auth:type_name -> common.base.ServiceCallAuth
+	40, // 35: match.PendingBattleScript.content:type_name -> BattleScript
+	7,  // 36: match.ListPendingBattleScriptsResponse.reject:type_name -> match.BattleScriptReviewReject
+	32, // 37: match.ListPendingBattleScriptsResponse.scripts:type_name -> match.PendingBattleScript
+	37, // 38: match.ReviewBattleScriptRequest.auth:type_name -> common.base.ServiceCallAuth
+	7,  // 39: match.ReviewBattleScriptResponse.reject:type_name -> match.BattleScriptReviewReject
+	8,  // 40: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
+	10, // 41: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
+	12, // 42: match.MatchInternal.CommitBattleOutcome:input_type -> match.CommitBattleOutcomeRequest
+	14, // 43: match.MatchInternal.SetSpectateFeatured:input_type -> match.SetSpectateFeaturedRequest
+	17, // 44: match.MatchInternal.AcquireTrialOccupancy:input_type -> match.AcquireTrialOccupancyRequest
+	19, // 45: match.MatchInternal.ReleaseTrialOccupancy:input_type -> match.ReleaseTrialOccupancyRequest
+	21, // 46: match.MatchInternal.GetBattleCompletion:input_type -> match.GetBattleCompletionRequest
+	23, // 47: match.MatchInternal.GetBattleTerminalDecision:input_type -> match.GetBattleTerminalDecisionRequest
+	27, // 48: match.MatchInternal.ListStrandedFormations:input_type -> match.ListStrandedFormationsRequest
+	29, // 49: match.MatchInternal.ResolveStrandedFormation:input_type -> match.ResolveStrandedFormationRequest
+	31, // 50: match.MatchInternal.ListPendingBattleScripts:input_type -> match.ListPendingBattleScriptsRequest
+	34, // 51: match.MatchInternal.ReviewBattleScript:input_type -> match.ReviewBattleScriptRequest
+	9,  // 52: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
+	11, // 53: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
+	13, // 54: match.MatchInternal.CommitBattleOutcome:output_type -> match.CommitBattleOutcomeResponse
+	15, // 55: match.MatchInternal.SetSpectateFeatured:output_type -> match.SetSpectateFeaturedResponse
+	18, // 56: match.MatchInternal.AcquireTrialOccupancy:output_type -> match.AcquireTrialOccupancyResponse
+	20, // 57: match.MatchInternal.ReleaseTrialOccupancy:output_type -> match.ReleaseTrialOccupancyResponse
+	22, // 58: match.MatchInternal.GetBattleCompletion:output_type -> match.GetBattleCompletionResponse
+	24, // 59: match.MatchInternal.GetBattleTerminalDecision:output_type -> match.GetBattleTerminalDecisionResponse
+	28, // 60: match.MatchInternal.ListStrandedFormations:output_type -> match.ListStrandedFormationsResponse
+	30, // 61: match.MatchInternal.ResolveStrandedFormation:output_type -> match.ResolveStrandedFormationResponse
+	33, // 62: match.MatchInternal.ListPendingBattleScripts:output_type -> match.ListPendingBattleScriptsResponse
+	35, // 63: match.MatchInternal.ReviewBattleScript:output_type -> match.ReviewBattleScriptResponse
+	52, // [52:64] is the sub-list for method output_type
+	40, // [40:52] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_internal_proto_init() }
@@ -2532,8 +2951,8 @@ func file_proto_match_match_internal_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_internal_proto_rawDesc), len(file_proto_match_match_internal_proto_rawDesc)),
-			NumEnums:      7,
-			NumMessages:   23,
+			NumEnums:      8,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

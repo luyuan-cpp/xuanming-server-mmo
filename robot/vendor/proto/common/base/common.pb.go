@@ -154,11 +154,14 @@ type NodeInfo struct {
 	// login 挑 gate 时剔除人数到上限 90% 的 gate（docs/design/gate-load-balancing-design.md「满载与停写的 gate」）。
 	// 字段号 13 上线后不复用；废弃时写 `reserved 13;`（AGENTS.md §4.3）。
 	MaxConnections uint32 `protobuf:"varint,13,opt,name=max_connections,json=maxConnections,proto3" json:"max_connections,omitempty"`
-	// 可分配状态（R6）：此刻接不接新房间。只由 battle 填写，其它节点留 0（UNSPECIFIED）。
-	// battle 在 etcd 首次发布前填 CLOSED；建房准入闸打开且 Agones 放行许可后改 OPEN；排空、停机或维护关闸时改回 CLOSED。
-	// 只在变化时写 etcd，并按 watch 回读到的自身登记对账（cpp/nodes/battle/battle_admission_advertise.h），稳态零写入。
+	// 可分配状态（R6）：此刻接不接新工作。battle 与 scene 填写，其它节点留 0（UNSPECIFIED）。
+	// - battle：新房间。etcd 首次发布前填 CLOSED；建房准入闸打开且 Agones 放行许可后改 OPEN；排空、停机或维护关闸时改回 CLOSED。
+	//   match 选点排除 CLOSED。
+	// - scene：新场景、新玩家与疏散落点。平时留 UNSPECIFIED（按开放处理）；计划排空开始时改 CLOSED，之后不再打开
+	//   （docs/design/scene-node-planned-drain.md §4.2）。scene_manager 选点排除 CLOSED，不影响它是不是活着、是不是场景属主。
+	// 只在变化时写 etcd，并按 watch 回读到的自身登记对账（cpp/libs/engine/core/node/system/node/node_admission_advertise.h），稳态零写入。
 	// 负载不放这里：房间数随 CreateBattleResponse.room_count 捎回，不周期写注册信息（写放大与读量随进程数平方增长）。
-	// match 选点排除 CLOSED；UNSPECIFIED 视为可选（旧节点 / 未上报）。只是提示，能否建房仍由 battle 的准入判定。
+	// UNSPECIFIED 视为可选（旧节点 / 未上报）。只是提示，能否建房、建场景仍由节点自己的准入判定。
 	// 字段号 14 上线后不复用；废弃时写 `reserved 14;`（AGENTS.md §4.3）。
 	Admission NodeAdmission `protobuf:"varint,14,opt,name=admission,proto3,enum=NodeAdmission" json:"admission,omitempty"`
 	// 发布轨道（docs/design/release-track-gray-canary.md §2.1）："stable" 或 "canary"。
@@ -166,7 +169,13 @@ type NodeInfo struct {
 	// 消费方把空串（没写轨道的节点）当 stable，其他值当无效节点跳过。
 	// 用字符串不用枚举：发现方按 protojson 宽松解析，未知的枚举名会被静默丢成 0，将来新增的轨道会被误当成 stable。
 	// 字段号 15 上线后不复用；废弃时写 `reserved 15;`（AGENTS.md §4.3）。
-	ReleaseTrack  string `protobuf:"bytes,15,opt,name=release_track,json=releaseTrack,proto3" json:"release_track,omitempty"`
+	ReleaseTrack string `protobuf:"bytes,15,opt,name=release_track,json=releaseTrack,proto3" json:"release_track,omitempty"`
+	// 部署构建标识（docs/design/scene-node-planned-drain.md §4.6）：与 Pod 标签 mmorpg.io/build 同一个值，
+	// 部署经环境变量 MMORPG_BUILD_LABEL 注入，进程存续期间不变；空串 = 没上报（本机开发）。
+	// 只用于选点偏好：scene_manager 把「本 zone 里有排空中节点的构建」当作外出构建，落点优先选别的构建。
+	// 不参与任何提交判定，也不是发布轨道（release_track）。
+	// 字段号 16 上线后不复用；废弃时写 `reserved 16;`（AGENTS.md §4.3）。
+	Build         string `protobuf:"bytes,16,opt,name=build,proto3" json:"build,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -306,6 +315,13 @@ func (x *NodeInfo) GetReleaseTrack() string {
 	return ""
 }
 
+func (x *NodeInfo) GetBuild() string {
+	if x != nil {
+		return x.Build
+	}
+	return ""
+}
+
 type NetworkAddress struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ip            string                 `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
@@ -365,7 +381,7 @@ const file_proto_common_base_common_proto_rawDesc = "" +
 	"\x1eproto/common/base/common.proto\"2\n" +
 	"\fEndpointComp\x12\x0e\n" +
 	"\x02ip\x18\x01 \x01(\tR\x02ip\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\rR\x04port\"\xc3\x04\n" +
+	"\x04port\x18\x02 \x01(\rR\x04port\"\xd9\x04\n" +
 	"\bNodeInfo\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\rR\x06nodeId\x12\x1b\n" +
 	"\tnode_type\x18\x02 \x01(\rR\bnodeType\x12\x1f\n" +
@@ -383,7 +399,8 @@ const file_proto_common_base_common_proto_rawDesc = "" +
 	"\x0fphysical_region\x18\f \x01(\rR\x0ephysicalRegion\x12'\n" +
 	"\x0fmax_connections\x18\r \x01(\rR\x0emaxConnections\x12,\n" +
 	"\tadmission\x18\x0e \x01(\x0e2\x0e.NodeAdmissionR\tadmission\x12#\n" +
-	"\rrelease_track\x18\x0f \x01(\tR\freleaseTrack\"4\n" +
+	"\rrelease_track\x18\x0f \x01(\tR\freleaseTrack\x12\x14\n" +
+	"\x05build\x18\x10 \x01(\tR\x05build\"4\n" +
 	"\x0eNetworkAddress\x12\x0e\n" +
 	"\x02ip\x18\x01 \x01(\tR\x02ip\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port*c\n" +

@@ -29,6 +29,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/service.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/db/proto_option.pb.h"
@@ -63,6 +64,8 @@ struct TableStruct_proto_2fscene_2fscene_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fscene_2fscene_2eproto;
 }  // extern "C"
+enum ClientMessageDispatchVerdict : int;
+extern const uint32_t ClientMessageDispatchVerdict_internal_data_[];
 class CancelBattlePrepareRequest;
 struct CancelBattlePrepareRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -169,9 +172,54 @@ extern const SessionDisconnectRequestGlobalsTypeInternal SessionDisconnectReques
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::ClientMessageDispatchVerdict_internal_data_>
+    internal::EnumTraitsImpl::value<::ClientMessageDispatchVerdict>;
 }  // namespace protobuf
 }  // namespace google
 
+enum ClientMessageDispatchVerdict : int {
+  CLIENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIED = 0,
+  CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER = 1,
+  ClientMessageDispatchVerdict_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  ClientMessageDispatchVerdict_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t ClientMessageDispatchVerdict_internal_data_[];
+inline constexpr ClientMessageDispatchVerdict ClientMessageDispatchVerdict_MIN =
+    static_cast<ClientMessageDispatchVerdict>(0);
+inline constexpr ClientMessageDispatchVerdict ClientMessageDispatchVerdict_MAX =
+    static_cast<ClientMessageDispatchVerdict>(1);
+[[nodiscard]] inline bool ClientMessageDispatchVerdict_IsValid(int value) {
+  return 0 <= value && value <= 1;
+}
+inline constexpr int ClientMessageDispatchVerdict_ARRAYSIZE = 1 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ClientMessageDispatchVerdict_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(ClientMessageDispatchVerdict) {
+  return ClientMessageDispatchVerdict_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& ClientMessageDispatchVerdict_Name(T value) {
+  static_assert(::std::is_same<T, ClientMessageDispatchVerdict>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to ClientMessageDispatchVerdict_Name().");
+  return ClientMessageDispatchVerdict_Name(static_cast<ClientMessageDispatchVerdict>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& ClientMessageDispatchVerdict_Name(ClientMessageDispatchVerdict value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<ClientMessageDispatchVerdict_descriptor, 0, 1>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool ClientMessageDispatchVerdict_Parse(
+    ::absl::string_view name, ClientMessageDispatchVerdict* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<ClientMessageDispatchVerdict>(ClientMessageDispatchVerdict_descriptor(), name,
+                                           value);
+}
+using ::google::protobuf::internal::generated_enum::AbslParseFlag;
+using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // ===================================================================
 
@@ -1491,8 +1539,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateSceneRequest final : public :
     kSceneIdFieldNumber = 2,
     kConfigIdFieldNumber = 1,
     kMirrorConfigIdFieldNumber = 3,
-    kPlacementGenerationFieldNumber = 6,
     kDungeonConfigIdFieldNumber = 4,
+    kZoneIdFieldNumber = 7,
+    kPlacementGenerationFieldNumber = 6,
   };
   // repeated uint64 creator_ids = 5;
   [[nodiscard]] int creator_ids_size()
@@ -1544,16 +1593,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateSceneRequest final : public :
   void _internal_set_mirror_config_id(::uint32_t value);
 
   public:
-  // uint64 placement_generation = 6;
-  void clear_placement_generation() ;
-  [[nodiscard]] ::uint64_t placement_generation() const;
-  void set_placement_generation(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_placement_generation() const;
-  void _internal_set_placement_generation(::uint64_t value);
-
-  public:
   // uint32 dungeon_config_id = 4;
   void clear_dungeon_config_id() ;
   [[nodiscard]] ::uint32_t dungeon_config_id() const;
@@ -1564,11 +1603,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateSceneRequest final : public :
   void _internal_set_dungeon_config_id(::uint32_t value);
 
   public:
+  // uint32 zone_id = 7;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
+  // uint64 placement_generation = 6;
+  void clear_placement_generation() ;
+  [[nodiscard]] ::uint64_t placement_generation() const;
+  void set_placement_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_placement_generation() const;
+  void _internal_set_placement_generation(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CreateSceneRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1602,8 +1661,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateSceneRequest final : public :
     ::uint64_t scene_id_;
     ::uint32_t config_id_;
     ::uint32_t mirror_config_id_;
-    ::uint64_t placement_generation_;
     ::uint32_t dungeon_config_id_;
+    ::uint32_t zone_id_;
+    ::uint64_t placement_generation_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2418,6 +2478,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProcessClientPlayerMessageResponse 
   enum : int {
     kMessageContentFieldNumber = 1,
     kSessionIdFieldNumber = 2,
+    kDispatchVerdictFieldNumber = 3,
   };
   // .MessageContent message_content = 1;
   [[nodiscard]] bool has_message_content()
@@ -2445,11 +2506,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProcessClientPlayerMessageResponse 
   void _internal_set_session_id(::uint32_t value);
 
   public:
+  // .ClientMessageDispatchVerdict dispatch_verdict = 3;
+  void clear_dispatch_verdict() ;
+  [[nodiscard]] ::ClientMessageDispatchVerdict dispatch_verdict() const;
+  void set_dispatch_verdict(::ClientMessageDispatchVerdict value);
+
+  private:
+  ::ClientMessageDispatchVerdict _internal_dispatch_verdict() const;
+  void _internal_set_dispatch_verdict(::ClientMessageDispatchVerdict value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ProcessClientPlayerMessageResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2480,6 +2551,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProcessClientPlayerMessageResponse 
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::MessageContent* PROTOBUF_NULLABLE message_content_;
     ::uint32_t session_id_;
+    int dispatch_verdict_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2638,6 +2710,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProcessClientPlayerMessageRequest f
     kMessageContentFieldNumber = 1,
     kPlayerIdFieldNumber = 3,
     kSessionIdFieldNumber = 2,
+    kReceivedOnPreviousRouteFieldNumber = 4,
   };
   // .MessageContent message_content = 1;
   [[nodiscard]] bool has_message_content()
@@ -2675,11 +2748,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProcessClientPlayerMessageRequest f
   void _internal_set_session_id(::uint32_t value);
 
   public:
+  // bool received_on_previous_route = 4;
+  void clear_received_on_previous_route() ;
+  [[nodiscard]] bool received_on_previous_route() const;
+  void set_received_on_previous_route(bool value);
+
+  private:
+  bool _internal_received_on_previous_route() const;
+  void _internal_set_received_on_previous_route(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ProcessClientPlayerMessageRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2711,6 +2794,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProcessClientPlayerMessageRequest f
     ::MessageContent* PROTOBUF_NULLABLE message_content_;
     ::uint64_t player_id_;
     ::uint32_t session_id_;
+    bool received_on_previous_route_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3638,6 +3722,30 @@ inline void ProcessClientPlayerMessageRequest::_internal_set_player_id(::uint64_
   _impl_.player_id_ = value;
 }
 
+// bool received_on_previous_route = 4;
+inline void ProcessClientPlayerMessageRequest::clear_received_on_previous_route() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.received_on_previous_route_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool ProcessClientPlayerMessageRequest::received_on_previous_route() const {
+  // @@protoc_insertion_point(field_get:ProcessClientPlayerMessageRequest.received_on_previous_route)
+  return _internal_received_on_previous_route();
+}
+inline void ProcessClientPlayerMessageRequest::set_received_on_previous_route(bool value) {
+  _internal_set_received_on_previous_route(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ProcessClientPlayerMessageRequest.received_on_previous_route)
+}
+inline bool ProcessClientPlayerMessageRequest::_internal_received_on_previous_route() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.received_on_previous_route_;
+}
+inline void ProcessClientPlayerMessageRequest::_internal_set_received_on_previous_route(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.received_on_previous_route_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // ProcessClientPlayerMessageResponse
@@ -3757,6 +3865,30 @@ inline ::uint32_t ProcessClientPlayerMessageResponse::_internal_session_id() con
 inline void ProcessClientPlayerMessageResponse::_internal_set_session_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = value;
+}
+
+// .ClientMessageDispatchVerdict dispatch_verdict = 3;
+inline void ProcessClientPlayerMessageResponse::clear_dispatch_verdict() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.dispatch_verdict_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::ClientMessageDispatchVerdict ProcessClientPlayerMessageResponse::dispatch_verdict() const {
+  // @@protoc_insertion_point(field_get:ProcessClientPlayerMessageResponse.dispatch_verdict)
+  return _internal_dispatch_verdict();
+}
+inline void ProcessClientPlayerMessageResponse::set_dispatch_verdict(::ClientMessageDispatchVerdict value) {
+  _internal_set_dispatch_verdict(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ProcessClientPlayerMessageResponse.dispatch_verdict)
+}
+inline ::ClientMessageDispatchVerdict ProcessClientPlayerMessageResponse::_internal_dispatch_verdict() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::ClientMessageDispatchVerdict>(_impl_.dispatch_verdict_);
+}
+inline void ProcessClientPlayerMessageResponse::_internal_set_dispatch_verdict(::ClientMessageDispatchVerdict value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.dispatch_verdict_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4040,7 +4172,7 @@ inline void CreateSceneRequest::_internal_set_mirror_config_id(::uint32_t value)
 inline void CreateSceneRequest::clear_dungeon_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.dungeon_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t CreateSceneRequest::dungeon_config_id() const {
   // @@protoc_insertion_point(field_get:CreateSceneRequest.dungeon_config_id)
@@ -4048,7 +4180,7 @@ inline ::uint32_t CreateSceneRequest::dungeon_config_id() const {
 }
 inline void CreateSceneRequest::set_dungeon_config_id(::uint32_t value) {
   _internal_set_dungeon_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:CreateSceneRequest.dungeon_config_id)
 }
 inline ::uint32_t CreateSceneRequest::_internal_dungeon_config_id() const {
@@ -4115,7 +4247,7 @@ CreateSceneRequest::_internal_mutable_creator_ids() {
 inline void CreateSceneRequest::clear_placement_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.placement_generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t CreateSceneRequest::placement_generation() const {
   // @@protoc_insertion_point(field_get:CreateSceneRequest.placement_generation)
@@ -4123,7 +4255,7 @@ inline ::uint64_t CreateSceneRequest::placement_generation() const {
 }
 inline void CreateSceneRequest::set_placement_generation(::uint64_t value) {
   _internal_set_placement_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:CreateSceneRequest.placement_generation)
 }
 inline ::uint64_t CreateSceneRequest::_internal_placement_generation() const {
@@ -4133,6 +4265,30 @@ inline ::uint64_t CreateSceneRequest::_internal_placement_generation() const {
 inline void CreateSceneRequest::_internal_set_placement_generation(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.placement_generation_ = value;
+}
+
+// uint32 zone_id = 7;
+inline void CreateSceneRequest::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t CreateSceneRequest::zone_id() const {
+  // @@protoc_insertion_point(field_get:CreateSceneRequest.zone_id)
+  return _internal_zone_id();
+}
+inline void CreateSceneRequest::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:CreateSceneRequest.zone_id)
+}
+inline ::uint32_t CreateSceneRequest::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void CreateSceneRequest::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4910,6 +5066,19 @@ inline void SealAccountRoleTradeRequest::set_allocated_auth(::common::base::Serv
 
 // @@protoc_insertion_point(namespace_scope)
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::ClientMessageDispatchVerdict> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::ClientMessageDispatchVerdict>() {
+  return ::ClientMessageDispatchVerdict_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

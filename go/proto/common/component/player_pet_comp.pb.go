@@ -24,7 +24,7 @@ const (
 // 一只宝宝
 type PetInstance struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
-	PetId      uint64                 `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`                                                                       // SnowFlake guid,由 scene 节点铸(tlsSnowflakeManager)
+	PetId      uint64                 `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`                                                                       // scene 从发号器 item 号段领号(宝宝沿用 item 身份域,PetSystem::GrantPet 铸),只当身份用,不能解析
 	PetTableId uint32                 `protobuf:"varint,2,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`                                                      // 种类(Pet 表 id)
 	Name       string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                                                                       // 玩家自定义名;空 = 用 PetTable.name
 	Level      uint32                 `protobuf:"varint,4,opt,name=level,proto3" json:"level,omitempty"`                                                                                    // 派生自主人等级(见文件头),存下来只为离线展示与结算夹取

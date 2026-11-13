@@ -103,10 +103,11 @@ message FriendCapacityRecord {
   // 真实玩家,LIMIT 永远取不满,每轮都会扫完全部老行。
   // 代价:friend_count 每次增减要多维护一个二级索引项(加 / 删好友是低频写,可接受)。
   // ⚠ "扫描量恒等于命中行数"的前提是该索引真实存在。go/schemamigrate 对**已存在的表**只 ADD COLUMN,
-  // 缺普通索引只出一条 warning"缺索引(不会自动建)"、退出码仍是 0(见 plan.go 的 drift);索引只在
-  // 建表时随 CREATE TABLE 建出。本批之前已建过 friend_capacity 的环境必须手工执行
+  // 缺普通索引只报一条 warning(类别 FindingMissingIndex,文案以 `missing index` 开头),不会自动建;索引只在
+  // 建表时随 CREATE TABLE 建出。friend 按这个类别拒绝启动、-migrate 以 4 退出(go/friend/friend.go 的
+  // missingIndexWarnings),不让回收的候选读静默退化成每轮全表扫。本批之前已建过 friend_capacity 的环境必须手工执行
   // `ALTER TABLE friend_capacity ADD INDEX idx_friend_capacity_0 (friend_count, created_ms);`
-  // (索引名以 -migrate 的 warning 原文为准),否则回收的候选读每轮全表扫;
+  // (索引名以 -migrate 的 warning 原文为准)才起得来;
   // friend 未上线、无存量,也可以直接删库重建。
   option(OptionIndex) = "friend_count,created_ms";
   option(OptionTiDBNonclusteredPK) = true;

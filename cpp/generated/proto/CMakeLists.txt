@@ -170,6 +170,12 @@ set(SOURCE_FILES
     common/event/player_placement_event.pb.cc
     battle/battle_script.pb.cc
     common/component/player_mail_outbox_comp.pb.cc
+    opentelemetry/proto/collector/trace/v1/trace_service.pb.cc
+    opentelemetry/proto/common/v1/common.pb.cc
+    opentelemetry/proto/resource/v1/resource.pb.cc
+    opentelemetry/proto/trace/v1/trace.pb.cc
+    payment/payment.pb.cc
+    payment/payment_table.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

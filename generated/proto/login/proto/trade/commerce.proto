@@ -37,6 +37,10 @@ enum CommerceOrderState {
   COMMERCE_ORDER_STATE_REFUNDED = 9;
   COMMERCE_ORDER_STATE_MANUAL = 10;
   COMMERCE_ORDER_STATE_SETTLED = 11;
+  // 官方订单的付款被渠道修订之后(用户在渠道侧退款、作废,或撤销又被撤回;payment-recharge.md §22.6):
+  // REVERSING 正在把游戏内发放收敛到渠道的最新结论(扣回或补发),REVERSED 已扣回。补发完成回到 DELIVERED。
+  COMMERCE_ORDER_STATE_REVERSING = 12;
+  COMMERCE_ORDER_STATE_REVERSED = 13;
 }
 
 message CommerceOrderView {

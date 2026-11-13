@@ -57,6 +57,9 @@ message BattleEndS2C {
   uint64 battle_id = 1;
   eBattleOutcome outcome = 2;
   BattleSettlementData settlement = 3;    // 收信玩家本人视角
+  // 本局掉落放不进人物背包与临时背包,整批改由邮件发放(docs/design/battle-overflow-mail.md):结算屏提示去邮箱领取。
+  // 与 PlayerBattleResult.items_mailed 同一个事实,取自这一局的近期结果。
+  bool items_mailed = 4;
 }
 
 // 重连提示:scene 在换会话(RECONNECT / REPLACE)或登录重建出 FIGHTING 冻结时经大厅推送;

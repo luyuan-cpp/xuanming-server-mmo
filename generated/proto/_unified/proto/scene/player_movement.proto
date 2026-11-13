@@ -80,8 +80,9 @@ message ActorMoveS2C {
   uint32 move_state = 5;             // 0=stopped, 1=walking, 2=running, 3=sprinting (extensible)
 }
 
-// Batched form of ActorMoveS2C; used when a player first enters an AOI cell
-// and many actors must be synced at once.
+// Batched form of ActorMoveS2C:同一批里某个接收者要收的多条移动合成一条,客户端逐条按 ActorMoveS2C 处理,
+// 结果与分开发相同。服务器目前在组队跟随里用它:同一队形的队员同一 tick 起步、停步、拐弯、补校正时合并发出
+// (MovementSystem 旁的 ActorMoveBatch,docs/design/team-follow-server-trail.md §4)。只收一条时仍发 ActorMoveS2C。
 message ActorMoveListS2C {
   repeated ActorMoveS2C moves = 1;
 }

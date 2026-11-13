@@ -107,6 +107,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::data_service::GetMergedZonesResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::CountZoneRolesRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::CountZoneRolesResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::data_service::GetPlayerRouteRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::data_service::GetPlayerRouteResponse
@@ -519,7 +523,7 @@ constexpr auto TransactionLogRow::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[55],
+      &file_reflection_data[57],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -736,7 +740,7 @@ constexpr auto SnapshotInfo::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[42],
+      &file_reflection_data[44],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -903,7 +907,7 @@ constexpr auto ResolveRecallOpResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[51],
+      &file_reflection_data[53],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1073,7 +1077,7 @@ constexpr auto ResolveRecallOpRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[50],
+      &file_reflection_data[52],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1221,7 +1225,7 @@ constexpr auto ReservePlayerNameResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[60],
+      &file_reflection_data[62],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1374,7 +1378,7 @@ constexpr auto ReservePlayerNameRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[59],
+      &file_reflection_data[61],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1536,7 +1540,7 @@ constexpr auto RegisterRecallReviewHandledResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[53],
+      &file_reflection_data[55],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1753,7 +1757,7 @@ constexpr auto RegisterRecallReviewHandledRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[52],
+      &file_reflection_data[54],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -2099,7 +2103,7 @@ constexpr auto RecallReviewRow::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[47],
+      &file_reflection_data[49],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -2320,7 +2324,7 @@ constexpr auto RecallResult::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[45],
+      &file_reflection_data[47],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -2515,7 +2519,7 @@ constexpr auto QueryTransactionLogRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[54],
+      &file_reflection_data[56],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -2853,7 +2857,7 @@ constexpr auto PlayerDisplay::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[66],
+      &file_reflection_data[68],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3009,7 +3013,7 @@ constexpr auto ListPlayerSnapshotsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[41],
+      &file_reflection_data[43],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3150,7 +3154,7 @@ constexpr auto GetRecallBatchRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[48],
+      &file_reflection_data[50],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3312,7 +3316,7 @@ constexpr auto GetPlayerRouteResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[40],
+      &file_reflection_data[42],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3453,7 +3457,7 @@ constexpr auto GetPlayerItemGainBlockRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[73],
+      &file_reflection_data[75],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3594,7 +3598,7 @@ constexpr auto GetPlayerInboxLedgerRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[71],
+      &file_reflection_data[73],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4017,7 +4021,7 @@ constexpr auto GetPlayerAssetOpLedgerRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[69],
+      &file_reflection_data[71],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4197,6 +4201,288 @@ const ::_pbi::ClassData* GetMergedZonesResponse_MergedIntoEntry_DoNotUse_get_cla
   return GetMergedZonesResponse_MergedIntoEntry_DoNotUse_globals_.GetClassData();
 #else
   return GetMergedZonesResponse_MergedIntoEntry_DoNotUse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CountZoneRolesResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CountZoneRolesResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CountZoneRolesResponse, _impl_._has_bits_);
+};
+
+constexpr CountZoneRolesResponse::ParseTableT_ CountZoneRolesResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CountZoneRolesResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::CountZoneRolesResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 roles = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CountZoneRolesResponse, _impl_.roles_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CountZoneRolesResponse, _impl_.roles_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 roles = 1;
+      {PROTOBUF_FIELD_OFFSET(CountZoneRolesResponse, _impl_.roles_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr CountZoneRolesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        roles_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr CountZoneRolesResponse::CountZoneRolesResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CountZoneRolesResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CountZoneRolesResponse(arena);
+}
+constexpr auto CountZoneRolesResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(CountZoneRolesResponse), alignof(CountZoneRolesResponse));
+}
+constexpr auto CountZoneRolesResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CountZoneRolesResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CountZoneRolesResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CountZoneRolesResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CountZoneRolesResponse>(), &CountZoneRolesResponse::ByteSizeLong,
+              &CountZoneRolesResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CountZoneRolesResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[40],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CountZoneRolesResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CountZoneRolesResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CountZoneRolesResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CountZoneRolesResponse::InternalGenerateClassData_(
+            _default, &CountZoneRolesResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CountZoneRolesResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CountZoneRolesResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CountZoneRolesResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CountZoneRolesResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CountZoneRolesResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CountZoneRolesResponseGlobalsTypeInternal CountZoneRolesResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CountZoneRolesResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CountZoneRolesResponse_globals_.GetClassData();
+#else
+  return CountZoneRolesResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CountZoneRolesRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CountZoneRolesRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CountZoneRolesRequest, _impl_._has_bits_);
+};
+
+constexpr CountZoneRolesRequest::ParseTableT_ CountZoneRolesRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CountZoneRolesRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::CountZoneRolesRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 zone_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CountZoneRolesRequest, _impl_.zone_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CountZoneRolesRequest, _impl_.zone_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 zone_id = 1;
+      {PROTOBUF_FIELD_OFFSET(CountZoneRolesRequest, _impl_.zone_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr CountZoneRolesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        zone_id_{0u} {}
+
+template <typename>
+constexpr CountZoneRolesRequest::CountZoneRolesRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CountZoneRolesRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CountZoneRolesRequest(arena);
+}
+constexpr auto CountZoneRolesRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(CountZoneRolesRequest), alignof(CountZoneRolesRequest));
+}
+constexpr auto CountZoneRolesRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CountZoneRolesRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CountZoneRolesRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CountZoneRolesRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CountZoneRolesRequest>(), &CountZoneRolesRequest::ByteSizeLong,
+              &CountZoneRolesRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CountZoneRolesRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[39],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CountZoneRolesRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CountZoneRolesRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CountZoneRolesRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CountZoneRolesRequest::InternalGenerateClassData_(
+            _default, &CountZoneRolesRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CountZoneRolesRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CountZoneRolesRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CountZoneRolesRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CountZoneRolesRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CountZoneRolesRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CountZoneRolesRequestGlobalsTypeInternal CountZoneRolesRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CountZoneRolesRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CountZoneRolesRequest_globals_.GetClassData();
+#else
+  return CountZoneRolesRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4603,7 +4889,7 @@ constexpr auto CancelRecallBatchRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[49],
+      &file_reflection_data[51],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4846,7 +5132,7 @@ constexpr auto BatchRecallItemsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[44],
+      &file_reflection_data[46],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4982,7 +5268,7 @@ constexpr auto BatchGetPlayerNameResponse_NamesEntry_DoNotUse::InternalGenerateC
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[63],
+      &file_reflection_data[65],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5128,7 +5414,7 @@ constexpr auto BatchGetPlayerNameRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[62],
+      &file_reflection_data[64],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5553,7 +5839,7 @@ constexpr auto BatchGetPlayerDisplayRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[65],
+      &file_reflection_data[67],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5709,7 +5995,7 @@ constexpr auto AllocateIdSegmentResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[58],
+      &file_reflection_data[60],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5862,7 +6148,7 @@ constexpr auto AllocateIdSegmentRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[57],
+      &file_reflection_data[59],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -7074,7 +7360,7 @@ constexpr auto ReleasePlayerNameRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[61],
+      &file_reflection_data[63],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -8201,7 +8487,7 @@ constexpr auto QueryTransactionLogResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[56],
+      &file_reflection_data[58],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -8513,7 +8799,7 @@ constexpr auto ListPlayerSnapshotsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[43],
+      &file_reflection_data[45],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -8983,7 +9269,7 @@ constexpr auto GetPlayerRouteRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[39],
+      &file_reflection_data[41],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -9137,7 +9423,7 @@ constexpr auto GetPlayerItemGainBlockResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[74],
+      &file_reflection_data[76],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -10621,7 +10907,7 @@ constexpr auto BatchRecallItemsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[46],
+      &file_reflection_data[48],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -10769,7 +11055,7 @@ constexpr auto BatchGetPlayerNameResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[64],
+      &file_reflection_data[66],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -11053,7 +11339,7 @@ constexpr auto BatchGetPlayerDisplayResponse_PlayersEntry_DoNotUse::InternalGene
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[67],
+      &file_reflection_data[69],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -11937,7 +12223,7 @@ constexpr auto BatchGetPlayerDisplayResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[68],
+      &file_reflection_data[70],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -12442,7 +12728,7 @@ constexpr auto GetPlayerInboxLedgerResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[72],
+      &file_reflection_data[74],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -12604,7 +12890,7 @@ constexpr auto GetPlayerAssetOpLedgerResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[70],
+      &file_reflection_data[72],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -13025,6 +13311,16 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::data_service::GetMergedZonesResponse, _impl_._has_bits_),
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::GetMergedZonesResponse, _impl_.merged_into_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::CountZoneRolesRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::CountZoneRolesRequest, _impl_.zone_id_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::CountZoneRolesResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::CountZoneRolesResponse, _impl_.roles_),
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerRouteRequest, _impl_._has_bits_),
@@ -13479,42 +13775,44 @@ static const ::_pbi::MigrationSchema
         {346, sizeof(::data_service::BatchGetPlayerHomeZoneResponse)},
         {351, sizeof(::data_service::GetMergedZonesResponse_MergedIntoEntry_DoNotUse)},
         {358, sizeof(::data_service::GetMergedZonesResponse)},
-        {363, sizeof(::data_service::GetPlayerRouteRequest)},
-        {370, sizeof(::data_service::GetPlayerRouteResponse)},
-        {381, sizeof(::data_service::ListPlayerSnapshotsRequest)},
-        {390, sizeof(::data_service::SnapshotInfo)},
-        {411, sizeof(::data_service::ListPlayerSnapshotsResponse)},
-        {418, sizeof(::data_service::BatchRecallItemsRequest)},
-        {445, sizeof(::data_service::RecallResult)},
-        {470, sizeof(::data_service::BatchRecallItemsResponse)},
-        {503, sizeof(::data_service::RecallReviewRow)},
-        {522, sizeof(::data_service::GetRecallBatchRequest)},
-        {527, sizeof(::data_service::CancelRecallBatchRequest)},
-        {536, sizeof(::data_service::ResolveRecallOpRequest)},
-        {547, sizeof(::data_service::ResolveRecallOpResponse)},
-        {558, sizeof(::data_service::RegisterRecallReviewHandledRequest)},
-        {579, sizeof(::data_service::RegisterRecallReviewHandledResponse)},
-        {590, sizeof(::data_service::QueryTransactionLogRequest)},
-        {609, sizeof(::data_service::TransactionLogRow)},
-        {640, sizeof(::data_service::QueryTransactionLogResponse)},
-        {649, sizeof(::data_service::AllocateIdSegmentRequest)},
-        {656, sizeof(::data_service::AllocateIdSegmentResponse)},
-        {665, sizeof(::data_service::ReservePlayerNameRequest)},
-        {672, sizeof(::data_service::ReservePlayerNameResponse)},
-        {679, sizeof(::data_service::ReleasePlayerNameRequest)},
-        {688, sizeof(::data_service::BatchGetPlayerNameRequest)},
-        {693, sizeof(::data_service::BatchGetPlayerNameResponse_NamesEntry_DoNotUse)},
-        {700, sizeof(::data_service::BatchGetPlayerNameResponse)},
-        {705, sizeof(::data_service::BatchGetPlayerDisplayRequest)},
-        {710, sizeof(::data_service::PlayerDisplay)},
-        {723, sizeof(::data_service::BatchGetPlayerDisplayResponse_PlayersEntry_DoNotUse)},
-        {730, sizeof(::data_service::BatchGetPlayerDisplayResponse)},
-        {735, sizeof(::data_service::GetPlayerAssetOpLedgerRequest)},
-        {740, sizeof(::data_service::GetPlayerAssetOpLedgerResponse)},
-        {749, sizeof(::data_service::GetPlayerInboxLedgerRequest)},
-        {754, sizeof(::data_service::GetPlayerInboxLedgerResponse)},
-        {761, sizeof(::data_service::GetPlayerItemGainBlockRequest)},
-        {766, sizeof(::data_service::GetPlayerItemGainBlockResponse)},
+        {363, sizeof(::data_service::CountZoneRolesRequest)},
+        {368, sizeof(::data_service::CountZoneRolesResponse)},
+        {373, sizeof(::data_service::GetPlayerRouteRequest)},
+        {380, sizeof(::data_service::GetPlayerRouteResponse)},
+        {391, sizeof(::data_service::ListPlayerSnapshotsRequest)},
+        {400, sizeof(::data_service::SnapshotInfo)},
+        {421, sizeof(::data_service::ListPlayerSnapshotsResponse)},
+        {428, sizeof(::data_service::BatchRecallItemsRequest)},
+        {455, sizeof(::data_service::RecallResult)},
+        {480, sizeof(::data_service::BatchRecallItemsResponse)},
+        {513, sizeof(::data_service::RecallReviewRow)},
+        {532, sizeof(::data_service::GetRecallBatchRequest)},
+        {537, sizeof(::data_service::CancelRecallBatchRequest)},
+        {546, sizeof(::data_service::ResolveRecallOpRequest)},
+        {557, sizeof(::data_service::ResolveRecallOpResponse)},
+        {568, sizeof(::data_service::RegisterRecallReviewHandledRequest)},
+        {589, sizeof(::data_service::RegisterRecallReviewHandledResponse)},
+        {600, sizeof(::data_service::QueryTransactionLogRequest)},
+        {619, sizeof(::data_service::TransactionLogRow)},
+        {650, sizeof(::data_service::QueryTransactionLogResponse)},
+        {659, sizeof(::data_service::AllocateIdSegmentRequest)},
+        {666, sizeof(::data_service::AllocateIdSegmentResponse)},
+        {675, sizeof(::data_service::ReservePlayerNameRequest)},
+        {682, sizeof(::data_service::ReservePlayerNameResponse)},
+        {689, sizeof(::data_service::ReleasePlayerNameRequest)},
+        {698, sizeof(::data_service::BatchGetPlayerNameRequest)},
+        {703, sizeof(::data_service::BatchGetPlayerNameResponse_NamesEntry_DoNotUse)},
+        {710, sizeof(::data_service::BatchGetPlayerNameResponse)},
+        {715, sizeof(::data_service::BatchGetPlayerDisplayRequest)},
+        {720, sizeof(::data_service::PlayerDisplay)},
+        {733, sizeof(::data_service::BatchGetPlayerDisplayResponse_PlayersEntry_DoNotUse)},
+        {740, sizeof(::data_service::BatchGetPlayerDisplayResponse)},
+        {745, sizeof(::data_service::GetPlayerAssetOpLedgerRequest)},
+        {750, sizeof(::data_service::GetPlayerAssetOpLedgerResponse)},
+        {759, sizeof(::data_service::GetPlayerInboxLedgerRequest)},
+        {764, sizeof(::data_service::GetPlayerInboxLedgerResponse)},
+        {771, sizeof(::data_service::GetPlayerItemGainBlockRequest)},
+        {776, sizeof(::data_service::GetPlayerItemGainBlockResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -13557,6 +13855,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::data_service::BatchGetPlayerHomeZoneResponse_globals_,
         &::data_service::GetMergedZonesResponse_MergedIntoEntry_DoNotUse_globals_,
         &::data_service::GetMergedZonesResponse_globals_,
+        &::data_service::CountZoneRolesRequest_globals_,
+        &::data_service::CountZoneRolesResponse_globals_,
         &::data_service::GetPlayerRouteRequest_globals_,
         &::data_service::GetPlayerRouteResponse_globals_,
         &::data_service::ListPlayerSnapshotsRequest_globals_,
@@ -13726,245 +14026,250 @@ const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2ep
     "rged_into\030\001 \003(\01324.data_service.GetMerged"
     "ZonesResponse.MergedIntoEntry\0321\n\017MergedI"
     "ntoEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001"
-    "\"V\n\025GetPlayerRouteRequest\022\021\n\tplayer_id\030\001"
-    " \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.base.Service"
-    "CallAuth\"]\n\026GetPlayerRouteResponse\022\022\n\nst"
-    "orage_id\030\001 \001(\r\022\021\n\thome_zone\030\002 \001(\r\022\r\n\005fou"
-    "nd\030\003 \001(\010\022\r\n\005retry\030\004 \001(\010\"S\n\032ListPlayerSna"
-    "pshotsRequest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013befo"
-    "re_time\030\002 \001(\004\022\r\n\005limit\030\003 \001(\r\"\320\001\n\014Snapsho"
-    "tInfo\022\023\n\013snapshot_id\030\001 \001(\004\022\021\n\tplayer_id\030"
-    "\002 \001(\004\022\017\n\007zone_id\030\003 \001(\r\022(\n\004type\030\004 \001(\0162\032.d"
-    "ata_service.SnapshotType\022\022\n\ncreated_at\030\005"
-    " \001(\004\022\016\n\006reason\030\006 \001(\t\022\020\n\010operator\030\007 \001(\t\022\027"
-    "\n\017data_size_bytes\030\010 \001(\r\022\016\n\006fields\030\t \003(\t\""
-    "`\n\033ListPlayerSnapshotsResponse\022\022\n\nerror_"
-    "code\030\001 \001(\r\022-\n\tsnapshots\030\002 \003(\0132\032.data_ser"
-    "vice.SnapshotInfo\"\250\002\n\027BatchRecallItemsRe"
-    "quest\022\022\n\nplayer_ids\030\001 \003(\004\022\026\n\016item_config"
-    "_id\030\002 \001(\r\022\025\n\rcurrency_type\030\003 \001(\r\022\022\n\ntime"
-    "_start\030\004 \001(\004\022\020\n\010time_end\030\005 \001(\004\022\020\n\010tx_typ"
-    "es\030\006 \003(\r\022\016\n\006reason\030\007 \001(\t\022\020\n\010operator\030\010 \001"
-    "(\t\022\017\n\007dry_run\030\t \001(\010\022-\n\013recall_kind\030\n \001(\016"
-    "2\030.data_service.RecallKind\022\022\n\nrequest_id"
-    "\030\013 \001(\004\022\034\n\024expected_plan_digest\030\014 \001(\t\"\334\001\n"
-    "\014RecallResult\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016item"
-    "_config_id\030\003 \001(\r\022\016\n\006amount\030\004 \001(\004\022\017\n\007succ"
-    "ess\030\005 \001(\010\022\024\n\014error_detail\030\006 \001(\t\022\r\n\005op_id"
-    "\030\007 \001(\004\022\025\n\rcurrency_type\030\010 \001(\r\022\016\n\006status\030"
-    "\t \001(\r\022\r\n\005taken\030\n \001(\004\022\014\n\004debt\030\013 \001(\004\022\021\n\tsh"
-    "ortfall\030\014 \001(\004J\004\010\002\020\003\"\237\003\n\030BatchRecallItems"
-    "Response\022\022\n\nerror_code\030\001 \001(\r\022\025\n\rtotal_ma"
-    "tched\030\002 \001(\r\022\026\n\016total_recalled\030\003 \001(\r\022\024\n\014t"
-    "otal_failed\030\004 \001(\r\022+\n\007results\030\005 \003(\0132\032.dat"
-    "a_service.RecallResult\022\023\n\013plan_digest\030\006 "
-    "\001(\t\022\025\n\rtotal_pending\030\007 \001(\r\022\022\n\nrequest_id"
-    "\030\010 \001(\004\022\023\n\013batch_state\030\t \001(\r\022\030\n\020amount_re"
-    "quested\030\n \001(\004\022\024\n\014amount_taken\030\013 \001(\004\022\023\n\013a"
-    "mount_debt\030\014 \001(\004\022\030\n\020amount_shortfall\030\r \001"
-    "(\004\022\024\n\014cancelled_ms\030\016 \001(\004\0223\n\014needs_review"
-    "\030\017 \003(\0132\035.data_service.RecallReviewRow\"\304\001"
-    "\n\017RecallReviewRow\022\021\n\tplayer_id\030\001 \001(\004\022\r\n\005"
-    "tx_id\030\002 \001(\004\022\026\n\016correlation_id\030\003 \001(\004\022\017\n\007t"
-    "x_type\030\004 \001(\r\022\016\n\006amount\030\005 \001(\004\022\021\n\titem_uui"
-    "d\030\006 \001(\004\022\021\n\ttimestamp\030\007 \001(\004\0220\n\006reason\030\010 \001"
-    "(\0162 .data_service.RecallReviewReason\"+\n\025"
-    "GetRecallBatchRequest\022\022\n\nrequest_id\030\001 \001("
-    "\004\"P\n\030CancelRecallBatchRequest\022\022\n\nrequest"
-    "_id\030\001 \001(\004\022\020\n\010operator\030\002 \001(\t\022\016\n\006reason\030\003 "
-    "\001(\t\"_\n\026ResolveRecallOpRequest\022\r\n\005op_id\030\001"
-    " \001(\004\022\024\n\014final_status\030\002 \001(\r\022\020\n\010operator\030\003"
-    " \001(\t\022\016\n\006reason\030\004 \001(\t\"a\n\027ResolveRecallOpR"
-    "esponse\022\022\n\nerror_code\030\001 \001(\r\022\020\n\010resolved\030"
-    "\002 \001(\010\022\016\n\006status\030\003 \001(\r\022\020\n\010evidence\030\004 \001(\t\""
-    "\230\002\n\"RegisterRecallReviewHandledRequest\022-"
-    "\n\013recall_kind\030\001 \001(\0162\030.data_service.Recal"
-    "lKind\022\026\n\016item_config_id\030\002 \001(\r\022\025\n\rcurrenc"
-    "y_type\030\003 \001(\r\022\021\n\tplayer_id\030\004 \001(\004\022\026\n\016corre"
-    "lation_id\030\005 \001(\004\022\016\n\006tx_ids\030\006 \003(\004\0227\n\rrevie"
-    "w_reason\030\007 \001(\0162 .data_service.RecallRevi"
-    "ewReason\022\020\n\010operator\030\010 \001(\t\022\016\n\006reason\030\t \001"
-    "(\t\"\233\001\n#RegisterRecallReviewHandledRespon"
-    "se\022\022\n\nerror_code\030\001 \001(\r\022\022\n\nregistered\030\002 \001"
-    "(\010\022\023\n\013source_rows\030\003 \001(\r\0227\n\rreview_reason"
-    "\030\004 \001(\0162 .data_service.RecallReviewReason"
-    "\"\265\001\n\032QueryTransactionLogRequest\022\021\n\tplaye"
-    "r_id\030\001 \001(\004\022\022\n\ntime_start\030\002 \001(\004\022\020\n\010time_e"
-    "nd\030\003 \001(\004\022\020\n\010tx_types\030\004 \003(\r\022\026\n\016item_confi"
-    "g_id\030\005 \001(\r\022\025\n\rcurrency_type\030\006 \001(\r\022\r\n\005lim"
-    "it\030\007 \001(\r\022\016\n\006offset\030\010 \001(\004\"\265\002\n\021Transaction"
-    "LogRow\022\r\n\005tx_id\030\001 \001(\004\022\021\n\ttimestamp\030\002 \001(\004"
-    "\022\017\n\007tx_type\030\003 \001(\r\022\023\n\013from_player\030\004 \001(\004\022\021"
-    "\n\tto_player\030\005 \001(\004\022\021\n\titem_uuid\030\006 \001(\004\022\026\n\016"
-    "item_config_id\030\007 \001(\r\022\025\n\ritem_quantity\030\010 "
-    "\001(\r\022\025\n\rcurrency_type\030\t \001(\r\022\026\n\016currency_d"
-    "elta\030\n \001(\003\022\026\n\016balance_before\030\013 \001(\004\022\025\n\rba"
-    "lance_after\030\014 \001(\004\022\026\n\016correlation_id\030\r \001("
-    "\004\022\r\n\005extra\030\016 \001(\t\"u\n\033QueryTransactionLogR"
-    "esponse\022\022\n\nerror_code\030\001 \001(\r\022-\n\004rows\030\002 \003("
-    "\0132\037.data_service.TransactionLogRow\022\023\n\013to"
-    "tal_count\030\003 \001(\r\"9\n\030AllocateIdSegmentRequ"
-    "est\022\017\n\007biz_tag\030\001 \001(\t\022\014\n\004step\030\002 \001(\r\"G\n\031Al"
-    "locateIdSegmentResponse\022\022\n\nerror_code\030\001 "
-    "\001(\r\022\n\n\002lo\030\002 \001(\004\022\n\n\002hi\030\003 \001(\004\";\n\030ReservePl"
-    "ayerNameRequest\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004na"
-    "me\030\002 \001(\t\"D\n\031ReservePlayerNameResponse\022\016\n"
-    "\006result\030\001 \001(\r\022\027\n\017owner_player_id\030\002 \001(\004\"g"
-    "\n\030ReleasePlayerNameRequest\022\021\n\tplayer_id\030"
-    "\001 \001(\004\022\014\n\004name\030\002 \001(\t\022*\n\004auth\030\003 \001(\0132\034.comm"
-    "on.base.ServiceCallAuth\"/\n\031BatchGetPlaye"
-    "rNameRequest\022\022\n\nplayer_ids\030\001 \003(\004\"\216\001\n\032Bat"
-    "chGetPlayerNameResponse\022B\n\005names\030\001 \003(\01323"
-    ".data_service.BatchGetPlayerNameResponse"
-    ".NamesEntry\032,\n\nNamesEntry\022\013\n\003key\030\001 \001(\004\022\r"
-    "\n\005value\030\002 \001(\t:\0028\001\"2\n\034BatchGetPlayerDispl"
-    "ayRequest\022\022\n\nplayer_ids\030\001 \003(\004\"e\n\rPlayerD"
-    "isplay\022\014\n\004name\030\001 \001(\t\022\r\n\005level\030\002 \001(\r\022\020\n\010c"
-    "lass_id\030\003 \001(\r\022\016\n\006gender\030\004 \001(\r\022\025\n\rappeara"
-    "nce_id\030\005 \001(\t\"\267\001\n\035BatchGetPlayerDisplayRe"
-    "sponse\022I\n\007players\030\001 \003(\01328.data_service.B"
-    "atchGetPlayerDisplayResponse.PlayersEntr"
-    "y\032K\n\014PlayersEntry\022\013\n\003key\030\001 \001(\004\022*\n\005value\030"
-    "\002 \001(\0132\033.data_service.PlayerDisplay:\0028\001\"2"
-    "\n\035GetPlayerAssetOpLedgerRequest\022\021\n\tplaye"
-    "r_id\030\001 \001(\004\"r\n\036GetPlayerAssetOpLedgerResp"
-    "onse\022\r\n\005found\030\001 \001(\010\022(\n\006ledger\030\002 \001(\0132\030.Pl"
-    "ayerAssetOpLedgerComp\022\027\n\017player_released"
-    "\030\003 \001(\010\"0\n\033GetPlayerInboxLedgerRequest\022\021\n"
-    "\tplayer_id\030\001 \001(\004\"U\n\034GetPlayerInboxLedger"
-    "Response\022\r\n\005found\030\001 \001(\010\022&\n\006ledger\030\002 \001(\0132"
-    "\026.PlayerInboxLedgerComp\"2\n\035GetPlayerItem"
-    "GainBlockRequest\022\021\n\tplayer_id\030\001 \001(\004\"X\n\036G"
-    "etPlayerItemGainBlockResponse\022\r\n\005found\030\001"
-    " \001(\010\022\'\n\005block\030\002 \001(\0132\030.PlayerItemGainBloc"
-    "kComp*\264\002\n\025AccountRoleTradeState\022(\n$ACCOU"
-    "NT_ROLE_TRADE_STATE_UNSPECIFIED\020\000\022%\n!ACC"
-    "OUNT_ROLE_TRADE_STATE_FREEZING\020\001\022#\n\037ACCO"
-    "UNT_ROLE_TRADE_STATE_FROZEN\020\002\022&\n\"ACCOUNT"
-    "_ROLE_TRADE_STATE_CANCELLED\020\003\022(\n$ACCOUNT"
-    "_ROLE_TRADE_STATE_TRANSFERRED\020\004\022+\n\'ACCOU"
-    "NT_ROLE_TRADE_STATE_CANCEL_PENDING\020\005\022&\n\""
-    "ACCOUNT_ROLE_TRADE_STATE_PREPARING\020\006*\351\001\n"
-    "\035AccountRoleFreezeEvidenceKind\0221\n-ACCOUN"
-    "T_ROLE_FREEZE_EVIDENCE_KIND_UNSPECIFIED\020"
-    "\000\0222\n.ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_N"
-    "O_ADMISSION\020\001\022+\n\'ACCOUNT_ROLE_FREEZE_EVI"
-    "DENCE_KIND_SCENE\020\002\0224\n0ACCOUNT_ROLE_FREEZ"
-    "E_EVIDENCE_KIND_INITIAL_COMMIT\020\003*\207\001\n\014Sna"
-    "pshotType\022\023\n\017SNAPSHOT_MANUAL\020\000\022\025\n\021SNAPSH"
-    "OT_PERIODIC\020\001\022\034\n\030SNAPSHOT_PRE_MAINTENANC"
-    "E\020\002\022\031\n\025SNAPSHOT_PRE_ROLLBACK\020\003\022\022\n\016SNAPSH"
-    "OT_LOGIN\020\004*Y\n\nRecallKind\022\033\n\027RECALL_KIND_"
-    "UNSPECIFIED\020\000\022\030\n\024RECALL_KIND_CURRENCY\020\001\022"
-    "\024\n\020RECALL_KIND_ITEM\020\002*\320\002\n\022RecallReviewRe"
-    "ason\022$\n RECALL_REVIEW_REASON_UNSPECIFIED"
-    "\020\000\022 \n\034RECALL_REVIEW_NO_CORRELATION\020\001\022!\n\035"
-    "RECALL_REVIEW_NO_PLAYER_STORE\020\002\022\037\n\033RECAL"
-    "L_REVIEW_NOT_IN_LEDGER\020\003\022\"\n\036RECALL_REVIE"
-    "W_LEDGER_AMBIGUOUS\020\004\022!\n\035RECALL_REVIEW_LE"
-    "DGER_REJECTED\020\005\022 \n\034RECALL_REVIEW_LEDGER_"
-    "PARTIAL\020\006\022$\n RECALL_REVIEW_LEDGER_NOT_AP"
-    "PLIED\020\007\022\037\n\033RECALL_REVIEW_ROWS_DISAGREE\020\010"
-    "2\356\036\n\013DataService\022k\n\024ReadAccountDirectory"
-    "\022).data_service.ReadAccountDirectoryRequ"
-    "est\032&.data_service.AccountDirectoryRespo"
-    "nse\"\000\022e\n\021CreateAccountRole\022&.data_servic"
-    "e.CreateAccountRoleRequest\032&.data_servic"
-    "e.AccountDirectoryResponse\"\000\022a\n\021LookupAc"
-    "countRole\022&.data_service.LookupAccountRo"
-    "leRequest\032\".data_service.AccountRoleOwne"
-    "rship\"\000\022e\n\021RepairAccountRole\022&.data_serv"
-    "ice.RepairAccountRoleRequest\032&.data_serv"
-    "ice.AccountDirectoryResponse\"\000\022W\n\022Remove"
-    "AccountRoles\022\'.data_service.RemoveAccoun"
-    "tRolesRequest\032\026.google.protobuf.Empty\"\000\022"
-    "l\n\025BeginAccountRoleTrade\022*.data_service."
-    "BeginAccountRoleTradeRequest\032%.data_serv"
-    "ice.AccountRoleTradeReceipt\"\000\022|\n\035Confirm"
-    "AccountRoleTradeFreeze\0222.data_service.Co"
-    "nfirmAccountRoleTradeFreezeRequest\032%.dat"
-    "a_service.AccountRoleTradeReceipt\"\000\022n\n\026C"
-    "ancelAccountRoleTrade\022+.data_service.Can"
-    "celAccountRoleTradeRequest\032%.data_servic"
-    "e.AccountRoleTradeReceipt\"\000\022k\n\023TransferA"
-    "ccountRole\022(.data_service.TransferAccoun"
-    "tRoleRequest\032(.data_service.AccountRoleT"
-    "ransferReceipt\"\000\022o\n\024CheckAccountRoleSlot"
-    "\022).data_service.CheckAccountRoleSlotRequ"
-    "est\032*.data_service.CheckAccountRoleSlotR"
-    "esponse\"\000\022f\n\021GetRoleFenceState\022&.data_se"
-    "rvice.GetRoleFenceStateRequest\032\'.data_se"
-    "rvice.GetRoleFenceStateResponse\"\000\022l\n\023Ver"
-    "ifyRoleAdmission\022(.data_service.VerifyRo"
-    "leAdmissionRequest\032).data_service.Verify"
-    "RoleAdmissionResponse\"\000\022r\n\025RegisterRoleA"
-    "dmission\022*.data_service.RegisterRoleAdmi"
-    "ssionRequest\032+.data_service.RegisterRole"
-    "AdmissionResponse\"\000\022l\n\023CloseRoleAdmissio"
-    "ns\022(.data_service.CloseRoleAdmissionsReq"
-    "uest\032).data_service.CloseRoleAdmissionsR"
-    "esponse\"\000\022U\n\021AckRoleTradeDrain\022&.data_se"
-    "rvice.AckRoleTradeDrainRequest\032\026.google."
-    "protobuf.Empty\"\000\022k\n\034ReleaseDeadPlayerSto"
-    "reHolder\0221.data_service.ReleaseDeadPlaye"
-    "rStoreHolderRequest\032\026.google.protobuf.Em"
-    "pty\"\000\022r\n\025ReadPlayerStoreHolder\022*.data_se"
-    "rvice.ReadPlayerStoreHolderRequest\032+.dat"
-    "a_service.ReadPlayerStoreHolderResponse\""
-    "\000\022W\n\022RegisterPlayerZone\022\'.data_service.R"
-    "egisterPlayerZoneRequest\032\026.google.protob"
-    "uf.Empty\"\000\022f\n\021GetPlayerHomeZone\022&.data_s"
-    "ervice.GetPlayerHomeZoneRequest\032\'.data_s"
-    "ervice.GetPlayerHomeZoneResponse\"\000\022u\n\026Ba"
-    "tchGetPlayerHomeZone\022+.data_service.Batc"
-    "hGetPlayerHomeZoneRequest\032,.data_service"
-    ".BatchGetPlayerHomeZoneResponse\"\000\022P\n\016Get"
-    "MergedZones\022\026.google.protobuf.Empty\032$.da"
-    "ta_service.GetMergedZonesResponse\"\000\022]\n\016G"
-    "etPlayerRoute\022#.data_service.GetPlayerRo"
-    "uteRequest\032$.data_service.GetPlayerRoute"
-    "Response\"\000\022l\n\023ListPlayerSnapshots\022(.data"
-    "_service.ListPlayerSnapshotsRequest\032).da"
-    "ta_service.ListPlayerSnapshotsResponse\"\000"
-    "\022c\n\020BatchRecallItems\022%.data_service.Batc"
-    "hRecallItemsRequest\032&.data_service.Batch"
-    "RecallItemsResponse\"\000\022_\n\016GetRecallBatch\022"
-    "#.data_service.GetRecallBatchRequest\032&.d"
-    "ata_service.BatchRecallItemsResponse\"\000\022e"
-    "\n\021CancelRecallBatch\022&.data_service.Cance"
-    "lRecallBatchRequest\032&.data_service.Batch"
-    "RecallItemsResponse\"\000\022`\n\017ResolveRecallOp"
-    "\022$.data_service.ResolveRecallOpRequest\032%"
-    ".data_service.ResolveRecallOpResponse\"\000\022"
-    "\204\001\n\033RegisterRecallReviewHandled\0220.data_s"
-    "ervice.RegisterRecallReviewHandledReques"
-    "t\0321.data_service.RegisterRecallReviewHan"
-    "dledResponse\"\000\022l\n\023QueryTransactionLog\022(."
-    "data_service.QueryTransactionLogRequest\032"
-    ").data_service.QueryTransactionLogRespon"
-    "se\"\000\022f\n\021AllocateIdSegment\022&.data_service"
-    ".AllocateIdSegmentRequest\032\'.data_service"
-    ".AllocateIdSegmentResponse\"\000\022f\n\021ReserveP"
-    "layerName\022&.data_service.ReservePlayerNa"
-    "meRequest\032\'.data_service.ReservePlayerNa"
-    "meResponse\"\000\022U\n\021ReleasePlayerName\022&.data"
-    "_service.ReleasePlayerNameRequest\032\026.goog"
-    "le.protobuf.Empty\"\000\022i\n\022BatchGetPlayerNam"
-    "e\022\'.data_service.BatchGetPlayerNameReque"
-    "st\032(.data_service.BatchGetPlayerNameResp"
-    "onse\"\000\022r\n\025BatchGetPlayerDisplay\022*.data_s"
-    "ervice.BatchGetPlayerDisplayRequest\032+.da"
-    "ta_service.BatchGetPlayerDisplayResponse"
-    "\"\000\022u\n\026GetPlayerAssetOpLedger\022+.data_serv"
-    "ice.GetPlayerAssetOpLedgerRequest\032,.data"
-    "_service.GetPlayerAssetOpLedgerResponse\""
-    "\000\022o\n\024GetPlayerInboxLedger\022).data_service"
-    ".GetPlayerInboxLedgerRequest\032*.data_serv"
-    "ice.GetPlayerInboxLedgerResponse\"\000\022u\n\026Ge"
-    "tPlayerItemGainBlock\022+.data_service.GetP"
-    "layerItemGainBlockRequest\032,.data_service"
-    ".GetPlayerItemGainBlockResponse\"\000B\033Z\031dat"
-    "a_service/data_serviceb\006proto3"
+    "\"(\n\025CountZoneRolesRequest\022\017\n\007zone_id\030\001 \001"
+    "(\r\"\'\n\026CountZoneRolesResponse\022\r\n\005roles\030\001 "
+    "\001(\004\"V\n\025GetPlayerRouteRequest\022\021\n\tplayer_i"
+    "d\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.base.Serv"
+    "iceCallAuth\"]\n\026GetPlayerRouteResponse\022\022\n"
+    "\nstorage_id\030\001 \001(\r\022\021\n\thome_zone\030\002 \001(\r\022\r\n\005"
+    "found\030\003 \001(\010\022\r\n\005retry\030\004 \001(\010\"S\n\032ListPlayer"
+    "SnapshotsRequest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013b"
+    "efore_time\030\002 \001(\004\022\r\n\005limit\030\003 \001(\r\"\320\001\n\014Snap"
+    "shotInfo\022\023\n\013snapshot_id\030\001 \001(\004\022\021\n\tplayer_"
+    "id\030\002 \001(\004\022\017\n\007zone_id\030\003 \001(\r\022(\n\004type\030\004 \001(\0162"
+    "\032.data_service.SnapshotType\022\022\n\ncreated_a"
+    "t\030\005 \001(\004\022\016\n\006reason\030\006 \001(\t\022\020\n\010operator\030\007 \001("
+    "\t\022\027\n\017data_size_bytes\030\010 \001(\r\022\016\n\006fields\030\t \003"
+    "(\t\"`\n\033ListPlayerSnapshotsResponse\022\022\n\nerr"
+    "or_code\030\001 \001(\r\022-\n\tsnapshots\030\002 \003(\0132\032.data_"
+    "service.SnapshotInfo\"\250\002\n\027BatchRecallItem"
+    "sRequest\022\022\n\nplayer_ids\030\001 \003(\004\022\026\n\016item_con"
+    "fig_id\030\002 \001(\r\022\025\n\rcurrency_type\030\003 \001(\r\022\022\n\nt"
+    "ime_start\030\004 \001(\004\022\020\n\010time_end\030\005 \001(\004\022\020\n\010tx_"
+    "types\030\006 \003(\r\022\016\n\006reason\030\007 \001(\t\022\020\n\010operator\030"
+    "\010 \001(\t\022\017\n\007dry_run\030\t \001(\010\022-\n\013recall_kind\030\n "
+    "\001(\0162\030.data_service.RecallKind\022\022\n\nrequest"
+    "_id\030\013 \001(\004\022\034\n\024expected_plan_digest\030\014 \001(\t\""
+    "\334\001\n\014RecallResult\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016i"
+    "tem_config_id\030\003 \001(\r\022\016\n\006amount\030\004 \001(\004\022\017\n\007s"
+    "uccess\030\005 \001(\010\022\024\n\014error_detail\030\006 \001(\t\022\r\n\005op"
+    "_id\030\007 \001(\004\022\025\n\rcurrency_type\030\010 \001(\r\022\016\n\006stat"
+    "us\030\t \001(\r\022\r\n\005taken\030\n \001(\004\022\014\n\004debt\030\013 \001(\004\022\021\n"
+    "\tshortfall\030\014 \001(\004J\004\010\002\020\003\"\237\003\n\030BatchRecallIt"
+    "emsResponse\022\022\n\nerror_code\030\001 \001(\r\022\025\n\rtotal"
+    "_matched\030\002 \001(\r\022\026\n\016total_recalled\030\003 \001(\r\022\024"
+    "\n\014total_failed\030\004 \001(\r\022+\n\007results\030\005 \003(\0132\032."
+    "data_service.RecallResult\022\023\n\013plan_digest"
+    "\030\006 \001(\t\022\025\n\rtotal_pending\030\007 \001(\r\022\022\n\nrequest"
+    "_id\030\010 \001(\004\022\023\n\013batch_state\030\t \001(\r\022\030\n\020amount"
+    "_requested\030\n \001(\004\022\024\n\014amount_taken\030\013 \001(\004\022\023"
+    "\n\013amount_debt\030\014 \001(\004\022\030\n\020amount_shortfall\030"
+    "\r \001(\004\022\024\n\014cancelled_ms\030\016 \001(\004\0223\n\014needs_rev"
+    "iew\030\017 \003(\0132\035.data_service.RecallReviewRow"
+    "\"\304\001\n\017RecallReviewRow\022\021\n\tplayer_id\030\001 \001(\004\022"
+    "\r\n\005tx_id\030\002 \001(\004\022\026\n\016correlation_id\030\003 \001(\004\022\017"
+    "\n\007tx_type\030\004 \001(\r\022\016\n\006amount\030\005 \001(\004\022\021\n\titem_"
+    "uuid\030\006 \001(\004\022\021\n\ttimestamp\030\007 \001(\004\0220\n\006reason\030"
+    "\010 \001(\0162 .data_service.RecallReviewReason\""
+    "+\n\025GetRecallBatchRequest\022\022\n\nrequest_id\030\001"
+    " \001(\004\"P\n\030CancelRecallBatchRequest\022\022\n\nrequ"
+    "est_id\030\001 \001(\004\022\020\n\010operator\030\002 \001(\t\022\016\n\006reason"
+    "\030\003 \001(\t\"_\n\026ResolveRecallOpRequest\022\r\n\005op_i"
+    "d\030\001 \001(\004\022\024\n\014final_status\030\002 \001(\r\022\020\n\010operato"
+    "r\030\003 \001(\t\022\016\n\006reason\030\004 \001(\t\"a\n\027ResolveRecall"
+    "OpResponse\022\022\n\nerror_code\030\001 \001(\r\022\020\n\010resolv"
+    "ed\030\002 \001(\010\022\016\n\006status\030\003 \001(\r\022\020\n\010evidence\030\004 \001"
+    "(\t\"\230\002\n\"RegisterRecallReviewHandledReques"
+    "t\022-\n\013recall_kind\030\001 \001(\0162\030.data_service.Re"
+    "callKind\022\026\n\016item_config_id\030\002 \001(\r\022\025\n\rcurr"
+    "ency_type\030\003 \001(\r\022\021\n\tplayer_id\030\004 \001(\004\022\026\n\016co"
+    "rrelation_id\030\005 \001(\004\022\016\n\006tx_ids\030\006 \003(\004\0227\n\rre"
+    "view_reason\030\007 \001(\0162 .data_service.RecallR"
+    "eviewReason\022\020\n\010operator\030\010 \001(\t\022\016\n\006reason\030"
+    "\t \001(\t\"\233\001\n#RegisterRecallReviewHandledRes"
+    "ponse\022\022\n\nerror_code\030\001 \001(\r\022\022\n\nregistered\030"
+    "\002 \001(\010\022\023\n\013source_rows\030\003 \001(\r\0227\n\rreview_rea"
+    "son\030\004 \001(\0162 .data_service.RecallReviewRea"
+    "son\"\265\001\n\032QueryTransactionLogRequest\022\021\n\tpl"
+    "ayer_id\030\001 \001(\004\022\022\n\ntime_start\030\002 \001(\004\022\020\n\010tim"
+    "e_end\030\003 \001(\004\022\020\n\010tx_types\030\004 \003(\r\022\026\n\016item_co"
+    "nfig_id\030\005 \001(\r\022\025\n\rcurrency_type\030\006 \001(\r\022\r\n\005"
+    "limit\030\007 \001(\r\022\016\n\006offset\030\010 \001(\004\"\265\002\n\021Transact"
+    "ionLogRow\022\r\n\005tx_id\030\001 \001(\004\022\021\n\ttimestamp\030\002 "
+    "\001(\004\022\017\n\007tx_type\030\003 \001(\r\022\023\n\013from_player\030\004 \001("
+    "\004\022\021\n\tto_player\030\005 \001(\004\022\021\n\titem_uuid\030\006 \001(\004\022"
+    "\026\n\016item_config_id\030\007 \001(\r\022\025\n\ritem_quantity"
+    "\030\010 \001(\r\022\025\n\rcurrency_type\030\t \001(\r\022\026\n\016currenc"
+    "y_delta\030\n \001(\003\022\026\n\016balance_before\030\013 \001(\004\022\025\n"
+    "\rbalance_after\030\014 \001(\004\022\026\n\016correlation_id\030\r"
+    " \001(\004\022\r\n\005extra\030\016 \001(\t\"u\n\033QueryTransactionL"
+    "ogResponse\022\022\n\nerror_code\030\001 \001(\r\022-\n\004rows\030\002"
+    " \003(\0132\037.data_service.TransactionLogRow\022\023\n"
+    "\013total_count\030\003 \001(\r\"9\n\030AllocateIdSegmentR"
+    "equest\022\017\n\007biz_tag\030\001 \001(\t\022\014\n\004step\030\002 \001(\r\"G\n"
+    "\031AllocateIdSegmentResponse\022\022\n\nerror_code"
+    "\030\001 \001(\r\022\n\n\002lo\030\002 \001(\004\022\n\n\002hi\030\003 \001(\004\";\n\030Reserv"
+    "ePlayerNameRequest\022\021\n\tplayer_id\030\001 \001(\004\022\014\n"
+    "\004name\030\002 \001(\t\"D\n\031ReservePlayerNameResponse"
+    "\022\016\n\006result\030\001 \001(\r\022\027\n\017owner_player_id\030\002 \001("
+    "\004\"g\n\030ReleasePlayerNameRequest\022\021\n\tplayer_"
+    "id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022*\n\004auth\030\003 \001(\0132\034.c"
+    "ommon.base.ServiceCallAuth\"/\n\031BatchGetPl"
+    "ayerNameRequest\022\022\n\nplayer_ids\030\001 \003(\004\"\216\001\n\032"
+    "BatchGetPlayerNameResponse\022B\n\005names\030\001 \003("
+    "\01323.data_service.BatchGetPlayerNameRespo"
+    "nse.NamesEntry\032,\n\nNamesEntry\022\013\n\003key\030\001 \001("
+    "\004\022\r\n\005value\030\002 \001(\t:\0028\001\"2\n\034BatchGetPlayerDi"
+    "splayRequest\022\022\n\nplayer_ids\030\001 \003(\004\"e\n\rPlay"
+    "erDisplay\022\014\n\004name\030\001 \001(\t\022\r\n\005level\030\002 \001(\r\022\020"
+    "\n\010class_id\030\003 \001(\r\022\016\n\006gender\030\004 \001(\r\022\025\n\rappe"
+    "arance_id\030\005 \001(\t\"\267\001\n\035BatchGetPlayerDispla"
+    "yResponse\022I\n\007players\030\001 \003(\01328.data_servic"
+    "e.BatchGetPlayerDisplayResponse.PlayersE"
+    "ntry\032K\n\014PlayersEntry\022\013\n\003key\030\001 \001(\004\022*\n\005val"
+    "ue\030\002 \001(\0132\033.data_service.PlayerDisplay:\0028"
+    "\001\"2\n\035GetPlayerAssetOpLedgerRequest\022\021\n\tpl"
+    "ayer_id\030\001 \001(\004\"r\n\036GetPlayerAssetOpLedgerR"
+    "esponse\022\r\n\005found\030\001 \001(\010\022(\n\006ledger\030\002 \001(\0132\030"
+    ".PlayerAssetOpLedgerComp\022\027\n\017player_relea"
+    "sed\030\003 \001(\010\"0\n\033GetPlayerInboxLedgerRequest"
+    "\022\021\n\tplayer_id\030\001 \001(\004\"U\n\034GetPlayerInboxLed"
+    "gerResponse\022\r\n\005found\030\001 \001(\010\022&\n\006ledger\030\002 \001"
+    "(\0132\026.PlayerInboxLedgerComp\"2\n\035GetPlayerI"
+    "temGainBlockRequest\022\021\n\tplayer_id\030\001 \001(\004\"X"
+    "\n\036GetPlayerItemGainBlockResponse\022\r\n\005foun"
+    "d\030\001 \001(\010\022\'\n\005block\030\002 \001(\0132\030.PlayerItemGainB"
+    "lockComp*\264\002\n\025AccountRoleTradeState\022(\n$AC"
+    "COUNT_ROLE_TRADE_STATE_UNSPECIFIED\020\000\022%\n!"
+    "ACCOUNT_ROLE_TRADE_STATE_FREEZING\020\001\022#\n\037A"
+    "CCOUNT_ROLE_TRADE_STATE_FROZEN\020\002\022&\n\"ACCO"
+    "UNT_ROLE_TRADE_STATE_CANCELLED\020\003\022(\n$ACCO"
+    "UNT_ROLE_TRADE_STATE_TRANSFERRED\020\004\022+\n\'AC"
+    "COUNT_ROLE_TRADE_STATE_CANCEL_PENDING\020\005\022"
+    "&\n\"ACCOUNT_ROLE_TRADE_STATE_PREPARING\020\006*"
+    "\351\001\n\035AccountRoleFreezeEvidenceKind\0221\n-ACC"
+    "OUNT_ROLE_FREEZE_EVIDENCE_KIND_UNSPECIFI"
+    "ED\020\000\0222\n.ACCOUNT_ROLE_FREEZE_EVIDENCE_KIN"
+    "D_NO_ADMISSION\020\001\022+\n\'ACCOUNT_ROLE_FREEZE_"
+    "EVIDENCE_KIND_SCENE\020\002\0224\n0ACCOUNT_ROLE_FR"
+    "EEZE_EVIDENCE_KIND_INITIAL_COMMIT\020\003*\207\001\n\014"
+    "SnapshotType\022\023\n\017SNAPSHOT_MANUAL\020\000\022\025\n\021SNA"
+    "PSHOT_PERIODIC\020\001\022\034\n\030SNAPSHOT_PRE_MAINTEN"
+    "ANCE\020\002\022\031\n\025SNAPSHOT_PRE_ROLLBACK\020\003\022\022\n\016SNA"
+    "PSHOT_LOGIN\020\004*Y\n\nRecallKind\022\033\n\027RECALL_KI"
+    "ND_UNSPECIFIED\020\000\022\030\n\024RECALL_KIND_CURRENCY"
+    "\020\001\022\024\n\020RECALL_KIND_ITEM\020\002*\320\002\n\022RecallRevie"
+    "wReason\022$\n RECALL_REVIEW_REASON_UNSPECIF"
+    "IED\020\000\022 \n\034RECALL_REVIEW_NO_CORRELATION\020\001\022"
+    "!\n\035RECALL_REVIEW_NO_PLAYER_STORE\020\002\022\037\n\033RE"
+    "CALL_REVIEW_NOT_IN_LEDGER\020\003\022\"\n\036RECALL_RE"
+    "VIEW_LEDGER_AMBIGUOUS\020\004\022!\n\035RECALL_REVIEW"
+    "_LEDGER_REJECTED\020\005\022 \n\034RECALL_REVIEW_LEDG"
+    "ER_PARTIAL\020\006\022$\n RECALL_REVIEW_LEDGER_NOT"
+    "_APPLIED\020\007\022\037\n\033RECALL_REVIEW_ROWS_DISAGRE"
+    "E\020\0102\315\037\n\013DataService\022k\n\024ReadAccountDirect"
+    "ory\022).data_service.ReadAccountDirectoryR"
+    "equest\032&.data_service.AccountDirectoryRe"
+    "sponse\"\000\022e\n\021CreateAccountRole\022&.data_ser"
+    "vice.CreateAccountRoleRequest\032&.data_ser"
+    "vice.AccountDirectoryResponse\"\000\022a\n\021Looku"
+    "pAccountRole\022&.data_service.LookupAccoun"
+    "tRoleRequest\032\".data_service.AccountRoleO"
+    "wnership\"\000\022e\n\021RepairAccountRole\022&.data_s"
+    "ervice.RepairAccountRoleRequest\032&.data_s"
+    "ervice.AccountDirectoryResponse\"\000\022W\n\022Rem"
+    "oveAccountRoles\022\'.data_service.RemoveAcc"
+    "ountRolesRequest\032\026.google.protobuf.Empty"
+    "\"\000\022l\n\025BeginAccountRoleTrade\022*.data_servi"
+    "ce.BeginAccountRoleTradeRequest\032%.data_s"
+    "ervice.AccountRoleTradeReceipt\"\000\022|\n\035Conf"
+    "irmAccountRoleTradeFreeze\0222.data_service"
+    ".ConfirmAccountRoleTradeFreezeRequest\032%."
+    "data_service.AccountRoleTradeReceipt\"\000\022n"
+    "\n\026CancelAccountRoleTrade\022+.data_service."
+    "CancelAccountRoleTradeRequest\032%.data_ser"
+    "vice.AccountRoleTradeReceipt\"\000\022k\n\023Transf"
+    "erAccountRole\022(.data_service.TransferAcc"
+    "ountRoleRequest\032(.data_service.AccountRo"
+    "leTransferReceipt\"\000\022o\n\024CheckAccountRoleS"
+    "lot\022).data_service.CheckAccountRoleSlotR"
+    "equest\032*.data_service.CheckAccountRoleSl"
+    "otResponse\"\000\022f\n\021GetRoleFenceState\022&.data"
+    "_service.GetRoleFenceStateRequest\032\'.data"
+    "_service.GetRoleFenceStateResponse\"\000\022l\n\023"
+    "VerifyRoleAdmission\022(.data_service.Verif"
+    "yRoleAdmissionRequest\032).data_service.Ver"
+    "ifyRoleAdmissionResponse\"\000\022r\n\025RegisterRo"
+    "leAdmission\022*.data_service.RegisterRoleA"
+    "dmissionRequest\032+.data_service.RegisterR"
+    "oleAdmissionResponse\"\000\022l\n\023CloseRoleAdmis"
+    "sions\022(.data_service.CloseRoleAdmissions"
+    "Request\032).data_service.CloseRoleAdmissio"
+    "nsResponse\"\000\022U\n\021AckRoleTradeDrain\022&.data"
+    "_service.AckRoleTradeDrainRequest\032\026.goog"
+    "le.protobuf.Empty\"\000\022k\n\034ReleaseDeadPlayer"
+    "StoreHolder\0221.data_service.ReleaseDeadPl"
+    "ayerStoreHolderRequest\032\026.google.protobuf"
+    ".Empty\"\000\022r\n\025ReadPlayerStoreHolder\022*.data"
+    "_service.ReadPlayerStoreHolderRequest\032+."
+    "data_service.ReadPlayerStoreHolderRespon"
+    "se\"\000\022W\n\022RegisterPlayerZone\022\'.data_servic"
+    "e.RegisterPlayerZoneRequest\032\026.google.pro"
+    "tobuf.Empty\"\000\022f\n\021GetPlayerHomeZone\022&.dat"
+    "a_service.GetPlayerHomeZoneRequest\032\'.dat"
+    "a_service.GetPlayerHomeZoneResponse\"\000\022u\n"
+    "\026BatchGetPlayerHomeZone\022+.data_service.B"
+    "atchGetPlayerHomeZoneRequest\032,.data_serv"
+    "ice.BatchGetPlayerHomeZoneResponse\"\000\022P\n\016"
+    "GetMergedZones\022\026.google.protobuf.Empty\032$"
+    ".data_service.GetMergedZonesResponse\"\000\022]"
+    "\n\016CountZoneRoles\022#.data_service.CountZon"
+    "eRolesRequest\032$.data_service.CountZoneRo"
+    "lesResponse\"\000\022]\n\016GetPlayerRoute\022#.data_s"
+    "ervice.GetPlayerRouteRequest\032$.data_serv"
+    "ice.GetPlayerRouteResponse\"\000\022l\n\023ListPlay"
+    "erSnapshots\022(.data_service.ListPlayerSna"
+    "pshotsRequest\032).data_service.ListPlayerS"
+    "napshotsResponse\"\000\022c\n\020BatchRecallItems\022%"
+    ".data_service.BatchRecallItemsRequest\032&."
+    "data_service.BatchRecallItemsResponse\"\000\022"
+    "_\n\016GetRecallBatch\022#.data_service.GetReca"
+    "llBatchRequest\032&.data_service.BatchRecal"
+    "lItemsResponse\"\000\022e\n\021CancelRecallBatch\022&."
+    "data_service.CancelRecallBatchRequest\032&."
+    "data_service.BatchRecallItemsResponse\"\000\022"
+    "`\n\017ResolveRecallOp\022$.data_service.Resolv"
+    "eRecallOpRequest\032%.data_service.ResolveR"
+    "ecallOpResponse\"\000\022\204\001\n\033RegisterRecallRevi"
+    "ewHandled\0220.data_service.RegisterRecallR"
+    "eviewHandledRequest\0321.data_service.Regis"
+    "terRecallReviewHandledResponse\"\000\022l\n\023Quer"
+    "yTransactionLog\022(.data_service.QueryTran"
+    "sactionLogRequest\032).data_service.QueryTr"
+    "ansactionLogResponse\"\000\022f\n\021AllocateIdSegm"
+    "ent\022&.data_service.AllocateIdSegmentRequ"
+    "est\032\'.data_service.AllocateIdSegmentResp"
+    "onse\"\000\022f\n\021ReservePlayerName\022&.data_servi"
+    "ce.ReservePlayerNameRequest\032\'.data_servi"
+    "ce.ReservePlayerNameResponse\"\000\022U\n\021Releas"
+    "ePlayerName\022&.data_service.ReleasePlayer"
+    "NameRequest\032\026.google.protobuf.Empty\"\000\022i\n"
+    "\022BatchGetPlayerName\022\'.data_service.Batch"
+    "GetPlayerNameRequest\032(.data_service.Batc"
+    "hGetPlayerNameResponse\"\000\022r\n\025BatchGetPlay"
+    "erDisplay\022*.data_service.BatchGetPlayerD"
+    "isplayRequest\032+.data_service.BatchGetPla"
+    "yerDisplayResponse\"\000\022u\n\026GetPlayerAssetOp"
+    "Ledger\022+.data_service.GetPlayerAssetOpLe"
+    "dgerRequest\032,.data_service.GetPlayerAsse"
+    "tOpLedgerResponse\"\000\022o\n\024GetPlayerInboxLed"
+    "ger\022).data_service.GetPlayerInboxLedgerR"
+    "equest\032*.data_service.GetPlayerInboxLedg"
+    "erResponse\"\000\022u\n\026GetPlayerItemGainBlock\022+"
+    ".data_service.GetPlayerItemGainBlockRequ"
+    "est\032,.data_service.GetPlayerItemGainBloc"
+    "kResponse\"\000B\033Z\031data_service/data_service"
+    "b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps[8] = {
@@ -13981,13 +14286,13 @@ static ::absl::once_flag descriptor_table_proto_2fdata_5fservice_2fdata_5fservic
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto = {
     false,
     false,
-    14750,
+    14928,
     descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
     "proto/data_service/data_service.proto",
     &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_once,
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps,
     8,
-    75,
+    77,
     schemas,
     file_message_globals,
     TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto::offsets,
@@ -24544,6 +24849,384 @@ void GetMergedZonesResponse::InternalSwap(GetMergedZonesResponse* PROTOBUF_RESTR
 }
 
 ::google::protobuf::Metadata GetMergedZonesResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CountZoneRolesRequest::CountZoneRolesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CountZoneRolesRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.CountZoneRolesRequest)
+}
+CountZoneRolesRequest::CountZoneRolesRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CountZoneRolesRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CountZoneRolesRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE CountZoneRolesRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void CountZoneRolesRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.zone_id_ = {};
+}
+CountZoneRolesRequest::~CountZoneRolesRequest() {
+  // @@protoc_insertion_point(destructor:data_service.CountZoneRolesRequest)
+  SharedDtor(*this);
+}
+inline void CountZoneRolesRequest::SharedDtor(MessageLite& self) {
+  CountZoneRolesRequest& this_ = static_cast<CountZoneRolesRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CountZoneRolesRequest_class_data_ =
+        CountZoneRolesRequest::InternalGenerateClassData_(CountZoneRolesRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CountZoneRolesRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CountZoneRolesRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CountZoneRolesRequest_class_data_.tc_table);
+  return CountZoneRolesRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CountZoneRolesRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CountZoneRolesRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CountZoneRolesRequest_globals_));
+  return CountZoneRolesRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CountZoneRolesRequest::ParseTableT_
+    CountZoneRolesRequest::_table_ =
+        CountZoneRolesRequest::InternalGenerateParseTable_(CountZoneRolesRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CountZoneRolesRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.CountZoneRolesRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.zone_id_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CountZoneRolesRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CountZoneRolesRequest& this_ = static_cast<const CountZoneRolesRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CountZoneRolesRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CountZoneRolesRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.CountZoneRolesRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 zone_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_zone_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_zone_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.CountZoneRolesRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CountZoneRolesRequest::ByteSizeLong(const MessageLite& base) {
+  const CountZoneRolesRequest& this_ = static_cast<const CountZoneRolesRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CountZoneRolesRequest::ByteSizeLong() const {
+  const CountZoneRolesRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.CountZoneRolesRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint32 zone_id = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_zone_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_zone_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CountZoneRolesRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CountZoneRolesRequest*>(&to_msg);
+  auto& from = static_cast<const CountZoneRolesRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.CountZoneRolesRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_zone_id() != 0) {
+      _this->_impl_.zone_id_ = from._impl_.zone_id_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CountZoneRolesRequest::CopyFrom(const CountZoneRolesRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.CountZoneRolesRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CountZoneRolesRequest::InternalSwap(CountZoneRolesRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.zone_id_, other->_impl_.zone_id_);
+}
+
+::google::protobuf::Metadata CountZoneRolesRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CountZoneRolesResponse::CountZoneRolesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CountZoneRolesResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.CountZoneRolesResponse)
+}
+CountZoneRolesResponse::CountZoneRolesResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CountZoneRolesResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CountZoneRolesResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE CountZoneRolesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void CountZoneRolesResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.roles_ = {};
+}
+CountZoneRolesResponse::~CountZoneRolesResponse() {
+  // @@protoc_insertion_point(destructor:data_service.CountZoneRolesResponse)
+  SharedDtor(*this);
+}
+inline void CountZoneRolesResponse::SharedDtor(MessageLite& self) {
+  CountZoneRolesResponse& this_ = static_cast<CountZoneRolesResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CountZoneRolesResponse_class_data_ =
+        CountZoneRolesResponse::InternalGenerateClassData_(CountZoneRolesResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CountZoneRolesResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CountZoneRolesResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CountZoneRolesResponse_class_data_.tc_table);
+  return CountZoneRolesResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CountZoneRolesResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CountZoneRolesResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CountZoneRolesResponse_globals_));
+  return CountZoneRolesResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CountZoneRolesResponse::ParseTableT_
+    CountZoneRolesResponse::_table_ =
+        CountZoneRolesResponse::InternalGenerateParseTable_(CountZoneRolesResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CountZoneRolesResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.CountZoneRolesResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.roles_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CountZoneRolesResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CountZoneRolesResponse& this_ = static_cast<const CountZoneRolesResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CountZoneRolesResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CountZoneRolesResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.CountZoneRolesResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 roles = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_roles() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_roles(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.CountZoneRolesResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CountZoneRolesResponse::ByteSizeLong(const MessageLite& base) {
+  const CountZoneRolesResponse& this_ = static_cast<const CountZoneRolesResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CountZoneRolesResponse::ByteSizeLong() const {
+  const CountZoneRolesResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.CountZoneRolesResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint64 roles = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_roles() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_roles());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CountZoneRolesResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CountZoneRolesResponse*>(&to_msg);
+  auto& from = static_cast<const CountZoneRolesResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.CountZoneRolesResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_roles() != 0) {
+      _this->_impl_.roles_ = from._impl_.roles_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CountZoneRolesResponse::CopyFrom(const CountZoneRolesResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.CountZoneRolesResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CountZoneRolesResponse::InternalSwap(CountZoneRolesResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.roles_, other->_impl_.roles_);
+}
+
+::google::protobuf::Metadata CountZoneRolesResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

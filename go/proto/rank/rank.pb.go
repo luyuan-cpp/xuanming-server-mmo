@@ -127,6 +127,63 @@ func (RankGenerationState) EnumDescriptor() ([]byte, []int) {
 	return file_proto_rank_rank_proto_rawDescGZIP(), []int{1}
 }
 
+// RankBoardKey.board_type 的取值登记处(2026-11-12)。board_type 是客户端契约:客户端按它找榜,两版服务器取同值。
+// 新增一种榜先在这里登记一个值,生产者与客户端都用生成的常量,不写数字;已上线的值不改、不复用(同字段编号)。
+// 字段本身仍是 uint32:rank 服务是通用榜,不按这里校验取值。
+type RankBoardType int32
+
+const (
+	RankBoardType_RANK_BOARD_TYPE_UNSPECIFIED RankBoardType = 0
+	// 计分模式的评分榜,一个计分模式一张(docs/design/global-match-hierarchical-pools.md §8 R5);
+	// 模式到榜的映射只在 go/match/internal/authority/rating.go 的 rankBoardTypes。
+	RankBoardType_RANK_BOARD_TYPE_MATCH_1V1      RankBoardType = 1 // MATCH_MODE_1V1,沿用拆分前唯一那张评分榜的键
+	RankBoardType_RANK_BOARD_TYPE_MATCH_5V5      RankBoardType = 2 // MATCH_MODE_5V5
+	RankBoardType_RANK_BOARD_TYPE_MATCH_PVP_TEAM RankBoardType = 3 // MATCH_MODE_PVP_TEAM,各档每侧人数共用一张
+)
+
+// Enum value maps for RankBoardType.
+var (
+	RankBoardType_name = map[int32]string{
+		0: "RANK_BOARD_TYPE_UNSPECIFIED",
+		1: "RANK_BOARD_TYPE_MATCH_1V1",
+		2: "RANK_BOARD_TYPE_MATCH_5V5",
+		3: "RANK_BOARD_TYPE_MATCH_PVP_TEAM",
+	}
+	RankBoardType_value = map[string]int32{
+		"RANK_BOARD_TYPE_UNSPECIFIED":    0,
+		"RANK_BOARD_TYPE_MATCH_1V1":      1,
+		"RANK_BOARD_TYPE_MATCH_5V5":      2,
+		"RANK_BOARD_TYPE_MATCH_PVP_TEAM": 3,
+	}
+)
+
+func (x RankBoardType) Enum() *RankBoardType {
+	p := new(RankBoardType)
+	*p = x
+	return p
+}
+
+func (x RankBoardType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RankBoardType) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_rank_rank_proto_enumTypes[2].Descriptor()
+}
+
+func (RankBoardType) Type() protoreflect.EnumType {
+	return &file_proto_rank_rank_proto_enumTypes[2]
+}
+
+func (x RankBoardType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RankBoardType.Descriptor instead.
+func (RankBoardType) EnumDescriptor() ([]byte, []int) {
+	return file_proto_rank_rank_proto_rawDescGZIP(), []int{2}
+}
+
 type RankBoardKey struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	BoardType     uint32                 `protobuf:"varint,1,opt,name=board_type,json=boardType,proto3" json:"board_type,omitempty"`
@@ -655,7 +712,12 @@ const file_proto_rank_rank_proto_rawDesc = "" +
 	"\x13RankGenerationState\x12\x1f\n" +
 	"\x1bRANK_GENERATION_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14RANK_GENERATION_OPEN\x10\x01\x12\x1a\n" +
-	"\x16RANK_GENERATION_SEALED\x10\x022\xaf\x01\n" +
+	"\x16RANK_GENERATION_SEALED\x10\x02*\x92\x01\n" +
+	"\rRankBoardType\x12\x1f\n" +
+	"\x1bRANK_BOARD_TYPE_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19RANK_BOARD_TYPE_MATCH_1V1\x10\x01\x12\x1d\n" +
+	"\x19RANK_BOARD_TYPE_MATCH_5V5\x10\x02\x12\"\n" +
+	"\x1eRANK_BOARD_TYPE_MATCH_PVP_TEAM\x10\x032\xaf\x01\n" +
 	"\x10ClientPlayerRank\x12F\n" +
 	"\vGetRankPage\x12\x1a.rankpb.GetRankPageRequest\x1a\x1b.rankpb.GetRankPageResponse\x12L\n" +
 	"\rGetRankAround\x12\x1c.rankpb.GetRankAroundRequest\x1a\x1d.rankpb.GetRankAroundResponse\x1a\x05\x88\xa8\xc3\x01\x01B\x10\x98\xd4a\x12Z\n" +
@@ -673,36 +735,37 @@ func file_proto_rank_rank_proto_rawDescGZIP() []byte {
 	return file_proto_rank_rank_proto_rawDescData
 }
 
-var file_proto_rank_rank_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_proto_rank_rank_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_proto_rank_rank_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_proto_rank_rank_proto_goTypes = []any{
 	(RankScope)(0),                // 0: rankpb.RankScope
 	(RankGenerationState)(0),      // 1: rankpb.RankGenerationState
-	(*RankBoardKey)(nil),          // 2: rankpb.RankBoardKey
-	(*RankEntry)(nil),             // 3: rankpb.RankEntry
-	(*GetRankPageRequest)(nil),    // 4: rankpb.GetRankPageRequest
-	(*GetRankPageResponse)(nil),   // 5: rankpb.GetRankPageResponse
-	(*GetRankAroundRequest)(nil),  // 6: rankpb.GetRankAroundRequest
-	(*GetRankAroundResponse)(nil), // 7: rankpb.GetRankAroundResponse
-	(*base.TipInfoMessage)(nil),   // 8: TipInfoMessage
+	(RankBoardType)(0),            // 2: rankpb.RankBoardType
+	(*RankBoardKey)(nil),          // 3: rankpb.RankBoardKey
+	(*RankEntry)(nil),             // 4: rankpb.RankEntry
+	(*GetRankPageRequest)(nil),    // 5: rankpb.GetRankPageRequest
+	(*GetRankPageResponse)(nil),   // 6: rankpb.GetRankPageResponse
+	(*GetRankAroundRequest)(nil),  // 7: rankpb.GetRankAroundRequest
+	(*GetRankAroundResponse)(nil), // 8: rankpb.GetRankAroundResponse
+	(*base.TipInfoMessage)(nil),   // 9: TipInfoMessage
 }
 var file_proto_rank_rank_proto_depIdxs = []int32{
 	0,  // 0: rankpb.RankBoardKey.scope:type_name -> rankpb.RankScope
-	2,  // 1: rankpb.GetRankPageRequest.board:type_name -> rankpb.RankBoardKey
-	8,  // 2: rankpb.GetRankPageResponse.error_message:type_name -> TipInfoMessage
-	2,  // 3: rankpb.GetRankPageResponse.board:type_name -> rankpb.RankBoardKey
-	3,  // 4: rankpb.GetRankPageResponse.entries:type_name -> rankpb.RankEntry
-	3,  // 5: rankpb.GetRankPageResponse.self:type_name -> rankpb.RankEntry
+	3,  // 1: rankpb.GetRankPageRequest.board:type_name -> rankpb.RankBoardKey
+	9,  // 2: rankpb.GetRankPageResponse.error_message:type_name -> TipInfoMessage
+	3,  // 3: rankpb.GetRankPageResponse.board:type_name -> rankpb.RankBoardKey
+	4,  // 4: rankpb.GetRankPageResponse.entries:type_name -> rankpb.RankEntry
+	4,  // 5: rankpb.GetRankPageResponse.self:type_name -> rankpb.RankEntry
 	1,  // 6: rankpb.GetRankPageResponse.state:type_name -> rankpb.RankGenerationState
-	2,  // 7: rankpb.GetRankAroundRequest.board:type_name -> rankpb.RankBoardKey
-	8,  // 8: rankpb.GetRankAroundResponse.error_message:type_name -> TipInfoMessage
-	2,  // 9: rankpb.GetRankAroundResponse.board:type_name -> rankpb.RankBoardKey
-	3,  // 10: rankpb.GetRankAroundResponse.entries:type_name -> rankpb.RankEntry
-	3,  // 11: rankpb.GetRankAroundResponse.self:type_name -> rankpb.RankEntry
-	4,  // 12: rankpb.ClientPlayerRank.GetRankPage:input_type -> rankpb.GetRankPageRequest
-	6,  // 13: rankpb.ClientPlayerRank.GetRankAround:input_type -> rankpb.GetRankAroundRequest
-	5,  // 14: rankpb.ClientPlayerRank.GetRankPage:output_type -> rankpb.GetRankPageResponse
-	7,  // 15: rankpb.ClientPlayerRank.GetRankAround:output_type -> rankpb.GetRankAroundResponse
+	3,  // 7: rankpb.GetRankAroundRequest.board:type_name -> rankpb.RankBoardKey
+	9,  // 8: rankpb.GetRankAroundResponse.error_message:type_name -> TipInfoMessage
+	3,  // 9: rankpb.GetRankAroundResponse.board:type_name -> rankpb.RankBoardKey
+	4,  // 10: rankpb.GetRankAroundResponse.entries:type_name -> rankpb.RankEntry
+	4,  // 11: rankpb.GetRankAroundResponse.self:type_name -> rankpb.RankEntry
+	5,  // 12: rankpb.ClientPlayerRank.GetRankPage:input_type -> rankpb.GetRankPageRequest
+	7,  // 13: rankpb.ClientPlayerRank.GetRankAround:input_type -> rankpb.GetRankAroundRequest
+	6,  // 14: rankpb.ClientPlayerRank.GetRankPage:output_type -> rankpb.GetRankPageResponse
+	8,  // 15: rankpb.ClientPlayerRank.GetRankAround:output_type -> rankpb.GetRankAroundResponse
 	14, // [14:16] is the sub-list for method output_type
 	12, // [12:14] is the sub-list for method input_type
 	12, // [12:12] is the sub-list for extension type_name
@@ -720,7 +783,7 @@ func file_proto_rank_rank_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_rank_rank_proto_rawDesc), len(file_proto_rank_rank_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,

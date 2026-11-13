@@ -24,33 +24,41 @@ const (
 type MatchError int32
 
 const (
-	MatchError_kMatch_errorOK               MatchError = 0
-	MatchError_kMatchInBattle               MatchError = 16000
-	MatchError_kMatchAlreadyQueued          MatchError = 16001
-	MatchError_kMatchModeNotOpen            MatchError = 16002
-	MatchError_kMatchTeamSizeNotConfigured  MatchError = 16003
-	MatchError_kMatchInternal               MatchError = 16004
-	MatchError_kMatchTicketMismatch         MatchError = 16005
-	MatchError_kMatchCancelTooLate          MatchError = 16006
-	MatchError_kMatchChallengeSelf          MatchError = 16007
-	MatchError_kMatchChallengeTargetOffline MatchError = 16008
-	MatchError_kMatchChallengeTargetBusy    MatchError = 16009
-	MatchError_kMatchChallengeSelfBusy      MatchError = 16010
-	MatchError_kMatchChallengePending       MatchError = 16011
-	MatchError_kMatchChallengeExpired       MatchError = 16012
-	MatchError_kMatchChallengeNotTarget     MatchError = 16013
-	MatchError_kMatchSpectateWhileQueued    MatchError = 16014
-	MatchError_kMatchSpectateWhileInBattle  MatchError = 16015
-	MatchError_kMatchAlreadyWatching        MatchError = 16016
-	MatchError_kMatchNoWatchableBattle      MatchError = 16017
-	MatchError_kMatchBattleNotWatchable     MatchError = 16018
-	MatchError_kMatchSpectateOffline        MatchError = 16019
-	MatchError_kMatchNotInScene             MatchError = 16020
-	MatchError_kMatchSpectateFull           MatchError = 16021
-	MatchError_kMatchProbeRequired          MatchError = 16022
-	MatchError_kMatchNoRegionWithinLatency  MatchError = 16023
-	MatchError_kMatchSpectateTicketInvalid  MatchError = 16024
-	MatchError_kMatchBattleReportNotFound   MatchError = 16025
+	MatchError_kMatch_errorOK                     MatchError = 0
+	MatchError_kMatchInBattle                     MatchError = 16000
+	MatchError_kMatchAlreadyQueued                MatchError = 16001
+	MatchError_kMatchModeNotOpen                  MatchError = 16002
+	MatchError_kMatchTeamSizeNotConfigured        MatchError = 16003
+	MatchError_kMatchInternal                     MatchError = 16004
+	MatchError_kMatchTicketMismatch               MatchError = 16005
+	MatchError_kMatchCancelTooLate                MatchError = 16006
+	MatchError_kMatchChallengeSelf                MatchError = 16007
+	MatchError_kMatchChallengeTargetOffline       MatchError = 16008
+	MatchError_kMatchChallengeTargetBusy          MatchError = 16009
+	MatchError_kMatchChallengeSelfBusy            MatchError = 16010
+	MatchError_kMatchChallengePending             MatchError = 16011
+	MatchError_kMatchChallengeExpired             MatchError = 16012
+	MatchError_kMatchChallengeNotTarget           MatchError = 16013
+	MatchError_kMatchSpectateWhileQueued          MatchError = 16014
+	MatchError_kMatchSpectateWhileInBattle        MatchError = 16015
+	MatchError_kMatchAlreadyWatching              MatchError = 16016
+	MatchError_kMatchNoWatchableBattle            MatchError = 16017
+	MatchError_kMatchBattleNotWatchable           MatchError = 16018
+	MatchError_kMatchSpectateOffline              MatchError = 16019
+	MatchError_kMatchNotInScene                   MatchError = 16020
+	MatchError_kMatchSpectateFull                 MatchError = 16021
+	MatchError_kMatchProbeRequired                MatchError = 16022
+	MatchError_kMatchNoRegionWithinLatency        MatchError = 16023
+	MatchError_kMatchSpectateTicketInvalid        MatchError = 16024
+	MatchError_kMatchBattleReportNotFound         MatchError = 16025
+	MatchError_kMatchBattleScriptInvalid          MatchError = 16026
+	MatchError_kMatchBattleScriptNotFound         MatchError = 16027
+	MatchError_kMatchBattleScriptLimitReached     MatchError = 16028
+	MatchError_kMatchBattleScriptRevisionConflict MatchError = 16029
+	MatchError_kMatchBattleScriptNotApproved      MatchError = 16030
+	MatchError_kMatchBattleScriptTooLarge         MatchError = 16031
+	MatchError_kMatchBattleScriptLoadoutInvalid   MatchError = 16032
+	MatchError_kMatchBattleScriptLoadoutFull      MatchError = 16033
 )
 
 // Enum value maps for MatchError.
@@ -83,35 +91,51 @@ var (
 		16023: "kMatchNoRegionWithinLatency",
 		16024: "kMatchSpectateTicketInvalid",
 		16025: "kMatchBattleReportNotFound",
+		16026: "kMatchBattleScriptInvalid",
+		16027: "kMatchBattleScriptNotFound",
+		16028: "kMatchBattleScriptLimitReached",
+		16029: "kMatchBattleScriptRevisionConflict",
+		16030: "kMatchBattleScriptNotApproved",
+		16031: "kMatchBattleScriptTooLarge",
+		16032: "kMatchBattleScriptLoadoutInvalid",
+		16033: "kMatchBattleScriptLoadoutFull",
 	}
 	MatchError_value = map[string]int32{
-		"kMatch_errorOK":               0,
-		"kMatchInBattle":               16000,
-		"kMatchAlreadyQueued":          16001,
-		"kMatchModeNotOpen":            16002,
-		"kMatchTeamSizeNotConfigured":  16003,
-		"kMatchInternal":               16004,
-		"kMatchTicketMismatch":         16005,
-		"kMatchCancelTooLate":          16006,
-		"kMatchChallengeSelf":          16007,
-		"kMatchChallengeTargetOffline": 16008,
-		"kMatchChallengeTargetBusy":    16009,
-		"kMatchChallengeSelfBusy":      16010,
-		"kMatchChallengePending":       16011,
-		"kMatchChallengeExpired":       16012,
-		"kMatchChallengeNotTarget":     16013,
-		"kMatchSpectateWhileQueued":    16014,
-		"kMatchSpectateWhileInBattle":  16015,
-		"kMatchAlreadyWatching":        16016,
-		"kMatchNoWatchableBattle":      16017,
-		"kMatchBattleNotWatchable":     16018,
-		"kMatchSpectateOffline":        16019,
-		"kMatchNotInScene":             16020,
-		"kMatchSpectateFull":           16021,
-		"kMatchProbeRequired":          16022,
-		"kMatchNoRegionWithinLatency":  16023,
-		"kMatchSpectateTicketInvalid":  16024,
-		"kMatchBattleReportNotFound":   16025,
+		"kMatch_errorOK":                     0,
+		"kMatchInBattle":                     16000,
+		"kMatchAlreadyQueued":                16001,
+		"kMatchModeNotOpen":                  16002,
+		"kMatchTeamSizeNotConfigured":        16003,
+		"kMatchInternal":                     16004,
+		"kMatchTicketMismatch":               16005,
+		"kMatchCancelTooLate":                16006,
+		"kMatchChallengeSelf":                16007,
+		"kMatchChallengeTargetOffline":       16008,
+		"kMatchChallengeTargetBusy":          16009,
+		"kMatchChallengeSelfBusy":            16010,
+		"kMatchChallengePending":             16011,
+		"kMatchChallengeExpired":             16012,
+		"kMatchChallengeNotTarget":           16013,
+		"kMatchSpectateWhileQueued":          16014,
+		"kMatchSpectateWhileInBattle":        16015,
+		"kMatchAlreadyWatching":              16016,
+		"kMatchNoWatchableBattle":            16017,
+		"kMatchBattleNotWatchable":           16018,
+		"kMatchSpectateOffline":              16019,
+		"kMatchNotInScene":                   16020,
+		"kMatchSpectateFull":                 16021,
+		"kMatchProbeRequired":                16022,
+		"kMatchNoRegionWithinLatency":        16023,
+		"kMatchSpectateTicketInvalid":        16024,
+		"kMatchBattleReportNotFound":         16025,
+		"kMatchBattleScriptInvalid":          16026,
+		"kMatchBattleScriptNotFound":         16027,
+		"kMatchBattleScriptLimitReached":     16028,
+		"kMatchBattleScriptRevisionConflict": 16029,
+		"kMatchBattleScriptNotApproved":      16030,
+		"kMatchBattleScriptTooLarge":         16031,
+		"kMatchBattleScriptLoadoutInvalid":   16032,
+		"kMatchBattleScriptLoadoutFull":      16033,
 	}
 )
 
@@ -146,7 +170,7 @@ var File_match_error_tip_proto protoreflect.FileDescriptor
 
 const file_match_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15match_error_tip.proto*\x8e\x06\n" +
+	"\x15match_error_tip.proto*\xad\b\n" +
 	"\vmatch_error\x12\x12\n" +
 	"\x0ekMatch_errorOK\x10\x00\x12\x13\n" +
 	"\x0ekMatchInBattle\x10\x80}\x12\x18\n" +
@@ -174,7 +198,15 @@ const file_match_error_tip_proto_rawDesc = "" +
 	"\x13kMatchProbeRequired\x10\x96}\x12 \n" +
 	"\x1bkMatchNoRegionWithinLatency\x10\x97}\x12 \n" +
 	"\x1bkMatchSpectateTicketInvalid\x10\x98}\x12\x1f\n" +
-	"\x1akMatchBattleReportNotFound\x10\x99}B$\n" +
+	"\x1akMatchBattleReportNotFound\x10\x99}\x12\x1e\n" +
+	"\x19kMatchBattleScriptInvalid\x10\x9a}\x12\x1f\n" +
+	"\x1akMatchBattleScriptNotFound\x10\x9b}\x12#\n" +
+	"\x1ekMatchBattleScriptLimitReached\x10\x9c}\x12'\n" +
+	"\"kMatchBattleScriptRevisionConflict\x10\x9d}\x12\"\n" +
+	"\x1dkMatchBattleScriptNotApproved\x10\x9e}\x12\x1f\n" +
+	"\x1akMatchBattleScriptTooLarge\x10\x9f}\x12%\n" +
+	" kMatchBattleScriptLoadoutInvalid\x10\xa0}\x12\"\n" +
+	"\x1dkMatchBattleScriptLoadoutFull\x10\xa1}B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

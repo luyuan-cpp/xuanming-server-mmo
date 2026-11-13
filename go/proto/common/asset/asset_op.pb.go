@@ -588,7 +588,7 @@ func (x *AssetItemInstance) GetInstanceProto() []byte {
 
 type AssetPetInstance struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PetId         uint64                 `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`                        // 与 PetInstance.pet_id 同源(SnowFlake guid)
+	PetId         uint64                 `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`                        // 与 PetInstance.pet_id 同源(发号器 item 号段),只当身份用,不能解析
 	PetTableId    uint32                 `protobuf:"varint,2,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`       // Pet 表 id
 	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                        // 玩家自定义名;空 = 用 PetTable.name
 	Level         uint32                 `protobuf:"varint,4,opt,name=level,proto3" json:"level,omitempty"`                                     // 成交时的等级快照,只为展示

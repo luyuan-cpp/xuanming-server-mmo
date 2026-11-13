@@ -19,7 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TradeAdmin_SeedListing_FullMethodName = "/trade.TradeAdmin/SeedListing"
+	TradeAdmin_SeedListing_FullMethodName           = "/trade.TradeAdmin/SeedListing"
+	TradeAdmin_ListManualContracts_FullMethodName   = "/trade.TradeAdmin/ListManualContracts"
+	TradeAdmin_ResolveManualContract_FullMethodName = "/trade.TradeAdmin/ResolveManualContract"
 )
 
 // TradeAdminClient is the client API for TradeAdmin service.
@@ -27,6 +29,8 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TradeAdminClient interface {
 	SeedListing(ctx context.Context, in *SeedListingRequest, opts ...grpc.CallOption) (*SeedListingResponse, error)
+	ListManualContracts(ctx context.Context, in *ListManualContractsRequest, opts ...grpc.CallOption) (*ListManualContractsResponse, error)
+	ResolveManualContract(ctx context.Context, in *ResolveManualContractRequest, opts ...grpc.CallOption) (*ResolveManualContractResponse, error)
 }
 
 type tradeAdminClient struct {
@@ -47,11 +51,33 @@ func (c *tradeAdminClient) SeedListing(ctx context.Context, in *SeedListingReque
 	return out, nil
 }
 
+func (c *tradeAdminClient) ListManualContracts(ctx context.Context, in *ListManualContractsRequest, opts ...grpc.CallOption) (*ListManualContractsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListManualContractsResponse)
+	err := c.cc.Invoke(ctx, TradeAdmin_ListManualContracts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradeAdminClient) ResolveManualContract(ctx context.Context, in *ResolveManualContractRequest, opts ...grpc.CallOption) (*ResolveManualContractResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveManualContractResponse)
+	err := c.cc.Invoke(ctx, TradeAdmin_ResolveManualContract_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradeAdminServer is the server API for TradeAdmin service.
 // All implementations must embed UnimplementedTradeAdminServer
 // for forward compatibility.
 type TradeAdminServer interface {
 	SeedListing(context.Context, *SeedListingRequest) (*SeedListingResponse, error)
+	ListManualContracts(context.Context, *ListManualContractsRequest) (*ListManualContractsResponse, error)
+	ResolveManualContract(context.Context, *ResolveManualContractRequest) (*ResolveManualContractResponse, error)
 	mustEmbedUnimplementedTradeAdminServer()
 }
 
@@ -64,6 +90,12 @@ type UnimplementedTradeAdminServer struct{}
 
 func (UnimplementedTradeAdminServer) SeedListing(context.Context, *SeedListingRequest) (*SeedListingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SeedListing not implemented")
+}
+func (UnimplementedTradeAdminServer) ListManualContracts(context.Context, *ListManualContractsRequest) (*ListManualContractsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListManualContracts not implemented")
+}
+func (UnimplementedTradeAdminServer) ResolveManualContract(context.Context, *ResolveManualContractRequest) (*ResolveManualContractResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveManualContract not implemented")
 }
 func (UnimplementedTradeAdminServer) mustEmbedUnimplementedTradeAdminServer() {}
 func (UnimplementedTradeAdminServer) testEmbeddedByValue()                    {}
@@ -104,6 +136,42 @@ func _TradeAdmin_SeedListing_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradeAdmin_ListManualContracts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListManualContractsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradeAdminServer).ListManualContracts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradeAdmin_ListManualContracts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradeAdminServer).ListManualContracts(ctx, req.(*ListManualContractsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradeAdmin_ResolveManualContract_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveManualContractRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradeAdminServer).ResolveManualContract(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradeAdmin_ResolveManualContract_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradeAdminServer).ResolveManualContract(ctx, req.(*ResolveManualContractRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradeAdmin_ServiceDesc is the grpc.ServiceDesc for TradeAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +182,14 @@ var TradeAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SeedListing",
 			Handler:    _TradeAdmin_SeedListing_Handler,
+		},
+		{
+			MethodName: "ListManualContracts",
+			Handler:    _TradeAdmin_ListManualContracts_Handler,
+		},
+		{
+			MethodName: "ResolveManualContract",
+			Handler:    _TradeAdmin_ResolveManualContract_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

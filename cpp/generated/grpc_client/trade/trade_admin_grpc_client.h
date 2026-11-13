@@ -15,6 +15,22 @@ void SendTradeAdminSeedListing(entt::registry& registry, entt::entity nodeEntity
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendTradeAdminSeedListingErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region TradeAdminListManualContracts
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kTradeAdminListManualContractsGrpcPath = "/trade.TradeAdmin/ListManualContracts";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendTradeAdminListManualContracts(entt::registry& registry, entt::entity nodeEntity, const ::trade::ListManualContractsRequest& request, GrpcDone<::trade::ListManualContractsResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendTradeAdminListManualContractsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region TradeAdminResolveManualContract
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kTradeAdminResolveManualContractGrpcPath = "/trade.TradeAdmin/ResolveManualContract";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendTradeAdminResolveManualContract(entt::registry& registry, entt::entity nodeEntity, const ::trade::ResolveManualContractRequest& request, GrpcDone<::trade::ResolveManualContractResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendTradeAdminResolveManualContractErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetTradeAdminCallDeadline(std::chrono::milliseconds deadline);
 

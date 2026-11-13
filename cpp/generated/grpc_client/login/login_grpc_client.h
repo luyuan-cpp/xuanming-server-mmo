@@ -63,6 +63,14 @@ void SendClientPlayerLoginRequestGateMigration(entt::registry& registry, entt::e
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendClientPlayerLoginRequestGateMigrationErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region ClientPlayerLoginRenewSession
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kClientPlayerLoginRenewSessionGrpcPath = "/loginpb.ClientPlayerLogin/RenewSession";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendClientPlayerLoginRenewSession(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::RenewSessionRequest& request, GrpcDone<::loginpb::RenewSessionResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendClientPlayerLoginRenewSessionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 #pragma region LoginPreGateAssignGate
 // gRPC :path(线上契约,与 Go 侧一致)。
 inline constexpr std::string_view kLoginPreGateAssignGateGrpcPath = "/loginpb.LoginPreGate/AssignGate";
@@ -78,6 +86,14 @@ inline constexpr std::string_view kLoginPreGateQueryQueueStatusGrpcPath = "/logi
 void SendLoginPreGateQueryQueueStatus(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::QueryQueueStatusRequest& request, GrpcDone<::loginpb::QueryQueueStatusResponse> done, const GrpcCallOptions& options = {});
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendLoginPreGateQueryQueueStatusErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region LoginPreGateGetZoneRoleCount
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kLoginPreGateGetZoneRoleCountGrpcPath = "/loginpb.LoginPreGate/GetZoneRoleCount";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendLoginPreGateGetZoneRoleCount(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::ZoneRoleCountRequest& request, GrpcDone<::loginpb::ZoneRoleCountResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendLoginPreGateGetZoneRoleCountErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
 #pragma region LoginAdminRemovePlayersFromAccounts
 // gRPC :path(线上契约,与 Go 侧一致)。

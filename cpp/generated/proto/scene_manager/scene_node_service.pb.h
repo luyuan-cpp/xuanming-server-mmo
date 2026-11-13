@@ -230,8 +230,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleasePlayerRequest final : public
     kPlayerIdFieldNumber = 1,
     kTargetSceneIdFieldNumber = 2,
     kExpectedOwnerEpochFieldNumber = 4,
-    kSessionEndedFieldNumber = 5,
     kCoveredSessionIdFieldNumber = 6,
+    kSessionEndedFieldNumber = 5,
+    kKeepHeldFieldNumber = 8,
     kCoveredLoginGenerationFieldNumber = 7,
   };
   // string target_node_id = 3;
@@ -279,6 +280,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleasePlayerRequest final : public
   void _internal_set_expected_owner_epoch(::uint64_t value);
 
   public:
+  // uint32 covered_session_id = 6;
+  void clear_covered_session_id() ;
+  [[nodiscard]] ::uint32_t covered_session_id() const;
+  void set_covered_session_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_covered_session_id() const;
+  void _internal_set_covered_session_id(::uint32_t value);
+
+  public:
   // bool session_ended = 5;
   void clear_session_ended() ;
   [[nodiscard]] bool session_ended() const;
@@ -289,14 +300,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleasePlayerRequest final : public
   void _internal_set_session_ended(bool value);
 
   public:
-  // uint32 covered_session_id = 6;
-  void clear_covered_session_id() ;
-  [[nodiscard]] ::uint32_t covered_session_id() const;
-  void set_covered_session_id(::uint32_t value);
+  // bool keep_held = 8;
+  void clear_keep_held() ;
+  [[nodiscard]] bool keep_held() const;
+  void set_keep_held(bool value);
 
   private:
-  ::uint32_t _internal_covered_session_id() const;
-  void _internal_set_covered_session_id(::uint32_t value);
+  bool _internal_keep_held() const;
+  void _internal_set_keep_held(bool value);
 
   public:
   // uint64 covered_login_generation = 7;
@@ -313,8 +324,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleasePlayerRequest final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 54,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 62,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -346,8 +357,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleasePlayerRequest final : public
     ::uint64_t player_id_;
     ::uint64_t target_scene_id_;
     ::uint64_t expected_owner_epoch_;
-    bool session_ended_;
     ::uint32_t covered_session_id_;
+    bool session_ended_;
+    bool keep_held_;
     ::uint64_t covered_login_generation_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -511,7 +523,7 @@ inline void ReleasePlayerRequest::_internal_set_expected_owner_epoch(::uint64_t 
 inline void ReleasePlayerRequest::clear_session_ended() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_ended_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline bool ReleasePlayerRequest::session_ended() const {
   // @@protoc_insertion_point(field_get:scene_node.ReleasePlayerRequest.session_ended)
@@ -519,7 +531,7 @@ inline bool ReleasePlayerRequest::session_ended() const {
 }
 inline void ReleasePlayerRequest::set_session_ended(bool value) {
   _internal_set_session_ended(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:scene_node.ReleasePlayerRequest.session_ended)
 }
 inline bool ReleasePlayerRequest::_internal_session_ended() const {
@@ -535,7 +547,7 @@ inline void ReleasePlayerRequest::_internal_set_session_ended(bool value) {
 inline void ReleasePlayerRequest::clear_covered_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.covered_session_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t ReleasePlayerRequest::covered_session_id() const {
   // @@protoc_insertion_point(field_get:scene_node.ReleasePlayerRequest.covered_session_id)
@@ -543,7 +555,7 @@ inline ::uint32_t ReleasePlayerRequest::covered_session_id() const {
 }
 inline void ReleasePlayerRequest::set_covered_session_id(::uint32_t value) {
   _internal_set_covered_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:scene_node.ReleasePlayerRequest.covered_session_id)
 }
 inline ::uint32_t ReleasePlayerRequest::_internal_covered_session_id() const {
@@ -559,7 +571,7 @@ inline void ReleasePlayerRequest::_internal_set_covered_session_id(::uint32_t va
 inline void ReleasePlayerRequest::clear_covered_login_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.covered_login_generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t ReleasePlayerRequest::covered_login_generation() const {
   // @@protoc_insertion_point(field_get:scene_node.ReleasePlayerRequest.covered_login_generation)
@@ -567,7 +579,7 @@ inline ::uint64_t ReleasePlayerRequest::covered_login_generation() const {
 }
 inline void ReleasePlayerRequest::set_covered_login_generation(::uint64_t value) {
   _internal_set_covered_login_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:scene_node.ReleasePlayerRequest.covered_login_generation)
 }
 inline ::uint64_t ReleasePlayerRequest::_internal_covered_login_generation() const {
@@ -577,6 +589,30 @@ inline ::uint64_t ReleasePlayerRequest::_internal_covered_login_generation() con
 inline void ReleasePlayerRequest::_internal_set_covered_login_generation(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.covered_login_generation_ = value;
+}
+
+// bool keep_held = 8;
+inline void ReleasePlayerRequest::clear_keep_held() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.keep_held_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool ReleasePlayerRequest::keep_held() const {
+  // @@protoc_insertion_point(field_get:scene_node.ReleasePlayerRequest.keep_held)
+  return _internal_keep_held();
+}
+inline void ReleasePlayerRequest::set_keep_held(bool value) {
+  _internal_set_keep_held(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:scene_node.ReleasePlayerRequest.keep_held)
+}
+inline bool ReleasePlayerRequest::_internal_keep_held() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.keep_held_;
+}
+inline void ReleasePlayerRequest::_internal_set_keep_held(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.keep_held_ = value;
 }
 
 #ifdef __GNUC__

@@ -1306,22 +1306,26 @@ type GmRecallOp struct {
 	NextAttemptMs uint64                 `protobuf:"varint,11,opt,name=next_attempt_ms,json=nextAttemptMs,proto3" json:"next_attempt_ms,omitempty"`
 	LeaseUntilMs  uint64                 `protobuf:"varint,12,opt,name=lease_until_ms,json=leaseUntilMs,proto3" json:"lease_until_ms,omitempty"`
 	LeaseToken    uint64                 `protobuf:"varint,13,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
-	LastOutcome   uint32                 `protobuf:"varint,14,opt,name=last_outcome,json=lastOutcome,proto3" json:"last_outcome,omitempty"`
-	LastReason    uint32                 `protobuf:"varint,15,opt,name=last_reason,json=lastReason,proto3" json:"last_reason,omitempty"`
-	Durable       uint32                 `protobuf:"varint,16,opt,name=durable,proto3" json:"durable,omitempty"`
-	DeadlineMs    uint64                 `protobuf:"varint,17,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"` // 0 = 永不中止。取消把它改成当前时刻,下一次投递改发中止
-	CreatedMs     uint64                 `protobuf:"varint,18,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
-	UpdatedMs     uint64                 `protobuf:"varint,19,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
-	LastSendMs    uint64                 `protobuf:"varint,20,opt,name=last_send_ms,json=lastSendMs,proto3" json:"last_send_ms,omitempty"`
-	RecallKind    uint32                 `protobuf:"varint,21,opt,name=recall_kind,json=recallKind,proto3" json:"recall_kind,omitempty"` // RecallKind
-	CurrencyType  uint32                 `protobuf:"varint,22,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
-	ItemConfigId  uint32                 `protobuf:"varint,23,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
-	Requested     uint64                 `protobuf:"varint,24,opt,name=requested,proto3" json:"requested,omitempty"`
-	Taken         uint64                 `protobuf:"varint,25,opt,name=taken,proto3" json:"taken,omitempty"`
-	Debt          uint64                 `protobuf:"varint,26,opt,name=debt,proto3" json:"debt,omitempty"`
-	Shortfall     uint64                 `protobuf:"varint,27,opt,name=shortfall,proto3" json:"shortfall,omitempty"`
-	ResolvedBy    string                 `protobuf:"bytes,28,opt,name=resolved_by,json=resolvedBy,proto3" json:"resolved_by,omitempty"`
-	ResolveReason string                 `protobuf:"bytes,29,opt,name=resolve_reason,json=resolveReason,proto3" json:"resolve_reason,omitempty"`
+	// last_outcome / last_reason / durable 三列描述同一件事:最后一次 scene 答复(AssetOpOutcome 数值、原因码)。
+	// durable = 1 表示那次答复报告结局已落盘(写进了玩家存档),只有这样的答复才能终结一行。重排按每次答复覆盖三列;
+	// 自动终结写下终结所凭的答复(durable 恒为 1)。人工终结、ROLE_GONE 不是 scene 的答复,三列都不改,终态行上留着最后一次
+	// 投递时 scene 实际回的值,事后核对用。谁终结的看 resolved_by(人工终结写操作人),不看 durable。
+	LastOutcome   uint32 `protobuf:"varint,14,opt,name=last_outcome,json=lastOutcome,proto3" json:"last_outcome,omitempty"`
+	LastReason    uint32 `protobuf:"varint,15,opt,name=last_reason,json=lastReason,proto3" json:"last_reason,omitempty"`
+	Durable       uint32 `protobuf:"varint,16,opt,name=durable,proto3" json:"durable,omitempty"`
+	DeadlineMs    uint64 `protobuf:"varint,17,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"` // 0 = 永不中止。取消把它改成当前时刻,下一次投递改发中止
+	CreatedMs     uint64 `protobuf:"varint,18,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	UpdatedMs     uint64 `protobuf:"varint,19,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	LastSendMs    uint64 `protobuf:"varint,20,opt,name=last_send_ms,json=lastSendMs,proto3" json:"last_send_ms,omitempty"`
+	RecallKind    uint32 `protobuf:"varint,21,opt,name=recall_kind,json=recallKind,proto3" json:"recall_kind,omitempty"` // RecallKind
+	CurrencyType  uint32 `protobuf:"varint,22,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
+	ItemConfigId  uint32 `protobuf:"varint,23,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
+	Requested     uint64 `protobuf:"varint,24,opt,name=requested,proto3" json:"requested,omitempty"`
+	Taken         uint64 `protobuf:"varint,25,opt,name=taken,proto3" json:"taken,omitempty"`
+	Debt          uint64 `protobuf:"varint,26,opt,name=debt,proto3" json:"debt,omitempty"`
+	Shortfall     uint64 `protobuf:"varint,27,opt,name=shortfall,proto3" json:"shortfall,omitempty"`
+	ResolvedBy    string `protobuf:"bytes,28,opt,name=resolved_by,json=resolvedBy,proto3" json:"resolved_by,omitempty"`
+	ResolveReason string `protobuf:"bytes,29,opt,name=resolve_reason,json=resolveReason,proto3" json:"resolve_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2629,15 +2633,20 @@ func (x *AccountDirectory) GetCreatedMs() uint64 {
 // 账号到角色的索引,放账号所在分片。不变量:ref 集合包含全部归属真相;真相永远是 account_role.account。
 // 规格见 docs/design/horizontal-scale-logical-db.md §5.2。
 type AccountRoleRef struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Account       string                 `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
-	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	State         uint32                 `protobuf:"varint,3,opt,name=state,proto3" json:"state,omitempty"`                          // 1 = PENDING,提交点之前写;2 = ACTIVE
-	TxId          uint64                 `protobuf:"varint,4,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"`                // PENDING 是过户时非 0;建角是 0
-	ListingId     uint64                 `protobuf:"varint,5,opt,name=listing_id,json=listingId,proto3" json:"listing_id,omitempty"` // 和 tx_id 成对
-	HomeZone      uint32                 `protobuf:"varint,6,opt,name=home_zone,json=homeZone,proto3" json:"home_zone,omitempty"`    // PENDING 是建角时非 0,判陈旧时给墓碑用
-	Nonce         uint64                 `protobuf:"varint,7,opt,name=nonce,proto3" json:"nonce,omitempty"`                          // 每次写换一个随机值。清理按它比较并删除,挡住「读完之后又被重新占用」
-	CreatedMs     uint64                 `protobuf:"varint,8,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Account   string                 `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	PlayerId  uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	State     uint32                 `protobuf:"varint,3,opt,name=state,proto3" json:"state,omitempty"`                          // 1 = PENDING,提交点之前写;2 = ACTIVE
+	TxId      uint64                 `protobuf:"varint,4,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"`                // PENDING 是过户时非 0;建角是 0
+	ListingId uint64                 `protobuf:"varint,5,opt,name=listing_id,json=listingId,proto3" json:"listing_id,omitempty"` // 和 tx_id 成对
+	HomeZone  uint32                 `protobuf:"varint,6,opt,name=home_zone,json=homeZone,proto3" json:"home_zone,omitempty"`    // PENDING 是建角时非 0,判陈旧时给墓碑用
+	Nonce     uint64                 `protobuf:"varint,7,opt,name=nonce,proto3" json:"nonce,omitempty"`                          // 每次写换一个随机值。清理按它比较并删除,挡住「读完之后又被重新占用」
+	CreatedMs uint64                 `protobuf:"varint,8,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	// 后台判陈旧留下等人处理的标记(2026-11-12,docs/design/horizontal-scale-logical-db.md §5.2):PENDING 的建角 ref 角色行不在,
+	// 却有提交过的证据或证据读不全,不写墓碑、不删,标上保留。held_ms 是最近一次判定保留的库时刻(0 = 没标),held_reason 是那次的证据。
+	// 后台扫描跳过标了保留的,只在单独的小复核名额里按 held_ms 轮着重判;改写这条 ref(建角重放、过户第 1 步、补 ACTIVE)时一起清掉。
+	HeldMs        uint64 `protobuf:"varint,9,opt,name=held_ms,json=heldMs,proto3" json:"held_ms,omitempty"`
+	HeldReason    string `protobuf:"bytes,10,opt,name=held_reason,json=heldReason,proto3" json:"held_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2726,6 +2735,20 @@ func (x *AccountRoleRef) GetCreatedMs() uint64 {
 		return x.CreatedMs
 	}
 	return 0
+}
+
+func (x *AccountRoleRef) GetHeldMs() uint64 {
+	if x != nil {
+		return x.HeldMs
+	}
+	return 0
+}
+
+func (x *AccountRoleRef) GetHeldReason() string {
+	if x != nil {
+		return x.HeldReason
+	}
+	return ""
 }
 
 type AccountRole struct {
@@ -4428,8 +4451,13 @@ type SqlWriterLifecycleReceipt_Request struct {
 	// 只用于换代退休:同一槽位的新一代在注册事务里退休上一代时,填那份 REGISTER 的 request_id。
 	// REGISTER、人工退休、排空退休都必须为空;换代退休没有维护 run。
 	SuccessorRequestId []byte `protobuf:"bytes,13,opt,name=successor_request_id,json=successorRequestId,proto3" json:"successor_request_id,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 只在 REGISTER 里有意义:登记这一代的工作负载在它所在集群里的身份,注册器现场读,名册模板里必须为空。
+	// K8s 里是 k8s-sa:<namespace>/<ServiceAccount 名>/<ServiceAccount UID>(UID 由那个集群的 API server 分配,备份恢复、克隆带不过去);
+	// 集群外登记(本机脚本、调试栈)为空。缩容收尾(writer_authority retire-removed-slots)只结束本集群登记的一代,
+	// 靠它判归属;换代不看它(docs/design/writer-roster-exhaustion-20261106.md §5.9)。
+	RegisteredBy  string `protobuf:"bytes,14,opt,name=registered_by,json=registeredBy,proto3" json:"registered_by,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SqlWriterLifecycleReceipt_Request) Reset() {
@@ -4551,6 +4579,13 @@ func (x *SqlWriterLifecycleReceipt_Request) GetSuccessorRequestId() []byte {
 		return x.SuccessorRequestId
 	}
 	return nil
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetRegisteredBy() string {
+	if x != nil {
+		return x.RegisteredBy
+	}
+	return ""
 }
 
 type SqlWriterMaintenanceReceipt_Plan struct {
@@ -6736,7 +6771,7 @@ var File_proto_common_database_rollback_database_table_proto protoreflect.FileDe
 
 const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\n" +
-	"3proto/common/database/rollback_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a+proto/common/rollback/transaction_log.proto\x1a+proto/common/rollback/player_snapshot.proto\x1a&proto/common/base/role_admission.proto\"\xd2\x05\n" +
+	"3proto/common/database/rollback_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a+proto/common/rollback/transaction_log.proto\x1a+proto/common/rollback/player_snapshot.proto\x1a&proto/common/base/role_admission.proto\"\xeb\x05\n" +
 	"\x0ftransaction_log\x12\x13\n" +
 	"\x05tx_id\x18\x01 \x01(\x04R\x04txId\x12#\n" +
 	"\rtimestamp_sec\x18\x02 \x01(\x04R\ftimestampSec\x12\x17\n" +
@@ -6755,7 +6790,7 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\x0ecorrelation_id\x18\r \x01(\x04R\rcorrelationId\x12\x14\n" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\x12\x14\n" +
-	"\x05shard\x18\x10 \x01(\rR\x05shard:\xc1\x01\x8a\x92\xf4\x01\x0ftransaction_log\x92\x92\xf4\x01\x05tx_idڒ\xf4\x01\x8e\x01from_player,timestamp_sec;to_player,timestamp_sec;item_config_id,shard,timestamp_sec;tx_type,shard,timestamp_sec;shard,timestamp_sec;item_uuid\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa8\x03\n" +
+	"\x05shard\x18\x10 \x01(\rR\x05shard:\xda\x01\x8a\x92\xf4\x01\x0ftransaction_log\x92\x92\xf4\x01\x05tx_idڒ\xf4\x01\xa7\x01from_player,timestamp_sec;to_player,timestamp_sec;item_config_id,shard,timestamp_sec;tx_type,shard,timestamp_sec;shard,timestamp_sec;item_uuid;to_player,correlation_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa8\x03\n" +
 	"\x0fplayer_snapshot\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x17\n" +
@@ -6975,7 +7010,7 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\x11account_directory\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\x12\x1d\n" +
 	"\n" +
-	"created_ms\x18\x02 \x01(\x04R\tcreatedMs:\"\x8a\x92\xf4\x01\x11account_directory\x92\x92\xf4\x01\aaccount\"\xa1\x02\n" +
+	"created_ms\x18\x02 \x01(\x04R\tcreatedMs:\"\x8a\x92\xf4\x01\x11account_directory\x92\x92\xf4\x01\aaccount\"\xdb\x02\n" +
 	"\x10account_role_ref\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x14\n" +
@@ -6986,7 +7021,11 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\thome_zone\x18\x06 \x01(\rR\bhomeZone\x12\x14\n" +
 	"\x05nonce\x18\a \x01(\x04R\x05nonce\x12\x1d\n" +
 	"\n" +
-	"created_ms\x18\b \x01(\x04R\tcreatedMs::\x8a\x92\xf4\x01\x10account_role_ref\x92\x92\xf4\x01\x11account,player_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x82\x03\n" +
+	"created_ms\x18\b \x01(\x04R\tcreatedMs\x12\x17\n" +
+	"\aheld_ms\x18\t \x01(\x04R\x06heldMs\x12\x1f\n" +
+	"\vheld_reason\x18\n" +
+	" \x01(\tR\n" +
+	"heldReason::\x8a\x92\xf4\x01\x10account_role_ref\x92\x92\xf4\x01\x11account,player_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x82\x03\n" +
 	"\faccount_role\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
 	"\aaccount\x18\x02 \x01(\tR\aaccount\x12\x1d\n" +
@@ -7095,7 +7134,7 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\fwriter_epoch\x18\x04 \x01(\x04R\vwriterEpoch\x120\n" +
 	"\x05state\x18\x05 \x01(\x0e2\x1a.sql_writer_registry.StateR\x05state\x12\x1d\n" +
 	"\n" +
-	"lock_touch\x18\x06 \x01(\rR\tlockTouch:$\x8a\x92\xf4\x01\vwriter_slot\x92\x92\xf4\x01\x0fwriter_key,slot\"\x8b\t\n" +
+	"lock_touch\x18\x06 \x01(\rR\tlockTouch:$\x8a\x92\xf4\x01\vwriter_slot\x92\x92\xf4\x01\x0fwriter_key,slot\"\xb0\t\n" +
 	"\x1csql_writer_lifecycle_receipt\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\fR\trequestId\x126\n" +
@@ -7107,7 +7146,7 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\rrequest_proto\x18\x05 \x01(\fR\frequestProto\x12%\n" +
 	"\x0eprevious_epoch\x18\x06 \x01(\x04R\rpreviousEpoch\x12'\n" +
 	"\x0fresulting_epoch\x18\a \x01(\x04R\x0eresultingEpoch\x12)\n" +
-	"\x10catalog_revision\x18\b \x01(\x04R\x0fcatalogRevision\x1a\x84\x05\n" +
+	"\x10catalog_revision\x18\b \x01(\x04R\x0fcatalogRevision\x1a\xa9\x05\n" +
 	"\aRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\fR\trequestId\x126\n" +
@@ -7123,7 +7162,8 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	" \x01(\tR\fdeploymentId\x12K\n" +
 	"\x0elock_primitive\x18\v \x01(\x0e2$.sql_writer_boot_grant.LockPrimitiveR\rlockPrimitive\x12:\n" +
 	"\x19lock_qualification_sha256\x18\f \x01(\fR\x17lockQualificationSha256\x120\n" +
-	"\x14successor_request_id\x18\r \x01(\fR\x12successorRequestId\"D\n" +
+	"\x14successor_request_id\x18\r \x01(\fR\x12successorRequestId\x12#\n" +
+	"\rregistered_by\x18\x0e \x01(\tR\fregisteredBy\"D\n" +
 	"\x04Kind\x12\x10\n" +
 	"\fKIND_UNKNOWN\x10\x00\x12\f\n" +
 	"\bREGISTER\x10\x01\x12\n" +

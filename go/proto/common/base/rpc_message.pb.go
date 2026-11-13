@@ -88,6 +88,9 @@ const (
 	GameErrorCode_TIMEOUT          GameErrorCode = 6 // 线上不发;本地完成状态见 C++ RpcStatusCode
 	GameErrorCode_HANDLER_FAILED   GameErrorCode = 7 // handler 显式失败(controller->SetFailed / RpcDoneCallback::Fail):handler 已运行
 	GameErrorCode_REPLY_DROPPED    GameErrorCode = 8 // handler 接管 done 后未完成即释放:结果未知
+	// 被热关停规则拒绝(docs/design/rpc-kill-switch.md):派发前拒绝,handler 没有运行,确定未执行。
+	// 没升级的调用方按 RpcStatus::FromRemoteError 的默认分支归为 kRemoteRejected,语义相同。
+	GameErrorCode_KILL_SWITCH_DENIED GameErrorCode = 9
 )
 
 // Enum value maps for GameErrorCode.
@@ -102,17 +105,19 @@ var (
 		6: "TIMEOUT",
 		7: "HANDLER_FAILED",
 		8: "REPLY_DROPPED",
+		9: "KILL_SWITCH_DENIED",
 	}
 	GameErrorCode_value = map[string]int32{
-		"RPC_NO_ERROR":     0,
-		"WRONG_PROTO":      1,
-		"NO_SERVICE":       2,
-		"NO_METHOD":        3,
-		"INVALID_REQUEST":  4,
-		"INVALID_RESPONSE": 5,
-		"TIMEOUT":          6,
-		"HANDLER_FAILED":   7,
-		"REPLY_DROPPED":    8,
+		"RPC_NO_ERROR":       0,
+		"WRONG_PROTO":        1,
+		"NO_SERVICE":         2,
+		"NO_METHOD":          3,
+		"INVALID_REQUEST":    4,
+		"INVALID_RESPONSE":   5,
+		"TIMEOUT":            6,
+		"HANDLER_FAILED":     7,
+		"REPLY_DROPPED":      8,
+		"KILL_SWITCH_DENIED": 9,
 	}
 )
 
@@ -291,7 +296,7 @@ const file_proto_common_base_rpc_message_proto_rawDesc = "" +
 	"\bRESPONSE\x10\x01\x12\r\n" +
 	"\tRPC_ERROR\x10\x04\x12\r\n" +
 	"\tHEARTBEAT\x10\x05\"\x04\b\x02\x10\x02\"\x04\b\x03\x10\x03*\x12RPC_CLIENT_REQUEST*\n" +
-	"NODE_ROUTE*\xb0\x01\n" +
+	"NODE_ROUTE*\xc8\x01\n" +
 	"\rGameErrorCode\x12\x10\n" +
 	"\fRPC_NO_ERROR\x10\x00\x12\x0f\n" +
 	"\vWRONG_PROTO\x10\x01\x12\x0e\n" +
@@ -302,7 +307,8 @@ const file_proto_common_base_rpc_message_proto_rawDesc = "" +
 	"\x10INVALID_RESPONSE\x10\x05\x12\v\n" +
 	"\aTIMEOUT\x10\x06\x12\x12\n" +
 	"\x0eHANDLER_FAILED\x10\a\x12\x11\n" +
-	"\rREPLY_DROPPED\x10\bB\x13Z\x11proto/common/baseb\x06proto3"
+	"\rREPLY_DROPPED\x10\b\x12\x16\n" +
+	"\x12KILL_SWITCH_DENIED\x10\tB\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_rpc_message_proto_rawDescOnce sync.Once

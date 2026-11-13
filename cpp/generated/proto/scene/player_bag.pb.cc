@@ -43,6 +43,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
         // ::BagLayoutInfo
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
+        // ::BagHeldItemInfo
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
         // ::BagInfo
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
         // ::GetBagRequest
@@ -174,7 +176,7 @@ constexpr auto UnequipItemRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -315,7 +317,7 @@ constexpr auto SortBagRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -463,7 +465,7 @@ constexpr auto RetrieveTemporaryItemsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[24],
+      &file_reflection_data[25],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -611,7 +613,7 @@ constexpr auto RemoveGemRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[22],
+      &file_reflection_data[23],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -767,7 +769,7 @@ constexpr auto InlayGemRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -915,7 +917,7 @@ constexpr auto GmGrantItemRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -1056,7 +1058,7 @@ constexpr auto GetBagRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -1358,7 +1360,7 @@ constexpr auto EquipItemRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -1935,7 +1937,7 @@ constexpr auto EnhanceEquipRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -2144,6 +2146,154 @@ const ::_pbi::ClassData* BagSlotInfo_get_class_data() {
   return BagSlotInfo_globals_.GetClassData();
 #else
   return BagSlotInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class BagHeldItemInfo::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BagHeldItemInfo>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BagHeldItemInfo, _impl_._has_bits_);
+};
+
+constexpr BagHeldItemInfo::ParseTableT_ BagHeldItemInfo::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BagHeldItemInfo, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BagHeldItemInfo>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 count = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BagHeldItemInfo, _impl_.count_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BagHeldItemInfo, _impl_.count_)}},
+      // uint32 config_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagHeldItemInfo, _impl_.config_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BagHeldItemInfo, _impl_.config_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 config_id = 1;
+      {PROTOBUF_FIELD_OFFSET(BagHeldItemInfo, _impl_.config_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 count = 2;
+      {PROTOBUF_FIELD_OFFSET(BagHeldItemInfo, _impl_.count_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BagHeldItemInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        count_{::uint64_t{0u}},
+        config_id_{0u} {}
+
+template <typename>
+constexpr BagHeldItemInfo::BagHeldItemInfo(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BagHeldItemInfo::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BagHeldItemInfo(arena);
+}
+constexpr auto BagHeldItemInfo::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BagHeldItemInfo), alignof(BagHeldItemInfo));
+}
+constexpr auto BagHeldItemInfo::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BagHeldItemInfo::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BagHeldItemInfo>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BagHeldItemInfo::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BagHeldItemInfo>(), &BagHeldItemInfo::ByteSizeLong,
+              &BagHeldItemInfo::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BagHeldItemInfo, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BagHeldItemInfoGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BagHeldItemInfoGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BagHeldItemInfo_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BagHeldItemInfo::InternalGenerateClassData_(
+            _default, &BagHeldItemInfo_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BagHeldItemInfo>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BagHeldItemInfoGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BagHeldItemInfo _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BagHeldItemInfo>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BagHeldItemInfoGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BagHeldItemInfoGlobalsTypeInternal BagHeldItemInfo_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BagHeldItemInfo_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BagHeldItemInfo_globals_.GetClassData();
+#else
+  return BagHeldItemInfo_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -2890,12 +3040,12 @@ constexpr BagInfo::ParseTableT_ BagInfo::InternalGenerateParseTable_(const ::_pb
     {
       PROTOBUF_FIELD_OFFSET(BagInfo, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
-      3,  // num_aux_entries
+      4,  // num_field_entries
+      4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -2904,18 +3054,21 @@ constexpr BagInfo::ParseTableT_ BagInfo::InternalGenerateParseTable_(const ::_pb
       ::_pbi::TcParser::GetTable<::BagInfo>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // repeated .BagHeldItemInfo held_items = 4;
+      {::_pbi::TcParser::FastMtR1,
+       {34, 1, 3,
+        PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.held_items_)}},
       // repeated .BagItemInfo items = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.items_)}},
       // .BagLayoutInfo layout = 2;
       {::_pbi::TcParser::FastMtS1,
-       {18, 1, 1,
+       {18, 2, 1,
         PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.layout_)}},
       // .CurrencyComp currency = 3;
       {::_pbi::TcParser::FastMtS1,
-       {26, 2, 2,
+       {26, 3, 2,
         PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.currency_)}},
     }}, {{
       65535, 65535
@@ -2923,9 +3076,11 @@ constexpr BagInfo::ParseTableT_ BagInfo::InternalGenerateParseTable_(const ::_pb
       // repeated .BagItemInfo items = 1;
       {PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // .BagLayoutInfo layout = 2;
-      {PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.layout_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.layout_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .CurrencyComp currency = 3;
-      {PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.currency_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.currency_), _Internal::kHasBitsOffset + 3, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .BagHeldItemInfo held_items = 4;
+      {PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.held_items_), _Internal::kHasBitsOffset + 1, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2943,6 +3098,11 @@ constexpr BagInfo::ParseTableT_ BagInfo::InternalGenerateParseTable_(const ::_pb
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::CurrencyComp_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::BagHeldItemInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::BagHeldItemInfo_globals_},
+        #endif
     }},
     {{
     }},
@@ -2957,6 +3117,11 @@ inline constexpr BagInfo::Impl_::Impl_(
         items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::BagInfo,
             PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_.items_)>()
+         }
+        ,
+        held_items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BagInfo,
+            PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_.held_items_)>()
          }
         ,
         layout_{nullptr},
@@ -3003,7 +3168,7 @@ constexpr auto BagInfo::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -3175,7 +3340,7 @@ constexpr auto UnequipItemResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -3342,7 +3507,7 @@ constexpr auto SortBagResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -3514,7 +3679,7 @@ constexpr auto RetrieveTemporaryItemsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[25],
+      &file_reflection_data[26],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -3686,7 +3851,7 @@ constexpr auto RemoveGemResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[23],
+      &file_reflection_data[24],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -3858,7 +4023,7 @@ constexpr auto InlayGemResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[22],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -4017,7 +4182,7 @@ constexpr auto GmGrantItemResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[18],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -4176,7 +4341,7 @@ constexpr auto GetBagResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -4348,7 +4513,7 @@ constexpr auto EquipItemResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -4542,7 +4707,7 @@ constexpr auto EnhanceEquipResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -4736,14 +4901,23 @@ const ::uint32_t
         4,
         1,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::BagHeldItemInfo, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::BagHeldItemInfo, _impl_.config_id_),
+        PROTOBUF_FIELD_OFFSET(::BagHeldItemInfo, _impl_.count_),
+        1,
+        0,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_.items_),
         PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_.layout_),
         PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_.currency_),
+        PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_.held_items_),
         0,
-        1,
         2,
+        3,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetBagRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -4897,25 +5071,26 @@ static const ::_pbi::MigrationSchema
         {68, sizeof(::BagItemInfo)},
         {111, sizeof(::BagSlotInfo)},
         {122, sizeof(::BagLayoutInfo)},
-        {135, sizeof(::BagInfo)},
-        {144, sizeof(::GetBagRequest)},
-        {149, sizeof(::GetBagResponse)},
-        {156, sizeof(::SortBagRequest)},
-        {161, sizeof(::SortBagResponse)},
-        {170, sizeof(::EquipItemRequest)},
-        {175, sizeof(::EquipItemResponse)},
-        {184, sizeof(::UnequipItemRequest)},
-        {189, sizeof(::UnequipItemResponse)},
-        {198, sizeof(::GmGrantItemRequest)},
-        {205, sizeof(::GmGrantItemResponse)},
-        {212, sizeof(::EnhanceEquipRequest)},
-        {221, sizeof(::EnhanceEquipResponse)},
-        {236, sizeof(::InlayGemRequest)},
-        {245, sizeof(::InlayGemResponse)},
-        {254, sizeof(::RemoveGemRequest)},
-        {261, sizeof(::RemoveGemResponse)},
-        {270, sizeof(::RetrieveTemporaryItemsRequest)},
-        {277, sizeof(::RetrieveTemporaryItemsResponse)},
+        {135, sizeof(::BagHeldItemInfo)},
+        {142, sizeof(::BagInfo)},
+        {153, sizeof(::GetBagRequest)},
+        {158, sizeof(::GetBagResponse)},
+        {165, sizeof(::SortBagRequest)},
+        {170, sizeof(::SortBagResponse)},
+        {179, sizeof(::EquipItemRequest)},
+        {184, sizeof(::EquipItemResponse)},
+        {193, sizeof(::UnequipItemRequest)},
+        {198, sizeof(::UnequipItemResponse)},
+        {207, sizeof(::GmGrantItemRequest)},
+        {214, sizeof(::GmGrantItemResponse)},
+        {221, sizeof(::EnhanceEquipRequest)},
+        {230, sizeof(::EnhanceEquipResponse)},
+        {245, sizeof(::InlayGemRequest)},
+        {254, sizeof(::InlayGemResponse)},
+        {263, sizeof(::RemoveGemRequest)},
+        {270, sizeof(::RemoveGemResponse)},
+        {279, sizeof(::RetrieveTemporaryItemsRequest)},
+        {286, sizeof(::RetrieveTemporaryItemsResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4926,6 +5101,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::BagItemInfo_globals_,
         &::BagSlotInfo_globals_,
         &::BagLayoutInfo_globals_,
+        &::BagHeldItemInfo_globals_,
         &::BagInfo_globals_,
         &::GetBagRequest_globals_,
         &::GetBagResponse_globals_,
@@ -4986,61 +5162,63 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto[] ABSL
     "fo\022\020\n\010bag_type\030\001 \001(\r\022\020\n\010capacity\030\002 \001(\r\022\033"
     "\n\005slots\030\003 \003(\0132\014.BagSlotInfo\022\020\n\010can_sort\030"
     "\004 \001(\010\022#\n\013equip_slots\030\005 \003(\0132\016.EquipSlotIn"
-    "fo\"g\n\007BagInfo\022\033\n\005items\030\001 \003(\0132\014.BagItemIn"
-    "fo\022\036\n\006layout\030\002 \001(\0132\016.BagLayoutInfo\022\037\n\010cu"
-    "rrency\030\003 \001(\0132\r.CurrencyComp\"!\n\rGetBagReq"
-    "uest\022\020\n\010bag_type\030\001 \001(\r\"O\n\016GetBagResponse"
-    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
-    "\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\"\"\n\016SortBagReques"
-    "t\022\020\n\010bag_type\030\001 \001(\r\"a\n\017SortBagResponse\022&"
-    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\025"
-    "\n\003bag\030\002 \001(\0132\010.BagInfo\022\017\n\007changed\030\003 \001(\010\"#"
-    "\n\020EquipItemRequest\022\017\n\007item_id\030\001 \001(\004\"o\n\021E"
-    "quipItemResponse\022&\n\rerror_message\030\001 \001(\0132"
-    "\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022"
-    "\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"%\n\022UnequipI"
-    "temRequest\022\017\n\007item_id\030\001 \001(\004\"q\n\023UnequipIt"
-    "emResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
-    "nfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequ"
-    "ipment\030\003 \001(\0132\010.BagInfo\"6\n\022GmGrantItemReq"
-    "uest\022\021\n\tconfig_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\r\"T"
-    "\n\023GmGrantItemResponse\022&\n\rerror_message\030\001"
-    " \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.Bag"
-    "Info\"Y\n\023EnhanceEquipRequest\022\017\n\007item_id\030\001"
-    " \001(\004\022\026\n\016expected_level\030\002 \001(\r\022\031\n\021client_r"
-    "equest_id\030\003 \001(\004\"\254\001\n\024EnhanceEquipResponse"
-    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
-    "\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequipment\030\003 \001"
-    "(\0132\010.BagInfo\022\017\n\007success\030\004 \001(\010\022\025\n\renhance"
-    "_level\030\005 \001(\r\022\020\n\010replayed\030\006 \001(\010\"I\n\017InlayG"
+    "fo\"3\n\017BagHeldItemInfo\022\021\n\tconfig_id\030\001 \001(\r"
+    "\022\r\n\005count\030\002 \001(\004\"\215\001\n\007BagInfo\022\033\n\005items\030\001 \003"
+    "(\0132\014.BagItemInfo\022\036\n\006layout\030\002 \001(\0132\016.BagLa"
+    "youtInfo\022\037\n\010currency\030\003 \001(\0132\r.CurrencyCom"
+    "p\022$\n\nheld_items\030\004 \003(\0132\020.BagHeldItemInfo\""
+    "!\n\rGetBagRequest\022\020\n\010bag_type\030\001 \001(\r\"O\n\016Ge"
+    "tBagResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\"\"\n\016S"
+    "ortBagRequest\022\020\n\010bag_type\030\001 \001(\r\"a\n\017SortB"
+    "agResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
+    "nfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\017\n\007cha"
+    "nged\030\003 \001(\010\"#\n\020EquipItemRequest\022\017\n\007item_i"
+    "d\030\001 \001(\004\"o\n\021EquipItemResponse\022&\n\rerror_me"
+    "ssage\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001("
+    "\0132\010.BagInfo\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo"
+    "\"%\n\022UnequipItemRequest\022\017\n\007item_id\030\001 \001(\004\""
+    "q\n\023UnequipItemResponse\022&\n\rerror_message\030"
+    "\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.Ba"
+    "gInfo\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"6\n\022Gm"
+    "GrantItemRequest\022\021\n\tconfig_id\030\001 \001(\r\022\r\n\005c"
+    "ount\030\002 \001(\r\"T\n\023GmGrantItemResponse\022&\n\rerr"
+    "or_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag"
+    "\030\002 \001(\0132\010.BagInfo\"Y\n\023EnhanceEquipRequest\022"
+    "\017\n\007item_id\030\001 \001(\004\022\026\n\016expected_level\030\002 \001(\r"
+    "\022\031\n\021client_request_id\030\003 \001(\004\"\254\001\n\024EnhanceE"
+    "quipResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\te"
+    "quipment\030\003 \001(\0132\010.BagInfo\022\017\n\007success\030\004 \001("
+    "\010\022\025\n\renhance_level\030\005 \001(\r\022\020\n\010replayed\030\006 \001"
+    "(\010\"I\n\017InlayGemRequest\022\017\n\007item_id\030\001 \001(\004\022\016"
+    "\n\006socket\030\002 \001(\r\022\025\n\rgem_config_id\030\003 \001(\r\"n\n"
+    "\020InlayGemResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo"
+    "\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"3\n\020RemoveG"
     "emRequest\022\017\n\007item_id\030\001 \001(\004\022\016\n\006socket\030\002 \001"
-    "(\r\022\025\n\rgem_config_id\030\003 \001(\r\"n\n\020InlayGemRes"
-    "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
-    "ssage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequipmen"
-    "t\030\003 \001(\0132\010.BagInfo\"3\n\020RemoveGemRequest\022\017\n"
-    "\007item_id\030\001 \001(\004\022\016\n\006socket\030\002 \001(\r\"o\n\021Remove"
-    "GemResponse\022&\n\rerror_message\030\001 \001(\0132\017.Tip"
-    "InfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\teq"
-    "uipment\030\003 \001(\0132\010.BagInfo\"B\n\035RetrieveTempo"
-    "raryItemsRequest\022\017\n\007item_id\030\001 \001(\004\022\020\n\010tak"
-    "e_all\030\002 \001(\010\"|\n\036RetrieveTemporaryItemsRes"
-    "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
-    "ssage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\ttemporar"
-    "y\030\003 \001(\0132\010.BagInfo2\240\004\n\024SceneBagClientPlay"
-    "er\022)\n\006GetBag\022\016.GetBagRequest\032\017.GetBagRes"
-    "ponse\022,\n\007SortBag\022\017.SortBagRequest\032\020.Sort"
-    "BagResponse\0222\n\tEquipItem\022\021.EquipItemRequ"
-    "est\032\022.EquipItemResponse\0228\n\013UnequipItem\022\023"
-    ".UnequipItemRequest\032\024.UnequipItemRespons"
-    "e\0228\n\013GmGrantItem\022\023.GmGrantItemRequest\032\024."
-    "GmGrantItemResponse\022;\n\014EnhanceEquip\022\024.En"
-    "hanceEquipRequest\032\025.EnhanceEquipResponse"
-    "\022/\n\010InlayGem\022\020.InlayGemRequest\032\021.InlayGe"
-    "mResponse\0222\n\tRemoveGem\022\021.RemoveGemReques"
-    "t\032\022.RemoveGemResponse\022Y\n\026RetrieveTempora"
-    "ryItems\022\036.RetrieveTemporaryItemsRequest\032"
-    "\037.RetrieveTemporaryItemsResponse\032\n\200\250\303\001\001\210"
-    "\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "(\r\"o\n\021RemoveGemResponse\022&\n\rerror_message"
+    "\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.B"
+    "agInfo\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"B\n\035R"
+    "etrieveTemporaryItemsRequest\022\017\n\007item_id\030"
+    "\001 \001(\004\022\020\n\010take_all\030\002 \001(\010\"|\n\036RetrieveTempo"
+    "raryItemsResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo"
+    "\022\033\n\ttemporary\030\003 \001(\0132\010.BagInfo2\240\004\n\024SceneB"
+    "agClientPlayer\022)\n\006GetBag\022\016.GetBagRequest"
+    "\032\017.GetBagResponse\022,\n\007SortBag\022\017.SortBagRe"
+    "quest\032\020.SortBagResponse\0222\n\tEquipItem\022\021.E"
+    "quipItemRequest\032\022.EquipItemResponse\0228\n\013U"
+    "nequipItem\022\023.UnequipItemRequest\032\024.Unequi"
+    "pItemResponse\0228\n\013GmGrantItem\022\023.GmGrantIt"
+    "emRequest\032\024.GmGrantItemResponse\022;\n\014Enhan"
+    "ceEquip\022\024.EnhanceEquipRequest\032\025.EnhanceE"
+    "quipResponse\022/\n\010InlayGem\022\020.InlayGemReque"
+    "st\032\021.InlayGemResponse\0222\n\tRemoveGem\022\021.Rem"
+    "oveGemRequest\032\022.RemoveGemResponse\022Y\n\026Ret"
+    "rieveTemporaryItems\022\036.RetrieveTemporaryI"
+    "temsRequest\032\037.RetrieveTemporaryItemsResp"
+    "onse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_deps[3] = {
@@ -5052,13 +5230,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto = {
     false,
     false,
-    3708,
+    3800,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto,
     "proto/scene/player_bag.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_deps,
     3,
-    26,
+    27,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fbag_2eproto::offsets,
@@ -7979,10 +8157,238 @@ void BagLayoutInfo::InternalSwap(BagLayoutInfo* PROTOBUF_RESTRICT PROTOBUF_NONNU
 }
 // ===================================================================
 
+BagHeldItemInfo::BagHeldItemInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BagHeldItemInfo_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:BagHeldItemInfo)
+}
+BagHeldItemInfo::BagHeldItemInfo(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BagHeldItemInfo& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BagHeldItemInfo_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE BagHeldItemInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void BagHeldItemInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, count_),
+           0,
+           offsetof(Impl_, config_id_) -
+               offsetof(Impl_, count_) +
+               sizeof(Impl_::config_id_));
+}
+BagHeldItemInfo::~BagHeldItemInfo() {
+  // @@protoc_insertion_point(destructor:BagHeldItemInfo)
+  SharedDtor(*this);
+}
+inline void BagHeldItemInfo::SharedDtor(MessageLite& self) {
+  BagHeldItemInfo& this_ = static_cast<BagHeldItemInfo&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BagHeldItemInfo_class_data_ =
+        BagHeldItemInfo::InternalGenerateClassData_(BagHeldItemInfo_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BagHeldItemInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BagHeldItemInfo_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BagHeldItemInfo_class_data_.tc_table);
+  return BagHeldItemInfo_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BagHeldItemInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BagHeldItemInfo_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BagHeldItemInfo_globals_));
+  return BagHeldItemInfo_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BagHeldItemInfo::ParseTableT_
+    BagHeldItemInfo::_table_ =
+        BagHeldItemInfo::InternalGenerateParseTable_(BagHeldItemInfo_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BagHeldItemInfo::Clear() {
+// @@protoc_insertion_point(message_clear_start:BagHeldItemInfo)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.count_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.config_id_) -
+        reinterpret_cast<char*>(&_impl_.count_)) + sizeof(_impl_.config_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BagHeldItemInfo::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BagHeldItemInfo& this_ = static_cast<const BagHeldItemInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BagHeldItemInfo::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BagHeldItemInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:BagHeldItemInfo)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 config_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_config_id(), target);
+    }
+  }
+
+  // uint64 count = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_count(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:BagHeldItemInfo)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BagHeldItemInfo::ByteSizeLong(const MessageLite& base) {
+  const BagHeldItemInfo& this_ = static_cast<const BagHeldItemInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BagHeldItemInfo::ByteSizeLong() const {
+  const BagHeldItemInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:BagHeldItemInfo)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint64 count = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_count());
+      }
+    }
+    // uint32 config_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_config_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BagHeldItemInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BagHeldItemInfo*>(&to_msg);
+  auto& from = static_cast<const BagHeldItemInfo&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:BagHeldItemInfo)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_count() != 0) {
+        _this->_impl_.count_ = from._impl_.count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_config_id() != 0) {
+        _this->_impl_.config_id_ = from._impl_.config_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BagHeldItemInfo::CopyFrom(const BagHeldItemInfo& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:BagHeldItemInfo)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BagHeldItemInfo::InternalSwap(BagHeldItemInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BagHeldItemInfo, _impl_.config_id_)
+      + sizeof(BagHeldItemInfo::_impl_.config_id_)
+      - PROTOBUF_FIELD_OFFSET(BagHeldItemInfo, _impl_.count_)>(
+          reinterpret_cast<char*>(&_impl_.count_),
+          reinterpret_cast<char*>(&other->_impl_.count_));
+}
+
+::google::protobuf::Metadata BagHeldItemInfo::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 void BagInfo::clear_currency() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.currency_ != nullptr) _impl_.currency_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 BagInfo::BagInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -8005,6 +8411,13 @@ PROTOBUF_NDEBUG_INLINE BagInfo::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_.items_)>()
           , from.items_
         }
+        ,
+        held_items_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::BagInfo,
+              PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_.held_items_)>()
+          , from.held_items_
+        }
      {}
 
 BagInfo::BagInfo(
@@ -8022,10 +8435,10 @@ BagInfo::BagInfo(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.layout_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+  _impl_.layout_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.layout_)
                 : nullptr;
-  _impl_.currency_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+  _impl_.currency_ = (CheckHasBit(cached_has_bits, 0x00000008U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.currency_)
                 : nullptr;
 
@@ -8038,6 +8451,11 @@ PROTOBUF_NDEBUG_INLINE BagInfo::Impl_::Impl_(
         items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::BagInfo,
             PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_.items_)>()
+         }
+        ,
+        held_items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BagInfo,
+            PROTOBUF_FIELD_OFFSET(::BagInfo, _impl_.held_items_)>()
          }
      {}
 
@@ -8100,15 +8518,18 @@ PROTOBUF_NOINLINE void BagInfo::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.items_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.held_items_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(_impl_.layout_ != nullptr);
       _impl_.layout_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(_impl_.currency_ != nullptr);
       _impl_.currency_->Clear();
     }
@@ -8150,17 +8571,30 @@ PROTOBUF_NOINLINE void BagInfo::Clear() {
   }
 
   // .BagLayoutInfo layout = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.layout_, this_._impl_.layout_->GetCachedSize(), target,
         stream);
   }
 
   // .CurrencyComp currency = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         3, *this_._impl_.currency_, this_._impl_.currency_->GetCachedSize(), target,
         stream);
+  }
+
+  // repeated .BagHeldItemInfo held_items = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_held_items_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_held_items().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              4, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -8188,7 +8622,7 @@ PROTOBUF_NOINLINE void BagInfo::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // repeated .BagItemInfo items = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_items_size();
@@ -8196,13 +8630,20 @@ PROTOBUF_NOINLINE void BagInfo::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .BagLayoutInfo layout = 2;
+    // repeated .BagHeldItemInfo held_items = 4;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_held_items_size();
+      for (const auto& msg : this_._internal_held_items()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .BagLayoutInfo layout = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.layout_);
     }
     // .CurrencyComp currency = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.currency_);
     }
@@ -8225,13 +8666,18 @@ void BagInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_items()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_items());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_held_items()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_held_items());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(from._impl_.layout_ != nullptr);
       if (_this->_impl_.layout_ == nullptr) {
         _this->_impl_.layout_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.layout_);
@@ -8239,7 +8685,7 @@ void BagInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.layout_->MergeFrom(*from._impl_.layout_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(from._impl_.currency_ != nullptr);
       if (_this->_impl_.currency_ == nullptr) {
         _this->_impl_.currency_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.currency_);
@@ -8266,6 +8712,7 @@ void BagInfo::InternalSwap(BagInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.items_.InternalSwap(&other->_impl_.items_);
+  _impl_.held_items_.InternalSwap(&other->_impl_.held_items_);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(BagInfo, _impl_.currency_)
       + sizeof(BagInfo::_impl_.currency_)

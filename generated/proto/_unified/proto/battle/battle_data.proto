@@ -21,7 +21,10 @@ message BattleRouting {
 
 // ---- 参战 buff(时间维度已换算为回合,见设计文档 §5.1 换算策略) ----
 message BattleBuffEntry {
-  uint64 buff_id = 1;        // buff 实例 SnowFlake id
+  // buff 实例 id,只在所属单位的 buff 列表里用来认出这一条,不跨重启:快照带来的沿用 scene 的进程内临时号
+  // (tlsIdGeneratorManager.buffIdGenerator,[node_id][seq] 拼成),战斗内新加的由引擎在局内自增域里接着往上发
+  // (turn_battle_engine 的 nextBuffInstanceId)。不是 SnowFlake,也不是发号器的永久 ID,不要解析。
+  uint64 buff_id = 1;
   uint32 buff_table_id = 2;  // BuffTable 表 id
   uint32 layer = 3;          // 叠层数
   uint32 remain_rounds = 4;  // 剩余回合(0 = 无限持续)
@@ -294,7 +297,7 @@ enum eBattleActivityKind {
 
 message BattleActivityContext {
   eBattleActivityKind kind = 1;     // 非 NONE 才是活动对局;match 拒绝 NONE(INVALID_ARGUMENT)
-  uint64 guild_id = 2;              // 发起帮会(SnowFlake 17-bit 布局);guild 写、guild 读
+  uint64 guild_id = 2;              // 发起帮会(发号器永久 ID,biz_tag=guild,只当身份用);guild 写、guild 读
   uint32 activity_id = 3;           // GuildActivity 表 id;guild 写、guild 读
   uint32 period_key = 4;            // 确认开战时的游戏日键 YYYYMMDD(gameday.DayKey,UTC+8 05:00 换日),用于个人每日次数
   uint64 initiator_player_id = 5;   // 发起人;match 校验它等于 StartActivityBattleRequest.member_player_ids[0]

@@ -61,6 +61,11 @@ service DataService {
   // 全部合服映射。没有全局库连接的服务(guild、trade)用它重建 placement.MergedZones,定时重读
   // (docs/design/player-data-tidb-scaling-plan.md §7.1)。映射还没读到时回 Unavailable。
   rpc GetMergedZones(google.protobuf.Empty) returns (GetMergedZonesResponse) {}
+  // 一个区一共建过多少角色(player_route 行数;删角只在账号目录写墓碑,不减),按合服之后的最终区算:合进来的源区一起数,
+  // zone_id 自己已被合走时按它的最终区回答。网关按区服目录的角色上限自动暂停创角时经 login 调
+  // (docs/design/zone-full-handling.md §6)。zone_id 为 0 或越界回 InvalidArgument;合服映射没读到或库故障回 Unavailable,
+  // 不回 0:0 会被当成「远没到上限」。
+  rpc CountZoneRoles(CountZoneRolesRequest) returns (CountZoneRolesResponse) {}
   // 玩家的落点(docs/design/horizontal-scale-logical-db.md §7),强读玩家所在分片。go/db 选库用,它不再连目录。
   // 没有路由行或没有落点回 found=false;目录读不到回 retry=true,都不走 gRPC 错误:只读,没有结局未知。只有 go/db 能调,密钥 MMORPG_ROLE_FENCE_SECRET_DB。
   rpc GetPlayerRoute(GetPlayerRouteRequest) returns (GetPlayerRouteResponse) {}
@@ -345,6 +350,14 @@ message BatchGetPlayerHomeZoneResponse {
 
 message GetMergedZonesResponse {
   map<uint32, uint32> merged_into = 1; // 源区 → 目标区(zone_merged_into 的原始映射,没有沿链解析)
+}
+
+message CountZoneRolesRequest {
+  uint32 zone_id = 1; // 1..999999(player_route.home_zone 的取值范围)
+}
+
+message CountZoneRolesResponse {
+  uint64 roles = 1; // 解析到 zone_id 最终区的全部原始区一共建过的角色数
 }
 
 message GetPlayerRouteRequest {

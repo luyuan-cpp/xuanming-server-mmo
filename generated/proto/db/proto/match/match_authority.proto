@@ -75,8 +75,12 @@ message MatchNetworkProfileRecord {
 message MatchAuthorityTicketRecord {
   option (OptionTableName) = "match_authority_ticket";
   option (OptionPrimaryKey) = "player_id";
-  // 第一条是按池读单排票的索引（authority.PoolTickets）：池 = (mode, config_id, team_size)，team_id=0 只取单排。
-  option (OptionIndex) = "state,mode,config_id,team_size,team_id,enqueued_ms,player_id;formation_id;state,enqueued_ms,player_id;state,mode,team_id,enqueued_ms,player_id";
+  // 三条二级索引，各有读者（docs/design/global-match-hierarchical-pools.md §5.2.1 第 6 条、§6）：
+  //   1. 按池读单排票（authority.SliceTickets 的整池段与跨机房段）：池 = (mode, config_id, team_size)，team_id=0 只取单排；
+  //   2. 已建房票巡检（ReadyAfter，state=3 按入队序翻页）；
+  //   3. 按首选机房读（机房段、子池段）；子池号在索引项上按 player_id 取模过滤。
+  // 2026-11-12 删掉没有读者的 formation_id 与 (state,mode,team_id,enqueued_ms,player_id) 两条（§6），少维护两份索引项。
+  option (OptionIndex) = "state,mode,config_id,team_size,team_id,enqueued_ms,player_id;state,enqueued_ms,player_id;state,mode,config_id,team_size,team_id,pool_region,enqueued_ms,player_id";
   uint64 player_id = 1;
   string ticket = 2;
   string request_id = 3;
@@ -99,6 +103,11 @@ message MatchAuthorityTicketRecord {
   reserved "preferred_region";
   string owner_account = 18;
   uint64 owner_revision = 19;
+  // 首选机房（docs/design/global-match-hierarchical-pools.md §5.2.1 热池拆分），只给撮合读页分段用，提交点不读。
+  // 入队（Join）时按刚落库的 network_profile 现算（authority.PreferredRegion），探测刷新（CommitProfile）时同一条 UPDATE 重算，
+  // 所以始终等于撮合与提交点现算的值。它不是上面退役的字段 17：那一列只喂两张投影表。
+  // 只对 team_id=0 的单排票有意义（整队按 team_launch.pool_region 读）；Go 侧 ticketColumns 不读它，也不进占用判定。
+  uint32 pool_region = 20;
 }
 
 // 帮会历练的战斗入口占用(docs/design/horizontal-scale-logical-db.md §4)。写者都先持本库 role_fence 行锁，

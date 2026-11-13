@@ -455,10 +455,13 @@ func (x *TurnResultS2C) GetActionOrder() []uint64 {
 // scene 在结算随存档确认提交之后推。客户端没有这一局的战斗上下文时(断线清了上下文、重登才应用)不要丢弃,
 // 改为查 SceneBattleResultClientPlayer.GetRecentBattleResults 补看胜负与奖励(docs/design/battle-result-recovery.md §7)。
 type BattleEndS2C struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	Outcome       EBattleOutcome         `protobuf:"varint,2,opt,name=outcome,proto3,enum=EBattleOutcome" json:"outcome,omitempty"`
-	Settlement    *BattleSettlementData  `protobuf:"bytes,3,opt,name=settlement,proto3" json:"settlement,omitempty"` // 收信玩家本人视角
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	BattleId   uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	Outcome    EBattleOutcome         `protobuf:"varint,2,opt,name=outcome,proto3,enum=EBattleOutcome" json:"outcome,omitempty"`
+	Settlement *BattleSettlementData  `protobuf:"bytes,3,opt,name=settlement,proto3" json:"settlement,omitempty"` // 收信玩家本人视角
+	// 本局掉落放不进人物背包与临时背包,整批改由邮件发放(docs/design/battle-overflow-mail.md):结算屏提示去邮箱领取。
+	// 与 PlayerBattleResult.items_mailed 同一个事实,取自这一局的近期结果。
+	ItemsMailed   bool `protobuf:"varint,4,opt,name=items_mailed,json=itemsMailed,proto3" json:"items_mailed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -512,6 +515,13 @@ func (x *BattleEndS2C) GetSettlement() *BattleSettlementData {
 		return x.Settlement
 	}
 	return nil
+}
+
+func (x *BattleEndS2C) GetItemsMailed() bool {
+	if x != nil {
+		return x.ItemsMailed
+	}
+	return false
 }
 
 // 重连提示:scene 在换会话(RECONNECT / REPLACE)或登录重建出 FIGHTING 冻结时经大厅推送;
@@ -1664,13 +1674,14 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"roundIndex\x12(\n" +
 	"\x06events\x18\x03 \x03(\v2\x10.BattleEventItemR\x06events\x12%\n" +
 	"\x05state\x18\x04 \x01(\v2\x0f.BattleStateS2CR\x05state\x12!\n" +
-	"\faction_order\x18\x05 \x03(\x04R\vactionOrder\"\x8d\x01\n" +
+	"\faction_order\x18\x05 \x03(\x04R\vactionOrder\"\xb0\x01\n" +
 	"\fBattleEndS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12)\n" +
 	"\aoutcome\x18\x02 \x01(\x0e2\x0f.eBattleOutcomeR\aoutcome\x125\n" +
 	"\n" +
 	"settlement\x18\x03 \x01(\v2\x15.BattleSettlementDataR\n" +
-	"settlement\"1\n" +
+	"settlement\x12!\n" +
+	"\fitems_mailed\x18\x04 \x01(\bR\vitemsMailed\"1\n" +
 	"\x12BattleReconnectS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"`\n" +
 	"\x10SpectateStateS2C\x12%\n" +

@@ -33,6 +33,20 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto, /* tracker*/ nullptr,},
         // ::trade::SeedListingResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto, /* tracker*/ nullptr,},
+        // ::trade::ListManualContractsRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto, /* tracker*/ nullptr,},
+        // ::trade::ListManualContractsResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto, /* tracker*/ nullptr,},
+        // ::trade::ResolveManualContractRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto, /* tracker*/ nullptr,},
+        // ::trade::ManualContractLeg
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto, /* tracker*/ nullptr,},
+        // ::trade::ManualContractParty
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto, /* tracker*/ nullptr,},
+        // ::trade::ManualContractActionVerdict
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto, /* tracker*/ nullptr,},
+        // ::trade::ResolveManualContractResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -267,6 +281,379 @@ const ::_pbi::ClassData* SeedListingRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ManualContractParty::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ManualContractParty>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_._has_bits_);
+};
+
+constexpr ManualContractParty::ParseTableT_ ManualContractParty::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_._has_bits_),
+      0, // no _extensions_
+      9, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294966784,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      9,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::ManualContractParty>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // string party = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.party_)}},
+      // uint64 player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ManualContractParty, _impl_.player_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.player_id_)}},
+      // uint64 contract_owner_revision = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ManualContractParty, _impl_.contract_owner_revision_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.contract_owner_revision_)}},
+      // uint64 current_owner_revision = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ManualContractParty, _impl_.current_owner_revision_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.current_owner_revision_)}},
+      // bool same_account = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ManualContractParty, _impl_.same_account_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.same_account_)}},
+      // bool deleted = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ManualContractParty, _impl_.deleted_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.deleted_)}},
+      // bool frozen = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ManualContractParty, _impl_.frozen_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.frozen_)}},
+      // bool unknown = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ManualContractParty, _impl_.unknown_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.unknown_)}},
+      // bool changed = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ManualContractParty, _impl_.changed_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.changed_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string party = 1;
+      {PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.party_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 contract_owner_revision = 3;
+      {PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.contract_owner_revision_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 current_owner_revision = 4;
+      {PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.current_owner_revision_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool same_account = 5;
+      {PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.same_account_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool deleted = 6;
+      {PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.deleted_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool frozen = 7;
+      {PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.frozen_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool unknown = 8;
+      {PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.unknown_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool changed = 9;
+      {PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.changed_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+      "\31\5\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "trade.ManualContractParty"
+      "party"
+    }},
+  };
+}
+
+
+inline constexpr ManualContractParty::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        party_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        contract_owner_revision_{::uint64_t{0u}},
+        current_owner_revision_{::uint64_t{0u}},
+        same_account_{false},
+        deleted_{false},
+        frozen_{false},
+        unknown_{false},
+        changed_{false} {}
+
+template <typename>
+constexpr ManualContractParty::ManualContractParty(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ManualContractParty::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ManualContractParty(arena);
+}
+constexpr auto ManualContractParty::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ManualContractParty), alignof(ManualContractParty));
+}
+constexpr auto ManualContractParty::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ManualContractParty::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ManualContractParty>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ManualContractParty::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ManualContractParty>(), &ManualContractParty::ByteSizeLong,
+              &ManualContractParty::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[6],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ManualContractPartyGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ManualContractPartyGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ManualContractParty_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ManualContractParty::InternalGenerateClassData_(
+            _default, &ManualContractParty_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ManualContractParty>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ManualContractPartyGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ManualContractParty _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ManualContractParty>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ManualContractPartyGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ManualContractPartyGlobalsTypeInternal ManualContractParty_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ManualContractParty_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ManualContractParty_globals_.GetClassData();
+#else
+  return ManualContractParty_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ManualContractActionVerdict::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ManualContractActionVerdict>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ManualContractActionVerdict, _impl_._has_bits_);
+};
+
+constexpr ManualContractActionVerdict::ParseTableT_ ManualContractActionVerdict::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ManualContractActionVerdict, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::ManualContractActionVerdict>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // string action = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractActionVerdict, _impl_.action_)}},
+      // bool allowed = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ManualContractActionVerdict, _impl_.allowed_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractActionVerdict, _impl_.allowed_)}},
+      // string detail = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractActionVerdict, _impl_.detail_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string action = 1;
+      {PROTOBUF_FIELD_OFFSET(ManualContractActionVerdict, _impl_.action_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool allowed = 2;
+      {PROTOBUF_FIELD_OFFSET(ManualContractActionVerdict, _impl_.allowed_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // string detail = 3;
+      {PROTOBUF_FIELD_OFFSET(ManualContractActionVerdict, _impl_.detail_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\41\6\0\6\0\0\0\0"
+      "trade.ManualContractActionVerdict"
+      "action"
+      "detail"
+    }},
+  };
+}
+
+
+inline constexpr ManualContractActionVerdict::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        action_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        detail_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        allowed_{false} {}
+
+template <typename>
+constexpr ManualContractActionVerdict::ManualContractActionVerdict(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ManualContractActionVerdict::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ManualContractActionVerdict(arena);
+}
+constexpr auto ManualContractActionVerdict::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ManualContractActionVerdict), alignof(ManualContractActionVerdict));
+}
+constexpr auto ManualContractActionVerdict::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ManualContractActionVerdict::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ManualContractActionVerdict>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ManualContractActionVerdict::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ManualContractActionVerdict>(), &ManualContractActionVerdict::ByteSizeLong,
+              &ManualContractActionVerdict::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ManualContractActionVerdict, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ManualContractActionVerdictGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ManualContractActionVerdictGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ManualContractActionVerdict_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ManualContractActionVerdict::InternalGenerateClassData_(
+            _default, &ManualContractActionVerdict_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ManualContractActionVerdict>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ManualContractActionVerdictGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ManualContractActionVerdict _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ManualContractActionVerdict>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ManualContractActionVerdictGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ManualContractActionVerdictGlobalsTypeInternal ManualContractActionVerdict_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ManualContractActionVerdict_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ManualContractActionVerdict_globals_.GetClassData();
+#else
+  return ManualContractActionVerdict_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class SeedListingResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<SeedListingResponse>()._impl_._has_bits_);
@@ -429,9 +816,1078 @@ const ::_pbi::ClassData* SeedListingResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ResolveManualContractRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ResolveManualContractRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_._has_bits_);
+};
+
+constexpr ResolveManualContractRequest::ParseTableT_ ResolveManualContractRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      13, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294959104,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      13,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::ResolveManualContractRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 commerce_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.commerce_id_), 7>(),
+       {8, 7, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.commerce_id_)}},
+      // .trade.ManualContractMode mode = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResolveManualContractRequest, _impl_.mode_), 12>(),
+       {16, 12, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.mode_)}},
+      // string action = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.action_)}},
+      // uint64 expect_version = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.expect_version_), 8>(),
+       {32, 8, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.expect_version_)}},
+      // string expect_target = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.expect_target_)}},
+      // string operator = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.operator__)}},
+      // string reason = 7;
+      {::_pbi::TcParser::FastUS1,
+       {58, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.reason_)}},
+      // repeated string parts = 8;
+      {::_pbi::TcParser::FastUR1,
+       {66, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.parts_)}},
+      // string party = 9;
+      {::_pbi::TcParser::FastUS1,
+       {74, 5, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.party_)}},
+      // uint64 to_player_id = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.to_player_id_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.to_player_id_)}},
+      // uint64 linked_commerce_id = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.linked_commerce_id_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.linked_commerce_id_)}},
+      // uint64 linked_version = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.linked_version_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.linked_version_)}},
+      // .common.base.ServiceCallAuth auth = 13;
+      {::_pbi::TcParser::FastMtS1,
+       {106, 6, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.auth_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 commerce_id = 1;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.commerce_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .trade.ManualContractMode mode = 2;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.mode_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // string action = 3;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.action_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 expect_version = 4;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.expect_version_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string expect_target = 5;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.expect_target_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string operator = 6;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.operator__), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string reason = 7;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.reason_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // repeated string parts = 8;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.parts_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kUtf8String | ::_fl::kRepSString)},
+      // string party = 9;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.party_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 to_player_id = 10;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 linked_commerce_id = 11;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.linked_commerce_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 linked_version = 12;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.linked_version_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .common.base.ServiceCallAuth auth = 13;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.auth_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\42\0\0\6\0\15\10\6\5\5\0\0\0\0\0\0"
+      "trade.ResolveManualContractRequest"
+      "action"
+      "expect_target"
+      "operator"
+      "reason"
+      "parts"
+      "party"
+    }},
+  };
+}
+
+
+inline constexpr ResolveManualContractRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        parts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::ResolveManualContractRequest,
+            PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.parts_)>()
+         }
+        ,
+        action_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        expect_target_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        operator__(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        party_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr},
+        commerce_id_{::uint64_t{0u}},
+        expect_version_{::uint64_t{0u}},
+        to_player_id_{::uint64_t{0u}},
+        linked_commerce_id_{::uint64_t{0u}},
+        linked_version_{::uint64_t{0u}},
+        mode_{static_cast< ::trade::ManualContractMode >(0)} {}
+
+template <typename>
+constexpr ResolveManualContractRequest::ResolveManualContractRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ResolveManualContractRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ResolveManualContractRequest(arena);
+}
+constexpr auto ResolveManualContractRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ResolveManualContractRequest), alignof(ResolveManualContractRequest));
+}
+constexpr auto ResolveManualContractRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ResolveManualContractRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ResolveManualContractRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ResolveManualContractRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ResolveManualContractRequest>(), &ResolveManualContractRequest::ByteSizeLong,
+              &ResolveManualContractRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ResolveManualContractRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ResolveManualContractRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ResolveManualContractRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ResolveManualContractRequest::InternalGenerateClassData_(
+            _default, &ResolveManualContractRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ResolveManualContractRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ResolveManualContractRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ResolveManualContractRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ResolveManualContractRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ResolveManualContractRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ResolveManualContractRequestGlobalsTypeInternal ResolveManualContractRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ResolveManualContractRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ResolveManualContractRequest_globals_.GetClassData();
+#else
+  return ResolveManualContractRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ListManualContractsResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ListManualContractsResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_._has_bits_);
+};
+
+constexpr ListManualContractsResponse::ParseTableT_ ListManualContractsResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::ListManualContractsResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // repeated .trade.TradeCommerceRecord contracts = 1;
+      {::_pbi::TcParser::FastMtR1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.contracts_)}},
+      // uint64 next_after_updated_ms = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ListManualContractsResponse, _impl_.next_after_updated_ms_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.next_after_updated_ms_)}},
+      // uint64 next_after_commerce_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ListManualContractsResponse, _impl_.next_after_commerce_id_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.next_after_commerce_id_)}},
+      // string target = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.target_)}},
+      // bool retry = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ListManualContractsResponse, _impl_.retry_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.retry_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated .trade.TradeCommerceRecord contracts = 1;
+      {PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.contracts_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 next_after_updated_ms = 2;
+      {PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.next_after_updated_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 next_after_commerce_id = 3;
+      {PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.next_after_commerce_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string target = 4;
+      {PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.target_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool retry = 5;
+      {PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.retry_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::TradeCommerceRecord>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::TradeCommerceRecord_globals_},
+        #endif
+    }},
+    {{
+      "\41\0\0\0\6\0\0\0"
+      "trade.ListManualContractsResponse"
+      "target"
+    }},
+  };
+}
+
+
+inline constexpr ListManualContractsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        contracts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::ListManualContractsResponse,
+            PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsResponse, _impl_.contracts_)>()
+         }
+        ,
+        target_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        next_after_updated_ms_{::uint64_t{0u}},
+        next_after_commerce_id_{::uint64_t{0u}},
+        retry_{false} {}
+
+template <typename>
+constexpr ListManualContractsResponse::ListManualContractsResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ListManualContractsResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ListManualContractsResponse(arena);
+}
+constexpr auto ListManualContractsResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ListManualContractsResponse), alignof(ListManualContractsResponse));
+}
+constexpr auto ListManualContractsResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ListManualContractsResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ListManualContractsResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ListManualContractsResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ListManualContractsResponse>(), &ListManualContractsResponse::ByteSizeLong,
+              &ListManualContractsResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[3],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ListManualContractsResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ListManualContractsResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ListManualContractsResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ListManualContractsResponse::InternalGenerateClassData_(
+            _default, &ListManualContractsResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ListManualContractsResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ListManualContractsResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ListManualContractsResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ListManualContractsResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ListManualContractsResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ListManualContractsResponseGlobalsTypeInternal ListManualContractsResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ListManualContractsResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ListManualContractsResponse_globals_.GetClassData();
+#else
+  return ListManualContractsResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ListManualContractsRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ListManualContractsRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_._has_bits_);
+};
+
+constexpr ListManualContractsRequest::ParseTableT_ ListManualContractsRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::ListManualContractsRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .common.base.ServiceCallAuth auth = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_.auth_)}},
+      // uint64 after_updated_ms = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ListManualContractsRequest, _impl_.after_updated_ms_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_.after_updated_ms_)}},
+      // uint64 after_commerce_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ListManualContractsRequest, _impl_.after_commerce_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_.after_commerce_id_)}},
+      // uint32 limit = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ListManualContractsRequest, _impl_.limit_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_.limit_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 after_updated_ms = 1;
+      {PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_.after_updated_ms_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 after_commerce_id = 2;
+      {PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_.after_commerce_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 limit = 3;
+      {PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_.limit_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .common.base.ServiceCallAuth auth = 4;
+      {PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_.auth_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ListManualContractsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        auth_{nullptr},
+        after_updated_ms_{::uint64_t{0u}},
+        after_commerce_id_{::uint64_t{0u}},
+        limit_{0u} {}
+
+template <typename>
+constexpr ListManualContractsRequest::ListManualContractsRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ListManualContractsRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ListManualContractsRequest(arena);
+}
+constexpr auto ListManualContractsRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ListManualContractsRequest), alignof(ListManualContractsRequest));
+}
+constexpr auto ListManualContractsRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ListManualContractsRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ListManualContractsRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ListManualContractsRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ListManualContractsRequest>(), &ListManualContractsRequest::ByteSizeLong,
+              &ListManualContractsRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[2],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ListManualContractsRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ListManualContractsRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ListManualContractsRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ListManualContractsRequest::InternalGenerateClassData_(
+            _default, &ListManualContractsRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ListManualContractsRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ListManualContractsRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ListManualContractsRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ListManualContractsRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ListManualContractsRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ListManualContractsRequestGlobalsTypeInternal ListManualContractsRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ListManualContractsRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ListManualContractsRequest_globals_.GetClassData();
+#else
+  return ListManualContractsRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ManualContractLeg::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ManualContractLeg>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_._has_bits_);
+};
+
+constexpr ManualContractLeg::ParseTableT_ ManualContractLeg::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::ManualContractLeg>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool read_failed = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ManualContractLeg, _impl_.read_failed_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_.read_failed_)}},
+      // .trade.TradeCommerceLeg leg = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_.leg_)}},
+      // .trade.TradeAssetOpStatus op_status = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ManualContractLeg, _impl_.op_status_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_.op_status_)}},
+      // uint64 final_ms = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ManualContractLeg, _impl_.final_ms_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_.final_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .trade.TradeCommerceLeg leg = 1;
+      {PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_.leg_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .trade.TradeAssetOpStatus op_status = 2;
+      {PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_.op_status_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint64 final_ms = 3;
+      {PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_.final_ms_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool read_failed = 4;
+      {PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_.read_failed_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::TradeCommerceLeg>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::TradeCommerceLeg_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ManualContractLeg::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        leg_{nullptr},
+        final_ms_{::uint64_t{0u}},
+        op_status_{static_cast< ::trade::TradeAssetOpStatus >(0)},
+        read_failed_{false} {}
+
+template <typename>
+constexpr ManualContractLeg::ManualContractLeg(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ManualContractLeg::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ManualContractLeg(arena);
+}
+constexpr auto ManualContractLeg::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ManualContractLeg), alignof(ManualContractLeg));
+}
+constexpr auto ManualContractLeg::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ManualContractLeg::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ManualContractLeg>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ManualContractLeg::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ManualContractLeg>(), &ManualContractLeg::ByteSizeLong,
+              &ManualContractLeg::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[5],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ManualContractLegGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ManualContractLegGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ManualContractLeg_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ManualContractLeg::InternalGenerateClassData_(
+            _default, &ManualContractLeg_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ManualContractLeg>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ManualContractLegGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ManualContractLeg _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ManualContractLeg>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ManualContractLegGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ManualContractLegGlobalsTypeInternal ManualContractLeg_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ManualContractLeg_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ManualContractLeg_globals_.GetClassData();
+#else
+  return ManualContractLeg_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ResolveManualContractResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ResolveManualContractResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_._has_bits_);
+};
+
+constexpr ResolveManualContractResponse::ParseTableT_ ResolveManualContractResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      13, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294959104,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      13,  // num_field_entries
+      7,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::ResolveManualContractResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .trade.ManualContractVerdict verdict = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResolveManualContractResponse, _impl_.verdict_), 11>(),
+       {8, 11, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.verdict_)}},
+      // string refusal = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.refusal_)}},
+      // string target = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.target_)}},
+      // .trade.TradeCommerceRecord record = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 7, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.record_)}},
+      // .trade.TradeCommerceRecord linked = 5;
+      {::_pbi::TcParser::FastMtS1,
+       {42, 8, 1,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.linked_)}},
+      // repeated .trade.ManualContractLeg legs = 6;
+      {::_pbi::TcParser::FastMtR1,
+       {50, 0, 2,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.legs_)}},
+      // repeated .trade.ManualContractParty parties = 7;
+      {::_pbi::TcParser::FastMtR1,
+       {58, 1, 3,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.parties_)}},
+      // repeated .trade.ManualContractActionVerdict actions = 8;
+      {::_pbi::TcParser::FastMtR1,
+       {66, 2, 4,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.actions_)}},
+      // .trade.TradeCommerceManualAction plan = 9;
+      {::_pbi::TcParser::FastMtS1,
+       {74, 9, 5,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.plan_)}},
+      // .trade.TradeCommerceManualAction linked_plan = 10;
+      {::_pbi::TcParser::FastMtS1,
+       {82, 10, 6,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.linked_plan_)}},
+      // string stage = 11;
+      {::_pbi::TcParser::FastUS1,
+       {90, 5, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.stage_)}},
+      // uint32 status = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResolveManualContractResponse, _impl_.status_), 12>(),
+       {96, 12, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.status_)}},
+      // string audit_line = 13;
+      {::_pbi::TcParser::FastUS1,
+       {106, 6, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.audit_line_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .trade.ManualContractVerdict verdict = 1;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.verdict_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // string refusal = 2;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.refusal_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string target = 3;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.target_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .trade.TradeCommerceRecord record = 4;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.record_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .trade.TradeCommerceRecord linked = 5;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.linked_), _Internal::kHasBitsOffset + 8, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .trade.ManualContractLeg legs = 6;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.legs_), _Internal::kHasBitsOffset + 0, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .trade.ManualContractParty parties = 7;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.parties_), _Internal::kHasBitsOffset + 1, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .trade.ManualContractActionVerdict actions = 8;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.actions_), _Internal::kHasBitsOffset + 2, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .trade.TradeCommerceManualAction plan = 9;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.plan_), _Internal::kHasBitsOffset + 9, 5, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .trade.TradeCommerceManualAction linked_plan = 10;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.linked_plan_), _Internal::kHasBitsOffset + 10, 6, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // string stage = 11;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.stage_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 status = 12;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.status_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string audit_line = 13;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.audit_line_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::TradeCommerceRecord>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::TradeCommerceRecord_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::TradeCommerceRecord>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::TradeCommerceRecord_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::ManualContractLeg>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::ManualContractLeg_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::ManualContractParty>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::ManualContractParty_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::ManualContractActionVerdict>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::ManualContractActionVerdict_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::TradeCommerceManualAction>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::TradeCommerceManualAction_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::TradeCommerceManualAction>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::TradeCommerceManualAction_globals_},
+        #endif
+    }},
+    {{
+      "\43\0\7\6\0\0\0\0\0\0\0\5\0\12\0\0"
+      "trade.ResolveManualContractResponse"
+      "refusal"
+      "target"
+      "stage"
+      "audit_line"
+    }},
+  };
+}
+
+
+inline constexpr ResolveManualContractResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        legs_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::ResolveManualContractResponse,
+            PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.legs_)>()
+         }
+        ,
+        parties_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::ResolveManualContractResponse,
+            PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.parties_)>()
+         }
+        ,
+        actions_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::ResolveManualContractResponse,
+            PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.actions_)>()
+         }
+        ,
+        refusal_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        target_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        stage_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        audit_line_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        record_{nullptr},
+        linked_{nullptr},
+        plan_{nullptr},
+        linked_plan_{nullptr},
+        verdict_{static_cast< ::trade::ManualContractVerdict >(0)},
+        status_{0u} {}
+
+template <typename>
+constexpr ResolveManualContractResponse::ResolveManualContractResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ResolveManualContractResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ResolveManualContractResponse(arena);
+}
+constexpr auto ResolveManualContractResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ResolveManualContractResponse), alignof(ResolveManualContractResponse));
+}
+constexpr auto ResolveManualContractResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ResolveManualContractResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ResolveManualContractResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ResolveManualContractResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ResolveManualContractResponse>(), &ResolveManualContractResponse::ByteSizeLong,
+              &ResolveManualContractResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[8],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ResolveManualContractResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ResolveManualContractResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ResolveManualContractResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ResolveManualContractResponse::InternalGenerateClassData_(
+            _default, &ResolveManualContractResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ResolveManualContractResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ResolveManualContractResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ResolveManualContractResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ResolveManualContractResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ResolveManualContractResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ResolveManualContractResponseGlobalsTypeInternal ResolveManualContractResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ResolveManualContractResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ResolveManualContractResponse_globals_.GetClassData();
+#else
+  return ResolveManualContractResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace trade
-static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
-    file_level_enum_descriptors_proto_2ftrade_2ftrade_5fadmin_2eproto = nullptr;
+static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
+    file_level_enum_descriptors_proto_2ftrade_2ftrade_5fadmin_2eproto[2];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2ftrade_2ftrade_5fadmin_2eproto = nullptr;
 const ::uint32_t
@@ -471,54 +1927,249 @@ const ::uint32_t
         0,
         1,
         2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsRequest, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsRequest, _impl_.after_updated_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsRequest, _impl_.after_commerce_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsRequest, _impl_.limit_),
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsRequest, _impl_.auth_),
+        1,
+        2,
+        3,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsResponse, _impl_.contracts_),
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsResponse, _impl_.next_after_updated_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsResponse, _impl_.next_after_commerce_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsResponse, _impl_.target_),
+        PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsResponse, _impl_.retry_),
+        0,
+        2,
+        3,
+        1,
+        4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_._has_bits_),
+        16, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.commerce_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.mode_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.action_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.expect_version_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.expect_target_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.operator__),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.reason_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.parts_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.party_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.to_player_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.linked_commerce_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.linked_version_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.auth_),
+        7,
+        12,
+        1,
+        8,
+        2,
+        3,
+        4,
+        0,
+        5,
+        9,
+        10,
+        11,
+        6,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractLeg, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractLeg, _impl_.leg_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractLeg, _impl_.op_status_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractLeg, _impl_.final_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractLeg, _impl_.read_failed_),
+        0,
+        2,
+        1,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractParty, _impl_._has_bits_),
+        12, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractParty, _impl_.party_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractParty, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractParty, _impl_.contract_owner_revision_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractParty, _impl_.current_owner_revision_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractParty, _impl_.same_account_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractParty, _impl_.deleted_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractParty, _impl_.frozen_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractParty, _impl_.unknown_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractParty, _impl_.changed_),
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractActionVerdict, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractActionVerdict, _impl_.action_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractActionVerdict, _impl_.allowed_),
+        PROTOBUF_FIELD_OFFSET(::trade::ManualContractActionVerdict, _impl_.detail_),
+        0,
+        2,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_._has_bits_),
+        16, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.verdict_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.refusal_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.target_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.record_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.linked_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.legs_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.parties_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.actions_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.plan_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.linked_plan_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.stage_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.status_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.audit_line_),
+        11,
+        3,
+        4,
+        7,
+        8,
+        0,
+        1,
+        2,
+        9,
+        10,
+        5,
+        12,
+        6,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::trade::SeedListingRequest)},
         {25, sizeof(::trade::SeedListingResponse)},
+        {34, sizeof(::trade::ListManualContractsRequest)},
+        {45, sizeof(::trade::ListManualContractsResponse)},
+        {58, sizeof(::trade::ResolveManualContractRequest)},
+        {87, sizeof(::trade::ManualContractLeg)},
+        {98, sizeof(::trade::ManualContractParty)},
+        {119, sizeof(::trade::ManualContractActionVerdict)},
+        {128, sizeof(::trade::ResolveManualContractResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::trade::SeedListingRequest_globals_,
         &::trade::SeedListingResponse_globals_,
+        &::trade::ListManualContractsRequest_globals_,
+        &::trade::ListManualContractsResponse_globals_,
+        &::trade::ResolveManualContractRequest_globals_,
+        &::trade::ManualContractLeg_globals_,
+        &::trade::ManualContractParty_globals_,
+        &::trade::ManualContractActionVerdict_globals_,
+        &::trade::ResolveManualContractResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2ftrade_2ftrade_5fadmin_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\035proto/trade/trade_admin.proto\022\005trade\032\033"
     "proto/db/proto_option.proto\032\033proto/commo"
-    "n/base/tip.proto\032\033proto/trade/jubaozhai."
-    "proto\"\214\002\n\022SeedListingRequest\022\030\n\020seller_p"
-    "layer_id\030\001 \001(\004\022(\n\010category\030\002 \001(\0162\026.trade"
-    ".ListingCategory\022\023\n\013subcategory\030\003 \001(\r\022\r\n"
-    "\005title\030\004 \001(\t\022\r\n\005level\030\005 \001(\r\022\021\n\tprice_fen"
-    "\030\006 \001(\004\022\017\n\007summary\030\007 \001(\t\022\023\n\013description\030\010"
-    " \001(\t\022\020\n\010icon_key\030\t \001(\t\022\032\n\022notice_duratio"
-    "n_ms\030\n \001(\004\022\030\n\020sale_duration_ms\030\013 \001(\004\"f\n\023"
-    "SeedListingResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage\022\022\n\nlisting_id\030\002 \001(\004\022"
-    "\023\n\013market_zone\030\003 \001(\r2R\n\nTradeAdmin\022D\n\013Se"
-    "edListing\022\031.trade.SeedListingRequest\032\032.t"
-    "rade.SeedListingResponseB\016Z\005trade\200\001\000\230\324a\021"
-    "b\006proto3"
+    "n/base/tip.proto\032)proto/common/base/serv"
+    "ice_call_auth.proto\032\033proto/trade/jubaozh"
+    "ai.proto\032\035proto/trade/trade_table.proto\""
+    "\214\002\n\022SeedListingRequest\022\030\n\020seller_player_"
+    "id\030\001 \001(\004\022(\n\010category\030\002 \001(\0162\026.trade.Listi"
+    "ngCategory\022\023\n\013subcategory\030\003 \001(\r\022\r\n\005title"
+    "\030\004 \001(\t\022\r\n\005level\030\005 \001(\r\022\021\n\tprice_fen\030\006 \001(\004"
+    "\022\017\n\007summary\030\007 \001(\t\022\023\n\013description\030\010 \001(\t\022\020"
+    "\n\010icon_key\030\t \001(\t\022\032\n\022notice_duration_ms\030\n"
+    " \001(\004\022\030\n\020sale_duration_ms\030\013 \001(\004\"f\n\023SeedLi"
+    "stingResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
+    "ipInfoMessage\022\022\n\nlisting_id\030\002 \001(\004\022\023\n\013mar"
+    "ket_zone\030\003 \001(\r\"\214\001\n\032ListManualContractsRe"
+    "quest\022\030\n\020after_updated_ms\030\001 \001(\004\022\031\n\021after"
+    "_commerce_id\030\002 \001(\004\022\r\n\005limit\030\003 \001(\r\022*\n\004aut"
+    "h\030\004 \001(\0132\034.common.base.ServiceCallAuth\"\252\001"
+    "\n\033ListManualContractsResponse\022-\n\tcontrac"
+    "ts\030\001 \003(\0132\032.trade.TradeCommerceRecord\022\035\n\025"
+    "next_after_updated_ms\030\002 \001(\004\022\036\n\026next_afte"
+    "r_commerce_id\030\003 \001(\004\022\016\n\006target\030\004 \001(\t\022\r\n\005r"
+    "etry\030\005 \001(\010\"\321\002\n\034ResolveManualContractRequ"
+    "est\022\023\n\013commerce_id\030\001 \001(\004\022\'\n\004mode\030\002 \001(\0162\031"
+    ".trade.ManualContractMode\022\016\n\006action\030\003 \001("
+    "\t\022\026\n\016expect_version\030\004 \001(\004\022\025\n\rexpect_targ"
+    "et\030\005 \001(\t\022\020\n\010operator\030\006 \001(\t\022\016\n\006reason\030\007 \001"
+    "(\t\022\r\n\005parts\030\010 \003(\t\022\r\n\005party\030\t \001(\t\022\024\n\014to_p"
+    "layer_id\030\n \001(\004\022\032\n\022linked_commerce_id\030\013 \001"
+    "(\004\022\026\n\016linked_version\030\014 \001(\004\022*\n\004auth\030\r \001(\013"
+    "2\034.common.base.ServiceCallAuth\"\216\001\n\021Manua"
+    "lContractLeg\022$\n\003leg\030\001 \001(\0132\027.trade.TradeC"
+    "ommerceLeg\022,\n\top_status\030\002 \001(\0162\031.trade.Tr"
+    "adeAssetOpStatus\022\020\n\010final_ms\030\003 \001(\004\022\023\n\013re"
+    "ad_failed\030\004 \001(\010\"\321\001\n\023ManualContractParty\022"
+    "\r\n\005party\030\001 \001(\t\022\021\n\tplayer_id\030\002 \001(\004\022\037\n\027con"
+    "tract_owner_revision\030\003 \001(\004\022\036\n\026current_ow"
+    "ner_revision\030\004 \001(\004\022\024\n\014same_account\030\005 \001(\010"
+    "\022\017\n\007deleted\030\006 \001(\010\022\016\n\006frozen\030\007 \001(\010\022\017\n\007unk"
+    "nown\030\010 \001(\010\022\017\n\007changed\030\t \001(\010\"N\n\033ManualCon"
+    "tractActionVerdict\022\016\n\006action\030\001 \001(\t\022\017\n\007al"
+    "lowed\030\002 \001(\010\022\016\n\006detail\030\003 \001(\t\"\353\003\n\035ResolveM"
+    "anualContractResponse\022-\n\007verdict\030\001 \001(\0162\034"
+    ".trade.ManualContractVerdict\022\017\n\007refusal\030"
+    "\002 \001(\t\022\016\n\006target\030\003 \001(\t\022*\n\006record\030\004 \001(\0132\032."
+    "trade.TradeCommerceRecord\022*\n\006linked\030\005 \001("
+    "\0132\032.trade.TradeCommerceRecord\022&\n\004legs\030\006 "
+    "\003(\0132\030.trade.ManualContractLeg\022+\n\007parties"
+    "\030\007 \003(\0132\032.trade.ManualContractParty\0223\n\007ac"
+    "tions\030\010 \003(\0132\".trade.ManualContractAction"
+    "Verdict\022.\n\004plan\030\t \001(\0132 .trade.TradeComme"
+    "rceManualAction\0225\n\013linked_plan\030\n \001(\0132 .t"
+    "rade.TradeCommerceManualAction\022\r\n\005stage\030"
+    "\013 \001(\t\022\016\n\006status\030\014 \001(\r\022\022\n\naudit_line\030\r \001("
+    "\t*\235\001\n\022ManualContractMode\022$\n MANUAL_CONTR"
+    "ACT_MODE_UNSPECIFIED\020\000\022\035\n\031MANUAL_CONTRAC"
+    "T_MODE_SHOW\020\001\022 \n\034MANUAL_CONTRACT_MODE_DR"
+    "Y_RUN\020\002\022 \n\034MANUAL_CONTRACT_MODE_EXECUTE\020"
+    "\003*\374\001\n\025ManualContractVerdict\022\'\n#MANUAL_CO"
+    "NTRACT_VERDICT_UNSPECIFIED\020\000\022\036\n\032MANUAL_C"
+    "ONTRACT_VERDICT_OK\020\001\022%\n!MANUAL_CONTRACT_"
+    "VERDICT_NOT_FOUND\020\002\022#\n\037MANUAL_CONTRACT_V"
+    "ERDICT_REFUSED\020\003\022+\n\'MANUAL_CONTRACT_VERD"
+    "ICT_VERSION_CHANGED\020\004\022!\n\035MANUAL_CONTRACT"
+    "_VERDICT_RETRY\020\0052\224\002\n\nTradeAdmin\022D\n\013SeedL"
+    "isting\022\031.trade.SeedListingRequest\032\032.trad"
+    "e.SeedListingResponse\022\\\n\023ListManualContr"
+    "acts\022!.trade.ListManualContractsRequest\032"
+    "\".trade.ListManualContractsResponse\022b\n\025R"
+    "esolveManualContract\022#.trade.ResolveManu"
+    "alContractRequest\032$.trade.ResolveManualC"
+    "ontractResponseB\016Z\005trade\200\001\000\230\324a\021b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto_deps[3] = {
+    descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto_deps[5] = {
+        &::descriptor_table_proto_2fcommon_2fbase_2fservice_5fcall_5fauth_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
         &::descriptor_table_proto_2ftrade_2fjubaozhai_2eproto,
+        &::descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
 };
 static ::absl::once_flag descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto = {
     false,
     false,
-    608,
+    2879,
     descriptor_table_protodef_proto_2ftrade_2ftrade_5fadmin_2eproto,
     "proto/trade/trade_admin.proto",
     &descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto_once,
     descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto_deps,
-    3,
-    2,
+    5,
+    9,
     schemas,
     file_message_globals,
     TableStruct_proto_2ftrade_2ftrade_5fadmin_2eproto::offsets,
@@ -526,6 +2177,20 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_
     file_level_service_descriptors_proto_2ftrade_2ftrade_5fadmin_2eproto,
 };
 namespace trade {
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ManualContractMode_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto);
+  return file_level_enum_descriptors_proto_2ftrade_2ftrade_5fadmin_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t ManualContractMode_internal_data_[] = {
+    262144u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ManualContractVerdict_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto);
+  return file_level_enum_descriptors_proto_2ftrade_2ftrade_5fadmin_2eproto[1];
+}
+PROTOBUF_CONSTINIT const uint32_t ManualContractVerdict_internal_data_[] = {
+    393216u, 0u, };
 // ===================================================================
 
 SeedListingRequest::SeedListingRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -1305,6 +2970,2876 @@ void SeedListingResponse::InternalSwap(SeedListingResponse* PROTOBUF_RESTRICT PR
 }
 
 ::google::protobuf::Metadata SeedListingResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ListManualContractsRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+ListManualContractsRequest::ListManualContractsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListManualContractsRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.ListManualContractsRequest)
+}
+PROTOBUF_NDEBUG_INLINE ListManualContractsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::ListManualContractsRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+ListManualContractsRequest::ListManualContractsRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ListManualContractsRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListManualContractsRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ListManualContractsRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, after_updated_ms_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, after_updated_ms_),
+           offsetof(Impl_, limit_) -
+               offsetof(Impl_, after_updated_ms_) +
+               sizeof(Impl_::limit_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.ListManualContractsRequest)
+}
+PROTOBUF_NDEBUG_INLINE ListManualContractsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ListManualContractsRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, limit_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::limit_));
+}
+ListManualContractsRequest::~ListManualContractsRequest() {
+  // @@protoc_insertion_point(destructor:trade.ListManualContractsRequest)
+  SharedDtor(*this);
+}
+inline void ListManualContractsRequest::SharedDtor(MessageLite& self) {
+  ListManualContractsRequest& this_ = static_cast<ListManualContractsRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ListManualContractsRequest_class_data_ =
+        ListManualContractsRequest::InternalGenerateClassData_(ListManualContractsRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListManualContractsRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListManualContractsRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ListManualContractsRequest_class_data_.tc_table);
+  return ListManualContractsRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListManualContractsRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListManualContractsRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ListManualContractsRequest_globals_));
+  return ListManualContractsRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ListManualContractsRequest::ParseTableT_
+    ListManualContractsRequest::_table_ =
+        ListManualContractsRequest::InternalGenerateParseTable_(ListManualContractsRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ListManualContractsRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.ListManualContractsRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.auth_ != nullptr);
+    _impl_.auth_->Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+    ::memset(&_impl_.after_updated_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.limit_) -
+        reinterpret_cast<char*>(&_impl_.after_updated_ms_)) + sizeof(_impl_.limit_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ListManualContractsRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ListManualContractsRequest& this_ = static_cast<const ListManualContractsRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ListManualContractsRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ListManualContractsRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.ListManualContractsRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 after_updated_ms = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_after_updated_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_after_updated_ms(), target);
+    }
+  }
+
+  // uint64 after_commerce_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_after_commerce_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_after_commerce_id(), target);
+    }
+  }
+
+  // uint32 limit = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_limit(), target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        4, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.ListManualContractsRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ListManualContractsRequest::ByteSizeLong(const MessageLite& base) {
+  const ListManualContractsRequest& this_ = static_cast<const ListManualContractsRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ListManualContractsRequest::ByteSizeLong() const {
+  const ListManualContractsRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.ListManualContractsRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // .common.base.ServiceCallAuth auth = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint64 after_updated_ms = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_after_updated_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_after_updated_ms());
+      }
+    }
+    // uint64 after_commerce_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_after_commerce_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_after_commerce_id());
+      }
+    }
+    // uint32 limit = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_limit());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ListManualContractsRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ListManualContractsRequest*>(&to_msg);
+  auto& from = static_cast<const ListManualContractsRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.ListManualContractsRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_after_updated_ms() != 0) {
+        _this->_impl_.after_updated_ms_ = from._impl_.after_updated_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_after_commerce_id() != 0) {
+        _this->_impl_.after_commerce_id_ = from._impl_.after_commerce_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_limit() != 0) {
+        _this->_impl_.limit_ = from._impl_.limit_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ListManualContractsRequest::CopyFrom(const ListManualContractsRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.ListManualContractsRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ListManualContractsRequest::InternalSwap(ListManualContractsRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_.limit_)
+      + sizeof(ListManualContractsRequest::_impl_.limit_)
+      - PROTOBUF_FIELD_OFFSET(ListManualContractsRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata ListManualContractsRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ListManualContractsResponse::clear_contracts() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contracts_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+ListManualContractsResponse::ListManualContractsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListManualContractsResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.ListManualContractsResponse)
+}
+PROTOBUF_NDEBUG_INLINE ListManualContractsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::ListManualContractsResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        contracts_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::trade::ListManualContractsResponse,
+              PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsResponse, _impl_.contracts_)>()
+          , from.contracts_
+        }
+        ,
+        target_(arena, from.target_) {}
+
+ListManualContractsResponse::ListManualContractsResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ListManualContractsResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListManualContractsResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ListManualContractsResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, next_after_updated_ms_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, next_after_updated_ms_),
+           offsetof(Impl_, retry_) -
+               offsetof(Impl_, next_after_updated_ms_) +
+               sizeof(Impl_::retry_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.ListManualContractsResponse)
+}
+PROTOBUF_NDEBUG_INLINE ListManualContractsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        contracts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::ListManualContractsResponse,
+            PROTOBUF_FIELD_OFFSET(::trade::ListManualContractsResponse, _impl_.contracts_)>()
+         }
+        ,
+        target_(arena) {}
+
+inline void ListManualContractsResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, next_after_updated_ms_),
+           0,
+           offsetof(Impl_, retry_) -
+               offsetof(Impl_, next_after_updated_ms_) +
+               sizeof(Impl_::retry_));
+}
+ListManualContractsResponse::~ListManualContractsResponse() {
+  // @@protoc_insertion_point(destructor:trade.ListManualContractsResponse)
+  SharedDtor(*this);
+}
+inline void ListManualContractsResponse::SharedDtor(MessageLite& self) {
+  ListManualContractsResponse& this_ = static_cast<ListManualContractsResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.target_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ListManualContractsResponse_class_data_ =
+        ListManualContractsResponse::InternalGenerateClassData_(ListManualContractsResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListManualContractsResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListManualContractsResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ListManualContractsResponse_class_data_.tc_table);
+  return ListManualContractsResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListManualContractsResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListManualContractsResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ListManualContractsResponse_globals_));
+  return ListManualContractsResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ListManualContractsResponse::ParseTableT_
+    ListManualContractsResponse::_table_ =
+        ListManualContractsResponse::InternalGenerateParseTable_(ListManualContractsResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ListManualContractsResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.ListManualContractsResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.contracts_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.target_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+    ::memset(&_impl_.next_after_updated_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.retry_) -
+        reinterpret_cast<char*>(&_impl_.next_after_updated_ms_)) + sizeof(_impl_.retry_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ListManualContractsResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ListManualContractsResponse& this_ = static_cast<const ListManualContractsResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ListManualContractsResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ListManualContractsResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.ListManualContractsResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated .trade.TradeCommerceRecord contracts = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_contracts_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_contracts().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              1, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // uint64 next_after_updated_ms = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_next_after_updated_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_next_after_updated_ms(), target);
+    }
+  }
+
+  // uint64 next_after_commerce_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_next_after_commerce_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_next_after_commerce_id(), target);
+    }
+  }
+
+  // string target = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_target().empty()) {
+      const ::std::string& _s = this_._internal_target();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ListManualContractsResponse.target");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // bool retry = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_retry() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_retry(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.ListManualContractsResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ListManualContractsResponse::ByteSizeLong(const MessageLite& base) {
+  const ListManualContractsResponse& this_ = static_cast<const ListManualContractsResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ListManualContractsResponse::ByteSizeLong() const {
+  const ListManualContractsResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.ListManualContractsResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // repeated .trade.TradeCommerceRecord contracts = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_contracts_size();
+      for (const auto& msg : this_._internal_contracts()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // string target = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_target().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target());
+      }
+    }
+    // uint64 next_after_updated_ms = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_next_after_updated_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_after_updated_ms());
+      }
+    }
+    // uint64 next_after_commerce_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_next_after_commerce_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_after_commerce_id());
+      }
+    }
+    // bool retry = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_retry() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ListManualContractsResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ListManualContractsResponse*>(&to_msg);
+  auto& from = static_cast<const ListManualContractsResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.ListManualContractsResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_contracts()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_contracts());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_target().empty()) {
+        _this->_internal_set_target(from._internal_target());
+      } else {
+        if (_this->_impl_.target_.IsDefault()) {
+          _this->_internal_set_target("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_next_after_updated_ms() != 0) {
+        _this->_impl_.next_after_updated_ms_ = from._impl_.next_after_updated_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_next_after_commerce_id() != 0) {
+        _this->_impl_.next_after_commerce_id_ = from._impl_.next_after_commerce_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_retry() != 0) {
+        _this->_impl_.retry_ = from._impl_.retry_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ListManualContractsResponse::CopyFrom(const ListManualContractsResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.ListManualContractsResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ListManualContractsResponse::InternalSwap(ListManualContractsResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.contracts_.InternalSwap(&other->_impl_.contracts_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_, &other->_impl_.target_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.retry_)
+      + sizeof(ListManualContractsResponse::_impl_.retry_)
+      - PROTOBUF_FIELD_OFFSET(ListManualContractsResponse, _impl_.next_after_updated_ms_)>(
+          reinterpret_cast<char*>(&_impl_.next_after_updated_ms_),
+          reinterpret_cast<char*>(&other->_impl_.next_after_updated_ms_));
+}
+
+::google::protobuf::Metadata ListManualContractsResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ResolveManualContractRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+ResolveManualContractRequest::ResolveManualContractRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ResolveManualContractRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.ResolveManualContractRequest)
+}
+PROTOBUF_NDEBUG_INLINE ResolveManualContractRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::ResolveManualContractRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        parts_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::trade::ResolveManualContractRequest,
+              PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.parts_)>()
+          , from.parts_
+        }
+        ,
+        action_(arena, from.action_),
+        expect_target_(arena, from.expect_target_),
+        operator__(arena, from.operator__),
+        reason_(arena, from.reason_),
+        party_(arena, from.party_) {}
+
+ResolveManualContractRequest::ResolveManualContractRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ResolveManualContractRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ResolveManualContractRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ResolveManualContractRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000040U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, commerce_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, commerce_id_),
+           offsetof(Impl_, mode_) -
+               offsetof(Impl_, commerce_id_) +
+               sizeof(Impl_::mode_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.ResolveManualContractRequest)
+}
+PROTOBUF_NDEBUG_INLINE ResolveManualContractRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        parts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::ResolveManualContractRequest,
+            PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.parts_)>()
+         }
+        ,
+        action_(arena),
+        expect_target_(arena),
+        operator__(arena),
+        reason_(arena),
+        party_(arena) {}
+
+inline void ResolveManualContractRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, mode_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::mode_));
+}
+ResolveManualContractRequest::~ResolveManualContractRequest() {
+  // @@protoc_insertion_point(destructor:trade.ResolveManualContractRequest)
+  SharedDtor(*this);
+}
+inline void ResolveManualContractRequest::SharedDtor(MessageLite& self) {
+  ResolveManualContractRequest& this_ = static_cast<ResolveManualContractRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.action_.Destroy();
+  this_._impl_.expect_target_.Destroy();
+  this_._impl_.operator__.Destroy();
+  this_._impl_.reason_.Destroy();
+  this_._impl_.party_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ResolveManualContractRequest_class_data_ =
+        ResolveManualContractRequest::InternalGenerateClassData_(ResolveManualContractRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ResolveManualContractRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ResolveManualContractRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ResolveManualContractRequest_class_data_.tc_table);
+  return ResolveManualContractRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ResolveManualContractRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ResolveManualContractRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ResolveManualContractRequest_globals_));
+  return ResolveManualContractRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ResolveManualContractRequest::ParseTableT_
+    ResolveManualContractRequest::_table_ =
+        ResolveManualContractRequest::InternalGenerateParseTable_(ResolveManualContractRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.ResolveManualContractRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.parts_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.action_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.expect_target_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.operator__.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.reason_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.party_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  _impl_.commerce_id_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    ::memset(&_impl_.expect_version_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.mode_) -
+        reinterpret_cast<char*>(&_impl_.expect_version_)) + sizeof(_impl_.mode_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ResolveManualContractRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ResolveManualContractRequest& this_ = static_cast<const ResolveManualContractRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ResolveManualContractRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ResolveManualContractRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.ResolveManualContractRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 commerce_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_commerce_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_commerce_id(), target);
+    }
+  }
+
+  // .trade.ManualContractMode mode = 2;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_mode() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_mode(), target);
+    }
+  }
+
+  // string action = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_action().empty()) {
+      const ::std::string& _s = this_._internal_action();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ResolveManualContractRequest.action");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint64 expect_version = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_expect_version() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_expect_version(), target);
+    }
+  }
+
+  // string expect_target = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_expect_target().empty()) {
+      const ::std::string& _s = this_._internal_expect_target();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ResolveManualContractRequest.expect_target");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // string operator = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_operator_().empty()) {
+      const ::std::string& _s = this_._internal_operator_();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ResolveManualContractRequest.operator");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  // string reason = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_reason().empty()) {
+      const ::std::string& _s = this_._internal_reason();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ResolveManualContractRequest.reason");
+      target = stream->WriteStringMaybeAliased(7, _s, target);
+    }
+  }
+
+  // repeated string parts = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (int i = 0, n = this_._internal_parts_size(); i < n; ++i) {
+      const auto& s = this_._internal_parts().Get(i);
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          s.data(), static_cast<int>(s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ResolveManualContractRequest.parts");
+      target = stream->WriteString(8, s, target);
+    }
+  }
+
+  // string party = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_party().empty()) {
+      const ::std::string& _s = this_._internal_party();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ResolveManualContractRequest.party");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
+    }
+  }
+
+  // uint64 to_player_id = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_to_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_to_player_id(), target);
+    }
+  }
+
+  // uint64 linked_commerce_id = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_linked_commerce_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_linked_commerce_id(), target);
+    }
+  }
+
+  // uint64 linked_version = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_linked_version() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          12, this_._internal_linked_version(), target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        13, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.ResolveManualContractRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ResolveManualContractRequest::ByteSizeLong(const MessageLite& base) {
+  const ResolveManualContractRequest& this_ = static_cast<const ResolveManualContractRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ResolveManualContractRequest::ByteSizeLong() const {
+  const ResolveManualContractRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.ResolveManualContractRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated string parts = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_parts().size());
+      for (int i = 0, n = this_._internal_parts().size(); i < n; ++i) {
+        total_size += ::google::protobuf::internal::WireFormatLite::StringSize(
+            this_._internal_parts().Get(i));
+      }
+    }
+    // string action = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_action().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_action());
+      }
+    }
+    // string expect_target = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_expect_target().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_expect_target());
+      }
+    }
+    // string operator = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_operator_().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_operator_());
+      }
+    }
+    // string reason = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_reason().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_reason());
+      }
+    }
+    // string party = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_party().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_party());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint64 commerce_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_commerce_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_commerce_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    // uint64 expect_version = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_expect_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expect_version());
+      }
+    }
+    // uint64 to_player_id = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_to_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_to_player_id());
+      }
+    }
+    // uint64 linked_commerce_id = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_linked_commerce_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_linked_commerce_id());
+      }
+    }
+    // uint64 linked_version = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_linked_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_linked_version());
+      }
+    }
+    // .trade.ManualContractMode mode = 2;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_mode() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_mode());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ResolveManualContractRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ResolveManualContractRequest*>(&to_msg);
+  auto& from = static_cast<const ResolveManualContractRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.ResolveManualContractRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_parts()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_parts());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_action().empty()) {
+        _this->_internal_set_action(from._internal_action());
+      } else {
+        if (_this->_impl_.action_.IsDefault()) {
+          _this->_internal_set_action("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_expect_target().empty()) {
+        _this->_internal_set_expect_target(from._internal_expect_target());
+      } else {
+        if (_this->_impl_.expect_target_.IsDefault()) {
+          _this->_internal_set_expect_target("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_operator_().empty()) {
+        _this->_internal_set_operator_(from._internal_operator_());
+      } else {
+        if (_this->_impl_.operator__.IsDefault()) {
+          _this->_internal_set_operator_("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_reason().empty()) {
+        _this->_internal_set_reason(from._internal_reason());
+      } else {
+        if (_this->_impl_.reason_.IsDefault()) {
+          _this->_internal_set_reason("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_party().empty()) {
+        _this->_internal_set_party(from._internal_party());
+      } else {
+        if (_this->_impl_.party_.IsDefault()) {
+          _this->_internal_set_party("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_commerce_id() != 0) {
+        _this->_impl_.commerce_id_ = from._impl_.commerce_id_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_expect_version() != 0) {
+        _this->_impl_.expect_version_ = from._impl_.expect_version_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_to_player_id() != 0) {
+        _this->_impl_.to_player_id_ = from._impl_.to_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_linked_commerce_id() != 0) {
+        _this->_impl_.linked_commerce_id_ = from._impl_.linked_commerce_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_linked_version() != 0) {
+        _this->_impl_.linked_version_ = from._impl_.linked_version_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_mode() != 0) {
+        _this->_impl_.mode_ = from._impl_.mode_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ResolveManualContractRequest::CopyFrom(const ResolveManualContractRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.ResolveManualContractRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ResolveManualContractRequest::InternalSwap(ResolveManualContractRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.parts_.InternalSwap(&other->_impl_.parts_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.action_, &other->_impl_.action_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.expect_target_, &other->_impl_.expect_target_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.operator__, &other->_impl_.operator__, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.party_, &other->_impl_.party_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.mode_)
+      + sizeof(ResolveManualContractRequest::_impl_.mode_)
+      - PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata ResolveManualContractRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ManualContractLeg::clear_leg() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.leg_ != nullptr) _impl_.leg_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+ManualContractLeg::ManualContractLeg(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ManualContractLeg_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.ManualContractLeg)
+}
+PROTOBUF_NDEBUG_INLINE ManualContractLeg::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::ManualContractLeg& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+ManualContractLeg::ManualContractLeg(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ManualContractLeg& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ManualContractLeg_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ManualContractLeg* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.leg_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.leg_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, final_ms_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, final_ms_),
+           offsetof(Impl_, read_failed_) -
+               offsetof(Impl_, final_ms_) +
+               sizeof(Impl_::read_failed_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.ManualContractLeg)
+}
+PROTOBUF_NDEBUG_INLINE ManualContractLeg::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ManualContractLeg::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, leg_),
+           0,
+           offsetof(Impl_, read_failed_) -
+               offsetof(Impl_, leg_) +
+               sizeof(Impl_::read_failed_));
+}
+ManualContractLeg::~ManualContractLeg() {
+  // @@protoc_insertion_point(destructor:trade.ManualContractLeg)
+  SharedDtor(*this);
+}
+inline void ManualContractLeg::SharedDtor(MessageLite& self) {
+  ManualContractLeg& this_ = static_cast<ManualContractLeg&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.leg_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ManualContractLeg_class_data_ =
+        ManualContractLeg::InternalGenerateClassData_(ManualContractLeg_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ManualContractLeg::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ManualContractLeg_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ManualContractLeg_class_data_.tc_table);
+  return ManualContractLeg_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ManualContractLeg::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ManualContractLeg_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ManualContractLeg_globals_));
+  return ManualContractLeg_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ManualContractLeg::ParseTableT_
+    ManualContractLeg::_table_ =
+        ManualContractLeg::InternalGenerateParseTable_(ManualContractLeg_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ManualContractLeg::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.ManualContractLeg)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.leg_ != nullptr);
+    _impl_.leg_->Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+    ::memset(&_impl_.final_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.read_failed_) -
+        reinterpret_cast<char*>(&_impl_.final_ms_)) + sizeof(_impl_.read_failed_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ManualContractLeg::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ManualContractLeg& this_ = static_cast<const ManualContractLeg&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ManualContractLeg::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ManualContractLeg& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.ManualContractLeg)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .trade.TradeCommerceLeg leg = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.leg_, this_._impl_.leg_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .trade.TradeAssetOpStatus op_status = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_op_status() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_op_status(), target);
+    }
+  }
+
+  // uint64 final_ms = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_final_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_final_ms(), target);
+    }
+  }
+
+  // bool read_failed = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_read_failed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_read_failed(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.ManualContractLeg)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ManualContractLeg::ByteSizeLong(const MessageLite& base) {
+  const ManualContractLeg& this_ = static_cast<const ManualContractLeg&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ManualContractLeg::ByteSizeLong() const {
+  const ManualContractLeg& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.ManualContractLeg)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // .trade.TradeCommerceLeg leg = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.leg_);
+    }
+    // uint64 final_ms = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_final_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_final_ms());
+      }
+    }
+    // .trade.TradeAssetOpStatus op_status = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_op_status() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_op_status());
+      }
+    }
+    // bool read_failed = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_read_failed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ManualContractLeg::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ManualContractLeg*>(&to_msg);
+  auto& from = static_cast<const ManualContractLeg&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.ManualContractLeg)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.leg_ != nullptr);
+      if (_this->_impl_.leg_ == nullptr) {
+        _this->_impl_.leg_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.leg_);
+      } else {
+        _this->_impl_.leg_->MergeFrom(*from._impl_.leg_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_final_ms() != 0) {
+        _this->_impl_.final_ms_ = from._impl_.final_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_op_status() != 0) {
+        _this->_impl_.op_status_ = from._impl_.op_status_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_read_failed() != 0) {
+        _this->_impl_.read_failed_ = from._impl_.read_failed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ManualContractLeg::CopyFrom(const ManualContractLeg& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.ManualContractLeg)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ManualContractLeg::InternalSwap(ManualContractLeg* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_.read_failed_)
+      + sizeof(ManualContractLeg::_impl_.read_failed_)
+      - PROTOBUF_FIELD_OFFSET(ManualContractLeg, _impl_.leg_)>(
+          reinterpret_cast<char*>(&_impl_.leg_),
+          reinterpret_cast<char*>(&other->_impl_.leg_));
+}
+
+::google::protobuf::Metadata ManualContractLeg::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ManualContractParty::ManualContractParty(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ManualContractParty_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.ManualContractParty)
+}
+PROTOBUF_NDEBUG_INLINE ManualContractParty::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::ManualContractParty& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        party_(arena, from.party_) {}
+
+ManualContractParty::ManualContractParty(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ManualContractParty& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ManualContractParty_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ManualContractParty* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, changed_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::changed_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.ManualContractParty)
+}
+PROTOBUF_NDEBUG_INLINE ManualContractParty::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        party_(arena) {}
+
+inline void ManualContractParty::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, changed_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::changed_));
+}
+ManualContractParty::~ManualContractParty() {
+  // @@protoc_insertion_point(destructor:trade.ManualContractParty)
+  SharedDtor(*this);
+}
+inline void ManualContractParty::SharedDtor(MessageLite& self) {
+  ManualContractParty& this_ = static_cast<ManualContractParty&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.party_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ManualContractParty_class_data_ =
+        ManualContractParty::InternalGenerateClassData_(ManualContractParty_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ManualContractParty::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ManualContractParty_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ManualContractParty_class_data_.tc_table);
+  return ManualContractParty_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ManualContractParty::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ManualContractParty_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ManualContractParty_globals_));
+  return ManualContractParty_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ManualContractParty::ParseTableT_
+    ManualContractParty::_table_ =
+        ManualContractParty::InternalGenerateParseTable_(ManualContractParty_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ManualContractParty::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.ManualContractParty)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.party_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.unknown_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.unknown_));
+  }
+  _impl_.changed_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ManualContractParty::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ManualContractParty& this_ = static_cast<const ManualContractParty&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ManualContractParty::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ManualContractParty& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.ManualContractParty)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string party = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_party().empty()) {
+      const ::std::string& _s = this_._internal_party();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ManualContractParty.party");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // uint64 player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_player_id(), target);
+    }
+  }
+
+  // uint64 contract_owner_revision = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_contract_owner_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_contract_owner_revision(), target);
+    }
+  }
+
+  // uint64 current_owner_revision = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_current_owner_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_current_owner_revision(), target);
+    }
+  }
+
+  // bool same_account = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_same_account() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_same_account(), target);
+    }
+  }
+
+  // bool deleted = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_deleted() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          6, this_._internal_deleted(), target);
+    }
+  }
+
+  // bool frozen = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_frozen() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          7, this_._internal_frozen(), target);
+    }
+  }
+
+  // bool unknown = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_unknown() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          8, this_._internal_unknown(), target);
+    }
+  }
+
+  // bool changed = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_changed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          9, this_._internal_changed(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.ManualContractParty)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ManualContractParty::ByteSizeLong(const MessageLite& base) {
+  const ManualContractParty& this_ = static_cast<const ManualContractParty&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ManualContractParty::ByteSizeLong() const {
+  const ManualContractParty& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.ManualContractParty)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string party = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_party().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_party());
+      }
+    }
+    // uint64 player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint64 contract_owner_revision = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_contract_owner_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_contract_owner_revision());
+      }
+    }
+    // uint64 current_owner_revision = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_current_owner_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_current_owner_revision());
+      }
+    }
+    // bool same_account = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_same_account() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool deleted = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_deleted() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool frozen = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_frozen() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool unknown = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_unknown() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+   {
+    // bool changed = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_changed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ManualContractParty::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ManualContractParty*>(&to_msg);
+  auto& from = static_cast<const ManualContractParty&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.ManualContractParty)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_party().empty()) {
+        _this->_internal_set_party(from._internal_party());
+      } else {
+        if (_this->_impl_.party_.IsDefault()) {
+          _this->_internal_set_party("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_contract_owner_revision() != 0) {
+        _this->_impl_.contract_owner_revision_ = from._impl_.contract_owner_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_current_owner_revision() != 0) {
+        _this->_impl_.current_owner_revision_ = from._impl_.current_owner_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_same_account() != 0) {
+        _this->_impl_.same_account_ = from._impl_.same_account_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_deleted() != 0) {
+        _this->_impl_.deleted_ = from._impl_.deleted_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_frozen() != 0) {
+        _this->_impl_.frozen_ = from._impl_.frozen_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_unknown() != 0) {
+        _this->_impl_.unknown_ = from._impl_.unknown_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_changed() != 0) {
+      _this->_impl_.changed_ = from._impl_.changed_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ManualContractParty::CopyFrom(const ManualContractParty& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.ManualContractParty)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ManualContractParty::InternalSwap(ManualContractParty* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.party_, &other->_impl_.party_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.changed_)
+      + sizeof(ManualContractParty::_impl_.changed_)
+      - PROTOBUF_FIELD_OFFSET(ManualContractParty, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata ManualContractParty::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ManualContractActionVerdict::ManualContractActionVerdict(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ManualContractActionVerdict_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.ManualContractActionVerdict)
+}
+PROTOBUF_NDEBUG_INLINE ManualContractActionVerdict::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::ManualContractActionVerdict& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        action_(arena, from.action_),
+        detail_(arena, from.detail_) {}
+
+ManualContractActionVerdict::ManualContractActionVerdict(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ManualContractActionVerdict& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ManualContractActionVerdict_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ManualContractActionVerdict* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.allowed_ = from._impl_.allowed_;
+
+  // @@protoc_insertion_point(copy_constructor:trade.ManualContractActionVerdict)
+}
+PROTOBUF_NDEBUG_INLINE ManualContractActionVerdict::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        action_(arena),
+        detail_(arena) {}
+
+inline void ManualContractActionVerdict::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.allowed_ = {};
+}
+ManualContractActionVerdict::~ManualContractActionVerdict() {
+  // @@protoc_insertion_point(destructor:trade.ManualContractActionVerdict)
+  SharedDtor(*this);
+}
+inline void ManualContractActionVerdict::SharedDtor(MessageLite& self) {
+  ManualContractActionVerdict& this_ = static_cast<ManualContractActionVerdict&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.action_.Destroy();
+  this_._impl_.detail_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ManualContractActionVerdict_class_data_ =
+        ManualContractActionVerdict::InternalGenerateClassData_(ManualContractActionVerdict_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ManualContractActionVerdict::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ManualContractActionVerdict_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ManualContractActionVerdict_class_data_.tc_table);
+  return ManualContractActionVerdict_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ManualContractActionVerdict::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ManualContractActionVerdict_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ManualContractActionVerdict_globals_));
+  return ManualContractActionVerdict_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ManualContractActionVerdict::ParseTableT_
+    ManualContractActionVerdict::_table_ =
+        ManualContractActionVerdict::InternalGenerateParseTable_(ManualContractActionVerdict_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ManualContractActionVerdict::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.ManualContractActionVerdict)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.action_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.detail_.ClearNonDefaultToEmpty();
+    }
+  }
+  _impl_.allowed_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ManualContractActionVerdict::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ManualContractActionVerdict& this_ = static_cast<const ManualContractActionVerdict&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ManualContractActionVerdict::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ManualContractActionVerdict& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.ManualContractActionVerdict)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string action = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_action().empty()) {
+      const ::std::string& _s = this_._internal_action();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ManualContractActionVerdict.action");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // bool allowed = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_allowed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_allowed(), target);
+    }
+  }
+
+  // string detail = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_detail().empty()) {
+      const ::std::string& _s = this_._internal_detail();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ManualContractActionVerdict.detail");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.ManualContractActionVerdict)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ManualContractActionVerdict::ByteSizeLong(const MessageLite& base) {
+  const ManualContractActionVerdict& this_ = static_cast<const ManualContractActionVerdict&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ManualContractActionVerdict::ByteSizeLong() const {
+  const ManualContractActionVerdict& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.ManualContractActionVerdict)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string action = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_action().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_action());
+      }
+    }
+    // string detail = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_detail().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_detail());
+      }
+    }
+    // bool allowed = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_allowed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ManualContractActionVerdict::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ManualContractActionVerdict*>(&to_msg);
+  auto& from = static_cast<const ManualContractActionVerdict&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.ManualContractActionVerdict)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_action().empty()) {
+        _this->_internal_set_action(from._internal_action());
+      } else {
+        if (_this->_impl_.action_.IsDefault()) {
+          _this->_internal_set_action("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_detail().empty()) {
+        _this->_internal_set_detail(from._internal_detail());
+      } else {
+        if (_this->_impl_.detail_.IsDefault()) {
+          _this->_internal_set_detail("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_allowed() != 0) {
+        _this->_impl_.allowed_ = from._impl_.allowed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ManualContractActionVerdict::CopyFrom(const ManualContractActionVerdict& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.ManualContractActionVerdict)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ManualContractActionVerdict::InternalSwap(ManualContractActionVerdict* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.action_, &other->_impl_.action_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.detail_, &other->_impl_.detail_, arena);
+  swap(_impl_.allowed_, other->_impl_.allowed_);
+}
+
+::google::protobuf::Metadata ManualContractActionVerdict::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ResolveManualContractResponse::clear_record() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.record_ != nullptr) _impl_.record_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+void ResolveManualContractResponse::clear_linked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.linked_ != nullptr) _impl_.linked_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+void ResolveManualContractResponse::clear_plan() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.plan_ != nullptr) _impl_.plan_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+void ResolveManualContractResponse::clear_linked_plan() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.linked_plan_ != nullptr) _impl_.linked_plan_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+ResolveManualContractResponse::ResolveManualContractResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ResolveManualContractResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.ResolveManualContractResponse)
+}
+PROTOBUF_NDEBUG_INLINE ResolveManualContractResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::ResolveManualContractResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        legs_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::trade::ResolveManualContractResponse,
+              PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.legs_)>()
+          , from.legs_
+        }
+        ,
+        parties_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::trade::ResolveManualContractResponse,
+              PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.parties_)>()
+          , from.parties_
+        }
+        ,
+        actions_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::trade::ResolveManualContractResponse,
+              PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.actions_)>()
+          , from.actions_
+        }
+        ,
+        refusal_(arena, from.refusal_),
+        target_(arena, from.target_),
+        stage_(arena, from.stage_),
+        audit_line_(arena, from.audit_line_) {}
+
+ResolveManualContractResponse::ResolveManualContractResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ResolveManualContractResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ResolveManualContractResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ResolveManualContractResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.record_ = (CheckHasBit(cached_has_bits, 0x00000080U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.record_)
+                : nullptr;
+  _impl_.linked_ = (CheckHasBit(cached_has_bits, 0x00000100U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.linked_)
+                : nullptr;
+  _impl_.plan_ = (CheckHasBit(cached_has_bits, 0x00000200U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.plan_)
+                : nullptr;
+  _impl_.linked_plan_ = (CheckHasBit(cached_has_bits, 0x00000400U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.linked_plan_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, verdict_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, verdict_),
+           offsetof(Impl_, status_) -
+               offsetof(Impl_, verdict_) +
+               sizeof(Impl_::status_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.ResolveManualContractResponse)
+}
+PROTOBUF_NDEBUG_INLINE ResolveManualContractResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        legs_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::ResolveManualContractResponse,
+            PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.legs_)>()
+         }
+        ,
+        parties_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::ResolveManualContractResponse,
+            PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.parties_)>()
+         }
+        ,
+        actions_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::ResolveManualContractResponse,
+            PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.actions_)>()
+         }
+        ,
+        refusal_(arena),
+        target_(arena),
+        stage_(arena),
+        audit_line_(arena) {}
+
+inline void ResolveManualContractResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, record_),
+           0,
+           offsetof(Impl_, status_) -
+               offsetof(Impl_, record_) +
+               sizeof(Impl_::status_));
+}
+ResolveManualContractResponse::~ResolveManualContractResponse() {
+  // @@protoc_insertion_point(destructor:trade.ResolveManualContractResponse)
+  SharedDtor(*this);
+}
+inline void ResolveManualContractResponse::SharedDtor(MessageLite& self) {
+  ResolveManualContractResponse& this_ = static_cast<ResolveManualContractResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.refusal_.Destroy();
+  this_._impl_.target_.Destroy();
+  this_._impl_.stage_.Destroy();
+  this_._impl_.audit_line_.Destroy();
+  delete this_._impl_.record_;
+  delete this_._impl_.linked_;
+  delete this_._impl_.plan_;
+  delete this_._impl_.linked_plan_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ResolveManualContractResponse_class_data_ =
+        ResolveManualContractResponse::InternalGenerateClassData_(ResolveManualContractResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ResolveManualContractResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ResolveManualContractResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ResolveManualContractResponse_class_data_.tc_table);
+  return ResolveManualContractResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ResolveManualContractResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ResolveManualContractResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ResolveManualContractResponse_globals_));
+  return ResolveManualContractResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ResolveManualContractResponse::ParseTableT_
+    ResolveManualContractResponse::_table_ =
+        ResolveManualContractResponse::InternalGenerateParseTable_(ResolveManualContractResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ResolveManualContractResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.ResolveManualContractResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.legs_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.parties_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.actions_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.refusal_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.target_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.stage_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.audit_line_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      ABSL_DCHECK(_impl_.record_ != nullptr);
+      _impl_.record_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      ABSL_DCHECK(_impl_.linked_ != nullptr);
+      _impl_.linked_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      ABSL_DCHECK(_impl_.plan_ != nullptr);
+      _impl_.plan_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      ABSL_DCHECK(_impl_.linked_plan_ != nullptr);
+      _impl_.linked_plan_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001800U)) {
+    ::memset(&_impl_.verdict_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.status_) -
+        reinterpret_cast<char*>(&_impl_.verdict_)) + sizeof(_impl_.status_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ResolveManualContractResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ResolveManualContractResponse& this_ = static_cast<const ResolveManualContractResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ResolveManualContractResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ResolveManualContractResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.ResolveManualContractResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .trade.ManualContractVerdict verdict = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_verdict() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_verdict(), target);
+    }
+  }
+
+  // string refusal = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_refusal().empty()) {
+      const ::std::string& _s = this_._internal_refusal();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ResolveManualContractResponse.refusal");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string target = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_target().empty()) {
+      const ::std::string& _s = this_._internal_target();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ResolveManualContractResponse.target");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // .trade.TradeCommerceRecord record = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        4, *this_._impl_.record_, this_._impl_.record_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .trade.TradeCommerceRecord linked = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.linked_, this_._impl_.linked_->GetCachedSize(), target,
+        stream);
+  }
+
+  // repeated .trade.ManualContractLeg legs = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_legs_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_legs().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              6, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // repeated .trade.ManualContractParty parties = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_parties_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_parties().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              7, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // repeated .trade.ManualContractActionVerdict actions = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_actions_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_actions().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              8, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // .trade.TradeCommerceManualAction plan = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        9, *this_._impl_.plan_, this_._impl_.plan_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .trade.TradeCommerceManualAction linked_plan = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        10, *this_._impl_.linked_plan_, this_._impl_.linked_plan_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string stage = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_stage().empty()) {
+      const ::std::string& _s = this_._internal_stage();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ResolveManualContractResponse.stage");
+      target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // uint32 status = 12;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_status() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_status(), target);
+    }
+  }
+
+  // string audit_line = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (!this_._internal_audit_line().empty()) {
+      const ::std::string& _s = this_._internal_audit_line();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.ResolveManualContractResponse.audit_line");
+      target = stream->WriteStringMaybeAliased(13, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.ResolveManualContractResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ResolveManualContractResponse::ByteSizeLong(const MessageLite& base) {
+  const ResolveManualContractResponse& this_ = static_cast<const ResolveManualContractResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ResolveManualContractResponse::ByteSizeLong() const {
+  const ResolveManualContractResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.ResolveManualContractResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated .trade.ManualContractLeg legs = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_legs_size();
+      for (const auto& msg : this_._internal_legs()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .trade.ManualContractParty parties = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_parties_size();
+      for (const auto& msg : this_._internal_parties()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .trade.ManualContractActionVerdict actions = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1UL * this_._internal_actions_size();
+      for (const auto& msg : this_._internal_actions()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // string refusal = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_refusal().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_refusal());
+      }
+    }
+    // string target = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_target().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target());
+      }
+    }
+    // string stage = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_stage().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_stage());
+      }
+    }
+    // string audit_line = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!this_._internal_audit_line().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_audit_line());
+      }
+    }
+    // .trade.TradeCommerceRecord record = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.record_);
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    // .trade.TradeCommerceRecord linked = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.linked_);
+    }
+    // .trade.TradeCommerceManualAction plan = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.plan_);
+    }
+    // .trade.TradeCommerceManualAction linked_plan = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.linked_plan_);
+    }
+    // .trade.ManualContractVerdict verdict = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_verdict() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_verdict());
+      }
+    }
+    // uint32 status = 12;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_status() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_status());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ResolveManualContractResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ResolveManualContractResponse*>(&to_msg);
+  auto& from = static_cast<const ResolveManualContractResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.ResolveManualContractResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_legs()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_legs());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_parties()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_parties());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _this->_internal_mutable_actions()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_actions());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_refusal().empty()) {
+        _this->_internal_set_refusal(from._internal_refusal());
+      } else {
+        if (_this->_impl_.refusal_.IsDefault()) {
+          _this->_internal_set_refusal("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_target().empty()) {
+        _this->_internal_set_target(from._internal_target());
+      } else {
+        if (_this->_impl_.target_.IsDefault()) {
+          _this->_internal_set_target("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_stage().empty()) {
+        _this->_internal_set_stage(from._internal_stage());
+      } else {
+        if (_this->_impl_.stage_.IsDefault()) {
+          _this->_internal_set_stage("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!from._internal_audit_line().empty()) {
+        _this->_internal_set_audit_line(from._internal_audit_line());
+      } else {
+        if (_this->_impl_.audit_line_.IsDefault()) {
+          _this->_internal_set_audit_line("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      ABSL_DCHECK(from._impl_.record_ != nullptr);
+      if (_this->_impl_.record_ == nullptr) {
+        _this->_impl_.record_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.record_);
+      } else {
+        _this->_impl_.record_->MergeFrom(*from._impl_.record_);
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      ABSL_DCHECK(from._impl_.linked_ != nullptr);
+      if (_this->_impl_.linked_ == nullptr) {
+        _this->_impl_.linked_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.linked_);
+      } else {
+        _this->_impl_.linked_->MergeFrom(*from._impl_.linked_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      ABSL_DCHECK(from._impl_.plan_ != nullptr);
+      if (_this->_impl_.plan_ == nullptr) {
+        _this->_impl_.plan_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.plan_);
+      } else {
+        _this->_impl_.plan_->MergeFrom(*from._impl_.plan_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      ABSL_DCHECK(from._impl_.linked_plan_ != nullptr);
+      if (_this->_impl_.linked_plan_ == nullptr) {
+        _this->_impl_.linked_plan_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.linked_plan_);
+      } else {
+        _this->_impl_.linked_plan_->MergeFrom(*from._impl_.linked_plan_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_verdict() != 0) {
+        _this->_impl_.verdict_ = from._impl_.verdict_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_status() != 0) {
+        _this->_impl_.status_ = from._impl_.status_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ResolveManualContractResponse::CopyFrom(const ResolveManualContractResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.ResolveManualContractResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ResolveManualContractResponse::InternalSwap(ResolveManualContractResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.legs_.InternalSwap(&other->_impl_.legs_);
+  _impl_.parties_.InternalSwap(&other->_impl_.parties_);
+  _impl_.actions_.InternalSwap(&other->_impl_.actions_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.refusal_, &other->_impl_.refusal_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_, &other->_impl_.target_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.stage_, &other->_impl_.stage_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.audit_line_, &other->_impl_.audit_line_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.status_)
+      + sizeof(ResolveManualContractResponse::_impl_.status_)
+      - PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.record_)>(
+          reinterpret_cast<char*>(&_impl_.record_),
+          reinterpret_cast<char*>(&other->_impl_.record_));
+}
+
+::google::protobuf::Metadata ResolveManualContractResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

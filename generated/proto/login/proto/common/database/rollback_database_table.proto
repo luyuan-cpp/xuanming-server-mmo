@@ -19,8 +19,12 @@ message transaction_log
   // 索引末尾同一个 TiKV Region;插了 shard 就分成 16 段各自的末尾。没有玩家条件的查询带 shard IN (0..15) 按段扫
   // (store.auditShardInSQL)。按玩家的两条不分桶:玩家号本身打散。
   // item_uuid 给 QueryByItemUUID(追物品流向)用,以前没有索引,对全服流水表做全表扫。
-  option(OptionIndex) = "from_player,timestamp_sec;to_player,timestamp_sec;item_config_id,shard,timestamp_sec;tx_type,shard,timestamp_sec;shard,timestamp_sec;item_uuid";
-  // 雪花主键 + 全服最高频追加写,按 §D3 处方 NONCLUSTERED + 打散(global-data-layer-tidb-decision.md)
+  // (to_player, correlation_id) 给 GM 回收按指令补查同指令流水(2026-11-12,store.TransactionLogQuery.ToPlayerID):
+  // 同一条指令重投再应用时,多出来的那条流水可能落在时间窗外,要按 (收到方, 指令号) 不限时间地查;以前只能按玩家扫完保留期内的全部流水。
+  // 只能追加在末尾:proto2mysql 按位置给索引起名(idx_transaction_log_<序号>),插在中间会让已有库的索引名对不上。
+  option(OptionIndex) = "from_player,timestamp_sec;to_player,timestamp_sec;item_config_id,shard,timestamp_sec;tx_type,shard,timestamp_sec;shard,timestamp_sec;item_uuid;to_player,correlation_id";
+  // 主键 tx_id 是 C++ 从发号器 txlog 号段领的号、经 MixGuid 打散,不单调。行数据按 _tidb_rowid 存,又是全服最高频的追加写,
+  // 所以 §D3 的 NONCLUSTERED + 打散照旧保留(global-data-layer-tidb-decision.md)。
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -219,6 +223,10 @@ message gm_recall_op
   uint64 next_attempt_ms = 11;
   uint64 lease_until_ms = 12;
   uint64 lease_token = 13;
+  // last_outcome / last_reason / durable 三列描述同一件事:最后一次 scene 答复(AssetOpOutcome 数值、原因码)。
+  // durable = 1 表示那次答复报告结局已落盘(写进了玩家存档),只有这样的答复才能终结一行。重排按每次答复覆盖三列;
+  // 自动终结写下终结所凭的答复(durable 恒为 1)。人工终结、ROLE_GONE 不是 scene 的答复,三列都不改,终态行上留着最后一次
+  // 投递时 scene 实际回的值,事后核对用。谁终结的看 resolved_by(人工终结写操作人),不看 durable。
   uint32 last_outcome = 14;
   uint32 last_reason = 15;
   uint32 durable = 16;
@@ -500,6 +508,11 @@ message account_role_ref {
   uint32 home_zone = 6;   // PENDING 是建角时非 0,判陈旧时给墓碑用
   uint64 nonce = 7;       // 每次写换一个随机值。清理按它比较并删除,挡住「读完之后又被重新占用」
   uint64 created_ms = 8;
+  // 后台判陈旧留下等人处理的标记(2026-11-12,docs/design/horizontal-scale-logical-db.md §5.2):PENDING 的建角 ref 角色行不在,
+  // 却有提交过的证据或证据读不全,不写墓碑、不删,标上保留。held_ms 是最近一次判定保留的库时刻(0 = 没标),held_reason 是那次的证据。
+  // 后台扫描跳过标了保留的,只在单独的小复核名额里按 held_ms 轮着重判;改写这条 ref(建角重放、过户第 1 步、补 ACTIVE)时一起清掉。
+  uint64 held_ms = 9;
+  string held_reason = 10;
 }
 
 message account_role {
@@ -661,6 +674,11 @@ message sql_writer_lifecycle_receipt {
     // 只用于换代退休:同一槽位的新一代在注册事务里退休上一代时,填那份 REGISTER 的 request_id。
     // REGISTER、人工退休、排空退休都必须为空;换代退休没有维护 run。
     bytes successor_request_id = 13;
+    // 只在 REGISTER 里有意义:登记这一代的工作负载在它所在集群里的身份,注册器现场读,名册模板里必须为空。
+    // K8s 里是 k8s-sa:<namespace>/<ServiceAccount 名>/<ServiceAccount UID>(UID 由那个集群的 API server 分配,备份恢复、克隆带不过去);
+    // 集群外登记(本机脚本、调试栈)为空。缩容收尾(writer_authority retire-removed-slots)只结束本集群登记的一代,
+    // 靠它判归属;换代不看它(docs/design/writer-roster-exhaustion-20261106.md §5.9)。
+    string registered_by = 14;
   }
 }
 // 本地启动授权文件的唯一正规消息；不是SQL表。proto JSON用lowerCamelCase，bytes用标准base64。

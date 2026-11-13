@@ -10168,7 +10168,7 @@ const char descriptor_table_protodef_proto_2ftrade_2fcommerce_2eproto[] ABSL_ATT
     "MERCE_ORDER_KIND_CONSIGNMENT\020\003\022$\n COMMER"
     "CE_ORDER_KIND_MARKET_MATCH\020\004\022#\n\037COMMERCE"
     "_ORDER_KIND_AUCTION_LOT\020\005\022\'\n#COMMERCE_OR"
-    "DER_KIND_RMB_CONSIGNMENT\020\006*\335\003\n\022CommerceO"
+    "DER_KIND_RMB_CONSIGNMENT\020\006*\244\004\n\022CommerceO"
     "rderState\022$\n COMMERCE_ORDER_STATE_UNSPEC"
     "IFIED\020\000\022-\n)COMMERCE_ORDER_STATE_WAITING_"
     "CONFIRMATION\020\001\022)\n%COMMERCE_ORDER_STATE_A"
@@ -10180,10 +10180,12 @@ const char descriptor_table_protodef_proto_2ftrade_2fcommerce_2eproto[] ABSL_ATT
     "D\020\007\022\'\n#COMMERCE_ORDER_STATE_REFUND_PENDI"
     "NG\020\010\022!\n\035COMMERCE_ORDER_STATE_REFUNDED\020\t\022"
     "\037\n\033COMMERCE_ORDER_STATE_MANUAL\020\n\022 \n\034COMM"
-    "ERCE_ORDER_STATE_SETTLED\020\013*k\n\017MarketOrde"
-    "rSide\022!\n\035MARKET_ORDER_SIDE_UNSPECIFIED\020\000"
-    "\022\031\n\025MARKET_ORDER_SIDE_BUY\020\001\022\032\n\026MARKET_OR"
-    "DER_SIDE_SELL\020\002B\007Z\005tradeb\006proto3"
+    "ERCE_ORDER_STATE_SETTLED\020\013\022\"\n\036COMMERCE_O"
+    "RDER_STATE_REVERSING\020\014\022!\n\035COMMERCE_ORDER"
+    "_STATE_REVERSED\020\r*k\n\017MarketOrderSide\022!\n\035"
+    "MARKET_ORDER_SIDE_UNSPECIFIED\020\000\022\031\n\025MARKE"
+    "T_ORDER_SIDE_BUY\020\001\022\032\n\026MARKET_ORDER_SIDE_"
+    "SELL\020\002B\007Z\005tradeb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2ftrade_2fcommerce_2eproto_deps[1] = {
@@ -10193,7 +10195,7 @@ static ::absl::once_flag descriptor_table_proto_2ftrade_2fcommerce_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_2fcommerce_2eproto = {
     false,
     false,
-    7472,
+    7543,
     descriptor_table_protodef_proto_2ftrade_2fcommerce_2eproto,
     "proto/trade/commerce.proto",
     &descriptor_table_proto_2ftrade_2fcommerce_2eproto_once,
@@ -10220,7 +10222,7 @@ CommerceOrderState_descriptor() {
   return file_level_enum_descriptors_proto_2ftrade_2fcommerce_2eproto[1];
 }
 PROTOBUF_CONSTINIT const uint32_t CommerceOrderState_internal_data_[] = {
-    786432u, 0u, };
+    917504u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 MarketOrderSide_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2ftrade_2fcommerce_2eproto);

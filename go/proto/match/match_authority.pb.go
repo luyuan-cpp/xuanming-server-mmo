@@ -589,8 +589,13 @@ type MatchAuthorityTicketRecord struct {
 	SelectedRegion uint32                 `protobuf:"varint,16,opt,name=selected_region,json=selectedRegion,proto3" json:"selected_region,omitempty"`
 	OwnerAccount   string                 `protobuf:"bytes,18,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
 	OwnerRevision  uint64                 `protobuf:"varint,19,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 首选机房（docs/design/global-match-hierarchical-pools.md §5.2.1 热池拆分），只给撮合读页分段用，提交点不读。
+	// 入队（Join）时按刚落库的 network_profile 现算（authority.PreferredRegion），探测刷新（CommitProfile）时同一条 UPDATE 重算，
+	// 所以始终等于撮合与提交点现算的值。它不是上面退役的字段 17：那一列只喂两张投影表。
+	// 只对 team_id=0 的单排票有意义（整队按 team_launch.pool_region 读）；Go 侧 ticketColumns 不读它，也不进占用判定。
+	PoolRegion    uint32 `protobuf:"varint,20,opt,name=pool_region,json=poolRegion,proto3" json:"pool_region,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchAuthorityTicketRecord) Reset() {
@@ -745,6 +750,13 @@ func (x *MatchAuthorityTicketRecord) GetOwnerAccount() string {
 func (x *MatchAuthorityTicketRecord) GetOwnerRevision() uint64 {
 	if x != nil {
 		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *MatchAuthorityTicketRecord) GetPoolRegion() uint32 {
+	if x != nil {
+		return x.PoolRegion
 	}
 	return 0
 }
@@ -2967,7 +2979,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\fR\apayload\x12\x1d\n" +
 	"\n" +
-	"expires_ms\x18\x03 \x01(\x04R\texpiresMs:(\x8a\x92\xf4\x01\x15match_network_profile\x92\x92\xf4\x01\tplayer_id\"\xa6\x06\n" +
+	"expires_ms\x18\x03 \x01(\x04R\texpiresMs:(\x8a\x92\xf4\x01\x15match_network_profile\x92\x92\xf4\x01\tplayer_id\"\xda\x06\n" +
 	"\x1aMatchAuthorityTicketRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\x12\x1d\n" +
@@ -2990,7 +3002,9 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"expires_ms\x18\x0f \x01(\x04R\texpiresMs\x12'\n" +
 	"\x0fselected_region\x18\x10 \x01(\rR\x0eselectedRegion\x12#\n" +
 	"\rowner_account\x18\x12 \x01(\tR\fownerAccount\x12%\n" +
-	"\x0eowner_revision\x18\x13 \x01(\x04R\rownerRevision:\xbd\x01\x8a\x92\xf4\x01\x16match_authority_ticket\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01\x8e\x01state,mode,config_id,team_size,team_id,enqueued_ms,player_id;formation_id;state,enqueued_ms,player_id;state,mode,team_id,enqueued_ms,player_idJ\x04\b\x11\x10\x12R\x10preferred_region\"\x9c\x02\n" +
+	"\x0eowner_revision\x18\x13 \x01(\x04R\rownerRevision\x12\x1f\n" +
+	"\vpool_region\x18\x14 \x01(\rR\n" +
+	"poolRegion:\xd0\x01\x8a\x92\xf4\x01\x16match_authority_ticket\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01\xa1\x01state,mode,config_id,team_size,team_id,enqueued_ms,player_id;state,enqueued_ms,player_id;state,mode,config_id,team_size,team_id,pool_region,enqueued_ms,player_idJ\x04\b\x11\x10\x12R\x10preferred_region\"\x9c\x02\n" +
 	"\x18MatchRoleOccupancyRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +

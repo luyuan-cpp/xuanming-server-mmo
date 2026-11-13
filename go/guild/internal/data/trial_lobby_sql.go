@@ -103,6 +103,7 @@ func lobbyView(row *pb.GuildTrialLobbyRecord) (*TrialLobby, *pb.GuildTrialLobbyO
 	}
 	return &TrialLobby{durable: true, LobbyID: row.LobbyId, GuildID: row.GuildId, ActivityID: row.ActivityId, InitiatorID: row.InitiatorPlayerId, Roster: v.MemberPlayerIds, AcceptedMask: mask, State: v.State, ExpireAtMs: row.ExpiresMs, LaunchDeadlineMs: row.LaunchDeadlineMs, BattleID: row.BattleId, CreatedMs: row.CreatedMs, EndTipID: v.EndTipId, EndParams: v.EndParameters}, o, c, nil
 }
+
 // trialSQLNowMs 是 SQL 时钟的当前毫秒。大厅截止、launch 原件的检查时刻都按它写、按它比,
 // 不用各副本的进程墙钟:副本之间的时钟差不该决定「窗口过没过」。
 const trialSQLNowMs = "CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)"
@@ -706,6 +707,7 @@ func lockTrialLobbyForLaunch(ctx context.Context, tx *sql.Tx, original *pb.Guild
 	}
 	return row, nil
 }
+
 // closeProvenTrialLobby 在权威终局(结算、标毒或核签的作废回执)的同一事务里把大厅写成 ENDED 并清占位。
 // endTip 是写进视图的结束原因:有对局结果时为 trialSettledLobbyEndTip(客户端按结果显示);作废释放写
 // 默认原因(cancelledTrialLobbyEnd),否则客户端只看到 ENDED、不知道这一局没打成(2026-11-05 修复,r2-guild#1 评审第 5 条)。

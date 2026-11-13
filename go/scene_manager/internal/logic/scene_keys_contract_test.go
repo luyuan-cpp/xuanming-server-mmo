@@ -175,8 +175,8 @@ func TestControlScriptKeysShareOneTag(t *testing.T) {
 	worldReg := sceneRegistration{SceneID: sceneID, ZoneID: zoneID, NodeID: nodeID}
 	scripts := map[string][]string{
 		"销毁认领(期望属主 + 摘集合 + 收尾任务表)": claim.keys(),
-		"销毁认领(只有场景键)":             sceneTeardownRequest{ZoneID: zoneID, SceneID: sceneID}.keys(),
-		"实例登记(带镜像源)":              instanceKeys,
+		"销毁认领(只有场景键)":              sceneTeardownRequest{ZoneID: zoneID, SceneID: sceneID}.keys(),
+		"实例登记(带镜像源)":               instanceKeys,
 		"世界频道登记":                   worldChannelRegistrationKeys(worldReg, confID),
 		"增减成员":                     sceneMemberKeys(sceneID, zoneID, nodeID),
 	}

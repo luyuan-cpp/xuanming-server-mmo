@@ -98,6 +98,10 @@ const (
 	CommerceOrderState_COMMERCE_ORDER_STATE_REFUNDED             CommerceOrderState = 9
 	CommerceOrderState_COMMERCE_ORDER_STATE_MANUAL               CommerceOrderState = 10
 	CommerceOrderState_COMMERCE_ORDER_STATE_SETTLED              CommerceOrderState = 11
+	// 官方订单的付款被渠道修订之后(用户在渠道侧退款、作废,或撤销又被撤回;payment-recharge.md §22.6):
+	// REVERSING 正在把游戏内发放收敛到渠道的最新结论(扣回或补发),REVERSED 已扣回。补发完成回到 DELIVERED。
+	CommerceOrderState_COMMERCE_ORDER_STATE_REVERSING CommerceOrderState = 12
+	CommerceOrderState_COMMERCE_ORDER_STATE_REVERSED  CommerceOrderState = 13
 )
 
 // Enum value maps for CommerceOrderState.
@@ -115,6 +119,8 @@ var (
 		9:  "COMMERCE_ORDER_STATE_REFUNDED",
 		10: "COMMERCE_ORDER_STATE_MANUAL",
 		11: "COMMERCE_ORDER_STATE_SETTLED",
+		12: "COMMERCE_ORDER_STATE_REVERSING",
+		13: "COMMERCE_ORDER_STATE_REVERSED",
 	}
 	CommerceOrderState_value = map[string]int32{
 		"COMMERCE_ORDER_STATE_UNSPECIFIED":          0,
@@ -129,6 +135,8 @@ var (
 		"COMMERCE_ORDER_STATE_REFUNDED":             9,
 		"COMMERCE_ORDER_STATE_MANUAL":               10,
 		"COMMERCE_ORDER_STATE_SETTLED":              11,
+		"COMMERCE_ORDER_STATE_REVERSING":            12,
+		"COMMERCE_ORDER_STATE_REVERSED":             13,
 	}
 )
 
@@ -3990,7 +3998,7 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\x1fCOMMERCE_ORDER_KIND_CONSIGNMENT\x10\x03\x12$\n" +
 	" COMMERCE_ORDER_KIND_MARKET_MATCH\x10\x04\x12#\n" +
 	"\x1fCOMMERCE_ORDER_KIND_AUCTION_LOT\x10\x05\x12'\n" +
-	"#COMMERCE_ORDER_KIND_RMB_CONSIGNMENT\x10\x06*\xdd\x03\n" +
+	"#COMMERCE_ORDER_KIND_RMB_CONSIGNMENT\x10\x06*\xa4\x04\n" +
 	"\x12CommerceOrderState\x12$\n" +
 	" COMMERCE_ORDER_STATE_UNSPECIFIED\x10\x00\x12-\n" +
 	")COMMERCE_ORDER_STATE_WAITING_CONFIRMATION\x10\x01\x12)\n" +
@@ -4004,7 +4012,9 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\x1dCOMMERCE_ORDER_STATE_REFUNDED\x10\t\x12\x1f\n" +
 	"\x1bCOMMERCE_ORDER_STATE_MANUAL\x10\n" +
 	"\x12 \n" +
-	"\x1cCOMMERCE_ORDER_STATE_SETTLED\x10\v*k\n" +
+	"\x1cCOMMERCE_ORDER_STATE_SETTLED\x10\v\x12\"\n" +
+	"\x1eCOMMERCE_ORDER_STATE_REVERSING\x10\f\x12!\n" +
+	"\x1dCOMMERCE_ORDER_STATE_REVERSED\x10\r*k\n" +
 	"\x0fMarketOrderSide\x12!\n" +
 	"\x1dMARKET_ORDER_SIDE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15MARKET_ORDER_SIDE_BUY\x10\x01\x12\x1a\n" +

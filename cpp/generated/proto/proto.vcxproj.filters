@@ -820,4 +820,42 @@
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="opentelemetry\proto\collector\trace\v1\trace_service.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="opentelemetry\proto\common\v1\common.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="opentelemetry\proto\resource\v1\resource.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="opentelemetry\proto\trace\v1\trace.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="payment\payment.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="payment\payment_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="opentelemetry\proto\collector\trace\v1\trace_service.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="opentelemetry\proto\common\v1\common.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="opentelemetry\proto\resource\v1\resource.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="opentelemetry\proto\trace\v1\trace.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="payment\payment.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="payment\payment_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

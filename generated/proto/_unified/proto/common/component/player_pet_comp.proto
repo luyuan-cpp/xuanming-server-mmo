@@ -14,7 +14,7 @@ option go_package = "proto/common/component";
 
 // 一只宝宝
 message PetInstance {
-  uint64 pet_id = 1;          // SnowFlake guid,由 scene 节点铸(tlsSnowflakeManager)
+  uint64 pet_id = 1;          // scene 从发号器 item 号段领号(宝宝沿用 item 身份域,PetSystem::GrantPet 铸),只当身份用,不能解析
   uint32 pet_table_id = 2;    // 种类(Pet 表 id)
   string name = 3;            // 玩家自定义名;空 = 用 PetTable.name
   uint32 level = 4;           // 派生自主人等级(见文件头),存下来只为离线展示与结算夹取

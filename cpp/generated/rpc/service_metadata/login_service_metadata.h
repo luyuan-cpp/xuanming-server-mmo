@@ -31,6 +31,10 @@ constexpr uint32_t ClientPlayerLoginRequestGateMigrationMessageId = 375;
 constexpr uint32_t ClientPlayerLoginRequestGateMigrationIndex = 6;
 #define ClientPlayerLoginRequestGateMigrationMethod  ::ClientPlayerLogin_Stub::descriptor()->method(6)
 
+constexpr uint32_t ClientPlayerLoginRenewSessionMessageId = 394;
+constexpr uint32_t ClientPlayerLoginRenewSessionIndex = 7;
+#define ClientPlayerLoginRenewSessionMethod  ::ClientPlayerLogin_Stub::descriptor()->method(7)
+
 constexpr uint32_t LoginPreGateAssignGateMessageId = 118;
 constexpr uint32_t LoginPreGateAssignGateIndex = 0;
 #define LoginPreGateAssignGateMethod  ::LoginPreGate_Stub::descriptor()->method(0)
@@ -38,6 +42,10 @@ constexpr uint32_t LoginPreGateAssignGateIndex = 0;
 constexpr uint32_t LoginPreGateQueryQueueStatusMessageId = 138;
 constexpr uint32_t LoginPreGateQueryQueueStatusIndex = 1;
 #define LoginPreGateQueryQueueStatusMethod  ::LoginPreGate_Stub::descriptor()->method(1)
+
+constexpr uint32_t LoginPreGateGetZoneRoleCountMessageId = 395;
+constexpr uint32_t LoginPreGateGetZoneRoleCountIndex = 2;
+#define LoginPreGateGetZoneRoleCountMethod  ::LoginPreGate_Stub::descriptor()->method(2)
 
 constexpr uint32_t LoginAdminRemovePlayersFromAccountsMessageId = 111;
 constexpr uint32_t LoginAdminRemovePlayersFromAccountsIndex = 0;

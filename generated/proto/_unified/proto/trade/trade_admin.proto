@@ -3,7 +3,9 @@ option go_package = "proto/trade";
 
 import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
+import "proto/common/base/service_call_auth.proto";
 import "proto/trade/jubaozhai.proto";
+import "proto/trade/trade_table.proto";
 
 package trade;
 
@@ -40,6 +42,106 @@ message SeedListingResponse {
   uint32 market_zone = 3; // 服务端写入的市场分区,供冒烟断言
 }
 
+// ── 转人工合同的人工处置(docs/design/jubaozhai-market.md §15.7、§15.7.1;手册 docs/ops/trade-commerce-quarantine-runbook.md §4.2)──
+// 调用方只有运维工具 go/trade/cmd/commercefix:serviceauth 调用方 "ops-commerce",密钥来自 trade 配置
+// Commerce.ManualResolutionSecretEnv 指名的环境变量,不与别的调用方共用。没配 = 入口关闭,一律 PermissionDenied;
+// 配了却读不到至少 32 字节的密钥、或没配有效的环境名 Commerce.ManualResolutionEnvironment,入口同样关闭,启动日志打 ERROR。
+// 读写都由运行中的 trade 副本执行,沿用本库写者闸门与角色护栏;工具不连库。
+
+message ListManualContractsRequest {
+  uint64 after_updated_ms = 1;   // 游标:上一页回的 next_*;两个都是 0 从头列
+  uint64 after_commerce_id = 2;
+  uint32 limit = 3;              // 1..500
+  common.base.ServiceCallAuth auth = 4;
+}
+
+message ListManualContractsResponse {
+  repeated TradeCommerceRecord contracts = 1;  // 转人工的合同,最早转人工的在前;workflow_proto 原样,工具自己解开
+  uint64 next_after_updated_ms = 2;            // 两个都是 0:没有下一页
+  uint64 next_after_commerce_id = 3;
+  string target = 4;                           // 本部署的环境名 Commerce.ManualResolutionEnvironment
+  bool retry = 5;                              // 读库失败(只读,没有结局未知),稍后重试
+}
+
+enum ManualContractMode {
+  MANUAL_CONTRACT_MODE_UNSPECIFIED = 0;
+  MANUAL_CONTRACT_MODE_SHOW = 1;     // 锁外读合同、腿、两方归属与关联合同,逐个动作试算;不写
+  MANUAL_CONTRACT_MODE_DRY_RUN = 2;  // 与执行同一锁序、同一判据算计划;不写
+  MANUAL_CONTRACT_MODE_EXECUTE = 3;  // 写库
+}
+
+enum ManualContractVerdict {
+  MANUAL_CONTRACT_VERDICT_UNSPECIFIED = 0;
+  MANUAL_CONTRACT_VERDICT_OK = 1;               // SHOW / DRY_RUN:读到、算出;EXECUTE:已提交
+  MANUAL_CONTRACT_VERDICT_NOT_FOUND = 2;
+  MANUAL_CONTRACT_VERDICT_REFUSED = 3;          // 前置条件不满足或目标环境不符,未改动;原因在 refusal
+  MANUAL_CONTRACT_VERDICT_VERSION_CHANGED = 4;  // 合同(或联动的出价)已不是操作人看过的那一版,未改动
+  MANUAL_CONTRACT_VERDICT_RETRY = 5;            // 读库失败或提交之前失败,事务已回滚,未改动
+}
+
+message ResolveManualContractRequest {
+  uint64 commerce_id = 1;
+  ManualContractMode mode = 2;
+  // 以下 DRY_RUN / EXECUTE 用,SHOW 忽略。
+  string action = 3;              // resume / reissue / refund / partial / redirect / void-auction
+  uint64 expect_version = 4;      // SHOW 看到的合同版本
+  string expect_target = 5;       // 工单上写明的环境名,与服务端逐字相等(不从 SHOW 照抄),连错环境回 REFUSED target_mismatch
+  string operator = 6;            // ≤64 字节,不带控制字符
+  string reason = 7;              // ≤191 字节:工单号与核对结论
+  repeated string parts = 8;      // partial:每条 "<腿名>=<缺口>",缺口是逗号分隔的 instance:<guid>、pet、currency:<类型>
+  string party = 9;               // redirect:seller / buyer
+  uint64 to_player_id = 10;       // redirect:原账号名下的目标角色
+  uint64 linked_commerce_id = 11; // void-auction:拍品引用的出价
+  uint64 linked_version = 12;     // void-auction:SHOW 看到的出价版本
+  common.base.ServiceCallAuth auth = 13;
+}
+
+// SHOW:一条腿与它 op 行的现状。
+message ManualContractLeg {
+  TradeCommerceLeg leg = 1;
+  TradeAssetOpStatus op_status = 2;  // op 行现在的状态;没发出为 UNSPECIFIED
+  uint64 final_ms = 3;               // 终态行的终结时刻(对照角色过户时刻用)
+  bool read_failed = 4;
+}
+
+// SHOW:一方的角色现在归谁。不带账号原文,只说账号是否相同。
+message ManualContractParty {
+  string party = 1;                  // seller / buyer
+  uint64 player_id = 2;
+  uint64 contract_owner_revision = 3;
+  uint64 current_owner_revision = 4; // 删角、判不了时为 0
+  bool same_account = 5;
+  bool deleted = 6;
+  bool frozen = 7;                   // 被挂单冻结或在投票中
+  bool unknown = 8;                  // 副本缺行,判不了
+  bool changed = 9;                  // 已不可逆地不归原身份:用 redirect
+}
+
+// SHOW:一种动作现在能否处理。partial、redirect 要额外参数,这里列出候选。
+message ManualContractActionVerdict {
+  string action = 1;
+  bool allowed = 2;
+  string detail = 3;
+}
+
+message ResolveManualContractResponse {
+  ManualContractVerdict verdict = 1;
+  string refusal = 2;                                // REFUSED / VERSION_CHANGED / RETRY 的原因
+  string target = 3;                                 // 本部署的环境名
+  TradeCommerceRecord record = 4;                    // SHOW:锁外读到的合同,workflow_proto 原样
+  TradeCommerceRecord linked = 5;                    // SHOW:出价所属的拍品,或拍品引用的出价
+  repeated ManualContractLeg legs = 6;               // SHOW
+  repeated ManualContractParty parties = 7;          // SHOW
+  repeated ManualContractActionVerdict actions = 8;  // SHOW
+  TradeCommerceManualAction plan = 9;                // DRY_RUN / EXECUTE:写进(或要写进)合同留痕的那一条
+  TradeCommerceManualAction linked_plan = 10;        // void-auction:写进出价留痕的那一条
+  string stage = 11;                                 // DRY_RUN / EXECUTE:处置后的阶段与状态
+  uint32 status = 12;
+  string audit_line = 13;                            // DRY_RUN / EXECUTE:服务端打进日志的同一行 [CommerceManual],贴进工单
+}
+
 service TradeAdmin {
   rpc SeedListing (SeedListingRequest) returns (SeedListingResponse);
+  rpc ListManualContracts (ListManualContractsRequest) returns (ListManualContractsResponse);
+  rpc ResolveManualContract (ResolveManualContractRequest) returns (ResolveManualContractResponse);
 }

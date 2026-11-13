@@ -391,3 +391,12 @@
 390=MatchServiceSubmitBattleScript
 391=MatchServiceDeleteBattleScript
 392=MatchServiceSetBattleScriptLoadout
+393=DataServiceCountZoneRoles
+394=ClientPlayerLoginRenewSession
+395=LoginPreGateGetZoneRoleCount
+396=ClientPlayerPaymentListPayChannels
+397=ClientPlayerPaymentCreatePayIntent
+398=ClientPlayerPaymentGetPayIntent
+399=ClientPlayerPaymentSubmitPurchase
+400=TradeAdminListManualContracts
+401=TradeAdminResolveManualContract

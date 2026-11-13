@@ -573,6 +573,8 @@ enum CommerceOrderState : int {
   COMMERCE_ORDER_STATE_REFUNDED = 9,
   COMMERCE_ORDER_STATE_MANUAL = 10,
   COMMERCE_ORDER_STATE_SETTLED = 11,
+  COMMERCE_ORDER_STATE_REVERSING = 12,
+  COMMERCE_ORDER_STATE_REVERSED = 13,
   CommerceOrderState_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   CommerceOrderState_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -583,11 +585,11 @@ extern const uint32_t CommerceOrderState_internal_data_[];
 inline constexpr CommerceOrderState CommerceOrderState_MIN =
     static_cast<CommerceOrderState>(0);
 inline constexpr CommerceOrderState CommerceOrderState_MAX =
-    static_cast<CommerceOrderState>(11);
+    static_cast<CommerceOrderState>(13);
 [[nodiscard]] inline bool CommerceOrderState_IsValid(int value) {
-  return 0 <= value && value <= 11;
+  return 0 <= value && value <= 13;
 }
-inline constexpr int CommerceOrderState_ARRAYSIZE = 11 + 1;
+inline constexpr int CommerceOrderState_ARRAYSIZE = 13 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 CommerceOrderState_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(CommerceOrderState) {
@@ -602,7 +604,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& CommerceOrderState_Name(CommerceOrderState value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<CommerceOrderState_descriptor, 0, 11>(
+  return ::google::protobuf::internal::NameOfDenseEnum<CommerceOrderState_descriptor, 0, 13>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool CommerceOrderState_Parse(

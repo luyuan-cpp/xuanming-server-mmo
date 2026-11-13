@@ -578,12 +578,15 @@ func (x *BattleRouting) GetZoneId() uint32 {
 
 // ---- 参战 buff(时间维度已换算为回合,见设计文档 §5.1 换算策略) ----
 type BattleBuffEntry struct {
-	state        protoimpl.MessageState `protogen:"open.v1"`
-	BuffId       uint64                 `protobuf:"varint,1,opt,name=buff_id,json=buffId,proto3" json:"buff_id,omitempty"`                   // buff 实例 SnowFlake id
-	BuffTableId  uint32                 `protobuf:"varint,2,opt,name=buff_table_id,json=buffTableId,proto3" json:"buff_table_id,omitempty"`  // BuffTable 表 id
-	Layer        uint32                 `protobuf:"varint,3,opt,name=layer,proto3" json:"layer,omitempty"`                                   // 叠层数
-	RemainRounds uint32                 `protobuf:"varint,4,opt,name=remain_rounds,json=remainRounds,proto3" json:"remain_rounds,omitempty"` // 剩余回合(0 = 无限持续)
-	CasterId     uint64                 `protobuf:"varint,5,opt,name=caster_id,json=casterId,proto3" json:"caster_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// buff 实例 id,只在所属单位的 buff 列表里用来认出这一条,不跨重启:快照带来的沿用 scene 的进程内临时号
+	// (tlsIdGeneratorManager.buffIdGenerator,[node_id][seq] 拼成),战斗内新加的由引擎在局内自增域里接着往上发
+	// (turn_battle_engine 的 nextBuffInstanceId)。不是 SnowFlake,也不是发号器的永久 ID,不要解析。
+	BuffId       uint64 `protobuf:"varint,1,opt,name=buff_id,json=buffId,proto3" json:"buff_id,omitempty"`
+	BuffTableId  uint32 `protobuf:"varint,2,opt,name=buff_table_id,json=buffTableId,proto3" json:"buff_table_id,omitempty"`  // BuffTable 表 id
+	Layer        uint32 `protobuf:"varint,3,opt,name=layer,proto3" json:"layer,omitempty"`                                   // 叠层数
+	RemainRounds uint32 `protobuf:"varint,4,opt,name=remain_rounds,json=remainRounds,proto3" json:"remain_rounds,omitempty"` // 剩余回合(0 = 无限持续)
+	CasterId     uint64 `protobuf:"varint,5,opt,name=caster_id,json=casterId,proto3" json:"caster_id,omitempty"`
 	// 四职业技能的属性增减(docs/design/class-skills.md §6.4):带符号比例,0.25 = +25%、-0.15 = -15%。
 	// 施加时按施法者当时的技能等级算定并存在这里,之后升级 / 换人都不改它;0 = 不是这类 buff(老 buff 全为 0)。
 	// 改的是哪一项由 Buff 表的 buff_type 决定(turn_battle_constants.h ClassSkillStatOfBuffType)。
@@ -2128,7 +2131,7 @@ func (x *BattlePetSettlementData) GetIsDead() bool {
 type BattleActivityContext struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Kind              EBattleActivityKind    `protobuf:"varint,1,opt,name=kind,proto3,enum=EBattleActivityKind" json:"kind,omitempty"`                             // 非 NONE 才是活动对局;match 拒绝 NONE(INVALID_ARGUMENT)
-	GuildId           uint64                 `protobuf:"varint,2,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`                                 // 发起帮会(SnowFlake 17-bit 布局);guild 写、guild 读
+	GuildId           uint64                 `protobuf:"varint,2,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`                                 // 发起帮会(发号器永久 ID,biz_tag=guild,只当身份用);guild 写、guild 读
 	ActivityId        uint32                 `protobuf:"varint,3,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`                        // GuildActivity 表 id;guild 写、guild 读
 	PeriodKey         uint32                 `protobuf:"varint,4,opt,name=period_key,json=periodKey,proto3" json:"period_key,omitempty"`                           // 确认开战时的游戏日键 YYYYMMDD(gameday.DayKey,UTC+8 05:00 换日),用于个人每日次数
 	InitiatorPlayerId uint64                 `protobuf:"varint,5,opt,name=initiator_player_id,json=initiatorPlayerId,proto3" json:"initiator_player_id,omitempty"` // 发起人;match 校验它等于 StartActivityBattleRequest.member_player_ids[0]

@@ -20,6 +20,8 @@ proto/
 ├── <service>/           一个服务一个目录:login、scene、scene_manager、data_service、
 │                        db、player_locator、gate、battle、match、team、chat、guild、
 │                        friend、mail、rank、trade、client_rpc_router、instance、etcd
+├── opentelemetry/       官方 opentelemetry-proto v1.3.1 的拷贝(只 import 路径与删掉的 TraceService 不同),
+│                        只给 C++ 的 span 导出器编码 OTLP 用,不生成 Go(docs/design/distributed-tracing.md §10.3)
 ├── message_id.txt       消息号注册表(生成器读写;删掉的方法留 `N=reserved:<原名>` 墓碑,号永不复用)
 └── event_id.txt         事件号注册表(生成器读写;墓碑格式同上)
 ```

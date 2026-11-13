@@ -152,7 +152,7 @@ enum QueueState {
 }
 
 // ----- 场景发起 PK(切磋) -----
-// challenge_id 由 match 服务 snowflake 生产;挑战记录存 Redis(TTL 60s),超时自动作废。
+// challenge_id 由 match 服务从发号器领号(biz_tag=battle,与 battle_id / team_id 共用号段;只当身份用,不能解析);挑战记录存 Redis(TTL 60s),超时自动作废。
 // 应战成功后与队列匹配共用 gather 开局管线(PrepareBattle -> CreateBattle),
 // 双方 battle:lock 校验在应战时刻做(发起时只做咨询性检查)。
 

@@ -469,7 +469,8 @@ type PlayerDatabase struct {
 	SkillList         *component.PlayerSkillListComp `protobuf:"bytes,4,opt,name=skill_list,json=skillList,proto3" json:"skill_list,omitempty"`                           // GROWTH
 	// 职业:建角事务里和名字、外观、性别一起写进 PROFILE 行。
 	Uint32PbComponent *component.PlayerUint32Comp `protobuf:"bytes,5,opt,name=uint32_pb_component,json=uint32PbComponent,proto3" json:"uint32_pb_component,omitempty"` // PROFILE
-	// 字段名沿用旧名:装的是基础属性和当前血蓝(BaseAttributesComp);真正的派生属性 DerivedAttributesComp 不落库,加载时重算。
+	// 字段名沿用旧名。只存当前血蓝(health、mana):BaseAttributesComp 的其余字段(力量、护甲、抗性、暴击、速度)只有职业表和重算
+	// 两个来源,scene 存盘时清掉、加载时写回(player_database_loader.cpp);派生属性 DerivedAttributesComp 同样不落库,加载时重算。
 	DerivedAttributesComponent *component.BaseAttributesComp `protobuf:"bytes,6,opt,name=derived_attributes_component,json=derivedAttributesComponent,proto3" json:"derived_attributes_component,omitempty"` // CHARACTER
 	LevelComponent             *component.LevelComp          `protobuf:"bytes,7,opt,name=level_component,json=levelComponent,proto3" json:"level_component,omitempty"`                                       // CHARACTER
 	Currency                   *component.CurrencyComp       `protobuf:"bytes,8,opt,name=currency,proto3" json:"currency,omitempty"`                                                                         // WALLET

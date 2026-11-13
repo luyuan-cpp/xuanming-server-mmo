@@ -6504,6 +6504,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchAuthorityTicketRecord final : 
     kSelectedRegionFieldNumber = 16,
     kExpiresMsFieldNumber = 15,
     kOwnerRevisionFieldNumber = 19,
+    kPoolRegionFieldNumber = 20,
   };
   // string ticket = 2;
   void clear_ticket() ;
@@ -6705,11 +6706,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchAuthorityTicketRecord final : 
   void _internal_set_owner_revision(::uint64_t value);
 
   public:
+  // uint32 pool_region = 20;
+  void clear_pool_region() ;
+  [[nodiscard]] ::uint32_t pool_region() const;
+  void set_pool_region(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pool_region() const;
+  void _internal_set_pool_region(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:match.MatchAuthorityTicketRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 18,
+      ::google::protobuf::internal::TcParseTable<5, 19,
                           0, 86,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -6756,6 +6767,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchAuthorityTicketRecord final : 
     ::uint32_t selected_region_;
     ::uint64_t expires_ms_;
     ::uint64_t owner_revision_;
+    ::uint32_t pool_region_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10631,6 +10643,30 @@ inline ::uint64_t MatchAuthorityTicketRecord::_internal_owner_revision() const {
 inline void MatchAuthorityTicketRecord::_internal_set_owner_revision(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_revision_ = value;
+}
+
+// uint32 pool_region = 20;
+inline void MatchAuthorityTicketRecord::clear_pool_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pool_region_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint32_t MatchAuthorityTicketRecord::pool_region() const {
+  // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.pool_region)
+  return _internal_pool_region();
+}
+inline void MatchAuthorityTicketRecord::set_pool_region(::uint32_t value) {
+  _internal_set_pool_region(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.pool_region)
+}
+inline ::uint32_t MatchAuthorityTicketRecord::_internal_pool_region() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pool_region_;
+}
+inline void MatchAuthorityTicketRecord::_internal_set_pool_region(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pool_region_ = value;
 }
 
 // -------------------------------------------------------------------

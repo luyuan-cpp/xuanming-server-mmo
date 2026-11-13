@@ -441,15 +441,15 @@ func commitReservedAgonesRoom(ctx context.Context, svcCtx *svc.ServiceContext, z
 // ARGV[4] = 这次占用的条目(在途占用的成员;非高密度模式为空串,不消费)
 // ARGV[5] = 新 GameServer 名
 // 返回 {1, prev}:已改到新记录,prev 是被覆盖的旧记录(没有记录时为空串);
-// {0, ''}:属主已不是 newNode,或场景已被销毁,或这次调用已被作废,记录没动;
-// {2, ''}:记录已经在新 GameServer 上(别的写者转过了,它的条目在用),记录没动;
-// {3, ''}:在途占用已被对账取消(这次占用拖过了截止时刻),一个键都没动。
+// {0, ”}:属主已不是 newNode,或场景已被销毁,或这次调用已被作废,记录没动;
+// {2, ”}:记录已经在新 GameServer 上(别的写者转过了,它的条目在用),记录没动;
+// {3, ”}:在途占用已被对账取消(这次占用拖过了截止时刻),一个键都没动。
 // 0 / 2 也消费了在途占用:这次占用不会再被提交,调用方删掉自己的条目。
 //
 // 回执(2026-11-05,与 luaReassignSceneNode 同一套,见那里)。go-redis 对读超时 / EOF 会原样重发 EVAL;第一次已经
 // 改写、回包丢了,重发时在途占用已消费,没有回执会回 3:调用方把刚记账的新条目删掉,旧条目永不归还。
 //   - 改写成功时把被覆盖的旧记录以 cjson 写进回执,同一 token 再来原样回 {1, prev}、什么都不动。0 / 2 / 3 不写回执。
-//   - Eval 最终回错时调用方用 luaResolveCasReceipt 问清结局,没执行的写下 'aborted',之后才到的 EVAL 回 {0, ''}。
+//   - Eval 最终回错时调用方用 luaResolveCasReceipt 问清结局,没执行的写下 'aborted',之后才到的 EVAL 回 {0, ”}。
 //
 // 「记录已经在新 GameServer 上」只比 GameServer 名(记录里 "/" 之前的部分):条目每次占用各不相同,比整串永远不等。
 const luaCommitAgonesRoomTransfer = `

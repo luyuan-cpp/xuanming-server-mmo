@@ -34030,3 +34030,22 @@ Windows modules、scene及bag_test按/m:1构建和完整裸指针门禁通过；
   7. 沙箱端到端(可选,需要 login、网关与 mock):按 `docs/ops/wechat-qq-sandbox-runbook.md` §I.2 的命令,期望值写在各条注释里。
 - **未验证**:以上全部没有运行。
 - **Java 版(AGENTS §12)**:待做,Java 版本号 0.1.0-SNAPSHOT;已在 `D:\luyuan\xuanming-server-mmo\PARITY.md` 末尾登记「2026-11-13 Apple / Google 登录」。客户端可见的新契约是 `/api/login` 的两个 auth_type 取值,两版要同批。
+
+
+## 2026-11-13 Codex：保留 Claude 开发快照并合并 main（进行中）
+
+- 按负责人要求，以本地 Claude 开发快照 `6914a1af8` 为主，合并 `origin/main` 的 `3ca9d4bdb`，逐项保留两方有效成果；本条记录时尚未提交或推送。
+- 文档、部署与工具冲突按源实现及演进记录核对。清掉自动合并重复插入的旧工作负载密钥目录、重复函数与已由控制 Redis Cluster 替代的旧入口，并清掉 Loki、金丝雀说明的重复整节；这些目录处理完后与本地快照逐字相同，未删任何本地成果。
+- `docs/PROGRESS.md` 追加本条前为 34,032 行，与本地快照逐字相同；远端全部 29,413 行是它的有序子序列，未丢失两方进度，未发现重复日期标题，旧记录未改。
+- 已实跑：Docker Python 脚本测试 108 条通过；冲突涉及的 PowerShell 脚本语法解析 0 错误；审计发件箱告警与循环活性告警契约通过。
+- 仍有验证失败，未宣称全量通过：muduo 三副本契约的注释文字匹配、gateway 告警测试的 Regex.Escape 传参、scene 排空渲染的空 Indent 参数、writer-slot-retirer 测试桩的参数捕获、route-tool 清单的身份变量匹配，以及发号器部署契约。相关测试及实现片段仍与本地快照相同；本次不扩大为这些既有问题的修复。主合并的协议生成、各语言构建与其余验证另续记录。
+
+## 2026-11-13 Codex：main 合并提交前验证记录
+
+- 负责人要求先提交并推送当前合并成果，再检查编译问题。本次保留本地 Claude 快照 6914a1af8 与远端 3ca9d4bdb 两条历史；相对本地快照没有删除文件，冲突标记与未合并索引均已清零。
+- 表导出、完整协议生成、db/login 包装生成及 robot vendor 同步成功。保留远端 MySQL 密码环境变量支持、相关测试与 Kafka 追踪，并修复合并拼接的重复声明。另有现成测试检出的最小适配：authoritysql 事务失败显式返回 nil 接口、测试跟随 Redis/枚举接口、机器人允许已有 gate-migrate-smoke 入口。
+- Go 全包测试通过 data_service、guild、chat、rank、proto、schemamigrate、mail、client_rpc_router、match、player_locator、robot；shared 的 authoritysql/noderegistry 定向复验通过。db、friend、trade、player_inbox、login、scene_manager 生产代码构建通过。
+- 仍待检查的既有问题：payment 缺 8 个源表 tip；四份远端 MySQL 密码测试引用未实现接口；trade 测试存在未使用变量；login schema 测试计入 SQL 注释；scene_manager 池大小 130 超过共享上限 128，以及 logic 三项测试失败。相关测试均保留。
+- C++ 协议与 grpc_client、muduo、muduo_grpc 等库已编译，完整方案受追踪代码 3 个 SpanRecorder 裸指针成员门禁阻挡，尚未验证全方案。Java authority 编译及 31 项测试通过，1 项缺真实 TiDB fixture；商城依赖下载受 Maven Central DNS 阻挡。
+- Docker Python 108 项、逻辑库部署 46 项及审计/活性告警契约通过；发号器契约 20/21，其余脚本既有失败见上一条。日志文案检查通过。Git 空白检查报告 protoc 自动生成的 common.pb.h 两处行尾空白，生成物保持工具输出。
+- 以上为当前实际证据，完整构建和全部测试尚未通过。详细验证日志保存在系统 TEMP 的 merge-main-*、merge-final-* 与 merge-go-validation-20261113。

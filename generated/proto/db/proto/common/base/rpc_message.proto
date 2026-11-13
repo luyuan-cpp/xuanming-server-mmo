@@ -26,6 +26,9 @@ enum GameErrorCode
   TIMEOUT = 6;          // 线上不发;本地完成状态见 C++ RpcStatusCode
   HANDLER_FAILED = 7;   // handler 显式失败(controller->SetFailed / RpcDoneCallback::Fail):handler 已运行
   REPLY_DROPPED = 8;    // handler 接管 done 后未完成即释放:结果未知
+  // 被热关停规则拒绝(docs/design/rpc-kill-switch.md):派发前拒绝,handler 没有运行,确定未执行。
+  // 没升级的调用方按 RpcStatus::FromRemoteError 的默认分支归为 kRemoteRejected,语义相同。
+  KILL_SWITCH_DENIED = 9;
 }
 
 message GameRpcMessage

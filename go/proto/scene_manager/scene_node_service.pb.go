@@ -48,8 +48,12 @@ type ReleasePlayerRequest struct {
 	// covered_login_generation = 0 = 旧版调用方,按现行为(只比 owner_epoch)。会话号 0 只按代次比。不进存盘,不替代 owner_epoch。
 	CoveredSessionId       uint32 `protobuf:"varint,6,opt,name=covered_session_id,json=coveredSessionId,proto3" json:"covered_session_id,omitempty"`
 	CoveredLoginGeneration uint64 `protobuf:"varint,7,opt,name=covered_login_generation,json=coveredLoginGeneration,proto3" json:"covered_login_generation,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// 只在 session_ended = true 时有意义:true = 只要本节点持有该玩家(有实体)就什么都不做,只在完全不持有时按上面的规则补写凭证。
+	// player_locator 的托管归位(docs/design/player-connection-lost-hold.md §4.5)撞上换手门时由 scene_manager 填:归位只把
+	// 没有节点持有的托管角色放回世界,不能把一个正在托管他的节点上的实体退掉。false = 上面的原语义。
+	KeepHeld      bool `protobuf:"varint,8,opt,name=keep_held,json=keepHeld,proto3" json:"keep_held,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ReleasePlayerRequest) Reset() {
@@ -131,12 +135,19 @@ func (x *ReleasePlayerRequest) GetCoveredLoginGeneration() uint64 {
 	return 0
 }
 
+func (x *ReleasePlayerRequest) GetKeepHeld() bool {
+	if x != nil {
+		return x.KeepHeld
+	}
+	return false
+}
+
 var File_proto_scene_manager_scene_node_service_proto protoreflect.FileDescriptor
 
 const file_proto_scene_manager_scene_node_service_proto_rawDesc = "" +
 	"\n" +
 	",proto/scene_manager/scene_node_service.proto\x12\n" +
-	"scene_node\x1a!proto/common/asset/asset_op.proto\x1a\x1dproto/common/base/empty.proto\x1a\x17proto/scene/scene.proto\"\xc0\x02\n" +
+	"scene_node\x1a!proto/common/asset/asset_op.proto\x1a\x1dproto/common/base/empty.proto\x1a\x17proto/scene/scene.proto\"\xdd\x02\n" +
 	"\x14ReleasePlayerRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12&\n" +
 	"\x0ftarget_scene_id\x18\x02 \x01(\x04R\rtargetSceneId\x12$\n" +
@@ -144,7 +155,8 @@ const file_proto_scene_manager_scene_node_service_proto_rawDesc = "" +
 	"\x14expected_owner_epoch\x18\x04 \x01(\x04R\x12expectedOwnerEpoch\x12#\n" +
 	"\rsession_ended\x18\x05 \x01(\bR\fsessionEnded\x12,\n" +
 	"\x12covered_session_id\x18\x06 \x01(\rR\x10coveredSessionId\x128\n" +
-	"\x18covered_login_generation\x18\a \x01(\x04R\x16coveredLoginGeneration2\xcf\x04\n" +
+	"\x18covered_login_generation\x18\a \x01(\x04R\x16coveredLoginGeneration\x12\x1b\n" +
+	"\tkeep_held\x18\b \x01(\bR\bkeepHeld2\xcf\x04\n" +
 	"\rSceneNodeGrpc\x12:\n" +
 	"\vCreateScene\x12\x13.CreateSceneRequest\x1a\x14.CreateSceneResponse\"\x00\x12.\n" +
 	"\fDestroyScene\x12\x14.DestroySceneRequest\x1a\x06.Empty\"\x00\x12;\n" +

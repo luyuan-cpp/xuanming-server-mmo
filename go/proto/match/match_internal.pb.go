@@ -560,7 +560,7 @@ type StartActivityBattleResponse struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Reject           ActivityBattleReject   `protobuf:"varint,1,opt,name=reject,proto3,enum=match.ActivityBattleReject" json:"reject,omitempty"`
 	OffenderPlayerId uint64                 `protobuf:"varint,2,opt,name=offender_player_id,json=offenderPlayerId,proto3" json:"offender_player_id,omitempty"` // reject 为 MEMBER_OFFLINE / MEMBER_IN_BATTLE / MEMBER_NOT_READY 时非 0(名单顺序里第一个不满足的人);其余为 0
-	// reject == NONE 时非 0:match 同步生成(shared/snowflake,battle_id 唯一生产者)并已为全员建好 matched 票、
+	// reject == NONE 时非 0:match 同步从发号器领号(biz_tag=battle,match 是 battle_id 唯一生产者)并已为全员建好 matched 票、
 	// 异步启动 gather;guild 据此登记 guild_trial_battle。gather 之后失败时全员删票、不回队列,
 	// 该 battle_id 不会产生结果事件,由 guild 巡检器兜底判 EXPIRED。
 	BattleId       uint64 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`

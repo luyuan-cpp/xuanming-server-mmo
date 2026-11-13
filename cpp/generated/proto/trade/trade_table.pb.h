@@ -4593,18 +4593,20 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceWorkflow final : publi
     kSellerIdentityFieldNumber = 21,
     kBuyerIdentityFieldNumber = 22,
     kQuarantineFieldNumber = 23,
-    kSellerConfirmedFieldNumber = 3,
-    kBuyerConfirmedFieldNumber = 4,
-    kCancelRequestedFieldNumber = 5,
-    kSkuQuantityFieldNumber = 16,
     kMinimumIncrementFieldNumber = 8,
     kHighestBidFieldNumber = 9,
     kHighestBidderFieldNumber = 10,
+    kSellerConfirmedFieldNumber = 3,
+    kBuyerConfirmedFieldNumber = 4,
+    kCancelRequestedFieldNumber = 5,
+    kPaymentRevokedFieldNumber = 26,
+    kSkuQuantityFieldNumber = 16,
     kWinningBidIdFieldNumber = 11,
     kParentIdFieldNumber = 12,
     kQuantityReservedFieldNumber = 13,
     kSkuIdFieldNumber = 15,
     kExternalAmountFieldNumber = 19,
+    kPaymentRevisionFieldNumber = 25,
   };
   // repeated .trade.TradeCommerceLeg legs = 6;
   [[nodiscard]] int legs_size()
@@ -4805,6 +4807,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceWorkflow final : publi
   ::trade::TradeCommerceQuarantine* PROTOBUF_NONNULL _internal_mutable_quarantine();
 
   public:
+  // uint64 minimum_increment = 8;
+  void clear_minimum_increment() ;
+  [[nodiscard]] ::uint64_t minimum_increment() const;
+  void set_minimum_increment(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_minimum_increment() const;
+  void _internal_set_minimum_increment(::uint64_t value);
+
+  public:
+  // uint64 highest_bid = 9;
+  void clear_highest_bid() ;
+  [[nodiscard]] ::uint64_t highest_bid() const;
+  void set_highest_bid(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_highest_bid() const;
+  void _internal_set_highest_bid(::uint64_t value);
+
+  public:
+  // uint64 highest_bidder = 10;
+  void clear_highest_bidder() ;
+  [[nodiscard]] ::uint64_t highest_bidder() const;
+  void set_highest_bidder(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_highest_bidder() const;
+  void _internal_set_highest_bidder(::uint64_t value);
+
+  public:
   // bool seller_confirmed = 3;
   void clear_seller_confirmed() ;
   [[nodiscard]] bool seller_confirmed() const;
@@ -4835,6 +4867,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceWorkflow final : publi
   void _internal_set_cancel_requested(bool value);
 
   public:
+  // bool payment_revoked = 26;
+  void clear_payment_revoked() ;
+  [[nodiscard]] bool payment_revoked() const;
+  void set_payment_revoked(bool value);
+
+  private:
+  bool _internal_payment_revoked() const;
+  void _internal_set_payment_revoked(bool value);
+
+  public:
   // uint32 sku_quantity = 16;
   void clear_sku_quantity() ;
   [[nodiscard]] ::uint32_t sku_quantity() const;
@@ -4843,36 +4885,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceWorkflow final : publi
   private:
   ::uint32_t _internal_sku_quantity() const;
   void _internal_set_sku_quantity(::uint32_t value);
-
-  public:
-  // uint64 minimum_increment = 8;
-  void clear_minimum_increment() ;
-  [[nodiscard]] ::uint64_t minimum_increment() const;
-  void set_minimum_increment(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_minimum_increment() const;
-  void _internal_set_minimum_increment(::uint64_t value);
-
-  public:
-  // uint64 highest_bid = 9;
-  void clear_highest_bid() ;
-  [[nodiscard]] ::uint64_t highest_bid() const;
-  void set_highest_bid(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_highest_bid() const;
-  void _internal_set_highest_bid(::uint64_t value);
-
-  public:
-  // uint64 highest_bidder = 10;
-  void clear_highest_bidder() ;
-  [[nodiscard]] ::uint64_t highest_bidder() const;
-  void set_highest_bidder(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_highest_bidder() const;
-  void _internal_set_highest_bidder(::uint64_t value);
 
   public:
   // uint64 winning_bid_id = 11;
@@ -4925,11 +4937,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceWorkflow final : publi
   void _internal_set_external_amount(::uint64_t value);
 
   public:
+  // uint32 payment_revision = 25;
+  void clear_payment_revision() ;
+  [[nodiscard]] ::uint32_t payment_revision() const;
+  void set_payment_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_payment_revision() const;
+  void _internal_set_payment_revision(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:trade.TradeCommerceWorkflow)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 24,
+      ::google::protobuf::internal::TcParseTable<5, 26,
                           9, 99,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4970,18 +4992,20 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceWorkflow final : publi
     ::trade::TradeRoleIdentity* PROTOBUF_NULLABLE seller_identity_;
     ::trade::TradeRoleIdentity* PROTOBUF_NULLABLE buyer_identity_;
     ::trade::TradeCommerceQuarantine* PROTOBUF_NULLABLE quarantine_;
-    bool seller_confirmed_;
-    bool buyer_confirmed_;
-    bool cancel_requested_;
-    ::uint32_t sku_quantity_;
     ::uint64_t minimum_increment_;
     ::uint64_t highest_bid_;
     ::uint64_t highest_bidder_;
+    bool seller_confirmed_;
+    bool buyer_confirmed_;
+    bool cancel_requested_;
+    bool payment_revoked_;
+    ::uint32_t sku_quantity_;
     ::uint64_t winning_bid_id_;
     ::uint64_t parent_id_;
     ::uint64_t quantity_reserved_;
     ::uint64_t sku_id_;
     ::uint64_t external_amount_;
+    ::uint32_t payment_revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7546,7 +7570,7 @@ inline void TradeCommerceWorkflow::set_allocated_buyer_assets(::trade::TradeAsse
 inline void TradeCommerceWorkflow::clear_seller_confirmed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.seller_confirmed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline bool TradeCommerceWorkflow::seller_confirmed() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.seller_confirmed)
@@ -7554,7 +7578,7 @@ inline bool TradeCommerceWorkflow::seller_confirmed() const {
 }
 inline void TradeCommerceWorkflow::set_seller_confirmed(bool value) {
   _internal_set_seller_confirmed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.seller_confirmed)
 }
 inline bool TradeCommerceWorkflow::_internal_seller_confirmed() const {
@@ -7570,7 +7594,7 @@ inline void TradeCommerceWorkflow::_internal_set_seller_confirmed(bool value) {
 inline void TradeCommerceWorkflow::clear_buyer_confirmed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.buyer_confirmed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline bool TradeCommerceWorkflow::buyer_confirmed() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.buyer_confirmed)
@@ -7578,7 +7602,7 @@ inline bool TradeCommerceWorkflow::buyer_confirmed() const {
 }
 inline void TradeCommerceWorkflow::set_buyer_confirmed(bool value) {
   _internal_set_buyer_confirmed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.buyer_confirmed)
 }
 inline bool TradeCommerceWorkflow::_internal_buyer_confirmed() const {
@@ -7594,7 +7618,7 @@ inline void TradeCommerceWorkflow::_internal_set_buyer_confirmed(bool value) {
 inline void TradeCommerceWorkflow::clear_cancel_requested() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cancel_requested_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline bool TradeCommerceWorkflow::cancel_requested() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.cancel_requested)
@@ -7602,7 +7626,7 @@ inline bool TradeCommerceWorkflow::cancel_requested() const {
 }
 inline void TradeCommerceWorkflow::set_cancel_requested(bool value) {
   _internal_set_cancel_requested(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.cancel_requested)
 }
 inline bool TradeCommerceWorkflow::_internal_cancel_requested() const {
@@ -7737,7 +7761,7 @@ inline void TradeCommerceWorkflow::set_allocated_stage(::std::string* PROTOBUF_N
 inline void TradeCommerceWorkflow::clear_minimum_increment() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.minimum_increment_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t TradeCommerceWorkflow::minimum_increment() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.minimum_increment)
@@ -7745,7 +7769,7 @@ inline ::uint64_t TradeCommerceWorkflow::minimum_increment() const {
 }
 inline void TradeCommerceWorkflow::set_minimum_increment(::uint64_t value) {
   _internal_set_minimum_increment(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.minimum_increment)
 }
 inline ::uint64_t TradeCommerceWorkflow::_internal_minimum_increment() const {
@@ -7761,7 +7785,7 @@ inline void TradeCommerceWorkflow::_internal_set_minimum_increment(::uint64_t va
 inline void TradeCommerceWorkflow::clear_highest_bid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.highest_bid_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t TradeCommerceWorkflow::highest_bid() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.highest_bid)
@@ -7769,7 +7793,7 @@ inline ::uint64_t TradeCommerceWorkflow::highest_bid() const {
 }
 inline void TradeCommerceWorkflow::set_highest_bid(::uint64_t value) {
   _internal_set_highest_bid(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.highest_bid)
 }
 inline ::uint64_t TradeCommerceWorkflow::_internal_highest_bid() const {
@@ -7785,7 +7809,7 @@ inline void TradeCommerceWorkflow::_internal_set_highest_bid(::uint64_t value) {
 inline void TradeCommerceWorkflow::clear_highest_bidder() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.highest_bidder_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t TradeCommerceWorkflow::highest_bidder() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.highest_bidder)
@@ -7793,7 +7817,7 @@ inline ::uint64_t TradeCommerceWorkflow::highest_bidder() const {
 }
 inline void TradeCommerceWorkflow::set_highest_bidder(::uint64_t value) {
   _internal_set_highest_bidder(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.highest_bidder)
 }
 inline ::uint64_t TradeCommerceWorkflow::_internal_highest_bidder() const {
@@ -7809,7 +7833,7 @@ inline void TradeCommerceWorkflow::_internal_set_highest_bidder(::uint64_t value
 inline void TradeCommerceWorkflow::clear_winning_bid_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.winning_bid_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint64_t TradeCommerceWorkflow::winning_bid_id() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.winning_bid_id)
@@ -7817,7 +7841,7 @@ inline ::uint64_t TradeCommerceWorkflow::winning_bid_id() const {
 }
 inline void TradeCommerceWorkflow::set_winning_bid_id(::uint64_t value) {
   _internal_set_winning_bid_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.winning_bid_id)
 }
 inline ::uint64_t TradeCommerceWorkflow::_internal_winning_bid_id() const {
@@ -7833,7 +7857,7 @@ inline void TradeCommerceWorkflow::_internal_set_winning_bid_id(::uint64_t value
 inline void TradeCommerceWorkflow::clear_parent_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.parent_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint64_t TradeCommerceWorkflow::parent_id() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.parent_id)
@@ -7841,7 +7865,7 @@ inline ::uint64_t TradeCommerceWorkflow::parent_id() const {
 }
 inline void TradeCommerceWorkflow::set_parent_id(::uint64_t value) {
   _internal_set_parent_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.parent_id)
 }
 inline ::uint64_t TradeCommerceWorkflow::_internal_parent_id() const {
@@ -7857,7 +7881,7 @@ inline void TradeCommerceWorkflow::_internal_set_parent_id(::uint64_t value) {
 inline void TradeCommerceWorkflow::clear_quantity_reserved() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.quantity_reserved_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint64_t TradeCommerceWorkflow::quantity_reserved() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.quantity_reserved)
@@ -7865,7 +7889,7 @@ inline ::uint64_t TradeCommerceWorkflow::quantity_reserved() const {
 }
 inline void TradeCommerceWorkflow::set_quantity_reserved(::uint64_t value) {
   _internal_set_quantity_reserved(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.quantity_reserved)
 }
 inline ::uint64_t TradeCommerceWorkflow::_internal_quantity_reserved() const {
@@ -7945,7 +7969,7 @@ inline void TradeCommerceWorkflow::set_allocated_external_order_sn(::std::string
 inline void TradeCommerceWorkflow::clear_sku_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sku_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint64_t TradeCommerceWorkflow::sku_id() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.sku_id)
@@ -7953,7 +7977,7 @@ inline ::uint64_t TradeCommerceWorkflow::sku_id() const {
 }
 inline void TradeCommerceWorkflow::set_sku_id(::uint64_t value) {
   _internal_set_sku_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.sku_id)
 }
 inline ::uint64_t TradeCommerceWorkflow::_internal_sku_id() const {
@@ -7969,7 +7993,7 @@ inline void TradeCommerceWorkflow::_internal_set_sku_id(::uint64_t value) {
 inline void TradeCommerceWorkflow::clear_sku_quantity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sku_quantity_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t TradeCommerceWorkflow::sku_quantity() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.sku_quantity)
@@ -7977,7 +8001,7 @@ inline ::uint32_t TradeCommerceWorkflow::sku_quantity() const {
 }
 inline void TradeCommerceWorkflow::set_sku_quantity(::uint32_t value) {
   _internal_set_sku_quantity(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.sku_quantity)
 }
 inline ::uint32_t TradeCommerceWorkflow::_internal_sku_quantity() const {
@@ -8150,7 +8174,7 @@ inline void TradeCommerceWorkflow::set_allocated_external_currency(::std::string
 inline void TradeCommerceWorkflow::clear_external_amount() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.external_amount_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint64_t TradeCommerceWorkflow::external_amount() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.external_amount)
@@ -8158,7 +8182,7 @@ inline ::uint64_t TradeCommerceWorkflow::external_amount() const {
 }
 inline void TradeCommerceWorkflow::set_external_amount(::uint64_t value) {
   _internal_set_external_amount(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.external_amount)
 }
 inline ::uint64_t TradeCommerceWorkflow::_internal_external_amount() const {
@@ -8615,6 +8639,54 @@ inline ::google::protobuf::RepeatedPtrField<::trade::TradeCommerceManualAction>*
 TradeCommerceWorkflow::_internal_mutable_manual_actions() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.manual_actions_;
+}
+
+// uint32 payment_revision = 25;
+inline void TradeCommerceWorkflow::clear_payment_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.payment_revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint32_t TradeCommerceWorkflow::payment_revision() const {
+  // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.payment_revision)
+  return _internal_payment_revision();
+}
+inline void TradeCommerceWorkflow::set_payment_revision(::uint32_t value) {
+  _internal_set_payment_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.payment_revision)
+}
+inline ::uint32_t TradeCommerceWorkflow::_internal_payment_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.payment_revision_;
+}
+inline void TradeCommerceWorkflow::_internal_set_payment_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.payment_revision_ = value;
+}
+
+// bool payment_revoked = 26;
+inline void TradeCommerceWorkflow::clear_payment_revoked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.payment_revoked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline bool TradeCommerceWorkflow::payment_revoked() const {
+  // @@protoc_insertion_point(field_get:trade.TradeCommerceWorkflow.payment_revoked)
+  return _internal_payment_revoked();
+}
+inline void TradeCommerceWorkflow::set_payment_revoked(bool value) {
+  _internal_set_payment_revoked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:trade.TradeCommerceWorkflow.payment_revoked)
+}
+inline bool TradeCommerceWorkflow::_internal_payment_revoked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.payment_revoked_;
+}
+inline void TradeCommerceWorkflow::_internal_set_payment_revoked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.payment_revoked_ = value;
 }
 
 // -------------------------------------------------------------------

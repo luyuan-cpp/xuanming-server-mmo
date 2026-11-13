@@ -1527,7 +1527,7 @@ func TestCampaign_YieldReleasesLeaderKeyAndBacksOff(t *testing.T) {
 	view.setWritersErr(errors.New("etcd unreachable from this pod"))
 	deps := testReconcilerDeps(view, newTestClock())
 	deps.sleep = blockUntilDone
-	elector := leader.New(leader.NewGoRedisStore(sc.RedisClient), reconcilerLeaderKey,
+	elector := leader.New(leader.NewUniversalStore(sc.RedisClient), reconcilerLeaderKey,
 		leader.Options{TTL: reconcilerLeaderTTL, ID: "test-replica"})
 
 	var heldDuringTerm atomic.Bool

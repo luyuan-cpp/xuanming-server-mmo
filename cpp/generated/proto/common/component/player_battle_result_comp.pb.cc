@@ -348,11 +348,11 @@ constexpr PlayerBattleResult::ParseTableT_ PlayerBattleResult::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_._has_bits_),
       0, // no _extensions_
-      16, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294901760,  // skipmap
+      4294836224,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      16,  // num_field_entries
+      17,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -362,10 +362,7 @@ constexpr PlayerBattleResult::ParseTableT_ PlayerBattleResult::InternalGenerateP
       ::_pbi::TcParser::GetTable<::PlayerBattleResult>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 battle_config_id = 16;
-      {::_pbi::TcParser::FastV32S2,
-       {384, 15, 0,
-        PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.battle_config_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 result_seq = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerBattleResult, _impl_.result_seq_), 3>(),
        {8, 3, 0,
@@ -426,6 +423,28 @@ constexpr PlayerBattleResult::ParseTableT_ PlayerBattleResult::InternalGenerateP
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerBattleResult, _impl_.match_mode_), 14>(),
        {120, 14, 0,
         PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.match_mode_)}},
+      // uint32 battle_config_id = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.battle_config_id_)}},
+      // bool items_mailed = 17;
+      {::_pbi::TcParser::FastV8S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.items_mailed_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -461,6 +480,8 @@ constexpr PlayerBattleResult::ParseTableT_ PlayerBattleResult::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.match_mode_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 battle_config_id = 16;
       {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool items_mailed = 17;
+      {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.items_mailed_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -516,7 +537,8 @@ inline constexpr PlayerBattleResult::Impl_::Impl_(
         lines_truncated_{false},
         seen_{false},
         match_mode_{0u},
-        battle_config_id_{0u} {}
+        battle_config_id_{0u},
+        items_mailed_{false} {}
 
 template <typename>
 constexpr PlayerBattleResult::PlayerBattleResult(::_pbi::ConstantInitialized,
@@ -791,7 +813,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_._has_bits_),
-        19, // hasbit index offset
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.result_seq_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.outcome_),
@@ -808,6 +830,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.seen_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.match_mode_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.battle_config_id_),
+        PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.items_mailed_),
         3,
         4,
         5,
@@ -824,6 +847,7 @@ const ::uint32_t
         13,
         14,
         15,
+        16,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResultComp, _impl_._has_bits_),
         5, // hasbit index offset
@@ -838,7 +862,7 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::PlayerBattleResultCurrency)},
         {7, sizeof(::PlayerBattleResultItem)},
         {14, sizeof(::PlayerBattleResult)},
-        {49, sizeof(::PlayerBattleResultComp)},
+        {51, sizeof(::PlayerBattleResultComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -853,7 +877,7 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fbattl
     "esult_comp.proto\"C\n\032PlayerBattleResultCu"
     "rrency\022\025\n\rcurrency_type\030\001 \001(\r\022\016\n\006amount\030"
     "\002 \001(\004\">\n\026PlayerBattleResultItem\022\025\n\ritem_"
-    "table_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\"\252\003\n\022Player"
+    "table_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\"\300\003\n\022Player"
     "BattleResult\022\022\n\nresult_seq\030\001 \001(\004\022\021\n\tbatt"
     "le_id\030\002 \001(\004\022\017\n\007outcome\030\003 \001(\r\022\022\n\nteam_ind"
     "ex\030\004 \001(\r\022\017\n\007is_dead\030\005 \001(\010\022\014\n\004fled\030\006 \001(\010\022"
@@ -864,16 +888,16 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fbattl
     "Item\022/\n\016items_consumed\030\014 \003(\0132\027.PlayerBat"
     "tleResultItem\022\027\n\017lines_truncated\030\r \001(\010\022\014"
     "\n\004seen\030\016 \001(\010\022\022\n\nmatch_mode\030\017 \001(\r\022\030\n\020batt"
-    "le_config_id\030\020 \001(\r\"W\n\026PlayerBattleResult"
-    "Comp\022\027\n\017last_result_seq\030\001 \001(\004\022$\n\007entries"
-    "\030\002 \003(\0132\023.PlayerBattleResultB\022Z\020common/co"
-    "mponentb\006proto3"
+    "le_config_id\030\020 \001(\r\022\024\n\014items_mailed\030\021 \001(\010"
+    "\"W\n\026PlayerBattleResultComp\022\027\n\017last_resul"
+    "t_seq\030\001 \001(\004\022$\n\007entries\030\002 \003(\0132\023.PlayerBat"
+    "tleResultB\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto = {
     false,
     false,
-    735,
+    757,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto,
     "proto/common/component/player_battle_result_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto_once,
@@ -1399,9 +1423,9 @@ PlayerBattleResult::PlayerBattleResult(
                offsetof(Impl_, result_seq_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, result_seq_),
-           offsetof(Impl_, battle_config_id_) -
+           offsetof(Impl_, items_mailed_) -
                offsetof(Impl_, result_seq_) +
-               sizeof(Impl_::battle_config_id_));
+               sizeof(Impl_::items_mailed_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerBattleResult)
 }
@@ -1430,9 +1454,9 @@ inline void PlayerBattleResult::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, result_seq_),
            0,
-           offsetof(Impl_, battle_config_id_) -
+           offsetof(Impl_, items_mailed_) -
                offsetof(Impl_, result_seq_) +
-               sizeof(Impl_::battle_config_id_));
+               sizeof(Impl_::items_mailed_));
 }
 PlayerBattleResult::~PlayerBattleResult() {
   // @@protoc_insertion_point(destructor:PlayerBattleResult)
@@ -1503,6 +1527,7 @@ PROTOBUF_NOINLINE void PlayerBattleResult::Clear() {
         reinterpret_cast<char*>(&_impl_.battle_config_id_) -
         reinterpret_cast<char*>(&_impl_.settled_at_ms_)) + sizeof(_impl_.battle_config_id_));
   }
+  _impl_.items_mailed_ = false;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1682,6 +1707,15 @@ PROTOBUF_NOINLINE void PlayerBattleResult::Clear() {
     }
   }
 
+  // bool items_mailed = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_items_mailed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          17, this_._internal_items_mailed(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1819,6 +1853,14 @@ PROTOBUF_NOINLINE void PlayerBattleResult::Clear() {
       }
     }
   }
+   {
+    // bool items_mailed = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_items_mailed() != 0) {
+        total_size += 3;
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -1921,6 +1963,11 @@ void PlayerBattleResult::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_items_mailed() != 0) {
+      _this->_impl_.items_mailed_ = from._impl_.items_mailed_;
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -1942,8 +1989,8 @@ void PlayerBattleResult::InternalSwap(PlayerBattleResult* PROTOBUF_RESTRICT PROT
   _impl_.items_gained_.InternalSwap(&other->_impl_.items_gained_);
   _impl_.items_consumed_.InternalSwap(&other->_impl_.items_consumed_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.battle_config_id_)
-      + sizeof(PlayerBattleResult::_impl_.battle_config_id_)
+      PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.items_mailed_)
+      + sizeof(PlayerBattleResult::_impl_.items_mailed_)
       - PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.result_seq_)>(
           reinterpret_cast<char*>(&_impl_.result_seq_),
           reinterpret_cast<char*>(&other->_impl_.result_seq_));

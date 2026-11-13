@@ -292,6 +292,7 @@ state=bootstrap
 1=MailOutboxItem#2 optional uint64 count
 1=PlayerMailOutboxComp#1 repeated MailOutboxEntry entries
 1=player_database#27 optional PlayerMailOutboxComp mail_outbox group=7
+1=PlayerBattleResult#17 optional bool items_mailed
 
 retired=player_database#10
 retired=player_database#17

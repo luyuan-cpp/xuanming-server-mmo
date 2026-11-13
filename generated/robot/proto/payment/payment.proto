@@ -1,0 +1,169 @@
+syntax = "proto3";
+package paymentpb;
+option go_package = "robot/proto/payment";
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+option (OptionFileDefaultNode) = NODE_PAYMENT;
+
+// 真钱支付的客户端协议(docs/design/payment-recharge.md §22)。两版服务器共用(AGENTS §12)。
+//
+// 支付只回答「这张订单的钱付了没有」。订单本身(下单、取消、发货进度)仍在 trade 的 ClientPlayerJubaozhai:
+// 客户端先下单拿到 order_id,再用它建支付意图、调起渠道 SDK,付完轮询 GetPayIntent;App Store / Google Play
+// 这类由商店扣款的渠道,付完把交易交给 SubmitPurchase。发货进度看订单状态。
+// 我是谁只取 gate 会话;金额、币种、买家都取商城订单的冻结值,客户端不提交这些字段,也不提交「已付款」的声明。
+// gate 拒收超过 1KB 的客户端请求:回执类字段只传渠道的交易号或令牌,服务端自己向渠道核实,不传整份签名回执。
+
+// 支付渠道。已上线的值不改、不复用;新渠道在末尾登记。渠道在商城回执里的名字由 go/payment 的渠道表给出,不在协议里。
+enum PayChannel {
+  PAY_CHANNEL_UNSPECIFIED = 0;
+  PAY_CHANNEL_DEVPAY = 1;          // 本地联调渠道,只在服务端 Mode=dev/test 时存在
+  PAY_CHANNEL_WECHAT_PAY = 2;      // 微信支付(APP)
+  PAY_CHANNEL_ALIPAY = 3;          // 支付宝(APP)
+  PAY_CHANNEL_WECHAT_MINIGAME = 4; // 微信小游戏虚拟支付(道具直购)
+  PAY_CHANNEL_DOUYIN_MINIGAME = 5; // 抖音小游戏支付(道具直购)
+  PAY_CHANNEL_APPLE = 6;           // App Store 内购(消耗型)
+  PAY_CHANNEL_GOOGLE = 7;          // Google Play 内购(一次性消耗型)
+}
+
+// 客户端所在的发行形态。服务端按它筛可用渠道:哪种形态能用哪些渠道是服务端配置,客户端不自己决定
+// (例:iOS App 内只能用 App Store 内购,苹果审核规则 3.1.1)。
+enum PayClientPlatform {
+  PAY_CLIENT_PLATFORM_UNSPECIFIED = 0;
+  PAY_CLIENT_PLATFORM_ANDROID_APP = 1;
+  PAY_CLIENT_PLATFORM_IOS_APP = 2;
+  PAY_CLIENT_PLATFORM_WECHAT_MINIGAME = 3;
+  PAY_CLIENT_PLATFORM_DOUYIN_MINIGAME = 4;
+  PAY_CLIENT_PLATFORM_DESKTOP = 5; // PC 包与编辑器
+}
+
+enum PayIntentState {
+  PAY_INTENT_STATE_UNSPECIFIED = 0;
+  PAY_INTENT_STATE_CREATED = 1; // 已建,等渠道的付款结果
+  PAY_INTENT_STATE_PAID = 2;    // 渠道已确认付款;发货进度看订单
+  PAY_INTENT_STATE_CLOSED = 3;  // 超过支付时限未付,或付款已被渠道撤销;要付款须重新下单
+}
+
+message PayIntentView {
+  string order_id = 1;
+  PayChannel channel = 2;
+  PayIntentState state = 3;
+  uint64 amount_minor = 4; // 应付金额,最小货币单位(人民币为分)
+  string currency = 5;     // ISO 4217,如 CNY
+  uint64 expire_ms = 6;    // 支付截止时刻(Unix 毫秒);由商店扣款的渠道不受它限制,迟到的付款照常记账
+}
+
+// 微信 OpenSDK PayReq 的全部字段,原样填给 SDK(iOS 上 package_value 对应 package)。
+message WechatAppPayParams {
+  string app_id = 1;
+  string partner_id = 2;
+  string prepay_id = 3;
+  string package_value = 4;
+  string nonce_str = 5;
+  string timestamp = 6; // Unix 秒的十进制字符串
+  string sign = 7;
+}
+
+// 支付宝 SDK payV2 的 orderInfo,原样传入,客户端不得改写(改一个字节验签就失败)。
+message AlipayAppPayParams { string order_string = 1; }
+
+// 联调渠道没有 SDK:联调工具凭 out_trade_no 向服务端的联调回调入口报付款。
+message DevPayParams { string out_trade_no = 1; }
+
+// wx.requestMidasPaymentGameItem 的三个参数,原样传入。sign_data 必须逐字节原样(含空格),pay_sig 是按它算的。
+message WechatMinigamePayParams {
+  string sign_data = 1;
+  string pay_sig = 2;
+  string signature = 3;
+}
+
+// tt.requestGamePayment 的参数,原样传入。
+message DouyinMinigamePayParams {
+  string mode = 1;
+  uint32 env = 2;
+  string currency_type = 3;
+  string platform = 4;
+  uint32 buy_quantity = 5;
+  string zone_id = 6;
+  string custom_id = 7;
+  string extra_info = 8;
+  uint32 good_type = 9;
+  uint64 order_amount = 10;
+  string good_name = 11;
+}
+
+// StoreKit 2:按 product_id 取商品,购买时把 app_account_token 设成购买选项 appAccountToken(UUID)。
+message AppleIapParams {
+  string product_id = 1;
+  string app_account_token = 2;
+}
+
+// Play Billing:按 product_id 发起购买,BillingFlowParams 设 setObfuscatedAccountId / setObfuscatedProfileId。
+message GooglePlayParams {
+  string product_id = 1;
+  string obfuscated_account_id = 2;
+  string obfuscated_profile_id = 3;
+}
+
+message ListPayChannelsRequest { PayClientPlatform platform = 1; }
+message ListPayChannelsResponse {
+  TipInfoMessage error_message = 1;
+  repeated PayChannel channels = 2; // 该形态下当前开放的渠道,按服务端配置的顺序
+}
+
+message CreatePayIntentRequest {
+  string order_id = 1;
+  PayChannel channel = 2;
+  PayClientPlatform platform = 3;
+  // 小游戏的登录凭证(wx.login / tt.login 的 code)。微信小游戏虚拟支付要用它换当次会话密钥签名,每次调起都重新取。
+  string login_code = 4;
+  // 设备系统:android / ios。微信小游戏虚拟支付按它填 signData.platform,其余渠道不用。
+  string device_os = 5;
+}
+message CreatePayIntentResponse {
+  TipInfoMessage error_message = 1;
+  PayIntentView intent = 2;
+  // 调起渠道 SDK 的参数,按 intent.channel 至多填其中一个。同一张订单重复请求会重新签发,旧参数仍然有效。
+  WechatAppPayParams wechat_app = 3;
+  AlipayAppPayParams alipay_app = 4;
+  DevPayParams devpay = 5;
+  uint64 server_now_ms = 6;
+  WechatMinigamePayParams wechat_minigame = 7;
+  DouyinMinigamePayParams douyin_minigame = 8;
+  AppleIapParams apple = 9;
+  GooglePlayParams google = 10;
+}
+
+message GetPayIntentRequest { string order_id = 1; }
+message GetPayIntentResponse {
+  TipInfoMessage error_message = 1;
+  PayIntentView intent = 2;
+  uint64 server_now_ms = 3;
+}
+
+// 由商店扣款的渠道(App Store、Google Play)付完之后提交交易。客户端在每次启动时也要把没结束的交易重新提交一遍。
+// 交易属于哪张订单以渠道里的绑定为准(appAccountToken / obfuscatedProfileId),order_id 只用于回包和展示。
+message SubmitPurchaseRequest {
+  PayChannel channel = 1;
+  string order_id = 2;
+  string apple_transaction_id = 3;  // StoreKit 2 Transaction.id 的十进制字符串
+  string google_purchase_token = 4;
+  string google_product_id = 5;
+}
+message SubmitPurchaseResponse {
+  TipInfoMessage error_message = 1;
+  PayIntentView intent = 2;
+  // 为真:服务端已经记下(或确认不该记下)这笔交易,客户端可以结束它(StoreKit finish / Play 确认)。
+  // 为假:这次没能核实(渠道暂时不可达),交易保持未结束,稍后重新提交。
+  bool finish_transaction = 3;
+  uint64 server_now_ms = 4;
+}
+
+service ClientPlayerPayment {
+  option (OptionIsClientProtocolService) = true;
+  rpc ListPayChannels(ListPayChannelsRequest) returns (ListPayChannelsResponse);
+  // 幂等:一张订单只有一个支付意图、一个渠道。换渠道须重新下单。
+  rpc CreatePayIntent(CreatePayIntentRequest) returns (CreatePayIntentResponse);
+  // 渠道 SDK 返回后轮询。SDK 的返回值不可信,付没付以这里的 state 为准。
+  rpc GetPayIntent(GetPayIntentRequest) returns (GetPayIntentResponse);
+  rpc SubmitPurchase(SubmitPurchaseRequest) returns (SubmitPurchaseResponse);
+}

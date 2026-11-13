@@ -24,6 +24,57 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// scene 在派发一条客户端消息之前的处置(docs/design/client-scene-request-handoff-hold.md §4.3)。只在 gate 与 scene 之间用,
+// 不是客户端可见契约。
+type ClientMessageDispatchVerdict int32
+
+const (
+	// 未填:已派发(应答带 message_content),或派发前确定拒绝(不带 message_content,gate 回 1003)。旧版 scene 一律是它。
+	ClientMessageDispatchVerdict_CLIENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIED ClientMessageDispatchVerdict = 0
+	// 请求确定未执行,而且等一等就能受理:玩家归属正在交接(换场景节点),或还没在本节点就绪(会话未登记、存档载入中)。
+	// gate 把这条请求放回会话队头,在有界等待内按收包顺序重投到玩家当时所在的节点。应答不带 message_content。
+	ClientMessageDispatchVerdict_CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER ClientMessageDispatchVerdict = 1
+)
+
+// Enum value maps for ClientMessageDispatchVerdict.
+var (
+	ClientMessageDispatchVerdict_name = map[int32]string{
+		0: "CLIENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIED",
+		1: "CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER",
+	}
+	ClientMessageDispatchVerdict_value = map[string]int32{
+		"CLIENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIED": 0,
+		"CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER": 1,
+	}
+)
+
+func (x ClientMessageDispatchVerdict) Enum() *ClientMessageDispatchVerdict {
+	p := new(ClientMessageDispatchVerdict)
+	*p = x
+	return p
+}
+
+func (x ClientMessageDispatchVerdict) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ClientMessageDispatchVerdict) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_scene_proto_enumTypes[0].Descriptor()
+}
+
+func (ClientMessageDispatchVerdict) Type() protoreflect.EnumType {
+	return &file_proto_scene_scene_proto_enumTypes[0]
+}
+
+func (x ClientMessageDispatchVerdict) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ClientMessageDispatchVerdict.Descriptor instead.
+func (ClientMessageDispatchVerdict) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_scene_proto_rawDescGZIP(), []int{0}
+}
+
 type PlayerEnterGameNodeRequest struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId    uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -136,9 +187,13 @@ type ProcessClientPlayerMessageRequest struct {
 	// scene 的 SessionMap 里可能仍留着"旧 gate 的同号 session -> A 玩家"的映射,
 	// 而新 gate 上同一个 session 号已经属于 B —— 不带玩家身份的话 B 的客户端消息
 	// 会被派发到 A 的实体上执行。0 = 老 gate(灰度窗口),scene 放行不校验。
-	PlayerId      uint64 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	PlayerId uint64 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// gate 收到这条消息时,会话绑的场景路由(场景实例或 scene 节点)与此刻发出时不同:它在 gate 的场景 lane 里排着
+	// 等过一次换场景或换节点,换完才发出(docs/design/client-scene-request-handoff-hold.md S13)。scene 对换节点执行
+	// 含义不变的请求照常处理;含义绑在当时那个场景上的(换图、瞬移、放技能、神秘商人、移动等)不在这里执行。
+	ReceivedOnPreviousRoute bool `protobuf:"varint,4,opt,name=received_on_previous_route,json=receivedOnPreviousRoute,proto3" json:"received_on_previous_route,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *ProcessClientPlayerMessageRequest) Reset() {
@@ -192,12 +247,21 @@ func (x *ProcessClientPlayerMessageRequest) GetPlayerId() uint64 {
 	return 0
 }
 
+func (x *ProcessClientPlayerMessageRequest) GetReceivedOnPreviousRoute() bool {
+	if x != nil {
+		return x.ReceivedOnPreviousRoute
+	}
+	return false
+}
+
 type ProcessClientPlayerMessageResponse struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	MessageContent *base.MessageContent   `protobuf:"bytes,1,opt,name=message_content,json=messageContent,proto3" json:"message_content,omitempty"`
 	SessionId      uint32                 `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 派发前的处置;只在没有 message_content 时有意义。0 = 旧版 scene 或确定拒绝。
+	DispatchVerdict ClientMessageDispatchVerdict `protobuf:"varint,3,opt,name=dispatch_verdict,json=dispatchVerdict,proto3,enum=ClientMessageDispatchVerdict" json:"dispatch_verdict,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ProcessClientPlayerMessageResponse) Reset() {
@@ -242,6 +306,13 @@ func (x *ProcessClientPlayerMessageResponse) GetSessionId() uint32 {
 		return x.SessionId
 	}
 	return 0
+}
+
+func (x *ProcessClientPlayerMessageResponse) GetDispatchVerdict() ClientMessageDispatchVerdict {
+	if x != nil {
+		return x.DispatchVerdict
+	}
+	return ClientMessageDispatchVerdict_CLIENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIED
 }
 
 type SessionDisconnectRequest struct {
@@ -403,8 +474,12 @@ type CreateSceneRequest struct {
 	// 计数器分配,同一次放置的建场景、拆场景带同一个值;init 向属主补建时带频道当前的代次。0 = 不带代次(副本、镜像、从没换过
 	// 节点的频道)。scene 节点已按 >= 本值的代次拆过这个场景时拒收:不建、不复用,回空应答。
 	PlacementGeneration uint64 `protobuf:"varint,6,opt,name=placement_generation,json=placementGeneration,proto3" json:"placement_generation,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 场景所属的 zone(docs/design/redis-cluster-all-domains-20261110.md §3.4):scene_manager 填本进程的 zone,场景的控制域键
+	// 写在这个 zone 的 {ctl:<z>} 下。scene 节点的归属对账只按自己的 zone 拼键,所以 zone 不是本节点的就拒建
+	// (gRPC 面回 FAILED_PRECONDITION,muduo 面回空应答),0 同样拒建。只在 scene_manager 与 scene 之间用,客户端不可见。
+	ZoneId        uint32 `protobuf:"varint,7,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateSceneRequest) Reset() {
@@ -475,6 +550,13 @@ func (x *CreateSceneRequest) GetCreatorIds() []uint64 {
 func (x *CreateSceneRequest) GetPlacementGeneration() uint64 {
 	if x != nil {
 		return x.PlacementGeneration
+	}
+	return 0
+}
+
+func (x *CreateSceneRequest) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
 	}
 	return 0
 }
@@ -834,16 +916,18 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\vowner_epoch\x18\a \x01(\x04R\n" +
 	"ownerEpoch\x12)\n" +
 	"\x10login_generation\x18\b \x01(\x04R\x0floginGeneration\x12%\n" +
-	"\x0eowner_revision\x18\t \x01(\x04R\rownerRevisionJ\x04\b\x03\x10\x04\"\x99\x01\n" +
+	"\x0eowner_revision\x18\t \x01(\x04R\rownerRevisionJ\x04\b\x03\x10\x04\"\xd6\x01\n" +
 	"!ProcessClientPlayerMessageRequest\x128\n" +
 	"\x0fmessage_content\x18\x01 \x01(\v2\x0f.MessageContentR\x0emessageContent\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x02 \x01(\rR\tsessionId\x12\x1b\n" +
-	"\tplayer_id\x18\x03 \x01(\x04R\bplayerId\"}\n" +
+	"\tplayer_id\x18\x03 \x01(\x04R\bplayerId\x12;\n" +
+	"\x1areceived_on_previous_route\x18\x04 \x01(\bR\x17receivedOnPreviousRoute\"\xc7\x01\n" +
 	"\"ProcessClientPlayerMessageResponse\x128\n" +
 	"\x0fmessage_content\x18\x01 \x01(\v2\x0f.MessageContentR\x0emessageContent\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\rR\tsessionId\"7\n" +
+	"session_id\x18\x02 \x01(\rR\tsessionId\x12H\n" +
+	"\x10dispatch_verdict\x18\x03 \x01(\x0e2\x1d.ClientMessageDispatchVerdictR\x0fdispatchVerdict\"7\n" +
 	"\x18SessionDisconnectRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"j\n" +
 	"\x16GameNodeConnectRequest\x12.\n" +
@@ -854,7 +938,7 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\x1cRegisterPlayerSessionRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1b\n" +
-	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\"\xf6\x01\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\"\x8f\x02\n" +
 	"\x12CreateSceneRequest\x12\x1b\n" +
 	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12\x19\n" +
 	"\bscene_id\x18\x02 \x01(\x04R\asceneId\x12(\n" +
@@ -862,7 +946,8 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\x11dungeon_config_id\x18\x04 \x01(\rR\x0fdungeonConfigId\x12\x1f\n" +
 	"\vcreator_ids\x18\x05 \x03(\x04R\n" +
 	"creatorIds\x121\n" +
-	"\x14placement_generation\x18\x06 \x01(\x04R\x13placementGeneration\"D\n" +
+	"\x14placement_generation\x18\x06 \x01(\x04R\x13placementGeneration\x12\x17\n" +
+	"\azone_id\x18\a \x01(\rR\x06zoneId\"D\n" +
 	"\x13CreateSceneResponse\x12-\n" +
 	"\n" +
 	"scene_info\x18\x01 \x01(\v2\x0e.SceneInfoCompR\tsceneInfo\"c\n" +
@@ -885,7 +970,10 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\"\x7f\n" +
 	"\x1bSealAccountRoleTradeRequest\x12.\n" +
 	"\x04seal\x18\x01 \x01(\v2\x1a.common.base.RoleTradeSealR\x04seal\x120\n" +
-	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth2\x8c\x04\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth*\x80\x01\n" +
+	"\x1cClientMessageDispatchVerdict\x12/\n" +
+	"+CLIENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIED\x10\x00\x12/\n" +
+	"+CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER\x10\x012\x8c\x04\n" +
 	"\x05Scene\x12:\n" +
 	"\x13PlayerEnterGameNode\x12\x1b.PlayerEnterGameNodeRequest\x1a\x06.Empty\x12e\n" +
 	"\x1aProcessClientPlayerMessage\x12\".ProcessClientPlayerMessageRequest\x1a#.ProcessClientPlayerMessageResponse\x12<\n" +
@@ -908,62 +996,65 @@ func file_proto_scene_scene_proto_rawDescGZIP() []byte {
 	return file_proto_scene_scene_proto_rawDescData
 }
 
+var file_proto_scene_scene_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_proto_scene_scene_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_proto_scene_scene_proto_goTypes = []any{
-	(*PlayerEnterGameNodeRequest)(nil),         // 0: PlayerEnterGameNodeRequest
-	(*ProcessClientPlayerMessageRequest)(nil),  // 1: ProcessClientPlayerMessageRequest
-	(*ProcessClientPlayerMessageResponse)(nil), // 2: ProcessClientPlayerMessageResponse
-	(*SessionDisconnectRequest)(nil),           // 3: SessionDisconnectRequest
-	(*GameNodeConnectRequest)(nil),             // 4: GameNodeConnectRequest
-	(*RegisterPlayerSessionRequest)(nil),       // 5: RegisterPlayerSessionRequest
-	(*CreateSceneRequest)(nil),                 // 6: CreateSceneRequest
-	(*CreateSceneResponse)(nil),                // 7: CreateSceneResponse
-	(*DestroySceneRequest)(nil),                // 8: DestroySceneRequest
-	(*PrepareBattleRequest)(nil),               // 9: PrepareBattleRequest
-	(*PrepareBattleResponse)(nil),              // 10: PrepareBattleResponse
-	(*CancelBattlePrepareRequest)(nil),         // 11: CancelBattlePrepareRequest
-	(*SealAccountRoleTradeRequest)(nil),        // 12: SealAccountRoleTradeRequest
-	(*base.MessageContent)(nil),                // 13: MessageContent
-	(*base.NetworkAddress)(nil),                // 14: NetworkAddress
-	(*SceneInfoComp)(nil),                      // 15: SceneInfoComp
-	(*base.TipInfoMessage)(nil),                // 16: TipInfoMessage
-	(*battle.BattlePlayerSnapshot)(nil),        // 17: BattlePlayerSnapshot
-	(*base.RoleTradeSeal)(nil),                 // 18: common.base.RoleTradeSeal
-	(*base.ServiceCallAuth)(nil),               // 19: common.base.ServiceCallAuth
-	(*base.NodeHandshakeRequest)(nil),          // 20: NodeHandshakeRequest
-	(*base.Empty)(nil),                         // 21: Empty
-	(*base.NodeHandshakeResponse)(nil),         // 22: NodeHandshakeResponse
+	(ClientMessageDispatchVerdict)(0),          // 0: ClientMessageDispatchVerdict
+	(*PlayerEnterGameNodeRequest)(nil),         // 1: PlayerEnterGameNodeRequest
+	(*ProcessClientPlayerMessageRequest)(nil),  // 2: ProcessClientPlayerMessageRequest
+	(*ProcessClientPlayerMessageResponse)(nil), // 3: ProcessClientPlayerMessageResponse
+	(*SessionDisconnectRequest)(nil),           // 4: SessionDisconnectRequest
+	(*GameNodeConnectRequest)(nil),             // 5: GameNodeConnectRequest
+	(*RegisterPlayerSessionRequest)(nil),       // 6: RegisterPlayerSessionRequest
+	(*CreateSceneRequest)(nil),                 // 7: CreateSceneRequest
+	(*CreateSceneResponse)(nil),                // 8: CreateSceneResponse
+	(*DestroySceneRequest)(nil),                // 9: DestroySceneRequest
+	(*PrepareBattleRequest)(nil),               // 10: PrepareBattleRequest
+	(*PrepareBattleResponse)(nil),              // 11: PrepareBattleResponse
+	(*CancelBattlePrepareRequest)(nil),         // 12: CancelBattlePrepareRequest
+	(*SealAccountRoleTradeRequest)(nil),        // 13: SealAccountRoleTradeRequest
+	(*base.MessageContent)(nil),                // 14: MessageContent
+	(*base.NetworkAddress)(nil),                // 15: NetworkAddress
+	(*SceneInfoComp)(nil),                      // 16: SceneInfoComp
+	(*base.TipInfoMessage)(nil),                // 17: TipInfoMessage
+	(*battle.BattlePlayerSnapshot)(nil),        // 18: BattlePlayerSnapshot
+	(*base.RoleTradeSeal)(nil),                 // 19: common.base.RoleTradeSeal
+	(*base.ServiceCallAuth)(nil),               // 20: common.base.ServiceCallAuth
+	(*base.NodeHandshakeRequest)(nil),          // 21: NodeHandshakeRequest
+	(*base.Empty)(nil),                         // 22: Empty
+	(*base.NodeHandshakeResponse)(nil),         // 23: NodeHandshakeResponse
 }
 var file_proto_scene_scene_proto_depIdxs = []int32{
-	13, // 0: ProcessClientPlayerMessageRequest.message_content:type_name -> MessageContent
-	13, // 1: ProcessClientPlayerMessageResponse.message_content:type_name -> MessageContent
-	14, // 2: GameNodeConnectRequest.rpc_client:type_name -> NetworkAddress
-	15, // 3: CreateSceneResponse.scene_info:type_name -> SceneInfoComp
-	16, // 4: PrepareBattleResponse.error_message:type_name -> TipInfoMessage
-	17, // 5: PrepareBattleResponse.snapshot:type_name -> BattlePlayerSnapshot
-	18, // 6: SealAccountRoleTradeRequest.seal:type_name -> common.base.RoleTradeSeal
-	19, // 7: SealAccountRoleTradeRequest.auth:type_name -> common.base.ServiceCallAuth
-	0,  // 8: Scene.PlayerEnterGameNode:input_type -> PlayerEnterGameNodeRequest
-	1,  // 9: Scene.ProcessClientPlayerMessage:input_type -> ProcessClientPlayerMessageRequest
-	5,  // 10: Scene.UpdateSessionDetail:input_type -> RegisterPlayerSessionRequest
-	6,  // 11: Scene.CreateScene:input_type -> CreateSceneRequest
-	8,  // 12: Scene.DestroyScene:input_type -> DestroySceneRequest
-	9,  // 13: Scene.PrepareBattle:input_type -> PrepareBattleRequest
-	11, // 14: Scene.CancelBattlePrepare:input_type -> CancelBattlePrepareRequest
-	20, // 15: Scene.NodeHandshake:input_type -> NodeHandshakeRequest
-	21, // 16: Scene.PlayerEnterGameNode:output_type -> Empty
-	2,  // 17: Scene.ProcessClientPlayerMessage:output_type -> ProcessClientPlayerMessageResponse
-	21, // 18: Scene.UpdateSessionDetail:output_type -> Empty
-	7,  // 19: Scene.CreateScene:output_type -> CreateSceneResponse
-	21, // 20: Scene.DestroyScene:output_type -> Empty
-	10, // 21: Scene.PrepareBattle:output_type -> PrepareBattleResponse
-	21, // 22: Scene.CancelBattlePrepare:output_type -> Empty
-	22, // 23: Scene.NodeHandshake:output_type -> NodeHandshakeResponse
-	16, // [16:24] is the sub-list for method output_type
-	8,  // [8:16] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	14, // 0: ProcessClientPlayerMessageRequest.message_content:type_name -> MessageContent
+	14, // 1: ProcessClientPlayerMessageResponse.message_content:type_name -> MessageContent
+	0,  // 2: ProcessClientPlayerMessageResponse.dispatch_verdict:type_name -> ClientMessageDispatchVerdict
+	15, // 3: GameNodeConnectRequest.rpc_client:type_name -> NetworkAddress
+	16, // 4: CreateSceneResponse.scene_info:type_name -> SceneInfoComp
+	17, // 5: PrepareBattleResponse.error_message:type_name -> TipInfoMessage
+	18, // 6: PrepareBattleResponse.snapshot:type_name -> BattlePlayerSnapshot
+	19, // 7: SealAccountRoleTradeRequest.seal:type_name -> common.base.RoleTradeSeal
+	20, // 8: SealAccountRoleTradeRequest.auth:type_name -> common.base.ServiceCallAuth
+	1,  // 9: Scene.PlayerEnterGameNode:input_type -> PlayerEnterGameNodeRequest
+	2,  // 10: Scene.ProcessClientPlayerMessage:input_type -> ProcessClientPlayerMessageRequest
+	6,  // 11: Scene.UpdateSessionDetail:input_type -> RegisterPlayerSessionRequest
+	7,  // 12: Scene.CreateScene:input_type -> CreateSceneRequest
+	9,  // 13: Scene.DestroyScene:input_type -> DestroySceneRequest
+	10, // 14: Scene.PrepareBattle:input_type -> PrepareBattleRequest
+	12, // 15: Scene.CancelBattlePrepare:input_type -> CancelBattlePrepareRequest
+	21, // 16: Scene.NodeHandshake:input_type -> NodeHandshakeRequest
+	22, // 17: Scene.PlayerEnterGameNode:output_type -> Empty
+	3,  // 18: Scene.ProcessClientPlayerMessage:output_type -> ProcessClientPlayerMessageResponse
+	22, // 19: Scene.UpdateSessionDetail:output_type -> Empty
+	8,  // 20: Scene.CreateScene:output_type -> CreateSceneResponse
+	22, // 21: Scene.DestroyScene:output_type -> Empty
+	11, // 22: Scene.PrepareBattle:output_type -> PrepareBattleResponse
+	22, // 23: Scene.CancelBattlePrepare:output_type -> Empty
+	23, // 24: Scene.NodeHandshake:output_type -> NodeHandshakeResponse
+	17, // [17:25] is the sub-list for method output_type
+	9,  // [9:17] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_scene_proto_init() }
@@ -977,13 +1068,14 @@ func file_proto_scene_scene_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_scene_proto_rawDesc), len(file_proto_scene_scene_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_proto_scene_scene_proto_goTypes,
 		DependencyIndexes: file_proto_scene_scene_proto_depIdxs,
+		EnumInfos:         file_proto_scene_scene_proto_enumTypes,
 		MessageInfos:      file_proto_scene_scene_proto_msgTypes,
 	}.Build()
 	File_proto_scene_scene_proto = out.File

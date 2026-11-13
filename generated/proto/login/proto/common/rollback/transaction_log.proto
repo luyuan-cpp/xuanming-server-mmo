@@ -14,7 +14,7 @@ option go_package = "login/proto/common/rollback";
 //   each via the same module entry point that originally produced them.
 //
 //   Anti-dup invariant: every replayable op MUST carry a unique tx_id
-//   (SnowFlake). PostCrashReplay tracks "applied tx_ids" per player so
+//   (发号器 txlog 号段的号,见 TransactionLogEntry.tx_id). PostCrashReplay tracks "applied tx_ids" per player so
 //   replaying the log twice produces the same end state — see
 //   single_player_rollback.md §"Anti-Duplication" for the broader pattern.
 enum TransactionType
@@ -95,13 +95,22 @@ enum TransactionType
   // 资产本来就是这名玩家的,不算新增获得,不受获取封禁约束(C++ GainBlockService::CountsAsGain);
   // 成交所得(交付腿)仍用 TX_AUCTION_BUY,照常判封禁。correlation_id 同其他交易腿。
   TX_AUCTION_RETURN = 30;
+
+  // ── 真钱付款被渠道撤销后的扣回(docs/design/payment-recharge.md §22.6)──────────
+  //
+  // 官方订单的付款被渠道撤销(用户在 App Store / Google Play 退款、渠道作废)之后,交易服务把这张订单发放的物品或货币
+  // 从买家身上扣回(TRADE_DEBIT 流,腿名 official_reverse_<修订号>)。扣不到(已经用掉)由合同转人工,不透支。
+  // correlation_id 同其他交易腿。只追加,不复用旧编号。
+  TX_PAYMENT_REVERSAL = 31;
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.
 // This is the foundation for: rollback diff, precision clawback, audit.
 message TransactionLogEntry
 {
-  uint64 tx_id = 1;              // Unique ID (SnowFlake)
+  // 全服唯一:C++ 从发号器 txlog 号段领的号(GuidKind::kTxLog,经 MixGuid 打散)。不单调、没有位布局,
+  // 不能用 ParseSnowflakeGuid 解析,先后看 timestamp。
+  uint64 tx_id = 1;
   uint64 timestamp = 2;          // Unix seconds
   TransactionType tx_type = 3;
 
@@ -110,7 +119,7 @@ message TransactionLogEntry
   uint64 to_player = 5;          // Destination player (0 = system/NPC)
 
   // Item details (omit if currency-only)
-  uint64 item_uuid = 6;          // Item instance UUID (SnowFlake Guid)
+  uint64 item_uuid = 6;          // 物品实例 guid,与 ItemComp.item_id 同源(发号器 item 号段),只当身份用,不能解析
   uint32 item_config_id = 7;     // Item template/config ID
   uint32 item_quantity = 8;      // Stack count
 
@@ -123,7 +132,9 @@ message TransactionLogEntry
   uint64 balance_after = 12;
 
   // Correlation: links related operations (e.g. both sides of a trade)
-  uint64 correlation_id = 13;    // Shared SnowFlake ID across paired entries
+  // 成对 / 同一次业务操作的几条流水共用的号,取产生它们的那次操作的 id:资产指令 = 指令里的 correlation_id
+  // (帮会即 op_id),战斗结算 = battle_id,神秘商人 = round_id 等。按各自来源解释,不是 SnowFlake,不能解析;0 = 无关联。
+  uint64 correlation_id = 13;
 
   // Free-form metadata (JSON)
   string extra = 14;

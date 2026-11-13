@@ -173,7 +173,10 @@ message GuildAssetOpRecord {                  // 锁序位置 6
   uint64 guild_id = 5;           // 发起时绑定的帮会;结算一律记给它,不看结算时玩家在哪个帮(D2)
   GuildAssetOpKind kind = 6;
   GuildAssetOpStatus status = 7;
-  uint32 durable = 8;            // 0/1:scene 是否已确认落盘
+  // 0/1:最后一次 scene 答复(last_outcome / last_reason 记的那一次)是否报告结局已落盘;只有落盘的 APPLIED / REJECTED 能终结一行。
+  // Reschedule 按每次答复覆盖,Finalize 写 1;人工终结(assetopfix)与自动放弃不是 scene 的答复,不改它,也不改那两列,
+  // 终态行上留着最后一次投递时 scene 实际回的值。谁终结的看 resolved_by(人工终结写操作人),不看 durable。
+  uint32 durable = 8;
   uint32 attempts = 9;
   uint64 next_attempt_ms = 10;   // 未决:下次重投时刻;终态:终结时刻(清理与回档检查按它判龄)
   uint64 deadline_ms = 11;       // 只有 DONATE 非 0;到期改发中止。商店 / 活动发奖恒 0,永不中止
@@ -296,7 +299,7 @@ message GuildTrialBattleRecord {              // 锁序位置 9
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
 
-  uint64 battle_id = 1;                // match 发的雪花 id;与 BattleResultEvent.battle_id、SharedRedis 结果键同值
+  uint64 battle_id = 1;                // match 从发号器领的永久 ID(biz_tag=battle,不能解析);与 BattleResultEvent.battle_id、SharedRedis 结果键同值
   uint64 guild_id = 2;                 // 发起帮会;插入后不变(本表的守卫行就按它取)
   uint32 activity_id = 3;              // GuildActivity.id
   uint32 period_key = 4;               // 开战时的游戏日键(个人每日次数记在这一天)

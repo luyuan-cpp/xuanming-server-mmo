@@ -36,8 +36,9 @@ const (
 //
 // 1、2 是 2026-11-05 退役的 HOT、ASSET:字段拆到了 CHARACTER、WALLET、BAG、LOCATION、PROFILE。
 // 5 是随 player_database_1 一起删掉的 LEGACY1(规格 §1.2)。退役号不复用,
-// 旧库残留的 1、2、5 行按未知 kind 拒绝加载,不会被当成新行误读(项目未上线,遇到就清库)。
-// 新加一行取下一个空闲号,不回填空号。
+// 旧库残留的 1、2、5 行拒绝加载,不会被当成新行误读(项目未上线,遇到就清库)。
+// 新加一行取下一个空闲号,不回填空号。所以号比读方认识的都大的行一定是更新版本加的:
+// 旧 scene 不读也不写它,库里那一行原样留着(混版本设计 §4.2)。新行里只能放新字段,已有字段不许换行。
 type PlayerStoreKind int32
 
 const (
@@ -118,8 +119,8 @@ const (
 	SavePlayerResult_SAVE_PLAYER_NOT_HOLDER         SavePlayerResult = 6  // 同代次,但持有者不是这个实例
 	SavePlayerResult_SAVE_PLAYER_UNCLAIMED          SavePlayerResult = 7  // 代次更高,但持有者不是这个实例,没有认领过
 	SavePlayerResult_SAVE_PLAYER_OLDER_SEQ          SavePlayerResult = 8  // 迟到的旧序号
-	SavePlayerResult_SAVE_PLAYER_SCHEMA_REGRESSED   SavePlayerResult = 9  // 世代低于库里的世代
-	SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW     SavePlayerResult = 10 // 世代高于 go/db 认识的世代,发布顺序问题
+	SavePlayerResult_SAVE_PLAYER_SCHEMA_REGRESSED   SavePlayerResult = 9  // 带着数据行,世代却低于库里的世代:写方没把加载到的内容和世代带回来
+	SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW     SavePlayerResult = 10 // 世代高于 go/db 认识的世代,或带了 go/db 不认识的行种:发布顺序问题,可重试
 	SavePlayerResult_SAVE_PLAYER_TOO_LARGE          SavePlayerResult = 11 // payload 超预算
 )
 
@@ -242,7 +243,7 @@ const (
 	LoadAndClaimResult_LOAD_AND_CLAIM_INVALID            LoadAndClaimResult = 3 // 请求不合法:E 或实例为空
 	LoadAndClaimResult_LOAD_AND_CLAIM_STALE_OWNER        LoadAndClaimResult = 4 // 路由过期,候选代次比库里低
 	LoadAndClaimResult_LOAD_AND_CLAIM_NOT_HOLDER         LoadAndClaimResult = 5 // 同代次已被别的实例持有
-	LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW     LoadAndClaimResult = 6 // 库里的世代比本进程新,拒绝加载
+	LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW     LoadAndClaimResult = 6 // 库里的世代或 scene 的世代比 go/db 认识的新:不认领、不抬代次。库里的世代比 scene 新不拦
 )
 
 // Enum value maps for LoadAndClaimResult.

@@ -203,7 +203,6 @@ type GlobalMatchConf struct {
 	SubPoolMergeSeconds uint32        `json:",default=5"`
 	// RankEndpoint / RankSecretEnv:评分榜投递的 rank 服务地址、生产者密钥所在的环境变量名。
 	RankEndpoint  string `json:",default=127.0.0.1:51100"`
-	RankEndpoint  string `json:",default=127.0.0.1:51100"`
 	RankSecretEnv string `json:",default=RANK_PRODUCER_SECRET_MATCH"`
 	// OutcomeOutbox:终局发件箱(整局结果发 Kafka、个人结算入 Inbox)的投递节拍、每轮批量与并发(2026-10-30,评审 B-6)。
 	// 不是提交点规则,不进策略指纹,各副本可以不同;越界在装配时拒启(authority.OutcomeOutboxOptions.Normalized)。

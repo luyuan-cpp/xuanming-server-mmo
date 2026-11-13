@@ -62,11 +62,11 @@ func TestTiDBFriendReplicas_AcceptReplayAndVisibility(t *testing.T) {
 
 	// 第二副本的失效访问不到第一副本私有缓存；权威读仍须看见删除后的 SQL。
 	stale := `[{"friend_player_id":1101,"since_ms":1}]`
-	require.NoError(t, first.rdb.SetCtx(ctx, friendListKey(to), stale))
+	require.NoError(t, first.rdb.Set(ctx, friendListKey(to), stale, 0).Err())
 	removed, err := second.RemoveFriend(ctx, from, to)
 	require.NoError(t, err)
 	require.True(t, removed)
-	cached, err := first.rdb.GetCtx(ctx, friendListKey(to))
+	cached, err := first.rdb.Get(ctx, friendListKey(to)).Result()
 	require.NoError(t, err)
 	require.Equal(t, stale, cached, "夹具必须真实保留另一副本未失效的旧列表")
 	friends, err := first.GetFriendList(ctx, to)

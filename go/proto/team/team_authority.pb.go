@@ -1004,7 +1004,13 @@ type TeamLaunchRecord struct {
 	Payload       []byte                 `protobuf:"bytes,14,opt,name=payload,proto3" json:"payload,omitempty"`
 	OwnerAccount  string                 `protobuf:"bytes,15,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
 	OwnerRevision uint64                 `protobuf:"varint,16,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
-	Mode          uint32                 `protobuf:"varint,17,opt,name=mode,proto3" json:"mode,omitempty"` // 0按旧PVE_TEAM解释；新人数档PVP为7，须与原请求一致。
+	// 新原件由 normalizeTeamMatchMode 写定：PVE_TEAM 为 5，人数档 PVP 为 7，须与原请求一致。0 是旧原件的写法，校验路径仍按 PVE_TEAM
+	// 解释（authority.TeamLaunchMode）；撮合读页只认显式的 5 / 7（global-match-hierarchical-pools.md §5.2.1 第 6 条，未上线、清库重建）。
+	Mode uint32 `protobuf:"varint,17,opt,name=mode,proto3" json:"mode,omitempty"`
+	// 首选机房（docs/design/global-match-hierarchical-pools.md §5.2.1 热池拆分），只给撮合读页分段用，提交点不读：
+	// EnqueueTeamLaunchTx 改成排队态的同一条 UPDATE 写入成员首选机房的共同值，不一致写 0（只有跨机房段读）。
+	// 成员探测原件入队后固定，值不再变。Go 侧 teamLaunchColumns 不读它。
+	PoolRegion    uint32 `protobuf:"varint,18,opt,name=pool_region,json=poolRegion,proto3" json:"pool_region,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1154,6 +1160,13 @@ func (x *TeamLaunchRecord) GetOwnerRevision() uint64 {
 func (x *TeamLaunchRecord) GetMode() uint32 {
 	if x != nil {
 		return x.Mode
+	}
+	return 0
+}
+
+func (x *TeamLaunchRecord) GetPoolRegion() uint32 {
+	if x != nil {
+		return x.PoolRegion
 	}
 	return 0
 }
@@ -1326,7 +1339,7 @@ const file_proto_team_team_authority_proto_rawDesc = "" +
 	"\vteam_record\x18\x03 \x01(\v2\x12.teampb.TeamRecordR\n" +
 	"teamRecord\x126\n" +
 	"\boriginal\x18\x04 \x01(\v2\x1a.teampb.TeamLaunchOriginalR\boriginal\x12D\n" +
-	"\x0fspectator_exits\x18\x05 \x03(\v2\x1b.match.MatchSpectatorRecordR\x0espectatorExits\"\x9c\x06\n" +
+	"\x0fspectator_exits\x18\x05 \x03(\v2\x1b.match.MatchSpectatorRecordR\x0espectatorExits\"\x98\a\n" +
 	"\x10TeamLaunchRecord\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x12!\n" +
 	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +
@@ -1349,7 +1362,9 @@ const file_proto_team_team_authority_proto_rawDesc = "" +
 	"\apayload\x18\x0e \x01(\fR\apayload\x12#\n" +
 	"\rowner_account\x18\x0f \x01(\tR\fownerAccount\x12%\n" +
 	"\x0eowner_revision\x18\x10 \x01(\x04R\rownerRevision\x12\x12\n" +
-	"\x04mode\x18\x11 \x01(\rR\x04mode:\xfa\x01\x8a\x92\xf4\x01\vteam_launch\x92\x92\xf4\x01!actor_id,request_high,request_lowڒ\xf4\x01\xbe\x01state,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low;state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low\"\xa5\x02\n" +
+	"\x04mode\x18\x11 \x01(\rR\x04mode\x12\x1f\n" +
+	"\vpool_region\x18\x12 \x01(\rR\n" +
+	"poolRegion:\xd5\x02\x8a\x92\xf4\x01\vteam_launch\x92\x92\xf4\x01!actor_id,request_high,request_lowڒ\xf4\x01\x99\x02state,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low;state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low;state,mode,config_id,target_size,pool_region,enqueued_ms,actor_id,request_high,request_low\"\xa5\x02\n" +
 	"\x14TeamLaunchRoleRecord\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x12!\n" +
 	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +

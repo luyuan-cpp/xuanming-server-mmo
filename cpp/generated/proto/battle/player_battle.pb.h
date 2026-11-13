@@ -4486,6 +4486,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
     kSettlementFieldNumber = 3,
     kBattleIdFieldNumber = 1,
     kOutcomeFieldNumber = 2,
+    kItemsMailedFieldNumber = 4,
   };
   // .BattleSettlementData settlement = 3;
   [[nodiscard]] bool has_settlement()
@@ -4523,11 +4524,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
   void _internal_set_outcome(::eBattleOutcome value);
 
   public:
+  // bool items_mailed = 4;
+  void clear_items_mailed() ;
+  [[nodiscard]] bool items_mailed() const;
+  void set_items_mailed(bool value);
+
+  private:
+  bool _internal_items_mailed() const;
+  void _internal_set_items_mailed(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleEndS2C)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4559,6 +4570,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
     ::BattleSettlementData* PROTOBUF_NULLABLE settlement_;
     ::uint64_t battle_id_;
     int outcome_;
+    bool items_mailed_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6436,6 +6448,30 @@ inline void BattleEndS2C::set_allocated_settlement(::BattleSettlementData* PROTO
 
   _impl_.settlement_ = reinterpret_cast<::BattleSettlementData*>(value);
   // @@protoc_insertion_point(field_set_allocated:BattleEndS2C.settlement)
+}
+
+// bool items_mailed = 4;
+inline void BattleEndS2C::clear_items_mailed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.items_mailed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool BattleEndS2C::items_mailed() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.items_mailed)
+  return _internal_items_mailed();
+}
+inline void BattleEndS2C::set_items_mailed(bool value) {
+  _internal_set_items_mailed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.items_mailed)
+}
+inline bool BattleEndS2C::_internal_items_mailed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.items_mailed_;
+}
+inline void BattleEndS2C::_internal_set_items_mailed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.items_mailed_ = value;
 }
 
 // -------------------------------------------------------------------

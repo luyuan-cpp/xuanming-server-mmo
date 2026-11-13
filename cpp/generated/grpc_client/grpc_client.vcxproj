@@ -231,4 +231,8 @@
     <ClCompile Include="role_fence\role_fence_grpc_client.cpp" />
     <ClInclude Include="role_fence\role_fence_grpc_client.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="payment\payment_grpc_client.cpp" />
+    <ClInclude Include="payment\payment_grpc_client.h" />
+  </ItemGroup>
 </Project>

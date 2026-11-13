@@ -172,14 +172,17 @@ proto/guild
 proto/login
 proto/mail
 proto/match
+proto/payment
 proto/rank
 proto/scene
 proto/team
 proto/trade
 # shared v0.0.0 => ../go/shared
 ## explicit; go 1.27.2
+shared/gatepick
 shared/generated/pb/table
 shared/generated/table
+shared/redisslot
 shared/serviceauth
 # proto => ../go/proto
 # shared => ../go/shared

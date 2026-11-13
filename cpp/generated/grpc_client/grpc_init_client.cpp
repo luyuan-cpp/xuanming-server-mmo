@@ -57,6 +57,10 @@ namespace match {
     void SetMatchServiceCallDeadline(std::chrono::milliseconds deadline);
 }
 
+namespace paymentpb {
+    void SetPaymentCallDeadline(std::chrono::milliseconds deadline);
+}
+
 namespace player_inbox {
     void SetPlayerInboxCallDeadline(std::chrono::milliseconds deadline);
 }
@@ -147,6 +151,9 @@ void SetGrpcCallDeadline(uint32_t nodeType, std::chrono::milliseconds deadline){
     }
     if (static_cast<uint32_t>(common::base::eNodeType::MatchNodeService) == nodeType) {
         match::SetMatchServiceCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::PaymentNodeService) == nodeType) {
+        paymentpb::SetPaymentCallDeadline(deadline);
     }
     if (static_cast<uint32_t>(common::base::eNodeType::PlayerInboxNodeService) == nodeType) {
         player_inbox::SetPlayerInboxCallDeadline(deadline);

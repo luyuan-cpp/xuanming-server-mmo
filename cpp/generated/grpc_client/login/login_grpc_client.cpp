@@ -642,6 +642,94 @@ void SendClientPlayerLoginRequestGateMigrationErased(entt::registry& registry, e
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::loginpb::GateMigrationResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region ClientPlayerLoginRenewSession
+namespace {
+void QueueLocalClientPlayerLoginRenewSessionFailure(GrpcDone<::loginpb::RenewSessionResponse> done, uint32_t code, std::string message) {
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerLoginRenewSessionCall(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::RenewSessionRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::loginpb::RenewSessionResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerLogin.RenewSession requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerLoginRenewSessionGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerLoginRenewSessionFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerLoginRenewSessionFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::loginpb::RenewSessionResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerLogin.RenewSession response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerLoginRenewSession(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::RenewSessionRequest& request,
+                                            GrpcDone<::loginpb::RenewSessionResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerLoginRenewSessionCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerLoginRenewSessionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerLogin.RenewSession requires a done callback";
+    }
+    if (message.GetDescriptor() != ::loginpb::RenewSessionRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerLogin.RenewSession: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::loginpb::RenewSessionRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerLogin.RenewSession: request C++ type does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerLoginRenewSessionCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::loginpb::RenewSessionResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 #pragma region LoginPreGateAssignGate
 namespace {
 void QueueLocalLoginPreGateAssignGateFailure(GrpcDone<::loginpb::AssignGateResponse> done, uint32_t code, std::string message) {
@@ -816,6 +904,94 @@ void SendLoginPreGateQueryQueueStatusErased(entt::registry& registry, entt::enti
     }
     StartLoginPreGateQueryQueueStatusCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::loginpb::QueryQueueStatusResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region LoginPreGateGetZoneRoleCount
+namespace {
+void QueueLocalLoginPreGateGetZoneRoleCountFailure(GrpcDone<::loginpb::ZoneRoleCountResponse> done, uint32_t code, std::string message) {
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartLoginPreGateGetZoneRoleCountCall(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::ZoneRoleCountRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::loginpb::ZoneRoleCountResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC LoginPreGate.GetZoneRoleCount requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kLoginPreGateGetZoneRoleCountGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalLoginPreGateGetZoneRoleCountFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalLoginPreGateGetZoneRoleCountFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::loginpb::ZoneRoleCountResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the LoginPreGate.GetZoneRoleCount response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendLoginPreGateGetZoneRoleCount(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::ZoneRoleCountRequest& request,
+                                            GrpcDone<::loginpb::ZoneRoleCountResponse> done, const GrpcCallOptions& options) {
+    StartLoginPreGateGetZoneRoleCountCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendLoginPreGateGetZoneRoleCountErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC LoginPreGate.GetZoneRoleCount requires a done callback";
+    }
+    if (message.GetDescriptor() != ::loginpb::ZoneRoleCountRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC LoginPreGate.GetZoneRoleCount: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::loginpb::ZoneRoleCountRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC LoginPreGate.GetZoneRoleCount: request C++ type does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartLoginPreGateGetZoneRoleCountCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::loginpb::ZoneRoleCountResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
 #pragma region LoginAdminRemovePlayersFromAccounts

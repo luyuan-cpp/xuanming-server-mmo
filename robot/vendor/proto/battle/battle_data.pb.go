@@ -284,6 +284,10 @@ const (
 	EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN EBattleOutcome = 1 // team_index 0 胜
 	EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN EBattleOutcome = 2
 	EBattleOutcome_BATTLE_OUTCOME_DRAW       EBattleOutcome = 3 // 回合打满等平局情形(PVE 中进攻方判负走 SIDE_B_WIN)
+	// 作废:Match 为这一局写了唯一的 ABORT(执行进程失效、截止作废、帮会取消、人工处置等),全员没有任何效果。
+	// 只由 Match 在 ABORT 事务里写进「作废结算」,battle 引擎永远不产出;客户端收到后退出战斗、提示本局作废
+	// (docs/design/battle-instance-loss-early-abort.md §5、§6)。
+	EBattleOutcome_BATTLE_OUTCOME_VOID EBattleOutcome = 4
 )
 
 // Enum value maps for EBattleOutcome.
@@ -293,12 +297,14 @@ var (
 		1: "BATTLE_OUTCOME_SIDE_A_WIN",
 		2: "BATTLE_OUTCOME_SIDE_B_WIN",
 		3: "BATTLE_OUTCOME_DRAW",
+		4: "BATTLE_OUTCOME_VOID",
 	}
 	EBattleOutcome_value = map[string]int32{
 		"BATTLE_OUTCOME_ONGOING":    0,
 		"BATTLE_OUTCOME_SIDE_A_WIN": 1,
 		"BATTLE_OUTCOME_SIDE_B_WIN": 2,
 		"BATTLE_OUTCOME_DRAW":       3,
+		"BATTLE_OUTCOME_VOID":       4,
 	}
 )
 
@@ -572,12 +578,15 @@ func (x *BattleRouting) GetZoneId() uint32 {
 
 // ---- 参战 buff(时间维度已换算为回合,见设计文档 §5.1 换算策略) ----
 type BattleBuffEntry struct {
-	state        protoimpl.MessageState `protogen:"open.v1"`
-	BuffId       uint64                 `protobuf:"varint,1,opt,name=buff_id,json=buffId,proto3" json:"buff_id,omitempty"`                   // buff 实例 SnowFlake id
-	BuffTableId  uint32                 `protobuf:"varint,2,opt,name=buff_table_id,json=buffTableId,proto3" json:"buff_table_id,omitempty"`  // BuffTable 表 id
-	Layer        uint32                 `protobuf:"varint,3,opt,name=layer,proto3" json:"layer,omitempty"`                                   // 叠层数
-	RemainRounds uint32                 `protobuf:"varint,4,opt,name=remain_rounds,json=remainRounds,proto3" json:"remain_rounds,omitempty"` // 剩余回合(0 = 无限持续)
-	CasterId     uint64                 `protobuf:"varint,5,opt,name=caster_id,json=casterId,proto3" json:"caster_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// buff 实例 id,只在所属单位的 buff 列表里用来认出这一条,不跨重启:快照带来的沿用 scene 的进程内临时号
+	// (tlsIdGeneratorManager.buffIdGenerator,[node_id][seq] 拼成),战斗内新加的由引擎在局内自增域里接着往上发
+	// (turn_battle_engine 的 nextBuffInstanceId)。不是 SnowFlake,也不是发号器的永久 ID,不要解析。
+	BuffId       uint64 `protobuf:"varint,1,opt,name=buff_id,json=buffId,proto3" json:"buff_id,omitempty"`
+	BuffTableId  uint32 `protobuf:"varint,2,opt,name=buff_table_id,json=buffTableId,proto3" json:"buff_table_id,omitempty"`  // BuffTable 表 id
+	Layer        uint32 `protobuf:"varint,3,opt,name=layer,proto3" json:"layer,omitempty"`                                   // 叠层数
+	RemainRounds uint32 `protobuf:"varint,4,opt,name=remain_rounds,json=remainRounds,proto3" json:"remain_rounds,omitempty"` // 剩余回合(0 = 无限持续)
+	CasterId     uint64 `protobuf:"varint,5,opt,name=caster_id,json=casterId,proto3" json:"caster_id,omitempty"`
 	// 四职业技能的属性增减(docs/design/class-skills.md §6.4):带符号比例,0.25 = +25%、-0.15 = -15%。
 	// 施加时按施法者当时的技能等级算定并存在这里,之后升级 / 换人都不改它;0 = 不是这类 buff(老 buff 全为 0)。
 	// 改的是哪一项由 Buff 表的 buff_type 决定(turn_battle_constants.h ClassSkillStatOfBuffType)。
@@ -2122,7 +2131,7 @@ func (x *BattlePetSettlementData) GetIsDead() bool {
 type BattleActivityContext struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Kind              EBattleActivityKind    `protobuf:"varint,1,opt,name=kind,proto3,enum=EBattleActivityKind" json:"kind,omitempty"`                             // 非 NONE 才是活动对局;match 拒绝 NONE(INVALID_ARGUMENT)
-	GuildId           uint64                 `protobuf:"varint,2,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`                                 // 发起帮会(SnowFlake 17-bit 布局);guild 写、guild 读
+	GuildId           uint64                 `protobuf:"varint,2,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`                                 // 发起帮会(发号器永久 ID,biz_tag=guild,只当身份用);guild 写、guild 读
 	ActivityId        uint32                 `protobuf:"varint,3,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`                        // GuildActivity 表 id;guild 写、guild 读
 	PeriodKey         uint32                 `protobuf:"varint,4,opt,name=period_key,json=periodKey,proto3" json:"period_key,omitempty"`                           // 确认开战时的游戏日键 YYYYMMDD(gameday.DayKey,UTC+8 05:00 换日),用于个人每日次数
 	InitiatorPlayerId uint64                 `protobuf:"varint,5,opt,name=initiator_player_id,json=initiatorPlayerId,proto3" json:"initiator_player_id,omitempty"` // 发起人;match 校验它等于 StartActivityBattleRequest.member_player_ids[0]
@@ -2445,12 +2454,13 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11BATTLE_HIT_NORMAL\x10\x00\x12\x14\n" +
 	"\x10BATTLE_HIT_COMBO\x10\x01\x12\x16\n" +
 	"\x12BATTLE_HIT_COUNTER\x10\x02\x12\x16\n" +
-	"\x12BATTLE_HIT_REFLECT\x10\x03*\x83\x01\n" +
+	"\x12BATTLE_HIT_REFLECT\x10\x03*\x9c\x01\n" +
 	"\x0eeBattleOutcome\x12\x1a\n" +
 	"\x16BATTLE_OUTCOME_ONGOING\x10\x00\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_A_WIN\x10\x01\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_B_WIN\x10\x02\x12\x17\n" +
-	"\x13BATTLE_OUTCOME_DRAW\x10\x03*Z\n" +
+	"\x13BATTLE_OUTCOME_DRAW\x10\x03\x12\x17\n" +
+	"\x13BATTLE_OUTCOME_VOID\x10\x04*Z\n" +
 	"\x13eBattleActivityKind\x12\x1d\n" +
 	"\x19BATTLE_ACTIVITY_KIND_NONE\x10\x00\x12$\n" +
 	" BATTLE_ACTIVITY_KIND_GUILD_TRIAL\x10\x01*{\n" +

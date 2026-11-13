@@ -35,7 +35,7 @@ const (
 //	each via the same module entry point that originally produced them.
 //
 //	Anti-dup invariant: every replayable op MUST carry a unique tx_id
-//	(SnowFlake). PostCrashReplay tracks "applied tx_ids" per player so
+//	(发号器 txlog 号段的号,见 TransactionLogEntry.tx_id). PostCrashReplay tracks "applied tx_ids" per player so
 //	replaying the log twice produces the same end state — see
 //	single_player_rollback.md §"Anti-Duplication" for the broader pattern.
 type TransactionType int32
@@ -77,6 +77,12 @@ const (
 	// 资产本来就是这名玩家的,不算新增获得,不受获取封禁约束(C++ GainBlockService::CountsAsGain);
 	// 成交所得(交付腿)仍用 TX_AUCTION_BUY,照常判封禁。correlation_id 同其他交易腿。
 	TransactionType_TX_AUCTION_RETURN TransactionType = 30
+	// ── 真钱付款被渠道撤销后的扣回(docs/design/payment-recharge.md §22.6)──────────
+	//
+	// 官方订单的付款被渠道撤销(用户在 App Store / Google Play 退款、渠道作废)之后,交易服务把这张订单发放的物品或货币
+	// 从买家身上扣回(TRADE_DEBIT 流,腿名 official_reverse_<修订号>)。扣不到(已经用掉)由合同转人工,不透支。
+	// correlation_id 同其他交易腿。只追加,不复用旧编号。
+	TransactionType_TX_PAYMENT_REVERSAL TransactionType = 31
 )
 
 // Enum value maps for TransactionType.
@@ -113,6 +119,7 @@ var (
 		28: "TX_EQUIP_INLAY",
 		29: "TX_EQUIP_GEM_REMOVE",
 		30: "TX_AUCTION_RETURN",
+		31: "TX_PAYMENT_REVERSAL",
 	}
 	TransactionType_value = map[string]int32{
 		"TX_UNKNOWN":               0,
@@ -146,6 +153,7 @@ var (
 		"TX_EQUIP_INLAY":           28,
 		"TX_EQUIP_GEM_REMOVE":      29,
 		"TX_AUCTION_RETURN":        30,
+		"TX_PAYMENT_REVERSAL":      31,
 	}
 )
 
@@ -179,15 +187,17 @@ func (TransactionType) EnumDescriptor() ([]byte, []int) {
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.
 // This is the foundation for: rollback diff, precision clawback, audit.
 type TransactionLogEntry struct {
-	state     protoimpl.MessageState `protogen:"open.v1"`
-	TxId      uint64                 `protobuf:"varint,1,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"` // Unique ID (SnowFlake)
-	Timestamp uint64                 `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`   // Unix seconds
-	TxType    TransactionType        `protobuf:"varint,3,opt,name=tx_type,json=txType,proto3,enum=TransactionType" json:"tx_type,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 全服唯一:C++ 从发号器 txlog 号段领的号(GuidKind::kTxLog,经 MixGuid 打散)。不单调、没有位布局,
+	// 不能用 ParseSnowflakeGuid 解析,先后看 timestamp。
+	TxId      uint64          `protobuf:"varint,1,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"`
+	Timestamp uint64          `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // Unix seconds
+	TxType    TransactionType `protobuf:"varint,3,opt,name=tx_type,json=txType,proto3,enum=TransactionType" json:"tx_type,omitempty"`
 	// Participants
 	FromPlayer uint64 `protobuf:"varint,4,opt,name=from_player,json=fromPlayer,proto3" json:"from_player,omitempty"` // Source player (0 = system)
 	ToPlayer   uint64 `protobuf:"varint,5,opt,name=to_player,json=toPlayer,proto3" json:"to_player,omitempty"`       // Destination player (0 = system/NPC)
 	// Item details (omit if currency-only)
-	ItemUuid     uint64 `protobuf:"varint,6,opt,name=item_uuid,json=itemUuid,proto3" json:"item_uuid,omitempty"`               // Item instance UUID (SnowFlake Guid)
+	ItemUuid     uint64 `protobuf:"varint,6,opt,name=item_uuid,json=itemUuid,proto3" json:"item_uuid,omitempty"`               // 物品实例 guid,与 ItemComp.item_id 同源(发号器 item 号段),只当身份用,不能解析
 	ItemConfigId uint32 `protobuf:"varint,7,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"` // Item template/config ID
 	ItemQuantity uint32 `protobuf:"varint,8,opt,name=item_quantity,json=itemQuantity,proto3" json:"item_quantity,omitempty"`   // Stack count
 	// Currency details (omit if item-only)
@@ -197,7 +207,9 @@ type TransactionLogEntry struct {
 	BalanceBefore uint64 `protobuf:"varint,11,opt,name=balance_before,json=balanceBefore,proto3" json:"balance_before,omitempty"`
 	BalanceAfter  uint64 `protobuf:"varint,12,opt,name=balance_after,json=balanceAfter,proto3" json:"balance_after,omitempty"`
 	// Correlation: links related operations (e.g. both sides of a trade)
-	CorrelationId uint64 `protobuf:"varint,13,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"` // Shared SnowFlake ID across paired entries
+	// 成对 / 同一次业务操作的几条流水共用的号,取产生它们的那次操作的 id:资产指令 = 指令里的 correlation_id
+	// (帮会即 op_id),战斗结算 = battle_id,神秘商人 = round_id 等。按各自来源解释,不是 SnowFlake,不能解析;0 = 无关联。
+	CorrelationId uint64 `protobuf:"varint,13,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
 	// Free-form metadata (JSON)
 	Extra string `protobuf:"bytes,14,opt,name=extra,proto3" json:"extra,omitempty"`
 	// 捕获时刻所在的 zone(生产者填 GetZoneId())。
@@ -413,7 +425,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\x9f\x05\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xb8\x05\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -447,7 +459,8 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x10TX_EQUIP_ENHANCE\x10\x1b\x12\x12\n" +
 	"\x0eTX_EQUIP_INLAY\x10\x1c\x12\x17\n" +
 	"\x13TX_EQUIP_GEM_REMOVE\x10\x1d\x12\x15\n" +
-	"\x11TX_AUCTION_RETURN\x10\x1eB\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x11TX_AUCTION_RETURN\x10\x1e\x12\x17\n" +
+	"\x13TX_PAYMENT_REVERSAL\x10\x1fB\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

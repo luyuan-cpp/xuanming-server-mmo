@@ -92,7 +92,8 @@ message player_centre_database
   option(OptionTableName) = "player_centre_database";
   option(OptionPrimaryKey) = "player_id";
   option(OptionAutoIncrementKey) = "player_id";
-  // 雪花主键 + TiDB 聚簇表 = 写热点,按 §D3 处方打散(global-data-layer-tidb-decision.md)
+  // 主键 player_id 是发号器发的永久 ID(biz_tag=player,经 MixID 打散),不是雪花。行数据按 _tidb_rowid 存,
+  // 所以 §D3 的 NONCLUSTERED + 打散照旧保留(global-data-layer-tidb-decision.md)。
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -121,7 +122,8 @@ message player_database
   PlayerSkillListComp skill_list = 4 [(OptionPersistGroup) = 3];  // GROWTH
   // 职业:建角事务里和名字、外观、性别一起写进 PROFILE 行。
   PlayerUint32Comp uint32_pb_component = 5 [(OptionPersistGroup) = 4];  // PROFILE
-  // 字段名沿用旧名:装的是基础属性和当前血蓝(BaseAttributesComp);真正的派生属性 DerivedAttributesComp 不落库,加载时重算。
+  // 字段名沿用旧名。只存当前血蓝(health、mana):BaseAttributesComp 的其余字段(力量、护甲、抗性、暴击、速度)只有职业表和重算
+  // 两个来源,scene 存盘时清掉、加载时写回(player_database_loader.cpp);派生属性 DerivedAttributesComp 同样不落库,加载时重算。
   BaseAttributesComp derived_attributes_component = 6 [(OptionPersistGroup) = 6];  // CHARACTER
   LevelComp level_component = 7 [(OptionPersistGroup) = 6];  // CHARACTER
   CurrencyComp currency = 8 [(OptionPersistGroup) = 7];  // WALLET

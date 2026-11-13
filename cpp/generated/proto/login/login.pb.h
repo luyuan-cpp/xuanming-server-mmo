@@ -240,6 +240,22 @@ extern const ::google::protobuf::internal::ClassDataFull RemovePlayersFromAccoun
 #else
 extern const RemovePlayersFromAccountsResponseGlobalsTypeInternal RemovePlayersFromAccountsResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class RenewSessionRequest;
+struct RenewSessionRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RenewSessionRequestGlobalsTypeInternal RenewSessionRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RenewSessionRequest_class_data_;
+#else
+extern const RenewSessionRequestGlobalsTypeInternal RenewSessionRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RenewSessionResponse;
+struct RenewSessionResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RenewSessionResponseGlobalsTypeInternal RenewSessionResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RenewSessionResponse_class_data_;
+#else
+extern const RenewSessionResponseGlobalsTypeInternal RenewSessionResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class TestResponse;
 struct TestResponseGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -247,6 +263,22 @@ extern TestResponseGlobalsTypeInternal TestResponse_globals_;
 extern const ::google::protobuf::internal::ClassDataFull TestResponse_class_data_;
 #else
 extern const TestResponseGlobalsTypeInternal TestResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ZoneRoleCountRequest;
+struct ZoneRoleCountRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ZoneRoleCountRequestGlobalsTypeInternal ZoneRoleCountRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ZoneRoleCountRequest_class_data_;
+#else
+extern const ZoneRoleCountRequestGlobalsTypeInternal ZoneRoleCountRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ZoneRoleCountResponse;
+struct ZoneRoleCountResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ZoneRoleCountResponseGlobalsTypeInternal ZoneRoleCountResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ZoneRoleCountResponse_class_data_;
+#else
+extern const ZoneRoleCountResponseGlobalsTypeInternal ZoneRoleCountResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }  // namespace loginpb
 namespace google {
@@ -356,6 +388,759 @@ using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ZoneRoleCountResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loginpb.ZoneRoleCountResponse) */ {
+ public:
+  inline ZoneRoleCountResponse() : ZoneRoleCountResponse(nullptr) {}
+  ~ZoneRoleCountResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ZoneRoleCountResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ZoneRoleCountResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ZoneRoleCountResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ZoneRoleCountResponse(const ZoneRoleCountResponse& from) : ZoneRoleCountResponse(nullptr, from) {}
+  inline ZoneRoleCountResponse(ZoneRoleCountResponse&& from) noexcept : ZoneRoleCountResponse(nullptr, ::std::move(from)) {}
+  inline ZoneRoleCountResponse& operator=(const ZoneRoleCountResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ZoneRoleCountResponse& operator=(ZoneRoleCountResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ZoneRoleCountResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ZoneRoleCountResponse>(&ZoneRoleCountResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 23;
+  friend void swap(ZoneRoleCountResponse& a, ZoneRoleCountResponse& b) { a.Swap(&b); }
+  inline void Swap(ZoneRoleCountResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ZoneRoleCountResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ZoneRoleCountResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ZoneRoleCountResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ZoneRoleCountResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ZoneRoleCountResponse& from) { ZoneRoleCountResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ZoneRoleCountResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "loginpb.ZoneRoleCountResponse"; }
+
+  explicit ZoneRoleCountResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ZoneRoleCountResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ZoneRoleCountResponse& from);
+  ZoneRoleCountResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ZoneRoleCountResponse&& from) noexcept
+      : ZoneRoleCountResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRolesFieldNumber = 1,
+  };
+  // uint64 roles = 1;
+  void clear_roles() ;
+  [[nodiscard]] ::uint64_t roles() const;
+  void set_roles(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_roles() const;
+  void _internal_set_roles(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:loginpb.ZoneRoleCountResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ZoneRoleCountResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t roles_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2flogin_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ZoneRoleCountRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loginpb.ZoneRoleCountRequest) */ {
+ public:
+  inline ZoneRoleCountRequest() : ZoneRoleCountRequest(nullptr) {}
+  ~ZoneRoleCountRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ZoneRoleCountRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ZoneRoleCountRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ZoneRoleCountRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ZoneRoleCountRequest(const ZoneRoleCountRequest& from) : ZoneRoleCountRequest(nullptr, from) {}
+  inline ZoneRoleCountRequest(ZoneRoleCountRequest&& from) noexcept : ZoneRoleCountRequest(nullptr, ::std::move(from)) {}
+  inline ZoneRoleCountRequest& operator=(const ZoneRoleCountRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ZoneRoleCountRequest& operator=(ZoneRoleCountRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ZoneRoleCountRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ZoneRoleCountRequest>(&ZoneRoleCountRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 22;
+  friend void swap(ZoneRoleCountRequest& a, ZoneRoleCountRequest& b) { a.Swap(&b); }
+  inline void Swap(ZoneRoleCountRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ZoneRoleCountRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ZoneRoleCountRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ZoneRoleCountRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ZoneRoleCountRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ZoneRoleCountRequest& from) { ZoneRoleCountRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ZoneRoleCountRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "loginpb.ZoneRoleCountRequest"; }
+
+  explicit ZoneRoleCountRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ZoneRoleCountRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ZoneRoleCountRequest& from);
+  ZoneRoleCountRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ZoneRoleCountRequest&& from) noexcept
+      : ZoneRoleCountRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kZoneIdFieldNumber = 1,
+  };
+  // uint32 zone_id = 1;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:loginpb.ZoneRoleCountRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ZoneRoleCountRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t zone_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2flogin_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RenewSessionResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loginpb.RenewSessionResponse) */ {
+ public:
+  inline RenewSessionResponse() : RenewSessionResponse(nullptr) {}
+  ~RenewSessionResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RenewSessionResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RenewSessionResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RenewSessionResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RenewSessionResponse(const RenewSessionResponse& from) : RenewSessionResponse(nullptr, from) {}
+  inline RenewSessionResponse(RenewSessionResponse&& from) noexcept : RenewSessionResponse(nullptr, ::std::move(from)) {}
+  inline RenewSessionResponse& operator=(const RenewSessionResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RenewSessionResponse& operator=(RenewSessionResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RenewSessionResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RenewSessionResponse>(&RenewSessionResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(RenewSessionResponse& a, RenewSessionResponse& b) { a.Swap(&b); }
+  inline void Swap(RenewSessionResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RenewSessionResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RenewSessionResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RenewSessionResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RenewSessionResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RenewSessionResponse& from) { RenewSessionResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RenewSessionResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "loginpb.RenewSessionResponse"; }
+
+  explicit RenewSessionResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RenewSessionResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RenewSessionResponse& from);
+  RenewSessionResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RenewSessionResponse&& from) noexcept
+      : RenewSessionResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRenewedFieldNumber = 1,
+    kRenewAfterSecondsFieldNumber = 2,
+  };
+  // bool renewed = 1;
+  void clear_renewed() ;
+  [[nodiscard]] bool renewed() const;
+  void set_renewed(bool value);
+
+  private:
+  bool _internal_renewed() const;
+  void _internal_set_renewed(bool value);
+
+  public:
+  // uint32 renew_after_seconds = 2;
+  void clear_renew_after_seconds() ;
+  [[nodiscard]] ::uint32_t renew_after_seconds() const;
+  void set_renew_after_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_renew_after_seconds() const;
+  void _internal_set_renew_after_seconds(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:loginpb.RenewSessionResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RenewSessionResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    bool renewed_;
+    ::uint32_t renew_after_seconds_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2flogin_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RenewSessionRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:loginpb.RenewSessionRequest) */ {
+ public:
+  inline RenewSessionRequest() : RenewSessionRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RenewSessionRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RenewSessionRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RenewSessionRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RenewSessionRequest(const RenewSessionRequest& from) : RenewSessionRequest(nullptr, from) {}
+  inline RenewSessionRequest(RenewSessionRequest&& from) noexcept : RenewSessionRequest(nullptr, ::std::move(from)) {}
+  inline RenewSessionRequest& operator=(const RenewSessionRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RenewSessionRequest& operator=(RenewSessionRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RenewSessionRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RenewSessionRequest>(&RenewSessionRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 16;
+  friend void swap(RenewSessionRequest& a, RenewSessionRequest& b) { a.Swap(&b); }
+  inline void Swap(RenewSessionRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RenewSessionRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RenewSessionRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<RenewSessionRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const RenewSessionRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const RenewSessionRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "loginpb.RenewSessionRequest"; }
+
+  explicit RenewSessionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RenewSessionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RenewSessionRequest& from);
+  RenewSessionRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RenewSessionRequest&& from) noexcept
+      : RenewSessionRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:loginpb.RenewSessionRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2flogin_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemovePlayersFromAccountsRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:loginpb.RemovePlayersFromAccountsRequest) */ {
  public:
@@ -412,7 +1197,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemovePlayersFromAccountsRequest fi
   [[nodiscard]] static const RemovePlayersFromAccountsRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RemovePlayersFromAccountsRequest>(&RemovePlayersFromAccountsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(RemovePlayersFromAccountsRequest& a, RemovePlayersFromAccountsRequest& b) { a.Swap(&b); }
   inline void Swap(RemovePlayersFromAccountsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -670,7 +1455,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemovePlayerResult final : public :
   [[nodiscard]] static const RemovePlayerResult& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RemovePlayerResult>(&RemovePlayerResult_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(RemovePlayerResult& a, RemovePlayerResult& b) { a.Swap(&b); }
   inline void Swap(RemovePlayerResult* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1089,7 +1874,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryQueueStatusResponse final : pu
   [[nodiscard]] static const QueryQueueStatusResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<QueryQueueStatusResponse>(&QueryQueueStatusResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(QueryQueueStatusResponse& a, QueryQueueStatusResponse& b) { a.Swap(&b); }
   inline void Swap(QueryQueueStatusResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1418,7 +2203,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryQueueStatusRequest final : pub
   [[nodiscard]] static const QueryQueueStatusRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<QueryQueueStatusRequest>(&QueryQueueStatusRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(QueryQueueStatusRequest& a, QueryQueueStatusRequest& b) { a.Swap(&b); }
   inline void Swap(QueryQueueStatusRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3508,7 +4293,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignGateResponse final : public :
   [[nodiscard]] static const AssignGateResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AssignGateResponse>(&AssignGateResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(AssignGateResponse& a, AssignGateResponse& b) { a.Swap(&b); }
   inline void Swap(AssignGateResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3854,7 +4639,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignGateRequest final : public ::
   [[nodiscard]] static const AssignGateRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AssignGateRequest>(&AssignGateRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(AssignGateRequest& a, AssignGateRequest& b) { a.Swap(&b); }
   inline void Swap(AssignGateRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3947,8 +4732,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignGateRequest final : public ::
   // accessors -------------------------------------------------------
   enum : int {
     kQueueTokenFieldNumber = 2,
-    kAccountFieldNumber = 3,
     kDeviceIdFieldNumber = 4,
+    kAccessTokenFieldNumber = 5,
     kZoneIdFieldNumber = 1,
   };
   // string queue_token = 2;
@@ -3966,21 +4751,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignGateRequest final : public ::
   ::std::string* PROTOBUF_NONNULL _internal_mutable_queue_token();
 
   public:
-  // string account = 3;
-  void clear_account() ;
-  [[nodiscard]] const ::std::string& account() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_account(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_account();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_account();
-  void set_allocated_account(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_account() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_account(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_account();
-
-  public:
   // string device_id = 4;
   void clear_device_id() ;
   [[nodiscard]] const ::std::string& device_id() const;
@@ -3994,6 +4764,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignGateRequest final : public ::
   const ::std::string& _internal_device_id() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_device_id(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_device_id();
+
+  public:
+  // string access_token = 5;
+  void clear_access_token() ;
+  [[nodiscard]] const ::std::string& access_token() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_access_token(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_access_token();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_access_token();
+  void set_allocated_access_token(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_access_token() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_access_token(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_access_token();
 
   public:
   // uint32 zone_id = 1;
@@ -4010,8 +4795,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignGateRequest final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          0, 61,
+      ::google::protobuf::internal::TcParseTable<3, 4,
+                          0, 66,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4040,8 +4825,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignGateRequest final : public ::
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr queue_token_;
-    ::google::protobuf::internal::ArenaStringPtr account_;
     ::google::protobuf::internal::ArenaStringPtr device_id_;
+    ::google::protobuf::internal::ArenaStringPtr access_token_;
     ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -4106,7 +4891,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemovePlayersFromAccountsResponse f
   [[nodiscard]] static const RemovePlayersFromAccountsResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RemovePlayersFromAccountsResponse>(&RemovePlayersFromAccountsResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(RemovePlayersFromAccountsResponse& a, RemovePlayersFromAccountsResponse& b) { a.Swap(&b); }
   inline void Swap(RemovePlayersFromAccountsResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8196,6 +8981,62 @@ inline void GateMigrationResponse::_internal_set_token_deadline(::int64_t value)
 
 // -------------------------------------------------------------------
 
+// RenewSessionRequest
+
+// -------------------------------------------------------------------
+
+// RenewSessionResponse
+
+// bool renewed = 1;
+inline void RenewSessionResponse::clear_renewed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.renewed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline bool RenewSessionResponse::renewed() const {
+  // @@protoc_insertion_point(field_get:loginpb.RenewSessionResponse.renewed)
+  return _internal_renewed();
+}
+inline void RenewSessionResponse::set_renewed(bool value) {
+  _internal_set_renewed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:loginpb.RenewSessionResponse.renewed)
+}
+inline bool RenewSessionResponse::_internal_renewed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.renewed_;
+}
+inline void RenewSessionResponse::_internal_set_renewed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.renewed_ = value;
+}
+
+// uint32 renew_after_seconds = 2;
+inline void RenewSessionResponse::clear_renew_after_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.renew_after_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t RenewSessionResponse::renew_after_seconds() const {
+  // @@protoc_insertion_point(field_get:loginpb.RenewSessionResponse.renew_after_seconds)
+  return _internal_renew_after_seconds();
+}
+inline void RenewSessionResponse::set_renew_after_seconds(::uint32_t value) {
+  _internal_set_renew_after_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:loginpb.RenewSessionResponse.renew_after_seconds)
+}
+inline ::uint32_t RenewSessionResponse::_internal_renew_after_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.renew_after_seconds_;
+}
+inline void RenewSessionResponse::_internal_set_renew_after_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.renew_after_seconds_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // AssignGateRequest
 
 // uint32 zone_id = 1;
@@ -8286,75 +9127,11 @@ inline void AssignGateRequest::set_allocated_queue_token(::std::string* PROTOBUF
   // @@protoc_insertion_point(field_set_allocated:loginpb.AssignGateRequest.queue_token)
 }
 
-// string account = 3;
-inline void AssignGateRequest::clear_account() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.account_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline const ::std::string& AssignGateRequest::account() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:loginpb.AssignGateRequest.account)
-  return _internal_account();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void AssignGateRequest::set_account(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  _impl_.account_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:loginpb.AssignGateRequest.account)
-}
-inline ::std::string* PROTOBUF_NONNULL AssignGateRequest::mutable_account()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::std::string* _s = _internal_mutable_account();
-  // @@protoc_insertion_point(field_mutable:loginpb.AssignGateRequest.account)
-  return _s;
-}
-inline const ::std::string& AssignGateRequest::_internal_account() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.account_.Get();
-}
-inline void AssignGateRequest::_internal_set_account(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.account_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL AssignGateRequest::_internal_mutable_account() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.account_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE AssignGateRequest::release_account() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:loginpb.AssignGateRequest.account)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  auto* released = _impl_.account_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.account_.Set("", GetArena());
-  }
-  return released;
-}
-inline void AssignGateRequest::set_allocated_account(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  }
-  _impl_.account_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.account_.IsDefault()) {
-    _impl_.account_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:loginpb.AssignGateRequest.account)
-}
-
 // string device_id = 4;
 inline void AssignGateRequest::clear_device_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.device_id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline const ::std::string& AssignGateRequest::device_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -8364,13 +9141,13 @@ inline const ::std::string& AssignGateRequest::device_id() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void AssignGateRequest::set_device_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   _impl_.device_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:loginpb.AssignGateRequest.device_id)
 }
 inline ::std::string* PROTOBUF_NONNULL AssignGateRequest::mutable_device_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::std::string* _s = _internal_mutable_device_id();
   // @@protoc_insertion_point(field_mutable:loginpb.AssignGateRequest.device_id)
   return _s;
@@ -8390,10 +9167,10 @@ inline ::std::string* PROTOBUF_NONNULL AssignGateRequest::_internal_mutable_devi
 inline ::std::string* PROTOBUF_NULLABLE AssignGateRequest::release_device_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:loginpb.AssignGateRequest.device_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   auto* released = _impl_.device_id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.device_id_.Set("", GetArena());
@@ -8403,15 +9180,79 @@ inline ::std::string* PROTOBUF_NULLABLE AssignGateRequest::release_device_id() {
 inline void AssignGateRequest::set_allocated_device_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   _impl_.device_id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.device_id_.IsDefault()) {
     _impl_.device_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:loginpb.AssignGateRequest.device_id)
+}
+
+// string access_token = 5;
+inline void AssignGateRequest::clear_access_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.access_token_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& AssignGateRequest::access_token() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loginpb.AssignGateRequest.access_token)
+  return _internal_access_token();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AssignGateRequest::set_access_token(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.access_token_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loginpb.AssignGateRequest.access_token)
+}
+inline ::std::string* PROTOBUF_NONNULL AssignGateRequest::mutable_access_token()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_access_token();
+  // @@protoc_insertion_point(field_mutable:loginpb.AssignGateRequest.access_token)
+  return _s;
+}
+inline const ::std::string& AssignGateRequest::_internal_access_token() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.access_token_.Get();
+}
+inline void AssignGateRequest::_internal_set_access_token(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.access_token_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AssignGateRequest::_internal_mutable_access_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.access_token_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AssignGateRequest::release_access_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loginpb.AssignGateRequest.access_token)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.access_token_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.access_token_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AssignGateRequest::set_allocated_access_token(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.access_token_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.access_token_.IsDefault()) {
+    _impl_.access_token_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loginpb.AssignGateRequest.access_token)
 }
 
 // -------------------------------------------------------------------
@@ -9352,6 +10193,62 @@ inline void QueryQueueStatusResponse::set_allocated_error(::std::string* PROTOBU
     _impl_.error_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:loginpb.QueryQueueStatusResponse.error)
+}
+
+// -------------------------------------------------------------------
+
+// ZoneRoleCountRequest
+
+// uint32 zone_id = 1;
+inline void ZoneRoleCountRequest::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t ZoneRoleCountRequest::zone_id() const {
+  // @@protoc_insertion_point(field_get:loginpb.ZoneRoleCountRequest.zone_id)
+  return _internal_zone_id();
+}
+inline void ZoneRoleCountRequest::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:loginpb.ZoneRoleCountRequest.zone_id)
+}
+inline ::uint32_t ZoneRoleCountRequest::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void ZoneRoleCountRequest::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ZoneRoleCountResponse
+
+// uint64 roles = 1;
+inline void ZoneRoleCountResponse::clear_roles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roles_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ZoneRoleCountResponse::roles() const {
+  // @@protoc_insertion_point(field_get:loginpb.ZoneRoleCountResponse.roles)
+  return _internal_roles();
+}
+inline void ZoneRoleCountResponse::set_roles(::uint64_t value) {
+  _internal_set_roles(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:loginpb.ZoneRoleCountResponse.roles)
+}
+inline ::uint64_t ZoneRoleCountResponse::_internal_roles() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.roles_;
+}
+inline void ZoneRoleCountResponse::_internal_set_roles(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roles_ = value;
 }
 
 // -------------------------------------------------------------------

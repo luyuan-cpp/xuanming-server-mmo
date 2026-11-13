@@ -57,6 +57,8 @@ extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2frank_2frank_2eproto;
 }  // extern "C"
 namespace rankpb {
+enum RankBoardType : int;
+extern const uint32_t RankBoardType_internal_data_[];
 enum RankGenerationState : int;
 extern const uint32_t RankGenerationState_internal_data_[];
 enum RankScope : int;
@@ -112,6 +114,9 @@ extern const RankEntryGlobalsTypeInternal RankEntry_globals_;
 }  // namespace rankpb
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::rankpb::RankBoardType_internal_data_>
+    internal::EnumTraitsImpl::value<::rankpb::RankBoardType>;
 template <>
 internal::EnumTraitsT<::rankpb::RankGenerationState_internal_data_>
     internal::EnumTraitsImpl::value<::rankpb::RankGenerationState>;
@@ -204,6 +209,48 @@ template <>
 [[nodiscard]] inline bool RankGenerationState_Parse(
     ::absl::string_view name, RankGenerationState* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<RankGenerationState>(RankGenerationState_descriptor(), name,
+                                           value);
+}
+enum RankBoardType : int {
+  RANK_BOARD_TYPE_UNSPECIFIED = 0,
+  RANK_BOARD_TYPE_MATCH_1V1 = 1,
+  RANK_BOARD_TYPE_MATCH_5V5 = 2,
+  RANK_BOARD_TYPE_MATCH_PVP_TEAM = 3,
+  RankBoardType_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  RankBoardType_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t RankBoardType_internal_data_[];
+inline constexpr RankBoardType RankBoardType_MIN =
+    static_cast<RankBoardType>(0);
+inline constexpr RankBoardType RankBoardType_MAX =
+    static_cast<RankBoardType>(3);
+[[nodiscard]] inline bool RankBoardType_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int RankBoardType_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+RankBoardType_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(RankBoardType) {
+  return RankBoardType_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& RankBoardType_Name(T value) {
+  static_assert(::std::is_same<T, RankBoardType>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to RankBoardType_Name().");
+  return RankBoardType_Name(static_cast<RankBoardType>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& RankBoardType_Name(RankBoardType value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<RankBoardType_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool RankBoardType_Parse(
+    ::absl::string_view name, RankBoardType* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<RankBoardType>(RankBoardType_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -3325,6 +3372,12 @@ struct is_proto_enum<::rankpb::RankGenerationState> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::rankpb::RankGenerationState>() {
   return ::rankpb::RankGenerationState_descriptor();
+}
+template <>
+struct is_proto_enum<::rankpb::RankBoardType> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::rankpb::RankBoardType>() {
+  return ::rankpb::RankBoardType_descriptor();
 }
 
 }  // namespace protobuf

@@ -351,6 +351,55 @@ func (x *GrpcClientConfig) GetCallDeadlineMs() map[string]uint32 {
 	return nil
 }
 
+// C++ 节点的 span 导出(docs/design/distributed-tracing.md §10.3,阶段三)。
+// 地址空 = 不导出(不起导出线程)。OTel 规范的环境变量优先于这里:OTEL_EXPORTER_OTLP_TRACES_ENDPOINT、
+// OTEL_EXPORTER_OTLP_ENDPOINT、OTEL_SDK_DISABLED、OTEL_TRACES_EXPORTER(取值规则见 core/tracing/otlp_http.h)。
+type TracingConfig struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// OTLP/HTTP 的 traces 地址,原样使用:http://host[:port]/v1/traces。本机是 Alloy 的 127.0.0.1:4318,
+	// K8s 上由 k8s_deploy.ps1 写成本节点 Alloy 的 Service(internalTrafficPolicy: Local)。只认明文 http。
+	OtlpTracesEndpoint string `protobuf:"bytes,1,opt,name=otlp_traces_endpoint,json=otlpTracesEndpoint,proto3" json:"otlp_traces_endpoint,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *TracingConfig) Reset() {
+	*x = TracingConfig{}
+	mi := &file_proto_common_base_config_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TracingConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TracingConfig) ProtoMessage() {}
+
+func (x *TracingConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_base_config_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TracingConfig.ProtoReflect.Descriptor instead.
+func (*TracingConfig) Descriptor() ([]byte, []int) {
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *TracingConfig) GetOtlpTracesEndpoint() string {
+	if x != nil {
+		return x.OtlpTracesEndpoint
+	}
+	return ""
+}
+
 // Base deploy config
 type BaseDeployConfig struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
@@ -405,32 +454,24 @@ type BaseDeployConfig struct {
 	// dev/test 放行并 WARN(gate 拒绝一切 SubscribeSpectate,只能走直连观战),prod 拒绝启动。
 	SpectateTokenSecret string `protobuf:"bytes,24,opt,name=spectate_token_secret,json=spectateTokenSecret,proto3" json:"spectate_token_secret,omitempty"`
 	// 集群号:部署级常量,由运维一次性设定(ConfigMap / yaml),策划不碰,默认 0。
-	// 只有 Go 的 snowflake 槽位协议(login-player / guild / scene-manager / match)消费它,
-	// 作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者
+	// 只有 Go 的 snowflake 槽位协议消费它(现在只剩 scene-manager 的 scene_id;login、guild、match
+	// 改由发号器发号,不再申领槽位),作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者
 	// (scene 的永久 guid 走号段,不编码集群),这里只是同一份 yaml 口径的原样读入。
 	// 取值 0..31。见 docs/design/node-id-overhaul-plan-20260908.md §5 / §7.5。
 	ClusterId uint32 `protobuf:"varint,18,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
 	// 永久 guid 号段(item / txlog / snapshot 各一块,见 IdSegmentConfig)。
 	IdSegment *IdSegmentConfig `protobuf:"bytes,19,opt,name=id_segment,json=idSegment,proto3" json:"id_segment,omitempty"`
-	// 审计 topic(transaction_log / player_snapshot)的**世代号**,进有效 topic 名:
-	// `<基名>_g<N>`,基名在 cpp/libs/modules/{transaction_log,snapshot} 的头文件里。
-	// 0 当 1 处理(proto3 没有 presence,存量 yaml 不写这一键也能起,名字仍规范)。
-	//
-	// **必须等于 go/data_service 的 Kafka.TopicGeneration**(go/data_service/etc/data_service.yaml):
-	// C++ 是这两个 topic 唯一的生产者,data_service 是唯一的消费者,名字是两边唯一的会合点。
-	// 两边分家不报任何错 —— 生产者写进一个没人消费的 topic,流水 / 快照在保留期(默认 30 天)
-	// 到期时被静默吃掉。2026-09-09 之前这个后缀是 C++ 编译期常量,换代要手改两个头文件并重出镜像;
-	// 现在收敛成这一个部署键(k8s 侧由 k8s_deploy.ps1 从 data_service.yaml 镜像进 node ConfigMap)。
-	AuditTopicGeneration uint32 `protobuf:"varint,20,opt,name=audit_topic_generation,json=auditTopicGeneration,proto3" json:"audit_topic_generation,omitempty"`
 	// C++ 节点 unary gRPC 调用的 deadline(见 GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
-	GrpcClient    *GrpcClientConfig `protobuf:"bytes,21,opt,name=grpc_client,json=grpcClient,proto3" json:"grpc_client,omitempty"`
+	GrpcClient *GrpcClientConfig `protobuf:"bytes,21,opt,name=grpc_client,json=grpcClient,proto3" json:"grpc_client,omitempty"`
+	// span 导出(见 TracingConfig)。22、23 没用过但不确定历史上有无存量配置,新字段从 25 起。yaml 键 Tracing。
+	Tracing       *TracingConfig `protobuf:"bytes,25,opt,name=tracing,proto3" json:"tracing,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BaseDeployConfig) Reset() {
 	*x = BaseDeployConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[5]
+	mi := &file_proto_common_base_config_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -442,7 +483,7 @@ func (x *BaseDeployConfig) String() string {
 func (*BaseDeployConfig) ProtoMessage() {}
 
 func (x *BaseDeployConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[5]
+	mi := &file_proto_common_base_config_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -455,7 +496,7 @@ func (x *BaseDeployConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BaseDeployConfig.ProtoReflect.Descriptor instead.
 func (*BaseDeployConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{5}
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *BaseDeployConfig) GetEtcdHosts() []string {
@@ -598,13 +639,6 @@ func (x *BaseDeployConfig) GetIdSegment() *IdSegmentConfig {
 	return nil
 }
 
-func (x *BaseDeployConfig) GetAuditTopicGeneration() uint32 {
-	if x != nil {
-		return x.AuditTopicGeneration
-	}
-	return 0
-}
-
 func (x *BaseDeployConfig) GetGrpcClient() *GrpcClientConfig {
 	if x != nil {
 		return x.GrpcClient
@@ -612,26 +646,36 @@ func (x *BaseDeployConfig) GetGrpcClient() *GrpcClientConfig {
 	return nil
 }
 
+func (x *BaseDeployConfig) GetTracing() *TracingConfig {
+	if x != nil {
+		return x.Tracing
+	}
+	return nil
+}
+
 // Game config
 type GameConfig struct {
-	state         protoimpl.MessageState          `protogen:"open.v1"`
-	SceneNodeType uint32                          `protobuf:"varint,1,opt,name=scene_node_type,json=sceneNodeType,proto3" json:"scene_node_type,omitempty"` // Scene node type
-	ZoneId        uint32                          `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                        // Zone ID
-	ZoneRedis     *GameConfig_ZoneRedisConfig     `protobuf:"bytes,7,opt,name=zone_redis,json=zoneRedis,proto3" json:"zone_redis,omitempty"`                // Zone Redis config
-	PlayerInbox   *GameConfig_PlayerInboxConfig   `protobuf:"bytes,8,opt,name=player_inbox,json=playerInbox,proto3" json:"player_inbox,omitempty"`
-	PlayerRedis   *GameConfig_PlayerRedisConfig   `protobuf:"bytes,9,opt,name=player_redis,json=playerRedis,proto3" json:"player_redis,omitempty"`
+	state         protoimpl.MessageState        `protogen:"open.v1"`
+	SceneNodeType uint32                        `protobuf:"varint,1,opt,name=scene_node_type,json=sceneNodeType,proto3" json:"scene_node_type,omitempty"` // Scene node type
+	ZoneId        uint32                        `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                        // Zone ID
+	PlayerInbox   *GameConfig_PlayerInboxConfig `protobuf:"bytes,8,opt,name=player_inbox,json=playerInbox,proto3" json:"player_inbox,omitempty"`
+	// 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它。yaml 键名 player_redis。
+	// **整段缺失时加载器显式取 control_redis 的值**(模式、种子与口令,同 Go 各服务 PlayerRedis 回落到 ControlRedis),
+	// 开发环境不用改配置;写了这一段就是另一个实例或集群,口令只认显式值与环境变量 PLAYER_REDIS_PASSWORD。
+	PlayerRedis   *GameConfig_RedisClusterConfig  `protobuf:"bytes,9,opt,name=player_redis,json=playerRedis,proto3" json:"player_redis,omitempty"`
 	AuditSnapshot *GameConfig_AuditSnapshotConfig `protobuf:"bytes,10,opt,name=audit_snapshot,json=auditSnapshot,proto3" json:"audit_snapshot,omitempty"`
-	// 本 zone 的场景控制域实例(docs/design/control-plane-zone-scoping-20261105.md §4.5):scene_manager 把分线目录、神秘商人
-	// 等读模型写在本 zone 所属组的控制域实例(K8s 上 redis-ctl-g<N>),只有 scene 读它。yaml 键 scene_control_redis,
-	// 由 readGameConfig 手工解析;**整段缺失时取 zone_redis 的值**(开发环境两者是同一个实例)。db 只认 0。
-	SceneControlRedis *GameConfig_ZoneRedisConfig `protobuf:"bytes,11,opt,name=scene_control_redis,json=sceneControlRedis,proto3" json:"scene_control_redis,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.2、§5.2),只有 scene 连它:scene_manager 写的分线目录、
+	// 神秘商人读模型,场景归属对账,资产待办唤醒(SPUBLISH 分片频道)。yaml 键 control_redis。
+	// **整段或单键缺失时加载器显式取默认**:standalone、种子 127.0.0.1:6379、不认证(同 Go 各服务 ControlRedis 的缺省);
+	// 口令可被环境变量 CONTROL_REDIS_PASSWORD 覆盖。
+	ControlRedis  *GameConfig_RedisClusterConfig `protobuf:"bytes,12,opt,name=control_redis,json=controlRedis,proto3" json:"control_redis,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GameConfig) Reset() {
 	*x = GameConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[6]
+	mi := &file_proto_common_base_config_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -643,7 +687,7 @@ func (x *GameConfig) String() string {
 func (*GameConfig) ProtoMessage() {}
 
 func (x *GameConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[6]
+	mi := &file_proto_common_base_config_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -656,7 +700,7 @@ func (x *GameConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameConfig.ProtoReflect.Descriptor instead.
 func (*GameConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{6}
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GameConfig) GetSceneNodeType() uint32 {
@@ -673,13 +717,6 @@ func (x *GameConfig) GetZoneId() uint32 {
 	return 0
 }
 
-func (x *GameConfig) GetZoneRedis() *GameConfig_ZoneRedisConfig {
-	if x != nil {
-		return x.ZoneRedis
-	}
-	return nil
-}
-
 func (x *GameConfig) GetPlayerInbox() *GameConfig_PlayerInboxConfig {
 	if x != nil {
 		return x.PlayerInbox
@@ -687,7 +724,7 @@ func (x *GameConfig) GetPlayerInbox() *GameConfig_PlayerInboxConfig {
 	return nil
 }
 
-func (x *GameConfig) GetPlayerRedis() *GameConfig_PlayerRedisConfig {
+func (x *GameConfig) GetPlayerRedis() *GameConfig_RedisClusterConfig {
 	if x != nil {
 		return x.PlayerRedis
 	}
@@ -701,39 +738,39 @@ func (x *GameConfig) GetAuditSnapshot() *GameConfig_AuditSnapshotConfig {
 	return nil
 }
 
-func (x *GameConfig) GetSceneControlRedis() *GameConfig_ZoneRedisConfig {
+func (x *GameConfig) GetControlRedis() *GameConfig_RedisClusterConfig {
 	if x != nil {
-		return x.SceneControlRedis
+		return x.ControlRedis
 	}
 	return nil
 }
 
-// Zone Redis config
-type GameConfig_ZoneRedisConfig struct {
+// 一个 Redis 句柄的地址(scene 的 RedisClusterClient):player_redis 与 control_redis 共用这一种写法。
+// 由 readGameConfig 手工逐键解析,取值由 scene 启动时校验,配错拒绝启动。
+type GameConfig_RedisClusterConfig struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Host          string                 `protobuf:"bytes,3,opt,name=host,proto3" json:"host,omitempty"`         // Redis host
-	Port          uint32                 `protobuf:"varint,4,opt,name=port,proto3" json:"port,omitempty"`        // Redis port
-	Password      string                 `protobuf:"bytes,5,opt,name=password,proto3" json:"password,omitempty"` // Redis password (optional)
-	Db            uint32                 `protobuf:"varint,6,opt,name=db,proto3" json:"db,omitempty"`            // Redis database number
+	Mode          string                 `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"`         // standalone | cluster
+	Seeds         []string               `protobuf:"bytes,2,rep,name=seeds,proto3" json:"seeds,omitempty"`       // host:port。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑
+	Password      string                 `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"` // 空 = 不认证;各段有自己的口令环境变量覆盖,值不进日志
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GameConfig_ZoneRedisConfig) Reset() {
-	*x = GameConfig_ZoneRedisConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[8]
+func (x *GameConfig_RedisClusterConfig) Reset() {
+	*x = GameConfig_RedisClusterConfig{}
+	mi := &file_proto_common_base_config_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GameConfig_ZoneRedisConfig) String() string {
+func (x *GameConfig_RedisClusterConfig) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GameConfig_ZoneRedisConfig) ProtoMessage() {}
+func (*GameConfig_RedisClusterConfig) ProtoMessage() {}
 
-func (x *GameConfig_ZoneRedisConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[8]
+func (x *GameConfig_RedisClusterConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_base_config_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -744,37 +781,30 @@ func (x *GameConfig_ZoneRedisConfig) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GameConfig_ZoneRedisConfig.ProtoReflect.Descriptor instead.
-func (*GameConfig_ZoneRedisConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{6, 0}
+// Deprecated: Use GameConfig_RedisClusterConfig.ProtoReflect.Descriptor instead.
+func (*GameConfig_RedisClusterConfig) Descriptor() ([]byte, []int) {
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{7, 0}
 }
 
-func (x *GameConfig_ZoneRedisConfig) GetHost() string {
+func (x *GameConfig_RedisClusterConfig) GetMode() string {
 	if x != nil {
-		return x.Host
+		return x.Mode
 	}
 	return ""
 }
 
-func (x *GameConfig_ZoneRedisConfig) GetPort() uint32 {
+func (x *GameConfig_RedisClusterConfig) GetSeeds() []string {
 	if x != nil {
-		return x.Port
+		return x.Seeds
 	}
-	return 0
+	return nil
 }
 
-func (x *GameConfig_ZoneRedisConfig) GetPassword() string {
+func (x *GameConfig_RedisClusterConfig) GetPassword() string {
 	if x != nil {
 		return x.Password
 	}
 	return ""
-}
-
-func (x *GameConfig_ZoneRedisConfig) GetDb() uint32 {
-	if x != nil {
-		return x.Db
-	}
-	return 0
 }
 
 // 玩家持久收件箱的 scene 消费端(docs/design/player-inbox-service.md §3.3、§7.3、§11.7)。
@@ -793,7 +823,7 @@ type GameConfig_PlayerInboxConfig struct {
 
 func (x *GameConfig_PlayerInboxConfig) Reset() {
 	*x = GameConfig_PlayerInboxConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[9]
+	mi := &file_proto_common_base_config_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -805,7 +835,7 @@ func (x *GameConfig_PlayerInboxConfig) String() string {
 func (*GameConfig_PlayerInboxConfig) ProtoMessage() {}
 
 func (x *GameConfig_PlayerInboxConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[9]
+	mi := &file_proto_common_base_config_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -818,7 +848,7 @@ func (x *GameConfig_PlayerInboxConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameConfig_PlayerInboxConfig.ProtoReflect.Descriptor instead.
 func (*GameConfig_PlayerInboxConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{6, 1}
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{7, 1}
 }
 
 func (x *GameConfig_PlayerInboxConfig) GetConsumerEnabled() bool {
@@ -833,69 +863,6 @@ func (x *GameConfig_PlayerInboxConfig) GetPeriodicFetchMinutes() uint32 {
 		return x.PeriodicFetchMinutes
 	}
 	return 0
-}
-
-// 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它;控制域仍是 zone_redis。
-// 由 readGameConfig 手工逐键解析,yaml 键名 player_redis。**整段缺失时加载器显式取默认**:standalone,
-// 地址与口令沿用 zone_redis,开发环境不用改配置。
-type GameConfig_PlayerRedisConfig struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Mode          string                 `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"`         // standalone | cluster;取值由 scene 启动时校验,配错拒绝启动
-	Seeds         []string               `protobuf:"bytes,2,rep,name=seeds,proto3" json:"seeds,omitempty"`       // host:port。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑
-	Password      string                 `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"` // 空 = 不认证;可被环境变量 PLAYER_REDIS_PASSWORD 覆盖,值不进日志
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GameConfig_PlayerRedisConfig) Reset() {
-	*x = GameConfig_PlayerRedisConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GameConfig_PlayerRedisConfig) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GameConfig_PlayerRedisConfig) ProtoMessage() {}
-
-func (x *GameConfig_PlayerRedisConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GameConfig_PlayerRedisConfig.ProtoReflect.Descriptor instead.
-func (*GameConfig_PlayerRedisConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{6, 2}
-}
-
-func (x *GameConfig_PlayerRedisConfig) GetMode() string {
-	if x != nil {
-		return x.Mode
-	}
-	return ""
-}
-
-func (x *GameConfig_PlayerRedisConfig) GetSeeds() []string {
-	if x != nil {
-		return x.Seeds
-	}
-	return nil
-}
-
-func (x *GameConfig_PlayerRedisConfig) GetPassword() string {
-	if x != nil {
-		return x.Password
-	}
-	return ""
 }
 
 // 进场、离场的审计快照(整档发 Kafka,data_service 落 player_snapshot;modules/snapshot/audit_snapshot_policy.h)。
@@ -938,7 +905,7 @@ func (x *GameConfig_AuditSnapshotConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameConfig_AuditSnapshotConfig.ProtoReflect.Descriptor instead.
 func (*GameConfig_AuditSnapshotConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{6, 3}
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{7, 2}
 }
 
 func (x *GameConfig_AuditSnapshotConfig) GetLoginEnabled() bool {
@@ -990,7 +957,9 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x10call_deadline_ms\x18\x01 \x03(\v2%.GrpcClientConfig.CallDeadlineMsEntryR\x0ecallDeadlineMs\x1aA\n" +
 	"\x13CallDeadlineMsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x9a\b\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"A\n" +
+	"\rTracingConfig\x120\n" +
+	"\x14otlp_traces_endpoint\x18\x01 \x01(\tR\x12otlpTracesEndpoint\"\xac\b\n" +
 	"\x10BaseDeployConfig\x12\x1d\n" +
 	"\n" +
 	"etcd_hosts\x18\x01 \x03(\tR\tetcdHosts\x12\x1b\n" +
@@ -1015,37 +984,31 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\n" +
 	"cluster_id\x18\x12 \x01(\rR\tclusterId\x12/\n" +
 	"\n" +
-	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\x124\n" +
-	"\x16audit_topic_generation\x18\x14 \x01(\rR\x14auditTopicGeneration\x122\n" +
+	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\x122\n" +
 	"\vgrpc_client\x18\x15 \x01(\v2\x11.GrpcClientConfigR\n" +
-	"grpcClient\"\xe8\x06\n" +
+	"grpcClient\x12(\n" +
+	"\atracing\x18\x19 \x01(\v2\x0e.TracingConfigR\atracingJ\x04\b\x14\x10\x15R\x16audit_topic_generation\"\xec\x05\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +
-	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12:\n" +
-	"\n" +
-	"zone_redis\x18\a \x01(\v2\x1b.GameConfig.ZoneRedisConfigR\tzoneRedis\x12@\n" +
-	"\fplayer_inbox\x18\b \x01(\v2\x1d.GameConfig.PlayerInboxConfigR\vplayerInbox\x12@\n" +
-	"\fplayer_redis\x18\t \x01(\v2\x1d.GameConfig.PlayerRedisConfigR\vplayerRedis\x12F\n" +
+	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12@\n" +
+	"\fplayer_inbox\x18\b \x01(\v2\x1d.GameConfig.PlayerInboxConfigR\vplayerInbox\x12A\n" +
+	"\fplayer_redis\x18\t \x01(\v2\x1e.GameConfig.RedisClusterConfigR\vplayerRedis\x12F\n" +
 	"\x0eaudit_snapshot\x18\n" +
-	" \x01(\v2\x1f.GameConfig.AuditSnapshotConfigR\rauditSnapshot\x12K\n" +
-	"\x13scene_control_redis\x18\v \x01(\v2\x1b.GameConfig.ZoneRedisConfigR\x11sceneControlRedis\x1ae\n" +
-	"\x0fZoneRedisConfig\x12\x12\n" +
-	"\x04host\x18\x03 \x01(\tR\x04host\x12\x12\n" +
-	"\x04port\x18\x04 \x01(\rR\x04port\x12\x1a\n" +
-	"\bpassword\x18\x05 \x01(\tR\bpassword\x12\x0e\n" +
-	"\x02db\x18\x06 \x01(\rR\x02db\x1at\n" +
-	"\x11PlayerInboxConfig\x12)\n" +
-	"\x10consumer_enabled\x18\x01 \x01(\bR\x0fconsumerEnabled\x124\n" +
-	"\x16periodic_fetch_minutes\x18\x02 \x01(\rR\x14periodicFetchMinutes\x1aY\n" +
-	"\x11PlayerRedisConfig\x12\x12\n" +
+	" \x01(\v2\x1f.GameConfig.AuditSnapshotConfigR\rauditSnapshot\x12C\n" +
+	"\rcontrol_redis\x18\f \x01(\v2\x1e.GameConfig.RedisClusterConfigR\fcontrolRedis\x1aZ\n" +
+	"\x12RedisClusterConfig\x12\x12\n" +
 	"\x04mode\x18\x01 \x01(\tR\x04mode\x12\x14\n" +
 	"\x05seeds\x18\x02 \x03(\tR\x05seeds\x12\x1a\n" +
-	"\bpassword\x18\x03 \x01(\tR\bpassword\x1a\x8b\x01\n" +
+	"\bpassword\x18\x03 \x01(\tR\bpassword\x1at\n" +
+	"\x11PlayerInboxConfig\x12)\n" +
+	"\x10consumer_enabled\x18\x01 \x01(\bR\x0fconsumerEnabled\x124\n" +
+	"\x16periodic_fetch_minutes\x18\x02 \x01(\rR\x14periodicFetchMinutes\x1a\x8b\x01\n" +
 	"\x13AuditSnapshotConfig\x12#\n" +
 	"\rlogin_enabled\x18\x01 \x01(\bR\floginEnabled\x12%\n" +
 	"\x0elogout_enabled\x18\x02 \x01(\bR\rlogoutEnabled\x12(\n" +
-	"\x10sample_per_mille\x18\x03 \x01(\rR\x0esamplePerMilleB\x13Z\x11proto/common/baseb\x06proto3"
+	"\x10sample_per_mille\x18\x03 \x01(\rR\x0esamplePerMilleJ\x04\b\a\x10\bJ\x04\b\v\x10\fR\n" +
+	"zone_redisR\x13scene_control_redisB\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_config_proto_rawDescOnce sync.Once
@@ -1066,26 +1029,26 @@ var file_proto_common_base_config_proto_goTypes = []any{
 	(*IdSegmentKindConfig)(nil),            // 2: IdSegmentKindConfig
 	(*IdSegmentConfig)(nil),                // 3: IdSegmentConfig
 	(*GrpcClientConfig)(nil),               // 4: GrpcClientConfig
-	(*BaseDeployConfig)(nil),               // 5: BaseDeployConfig
-	(*GameConfig)(nil),                     // 6: GameConfig
-	nil,                                    // 7: GrpcClientConfig.CallDeadlineMsEntry
-	(*GameConfig_ZoneRedisConfig)(nil),     // 8: GameConfig.ZoneRedisConfig
-	(*GameConfig_PlayerInboxConfig)(nil),   // 9: GameConfig.PlayerInboxConfig
-	(*GameConfig_PlayerRedisConfig)(nil),   // 10: GameConfig.PlayerRedisConfig
+	(*TracingConfig)(nil),                  // 5: TracingConfig
+	(*BaseDeployConfig)(nil),               // 6: BaseDeployConfig
+	(*GameConfig)(nil),                     // 7: GameConfig
+	nil,                                    // 8: GrpcClientConfig.CallDeadlineMsEntry
+	(*GameConfig_RedisClusterConfig)(nil),  // 9: GameConfig.RedisClusterConfig
+	(*GameConfig_PlayerInboxConfig)(nil),   // 10: GameConfig.PlayerInboxConfig
 	(*GameConfig_AuditSnapshotConfig)(nil), // 11: GameConfig.AuditSnapshotConfig
 }
 var file_proto_common_base_config_proto_depIdxs = []int32{
 	2,  // 0: IdSegmentConfig.kinds:type_name -> IdSegmentKindConfig
-	7,  // 1: GrpcClientConfig.call_deadline_ms:type_name -> GrpcClientConfig.CallDeadlineMsEntry
+	8,  // 1: GrpcClientConfig.call_deadline_ms:type_name -> GrpcClientConfig.CallDeadlineMsEntry
 	0,  // 2: BaseDeployConfig.services:type_name -> ServiceConfig
 	1,  // 3: BaseDeployConfig.kafka:type_name -> KafkaConfig
 	3,  // 4: BaseDeployConfig.id_segment:type_name -> IdSegmentConfig
 	4,  // 5: BaseDeployConfig.grpc_client:type_name -> GrpcClientConfig
-	8,  // 6: GameConfig.zone_redis:type_name -> GameConfig.ZoneRedisConfig
-	9,  // 7: GameConfig.player_inbox:type_name -> GameConfig.PlayerInboxConfig
-	10, // 8: GameConfig.player_redis:type_name -> GameConfig.PlayerRedisConfig
+	5,  // 6: BaseDeployConfig.tracing:type_name -> TracingConfig
+	10, // 7: GameConfig.player_inbox:type_name -> GameConfig.PlayerInboxConfig
+	9,  // 8: GameConfig.player_redis:type_name -> GameConfig.RedisClusterConfig
 	11, // 9: GameConfig.audit_snapshot:type_name -> GameConfig.AuditSnapshotConfig
-	8,  // 10: GameConfig.scene_control_redis:type_name -> GameConfig.ZoneRedisConfig
+	9,  // 10: GameConfig.control_redis:type_name -> GameConfig.RedisClusterConfig
 	11, // [11:11] is the sub-list for method output_type
 	11, // [11:11] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name

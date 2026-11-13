@@ -23,6 +23,116 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ManualContractMode int32
+
+const (
+	ManualContractMode_MANUAL_CONTRACT_MODE_UNSPECIFIED ManualContractMode = 0
+	ManualContractMode_MANUAL_CONTRACT_MODE_SHOW        ManualContractMode = 1 // 锁外读合同、腿、两方归属与关联合同,逐个动作试算;不写
+	ManualContractMode_MANUAL_CONTRACT_MODE_DRY_RUN     ManualContractMode = 2 // 与执行同一锁序、同一判据算计划;不写
+	ManualContractMode_MANUAL_CONTRACT_MODE_EXECUTE     ManualContractMode = 3 // 写库
+)
+
+// Enum value maps for ManualContractMode.
+var (
+	ManualContractMode_name = map[int32]string{
+		0: "MANUAL_CONTRACT_MODE_UNSPECIFIED",
+		1: "MANUAL_CONTRACT_MODE_SHOW",
+		2: "MANUAL_CONTRACT_MODE_DRY_RUN",
+		3: "MANUAL_CONTRACT_MODE_EXECUTE",
+	}
+	ManualContractMode_value = map[string]int32{
+		"MANUAL_CONTRACT_MODE_UNSPECIFIED": 0,
+		"MANUAL_CONTRACT_MODE_SHOW":        1,
+		"MANUAL_CONTRACT_MODE_DRY_RUN":     2,
+		"MANUAL_CONTRACT_MODE_EXECUTE":     3,
+	}
+)
+
+func (x ManualContractMode) Enum() *ManualContractMode {
+	p := new(ManualContractMode)
+	*p = x
+	return p
+}
+
+func (x ManualContractMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ManualContractMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_trade_trade_admin_proto_enumTypes[0].Descriptor()
+}
+
+func (ManualContractMode) Type() protoreflect.EnumType {
+	return &file_proto_trade_trade_admin_proto_enumTypes[0]
+}
+
+func (x ManualContractMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ManualContractMode.Descriptor instead.
+func (ManualContractMode) EnumDescriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{0}
+}
+
+type ManualContractVerdict int32
+
+const (
+	ManualContractVerdict_MANUAL_CONTRACT_VERDICT_UNSPECIFIED     ManualContractVerdict = 0
+	ManualContractVerdict_MANUAL_CONTRACT_VERDICT_OK              ManualContractVerdict = 1 // SHOW / DRY_RUN:读到、算出;EXECUTE:已提交
+	ManualContractVerdict_MANUAL_CONTRACT_VERDICT_NOT_FOUND       ManualContractVerdict = 2
+	ManualContractVerdict_MANUAL_CONTRACT_VERDICT_REFUSED         ManualContractVerdict = 3 // 前置条件不满足或目标环境不符,未改动;原因在 refusal
+	ManualContractVerdict_MANUAL_CONTRACT_VERDICT_VERSION_CHANGED ManualContractVerdict = 4 // 合同(或联动的出价)已不是操作人看过的那一版,未改动
+	ManualContractVerdict_MANUAL_CONTRACT_VERDICT_RETRY           ManualContractVerdict = 5 // 读库失败或提交之前失败,事务已回滚,未改动
+)
+
+// Enum value maps for ManualContractVerdict.
+var (
+	ManualContractVerdict_name = map[int32]string{
+		0: "MANUAL_CONTRACT_VERDICT_UNSPECIFIED",
+		1: "MANUAL_CONTRACT_VERDICT_OK",
+		2: "MANUAL_CONTRACT_VERDICT_NOT_FOUND",
+		3: "MANUAL_CONTRACT_VERDICT_REFUSED",
+		4: "MANUAL_CONTRACT_VERDICT_VERSION_CHANGED",
+		5: "MANUAL_CONTRACT_VERDICT_RETRY",
+	}
+	ManualContractVerdict_value = map[string]int32{
+		"MANUAL_CONTRACT_VERDICT_UNSPECIFIED":     0,
+		"MANUAL_CONTRACT_VERDICT_OK":              1,
+		"MANUAL_CONTRACT_VERDICT_NOT_FOUND":       2,
+		"MANUAL_CONTRACT_VERDICT_REFUSED":         3,
+		"MANUAL_CONTRACT_VERDICT_VERSION_CHANGED": 4,
+		"MANUAL_CONTRACT_VERDICT_RETRY":           5,
+	}
+)
+
+func (x ManualContractVerdict) Enum() *ManualContractVerdict {
+	p := new(ManualContractVerdict)
+	*p = x
+	return p
+}
+
+func (x ManualContractVerdict) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ManualContractVerdict) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_trade_trade_admin_proto_enumTypes[1].Descriptor()
+}
+
+func (ManualContractVerdict) Type() protoreflect.EnumType {
+	return &file_proto_trade_trade_admin_proto_enumTypes[1]
+}
+
+func (x ManualContractVerdict) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ManualContractVerdict.Descriptor instead.
+func (ManualContractVerdict) EnumDescriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{1}
+}
+
 // 造一条已上架商品,只用于本地联调与 robot 冒烟;不移动任何资产。
 // 只在 Mode=dev|test 下可用,否则回 gRPC PermissionDenied。
 // 刻意没有 market_zone 字段:服务端按卖家查 home_zone,与正式上架同一条路径。
@@ -210,11 +320,675 @@ func (x *SeedListingResponse) GetMarketZone() uint32 {
 	return 0
 }
 
+type ListManualContractsRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AfterUpdatedMs  uint64                 `protobuf:"varint,1,opt,name=after_updated_ms,json=afterUpdatedMs,proto3" json:"after_updated_ms,omitempty"` // 游标:上一页回的 next_*;两个都是 0 从头列
+	AfterCommerceId uint64                 `protobuf:"varint,2,opt,name=after_commerce_id,json=afterCommerceId,proto3" json:"after_commerce_id,omitempty"`
+	Limit           uint32                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"` // 1..500
+	Auth            *base.ServiceCallAuth  `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ListManualContractsRequest) Reset() {
+	*x = ListManualContractsRequest{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListManualContractsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListManualContractsRequest) ProtoMessage() {}
+
+func (x *ListManualContractsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListManualContractsRequest.ProtoReflect.Descriptor instead.
+func (*ListManualContractsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListManualContractsRequest) GetAfterUpdatedMs() uint64 {
+	if x != nil {
+		return x.AfterUpdatedMs
+	}
+	return 0
+}
+
+func (x *ListManualContractsRequest) GetAfterCommerceId() uint64 {
+	if x != nil {
+		return x.AfterCommerceId
+	}
+	return 0
+}
+
+func (x *ListManualContractsRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListManualContractsRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type ListManualContractsResponse struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Contracts           []*TradeCommerceRecord `protobuf:"bytes,1,rep,name=contracts,proto3" json:"contracts,omitempty"`                                                  // 转人工的合同,最早转人工的在前;workflow_proto 原样,工具自己解开
+	NextAfterUpdatedMs  uint64                 `protobuf:"varint,2,opt,name=next_after_updated_ms,json=nextAfterUpdatedMs,proto3" json:"next_after_updated_ms,omitempty"` // 两个都是 0:没有下一页
+	NextAfterCommerceId uint64                 `protobuf:"varint,3,opt,name=next_after_commerce_id,json=nextAfterCommerceId,proto3" json:"next_after_commerce_id,omitempty"`
+	Target              string                 `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"` // 本部署的环境名 Commerce.ManualResolutionEnvironment
+	Retry               bool                   `protobuf:"varint,5,opt,name=retry,proto3" json:"retry,omitempty"`  // 读库失败(只读,没有结局未知),稍后重试
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ListManualContractsResponse) Reset() {
+	*x = ListManualContractsResponse{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListManualContractsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListManualContractsResponse) ProtoMessage() {}
+
+func (x *ListManualContractsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListManualContractsResponse.ProtoReflect.Descriptor instead.
+func (*ListManualContractsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ListManualContractsResponse) GetContracts() []*TradeCommerceRecord {
+	if x != nil {
+		return x.Contracts
+	}
+	return nil
+}
+
+func (x *ListManualContractsResponse) GetNextAfterUpdatedMs() uint64 {
+	if x != nil {
+		return x.NextAfterUpdatedMs
+	}
+	return 0
+}
+
+func (x *ListManualContractsResponse) GetNextAfterCommerceId() uint64 {
+	if x != nil {
+		return x.NextAfterCommerceId
+	}
+	return 0
+}
+
+func (x *ListManualContractsResponse) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *ListManualContractsResponse) GetRetry() bool {
+	if x != nil {
+		return x.Retry
+	}
+	return false
+}
+
+type ResolveManualContractRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	CommerceId uint64                 `protobuf:"varint,1,opt,name=commerce_id,json=commerceId,proto3" json:"commerce_id,omitempty"`
+	Mode       ManualContractMode     `protobuf:"varint,2,opt,name=mode,proto3,enum=trade.ManualContractMode" json:"mode,omitempty"`
+	// 以下 DRY_RUN / EXECUTE 用,SHOW 忽略。
+	Action           string                `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`                                                 // resume / reissue / refund / partial / redirect / void-auction
+	ExpectVersion    uint64                `protobuf:"varint,4,opt,name=expect_version,json=expectVersion,proto3" json:"expect_version,omitempty"`             // SHOW 看到的合同版本
+	ExpectTarget     string                `protobuf:"bytes,5,opt,name=expect_target,json=expectTarget,proto3" json:"expect_target,omitempty"`                 // 工单上写明的环境名,与服务端逐字相等(不从 SHOW 照抄),连错环境回 REFUSED target_mismatch
+	Operator         string                `protobuf:"bytes,6,opt,name=operator,proto3" json:"operator,omitempty"`                                             // ≤64 字节,不带控制字符
+	Reason           string                `protobuf:"bytes,7,opt,name=reason,proto3" json:"reason,omitempty"`                                                 // ≤191 字节:工单号与核对结论
+	Parts            []string              `protobuf:"bytes,8,rep,name=parts,proto3" json:"parts,omitempty"`                                                   // partial:每条 "<腿名>=<缺口>",缺口是逗号分隔的 instance:<guid>、pet、currency:<类型>
+	Party            string                `protobuf:"bytes,9,opt,name=party,proto3" json:"party,omitempty"`                                                   // redirect:seller / buyer
+	ToPlayerId       uint64                `protobuf:"varint,10,opt,name=to_player_id,json=toPlayerId,proto3" json:"to_player_id,omitempty"`                   // redirect:原账号名下的目标角色
+	LinkedCommerceId uint64                `protobuf:"varint,11,opt,name=linked_commerce_id,json=linkedCommerceId,proto3" json:"linked_commerce_id,omitempty"` // void-auction:拍品引用的出价
+	LinkedVersion    uint64                `protobuf:"varint,12,opt,name=linked_version,json=linkedVersion,proto3" json:"linked_version,omitempty"`            // void-auction:SHOW 看到的出价版本
+	Auth             *base.ServiceCallAuth `protobuf:"bytes,13,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ResolveManualContractRequest) Reset() {
+	*x = ResolveManualContractRequest{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveManualContractRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveManualContractRequest) ProtoMessage() {}
+
+func (x *ResolveManualContractRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveManualContractRequest.ProtoReflect.Descriptor instead.
+func (*ResolveManualContractRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ResolveManualContractRequest) GetCommerceId() uint64 {
+	if x != nil {
+		return x.CommerceId
+	}
+	return 0
+}
+
+func (x *ResolveManualContractRequest) GetMode() ManualContractMode {
+	if x != nil {
+		return x.Mode
+	}
+	return ManualContractMode_MANUAL_CONTRACT_MODE_UNSPECIFIED
+}
+
+func (x *ResolveManualContractRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *ResolveManualContractRequest) GetExpectVersion() uint64 {
+	if x != nil {
+		return x.ExpectVersion
+	}
+	return 0
+}
+
+func (x *ResolveManualContractRequest) GetExpectTarget() string {
+	if x != nil {
+		return x.ExpectTarget
+	}
+	return ""
+}
+
+func (x *ResolveManualContractRequest) GetOperator() string {
+	if x != nil {
+		return x.Operator
+	}
+	return ""
+}
+
+func (x *ResolveManualContractRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *ResolveManualContractRequest) GetParts() []string {
+	if x != nil {
+		return x.Parts
+	}
+	return nil
+}
+
+func (x *ResolveManualContractRequest) GetParty() string {
+	if x != nil {
+		return x.Party
+	}
+	return ""
+}
+
+func (x *ResolveManualContractRequest) GetToPlayerId() uint64 {
+	if x != nil {
+		return x.ToPlayerId
+	}
+	return 0
+}
+
+func (x *ResolveManualContractRequest) GetLinkedCommerceId() uint64 {
+	if x != nil {
+		return x.LinkedCommerceId
+	}
+	return 0
+}
+
+func (x *ResolveManualContractRequest) GetLinkedVersion() uint64 {
+	if x != nil {
+		return x.LinkedVersion
+	}
+	return 0
+}
+
+func (x *ResolveManualContractRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+// SHOW:一条腿与它 op 行的现状。
+type ManualContractLeg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Leg           *TradeCommerceLeg      `protobuf:"bytes,1,opt,name=leg,proto3" json:"leg,omitempty"`
+	OpStatus      TradeAssetOpStatus     `protobuf:"varint,2,opt,name=op_status,json=opStatus,proto3,enum=trade.TradeAssetOpStatus" json:"op_status,omitempty"` // op 行现在的状态;没发出为 UNSPECIFIED
+	FinalMs       uint64                 `protobuf:"varint,3,opt,name=final_ms,json=finalMs,proto3" json:"final_ms,omitempty"`                                  // 终态行的终结时刻(对照角色过户时刻用)
+	ReadFailed    bool                   `protobuf:"varint,4,opt,name=read_failed,json=readFailed,proto3" json:"read_failed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ManualContractLeg) Reset() {
+	*x = ManualContractLeg{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManualContractLeg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManualContractLeg) ProtoMessage() {}
+
+func (x *ManualContractLeg) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManualContractLeg.ProtoReflect.Descriptor instead.
+func (*ManualContractLeg) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ManualContractLeg) GetLeg() *TradeCommerceLeg {
+	if x != nil {
+		return x.Leg
+	}
+	return nil
+}
+
+func (x *ManualContractLeg) GetOpStatus() TradeAssetOpStatus {
+	if x != nil {
+		return x.OpStatus
+	}
+	return TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_UNSPECIFIED
+}
+
+func (x *ManualContractLeg) GetFinalMs() uint64 {
+	if x != nil {
+		return x.FinalMs
+	}
+	return 0
+}
+
+func (x *ManualContractLeg) GetReadFailed() bool {
+	if x != nil {
+		return x.ReadFailed
+	}
+	return false
+}
+
+// SHOW:一方的角色现在归谁。不带账号原文,只说账号是否相同。
+type ManualContractParty struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Party                 string                 `protobuf:"bytes,1,opt,name=party,proto3" json:"party,omitempty"` // seller / buyer
+	PlayerId              uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	ContractOwnerRevision uint64                 `protobuf:"varint,3,opt,name=contract_owner_revision,json=contractOwnerRevision,proto3" json:"contract_owner_revision,omitempty"`
+	CurrentOwnerRevision  uint64                 `protobuf:"varint,4,opt,name=current_owner_revision,json=currentOwnerRevision,proto3" json:"current_owner_revision,omitempty"` // 删角、判不了时为 0
+	SameAccount           bool                   `protobuf:"varint,5,opt,name=same_account,json=sameAccount,proto3" json:"same_account,omitempty"`
+	Deleted               bool                   `protobuf:"varint,6,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	Frozen                bool                   `protobuf:"varint,7,opt,name=frozen,proto3" json:"frozen,omitempty"`   // 被挂单冻结或在投票中
+	Unknown               bool                   `protobuf:"varint,8,opt,name=unknown,proto3" json:"unknown,omitempty"` // 副本缺行,判不了
+	Changed               bool                   `protobuf:"varint,9,opt,name=changed,proto3" json:"changed,omitempty"` // 已不可逆地不归原身份:用 redirect
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *ManualContractParty) Reset() {
+	*x = ManualContractParty{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManualContractParty) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManualContractParty) ProtoMessage() {}
+
+func (x *ManualContractParty) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManualContractParty.ProtoReflect.Descriptor instead.
+func (*ManualContractParty) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ManualContractParty) GetParty() string {
+	if x != nil {
+		return x.Party
+	}
+	return ""
+}
+
+func (x *ManualContractParty) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *ManualContractParty) GetContractOwnerRevision() uint64 {
+	if x != nil {
+		return x.ContractOwnerRevision
+	}
+	return 0
+}
+
+func (x *ManualContractParty) GetCurrentOwnerRevision() uint64 {
+	if x != nil {
+		return x.CurrentOwnerRevision
+	}
+	return 0
+}
+
+func (x *ManualContractParty) GetSameAccount() bool {
+	if x != nil {
+		return x.SameAccount
+	}
+	return false
+}
+
+func (x *ManualContractParty) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
+func (x *ManualContractParty) GetFrozen() bool {
+	if x != nil {
+		return x.Frozen
+	}
+	return false
+}
+
+func (x *ManualContractParty) GetUnknown() bool {
+	if x != nil {
+		return x.Unknown
+	}
+	return false
+}
+
+func (x *ManualContractParty) GetChanged() bool {
+	if x != nil {
+		return x.Changed
+	}
+	return false
+}
+
+// SHOW:一种动作现在能否处理。partial、redirect 要额外参数,这里列出候选。
+type ManualContractActionVerdict struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Action        string                 `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"`
+	Allowed       bool                   `protobuf:"varint,2,opt,name=allowed,proto3" json:"allowed,omitempty"`
+	Detail        string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ManualContractActionVerdict) Reset() {
+	*x = ManualContractActionVerdict{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManualContractActionVerdict) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManualContractActionVerdict) ProtoMessage() {}
+
+func (x *ManualContractActionVerdict) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManualContractActionVerdict.ProtoReflect.Descriptor instead.
+func (*ManualContractActionVerdict) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ManualContractActionVerdict) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *ManualContractActionVerdict) GetAllowed() bool {
+	if x != nil {
+		return x.Allowed
+	}
+	return false
+}
+
+func (x *ManualContractActionVerdict) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+type ResolveManualContractResponse struct {
+	state         protoimpl.MessageState         `protogen:"open.v1"`
+	Verdict       ManualContractVerdict          `protobuf:"varint,1,opt,name=verdict,proto3,enum=trade.ManualContractVerdict" json:"verdict,omitempty"`
+	Refusal       string                         `protobuf:"bytes,2,opt,name=refusal,proto3" json:"refusal,omitempty"`                          // REFUSED / VERSION_CHANGED / RETRY 的原因
+	Target        string                         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`                            // 本部署的环境名
+	Record        *TradeCommerceRecord           `protobuf:"bytes,4,opt,name=record,proto3" json:"record,omitempty"`                            // SHOW:锁外读到的合同,workflow_proto 原样
+	Linked        *TradeCommerceRecord           `protobuf:"bytes,5,opt,name=linked,proto3" json:"linked,omitempty"`                            // SHOW:出价所属的拍品,或拍品引用的出价
+	Legs          []*ManualContractLeg           `protobuf:"bytes,6,rep,name=legs,proto3" json:"legs,omitempty"`                                // SHOW
+	Parties       []*ManualContractParty         `protobuf:"bytes,7,rep,name=parties,proto3" json:"parties,omitempty"`                          // SHOW
+	Actions       []*ManualContractActionVerdict `protobuf:"bytes,8,rep,name=actions,proto3" json:"actions,omitempty"`                          // SHOW
+	Plan          *TradeCommerceManualAction     `protobuf:"bytes,9,opt,name=plan,proto3" json:"plan,omitempty"`                                // DRY_RUN / EXECUTE:写进(或要写进)合同留痕的那一条
+	LinkedPlan    *TradeCommerceManualAction     `protobuf:"bytes,10,opt,name=linked_plan,json=linkedPlan,proto3" json:"linked_plan,omitempty"` // void-auction:写进出价留痕的那一条
+	Stage         string                         `protobuf:"bytes,11,opt,name=stage,proto3" json:"stage,omitempty"`                             // DRY_RUN / EXECUTE:处置后的阶段与状态
+	Status        uint32                         `protobuf:"varint,12,opt,name=status,proto3" json:"status,omitempty"`
+	AuditLine     string                         `protobuf:"bytes,13,opt,name=audit_line,json=auditLine,proto3" json:"audit_line,omitempty"` // DRY_RUN / EXECUTE:服务端打进日志的同一行 [CommerceManual],贴进工单
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveManualContractResponse) Reset() {
+	*x = ResolveManualContractResponse{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveManualContractResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveManualContractResponse) ProtoMessage() {}
+
+func (x *ResolveManualContractResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveManualContractResponse.ProtoReflect.Descriptor instead.
+func (*ResolveManualContractResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ResolveManualContractResponse) GetVerdict() ManualContractVerdict {
+	if x != nil {
+		return x.Verdict
+	}
+	return ManualContractVerdict_MANUAL_CONTRACT_VERDICT_UNSPECIFIED
+}
+
+func (x *ResolveManualContractResponse) GetRefusal() string {
+	if x != nil {
+		return x.Refusal
+	}
+	return ""
+}
+
+func (x *ResolveManualContractResponse) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *ResolveManualContractResponse) GetRecord() *TradeCommerceRecord {
+	if x != nil {
+		return x.Record
+	}
+	return nil
+}
+
+func (x *ResolveManualContractResponse) GetLinked() *TradeCommerceRecord {
+	if x != nil {
+		return x.Linked
+	}
+	return nil
+}
+
+func (x *ResolveManualContractResponse) GetLegs() []*ManualContractLeg {
+	if x != nil {
+		return x.Legs
+	}
+	return nil
+}
+
+func (x *ResolveManualContractResponse) GetParties() []*ManualContractParty {
+	if x != nil {
+		return x.Parties
+	}
+	return nil
+}
+
+func (x *ResolveManualContractResponse) GetActions() []*ManualContractActionVerdict {
+	if x != nil {
+		return x.Actions
+	}
+	return nil
+}
+
+func (x *ResolveManualContractResponse) GetPlan() *TradeCommerceManualAction {
+	if x != nil {
+		return x.Plan
+	}
+	return nil
+}
+
+func (x *ResolveManualContractResponse) GetLinkedPlan() *TradeCommerceManualAction {
+	if x != nil {
+		return x.LinkedPlan
+	}
+	return nil
+}
+
+func (x *ResolveManualContractResponse) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
+}
+
+func (x *ResolveManualContractResponse) GetStatus() uint32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *ResolveManualContractResponse) GetAuditLine() string {
+	if x != nil {
+		return x.AuditLine
+	}
+	return ""
+}
+
 var File_proto_trade_trade_admin_proto protoreflect.FileDescriptor
 
 const file_proto_trade_trade_admin_proto_rawDesc = "" +
 	"\n" +
-	"\x1dproto/trade/trade_admin.proto\x12\x05trade\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1bproto/trade/jubaozhai.proto\"\x8c\x03\n" +
+	"\x1dproto/trade/trade_admin.proto\x12\x05trade\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a)proto/common/base/service_call_auth.proto\x1a\x1bproto/trade/jubaozhai.proto\x1a\x1dproto/trade/trade_table.proto\"\x8c\x03\n" +
 	"\x12SeedListingRequest\x12(\n" +
 	"\x10seller_player_id\x18\x01 \x01(\x04R\x0esellerPlayerId\x122\n" +
 	"\bcategory\x18\x02 \x01(\x0e2\x16.trade.ListingCategoryR\bcategory\x12 \n" +
@@ -233,10 +1007,89 @@ const file_proto_trade_trade_admin_proto_rawDesc = "" +
 	"\n" +
 	"listing_id\x18\x02 \x01(\x04R\tlistingId\x12\x1f\n" +
 	"\vmarket_zone\x18\x03 \x01(\rR\n" +
-	"marketZone2R\n" +
+	"marketZone\"\xba\x01\n" +
+	"\x1aListManualContractsRequest\x12(\n" +
+	"\x10after_updated_ms\x18\x01 \x01(\x04R\x0eafterUpdatedMs\x12*\n" +
+	"\x11after_commerce_id\x18\x02 \x01(\x04R\x0fafterCommerceId\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\rR\x05limit\x120\n" +
+	"\x04auth\x18\x04 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xed\x01\n" +
+	"\x1bListManualContractsResponse\x128\n" +
+	"\tcontracts\x18\x01 \x03(\v2\x1a.trade.TradeCommerceRecordR\tcontracts\x121\n" +
+	"\x15next_after_updated_ms\x18\x02 \x01(\x04R\x12nextAfterUpdatedMs\x123\n" +
+	"\x16next_after_commerce_id\x18\x03 \x01(\x04R\x13nextAfterCommerceId\x12\x16\n" +
+	"\x06target\x18\x04 \x01(\tR\x06target\x12\x14\n" +
+	"\x05retry\x18\x05 \x01(\bR\x05retry\"\xdb\x03\n" +
+	"\x1cResolveManualContractRequest\x12\x1f\n" +
+	"\vcommerce_id\x18\x01 \x01(\x04R\n" +
+	"commerceId\x12-\n" +
+	"\x04mode\x18\x02 \x01(\x0e2\x19.trade.ManualContractModeR\x04mode\x12\x16\n" +
+	"\x06action\x18\x03 \x01(\tR\x06action\x12%\n" +
+	"\x0eexpect_version\x18\x04 \x01(\x04R\rexpectVersion\x12#\n" +
+	"\rexpect_target\x18\x05 \x01(\tR\fexpectTarget\x12\x1a\n" +
+	"\boperator\x18\x06 \x01(\tR\boperator\x12\x16\n" +
+	"\x06reason\x18\a \x01(\tR\x06reason\x12\x14\n" +
+	"\x05parts\x18\b \x03(\tR\x05parts\x12\x14\n" +
+	"\x05party\x18\t \x01(\tR\x05party\x12 \n" +
+	"\fto_player_id\x18\n" +
+	" \x01(\x04R\n" +
+	"toPlayerId\x12,\n" +
+	"\x12linked_commerce_id\x18\v \x01(\x04R\x10linkedCommerceId\x12%\n" +
+	"\x0elinked_version\x18\f \x01(\x04R\rlinkedVersion\x120\n" +
+	"\x04auth\x18\r \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xb2\x01\n" +
+	"\x11ManualContractLeg\x12)\n" +
+	"\x03leg\x18\x01 \x01(\v2\x17.trade.TradeCommerceLegR\x03leg\x126\n" +
+	"\top_status\x18\x02 \x01(\x0e2\x19.trade.TradeAssetOpStatusR\bopStatus\x12\x19\n" +
+	"\bfinal_ms\x18\x03 \x01(\x04R\afinalMs\x12\x1f\n" +
+	"\vread_failed\x18\x04 \x01(\bR\n" +
+	"readFailed\"\xbf\x02\n" +
+	"\x13ManualContractParty\x12\x14\n" +
+	"\x05party\x18\x01 \x01(\tR\x05party\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x126\n" +
+	"\x17contract_owner_revision\x18\x03 \x01(\x04R\x15contractOwnerRevision\x124\n" +
+	"\x16current_owner_revision\x18\x04 \x01(\x04R\x14currentOwnerRevision\x12!\n" +
+	"\fsame_account\x18\x05 \x01(\bR\vsameAccount\x12\x18\n" +
+	"\adeleted\x18\x06 \x01(\bR\adeleted\x12\x16\n" +
+	"\x06frozen\x18\a \x01(\bR\x06frozen\x12\x18\n" +
+	"\aunknown\x18\b \x01(\bR\aunknown\x12\x18\n" +
+	"\achanged\x18\t \x01(\bR\achanged\"g\n" +
+	"\x1bManualContractActionVerdict\x12\x16\n" +
+	"\x06action\x18\x01 \x01(\tR\x06action\x12\x18\n" +
+	"\aallowed\x18\x02 \x01(\bR\aallowed\x12\x16\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail\"\xd9\x04\n" +
+	"\x1dResolveManualContractResponse\x126\n" +
+	"\averdict\x18\x01 \x01(\x0e2\x1c.trade.ManualContractVerdictR\averdict\x12\x18\n" +
+	"\arefusal\x18\x02 \x01(\tR\arefusal\x12\x16\n" +
+	"\x06target\x18\x03 \x01(\tR\x06target\x122\n" +
+	"\x06record\x18\x04 \x01(\v2\x1a.trade.TradeCommerceRecordR\x06record\x122\n" +
+	"\x06linked\x18\x05 \x01(\v2\x1a.trade.TradeCommerceRecordR\x06linked\x12,\n" +
+	"\x04legs\x18\x06 \x03(\v2\x18.trade.ManualContractLegR\x04legs\x124\n" +
+	"\aparties\x18\a \x03(\v2\x1a.trade.ManualContractPartyR\aparties\x12<\n" +
+	"\aactions\x18\b \x03(\v2\".trade.ManualContractActionVerdictR\aactions\x124\n" +
+	"\x04plan\x18\t \x01(\v2 .trade.TradeCommerceManualActionR\x04plan\x12A\n" +
+	"\vlinked_plan\x18\n" +
+	" \x01(\v2 .trade.TradeCommerceManualActionR\n" +
+	"linkedPlan\x12\x14\n" +
+	"\x05stage\x18\v \x01(\tR\x05stage\x12\x16\n" +
+	"\x06status\x18\f \x01(\rR\x06status\x12\x1d\n" +
+	"\n" +
+	"audit_line\x18\r \x01(\tR\tauditLine*\x9d\x01\n" +
+	"\x12ManualContractMode\x12$\n" +
+	" MANUAL_CONTRACT_MODE_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19MANUAL_CONTRACT_MODE_SHOW\x10\x01\x12 \n" +
+	"\x1cMANUAL_CONTRACT_MODE_DRY_RUN\x10\x02\x12 \n" +
+	"\x1cMANUAL_CONTRACT_MODE_EXECUTE\x10\x03*\xfc\x01\n" +
+	"\x15ManualContractVerdict\x12'\n" +
+	"#MANUAL_CONTRACT_VERDICT_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aMANUAL_CONTRACT_VERDICT_OK\x10\x01\x12%\n" +
+	"!MANUAL_CONTRACT_VERDICT_NOT_FOUND\x10\x02\x12#\n" +
+	"\x1fMANUAL_CONTRACT_VERDICT_REFUSED\x10\x03\x12+\n" +
+	"'MANUAL_CONTRACT_VERDICT_VERSION_CHANGED\x10\x04\x12!\n" +
+	"\x1dMANUAL_CONTRACT_VERDICT_RETRY\x10\x052\x94\x02\n" +
 	"\n" +
 	"TradeAdmin\x12D\n" +
-	"\vSeedListing\x12\x19.trade.SeedListingRequest\x1a\x1a.trade.SeedListingResponseB\x14\x98\xd4a\x11Z\vproto/trade\x80\x01\x00b\x06proto3"
+	"\vSeedListing\x12\x19.trade.SeedListingRequest\x1a\x1a.trade.SeedListingResponse\x12\\\n" +
+	"\x13ListManualContracts\x12!.trade.ListManualContractsRequest\x1a\".trade.ListManualContractsResponse\x12b\n" +
+	"\x15ResolveManualContract\x12#.trade.ResolveManualContractRequest\x1a$.trade.ResolveManualContractResponseB\x14\x98\xd4a\x11Z\vproto/trade\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_trade_trade_admin_proto_rawDescOnce sync.Once
@@ -250,23 +1103,56 @@ func file_proto_trade_trade_admin_proto_rawDescGZIP() []byte {
 	return file_proto_trade_trade_admin_proto_rawDescData
 }
 
-var file_proto_trade_trade_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_trade_trade_admin_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_proto_trade_trade_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_trade_trade_admin_proto_goTypes = []any{
-	(*SeedListingRequest)(nil),  // 0: trade.SeedListingRequest
-	(*SeedListingResponse)(nil), // 1: trade.SeedListingResponse
-	(ListingCategory)(0),        // 2: trade.ListingCategory
-	(*base.TipInfoMessage)(nil), // 3: TipInfoMessage
+	(ManualContractMode)(0),               // 0: trade.ManualContractMode
+	(ManualContractVerdict)(0),            // 1: trade.ManualContractVerdict
+	(*SeedListingRequest)(nil),            // 2: trade.SeedListingRequest
+	(*SeedListingResponse)(nil),           // 3: trade.SeedListingResponse
+	(*ListManualContractsRequest)(nil),    // 4: trade.ListManualContractsRequest
+	(*ListManualContractsResponse)(nil),   // 5: trade.ListManualContractsResponse
+	(*ResolveManualContractRequest)(nil),  // 6: trade.ResolveManualContractRequest
+	(*ManualContractLeg)(nil),             // 7: trade.ManualContractLeg
+	(*ManualContractParty)(nil),           // 8: trade.ManualContractParty
+	(*ManualContractActionVerdict)(nil),   // 9: trade.ManualContractActionVerdict
+	(*ResolveManualContractResponse)(nil), // 10: trade.ResolveManualContractResponse
+	(ListingCategory)(0),                  // 11: trade.ListingCategory
+	(*base.TipInfoMessage)(nil),           // 12: TipInfoMessage
+	(*base.ServiceCallAuth)(nil),          // 13: common.base.ServiceCallAuth
+	(*TradeCommerceRecord)(nil),           // 14: trade.TradeCommerceRecord
+	(*TradeCommerceLeg)(nil),              // 15: trade.TradeCommerceLeg
+	(TradeAssetOpStatus)(0),               // 16: trade.TradeAssetOpStatus
+	(*TradeCommerceManualAction)(nil),     // 17: trade.TradeCommerceManualAction
 }
 var file_proto_trade_trade_admin_proto_depIdxs = []int32{
-	2, // 0: trade.SeedListingRequest.category:type_name -> trade.ListingCategory
-	3, // 1: trade.SeedListingResponse.error_message:type_name -> TipInfoMessage
-	0, // 2: trade.TradeAdmin.SeedListing:input_type -> trade.SeedListingRequest
-	1, // 3: trade.TradeAdmin.SeedListing:output_type -> trade.SeedListingResponse
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	11, // 0: trade.SeedListingRequest.category:type_name -> trade.ListingCategory
+	12, // 1: trade.SeedListingResponse.error_message:type_name -> TipInfoMessage
+	13, // 2: trade.ListManualContractsRequest.auth:type_name -> common.base.ServiceCallAuth
+	14, // 3: trade.ListManualContractsResponse.contracts:type_name -> trade.TradeCommerceRecord
+	0,  // 4: trade.ResolveManualContractRequest.mode:type_name -> trade.ManualContractMode
+	13, // 5: trade.ResolveManualContractRequest.auth:type_name -> common.base.ServiceCallAuth
+	15, // 6: trade.ManualContractLeg.leg:type_name -> trade.TradeCommerceLeg
+	16, // 7: trade.ManualContractLeg.op_status:type_name -> trade.TradeAssetOpStatus
+	1,  // 8: trade.ResolveManualContractResponse.verdict:type_name -> trade.ManualContractVerdict
+	14, // 9: trade.ResolveManualContractResponse.record:type_name -> trade.TradeCommerceRecord
+	14, // 10: trade.ResolveManualContractResponse.linked:type_name -> trade.TradeCommerceRecord
+	7,  // 11: trade.ResolveManualContractResponse.legs:type_name -> trade.ManualContractLeg
+	8,  // 12: trade.ResolveManualContractResponse.parties:type_name -> trade.ManualContractParty
+	9,  // 13: trade.ResolveManualContractResponse.actions:type_name -> trade.ManualContractActionVerdict
+	17, // 14: trade.ResolveManualContractResponse.plan:type_name -> trade.TradeCommerceManualAction
+	17, // 15: trade.ResolveManualContractResponse.linked_plan:type_name -> trade.TradeCommerceManualAction
+	2,  // 16: trade.TradeAdmin.SeedListing:input_type -> trade.SeedListingRequest
+	4,  // 17: trade.TradeAdmin.ListManualContracts:input_type -> trade.ListManualContractsRequest
+	6,  // 18: trade.TradeAdmin.ResolveManualContract:input_type -> trade.ResolveManualContractRequest
+	3,  // 19: trade.TradeAdmin.SeedListing:output_type -> trade.SeedListingResponse
+	5,  // 20: trade.TradeAdmin.ListManualContracts:output_type -> trade.ListManualContractsResponse
+	10, // 21: trade.TradeAdmin.ResolveManualContract:output_type -> trade.ResolveManualContractResponse
+	19, // [19:22] is the sub-list for method output_type
+	16, // [16:19] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_proto_trade_trade_admin_proto_init() }
@@ -275,18 +1161,20 @@ func file_proto_trade_trade_admin_proto_init() {
 		return
 	}
 	file_proto_trade_jubaozhai_proto_init()
+	file_proto_trade_trade_table_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_trade_trade_admin_proto_rawDesc), len(file_proto_trade_trade_admin_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   2,
+			NumEnums:      2,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_proto_trade_trade_admin_proto_goTypes,
 		DependencyIndexes: file_proto_trade_trade_admin_proto_depIdxs,
+		EnumInfos:         file_proto_trade_trade_admin_proto_enumTypes,
 		MessageInfos:      file_proto_trade_trade_admin_proto_msgTypes,
 	}.Build()
 	File_proto_trade_trade_admin_proto = out.File

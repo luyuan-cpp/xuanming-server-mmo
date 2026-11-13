@@ -87,66 +87,70 @@ constexpr uint32_t DataServiceGetMergedZonesMessageId = 355;
 constexpr uint32_t DataServiceGetMergedZonesIndex = 20;
 #define DataServiceGetMergedZonesMethod  ::DataService_Stub::descriptor()->method(20)
 
+constexpr uint32_t DataServiceCountZoneRolesMessageId = 393;
+constexpr uint32_t DataServiceCountZoneRolesIndex = 21;
+#define DataServiceCountZoneRolesMethod  ::DataService_Stub::descriptor()->method(21)
+
 constexpr uint32_t DataServiceGetPlayerRouteMessageId = 364;
-constexpr uint32_t DataServiceGetPlayerRouteIndex = 21;
-#define DataServiceGetPlayerRouteMethod  ::DataService_Stub::descriptor()->method(21)
+constexpr uint32_t DataServiceGetPlayerRouteIndex = 22;
+#define DataServiceGetPlayerRouteMethod  ::DataService_Stub::descriptor()->method(22)
 
 constexpr uint32_t DataServiceListPlayerSnapshotsMessageId = 97;
-constexpr uint32_t DataServiceListPlayerSnapshotsIndex = 22;
-#define DataServiceListPlayerSnapshotsMethod  ::DataService_Stub::descriptor()->method(22)
+constexpr uint32_t DataServiceListPlayerSnapshotsIndex = 23;
+#define DataServiceListPlayerSnapshotsMethod  ::DataService_Stub::descriptor()->method(23)
 
 constexpr uint32_t DataServiceBatchRecallItemsMessageId = 108;
-constexpr uint32_t DataServiceBatchRecallItemsIndex = 23;
-#define DataServiceBatchRecallItemsMethod  ::DataService_Stub::descriptor()->method(23)
+constexpr uint32_t DataServiceBatchRecallItemsIndex = 24;
+#define DataServiceBatchRecallItemsMethod  ::DataService_Stub::descriptor()->method(24)
 
 constexpr uint32_t DataServiceGetRecallBatchMessageId = 365;
-constexpr uint32_t DataServiceGetRecallBatchIndex = 24;
-#define DataServiceGetRecallBatchMethod  ::DataService_Stub::descriptor()->method(24)
+constexpr uint32_t DataServiceGetRecallBatchIndex = 25;
+#define DataServiceGetRecallBatchMethod  ::DataService_Stub::descriptor()->method(25)
 
 constexpr uint32_t DataServiceCancelRecallBatchMessageId = 366;
-constexpr uint32_t DataServiceCancelRecallBatchIndex = 25;
-#define DataServiceCancelRecallBatchMethod  ::DataService_Stub::descriptor()->method(25)
+constexpr uint32_t DataServiceCancelRecallBatchIndex = 26;
+#define DataServiceCancelRecallBatchMethod  ::DataService_Stub::descriptor()->method(26)
 
 constexpr uint32_t DataServiceResolveRecallOpMessageId = 367;
-constexpr uint32_t DataServiceResolveRecallOpIndex = 26;
-#define DataServiceResolveRecallOpMethod  ::DataService_Stub::descriptor()->method(26)
+constexpr uint32_t DataServiceResolveRecallOpIndex = 27;
+#define DataServiceResolveRecallOpMethod  ::DataService_Stub::descriptor()->method(27)
 
 constexpr uint32_t DataServiceRegisterRecallReviewHandledMessageId = 384;
-constexpr uint32_t DataServiceRegisterRecallReviewHandledIndex = 27;
-#define DataServiceRegisterRecallReviewHandledMethod  ::DataService_Stub::descriptor()->method(27)
+constexpr uint32_t DataServiceRegisterRecallReviewHandledIndex = 28;
+#define DataServiceRegisterRecallReviewHandledMethod  ::DataService_Stub::descriptor()->method(28)
 
 constexpr uint32_t DataServiceQueryTransactionLogMessageId = 114;
-constexpr uint32_t DataServiceQueryTransactionLogIndex = 28;
-#define DataServiceQueryTransactionLogMethod  ::DataService_Stub::descriptor()->method(28)
+constexpr uint32_t DataServiceQueryTransactionLogIndex = 29;
+#define DataServiceQueryTransactionLogMethod  ::DataService_Stub::descriptor()->method(29)
 
 constexpr uint32_t DataServiceAllocateIdSegmentMessageId = 180;
-constexpr uint32_t DataServiceAllocateIdSegmentIndex = 29;
-#define DataServiceAllocateIdSegmentMethod  ::DataService_Stub::descriptor()->method(29)
+constexpr uint32_t DataServiceAllocateIdSegmentIndex = 30;
+#define DataServiceAllocateIdSegmentMethod  ::DataService_Stub::descriptor()->method(30)
 
 constexpr uint32_t DataServiceReservePlayerNameMessageId = 229;
-constexpr uint32_t DataServiceReservePlayerNameIndex = 30;
-#define DataServiceReservePlayerNameMethod  ::DataService_Stub::descriptor()->method(30)
+constexpr uint32_t DataServiceReservePlayerNameIndex = 31;
+#define DataServiceReservePlayerNameMethod  ::DataService_Stub::descriptor()->method(31)
 
 constexpr uint32_t DataServiceReleasePlayerNameMessageId = 237;
-constexpr uint32_t DataServiceReleasePlayerNameIndex = 31;
-#define DataServiceReleasePlayerNameMethod  ::DataService_Stub::descriptor()->method(31)
+constexpr uint32_t DataServiceReleasePlayerNameIndex = 32;
+#define DataServiceReleasePlayerNameMethod  ::DataService_Stub::descriptor()->method(32)
 
 constexpr uint32_t DataServiceBatchGetPlayerNameMessageId = 231;
-constexpr uint32_t DataServiceBatchGetPlayerNameIndex = 32;
-#define DataServiceBatchGetPlayerNameMethod  ::DataService_Stub::descriptor()->method(32)
+constexpr uint32_t DataServiceBatchGetPlayerNameIndex = 33;
+#define DataServiceBatchGetPlayerNameMethod  ::DataService_Stub::descriptor()->method(33)
 
 constexpr uint32_t DataServiceBatchGetPlayerDisplayMessageId = 356;
-constexpr uint32_t DataServiceBatchGetPlayerDisplayIndex = 33;
-#define DataServiceBatchGetPlayerDisplayMethod  ::DataService_Stub::descriptor()->method(33)
+constexpr uint32_t DataServiceBatchGetPlayerDisplayIndex = 34;
+#define DataServiceBatchGetPlayerDisplayMethod  ::DataService_Stub::descriptor()->method(34)
 
 constexpr uint32_t DataServiceGetPlayerAssetOpLedgerMessageId = 248;
-constexpr uint32_t DataServiceGetPlayerAssetOpLedgerIndex = 34;
-#define DataServiceGetPlayerAssetOpLedgerMethod  ::DataService_Stub::descriptor()->method(34)
+constexpr uint32_t DataServiceGetPlayerAssetOpLedgerIndex = 35;
+#define DataServiceGetPlayerAssetOpLedgerMethod  ::DataService_Stub::descriptor()->method(35)
 
 constexpr uint32_t DataServiceGetPlayerInboxLedgerMessageId = 258;
-constexpr uint32_t DataServiceGetPlayerInboxLedgerIndex = 35;
-#define DataServiceGetPlayerInboxLedgerMethod  ::DataService_Stub::descriptor()->method(35)
+constexpr uint32_t DataServiceGetPlayerInboxLedgerIndex = 36;
+#define DataServiceGetPlayerInboxLedgerMethod  ::DataService_Stub::descriptor()->method(36)
 
 constexpr uint32_t DataServiceGetPlayerItemGainBlockMessageId = 385;
-constexpr uint32_t DataServiceGetPlayerItemGainBlockIndex = 36;
-#define DataServiceGetPlayerItemGainBlockMethod  ::DataService_Stub::descriptor()->method(36)
+constexpr uint32_t DataServiceGetPlayerItemGainBlockIndex = 37;
+#define DataServiceGetPlayerItemGainBlockMethod  ::DataService_Stub::descriptor()->method(37)

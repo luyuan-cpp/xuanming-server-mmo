@@ -11683,6 +11683,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_ref final : public ::g
   // accessors -------------------------------------------------------
   enum : int {
     kAccountFieldNumber = 1,
+    kHeldReasonFieldNumber = 10,
     kPlayerIdFieldNumber = 2,
     kTxIdFieldNumber = 4,
     kStateFieldNumber = 3,
@@ -11690,6 +11691,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_ref final : public ::g
     kListingIdFieldNumber = 5,
     kNonceFieldNumber = 7,
     kCreatedMsFieldNumber = 8,
+    kHeldMsFieldNumber = 9,
   };
   // string account = 1;
   void clear_account() ;
@@ -11704,6 +11706,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_ref final : public ::g
   const ::std::string& _internal_account() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_account(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_account();
+
+  public:
+  // string held_reason = 10;
+  void clear_held_reason() ;
+  [[nodiscard]] const ::std::string& held_reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_held_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_held_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_held_reason();
+  void set_allocated_held_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_held_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_held_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_held_reason();
 
   public:
   // uint64 player_id = 2;
@@ -11776,12 +11793,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_ref final : public ::g
   void _internal_set_created_ms(::uint64_t value);
 
   public:
+  // uint64 held_ms = 9;
+  void clear_held_ms() ;
+  [[nodiscard]] ::uint64_t held_ms() const;
+  void set_held_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_held_ms() const;
+  void _internal_set_held_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:account_role_ref)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
-                          0, 40,
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          0, 51,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -11810,6 +11837,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_ref final : public ::g
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr account_;
+    ::google::protobuf::internal::ArenaStringPtr held_reason_;
     ::uint64_t player_id_;
     ::uint64_t tx_id_;
     ::uint32_t state_;
@@ -11817,6 +11845,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_ref final : public ::g
     ::uint64_t listing_id_;
     ::uint64_t nonce_;
     ::uint64_t created_ms_;
+    ::uint64_t held_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -15464,6 +15493,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt_Reques
     kDeploymentIdFieldNumber = 10,
     kLockQualificationSha256FieldNumber = 12,
     kSuccessorRequestIdFieldNumber = 13,
+    kRegisteredByFieldNumber = 14,
     kWriterFieldNumber = 3,
     kExpectedEpochFieldNumber = 4,
     kExpectedCatalogRevisionFieldNumber = 5,
@@ -15602,6 +15632,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt_Reques
   ::std::string* PROTOBUF_NONNULL _internal_mutable_successor_request_id();
 
   public:
+  // string registered_by = 14;
+  void clear_registered_by() ;
+  [[nodiscard]] const ::std::string& registered_by() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_registered_by(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_registered_by();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_registered_by();
+  void set_allocated_registered_by(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_registered_by() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_registered_by(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_registered_by();
+
+  public:
   // .sql_writer_registry writer = 3;
   [[nodiscard]] bool has_writer()
       const;
@@ -15662,8 +15707,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt_Reques
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
-                          1, 99,
+      ::google::protobuf::internal::TcParseTable<4, 14,
+                          1, 112,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -15699,6 +15744,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt_Reques
     ::google::protobuf::internal::ArenaStringPtr deployment_id_;
     ::google::protobuf::internal::ArenaStringPtr lock_qualification_sha256_;
     ::google::protobuf::internal::ArenaStringPtr successor_request_id_;
+    ::google::protobuf::internal::ArenaStringPtr registered_by_;
     ::sql_writer_registry* PROTOBUF_NULLABLE writer_;
     ::uint64_t expected_epoch_;
     ::uint64_t expected_catalog_revision_;
@@ -24756,7 +24802,7 @@ inline void account_role_ref::set_allocated_account(::std::string* PROTOBUF_NULL
 inline void account_role_ref::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t account_role_ref::player_id() const {
   // @@protoc_insertion_point(field_get:account_role_ref.player_id)
@@ -24764,7 +24810,7 @@ inline ::uint64_t account_role_ref::player_id() const {
 }
 inline void account_role_ref::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:account_role_ref.player_id)
 }
 inline ::uint64_t account_role_ref::_internal_player_id() const {
@@ -24780,7 +24826,7 @@ inline void account_role_ref::_internal_set_player_id(::uint64_t value) {
 inline void account_role_ref::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t account_role_ref::state() const {
   // @@protoc_insertion_point(field_get:account_role_ref.state)
@@ -24788,7 +24834,7 @@ inline ::uint32_t account_role_ref::state() const {
 }
 inline void account_role_ref::set_state(::uint32_t value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:account_role_ref.state)
 }
 inline ::uint32_t account_role_ref::_internal_state() const {
@@ -24804,7 +24850,7 @@ inline void account_role_ref::_internal_set_state(::uint32_t value) {
 inline void account_role_ref::clear_tx_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.tx_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t account_role_ref::tx_id() const {
   // @@protoc_insertion_point(field_get:account_role_ref.tx_id)
@@ -24812,7 +24858,7 @@ inline ::uint64_t account_role_ref::tx_id() const {
 }
 inline void account_role_ref::set_tx_id(::uint64_t value) {
   _internal_set_tx_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:account_role_ref.tx_id)
 }
 inline ::uint64_t account_role_ref::_internal_tx_id() const {
@@ -24828,7 +24874,7 @@ inline void account_role_ref::_internal_set_tx_id(::uint64_t value) {
 inline void account_role_ref::clear_listing_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.listing_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t account_role_ref::listing_id() const {
   // @@protoc_insertion_point(field_get:account_role_ref.listing_id)
@@ -24836,7 +24882,7 @@ inline ::uint64_t account_role_ref::listing_id() const {
 }
 inline void account_role_ref::set_listing_id(::uint64_t value) {
   _internal_set_listing_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:account_role_ref.listing_id)
 }
 inline ::uint64_t account_role_ref::_internal_listing_id() const {
@@ -24852,7 +24898,7 @@ inline void account_role_ref::_internal_set_listing_id(::uint64_t value) {
 inline void account_role_ref::clear_home_zone() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.home_zone_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t account_role_ref::home_zone() const {
   // @@protoc_insertion_point(field_get:account_role_ref.home_zone)
@@ -24860,7 +24906,7 @@ inline ::uint32_t account_role_ref::home_zone() const {
 }
 inline void account_role_ref::set_home_zone(::uint32_t value) {
   _internal_set_home_zone(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:account_role_ref.home_zone)
 }
 inline ::uint32_t account_role_ref::_internal_home_zone() const {
@@ -24876,7 +24922,7 @@ inline void account_role_ref::_internal_set_home_zone(::uint32_t value) {
 inline void account_role_ref::clear_nonce() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.nonce_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t account_role_ref::nonce() const {
   // @@protoc_insertion_point(field_get:account_role_ref.nonce)
@@ -24884,7 +24930,7 @@ inline ::uint64_t account_role_ref::nonce() const {
 }
 inline void account_role_ref::set_nonce(::uint64_t value) {
   _internal_set_nonce(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:account_role_ref.nonce)
 }
 inline ::uint64_t account_role_ref::_internal_nonce() const {
@@ -24900,7 +24946,7 @@ inline void account_role_ref::_internal_set_nonce(::uint64_t value) {
 inline void account_role_ref::clear_created_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t account_role_ref::created_ms() const {
   // @@protoc_insertion_point(field_get:account_role_ref.created_ms)
@@ -24908,7 +24954,7 @@ inline ::uint64_t account_role_ref::created_ms() const {
 }
 inline void account_role_ref::set_created_ms(::uint64_t value) {
   _internal_set_created_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:account_role_ref.created_ms)
 }
 inline ::uint64_t account_role_ref::_internal_created_ms() const {
@@ -24918,6 +24964,94 @@ inline ::uint64_t account_role_ref::_internal_created_ms() const {
 inline void account_role_ref::_internal_set_created_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = value;
+}
+
+// uint64 held_ms = 9;
+inline void account_role_ref::clear_held_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.held_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t account_role_ref::held_ms() const {
+  // @@protoc_insertion_point(field_get:account_role_ref.held_ms)
+  return _internal_held_ms();
+}
+inline void account_role_ref::set_held_ms(::uint64_t value) {
+  _internal_set_held_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:account_role_ref.held_ms)
+}
+inline ::uint64_t account_role_ref::_internal_held_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.held_ms_;
+}
+inline void account_role_ref::_internal_set_held_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.held_ms_ = value;
+}
+
+// string held_reason = 10;
+inline void account_role_ref::clear_held_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.held_reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& account_role_ref::held_reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:account_role_ref.held_reason)
+  return _internal_held_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void account_role_ref::set_held_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.held_reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:account_role_ref.held_reason)
+}
+inline ::std::string* PROTOBUF_NONNULL account_role_ref::mutable_held_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_held_reason();
+  // @@protoc_insertion_point(field_mutable:account_role_ref.held_reason)
+  return _s;
+}
+inline const ::std::string& account_role_ref::_internal_held_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.held_reason_.Get();
+}
+inline void account_role_ref::_internal_set_held_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.held_reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL account_role_ref::_internal_mutable_held_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.held_reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE account_role_ref::release_held_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:account_role_ref.held_reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.held_reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.held_reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void account_role_ref::set_allocated_held_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.held_reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.held_reason_.IsDefault()) {
+    _impl_.held_reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:account_role_ref.held_reason)
 }
 
 // -------------------------------------------------------------------
@@ -27672,7 +27806,7 @@ inline void sql_writer_lifecycle_receipt_Request::set_allocated_request_id(::std
 inline void sql_writer_lifecycle_receipt_Request::clear_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.kind_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::sql_writer_lifecycle_receipt_Kind sql_writer_lifecycle_receipt_Request::kind() const {
   // @@protoc_insertion_point(field_get:sql_writer_lifecycle_receipt.Request.kind)
@@ -27680,7 +27814,7 @@ inline ::sql_writer_lifecycle_receipt_Kind sql_writer_lifecycle_receipt_Request:
 }
 inline void sql_writer_lifecycle_receipt_Request::set_kind(::sql_writer_lifecycle_receipt_Kind value) {
   _internal_set_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:sql_writer_lifecycle_receipt.Request.kind)
 }
 inline ::sql_writer_lifecycle_receipt_Kind sql_writer_lifecycle_receipt_Request::_internal_kind() const {
@@ -27694,14 +27828,14 @@ inline void sql_writer_lifecycle_receipt_Request::_internal_set_kind(::sql_write
 
 // .sql_writer_registry writer = 3;
 inline bool sql_writer_lifecycle_receipt_Request::has_writer() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000200U);
   PROTOBUF_ASSUME(!value || _impl_.writer_ != nullptr);
   return value;
 }
 inline void sql_writer_lifecycle_receipt_Request::clear_writer() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.writer_ != nullptr) _impl_.writer_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline const ::sql_writer_registry& sql_writer_lifecycle_receipt_Request::_internal_writer() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -27720,16 +27854,16 @@ inline void sql_writer_lifecycle_receipt_Request::unsafe_arena_set_allocated_wri
   }
   _impl_.writer_ = reinterpret_cast<::sql_writer_registry*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:sql_writer_lifecycle_receipt.Request.writer)
 }
 inline ::sql_writer_registry* PROTOBUF_NULLABLE sql_writer_lifecycle_receipt_Request::release_writer() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::sql_writer_registry* released = _impl_.writer_;
   _impl_.writer_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -27749,7 +27883,7 @@ inline ::sql_writer_registry* PROTOBUF_NULLABLE sql_writer_lifecycle_receipt_Req
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:sql_writer_lifecycle_receipt.Request.writer)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::sql_writer_registry* temp = _impl_.writer_;
   _impl_.writer_ = nullptr;
   return temp;
@@ -27764,7 +27898,7 @@ inline ::sql_writer_registry* PROTOBUF_NONNULL sql_writer_lifecycle_receipt_Requ
 }
 inline ::sql_writer_registry* PROTOBUF_NONNULL sql_writer_lifecycle_receipt_Request::mutable_writer()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::sql_writer_registry* _msg = _internal_mutable_writer();
   // @@protoc_insertion_point(field_mutable:sql_writer_lifecycle_receipt.Request.writer)
   return _msg;
@@ -27781,9 +27915,9 @@ inline void sql_writer_lifecycle_receipt_Request::set_allocated_writer(::sql_wri
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   }
 
   _impl_.writer_ = reinterpret_cast<::sql_writer_registry*>(value);
@@ -27794,7 +27928,7 @@ inline void sql_writer_lifecycle_receipt_Request::set_allocated_writer(::sql_wri
 inline void sql_writer_lifecycle_receipt_Request::clear_expected_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_epoch_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t sql_writer_lifecycle_receipt_Request::expected_epoch() const {
   // @@protoc_insertion_point(field_get:sql_writer_lifecycle_receipt.Request.expected_epoch)
@@ -27802,7 +27936,7 @@ inline ::uint64_t sql_writer_lifecycle_receipt_Request::expected_epoch() const {
 }
 inline void sql_writer_lifecycle_receipt_Request::set_expected_epoch(::uint64_t value) {
   _internal_set_expected_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:sql_writer_lifecycle_receipt.Request.expected_epoch)
 }
 inline ::uint64_t sql_writer_lifecycle_receipt_Request::_internal_expected_epoch() const {
@@ -27818,7 +27952,7 @@ inline void sql_writer_lifecycle_receipt_Request::_internal_set_expected_epoch(:
 inline void sql_writer_lifecycle_receipt_Request::clear_expected_catalog_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_catalog_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t sql_writer_lifecycle_receipt_Request::expected_catalog_revision() const {
   // @@protoc_insertion_point(field_get:sql_writer_lifecycle_receipt.Request.expected_catalog_revision)
@@ -27826,7 +27960,7 @@ inline ::uint64_t sql_writer_lifecycle_receipt_Request::expected_catalog_revisio
 }
 inline void sql_writer_lifecycle_receipt_Request::set_expected_catalog_revision(::uint64_t value) {
   _internal_set_expected_catalog_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:sql_writer_lifecycle_receipt.Request.expected_catalog_revision)
 }
 inline ::uint64_t sql_writer_lifecycle_receipt_Request::_internal_expected_catalog_revision() const {
@@ -28170,7 +28304,7 @@ inline void sql_writer_lifecycle_receipt_Request::set_allocated_deployment_id(::
 inline void sql_writer_lifecycle_receipt_Request::clear_lock_primitive() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.lock_primitive_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::sql_writer_boot_grant_LockPrimitive sql_writer_lifecycle_receipt_Request::lock_primitive() const {
   // @@protoc_insertion_point(field_get:sql_writer_lifecycle_receipt.Request.lock_primitive)
@@ -28178,7 +28312,7 @@ inline ::sql_writer_boot_grant_LockPrimitive sql_writer_lifecycle_receipt_Reques
 }
 inline void sql_writer_lifecycle_receipt_Request::set_lock_primitive(::sql_writer_boot_grant_LockPrimitive value) {
   _internal_set_lock_primitive(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:sql_writer_lifecycle_receipt.Request.lock_primitive)
 }
 inline ::sql_writer_boot_grant_LockPrimitive sql_writer_lifecycle_receipt_Request::_internal_lock_primitive() const {
@@ -28316,6 +28450,70 @@ inline void sql_writer_lifecycle_receipt_Request::set_allocated_successor_reques
     _impl_.successor_request_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:sql_writer_lifecycle_receipt.Request.successor_request_id)
+}
+
+// string registered_by = 14;
+inline void sql_writer_lifecycle_receipt_Request::clear_registered_by() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.registered_by_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline const ::std::string& sql_writer_lifecycle_receipt_Request::registered_by() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:sql_writer_lifecycle_receipt.Request.registered_by)
+  return _internal_registered_by();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void sql_writer_lifecycle_receipt_Request::set_registered_by(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  _impl_.registered_by_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:sql_writer_lifecycle_receipt.Request.registered_by)
+}
+inline ::std::string* PROTOBUF_NONNULL sql_writer_lifecycle_receipt_Request::mutable_registered_by()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::std::string* _s = _internal_mutable_registered_by();
+  // @@protoc_insertion_point(field_mutable:sql_writer_lifecycle_receipt.Request.registered_by)
+  return _s;
+}
+inline const ::std::string& sql_writer_lifecycle_receipt_Request::_internal_registered_by() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.registered_by_.Get();
+}
+inline void sql_writer_lifecycle_receipt_Request::_internal_set_registered_by(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.registered_by_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL sql_writer_lifecycle_receipt_Request::_internal_mutable_registered_by() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.registered_by_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE sql_writer_lifecycle_receipt_Request::release_registered_by() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:sql_writer_lifecycle_receipt.Request.registered_by)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000100U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  auto* released = _impl_.registered_by_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.registered_by_.Set("", GetArena());
+  }
+  return released;
+}
+inline void sql_writer_lifecycle_receipt_Request::set_allocated_registered_by(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+  _impl_.registered_by_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.registered_by_.IsDefault()) {
+    _impl_.registered_by_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:sql_writer_lifecycle_receipt.Request.registered_by)
 }
 
 // -------------------------------------------------------------------

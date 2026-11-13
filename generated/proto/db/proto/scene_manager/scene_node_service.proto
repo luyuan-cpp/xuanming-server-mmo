@@ -69,4 +69,8 @@ message ReleasePlayerRequest {
   // covered_login_generation = 0 = 旧版调用方,按现行为(只比 owner_epoch)。会话号 0 只按代次比。不进存盘,不替代 owner_epoch。
   uint32 covered_session_id = 6;
   uint64 covered_login_generation = 7;
+  // 只在 session_ended = true 时有意义:true = 只要本节点持有该玩家(有实体)就什么都不做,只在完全不持有时按上面的规则补写凭证。
+  // player_locator 的托管归位(docs/design/player-connection-lost-hold.md §4.5)撞上换手门时由 scene_manager 填:归位只把
+  // 没有节点持有的托管角色放回世界,不能把一个正在托管他的节点上的实体退掉。false = 上面的原语义。
+  bool keep_held = 8;
 }

@@ -129,6 +129,7 @@ enum GameErrorCode : int {
   TIMEOUT = 6,
   HANDLER_FAILED = 7,
   REPLY_DROPPED = 8,
+  KILL_SWITCH_DENIED = 9,
   GameErrorCode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   GameErrorCode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -139,11 +140,11 @@ extern const uint32_t GameErrorCode_internal_data_[];
 inline constexpr GameErrorCode GameErrorCode_MIN =
     static_cast<GameErrorCode>(0);
 inline constexpr GameErrorCode GameErrorCode_MAX =
-    static_cast<GameErrorCode>(8);
+    static_cast<GameErrorCode>(9);
 [[nodiscard]] inline bool GameErrorCode_IsValid(int value) {
-  return 0 <= value && value <= 8;
+  return 0 <= value && value <= 9;
 }
-inline constexpr int GameErrorCode_ARRAYSIZE = 8 + 1;
+inline constexpr int GameErrorCode_ARRAYSIZE = 9 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 GameErrorCode_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(GameErrorCode) {
@@ -158,7 +159,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& GameErrorCode_Name(GameErrorCode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<GameErrorCode_descriptor, 0, 8>(
+  return ::google::protobuf::internal::NameOfDenseEnum<GameErrorCode_descriptor, 0, 9>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool GameErrorCode_Parse(

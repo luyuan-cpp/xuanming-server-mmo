@@ -27,8 +27,9 @@ message ObserverExitOriginal {
 }
 
 // battle 节点内部 gRPC 契约(match 服务调用)。
-// battle_id 由 match 服务用 shared/snowflake(17-bit worker 布局)生产,是该 ID 的唯一生产者
-// (SnowFlake 节点隔离不变量,宪法 §7)。
+// battle_id 只由 match 服务生产:从发号器领号(data_service.AllocateIdSegment,biz_tag=battle,与 challenge_id /
+// team_id 共用一个号段)。它是打散过的计数器值,没有位布局,不能用 ParseSnowflakeGuid 解析,也不能靠大小判先后
+// (AGENTS.md §7 第 1 条)。
 // 设计依据:docs/design/turn-based-battle-server.md §3.1、§5.4。
 
 message CreateBattleRequest {

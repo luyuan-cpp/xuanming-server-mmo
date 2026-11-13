@@ -1152,8 +1152,14 @@ type TradeCommerceWorkflow struct {
 	Quarantine *TradeCommerceQuarantine `protobuf:"bytes,23,opt,name=quarantine,proto3" json:"quarantine,omitempty"`
 	// 人工处理留痕,只追加(commerce.ResolveManual 写)。
 	ManualActions []*TradeCommerceManualAction `protobuf:"bytes,24,rep,name=manual_actions,json=manualActions,proto3" json:"manual_actions,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 官方订单绑定付款的渠道修订(docs/design/payment-recharge.md §22.6,commerce.Mall 收到商城的扣回待办或带修订号的交付待办时写)。
+	// payment_revision 是已收到的最新修订号(0 = 原始付款,只增不减);payment_revoked 是这个修订号下买家不该持有这份发放
+	// (修订号为奇数)。plan 把发放收敛到它:持有却已撤销 → 扣回腿 official_reverse_<修订号>;未持有却已恢复 →
+	// 补发腿 official_regrant_<修订号>(从没发过的作废合同走原发放腿 official_credit)。
+	PaymentRevision uint32 `protobuf:"varint,25,opt,name=payment_revision,json=paymentRevision,proto3" json:"payment_revision,omitempty"`
+	PaymentRevoked  bool   `protobuf:"varint,26,opt,name=payment_revoked,json=paymentRevoked,proto3" json:"payment_revoked,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *TradeCommerceWorkflow) Reset() {
@@ -1352,6 +1358,20 @@ func (x *TradeCommerceWorkflow) GetManualActions() []*TradeCommerceManualAction 
 		return x.ManualActions
 	}
 	return nil
+}
+
+func (x *TradeCommerceWorkflow) GetPaymentRevision() uint32 {
+	if x != nil {
+		return x.PaymentRevision
+	}
+	return 0
+}
+
+func (x *TradeCommerceWorkflow) GetPaymentRevoked() bool {
+	if x != nil {
+		return x.PaymentRevoked
+	}
+	return false
 }
 
 // 合同转人工的记录。stage、status 是转人工之前的值;reason 是类别(commerce 包的 manualReason* 常量);
@@ -2095,7 +2115,7 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x0fcounterparty_id\x18\x15 \x01(\x04R\x0ecounterpartyId\x12\x17\n" +
 	"\aon_book\x18\x16 \x01(\bR\x06onBook:\x9b\x02\x8a\x92\xf4\x01\x0etrade_commerce\x92\x92\xf4\x01\vcommerce_idڒ\xf4\x01\xd3\x01status,updated_ms; seller_player_id,commerce_id;buyer_player_id,commerce_id;kind,market_id,item_config_id,side,status,on_book,unit_price,commerce_id;kind,status,expires_ms;parent_id,status;counterparty_id,status\xe2\x92\xf4\x01\vrequest_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"]\n" +
 	"\x18TradeCommerceGuardRecord\x12\x19\n" +
-	"\bguard_id\x18\x01 \x01(\x04R\aguardId:&\x8a\x92\xf4\x01\x14trade_commerce_guard\x92\x92\xf4\x01\bguard_id\"\xf4\b\n" +
+	"\bguard_id\x18\x01 \x01(\x04R\aguardId:&\x8a\x92\xf4\x01\x14trade_commerce_guard\x92\x92\xf4\x01\bguard_id\"\xc8\t\n" +
 	"\x15TradeCommerceWorkflow\x12?\n" +
 	"\rseller_assets\x18\x01 \x01(\v2\x1a.trade.TradeAssetSelectionR\fsellerAssets\x12=\n" +
 	"\fbuyer_assets\x18\x02 \x01(\v2\x1a.trade.TradeAssetSelectionR\vbuyerAssets\x12)\n" +
@@ -2124,7 +2144,9 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\n" +
 	"quarantine\x18\x17 \x01(\v2\x1e.trade.TradeCommerceQuarantineR\n" +
 	"quarantine\x12G\n" +
-	"\x0emanual_actions\x18\x18 \x03(\v2 .trade.TradeCommerceManualActionR\rmanualActions\"\x8c\x01\n" +
+	"\x0emanual_actions\x18\x18 \x03(\v2 .trade.TradeCommerceManualActionR\rmanualActions\x12)\n" +
+	"\x10payment_revision\x18\x19 \x01(\rR\x0fpaymentRevision\x12'\n" +
+	"\x0fpayment_revoked\x18\x1a \x01(\bR\x0epaymentRevoked\"\x8c\x01\n" +
 	"\x17TradeCommerceQuarantine\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\rR\x06status\x12\x16\n" +

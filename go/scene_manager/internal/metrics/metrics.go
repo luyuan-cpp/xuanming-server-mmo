@@ -809,7 +809,7 @@ func register() {
 			sceneRegistrationTotal,
 			sceneTeardownJobsTotal, sceneTeardownOldestPendingSeconds,
 			nodeViewHolding, nodeViewReleasedTotal, // node_view.go
-			etcdRevisionRegressionsTotal,           // node_holder.go
+			etcdRevisionRegressionsTotal, // node_holder.go
 			gateRedirectExcludedTotal, gateRedirectFallbackTotal,
 			foreignZoneRegistryReadsTotal, foreignZoneSkipsTotal,
 			evacuationResolveTotal, // planned_drain.go

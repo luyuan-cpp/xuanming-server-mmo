@@ -92,6 +92,8 @@ message LeaveGameRequest
 
 message LoginNodeDisconnectRequest
 {
+  // 只做一致性核对:login 以 gate 签名的会话头 SessionDetails.session_id 为准,这里填了且与会话头不同就整条拒绝
+  // (InvalidArgument)。gate 合成时填同一个值;0 = 没填,按会话头处理(docs/design/client-request-ordering.md §6.2)。
   uint32 session_id = 1;
 }
 
@@ -142,6 +144,22 @@ message GateMigrationResponse
   int64  token_deadline = 6;    // 票据到期时刻,Unix 秒
 }
 
+// gate 为仍然连着的连接续租它在 login 的按连接记录(docs/design/gate-online-identity.md §10.4):
+// 登录态、账号设备集里的成员、已绑定角色的会话栅栏。这些记录的寿命只是「连接断了、Disconnect 又没送到」时的回收兜底,
+// 不该比活着的连接先到期。只有 gate 合成,客户端不得发起;连接身份全在 gate 签名的 SessionDetails 里,请求体为空。
+message RenewSessionRequest
+{
+}
+
+message RenewSessionResponse
+{
+  // true = 这条连接在 login 还有记录(登录态,或已绑定的角色),已续期。
+  // false = 已没有可续的记录(离开游戏之后、连接已按断线处理、或记录已过期):gate 停止为它续租,直到这条连接再次登录成功。
+  bool renewed = 1;
+  // 下一次续租的间隔(秒)。login 按登录态寿命的三分之一给出,gate 不另配寿命;renewed 为 false 时为 0。
+  uint32 renew_after_seconds = 2;
+}
+
 service ClientPlayerLogin  {
   option (OptionIsClientProtocolService) = true;
 
@@ -154,6 +172,8 @@ service ClientPlayerLogin  {
   // gate 排空时为本连接签迁移票据。与 Disconnect 一样只有 gate 合成,客户端发这个号要被 gate 按非法包拒收
   // (gate 侧 login_admission.h IsGateSynthesizedOnly,随迁移的 gate 批次加入)。
   rpc RequestGateMigration (GateMigrationRequest) returns (GateMigrationResponse) { option (OptionClientRpcKind) = CLIENT_RPC_SERVER_ONLY; }
+  // gate 为仍然连着的连接续租登录态。同样只有 gate 合成,客户端发这个号被 gate 按非法包拒收(login_admission.h IsGateSynthesizedOnly)。
+  rpc RenewSession (RenewSessionRequest) returns (RenewSessionResponse) { option (OptionClientRpcKind) = CLIENT_RPC_SERVER_ONLY; }
 }
 
 // ── Pre-connection RPCs (called before connecting to Gate) ──────
@@ -164,11 +184,15 @@ message AssignGateRequest {
   // skips capacity check, and returns the current rank (or admit token if
   // dispatcher already promoted this entry). Empty on first call.
   string queue_token = 2;
-  // Optional account/device for reconnect-exemption. When server sees an
-  // existing PlayerSession for this account on a live gate, it bypasses
-  // the queue and returns a fresh gate token bound to that gate.
-  string account = 3;
+  // 3 是客户端自报的 account,2026-11-12 删除:它没有经过鉴权,报出别人的账号名就能免排队、冒用排队身份。
+  // 账号现在只从 access_token 解出。
+  reserved 3;
+  reserved "account";
   string device_id = 4;
+  // /api/login 签发的 access token。login 用它鉴权并解出账号,免排队判定(已有在线会话)与排队身份都只认这个账号。
+  // 不带(排队重入带 queue_token 的除外)= 匿名分配,只在旧 gate 凭据登录还开着(LegacyGateLoginEnabled)时允许;
+  // 带了却无效回 status=4。
+  string access_token = 5;
 }
 
 // AssignGateStatus mirrors AssignGateResponse.status / QueryQueueStatusResponse.status.
@@ -177,6 +201,8 @@ message AssignGateRequest {
 //   1 = QUEUEING  (queue_token + queue_rank populated; client polls QueryQueueStatus)
 //   2 = ERROR     (error field populated)
 //   3 = EXPIRED   (queue_token expired or unknown — client must restart from /assign-gate)
+//   4 = UNAUTHENTICATED (AssignGate only: access_token invalid, or missing while anonymous assignment is off —
+//                        client must log in again; never returned by QueryQueueStatus)
 
 message AssignGateResponse {
   string ip = 1;
@@ -229,6 +255,18 @@ service LoginPreGate {
   // QueryQueueStatus until it receives a gate token.
   rpc AssignGate (AssignGateRequest) returns (AssignGateResponse);
   rpc QueryQueueStatus (QueryQueueStatusRequest) returns (QueryQueueStatusResponse);
+  // 本区一共建过多少角色(转问 data_service.CountZoneRoles)。网关里每个区的负责副本按区服目录的角色上限
+  // (zone_config.role_capacity)定时来问,到了就关上本区的创角开关(docs/design/zone-full-handling.md §6)。只读,可重试。
+  rpc GetZoneRoleCount (ZoneRoleCountRequest) returns (ZoneRoleCountResponse);
+}
+
+message ZoneRoleCountRequest {
+  // 必须是本 login 所在的区,否则回 InvalidArgument:网关按区选路,问到别区的 login 是选路错了,不能拿别区的数开关本区。
+  uint32 zone_id = 1;
+}
+
+message ZoneRoleCountResponse {
+  uint64 roles = 1; // 按合服之后的最终区算,删角不减;读不到时回 Unavailable,不回 0
 }
 
 // ── Admin-only RPCs (internal, not client-facing) ──────────────

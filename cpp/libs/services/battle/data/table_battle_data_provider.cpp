@@ -18,15 +18,25 @@
 
 namespace turnbattle {
 
-bool TableBattleDataProvider::LoadBattleRewards(const std::string& path) {
+namespace {
+
+// 启动边界读取奖励配置:空文件、读不出或超过 1 MiB 都按不可用处理
+bool ReadSmallConfigFile(const std::string& path, const char* label, std::string& content) {
     std::ifstream input(path, std::ios::binary | std::ios::ate);
     if (!input || input.tellg() <= 0 || input.tellg() > 1024 * 1024) {
-        LOG_ERROR << "Battle reward config unavailable or exceeds 1 MiB: " << path;
+        LOG_ERROR << label << " unavailable or exceeds 1 MiB: " << path;
         return false;
     }
-    std::string json(static_cast<size_t>(input.tellg()), '\0');
+    content.assign(static_cast<size_t>(input.tellg()), '\0');
     input.seekg(0);
-    if (!input.read(json.data(), static_cast<std::streamsize>(json.size()))) return false;
+    return static_cast<bool>(input.read(content.data(), static_cast<std::streamsize>(content.size())));
+}
+
+}  // namespace
+
+bool TableBattleDataProvider::LoadBattleRewards(const std::string& path) {
+    std::string json;
+    if (!ReadSmallConfigFile(path, "Battle reward config", json)) return false;
     BattleRewardConfig candidate;
     const auto status = google::protobuf::util::JsonStringToMessage(json, &candidate);
     if (!status.ok()) {

@@ -26,6 +26,7 @@ const (
 	ClientPlayerLogin_Disconnect_FullMethodName           = "/loginpb.ClientPlayerLogin/Disconnect"
 	ClientPlayerLogin_RefreshToken_FullMethodName         = "/loginpb.ClientPlayerLogin/RefreshToken"
 	ClientPlayerLogin_RequestGateMigration_FullMethodName = "/loginpb.ClientPlayerLogin/RequestGateMigration"
+	ClientPlayerLogin_RenewSession_FullMethodName         = "/loginpb.ClientPlayerLogin/RenewSession"
 )
 
 // ClientPlayerLoginClient is the client API for ClientPlayerLogin service.
@@ -41,6 +42,8 @@ type ClientPlayerLoginClient interface {
 	// gate 排空时为本连接签迁移票据。与 Disconnect 一样只有 gate 合成,客户端发这个号要被 gate 按非法包拒收
 	// (gate 侧 login_admission.h IsGateSynthesizedOnly,随迁移的 gate 批次加入)。
 	RequestGateMigration(ctx context.Context, in *GateMigrationRequest, opts ...grpc.CallOption) (*GateMigrationResponse, error)
+	// gate 为仍然连着的连接续租登录态。同样只有 gate 合成,客户端发这个号被 gate 按非法包拒收(login_admission.h IsGateSynthesizedOnly)。
+	RenewSession(ctx context.Context, in *RenewSessionRequest, opts ...grpc.CallOption) (*RenewSessionResponse, error)
 }
 
 type clientPlayerLoginClient struct {
@@ -121,6 +124,16 @@ func (c *clientPlayerLoginClient) RequestGateMigration(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *clientPlayerLoginClient) RenewSession(ctx context.Context, in *RenewSessionRequest, opts ...grpc.CallOption) (*RenewSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewSessionResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerLogin_RenewSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientPlayerLoginServer is the server API for ClientPlayerLogin service.
 // All implementations must embed UnimplementedClientPlayerLoginServer
 // for forward compatibility.
@@ -134,6 +147,8 @@ type ClientPlayerLoginServer interface {
 	// gate 排空时为本连接签迁移票据。与 Disconnect 一样只有 gate 合成,客户端发这个号要被 gate 按非法包拒收
 	// (gate 侧 login_admission.h IsGateSynthesizedOnly,随迁移的 gate 批次加入)。
 	RequestGateMigration(context.Context, *GateMigrationRequest) (*GateMigrationResponse, error)
+	// gate 为仍然连着的连接续租登录态。同样只有 gate 合成,客户端发这个号被 gate 按非法包拒收(login_admission.h IsGateSynthesizedOnly)。
+	RenewSession(context.Context, *RenewSessionRequest) (*RenewSessionResponse, error)
 	mustEmbedUnimplementedClientPlayerLoginServer()
 }
 
@@ -164,6 +179,9 @@ func (UnimplementedClientPlayerLoginServer) RefreshToken(context.Context, *Refre
 }
 func (UnimplementedClientPlayerLoginServer) RequestGateMigration(context.Context, *GateMigrationRequest) (*GateMigrationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RequestGateMigration not implemented")
+}
+func (UnimplementedClientPlayerLoginServer) RenewSession(context.Context, *RenewSessionRequest) (*RenewSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewSession not implemented")
 }
 func (UnimplementedClientPlayerLoginServer) mustEmbedUnimplementedClientPlayerLoginServer() {}
 func (UnimplementedClientPlayerLoginServer) testEmbeddedByValue()                           {}
@@ -312,6 +330,24 @@ func _ClientPlayerLogin_RequestGateMigration_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientPlayerLogin_RenewSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerLoginServer).RenewSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerLogin_RenewSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerLoginServer).RenewSession(ctx, req.(*RenewSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientPlayerLogin_ServiceDesc is the grpc.ServiceDesc for ClientPlayerLogin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -347,6 +383,10 @@ var ClientPlayerLogin_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RequestGateMigration",
 			Handler:    _ClientPlayerLogin_RequestGateMigration_Handler,
 		},
+		{
+			MethodName: "RenewSession",
+			Handler:    _ClientPlayerLogin_RenewSession_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/login/login.proto",
@@ -355,6 +395,7 @@ var ClientPlayerLogin_ServiceDesc = grpc.ServiceDesc{
 const (
 	LoginPreGate_AssignGate_FullMethodName       = "/loginpb.LoginPreGate/AssignGate"
 	LoginPreGate_QueryQueueStatus_FullMethodName = "/loginpb.LoginPreGate/QueryQueueStatus"
+	LoginPreGate_GetZoneRoleCount_FullMethodName = "/loginpb.LoginPreGate/GetZoneRoleCount"
 )
 
 // LoginPreGateClient is the client API for LoginPreGate service.
@@ -373,6 +414,9 @@ type LoginPreGateClient interface {
 	// QueryQueueStatus until it receives a gate token.
 	AssignGate(ctx context.Context, in *AssignGateRequest, opts ...grpc.CallOption) (*AssignGateResponse, error)
 	QueryQueueStatus(ctx context.Context, in *QueryQueueStatusRequest, opts ...grpc.CallOption) (*QueryQueueStatusResponse, error)
+	// 本区一共建过多少角色(转问 data_service.CountZoneRoles)。网关里每个区的负责副本按区服目录的角色上限
+	// (zone_config.role_capacity)定时来问,到了就关上本区的创角开关(docs/design/zone-full-handling.md §6)。只读,可重试。
+	GetZoneRoleCount(ctx context.Context, in *ZoneRoleCountRequest, opts ...grpc.CallOption) (*ZoneRoleCountResponse, error)
 }
 
 type loginPreGateClient struct {
@@ -403,6 +447,16 @@ func (c *loginPreGateClient) QueryQueueStatus(ctx context.Context, in *QueryQueu
 	return out, nil
 }
 
+func (c *loginPreGateClient) GetZoneRoleCount(ctx context.Context, in *ZoneRoleCountRequest, opts ...grpc.CallOption) (*ZoneRoleCountResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ZoneRoleCountResponse)
+	err := c.cc.Invoke(ctx, LoginPreGate_GetZoneRoleCount_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LoginPreGateServer is the server API for LoginPreGate service.
 // All implementations must embed UnimplementedLoginPreGateServer
 // for forward compatibility.
@@ -419,6 +473,9 @@ type LoginPreGateServer interface {
 	// QueryQueueStatus until it receives a gate token.
 	AssignGate(context.Context, *AssignGateRequest) (*AssignGateResponse, error)
 	QueryQueueStatus(context.Context, *QueryQueueStatusRequest) (*QueryQueueStatusResponse, error)
+	// 本区一共建过多少角色(转问 data_service.CountZoneRoles)。网关里每个区的负责副本按区服目录的角色上限
+	// (zone_config.role_capacity)定时来问,到了就关上本区的创角开关(docs/design/zone-full-handling.md §6)。只读,可重试。
+	GetZoneRoleCount(context.Context, *ZoneRoleCountRequest) (*ZoneRoleCountResponse, error)
 	mustEmbedUnimplementedLoginPreGateServer()
 }
 
@@ -434,6 +491,9 @@ func (UnimplementedLoginPreGateServer) AssignGate(context.Context, *AssignGateRe
 }
 func (UnimplementedLoginPreGateServer) QueryQueueStatus(context.Context, *QueryQueueStatusRequest) (*QueryQueueStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryQueueStatus not implemented")
+}
+func (UnimplementedLoginPreGateServer) GetZoneRoleCount(context.Context, *ZoneRoleCountRequest) (*ZoneRoleCountResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetZoneRoleCount not implemented")
 }
 func (UnimplementedLoginPreGateServer) mustEmbedUnimplementedLoginPreGateServer() {}
 func (UnimplementedLoginPreGateServer) testEmbeddedByValue()                      {}
@@ -492,6 +552,24 @@ func _LoginPreGate_QueryQueueStatus_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LoginPreGate_GetZoneRoleCount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ZoneRoleCountRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LoginPreGateServer).GetZoneRoleCount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LoginPreGate_GetZoneRoleCount_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LoginPreGateServer).GetZoneRoleCount(ctx, req.(*ZoneRoleCountRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LoginPreGate_ServiceDesc is the grpc.ServiceDesc for LoginPreGate service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -506,6 +584,10 @@ var LoginPreGate_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryQueueStatus",
 			Handler:    _LoginPreGate_QueryQueueStatus_Handler,
+		},
+		{
+			MethodName: "GetZoneRoleCount",
+			Handler:    _LoginPreGate_GetZoneRoleCount_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

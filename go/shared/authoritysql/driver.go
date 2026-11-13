@@ -227,7 +227,11 @@ func (c *guardedConn) BeginTx(ctx context.Context, opts driver.TxOptions) (drive
 	if c.tx != nil {
 		return nil, errGuardBusy
 	}
-	return c.beginLocked(ctx, opts, false)
+	tx, err := c.beginLocked(ctx, opts, false)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
 }
 
 func (c *guardedConn) beginLocked(ctx context.Context, opts driver.TxOptions, automatic bool) (*guardedTx, error) {

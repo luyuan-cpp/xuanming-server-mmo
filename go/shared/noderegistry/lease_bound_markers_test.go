@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 
+	"shared/releasetrack"
+
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -45,7 +47,7 @@ func TestSpecValidateRejectsBadLeaseBoundMarkers(t *testing.T) {
 func TestRegistrationPutsCarryEveryMarkerOnTheSameLease(t *testing.T) {
 	spec := unitSpec()
 	spec.LeaseBoundMarkers = []string{"cap/a/", "cap/b/"}
-	r := newRegistration(nil, spec, unitUUID, "")
+	r := newRegistration(nil, spec, unitUUID, releasetrack.Stable)
 	defer r.cancel()
 	const (
 		id    uint32 = 7
@@ -79,7 +81,7 @@ func TestRegistrationPutsCarryEveryMarkerOnTheSameLease(t *testing.T) {
 
 // 没有标记时只写双 key,与加这个选项之前一样。
 func TestRegistrationPutsWithoutMarkersWritesOnlyTheTwoKeys(t *testing.T) {
-	r := newRegistration(nil, unitSpec(), unitUUID, "")
+	r := newRegistration(nil, unitSpec(), unitUUID, releasetrack.Stable)
 	defer r.cancel()
 
 	if puts := r.registrationPuts(7, "value", clientv3.LeaseID(0x42)); len(puts) != 2 {

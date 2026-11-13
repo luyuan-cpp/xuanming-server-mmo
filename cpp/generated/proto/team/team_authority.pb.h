@@ -1074,6 +1074,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchRecord final : public ::g
     kBattleIdFieldNumber = 13,
     kOwnerRevisionFieldNumber = 16,
     kModeFieldNumber = 17,
+    kPoolRegionFieldNumber = 18,
   };
   // string lock_token = 6;
   void clear_lock_token() ;
@@ -1260,11 +1261,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchRecord final : public ::g
   void _internal_set_mode(::uint32_t value);
 
   public:
+  // uint32 pool_region = 18;
+  void clear_pool_region() ;
+  [[nodiscard]] ::uint32_t pool_region() const;
+  void set_pool_region(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pool_region() const;
+  void _internal_set_pool_region(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:teampb.TeamLaunchRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 17,
+      ::google::protobuf::internal::TcParseTable<5, 18,
                           0, 71,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1310,6 +1321,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchRecord final : public ::g
     ::uint64_t battle_id_;
     ::uint64_t owner_revision_;
     ::uint32_t mode_;
+    ::uint32_t pool_region_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7786,6 +7798,30 @@ inline ::uint32_t TeamLaunchRecord::_internal_mode() const {
 inline void TeamLaunchRecord::_internal_set_mode(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mode_ = value;
+}
+
+// uint32 pool_region = 18;
+inline void TeamLaunchRecord::clear_pool_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pool_region_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t TeamLaunchRecord::pool_region() const {
+  // @@protoc_insertion_point(field_get:teampb.TeamLaunchRecord.pool_region)
+  return _internal_pool_region();
+}
+inline void TeamLaunchRecord::set_pool_region(::uint32_t value) {
+  _internal_set_pool_region(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:teampb.TeamLaunchRecord.pool_region)
+}
+inline ::uint32_t TeamLaunchRecord::_internal_pool_region() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pool_region_;
+}
+inline void TeamLaunchRecord::_internal_set_pool_region(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pool_region_ = value;
 }
 
 // -------------------------------------------------------------------

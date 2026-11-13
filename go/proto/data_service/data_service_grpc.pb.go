@@ -41,6 +41,7 @@ const (
 	DataService_GetPlayerHomeZone_FullMethodName             = "/data_service.DataService/GetPlayerHomeZone"
 	DataService_BatchGetPlayerHomeZone_FullMethodName        = "/data_service.DataService/BatchGetPlayerHomeZone"
 	DataService_GetMergedZones_FullMethodName                = "/data_service.DataService/GetMergedZones"
+	DataService_CountZoneRoles_FullMethodName                = "/data_service.DataService/CountZoneRoles"
 	DataService_GetPlayerRoute_FullMethodName                = "/data_service.DataService/GetPlayerRoute"
 	DataService_ListPlayerSnapshots_FullMethodName           = "/data_service.DataService/ListPlayerSnapshots"
 	DataService_BatchRecallItems_FullMethodName              = "/data_service.DataService/BatchRecallItems"
@@ -106,6 +107,11 @@ type DataServiceClient interface {
 	// 全部合服映射。没有全局库连接的服务(guild、trade)用它重建 placement.MergedZones,定时重读
 	// (docs/design/player-data-tidb-scaling-plan.md §7.1)。映射还没读到时回 Unavailable。
 	GetMergedZones(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetMergedZonesResponse, error)
+	// 一个区一共建过多少角色(player_route 行数;删角只在账号目录写墓碑,不减),按合服之后的最终区算:合进来的源区一起数,
+	// zone_id 自己已被合走时按它的最终区回答。网关按区服目录的角色上限自动暂停创角时经 login 调
+	// (docs/design/zone-full-handling.md §6)。zone_id 为 0 或越界回 InvalidArgument;合服映射没读到或库故障回 Unavailable,
+	// 不回 0:0 会被当成「远没到上限」。
+	CountZoneRoles(ctx context.Context, in *CountZoneRolesRequest, opts ...grpc.CallOption) (*CountZoneRolesResponse, error)
 	// 玩家的落点(docs/design/horizontal-scale-logical-db.md §7),强读玩家所在分片。go/db 选库用,它不再连目录。
 	// 没有路由行或没有落点回 found=false;目录读不到回 retry=true,都不走 gRPC 错误:只读,没有结局未知。只有 go/db 能调,密钥 MMORPG_ROLE_FENCE_SECRET_DB。
 	GetPlayerRoute(ctx context.Context, in *GetPlayerRouteRequest, opts ...grpc.CallOption) (*GetPlayerRouteResponse, error)
@@ -373,6 +379,16 @@ func (c *dataServiceClient) GetMergedZones(ctx context.Context, in *emptypb.Empt
 	return out, nil
 }
 
+func (c *dataServiceClient) CountZoneRoles(ctx context.Context, in *CountZoneRolesRequest, opts ...grpc.CallOption) (*CountZoneRolesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CountZoneRolesResponse)
+	err := c.cc.Invoke(ctx, DataService_CountZoneRoles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *dataServiceClient) GetPlayerRoute(ctx context.Context, in *GetPlayerRouteRequest, opts ...grpc.CallOption) (*GetPlayerRouteResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetPlayerRouteResponse)
@@ -580,6 +596,11 @@ type DataServiceServer interface {
 	// 全部合服映射。没有全局库连接的服务(guild、trade)用它重建 placement.MergedZones,定时重读
 	// (docs/design/player-data-tidb-scaling-plan.md §7.1)。映射还没读到时回 Unavailable。
 	GetMergedZones(context.Context, *emptypb.Empty) (*GetMergedZonesResponse, error)
+	// 一个区一共建过多少角色(player_route 行数;删角只在账号目录写墓碑,不减),按合服之后的最终区算:合进来的源区一起数,
+	// zone_id 自己已被合走时按它的最终区回答。网关按区服目录的角色上限自动暂停创角时经 login 调
+	// (docs/design/zone-full-handling.md §6)。zone_id 为 0 或越界回 InvalidArgument;合服映射没读到或库故障回 Unavailable,
+	// 不回 0:0 会被当成「远没到上限」。
+	CountZoneRoles(context.Context, *CountZoneRolesRequest) (*CountZoneRolesResponse, error)
 	// 玩家的落点(docs/design/horizontal-scale-logical-db.md §7),强读玩家所在分片。go/db 选库用,它不再连目录。
 	// 没有路由行或没有落点回 found=false;目录读不到回 retry=true,都不走 gRPC 错误:只读,没有结局未知。只有 go/db 能调,密钥 MMORPG_ROLE_FENCE_SECRET_DB。
 	GetPlayerRoute(context.Context, *GetPlayerRouteRequest) (*GetPlayerRouteResponse, error)
@@ -699,6 +720,9 @@ func (UnimplementedDataServiceServer) BatchGetPlayerHomeZone(context.Context, *B
 }
 func (UnimplementedDataServiceServer) GetMergedZones(context.Context, *emptypb.Empty) (*GetMergedZonesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetMergedZones not implemented")
+}
+func (UnimplementedDataServiceServer) CountZoneRoles(context.Context, *CountZoneRolesRequest) (*CountZoneRolesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CountZoneRoles not implemented")
 }
 func (UnimplementedDataServiceServer) GetPlayerRoute(context.Context, *GetPlayerRouteRequest) (*GetPlayerRouteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPlayerRoute not implemented")
@@ -1147,6 +1171,24 @@ func _DataService_GetMergedZones_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataService_CountZoneRoles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CountZoneRolesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).CountZoneRoles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_CountZoneRoles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).CountZoneRoles(ctx, req.(*CountZoneRolesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DataService_GetPlayerRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPlayerRouteRequest)
 	if err := dec(in); err != nil {
@@ -1525,6 +1567,10 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMergedZones",
 			Handler:    _DataService_GetMergedZones_Handler,
+		},
+		{
+			MethodName: "CountZoneRoles",
+			Handler:    _DataService_CountZoneRoles_Handler,
 		},
 		{
 			MethodName: "GetPlayerRoute",

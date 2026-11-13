@@ -132,7 +132,7 @@ type PlayerBattleResult struct {
 	state          protoimpl.MessageState        `protogen:"open.v1"`
 	ResultSeq      uint64                        `protobuf:"varint,1,opt,name=result_seq,json=resultSeq,proto3" json:"result_seq,omitempty"` // 本玩家的结果序号,从 1 起只增;新旧看它
 	BattleId       uint64                        `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`    // 去重键:同一局至多一条
-	Outcome        uint32                        `protobuf:"varint,3,opt,name=outcome,proto3" json:"outcome,omitempty"`                      // eBattleOutcome:A 胜 / B 胜 / 平局,不会是 ONGOING
+	Outcome        uint32                        `protobuf:"varint,3,opt,name=outcome,proto3" json:"outcome,omitempty"`                      // eBattleOutcome:A 胜 / B 胜 / 平局 / 作废(VOID:本局被 Match 作废,下面的明细全空);不会是 ONGOING
 	TeamIndex      uint32                        `protobuf:"varint,4,opt,name=team_index,json=teamIndex,proto3" json:"team_index,omitempty"` // 本人所在方(0 = A 方);胜负 = outcome 对照它
 	IsDead         bool                          `protobuf:"varint,5,opt,name=is_dead,json=isDead,proto3" json:"is_dead,omitempty"`          // 本人终局时阵亡
 	Fled           bool                          `protobuf:"varint,6,opt,name=fled,proto3" json:"fled,omitempty"`                            // 本人逃离了战斗
@@ -140,14 +140,17 @@ type PlayerBattleResult struct {
 	FinishedAtMs   uint64                        `protobuf:"varint,8,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`        // 战斗结束时刻(battle 冻结终局时的 UTC 毫秒);0 = 结算原件没带
 	SettledAtMs    uint64                        `protobuf:"varint,9,opt,name=settled_at_ms,json=settledAtMs,proto3" json:"settled_at_ms,omitempty"`           // 奖励入账时刻(scene 应用结算时的 UTC 毫秒)
 	Currencies     []*PlayerBattleResultCurrency `protobuf:"bytes,10,rep,name=currencies,proto3" json:"currencies,omitempty"`                                  // 按 currency_type 升序,只含非 0
-	ItemsGained    []*PlayerBattleResultItem     `protobuf:"bytes,11,rep,name=items_gained,json=itemsGained,proto3" json:"items_gained,omitempty"`             // 实际入包(含临时背包)的掉落,按 item_table_id 升序
+	ItemsGained    []*PlayerBattleResultItem     `protobuf:"bytes,11,rep,name=items_gained,json=itemsGained,proto3" json:"items_gained,omitempty"`             // 本人实得的掉落(入了人物背包或临时背包;items_mailed 时改由邮件发放),按 item_table_id 升序
 	ItemsConsumed  []*PlayerBattleResultItem     `protobuf:"bytes,12,rep,name=items_consumed,json=itemsConsumed,proto3" json:"items_consumed,omitempty"`       // 实际扣除的战斗消耗,按 item_table_id 升序
 	LinesTruncated bool                          `protobuf:"varint,13,opt,name=lines_truncated,json=linesTruncated,proto3" json:"lines_truncated,omitempty"`   // 物品行超过上限被截掉了一部分(只留配置号最小的那些)
 	Seen           bool                          `protobuf:"varint,14,opt,name=seen,proto3" json:"seen,omitempty"`                                             // 客户端已确认展示过(AckBattleResults)
 	MatchMode      uint32                        `protobuf:"varint,15,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`                  // MatchMode 数值;0 = 结算原件没带
 	BattleConfigId uint32                        `protobuf:"varint,16,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // 战斗配置号;0 = 结算原件没带
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 掉落放不进人物背包与临时背包,整批改由邮件发放(docs/design/battle-overflow-mail.md)。items_gained 照常列出这批掉落
+	// (它们已经是本人的,只是要去邮箱领);客户端据此在结算屏提示。
+	ItemsMailed   bool `protobuf:"varint,17,opt,name=items_mailed,json=itemsMailed,proto3" json:"items_mailed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlayerBattleResult) Reset() {
@@ -292,6 +295,13 @@ func (x *PlayerBattleResult) GetBattleConfigId() uint32 {
 	return 0
 }
 
+func (x *PlayerBattleResult) GetItemsMailed() bool {
+	if x != nil {
+		return x.ItemsMailed
+	}
+	return false
+}
+
 type PlayerBattleResultComp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	LastResultSeq uint64                 `protobuf:"varint,1,opt,name=last_result_seq,json=lastResultSeq,proto3" json:"last_result_seq,omitempty"` // 发过的最大 result_seq,只增不减(淘汰旧条目不回退)
@@ -354,7 +364,7 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"R\n" +
 	"\x16PlayerBattleResultItem\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xe2\x04\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\x85\x05\n" +
 	"\x12PlayerBattleResult\x12\x1d\n" +
 	"\n" +
 	"result_seq\x18\x01 \x01(\x04R\tresultSeq\x12\x1b\n" +
@@ -377,7 +387,8 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x04seen\x18\x0e \x01(\bR\x04seen\x12\x1d\n" +
 	"\n" +
 	"match_mode\x18\x0f \x01(\rR\tmatchMode\x12(\n" +
-	"\x10battle_config_id\x18\x10 \x01(\rR\x0ebattleConfigId\"o\n" +
+	"\x10battle_config_id\x18\x10 \x01(\rR\x0ebattleConfigId\x12!\n" +
+	"\fitems_mailed\x18\x11 \x01(\bR\vitemsMailed\"o\n" +
 	"\x16PlayerBattleResultComp\x12&\n" +
 	"\x0flast_result_seq\x18\x01 \x01(\x04R\rlastResultSeq\x12-\n" +
 	"\aentries\x18\x02 \x03(\v2\x13.PlayerBattleResultR\aentriesB\x18Z\x16proto/common/componentb\x06proto3"
