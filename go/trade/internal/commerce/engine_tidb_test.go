@@ -160,6 +160,12 @@ func TestTiDBConsignmentConcurrentBuyAndWorkerRestart(t *testing.T) {
 	require.Equal(t, Delivering, r.Status)
 	var credits int
 	require.NoError(t, e.Repo.DB.QueryRow("SELECT COUNT(*) FROM trade_asset_op WHERE stream=4").Scan(&credits))
+	require.Equal(t, 1, credits, "先只发买家那条,卖家所得等它到账(delivery_order.go)")
+	settleLegs(t, &restarted, 2)
+	tick(t, &restarted)
+	r, _ = state(t, e, offer.CommerceId)
+	require.Equal(t, Delivering, r.Status, "买家那条到账,这一步才发卖家所得")
+	require.NoError(t, e.Repo.DB.QueryRow("SELECT COUNT(*) FROM trade_asset_op WHERE stream=4").Scan(&credits))
 	require.Equal(t, 2, credits)
 	settleLegs(t, &restarted, 2)
 	tick(t, &restarted)
@@ -337,9 +343,19 @@ func TestTiDBOrderBookPriceTimePartialCancelWaitsForChildren(t *testing.T) {
 	require.Equal(t, CancelPending, r.Status, "子成交交付未结束不能声称撤单完全完成")
 	require.Equal(t, "market_wait", w.Stage)
 	settleLegs(t, e, 2)
+	// 先买家、后卖家(delivery_order.go):子单的买家那条到账之后才发卖家货款,再落一轮终局子单才收尾。
 	for _, id := range children {
 		r, _ = state(t, e, id)
 		require.NoError(t, e.advance(ctx, r))
+		r, _ = state(t, e, id)
+		require.Equal(t, Delivering, r.Status, "卖家货款刚发出")
+	}
+	settleLegs(t, e, 2)
+	for _, id := range children {
+		r, _ = state(t, e, id)
+		require.NoError(t, e.advance(ctx, r))
+		r, _ = state(t, e, id)
+		require.Equal(t, Settled, r.Status)
 	}
 	r, _ = state(t, e, second)
 	require.NoError(t, e.advance(ctx, r))

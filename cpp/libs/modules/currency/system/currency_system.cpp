@@ -11,6 +11,7 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "core/utils/registry/game_registry.h"
 #include "modules/currency/comp/player_currency_comp.h"
+#include "modules/currency/system/currency_clawback_stats.h" // 补缴因版本错位被跳过的计数(scene 的 Prometheus 出口导出)
 #include "modules/gain_block/gain_block_service.h"
 #include "modules/transaction_log/anomaly_detector.h"
 #include "modules/transaction_log/transaction_log_system.h"
@@ -221,7 +222,9 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     // ── 提交:从这里起不再有失败分支 ───────────────────────────────────
     if (clawbackSkippedForVersionSkew)
     {
-        // 版本错位的统一计数口径:告警与值班查询按 metric= / where= 数行(asset-channel-alerts.yaml 文件头)。
+        // 版本错位的统一计数口径:值班查询按 metric= / where= 数行(asset-channel-alerts.yaml 文件头);同一时刻进程计数加一,
+        // 由 scene 的 Prometheus 出口导出为 scene_currency_clawback_version_skew_total,告警读它(persist-version-skew-alerts.yaml)。
+        currency_clawback_stats::IncVersionSkewSkipped();
         LOG_WARN << "[CurrencySystem] metric=persist_version_skew where=currency_clawback player_id="
                  << tlsEcs.GetPlayerId(player) << " currency_type=" << static_cast<uint32_t>(type)
                  << " owed=" << debt->owed << " paid=" << debt->paid << " gain=" << gain

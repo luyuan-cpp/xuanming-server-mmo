@@ -33,13 +33,27 @@ import (
 //   - 初始存档行缺失:存档库早于写初始行。go/db 认领回 NO_OWNER,永远进不了场,建角重放也不碰存档。修复:重写建角时那几行初始行。
 //     只修现行建角流程建的角色(initial_player_commit=1):只有它们确定写过、而且只写过这几行。
 //
-// 反过来「有名字、有路由、有 ref,没有角色行」是没建成的建角,不在这里:PENDING ref 由后台判陈旧,名字和初始行没人读得到。
+// 名字登记表另有两种残留,也在这里收(2026-11-12):
+//
+//   - 删角的名字还登记着(removed_role_name):名字片恢复点早于删角释放,名字行(或名字副本)还在已删的角色名下,小表那一行
+//     已经删了,没有谁会再放它。角色行扫描连墓碑一起扫:墓碑里留着原名,按它查名字行。修复:先复核墓碑(不可逆),再按
+//     (player_id, 判重键) 条件删除名字行和名字副本(PlayerNameStore.ReleaseRemoved,和删角收尾同一步)。
+//   - 孤儿名字(orphan_name):名字行还是预留态、登记超过 ResidualOrphanNameMinAge,这个 player_id 却没有活角色(没有角色行,
+//     或者是不带名字的墓碑)。来历是建角回滚的释放没做成:玩家片冻结或不可达时释放之前的证明写不了墓碑,名字就留下了;
+//     login 判不出结局、来不及补偿时也会留下。按名字片分页扫(Target = ResidualTargetNames)。修复同运维带 token 的
+//     ReleasePlayerName:先在玩家片证明这名角色永远不会提交(有路由行、没有角色行时写墓碑),再只删预留态的名字行。
+//     证明之前先找提交过的证据,有就只报告(committed_evidence):存档库进过场或存过盘、这名角色在某个账号上有 ACTIVE 的 ref
+//     (多集群恢复点错开时角色行可能丢了,墓碑不可逆);落点不在本次的存档库名单里也只报告。
+//
+// 反过来「有名字、有路由、有 ref,没有角色行」是没建成的建角(或者玩家片恢复点早于提交):PENDING ref 由后台判陈旧,
+// 名字由上面的孤儿名字一项收,初始行没人读得到。
 //
 // 默认只报告。修复要显式选种类;每一项修之前重读角色行复核前提,变了就拒绝。ref 和初始行各在一个逻辑库的一个事务里写完,
 // 名字修复复用建角的登记(PlayerNameStore.Reserve,两步各自幂等,提交点是名字行)再置为已绑定(PlayerNameStore.Bind),
-// 写的时候持着两个库的闸门行锁。
+// 写的时候持着两个库的闸门行锁。名字每改一处(补回、置绑定、释放)都删这名玩家的名字缓存(NameCacheInvalidator):
+// 补回的名字马上查得到,不用等 60 秒的负缓存过期;没接缓存时名字的修复一律拒绝(name_cache_unavailable)。
 // 维护身份不过写者闸门,所以每一笔写都要先锁本库闸门行、核它开着(requireGateOpenTx):冻结要拿同一把锁,只能排在这笔写之后。
-// 每一项都可以重放:ref 和初始行在事务里核过不缺才写,名字登记本身幂等。按玩家分片分页扫,只做一致读,不锁表。
+// 每一项都可以重放:ref 和初始行在事务里核过不缺才写,名字登记和释放本身幂等。按片分页扫,只做一致读,不锁表。
 
 const (
 	// CreateResidualDefaultBatch / CreateResidualMaxBatch 是每页扫的角色数。页内的 ref、名字、存档按目标库分组批量查:
@@ -48,6 +62,42 @@ const (
 	CreateResidualMaxBatch     = 1000
 	// residualLookupChunk 是一条 IN 最多带的键数。
 	residualLookupChunk = 500
+
+	// ResidualOrphanNameMinAge 是预留态名字行登记多久之后才当孤儿看:远大于 login 一次建角的预算和它两次补偿释放的间隔
+	// (立即一次、约 10 秒后一次),也大于无 token 释放的窗口(PlayerName.ReleaseWindow,10 分钟)。更新的预留态可能是在途的建角。
+	ResidualOrphanNameMinAge = 30 * time.Minute
+)
+
+// CreateResidualTarget 是一次扫描扫哪张表。
+type CreateResidualTarget uint8
+
+const (
+	// ResidualTargetRoles 按玩家片扫角色行(含墓碑),核 ref、名字、存档。零值就是它。
+	ResidualTargetRoles CreateResidualTarget = iota
+	// ResidualTargetNames 按名字片扫名字行,找孤儿名字(预留态、没有活角色)。
+	ResidualTargetNames
+)
+
+// String 进工具输出,固定的英文词。
+func (t CreateResidualTarget) String() string {
+	switch t {
+	case ResidualTargetRoles:
+		return "roles"
+	case ResidualTargetNames:
+		return "names"
+	default:
+		return "unknown"
+	}
+}
+
+// 修好了、但留下要人定的后果:Result 是 Repaired,Reason 是下面之一时 NeedsAttention 仍回 true(退出码非 0)。
+const (
+	// residualReasonOverRoleCap 补回 ref 之后这个账号的角色数超过了上限:角色是真的,补回比藏着对;超出的名额只挡以后建角,
+	// 要不要清掉哪名角色由人定。
+	residualReasonOverRoleCap = "over_role_cap"
+	// residualReasonNameCacheStale 名字在库里修好了,删名字缓存失败:按玩家查名字最多还要等缓存的 TTL(负缓存 60 秒、正缓存 24 小时),
+	// 要人手工删 player:name:<player>。
+	residualReasonNameCacheStale = "name_cache_not_invalidated"
 )
 
 // CreateResidualKind 是一项残留的种类。
@@ -67,6 +117,11 @@ const (
 	// ResidualNameUnbound 名字登记在本角色名下,却还是预留态:建角提交之后的绑定没做完(或者名字片恢复点早于绑定)。
 	// 名字仍受保护(释放预留态之前要证明角色从未提交,而它提交了),但只有绑定之后才是「只有删角能释放」:可修。
 	ResidualNameUnbound
+	// ResidualRemovedRoleName 角色已是墓碑,名字行(或名字副本)还在它名下:名字片恢复点早于删角释放。可修(复核墓碑之后释放)。
+	ResidualRemovedRoleName
+	// ResidualOrphanName 预留态的名字行登记很久了,这个 player_id 没有活角色(没有角色行,或者是不带这个名字的墓碑):
+	// 建角回滚的释放没做成。没有提交过的证据时可修(先证明永远不会提交,再删预留态),有证据只报告。
+	ResidualOrphanName
 )
 
 // String 进工具输出,固定的英文词。
@@ -94,6 +149,10 @@ func (k CreateResidualKind) String() string {
 		return "role_row_corrupt"
 	case ResidualNameUnbound:
 		return "name_unbound"
+	case ResidualRemovedRoleName:
+		return "removed_role_name"
+	case ResidualOrphanName:
+		return "orphan_name"
 	default:
 		return "unknown"
 	}
@@ -144,19 +203,29 @@ type CreateResidualFinding struct {
 	HolderLive bool
 	Keeper     uint64
 
-	// seen 是扫到时的角色行,修之前拿来和重读的比。
+	// seen 是扫到时的角色行,修之前拿来和重读的比。孤儿名字一项扫到时可能没有角色行,这时只有 PlayerID。
 	seen residualRole
+	// norm 是名字两项(removed_role_name、orphan_name)要释放的那个判重键:墓碑原名算出来的,或者名字行本身的。不进输出。
+	norm string
 }
 
-// NeedsAttention 报告这一项还要人看:没修、不能自动修、被拒或出错。
+// NeedsAttention 报告这一项还要人看:没修、不能自动修、被拒或出错;修好了但留下要人定的后果(补回 ref 之后超过角色上限、
+// 名字缓存没删掉)也算。工具的退出码按它定。
 func (f CreateResidualFinding) NeedsAttention() bool {
-	return f.Result != ResidualRepaired && f.Result != ResidualUnchanged
+	switch f.Result {
+	case ResidualRepaired:
+		return f.Reason == residualReasonOverRoleCap || f.Reason == residualReasonNameCacheStale
+	case ResidualUnchanged:
+		return false
+	default:
+		return true
+	}
 }
 
 // CreateResidualRepairs 选这一次修哪几类。全 false 就是只报告。
 type CreateResidualRepairs struct {
 	Refs        bool // ResidualRefMissing
-	Names       bool // ResidualNameMissing、ResidualNameIndexStale、ResidualNameUnbound
+	Names       bool // ResidualNameMissing、ResidualNameIndexStale、ResidualNameUnbound、ResidualRemovedRoleName、ResidualOrphanName
 	InitialRows bool // ResidualInitialRowsMissing
 }
 
@@ -164,7 +233,7 @@ func (r CreateResidualRepairs) selects(kind CreateResidualKind) bool {
 	switch kind {
 	case ResidualRefMissing:
 		return r.Refs
-	case ResidualNameMissing, ResidualNameIndexStale, ResidualNameUnbound:
+	case ResidualNameMissing, ResidualNameIndexStale, ResidualNameUnbound, ResidualRemovedRoleName, ResidualOrphanName:
 		return r.Names
 	case ResidualInitialRowsMissing:
 		return r.InitialRows
@@ -173,22 +242,26 @@ func (r CreateResidualRepairs) selects(kind CreateResidualKind) bool {
 	}
 }
 
-// CreateResidualScan 是扫一片的一段。
+// CreateResidualScan 是扫一片的一段。角色行按 player_id 分页(After),名字行按判重键分页(AfterName)。
 type CreateResidualScan struct {
-	Slot   int
-	After  uint64 // 从这个 player_id 之后接着扫(不含);0 从头
-	Limit  int    // 这一次最多扫多少名角色;0 扫到片尾
-	Batch  int    // 每页角色数;0 用 CreateResidualDefaultBatch
-	Repair CreateResidualRepairs
+	Slot      int
+	Target    CreateResidualTarget
+	After     uint64 // 角色行:从这个 player_id 之后接着扫(不含);0 从头
+	AfterName string // 名字行:从这个判重键之后接着扫(不含);"" 从头
+	Limit     int    // 这一次最多扫多少行;0 扫到片尾
+	Batch     int    // 每页行数;0 用 CreateResidualDefaultBatch
+	Repair    CreateResidualRepairs
 }
 
-// CreateResidualReport 是扫完一段的结果。出错时只含已经核完的页,NextAfter 停在最后一页核完的末尾,从那里重跑不会漏。
+// CreateResidualReport 是扫完一段的结果。出错时只含已经核完的页,NextAfter / NextAfterName 停在最后一页核完的末尾,从那里重跑不会漏。
 type CreateResidualReport struct {
-	Slot      int
-	Scanned   int
-	Findings  []CreateResidualFinding
-	NextAfter uint64
-	Done      bool // 这一片扫到头了
+	Slot          int
+	Target        CreateResidualTarget
+	Scanned       int
+	Findings      []CreateResidualFinding
+	NextAfter     uint64 // 角色行扫描的下一段起点
+	NextAfterName string // 名字行扫描的下一段起点
+	Done          bool   // 这一片扫到头了
 }
 
 // CreateResidualAuditor 核对并修复建角残留。不持久化任何状态,多个实例可以同时跑(比如每片一个进程):每一项修复都在库里核过才写。
@@ -196,12 +269,14 @@ type CreateResidualAuditor struct {
 	steps    residualSteps
 	shards   int
 	maxRoles int
-	now      func() time.Time
+	// cache 是名字读缓存:名字每修一处就删这名玩家的缓存。nil 时名字的修复一律拒绝(修好了却查不到,不如不修)。
+	cache NameCacheInvalidator
+	now   func() time.Time
 }
 
-// NewCreateResidualAuditor 用目录(必须已经 ConfigurePlayerStores)和名字库装出核账。两者必须开在同一组逻辑库上:
-// 名字修复借目录的池锁闸门行、用名字库的池写(withGatesHeld),两边是同一个库,锁才有意义。
-func NewCreateResidualAuditor(directory *AccountDirectoryStore, names *PlayerNameStore, now func() time.Time) (*CreateResidualAuditor, error) {
+// NewCreateResidualAuditor 用目录(必须已经 ConfigurePlayerStores)、名字库和名字读缓存装出核账。目录和名字库必须开在同一组逻辑库上:
+// 名字修复借目录的池锁闸门行、用名字库的池写(withGatesHeld),两边是同一个库,锁才有意义。cache 可以是 nil:只报告、不修名字时用不上它。
+func NewCreateResidualAuditor(directory *AccountDirectoryStore, names *PlayerNameStore, cache NameCacheInvalidator, now func() time.Time) (*CreateResidualAuditor, error) {
 	if directory == nil || directory.shards == nil || directory.stores == nil || names == nil || names.pools == nil || now == nil {
 		return nil, errors.New("建角残留核账缺少目录、存档库或名字库")
 	}
@@ -212,6 +287,7 @@ func NewCreateResidualAuditor(directory *AccountDirectoryStore, names *PlayerNam
 		steps:    &sqlResidualSteps{shards: directory.shards, stores: directory.stores, names: names},
 		shards:   directory.shards.k,
 		maxRoles: directory.maxRoles,
+		cache:    cache,
 		now:      now,
 	}, nil
 }
@@ -219,15 +295,23 @@ func NewCreateResidualAuditor(directory *AccountDirectoryStore, names *PlayerNam
 // Shards 是目录分片数 K,片号 0..K-1。
 func (a *CreateResidualAuditor) Shards() int { return a.shards }
 
-// Run 扫一片的一段:按 player_id 分页读角色行,每页批量取 ref、名字、存档的证据逐名判,选了的种类当场修。
+// Run 扫一片的一段。角色行(ResidualTargetRoles):按 player_id 分页读角色行(含墓碑),每页批量取 ref、名字、存档的证据逐名判;
+// 名字行(ResidualTargetNames):按判重键分页读名字行,老的预留态逐个去玩家片核角色。选了的种类当场修。
 // 证据读失败时这一页的结论不报、游标不前进,回错误;单项修复失败记在那一项上,不中断。
 func (a *CreateResidualAuditor) Run(ctx context.Context, scan CreateResidualScan) (CreateResidualReport, error) {
-	report := CreateResidualReport{Slot: scan.Slot, NextAfter: scan.After}
+	report := CreateResidualReport{Slot: scan.Slot, Target: scan.Target, NextAfter: scan.After, NextAfterName: scan.AfterName}
 	batch := scan.Batch
 	if batch == 0 {
 		batch = CreateResidualDefaultBatch
 	}
 	if scan.Slot < 0 || scan.Slot >= a.shards || batch < 1 || batch > CreateResidualMaxBatch || scan.Limit < 0 {
+		return report, accountdirectory.ErrInvalid
+	}
+	switch {
+	case scan.Target == ResidualTargetNames && scan.After == 0:
+		return a.runNames(ctx, scan, batch, report)
+	case scan.Target != ResidualTargetRoles || scan.AfterName != "":
+		// 游标和扫描对象对不上(角色行带了名字游标、名字行带了 player_id 游标),说明调用方拼错了。
 		return report, accountdirectory.ErrInvalid
 	}
 	for scan.Limit == 0 || report.Scanned < scan.Limit {
@@ -259,7 +343,7 @@ func (a *CreateResidualAuditor) Run(ctx context.Context, scan CreateResidualScan
 	return report, nil
 }
 
-// classify 批量取一页的证据,逐名判。
+// classify 批量取一页的证据,逐名判。墓碑只核名字:ref 由后台判陈旧清,存档不再有人读。
 func (a *CreateResidualAuditor) classify(ctx context.Context, slot int, page []residualRole) ([]CreateResidualFinding, error) {
 	refKeys := make([]residualRefKey, 0, len(page))
 	names := make(map[uint64]residualName, len(page))
@@ -269,11 +353,14 @@ func (a *CreateResidualAuditor) classify(ctx context.Context, slot int, page []r
 		if r.Role == nil {
 			continue
 		}
-		refKeys = append(refKeys, residualRefKey{account: r.Account, player: r.PlayerID})
 		if key, ok := residualNameKeyOf(r.Role.GetName()); ok {
 			names[r.PlayerID] = key
 			norms = append(norms, key.norm)
 		}
+		if r.Account == "" {
+			continue
+		}
+		refKeys = append(refKeys, residualRefKey{account: r.Account, player: r.PlayerID})
 		if r.Routed && r.Route.HasPlacement() && a.steps.storageAllowed(r.Route.StorageID) {
 			byStorage[r.Route.StorageID] = append(byStorage[r.Route.StorageID], r.PlayerID)
 		}
@@ -319,6 +406,9 @@ func (a *CreateResidualAuditor) judge(slot int, r residualRole, present map[resi
 	}
 	if r.Role == nil {
 		return []CreateResidualFinding{manual(ResidualRoleRowCorrupt, "corrupt_role_row")}
+	}
+	if r.Account == "" {
+		return judgeRemoved(slot, r, names, holders)
 	}
 	var out []CreateResidualFinding
 	if !present[residualRefKey{account: r.Account, player: r.PlayerID}] {
@@ -381,6 +471,114 @@ func (a *CreateResidualAuditor) judge(slot int, r residualRole, present map[resi
 	return out
 }
 
+// judgeRemoved 判一块墓碑:只核名字。墓碑不可逆,这个 player_id 再也不会有角色,名字行或名字副本还在它名下就是删角释放没做完
+// (名字片恢复点早于释放;小表那一行已删,没有谁会再放它)。按墓碑里留着的原名查;原名算不出判重键时按名字副本里的判重键放。
+// 墓碑里没有名字的(证明、判陈旧写的)没有可核的,它们留下的预留态由名字行扫描当孤儿名字报。
+func judgeRemoved(slot int, r residualRole, names map[uint64]residualName, holders map[string]residualNameRow) []CreateResidualFinding {
+	if r.Role.GetName() == "" {
+		return nil
+	}
+	f := CreateResidualFinding{Slot: slot, PlayerID: r.PlayerID, Kind: ResidualRemovedRoleName, seen: r}
+	key, computable := names[r.PlayerID]
+	switch {
+	case !computable && r.OwnedNorm == "":
+		// 名字行按判重键分片,算不出键就找不到它;名字副本也没有,没有可放的线索。
+		return nil
+	case !computable:
+		f.norm = r.OwnedNorm
+	case r.OwnedNorm != "" && r.OwnedNorm != key.norm:
+		// 名字副本指着别的名字:只有 ID 复用这类事故到得了,一个字节都不动,交给人。
+		f.Result, f.Reason = ResidualManual, "player_holds_other_name"
+		return []CreateResidualFinding{f}
+	default:
+		row, held := holders[key.norm]
+		if !(held && row.Holder == r.PlayerID) && r.OwnedNorm == "" {
+			return nil
+		}
+		f.norm = key.norm
+	}
+	return []CreateResidualFinding{f}
+}
+
+// runNames 扫一片名字行的一段:按判重键分页读,预留态、登记早于 ResidualOrphanNameMinAge 的逐个去玩家片核角色(孤儿名字很少,
+// 逐个点查),当场判、选了就修。Scanned 数的是名字行。
+func (a *CreateResidualAuditor) runNames(ctx context.Context, scan CreateResidualScan, batch int, report CreateResidualReport) (CreateResidualReport, error) {
+	cutoffMs := uint64(a.now().Add(-ResidualOrphanNameMinAge).UnixMilli())
+	for scan.Limit == 0 || report.Scanned < scan.Limit {
+		n := batch
+		if scan.Limit > 0 && scan.Limit-report.Scanned < n {
+			n = scan.Limit - report.Scanned
+		}
+		page, err := a.steps.scanNames(ctx, scan.Slot, report.NextAfterName, n)
+		if err != nil {
+			return report, fmt.Errorf("scan player_name on shard %d: %w", scan.Slot, err)
+		}
+		var findings []CreateResidualFinding
+		for _, entry := range page {
+			if entry.BoundMs != 0 || entry.CreatedMs >= cutoffMs {
+				continue
+			}
+			f, reported, err := a.judgeOrphan(ctx, scan.Slot, entry)
+			if err != nil {
+				// 这一页的结论不报、游标不前进:重跑从这一页开始,不会跳过。
+				return report, fmt.Errorf("check reserved names on shard %d: %w", scan.Slot, err)
+			}
+			if reported {
+				findings = append(findings, f)
+			}
+		}
+		for i := range findings {
+			a.settle(ctx, &findings[i], scan.Repair)
+		}
+		report.Findings = append(report.Findings, findings...)
+		report.Scanned += len(page)
+		if len(page) > 0 {
+			report.NextAfterName = page[len(page)-1].Norm
+		}
+		if len(page) < n {
+			report.Done = true
+			break
+		}
+	}
+	return report, nil
+}
+
+// judgeOrphan 判一条老的预留态名字行,回这一项和要不要报。活角色、带着这个名字的墓碑不在这里报:角色行扫描按 name_unbound、
+// removed_role_name 报它们。没有角色行时先找提交过的证据(orphanEvidence),有就只报告。
+func (a *CreateResidualAuditor) judgeOrphan(ctx context.Context, slot int, entry residualNameEntry) (CreateResidualFinding, bool, error) {
+	f := CreateResidualFinding{Slot: slot, PlayerID: entry.Holder, Kind: ResidualOrphanName, norm: entry.Norm, seen: residualRole{PlayerID: entry.Holder}}
+	role, err := a.steps.loadRole(ctx, entry.Holder)
+	if err != nil {
+		return f, false, fmt.Errorf("read the role of a reserved name: %w", err)
+	}
+	if role != nil {
+		f.seen = *role
+		if role.Role == nil {
+			f.Result, f.Reason = ResidualManual, "corrupt_role_row"
+			return f, true, nil
+		}
+		key, ok := residualNameKeyOf(role.Role.GetName())
+		ownName := ok && key.norm == entry.Norm
+		switch {
+		case ownName:
+			return f, false, nil
+		case role.Account != "":
+			// 活角色名下登记着另一个名字的预留态:只有 ID 复用这类事故到得了,交给人。
+			f.Result, f.Reason = ResidualManual, "live_role_holds_other_name"
+		}
+		// 不带这个名字的墓碑:永远不会提交,可修。
+		return f, true, nil
+	}
+	evidence, err := a.steps.orphanEvidence(ctx, entry.Holder)
+	if err != nil {
+		return f, false, fmt.Errorf("read the commit evidence of a reserved name: %w", err)
+	}
+	if evidence != "" {
+		f.Result, f.Reason = ResidualManual, evidence
+	}
+	return f, true, nil
+}
+
 // describeHolders 给名字被占的项补上占用者的情况和裁决。
 func (a *CreateResidualAuditor) describeHolders(ctx context.Context, findings []CreateResidualFinding) error {
 	var holders []uint64
@@ -435,10 +633,20 @@ func (a *CreateResidualAuditor) settle(ctx context.Context, f *CreateResidualFin
 }
 
 // repair 修一项。先重读角色行:扫完之后过了户、删了角、改了身份,这一项的前提就不成立了,拒绝,重跑 plan 再看。
+// 孤儿名字扫到时可能没有角色行,前提是「没有活角色」,由 settleOrphanName 自己复核。
+// 名字几项要删名字缓存:没接缓存就不修(修好了却查不到,补回的名字要等负缓存过期)。
 func (a *CreateResidualAuditor) repair(ctx context.Context, f *CreateResidualFinding) {
+	if residualNameKind(f.Kind) && a.cache == nil {
+		f.Result, f.Reason = ResidualRefused, "name_cache_unavailable"
+		return
+	}
 	fresh, err := a.steps.loadRole(ctx, f.PlayerID)
 	if err != nil {
 		a.fail(f, err)
+		return
+	}
+	if f.Kind == ResidualOrphanName {
+		a.settleOrphanName(ctx, f, fresh)
 		return
 	}
 	if !sameResidualRole(fresh, &f.seen) {
@@ -450,10 +658,31 @@ func (a *CreateResidualAuditor) repair(ctx context.Context, f *CreateResidualFin
 		a.restoreRef(ctx, f, fresh)
 	case ResidualNameMissing, ResidualNameIndexStale, ResidualNameUnbound:
 		a.restoreName(ctx, f, fresh)
+	case ResidualRemovedRoleName:
+		a.releaseRemovedName(ctx, f)
 	case ResidualInitialRowsMissing:
 		a.restoreInitialRows(ctx, f, fresh)
 	default:
 		f.Result, f.Reason = ResidualManual, "not_repairable"
+	}
+}
+
+// residualNameKind 报告这一类修的是名字登记(修完要删名字缓存)。
+func residualNameKind(kind CreateResidualKind) bool {
+	switch kind {
+	case ResidualNameMissing, ResidualNameIndexStale, ResidualNameUnbound, ResidualRemovedRoleName, ResidualOrphanName:
+		return true
+	default:
+		return false
+	}
+}
+
+// invalidateNameCache 名字在库里修好之后删这名玩家的名字缓存(正、负缓存同一个键),有上限地重来。还是删不掉就把这一项标成
+// 要人看(name_cache_not_invalidated):库里已经修好,只是按玩家查名字最多还要等缓存的 TTL。
+func (a *CreateResidualAuditor) invalidateNameCache(ctx context.Context, f *CreateResidualFinding) {
+	if err := delNameCacheWithRetry(ctx, a.cache, f.PlayerID); err != nil {
+		f.Reason = residualReasonNameCacheStale
+		logx.Errorf("[create-residual] name repaired but its cache entry was not deleted, delete player:name:<player> by hand: player=%d: %v", f.PlayerID, err)
 	}
 }
 
@@ -485,8 +714,9 @@ func (a *CreateResidualAuditor) restoreRef(ctx context.Context, f *CreateResidua
 	case refRestored:
 		f.Result = ResidualRepaired
 	case refRestoredOverCap:
-		// 隐身的角色不占名额,恢复之后账号可能又建满了。角色是真的,补回来比藏着对;超出的名额只挡以后建角。
-		f.Result, f.Reason = ResidualRepaired, "over_role_cap"
+		// 隐身的角色不占名额,恢复之后账号可能又建满了。角色是真的,补回来比藏着对;超出的名额只挡以后建角,
+		// 要不要处理由人定:算成要人看的项(NeedsAttention),工具以 1 退出。
+		f.Result, f.Reason = ResidualRepaired, residualReasonOverRoleCap
 	case refPresent:
 		f.Result = ResidualUnchanged
 	default:
@@ -513,12 +743,78 @@ func (a *CreateResidualAuditor) restoreName(ctx context.Context, f *CreateResidu
 	case ReserveInserted, ReserveAlreadyOwned:
 		f.Result = ResidualRepaired
 		logx.Infof("[create-residual] restored player name registration: player=%d outcome=%s", role.PlayerID, outcome)
+		// 名字缺着的那段时间读路径可能记了「没有名字」的负缓存(60 秒),名字副本不对时还可能缓存着错的名字:删掉,修完马上查得到。
+		a.invalidateNameCache(ctx, f)
 	case ReserveTaken:
 		// 扫完之后有人抢先登记了这个名字。登记什么都没写,和扫到时被占一样交给人。
 		f.Result, f.Reason, f.Holder = ResidualRefused, "name_held_by_other", holder
 	default:
 		// 这个 player_id 名下已经登记了另一个名字。v1 没有改名,只可能是 ID 复用这类事故,一个字节都不动。
 		f.Result, f.Reason = ResidualRefused, "player_holds_other_name"
+	}
+}
+
+// releaseRemovedName 释放一块墓碑名下的名字(removed_role_name):repair 刚重读过角色行,确是同一块墓碑(不可逆)。
+// 持着名字片和玩家片的闸门行锁,按 (player_id, 判重键) 条件删名字行和名字副本,和删角收尾同一步(PlayerNameStore.ReleaseRemoved);
+// 名字已经归了别人(player_id 对不上)不动。可以重放。
+func (a *CreateResidualAuditor) releaseRemovedName(ctx context.Context, f *CreateResidualFinding) {
+	outcome, err := a.steps.releaseRemovedName(ctx, f.PlayerID, f.norm)
+	if err != nil {
+		a.fail(f, err)
+		return
+	}
+	f.Result = ResidualRepaired
+	logx.Infof("[create-residual] released the name of a removed role: player=%d outcome=%s", f.PlayerID, outcome)
+	a.invalidateNameCache(ctx, f)
+}
+
+// settleOrphanName 收一条孤儿名字(orphan_name),做的事同运维带 token 的 ReleasePlayerName:
+//  1. 复核这时还没有活角色(扫完之后建成了就拒绝,role_committed);没有角色行时重新找一遍提交过的证据,有就拒绝。
+//  2. 在玩家片证明这名角色永远不会提交(sealOrphanRole:锁闸门行、路由行、角色行;有路由行、没有角色行时写墓碑,迟到的建角提交不了)。
+//  3. 持着名字片和玩家片的闸门行锁,只删预留态的名字行(和名字副本)。证明在前、删除在后:反过来的话删完名字之后在途的建角还能提交。
+//
+// 每一步都可以重放:墓碑写过就读到墓碑,名字删过就是 Absent。
+func (a *CreateResidualAuditor) settleOrphanName(ctx context.Context, f *CreateResidualFinding, fresh *residualRole) {
+	switch {
+	case fresh != nil && fresh.Account != "":
+		f.Result, f.Reason = ResidualRefused, "role_committed"
+		return
+	case fresh == nil:
+		evidence, err := a.steps.orphanEvidence(ctx, f.PlayerID)
+		if err != nil {
+			a.fail(f, err)
+			return
+		}
+		if evidence != "" {
+			f.Result, f.Reason = ResidualRefused, evidence
+			return
+		}
+	}
+	seal, err := a.steps.sealOrphanRole(ctx, f.PlayerID)
+	if err != nil {
+		a.fail(f, err)
+		return
+	}
+	if seal == RoleSealCommitted {
+		// 证明的事务里读到在役角色:复核之后才提交的。名字属于它,下一轮角色行扫描按 name_unbound 报。
+		f.Result, f.Reason = ResidualRefused, "role_committed"
+		return
+	}
+	outcome, err := a.steps.releaseReservedName(ctx, f.PlayerID, f.norm)
+	if err != nil {
+		a.fail(f, err)
+		return
+	}
+	switch outcome {
+	case ReleaseDeleted:
+		f.Result = ResidualRepaired
+		logx.Infof("[create-residual] released an orphan name reservation: player=%d seal=%s", f.PlayerID, seal)
+		a.invalidateNameCache(ctx, f)
+	case ReleaseAbsent:
+		f.Result = ResidualUnchanged
+	default:
+		// 已绑定:证明之后角色提交不了,也就绑定不了;读到它说明库被人动过。一个字节都不动。
+		f.Result, f.Reason = ResidualRefused, "name_bound"
 	}
 }
 
@@ -541,6 +837,14 @@ func (a *CreateResidualAuditor) restoreInitialRows(ctx context.Context, f *Creat
 }
 
 // ── 证据与修复的接缝 ──────────────────────────────────────────────────────
+
+// residualNameEntry 是名字行上核孤儿名字要的四列:判重键、登记在谁名下、登记时刻、绑定时刻(0 = 预留态)。
+type residualNameEntry struct {
+	Norm      string
+	Holder    uint64
+	CreatedMs uint64
+	BoundMs   uint64
+}
 
 // residualRole 是一名角色在玩家片上的三样东西:角色行、路由行、名字副本。三张表都按玩家分片,在同一个库。
 type residualRole struct {
@@ -600,11 +904,16 @@ const (
 	storePartial                          // 有别的行没有写权行,没写
 )
 
-// residualSteps 是核账和修复要的每一步。读都是一致读不加锁;每个修复方法只写一个逻辑库(名字登记例外,见 restoreName),
+// residualSteps 是核账和修复要的每一步。读都是一致读不加锁;每个修复方法只写一个逻辑库(名字登记、释放例外,见 restoreName),
 // 事务里先锁本库闸门行。分开是为了能用内存替身把判据、复核和重放跑一遍,SQL 实现见 create_residual_sql.go。
 type residualSteps interface {
-	// scanRoles 按 player_id 升序读一片上 after 之后的活角色(墓碑跳过),最多 limit 名。
+	// scanRoles 按 player_id 升序读一片上 after 之后的角色行(墓碑也读,Account 为空),最多 limit 行。
 	scanRoles(ctx context.Context, slot int, after uint64, limit int) ([]residualRole, error)
+	// scanNames 按判重键升序读一片名字行里 after 之后的,最多 limit 行(不筛状态,筛选在编排里)。
+	scanNames(ctx context.Context, slot int, after string, limit int) ([]residualNameEntry, error)
+	// orphanEvidence 找一个没有角色行的 player_id 提交过的证据:存档库进过场或存过盘(store_saved)、某个账号上有 ACTIVE 的 ref
+	// (ref_active)、落点不在本次的存档库名单里(storage_not_listed,核不全)。没有路由行或没有落点回空:提交要求路由行和落点,提交不了。
+	orphanEvidence(ctx context.Context, player uint64) (string, error)
 	// loadRole 重读一名角色,墓碑也读出来;没有角色行回 nil。
 	loadRole(ctx context.Context, player uint64) (*residualRole, error)
 	presentRefs(ctx context.Context, keys []residualRefKey) (map[residualRefKey]bool, error)
@@ -620,6 +929,13 @@ type residualSteps interface {
 	// 结局口径同 Reserve:Inserted / AlreadyOwned 是登记并绑定好了,Taken 带占用者,Conflict 是这个 id 名下另有名字。
 	restoreName(ctx context.Context, player uint64, display, norm string, nowMs uint64) (ReserveOutcome, uint64, error)
 	restoreInitialRows(ctx context.Context, storage uint32, role *base.AccountSimplePlayer) (storeRestore, error)
+	// releaseRemovedName 删墓碑名下的名字行和名字副本(只认这个 player_id、这个判重键),持着两个库的闸门行锁。调用方已复核墓碑。
+	releaseRemovedName(ctx context.Context, player uint64, norm string) (ReleaseOutcome, error)
+	// sealOrphanRole 在玩家片一个事务里锁闸门行、核它开着,再证明这名角色永远不会提交(sealRoleTx:必要时写墓碑)。
+	sealOrphanRole(ctx context.Context, player uint64) (RoleSeal, error)
+	// releaseReservedName 只删预留态的名字行和名字副本(PlayerNameStore.Release,不限登记时刻),持着两个库的闸门行锁。
+	// 调用方已证明角色永远不会提交。
+	releaseReservedName(ctx context.Context, player uint64, norm string) (ReleaseOutcome, error)
 }
 
 // residualNameRow 是名字行上核账要的两列:登记在谁名下,绑没绑定(bound_ms 非 0)。

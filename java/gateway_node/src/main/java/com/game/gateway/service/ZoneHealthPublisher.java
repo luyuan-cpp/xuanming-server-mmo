@@ -42,7 +42,9 @@ import java.util.function.LongSupplier;
  * (读本 zone 失败、坏 NodeInfo、读目录失败、写失败),就把它删掉:在 TTL 内读方照旧看到上一份(last-known-good),
  * 过了 TTL 读方看不到这条、当作不知道。续租失败时本拍什么都不写,记录随旧租约到期消失。
  *
- * <p>只在调度线程上运行,按 zone 的状态不跨线程共享。用固定频率调度,每拍先续租:租约 TTL 至少是周期的两倍(构造时校验)。
+ * <p>只由调度器调用,同一时刻只有一个线程在跑,按 zone 的状态不跨线程共享。用固定频率调度,每拍先续租:租约 TTL 至少是周期的
+ * 两倍(构造时校验)。续租靠这个循环自己,所以它不能被别的定时任务拖住:application.yaml 把调度线程数
+ * ({@code spring.task.scheduling.pool.size})设成任务数,每个任务各有线程可用(ScheduledTaskThreadsTest 钉住)。
  */
 @Component
 public class ZoneHealthPublisher {

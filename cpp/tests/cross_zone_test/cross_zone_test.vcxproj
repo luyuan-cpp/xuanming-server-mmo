@@ -167,6 +167,7 @@
     <ClCompile Include="role_admission_test.cpp" />
     <ClCompile Include="save_seq_test.cpp" />
     <ClCompile Include="player_ownership_metrics_test.cpp" />
+    <ClCompile Include="player_handoff_gate_test.cpp" />
     <ClCompile Include="discovery_zone_scope_test.cpp" />
     <ClCompile Include="discovery_set_test.cpp" />
   </ItemGroup>

@@ -329,6 +329,12 @@ func (w *indexPassWorker) runSegment(ctx context.Context, pass indexPass, seg in
 	if prog.next >= segmentEnd(seg) {
 		return nil
 	}
+	// 每做一段之前按当前持有的段数换一次限速:一步可能做很久,其间别的副本加入或退出,份额要跟着变。
+	owned := len(w.owner.OwnedSegments())
+	if owned == 0 {
+		return nil
+	}
+	w.r.scanPacer = w.r.deps.newPacer(scanBudgetShare(w.r.cfg.ScanPagesPerSecond, owned))
 	for prog.next < segmentEnd(seg) {
 		if !w.owns(seg) {
 			return nil
@@ -361,6 +367,20 @@ func (w *indexPassWorker) owns(seg int) bool {
 	owned := w.owner.OwnedSegments()
 	i := sort.SearchInts(owned, seg)
 	return i < len(owned) && owned[i] == seg
+}
+
+// scanBudgetShare 返回本副本的扫描限速(页/秒):全服预算 × 本副本持有的段数 / 段总数。
+//
+// Lease.Reconcile.ScanPagesPerSecond 是全服一遍的总预算,不是每个副本各自的上限:各副本的份额加起来就是它,与副本数无关。
+// 这个数保护的是玩家域 Redis。2026-11-12 之前每个副本各拿一整份,一遍的总速度 = 持段副本数 × 它,
+// 加 player_locator 副本就等于加重 Redis 的负担,配置值要跟着副本数回头去调。现在加副本只是把同一份预算分得更细;
+// 要让一遍更快,随 Redis 的余量调大这一个数,一遍的耗时 ≈ 总页数 / 预算。
+// 预算 ≤ 0(不限速,只给本机与单测)原样返回;调用方保证 ownedSegments > 0(一段都不持有时什么也不做)。
+func scanBudgetShare(budgetPerSecond, ownedSegments int) float64 {
+	if budgetPerSecond <= 0 {
+		return float64(budgetPerSecond)
+	}
+	return float64(budgetPerSecond) * float64(ownedSegments) / float64(slotSegmentCount)
 }
 
 // processSlot 做一个 slot:第 1 阶段列出它的全部键、按页补漏成员;第 2 阶段读它的登记集、逐把索引键清脏成员。

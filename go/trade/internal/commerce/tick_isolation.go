@@ -301,8 +301,13 @@ func recordMatchFailure(takerID uint64, err error) {
 	logx.Errorf("[Commerce] Market match failed, rematching next round taker_id=%d class=%s: %v", takerID, class, err)
 }
 
-// settleHeldBid:拍品结算后把持有中的竞价结案;拍品未结算时把这一行推迟到拍品截止。
+// settleHeldBid:拍品结案后把持有中的竞价结案;拍品没结案时把这一行推迟到拍品截止。
+//   - 拍品成交(Settled):冻结款已由拍品的卖家所得腿付给卖家,出价按成交结案。
+//   - 拍品按撤单结案(Cancelled):交付时赢家那条被拒、整单退回(delivery_order.go)。卖家所得没发,冻结款还在出价里,
+//     出价改 bid_refund,与被超价同一条路退回出价人(bid_return 带 TX_AUCTION_RETURN)。拍品发出过卖家所得却按撤单
+//     结案是自相矛盾,不自动退款,按坏数据隔离成人工(heldBidKeepsFunds)。
 //
+// 拍品结案时 advance 会唤醒它引用的出价(finishedLotBid),不用等 bidHeldRecheck。
 // 以前未结算时原样跳过、updated_ms 不变,每个有出价的在拍拍品都有一行 bid_held 永远排在 Due 队头;
 // 在拍拍品数达到 tickDueLimit 后 Due 只回这些行,拍品自己也推进不了,整个交易停摆。
 func (e *Engine) settleHeldBid(ctx context.Context, r *tradepb.TradeCommerceRecord) error {
@@ -313,7 +318,17 @@ func (e *Engine) settleHeldBid(ctx context.Context, r *tradepb.TradeCommerceReco
 	if err != nil {
 		return err
 	}
-	if parent.Status != Settled {
+	switch parent.Status {
+	case Settled:
+	case Cancelled:
+		lw, err := data.Workflow(parent)
+		if err != nil {
+			return corrupt(fmt.Errorf("拍品 %d 的 workflow 解不开,判不了冻结款是否还在出价里: %w", parent.CommerceId, err))
+		}
+		if !heldBidKeepsFunds(lw, r.CommerceId) {
+			return corrupt(fmt.Errorf("拍品 %d 按撤单结案,卖家所得腿却发出过,出价 %d 的冻结款不能自动退回", parent.CommerceId, r.CommerceId))
+		}
+	default:
 		now := e.now()
 		until := min(max(parent.ExpiresMs, now+uint64(bidHeldRecheck.Milliseconds())), now+uint64(bidHeldMaxWait.Milliseconds()))
 		// 落空(版本已变)说明这一行刚被出价改成 bid_refund 之类,新状态立即到期,不需要推迟。
@@ -331,6 +346,12 @@ func (e *Engine) settleHeldBid(ctx context.Context, r *tradepb.TradeCommerceReco
 		}
 		if cw.Stage != "bid_held" {
 			return nil
+		}
+		if parent.Status == Cancelled {
+			// 结案后的拍品不再变(人工处置只接转人工的合同),锁外读到的状态就是终局。
+			cw.Stage = "bid_refund"
+			current.Status = CancelPending
+			return e.Repo.Save(ctx, tx, current, cw, e.now())
 		}
 		current.Status = Settled
 		cw.Stage = "done"

@@ -295,7 +295,7 @@ type unqualifiedRevokeTarget struct {
 	locationRaw   string                        // location 原字节
 	revisionTag   string                        // §16 的 location_revision 侧车原文(随 location 一起读到的)
 	ownerRevision uint64                        // 本次请求已观察到的 SQL 原修订(floor 期望);0 = 不核
-	zoneID        uint32                        // location 所在 zone,只用于找节点成员集合;0 按 scene:{id}:zone 补
+	zoneID        uint32                        // location 所在 zone,只用于找节点成员集合;0 按本进程的 zone 补(removeScenePlayer)
 	epoch         uint64                        // 本次请求观察到的 owner_epoch(期望 E)
 	waited        time.Duration                 // 这份 location 的等待计时(Redis TIME)
 }

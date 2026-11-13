@@ -22,6 +22,7 @@ import (
 	"shared/generated/clientrpc"
 	"shared/kafkautil"
 	"shared/killswitch"
+	"shared/rolefence"
 	"shared/roleidentity"
 )
 
@@ -57,13 +58,20 @@ func TestGlobalGuildTrialRequiresDurableTopicBeforeServing(t *testing.T) {
 	c.Kafka.Brokers = []string{"broker:9092"}
 	c.Activity.TrialResult.Enabled = true
 	c.Activity.TrialResult.Topic = "match-results"
+	c.Activity.TrialResult.GroupID = "guild-trial"
 	c.Activity.TrialResult.Partitions = 3
 	calls := 0
 	blocked := errors.New("existing topic RF1")
 	ensure := func(brokers []string, specs []kafkautil.TopicSpec) error {
 		calls++
-		if len(brokers) != 1 || len(specs) != 1 || !specs[0].RequireDurability || specs[0].ReplicaFactor != 3 || specs[0].Partitions != 3 {
-			t.Fatal("全局启动必须显式核验RF3严格策略")
+		// 结果 topic 与本组死信 topic(2026-11-12 起,有界重试后转死信)同一套严格耐久契约,注册前一起核。
+		if len(brokers) != 1 || len(specs) != 2 || specs[0].Partitions != 3 || specs[1].Name != "guild-trial-dlq" {
+			t.Fatalf("全局启动必须同时核验结果 topic 与死信 topic: %+v", specs)
+		}
+		for _, spec := range specs {
+			if !spec.RequireDurability || spec.ReplicaFactor != 3 {
+				t.Fatal("全局启动必须显式核验RF3严格策略")
+			}
 		}
 		return blocked
 	}
@@ -234,6 +242,91 @@ func TestSessionGateWiredIntoUnaryChain(t *testing.T) {
 	}
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("期望 PermissionDenied,得到 %v", err)
+	}
+}
+
+// TestOwnershipPrecheckWiredIntoUnaryChain 证明原角色归属预检**确实挂在**拦截器链上,且在入口准入之后、handler 之前
+// (docs/design/gate-online-identity.md §9.3)。它读本库护栏副本、不加锁,是 guild 读方法唯一的归属检查。
+// 判定函数换成测试给的结果,拒绝判据用 guild.go 装配的同一个 guildOwnerRejected。
+func TestOwnershipPrecheckWiredIntoUnaryChain(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		checkErr error
+		code     codes.Code
+	}{
+		{"角色仍归原身份", nil, codes.OK},
+		{"角色已换主、已删或被冻结", data.ErrWriteConflict, codes.PermissionDenied},
+		{"目录里没有这名角色", &rolefence.RoleNotFoundError{Players: []uint64{42}}, codes.PermissionDenied},
+		// 目录读不到、库故障:客户端要能重试,不能告诉它角色变了;只读、确定没写,也不回 Unavailable 免得打成排空 Hold。
+		{"这一次判不了", errors.New("目录读不到"), codes.Aborted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checked, handlerCalled := false, false
+			ownership, err := roleidentity.OwnershipInterceptor(func(ctx context.Context) error {
+				checked = true
+				original, ok := roleidentity.Original(ctx)
+				if !ok || original.Role.GetPlayerId() != 42 || original.Account != "guild-account" || original.OwnerRevision != 7 {
+					t.Errorf("归属预检要按入口准入捕获的原身份判,实际 %v(ok=%v)", original, ok)
+				}
+				return tc.checkErr
+			}, guildOwnerRejected)
+			if err != nil {
+				t.Fatalf("归属预检装配失败: %v", err)
+			}
+			info := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_GetGuild_FullMethodName}
+			h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), time.Second, guildEntry(t), ownership), info,
+				func(ctx context.Context, req any) (any, error) {
+					handlerCalled = true
+					return &pb.GetGuildResponse{}, nil
+				})
+
+			_, err = h(guildSession(t, info.FullMethod, 42), &pb.GetGuildRequest{})
+			if !checked {
+				t.Fatal("归属判定没有被调用:预检没有挂上拦截器链(或排在入口准入之前,拿不到原身份)")
+			}
+			if status.Code(err) != tc.code {
+				t.Fatalf("期望 %v,得到 %v", tc.code, err)
+			}
+			if handlerCalled != (tc.code == codes.OK) {
+				t.Fatalf("handler 调用与结果不符: called=%v code=%v", handlerCalled, tc.code)
+			}
+		})
+	}
+}
+
+// TestOwnershipPrecheckSkipsCallsWithoutOriginal:不带会话的调用(内部调用、匿名只读例外 GetPlayerGuild)ctx 里没有原身份,
+// 不做归属预检;入口准入就拒掉的身份(缺修订)也不进预检。
+func TestOwnershipPrecheckSkipsCallsWithoutOriginal(t *testing.T) {
+	checked := false
+	ownership, err := roleidentity.OwnershipInterceptor(func(context.Context) error {
+		checked = true
+		return data.ErrWriteConflict
+	}, guildOwnerRejected)
+	if err != nil {
+		t.Fatalf("归属预检装配失败: %v", err)
+	}
+	chain := buildUnaryInterceptors(killswitch.New(killswitch.Config{}), time.Second, guildEntry(t), ownership)
+
+	handlerCalled := false
+	anonymous := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_GetPlayerGuild_FullMethodName}
+	if _, err := chainUnary(chain, anonymous, func(context.Context, any) (any, error) {
+		handlerCalled = true
+		return &pb.GetPlayerGuildResponse{}, nil
+	})(context.Background(), &pb.GetPlayerGuildRequest{}); err != nil {
+		t.Fatalf("匿名只读例外必须放行: %v", err)
+	}
+	if checked || !handlerCalled {
+		t.Fatalf("不带会话的调用不做归属预检且要走到 handler: checked=%v handlerCalled=%v", checked, handlerCalled)
+	}
+
+	incomplete := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_GetGuild_FullMethodName}
+	ctx := callerauthtest.Incoming(t, incomplete.FullMethod, callerauthtest.OnlineSession("guild-account", 42, 0))
+	_, err = chainUnary(chain, incomplete, func(context.Context, any) (any, error) {
+		t.Error("缺修订的身份不该走到 handler")
+		return nil, nil
+	})(ctx, &pb.GetGuildRequest{})
+	if status.Code(err) != codes.PermissionDenied || checked {
+		t.Fatalf("入口准入就拒掉的身份不进归属预检: code=%v checked=%v", status.Code(err), checked)
 	}
 }
 

@@ -302,6 +302,8 @@ mock 暴露的 endpoint(响应字节级对齐真 API):
 |---|---|---|
 | `GET /sns/oauth2/access_token` | `api.weixin.qq.com` | `code` 以 `U` 开头→返回 unionid;`code=EXPIRED`→errcode 40029 |
 | `GET /oauth2.0/me` | `graph.qq.com` | `access_token=INVALID`→error 100007 |
+| `GET /sns/jscode2session` | `api.weixin.qq.com`(微信小游戏,§H) | `js_code` 以 `U` 开头→返回 unionid;`js_code=EXPIRED`→errcode 40029 |
+| `GET /mgplatform/api/apps/jscode2session` | `minigame.zijieapi.com`(抖音小游戏,§H) | 任何 `code` 都返回 unionid;`code=EXPIRED`→错误应答 |
 | `GET /healthz` | — | 返回 `ok`,用于 liveness |
 
 **deterministic 哈希**:同一 `code`(WeChat)/ `access_token`(QQ)每次返回**完全相同**的 openid / unionid。这是 §C.4 账号复用验证的前提——不会因为 mock 重启就把"老账号"洗成新账号。
@@ -396,11 +398,114 @@ curl -s -X POST http://127.0.0.1:8081/api/login -H 'Content-Type: application/js
 
 ---
 
+## H. 小游戏登录(微信小游戏 / 抖音小游戏,2026-11-12 起)
+
+小游戏是另外两个 auth_type(`wechat_minigame` / `douyin_minigame`),不是 `wechat` 的一个开关:小游戏的 code 只能用小游戏自己的
+AppId / AppSecret 走 code2Session,发到 App 的接口换不出来。设计、错误分类与没做的事项见
+[第三方登录设计 §十一](../design/third-party-login-end-to-end-design.md)。代码未编译,下面的期望值按代码推出,没有跑过。
+
+**K8s 部署脚本还不渲染这两段**:`k8s_deploy.ps1` 没有对应的部署参数、Secret 与防误关。目前只能用本机 `login.yaml` 或 linux 登录栈
+(`deploy/login-stack.linux/login.yaml` 已带这两段,指向 mock)。
+
+### H.1 凭证与接口
+
+| 渠道 | 要拿什么 | 备注 |
+|---|---|---|
+| 微信小游戏 | 小游戏管理后台(<https://mp.weixin.qq.com/>)开发设置里的 AppID 与 AppSecret | 要有 unionid,小游戏得在微信开放平台(<https://open.weixin.qq.com/>)绑定到开放平台账号;与 App 绑在同一个账号下,两边才是同一个游戏账号 |
+| 抖音小游戏 | 抖音开放平台开发者后台里小游戏应用的 AppID 与 AppSecret | 客户端用 `tt.login({force: true})`;没登录抖音的匿名用户登不了 |
+
+我们用到的接口(`go/login/internal/logic/pkg/auth/minigame_providers.go`):
+
+```
+GET https://api.weixin.qq.com/sns/jscode2session
+    ?appid=<AppId>&secret=<AppSecret>&js_code=<wx.login 的 code>&grant_type=authorization_code
+返回: { openid, session_key, unionid?, errcode?, errmsg? }
+
+GET https://minigame.zijieapi.com/mgplatform/api/apps/jscode2session
+    ?appid=<AppId>&secret=<AppSecret>&code=<tt.login 的 code>          请求头 Content-Type: application/json
+返回: { error, openid, session_key, unionid, anonymous_openid };失败时 error 非 0,另带 errcode / errmsg
+```
+
+应答里的 `session_key` login 不解析、不记录。
+
+### H.2 配置
+
+```yaml
+AuthProviders:
+  WeChatMiniGame:
+    AppId: "wxfedcba9876543210"                       # 小游戏的 AppID;与 WeChat.AppId 相同会拒绝启动
+    AppSecretEnv: "LOGIN_WECHAT_MINIGAME_APP_SECRET"  # 环境变量名,规则同 §B 的 WeChat 段
+    # RequireUnionId: true                            # 缺省 true:没有 unionid 就拒绝登录
+  DouyinMiniGame:
+    AppId: "tt0123456789abcdef"
+    AppSecretEnv: "LOGIN_DOUYIN_MINIGAME_APP_SECRET"
+```
+
+内联 `AppSecret`、`http://` 的 `Endpoint`、`${...}` 占位符的放行与拒绝规则,和 §B 的表完全相同。
+
+### H.3 用 sandbox_mock 端到端
+
+`go/login/etc/login.yaml`(`Mode: dev`)在 §G.2 的基础上加:
+
+```yaml
+AuthProviders:
+  WeChatMiniGame:
+    AppId: "wx_sandbox_minigame"         # 不能与 WeChat.AppId 相同
+    AppSecret: "any_string_ok_here"
+    Endpoint: "http://127.0.0.1:18090"
+  DouyinMiniGame:
+    AppId: "tt_sandbox_minigame"
+    AppSecret: "any_string_ok_here"
+    Endpoint: "http://127.0.0.1:18090"
+```
+
+重启 `login`,期望多出两行日志:
+```
+Auth provider registered: wechat_minigame (require_unionid=true endpoint_override="http://127.0.0.1:18090")
+Auth provider registered: douyin_minigame (require_unionid=true endpoint_override="http://127.0.0.1:18090")
+```
+
+```bash
+# 微信小游戏:期望 code:0。mock 对 App 的 code 与小游戏的 js_code 用同一条规则派生 unionid,
+# 所以它和 §G.3 里 auth_type=wechat、auth_token=Utest1 是同一个账号,返回的角色列表相同。
+curl -s -X POST http://127.0.0.1:8081/api/login -H 'Content-Type: application/json' \
+  -d '{"zone_id":1,"auth_type":"wechat_minigame","auth_token":"Utest1","device_id":"sandbox-1"}'
+
+# 没有 unionid(小游戏没绑定开放平台账号):期望 {"code":500,"message":"upstream_err=2035"},login 日志 "unionid missing"
+curl -s -X POST http://127.0.0.1:8081/api/login -H 'Content-Type: application/json' \
+  -d '{"zone_id":1,"auth_type":"wechat_minigame","auth_token":"plain_code","device_id":"sandbox-1"}'
+
+# code 过期:期望 {"code":401,"message":"upstream_err=2000"},login 日志 "wechat_minigame: errcode=40029"
+curl -s -X POST http://127.0.0.1:8081/api/login -H 'Content-Type: application/json' \
+  -d '{"zone_id":1,"auth_type":"wechat_minigame","auth_token":"EXPIRED","device_id":"sandbox-1"}'
+
+# 抖音小游戏:期望 code:0,账号 dy_unionid_<12 位十六进制>
+curl -s -X POST http://127.0.0.1:8081/api/login -H 'Content-Type: application/json' \
+  -d '{"zone_id":1,"auth_type":"douyin_minigame","auth_token":"dy_code_1","device_id":"sandbox-1"}'
+
+# 抖音 code 过期:期望 {"code":401,"message":"upstream_err=2000"},login 日志 "douyin_minigame: error=1 errcode=40018"
+# (40018 是 mock 的示例值,抖音文档没有给出错误码表)
+curl -s -X POST http://127.0.0.1:8081/api/login -H 'Content-Type: application/json' \
+  -d '{"zone_id":1,"auth_type":"douyin_minigame","auth_token":"EXPIRED","device_id":"sandbox-1"}'
+```
+
+账号落在全局 SQL 账号目录(data_service),不在 Redis。§C.3 与 §G.3 里「查 Redis `account:*`」的步骤是 2026-10-21 账号目录迁到
+SQL 之前的写法,现在查不到,待订正。
+
+### H.4 上真渠道前要复核的两件事
+
+- 微信 errcode 45011 在 code2Session 上按「单个用户限频」处理,不算渠道故障;2026-11-12 没能打开微信官方页面复核。
+- 抖音没有可核对的错误码表,`error` / `errcode` 非 0 一律按凭证无效(回 401、不告警)。联调时把 AppSecret 配错一次,
+  记下实际的 errcode,再决定要不要把它列成渠道故障。
+
+---
+
 ## 关联文档
 - [auth-provider-framework.md](../design/auth-provider-framework.md) §How to Add — 加新 provider 的 4 步骤(Apple Sign-in / Google Play Games 都按这个加)
 - [third-party-login-end-to-end-design.md](../design/third-party-login-end-to-end-design.md) — 完整设计 + UserBindings 表(账号合并未来要用)
 - [dual-token-authentication.md](../design/dual-token-authentication.md) — 第三方 token / access / refresh 三层关系
 - 代码: `go/login/internal/logic/pkg/auth/providers.go`(WeChatProvider / QQProvider)
+- 代码: `go/login/internal/logic/pkg/auth/minigame_providers.go`(WeChatMiniGameProvider / DouyinMiniGameProvider,§H)
 - 代码: `go/login/internal/svc/auth_init.go`(provider 注册)
 - 代码: `java/gateway_node/.../grpc/LoginRpcClient.java`(auth_type/auth_token wire 透传)
 - 部署: `tools/scripts/k8s_deploy.ps1`(`-LoginWeChatAppId` 等六个参数、`Assert-LoginAuthProviderClusterState` 防误关)

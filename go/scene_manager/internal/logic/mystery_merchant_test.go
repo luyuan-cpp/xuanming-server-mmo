@@ -798,11 +798,12 @@ func TestScheduleMysteryMerchantForZone_FollowerDoesNothing(t *testing.T) {
 
 // ── 跨语言契约 ───────────────────────────────────────────────────────────
 
-// C++ scene 节点按同一格式拼键、读同一个 field(player_mystery_merchant.cpp 的 kMysteryMerchantKeyFmt /
-// kMysteryMerchantStateField)。这里把本侧的字面量与渲染结果钉死:改动任何一个都必须同批改 C++。
+// C++ scene 节点拼同一把键、读同一个 field(player_mystery_merchant.cpp 的 PlayerMysteryMerchantSystem::RecordKey /
+// kMysteryMerchantStateField,C++ 侧 PlayerRedisRouteContract.ControlDomainStaysOffThePlayerHandle 钉同一个串)。
+// 这里把本侧的字面量与渲染结果钉死:改动任何一个都必须同批改 C++。
 func TestMysteryMerchantKey_CrossLanguageContract(t *testing.T) {
-	assert.Equal(t, "mystery_merchant:zone:%d", MysteryMerchantKeyFmt)
-	assert.Equal(t, "mystery_merchant:zone:7", mysteryMerchantKey(7))
+	assert.Equal(t, "mystery_merchant:%s", MysteryMerchantKeyFmt)
+	assert.Equal(t, "mystery_merchant:{ctl:7}", mysteryMerchantKey(7))
 	assert.Equal(t, "state", MysteryMerchantStateField)
 	assert.Equal(t, "v", MysteryMerchantVersionField)
 	assert.Equal(t, [3]uint32{60, 50, 40}, mysteryMerchantDiscountPercents)

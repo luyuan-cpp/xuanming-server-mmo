@@ -122,6 +122,7 @@ func realRedisPlayerID(t *testing.T, ctx context.Context, c *goredis.Client) uin
 	t.Helper()
 	playerID := uint64(9_000_000_000_000) + rand.Uint64N(1_000_000_000)
 	keys := append(placementKeys(playerID), rollbackPlacementKeys(playerID)...)
+	keys = append(keys, ownerepoch.ConfirmedKey(playerID)) // 确认过的铸造与落盘确认会记已确认位点
 	n, err := c.Exists(ctx, keys...).Result()
 	require.NoError(t, err)
 	require.Zero(t, n, "测试玩家号 %d 的键已存在,换一个实例或清库后再跑", playerID)
@@ -248,4 +249,63 @@ func TestRealRedisRollbackWithoutDurabilityLeavesPendingReceipt(t *testing.T) {
 	assert.Equal(t, "10", loc.NodeId)
 	assert.Equal(t, uint64(3), loc.OwnerEpoch)
 	assert.Equal(t, ownerepoch.PendingRollbackReceipt(marker), loc.RollbackReceipt, "确认不到份数:回执停在待确认形态")
+}
+
+// 作废分支在真实 Redis 上的行为(§4.3.5)。miniredis 的 Lua 不是真实 Redis 的那一个实现,这里核对脚本本身:
+//   - 不凭标记、首发还没执行:收尾的回滚脚本把 epoch 写到铸出值之后(回 6),迟到的铸造 CAS 不过(回 0),一个字节都不写;
+//   - 凭标记、首发还没执行:只删掉所凭的标记(回 7),epoch 与 location 不动,迟到的铸造过不了标记比对(回 -1)。
+func TestRealRedisRollbackVoidsMintThatHasNotApplied(t *testing.T) {
+	addr := realRedisAddr(t)
+	ctx := realRedisContext(t)
+	inspect := newRealRedisInspector(t, ctx, addr)
+	sc := newRealRedisServiceContext(t, addr, newRealRedisMinter(t, addr, 0, 0, 0))
+
+	t.Run("unmarked", func(t *testing.T) {
+		playerID := realRedisPlayerID(t, ctx, inspect)
+		placed := placedLocation{epoch: 1, minted: true, raw: "placed-bytes", observedKnown: true}
+		plan := routeRollbackPlan{mode: rollbackModeBump, epochAfter: 2, voidUnapplied: true}
+		got, err := playerRedisEval(sc, luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), rollbackPlacementArgs(placed, plan)...)
+		require.NoError(t, err)
+		require.Equal(t, "6", fmt.Sprint(got))
+		epoch, err := inspect.Get(ctx, ownerepoch.OwnerEpochKey(playerID)).Result()
+		require.NoError(t, err)
+		assert.Equal(t, "2", epoch, "epoch 越过本该铸出的 1")
+
+		late, err := playerRedisEval(sc, luaMintEpochAndSetLocation, placementKeys(playerID),
+			mintLuaArgs("0", "placed-bytes", "", "missing")...)
+		require.NoError(t, err)
+		assert.Equal(t, "0", fmt.Sprint(late), "迟到的首发 CAS 不过")
+		n, err := inspect.Exists(ctx, getPlayerLocationKey(playerID)).Result()
+		require.NoError(t, err)
+		assert.Zero(t, n, "迟到的首发一个字节都写不进去")
+	})
+
+	t.Run("marked", func(t *testing.T) {
+		playerID := realRedisPlayerID(t, ctx, inspect)
+		marker := ownerepoch.Handoff{Epoch: 1, SavedAtMs: 1757000000000}.String()
+		require.NoError(t, inspect.Set(ctx, ownerepoch.OwnerEpochKey(playerID), "1", 0).Err())
+		require.NoError(t, inspect.Set(ctx, getPlayerLocationKey(playerID), "observed-bytes", 0).Err())
+		require.NoError(t, inspect.Set(ctx, ownerepoch.HandoffKey(playerID), marker, 0).Err())
+		placed := placedLocation{epoch: 2, minted: true, raw: "placed-bytes",
+			observedEpoch: 1, observedRaw: "observed-bytes", observedKnown: true}
+		plan := routeRollbackPlan{mode: rollbackModeBump, restoredRaw: "restored-bytes", epochAfter: 3,
+			requiredMarker: marker, forwardMarker: "3:1757000000000", voidUnapplied: true}
+		got, err := playerRedisEval(sc, luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), rollbackPlacementArgs(placed, plan)...)
+		require.NoError(t, err)
+		require.Equal(t, "7", fmt.Sprint(got))
+		n, err := inspect.Exists(ctx, ownerepoch.HandoffKey(playerID)).Result()
+		require.NoError(t, err)
+		assert.Zero(t, n, "所凭的标记被删掉")
+
+		late, err := playerRedisEval(sc, luaMintEpochAndSetLocation, placementKeys(playerID),
+			mintLuaArgs("1", "placed-bytes", marker, "present", "observed-bytes")...)
+		require.NoError(t, err)
+		assert.Equal(t, "-1", fmt.Sprint(late), "迟到的首发过不了标记比对")
+		epoch, err := inspect.Get(ctx, ownerepoch.OwnerEpochKey(playerID)).Result()
+		require.NoError(t, err)
+		assert.Equal(t, "1", epoch, "epoch 不动")
+		raw, err := inspect.Get(ctx, getPlayerLocationKey(playerID)).Result()
+		require.NoError(t, err)
+		assert.Equal(t, "observed-bytes", raw, "location 不动")
+	})
 }

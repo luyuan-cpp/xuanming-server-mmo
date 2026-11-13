@@ -17,7 +17,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	// Redis 句柄统一用 go-zero 的封装(契约 §4):同进程混用 go-zero 与裸 go-redis
 	// 会出现两套连接池、两套超时与熔断语义,排障时指标和日志对不上账。
-	"github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/redis/go-redis/v9"
 
 	"friend/internal/sqldialect"
 	"shared/rolefence"
@@ -259,7 +259,7 @@ type FriendRequestEntry struct {
 // Redis 只服务限流及非权威派生数据，不能用旧列表缓存作权限或申请处理依据。
 type FriendRepo struct {
 	guard      *rolefence.Guard
-	rdb        *redis.Redis
+	rdb        redis.UniversalClient
 	db         *sql.DB
 	defaultTTL time.Duration
 	// listReadHardLimit 是列表类读的 SQL LIMIT(Friend.ListReadHardLimit)。
@@ -295,7 +295,7 @@ type FriendRepoOptions struct {
 }
 
 // NewFriendRepo 构造。推荐查询的 SQL 文本在这里按方言渲染一次(方言未知会 panic:启动致命),之后只读。
-func NewFriendRepo(rdb *redis.Redis, db *sql.DB, opts FriendRepoOptions) *FriendRepo {
+func NewFriendRepo(rdb redis.UniversalClient, db *sql.DB, opts FriendRepoOptions) *FriendRepo {
 	return &FriendRepo{
 		rdb:               rdb,
 		db:                db,
@@ -325,9 +325,8 @@ func pendingRequestsKey(playerID uint64) string {
 	return fmt.Sprintf("friend:{f:%d}:req:v4", playerID)
 }
 
-// 两条 Lua 以**脚本正文**保存而不是 redis.NewScript 包装:go-zero 的执行入口是
-// EvalCtx(ctx, script, keys, args...)(仓内先例 go/chat/internal/logic/chat_logic.go、
-// go/data_service/internal/routing/router.go),它自己吃脚本字符串,不接 *redis.Script。
+// 两条 Lua 以**脚本正文**保存,直接交给 UniversalClient.Eval(每次发 EVAL 正文,不走 EVALSHA)。
+// 2026-11-12 句柄由 go-zero 换成 shared/clusterredis:节点客户端不自动重发结果未知的命令(R8)。
 const invalidateFriendCacheScript = `
 redis.call("INCR", KEYS[1])
 redis.call("DEL", KEYS[2])
@@ -1106,15 +1105,24 @@ func (r *FriendRepo) invalidateCaches(ctx context.Context, keys ...string) error
 		// 脚本固定返回 1,返回值本来就丢弃;真正要传播的是"失效没做成"这件事 ——
 		// 吞掉它会让下一次 miss 把写入前的旧快照按旧 generation 合法回填。
 		// 两个 KEYS 共享同一个 hash tag(见 friendListKey 的说明),所以在 Cluster 上同 slot。
-		if _, err := r.rdb.EvalCtx(
+		if err := r.rdb.Eval(
 			ctx,
 			invalidateFriendCacheScript,
 			[]string{friendCacheGenerationKey(key), key},
-		); err != nil {
+		).Err(); err != nil {
 			result = errors.Join(result, fmt.Errorf("invalidate friend cache key %s: %w", key, err))
 		}
 	}
 	return result
+}
+
+// getOrEmpty 读一个字符串键,键不存在时返回 ("", nil),别的错误原样返回。
+func (r *FriendRepo) getOrEmpty(ctx context.Context, key string) (string, error) {
+	value, err := r.rdb.Get(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	return value, err
 }
 
 // invalidateCachesAfterCommit 用在**写事务已经提交之后**。
@@ -1263,12 +1271,10 @@ func loadVersionedFriendCache[T any](
 ) (T, error) {
 	var zero T
 	readCache := func() (T, bool, error) {
-		// ⚠ go-zero 的 GetCtx 把 redis.Nil **吞成 ("", nil)**(core/stores/redis/redis.go
-		// 的 GetCtx:errors.Is(err, red.Nil) → return "", nil),所以这里不能再用
-		// err == redis.Nil 判未命中 —— 那条分支永远走不到。
+		// getOrEmpty 把 redis.Nil 归一成 ("", nil)(与换句柄之前 go-zero GetCtx 的口径相同)。
 		// 必须先判 err(真故障),再把空串当未命中:JSON 序列化的结果最短也是 "null" /
 		// "[]" / "{}",永不为空串,所以"空串"与"命中了一个空值"不会混。
-		payload, err := r.rdb.GetCtx(ctx, cacheKey)
+		payload, err := r.getOrEmpty(ctx, cacheKey)
 		if err != nil {
 			return zero, false, fmt.Errorf("read friend cache %s: %w", cacheKey, err)
 		}
@@ -1292,14 +1298,14 @@ func loadVersionedFriendCache[T any](
 		return value, err
 	}
 
-	generation, err := r.rdb.GetCtx(ctx, friendCacheGenerationKey(cacheKey))
+	generation, err := r.getOrEmpty(ctx, friendCacheGenerationKey(cacheKey))
 	if err != nil {
 		return zero, fmt.Errorf("read friend cache generation %s: %w", cacheKey, err)
 	}
-	// generation key 从未被写过时 GetCtx 返回 ("", nil)(见 readCache 里的说明),
+	// generation key 从未被写过时 getOrEmpty 返回 ("", nil)(见 readCache 里的说明),
 	// 这里**必须**显式补成 "0":fill 脚本里 GET 不到 generation 时也按 "0" 比较,
 	// 把空串传下去会和脚本里的 "0" 比不上 → 脚本恒 return 0、缓存**永远写不进去**,
-	// 而且一个错都不报(EvalCtx 成功、返回值本来就丢弃)。这是纯静默故障,不能省。
+	// 而且一个错都不报(EVAL 成功、返回值本来就丢弃)。这是纯静默故障,不能省。
 	if generation == "" {
 		generation = "0"
 	}
@@ -1311,16 +1317,16 @@ func loadVersionedFriendCache[T any](
 	if err != nil {
 		return zero, fmt.Errorf("encode friend cache %s: %w", cacheKey, err)
 	}
-	// ARGV 一律显式转成 string:go-zero 直接把 args 交给 go-redis 的 Eval,而脚本里
-	// ARGV[1] 是拿来和 GET 回来的 generation 做**字符串**比较的,ARGV[3] 也要 tonumber 得动。
-	if _, err := r.rdb.EvalCtx(
+	// ARGV 一律显式转成 string:脚本里 ARGV[1] 是拿来和 GET 回来的 generation 做**字符串**比较的,
+	// ARGV[3] 也要 tonumber 得动。
+	if err := r.rdb.Eval(
 		ctx,
 		fillFriendCacheScript,
 		[]string{friendCacheGenerationKey(cacheKey), cacheKey},
 		generation,
 		string(payload),
 		strconv.FormatInt(r.defaultTTL.Milliseconds(), 10),
-	); err != nil {
+	).Err(); err != nil {
 		// 回填失败**不影响本次返回**:MySQL 的权威结果已经在手,丢掉它只会让调用方拿到
 		// fault 码 ErrStorage(本域唯一的 fault),表现成"好友系统挂了"——
 		// 而真正挂的只是一个纯加速用的私有缓存。代价:下一次读仍是 miss,再打一次 MySQL。

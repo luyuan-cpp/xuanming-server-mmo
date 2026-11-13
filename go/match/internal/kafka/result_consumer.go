@@ -33,7 +33,8 @@ import (
 //
 // 多实例:同组分摊分区,每条结果只被一个实例消费;重复投递(rebalance /
 // 提交前崩溃)由 handler 的 SQL 入账收据幂等兜底。
-// 只在入账确认后提交位点;失败关闭并重建 reader 恢复原消息。
+// 只在入账确认后提交位点;未确认时由消费组 owner(kafkautil.BoundConsumerGroup)保留原位点、退避后原地重调同一条
+// (设计 docs/design/kafka-bound-consumer-group.md)。
 // 本文件不 import internal/logic(svc → kafka → logic → svc 会成环),
 // 入账逻辑由 main 以回调注入。
 
@@ -60,12 +61,11 @@ type ResultHandler func(ctx context.Context, event *kafkapb.BattleResultEvent) e
 // 来源归档不代表个人资产已到账，也不驱动R07重投或销账。
 type ResultRecordHandler func(ctx context.Context, event *kafkapb.BattleResultEvent, raw []byte, topic string, partition int, offset int64) error
 
-// 消费者常量:handler 失败重试上限与退避;拉取失败的退避;topic 保留 7 天
+// 消费者常量:一次回调内 handler 失败的重试上限与退避;topic 保留 7 天
 // (与入账标记 TTL 同口径,重复投递不会跨这么久)。
 const (
 	resultHandleMaxAttempts = 3
 	resultHandleBackoff     = time.Second
-	resultFetchBackoff      = time.Second
 	resultTopicRetentionMs  = 7 * 24 * 3600 * 1000
 )
 
@@ -99,6 +99,11 @@ func EnsureResultTopic(cfg ResultConsumerConfig) error {
 
 // StartResultConsumer 确保 topic 存在后起消费 goroutine(ctx 结束即退出)。
 // handler 在本实例内串行调用，结果只有 SQL 确认后才提交位点。
+//
+// 只有消费组 owner(kafkautil.BoundConsumerGroup)这一条路径:缺 RelayAdmission 或 BindOwner 在碰 Kafka 之前拒绝。
+// 2026-11-12 以前还有一条「无 relay」的自建 reader 循环:它的 goroutine 不进任何关停 join(svc 的 StopAndReport 在无 relay 时
+// 直接回 HOLD,根本没有关停路径),生产也走不到(serverbase.LoadPublicationRuntime 恒给 relay),所以删掉,不再给它补接线。
+// owner 的 goroutine 由 BindOwner 登记的 owner 收口:StopAndReport 调 CloseAndReport,它要等 owner.Run 返回(Kafka 组已关)才回。
 func StartResultConsumer(ctx context.Context, cfg ResultConsumerConfig, handle ResultHandler, record ResultRecordHandler) error {
 	if handle == nil || record == nil {
 		return fmt.Errorf("结果消费者必须装配完整来源归档，处理器不能缺失")
@@ -109,73 +114,38 @@ func StartResultConsumer(ctx context.Context, cfg ResultConsumerConfig, handle R
 	if cfg.BindLagProbe == nil {
 		return fmt.Errorf("结果消费者缺少 lag 探针的关停 join")
 	}
+	if cfg.RelayAdmission == nil || cfg.BindOwner == nil {
+		return fmt.Errorf("结果消费者缺少排空 relay 或实际生命周期 owner")
+	}
 	if err := EnsureResultTopic(cfg); err != nil {
 		return err
 	}
 
-	if cfg.RelayAdmission != nil {
-		if cfg.BindOwner == nil {
-			return fmt.Errorf("结果消费者缺少实际生命周期 owner")
-		}
-		var serial sync.Mutex
-		owner, err := kafkautil.NewBoundConsumerGroup(kafkautil.BoundConsumerGroupConfig{Group: kafkago.ConsumerGroupConfig{ID: cfg.GroupID, Brokers: cfg.Brokers, Topics: []string{cfg.Topic}, StartOffset: kafkago.FirstOffset}, Reader: kafkago.ReaderConfig{MinBytes: 1, MaxBytes: 1 << 20, MaxWait: 500 * time.Millisecond}, HandlerTimeout: 2 * time.Minute}, cfg.RelayAdmission, func(call context.Context, message kafkago.Message) error {
-			serial.Lock()
-			defer serial.Unlock()
-			if err := call.Err(); err != nil {
-				return err
-			}
-			return processResultRecord(call, message, handle, sleepCtx, record)
-		})
-		if err != nil {
+	var serial sync.Mutex
+	// 不打开死信(负责人 2026-11-06 定,cross-zone-matchmaking.md §13.4):解码失败与同局原字节冲突保留位点、告警、人工处置,
+	// 未处置前分区不前进;回调失败一律由 owner 原地退避重试,不跳过。
+	owner, err := kafkautil.NewBoundConsumerGroup(kafkautil.BoundConsumerGroupConfig{Group: kafkago.ConsumerGroupConfig{ID: cfg.GroupID, Brokers: cfg.Brokers, Topics: []string{cfg.Topic}, StartOffset: kafkago.FirstOffset}, Reader: kafkago.ReaderConfig{MinBytes: 1, MaxBytes: 1 << 20, MaxWait: 500 * time.Millisecond}, HandlerTimeout: 2 * time.Minute}, cfg.RelayAdmission, func(call context.Context, message kafkago.Message) error {
+		serial.Lock()
+		defer serial.Unlock()
+		if err := call.Err(); err != nil {
 			return err
 		}
-		if err = cfg.BindOwner(owner); err != nil {
-			return err
-		}
-		// owner 遇再均衡与暂时失败不返回:handler 失败按有界退避原地重试同一条,代次结束时不提交、交还 Kafka 由新属主重投
-		// (入账有 SQL 收据幂等,r2-kc#1)。返回 error 只可能是 HOLD:不变量破坏、提交点越过保留期,或终止时仍有没结清的记录。
-		safego.Go("match.kafka.results", func() {
-			if err := owner.Run(ctx); err != nil {
-				cfg.RelayAdmission.Hold()
-				logx.Errorf("[rating] result consumer HOLD: %v", err)
-			}
-		})
-		return startResultLagProbe(ctx, cfg)
+		return processResultRecord(call, message, handle, sleepCtx, record)
+	})
+	if err != nil {
+		return err
 	}
-
+	if err = cfg.BindOwner(owner); err != nil {
+		return err
+	}
 	logx.Infof("[rating] Battle result consumer started topic=%s group=%s", cfg.Topic, cfg.GroupID)
+	// owner 遇再均衡与暂时失败不返回:handler 失败按有界退避原地重试同一条,代次结束时不提交、交还 Kafka 由新属主重投
+	// (入账有 SQL 收据幂等)。返回 error 只可能是 HOLD:不变量破坏、提交点越过保留期、保留期删掉了没处理的记录,
+	// 或排空收尾核不到交还记录的结局。
 	safego.Go("match.kafka.results", func() {
-		delay := resultFetchBackoff
-		for ctx.Err() == nil {
-			reader := kafkago.NewReader(kafkago.ReaderConfig{
-				Brokers: cfg.Brokers,
-				GroupID: cfg.GroupID,
-				Topic:   cfg.Topic,
-				// 新消费组从最早开始:match 晚于 battle 启动时,先发的结果不能丢。
-				StartOffset: kafkago.FirstOffset,
-				MinBytes:    1,
-				MaxBytes:    1 << 20,
-				MaxWait:     500 * time.Millisecond,
-				// CommitInterval=0:每条处理完同步提交,崩溃最多重放一条(幂等兜底)。
-				CommitInterval: 0,
-			})
-			func() {
-				defer func() {
-					if err := reader.Close(); err != nil {
-						logx.Error("[rating] failed to close the rating result consumer")
-					}
-				}()
-				runResultConsumer(ctx, reader, handle, sleepCtx, record)
-			}()
-			if ctx.Err() != nil {
-				return
-			}
-			// 未确认的位点绝不提交；换 reader 后从 broker 的原位点恢复。每轮最多三次业务调用。
-			logx.Error("[rating] rating SQL not yet confirmed; keeping the original Kafka offset and backing off before resuming")
-			if !sleepCtx(ctx, delay) {
-				return
-			}
-			delay = min(delay*2, 30*time.Second)
+		if err := owner.Run(ctx); err != nil {
+			cfg.RelayAdmission.Hold()
+			logx.Errorf("[rating] result consumer HOLD: %v", err)
 		}
 	})
 	return startResultLagProbe(ctx, cfg)
@@ -231,33 +201,7 @@ func observeResultLag(target kafkautil.GroupLagTarget, lag kafkautil.GroupLag, e
 	}
 }
 
-// runResultConsumer 拉取 → 反序列化 → handler(有限重试)→ 提交,直到 ctx 结束。
-type resultReader interface {
-	FetchMessage(context.Context) (kafkago.Message, error)
-	CommitMessages(context.Context, ...kafkago.Message) error
-}
-
-func runResultConsumer(ctx context.Context, reader resultReader, handle ResultHandler, wait func(context.Context, time.Duration) bool, record ResultRecordHandler) {
-	for {
-		message, err := reader.FetchMessage(ctx)
-		if err != nil {
-			if ctx.Err() != nil || errors.Is(err, context.Canceled) {
-				return
-			}
-			logx.Errorf("[rating] result fetch failed; waiting for the existing backoff: %v", err)
-			if !wait(ctx, resultFetchBackoff) {
-				return
-			}
-			continue
-		}
-		if err = processResultRecord(ctx, message, handle, wait, record); err != nil {
-			return
-		}
-		commitResult(ctx, reader, message)
-	}
-}
-
-// processResultRecord 只返回业务结局；实际 offset 提交由唯一 consumer owner 完成。
+// processResultRecord 只返回业务结局；实际 offset 提交由唯一 consumer owner 完成(nil 才提交,error 时 owner 退避后原地重调)。
 func processResultRecord(ctx context.Context, msg kafkago.Message, handle ResultHandler, wait func(context.Context, time.Duration) bool, record ResultRecordHandler) error {
 	// 这条结果的归档、评分处理与逐条日志接上 battle 发结果时的 trace(docs/design/distributed-tracing.md §6.2);
 	// 取消仍由消费者的 ctx 决定。
@@ -303,14 +247,6 @@ func processResultRecord(ctx context.Context, msg kafkago.Message, handle Result
 		}
 	}
 	return last
-}
-
-// commitResult 同步提交一条消息的 offset;失败只记日志(下次提交会覆盖,
-// 崩溃最多重放到上次成功提交处,幂等标记兜底)。
-func commitResult(ctx context.Context, reader resultReader, msg kafkago.Message) {
-	if err := reader.CommitMessages(ctx, msg); err != nil && ctx.Err() == nil {
-		logx.Errorf("[rating] Failed to commit battle result offset partition=%d offset=%d: %v", msg.Partition, msg.Offset, err)
-	}
 }
 
 // sleepCtx 可中断的 sleep;ctx 结束返回 false。

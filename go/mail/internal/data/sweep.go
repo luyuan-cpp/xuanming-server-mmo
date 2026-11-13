@@ -18,8 +18,10 @@ type SweepReport struct{ Personal, System, SystemState SweepStats }
 // docs/design/assetop-redelivery-sharding-20261110.md §14.2)。与附件重投的 mail-assetop 不同名:同一片的重投与清理不必落在同一个副本上。
 const SweepWorkKind = "mail-expiry-sweep"
 
-// SweepShardColumn 是清理分片取模的列。按 mail_id 而不按收件人:系统、帮会、活动邮件的 owner_player_id 都是 0,
-// 按收件人分会全挤进第 0 片;mail_id 是发号器发的打散值,取模均匀,又是主键,(kind, expire_ms) 索引的条目里带着它,片条件不用回表。
+// SweepShardColumn 是清理分片取模的列。按 mail_id 而不按收件人:清理的单位是一封邮件;系统、帮会、活动邮件的
+// owner_player_id 都是 0,按收件人分会全挤进第 0 片;mail_id 是发号器发的打散值,取模均匀。
+// 片条件在回表之后判:候选读走 (kind, expire_ms) 索引,本来就要回表取 campaign_id(TiDB 上主键非聚簇,索引条目里也不带 mail_id),
+// 每检查一行的代价不变。清理每 5 分钟一轮、稳态候选很少,不为它改索引(设计 §14.2)。
 const SweepShardColumn = "m.mail_id"
 
 // sweepEligible 是「可以物理删除」的条件,只有一个参数 cutoff。候选读与删除前的点锁复核共用它。

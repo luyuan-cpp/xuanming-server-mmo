@@ -14,7 +14,8 @@
 //
 // 旧 GetSceneManagerEntity 是 playerId % 已注册实例数,不看通道状态:
 //   1) 某个实例崩溃后,它的 etcd 租约 60s 内仍在注册表里,约 1/N 的换图请求打到死实例;
-//   2) PlayerId 低 9 位是毫秒内序号、大多为 0,实例数为 2 / 4 时几乎所有玩家都落在第 0 个实例。
+//   2) 当时的 PlayerId(bwmarrin 布局,2026-11-12 已删)低 9 位是毫秒内序号、大多为 0,实例数为 2 / 4 时
+//      几乎所有玩家都落在第 0 个实例。
 // 新规则只在"有更好的选择"时避开坏通道,底线不变:候选非空就一定挑出一个,null 只留给空表
 // (调用方拿到 null 走的立即失败分支比"挑一个坏实例、让那次调用失败"更伤,见 node_utils.cpp)。
 // 选择规则拆成纯函数,这里直接喂 (实体, 通道状态) 表,不起 gRPC;通道状态为 std::nullopt 表示实体没挂通道。
@@ -41,7 +42,9 @@ namespace
 		return entt::to_integral(Pick(candidates, playerId));
 	}
 
-	// 与 login 发的 PlayerId 同形:bwmarrin 布局 41 位毫秒 | 13 位 node | 9 位 step。
+	// 按旧 PlayerId 的 bwmarrin 布局(41 位毫秒 | 13 位 node | 9 位 step)拼号。这种布局 2026-11-12 已删,
+	// 现在的 player_id 由发号器发、没有位布局(AGENTS.md §7 第 1 条);这里留着它当最坏输入:低 9 位全是 0,
+	// 直接取模会全压到第 0 个实例。
 	Guid MakePlayerId(uint64_t millis, uint64_t node, uint64_t step)
 	{
 		return (millis << 22) | (node << 9) | step;

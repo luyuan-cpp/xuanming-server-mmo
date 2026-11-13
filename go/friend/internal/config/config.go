@@ -17,12 +17,12 @@ import (
 
 	"friend/internal/data"
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/playerredis"
 	"shared/redisauth"
 
 	"github.com/zeromicro/go-zero/core/service"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -57,10 +57,9 @@ const (
 
 // Config 是 friend 服务的全部配置。
 //
-// 共享 Redis 库**不在这里重新声明**:嵌入的 zrpc.RpcServerConf 已经带了
-// `Redis redis.RedisKeyConf`(yaml 顶层 `Redis:`),再声明一个同名字段会让 go-zero conf 在加载期
-// 报 "conflict key Redis"(core/conf/config.go addOrMergeFields)。共享库一律用 c.Redis.RedisConf
-// —— 与 chat / match / trade 同一写法。
+// Redis 句柄只有两个:控制集群 ControlRedis(friend 私有 key)与玩家域 PlayerRedis。嵌入的 zrpc.RpcServerConf
+// 自带的 `Redis`(go-zero RedisKeyConf,只在 Auth=true 时用)friend 不用,yaml 里不写
+// (docs/design/redis-cluster-all-domains-20261110.md §5.1:段名不叫 Redis,避开这个同名字段)。
 type Config struct {
 	zrpc.RpcServerConf
 
@@ -92,24 +91,20 @@ type Config struct {
 	// Schema:建表策略,见 SchemaConf.AutoMigrate。整段可缺失。
 	Schema SchemaConf `json:",optional"`
 
-	// FriendRedis:friend 私有 key 的存储,可配 Type: cluster(所有私有 key 都是单 key 操作,
-	// 集群安全,契约 §4)。留空则回落到共享库 c.Redis.RedisConf,启动时打 WARN 并在横幅打印落点。
-	// ⚠ staging/prod 必须指向独立实例且 maxmemory-policy=noeviction。2026-10-12 起本地 compose 也改为
-	// noeviction(K8s 一直是 noeviction),回落时私有 key 不会被淘汰,但与契约 key 争内存,共享库设了
-	// maxmemory 时写满会连带拒写契约 key。共享库一旦被配成淘汰型:好友列表缓存被淘汰只是多打一次 MySQL,
-	// 但配额 / 限流 key 被淘汰等于限流静默失效。
-	//
-	// 类型用 go-zero 的 core/stores/redis.RedisConf(不是 redis/go-redis/v9 的 Options):
-	// 全仓 Go 服务统一走 go-zero 句柄,回落逻辑才能与 chat / match 复用同一套写法。
-	FriendRedis redis.RedisConf `json:",optional"`
+	// ControlRedis:控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1),2026-11-12 取代 go-zero 的
+	// FriendRedis 与 Redis 两段。放 friend 私有 key(好友列表缓存 {f:<p>}、申请配额 {rq:<p>}、目录配额 {directory:<p>}),
+	// 两段缓存 Lua 都是同 tag 两键,键守卫是 clusterredis.ControlClusterKeys。读取走 EffectiveControlRedis():
+	// 没写 Addrs 时指向本机 127.0.0.1:6379 单实例。
+	// ⚠ 实例必须 maxmemory-policy=noeviction:好友列表缓存被淘汰只是多打一次 MySQL,但配额 / 限流 key 被淘汰等于限流静默失效。
+	ControlRedis clusterredis.Config `json:",optional"`
 
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):player:session:{id}(判在线、推送路由、
-	// 在线目录)与 player:{id}:sync_digest。读取走 EffectivePlayerRedis():没写 Addrs 时指向 Redis 段那一个实例,开发环境不用改。
+	// 在线目录)与 player:{id}:sync_digest。读取走 EffectivePlayerRedis():没写 Addrs 时指向 ControlRedis 那一个实例,开发环境不用改。
 	PlayerRedis playerredis.Config `json:",optional"`
 
-	// SharedRedisPasswordEnv 是 Redis 段(控制域共享单库)的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在
-	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里 Redis.Pass 写空串。不写 = 照用 Pass 字面量(本机)。
-	// FriendRedis 是独立实例,口令照它自己的 Pass,不归它管。由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
+	// SharedRedisPasswordEnv 是 ControlRedis 口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret 里,
+	// 经 secretKeyRef 注入;ConfigMap 里 ControlRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。ControlRedis.PasswordEnv 不用(变量缺失时静默落成空口令)。
 	SharedRedisPasswordEnv string `json:",optional"`
 
 	// Kafka:S2C 推送(kafkautil.PushToPlayer → gate-cmd_g<N>)的 broker 地址。
@@ -131,36 +126,56 @@ type Config struct {
 	Friend FriendConf `json:"Friend"`
 }
 
-// 没写 PlayerRedis.Addrs 时玩家域连接的口径:go-zero 对 Redis 段的缺省值(池 10 × GOMAXPROCS,K8s 上 GOMAXPROCS 按 2 算,读写 3s,
-// 取连接 4s,拨号 5s)。这里写成常量,不随 CPU limit 漂移。
+// 没写 ControlRedis.Addrs / PlayerRedis.Addrs 时的连接口径:换句柄之前 go-zero 对 Redis 段的缺省值(池 10 × GOMAXPROCS,
+// K8s 上 GOMAXPROCS 按 2 算,读写 3s,取连接 4s,拨号 5s)。这里写成常量,不随 CPU limit 漂移。
 const (
-	playerRedisFallbackPoolSize      = 20
-	playerRedisFallbackIOTimeoutMs   = 3000
-	playerRedisFallbackPoolTimeoutMs = 4000
-	playerRedisFallbackDialTimeoutMs = 5000
+	controlRedisFallbackAddr   = "127.0.0.1:6379"
+	redisFallbackPoolSize      = 20
+	redisFallbackIOTimeoutMs   = 3000
+	redisFallbackPoolTimeoutMs = 4000
+	redisFallbackDialTimeoutMs = 5000
 )
 
-// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 Redis 段那一个实例。
-func (c *Config) EffectivePlayerRedis() playerredis.Config {
-	return c.PlayerRedis.OrDefault(playerredis.Config{
-		Addrs:           []string{c.Redis.Host},
-		Username:        c.Redis.User,
-		Password:        c.Redis.Pass,
-		TLS:             c.Redis.Tls,
-		PoolSizePerNode: playerRedisFallbackPoolSize,
-		DialTimeoutMs:   playerRedisFallbackDialTimeoutMs,
-		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
-		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
-		PoolTimeoutMs:   playerRedisFallbackPoolTimeoutMs,
+// EffectiveControlRedis 返回生效的控制集群配置:写了 ControlRedis.Addrs 就用它,否则指向本机单实例。
+// 段里单独写的池与超时优先于回落值(clusterredis.Config.OrDefault)。
+func (c *Config) EffectiveControlRedis() clusterredis.Config {
+	return c.ControlRedis.OrDefault(clusterredis.Config{
+		Addrs:           []string{controlRedisFallbackAddr},
+		Username:        c.ControlRedis.Username,
+		Password:        c.ControlRedis.Password,
+		TLS:             c.ControlRedis.TLS,
+		PoolSizePerNode: redisFallbackPoolSize,
+		DialTimeoutMs:   redisFallbackDialTimeoutMs,
+		ReadTimeoutMs:   redisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  redisFallbackIOTimeoutMs,
+		PoolTimeoutMs:   redisFallbackPoolTimeoutMs,
 	})
 }
 
-// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Redis.Pass,规则见 redisauth.Apply。
-// 没配 FriendRedis 时私有 key 回落到 c.Redis.RedisConf,玩家域没写 Addrs 时也回落到 Redis 段(EffectivePlayerRedis),
-// 填完之后它们用的都是这个口令。-migrate 不连 Redis,只在常驻启动时调用(friend.go)。
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 ControlRedis 那一个实例。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	control := c.EffectiveControlRedis()
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           control.Addrs,
+		Cluster:         control.Cluster,
+		Username:        control.Username,
+		Password:        control.Password,
+		TLS:             control.TLS,
+		DB:              control.DB,
+		PoolSizePerNode: redisFallbackPoolSize,
+		DialTimeoutMs:   redisFallbackDialTimeoutMs,
+		ReadTimeoutMs:   redisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  redisFallbackIOTimeoutMs,
+		PoolTimeoutMs:   redisFallbackPoolTimeoutMs,
+	})
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 ControlRedis.Password,规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落到 ControlRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
+// -migrate 不连 Redis,只在常驻启动时调用(friend.go)。
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
 	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
-		redisauth.Target{Field: "Redis.Pass", Password: &c.Redis.Pass})
+		redisauth.Target{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password})
 }
 
 // MySQLConf 是 mmorpg_friend 的连接参数。
@@ -372,11 +387,12 @@ func (c *Config) Validate() error {
 			c.MySQL.MaxOpenConn, c.MySQL.MaxIdleConn)
 	}
 
-	// 共享库 Host 为空:它既是 FriendRedis 未配置时的回落目标,也是 PlayerRedis 没写 Addrs 时玩家域的落点。
-	// 缺它 = 回落落到空地址,所有私有 key 操作与在线判定都失败。
-	if c.Redis.Host == "" {
-		return errors.New("Redis.Host(共享库)不能为空:FriendRedis 未配置时私有 key 回落到它," +
-			"PlayerRedis 没写 Addrs 时玩家域也指向它")
+	// ControlRedis 没写 Addrs 是合法的(指向本机单实例);写了就按 clusterredis 的规则校验,Cluster 没写种子拒启。
+	if err := c.ControlRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("ControlRedis: %w", err)
+	}
+	if c.ControlRedis.PasswordEnv != "" {
+		return errors.New("ControlRedis.PasswordEnv 不用:口令变量名写在 SharedRedisPasswordEnv(变量缺失时拒启)")
 	}
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
 		return fmt.Errorf("PlayerRedis: %w", err)

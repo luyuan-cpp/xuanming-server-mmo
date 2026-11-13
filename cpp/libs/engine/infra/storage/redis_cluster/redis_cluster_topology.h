@@ -84,8 +84,4 @@ namespace redis_cluster
 		bool requested_ = false;
 		bool inFlight_ = false;
 	};
-
-	// 重连间隔 = 基础间隔 + [0, jitterSec) 的抖动,避免主切换时全体客户端同时回连。
-	// unitRandom 是调用方给的 [0, 1) 随机数,超出范围时收进这个区间。
-	double JitteredReconnectIntervalSec(double baseSec, double jitterSec, double unitRandom);
 }

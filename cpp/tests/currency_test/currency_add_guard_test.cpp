@@ -25,9 +25,12 @@
 #include <google/protobuf/unknown_field_set.h>
 
 #include "muduo/base/Logging.h"
+#include "engine/core/metrics/metrics_registry.h"
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
+#include "modules/currency/system/currency_clawback_stats.h"
 #include "modules/currency/system/currency_system.h"
+#include "player/system/currency_metrics.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "modules/transaction_log/anomaly_detector.h"
 #include "proto/common/component/currency_comp.pb.h"
@@ -251,6 +254,44 @@ TEST_F(CurrencyAddGuardTest, DebtWithNewerVersionFieldsIsNeitherRepaidNorDeleted
 	ASSERT_EQ(1, saved.debts(0).unknown_fields().field_count());
 	EXPECT_EQ(kFutureDebtField, saved.debts(0).unknown_fields().field(0).number());
 	EXPECT_EQ(7u, saved.debts(0).unknown_fields().field(0).varint());
+}
+
+// 2026-11-12:跳过补缴除了那一行 WARN,还要计一次进程计数,由 scene 的 Prometheus 出口导出(告警读它)。
+// 计数是进程累计的,同一进程里别的用例也可能走到,所以一律比前后差值。只在本版本本来要扣还时计:
+// 普通欠款照常扣还不计;冻结的(本来就不扣)、溢出被拒的(什么都没提交)也不计。
+TEST_F(CurrencyAddGuardTest, ClawbackSkippedForVersionSkewIsCountedAndExported)
+{
+	CurrencyComp persisted;
+	auto *skewed = persisted.add_debts();
+	skewed->set_currency_type(Slot(kCurrencyGold));
+	skewed->set_owed(50);
+	skewed->mutable_unknown_fields()->AddVarint(kFutureDebtField, 7);
+	auto *frozen = persisted.add_debts();
+	frozen->set_currency_type(Slot(kCurrencyBindDiamond));
+	frozen->set_owed(50);
+	frozen->set_frozen(true);
+	frozen->mutable_unknown_fields()->AddVarint(kFutureDebtField, 7);
+	Debts().LoadFromProto(persisted);
+	ASSERT_TRUE(CurrencySystem::DebtCarriesUnknownFields(player_, kCurrencyGold));
+	ASSERT_EQ(kSuccess, CurrencySystem::AttachDebt(player_, kCurrencyDiamond, 40)); // 普通欠款,对照
+
+	const uint64_t before = currency_clawback_stats::ReadVersionSkewSkipped();
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 10));
+	EXPECT_EQ(before + 1, currency_clawback_stats::ReadVersionSkewSkipped()) << "跳过补缴计一次";
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyDiamond, 10));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyBindDiamond, 10));
+	EXPECT_EQ(before + 1, currency_clawback_stats::ReadVersionSkewSkipped()) << "普通欠款照常扣还、冻结的本来就不扣,都不计";
+	SetBalance(kCurrencyGold, kMaxBalance);
+	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player_, kCurrencyGold, 10));
+	EXPECT_EQ(before + 1, currency_clawback_stats::ReadVersionSkewSkipped()) << "溢出被拒,什么都没提交,不计";
+
+	// 导出:族名、类型与当前值(启动即以 0 导出,告警的 increase 抓得到第一次)。重复登记被注册表按名字拒绝,只打一行 ERROR。
+	RegisterCurrencyMetrics();
+	const std::string text = GlobalMetricsRegistry().Render();
+	EXPECT_NE(std::string::npos, text.find("# TYPE scene_currency_clawback_version_skew_total counter\n")) << text;
+	const std::string sample =
+		"\nscene_currency_clawback_version_skew_total " + std::to_string(currency_clawback_stats::ReadVersionSkewSkipped()) + "\n";
+	EXPECT_NE(std::string::npos, text.find(sample)) << text;
 }
 
 } // namespace

@@ -50,7 +50,8 @@ public:
     //
     // 补缴扣还:该币种欠款有效(未冻结、未过期)时先扣还、扣满即删,余下的再入账。欠款带更新版本才有的字段时
     // (与 DebtCarriesUnknownFields 同一判据)本版本不扣还也不删除,按冻结处理、全额入账,并打
-    // metric=persist_version_skew where=currency_clawback 的 WARN(docs/design/mixed-version-persist-field-protection.md §4.4)。
+    // metric=persist_version_skew where=currency_clawback 的 WARN(docs/design/mixed-version-persist-field-protection.md §4.4);
+    // 同一时刻 currency_clawback_stats 的进程计数加一(scene 导出为 scene_currency_clawback_version_skew_total,有告警)。
     //
     // **判定顺序是契约的一部分**:amount<=0 与类型越界这两条零副作用的纯参数校验
     // 排在冻结 / 封禁之前。冻结中的玩家传一个越界币种,得到的仍是 kInvalidParameter
@@ -102,6 +103,14 @@ public:
     // 命中回 kVersionSkew(收件箱停用本域,实体重建后重拉;docs/design/mixed-version-persist-field-protection.md §4.4)。
     // 结果可能在会话内变化(这笔欠款被删除后变 false;AddCurrency 不会把它还清删除),调用方不能把一次 true 当成"本会话一直做不了"。
     static bool DebtCarriesUnknownFields(entt::entity player, CurrencyType type);
+
+    // ── 免除 / 调整 / 冻结欠款:今天没有任何生产入口(2026-11-12 复核)──
+    // GM 的 SceneRollbackClientPlayer.GmWaiveDebt / GmAdjustDebt / GmFreezeDebt 早已删除(proto/message_id.txt 106 / 113 / 109 记为 reserved),
+    // 收件箱的 GM 处置域只有挂欠款(GmSanctionInboxExecutor::AttachCurrencyDebt,它在调 AttachDebt 之前先判 DebtCarriesUnknownFields),
+    // 下面三个函数只有单测调用。**接任何生产入口(GM 指令、收件箱新类型)之前,必须先补与 AddCurrency 同类的守卫**:
+    // DebtCarriesUnknownFields 为真时不改、不删这笔欠款,打 metric=persist_version_skew 的 WARN(where 取入口名)并计数,
+    // 调用方按版本错位处理、不记终态 —— 否则免除会整条删掉新字段、调整与冻结会按旧口径改写它
+    // (docs/design/mixed-version-persist-field-protection.md §4.4 欠款合并一行)。
 
     // Write off all remaining debt for the given currency type.
     static uint64_t WaiveDebt(entt::entity player, CurrencyType type,

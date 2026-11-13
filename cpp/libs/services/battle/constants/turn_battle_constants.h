@@ -260,8 +260,9 @@ inline constexpr uint32_t kMaxScaledPveMonsterCount = kFormationFrontRowSize * 2
 //   - 宝宝直接拿 pet_id 当 actor_id:1 号玩家带着 1 号宝宝就同号,InitPets 查重后拒绝开局;
 //   - 怪物用 1000000 + 序号:第 100 万个玩家进 PVE 就与 0 号怪同号,而怪物追加**不查重**,
 //     伤害/目标按 actor_id 找人时会静默打错单位。
-// player_id 两个来源都 < 2^63(号段从 1 递增;遗留 bwmarrin SnowFlake 是正的 int64),
-// 且 InitPlayers 对 bit63 置位的 player_id 直接 fail-closed —— 这是被强制的不变量,不是假设。
+// player_id 只由发号器发(data_service.AllocateIdSegment,AGENTS.md §7 第 1 条),是计数器值经 MixID
+// 打散后的 63 位值,恒 < 2^63(go/shared/idsegment/mix.go);且 InitPlayers 对 bit63 置位的 player_id
+// 直接 fail-closed —— 这是被强制的不变量,不是假设。
 inline constexpr uint64_t kEngineLocalActorIdFlag = 1ULL << 63;
 inline constexpr uint64_t kMonsterActorIdBase = kEngineLocalActorIdFlag | (1ULL << 32);  // 怪物局内 actor_id 起始值
 inline constexpr uint64_t kPetActorIdBase = kEngineLocalActorIdFlag | (2ULL << 32);      // 宝宝局内 actor_id 起始值

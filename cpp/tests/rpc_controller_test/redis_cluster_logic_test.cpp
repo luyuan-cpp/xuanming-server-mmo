@@ -999,13 +999,6 @@ namespace
 		EXPECT_TRUE(policy.ShouldStart(kT0 + 1s));
 	}
 
-	TEST(RedisClusterTopologyTest, ReconnectJitterStaysWithinTheConfiguredWindow)
-	{
-		EXPECT_DOUBLE_EQ(JitteredReconnectIntervalSec(3.0, 1.0, 0.0), 3.0);
-		EXPECT_DOUBLE_EQ(JitteredReconnectIntervalSec(3.0, 1.0, 0.5), 3.5);
-		EXPECT_LT(JitteredReconnectIntervalSec(3.0, 1.0, 0.999999), 4.0);
-		EXPECT_DOUBLE_EQ(JitteredReconnectIntervalSec(3.0, 0.0, 0.5), 3.0) << "抖动关闭";
-		EXPECT_DOUBLE_EQ(JitteredReconnectIntervalSec(3.0, 1.0, 1.5), 3.0) << "越界的随机数收回区间";
-		EXPECT_DOUBLE_EQ(JitteredReconnectIntervalSec(3.0, 1.0, -0.5), 3.0);
-	}
+	// 重连抖动的用例随实现挪到了 RedisManager(redis_manager_auth_test.cpp 的 RedisManagerReconnectJitter.*):
+	// 抖动现在由每条连接的 RedisManager 自己加,集群客户端只透传 connect.reconnectJitterSec。
 }

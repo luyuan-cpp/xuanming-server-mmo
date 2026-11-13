@@ -211,7 +211,7 @@ func TestIndexPassWorker_StopsWhenSegmentMovesAway(t *testing.T) {
 	sc, mr := newTestSvcCtx(t)
 	pass := indexPass{id: "1", kind: passKindBackfill, gen: ""}
 	require.NoError(t, mr.Set(gateIndexPassKey, pass.value()))
-	owner := &shrinkingOwner{segments: []int{0}, keepFor: 2} // step 的循环一次 + 第一个 slot 前的核对一次
+	owner := &shrinkingOwner{segments: []int{0}, keepFor: 3} // step 的循环一次 + 段开始前算限速份额一次 + 第一个 slot 前的核对一次
 	lister := newCountingSlotKeys(mr)
 	deps := testReconcilerDeps(newFakeClusterView(), newTestClock())
 	worker := newIndexPassWorker(newSessionReconciler(sc, testReconcileConf(), testReconcileInterval, deps), owner, lister.list)
@@ -249,6 +249,48 @@ func TestIndexPassWorker_RetriesFailedSlotNextStep(t *testing.T) {
 	require.True(t, ok, raw)
 	assert.Equal(t, segmentEnd(0), prog.next, "下一步做完这一段")
 	assert.Equal(t, 1, lister.listed[0], "做过的 slot 不重列")
+}
+
+// 扫描预算是全服一份:各副本按持有的段数分摊,加起来等于配置值,与副本数无关(加副本不加重玩家域 Redis 的负担)。
+func TestScanBudgetShare(t *testing.T) {
+	assert.Equal(t, 200.0, scanBudgetShare(200, slotSegmentCount), "一个副本持有全部段时拿整份预算,与单 leader 扫时相同")
+	assert.Equal(t, 100.0, scanBudgetShare(200, slotSegmentCount/2))
+	assert.InDelta(t, 200.0/256, scanBudgetShare(200, 1), 1e-9)
+	assert.Greater(t, scanBudgetShare(1, 1), 0.0, "不到每秒一页的份额不能变成 0:0 在限速器里是不限速")
+	for _, split := range [][]int{{256}, {128, 128}, {86, 85, 85}, {1, 255}, {64, 64, 64, 32, 32}} {
+		total := 0.0
+		for _, owned := range split {
+			total += scanBudgetShare(200, owned)
+		}
+		assert.InDelta(t, 200.0, total, 1e-9, "各副本的份额加起来必须是配置值,split=%v", split)
+	}
+	assert.Equal(t, -1.0, scanBudgetShare(-1, 3), "负数是不限速(本机与单测),原样交给限速器")
+}
+
+// worker 每做一段之前按当前持有的段数换限速:持有 4 段就是预算的 4/256。构造时那一份(整份预算)只给 leader 自己扫的形态用。
+func TestIndexPassWorker_PacesByItsShareOfTheBudget(t *testing.T) {
+	sc, mr := newTestSvcCtx(t)
+	pass := indexPass{id: "1", kind: passKindBackfill, gen: ""}
+	require.NoError(t, mr.Set(gateIndexPassKey, pass.value()))
+	lister := newCountingSlotKeys(mr)
+	deps := testReconcilerDeps(newFakeClusterView(), newTestClock())
+	var rates []float64
+	deps.newPacer = func(perSecond float64) pacer {
+		rates = append(rates, perSecond)
+		return noopPacer{}
+	}
+	cfg := testReconcileConf()
+	cfg.ScanPagesPerSecond = 512
+	worker := newIndexPassWorker(newSessionReconciler(sc, cfg, testReconcileInterval, deps), segmentRange{0, 4}, lister.list)
+
+	worker.step(context.Background())
+
+	require.Len(t, rates, 5, "构造时一次(整份预算),之后每段开始前各一次")
+	assert.Equal(t, 512.0, rates[0])
+	for _, rate := range rates[1:] {
+		assert.Equal(t, 8.0, rate, "512 × 4 / 256")
+	}
+	assert.Equal(t, 4*slotsPerSegment, lister.listedSlots(), "四段都做完")
 }
 
 // 等着的这一遍被换掉(短暂重叠的另一个 leader 发布了新的一遍)或删掉:这一遍作废,不据此设就绪标记。

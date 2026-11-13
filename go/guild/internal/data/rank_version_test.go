@@ -122,21 +122,21 @@ func TestPublishRank_RefusesVersionsBeyondTheExactRange(t *testing.T) {
 func TestRankWritesDoNotWaitForTheMaintenanceLock(t *testing.T) {
 	repo, _ := newRankRepo(t)
 	ctx := context.Background()
-	require.NoError(t, repo.rdb.Set(ctx, guildRankLockKey, "rebuild-elsewhere", time.Minute).Err())
+	require.NoError(t, repo.rdb.Set(ctx, guildRankLockKey(3), "rebuild-elsewhere", time.Minute).Err())
 
 	short, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 	require.NoError(t, repo.AddNewGuildToRank(short, 301, 3))
 	require.NoError(t, repo.publishRank(short, 301, 3, 40, 1))
 	require.NoError(t, repo.publishRank(short, 302, 3, 20, 1))
-	require.NoError(t, repo.removeFromAllRanks(short, 302, 3, true))
+	require.NoError(t, repo.removeFromAllRanks(short, 302, 3, true, []uint32{3}))
 
 	score, _, ok := rankedScore(t, repo, 3, 301)
 	require.True(t, ok)
 	assert.Equal(t, float64(40), score)
 	_, _, ok = rankedScore(t, repo, 3, 302)
 	assert.False(t, ok)
-	assert.Equal(t, "rebuild-elsewhere", repo.rdb.Get(ctx, guildRankLockKey).Val(), "别人的锁原样留着")
+	assert.Equal(t, "rebuild-elsewhere", repo.rdb.Get(ctx, guildRankLockKey(3)).Val(), "别人的锁原样留着")
 }
 
 // 建帮上榜晚到:初始版本 0 输给已经写进来的推分。
@@ -173,7 +173,7 @@ func TestRemoveDisbandedGuild_LateWritesDoNotResurrectIt(t *testing.T) {
 	ctx := context.Background()
 	publishVersioned(t, repo, 3, 301, 40, 1)
 
-	require.NoError(t, repo.removeFromAllRanks(ctx, 301, 3, true))
+	require.NoError(t, repo.removeFromAllRanks(ctx, 301, 3, true, []uint32{3}))
 	_, _, ok := rankedScore(t, repo, 3, 301)
 	require.False(t, ok)
 
@@ -189,7 +189,7 @@ func TestRemoveDisbandedGuild_LateWritesDoNotResurrectIt(t *testing.T) {
 func TestRankTombstonesExpireWithoutACleanupJob(t *testing.T) {
 	repo, mr := newRankRepo(t)
 	ctx := context.Background()
-	require.NoError(t, repo.removeFromAllRanks(ctx, 301, 3, true))
+	require.NoError(t, repo.removeFromAllRanks(ctx, 301, 3, true, []uint32{3}))
 	assert.Equal(t, rankTombstoneTTL, mr.TTL(zoneRankTombstoneKey(3)))
 
 	mr.SetTime(time.Now().Add(rankTombstoneTTL + time.Minute))
@@ -197,7 +197,7 @@ func TestRankTombstonesExpireWithoutACleanupJob(t *testing.T) {
 	_, _, ok := rankedScore(t, repo, 3, 301)
 	assert.True(t, ok, "过了保留期的墓碑不再拦写入(那时已不可能还有迟到的写入)")
 
-	require.NoError(t, repo.removeFromAllRanks(ctx, 302, 3, true))
+	require.NoError(t, repo.removeFromAllRanks(ctx, 302, 3, true, []uint32{3}))
 	assert.Equal(t, []string{"302"}, buried(t, repo, 3), "立新墓碑时删掉本区已到期的")
 
 	mr.FastForward(rankTombstoneTTL + time.Second)
@@ -211,7 +211,7 @@ func TestRemoveDisbandedGuild_BuriesEveryZoneOfItsMergeGroup(t *testing.T) {
 	bindMergedZones(t, repo, map[uint32]uint32{10: 20})
 	publishVersioned(t, repo, 10, 1001, 40, 1) // 原始区 10,进最终区 20 的榜
 
-	require.NoError(t, repo.removeFromAllRanks(ctx, 1001, 10, true))
+	require.NoError(t, repo.removeFromAllRanks(ctx, 1001, 10, true, []uint32{10}))
 
 	assert.Equal(t, []string{"1001"}, buried(t, repo, 10))
 	assert.Equal(t, []string{"1001"}, buried(t, repo, 20))
@@ -223,14 +223,15 @@ func TestRemoveDisbandedGuild_BuriesEveryZoneOfItsMergeGroup(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// 摘榜扫每一张分区榜:合服折叠之前,条目可能还在源区的旧键上。别的帮会不动。
+// 摘榜走 zone 清单里的每一张分区榜(guild 表出现过的区,从 SQL 推出,不扫 Redis):合服折叠之前,条目可能还在源区的旧键上。
+// 别的帮会不动。
 func TestRemoveDisbandedGuild_SweepsEveryZoneRank(t *testing.T) {
 	repo, _ := newRankRepo(t)
 	seedVersioned(t, repo, 3, 301, 40, 1)
 	seedVersioned(t, repo, 7, 301, 30, 1)
 	seedVersioned(t, repo, 7, 701, 30, 1)
 
-	require.NoError(t, repo.removeFromAllRanks(context.Background(), 301, 3, true))
+	require.NoError(t, repo.removeFromAllRanks(context.Background(), 301, 3, true, []uint32{3, 7}))
 
 	_, _, ok := rankedScore(t, repo, 3, 301)
 	assert.False(t, ok)
@@ -245,7 +246,7 @@ func TestRemoveLiveGuild_LeavesNoTombstone(t *testing.T) {
 	repo, mr := newRankRepo(t)
 	publishVersioned(t, repo, 3, 301, 40, 1)
 
-	require.NoError(t, repo.removeFromAllRanks(context.Background(), 301, 3, false))
+	require.NoError(t, repo.removeFromAllRanks(context.Background(), 301, 3, false, []uint32{3}))
 
 	assert.False(t, mr.Exists(zoneRankTombstoneKey(3)))
 	publishVersioned(t, repo, 3, 301, 50, 2)
@@ -302,7 +303,7 @@ func TestReconcileRanks_DoesNotResurrectAGuildDisbandedAfterTheSnapshot(t *testi
 	ctx := context.Background()
 	seedVersioned(t, repo, 3, 301, 40, 1)
 	snapshot := []rankRow{{guildID: 301, zoneID: 3, score: 40, version: 1}}
-	require.NoError(t, repo.removeFromAllRanks(ctx, 301, 3, true))
+	require.NoError(t, repo.removeFromAllRanks(ctx, 301, 3, true, []uint32{3}))
 
 	require.NoError(t, repo.reconcileRanks(ctx, snapshot, (&staticRankLookup{}).lookup))
 
@@ -311,15 +312,16 @@ func TestReconcileRanks_DoesNotResurrectAGuildDisbandedAfterTheSnapshot(t *testi
 }
 
 // 解散后没摘干净的幽灵(含本次改动之前写的、没记版本的项):不在快照里,回库也查不到,摘掉并立墓碑,
-// 之后迟到的写入也写不回来。榜空了,两个键都由 Redis 删掉。
+// 之后迟到的写入也写不回来。区 3 还有活帮会 309,所以在 zone 清单里(清单从快照推出,不扫 Redis)。
 func TestReconcileRanks_RemovesGhostsOfDisbandedGuilds(t *testing.T) {
-	repo, mr := newRankRepo(t)
+	repo, _ := newRankRepo(t)
 	ctx := context.Background()
 	seedVersioned(t, repo, 3, 303, 70, 4)
 	zadd(t, repo, 3, 304, 5)
+	snapshot := []rankRow{{guildID: 309, zoneID: 3, score: 1, version: 1}}
 
 	lookup := &staticRankLookup{}
-	require.NoError(t, repo.reconcileRanks(ctx, nil, lookup.lookup))
+	require.NoError(t, repo.reconcileRanks(ctx, snapshot, lookup.lookup))
 
 	for _, id := range []uint64{303, 304} {
 		_, _, ok := rankedScore(t, repo, 3, id)
@@ -330,8 +332,21 @@ func TestReconcileRanks_RemovesGhostsOfDisbandedGuilds(t *testing.T) {
 	publishVersioned(t, repo, 3, 303, 80, 5)
 	_, _, ok := rankedScore(t, repo, 3, 303)
 	assert.False(t, ok)
-	assert.False(t, mr.Exists(zoneRankKey(3)))
-	assert.False(t, mr.Exists(zoneRankVersionKey(3)))
+	assert.Equal(t, []string{"309"}, repo.rdb.ZRange(ctx, zoneRankKey(3), 0, -1).Val(), "榜上只剩活帮会")
+}
+
+// zone 清单从 SQL(快照)推出,不扫 Redis:guild 表里一个帮会都没有的区不会被访问,那里的幽灵留着,
+// 等那个区再有帮会时由下一次重建摘掉(guild_repo.go rankZones)。这是不扫 Redis 换来的已知残余,只影响那张空榜的显示。
+func TestReconcileRanks_ZoneListComesFromSQLNotRedis(t *testing.T) {
+	repo, _ := newRankRepo(t)
+	ctx := context.Background()
+	zadd(t, repo, 8, 801, 5)
+
+	lookup := &staticRankLookup{}
+	require.NoError(t, repo.reconcileRanks(ctx, nil, lookup.lookup))
+
+	assert.Empty(t, lookup.calls, "没有帮会的区不在清单里,不复核")
+	assert.Equal(t, float64(5), zscore(t, repo, 8, 801))
 }
 
 // 放错区的条目(合服后源区还没折叠的旧键、撤销合服后留在目标区的项):权威分并进它该在的区,再按版本从这里摘。
@@ -375,13 +390,14 @@ func TestReconcileRanks_RepairsMissingAndStaleEntries(t *testing.T) {
 	assert.Equal(t, []string{zoneRankKey(3)}, repo.rdb.Keys(ctx, zoneRankKeyPrefix+"*").Val(), "zone_id=0 的帮会不进任何榜")
 }
 
-// 手工写进来的、不是 guild_id 的成员,重建时摘掉。
+// 手工写进来的、不是 guild_id 的成员,重建时摘掉。区 3 有活帮会 309,在 zone 清单里。
 func TestReconcileRanks_RemovesGarbageMembers(t *testing.T) {
 	repo, _ := newRankRepo(t)
 	ctx := context.Background()
 	require.NoError(t, repo.rdb.ZAdd(ctx, zoneRankKey(3), redis.Z{Score: 1, Member: "not-a-guild"}, redis.Z{Score: 2, Member: "0042"}).Err())
+	snapshot := []rankRow{{guildID: 309, zoneID: 3, score: 1, version: 1}}
 
-	require.NoError(t, repo.reconcileRanks(ctx, nil, (&staticRankLookup{}).lookup))
+	require.NoError(t, repo.reconcileRanks(ctx, snapshot, (&staticRankLookup{}).lookup))
 
-	assert.Zero(t, repo.rdb.Exists(ctx, zoneRankKey(3)).Val())
+	assert.Equal(t, []string{"309"}, repo.rdb.ZRange(ctx, zoneRankKey(3), 0, -1).Val())
 }

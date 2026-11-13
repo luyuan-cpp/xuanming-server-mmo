@@ -15,11 +15,11 @@
 #   1. scene_manager 已换上带切线的新版并启动,且有实例当上领导者:分线目录只由领导者发布(每 2s 一次),
 #      ChannelSwitch.DirectoryRefreshSeconds 不能是负数(负数 = 不发布),ChannelSwitch.Disabled 不能是 true。
 #   2. scene 节点同样是新版(把目录放进 NotifySceneInfo;客户端 EnterScene 带 client_channel_pick),
-#      它的 zone Redis 与 scene_manager 是同一个(目录键 world_channel_directory:zone:{zone}:{conf} 在里面)。
+#      它的 zone Redis 与 scene_manager 是同一个(目录键 world_channel_directory:{ctl:<zone>}:{conf} 在里面)。
 #      gate 不需要为此重编:没有新消息号,它只转发消息体。
 #   3. 机器人登录落到的那张大世界地图至少有 2 条线:scene_manager 的 WorldChannelCountByConfId 里这张图 ≥ 2
 #      (本机 yaml 的主城是 "1": 16)。只有 1 条线时打印 CHANNEL_SMOKE_SKIP 并以退出码 0 结束(列线仍会验证)。
-#      配置只是种子、Redis 里的 desired 才是权威:改了 yaml 不生效时看 world_channels:desired:zone:{zone}。
+#      配置只是种子、Redis 里的 desired 才是权威:改了 yaml 不生效时看 world_channels:desired:{ctl:<zone>}。
 #   4. robot/vendor/proto/scene/player_scene.pb.go 已与 go/proto 同步(含 SceneChannelDirectory),robot 重新编译过。
 #   5. robot_9801 不在任何队伍里(队员切线后会被同节点的队长拉回,C4 会报"进了别的场景");
 #      账号停在大世界地图上(副本 / 镜像里不带目录)。前缀必须是 robot_ 才会命中 login 侧 DevPasswordAuth。

@@ -111,6 +111,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
   `-ReleaseVersion` 追加的 H 节检查项:`release.version`、`release.changelog`、`release.artifact.dir`、`release.artifact.sha256sums`、`release.buildinfo.version`、`release.buildinfo.clean`、`release.manifest`、`release.imagetag.commit`(给了 `-ImageTag` 时),以及只告警的 `release.buildinfo.commit`——当前工作树不在制品 commit 上时,A–G 节读到的配置不代表该版本,切到发布提交重跑。
   注意:`k8s_image.ps1` / `k8s_deploy.ps1` 在 staging/prod 自动调用的预检**不带** `-ReleaseVersion`,只查配置与 tag;制品检查只靠这一步手动跑。
 - [ ] **⑦(人工)打 tag、部署、核对**:
+  **先于下面的部署命令做（2026-11-12 增补）**：首次上线含改投邮件的 scene 与 mail 之前，要先在 infra namespace 与每个 zone namespace 的 `domain-service-secrets` 里补上 `mail-producer-battle`（各处同值，至少 32 字节）。缺了 mail 与 scene 的 Pod 都起不来（manifest 是 `optional: false`）。顺序与核对命令见 [k8s-open-server-runbook.md](k8s-open-server-runbook.md) §1。
   ```powershell
   git tag vX.Y.Z <12位commit>
   git push origin vX.Y.Z

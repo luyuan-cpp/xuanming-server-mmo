@@ -193,6 +193,66 @@ func TestElectorBecomesLeaderAndReleasesOnCtxCancel(t *testing.T) {
 	}
 }
 
+// Token 是本任期写进锁键的值:在任时与存储里的锁值逐字相同(写脚本拿它核对属主),不在任时为空串。
+// 丢锁之后也要清空:旧值不能再被拿去当围栏用。
+func TestTokenIsTheLockValueWhileLeadingAndEmptyOtherwise(t *testing.T) {
+	store := &fakeStore{}
+	e := New(store, "test:lock", Options{TTL: testTTL, ID: "a"})
+	if got := e.Token(); got != "" {
+		t.Fatalf("竞选之前不该有围栏值: %q", got)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() { e.Run(ctx, nil); close(done) }()
+
+	eventually(t, "当选领导者", e.IsLeader)
+	first := e.Token()
+	if first == "" || first != store.holder() {
+		t.Fatalf("在任时围栏值应等于锁值: token=%q holder=%q", first, store.holder())
+	}
+
+	// 锁被别人拿走:降级之后围栏值清空。之后 a 再竞选不上(锁在 b 手里),一直是空串。
+	store.steal("b:stolen", time.Hour)
+	eventually(t, "丢锁后降级", func() bool { return !e.IsLeader() })
+	eventually(t, "丢锁后围栏值清空", func() bool { return e.Token() == "" })
+
+	cancel()
+	<-done
+	if got := e.Token(); got != "" {
+		t.Fatalf("退出之后不该有围栏值: %q", got)
+	}
+}
+
+// 每个任期的围栏值都不同:重新当选之后,上一任期留下的值核不过锁键。
+func TestTokenChangesAcrossTenures(t *testing.T) {
+	store := &fakeStore{}
+	e := New(store, "test:lock", Options{TTL: testTTL, ID: "a"})
+	tenures := make(chan string, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		// whileLeader 立刻返回 = 主动让位,选主器释放锁后再竞选,得到第二个任期。第三个任期起不再让位,等用例取消。
+		e.Run(ctx, func(lctx context.Context) {
+			select {
+			case tenures <- e.Token():
+			default:
+				<-lctx.Done()
+			}
+		})
+		close(done)
+	}()
+
+	first, second := <-tenures, <-tenures
+	cancel()
+	<-done
+	if first == "" || second == "" || first == second {
+		t.Fatalf("两个任期的围栏值应非空且不同: %q %q", first, second)
+	}
+}
+
 // 竞选的 SETNX 首发已经写入、回包丢了,客户端自动重发时回「已存在」。锁里其实是自己这一次的值,
 // 必须认出来并当选,不能让锁空占到 TTL 过期(docs/design/infra-reconnect-overview.md §4 R8)。
 // TTL 取 1 小时:没修时要等一个竞选间隔(20 分钟)才再试,这里 3s 内当不上就失败。

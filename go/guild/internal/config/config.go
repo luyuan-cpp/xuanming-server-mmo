@@ -14,6 +14,7 @@ import (
 	"guild/internal/data"
 	"shared/assetopwake"
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/idsegment"
 	"shared/playerredis"
@@ -49,15 +50,18 @@ type SchemaConf struct {
 
 type Config struct {
 	zrpc.RpcServerConf
-	RedisClient RedisConf `json:"RedisClient"`
-	// PlayerLocatorRedis 现在只承担控制域:scene 发布的 assetop:wake 频道与它的跨副本去重键。键名留着,部署配置不用跟着改。
-	PlayerLocatorRedis RedisConf `json:"PlayerLocatorRedis"`
-	// SharedRedisPasswordEnv 是 RedisClient 与 PlayerLocatorRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在
-	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里两段的 Password 写空串。不写 = 照用 Password 字面量(本机)。
-	// 由 ResolveSharedRedisPassword 在建 Redis 客户端之前填好,变量缺失或为空即拒启。
+	// ControlRedis:控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1),2026-11-12 取代 RedisClient 与
+	// PlayerLocatorRedis 两段。放帮会缓存、帮会榜、维护锁与选主锁、申请配额与推送冷却、巡检租约、清理水位,以及 scene 发布的
+	// assetop:wake 订阅与它的跨副本去重键。键守卫是 clusterredis.ControlClusterKeys:多键脚本的 KEYS 必须同一个登记过的族 tag。
+	// 读取走 EffectiveControlRedis():没写 Addrs 时指向本机 127.0.0.1:6379 单实例。
+	ControlRedis clusterredis.Config `json:",optional"`
+	// SharedRedisPasswordEnv 是 ControlRedis 口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret 里,
+	// 经 secretKeyRef 注入;ConfigMap 里 ControlRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在建 Redis 客户端之前填好,变量缺失或为空即拒启。ControlRedis.PasswordEnv 不用:
+	// 它在变量缺失时静默落成空口令,做不到拒启。
 	SharedRedisPasswordEnv string `json:",optional"`
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):会话、位置、战斗锁、同步摘要。
-	// 读取走 EffectivePlayerRedis():没写 Addrs 时指向 PlayerLocatorRedis 那一个实例,开发环境不用改。
+	// 读取走 EffectivePlayerRedis():没写 Addrs 时指向 ControlRedis 那一个实例,开发环境不用改。
 	PlayerRedis playerredis.Config `json:",optional"`
 	MySQL       MySQLConf          `json:"MySQL"`
 	Node        NodeConf           `json:"Node"`
@@ -587,17 +591,11 @@ func (c *Config) Validate() error {
 	if maxOpen, _ := c.MySQL.EffectivePool(); maxOpen < 1 || maxOpen > 128 {
 		return errors.New("MySQL.MaxOpenConn 必须在 [1, 128] 内")
 	}
-	// 连接池上限:负数没有合法含义(0 = go-redis 缺省 10 × GOMAXPROCS),见 RedisConf.PoolSize。
-	for _, pool := range []struct {
-		name string
-		size int
-	}{
-		{"RedisClient", c.RedisClient.PoolSize},
-		{"PlayerLocatorRedis", c.PlayerLocatorRedis.PoolSize},
-	} {
-		if pool.size < 0 {
-			return fmt.Errorf("%s.PoolSize(%d)不能为负:0 = go-redis 缺省 10 × GOMAXPROCS", pool.name, pool.size)
-		}
+	if err := c.ControlRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("ControlRedis: %w", err)
+	}
+	if c.ControlRedis.PasswordEnv != "" {
+		return errors.New("ControlRedis.PasswordEnv 不用:口令变量名写在 SharedRedisPasswordEnv(变量缺失时拒启)")
 	}
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
 		return fmt.Errorf("PlayerRedis: %w", err)
@@ -675,51 +673,55 @@ func (c *Config) Validate() error {
 	return c.Activity.validate()
 }
 
-// playerRedisFallbackPoolSize / IOTimeoutMs:没写 PlayerRedis.Addrs 且 PlayerLocatorRedis.PoolSize 也没写时的连接池,以及读写超时。
-// 与换句柄之前的 go-redis 缺省同量级(K8s 上 GOMAXPROCS 按 2 算),写成常量,不随 CPU limit 漂移。
+// 没写 ControlRedis.Addrs 时的回落(设计 §5.1):本机单实例,连接池与读写超时与换句柄之前的 go-redis 缺省同量级
+// (K8s 上 GOMAXPROCS 按 2 算是 20 条;读写 3 秒),写成常量,不随 CPU limit 漂移。没写 PlayerRedis.Addrs 时玩家域再回落到它。
 const (
-	playerRedisFallbackPoolSize  = 20
-	playerRedisFallbackIOTimeout = 3000
+	controlRedisFallbackAddr      = "127.0.0.1:6379"
+	controlRedisFallbackPoolSize  = 20
+	controlRedisFallbackIOTimeout = 3000
 )
 
-// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 PlayerLocatorRedis 那一个实例
-// (它没写 Host 时再回落 RedisClient,与 svc.NewServiceContext 的回落同口径)。
-func (c *Config) EffectivePlayerRedis() playerredis.Config {
-	locator := c.PlayerLocatorRedis
-	if locator.Host == "" {
-		locator = c.RedisClient
-	}
-	pool := locator.PoolSize
-	if pool == 0 {
-		pool = playerRedisFallbackPoolSize
-	}
-	return c.PlayerRedis.OrDefault(playerredis.Config{
-		Addrs:           []string{locator.Host},
-		Password:        locator.Password,
-		PoolSizePerNode: min(pool, playerredis.MaxPoolSizePerNode),
-		ReadTimeoutMs:   playerRedisFallbackIOTimeout,
-		WriteTimeoutMs:  playerRedisFallbackIOTimeout,
+// EffectiveControlRedis 返回生效的控制集群配置:写了 ControlRedis.Addrs 就用它,否则指向本机单实例。
+// 段里单独写的池与超时优先于回落值(clusterredis.Config.OrDefault)。
+func (c *Config) EffectiveControlRedis() clusterredis.Config {
+	return c.ControlRedis.OrDefault(clusterredis.Config{
+		Addrs:           []string{controlRedisFallbackAddr},
+		Password:        c.ControlRedis.Password,
+		Username:        c.ControlRedis.Username,
+		TLS:             c.ControlRedis.TLS,
+		PoolSizePerNode: controlRedisFallbackPoolSize,
+		ReadTimeoutMs:   controlRedisFallbackIOTimeout,
+		WriteTimeoutMs:  controlRedisFallbackIOTimeout,
 	})
 }
 
-// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 RedisClient.Password 与 PlayerLocatorRedis.Password,规则见 redisauth.Apply。
-// PlayerLocatorRedis 没写 Host 时回落 RedisClient,玩家域没写 Addrs 时回落 PlayerLocatorRedis(EffectivePlayerRedis),
-// 填完之后它们用的都是这个口令。-migrate 不连 Redis;常驻启动(guild.go)与 cmd/assetopfix 在建 Redis 客户端之前调用。
-func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
-	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
-		redisauth.Target{Field: "RedisClient.Password", Password: &c.RedisClient.Password},
-		redisauth.Target{Field: "PlayerLocatorRedis.Password", Password: &c.PlayerLocatorRedis.Password})
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 ControlRedis 那一个实例
+// (EffectiveControlRedis,连同口令与连接池)。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	control := c.EffectiveControlRedis()
+	pool := control.PoolSizePerNode
+	if pool == 0 {
+		pool = controlRedisFallbackPoolSize
+	}
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           control.Addrs,
+		Cluster:         control.Cluster,
+		Username:        control.Username,
+		Password:        control.Password,
+		DB:              control.DB,
+		TLS:             control.TLS,
+		PoolSizePerNode: min(pool, playerredis.MaxPoolSizePerNode),
+		ReadTimeoutMs:   controlRedisFallbackIOTimeout,
+		WriteTimeoutMs:  controlRedisFallbackIOTimeout,
+	})
 }
 
-type RedisConf struct {
-	Host     string `json:"Host"`
-	Password string `json:"Password"`
-	DB       int    `json:"DB"`
-	// PoolSize 是 go-redis 连接池上限(共享 Redis 连接总账,P0-E 第 3 批)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
-	// 随 CPU limit 漂移;负数由 Validate 拒绝。guild 现在没有 K8s 清单,不进 Redis 连接总账;接入 K8s 时由
-	// tools/scripts/k8s_deploy.ps1 镜像并记账。PlayerLocatorRedis 没写 Host 时回落 RedisClient(连同本字段)。
-	// 落地恢复摘要专用客户端与申请配额池各自固定 4 条,不读本字段。
-	PoolSize int `json:"PoolSize,optional"`
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 ControlRedis.Password,规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落 ControlRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
+// -migrate 不连 Redis;常驻启动(guild.go)与 cmd/assetopfix 在建 Redis 客户端之前调用。
+func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
+	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
+		redisauth.Target{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password})
 }
 
 type MySQLConf struct {

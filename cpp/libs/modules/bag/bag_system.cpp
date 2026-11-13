@@ -198,7 +198,7 @@ uint32_t Bag::CheckSpaceFor(const ItemCountMap &itemsToAdd, std::size_t *instanc
 	// 能不能放下" —— 后者会销毁玩家的东西,不能藏在一个名字里带 Check 的函数里。
 	// 真入包路径(AddItems)走 PlanInstances + PlanEviction。
 	//
-	// 副作用:对会淘汰的包(配了 EvictOldestFirst 的;2026-11-05 起没有生产包这样配,临时格也是满即拒),
+	// 副作用:对会淘汰的包(配了会淘汰的策略的;2026-11-12 起淘汰轴只有 RejectWhenFull,没有这样的包),
 	// 这个函数会说"放不下",而实际 AddItems 能成功。这是刻意的 —— 预测就该按不破坏现状回答。
 	ItemCountMap instancesByConfig;
 	std::size_t instancesNeeded = 0;
@@ -991,8 +991,9 @@ bool Bag::PlanEviction(const ItemCountMap &unitsToAdd, bool allowEviction,
 	// 稳定了才动手 —— 于是"腾不够就一件都不动"是结构保证,不是祈愿。
 	//
 	// 收敛:牺牲者集合每轮严格变大(否则退出),上界是 store_.Size() 轮。
-	// 先进先出是前缀稳定的(最早 k 个 ⊂ 最早 k+1 个),并集不改变它;对不前缀
-	// 稳定的未来策略,并集保证单调。
+	// 前缀稳定的策略(如已删除的先进先出:最早 k 个 ⊂ 最早 k+1 个)并集不改变它;对不前缀
+	// 稳定的策略,并集保证单调。2026-11-12 起淘汰轴只有 RejectWhenFull,这一段没有实现会走到、也没有用例覆盖
+	// (eviction_policy.h 文件头「现状」)。
 	std::unordered_set<Guid> victimSet;
 	bool converged = false;
 	for (std::size_t round = 0; round <= store_.Size(); ++round)
@@ -1015,7 +1016,7 @@ bool Bag::PlanEviction(const ItemCountMap &unitsToAdd, bool allowEviction,
 		if (picked.size() < shortfall)
 		{
 			// RejectWhenFull 恒走这条(返回空),等于拆分前"背包满了"的行为。
-			// EvictOldestFirst 腾不够时也走这条 —— 一件都不动。
+			// 会淘汰的策略腾不够时也走这条 —— 一件都不动。
 			return false;
 		}
 		bool grew = false;
@@ -1314,7 +1315,7 @@ uint32_t Bag::PutInstance(ItemComp item, std::optional<uint32_t> slot)
 
 	// ── 校验全过,现在才允许改状态 ──────────────────────────────────────
 	// 入包序号是"本包内的先后",不随实例搬家:ItemStore::Insert 对非 0 值会原样保留并把
-	// 水位抬到它之上,带着源包的序号进来,先进先出就按别的包的时间线挤人了。
+	// 水位抬到它之上,带着源包的序号进来,本包的实例序(ItemStore::AcquiredBefore)就按别的包的时间线排了。
 	item.set_acquire_seq(0);
 
 	if (store_.Insert(std::move(item)) == nullptr)

@@ -150,13 +150,46 @@ func TestCacheFile_LegacyRecordWithoutHighWaterFieldsLoads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("旧缓存文件必须仍可读: %v", err)
 	}
-	if rec.LocalHighWaterSec != 0 || rec.LocalHighWaterMs != 0 {
+	if rec.LocalHighWaterSec != 0 || rec.WatermarkRev != 0 {
 		t.Fatalf("缺省的新字段必须是 0: %+v", rec)
 	}
 
 	h := bootFromCache(t, unreachableClient(t), path)
 	if h.GuardEpochSec != lastWm+guardLeadSec {
 		t.Fatalf("旧缓存的地板仍应是 lastWatermark+lead: got %d want %d", h.GuardEpochSec, lastWm+guardLeadSec)
+	}
+}
+
+// 2026-11-12 删掉了 login 毫秒水位的三个缓存字段。还带着它们的旧文件必须照样能读、能起:毫秒字段被忽略,
+// 秒级的地板、资格时刻与水位 revision 照常接上。
+func TestCacheFile_RecordWithRemovedMsFieldsStillLoads(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "snowflake-ms-fields.json")
+	lastWm := snowflake.NowEpochSec() - 10
+	old := fmt.Sprintf(
+		`{"kind":"boot","cluster":0,"slot":5,"uuid":"cached-uuid","incarnation":42,"lastWatermark":%d,`+
+			`"lastWatermarkMs":1800000000000,"localHighWaterMs":1800000000123,"lastAckWall":%d,`+
+			`"watermarkRev":321,"watermarkMsRev":654}`,
+		lastWm, time.Now().Add(-time.Minute).UnixMilli())
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := readCacheFile(path)
+	if err != nil {
+		t.Fatalf("带已删字段的旧缓存文件必须仍可读: %v", err)
+	}
+	if rec.LastWatermark != lastWm || rec.WatermarkRev != 321 || rec.LocalHighWaterSec != 0 {
+		t.Fatalf("秒级字段必须原样读出: %+v", rec)
+	}
+
+	h := bootFromCache(t, unreachableClient(t), path)
+	if h.GuardEpochSec != lastWm+guardLeadSec {
+		t.Fatalf("地板只看秒级水位: got %d want %d", h.GuardEpochSec, lastWm+guardLeadSec)
+	}
+	h.guardMu.Lock()
+	gotRev := h.guardRev
+	h.guardMu.Unlock()
+	if gotRev != 321 {
+		t.Fatalf("秒级水位 revision 必须接上: got %d want 321", gotRev)
 	}
 }
 
@@ -198,7 +231,7 @@ func TestAllocate_BootsFromLocalCacheWhenEtcdUnreachable(t *testing.T) {
 		t.Fatal("etcd 不通不是失去所有权,Lost() 不得关闭")
 	}
 	// 缓存里的 lastAckWall 在注册成功前不得推进(否则 F 规则失去意义)。
-	stale, age := h.FenceClock().Stale()
+	stale, age := h.fence.Stale()
 	if stale || age < 50*time.Second {
 		t.Fatalf("Ack 年龄必须从缓存时刻起算: stale=%v age=%v", stale, age)
 	}
@@ -289,7 +322,7 @@ func cacheHandle(t *testing.T, path string, now *time.Time, cli *clientv3.Client
 			func() time.Duration { return now.Sub(origin) },
 			func() time.Time { return *now }),
 		r: resolvedOptions{cachePath: path, fenceAfter: 2 * time.Hour,
-			quarantine: 4 * time.Hour, ttl: 30, clusterBits: ClusterBits, slotBits: SlotBits, maxSlot: 4095},
+			quarantine: 4 * time.Hour, ttl: 30, maxSlot: 4095},
 	}
 	h.cache = cacheRecord{Kind: h.Kind, Slot: h.Slot, UUID: h.UUID}
 	h.incarnation.Store(100)
@@ -353,7 +386,7 @@ func TestCacheWrite_SteadyStateAcksNeverWrite(t *testing.T) {
 	}
 	// 每拍 advanceGuard 都会先记本地高水位:稳态下同样只改内存。
 	h.guardMu.Lock()
-	h.noteLocalHighWaterLocked(6000, 0)
+	h.noteLocalHighWaterLocked(6000)
 	h.guardMu.Unlock()
 	if writes.Load() != 1 || h.cache.LocalHighWaterSec != 6000 {
 		t.Fatalf("稳态下本地高水位只改内存: writes=%d mem=%d", writes.Load(), h.cache.LocalHighWaterSec)
@@ -419,45 +452,49 @@ func TestCacheWrite_CloseFlushesTheFinalAck(t *testing.T) {
 }
 
 // (c):水位写失败(etcd 不通)进入故障模式 —— 那时磁盘上的本地高水位是同主机在 F 内重启时
-// 唯一罩得住已发号段的地板,每一拍都得落盘。用毫秒水位驱动(值由调用方给,不必等真实秒针
-// 走),每次失败恰好写一次(第一次失败落在 Txn 之后立刻写;之后每拍在 Txn 之前写、Txn 之后
-// 不重复写)。
+// 唯一罩得住已发号段的地板,每一拍都得落盘。目标值由发号器的高水位驱动(advanceGuard 取
+// max(墙钟, 发号器高水位) + lead;这里把高水位拨到墙钟前面,相当于借位),不必等真实秒针走。
+// 每次失败恰好写一次(第一次失败落在 Txn 之后立刻写;之后每拍在 Txn 之前写、Txn 之后不重复写)。
 func TestCacheWrite_FailedWatermarkWriteFlushesEveryTick(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "c.json")
 	now := time.Unix(1_800_000_000, 0)
 	writes := countCacheWrites(t)
 	h := cacheHandle(t, path, &now, unreachableClient(t))
+	node := snowflake.NewNode(h.WorkerID)
+	h.node.Store(node)
 
 	ack(h) // 身份落盘 → 1
 	acked := mustReadCache(t, path)
 
+	base := snowflake.NowEpochSec() + 1000 // 远在墙钟 + lead 之上:目标值只由下面拨的高水位决定
 	for i := 1; i <= 3; i++ {
-		now = now.Add(time.Second) // 远在 30 分钟以内
-		ms := uint64(1_800_000_000_000 + i)
+		now = now.Add(time.Second) // 远在 F 以内
+		node.SetGuardTime(base + uint64(i))
+		want := base + uint64(i) + guardLeadSec
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		err := h.PutMsWatermark(ctx, ms)
+		ok := h.advanceGuard(ctx)
 		cancel()
-		if err == nil {
-			t.Fatal("etcd 不通时毫秒水位不可能写成功")
+		if ok {
+			t.Fatal("etcd 不通时水位不可能写成功")
 		}
 		if writes.Load() != int64(1+i) {
 			t.Fatalf("第 %d 次失败后应恰好累计 %d 次写盘, got %d", i, 1+i, writes.Load())
 		}
 		got := mustReadCache(t, path)
-		if got.LocalHighWaterMs != ms {
-			t.Fatalf("失败后本地高水位必须已在磁盘上: got %d want %d", got.LocalHighWaterMs, ms)
+		if got.LocalHighWaterSec != want {
+			t.Fatalf("失败后本地高水位必须已在磁盘上: got %d want %d", got.LocalHighWaterSec, want)
 		}
-		if got.LastAckWall != acked.LastAckWall || got.LastWatermarkMs != acked.LastWatermarkMs {
-			t.Fatalf("etcd 没确认过,LastAckWall / LastWatermarkMs 不许动: %+v", got)
+		if got.LastAckWall != acked.LastAckWall || got.LastWatermark != acked.LastWatermark {
+			t.Fatalf("etcd 没确认过,LastAckWall / LastWatermark 不许动: %+v", got)
 		}
 	}
 	if !h.watermarkDegraded {
 		t.Fatal("连续失败后应处于故障期")
 	}
 
-	// 同一个值再来一次:本地高水位没变,即使在故障期也不写(没有新东西可落)。
+	// 高水位不动再来一拍:本地高水位没变,即使在故障期也不写(没有新东西可落)。
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	_ = h.PutMsWatermark(ctx, 1_800_000_000_000+3)
+	_ = h.advanceGuard(ctx)
 	cancel()
 	if writes.Load() != 4 {
 		t.Fatalf("高水位没推进就不该写盘: writes=%d", writes.Load())
@@ -473,7 +510,7 @@ func TestCacheWrite_RecoveryStopsWriting(t *testing.T) {
 
 	ack(h)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	_ = h.PutMsWatermark(ctx, 1_800_000_000_001)
+	_ = h.advanceGuard(ctx)
 	cancel()
 	if writes.Load() != 2 || !h.watermarkDegraded {
 		t.Fatalf("前置条件:一次失败已落盘 writes=%d degraded=%v", writes.Load(), h.watermarkDegraded)
@@ -489,7 +526,7 @@ func TestCacheWrite_RecoveryStopsWriting(t *testing.T) {
 	}
 	// 恢复之后本地高水位推进也不再写盘(稳态)。
 	h.guardMu.Lock()
-	h.noteLocalHighWaterLocked(0, 1_800_000_000_002)
+	h.noteLocalHighWaterLocked(snowflake.NowEpochSec() + 1000)
 	h.guardMu.Unlock()
 	if writes.Load() != 2 {
 		t.Fatalf("稳态下本地高水位推进不许写盘: writes=%d", writes.Load())
@@ -505,20 +542,20 @@ func TestCacheWrite_PersistsTheLatestWatermarkRevisions(t *testing.T) {
 	writes := countCacheWrites(t)
 	h := cacheHandle(t, path, &now, nil)
 
-	h.guardRev, h.msRev = 1000, 2000
+	h.guardRev = 1000
 	ack(h) // 身份落盘
-	if got := mustReadCache(t, path); got.WatermarkRev != 1000 || got.WatermarkMsRev != 2000 {
+	if got := mustReadCache(t, path); got.WatermarkRev != 1000 {
 		t.Fatalf("首写必须带上当时的水位 revision: %+v", got)
 	}
 
 	now = now.Add(time.Second)
-	h.guardRev, h.msRev = 1010, 2020 // 稳态又写了一拍水位
+	h.guardRev = 1010 // 稳态又写了一拍水位
 	ack(h)
 	if writes.Load() != 1 {
 		t.Fatalf("revision 变化不得额外写盘: writes=%d (want 1)", writes.Load())
 	}
 	h.Close()
-	if got := mustReadCache(t, path); got.WatermarkRev != 1010 || got.WatermarkMsRev != 2020 {
+	if got := mustReadCache(t, path); got.WatermarkRev != 1010 {
 		t.Fatalf("Close() 落盘必须带最新观测到的水位 revision: %+v", got)
 	}
 }
@@ -528,17 +565,17 @@ func TestCacheWrite_PersistsTheLatestWatermarkRevisions(t *testing.T) {
 func TestBootFromCache_RestoresTheWatermarkRevisions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "snowflake-boot.json")
 	rec := writeBootCache(t, path, time.Minute)
-	rec.WatermarkRev, rec.WatermarkMsRev = 777, 888
+	rec.WatermarkRev = 777
 	if err := writeCacheFile(path, rec); err != nil {
 		t.Fatal(err)
 	}
 
 	h := bootFromCache(t, unreachableClient(t), path)
 	h.guardMu.Lock()
-	gotSec, gotMs := h.guardRev, h.msRev
+	got := h.guardRev
 	h.guardMu.Unlock()
-	if gotSec != 777 || gotMs != 888 {
-		t.Fatalf("缓存里的水位 revision 没接上: sec=%d ms=%d (want 777 / 888)", gotSec, gotMs)
+	if got != 777 {
+		t.Fatalf("缓存里的水位 revision 没接上: got %d want 777", got)
 	}
 }
 
@@ -560,37 +597,28 @@ func TestWatermarkTxn_FailsWithinTheLeadBound(t *testing.T) {
 	}
 	now := time.Now()
 	h := cacheHandle(t, "", &now, unreachableClient(t))
-	ops := []struct {
-		name string
-		run  func() bool
-	}{
-		{"advanceGuard", func() bool { return h.advanceGuard(context.Background()) }},
-		{"PutMsWatermark", func() bool { return h.PutMsWatermark(context.Background(), 1_800_000_000_000) == nil }},
+	start := time.Now()
+	ok := h.advanceGuard(context.Background())
+	elapsed := time.Since(start)
+	if ok {
+		t.Fatal("advanceGuard: etcd 不通不可能写成功")
 	}
-	for _, op := range ops {
-		start := time.Now()
-		ok := op.run()
-		elapsed := time.Since(start)
-		if ok {
-			t.Fatalf("%s: etcd 不通不可能写成功", op.name)
-		}
-		if elapsed >= guardLeadSec*time.Second {
-			t.Fatalf("%s 用了 %v ≥ 前推量 %ds:失败窗口不再被上一拍已 Ack 的水位罩住", op.name, elapsed, guardLeadSec)
-		}
-		if elapsed < watermarkTxnTimeout/2 {
-			t.Fatalf("%s 只用了 %v:没有等到内部超时 %v,量到的不是 Txn 超时本身", op.name, elapsed, watermarkTxnTimeout)
-		}
-		t.Logf("%s failed after %v (timeout %v < lead %ds)", op.name, elapsed.Truncate(time.Millisecond), watermarkTxnTimeout, guardLeadSec)
+	if elapsed >= guardLeadSec*time.Second {
+		t.Fatalf("advanceGuard 用了 %v ≥ 前推量 %ds:失败窗口不再被上一拍已 Ack 的水位罩住", elapsed, guardLeadSec)
 	}
+	if elapsed < watermarkTxnTimeout/2 {
+		t.Fatalf("advanceGuard 只用了 %v:没有等到内部超时 %v,量到的不是 Txn 超时本身", elapsed, watermarkTxnTimeout)
+	}
+	t.Logf("advanceGuard failed after %v (timeout %v < lead %ds)", elapsed.Truncate(time.Millisecond), watermarkTxnTimeout, guardLeadSec)
 	if !degraded(h) {
-		t.Fatal("两次失败之后应处于故障模式")
+		t.Fatal("失败之后应处于故障模式")
 	}
 }
 
 // 缓存文件读写往返 + 原子写(临时文件不残留)。
 func TestCacheFile_RoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "c.json")
-	want := &cacheRecord{Kind: "k", Cluster: 2, Slot: 9, UUID: "u", Incarnation: 7, LastWatermark: 100, LastWatermarkMs: 5, LastAckWall: 123}
+	want := &cacheRecord{Kind: "k", Cluster: 2, Slot: 9, UUID: "u", Incarnation: 7, LastWatermark: 100, LocalHighWaterSec: 105, LastAckWall: 123, WatermarkRev: 42}
 	if err := writeCacheFile(path, want); err != nil {
 		t.Fatal(err)
 	}

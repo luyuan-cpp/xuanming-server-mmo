@@ -18,10 +18,6 @@ func TestLayout_ClusterAndSlotFillNodeBits(t *testing.T) {
 	if MaxCluster != 31 || MaxSlot != 4095 {
 		t.Fatalf("MaxCluster=%d MaxSlot=%d, 期望 31 / 4095", MaxCluster, MaxSlot)
 	}
-	// login 变体:bwmarrin 的 13 位 node 段切 [cluster3][slot10]。
-	if PlayerIDClusterBits != 3 || PlayerIDSlotBits != 10 {
-		t.Fatalf("PlayerID 布局 cluster%d/slot%d, 期望 3/10", PlayerIDClusterBits, PlayerIDSlotBits)
-	}
 }
 
 // (cluster, slot) → worker → (cluster, slot) 往返,含边界值。
@@ -66,16 +62,6 @@ func TestComposeWorkerID_RejectsOverflow(t *testing.T) {
 	}
 	if _, err := ComposeWorkerID(0, 4096, ClusterBits, SlotBits); err == nil {
 		t.Fatal("slot=4096 越过 12 位必须报错")
-	}
-	// login 的 13 位布局 [cluster3][slot10]
-	if _, err := ComposeWorkerID(8, 0, PlayerIDClusterBits, PlayerIDSlotBits); err == nil {
-		t.Fatal("login 布局 cluster=8 越过 3 位必须报错")
-	}
-	if w, err := ComposeWorkerID(7, 1023, PlayerIDClusterBits, PlayerIDSlotBits); err != nil || w != 8191 {
-		t.Fatalf("login 布局 (7,1023) 应合成 8191, got %d err=%v", w, err)
-	}
-	if cl, sl := DecodeWorkerID(8191, PlayerIDClusterBits, PlayerIDSlotBits); cl != 7 || sl != 1023 {
-		t.Fatalf("login 布局 decode(8191)=(%d,%d), 期望 (7,1023)", cl, sl)
 	}
 	// 位宽本身非法(0 位 / 超过 63 位)也要拒绝。
 	if _, err := ComposeWorkerID(0, 0, 0, 12); err == nil {

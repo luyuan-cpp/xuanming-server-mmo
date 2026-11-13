@@ -200,6 +200,11 @@ func (e Expect) stale() error {
 	return &StaleError{Players: []uint64{e.PlayerID}, Reject: e.Reject}
 }
 
+// hasOriginal 报告 expect 是否带完整的原身份(角色、账号、修订号)。归属预检只认完整的原身份。
+func (e Expect) hasOriginal() bool {
+	return e.PlayerID != 0 && e.Account != "" && e.OwnerRevision != 0
+}
+
 // Check 判定 Lock 的结果。回 nil 是放行;回 *StaleError 是该自愈;其余是拒绝或 SQL 错误,原样往外返回。
 //
 // 过户之后旧主的会话:副本修订号比会话大,直接拒绝,不自愈。新主的会话:副本修订号比会话小,自愈后通过。
@@ -227,6 +232,34 @@ func Check(fence Fence, lockErr error, expect Expect) error {
 		return expect.stale()
 	}
 	if fence.Account == "" {
+		return expect.rejection()
+	}
+	return nil
+}
+
+// CheckOwner 判 Read 的结果里角色是否仍归 expect 的原身份,只给只读入口的归属预检用(Guard.VerifyOwner)。
+// 回 nil 是仍归它;回 *StaleError 是该自愈;其余是拒绝或 SQL 错误,原样往外返回。expect 必须带完整原身份,不用 AllowToken。
+//
+// 与 Check 只差一处:不看冻结。冻结期间(公示、投票、删角待确认)角色仍归原账号,读自己的数据不必拦;
+// 写在提交点由 Check 持锁拦。冻结的副本可能停在过户之前,这一点由 Guard.VerifyOwner 先自愈再判,不在这里处理。
+func CheckOwner(fence Fence, readErr error, expect Expect) error {
+	if !expect.hasOriginal() {
+		return expect.rejection()
+	}
+	if errors.Is(readErr, ErrMissing) {
+		return expect.stale()
+	}
+	if readErr != nil {
+		return readErr
+	}
+	if fence.OwnerRevision > expect.OwnerRevision {
+		return expect.rejection()
+	}
+	if fence.OwnerRevision < expect.OwnerRevision {
+		return expect.stale()
+	}
+	// 修订号相同而账号不同:角色已删(账号清空),或这份原身份本来就不是这名角色的。
+	if fence.Account != expect.Account {
 		return expect.rejection()
 	}
 	return nil

@@ -7,9 +7,11 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <utility>
 
 #include "handler/rpc/drain_migration.h"
 #include "session/comp/router_lane_item.h"
+#include "session/comp/scene_lane_item.h"
 #include "session/comp/session_info_comp.h"
 
 namespace
@@ -70,5 +72,30 @@ namespace
 
 		ASSERT_EQ(session.routerLane.Admit(Item(1), kDepth), gate_lane::AdmitResult::kQueued);
 		EXPECT_EQ(Classify(session, kNow), Candidate::kSkip);
+	}
+
+	// 场景 lane 同理(docs/design/client-scene-request-handoff-hold.md §4.6,2026-11-12):还有发往 scene 的请求在途、排队或
+	// 等重投时这一拍不迁,免得客户端到新 gate 上发的请求抢在它们前面执行。
+	TEST(DrainMigrationLaneBusy, InGameSessionWithBusySceneLaneIsSkipped)
+	{
+		SessionInfo session;
+		MakeInGame(session);
+		ASSERT_EQ(Classify(session, kNow), Candidate::kInGame);
+
+		ASSERT_EQ(session.sceneLane.Admit(gate_scene_lane::SceneLaneItem{}, kDepth), gate_scene_lane::AdmitResult::kQueued);
+		EXPECT_EQ(Classify(session, kNow), Candidate::kSkip) << "发往 scene 的请求还排着";
+
+		auto item = session.sceneLane.TakeNextIfReady(kNow);
+		ASSERT_TRUE(item.has_value());
+		ASSERT_TRUE(session.sceneLane.MarkSent(std::move(*item), 1, kNow + std::chrono::seconds(13)));
+		EXPECT_EQ(Classify(session, kNow), Candidate::kSkip) << "在途那条的回包还没回来";
+
+		auto notExecuted = session.sceneLane.Complete(1);
+		ASSERT_TRUE(notExecuted.has_value());
+		session.sceneLane.HoldForRetry(std::move(*notExecuted), kNow + std::chrono::milliseconds(200));
+		EXPECT_EQ(Classify(session, kNow), Candidate::kSkip) << "玩家在换场景节点,请求在等重投";
+
+		ASSERT_TRUE(session.sceneLane.TakeNextIfReady(kNow + std::chrono::milliseconds(200)).has_value());
+		EXPECT_EQ(Classify(session, kNow), Candidate::kInGame) << "场景 lane 空了照常迁";
 	}
 } // namespace

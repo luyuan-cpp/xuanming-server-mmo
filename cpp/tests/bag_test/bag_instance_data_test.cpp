@@ -29,7 +29,6 @@
 #include "modules/bag/bag_system.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/bag/item_store.h"
-#include "fifo_eviction_profile_for_test.h" // 先进先出的测试包(生产已无包淘汰,§6.6)
 #include "modules/id_segment/guid_segment_registry.h"
 #include "proto/common/component/item_base_comp.pb.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
@@ -541,21 +540,22 @@ TEST_F(BagInstanceDataTest, PutInstanceStillAsksAdmission)
 	EXPECT_TRUE(festival.IsLayerConsistent());
 }
 
-// 搬运绝不为了腾位销毁东西 —— 哪怕目标包配了先进先出淘汰(临时格以前就是这样配的)。
-TEST_F(BagInstanceDataTest, PutInstanceNeverEvictsEvenOnAnEvictingBag)
+// 搬运放不下就拒,绝不为了腾位销毁东西:目标自由格包满了回 kBagAddItemBagFull,已有的那件原样在。
+// (2026-11-12 前目标包配的是先进先出淘汰,钉「哪怕会淘汰也不腾位」;先进先出删了之后改成满了的自由格包。)
+TEST_F(BagInstanceDataTest, PutInstanceRefusesAFullFlatBagAndChangesNothing)
 {
 	Bag temporary;
-	temporary.SetProfile(FifoEvictingProfileForTest(1));
+	temporary.SetProfile(BagProfile::Flat(1));
 	temporary.RestoreItems({{MakeInstance(kGuidA, kEquipA), 0}});
 	const BagState before = Capture(temporary);
 
 	EXPECT_EQ(kBagAddItemBagFull, temporary.PutInstance(MakeInstance(kGuidB, kEquipB)));
 	ExpectUnchanged(before, temporary);
-	EXPECT_NE(nullptr, temporary.GetItemCompByGuid(kGuidA)) << "the old item must not be evicted";
+	EXPECT_NE(nullptr, temporary.GetItemCompByGuid(kGuidA)) << "the old item must stay";
 }
 
 // acquire_seq 是"本包内的入包先后",不随实例搬家:沿用源包的序号会抬高目标包水位、
-// 让先进先出按别的包的时间线挤人。
+// 让目标包的实例序(遍历、扣除与整理的平局,ItemStore::AcquiredBefore)按别的包的时间线排。
 TEST_F(BagInstanceDataTest, PutInstanceRestampsAcquireSeq)
 {
 	Bag source;

@@ -651,8 +651,9 @@ TEST(PlayerStoreProjectionTest, FieldInTwoRowsIsNotMergedTwice)
     EXPECT_EQ(30u, restored.level_component().level());
 }
 
-// 新二进制写的字段被旧二进制丢掉,比拒写更糟。
-TEST(PlayerStoreProjectionTest, UnknownFieldsAreRejected)
+// 走到投影的消息顶层不该有未知字段:行里不认识的顶层字段不进内存,由存盘状态机按行保管。
+// 有就说明这份消息不是从行里加载来的,投影不知道该把它们写回哪一行,拒绝比写丢强。
+TEST(PlayerStoreProjectionTest, ProjectRefusesAMessageWithUnknownTopLevelFields)
 {
     player_database db;
     db.GetReflection()->MutableUnknownFields(&db)->AddVarint(9999, 1);
@@ -660,22 +661,104 @@ TEST(PlayerStoreProjectionTest, UnknownFieldsAreRejected)
     std::string error;
     EXPECT_FALSE(player_store_rows::ProjectPlayer(db, bytes, error));
     EXPECT_FALSE(error.empty());
+}
+
+// 新旧版本混跑:更新版本在等级那一行里写了本二进制不认识的顶层字段。拼装照常成功,这些字段不并进消息;
+// CarriedTopLevelBytes 把它们原样取出来。本二进制改了这一行里自己认识的字段再存,投影结果接上取出来的字节,
+// 更新版本读回来的还是全部字段。
+TEST(PlayerStoreProjectionTest, UnknownTopLevelFieldsOfARowAreCarriedOutsideTheMessage)
+{
+    player_database newer;
+    newer.mutable_level_component()->set_level(30);
+    newer.GetReflection()->MutableUnknownFields(&newer)->AddVarint(9999, 100);
+    newer.GetReflection()->MutableUnknownFields(&newer)->AddLengthDelimited(9998, "specialization");
+    const std::string stored = newer.SerializeAsString();
 
     google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> rows;
     auto *row = rows.Add();
     row->set_kind(playerstore::PLAYER_STORE_KIND_CHARACTER);
-    row->set_payload(db.SerializeAsString());
-    player_database restored;
-    EXPECT_FALSE(player_store_rows::AssemblePlayer(rows, restored, error));
-}
+    row->set_payload(stored);
 
-TEST(PlayerStoreProjectionTest, UnknownKindIsRejected)
-{
-    google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> rows;
-    rows.Add()->set_kind(static_cast<playerstore::PlayerStoreKind>(99));
     player_database restored;
     std::string error;
-    EXPECT_FALSE(player_store_rows::AssemblePlayer(rows, restored, error));
+    ASSERT_TRUE(player_store_rows::AssemblePlayer(rows, restored, error)) << error;
+    EXPECT_EQ(30u, restored.level_component().level());
+    EXPECT_TRUE(restored.GetReflection()->GetUnknownFields(restored).empty()) << "不认识的顶层字段不并进消息";
+
+    std::string carried;
+    ASSERT_TRUE(player_store_rows::CarriedTopLevelBytes(stored, carried));
+    ASSERT_FALSE(carried.empty());
+
+    restored.mutable_level_component()->set_level(31);
+    player_store_rows::KindBytes bytes;
+    ASSERT_TRUE(player_store_rows::ProjectPlayer(restored, bytes, error)) << error;
+    player_database reread;
+    ASSERT_TRUE(reread.ParseFromString(bytes[kCharacter] + carried));
+    EXPECT_EQ(31u, reread.level_component().level());
+    const auto &unknown = reread.GetReflection()->GetUnknownFields(reread);
+    ASSERT_EQ(2, unknown.field_count());
+    bool sawVarint = false;
+    bool sawBytes = false;
+    for (int i = 0; i < unknown.field_count(); ++i)
+    {
+        const auto &field = unknown.field(i);
+        if (field.number() == 9999)
+        {
+            ASSERT_EQ(google::protobuf::UnknownField::TYPE_VARINT, field.type());
+            EXPECT_EQ(100u, field.varint());
+            sawVarint = true;
+        }
+        if (field.number() == 9998)
+        {
+            ASSERT_EQ(google::protobuf::UnknownField::TYPE_LENGTH_DELIMITED, field.type());
+            EXPECT_EQ("specialization", std::string(field.length_delimited()));
+            sawBytes = true;
+        }
+    }
+    EXPECT_TRUE(sawVarint);
+    EXPECT_TRUE(sawBytes);
+}
+
+// 行里没有不认识的顶层字段时什么都不带;子消息里不认识的字段跟着对象走,不算这一行的顶层内容;解析不了的行报失败。
+TEST(PlayerStoreProjectionTest, CarriedTopLevelBytesCoverOnlyTheTopLevelOfARow)
+{
+    std::string carried = "stale";
+    ASSERT_TRUE(player_store_rows::CarriedTopLevelBytes(SamplePlayer().SerializeAsString(), carried));
+    EXPECT_TRUE(carried.empty());
+
+    player_database nested = SamplePlayer();
+    auto *level = nested.mutable_level_component();
+    level->GetReflection()->MutableUnknownFields(level)->AddVarint(9999, 1);
+    carried = "stale";
+    ASSERT_TRUE(player_store_rows::CarriedTopLevelBytes(nested.SerializeAsString(), carried));
+    EXPECT_TRUE(carried.empty());
+
+    // 字段 1 按长度前缀类型开头,长度却没写完。
+    EXPECT_FALSE(player_store_rows::CarriedTopLevelBytes("\x0a\xff", carried));
+}
+
+// 更新版本才有的行(号比本二进制认识的都大):不读也不拒绝,库里那一行原样留着。
+TEST(PlayerStoreProjectionTest, RowOfANewerKindIsLeftAlone)
+{
+    EXPECT_TRUE(player_store_rows::IsNewerKind(player_store_rows::kKindCount));
+    EXPECT_TRUE(player_store_rows::IsNewerKind(99));
+    EXPECT_FALSE(player_store_rows::IsNewerKind(1)) << "退役号不是更新版本的行";
+    EXPECT_FALSE(player_store_rows::IsNewerKind(kCharacter));
+
+    google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> rows;
+    auto *newer = rows.Add();
+    newer->set_kind(static_cast<playerstore::PlayerStoreKind>(99));
+    newer->set_payload("bytes this build cannot read");
+    player_database character;
+    character.mutable_level_component()->set_level(30);
+    auto *known = rows.Add();
+    known->set_kind(playerstore::PLAYER_STORE_KIND_CHARACTER);
+    known->set_payload(character.SerializeAsString());
+
+    player_database restored;
+    std::string error;
+    ASSERT_TRUE(player_store_rows::AssemblePlayer(rows, restored, error)) << error;
+    EXPECT_EQ(30u, restored.level_component().level());
 }
 
 // 提交结果带着这一笔的代次和序号,落盘快照要用它们判断能不能跳过存盘。
@@ -1380,6 +1463,149 @@ TEST(PlayerStoreClientTest, ClaimWithRetiredKindHasNoConclusion)
     EXPECT_EQ(PlayerStoreClient::SubmitResult::kNotSeeded, client.Submit(kPlayer, Rows("h0"), {}, nullptr));
 }
 
+// ── 新旧版本混跑:行里本二进制不认识的内容(混版本设计 §4.2)──────────────────────────────
+namespace
+{
+    // 假的 Options::carriedBytes:'#' 起到行尾算本二进制不认识的内容。这里的行不是真的 protobuf,
+    // 真实的取法(player_store_rows::CarriedTopLevelBytes)在上面的投影用例里测。
+    bool FakeCarriedBytes(const std::string &payload, std::string &carried)
+    {
+        if (payload == "corrupt")
+        {
+            return false;
+        }
+        const auto mark = payload.find('#');
+        carried = mark == std::string::npos ? std::string() : payload.substr(mark);
+        return true;
+    }
+}
+
+// 更新版本在 kCharacter 行里写了本二进制不认识的内容("#new")。投影结果只有认识的部分,状态机接上带回的内容
+// 再比脏、再发送:没改就不写;改了认识的部分,写回去的行里它还在;提交之后照样如此。
+TEST(PlayerStoreClientTest, CarriedBytesOfARowAreWrittenBackWithEveryWriteOfThatRow)
+{
+    Fixture f;
+    f.options.carriedBytes = FakeCarriedBytes;
+    PlayerStoreClient client(f.options);
+    client.RequestClaim(kPlayer);
+    f.ReplyClaimed(1, kEpoch, 55, Rows("h0#new", "a0"));
+    ASSERT_EQ(1u, f.claimed.size());
+    EXPECT_EQ(playerstore::LOAD_AND_CLAIM_CLAIMED, f.claimed.front().second);
+
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kAlreadyPersisted, client.Submit(kPlayer, Rows("h0", "a0"), {}, nullptr));
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h1", "a1"), {}, nullptr));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ("h1#new", PayloadOf(f.sent.front().request, kCharacter));
+    EXPECT_EQ("a1", PayloadOf(f.sent.front().request, kWallet)) << "没有带回内容的行照旧";
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kAlreadyPersisted, client.Submit(kPlayer, Rows("h1", "a1"), {}, nullptr));
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h2", "a1"), {}, nullptr));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ("h2#new", PayloadOf(f.sent.front().request, kCharacter));
+    EXPECT_EQ("<absent>", PayloadOf(f.sent.front().request, kWallet));
+}
+
+// 在途时排队的快照也带着:排队的是接好之后的整行,轮到它时不会少掉带回的内容,也不会接两遍。
+TEST(PlayerStoreClientTest, QueuedSnapshotKeepsItsCarriedBytes)
+{
+    Fixture f;
+    f.options.carriedBytes = FakeCarriedBytes;
+    PlayerStoreClient client(f.options);
+    client.RequestClaim(kPlayer);
+    f.ReplyClaimed(1, kEpoch, 55, Rows("h0#new", "a0"));
+
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h1", "a0"), {}, nullptr));
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h2", "a0"), {}, nullptr));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ("h1#new", PayloadOf(f.sent.front().request, kCharacter));
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ("h2#new", PayloadOf(f.sent.front().request, kCharacter));
+}
+
+// 只顺带的行也一样:带回的内容不算变化,定时存盘照常推迟;真要写位置时带回的内容跟着写。
+TEST(PlayerStoreClientTest, PeriodicDeferComparesRowsWithTheirCarriedBytes)
+{
+    Fixture f;
+    f.options.carriedBytes = FakeCarriedBytes;
+    PlayerStoreClient client(f.options);
+    client.RequestClaim(kPlayer);
+    f.ReplyClaimed(1, kEpoch, 55, WithLocation(Rows("h0#new"), "l0#loc"));
+
+    EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l0"))) << "没有任何变化,交给 Submit 判已落盘";
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kAlreadyPersisted, client.Submit(kPlayer, WithLocation(Rows("h0"), "l0"), {}, nullptr));
+    EXPECT_TRUE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l1"))) << "只有位置变了";
+
+    const auto rows = WithLocation(Rows("h1"), "l1");
+    EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, rows)) << "别的行也变了";
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, rows, {}, nullptr));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ("h1#new", PayloadOf(f.sent.front().request, kCharacter));
+    EXPECT_EQ("l1#loc", PayloadOf(f.sent.front().request, kLocation));
+}
+
+// 更新版本才有的行:不播种也不拒绝。本二进制不会写它,库里那一行原样留着。
+TEST(PlayerStoreClientTest, ClaimLeavesRowsOfNewerKindsUntouched)
+{
+    Fixture f;
+    PlayerStoreClient client(f.options);
+    client.RequestClaim(kPlayer);
+    playerstore::LoadAndClaimResponse response;
+    response.set_result(playerstore::LOAD_AND_CLAIM_CLAIMED);
+    response.set_storage_id(1);
+    response.set_owner_epoch(kEpoch);
+    auto *known = response.add_rows();
+    known->set_kind(playerstore::PLAYER_STORE_KIND_CHARACTER);
+    known->set_payload("h0");
+    auto *newer = response.add_rows();
+    newer->set_kind(static_cast<playerstore::PlayerStoreKind>(99));
+    newer->set_payload("from-a-newer-version");
+    f.ReplyClaimWith(response);
+    ASSERT_EQ(1u, f.claimed.size());
+    EXPECT_EQ(playerstore::LOAD_AND_CLAIM_CLAIMED, f.claimed.front().second);
+
+    player_store_rows::KindBytes rows;
+    rows[kCharacter] = "h0";
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kAlreadyPersisted, client.Submit(kPlayer, rows, {}, nullptr));
+    rows[kCharacter] = "h1";
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, rows, {}, nullptr));
+    ASSERT_EQ(1u, f.sent.size());
+    ASSERT_EQ(1, f.sent.front().request.rows_size()) << "只写自己认识的行";
+    EXPECT_EQ("h1", PayloadOf(f.sent.front().request, kCharacter));
+}
+
+// 行解析不了:取不出要带回的内容就不能播种,否则第一次重写这一行可能把它们抹掉。
+TEST(PlayerStoreClientTest, ClaimWithAnUnreadableRowHasNoConclusion)
+{
+    Fixture f;
+    f.options.carriedBytes = FakeCarriedBytes;
+    PlayerStoreClient client(f.options);
+    client.RequestClaim(kPlayer);
+    f.ReplyClaimed(1, kEpoch, 55, Rows("corrupt"));
+    ASSERT_EQ(1u, f.claimed.size());
+    EXPECT_FALSE(f.claimed.front().second.has_value());
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kNotSeeded, client.Submit(kPlayer, Rows("h0"), {}, nullptr));
+}
+
+// 重新认领以新回包为准:上一次带回的内容不留到这一次。
+TEST(PlayerStoreClientTest, ReclaimReplacesCarriedBytes)
+{
+    Fixture f;
+    f.options.carriedBytes = FakeCarriedBytes;
+    PlayerStoreClient client(f.options);
+    client.RequestClaim(kPlayer);
+    f.ReplyClaimed(1, kEpoch, 55, Rows("h0#new", "a0"));
+    client.RequestClaim(kPlayer);
+    f.ReplyClaimed(1, kEpoch, 56, Rows("h0", "a0"));
+    ASSERT_EQ(2u, f.claimed.size());
+
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kAlreadyPersisted, client.Submit(kPlayer, Rows("h0", "a0"), {}, nullptr));
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h1", "a0"), {}, nullptr));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ("h1", PayloadOf(f.sent.front().request, kCharacter));
+}
+
 // 定时存盘只遇到位置变化:不发、不取号、不进状态机。
 TEST(PlayerStoreClientTest, PeriodicSaveDefersWhenOnlyLocationChanged)
 {
@@ -1492,12 +1718,14 @@ TEST(PlayerStoreClientTest, ZeroFallbackNeverDefers)
 // ── 审计发件箱(docs/design/player-audit-outbox.md §5.2)──────────────────────────────────
 namespace
 {
-    // 假的审计队列,语义与 AuditOutbox 相同:按水位排队,按快照水位交出,放行时删掉水位不大于它的。
+    // 假的审计队列,语义与 AuditOutbox 相同:按水位排队,按快照水位交出(一笔有预算),放行时删掉水位不大于它的。
     struct AuditProbe
     {
         uint64_t mark{0};
         std::vector<std::pair<uint64_t, uint64_t>> queued; // (水位, tx_id)
         std::vector<uint64_t> acked;
+        // 一笔最多带几条。AuditOutbox 的预算按字节算(kMaxBytesPerSave),这里按条数模拟;缺省不限。
+        std::size_t perSave{static_cast<std::size_t>(-1)};
 
         void Record(uint64_t txId) { queued.emplace_back(++mark, txId); }
 
@@ -1507,14 +1735,24 @@ namespace
             options.auditDue = [this](Guid, uint64_t commitMark) { return !queued.empty() && queued.front().first <= commitMark; };
             options.attachAudit = [this](Guid, uint64_t commitMark, playerstore::SavePlayerRequest &request)
             {
+                PlayerStoreClient::AuditAttachment attached;
+                std::size_t count = 0;
                 for (const auto &[recordMark, txId] : queued)
                 {
                     if (recordMark > commitMark)
                     {
                         break;
                     }
+                    if (count == perSave)
+                    {
+                        attached.more = true;
+                        break;
+                    }
                     request.add_transaction_logs()->set_tx_id(txId);
+                    attached.through = recordMark;
+                    ++count;
                 }
+                return attached;
             };
             options.onCommittedThrough = [this](Guid, uint64_t commitMark)
             {
@@ -1690,4 +1928,167 @@ TEST(PlayerStoreClientTest, PeriodicSaveIsNotDeferredWhileAuditIsDue)
 
     audit.Record(1);
     EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l2")));
+}
+
+// 到期的审计记录超过一笔的预算:分笔,不丢。行随第一笔提交;调用方要的 release 与回调留给最后一笔 ——
+// release 之后别的节点可以认领,剩下的记录就没有机会由本节点提交了。
+TEST(PlayerStoreClientTest, AuditOverTheSaveBudgetIsCarriedByFollowUpSaves)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.perSave = 2;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    for (uint64_t txId = 1; txId <= 5; ++txId)
+    {
+        audit.Record(txId);
+    }
+    std::vector<PlayerStoreClient::SaveResult> results;
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted,
+              client.Submit(kPlayer, Rows("h1"), Released(), [&results](const PlayerStoreClient::SaveResult &result) { results.push_back(result); }));
+
+    // 第一笔:行和前两条记录,不带 release。
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ("h1", PayloadOf(f.sent.front().request, kCharacter));
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1, 2}));
+    EXPECT_FALSE(f.sent.front().request.release());
+    const uint64_t firstSeq = f.sent.front().request.save_seq();
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
+    EXPECT_TRUE(results.empty()) << "记录还没交完,这次存盘对调用方来说还没完成";
+    EXPECT_TRUE(client.HasUnsettled(kPlayer));
+    EXPECT_TRUE(f.settled.empty());
+    EXPECT_EQ(audit.acked, (std::vector<uint64_t>{2})) << "只放行到带上的最后一条";
+
+    // 第二笔:没有脏行,接着带两条,仍不带 release。
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(0, f.sent.front().request.rows_size());
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{3, 4}));
+    EXPECT_FALSE(f.sent.front().request.release());
+    EXPECT_GT(f.sent.front().request.save_seq(), firstSeq) << "每一笔是一次独立的提交,各取各的序号";
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
+    EXPECT_TRUE(results.empty());
+
+    // 最后一笔:带走剩下的一条,带上调用方要的 release;它提交了才回调。
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(0, f.sent.front().request.rows_size());
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{5}));
+    EXPECT_TRUE(f.sent.front().request.release());
+    const uint64_t lastSeq = f.sent.front().request.save_seq();
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
+
+    ASSERT_EQ(1u, results.size());
+    EXPECT_EQ(PlayerStoreClient::SaveStatus::kCommitted, results[0].status);
+    EXPECT_FALSE(results[0].superseded);
+    EXPECT_EQ(lastSeq, results[0].saveSeq) << "调用方拿到的是最后一笔的序号:库里的写权行停在它上面";
+    EXPECT_EQ(audit.acked, (std::vector<uint64_t>{2, 4, 5}));
+    EXPECT_TRUE(audit.queued.empty());
+    EXPECT_FALSE(client.HasUnsettled(kPlayer));
+    ASSERT_EQ(1u, f.settled.size());
+    EXPECT_TRUE(f.sent.empty());
+}
+
+// 第一笔在途时又来了更新的快照:不另补续笔,更新的那份水位更大,带走剩下的记录,release 也以它为准;第一笔照常回调。
+TEST(PlayerStoreClientTest, NewerSnapshotTakesOverTheRestOfTheAudit)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.perSave = 2;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    for (uint64_t txId = 1; txId <= 3; ++txId)
+    {
+        audit.Record(txId);
+    }
+    std::vector<std::string> calls;
+    auto record = [&calls](const char *name)
+    {
+        return [&calls, name](const PlayerStoreClient::SaveResult &result)
+        {
+            calls.push_back(std::string(name) + (result.status == PlayerStoreClient::SaveStatus::kCommitted ? ":ok" : ":other") +
+                            (result.superseded ? ":superseded" : ""));
+        };
+    };
+    client.Submit(kPlayer, Rows("h1"), Released(), record("first"));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1, 2}));
+    EXPECT_FALSE(f.sent.front().request.release());
+
+    audit.Record(4);
+    client.Submit(kPlayer, Rows("h2"), {}, record("second")); // 同节点重连取消了退出:这一份不带 release
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
+
+    EXPECT_EQ(calls, (std::vector<std::string>{"first:ok"}));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ("h2", PayloadOf(f.sent.front().request, kCharacter));
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{3, 4}));
+    EXPECT_FALSE(f.sent.front().request.release()) << "release 以最后一份快照为准";
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
+
+    EXPECT_EQ(calls, (std::vector<std::string>{"first:ok", "second:ok"}));
+    EXPECT_EQ(audit.acked, (std::vector<uint64_t>{2, 4}));
+    EXPECT_TRUE(audit.queued.empty());
+    EXPECT_FALSE(client.HasUnsettled(kPlayer));
+}
+
+// 分笔的第一笔被拒:结局原样交给调用方,不自己接着发 —— 续笔只在提交之后才有。
+TEST(PlayerStoreClientTest, RejectedFirstChunkReportsToTheCallerWithoutAFollowUp)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.perSave = 2;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    for (uint64_t txId = 1; txId <= 3; ++txId)
+    {
+        audit.Record(txId);
+    }
+    std::vector<PlayerStoreClient::SaveResult> results;
+    client.Submit(kPlayer, Rows("h1"), Released(), [&results](const PlayerStoreClient::SaveResult &result) { results.push_back(result); });
+    ASSERT_EQ(1u, f.sent.size());
+
+    f.Reply(playerstore::SAVE_PLAYER_STALE_OWNER, kEpoch + 1, 9);
+
+    ASSERT_EQ(1u, results.size());
+    EXPECT_EQ(PlayerStoreClient::SaveStatus::kRejected, results[0].status);
+    EXPECT_TRUE(f.sent.empty());
+    EXPECT_TRUE(audit.acked.empty());
+    EXPECT_EQ(3u, audit.queued.size()) << "记录留在队列,由调用方的处置决定去留";
+    EXPECT_FALSE(client.HasUnsettled(kPlayer));
+}
+
+// go/db 不认识审计字段(比 scene 旧)又赶上记录超过一笔的预算:记录交不出去,分笔只会一笔接一笔空转。
+// 第一次发现之后不再分笔:补一笔把调用方要的 release 带上就收住,记录留在队列。
+TEST(PlayerStoreClientTest, StoreWithoutTheOutboxDoesNotLoopOnAuditOverTheBudget)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.perSave = 2;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    for (uint64_t txId = 1; txId <= 3; ++txId)
+    {
+        audit.Record(txId);
+    }
+    std::vector<PlayerStoreClient::SaveResult> results;
+    client.Submit(kPlayer, Rows("h1"), Released(), [&results](const PlayerStoreClient::SaveResult &result) { results.push_back(result); });
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_FALSE(f.sent.front().request.release()) << "还不知道 go/db 太旧:照常分笔";
+
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, false);
+    EXPECT_TRUE(results.empty());
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_TRUE(f.sent.front().request.release()) << "交不出去就不再分笔:这一笔带上调用方要的 release";
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1, 2}));
+
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, false);
+    ASSERT_EQ(1u, results.size());
+    EXPECT_EQ(PlayerStoreClient::SaveStatus::kCommitted, results[0].status);
+    EXPECT_TRUE(f.sent.empty()) << "不会一笔接一笔空转";
+    EXPECT_TRUE(audit.acked.empty());
+    EXPECT_EQ(3u, audit.queued.size());
+    EXPECT_FALSE(client.HasUnsettled(kPlayer));
 }

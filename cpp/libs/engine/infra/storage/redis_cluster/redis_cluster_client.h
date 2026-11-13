@@ -54,7 +54,8 @@ struct RedisClusterOptions
 	// 必须是 IP 字面量,调用方启动时解析一次(运行期不做阻塞 DNS)。standalone 恰好一个;cluster 至少一个,
 	// 种子只用来拿拓扑,不是主节点的种子在拓扑到达后断开。
 	std::vector<redis_cluster::NodeEndpoint> seeds;
-	// 每条节点连接的口令、重连间隔与存活探测。重连间隔会再加上 reconnectJitterSec 以内的随机抖动。
+	// 每条节点连接的口令、重连间隔与存活探测。重连抖动也在这里(connect.reconnectJitterSec,默认 1s):
+	// 每条节点连接建连时各抽一次,避免主切换或网络恢复时全部节点连接同一刻回连。
 	RedisConnectOptions connect;
 	// 玩家域句柄取 kAllKeys(§5.1 的接缝规则)。
 	redis_cluster::HashTagPolicy hashTagPolicy = redis_cluster::HashTagPolicy::kMultiKeyOnly;
@@ -68,7 +69,6 @@ struct RedisClusterOptions
 	// 全部已知节点连不上持续这么久,就把种子连回来重新拿拓扑。不能一断就连:启动时种子退场之后,
 	// 主节点还在握手的那一小段同样是「一个都没连上」,不该把种子又招回来。
 	redis_cluster::Duration seedFallbackDelay = std::chrono::seconds(5);
-	double reconnectJitterSec = 1.0;
 };
 
 // 进程启动以来的累计计数,只增不减。没有玩家维度,可直接进日志或指标。

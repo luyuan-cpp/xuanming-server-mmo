@@ -266,7 +266,7 @@ func TestRefreshLoadScores_LosingLeadershipDuringReadsWritesNothing(t *testing.T
 func TestRefreshLoadScores_SpansMultiplePipelineBatches(t *testing.T) {
 	sc, mr := newLoadRefreshScopeCtx(t)
 	const zone = uint32(99)
-	// 读每批 512 个节点,共 3 批(第 3 批是 991024..991026);写 = 每节点一条 SET + 一条 ZADD,共 1028 条、2 批,
+	// 读每批 512 个节点,共 3 批(第 3 批是 991024..991026);写 = 每节点一条 SET + 分数 ZADD(每 512 个成员一条,共 3 条),共 1030 条、2 批,
 	// 991026 的类型镜像是第 1027 条,落在第 2 个写批。
 	total := loadRefreshPipelineMaxCmds + 3
 	// 一千多个节点的每节点序列不留给后面的用例。

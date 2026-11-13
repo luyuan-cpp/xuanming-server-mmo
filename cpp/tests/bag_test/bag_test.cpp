@@ -10,7 +10,6 @@
 #include "modules/bag/bag_service.h"
 #include "modules/bag/bag_profile_registry.h"
 #include "modules/bag/comp/player_bags_comp.h"
-#include "fifo_eviction_profile_for_test.h" // 先进先出的测试包(生产已无包淘汰,§6.6)
 #include "modules/currency/comp/player_currency_comp.h"
 #include "services/scene/player/comp/player_persist_carry_comp.h"
 #include "modules/mission/comp/mission_comp.h"
@@ -1798,9 +1797,9 @@ TEST(BagProfileTest, FullTemporaryBagRefusesNewItemsAndKeepsTheOldest)
 // ---------------------------------------------------------------------------
 // 淘汰轴(IEvictionPolicy)
 //
-// 六根轴里唯一有副作用的一根,所以用例重点全在"什么时候**不**该销毁":
-// 默认策略一件不动、腾不够一件不动、具名槽一律不淘汰、纯预测绝不销毁。
-// 见 docs/design/bag-rule-policy-layering.md §3.2 与 §6.2。
+// 2026-11-12 起这一轴只有 RejectWhenFull:先进先出 EvictOldestFirst 没有生产使用者,连同它的机制用例一起删了
+// (eviction_policy.h 文件头「现状」;删掉的用例清单在 docs/design/bag-rule-policy-layering.md §6.6 (2))。
+// 这里只剩「满了一件不动」的两条。
 // ---------------------------------------------------------------------------
 
 TEST(EvictionPolicyTest, RejectWhenFullNeverSelectsAnyone)
@@ -1827,215 +1826,18 @@ TEST(EvictionPolicyTest, DefaultBagRefusesInsteadOfEvicting)
     EXPECT_TRUE(bag.IsLayerConsistent());
 }
 
-// 先进先出的包:满了顶掉**最早进包的**那件,并把它回执出来给 BagService 落流水。
-// (生产上已没有包这样配,见 FifoEvictingProfileForTest;这里钉的是淘汰轴的机制。)
-TEST(EvictionPolicyTest, FifoBagEvictsOldestAndReportsIt)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(3));
-
-    const Guid first = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-    const Guid second = AddItemAndGetLastWritten(bag, MakeItem(kNonStack2));
-    const Guid third = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-    ASSERT_EQ(3u, bag.OccupiedGridCount());
-    ASSERT_TRUE(bag.IsFull());
-
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack2), nullptr, &evicted));
-
-    EXPECT_EQ(3u, bag.OccupiedGridCount()) << "容量没变 —— 新的进来,旧的顶出去";
-    ASSERT_EQ(1u, evicted.size()) << "回执必须给出被挤掉的实例,否则流水追溯不到";
-    EXPECT_EQ(first, evicted.front().guid) << "先进先出";
-    EXPECT_EQ(kNonStack1, evicted.front().configId);
-    EXPECT_EQ(1u, evicted.front().size) << "被挤掉的数量是真的没了,不是 0";
-
-    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(first));
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(second));
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(third));
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
-// 腾**不够**就一件都不动 —— 销毁一半仍然放不下,等于白白弄丢玩家的东西。
-TEST(EvictionPolicyTest, EvictsNothingWhenItCannotFreeEnough)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2));
-    const Guid kept = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-
-    // 要 3 个实例,只空 1 格、包里也只有 1 件可挤 —— 缺口填不上。
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_NE(kSuccess, bag.AddItem(MakeItem(kNonStack2, 3), nullptr, &evicted));
-
-    EXPECT_TRUE(evicted.empty()) << "腾不够就一件都不许动";
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(kept)) << "已有的东西必须原封不动";
-    EXPECT_EQ(1u, bag.OccupiedGridCount());
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
-// 具名槽**一律不淘汰**,哪怕有人手工把 EvictOldestFirst 配到装备栏上。
-// "为了给新手镯腾位而烧掉你正戴着的手镯"不是任何游戏想要的行为。
-TEST(EvictionPolicyTest, NamedSlotsNeverEvictEvenWithAnEvictingPolicy)
-{
-    Bag bag;
-    bag.SetProfile(BagProfile::Equipment(kEquipmentCapacity));
-    bag.SetEviction(std::make_unique<EvictOldestFirst>()); // 故意配错
-
-    ASSERT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
-    ASSERT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1))); // 部位 1 的两个槽满了
-
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_NE(kSuccess, bag.AddItem(MakeItem(kNonStack1), nullptr, &evicted));
-    EXPECT_TRUE(evicted.empty()) << "桥层第二道锁:具名槽布局直接拒绝淘汰";
-    EXPECT_EQ(2u, bag.OccupiedGridCount());
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
-// CheckSpaceFor 是**纯预测**:它按"不破坏现状"回答,绝不销毁任何东西 ——
-// 于是它会对会淘汰的包偏保守地说"放不下",而真入包是能成的。这是刻意的。
-TEST(EvictionPolicyTest, CheckSpaceForStaysPureAndNeverEvicts)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(1));
-    const Guid kept = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-
-    ItemCountMap want;
-    want[kNonStack2] = 1;
-    EXPECT_NE(kSuccess, bag.CheckSpaceFor(want)) << "纯预测:照现在这样放不下";
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(kept)) << "预测绝不能销毁任何东西";
-    EXPECT_EQ(1u, bag.OccupiedGridCount());
-
-    // 但真入包会腾位,所以能成。
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack2), nullptr, &evicted));
-    ASSERT_EQ(1u, evicted.size());
-    EXPECT_EQ(kept, evicted.front().guid);
-}
-
-// 真实批量入口的候选提交也要能淘汰;纯空间预测不能抢先把可腾位的整批拒掉。
-TEST(EvictionPolicyTest, BatchAddEvictsOldestThroughPublicEntry)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2));
-    const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-    AddItemAndGetLastWritten(bag, MakeItem(kNonStack2));
-    ASSERT_TRUE(bag.IsFull());
-
-    ItemCountMap batch;
-    batch[kNonStack1] = 1;
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kSuccess, bag.AddItems(batch, &evicted));
-
-    ASSERT_EQ(1u, evicted.size());
-    EXPECT_EQ(oldest, evicted.front().guid) << "批量路径同样先进先出";
-    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(oldest));
-    EXPECT_EQ(2u, bag.OccupiedGridCount());
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
-// 真实入包入口在尚有空位时保留旧实例,按确定顺序写入新物品,不单独暴露腾位副作用。
-TEST(EvictionPolicyTest, BatchAddPreservesExistingInstancesWhenItAlreadyFits)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(4));
-    const Guid kept = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-
-    ItemCountMap batch;
-    batch[kNonStack2] = 1;
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kSuccess, bag.AddItems(batch, &evicted));
-    EXPECT_TRUE(evicted.empty()) << "还有空格,淘汰不该发生";
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(kept));
-    EXPECT_EQ(2u, bag.OccupiedGridCount());
-    EXPECT_EQ(0u, bag.GetItemPosByGuid(kept));
-    ASSERT_NE(nullptr, bag.GetItemCompByPos(1));
-    EXPECT_EQ(kNonStack2, bag.GetItemCompByPos(1)->config_id());
-    EXPECT_EQ(1u, bag.GetTotalItemCount(kNonStack1));
-    EXPECT_EQ(1u, bag.GetTotalItemCount(kNonStack2));
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
 // ---------------------------------------------------------------------------
 // 第二轮审计(2026-09-02,多视角 + 对抗证伪)钉下来的回归用例
-// 见 docs/design/bag-rule-policy-layering.md §6.5。
+// 见 docs/design/bag-rule-policy-layering.md §6.5。用先进先出包钉淘汰机制的那几条 2026-11-12 随 EvictOldestFirst 删了。
 // ---------------------------------------------------------------------------
 
-// **P0 回归**:被挤掉的正是本次要并进去的同 config 未满堆。
-//
-// 修复前:缺口按**淘汰前**的规划算(并 1 进旧堆、剩 2 铺 1 个实例 → 缺 1 格),
-// 只挤 1 件 —— 恰恰是那个旧堆;重规划后需求变成 2 个实例、只腾出 1 格 → 放不下,
-// 返回失败,但旧堆已经销毁了。玩家净损失,而且这在当时是临时格拾取同种材料的日常路径
-// (临时格 2026-11-05 起不再淘汰,这条钉的是淘汰轴本身)。
-// 修复后:把牺牲者当作已不存在反复规划,算到不动点(需要挤 2 件)才真销毁。
-TEST(EvictionPolicyTest, EvictingTheMergeTargetStillLandsEverything)
-{
-    ASSERT_EQ(2u, MaxStack(kStack9)) << "用例前提:kStack9 堆叠上限 2(Item.json)";
-
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2));
-    const Guid oldStack = AddItemAndGetLastWritten(bag, MakeItem(kStack9, 1)); // 最早,room 1
-    const Guid other = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-    ASSERT_TRUE(bag.IsFull());
-
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack9, 3), nullptr, &evicted));
-
-    // 3 个单位要 2 个实例(上限 2),而旧堆本身就是牺牲品 → 两件都得让位。
-    EXPECT_EQ(2u, evicted.size());
-    EXPECT_EQ(3u, bag.GetTotalItemCount(kStack9)) << "新来的 3 个单位一个都不能少";
-    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(oldStack));
-    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(other));
-    EXPECT_EQ(2u, bag.OccupiedGridCount());
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
-// 同一场景走批量路径(AddItems 批量入口)。
-TEST(EvictionPolicyTest, EvictingTheMergeTargetInABatchStillLandsEverything)
+// 预设 guid 撞包内已有实例:零成本纯预检,排在空间规划之前 —— 包满时回的是「已有这个 guid」,不是「放不下」,
+// 一件不动。修复前单件路径漏了这一道:同一预设 guid 的发放被重放时,当年的临时格先挤掉旧物、再在 Insert 处撞 guid 失败
+// (2026-11-12 起没有包会淘汰,原用例的淘汰包改成满了的自由格包,钉的仍是这道预检的位置)。
+TEST(BagTest, PreassignedGuidCollisionIsRefusedBeforeSpacePlanning)
 {
     Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2));
-    AddItemAndGetLastWritten(bag, MakeItem(kStack9, 1));
-    AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-    ASSERT_TRUE(bag.IsFull());
-
-    ItemCountMap batch;
-    batch[kStack9] = 3;
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kSuccess, bag.AddItems(batch, &evicted));
-
-    EXPECT_EQ(2u, evicted.size());
-    EXPECT_EQ(3u, bag.GetTotalItemCount(kStack9));
-    EXPECT_EQ(2u, bag.OccupiedGridCount());
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
-// 对照:并入目标**不是**最早的那件时,只需腾 1 格,旧堆保留并吸收数量 —— 不能
-// 因为修了上面那条就退化成"一律按最坏情况多挤"。
-TEST(EvictionPolicyTest, MergeTargetThatIsNotOldestSurvivesAndAbsorbs)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2));
-    const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-    const Guid stack = AddItemAndGetLastWritten(bag, MakeItem(kStack9, 1)); // room 1
-    ASSERT_TRUE(bag.IsFull());
-
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack9, 3), nullptr, &evicted));
-
-    ASSERT_EQ(1u, evicted.size()) << "并 1 进旧堆,剩 2 铺进腾出的那 1 格 —— 只挤 1 件";
-    EXPECT_EQ(oldest, evicted.front().guid);
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(stack)) << "并入目标不是牺牲品";
-    EXPECT_EQ(4u, bag.GetTotalItemCount(kStack9));
-    EXPECT_EQ(2u, bag.OccupiedGridCount());
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
-// 预设 guid 撞包内已有实例:零成本纯预检,必须在腾位之前。
-// 修复前单件路径漏了这一道:同一预设 guid 的发放被重放时,临时格先挤掉旧物、
-// 再在 Insert 处撞 guid 失败。
-TEST(EvictionPolicyTest, PreassignedGuidCollisionRefusesBeforeEvicting)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2));
+    bag.SetProfile(BagProfile::Flat(2));
     const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     const Guid existing = AddItemAndGetLastWritten(bag, MakeItem(kNonStack2));
     ASSERT_TRUE(bag.IsFull());
@@ -2044,8 +1846,8 @@ TEST(EvictionPolicyTest, PreassignedGuidCollisionRefusesBeforeEvicting)
     replay.itemPBComp.set_item_id(existing); // 同一预设 guid 的发放被重放
 
     std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kBagDeleteItemAlreadyHasGuid, bag.AddItem(replay, nullptr, &evicted));
-    EXPECT_TRUE(evicted.empty()) << "撞车是零成本预检,必须在腾位之前";
+    EXPECT_EQ(kBagDeleteItemAlreadyHasGuid, bag.AddItem(replay, nullptr, &evicted)) << "撞号要先于「放不下」判出";
+    EXPECT_TRUE(evicted.empty());
     EXPECT_NE(nullptr, bag.GetItemCompByGuid(oldest));
     EXPECT_EQ(2u, bag.OccupiedGridCount());
 
@@ -2056,6 +1858,7 @@ TEST(EvictionPolicyTest, PreassignedGuidCollisionRefusesBeforeEvicting)
     EXPECT_TRUE(evicted.empty());
     EXPECT_NE(nullptr, bag.GetItemCompByGuid(oldest));
     EXPECT_EQ(2u, bag.OccupiedGridCount());
+    EXPECT_TRUE(bag.IsLayerConsistent());
 }
 
 // count == 0 的条目:预测(CheckSpaceFor)宽容,入包不宽容 —— 但必须在写入任何
@@ -2079,77 +1882,20 @@ TEST(EvictionPolicyTest, ZeroCountEntryRefusesWholeBatchBeforeAnyWrite)
     EXPECT_EQ(kSuccess, bag.CheckSpaceFor(zeroOnly));
 }
 
-// 没有回执就不淘汰:直接调纯容器、不传 evictedOut 的调用方,在会淘汰的包上按
-// RejectWhenFull 处理 —— 玩家资产绝不能无声销毁。此前这只是注释,现在是闸。
-TEST(EvictionPolicyTest, NoReceiptSinkMeansNoEviction)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(1));
-    const Guid kept = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-    ASSERT_TRUE(bag.IsFull());
-
-    EXPECT_NE(kSuccess, bag.AddItem(MakeItem(kNonStack2))); // 没传 evictedOut
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(kept)) << "没有回执就不许销毁";
-    EXPECT_EQ(1u, bag.OccupiedGridCount());
-
-    ItemCountMap batch;
-    batch[kNonStack2] = 1;
-    EXPECT_NE(kSuccess, bag.AddItems(batch)); // 同样没传
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(kept));
-
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack2), nullptr, &evicted)) << "带回执才淘汰";
-    ASSERT_EQ(1u, evicted.size());
-    EXPECT_EQ(kept, evicted.front().guid);
-}
-
-// 编排层(BagService)必须经过候选提交而不是纯预测的 CheckSpaceFor ——
-// 否则配了先进先出的包在编排层永远不淘汰。回执落流水那一步在
-// TransactionLogSystem 里、单测没有可读侧,这里至少钉住"确实淘汰了、且 BagService
-// 的两条入包路径都能走完"。删掉 BagService 里的 LogEvictedInstances 调用这条用例
-// 不会红 —— 那是已知的覆盖上限,记在设计文档 §6.5.3。
-TEST(EvictionPolicyTest, ServiceLevelAddEvictsThroughTheReservePath)
-{
-    GainBlockService::ClearAllGlobalBlocks(); // 前序 GainBlockServiceTest 可能留有全局封锁
-
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(1));
-    const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-    ASSERT_TRUE(bag.IsFull());
-
-    // 单件路径。
-    EXPECT_EQ(kSuccess, BagService::AddItem(entt::null, bag, MakeItem(kNonStack2)));
-    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(oldest)) << "最早那件被顶出去了";
-    EXPECT_EQ(1u, bag.GetTotalItemCount(kNonStack2));
-
-    // ItemCountMap 批量路径。
-    ItemCountMap batch;
-    batch[kNonStack1] = 1;
-    EXPECT_EQ(kSuccess, BagService::AddItems(entt::null, bag, batch));
-    EXPECT_EQ(0u, bag.GetTotalItemCount(kNonStack2)) << "批量路径同样淘汰";
-    EXPECT_EQ(1u, bag.GetTotalItemCount(kNonStack1));
-
-    // vector 批量路径。
-    const std::vector<InitItemParam> pieces{MakeItem(kNonStack2, 1)};
-    EXPECT_EQ(kSuccess, BagService::AddItems(entt::null, bag, pieces));
-    EXPECT_EQ(1u, bag.GetTotalItemCount(kNonStack2));
-    EXPECT_EQ(0u, bag.GetTotalItemCount(kNonStack1));
-    EXPECT_EQ(1u, bag.OccupiedGridCount());
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
-// SetProfile 要么整套换、要么一根都不换:非空包上不能得到"旧布局 + 新淘汰策略"。
+// SetProfile 要么整套换、要么一根都不换:非空包上不能得到"旧布局 + 新准入规则"。
+// (2026-11-12 前这里换的是先进先出包、核对淘汰轴没被换;先进先出删了之后改换节日包,核对准入轴。)
 TEST(BagProfileTest, SetProfileOnANonEmptyBagChangesNothing)
 {
     Bag bag; // Flat(kDefaultCapacity) + AcceptAll + RejectWhenFull
     ASSERT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
 
-    bag.SetProfile(FifoEvictingProfileForTest(200));
+    bag.SetProfile(BagProfile::Festival(200, {kNonStack1}));
 
     EXPECT_EQ(kDefaultCapacity, bag.Capacity()) << "布局没换";
-    EXPECT_NE(nullptr, dynamic_cast<const RejectWhenFull *>(&bag.Eviction()))
-        << "淘汰也没换 —— 不能只换半套";
-    EXPECT_EQ(1u, bag.OccupiedGridCount());
+    EXPECT_NE(nullptr, dynamic_cast<const AcceptAll *>(&bag.Admission()))
+        << "准入也没换 —— 不能只换半套";
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack2))) << "名单外的道具照收:准入仍是 AcceptAll";
+    EXPECT_EQ(2u, bag.OccupiedGridCount());
 }
 
 // 准入轴的**负向**用例:此前所有用例都只让 AcceptAll 走 true 分支,把两处
@@ -2196,10 +1942,10 @@ TEST(BagRestoreTest, CapacityNeverShrinksBelowOccupiedSlots)
 }
 
 // ---------------------------------------------------------------------------
-// 入包序号(ItemComp.acquire_seq)—— 淘汰排序的真实依据
+// 入包序号(ItemComp.acquire_seq)—— 包内实例序(ItemStore::AcquiredBefore)的依据
 //
-// 2026-09-01 首版按 guid 排序,当天就记为"已知近似";2026-09-02 补上真序号。
-// 见 docs/design/bag-rule-policy-layering.md §6.2。
+// 2026-09-01 首版按 guid 排序,当天就记为"已知近似";2026-09-02 补上真序号。当时是给先进先出淘汰排序用的,
+// 先进先出 2026-11-12 已删除;遍历、扣除与整理的平局仍按它排。见 docs/design/bag-rule-policy-layering.md §6.2。
 // ---------------------------------------------------------------------------
 
 // 入库口统一盖章:序号非零、同包内单调。
@@ -2216,35 +1962,8 @@ TEST(AcquireSeqTest, InsertStampsMonotonicSequence)
         << "后进包的序号必须更大";
 }
 
-// **本轮的核心回归:先进先出必须看序号,不能看 guid。**
-//
-// 构造的正是生产里真实存在的两条打乱路径:跨服迁移带回来的实例(号是源服 node
-// 铸的)、邮件附件沿用调用方预设的 guid。这里让**更早进包的那件拿到更大的 guid**——
-// 按 guid 排会挤错人:留下最早的、挤掉刚拿到的。
-TEST(AcquireSeqTest, FifoFollowsSequenceNotGuid)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2));
-
-    // guid 大 / 序号小 = 最早进包(跨服带回来的那件)
-    bag.InsertItemForRestore(/*guid=*/900002, kNonStack1, 1, 0, /*acquireSeq=*/1);
-    // guid 小 / 序号大 = 后进包(本服邮件附件预设的号)
-    bag.InsertItemForRestore(/*guid=*/900001, kNonStack2, 1, 1, /*acquireSeq=*/2);
-    ASSERT_TRUE(bag.IsFull());
-
-    std::vector<DestroyedInstance> evicted;
-    ASSERT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1), nullptr, &evicted));
-
-    ASSERT_EQ(1u, evicted.size());
-    EXPECT_EQ(900002u, evicted.front().guid)
-        << "该挤掉序号最小的那件;挤掉 900001 说明还在按 guid 排";
-    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(900002));
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(900001));
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
 // 还原保留快照里的序号,并把水位抬到它之上 —— 否则还原后新进的物品会拿到
-// 与存量重复的序号,先进先出就退化成随机。
+// 与存量重复的序号,包内实例序(ItemStore::AcquiredBefore)就退化成按 guid 排。
 TEST(AcquireSeqTest, RestorePreservesSeqAndRaisesWatermark)
 {
     Bag bag;
@@ -2377,39 +2096,13 @@ TEST(BagProfileRegistryTest, FixedBagsCarryNoProfileId)
 }
 
 // ---------------------------------------------------------------------------
-// 编排层:被挤掉的实例必须经 BagService 落 LogItemDestroy
+// 编排层:满了的包经 BagService 入包同样不淘汰
 //
-// 此前这条改动零用例守着 —— 把 LogEvictedInstances 的调用全删掉,bag_test 仍全绿。
+// 2026-11-12 前这里还有一条「满了的先进先出包经 BagService 仍能入包」,钉编排层的淘汰回执路径;
+// 先进先出删了之后没有会淘汰的包,那条随之删除(eviction_policy.h 文件头「现状」)。
 // ---------------------------------------------------------------------------
 
-// 判据:**满了的先进先出包经 BagService 仍能入包**(生产上已没有包这样配,钉的是编排层的回执路径)。
-// 这一条能区分编排层走的是候选提交(会腾位)还是纯预测的 CheckSpaceFor
-// —— 后者会抢在淘汰之前把整批拒掉,先进先出在编排层就永远不生效。
-TEST(BagServiceEvictionTest, ServiceLevelAddEvictsOnAFullFifoBag)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2));
-    const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
-    const Guid newer = AddItemAndGetLastWritten(bag, MakeItem(kNonStack2));
-    ASSERT_TRUE(bag.IsFull());
-
-    // 单件路径。
-    EXPECT_EQ(kSuccess, BagService::AddItem(entt::null, bag, MakeItem(kNonStack1)));
-    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(oldest)) << "最早那件被挤掉";
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(newer));
-    EXPECT_EQ(2u, bag.OccupiedGridCount());
-
-    // 批量路径(ItemCountMap):这条最能说明问题 —— 走 CheckSpaceFor 的话必然失败。
-    ItemCountMap batch;
-    batch[kNonStack2] = 1;
-    EXPECT_EQ(kSuccess, BagService::AddItems(entt::null, bag, batch))
-        << "编排层必须提交完整候选,否则先进先出在批量路径上失效";
-    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(newer)) << "轮到它了";
-    EXPECT_EQ(2u, bag.OccupiedGridCount());
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
-// 其余三个包在编排层同样不淘汰 —— 满了就拒。
+// 满了就拒,一件不挤。
 TEST(BagServiceEvictionTest, ServiceLevelAddNeverEvictsOnNonEvictingBags)
 {
     Bag bag; // 默认 Flat + RejectWhenFull
@@ -4343,104 +4036,33 @@ TEST_F(BagSegmentNotReadyTest, CountMapBatchRejectsWholeBatchWhenMintingUnavaila
     EXPECT_TRUE(bag.IsLayerConsistent());
 }
 
-// 顺序纪律:**所有零副作用的预检,必须跑在唯一那步会改状态的操作之前。**
-//
-// 加淘汰轴时这里踩过一次:ReserveOrEvict(会为了腾位真销毁实例)排在
-// CanMintGuid 预检**之前**,于是发号源不可用时,临时格已经挤掉了最早那件、
-// 然后整批拒绝 —— 玩家的东西白丢了。这跟 §6.1 那个 bug 是同一个家族:
-// 一个会失败的判断站错了位置。
-//
-// 三处同病(AddNonStackableItem / AddStackableItem / 两个 AddItems),已全部
-// 把预检提到 reserve 之前。这条用例钉住结果:**被预检拒绝的批次,不该付出
-// 任何代价。**
-TEST_F(BagSegmentNotReadyTest, EvictionNeverHappensBeforeAPureCheckCanRefuse)
-{
-    ASSERT_FALSE((tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available() > 0)) << "本例夹具独立禁用发号源";
-
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2)); // 会淘汰的包
-    // 用还原路径铺底:它不铸号,发号源没了之后仍然可用。
-    bag.InsertItemForRestore(920001, kNonStack1, 1, 0);
-    bag.InsertItemForRestore(920002, kNonStack2, 1, 1);
-    ASSERT_EQ(2u, bag.OccupiedGridCount());
-    ASSERT_TRUE(bag.IsFull()) << "满了 —— 再进一件就会触发淘汰";
-
-    // 单件路径:要铸号而发号源不可用,必须在腾位之前就拒。
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kNonStack1), nullptr, &evicted));
-    EXPECT_TRUE(evicted.empty()) << "预检拒绝的批次不该挤掉任何东西";
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(920001)) << "最早那件必须还在";
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(920002));
-    EXPECT_EQ(2u, bag.OccupiedGridCount());
-
-    // 批量路径同样：最终规划与铸号都在任何修改之前。
-    ItemCountMap batch;
-    batch[kNonStack1] = 1;
-    evicted.clear();
-    EXPECT_NE(kSuccess, bag.AddItems(batch, &evicted));
-    EXPECT_TRUE(evicted.empty()) << "批量路径同样:预检在腾位之前";
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(920001));
-    EXPECT_EQ(2u, bag.OccupiedGridCount());
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
-// 第二轮审计补的覆盖:上一条只走了 AddNonStackableItem 与 ItemCountMap 重载。
-// 可叠加溢出路径的铸号预检也必须在腾位之前。
-TEST_F(BagSegmentNotReadyTest, StackableSpillNeverEvictsWhenSegmentIsUnavailable)
-{
-    ASSERT_FALSE((tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available() > 0)) << "本例夹具独立禁用发号源";
-    const uint32_t maxStack10 = MaxStack(kStack10);
-
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(1));
-    bag.InsertItemForRestore(930001, kStack10, maxStack10, 0); // 满堆,一个都并不进
-    ASSERT_TRUE(bag.IsFull());
-
-    std::vector<DestroyedInstance> evicted;
-    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kStack10, 1), nullptr, &evicted));
-    EXPECT_TRUE(evicted.empty()) << "要溢出到新实例就要铸号;没号必须在腾位之前拒";
-    ASSERT_NE(nullptr, bag.GetItemCompByGuid(930001));
-    EXPECT_EQ(maxStack10, bag.GetItemCompByGuid(930001)->size());
-}
-
-// vector 重载三种形状：需铸号则拒且不腾位 / 全预设、需腾位则按 FIFO 淘汰且不铸号 / 全预设且放得下则不淘汰。
+// vector 重载在发号源不可用时只铸最终规划需要的号:需铸号的件整批拒、包不动;全是预设 guid 的件不铸号、照常入包。
+// (2026-11-12 前这里还有「需腾位则按 FIFO 淘汰」一形,以及两条「预检拒绝的批次不腾位」用例,钉的是淘汰包上预检与腾位的先后;
+//  先进先出删了之后没有包会腾位,那三处随之删掉。)
 TEST_F(BagSegmentNotReadyTest, VectorBatchMintsOnlyWhatTheFinalPlanNeedsWhenSegmentIsUnavailable)
 {
     ASSERT_FALSE((tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available() > 0)) << "本例夹具独立禁用发号源";
 
     Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2));
+    bag.SetProfile(BagProfile::Flat(3));
     bag.InsertItemForRestore(940001, kNonStack1, 1, 0);
     bag.InsertItemForRestore(940002, kNonStack2, 1, 1);
-    ASSERT_TRUE(bag.IsFull());
+    ASSERT_EQ(2u, bag.OccupiedGridCount()) << "还空一格:放得下,拒绝只可能来自铸号";
 
     std::vector<DestroyedInstance> evicted;
 
-    // ① 需要铸号的件:预检拒,不腾位。
+    // ① 需要铸号的件:放得下,但发号源没号,整批拒,包不动。
     EXPECT_EQ(kBagAddItemInvalidParam,
               bag.AddItems(std::vector<InitItemParam>{MakeItem(kNonStack1, 1)}, &evicted));
     EXPECT_TRUE(evicted.empty());
-
-    // ② 最终规划无需铸号，按 FIFO 淘汰；淘汰后才需铸号见 BagJavaParityTest.PostEvictionMintFailure。
-    InitItemParam preassigned = MakeItem(kNonStack1, 1);
-    preassigned.itemPBComp.set_item_id(940003);
-    evicted.clear();
-    EXPECT_EQ(kSuccess,
-              bag.AddItems(std::vector<InitItemParam>{preassigned}, &evicted));
-    ASSERT_EQ(1u, evicted.size());
-    EXPECT_EQ(940001u, evicted.front().guid);
     EXPECT_EQ(2u, bag.OccupiedGridCount());
-    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(940001));
+    EXPECT_NE(nullptr, bag.GetItemCompByGuid(940001));
     EXPECT_NE(nullptr, bag.GetItemCompByGuid(940002));
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(940003));
-    EXPECT_TRUE(bag.IsLayerConsistent());
 
-    // ③ 全部预设 guid 且放得下，不淘汰。
-    InitItemParam another = MakeItem(kNonStack1, 1);
-    another.itemPBComp.set_item_id(940004);
-    bag.SetCapacityForRestore(3);
-    evicted.clear();
-    EXPECT_EQ(kSuccess, bag.AddItems(std::vector<InitItemParam>{another}, &evicted));
+    // ② 全部预设 guid 且放得下:不铸号,照常入包。
+    InitItemParam preassigned = MakeItem(kNonStack1, 1);
+    preassigned.itemPBComp.set_item_id(940004);
+    EXPECT_EQ(kSuccess, bag.AddItems(std::vector<InitItemParam>{preassigned}, &evicted));
     EXPECT_TRUE(evicted.empty());
     EXPECT_EQ(3u, bag.OccupiedGridCount());
     EXPECT_NE(nullptr, bag.GetItemCompByGuid(940004));

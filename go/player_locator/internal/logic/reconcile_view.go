@@ -166,11 +166,12 @@ type intervalPacer struct {
 }
 
 // newIntervalPacer 返回每秒最多放行 perSecond 次的 pacer;perSecond ≤ 0 时不限速。
-func newIntervalPacer(perSecond int) pacer {
+// perSecond 可以是小数:补建 / 审计把一份全服预算按各副本持有的段数分摊(scanBudgetShare),分到的份额常常不到每秒一页。
+func newIntervalPacer(perSecond float64) pacer {
 	if perSecond <= 0 {
 		return noopPacer{}
 	}
-	return &intervalPacer{interval: time.Second / time.Duration(perSecond), now: time.Now}
+	return &intervalPacer{interval: time.Duration(float64(time.Second) / perSecond), now: time.Now}
 }
 
 func (p *intervalPacer) Wait(ctx context.Context) error {

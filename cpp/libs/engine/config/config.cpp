@@ -177,13 +177,8 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.set_cluster_id(root["ClusterId"].as<uint32_t>());
 	}
 
-	// 审计 topic 世代号(见 config.proto audit_topic_generation / modules/audit/audit_topic.h)。
-	// 可以不写:不写 = 0 = 按第一代(_g1)处理,存量 yaml 不改也能起。
-	// 必须与 go/data_service 的 Kafka.TopicGeneration 相等,否则流水 / 快照写进没人消费的 topic。
-	if (root["AuditTopicGeneration"])
-	{
-		baseConfig.set_audit_topic_generation(root["AuditTopicGeneration"].as<uint32_t>());
-	}
+	// AuditTopicGeneration(审计 topic 世代号)2026-11-12 起不再读:C++ 不直接发审计 topic,流水与快照随玩家存盘进
+	// go/db 的审计发件箱(docs/design/player-audit-outbox.md)。旧 yaml 里残留这一键不报错,只是没人读。
 
 	// 永久 guid 号段(见 config.proto IdSegmentConfig):一种 GUID 一块配置,按 Kind 名字
 	// 对上 GuidSegmentRegistry 里的实例(item / txlog / snapshot;以后 pet / guild 只加一块)。

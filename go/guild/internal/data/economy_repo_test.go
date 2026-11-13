@@ -1883,6 +1883,33 @@ func TestResolveManuallyIfQuiet_MissesAfterAClaim(t *testing.T) {
 	assert.Zero(t, stored.GetDurable(), "人工终结不置 durable")
 }
 
+// TestResolveManuallyIfQuiet_KeepsTheLastSceneAnswer:assetopfix 的人工终结不是 scene 的答复,durable、last_outcome、last_reason
+// 三列都留着最后一次投递时 scene 实际回的值(重排写下的那一份),事后能和账本、流水对上;经办人只进 resolved_by / resolve_reason。
+func TestResolveManuallyIfQuiet_KeepsTheLastSceneAnswer(t *testing.T) {
+	f := openEconomyFixture(t)
+	const player uint64 = 8592
+	econInsertOp(t, f, econShopRecord(t, 452, player, testNowMs-100_000, 9))
+	_, claimed, err := f.store.Claim(f.ctx, 452, testNowMs, testNowMs+econLeaseMs, testNowMs+3_600_000, 0xcafe)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	answer := assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN, Reason: assetop.ReasonBagFull, Durable: true}
+	require.NoError(t, f.store.Reschedule(f.ctx, assetop.Op{OpID: 452, PlayerID: player, LeaseToken: 0xcafe}, testNowMs+60_000, answer, testNowMs+1))
+
+	read, _, err := f.store.GetOp(f.ctx, 452)
+	require.NoError(t, err)
+	manual := assetop.ManualResolution{OpID: 452, Final: assetop.StatusAborted, Operator: "ops-carol", Reason: "账本证实从未应用"}
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, manual, assetop.QuietWitness{LeaseUntilMs: read.LeaseUntilMs, LastSendMs: read.LastSendMs}, testNowMs+2)
+	require.NoError(t, err)
+	require.True(t, resolved)
+
+	stored := econRecord(t, f, 452)
+	assert.Equal(t, pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_ABORTED, stored.GetStatus())
+	assert.Equal(t, uint32(assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN), stored.GetLastOutcome(), "last_outcome 是最后一次 scene 答复")
+	assert.Equal(t, assetop.ReasonBagFull, stored.GetLastReason(), "last_reason 是最后一次 scene 答复")
+	assert.Equal(t, uint32(1), stored.GetDurable(), "durable 描述的是那次答复,人工终结不改它")
+	assert.Equal(t, "ops-carol", stored.GetResolvedBy(), "谁终结的看 resolved_by")
+}
+
 // ── 离帮 / 被踢 / 解散提前截止 ───────────────────────────────
 
 // TestAccelerate_LeaveKickDisbandPullDeadlineToNow:三个事务把本帮未决捐献的截止提前到 now、

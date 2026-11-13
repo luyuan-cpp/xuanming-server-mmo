@@ -318,6 +318,15 @@ func main() {
 		return
 	}
 
+	// gate-migrate-smoke: gate 排空迁移的端到端冒烟(C++ 仓 docs/design/gate-drain-session-migration.md)
+	// (4 个机器人登录进场 → 等人给其中一台 gate 打排空标记 → 那台上的机器人全部经 msg 124 换到别的 gate、
+	//  接回原场景里的同一个实体、没被踢 → 别的 gate 上的机器人不动 → 迁走的机器人在新连接上请求有应答、心跳有回包)。
+	// 跟随 124 用的是上面注册的通用重登。见 gate_migrate_smoke_scenario.go;前置条件写在 etc/gate_migrate_smoke.yaml 文件头。
+	if cfg.Mode == "gate-migrate-smoke" {
+		RunGateMigrateSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {

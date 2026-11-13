@@ -46,6 +46,11 @@ struct PlayerStoreSaveResult
 // 状态以 Guid 为键放在这里,不挂在实体上:实体销毁时存盘还可能在途,结果要有地方落。
 // 存盘未落定时不能重新播种(Seed 返回 false),所以迟到的回包不可能改到重新加载之后的状态。
 //
+// 新旧版本混跑时,一行里可能有本二进制不认识的顶层字段(更新版本加的,或已退役字段的残留)。它们不进内存,
+// 认领时按行取出、随播种存在这里(State::carried),之后每次收到投影结果都先接上它们再比脏、再发送:
+// 本二进制改了一行里自己认识的字段,整行重写时不会把不认识的那部分抹掉(混版本设计 §4.2)。
+// 更新版本才有的行不播种、不比脏、不写,库里那一行原样留着。
+//
 // 传输、定时器、发号都是注入的,单测用假实现。单线程语义:所有入口都在 scene 逻辑线程上。
 // 回包与定时器只借用实例身份。持久任务由所属 Scene loop 持有，排空前仍处理真实回包。
 class PlayerStoreClient
@@ -87,6 +92,15 @@ public:
     using SendClaimFn = std::function<bool(const playerstore::LoadAndClaimRequest &request, ClaimDone done)>;
     using Clock = std::chrono::steady_clock;
 
+    // Options::attachAudit 的结果(与 AuditOutbox::Attached 同形,状态机不依赖审计模块)。
+    struct AuditAttachment
+    {
+        // 这一笔带走的最后一条审计记录的水位;一条都没带时是 0。
+        uint64_t through{0};
+        // 水位不大于这份快照的审计记录还有没带上的(超过了一笔的预算)。
+        bool more{false};
+    };
+
     struct Options
     {
         SendFn send;
@@ -112,6 +126,11 @@ public:
         std::function<std::optional<playerstore::LoadAndClaimRequest>(Guid playerId)> claimRequest;
         // 认领结束,恰好一次。CLAIMED 时已经播种。response 为空 = 没有结论(预算用完、载入已放弃、响应不合法)。
         std::function<void(Guid playerId, const playerstore::LoadAndClaimResponse *response)> onClaimed;
+        // 取出一行里本二进制不认识的顶层字段(原样的字节),没有时给空串;返回 false = 这一行解析不了,认领按没有结论处理。
+        // 认领时逐行调用,结果随播种存下,之后每次写这一行都接在投影结果后面。生产接 player_store_rows::CarriedTopLevelBytes;
+        // 不接就没有要带回的内容,只有单测可以不接(那里的行不是真的 protobuf):生产不接,更新版本写在行里的字段
+        // 会在本二进制第一次重写那一行时丢掉。
+        std::function<bool(const std::string &payload, std::string &carried)> carriedBytes;
         // 结果未知时的重试预算,从第一次发送算起。
         double claimBudgetSec{30.0};
         // 可选:缺省是单调时钟。
@@ -130,8 +149,10 @@ public:
         // 可选:审计发件箱,要和 commitMark 一起接。auditDue 回答这名玩家水位不大于这份快照的审计记录还有没有:有就算没有脏行
         // 也写一笔(净变化为零的改动同样有流水要交),定时存盘也不推迟。attachAudit 在组请求时把它们拷进请求;
         // 重试发的是同一份请求,审计记录和行一样同内容、同序号。
+        // 一笔能带的审计记录有预算(AuditOutbox::kMaxBytesPerSave),带不完时 attachAudit 回 more=true:这一笔先提交行和前一段记录、
+        // 不带 release,提交之后状态机紧接着再发一笔带剩下的;调用方要的 release 与回调都留给最后一笔(设计 §5.2「分笔」)。
         std::function<bool(Guid playerId, uint64_t commitMark)> auditDue;
-        std::function<void(Guid playerId, uint64_t commitMark, playerstore::SavePlayerRequest &request)> attachAudit;
+        std::function<AuditAttachment(Guid playerId, uint64_t commitMark, playerstore::SavePlayerRequest &request)> attachAudit;
     };
 
     explicit PlayerStoreClient(Options options);
@@ -142,12 +163,15 @@ public:
     // 认领成功后调用。confirmed 必须是库里的原字节,不能是加载后重新序列化的结果:否则加载时改过的字段
     // 不会被写回。存盘未落定时返回 false,调用方要等落定再加载。
     // committedSaveSeq 是响应里的 save_seq,新号是 0。
-    bool Seed(Guid playerId, uint32_t storageId, uint64_t ownerEpoch, uint64_t committedSaveSeq, player_store_rows::KindBytes confirmed);
+    // carried 是每一行里本二进制不认识的顶层字段(Options::carriedBytes 的结果),confirmed 里已经含着它们;
+    // 之后 Submit、DeferPeriodicSave 收到的投影结果都先接上它们。缺省为空 = 行里没有要带回的内容。
+    bool Seed(Guid playerId, uint32_t storageId, uint64_t ownerEpoch, uint64_t committedSaveSeq, player_store_rows::KindBytes confirmed,
+              player_store_rows::KindBytes carried = {});
 
     // 本地代次变了(路由刷新、复用实体)。在途那笔不变,下一笔用新值。比库里新就算没有脏行也会写一笔,把代次抬上去。
     void SetOwnerEpoch(Guid playerId, uint64_t ownerEpoch);
 
-    // 提交一份完整快照。rows 是未打探针的投影结果。
+    // 提交一份完整快照。rows 是未打探针的投影结果,只含本二进制认识的字段;认领时带回的未知字段由这里接上。
     SubmitResult Submit(Guid playerId, player_store_rows::KindBytes rows, const SubmitOptions &options, SaveDone done);
 
     // 发一笔不带状态的空行释放:实体已经没了(也没有播种状态)时用,比如会话结束凭证。storage_id 发 0,
@@ -200,10 +224,16 @@ private:
         // 提交成功后写进 confirmed 的字节,不含探针。
         player_store_rows::KindBytes confirmOnCommit;
         Callbacks callbacks;
-        // 这份快照的提交水位(Options::commitMark),提交时交给 onCommittedThrough。
+        // 这份快照的提交水位(Options::commitMark)。
         uint64_t commitMark{0};
+        // 提交并确认写了发件箱之后,交给 onCommittedThrough 的水位:到期的审计记录都带上了就是 commitMark,
+        // 一笔带不完时是带上的最后一条的水位(剩下的还没进库,不能放行)。
+        uint64_t auditAckMark{0};
         // 请求里带了审计记录:提交时还要 go/db 回 audit_outbox_written 才放行(旧 go/db 会静默丢掉审计字段)。
         bool carriesAudit{false};
+        // 到期的审计记录这一笔带不完时有值:调用方原本的提交要求。这一笔发出去时不带 release;它提交之后紧接着再发一笔
+        // 带剩下的记录,release 与回调都留给那一笔(Finish)。
+        std::optional<SubmitOptions> continuation;
     };
 
     struct Pending
@@ -220,10 +250,17 @@ private:
         uint32_t storageId{0};
         uint64_t ownerEpoch{0};
         player_store_rows::KindBytes confirmed;
+        // 认领时每一行里本二进制不认识的顶层字段,原样的字节。本二进制改不到它们,所以在下一次播种之前不变;
+        // 写这一行时接在投影结果后面。hasCarried 为假(全网同一版本时的常态)就不做任何拼接。
+        player_store_rows::KindBytes carried;
+        bool hasCarried{false};
         // 结果未决的 kind:上一笔可能已经提交,不知道库里是哪一份,所以必须再写一次。
         KindSet uncertain;
         // 上一次提交带着 release:库里 released=1,后面的存盘即使没有脏行也要写一笔把它清掉。
         bool releaseCommitted{false};
+        // 上一笔带了审计记录、存档提交了、go/db 却没写发件箱(go/db 比 scene 旧):这些记录放行不了,会一直到期。
+        // 这期间不分笔 —— 分笔是为了把记录交完,交不出去时分笔只会让存盘一笔接一笔空转。下一次确认写了发件箱时清掉。
+        bool auditStalled{false};
         // 库里已确认的代次与序号:认领或上一次提交的值。代次落后于 ownerEpoch 时必须写一笔。
         uint64_t committedOwnerEpoch{0};
         uint64_t committedSaveSeq{0};
@@ -257,6 +294,9 @@ private:
         uint32_t failedAttempts{0};
     };
 
+    // rows 是只含本二进制认识的字段的投影结果;接上认领时带回的未知字段,才是要和 confirmed 比、要写进库的字节。
+    static void AppendCarried(const State &state, player_store_rows::KindBytes &rows);
+    // rows 必须已经接上带回的未知字段(AppendCarried)。
     [[nodiscard]] KindSet DirtyKinds(const State &state, const player_store_rows::KindBytes &rows) const;
     // 存盘方式是 PERSIST_ROW_SAVE_PIGGYBACK 的行。由 proto 选项决定,启动校验之后不变。
     [[nodiscard]] static const KindSet &PiggybackKinds();
@@ -269,6 +309,7 @@ private:
     void ScheduleRetry(Guid playerId, State &state);
     void HandleSaveResponse(Guid playerId, State &state, const playerstore::SavePlayerResponse &response);
     // committed 时更新已确认的行;auditWritten 为假(带了审计记录而 go/db 没写发件箱)时不放行审计记录,留到下一笔再交。
+    // 提交的这一笔审计记录没带完时不回调,把调用方的要求和回调交给紧接着的下一笔(InFlight::continuation)。
     void Finish(Guid playerId, State &state, const SaveResult &result, bool committed, bool auditWritten = true);
     void Advance(Guid playerId);
     // 这个玩家的存盘都落定了:通知调用方,再放行等着它的认领。
@@ -295,6 +336,8 @@ private:
     Options options_;
     // 提交了带审计记录的一笔、go/db 却没写发件箱的次数,只给日志节流用。
     uint64_t auditNotWrittenCount_{0};
+    // 认领到本二进制不认识的内容(行里的未知顶层字段、更新版本才有的行)的次数,只给日志节流用。
+    uint64_t carriedClaimCount_{0};
     std::unordered_map<Guid, State> states_;
     std::unordered_set<Guid> detachedInFlight_;
     std::unordered_map<Guid, Claim> claims_;

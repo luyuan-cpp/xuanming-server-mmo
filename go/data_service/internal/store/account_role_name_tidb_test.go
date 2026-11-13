@@ -260,10 +260,19 @@ func TestTiDBRemovalReleasesTheNameAndTheResumerRetries(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ReserveTaken, outcome, "没释放之前谁都登记不了:不会一名两角")
 
-	d.names = names
+	// 后台收尾时名字片还是不可达:墓碑已提交,收尾仍没做完,不算完成(Unsettled),小表那一行留着;每次没做完都计一次。
 	_, err = f.Raw[dirshard.SlotOfPlayer(14, shardFixtureK)].ExecContext(ctx, "UPDATE account_role_removal SET started_ms=started_ms-600000 WHERE player_id=?", 14)
 	require.NoError(t, err)
+	events := &recordedDirectoryEvents{}
+	d.ConfigureEvents(events)
 	result, err := d.ResumeRemovals(ctx, 5*time.Minute, 10)
+	require.NoError(t, err, "收尾没做完不是删角失败:错误逐条记了日志和计数")
+	require.Equal(t, RemovalResumeResult{Unsettled: 1}, result, "收尾失败不再算完成")
+	require.Equal(t, []string{RemovalSettleReleaseName}, events.settleFailures)
+	require.Equal(t, 1, removalRowsForTest(t, ctx, f, 14))
+
+	d.names = names
+	result, err = d.ResumeRemovals(ctx, 5*time.Minute, 10)
 	require.NoError(t, err)
 	require.Equal(t, RemovalResumeResult{Finished: 1}, result)
 	_, _, found = nameRowForTest(t, ctx, f, key.norm)
@@ -306,7 +315,16 @@ func TestTiDBStaleCreateRefOfACommittedRoleIsNotTombstoned(t *testing.T) {
 
 	result, err := d.SweepStaleRefs(ctx, refPendingGrace, 64)
 	require.NoError(t, err)
-	require.Equal(t, SweepResult{Scanned: 3, Dropped: 1, Held: 2}, result)
+	require.Equal(t, SweepResult{Scanned: 3, Dropped: 1, Held: 2, HeldTotal: 2, HeldCounted: true}, result)
+	// 留下的两条标了保留原因:下一轮后台扫描不再扫它们,只在复核名额里重判,同一条不再重复计 Held。
+	var held int
+	require.NoError(t, f.Raw[dirshard.SlotOfAccount(shardSeller, shardFixtureK)].QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM account_role_ref WHERE account=? AND held_ms>0 AND held_reason IN (?,?)",
+		[]byte(shardSeller), []byte(committedEvidenceNameBound), []byte(committedEvidenceStoreSaved)).Scan(&held))
+	require.Equal(t, 2, held)
+	again, err := d.SweepStaleRefs(ctx, refPendingGrace, 64)
+	require.NoError(t, err)
+	require.Equal(t, SweepResult{Rechecked: 2, HeldTotal: 2, HeldCounted: true}, again, "扫描名额里不再有它们,复核还留着,不重复计")
 	for player, want := range map[uint64]int{12: 0, 13: 0, 14: 1} {
 		var rows int
 		require.NoError(t, f.Raw[dirshard.SlotOfPlayer(player, shardFixtureK)].QueryRowContext(ctx, "SELECT COUNT(*) FROM account_role WHERE player_id=?", player).Scan(&rows))

@@ -128,10 +128,10 @@ func (f *fakeTransactionLogStore) QueryLog(_ context.Context, query *store.Trans
 	queryCopy := *query
 	f.queries = append(f.queries, &queryCopy)
 	if len(query.CorrelationIDs) > 0 {
-		// 回收按指令号补查同指令流水:只回这些指令号的行,和真 SQL 的 correlation_id IN 一致。
+		// 回收按指令号补查同指令流水:只回这些指令号的行,和真 SQL 的 correlation_id IN 一致;带 ToPlayerID 时只回收到方是他的行(to_player = ?)。
 		var matched []*store.TransactionLogRow
 		for _, row := range f.rows {
-			if slices.Contains(query.CorrelationIDs, row.CorrelationID) {
+			if slices.Contains(query.CorrelationIDs, row.CorrelationID) && (query.ToPlayerID == 0 || row.ToPlayer == query.ToPlayerID) {
 				matched = append(matched, row)
 			}
 		}
@@ -510,7 +510,8 @@ func TestBatchRecallItems_RedeliveredInstructionIsRecalledOnce(t *testing.T) {
 
 	queries := svcCtx.TxLogStore.(*fakeTransactionLogStore).queries
 	require.Len(t, queries, 2, "一次时间窗查询 + 一次同指令流水查询")
-	assert.Equal(t, uint64(9001), queries[1].PlayerID)
+	assert.Zero(t, queries[1].PlayerID, "同指令流水只按收到方查,不按双向玩家条件扫")
+	assert.Equal(t, uint64(9001), queries[1].ToPlayerID, "走 (to_player, correlation_id) 索引")
 	assert.Equal(t, []uint64{501}, queries[1].CorrelationIDs)
 	assert.Zero(t, queries[1].TimeStart, "同指令流水不限时间窗")
 	assert.Zero(t, queries[1].TimeEnd)

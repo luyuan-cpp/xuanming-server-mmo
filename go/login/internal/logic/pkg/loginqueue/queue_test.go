@@ -406,7 +406,7 @@ func TestPopAdmit_PickFailure_EntryNeverLeavesQueue(t *testing.T) {
 	if got, err := rdb.ZScore(ctx, zoneZSetKey(1), res.QueueID).Result(); err != nil || got != score {
 		t.Fatalf("queue score after a pick failure = %.0f err=%v, want %.0f (unchanged, never re-added at score 0)", got, err, score)
 	}
-	if n, err := rdb.Exists(ctx, admitKey(res.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot exists=%d err=%v, want none", n, err)
 	}
 	mustAdmittedCount(t, q, 0, "pick failed")
@@ -526,8 +526,8 @@ func TestPopAdmit_HoldsPlaceholderInZSetUntilAdmitTTL(t *testing.T) {
 	}
 
 	key := admittedZSetKey(1)
-	if key != "admitted:zset:zone:1" {
-		t.Fatalf("admitted key = %q, want admitted:zset:zone:1", key)
+	if key != "admitted:zset:{q:1}" {
+		t.Fatalf("admitted key = %q, want admitted:zset:{q:1}", key)
 	}
 	if typ, err := rdb.Type(ctx, key).Result(); err != nil || typ != "zset" {
 		t.Fatalf("type(%s) = %q err=%v, want zset", key, typ, err)
@@ -807,8 +807,8 @@ func TestLegacyAdmittedSetKey_NeverWritten(t *testing.T) {
 	mustAdmittedCount(t, q, 2, "fast-path placeholder + consumed admit")
 
 	keys, err := rdb.Keys(ctx, "admitted:*").Result()
-	if err != nil || len(keys) != 1 || keys[0] != "admitted:zset:zone:1" {
-		t.Fatalf("keys admitted:* = %v err=%v, want only admitted:zset:zone:1", keys, err)
+	if err != nil || len(keys) != 1 || keys[0] != "admitted:zset:{q:1}" {
+		t.Fatalf("keys admitted:* = %v err=%v, want only admitted:zset:{q:1}", keys, err)
 	}
 }
 
@@ -1248,7 +1248,7 @@ func TestPoll_AdmitSlotExpiredUnclaimed_ReturnsExpired(t *testing.T) {
 	// 放行槽(miniredis TTL)与占位(假时钟分数)一起走到「放行时刻 + AdmitTTL」。
 	mr.FastForward(q.admitTTL)
 	clk.Advance(q.admitTTL)
-	if n, err := rdb.Exists(ctx, admitKey(res.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot exists=%d err=%v after AdmitTTL, want gone", n, err)
 	}
 
@@ -1332,7 +1332,7 @@ func TestPoll_RetakeInsideWindow_ReturnsSameSlot(t *testing.T) {
 		t.Fatalf("first lookup = (%+v, %v), want ADMITTED", st, err)
 	}
 	wantUntil := fmt.Sprint(takenAt.Add(q.handoffGrace).UnixMilli())
-	if got, err := rdb.HGet(ctx, metaKey(res.QueueID), metaFieldRetakeUntil).Result(); err != nil || got != wantUntil {
+	if got, err := rdb.HGet(ctx, metaKey(1, res.QueueID), metaFieldRetakeUntil).Result(); err != nil || got != wantUntil {
 		t.Fatalf("meta %s = (%q, %v), want %s (take time + handoff grace)", metaFieldRetakeUntil, got, err, wantUntil)
 	}
 
@@ -1349,7 +1349,7 @@ func TestPoll_RetakeInsideWindow_ReturnsSameSlot(t *testing.T) {
 	if len(signed) != 2 || signed[0] != want || signed[1] != want {
 		t.Fatalf("signed slots = %+v, want the same slot %+v twice (take, then retake)", signed, want)
 	}
-	if n, err := rdb.Exists(ctx, admitKey(res.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot exists=%d err=%v after the retake, want none: a retake never writes a slot back", n, err)
 	}
 	if n, err := rdb.ZCard(ctx, admittedZSetKey(1)).Result(); err != nil || n != 1 {
@@ -1359,7 +1359,7 @@ func TestPoll_RetakeInsideWindow_ReturnsSameSlot(t *testing.T) {
 	if want := float64(clk.Now().Add(q.handoffGrace).UnixMilli()); err != nil || score != want {
 		t.Fatalf("placeholder score after the retake = %.0f err=%v, want %.0f (retake time + handoff grace)", score, err, want)
 	}
-	if got, err := rdb.HGet(ctx, metaKey(res.QueueID), metaFieldRetakeUntil).Result(); err != nil || got != wantUntil {
+	if got, err := rdb.HGet(ctx, metaKey(1, res.QueueID), metaFieldRetakeUntil).Result(); err != nil || got != wantUntil {
 		t.Fatalf("meta %s after the retake = (%q, %v), want %s: a retake must not push the deadline", metaFieldRetakeUntil, got, err, wantUntil)
 	}
 }
@@ -1414,7 +1414,7 @@ func TestPoll_LookupResentAfterTake_ReturnsSameSlot(t *testing.T) {
 		return stubSignFn(slot)
 	}
 	replays := 0
-	rdb.AddHook(replayLookupScriptHook{metaKey: metaKey(res.QueueID), replays: &replays})
+	rdb.AddHook(replayLookupScriptHook{metaKey: metaKey(1, res.QueueID), replays: &replays})
 
 	st, err := q.Poll(ctx, res.QueueToken, 1, countingSign)
 	if replays != 1 {
@@ -1426,7 +1426,7 @@ func TestPoll_LookupResentAfterTake_ReturnsSameSlot(t *testing.T) {
 	if signs != 1 {
 		t.Fatalf("signFn ran %d times, want exactly 1", signs)
 	}
-	if n, err := rdb.Exists(ctx, admitKey(res.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot exists=%d err=%v, want taken", n, err)
 	}
 }
@@ -1495,8 +1495,8 @@ func TestPoll_MetaPresentNotQueuedNotAdmitted_ReturnsQueueGone(t *testing.T) {
 	if got := expiredTotalValue(t, "1", ExpireReasonQueueGone) - before; got != 1 {
 		t.Fatalf(`login_queue_expired_total{zone="1",reason="queue_gone"} grew by %v, want 1`, got)
 	}
-	mustKeyPTTL(t, rdb, metaKey(res.QueueID), q.entryTTL-time.Second, "queue_gone must not renew the meta")
-	mustKeyPTTL(t, rdb, tokenIndexKey(res.QueueToken), q.entryTTL-time.Second, "queue_gone must not renew the token index")
+	mustKeyPTTL(t, rdb, metaKey(1, res.QueueID), q.entryTTL-time.Second, "queue_gone must not renew the meta")
+	mustKeyPTTL(t, rdb, tokenIndexKey(1, res.QueueToken), q.entryTTL-time.Second, "queue_gone must not renew the token index")
 }
 
 // / (iv) 放行落在两次轮询之间(2026-11-06 改写,原 TestPoll_AdmitLandsBetweenGetDelAndMetaRead_Admits)。lookupScript 在同一段里
@@ -1541,7 +1541,7 @@ func TestPoll_AdmitBetweenPolls_TakenInOneScript(t *testing.T) {
 	if getdels != 0 {
 		t.Fatalf("lookup sent %d standalone GETDEL commands, want 0: the admit slot is taken inside lookupScript", getdels)
 	}
-	if n, err := rdb.Exists(ctx, admitKey(res.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot exists=%d err=%v after lookup, want taken", n, err)
 	}
 	score, err := rdb.ZScore(ctx, admittedZSetKey(1), res.QueueID).Result()
@@ -1611,7 +1611,7 @@ func TestPoll_TokenWithForeignQueueID_DoesNotTakeOthersAdmit(t *testing.T) {
 	if got := expiredTotalValue(t, "1", ExpireReasonMetaGone) - before; got != 1 {
 		t.Fatalf(`login_queue_expired_total{zone="1",reason="meta_gone"} grew by %v, want 1`, got)
 	}
-	if n, err := rdb.Exists(ctx, admitKey(bob.QueueID)).Result(); err != nil || n != 1 {
+	if n, err := rdb.Exists(ctx, admitKey(1, bob.QueueID)).Result(); err != nil || n != 1 {
 		t.Fatalf("bob's admit slot exists=%d err=%v, want it untouched for bob's own token", n, err)
 	}
 	if st, err := q.Poll(ctx, bob.QueueToken, 1, stubSignFn); err != nil || st.Status != StatusAdmitted {
@@ -1656,22 +1656,22 @@ func TestPopAdmit_MarksAdmittedAtKeepingMetaTTL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
-	if v, err := rdb.HGet(ctx, metaKey(res.QueueID), metaFieldAdmittedAt).Result(); !errors.Is(err, redis.Nil) {
+	if v, err := rdb.HGet(ctx, metaKey(1, res.QueueID), metaFieldAdmittedAt).Result(); !errors.Is(err, redis.Nil) {
 		t.Fatalf("meta %s before admit = (%q, %v), want absent", metaFieldAdmittedAt, v, err)
 	}
 	const waited = 10 * time.Minute // 在队里等过的时间,须小于 entryTTL(1h)
 	mr.FastForward(waited)
 	want := q.entryTTL - waited
-	if ttl, err := rdb.PTTL(ctx, metaKey(res.QueueID)).Result(); err != nil || ttl != want {
+	if ttl, err := rdb.PTTL(ctx, metaKey(1, res.QueueID)).Result(); err != nil || ttl != want {
 		t.Fatalf("meta PTTL before admit = %v err=%v, want %v", ttl, err, want)
 	}
 	if n, err := q.PopAdmit(ctx, 1, 1, noBudgetLimit, pickZone1Gate); err != nil || n != 1 {
 		t.Fatalf("popadmit = (%d, %v), want (1, nil)", n, err)
 	}
-	if v, err := rdb.HGet(ctx, metaKey(res.QueueID), metaFieldAdmittedAt).Result(); err != nil || v == "" {
+	if v, err := rdb.HGet(ctx, metaKey(1, res.QueueID), metaFieldAdmittedAt).Result(); err != nil || v == "" {
 		t.Fatalf("meta %s after admit = (%q, %v), want the admit time", metaFieldAdmittedAt, v, err)
 	}
-	if ttl, err := rdb.PTTL(ctx, metaKey(res.QueueID)).Result(); err != nil || ttl != want {
+	if ttl, err := rdb.PTTL(ctx, metaKey(1, res.QueueID)).Result(); err != nil || ttl != want {
 		t.Fatalf("meta PTTL after admit = %v err=%v, want %v: writing admitted_at must neither drop, renew nor shorten the entry TTL", ttl, err, want)
 	}
 }
@@ -1694,16 +1694,16 @@ func TestPopAdmit_MetaGone_DoesNotRecreateMeta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
-	if err := rdb.Del(ctx, metaKey(res.QueueID)).Err(); err != nil {
+	if err := rdb.Del(ctx, metaKey(1, res.QueueID)).Err(); err != nil {
 		t.Fatalf("del meta: %v", err)
 	}
 	if n, err := q.PopAdmit(ctx, 1, 1, noBudgetLimit, pickZone1Gate); err != nil || n != 0 {
 		t.Fatalf("popadmit = (%d, %v), want (0, nil): an entry whose meta is gone is not admitted", n, err)
 	}
-	if n, err := rdb.Exists(ctx, metaKey(res.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, metaKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("meta exists=%d err=%v after admit, want still gone", n, err)
 	}
-	if n, err := rdb.Exists(ctx, admitKey(res.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot exists=%d err=%v, want none written for an orphan", n, err)
 	}
 	mustAdmittedCount(t, q, 0, "orphan not held")
@@ -1738,7 +1738,7 @@ func TestPopAdmit_EntryOlderThanQueueEntryTTL_NotAdmitted(t *testing.T) {
 		t.Fatalf("enqueue B: %v", err)
 	}
 	mr.FastForward(q.entryTTL - q.entryTTL/2)
-	if n, err := rdb.Exists(ctx, metaKey(a.QueueID), tokenIndexKey(a.QueueToken)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, metaKey(1, a.QueueID), tokenIndexKey(1, a.QueueToken)).Result(); err != nil || n != 0 {
 		t.Fatalf("A's meta + token index exist=%d err=%v after QueueEntryTTL, want both expired", n, err)
 	}
 	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 2 {
@@ -1751,7 +1751,7 @@ func TestPopAdmit_EntryOlderThanQueueEntryTTL_NotAdmitted(t *testing.T) {
 	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 0 {
 		t.Fatalf("queue length after popadmit = %d err=%v, want 0 (A removed as META_GONE, B admitted)", n, err)
 	}
-	if n, err := rdb.Exists(ctx, admitKey(a.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, a.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("A's admit slot exists=%d err=%v, want none", n, err)
 	}
 	mustAdmittedCount(t, q, 1, "only B holds a slot")
@@ -1778,7 +1778,7 @@ func TestPopAdmit_CtxCanceledMidBatch_RestStayQueued(t *testing.T) {
 	var picked []string
 	rdb.AddHook(cmdHook{process: func(ctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error {
 		err := next(ctx, cmd)
-		if key, ok := admitScriptKey(cmd); err == nil && ok && len(picked) > 0 && key == admitKey(picked[0]) {
+		if key, ok := admitScriptKey(cmd); err == nil && ok && len(picked) > 0 && key == admitKey(1, picked[0]) {
 			cancel() // 首探路已得到成功回包；NOSCRIPT 不触发，等回退 EVAL 成功。
 		}
 		return err
@@ -1799,15 +1799,15 @@ func TestPopAdmit_CtxCanceledMidBatch_RestStayQueued(t *testing.T) {
 		if score != before[queueID] || queueID == picked[0] {
 			t.Fatalf("queued entry %s score %.0f, want an untouched entry with its enqueue score %.0f", queueID, score, before[queueID])
 		}
-		if n, err := rdb.Exists(bg, admitKey(queueID)).Result(); err != nil || n != 0 {
+		if n, err := rdb.Exists(bg, admitKey(1, queueID)).Result(); err != nil || n != 0 {
 			t.Fatalf("admit slot of %s exists=%d err=%v, want none", queueID, n, err)
 		}
 	}
 	// 未写条目的票据与队列 TTL 均未改变，检查在 Poll 续期之前进行。
 	mustKeyPTTL(t, rdb, zoneZSetKey(1), q.entryTTL, "after cancellation")
 	for queueID := range after {
-		mustKeyPTTL(t, rdb, metaKey(queueID), q.entryTTL, "unadmitted meta after cancellation")
-		mustKeyPTTL(t, rdb, tokenIndexKey(tokens[queueID]), q.entryTTL, "unadmitted token after cancellation")
+		mustKeyPTTL(t, rdb, metaKey(1, queueID), q.entryTTL, "unadmitted meta after cancellation")
+		mustKeyPTTL(t, rdb, tokenIndexKey(1, tokens[queueID]), q.entryTTL, "unadmitted token after cancellation")
 	}
 	mustAdmittedCount(t, q, 1, "only the entry written before the cancel holds a slot")
 	if st, err := q.Poll(bg, tokens[picked[0]], 1, stubSignFn); err != nil || st.Status != StatusAdmitted {
@@ -1861,14 +1861,14 @@ func TestPopAdmit_CtxCanceledDuringPick_AdmitsNothing(t *testing.T) {
 		if got, ok := after[queueID]; !ok || got != score {
 			t.Fatalf("queued entry %s score=%v present=%v, want %v", queueID, got, ok, score)
 		}
-		if n, err := rdb.Exists(bg, admitKey(queueID)).Result(); err != nil || n != 0 {
+		if n, err := rdb.Exists(bg, admitKey(1, queueID)).Result(); err != nil || n != 0 {
 			t.Fatalf("admit slot of %s exists=%d err=%v, want none", queueID, n, err)
 		}
-		if admitted, err := rdb.HExists(bg, metaKey(queueID), metaFieldAdmittedAt).Result(); err != nil || admitted {
+		if admitted, err := rdb.HExists(bg, metaKey(1, queueID), metaFieldAdmittedAt).Result(); err != nil || admitted {
 			t.Fatalf("entry %s admitted_at=%v err=%v, want absent", queueID, admitted, err)
 		}
-		mustKeyPTTL(t, rdb, metaKey(queueID), q.entryTTL, "meta after pick cancellation")
-		mustKeyPTTL(t, rdb, tokenIndexKey(tokens[queueID]), q.entryTTL, "token after pick cancellation")
+		mustKeyPTTL(t, rdb, metaKey(1, queueID), q.entryTTL, "meta after pick cancellation")
+		mustKeyPTTL(t, rdb, tokenIndexKey(1, tokens[queueID]), q.entryTTL, "token after pick cancellation")
 	}
 	mustKeyPTTL(t, rdb, zoneZSetKey(1), q.entryTTL, "queue after pick cancellation")
 	mustAdmittedCount(t, q, 0, "no entry admitted before pick cancellation")
@@ -1909,7 +1909,7 @@ func TestPopAdmit_CtxCanceledBeforeRead_AdmitsNothing(t *testing.T) {
 	if got, err := rdb.ZScore(bg, zoneZSetKey(1), res.QueueID).Result(); err != nil || got != score {
 		t.Fatalf("queue score = %.0f err=%v, want %.0f (unchanged)", got, err, score)
 	}
-	if n, err := rdb.Exists(bg, admitKey(res.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(bg, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot exists=%d err=%v, want none", n, err)
 	}
 }
@@ -2073,7 +2073,7 @@ func TestPopAdmit_OOMOnAdmitScript_EntriesStayQueued(t *testing.T) {
 	}
 	mustAdmittedCount(t, q, 0, "nothing admitted under OOM")
 	for queueID := range tokens {
-		if has, err := rdb.HExists(ctx, metaKey(queueID), metaFieldAdmittedAt).Result(); err != nil || has {
+		if has, err := rdb.HExists(ctx, metaKey(1, queueID), metaFieldAdmittedAt).Result(); err != nil || has {
 			t.Fatalf("meta of %s has %s=%v err=%v, want absent", queueID, metaFieldAdmittedAt, has, err)
 		}
 	}
@@ -2121,8 +2121,8 @@ func TestPopAdmit_ScriptErrorStopsBatch_WrongTypePlaceholderWritesNothing(t *tes
 		t.Fatalf("queue length = %d err=%v, want 3 (nothing leaves the queue on a script error)", n, err)
 	}
 	for i, queueID := range order {
-		has, err := rdb.HExists(ctx, metaKey(queueID), metaFieldAdmittedAt).Result()
-		slot, slotErr := rdb.Exists(ctx, admitKey(queueID)).Result()
+		has, err := rdb.HExists(ctx, metaKey(1, queueID), metaFieldAdmittedAt).Result()
+		slot, slotErr := rdb.Exists(ctx, admitKey(1, queueID)).Result()
 		if err != nil || slotErr != nil || has || slot != 0 {
 			t.Fatalf("entry #%d: admitted_at=%v slot=%d (errs %v / %v), want neither written", i, has, slot, err, slotErr)
 		}
@@ -2157,7 +2157,7 @@ func TestPopAdmit_AdmittedAtWhileQueued_CleanedAsAlready(t *testing.T) {
 		t.Fatalf("queue order = %v err=%v, want 2 members", order, err)
 	}
 	head, next := order[0], order[1]
-	if err := rdb.HSet(ctx, metaKey(head), metaFieldAdmittedAt, "1").Err(); err != nil {
+	if err := rdb.HSet(ctx, metaKey(1, head), metaFieldAdmittedAt, "1").Err(); err != nil {
 		t.Fatalf("seed the partial write: %v", err)
 	}
 
@@ -2167,7 +2167,7 @@ func TestPopAdmit_AdmittedAtWhileQueued_CleanedAsAlready(t *testing.T) {
 	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 0 {
 		t.Fatalf("queue length = %d err=%v, want 0", n, err)
 	}
-	if n, err := rdb.Exists(ctx, admitKey(head)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, head)).Result(); err != nil || n != 0 {
 		t.Fatalf("head's admit slot exists=%d err=%v, want none", n, err)
 	}
 	mustAdmittedCount(t, q, 1, "only the next entry holds a placeholder")
@@ -2255,7 +2255,7 @@ func TestPopAdmit_MetaNotHash_CleanedWithoutStallingZone(t *testing.T) {
 	if err := rdb.ZAdd(ctx, zoneZSetKey(1), redis.Z{Score: 0, Member: a.QueueID}).Err(); err != nil {
 		t.Fatalf("move A to the head: %v", err)
 	}
-	if err := rdb.Set(ctx, metaKey(a.QueueID), "x", 0).Err(); err != nil {
+	if err := rdb.Set(ctx, metaKey(1, a.QueueID), "x", 0).Err(); err != nil {
 		t.Fatalf("corrupt A's meta: %v", err)
 	}
 
@@ -2272,10 +2272,10 @@ func TestPopAdmit_MetaNotHash_CleanedWithoutStallingZone(t *testing.T) {
 	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 0 {
 		t.Fatalf("queue length = %d err=%v, want 0", n, err)
 	}
-	if n, err := rdb.Exists(ctx, admitKey(a.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, a.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("A's admit slot exists=%d err=%v, want none", n, err)
 	}
-	if typ, err := rdb.Type(ctx, metaKey(a.QueueID)).Result(); err != nil || typ != "string" {
+	if typ, err := rdb.Type(ctx, metaKey(1, a.QueueID)).Result(); err != nil || typ != "string" {
 		t.Fatalf("type of A's meta = %q err=%v, want string (left untouched)", typ, err)
 	}
 	if st, err := q.Poll(ctx, b.QueueToken, 1, stubSignFn); err != nil || st.Status != StatusAdmitted {
@@ -2302,7 +2302,7 @@ func TestPopAdmit_EmptyMemberAtHead_Removed(t *testing.T) {
 	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 0 {
 		t.Fatalf("queue length = %d err=%v, want 0 (the empty member is removed)", n, err)
 	}
-	if n, err := rdb.Exists(ctx, admitKey("")).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, "")).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot for the empty member exists=%d err=%v, want none", n, err)
 	}
 	if st, err := q.Poll(ctx, b.QueueToken, 1, stubSignFn); err != nil || st.Status != StatusAdmitted {
@@ -2352,7 +2352,7 @@ func TestPoll_RenewalIsLazy_OnlyBelowEntryTTL(t *testing.T) {
 	if renew != 75*time.Minute {
 		t.Fatalf("entryRenewTTL = %v, want 75m0s (1.25 × QueueEntryTTL)", renew)
 	}
-	keys := []string{metaKey(res.QueueID), tokenIndexKey(res.QueueToken), zoneZSetKey(1)}
+	keys := []string{metaKey(1, res.QueueID), tokenIndexKey(1, res.QueueToken), zoneZSetKey(1)}
 	poll := func(want time.Duration, when string) {
 		t.Helper()
 		if st, err := q.Poll(ctx, res.QueueToken, 1, signMustNotRun(t)); err != nil || st.Status != StatusQueueing {
@@ -2451,7 +2451,7 @@ func TestPoll_NoRenewalAfterAdmit(t *testing.T) {
 	if st, err := q.Poll(ctx, res.QueueToken, 1, signMustNotRun(t)); err != nil || st.Status != StatusQueueing {
 		t.Fatalf("lookup while queueing = (%+v, %v), want QUEUEING", st, err)
 	}
-	mustKeyPTTL(t, rdb, metaKey(res.QueueID), q.entryRenewTTL(), "renewed while queueing")
+	mustKeyPTTL(t, rdb, metaKey(1, res.QueueID), q.entryRenewTTL(), "renewed while queueing")
 	mr.FastForward(20 * time.Minute)
 	if n, err := q.PopAdmit(ctx, 1, 1, noBudgetLimit, pickZone1Gate); err != nil || n != 1 {
 		t.Fatalf("popadmit = (%d, %v), want (1, nil)", n, err)
@@ -2471,8 +2471,8 @@ func TestPoll_NoRenewalAfterAdmit(t *testing.T) {
 		t.Fatalf(`login_queue_expired_total{zone="1",reason="admit_window_passed"} grew by %v, want 1`, got)
 	}
 	want := q.entryRenewTTL() - 20*time.Minute
-	mustKeyPTTL(t, rdb, metaKey(res.QueueID), want, "no renewal after admit")
-	mustKeyPTTL(t, rdb, tokenIndexKey(res.QueueToken), want, "no renewal after admit")
+	mustKeyPTTL(t, rdb, metaKey(1, res.QueueID), want, "no renewal after admit")
+	mustKeyPTTL(t, rdb, tokenIndexKey(1, res.QueueToken), want, "no renewal after admit")
 }
 
 // N10(2026-10-18):Poll 的 zone 取自令牌。与 meta 的 zone_id 不符时回 EXPIRED(meta_gone,按传入的 zone 记),不续期、
@@ -2496,7 +2496,7 @@ func TestPoll_ZoneMismatchOrZero_ReturnsMetaGone(t *testing.T) {
 	if got := expiredTotalValue(t, "2", ExpireReasonMetaGone) - before; got != 1 {
 		t.Fatalf(`login_queue_expired_total{zone="2",reason="meta_gone"} grew by %v, want 1`, got)
 	}
-	mustKeyPTTL(t, rdb, metaKey(res.QueueID), q.entryTTL-time.Second, "zone mismatch must not renew")
+	mustKeyPTTL(t, rdb, metaKey(1, res.QueueID), q.entryTTL-time.Second, "zone mismatch must not renew")
 	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 1 {
 		t.Fatalf("zone 1 queue length = %d err=%v, want 1 (untouched)", n, err)
 	}
@@ -2550,8 +2550,8 @@ func TestPoll_InvalidEntryTTL_FailsWithoutTouchingRedis(t *testing.T) {
 	if cmds != 0 {
 		t.Fatalf("lookup with an invalid ttl sent %d Redis commands, want 0", cmds)
 	}
-	mustKeyPTTL(t, rdb, metaKey(res.QueueID), q.entryTTL-time.Second, "invalid ttl must not touch the meta")
-	mustKeyPTTL(t, rdb, tokenIndexKey(res.QueueToken), q.entryTTL-time.Second, "invalid ttl must not touch the token index")
+	mustKeyPTTL(t, rdb, metaKey(1, res.QueueID), q.entryTTL-time.Second, "invalid ttl must not touch the meta")
+	mustKeyPTTL(t, rdb, tokenIndexKey(1, res.QueueToken), q.entryTTL-time.Second, "invalid ttl must not touch the token index")
 }
 
 // N12(2026-10-18):排队令牌按 queueTokenMaxAge(24h)签,不再等于 QueueEntryTTL。在包内手工解码令牌体
@@ -2692,7 +2692,7 @@ func TestPopAdmit_AdmitScriptReplayedAfterConsume_DoesNotReissue(t *testing.T) {
 	replays := 0
 	var consumedAt time.Time
 	rdb.AddHook(replayAdmitScriptHook{
-		admitKey: admitKey(res.QueueID),
+		admitKey: admitKey(1, res.QueueID),
 		replays:  &replays,
 		between: func() {
 			clk.Advance(2 * time.Second) // 客户端的下一次轮询
@@ -2712,7 +2712,7 @@ func TestPopAdmit_AdmitScriptReplayedAfterConsume_DoesNotReissue(t *testing.T) {
 	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 0 {
 		t.Fatalf("queue length = %d err=%v after the replay, want 0", n, err)
 	}
-	if n, err := rdb.Exists(ctx, admitKey(res.QueueID)).Result(); err != nil || n != 0 {
+	if n, err := rdb.Exists(ctx, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot exists=%d err=%v after the replay, want none: the replay must not write a second slot", n, err)
 	}
 	score, err := rdb.ZScore(ctx, admittedZSetKey(1), res.QueueID).Result()
@@ -2818,7 +2818,7 @@ func TestPopAdmit_ChunkErrorStopsAfterTheChunk(t *testing.T) {
 	order := enqueueN(t, q, rdb, 1+popAdmitPipelineChunk+untried)
 	failing := order[6] // 第一块(队列下标 1..128)里的一条
 	rdb.AddHook(cmdHook{process: func(ctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error {
-		if key, ok := admitScriptKey(cmd); ok && key == admitKey(failing) {
+		if key, ok := admitScriptKey(cmd); ok && key == admitKey(1, failing) {
 			return failCmd(cmd, errors.New("ERR injected"))
 		}
 		return next(ctx, cmd)
@@ -2844,7 +2844,7 @@ func TestPopAdmit_ChunkErrorStopsAfterTheChunk(t *testing.T) {
 	if !slices.Equal(left, want) {
 		t.Fatalf("queue after the failing chunk = %v, want the failed entry followed by the untried ones %v", left, want)
 	}
-	if has, err := rdb.HExists(ctx, metaKey(failing), metaFieldAdmittedAt).Result(); err != nil || has {
+	if has, err := rdb.HExists(ctx, metaKey(1, failing), metaFieldAdmittedAt).Result(); err != nil || has {
 		t.Fatalf("meta of the failed entry has %s=%v err=%v, want absent (its script never ran)", metaFieldAdmittedAt, has, err)
 	}
 }
@@ -2875,7 +2875,7 @@ func TestPopAdmit_NonPositiveAdmitTTL_PopsNothing(t *testing.T) {
 			if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 1 {
 				t.Fatalf("queue length = %d err=%v, want 1 (the entry stays queued)", n, err)
 			}
-			if n, err := rdb.Exists(ctx, admitKey(res.QueueID)).Result(); err != nil || n != 0 {
+			if n, err := rdb.Exists(ctx, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 				t.Fatalf("admit slot exists=%d err=%v, want none", n, err)
 			}
 		})
@@ -2942,8 +2942,8 @@ func TestPopAdmit_BudgetCapsInFlightAcrossOverlappingLeaders(t *testing.T) {
 		t.Fatalf("queue after the refused batch = %v, want unchanged %v", after, before)
 	}
 	for _, queueID := range order[2:] {
-		has, err := rdb.HExists(ctx, metaKey(queueID), metaFieldAdmittedAt).Result()
-		slot, slotErr := rdb.Exists(ctx, admitKey(queueID)).Result()
+		has, err := rdb.HExists(ctx, metaKey(1, queueID), metaFieldAdmittedAt).Result()
+		slot, slotErr := rdb.Exists(ctx, admitKey(1, queueID)).Result()
 		if err != nil || slotErr != nil || has || slot != 0 {
 			t.Fatalf("refused entry %s: admitted_at=%v slot=%d (errs %v / %v), want neither written", queueID, has, slot, err, slotErr)
 		}

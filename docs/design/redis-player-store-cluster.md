@@ -214,7 +214,7 @@
 - **单键命令不强制 hash tag**：§5.1 的「玩家域只接受带 tag 的键」目前只在多键路径上检查。第 3 批改名之前现有单键大多没有 tag，强制就接不上线；改名完成后再决定是否打开。（第 5c 批已打开，见下。）
 - **维护前沿**：`Hiredis::MaintenanceState` 把任何错误应答记成 UNKNOWN，MOVED 会让进程永远过不了维护排空，所以 `formattedCommand` 多一个可选的 `NotExecutedPredicate`，判定为「确定没有执行」的错误不算 UNKNOWN。路由层接受的每条命令也单独计入 `ProcessMaintenance()` 直到最终结果：排队与退避中的命令不在任何连接上，否则排空会把它们漏掉。
 - **`Hiredis.h` 实际有三份**：`muduo_windows`（编译 muduo.lib）、`tools/archived/muduo_linux_overlay`（Linux 覆盖件）、`third_party/muduo/contrib/hiredis`（业务代码 `#include <muduo/contrib/hiredis/Hiredis.h>` 实际命中的就是这份）。改接口要三处同改；`.cc` 只有前两份在编译。
-- **重连抖动**靠给每个节点的 `reconnectIntervalSec` 加 `[0, 1s)` 的随机量实现，`RedisManager` 未改。
+- **重连抖动**由每条节点连接的 `RedisManager` 自己加：`RedisConnectOptions::reconnectJitterSec`（默认 1s），每次 `Connect` 在基础间隔上抽一个 `[0, 1s)` 的随机量，同一个 Connect 周期内不变。2026-11-12 起集群客户端不再自己算，只把 `options.connect` 原样传给各节点连接；单实例句柄（核心、场景控制域）因此也带上同样的抖动（[断线重连总纲](infra-reconnect-overview.md) R18）。
 - **断连发现有延迟的一种情况**：退避中的队头要等下一次重试才发现节点断了（最迟 1s）；在途命令是立刻空应答。`RedisManager` 没有断线回调，这条延迟换来不改它。
 - **种子回退**：全部已知节点连不上持续 5s（`seedFallbackDelay`）才把种子连回来。
 

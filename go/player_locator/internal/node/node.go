@@ -1,11 +1,8 @@
 package node
 
-// 本文件中的 allocator 逻辑在 guild / friend / player_locator / scene_manager
-// 四个服务里是逐字相同的副本(只有 import 包名不同)。
-// 若需修改 allocator 行为,请同步修改另外三个服务的对应文件:
-//   - go/guild/internal/node/node.go
-//   - go/friend/internal/node/node.go
-//   - go/scene_manager/internal/noderegistry/registry.go
+// 本文件的 allocator 与 go/guild/internal/node/node.go 是同源副本,改 allocator 行为时两份同步改。
+// 语义以 shared/noderegistry 为准(唯一实现,见其包注释「与既有副本的关系」):friend 原来那份已删、直接用它,
+// scene_manager 等服务的 internal/noderegistry 已是它的薄适配层;guild 与 player_locator 这两份尚未迁移。
 //
 // 有意的差异(2026-10-18,只此一处):tryClaimNodeID / allocateNodeID 末尾多一个可选的 extraOps 钩子
 // (变参,缺省为空,不传时与其它副本逐字同义),reRegister 第 1 步的 Txn 也带上它。player_locator 用它把
@@ -34,14 +31,16 @@ import (
 	proto_common "proto/common/base"
 	"shared/nodeinfo"
 	"shared/releasetrack"
-	"shared/snowflake"
 )
 
 // nodeIDMin 是合法 node_id 的下界。0 永远作为 "未分配 / 非法值" 保留。
 const nodeIDMin uint32 = 1
 
-// nodeIDMax 与 Snowflake worker id 位宽对齐(shared/snowflake.NodeMask)。
-var nodeIDMax = uint32(snowflake.NodeMask)
+// nodeIDMax 是 node_id 的上界(含),分配时从 nodeIDMin 顺序扫到它为止。node_id 只是服务发现路径
+// 和 NodeInfo 里的编号,不喂给任何发号器:永久 ID 由 data_service 发号器发,scene_manager 的 scene_id
+// 由 shared/snowflakealloc 另行申领槽位,都与 node_id 无关。取值 1<<17-1 与 C++ NodeAllocator 的
+// kMaxNodeId 相同,各语言的分配器用同一个上界;它远大于任何一种节点的实例数。
+const nodeIDMax uint32 = 1<<17 - 1
 
 type Node struct {
 	Info       *proto_common.NodeInfo
@@ -292,8 +291,7 @@ func (n *Node) watchKeepAlive(ctx context.Context, ch <-chan *clientv3.LeaseKeep
 //	可能已抢占同一个 node_id。绝不能盲 Put 老 key(会覆盖别人的 NodeInfo,
 //	把流量路由到错误节点);只能 CAS "allocationKey 仍不存在" 重夺,
 //	失败就换一个全新 node_id —— player_locator 没有"我必须是 node N"的
-//	持久化语义,换 ID 安全(Snowflake worker id 由 shared/snowflakealloc
-//	独立分配,与 NodeInfo.NodeId 解耦)。
+//	持久化语义,换 ID 安全(node_id 只是发现路径里的编号,不喂给任何发号器)。
 func (n *Node) reRegister(ctx context.Context) {
 	prefix := rpcPrefix(n.Info.NodeType)
 	backoff := time.Second

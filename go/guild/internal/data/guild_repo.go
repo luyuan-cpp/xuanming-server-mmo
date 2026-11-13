@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"shared/drainproof"
 	"shared/placement"
+	"shared/redisslot"
 	"shared/rolefence"
 	"slices"
 	"strconv"
@@ -126,10 +128,12 @@ type GuildRepo struct {
 	publicationMu    sync.Mutex
 	publicationRole  *drainproof.Session
 	publicationOwner *drainproof.Session
-	rdb              *redis.Client
-	db               *sql.DB
-	defaultTTL       time.Duration
-	cacheLoadMu      sync.Mutex
+	// rdb 是控制集群句柄(shared/clusterredis 的 ControlClusterKeys 策略,单实例或 Redis Cluster 同一条路径)。
+	// 多键脚本的 KEYS 都同 tag(guild_keys_contract_test.go 钉住);EVAL 不进 pipeline(守卫拒绝,见 rankScriptsOneByOne)。
+	rdb         redis.UniversalClient
+	db          *sql.DB
+	defaultTTL  time.Duration
+	cacheLoadMu sync.Mutex
 	// fence 是角色护栏,ConfigureRoleFence 启动时写一次;occupancy 是 match 上的历练占用,BindTrialOccupancy 启动时写一次。之后都只读。
 	fence     *rolefence.Guard
 	occupancy TrialOccupancy
@@ -137,7 +141,7 @@ type GuildRepo struct {
 	zones *placement.MergedZoneCache
 }
 
-func NewGuildRepo(rdb *redis.Client, db *sql.DB, defaultTTL time.Duration) *GuildRepo {
+func NewGuildRepo(rdb redis.UniversalClient, db *sql.DB, defaultTTL time.Duration) *GuildRepo {
 	return &GuildRepo{
 		rdb:        rdb,
 		db:         db,
@@ -181,41 +185,63 @@ func (r *GuildRepo) ZoneMembers(zone uint32) []uint32 {
 }
 
 // ── Redis key helpers ──────────────────────────────────────────
+//
+// 键在控制集群上(docs/design/redis-cluster-all-domains-20261110.md §3.2、§4.8)。缓存填充 / 失效脚本的 KEYS 是
+// [代次键, 数据键],两把键共用一个 tag:帮会缓存用 {g:<guild_id>},玩家所在帮会用 {pg:<player_id>};
+// 同区的帮会榜三把键与该区的维护锁共用 {gr:<最终区>}。tag 一律经 redisslot 的族前缀函数构造,不手拼。
+// 项目未上线,改形直接以新键起步,不迁旧键(设计 §8)。
+
+func guildTag(guildID uint64) string {
+	return redisslot.ControlTag(redisslot.ControlFamilyGuild, strconv.FormatUint(guildID, 10))
+}
+
+func playerGuildTag(playerID uint64) string {
+	return redisslot.ControlTag(redisslot.ControlFamilyPlayerGuild, strconv.FormatUint(playerID, 10))
+}
+
+func guildRankTag(zoneID uint32) string {
+	return redisslot.ZoneControlTag(redisslot.ControlFamilyGuildRank, zoneID)
+}
 
 func guildKey(guildID uint64) string {
 	// v2 隔离旧版无 generation 的整份覆盖缓存；部署后绝不能直接信任可能由
-	// 旧 reader 在写后回填的 guild:{id}。
-	return fmt.Sprintf("guild:v2:%d", guildID)
+	// 旧 reader 在写后回填的旧形状缓存。
+	return "guild:v2:" + guildTag(guildID)
 }
 
 func playerGuildKey(playerID uint64) string {
-	return fmt.Sprintf("player_guild:v2:%d", playerID)
+	return "player_guild:v2:" + playerGuildTag(playerID)
 }
 
 func guildCacheGenerationKey(guildID uint64) string {
-	return fmt.Sprintf("guild:v2:cache_generation:%d", guildID)
+	return "guild:v2:cache_generation:" + guildTag(guildID)
 }
 
 func playerGuildCacheGenerationKey(playerID uint64) string {
-	return fmt.Sprintf("player_guild:v2:cache_generation:%d", playerID)
+	return "player_guild:v2:cache_generation:" + playerGuildTag(playerID)
 }
 
 // 帮会榜只有分区榜,没有全服榜:客户端只看本区榜,运维和 GM 也不需要(负责人 2026-11-10 定,
-// docs/design/gate-online-identity.md §9.6;Java 版同样不提供)。每个最终区三个键,只经下面「写榜协议」一节的脚本改:
-//   - guild_rank:zone:{最终区}      ZSET,member = guild_id,score = 帮会积分;
-//   - guild_rank:version:{最终区}   HASH,field = guild_id,value = 榜上那个分数对应的 guild.score_version;
-//   - guild_rank:tombstone:{最终区} ZSET,该区的解散墓碑,挡住解散前提交、解散后才到的旧写入。
+// docs/design/gate-online-identity.md §9.6;Java 版同样不提供)。每个最终区三个键,同一个 tag {gr:<最终区>},
+// 只经下面「写榜协议」一节的脚本改:
+//   - guild_rank:zone:{gr:<最终区>}      ZSET,member = guild_id,score = 帮会积分;
+//   - guild_rank:version:{gr:<最终区>}   HASH,field = guild_id,value = 榜上那个分数对应的 guild.score_version;
+//   - guild_rank:tombstone:{gr:<最终区>} ZSET,该区的解散墓碑,挡住解散前提交、解散后才到的旧写入。
+//
+// 维护锁也按区:guild_rank:maintenance_lock:{gr:<区>}。哪些区有榜键从 SQL 推出(rankZones),不扫 Redis。
 //
 // 权威分在 MySQL guild.score / score_version,RebuildRanks 按版本把榜与它对齐。
 // ErrRankZoneRequired 是查榜不给区时的错误,只可能是调用方写错了。
 var ErrRankZoneRequired = errors.New("guild rank: a zone is required, there is no global guild rank")
 
 const (
-	// 榜维护锁只让 RebuildRanks 与 FoldMergedZoneRanks 互斥(同一时刻只有一个副本在搬条目,不重复扫描)。
-	// 写分、建帮上榜、解散摘榜都不拿它。
-	guildRankLockKey  = "guild_rank:maintenance_lock"
-	guildRankLockTTL  = 5 * time.Minute
-	guildRankLockWait = 5 * time.Second
+	// 榜维护锁只让 RebuildRanks 与 FoldMergedZoneRanks 互斥(同一时刻只有一个副本在搬某个区的条目,不重复扫描)。
+	// 每区一把(guildRankLockKey),写分、建帮上榜、解散摘榜都不拿它。
+	guildRankLockKeyPrefix = "guild_rank:maintenance_lock:"
+	guildRankLockTTL       = 5 * time.Minute
+	guildRankLockWait      = 5 * time.Second
+	// 放锁那一条命令的时限(releaseRankLock):它不挂调用方的 ctx,要自己封顶。
+	guildRankLockReleaseTimeout = 2 * time.Second
 
 	zoneRankKeyPrefix = "guild_rank:zone:"
 
@@ -261,19 +287,23 @@ return 0
 `)
 
 func zoneRankKey(zoneID uint32) string {
-	return fmt.Sprintf("%s%d", zoneRankKeyPrefix, zoneID)
+	return zoneRankKeyPrefix + guildRankTag(zoneID)
 }
 
-// zoneRankVersionKey 是与 zoneRankKey 同区的版本 HASH。刻意不以 guild_rank:zone: 开头:按 guild_rank:zone:* 扫榜键的地方
-// (RebuildRanks、RemoveGuildFromRank、tools/data_consistency_check)不会把它当成一张榜。
+// zoneRankVersionKey 是与 zoneRankKey 同区、同 tag 的版本 HASH。
 func zoneRankVersionKey(zoneID uint32) string {
-	return fmt.Sprintf("guild_rank:version:%d", zoneID)
+	return "guild_rank:version:" + guildRankTag(zoneID)
 }
 
 // zoneRankTombstoneKey 是同区的解散墓碑 ZSET:member = guild_id,score = 墓碑到期时刻(Redis 服务器时间,毫秒)。
-// 墓碑按区存、与同区榜键并列,所以写榜脚本只碰一个区的键(上 Cluster 时三个键打同一个 tag 即可)。
+// 墓碑按区存、与同区榜键同 tag,所以写榜脚本只碰一个区、一个槽的键。
 func zoneRankTombstoneKey(zoneID uint32) string {
-	return fmt.Sprintf("guild_rank:tombstone:%d", zoneID)
+	return "guild_rank:tombstone:" + guildRankTag(zoneID)
+}
+
+// guildRankLockKey 是 zone 的榜维护锁,与该区榜键同 tag。
+func guildRankLockKey(zoneID uint32) string {
+	return guildRankLockKeyPrefix + guildRankTag(zoneID)
 }
 
 // ── Read (cache-aside + singleflight) ──────────────────────────
@@ -649,9 +679,9 @@ type RankEntry struct {
 //   - 重建、折叠与写分交错:它们手里快照的版本不比之后提交的推分新,盖不掉它(RebuildRanks、FoldMergedZoneRanks);
 //   - 解散之后:立墓碑与摘榜在同一段脚本里,迟到的旧写入连同重建、折叠手里的旧快照都被墓碑拒绝(RemoveGuildFromRank)。
 //
-// 每个脚本都只碰一个区的键(分区榜、版本 HASH、墓碑)。guild 的 RedisClient 是单实例 *redis.Client,与本文件的
-// 缓存代次脚本一样不带 hash tag;上 Redis Cluster 时给同区三个键打同一个 tag 即可,不用改协议
-// (docs/design/guild_ranking_architecture_zh.md §8)。墓碑的到期时刻用 Redis 服务器的 TIME,各副本的时钟差不进来。
+// 每个脚本都只碰一个区的键(分区榜、版本 HASH、墓碑),三把键同一个 tag {gr:<区>},Redis Cluster 下同槽
+// (docs/design/guild_ranking_architecture_zh.md §8、redis-cluster-all-domains-20261110.md §4.8)。
+// 墓碑的到期时刻用 Redis 服务器的 TIME,各副本的时钟差不进来。
 
 // rankUpsertScript 是带版本的条件写入,推分、建帮上榜、重建合并、折叠合并都走它。
 // 版本相等也写:同一版本只对应一个已提交的分数,重写是幂等的,还能修好被手工改过的分数。
@@ -756,23 +786,28 @@ func rankEntryKeys(zone uint32) []string {
 	return []string{zoneRankKey(zone), zoneRankVersionKey(zone)}
 }
 
-// 下面四个把一条写榜命令排进 pipeline,zone 都是已解析的区。pipeline 里一律用 EVAL:
-// Script.Run 的 EVALSHA 失败回退要先看到这条命令的结果,在 pipeline 里等不到。
+// 下面四个各发一条写榜脚本,zone 都是已解析的区。
+//
+// rankScriptsOneByOne:写榜脚本一条一条发,不进 pipeline。控制集群句柄(shared/clusterredis)的守卫拒绝 pipeline 里的
+// EVAL:ClusterClient 的 pipeline 遇到 EOF / 超时会整批自动重发,钩子拦不到(clusterredis.ErrNonIdempotentInPipeline)。
+// 逐条发的代价是重建、折叠这类维护每项一个往返(启动与周期任务,不在请求路径上);一条失败就停下返回错误,
+// 没发出去的项与 pipeline 时代「整批报错」一样留给下一轮,所有写都是条件写,重来是幂等的。
+// Script.Run 先 EVALSHA,NOSCRIPT 时回退 EVAL。
 
-func queueRankUpsert(ctx context.Context, pipe redis.Pipeliner, zone uint32, item rankItem) *redis.Cmd {
-	return rankUpsertScript.Eval(ctx, pipe, rankZoneKeys(zone), item.upsertArgs()...)
+func (r *GuildRepo) runRankUpsert(ctx context.Context, zone uint32, item rankItem) (int64, error) {
+	return rankUpsertScript.Run(ctx, r.rdb, rankZoneKeys(zone), item.upsertArgs()...).Int64()
 }
 
-func queueRankBury(ctx context.Context, pipe redis.Pipeliner, zone uint32, guildID uint64) *redis.Cmd {
-	return rankBuryScript.Eval(ctx, pipe, rankZoneKeys(zone), guildID, rankTombstoneTTL.Milliseconds())
+func (r *GuildRepo) runRankBury(ctx context.Context, zone uint32, guildID uint64) (int64, error) {
+	return rankBuryScript.Run(ctx, r.rdb, rankZoneKeys(zone), guildID, rankTombstoneTTL.Milliseconds()).Int64()
 }
 
-func queueRankRemove(ctx context.Context, pipe redis.Pipeliner, zone uint32, member string) *redis.Cmd {
-	return rankRemoveScript.Eval(ctx, pipe, rankEntryKeys(zone), member)
+func (r *GuildRepo) runRankRemove(ctx context.Context, zone uint32, member string) (int64, error) {
+	return rankRemoveScript.Run(ctx, r.rdb, rankEntryKeys(zone), member).Int64()
 }
 
-func queueRankRemoveIfVersion(ctx context.Context, pipe redis.Pipeliner, zone uint32, member, observed string) *redis.Cmd {
-	return rankRemoveIfVersionScript.Eval(ctx, pipe, rankEntryKeys(zone), member, observed)
+func (r *GuildRepo) runRankRemoveIfVersion(ctx context.Context, zone uint32, member, observed string) (int64, error) {
+	return rankRemoveIfVersionScript.Run(ctx, r.rdb, rankEntryKeys(zone), member, observed).Int64()
 }
 
 // 写分事务的两条语句。guild 表上 guild_id 只有 PRIMARY 一条路(guild_lock_plan_mysql_test.go 用 EXPLAIN 钉住)。
@@ -881,19 +916,19 @@ func (r *GuildRepo) publishRank(ctx context.Context, guildID uint64, zoneID uint
 //     - 在库里、属于这个区:快照之后才建的帮会。按当前权威合并,不删;
 //     - 在库里、属于别的区(映射变了)或 zone_id=0:权威分并进它该在的区,再按读到的版本从这里摘,期间新写进来的版本不误删。
 //
-// 持榜维护锁,只为与折叠、别的副本的重建互斥(同一时刻只有一个副本在搬条目,不重复全表扫描)。
+// 持涉及各区的榜维护锁(每区一把,升序拿),只为与折叠、别的副本的重建互斥(同一时刻只有一个副本在搬某区的条目,不重复全表扫描)。
 // 正确性不靠这把锁:所有写都是条件写,所有搬走都按版本比较后删除,锁过期(TTL 5 分钟、不续期)也写不坏榜。
 func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
-	release, err := r.acquireRankLock(ctx)
-	if err != nil {
-		return err
-	}
-	defer release()
-
+	// 先读快照:要处理哪些区由快照推出(rankZones),锁按区拿。锁不保证正确性(见上),先读后锁不改变结论。
 	snapshot, err := r.loadRankSnapshot(ctx)
 	if err != nil {
 		return err
 	}
+	release, err := r.acquireRankLocks(ctx, slices.Sorted(maps.Keys(r.rankZones(snapshotZones(snapshot)))))
+	if err != nil {
+		return err
+	}
+	defer release()
 	return r.reconcileRanks(ctx, snapshot, r.lookupRankRows)
 }
 
@@ -1005,11 +1040,8 @@ func (r *GuildRepo) reconcileRanks(ctx context.Context, snapshot []rankRow, look
 	}
 
 	// 2. 扫现有分区榜,可疑条目回库复核。列成员与处理分开:先把一张榜列完再动它,不边扫边删。
-	existing, err := r.rankZones(ctx)
-	if err != nil {
-		return err
-	}
-	for zone := range existing {
+	// 清单从快照推出(rankZones),不扫 Redis;升序处理,与 RebuildRanks 拿锁的顺序一致。
+	for _, zone := range slices.Sorted(maps.Keys(r.rankZones(snapshotZones(snapshot)))) {
 		members, garbage, err := r.zoneMembers(ctx, zone)
 		if err != nil {
 			return err
@@ -1037,18 +1069,14 @@ func (r *GuildRepo) reconcileRanks(ctx context.Context, snapshot []rankRow, look
 	return nil
 }
 
-// mergeRankBatch 用一条 pipeline 把一批快照项按版本合并进 zone 的榜。
+// mergeRankBatch 把一批快照项按版本逐条合并进 zone 的榜(逐条的理由见 rankScriptsOneByOne)。
 func (r *GuildRepo) mergeRankBatch(ctx context.Context, zone uint32, items []rankItem, stats *rankReconcileStats) error {
-	pipe := r.rdb.Pipeline()
-	cmds := make([]*redis.Cmd, len(items))
-	for i, item := range items {
-		cmds[i] = queueRankUpsert(ctx, pipe, zone, item)
-	}
-	if _, err := pipe.Exec(ctx); err != nil {
-		return fmt.Errorf("merge snapshot into %s: %w", zoneRankKey(zone), err)
-	}
-	for _, cmd := range cmds {
-		switch result, _ := cmd.Int64(); result {
+	for _, item := range items {
+		result, err := r.runRankUpsert(ctx, zone, item)
+		if err != nil {
+			return fmt.Errorf("merge snapshot into %s: %w", zoneRankKey(zone), err)
+		}
+		switch result {
 		case rankWriteStale:
 			stats.newer++
 		case rankWriteDisbanded:
@@ -1071,22 +1099,34 @@ func (r *GuildRepo) settleRankSuspects(ctx context.Context, zones *placement.Mer
 		return fmt.Errorf("recheck %d rank entries of %s: %w", len(suspects), zoneRankKey(zone), err)
 	}
 
-	// 先写后摘,分两条 pipeline:放错区的项先并进它该在的区,写成功了才从这里摘,中间失败也不会两边都没有。
-	writes, removals := r.rdb.Pipeline(), r.rdb.Pipeline()
+	// 先写后摘,两轮:放错区的项先全部并进它该在的区,写都成功了才从这里摘,中间失败也不会两边都没有。
+	// 每条单独发(rankScriptsOneByOne)。
+	type rankWrite struct {
+		zone uint32
+		item rankItem
+	}
+	type rankRemoval struct {
+		bury     bool // true = 立墓碑并摘(rankBuryScript),false = 按版本摘
+		guildID  uint64
+		member   string
+		observed string
+	}
+	var writes []rankWrite
+	var removals []rankRemoval
 	for i, id := range suspects {
 		member := strconv.FormatUint(id, 10)
 		row, ok := current[id]
 		switch {
 		case !ok:
 			// 在这个区立墓碑并摘掉(同一段脚本),之后到的旧写入都被拒绝。
-			queueRankBury(ctx, removals, zone, id)
+			removals = append(removals, rankRemoval{bury: true, guildID: id})
 			stats.ghosts++
 		case row.zoneID != 0 && zones.Final(row.zoneID) == zone:
 			item, err := row.item()
 			if err != nil {
 				return err
 			}
-			queueRankUpsert(ctx, writes, zone, item)
+			writes = append(writes, rankWrite{zone: zone, item: item})
 			stats.added++
 		default:
 			if row.zoneID != 0 {
@@ -1094,19 +1134,25 @@ func (r *GuildRepo) settleRankSuspects(ctx context.Context, zones *placement.Mer
 				if err != nil {
 					return err
 				}
-				queueRankUpsert(ctx, writes, zones.Final(row.zoneID), item)
+				writes = append(writes, rankWrite{zone: zones.Final(row.zoneID), item: item})
 			}
-			queueRankRemoveIfVersion(ctx, removals, zone, member, observed[i])
+			removals = append(removals, rankRemoval{member: member, observed: observed[i]})
 			stats.misplaced++
 		}
 	}
-	if writes.Len() > 0 {
-		if _, err := writes.Exec(ctx); err != nil {
+	for _, w := range writes {
+		if _, err := r.runRankUpsert(ctx, w.zone, w.item); err != nil {
 			return fmt.Errorf("write rechecked rank entries of %s: %w", zoneRankKey(zone), err)
 		}
 	}
-	if removals.Len() > 0 {
-		if _, err := removals.Exec(ctx); err != nil {
+	for _, rm := range removals {
+		var err error
+		if rm.bury {
+			_, err = r.runRankBury(ctx, zone, rm.guildID)
+		} else {
+			_, err = r.runRankRemoveIfVersion(ctx, zone, rm.member, rm.observed)
+		}
+		if err != nil {
 			return fmt.Errorf("remove rechecked rank entries of %s: %w", zoneRankKey(zone), err)
 		}
 	}
@@ -1171,12 +1217,10 @@ func (r *GuildRepo) removeGarbageMembers(ctx context.Context, zone uint32, garba
 		return nil
 	}
 	logx.Errorf("RebuildRanks: removing %d members of %s that are not guild ids", len(garbage), zoneRankKey(zone))
-	pipe := r.rdb.Pipeline()
 	for _, member := range garbage {
-		queueRankRemove(ctx, pipe, zone, member)
-	}
-	if _, err := pipe.Exec(ctx); err != nil {
-		return fmt.Errorf("remove garbage members of %s: %w", zoneRankKey(zone), err)
+		if _, err := r.runRankRemove(ctx, zone, member); err != nil {
+			return fmt.Errorf("remove garbage members of %s: %w", zoneRankKey(zone), err)
+		}
 	}
 	return nil
 }
@@ -1189,13 +1233,13 @@ func (r *GuildRepo) removeGarbageMembers(ctx context.Context, zone uint32, garba
 //     (读路径不需要行锁,理由见 authoritativeZoneID;写路径 UpdateGuildScore 仍用 FOR UPDATE),
 //     调用方传进来的值只用来记一条不一致日志。帮会还活着,不立墓碑:之后的推分照常让它回到榜上。
 //  2. 公会行已删(DisbandGuild 的正常路径)→ 用调用方传进来的值,它必须是
-//     DisbandResult.ZoneID(解散事务内 FOR UPDATE 读到的),不能是 guild:v2:{id} 缓存。
+//     DisbandResult.ZoneID(解散事务内 FOR UPDATE 读到的),不能是 guild:v2:{g:<id>} 缓存。
 //     这时在它的合服组(ZoneMembers:解析到同一最终区的全部原始区,含最终区)的每个区立墓碑(保留 rankTombstoneTTL):
 //     解散前提交、解散后才到的推分,以及重建、折叠手里的旧快照,都会被条件写入脚本拒绝,不会把帮会写回榜上。
 //
-// 无论走哪条,都扫一遍 guild_rank:zone:* 把该 guildID 从**每一个**分区榜里
-// 摘掉:合服之后条目可能还在源区的旧键上(还没折叠),撤销合服之后可能还在目标区的键上(还没重建),
-// 只摘最终区那一张会留下一个查不到名字的幽灵条目。代价是一次 SCAN(zone 数量级),换"解散即从所有榜上消失"的确定性。
+// 无论走哪条,都按 zone 清单(rankZones:guild 表出现过的区及其最终区、合服映射两端,从 SQL 推出,不扫 Redis)把该 guildID
+// 从**每一个**分区榜里摘掉:合服之后条目可能还在源区的旧键上(还没折叠),撤销合服之后可能还在目标区的键上(还没重建),
+// 只摘最终区那一张会留下一个查不到名字的幽灵条目。代价是一次 SQL 去重加每区一条脚本(zone 数量级),换"解散即从所有榜上消失"的确定性。
 //
 // 为什么不用和写分互斥:一个区的立墓碑与摘榜在同一段脚本里(rankBuryScript),在它之前执行的写入留下的项被它摘掉,
 // 在它之后的写入被墓碑拒绝。写榜只写进 Final(zone_id),映射缓存滞后的副本算出来的也在合服组里(还不知道合服的写原始区,
@@ -1217,16 +1261,18 @@ func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zon
 	default:
 		return fmt.Errorf("read authoritative zone of guild %d: %w", guildID, err)
 	}
-	return r.removeFromAllRanks(ctx, guildID, effectiveZone, disbanded)
-}
-
-// removeFromAllRanks 是 RemoveGuildFromRank 的 Redis 半段:把 guildID 从每张分区榜摘掉;disbanded 时在它的合服组里
-// 立墓碑(与摘榜同一段脚本)。zoneID 是帮会的原始区,0 = 不知道(只扫现有的榜,也立不了墓碑)。
-func (r *GuildRepo) removeFromAllRanks(ctx context.Context, guildID uint64, zoneID uint32, disbanded bool) error {
-	zones, err := r.rankZones(ctx)
+	guildZones, err := r.guildZones(ctx)
 	if err != nil {
 		return err
 	}
+	return r.removeFromAllRanks(ctx, guildID, effectiveZone, disbanded, guildZones)
+}
+
+// removeFromAllRanks 是 RemoveGuildFromRank 的 Redis 半段:把 guildID 从每张分区榜摘掉;disbanded 时在它的合服组里
+// 立墓碑(与摘榜同一段脚本)。zoneID 是帮会的原始区,0 = 不知道(只摘清单里的榜,也立不了墓碑)。
+// guildZones 是 guild 表里出现过的原始区(guildZones),由它推出要摘的榜(rankZones);单测直接给。
+func (r *GuildRepo) removeFromAllRanks(ctx context.Context, guildID uint64, zoneID uint32, disbanded bool, guildZones []uint32) error {
+	zones := r.rankZones(guildZones)
 	group := make(map[uint32]struct{})
 	if zoneID > 0 {
 		// 合服组的区即使还没有榜键也带上:分区榜可能因为没人推过分而还不存在,墓碑要先立好,等着迟到的写入。
@@ -1239,16 +1285,17 @@ func (r *GuildRepo) removeFromAllRanks(ctx context.Context, guildID uint64, zone
 		return nil // 还没有任何分区榜,也就没有要摘的条目。
 	}
 	member := strconv.FormatUint(guildID, 10)
-	pipe := r.rdb.Pipeline()
-	for zone := range zones {
+	// 一区一条脚本(rankScriptsOneByOne);不同区在不同 tag 上,本来也不能进同一条多键命令。
+	for _, zone := range slices.Sorted(maps.Keys(zones)) {
+		var err error
 		if _, inGroup := group[zone]; disbanded && inGroup {
-			queueRankBury(ctx, pipe, zone, guildID)
+			_, err = r.runRankBury(ctx, zone, guildID)
 		} else {
-			queueRankRemove(ctx, pipe, zone, member)
+			_, err = r.runRankRemove(ctx, zone, member)
 		}
-	}
-	if _, err := pipe.Exec(ctx); err != nil {
-		return fmt.Errorf("remove guild %d from rank: %w", guildID, err)
+		if err != nil {
+			return fmt.Errorf("remove guild %d from rank: %w", guildID, err)
+		}
 	}
 	return nil
 }
@@ -1269,29 +1316,64 @@ func (r *GuildRepo) authoritativeZoneID(ctx context.Context, guildID uint64) (ui
 	return zoneID, nil
 }
 
-// rankZones 列出当前存在分区榜的区(扫 guild_rank:zone:*)。
-// SCAN 而不是 KEYS:分区榜数量与 zone 数同量级,但 KEYS 会阻塞整个 Redis。
-func (r *GuildRepo) rankZones(ctx context.Context) (map[uint32]struct{}, error) {
-	zones := make(map[uint32]struct{})
-	iterator := r.rdb.Scan(ctx, 0, zoneRankKeyPrefix+"*", 1000).Iterator()
-	for iterator.Next(ctx) {
-		key := iterator.Val()
-		suffix := strings.TrimPrefix(key, zoneRankKeyPrefix)
-		zone, err := strconv.ParseUint(suffix, 10, 32)
-		if err != nil || strconv.FormatUint(zone, 10) != suffix {
-			// 只可能是手工写进来的键:不认识的键不动它,也不让它挡住这次扫描。
-			logx.Errorf("guild rank: key %q is not a zone rank, ignored", key)
-			continue
-		}
-		zones[uint32(zone)] = struct{}{}
+// sqlSelectGuildZones 列出 guild 行出现过的原始区。zone_id 是 idx_guild_0 的前缀列,去重走索引,结果是 zone 数量级。
+const sqlSelectGuildZones = "SELECT DISTINCT zone_id FROM guild"
+
+// guildZones 读 guild 表里出现过的原始区(含 0 这种坏行,由 rankZones 丢掉)。
+func (r *GuildRepo) guildZones(ctx context.Context) ([]uint32, error) {
+	rows, err := r.db.QueryContext(ctx, sqlSelectGuildZones)
+	if err != nil {
+		return nil, fmt.Errorf("list guild zones for rank maintenance: %w", err)
 	}
-	if err := iterator.Err(); err != nil {
-		return nil, fmt.Errorf("scan per-zone rank keys: %w", err)
+	defer rows.Close()
+	var zones []uint32
+	for rows.Next() {
+		var zone uint32
+		if err := rows.Scan(&zone); err != nil {
+			return nil, fmt.Errorf("scan guild zone for rank maintenance: %w", err)
+		}
+		zones = append(zones, zone)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate guild zones for rank maintenance: %w", err)
 	}
 	return zones, nil
 }
 
-// FoldMergedZoneRanks 把已合走区的旧榜 guild_rank:zone:{src} 逐项并进最终区的榜,返回这次从旧榜搬走的条目数。
+// snapshotZones 是重建快照里出现过的原始区。快照就是 guild 全表,与 guildZones 同一个集合,不用再查一次。
+func snapshotZones(snapshot []rankRow) []uint32 {
+	zones := make([]uint32, 0, len(snapshot))
+	for _, row := range snapshot {
+		zones = append(zones, row.zoneID)
+	}
+	return zones
+}
+
+// rankZones 列出可能有分区榜键的区:guild 行出现过的原始区与它们的最终区,加上合服映射的两端。
+//
+// 按 zone 清单逐个处理,不扫 Redis(docs/design/redis-cluster-all-domains-20261110.md §4.8):Redis Cluster 上 SCAN 只扫一个节点,
+// 而写榜只会写 guild 行的原始区(合服前)或它的最终区(合服后),所以这个集合覆盖本服务写过的全部榜键。
+// 盖不到的只有一种:某个区的帮会全部解散、摘榜又失败,幽灵条目所在的区不再出现在 guild 表里。它只影响那张已没有活帮会的榜
+// 的显示;那个区再有人建帮之后,下一次重建会把它摘掉。
+func (r *GuildRepo) rankZones(guildZones []uint32) map[uint32]struct{} {
+	merged := r.mergedZones()
+	zones := make(map[uint32]struct{})
+	for _, zone := range guildZones {
+		if zone == 0 {
+			continue
+		}
+		zones[zone] = struct{}{}
+		zones[merged.Final(zone)] = struct{}{}
+	}
+	for src, dst := range merged.Merges() {
+		zones[src] = struct{}{}
+		zones[dst] = struct{}{}
+		zones[merged.Final(src)] = struct{}{}
+	}
+	return zones
+}
+
+// FoldMergedZoneRanks 把已合走区的旧榜 guild_rank:zone:{gr:<源区>} 逐项并进最终区的榜,返回这次从旧榜搬走的条目数。
 //
 // 为什么要有这一步:合服不动公会行,新分数按 Final(guild.zone_id) 写进最终区的榜,但合服之前写的条目还留在源区的键上,
 // 没有人再读它。榜是可重建的缓存,权威分在 guild.score;周期任务逐步并过去,不必为一次合服全量重建。
@@ -1304,7 +1386,8 @@ func (r *GuildRepo) rankZones(ctx context.Context) (map[uint32]struct{}, error) 
 //   - 每页都从榜头重读(ZRANGE 0 N-1,分数与版本在一个脚本里成对读出),不用 ZSCAN 游标:本页摘掉的项不会让下一页漏项。
 //   - 逐成员写,不用 ZUNIONSTORE:Redis Cluster 下两个键不在同一个 slot,多键命令会被拒绝。
 //   - 中途失败或进程退出:已并的项重并是幂等的条件写,没摘的项下一轮从头再并一遍。
-//   - 持 guild_rank:maintenance_lock,只为与 RebuildRanks、别的副本的折叠互斥,不重复搬;正确性不靠它(同 RebuildRanks)。
+//   - 持各源区的维护锁 guild_rank:maintenance_lock:{gr:<源区>},只为与 RebuildRanks、别的副本的折叠互斥,不重复搬;
+//     正确性不靠它(同 RebuildRanks)。
 //
 // 稳态下旧键都不存在:先无锁探测,不为空转去抢维护锁。
 func (r *GuildRepo) FoldMergedZoneRanks(ctx context.Context) (int, error) {
@@ -1324,7 +1407,7 @@ func (r *GuildRepo) FoldMergedZoneRanks(ctx context.Context) (int, error) {
 	}
 	slices.Sort(pending)
 
-	release, err := r.acquireRankLock(ctx)
+	release, err := r.acquireRankLocks(ctx, pending)
 	if err != nil {
 		return 0, err
 	}
@@ -1341,7 +1424,7 @@ func (r *GuildRepo) FoldMergedZoneRanks(ctx context.Context) (int, error) {
 	return folded, nil
 }
 
-// foldZoneRank 把 src 榜逐项按版本并进 dst 榜,并完一页摘一页(按版本摘)。调用方持榜维护锁。
+// foldZoneRank 把 src 榜逐项按版本并进 dst 榜,并完一页摘一页(按版本摘)。调用方持 src 的榜维护锁。
 func (r *GuildRepo) foldZoneRank(ctx context.Context, src, dst uint32) (int, error) {
 	folded := 0
 	for {
@@ -1352,32 +1435,29 @@ func (r *GuildRepo) foldZoneRank(ctx context.Context, src, dst uint32) (int, err
 		if len(head) == 0 && len(garbage) == 0 {
 			return folded, nil
 		}
-		if len(head) > 0 {
-			writes := r.rdb.Pipeline()
-			for _, item := range head {
-				queueRankUpsert(ctx, writes, dst, item)
-			}
-			if _, err := writes.Exec(ctx); err != nil {
+		// 每条单独发(rankScriptsOneByOne)。整页并完才开始摘,与原先两条 pipeline 的先后相同。
+		for _, item := range head {
+			if _, err := r.runRankUpsert(ctx, dst, item); err != nil {
 				return folded, fmt.Errorf("fold %s into %s: %w", zoneRankKey(src), zoneRankKey(dst), err)
 			}
 		}
 		// 并进目标区成功之后才从源区摘。并的结果(写入 / 目标区更新 / 已解散)都意味着源区这一项可以摘了。
-		removals := r.rdb.Pipeline()
-		cmds := make([]*redis.Cmd, len(head))
-		for i, item := range head {
-			cmds[i] = queueRankRemoveIfVersion(ctx, removals, src, strconv.FormatUint(item.guildID, 10), item.version)
-		}
-		for _, member := range garbage {
-			queueRankRemove(ctx, removals, src, member)
-		}
-		if _, err := removals.Exec(ctx); err != nil {
-			return folded, fmt.Errorf("remove folded entries from %s: %w", zoneRankKey(src), err)
-		}
-		removed := len(garbage)
-		for _, cmd := range cmds {
-			if n, _ := cmd.Int64(); n == 1 {
+		// 原先整条 pipeline 失败时本页一项都不计;这里也一样:中途失败返回本页之前的累计,本页留给下一轮。
+		removed := 0
+		for _, item := range head {
+			n, err := r.runRankRemoveIfVersion(ctx, src, strconv.FormatUint(item.guildID, 10), item.version)
+			if err != nil {
+				return folded, fmt.Errorf("remove folded entries from %s: %w", zoneRankKey(src), err)
+			}
+			if n == 1 {
 				removed++
 			}
+		}
+		for _, member := range garbage {
+			if _, err := r.runRankRemove(ctx, src, member); err != nil {
+				return folded, fmt.Errorf("remove folded entries from %s: %w", zoneRankKey(src), err)
+			}
+			removed++
 		}
 		folded += removed
 		if removed == 0 {
@@ -1410,7 +1490,28 @@ func (r *GuildRepo) rankHead(ctx context.Context, zone uint32, n int) ([]rankIte
 	return items, garbage, nil
 }
 
-func (r *GuildRepo) acquireRankLock(ctx context.Context) (func(), error) {
+// acquireRankLocks 按给定顺序(调用方传升序,两个副本不会互相等成死锁)逐区拿维护锁,全部拿到才返回;中途失败放掉已拿到的。
+// 每区一把锁(guildRankLockKey),各在自己区的 tag 上;拿锁与放锁都是单键命令,不跨槽。
+func (r *GuildRepo) acquireRankLocks(ctx context.Context, zones []uint32) (func(), error) {
+	releases := make([]func(), 0, len(zones))
+	releaseAll := func() {
+		for i := len(releases) - 1; i >= 0; i-- {
+			releases[i]()
+		}
+	}
+	for _, zone := range zones {
+		release, err := r.acquireRankLock(ctx, zone)
+		if err != nil {
+			releaseAll()
+			return nil, err
+		}
+		releases = append(releases, release)
+	}
+	return releaseAll, nil
+}
+
+func (r *GuildRepo) acquireRankLock(ctx context.Context, zone uint32) (func(), error) {
+	key := guildRankLockKey(zone)
 	token := uuid.NewString()
 	waitTimer := time.NewTimer(guildRankLockWait)
 	defer waitTimer.Stop()
@@ -1418,27 +1519,35 @@ func (r *GuildRepo) acquireRankLock(ctx context.Context) (func(), error) {
 	defer ticker.Stop()
 
 	for {
-		acquired, err := r.rdb.SetNX(ctx, guildRankLockKey, token, guildRankLockTTL).Result()
+		acquired, err := r.rdb.SetNX(ctx, key, token, guildRankLockTTL).Result()
 		if err != nil {
-			return nil, fmt.Errorf("acquire guild rank lock: %w", err)
+			// 结局未知:句柄不自动重发,读超时或断线时 SET NX 可能已经写进去、只是回包丢了。不收拾的话这把锁空占到 TTL,
+			// 期间重建榜与合服并榜都等到超时(docs/design/infra-reconnect-overview.md §4.1 R8)。按同一个令牌做一次
+			// 条件删除:写进去了就删掉,没写进去就什么都不动,别人的锁令牌不同、删不到。
+			r.releaseRankLock(key, token, zone)
+			return nil, fmt.Errorf("acquire guild rank lock of zone %d: %w", zone, err)
 		}
 		if acquired {
-			return func() {
-				if _, err := releaseRankLockScript.Run(
-					context.Background(), r.rdb, []string{guildRankLockKey}, token,
-				).Int(); err != nil {
-					logx.Errorf("release guild rank lock: %v", err)
-				}
-			}, nil
+			return func() { r.releaseRankLock(key, token, zone) }, nil
 		}
 
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-waitTimer.C:
-			return nil, fmt.Errorf("timed out waiting for guild rank maintenance lock")
+			return nil, fmt.Errorf("timed out waiting for guild rank maintenance lock of zone %d", zone)
 		case <-ticker.C:
 		}
+	}
+}
+
+// releaseRankLock 按令牌放掉一把维护锁(releaseRankLockScript,令牌不符不删)。不挂调用方的 ctx:调用方取消或超时之后
+// 锁照样要放;自带时限,Redis 不通时不把调用方卡住。放不掉只记日志,锁到 TTL 自己过期。
+func (r *GuildRepo) releaseRankLock(key, token string, zone uint32) {
+	ctx, cancel := context.WithTimeout(context.Background(), guildRankLockReleaseTimeout)
+	defer cancel()
+	if _, err := releaseRankLockScript.Run(ctx, r.rdb, []string{key}, token).Int(); err != nil {
+		logx.Errorf("release guild rank lock of zone %d: %v", zone, err)
 	}
 }
 

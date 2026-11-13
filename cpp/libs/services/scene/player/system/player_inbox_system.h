@@ -14,8 +14,11 @@
 //                           找不到实体 / 实体还没落地就丢弃,下次落地会拉。
 //   * OnBattleFreezeCleared PlayerBattleSystem 摘 InBattleComp 的唯一入口里一行调用。之前因战斗延后的,立即重查
 //                           (不合并、不去抖)。
-//   * OnBagSpaceFreed       PlayerBagSystem::RetrieveTemporary 取回成功后一行调用(2026-11-06)。只把「执行器因背包
-//                           放不下而 DEFER」的域的下一次尝试提到现在,不改任何判定(bag-rule-policy-layering.md §6.6)。
+//   * OnBagSpaceFreed       BagService 的「腾位通知」订阅方(bag_service.h;scene main 在 Initialize 之后经
+//                           BagService::SetSpaceFreedListener 装上,2026-11-12):人物背包或临时格移走了东西之后调 ——
+//                           使用 / 寄出 / 上架托管等经 BagService 出包、整理合堆、穿戴装到空槽、临时格取回。
+//                           2026-11-06 ~ 11-12 只有临时格取回一处直接调。只把「执行器因背包放不下而 DEFER」的域的
+//                           下一次尝试提到现在,不改任何判定(bag-rule-policy-layering.md §6.6)。
 //   * Tick                  scene main 每秒调一次:到期的检查(单个 tick ≤ 200 次)、在线有界兜底、等落盘与补确认、
 //                           在途超时。节点级停用(注册表自检失败 metric=inbox_registry_broken、配置开关关着
 //                           metric=inbox_consumer_disabled)每 kNodeStuckRelogIntervalMs 补打一行,与有没有在线玩家无关。
@@ -74,10 +77,13 @@ public:
 	// ── 触发入口 ──
 	static void OnPlayerLanded(entt::entity player);
 	static void OnBattleFreezeCleared(entt::entity player);
-	// 玩家腾出了背包空间(今天只有临时格取回成功)。只处理执行器因背包放不下而 DEFER 的域 —— deferReason == kExecutorDefer
-	// 且执行器带回的原因是 kBagItemNotStacked(PlayerInboxDomainState::executorDeferReason):处在 kIdle / kApplying 的把
-	// nextCheckMs 提到现在,下一个 Tick 就按原有规则重试。不改任何判定:不清 failStreak(重试仍放不下时照常退避),不动
-	// recheckRequested,不在调用栈里同步续做,在途的那一轮不打断;其它域一律不碰。无效实体 / 没有运行时组件时直接返回,不创建组件。
+	// 玩家的人物背包或临时格腾出了位置(BagService 的「腾位通知」,bag_service.h)。只处理执行器因背包放不下而 DEFER 的域 ——
+	// deferReason == kExecutorDefer 且执行器带回的原因是 kBagItemNotStacked(PlayerInboxDomainState::executorDeferReason):
+	// 处在 kIdle / kApplying 的把 nextCheckMs 提到现在,下一个 Tick 就按原有规则重试。不改任何判定:不清 failStreak(重试仍放不下时
+	// 照常退避),不动 recheckRequested,不在调用栈里同步续做,在途的那一轮不打断;其它域一律不碰。无效实体 / 没有运行时组件时直接返回,
+	// 不创建组件。
+	// 可能在本系统执行器的调用栈里被调(战斗结算扣消耗经 BagService 出包):这里只改调度字段,不碰 pendingItems / ackQueue / phase,
+	// 所以重入安全;那一域随后由执行器的结局照常改写 nextCheckMs(DEFER 重排退避,结束一轮按 FinishRound)。
 	static void OnBagSpaceFreed(entt::entity player);
 	static void OnNotifyEvent(uint64_t playerId, uint32_t domain);
 	static void Tick();

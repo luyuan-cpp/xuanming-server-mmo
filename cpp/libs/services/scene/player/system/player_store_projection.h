@@ -25,6 +25,12 @@ namespace player_store_rows
     // kind 是不是一行数据:枚举里有(退役号不算)且不是写权行。遍历 KindBytes 时用它跳过空位。
     bool IsDataKind(std::size_t kind);
 
+    // kind 是不是更新版本才有的行:号比本二进制认识的都大。行种的号只增、不回填、不复用(退役号写 reserved),
+    // 所以更新版本加的行一定落在这里;比它小又不是数据行的只剩写权行和退役号。
+    // 更新版本的行里只有本二进制不认识的字段(字段不许换行,proto 生成器守着):认领时不读、存盘时不写,
+    // 库里那一行原样留着,等认识它的版本来读(混版本设计 §4.2)。
+    bool IsNewerKind(std::size_t kind);
+
     // 这一行的存盘方式。只对 IsDataKind 为真的 kind 有意义;ValidatePersistGroups 通过之后不会是 UNSPECIFIED。
     PersistRowSavePolicy RowSavePolicy(std::size_t kind);
 
@@ -32,14 +38,26 @@ namespace player_store_rows
     // 失败时 error 点名字段或行。
     bool ValidatePersistGroups(std::string &error);
 
-    // 投影全部 kind,确定性序列化。db 在调用期间被短暂改动(字段交换到临时消息再换回来,不拷贝内容),
-    // 返回时恢复原样。顶层有未知字段就拒绝:新二进制写的字段被旧二进制丢掉,比拒写更糟。
+    // 投影全部 kind,确定性序列化,结果只含本二进制认识的字段。db 在调用期间被短暂改动(字段交换到临时消息
+    // 再换回来,不拷贝内容),返回时恢复原样。
+    // 顶层有未知字段就拒绝。行里本二进制不认识的顶层字段不进内存(见 AssemblePlayer),走到这里的消息顶层不该有
+    // 未知字段;有就说明它不是从行里加载来的,投影不知道该把它们写回哪一行,拒绝比写丢强。
     bool ProjectPlayer(player_database &db, KindBytes &out, std::string &error);
 
     // 把片段拼回去。逐行解析、清除不属于本 kind 的字段再合并,所以字段换行之后库里两行各有一份也不会
     // 合并出双份。
-    // 未知或退役的 kind(旧布局留下的 1、2、5 行)整份拒绝:那是另一种布局写的,按现在的分行解读会丢字段。
-    // 顶层有更新版本才有的字段就失败(认领时已按世代拒绝,这里是纵深防御);已退役字段的残留直接丢掉。
+    // 新旧版本混跑时本二进制不认识的内容都不读,也都不丢:
+    //   - 更新版本才有的行(IsNewerKind)跳过,库里那一行没有人动;
+    //   - 一行里本二进制不认识的顶层字段(更新版本加的,或已退役字段的残留)不并进消息,由存盘状态机按行保管:
+    //     PlayerStoreClient 认领时用 CarriedTopLevelBytes 取出,之后每次写这一行都接在投影结果后面。
+    //     并进消息就分不清哪个字段属于哪一行,ProjectPlayer 没法把它们写回原来的行。
+    //   - 子消息里不认识的字段跟着对象走(unknown_field_carry.h)。
+    // 退役的 kind(旧布局留下的 1、2、5 行)整份拒绝:那是另一种布局写的,按现在的分行解读会丢字段。
     bool AssemblePlayer(const google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> &rows,
                         player_database &db, std::string &error);
+
+    // 取出一行里本二进制不认识的顶层字段,原样序列化进 carried;没有时 carried 为空串。
+    // 把它接在这一行的投影结果后面,就是更新版本读得回全部字段的一行。返回 false = payload 解析不了。
+    // 认领时每行在这里多解析一遍(AssemblePlayer 还要解析一遍),只发生在进场;要省这一遍先拿到实测数据再说。
+    bool CarriedTopLevelBytes(const std::string &payload, std::string &carried);
 }

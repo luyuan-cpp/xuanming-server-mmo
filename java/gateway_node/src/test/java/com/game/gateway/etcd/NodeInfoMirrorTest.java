@@ -19,12 +19,16 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -68,12 +72,18 @@ class NodeInfoMirrorTest {
 
     /** 下一次整段读返回给定记录,header 的 revision 为 {@code revision}。 */
     private void listReturns(long revision, KeyValue... records) {
+        GetResponse response = listResponse(revision, records);
+        when(kv.get(any(ByteSequence.class), any(GetOption.class))).thenReturn(CompletableFuture.completedFuture(response));
+    }
+
+    /** 一份整段读的应答:给定记录,header 的 revision 为 {@code revision}。 */
+    private static GetResponse listResponse(long revision, KeyValue... records) {
         GetResponse response = mock(GetResponse.class);
         Response.Header header = mock(Response.Header.class);
         when(header.getRevision()).thenReturn(revision);
         when(response.getHeader()).thenReturn(header);
         when(response.getKvs()).thenReturn(List.of(records));
-        when(kv.get(any(ByteSequence.class), any(GetOption.class))).thenReturn(CompletableFuture.completedFuture(response));
+        return response;
     }
 
     private void listFails() {
@@ -211,5 +221,42 @@ class NodeInfoMirrorTest {
 
         verify(watchers.get(0)).close();
         assertThrows(GateWatcher.NodeDiscoveryException.class, mirror::nodes);
+    }
+
+    // login 的镜像由 login 发现与区服健康两个定时任务读(2026-11-12 起各有线程):第二个读者等第一个同步完直接用结果,
+    // 不再各读一遍 etcd,也不会有一方以「被并发重新同步」失败。
+    @Test
+    void concurrentReaders_shareOneRelist() throws InterruptedException {
+        NodeInfoMirror shared = new NodeInfoMirror(client, PREFIX, 10_000, clock::get);
+        GetResponse response = listResponse(1, gate(GATE_10, 10, 1));
+        CompletableFuture<GetResponse> pending = new CompletableFuture<>();
+        when(kv.get(any(ByteSequence.class), any(GetOption.class))).thenReturn(pending);
+        AtomicReference<List<NodeInfoRecord>> firstResult = new AtomicReference<>();
+        AtomicReference<List<NodeInfoRecord>> secondResult = new AtomicReference<>();
+        Thread first = new Thread(() -> firstResult.set(shared.nodes()), "mirror-reader-1");
+        Thread second = new Thread(() -> secondResult.set(shared.nodes()), "mirror-reader-2");
+
+        first.start();
+        verify(kv, timeout(5_000)).get(any(ByteSequence.class), any(GetOption.class));
+        second.start();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (second.getState() != Thread.State.BLOCKED && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertEquals(Thread.State.BLOCKED, second.getState(), "第二个读者应当等在重新同步的锁上,而不是自己再整段读一遍");
+
+        pending.complete(response);
+        first.join(5_000);
+        second.join(5_000);
+
+        assertEquals(List.of(10L), nodeIdsOf(firstResult.get()));
+        assertEquals(List.of(10L), nodeIdsOf(secondResult.get()));
+        verify(kv, times(1)).get(any(ByteSequence.class), any(GetOption.class));
+        assertEquals(1, listeners.size(), "只建了一个 watch");
+    }
+
+    private static List<Long> nodeIdsOf(List<NodeInfoRecord> nodes) {
+        assertNotNull(nodes, "读者线程应当拿到结果而不是抛异常");
+        return nodes.stream().map(NodeInfoRecord::getNodeId).toList();
     }
 }

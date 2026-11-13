@@ -26,6 +26,8 @@ public class LoginRequest {
      * Auth provider:
      *   "" / "password"      — built-in password auth
      *   "wechat" / "qq"      — third-party OAuth (authToken is the SDK code/access_token)
+     *   "wechat_minigame" / "douyin_minigame"
+     *                        — mini game login (authToken is the wx.login / tt.login code)
      *   "satoken"            — Sa-Token bridge
      *   "access_token"       — silent re-login with a previously issued opaque token
      */

@@ -78,25 +78,37 @@ func main() {
 	addr := flag.String("addr", ":18090", "listen address; defaults to :18090 to match docs/ops/wechat-qq-sandbox-runbook.md examples")
 	flag.Parse()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/sns/oauth2/access_token", handleWeChatTokenExchange)
-	mux.HandleFunc("/oauth2.0/me", handleQQTokenVerify)
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("ok"))
-	})
-
 	log.Printf("sandbox mock listening on %s — point WeChat/QQ providers' Endpoint at http://127.0.0.1%s", *addr, *addr)
 	log.Printf("  /sns/oauth2/access_token  (WeChat) — code starting with 'U' returns unionid, code 'EXPIRED' returns errcode 40029")
 	log.Printf("  /oauth2.0/me              (QQ)     — access_token 'INVALID' returns error response")
+	log.Printf("  /sns/jscode2session       (WeChat mini game) — js_code starting with 'U' returns unionid, js_code 'EXPIRED' returns errcode 40029")
+	log.Printf("  /mgplatform/api/apps/jscode2session (Douyin mini game) — code 'EXPIRED' returns an error response")
 
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           mux,
+		Handler:           newMux(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("sandbox mock: %v", err)
 	}
+}
+
+// newMux 注册 mock 的全部路由。单独成函数,测试用同一张路由表起 httptest 服务,不会和 main 各写一份。
+//
+// 后两条是小游戏登录(2026-11-12 起,auth_type 为 wechat_minigame / douyin_minigame)。login.yaml 里加
+// AuthProviders.WeChatMiniGame / DouyinMiniGame,Endpoint 同样指向本 mock,WeChatMiniGame.AppId 必须与
+// WeChat.AppId 不同。两个接口的应答都带 session_key,与真实平台一致;login 不解析它(auth/minigame_providers.go)。
+func newMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/sns/oauth2/access_token", handleWeChatTokenExchange)
+	mux.HandleFunc("/oauth2.0/me", handleQQTokenVerify)
+	mux.HandleFunc("/sns/jscode2session", handleWeChatMiniGameCode2Session)
+	mux.HandleFunc("/mgplatform/api/apps/jscode2session", handleDouyinMiniGameCode2Session)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
+	return mux
 }
 
 // sandboxQQClientID 是 mock 对每个 QQ access_token 固定返回的 client_id。QQProvider 要求它等于配置的
@@ -169,6 +181,62 @@ func handleQQTokenVerify(w http.ResponseWriter, r *http.Request) {
 		"unionid":   "qq_unionid_" + hashTo12(accessToken, "unionid"),
 	}
 	writeJSON(w, resp)
+}
+
+// handleWeChatMiniGameCode2Session 模拟微信小游戏的 code2Session(GET /sns/jscode2session)。
+// 身份的派生规则与 handleWeChatTokenExchange 相同,所以同一个字符串当 App 的 code 和当小游戏的 js_code
+// 得到同一个 unionid:用它验证「同一主体下 App 与小游戏是同一个账号」。openid 按应用区分,这里换了盐。
+func handleWeChatMiniGameCode2Session(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	jsCode := q.Get("js_code")
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	switch {
+	case jsCode == "" || jsCode == "EXPIRED":
+		writeJSON(w, map[string]any{"errcode": 40029, "errmsg": "invalid code"})
+		return
+	case q.Get("appid") == "":
+		writeJSON(w, map[string]any{"errcode": 40013, "errmsg": "invalid appid"})
+		return
+	}
+
+	resp := map[string]any{
+		"openid":      "mg_openid_" + hashTo12(jsCode, "minigame-openid"),
+		"session_key": "MOCK_SESSION_" + hashTo12(jsCode, "session"),
+	}
+	// 与 App 形态同一个怪癖:小游戏没绑定开放平台账号就没有 unionid。js_code 以 "U" 开头才下发。
+	if strings.HasPrefix(jsCode, "U") {
+		resp["unionid"] = "unionid_" + hashTo12(jsCode, "unionid")
+	}
+	writeJSON(w, resp)
+}
+
+// handleDouyinMiniGameCode2Session 模拟抖音小游戏的 code2Session(GET /mgplatform/api/apps/jscode2session)。
+// 成功应答 error=0;失败应答 error 非 0,另带 errcode / errmsg / message。抖音文档没有给出错误码表,
+// 这里的 errcode 数值只是示例,不要拿它当平台的真实取值写断言。
+func handleDouyinMiniGameCode2Session(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	code := q.Get("code")
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	switch {
+	case code == "" || code == "EXPIRED":
+		writeJSON(w, map[string]any{"errcode": 40018, "errmsg": "bad code", "error": 1, "message": "bad code"})
+		return
+	case q.Get("appid") == "":
+		writeJSON(w, map[string]any{"errcode": 40015, "errmsg": "bad appid", "error": 1, "message": "bad appid"})
+		return
+	}
+
+	writeJSON(w, map[string]any{
+		"error":            0,
+		"session_key":      "MOCK_SESSION_" + hashTo12(code, "douyin-session"),
+		"openid":           "openid_" + hashTo12(code, "douyin-openid"),
+		"anonymous_openid": "",
+		"unionid":          "unionid_" + hashTo12(code, "douyin-unionid"),
+	})
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

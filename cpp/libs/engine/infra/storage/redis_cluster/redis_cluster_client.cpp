@@ -1,7 +1,6 @@
 #include "redis_cluster_client.h"
 
 #include <cstddef>
-#include <random>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -14,6 +13,7 @@
 #include "redis_cluster_topology.h"
 #include "redis_command_route.h"
 #include "redis_reply_classifier.h"
+#include "thread_context/trace_context_tls.h"
 
 using redis_cluster::Clock;
 using redis_cluster::CommandRoute;
@@ -109,7 +109,6 @@ public:
 		, queues_(options_.retry, options_.limits)
 		, refreshPolicy_(options_.topologyRefreshPeriod, options_.topologyRefreshMinInterval)
 		, maintenance_(hiredis::Hiredis::ProcessMaintenance())
-		, rng_(std::random_device{}())
 	{
 	}
 
@@ -260,7 +259,10 @@ public:
 			return REDIS_ERR;
 		}
 		command->maintenance = maintenance_;
-		command->callback = cb;
+		// 回调落在提交这一刻的 trace 上(docs/design/distributed-tracing.md §4.3)。应答在 loop 顶层派发,同 slot 的后一条
+		// 由前一条的应答驱动上线,本地收尾(Shutdown、预算耗尽)又在别人的调用栈上同步回调:不包这一层,回调要么没有 trace,
+		// 要么挂到不相干的那条上。提交时没有 trace,回调里也没有。所有回调出口都经过这个对象,不必逐个出口恢复。
+		command->callback = tracing::Bind(cb);
 		command->queue = queue;
 		command->id = nextCommandId_++;
 
@@ -361,15 +363,9 @@ private:
 					self->OnNodeReady(endpoint);
 				}
 			});
-		RedisConnectOptions connect = options_.connect;
-		const double base = connect.reconnectIntervalSec > 0
-			? connect.reconnectIntervalSec
-			: RedisConnectOptions::kDefaultReconnectIntervalSec;
-		std::uniform_real_distribution<double> unit(0.0, 1.0);
-		connect.reconnectIntervalSec =
-			redis_cluster::JitteredReconnectIntervalSec(base, options_.reconnectJitterSec, unit(rng_));
+		// 重连抖动由 RedisManager::Connect 按 options_.connect.reconnectJitterSec 给每条节点连接各抽一次,这里不再另算。
 		node.manager->Connect(
-			&loop_.get(), muduo::net::InetAddress(endpoint.ip, endpoint.port, endpoint.IsIpv6()), std::move(connect));
+			&loop_.get(), muduo::net::InetAddress(endpoint.ip, endpoint.port, endpoint.IsIpv6()), options_.connect);
 		return node;
 	}
 
@@ -847,7 +843,6 @@ private:
 	bool topologyReady_ = false;
 	uint64_t nextCommandId_ = 1;
 	std::size_t pickCursor_ = 0;
-	std::mt19937_64 rng_;   // 重连抖动。只影响连接时机,不进任何业务判定
 	RedisClusterStats stats_;
 };
 

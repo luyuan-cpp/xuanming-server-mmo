@@ -235,7 +235,7 @@ func itSetup(t *testing.T) (context.Context, *itSide, *itSide, *mover, *fakeStor
 		o: moverOptions{
 			db: schema, runID: run, runIDBytes: runBytes, operator: source.principal, backend: string(backend),
 			config: dbplacement.Config{DefaultCluster: "a", EtcdHosts: []string{"e:2379"}, SqlClusters: map[string]dbplacement.SqlCluster{"a": {Hosts: "h:1"}, "b": {Hosts: "h:2"}}},
-			maxLag: time.Second, budget: 20 * time.Second, rollbackBudget: 10 * time.Second, preflight: 10 * time.Second,
+			maxLag: time.Second, budget: 20 * time.Second, compareBudget: 20 * time.Second, rollbackBudget: 10 * time.Second, preflight: 10 * time.Second,
 			verifyMaxAge: time.Hour, retention: time.Hour, pollInterval: 50 * time.Millisecond,
 		},
 		store:       store,
@@ -257,7 +257,7 @@ func itSetup(t *testing.T) (context.Context, *itSide, *itSide, *mover, *fakeStor
 		},
 		now:   time.Now,
 		sleep: sleepContext,
-		log:   &journal{out: &bytes.Buffer{}, now: time.Now},
+		log:   &journal{out: &bytes.Buffer{}, errOut: &bytes.Buffer{}, now: time.Now},
 	}
 	return ctx, source, target, m, store
 }
@@ -357,6 +357,17 @@ func TestITChecksumMatchesAndCatchesDifference(t *testing.T) {
 	}
 	if len(mismatches) != 1 {
 		t.Fatalf("NULL 和空串不同要查出来: %v", mismatches)
+	}
+	// 值里有逗号:('a,b', 'c') 和 ('a', 'b,c') 用分隔符直接连起来是同一串,逐行摘要要分得清。
+	itReplicate(ctx, t, source, target)
+	source.exec(ctx, t, "UPDATE {db}.it_business SET val='a,b',payload=X'63' WHERE id=1")
+	target.exec(ctx, t, "UPDATE {db}.it_business SET val='a',payload=X'622C63' WHERE id=1")
+	mismatches, err = m.compare(ctx, "verify", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mismatches) != 1 || !strings.Contains(mismatches[0], "it_business") {
+		t.Fatalf("逗号挪了位置的两行要查出来: %v", mismatches)
 	}
 	if target.backend != authoritysql.BackendTiDB {
 		return
@@ -519,5 +530,103 @@ func TestITMaintenanceProbeOnRealDatabases(t *testing.T) {
 	}
 	if exists, err = admin.SchemaExists(ctx, target.schema); err != nil || exists {
 		t.Fatalf("库要没了: %v %v", exists, err)
+	}
+}
+
+// itShapeColumns 是 it_shape 表在源库上的定义。排序规则写明:两个后端的缺省值不同。
+const itShapeColumns = "id BIGINT PRIMARY KEY,name VARCHAR(16) COLLATE utf8mb4_bin NOT NULL,note VARCHAR(16) COLLATE utf8mb4_bin NULL,UNIQUE KEY uk_name(name),KEY idx_pair(name,note)"
+
+// 表的定义在真实后端上读得出来、比得出差异:数据一样(都是空表),定义不一样也算不一致。没有主键的表拒绝。
+func TestITTableDefinitionsOnRealDatabases(t *testing.T) {
+	requireIT(t)
+	ctx, source, target, m, _ := itSetup(t)
+	source.exec(ctx, t, "CREATE TABLE {db}.it_shape("+itShapeColumns+")")
+	recreate := func(columns string) {
+		t.Helper()
+		target.exec(ctx, t, "DROP TABLE IF EXISTS {db}.it_shape")
+		target.exec(ctx, t, "CREATE TABLE {db}.it_shape("+columns+")")
+	}
+	recreate(itShapeColumns)
+	mismatches, err := m.compare(ctx, "verify", "", "")
+	if err != nil || len(mismatches) != 0 {
+		t.Fatalf("同一份定义要一致(闸门表、业务表都在内): %v %v", mismatches, err)
+	}
+	view, err := openChecksumView(ctx, source.dsn, source.schema, source.backend, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer view.Close()
+	digest, err := view.TableDigest(ctx, "it_shape")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`column 1 "id" type="bigint`, `column 2 "name" type="varchar(16)" collation="utf8mb4_bin" nullable=NO`, `column 3 "note" type="varchar(16)" collation="utf8mb4_bin" nullable=YES`,
+		`primary key "PRIMARY"`, `unique index "uk_name"`, `index "idx_pair"`,
+	} {
+		if !strings.Contains(digest.Structure, want) {
+			t.Fatalf("表定义里缺 %q:\n%s", want, digest.Structure)
+		}
+	}
+	// 索引里列的先后按 SEQ_IN_INDEX。
+	if name, note := strings.Index(digest.Structure, `("name" expression`), strings.Index(digest.Structure, `"note" expression`); name < 0 || note < name {
+		t.Fatalf("idx_pair 的列序是 name、note:\n%s", digest.Structure)
+	}
+
+	tests := []struct {
+		name    string
+		columns string
+		want    string
+	}{
+		{"唯一约束成了普通索引", "id BIGINT PRIMARY KEY,name VARCHAR(16) COLLATE utf8mb4_bin NOT NULL,note VARCHAR(16) COLLATE utf8mb4_bin NULL,KEY uk_name(name),KEY idx_pair(name,note)", `unique index "uk_name"`},
+		{"列类型不同", "id BIGINT PRIMARY KEY,name VARCHAR(32) COLLATE utf8mb4_bin NOT NULL,note VARCHAR(16) COLLATE utf8mb4_bin NULL,UNIQUE KEY uk_name(name),KEY idx_pair(name,note)", `type="varchar(32)"`},
+		{"排序规则不同", "id BIGINT PRIMARY KEY,name VARCHAR(16) COLLATE utf8mb4_general_ci NOT NULL,note VARCHAR(16) COLLATE utf8mb4_bin NULL,UNIQUE KEY uk_name(name),KEY idx_pair(name,note)", `collation="utf8mb4_general_ci"`},
+		{"可空性不同", "id BIGINT PRIMARY KEY,name VARCHAR(16) COLLATE utf8mb4_bin NOT NULL,note VARCHAR(16) COLLATE utf8mb4_bin NOT NULL,UNIQUE KEY uk_name(name),KEY idx_pair(name,note)", `column 3 "note"`},
+		{"缺省值不同", "id BIGINT PRIMARY KEY,name VARCHAR(16) COLLATE utf8mb4_bin NOT NULL,note VARCHAR(16) COLLATE utf8mb4_bin NULL DEFAULT 'x',UNIQUE KEY uk_name(name),KEY idx_pair(name,note)", `default="x"`},
+		{"索引的列序不同", "id BIGINT PRIMARY KEY,name VARCHAR(16) COLLATE utf8mb4_bin NOT NULL,note VARCHAR(16) COLLATE utf8mb4_bin NULL,UNIQUE KEY uk_name(name),KEY idx_pair(note,name)", `index "idx_pair"`},
+		{"少一个索引", "id BIGINT PRIMARY KEY,name VARCHAR(16) COLLATE utf8mb4_bin NOT NULL,note VARCHAR(16) COLLATE utf8mb4_bin NULL,UNIQUE KEY uk_name(name)", `index "idx_pair"`},
+	}
+	for _, test := range tests {
+		recreate(test.columns)
+		mismatches, err := m.compare(ctx, "verify", "", "")
+		if err != nil {
+			t.Fatalf("%s: %v", test.name, err)
+		}
+		if len(mismatches) != 1 || !strings.Contains(mismatches[0], "it_shape: the table definition differs") || !strings.Contains(mismatches[0], test.want) {
+			t.Fatalf("%s: 定义不同要查出来并点名 %q: %v", test.name, test.want, mismatches)
+		}
+	}
+
+	// 没有主键,只有一个非空唯一键:plan 用的清单点名它,比对直接拒绝。
+	recreate("id BIGINT NOT NULL,name VARCHAR(16) COLLATE utf8mb4_bin NOT NULL,note VARCHAR(16) COLLATE utf8mb4_bin NULL,UNIQUE KEY uk_id(id)")
+	missing, err := (&sqlAdmin{db: target.admin}).TablesWithoutPrimaryKey(ctx, target.schema)
+	if err != nil || strings.Join(missing, ",") != "it_shape" {
+		t.Fatalf("没有主键的表: %v %v", missing, err)
+	}
+	if missing, err = (&sqlAdmin{db: source.admin}).TablesWithoutPrimaryKey(ctx, source.schema); err != nil || len(missing) != 0 {
+		t.Fatalf("源库的表都有主键(闸门表在内): %v %v", missing, err)
+	}
+	if _, err := m.compare(ctx, "verify", "", ""); !errors.Is(err, errRefused) || !strings.Contains(err.Error(), "table it_shape has no primary key") {
+		t.Fatalf("没有主键的表要拒绝并点名: %v", err)
+	}
+}
+
+// mysql 档读复制设置的语句在真实后端上的形状(verify、cutover 核跳过开关和通道过滤,cleanup 核通道撤掉了没有)。
+// 测试实例上不配复制通道:过滤是空集合,通道查不到。通道真的在跑时的行为由手册 §10 的演练覆盖。
+func TestITReplicaSettingsOnRealMySQL(t *testing.T) {
+	requireIT(t)
+	ctx, _, target, _, _ := itSetup(t)
+	if target.backend != authoritysql.BackendMySQL {
+		return
+	}
+	const channel = "dbmove_it_no_such_channel"
+	repl := &gtidReplication{channel: channel, target: target.admin, schema: target.schema}
+	digest, err := repl.channelConfig(ctx)
+	if err != nil || digest != channelFilterDigest(nil) {
+		t.Fatalf("测试实例不该开跳过开关,没有通道时过滤是空集合: %s %v", digest, err)
+	}
+	exists, _, err := repl.StillExists(ctx, dbplacement.FeedIdentity{Channel: channel})
+	if err != nil || exists {
+		t.Fatalf("没有配置过的通道: %v %v", exists, err)
 	}
 }

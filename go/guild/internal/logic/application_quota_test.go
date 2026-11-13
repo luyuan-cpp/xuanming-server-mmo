@@ -161,7 +161,7 @@ func TestApplyJoinGuildQuotaCountsRepositoryRejectionsAndRefreshAttempts(t *test
 	repo := data.NewGuildRepo(rdb, nil, time.Minute)
 	l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2}, WithApplicationQuota(q))
 	// 缓存预检的非法值仓储拒绝发生在配额之后；相同 guild 的重试仍各消耗一次。
-	require.NoError(t, rdb.Set(context.Background(), "player_guild:v2:42", "bad-guild-id", 0).Err())
+	require.NoError(t, rdb.Set(context.Background(), "player_guild:v2:{pg:42}", "bad-guild-id", 0).Err())
 	for i := 0; i < 2; i++ {
 		_, err := l.ApplyJoinGuild(clientCtx(42), &pb.ApplyJoinGuildRequest{GuildId: 9})
 		require.Error(t, err)

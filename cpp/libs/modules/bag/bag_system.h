@@ -160,7 +160,7 @@ struct BagProfile
     // 人物背包 / 仓库 / 临时格:自由格 + 什么都收 + 满了就拒。
     // 三者只有容量不同,所以共用一个工厂 —— 免得多一个只差一个数字的函数。
     //
-    // 临时格 2026-11-05 之前配的是先进先出淘汰(EvictOldestFirst),满 200 件后新掉落会销毁最早进包的那件 ——
+    // 临时格 2026-11-05 之前配的是先进先出淘汰(EvictOldestFirst,2026-11-12 已删除),满 200 件后新掉落会销毁最早进包的那件 ——
     // 被挤掉的东西没有任何去处,就是真丢(审计 cpp-economy#2)。现在满了同样就拒:入账方在任何副作用之前被拒,
     // 由来源保留(战斗结算整笔延后),玩家经 RetrieveTemporaryItems 取回腾位后再补发。
     // 见 docs/design/bag-rule-policy-layering.md §6.6。
@@ -234,9 +234,9 @@ public:
 
     // ── 淘汰策略 ──────────────────────────────────────────────────────
     // 默认 RejectWhenFull,即拆分前的唯一行为(那句 `// TODO: overflow to
-    // temp bag or mail` 底下直接返回"背包满了")。四个固定包今天都是它。
-    // 换成 EvictOldestFirst(先进先出)只需在这里换一个对象 —— 但被挤掉的实例没有去处时那就是丢数据,
-    // 临时格因此在 2026-11-05 改回满即拒(BagProfile::Flat 的说明)。
+    // temp bag or mail` 底下直接返回"背包满了")。2026-11-12 起它是淘汰轴唯一的实现,所有包都是它。
+    // 要换成会淘汰的策略只需在这里换一个对象 —— 但被挤掉的实例没有去处时那就是丢数据,
+    // 临时格因此在 2026-11-05 改回满即拒(BagProfile::Flat 的说明);先要满足 eviction_policy.h 文件头「现状」的两条。
     void SetEviction(std::unique_ptr<IEvictionPolicy> eviction);
     [[nodiscard]] const IEvictionPolicy &Eviction() const { return *eviction_; }
 
@@ -288,8 +288,8 @@ public:
     // CheckQuantities 映射成 tip 码,静默:kSuccess / kFeatureUnavailable(版本错位)/ kBagInsufficientItems。
     [[nodiscard]] uint32_t CheckItemsAvailable(const ItemCountMap &requiredItems) const;
     // evictedOut(可为 nullptr)按退役顺序收集**本次入包为了腾位而销毁的实例**
-    // (销毁前抓拍 guid/config/size)。只有配了会淘汰的策略(EvictOldestFirst)的包才会非空;
-    // 2026-11-05 起四个固定包都是 RejectWhenFull,生产路径上恒为空。
+    // (销毁前抓拍 guid/config/size)。只有配了会淘汰的策略的包才会非空;2026-11-12 起淘汰轴只有
+    // RejectWhenFull 一个实现(eviction_policy.h),它恒为空。
     // 与 MergeAndCompact 的 destroyedOut 是同一个形状、同一个理由:被挤掉的
     // item_uuid 是 transaction_log 做外挂回收的关联键,不留痕追溯链就断了。
     // 生产代码请走 BagService::AddItem / AddItems,那里会把回执落成流水。
@@ -420,7 +420,7 @@ public:
     //            (见 InsertItemForRestore 的落位规则),同部位多槽不会在重登后互换。
     //
     // acquire_seq 在函数内清 0,由本包重新盖章:那是「同一背包内的入包先后」,带着源包
-    // 的序号进来会抬高本包水位、打乱先进先出。
+    // 的序号进来会抬高本包水位、打乱本包的实例序(遍历、扣除与整理的平局都按它排,ItemStore::AcquiredBefore)。
     //
     // **不触发淘汰**(包满就拒,哪怕是临时格):搬运不该销毁任何东西。准入策略照常问。
     // 返回:

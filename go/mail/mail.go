@@ -113,13 +113,43 @@ func main() {
 	conf.MustLoad(*file, &c)
 	if err := run(c, *migrate); err != nil {
 		fmt.Fprintln(os.Stderr, "[mail]", err)
-		code := schemamigrate.ExitCode(schemamigrate.Report{}, err)
-		if errors.Is(err, errManualSchema) {
-			code = schemamigrate.ExitManual
-		}
-		os.Exit(code)
+		os.Exit(exitCode(err))
 	}
 }
+
+// exitCode 把 run 的错误映射成进程退出码(D-14,迁移 Job 的 podFailurePolicy 按它判):
+// 需人工 4,迁移锁忙 3(可重试),其余失败 1。
+func exitCode(err error) int {
+	if errors.Is(err, errManualSchema) {
+		return schemamigrate.ExitManual
+	}
+	return schemamigrate.ExitCode(schemamigrate.Report{}, err)
+}
+
+// schemaGate 把迁移(-migrate)或只读核对(常驻启动)的报告判成能不能继续:
+//   - 有需人工项 → errManualSchema;
+//   - 常驻启动且还有待执行语句 → 要求先跑 -migrate;
+//   - 缺普通索引 → errManualSchema。schemamigrate 只把它记成 Warning、不进 ExitCode,也不会自动补建;
+//     邮箱的查询依赖这些索引,所以升级成需人工(设计 M-16,与 friend / guild 同一口径:拒启,-migrate 以 4 退出)。
+//     判断按报告项的结构化类别,不匹配告警文案。
+//
+// 其余告警只记日志。
+func schemaGate(report schemamigrate.Report, migrate bool) error {
+	if len(report.Manual) > 0 {
+		return fmt.Errorf("%w: %s", errManualSchema, strings.Join(report.Manual, ";"))
+	}
+	if !migrate && !report.Clean() {
+		return errors.New("邮箱结构未部署，请先运行mail -migrate")
+	}
+	for _, warning := range report.Warnings {
+		logx.Info(warning)
+	}
+	if missing := report.MissingIndexes(); len(missing) > 0 {
+		return fmt.Errorf("%w: 邮箱必要索引缺失: %s", errManualSchema, strings.Join(schemamigrate.Messages(missing), ";"))
+	}
+	return nil
+}
+
 func run(c config, migrate bool) (runErr error) {
 	c.Mail = c.Mail.Defaults()
 	c.Sweep = c.Sweep.Defaults()
@@ -199,18 +229,8 @@ func run(c config, migrate bool) (runErr error) {
 	if err != nil {
 		return err
 	}
-	if len(report.Manual) > 0 {
-		return fmt.Errorf("%w: %s", errManualSchema, strings.Join(report.Manual, ";"))
-	}
-	if !migrate && !report.Clean() {
-		return errors.New("邮箱结构未部署，请先运行mail -migrate")
-	}
-	for _, warning := range report.Warnings {
-		logx.Info(warning)
-	}
-	// 缺普通索引在 schemamigrate 里只是 Warning(不进 ExitCode);邮箱依赖这些索引,按结构化类别升级成拒启,不匹配文案。
-	if len(report.MissingIndexes()) > 0 {
-		return errors.New("邮箱必要索引缺失")
+	if err = schemaGate(report, migrate); err != nil {
+		return err
 	}
 	if migrate {
 		return nil

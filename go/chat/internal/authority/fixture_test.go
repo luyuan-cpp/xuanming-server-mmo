@@ -135,6 +135,14 @@ func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*St
 	db, err := fixture.OpenSchema(ctx, name)
 	require.NoError(t, err)
 	require.NoError(t, Migrate(ctx, db))
+	// 每条真库用例都顺带核对:建表语句在真 TiDB 上确实建出了开着的保留期属性(schema.go 的 TTL)。
+	retention, err := RetentionEnabled(ctx, db)
+	require.NoError(t, err)
+	require.True(t, retention, "chat_send_authority 必须带开着的 TTL 属性")
+	// 核对完就关掉:用例用假时钟写 1970 年的行,对 TTL 来说一建表就过期,而 TTL 任务几秒内就可能调度到新表,
+	// 行在断言之前被删掉会让用例偶发失败。保留期属性本身已在上面核对过。
+	_, err = db.ExecContext(ctx, "ALTER TABLE chat_send_authority TTL_ENABLE='OFF'")
+	require.NoError(t, err)
 	require.NoError(t, fixture.GrantTables(ctx, name, "chat_send_authority", "chat_policy"))
 	runtimeDB, err := fixture.Open(ctx, name, 8)
 	require.NoError(t, err)

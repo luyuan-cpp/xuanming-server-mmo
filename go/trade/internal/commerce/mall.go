@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"shared/accountdirectory"
 	"shared/roleidentity"
+	"shared/tracing"
 	"strconv"
 	"strings"
 	"time"
@@ -187,7 +188,8 @@ func (m *Mall) call(ctx context.Context, role, subject, method, path string, inp
 	request.Header.Set("X-Commerce-Timestamp", stamp)
 	request.Header.Set("X-Commerce-Nonce", nonce)
 	request.Header.Set("X-Commerce-Signature", commerceSignature(secret, role, subject, stamp, nonce, method, path, body))
-	response, err := m.HTTP.Do(request)
+	// 带上 traceparent 调商城(distributed-tracing.md §6.2);签名只覆盖上面几项,多一个传播头不影响验签。
+	response, err := tracing.DoHTTP(m.HTTP, request)
 	if err != nil {
 		return err
 	}

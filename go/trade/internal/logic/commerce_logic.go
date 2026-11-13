@@ -367,8 +367,13 @@ func (l *JubaozhaiLogic) ListMarketOrders(in *tradepb.ListMarketOrdersRequest) (
 	rows, err := l.deps.Commerce.Repo.Query(l.ctx, "SELECT "+data.CommerceColumns+" FROM trade_commerce WHERE kind=4 AND side<>0 AND seller_player_id=? AND (created_ms>? OR (created_ms=? AND commerce_id>?)) ORDER BY created_ms,commerce_id LIMIT ?", me, after.CreatedMs, after.CreatedMs, after.CommerceId, limit)
 	out := &tradepb.ListMarketOrdersResponse{ErrorMessage: tipOf(commerceCode(err))}
 	for _, r := range rows {
-		out.Orders = append(out.Orders, marketView(r))
 		out.NextCursor = data.CommerceCursorOf(r).String()
+		// 与 ListCommerceOrders 同一条规则:私有历史按合同里存的原账号 / 修订筛,角色过户之后新主看不到旧主的挂单。
+		// 原身份由入口准入捕获进 ctx;解不开的合同不展示。
+		workflow, decodeErr := data.Workflow(r)
+		if decodeErr == nil && commerce.OwnsRecord(l.ctx, r, workflow) {
+			out.Orders = append(out.Orders, marketView(r))
+		}
 	}
 	return out, nil
 }

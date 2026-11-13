@@ -42,6 +42,7 @@ import (
 	"os"
 	"shared/authoritysql/sqltest"
 	"shared/rolefence"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1892,5 +1893,73 @@ func TestIntegrationCheckRowShards(t *testing.T) {
 	}
 	if err := CheckRowShards(ctx, e.db); err != nil {
 		t.Fatalf("全部改回之后应通过: %v", err)
+	}
+}
+
+// TestIntegrationPlayerItemsPagingReadsEveryRow 钉住 ReconcilePlayer 读条目行的键集翻页(forEachPlayerItemsPage,2026-11-12):
+// 按 (domain, seq) 升序一页一页读完这名玩家的全部行,不漏、不重、不读别的玩家;指定域时只读那个域;
+// 行数正好是页长整数倍时多读一页空页收尾。以前一次至多读 5000 行,超出只打 ERROR、回半份结果。
+func TestIntegrationPlayerItemsPagingReadsEveryRow(t *testing.T) {
+	e := openIntegration(t)
+	const pid, other = uint64(5301), uint64(5302)
+	spec, _ := e.store.registry.Domain(gmDomain)
+	n := min(uint64(5), uint64(spec.GetMaxPending()))
+	if n < 3 {
+		t.Fatalf("GM 域 max_pending=%d,不够造跨页的行", spec.GetMaxPending())
+	}
+	var want []uint64
+	for i := uint64(1); i <= n; i++ {
+		want = append(want, e.mustEnqueue(t, pid, i).Seq)
+	}
+	e.mustEnqueue(t, other, 1) // 别的玩家的行不在结果里
+	ctx := itCtx(t)
+
+	for _, tc := range []struct {
+		name     string
+		domain   inboxpb.PlayerInboxDomain
+		pageSize int
+	}{
+		{"全部域,页长 2", inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_UNSPECIFIED, 2},
+		{"指定域,页长 2", gmDomain, 2},
+		{"页长整除行数", gmDomain, int(n)},
+		{"一页读完", inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_UNSPECIFIED, playerItemsPageSize},
+	} {
+		var got []uint64
+		pages := 0
+		err := e.store.forEachPlayerItemsPage(ctx, pid, tc.domain, tc.pageSize, func(rows []*inboxpb.PlayerInboxItemRow) error {
+			pages++
+			if len(rows) == 0 || len(rows) > tc.pageSize {
+				t.Fatalf("%s: 第 %d 页 %d 行,页长 %d", tc.name, pages, len(rows), tc.pageSize)
+			}
+			for _, row := range rows {
+				if row.GetPlayerId() != pid || row.GetDomain() != uint32(gmDomain) {
+					t.Fatalf("%s: 读到别的玩家或别的域的行 %+v", tc.name, row)
+				}
+				got = append(got, row.GetSeq())
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("%s: seq = %v, want %v", tc.name, got, want)
+		}
+		if wantPages := (len(want) + tc.pageSize - 1) / tc.pageSize; pages != wantPages {
+			t.Fatalf("%s: 交给 visit %d 页, want %d(空页不交给 visit)", tc.name, pages, wantPages)
+		}
+	}
+
+	stop := errors.New("visit 要求停下")
+	calls := 0
+	err := e.store.forEachPlayerItemsPage(ctx, pid, gmDomain, 1, func([]*inboxpb.PlayerInboxItemRow) error {
+		calls++
+		return stop
+	})
+	if !errors.Is(err, stop) || calls != 1 {
+		t.Fatalf("visit 出错要停在那一页并原样返回: calls=%d err=%v", calls, err)
+	}
+	if err := e.store.forEachPlayerItemsPage(ctx, pid, gmDomain, 0, func([]*inboxpb.PlayerInboxItemRow) error { return nil }); err == nil {
+		t.Fatal("页长 0 必须报错,不能死循环或当成读完")
 	}
 }

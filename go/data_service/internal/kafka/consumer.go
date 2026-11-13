@@ -581,7 +581,8 @@ func (r *ownedReader) CommitMessages(ctx context.Context, msgs ...kafkago.Messag
 	err := r.reader.CommitMessages(commitCtx, msgs...)
 	var released *kafkautil.UncommittedError
 	if errors.As(err, &released) {
-		// 消费组 owner 仍在运行、只是这批没提交上（再均衡 / 提交被拒，r2-kc#1）：它已把这些位置交还 Kafka 重投。
+		// 这批没提交上（再均衡 / 提交被拒 / 排空时逐个离组）：消费组 owner 已把这些位置交还 Kafka 重投 —— 仍在运行时结束本代次、
+		// 由下一代次立即重投；正在终止时交给新属主，它自己的票据留到收尾按组内已提交位点核结局（kafkautil.BoundConsumerGroup.releaseUncommitted）。
 		// 不是未知结局，不 hold、不排空兄弟消费者；只把它们从在途集合与票据里摘掉，返回错误由调用方记日志后继续消费。
 		r.forget(released.Released)
 		r.owner.release(released.Released)

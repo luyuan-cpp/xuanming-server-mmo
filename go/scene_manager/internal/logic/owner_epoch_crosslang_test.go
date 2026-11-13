@@ -554,6 +554,40 @@ func TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt(t *testing.T) {
 		assert.Equal(t, "-1", fmt.Sprint(result))
 		assert.Equal(t, "7", ownerEpochRaw(t, sc, playerID))
 	})
+
+	// 铸造结果未知而首发还没生效:scene_manager 的作废只删掉所凭的标记(owner_epoch.go luaRollbackPlayerPlacement「作废」,
+	// zone-redis-regression-guard-20261022.md §4.3.5)。源端随后取证:标记已不在不算错,读到的 epoch 没变、location 仍指回
+	// 自己且没有回执 —— C++ 按「归属没变」解冻(ClassifyOwnership 最先判 epoch 没变)。
+	t.Run("marker_voided_by_scene_manager_reads_as_unchanged", func(t *testing.T) {
+		const playerID = uint64(6399)
+		marker := "5:" + savedAt
+		old := &scene_manager.PlayerLocation{
+			SceneId: 7400, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 5, UpdateTime: 1_757_000_000,
+		}
+		oldBytes, err := gproto.Marshal(old)
+		require.NoError(t, err)
+		oldRaw := string(oldBytes)
+		require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), oldRaw))
+		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "5"))
+		require.NoError(t, sc.Redis.Set(ownerepoch.HandoffKey(playerID), marker))
+
+		// 本该凭 "5:t" 铸出 6 的那次铸造还没到 Redis;收尾的回滚带着作废参数先到。
+		placed := placedLocation{epoch: 6, minted: true, raw: "planned-bytes",
+			observedEpoch: 5, observedRaw: oldRaw, observedKnown: true}
+		plan, err := planRouteRollbackWith(old, oldRaw, testZoneId, placed, marker, false, true)
+		require.NoError(t, err)
+		plan.voidUnapplied = true
+		result, err := sc.Redis.Eval(luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), rollbackPlacementArgs(placed, plan)...)
+		require.NoError(t, err)
+		require.Equal(t, "7", fmt.Sprint(result))
+		require.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)), "所凭的标记被删掉")
+
+		reply := judge(t, playerID)
+		assert.Equal(t, "5", reply[0], "epoch 没变:源端手里的值仍然有效")
+		locRaw, ok := reply[1].(string)
+		require.True(t, ok, "location 必须是字符串,实际 %T", reply[1])
+		assert.Equal(t, oldRaw, locRaw, "location 原样:指回源节点,没有回执")
+	})
 }
 
 func TestHandoffFenceRejectsLateRegistrationPublishAndRevocation(t *testing.T) {

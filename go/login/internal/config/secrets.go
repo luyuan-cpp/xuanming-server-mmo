@@ -243,9 +243,9 @@ func (c SecretConf) resolve(name string, lookup func(string) (string, bool)) (*S
 // 但只要配了,强度检查一视同仁:一条弱的**附加**密钥同样能签出可信凭据,
 // 所以附加密钥和主密钥用同一把尺子量。
 func (s *SecretSet) validate(name string, relaxed, required bool) (warnings []string, err error) {
-	// fail 的文案一份两用:宽松模式进 SECURITY WARNING 日志,生产模式是返回的启动错误(只进 login.go 的启动 panic)。
-	// 返回的 error 按 2026-11-10 日志英文化口径不译,所以保持中文;拆成「英文告警 + 中文错误」两份会让同一事实
-	// 有两份文案、改一边漏一边,不拆。ResolveSecrets 里主密钥复用那条同理。没有测试或文档按原文匹配,将来统一译时两种模式一起改。
+	// fail 的文案一份两用:宽松模式进 SECURITY WARNING 日志,生产模式是启动错误(只进 login.go 的启动 panic)。
+	// 两个去处都是诊断输出,按 AGENTS §2 写英文;只留这一份文案,两种模式不会说法不一(secrets_test.go 钉住)。
+	// ResolveSecrets 里主密钥复用那条同理。
 	fail := func(format string, a ...any) {
 		msg := fmt.Sprintf(format, a...)
 		if relaxed {
@@ -259,22 +259,22 @@ func (s *SecretSet) validate(name string, relaxed, required bool) (warnings []st
 
 	if !s.Configured() {
 		if required {
-			fail("密钥 %s 未配置:生产模式下这把密钥是必需的(配 Secrets.%s.Env 指向环境变量)", name, name)
+			fail("secret %s is not configured: it is required in production mode (set Secrets.%s.Env to the name of an environment variable)", name, name)
 		}
 		return warnings, err
 	}
 
 	for i, key := range s.Candidates() {
-		slot := "主密钥"
+		slot := "primary key"
 		if i > 0 {
-			slot = fmt.Sprintf("附加密钥#%d", i)
+			slot = fmt.Sprintf("additional key #%d", i)
 		}
 		if IsPlaceholderSecret(string(key)) {
-			fail("密钥 %s 的%s是占位串:它已经进过 git / 部署脚本 / 文档,等于公开值", name, slot)
+			fail("secret %s: the %s is a placeholder value; it has been in git / deploy scripts / docs, so it is effectively public", name, slot)
 			continue
 		}
 		if len(key) < MinSecretLen {
-			fail("密钥 %s 的%s只有 %d 字节,低于 %d 字节下限", name, slot, len(key), MinSecretLen)
+			fail("secret %s: the %s is only %d bytes, below the %d-byte minimum", name, slot, len(key), MinSecretLen)
 		}
 	}
 	return warnings, err
@@ -284,7 +284,7 @@ func (s *SecretSet) validate(name string, relaxed, required bool) (warnings []st
 type ResolvedSecrets struct {
 	GateToken  *SecretSet
 	QueueToken *SecretSet
-	// AuthProviders 是第三方登录(微信 / QQ)的凭据,由 svc.InitAuthProviders 消费(auth_providers.go)。
+	// AuthProviders 是第三方登录(微信 / QQ,以及微信、抖音小游戏)的凭据,由 svc.InitAuthProviders 消费(auth_providers.go)。
 	AuthProviders AuthProviderSecrets
 }
 
@@ -376,7 +376,7 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 		if !hmac.Equal(p.x.Primary(), p.y.Primary()) {
 			continue
 		}
-		msg := fmt.Sprintf("密钥 %s 与 %s 主密钥相同:不同用途必须用不同密钥,否则一处泄露即全线失守", p.a, p.b)
+		msg := fmt.Sprintf("secrets %s and %s share the same primary key: different purposes must use different keys, otherwise one leak compromises both", p.a, p.b)
 		if relaxed {
 			warnings = append(warnings, msg)
 			continue

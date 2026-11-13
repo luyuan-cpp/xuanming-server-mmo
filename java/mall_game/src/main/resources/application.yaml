@@ -4,6 +4,22 @@ server:
   error:
     include-message: never
     include-stacktrace: never
+# 链路追踪(docs/design/distributed-tracing.md §7):接住 trade、网关带来的 traceparent,日志带同一个 traceId。
+# 商城只在内网、调用方都经 HMAC 认证,所以照常接收传播头(公网入口的网关才藏掉)。actuator 只为追踪自动配置,
+# web 端点一个都不开,对外 HTTP 面不变。
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  endpoints:
+    web:
+      exposure:
+        exclude: "*"
+# 控制台一行一条 JSON(logstash 风格,与 gateway_node 一致):Micrometer 放进 MDC 的 traceId / spanId 成为顶层字段。
+logging:
+  structured:
+    format:
+      console: logstash
 spring:
   sql:
     init:

@@ -99,6 +99,35 @@ void BagService::SetItemInstanceInitializer(ItemInstanceInitializer initializer)
 	ItemInstanceInitializerSlot() = std::move(initializer);
 }
 
+// 进程级的腾位订阅方槽位(bag_service.h「腾位通知」)。函数内静态,理由同 ItemInstanceInitializerSlot;
+// 启动期装一次、此后只读,不带锁。
+static BagService::SpaceFreedListener &SpaceFreedListenerSlot()
+{
+	static BagService::SpaceFreedListener slot = nullptr;
+	return slot;
+}
+
+void BagService::SetSpaceFreedListener(SpaceFreedListener listener)
+{
+	SpaceFreedListenerSlot() = listener;
+}
+
+void BagService::NotifySpaceFreed(entt::entity playerEntity, const Bag &bag)
+{
+	const SpaceFreedListener listener = SpaceFreedListenerSlot();
+	if (listener == nullptr || !tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		return;
+	}
+	// 只认这名玩家自己的人物背包与临时格:入账只落这两个包。比地址,同 HeldCount:候选副本、仓库、装备栏、动态包都不算。
+	const auto *bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
+	if (bags == nullptr || (&bag != &bags->bags[kInventory] && &bag != &bags->bags[kTemporary]))
+	{
+		return;
+	}
+	listener(playerEntity);
+}
+
 uint32_t BagService::AddItem(
 	entt::entity playerEntity,
 	Bag &bag,
@@ -526,6 +555,8 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     // 这一笔整批发放成功:「连续放不下」到此为止,下一段卡住重新从首次打 WARN(GrantOverflowRejectStreakComp 的说明)。
     if (tlsEcs.actorRegistry.any_of<GrantOverflowRejectStreakComp>(playerEntity))
         tlsEcs.actorRegistry.remove<GrantOverflowRejectStreakComp>(playerEntity);
+    // 真扣到了消耗 = 人物背包移走了东西(「腾位通知」),在两包都发布之后通知。不算净值:同一笔的获得占了多少位不管。
+    if (!drained.empty()) NotifySpaceFreed(playerEntity, inventory);
     return kSuccess;
 }
 
@@ -638,6 +669,10 @@ uint32_t BagService::RemoveItem(
 			playerEntity, guid,
 			capturedConfigId, capturedSize);
 	}
+	if (result == kSuccess)
+	{
+		NotifySpaceFreed(playerEntity, bag); // 「腾位通知」:销毁一件,格子空出来
+	}
 
 	return result;
 }
@@ -687,6 +722,10 @@ uint32_t BagService::RemoveItemsClamped(
 	if (drainedOut != nullptr)
 	{
 		drainedOut->insert(drainedOut->end(), drained.begin(), drained.end());
+	}
+	if (!drained.empty())
+	{
+		NotifySpaceFreed(playerEntity, bag); // 「腾位通知」:真扣到了东西(夹到 0 的一件没扣,不通知)
 	}
 	return result;
 }
@@ -765,6 +804,9 @@ uint32_t BagService::RemoveItemsExact(
 		TransactionLogSystem::LogItemDestroy(
 			playerEntity, entry.guid, entry.configId, entry.amount, correlationId, extra, txType);
 	}
+	// 「腾位通知」:每一项都恰好扣掉了请求的数量(入口已拒 0 数量与空表),包里一定移走了东西;
+	// 是不是人物背包 / 临时格由 NotifySpaceFreed 判(GM 回收也从仓库、装备栏扣)。
+	NotifySpaceFreed(playerEntity, bag);
 
 	return kSuccess;
 }
@@ -860,6 +902,11 @@ uint32_t BagService::RemoveItemsByGuid(
 			removedOut->push_back(item);
 		}
 	}
+	// 「腾位通知」:整批销毁成功。中途失败的半截批次是两层不自洽的编程错误,不当成腾位成功通知。
+	if (!removable.empty())
+	{
+		NotifySpaceFreed(playerEntity, bag);
+	}
 
 	return kSuccess;
 }
@@ -903,6 +950,11 @@ uint32_t BagService::MergeAndCompact(
 	{
 		TransactionLogSystem::LogItemDestroy(
 			playerEntity, item.guid, item.configId, item.size);
+	}
+	// 「腾位通知」:合堆退役了实例,格子空出来。只重排、没合堆时(自由格)一格都没腾,不通知。
+	if (!destroyed.empty())
+	{
+		NotifySpaceFreed(playerEntity, bag);
 	}
 
 	return kSuccess;
@@ -962,5 +1014,7 @@ uint32_t BagService::RetrieveFromTemporary(
 	LOG_INFO << "BagService::RetrieveFromTemporary: moved " << guids.size() << " instance(s) from the temporary bag"
 			 << " into the inventory, " << absorbed.size() << " merged into existing stacks. player_id="
 			 << tlsEcs.GetPlayerId(playerEntity);
+	// 「腾位通知」:临时格搬走了实例(guids 非空由 MoveInstancesTo 把关),两包都放不下而延后的入账可以再试。
+	NotifySpaceFreed(playerEntity, temporary);
 	return kSuccess;
 }

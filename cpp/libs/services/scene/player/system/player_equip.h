@@ -162,6 +162,7 @@ public:
 	//
 	// 成功后:PlayerAttributeSystem::Recalculate(player, RecalcReason::kEquipmentChanged)
 	//   + PlayerAttributeSystem::PushPanel(player)。当前气血 / 法力按比例保持(穿脱不能当治疗)。
+	//   装到空槽时人物背包空出一格,再调 BagService::NotifySpaceFreed(「腾位通知」;替换时格数不变,不调)。
 	// 不写流水(同一 guid 换包)、不过发放封禁闸、不重掷属性、不推背包(由 handler 回两个包的全量)。
 	static uint32_t Equip(entt::entity player, Guid itemId);
 

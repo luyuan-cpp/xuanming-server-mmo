@@ -33,7 +33,12 @@ type directorySteps interface {
 	activateRef(ctx context.Context, account string, player, txID uint64) error
 	promoteRef(ctx context.Context, account string, ref roleRef) error
 	dropRef(ctx context.Context, account string, ref roleRef) (bool, error)
+	// holdRef 把有提交证据的建角 ref 标成保留(按 nonce 比较);scanPendingRefs 不扫标了保留的,scanHeldRefs 只扫它们,
+	// countHeldRefs 数它们。见 account_role_ref.go 的 SweepStaleRefs。
+	holdRef(ctx context.Context, account string, ref roleRef, reason string) error
 	scanPendingRefs(ctx context.Context, olderThan time.Duration, limit int) ([]roleRef, error)
+	scanHeldRefs(ctx context.Context, limit int) ([]roleRef, error)
+	countHeldRefs(ctx context.Context) (int, error)
 
 	// 玩家分片。readOwner 把墓碑也读出来(Account 为空),没有行回 nil。
 	readOwner(ctx context.Context, player uint64) (*dspb.AccountRoleOwnership, error)
@@ -66,6 +71,8 @@ type sqlDirectorySteps struct {
 	directory *AccountDirectoryStore
 	// sweepCursor 让后台清理逐轮换起点。
 	sweepCursor atomic.Uint64
+	// heldCursor 让复核已保留 ref 逐轮换起点。
+	heldCursor atomic.Uint64
 }
 
 // readAccount 读目录行和全部 ref,不取行锁。

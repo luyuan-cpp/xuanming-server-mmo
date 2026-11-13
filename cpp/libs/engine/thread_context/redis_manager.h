@@ -17,6 +17,8 @@ struct RedisConnectOptions
 {
 	// 重连间隔的默认值;Connect 收到非正数时也回落到它。
 	static constexpr double kDefaultReconnectIntervalSec = 3.0;
+	// 重连抖动上限的默认值,见 reconnectJitterSec。
+	static constexpr double kDefaultReconnectJitterSec = 1.0;
 	// 存活探测的默认值;Connect 收到非正数时也回落到它们。
 	static constexpr double kDefaultLivenessProbeIntervalSec = 5.0;
 	static constexpr double kDefaultLivenessTimeoutSec = 15.0;
@@ -24,9 +26,15 @@ struct RedisConnectOptions
 	// 空 = 不认证(dev / 本机无口令 Redis,行为与 2026-10 之前相同);
 	// 非空 = 每条新连接(首次建连与每次重连)建立后发出的第一条命令就是 AUTH,收到 +OK 才对业务可见。
 	std::string password;
-	// 断线重连间隔(秒),同时是一次 AUTH 握手的截止时间(从连上算起)。
+	// 断线重连的基础间隔(秒)。实际周期 = 它 + 本次 Connect 抽出的抖动(见 reconnectJitterSec),
+	// 这个周期同时是一次 AUTH 握手的截止时间(从连上算起)。
 	// 可注入只是为了让回归用例不必等满默认值;生产保持默认。
 	double reconnectIntervalSec = kDefaultReconnectIntervalSec;
+	// 重连抖动上限(秒):每次 Connect 在基础间隔上加一个 [0, 该值) 的随机量,同一个 Connect 周期内不变。
+	// 没有它,Redis 重启或网络恢复时全体进程按同一节拍回连,建连与 AUTH 同时压到刚起来的实例上
+	// (docs/design/infra-reconnect-overview.md §4 R18)。集群客户端的每条节点连接各抽一次。
+	// 0 或负数 = 不加抖动;时序断言精确到重连间隔的回归用例传 0,生产保持默认。
+	double reconnectJitterSec = kDefaultReconnectJitterSec;
 	// 存活探测(契约见 RedisManager::Connect):每隔这么多秒检查一次对业务可见的连接,没有探测 PING 在途就发一条。
 	double livenessProbeIntervalSec = kDefaultLivenessProbeIntervalSec;
 	// 探测 PING 发出后这么多秒仍没有应答,就把连接当成已断开:摘下、释放、走既有重连。
@@ -108,6 +116,13 @@ public:
 	// 因此回调内同步 Connect / Shutdown 或释放连接时，旧连接在分发结束后的 pending 阶段才真正销毁。
 	void SetReconnectCallback(const ReconnectCallback &cb) { reconnectCb_ = cb; }
 
+	// 本次 Connect 周期实际使用的重连周期(秒):基础间隔加抽出的抖动。Connect 之前是默认基础间隔。
+	double ReconnectPeriodSec() const { return reconnectPeriodSec_; }
+
+	// 重连周期 = 基础间隔 + jitterSec × unitRandom。unitRandom 是调用方给的 [0, 1) 随机数,超出范围(含 NaN)按 0 算;
+	// jitterSec 不是正数时不加抖动。纯函数,随机数由调用方给,方便单测。
+	static double JitteredReconnectIntervalSec(double baseSec, double jitterSec, double unitRandom);
+
 private:
 	void ScheduleReconnect();
 	void CancelReconnectTimer();
@@ -154,6 +169,8 @@ private:
 	std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
 	muduo::net::InetAddress redisAddr_;
 	RedisConnectOptions options_;
+	// 本次 Connect 周期的重连周期(秒),Connect 里定下后不变;重连定时器与 AUTH 握手截止都用它。
+	double reconnectPeriodSec_ = RedisConnectOptions::kDefaultReconnectIntervalSec;
 	muduo::net::TimerId reconnectTimerId_;
 	bool reconnectTimerActive_ = false;
 	// 只在 loop 线程访问；每次安排与取消都换代，使已投递的旧重建任务失效。

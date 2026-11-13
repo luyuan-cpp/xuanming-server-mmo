@@ -15,27 +15,20 @@ ApplicationQuotaPerMinute: 10
 # 按 GuildNodeService.rpc/ 前缀的 NodeInfo 找到它(internal/node),没有任何 Go 服务按 go-zero key 发现 guild;
 # 写了反而会被本地 go_services.ps1 -Zone 加上 .z<N> 后缀,把同一个全局服务切成按 zone 的碎片。
 
-# Global Redis (not per-zone — guilds are cross-zone)
-# 三段 Redis 的 PoolSize 是各自 go-redis 连接池上限(P0-E 第 3 批):0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
-# 随 CPU limit 漂移(本机 Windows 上是 10 × 核数);负数 config.Validate 拒启。20 = K8s 上 GOMAXPROCS 按 2 时的缺省值。
-# guild 现在没有 K8s 清单、不进共享 Redis 连接总账;接入 K8s 时要在 tools/scripts/k8s_deploy.ps1 镜像这三个键并记账。
-# DB 用 0(2026-10-23 由 2 改为 0,上线前改、不搬数据):Redis Cluster 只有 DB 0,guild 私有键都带
-# guild: / guild_rank: / player_guild: 前缀,与共享库 DB 0 上的其他键族不冲突(shared-redis-split-by-purpose.md §25.3)。
-RedisClient:
-  Host: 127.0.0.1:6379
-  Password: ""
-  DB: 0
-  PoolSize: 20
-
-# 控制域:assetop:wake 频道(scene 发布,AssetOp.Wake 订阅)与它的跨副本去重键。玩家键已移到下面的 PlayerRedis。
-PlayerLocatorRedis:
-  Host: 127.0.0.1:6379
-  Password: ""
-  DB: 0
-  PoolSize: 20
+# 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1;2026-11-12 取代 RedisClient 与 PlayerLocatorRedis 两段)。
+# 放帮会缓存 guild:v2:{g:<id>} / player_guild:v2:{pg:<id>}、帮会榜 guild_rank:*:{gr:<区>} 与各区维护锁、选主锁、
+# 申请配额、推送冷却、巡检租约、清理水位,以及 scene 发布的 assetop:wake 订阅与它的跨副本去重键。全局一份(帮会跨 zone)。
+# 不写 Addrs = 本机 127.0.0.1:6379 单实例;集群部署写种子地址并打开 Cluster:
+#   Addrs: [127.0.0.1:7100, 127.0.0.1:7101, 127.0.0.1:7102]
+#   Cluster: true
+# PoolSizePerNode 是每个节点的连接池上限,单实例即总上限(20 = 换句柄之前 K8s 上 GOMAXPROCS 按 2 时的 go-redis 缺省值)。
+# 申请配额另有固定 4 条的专用池(logic.ApplicationQuotaRedisPoolSize)。口令写 Password 字面量,或在 SharedRedisPasswordEnv 指名变量。
+ControlRedis:
+  Addrs: [127.0.0.1:6379]
+  PoolSizePerNode: 20
 
 # 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):会话、位置、战斗锁、同步摘要。
-# 不写 Addrs = 指向上面的 PlayerLocatorRedis 实例。集群部署写种子地址并打开 Cluster:
+# 不写 Addrs = 指向上面的 ControlRedis 实例。集群部署写种子地址并打开 Cluster:
 #   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
 #   Cluster: true
 # PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。落地恢复摘要另有固定 4 条的专用池。
@@ -171,9 +164,9 @@ AssetOp:
   AbandonIntervalMs: 3600000
   # 日对账(只读):把 PENDING 行分成 online_retry / offline / alert / abandon_candidate 四类,刷新
   #   assetop_pending_rows 与 assetop_pending_class_oldest_age_seconds。写 0 = 不跑;非 0 时 ∈ [60000, 604800000]。
-  # 对账与放弃只在选主当选的一个副本上跑(锁 guild:assetop:maintenance:leader 在上面的 RedisClient 里)。
+  # 对账与放弃只在选主当选的一个副本上跑(锁 guild:assetop:maintenance:leader 在上面的 ControlRedis 里)。
   AuditIntervalMs: 86400000
-  # 落地唤醒:订阅核心 Redis(上面的 PlayerLocatorRedis,scene 在同一实例上 PUBLISH assetop:wake <player_id>),
+  # 落地唤醒:订阅核心 Redis(上面的 ControlRedis,scene 在同一实例上 PUBLISH assetop:wake <player_id>),
   #   玩家进场完成后立即重投他的 PENDING 行,不再等退避 / 停放档。唤醒只是提示,丢了退回原退避,只慢不错。
   # Enabled 不写 = 开;Concurrency 不写 = 4([1, 64],满了直接丢);TimeoutMs 不写 = 10000(必须 ≥ 2 × OpBudgetMs、≤ 60000:
   #   唤醒先列出该玩家的未决行,剩余预算够一整个 OpBudget 才领下一行,下界再小就会一行不领、静默退化)。
@@ -206,7 +199,7 @@ MatchRpc:
 #   TrialAbandonSeconds:多久后仍无结果也无终局则判 EXPIRED(迟到的结果仍可结算);必须 ≥ 上一项 + 600,≤ 604800(7 天)。
 #   TrialSweepIntervalSeconds:巡检间隔 [10, 600];多副本靠全局 Redis 的 guild:trial:sweep:lease 互斥。
 #   OwedLoopIntervalSeconds:待入队物品循环间隔 [1, 60](结算时未决指令已满者的物品,等窗口有空位再入队)。
-# 战斗锁读的是上面的 PlayerLocatorRedis:它必须与 scene 的 zone Redis(K8s 的 SharedRedis)**同一实例同一 DB**。
+# 战斗锁读的是上面的 PlayerRedis:它必须与 scene 写 battle:lock:{id} 的是同一个玩家域。
 Activity:
   TrialResultOverdueSeconds: 420
   TrialAbandonSeconds: 3600

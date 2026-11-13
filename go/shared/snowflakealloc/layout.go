@@ -29,19 +29,13 @@ const (
 	// MaxCluster / MaxSlot 是默认布局下两个子段的上界(含)。
 	MaxCluster uint64 = (1 << ClusterBits) - 1
 	MaxSlot    uint64 = (1 << SlotBits) - 1
-
-	// PlayerIDClusterBits / PlayerIDSlotBits 是 login PlayerId 的变体:bwmarrin 的 13 位
-	// node 段切成 [cluster3][slot10],worker = (cluster << 10) | slot。login 侧把这两个
-	// 位宽显式传进 Options{ClusterBits, SlotBits};这里只是把布局钉成常量供对拍。
-	PlayerIDClusterBits uint = 3
-	PlayerIDSlotBits    uint = 10
 )
 
 // ComposeWorkerID 把 (cluster, slot) 按给定位宽合成发号器吃的 worker id:
 // worker = (cluster << slotBits) | slot。任一段越界即返回错误(fail-closed,
 // 越界的 cluster 会溢到时间段、越界的 slot 会溢到 cluster 段,两者都是静默撞号)。
 //
-// 默认布局传 ClusterBits / SlotBits;login 传 PlayerIDClusterBits / PlayerIDSlotBits。
+// 分配器传 ClusterBits / SlotBits。login 的 13 位 PlayerId 变体([cluster3][slot10])2026-11-12 随它的槽位申领删除。
 func ComposeWorkerID(cluster uint32, slot uint64, clusterBits, slotBits uint) (uint64, error) {
 	if clusterBits == 0 || slotBits == 0 || clusterBits+slotBits > 63 {
 		return 0, fmt.Errorf("snowflakealloc: invalid worker layout cluster%d/slot%d", clusterBits, slotBits)
@@ -72,7 +66,8 @@ func WorkerOf(id uint64) uint64 {
 // worker 段按默认的 ClusterBits / SlotBits 切。这是 C++ ParseSnowflakeGuid 的等价物,两端用同一组
 // 向量对拍。只用发号器的公开常量(NodeBits / StepBits),不依赖它的内部布局。
 //
-// login 的 bwmarrin PlayerId 是另一种 id 布局(毫秒时间 / 13 位 node),不能用这个拆。
+// 发号器(data_service.AllocateIdSegment)发的永久 ID(player_id、guild_id 等)没有位布局,不能用这个拆
+// (AGENTS.md §7 第 1 条)。
 func DecodeID(id uint64) (epochSec uint64, cluster uint32, slot uint64, step uint64) {
 	stepMask := (uint64(1) << snowflake.StepBits) - 1
 	cluster, slot = DecodeWorkerID(WorkerOf(id), ClusterBits, SlotBits)

@@ -28,35 +28,40 @@
 ## 2. 原理
 
 - **为什么会涨**:etcd 是多版本存储,每次写入都产生一个新 revision,旧版本一直留着,直到被**压缩**(compact)。本仓库有持续写入方:
-  Go `snowflakealloc` 每个持有者每秒一笔水位 Txn(login / scene_manager / match / guild),login 另有每秒一笔毫秒水位,过渡期
-  每笔水位 Txn 镜像写新旧两个 key,gate 每 10s 上报一次人数。K8s 默认档推算约 **每 zone 6.2 revision/s,另加全局池约 2/s**。
+  Go `snowflakealloc` 每个持有者每秒一笔水位 Txn,过渡期每笔水位 Txn 镜像写新旧两个 key,gate 每 10s 上报一次人数。
+  持槽的现在只有 scene_manager(scene_id):login、guild、match 只由发号器发号,match 随 A7c、login 与 guild 2026-11-12 起不再申领槽位、
+  不写水位(login 原来还有每秒一笔毫秒水位)。K8s 默认档推算约 **每 zone 2.2 revision/s**:scene_manager 两副本各每秒一笔,
+  加 gate 两副本每 10 秒一笔;原来 login 两副本的 4 笔/s 与全局池的 2 笔/s 都没有了。
 - **自动压缩怎么做**(etcd 内置,`--auto-compaction-mode=revision`,外部常识):每 5 分钟把历史压到 `最新 revision - retention`。
   这与退役的 CronJob 做的是同一件事、同一个保留量,只是不再需要一个带 shell 的镜像和一份脚本。
 - **压缩不等于缩小文件**:compact 只把旧版本标成可回收,库文件(bbolt)里的空闲页留给以后复用,文件大小不变;
   **defrag** 才会重写文件、把空间还给文件系统。所以在已经涨大的环境上第一次压缩之后,必须紧跟逐成员 defrag(§5)。
 - **配额与 NOSPACE**:库文件超过配额(`--quota-backend-bytes`,本仓库三套都显式设了;按物理文件大小判断 —— 外部常识,待实测)时,
   集群拉起 `NOSPACE` 告警并进入只读 + 删除的维护态,告警**不会自动解除**。后果分项:
-  - 立即失败:新节点注册、失租重注册、gate 人数上报、全部发号水位 Txn(扩容、滚动发布、崩溃恢复都受阻);
-  - 暂不受影响:已注册且租约仍在续的节点、读与 watch;login 的 PlayerId(K8s 默认走号段,不回退 snowflake);
+  - 立即失败:新节点注册、失租重注册、gate 人数上报、scene_manager 的发号水位 Txn、发号器预留新块(主记录 `/id_issuer/counter/primary`
+    就在主 etcd 上)。扩容、滚动发布、崩溃恢复都受阻;
+  - 暂不受影响:已注册且租约仍在续的节点、读与 watch;player_id、guild_id、battle_id 等永久 ID 的发号(只走发号器,没有 snowflake 回退):
+    发号器手里已预留的块照发,用完才 fail-closed,能撑多久见[发号器运维手册](id-issuer-runbook.md)的 `store_error` 一行;
   - 主 etcd 的两个探针都带 `exclude=NOSPACE`(2026-10-30 起):告警时成员不会被摘出 Service、也不会被 liveness 反复重启,读和删照常可用
     (上游 `/health` 语义推断,待 §9 探针 A 在 v3.6.16 上实测)。发号器两套没排除:它们的库只有几个键、保留 1000 个版本,NOSPACE 基本不会发生;
     真发生时成员会 NotReady 并被反复重启,处置同 §7,改探针属于发号器那条线;
-  - 约 2 小时后:仍用 snowflakealloc 发号的 scene_manager / match / guild 因水位过旧拒发(`defaultFenceAfter = 2h`,推断)。
+  - 约 2 小时后:仍用 snowflakealloc 发号的 scene_manager 因水位过旧拒发 scene_id(`defaultFenceAfter = 2h`,推断)。
 - **压缩与 watch**:从已压缩的 revision 起 watch 会被服务端取消(`ErrCompacted`),客户端必须全量重新 list 再 watch。换成内置压缩不改变
   压缩的时机与窗口(都是每 5 分钟、保留 1000000),所以不会更常撞上。Go 侧 watch 循环出错即全量重同步(推断安全);
   C++ 的断流重建、重建后 Range 对账与 compacted 处理在 `docs/design/grpc-muduo-transport.md` §10.2 第 2 批的验收条件里,代码已落,**没有运行证据**。
 
-## 3. 取值(负责人 2026-10-15 定,取值待实测 / 压测复核)
+## 3. 取值(负责人 2026-10-15 定;已定(2026-11-12),压测出基线后可调。依据见 3.1 的历史窗口推算与 3.2 的盘余量判据)
 
 ### 3.1 保留量 ETCD_AUTO_COMPACTION_RETENTION = 1000000(主 etcd 与 compose)
 
-历史窗口 = 保留量 ÷ 写入速率(速率按 `6.2 × zone 数 + 2` revision/s 推算,未实测):
+历史窗口 = 保留量 ÷ 写入速率(速率按 `2.2 × zone 数` revision/s 推算,未实测;只算 §2 列的两项:scene_manager 水位与 gate 人数上报。
+2026-11-12 之前按 `6.2 × zone 数 + 2` 算,多出来的是 login 与全局池 match / guild 的 snowflake 水位,它们已不再写):
 
 | zone 数 | revision/s(推算) | 历史窗口 |
 |---|---|---|
-| 1 | 约 8.2 | 约 34 小时 |
-| 10 | 约 64 | 约 4.3 小时 |
-| 100 | 约 622 | 约 27 分钟 |
+| 1 | 约 2.2 | 约 126 小时 |
+| 10 | 约 22 | 约 12.6 小时 |
+| 100 | 约 220 | 约 76 分钟 |
 
 - 常态占用约 `保留量 × 每 revision 字节数`;每 revision 字节数未实测(M2),按 200~400 字节估是 200~400 MB。
 - 正确性不依赖这个窗口(watch 撞上已压缩区就全量重同步),它只决定余量和日志噪声。**扩 zone 时同步调大**。
@@ -117,7 +122,7 @@ kubectl --context $ctx -n $ns exec etcd-0 -- etcdctl endpoint health --cluster
 kubectl --context $ctx -n $ns exec etcd-0 -- etcdctl alarm list                            # 空 = 无告警
 ```
 
-DB SIZE 超过配额一半就该安排 defrag;到 80% 时 `EtcdDatabaseQuotaHighUsage` 会响,按紧急处理(阈值是建议值,待压测复核)。
+DB SIZE 超过配额一半就该安排 defrag;到 80% 时 `EtcdDatabaseQuotaHighUsage` 会响(`etcd-alerts.yaml`:超过 80% 持续 10 分钟,severity warning),按紧急处理。阈值已定(2026-11-12),压测出基线后可调。依据:库文件到配额(3GiB)时 etcd 报 NOSPACE 告警、整个集群拒绝写入;defrag 要按库文件大小再写一份临时文件,所以在一半时安排,盘和配额都还腾得开(§3.2 的 `配额 × 2 + 1Gi ≤ PVC` 是同一个考虑);80% 留出约 600MiB 给值班逐成员 defrag,即使按 §3.1 表里最大一档的推算速率、每条 400 字节不压缩地涨,也要 40 分钟以上才写满,够逐成员做完一轮。
 发号器两套把 `etcd-0` 换成 `etcd-id-secondary-0` / `etcd-id-registry-0`。
 
 ### 5.2 defrag 规则
@@ -215,15 +220,17 @@ Git Bash 下,以 `/` 开头的参数(`/mmorpg/killswitch/...` 这类键)要加 `
 5. **确认空间**:每个成员的 DB SIZE 都明显低于配额。空间没腾出来就解除告警,写入一来马上再次触发。
 6. **解除告警**:`etcdctl alarm disarm`,再 `etcdctl alarm list` 确认为空。
 7. **验证写入**:`etcdctl put etcd-maintenance/disarm-check ok`,成功后 `etcdctl del etcd-maintenance/disarm-check`。
-8. **事后**:看 C++ 节点是否失租重注册、gate 是否摘掉了节点;Go 发号水位恢复写入后 scene_manager / match / guild 的拒发应自行解除(推断);
+8. **事后**:看 C++ 节点是否失租重注册、gate 是否摘掉了节点;发号水位恢复写入后 scene_manager 的拒发应自行解除(推断),
+   发号器恢复预留新块(指标 `result="store_error"` 不再增长);
    再查自动压缩为什么没挡住:启动日志里的压缩参数是否生效(§4.1)、保留量是否过大、写入速率是否超出 §3.1 的推算、
    `EtcdDatabaseHighFragmentationRatio` 是否早就在响而没人 defrag。
 
 ## 7a. 主 etcd 从快照恢复:按发号安全事件处理
 
-主 etcd 里放着 `snowflakealloc` 的发号水位(`/snowflake/<kind>/c<cluster>/watermark/<slot>` 秒水位、`watermark_ms/<slot>` 毫秒水位,
-都**不挂 lease**),login / scene_manager / match / guild 的 worker id 唯一性靠它们和隔离期 Q(缺省 4h)、自 fence 期限 F(= Q/2,缺省 2h)
-共同保证:申领者跳过 `now − wm < Q` 的槽,持有者距上次水位写成功超过 F 就停发,不等式 `T_ack + F < wm + Q` 让前任与继任者永不同时发号
+主 etcd 里放着 `snowflakealloc` 的发号水位(`/snowflake/<kind>/c<cluster>/watermark/<slot>` 秒水位,**不挂 lease**;
+`watermark_ms/<slot>` 毫秒水位只有已删的 login 槽位写过,现在没有读写者)。持槽的现在只有 scene_manager(kind = `scene-manager`,发 scene_id):
+login、guild、match 只由发号器发号,match 随 A7c、login 与 guild 2026-11-12 起不再申领槽位。scene_manager 的 worker id 唯一性靠水位和
+隔离期 Q(缺省 4h)、自 fence 期限 F(= Q/2,缺省 2h)共同保证:申领者跳过 `now − wm < Q` 的槽,持有者距上次水位写成功超过 F 就停发,不等式 `T_ack + F < wm + Q` 让前任与继任者永不同时发号
 (`go/shared/snowflakealloc/allocator.go` 文件头,`docs/design/node-id-overhaul-plan-20260908.md` §3、§5)。从更早的快照恢复会同时破坏两件事:
 
 - **水位回退**:恢复后 etcd 里的 wm 比持有者真正最后写成的值旧。一个旧到超过 Q 的槽会被新进程当成空闲槽立刻申领,而原持有者可能还在用同一个
@@ -233,22 +240,22 @@ Git Bash 下,以 `/` 开头的参数(`/mmorpg/killswitch/...` 这类键)要加 `
 
 所以恢复主 etcd 时,二选一,不能两样都不做:
 
-1. **首选:恢复前停掉全部持槽进程**(login、scene_manager、match、guild,以及任何调用 `snowflakealloc` 的工具),恢复完成后再启动。
+1. **首选:恢复前停掉全部持槽进程**(现在是各 zone 的 scene_manager,以及任何调用 `snowflakealloc` 的工具),恢复完成后再启动。
    没有进程在发号,就没有「前任还在发」的窗口。
-2. **停不掉时:恢复后至少等满 F(缺省 2 小时)再允许任何新的持槽进程启动**:这段时间不扩容、不滚动发布、不手动拉起这几类服务。
+2. **停不掉时:恢复后至少等满 F(缺省 2 小时)再允许任何新的持槽进程启动**:这段时间不扩容、不滚动发布、不手动拉起 scene_manager。
    仍在运行的持有者要么继续写成水位(槽重新变新,别人申领不到),要么写不成、在 F 内自己 fence 退出,等满 F 之后就不会再有前任在发号。
 
 两种做法都必须这样恢复:`etcdutl snapshot restore <快照> --bump-revision 1000000000 --mark-compacted ...`(与 [搬库手册](db-move-runbook.md)
-里映射回退一行同一口径),保证恢复后的 revision 严格大于恢复前任何进程见过的值。恢复之后核对:各服务启动日志里 `[snowflakealloc]` 的申领
+里映射回退一行同一口径),保证恢复后的 revision 严格大于恢复前任何进程见过的值。恢复之后核对:scene_manager 启动日志里 `[snowflakealloc]` 的申领
 都成功、没有 `slot ownership lost`;有的话按「槽被别人接管」处理,该进程已自己停发。
 
 **revision 倒退(换成一套全新的 etcd、revision 从 1 重计,或者没带 `--bump-revision` 从快照恢复)**:除了重启全部节点
-(`docs/design/grpc-muduo-transport.md` 的 revision 单调前提),本 zone 控制域 Redis 里的节点号持有者 `node:zone:*:holder`
+(`docs/design/grpc-muduo-transport.md` 的 revision 单调前提),本 zone 控制域 Redis 里的节点号持有者 `node:{ctl:<z>}:*:holder`
 (scene_manager 写,scene 节点据它认出「自己的节点号已被别的进程接走」,[归属对账](../design/scene-node-ownership-reconcile.md) §4.6)
 记着倒退之前的修订号,与新登记不可比。scene_manager 自动处理,不用手工清 Redis:
 
-- 领导者每轮全量同步(约一分钟)先读本 zone 的修订号水位 `scene_manager:etcd_revision_seen:zone:<z>`,再线性一致地读 etcd 当前修订号。
-  当前修订号小于水位就换一次 etcd 纪元:`scene_manager:etcd_epoch:zone:<z>` 加一,水位降到当前修订号。ERROR 日志
+- 领导者每轮全量同步(约一分钟)先读本 zone 的修订号水位 `scene_manager:etcd_revision_seen:{ctl:<z>}`,再线性一致地读 etcd 当前修订号。
+  当前修订号小于水位就换一次 etcd 纪元:`scene_manager:etcd_epoch:{ctl:<z>}` 加一,水位降到当前修订号。ERROR 日志
   `[NodeHolder] etcd revision went back in zone N: current revision C is below the recorded W ...`,计数
   `scene_manager_etcd_revision_regressions_total`,告警 `SceneManagerEtcdRevisionRegressed`(critical)。
 - 换纪元之后,快照里在册的号当场改写成新集群里的登记;其余的号旧记录先留着,下一次登记时不比修订号直接覆盖。
@@ -266,7 +273,7 @@ Git Bash 下,以 `/` 开头的参数(`/mmorpg/killswitch/...` 这类键)要加 `
    有领导者仍不亮,多半是那个 zone 的水位丢了(控制域丢过数据或有人删了键),这次倒退认不出来。确认 etcd 确实换过之后,在那个 zone 的
    控制域实例上手工换纪元:
    ```
-   redis-cli -h <控制域实例> INCR scene_manager:etcd_epoch:zone:<z>
+   redis-cli -h <控制域实例> INCR scene_manager:etcd_epoch:{ctl:<z>}
    ```
    效果与自动换纪元相同:该 zone 全部持有者记录让位给下一次登记,领导者下一轮全量同步把在册节点的记录改写成新集群里的登记。
    多做一次也只是全部记录重写一遍,不会误判排空([归属对账](../design/scene-node-ownership-reconcile.md) §9 第 9 条)。
@@ -274,7 +281,8 @@ Git Bash 下,以 `/` 开头的参数(`/mmorpg/killswitch/...` 这类键)要加 `
 修正之前 scene 节点只会认不出被接走,不会误排空。
 
 发号器(data_service `AllocateIdSegment`)的两套独立 etcd 与全局号源登记处是另一回事,恢复与初始化只走 [发号器运维手册](id-issuer-runbook.md),
-**登记处不许从备份恢复**(AGENTS.md §7 不变量 1)。
+**登记处不许从备份恢复**(AGENTS.md §7 不变量 1)。主 etcd 里另有发号器的主记录 `/id_issuer/counter/primary`,它会随主 etcd 的快照一起回退:
+副记录和登记处盖得住,不用停服、不会发重,下一次预留自动对齐,指标 `result="record_behind"`(发号器运维手册 §4.1)。
 
 ## 8. 阶段 2(2026-11-05 完成落码)与部署
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"trade/internal/commerce"
 	"trade/internal/config"
 	"trade/internal/constants"
 	"trade/internal/data"
@@ -67,12 +68,26 @@ func tradeEntry(t *testing.T) grpc.UnaryServerInterceptor {
 	return entry
 }
 
-// TestBuildUnaryInterceptorsOrder 钉住链长与顺序:grpcstats → killswitch → session → serverbase。
+// tradeOwnership 是 trade.go 装配的同一个归属预检,判定函数换成测试给的;check 为 nil 表示角色仍归原身份。
+func tradeOwnership(t *testing.T, check func(context.Context) error) grpc.UnaryServerInterceptor {
+	t.Helper()
+	if check == nil {
+		check = func(context.Context) error { return nil }
+	}
+	ownership, err := roleidentity.OwnershipInterceptor(check, commerce.OwnerRejected)
+	if err != nil {
+		t.Fatalf("归属预检装配失败: %v", err)
+	}
+	return ownership
+}
+
+// TestBuildUnaryInterceptorsOrder 钉住链长与顺序:grpcstats → killswitch → session → ownership → serverbase。
 //
 // 按**可观测行为**逐个探测(函数值不能比较):对每个位置单独调用那一个拦截器,handler 返回带 fault 码的
-// 响应,并带上合法会话头 + 命中的关停规则。于是:
+// 响应,并带上合法会话头、已捕获的原身份和命中的关停规则。于是:
 //   - killswitch:唯一不调 handler、回 Unavailable 的;
 //   - session:唯一让 handler 从 ctx 取到会话 player_id 的;
+//   - ownership:唯一调用归属判定函数的;
 //   - serverbase:唯一把 fault 码打成 rpc_inband_fault 日志的;
 //   - grpcstats:未开启采集时完全透明 —— 剩下的那个位置就是它。
 func TestBuildUnaryInterceptorsOrder(t *testing.T) {
@@ -80,15 +95,20 @@ func TestBuildUnaryInterceptorsOrder(t *testing.T) {
 	ks.SetRules(map[string]killswitch.Rule{
 		strings.TrimPrefix(tradepb.ClientPlayerJubaozhai_BrowseListings_FullMethodName, "/"): {Deny: true, Reason: "单测:顺序探针"},
 	})
-	chain := buildUnaryInterceptors(ks, tradeEntry(t))
-	if len(chain) != 4 {
-		t.Fatalf("拦截器链长度应为 4(grpcstats/killswitch/session/serverbase),实际 %d", len(chain))
+	ownerChecked := false
+	chain := buildUnaryInterceptors(ks, tradeEntry(t), tradeOwnership(t, func(context.Context) error {
+		ownerChecked = true
+		return nil
+	}))
+	if len(chain) != 5 {
+		t.Fatalf("拦截器链长度应为 5(grpcstats/killswitch/session/ownership/serverbase),实际 %d", len(chain))
 	}
 
 	type observed struct {
 		handlerCalled bool
 		blocked       bool
 		sawSession    bool
+		checkedOwner  bool
 		loggedFault   bool
 	}
 	want := []struct {
@@ -98,6 +118,7 @@ func TestBuildUnaryInterceptorsOrder(t *testing.T) {
 		{"grpcstats", observed{handlerCalled: true}},
 		{"killswitch", observed{blocked: true}},
 		{"session", observed{handlerCalled: true, sawSession: true}},
+		{"ownership", observed{handlerCalled: true, checkedOwner: true}},
 		{"serverbase", observed{handlerCalled: true, loggedFault: true}},
 	}
 
@@ -108,7 +129,13 @@ func TestBuildUnaryInterceptorsOrder(t *testing.T) {
 		t.Run(w.name, func(t *testing.T) {
 			logs := logtest.NewCollector(t)
 			var got observed
-			_, err := chain[i](incomingSessionContext(t, info.FullMethod, 42), &tradepb.BrowseListingsRequest{}, info,
+			ownerChecked = false
+			// 探针同时带验签会话与已捕获的原身份:入口准入要前者,归属预检要后者(生产里由入口准入捕获)。
+			probe, err := roleidentity.CaptureSession(incomingSessionContext(t, info.FullMethod, 42))
+			if err != nil {
+				t.Fatalf("探针捕获原身份失败: %v", err)
+			}
+			_, err = chain[i](probe, &tradepb.BrowseListingsRequest{}, info,
 				func(ctx context.Context, req any) (any, error) {
 					got.handlerCalled = true
 					_, got.sawSession = session.ClientPlayerID(ctx)
@@ -117,6 +144,7 @@ func TestBuildUnaryInterceptorsOrder(t *testing.T) {
 			if st, ok := status.FromError(err); err != nil && ok && st.Code() == codes.Unavailable {
 				got.blocked = true
 			}
+			got.checkedOwner = ownerChecked
 			got.loggedFault = strings.Contains(logs.String(), serverbase.EventInbandFault)
 			if got != w.obs {
 				t.Fatalf("位置 %d 应是 %s,行为不符: 期望 %+v,实际 %+v", i, w.name, w.obs, got)
@@ -134,7 +162,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 	ks.SetRules(map[string]killswitch.Rule{
 		blocked: {Deny: true, Reason: "单测:浏览把库打爆了"},
 	})
-	chain := buildUnaryInterceptors(ks, tradeEntry(t))
+	chain := buildUnaryInterceptors(ks, tradeEntry(t), tradeOwnership(t, nil))
 
 	t.Run("命中规则的方法被短路", func(t *testing.T) {
 		handlerCalled := false
@@ -186,7 +214,7 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: tradepb.ClientPlayerJubaozhai_BrowseListings_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(ks, tradeEntry(t)), info, func(ctx context.Context, req any) (any, error) {
+	h := chainUnary(buildUnaryInterceptors(ks, tradeEntry(t), tradeOwnership(t, nil)), info, func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return &tradepb.BrowseListingsResponse{}, nil
 	})
@@ -206,7 +234,7 @@ func TestSessionGateRejectsClientCallToTradeAdmin(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: tradepb.TradeAdmin_SeedListing_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t)), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t), tradeOwnership(t, nil)), info,
 		func(ctx context.Context, req any) (any, error) {
 			handlerCalled = true
 			return &tradepb.SeedListingResponse{}, nil
@@ -221,12 +249,81 @@ func TestSessionGateRejectsClientCallToTradeAdmin(t *testing.T) {
 	}
 }
 
+// TestOwnershipPrecheckWiredIntoUnaryChain 证明原角色归属预检**确实挂在**链上,且在入口准入之后、handler 之前
+// (docs/design/gate-online-identity.md §9.3):过户、删角之后旧连接发来的只读请求必须在 handler 之前被拒。
+// 删掉 buildUnaryInterceptors 里 ownership 那一行,其余测试全绿,旧主却还能读这名角色的货架、收藏与盘口挂单。
+func TestOwnershipPrecheckWiredIntoUnaryChain(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		checkErr error
+		code     codes.Code
+	}{
+		{"角色仍归原身份", nil, codes.OK},
+		{"角色已换主或已删", commerce.ErrConflict, codes.PermissionDenied},
+		// 目录读不到、库故障:不能告诉客户端角色变了,也不回 Unavailable(只读、确定没写,不该把排空证明打成 Hold)。
+		{"这一次判不了", errors.New("目录读不到"), codes.Aborted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			logtest.Discard(t)
+			checked, handlerCalled := false, false
+			info := &grpc.UnaryServerInfo{FullMethod: tradepb.ClientPlayerJubaozhai_GetMyShelf_FullMethodName}
+			ownership := tradeOwnership(t, func(ctx context.Context) error {
+				checked = true
+				original, ok := roleidentity.Original(ctx)
+				if !ok || original.Role.GetPlayerId() != 42 || original.Account != "trade-account" || original.OwnerRevision != 7 {
+					t.Errorf("归属预检要按入口准入捕获的原身份判,实际 %v(ok=%v)", original, ok)
+				}
+				return tc.checkErr
+			})
+			h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t), ownership), info,
+				func(ctx context.Context, req any) (any, error) {
+					handlerCalled = true
+					return &tradepb.GetMyShelfResponse{}, nil
+				})
+
+			_, err := h(incomingSessionContext(t, info.FullMethod, 42), &tradepb.GetMyShelfRequest{})
+			if !checked {
+				t.Fatal("归属判定没有被调用:归属预检没有挂上拦截器链(或排在入口准入之前,拿不到原身份)")
+			}
+			if status.Code(err) != tc.code {
+				t.Fatalf("期望 %v,得到 %v", tc.code, err)
+			}
+			if handlerCalled != (tc.code == codes.OK) {
+				t.Fatalf("handler 调用与结果不符: called=%v code=%v", handlerCalled, tc.code)
+			}
+		})
+	}
+}
+
+// TestOwnershipPrecheckSkipsInternalCalls:不带会话的内部调用(TradeAdmin、角色护栏参与者接口)没有原身份,
+// 不做归属预检,否则协调者冻结角色、robot 播种都会被这一层挡住。
+func TestOwnershipPrecheckSkipsInternalCalls(t *testing.T) {
+	checked, handlerCalled := false, false
+	info := &grpc.UnaryServerInfo{FullMethod: tradepb.TradeAdmin_SeedListing_FullMethodName}
+	ownership := tradeOwnership(t, func(context.Context) error {
+		checked = true
+		return commerce.ErrConflict
+	})
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t), ownership), info,
+		func(ctx context.Context, req any) (any, error) {
+			handlerCalled = true
+			return &tradepb.SeedListingResponse{}, nil
+		})
+
+	if _, err := h(context.Background(), &tradepb.SeedListingRequest{}); err != nil {
+		t.Fatalf("无会话的内部调用必须放行: %v", err)
+	}
+	if checked || !handlerCalled {
+		t.Fatalf("内部调用不做归属预检且要走到 handler: checked=%v handlerCalled=%v", checked, handlerCalled)
+	}
+}
+
 // TestInternalSeedListingWithoutSessionReachesHandler:不带会话 metadata 的内部调用(robot 直连播种)
 // 必须穿过整条链到达 handler,且 handler 眼里没有客户端身份。
 func TestInternalSeedListingWithoutSessionReachesHandler(t *testing.T) {
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: tradepb.TradeAdmin_SeedListing_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t)), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t), tradeOwnership(t, nil)), info,
 		func(ctx context.Context, req any) (any, error) {
 			handlerCalled = true
 			if _, ok := session.ClientPlayerID(ctx); ok {
@@ -250,7 +347,7 @@ func TestBrokenSessionRejectedInChain(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: tradepb.TradeAdmin_SeedListing_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t)), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t), tradeOwnership(t, nil)), info,
 		func(ctx context.Context, req any) (any, error) {
 			handlerCalled = true
 			return &tradepb.SeedListingResponse{}, nil
@@ -356,6 +453,10 @@ func TestEnsureSchema(t *testing.T) {
 			wantErr: true, wantRemedy: true},
 		{name: "false + Plan 出错", autoMigrate: &no, err: errors.New("dial tcp: connection refused"),
 			wantErr: true, wantRemedy: true},
+		{name: "false + 只有多余列告警", autoMigrate: &no, report: extraColumnReport()},
+		// 缺索引落在 Warnings 里,Report.Clean() 不看它,所以走的是 !Clean() 之后单独那一判。
+		// 它不带补救命令:-migrate 同样不补建索引,指过去只会让人白跑一趟。
+		{name: "false + 缺索引", autoMigrate: &no, report: missingIndexReport(), wantErr: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -456,6 +557,90 @@ func TestRunMigrationModifyAuthorization(t *testing.T) {
 			}
 			if up.opts.Database != data.DatabaseName || len(up.opts.Tables) != len(data.Tables()) {
 				t.Fatalf("迁移授权不得改变目标库或表清单: %+v", up.opts)
+			}
+		})
+	}
+}
+
+// missingIndexMessage 是缺索引那一项的文案样本。trade 只按结构化类别判断,文案内容不影响拒启,
+// 这里只用来核对错误里带上了原文(排查的人靠它知道是哪张表的哪条索引)。
+const missingIndexMessage = "missing index (not created automatically): table trade_listing lacks index idx_trade_listing_1 declared in proto"
+
+// missingIndexReport 是 schemamigrate 报出一条缺普通索引时的报告形状:结构化项进 Findings,同一条文案进 Warnings。
+func missingIndexReport() schemamigrate.Report {
+	return schemamigrate.Report{
+		Warnings: []string{missingIndexMessage},
+		Findings: []schemamigrate.Finding{{Kind: schemamigrate.FindingMissingIndex,
+			Table: "trade_listing", Index: "idx_trade_listing_1", Message: missingIndexMessage}},
+	}
+}
+
+// extraColumnReport 是只有一条多余列告警的报告。
+func extraColumnReport() schemamigrate.Report {
+	const msg = "extra column (never dropped): trade_listing.legacy_col is not declared in proto"
+	return schemamigrate.Report{
+		Warnings: []string{msg},
+		Findings: []schemamigrate.Finding{{Kind: schemamigrate.FindingExtraColumn,
+			Table: "trade_listing", Column: "legacy_col", Message: msg}},
+	}
+}
+
+// TestMissingIndexIsBlocking 钉住全仓口径「缺普通索引即拒启」在 trade 的落实(2026-11-12 补齐)。
+//
+// schemamigrate 对已存在的表只 ADD COLUMN,不补建 proto 新声明的普通索引,而 Warning 不进 ExitCode;
+// 放过去就是带着缺索引的表对外服务,查询与后台扫描退化成全表扫,全程零报错。
+func TestMissingIndexIsBlocking(t *testing.T) {
+	err := missingIndexError(missingIndexReport())
+	if err == nil {
+		t.Fatal("缺索引必须返回错误(拒绝启动 / -migrate 返回非 0)")
+	}
+	// 错误里要带上原始告警与库名:排查的人靠它知道是哪个库、哪张表的哪条索引。
+	if !strings.Contains(err.Error(), missingIndexMessage) || !strings.Contains(err.Error(), data.DatabaseName) {
+		t.Errorf("错误应带上告警原文与库名 %q,实际: %v", data.DatabaseName, err)
+	}
+	if missingIndexError(extraColumnReport()) != nil {
+		t.Error("只有多余列告警时不得拒绝启动(回滚到旧版本二进制时是正常形态)")
+	}
+	if missingIndexError(schemamigrate.Report{}) != nil {
+		t.Error("没有任何告警时不得拒绝启动")
+	}
+	// 判断只看结构化类别:只有文案、没有缺索引项的报告不拒启,文案改措辞不会改变拒启行为。
+	if missingIndexError(schemamigrate.Report{Warnings: []string{missingIndexMessage}}) != nil {
+		t.Error("不能按告警文案判断缺索引")
+	}
+}
+
+// TestRunMigrationExitCodes 钉住 `-migrate` 的退出码(D-14:0 成功 / 1 失败 / 3 锁忙 / 4 需人工)。
+//
+// trade-migrate Job 与部署脚本只看退出码。最要紧的是「缺索引 → 4」:schemamigrate 把缺索引记成 Warning、
+// ExitCode 算出来是 0,不在 runMigration 里升级的话 Job 会绿着结束,随后起来的 trade Pod 又被 ensureSchema 拦下。
+func TestRunMigrationExitCodes(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		report schemamigrate.Report
+		err    error
+		want   int
+	}{
+		{name: "建表成功", report: schemamigrate.Report{Statements: []string{"CREATE TABLE trade_listing ..."}}, want: schemamigrate.ExitOK},
+		{name: "只有多余列告警照常成功", report: extraColumnReport(), want: schemamigrate.ExitOK},
+		{name: "缺索引升级成需人工", report: missingIndexReport(), want: schemamigrate.ExitManual},
+		{name: "需人工项", report: schemamigrate.Report{Manual: []string{"column type drift"}}, want: schemamigrate.ExitManual},
+		{name: "锁忙可重试", err: schemamigrate.ErrLockBusy, want: schemamigrate.ExitLockBusy},
+		{name: "迁移出错", err: errors.New("dial tcp: connection refused"), want: schemamigrate.ExitFailed},
+		// 迁移本身已经失败时,缺索引不得把退出码「改善」成 4:失败(1)比需人工(4)更要紧。
+		{name: "出错且缺索引仍按出错", report: missingIndexReport(), err: errors.New("ddl failed"), want: schemamigrate.ExitFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			up := &fakeSchemaRunner{report: tc.report, err: tc.err}
+			openMySQL := func(config.MySQLConf) (*sql.DB, error) {
+				// sql.Open 只创建连接池;假 Up 不发查询,整个测试不连接数据库。
+				return sql.Open("mysql", "test@tcp(127.0.0.1:1)/mmorpg_trade")
+			}
+			if got := runMigration(config.Config{}, false, openMySQL, up.run); got != tc.want {
+				t.Fatalf("退出码应为 %d,实际 %d", tc.want, got)
+			}
+			if up.calls != 1 {
+				t.Fatalf("应恰好跑一次 Up,实际 %d 次", up.calls)
 			}
 		})
 	}

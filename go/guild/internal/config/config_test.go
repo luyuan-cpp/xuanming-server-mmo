@@ -10,6 +10,7 @@ import (
 	"github.com/zeromicro/go-zero/core/conf"
 
 	"shared/assetopwake"
+	"shared/clusterredis"
 	"shared/playerredis"
 )
 
@@ -65,14 +66,8 @@ const minimalGuildYaml = `
 Name: guild.rpc
 ListenOn: 127.0.0.1:50300
 Timeout: 4000
-RedisClient:
-  Host: 127.0.0.1:6379
-  Password: ""
-  DB: 2
-PlayerLocatorRedis:
-  Host: 127.0.0.1:6379
-  Password: ""
-  DB: 0
+ControlRedis:
+  Addrs: [127.0.0.1:6379]
 MySQL:
   DataSource: "u:p@tcp(127.0.0.1:3306)/mmorpg_guild"
 DataServiceRpc:
@@ -994,21 +989,23 @@ func TestApplicationQuotaConfig(t *testing.T) {
 	}
 }
 
-// 没写 PlayerRedis.Addrs:玩家域指向 PlayerLocatorRedis 那一个实例,它没写 Host 时回落 RedisClient;写了就完全按它来。
+// 没写 PlayerRedis.Addrs:玩家域指向 ControlRedis 那一个实例,它没写 Addrs 时两者都回落本机单实例;写了就完全按它来。
 func TestEffectivePlayerRedis(t *testing.T) {
 	c := Config{
-		RedisClient:        RedisConf{Host: "global:6379", Password: "global-secret"},
-		PlayerLocatorRedis: RedisConf{Host: "locator:6379", Password: "locator-secret", PoolSize: 9},
+		ControlRedis: clusterredis.Config{Addrs: []string{"control:6379"}, Password: "control-secret", PoolSizePerNode: 9},
 	}
 	got := c.EffectivePlayerRedis()
-	if len(got.Addrs) != 1 || got.Addrs[0] != "locator:6379" || got.Password != "locator-secret" || got.PoolSizePerNode != 9 {
-		t.Fatalf("应指向 PlayerLocatorRedis: %+v", got)
+	if len(got.Addrs) != 1 || got.Addrs[0] != "control:6379" || got.Password != "control-secret" || got.PoolSizePerNode != 9 {
+		t.Fatalf("应指向 ControlRedis: %+v", got)
 	}
 
-	c.PlayerLocatorRedis = RedisConf{}
+	c.ControlRedis = clusterredis.Config{}
 	got = c.EffectivePlayerRedis()
-	if len(got.Addrs) != 1 || got.Addrs[0] != "global:6379" || got.Password != "global-secret" || got.PoolSizePerNode != playerRedisFallbackPoolSize {
-		t.Fatalf("PlayerLocatorRedis 没写 Host 时应回落 RedisClient: %+v", got)
+	if len(got.Addrs) != 1 || got.Addrs[0] != controlRedisFallbackAddr || got.PoolSizePerNode != controlRedisFallbackPoolSize {
+		t.Fatalf("ControlRedis 没写 Addrs 时应回落本机单实例: %+v", got)
+	}
+	if control := c.EffectiveControlRedis(); len(control.Addrs) != 1 || control.Addrs[0] != controlRedisFallbackAddr {
+		t.Fatalf("ControlRedis 没写 Addrs 时应指向本机单实例: %+v", control)
 	}
 
 	c.PlayerRedis = playerredis.Config{Addrs: []string{"a:7000", "b:7000"}, Cluster: true}

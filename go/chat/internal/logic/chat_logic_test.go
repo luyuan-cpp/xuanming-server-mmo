@@ -169,6 +169,20 @@ func TestRateRejectionAndAcceptedDuplicateAreRelayed(t *testing.T) {
 	}
 	require.Zero(t, send(t, sc, playerCtx(playerA), request()))
 }
+
+// 世界频道发言间隔与每秒条数回给客户端的是同一个限流码,指标分开记:看得出是哪一道在挡。
+func TestWorldCooldownRejectionSharesTheTipButHasItsOwnOutcome(t *testing.T) {
+	sc, spy := fixture()
+	label := svc.ChannelLabel(request().GetMessage().GetChannel())
+	cooldownBefore := svc.SendTotalValue(label, svc.OutcomeWorldCooldown)
+	rateBefore := svc.SendTotalValue(label, svc.OutcomeRateLimited)
+	spy.send = func(context.Context, *chatpb.SendChatRequest) (authority.SendResult, error) {
+		return authority.SendResult{Tip: constants.ErrRateLimited, Cooldown: true}, nil
+	}
+	require.Equal(t, constants.ErrRateLimited, send(t, sc, playerCtx(playerA), request()))
+	require.Equal(t, cooldownBefore+1, svc.SendTotalValue(label, svc.OutcomeWorldCooldown))
+	require.Equal(t, rateBefore, svc.SendTotalValue(label, svc.OutcomeRateLimited), "发言间隔的拒绝不记进每秒限流")
+}
 func TestPullLimitClamped(t *testing.T) {
 	sc, spy := fixture()
 	for _, value := range []struct {

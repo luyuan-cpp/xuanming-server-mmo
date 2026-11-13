@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -407,16 +408,29 @@ func (c *fakeSlotCatalog) CurrentMeta(context.Context) (*dbpb.RouteMeta, error) 
 	return &dbpb.RouteMeta{Generation: generationForTest, Writable: writable, WriterEpoch: c.epoch}, nil
 }
 
+// 夹具里写者 Pod 的工作负载身份:namespace mmorpg-zone-1 的 ServiceAccount default(registered_by,workload_identity.go)。
+const (
+	namespaceForTest         = "mmorpg-zone-1"
+	serviceAccountForTest    = "default"
+	serviceAccountUIDForTest = "0f8fad5b-d9cb-469f-a165-70867728950e"
+)
+
+var workloadIdentityForTest = workloadIdentity{namespace: namespaceForTest, serviceAccount: serviceAccountForTest, uid: serviceAccountUIDForTest}.String()
+
 // slotHarness 把一个槽位模板接到内存里的目录上。每个 Pod 有自己的私有 emptyDir,启动记录按 Pod 分开放。
+// identity、identityErr 是注册器问到的工作负载身份,identityCalls 数问了几次。
 type slotHarness struct {
-	catalogs map[string]*fakeSlotCatalog
-	records  map[string]*dbpb.SqlWriterBootRoster_Entry
-	template *dbpb.SqlWriterBootRoster_Entry
+	catalogs      map[string]*fakeSlotCatalog
+	records       map[string]*dbpb.SqlWriterBootRoster_Entry
+	template      *dbpb.SqlWriterBootRoster_Entry
+	identity      string
+	identityErr   error
+	identityCalls int
 }
 
 func newSlotHarness(t *testing.T, schemas ...string) *slotHarness {
 	t.Helper()
-	h := &slotHarness{catalogs: map[string]*fakeSlotCatalog{}, records: map[string]*dbpb.SqlWriterBootRoster_Entry{}, template: slotEntryForTest(schemas...)}
+	h := &slotHarness{catalogs: map[string]*fakeSlotCatalog{}, records: map[string]*dbpb.SqlWriterBootRoster_Entry{}, template: slotEntryForTest(schemas...), identity: workloadIdentityForTest}
 	for _, schema := range schemas {
 		h.catalogs[schema] = &fakeSlotCatalog{t: t, epoch: 9}
 	}
@@ -431,6 +445,10 @@ func (h *slotHarness) pod(pod string) slotRegistration {
 		physical:     physicalForTest,
 		open: func(request *dbpb.SqlWriterLifecycleReceipt_Request) (registrationCatalog, error) {
 			return h.catalogs[request.AuthoritySchema], nil
+		},
+		identity: func(context.Context) (string, error) {
+			h.identityCalls++
+			return h.identity, h.identityErr
 		},
 		loadRecord: func(path string) (*dbpb.SqlWriterBootRoster_Entry, error) {
 			record, ok := h.records[pod+path]
@@ -476,6 +494,7 @@ func TestSlotTemplateMustLeaveIdentityEmpty(t *testing.T) {
 	for name, change := range map[string]func(*dbpb.SqlWriterLifecycleReceipt_Request){
 		"request_id":    func(r *dbpb.SqlWriterLifecycleReceipt_Request) { r.RequestId = bytes.Repeat([]byte{1}, 16) },
 		"deployment_id": func(r *dbpb.SqlWriterLifecycleReceipt_Request) { r.DeploymentId = "PLACEHOLDER_POD_UID" },
+		"registered_by": func(r *dbpb.SqlWriterLifecycleReceipt_Request) { r.RegisteredBy = workloadIdentityForTest },
 		"writer_key":    func(r *dbpb.SqlWriterLifecycleReceipt_Request) { r.Writer.WriterKey = bytes.Repeat([]byte{2}, 16) },
 		"instance_id":   func(r *dbpb.SqlWriterLifecycleReceipt_Request) { r.Writer.InstanceId = bytes.Repeat([]byte{3}, 16) },
 		"registration": func(r *dbpb.SqlWriterLifecycleReceipt_Request) {
@@ -578,6 +597,90 @@ func TestNextBootTakesHighestSeqAcrossDatabases(t *testing.T) {
 }
 
 // init 重跑(同一个 Pod):读启动记录,还是同一代。已注册的库收据在,原样返回;没注册的接着注册。
+// 登记一代时,把登记进程的工作负载身份记进每个库的 REGISTER(registered_by,缩容收尾按它判归属,设计稿 §5.9):
+// 各库相同,算进注册摘要(登记之后改不了);只在现场生成这一代时问一次,init 重跑读启动记录,不再问。
+func TestBootRecordsWhoRegisteredIt(t *testing.T) {
+	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
+	_, boot, err := h.pod("pod-a").register(context.Background(), h.template)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, request := range boot.Requests {
+		if request.RegisteredBy != workloadIdentityForTest {
+			t.Fatalf("%s 的 REGISTER 要记下登记它的工作负载: %q", request.AuthoritySchema, request.RegisteredBy)
+		}
+	}
+	anonymous := proto.Clone(boot.Requests[0]).(*dbpb.SqlWriterLifecycleReceipt_Request)
+	anonymous.RegisteredBy = ""
+	anonymous.Writer.RegistrationDigest = nil
+	canonical, err := authoritysql.CanonicalRegistrationRequest(anonymous)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(canonical.Writer.RegistrationDigest, boot.Requests[0].Writer.RegistrationDigest) {
+		t.Fatal("身份要算进注册摘要")
+	}
+	if err = recordMatchesTemplate(h.record("pod-a"), h.template, "pod-a"); err != nil {
+		t.Fatalf("带身份的启动记录仍是这份模板生成的: %v", err)
+	}
+	if _, again, err := h.pod("pod-a").register(context.Background(), h.template); err != nil || !proto.Equal(again, boot) {
+		t.Fatalf("重跑还是同一代: %v", err)
+	}
+	if h.identityCalls != 1 {
+		t.Fatalf("身份只在生成这一代时问一次,重跑读启动记录: %d", h.identityCalls)
+	}
+}
+
+// 在 K8s 里读不到身份就不登记:什么都没写、不留启动记录;修好之后重新生成一代。带着空身份登记的一代缩容时不会被自动结束,
+// 所以宁可现在停在 init。
+func TestIdentityFailureRegistersNothing(t *testing.T) {
+	h := newSlotHarness(t, "zone_1_db")
+	h.identityErr = errors.New("POST selfsubjectreviews returned HTTP 403")
+	if _, _, err := h.pod("pod-a").register(context.Background(), h.template); err == nil || !strings.Contains(err.Error(), "HTTP 403") {
+		t.Fatalf("读不到身份要原样报错: %v", err)
+	}
+	if h.record("pod-a") != nil || h.catalogs["zone_1_db"].registers != 0 || h.catalogs["zone_1_db"].latest != nil {
+		t.Fatal("读不到身份时什么都不能写")
+	}
+	h.identityErr = nil
+	if _, boot, err := h.pod("pod-a").register(context.Background(), h.template); err != nil || boot.Requests[0].RegisteredBy != workloadIdentityForTest {
+		t.Fatalf("修好之后照常登记: %v", err)
+	}
+}
+
+// 集群外登记(本机脚本、调试栈)没有工作负载身份:照常登记,registered_by 为空。
+func TestBootOutsideKubernetesHasNoIdentity(t *testing.T) {
+	h := newSlotHarness(t, "zone_1_db")
+	h.identity = ""
+	_, boot, err := h.pod("local-boot").register(context.Background(), h.template)
+	if err != nil || boot.Requests[0].RegisteredBy != "" {
+		t.Fatalf("集群外登记不带身份: %v", err)
+	}
+	if err = recordMatchesTemplate(h.record("local-boot"), h.template, "local-boot"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 启动记录里各库的 registered_by 必须相同:一代是一个 Pod 登记的。
+func TestBootRecordWithMixedIdentityRefused(t *testing.T) {
+	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
+	if _, _, err := h.pod("pod-a").register(context.Background(), h.template); err != nil {
+		t.Fatal(err)
+	}
+	tampered := proto.Clone(h.record("pod-a")).(*dbpb.SqlWriterBootRoster_Entry)
+	other := tampered.Requests[1]
+	other.RegisteredBy = workloadIdentity{namespace: "other-namespace", serviceAccount: serviceAccountForTest, uid: serviceAccountUIDForTest}.String()
+	other.Writer.RegistrationDigest = nil
+	canonical, err := authoritysql.CanonicalRegistrationRequest(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered.Requests[1] = canonical
+	if recordMatchesTemplate(tampered, h.template, "pod-a") == nil {
+		t.Fatal("两个库的登记身份不同的启动记录被接受了")
+	}
+}
+
 func TestInitRestartReplaysRecordedBoot(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
 	first, second := h.catalogs["zone_1_db"], h.catalogs["zone_2_db"]

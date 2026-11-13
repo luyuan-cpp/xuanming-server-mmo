@@ -21,9 +21,10 @@ package data
 //	guild:trial:cooldown:{initiator}     STRING  建房冷却  发起人两次建房的最小间隔
 //	guild:trial:sweep:lease              STRING  调用方给  历练巡检器的多副本互斥(06 §6.33)
 //
-// **只在单节点 Redis 上成立**:建房脚本要在脚本里按 of 键的值拼出另一个房间的键再读它,这个键没有出现在 KEYS 里。
-// guild 全局 Redis 目前是单节点 *redis.Client(svc.ServiceContext.RedisClient);迁 Redis Cluster 时必须先改成两段式
-// (先读 of 键、再把涉及的房间键作为 KEYS 传入并在脚本里复核),否则跨槽访问会直接报错。
+// **只在单节点 Redis 上成立**:建房脚本要在脚本里按 of 键的值拼出另一个房间的键再读它,这个键没有出现在 KEYS 里,
+// KEYS 本身也跨多个不带 tag 的键。这套夹具只给 miniredis 上的旧用例用;生产的 guild 句柄是控制集群句柄
+// (shared/clusterredis,ControlRedis 段),只经 NewSQLTrialLobbyRepo 用到单键的巡检租约,不会执行这些脚本
+// (docs/design/redis-cluster-all-domains-20261110.md §3.1)。
 //
 // 所有判定都在 Lua 里原子完成,"现在"由调用方传入(与本次请求的其它判定同一个 now),脚本不读 Redis 的时钟。
 // 玩家 id / 房间 id 在脚本里一律按**字符串**比较与存取,不经 Lua 的 number(double 存不下 64 位雪花 id)。
@@ -243,13 +244,13 @@ func (lb TrialLobby) EffectiveAt(nowMs uint64) TrialLobby {
 
 // TrialLobbyRepo 是邀请房间的存取入口。线程模型:构造后只读,可被多个请求 goroutine 共享。
 type TrialLobbyRepo struct {
-	rdb    *redis.Client
+	rdb    redis.UniversalClient
 	guilds *GuildRepo
 	mint   func(context.Context) (uint64, error)
 }
 
 // NewTrialLobbyRepo仅保留旧Redis隔离夹具。生产必须调用NewSQLTrialLobbyRepo，禁止自动降级。
-func NewTrialLobbyRepo(rdb *redis.Client) (*TrialLobbyRepo, error) {
+func NewTrialLobbyRepo(rdb redis.UniversalClient) (*TrialLobbyRepo, error) {
 	if rdb == nil {
 		return nil, errors.New("guild trial lobby repo: nil redis client")
 	}
@@ -674,7 +675,7 @@ func (r *TrialLobbyRepo) AcquireSweepLease(ctx context.Context, owner string, tt
 // ── 小工具 ───────────────────────────────────────────────────
 
 // runPairScript 跑一条返回 {code, arg} 两个整数的脚本。
-func runPairScript(ctx context.Context, rdb *redis.Client, script *redis.Script, what string, keys []string, args ...any) (code, arg int64, err error) {
+func runPairScript(ctx context.Context, rdb redis.UniversalClient, script *redis.Script, what string, keys []string, args ...any) (code, arg int64, err error) {
 	reply, err := script.Run(ctx, rdb, keys, args...).Int64Slice()
 	if err != nil {
 		return 0, 0, fmt.Errorf("guild trial lobby: %s script: %w", what, err)

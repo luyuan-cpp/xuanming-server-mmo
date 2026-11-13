@@ -11,6 +11,7 @@
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "thread_context/ecs_context.h"
 #include "thread_context/redis_manager.h"
+#include "thread_context/trace_context_tls.h"
 // hiredis 应答类型(redisReply / REDIS_REPLY_* / REDIS_OK)。redis_manager.h 经 muduo 的 Hiredis.h 已带进来,
 // 这里显式再包含一次,不靠传递包含拿这些符号(同 player_scene.cpp / player_team.h)。
 #include <hiredis/hiredis.h>
@@ -252,8 +253,10 @@ void PlayerLandingSystem::PublishAssetWake(entt::entity player, AssetWakeReason 
 		return;
 	}
 
+	// 直接调 Hiredis,不经 RedisClusterClient:回调用 tracing::Bind 包一层,回调里的告警落在这次进场的 trace 上
+	// (docs/design/distributed-tracing.md §4.3)。
 	const int ret = tlsRedis.GetConnection()->command(
-		[playerId = playerId](hiredis::Hiredis *, redisReply *reply) {
+		tracing::Bind([playerId = playerId](hiredis::Hiredis *, redisReply *reply) {
 			// 只在出错时打日志:PUBLISH 的正常应答是收到的订阅者数(整数),0 个订阅者也不算错
 			// (guild / trade 的资产通道可能未开启)。
 			if (reply == nullptr)
@@ -266,7 +269,7 @@ void PlayerLandingSystem::PublishAssetWake(entt::entity player, AssetWakeReason 
 				LOG_WARN << "[PlayerLanding] asset wake rejected by Redis, player_id=" << playerId
 						 << " err=" << (reply->str != nullptr ? reply->str : "");
 			}
-		},
+		}),
 		(std::string("PUBLISH ") + player_landing::kAssetWakeChannel + " %llu").c_str(),
 		static_cast<unsigned long long>(playerId));
 	if (ret != REDIS_OK)

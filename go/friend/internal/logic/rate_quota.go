@@ -78,8 +78,9 @@ func (l *FriendLogic) allowFriendRequest(ctx context.Context, playerID uint64) b
 		return true
 	}
 
-	res, err := rds.EvalCtx(ctx, requestQuotaScript,
-		[]string{requestQuotaKey(playerID)}, strconv.Itoa(requestQuotaWindowSeconds))
+	// 控制集群句柄(shared/clusterredis)不自动重发结果未知的命令:这段 INCR 不会因为连接抖动被多算一次(R8)。
+	res, err := rds.Eval(ctx, requestQuotaScript,
+		[]string{requestQuotaKey(playerID)}, strconv.Itoa(requestQuotaWindowSeconds)).Result()
 	if err != nil {
 		logx.WithContext(ctx).Errorf("[friend] Friend request rate limit script failed; allowing under fail-open policy player=%d: %v", playerID, err)
 		metrics.ObserveRateQuota(metrics.OutcomeError)
@@ -87,7 +88,7 @@ func (l *FriendLogic) allowFriendRequest(ctx context.Context, playerID uint64) b
 	}
 	count, isInt := res.(int64)
 	if !isInt {
-		// 返回形态异常同样 fail-open:它是我们自己的脚本写错了 / go-zero 改了返回类型,
+		// 返回形态异常同样 fail-open:它是我们自己的脚本写错了 / go-redis 改了返回类型,
 		// 属于代码缺陷而不是玩家行为,不该由玩家承担"加不了好友"的后果。
 		logx.WithContext(ctx).Errorf("[friend] Unexpected friend request rate limit script response; allowing under fail-open policy player=%d: %T %v",
 			playerID, res, res)

@@ -111,8 +111,9 @@ func registerRecallReviewHandled(ctx context.Context, svcCtx *svc.ServiceContext
 // registerListedReview 是步骤 1~5。
 func registerListedReview(ctx context.Context, svcCtx *svc.ServiceContext, req *RecallReviewHandledReq, now func() time.Time) (RecallReviewHandledResult, error) {
 	filter := req.filter()
+	// 和计划补查同指令流水同一种查法:只按收到方(走 (to_player, correlation_id) 索引),收益只算这名玩家收到的(filter 的名单)。
 	rows, total, err := svcCtx.TxLogStore.QueryLog(ctx, &store.TransactionLogQuery{
-		PlayerID:       req.PlayerID,
+		ToPlayerID:     req.PlayerID,
 		CorrelationIDs: []uint64{req.CorrelationID},
 		ItemConfigID:   req.ItemConfigID,
 		CurrencyType:   req.CurrencyType,

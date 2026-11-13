@@ -398,6 +398,7 @@ TEST(RedisManagerEventBatch, AuthSuccessAfterDeadlineTickInSameBatchKeepsOrigina
     RedisConnectOptions options;
     options.password = kFakePassword;
     options.reconnectIntervalSec = kHandshakeDeadlineSec;
+    options.reconnectJitterSec = 0.0;   // 握手截止按 kHandshakeDeadlineSec 断言,不加抖动
     options.livenessProbeIntervalSec = 2.0;
     options.livenessTimeoutSec = 2.0;
     manager.Connect(&loop, muduo::net::InetAddress("127.0.0.1", server->Port()), std::move(options));
@@ -463,6 +464,7 @@ TEST(RedisManagerEventBatch, QueuedDeadlineTaskDoesNotAccessManagerDestroyedEarl
     RedisConnectOptions options;
     options.password = kFakePassword;
     options.reconnectIntervalSec = kHandshakeDeadlineSec;
+    options.reconnectJitterSec = 0.0;   // 握手截止按 kHandshakeDeadlineSec 断言,不加抖动
     options.livenessProbeIntervalSec = 2.0;
     options.livenessTimeoutSec = 2.0;
     manager->Connect(&loop, muduo::net::InetAddress("127.0.0.1", server->Port()), std::move(options));
@@ -530,6 +532,7 @@ TEST(RedisManagerEventBatch, ConnectSuccessRearmingAuthDeadlineInvalidatesPrevio
     RedisConnectOptions options;
     options.password = kFakePassword;
     options.reconnectIntervalSec = kHandshakeDeadlineSec;
+    options.reconnectJitterSec = 0.0;   // 握手截止按 kHandshakeDeadlineSec 断言,不加抖动
     options.livenessProbeIntervalSec = 2.0;
     options.livenessTimeoutSec = 2.0;
     manager.Connect(&loop, muduo::net::InetAddress("127.0.0.1", server->Port()), std::move(options));

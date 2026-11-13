@@ -50,6 +50,30 @@ public:
 	// Bag 自己不持有这份全局状态:回调由本类在每次调用 Bag::AddItem 时作为参数传下去。
 	static void SetItemInstanceInitializer(ItemInstanceInitializer initializer);
 
+	// ── 腾位通知(2026-11-12,docs/design/bag-rule-policy-layering.md §6.6「腾位唤醒」)───────────────────────
+	// 人物背包或临时格(新入账落的两个包)移走了东西之后通知一次。今天唯一的订阅方是 scene 的收件箱:
+	// PlayerInboxSystem::OnBagSpaceFreed 把「执行器因两包都放不下而 DEFER」的那一次尝试提到下一个 Tick,不改任何判定。
+	//
+	// 本类是这件事的唯一出口:下面每个出包入口在**成功**之后各调一次 NotifySpaceFreed,玩法入口(使用、出售、丢弃、寄出、
+	// 上架托管、存仓库……)只要经这些入口出包就自动唤醒,不各自去调收件箱:
+	//   RemoveItem、RemoveItemsExact、RemoveItemsByGuid(整批销毁成功)、RemoveItemsClamped 与 ConsumeInventoryAndGrant
+	//   (真扣到了东西)、MergeAndCompact / SortByPlayerRequest(合堆退役了实例)、RetrieveFromTemporary(临时格搬走了实例)。
+	// 「腾出位置」只看这两个包里有没有东西被移走 —— 实例销毁或搬走(格子空出来),或可叠加的堆被扣掉一部分(同种物品又能并进去);
+	// 不算净值:同一笔里又放进了东西(兑换的获得、取回进人物背包)照样通知,订阅方只是把下一次尝试提前,放不下就照常退避。
+	// 仓库、装备栏、动态包不通知:入账不落在那里。失败、一件没动的调用不通知。
+	// 本类之外把东西移出这两个包的入口(今天只有穿戴:PlayerEquipSystem::Equip 经 Bag::TakeInstance)在成功之后自己调
+	// NotifySpaceFreed,与它在纯校验段问 CheckRemovableInstances 是同一条规矩(「物品数量预留」一段)。
+	//
+	// 订阅方在调用栈里同步执行,可能就在收件箱执行器的调用栈里(战斗结算经 ConsumeInventoryAndGrant 扣消耗):
+	// 只许安排下一次尝试,不得改背包、不得重入本类、不得 yield。
+	// 进程级,不是每线程一份,理由同 SetItemInstanceInitializer:启动时装一次(scene main 在 PlayerInboxSystem::Initialize
+	// 之后装),此后只读;不带同步,只许在还没有背包流量时安装(启动期 / 单测的 SetUp、TearDown)。传 nullptr = 卸载。
+	using SpaceFreedListener = void (*)(entt::entity playerEntity);
+	static void SetSpaceFreedListener(SpaceFreedListener listener);
+	// bag 是这名玩家的人物背包或临时格(按地址比:候选副本、别的玩家的包都不算)且装了订阅方时通知一次,否则什么都不做。
+	// 实体无效、没有 PlayerBagsComp 时什么都不做,不补建组件。只在 scene loop 线程调用。
+	static void NotifySpaceFreed(entt::entity playerEntity, const Bag &bag);
+
 	// Orchestrated AddItem:
 	//   frozen check → 获得封禁(全服 + 本人,kAssetBlocked) → Bag::AddItem → transaction log → anomaly detection
 	static uint32_t AddItem(
@@ -111,7 +135,8 @@ public:
     // (前两种按「可出包数量」夹紧或拒绝,后两种整批拒绝、一件不扣);唯一能动用某份预留的是
     // ConsumeInventoryAndGrant(consumeFromHoldId = 那份预留的号)。整理、取回临时格、入包不改数量,不受影响。
     // 本类之外把实例移出人物背包的入口只有穿戴(PlayerEquipSystem::Equip,经 Bag::TakeInstance),它在纯校验段问
-    // CheckRemovableInstances;以后新加的移出入口(存仓库、丢弃、出售)同样先问,不得绕开。
+    // CheckRemovableInstances、成功后调 NotifySpaceFreed;以后新加的移出入口(存仓库、丢弃、出售)优先走本类的出包入口,
+    // 真要用容器原语就同样先问、成功后通知,不得绕开。
     // 这**不是**「局中挡一切背包写」的战斗闸(D48 红线照旧:战斗闸只放在玩法入口层):预留只管数量,不看 InBattleComp;
     // 战斗结算扣的正是它自己那份预留,不会被自己拦住。
     //
@@ -392,6 +417,7 @@ public:
 	// 人物背包只进不出,而整笔延后的那一局要靠取回腾位才补得上(那里有完整理由)。
 	//
 	// guids 按给定顺序处理:非空、互不重复、都在临时格里(由 Bag::MoveInstancesTo 把关)。
+	// 成功后按临时格调一次 NotifySpaceFreed(「腾位通知」):临时格空出了格子,两包都放不下而延后的入账可以再试。
 	// 返回:
 	//   * 跨 zone 冻结期 / 玩家没有 PlayerBagsComp / 任一包两层不一致 -> kInvalidParameter(两包不动)
 	//   * 其余原样透传 Bag::MoveInstancesTo:kBagAddItemBagFull = 人物背包放不下这一批(两包不动);

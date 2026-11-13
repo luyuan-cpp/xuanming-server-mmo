@@ -45,7 +45,8 @@ func (s *AccountDirectoryStore) Remove(ctx context.Context, account string, role
 		return accountdirectory.ErrRetryLater
 	}
 	for i, r := range ordered {
-		if err := s.removeRole(ctx, account, r.PlayerId, r.OwnerRevision); err != nil {
+		// 墓碑之后的收尾没做完(removalUnsettled)也算删成了:墓碑已提交,小表那一行留着,后台接着收尾。
+		if _, err := s.removeRole(ctx, account, r.PlayerId, r.OwnerRevision); err != nil {
 			if i > 0 {
 				return notRejection(err)
 			}
@@ -55,35 +56,64 @@ func (s *AccountDirectoryStore) Remove(ctx context.Context, account string, role
 	return nil
 }
 
-func (s *AccountDirectoryStore) removeRole(ctx context.Context, account string, player, revision uint64) error {
-	state, err := s.beginRemoval(ctx, account, player, revision)
-	if err != nil || state == nil {
-		return err
+// removalOutcome 是一名角色删成之后墓碑之后那一段收尾的结局。删角本身成没成看 removeRole 的错误。
+type removalOutcome uint8
+
+const (
+	// removalSettled 墓碑已提交(或者本来就没有这名角色),收尾做完:名字放掉了,小表那一行删了。
+	removalSettled removalOutcome = iota + 1
+	// removalUnsettled 墓碑已提交,收尾这一次没做完(settleRemovedRole):小表那一行留着,后台 ResumeRemovals 接着做。
+	removalUnsettled
+)
+
+// removeRole 删一名角色。回错误表示删角本身没成(有挂起回 ErrConflict,参与者不可达回 ErrRetryLater);
+// 回 nil 时删角已成,removalOutcome 说墓碑之后的收尾这一次做没做完。
+func (s *AccountDirectoryStore) removeRole(ctx context.Context, account string, player, revision uint64) (removalOutcome, error) {
+	state, gone, err := s.beginRemoval(ctx, account, player, revision)
+	if err != nil {
+		return 0, err
+	}
+	if gone {
+		// 重放或后台接着做:上一次写完墓碑之后没来得及清 ref、释放名字、删小表那一行。
+		s.reapOwnRef(ctx, account, player)
+		return s.settleOutcome(ctx, player), nil
+	}
+	if state == nil {
+		// 没有这名角色(从没建成):没有可删的,也没有收尾。
+		return removalSettled, nil
 	}
 	switch s.fences.Prepare(ctx, state) {
 	case rolefence.PrepareClean:
 		err := s.finishRemoval(ctx, state)
 		if errors.Is(err, accountdirectory.ErrConflict) {
 			// 投票期间有实例进场了。令牌不能留着,否则重放和后台永远停在这里。
-			return s.abortRemoval(ctx, state)
+			return 0, s.abortRemoval(ctx, state)
 		}
 		if err != nil {
-			return err
+			return 0, err
 		}
 		// 墓碑已经提交,ref 现在能证明陈旧。失败无害:读路径会过滤,上限判定和后台都会再清。
 		s.reapOwnRef(ctx, account, player)
-		s.settleRemovedRole(ctx, player)
-		return nil
+		return s.settleOutcome(ctx, player), nil
 	case rolefence.PrepareBlocked:
-		return s.abortRemoval(ctx, state)
+		return 0, s.abortRemoval(ctx, state)
 	default:
-		return accountdirectory.ErrRetryLater
+		return 0, accountdirectory.ErrRetryLater
 	}
 }
 
-// beginRemoval 是第 1 步,在玩家分片的一个事务里:核归属和入场登记,写准备令牌和小表。回 nil state 表示角色已经删了,幂等成功。
+// settleOutcome 跑墓碑之后的收尾,把它的成败折成 removalOutcome。失败已在 settleRemovedRole 里记了日志和计数。
+func (s *AccountDirectoryStore) settleOutcome(ctx context.Context, player uint64) removalOutcome {
+	if err := s.settleRemovedRole(ctx, player); err != nil {
+		return removalUnsettled
+	}
+	return removalSettled
+}
+
+// beginRemoval 是第 1 步,在玩家分片的一个事务里:核归属和入场登记,写准备令牌和小表。
+// gone=true 表示角色已经是墓碑(删过了,幂等成功,调用方接着收尾);state 和 gone 都是零值表示没有这名角色。
 // 准备令牌不挡 RegisterRoleAdmission,开放登记到墓碑事务里再判一次。不锁账号 guard:它在账号分片,归属只看角色行。
-func (s *AccountDirectoryStore) beginRemoval(ctx context.Context, account string, player, revision uint64) (*rfpb.RoleFenceState, error) {
+func (s *AccountDirectoryStore) beginRemoval(ctx context.Context, account string, player, revision uint64) (*rfpb.RoleFenceState, bool, error) {
 	var state *rfpb.RoleFenceState
 	var gone bool
 	err := s.playerTx(ctx, player, func(tx *sql.Tx) error {
@@ -127,14 +157,9 @@ func (s *AccountDirectoryStore) beginRemoval(ctx context.Context, account string
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if gone {
-		// 重放或后台接着做:上一次写完墓碑之后没来得及清 ref、释放名字、删小表那一行。
-		s.reapOwnRef(ctx, account, player)
-		s.settleRemovedRole(ctx, player)
-	}
-	return state, nil
+	return state, gone, nil
 }
 
 // errRemovalDone 表示另一条路径已经写了墓碑,这次删角算成功。只在本文件内流转。
@@ -215,13 +240,18 @@ func (s *AccountDirectoryStore) abortRemoval(ctx context.Context, state *rfpb.Ro
 	return accountdirectory.ErrConflict
 }
 
-// RemovalResumeResult 是一轮后台收尾的结果。Failed 留在小表里,下一轮再试。
+// RemovalResumeResult 是一轮后台收尾的结果。Unsettled、Failed 留在小表里,下一轮再试。
+//   - Finished:墓碑已提交、收尾做完(名字放掉了,小表那一行删了);
+//   - Abandoned:有挂起,放弃了这次删角(令牌清掉,角色回到没开始删的样子);
+//   - Unsettled:墓碑已提交,但墓碑之后的收尾这一轮还是没做完(释放名字或删小表那一行失败),不算完成;
+//   - Failed:删角本身这一轮没做下去(参与者不可达、库出错)。
 type RemovalResumeResult struct {
-	Finished, Abandoned, Failed int
+	Finished, Abandoned, Unsettled, Failed int
 }
 
-// ResumeRemovals 把开始超过 olderThan 的删角接着做:全通过写墓碑,有挂起放弃,不可达留给下一轮。
+// ResumeRemovals 把开始超过 olderThan 的删角接着做:全通过写墓碑,有挂起放弃,不可达留给下一轮;墓碑已提交的接着收尾。
 // 流程和 Remove 相同,多副本同时跑靠角色行锁和令牌串行。每轮最多 limit 行,逐片读,每轮换一个起点,积压多的片不会饿死别的片。
+// 收尾没做完不回错误(它的错误已经逐条记了日志和计数),只计进 Unsettled:调用方按它计数告警。
 func (s *AccountDirectoryStore) ResumeRemovals(ctx context.Context, olderThan time.Duration, limit int) (RemovalResumeResult, error) {
 	var out RemovalResumeResult
 	if s.fences == nil {
@@ -233,10 +263,12 @@ func (s *AccountDirectoryStore) ResumeRemovals(ctx context.Context, olderThan ti
 	}
 	var failure error
 	for _, r := range removals {
-		err := s.removeRole(ctx, r.account, r.player, r.revision)
+		outcome, err := s.removeRole(ctx, r.account, r.player, r.revision)
 		switch {
-		case err == nil:
+		case err == nil && outcome == removalSettled:
 			out.Finished++
+		case err == nil:
+			out.Unsettled++
 		case errors.Is(err, accountdirectory.ErrConflict):
 			out.Abandoned++
 		default:

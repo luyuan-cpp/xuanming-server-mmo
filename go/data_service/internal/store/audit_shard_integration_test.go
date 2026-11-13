@@ -68,6 +68,7 @@ func TestAuditShard_IndexesLeadTimeWithShard(t *testing.T) {
 		{"tx_type", "shard", "timestamp_sec"},
 		{"shard", "timestamp_sec"},
 		{"item_uuid"},
+		{"to_player", "correlation_id"},
 	} {
 		assert.Truef(t, hasIndexExactly(tx, want...), "transaction_log 缺索引 %v(有 %v)", want, tx)
 	}

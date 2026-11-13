@@ -164,8 +164,16 @@ func (s *ServiceContext) resumeRoleRemovals(ctx context.Context) {
 		if errors.Is(err, authoritysql.ErrOutcomeUnknown) {
 			s.RelayAdmission.Hold()
 		}
+		// 逐行结局都计(出错的一轮也照记):收尾没做完(unsettled)不算完成,持续出现由告警 DataServiceRoleRemovalResumeStuck 报。
+		metrics.ObserveRoleRemovalResume(result.Finished, result.Abandoned, result.Unsettled, result.Failed)
 		if err != nil && ctx.Err() == nil {
-			logx.Errorf("[role-fence] resume removals: finished=%d abandoned=%d failed=%d err=%v", result.Finished, result.Abandoned, result.Failed, err)
+			logx.Errorf("[role-fence] resume removals: finished=%d abandoned=%d unsettled=%d failed=%d err=%v",
+				result.Finished, result.Abandoned, result.Unsettled, result.Failed, err)
+			return
+		}
+		if result.Unsettled != 0 {
+			logx.Errorf("[role-fence] resume removals: %d removed roles still not settled (name not released or removal row not dropped), retried next round: finished=%d abandoned=%d",
+				result.Unsettled, result.Finished, result.Abandoned)
 			return
 		}
 		if result.Finished != 0 || result.Abandoned != 0 {
@@ -218,10 +226,15 @@ func (s *ServiceContext) sweepStaleRoleRefs(ctx context.Context) {
 		if errors.Is(err, authoritysql.ErrOutcomeUnknown) {
 			s.RelayAdmission.Hold()
 		}
-		// 留下没写墓碑的建角 ref(角色行不在,但角色提交过):逐条的 ERROR 已在 store 里记过,这里只计数。出错的一轮也照记。
+		// 新标成保留、没写墓碑的建角 ref(角色行不在,但角色提交过):逐条的 ERROR 已在 store 里记过,这里只计数。出错的一轮也照记。
+		// 还留着多少条报 gauge(告警 DataServiceRoleRefHeldForReview 按它持续报);这一轮没数成就不写,保留上一轮的值。
 		metrics.ObserveRoleRefTombstoneHeld(result.Held)
+		if result.HeldCounted {
+			metrics.SetRoleRefHeld(result.HeldTotal)
+		}
 		if err != nil && ctx.Err() == nil {
-			logx.Errorf("[account-role-ref] sweep: scanned=%d dropped=%d failed=%d held=%d err=%v", result.Scanned, result.Dropped, result.Failed, result.Held, err)
+			logx.Errorf("[account-role-ref] sweep: scanned=%d dropped=%d failed=%d held=%d rechecked=%d held_total=%d err=%v",
+				result.Scanned, result.Dropped, result.Failed, result.Held, result.Rechecked, result.HeldTotal, err)
 			return
 		}
 		if result.Dropped != 0 {

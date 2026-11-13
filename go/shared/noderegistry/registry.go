@@ -36,7 +36,8 @@
 //   - ExitProcess:Revoke 新租约后 logx.Error + os.Exit(1),交给编排器重启。
 //     适用于 login 以及任何以 NodeId 派生持久身份或 per-node topic(`{type}-{id}`)的服务——
 //     这类服务在进程内换号,等于把旧身份上的在途消息 / 状态悄悄丢给了别人。
-//     D-11 的前提是"node_id = worker id"只对 C++ / login 成立,Go 全局服务不成立。
+//     D-11 定稿时 C++ 与 login 的 node_id 还兼作 Snowflake worker id;现在 node_id 不喂给任何发号器,
+//     选哪一档只看它有没有派生持久身份或 per-node topic。
 //
 // # 发布轨道(docs/design/release-track-gray-canary.md §2.1)
 //
@@ -86,7 +87,6 @@ import (
 
 	"shared/releasetrack"
 	"shared/safego"
-	"shared/snowflake"
 )
 
 // ReclaimPolicy 决定"失租后原 node_id 已被别人占用"时怎么办,见包注释「失租策略两档」。
@@ -177,8 +177,11 @@ type Registration struct {
 const (
 	// nodeIDMin:0 永远保留为"未分配 / 非法值"(C++ 同口径),扫描时也一律忽略。
 	nodeIDMin uint32 = 1
-	// nodeIDMax 与 Snowflake worker id 位宽对齐,与既有副本同值。
-	nodeIDMax = uint32(snowflake.NodeMask)
+	// nodeIDMax 是 node_id 的上界(含),分配时从 nodeIDMin 顺序扫到它为止。node_id 只是服务发现路径
+	// 和 NodeInfo 里的编号,不喂给任何发号器:永久 ID 由 data_service 发号器发,scene_manager 的 scene_id
+	// 由 shared/snowflakealloc 另行申领槽位,都与 node_id 无关。取值 1<<17-1 与 C++ NodeAllocator 的
+	// kMaxNodeId 相同,各语言的分配器用同一个上界;它远大于任何一种节点的实例数。
+	nodeIDMax uint32 = 1<<17 - 1
 
 	// nodeIDSegment 是两种 key 共有的尾段标记,已占 id 统一从它后面取。
 	nodeIDSegment = "/node_id/"

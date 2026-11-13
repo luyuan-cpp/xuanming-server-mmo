@@ -142,7 +142,20 @@ param(
     # 控制域实例 redis-ctl-g<N>(缺口第 5 条),透传给 k8s_deploy.ps1 同名参数:容量非空才传,确认开关被指定才传。
     # 追加在末尾,理由同上方"新参数一律追加在末尾"。
     [string]$RedisCtlMaxMemory = "",
-    [switch]$ConfirmRedisCtlSwitch
+    [switch]$ConfirmRedisCtlSwitch,
+    # Loki 的形态与对象存储(docs/design/no-single-node-horizontal-scaling-20261001.md §10),透传给 k8s_deploy.ps1 同名参数,
+    # 语义与校验都在那边(Assert-LokiDeployPreflight)。只有 release-all(不带 -SkipInfra)会 apply Loki,release-zone 用不到。
+    # staging / prod 缺省是 3 副本:必须给 -LokiS3Endpoint 与 -LokiS3Bucket;访问密钥走环境变量 MMORPG_LOKI_S3_ACCESS_KEY_ID /
+    # MMORPG_LOKI_S3_SECRET_ACCESS_KEY,不经参数。以前这组参数传不进来,非 dev 档的 release-all 会在 Loki 的前置检查上被拦下。
+    # 副本数 0 = 不透传(k8s_deploy.ps1 按档位取),字符串非空才透传,switch 只在被指定时透传。追加在末尾,理由同上方"新参数一律追加在末尾"。
+    [int]$LokiReplicas = 0,
+    [string]$LokiS3Endpoint = "",
+    [string]$LokiS3Bucket = "",
+    [string]$LokiS3Region = "",
+    [switch]$LokiS3ForcePathStyle,
+    [switch]$LokiS3Insecure,
+    [switch]$LokiS3DevFixture,
+    [switch]$ConfirmLokiTopologyChange
 )
 
 $ErrorActionPreference = "Stop"
@@ -475,6 +488,15 @@ function Invoke-K8sDeploy {
     if ($PlayerRedisReplicasPerMaster -gt 0) { $args.PlayerRedisReplicasPerMaster = $PlayerRedisReplicasPerMaster }
     if (-not [string]::IsNullOrWhiteSpace($PlayerRedisMaxMemory)) { $args.PlayerRedisMaxMemory = $PlayerRedisMaxMemory }
     if (-not [string]::IsNullOrWhiteSpace($PlayerRedisStorage)) { $args.PlayerRedisStorage = $PlayerRedisStorage }
+    # Loki 的形态与对象存储:非 0 / 非空 / 被指定才传。档位规则、拓扑变更闸与 S3 参数校验只在 k8s_deploy.ps1(Assert-LokiDeployPreflight)。
+    if ($LokiReplicas -gt 0) { $args.LokiReplicas = $LokiReplicas }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Endpoint)) { $args.LokiS3Endpoint = $LokiS3Endpoint }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Bucket)) { $args.LokiS3Bucket = $LokiS3Bucket }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Region)) { $args.LokiS3Region = $LokiS3Region }
+    if ($LokiS3ForcePathStyle) { $args.LokiS3ForcePathStyle = $true }
+    if ($LokiS3Insecure) { $args.LokiS3Insecure = $true }
+    if ($LokiS3DevFixture) { $args.LokiS3DevFixture = $true }
+    if ($ConfirmLokiTopologyChange) { $args.ConfirmLokiTopologyChange = $true }
     # 同一口径留空不透传。本函数从不传 -GoSvcRegistry,k8s_deploy.ps1 因此不部署 login / scene_manager,
     # 这个值只进它的组合预检、不写进 ConfigMap;"不生效"的告警在脚本入口打(见 switch ($Command) 之前),这里只透传。
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }

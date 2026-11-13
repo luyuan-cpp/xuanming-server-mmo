@@ -1,6 +1,6 @@
 # QQ / 微信第三方登录端到端联调设计
 
-更新：2026-10-18。HTTP 登录入口已经实现；2026-10-18 补齐上线前的服务端缺口（密钥注入、unionid 策略、错误语义、HTTP 加固、K8s 渲染，见 §四.1 与 §九）。渠道真实凭据联调、客户端 SDK 和账号绑定仍按各自验收记录判断，**从未与真实微信 / QQ 联调过**。
+更新：2026-11-12。HTTP 登录入口已经实现；2026-10-18 补齐上线前的服务端缺口（密钥注入、unionid 策略、错误语义、HTTP 加固、K8s 渲染，见 §四.1 与 §九）；2026-11-12 补上微信、抖音小游戏登录（§十一，已落码未编译）。渠道真实凭据联调、客户端 SDK 和账号绑定仍按各自验收记录判断，**从未与真实微信 / QQ / 抖音联调过**。
 
 前置：[认证提供者框架](./auth-provider-framework.md)、[双 Token 设计](./dual-token-authentication.md)、[渠道沙盒手册](../ops/wechat-qq-sandbox-runbook.md)。
 
@@ -9,6 +9,7 @@
 | 组件 | 当前状态 |
 |---|---|
 | WeChat / QQ provider 与注册入口 | 服务端已有实现；配置和真实渠道联调分别验收 |
+| 微信 / 抖音小游戏 provider（`wechat_minigame` / `douyin_minigame`） | 2026-11-12 服务端落码，未编译；K8s 部署脚本还不渲染这两段，见 §十一 |
 | Java Gateway `POST /api/login` | 已在 LoginController 实现，委托 LoginService 调 login gRPC |
 | `POST /api/assign-gate` | 独立负责分配 gate 与握手票据，不由 /api/login 加发 |
 | 客户端 SDK、按钮与完整 OAuth 体验 | 本次未读取客户端仓，状态由客户端任务核对 |
@@ -36,7 +37,7 @@ Gateway 在 `application.yaml` 中配置 Jackson `SNAKE_CASE`，HTTP JSON 使用
 
 旧 gate TCP Login 路径是否开放受 login 的 `LegacyGateLoginEnabled` 控制。这个开关只管 gate 上用口令 / 第三方凭据做的**首认证**；gate 上 `auth_type=access_token` 的会话绑定是新流程的必经一步，不受它控制（`classifyLoginPath`，见 [gate-login-rpc-boundary.md](./gate-login-rpc-boundary.md)）。它与 HTTP 入口共享后端鉴权能力；后续会话恢复与入场见 [登录流程](./player_login_flow.md)。
 
-生产的第三方登录只有一条路径：客户端把渠道凭据交给 `/api/login`，由 Go login 直连微信 / 腾讯校验（auth_type=`wechat` / `qq`）。`java/springboot_satoken_auth_starter` 是示例应用，没有部署清单；它的 `/auth/dev-login` 免 OAuth 按任意账号名签 SA-Token，只在 Spring profile `dev` 下注册，不得部署到玩家可达的环境。
+生产的第三方登录只有一条路径：客户端把渠道凭据交给 `/api/login`，由 Go login 直连渠道校验（App 形态 auth_type=`wechat` / `qq`，小游戏形态 `wechat_minigame` / `douyin_minigame`，见 §十一）。`java/springboot_satoken_auth_starter` 是示例应用，没有部署清单；它的 `/auth/dev-login` 免 OAuth 按任意账号名签 SA-Token，只在 Spring profile `dev` 下注册，不得部署到玩家可达的环境。
 
 ## 三、返回码与 Gateway 配置
 
@@ -70,7 +71,7 @@ login 侧的 in-band 码（2026-10-18 起，fault 列来自 `data/tip/Tip.xlsx`�
 
 渠道凭据按 `go/login/etc/login.yaml`、对应配置类型与 provider 的现有字段注入；真实 AppSecret 只从部署环境提供，禁止写入仓库与日志。沙盒验证按 [微信/QQ 手册](../ops/wechat-qq-sandbox-runbook.md) 执行。
 
-新增账号的持久化与索引规则应从当前 login 逻辑核对（账号角色目录是 login Redis 的 `account:<account>`，不落库），不能执行旧草案中的 `INSERT IGNORE UserAccounts` 或照抄假设存在的 UserAccountsModel。账号绑定和按 zone 白名单仍需独立实现、迁移与测试；旧草案的 `Auth.EnabledTypes` / `PerZoneOverrides` 不是已经支持的配置。
+第三方账号不存凭据：渠道校验通过后，账号名（`wx_<unionid>`、`qq_<unionid>`、`dy_<unionid>`）直接作为全局 SQL 账号目录的键，首次登录由 data_service 自动建目录行（login 的 `readAccountDirectory(..., create=true)`，见 [账号角色目录](./account-role-authority.md)）。目录在 TiDB，同一地域所有区共用一份，跨地域各一份（[全层水平扩展规格](./horizontal-scale-logical-db.md) §9）；login Redis 的 `account:<account>` 自 2026-10-21 起不再是权威。不能执行旧草案中的 `INSERT IGNORE UserAccounts` 或照抄假设存在的 UserAccountsModel。账号绑定和按 zone 白名单仍需独立实现、迁移与测试；旧草案的 `Auth.EnabledTypes` / `PerZoneOverrides` 不是已经支持的配置。
 
 以下保留渠道接入、绑定、安全与监控的后续设计清单；其中 API、表、指标及渠道时效均须在对应任务中核实，不作为本次已经实现或验收的声明。
 
@@ -133,6 +134,15 @@ POST /api/bind   { bind_type: "wechat", auth_token: <code> }
 - 拿到 `access_token` + `openid` → POST `/api/login {auth_type:"qq", auth_token:access_token}`
 - 服务端会再调 graph.qq.com 验证
 
+### 微信小游戏
+- 小游戏端调 `wx.login()` 拿到 `code`（一次性，约 5 分钟有效）→ POST `/api/login {auth_type:"wechat_minigame", auth_token:code}`
+- 不要送 `auth_type:"wechat"`：那是 App / 网站应用的接口，换不了小游戏的 code
+- 小游戏要绑定到与 App 相同的微信开放平台账号，才有 unionid，才和 App 是同一个账号（§十一）
+
+### 抖音小游戏
+- 小游戏端调 `tt.login({force: true})` 拿到 `code` → POST `/api/login {auth_type:"douyin_minigame", auth_token:code}`
+- 用户没登录抖音时只有 `anonymousCode`，不能登录；客户端要先引导用户登录抖音
+
 ### 静默登录(双 token)
 - 已有 access_token (2h 内) → POST `/api/login {auth_type:"access_token", auth_token:xxx}`
 - access 过期但 refresh 有效 → POST `/api/refresh-token {refresh_token:yyy}`
@@ -177,7 +187,9 @@ POST /api/bind   { bind_type: "wechat", auth_token: <code> }
 |---|---|
 | Java Gateway `/api/login` controller + DTO、grpc-java 客户端 | 已完成（LoginController / LoginService / LoginRpcClient） |
 | login.yaml 配置 WeChat / QQ（K8s Secret） | 已完成：`AppSecretEnv` + 启动期门禁；`k8s_deploy.ps1` 渲染 + Secret `login-oauth`（2026-10-18） |
-| loginlogic 自动注册分支对 wechat / qq 走通 | 已完成（账号目录 `account:<account>`，首次登录自动初始化） |
+| loginlogic 自动注册分支对 wechat / qq 走通 | 已完成（全局 SQL 账号目录，首次登录自动建目录行；2026-10-21 前是 login Redis 的 `account:<account>`） |
+| 微信 / 抖音小游戏登录（`wechat_minigame` / `douyin_minigame`） | 2026-11-12 服务端落码，未编译、未测试，待 Codex 验证（§十一） |
+| 小游戏登录的 K8s 渲染（部署参数、Secret、防误关） | 未做：`k8s_deploy.ps1` 只渲染 WeChat / QQ 两段（§11.3） |
 | 单元测试：mock 渠道 HTTP、错误传播 | 已落码；2026-10-19 Go 定向 7 项通过，全量 519 个顶层与 375 个子测试通过、4 个顶层环境条件跳过，旧行为两例精确断言红灯成立；证据与范围见 [交接文档](../handoff/handoff-tip-fault-gateway-500-20261018.md) |
 | 本地沙箱端到端（sandbox_mock） | 工具已有；linux 登录栈 QQ AppId 与 mock 不一致的问题已修（2026-10-18） |
 | 真实微信 / QQ 沙箱联调 → /api/login → /api/assign-gate → gate | **未做**，需要有真凭证的人按 runbook §C.2 执行 |
@@ -195,6 +207,7 @@ POST /api/bind   { bind_type: "wechat", auth_token: <code> }
 - [docs/design/open-server-rate-limit-design.md](./open-server-rate-limit-design.md) /api/login 也要走限流
 - [docs/design/architecture-current-state-vs-gaps-2026-05.md](./architecture-current-state-vs-gaps-2026-05.md) 缺口 #11
 - 代码: `go/login/internal/logic/pkg/auth/providers.go` (WeChatProvider / QQProvider)
+- 代码: `go/login/internal/logic/pkg/auth/minigame_providers.go` (WeChatMiniGameProvider / DouyinMiniGameProvider)
 - 代码: `go/login/internal/logic/clientplayerlogin/loginlogic.go` (resolveAccount)
 - 代码: `java/gateway_node/src/main/java/com/game/gateway/controller/LoginController.java`、`service/LoginService.java`
 - 代码: `go/login/internal/config/auth_providers.go`（第三方配置门禁）
@@ -283,3 +296,56 @@ message_id FIFO 兜底」(与 robot 口径一致),否则 Login/CreatePlayer/Ente
 
 该验收覆盖资源导入、prefab 和客户端启动生命周期；本地未启动 8081 gateway，
 因此不替代依赖 etcd/Redis/MySQL/login/gate/scene 的真实 HTTP/TCP 联调。
+
+---
+
+## 十一、小游戏登录（2026-11-12，已落码，未编译、未测试，待 Codex 验证）
+
+用户 2026-10-19 定微信、抖音走小游戏形态（[充值设计](./payment-recharge.md) 文首）。小游戏的登录凭证和 App 不是同一套接口，原有的 `wechat` provider 换不了小游戏的 code，所以加两个 provider。
+
+### 11.1 接口与账号
+
+| auth_type | 客户端拿凭证 | login 调的渠道接口 | 账号名 |
+|---|---|---|---|
+| `wechat_minigame` | `wx.login()` 的 `code` | `GET https://api.weixin.qq.com/sns/jscode2session`，参数 `appid`、`secret`、`js_code`、`grant_type=authorization_code` | `wx_<unionid>` |
+| `douyin_minigame` | `tt.login({force: true})` 的 `code` | `GET https://minigame.zijieapi.com/mgplatform/api/apps/jscode2session`，参数 `appid`、`secret`、`code`，请求头 `Content-Type: application/json` | `dy_<unionid>` |
+
+- **为什么是新的 auth_type，不让 `wechat` 自己试两个接口**：两种 code 从外观上分不出来，试错会把一次性的 code 先消耗在错的接口上；App 和小游戏又各有各的 AppId 与密钥。客户端最清楚自己是哪种形态，由它在 auth_type 里说明。
+- **微信 App 与小游戏是同一个账号**：账号名都是 `wx_<unionid>`。前提是小游戏绑定到与 App 相同的微信开放平台账号；没绑定时 code2Session 不返回 unionid，缺省拒绝登录（`RequireUnionId`，口径同 §四.1）。
+- **抖音**：unionid 是同一开发者主体下各小游戏通用的用户标识，带 `code` 的请求会返回。匿名用户（只有 `anonymousCode`）不能登录：匿名身份跟着设备走，换设备就变，不能当账号。
+- **session_key 不留**：code2Session 的应答带 `session_key`，登录用不到。provider 的应答结构体不声明这个字段，它不进内存里的结构体，也就进不了日志和错误文案。支付要用时由支付服务拿新的 code 现取现弃（充值设计 §6）。
+- **配置**：`AuthProviders.WeChatMiniGame` / `DouyinMiniGame`，字段是 `AppId`、`AppSecretEnv`（生产必须）、`RequireUnionId`（缺省 true）、`Endpoint`（沙箱）。门禁与 WeChat 段相同（§四.1）。另外 `WeChat.AppId` 与 `WeChatMiniGame.AppId` 相同时拒绝启动：两个应用的应用号不会相同，相同说明有一段抄错了。
+
+### 11.2 错误语义
+
+回给客户端的码仍是 §三 那几个，分类规则：
+
+| 情形 | 归类 |
+|---|---|
+| 网络 / 超时、非 2xx、应答超 64 KiB 或不可解析、成功应答却没有 openid、拿不到必需的 unionid | 渠道故障（`kLoginAuthProviderUnavailable`） |
+| 微信 errcode -1 / 40001 / 40013 / 40125 / 40164 / 41002 / 41004 / 45009 | 渠道故障 |
+| 微信其余 errcode：40029（code 无效）、40163（已被使用）、40226（高风险用户被微信拦截）、45011（按用户限频）等 | 凭证无效（`kLoginAccountNotFound`） |
+| 抖音 `error` / `errcode` 非 0 | 一律凭证无效 |
+
+两处要在真渠道联调时复核：
+
+- 微信 45011 在 App 的接口上算渠道故障，在 code2Session 上是按用户限频（文档口径是每个用户每分钟 100 次），这里不算故障。2026-11-12 没能打开微信官方页面复核这一条，按 [tip-code-axis.md](./tip-code-axis.md) §2.9「拿不准不算故障」处理。
+- 抖音的 code2Session 文档没有给出错误码表，分不清哪些是应用侧故障，所以全部按凭证无效（与 QQ 同一处理）。代价是 AppId / AppSecret 配错时所有抖音登录都失败，却不触发故障告警；errcode 在 login 的 `Auth failed` ERROR 日志里。
+
+### 11.3 没做的
+
+| 项 | 状态 |
+|---|---|
+| K8s 部署 | 未做。`k8s_deploy.ps1` 只渲染 WeChat / QQ 两段，没有小游戏的部署参数、Secret 与防误关。本机 `login.yaml` 与 linux 登录栈可用 |
+| QQ 小游戏 | 未做，没有接入计划。要做时照 `WeChatMiniGameProvider` 加一个 provider |
+| 客户端 | 未做。小游戏端调 `wx.login` / `tt.login`，并在 `/api/login` 里送新的 auth_type，归客户端任务 |
+| 传输层 | 未做。gate 只有 TCP 入口，没有 WebSocket；小游戏登录成功后还连不上 gate（充值设计把「客户端改 WebSocket」列为非目标，没有别的文档接手） |
+| 真渠道联调 | 未做，没有小游戏的开发者账号。现有证据只能来自 mock |
+| Java 版 | 待做，已在 Java 仓 `PARITY.md` 登记 |
+
+### 11.4 接口事实的来源
+
+- 微信：开放文档「小程序登录 / code2Session」。2026-11-12 旧地址已迁移、没能打开新页面，请求地址、参数与返回字段取自搜索引擎对该文档的摘录，errcode 表没有复核到。
+- 抖音：[小游戏 code2Session](https://developer.open-douyin.com/docs/resource/zh-CN/mini-game/develop/server/log-in/code-2-session)。2026-11-12 页面同样没能直接打开，请求方法、地址、请求头、参数与返回字段取自搜索引擎对该页的摘录。
+
+验证命令见 `docs/PROGRESS.md` 2026-11-12「微信 / 抖音小游戏登录」条目。

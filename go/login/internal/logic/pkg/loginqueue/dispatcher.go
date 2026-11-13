@@ -1,5 +1,5 @@
 // dispatcher.go — 每个 zone 一个 leader 的出队 goroutine:把本 zone 队列里的条目
-// 放行成 admit:{queueId}。
+// 放行成放行槽(admitKey)。
 //
 // Why leader-elect (instead of every login replica draining):
 //
@@ -48,7 +48,6 @@ package loginqueue
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -65,7 +64,7 @@ import (
 type Dispatcher struct {
 	queue        *Queue
 	provider     CapacityProvider
-	rdb          *redis.Client
+	rdb          redis.UniversalClient
 	hmacSecret   []byte
 	gateTokenTTL time.Duration
 
@@ -106,7 +105,7 @@ type Dispatcher struct {
 func NewDispatcher(
 	queue *Queue,
 	provider CapacityProvider,
-	rdb *redis.Client,
+	rdb redis.UniversalClient,
 	hmacSecret []byte,
 	gateTokenTTL time.Duration,
 	interval time.Duration,
@@ -142,11 +141,13 @@ func NewDispatcher(
 	}, nil
 }
 
-// ZoneDispatcherLockKey 返回 zone 级出队 leader 锁键 <base>:zone:<zoneID>。
+// ZoneDispatcherLockKey 返回 zone 级出队 leader 锁键 <base>:{q:<zoneID>}。
 // 同一 zone 的 login 副本抢同一把锁,不同 zone 互不相干。
-// 排查时用:redis-cli GET dispatcher:lock:login_queue:zone:1
+// 锁键与本 zone 的排队键共用 hash tag(queueTag),在集群里同槽:以后放行要在同一段脚本里核对任期时,
+// 锁键可以直接写进 KEYS(docs/design/redis-cluster-all-domains-20261110.md §4.7)。
+// 排查时用:redis-cli -c GET 'dispatcher:lock:login_queue:{q:1}'
 func ZoneDispatcherLockKey(base string, zoneID uint32) string {
-	return fmt.Sprintf("%s:zone:%d", base, zoneID)
+	return base + ":" + queueTag(zoneID)
 }
 
 // Start launches the leader-election + drain goroutine. Returns immediately.

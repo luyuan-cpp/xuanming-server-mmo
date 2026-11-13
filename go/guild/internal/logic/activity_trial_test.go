@@ -6,7 +6,7 @@ package logic
 //   - fakeTrialStore:历练仓储(trialStore)的内存替身。事务语义(取锁、幂等闸门、发奖名单的过滤)不在这里验 ——
 //     那是 data/activity_repo_integration_test.go 的 I13–I23;这里只验 logic 传给仓储什么、拿到每种结果之后做什么。
 //   - fakeMatch:match 内部服务的替身,按脚本作答,并记下每次请求与当时的 ctx。
-//   - 两个 miniredis:一个当 guild 全局 Redis(邀请房间的 Lua 真跑在上面),一个当 PlayerLocatorRedis
+//   - 两个 miniredis:一个当 guild 全局 Redis(邀请房间的 Lua 真跑在上面),一个当玩家域 PlayerRedis
 //     (会话、战斗锁)。分开是为了能单独把其中一个关掉来注入故障。
 //
 // 时间一律走注入的 trialTestClock(房间过期、周期键、结算的"现在"),不读墙钟;唯一与墙钟有关的是调 match 的预算,
@@ -345,7 +345,7 @@ func (f *fakeTrialResults) Load(_ context.Context, battleID uint64) ([]byte, boo
 }
 
 // trialFixture:帮会 9(zone 2)在缓存里;MySQL 是 noMembershipMySQL(活动视图的读全回空);
-// 历练的仓储、match、结果来源、推送都是替身;两个 miniredis 分别当 guild 全局 Redis(房间)与 PlayerLocatorRedis(会话 / 锁)。
+// 历练的仓储、match、结果来源、推送都是替身;两个 miniredis 分别当 guild 全局 Redis(房间)与玩家域 PlayerRedis(会话 / 锁)。
 type trialFixture struct {
 	l        *GuildLogic
 	deps     *ActivityDeps

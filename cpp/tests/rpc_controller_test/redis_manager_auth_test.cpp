@@ -514,6 +514,7 @@ protected:
             RedisConnectOptions options;
             options.password = password;
             options.reconnectIntervalSec = reconnectIntervalSec;
+            options.reconnectJitterSec = 0.0;   // 握手截止与重连时序按 reconnectIntervalSec 断言,不加抖动
             options.livenessProbeIntervalSec = livenessProbeIntervalSec;
             options.livenessTimeoutSec = livenessTimeoutSec;
             manager_->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port_), std::move(options));
@@ -1179,6 +1180,47 @@ TEST_F(RedisManagerAuth, NonPositiveReconnectIntervalFallsBackToDefault)
     const Snapshot snap = TakeSnapshot();
     EXPECT_EQ(snap.reconnectCalls, 1);
     EXPECT_TRUE(snap.zoneRedisConnected);
+}
+
+// ---------------------------------------------------------------------------
+// 8b. 重连抖动(docs/design/infra-reconnect-overview.md §4 R18):重连周期 = 基础间隔 + [0, 抖动上限),
+//     每次 Connect 抽一次;抖动上限为 0 时周期恰是基础间隔。只读周期,不等定时器,结果与机器快慢无关。
+// ---------------------------------------------------------------------------
+
+TEST(RedisManagerReconnectJitter, StaysWithinTheConfiguredWindow)
+{
+    EXPECT_DOUBLE_EQ(RedisManager::JitteredReconnectIntervalSec(3.0, 1.0, 0.0), 3.0);
+    EXPECT_DOUBLE_EQ(RedisManager::JitteredReconnectIntervalSec(3.0, 1.0, 0.5), 3.5);
+    EXPECT_LT(RedisManager::JitteredReconnectIntervalSec(3.0, 1.0, 0.999999), 4.0);
+    EXPECT_DOUBLE_EQ(RedisManager::JitteredReconnectIntervalSec(3.0, 0.0, 0.5), 3.0) << "抖动关闭";
+    EXPECT_DOUBLE_EQ(RedisManager::JitteredReconnectIntervalSec(3.0, -1.0, 0.5), 3.0) << "负的抖动上限按关闭算";
+    EXPECT_DOUBLE_EQ(RedisManager::JitteredReconnectIntervalSec(3.0, 1.0, 1.5), 3.0) << "越界的随机数收回区间";
+    EXPECT_DOUBLE_EQ(RedisManager::JitteredReconnectIntervalSec(3.0, 1.0, -0.5), 3.0);
+}
+
+TEST_F(RedisManagerAuth, ReconnectPeriodIsBaseIntervalPlusJitterDrawnAtConnect)
+{
+    // StartManager 关掉了抖动:周期恰是基础间隔。
+    StartManager("", kLongReconnectIntervalSec);
+    ASSERT_TRUE(WaitUntil([this] { return pingReplies_ >= 1; }, kSettleTimeout))
+        << "the first connection did not come up";
+    double withoutJitter = 0;
+    RunInLoopAndWait([&] { withoutJitter = manager_->ReconnectPeriodSec(); });
+    EXPECT_DOUBLE_EQ(withoutJitter, kLongReconnectIntervalSec);
+
+    // 生产不设 reconnectJitterSec:默认就带抖动。同一个管理器再 Connect 一次,周期重新抽,
+    // 落在 [基础间隔, 基础间隔 + 默认上限)。
+    double byDefault = 0;
+    RunInLoopAndWait([&] {
+        RedisConnectOptions options;
+        options.reconnectIntervalSec = kLongReconnectIntervalSec;
+        manager_->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port_), std::move(options));
+        byDefault = manager_->ReconnectPeriodSec();
+    });
+    ASSERT_TRUE(WaitUntil([this] { return pingReplies_ >= 2; }, kSettleTimeout))
+        << "the second connection did not come up";
+    EXPECT_GE(byDefault, kLongReconnectIntervalSec);
+    EXPECT_LT(byDefault, kLongReconnectIntervalSec + RedisConnectOptions::kDefaultReconnectJitterSec);
 }
 
 // ---------------------------------------------------------------------------

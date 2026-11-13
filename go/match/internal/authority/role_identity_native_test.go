@@ -18,6 +18,7 @@ import (
 	base "proto/common/base"
 	dspb "proto/data_service"
 	pb "proto/match"
+	"shared/rolefence"
 	"shared/rolefence/fencetest"
 	"shared/roleidentity"
 )
@@ -155,6 +156,66 @@ func TestAuthorityTiDBNewOwnerCannotReplayOldJoinUUIDOrOldProfile(t *testing.T) 
 	require.ErrorIs(t, s.CommitProfile(actor, 11, profile.PlanId, profile.SessionBinding, profile.Receipts, ticket.ExpiresMs), ErrOriginalPlayer)
 	require.ErrorIs(t, s.CancelIntent(actor, 11, ticket.Ticket, ticket.RequestId), ErrOriginalPlayer)
 	require.Equal(t, before, nativeMatchSnapshot(t, s, ctx))
+}
+
+// 入口归属预检(docs/design/gate-online-identity.md §9.3):不加锁读副本,只判归属。战报、作战脚本列表这些只读方法靠它核归属。
+func TestAuthorityTiDBVerifyOriginalOwnerFollowsOwnershipNotFreeze(t *testing.T) {
+	s := nativeRoleStore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	fencetest.Seed(t, ctx, s.DB, 11, "seller", 7)
+	seller := nativeRoleActor(t, ctx, 11, "seller", 7)
+	before := nativeMatchSnapshot(t, s, ctx)
+	require.NoError(t, s.VerifyOriginalOwner(seller))
+
+	// 冻结(公示、投票、删角待确认)期间角色仍归原身份,读不拦;写入照旧由提交点拒绝。
+	fencetest.Update(t, ctx, s.DB, 11, "seller", 7, 901)
+	require.NoError(t, s.VerifyOriginalOwner(seller))
+
+	// 过户之后旧主的连接:确定不归。新主通过;修订号相同而账号不同同样拒绝。
+	fencetest.Update(t, ctx, s.DB, 11, "buyer", 8, 0)
+	err := s.VerifyOriginalOwner(seller)
+	require.ErrorIs(t, err, ErrOriginalPlayer)
+	require.True(t, OwnerRejected(err))
+	require.NoError(t, s.VerifyOriginalOwner(nativeRoleActor(t, ctx, 11, "buyer", 8)))
+	require.True(t, OwnerRejected(s.VerifyOriginalOwner(nativeRoleActor(t, ctx, 11, "other", 8))))
+
+	// 删角墓碑、目录里没有这名角色、ctx 里没有原身份:都是确定不归。
+	fencetest.Update(t, ctx, s.DB, 11, "", 9, 0)
+	require.True(t, OwnerRejected(s.VerifyOriginalOwner(nativeRoleActor(t, ctx, 11, "buyer", 8))))
+	require.True(t, OwnerRejected(s.VerifyOriginalOwner(nativeRoleActor(t, ctx, 404, "ghost", 1))))
+	require.True(t, OwnerRejected(s.VerifyOriginalOwner(ctx)))
+
+	require.Equal(t, before, nativeMatchSnapshot(t, s, ctx), "预检只读,不碰任何匹配表")
+}
+
+// 过户提交、推送丢了:本库副本还停在「旧主 + 冻结」。预检不看冻结,但冻结的副本要先读目录再判,否则旧主的连接还能读战报。
+// 目录读不到时这一次判不了,不能当成角色变了。
+func TestAuthorityTiDBVerifyOriginalOwnerHealsFrozenReplicaBeforeJudging(t *testing.T) {
+	s, directory := healStore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	seller, buyer := nativeRoleActor(t, ctx, 11, "seller", 7), nativeRoleActor(t, ctx, 11, "buyer", 8)
+
+	// 副本缺行:读一次目录后通过;之后副本相符,只读本库。
+	directory.Set(11, "seller", 7, 0)
+	require.NoError(t, s.VerifyOriginalOwner(seller))
+	require.NoError(t, s.VerifyOriginalOwner(seller))
+	require.Equal(t, []uint64{11}, directory.Reads, "副本相符不读目录")
+
+	// 冻结写进了副本,过户提交,推送丢了。
+	fencetest.Update(t, ctx, s.DB, 11, "seller", 7, 901)
+	directory.Set(11, "seller", 7, 901)
+	directory.Set(11, "buyer", 8, 0)
+	require.ErrorIs(t, s.VerifyOriginalOwner(seller), ErrOriginalPlayer)
+	require.NoError(t, s.VerifyOriginalOwner(buyer))
+
+	// 冻结而目录读不到:判不了,不是拒绝。
+	fencetest.Update(t, ctx, s.DB, 11, "buyer", 8, 902)
+	directory.Err = errors.Join(rolefence.ErrUnavailable, errors.New("data_service down"))
+	err := s.VerifyOriginalOwner(buyer)
+	require.ErrorIs(t, err, rolefence.ErrUnavailable)
+	require.False(t, OwnerRejected(err))
 }
 
 func nativeRoleFormation(battle uint64) *pb.MatchFormationRecord {

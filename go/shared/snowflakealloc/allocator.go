@@ -22,15 +22,17 @@
 //	/snowflake/<kind>/c<cluster>/affinity/<host>     = <slot>          挂 lease(同主机优雅重启复用)
 //	/snowflake/<kind>/c<cluster>/released/<host>     = "released"      挂 lease(前任已 fence 并优雅退出)
 //	/snowflake/<kind>/c<cluster>/watermark/<slot>    = <epochSec>      **不挂 lease**,guard + 墓碑
-//	/snowflake/<kind>/c<cluster>/watermark_ms/<slot> = <unixMs>        不挂 lease,login 的毫秒地板
+//
+// 毫秒水位 watermark_ms/<slot> 只有 login 的 PlayerId 发号器写过,2026-11-12 随 login 的槽位申领一起删掉:
+// 现在每个持有者只有上面这一把水位,闸也只在它写成功时 Ack。etcd 里残留的旧键没有读者,清 etcd 时一并清掉。
 //
 // worker id = (cluster << SlotBits) | slot(layout.go);发号器只认合成后的 worker id,
 // 对 cluster / slot 的切分一无所知。
 //
-// 用法:
+// 用法(现在只有 scene_manager 申领槽位):
 //
-//	h, err := snowflakealloc.AllocateWithKeepAlive(ctx, cli, "guild", hostname,
-//	    snowflakealloc.Options{LeaseTTL: 60, ClusterID: cfg.ClusterId, LegacyPrefix: "/guild"})
+//	h, err := snowflakealloc.AllocateWithKeepAlive(ctx, cli, "scene-manager", nodeName,
+//	    snowflakealloc.Options{LeaseTTL: 60, ClusterID: cfg.ClusterId, LegacyPrefix: "/scene_manager"})
 //	sf := h.NewNode()
 //	go func() { <-h.Lost(); sf.Fence(); os.Exit(1) }()
 //
@@ -56,7 +58,7 @@ import (
 )
 
 // ErrNoSlotAvailable 表示候选集为空:所有槽要么被活着的持有者占着,要么还在隔离期内。
-// fail-closed —— 4096 个槽(login 1024)在现实中不可能耗尽,除非一小时内重启上千次。
+// fail-closed —— 4096 个槽在现实中不可能耗尽,除非一小时内重启上千次。
 var ErrNoSlotAvailable = errors.New("snowflakealloc: no slot available (all held or quarantined)")
 
 // ErrInvalidOptions 表示 Options 自相矛盾(F ≥ Q、cluster 越界……),启动前就该发现。
@@ -69,16 +71,11 @@ type Options struct {
 	LeaseTTL int64
 
 	// ClusterID 是部署级集群号(运维在 ConfigMap / env 一次性设定,策划不碰),默认 0。
-	// 必须 < 1<<ClusterBits。
+	// 必须 ≤ MaxCluster。worker 段的切分固定是 layout.go 的 [cluster5][slot12]:原来可配的位宽只给 login 的
+	// 13 位 PlayerId 布局用过,2026-11-12 随 login 的槽位申领删除。
 	ClusterID uint32
 
-	// ClusterBits / SlotBits 是 worker 段的切分(见 layout.go)。0 时取本包默认的
-	// ClusterBits / SlotBits(5 / 12)。login 的 bwmarrin 13 位 node 段传
-	// PlayerIDClusterBits / PlayerIDSlotBits(3 / 10)。
-	ClusterBits uint
-	SlotBits    uint
-
-	// MaxSlot 是槽号上限(含)。0 时默认 (1<<SlotBits)-1。只能调小不能调大。
+	// MaxSlot 是槽号上限(含)。0 时默认 MaxSlot(4095)。只能调小不能调大。
 	MaxSlot uint64
 
 	// Quarantine 是隔离期 Q:一个槽的水位距今不足 Q 就不许被申领。0 时默认 4h。
@@ -94,8 +91,8 @@ type Options struct {
 	// Close() 写一次,etcd 水位写失败期间每拍写;稳态**一次都不写**,没有周期刷新可配。
 	CachePath string
 
-	// LegacyPrefix 是改造前的 etcd 前缀("/guild" / "/login" / "/match" / "/scene_manager")。
-	// 非空且 ClusterID==0 时,申领会额外读旧布局的水位(snowflake_guard / guard_ms)取 max,
+	// LegacyPrefix 是改造前的 etcd 前缀(现在只有 scene_manager 传 "/scene_manager")。
+	// 非空且 ClusterID==0 时,申领会额外读旧布局的水位(snowflake_guard)取 max,
 	// 并把旧布局仍活着的 worker id(snowflake_ids / snowflake_nodes)算作已占 —— 覆盖
 	// 滚动升级期新老版本并存的窗口。**发布一版之后可以删掉这条兼容读**。
 	LegacyPrefix string
@@ -103,15 +100,13 @@ type Options struct {
 
 // resolvedOptions 是校验并填好默认值后的 Options。
 type resolvedOptions struct {
-	ttl         int64
-	cluster     uint32
-	clusterBits uint
-	slotBits    uint
-	maxSlot     uint64
-	quarantine  time.Duration
-	fenceAfter  time.Duration
-	cachePath   string
-	legacy      string
+	ttl        int64
+	cluster    uint32
+	maxSlot    uint64
+	quarantine time.Duration
+	fenceAfter time.Duration
+	cachePath  string
+	legacy     string
 }
 
 const (
@@ -122,37 +117,25 @@ const (
 
 func (o Options) resolve() (resolvedOptions, error) {
 	r := resolvedOptions{
-		ttl:         o.LeaseTTL,
-		cluster:     o.ClusterID,
-		clusterBits: o.ClusterBits,
-		slotBits:    o.SlotBits,
-		maxSlot:     o.MaxSlot,
-		quarantine:  o.Quarantine,
-		fenceAfter:  o.FenceAfter,
-		cachePath:   o.CachePath,
-		legacy:      o.LegacyPrefix,
+		ttl:        o.LeaseTTL,
+		cluster:    o.ClusterID,
+		maxSlot:    o.MaxSlot,
+		quarantine: o.Quarantine,
+		fenceAfter: o.FenceAfter,
+		cachePath:  o.CachePath,
+		legacy:     o.LegacyPrefix,
 	}
 	if r.ttl <= 0 {
 		r.ttl = defaultLeaseTTL
 	}
-	if r.clusterBits == 0 {
-		r.clusterBits = ClusterBits
+	if uint64(r.cluster) > MaxCluster {
+		return r, fmt.Errorf("%w: ClusterID %d exceeds %d bits", ErrInvalidOptions, r.cluster, ClusterBits)
 	}
-	if r.slotBits == 0 {
-		r.slotBits = SlotBits
-	}
-	if r.clusterBits+r.slotBits > 63 {
-		return r, fmt.Errorf("%w: cluster%d+slot%d bits too wide", ErrInvalidOptions, r.clusterBits, r.slotBits)
-	}
-	if uint64(r.cluster) > (uint64(1)<<r.clusterBits)-1 {
-		return r, fmt.Errorf("%w: ClusterID %d exceeds %d bits", ErrInvalidOptions, r.cluster, r.clusterBits)
-	}
-	slotCap := (uint64(1) << r.slotBits) - 1
 	if r.maxSlot == 0 {
-		r.maxSlot = slotCap
+		r.maxSlot = MaxSlot
 	}
-	if r.maxSlot > slotCap {
-		return r, fmt.Errorf("%w: MaxSlot %d exceeds %d bits", ErrInvalidOptions, r.maxSlot, r.slotBits)
+	if r.maxSlot > MaxSlot {
+		return r, fmt.Errorf("%w: MaxSlot %d exceeds %d bits", ErrInvalidOptions, r.maxSlot, SlotBits)
 	}
 	if r.quarantine <= 0 {
 		r.quarantine = defaultQuarantine
@@ -214,17 +197,10 @@ func watermarkKey(kind string, cluster uint32, slot uint64) string {
 	return watermarkPrefix(kind, cluster) + strconv.FormatUint(slot, 10)
 }
 
-// watermarkMsKey 是毫秒级持久水位,给 **bwmarrin 布局**的消费方(login PlayerId)用。
-// 与 watermarkKey 的秒级 / snowflake.Epoch 口径完全独立:值统一存 **Unix 毫秒**。
-func watermarkMsKey(kind string, cluster uint32, slot uint64) string {
-	return rootKey(kind, cluster) + "/watermark_ms/" + strconv.FormatUint(slot, 10)
-}
-
 // 旧布局(改造前)的 key,只在 cluster 0 兼容读**与过渡期镜像写**。发布一版之后可删。
-func legacyGuardPrefix(prefix string) string   { return prefix + "/snowflake_guard/" }
-func legacyGuardMsPrefix(prefix string) string { return prefix + "/guard_ms/" }
-func legacyIDPrefix(prefix string) string      { return prefix + "/snowflake_ids/" }
-func legacyNodePrefix(prefix string) string    { return prefix + "/snowflake_nodes/" }
+func legacyGuardPrefix(prefix string) string { return prefix + "/snowflake_guard/" }
+func legacyIDPrefix(prefix string) string    { return prefix + "/snowflake_ids/" }
+func legacyNodePrefix(prefix string) string  { return prefix + "/snowflake_nodes/" }
 
 // legacyIDKey 是旧二进制的"槽位已占"占位键(<legacy>/snowflake_ids/<id> = <host>)。
 // 过渡期新二进制申领成功时把它一并挂到自己的 lease 上:旧二进制的双 key CAS 条件
@@ -234,15 +210,11 @@ func legacyIDKey(prefix string, slot uint64) string {
 	return legacyIDPrefix(prefix) + strconv.FormatUint(slot, 10)
 }
 
-// legacyGuardKey / legacyGuardMsKey 是旧二进制读地板用的水位键。过渡期把新水位镜像
+// legacyGuardKey 是旧二进制读地板用的水位键。过渡期把新水位镜像
 // 过去,旧二进制接手这个槽时才有地板可用(它只会去 readGuard 旧 key)。
 // **过渡专用,发布一版之后删。**
 func legacyGuardKey(prefix string, slot uint64) string {
 	return legacyGuardPrefix(prefix) + strconv.FormatUint(slot, 10)
-}
-
-func legacyGuardMsKey(prefix string, slot uint64) string {
-	return legacyGuardMsPrefix(prefix) + strconv.FormatUint(slot, 10)
 }
 
 // newHolderID 生成持有者 uuid(128 bit 随机,hex)。不引 uuid 库:shared 模块里它只是
@@ -476,38 +448,25 @@ func scanUsedSlots(ctx context.Context, cli *clientv3.Client, kind string, r res
 	return used, nil
 }
 
-// scanWatermarks 读 watermark/ 全表;cluster 0 兼容期与旧布局的 snowflake_guard /
-// guard_ms 按槽取 max。发布一版之后可删兼容读。
+// scanWatermarks 读 watermark/ 全表;cluster 0 兼容期与旧布局的 snowflake_guard 按槽取 max。
+// 发布一版之后可删兼容读。旧布局的毫秒水位 guard_ms 只有 login 写过,不再读(scene_manager 的旧前缀下从来没有)。
 func scanWatermarks(ctx context.Context, cli *clientv3.Client, kind string, r resolvedOptions) (map[uint64]uint64, error) {
-	wm, err := scanSecMap(ctx, cli, watermarkPrefix(kind, r.cluster), 1)
+	wm, err := scanSecMap(ctx, cli, watermarkPrefix(kind, r.cluster))
 	if err != nil {
 		return nil, err
 	}
 	if r.cluster != 0 || r.legacy == "" {
 		return wm, nil
 	}
-	legacySec, err := scanSecMap(ctx, cli, legacyGuardPrefix(r.legacy), 1)
+	legacySec, err := scanSecMap(ctx, cli, legacyGuardPrefix(r.legacy))
 	if err != nil {
 		return nil, err
 	}
-	wm = mergeWatermarks(wm, legacySec)
-	legacyMs, err := scanSecMap(ctx, cli, legacyGuardMsPrefix(r.legacy), 1000)
-	if err != nil {
-		return nil, err
-	}
-	// guard_ms 是 Unix 毫秒,换算成 snowflake.Epoch 起的秒。
-	for slot, unixSec := range legacyMs {
-		if unixSec > snowflake.Epoch {
-			legacyMs[slot] = unixSec - snowflake.Epoch
-		} else {
-			delete(legacyMs, slot)
-		}
-	}
-	return mergeWatermarks(wm, legacyMs), nil
+	return mergeWatermarks(wm, legacySec), nil
 }
 
-// scanSecMap 把 <prefix><slot>=<n> 读成 map[slot]=n/divisor。
-func scanSecMap(ctx context.Context, cli *clientv3.Client, prefix string, divisor uint64) (map[uint64]uint64, error) {
+// scanSecMap 把 <prefix><slot>=<秒> 读成 map[slot]=秒。
+func scanSecMap(ctx context.Context, cli *clientv3.Client, prefix string) (map[uint64]uint64, error) {
 	resp, err := cli.Get(ctx, prefix, clientv3.WithPrefix())
 	if err != nil {
 		return nil, fmt.Errorf("snowflakealloc: scan %s: %w", prefix, err)
@@ -522,7 +481,7 @@ func scanSecMap(ctx context.Context, cli *clientv3.Client, prefix string, diviso
 		if perr != nil {
 			continue
 		}
-		out[slot] = v / divisor
+		out[slot] = v
 	}
 	return out, nil
 }
@@ -600,8 +559,9 @@ func readUintRev(ctx context.Context, cli *clientv3.Client, key string) (uint64,
 
 // ---- Handle --------------------------------------------------------------------
 
-// Fencer 是"能被永久停用"的发号器:shared/snowflake.Node 与 login 的 PlayerIDGen 都满足。
-type Fencer interface{ Fence() }
+// fencer 是"能被永久停用"的发号器(shared/snowflake.Node 满足)。NewNode 交出的发号器都登记在 Handle 上,
+// Close() 与 markLost 先把它们全部停用。
+type fencer interface{ Fence() }
 
 // Handle 把槽位、lease、keepalive / 水位 / reclaim 循环打包,方便调用方在进程退出时清理。
 type Handle struct {
@@ -634,19 +594,17 @@ type Handle struct {
 	fence *snowflake.FenceClock
 
 	fencersMu sync.Mutex
-	fencers   []Fencer
+	fencers   []fencer
 
-	// guardMu 串行化水位推进;guardWritten / msWritten 是本进程**已成功落盘**的最大水位。
+	// guardMu 串行化水位推进;guardWritten 是本进程**已成功落盘**的最大水位。
 	// 必须串行:NewNode() 的同步首写(调用方协程)与循环 goroutine 的 tick 并发;
 	// 锁跨 Txn 持有保证"值的顺序 = 落盘的顺序",水位绝不倒退。
 	//
-	// guardRev / msRev 是两把水位 key 已知的 ModRevision,给写入的 CAS 用
+	// guardRev 是水位 key 已知的 ModRevision,给写入的 CAS 与 reclaim 的重建比较用
 	// (见 putWatermarkLocked:etcd 的值比较是按字节的,"9" > "10",没法拿 Value 比大小)。
 	guardMu      sync.Mutex
 	guardWritten uint64
 	guardRev     int64
-	msWritten    uint64
-	msRev        int64
 	// 本地缓存的落盘状态(guardMu 下;设计稿 §7.5-5,用户拍板:**稳态零写盘**)。
 	// cache 是缓存文件的内存映像,每次 Ack / 每拍都更新;磁盘只在下面三种时刻写:
 	//   - cacheWrittenInc ≠ 当前 incarnation(申领 / reclaim 之后的第一次 Ack:身份落盘);
@@ -666,7 +624,7 @@ type Handle struct {
 	watermarkDegraded bool
 	lastCacheErr      time.Time
 
-	// node 是经 NewNode() 构造出的发号器(为空 = 调用方还没构造 / login 用的是 bwmarrin)。
+	// node 是经 NewNode() 构造出的发号器(为空 = 调用方还没构造)。
 	// advanceGuard 靠它读真实高水位:借位时 lastTime 会跑到墙钟前面。
 	node atomic.Pointer[snowflake.Node]
 
@@ -712,9 +670,6 @@ func (h *Handle) Incarnation() int64 { return h.incarnation.Load() }
 // Registered 返回 slots key 此刻是否确认挂在我们的 lease 上。
 func (h *Handle) Registered() bool { return h.registered.Load() }
 
-// FenceClock 返回自 fence 闸,给不走 NewNode 的发号器(login PlayerIDGen)共用。
-func (h *Handle) FenceClock() *snowflake.FenceClock { return h.fence }
-
 // LogFields 返回日志关联三字段:kind / worker=c<cluster>:<slot> / inc=<revision>。
 // slot 会随重启变,inc 全局单调唯一 —— 排查撞号按 inc。
 func (h *Handle) LogFields() string {
@@ -725,9 +680,8 @@ func (h *Handle) LogFields() string {
 	return s
 }
 
-// AttachFencer 登记一个发号器:Close() 与 markLost 会先 Fence 它们。NewNode 自动登记;
-// login 把 PlayerIDGen 挂上来。
-func (h *Handle) AttachFencer(f Fencer) {
+// attachFencer 登记一个发号器:Close() 与 markLost 会先 Fence 它们。由 NewNode 调用。
+func (h *Handle) attachFencer(f fencer) {
 	if f == nil {
 		return
 	}
@@ -738,7 +692,7 @@ func (h *Handle) AttachFencer(f Fencer) {
 
 func (h *Handle) fenceAll() {
 	h.fencersMu.Lock()
-	fs := append([]Fencer(nil), h.fencers...)
+	fs := append([]fencer(nil), h.fencers...)
 	h.fencersMu.Unlock()
 	for _, f := range fs {
 		f.Fence()
@@ -759,7 +713,7 @@ func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, kind, host
 		return nil, err
 	}
 	workerFor := func(slot uint64) (uint64, error) {
-		return ComposeWorkerID(r.cluster, slot, r.clusterBits, r.slotBits)
+		return ComposeWorkerID(r.cluster, slot, ClusterBits, SlotBits)
 	}
 
 	cl, err := allocate(ctx, cli, kind, hostname, r)
@@ -798,15 +752,10 @@ func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, kind, host
 		}
 		h.GuardEpochSec = floor + guardLeadSec
 		h.guardWritten = floor
-		h.msWritten = rec.LastWatermarkMs
-		if rec.LocalHighWaterMs > h.msWritten {
-			h.msWritten = rec.LocalHighWaterMs
-		}
 		// 前任落盘时最后观测到的水位 revision:etcd 回来时前任的 slots key 多半已随 lease 过期,
 		// reclaim 只有凭它证明"这段时间没人写过水位"才肯把 key 重新 Create 出来(见 reclaim)。
 		// 缺字段的旧缓存读成 0,重建时就判为别人写过 → fence,不会放行。
 		h.guardRev = rec.WatermarkRev
-		h.msRev = rec.WatermarkMsRev
 		h.cache = *rec
 		h.fence.SeedAck(time.UnixMilli(rec.LastAckWall))
 		h.needReclaim.Store(true)
@@ -940,7 +889,7 @@ const (
 	reclaimRetryInterval = 2 * time.Second
 	// etcdOpTimeout 是循环内单次 etcd 操作(申领 / reclaim / 读地板 / released)的超时。
 	etcdOpTimeout = 3 * time.Second
-	// watermarkTxnTimeout 是 advanceGuard / PutMsWatermark 里**水位 Txn 专用**的超时,
+	// watermarkTxnTimeout 是 advanceGuard 里**水位 Txn 专用**的超时,
 	// 覆盖 putWatermarkLocked 的整个调用(含 CAS 重试),刻意比 etcdOpTimeout 短。
 	// 它必须 **< guardLeadSec**,这是本地缓存"稳态零写盘"(设计稿 §7.5-5)的正确性前提:
 	//
@@ -1063,7 +1012,7 @@ func (h *Handle) run(kaCtx context.Context, st *loopState) {
 //  1. Get slots key。value 是别人的 uuid → 所有权已丢,markLost。
 //  2. value 是我们、且 lease 正是当前 lease 且仍存活 → 虚惊(客户端侧误判),恢复 keepalive 即可。
 //  3. 否则 Grant 新 lease,**一笔** Txn:
-//     If CreateRev==0(key 已过期)Then 内层 Txn If 两把水位 key 的 ModRevision 仍是我们最后的观测 Then Put;
+//     If CreateRev==0(key 已过期)Then 内层 Txn If 水位 key 的 ModRevision 仍是我们最后的观测 Then Put;
 //     Else 内层 Txn If Value==uuid(还在旧 lease 上)Then Put。
 //     key 已过期但水位被别人写过 → 永久 fence(见下);两支都不成立才去看是谁拿走了。
 //
@@ -1077,10 +1026,14 @@ func (h *Handle) run(kaCtx context.Context, st *loopState) {
 // 对别人就是空的:过了隔离期,继任者 B 可以合法申领并发号;B 若此刻恰好也与 etcd 断开(它的 key
 // 同样过期),它在自己的 F 内还会继续发号。这时把 key 重新 Create 回我们名下,就是两个进程拿同一个
 // worker id 同时发号 —— 隔离期被重建分支绕过了。任何发过号的持有者都先写过水位(闸只在水位写
-// 成功后 Ack;秒级或毫秒级任一),所以两把水位 key 的 ModRevision 仍等于我们最后一次观测的值,
+// 成功后 Ack,水位只有 watermark/<slot> 这一把),所以水位 key 的 ModRevision 仍等于我们最后一次观测的值,
 // 就证明这段时间没人用过;不等时分不清 B 已退出还是仍在发号,只能永久 fence,让进程重启后走受
 // 隔离期保护的正常申领。比较与重建在同一笔 Txn 里,没有先读后写的窗口。代价:我们自己最后一笔
 // 水位写"已提交但没收到应答"时 revision 同样对不上,也会 fence(fail-closed,只多一次重启)。
+//
+// 2026-11-12 之前这里还比较毫秒水位 watermark_ms/<slot> 的 ModRevision。它只有 login 写过,而申领时从不读它的
+// revision:login 的第一笔毫秒水位写失败、随后又碰上 key 过期时,本进程记的 0 与 etcd 里前任留下的值对不上,
+// 进程被无故 fence 退出。毫秒水位随 login 的槽位申领一起删掉,这条比较与那条误 fence 路径一起没有了。
 //
 // etcd 不可达时什么都不改,留着 needReclaim 下一拍再试;这段时间发号器由 F 兜底。
 func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
@@ -1134,21 +1087,16 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 		puts = append(puts, clientv3.OpPut(legacyIDKey(h.r.legacy, h.Slot), h.host, clientv3.WithLease(lease.ID)))
 	}
 	wmKey := watermarkKey(h.Kind, h.Cluster, h.Slot)
-	wmMsKey := watermarkMsKey(h.Kind, h.Cluster, h.Slot)
 	// guardMu 跨 Txn 持有:拿来比较的 revision 与 Txn 之间不能夹进本进程自己的水位写
-	// (NewNode 的同步首写、login 的毫秒水位协程),否则刚写的那一笔会被误判成"别人写过"。
-	// 秒级 / 毫秒级都比:没写过毫秒水位的 kind 两边恒为 0(key 不存在时 ModRevision 按 0 比较)。
+	// (NewNode 的同步首写),否则刚写的那一笔会被误判成"别人写过"。key 不存在时 ModRevision 按 0 比较。
 	h.guardMu.Lock()
-	secRev, msRev := h.guardRev, h.msRev
+	wantRev := h.guardRev
 	txn, err := h.cli.Txn(ctx).
 		If(clientv3.Compare(clientv3.CreateRevision(h.sKey()), "=", 0)).
 		Then(clientv3.OpTxn(
-			[]clientv3.Cmp{
-				clientv3.Compare(clientv3.ModRevision(wmKey), "=", secRev),
-				clientv3.Compare(clientv3.ModRevision(wmMsKey), "=", msRev),
-			},
+			[]clientv3.Cmp{clientv3.Compare(clientv3.ModRevision(wmKey), "=", wantRev)},
 			puts,
-			[]clientv3.Op{clientv3.OpGet(wmKey), clientv3.OpGet(wmMsKey)},
+			[]clientv3.Op{clientv3.OpGet(wmKey)},
 		)).
 		Else(clientv3.OpTxn(
 			[]clientv3.Cmp{clientv3.Compare(clientv3.Value(h.sKey()), "=", h.UUID)},
@@ -1170,22 +1118,16 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 		// 重建被拒:key 过期期间水位被别人写过(见函数注释)。先 fence 再撤新 lease(上面什么都没挂):
 		// 撤销要等 etcd 连接,断网时会卡住,不能让它推迟 fence 与日志。槽 key 留空,别人(包括仍在 F 内的 B)
 		// 照常按自己的规则处理。
-		var gotSecRev, gotMsRev int64
-		gotSecVal := "<absent>"
-		for i, r := range branch.GetResponses() {
-			kvs := r.GetResponseRange().GetKvs()
-			if len(kvs) == 0 {
-				continue
-			}
-			if i == 0 {
-				gotSecRev, gotSecVal = kvs[0].ModRevision, string(kvs[0].Value)
-			} else {
-				gotMsRev = kvs[0].ModRevision
+		var gotRev int64
+		gotVal := "<absent>"
+		if rs := branch.GetResponses(); len(rs) > 0 {
+			if kvs := rs[0].GetResponseRange().GetKvs(); len(kvs) > 0 {
+				gotRev, gotVal = kvs[0].ModRevision, string(kvs[0].Value)
 			}
 		}
 		h.onOwnershipLost(fmt.Sprintf("reclaim (%s): the slot key had expired and the watermark was written by "+
-			"someone else meanwhile (sec rev %d -> %d value %s, ms rev %d -> %d); another holder may still be "+
-			"minting with this worker id, refusing to recreate the slot", reason, secRev, gotSecRev, gotSecVal, msRev, gotMsRev))
+			"someone else meanwhile (rev %d -> %d, value %s); another holder may still be "+
+			"minting with this worker id, refusing to recreate the slot", reason, wantRev, gotRev, gotVal))
 		h.revokeUnusedLease(lease.ID)
 		return
 	}
@@ -1236,7 +1178,7 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 }
 
 // refloorFromWatermark 在"槽 key 曾经消失过"或"本进程曾经因水位过期自 fence"之后,
-// 把 etcd 里当前的水位重新当地板吃回来(秒级喂 SetGuardTime,毫秒级抬 msWritten)。
+// 把 etcd 里当前的水位重新当地板吃回来(喂 SetGuardTime)。
 //
 // "失联期间别的持有者用过这个槽"不会走到这里:reclaim 的重建分支用水位 revision 比较把它
 // 拒掉并永久 fence(第一轮数据审计 §4 第 21 条)。这一步是纵深防御,兜两类不经过那条比较的
@@ -1254,7 +1196,6 @@ func (h *Handle) refloorFromWatermark(ctx context.Context, reason string, recrea
 			"the next watermark write will adopt whatever etcd holds before un-fencing", reason, h.LogFields(), err)
 		return
 	}
-	ms, msErr := readMsWatermarkRaw(ctx, h)
 
 	h.guardMu.Lock()
 	defer h.guardMu.Unlock()
@@ -1266,34 +1207,12 @@ func (h *Handle) refloorFromWatermark(ctx context.Context, reason string, recrea
 	if rev > h.guardRev {
 		h.guardRev = rev
 	}
-	if msErr == nil && ms > h.msWritten {
-		h.msWritten = ms
-	}
 	if n := h.node.Load(); n != nil && floor > 0 {
 		// 地板语义:只在比当前高水位更晚时才生效,绝不把发号器往回拨。
 		n.SetGuardTime(floor)
 	}
-	logx.Errorf("[snowflakealloc] reclaim (%s) re-applied the watermark floor sec=%d ms=%d (%s, recreated=%v)",
-		reason, floor, h.msWritten, h.LogFields(), recreated)
-}
-
-// readMsWatermarkRaw 读本槽的毫秒水位(新 key 与过渡期旧 key 取 max)。与 ReadMsWatermark
-// 的区别是它不碰 guardMu(调用方自己持锁),也不退回本地缓存。
-func readMsWatermarkRaw(ctx context.Context, h *Handle) (uint64, error) {
-	ms, err := readUint(ctx, h.cli, watermarkMsKey(h.Kind, h.Cluster, h.Slot))
-	if err != nil {
-		return 0, err
-	}
-	if h.r.legacyMirror() {
-		legacy, lerr := readUint(ctx, h.cli, legacyGuardMsKey(h.r.legacy, h.Slot))
-		if lerr != nil {
-			return 0, lerr
-		}
-		if legacy > ms {
-			ms = legacy
-		}
-	}
-	return ms, nil
+	logx.Errorf("[snowflakealloc] reclaim (%s) re-applied the watermark floor %d (%s, recreated=%v)",
+		reason, floor, h.LogFields(), recreated)
 }
 
 // rewatch 在 watch 断掉后重建:先 Get 校验归属(不是我们的就交给 reclaim),再从当前
@@ -1358,7 +1277,7 @@ func (h *Handle) NewNode() *snowflake.Node {
 	}
 	n.SetFenceClock(h.fence)
 	h.node.Store(n)
-	h.AttachFencer(n)
+	h.attachFencer(n)
 
 	// 同步首写:从这里到循环的第一个 tick 之间(≤1s)我们已经在发号,etcd 里必须已经有
 	// 覆盖这段的水位。写失败只告警,闸不 Ack ⇒ 发号器拒发到下一次写成功为止。
@@ -1366,14 +1285,6 @@ func (h *Handle) NewNode() *snowflake.Node {
 	h.advanceGuard(ctx)
 	cancel()
 	return n
-}
-
-// SyncWatermark 同步写一次秒级水位(带槽归属校验),供不走 NewNode 的消费方(login)
-// 在开始服务前调用。返回是否写成功(= 闸已 Ack)。
-func (h *Handle) SyncWatermark(ctx context.Context) bool {
-	h.advanceGuard(ctx)
-	stale, _ := h.fence.Stale()
-	return !stale
 }
 
 // advanceGuard 把本槽的持久水位推进到"墙钟秒与发号器真实高水位的较大者 + 前推量",
@@ -1401,7 +1312,7 @@ func (h *Handle) advanceGuard(ctx context.Context) bool {
 	// 本地高水位先记下(故障模式下这一步就落盘,稳态只改内存),再去写 etcd。稳态不预写
 	// 之所以安全,靠的是 Txn 超时 watermarkTxnTimeout < 前推量 guardLeadSec(见常量注释):
 	// 这一拍失败被发现之前发出的号仍在上一拍已 Ack 水位的 lead 之内。
-	h.noteLocalHighWaterLocked(target, 0)
+	h.noteLocalHighWaterLocked(target)
 
 	legacyKey := ""
 	if h.r.legacyMirror() {
@@ -1434,7 +1345,7 @@ func (h *Handle) advanceGuard(ctx context.Context) bool {
 	return true
 }
 
-// putWatermarkLocked 写一把持久水位 key(秒级或毫秒级)。调用方必须持 guardMu。
+// putWatermarkLocked 写本槽的持久水位 key。调用方必须持 guardMu。
 // 返回 (etcd 里现在的值, 槽是否仍归我们, 错误)。
 //
 // 三件事一起做:
@@ -1497,8 +1408,7 @@ func (h *Handle) putWatermarkLocked(ctx context.Context, key, legacyKey string, 
 	return 0, true, fmt.Errorf("snowflakealloc: watermark %s lost the CAS twice in a row (concurrent writer?)", key)
 }
 
-// noteLocalHighWaterLocked 在 guardMu 下记下"本进程打算发到的最高时刻",**不等 etcd**。
-// sec / ms 传 0 表示这一维不动。
+// noteLocalHighWaterLocked 在 guardMu 下记下"本进程打算发到的最高逻辑秒",**不等 etcd**。只升不降。
 //
 // 这是 etcd 长时间不可达时唯一还在推进的地板来源:LastWatermark 冻在最后一次 Ack,
 // 而发号器还能再发 F 那么久(还可能借位、可能撞上墙钟回拨)。
@@ -1508,22 +1418,11 @@ func (h *Handle) putWatermarkLocked(ctx context.Context, key, legacyKey string, 
 // 之后发出的号全归它罩。第一次失败那一拍事先无从知道会失败,只能在失败返回后立刻补写
 // (noteWatermarkWriteFailedLocked);这段"发起到失败"的空档由 watermarkTxnTimeout <
 // guardLeadSec 保证仍在上一拍已 Ack 水位之内 —— 见常量注释。
-func (h *Handle) noteLocalHighWaterLocked(sec, ms uint64) {
-	if h.r.cachePath == "" {
+func (h *Handle) noteLocalHighWaterLocked(sec uint64) {
+	if h.r.cachePath == "" || sec <= h.cache.LocalHighWaterSec {
 		return
 	}
-	changed := false
-	if sec > h.cache.LocalHighWaterSec {
-		h.cache.LocalHighWaterSec = sec
-		changed = true
-	}
-	if ms > h.cache.LocalHighWaterMs {
-		h.cache.LocalHighWaterMs = ms
-		changed = true
-	}
-	if !changed {
-		return
-	}
+	h.cache.LocalHighWaterSec = sec
 	h.cacheDirty = true
 	if h.watermarkDegraded {
 		h.writeCacheLocked()
@@ -1564,7 +1463,6 @@ func (h *Handle) ackLocked() {
 	inc := h.incarnation.Load()
 	h.cache.Incarnation = inc
 	h.cache.LastWatermark = h.guardWritten
-	h.cache.LastWatermarkMs = h.msWritten
 	h.cache.LastAckWall = h.fence.LastAckWall().UnixMilli()
 	h.cacheDirty = true
 	if inc != h.cacheWrittenInc {
@@ -1584,7 +1482,6 @@ func (h *Handle) writeCacheLocked() {
 	// 水位 revision 每次写都在变,只在落盘这一刻抄进记录:磁盘上总是落盘时刻最新的观测
 	// (不因 revision 变化额外写盘,稳态零写盘不变;见 cacheRecord.WatermarkRev)。
 	h.cache.WatermarkRev = h.guardRev
-	h.cache.WatermarkMsRev = h.msRev
 	if err := writeCacheFileFn(h.r.cachePath, &h.cache); err != nil {
 		// 缓存只影响"下次 etcd 不通时能不能起",限频告警即可。cacheDirty 留着,下一个
 		// 落盘时机再补写。
@@ -1597,65 +1494,6 @@ func (h *Handle) writeCacheLocked() {
 	}
 	h.cacheDirty = false
 	h.cacheWrittenInc = h.cache.Incarnation
-}
-
-// ReadMsWatermark 读本槽的毫秒级持久水位(Unix ms);key 不存在返回 0。cluster 0 兼容期
-// 与旧布局 <LegacyPrefix>/guard_ms/<slot> 取 max。读失败必须返回错误让调用方 fail-closed
-// —— 水位是防跨重启重放的唯一地板;只有本地缓存启动(尚未注册)时才退回缓存值。
-func (h *Handle) ReadMsWatermark(ctx context.Context) (uint64, error) {
-	ms, err := readUint(ctx, h.cli, watermarkMsKey(h.Kind, h.Cluster, h.Slot))
-	if err == nil && h.r.legacyMirror() {
-		var legacy uint64
-		legacy, err = readUint(ctx, h.cli, legacyGuardMsKey(h.r.legacy, h.Slot))
-		if legacy > ms {
-			ms = legacy
-		}
-	}
-	h.guardMu.Lock()
-	cached := h.msWritten
-	registered := h.registered.Load()
-	h.guardMu.Unlock()
-	if err != nil {
-		if !registered && cached > 0 {
-			return cached, nil
-		}
-		return 0, err
-	}
-	if cached > ms {
-		ms = cached
-	}
-	return ms, nil
-}
-
-// PutMsWatermark 写毫秒级持久水位(带槽归属校验,成功即 Ack 闸)。写入节奏与前推量由
-// 调用方决定(它才知道自己发号器的时钟语义);单调不回退。写失败只回错误不重试。
-func (h *Handle) PutMsWatermark(ctx context.Context, ms uint64) error {
-	h.guardMu.Lock()
-	defer h.guardMu.Unlock()
-	if ms < h.msWritten {
-		ms = h.msWritten
-	}
-	// 与 advanceGuard 同理:本地高水位先记下(故障模式落盘),再去写 etcd;Txn 同样受
-	// watermarkTxnTimeout 约束 —— 调用方(login)自己定前推量,须保证它 > 该超时 + 写入间隔。
-	h.noteLocalHighWaterLocked(0, ms)
-
-	legacyKey := ""
-	if h.r.legacyMirror() {
-		legacyKey = legacyGuardMsKey(h.r.legacy, h.Slot)
-	}
-	persisted, owned, err := h.putWatermarkLocked(ctx, watermarkMsKey(h.Kind, h.Cluster, h.Slot), legacyKey, &h.msRev, ms)
-	if err != nil {
-		h.noteWatermarkWriteFailedLocked("ms watermark txn failed: " + err.Error())
-		return err
-	}
-	if !owned {
-		h.needReclaim.Store(true)
-		h.noteWatermarkWriteFailedLocked("ms watermark txn: slot not on our uuid")
-		return fmt.Errorf("snowflakealloc: slot %s not held by our uuid; ms watermark not written", h.LogFields())
-	}
-	h.msWritten = persisted
-	h.ackLocked()
-	return nil
 }
 
 // ---- Close ---------------------------------------------------------------------------

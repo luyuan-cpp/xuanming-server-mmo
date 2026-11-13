@@ -1,4 +1,4 @@
-// auth_providers.go —— 第三方登录(微信 / QQ)配置的启动期门禁,由 ResolveSecrets 调用。
+// auth_providers.go —— 第三方登录(微信 / QQ,以及微信、抖音小游戏)配置的启动期门禁,由 ResolveSecrets 调用。
 //
 // 已核实的两个坑:
 //
@@ -23,6 +23,9 @@ import (
 type AuthProviderSecrets struct {
 	WeChatAppSecret string
 	QQAppKey        string
+	// 小游戏渠道调 code2Session 用的 AppSecret。
+	WeChatMiniGameAppSecret string
+	DouyinMiniGameAppSecret string
 }
 
 // containsUnexpandedPlaceholder 判断值里是否有没被展开的 ${...}。
@@ -81,7 +84,53 @@ func resolveAuthProviders(cfg AuthConfig, relaxed bool, lookup func(string) (str
 		}
 	}
 
+	// 小游戏渠道形状相同,走同一套门禁(resolveMiniGameProvider)。
+	if m := cfg.WeChatMiniGame; m != nil {
+		secret, ws, err := resolveMiniGameProvider("WeChatMiniGame", m, relaxed, lookup)
+		if err != nil {
+			return AuthProviderSecrets{}, warnings, err
+		}
+		warnings = append(warnings, ws...)
+		out.WeChatMiniGameAppSecret = secret
+		// App 与小游戏是两个应用,应用号不会相同。写成同一个说明有一段抄错了:起服零报错,但那一段的每次登录都被微信拒绝。
+		if w := cfg.WeChat; w != nil && w.AppId == m.AppId {
+			return AuthProviderSecrets{}, warnings, fmt.Errorf(
+				"AuthProviders.WeChat.AppId and AuthProviders.WeChatMiniGame.AppId are identical: " +
+					"the app and the mini game are two different apps and never share an AppId")
+		}
+	}
+
+	if m := cfg.DouyinMiniGame; m != nil {
+		secret, ws, err := resolveMiniGameProvider("DouyinMiniGame", m, relaxed, lookup)
+		if err != nil {
+			return AuthProviderSecrets{}, warnings, err
+		}
+		warnings = append(warnings, ws...)
+		out.DouyinMiniGameAppSecret = secret
+	}
+
 	return out, warnings, nil
+}
+
+// resolveMiniGameProvider 校验一个小游戏渠道段并解析它的 AppSecret。name 是配置段名,报错与告警里用它点名。
+// 规则与 WeChat 段相同:AppId 非空无占位符,Endpoint 生产只接受 https,密钥生产只认 AppSecretEnv。
+func resolveMiniGameProvider(name string, m *MiniGameAuthConf, relaxed bool,
+	lookup func(string) (string, bool)) (string, []string, error) {
+	if err := checkAuthAppId(name, m.AppId); err != nil {
+		return "", nil, err
+	}
+	if err := checkOAuthEndpoint(name, m.Endpoint, relaxed); err != nil {
+		return "", nil, err
+	}
+	secret, warnings, err := resolveAuthCredential(name, "AppSecret", m.AppSecretEnv, m.AppSecret, true, relaxed, lookup)
+	if err != nil {
+		return "", nil, err
+	}
+	if !m.RequireUnionId {
+		warnings = append(warnings, "AuthProviders."+name+".RequireUnionId=false: accounts are created by openid when unionid is unavailable; "+
+			"the same player entering through another app of the same channel becomes a different account that cannot be merged afterwards")
+	}
+	return secret, warnings, nil
 }
 
 // checkAuthAppId:AppId 是公开值,可以写在配置里,但不能为空、不能带首尾空白、不能是未展开的占位符。

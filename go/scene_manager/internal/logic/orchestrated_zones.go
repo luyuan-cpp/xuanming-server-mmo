@@ -9,7 +9,7 @@ import (
 // 一个 scene_manager 进程只编排一个 zone(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3)。
 //
 // 为什么恒为配置的 ZoneId,而不是「etcd 快照里出现的 zone」或「Redis 里登记过的 zone」:
-//   - 选主锁按 zone(scene_manager:leader:lock:zone:<z>),本副本只可能是自己 zone 的领导者;
+//   - 选主锁按 zone(scene_manager:leader:lock:{ctl:<z>}),本副本只可能是自己 zone 的领导者;
 //   - 控制域按 zone 组分实例之后,同组几个 zone 的键在同一个实例上、各自有领导者。任何「从 Redis 里发现有哪些 zone」
 //     的循环都会扫到同组别的 zone,而本副本的 etcd 镜像里没有那些 zone 的节点:清扫会把它们的活节点当成陈旧成员,
 //     写 death_at、摘出负载集。zone 登记集合 scene_manager:zones 因此删除;

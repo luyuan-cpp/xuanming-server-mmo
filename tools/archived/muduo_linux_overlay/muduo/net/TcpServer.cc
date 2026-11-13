@@ -11,7 +11,7 @@
 // LOCAL OVERLAY -- 由 tools/archived/setup_dependencies.sh 在配置 muduo 之前
 // 拷到 third_party/muduo-linux/muduo/net/TcpServer.cc。
 //
-// 除标 LOCAL DELTA 的三处外与上游逐字一致:
+// 除标 LOCAL DELTA 的四处外与上游逐字一致:
 //   1. newConnection 与 2. removeConnectionInLoop 的连接生命周期日志由 LOG_INFO 降为 LOG_TRACE,
 //      与 Windows 两份副本(cpp/libs/engine/muduo_windows、third_party/muduo)的 52ebf9e5d 一致。
 //      生产 LogLevel 是 2(INFO),每条客户端连接建立 / 断开各一行 INFO 会让连接风暴变成日志风暴,
@@ -20,6 +20,8 @@
 //      与 f1fc77e(v2.0.3-1,listening)之间翻转过,两版的 TcpServer.cc 只差这个拼写;整文件覆盖
 //      必须两版都能编。这条 assert 没有额外保护:started_.getAndSet(1) 已保证 listen 只排一次,
 //      acceptor_ 又是私有成员,外部无法先让它进入监听。
+//   4. 加 setAdmissionCallback,把准入回调转给 Acceptor(docs/design/gate-connection-admission-control.md P1-1)。
+//      必须与同目录的 TcpServer.h、Acceptor.h、Acceptor.cc 覆盖件一起生效。
 //
 // 升级 muduo 子模块时:用新的上游文件覆盖本文件,再逐处补回 LOCAL DELTA。
 // ---------------------------------------------------------------------------
@@ -72,6 +74,13 @@ void TcpServer::setThreadNum(int numThreads)
 {
   assert(0 <= numThreads);
   threadPool_->setThreadNum(numThreads);
+}
+
+// LOCAL DELTA 4: 转给 Acceptor(见 Acceptor::setAdmissionCallback)。Acceptor 是内部类,不经 TcpServer 应用层够不着它。
+void TcpServer::setAdmissionCallback(const AdmissionCallback& cb)
+{
+  loop_->assertInLoopThread();
+  acceptor_->setAdmissionCallback(cb);
 }
 
 void TcpServer::start()

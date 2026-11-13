@@ -6,6 +6,7 @@
 #include <cctype>
 #include <chrono>
 #include <memory>
+#include <random>
 #include <string_view>
 #include <thread>
 
@@ -153,6 +154,17 @@ RedisManager::~RedisManager()
 	Shutdown();
 }
 
+double RedisManager::JitteredReconnectIntervalSec(double baseSec, double jitterSec, double unitRandom)
+{
+	if (!(jitterSec > 0))
+	{
+		return baseSec; // 0、负数与 NaN 都不加抖动
+	}
+	// NaN 比较都为假,走 else 分支收成 0。
+	const double unit = unitRandom >= 0 && unitRandom < 1 ? unitRandom : 0.0;
+	return baseSec + jitterSec * unit;
+}
+
 void RedisManager::Connect(muduo::net::EventLoop *loop, const muduo::net::InetAddress &addr, RedisConnectOptions options)
 {
 	if (loop_)
@@ -173,6 +185,12 @@ void RedisManager::Connect(muduo::net::EventLoop *loop, const muduo::net::InetAd
 	options_ = std::move(options);
 	options_.reconnectIntervalSec = PositiveOrDefault(
 		options_.reconnectIntervalSec, RedisConnectOptions::kDefaultReconnectIntervalSec, "reconnect interval");
+	// 抖动每个 Connect 周期只抽一次:各进程的重连周期因此各不相同,Redis 恢复时不会挤在同一刻回连。
+	// 只影响连接时机,不进任何业务判定,用 random_device 抽一个数即可,不留随机数引擎成员。
+	std::random_device entropy;
+	std::uniform_real_distribution<double> unit(0.0, 1.0);
+	reconnectPeriodSec_ =
+		JitteredReconnectIntervalSec(options_.reconnectIntervalSec, options_.reconnectJitterSec, unit(entropy));
 	options_.livenessProbeIntervalSec = PositiveOrDefault(
 		options_.livenessProbeIntervalSec, RedisConnectOptions::kDefaultLivenessProbeIntervalSec, "liveness probe interval");
 	options_.livenessTimeoutSec = PositiveOrDefault(
@@ -287,7 +305,7 @@ void RedisManager::SendAuth()
 	// 连接回调里这条连接必然可用(hiredis 回调前已置 REDIS_CONNECTED,不会处在 DISCONNECTING / FREEING),
 	// 所以只在命令格式化失败或内存不足时发生。不移交,截止定时器到点重建。
 	LOG_ERROR << "Redis AUTH could not be sent to " << redisAddr_.toIpPort() << " (ret=" << ret
-			  << ") -- zone Redis stays unavailable, retrying every " << options_.reconnectIntervalSec
+			  << ") -- zone Redis stays unavailable, retrying every " << reconnectPeriodSec_
 			  << "s (metric=zone_redis_auth_failed)";
 }
 
@@ -312,7 +330,7 @@ void RedisManager::OnAuthReply(hiredis::Hiredis *me, const redisReply *reply)
 	// 但服务端没开口令时命令会照常执行,所以不能把这条连接交给业务。
 	// 截止定时器已在跑，到点按既有间隔重建；Channel tie 与工厂删除器另外保证回调内释放连接也安全。
 	LOG_ERROR << "Redis AUTH rejected by " << redisAddr_.toIpPort() << ": " << DescribeAuthFailure(reply, options_.password)
-			  << " -- zone Redis stays unavailable, retrying every " << options_.reconnectIntervalSec
+			  << " -- zone Redis stays unavailable, retrying every " << reconnectPeriodSec_
 			  << "s (metric=zone_redis_auth_failed)";
 	ScheduleReconnect(); // 截止定时器已在跑时是空操作;兜底保证一定会重试
 }
@@ -339,7 +357,7 @@ void RedisManager::ScheduleReconnect()
 		return; // Timer already running; avoid stacking duplicate timers.
 	}
 	const std::uint64_t generation = ++reconnectGeneration_;
-	reconnectTimerId_ = loop_->get().runEvery(options_.reconnectIntervalSec,
+	reconnectTimerId_ = loop_->get().runEvery(reconnectPeriodSec_,
 		[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this, generation]
 		{
 			const auto alive = token.lock();
@@ -395,8 +413,8 @@ void RedisManager::DoReconnect()
 		// (后者此前已有一条 "Redis disconnected" ERROR)。与被拒同样是握手失败、zone Redis 同样不可用,
 		// 必须带 metric 打 ERROR,不能只剩下面那条 INFO(按 metric 标记的告警会漏掉)。
 		LOG_ERROR << "Redis AUTH timed out on " << redisAddr_.toIpPort() << ": no reply within "
-				  << options_.reconnectIntervalSec << "s of connecting -- zone Redis stays unavailable, retrying every "
-				  << options_.reconnectIntervalSec << "s (metric=zone_redis_auth_failed)";
+				  << reconnectPeriodSec_ << "s of connecting -- zone Redis stays unavailable, retrying every "
+				  << reconnectPeriodSec_ << "s (metric=zone_redis_auth_failed)";
 		authAwaitingReply_ = false;
 	}
 	LOG_INFO << "Attempting Redis reconnect to " << redisAddr_.toIpPort();
@@ -527,7 +545,7 @@ void RedisManager::DropUnresponsive(std::uint64_t generation)
 
 	LOG_ERROR << "Redis liveness probe timed out on " << redisAddr_.toIpPort() << ": PING got no reply within "
 			  << options_.livenessTimeoutSec << "s -- dropping the connection (in-flight commands complete with null replies), "
-			  << "reconnecting every " << options_.reconnectIntervalSec << "s (metric=zone_redis_liveness_timeout)";
+			  << "reconnecting every " << reconnectPeriodSec_ << "s (metric=zone_redis_liveness_timeout)";
 	ResetLivenessProbe();
 
 	// 空应答 = 结果未知,不是"没执行":close 之后内核仍会重传已写出的命令,它们可能晚于重连后新连接上的命令到达 Redis

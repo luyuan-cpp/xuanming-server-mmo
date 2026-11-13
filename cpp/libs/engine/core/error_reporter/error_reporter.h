@@ -13,6 +13,9 @@
 #include <string_view>
 #include <vector>
 
+#include "core/tracing/trace_context.h"
+#include "thread_context/trace_context_tls.h"
+
 // Error aggregation buffer (todo.md #250).
 //
 // Sentry-style "collect errors and ship to a central server" is the goal,
@@ -41,6 +44,10 @@
 // triage than old ones, and dropping silently keeps the recorder
 // always non-blocking. A monotonic dropped-count exposes the
 // drop-pressure to monitoring.
+//
+// 日志上下文:每条事件还记下录入那一刻线程上的 trace 与玩家(docs/design/distributed-tracing.md §13 第 4 条),
+// 拿转储里的 trace_id 就能在 Loki 里查到这次请求在各服务的全部日志。口径与日志行尾后缀相同(§5.1):
+// 没有 trace 就不带 trace_id / span_id,没有玩家就不带 player_id。
 
 namespace error_reporter {
 
@@ -49,6 +56,8 @@ struct Event {
     uint32_t error_code{0};     // domain-specific; 0 = "no code, just text"
     std::string tag;            // short label, e.g. "AssignGate", "Logout"
     std::string message;        // human-readable detail
+    tracing::TraceContext trace; // 录入时线程上的 trace;IsValid() 为 false 表示没有
+    uint64_t player_id{0};      // 录入时线程上的玩家;0 表示没有
 };
 
 class Buffer {
@@ -58,7 +67,10 @@ public:
     // Record one event. Allocates only inside the lock (mutex + deque
     // push); call sites are expected to be on the rare error path, so
     // the cost is amortized below noise.
-    void Record(uint32_t error_code, std::string_view tag, std::string_view message)
+    // trace / playerId 由调用方显式传入(业务走下面的 error_reporter::Record,取当前线程的值),
+    // 本类不读线程局部状态,单测可以直接构造。
+    void Record(uint32_t error_code, std::string_view tag, std::string_view message,
+                const tracing::TraceContext& trace, uint64_t playerId)
     {
         Event e;
         e.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -66,6 +78,8 @@ public:
         e.error_code = error_code;
         e.tag.assign(tag);
         e.message.assign(message);
+        e.trace = trace;
+        e.player_id = playerId;
 
         std::lock_guard<std::mutex> lock(mutex_);
         if (buffer_.size() >= capacity_) {
@@ -128,17 +142,23 @@ inline Buffer& Instance()
 }
 
 // One-liner for the call-site convenience. Equivalent to
-// `Instance().Record(...)`.
+// `Instance().Record(...)` with the calling thread's log context:
+// 带上当前线程的 trace 与玩家(trace_context_tls.h),调用点不用自己取。
 inline void Record(uint32_t error_code, std::string_view tag, std::string_view message)
 {
-    Instance().Record(error_code, tag, message);
+    Instance().Record(error_code, tag, message, tracing::Current(), tracing::CurrentPlayerId());
 }
 
 // JSONL serialization of an event. One event per line so a downstream
 // log shipper (or `cat | jq`) can stream-process the dump file.
 //
 // Format: { "wall_ms": <int>, "error_code": <int>, "tag": "...",
-//           "message": "..." }
+//           "message": "...", "trace_id": "<32 hex>", "span_id": "<16 hex>",
+//           "player_id": "<decimal>" }
+//
+// trace_id / span_id 只在录入时有 trace 才写,player_id 只在有玩家时写(同日志行尾后缀,
+// distributed-tracing.md §5.1)。player_id 写成十进制字符串:jq 等按双精度解析数字的工具
+// 读超过 2^53 的整数会丢精度(同 Go 日志的口径,§6.2)。
 //
 // Strings are escaped for the limited set of JSON-required characters
 // only (no UTF-8 reformatting — the bytes pass through unchanged so a
@@ -179,7 +199,15 @@ inline std::string EventToJsonl(const Event& e)
     oss << "{\"wall_ms\":" << e.wall_ms
         << ",\"error_code\":" << e.error_code
         << ",\"tag\":\"" << EscapeJsonString(e.tag) << "\""
-        << ",\"message\":\"" << EscapeJsonString(e.message) << "\"}";
+        << ",\"message\":\"" << EscapeJsonString(e.message) << "\"";
+    if (e.trace.IsValid()) {
+        oss << ",\"trace_id\":\"" << e.trace.trace_id.ToHex() << "\""
+            << ",\"span_id\":\"" << e.trace.span_id.ToHex() << "\"";
+    }
+    if (e.player_id != 0) {
+        oss << ",\"player_id\":\"" << e.player_id << "\"";
+    }
+    oss << "}";
     return oss.str();
 }
 

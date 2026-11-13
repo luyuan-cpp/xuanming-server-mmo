@@ -219,7 +219,7 @@ func TestSetAnnouncement_RejectsOversizeBeforeTouchingStorage(t *testing.T) {
 	assert.Equal(t, constants.ErrAnnouncementTooLong, resp.GetErrorMessage().GetId())
 }
 
-// newCacheOnlyRepo 返回只接 Redis 的仓储:榜单读 ZSET、公会读 guild:v2:{id} 缓存。
+// newCacheOnlyRepo 返回只接 Redis 的仓储:榜单读 ZSET、公会读 guild:v2:{g:<id>} 缓存。
 // 用例把数据预先放进缓存,读路径不碰 MySQL(db 为 nil,误触即 panic)。
 func newCacheOnlyRepo(t *testing.T) (*data.GuildRepo, *miniredis.Miniredis) {
 	t.Helper()
@@ -234,9 +234,9 @@ func seedGuild(t *testing.T, mr *miniredis.Miniredis, guild data.GuildData, scor
 	t.Helper()
 	payload, err := json.Marshal(guild)
 	require.NoError(t, err)
-	require.NoError(t, mr.Set(fmt.Sprintf("guild:v2:%d", guild.GuildID), string(payload)))
+	require.NoError(t, mr.Set(fmt.Sprintf("guild:v2:{g:%d}", guild.GuildID), string(payload)))
 	member := strconv.FormatUint(guild.GuildID, 10)
-	_, err = mr.ZAdd(fmt.Sprintf("guild_rank:zone:%d", guild.ZoneID), score, member)
+	_, err = mr.ZAdd(fmt.Sprintf("guild_rank:zone:{gr:%d}", guild.ZoneID), score, member)
 	require.NoError(t, err)
 }
 

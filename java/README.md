@@ -18,6 +18,13 @@
 区服状态有两个来源:管理接口写进 MySQL 的人工状态,以及对 etcd、Redis 的自动探测;人工状态优先。
 管理接口(`/admin/**`)需要 `X-Admin-Key` 请求头。
 
+区服管理接口 `/admin/zones` 的并发与错误约定(2026-11-12):
+
+- **改整行要带版本**:先 `GET /admin/zones/{id}`,响应头 `ETag` 是这一行的当前版本;改完整行 `PUT` 回去,请求头 `If-Match` 原样带上那个 ETag(连双引号)。没带或带 `*` 回 428,这期间有人改过(版本不符)回 412,都不写;412 时重新 GET,在新的整行上重做修改再 PUT。比较与写入在同一条条件 UPDATE 里,两个运维先后 GET 再 PUT 时,后到的那个拿 412,不会覆盖前一个人的修改。`If-None-Match` 带上次的 ETag 且没变时 GET 回 304。
+- **命令不带版本**:`/maintenance`、`/open`、`/create-role/close|open`、`/role-capacity` 写的是这几列的目标值,不要求 If-Match(带了也不看);它们照样让版本加一,基于更早 GET 的整行 PUT 因此回 412,不会把刚置的维护状态改回开放。
+- **错误体**:400、412、428 回 problem details(`application/problem+json`):`reason` 是原因码(`missing`、`invalid`、`too_long`、`mismatch`、`if_match_invalid`、`if_match_required`、`version_mismatch`),`field` 是出问题的 JSON 字段名或 `If-Match`(问题在整个请求体时没有这一项),`detail` 是英文说明;都不含请求里的值。`/admin/whitelist` 的 400 同形。之前 400 不带响应体,原因只在网关日志里。代码在 `AdminProblems`、`AdminZoneController`。
+- **库表**:`zone_config` 加了 `version` 列(`BIGINT NOT NULL DEFAULT 1`)。网关 `ddl-auto: validate`,缺列拒启;项目未上线,已有的 `mmorpg` 库重建,或手工 `ALTER TABLE zone_config ADD COLUMN version BIGINT NOT NULL DEFAULT 1 AFTER role_capacity;`。
+
 ```powershell
 cd java/gateway_node
 mvn package        # 打包

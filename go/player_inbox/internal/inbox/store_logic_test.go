@@ -606,7 +606,20 @@ func TestReconcileReport(t *testing.T) {
 	ledger := rcLedger(rcCursor(gmDomain,
 		rcDecision(10, 1, outApplied, 0), rcDecision(13, 4, outApplied, 0), rcDecision(15, 7, outApplied, 0)))
 	streams := map[inboxpb.PlayerInboxDomain]*inboxpb.PlayerInboxStream{gmDomain: {Domain: uint32(gmDomain), NextSeq: 31}}
-	cursors, diffs := reconcileReport([]inboxpb.PlayerInboxDomain{gmDomain, otherDomain}, streams, ledger, rows)
+	cursors := reconcileCursors([]inboxpb.PlayerInboxDomain{gmDomain, otherDomain}, streams, ledger)
+	diffs := appendReconcileDiffs(nil, ledger, rows)
+	// ReconcilePlayer 一页一页追加:任意切页,结果与一次读完相同。
+	for split := 0; split <= len(rows); split++ {
+		paged := appendReconcileDiffs(appendReconcileDiffs(nil, ledger, rows[:split]), ledger, rows[split:])
+		if len(paged) != len(diffs) {
+			t.Fatalf("切在第 %d 行: %d 条差异, 一次读完 %d 条", split, len(paged), len(diffs))
+		}
+		for i := range paged {
+			if !proto.Equal(paged[i], diffs[i]) {
+				t.Fatalf("切在第 %d 行: diffs[%d] = %+v, 一次读完 %+v", split, i, paged[i], diffs[i])
+			}
+		}
+	}
 
 	if len(cursors) != 1 || cursors[0].GetDomain() != gmDomain || cursors[0].GetLedgerDecidedThrough() != 15 || cursors[0].GetInboxNextSeq() != 31 {
 		t.Fatalf("cursors = %+v(没有流也没有水位的域 2 不列)", cursors)
@@ -633,7 +646,7 @@ func TestReconcileReport(t *testing.T) {
 	}
 
 	// 收件箱没有流、账本却有水位(例如流行所在库被恢复过):照样列出游标,next_seq 为 0。
-	cursors, _ = reconcileReport([]inboxpb.PlayerInboxDomain{gmDomain}, nil, rcLedger(rcCursor(gmDomain, rcDecision(9, 1, outApplied, 0))), nil)
+	cursors = reconcileCursors([]inboxpb.PlayerInboxDomain{gmDomain}, nil, rcLedger(rcCursor(gmDomain, rcDecision(9, 1, outApplied, 0))))
 	if len(cursors) != 1 || cursors[0].GetInboxNextSeq() != 0 || cursors[0].GetLedgerDecidedThrough() != 9 {
 		t.Errorf("只有账本水位的域: %+v", cursors)
 	}

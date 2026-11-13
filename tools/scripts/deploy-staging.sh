@@ -20,7 +20,6 @@
 #
 # Required PATH binaries:
 #   - redis-cli        (for residue wipe + readiness check)
-#   - etcdctl          (for snowflake compaction; optional but recommended)
 #   - go               (only if --build is passed)
 #   - mvn / java       (only if --build is passed AND --gateway is enabled)
 #   - msbuild / cmake  (cpp build is out of scope; build cpp manually

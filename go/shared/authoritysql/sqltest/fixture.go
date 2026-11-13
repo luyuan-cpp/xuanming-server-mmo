@@ -40,6 +40,9 @@ type Options struct {
 	PhysicalAuthoritySHA256 []byte
 	LockPrimitive           pb.SqlWriterBootGrant_LockPrimitive
 	LockQualificationSHA256 []byte
+	// RegisteredBy 写进夹具那一代 REGISTER 的 registered_by(登记这一代的工作负载身份)。缺省为空,等于在集群外登记;
+	// 缩容收尾的用例填一个 K8s 身份,模拟 Pod 里的注册器登记的一代。
+	RegisteredBy string
 	// ReceiptDirectory 是 runner 保留的私有目录；SQL清理未知时原件仍可用于人工恢复。
 	ReceiptDirectory string
 	PrepareAuthority func(context.Context, *sql.DB, string, string) error
@@ -616,6 +619,7 @@ func (f *Fixture) registerBoot(ctx context.Context, runID []byte, schemas []stri
 		}
 		writer := &pb.SqlWriterRegistry{WriterKey: writerID, Generation: f.Generation, InstanceId: instance, SqlPrincipal: principal, State: pb.SqlWriterRegistry_ACTIVE, RegisteredMs: registeredMs, BootSeq: bootSeq}
 		request := &pb.SqlWriterLifecycleReceipt_Request{RequestId: requestID, Kind: pb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: schema, ProtectedSchemas: []string{schema}, DeploymentDigest: f.physical, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256, MaintenanceRunId: bytes.Clone(runID)}
+		request.RegisteredBy = opts.RegisteredBy
 		request, err = authoritysql.CanonicalRegistrationRequest(request)
 		if err != nil {
 			return err

@@ -168,15 +168,20 @@ g N 的 data-service 保持运行。
 
 ## 5. 批量 / 并发旋钮(G2a,`Kafka.*`)
 
-| 键 | 默认(= 2026-10-12 之前的行为) | 合法范围 | 建议开服值(待压测) |
+| 键 | 默认(= 2026-10-12 之前的行为) | 合法范围 | 开服值(已定(2026-11-12),压测出基线后可调;依据见表下) |
 |---|---|---|---|
 | `SnapshotBatchMaxRows` | 1(逐条落、逐条提交) | [1, 256] | 16 |
 | `SnapshotBatchMaxBytes` | 4194304(软上限,加入后检查,最多超出一条) | [65536, 33554432] | 4194304 |
 | `SnapshotFlushIntervalMs` | 0(不等待,只拼已排队的) | [0, 5000] | 200 |
 | `SnapshotMaxInflightFlushes` | 1(本实例同时落库的分区数) | [1, max(1, SnapshotMySQL.MaxOpenConn − 1)] | 2 |
-| `TransactionLogMaxInflightFlushes`(2026-11-06) | 1(流水本实例同时落库的分区数;每分区各攒 200 行 / 200ms 一批) | [1, max(1, SnapshotMySQL.MaxOpenConn − 1)] | 一个副本分到 ≥ 2 个流水分区时调到 2(待压测) |
+| `TransactionLogMaxInflightFlushes`(2026-11-06) | 1(流水本实例同时落库的分区数;每分区各攒 200 行 / 200ms 一批) | [1, max(1, SnapshotMySQL.MaxOpenConn − 1)] | 一个副本分到 ≥ 2 个流水分区时调到 2 |
 | `LagProbeIntervalMs` | 30000(yaml 刻意打开;0 = 关) | 0 或 [5000, 600000] | 30000 |
 
+- 开服值的依据(2026-11-12 定):`SnapshotBatchMaxRows` 16 把提交次数降到逐条的 1/16,快照按 §4 示例的 300KB 算时字节上限先到(约 13 条),行数上限只在小快照时起作用;
+  `SnapshotBatchMaxBytes` 4MiB 与下面 TiDB 一条要求的批字节上限同值,一批最多超出一条,低于 TiKV `raft-entry-max-size` 缺省 8MB 与 MySQL `max_allowed_packet` 64MiB;
+  `SnapshotFlushIntervalMs` 200 与流水消费者「每分区 200ms 一批」同口径,凑批最多多等 200ms;`SnapshotMaxInflightFlushes` 2 在范围上限 `SnapshotMySQL.MaxOpenConn − 1`(现 5 − 1 = 4)
+  之内留出号段、名字登记与 GM 读的连接;流水并发同理。服务 yaml 里仍是左列默认值(现状),按本表改服务 yaml 打开;打开批量之前照下面「打开批量的前置」第 2 条核内存护栏,
+  吞吐提升照第 1 条出对比表再说(AGENTS §6)。
 - 越界 = data_service 拒启(exit 1,日志 `invalid Kafka consumer config`)。K8s ConfigMap 从服务 yaml 镜像这六个键,改服务 yaml 即可。
 - 流水消费者 2026-11-06 起和快照一样每个分区一个 worker(`go/data_service/internal/kafka/partition_workers.go`):各分区各攒各的批、各自先落库后提交,
   一个分区重试用尽就停下整个消费者;排空时各分区落完手里的批再退出。`data_service_kafka_consumer_flush_seconds{consumer="transaction_log"}`

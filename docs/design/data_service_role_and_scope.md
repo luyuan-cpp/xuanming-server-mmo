@@ -16,7 +16,7 @@
 
 ## 与 Login 的关系
 
-Login 已经依赖 data_service：建角前领取 PlayerId 号段、登记角色名与归属，角色列表和进场时查询权威 home_zone。`go/login/internal/svc/servicecontext.go` 装配共用的 `DataServiceClient`；`player_id_minter.go`、`home_zone.go` 与 `playernamereg` 分别封装调用。缺少归属/名字客户端会拒绝建角；号段失败按发号配置处理，默认禁止回退 Snowflake。
+Login 已经依赖 data_service：建角前领取 PlayerId 号段、登记角色名与归属，角色列表和进场时查询权威 home_zone。`go/login/internal/svc/servicecontext.go` 装配共用的 `DataServiceClient`；`player_id_minter.go`、`home_zone.go` 与 `playernamereg` 分别封装调用。缺少归属/名字客户端会拒绝建角；号段失败即建角失败，没有 Snowflake 回退。
 
 玩家 blob 走另一条链：EnterGame 先检查 Redis 父键，缺失时通过 Kafka 发 DBTask 读取子表，由 TaskResultDispatcher 的 Pub/Sub 回调拼装父键。EnterGame 的成功应答只表示已受理，真正进场由后续 Scene 通知确认。`sync_loader.go` 中的同步辅助路径不代表当前 EnterGame 在等待 BLPOP。目录与发号依赖的故障语义、预算及数据读路径应分别排查。
 

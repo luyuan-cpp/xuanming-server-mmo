@@ -1,4 +1,5 @@
-// Package drain是DB的维护排空装配：只有gRPC入口和SQL池，没有消费者、队列或补投；它不重新注册writer或建立第二SQL连接。
+// Package drain是DB的维护排空装配：SOURCE是gRPC入口，RELAY是审计发件箱的转发循环(internal/auditoutbox,docs/design/player-audit-outbox.md §7)；
+// 没有消费者、队列或补投。它不重新注册writer或建立第二SQL连接。
 package drain
 
 import (
@@ -10,27 +11,32 @@ import (
 	"time"
 )
 
-// Run只复用调用方当前boot已guard的真实stores。专用维护boot从未serve，没有已接收RPC。
+// Run只复用调用方当前boot已guard的真实stores。专用维护boot从未serve，没有已接收RPC，也不起转发循环。
 func Run(ctx context.Context, runtime *drainproof.Runtime, stores *proto_sql.StoreRegistry) error {
-	return runOwners(ctx, runtime, stores, nil)
+	return runOwners(ctx, runtime, stores, nil, nil)
 }
 
 // RunExisting在正常boot上排空：closeSource关闭gRPC入口、等在途RPC结束并给出前沿。
-func RunExisting(ctx context.Context, runtime *drainproof.Runtime, stores *proto_sql.StoreRegistry, closeSource func(context.Context) ([]byte, error)) error {
+// relay是本boot转发循环进入的RELAY会话：RELAY阶段关它、等在途的单位做完，之后才封写资格、关池；
+// 不关的话，转发循环会在写资格封掉之后继续删发件箱的行。nil表示本boot没有转发循环。
+func RunExisting(ctx context.Context, runtime *drainproof.Runtime, stores *proto_sql.StoreRegistry, closeSource func(context.Context) ([]byte, error), relay *drainproof.Session) error {
 	if closeSource == nil {
 		return drainproof.ErrHold
 	}
-	return runOwners(ctx, runtime, stores, closeSource)
+	return runOwners(ctx, runtime, stores, closeSource, relay)
 }
 
-func runOwners(ctx context.Context, runtime *drainproof.Runtime, stores *proto_sql.StoreRegistry, closeSource func(context.Context) ([]byte, error)) error {
+func runOwners(ctx context.Context, runtime *drainproof.Runtime, stores *proto_sql.StoreRegistry, closeSource func(context.Context) ([]byte, error), relay *drainproof.Session) error {
 	if runtime == nil || stores == nil {
 		return drainproof.ErrHold
 	}
 	if err := maintenancephase.ValidateAuthorityPlan(runtime.Plan); err != nil {
 		return err
 	}
-	source, relay := drainproof.New(), drainproof.New()
+	source := drainproof.New()
+	if relay == nil {
+		relay = drainproof.New()
+	}
 	sourceWritten := false
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()

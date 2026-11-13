@@ -530,3 +530,54 @@ func TestManualRetireEndsGenerationAndSlotRegistersAgain(t *testing.T) {
 		t.Fatalf("被拒的退休不写目录: %v", err)
 	}
 }
+
+// Registration 按登记行读回这一代的 REGISTER 原件(缩容收尾拿它看这一代是谁登记的,§5.9):registered_by 原样读回,
+// 在役的和已经结束的一代都读得到(收据永久保留);登记行和收据对不上、找不到收据都回确定的拒绝。
+func TestRegistrationReadsBackTheRegisterRequest(t *testing.T) {
+	ctx, fixture, schema, _ := twoLogicalDBFixture(t)
+	catalog, err := fixture.CatalogFor(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := latestRegistration(t, ctx, fixture.Operator)
+	firstRow, err := catalog.LatestBoot(ctx, first.Writer.SqlPrincipal)
+	if err != nil || firstRow == nil {
+		t.Fatalf("夹具的一代: %+v %v", firstRow, err)
+	}
+	got, err := catalog.Registration(ctx, firstRow)
+	if err != nil || !proto.Equal(got, first) || got.RegisteredBy != "" {
+		t.Fatalf("夹具在集群外登记,REGISTER 原样读回、不带身份: %+v %v", got, err)
+	}
+	next := proto.Clone(nextBoot(t, first, "registration-read-back")).(*pb.SqlWriterLifecycleReceipt_Request)
+	next.RegisteredBy = "k8s-sa:" + schema + "/default/0f8fad5b-d9cb-469f-a165-70867728950e"
+	next.Writer.RegistrationDigest = nil
+	if next, err = authoritysql.CanonicalRegistrationRequest(next); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = catalog.Register(ctx, next); err != nil {
+		t.Fatalf("带身份的一代换代: %v", err)
+	}
+	nextRow, err := catalog.LatestBoot(ctx, next.Writer.SqlPrincipal)
+	if err != nil || nextRow == nil || !bytes.Equal(nextRow.WriterKey, next.Writer.WriterKey) {
+		t.Fatalf("新一代的登记行: %+v %v", nextRow, err)
+	}
+	if got, err = catalog.Registration(ctx, nextRow); err != nil || !proto.Equal(got, next) || got.RegisteredBy != next.RegisteredBy {
+		t.Fatalf("registered_by 原样读回: %+v %v", got, err)
+	}
+	// 上一代已被换代结束,它的 REGISTER 收据还在。
+	if got, err = catalog.Registration(ctx, firstRow); err != nil || !proto.Equal(got, first) {
+		t.Fatalf("已结束的一代也读得到: %+v %v", got, err)
+	}
+	// 登记行的序号对不上收据里的 writer:拒绝。
+	forged := proto.Clone(nextRow).(*pb.SqlWriterRegistry)
+	forged.BootSeq++
+	if _, err = catalog.Registration(ctx, forged); !errors.Is(err, authoritysql.ErrWriterDenied) {
+		t.Fatalf("登记行与收据对不上要拒绝: %v", err)
+	}
+	// 没有这份摘要的 REGISTER 收据:拒绝,不把「没有行」交出去。
+	unknown := proto.Clone(nextRow).(*pb.SqlWriterRegistry)
+	unknown.RegistrationDigest = bytes.Repeat([]byte{9}, 32)
+	if _, err = catalog.Registration(ctx, unknown); !errors.Is(err, authoritysql.ErrWriterDenied) || errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("找不到收据要拒绝: %v", err)
+	}
+}

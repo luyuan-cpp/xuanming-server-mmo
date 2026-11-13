@@ -191,15 +191,4 @@ namespace redis_cluster
 			requested_ = true;
 		}
 	}
-
-	double JitteredReconnectIntervalSec(double baseSec, double jitterSec, double unitRandom)
-	{
-		if (jitterSec <= 0)
-		{
-			return baseSec;
-		}
-		// NaN 比较都为假,走 else 分支收成 0。
-		const double unit = unitRandom >= 0 && unitRandom < 1 ? unitRandom : 0.0;
-		return baseSec + jitterSec * unit;
-	}
 }

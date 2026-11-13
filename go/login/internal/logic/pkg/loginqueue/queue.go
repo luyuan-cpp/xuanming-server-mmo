@@ -8,20 +8,23 @@
 //     hint, not a real ordered queue. The two layers compose: Bucket4j
 //     filters obvious spam first, the surviving traffic enters this queue.
 //
-// Redis layout (per zone):
+// Redis layout (per zone)。五把键都带 hash tag {q:<zone>}(2026-11-12 起,控制集群的排队族,
+// docs/design/redis-cluster-all-domains-20261110.md §4.3):一个 zone 的排队键同槽,入队的 MULTI 与两段多键脚本在
+// Redis Cluster 上可以执行;不同 zone 落在不同槽,随槽散到各主节点。下面的 <z> 是十进制 zone 号。
 //
-//	queue:zone:{zoneId}        ZSET   member=queueId, score=enqueue unix ms
-//	admit:{queueId}            STRING JSON AdmitSlot{node_id, ip, port, zone_id},TTL = AdmitTTL
-//	                           (只记放行时选好的 gate,不含签名;PopAdmit 把它与在途占位排进同一个 MULTI 写入,
-//	                           gate 票在取走时由 consumeAdmitAndSign 现签。R17 R1(2026-06-04)之前存的是
-//	                           已签好的 {ip, port, payload, signature, deadline},票在 Redis 里就开始耗有效期)
-//	admitted:zset:zone:{zoneId} ZSET member=queueId | fast:<uuid>, score=占位到期 unix ms
-//	                           (在途占位:成员逐个到期,计数前清掉;整键 TTL 只做垃圾回收、只增不减。
-//	                           G4b-G 之前是 SET admitted:zone:{zoneId} + 整键滑动 TTL,新版本不再读写旧键)
-//	queue:meta:{queueId}       HASH   {account, device, zone_id, createdAt, admitted_at}
-//	                           (admitted_at:放行时刻 unix 毫秒,PopAdmit 与放行槽同一个 MULTI 写入,
-//	                           入队时没有;Poll 靠它区分「放行窗口已过」与「在途窗口」,2026-10-15 起)
-//	queue:token:{queueToken}   STRING queueId  (token → queueId reverse index)
+//	queue:{q:<z>}                    ZSET   member=queueId, score=enqueue unix ms
+//	admit:{q:<z>}:<queueId>          STRING JSON AdmitSlot{node_id, ip, port, zone_id},TTL = AdmitTTL
+//	                                 (只记放行时选好的 gate,不含签名;gate 票在取走时由 consumeAdmitAndSign 现签。
+//	                                 R17 R1(2026-06-04)之前存的是已签好的 {ip, port, payload, signature, deadline},
+//	                                 票在 Redis 里就开始耗有效期)
+//	admitted:zset:{q:<z>}            ZSET   member=queueId | fast:<uuid>, score=占位到期 unix ms
+//	                                 (在途占位:成员逐个到期,计数前清掉;整键 TTL 只做垃圾回收、只增不减)
+//	queue:meta:{q:<z>}:<queueId>     HASH   {account, device, zone_id, createdAt, admitted_at, taken_slot, retake_until}
+//	                                 (admitted_at:放行时刻 unix 毫秒,放行脚本写,入队时没有;后两个字段在取走放行槽时写)
+//	queue:token:{q:<z>}:<queueToken> STRING queueId  (token → queueId reverse index)
+//
+// 下文按日期追加的各段更正里,键仍写作改形之前的名字(queue:zone:{zone}、admit:{queueId}、queue:meta:{queueId}、
+// queue:token:{token}、admitted:zset:zone:{zone}),一律按上表对应的新键读。
 //
 // Lifecycle:
 //
@@ -72,6 +75,14 @@
 //   - 放行名额进脚本:PopAdmit 带上在途名额(容量 − 在线,与快速通道同一口径),放行脚本写放行之前数未到期的占位,
 //     不足名额才放行。重叠 leader 时在途上界从 2×(容量 − 在线) 收紧到容量 − 在线。
 //
+// (2026-11-12 更正,docs/design/redis-cluster-all-domains-20261110.md §4.3、§5.1)三处:
+//   - 键带 hash tag,见最上面的布局表。
+//   - 句柄换成 shared/clusterredis 的控制集群客户端:发送前按控制集群键策略核对键,结果未知的命令不由客户端重发。
+//     上文凡是说「go-redis 超时后自动重发同一条命令」的地方,换句柄之后这个来源没有了;REPLAYED 与重取两个分支照旧留着,
+//     兜调用方自己的重试(客户端重发请求、dispatcher 下一拍再放)。
+//   - 放行流水线不走集群客户端的 pipeline(它在连接出错后会整批重发,已执行的放行脚本会再跑一遍),改为取队列键所在槽的
+//     主节点、在节点客户端上发,见 runAdmitScripts。
+//
 // 残余风险逐条写在 admitEntryScript、lookupScript、PopAdmit、Poll 与 queueTokenMaxAge 的注释里。
 package loginqueue
 
@@ -85,6 +96,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
+
+	"shared/clusterredis"
+	"shared/redisslot"
 )
 
 // Status mirrors AssignGateResponse.status / QueryQueueStatusResponse.status.
@@ -207,7 +221,11 @@ const queueTokenMaxAge = 24 * time.Hour
 // Queue wraps Redis ZSET operations behind a small typed surface. The zero
 // value is unusable; construct via New.
 type Queue struct {
-	rdb        *redis.Client
+	// rdb 是排队族所在的 Redis 句柄(生产是 clusterredis.New 建的控制集群客户端,带发送前守卫)。
+	rdb redis.UniversalClient
+	// admitNodes 只用来取队列键所在槽的主节点、在它上面发放行流水线(runAdmitScripts)。生产是 clusterredis.NewPinned
+	// 建的客户端(不挂守卫:守卫拒绝 pipeline 里的 EVAL);缺省与 rdb 相同,见 UseAdmitPipelineClient。
+	admitNodes redis.UniversalClient
 	entryTTL   time.Duration
 	admitTTL   time.Duration
 	hmacSecret []byte // signs queue tokens; same secret as gate tokens is fine
@@ -227,15 +245,26 @@ type Queue struct {
 // which HMAC over (queueId|expire) defeats.
 //
 // entryTTL、admitTTL 必须为正,New 本身不校验;生产路径应先调 ValidateTTLs(2026-10-15)。
-func New(rdb *redis.Client, entryTTL, admitTTL time.Duration, hmacSecret []byte) *Queue {
+func New(rdb redis.UniversalClient, entryTTL, admitTTL time.Duration, hmacSecret []byte) *Queue {
 	return &Queue{
 		rdb:          rdb,
+		admitNodes:   rdb,
 		entryTTL:     entryTTL,
 		admitTTL:     admitTTL,
 		hmacSecret:   hmacSecret,
 		handoffGrace: defaultHandoffGrace,
 		now:          time.Now,
 	}
+}
+
+// UseAdmitPipelineClient 指定放行流水线用的客户端(runAdmitScripts 用它取队列键所在槽的主节点)。
+//
+// 生产必须传 clusterredis.NewPinned 建的那一个:New 收到的 rdb 带发送前守卫,守卫拒绝 pipeline 里的 EVAL
+// (clusterredis.ErrNonIdempotentInPipeline),单实例下 rdb 自己就是「主节点」,不换的话每一块流水线都会被整批拒绝,
+// 每拍只剩探路的那一条能放行。不调用时沿用 rdb,只适合不带守卫的客户端(同包测试直接连 miniredis)。
+// 必须在 Dispatcher.Start 之前调用,之后只读。
+func (q *Queue) UseAdmitPipelineClient(c redis.UniversalClient) {
+	q.admitNodes = c
 }
 
 // ValidateTTLs 校验 New 的两个时长参数(2026-10-15)。应由起服装配在 New 之前调用、失败即起服失败,
@@ -272,11 +301,23 @@ func ValidateTTLs(entryTTL, admitTTL time.Duration) error {
 
 // ── Key helpers ────────────────────────────────────────────────────────
 
-func zoneZSetKey(zoneID uint32) string     { return fmt.Sprintf("queue:zone:%d", zoneID) }
-func admittedZSetKey(zoneID uint32) string { return fmt.Sprintf("admitted:zset:zone:%d", zoneID) }
-func admitKey(queueID string) string       { return "admit:" + queueID }
-func metaKey(queueID string) string        { return "queue:meta:" + queueID }
-func tokenIndexKey(token string) string    { return "queue:token:" + token }
+// queueTag 是 zone 的排队族 hash tag,例如 queueTag(3) = "{q:3}"。排队族的键与放行锁(ZoneDispatcherLockKey)都只经它拼:
+// tag 写在键里第一个花括号的位置,后面跟的 queueId、令牌里即使有花括号也不影响取槽。
+func queueTag(zoneID uint32) string {
+	return redisslot.ZoneControlTag(redisslot.ControlFamilyLoginQueue, zoneID)
+}
+
+func zoneZSetKey(zoneID uint32) string     { return "queue:" + queueTag(zoneID) }
+func admittedZSetKey(zoneID uint32) string { return "admitted:zset:" + queueTag(zoneID) }
+func admitKey(zoneID uint32, queueID string) string {
+	return "admit:" + queueTag(zoneID) + ":" + queueID
+}
+func metaKey(zoneID uint32, queueID string) string {
+	return "queue:meta:" + queueTag(zoneID) + ":" + queueID
+}
+func tokenIndexKey(zoneID uint32, token string) string {
+	return "queue:token:" + queueTag(zoneID) + ":" + token
+}
 
 // metaFieldAdmittedAt 是 meta 里的放行时刻字段(unix 毫秒)。PopAdmit 写、Poll 读,只看有没有,不看值。
 // (2026-10-18 补注)放行脚本的 REPLAYED 判定会看值:成员已不在队列、admitted_at 恰等于本次的放行时刻,即 go-redis
@@ -334,6 +375,8 @@ func (q *Queue) Enqueue(ctx context.Context, zoneID uint32, account, deviceID st
 
 	scoreMs := time.Now().UnixMilli()
 
+	// 三把键同 tag、同槽,MULTI 在集群里落在一个节点上。里面只有 ZADD / EXPIRE / HSET / SET:值都由本次调用定死,
+	// 集群客户端在连接出错后整批重发也只是把同样的值再写一遍(非幂等命令不许进 pipeline,见 clusterredis 的守卫)。
 	pipe := q.rdb.TxPipeline()
 	pipe.ZAdd(ctx, zoneZSetKey(zoneID), redis.Z{Score: float64(scoreMs), Member: queueID})
 	// 队列键的 TTL 只增不减(2026-10-18 起;此前无条件 EXPIRE E,会把读状态脚本续上的 1.25E、或 QueueEntryTTL 较大的
@@ -344,7 +387,7 @@ func (q *Queue) Enqueue(ctx context.Context, zoneID uint32, account, deviceID st
 	// 阶段报参数错误,EXEC 回 EXECABORT,每次 Enqueue 都失败、新玩家全部进不了队;生产与 docker-compose 均为 7.2。
 	pipe.ExpireNX(ctx, zoneZSetKey(zoneID), q.entryTTL)
 	pipe.ExpireGT(ctx, zoneZSetKey(zoneID), q.entryTTL)
-	pipe.HSet(ctx, metaKey(queueID), map[string]any{
+	pipe.HSet(ctx, metaKey(zoneID, queueID), map[string]any{
 		"account":       account,
 		"device":        deviceID,
 		metaFieldZoneID: zoneID,
@@ -352,8 +395,8 @@ func (q *Queue) Enqueue(ctx context.Context, zoneID uint32, account, deviceID st
 	})
 	// meta 与 token 索引是新键,照旧无条件设 TTL。go-redis 的 EXPIRE 按秒截断,与脚本里续期用的毫秒不一致,
 	// 但 E ≥ 1s(ValidateTTLs)时无害。
-	pipe.Expire(ctx, metaKey(queueID), q.entryTTL)
-	pipe.Set(ctx, tokenIndexKey(token), queueID, q.entryTTL)
+	pipe.Expire(ctx, metaKey(zoneID, queueID), q.entryTTL)
+	pipe.Set(ctx, tokenIndexKey(zoneID, token), queueID, q.entryTTL)
 	if _, err := pipe.Exec(ctx); err != nil {
 		return nil, fmt.Errorf("enqueue pipeline: %w", err)
 	}
@@ -462,7 +505,7 @@ func (q *Queue) Poll(ctx context.Context, token string, zoneID uint32, signFn Si
 	case lookupAdmitTaken, lookupAdmitRetaken:
 		// 条目的生命到此为止,只剩重取窗口里同一令牌再取同一个槽(见 lookupScript)。meta 与 token 索引留到 TTL
 		// (见 consumeAdmitAndSign 末尾);在途占位不撤,consumeAdmitAndSign 把它改成再留 handoffGrace。
-		admit, err := q.consumeAdmitAndSign(ctx, queueID, res.slotJSON, signFn, res.code == lookupAdmitRetaken)
+		admit, err := q.consumeAdmitAndSign(ctx, zoneID, queueID, res.slotJSON, signFn, res.code == lookupAdmitRetaken)
 		if err != nil {
 			return nil, err
 		}
@@ -487,8 +530,8 @@ func (q *Queue) Poll(ctx context.Context, token string, zoneID uint32, signFn Si
 // lookupScript 是一次轮询的全部 Redis 操作(2026-11-06 起,合并了此前的 GET token 索引、GETDEL 放行槽与读状态脚本
 // lookupStateScript;缺口清单第 14 条):核对令牌、取走放行槽或读出排队状态,条目仍在排队时在同一次执行里续空闲 TTL。
 //
-//	KEYS[1] = queue:meta:{queueId}   KEYS[2] = queue:zone:{zone}(zone 取自令牌)   KEYS[3] = queue:token:{token}
-//	KEYS[4] = admit:{queueId}
+//	KEYS[1] = metaKey(zone, queueId)   KEYS[2] = zoneZSetKey(zone)(zone 取自令牌)   KEYS[3] = tokenIndexKey(zone, token)
+//	KEYS[4] = admitKey(zone, queueId)。四个键同 tag {q:<zone>}。
 //	ARGV[1] = member(queueId,取自令牌)   ARGV[2] = zone(十进制)   ARGV[3] = metaFieldZoneID   ARGV[4] = metaFieldAdmittedAt
 //	ARGV[5] = E 毫秒(续期阈值,QueueEntryTTL)   ARGV[6] = entryRenewTTL 毫秒(续期写入值)
 //	ARGV[7] = metaFieldTakenSlot   ARGV[8] = metaFieldRetakeUntil   ARGV[9] = 现在(毫秒,Queue.now)
@@ -528,8 +571,8 @@ func (q *Queue) Poll(ctx context.Context, token string, zoneID uint32, signFn Si
 // stress_summarize 的 Redis 负载段(R1 / R2)。
 //
 // 只返回整数与字符串:缺失判定一律写 `not x` 或比较值,返回表里不放 nil / false(原因见 admitEntryScript (f))。
-// 排队族的键分属不同 hash slot,不支持 Cluster;KEYS 全部声明是脚本契约本身。KEYS[1] 是 meta 而不是放行槽:测试按
-// 「第一个键以 admit: 开头」认放行脚本(admitScriptKey),两者不能混。
+// 四个键同 tag、同槽,Redis Cluster 上可以执行(2026-11-12 起);脚本碰的键全部在 KEYS 里声明,不现拼。KEYS[1] 是 meta
+// 而不是放行槽:测试按「第一个键以 admit: 开头」认放行脚本(admitScriptKey),两者不能混。
 var lookupScript = redis.NewScript(`
 if redis.call('GET', KEYS[3]) ~= ARGV[1] then
 	return {1, 0, 0, ''}
@@ -592,7 +635,7 @@ type lookupResult struct {
 func (q *Queue) lookupEntry(ctx context.Context, token, queueID string, zoneID uint32) (lookupResult, error) {
 	now := q.now()
 	vals, err := lookupScript.Run(ctx, q.rdb,
-		[]string{metaKey(queueID), zoneZSetKey(zoneID), tokenIndexKey(token), admitKey(queueID)},
+		[]string{metaKey(zoneID, queueID), zoneZSetKey(zoneID), tokenIndexKey(zoneID, token), admitKey(zoneID, queueID)},
 		queueID, zoneID, metaFieldZoneID, metaFieldAdmittedAt,
 		q.entryTTL.Milliseconds(), q.entryRenewTTL().Milliseconds(),
 		metaFieldTakenSlot, metaFieldRetakeUntil, now.UnixMilli(), now.Add(q.handoffGrace).UnixMilli(),
@@ -627,6 +670,9 @@ func (q *Queue) lookupEntry(ctx context.Context, token, queueID string, zoneID u
 // 在途占位改为「现在 + handoffGrace」到期 → 记等待时长。(2026-11-06 起 GETDEL 挪进 lookupScript,本函数从取到的放行槽
 // 开始;此前本函数自己 GETDEL,取不到回 (nil, nil),由 Poll 再读状态。)
 //
+// zoneID 是验过签的令牌里的 zone(2026-11-12 起由 Poll 传入):meta 键与占位键按它拼。放行槽是在同一个 zone 的键里取到的,
+// 所以它就是放行时的 zone。
+//
 // retake 为 true 表示这是重取窗口里同一令牌再取同一个槽(lookupAdmitRetaken,2026-11-11,R8):照样现签、照样把占位改为
 // 「现在 + handoffGrace」(票此刻才真正交到客户端手里),只是不再记等待时长(第一次取走时记过),另打一行 INFO 便于对账。
 //
@@ -637,7 +683,7 @@ func (q *Queue) lookupEntry(ctx context.Context, token, queueID string, zoneID u
 // PopAdmit and the token could sit in Redis for 4-5 min before the client
 // GetDel'd it, burning most of its TTL. See
 // stress-1zone-45k-2026-06-03-round17.md §4 R1 for the diagnosis.
-func (q *Queue) consumeAdmitAndSign(ctx context.Context, queueID string, slotJSON []byte, signFn SignAdmitFn, retake bool) (*AdmitToken, error) {
+func (q *Queue) consumeAdmitAndSign(ctx context.Context, zoneID uint32, queueID string, slotJSON []byte, signFn SignAdmitFn, retake bool) (*AdmitToken, error) {
 	var slot AdmitSlot
 	if err := json.Unmarshal(slotJSON, &slot); err != nil {
 		return nil, fmt.Errorf("unmarshal admit slot: %w", err)
@@ -662,14 +708,14 @@ func (q *Queue) consumeAdmitAndSign(ctx context.Context, queueID string, slotJSO
 	// We do HMGET (not HGET) to grab createdAt and zone_id in one RTT so the
 	// wait-time histogram observation below pays no extra Redis cost. Missing
 	// createdAt is non-fatal — the wait observation is skipped.
-	fields, _ := q.rdb.HMGet(ctx, metaKey(queueID), metaFieldZoneID, "createdAt").Result()
+	fields, _ := q.rdb.HMGet(ctx, metaKey(zoneID, queueID), metaFieldZoneID, "createdAt").Result()
 	var (
-		zoneID    uint32
+		metaZone  uint32
 		createdAt int64
 	)
 	if len(fields) >= 1 {
 		if s, ok := fields[0].(string); ok {
-			_, _ = fmt.Sscanf(s, "%d", &zoneID)
+			_, _ = fmt.Sscanf(s, "%d", &metaZone)
 		}
 	}
 	if len(fields) >= 2 {
@@ -677,12 +723,13 @@ func (q *Queue) consumeAdmitAndSign(ctx context.Context, queueID string, slotJSO
 			_, _ = fmt.Sscanf(s, "%d", &createdAt)
 		}
 	}
-	if zoneID != 0 {
+	// meta 还读得到、zone 对得上才改占位与记等待时长;zoneID 非 0(Poll 已挡掉 0),所以 meta 不在时这里不成立。
+	if metaZone == zoneID {
 		// 不撤占位,改成再留 handoffGrace(G4b-G):票已交给客户端,但他连上 gate、gate 把人数
 		// 报进 etcd 之前不在任何 gate 的 online 里。此刻撤掉,下一拍会按「在线没变、在途为 0」
 		// 再放一批(旧实现在这里 SREM,开区时能放进几倍容量)。
 		// 用普通 ZADD 而不是 XX:占位若已按分数清掉(login 与 Redis 的时钟差),这个人照样要占名额。
-		// zone 读不到(meta 被淘汰)时走不到这里:占位保持放行时的分数,最迟 AdmitTTL 到期。
+		// meta 读不到(被淘汰)时走不到这里:占位保持放行时的分数,最迟 AdmitTTL 到期。
 		if err := q.holdAdmitted(ctx, q.rdb, zoneID, queueID, q.handoffGrace).Err(); err != nil {
 			logx.Errorf("[loginqueue] hold admitted placeholder after consume zone=%d queueId=%s err=%v",
 				zoneID, queueID, err)
@@ -896,7 +943,7 @@ func (q *Queue) admittedKeyTTL() time.Duration {
 // (2026-10-15 更正)放行改由 admitEntryScript 写占位,本脚本只剩取走一处在用;admitEntryScript 的后两步
 // 也是同一写法,现在是三处同步改。
 //
-//	KEYS[1] = admitted:zset:zone:{zone}
+//	KEYS[1] = admittedZSetKey(zone)
 //	ARGV[1] = 占位到期毫秒   ARGV[2] = member(queueId)   ARGV[3] = W 毫秒
 //	返回 1。不能不返回:脚本回 nil 时 go-redis 记为 redis.Nil,排在 MULTI 里会让 Exec 回 error。
 var admittedHoldScript = redis.NewScript(`
@@ -936,8 +983,8 @@ const (
 // 移出队列,对其它客户端同时可见(2026-10-18 起,替代 2026-10-15 版的「先判 meta 在、admitted_at 不在,再写
 // SET → HSET → ZADD」;那一版由 ZPOPMIN 之后调用,出错即丢条目)。
 //
-//	KEYS[1] = admit:{queueId}   KEYS[2] = queue:meta:{queueId}   KEYS[3] = admitted:zset:zone:{zone}
-//	KEYS[4] = queue:zone:{zone}
+//	KEYS[1] = admitKey(zone, queueId)   KEYS[2] = metaKey(zone, queueId)   KEYS[3] = admittedZSetKey(zone)
+//	KEYS[4] = zoneZSetKey(zone)。四个键同 tag {q:<zone>}。
 //	ARGV[1] = AdmitSlot JSON    ARGV[2] = AdmitTTL 毫秒          ARGV[3] = 字段名(metaFieldAdmittedAt)
 //	ARGV[4] = 放行时刻 unix 毫秒(time.Now,与 meta 的 createdAt 同源)
 //	ARGV[5] = 占位到期毫秒(Queue.now + AdmitTTL)   ARGV[6] = member(queueId)   ARGV[7] = W 毫秒(admittedKeyTTL)
@@ -988,7 +1035,7 @@ const (
 //
 // (f) 只返回整数:go-redis v9 默认 RESP3,真实 Redis 会把 Lua false 回成布尔值,miniredis 回成 null,两边行为不同。
 //
-// (g) 排队族的键分属不同 hash slot,不支持 Cluster。KEYS 全部声明是脚本契约本身,与是否兼容 Cluster 无关。
+// (g) 四个键同 tag、同槽,Redis Cluster 上可以执行(2026-11-12 起)。脚本碰的键全部在 KEYS 里声明,不现拼。
 //
 // (h) 名额在脚本里判(2026-11-11,infra-reconnect-overview.md §4.1 R7)。此前 dispatcher 在脚本外按快照算空位
 // (容量 − 在线 − 占位),两个重叠 leader 各按同一份快照放满,在途可达 2×(容量 − 在线)。现在每条写放行之前,在同一段里
@@ -1063,10 +1110,22 @@ func pickAdmitSlot(pickFn PickAdmitSlotFn, zoneID uint32, queueID string) ([]byt
 }
 
 // runAdmitScripts 对一块条目各跑一段 admitEntryScript,结果与 entries 同下标。只由 PopAdmit 调用。
-//   - 一条时单发(admitEntry,Script.Run:先 EVALSHA,NOSCRIPT 时当场回退 EVAL)。
+//   - 一条时单发(admitEntry,Script.Run:先 EVALSHA,NOSCRIPT 时当场回退 EVAL)。走 rdb,集群里的重定向由客户端跟随。
 //   - 多条时放进一个 pipeline 一次往返,每条发 EVAL 全文:pipeline 里的 EVALSHA 撞上 NOSCRIPT(Redis 重启、SCRIPT FLUSH
 //     之后)要等整块回来才知道,那几条没执行、还得另发一遍;脚本约 1KB,带全文的开销可以接受(与 holdAdmitted 同一取舍)。
 //     各条仍是独立的一段脚本,一条出错不影响同块别的条目执行。
+//
+// 流水线发给谁(2026-11-12 起):先取队列键所在槽的主节点(clusterredis.MasterForKey),在这个节点客户端上发,不用集群
+// 客户端的 pipeline。集群客户端的 pipeline 在连接出错(EOF / 超时)后会把整块自动重发,已经执行过的放行脚本会再跑一遍;
+// 节点客户端不重发(MaxRetries = -1),出错就是「这一块结果未知」,交给 PopAdmit 的停批规则,条目要么已放行可取、要么仍在
+// 队列,下一拍不会重复放行。一个 zone 的四把键同槽,所以整块落在同一个节点、同一条连接上,仍按队列顺序执行。
+// 与 scene_manager 铸造 owner_epoch 的通道同一做法(go/scene_manager/internal/svc/owner_epoch_mint.go)。
+//
+// 节点客户端不跟随重定向。迁槽期间这一块可能整块收到 MOVED / ASK / TRYAGAIN(都是「没执行」):这里请求刷新路由表,
+// 错误原样交回,PopAdmit 在这一块之后停下,条目原样留在队列,下一拍按新路由再放。原子迁槽(Redis 8 的 CLUSTER MIGRATION)
+// 下只会碰到一次 MOVED;逐键迁移期间 ASK 会持续到迁完,这段时间每拍只有探路的那一条(单发,客户端跟随 ASK)能放行。
+//
+// 这条通道绕开了发送前守卫,所以发之前自己按控制集群键策略核一遍键(clusterredis 对这类通道的要求)。
 //
 // 每条的结果与错误看它自己的 Cmd:连接 / 超时出错时 go-redis 给整块的 Cmd 都设上错误;Exec 的返回值只是其中第一条的
 // 错误,不另看。
@@ -1076,14 +1135,38 @@ func (q *Queue) runAdmitScripts(ctx context.Context, zoneID uint32, budget uint3
 		out[0].result, out[0].err = q.admitEntry(ctx, zoneID, budget, entries[0].queueID, entries[0].slotJSON)
 		return out
 	}
-	pipe := q.rdb.Pipeline()
+	failAll := func(err error) []admitEntryOutcome {
+		for i := range out {
+			out[i].err = err
+		}
+		return out
+	}
+	keys := make([][]string, len(entries))
+	for i, e := range entries {
+		keys[i] = admitEntryKeys(zoneID, e.queueID)
+		if err := clusterredis.ControlClusterKeys.CheckKeys(keys[i]); err != nil {
+			return failAll(fmt.Errorf("admit pipeline keys: %w", err))
+		}
+	}
+	node, err := clusterredis.MasterForKey(ctx, q.admitNodes, zoneZSetKey(zoneID))
+	if err != nil {
+		return failAll(fmt.Errorf("locate the master of the queue slot: %w", err))
+	}
+	pipe := node.Pipeline()
 	cmds := make([]*redis.Cmd, len(entries))
 	for i, e := range entries {
-		cmds[i] = admitEntryScript.Eval(ctx, pipe, admitEntryKeys(zoneID, e.queueID), q.admitEntryArgs(e.queueID, e.slotJSON, budget)...)
+		cmds[i] = admitEntryScript.Eval(ctx, pipe, keys[i], q.admitEntryArgs(e.queueID, e.slotJSON, budget)...)
 	}
 	_, _ = pipe.Exec(ctx)
+	redirected := false
 	for i, cmd := range cmds {
 		out[i].result, out[i].err = cmd.Int64()
+		if kind, _ := clusterredis.ClassifyNotExecuted(out[i].err); kind != clusterredis.NotExecutedNo {
+			redirected = true
+		}
+	}
+	if redirected {
+		clusterredis.ReloadTopology(ctx, q.admitNodes)
 	}
 	return out
 }
@@ -1091,7 +1174,7 @@ func (q *Queue) runAdmitScripts(ctx context.Context, zoneID uint32, budget uint3
 // admitEntry 对 queueID 跑一次 admitEntryScript,返回值见该脚本。由 runAdmitScripts 在一块只有一条时调用。
 // 不在 pipeline 里,用 Script.Run(先 EVALSHA,NOSCRIPT 时回退 EVAL):EVALSHA 撞上 NOSCRIPT 时脚本没有执行,
 // 当场就能回退,不存在 holdAdmitted 注释里「排在 MULTI 里来不及回退」的问题。
-// (2026-10-18 起多传队列键 KEYS[4];KEYS[1..3] 与全部 ARGV 同位不变。四个键都在排队族同一个实例上。)
+// (2026-10-18 起多传队列键 KEYS[4];KEYS[1..3] 与全部 ARGV 同位不变。四个键同 tag,在集群里同槽。)
 // (2026-11-11 起 ARGV 末尾多两个:现在与名额,见 admitEntryArgs。)
 func (q *Queue) admitEntry(ctx context.Context, zoneID uint32, budget uint32, queueID string, slotJSON []byte) (int64, error) {
 	return admitEntryScript.Run(ctx, q.rdb, admitEntryKeys(zoneID, queueID), q.admitEntryArgs(queueID, slotJSON, budget)...).Int64()
@@ -1101,7 +1184,7 @@ func (q *Queue) admitEntry(ctx context.Context, zoneID uint32, budget uint32, qu
 // ARGV[4] 的放行时刻在这里取墙钟:go-redis 重发同一条命令时带的是同一个值,脚本据此认出 REPLAYED。
 // 占位到期(ARGV[5])与数名额用的现在(ARGV[8])取同一个 Queue.now,与 AdmittedCount、快速通道同一个钟。
 func admitEntryKeys(zoneID uint32, queueID string) []string {
-	return []string{admitKey(queueID), metaKey(queueID), admittedZSetKey(zoneID), zoneZSetKey(zoneID)}
+	return []string{admitKey(zoneID, queueID), metaKey(zoneID, queueID), admittedZSetKey(zoneID), zoneZSetKey(zoneID)}
 }
 
 func (q *Queue) admitEntryArgs(queueID string, slotJSON []byte, budget uint32) []any {
@@ -1115,7 +1198,7 @@ func (q *Queue) admitEntryArgs(queueID string, slotJSON []byte, budget uint32) [
 
 // admittedCountScript 清掉已到期的占位再计数,两步在同一段脚本里。
 //
-//	KEYS[1] = admitted:zset:zone:{zone}
+//	KEYS[1] = admittedZSetKey(zone)
 //	ARGV[1] = now_ms
 //	返回未到期的成员数
 var admittedCountScript = redis.NewScript(`
@@ -1143,7 +1226,7 @@ func (q *Queue) AdmittedCount(ctx context.Context, zoneID uint32) (uint32, error
 // 占位之后的整键续期与 admittedHoldScript 相同:先 ZADD,剩余 PTTL < W 才 PEXPIRE W(只增不减,
 // 两个陷阱见 admittedKeyTTL)。
 //
-//	KEYS[1] = admitted:zset:zone:{zone}
+//	KEYS[1] = admittedZSetKey(zone)
 //	ARGV[1] = now_ms   ARGV[2] = budget   ARGV[3] = member(fast:<uuid>)
 //	ARGV[4] = 占位到期毫秒   ARGV[5] = W 毫秒(整键 TTL 下限,只做垃圾回收)
 //	返回 1 = 占到,0 = 已满

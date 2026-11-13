@@ -323,7 +323,7 @@ D3 已于 2026-10-15 拍板：独立进程 `go/player_inbox`，按 D-14 独占�
 - **读缺失的口径**（持久数据「读缺失即 fail-closed」规则的一处有记录的例外，见 `ecs-component-access-rules.md`）：判定对无效句柄（`entt::null`）只判全服；有效实体缺封禁表时按「没有单人封禁」回答、不补建。理由：`BagService` 的入口历来接受没有玩家上下文的容器级调用；这个组件唯一的创建点是加载，缺了说明加载不变量已被破坏，而同一实体的存盘会因缺组件整份拒绝，资产通道与收件箱只在落盘之后才终结 / 确认，所以这种状态下发出的物品成不了盘上事实，封禁绕不过去。代价是这个实体的会话内存里可能短暂多出被封物品（随实体不存盘丢弃）；线索是存盘拒绝的 ERROR（`missing=PlayerItemGainBlockComp`）。写入口（Block / Unblock）缺组件一律拒绝、不补建。
 - **交易退回不算获得**（2026-11-10，数据覆写审计 r2-trade#1）：
   - 交易把玩家自己托管的资产还给他（撤单、过期、整单退款、竞价退回），带交易类型 `TX_AUCTION_RETURN`。资产转入、`AddCurrency`、两种带交易类型的 `BagService::AddItems`，都先问 `GainBlockService::CountsAsGain`，对它不判封禁，与「同一所有者内部搬运」同一口径。
-  - 交易的成交所得照常判封禁：被拒后合同转人工，解封后补发；交付顺序的改进写在[聚宝斋设计](jubaozhai-market.md) §6.2 末「获取封禁与托管交易」。打开 GM 封禁处置时，在途交易受的影响见手册 §2 第 6 步。
+  - 交易的成交所得照常判封禁。交付先买家、后卖家（2026-11-12）：买家那条被拒时整单自动退回，卖家那条被拒时合同转人工、解封后补发，见[聚宝斋设计](jubaozhai-market.md) §6.2 末「获取封禁与托管交易」。打开 GM 封禁处置时，在途交易受的影响见手册 §2 第 6 步。
 - **已知边界**：战斗结算里被封的掉落是「这一局不发」而不是「整笔延后」，玩家与客服按 `metric=battle_settlement_item_blocked` 的 battle_id 查。宝石取下被拦是业务拒绝而不是故障：取下入口单独认出 `kAssetBlocked`，原样回 27005 并打 WARN（`PlayerEquipSystem::RemoveGem`，用例 `PlayerEquipTest.RemoveGemOfAGainBannedGemIsRefusedAndKeepsTheGem`）。
 - **运维查询**（2026-11-06 补，源码已改，未编译、未测试）：`PlayerInboxAdmin.GetItemGainBlocks(player_id)`，同样要 `x-admin-token`，只读、不写审计。回包两部分：
   - `blocked_item_config_ids`：玩家**已落盘**存档里的本人封禁表。player_inbox 不能跨库读存档库（AGENTS §7 #6），经 data_service 新增的只读 RPC `GetPlayerItemGainBlock` 读资料行（kind=PROFILE）的 `item_gain_block`；读法、错误口径与 `GetPlayerInboxLedger` 相同（data_service 两者共用 `readPersistedPlayerRow`，存档读共用 `readOwnerAndRow`）：没有写权行 `found=false`，读不成一律是错误、绝不退化成「没有」。
@@ -514,7 +514,7 @@ message player_inbox_audit {
 - **seq 来源**：不用 AUTO_RANDOM，也不依赖 AUTO_INCREMENT。seq 由流行显式分配，带时间下界。
 - **shard 模数**：64，与 `placement.RouteRowShard` 相同，但**常量独立定义**。两张表的模数各自是建表时定下的契约，不联动修改。
 - **shard 公式**：`shard = mix64(player_id) % 64`，`mix64` 是 splitmix64 的终结函数，只由 `inbox.RowShard` 计算（`shard.go`）。
-  - **2026-10-16 首次建表前**由 `player_id % 64` 改为现公式（评审 L5）。存量和回退的 bwmarrin SnowFlake ID 低 9 位是 step，同一毫秒只建一个角色时 step=0，直接取模会把这批玩家全压进 shard 0。mix64 与位布局无关，两套号源都能打散。
+  - **2026-10-16 首次建表前**由 `player_id % 64` 改为现公式（评审 L5）。当时存量和回退的 bwmarrin SnowFlake ID 低 9 位是 step，同一毫秒只建一个角色时 step=0，直接取模会把这批玩家全压进 shard 0。mix64 与位布局无关，换号源不用动公式。bwmarrin 号源 2026-11-12 已删，player_id 现在只由发号器发，公式不变。
   - 上线之后再改公式等于迁移全部主键。`placement.RouteRowShard` 有同样的问题，已登记给 data_service 负责人。
   - **旧公式写出的行对按玩家的读写静默不可见**：所有按玩家的 SQL 都带 `WHERE shard = RowShard(player_id)`，旧行查不出来，锁内判重读不到它，同一 request_id 会再入箱一次（IB-2 失效）；只有按分片扫描的读会撞上读出断言。所以按旧公式写过数据的库必须先清空收件箱三张表。
   - **启动核对**：启动路径与 `-migrate` 在表结构对齐之后跑 `inbox.CheckRowShards`，逐表核对 `(shard, player_id)`。有一行不一致就拒启；`-migrate` 按「需人工」退出（退出码 4），K8s Job 停下而不是反复重试。
@@ -1254,7 +1254,7 @@ v1 不接版本摘要（D4 已拍板）。只有当落地拉取的负载超出�
 - **容量**：条目行随两类入箱永久增长。
   - GM 处置：每条处置一行。
   - 战斗结算：每局全球对局给每名成员一行，这是增长的大头。
-  - Fetch、挂起护栏都走 `(shard, player_id, state)` 索引，行数增长不影响它们的正确性。单玩家对账 `ReconcilePlayer` 一次最多读 5000 行，老玩家超过这个数时只做部分核对（`store_maintenance.go`），手册与指标按此口径解读。
+  - Fetch、挂起护栏都走 `(shard, player_id, state)` 索引，行数增长不影响它们的正确性。单玩家对账 `ReconcilePlayer` 按 (domain, seq) 主键键集翻页读完这名玩家的全部行（每页 1000 行，`store_maintenance.go` 的 `forEachPlayerItemsPage`），结果完整；耗时随行数线性增长，读不完回错误，不回部分结果（2026-11-12 起；原先一次最多读 5000 行，老玩家超过这个数时只做部分核对）。
 - 将来要归档，必须保留同一唯一键、原摘要和原 owner 墓碑，不能恢复有限 TTL 的去重（§1 第 48 行）。
 
 ### 9.2 过期

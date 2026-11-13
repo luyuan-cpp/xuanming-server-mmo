@@ -505,7 +505,7 @@ var lockBusyRetryDelay = 2 * time.Second
 2. `if *migrateOnly { os.Exit(runMigration(config.AppConfig)) }`。
 3. `svcCtx := svc.NewServiceContext(...)`(不变)。
 4. **新增** `if err := ensureSchema(context.Background(), svcCtx.DB, config.AppConfig, schemamigrate.Up, schemamigrate.Plan); err != nil { logx.Must(err) }`,放在 `node.NewNode` 之前:表结构不对的实例不能注册进 etcd。
-5. 节点注册、snowflake、killswitch(不变)。
+5. 节点注册、snowflake、killswitch(不变)。snowflake 槽位申领 2026-11-12 已删:guild_id、op_id 只由号段发,现在这一步只有节点注册与 killswitch。
 6. `repo := data.NewGuildRepo(...)`。**删除** `MigrateLegacyRankScores` 调用和它上方的注释(第 137-142 行);保留 `RebuildRanks`,注释改为 `// 每次启动从 MySQL 权威快照重建全局 / 分区榜;失败拒绝启动,避免对外提供不完整榜单。`
 7. 第 180 行改为 `s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget())...)`。
 

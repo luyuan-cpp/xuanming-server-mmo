@@ -18,14 +18,23 @@ import (
 )
 
 // 人工终结的证据只认已提交账本(05-economy.md §5.23)。流水在内存改动时就发出、早于存盘提交,不能凭它判 applied。
+//
+// 时间一律从 testNow 派生、经 toolDeps.now 注入,不读真实墙钟:行够不够老、安静不安静、终结写下的时刻都是确定的。
 
 const testOpID uint64 = 70001
+
+// testNow 是全部用例共用的固定时刻(2025-11-01T08:00:00Z)。
+var testNow = time.UnixMilli(1_761_984_000_000)
+
+func fixedClock() time.Time { return testNow }
 
 type fakeStore struct {
 	row      data.AssetOpRow
 	resolved bool
 	calls    []assetop.ManualResolution
 	witness  []assetop.QuietWitness
+	// nowMs 是每次人工终结收到的时刻:应当就是注入的时钟。
+	nowMs []uint64
 }
 
 func (f *fakeStore) GetOp(context.Context, uint64) (data.AssetOpRow, bool, error) {
@@ -36,9 +45,10 @@ func (f *fakeStore) ListStuck(context.Context, uint64, int) ([]data.AssetOpRow, 
 	return []data.AssetOpRow{f.row}, nil
 }
 
-func (f *fakeStore) ResolveManuallyIfQuiet(_ context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, _ uint64) (bool, error) {
+func (f *fakeStore) ResolveManuallyIfQuiet(_ context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error) {
 	f.calls = append(f.calls, r)
 	f.witness = append(f.witness, witness)
+	f.nowMs = append(f.nowMs, nowMs)
 	return f.resolved, nil
 }
 
@@ -60,14 +70,13 @@ func stuckRow(t *testing.T) data.AssetOpRow {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now()
 	return data.AssetOpRow{
 		OpID: testOpID, PlayerID: 5, GuildID: 9,
 		Stream: assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_DEBIT, Seq: 3, StreamEpoch: 1700000000000,
 		Kind: pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_DONATE, Status: pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING,
 		Attempts: resolveMinAttempts, LastOutcome: uint32(assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN),
-		CreatedMs: uint64(now.Add(-2 * time.Hour).UnixMilli()), Payload: payload, TxType: 24,
-		LastSendMs: uint64(now.Add(-time.Hour).UnixMilli()),
+		CreatedMs: uint64(testNow.Add(-2 * time.Hour).UnixMilli()), Payload: payload, TxType: 24,
+		LastSendMs: uint64(testNow.Add(-time.Hour).UnixMilli()),
 	}
 }
 
@@ -108,7 +117,7 @@ func resolveAs(as string, final assetop.Status, force bool) resolveOptions {
 }
 
 func deps(store *fakeStore, ledger *fakeLedger) toolDeps {
-	return toolDeps{store: store, ledger: ledger, quietGap: assetop.ManualQuietFloor}
+	return toolDeps{store: store, ledger: ledger, quietGap: assetop.ManualQuietFloor, now: fixedClock}
 }
 
 // 已提交账本说已应用、收据是这一条请求:判 applied,终结带着读行时的租约与发送时刻。
@@ -125,6 +134,9 @@ func TestRunResolve_AppliedWithCommittedReceiptFinalizes(t *testing.T) {
 	}
 	if store.witness[0] != (assetop.QuietWitness{LeaseUntilMs: row.LeaseUntilMs, LastSendMs: row.LastSendMs}) {
 		t.Fatalf("witness=%+v, want the row's lease / last send as read", store.witness[0])
+	}
+	if store.nowMs[0] != uint64(testNow.UnixMilli()) {
+		t.Fatalf("终结时刻=%d,要的是注入的时钟 %d(不读真实墙钟)", store.nowMs[0], testNow.UnixMilli())
 	}
 	if !strings.Contains(stdout.String(), "evidence=applied evidence_source=player_store") {
 		t.Fatalf("审计行要写明证据与来源: %s", stdout.String())
@@ -172,9 +184,9 @@ func TestRunResolve_ForceAbortNeedsLedgerProof(t *testing.T) {
 	slid.Streams[0].Watermark = 10 // seq 3 已滑出窗口,结局不可知
 
 	recentSend := base
-	recentSend.LastSendMs = uint64(time.Now().Add(-time.Minute).UnixMilli())
+	recentSend.LastSendMs = uint64(testNow.Add(-time.Minute).UnixMilli())
 	leaseHeld := base
-	leaseHeld.LeaseUntilMs = uint64(time.Now().Add(time.Minute).UnixMilli())
+	leaseHeld.LeaseUntilMs = uint64(testNow.Add(time.Minute).UnixMilli())
 	notMaintained := base
 	notMaintained.LastSendMs = 0
 

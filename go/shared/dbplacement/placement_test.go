@@ -74,6 +74,36 @@ func TestPlacementCodec(t *testing.T) {
 	}
 }
 
+// 搬迁记录里手册点名的键:运维按这些名字读映射,etcd 从备份恢复之后也按它们手工写回(docs/ops/db-move-runbook.md §6)。
+func TestMoveRecordKeys(t *testing.T) {
+	feed := FeedIdentity{Changefeed: "feed-1", StartTs: 7, CreateTime: "t", ConfigDigest: "d"}
+	raw, err := Encode(Placement{Cluster: "b", Version: 1, State: StateActive, Move: &Move{
+		RunID: "r", SourceCluster: "a", TargetCluster: "b", VerifiedFeed: &feed, VerifyTookMs: 1200, FlippedMs: 5,
+		FeedEndpoint: "http://cdc-a:8300", FinalCompareSkipped: true,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`"verified_feed":{"changefeed":"feed-1","start_ts":7,"create_time":"t","config_digest":"d"}`,
+		`"verify_took_ms":1200`, `"feed_endpoint":"http://cdc-a:8300"`, `"final_compare_skipped":true`,
+	} {
+		if !strings.Contains(string(raw), want) {
+			t.Fatalf("映射值里缺 %s: %s", want, raw)
+		}
+	}
+	out, err := Decode(raw)
+	if err != nil || out.Move == nil || out.Move.VerifiedFeed == nil || *out.Move.VerifiedFeed != feed ||
+		out.Move.VerifyTookMs != 1200 || out.Move.FeedEndpoint != "http://cdc-a:8300" || !out.Move.FinalCompareSkipped {
+		t.Fatalf("round trip: %+v %v", out.Move, err)
+	}
+	// 没跳过静止比对、没有 TiCDC 地址(MySQL 档)时,这两项不出现在映射值里。
+	plain, err := Encode(Placement{Cluster: "b", Version: 1, State: StateActive, Move: &Move{RunID: "r", FlippedMs: 5}})
+	if err != nil || strings.Contains(string(plain), "final_compare_skipped") || strings.Contains(string(plain), "feed_endpoint") {
+		t.Fatalf("缺省值不该写出来: %s %v", plain, err)
+	}
+}
+
 func TestKeyRoundTrip(t *testing.T) {
 	if Key(guildDB) != "/mmorpg/db_placement/mmorpg_guild" {
 		t.Fatalf("键的形状变了: %s", Key(guildDB))

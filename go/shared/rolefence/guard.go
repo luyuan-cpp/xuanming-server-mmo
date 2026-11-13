@@ -191,3 +191,30 @@ func (g *Guard) RunTx(ctx context.Context, action func() error) error {
 	}
 	return err
 }
+
+// VerifyOwner 是只读入口的归属预检:不加锁读本库副本,判角色此刻是否仍归 expect 的原身份。只读,不替代提交点的 Lock + Check。
+//
+// 回 nil 是仍归它;回 expect.Reject 是确定不归(已换主、已删);回 *RoleNotFoundError 是目录里没有这名角色;
+// 其余错误(ErrUnavailable、SQL 错误)是这一次判不了,调用方按可重试处理,不能当成归属变了。
+//
+// 副本缺行、修订号落后或处于冻结时读一次权威状态再判。冻结的副本可能停在过户之前(过户完成的推送丢了),
+// 不先自愈就会把旧主的会话放过去;没冻结的副本不会落后于目录,因为过户、删角之前全部参与者都先冻结了。
+// 冻结本身不算拒绝,见 CheckOwner。
+func (g *Guard) VerifyOwner(ctx context.Context, expect Expect) error {
+	if g == nil || g.db == nil || g.reader == nil {
+		return ErrUnavailable
+	}
+	if !expect.hasOriginal() {
+		return expect.rejection()
+	}
+	refreshed := false // RunTx 只在自愈成功之后才跑第二次,第二次读到的就是刚按权威状态写过的副本
+	return g.RunTx(ctx, func() error {
+		fence, err := Read(ctx, g.db, expect.PlayerID)
+		verdict := CheckOwner(fence, err, expect)
+		if verdict == nil && fence.FreezeToken != 0 && !refreshed {
+			verdict = expect.stale()
+		}
+		refreshed = true
+		return verdict
+	})
+}

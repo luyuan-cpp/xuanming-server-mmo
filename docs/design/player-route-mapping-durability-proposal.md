@@ -875,7 +875,7 @@ gRPC code 的集合与今天相同:OK、AlreadyExists、FailedPrecondition、Una
 
 1. **HR1 TiDB 细节大量未核实**(本批无法联网对照官方文档):SPLIT 元组写法、重复 SPLIT 是否幂等、`ATTRIBUTES` 是否覆盖索引 Region、所需权限、`TIDB_PK_TYPE` 列、缓存表语义、TiDB 的 3819 文案、行构造器 IN 的计划。缓解:真 TiDB 用例 `TestRouteStore_TiDBClusteredShardsAndPresplit` 与验证增量第 8 步;任何一项不成立,改 `route_tidb.go` 的语句生成或探针判据,DDL 不动。
 2. **HR2 CHECK 是唯一性的一部分**:P4 只在建池时证一次;运行期有人 `ALTER … NOT ENFORCED`、DROP CHECK 或把 `tidb_enable_check_constraint` 改回 OFF,要到下次重启才发现;其间写进来的错片行只有 `ScanRoutes`(audit 方向 A)看得见。runbook 写明不许关这条 CHECK,改过 DDL / 全局变量之后必跑 audit。
-3. **HR3 存量 snowflake 号偏向片 0**:bwmarrin 布局最低 9 位是同毫秒序号,低速铸号时多为 0(AGENTS §7.1),`% 64` 几乎都落片 0(同毫秒序号占最低 9 位,模 64 只看最低 6 位)。只影响一次性导入与冷读的分布,不影响新号(号段稠密、均匀)。
+3. **HR3 存量 snowflake 号偏向片 0**:bwmarrin 布局(13 位 node、9 位同毫秒序号、毫秒时间)最低 9 位是同毫秒序号,低速铸号时多为 0,`% 64` 几乎都落片 0(同毫秒序号占最低 9 位,模 64 只看最低 6 位)。只影响一次性导入与冷读的分布,不影响新号(号段稠密、均匀)。**2026-11-12 起不再适用**:login 的 bwmarrin 号源已删,项目未上线、旧库清空重建,库里不会再有这种号。
 4. **HR4 本机旧形状表**:G1a 之前跑过第 1a 批迁移的库,`player_route` 会让迁移失败(fail-closed,带处理提示)。确认路由表里没有要保留的数据后手工 `DROP TABLE player_route, zone_merge_fence, zone_merged_into, route_meta;`(`route_reconcile` 若存在一并 DROP)再 `-migrate`;**只 DROP `player_route` 不够**(旧 `route_meta` 与旧排序规则守卫查不出来)。代码不自动 DROP。**2026-10-13 补:按模数 16 建过表的库(跑过 HEAD `d5cbb8a8e` 的迁移或启动过那一版 data_service)同样要这样 DROP,而且这一种迁移不会报错**,见下「行片 16 → 64」的前置。2026-10-14 补:db_first 的 data_service 与 route_tool 建池时由 P5 认出(`ErrRouteShardModulusMismatch`),redis 模式认不出(见下「正向探针 P5」)。
 5. **HR5 `idx_route_storage` 的 NULL 段没切**:`PinOnCreate=false` 时新号 storage 为 NULL,这 64 条尾部仍在一个 Region;`SPLIT … BY (NULL, …)` 的写法未核实。打开 `PinOnCreate` 后按 `-storages=1000000` 切。
 6. **HR6 围栏仍是每 zone 一个 Region**:单 zone 开服尖峰时,该 zone 的全部 W1 在一个 Region leader 上加锁 / 提交。缓解梯子见 §12「万一目录还是成了瓶颈」第 ③ 步。

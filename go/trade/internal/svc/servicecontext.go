@@ -92,7 +92,9 @@ type ServiceContext struct {
 	// **整个字段可能为 nil**:AssetOp.Enabled=false(默认)时通道根本不装配。调用托管 / 交付前
 	// 应判 Assets.Enabled(),好给玩家一个明确的"功能未开放";漏判也不会 panic —— AssetChannel
 	// 的方法都带空接收者守卫,reconcile 同理,业务侧拿到的是 reconcile.ErrSignerMissing。
-	Assets      *AssetChannel
+	Assets *AssetChannel
+	// Roles 读本库的角色护栏副本,无条件装配:入口归属预检每个客户端请求都用它,Commerce 的合同事务用的也是这一个。
+	Roles       *commerce.RoleAuthority
 	Commerce    *commerce.Engine
 	Mall        *commerce.Mall
 	Rmb         *commerce.RmbConsignments
@@ -192,6 +194,18 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 			AssetOpSecretEnv, assetop.MinSecretLen)
 	}
 
+	// 角色护栏不随资产通道开关:入口归属预检覆盖全部客户端请求(浏览、收藏在通道关闭时照常服务,
+	// docs/design/gate-online-identity.md §9.3),合同事务在通道开启时用同一个 RoleAuthority。
+	// trade 是护栏参与者,调用方密钥在各档位都注入;缺了拒启,不带着没有归属预检的入口运行。
+	fenceReader, roleErr := rolefence.NewDirectoryReader(dsClient, RoleFenceCaller, os.Getenv(rolefence.SecretEnv(RoleFenceCaller)))
+	if roleErr != nil {
+		panic(fmt.Errorf("trade role fence caller secret %s unavailable: %w", rolefence.SecretEnv(RoleFenceCaller), roleErr))
+	}
+	roles, roleErr := commerce.NewRoleAuthority(db, fenceReader)
+	if roleErr != nil {
+		panic(fmt.Errorf("trade role fence wiring failed: %w", roleErr))
+	}
+
 	var commerceEngine *commerce.Engine
 	var mall *commerce.Mall
 	if assets != nil {
@@ -206,14 +220,6 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		commerceEngine = &commerce.Engine{Repo: &data.CommerceRepo{DB: db, Ops: assets.Ops}, IDs: seg, OpIDs: assets.OpIDs,
 			Policy:  commerce.Policy{Items: c.Commerce.ItemConfigs, ItemTitles: titles, Pets: c.Commerce.PetConfigs, Currencies: c.Commerce.CurrencyTypes, AllowInstances: c.Commerce.AllowInstances},
 			Applier: assets.Caller, Ledger: persistedLedger(dsClient), Now: time.Now}
-		reader, roleErr := rolefence.NewDirectoryReader(dsClient, RoleFenceCaller, os.Getenv(rolefence.SecretEnv(RoleFenceCaller)))
-		if roleErr != nil {
-			panic(fmt.Errorf("trade role fence caller secret %s unavailable: %w", rolefence.SecretEnv(RoleFenceCaller), roleErr))
-		}
-		roles, roleErr := commerce.NewRoleAuthority(db, reader)
-		if roleErr != nil {
-			panic(fmt.Errorf("trade role fence wiring failed: %w", roleErr))
-		}
 		commerceEngine.Roles = roles
 		// 合同推进与收据 ACK 按片分工(缺口清单第 16 条,docs/design/jubaozhai-market.md §15.8)。成员表只圈本 zone:
 		// 同一个 zone 的 trade 副本连同一个库。本副本的身份在 etcd 注册之后由 BindWorkMember 补上。
@@ -246,6 +252,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		directoryConn:     conn.Conn(),
 		ListingIDSegment:  seg,
 		Assets:            assets,
+		Roles:             roles,
 		Commerce:          commerceEngine,
 		Mall:              mall,
 	}

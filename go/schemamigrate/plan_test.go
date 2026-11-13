@@ -359,6 +359,20 @@ func TestMissingIndexesJudgesByKindNotText(t *testing.T) {
 	}
 }
 
+// 服务把缺索引各项的文案拼进拒启错误:Messages 逐项取文案、不改顺序,没有项时返回空。
+func TestMessagesKeepsOrder(t *testing.T) {
+	got := Messages([]Finding{
+		{Kind: FindingMissingIndex, Table: "t", Index: "idx_t_1", Message: "second"},
+		{Kind: FindingMissingIndex, Table: "t", Index: "idx_t_0", Message: "first"},
+	})
+	if !slices.Equal(got, []string{"second", "first"}) {
+		t.Fatalf("Messages = %v", got)
+	}
+	if got := Messages(nil); len(got) != 0 {
+		t.Fatalf("没有项时应为空,got %v", got)
+	}
+}
+
 // reportOf 按 run 的同一个入口(Report.add)把报告项分进 Warnings / Manual。
 func reportOf(findings []Finding) Report {
 	var r Report

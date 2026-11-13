@@ -69,6 +69,7 @@
 #include "services/scene/player/system/player_equip.h"
 #include "services/scene/player/system/player_feature_snapshot.h"
 #include "services/scene/player/system/player_level_rules.h"  // 穿戴等级读点用例:playerlevel::kMaxLevel
+#include "space_freed_recorder_for_test.h"                   // 穿戴的「腾位通知」用例
 #include "table/code/attributeallocratio_table.h"
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
@@ -1608,6 +1609,25 @@ TEST_F(PlayerEquipTest, EquipRefusesToTakeTheLastHeldUnitOutOfTheInventory)
 
 	ASSERT_TRUE(BagService::ReleaseHold(player, kHeldBattle));
 	EXPECT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kGuidB)) << "释放之后照常能穿(替换下第一件)";
+}
+
+// 穿戴是 BagService 之外唯一把实例移出人物背包的入口(bag_service.h「腾位通知」,2026-11-12):装到空槽时人物背包空出一格,
+// 通知一次;替换时换下的旧装备放回人物背包,格数不变,不通知;被拒的穿戴两个包都没动,也不通知。
+TEST_F(PlayerEquipTest, EquipIntoAnEmptySlotSendsTheSpaceFreedNoticeAndAReplacementDoesNot)
+{
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 0}});
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidB, kWeaponL1), 1}});
+	ScopedSpaceFreedRecorder recorder;
+
+	EXPECT_EQ(kEquipItemNotFound, PlayerEquipSystem::Equip(player, kGuidC)) << "不在人物背包里的那件";
+	EXPECT_TRUE(ScopedSpaceFreedRecorder::Notified().empty());
+
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kGuidA)) << "武器槽空着";
+	EXPECT_EQ((std::vector<entt::entity>{player}), ScopedSpaceFreedRecorder::Notified());
+
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kGuidB)) << "替换下第一件";
+	EXPECT_EQ((std::vector<entt::entity>{player}), ScopedSpaceFreedRecorder::Notified()) << "替换不腾位,不再通知";
+	EXPECT_EQ(1u, Inventory().OccupiedGridCount()) << "换下的那件回了人物背包";
 }
 
 TEST_F(PlayerEquipTest, WriteEntriesRejectInvalidEntitiesAndPlayersWithoutBags)

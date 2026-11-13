@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"maps"
 	"slices"
 	"sync"
@@ -23,8 +24,117 @@ type sqlResidualSteps struct {
 
 const residualRoleColumns = "player_id," + ownershipColumns + ",initial_player_commit"
 
+// scanRoles 连墓碑一起读:墓碑里留着原名,删角释放没做完的名字按它查(judgeRemoved)。
 func (st *sqlResidualSteps) scanRoles(ctx context.Context, slot int, after uint64, limit int) ([]residualRole, error) {
-	return st.readRoles(ctx, slot, "SELECT "+residualRoleColumns+" FROM account_role WHERE player_id>? AND account<>'' ORDER BY player_id LIMIT ?", after, limit)
+	return st.readRoles(ctx, slot, "SELECT "+residualRoleColumns+" FROM account_role WHERE player_id>? ORDER BY player_id LIMIT ?", after, limit)
+}
+
+// scanNames 按主键 name_norm 翻页读名字行,只读核孤儿名字要的四列。按主键翻页每页读的行数有上限,筛预留态、判龄在编排里做:
+// 名字表上刻意没有二级索引(Reserve 的锁序分析建在「名字是唯一的聚簇主键」上,player_name_store_contract_test 钉住),
+// 带着状态条件翻页会一页扫穿整张表。
+func (st *sqlResidualSteps) scanNames(ctx context.Context, slot int, after string, limit int) ([]residualNameEntry, error) {
+	rows, err := st.names.pools.pools[slot].QueryContext(ctx,
+		"SELECT name_norm,player_id,created_ms,bound_ms FROM player_name WHERE name_norm>? ORDER BY name_norm LIMIT ?", after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []residualNameEntry
+	for rows.Next() {
+		var e residualNameEntry
+		if err := rows.Scan(&e.Norm, &e.Holder, &e.CreatedMs, &e.BoundMs); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// orphanEvidence 见 residualSteps。读路由行(玩家片)、存档库这名玩家的行头、这名角色在各账号片上的 ref,都是一致读、不取锁;
+// 口径同后台判陈旧的 committedEvidence(名字已绑定那一条不用看:孤儿名字本来就是预留态)。
+func (st *sqlResidualSteps) orphanEvidence(ctx context.Context, player uint64) (string, error) {
+	routes, err := loadRoutes(ctx, st.shards.forPlayer(player), []uint64{player})
+	if err != nil {
+		return "", err
+	}
+	route, routed := routes[player]
+	if !routed || !route.HasPlacement() {
+		return "", nil
+	}
+	if !st.stores.Allowed(route.StorageID) {
+		return committedEvidenceStoreUnlisted, nil
+	}
+	db, _, err := st.stores.DB(ctx, route.StorageID)
+	if err != nil {
+		return "", err
+	}
+	played, err := storeShowsPlay(ctx, db, player)
+	if err != nil {
+		return "", err
+	}
+	if played {
+		return committedEvidenceStoreSaved, nil
+	}
+	refs, err := readRefsOfPlayer(ctx, st.shards, player)
+	if err != nil {
+		return "", err
+	}
+	if slices.ContainsFunc(refs, func(r playerRefState) bool { return r.State == refStateActive }) {
+		return committedEvidenceRefActive, nil
+	}
+	return "", nil
+}
+
+// sealOrphanRole 见 residualSteps。和服务的 SealUncommittedRole 同一个事务体(sealRoleTx),只在前面多锁一道本库闸门行:
+// 维护身份不过写者闸门,冻结要拿同一把锁,只能排在这笔写之后。插墓碑撞上并发的墓碑回滚重来一次。
+func (st *sqlResidualSteps) sealOrphanRole(ctx context.Context, player uint64) (RoleSeal, error) {
+	for attempt := 1; ; attempt++ {
+		var seal RoleSeal
+		err := shardTx(ctx, st.shards.forPlayer(player), func(tx *sql.Tx) error {
+			if err := requireGateOpenTx(ctx, tx); err != nil {
+				return err
+			}
+			var err error
+			seal, err = sealRoleTx(ctx, tx, player)
+			return err
+		})
+		if errors.Is(err, errRoleSealRaced) && attempt < roleSealAttempts {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		return seal, nil
+	}
+}
+
+// releaseReservedName 见 residualSteps。Release 不限登记时刻(minCreatedMs = 0),只删预留态;名字行、名字副本都是自动提交的单条语句,
+// 闸门行锁开在旁边的事务里,持到它们提交之后才放(withGatesHeld)。
+func (st *sqlResidualSteps) releaseReservedName(ctx context.Context, player uint64, norm string) (ReleaseOutcome, error) {
+	var outcome ReleaseOutcome
+	err := withGatesHeld(ctx, st.nameGates(player, norm), func() error {
+		var err error
+		outcome, err = st.names.Release(ctx, player, norm, 0)
+		return err
+	})
+	if err != nil {
+		return 0, err
+	}
+	return outcome, nil
+}
+
+// releaseRemovedName 见 residualSteps。写法同 releaseReservedName,用删角收尾那一步(不看状态、不看登记时刻)。
+func (st *sqlResidualSteps) releaseRemovedName(ctx context.Context, player uint64, norm string) (ReleaseOutcome, error) {
+	var outcome ReleaseOutcome
+	err := withGatesHeld(ctx, st.nameGates(player, norm), func() error {
+		var err error
+		outcome, err = st.names.ReleaseRemoved(ctx, player, norm)
+		return err
+	})
+	if err != nil {
+		return 0, err
+	}
+	return outcome, nil
 }
 
 func (st *sqlResidualSteps) loadRole(ctx context.Context, player uint64) (*residualRole, error) {
@@ -317,7 +427,7 @@ func (st *sqlResidualSteps) restoreRef(ctx context.Context, account string, play
 		default:
 			out = refRestored
 		}
-		_, err = tx.ExecContext(ctx, activateRefSQL, []byte(account), player, refStateActive, newRefNonce(), uint64(0), uint64(0), uint64(0), uint64(0))
+		_, err = tx.ExecContext(ctx, activateRefSQL, activateRefArgs(account, player, 0)...)
 		return err
 	})
 	if err != nil {

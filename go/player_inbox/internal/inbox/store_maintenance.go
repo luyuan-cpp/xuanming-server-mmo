@@ -215,23 +215,50 @@ func (s *Store) RecentlyFinalized(ctx context.Context, shard uint32, sinceMs uin
 	return out, rows.Err()
 }
 
-// playerItemsLimit 是 ReconcilePlayer 单个玩家读出的行数上限:单条流在保留期内不超过数百行(设计 §4.2 量级假设)。
-const playerItemsLimit = 5000
+// playerItemsPageSize 是 ReconcilePlayer 读一名玩家条目行时一页的行数。翻页读完这名玩家的全部行,不设总量上限:
+// 条目行永久保留(设计 §9.1),老玩家的战斗结算行一直增长,设了上限就只能做部分核对。每页是一段主键范围扫描,
+// 内存只占一页,总耗时随这名玩家的行数线性增长;读不完(超时、库错误)回错误,不回半份。
+// 以前一次至多读 5000 行,超出时只打 ERROR、照样回结果,运维看到的「无差异」可能只是后面的行没读到(数据覆写审计 r2,2026-11-12 改)。
+const playerItemsPageSize = 1000
 
-// playerItems 读一名玩家(可选一个域)的全部条目行,按 (domain, seq) 升序;超过上限时 truncated=true。
-func (s *Store) playerItems(ctx context.Context, playerID uint64, domain inboxpb.PlayerInboxDomain) (rows []*inboxpb.PlayerInboxItemRow, truncated bool, err error) {
-	query := "SELECT " + itemColumns + " FROM " + itemTable + " WHERE `shard` = ? AND `player_id` = ?"
-	args := []any{RowShard(playerID), playerID}
-	if domain != inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_UNSPECIFIED {
-		query += " AND `domain` = ?"
-		args = append(args, uint32(domain))
+// forEachPlayerItemsPage 按 (domain, seq) 升序键集翻页读一名玩家(可选一个域)的全部条目行,每读到一页交给 visit。
+// 翻页条件落在主键 (shard, player_id, domain, seq) 上,每页是一段主键范围扫描,不随翻到第几页变慢。
+// 读失败或 visit 返回错误时停下并返回错误:对账结果要么完整,要么是错误,不回半份。
+// 各页是各自的读快照:翻页期间新入箱的行,排在游标之后的会读到;已读过的行之后再变,不回头重读。
+func (s *Store) forEachPlayerItemsPage(ctx context.Context, playerID uint64, domain inboxpb.PlayerInboxDomain, pageSize int,
+	visit func(rows []*inboxpb.PlayerInboxItemRow) error) error {
+	if pageSize <= 0 {
+		return fmt.Errorf("inbox: player items page size must be positive, got %d", pageSize)
 	}
-	query += " ORDER BY `domain` ASC, `seq` ASC LIMIT ?"
-	args = append(args, playerItemsLimit+1)
-	rows, err = queryItems(ctx, s.db, query, args...)
-	if err != nil {
-		return nil, false, fmt.Errorf("inbox: read player items player=%d: %w", playerID, err)
+	var afterDomain uint32
+	var afterSeq uint64
+	first := true
+	for {
+		query := "SELECT " + itemColumns + " FROM " + itemTable + " WHERE `shard` = ? AND `player_id` = ?"
+		args := []any{RowShard(playerID), playerID}
+		if domain != inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_UNSPECIFIED {
+			query += " AND `domain` = ?"
+			args = append(args, uint32(domain))
+		}
+		if !first {
+			query += " AND (`domain` > ? OR (`domain` = ? AND `seq` > ?))"
+			args = append(args, afterDomain, afterDomain, afterSeq)
+		}
+		query += " ORDER BY `domain` ASC, `seq` ASC LIMIT ?"
+		args = append(args, pageSize)
+		rows, err := queryItems(ctx, s.db, query, args...)
+		if err != nil {
+			return fmt.Errorf("inbox: read player items player=%d after domain=%d seq=%d: %w", playerID, afterDomain, afterSeq, err)
+		}
+		if len(rows) > 0 {
+			if err := visit(rows); err != nil {
+				return err
+			}
+			last := rows[len(rows)-1]
+			afterDomain, afterSeq, first = last.GetDomain(), last.GetSeq(), false
+		}
+		if len(rows) < pageSize {
+			return nil
+		}
 	}
-	rows, truncated = splitPage(rows, playerItemsLimit)
-	return rows, truncated, nil
 }

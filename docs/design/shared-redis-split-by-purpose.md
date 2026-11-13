@@ -1011,7 +1011,7 @@ type Family struct {
 | redis-mapping(第 1 批) | go/db 每个任务 2 次 MGET;每次进场 1 次 EVAL;每次角色列表 1 次 MGET;每次建角 2–3 条(db_first 模式再加 WAITAOF);心跳 | ≈ 2W + E + 列表数/s + 3C |
 | redis-mapping(第 2 批后) | 再加每个写任务约 7 条控制面命令:锁 SETNX、游标 GET / SET、epoch GET / EVAL、解锁 EVAL | ≈ 9W + E + … |
 | redis-cache | 每个任务 1 次大 value 的 SET;每个读任务 LPUSH / EXPIRE / PUBLISH 各一次;PUBLISH 扇出到 L 个 login | ≈ W + 3R,另有推送 R × L 条 |
-| redis(核心) | C++ 存盘每玩家每 300s 一次 EVALSHA;进场链路(锁、父键、会话、位置 / epoch 的 Lua、场景计数);离场;战斗与组队;会话续租 | 待压测 |
+| redis(核心) | C++ 存盘每玩家每 300s 一次 EVALSHA;进场链路(锁、父键、会话、位置 / epoch 的 Lua、场景计数);离场;战斗与组队;会话续租 | 不再按本行估(2026-11-12 注:存盘与父键已随玩家存档移出 Redis,见文首;剩下的协调负载按现行键族重算) |
 
 > **(2026-10-18 更正,上表 redis-queue 一行;原文保留)** 排队 Lookup 改为 3 次往返(其中 1 次是脚本),放行改为每人 1 次 EVALSHA,不再 ZPOPMIN;稳态续期写约 100 PEXPIRE/s(4.5 万人在排、2s 轮询、`QueueEntryTTL`=1h 的估算,未实测)。见 `login-queue-2026-05.md` §5 的 2026-10-18 更正。
 
@@ -1030,7 +1030,7 @@ type Family struct {
 |---|---|---|---|
 | redis-queue | 每个排队玩家:ZSET 成员 + meta HASH + token 键,约 0.5–1KB;每个 IP 桶约 0.2KB | 与在途排队人数、活跃 IP 数成正比,带 TTL | 10 万人排队约 100MB |
 | redis-mapping | 每个玩家的 `player:zone`(加上 placement、maprev)约 0.1–0.3KB;第 2 批起,每个存过盘的玩家再加「表数(2)× 2 个游标键」约 0.5KB | **随累计注册 / 存过盘的玩家数增长,无 TTL,不会回落** | 1000 万玩家约 3–8GB |
-| redis-cache | 最近一个 TTL 内(K8s 为 1h)写过的玩家 × 子表大小 | 与近 1h 活跃玩家数成正比 | 待压测 |
+| redis-cache | 最近一个 TTL 内(K8s 为 1h)写过的玩家 × 子表大小 | 与近 1h 活跃玩家数成正比 | 不再估(2026-11-12 注:子表缓存随 go/db 消费链删除,`k8s_deploy.ps1` 里已没有 redis-cache) |
 | redis(核心) | `PlayerAllData` 父键(2026-06 实测每玩家约 21KB / 17 个键,`docs/notes/redis-oom-data-safety-qa-record.md:21`)+ `owner_epoch`(永不删)+ 账号 + `dirty_keys_set` 成员(2026-10-16:写入已在代码中删除(已落码,未编译、未测试;全部 scene 换成新镜像前生产仍在写),存量待按 release-checklist §6.1 清理) | **随累计进过场景的玩家数增长**(§2.5 第 1、2 条) | 累计 100 万玩家约 20GB |
 
 **核心内存没有上界,这是比拆分更急的容量问题**:
@@ -1065,7 +1065,7 @@ type Family struct {
 
 - **取值**:`maxmemory` = 压测峰值 × 1.5;`limits.memory` = 2 × maxmemory。release 档不给值就拒绝部署;dev 档用很小的缺省值。D1 的 noeviction 自检需要 `CONFIG GET` 可用,所以不能禁用这个命令。
   - `redis-queue` 的峰值要按最坏情况算 `rl:ip:*`:每个出现过的 IP 一个桶,TTL 是重填时间加 1h(`RateLimitConfig.java:71-91`)。trusted-proxies 配错时 IP 可被 X-Forwarded-For 伪造(`ClientIpResolver.java:20`),桶数没有上界。它满了之后,排队开着时新登录全部失败(§7),所以这个实例的内存告警要比别的实例更早。
-- **持久化**:全部用 AOF everysec;核心维持现状(`redis.yaml:95-97`)。`redis-mapping` 上的 W1 用 `WAITAOF 1 0`(D1)。要不要改成 `appendfsync always`,按 D1 §11.1 第 5 条,压测后再定。
+- **持久化**:全部用 AOF everysec;核心维持现状(`redis.yaml:95-97`)。`redis-mapping` 上的 W1 用 `WAITAOF 1 0`(D1)。要不要改成 `appendfsync always`(原按 D1 §11.1 第 5 条等压测):不再定(2026-11-12 注:映射 2026-10-30 起直读 TiDB,`redis-mapping` 已从部署里删除;其余实例维持 everysec,需要落盘确认的写各自用 WAITAOF,如铸造 owner_epoch)。
 
 ### 6.4 监控
 

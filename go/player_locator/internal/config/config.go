@@ -104,14 +104,20 @@ func (c LeaseConf) ScanRound() time.Duration {
 }
 
 // ReconcileConf 各字段零值取默认值。默认值都是推断值([I]),需要 V0 实测后校准。
-// 限速与预算都按副本计:死 gate 清扫分给了各副本,全服的量 = 持段副本数 × 这些值。
+// 两种口径,别混:
+//   - ScanPagesPerSecond 是**全服预算**(2026-11-12 起):补建 / 审计按段分给各副本时,每个副本只拿「持有的段数 / 段总数」那一份,
+//     各副本加起来就是它,与副本数无关。它保护的是玩家域 Redis,加 player_locator 副本不该加重 Redis 的负担。
+//   - MaxTransitionsPerSecond、DeadGateMembersPerRound 仍按副本计:死 gate 清扫分给了各副本,全服的量 = 持段副本数 × 这些值。
+//     它们管的是一台 gate 死后把它的会话清掉有多快,量由死掉的 gate 上的人数封顶,副本越多清得越快正是想要的。
 type ReconcileConf struct {
 	// AuditIntervalSeconds 是索引就绪后定期审计(全键扫描补漏成员 + 清各 gate 索引里的脏成员)的周期。
 	// 0 = 86400;-1 = 就绪后不再定期审计(未就绪时的补建不受影响)。审计时机持久化在 Redis,换主不重置。
 	AuditIntervalSeconds int64 `json:"AuditIntervalSeconds,optional"`
 	// ScanCount 是补建 / 审计扫描 SCAN 与 SSCAN 每页的 COUNT 提示。0 = 1000。
 	ScanCount int64 `json:"ScanCount,optional"`
-	// ScanPagesPerSecond 是补建 / 审计扫描每秒最多发出的页数:一页是一次 SCAN 的结果、ScanCount 把索引键,或一把大索引键的续页。
+	// ScanPagesPerSecond 是补建 / 审计扫描**全服**每秒最多发出的页数:一页是一次 SCAN 的结果、ScanCount 把索引键,或一把大索引键的续页。
+	// leader 自己扫(单实例玩家域)时它就是 leader 的限速;按段分给各副本时每个副本拿自己的份额(logic.scanBudgetShare)。
+	// 一遍的耗时 ≈ 总页数 / 本值,不随副本数变;要更快就随 Redis 的余量调大它。
 	// 0 = 200;负数 = 不限速(只用于本机与单测,生产不要用:会拉高 Redis 延迟)。
 	ScanPagesPerSecond int `json:"ScanPagesPerSecond,optional"`
 	// MaxTransitionsPerSecond 是对账把死 gate 上的 ONLINE 会话转成 DISCONNECTING 的速率上限。

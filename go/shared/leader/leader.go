@@ -21,6 +21,10 @@
 //
 // 锁的属主凭据是每次竞选新生成的随机值,续期与释放都带属主校验,
 // 不存在"续了别人的锁"或"删了别人的锁"。
+//
+// 这把锁只保证「最终只有一个领导者」,不保证任一时刻只有一个:自我降级靠本地时钟,进程卡顿、
+// 或 Redis 主从切换丢了锁时,旧领导者在下一次心跳之前仍以为自己在任。所以领导者独占的写不能只凭
+// IsLeader:要么本身幂等、要么带按对象的条件,要么带上 Token 在写脚本里核对锁键(见 Elector.Token)。
 package leader
 
 import (
@@ -110,6 +114,8 @@ type Elector struct {
 	stopped    atomic.Bool
 	mu         sync.Mutex
 	leadCancel context.CancelFunc
+	// token 是本任期写进锁键的值,不在任时为空串(见 Token)。由 mu 保护。
+	token string
 }
 
 // New 构造一个选举器。key 是全体候选副本共用的锁 key。
@@ -135,6 +141,24 @@ func New(store Store, key string, opts Options) *Elector {
 // 适合作为业务侧"变更动作闸门"的判定函数。
 func (e *Elector) IsLeader() bool {
 	return e.isLeader.Load()
+}
+
+// Token 返回本任期写进锁键的值,不在任时返回空串。跨 goroutine 安全。
+//
+// 它给领导者独占的写做围栏:写脚本在同一段里先核对锁键的值仍等于它,再写数据(锁键要和数据键同槽)。
+// IsLeader 是本进程对自己的判断,会过时 —— 进程卡顿到锁过期,或 Redis 主从切换丢了锁之后,在下一次心跳之前它仍为真。
+// 带着 Token 的写这时会被拒:锁键里已经是别人的值,或者空了。由存锁的那台 Redis 在写的那一刻判定谁是属主,
+// 不依赖任何一方的时钟。只凭 IsLeader 做的写没有这层保证,要么本身幂等,要么自带按对象的条件。
+func (e *Elector) Token() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.token
+}
+
+func (e *Elector) setToken(token string) {
+	e.mu.Lock()
+	e.token = token
+	e.mu.Unlock()
 }
 
 // Run 阻塞运行候选者循环,直到 ctx 结束;通常 `go e.Run(...)`。
@@ -189,6 +213,8 @@ func (e *Elector) Run(ctx context.Context, whileLeader func(ctx context.Context)
 		}
 
 		logx.Infof("[leader] elected key=%s id=%s ttl=%s", e.key, e.id, e.ttl)
+		// 先有围栏值、后有领导权:IsLeader 为真时 Token 一定已是本任期的值。
+		e.setToken(val)
 		e.isLeader.Store(true)
 		e.notify(true)
 
@@ -205,6 +231,7 @@ func (e *Elector) Run(ctx context.Context, whileLeader func(ctx context.Context)
 
 		stopHB()
 		e.isLeader.Store(false)
+		e.setToken("")
 		e.notify(false)
 
 		// 尽力释放:丢锁场景下 key 已易主,属主校验会拒绝删除,无害。

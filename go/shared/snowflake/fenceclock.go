@@ -35,8 +35,8 @@ var ErrWatermarkStale = errors.New(
 // VM 挂起后两条都不触发(第一轮数据审计 §4 第 20 条)。所以每个读入墙钟的入口(Ack /
 // SeedAck / Stale)都先 Round(0)(time 包给出的标准去单调写法),不依赖注入的时钟自己去掉。
 //
-// 一个 FenceClock 由 snowflakealloc.Handle 持有并 Ack,同时被 shared/snowflake.Node
-// 与 login 的 PlayerIDGen(bwmarrin 包装)共用,两种发号器执行同一条规则。
+// 一个 FenceClock 由 snowflakealloc.Handle 持有并 Ack;Handle.NewNode 交出的 shared/snowflake.Node
+// 挂着它(SetFenceClock),每次 Generate 先问它。
 //
 // 从未 Ack 过的 FenceClock 视为**已过期**(fail-closed):分配器在交出发号器前必须
 // 同步写一次水位;本地缓存启动路径用 SeedAck 把上次成功时刻灌进来。

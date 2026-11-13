@@ -9,7 +9,7 @@
 
 1. **gate → 路由服:按 zone 取确定性子集。** zone z 的路由服集合 = 对 `(z, 路由服 node_uuid)` 做 HRW(rendezvous)打分取前 k 台,k 缺省 3,在同一发布轨道内算。gate 只连、只挑这 k 台。gate 到路由服的连接从 G_全服 × R 降到 G_全服 × k。路由服增减时,只有前 k 名变了的 zone 换路由服,其余 zone 不动。
 2. **路由服 → 目标:zone 跟着子集走,全服池再取一次子集。** 稳态下一台路由服只收到分给它的那些 zone 的请求,zone-scoped 目标(login、scene_manager)只会拨这些 zone 的实例。全服池目标(match、chat、friend、guild 等)用确定性 aperture:同轨道路由服按 node_uuid 排名,在目标环上均匀各占一段,每台路由服约连 k_t 台(缺省 4),每台目标收到的请求一样多、一台不漏。连接按空闲回收,子集变了之后旧连接自然消失。
-3. **gate ↔ scene 的 zone 内全连接保持不变。** 它的上界是 G_z × S_z,随单 zone 规模增长,不随全服 zone 数增长;单 zone 规模由开服容量限定。重新评估的触发条件:单 zone 的 G_z × S_z 超过 10 000 条连接(经验值,待压测),或者做万人同屏的时候(那时整体重做,现在不预留)。
+3. **gate ↔ scene 的 zone 内全连接保持不变。** 它的上界是 G_z × S_z,随单 zone 规模增长,不随全服 zone 数增长;单 zone 规模由开服容量限定。重新评估的触发条件:单 zone 的 G_z × S_z 超过 10 000 条连接(已定(2026-11-12),压测出基线后可调),或者做万人同屏的时候(那时整体重做,现在不预留)。依据:按容量模型一台 gate 约 4500 人、区容量缺省 45000 人(`zone_config.capacity`),一个 zone 约 10 台 gate;到 1 万条要每台 gate 连约 1000 个 scene 进程,比开服规模高一个数量级以上,到这里说明单 zone 已大到该整体重做。
 4. **每类 C++ 节点只发现自己用到的类型。** 每类节点显式声明自己的发现集合,与 `CanConnectNodeTypeList` 并列。共享的前缀列表(本机 `bin/etc/base_deploy_config.yaml` 13 个,K8s 模板 11 个)只回答「部署里有哪些前缀」,不再决定每个节点 watch 什么。battle 的集合是 {Match},自身类型只 watch 自己那一条键,不再 watch 全部 battle。
 5. **控制面命令 topic 不换代、P 不改(2026-11-11 定案,缺口清单第 30 条残余)。** 每个节点只 assign `node_id % P` 那一个分区,每个节点每秒要解码的条数 ≈ 该类型命令总速率 ÷ P,与节点数无关;读放大比值(同分区节点数)随节点数涨,但解码量不涨。按最大目标口径(2000 万 PCU,登录速率 ≈ PCU/1800 ≈ 1.1 万/s,每次登录给 gate、scene 各发几条)每个 topic 约 3~5 万条/s,P = 256 时每个节点每秒约 120~200 条小消息,远低于一个节点的解码能力。所以不预先换代;读放大计数与告警(§3.5)只用来抓异常(某个分区被打偏、某类命令暴涨),真响了才按既有规则换代号、换更大的 P,绝不原地扩分区。
 6. **场景亲和不做(2026-11-11 定案,缺口清单第 30 条残余)。** 理由见 §3.6 末尾:每次广播至多发本 zone 的 gate 数(G_z)份、每份只带本 gate 的收件人,开销的上界由单 zone 规模限定,不随全服规模增长;亲和要拿 gate 的负载均衡与故障隔离去换,而且玩家几分钟就换一次场景,登录时定的亲和很快失效。等做万人同屏时整体重做,现在不预留。
@@ -49,7 +49,7 @@
 
 - 子集:key 是本 gate 的 zone 号(十进制串),成员是发现快照里的路由服,按发布轨道分组,各组各取 HRW 前 k 台。stable gate 只用 stable 组的前 k;canary gate 用 canary 组的前 k 加 stable 组的前 k,因为 `release_track::Select` 在 canary 组没有可用实例时退回 stable,退回的那几台也要连着。轨道认不出的路由服不进任何组(选点本来就跳过它们)。一个 zone 只有一条轨道,同 zone 的 gate 算出同一个子集。
 - k 由环境变量 `GATE_ROUTER_SUBSET_SIZE` 给,缺省 3,合法范围 2~64,非法拒启。下限 2:一台路由服重启时,本 zone 至少还有一台可用。用环境变量、不进 proto 配置:它和路由模式开关 `GATE_CLIENT_RPC_ROUTER` 是同一类部署参数,缺省值适用于全部部署,不值得为它重新生成协议。
-- 容量口径:一个 zone 的客户端请求只落在 k 台路由服上。k 要不小于「zone 峰值请求率 ÷ 单台路由服能力」再加一台冗余,缺省 3 待压测校准。只有一两个 zone 的部署里,多出来的路由服分不到流量,要扩吞吐就调大 k。
+- 容量口径:一个 zone 的客户端请求只落在 k 台路由服上。k 要不小于「zone 峰值请求率 ÷ 单台路由服能力」再加一台冗余,缺省 3(`router_subset_policy.h` 的 `kDefaultSubsetSize`),已定(2026-11-12),压测出基线后可调。依据:3 = 下限 2 再加一台,滚动重启一台的同时再坏一台,本 zone 仍有一台在服务(维护加故障各留一台的常用冗余口径);单 zone 峰值超过两台路由服的能力时按上式调大。只有一两个 zone 的部署里,多出来的路由服分不到流量,要扩吞吐就调大 k。
 - 引擎加三处接缝(`Node`),都只在 loop 线程用:
   - `SetConnectionAdmission(type, fn)`:白名单类型在建连前再过一道准入。`ServiceDiscoveryManager::AddServiceNode` 与 `NodeConnector::ConnectAllNodes` 都改成问 `Node::AdmitsConnection`(在白名单里且准入通过)。没装准入的类型行为不变。
   - `SetDiscoveryObserver(type, fn)`:发现快照里这一类的成员变了(加入、更新、摘除)之后调用,调用时快照已是新状态。发现快照每类型带一个代数(generation),每变一次加一。
@@ -103,7 +103,8 @@
 - 计数 `node_command_consumed_total{node_type, topic, target}`(`cpp/libs/engine/core/node/system/node/node_command_consume_stats.h`)。计在 `RegisterKafkaCommandHandler` 的回调里(`node_kafka_command_handler.h`):过了目标过滤、已派发的记 own;目标过滤判定不是本节点的记 foreign,包括同分区的别的节点和同号前任实例的残留命令,维护模式的精确目标校验同样算。解码失败的不计。
 - 比原设计多一个 `topic` 标签(topic 基名,不带代号):同一个节点还会消费广播 topic(如 chat-world-bcast,`assignAllPartitions`),它们只有 own,混在一起会把比值拉低。标签取值都是低基数。
 - 计数表只在注册命令消费时追加(启动期),第一次注册时把采集回调登记进 `/metrics`,不改 node.h/.cpp。
-- 告警 `NodeCommandTopicReadAmplificationHigh`(`deploy/k8s/node-command-topic-alerts.yaml`,经验值,待压测):单节点(按 namespace、pod、node_type、topic 聚合)foreign 每秒超过 50 条,且 foreign 超过 own 的 50 倍,持续 10 分钟,severity warning。比值用乘法写,own 为 0 时不除零。契约测试 `tools/scripts/tests/node_command_topic_alerts_contract.tests.ps1` 核对指标名、label 名与取值都是 C++ 写出的。
+- 「这条命令是不是发给本节点的」收成一个纯函数 `detail::IsCommandForThisNode`(`node_kafka_command_filter.h`,2026-11-11):派发与计数用同一个判定,不会出现「派发了却记成 foreign」。维护受控启动要求 node_id 与实例号都填且都等于自己,平常的启动沿用 `ValidateCommandTarget`。用例在 `cpp/tests/kafka_command_test/kafka_command_test.cpp` 的 `IsCommandForThisNode.*`。
+- 告警 `NodeCommandTopicReadAmplificationHigh`(`deploy/k8s/node-command-topic-alerts.yaml`;阈值已定(2026-11-12),压测出基线后可调):单节点(按 namespace、pod、node_type、topic 聚合)foreign 每秒超过 50 条,且 foreign 超过 own 的 50 倍,持续 10 分钟,severity warning。依据:流量均匀时 foreign 与 own 之比约等于同分区上别的节点数,50 倍就是一个分区上挤着约 50 个同类节点,读进来的命令几乎全被丢弃;每秒 50 条的绝对下限挡住空闲节点 own 接近 0 时比值虚高;10 分钟排除扩缩容、换代时的短时峰值。比值用乘法写,own 为 0 时不除零。契约测试 `tools/scripts/tests/node_command_topic_alerts_contract.tests.ps1` 核对指标名、label 名与取值都是 C++ 写出的。
 - 处理办法沿用 `node_command_topic.h` 的契约:换代号、换更大的 P(2 的幂),生产端与消费端按同一配置一起切换,不在同名 topic 上扩分区。
 - **2026-11-11 定案:不预先换代**(§1 第 5 条)。每个节点的解码量 ≈ 命令总速率 ÷ P,与节点数无关,P = 256 在最大目标口径下每个节点每秒也只有一两百条;告警是异常检测,不是扩容信号。告警的 50 条/s、50 倍两个阈值仍是经验值,压测里按 `node_command_consumed_total` 的实测分布复核。
 

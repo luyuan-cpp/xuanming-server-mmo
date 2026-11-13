@@ -44,11 +44,17 @@ func identMarshalLocation(t *testing.T, loc *scene_manager.PlayerLocation) strin
 }
 
 // identSeedLocation 直接写 location 原文,并把 owner_epoch 键设成 location 里记的 epoch(两者一致才是生产会写出的状态)。
+// epoch 非 0 时同时写已确认位点:生产里这个值在铸造当时确认过落盘、位点随即记下(owner_epoch.go「已确认位点」)。
+// 不写的话,不铸造的落点会在下发之前多走一次落盘确认,那是「铸造没走完」的状态,由 owner_epoch_mint_test.go 专门测。
 func identSeedLocation(t *testing.T, sc *svc.ServiceContext, playerID uint64, loc *scene_manager.PlayerLocation) string {
 	t.Helper()
 	raw := identMarshalLocation(t, loc)
+	epoch := strconv.FormatUint(loc.OwnerEpoch, 10)
 	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), raw))
-	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), strconv.FormatUint(loc.OwnerEpoch, 10)))
+	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), epoch))
+	if loc.OwnerEpoch != 0 {
+		require.NoError(t, sc.Redis.Set(ownerepoch.ConfirmedKey(playerID), epoch))
+	}
 	return raw
 }
 

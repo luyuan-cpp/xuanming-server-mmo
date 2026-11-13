@@ -154,7 +154,7 @@ last_success{index} 按「完成一拍」推进:预算截断、被跳过的单�
 - **断点续做**:换主后新 leader 发布时,种类与代次都没变就接着用原来那一遍,已做完的段不重做;代次变了(期间看到过旧写者)或种类变了,换新编号、清空进度。副本重启、段换了主人,新主人从这一段记下的 slot 接着做。
 - **列一个 slot 为什么用 GETKEYSINSLOT**:SCAN 只能逐节点扫整个键空间,没法按 slot 拆;GETKEYSINSLOT 是一条命令,拿到的是那一刻这个 slot 的全部键,没有游标,也就没有「游标跨了进程或拓扑」的问题。要核的只是执行它的节点那一刻确实持有这个 slot:前后各读一次这个节点的 myself 行和 `run_id`,不持有、有进行中的迁移、前后不一致都按 `ErrTopologyChanged` 处理,这个 slot 下一拍重试(并刷新客户端的拓扑缓存)。它没有游标,所以不截断:一个 slot 的键数加余量 64 超过 10 万就报错,这一段停在那个 slot,补建 / 审计的 last_success 告警会响。2000 万在线时一个 slot 只有几千个键。
 - **重叠无害**:两个副本短暂做同一个 slot,补成员、摘成员都走字节守卫脚本(I3),进度只有一个写得进。
-- **限速**:`ScanPagesPerSecond` 是每个副本自己的上限。一遍的总速度是「持有段的副本数 × 它」:2 个副本时比单 leader 快一倍,256 个副本时一遍约几分钟,玩家域各主节点上的压力随之变大,要按压测调这个值。
+- **限速**:`ScanPagesPerSecond` 是全服预算(2026-11-12 定,落码未编译)。每个副本做一段之前按当前持有的段数取自己的份额:预算 × 持有的段数 / 256(`scanBudgetShare`),各副本加起来就是它,与副本数无关。这个数保护的是玩家域 Redis:加 player_locator 副本只是把同一份预算分得更细,不加重 Redis 的负担;一遍的耗时 ≈ 总页数 / 预算,要更快就随 Redis 的余量调大这一个数。此前每个副本各拿一整份,总速度 = 持段副本数 × 它,副本数一变就得回头按压测去调。份额可以不到每秒一页,限速器按小数速率算间隔,不取整(取整成 0 在限速器里是不限速)。
 - **容错**:一个 slot 失败(单页重试用完、列键失败、拓扑变化)只停这一段,下一拍从这个 slot 重试,别的段照常;不再有「整遍作废」。卡死的段让这一遍一直做不完,leader 一直在等,由 last_success 的告警(§9)发现,日志点名段和 slot。
 - **滚动升级**:还没有这套代码的旧副本也持有清扫的段,但不做这一遍,它们的段要等它们退出、段换到新副本手里才往下做;升级期间这一遍会慢,不会出错。
 - **指标**:`gate_index_pass_segments_done`(leader 专属,当前这一遍做完了几段)、`reconcile_pass_slots_total{result}`(每个副本做了几个 slot,ok | redis_error)。
@@ -196,7 +196,7 @@ allocator 是 guild / scene_manager / match / client_rpc_router / data_service �
 | 分片 | — | 每个副本每 10s:2 个角色 ×(1 次心跳 + 256 GET + 持有段数次续约)。2Z = 890 个副本时全服约 4.6 万 GET/s,散在玩家域各主节点上 [I] |
 | 租约探测 | — | 全服 2 × 16384 / `ScanRoundSeconds` ≈ 2048 ZCOUNT/s,与副本数无关;租约到期后最迟晚一个 ScanRound(默认 16s)才被认领 [I] |
 | 一轮耗时 | 单副本 Z=1 时 22~108 分钟(交接 E2,[D]);多副本争用下更长,「连续两拍缺席」随之拖到小时级 | 一拍内完成;死 gate 处理受预算与限速约束 |
-| 补建 / 审计 | 无 | 单 leader 扫时:第 1 阶段 K/ScanCount ≈ 6.5e6 页,200 页/s 约 9 小时 [I];第 2 阶段逐把索引键 SSCAN + MGET,约 1.75e7 把键 × 2 个往返,约 10 小时 [I],一遍接近 19 小时。Cluster 下按段分给持段副本(§4.5):一遍的耗时约等于 19 小时 ÷ 持段副本数,256 个副本时几分钟 [I];玩家域的总压力按同一个倍数变大,`ScanPagesPerSecond` 要按压测调 |
+| 补建 / 审计 | 无 | 单 leader 扫时:第 1 阶段 K/ScanCount ≈ 6.5e6 页,200 页/s 约 9 小时 [I];第 2 阶段逐把索引键 SSCAN + MGET,约 1.75e7 把键 × 2 个往返,约 10 小时 [I],一遍接近 19 小时。Cluster 下按段分给持段副本(§4.5):`ScanPagesPerSecond` 是全服预算,各副本按持有的段数分摊,所以一遍的耗时与玩家域的总压力都和单 leader 扫时相同、不随副本数变;分摊消掉的是「只有 leader 一个副本在扫」这个单点,要更快就调大预算(一遍 ≈ 总页数 / 预算)[I] |
 | 大面积 gate 故障 | — | 丢一个可用区约 6.7e6 会话:每个持段副本每拍只用半拍去转换,每个会话约 4 个往返,一拍约 7500 个,持续约 125/s(`MaxTransitionsPerSecond` / 2 是另一道上限)。256 个持段副本合计约 3.2 万/s,约 3.5 分钟转换完 [I];副本少时按副本数线性变慢,这么大的规模不会只有几个副本。下游压力由 LeaseMonitor 的 BatchSize 限住 |
 | 索引常驻内存 | 0 | 约 1.75e7 把索引键(4444 个 gate × 每个 gate 约 3900 个 slot)+ 同样多的登记集成员,约 3~4 GB,散在玩家域各主节点上 [I],需实测 MEMORY USAGE。比全局索引(1~1.6 GB)多,这是按 slot 分桶的代价:一把键只有一两个成员,键本身的开销占大头 |
 
@@ -282,7 +282,7 @@ go-zero 在 Prometheus agent 启动(`zrpc.MustNewServer`)之前的指标写入�
 - `PlayerRedis`(`playerredis.Config`:`Addrs`、`Cluster`、`Password` / `PasswordEnv`、`PoolSizePerNode` 等):玩家域句柄。整段不写时指向 `RedisClient` 这个单实例,沿用它的口令、连接池与 go-redis 缺省超时,开发环境不用改;`RedisClient.DB` 不是 0 时必须显式写(玩家域只用 DB 0)。
 - `RedisClient`:控制域,照旧。
 - `Lease.ScanRoundSeconds`:LeaseMonitor 探测完持有的全部 slot 用多久,默认 16。
-- `Lease.ReconcileIntervalSeconds`(默认 60,-1 关闭)与 `Lease.Reconcile.{AuditIntervalSeconds, ScanCount, ScanPagesPerSecond, MaxTransitionsPerSecond, DeadGateMembersPerRound}`。`MaxTransitionsPerSecond`、`DeadGateMembersPerRound` 按副本计,`MaxTransitionsPerSecond` 是瞬时上限,大面积故障时每个副本的持续速率约为它的一半(§4.2、§7)。
+- `Lease.ReconcileIntervalSeconds`(默认 60,-1 关闭)与 `Lease.Reconcile.{AuditIntervalSeconds, ScanCount, ScanPagesPerSecond, MaxTransitionsPerSecond, DeadGateMembersPerRound}`。`ScanPagesPerSecond` 是全服预算,按各副本持有的段数分摊(§4.5);`MaxTransitionsPerSecond`、`DeadGateMembersPerRound` 按副本计,`MaxTransitionsPerSecond` 是瞬时上限,大面积故障时每个副本的持续速率约为它的一半(§4.2、§7)。
 
 `ScanRoundSeconds` 与 `Reconcile` 各项的**事实源是代码默认值**(`config.ReconcileConf.Normalized`、`config.LeaseConf.ScanRound`):dev yaml 只写注释,K8s ConfigMap 不写,`TestEtcYamlLeavesReconcileToCodeDefaults` 守住。**这些项必须全服一致**,否则行为取决于哪个 Pod 当选、哪个副本持段;要改就改代码默认值。
 

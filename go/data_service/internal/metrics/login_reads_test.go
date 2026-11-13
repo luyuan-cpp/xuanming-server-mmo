@@ -118,6 +118,8 @@ func TestLoginReadNamesMatchStressSummarize(t *testing.T) {
 	}{
 		{"homeZoneReadResults", homeZoneReadResults},
 		{"accountDirectoryRpcs", accountDirectoryRPCs},
+		// A1 表(审计管道,2026-11-12)的 kafka_consumer_messages_total{outcome},同 kafkaConsumerOutcomes 同序。
+		{"dsKafkaOutcomes", kafkaConsumerOutcomes},
 	} {
 		block := regexp.MustCompile(`(?s)\$` + tc.variable + `\s*=\s*@\(([^)]*)\)`).FindSubmatch(raw)
 		if block == nil {

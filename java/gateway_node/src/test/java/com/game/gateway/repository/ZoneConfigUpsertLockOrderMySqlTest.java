@@ -57,8 +57,14 @@ class ZoneConfigUpsertLockOrderMySqlTest {
     private static final String LEGACY_MERGE_INSERT_SQL = "INSERT INTO zone_config (zone_id, name, manual_status,"
             + " capacity, maintenance_msg, open_time, recommended, sort_order, created_at, updated_at)"
             + " VALUES (?, ?, 0, 5000, '', NULL, 0, 0, ?, ?)";
-    /** create 在同一事务里的回读,与 findById 同形。 */
-    private static final String READ_BACK_SQL = "SELECT name FROM zone_config WHERE zone_id = ?";
+    /**
+     * create 在同一事务里的回读:生产的 {@link ZoneConfigRepository#FIND_BY_ID_FOR_UPDATE_SQL}(2026-11-12 起是加锁读,
+     * 同一个常量,命名参数换成占位符)。锁已由 upsert 取得,回读不该多出任何等待:upsert 用例因此也证明换成加锁读之后
+     * ODKU 仍然只排队。
+     */
+    private static final String READ_BACK_SQL = ZoneConfigRepository.FIND_BY_ID_FOR_UPDATE_SQL.replace(":zoneId", "?");
+    /** 旧 create(save 之后 findById)的回读:普通一致性读,只给对照组用,保持旧代码的形状。 */
+    private static final String LEGACY_READ_BACK_SQL = "SELECT name FROM zone_config WHERE zone_id = ?";
 
     /** null = 真库可用;否则是跳过 / 判红的原因。 */
     private static String unusableReason;
@@ -85,7 +91,7 @@ class ZoneConfigUpsertLockOrderMySqlTest {
     void upsertBehindPendingDeleteOnlyQueues() throws Exception {
         List<Optional<SQLException>> outcomes = runScenario(ZONE_UPSERT, (c, name) -> {
             UPSERT.executeUpdate(c, upsertParams(ZONE_UPSERT, name));
-            readBack(c, ZONE_UPSERT);
+            readBack(c, READ_BACK_SQL, ZONE_UPSERT);
         });
 
         for (int i = 0; i < outcomes.size(); i++) {
@@ -116,7 +122,7 @@ class ZoneConfigUpsertLockOrderMySqlTest {
                 ps.setObject(4, now);
                 ps.executeUpdate();
             }
-            readBack(c, ZONE_LEGACY);
+            readBack(c, LEGACY_READ_BACK_SQL, ZONE_LEGACY);
         });
 
         long deadlocks = outcomes.stream().filter(o -> o.isPresent() && isDeadlock(o.get())).count();
@@ -151,6 +157,7 @@ class ZoneConfigUpsertLockOrderMySqlTest {
         p.put("openTime", null);
         p.put("recommended", false);
         p.put("sortOrder", 0);
+        p.put("version", 1L);
         p.put("now", nowSeconds());
         return p;
     }
@@ -160,8 +167,8 @@ class ZoneConfigUpsertLockOrderMySqlTest {
         return LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
     }
 
-    private static void readBack(Connection c, long zoneId) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(READ_BACK_SQL)) {
+    private static void readBack(Connection c, String sql, long zoneId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setLong(1, zoneId);
             ps.executeQuery().close();
         }

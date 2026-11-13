@@ -57,7 +57,8 @@
   留空 host 不生成、也不删除已有 Ingress。参数细节见 `deploy/k8s/README.md` Optional Flags「集群外客户端入口」。
 - **限流按发布档位开启,ConfigMap 带 Redis 口令(G4b,2026-10-14;已落码,未编译、未测试,待 Codex 验证)**:`k8s_deploy.ps1 -GatewayRateLimit auto|on|off`
   (缺省 `auto` = staging / prod 开、dev 关)决定 gateway ConfigMap 是否在 `gate.rate-limit` 下写 `enabled: true` 与开服档阈值(zone 2000/s、突发 5000,IP 5/s、突发 20,
-  冷却 5000ms,**待压测确认**),与上一条的 `trusted-proxies` 共用一个 `rate-limit:` 键;`spring.data.redis.password` 在 `MMORPG_REDIS_PASSWORD` 非空时写入
+  冷却 5000ms,**已定(2026-11-12),压测出基线后可调**;依据见 `deploy/k8s/README.md`「削峰(G4b)」:zone 档取设计稿「Layer 1 配额参考」的开服档,
+  IP 档与冷却同 jar 内缺省,一次登录扣 2 个 IP 令牌),与上一条的 `trusted-proxies` 共用一个 `rate-limit:` 键;`spring.data.redis.password` 在 `MMORPG_REDIS_PASSWORD` 非空时写入
   (staging / prod 恒写,与开关无关:限流的 Lettuce 客户端只从这里取口令,不写就过不了 Redis 的 `--requirepass`)。2026-11-06 起写的是引用 `"${SHARED_REDIS_PASSWORD}"`,
   口令经 Secret `redis-auth` 注入容器环境变量,不进 ConfigMap;变量缺失时 `@Value` 解析失败、gateway 拒启。开关、阈值、代理网段任一变化,经 Pod 模板注解
   `mmorpg.io/peak-shaving-hash` 自动滚动 gateway;换 Redis 口令由只哈希口令的 `mmorpg.io/shared-redis-auth-hash` 滚动,与限流开关无关。设计见 `docs/design/open-server-rate-limit-design.md` §十一,参数见 `deploy/k8s/README.md` Optional Flags「削峰(G4b)」。

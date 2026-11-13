@@ -132,9 +132,11 @@ namespace
 		return kTierNames[static_cast<std::size_t>(tier)];
 	}
 
-	// 取模前先把 playerId 打散(splitmix64 的终混步)。PlayerId 是 bwmarrin 布局
-	// (41 位毫秒 | 13 位 node | 9 位 step),低 9 位是毫秒内序号、每个新毫秒归零,低频建角时几乎全是 0。
-	// 直接 playerId % 实例数,实例数为 2 / 4 / 8 时几乎所有玩家都压在第 0 个实例上(旧实现就是这样)。
+	// 取模前先把 playerId 打散(splitmix64 的终混步):选实例只靠这一步摊匀,不指望 id 本身的位分布。
+	// player_id 只由发号器(data_service.AllocateIdSegment)发,是打散过的计数器值,没有位布局
+	// (AGENTS.md §7 第 1 条);用例和工具里手写的号则常常低位有规律。旧实现直接 playerId % 实例数,
+	// 当时的 PlayerId 是 bwmarrin 布局(41 位毫秒 | 13 位 node | 9 位 step,2026-11-12 已删),低 9 位是
+	// 毫秒内序号、低频建角时几乎全是 0,实例数为 2 / 4 / 8 时几乎所有玩家都压在第 0 个实例上。
 	uint64_t SpreadPlayerId(Guid playerId)
 	{
 		uint64_t z = playerId + 0x9e3779b97f4a7c15ull;

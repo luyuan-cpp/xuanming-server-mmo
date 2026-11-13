@@ -60,8 +60,8 @@ func TestOutcomeMetricsRegisteredAndWritten(t *testing.T) {
 	}
 }
 
-// outcomeOutboxLastRun 读默认注册表里的 match_outcome_outbox_last_run_unixtime;没有序列时 ok=false。
-func outcomeOutboxLastRun(t *testing.T) (value float64, ok bool) {
+// exportedOutcomeOutboxLive 读默认注册表里的 match_outcome_outbox_last_run_unixtime;没有序列时 ok=false。
+func exportedOutcomeOutboxLive(t *testing.T) (value float64, ok bool) {
 	t.Helper()
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -75,20 +75,20 @@ func outcomeOutboxLastRun(t *testing.T) (value float64, ok bool) {
 	return 0, false
 }
 
-// 缺口清单第 25 条第五批:终局发件箱投递循环的活性 gauge 不预建,循环写过才有序列、值就是写入的时刻,循环退出删掉序列
-// (canary 与停机中的副本没有序列,告警按副本判不会误报)。
-func TestOutcomeOutboxLastRunExistsOnlyWhileTheLoopRuns(t *testing.T) {
+// 缺口清单第 25 条第五批:终局发件箱投递循环的活性 gauge 挂进了 register(),名字带 match_ 前缀;不预建,循环写过才有序列、
+// 值就是写入的时刻,循环有意停止后删掉序列(canary 与停机中的副本没有序列,告警按副本判不会误报)。
+func TestOutcomeOutboxLiveIsRegisteredAndExistsOnlyWhileTheLoopRuns(t *testing.T) {
 	register()
-	ClearOutcomeOutboxRun()
-	if _, ok := outcomeOutboxLastRun(t); ok {
-		t.Fatal("循环没起来(或已退出)时不该有活性序列")
+	OutcomeOutboxLive.Stop()
+	if _, ok := exportedOutcomeOutboxLive(t); ok {
+		t.Fatal("循环没起来(或已停止)时不该有活性序列")
 	}
-	MarkOutcomeOutboxRun(time.Unix(1234, 0))
-	if got, ok := outcomeOutboxLastRun(t); !ok || got != 1234 {
-		t.Fatalf("写入之后应有序列且值为 1234,实际 ok=%t 值=%v", ok, got)
+	OutcomeOutboxLive.Mark(time.Unix(1234, 0))
+	if got, ok := exportedOutcomeOutboxLive(t); !ok || got != 1234 {
+		t.Fatalf("写入之后默认注册表里应有序列且值为 1234,实际 ok=%t 值=%v", ok, got)
 	}
-	ClearOutcomeOutboxRun()
-	if _, ok := outcomeOutboxLastRun(t); ok {
-		t.Fatal("循环退出之后应删掉活性序列")
+	OutcomeOutboxLive.Stop()
+	if _, ok := exportedOutcomeOutboxLive(t); ok {
+		t.Fatal("循环停止之后应删掉活性序列")
 	}
 }

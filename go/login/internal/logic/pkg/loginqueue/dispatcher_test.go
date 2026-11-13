@@ -295,7 +295,7 @@ func TestIntegration_LeaderElectionSerializesDispatch(t *testing.T) {
 // 锁键按 zone 拆:同一前缀下每个 zone 一把,互不相同,也都不等于前缀本身(旧的全服键)。
 func TestZoneDispatcherLockKey_IsPerZone(t *testing.T) {
 	const base = "dispatcher:lock:login_queue"
-	if got, want := ZoneDispatcherLockKey(base, 1), "dispatcher:lock:login_queue:zone:1"; got != want {
+	if got, want := ZoneDispatcherLockKey(base, 1), "dispatcher:lock:login_queue:{q:1}"; got != want {
 		t.Fatalf("ZoneDispatcherLockKey(%q, 1) = %q, want %q", base, got, want)
 	}
 	seen := make(map[string]uint32)
@@ -776,7 +776,7 @@ func TestDispatchOnce_PartialBatchError_CountsAdmittedAndLogsOnce(t *testing.T) 
 	if err != nil || len(left) != 1 {
 		t.Fatalf("queue after the partial batch = %v err=%v, want exactly the entry whose script failed", left, err)
 	}
-	if has, err := rdb.HExists(ctx, metaKey(left[0]), metaFieldAdmittedAt).Result(); err != nil || has {
+	if has, err := rdb.HExists(ctx, metaKey(1, left[0]), metaFieldAdmittedAt).Result(); err != nil || has {
 		t.Fatalf("meta of the remaining entry has %s=%v err=%v, want absent", metaFieldAdmittedAt, has, err)
 	}
 	if st, err := q.Poll(ctx, tokens[left[0]], 1, signMustNotRun(t)); err != nil || st.Status != StatusQueueing {

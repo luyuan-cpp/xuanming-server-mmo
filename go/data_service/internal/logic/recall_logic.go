@@ -315,8 +315,10 @@ func loadRecallInputs(ctx context.Context, svcCtx *svc.ServiceContext, filter re
 		}
 		in.Ledgers[playerID] = ledger
 		// 不带时间窗和 tx_type:同一条指令重投再应用时,多出来的那条流水可能落在窗外,要和窗内的一起消费。
+		// 只按收到方查(ToPlayerID):指令按 (to_player, correlation_id) 成组(recallInstructionKey),这名玩家转出的流水
+		// 不是他的收益,不进他的组;收到方等值 + 指令号 IN 走 (to_player, correlation_id) 索引,不按玩家扫完保留期内的全部流水。
 		siblings, total, err := svcCtx.TxLogStore.QueryLog(ctx, &store.TransactionLogQuery{
-			PlayerID:       playerID,
+			ToPlayerID:     playerID,
 			CorrelationIDs: byPlayer[playerID],
 			ItemConfigID:   filter.ItemConfigID,
 			CurrencyType:   filter.CurrencyType,
