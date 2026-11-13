@@ -428,7 +428,7 @@ const ::CurrencyAmount* FindCurrencyUnknownToThisVersion(const ::AssetBundle& bu
 // 依赖行内容的规则只在行存在时才判。
 struct ConfigUnknownToThisVersion
 {
-	const char* table; // 只进日志
+	std::string table; // 只进日志
 	uint32_t id;
 };
 

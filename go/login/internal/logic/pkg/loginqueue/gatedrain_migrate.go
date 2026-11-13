@@ -154,6 +154,9 @@ func DrainingGateSet(ctx context.Context, rdb *redis.Client, nodeIDs []uint32) (
 //   - 登录时「全部不合格就回落全集」是为了不把人挡在门外;
 //   - 迁移时回落只会把人推到满载、卡住或也要下线的 gate 上。
 //
+// 合格的目标再分两档(设计文档 §7.3):有不在外出构建上的,就只在它们里面挑;一个都没有才用全部合格目标。
+// 逐台换版时,被排空的永远是要换下的那个构建,所以这样挑出来的就是已经换上新构建的 gate,玩家迁过去之后不会再被迁一次。
+//
 // 没有合格的目标返回 false,这个连接留在原地,之后的拍子再试或等到期(设计文档 §4.4)。
 // candidates 应已按 zone 过滤并按客户端地址去重(buildGateCandidates 的结果),不得被修改。
 func PickMigrationTarget(candidates []GateCandidate, draining map[uint32]bool, callerNodeID uint32, intn func(int) int) (*GateCandidate, bool) {
@@ -167,10 +170,47 @@ func PickMigrationTarget(candidates []GateCandidate, draining map[uint32]bool, c
 		}
 		targets = append(targets, c)
 	}
+	targets = preferIncomingBuild(targets, outgoingBuilds(candidates, draining))
 	i, ok := gatepick.TwoChoices(targets, func(c GateCandidate) uint32 { return c.PlayerCount }, intn)
 	if !ok {
 		return nil, false
 	}
 	target := targets[i]
 	return &target, true
+}
+
+// outgoingBuilds 返回外出构建:候选里至少有一台排空中 gate 的构建。没上报构建(空串)的不算,没有依据就不偏好。
+//
+// 与 scene_manager 的同名概念同一口径(docs/design/scene-node-planned-drain.md §4.6):不需要知道哪个版本更新,
+// 升级时被排空的是旧版本,回退时被排空的是新版本,「避开外出构建」两种情况下都是「迁到要留下的那个版本」。
+func outgoingBuilds(candidates []GateCandidate, draining map[uint32]bool) map[string]bool {
+	var outgoing map[string]bool
+	for _, c := range candidates {
+		if c.Build == "" || !draining[c.NodeID] {
+			continue
+		}
+		if outgoing == nil {
+			outgoing = make(map[string]bool)
+		}
+		outgoing[c.Build] = true
+	}
+	return outgoing
+}
+
+// preferIncomingBuild 在合格目标里只留不在外出构建上的。一个都没有(第一台排空时还没有新构建的 gate,或新构建的都满了、
+// 同构建重启)就原样返回,不因为偏好把人留在要下线的 gate 上。没上报构建的目标算首选。不修改入参。
+func preferIncomingBuild(targets []GateCandidate, outgoing map[string]bool) []GateCandidate {
+	if len(outgoing) == 0 {
+		return targets
+	}
+	preferred := make([]GateCandidate, 0, len(targets))
+	for _, c := range targets {
+		if c.Build == "" || !outgoing[c.Build] {
+			preferred = append(preferred, c)
+		}
+	}
+	if len(preferred) == 0 {
+		return targets
+	}
+	return preferred
 }

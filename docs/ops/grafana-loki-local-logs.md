@@ -4,6 +4,8 @@
 > 2026-09-18 按对抗式复核结果修正采集规则与本文多处说法(见 §7);
 > 2026-09-19 k8s 侧 C++ 日志 sidecar 做了一轮审计修复(原生 sidecar / 日志保留 / 解析规则,见 §6;
 > 已落码,并在 kind 的临时 namespace 上做完端到端复测,真实 zone / infra namespace 仍未 apply,见 §7)。
+> 2026-11-12 k8s 侧补上容器 stdout / stderr 的采集(读 `/var/log/pods` 的 DaemonSet,Go / Java 全部日志与 C++ 容器的 stderr,§6.11),
+> C++ sidecar 也取出 `trace_id` / `span_id` / `player_id`(§6.4);已落码,配置校验、契约测试与 kind 端到端核对都还没跑,见 §7 末条。
 > 适用于 Windows 本机开发环境;k8s 侧见 §6。
 
 ---
@@ -212,8 +214,9 @@ v1.10.0 记录的位置等于文件大小,解析结果和 v1.19.2 逐条一致�
 标签只用上面这些低基数字段。**不要**把 trace_id、player_id、session_id 之类做成标签,Loki 会被撑爆。
 trace_id、player_id 用结构化元数据过滤(见 §4);其余这类值用行内搜索,例如 `{job=~".+"} |= "session_id=678"`。
 
-以上是**本机这条链路**的口径。k8s 上 C++ 由 sidecar 直接读 muduo 文件,标签不完全一样(没有 `instance` / `stream`,
-`filename` 挪进了结构化元数据,多出 `namespace` / `pod`),对照表见 §6.4。
+以上是**本机这条链路**的口径。k8s 上 C++ 业务日志由 sidecar 直接读 muduo 文件,Go / Java 与 C++ 容器的 stdout / stderr 由 DaemonSet 读,
+标签不完全一样(没有 `instance`,`filename` 挪进了结构化元数据,多出 `namespace` / `pod`,DaemonSet 那一路另有 `container` / `stream`),
+`trace_id` / `span_id` / `player_id` 三个结构化元数据的口径与本机相同。对照表见 §6.4。
 
 ---
 
@@ -337,7 +340,7 @@ dev.bat obs
 
 ---
 
-## 6. k8s:C++ 日志不经 stdout,由 sidecar 直接读文件
+## 6. k8s:C++ 业务日志由 sidecar 读文件,容器 stdout / stderr 由 DaemonSet 采
 
 **背景:C++ 节点在 Linux 下不往 stdout 写业务日志。** `Node::AsyncOutput` 里调用控制台输出的那一句包在 `#ifdef WIN32` 内,
 容器里 muduo 的业务日志(包括 `LOG_FATAL` 的崩溃原因)只写 `/app/bin/logs/cpp_nodes/<节点>.*.log`。
@@ -346,6 +349,10 @@ dev.bat obs
 **做法(2026-09-19 已落码;端到端链路已在 kind 的临时 namespace 上实测通过,真实 zone / infra namespace 尚未 apply,见 §7):**
 每个 C++ Pod 里跟一个 Alloy sidecar,和业务容器共享同一个 `node-logs` 卷(sidecar 侧只读),
 直接读那些 muduo 文件送进 Loki,全程不经过 stdout。
+
+**容器自己的 stdout / stderr(2026-11-12 已落码,未运行,见 §6.11):** infra namespace 里一个读 `/var/log/pods` 的 Alloy DaemonSet
+(`pod-log-collector`)采三类 Pod 的容器输出:Go 服务(go-zero JSON)、Java 网关(logstash JSON)全部的日志,以及 C++ 节点容器
+stdout / stderr 上 sidecar 读不到的那部分(gRPC / abseil、librdkafka、未捕获异常、gate 的启动行)。两路推同一个 Loki、同开同关。
 
 ### 6.1 组成、形态与开关
 
@@ -356,9 +363,9 @@ dev.bat obs
 
   | 开关 | 作用 |
   |---|---|
-  | `-NoCppLogSidecar` | 关掉 sidecar 本身:它的容器片段、两个卷、config-hash 注解一个不留。**但清理循环和 `node-logs` 的 `sizeLimit: 2Gi` 不受这个开关控制,始终生效**(它们保护的是节点磁盘,与采不采日志无关,见 §6.7) |
-  | `-CppLogSidecarImage` | 换 sidecar 镜像。默认钉死 `grafana/alloy:v1.10.0`(原因见 §1);**脚本的默认值**只在 `k8s_deploy.ps1` 定义一处(`dev_tools.ps1` / `k8s_image.ps1` 留空即不覆盖),文档里 `deploy/k8s/README.md` 和本文 §1 的表格另外写了这个版本号,改版本时要一起改 |
-  | `-LokiPushUrl` | 推向已有的 Loki,写完整 push 地址。留空 = 用 infra namespace 里那套(见 6.2) |
+  | `-NoCppLogSidecar` | 关掉 sidecar 本身:它的容器片段、两个卷、config-hash 注解一个不留;`infra-up` 也不再部署容器日志 DaemonSet(§6.11),集群里整条日志采集都关掉。**但清理循环和 `node-logs` 的 `sizeLimit: 2Gi` 不受这个开关控制,始终生效**(它们保护的是节点磁盘,与采不采日志无关,见 §6.7) |
+  | `-CppLogSidecarImage` | 换 sidecar 镜像,容器日志 DaemonSet 用同一个。默认钉死 `grafana/alloy:v1.10.0`(原因见 §1);**脚本的默认值**只在 `k8s_deploy.ps1` 定义一处(`dev_tools.ps1` / `k8s_image.ps1` 留空即不覆盖),文档里 `deploy/k8s/README.md` 和本文 §1 的表格另外写了这个版本号,改版本时要一起改 |
+  | `-LokiPushUrl` | 推向已有的 Loki,写完整 push 地址,sidecar 与 DaemonSet 推同一个。留空 = 用 infra namespace 里那套(见 6.2)。地址原样写进两份 ConfigMap,**不许带凭据**(`http://用户:口令@...` 在写路径入口就被拒绝,`Assert-LokiPushUrlSafe`);引号、反斜杠、空白同样拒绝 |
 
   ```powershell
   pwsh tools\scripts\dev_tools.ps1 -Command k8s-zone-up -ZoneName 1 -ZoneId 1 -NoCppLogSidecar
@@ -398,6 +405,11 @@ kubectl -n mmorpg-infra get deploy/loki svc/loki
 
 两个都在才算齐。缺了就补一次 `pwsh tools\scripts\dev_tools.ps1 -Command k8s-infra-up`(别带 `-SkipInfra`),
 或者 `-LokiPushUrl` 指向已有的 Loki,或者 `-NoCppLogSidecar` 关掉别装样子。
+
+容器日志 DaemonSet `pod-log-collector`(§6.11)同理,也只随 `infra-up` 部署,上面三种走法里它同样不存在,表现是
+"Go / Java 的日志和 C++ 容器的 stderr 只在 `kubectl logs` 里"。脚本在同一处再探一次
+(`kubectl -n <infra-ns> get daemonset pod-log-collector --ignore-not-found`),查不到同样只 `Write-Warning`。
+它与推送地址无关,给了 `-LokiPushUrl` 也探。自己核对:`kubectl -n mmorpg-infra get ds/pod-log-collector`,`DESIRED` 等于节点数、`READY` 与它相等才算齐。
 
 另一件事没这么静默,但同样容易认错:**kind 节点不共享宿主的镜像缓存**,`grafana/alloy:v1.10.0` 要先载入节点(预载命令见 `deploy/k8s/README.md`)。
 漏了预载时,因为 sidecar 是**原生 sidecar、放在 `initContainers` 里**,gate / scene / battle 的 Pod 会卡在
@@ -439,31 +451,37 @@ http://host.docker.internal:3101
 
 ### 6.4 标签口径(与 §3 的差异)
 
-k8s 这条链路的**流标签**:
+k8s 这条链路的**流标签**。C++ 业务日志来自 sidecar(读 muduo 文件);Go、Java 的日志与 C++ 容器自己的 stdout / stderr
+来自 DaemonSet(读 `/var/log/pods`,§6.11)。两路推同一个 Loki:
 
-| 标签 | 取值 | 来自 |
-|---|---|---|
-| `env` | `k8s`(本机那套是 `local`) | Alloy `external_labels` |
-| `job` | `cpp_nodes` | 静态标签 |
-| `lang` | `cpp` | 静态标签 |
-| `service` | `gate` / `scene` / `battle` | muduo 文件名解析 |
-| `level` | `trace` `debug` `info` `warn` `error` `fatal` | 行内解析;丢弃告警行记 `warn`(见 6.9) |
-| `zone` | zone 名;**battle 池是 `global`** | 容器环境变量 `ZONE_NAME` |
-| `namespace` / `pod` | k8s 独有 | Downward API |
+| 标签 | 取值 | C++ 业务日志(sidecar) | 容器 stdout / stderr(DaemonSet) |
+|---|---|---|---|
+| `env` | `k8s`(本机那套是 `local`) | Alloy `external_labels` | Alloy `external_labels` |
+| `job` | `cpp_nodes` / `go_services` / `java` | 静态标签,`cpp_nodes` | 按 Pod 认:清单 `tier: go-svc` → `go_services`,`tier: java-svc` → `java`,C++ 节点 → `cpp_nodes` |
+| `lang` | `cpp` / `go` / `java` | 静态标签 | 同 `job` |
+| `service` | C++:`gate` / `scene` / `battle`;Go / Java:清单的 `app` 标签,连字符换成下划线(`data-service` → `data_service`,与 §3 同值) | muduo 文件名解析 | Pod 的 `app` 标签;C++ 取节点角色(`scene-world` → `scene`) |
+| `level` | 取值见 §3 的级别表 | 行内解析;丢弃告警行记 `warn`(见 6.9) | 行内解析,规则与本机相同;C++ 的未捕获异常记 `fatal` |
+| `zone` | zone 名;**battle 池与 infra 里的全局 Go 服务是 `global`** | 容器环境变量 `ZONE_NAME` | 命名空间名:`<-NamespacePrefix>-<zone 名>` 取 zone 名,infra 命名空间记 `global` |
+| `namespace` / `pod` | k8s 独有 | Downward API | Pod 元数据 |
+| `container` | 容器名 | 无 | Pod 元数据 |
+| `stream` | `stdout` / `stderr` | 无(读的是文件) | CRI 行头 |
 
-**结构化元数据**(不是标签,但行详情里看得到,也能用 `| pid="..."` 过滤):`pid`、`tid`、`filename`。
+**结构化元数据**(不是标签,但行详情里看得到,也能用 `| pid="..."` 过滤):
 
-**还没有 `trace_id` / `span_id` / `player_id`。** sidecar 的规则要按 [distributed-tracing.md](../design/distributed-tracing.md) §9.2
-加上本机那两条行尾正则(§2.2),改它会滚动重启 C++ 节点(§6.5),要挑时机。在那之前 k8s 上按 trace 查用行内搜索:
-`{env="k8s"} |= "trace_id=<32 位>"`,muduo 文件里的行尾后缀是原文。
+- C++ 业务日志:`pid`、`tid`、`filename`;C++ 容器 stderr:`tid`(gRPC 行)、`filename`;Go:`caller`、`filename`;Java:`logger`、`thread`、`filename`。
+- **`trace_id` / `span_id` / `player_id`(2026-11-12 起,未运行验证)**:三种语言同一套键名,只在那一行真带了值时才写,Java 没有 `player_id`。
+  C++ 取自行尾后缀(sidecar 里与本机 §2.2 同两条正则),Go 取自 go-zero 的 `trace` / `span` 与字符串形态的 `player_id`,
+  Java 取自 logstash JSON 的 `traceId` / `spanId`(§2.1、§2.3 的规则原样照搬)。查询写法与本机相同(§4):
+  `{env="k8s"} | trace_id="<32 位>"`、`{env="k8s"} | player_id="<id>"`。
 
 两条链路口径不同的地方,查询时别照抄 §3:
 
 - **`filename` 在 k8s 上是结构化元数据,在本机仍然是流标签。** 本机采的是 `run/logs/**` 下名字稳定的重定向文件;
-  k8s 采的是 muduo 自己滚的文件,名字带滚动时间戳和 pid,**每滚 8MiB 就会新开一条 Loki 流** ——
-  留成标签等于把刚挪进结构化元数据的 pid 从旁边放回去。
-- **本机才有的 `instance` / `stream` 在 k8s 上没有。** 容器里没有"实例名"(muduo 文件名里只有节点角色),
-  也没有 stdout / stderr 两路之分。**要区分实例按 `pod` 标签。**
+  k8s 的 sidecar 采的是 muduo 自己滚的文件,名字带滚动时间戳和 pid,**每滚 8MiB 就会新开一条 Loki 流** ——
+  留成标签等于把刚挪进结构化元数据的 pid 从旁边放回去。DaemonSet 读的 `/var/log/pods/.../<重启次数>.log` 同理,容器每重启一次就换名。
+- **本机才有的 `instance` 在 k8s 上没有,要区分实例按 `pod` 标签。** `stream` 只有 DaemonSet 那一路有(C++ 业务日志读的是文件,没有两路之分)。
+- **时间口径不同。** 本机按行内时间入库;k8s 的 DaemonSet 一律用容器运行时收下这一行的时刻(CRI 时间戳,纳秒),
+  与行内时间差在毫秒内,理由见 §6.11;C++ 业务日志仍按 muduo 行内时间(sidecar 读文件,没有别的时间来源)。
 
 ### 6.5 改 sidecar 配置 = 滚动重启 C++ 节点
 
@@ -474,6 +492,12 @@ pod 模板上有一条注解 `mmorpg.io/cpp-log-sidecar-config-hash: <Alloy 配�
 **代价必须记住:** 改 `-LokiPushUrl` 或改解析规则会让这条注解变,下一次 `zone-up` / `all-up` 就**滚动重启 C++ 节点**;
 Agones 侧是 Fleet RollingUpdate 换一批 GameServer。这是业务影响,要挑时机,不是"顺手改个日志配置"。
 换 `-CppLogSidecarImage` 同样会滚(tag 就在容器片段的 `image:` 行里,模板照样会变)。
+2026-11-12 给 sidecar 加了取 `trace_id` / `span_id` / `player_id` 的两条正则,注解跟着变:**部署这一版之后的第一次 `zone-up`、
+以及带 battle 的 `infra-up` 都会滚动重启 C++ 节点**,要放进需要滚动的维护窗口(项目未上线,当前可以接受)。
+
+容器日志 DaemonSet 也有自己的指纹注解 `mmorpg.io/pod-log-collector-config-hash`(整份渲染结果的 sha256 前 12 位):
+改它的规则、推送地址、镜像或命名空间,下一次 `infra-up` 只滚动 DaemonSet 自己,每个节点停采几秒,**不碰业务 Pod**。
+改 `-LokiPushUrl` 两边一起变:DaemonSet 在 `infra-up` 时滚,C++ 节点在各自的 `zone-up` / `infra-up` 时滚。
 
 ### 6.6 sidecar 自己还活着吗
 
@@ -504,18 +528,35 @@ C++ 容器里的时间如果写成 UTC,解析规则按 `Asia/Hong_Kong` 给它�
 默认查询窗口里自然查不到,sidecar 自己的日志里也**一个字都不报**。所以碰到这种情况,先核 C++ 容器的时区
 (镜像里 `zoneinfo/Asia/Hong_Kong` 在不在、muduo 行头的时间是不是 +8),再去核 push 目标。
 
+**容器日志 DaemonSet 同样看这两个指标**,端口也是 12345(`alloy-http`)。每个节点一个 Pod,各采各节点上的容器;
+`port-forward ds/...` 只随便挑一个,要看某个节点先找到那台的 Pod:
+
+```powershell
+kubectl -n mmorpg-infra get pod -l app=pod-log-collector -o wide
+kubectl -n mmorpg-infra port-forward pod/<上一步的 Pod 名> 12347:12345
+curl.exe -s http://127.0.0.1:12347/metrics | Select-String "loki_source_file_|loki_write_|discovery_kubernetes"
+```
+
+`loki_source_file_files_active_total` 是这个节点上正在读的容器日志文件数,大致等于这台节点上 Go / Java / C++ 业务 Pod 的普通容器数。
+是 0 的话按顺序查:`kubectl -n mmorpg-infra logs <Pod>` 里有没有列 Pod 被拒(403 = ClusterRoleBinding 没建或名字不对,§6.11)
+→ Pod 有没有 `tier` 标签 / app 是不是 C++ 节点名(§6.11「采哪些」)→ 命名空间是不是 infra 或 `<-NamespacePrefix>-*`。
+
 ### 6.7 日志的保留与销毁
 
 **Pod 里的文件(与 sidecar 开关无关,始终生效)。** muduo 每 8MiB 滚一个新文件且**从不删旧文件**,而 `node-logs` 是 `emptyDir`。
 现在有两道闸:
 
 - 业务容器的启动命令里带一个极小的清理循环:每 5 分钟把 `/app/bin/logs/cpp_nodes/*.log` 按时间排序,只留最近 8 个(≈64MiB),其余删掉。
-- `node-logs` 的 `emptyDir` 带 `sizeLimit: 2Gi` 作远端兜底;`snowflake-cache` 和 sidecar 的 state 卷各 64Mi。
+- `node-logs` 的 `emptyDir` 带 `sizeLimit: 2Gi` 作远端兜底;sidecar 的 state 卷 64Mi(C++ Pod 2026-11-12 起不再挂 `snowflake-cache`)。
 
 **盘写满的后果口径别记错。** 本机 kind 的 `evictionHard` 是 nodefs/imagefs 0%,`DiskPressure` **永远不会置位**,
 所以写满的表现**不是**"节点级驱逐挑谁",而是 MySQL / Kafka / etcd / Loki 一起 ENOSPC 写失败,存档有损坏风险且不会自愈。
 `sizeLimit` 走的是 kubelet 的 `emptyDirLimitEviction`,与 `DiskPressure` 无关,只驱逐越界的那一个 Pod。
 正常情况下清理循环让用量停在几十 MiB,碰不到这道闸。Pod 里的文件只用于"exec 进去看最近一段",长期留存靠 Loki。
+
+**容器 stdout / stderr 的文件**由 kubelet 自己轮转(缺省 `containerLogMaxSize: 10Mi`、留 5 个),不归本仓管;
+DaemonSet 只读当前那个 `<重启次数>.log`。它的读取位置落在宿主机 `/var/lib/mmorpg-pod-log-collector/<infra 命名空间>`(hostPath),
+DaemonSet 换 Pod 后接着读;`infra-down` 不删这个目录(删命名空间删不到宿主机),它只有几 KB,要清就到节点上手工删。
 
 **Loki 里的数据。** 落在 infra namespace 的 `loki-data-pvc`(10Gi,用集群默认 StorageClass),retention **7 天**。
 
@@ -529,11 +570,13 @@ C++ 容器里的时间如果写成 UTC,解析规则按 `Asia/Hong_Kong` 给它�
 | | requests | limits |
 |---|---|---|
 | 每个 sidecar | cpu 20m / memory 64Mi | memory 256Mi |
+| 容器日志 DaemonSet(每个节点一个) | cpu 50m / memory 128Mi | memory 512Mi |
 | Loki(单副本) | cpu 100m / memory 256Mi | memory 1Gi;PVC 10Gi |
 
 sidecar 是**每个 C++ Pod 一个**,不是每个 zone 一个:按默认副本数(gate 2 + scene 4)一个 zone 就是 6 个,
 外加全局 battle 池的 1 个;`cpp-log-sidecar` 这个 ConfigMap 则每个 namespace 一份(每个 zone 一份 + infra 里 battle 一份)。
-本机 kind 资源紧张时,要么 `-NoCppLogSidecar` 关掉,要么 `-LokiPushUrl` 指向外部 Loki,省掉集群里那套。
+DaemonSet 与 zone 数无关,只跟节点数走,单节点的 kind 上就一个。
+本机 kind 资源紧张时,要么 `-NoCppLogSidecar` 关掉(两路一起关),要么 `-LokiPushUrl` 指向外部 Loki,省掉集群里那套。
 
 ### 6.9 解析规则里几个刻意的选择
 
@@ -558,11 +601,11 @@ sidecar 是**每个 C++ Pod 一个**,不是每个 zone 一个:按默认副本数
 ### 6.10 这套方案没覆盖的部分,别误以为都进去了
 
 - **容器 stdout/stderr 上的东西 sidecar 读不到**(它只读共享卷里的文件):gate 的 `[gate_version]` 启动行、gRPC / abseil 和 librdkafka 的 stderr。
-  要这些就另外上一个读 `/var/log/pods` 的 DaemonSet,Go 和 Java 的 pod 日志也走那条路(它们确实走 stdout,本文 §2.1 / §2.3 的解析段可以原样搬,标签改从 pod label 取)。
-  **目前还没有这个 DaemonSet,k8s 上的 Go / Java 日志只在 `kubectl logs` 里。**
-- **崩溃现场的文本同样采不到。** glibc 断言、`terminate called after throwing ...`、abort 的栈回溯都由 C 运行库直接写容器 stderr,
-  不经过 muduo 的 `LogFile`。它们只存在于 `kubectl logs`,而且 **Pod 一重建就没了**(`kubectl logs --previous` 只留上一次)。
-  对应地,**Loki 里的 `level="fatal"` 只覆盖代码里显式写了 `LOG_FATAL` 的分支 —— 查不到 fatal 不等于没崩。**
+  2026-11-12 起由容器日志 DaemonSet 采(§6.11),与 sidecar 的流同属 `job="cpp_nodes"`,多 `container` / `stream` 两个标签。
+  **DaemonSet 没部署(存量集群、只跑过 zone-up)时它们仍只在 `kubectl logs` 里**,核对方法见 §6.2 末段。
+- **崩溃现场的文本**:未捕获异常的 `terminate called after throwing ...` 由 DaemonSet 采,记 `level="fatal"`
+  (下一行 `what():` 是原因,单独成条、无级别,按 `pod` 与时间挨着看);glibc 断言在 release 里编掉了(`-DNDEBUG`),不会出现;
+  段错误、被信号杀掉这类没有文本的崩溃,Loki 里什么都没有。所以 **`level="fatal"` 查不到仍不等于没崩**。
   崩没崩看 Pod 自己:
 
   ```powershell
@@ -571,8 +614,40 @@ sidecar 是**每个 C++ Pod 一个**,不是每个 zone 一个:按默认副本数
   ```
 - `node-logs` 是 `emptyDir`,随 Pod 销毁即丢。**正常终止**这一路因为用了原生 sidecar 追得完(见 6.1);
   被强杀 / 驱逐 / 节点掉电时,还没被 sidecar 读走的尾部日志找不回来。
-- 单副本 + 文件存储的 Loki 只够 dev / 小规模 staging。生产要换对象存储加多副本,
-  `docs/ops/log-management.md` 的「Production (K8s)」一节是总方针。
+- 单副本 + 文件存储的 Loki(`-LokiReplicas 1`)只够 dev / kind;staging、prod 缺省是单体模式 3 副本加外部 S3(`-LokiReplicas 3`,
+  `deploy/k8s/README.md`「Loki:单副本与单体模式 3 副本」)。`docs/ops/log-management.md` 的「Production (K8s)」一节是总方针。
+- infra 命名空间里的 etcd / Kafka / Redis / MySQL / Loki 自己的日志不采(DaemonSet 只认 Go / Java / C++ 业务 Pod),仍看 `kubectl logs`。
+
+### 6.11 容器日志 DaemonSet(Go / Java 的日志与 C++ 容器的 stdout / stderr)
+
+> 2026-11-12 落码,**没有运行过**:配置校验、契约测试与 kind 上的端到端核对都待 Codex(`docs/PROGRESS.md` 同日条目)。
+
+- **组成:** 清单是 `deploy/k8s/manifests/infra/pod-log-collector.yaml`(ServiceAccount、ClusterRole `mmorpg-pod-log-reader`、
+  ClusterRoleBinding `mmorpg-pod-log-reader-<infra 命名空间>`、ConfigMap 与 DaemonSet 都叫 `pod-log-collector`),
+  由 `k8s_deploy.ps1` 的 `New-PodLogCollectorManifestText` 替换占位、算指纹,`Apply-Infra` 在全部 infra 清单之后 apply。
+  不要绕过脚本直接 apply 那份文件(占位没换)。镜像与 C++ sidecar 同一个(`-CppLogSidecarImage`)。
+- **什么时候部署:** `infra-up`(或不带 `-SkipInfra` 的 `all-up`)且没给 `-NoCppLogSidecar`;推送地址与 sidecar 相同,
+  集群内 Loki 单副本与 3 副本的 Service 都叫 `loki:3100`,给了 `-LokiPushUrl` 就推那个地址。`zone-up` 不部署它。
+- **采哪些:** 只发现本节点的 Pod(字段选择器 `spec.nodeName`),只要 infra 命名空间与 `<-NamespacePrefix>-*` 命名空间里的:
+  清单标了 `tier: go-svc` / `java-svc` 的 Go / Java 工作负载(含建表 Job、`sql-writer-pod-reaper` 这类同 tier 的运维 Pod);
+  没有 `tier`、`app` 是 `gate` / `scene` / `scene-world` / `scene-instance` / `battle`(金丝雀再加 `-canary`)的 C++ 节点。
+  init 容器不采(等 MySQL 的小循环、C++ 的日志 sidecar 本身)。Agones 往 GameServer Pod 里加的 SDK 容器会一起采进来,按 `container` 标签区分。
+  以后新加 C++ 工作负载,名字不在上面这份清单里就要改 DaemonSet 的那条正则;契约测试会拿部署脚本里的工作负载名核对。
+- **解析:** 每行先过 `stage.cri`(取正文、`stream` 标签,拼回被运行时切开的超长行),再按语言走本机 `config.alloy` 的同名段:
+  Go 的 go-zero / zap 两段与 trace / 玩家两段、Java 的多行合并与 JSON / 文本两段、C++ 的 gRPC / librdkafka 两段,
+  逐段相同,由 `tools/scripts/tests/k8s_log_collection_contract.tests.ps1` 核对(改了本机规则要同批改这里)。不搬的三段:
+  go-redis 那段只取时间;muduo 行在 Linux 下不进 stdout;`Assertion failed: ` 是 Windows 的行型。另加一段:C++ 的 `terminate called ...` 记 `fatal`。
+- **时间用 CRI 时间戳,不从行内取。** 本机从行内取是因为读文件没有别的时间来源;集群里每行都带运行时收下它的时刻(纳秒),
+  与行内时间差在毫秒内,同一毫秒里的多行也保住先后。照搬本机的 go-redis 那段反而会出错:它按开发机时区(`America/New_York`)解析,
+  容器多半是 UTC,算出来是未来时间,Loki 以 400 拒收,`loki.write` 对 4xx 不重试,整批丢掉。
+- **权限与安全:** 以 uid 0 运行(`/var/log/pods` 下的文件属主是 root,别人读不了),但丢掉全部 capabilities、禁止提权、根文件系统只读,
+  `/var/log/pods` 只读挂载;列 Pod 用 ClusterRole,只有 `pods` 的 `list` / `watch`。**Pod Security Admission 的 baseline / restricted 档不允许 hostPath**:
+  infra 命名空间打了这类 enforce 标签时 DaemonSet 建得出来、Pod 一个都起不来(`kubectl describe ds pod-log-collector` 里是 `FailedCreate`),
+  要给 infra 命名空间放行 privileged 档。这份清单不需要任何密钥;推送地址带凭据在写路径入口就被拒绝(§6.1 的开关表)。
+- **读取位置**在宿主机 `/var/lib/mmorpg-pod-log-collector/<infra 命名空间>`,DaemonSet 换 Pod 后接着读,不重推;每个 infra 命名空间一个目录。
+- **改配置只滚 DaemonSet 自己**,不碰业务 Pod(§6.5)。`infra-down` 删完命名空间后按名字删 ClusterRoleBinding,ClusterRole 留给同一集群里别的部署。
+- **自己还活着吗:** 见 §6.6 末段;状态一眼看 `pwsh tools\scripts\dev_tools.ps1 -Command k8s-infra-status` 的 `daemonset.apps/pod-log-collector` 那一行。
+- **端到端核对夹具:** `deploy/k8s/e2e/log-collection-check.yaml`(三个假 Pod,按真进程的格式打日志),用法与要核的项见 `docs/PROGRESS.md` 2026-11-12 条目。
 
 相关设计:`docs/design/distributed-tracing.md`(日志行里带上 `trace_id` 后,可以在 Grafana 里从日志跳到链路)、
 `docs/design/error-reporting.md`。
@@ -665,3 +740,20 @@ Loki 静默丢弃 —— 默认查询窗口里查不到,sidecar 自己的日志�
   Fleet 与 Deployment 两套模板的断言都挂在同一次运行上。按 `AGENTS.md` §10.1 由 Codex 跑。
 - **6.3 那条查看路径里"在本机 Grafana 里加第二个数据源"那一半本轮没走过**(复测是直接打 Loki 的 HTTP API 验的),
   也没在真实集群上走过。
+
+### 2026-11-12 k8s 采集阶段二:容器日志 DaemonSet 与 sidecar 的 trace 字段(已落码,一项都没运行)
+
+对应 [distributed-tracing.md](../design/distributed-tracing.md) §9.2 / §10.2。改了什么:
+
+- **C++ sidecar**(`k8s_deploy.ps1` 的 `Get-CppLogSidecarConfigAlloy`):muduo 行那段加上本机 §2.2 的两条行尾正则,
+  `trace_id` / `span_id` / `player_id` 进结构化元数据。配置正文变了,指纹注解跟着变,下一次 `zone-up` 与带 battle 的 `infra-up` 会滚动重启 C++ 节点(§6.5)。
+- **容器日志 DaemonSet**(§6.11):新清单 `deploy/k8s/manifests/infra/pod-log-collector.yaml`,`Apply-Infra` 部署,`Remove-Infra` 删
+  ClusterRoleBinding,`infra-status` 多列 `ds`,`zone-up` 时只读探测它在不在(§6.2)。
+- **推送地址的校验**:`-LokiPushUrl` 带凭据、引号、反斜杠、空白或不是 http(s) 时在写路径入口拒绝(以前原样写进 sidecar 的 ConfigMap)。
+- **契约测试** `tools/scripts/tests/k8s_log_collection_contract.tests.ps1`:规则与本机逐段一致、三个字段不做标签、渲染与指纹、
+  地址校验、部署判定、DryRun(单副本 / 3 副本 / 外部 Loki / 关 sidecar / 带凭据 / infra-down)。CI 触发路径加了 `deploy/observability/alloy/config.alloy`。
+- **端到端核对夹具** `deploy/k8s/e2e/log-collection-check.yaml`。
+
+**未验证项(全部):** 契约测试没跑;两份 Alloy 配置没过 `alloy fmt`、没真跑;DaemonSet 没在 kind 上起过
+(root + hostPath 读 `/var/log/pods`、字段选择器、`stage.cri` 都是按文档写的);结构化元数据只在有值时才写这一条没在 Loki 里核对;
+3 副本 Loki 下的推送只核了渲染出的地址相同。核对步骤见 `docs/PROGRESS.md` 2026-11-12「分布式日志阶段二」条目。

@@ -262,7 +262,8 @@ const (
 const (
 	RouteReadPathHome      = "home"
 	RouteReadPathBatch     = "batch"
-	RouteReadPathPlacement = "placement" // go/db 选库读落点(GetPlayerRoute)
+	RouteReadPathPlacement = "placement"  // go/db 选库读落点(GetPlayerRoute)
+	RouteReadPathZoneCount = "zone_count" // 按区数角色(CountZoneRoles),每次计数计一次
 
 	RouteReadResultOK       = "ok"
 	RouteReadResultNotFound = "not_found"
@@ -280,7 +281,7 @@ var (
 		RouteRegisterInvalid,
 	}
 
-	// routeReadSeries 是 route_read_total 里**会出现**的 path × result 组合(8 条):batch 没有逐 id 的缺席结论,
+	// routeReadSeries 是 route_read_total 里**会出现**的 path × result 组合(10 条):batch、zone_count 没有缺席结论,
 	// 不出现的组合不预置,免得面板上多出恒为 0、看着像「在跑」的序列。
 	routeReadSeries = [][2]string{
 		{RouteReadPathHome, RouteReadResultOK},
@@ -291,6 +292,8 @@ var (
 		{RouteReadPathPlacement, RouteReadResultOK},
 		{RouteReadPathPlacement, RouteReadResultNotFound},
 		{RouteReadPathPlacement, RouteReadResultError},
+		{RouteReadPathZoneCount, RouteReadResultOK},
+		{RouteReadPathZoneCount, RouteReadResultError},
 	}
 )
 
@@ -323,7 +326,7 @@ func ObserveRoleRefTombstoneHeld(n int) {
 	}
 }
 
-// PrimeRoute 把 route_register_total(7 条)与 route_read_total(8 条)的封闭集合逐个预置为 0(data_service.go 启动路径):
+// PrimeRoute 把 route_register_total(7 条)与 route_read_total(10 条)的封闭集合逐个预置为 0(data_service.go 启动路径):
 // store_error 这类一辈子可能只发生几次的结局,序列不预先存在的话 `increase(...) > 0` 恰好漏掉第一次。
 func PrimeRoute() {
 	register()

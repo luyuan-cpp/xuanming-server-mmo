@@ -232,7 +232,7 @@ def main():
     with open(README, encoding="utf-8", newline="") as f:
         text = f.read()
     if BEGIN not in text or END not in text:
-        sys.exit(f"{README} 里找不到索引标记行,拒绝改写")
+        sys.exit(f"index marker lines not found in {README}; refusing to rewrite it")
     head, rest = text.split(BEGIN, 1)
     _, tail = rest.split(END, 1)
     new_text = f"{head}{BEGIN}\n\n{build()}\n{END}{tail}"
@@ -240,7 +240,7 @@ def main():
         print("docs/README.md index is up to date")
         return
     if check:
-        sys.exit("docs/README.md 索引已过期: 请运行 python tools/scripts/gen_docs_index.py")
+        sys.exit("docs/README.md index is stale: run python tools/scripts/gen_docs_index.py")
     with open(README, "w", encoding="utf-8", newline="") as f:
         f.write(new_text)
     print("Updated docs/README.md index")

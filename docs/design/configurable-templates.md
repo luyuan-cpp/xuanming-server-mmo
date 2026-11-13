@@ -20,7 +20,7 @@
 
    纪律只有一条：**程序决定"能做什么"，策划决定"怎么组合"，玩家只能在策划画的圈里选值**。发奖、扣钱、计分这类资产操作只能是代码里的原子，配置与玩家模板只能引用，不能实现。
 2. **技术路线：表驱动原子组合**。不引入 Lua 或其他通用脚本；不用现有 exprtk 表达式列承载策略；v1 不做行为树 / 节点图。理由见 §2。
-3. **战斗策略**：`BattleAtomKind` 原子字典 + `BattleStrategy` / `BattleStrategyPhase` / `BattleStrategyRule`，一条规则一行"条件1 且 条件2 → 行动 + 目标"。接缝只有 `TurnBattleEngine::FillDefaultActions` 一处（§4）。
+3. **战斗策略**：由 [battle-script.md](battle-script.md)(战斗剧本)取代并已落码:protobuf 定义的剧本(角色位 → 规则),match 解析后按值冻结进建房原件,接缝仍只有 `TurnBattleEngine::FillDefaultActions` 一处（§4）。
 4. **活动**：模板 / 实例 / 奖励档位三层；阶段由 (实例起点, 偏移, now) 纯函数推导；触发器是扁平行"事件 + 过滤 → 加计数器"；奖励只走"档位 + 领取"（§5）。
 5. **玩法**：`PlayMode` + `BattleRuleSet` 纯参数，替掉引擎里 `IsPveMatch()` 一个布尔撑起来的一堆规则；battle 按 `CreateBattleRequest` 里本来就有的 `(match_mode, battle_config_id)` 自查表，不加新 wire 字段（§6）。
 6. **玩家自定义模板**（类网易狼人杀自定义板子）：可以做，但只开放"对局规则"（自建房 / 带板切磋）和"自动战斗策略"（角色与宝宝挂机出招）两类，**活动与奖励类绝不开放**。自定义对局一律 `MATCH_MODE_CUSTOM`，无奖、无损、不计分。官方板子是主入口，第一期只做"官方板子 + 带板切磋"，不建模板服务、不开自由文本；之后再上自建房、玩家板子（全局服务 `go/player_template`，非作者只能凭分享码访问）、宝宝优先的自动战斗策略。使用时按值冻结进对局（§8）。
@@ -180,122 +180,13 @@ int32  design_note    = 9002 [(cfg_owner) = "designer"];
 
 ## 4. 战斗策略模板
 
-### 4.1 模型
+> **2026-11-12 起由 [battle-script.md](battle-script.md)(战斗剧本)取代并已落码(未编译)。** 本节原方案(`BattleAtomKind` 字典表 + `BattleStrategy` / `Phase` / `Rule` 三张 xlsx 子表、`Monster.strategy_id`)不再实施,原因与落法如下,细节以 battle-script.md 为准。
 
-- **原子**（代码注册）：条件、目标选择、行动三类；v1 不做效果原子，阶段效果复用 buff。
-- **模板 = 实例**：`BattleStrategy` 一行，下挂 `BattleStrategyPhase`（阶段，只进不退）和 `BattleStrategyRule`（规则，priority 小的先判）。
-- **挂载**：`MonsterTable` 新增 `strategy_id`，0 = 现行写死行为（普攻 + target 0 + 结算期 RNG 选目标）。一份策略可以挂给多种怪。
-- **分层**（借 §11.6 的思路）：Monster 表回答"它是什么"（属性、掉落），策略表回答"它怎么出手"。怪物的技能集**不另开** `Monster.skill` 列，由策略引用的 `skill_id` 派生，避免同一件事两份来源。
-- **复用同一参数**：规则的阈值参数允许引用策略实例上的具名参数槽（如 `BattleStrategy.param1..4`），"同一套打法只改一个阈值"不必复制整份策略。
-
-### 4.2 表结构（示意，字段号以落码时为准）
-
-```proto
-// data/schema/battleatomkind_table.proto —— 战斗原子编号的唯一来源
-message BattleAtomKindTable {
-  option (cfg_sheet) = "BattleAtomKind"; option (cfg_source_file) = "BattleAtomKind.xlsx"; option (cfg_primary_key) = "id";
-  uint32 id = 1;              // 原子编号，上线后不复用
-  uint32 category = 2;        // 1 条件 2 目标 3 行动（闭集）
-  int64  p1_min = 3; int64 p1_max = 4;
-  int64  p2_min = 5; int64 p2_max = 6;   // min = max = 0 表示不用
-  string ref_table = 7;       // "Skill" / "Buff" / 空
-  bool   consumes_rng = 8;    // v1 只有 RandomEnemy 为 true，且只许配普攻
-  bool   player_selectable = 9; // 是否允许玩家自定义策略选用（§8），默认 false；为 true 时 p 区间须落在 [0, 2^21)（§8.3）
-  int32  constants_name = 9001 [(cfg_owner) = "constants_name"];
-  int32  design_note    = 9002 [(cfg_owner) = "designer"];
-}
-
-// data/schema/battlestrategy_table.proto —— 策略主表
-message BattleStrategyTable {
-  uint32 id = 1;
-  uint32 fallback_target_kind = 2 [(cfg_fk) = "BattleAtomKind"]; // 全部规则落空时普攻的目标；0 = 旧行为
-  int64  param1 = 3; int64 param2 = 4; int64 param3 = 5; int64 param4 = 6; // 规则可引用的具名阈值
-  int32  design_note = 9001 [(cfg_owner) = "designer"];
-}
-
-// data/schema/battlestrategyphase_table.proto —— 阶段子表
-message BattleStrategyPhaseTable {
-  uint32 id = 1;
-  uint32 strategy_id = 2 [(cfg_fk) = "BattleStrategy", (cfg_index) = true];
-  uint32 phase_order = 3;                                // 同策略内 1..N 连续，显式
-  uint32 enter_kind  = 4 [(cfg_fk) = "BattleAtomKind"];  // 进入条件（category = 条件）；第 1 阶段必须 0
-  int64  enter_p1 = 5; int64 enter_p2 = 6;
-  uint32 enter_buff_id = 7 [(cfg_fk) = "Buff"];         // 进入时挂给自己；0 = 不挂
-}
-
-// data/schema/battlestrategyrule_table.proto —— 规则子表（条件 → 行动）
-message BattleStrategyRuleTable {
-  uint32 id = 1;
-  uint32 phase_id = 2 [(cfg_fk) = "BattleStrategyPhase", (cfg_index) = true];
-  uint32 priority = 3;                                   // 阶段内唯一，小者先判
-  uint32 cond1_kind = 4 [(cfg_fk) = "BattleAtomKind"]; int64 cond1_p1 = 5; int64 cond1_p2 = 6;
-  uint32 cond2_kind = 7 [(cfg_fk) = "BattleAtomKind"]; int64 cond2_p1 = 8; int64 cond2_p2 = 9; // AND；0 = 恒真
-  uint32 action_kind = 10 [(cfg_fk) = "BattleAtomKind"];  // Attack / CastSkill / Defend
-  uint32 skill_id    = 11 [(cfg_fk) = "Skill"];           // 仅 CastSkill 必填，其余必须 0（导表期条件校验）
-  uint32 target_kind = 12 [(cfg_fk) = "BattleAtomKind"]; int64 target_p1 = 13;
-}
-
-// monster_table.proto 纯追加（现有字段 1–10、9001）
-uint32 strategy_id = 11 [(cfg_fk) = "BattleStrategy"];   // 0 = 现行普攻随机
-
-// proto/battle/battle_data.proto —— 引擎内部状态，不进客户端可见的 BattleActorState
-message BattleAiState { uint64 actor_id = 1; uint32 phase_order = 2; }
-```
-
-v1 原子集合（每个都要有 ≥2 个真实实例才加）：
-
-| 类别 | 原子 | 参数 | 是否消耗 RNG |
-|---|---|---|---|
-| 条件 | `SelfHpBelowPermyriad` | p1 = 万分比 | 否 |
-| 条件 | `RoundEveryN` | p1 = N，p2 = 起始回合 | 否 |
-| 条件 | `AliveEnemyCountAtLeast` | p1 = 人数 | 否 |
-| 目标 | `RandomEnemy` | — | 是（复用现有 target 0 + 结算期 RNG，**只许配普攻**） |
-| 目标 | `LowestHpEnemy` / `HighestHpEnemy` | — | 否，同分按 (hp, actor_id) 升序 |
-| 目标 | `FirstEnemy` / `Self` / `LowestHpAlly` | — | 否 |
-| 行动 | `Attack` / `CastSkill` / `Defend` | — | 否 |
-
-### 4.3 运行时
-
-**C++（battle 节点，唯一接缝 `TurnBattleEngine::FillDefaultActions`）**：
-
-1. actor 是 MONSTER 且 `strategy_id ≠ 0` 时：先推进阶段（只进不退，越过的每个阶段按 `phase_order` 依次挂 `enter_buff`），再按 priority 逐条求值。
-2. 条件为真的规则构造 `BattleAction`，送进现有的 `CheckActionPrerequisites`；通过就采用，不通过看下一条；全部落空走 `fallback_target_kind` 或旧路径。
-3. 出手时 `ExecuteSkill` 照常复校验，失败降级。
-4. 新模块 `cpp/libs/services/battle/system/battle_strategy.{h,cpp}`：纯逻辑，不 include scene，不打日志。内容是平铺处理器常量表 + `CompiledBattleStrategy`（加载期编译出的只读索引，阶段和规则已排序，附派生技能集）。
-5. `BattleDataProvider` 新增 `FindStrategy(id)`；生产实现在 `TableLoadHandler` 里编译一次，单测用 `MemoryBattleDataProvider` 喂内存数据。
-6. `AppendMonsterActor` 在 `strategy_id ≠ 0` 时把派生技能集写进 `actor.skill_table_ids`，这样 `CheckActionPrerequisites` 的"技能必须在快照列表里"、冷却、沉默判定都直接复用。
-7. 阶段状态存成 `BattleAiState` proto（turn_battle_engine.h：引擎状态由 proto 承载，不写平行 struct）。
-
-**Java（game-battle-engine）**：在 `TurnBattleEngine.fillDefaultActions` 同一位置接入；`BattleData` 增加 `findStrategy`；`TableBattleData` 加载期编译并按同一口径 Validate；`BattleTableFingerprint` 按同序追加；原子编号用 `TableConstants`。
-
-### 4.4 确定性硬约束
-
-- **v1 不新增 RNG 抽取点**：规则按优先级确定性选取；目标同分按 (hp, actor_id) 升序；"随机敌人"只给普攻用，走现有 target 0 路径。`turn_battle_constants.h` 里记录的消费顺序不变。
-- **v1 禁止任何作用于敌方的 buff 原子**：给敌方挂异常类 buff（毒 50 / 冰冻 52 / 眩晕 30 / 沉默 31）会走 `AddBuffToActor → RollAilmentResist`，有效抵抗率在 1..99 时调用 `RollPercent` 消耗随机数；`CastSkill` 引用技能的 `effect[]` 打在敌方目标上同样经 `ApplySkillToTarget → AddBuffToActor` 走这条路；而抗异常是 Java 还没追平的 C++ 修正，两版会在同一配置下分叉。v1 阶段 buff 只许挂给自己（同队施加不触发抗异常掷骰）。等 Java 追平、并把消耗点登记进 Java battle-engine-spec §8.4 之后再开放。
-- **导表期据此校验两条**：`CastSkill` 规则的 `target_kind` 不得为 0（`ValidateSkillTarget` 对 targeting_mode 非空的技能一律拒绝 target_id = 0，AOE 也不例外）；v1 里 `CastSkill` 引用技能的 `effect[]` 不得含毒 / 冰冻 / 眩晕 / 沉默类 buff。
-- **阶段事件必须放在事件组清零之后**：`FillDefaultActions` 在 `ResolveCurrentRound` 里早于 `currentGroupId = 0` 执行。阶段推进若在里面发 buff 事件，group_id 会沿用上一回合末的组计数（第 1 回合为 0，先 BeginEventGroup 则为上一回合末 +1），与本回合从 1 重新编号的行动组撞号或乱序；且 `FillDefaultActions` 目前不接收 `TurnResultS2C`，发事件需先改签名。要么调整清零顺序，要么把阶段推进移到清零之后。
-- 同优先级权重随机是**新的 RNG 抽取点**：要在 `turn_battle_constants.h` 与 Java spec §8.4 登记位置并刷新基线，作为单独决策，不进 v1。
-
-### 4.5 热路径上限
-
-battle 所有房间共用一个 loop。上限：每策略阶段 ≤ 8、每阶段规则 ≤ 16、每规则条件 ≤ 2。单局约 20 个单位，每回合求值是万次量级的整数比较，不分配内存。导表期校验上限；Codex 跑满配基准后把结果写回本节。
-
-### 4.6 示例：三阶段 Boss「山魈王」（Monster 9001，策略 900）
-
-| 阶段 | 进入条件 | 进入时 | 规则（priority 小先判） |
-|---|---|---|---|
-| 1 | — | — | p10：`RoundEveryN(3,1)` → 放横扫（AOE，不耗蓝）；p20：→ 普攻 `LowestHpEnemy` |
-| 2 | `SelfHpBelowPermyriad(6000)` | 给自己挂回血 buff（type 40，回合侧已生效） | p10：`AliveEnemyCountAtLeast(3)` → 横扫；p20：→ 裂地（单体高伤，effect[] 不含异常 buff）打 `LowestHpEnemy` |
-| 3 | `SelfHpBelowPermyriad(2500)` | — | p10：`RoundEveryN(2,0)` → 重击 `LowestHpEnemy`；p20：→ 普攻 `RandomEnemy` |
-
-走一遍：开局 `AppendMonsterActor` 把 {横扫, 裂地, 重击} 写进 `skill_table_ids`。第 1 回合 `RoundEveryN(3,1)` 为真，横扫过校验被采用（前提：规则配了非 0 的 target_kind，如 `FirstEnemy`；`ValidateSkillTarget` 对 targeting_mode 非空的技能一律拒绝 target_id = 0，AOE 也不例外）。第 2 回合落到 p20，普攻血最少的玩家，同血取 actor_id 小者，不耗 RNG。HP 降到 55% 后的下一回合开始时推进到阶段 2，挂回血 buff，`BattleAiState.phase_order = 2`。裂地冷却中就回落 fallback。（v1 不能用"毒刺"这类 effect[] 带毒 / 冰冻 / 眩晕 / 沉默的技能打敌方：它会经 `ApplySkillToTarget → AddBuffToActor → RollAilmentResist` 消耗随机数，见 H3。）若一回合内 HP 从 70% 掉到 20%，下回合依次挂上阶段 2、3 的进入 buff，直接进阶段 3。Boss 被眩晕时照旧跳过行动。
-
-注意：Monster 表没有法力列，`CheckSkillCost` 会拦下有消耗的技能——策划必须给 Boss 配无消耗技能，或另行补怪物法力列。
-
-### 4.7 待拍板
-
-- 派生技能集写进 `skill_table_ids`，而它同时是"客户端可见的本局可用技能列表"——Boss 后期阶段的技能会在开局就暴露给客户端。接受，还是另开一个服务端内部列表？
-- 宝宝（`Pet.strategy_id`）是否同批接入，替换"取第一个可用技能"。
+- **格式从 xlsx 子表改为 protobuf 定义的剧本**(`proto/battle/battle_script.proto`):剧本要表达「角色位 → 规则 → 条件 / 筛选 / 行动」的嵌套,xlsx 只能拍平成定长槽位,导表器又不支持 oneof / enum / 嵌套消息;同一份剧本还要给玩家上传与审核,官方剧本与玩家剧本必须是同一个消息、同一套校验(DRY)。官方剧本写成 protobuf JSON,随 match 内置(`go/match/internal/battlescript/official_scripts.json`),启动时按配表整份校验,不合法拒启;真表契约测试替代导表期校验。
+- **决策点从 battle 读表改为 match 解析后按值冻结**进 `CreateBattleRequest.team_scripts`:官方绑定、玩家选用、审核通过的玩家剧本都只在 match 一处解析,剧本成为建房原件的一部分,回放与按指令流重算的输入完整;battle 不读剧本配置,开局按本节点配表复核,不合法整份忽略。
+- **从「每个怪物一份策略」改为「每一方一份剧本、按角色位分工」**:新增角色位认领、决策顺序与本回合认领表(组合技、集火、同角色位不重复控同一个);怪物剧本按角色位的 `monster_id` 认领单只怪。阶段状态机(原 §4 的 Phase)暂不做,回合条件(`ROUND_AT_LEAST` / `ROUND_EVERY`)与自身血量条件覆盖了「血量阶段」的常见写法。
+- **保留下来的约束**:接缝只有 `FillDefaultActions`;不新增随机数抽取点、同分按 (排序键, 阵位, actor_id 无符号) 决胜;剧本只能挑合法行动;AI 运行态不进 `BattleActorState`;怪物技能集由剧本派生(开局即对客户端可见,原 §4.7 第 1 问按「接受」定案);怪物只放零耗蓝的老技能;老技能只许打敌方。
+- **取消的约束**:原 H3「禁止对敌施毒 / 冰 / 眩晕 / 沉默」。剧本自己不掷骰,抗异常的随机数消耗发生在出手时,与手动放同一技能完全一样;Java 引擎已有抗异常,两版一致由跨语言金样钉住(battle-script.md §8)。
 
 ---
 
@@ -515,7 +406,7 @@ v1 只用 `round_cap_outcome` 枚举。出现"击杀指定单位即胜"这类真
 |---|---|---|---|
 | H1 | 所有新列 0 值 = 现行行为，存量同种子回放逐字节不变 | 回放基线平移，两版对拍失效 | turn_battle_engine.h 确定性约束 |
 | H2 | v1 不新增 RNG 抽取点；同分按 (hp, actor_id)；`RandomEnemy` 只配普攻 | 随机序列平移，两版分叉 | turn_battle_constants.h 消费顺序 |
-| H3 | v1 禁止对敌施 buff 的原子，且 CastSkill 不得引用 effect[] 含对敌异常类 buff 的技能 | `RollAilmentResist` 掷骰 + Java 未追平 → 两版分叉 | `AddBuffToActor` |
+| H3 | ~~v1 禁止对敌施 buff~~ 2026-11-12 取消:剧本不掷骰,抗异常掷骰发生在出手时与手动相同;两版一致由跨语言金样钉住 | — | battle-script.md §4 |
 | H4 | 阶段事件在事件组清零之后发 | group_id 撞号 | `ResolveCurrentRound` |
 | H5 | AI 运行态只放服务端内部 `BattleAiState`，不进 `BattleActorState` | 改客户端契约，泄漏 Boss 阶段 | player_battle.proto |
 | H6 | 战斗新表追加到指纹末尾，指纹切 enforce | 表版本不一致照常开局 | battle_table_fingerprint、match config |
@@ -890,16 +781,9 @@ message PlayerTemplateAuditRecord {          // 运维操作审计，与状态�
 - **邀请**要查目标的黑名单。现在 match 不查 friend 黑名单、也没有内部 RPC，需新增 `FriendInternal.IsBlocked`（Java 同批）。
 - **容量**：`ArchiveCompletion` 对所有模式都归档，"再来一局"会让 CUSTOM 局频繁写进 TiDB——上线前估算容量，或给 CUSTOM 局归档设保留期 [I]。
 
-#### 8.6.5 自动战斗策略（P4，宝宝优先）
+#### 8.6.5 自动战斗策略
 
-1. 玩家用 `SetPlayerStrategyLoadout(slot, template_id)` 选用：只能选自己的模板（别人的先凭码复制），`slot` 必须与模板基底的 `strategy_actor` 一致。**复制来的策略里的 `UseItem` 规则默认关闭**，需要本人确认后才启用，防止被诱导自动消耗贵重道具。
-2. **解析时机**：在 `teamAssignment` 之后、`PrepareBattle` **之前**调 `PlayerTemplateInternal.ResolveBattleStrategies(player_ids)`，并把它的耗时（预算 300ms）写进 `queue.go` `matchedTicketTTLFor` 的封闭公式与 `ticket_cas_test.go` 的复算守卫——`prepare_deadline_ms` 在 PrepareBattle 时就已下发给 scene，事后改不了。
-3. **不让模板服务成为所有开局的同步依赖**：只对设置了 loadout 的玩家调用（match 侧缓存"谁有 loadout"，由模板服务在 loadout 变更时失效）；加熔断（连续失败后一段时间内跳过这一步）；失败或超时不带策略继续开局并计 `outcome=error`（fail-open）。
-4. 结果写 `BattlePlayerSnapshot.auto_strategy = 21` 与 `BattlePetSnapshot.auto_strategy = 13`（两条消息现有最大字段号 20 和 12）。唯一写方是 match（`gather.go` 的快照写点），对每份快照都覆盖或清空。规则集或覆盖层禁用策略时整份清空。
-5. battle 在 `Initialize` 时编译成 `CompiledBattleStrategy`（与怪物策略共用编译器和求值器），引擎**自己**再执行一遍原子 player_selectable、组合矩阵、禁用开关检查。编译结果放私有 `std::map<actor_id, …>`，**不进 `BattleActorState`**（H5）。
-6. `FillDefaultActions`（唯一接缝）：PET 有策略时替换现行"取第一个能放的技能"（宝宝恒为自动行动，`InitPets` 里固定 `set_is_auto(true)`，所以宝宝策略一上线就生效）；PLAYER 没有 pendingAction 且有策略时按 priority 求值，候选过 `CheckActionPrerequisites`，全部落空回到现行默认行动（挂机玩家先试内置的职业选技，见 `class-skills.md` §6.5；其余"普攻 + target 0"）。超时玩家与挂机玩家都按策略出手（推荐）。`is_auto` 已经因内置选技进了事件语义（只有挂机玩家才自动选职业技能），策略这一步摘不掉它，按指令流重算的回放要逐回合记录挂机开关。
-7. **可解释性**：玩家不知道本回合按哪条规则出手，"策略没生效"会成为常见客诉。参照 `RedactStateForViewer`，只给本人下发"命中第 N 条 / 落空回退普攻"；C++ 指标加 `outcome=fell_back_default`。
-8. v1 战斗中不能切换策略；挂机开关保持现状（不持久化）。
+**2026-11-12 起由 [battle-script.md](battle-script.md) 取代并已落码(未编译)**:玩家剧本不走本节规划的模板服务与 loadout 槽位,改为 match 自己存(`match_battle_script` / `_review` / `_loadout` 三张表),上传后经运营审核才能选用;选用按 (模式, 副本) 记,建房时按队长的选用解析;评分局只开官方剧本;剧本只管挂机 / 托管 / 超时的人与宝宝、怪物,手动行动不动。本节原文的几条要点(候选必过 `CheckActionPrerequisites`、运行态不进 `BattleActorState`、本人可见的命中提示另议)在新方案里保留或另列于 battle-script.md §12。
 
 #### 8.6.6 确定性、回放与指纹
 
@@ -1089,14 +973,7 @@ Java 侧要做的事：① 模板服务模块（独占存储）+ 共享校验模
 - 新增时间字符串列：cfg option 声明"UTC+8 墙钟串 → UTC 毫秒"，替代手填毫秒戳（填错一位就差好几天，而导表期连 start < end 都不查，只在 scene 运行期由 `PlayerActivityScheduleSystem::BuildInfo` 按查询拒绝）。
 - 导表时输出规则渲染报告。
 
-**第 3 步：战斗策略 MVP（单阶段）**
-
-- 表：`BattleAtomKind`、`BattleStrategy`、`BattleStrategyRule`（Phase 表先只允许一行阶段，或第 4 步再建）。
-- 原子：条件 3 个、目标 4 个、行动 2 个（§4.2）。
-- 改动点：`Monster.strategy_id`、`FillDefaultActions` 接入、`AppendMonsterActor` 派生技能集、`BattleDataProvider.FindStrategy`、DecisionTrace、聚合指标、启动期校验、指纹追加；Java 同批。
-- 验收：① `strategy_id = 0` 时现有全部同种子用例逐字节不变；② 每个原子有用例，坏表在导表期失败；③ C++ 导出新用例的事件 hex，Java 回放一致。
-
-**第 4 步：阶段状态机**：`BattleStrategyPhase` + `BattleAiState`；阶段只在回合开始推进，事件放在组清零之后（H4）。可选：宝宝接入。
+**第 3、4 步:战斗策略 MVP 与阶段状态机** —— 由 [battle-script.md](battle-script.md) 取代并已落码(未编译):剧本格式、引擎接缝、match 解析与冻结、玩家上传与审核一并完成;阶段状态机不单做(§4)。
 
 **第 5 步：玩法 v1**：`PlayModeKind`、`PlayMode`、`BattleRuleSet`；match 接表；`IsPveMatch` 读点改读规则集；删 `PveTeamSizeByConfigId` 与 `RatingDrawRoundCap`；3V3 处理器。前提：第 1 步第 3 项完成，否则规则集在两版起点不同。
 
@@ -1110,7 +987,7 @@ Java 侧要做的事：① 模板服务模块（独占存储）+ 共享校验模
 
 ## 11. 待拍板
 
-1. 是否接受 Boss 全部技能在开局即对客户端可见（§4.7）。
+1. ~~是否接受 Boss 全部技能在开局即对客户端可见~~ 已定案:接受(怪物技能集由剧本派生,battle-script.md §4)。
 2. 活动进度存储：独立 `PlayerActivityComp` + 新 RPC（推荐），还是复用 Mission scope 2 以免改客户端协议（§5.3）。
 3. 是否同意第 1 步建跨语言战斗金样（需用户同意）。
 4. 指纹切 enforce 的时间表。

@@ -142,6 +142,22 @@ message GateMigrationResponse
   int64  token_deadline = 6;    // 票据到期时刻,Unix 秒
 }
 
+// gate 为仍然连着的连接续租它在 login 的按连接记录(docs/design/gate-online-identity.md §10.4):
+// 登录态、账号设备集里的成员、已绑定角色的会话栅栏。这些记录的寿命只是「连接断了、Disconnect 又没送到」时的回收兜底,
+// 不该比活着的连接先到期。只有 gate 合成,客户端不得发起;连接身份全在 gate 签名的 SessionDetails 里,请求体为空。
+message RenewSessionRequest
+{
+}
+
+message RenewSessionResponse
+{
+  // true = 这条连接在 login 还有记录(登录态,或已绑定的角色),已续期。
+  // false = 已没有可续的记录(离开游戏之后、连接已按断线处理、或记录已过期):gate 停止为它续租,直到这条连接再次登录成功。
+  bool renewed = 1;
+  // 下一次续租的间隔(秒)。login 按登录态寿命的三分之一给出,gate 不另配寿命;renewed 为 false 时为 0。
+  uint32 renew_after_seconds = 2;
+}
+
 service ClientPlayerLogin  {
   option (OptionIsClientProtocolService) = true;
 
@@ -154,6 +170,8 @@ service ClientPlayerLogin  {
   // gate 排空时为本连接签迁移票据。与 Disconnect 一样只有 gate 合成,客户端发这个号要被 gate 按非法包拒收
   // (gate 侧 login_admission.h IsGateSynthesizedOnly,随迁移的 gate 批次加入)。
   rpc RequestGateMigration (GateMigrationRequest) returns (GateMigrationResponse) { option (OptionClientRpcKind) = CLIENT_RPC_SERVER_ONLY; }
+  // gate 为仍然连着的连接续租登录态。同样只有 gate 合成,客户端发这个号被 gate 按非法包拒收(login_admission.h IsGateSynthesizedOnly)。
+  rpc RenewSession (RenewSessionRequest) returns (RenewSessionResponse) { option (OptionClientRpcKind) = CLIENT_RPC_SERVER_ONLY; }
 }
 
 // ── Pre-connection RPCs (called before connecting to Gate) ──────
@@ -229,6 +247,18 @@ service LoginPreGate {
   // QueryQueueStatus until it receives a gate token.
   rpc AssignGate (AssignGateRequest) returns (AssignGateResponse);
   rpc QueryQueueStatus (QueryQueueStatusRequest) returns (QueryQueueStatusResponse);
+  // 本区一共建过多少角色(转问 data_service.CountZoneRoles)。网关里每个区的负责副本按区服目录的角色上限
+  // (zone_config.role_capacity)定时来问,到了就关上本区的创角开关(docs/design/zone-full-handling.md §6)。只读,可重试。
+  rpc GetZoneRoleCount (ZoneRoleCountRequest) returns (ZoneRoleCountResponse);
+}
+
+message ZoneRoleCountRequest {
+  // 必须是本 login 所在的区,否则回 InvalidArgument:网关按区选路,问到别区的 login 是选路错了,不能拿别区的数开关本区。
+  uint32 zone_id = 1;
+}
+
+message ZoneRoleCountResponse {
+  uint64 roles = 1; // 按合服之后的最终区算,删角不减;读不到时回 Unavailable,不回 0
 }
 
 // ── Admin-only RPCs (internal, not client-facing) ──────────────

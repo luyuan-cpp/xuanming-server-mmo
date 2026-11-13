@@ -220,7 +220,7 @@ func logMessageFields(msgName string, msg proto.Message) {
 	for i := 0; i < fields.Len(); i++ {
 		fd := fields.Get(i)
 		fieldCount++
-		logger.Global.Debug("消息描述符字段信息",
+		logger.Global.Debug("Message descriptor field",
 			zap.String("message_name", msgName),
 			zap.String("field_name", string(fd.Name())),
 			zap.String("field_kind", fd.Kind().String()),
@@ -229,12 +229,12 @@ func logMessageFields(msgName string, msg proto.Message) {
 	}
 
 	if fieldCount == 0 {
-		logger.Global.Warn("消息描述符未声明字段",
+		logger.Global.Warn("Message descriptor declares no fields",
 			zap.String("message_name", msgName),
-			zap.String("reason", "字段列表为空"),
+			zap.String("reason", "empty field list"),
 		)
 	} else {
-		logger.Global.Info("消息描述符字段记录完成",
+		logger.Global.Info("Message descriptor fields recorded",
 			zap.String("message_name", msgName),
 			zap.Int("field_count", fieldCount),
 		)

@@ -49,6 +49,17 @@ public class ZoneConfig {
     @ColumnDefault("false")
     private boolean createRoleClosed;
 
+    /**
+     * 本区角色上限(2026-11-12,区服满员处理 §6):本区一共建过的角色数(data_service 按合服之后的最终区数,删角不减)
+     * 到了这个数,本区网关的 RoleCapacityGuard 就把 {@link #createRoleClosed} 关上。0 = 不设上限。软上限:到线后
+     * 至多一个检查周期加一次策略发布内建出的角色会超出,见 docs/design/zone-full-handling.md §6。
+     * 运维开关,只经 {@code PUT /admin/zones/{id}/role-capacity} 改;POST 新建区服时取库缺省(0),PUT 整行替换不碰它。
+     * {@code @ColumnDefault} 的理由同 {@link #createRoleClosed}。
+     */
+    @Column(name = "role_capacity", nullable = false)
+    @ColumnDefault("0")
+    private int roleCapacity;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -94,6 +105,9 @@ public class ZoneConfig {
 
     public boolean isCreateRoleClosed() { return createRoleClosed; }
     public void setCreateRoleClosed(boolean createRoleClosed) { this.createRoleClosed = createRoleClosed; }
+
+    public int getRoleCapacity() { return roleCapacity; }
+    public void setRoleCapacity(int roleCapacity) { this.roleCapacity = roleCapacity; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

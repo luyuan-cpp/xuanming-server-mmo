@@ -262,8 +262,8 @@ SELECT max_id, step FROM id_segment WHERE biz_tag = ?;
 
 ### 6.4 接线
 
-- **player_id**(Phase 4):login `CreatePlayer` 改用 `idsegment(biz="player")`;`PlayerIDGen` 与 `/login-player` 槽保留一个版本做回滚开关,之后删。
-- **guild_id**(Phase 4):`CreateGuild` 同理。
+- **player_id**(Phase 4):login `CreatePlayer` 改用 `idsegment(biz="player")`;`PlayerIDGen` 与 `/login-player` 槽保留一个版本做回滚开关,之后删。**已删**:回退开关随 2026-10-30 发号器批删除,`PlayerIDGen` 与 `/login-player` 槽位申领 2026-11-12 删除。
+- **guild_id**(Phase 4):`CreateGuild` 同理。guild 的 `/guild` 槽位申领同样 2026-11-12 删除。
 - **item guid**(Phase 5,最后):`ItemStore::MintGuid` 改从 `SegmentClient(biz="item")` 取;段耗尽且续段失败 → 返回 `kInvalidGuid`(与今天 fence 语义一致,bag 已 fail-closed)。可选:续段失败时回退 snowflake 发号——因为 6.3 的值域不相交,这个回退是**安全**的,代价是 snowflake 机器永远留着。默认不回退,只告警,由你选。
 - **继续用 snowflake 的**:snapshot_id、tx_id(需要时间序,且已经是 Kafka 去重键)、scene_id、battle_id / challenge_id、session_id。它们走第 3 节的协议。
 

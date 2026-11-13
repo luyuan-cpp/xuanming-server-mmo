@@ -55,7 +55,7 @@ try:
         tip_parse,
     )
 except ImportError as exc:  # pragma: no cover - 环境问题,给一句能照着做的话
-    sys.exit(f"无法载入依赖({exc}):请先执行  pip install pyyaml openpyxl,并确认 equip_xlsx_patch.py 在同目录")
+    sys.exit(f"cannot load dependencies ({exc}): run  pip install pyyaml openpyxl  first, and make sure equip_xlsx_patch.py is in the same directory")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -139,42 +139,42 @@ TIP_CODES = [
 def self_check() -> None:
     rule = RULE_ROW
     if not 60 <= rule["interval_seconds"] <= 86400:
-        fail("RULE_ROW.interval_seconds 应在 60..86400")
+        fail("RULE_ROW.interval_seconds must be within 60..86400")
     if not 30 <= rule["stay_seconds"] <= rule["interval_seconds"]:
-        fail("RULE_ROW.stay_seconds 应在 30..interval_seconds")
+        fail("RULE_ROW.stay_seconds must be within 30..interval_seconds")
     if not 1 <= rule["shelf_size"] <= 32:
-        fail("RULE_ROW.shelf_size 应在 1..32")
+        fail("RULE_ROW.shelf_size must be within 1..32")
     if rule["weight_discount60"] + rule["weight_discount50"] + rule["weight_discount40"] <= 0:
-        fail("RULE_ROW 的三档折扣权重之和必须 > 0")
+        fail("RULE_ROW: the three discount weights must sum to > 0")
     if not 1 <= rule["interact_range"] <= 100:
-        fail("RULE_ROW.interact_range 应在 1..100")
+        fail("RULE_ROW.interact_range must be within 1..100")
 
     goods_ids = [row[0] for row in GOODS_ROWS]
     if len(set(goods_ids)) != len(goods_ids):
-        fail("GOODS_ROWS 的 id 重复")
+        fail("GOODS_ROWS has duplicate ids")
     for goods_id, _name, item_id, item_count, currency_type, price, _weight, limit_count in GOODS_ROWS:
         if item_id <= 0 or item_count <= 0:
-            fail(f"GOODS_ROWS id={goods_id}:item_id / item_count 必须为正")
+            fail(f"GOODS_ROWS id={goods_id}: item_id / item_count must be positive")
         if currency_type not in (0, 1, 2):
-            fail(f"GOODS_ROWS id={goods_id}:currency_type 只能是 0 / 1 / 2")
+            fail(f"GOODS_ROWS id={goods_id}: currency_type must be 0 / 1 / 2")
         if not 1 <= price <= 1_000_000_000:
-            fail(f"GOODS_ROWS id={goods_id}:price 应在 1..1000000000")
+            fail(f"GOODS_ROWS id={goods_id}: price must be within 1..1000000000")
         if not 1 <= limit_count <= 99:
-            fail(f"GOODS_ROWS id={goods_id}:limit_count 应在 1..99")
+            fail(f"GOODS_ROWS id={goods_id}: limit_count must be within 1..99")
     if sum(row[6] for row in GOODS_ROWS) <= 0:
-        fail("GOODS_ROWS 的上架权重全为 0,货架会永远是空的")
+        fail("GOODS_ROWS: all shelf weights are 0, so the shelf would always be empty")
 
     spot_ids = [row[0] for row in SPOT_ROWS]
     if len(set(spot_ids)) != len(spot_ids):
-        fail("SPOT_ROWS 的 id 重复")
+        fail("SPOT_ROWS has duplicate ids")
     if any(row[1] <= 0 for row in SPOT_ROWS):
-        fail("SPOT_ROWS 的 scene_config_id 必须为正")
+        fail("SPOT_ROWS: scene_config_id must be positive")
 
     names = [name for name, _text, _fault in TIP_CODES]
     if len(set(names)) != len(names):
-        fail("TIP_CODES 的码名重复")
+        fail("TIP_CODES has duplicate code names")
     if len(TIP_CODES) > TIP_WIDTH:
-        fail("TIP_CODES 超出段宽")
+        fail("TIP_CODES exceeds the range width")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -194,11 +194,11 @@ def cmd_new_tables(dry_run: bool) -> None:
         xlsx_path = DATA_DIR / f"{sheet}.xlsx"
         layout = schema_layout(sheet)
         if any(f.width != 1 for f in layout):
-            fail(f"{sheet} 的 schema 里出现了非标量列,new-tables 只会写全标量表,先同步脚本")
+            fail(f"the {sheet} schema has non-scalar columns, but new-tables only writes all-scalar tables; update the script first")
         names = [f.name for f in layout]
         for row in rows:
             if list(row.keys()) != names:
-                fail(f"{sheet} 数据行的键 {list(row.keys())} 与 schema 字段 {names} 不一致 —— schema 改过列,先同步本脚本")
+                fail(f"{sheet}: data row keys {list(row.keys())} differ from the schema fields {names} -- the schema columns changed; update this script first")
 
         wanted = [[None] * len(names) for _ in range(DATA_BEGIN_ROW - 1 + len(rows))]
         wanted[HEADER_ROW - 1] = list(names)
@@ -210,13 +210,13 @@ def cmd_new_tables(dry_run: bool) -> None:
         if xlsx_path.exists():
             ws = only_sheet(openpyxl.load_workbook(xlsx_path), xlsx_path)
             if ws.title == sheet and first_difference(sheet_matrix(ws), wanted) is None:
-                print(f"[已是目标状态] {rel(xlsx_path)} 已存在且内容一致({len(rows)} 行),不改文件。")
+                print(f"[ALREADY CURRENT] {rel(xlsx_path)} exists with identical contents ({len(rows)} rows); file unchanged.")
                 continue
-            fail(f"{rel(xlsx_path)} 已存在但内容与本脚本不同(可能策划已调过数值)—— 本脚本不覆盖。")
+            fail(f"{rel(xlsx_path)} already exists with different contents (designers may have tuned the values) -- this script does not overwrite it.")
 
-        print(f"将新建 {rel(xlsx_path)}:sheet={sheet!r},{len(names)} 列 × {len(rows)} 行数据")
-        print(f"  列:{names}")
-        print(f"  首行:{[rows[0][n] for n in names]}  末行:{[rows[-1][n] for n in names]}")
+        print(f"Will create {rel(xlsx_path)}: sheet={sheet!r}, {len(names)} columns x {len(rows)} data rows")
+        print(f"  columns: {names}")
+        print(f"  first row: {[rows[0][n] for n in names]}  last row: {[rows[-1][n] for n in names]}")
         if dry_run:
             continue
         wb = openpyxl.Workbook()
@@ -232,11 +232,11 @@ def cmd_new_tables(dry_run: bool) -> None:
         check_ws = only_sheet(openpyxl.load_workbook(xlsx_path), xlsx_path, sheet)
         diff = first_difference(sheet_matrix(check_ws), wanted)
         if diff:
-            fail(f"保存后读回的 {xlsx_path.name} 与写入内容不一致({diff})—— 删除该文件后重试")
+            fail(f"after saving, {xlsx_path.name} read back differs from what was written ({diff}) -- delete the file and retry")
         bind(sheet, xlsx_path)
-        print(f"[完成] {rel(xlsx_path)}")
+        print(f"[DONE] {rel(xlsx_path)}")
     if dry_run:
-        print("[dry-run] 未写文件。")
+        print("[dry-run] No files written.")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -249,7 +249,7 @@ def cmd_tip_codes(dry_run: bool) -> None:
     before = sheet_matrix(ws)
     header = [str(v).strip().lower() if v is not None else "" for v in before[HEADER_ROW - 1]]
     if header[:2] != ["name", "commen"] or header.count("fault") != 1:
-        fail(f"{TIP_XLSX.name} 第 1 行应为 name / commen / … / fault(fault 恰好一列),实际 {before[HEADER_ROW - 1]}")
+        fail(f"{TIP_XLSX.name} row 1 should be name / commen / ... / fault (exactly one fault column), got {before[HEADER_ROW - 1]}")
     fault_col = header.index("fault") + 1
 
     groups, notes = tip_parse(before, fault_col)
@@ -261,45 +261,45 @@ def cmd_tip_codes(dry_run: bool) -> None:
     if mine is not None:
         # 已是目标状态 = 段声明一致,且这批码是本组开头的连续一段。不要求恰好在组尾:以后还会往组尾追加。
         if (mine["base"], mine["width"]) == (TIP_BASE, TIP_WIDTH) and mine["codes"][:len(wanted)] == wanted:
-            print(f"[已是目标状态] {header_text}(第 {mine['row']} 行)下已有这 {len(wanted)} 个码,不改文件。")
+            print(f"[ALREADY CURRENT] {header_text} (row {mine['row']}) already has these {len(wanted)} codes; file unchanged.")
             return
-        fail(f"{TIP_XLSX.name} 第 {mine['row']} 行已有 //{TIP_GROUP} 组,但段声明或开头 {len(wanted)} 个码与本脚本不同 —— 先查清是谁加的。")
+        fail(f"{TIP_XLSX.name} row {mine['row']} already has group //{TIP_GROUP}, but its range declaration or first {len(wanted)} codes differ from this script -- find out who added it first.")
 
     # 以下四项都是「先核对再动手」:码名全表唯一、段没被占、没被说明行预留、发号 state 里也不是墓碑。
     owner = {code: g["name"] for g in groups for code, _t, _f in g["codes"]}
-    clash = [f"{n}(在 {owner[n]})" for n in new_names if n in owner]
+    clash = [f"{n} (in {owner[n]})" for n in new_names if n in owner]
     if clash:
-        fail(f"这些码名已在表里:{clash} —— 码名全局唯一,先查清。")
+        fail(f"these code names are already in the table: {clash} -- code names are globally unique; find out first.")
     lo, hi = TIP_BASE, TIP_BASE + TIP_WIDTH
     overlap = [f"{g['name']} [{g['base']},{g['base'] + g['width']})" for g in groups
                if g["base"] < hi and lo < g["base"] + g["width"]]
     if overlap:
-        fail(f"段 [{lo},{hi}) 已被占用:{overlap} —— 改用下一个空闲整千段(改 TIP_BASE),"
-             f"并同步 docs/design/mystery-merchant.md §3.4。")
-    reserved = [f"第 {row} 行 {text!r}" for row, text in notes if str(TIP_BASE) in text]
+        fail(f"range [{lo},{hi}) is already taken: {overlap} -- switch to the next free thousand-wide range (change TIP_BASE) "
+             f"and update docs/design/mystery-merchant.md §3.4.")
+    reserved = [f"row {row} {text!r}" for row, text in notes if str(TIP_BASE) in text]
     if reserved:
-        fail(f"{TIP_BASE} 段已被说明行预留:{reserved} —— 改用下一个空闲整千段并同步设计文档 §3.4。")
+        fail(f"range {TIP_BASE} is reserved by note rows: {reserved} -- switch to the next free thousand-wide range and update design doc §3.4.")
     if TIP_STATE.exists():
         state_groups = json.loads(TIP_STATE.read_text(encoding="utf-8")).get("groups", {})
         tomb = [f"{n} [{g['base']},{g['base'] + g['width']})" for n, g in state_groups.items()
                 if int(g["base"]) < hi and lo < int(g["base"]) + int(g["width"])]
         if tomb:
-            fail(f"发号 state({rel(TIP_STATE)})里段 [{lo},{hi}) 已属于 {tomb} —— 换一个段,不要手改 state。")
+            fail(f"in the ID state ({rel(TIP_STATE)}), range [{lo},{hi}) already belongs to {tomb} -- pick another range; do not edit the state by hand.")
 
     last_row = max((r for r, row in enumerate(before, start=1) if any(v is not None for v in row)), default=0)
     header_row = last_row + 2          # 与既有组一样,组头前留一个空行
     patches: list[Patch] = [(header_row, 1, header_text)]
-    print(f"{TIP_XLSX.name}:现有 {len(groups)} 个组、{len(owner)} 个码,末行是第 {last_row} 行;"
-          f"段 [{lo},{hi}) 空闲、{len(new_names)} 个码名全表唯一。将追加:")
-    print(f"  第 {header_row} 行: {header_text}")
+    print(f"{TIP_XLSX.name}: {len(groups)} groups, {len(owner)} codes, last row {last_row}; "
+          f"range [{lo},{hi}) is free and all {len(new_names)} code names are unique in the table. Will append:")
+    print(f"  row {header_row}: {header_text}")
     for offset, (name, text, fault) in enumerate(wanted, start=1):
         row_idx = header_row + offset
         patches += [(row_idx, 1, name), (row_idx, 2, text)]
         if fault is not None:
             patches.append((row_idx, fault_col, fault))
-        print(f"  第 {row_idx} 行: {name} | {text}" + (" | fault=1" if fault else ""))
+        print(f"  row {row_idx}: {name} | {text}" + (" | fault=1" if fault else ""))
     if dry_run:
-        print("[dry-run] 未写文件。")
+        print("[dry-run] No files written.")
         return
     apply_patches_and_verify(TIP_XLSX, None, wb, ws, before, patches, bind_schema=False)
 
@@ -307,10 +307,10 @@ def cmd_tip_codes(dry_run: bool) -> None:
     groups_after, _notes = tip_parse(sheet_matrix(check_ws), fault_col)
     if [(g["name"], g["codes"]) for g in groups_after[:-1]] != [(g["name"], g["codes"]) for g in groups] \
             or groups_after[-1]["name"] != TIP_GROUP or groups_after[-1]["codes"] != wanted:
-        fail(f"保存后各组的码与预期不符 —— 立刻 git checkout -- {rel(TIP_XLSX)} 还原")
-    print(f"[完成] 组 {len(groups)} -> {len(groups_after)},原有 {len(owner)} 个码逐格一致。"
-          f"导表后核对:这 {len(wanted)} 个码的 id 应为 {lo}..{lo + len(wanted) - 1};"
-          f"新域的 proto/tip/{TIP_GROUP}_tip.pb.{{h,cc}} 要登记进 cpp/generated/table 的 CMakeLists.txt 与 table.vcxproj。")
+        fail(f"after saving, the codes per group are not as expected -- restore it now with git checkout -- {rel(TIP_XLSX)}")
+    print(f"[DONE] groups {len(groups)} -> {len(groups_after)}; the existing {len(owner)} codes are identical cell by cell. "
+          f"After exporting, check: the ids of these {len(wanted)} codes should be {lo}..{lo + len(wanted) - 1}; "
+          f"register the new domain's proto/tip/{TIP_GROUP}_tip.pb.{{h,cc}} in CMakeLists.txt and table.vcxproj under cpp/generated/table.")
 
 
 COMMANDS = {

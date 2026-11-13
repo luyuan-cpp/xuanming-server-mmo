@@ -793,25 +793,43 @@ func (f *teamFollowSmokeBot) walkLeg(from *component.Location, dir [2]float64) (
 	return pos, nil
 }
 
-// followerMoves 统计下标 since 之后 entity 的移动广播:返回 move_state != 0 的条数,以及第一条与最后一条。
+// actorMovesOf 把一条下行消息展开成 ActorMoveS2C:单条移动广播是一条;同一 tick 合并发出的移动列表
+// (ActorMoveListS2C,例如同一队形的几名队员同时起步、停步)是多条;其它消息或解不开时返回 nil。
+func actorMovesOf(r teamFollowSmokeRecord) []*scene.ActorMoveS2C {
+	switch r.messageId {
+	case game.SceneMovementClientPlayerNotifyActorMoveMessageId:
+		msg := &scene.ActorMoveS2C{}
+		if proto.Unmarshal(r.body, msg) != nil {
+			return nil
+		}
+		return []*scene.ActorMoveS2C{msg}
+	case game.SceneMovementClientPlayerNotifyActorMoveListMessageId:
+		list := &scene.ActorMoveListS2C{}
+		if proto.Unmarshal(r.body, list) != nil {
+			return nil
+		}
+		return list.GetMoves()
+	}
+	return nil
+}
+
+// followerMoves 统计下标 since 之后 entity 的移动广播(含合并列表里的):返回 move_state != 0 的条数,以及第一条与最后一条。
 func (f *teamFollowSmokeBot) followerMoves(since int, entity uint64) (int, *scene.ActorMoveS2C, *scene.ActorMoveS2C) {
 	walking := 0
 	var first, last *scene.ActorMoveS2C
 	for _, r := range f.recordsSince(since) {
-		if r.messageId != game.SceneMovementClientPlayerNotifyActorMoveMessageId {
-			continue
+		for _, msg := range actorMovesOf(r) {
+			if msg.GetEntity() != entity {
+				continue
+			}
+			if msg.GetMoveState() != 0 {
+				walking++
+			}
+			if first == nil {
+				first = msg
+			}
+			last = msg
 		}
-		msg := &scene.ActorMoveS2C{}
-		if proto.Unmarshal(r.body, msg) != nil || msg.GetEntity() != entity {
-			continue
-		}
-		if msg.GetMoveState() != 0 {
-			walking++
-		}
-		if first == nil {
-			first = msg
-		}
-		last = msg
 	}
 	return walking, first, last
 }
@@ -821,20 +839,20 @@ func (f *teamFollowSmokeBot) followerMoves(since int, entity uint64) (int, *scen
 func (f *teamFollowSmokeBot) followerTrace(since int, entity uint64) string {
 	var parts []string
 	for _, r := range f.recordsSince(since) {
-		switch r.messageId {
-		case game.SceneMovementClientPlayerNotifyActorMoveMessageId:
-			msg := &scene.ActorMoveS2C{}
-			if proto.Unmarshal(r.body, msg) != nil || msg.GetEntity() != entity {
+		if r.messageId == game.SceneSceneClientPlayerNotifyActorDestroyMessageId {
+			msg := &scene.ActorDestroyS2C{}
+			if proto.Unmarshal(r.body, msg) == nil && msg.GetEntity() == entity {
+				parts = append(parts, "DESTROYED(可见性丢失)")
+			}
+			continue
+		}
+		for _, msg := range actorMovesOf(r) {
+			if msg.GetEntity() != entity {
 				continue
 			}
 			location := msg.GetTransform().GetLocation()
 			parts = append(parts, fmt.Sprintf("%d@(%.2f,%.2f) v=(%.1f,%.1f)", msg.GetMoveState(),
 				location.GetX(), location.GetY(), msg.GetVelocity().GetX(), msg.GetVelocity().GetY()))
-		case game.SceneSceneClientPlayerNotifyActorDestroyMessageId:
-			msg := &scene.ActorDestroyS2C{}
-			if proto.Unmarshal(r.body, msg) == nil && msg.GetEntity() == entity {
-				parts = append(parts, "DESTROYED(可见性丢失)")
-			}
 		}
 	}
 	if len(parts) == 0 {

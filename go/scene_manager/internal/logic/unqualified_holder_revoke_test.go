@@ -226,7 +226,7 @@ func unqualifiedRevokeLuaSeed(t *testing.T, mr *miniredis.Miniredis, playerID, s
 	unqualifiedRevokeSetFence(mr, playerID, fence)
 	require.NoError(t, mr.Set(leaveReleaseWaitKey(playerID), leaveReleaseWaitScope(7, loc)+":1790000000000"))
 	seedSceneMembers(mr, sceneID, 2, playerID)
-	require.NoError(t, mr.Set(sceneNodeKey(sceneID), "10"))
+	require.NoError(t, mr.Set(sceneNodeKey(testZoneId, sceneID), "10"))
 	seedNodeMembers(mr, testZoneId, "10", 2, playerID)
 	return unqualifiedRevokeTarget{playerID: playerID, loc: loc, locationRaw: raw, revisionTag: tag, ownerRevision: 1,
 		zoneID: testZoneId, epoch: 7}, fence
@@ -251,7 +251,7 @@ func TestRevokeUnqualifiedHolderLua_Outcomes(t *testing.T) {
 			return "", false
 		}, unqualifiedRevokeOutcomeRevoked},
 		{"节点映射已不在:只扣场景人数", func(_ *testing.T, mr *miniredis.Miniredis, _ uint64, sceneID uint64) (string, bool) {
-			mr.Del(sceneNodeKey(sceneID))
+			mr.Del(sceneNodeKey(testZoneId, sceneID))
 			return "", false
 		}, unqualifiedRevokeOutcomeRevoked},
 		{"location 已被删掉", func(_ *testing.T, mr *miniredis.Miniredis, playerID, _ uint64) (string, bool) {
@@ -322,7 +322,7 @@ func TestRevokeUnqualifiedHolderLua_Outcomes(t *testing.T) {
 					observed = fence
 				}
 			}
-			nodeMapped := mr.Exists(sceneNodeKey(sceneID))
+			nodeMapped := mr.Exists(sceneNodeKey(testZoneId, sceneID))
 			fenceBefore := unqualifiedRevokeFenceValue(mr, playerID)
 			before := mr.Dump()
 
@@ -334,7 +334,7 @@ func TestRevokeUnqualifiedHolderLua_Outcomes(t *testing.T) {
 				assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
 				assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
 				member := strconv.FormatUint(playerID, 10)
-				_, err = mr.SetAdd(instanceMembersKey(sceneID), member)
+				_, err = mr.SetAdd(instanceMembersKey(testZoneId, sceneID), member)
 				require.NoError(t, err)
 				_, err = mr.SetAdd(nodeMembersKey(testZoneId, "10"), member)
 				require.NoError(t, err)

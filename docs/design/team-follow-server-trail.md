@@ -184,6 +184,11 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
   `PlayerTeamSystem::OnOfflineHostingHeartbeat`:在队伍里、有跟随意图、没接在队长身后的,走一遍刷新与跟随检查;已接上的不发任何读。
   周期比客户端长,是因为正常路径都当场触发,这里只补漏;每次的代价是一次组队读加至多两次 Redis GET,只落在没接上的托管队员身上,
   按节点分摊,不引入全局状态。
+- **节点排空 / 疏散时**(2026-11-12 补,player-connection-lost-hold.md §4.3):托管队员所在的频道被缩容、节点滚动重启或失去身份时,
+  他不再存盘下线,而是拿托管票据走与在线玩家同一条改派链,按托管落点搬到别的节点(去向按「原频道 → 同图 → 默认大世界」解析)。
+  到了之后与跟随换场景到达同一套:重建托管、查月卡、托管开始时由服务器开启跟随,队长在本 zone 别的场景就照上面的规则再跟过去。
+  改派被拒且能证明没放行时有界重发两次;托管落点到了目标节点却没建起来(角色登记 / 认领一时失败)时,目标节点按退避有限次重试
+  同一条落点(同文 §4.4)。在线队员不受影响。
 
 **一次完整的离线托管跨节点跟随**(队长 L 与离线托管的队员 M 在节点 A,L 穿过传送点去了节点 B 的场景 S2):
 
@@ -207,10 +212,17 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
   `MovementSystem::Update` 按 `TeamFollowerComp` 排除他,不会再积分一遍。
 - 移动广播 `ActorMoveS2C` 发给正在显示他的观察者**和他本人**。节流:起步 / 停步、拐弯超过约 20°、速度变化超过 15%
   时立刻发,行走中每 5 帧(250ms)补一条校正,站着不发。量级与改动前队员客户端自己每 0.25 秒一条 MoveSync 相同。
-- 朝向:与客户端上报同一口径(客户端 `WorldCoordinateConverter`):`Rotation.z` 是 Unity 偏航角,单位**度**,
-  服务器坐标里朝向 = (cos z, sin z),所以写 `atan2(dy, dx)` 换算成度,x / y 取 0。瞬移进槽位时直接拷队长的朝向。
-  2026-11-06 读客户端时核实;`ViewSystem::LookAtPosition`(NPC 朝向)写的是弧度、x 当俯仰,与客户端口径不一致,
-  不在本次范围,记在 §9。客户端的角色动画按位置变化取方向,不读这个朝向,所以眼下画面上看不出差别。
+- 同一队形同一 tick 要发的移动合成一批(2026-11-12,`spatial/system/movement.h` 的 `ActorMoveBatch`):按"每个接收者要收哪几名队员"
+  分组,一组一条 —— 只收一个人时仍是 `ActorMoveS2C`,收几个人时是 `ActorMoveListS2C`(客户端逐条按 `ActorMoveS2C` 处理,
+  自己的那条照样只在被驱动期间生效,过滤在 `ActorWorld.ApplyMove`,两种消息走同一处)。每组序列化一次、每个 gate 一个请求,
+  与单条广播同一个形状。队员多半同一 tick 起步、停步,起步对齐时行走中的校正也对齐,所以观察者通常每 tick 每队只收一条;
+  视野不同的接收者分到不同的组,最坏退回到每人一条。停止驱动那一刻补的停步不进批、就地发出,保持它在
+  `TeamFollowStateS2C{driven=false}` 之前发出(到达先后本来不保证,见 §5 第 3 条)。
+- 朝向:口径收在 `spatial/system/facing.h`,与客户端上报同一份(客户端 `WorldCoordinateConverter`):`Rotation.z` 是偏航角,单位**度**,
+  服务器坐标里朝向 = (cos z, sin z),所以写 `atan2(dy, dx)` 换算成度,x / y 取 0;这一 tick 没有水平位移时保留原朝向。
+  瞬移进槽位时直接拷队长的朝向。技能面向目标(`ViewSystem::LookAtPosition`)走同一份口径,2026-11-12 修正(此前写的是弧度、
+  俯仰放在 x,客户端把 x 当翻滚),并像其它写 `Transform` 的入口一样标脏。客户端的角色动画按位置变化取方向,
+  所以朝向错了画面上也不明显,但新进视野的人拿到的快照朝向此前是错的。
 - 被驱动期间客户端的 `MoveStart / MoveSync / MoveStop` 整条丢弃。
 
 ## 5. 客户端契约(新增协议,`proto/scene/player_movement.proto`)
@@ -268,7 +280,7 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
 | 队员逐 tick 导航射线 | 无(被 `MovementSystem` 排除) | 行走中每人每 tick 一次 `ValidateMove`(吸附 + 射线 + 吸附) |
 | 队员移动上报裁决 | 无(整条丢弃) | 每人每秒 4~8 条,每条一次 `ValidateMove` |
 | 寻路 | 只在加入时一次 `FindPath` | 无(客户端自己寻) |
-| 广播 | 与改动前同量级 | 每条上报一次扇出 |
+| 广播 | 同一队形同一 tick 合成一条(§4),观察者通常每 tick 每队一条 | 每名队员每条上报一次扇出 |
 | 内存 | 每支队伍一条有界轨迹(几十个点) | 无 |
 
 要用 `stress_summarize.ps1` 的对比表说话(AGENTS §6),压测要覆盖"全员组队行走"与"队长原地来回点"两种负载。
@@ -277,7 +289,7 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
 
 | 常量 | 值 | 含义 |
 |---|---|---|
-| `kTeamFollowSpacing` | 1.4 米 | 槽位间距(沿路)。沿用客户端跟随的值;视觉偏紧是 team-system.md V.7 第 5 条的待定项,改到 3.3 时队尾到队长 13.2,超过可见半径 10,要同时给队员之间加 AOI 显式关注 |
+| `kTeamFollowSpacing` | 1.4 米 | 槽位间距(沿路)。沿用客户端跟随的值,2026-11-12 定案保留(team-system.md V.7 第 5 条):紧凑纵队,整列 4 × 1.4 = 5.6 在视野半径 10 以内,队员之间不靠显式关注就互相看得见;贴图重叠由客户端按脚底先后排序。`player_team.cpp` 顶部两条 static_assert 守着"整列不超过归队阈值 8、归队阈值小于视野半径 10";按美术身宽拉开时这两条会先报错,要同时给队员之间加 AOI 显式关注(`AoiFollowKind::kTeam` 已预留)并核对 `kTeamFollowMaxLag` |
 | `kTeamFollowCatchUpSpeed` | 10.8 米/秒 | 追赶速度上限 |
 | `kTeamFollowMaxLag` | 24 米 | 暂停中的队员最多为他保留的轨迹;超过就恢复后直接瞬移进槽位 |
 | `kTrailRewindRadius` / `kTrailRewindMinGain` / `kTrailRewindSearchLength` | 0.6 / 0.05 / 4 米 | 回收判定 |
@@ -314,6 +326,18 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
     每名玩家每个周期恰好一秒到期、同一秒的到期按玩家号错开)、`player_team_follow_test.cpp` 的
     `TeamFollowDriveTest.OnlyADetachedMemberWhoWantsToFollowNeedsARecheck`(判据 `NeedsFollowRecheck`:已接在队长身后、不在队伍里、
     暂离的都不重试);真发出去的组队读要组队权威,单测宿主没有,留给联机验收。
+- 2026-11-12 朝向口径与合并广播(§4),未编译、未测试:
+  - `cpp/tests/aoi_delivery_test/aoi_delivery_test.cpp`:`FacingTest.YawIsTheGroundAzimuthInDegrees`、
+    `AoiDeliveryTest.LookAtPositionTurnsTheYawInDegreesAndMarksTheTransformDirty`、`AoiDeliveryTest.LookAtPositionStraightAboveKeepsTheFacing`;
+  - `cpp/tests/aoi_test/aoi_system_test.cpp`:`MoveReceiverGroupingTest.*` 4 条(视野相同的一组一条、视野不同分组、重复接收者与无人接收、满批 64 位);
+  - `player_team_follow_test.cpp`:`TeamFollowDriveTest.DrivenFollowerFacesItsWalkingDirectionInDegrees`(拐弯后偏航 90 度,不是 π/2)。
+  - 合并批的发送胶水(按组选 133 / 135、每组一次广播)没有单测:能截获客户端消息的只有 `aoi_delivery_test`,它不编 `movement.cpp`,
+    编进去会连带拉进大半个 scene 库、可能与假发送函数重复定义,不编译没法排除。留给联机验收:3 人以上的队伍同时起步,
+    旁观者与队员各收到一条 135、列表里是全部在动的队员(本人那条也在),2 人队伍仍是 133。
+
+- 2026-11-12 排空 / 疏散改派托管队员与托管落点的看护(§3.7 末条),未编译、未测试:用例列在 player-connection-lost-hold.md §10 第 7 条
+  (`RelocateConfirmEcs.Hosted*`、`RelocateConfirmHosted.*`、`HostedPlacementRetry*`,Go 的 `TestEnterScene_HostedPlacementEvacuationLandsOnTheResolvedTarget`);
+  联机验收(托管队员所在频道被排空后被改派到别的频道、继续跟随队长)见 `docs/PROGRESS.md` 同日条目。
 
 ## 9. 没做 / 已知边界
 
@@ -324,10 +348,9 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
   入场之后对仍在队形里的队员补推 `driven=true`。2026-11-10 补一行待做:队员跨节点跟随、离线托管的队员跨场景跟随(§3.7),本轮不写 Java 代码。
 - 跨 zone 仍不跟(team-system.md DV-6 的同 zone 那一半不变);跨节点 2026-11-10 起跟(§3.7)。
 - 没开通挂机的离线队员不跨场景跟随,断线保留到期(25 秒)就退出;开通了的跨场景、跨节点照样跟(§3.7),托管到月卡到期。
-- 托管落点提交之后目标节点没把人建起来(事件丢了、登记被拒、载入失败):不丢数据,但他不在世界里,直到重新登录或月卡到期后租约清理
-  (player-connection-lost-hold.md §8 第 9 条)。
+- 托管落点提交之后目标节点没把人建起来:2026-11-12 起目标节点按退避有限次重试(player-connection-lost-hold.md §4.4)。仍不补的两类 ——
+  事件在目标节点消费之前丢了(节点崩溃 / 被同号新进程顶替)、提交之后目标场景被销毁 —— 不丢数据,但他不在世界里,直到重新登录或月卡
+  到期后租约清理(同文 §8 第 9 条)。节点排空 / 疏散 2026-11-12 起把托管队员搬走、接着跟(§3.7 末条)。
 - 原随从的唤醒只覆盖"因队长离开本节点而解散"的那一批;那一刻不在队形里的离线托管队员(例如正在战斗)靠战斗结束时的跟随检查,
   其余漏掉的由托管中的兜底重试(§3.7,每 15 秒)补上,最多晚一个周期(扫描偶尔跳过一秒时晚两个周期)。
 - 掉头时队员互相穿过;绕比间距大的圈时队员跟着绕(§3.3)。
-- `ViewSystem::LookAtPosition` 写 NPC 朝向用的是弧度、x 当俯仰,与客户端口径(`Rotation.z` = 偏航角,度)不一致(§4),不在本次范围。
-- 可以进一步省的:同一支队伍同一 tick 的移动合成一条 `ActorMoveListS2C`;等压测证明广播是瓶颈再做。

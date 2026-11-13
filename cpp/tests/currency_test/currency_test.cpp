@@ -625,6 +625,8 @@ TEST(CurrencyTest, PlayerDomainRedisKeysMatchGoContract)
               player_ownership::OwnerEpochRedisKey(std::numeric_limits<Guid>::max()));
     EXPECT_EQ("player:{12345}:handoff", player_ownership::HandoffRedisKey(12345));
     EXPECT_EQ("player:{42}:handoff_fence", player_ownership::HandoffFenceRedisKey(42));
+    EXPECT_EQ("player:{42}:holder_lease", player_ownership::HolderLeaseRedisKey(42));
+    EXPECT_EQ("15000", player_ownership::kHolderLeaseTtlMs) << "与 Go shared/ownerepoch.HolderLeaseTTL(15 秒)同值";
     EXPECT_EQ("player:{42}:location", player_ownership::LocationRedisKey(42));
     EXPECT_EQ("player:{18446744073709551615}:location",
               player_ownership::LocationRedisKey(std::numeric_limits<Guid>::max()));
@@ -640,6 +642,7 @@ TEST(CurrencyTest, PlayerDomainRedisKeysMatchGoContract)
         EXPECT_EQ(slot, redis_slot::HashSlot(player_ownership::HandoffRedisKey(playerId)));
         EXPECT_EQ(slot, redis_slot::HashSlot(player_ownership::HandoffFenceRedisKey(playerId)));
         EXPECT_EQ(slot, redis_slot::HashSlot(player_ownership::LocationRedisKey(playerId)));
+        EXPECT_EQ(slot, redis_slot::HashSlot(player_ownership::HolderLeaseRedisKey(playerId)));
         const std::string tag = redis_slot::PlayerTag(playerId);
         EXPECT_EQ(slot, redis_slot::HashSlot("battle:lock:" + tag));
         EXPECT_EQ(slot, redis_slot::HashSlot("battle:ctx:" + tag));

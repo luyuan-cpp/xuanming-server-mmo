@@ -64,6 +64,27 @@ func (f *memRouteStore) RegisterHome(_ context.Context, req store.RouteRegisterR
 	}
 }
 
+// CountHomeZones 同真实驱动:ctx 已结束的查询直接失败;数 rows 里归属落在 zones 的行(重复的区不重复计)。
+func (f *memRouteStore) CountHomeZones(ctx context.Context, zones []uint32) (uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	if f.err != nil {
+		return 0, f.err
+	}
+	in := make(map[uint32]bool, len(zones))
+	for _, zone := range zones {
+		in[zone] = true
+	}
+	var roles uint64
+	for _, row := range f.rows {
+		if row.HasHome() && in[row.HomeZone] {
+			roles++
+		}
+	}
+	return roles, nil
+}
+
 // GetRoutes 同真实驱动:ctx 已结束的查询直接失败。
 func (f *memRouteStore) GetRoutes(ctx context.Context, ids []uint64) (map[uint64]store.RouteRow, error) {
 	f.getRoutesCalls++
@@ -224,6 +245,53 @@ func TestGetMergedZones(t *testing.T) {
 	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
 }
 
+// TestCountZoneRoles_CountsFinalZoneGroup:按合服之后的最终区数(5→6→7 链上三个区一起数),被合走的区按最终区回答,
+// 没合服的区只数自己;登记写入的是原始值,删角不经过这里。
+func TestCountZoneRoles_CountsFinalZoneGroup(t *testing.T) {
+	s := newMergedZoneTestServer(t, map[uint32]uint32{5: 6, 6: 7})
+	ctx := context.Background()
+	for player, zone := range map[uint64]uint32{1201: 5, 1202: 6, 1203: 7, 1204: 7, 1205: 9} {
+		_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: player, HomeZoneId: zone, StorageId: placement.DefaultGlobalStorageID})
+		require.NoError(t, err)
+	}
+	for zone, want := range map[uint32]uint64{7: 4, 5: 4, 9: 1, 11: 0} {
+		resp, err := s.CountZoneRoles(ctx, &data_service.CountZoneRolesRequest{ZoneId: zone})
+		require.NoErrorf(t, err, "zone %d", zone)
+		assert.Equalf(t, want, resp.GetRoles(), "zone %d", zone)
+	}
+}
+
+// TestCountZoneRoles_FailsClosed:区号非法回 InvalidArgument;合服映射没装配、库故障、route store 没装配都回
+// Unavailable + 码 30,绝不回 0(0 会被网关当成「远没到上限」);调用方已放弃时回它的取消原因。
+func TestCountZoneRoles_FailsClosed(t *testing.T) {
+	ctx := context.Background()
+	s, routes := newHomeZoneTestServer(t)
+
+	for _, zone := range []uint32{0, store.RouteHomeZoneMax + 1} {
+		_, err := s.CountZoneRoles(ctx, &data_service.CountZoneRolesRequest{ZoneId: zone})
+		assertStatusCode(t, err, codes.InvalidArgument, constants.ErrCodeInvalidRequest)
+	}
+
+	routes.err = errRouteSQL
+	resp, err := s.CountZoneRoles(ctx, &data_service.CountZoneRolesRequest{ZoneId: 3})
+	assert.Nil(t, resp)
+	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
+	routes.err = nil
+
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = s.CountZoneRoles(canceled, &data_service.CountZoneRolesRequest{ZoneId: 3})
+	assert.Equal(t, codes.Canceled, status.Code(err))
+
+	s.svcCtx.Router = routing.NewRouter(nil)
+	_, err = s.CountZoneRoles(ctx, &data_service.CountZoneRolesRequest{ZoneId: 3})
+	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
+
+	s.svcCtx.MergedZones = nil
+	_, err = s.CountZoneRoles(ctx, &data_service.CountZoneRolesRequest{ZoneId: 3})
+	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
+}
+
 // TestHomeZoneRPCs_NoRouteStoreFailsClosed:route store 没装配时读写都回 Unavailable + 码 30,绝不 NotFound。
 func TestHomeZoneRPCs_NoRouteStoreFailsClosed(t *testing.T) {
 	s, _ := newHomeZoneTestServer(t)
@@ -339,7 +407,8 @@ func TestRegisterPlayerZone_StorageIdPinsPlacementOnlyOnFirstWrite(t *testing.T)
 	require.NoError(t, err)
 	assert.Equal(t, placement.DefaultGlobalStorageID, routes.rows[3101].StorageID)
 
-	const firstStorage = uint32(11)
+	// 另一个存档库编号。区号值域的编号(比如 11)登记时就被拒绝:zone 存档库已退役(A17c)。
+	const firstStorage = placement.FirstStorageID + 11
 	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3102, HomeZoneId: 4, StorageId: firstStorage})
 	require.NoError(t, err)
 	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{

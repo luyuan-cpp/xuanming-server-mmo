@@ -173,7 +173,9 @@ Candidate Classify(const SessionInfo &session, SteadyTime now)
 	// 路由 lane 还有在途或排队的请求时不迁,留到下一拍(client-request-ordering.md O9,2026-11-10 补):推 124 会让排队项不再发出
 	// (逐条回 1003),排在慢请求后面的 LeaveGame 这类请求就白发了;在途那条的回包也还没回来。应答到达时 OnReply 按本函数复核,
 	// 要票期间 lane 变忙同样不推。代价只是这条连接晚一拍迁:正常会话的 lane 绝大多数时刻是空的。
-	if (session.routerLane.Depth() != 0)
+	// 场景 lane 同理(client-scene-request-handoff-hold.md §4.6):还有发往 scene 的请求在途、排队或等重投时不迁,
+	// 免得客户端到新 gate 上发的请求抢在它们前面执行。请求-响应在途只有毫秒级,等重投最长 2 s,晚一两拍迁。
+	if (session.routerLane.Depth() != 0 || !session.sceneLane.Empty())
 	{
 		return Candidate::kSkip;
 	}

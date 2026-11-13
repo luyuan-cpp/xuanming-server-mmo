@@ -114,7 +114,7 @@ func TestEnterScene_SameRequestIDDifferentLoginGenerationReplaysCachedSuccess(t 
 
 	const targetID = uint64(7403)
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
-	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, targetID), "10")
+	mr.Set(sceneNodeKey(testZoneId, targetID), "10")
 	seedSceneMembers(mr, targetID, 0)
 	first := &scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: 6403, SceneId: targetID, ZoneId: testZoneId, SessionId: 44,
@@ -128,7 +128,7 @@ func TestEnterScene_SameRequestIDDifferentLoginGenerationReplaysCachedSuccess(t 
 	require.Len(t, *captured, 1)
 
 	// 删除目标映射:若第二次还进入解析路径就会失败;成功只能来自完整响应重放。
-	mr.Del(fmt.Sprintf(SceneNodeKeyFmt, targetID))
+	mr.Del(sceneNodeKey(testZoneId, targetID))
 	retry := gproto.Clone(first).(*scene_manager.EnterSceneRequest)
 	retry.LoginGeneration = 200
 	retryResp, err := NewEnterSceneLogic(ctx, sc).EnterScene(retry)

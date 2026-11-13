@@ -125,7 +125,6 @@ func newReserveMoveCase(t *testing.T, sceneID uint64, setup reserveMoveSetup, op
 
 	_, err = mr.SAdd(worldChannelsKey(reserveMoveZone, reserveMoveConfID), strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
-	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(reserveMoveZone), 10)))
 	seedSceneOwnedBy(t, mr, reserveMoveZone, sceneID, reserveNodeOwner)
 	record := seedAgonesRoom(t, sc, alloc, sceneID, reserveGsOwner)
 
@@ -163,7 +162,7 @@ func (c *reserveMoveCase) requireOwnedBy(t *testing.T, node string) {
 func (c *reserveMoveCase) requireUnmoved(t *testing.T) {
 	t.Helper()
 	c.requireOwnedBy(t, reserveNodeOwner)
-	record, err := c.sc.Redis.Get(sceneAgonesGsKey(c.sceneID))
+	record, err := c.sc.Redis.Get(sceneAgonesGsKey(reserveMoveZone, c.sceneID))
 	require.NoError(t, err)
 	require.Equal(t, c.record, record, "名额记录不动")
 	require.Contains(t, c.alloc.entriesOf(reserveGsOwner), parseAgonesRoom(c.record).Entry, "属主 GameServer 上的旧条目不动")
@@ -185,7 +184,7 @@ func deadOwnerMovePaths() []deadOwnerMovePath {
 				return ""
 			}
 			// rebalance 不回落点,以迁移之后的属主为准。
-			owner, err := c.sc.Redis.Get(sceneNodeKey(c.sceneID))
+			owner, err := c.sc.Redis.Get(sceneNodeKey(reserveMoveZone, c.sceneID))
 			require.NoError(t, err)
 			return owner
 		}},
@@ -346,7 +345,7 @@ func TestReserveBeforeMove_LostCASSettlesTheRoomByTheCurrentOwner(t *testing.T) 
 				return
 			}
 			require.Equal(t, destroysBefore+1, sharedFakeSceneNode.destroyCalls.Load(), "target 上预建的实体没有归属,必须回收")
-			record, err := c.sc.Redis.Get(sceneAgonesGsKey(c.sceneID))
+			record, err := c.sc.Redis.Get(sceneAgonesGsKey(reserveMoveZone, c.sceneID))
 			require.NoError(t, err)
 			require.Equal(t, c.record, record, "属主不是这次的落点:记录不动")
 			require.EqualValues(t, 0, c.alloc.roomsOf(reserveGsTarget), "这次在 target 上占的那一条必须放弃")

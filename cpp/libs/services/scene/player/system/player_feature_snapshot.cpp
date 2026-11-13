@@ -110,6 +110,23 @@ void FillMission(entt::entity player, uint64_t nowMs, uint32_t missionId, uint32
     }
 }
 
+// 人物背包里每种物品被预留占住的数量(战斗道具预留,docs/design/battle-item-reservation.md),按 config_id 升序。
+// 只读,经 BagService::HeldCount 问(读缺失按没有预留)。只列背包里此刻有的配置号,数量不超过这种物品的可计数总量:
+// 给玩家看的是「包里这几样有多少动不了」,预留里多出来的部分(不变量被破坏时才会有)没有可标的格子。
+void FillHeldItems(entt::entity player, const Bag& inventory, BagInfo& out)
+{
+    std::set<uint32_t> configIds;
+    inventory.ForEachItem([&configIds](Guid, const ItemComp& item) { configIds.insert(item.config_id()); });
+    for (const uint32_t configId : configIds)
+    {
+        const uint64_t held = BagService::HeldCount(player, inventory, configId);
+        if (held == 0) continue;
+        auto* line = out.add_held_items();
+        line->set_config_id(configId);
+        line->set_count(std::min<uint64_t>(held, inventory.GetTotalItemCount(configId)));
+    }
+}
+
 } // namespace
 
 uint32_t PlayerBagSystem::BuildSnapshot(entt::entity player, uint32_t bagType, BagInfo& out)
@@ -156,6 +173,8 @@ uint32_t PlayerBagSystem::BuildSnapshot(entt::entity player, uint32_t bagType, B
     // 必须在 set_capacity 与上面填完 slots 之后调 —— 它只下发槽号在容量内的槽,
     // 并且没有部位名的槽只在被占用时才下发(占用关系读 layout.slots)。
     if (bagType == kEquipment) PlayerEquipSystem::FillEquipSlots(*layout);
+    // 人物背包额外下发被战斗道具预留占住的数量:客户端标出「战斗结算中」,选物品交易时只让选没被占住的部分。
+    if (bagType == kInventory) FillHeldItems(player, bag, out);
     if (const auto* currency = tlsEcs.actorRegistry.try_get<CurrencyComp>(player))
         out.mutable_currency()->CopyFrom(*currency);
     return kSuccess;

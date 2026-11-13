@@ -1485,19 +1485,9 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 - **第 2 项（GM 对新币种按 ID 透明执行）**：维持现状，不改代码，理由写进设计 §13 第 10 条。
 - **第 3 项（新币种启用开关）**：第一次新增币种时再做（YAGNI），不改代码。
 
-**3. 没做：战斗结算 C-2 改整笔 DEFER（留给战斗线）**
+**3. ~~没做：战斗结算 C-2 改整笔 DEFER（留给战斗线）~~ 已做，见 §25**
 
-- **现状**：`player_battle.cpp` 对查不到表的掉落 / 消耗按 C-2 剔除这一项、记 ERROR（`metric=battle_inbox_item_effect_skipped`），交人工补偿。
-- **为什么要改**：
-  - C-2 的前提是「配置行可能被热更删掉」。表行只增不删之后，查不到只可能是尚未热更到本节点、或来自更新版本的行。
-  - 剔除就是丢掉玩家这一局的掉落，应改为整笔 DEFER。整笔 DEFER 零副作用，热更到这一行之后本地续做即可成功，与号段不足、跨区冻结同一条路。
-- **为什么本批没改**：11-11 01:50 这个文件还有别的会话在写，C-2 的几处都在别人的未提交改动范围里。
-- **要改的地方**：
-  - 删 `DropItemsWithoutConfigRow` 与应用成功后逐项记 ERROR 的循环；
-  - `ApplySettlementToEntity` 在算候选之前，见到查不到表的配置就整笔返回 DEFER（打 `metric=persist_version_skew where=battle_item`）；
-  - `HasUnsupportedInboxConsumption` 里那句「行不存在不是版本错位」的注释改掉；
-  - `player_battle_settlement_test.cpp` 里两条 C-2 用例（掉落、消耗）改为期望 DEFER、零副作用，热更补上这一行后重试即 APPLIED。
-- **Java**：同样要做，PARITY 里一并登记。
+> 2026-11-11 ~ 12 由「战斗结算 C-2」会话做完。本段原先列的现状、理由与改法都搬进了 §25，以 §25 为准。当时没改的原因：11-11 01:50 `player_battle.cpp` 还有别的会话在写。
 
 **4. 客户端核对（设计 §12.2 末段「客户端可见的语义变化」；原登记见本文 761 行附近的客户端待确认项）**
 
@@ -1555,3 +1545,102 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
   - 本文、`docs/PROGRESS.md`。
 - Java 对账本：`D:\luyuan\xuanming-server-mmo\PARITY.md`。
 - 客户端（`D:\luyuan\mmorpg-client`，已随 `0ef7a0a6` 入库）：`Assets/Scripts/UI/Ugui/Skills/SkillPanel.cs`、`Assets/Tests/EditMode/Battle/SkillPanelPresentationTests.cs`。Java 对账本的登记已随 Java 仓 `7f29da40` 入库。
+
+## 25. 续：第 8 批收尾：战斗结算对查不到表的物品 / 宝宝种类改整笔 DEFER（2026-11-11 ~ 12，战斗结算 C-2 会话，接 §24 第 3 段）
+
+> **状态**：代码、用例、文档都已写完，**未编译、未测试**（Claude 不跑编译和测试命令）。
+> - 11-11 的物品部分（`player_battle.{h,cpp}`）已随整仓提交 `4edb25640` 入库。此后 11-12 的 Docker 全量 C++ Debug 构建（`build/verification/docker-rebuild-all-20261112T040700.029055Z/`）成功，可作这部分能编过的旁证，不代替下面的验证。
+> - 11-12 的宝宝部分、全部用例改动与文档在 main 工作区，未提交（没开分支）。
+> - bag_test 自 11-10 之后没有运行记录。从 `4edb25640` 到这次用例改动之间，HEAD 上有 3 条用例还按旧口径断言，这段时间跑 bag_test 会红在这 3 条上，不是别的改动引起的：`InboxBattleResultRecordsActualAmountsNotTheTerminalSource`、`InboxDropWithDeletedConfigRowSkipsOnlyThatDrop`、`InboxConsumptionWithDeletedConfigRowDoesNotHaltDomain`（后两条现已改名）。
+
+**为什么改**
+
+- C-2（2026-10-30）的前提是「配置行可能被热更删掉」：行不会回来，整笔 DEFER 会永远卡住，所以只剔除查不到表的掉落 / 消耗，其余照常 APPLIED，剔除的项记 ERROR 交人工补偿。
+- 2026-11-11 起 Item / Pet 表行 id 只增不删，由导表器 `(cfg_ids_permanent)` 门禁守住（§24 第 2 段、`data/AGENTS.md`「行 id 只增不删」）。查不到只可能是这一行还没热更到本节点，或结算来自更新版本的 battle 节点。
+- 这时剔除就是丢掉玩家这一局的掉落。整笔 DEFER 没有副作用，这一行热更到本节点之后本地续做即成功，与号段不足、跨区冻结走同一条路。
+- 资产通道在第 8 批已对「查不到表」回 RETRY。战斗结算是表行规则定下之后剩下的不一致点。
+
+**1. 物品（11-11）**
+
+改动都在 `cpp/libs/services/scene/battle/system/player_battle.cpp`：
+- 删掉 `DropItemsWithoutConfigRow`、`SkippedSettlementItem`，以及应用成功后逐项打 `metric=battle_inbox_item_effect_skipped` 的循环。
+- 新增 `SmallestItemConfigUnknownToThisNode`。`ApplySettlementToEntity` 在 `CollectApplicableInboxPets` 之后、`DropBlockedGains` 之前判：消耗或掉落里有本节点 Item 表查不到的配置号，整笔返回 false。
+  - 位置必须在剔除封禁项、算实际可扣量之前：查不到的项既不能当「被封」剔掉，也不能当「持有 0」夹紧后照常应用。
+  - 日志一条 WARN：`[PlayerBattle] metric=persist_version_skew where=battle_item player_id= battle_id= side=consumed|gained config_id=`。两边都有时报消耗那一边，同一边报最小的配置号，日志确定。
+- `HasUnsupportedInboxConsumption` 的函数体没变（查不到行照旧 `continue`，交给上面那一步），只把注释改成新口径。
+- 判 DEFER，不判版本错位：`kVersionSkew` 会停用整个域，要等实体重建才重拉；配置表在进程内热更，行到了本地重试就能成功。
+- 退避与告警照收件箱现有路径，没有另造：
+  - 执行器回 `{kDefer, 0}`，收件箱打 `metric=inbox_deferred reason=executor_defer`，本地按 1s→60s 退避重试，不重新拉取；
+  - 原因码是 0，不带「背包放不下」，玩家腾背包不会把它提前；
+  - 一直不落定时由现有的 `PlayerInboxDeliveredUnackedTooOld` 告警兜住。
+
+**2. 宝宝（11-12，核对同类入口时发现，一并改）**
+
+- 同一个执行器里，玩家带进这一局的宝宝种类在本节点 Pet 表查不到时，原先只跳过这只宝宝的战后终值回写（`metric=battle_inbox_pet_effect_skipped reason=pet_table_missing`），其余照常 APPLIED。
+- Pet 表与 Item 表是同一条表行规则，跳过会永久丢掉这只宝宝的战后终值。现在 `CollectApplicableInboxPets` 遇到这种情况整笔返回 false，日志 `metric=persist_version_skew where=battle_pet`（带 `pet_id`、`pet_table_id`）。
+- 没变的两种：宝宝已不在玩家身上（`pet_no_longer_owned`）、宝宝属性池缺配（`pet_pool_missing`）。它们不属于「表行还没到」，仍只跳过这一只、记 ERROR。
+- 这一条超出了原任务点名的掉落 / 消耗。负责人 11-12 的要求是查出的问题现在就修，所以没有留到以后。
+
+**3. 用例**（都在 `cpp/tests/bag_test/player_battle_settlement_test.cpp`）
+
+| 用例 | 变化 |
+|---|---|
+| `PlayerBattleSettlementItemTest.InboxDropWithConfigUnknownToThisNodeDefersWholeSettlement` | 原名 `InboxDropWithDeletedConfigRowSkipsOnlyThatDrop`。期望从 APPLIED 改为 DEFER；同一笔里查得到的掉落、金币、击杀、HP 都不动，不铸号、不记流水；再试一次仍是 DEFER，原因码 0 |
+| `PlayerBattleSettlementItemTest.InboxConsumptionWithConfigUnknownToThisNodeDefersWholeSettlement` | 原名 `InboxConsumptionWithDeletedConfigRowDoesNotHaltDomain`。期望从 APPLIED 改为 DEFER；查得到的消耗也不扣 |
+| `PlayerBattleSettlementItemTest.InboxSettlementAppliesOnRetryOnceTheItemRowsAreHotUpdated` | 新增。消耗与掉落两行都没热更到时 DEFER，这一局的道具预留原样押着；热更之后同一份原件重试即 APPLIED，消耗从预留里扣、掉落入包、预留释放 |
+| `PlayerBattleSettlementTest.InboxPetConfigUnknownToThisNodeDefersWholeSettlement` | 原名 `InboxMissingPetTableSkipsOnlyThatPetEffect`。期望从 APPLIED 改为 DEFER、零副作用 |
+| `PlayerBattleSettlementTest.InboxSettlementAppliesOnRetryOnceThePetRowIsHotUpdated` | 新增。种类行没热更到时 DEFER；热更之后重试即 APPLIED，宝宝的战后终值写进去 |
+| `PlayerBattleSettlementItemTest.InboxBattleResultRecordsActualAmountsNotTheTerminalSource` | 去掉了「配置行已删的掉落不记」那一项（这种结算现在整笔延后，走不到记结果）；消耗按实际持有夹紧的断言不变 |
+
+- 模拟「还没热更到」的手法：把这一行从表的主键索引里摘掉（查行与 `Exists` 都走这份索引，与 `player_equip_test` 的 `EditableEnhanceIndex` 同一类手段）；热更就是重新 `Load()` 整张表。物品用例用夹具 `ScopedItemRowsNotYetHotUpdated`，析构时无条件再加载一次。
+- 宝宝重试用例是这个文件里第一条让宝宝效果真正应用成功的用例，此前几条都是跳过或延后。前置断言了 Pet 表非空、宝宝属性池有配。它失败时先看是不是夹具缺表，再判断是不是本批改动的问题。
+
+**4. 同步改的文档**
+
+- 设计稿 `docs/design/mixed-version-persist-field-protection.md`：§9「第 8 批收尾」与表里一行、§12 载荷行、§13 第 10 条、v0.13。
+- 运维手册 `docs/ops/player-inbox-runbook.md`：
+  - §6.1 表把「物品配置行被热更删除」一行改成「物品 / 宝宝配置在本节点表里查不到」，宝宝一行去掉 `pet_table_missing`；
+  - §5.2 A′ 加一条指路：`where=battle_item` / `where=battle_pet` 不是停用，是整笔延后。
+- `docs/design/battle-result-recovery.md` §4.1「只记实际入账」一句。
+- 告警规则没有改：
+  - `player-inbox-alerts.yaml` 的毒消息告警描述已经写了，见到 `metric=persist_version_skew` 先按版本错位排查；
+  - `battle_inbox_item_effect_skipped` 从来没有告警规则。
+
+**给 Codex**（工作目录为仓库根 `D:\luyuan\xuanming-server-mmo-cpp`，pwsh 7，日志放 `build/verification/persist-batch8-battle/`）
+
+1. 先编库。`player_battle.cpp` 在 scene 库里，`run_cpp_tests.ps1 -Build` 只编测试工程、链接预编好的库，不先编库跑的就是旧代码：
+   ```
+   msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64
+   ```
+   - 必须串行 `/m:1`，并发会报假的 C1041 / LNK1104。
+   - 通过标准：0 错误，Scene 共享库与 Scene / Gate / Battle 节点退出 0。输出 Tee 到 `build/verification/persist-batch8-battle/game-sln.build.log`。
+2. 再跑 bag_test：
+   ```
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter bag_test -LogDir build/verification/persist-batch8-battle
+   ```
+   - 通过标准：上表 6 条都在列且通过；`PlayerBattleSettlementTest.*`、`PlayerBattleSettlementItemTest.*` 全绿；三个旧用例名不再出现。
+   - 回归守卫（必须照旧通过）：
+     - `PlayerBattleSettlementTest.InboxUnownedPetSkipsOnlyRetiredPetEffect`、`InboxMissingPetPoolSkipsOnlyThatPetEffect`：这两种仍只跳过这一只；
+     - `PlayerBattleSettlementItemTest.InboxGlobalItemBlockSkipsOnlyTheBlockedDropAndAppliesTheRest`：封禁仍只剔除这一项；
+     - `PlayerBattleSettlementItemTest.InboxUnknownConsumedInstanceCannotBeDowngradedToOrdinaryQuantity`：实例带未知字段仍判版本错位；
+     - `PlayerBattleSettlementItemTest.InboxConsumesFromItsOwnHoldAndReleasesIt`。
+   - 失败时保留 gtest 输出。不要为了变绿去改期望，先判断是不是这批改动的问题。
+3. 本节没有改 proto、配表和 Go，不需要协议生成、导表和 Go 构建。§24「给 Codex」的 5 步仍然要跑，其中第 3 步的 bag_test 可以和上面第 2 步合并成一次。
+
+**没验证的**
+
+- 没有编译，没有跑任何用例。
+- 没有走真实的热更入口（scene 节点收到配表更新后重新加载）。用例里的热更是直接调 `Load()`。
+- 没有冒烟：新旧 scene 混跑时，一局带新物品的结算先延后、升级后到账，这条链路只有单测口径。
+
+**Java 版（AGENTS §12）**：本轮不写 Java 代码。Java 仓 `PARITY.md` 混版本那一行的第 ③ 条（战斗结算查不到表的掉落 / 消耗整笔延后）11-11 已登记；11-12 把其中「mmorpg 也还没改」改成已改，并补了宝宝种类同口径。
+
+**本节文件清单**
+
+- 已随 `4edb25640` 入库：`cpp/libs/services/scene/battle/system/player_battle.{h,cpp}` 的物品部分。
+- main 工作区，未提交：
+  - `cpp/libs/services/scene/battle/system/player_battle.{h,cpp}`（宝宝部分）；
+  - `cpp/tests/bag_test/player_battle_settlement_test.cpp`；
+  - `docs/design/mixed-version-persist-field-protection.md`、`docs/design/battle-result-recovery.md`、`docs/ops/player-inbox-runbook.md`；
+  - 本文、`docs/PROGRESS.md`。
+- Java 对账本：`D:\luyuan\xuanming-server-mmo\PARITY.md`。

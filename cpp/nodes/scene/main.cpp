@@ -462,6 +462,17 @@ int main(int argc, char *argv[])
             // 待寄邮件的 tick(docs/design/battle-overflow-mail.md):每秒把已确认落盘的待寄条目交给邮件服务,
             // 每名玩家至多一封在途。只寄已提交的存档快照里已有的条目,所以不必等别的启动依赖。
             context->mailOutboxTimer.RunEvery(PlayerMailOutboxSystem::kTickIntervalSec, PlayerMailOutboxSystem::Tick);
+            // 没配发件密钥(没有部署 mail 的调试栈)时不接改投:两包都放不下的结算照旧整笔延后。在这里说一次,
+            // 之后每一次不接只打 DEBUG。K8s 上密钥是必需的 secretKeyRef,缺了 Pod 起不来,走不到这一行。
+            if (PlayerMailOutboxSystem::IsSenderConfigured())
+            {
+                LOG_INFO << "[MailOutbox] Battle overflow mail is enabled: drops that fit neither bag are mailed to the player";
+            }
+            else
+            {
+                LOG_WARN << "[MailOutbox] Battle overflow mail is disabled: MAIL_PRODUCER_SECRET_BATTLE is not set (or shorter"
+                            " than 32 bytes); settlements whose drops fit neither bag are deferred until the player frees space";
+            }
             // 神秘商人:每 5 秒从 zone Redis 读一次「这一轮商人在哪、卖什么」(scene_manager 写入),
             // 读到新的一轮就向本节点玩家发出现公告(docs/design/mystery-merchant.md §5.1)。不进 20FPS World::Update。
             PlayerMysteryMerchantSystem::Start(n.GetLoop());

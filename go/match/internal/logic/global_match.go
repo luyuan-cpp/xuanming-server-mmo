@@ -500,7 +500,13 @@ func globalRequestBattleTicket(ctx context.Context, s *svc.ServiceContext, pid, 
 	client := battlepb.NewBattleNodeClient(conn)
 	q, e := client.QueryBattleCreation(qctx, &battlepb.QueryBattleCreationRequest{BattleId: id, PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId})
 	if e != nil {
+		// 问不到原执行实例:它也许已经不在了。记成可疑,由取证循环确认后提前作废(global_instance_loss.go);这一次的回包不变。
+		suspectBattleInstanceLoss(s, id)
 		return nil, e
+	}
+	if q.GetTargetInstanceId() == "" {
+		// 回了空包:原地址上应答的不是原实例(battle 对不符的实例号不回显)。同样记成可疑。
+		suspectBattleInstanceLoss(s, id)
 	}
 	if q.State == battlepb.BattleCreationState_BATTLE_CREATION_UNKNOWN || f.State < 2 {
 		return &battlepb.RequestBattleTicketResponse{ErrorMessage: tipErr(constants.ErrInternal, "战斗创建结果正在恢复，请稍后重试")}, nil
@@ -545,6 +551,10 @@ func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, culp
 		s.HoldRelay(err)
 		if err == nil && decision == pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
 			cancelPrepared(s, prepared, f.BattleId)
+		} else if err == nil {
+			// 这一次没能作废(准入还没关、原实例没应答等)。原实例若已经不在,不必等到截止:记成可疑,取证循环只做只读查询,
+			// 原实例应答就撤出,确认不在就提前作废(global_instance_loss.go)。备战中的成员由作废结算解冻。
+			suspectBattleInstanceLoss(s, f.BattleId)
 		}
 		return
 	}

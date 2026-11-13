@@ -156,7 +156,9 @@ func (passGate) beforeBegin(context.Context, driver.Conn) (gateAttempt, error) {
 func (passGate) enter(context.Context, driver.Conn) error     { return nil }
 func (passGate) admitRead(context.Context, driver.Conn) error { return nil }
 
-// 每条物理连接只读核永久REGISTER全文；复位后也重核，不以可读UUID替代boot绑定。
+// 每条物理连接建连时只读核一次永久REGISTER全文，不以可读UUID替代boot绑定。
+// 连接复用时不重核(2026-11-12,connector.revalidate):收据只追加、按 registration_digest 取,不会变;
+// 注册行还在不在、摘要对不对,每笔写事务在 enter 里、slot 行锁之下核。
 func verifyBootRegistration(ctx context.Context, conn driver.Conn, grant *databasepb.SqlWriterBootGrant) error {
 	if grant == nil {
 		return ErrWriterDenied

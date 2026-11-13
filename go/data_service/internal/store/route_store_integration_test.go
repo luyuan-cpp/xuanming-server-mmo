@@ -1056,4 +1056,80 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 		"对照语句必然全表扫描,计划里却没有 %q:这一版 TiDB 的 EXPLAIN 格式与用例的假设不同,"+
 			"下面的「不含」不构成证据,请按留档的计划人工判读", tidbFullScanOp)
 	assert.NotContains(t, explainTiDB("R13", stmt), tidbFullScanOp, "R13 不许全表扫描")
+	// R16 按区计数:区号是 idx_route_home 的首列,必须是索引范围扫描(建角上限检查定时按区数,不能每次扫全表)。
+	countStmt := inlineRouteArgs(t, store.RouteCountHomeZonesSQLForTest(2), []uint64{uint64(zone), uint64(zone) + 1})
+	assert.NotContains(t, explainTiDB("R16", countStmt), tidbFullScanOp, "R16 不许全表 / 全索引扫描")
+}
+
+// TestRouteStore_CountHomeZones(R16):只数给定区的行,重复的区不重复计,归属为 NULL 的行(只有落点)不算;
+// MySQL 上走 idx_route_home(TiDB 的计划在 TestRouteStore_TiDBClusteredShardsAndPresplit 里查)。
+func TestRouteStore_CountHomeZones(t *testing.T) {
+	db := storetest.NewMigratedDB(t)
+	st := newRouteStore(t, db)
+	ctx := context.Background()
+
+	// 20 个区各 100 行,另加一行只有落点、没有归属。
+	const zones, perZone = 20, 100
+	var values strings.Builder
+	for z := 1; z <= zones; z++ {
+		for i := 0; i < perZone; i++ {
+			id := uint64(z*1000 + i)
+			if values.Len() > 0 {
+				values.WriteString(",")
+			}
+			fmt.Fprintf(&values, "(%d,%d,%d,1,'it-seed',1,1)", placement.RouteRowShard(id), id, z)
+		}
+	}
+	_, err := db.Raw.Exec("INSERT INTO player_route (route_shard, player_id, home_zone, rev, updated_by, created_at_ms, updated_at_ms) VALUES " + values.String())
+	require.NoError(t, err)
+	const placementOnly uint64 = 99001
+	_, err = db.Raw.Exec("INSERT INTO player_route (route_shard, player_id, storage_id, placement_version, rev, updated_by, created_at_ms, updated_at_ms)"+
+		" VALUES (?, ?, 1, 1, 1, 'it-seed', 1, 1)", placement.RouteRowShard(placementOnly), placementOnly)
+	require.NoError(t, err)
+
+	for _, c := range []struct {
+		zones []uint32
+		want  uint64
+	}{
+		{[]uint32{3}, perZone},
+		{[]uint32{3, 4}, 2 * perZone},
+		{[]uint32{3, 3}, perZone},
+		{[]uint32{zones + 1}, 0},
+	} {
+		got, err := st.CountHomeZones(ctx, c.zones)
+		require.NoErrorf(t, err, "zones %v", c.zones)
+		assert.Equalf(t, c.want, got, "zones %v", c.zones)
+	}
+
+	var version string
+	require.NoError(t, db.Raw.QueryRow("SELECT VERSION()").Scan(&version))
+	if strings.Contains(strings.ToUpper(version), "TIDB") {
+		return
+	}
+	analyzed, err := db.Raw.Query("ANALYZE TABLE player_route")
+	require.NoError(t, err)
+	for analyzed.Next() {
+	}
+	require.NoError(t, analyzed.Err())
+	require.NoError(t, analyzed.Close())
+	plan, err := db.Raw.Query("EXPLAIN " + inlineRouteArgs(t, store.RouteCountHomeZonesSQLForTest(2), []uint64{3, 4}))
+	require.NoError(t, err)
+	defer plan.Close()
+	cols, err := plan.Columns()
+	require.NoError(t, err)
+	keyCol := -1
+	for i, name := range cols {
+		if name == "key" {
+			keyCol = i
+		}
+	}
+	require.GreaterOrEqualf(t, keyCol, 0, "EXPLAIN 没有 key 列: %v", cols)
+	require.True(t, plan.Next(), "EXPLAIN 没有行")
+	vals := make([]sql.NullString, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	require.NoError(t, plan.Scan(ptrs...))
+	assert.Equal(t, "idx_route_home", vals[keyCol].String, "R16 必须走 idx_route_home 的范围扫描")
 }

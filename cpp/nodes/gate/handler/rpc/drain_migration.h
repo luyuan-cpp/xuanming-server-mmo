@@ -48,7 +48,7 @@ inline constexpr std::chrono::minutes kEnterGameSettle{5};
 // 一个会话这一拍按什么身份迁。票据绑不绑玩家由 login 按 SessionDetails 的 player_id 判,gate 只决定迁不迁。
 enum class Candidate : uint8_t
 {
-	kSkip,       // 不迁:没验票、没登录成功、进场途中、选角界面但刚转发过 EnterGame、已推过 124、路由 lane 有在途或排队的请求
+	kSkip,       // 不迁:没验票、没登录成功、进场途中、选角界面但刚转发过 EnterGame、已推过 124、路由 lane 或场景 lane 有在途或排队的请求
 	kInGame,     // 已进游戏:已绑角色、有场景路由、没有待补发的进场。票据绑定本人
 	kRoleSelect, // 停在选角界面:登录过、没绑角色、距上次 EnterGame 已满 kEnterGameSettle。票据不绑玩家
 };

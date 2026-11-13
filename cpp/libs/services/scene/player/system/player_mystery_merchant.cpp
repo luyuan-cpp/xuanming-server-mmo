@@ -10,6 +10,7 @@
 
 #include "core/utils/registry/actor_log.h"
 #include "engine/core/time/system/time.h"
+#include "engine/infra/storage/redis_cluster/redis_slot.h" // ZoneControlTag:记录键的控制域 tag
 #include "network/node_utils.h"
 #include "network/client_message_sender.h"
 #include "thread_context/ecs_context.h"
@@ -47,11 +48,8 @@
 namespace
 {
 
-// 记录所在的 Redis 键(HASH)与 field。两个都是**跨语言契约**:写入方是
-// go/scene_manager/internal/logic/mystery_merchant.go 的 MysteryMerchantKeyFmt / MysteryMerchantStateField
-// (那边的占位符是 Go 的 %d,这边是 C printf 的 %u;契约是渲染出来的键逐字节相同:
-// mystery_merchant:zone:{zone 十进制})。改一边必须改另一边。
-constexpr char kMysteryMerchantKeyFmt[] = "mystery_merchant:zone:%u";
+// 记录所在 HASH 的 field。与键(PlayerMysteryMerchantSystem::RecordKey)一样是**跨语言契约**:写入方是
+// go/scene_manager/internal/logic/mystery_merchant.go 的 MysteryMerchantStateField。改一边必须改另一边。
 constexpr char kMysteryMerchantStateField[] = "state";
 
 // 多久从 Redis 读一次记录。它决定:整点之后本节点最晚几秒知道商人来了(并发出公告),
@@ -355,7 +353,7 @@ void RequestRefresh()
 	// 回调不捕获任何东西:它只动全局缓存,不引用任何可能先于它销毁的对象。
 	const int ret = redis->command(
 		[](hiredis::Hiredis *, redisReply *reply) { OnStateReply(reply, TimeSystem::NowMillisecondsUTC()); },
-		(std::string("HGET ") + kMysteryMerchantKeyFmt + " " + kMysteryMerchantStateField).c_str(), GetZoneId());
+		"HGET %s %s", PlayerMysteryMerchantSystem::RecordKey(GetZoneId()).c_str(), kMysteryMerchantStateField);
 	if (ret != REDIS_OK)
 	{
 		LOG_WARN << "[MysteryMerchant] Record read command was not sent; keeping the cached record: ret=" << ret;
@@ -372,6 +370,11 @@ std::string PurchaseExtra(const ::MysteryMerchantState &state, const ResolvedGoo
 }
 
 } // namespace
+
+std::string PlayerMysteryMerchantSystem::RecordKey(uint32_t zoneId)
+{
+	return "mystery_merchant:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId);
+}
 
 void PlayerMysteryMerchantSystem::Start(muduo::net::EventLoop *loop)
 {

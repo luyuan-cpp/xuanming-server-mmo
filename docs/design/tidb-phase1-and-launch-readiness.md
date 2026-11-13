@@ -271,13 +271,13 @@
 | friend（含 friend-migrate Job） | `mmorpg_friend` | `go/friend/etc/friend.yaml:92-93` | `:4073` | 同上 |
 | guild | `mmorpg_guild` | `go/guild/etc/guild.yaml:44-45`（整串 DataSource） | **没有 K8s 清单**（no-single-node §7） | 补清单时直接写 TiDB |
 | Java gateway | `mmorpg`（`zone_config` 等） | `java/gateway_node/src/main/resources/application.yaml:10-11` | `:4925-4926` | `jdbc:mysql://<tidb>:4000/mmorpg?...` |
-| **login（条件性）** | `user_accounts` 所在的库（zone 库） | `go/login/etc/login.yaml:336-345`（`PasswordAuth`，DSN 取自环境变量 `LOGIN_PASSWORD_AUTH_DSN`，默认关）；每次口令登录都读 `user_accounts.password`（`password_provider.go:80`） | K8s 现在只用 `-LoginDevPasswordAuth`（`:230-234`），不连库 | 正式服若开启，DSN 同批切；连接数计入 §2.4 |
+| **login（条件性）** | `mmorpg`（口令凭据表 `user_accounts`；2026-11-12 定，原写「zone 库」。存档库里同名的旧表不是口令权威） | `go/login/etc/login.yaml` 的 `PasswordAuth`（DSN 取自环境变量 `LOGIN_PASSWORD_AUTH_DSN`，默认关；`Backend`、`Database` 两个键 11-12 新增）；每次口令登录都读 `user_accounts.password`，11-12 起走 `authoritysql` 的只读权威连接 | K8s 现在只用 `-LoginDevPasswordAuth`，不连库；口令登录的部署开关没有实现，注入口径见[消除单节点总纲](no-single-node-horizontal-scaling-20261001.md) §6.5 | 正式服若开启，连全球权威 SQL 入口上的 `mmorpg`；连接数计入 §2.4 |
 | 工具 | — | merge_zone `-mysql-dsn`（`main.go:246-249`）及 D1 第 2 批的 `-route-db-dsn`；data_consistency_check `-mysql-dsn` / `-friend-mysql-dsn`（`main.go:92`、`:99`）；`go/login/cmd/password_admin`（`main.go:61`）；`go/guild/cmd/assetopfix`；`go/data_service/cmd/debugutil` | — | runbook 和命令行一起改 |
 | 脚本 | — | `stress_round19.ps1`（TRUNCATE，`:59-60`、`:103`）；`currency_crash_window.ps1:118-130`（TRUNCATE）；`k8s_zone_rollback.ps1` Step 3（工作区 `:903-915`）；`start_game.ps1:446-474`（本地写死 compose 的 `mysql` 容器）；`mysql-backup-cronjob.yaml`（**不在** infra 清单列表 `:5740` 里，见 §6.1） | infra 清单列表 `:5740` | §3.5、§6 |
 
 C++ 节点不直连数据库，`cpp/` 全仓没有 MySQL 客户端调用。
 
-login 只在 `PasswordAuth` 开启时连库。它的存量迁移脚本是 MySQL 存储过程（§4 #13）。
+login 只在 `PasswordAuth` 开启时连库，连的是 `mmorpg`。它原来的存量迁移脚本是 MySQL 存储过程，2026-11-12 已删除，改成建表约束加启动时的形状核对（§4 #13）。
 
 ### 2.8 `k8s_deploy.ps1` 改造点（P1-2 批）
 
@@ -354,10 +354,9 @@ login 只在 `PasswordAuth` 开启时连库。它的存量迁移脚本是 MySQL 
 4. **源库先对齐版本**：把 MySQL 侧的所有迁移跑到与即将部署的代码同一版本，包括 go/db `cmd/migrate`、`data_service -migrate`、friend / trade / guild 的 `-migrate`。两侧台账的 version 集合要一致，否则导入的数据与 TiDB 上的表结构对不上。
 
 5. **用官方迁移工具在 TiDB 上预建全部表结构，不用 Dumpling 导出的表结构**（原因见 §4 #11）。依次是：
-   - **每个 zone 跑 go/db `cmd/migrate -command up`**，有 `player_store_*` 时加 `-storage-id`。
-     - K8s 上**没有** go/db 的 migrate Job：`k8s_deploy.ps1:937` 里没有 `MigrateJob`；staging / prod 靠人工执行 `go run ./cmd/migrate`（`:3369-3370`）；手工步骤见 `merge-zone-runbook.md:235-238`。
-     - 二选一：继续手工跑，port-forward 到 TiDB Service，用一份指向它、不进 git 的 `db.yaml` 副本；或者在 P1-2 新增 db-migrate Job（推荐）。
-     - 选哪种都要注意：go/db 的启动闸 `assertSchemaUpToDate` 会核对台账（`proto_sql/db.go:305-323`），所以要和第 7 步的台账处理一起考虑。
+   - **对本地域的每个存档库跑 go/db `cmd/migrate -storage-id <编号> -command up`**（2026-11-11 更正：`zone_<n>_db` 已退役，玩家存档只在 `player_store_<编号>_db`，`-storage-id` 必填，[总体方案 §7.2](./player-data-tidb-scaling-plan.md) A17c）。
+     - K8s 上由 `db-migrate` Job 逐库执行（`deploy/k8s/manifests/go-svc/db-migrate.yaml`，目录条目 `MigrateJob`，排在 db、data-service 之前），不用再手工跑；本文起草时（10-12）还没有这个 Job。
+     - go/db 打开每个存档库时的只读 schema 闸会核对台账，所以要和第 7 步的台账处理一起考虑。
    - **跑 `data_service -migrate`**。前提是 P1-1 的快照去重已经合入，否则它在 TiDB 上一定失败（§4 #1）。
    - **跑 friend / trade / guild 的 `-migrate`**（`go/schemamigrate`）。
    - **跑 gateway 的 `gateway_tables.sql`**。
@@ -542,7 +541,7 @@ Redis `FLUSHALL`、etcd、Kafka offset reset 照旧执行。AGENTS §6.2 第 6 �
 | 10 | 库级和表级默认排序规则 | 见下文 #10 | 只写了 CHARSET 的表，两边的排序规则**一定**不同 | 见下文 | 解法明确 |
 | 11 | Dumpling 导出的 MySQL 表结构不含 TiDB 选项 | 推断：MySQL 只识别 `/*! */` 版本注释，`/*T! … */` 当普通注释丢弃，所以 MySQL 的 `SHOW CREATE TABLE` 里没有 `NONCLUSTERED` / `SHARD_ROW_ID_BITS` | 如果让 Lightning 按 Dumpling 的表结构建表，TiDB 上的表会全部变成聚簇单调主键，§D3 的处方整体失效 | Dumpling `--no-schemas` 只导数据【文】；表结构由官方迁移工具预建（§3.2 第 5 步） | 解法明确 |
 | 12 | affected rows 与 ODKU 的语义 | 见下文 #12 | 多处业务判断依赖「ODKU 返回 0/1/2、无变化的 UPDATE 返回 0」，一旦错位会**静默**出错，例如多发奖励、撞名被当成插入成功 | 每处补一条 TiDB 用例（§9.1 #14） | 未实测 |
-| 13 | login 口令认证的门禁脚本是 MySQL 存储过程 | `go/login/model/migrations/20260803_password_auth.sql:7-9`（`DELIMITER` + `CREATE PROCEDURE` + `SIGNAL`） | TiDB 不支持存储过程（官方 mysql-compatibility 页写明；本次没有重新抓取该页），脚本在 TiDB 上跑不了 | 迁库前先在 MySQL 上跑完；或改写成应用侧检查（§9.3 #17） | 待拍板，只在开启 PasswordAuth 时阻塞 |
+| 13 | login 口令认证的门禁脚本是 MySQL 存储过程 | `go/login/model/migrations/20260803_password_auth.sql:7-9`（`DELIMITER` + `CREATE PROCEDURE` + `SIGNAL`；文件 2026-11-12 已删除） | TiDB 不支持存储过程（官方 mysql-compatibility 页写明；本次没有重新抓取该页），脚本在 TiDB 上跑不了 | 改写成应用侧检查（§9.3 #17） | **已定并落码（2026-11-12，未编译）**：项目没有存量表，脚本删除；前提由建表语句的主键、NOT NULL 与列宽保证，login 与 `password_admin` 启动时核对表的形状。见下面「#13 细节」 |
 | 14 | 预建表时，迁移工具会写入行 | `id_segment_store.go:253-265`；`go/db/internal/migrate/runner.go:324-333`；`go/schemamigrate/runner.go:33-44`；`gateway_tables.sql:37-39`；D1 提案 :299 | 第 12 步导入必然撞主键；若改用 `ignore` 绕过，号段会倒回 | §3.2 第 7 步 | 解法明确 |
 
 **#1 解法（负责人从 A1 / A2 / B 中选一个）**
@@ -693,10 +692,11 @@ Redis `FLUSHALL`、etcd、Kafka offset reset 照旧执行。AGENTS §6.2 第 6 �
 **#13 细节（新增）**
 
 - `PasswordAuth` 默认关闭，K8s 上也没开（§2.7）。所以这一项**只在正式服启用口令登录时**阻塞。
-- 门禁脚本会对 `user_accounts` 做空值、重复、长度检查，然后才执行 ALTER。
-- 两种出路：
-  - 迁库前先在 MySQL 上跑完。迁移后的 TiDB 表就已经是目标形态；
-  - 改写成应用侧检查（`password_admin` 或一次性 Go 工具）。
+- 原来的门禁脚本对 `user_accounts` 做空值、重复、长度检查，然后才执行 ALTER。它是给 MySQL 上的存量表做一次性改造的。
+- **2026-11-12 定案并落码（未编译）**：项目没有上线，没有存量表要改造，脚本删除。
+  - 口令凭据表归 `mmorpg`，全服一份，建表语句的唯一来源是 `go/login/model/password_auth_schema.sql`：主键 `account`、NOT NULL、`VARCHAR(191)` 与 `VARCHAR(255)` 直接给出那几条前提，排序规则显式写。
+  - login 与 `password_admin` 每次启动核对表确实是这个形状，不是就拒绝启动；这一步在 MySQL 与 TiDB 上都能跑。
+  - 读库改走 `authoritysql` 的只读权威连接。细节见[消除单节点总纲](no-single-node-horizontal-scaling-20261001.md) §6.5 与[认证框架](auth-provider-framework.md)「开通口令账号与写入口令」。
 
 ---
 
@@ -871,7 +871,7 @@ Phase 1 的逻辑库仍按 zone 分开，用按库过滤恢复就能表达「只
 | L-14 | P1 | 交给 Codex 跑一轮开服尖峰压测，按 AGENTS §6 全流程，**环境是 §3.5 的专用压测环境**，同环境先跑 MySQL 基线。<br>场景：多 zone，0–30s 尖峰，同时覆盖建角、首次进场、周期存盘、进退场快照。用 `stress_summarize` 出对比表；没有这张表，不下容量结论 | Codex | 是 | 负责人点名环境（§9.3 #13） | 对比表 |
 | L-15 | P2 | 首日按地域多开 zone，按负载分流选区。db_task 的 10 个分区不能在线扩，要扩只能走离线换代（`db-task-kafka-partition-contract.md`） | 运营、部署 | 否 | 负责人 | — |
 | L-16 | P2 | 如果首日要开 `PinOnCreate`：遵守 placement §13 的顺序，先满足 D8、D1 两项前置 | Phase 2 | 是 | 负责人 | — |
-| L-17 | P2 | 条件性的两项：<br>• gate 单 IO 线程；<br>• 正式服若用口令登录：Argon2id 每进程只允许 2 个并发（`login.yaml:346-348`），而且 login 会连库（§2.7），存量门禁脚本要先处理（§4 #13） | gate、login | 否 | — | 实测 t_kdf |
+| L-17 | P2 | 条件性的两项：<br>• gate 单 IO 线程；<br>• 正式服若用口令登录：Argon2id 每进程只允许 2 个并发（`login.yaml` 的 `KDFConcurrency`），而且 login 会连库（§2.7）。存量门禁脚本一项已于 2026-11-12 结清（§4 #13） | gate、login | 否 | — | 实测 t_kdf |
 | L-18 | P1 | **上线前由 AI 复核（负责人 2026-10-19 要求）**：账号登录取逻辑服（home_zone）/ 物理服（storage_id）这条链路，届时是不是瓶颈、能不能水平扩展。按 [player-route-mapping-durability-proposal.md](./player-route-mapping-durability-proposal.md) §12.2「上线前复核步骤」逐条对照当时的代码、部署与压测重做一遍，不能沿用 2026-10-18 的结论（那时当前登录路径没有任何压测覆盖，倍数全是推算） | login、data_service、scene_manager、共享 Redis | 否 | 负责人 | §12.2 的结论写回 §12.1 表格并追加 PROGRESS；性能结论只认 L-14 的 `stress_summarize.ps1` 对比表。（2026-10-20：静态部分已复核，结论不变，见提案 §12.3；第 5 步压测未做，前置观测见开服线拍板清单 X-3） |
 
 **L-07 展开：全球审计管道**
@@ -990,7 +990,7 @@ Phase 1 的逻辑库仍按 zone 分开，用按库过滤恢复就能表达「只
 14. Phase 1 超过 30 个文件的改动面授权。
 15. **安装 helm、TiDB Operator、CRD、tiup 的授权**（AGENTS §10.2）。
 16. go/db 迁移方式：新增 db-migrate Job（推荐），还是沿用手工。
-17. login 口令认证的门禁脚本：迁库前在 MySQL 上跑完，还是改写成应用侧检查（§4 #13）。
+17. login 口令认证的门禁脚本：迁库前在 MySQL 上跑完，还是改写成应用侧检查（§4 #13）。**已定（2026-11-12）：改成应用侧检查，脚本删除。**
 18. zone 回档时 Redis 按 zone 范围清理的键清单，由谁定（§6.3 第 6 步）。
 19. §7 各项 P0 的负责人与时间点。
 20. Java 版：登记「不适用」，还是同步评估（§10）。

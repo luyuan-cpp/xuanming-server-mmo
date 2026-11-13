@@ -84,13 +84,17 @@ const (
 	gatePhaseBeforeBegin = "before_begin" // BEGIN 之前读 route_meta
 	gatePhaseEnter       = "enter"        // BEGIN 之后锁 slot、复核 slot / route_meta / 注册
 	gatePhaseRead        = "read"         // 事务外纯读的读闸门
+	// 下面两步不在每笔事务上(2026-11-12,存盘规格 §9 第 1 条):
+	gatePhasePin        = "pin"        // 新建物理连接时固定会话并核对身份、注册;次数 = 写者池新建的连接数
+	gatePhaseRevalidate = "revalidate" // 连接复用时的核对:mysql 档每次复用核一次主库;tidb 档只有空闲超过 idleProbeAfter 的连接才发一条读并记,热路径不发也不记
 )
 
-// writerGateSeconds 按 (逻辑库, 步骤) 记闸门耗时。logical_db 只有本进程持有写资格的那几个库,phase 三个值,基数有界。
+// writerGateSeconds 按 (逻辑库, 步骤) 记闸门耗时。logical_db 只有本进程持有写资格的那几个库,phase 五个值,基数有界。
 // 第一次观察时才注册(registerWriterGateSeconds),与 writer_frozen_seconds 同一做法:不持写资格的进程不多出空序列。
+// pin 的次数对着连接池的新建连接数看:它涨得快说明连接在频繁重建(空闲回收太短、映射翻转、库在重启),不是闸门本身慢。
 var writerGateSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 	Name:    "writer_gate_seconds",
-	Help:    "写者闸门每一步的耗时(before_begin / enter / read),用来判断闸门往返占写事务耗时的比例。",
+	Help:    "写者闸门每一步的耗时(before_begin / enter / read 在每笔事务或每次读上,pin 在新建连接时,revalidate 在复用连接时:mysql 档每次、tidb 档只在连接空闲超过探测窗口时),用来判断闸门往返占写事务耗时的比例。",
 	Buckets: prometheus.ExponentialBuckets(0.0002, 2, 12), // 0.2ms 到约 410ms
 }, []string{"logical_db", "phase"})
 

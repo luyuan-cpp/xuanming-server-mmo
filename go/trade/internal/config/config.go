@@ -28,7 +28,6 @@ import (
 	"shared/dbplacement"
 	"shared/idsegment"
 	"shared/redisauth"
-	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -126,9 +125,6 @@ type Config struct {
 	// 经 secretKeyRef 注入;ConfigMap 里 SharedRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
 	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
 	SharedRedisPasswordEnv string `json:",optional"`
-	// MySQLPasswordEnv 是 MySQL.Password 所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md);
-	// ConfigMap 里 MySQL.Password 写空串。不写 = 照用 Password 字面量(本机)。由 ResolveMySQLPassword 在加载配置后填好,变量缺失或为空即拒启。
-	MySQLPasswordEnv string `json:",optional"`
 
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.8):资产通道读 player:{id}:location。
 	// SharedRedis 留给控制域(唤醒频道与去重键、选主锁)。读取走 EffectivePlayerRedis():没写 Addrs 时指向 SharedRedis 那一个实例,
@@ -159,7 +155,17 @@ type CommerceConf struct {
 	PetConfigs     []uint32          `json:",optional"`
 	CurrencyTypes  []uint32          `json:",optional"`
 	AllowInstances bool              `json:",optional"`
+	// ManualResolutionSecretEnv:人工处置入口(TradeAdmin.ListManualContracts / ResolveManualContract,运维工具 commercefix 调)
+	// 的 serviceauth 密钥所在的环境变量名,调用方只有 ManualResolutionCaller,不与别的调用方共用。空 = 入口关闭,一律 PermissionDenied。
+	// 只写变量名;密钥值由部署从 K8s Secret 注入,不进 yaml / ConfigMap(2026-11-11,jubaozhai-market.md §15.7.1)。
+	ManualResolutionSecretEnv string `json:",optional"`
+	// ManualResolutionEnvironment:本部署的环境名(例如 prod-global、staging-global),1~64 个 ASCII 字母、数字或 . _ -。
+	// 工具的 -expect-target 要与它逐字相等,连错环境时服务端回 target_mismatch;开了入口却没写有效值时入口保持关闭。
+	ManualResolutionEnvironment string `json:",optional"`
 }
+
+// ManualResolutionCaller 是 TradeAdmin.ListManualContracts / ResolveManualContract 唯一接受的 serviceauth 调用方。
+const ManualResolutionCaller = "ops-commerce"
 
 // AssetOpConf 是通用资产通道(guild-phase2/04-asset-channel.md §S4)的开关与密钥来源。
 //
@@ -414,13 +420,6 @@ func (c *Config) EffectivePlayerRedis() playerredis.Config {
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
 	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
 		redisauth.Target{Field: "SharedRedis.Password", Password: &c.SharedRedis.Password})
-}
-
-// ResolveMySQLPassword 按 MySQLPasswordEnv 填 MySQL.Password,规则见 secretenv.Fill。-migrate 与常驻启动都连库,
-// 所以在 conf.MustLoad 之后、迁移分支之前调用(trade.go);trade-migrate Job 同样注入这个变量。
-func (c *Config) ResolveMySQLPassword(lookup func(string) (string, bool)) error {
-	return secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
-		secretenv.Target{Field: "MySQL.Password", Value: &c.MySQL.Password})
 }
 
 // MySQLConf 是 mmorpg_trade 的连接参数。

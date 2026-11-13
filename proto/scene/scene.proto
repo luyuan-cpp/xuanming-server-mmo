@@ -42,10 +42,23 @@ message ProcessClientPlayerMessageRequest
   uint64 player_id = 3;
 }
 
+// scene 在派发一条客户端消息之前的处置(docs/design/client-scene-request-handoff-hold.md §4.3)。只在 gate 与 scene 之间用,
+// 不是客户端可见契约。
+enum ClientMessageDispatchVerdict
+{
+  // 未填:已派发(应答带 message_content),或派发前确定拒绝(不带 message_content,gate 回 1003)。旧版 scene 一律是它。
+  CLIENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIED = 0;
+  // 请求确定未执行,而且等一等就能受理:玩家归属正在交接(换场景节点),或还没在本节点就绪(会话未登记、存档载入中)。
+  // gate 把这条请求放回会话队头,在有界等待内按收包顺序重投到玩家当时所在的节点。应答不带 message_content。
+  CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER = 1;
+}
+
 message ProcessClientPlayerMessageResponse
 {
   MessageContent message_content = 1;
   uint32 session_id = 2;
+  // 派发前的处置;只在没有 message_content 时有意义。0 = 旧版 scene 或确定拒绝。
+  ClientMessageDispatchVerdict dispatch_verdict = 3;
 }
 
 message SessionDisconnectRequest

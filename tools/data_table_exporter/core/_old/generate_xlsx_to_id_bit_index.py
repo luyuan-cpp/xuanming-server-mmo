@@ -160,9 +160,9 @@ def main() -> None:
                 try:
                     future.result()
                 except Exception as e:
-                    logger.error(f"任务执行失败: {str(e)}")
+                    logger.error(f"Task failed: {str(e)}")
     except Exception as e:
-        logger.error(f"主程序执行失败: {str(e)}")
+        logger.error(f"Main program failed: {str(e)}")
 
 
 if __name__ == "__main__":

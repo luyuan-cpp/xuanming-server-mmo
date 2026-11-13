@@ -52,7 +52,7 @@ func GenerateSceneKafkaCommandRouter(wg *sync.WaitGroup) {
 		outputPath := filepath.Join(_config.Global.Paths.SceneNodeEventHandlerDirectory, "scene_kafka_command_router.cpp")
 		// 空白名单也覆写旧路由,避免撤掉入口后仍残留旧 handler 分支。
 		if err := utils2.RenderTemplateToFile("internal/template/scene_kafka_command_router.cpp.tmpl", outputPath, buildSceneKafkaRouterData()); err != nil {
-			logger.Global.Fatal("写入场景 Kafka 路由失败", zap.String("output_file", outputPath), zap.Error(err))
+			logger.Global.Fatal("Failed to write the scene Kafka router", zap.String("output_file", outputPath), zap.Error(err))
 		}
 	}()
 }

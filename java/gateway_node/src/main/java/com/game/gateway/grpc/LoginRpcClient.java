@@ -80,6 +80,8 @@ public class LoginRpcClient {
     private static final String PREGATE_SERVICE      = "loginpb.LoginPreGate";
     private static final String METHOD_ASSIGN_GATE   = PREGATE_SERVICE + "/AssignGate";
     private static final String METHOD_QUEUE_STATUS  = PREGATE_SERVICE + "/QueryQueueStatus";
+    /** 本区角色总数(2026-11-12,角色上限守卫用)。 */
+    private static final String METHOD_ZONE_ROLE_COUNT = PREGATE_SERVICE + "/GetZoneRoleCount";
 
     private final LoginGrpcProperties props;
     /** 每个通道都挂的出站追踪拦截器(见类注释);注册表是 NOOP 时它原样放行,不做任何事。 */
@@ -121,6 +123,7 @@ public class LoginRpcClient {
     private final MethodDescriptor<RefreshTokenRequestProto, RefreshTokenResponseProto> refreshTokenMethod;
     private final MethodDescriptor<AssignGateRequestProto, AssignGateResponseProto> assignGateMethod;
     private final MethodDescriptor<QueryQueueStatusRequestProto, QueryQueueStatusResponseProto> queueStatusMethod;
+    private final MethodDescriptor<ZoneRoleCountRequestProto, ZoneRoleCountResponseProto> zoneRoleCountMethod;
 
     public LoginRpcClient(LoginGrpcProperties props, ObservationRegistry observationRegistry) {
         this.props = props;
@@ -148,6 +151,12 @@ public class LoginRpcClient {
                 .setFullMethodName(METHOD_QUEUE_STATUS)
                 .setRequestMarshaller(new QueryQueueStatusRequestMarshaller())
                 .setResponseMarshaller(new QueryQueueStatusResponseMarshaller())
+                .build();
+        this.zoneRoleCountMethod = MethodDescriptor.<ZoneRoleCountRequestProto, ZoneRoleCountResponseProto>newBuilder()
+                .setType(MethodDescriptor.MethodType.UNARY)
+                .setFullMethodName(METHOD_ZONE_ROLE_COUNT)
+                .setRequestMarshaller(new ZoneRoleCountRequestMarshaller())
+                .setResponseMarshaller(new ZoneRoleCountResponseMarshaller())
                 .build();
     }
 
@@ -347,6 +356,16 @@ public class LoginRpcClient {
         // QueryQueueStatus 也不是纯读：轮询已放行条目可能消费/推进队列状态，
         // 并返回新签发的 Gate 连接材料。
         return unaryCall(queueStatusMethod, req, zoneId, true, false);
+    }
+
+    /**
+     * 本区一共建过多少角色({@code LoginPreGate.GetZoneRoleCount},2026-11-12,RoleCapacityGuard 用):login 转问
+     * data_service,按合服之后的最终区算,删角不减。按区选路、没有该区的通道直接失败,不跨区兜底(login 也会拒绝别区的问)。
+     * 纯读,UNAVAILABLE / DEADLINE_EXCEEDED 按 {@code login.grpc.retry} 重试,可能落到同区另一个实例。
+     * 读不到时抛异常(StatusRuntimeException / IllegalStateException),从不返回一个兜底的 0。
+     */
+    public long getZoneRoleCount(int zoneId) {
+        return unaryCall(zoneRoleCountMethod, new ZoneRoleCountRequestProto(zoneId), zoneId, true, true).roles;
     }
 
     private <Q, R> R unaryCall(
@@ -902,6 +921,80 @@ public class LoginRpcClient {
                 case 9 -> resp.retryAfterMs   = in.readUInt32();
                 case 10 -> resp.error         = in.readString();
                 default -> in.skipField(tag);
+            }
+        }
+        return resp;
+    }
+
+    /**
+     * proto/login/login.proto ZoneRoleCountRequest:
+     *   uint32 zone_id = 1;
+     */
+    public static final class ZoneRoleCountRequestProto {
+        public final int zoneId;
+
+        public ZoneRoleCountRequestProto(int zoneId) {
+            this.zoneId = zoneId;
+        }
+
+        byte[] toBytes() throws IOException {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(8);
+            CodedOutputStream out = CodedOutputStream.newInstance(baos);
+            if (zoneId != 0) out.writeUInt32(1, zoneId);
+            out.flush();
+            return baos.toByteArray();
+        }
+    }
+
+    /**
+     * proto/login/login.proto ZoneRoleCountResponse:
+     *   uint64 roles = 1;
+     */
+    public static final class ZoneRoleCountResponseProto {
+        public long roles;
+    }
+
+    private static final class ZoneRoleCountRequestMarshaller implements MethodDescriptor.Marshaller<ZoneRoleCountRequestProto> {
+        @Override
+        public InputStream stream(ZoneRoleCountRequestProto value) {
+            try {
+                return new java.io.ByteArrayInputStream(value.toBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public ZoneRoleCountRequestProto parse(InputStream stream) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private static final class ZoneRoleCountResponseMarshaller implements MethodDescriptor.Marshaller<ZoneRoleCountResponseProto> {
+        @Override
+        public InputStream stream(ZoneRoleCountResponseProto value) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ZoneRoleCountResponseProto parse(InputStream stream) {
+            try {
+                return parseZoneRoleCountResponse(stream.readAllBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    static ZoneRoleCountResponseProto parseZoneRoleCountResponse(byte[] bytes) throws IOException {
+        ZoneRoleCountResponseProto resp = new ZoneRoleCountResponseProto();
+        CodedInputStream in = CodedInputStream.newInstance(bytes);
+        while (!in.isAtEnd()) {
+            int tag = in.readTag();
+            if (tag >>> 3 == 1) {
+                resp.roles = in.readUInt64();
+            } else {
+                in.skipField(tag);
             }
         }
         return resp;

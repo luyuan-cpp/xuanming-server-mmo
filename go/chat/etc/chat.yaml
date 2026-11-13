@@ -76,15 +76,19 @@ MetricsListenAddr: ":9210"
 MaxContentBytes: 512
 # 每玩家每秒最多发几条(gate 每会话每消息号 3 次/秒是第一道)。
 RateLimitPerSecond: 5
+# 同一名玩家相邻两条世界频道消息的最短间隔(毫秒),0 = 不限;只管世界频道。世界频道一条消息要推给全服在线玩家,
+# 这个间隔把全服世界消息量压在「在线人数 ÷ 间隔」之内。K8s ConfigMap 逐字镜像这一行。
+WorldChannelCooldownMs: 5000
 # 每个SQL频道窗口最多可见的最近条数。
 HistoryMaxEntries: 200
-# 频道闲置窗口TTL(秒)，保持每次接受续期语义；显示过期不删除永久原UUID收据。
+# 频道闲置窗口TTL(秒)，保持每次接受续期语义；显示过期不删除原UUID收据。原件本身保留 30 天后由库删除(TiDB TTL),
+# 所以本值最大 2505600(29 天)。
 HistoryTTLSeconds: 604800
 # PullChatHistory.limit=0 时的默认条数与上限。
 # HistoryMaxLimit最多200；HistoryMaxEntries可独立增大容量，一次读取仍最多200。
 HistoryDefaultLimit: 20
 HistoryMaxLimit: 50
-# 旧配置兼容字段；SQL成功幂等收据永久保留，此值不再控制删除。
+# 旧配置兼容字段；SQL成功幂等收据随原件保留 30 天，此值不控制删除。
 RequestIdTTLSeconds: 60
 
 # RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。

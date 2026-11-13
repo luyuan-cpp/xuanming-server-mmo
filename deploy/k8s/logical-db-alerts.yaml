@@ -16,6 +16,8 @@
 #       data_service_role_fence_push_total{participant,result}     result = ok | failed
 #   - 写者注册(kube-state-metrics,不是服务指标):
 #       kube_pod_init_container_status_restarts_total{container="sql-writer-registrar"}  写者 Pod 的 init 容器重启次数。init 容器名写在 manifests/go-svc/data-service.yaml,注入到 login、gateway 的也是它
+#       kube_cronjob_status_last_successful_time{cronjob=~"sql-writer-slot-retirer-.+"}  缩容收尾 CronJob 上一次成功的时间;从没成功过时没有这条
+#       kube_cronjob_created{cronjob=~"sql-writer-slot-retirer-.+"}                      同一个 CronJob 的创建时间。CronJob 名由 k8s_deploy.ps1 New-SqlWriterSlotRetirerManifest 起
 #
 # writer_frozen_seconds 只有写者撞到闸门时才看得到:15 秒没再撞到就回 0。所以它回答的是「有业务被挡住了多久」,不是「闸门冻结了多久」。
 # 完全没有写流量的库冻结再久也不响,这种情况查库(各逻辑库的 route_meta.writable、freeze_run_id)。
@@ -28,7 +30,8 @@
 #     接入哪种抓取方式(ServiceMonitor / PodMonitor,或按注解抓取的 job)要在上线前定下来并验证有数。
 #   - 协调者的规则按 namespace 分组(data_service 一个 zone 一个 namespace),用的是 ServiceMonitor / PodMonitor 默认附加的 namespace 标签;
 #     改用按注解抓取的 job 时 relabel 必须同样写出它。映射的规则跨 namespace 比版本,不按 namespace 分组。
-#   - SqlWriterRegistrarFailing 读 kube-state-metrics,集群里没有它时这一条是哑的。kube-prometheus stack 自带。
+#   - SqlWriterRegistrarFailing、SqlWriterSlotRetirerFailing 读 kube-state-metrics,集群里没有它时这两条是哑的。kube-prometheus stack 自带;
+#     kube_cronjob_status_last_successful_time 要 kube-state-metrics v2.3 以上。
 #
 # 口径:
 #   - 映射版本落后的进程还连着旧集群。旧集群的闸门是冻结的,这些进程写不进去(RPC 回 Unavailable),不分叉但一直失败,所以是 critical。
@@ -40,7 +43,7 @@
 #   - 协调者 fail-closed:参与者不可达或副本过时,过户和删角拒绝,不会放过去。玩家看到的是操作失败,数据没事。
 #   - result=blocked 是业务拒绝(参与者还有挂起项),只进看板,不设告警。
 #   - 推送失败在下次访问时自愈,所以是 warning。
-#   - 阈值没有实测基线(任何一次持续即报),压测出对比表之后回头校准。
+#   - 阈值已定(2026-11-12),压测出基线后可调:这些信号健康时恒为 0,故按「持续出现即报」定;for 沿用 warning 级惯例(5~10 分钟),盖住一次滚动发布或选主切换。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up
@@ -136,6 +139,30 @@ spec:
               日志是「is slot N but the roster has M slots」就是副本数比名册槽位多:按手册 docs/ops/k8s-open-server-runbook.md §1 先加槽位。
               「cannot register boot N of this slot yet」后面跟 denied:同序号另一个 Pod 先注册了,多半是强删之后旧节点上的 Pod 还在,处置见手册 §9「节点失联」。
               其余按日志查账号、generation 和闸门表。
+
+        # 缩容收尾 CronJob(sql-writer-slot-retirer-<StatefulSet>,manifests/go-svc/sql-writer-slot-retirer.yaml)每 5 分钟一轮。闸门冻结、排空 run 开着、
+        # Pod 还在优雅退出、读完目录又扩回来都按成功收场,只有真失败(连不上库或 API server、权限不够、结局未知、试满还被拒)才失败。
+        # 30 分钟没有一次成功 = 连着 6 轮失败。被缩掉槽位的末代一直在役,下一次排空收不了尾;不写坏数据,所以是 warning。
+        # 从没成功过的 CronJob 没有 last_successful_time,第二支按创建时间补上。
+        - alert: SqlWriterSlotRetirerFailing
+          expr: |
+            (time() - max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{cronjob=~"sql-writer-slot-retirer-.+"})) > 1800
+            or
+            (
+              (time() - max by (namespace, cronjob) (kube_cronjob_created{cronjob=~"sql-writer-slot-retirer-.+"})) > 1800
+              unless on (namespace, cronjob)
+              max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{cronjob=~"sql-writer-slot-retirer-.+"})
+            )
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.cronjob }} 30 分钟没有成功过,缩容留下的写者末代没人结束"
+            description: >-
+              看最近失败的 Job:`kubectl -n {{ $labels.namespace }} get jobs -l app=sql-writer-slot-retirer`,
+              再 `kubectl -n {{ $labels.namespace }} logs job/<job> -c retire-removed-slots`。每个候选一行(slot、logical_db、boot_seq、result),
+              最后一行是汇总;result=failed 的原因在报错里。常见是注册账号或名册 Secret 配错、连不上库、ServiceAccount 少了 statefulsets 或 pods 的 get。
+              修好之前若要开排空,先按手册 docs/ops/k8s-open-server-runbook.md §9 人工退休被缩掉槽位的末代。
 
     - name: logical-db.role-fence
       interval: 30s

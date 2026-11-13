@@ -24,6 +24,7 @@
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/player_attribute.h"
+#include "player/system/player_lifecycle.h"
 
 #include "table/code/attributedimension_table.h"
 #include "table/code/equipaffixpool_table.h"
@@ -1314,6 +1315,10 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 			 << " material_count=" << (needsMaterial ? materialCount : 0);
 	outcome.success = success;
 	outcome.level = newLevel;
+	// 16. 掷出的结果尽快落库(总体方案 §4.5):崩溃回档会让玩家丢掉这次结果,也让同一次强化有机会重掷。
+	//     扣了金币或材料时,资产流水已经请求过存盘(AuditOutbox 的入队钩子);这里再请求一次,
+	//     表里这一级既不要金币也不要材料时同样约 1 秒内提交。重复请求合并成一笔。
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "equip_enhanced");
 	return kSuccess;
 }
 

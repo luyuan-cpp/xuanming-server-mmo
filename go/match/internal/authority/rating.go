@@ -26,12 +26,13 @@ import (
 // rankBoardTypes 是每个计分模式写的那张榜的 board_type(rank 的榜键其余部分固定:GLOBAL、period "all"、第 1 代)。
 // 必须一个模式一张榜:批次的 score_version 是「这名玩家在本模式第几局」,两种模式混在一张榜上,1V1 的第 9 局
 // 会被 5V5 的第 3 局当成旧版本挡掉(或反过来把新分盖回旧分),榜就错了。
-// board_type 是客户端契约(GetRankPage 按它找榜),两版服务器取同值;增删改要与客户端、Java 版同批。
+// board_type 是客户端契约(GetRankPage 按它找榜),取值登记在 proto/rank/rank.proto 的 RankBoardType,
+// 客户端与两版服务器用同一组生成常量;这里只决定「哪个模式写哪张榜」。增删改要与客户端、Java 版同批。
 // 1V1 沿用拆分前唯一那张评分榜的键(robot rank-smoke 读的就是它)。PVP_TEAM 各档每侧人数共用一条评分轨道、一张榜。
-var rankBoardTypes = map[pb.MatchMode]uint32{
-	pb.MatchMode_MATCH_MODE_1V1:      1,
-	pb.MatchMode_MATCH_MODE_5V5:      2,
-	pb.MatchMode_MATCH_MODE_PVP_TEAM: 3,
+var rankBoardTypes = map[pb.MatchMode]rankpb.RankBoardType{
+	pb.MatchMode_MATCH_MODE_1V1:      rankpb.RankBoardType_RANK_BOARD_TYPE_MATCH_1V1,
+	pb.MatchMode_MATCH_MODE_5V5:      rankpb.RankBoardType_RANK_BOARD_TYPE_MATCH_5V5,
+	pb.MatchMode_MATCH_MODE_PVP_TEAM: rankpb.RankBoardType_RANK_BOARD_TYPE_MATCH_PVP_TEAM,
 }
 
 // RankBoardType 返回计分模式那张榜的 board_type;不计分的模式没有评分轨道,也没有榜。
@@ -40,7 +41,7 @@ func RankBoardType(mode uint32) (uint32, bool) {
 		return 0, false
 	}
 	boardType, ok := rankBoardTypes[pb.MatchMode(mode)]
-	return boardType, ok
+	return uint32(boardType), ok
 }
 
 // rowQuerier 是 *sql.DB 与 *sql.Tx 共有的单行读。

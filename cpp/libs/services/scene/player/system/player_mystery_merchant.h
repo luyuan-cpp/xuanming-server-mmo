@@ -12,6 +12,7 @@
 // (RPC handler、定时器回调、hiredis 回调本来就都在那条线程)。没有锁。
 
 #include <cstdint>
+#include <string>
 
 #include "entt/src/entt/entity/entity.hpp"
 
@@ -57,6 +58,11 @@ public:
 	// 账本随玩家存档落盘(player_database.client_request_ledger),与钱、货、限购记录同一次提交。
 	static uint32_t Buy(entt::entity player, const ::BuyMysteryMerchantGoodsRequest &request, uint64_t nowMs,
 						::BuyMysteryMerchantGoodsResponse &response);
+
+	// 记录所在的 Redis 键 mystery_merchant:{ctl:<zone>}(HASH)。跨语言契约:写入方是
+	// go/scene_manager/internal/logic/mystery_merchant.go 的 mysteryMerchantKey,渲染出来的键逐字节相同,改一边必须改另一边;
+	// tag 由族表生成(docs/design/redis-cluster-all-domains-20261110.md §3)。
+	[[nodiscard]] static std::string RecordKey(uint32_t zoneId);
 
 	// ── 单测入口 ──
 	// 直接替换缓存的记录(nullptr = 没有记录),等价于「刚从 Redis 读到这一份」,包括公告判定。

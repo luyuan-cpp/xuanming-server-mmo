@@ -201,7 +201,7 @@
 | PickGate 集中度 | 按 10 秒才刷新一次的 player_count 确定性地取最小那台（`gatetoken.go:84-101`；gate 每 10 秒写 etcd，`cpp/nodes/gate/main.cpp:407-411`），所以每个 10 秒窗口有 λ_zone×10 个新连接落到同一台 | 稳态每窗口 250~560 个；开新区 4,500~50,000 个 | 同 | 同 | 本应 10 台均摊。候选集只做地址去重和排空过滤，没有存活或新鲜度过滤（`servicecontext.go:310-317`）；gate 键 TTL 180 秒（`base_deploy_config.yaml:6`），死掉的 gate 最长 180 秒内仍会被选中（「黑洞」）[C][I] | 集中度 10 倍；开新区一个窗口就能超过单台 20,000 / 1024 |
 | login 的 AssignGate | 每次 1 次 etcd Range，不缓存（`servicecontext.go:292-297`）+ 1 次 Redis MGET（`gatedrain.go:77`） | 稳态 556/s；开服 1k~5k/s | 2,778/s；5k~2.5 万/s | 5,556/s；1~5 万/s | 未测 | 计入 etcd |
 | 口令哈希 Argon2id（PasswordAuth，缺省关） | 每实例需求 E·f_pwd/(2Z)；能力 = min(2 并发 / t_kdf, 1 核 / t_cpu)（`password_provider.go:24-35`；`login.yaml:356-373`） | 稳态每实例 12~28·f_pwd 次/s | 同 | 同 | t_kdf 未测；按单次 50~150 ms 假设，约 7~20 次/s/实例；每个 login 1 CPU（`login.yaml:89`） | f_pwd≈1 时：稳态 0.6~4 倍，开新区 10 倍以上 |
-| HTTP 入口（Ingress + Java gateway，每 zone 2 副本 × 500m，`gateway.yaml:24`、`:70`） | 2E + Q/2s（排队轮询间隔 2 秒，`go/login/internal/config/config.go:276`） | 稳态 1.1k/s；开服再加 5 万/s | 5.6k；再加 25 万 | 1.1 万；再加 50 万 | 未测；TLS 可选（`k8s-client-entry.md:174`、`:311`） | 开 TLS 且不复用连接：按每次握手 0.5~2 ms CPU 假设，S3 开服要 250~1,000 核 [I] |
+| HTTP 入口（Ingress + Java gateway，每 zone 2 副本、CPU 上限 1 核，`java-svc/gateway.yaml:24`、`:111`；2026-11-12 更正：原写的 500m 取自从不部署的旧清单 `go-svc/gateway.yaml`，该文件已删） | 2E + Q/2s（排队轮询间隔 2 秒，`go/login/internal/config/config.go:276`） | 稳态 1.1k/s；开服再加 5 万/s | 5.6k；再加 25 万 | 1.1 万；再加 50 万 | 未测；TLS 可选（`k8s-client-entry.md:174`、`:311`） | 开 TLS 且不复用连接：按每次握手 0.5~2 ms CPU 假设，S3 开服要 250~1,000 核 [I] |
 | 下行带宽 | PCU×b_down，b_down 取 2~10 KB/s/人 [I] | 16~80 Gbps | 80~400 Gbps | 160~800 Gbps | 未测：R18 的机器人不移动，也没有 AOI | 未测；scene→gate 的内网流量再加一份 |
 | NodePort 端口段 | N_g（另加 battle）对比 30000-32767，共 2,768 个（`k8s_deploy.ps1:140-144`、`:203-207`） | 2~8% | 9~40% | 18~80% | 2,768 | S3 逼近上限；改用 LoadBalancer 就是每台 gate 一个云 LB |
 
@@ -823,7 +823,7 @@ S2/S3 不做全量演练，按「单元容量 × 单元数」线性外推，前�
 - [C] `go/login/internal/svc/servicecontext.go:151-160`、`:292-297`、`:310-317`
 - [C] `go/login/internal/logic/pkg/loginqueue/gatetoken.go:84-101`；`gatedrain.go:67-90`；`queue.go` 的 `Lookup`
 - [C] `go/login/internal/logic/pkg/auth/password_provider.go:24-35`；`go/login/etc/login.yaml:89`、`:189-191`、`:356-373`、`:496`；`go/login/internal/config/config.go:276`
-- [C] `deploy/k8s/manifests/go-svc/gateway.yaml:24`、`:70`；[D] `docs/design/k8s-client-entry.md:174`、`:311`
+- [C] `deploy/k8s/manifests/java-svc/gateway.yaml:24`、`:111`（2026-11-12 更正，原引 `go-svc/gateway.yaml` 是从不部署的旧清单）；[D] `docs/design/k8s-client-entry.md:174`、`:311`
 - [C] `tools/scripts/k8s_deploy.ps1:77`、`:140-144`、`:203-207`、`:211`
 
 **控制面**

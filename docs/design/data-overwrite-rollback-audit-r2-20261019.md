@@ -459,7 +459,7 @@
 | r2-ps#8 | 加载时不改存储的 rank（运行期 `EffectiveRank` 已夹住），只打 WARN；设计 §12 补"技能等级 / 技能分类"一行，release-checklist 增加持久值域与 scene 回滚门禁。「核对 §12 未核对的持久值域删数据点」会话在处理同一族问题 |
 | r2-ps#9 | **已修（混版本会话第 6 批 6c，未编译，需 Codex 先跑 proto-gen-build / proto-gen-run）**：生成器把台账 retired 行输出成 `persist_schema::kRetiredFields`，`unknown_field_carry::CarriesNewerVersionFields` 只认非退役字段，合堆（`ItemStore::IsIndependentInstance`）与欠款合并（`CurrencySystem::DebtCarriesUnknownFields`）都改用它。PROGRESS 条目「2026-10-23 Claude：混版本持久字段保护第 6 批」 |
 | r2-ps#10 | 补 r2-ps#1 的字段集合指纹门禁；release-checklist §2.1 ⑦ 增加"新增行的世代必须大于线上最大世代"；台账头注释与设计 §3.1 写明"台账冲突时丢弃本分支新增行，在合入后的主干上重新生成" **已修(2026-11-05,未编译,待 Codex 验证)**:同一封存门禁覆盖这一来源,合并带进已封存世代的行让生成失败,提示丢弃本分支新增的台账行、在合入后的主干上重新生成。 |
-| r2-dcc#1 | 新增 `-guild-redis-addr` / `-guild-redis-db`（缺省 DB 2），榜单检查改用这个句柄；guild 表读不到时报 fail 或 warn「NOT CHECKED」，不再报 info |
+| r2-dcc#1 | 新增 `-guild-redis-addr` / `-guild-redis-db`（缺省 DB 2），榜单检查改用这个句柄；guild 表读不到时报 fail 或 warn「NOT CHECKED」，不再报 info(2026-11-12 注:实现没有加这两个参数,guild 已改用 DB 0,读不到报 `NOT CHECKED`,以 §5.0 为准) |
 | r2-low#1 | 更正 `scene-owner-reentry-barrier.md` §6.2 与 `db-write-fencing-mysql.md:1058`；把 `missing owner` 错误回复单独计数并配告警；写在线玩家受控恢复手册。并入 zone Redis 回退防护的统一设计 |
 | r2-low#2 | P3 把 `row.current != high` 也记为问题；或把 describe 放到 get-offsets 之后再跑一次 |
 | r2-kc#1 | handler 本身幂等，代次失效或暂时失败时只"不提交"，回到 `group.Next` 重新领分区；或在外层做有界退避后重建 owner。只有控制面真的调用了 StopFetching（维护排空）时，才把未知结局计为 HOLD。补"在途时再均衡后仍继续消费""SQL 抖动后恢复"两类用例；给 match 评分消费组加 lag 告警。核对 data_service 消费者是否同病。**2026-10-30 无人认领，由本审计续做会话在 5 小时额度窗口重置后修** |

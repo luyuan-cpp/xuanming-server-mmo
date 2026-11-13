@@ -25,25 +25,27 @@ func sceneControlTag(zoneID uint32) string {
 }
 
 // Redis key for the active-instance sorted set (score = create timestamp).
-// 键格式里第一个 %s 是 sceneControlTag(zone)。
+//
+// 键格式里第一个 %s 是 sceneControlTag(zone)。场景键(scene:{ctl:<z>}:<id>:*)的 zone 是场景所在的 zone,
+// 也就是本进程的 zone:只拿得到场景号的入口一律按 svcCtx.Config.ZoneId 拼(docs/design/redis-cluster-all-domains-20261110.md
+// §3.3),别的 zone 的场景在本 zone 的键里读出来就是「不存在」。场景所在的 zone 不再单独存一把键(原 scene:<id>:zone)。
 const (
 	ActiveInstancesKeyFmt = "instances:%s:active"
-	SceneNodeKeyFmt       = "scene:%d:node"
-	SceneZoneKeyFmt       = "scene:%d:zone"
+	SceneNodeKeyFmt       = "scene:%s:%d:node"
 	// SceneMirrorFlagKeyFmt marks a scene as a mirror so the lifecycle
 	// manager can apply MirrorIdleTimeoutSeconds instead of the standard
 	// InstanceIdleTimeoutSeconds. Value is "1" when present, key absent
 	// for non-mirror scenes.
-	SceneMirrorFlagKeyFmt = "scene:%d:mirror"
+	SceneMirrorFlagKeyFmt = "scene:%s:%d:mirror"
 	// SceneSourceKeyFmt stores the source scene id of a mirror so we can
 	// reverse-look up which source's `mirrors` set this scene is a member of
 	// when destroying the mirror. Only present when the mirror was created
 	// with source_scene_id > 0.
-	SceneSourceKeyFmt = "scene:%d:source"
+	SceneSourceKeyFmt = "scene:%s:%d:source"
 	// SceneMirrorsKeyFmt is the Redis SET of mirror scene ids whose source
 	// is the given scene id. Populated at mirror creation, consumed by the
 	// cascade-destroy path when a scene with mirrors is removed.
-	SceneMirrorsKeyFmt = "scene:%d:mirrors"
+	SceneMirrorsKeyFmt = "scene:%s:%d:mirrors"
 	// NodeScenesKeyFmt is the Redis SET of scene ids currently hosted by a
 	// scene node. Populated by the scene registration scripts
 	// (scene_registration.go), drained by every destroy path.
@@ -51,32 +53,30 @@ const (
 	NodeScenesKeyFmt = "node:%s:%s:scenes"
 )
 
-func sceneMirrorFlagKey(sceneID uint64) string {
-	return fmt.Sprintf(SceneMirrorFlagKeyFmt, sceneID)
+func sceneMirrorFlagKey(zoneID uint32, sceneID uint64) string {
+	return fmt.Sprintf(SceneMirrorFlagKeyFmt, sceneControlTag(zoneID), sceneID)
 }
 
-func sceneSourceKey(sceneID uint64) string {
-	return fmt.Sprintf(SceneSourceKeyFmt, sceneID)
+func sceneSourceKey(zoneID uint32, sceneID uint64) string {
+	return fmt.Sprintf(SceneSourceKeyFmt, sceneControlTag(zoneID), sceneID)
 }
 
-func sceneMirrorsKey(sourceSceneID uint64) string {
-	return fmt.Sprintf(SceneMirrorsKeyFmt, sourceSceneID)
+func sceneMirrorsKey(zoneID uint32, sourceSceneID uint64) string {
+	return fmt.Sprintf(SceneMirrorsKeyFmt, sceneControlTag(zoneID), sourceSceneID)
 }
 
 func nodeScenesKey(zoneID uint32, nodeID string) string {
 	return fmt.Sprintf(NodeScenesKeyFmt, sceneControlTag(zoneID), nodeID)
 }
 
-func sceneZoneKey(sceneID uint64) string {
-	return fmt.Sprintf(SceneZoneKeyFmt, sceneID)
-}
-
 func activeInstancesKey(zoneID uint32) string {
 	return fmt.Sprintf(ActiveInstancesKeyFmt, sceneControlTag(zoneID))
 }
 
-func sceneNodeKey(sceneID uint64) string {
-	return fmt.Sprintf(SceneNodeKeyFmt, sceneID)
+// sceneNodeKey 是场景属主 scene:{ctl:<z>}:<id>:node。跨语言契约:C++ scene_ownership::SceneNodeKey 读同一个键,
+// 渲染出来的键逐字节相同,改名必须同批改。
+func sceneNodeKey(zoneID uint32, sceneID uint64) string {
+	return fmt.Sprintf(SceneNodeKeyFmt, sceneControlTag(zoneID), sceneID)
 }
 
 type CreateSceneLogic struct {
@@ -98,7 +98,7 @@ func NewCreateSceneLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Creat
 func (l *CreateSceneLogic) CreateScene(in *scene_manager.CreateSceneRequest) (*scene_manager.CreateSceneResponse, error) {
 	// 路由不变量(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):scene 只连本 zone 的 scene_manager,
 	// 请求的 zone 恒是本进程的 zone。不是的话是调用方连错了实例,不能替别的 zone 登记场景(那是别的 zone 的控制域键)。
-	// 在任何写入之前拒绝;zone_id = 0(调用方没填)不在这里拒,后面按原有口径处理。
+	// 在任何写入之前拒绝。
 	if in.ZoneId != 0 && in.ZoneId != l.svcCtx.Config.ZoneId {
 		l.Logger.Errorf("[CreateScene] request for zone %d reached the scene_manager of zone %d; rejected without any write",
 			in.ZoneId, l.svcCtx.Config.ZoneId)
@@ -106,6 +106,12 @@ func (l *CreateSceneLogic) CreateScene(in *scene_manager.CreateSceneRequest) (*s
 			ErrorCode:    constants.ErrNoAvailableNode,
 			ErrorMessage: fmt.Sprintf("zone %d is served by its own scene_manager (this process serves zone %d)", in.ZoneId, l.svcCtx.Config.ZoneId),
 		}, nil
+	}
+	// zone_id = 0(调用方没填)按本进程的 zone,与 DestroyScene 同一口径(docs/design/redis-cluster-all-domains-20261110.md
+	// §3.3)。以前会以 zone 0 登记:选点、负载集与场景键都落在 zone 0 上,而控制域里不存在 zone 0 的键。
+	// 后面所有步骤都读 in.ZoneId,所以在这里改写一次请求(请求对象只归本次调用)。
+	if in.ZoneId == 0 {
+		in.ZoneId = l.svcCtx.Config.ZoneId
 	}
 	sceneType := l.resolveSceneType(in)
 
@@ -122,12 +128,12 @@ func (l *CreateSceneLogic) CreateScene(in *scene_manager.CreateSceneRequest) (*s
 	}
 }
 
-// findExistingMirror picks one mirror id from scene:{sourceId}:mirrors. Used
+// findExistingMirror picks one mirror id from scene:{ctl:<z>}:<sourceId>:mirrors. Used
 // by the MirrorDedupBySource code path. Returns (0, false) when the set is
 // empty or the read fails. The selection is arbitrary (Redis SET ordering is
 // undefined), which matches the contract of "any existing mirror is fine".
-func (l *CreateSceneLogic) findExistingMirror(sourceId uint64) (uint64, bool) {
-	members, err := l.svcCtx.Redis.Smembers(sceneMirrorsKey(sourceId))
+func (l *CreateSceneLogic) findExistingMirror(zoneID uint32, sourceId uint64) (uint64, bool) {
+	members, err := l.svcCtx.Redis.Smembers(sceneMirrorsKey(zoneID, sourceId))
 	if err != nil || len(members) == 0 {
 		return 0, false
 	}
@@ -219,29 +225,17 @@ func (l *CreateSceneLogic) createMainWorldScene(in *scene_manager.CreateSceneReq
 //     one. Off by default because the typical mirror use case is per-player
 //     phasing where independent copies are intentional.
 func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) (*scene_manager.CreateSceneResponse, error) {
-	// 镜像源记录在别的 zone(control-plane-zone-scoping-20261105.md §4.3):同组时它的键和本 zone 在同一个实例里,但只归那个
-	// zone 读写 —— 不按它去重(去重会读、还可能 SREM 它的子集合),也不把新镜像登记成它的子镜像(luaRegisterInstance 会 SADD
-	// scene:{源}:mirrors,源所在 zone 的级联随后就会动本 zone 的场景键)。新镜像照样带镜像标记、按 MirrorIdleTimeoutSeconds
-	// 空闲回收,只是源销毁时不级联到它;共置由 resolveMirrorSourceNode 的 zone_mismatch 照旧回落。
-	// scene:{源}:zone 读失败按别的 zone 处理(拿不准就不碰);没有记录(源不在本组实例里)时照旧:子集合落在本组实例里,
-	// 只有本 zone 读写,随镜像销毁摘掉。
-	foreignSource := false
-	if in.SourceSceneId > 0 {
-		srcZone, err := lookupSceneZone(l.svcCtx, in.SourceSceneId)
-		foreignSource = err != nil || (srcZone != 0 && srcZone != in.ZoneId)
-		if foreignSource {
-			l.Logger.Infof("[Instance] mirror source scene %d is not in zone %d (zone=%d err=%v); not linking the new mirror to it",
-				in.SourceSceneId, in.ZoneId, srcZone, err)
-		}
-	}
+	// 镜像源只按本 zone 的键查(docs/design/redis-cluster-all-domains-20261110.md §3.3):源在别的 zone 时本 zone 的键里没有它,
+	// 与源已销毁同一个结局 —— 源克隆镜像回 ErrSourceSceneGone;带自己配置的镜像照建,共置按 no_mapping 回落,子集合与反向索引
+	// 落在本 zone 的键里,只有本 zone 读写,随镜像销毁摘掉。别的 zone 的键一把都不读、不写(control-plane-zone-scoping §4.3)。
 	if in.SourceSceneId > 0 {
 		// Only enforce source-existence when the source IS the template
 		// (no MirrorConfigId provided). Otherwise the source is just a
 		// co-location hint and pickInstanceNode handles the fallback.
 		if in.MirrorConfigId == 0 {
-			exists, err := l.svcCtx.Redis.Exists(sceneNodeKey(in.SourceSceneId))
+			exists, err := l.svcCtx.Redis.Exists(sceneNodeKey(in.ZoneId, in.SourceSceneId))
 			if err != nil {
-				l.Logger.Errorf("[Instance] EXISTS scene:%d:node failed for source-clone mirror: %v", in.SourceSceneId, err)
+				l.Logger.Errorf("[Instance] EXISTS on the owner of source scene %d failed for source-clone mirror: %v", in.SourceSceneId, err)
 			} else if !exists {
 				l.Logger.Infof("[Instance] Refusing source-clone mirror: source scene %d is gone (caller=%v conf=%d)",
 					in.SourceSceneId, in.CreatorIds, in.SceneConfId)
@@ -253,9 +247,9 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 			}
 		}
 
-		if l.svcCtx.Config.MirrorDedupBySource && !foreignSource {
-			if existingId, ok := l.findExistingMirror(in.SourceSceneId); ok {
-				nodeId, err := l.svcCtx.Redis.Get(sceneNodeKey(existingId))
+		if l.svcCtx.Config.MirrorDedupBySource {
+			if existingId, ok := l.findExistingMirror(in.ZoneId, in.SourceSceneId); ok {
+				nodeId, err := l.svcCtx.Redis.Get(sceneNodeKey(in.ZoneId, existingId))
 				switch {
 				case err != nil:
 					// 读不到属主(2026-10-23)不能当成陈旧条目摘掉:那会把一个活镜像从源的子集合里摘掉,
@@ -276,7 +270,7 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 					// Stale entry in the mirrors set — the mirror was destroyed
 					// but its membership wasn't cleaned. Drop it and fall through
 					// to a fresh allocation.
-					l.svcCtx.Redis.Srem(sceneMirrorsKey(in.SourceSceneId), strconv.FormatUint(existingId, 10))
+					l.svcCtx.Redis.Srem(sceneMirrorsKey(in.ZoneId, in.SourceSceneId), strconv.FormatUint(existingId, 10))
 					metrics.ObserveMirrorDedup(in.ZoneId, "stale")
 				}
 			} else {
@@ -313,15 +307,12 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 	// 实例的全部 Redis 状态由一段脚本登记(scene_registration.go),必须在调 C++ CreateScene **之前**:
 	// 进程在 RPC 前后崩溃时,空闲回收靠 active 集合找到它,按 agones_gs 归还名额。
 	//   - 镜像标记让空闲回收改用更短的 MirrorIdleTimeoutSeconds:镜像每次进场都重建 NPC,没人时留着纯属浪费;
-	//   - scene:{源}:mirrors 与 scene:{镜像}:source 是级联销毁和死节点收尾用的反向索引。
+	//   - scene:{ctl:<z>}:<源>:mirrors 与 scene:{ctl:<z>}:<镜像>:source 是级联销毁和死节点收尾用的反向索引。
 	reg := instanceRegistration{
 		sceneRegistration: sceneRegistration{SceneID: sceneId, ZoneID: in.ZoneId, NodeID: targetNode},
 		CreatedAt:         time.Now().Unix(),
 		Mirror:            in.MirrorConfigId > 0 || in.SourceSceneId > 0,
 		SourceSceneID:     in.SourceSceneId,
-	}
-	if foreignSource {
-		reg.SourceSceneID = 0 // 不登记成别的 zone 场景的子镜像(见函数开头)
 	}
 	if placement != nil {
 		reg.AgonesRoom = placement.room()
@@ -491,7 +482,7 @@ func (l *CreateSceneLogic) rollbackInstanceAllocation(
 // 节点计数与反向索引已在回滚脚本里改好。
 //   - 向这次分配的节点补发 DestroyScene:CreateScene 回错不等于节点上没建(超时的那次可能已经建好),不补就留下
 //     没有 Redis 状态的实体。节点已死时跳过,实体随进程没了。
-//   - 从镜像源的子集合摘掉自己:源取快照里登记时写下的 scene:{id}:source(源在别的 zone 时登记没写,这里也就不碰)。
+//   - 从镜像源的子集合摘掉自己:源取快照里登记时写下的 scene:{ctl:<z>}:<id>:source,子集合同在本 zone 的键里。
 //   - 按登记时记下的 agones_gs 删名额条目,删失败任务留着,扫描重做到成功(releaseTeardownRoom)。
 func runRollbackTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job sceneTeardownJob) error {
 	var deferred []string
@@ -549,44 +540,22 @@ func (l *CreateSceneLogic) pickInstanceNode(in *scene_manager.CreateSceneRequest
 // resolveMirrorSourceNode returns the node hosting sourceSceneId when that
 // node is a viable co-location target. On success returns (node, "ok").
 // On fallback returns ("", <reason>) where reason is one of:
-//   - "no_mapping":   source scene has no scene:{id}:node entry
-//   - "zone_mismatch": source scene lives in a different zone (would punch
-//     a hole in zone isolation, e.g. mirror request from
-//     zone 2 pointing at a zone 1 source — co-location
-//     would route the mirror onto zone 1's node)
+//   - "no_mapping":   source scene has no scene:{ctl:<z>}:<id>:node entry in
+//     this zone (destroyed, never registered, or registered in a different
+//     zone: only this zone's keys are read, docs/design/redis-cluster-all-domains-20261110.md §3.3)
 //   - "node_dead":    source node is not in the requested zone's load set
 //   - "overloaded":   source node is at/over MirrorSourceNodeLoadCap
 //
 // The reason string is used as a Prometheus label and also logged so
 // operators can diagnose why a mirror fell through to GetBestNode.
 //
-// zone_mismatch is treated as a soft fallback (not an error) so callers
-// that pass a stale source_scene_id from a different zone still get a
-// usable mirror — just without the co-location optimization.
+// 源在别的 zone 时落到 no_mapping(原来单列 zone_mismatch,靠 scene:<id>:zone 判;那把键已删):共置只可能落在本 zone
+// 的节点上,不会把镜像放到别的 zone 的节点、让本 zone 的死节点收尾管不到它。
 func (l *CreateSceneLogic) resolveMirrorSourceNode(sourceSceneId uint64, zoneId uint32) (string, string) {
-	nodeId, err := l.svcCtx.Redis.Get(sceneNodeKey(sourceSceneId))
+	nodeId, err := l.svcCtx.Redis.Get(sceneNodeKey(zoneId, sourceSceneId))
 	if err != nil || nodeId == "" {
-		l.Logger.Infof("[Mirror] source scene %d has no node mapping (err=%v), falling back to GetBestNode", sourceSceneId, err)
+		l.Logger.Infof("[Mirror] source scene %d has no node mapping in zone %d (err=%v), falling back to GetBestNode", sourceSceneId, zoneId, err)
 		return "", "no_mapping"
-	}
-
-	// Zone isolation guard. Allowing a cross-zone source to drive
-	// co-location would land the new mirror on the source's zone node,
-	// which then can't be reconciled by the requesting zone's node-death
-	// loop (different active set), creating an orphan on every restart.
-	// We only enforce when the source has a recorded zone — sources
-	// created before scene:{id}:zone existed return 0 from lookupSceneZone
-	// and skip the check (back-compat). 读不到不等于没记录:不知道是不是跨 zone,
-	// 就不共置,和上面映射读不到走同一条回退。
-	srcZone, err := lookupSceneZone(l.svcCtx, sourceSceneId)
-	if err != nil {
-		l.Logger.Errorf("[Mirror] cannot read zone of source scene %d, falling back to GetBestNode: %v", sourceSceneId, err)
-		return "", "no_mapping"
-	}
-	if srcZone != 0 && srcZone != zoneId {
-		l.Logger.Infof("[Mirror] source scene %d lives in zone %d but request is for zone %d, falling back to GetBestNode",
-			sourceSceneId, srcZone, zoneId)
-		return "", "zone_mismatch"
 	}
 
 	if !IsNodeAlive(l.svcCtx, zoneId, nodeId) {

@@ -101,10 +101,20 @@ message BagLayoutInfo {
   repeated EquipSlotInfo equip_slots = 5;
 }
 
+// 人物背包里一种物品被占住的数量(战斗道具预留,docs/design/battle-item-reservation.md):这些数量押在还没结算的战斗里,
+// 交易、捐献等出包操作暂时动不了它们,那一局结算或作废之后放开。按配置号给数量,不指定是哪一堆、哪一格(AGENTS §11.6)。
+message BagHeldItemInfo {
+  uint32 config_id = 1;
+  uint64 count = 2; // 被占住的数量,不超过背包里这种物品的总数
+}
+
 message BagInfo {
   repeated BagItemInfo items = 1; // 顺序无语义，布局通过 item_id 关联。
   BagLayoutInfo layout = 2;
   CurrencyComp currency = 3;
+  // 仅人物背包(bag_type = 0):被占住的数量,按 config_id 升序、互不重复;没有时为空。别的包恒为空。
+  // 客户端据此显示「战斗结算中」的数量,并在选物品交易时只让选没被占住的部分;能不能出包仍由服务器裁决。
+  repeated BagHeldItemInfo held_items = 4;
 }
 
 message GetBagRequest { uint32 bag_type = 1; }

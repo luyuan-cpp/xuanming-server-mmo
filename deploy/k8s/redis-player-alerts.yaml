@@ -16,7 +16,7 @@
 #   redis_rejected_connections_total、redis_connected_clients、redis_config_maxclients、redis_aof_last_write_status、redis_master_link_up。
 #   部署后逐个对着 exporter 的 /metrics 核对,对不上就改这里 —— 指标名写错的规则不报错,只是永远不响。
 #
-# 阈值与 for 时长是占位值,**待压测确认**(设计 §14.3、AGENTS.md §6:没有压测对比不下容量结论)。
+# 阈值与 for 时长已定(2026-11-12),压测出基线后可调(设计 §14.3、AGENTS.md §6:容量结论仍以压测对比为准):依据是业界 Redis 常用口径——内存 80% 预警、拒绝连接 / 驱逐出现即报、for 5~10 分钟滤掉 BGSAVE 与故障切换抖动。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up

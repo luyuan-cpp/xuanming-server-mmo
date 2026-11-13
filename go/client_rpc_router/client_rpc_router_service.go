@@ -25,6 +25,7 @@ import (
 	"shared/buildinfo"
 	"shared/grpcstats"
 	"shared/releasetrack"
+	"shared/shutdownbudget"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/netx"
@@ -49,6 +50,9 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	// 停机强退时限要盖住最长的在途请求(Timeout 6s 比 go-zero 缺省的 4.5s 长):滚动重启路由服时,正在转发的客户端请求
+	// 要么拿到下游应答、要么自己超时,不被强杀砍断。
+	shutdownbudget.Apply(&c.RpcServerConf)
 	// 发布轨道是进程级部署属性(docs/design/release-track-gray-canary.md §2.1),取值非法就不起服:
 	// 带着认不出的轨道注册,gate 会把本实例当无效节点跳过,不报错也收不到流量。
 	releaseTrack, err := releasetrack.FromEnv()
@@ -68,6 +72,8 @@ func main() {
 	// 目标业务服务发现:路由表里每个客户端协议目标类型(非 Battle)一个 etcd
 	// list-watch 镜像,连接按 endpoint 缓存、节点消失即清。
 	svcCtx.RunWatchers(ctx)
+	// 热关停(docs/design/rpc-kill-switch.md):非阻塞;连不上 etcd 就是全放行。规则按转发的目标方法判(forwardlogic.go)。
+	svcCtx.KillSwitch.Start(ctx, svcCtx.Etcd)
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterClientRpcRouterServer(grpcServer, server.NewClientRpcRouterServer(svcCtx))
@@ -77,9 +83,12 @@ func main() {
 		}
 	})
 	// 会话元数据的透传与回写在 Forward 逻辑里按原值处理,本服务不解析它,
-	// 所以不像 match 那样挂 sessionInterceptor;只挂流量统计。
+	// 所以不像 match 那样挂 sessionInterceptor;挂流量统计与热关停。
+	// 热关停拦截器只管本跳的方法:Forward 是转发信封、受保护,只有精确到 Forward 的规则才能整体关掉路由服;
+	// 通配规则由 Forward 逻辑按目标方法判。
 	s.AddUnaryInterceptors(
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
+		svcCtx.KillSwitch.UnaryServerInterceptor(),
 	)
 	defer s.Stop()
 
@@ -104,6 +113,7 @@ func main() {
 	// 有了 node_uuid 才知道本路由服在同轨道路由服里的名次;s.Start() 之前设好,接到的每个请求都按子集挑全服池目标。
 	// 重新注册(失租)沿用同一个 node_uuid,这里只设一次。
 	svcCtx.SetSubsetIdentity(nr.Info.NodeUuid, releaseTrack)
+	svcCtx.KillSwitch.AddInstance(nr.Info.NodeUuid) // 认 instance/<本进程 uuid>/ 下的热关停规则
 
 	targetNames := make([]string, 0, len(svcCtx.Targets))
 	for nodeType := range svcCtx.Targets {

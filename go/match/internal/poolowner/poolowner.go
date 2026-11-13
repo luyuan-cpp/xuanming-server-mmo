@@ -1,5 +1,6 @@
-// Package poolowner 决定一个匹配池由哪个 match 副本负责撮合
-// （docs/design/global-match-hierarchical-pools.md §5.2）。
+// Package poolowner 决定匹配池的撮合工作由哪个 match 副本负责
+// （docs/design/global-match-hierarchical-pools.md §5.2）。一个池先切成撮合段（segments.go：整池 / 机房 / 子池 / 跨机房，§5.2.1），
+// 每段一个归属键，再按下面的规则分给副本。
 //
 // 用最高随机权重哈希（rendezvous / HRW）：每个副本对每个键算一个分数，分数最高者负责。
 // 副本增减时只有原本落在增减副本上的键换主，其余池不动。成员表来自 etcd 里

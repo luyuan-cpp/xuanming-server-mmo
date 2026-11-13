@@ -87,15 +87,9 @@ func isWorldMap(confID uint64) bool {
 // evacuationOwnerOf 判断原频道能不能接住疏散的玩家:频道属于本 zone,属主存在、不是源节点、活着、没在排空、身份不歧义。
 // 任何一次读失败都按「不能」处理,交给下一级(同图别的频道);这里不改写任何归属。
 func (l *EnterSceneLogic) evacuationOwnerOf(sceneID uint64, sourceNode string, zoneID uint32, admission nodeAdmissionView) (string, bool) {
-	mappedZone, err := lookupSceneZone(l.svcCtx, sceneID)
-	if err != nil {
-		l.Logger.Errorf("[Evacuation] zone of scene %d unreadable; skipping the original channel: %v", sceneID, err)
-		return "", false
-	}
-	if mappedZone != 0 && mappedZone != zoneID {
-		return "", false
-	}
-	owner, err := l.svcCtx.Redis.Get(sceneNodeKey(sceneID))
+	// 只读 zoneID 的属主键(docs/design/redis-cluster-all-domains-20261110.md §3.3):原频道不在这个 zone 时读不到属主,
+	// 与「属主不存在」同一个结局,交给下一级。原来先读 scene:<id>:zone 比 zone,那把键已删。
+	owner, err := l.svcCtx.Redis.Get(sceneNodeKey(zoneID, sceneID))
 	if err != nil {
 		l.Logger.Errorf("[Evacuation] owner of scene %d unreadable; skipping the original channel: %v", sceneID, err)
 		return "", false

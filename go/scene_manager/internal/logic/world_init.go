@@ -263,7 +263,7 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 			sceneId, _ := strconv.ParseUint(sceneIdStr, 10, 64)
 			// 属主与放置代次一条 MGET 读出(同一时刻的快照):对属主的补建带上频道当前的代次,
 			// 节点据此认出它不是晚到的旧请求(docs/design/world-channel-placement-generation.md §3.3)。
-			targetNode, generation, err := readWorldChannelPlacement(svcCtx, sceneId)
+			targetNode, generation, err := readWorldChannelPlacement(svcCtx, zoneId, sceneId)
 			if err != nil {
 				noteReadUnknown(zoneId, readUnknownSiteWorldInit, fmt.Sprintf("owner and placement generation of scene %d", sceneId), err)
 				continue
@@ -367,7 +367,7 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 // CreateScene(调用方据此累加本轮 ensured);createErr:CreateScene 的错误(调用方按 rpcNode 记不可达)。
 func moveWorldChannelOffDeadNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, confId, sceneId uint64,
 	deadNode, newNode string) (rpcNode string, rpcSent bool, createErr error) {
-	owner, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+	owner, err := svcCtx.Redis.Get(sceneNodeKey(zoneId, sceneId))
 	if err != nil {
 		noteReadUnknown(zoneId, readUnknownSiteWorldInit,
 			fmt.Sprintf("owner of scene %d before moving it off dead node %s", sceneId, deadNode), err)
@@ -441,8 +441,7 @@ func SelectOrRecoverWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext
 			continue
 		}
 
-		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
-		nid, getErr := svcCtx.Redis.Get(nodeKey)
+		nid, getErr := svcCtx.Redis.Get(sceneNodeKey(zoneId, sceneId))
 		if getErr != nil {
 			// 读错不等于映射不存在:属主可能活着。当成陈旧会进懒改派,下一次读若成功就会拿着
 			// 活属主做 CAS,把频道从活节点上搬走、在新节点上再建一份同 scene_id 的实体。
@@ -460,7 +459,7 @@ func SelectOrRecoverWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext
 			continue
 		}
 
-		count := readScenePlayerCount(svcCtx, sceneId)
+		count := readScenePlayerCount(svcCtx, zoneId, sceneId)
 
 		if count < bestCount {
 			bestCount = count
@@ -633,7 +632,7 @@ func worldChannelOwnersUnknownError(confId uint64, zoneId uint32, unknownOwners 
 // 没法放进 CAS 脚本 —— 同一脚本也服务 rebalance 从活节点主动迁出 —— 所以「重读 + 存活复核」与 CAS 之间仍有
 // 一条缝(中间隔着一次 CreateScene),比原来的「跨多个频道与 RPC」窄得多。
 func staleWorldChannelOwner(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (string, bool) {
-	oldNode, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+	oldNode, err := svcCtx.Redis.Get(sceneNodeKey(zoneId, sceneId))
 	if err != nil {
 		noteReadUnknown(zoneId, readUnknownSiteWorldLazy, fmt.Sprintf("owner of scene %d before lazy reassign", sceneId), err)
 		return "", false
@@ -716,8 +715,7 @@ func reserveWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceContext
 			continue
 		}
 
-		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
-		nid, getErr := svcCtx.Redis.Get(nodeKey)
+		nid, getErr := svcCtx.Redis.Get(sceneNodeKey(zoneId, sceneId))
 		if getErr != nil {
 			// 同 SelectOrRecoverWorldChannel:读错不当陈旧,否则可能把活属主的频道懒改派走。
 			noteReadUnknown(zoneId, readUnknownSiteWorldPick, fmt.Sprintf("owner of scene %d", sceneId), getErr)
@@ -783,14 +781,15 @@ func reserveWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceContext
 // 规划时看到的 oldNode,才把归属改到 newNode,并在同一个脚本里同步两侧的反向索引
 // 与 scene_count。比较和写入之间没有缝,并发的两个改派者只有一个能落地。
 //
-// KEYS[1] = scene:{id}:node
-// KEYS[2] = node:zone:{zoneId}:{oldNode}:scenes
-// KEYS[3] = node:zone:{zoneId}:{newNode}:scenes
-// KEYS[4] = node:zone:{zoneId}:{oldNode}:scene_count
-// KEYS[5] = node:zone:{zoneId}:{newNode}:scene_count
-// KEYS[6] = scene:{id}:reassign_receipt:{token},本次调用的回执(见下)
-// KEYS[7] = scene:{id}:placement_gen,频道的放置代次高水位(见 scenePlacementGenKey)
-// KEYS[8] = (可选)world_channels:zone:{zoneId}:{confId};传了就要求 sceneId 仍是它的成员
+// KEYS[1] = scene:{ctl:<z>}:<id>:node
+// KEYS[2] = node:{ctl:<z>}:<oldNode>:scenes
+// KEYS[3] = node:{ctl:<z>}:<newNode>:scenes
+// KEYS[4] = node:{ctl:<z>}:<oldNode>:scene_count
+// KEYS[5] = node:{ctl:<z>}:<newNode>:scene_count
+// KEYS[6] = scene:{ctl:<z>}:<id>:reassign_receipt:<token>,本次调用的回执(见下)
+// KEYS[7] = scene:{ctl:<z>}:<id>:placement_gen,频道的放置代次高水位(见 scenePlacementGenKey)
+// KEYS[8] = (可选)world_channels:{ctl:<z>}:<confId>;传了就要求 sceneId 仍是它的成员
+// (全部 KEYS 同一个 zone 的 tag,同槽。)
 // ARGV[1] = oldNode;空串表示期望映射不存在(懒改派里没有属主的频道)
 // ARGV[2] = newNode
 // ARGV[3] = sceneId
@@ -856,8 +855,9 @@ return 1
 
 // sceneReassignReceiptKey 是 luaReassignSceneNode 一次调用的回执键,存活 sceneClaimRecordTTLSeconds(与认领记录
 // 同一个口径:长过 go-redis 的重发,也长过一个卡在旧连接里的 EVAL)。
-func sceneReassignReceiptKey(sceneID uint64, token string) string {
-	return fmt.Sprintf("scene:%d:reassign_receipt:%s", sceneID, token)
+// 键是 scene:{ctl:<z>}:<id>:reassign_receipt:<token>,与脚本里的其余键同一个 zone 的 tag。
+func sceneReassignReceiptKey(zoneID uint32, sceneID uint64, token string) string {
+	return fmt.Sprintf("scene:%s:%d:reassign_receipt:%s", sceneControlTag(zoneID), sceneID, token)
 }
 
 // 放置代次(docs/design/world-channel-placement-generation.md)。
@@ -876,22 +876,22 @@ func sceneReassignReceiptKey(sceneID uint64, token string) string {
 // WorldPlacementSeqKeyFmt / ScenePlacementGenKeyFmt 是上面两把键的格式。
 const (
 	WorldPlacementSeqKeyFmt = "world_channels:placement_seq:%s"
-	ScenePlacementGenKeyFmt = "scene:%d:placement_gen"
+	ScenePlacementGenKeyFmt = "scene:%s:%d:placement_gen"
 )
 
 func worldPlacementSeqKey(zoneID uint32) string {
 	return fmt.Sprintf(WorldPlacementSeqKeyFmt, sceneControlTag(zoneID))
 }
 
-func scenePlacementGenKey(sceneID uint64) string {
-	return fmt.Sprintf(ScenePlacementGenKeyFmt, sceneID)
+func scenePlacementGenKey(zoneID uint32, sceneID uint64) string {
+	return fmt.Sprintf(ScenePlacementGenKeyFmt, sceneControlTag(zoneID), sceneID)
 }
 
 // deletePlacementGeneration 删频道的代次高水位。世界频道的拆除任务(排空收尾、孤儿清理)在认领之后调用:认领脚本已删映射、
 // 摘出集合,之后没有写者会再写它(luaFenceReclaim 只在频道还在时写,改派 CAS 要比属主)。这把键没有 TTL,删不掉时调用方
 // 把任务留给扫描重做。
-func deletePlacementGeneration(svcCtx *svc.ServiceContext, sceneId uint64) error {
-	_, err := svcCtx.Redis.Del(scenePlacementGenKey(sceneId))
+func deletePlacementGeneration(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) error {
+	_, err := svcCtx.Redis.Del(scenePlacementGenKey(zoneId, sceneId))
 	return err
 }
 
@@ -910,8 +910,8 @@ func allocatePlacementGeneration(svcCtx *svc.ServiceContext, zoneId uint32) (uin
 
 // readWorldChannelPlacement 用一条 MGET 读频道的属主与放置代次(同一时刻的快照)。属主不存在时 owner 为空串;
 // 代次不存在时为 0,值损坏时回错误(不能按 0 去建:节点若已记下更新的拆除,代次 0 的建场景会被拒)。
-func readWorldChannelPlacement(svcCtx *svc.ServiceContext, sceneId uint64) (owner string, generation uint64, err error) {
-	vals, err := svcCtx.Redis.Mget(sceneNodeKey(sceneId), scenePlacementGenKey(sceneId))
+func readWorldChannelPlacement(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (owner string, generation uint64, err error) {
+	vals, err := svcCtx.Redis.Mget(sceneNodeKey(zoneId, sceneId), scenePlacementGenKey(zoneId, sceneId))
 	if err != nil {
 		return "", 0, err
 	}
@@ -940,7 +940,8 @@ end
 
 // luaFenceReclaim 是回收预建实体之前的「比对属主 + 抬代次」,在一个脚本里。
 //
-// KEYS[1] = scene:{id}:node,KEYS[2] = scene:{id}:placement_gen,KEYS[3] = world_channels:zone:{zoneId}:{confId}。
+// KEYS[1] = scene:{ctl:<z>}:<id>:node,KEYS[2] = scene:{ctl:<z>}:<id>:placement_gen,KEYS[3] = world_channels:{ctl:<z>}:<confId>
+// (同一个 zone 的 tag,同槽)。
 // ARGV[1] = node,ARGV[2] = 这次尝试的代次(十进制),ARGV[3] = sceneId。
 // 返回 {0, owner}:node 就是现任属主,实体在用,不回收;{1, owner}:可以按 ARGV[2] 发 DestroyScene。
 // owner 是比对时读到的属主(映射不存在时为空串)。
@@ -987,7 +988,7 @@ type worldChannelReclaim struct {
 // error 是比对脚本的错误:结局未知,没有发 DestroyScene,留下的空实体没有映射指向它,不影响路由。
 func reclaimUnownedWorldChannelEntity(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, confId, sceneId uint64,
 	node string, generation uint64) (worldChannelReclaim, error) {
-	keys := []string{sceneNodeKey(sceneId), scenePlacementGenKey(sceneId), worldChannelsKey(zoneId, confId)}
+	keys := []string{sceneNodeKey(zoneId, sceneId), scenePlacementGenKey(zoneId, sceneId), worldChannelsKey(zoneId, confId)}
 	raw, err := svcCtx.Redis.Eval(luaFenceReclaim, keys, node, strconv.FormatUint(generation, 10), strconv.FormatUint(sceneId, 10))
 	if err != nil {
 		return worldChannelReclaim{}, fmt.Errorf("fence the reclaim of scene %d on %s at placement generation %d: %w",
@@ -1043,7 +1044,7 @@ func resolveCasReceipt(svcCtx *svc.ServiceContext, receiptKey string) (string, e
 }
 
 // reassignSceneNode 把场景归属从 oldNode 原子地改到 newNode:scene:{id}:node、两侧的
-// node:zone:{zoneId}:{nodeId}:scenes 反向索引、两侧的 scene_count 在一个 Lua 脚本里一起改。
+// node:{ctl:<z>}:<nodeId>:scenes 反向索引、两侧的 scene_count 在一个 Lua 脚本里一起改。
 //
 // 这是**所有权改写的收口点**:全模块改写已有场景的 scene:{id}:node 的路径都经过它
 // (建场景时的首次写入不算改写,见 scene_registration.go)。
@@ -1116,15 +1117,15 @@ func casReassignSceneNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uin
 		return false
 	}
 	// 每次调用一个新 token、一把自己的回执键:go-redis 内部重发带的是同一个,脚本据此认出重发(见 luaReassignSceneNode)。
-	receiptKey := sceneReassignReceiptKey(sceneId, uuid.NewString())
+	receiptKey := sceneReassignReceiptKey(zoneId, sceneId, uuid.NewString())
 	keys := []string{
-		sceneNodeKey(sceneId),
+		sceneNodeKey(zoneId, sceneId),
 		nodeScenesKey(zoneId, oldNode),
 		nodeScenesKey(zoneId, newNode),
 		nodeSceneCountKey(zoneId, oldNode),
 		nodeSceneCountKey(zoneId, newNode),
 		receiptKey,
-		scenePlacementGenKey(sceneId),
+		scenePlacementGenKey(zoneId, sceneId),
 	}
 	if channelSetKey != "" {
 		keys = append(keys, channelSetKey)

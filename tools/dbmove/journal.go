@@ -12,12 +12,13 @@ import (
 // journal 把每一步写到屏幕和本地文件。文件是事后对账用的:etcd 里只留最新状态,这里留过程。
 // 内容不含连接串和口令。追加写失败不打断切换窗口,只在屏幕上提示。
 type journal struct {
-	out  io.Writer
-	file *os.File
-	now  func() time.Time
+	out    io.Writer
+	errOut io.Writer // 告警走标准错误输出,见 warn
+	file   *os.File
+	now    func() time.Time
 }
 
-func openJournal(dir, db, runID string, out io.Writer, now func() time.Time) (*journal, error) {
+func openJournal(dir, db, runID string, out, errOut io.Writer, now func() time.Time) (*journal, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -29,12 +30,18 @@ func openJournal(dir, db, runID string, out io.Writer, now func() time.Time) (*j
 	if err != nil {
 		return nil, err
 	}
-	return &journal{out: out, file: file, now: now}, nil
+	return &journal{out: out, errOut: errOut, file: file, now: now}, nil
 }
 
 func (j *journal) write(step, line string) {
 	fmt.Fprintf(j.out, "[%s] %s\n", step, line)
 	j.record(step, line)
+}
+
+// warn 用在运维放弃了一道保护的地方:写到标准错误输出让人当场看见,也写进文件,事后查得到是谁在什么时候放弃的。
+func (j *journal) warn(step, line string) {
+	fmt.Fprintf(j.errOut, "WARNING: [%s] %s\n", step, line)
+	j.record(step, "WARNING: "+line)
 }
 
 // record 只写文件。

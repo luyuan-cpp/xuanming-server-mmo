@@ -501,6 +501,13 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 		return battleSmokeFighterResult{step: "a-wait-battle-end",
 			err: fmt.Errorf("no BattleEnd within %s: %w", battleSmokeEndTimeout, err), battleId: battleId}
 	}
+	// 作废不是一种胜负:match 为这一局写了 ABORT(battle 进程失效、截止作废等,docs/design/battle-instance-loss-early-abort.md),
+	// 全员没有任何结算。冒烟要的是一局打完的战斗,作废必须判失败,不能当成「收到了终局」。
+	if battle.EBattleOutcome(outcome) == battle.EBattleOutcome_BATTLE_OUTCOME_VOID {
+		return battleSmokeFighterResult{step: "a-battle-voided",
+			err:      fmt.Errorf("battle_id=%d was voided by match (BATTLE_OUTCOME_VOID): its battle node was lost or the battle was aborted, nothing was settled", battleId),
+			battleId: battleId, outcome: outcome}
+	}
 
 	turns := bot.player.GetTurnCount()
 	// 就绪补拉和公共回合帧必须来自直连；个人终局只能由 Scene 持久结算后经大厅通知。

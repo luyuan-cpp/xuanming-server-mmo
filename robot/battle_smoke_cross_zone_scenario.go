@@ -329,6 +329,12 @@ func runCrossZoneFighter(side string, bot *battleSmokeBot, zone uint32, mode mat
 		return crossZoneFighterResult{step: stepPrefix + "-wait-battle-end",
 			err: fmt.Errorf("no BattleEnd within %s: %w", battleSmokeEndTimeout, err), battleId: battleId}
 	}
+	// 作废不是一种胜负(同 battle-smoke 的 a-battle-voided):match 为这一局写了 ABORT,全员没有任何结算,冒烟判失败。
+	if battle.EBattleOutcome(outcome) == battle.EBattleOutcome_BATTLE_OUTCOME_VOID {
+		return crossZoneFighterResult{step: stepPrefix + "-battle-voided",
+			err:      fmt.Errorf("battle_id=%d was voided by match (BATTLE_OUTCOME_VOID): its battle node was lost or the battle was aborted, nothing was settled", battleId),
+			battleId: battleId, outcome: outcome}
+	}
 
 	turns := bot.player.GetTurnCount()
 	// 就绪补拉应答、回合结果与终局包都必须从直连到达(D68/D69)

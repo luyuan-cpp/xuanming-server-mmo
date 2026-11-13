@@ -23,6 +23,8 @@
     <ClInclude Include="session\comp\pending_scene_entry_comp.h" />
     <ClInclude Include="session\comp\router_lane.h" />
     <ClInclude Include="session\comp\router_lane_item.h" />
+    <ClInclude Include="session\comp\scene_lane.h" />
+    <ClInclude Include="session\comp\scene_lane_item.h" />
     <ClInclude Include="session\manager\session_manager.h" />
     <ClInclude Include="session\system\session_identity_fence.h" />
   </ItemGroup>

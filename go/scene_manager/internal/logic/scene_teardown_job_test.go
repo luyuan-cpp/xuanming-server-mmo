@@ -140,7 +140,7 @@ func TestSceneTeardown_SweepReleasesTheRoomOfALostResidueSweep(t *testing.T) {
 	alloc := newFakeAllocator(&fakeGameServer{name: "gs-left", podIP: "10.0.0.8", state: "Allocated", capacity: 4})
 	withAgones(t, sc, alloc, true)
 	const sceneID uint64 = 89623
-	seedAgonesRoom(t, sc, alloc, sceneID, "gs-left")
+	seedAgonesRoomInZone(t, sc, alloc, claimTestZone, sceneID, "gs-left")
 	_, err := mr.ZAdd(activeInstancesKey(claimTestZone), 1, strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 
@@ -230,9 +230,9 @@ func TestSceneTeardown_SweepUnlinksALostMirrorFromItsSource(t *testing.T) {
 	)
 	siblingStr := strconv.FormatUint(sibling, 10)
 	seedClaimScene(t, mr, mirror, "node-a", "", 0)
-	require.NoError(t, mr.Set(sceneMirrorFlagKey(mirror), "1"))
-	require.NoError(t, mr.Set(sceneSourceKey(mirror), strconv.FormatUint(source, 10)))
-	_, err := mr.SAdd(sceneMirrorsKey(source), strconv.FormatUint(mirror, 10), siblingStr)
+	require.NoError(t, mr.Set(sceneMirrorFlagKey(claimTestZone, mirror), "1"))
+	require.NoError(t, mr.Set(sceneSourceKey(claimTestZone, mirror), strconv.FormatUint(source, 10)))
+	_, err := mr.SAdd(sceneMirrorsKey(claimTestZone, source), strconv.FormatUint(mirror, 10), siblingStr)
 	require.NoError(t, err)
 	mirrorDestroys := func() float64 {
 		return counterValueForTest(t, "scene_manager_instance_destroyed_total", map[string]string{
@@ -244,10 +244,10 @@ func TestSceneTeardown_SweepUnlinksALostMirrorFromItsSource(t *testing.T) {
 	_, err = destroyInstanceForce(ctx, sc, claimTestZone, mirror, "explicit")
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
 	require.Error(t, err)
-	require.False(t, mr.Exists(sceneSourceKey(mirror)), "前提:脚本已执行,镜像源键已删")
+	require.False(t, mr.Exists(sceneSourceKey(claimTestZone, mirror)), "前提:脚本已执行,镜像源键已删")
 
 	require.Equal(t, 1, sweepSceneTeardownJobs(ctx, sc, claimTestZone, pastLease()))
-	members, err := mr.Members(sceneMirrorsKey(source))
+	members, err := mr.Members(sceneMirrorsKey(claimTestZone, source))
 	require.NoError(t, err)
 	require.Equal(t, []string{siblingStr}, members, "镜像源取自认领快照")
 	require.Equal(t, before+1, mirrorDestroys(), "kind 取自认领快照,完成只记一次")
@@ -264,25 +264,25 @@ func TestSceneTeardown_FailedStepKeepsTheJobUntilItSucceeds(t *testing.T) {
 	)
 	seedClaimScene(t, mr, parent, "node-a", "", 0)
 	seedClaimScene(t, mr, child, "node-a", "", 0)
-	require.NoError(t, mr.Set(sceneMirrorFlagKey(child), "1"))
-	require.NoError(t, mr.Set(sceneSourceKey(child), strconv.FormatUint(parent, 10)))
-	_, err := mr.SAdd(sceneMirrorsKey(parent), strconv.FormatUint(child, 10))
+	require.NoError(t, mr.Set(sceneMirrorFlagKey(claimTestZone, child), "1"))
+	require.NoError(t, mr.Set(sceneSourceKey(claimTestZone, child), strconv.FormatUint(parent, 10)))
+	_, err := mr.SAdd(sceneMirrorsKey(claimTestZone, parent), strconv.FormatUint(child, 10))
 	require.NoError(t, err)
 	deferredBefore := teardownJobCount(t, teardownKindInstance, "deferred")
 	// 第一次 SMEMBERS 是认领前的预读,放过;第二次是认领之后级联的重读,让它失败。
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(parent), skip: 1, times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(claimTestZone, parent), skip: 1, times: 1})
 
 	destroyed, err := destroyInstanceForce(ctx, sc, claimTestZone, parent, "explicit")
 	require.EqualValues(t, 1, fired.Load())
 	require.NoError(t, err)
 	require.True(t, destroyed, "认领已提交,销毁已经发生")
-	requireSceneOwner(t, sc, child, "", "按预读快照级联")
+	requireSceneOwnerInZone(t, sc, claimTestZone, child, "", "按预读快照级联")
 	requireTeardownPending(t, mr, claimTestZone, parent, true)
 	require.Equal(t, deferredBefore+1, teardownJobCount(t, teardownKindInstance, "deferred"))
 
 	require.Equal(t, 1, sweepSceneTeardownJobs(ctx, sc, claimTestZone, pastLease()))
 	requireTeardownPending(t, mr, claimTestZone, parent, false)
-	require.False(t, mr.Exists(sceneMirrorsKey(parent)), "补完的级联删掉了子集合索引")
+	require.False(t, mr.Exists(sceneMirrorsKey(claimTestZone, parent)), "补完的级联删掉了子集合索引")
 }
 
 // 上一次拆除没做完时,同一个 scene_id 又被登记(号源出错):新场景认领不到(Pending,不重读、不报错),
@@ -295,13 +295,13 @@ func TestSceneTeardown_PendingJobBlocksAReusedSceneID(t *testing.T) {
 	first, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "", "explicit")
 	require.NoError(t, err)
 	require.True(t, first.Claimed)
-	require.NoError(t, mr.Set(sceneNodeKey(sceneID), "node-b"))
+	require.NoError(t, mr.Set(sceneNodeKey(claimTestZone, sceneID), "node-b"))
 
 	second, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "", "explicit")
 	require.NoError(t, err)
 	require.False(t, second.Claimed)
 	require.True(t, second.Pending)
-	require.Equal(t, "node-b", mustGet(t, mr, sceneNodeKey(sceneID)), "新场景一个键都不动")
+	require.Equal(t, "node-b", mustGet(t, mr, sceneNodeKey(claimTestZone, sceneID)), "新场景一个键都不动")
 
 	job := sceneTeardownJob{ZoneID: claimTestZone, SceneID: sceneID, Kind: teardownKindInstance, Reason: "explicit", Claim: first}
 	require.True(t, completeSceneTeardown(ctx, sc, job, nil, false))
@@ -352,24 +352,24 @@ func TestSceneTeardown_SweepFinishesALostWorldDrain(t *testing.T) {
 		confID  uint64 = 89633
 	)
 	channelStr := strconv.FormatUint(channel, 10)
-	require.NoError(t, mr.Set(sceneNodeKey(channel), "node-a"))
-	seedAgonesRoom(t, sc, alloc, channel, "gs-w")
-	require.NoError(t, mr.Set(sceneDrainingKey(channel), "1"))
+	require.NoError(t, mr.Set(sceneNodeKey(claimTestZone, channel), "node-a"))
+	seedAgonesRoomInZone(t, sc, alloc, claimTestZone, channel, "gs-w")
+	require.NoError(t, mr.Set(sceneDrainingKey(claimTestZone, channel), "1"))
 	_, err := mr.SAdd(worldDrainingSetKey(claimTestZone, confID), channelStr)
 	require.NoError(t, err)
 	drainedBefore := autoscaleOutcomeCount(t, claimTestZone, "scale_in", "drained")
 
 	finishDrainedChannel(ctx, sc, claimTestZone, confID, channel, "node-a")
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
-	requireSceneOwner(t, sc, channel, "", "前提:认领已执行")
+	requireSceneOwnerInZone(t, sc, claimTestZone, channel, "", "前提:认领已执行")
 	in, err := mr.IsMember(worldDrainingSetKey(claimTestZone, confID), channelStr)
 	if err == nil {
 		require.False(t, in, "排空集合成员资格与映射同一步删")
 	}
-	require.True(t, mr.Exists(sceneDrainingKey(channel)), "前提:排空标记还没删")
+	require.True(t, mr.Exists(sceneDrainingKey(claimTestZone, channel)), "前提:排空标记还没删")
 
 	require.Equal(t, 1, sweepSceneTeardownJobs(ctx, sc, claimTestZone, pastLease()))
-	require.False(t, mr.Exists(sceneDrainingKey(channel)))
+	require.False(t, mr.Exists(sceneDrainingKey(claimTestZone, channel)))
 	_, releases, _ := alloc.stats()
 	require.Equal(t, 1, releases)
 	require.EqualValues(t, 0, alloc.roomsOf("gs-w"))
@@ -380,7 +380,7 @@ func TestSceneTeardown_SweepFinishesALostWorldDrain(t *testing.T) {
 func TestSceneTeardown_UnknownKindStaysPending(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 89634
-	mr.HSet(sceneTeardownJobKey(sceneID), "token", "t-1", "kind", "from_a_newer_version", "reason", "x",
+	mr.HSet(sceneTeardownJobKey(claimTestZone, sceneID), "token", "t-1", "kind", "from_a_newer_version", "reason", "x",
 		"reply", `["claimed","","","",""]`)
 	_, err := mr.ZAdd(sceneTeardownPendingKey(claimTestZone), 1, strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)

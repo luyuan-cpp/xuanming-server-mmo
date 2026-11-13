@@ -189,7 +189,7 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 		}
 		planned[sceneId] = struct{}{}
 		// 属主读错当「没有属主」会绕过屏障,而下面会删掉映射。
-		nodeId, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+		nodeId, err := svcCtx.Redis.Get(sceneNodeKey(zone, sceneId))
 		if err != nil {
 			noteReadUnknown(zone, readUnknownSiteOrphanCleanup, fmt.Sprintf("owner of scene %d (conf %d)", sceneId, confId), err)
 			return false
@@ -299,9 +299,9 @@ func runWorldOrphanTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job
 	if err := unlinkFromSourceMirrors(svcCtx, zone, sceneID, job.Claim.Source); err != nil {
 		deferred = append(deferred, "unlink from the source's mirror set")
 	}
-	svcCtx.Redis.Del(sceneMirrorsKey(sceneID))
-	svcCtx.Redis.Del(sceneDrainingKey(sceneID))
-	if err := deletePlacementGeneration(svcCtx, sceneID); err != nil {
+	svcCtx.Redis.Del(sceneMirrorsKey(zone, sceneID))
+	svcCtx.Redis.Del(sceneDrainingKey(zone, sceneID))
+	if err := deletePlacementGeneration(svcCtx, zone, sceneID); err != nil {
 		deferred = append(deferred, "delete the placement generation")
 	}
 	if nodeID != "" {

@@ -94,6 +94,16 @@ func (s *MatchInternalServer) ResolveStrandedFormation(ctx context.Context, in *
 	return s.strandedFormations.ResolveStrandedFormation(ctx, in)
 }
 
+// ListPendingBattleScripts 运营拉一页待审的玩家剧本(docs/design/battle-script.md §6.3,调用方 ops)。
+func (s *MatchInternalServer) ListPendingBattleScripts(ctx context.Context, in *matchpb.ListPendingBattleScriptsRequest) (*matchpb.ListPendingBattleScriptsResponse, error) {
+	return logic.NewBattleScriptReviewLogic(ctx, s.svcCtx).ListPendingBattleScripts(in)
+}
+
+// ReviewBattleScript 运营通过或驳回一版待审的玩家剧本(调用方 ops)。
+func (s *MatchInternalServer) ReviewBattleScript(ctx context.Context, in *matchpb.ReviewBattleScriptRequest) (*matchpb.ReviewBattleScriptResponse, error) {
+	return logic.NewBattleScriptReviewLogic(ctx, s.svcCtx).ReviewBattleScript(in)
+}
+
 // SetSpectateFeatured 运营把一场公开局标成 / 取消标成赛事局(battle-spectate-tiered-fanout.md §15.6)。
 func (s *MatchInternalServer) SetSpectateFeatured(ctx context.Context, in *matchpb.SetSpectateFeaturedRequest) (*matchpb.SetSpectateFeaturedResponse, error) {
 	return logic.NewSetSpectateFeaturedLogic(ctx, s.svcCtx).SetSpectateFeatured(in)

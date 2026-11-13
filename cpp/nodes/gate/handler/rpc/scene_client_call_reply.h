@@ -28,6 +28,10 @@ enum class Disposition : uint8_t
 	kForwardContent,             // 原样下发 scene 的 message_content(id / message_id 由 scene 回显)
 	kServiceUnavailableEnvelope, // 回带请求 id 与原 message_id 的 1003 信封(gate_lane::SendEnvelope)
 	kDrop,                       // 不下发
+	// scene 明确答复「确定未执行、稍后重投」(dispatch_verdict = RETRY_LATER):玩家归属正在交接,或还没在目标节点就绪。
+	// gate 的场景 lane 把这一条放回队头,在有界等待内按收包顺序重投(docs/design/client-scene-request-handoff-hold.md §4)。
+	// 请求号为 0 的请求同样重投:重投不靠请求号关联,只有最终放弃时才按「没法关联」不回执。
+	kRetryLater,
 };
 
 // status:RPC0 调用结局;response:成功时的应答,失败时为空(RpcClient::CallMethod 以空 shared_ptr 回调);
@@ -44,6 +48,12 @@ inline Disposition Decide(const RpcStatus &status, const ProcessClientPlayerMess
 	if (response != nullptr && response->has_message_content())
 	{
 		return Disposition::kForwardContent;
+	}
+	// scene 派发前早退,但明确说了「稍后重投」:只有这一种早退是「等一等就能受理」的,其余早退等也没用。
+	// 旧版 scene 不填这个字段(默认 UNSPECIFIED),落到下面的 1003,与改造前相同。
+	if (response != nullptr && response->dispatch_verdict() == CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER)
+	{
+		return Disposition::kRetryLater;
 	}
 	// scene 派发前早退(R1):请求号非 0 才能让客户端按 id 认领,回 1003(确定未执行,重试安全)。
 	// 请求号为 0 的(旧 robot 的 SendRequest)没法关联,维持不下发:回一个空 body 的信封会被按 message_id

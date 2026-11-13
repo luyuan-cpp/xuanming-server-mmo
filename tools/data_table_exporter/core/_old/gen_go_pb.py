@@ -66,7 +66,7 @@ def check_protoc_exists():
     """检查系统是否安装 protoc"""
     import shutil
     if not shutil.which("protoc"):
-        logger.error("protoc 编译器未找到，请先安装并确保在 PATH 中")
+        logger.error("protoc compiler not found; install it and make sure it is on PATH")
         exit(1)
 
 

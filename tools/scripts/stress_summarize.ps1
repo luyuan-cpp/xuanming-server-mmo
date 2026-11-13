@@ -60,8 +60,24 @@
       [G3 Match by mode:每个快照 × mode 一行(mode 取快照里出现过的值)]
           when | mode | committed conflict% | units | imm_ok imm_n
 
+      [G4 Match by segment role(热池拆分,2026-11-12 起;global-match-hierarchical-pools.md §5.2.1):每个快照 × 撮合段角色一行]
+          when | role | owned | committed conflict no_node no_slot id_err party_end | conflict%
+          role = pool / region / sub / cross;cross 的 conflict% 偏高说明跨机房段与机房段常争同一批老票
+
       [PL1 player_locator(*_pl,:9190,2026-11-05 起):会话对账与断线上报的健康度 + 服务端 RPC 总耗时]
           when | leader view_hold | idx_ok idx_err idx_held | to_disc cas pruned repaired audit_rep errors | dead_gates dead_members | stale_inst | rpc_n rpc_avg rpc_p99
+
+      [A1 data_service audit pipeline(*_ds,2026-11-12 起;缺口清单第 3、15 条的复核):每个快照 × 审计流(transaction_log / player_snapshot)一行]
+          when | stream | msgs ins dup bad | b_n b_avg b_p99 | lag_max gap | del del_err
+          b_* = 每条消息字节数;gap = 保留期删掉的未消费消息(应恒为 0);del = 同名表过期清理删掉的行
+
+      [Q1 login queue(login 快照,2026-11-12 起;第 14 条的复核):跨 zone 求和]
+          when | size inflight cap | admit | bad_sig ttl meta_gone q_off adm_win q_gone | w_n w_p50 w_p95
+          adm_win 涨 = 放行了却没人来取(轮询间隔拉得太长的第一个信号)
+
+      [N1 C++ nodes(*_cpp_<实例键>,stress_snap.ps1 -CppMetricsBasePort / -CppEndpoints,2026-11-12 起;第 30、33 条的复核)]
+          when | node | cmd_own cmd_for for/own | fan_n fan_p50 fan_p99 | rel dest | track relg defer super
+          cmd_* 只数命令 topic(-cmd 结尾);fan_* = 每次按收件人广播发给几台 gate;rel / dest = 场景归属对账开始排空 / 已销毁
 
       [R1 Redis instance load(stress_snap.ps1 抓的 t<N>m_redis_<name>.txt,INFO 相邻两份求差 + 首末整体窗口)]
           target | window | secs ops/s cpu% main% in_KB/s out_KB/s | clients used_MB mem% | rej_conn err_rep oom aof_dfs | note
@@ -636,6 +652,9 @@ $matchPoolClaimColumns = @('committed', 'conflict', 'no_node', 'no_slot', 'id_er
 # $matchPoolLevels:match_pool_claim_total / match_pool_wait_seconds 的 level,同 go/match/internal/scope 的 kLevelNames
 #   (钉名测试 go/match/internal/scope/level_names_stress_test.go)。
 $matchPoolLevels = @('zone', 'group', 'global')
+# $matchSegmentRoles:match_pool_owned / match_pool_segment_claim_total 的 role(撮合段角色,热池拆分 2026-11-12),
+#   同 go/match/internal/poolowner 的 Roles、同序(钉名测试 go/match/internal/poolowner/segments_names_stress_test.go)。
+$matchSegmentRoles = @('pool', 'region', 'sub', 'cross')
 # $plIndexRoundResults:player_locator_reconcile_round_total{loop="index"} 的 result,同
 #   go/player_locator/internal/logic/reconcile_metrics.go 的 reconcileRoundCombos 里 index 那几项、同序;PL1 按 $plIndexRoundColumns 分组出列
 #   (view_held = etcd 存活集骤降或为空、本拍被 B1-1 闸门压住,不算失败,单独一列)。
@@ -648,6 +667,28 @@ $plSessionActionColumns = [ordered]@{
     to_disc = @('to_disconnecting'); cas = @('cas_conflict')
     pruned = @('pruned_stale', 'pruned_missing', 'pruned_malformed', 'pruned_bad_member')
     repaired = @('repaired'); audit_rep = @('audit_repaired'); errors = @('member_error', 'gate_error')
+}
+# A1 / Q1 / N1(2026-11-12,缺口清单压测项的复核口径,docs/stress/stress-gap-items-verification-20261111.md §4):
+# $dsAuditStreams:data_service 两条审计落库流。消费者名(kafka_consumer_*{consumer})与过期清理的表名(audit_retention_*{table})
+#   恰好同名,A1 每个快照按它们各出一行(钉名测试 go/data_service/internal/kafka/audit_streams_stress_test.go:
+#   ConsumerTxLog / ConsumerSnapshot 与 store.AuditTableTransactionLog / AuditTablePlayerSnapshot)。
+$dsAuditStreams = @('transaction_log', 'player_snapshot')
+# $dsKafkaOutcomes:kafka_consumer_messages_total 的 outcome,同 go/data_service/internal/metrics/metrics.go 的 kafkaConsumerOutcomes、同序
+#   (钉名测试 go/data_service/internal/metrics/audit_outcomes_stress_test.go)。A1 把后四种坏结局合成一列 bad。
+$dsKafkaOutcomes = @('inserted', 'duplicate', 'decode_error', 'invalid', 'oversize', 'db_error')
+# $loginQueueExpireReasons:login_queue_expired_total 的 reason,同 go/login/internal/logic/pkg/loginqueue/metrics.go 的 ExpireReason* 常量、
+#   按该文件的声明顺序(钉名测试 go/login/internal/logic/pkg/loginqueue/expire_reasons_stress_test.go);$loginQueueExpireColumns 是 Q1 的列名,同序。
+$loginQueueExpireReasons = @('bad_signature', 'ttl', 'meta_gone', 'queue_disabled', 'admit_window_passed', 'queue_gone')
+$loginQueueExpireColumns = @('bad_sig', 'ttl', 'meta_gone', 'q_off', 'adm_win', 'q_gone')
+# C++ 节点快照(*_cpp_<实例键>,N1)用到的 label 取值,由 tools/scripts/tests/stress_cpp_metrics.tests.ps1 对照 C++ 源码钉住:
+#   $cppCommandTargets  node_command_consumed_total{target}(cpp/libs/engine/core/node/system/node/node_command_consume_stats.h)
+#   $cppFanoutKinds     scene_broadcast_gate_fanout{kind}(cpp/libs/engine/core/network/broadcast_fanout_stats.h 的 kKindNames,同序)
+#   $cppReleaseStages   scene_ownership_releases_total{stage}(cpp/libs/services/scene/world/scene_ownership_reconciler.cpp)
+$cppCommandTargets = @('own', 'foreign')
+$cppFanoutKinds = @('players', 'scene')
+$cppReleaseStages = @('drain_started', 'destroyed')
+if ($loginQueueExpireReasons.Count -ne $loginQueueExpireColumns.Count) {
+    throw "`$loginQueueExpireReasons 与 `$loginQueueExpireColumns 长度不一致"
 }
 
 if ($loginRpcMethods.Count -ne $loginRpcColumns.Count) {
@@ -720,6 +761,7 @@ $dbSnapshots = @()
 $dsSnapshots = @()
 $matchSnapshots = @()
 $plSnapshots = @()
+$cppSnapshots = @()
 $redisSnapshots = @()
 
 if (Test-Path $snapDir) {
@@ -747,11 +789,15 @@ if (Test-Path $snapDir) {
     # match(:9170)与 player_locator(:9190),2026-11-05 起由 stress_snap.ps1 缺省抓取。
     $matchSnapshots = @($promTxt | Where-Object { $_.BaseName -match '_match$' })
     $plSnapshots = @($promTxt | Where-Object { $_.BaseName -match '_pl$' })
+    # C++ 节点(stress_snap.ps1 -CppMetricsBasePort / -CppEndpoints,2026-11-12 起):t{N}m_cpp_<实例键>.txt,按分钟数、再按实例键排。
+    $cppPattern = '^t\d+m_cpp_[a-z0-9_]+$'
+    $cppSnapshots = @($promTxt | Where-Object { $_.BaseName -match $cppPattern } |
+        Sort-Object @{ Expression = { [int]([regex]::Match($_.BaseName, '^t(\d+)m').Groups[1].Value) } }, Name)
     if ($loginTxt.Count -gt 0) {
         $snapshots += $loginTxt
     } else {
         # Legacy: bare t{N}m.txt files all hold login metrics.
-        $snapshots += @($promTxt | Where-Object { $_.BaseName -notmatch '_(login|sm|db|ds|match|pl)$' })
+        $snapshots += @($promTxt | Where-Object { $_.BaseName -notmatch '_(login|sm|db|ds|match|pl)$' -and $_.BaseName -notmatch $cppPattern })
     }
 }
 
@@ -1588,6 +1634,39 @@ if ($matchSnapshots.Count -eq 0) {
     }
 }
 
+# G4:每个快照 × 撮合段角色一行(热池拆分,docs/design/global-match-hierarchical-pools.md §5.2.1 第 8 条)。
+#   role         $matchSegmentRoles:pool 整池段 / region 机房段 / sub 子池段 / cross 跨机房段
+#   owned        match_pool_owned{role}(本副本负责的这类段数;G1 的 owned 是四类之和)
+#   committed …  match_pool_segment_claim_total{role} 每个 outcome($matchPoolClaimOutcomes);conflict% = conflict ÷ 这类段的全部提交。
+#                cross 段的 conflict% 偏高,说明跨机房段与机房段常争同一批老票(提交点裁决,输的一方回滚,不成错局)
+#   拆分之前的 match 没有带 role 的序列:族存在、这一类没有序列打 0,整族缺失打 n/a(同 G1)。
+$g4Fmt = "  {0,-30} | {1,-6} | {2,-5} | {3,-9} {4,-8} {5,-7} {6,-7} {7,-6} {8,-9} | {9}"
+Write-Host ""
+Write-Host "=== G4 Match by segment role (match_pool_owned{role}, match_pool_segment_claim_total) ===" -ForegroundColor Yellow
+Write-Host "  conflict% = conflict / all claims of that role"
+Write-Host ""
+if ($matchSnapshots.Count -eq 0) {
+    Write-NoData $matchNoSnapshot
+} else {
+    $g4Header = @('snapshot', 'role', 'owned') + $matchPoolClaimColumns + @('conflict%')
+    Write-Host ($g4Fmt -f $g4Header)
+    Write-Host ($g4Fmt -f @($g4Header | ForEach-Object { '-' * $_.Length }))
+    foreach ($snap in $matchSnapshots) {
+        $m = Read-PromSnapshot $snap.FullName
+        foreach ($role in $matchSegmentRoles) {
+            $claims = [ordered]@{}
+            foreach ($outcome in $matchPoolClaimOutcomes) {
+                $claims[$outcome] = Get-FamilySumOrNull $m 'match_pool_segment_claim_total' @{ role = $role; outcome = $outcome }
+            }
+            $all = Get-FamilySumOrNull $m 'match_pool_segment_claim_total' @{ role = $role }
+            $cells = @($snap.BaseName, $role, (Format-CountCell (Get-FamilySumOrNull $m 'match_pool_owned' @{ role = $role })))
+            $cells += @($matchPoolClaimOutcomes | ForEach-Object { Format-CountCell $claims[$_] })
+            $cells += Format-RatioCell $claims['conflict'] $all
+            Write-Host ($g4Fmt -f $cells)
+        }
+    }
+}
+
 # PL1:player_locator 每个快照一行(go/player_locator/internal/logic/reconcile_metrics.go、setdisconnectinglogic.go)。
 #   leader       reconcile_is_leader(只有 leader 跑 writers / repair / audit 三个 loop)
 #   view_hold    reconcile_live_view_holding(B1-1 存活集闸门此刻压着没放:etcd 存活集骤降或为空)
@@ -1628,6 +1707,150 @@ if ($plSnapshots.Count -eq 0) {
             (Format-CountCell (Get-FamilySumOrNull $m 'player_locator_stale_gate_instance_total')))
         $cells += Get-HistogramCells (Get-HistogramOrNull $m 'rpc_server_requests_duration_ms') 0.001 1
         Write-Host ($pl1Fmt -f $cells)
+    }
+}
+
+# ----- 2e. 审计管道(A1)、登录排队(Q1)与 C++ 节点(N1),2026-11-12 ------------------------------
+#
+# 缺口清单压测项的复核口径(docs/stress/stress-gap-items-verification-20261111.md §3、§4)。计数与直方图都是进程启动以来的累计值,
+# 看一段压测拿相邻两个快照相减;gauge 是抓取那一刻的值。每个快照是一个进程:多副本、多节点时自己跨行相加。
+
+# 直方图分位数一格,按原单位打一位小数(N1 的广播扇出按「台 gate」计,桶 1~64)。规则同 Get-QuantileSecondsCell。
+function Get-QuantileCountCell {
+    param($Hist, [double]$Q)
+    $quantile = Get-HistogramQuantile -Hist $Hist -Q $Q
+    if ($null -eq $quantile) { return 'n/a' }
+    if ($quantile -is [double]) { return '-' }
+    return $(if ($quantile.Overflow) { '>' } else { '' }) + (Format-DecimalCell $quantile.Value 1)
+}
+
+# node_command_consumed_total 里命令 topic(topic 基名以 -cmd 结尾,gate-cmd / scene-cmd)按 target 求和。
+# 同一节点还消费广播 topic(如 chat-world-bcast),它们只有 own,混进来会把读放大比值拉低,所以只数 -cmd。
+# 整族缺失 → $null(n/a);族在、没有命令 topic 的序列 → 0。
+function Get-CommandConsumedOrNull {
+    param([hashtable]$M, [string]$Target)
+    $familySeen = $false
+    $sum = 0.0
+    foreach ($k in $M.Keys) {
+        $labels = Get-SeriesLabels -Key $k -Name 'node_command_consumed_total'
+        if ($null -eq $labels) { continue }
+        $familySeen = $true
+        if ($labels['target'] -ceq $Target -and ([string]$labels['topic']).EndsWith('-cmd')) { $sum += [double]$M[$k] }
+    }
+    if (-not $familySeen) { return $null }
+    return $sum
+}
+
+# A1:data_service(*_ds)每个快照 × 每条审计流($dsAuditStreams)一行。
+#   msgs ins dup bad   kafka_consumer_messages_total:全部 / inserted / duplicate / 其余四种坏结局之和($dsKafkaOutcomes)
+#   b_n b_avg b_p99    kafka_consumer_message_bytes(每条消息的字节数;第 3 条 retention.bytes 的推导按它复核)
+#   lag_max            kafka_consumer_lag_max_partition_messages(单分区最大积压,DataServiceAuditLagHigh 比的就是它)
+#   gap                kafka_consumer_retention_gap_messages(保留期删掉的未消费消息,应恒为 0)
+#   del del_err        audit_retention_deleted_rows_total / audit_retention_failures_total(同名表的过期清理,第 15 条)
+$a1Header = @('snapshot', 'stream', 'msgs', 'ins', 'dup', 'bad', 'b_n', 'b_avg', 'b_p99', 'lag_max', 'gap', 'del', 'del_err')
+$a1Fmt = "  {0,-30} | {1,-15} | {2,-10} {3,-10} {4,-8} {5,-5} | {6,-10} {7,-7} {8,-8} | {9,-8} {10,-5} | {11,-10} {12}"
+Write-Host ""
+Write-Host "=== A1 data_service audit pipeline (kafka_consumer_*, audit_retention_*, :9260) ===" -ForegroundColor Yellow
+Write-Host "  bad = decode_error + invalid + oversize + db_error; b_* = bytes per consumed message; gap = unconsumed messages deleted by retention (must stay 0)"
+Write-Host ""
+if ($dsSnapshots.Count -eq 0) {
+    Write-NoData "no *_ds snapshot (data_service :9260 not scraped)"
+} else {
+    Write-Host ($a1Fmt -f $a1Header)
+    Write-Host ($a1Fmt -f @($a1Header | ForEach-Object { '-' * $_.Length }))
+    foreach ($snap in $dsSnapshots) {
+        $m = Read-PromSnapshot $snap.FullName
+        foreach ($stream in $dsAuditStreams) {
+            $outcomes = Get-FamilyCountsOrNull $m 'data_service_kafka_consumer_messages_total' 'outcome' $dsKafkaOutcomes @{ consumer = $stream }
+            $cells = @($snap.BaseName, $stream,
+                (Format-CountCell (Get-SumOrNull $outcomes.Values)),
+                (Format-CountCell $outcomes['inserted']),
+                (Format-CountCell $outcomes['duplicate']),
+                (Format-CountCell (Get-GroupSumOrNull $outcomes @('decode_error', 'invalid', 'oversize', 'db_error'))))
+            $cells += Get-HistogramByteCells (Get-HistogramOrNull $m 'data_service_kafka_consumer_message_bytes' @{ consumer = $stream })
+            $cells += @((Format-CountCell (Get-SeriesSumOrNull $m 'data_service_kafka_consumer_lag_max_partition_messages' @{ consumer = $stream })),
+                (Format-CountCell (Get-SeriesSumOrNull $m 'data_service_kafka_consumer_retention_gap_messages' @{ consumer = $stream })),
+                (Format-CountCell (Get-FamilySumOrNull $m 'data_service_audit_retention_deleted_rows_total' @{ table = $stream })),
+                (Format-CountCell (Get-FamilySumOrNull $m 'data_service_audit_retention_failures_total' @{ table = $stream })))
+            Write-Host ($a1Fmt -f $cells)
+        }
+    }
+}
+
+# Q1:login(login 快照,与 L1 同一批)每个快照一行,跨 zone 求和(多 zone 时各 zone 的排队互相独立,这里只看总量)。
+#   size inflight cap      login_queue_size / admitted_inflight / capacity(gauge,抓取那一刻)
+#   admit                  login_queue_admit_total(放行条数)
+#   bad_sig … q_gone       login_queue_expired_total 每个 reason($loginQueueExpireReasons);adm_win 涨 = 放行了却没人来取,
+#                          是轮询间隔拉得太长的第一个信号(第 14 条按名次拉长 RetryAfterMs)
+#   w_n w_p50 w_p95        login_queue_wait_seconds(入队到放行的等待,秒)
+$q1Header = @('snapshot', 'size', 'inflight', 'cap', 'admit') + $loginQueueExpireColumns + @('w_n', 'w_p50', 'w_p95')
+$q1Fmt = "  {0,-30} | {1,-8} {2,-8} {3,-8} | {4,-9} | {5,-7} {6,-6} {7,-9} {8,-5} {9,-7} {10,-6} | {11,-8} {12,-7} {13}"
+Write-Host ""
+Write-Host "=== Q1 login queue (login_queue_*, :9101) ===" -ForegroundColor Yellow
+Write-Host "  summed over zones; adm_win = admitted but the admit slot was already taken or expired when the client came back"
+Write-Host ""
+if ($snapshots.Count -eq 0) {
+    Write-NoData "no login snapshot"
+} else {
+    Write-Host ($q1Fmt -f $q1Header)
+    Write-Host ($q1Fmt -f @($q1Header | ForEach-Object { '-' * $_.Length }))
+    foreach ($snap in $snapshots) {
+        $m = Read-PromSnapshot $snap.FullName
+        $expired = Get-FamilyCountsOrNull $m 'login_queue_expired_total' 'reason' $loginQueueExpireReasons
+        $wait = Get-HistogramOrNull $m 'login_queue_wait_seconds'
+        $waitCells = if ($null -eq $wait) { @('n/a', 'n/a', 'n/a') }
+                     else { @((Format-CountCell $wait.Count), (Get-QuantileSecondsCell $wait 0.5), (Get-QuantileSecondsCell $wait 0.95)) }
+        $cells = @($snap.BaseName,
+            (Format-CountCell (Get-SeriesSumOrNull $m 'login_queue_size')),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'login_queue_admitted_inflight')),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'login_queue_capacity')),
+            (Format-CountCell (Get-FamilySumOrNull $m 'login_queue_admit_total')))
+        $cells += @($loginQueueExpireReasons | ForEach-Object { Format-CountCell $expired[$_] })
+        $cells += $waitCells
+        Write-Host ($q1Fmt -f $cells)
+    }
+}
+
+# N1:C++ 节点(*_cpp_<实例键>)每个快照 × 实例一行,按分钟数、实例键排。
+#   node                       实例键里的节点类型(gate / scene / battle)
+#   cmd_own cmd_for for/own    node_command_consumed_total 里命令 topic 的 own / foreign 与倍数(读放大,第 30 条):
+#                              倍数 = 同分区上别的节点的命令 ÷ 本节点的;告警 NodeCommandTopicReadAmplificationHigh 看 foreign 每秒与倍数
+#   fan_n fan_p50 fan_p99      scene_broadcast_gate_fanout{kind="players"}(每次按收件人集合广播发给了几台 gate;只有 scene 有)
+#   rel dest                   scene_ownership_releases_total{stage}($cppReleaseStages:开始排空 / 已销毁,第 33 条)
+#   track relg defer super     scene_ownership_tracked_scenes / releasing_scenes / release_deferred_scenes / superseded(gauge)
+$cppNoSnapshot = "no *_cpp_* snapshot (C++ nodes open /metrics only with MMORPG_METRICS_PORT: start them with cpp_nodes.ps1 -MetricsBasePort N and pass the same N to stress_snap.ps1 -CppMetricsBasePort)"
+# rel / dest 两列与 $cppReleaseStages 同序(drain_started、destroyed)。
+$n1Header = @('snapshot', 'node', 'cmd_own', 'cmd_for', 'for/own', 'fan_n', 'fan_p50', 'fan_p99', 'rel', 'dest', 'track', 'relg', 'defer', 'super')
+$n1Fmt = "  {0,-30} | {1,-6} | {2,-9} {3,-9} {4,-7} | {5,-10} {6,-7} {7,-7} | {8,-6} {9,-6} | {10,-6} {11,-5} {12,-5} {13}"
+Write-Host ""
+Write-Host "=== N1 C++ nodes (node_command_consumed_total, scene_broadcast_gate_fanout, scene_ownership_*) ===" -ForegroundColor Yellow
+Write-Host "  cmd_* = command topics only (topic ending in -cmd); for/own = foreign / own; fan_* = gates per player-set broadcast (kind=$($cppFanoutKinds[0]))"
+Write-Host ""
+if ($cppSnapshots.Count -eq 0) {
+    Write-NoData $cppNoSnapshot
+} else {
+    Write-Host ($n1Fmt -f $n1Header)
+    Write-Host ($n1Fmt -f @($n1Header | ForEach-Object { '-' * $_.Length }))
+    foreach ($snap in $cppSnapshots) {
+        $m = Read-PromSnapshot $snap.FullName
+        $key = [regex]::Match($snap.BaseName, '^t\d+m_cpp_(?<key>.+)$').Groups['key'].Value
+        $node = [regex]::Match($key, '^(?:z\d+_)?(?<node>[a-z]+)').Groups['node'].Value
+        $own = Get-CommandConsumedOrNull $m $cppCommandTargets[0]
+        $foreign = Get-CommandConsumedOrNull $m $cppCommandTargets[1]
+        $ratio = if ($null -eq $own -or $null -eq $foreign) { 'n/a' }
+                 elseif ([double]$own -le 0) { '-' }
+                 else { Format-DecimalCell ([double]$foreign / [double]$own) 1 }
+        $fan = Get-HistogramOrNull $m 'scene_broadcast_gate_fanout' @{ kind = $cppFanoutKinds[0] }
+        $fanCells = if ($null -eq $fan) { @('n/a', 'n/a', 'n/a') }
+                    else { @((Format-CountCell $fan.Count), (Get-QuantileCountCell $fan 0.5), (Get-QuantileCountCell $fan 0.99)) }
+        $releases = Get-FamilyCountsOrNull $m 'scene_ownership_releases_total' 'stage' $cppReleaseStages
+        $cells = @($snap.BaseName, $node, (Format-CountCell $own), (Format-CountCell $foreign), $ratio) + $fanCells
+        $cells += @($cppReleaseStages | ForEach-Object { Format-CountCell $releases[$_] })
+        $cells += @((Format-CountCell (Get-SeriesSumOrNull $m 'scene_ownership_tracked_scenes')),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'scene_ownership_releasing_scenes')),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'scene_ownership_release_deferred_scenes')),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'scene_ownership_superseded')))
+        Write-Host ($n1Fmt -f $cells)
     }
 }
 

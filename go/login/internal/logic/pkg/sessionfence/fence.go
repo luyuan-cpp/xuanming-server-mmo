@@ -26,7 +26,8 @@
 //
 //   - 没绑定玩家、或连接已关闭的记录:调用方给的 ttl(TTLFor(后台链总预算)),只需比还可能读它的在途操作活得久;
 //   - 绑定了玩家、连接未关闭的记录:绑定只由 Leave(离开游戏)与 Close(断线)解除,两者把记录收回到 ttl。
-//     记录本身用 boundRecordTTL 兜底,登录提交(登录态续期)、进游戏入口、绑定都把它续满。
+//     记录本身用 boundRecordTTL 兜底,登录提交(登录态续期)、进游戏入口、绑定都把它续满;连接活着期间 gate 还会
+//     定期续租(Renew,docs/design/gate-online-identity.md §10.4),所以活着的连接不会因为兜底寿命到期而丢绑定。
 //
 // 以前绑定与其余字段共用 ttl:绑定后 6 分钟内没有 LeaveGame / Disconnect,player 随记录一起过期,
 // 同一连接再 EnterGame 就能绑上第二个角色,断线时也读不到绑定的玩家。
@@ -81,11 +82,12 @@ func TTLFor(enterGameChainBudget time.Duration) time.Duration {
 
 // boundRecordTTL 是绑定了玩家、连接未关闭的记录的兜底寿命。绑定不靠它到期,只由 Leave / Close 解除;
 // 它只回收 Disconnect 没送到(gate 进程崩溃、断线时 login 不可用)之后再没人会读的记录,让这类记录有界。
-// 这条连接上的栅栏操作(登录提交即登录态续期、进游戏入口、绑定)都把它续满。
+// 这条连接上的栅栏操作(登录提交即登录态续期、进游戏入口、绑定)都把它续满,gate 的定期续租(Renew)也续满。
 //
-// 残余:gate 连接没有寿命上限。一条连接在游戏里连续停满 boundRecordTTL、期间没有任何栅栏操作时,login 这一层会丢绑定;
-// 之后同一连接换角由 gate 会话层拒绝(cpp/nodes/gate/handler/rpc/login_admission.h EnterGameRoleSwitchRejectTip,
-// gate 的会话与连接同寿命)。取一周:要回收的只是已死 gate 进程的记录,内存代价可以忽略;取得更长不改变这条残余的性质,只推迟回收。
+// gate 连接没有寿命上限,所以活着的连接靠续租保住绑定(2026-11-12 起;之前一条连接在游戏里连续停满 boundRecordTTL、
+// 期间没有任何栅栏操作时,login 这一层会丢绑定)。续租间隔是登录态寿命的三分之一,要连续失败满 boundRecordTTL 才会到期;
+// 真到了那一步,同一连接换角仍由 gate 会话层拒绝(cpp/nodes/gate/handler/rpc/login_admission.h EnterGameRoleSwitchRejectTip,
+// gate 的会话与连接同寿命)。取一周:要回收的只是已死 gate 进程的记录,内存代价可以忽略。
 const boundRecordTTL = 7 * 24 * time.Hour
 
 // Outcome 是栅栏判定的结果。
@@ -312,6 +314,60 @@ func Leave(ctx context.Context, rdb redis.UniversalClient, key Key, ttl time.Dur
 		return 0, err
 	}
 	return parsePlayer(raw)
+}
+
+// KEYS = {栅栏, login_session};ARGV = {sessionTTL(ms), boundRecordTTL(ms)}。两个键带同一个连接 tag,必然同槽。
+// 返回 {还有没有被续期的记录(1 / 0), 登录态里的账号(没有登录态为空串)}。
+var renewScript = redis.NewScript(`
+if redis.call('HGET', KEYS[1], 'closed') == '1' then
+  return {0, ''}
+end
+local kept = 0
+local account = redis.call('GET', KEYS[2])
+if account then
+  redis.call('PEXPIRE', KEYS[2], ARGV[1])
+  kept = 1
+end
+if redis.call('HEXISTS', KEYS[1], 'player') == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[2])
+  kept = 1
+end
+return {kept, account or ''}
+`)
+
+// Renewal 是 Renew 的结果。
+type Renewal struct {
+	// Kept:这条连接还有记录(登录态,或已绑定的角色)并已续期。false = 连接已关闭,或两样都没有,什么都没写。
+	Kept bool
+	// Account:登录态里的账号;登录态已不存在时为空。调用方据此续账号设备集(不同槽,进不了这段脚本)。
+	Account string
+}
+
+// Renew 为仍然连着的连接续期它的按连接记录(docs/design/gate-online-identity.md §10.4),由 gate 定期代发的 RenewSession 调用:
+// 登录态续到 sessionTTL;已绑定角色、连接未关闭的栅栏记录续满 boundRecordTTL。只续已有的记录,从不新建:
+// 登录态只能由 Login 建(CommitLogin),绑定只能由后台链建(BindPlayer)。
+//
+// 先查 closed 再续,与 CommitLogin 同一个理由:Disconnect 已经处理过的连接,迟到的续租不得把它的登录态续活。
+// 检查与续期在同一段脚本里,没有「检查通过、Disconnect 插进来、再续期」的窗口。
+func Renew(ctx context.Context, rdb redis.UniversalClient, key Key, sessionTTL time.Duration) (Renewal, error) {
+	// PEXPIRE 的 0 / 负值会让 Redis 立刻删键:SessionExpireMin 漏配时续租会变成清登录态。这里显式报错,什么都不写。
+	if sessionTTL <= 0 {
+		return Renewal{}, fmt.Errorf("session fence renew: non-positive session ttl %s", sessionTTL)
+	}
+	vals, err := renewScript.Run(ctx, rdb, []string{key.redisKey(), redisslot.LoginSessionKey(key.String())},
+		sessionTTL.Milliseconds(), boundRecordTTL.Milliseconds(),
+	).Slice()
+	if err != nil {
+		return Renewal{}, err
+	}
+	if len(vals) != 2 {
+		return Renewal{}, fmt.Errorf("session fence renew: unexpected reply length %d", len(vals))
+	}
+	kept, ok := vals[0].(int64)
+	if !ok {
+		return Renewal{}, fmt.Errorf("session fence renew: unexpected reply type %T", vals[0])
+	}
+	return Renewal{Kept: kept == 1, Account: asString(vals[1])}, nil
 }
 
 func asString(v any) string {

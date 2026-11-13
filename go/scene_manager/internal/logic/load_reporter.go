@@ -23,14 +23,15 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+// 下面三个键格式里第一个 %s 是 sceneControlTag(zone)(docs/design/redis-cluster-all-domains-20261110.md §3)。
 const (
-	NodeLoadKeyFmt    = "scene_nodes:zone:%d:load"
-	NodeSceneCountKey = "node:zone:%d:%s:scene_count"
+	NodeLoadKeyFmt    = "scene_nodes:%s:load"
+	NodeSceneCountKey = "node:%s:%s:scene_count"
 	// NodeSceneNodeTypeKey mirrors the scene_node_type declared by the C++
 	// node (0=MainWorld, 1=Instance, 2=MainWorldCross, 3=InstanceCross). The
 	// load reporter writes this when a node registers so selection logic can
 	// filter by purpose without hitting etcd.
-	NodeSceneNodeTypeKey = "node:zone:%d:%s:scene_node_type"
+	NodeSceneNodeTypeKey = "node:%s:%s:scene_node_type"
 	LoadReportInterval   = 5 * time.Second
 	sceneNodePrefix      = "SceneNodeService.rpc/"
 )
@@ -39,17 +40,17 @@ const (
 // sceneNodeZonePrefix(ZoneId),knownNodes 只有本 zone 的场景节点;领导者循环的 zone 范围见 orchestrated_zones.go。
 // 原来按镜像里出现的 zone 推出的 activeZones / GetActiveZones 随之删除。
 
-// nodeLoadKey returns the zone-scoped Redis sorted-set key.
+// nodeLoadKey returns the zone-scoped Redis sorted-set key scene_nodes:{ctl:<z>}:load.
 func nodeLoadKey(zoneID uint32) string {
-	return fmt.Sprintf(NodeLoadKeyFmt, zoneID)
+	return fmt.Sprintf(NodeLoadKeyFmt, sceneControlTag(zoneID))
 }
 
 func nodeSceneCountKey(zoneID uint32, nodeID string) string {
-	return fmt.Sprintf(NodeSceneCountKey, zoneID, nodeID)
+	return fmt.Sprintf(NodeSceneCountKey, sceneControlTag(zoneID), nodeID)
 }
 
 func nodeSceneNodeTypeKey(zoneID uint32, nodeID string) string {
-	return fmt.Sprintf(NodeSceneNodeTypeKey, zoneID, nodeID)
+	return fmt.Sprintf(NodeSceneNodeTypeKey, sceneControlTag(zoneID), nodeID)
 }
 
 // sceneNodeRegistration mirrors the JSON that C++ scene nodes write to etcd.
@@ -411,6 +412,9 @@ type deadNodeReconcileResult struct {
 	// withdrawn:中途发现收尾任务已被撤(判死的那一代回来了)或换成了新的一次判死,剩下的成员没处理,反向索引一个都没摘
 	// (R1-I6,reentry_barrier.go)。
 	withdrawn bool
+	// paused:这一轮的时间预算用完,剩下的成员没处理(不在 resolved、也不在 failed 里),下一拍重新判过之后接着做
+	// (R1-I7,reentry_barrier.go deadNodeReconcilePassBudget)。
+	paused bool
 }
 
 // reconcileDeadNodeScenes force-destroys the orphaned instance scenes of a node
@@ -451,9 +455,14 @@ type deadNodeReconcileResult struct {
 //	their in-world context. Instances are per-run disposable, so
 //	destroying an orphan is the right default.
 //
-// task 是这条收尾任务的身份。每个场景的销毁认领都在同一步核对它(destroyOrphanOfDeadNode):一轮收尾进行到一半时
-// 判死的那一代回来了、任务被撤,剩下的一个都不拆,反向索引也一个都不摘 —— 它们与回来的那一代一起活着(R1-I6)。
-func reconcileDeadNodeScenes(ctx context.Context, svcCtx *svc.ServiceContext, entry nodeEntry, members []string, task deadNodeTaskFence) deadNodeReconcileResult {
+// task 是这条收尾任务的身份。每个场景的销毁认领都在同一步核对它(destroyOrphanOfDeadNode):这一轮进行到一半时任务被
+// 别的进程撤了(换主时新领导者处理了判死那一代的重新注册,本进程还没察觉自己已降级),剩下的一个都不拆,反向索引也一个
+// 都不摘 —— 它们与回来的那一代一起活着(R1-I6)。本进程自己的 watch 事件与收尾在同一个循环里先后执行,一轮中途处理不到。
+//
+// deadline 是这一轮的时间预算(单调时钟;零值不限,只给直接调用本函数的单测用)。到点就停下、置 paused,剩下的原样
+// 留在收尾范围与反向索引里;每轮至少处理一个成员(R1-I7)。
+func reconcileDeadNodeScenes(ctx context.Context, svcCtx *svc.ServiceContext, entry nodeEntry, members []string, task deadNodeTaskFence,
+	deadline time.Time) deadNodeReconcileResult {
 	var result deadNodeReconcileResult
 	setKey := nodeScenesKey(entry.reg.ZoneId, entry.nodeID)
 	if len(members) == 0 {
@@ -466,6 +475,8 @@ func reconcileDeadNodeScenes(ctx context.Context, svcCtx *svc.ServiceContext, en
 	activeKey := activeInstancesKey(zoneId)
 	destroyed, skippedWorld, stale := 0, 0, 0
 	var failedMembers []string
+	// processed:这一轮已处理的成员。时间预算用完时只有它们参与摘反向索引,其余原样留着。
+	processed := make([]string, 0, len(members))
 
 	for _, s := range members {
 		// 降级即停,一个字节不写回(R1-I4):剩余成员原样留在反向索引与收尾范围里,新领导者照着接着做。
@@ -476,6 +487,12 @@ func reconcileDeadNodeScenes(ctx context.Context, svcCtx *svc.ServiceContext, en
 			result.lostLeadership = true
 			return result
 		}
+		// 「到点」含等于:预算为 0 时每轮恰好一个,与时钟分辨率无关(Windows 上两次取时可能相同)。
+		if len(processed) > 0 && !deadline.IsZero() && !time.Now().Before(deadline) {
+			result.paused = true
+			break
+		}
+		processed = append(processed, s)
 		sceneId, err := strconv.ParseUint(s, 10, 64)
 		if err != nil {
 			continue
@@ -483,7 +500,7 @@ func reconcileDeadNodeScenes(ctx context.Context, svcCtx *svc.ServiceContext, en
 
 		// Did this scene already get reassigned to a live node? 快速过滤;
 		// 权威比较在下面的销毁脚本里(见函数注释)。
-		currentNode, _ := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+		currentNode, _ := svcCtx.Redis.Get(sceneNodeKey(zoneId, sceneId))
 		if currentNode != "" && currentNode != entry.nodeID {
 			stale++
 			continue
@@ -531,9 +548,10 @@ func reconcileDeadNodeScenes(ctx context.Context, svcCtx *svc.ServiceContext, en
 
 	// 只摘掉快照里有结论的成员,不 Del 整个集合:屏障窗口里可能有新场景被建到同一个
 	// node_id 上并加进了这个集合,Del 会把它们的反向索引一起抹掉,以后再没有
-	// 任何路径能发现它们。集合被摘空后 Redis 会自动回收键。failed 的成员不摘。
+	// 任何路径能发现它们。集合被摘空后 Redis 会自动回收键。failed 的成员不摘,
+	// 时间预算用完没轮到的成员也不摘(只看 processed)。
 	result.failed = failedMembers
-	if resolved := membersExcept(members, failedMembers); len(resolved) > 0 {
+	if resolved := membersExcept(processed, failedMembers); len(resolved) > 0 {
 		if _, err := svcCtx.Redis.Srem(setKey, stringsAsArgs(resolved)...); err != nil {
 			logx.Errorf("[Reconcile] Srem %s failed; resolved members stay in the cleanup scope and are redone next pass: %v", setKey, err)
 			result.indexUnlinkFailed = true

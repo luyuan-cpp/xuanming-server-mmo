@@ -16,7 +16,8 @@ import (
 
 // EtcdStore 把一份本地预留记录存在 etcd 的一个键里。
 //
-// 值是 JSON:{"counter":<计数器>,"authority":"<发号世系>"}。没上线,不认旧的纯数字格式:读到就当记录损坏,
+// 值是 JSON:{"counter":<计数器>,"authority":"<发号世系>","deployment":"<写下它的部署环境身份>"}。
+// deployment 在 dev 写的记录里缺省。没上线,不认旧的纯数字格式:读到就当记录损坏,
 // dev 清掉 /id_issuer/ 和 /id_registry/ 下的键重来。
 type EtcdStore struct {
 	cli *clientv3.Client
@@ -42,8 +43,14 @@ func NewEtcdStore(endpoints []string, key string) (*EtcdStore, error) {
 }
 
 type recordJSON struct {
-	Counter   uint64 `json:"counter"`
-	Authority string `json:"authority"`
+	Counter    uint64 `json:"counter"`
+	Authority  string `json:"authority"`
+	Deployment string `json:"deployment,omitempty"`
+}
+
+// validRecord 是本地记录读写共用的格式校验:计数器非 0,世系合法,部署身份为空(dev)或合法。
+func validRecord(body recordJSON) bool {
+	return body.Counter != 0 && ValidAuthority(body.Authority) && (body.Deployment == "" || ValidDeployment(body.Deployment))
 }
 
 // Read 是 etcd 默认的线性读。值损坏时返回错误,不当作不存在。
@@ -61,18 +68,22 @@ func (s *EtcdStore) Read(ctx context.Context) (Record, error) {
 	if err := decodeStrict(kv.Value, &body); err != nil {
 		return Record{}, fmt.Errorf("id issuer: record %s is corrupt: %w", s.key, err)
 	}
-	if body.Counter == 0 || !ValidAuthority(body.Authority) {
-		return Record{}, fmt.Errorf("id issuer: record %s is corrupt: counter=%d authority=%q", s.key, body.Counter, body.Authority)
+	if !validRecord(body) {
+		return Record{}, fmt.Errorf("id issuer: record %s is corrupt: counter=%d authority=%q deployment=%q",
+			s.key, body.Counter, body.Authority, body.Deployment)
 	}
-	return Record{Value: body.Counter, Authority: body.Authority, Revision: kv.ModRevision, Exists: true, ClusterID: clusterID}, nil
+	return Record{Value: body.Counter, Authority: body.Authority, Deployment: body.Deployment, Revision: kv.ModRevision,
+		Exists: true, ClusterID: clusterID}, nil
 }
 
 // CompareAndSwap 用 Txn 比较版本。超时等错误一律是结果未知,见 CounterStore 的契约。
-func (s *EtcdStore) CompareAndSwap(ctx context.Context, prev Record, value uint64, authority string) (bool, error) {
-	if value == 0 || !ValidAuthority(authority) {
-		return false, fmt.Errorf("id issuer: refusing to write record %s: counter=%d authority=%q", s.key, value, authority)
+func (s *EtcdStore) CompareAndSwap(ctx context.Context, prev Record, value uint64, authority, deployment string) (bool, error) {
+	body := recordJSON{Counter: value, Authority: authority, Deployment: deployment}
+	if !validRecord(body) {
+		return false, fmt.Errorf("id issuer: refusing to write record %s: counter=%d authority=%q deployment=%q",
+			s.key, value, authority, deployment)
 	}
-	raw, err := json.Marshal(recordJSON{Counter: value, Authority: authority})
+	raw, err := json.Marshal(body)
 	if err != nil {
 		return false, err
 	}
@@ -185,7 +196,7 @@ func (r *EtcdRegistry) Read(ctx context.Context, region uint8) (ClaimRecord, err
 	return ClaimRecord{Claim: claim, Revision: kv.ModRevision, Exists: true, ClusterID: clusterID}, nil
 }
 
-// CompareAndSwap 用 Txn 比较版本。超时等错误一律是结果未知。
+// CompareAndSwap 用 Txn 比较版本。超时等错误一律是结果未知。prev 不存在时是补一条记录,见 createEntry。
 func (r *EtcdRegistry) CompareAndSwap(ctx context.Context, region uint8, prev ClaimRecord, next Claim) (bool, error) {
 	key := r.key(region)
 	if !validClaim(next) {
@@ -195,7 +206,56 @@ func (r *EtcdRegistry) CompareAndSwap(ctx context.Context, region uint8, prev Cl
 	if err != nil {
 		return false, err
 	}
-	return casKey(ctx, r.cli, key, prev.Exists, prev.Revision, raw)
+	if prev.Exists {
+		return casKey(ctx, r.cli, key, true, prev.Revision, raw)
+	}
+	return r.createEntry(ctx, region, next.State, key, raw)
+}
+
+// createEntry 给一个没有记录的码补一条记录(Recover 重新登记、Retire 补墓碑、dev 第一次预留时认领),并在同一个事务里
+// 守住「有记录的码都小于下一个可认领的码」,规则见 Registry.CompareAndSwap 的契约。
+func (r *EtcdRegistry) createEntry(ctx context.Context, region uint8, state, key string, raw []byte) (bool, error) {
+	next, revision, opened, err := r.readNext(ctx)
+	if err != nil {
+		return false, err
+	}
+	absent := clientv3.Compare(clientv3.CreateRevision(key), "=", 0)
+	put := clientv3.OpPut(key, string(raw))
+	txn := r.cli.Txn(ctx)
+	switch {
+	case !opened:
+		// 提交时必须仍然没开启:和 Open 抢在一起时,由 Open 的范围复核或这里的比较让其中一方重来。
+		txn = txn.If(absent, clientv3.Compare(clientv3.CreateRevision(r.nextKey()), "=", 0)).Then(put)
+	case uint32(region) < next:
+		// 下一个可认领的码只增不减,这个码之后也一直小于它,不用再比。
+		txn = txn.If(absent).Then(put)
+	default:
+		if refusal := allowCreateAtOrAboveNext(region, state, next); refusal != nil {
+			return false, refusal
+		}
+		rawNext, marshalErr := json.Marshal(nextJSON{Next: uint32(region) + 1})
+		if marshalErr != nil {
+			return false, marshalErr
+		}
+		txn = txn.If(absent, clientv3.Compare(clientv3.ModRevision(r.nextKey()), "=", revision)).
+			Then(put, clientv3.OpPut(r.nextKey(), string(rawNext)))
+	}
+	resp, err := txn.Commit()
+	if err != nil {
+		return false, err
+	}
+	return resp.Succeeded, nil
+}
+
+// allowCreateAtOrAboveNext 判断能不能给一个不小于「下一个可认领的码」的码补记录(补完会把那个指针推到 region+1)。
+// 在用的码可以:它是 Recover 凭幸存的本地记录重新登记的,说明登记处重建时开启得太低。墓碑只有恰好等于
+// 下一个可认领的码时可以:这个码不用了,跳过它。墓碑更大时拒绝:没有任何证据说明中间的码用过,填错一次就烧掉一段。
+func allowCreateAtOrAboveNext(region uint8, state string, next uint32) error {
+	if state == ClaimActive || uint32(region) == next {
+		return nil
+	}
+	return fmt.Errorf("%w: code %d was never claimed and the next claimable code is %d, there is nothing to retire",
+		ErrRegionOutOfOrder, region, next)
 }
 
 // nextJSON 是登记处里「下一个可认领的码」:{"next":N}。没有这个键 = 登记处没开启。

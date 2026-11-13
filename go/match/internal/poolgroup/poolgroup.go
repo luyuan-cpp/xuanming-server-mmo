@@ -59,7 +59,23 @@ type Policy struct {
 	ToleranceCenti    func(anchorWaitMs uint64) float64
 	MaxAnchorsPerPass int // 每个机房阶段最多真正展开搜索的锚点数；≤0 用默认值
 	MaxCandidates     int // 每个机房每次尝试最多收集的候选单位数（先按机房过滤再计数）；≤0 用默认值
+	// Passes 选跑哪些机房阶段、产出哪些阶段的组；零值是两个阶段都跑、都产出（不拆的池与入队即时成局）。
+	Passes Passes
 }
+
+// Passes 选择 Form 跑哪些机房阶段、产出哪些阶段的组（热池拆分，docs/design/global-match-hierarchical-pools.md §5.2.1）。
+// 一个池按撮合段分给多个写者后，机房段只跑本机房阶段，跨机房段只提交跨机房阶段的组。
+type Passes uint8
+
+const (
+	// PassesBoth：先本机房、再跨机房，两个阶段的组都产出（整池段与入队即时成局，拆分前的行为）。
+	PassesBoth Passes = iota
+	// PassesLocal：只跑本机房阶段（机房段、子池段）。
+	PassesLocal
+	// PassesCross：先照常跑本机房阶段，但它成的组不产出，只用来把能在首选机房成组的单位让给机房段，
+	// 保持「同一页先本机房、再跨机房」的优先级；再在剩下的单位上跑跨机房阶段，只产出这一阶段的组（跨机房段）。
+	PassesCross
+)
 
 // Group 是一个候选组。Units 是输入切片的下标：Units[0] 是锚点，其余按排队序。
 // 计分模式下组内评分极差不超过锚点容差；锚点不一定是组里最早入队的单位
@@ -99,6 +115,11 @@ func Form(units []Unit, regions map[uint32]bool, nowMs uint64, p Policy) []Group
 	}
 	var out []Group
 	for _, cross := range [2]bool{false, true} {
+		if cross && p.Passes == PassesLocal {
+			break
+		}
+		// 跨机房段的本机房阶段只占位：成的组照样占住单位，但不产出（交给机房段提交）。
+		emit := cross || p.Passes != PassesCross
 		tried := 0
 		for _, a := range f.order {
 			if tried >= maxAnchors {
@@ -110,7 +131,9 @@ func Form(units []Unit, regions map[uint32]bool, nowMs uint64, p Policy) []Group
 			tried++
 			if g, ok := f.formAround(a, cross); ok {
 				f.take(g)
-				out = append(out, g)
+				if emit {
+					out = append(out, g)
+				}
 			}
 		}
 	}

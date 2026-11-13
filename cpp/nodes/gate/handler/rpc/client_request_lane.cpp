@@ -11,6 +11,7 @@
 #include "muduo/base/Logging.h"
 #include "gate_codec.h"
 #include "login_admission.h"
+#include "login_session_renewal.h"
 #include "session_details_builder.h"
 #include "error_reporter/error_reporter.h"
 #include "node/system/grpc_call_deadline.h"
@@ -379,6 +380,8 @@ bool OnRouterReply(const SessionDetails &echoed, const ::google::protobuf::Messa
 	if (call->messageId == ClientPlayerLoginLoginMessageId && gate_login_admission::IsLoginReplySuccess(reply))
 	{
 		session->loginSucceeded = true;
+		// 从这次登录起,连接活着期间由 gate 定期向 login 续租登录态(login_session_renewal.h)。
+		gate_login_renewal::NoteLoginSucceeded(call->sessionId, *session, std::chrono::steady_clock::now());
 	}
 	if (const auto conn = session->conn.lock())
 	{

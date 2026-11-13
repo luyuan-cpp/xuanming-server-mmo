@@ -56,6 +56,52 @@ func TestBattleOriginalPermanentErrorsPrecedeStorage(t *testing.T) {
 	}
 }
 
+// 2026-11-11(docs/design/battle-instance-loss-early-abort.md §5):Match 的 ABORT 投来的作废结算(BATTLE_OUTCOME_VOID)只带身份、
+// 作废结局与展示字段;带任何效果字段都按原件错误拒收,不入箱。ONGOING 与枚举之外的取值照旧拒收。
+func TestVoidBattleSettlementIsAcceptedOnlyWithoutEffects(t *testing.T) {
+	request := func(p *battlepb.BattleSettlementData) *inboxpb.BattleSettlementInboxRequest {
+		return &inboxpb.BattleSettlementInboxRequest{PlayerId: 11, BattleId: 21, ExpectedOwnerAccount: "owner", ExpectedOwnerRevision: 1, IssuedAtMs: 5, SettlementPayload: marshal(t, p)}
+	}
+	void := &battlepb.BattleSettlementData{PlayerId: 11, BattleId: 21, Outcome: battlepb.EBattleOutcome_BATTLE_OUTCOME_VOID, PlayerTeamIndex: 1, FinishedAtMs: 7, MatchMode: 3, BattleConfigId: 9}
+	if err := validateBattleOriginal(request(void)); err != nil {
+		t.Fatalf("作废结算应被接受: %v", err)
+	}
+	for why, edit := range map[string]func(*battlepb.BattleSettlementData){
+		"带血量终值": func(p *battlepb.BattleSettlementData) { p.Health = 1 },
+		"带蓝量终值": func(p *battlepb.BattleSettlementData) { p.Mana = 1 },
+		"带经验":   func(p *battlepb.BattleSettlementData) { p.ExpGain = 1 },
+		"带金币":   func(p *battlepb.BattleSettlementData) { p.GoldGain = 1 },
+		"带掉落": func(p *battlepb.BattleSettlementData) {
+			p.ItemsGained = []*battlepb.BattleItemEntry{{ItemTableId: 3, Count: 1}}
+		},
+		"带消耗": func(p *battlepb.BattleSettlementData) {
+			p.ItemsConsumed = []*battlepb.BattleItemEntry{{ItemTableId: 3, Count: 1}}
+		},
+		"带货币": func(p *battlepb.BattleSettlementData) {
+			p.CurrencyGains = []*battlepb.BattleCurrencyGain{{CurrencyType: 0, Amount: 1}}
+		},
+		"带击杀": func(p *battlepb.BattleSettlementData) {
+			p.DefeatedMonsters = []*battlepb.BattleMonsterDefeat{{MonsterConfigId: 1, Count: 1}}
+		},
+		"标了阵亡": func(p *battlepb.BattleSettlementData) { p.IsDead = true },
+		"标了逃跑": func(p *battlepb.BattleSettlementData) { p.Fled = true },
+		"带回合数": func(p *battlepb.BattleSettlementData) { p.TotalRounds = 1 },
+	} {
+		p := proto.Clone(void).(*battlepb.BattleSettlementData)
+		edit(p)
+		if err := validateBattleOriginal(request(p)); !errors.Is(err, ErrBattleSettlementOriginal) {
+			t.Fatalf("%s 的作废结算应按原件错误拒收: %v", why, err)
+		}
+	}
+	for _, outcome := range []battlepb.EBattleOutcome{battlepb.EBattleOutcome_BATTLE_OUTCOME_ONGOING, battlepb.EBattleOutcome(5)} {
+		p := proto.Clone(void).(*battlepb.BattleSettlementData)
+		p.Outcome = outcome
+		if err := validateBattleOriginal(request(p)); !errors.Is(err, ErrBattleSettlementOriginal) {
+			t.Fatalf("outcome=%d 应拒收: %v", outcome, err)
+		}
+	}
+}
+
 func TestBattleSettlementRegistryAndImmutableOriginal(t *testing.T) {
 	r := mustRegistry(t)
 	typ := inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT

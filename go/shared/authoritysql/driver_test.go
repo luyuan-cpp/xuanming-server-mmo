@@ -10,6 +10,7 @@ import (
 	pb "proto/common/database"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
@@ -24,6 +25,10 @@ type writerFakeWire struct {
 	lastArgs                                                                           []driver.NamedValue
 	onCommit                                                                           func()
 	onExec                                                                             func()
+
+	// beginErr 让 BEGIN 失败;revalidateIdle 记下最近一次复用核对收到的空闲时长。
+	beginErr       error
+	revalidateIdle time.Duration
 }
 
 func (w *writerFakeWire) record(s string) { w.events = append(w.events, s) }
@@ -42,6 +47,9 @@ func (w *writerFakeWire) Begin() (driver.Tx, error) {
 func (w *writerFakeWire) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
 	w.begins++
 	w.record("begin")
+	if w.beginErr != nil {
+		return nil, w.beginErr
+	}
 	return &writerFakeTx{wire: w}, nil
 }
 func (w *writerFakeWire) ExecContext(_ context.Context, _ string, args []driver.NamedValue) (driver.Result, error) {
@@ -160,6 +168,11 @@ func (g *writerFakeGate) admitRead(context.Context, driver.Conn) error {
 type writerFakeSession struct{ wire *writerFakeWire }
 
 func (p writerFakeSession) pin(context.Context, driver.Conn) error { p.wire.record("pin"); return nil }
+func (p writerFakeSession) revalidate(_ context.Context, _ driver.Conn, idle time.Duration) error {
+	p.wire.record("revalidate")
+	p.wire.revalidateIdle = idle
+	return nil
+}
 
 type writerFakeConnector struct {
 	wire     *writerFakeWire
@@ -848,8 +861,9 @@ func TestWriterDriverSessionOptionalInterfacesPreservePolicy(t *testing.T) {
 	if err := c.ResetSession(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(w.events, []string{"ping", "reset", "pin"}) {
-		t.Fatalf("reset后必须重核强会话/boot: %v", w.events)
+	// 复用走 revalidate,不重放建连时的 pin(connector.revalidate 说明了哪些要核、哪些不用)。
+	if !reflect.DeepEqual(w.events, []string{"ping", "reset", "revalidate"}) {
+		t.Fatalf("reset后必须走复用核对,且不重放pin: %v", w.events)
 	}
 	value := driver.NamedValue{Ordinal: 1, Value: "fixture"}
 	if err := c.CheckNamedValue(&value); err != nil || value.Value != int64(42) {
@@ -858,6 +872,65 @@ func TestWriterDriverSessionOptionalInterfacesPreservePolicy(t *testing.T) {
 	c.raw = writerOptionalConn{writerFakeWire: w, valid: false}
 	if c.IsValid() {
 		t.Fatal("不能覆盖底层Validator=false")
+	}
+}
+
+// 复用核对拿到的空闲时长从归还时刻(IsValid 通过)算起;从没归还过的连接按不知道空闲多久处理,宁可多探测一次。
+func TestWriterDriverResetSessionReportsIdleSinceReturn(t *testing.T) {
+	w := &writerFakeWire{}
+	c := writerFixture(w)
+	if err := c.ResetSession(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if w.revalidateIdle != idleUnknown {
+		t.Fatalf("没归还过的连接要按空闲时长未知处理: %v", w.revalidateIdle)
+	}
+	if !c.IsValid() {
+		t.Fatal("健康连接归还时应通过")
+	}
+	if err := c.ResetSession(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// 上界放到一小时:只断言「从归还时刻算起」,不让用例的结论取决于机器这一刻快不快。
+	if w.revalidateIdle < 0 || w.revalidateIdle >= time.Hour {
+		t.Fatalf("刚归还就借出,空闲时长应从归还时刻算起: %v", w.revalidateIdle)
+	}
+	// 把归还时刻拨回去,不靠 sleep 等真实时间。
+	c.returnedAt = c.returnedAt.Add(-2 * time.Hour)
+	if err := c.ResetSession(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if w.revalidateIdle < 2*time.Hour || w.revalidateIdle == idleUnknown {
+		t.Fatalf("空闲时长要从归还时刻算起: %v", w.revalidateIdle)
+	}
+}
+
+// 带隔离级别的 BEGIN 失败:驱动可能已经发过 SET TRANSACTION ISOLATION LEVEL,待生效的隔离级别留在连接上,
+// 这条连接不能回池给下一个调用方。错误原样返回(事务没开成,不是结局未知)。不带隔离级别的 BEGIN 失败不留东西,连接照旧可用。
+func TestWriterDriverBeginFailureWithIsolationDiscardsConnection(t *testing.T) {
+	rejected := &mysql.MySQLError{Number: 8027, Message: "fixture: begin rejected"}
+	cases := map[string]struct {
+		opts      driver.TxOptions
+		wantValid bool
+	}{
+		"repeatable_read": {driver.TxOptions{Isolation: driver.IsolationLevel(sql.LevelRepeatableRead)}, false},
+		"default":         {driver.TxOptions{}, true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			w := &writerFakeWire{beginErr: rejected}
+			c := writerFixture(w)
+			tx, err := c.BeginTx(context.Background(), tc.opts)
+			if tx != nil || err != error(rejected) || errors.Is(err, ErrOutcomeUnknown) {
+				t.Fatalf("BEGIN 被拒要原样返回服务端错误: tx=%v err=%v", tx, err)
+			}
+			if c.IsValid() != tc.wantValid {
+				t.Fatalf("BEGIN 失败后连接可否回池不符: valid=%v want=%v", c.IsValid(), tc.wantValid)
+			}
+			if w.execs != 0 || w.commits != 0 || w.rollbacks != 0 {
+				t.Fatalf("事务没开成不该再发语句: %v", w.events)
+			}
+		})
 	}
 }
 

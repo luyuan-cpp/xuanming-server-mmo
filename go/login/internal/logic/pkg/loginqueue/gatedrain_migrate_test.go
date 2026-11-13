@@ -196,6 +196,65 @@ func TestPickMigrationTarget_TwoChoicesTakesTheLighter(t *testing.T) {
 	assert.EqualValues(t, 6, target.NodeID)
 }
 
+// 逐台换版:1 在排空(旧构建),2 已换成新构建,3、4 还是旧构建。目标只在新构建里挑,哪怕它人更多。
+func TestPickMigrationTarget_PrefersGatesNotOnTheOutgoingBuild(t *testing.T) {
+	cs := candidates(1, 2, 3, 4)
+	cs[0].Build, cs[1].Build, cs[2].Build, cs[3].Build = "v1", "v2", "v1", "v1"
+	cs[1].PlayerCount = 50
+	draining := map[uint32]bool{1: true}
+
+	for _, intn := range []func(int) int{intnZero, func(n int) int { return n - 1 }} {
+		target, ok := PickMigrationTarget(cs, draining, 1, intn)
+		require.True(t, ok)
+		assert.EqualValues(t, 2, target.NodeID, "3、4 与被排空的 1 同构建,迁过去还要再迁一次")
+	}
+	assert.Equal(t, []uint32{1, 2, 3, 4}, nodeIDsOf(cs), "不改入参")
+}
+
+// 偏好不能把人留在要下线的 gate 上:没有新构建的合格目标时用全部合格目标。
+func TestPickMigrationTarget_BuildPreferenceFallsBackToAllEligible(t *testing.T) {
+	// 第一台排空时还没有新构建的 gate。
+	cs := candidates(1, 2, 3)
+	cs[0].Build, cs[1].Build, cs[2].Build = "v1", "v1", "v1"
+	cs[1].PlayerCount = 9
+	target, ok := PickMigrationTarget(cs, map[uint32]bool{1: true}, 1, intnZero)
+	require.True(t, ok)
+	assert.EqualValues(t, 3, target.NodeID, "同构建的两台里二选一取轻的")
+
+	// 新构建的那台满了:它在合格筛选里就被剔掉,剩下旧构建的照迁。
+	cs = candidates(1, 2, 3)
+	cs[0].Build, cs[1].Build, cs[2].Build = "v1", "v2", "v1"
+	cs[1].PlayerCount, cs[1].MaxConnections = 100, 100
+	target, ok = PickMigrationTarget(cs, map[uint32]bool{1: true}, 1, intnZero)
+	require.True(t, ok)
+	assert.EqualValues(t, 3, target.NodeID)
+}
+
+// 没上报构建就没有依据:排空中的 gate 没报构建时不产生偏好;目标没报构建时算首选。
+func TestPickMigrationTarget_UnreportedBuildCarriesNoPreference(t *testing.T) {
+	cs := candidates(1, 2, 3)
+	cs[1].Build, cs[2].Build = "v2", "v1"
+	cs[1].PlayerCount = 9
+	target, ok := PickMigrationTarget(cs, map[uint32]bool{1: true}, 1, intnZero)
+	require.True(t, ok)
+	assert.EqualValues(t, 3, target.NodeID, "1 没报构建:没有外出构建,按负载挑")
+
+	cs = candidates(1, 2, 3)
+	cs[0].Build, cs[2].Build = "v1", "v1"
+	target, ok = PickMigrationTarget(cs, map[uint32]bool{1: true}, 1, intnZero)
+	require.True(t, ok)
+	assert.EqualValues(t, 2, target.NodeID, "2 没报构建算首选,3 在外出构建上")
+}
+
+func TestOutgoingBuilds(t *testing.T) {
+	cs := candidates(1, 2, 3, 4)
+	cs[0].Build, cs[1].Build, cs[2].Build = "v1", "v2", "v3"
+
+	assert.Empty(t, outgoingBuilds(cs, nil), "没有排空中的 gate")
+	assert.Equal(t, map[string]bool{"v1": true, "v3": true}, outgoingBuilds(cs, map[uint32]bool{1: true, 3: true, 4: true}),
+		"4 在排空但没报构建,不算")
+}
+
 // ── 票据 ────────────────────────────────────────────────────────────────
 
 func TestSignMigrationGateToken_BindsPlayerAndNeverPinsZone(t *testing.T) {

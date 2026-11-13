@@ -86,14 +86,14 @@ Client -> LoginRequest{auth_type, auth_token}
 
 ## Config (login.yaml)
 
-Password is disabled by default; third-party-only deployments leave `Enabled`
-false. Production names an environment variable containing the MySQL DSN. A
-missing DSN makes startup fail rather than silently disabling verification:
+口令登录缺省关闭；只开第三方登录的部署保持 `Enabled: false`。开启时配置里只写存放 DSN 的环境变量名，DSN 缺失、库名或档位不对、表结构不对都会让 login 拒绝启动，不会静默关掉校验：
 
 ```yaml
 PasswordAuth:
   Enabled: true
   DSNEnv: "LOGIN_PASSWORD_AUTH_DSN"
+  Backend: tidb        # tidb | mysql，没写按 tidb
+  Database: mmorpg     # 生产（Mode 不是 dev / test）只接受 mmorpg
   MaxOpenConns: 20
   MaxIdleConns: 10
   KDFConcurrency: 2
@@ -103,11 +103,9 @@ PasswordAuth:
   FailureLock: 5m
 ```
 
-`LOGIN_PASSWORD_AUTH_DSN` is injected by the secret manager using a login-service
-database principal with `SELECT` on `user_accounts` only, for example
-`login_auth:...@tcp(mysql:3306)/game?charset=utf8mb4`. Its value must never be
-committed or logged. `PasswordAuth.Enabled=false` disables only password login;
-OAuth/access-token providers continue to work.
+- `LOGIN_PASSWORD_AUTH_DSN` 由密钥管理注入，账号只给口令凭据表 `user_accounts` 的 `SELECT` 权限，例如 `login_auth:...@tcp(<权威 SQL 入口>)/mmorpg?charset=utf8mb4`。它的值不进仓库、不进日志。
+- DSN 里的库名必须就是 `Database`。读库走 `shared/authoritysql` 的只读权威连接（2026-11-12 起，原来是裸 `sql.Open`）：tidb 档只读 leader、不读陈旧快照，mysql 档只连可写主库，连到从库或对端档位不符就拒绝。口令改了或停用之后，不能再有连接读到旧哈希。
+- `PasswordAuth.Enabled=false` 只关口令登录，第三方与 access-token 登录照常。
 
 Local robots may instead opt into the guarded dev provider by naming an
 environment variable that contains the shared secret and by listing
@@ -258,12 +256,14 @@ gRPC status 失败只有 UNAUTHENTICATED / PERMISSION_DENIED 回 401，其余回
 
 ## Production Password Authority and Cache Boundary
 
-- Authority is MySQL `user_accounts(account, password)`. `password` is an
-  Argon2id PHC string (`m=65536,t=3,p=2`, random 16-byte salt, 32-byte result).
-- Every password login queries MySQL and verifies with constant-time digest
+- 权威是 `mmorpg` 逻辑库里的口令凭据表 `user_accounts(account, password)`（2026-11-12 定）。口令凭据按账号存，账号是全服的，所以凭据全服一份，放在 login 登记写者资格的那个库，在全球权威 SQL 入口上，tidb 档与 MySQL 主从档都一样。存档库里同名的 `user_accounts` 是 db 服务的旧表（带 `simple_players`），每个区各有一份，不是口令权威；login 去读别的服务的库也违反逻辑库自治（AGENTS.md §7 第 6 条）。生产配置把口令库指到别处会被拒绝启动。
+- 建表语句的唯一来源是 `go/login/model/password_auth_schema.sql`：`account VARCHAR(191)` 主键、`password VARCHAR(255)` 可空、排序规则显式写 `utf8mb4_unicode_ci`。K8s 上由 `mmorpg` 的建表 Job（`gateway-schema`）执行，本机与集群内开发 MySQL 用 `deploy/mysql-init/gateway_tables.sql` 里逐字相同的一条。口令登录没开时这张表也建，空表无害。
+- login 与 `password_admin` 每次启动核对表确实是这个形状（主键恰好是 `account`、列宽、可空性、排序规则），不是就拒绝启动。账号不重复、不为空、不超长这几条前提由约束本身保证，不再靠迁移脚本检查。
+- `password` is an Argon2id PHC string (`m=65536,t=3,p=2`, random 16-byte salt, 32-byte result). NULL 表示这个账号停用口令登录。
+- Every password login queries the authority database and verifies with constant-time digest
   comparison. The Redis `account:{account}` value is only the player-list
   cache and is read **after** authentication; its existence, absence or expiry
-  cannot bypass MySQL verification.
+  cannot bypass the authority check.
 - Unknown accounts execute a dummy Argon2id calculation to reduce account
   enumeration by timing. Empty hashes, legacy plaintext, malformed hashes, and
   hashes below policy are rejected. Login never auto-upgrades them because it
@@ -277,44 +277,34 @@ gRPC status 失败只有 UNAUTHENTICATED / PERMISSION_DENIED 回 401，其余回
   side effect. Unknown-account dummy hashes use the same slots and cannot bypass
   this memory bound. Capacity must be budgeted per replica, then multiplied by
   the maximum simultaneous login replicas when estimating node memory.
-- The canonical account returned to the rest of login comes from the MySQL row,
-  not from client-controlled casing.
+- The canonical account returned to the rest of login comes from the authority row,
+  not from client-controlled casing. 匹配不区分大小写与重音，这个语义来自 `account` 列的排序规则，所以启动时一并核对。
 
-## Existing-database Deployment and Password Migration
+## 开通口令账号与写入口令（2026-11-12 改写）
 
-1. Back up MySQL and stop account writes.
-2. Run `go/login/model/migrations/20260803_password_auth.sql`. It first rejects
-   NULL, empty, duplicate, and over-191-character accounts. It never truncates or
-   merges data, then makes `account VARCHAR(191) PRIMARY KEY` and bounds the hash
-   column to `VARCHAR(255)`.
-3. For each existing account, run from `go/login` with the DSN secret in the
-   environment:
+原来这一节是「存量库迁移」：先跑 `go/login/model/migrations/20260803_password_auth.sql`（一段存储过程，检查并改造旧的 `user_accounts`），再逐个账号迁移口令。项目没有上线，没有要迁的存量表；那段存储过程只能在 MySQL 上跑，TiDB 不支持，已删除。它检查的几条前提改由建表语句的约束和启动时的形状核对保证（见上一节）。
+
+口令只由离线工具 `go/login/cmd/password_admin` 写，login 进程永不写口令：
+
+1. 库里要有口令凭据表：K8s 上 `mmorpg` 的建表 Job 已经建好；别的环境用 `writer_authority -command prepare-schema -schema mmorpg -ddl-file <password_auth_schema.sql 的绝对路径>`。
+2. 在 `go/login` 目录运行，DSN 与一次性 writer 资格从环境变量给（login 在 `mmorpg` 上登记的写者资格，档位取 `MMORPG_SQL_BACKEND`）：
 
    ```powershell
-   $env:LOGIN_PASSWORD_MIGRATION_DSN = '<short-lived UPDATE credential from secret manager>'
-   go run ./cmd/password_admin -account alice
+   $env:LOGIN_PASSWORD_MIGRATION_DSN = '<短期有效、可写 user_accounts 的连接串,库名是 mmorpg>'
+   go run ./cmd/password_admin -account alice -create
    ```
 
-   The command reads and confirms the password without terminal echo and updates
-   exactly one already-existing, not-yet-Argon2id row. It refuses missing,
-   duplicate, or already-migrated accounts, so it cannot become an implicit
-   registration or password-reset API. For a controlled batch,
-   `-password-stdin` accepts exactly two piped lines; plaintext must never be a
-   command-line argument or logged.
-4. Confirm migrated rows begin with `$argon2id$`. Unmigrated NULL/plaintext rows
-   remain unable to use password login but can still use an independently bound
-   third-party provider.
-5. Inject `LOGIN_PASSWORD_AUTH_DSN`, set `PasswordAuth.Enabled: true`, deploy a
-   canary, and test correct/wrong/unknown credentials. A missing DSN or unreachable
-   database makes startup fail.
-6. Disable the legacy Gate login path after its existing telemetry gate, so the
-   Java Gateway's IP/account rate limiter is the single public ingress.
+   - `-create`：开通一个新的口令账号，账号行不存在时建行并写入哈希；账号已存在就拒绝。
+   - 不带 `-create`：给已有、但还没有 Argon2id 哈希的账号写入一次哈希；账号不存在就拒绝。
+   - 账号已经有 Argon2id 哈希时一律拒绝，这个工具不改密。要重置：先由 DBA 把那一行的 `password` 置 NULL（停用），再不带 `-create` 写入新哈希。
+   - 口令从终端读两遍，不回显；批处理用 `-password-stdin` 从标准输入读两行。明文不进命令行参数、日志或 SQL 文件。
+   - DSN 的库名必须是 `mmorpg`（`-database` 的缺省值），表的形状不对也拒绝写。
+3. 注入 `LOGIN_PASSWORD_AUTH_DSN`，把 `PasswordAuth.Enabled` 设成 true，先发金丝雀，用正确、错误、不存在的账号各试一次。DSN 缺失、库不通、表结构不对都会让启动失败。
+4. 旧的 gate 直连登录入口在它现有的遥测门禁之后关掉（原文第 6 步，沿用）：公网入口只留 Java 网关那一条，按 IP 与账号的限流才覆盖得全。
 
-Public self-registration, password recovery, and user-driven password change are
-still **not exposed**: they require a product contract, identity proof, refresh-
-token revocation and audit policy across Gateway/client. Until those are designed,
-operations use the explicit admin path above. In particular, “first password
-presented claims an existing account” is forbidden and is not implemented.
+K8s 上的注入口径（已定，部署脚本的开关尚未实现，见[消除单节点总纲](no-single-node-horizontal-scaling-20261001.md) §6.5）：DSN 放 zone namespace 的 Secret，经 `secretKeyRef` 注入 login 容器的 `LOGIN_PASSWORD_AUTH_DSN`；ConfigMap 只写变量名、`Backend`（跟 `-DatabaseBackend`）与 `Database: mmorpg`。
+
+玩家自助注册、找回口令、自助改密仍然**没有开放**：它们需要产品契约、身份证明、刷新令牌吊销和审计策略，涉及网关与客户端。设计出来之前只有上面这条运维通道。特别是「谁先报上口令，账号就归谁」这种做法是禁止的，也没有实现。
 
 ## 2026-10-15 八域对齐：跨副本口令失败配额
 

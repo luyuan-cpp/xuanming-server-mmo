@@ -23,7 +23,9 @@
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/bag/item_hold.h"
 #include "proto/common/component/player_item_hold_comp.pb.h"
+#include "proto/scene/player_bag.pb.h" // BagInfo.held_items:下发给客户端的被占数量
 #include "services/scene/player/comp/player_ownership_comp.h"
+#include "services/scene/player/system/player_feature_snapshot.h"
 #include "table/code/item_table.h"
 #include "table/proto/tip/asset_error_tip.pb.h"
 #include "table/proto/tip/bag_error_tip.pb.h"
@@ -346,6 +348,36 @@ TEST_F(BagServiceItemHoldTest, PlaceHoldChecksRemovableQuantityAndRefusesWithout
 	EXPECT_EQ(kServiceUnavailable, Hold(kBattleA, {{kPotion, 1}}));
 	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerItemHoldComp>(player));
 	EXPECT_FALSE(BagService::ReleaseHold(player, kBattleB));
+}
+
+// 客户端看得见被占住的数量:人物背包快照带 held_items(按 config_id 升序,数量不超过这种物品的总数),别的包不带。
+TEST_F(BagServiceItemHoldTest, InventorySnapshotListsHeldQuantitiesForTheClient)
+{
+	BagInfo snapshot;
+	ASSERT_EQ(kSuccess, PlayerBagSystem::BuildSnapshot(player, kInventory, snapshot));
+	EXPECT_EQ(0, snapshot.held_items_size()) << "没有预留时为空";
+
+	ASSERT_EQ(kSuccess, Hold(kBattleA, {{kPotion, 4}, {kElixir, 5}}));
+	ASSERT_EQ(kSuccess, Hold(kBattleB, {{kPotion, 1}}));
+	ASSERT_EQ(kSuccess, PlayerBagSystem::BuildSnapshot(player, kInventory, snapshot));
+	ASSERT_EQ(2, snapshot.held_items_size());
+	EXPECT_EQ(kPotion, snapshot.held_items(0).config_id());
+	EXPECT_EQ(5u, snapshot.held_items(0).count()) << "两份预留之和";
+	EXPECT_EQ(kElixir, snapshot.held_items(1).config_id());
+	EXPECT_EQ(5u, snapshot.held_items(1).count());
+
+	// 预留里多出来的部分不下发:包里只有 6 瓶时最多标 6 瓶,客户端算出的可用数不会是负的。
+	Holds().mutable_holds(0)->mutable_lines(0)->set_count(40);
+	ASSERT_EQ(kSuccess, PlayerBagSystem::BuildSnapshot(player, kInventory, snapshot));
+	ASSERT_EQ(2, snapshot.held_items_size());
+	EXPECT_EQ(6u, snapshot.held_items(0).count()) << "夹到背包里这种物品的总数";
+
+	Warehouse().SetCapacityForRestore(20);
+	Warehouse().InsertItemForRestore((uint64_t{1} << 60) + 9598, kPotion, 3, 0);
+	BagInfo warehouse;
+	ASSERT_EQ(kSuccess, PlayerBagSystem::BuildSnapshot(player, kWarehouse, warehouse));
+	EXPECT_EQ(1, warehouse.items_size());
+	EXPECT_EQ(0, warehouse.held_items_size()) << "预留只约束人物背包";
 }
 
 } // namespace

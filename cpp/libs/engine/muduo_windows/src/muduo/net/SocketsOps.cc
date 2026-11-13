@@ -141,7 +141,9 @@ int sockets::accept(int sockfd, struct sockaddr_in6* addr)
   if (connfd < 0)
   {
     int savedErrno = errno;
-    LOG_SYSERR << "Socket::accept";
+    // LOCAL DELTA begin(与 Linux 覆盖件 tools/archived/muduo_linux_overlay/muduo/net/SocketsOps.cc 同一改动,两边要一起改):
+    // 原来在这里每次失败都 LOG_SYSERR,并把 ENFILE / ENOBUFS / ENOMEM / EOPNOTSUPP 归进下面的 LOG_FATAL。
+    // 现在这里不打日志(Acceptor 限频打),下面三组 errno 原样交回调用方,由 Acceptor::classifyAcceptFailure 决定怎么降级。
     switch (savedErrno)
     {
       case EAGAIN:
@@ -149,18 +151,32 @@ int sockets::accept(int sockfd, struct sockaddr_in6* addr)
       case EINTR:
       case EPROTO: // ???
       case EPERM:
-      case EMFILE: // per-process lmit of open file desctiptor ???
-        // expected errors
-        errno = savedErrno;
-        break;
-      case EBADF:
-      case EFAULT:
-      case EINVAL:
+      // accept(2):TCP 上已排队连接身上挂着的网络错误会从 accept 返回,应用要当作这一条连接没了、接着接下一条。
+      // EHOSTDOWN、ENONET 只有 Linux 的 errno.h 里有。
+      case ENETDOWN:
+      case ENOPROTOOPT:
+#ifdef EHOSTDOWN
+      case EHOSTDOWN:
+#endif
+#ifdef ENONET
+      case ENONET:
+#endif
+      case EHOSTUNREACH:
+      case EOPNOTSUPP:
+      case ENETUNREACH:
+      // 资源耗尽:fd 用尽(进程级 EMFILE、全机级 ENFILE)、内核缓冲或内存不足。连接洪峰下它们是会真实出现的
+      // 运行期状态,不是编程错误;为此 abort 等于替攻击者把全部在线连接一起断掉。
+      case EMFILE:
       case ENFILE:
       case ENOBUFS:
       case ENOMEM:
+        errno = savedErrno;
+        break;
+      // LOCAL DELTA end
+      case EBADF:
+      case EFAULT:
+      case EINVAL:
       case ENOTSOCK:
-      case EOPNOTSUPP:
         // unexpected errors
         LOG_FATAL << "unexpected error of ::accept " << savedErrno;
         break;

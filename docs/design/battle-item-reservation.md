@@ -2,6 +2,8 @@
 
 > 状态:2026-11-10 落码,**未编译、未测试**,待 Codex 验证(§9)。负责人 2026-11-10 拍板「按预留方案做」。
 > Java 版(0.1.0-SNAPSHOT)待做,登记在 Java 仓 `PARITY.md`(§10)。
+> 2026-11-12:原先记在 §7 的两条残余已做,同样未编译 —— 两个背包都放不下的掉落改投邮件([battle-overflow-mail.md](battle-overflow-mail.md)),
+> 客户端看得到被押住的数量(§4.1)。
 > 前文:[turn-battle-gap-closure.md](turn-battle-gap-closure.md) §11.2「FIGHTING 冻结到期先查 SQL 终局」与其中「2026-11-10 复核」一段。
 
 ## 1. 要解决的问题
@@ -43,6 +45,7 @@ scene 再按结算从背包里扣(`ApplySettlementToEntity`)。从开局到结�
 | 备战(PrepareBattle)冻结之前 | `BagService::PlaceHold(battle_id, 快照道具, review_after = 冻结到期时刻)`;建不起来就整笔拒绝备战、不留冻结;建起来之后请一次关键进度存盘(1 秒内) | `PlayerBattleSystem::PrepareBattle` |
 | 结算应用 | 消耗按「可计数总量 - 别的局的预留」扣(本局预留可用),成功后**同一帧**释放本局预留,随结算那一次存档提交 | `ApplySettlementToEntity` + `ConsumeInventoryAndGrant(consumeFromHoldId)` |
 | match 取消备战(在线) | 摘冻结 + 释放预留 | `CancelBattlePrepare` |
+| 作废结算应用(2026-11-12:match 的 ABORT 给每名成员投一份 VOID 结算,[battle-instance-loss-early-abort.md](./battle-instance-loss-early-abort.md) §5.2) | 释放预留(一个都不扣,reason = void_settlement),随收件箱账本那一次存档提交;冻结在存档确认后解开 | `ApplyVoidSettlement` |
 | 冻结到期,SQL 终局 ABORT / 没有可裁决原件 | 解冻 + 释放预留 | `OnExpiredFightingTerminalAnswer` |
 | 冻结到期,本地已应用过这一局 | 解冻 + 释放预留(兜底,正常已在结算时释放) | `ResolveExpiredFightingFreeze` |
 | **续冻到上限** | **只解冻,不放预留** | 同上 |
@@ -115,6 +118,24 @@ ERROR `metric=battle_item_hold_overdue`(`IsHoldOverdueLogDue`)。
 这**不是**「局中挡一切背包写」的战斗闸:D48 红线照旧(战斗闸只放在玩法入口层),预留只管数量、不看 `InBattleComp`,
 战斗结算扣的正是它自己那份,不会被自己拦住。
 
+### 4.1 客户端看得到被押住的数量(2026-11-12)
+
+`BagInfo.held_items`(字段 4,`BagHeldItemInfo { config_id, count }`)列出人物背包里每种物品被预留占住的数量,按 `config_id` 升序,
+没有预留时为空。只有人物背包的快照带它:预留只管人物背包,临时格、仓库的 `BagInfo` 不带。
+
+- 填充点只有一处:`player_feature_snapshot.cpp` 建人物背包快照时的 `FillHeldItems`。数量取 `BagService::HeldCount`,再按背包里这种物品的
+  可计数总量夹紧;背包里此刻没有的种类不列。正常情况下预留不会比持有多(出包入口只动未预留的部分),夹紧只在不变量被破坏时起作用:
+  给玩家看的是「包里这几样有多少动不了」,多出来的部分没有可标的格子。
+- 它是给显示用的派生量,不落库,也不是第二份规则。能不能拿走仍只由服务端的 `CheckRemovable` / `CheckRemovableInstances` 判;
+  客户端只用它把「可交易数量」算对、把原因写明白。
+- 随人物背包快照下发(`GetBag` 与各背包操作的回包)。预留的变化不单独推送:客户端打开背包、聚宝斋选物品时拉到的是当时的值。
+- 客户端(`../mmorpg-client`):`EquipBagModel.HeldCountOf / AvailableCountOf / AvailableInStack / HeldLine`;背包物品详情多一行
+  「战斗结算中 N(结算后可交易)」;聚宝斋选物品时显示占用与可交易数量,只能选可交易的部分,全被押住的不能选。
+- 用例:`cpp/tests/bag_test/item_hold_test.cpp` 的 `InventorySnapshotListsHeldQuantitiesForTheClient`;客户端
+  `EquipForgeModelTests.HeldAndAvailableCountsFollowTheServerHeldItems`、`HeldLineOnlyShowsForKindsWithHeldQuantity`。
+
+这是客户端可见的协议,两版共享:Java 版登记待做(§10)。
+
 ## 5. 持久化与兼容
 
 - 新字段 `player_database.item_holds = 26`,PROFILE 组。新组件只在加载时创建(`PlayerDatabaseMessageFieldsUnmarshal`),
@@ -130,7 +151,7 @@ scene 进程没有 Prometheus 端点,信号是结构化日志(英文):
 
 | 日志 | 级别 | 含义 |
 |---|---|---|
-| `metric=battle_item_hold_released reason=…` | INFO | 预留释放;reason = settlement_applied / prepare_cancelled / ABORT / NO_ORIGINAL / applied_here |
+| `metric=battle_item_hold_released reason=…` | INFO | 预留释放;reason = settlement_applied / prepare_cancelled / void_settlement / ABORT / NO_ORIGINAL / applied_here |
 | `metric=battle_item_hold_overdue` | ERROR | 预留越过「复核时刻 + 15 分钟」仍没收尾,每 10 分钟一行 |
 | `metric=asset_debit_items_held` / `asset_recall_items_held` | WARN | 资产通道因预留回 RETRY |
 | `metric=item_hold_invalid source=loader` | ERROR | 加载校验不过 |
@@ -151,10 +172,12 @@ count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_o
   只在既是装备又可参战的行上会碰到,今天的表里没有);结算一到即放开。
   积压或 match 不可用越久,押得越久,有 `battle_item_hold_overdue` 告警。
 - 备战时人物背包里**全部**可参战的道具都被押住(快照就是这么取的),不只是这一局真正会喝掉的那几瓶。
-- 两个背包都满、而人物背包里全是被押着的满堆时,玩家仍腾不出位置,那一局结算一直延后、预留一直在。冻结已按上限解开,
-  玩家其余照常;真正的出口是丢弃或存仓入口,另议(`bag-rule-policy-layering.md` §(7))。
+- 两个背包都满、而人物背包里全是被押着的满堆时,玩家腾不出位置。2026-11-12 起这一局不再延后:掉落整批改投邮件,
+  扣消耗、入账、释放预留照常进行([battle-overflow-mail.md](battle-overflow-mail.md);负责人 2026-11-11 定「背包满是放到邮件里面的」)。
+  只有邮件接不住时(没配发件密钥、待寄队列满、请求号暂缺)才回到整笔延后,预留随之继续押着。
 - 玩家离线时被取消的备战:预留留到下次加载后由复核收尾(查到 ABORT / NO_ORIGINAL 即放)。
-- 客户端还看不到「哪些数量被押着」:被挡住时只收到 RETRY 后的提示。显示预留数量要改客户端可见协议,两版同批改,本批不做。
+- 客户端看得到被押住的数量(§4.1,2026-11-12)。预留的变化不单独推送,界面上的数量是上一次拉背包时的值;
+  以为能交易而被服务端挡住时,仍按 RETRY 之后的提示处理。
 - HP / MP、宠物状态的覆盖时序仍由冻结与续冻管,预留不涉及。
 
 ## 8. 改动清单
@@ -168,6 +191,7 @@ count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_o
 | 资产 / 装备 | `cpp/libs/services/scene/player/system/{asset_op_system.cpp, player_equip.h, player_equip.cpp}`(强化 / 镶嵌预检、穿戴闸) |
 | 测试 | `cpp/tests/bag_test/item_hold_test.cpp`(新)、`battle_freeze_hold_test.cpp`、`player_battle_settlement_test.cpp`、`persist_round_trip_test.cpp`、`player_feature_persistence_test.cpp`、`player_equip_attribute_test.cpp`、`player_equip_test.cpp`、`bag_test.cpp`、`bag_test.vcxproj(.filters)`;`cpp/tests/cross_zone_test/cross_zone_test.cpp` |
 | 文档 | 本文、`turn-battle-gap-closure.md` §11.2、`bag-rule-policy-layering.md` §(7)、`player-inbox-runbook.md` §6.1、`ecs-component-access-rules.md`(持久数据表与读缺失例外)、`player-save-direct-commit.md` §1.1(资料行字段)、`deploy/k8s/match-outcome-outbox-alerts.yaml`(只改描述)、`deploy/k8s/asset-channel-alerts.yaml`(头注释固定查询:改上限那条的描述,加 `battle_item_hold_overdue`)、`docs/README.md` |
+| 2026-11-12 显示占用数量 | `proto/scene/player_bag.proto`(`BagHeldItemInfo`、`BagInfo.held_items = 4`)、`cpp/libs/services/scene/player/system/player_feature_snapshot.cpp`(`FillHeldItems`)、`cpp/tests/bag_test/item_hold_test.cpp`;客户端 `Assets/Scripts/UI/Ugui/Gameplay/{EquipBagModel.cs, GameplayWindow.Fidelity.cs}`、`Assets/Scripts/UI/Ugui/Jubaozhai/CommerceWindow.cs`、`Assets/Tests/EditMode/Battle/EquipForgeModelTests.cs`。两包都放不下改投邮件的改动清单在 [battle-overflow-mail.md](battle-overflow-mail.md) §11 |
 | 别的会话已改 | `go/match/internal/authority/terminal_abort.go` 里 `deadlineAbortHardCapMs` 的注释(「数据覆盖审计交接文档」会话 11-10 改,纯注释、未编译):scene 按上限解冻只放开人,道具仍由预留押着;晚到的 COMPLETE 从预留里扣,晚到的 ABORT / 没有可裁决原件只释放预留;等待上限决定的是「人被冻多久」。`kFreezeHoldCapMs` 没变,`TestDeadlineAbortBoundsFitSceneFreezeHold` 的不等式照旧成立 |
 
 ## 9. 验证(全部未执行,交 Codex)
@@ -185,9 +209,13 @@ count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_o
 4. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`:match-outcome-outbox-alerts 用例照旧通过(只改了描述文字);
    「LogQL 契约」用例照旧通过(`asset-channel-alerts.yaml` 多了一条 `{job="cpp_nodes", service="scene"}` 的固定查询,写法与其余几条相同)。
 5. `cd go/match && go build ./...`(只改了注释)。
+6. 2026-11-12 的显示占用数量(§4.1)改了客户端可见的 proto,要重新生成服务端与客户端两边的绑定,再编译、跑
+   `bag_test.exe --gtest_filter=BagServiceItemHoldTest.InventorySnapshotListsHeldQuantitiesForTheClient` 与客户端 EditMode 的
+   `EquipForgeModelTests`。它与改投邮件同批验证,完整步骤见 [battle-overflow-mail.md](battle-overflow-mail.md) §12。
 
 ## 10. Java 版
 
 Java 版的冻结与结算模型不同(断线即写回、重连新建实例,战斗锁在 Redis 哈希里),但「冻结解开之后晚到的结算按持有夹紧」是同一类问题,
 要做同一组行为:备战时按快照占住道具、结算从占用里扣并释放、取消 / 作废时释放、出包入口只动未占用的数量、冻结不在时按终局复核。
 登记在 Java 仓 `PARITY.md`「2026-11-10 战斗道具预留(Java 待做)」。本批没有改 Java 代码。
+`BagInfo.held_items`(§4.1)是客户端可见的协议,Java 版要同批补上,与改投邮件的两个字段一起登记在 `PARITY.md` 2026-11-12 的条目里。

@@ -42,7 +42,7 @@
 # 本文件里凡是以指标前缀开头的词(表达式、注释、描述都算)都必须是已注册的指标名:go/player_locator/internal/logic 的
 # TestAlertRulesReferenceRegisteredMetrics 读本文件逐个核对。注释里提到文件名、服务名时不要写成指标前缀加下划线的形式。
 #
-# 阈值与 for 都是起步值([I]),待 V0 实测后校准;代码未编译、未实测。
+# 阈值与 for 已定(2026-11-12),压测出基线后可调:依据是定位写入的重试退避上限(5s)与滚动发布窗口,for 取 5~10 分钟以盖住一次滚动发布与 Redis 主从切换;代码未编译、未实测。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up

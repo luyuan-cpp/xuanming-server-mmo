@@ -392,6 +392,7 @@ func allRouteSQLForTest() map[string]string {
 		"R13(2)":          routeSelectRowsSQL(2),
 		"R14":             routeListMergedIntoSQL,
 		"R15":             routeMetaSeedSQL,
+		"R16(2)":          routeCountHomeZonesSQL(2),
 		"P0":              routeLockProbeGuardSQL,
 		"P4":              routeProbeShardCheckSQL,
 		"P5":              routeProbeShardModulusSQL,

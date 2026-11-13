@@ -10,7 +10,7 @@
 	设计与模式矩阵见 docs/design/k8s-client-entry.md(ingress_final D80 / D81 / D86–D91)。
 
 	约定:
-	  1. **不读任何脚本级变量**。k8s_deploy.ps1 的 $NodeImage / $SnowflakeCacheDir / 日志 sidecar
+	  1. **不读任何脚本级变量**。k8s_deploy.ps1 的 $NodeImage / 日志 sidecar
 	     等一律经参数传入(公共容器参数先用 New-ClientEntryPodCommon 打包),本文件可以单独 dot-source 测试。
 	  2. 生成函数是纯函数:只拼 YAML 字符串,不调 kubectl、不写文件、不打日志;返回值一律是 LF 换行(本文件按
 	     .gitattributes 以 CRLF 检出,here-string 会带 CR,返回前经 ConvertTo-ClientEntryLf 统一)。YAML 一律用**空格**缩进
@@ -60,7 +60,7 @@
 	                                    → { Drifts = string[]; KeepArgs }(login 第三方登录防误关闸,见第 9 节)
 
 	  生成器(纯函数,返回 YAML 字符串)
-	    New-ClientEntryPodCommon        -Image -ImagePullPolicy -SnowflakeCacheDir -LogVolumeSizeLimit
+	    New-ClientEntryPodCommon        -Image -ImagePullPolicy -LogVolumeSizeLimit
 	                                    [-LogPrunerCommand ''] [-GrpcServerMaxPollers 0(已退役,取值被忽略)]
 	                                    [-SidecarContainerYaml ''] [-SidecarVolumeYaml ''] [-SidecarConfigHash '']
 	                                    [-PodAnnotations $null] [-OpenFileLimitMode ''(B0-4 豁免开关,留空不写)]
@@ -222,6 +222,12 @@ function Get-ClientEntryContract {
 		# 金丝雀 Pod 的标签(发布轨道设计 §5.3):和上面的 env 同一判据,只有 canary 才写,stable 不写(模板逐字不变,不触发滚动)。
 		# 用来 kubectl -l 筛金丝雀 Pod,以及 Prometheus 把它映射成目标标签(没有这个标签 = stable,见 docs/ops/release-track-canary-runbook.md)。
 		ReleaseTrackPodLabel       = 'mmorpg.io/release-track'
+		# 部署构建标识(C++ node_planned_drain.h kBuildLabelEnvVar,写进 NodeInfo.build;值与 Pod 标签 mmorpg.io/build 相同)。
+		# k8s_deploy.ps1 经 PodCommon.BuildLabel 写进本库的 C++ 生成器(Get-ClientEntryNodeBaseEnv),该脚本自己的两个模板
+		# (Get-CppBuildLabelEnvLines)写同一个名字。选落点的一方据此避开「有节点在排空的构建」(新版本优先)。
+		BuildLabelEnv              = 'MMORPG_BUILD_LABEL'
+		# Pod 所属的工作负载修订(C++ node_planned_drain.h kPodRevisionEnvVar),经 downward API 取 Pod 标签,拼进 NodeInfo.build。
+		PodRevisionEnv             = 'MMORPG_POD_REVISION'
 		# gate 出站调用的会话身份签名私钥(cpp/libs/engine/core/security/caller_auth.h kSigningKeyEnv,32 字节 Ed25519 种子的十六进制)
 		# 与验证方公钥列表(kPublicKeysEnv)。gate main.cpp 在私钥缺失、格式不对或与公钥列表不配对时拒绝启动,所以两种入口形态都必须带:
 		# 本库 New-GateStatefulSetYaml(external)与 k8s_deploy.ps1 New-NodeDeploymentYaml 的 gate 分支(podip)都按这些名字写,
@@ -639,7 +645,7 @@ function Resolve-BattleFleetHealth {
 	k8s_deploy.ps1 接入示例(sidecar 片段用任意缩进渲染,本库去掉公共前导空格后按各模板的列位置重新缩进;
 	-ItemIndent 是必填且不收空串,传两个空格即可):
 	    $podCommon = New-ClientEntryPodCommon -Image $NodeImage -ImagePullPolicy $ImagePullPolicy `
-	        -SnowflakeCacheDir $SnowflakeCacheDir -LogVolumeSizeLimit $CppLogVolumeSizeLimit `
+	        -LogVolumeSizeLimit $CppLogVolumeSizeLimit `
 	        -LogPrunerCommand $CppLogPrunerCommand `
 	        -SidecarContainerYaml (New-CppLogSidecarContainerYaml -ItemIndent '  ' -CurrentZoneName <zone|global> -AsNativeSidecar) `
 	        -SidecarVolumeYaml (New-CppLogSidecarVolumeYaml -ItemIndent '  ') `
@@ -655,7 +661,6 @@ function New-ClientEntryPodCommon {
 	param(
 		[Parameter(Mandatory = $true)][string]$Image,
 		[Parameter(Mandatory = $true)][ValidateSet('Always', 'IfNotPresent', 'Never')][string]$ImagePullPolicy,
-		[Parameter(Mandatory = $true)][string]$SnowflakeCacheDir,
 		[Parameter(Mandatory = $true)][string]$LogVolumeSizeLimit,
 		# 形如 "(while true; ...; done &) && ",拼在 mkdir 与启动命令之间;不得含双引号。
 		[AllowEmptyString()][string]$LogPrunerCommand = '',
@@ -678,6 +683,9 @@ function New-ClientEntryPodCommon {
 		# 发布轨道(k8s_deploy.ps1 -ReleaseTrack)。留空或 stable = 不写 env(C++ 不设即 stable),生成物与不传时逐字相同;
 		# canary 写 MMORPG_RELEASE_TRACK=canary。只收小写,在渲染时(Get-ClientEntryNodeBaseEnv)校验。
 		[AllowEmptyString()][string]$ReleaseTrack = '',
+		# 部署构建标识(k8s_deploy.ps1 Get-CppBuildLabelValue,与 Pod 标签 mmorpg.io/build 同值)。留空 = 不写 MMORPG_BUILD_LABEL
+		# (C++ 的 NodeInfo.build 为空 = 没上报,不参与构建偏好),生成物与不传时逐字相同。
+		[AllowEmptyString()][string]$BuildLabel = '',
 		# 经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey },按给出的顺序接在公共 env 之后,渲染成 secretKeyRef(optional: false)。
 		# 留空 = 不加,生成物与不传时逐字相同。名字不是大写环境变量名、三项有空、或名字重复,在这里 throw。
 		[AllowNull()][AllowEmptyCollection()][object[]]$SecretEnv = @()
@@ -719,7 +727,6 @@ function New-ClientEntryPodCommon {
 		Image                = $Image
 		# 规范大小写(约定 7):imagePullPolicy 是区分大小写的 K8s 枚举。
 		ImagePullPolicy      = ConvertTo-ClientEntryCanonicalName -Value $ImagePullPolicy -Allowed @('Always', 'IfNotPresent', 'Never')
-		SnowflakeCacheDir    = $SnowflakeCacheDir
 		LogVolumeSizeLimit   = $LogVolumeSizeLimit
 		LogPrunerCommand     = $LogPrunerCommand
 		SidecarEnabled       = ($given.Count -eq 3)
@@ -730,6 +737,7 @@ function New-ClientEntryPodCommon {
 		OpenFileLimitMode    = $OpenFileLimitMode
 		MetricsPort          = $MetricsPort
 		ReleaseTrack         = $ReleaseTrack
+		BuildLabel           = $BuildLabel
 		SecretEnv            = $secretEnvCopy
 	}
 }
@@ -768,19 +776,22 @@ function Get-ClientEntryEnvYaml {
 	return ($lines -join "`n")
 }
 
-# C++ 节点共有的 env:集群内身份(POD_IP + RPC_PORT)、发号槽缓存目录;末尾接 PodCommon.SecretEnv(zone Redis 口令等)。
+# C++ 节点共有的 env:集群内身份(POD_IP + RPC_PORT);末尾接 PodCommon.SecretEnv(zone Redis 口令等)。
+# SNOWFLAKE_CACHE_DIR 已删(2026-11-12):C++ 的 snowflake 槽位客户端早已随永久 guid 改走号段删掉,没有读者。
 # GRPC_SERVER_MAX_POLLERS 已退役(grpc-muduo-transport.md §15.11),不再注入。
 # 与 New-NodeDeploymentYaml 同口径,只是不写 D92 禁用的第二个端口变量(RPC_PORT 优先,行为不变)。
 function Get-ClientEntryNodeBaseEnv {
 	param(
 		[Parameter(Mandatory = $true)]$PodCommon,
-		[Parameter(Mandatory = $true)][int]$RpcPort
+		[Parameter(Mandatory = $true)][int]$RpcPort,
+		# Pod 上记着工作负载修订的标签名:StatefulSet 是 controller-revision-hash,Deployment 是 pod-template-hash,
+		# Agones Fleet 的 Pod 没有,留空。只在 PodCommon 带构建标识时生效,见下面写 PodRevisionEnv 的地方。
+		[AllowEmptyString()][string]$RevisionLabelKey = ''
 	)
 	$entries = @(
 		@{ Name = 'POD_IP'; FieldPath = 'status.podIP' },
 		@{ Name = 'RPC_PORT'; Value = [string]$RpcPort }
 	)
-	$entries += @{ Name = 'SNOWFLAKE_CACHE_DIR'; Value = $PodCommon.SnowflakeCacheDir }
 	# B0-4 运维豁免开关:只有显式给值才写(缺省不写 = C++ 按 enforce),与 k8s_deploy.ps1 的 New-NodeDeploymentYaml / New-SceneFleetYaml 同口径。
 	# 经 Get-ClientEntryMember 读:调用方自己拼的 PodCommon 可能没有这个成员(缺席 = 不写)。校验放在这里而不是 New-ClientEntryPodCommon:
 	# 这是值写进 YAML 的唯一入口,手拼的 PodCommon 也绕不过去。区分大小写(-cnotin):C++ 只认小写,大写会被进程静默当成 enforce。
@@ -806,6 +817,16 @@ function Get-ClientEntryNodeBaseEnv {
 		}
 		if ($releaseTrack -ceq 'canary') {
 			$entries += @{ Name = $contract.ReleaseTrackEnv; Value = $releaseTrack }
+		}
+	}
+	# 部署构建标识:同样经 Get-ClientEntryMember 读,缺成员或空串 = 不写(C++ 的 NodeInfo.build 为空 = 没上报)。
+	# 工作负载修订跟着构建标识一起写(经 downward API 取 Pod 标签),C++ 把两者拼成 NodeInfo.build:同一个镜像只改配置或
+	# rollout restart 时构建标识不变、修订会变,已经换好的那一代 Pod 才分得出来。没有构建标识时不写,生成物与不传时逐字相同。
+	$buildLabel = [string](Get-ClientEntryMember -Object $PodCommon -Path @('BuildLabel'))
+	if (-not [string]::IsNullOrWhiteSpace($buildLabel)) {
+		$entries += @{ Name = $contract.BuildLabelEnv; Value = $buildLabel }
+		if (-not [string]::IsNullOrEmpty($RevisionLabelKey)) {
+			$entries += @{ Name = $contract.PodRevisionEnv; FieldPath = "metadata.labels['$RevisionLabelKey']" }
 		}
 	}
 	# 经 Secret 注入的附加 env(PodCommon.SecretEnv,New-ClientEntryPodCommon 打包时已校验):缺成员或空列表 = 不写。
@@ -877,8 +898,7 @@ function Get-ClientEntryVolumeMountYaml {
 	$k = $ItemIndent + '  '
 	return (@(
 		"$ItemIndent- name: node-config", "${k}mountPath: /app/bin/etc", "${k}readOnly: true",
-		"$ItemIndent- name: node-logs", "${k}mountPath: /app/bin/logs",
-		"$ItemIndent- name: snowflake-cache", "${k}mountPath: $($PodCommon.SnowflakeCacheDir)"
+		"$ItemIndent- name: node-logs", "${k}mountPath: /app/bin/logs"
 	) -join "`n")
 }
 
@@ -891,8 +911,7 @@ function Get-ClientEntryPodVolumeYaml {
 	$k = $ItemIndent + '  '
 	$text = (@(
 		"$ItemIndent- name: node-config", "${k}configMap:", "${k}  name: $ConfigMapName",
-		"$ItemIndent- name: node-logs", "${k}emptyDir: { sizeLimit: $($PodCommon.LogVolumeSizeLimit) }",
-		"$ItemIndent- name: snowflake-cache", "${k}emptyDir: { sizeLimit: 64Mi }"
+		"$ItemIndent- name: node-logs", "${k}emptyDir: { sizeLimit: $($PodCommon.LogVolumeSizeLimit) }"
 	) -join "`n")
 	if ($PodCommon.SidecarEnabled) {
 		$text += "`n" + (Add-ClientEntryIndent -Text $PodCommon.SidecarVolumeYaml -Indent $ItemIndent)
@@ -1020,7 +1039,8 @@ function New-GateStatefulSetYaml {
 	$contract = Get-ClientEntryContract
 	$replicas = @($Plan.Ordinals).Count
 
-	$envEntries = Get-ClientEntryNodeBaseEnv -PodCommon $PodCommon -RpcPort $RpcPort
+	# StatefulSet 的 Pod 带 controller-revision-hash:逐台换 gate 时,已重建的 Pod 与还没换的 Pod 修订不同(哪怕镜像没变)。
+	$envEntries = Get-ClientEntryNodeBaseEnv -PodCommon $PodCommon -RpcPort $RpcPort -RevisionLabelKey 'controller-revision-hash'
 	$envEntries += @(
 		@{ Name = 'GATE_CLIENT_RPC_ROUTER'; Value = $GateRouterMode },
 		@{ Name = $contract.InternalAuthSecretEnv; SecretName = $contract.InternalAuthSecretName; SecretKey = $contract.InternalAuthSecretKey },
@@ -1375,7 +1395,8 @@ function New-BattleHostPortDeploymentYaml {
 	# 缺省值 $(HOST_IP) 是交给 kubelet 的依赖展开,不是 PowerShell 子表达式(契约里用单引号定义)。
 	$clientHost = if ([string]::IsNullOrWhiteSpace($ClientPublicHost)) { $contract.BattleHostPortDefaultClientHost } else { $ClientPublicHost }
 
-	$envEntries = Get-ClientEntryNodeBaseEnv -PodCommon $PodCommon -RpcPort $RpcPort
+	# Deployment 的 Pod 带 pod-template-hash(与 k8s_deploy.ps1 New-NodeDeploymentYaml 同一个标签)。
+	$envEntries = Get-ClientEntryNodeBaseEnv -PodCommon $PodCommon -RpcPort $RpcPort -RevisionLabelKey 'pod-template-hash'
 	$envEntries += @(
 		@{ Name = 'HOST_IP'; FieldPath = 'status.hostIP' },
 		@{ Name = $contract.ClientEndpointSourceEnv; Value = $contract.ClientEndpointSourceStatic },

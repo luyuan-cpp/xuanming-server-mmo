@@ -91,7 +91,9 @@ function New-MockGatePod {
 # 客户端地址缺省不填(podip 形态);-ClientIp / -ClientPort 模拟 external 形态自报的地址。
 function New-EtcdGate {
     param([uint32]$NodeId, [string]$Ip, [string]$Uuid, [uint32]$Players = 0, [int]$ValueNodeId = -1, [switch]$ProtoNames,
-        [uint32]$ZoneId = 7, [uint64]$LaunchTime = 100, [string]$ClientIp = '', [uint32]$ClientPort = 0)
+        [uint32]$ZoneId = 7, [uint64]$LaunchTime = 100, [string]$ClientIp = '', [uint32]$ClientPort = 0,
+        # gate 自报的连接上限;0 = 不写这个字段(protojson 省略零值,也就是「没声明上限」)。
+        [uint32]$MaxConnections = 0)
     $valueId = if ($ValueNodeId -ge 0) { $ValueNodeId } else { $NodeId }
     $info = if ($ProtoNames) {
         @{ node_id = $valueId; node_type = 4; endpoint = @{ ip = $Ip; port = 18000 }; node_uuid = $Uuid; player_count = $Players
@@ -101,6 +103,9 @@ function New-EtcdGate {
             zoneId = $ZoneId; launchTime = [string]$LaunchTime }
     }
     if ($Players -eq 0 -and -not $ProtoNames) { $info.Remove('playerCount') }   # protojson 省略零值
+    if ($MaxConnections -ne 0) {
+        if ($ProtoNames) { $info.max_connections = $MaxConnections } else { $info.maxConnections = $MaxConnections }
+    }
     if (-not [string]::IsNullOrEmpty($ClientIp) -or $ClientPort -ne 0) {
         $client = @{}
         if (-not [string]::IsNullOrEmpty($ClientIp)) { $client.ip = $ClientIp }
@@ -499,10 +504,10 @@ Test-Case 'login 配置:RequireClientEndpoint 缺省 false,true / false 大小�
     Assert-Match -Text $failure -Pattern 'RequireClientEndpoint' -Because '不认识的值不猜'
 }
 
-Test-Case 'login 配置:GateDrain.Migrate 缺省关闭,显式值按 login 口径换算,非法值拒绝,迁移说明按速率估算' {
+Test-Case 'login 配置:GateDrain.Migrate 缺省开启,显式值按 login 口径换算,非法值拒绝,迁移说明按速率估算' {
     Reset-DrainFixture
     $defaults = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml) -Source 'audit'
-    Assert-Equal -Expected 'False|20|0' -Actual ("{0}|{1}|{2}" -f $defaults.MigrateEnabled, $defaults.MigrateRatePerSecond, $defaults.MigrateStartAfterSeconds) -Because '缺 Migrate 子块取 GateDrainMigrateConf 的默认值'
+    Assert-Equal -Expected 'True|20|0' -Actual ("{0}|{1}|{2}" -f $defaults.MigrateEnabled, $defaults.MigrateRatePerSecond, $defaults.MigrateStartAfterSeconds) -Because '缺 Migrate 子块取 GateDrainMigrateConf 的默认值'
     $block = "GateDrain:`n  Interval: 5s`n  Migrate:`n    Enabled: true`n    RatePerSecond: 50`n    StartAfter: 1500ms"
     $login = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock $block) -Source 'audit'
     Assert-Equal -Expected 'True|50|2' -Actual ("{0}|{1}|{2}" -f $login.MigrateEnabled, $login.MigrateRatePerSecond, $login.MigrateStartAfterSeconds) -Because '显式值优先,StartAfter 不足 1s 向上取整(与 gateDrainMigratePolicy 同口径)'
@@ -511,7 +516,10 @@ Test-Case 'login 配置:GateDrain.Migrate 缺省关闭,显式值按 login 口径
     $failure = Get-ThrownMessage { ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock "GateDrain:`n  Migrate:`n    RatePerSecond: -1") -Source 'audit' }
     Assert-Match -Text $failure -Pattern 'GateDrain.Migrate.RatePerSecond' -Because '速率必须是非负整数'
     Assert-Match -Text (Format-GateDrainMigrationLine -Login $login -Online 4500) -Pattern 'about 92s' -Because '起始 2s + 4500 人 / 每秒 50 人 = 92s'
-    Assert-Match -Text (Format-GateDrainMigrationLine -Login $defaults -Online 4500) -Pattern 'migration: off' -Because '缺省关闭:只等自然下线,到期删 Pod 会断开剩余玩家'
+    Assert-Match -Text (Format-GateDrainMigrationLine -Login $defaults -Online 4500) -Pattern 'about 225s' -Because '缺省开启:4500 人 / 每秒 20 人 = 225s'
+    $off = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock "GateDrain:`n  Migrate:`n    Enabled: false") -Source 'audit'
+    Assert-Equal -Expected 'False|20|0' -Actual ("{0}|{1}|{2}" -f $off.MigrateEnabled, $off.MigrateRatePerSecond, $off.MigrateStartAfterSeconds) -Because '应急关闭只写 Enabled: false,其余取默认值'
+    Assert-Match -Text (Format-GateDrainMigrationLine -Login $off -Online 4500) -Pattern 'migration: off' -Because '显式关闭:只等自然下线,到期删 Pod 会断开剩余玩家'
 }
 
 Test-Case 'login ConfigMap 从 zone namespace 读取,读取失败 fail-closed' {
@@ -575,6 +583,46 @@ Test-Case 'etcd:客户端地址、launch_time(字符串)、zone_id 按两种字�
         $r = (ConvertFrom-GateEtcdRecords -Json $json -Prefix $prefix)[0]
         Assert-Equal -Expected 'True|18000|gate-1.example.com|30001|1790000000123|7' -Actual ("{0}|{1}|{2}|{3}|{4}|{5}" -f $r.HasEndpoint, $r.EndpointPort, $r.ClientIp, $r.ClientPort, $r.LaunchTime, $r.ZoneId) -Because "protoNames=$proto"
     }
+}
+
+Test-Case 'etcd:max_connections 按两种字段名解析,省略时为 0(没声明上限)' {
+    Reset-DrainFixture
+    $prefix = 'GateNodeService.rpc/zone/7/node_type/4/'
+    foreach ($proto in @($false, $true)) {
+        $json = ConvertTo-EtcdJson @(
+            (New-EtcdGate -NodeId 3 -Ip '10.0.0.11' -Uuid 'a' -Players 1200 -MaxConnections 20000 -ProtoNames:$proto),
+            (New-EtcdGate -NodeId 4 -Ip '10.0.0.12' -Uuid 'b' -Players 5 -ProtoNames:$proto))
+        $records = ConvertFrom-GateEtcdRecords -Json $json -Prefix $prefix
+        Assert-Equal -Expected '1200|20000' -Actual ("{0}|{1}" -f $records[0].PlayerCount, $records[0].MaxConnections) -Because "protoNames=$proto:自报上限原样读出"
+        Assert-Equal -Expected '5|0' -Actual ("{0}|{1}" -f $records[1].PlayerCount, $records[1].MaxConnections) -Because "protoNames=$proto:字段省略 = 没声明上限"
+    }
+}
+
+Test-Case '容量估算:水位口径与 login 的 gatepick 一致,装不下时给出缺口,有 gate 没声明上限时不估' {
+    Reset-DrainFixture
+    $c = Get-GateDrainContract
+    $eligibilityGo = Read-RepoText 'go/shared/gatepick/eligibility.go'
+    Assert-Match -Text $eligibilityGo -Pattern ("(?m)^const FullPercent = {0}\s*$" -f $c.GateFullPercent) -Because '水位百分比必须与 login 挑 gate 用的 FullPercent 一致'
+    $capacityGo = Read-RepoText 'go/shared/gatepick/capacity.go'
+    Assert-Match -Text $capacityGo -Pattern 'return \(uint64\(maxConnections\)\*FullPercent \+ 99\) / 100' -Because '水位 = ceil(上限 × 百分比 / 100),本脚本照这条整数算法'
+
+    $peer = { param([uint32]$Id, [uint32]$Players, [uint32]$Max) [pscustomobject]@{ NodeId = $Id; PlayerCount = $Players; MaxConnections = $Max } }
+    # 上限 20000 → 水位 18000;上限 15 → 水位 ceil(13.5) = 14;已过水位的记 0,不出现负数。
+    $bounded = Get-GateDrainPeerHeadroom -Peers @((& $peer 4 17000 20000), (& $peer 5 10 15), (& $peer 6 19500 20000))
+    Assert-Equal -Expected 'True|1004|3' -Actual ("{0}|{1}|{2}" -f $bounded.Bounded, $bounded.Headroom, $bounded.PeerCount) -Because '(18000-17000) + (14-10) + 0'
+    $fits = Format-GateDrainCapacityLine -Capacity $bounded -Online 1004
+    Assert-True -Condition (-not $fits.Short) -Because '余量恰好等于在线数:装得下'
+    Assert-Match -Text $fits.Text -Pattern 'about 1004 more before their 90% watermark, so everyone fits' -Because '装得下时的说明'
+    $short = Format-GateDrainCapacityLine -Capacity $bounded -Online 4500
+    Assert-True -Condition $short.Short -Because '在线数超过余量:装不下,调用方按 WARNING 打'
+    Assert-Match -Text $short.Text -Pattern 'peer capacity is SHORT: 4500 online here' -Because '缺口说明带在线数'
+    Assert-Match -Text $short.Text -Pattern 'About 3496 player\(s\) will find no migration target' -Because '缺口 = 4500 - 1004'
+
+    $unbounded = Get-GateDrainPeerHeadroom -Peers @((& $peer 4 17000 20000), (& $peer 5 3 0))
+    Assert-Equal -Expected 'False|2' -Actual ("{0}|{1}" -f $unbounded.Bounded, $unbounded.PeerCount) -Because '有一台没声明上限(dev、旧版 gate):无从封顶'
+    $note = Format-GateDrainCapacityLine -Capacity $unbounded -Online 999999
+    Assert-True -Condition (-not $note.Short) -Because '估不出来不告警:不能凭一个算不出的数说装不下'
+    Assert-Match -Text $note.Text -Pattern 'peer capacity: not estimated' -Because '说明为什么没估'
 }
 
 Test-Case '同 zone 候选:按 login 口径选地址、去重;一台别的候选都没有就拒绝' {

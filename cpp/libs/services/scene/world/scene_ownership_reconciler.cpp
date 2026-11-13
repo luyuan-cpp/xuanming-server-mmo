@@ -440,13 +440,16 @@ bool SceneOwnershipReconciler::SendOwnerRead(hiredis::Hiredis &redis, const std:
 											 const std::string &selfUuid, scene_ownership::Clock::time_point issuedAt,
 											 const std::shared_ptr<scene_ownership::ReleaseBudget> &budget)
 {
-	// MGET <本节点号持有者> scene:{id}:node ...:键名按长度传参,不经格式串。
+	// MGET <本节点号持有者> scene:{ctl:<z>}:<id>:node ...:键名按长度传参,不经格式串。
+	// 全部按本节点的 zone 拼(与 holderKey 同一个 tag,同槽,docs/design/redis-cluster-all-domains-20261110.md §3.4):
+	// 本节点只承载本 zone 的场景。
 	std::vector<std::string> keys;
 	keys.reserve(batch.size() + 1);
 	keys.push_back(holderKey);
+	const std::uint32_t zoneId = GetZoneId();
 	for (const auto &check : batch)
 	{
-		keys.push_back(scene_ownership::SceneNodeKey(check.sceneId));
+		keys.push_back(scene_ownership::SceneNodeKey(zoneId, check.sceneId));
 	}
 	static constexpr char kMget[] = "MGET";
 	std::vector<const char *> argv;

@@ -34,7 +34,8 @@ namespace gate_login_admission
 
 // 发出前要求本连接已成功 Login 的方法。Login 本身、RefreshToken(凭 refresh token 自证)不在其中;Disconnect 也不在,
 // 它只由 gate 合成、客户端发不进来(见 IsGateSynthesizedOnly)。login 侧的 CreatePlayer / EnterGame 读的就是本连接的登录态;
-// LeaveGame 在 login 侧不读登录态(在游戏里待满 SessionExpireMin 后登录态已过期,读了会误拒正常登出),只能在 gate 这一层要求。
+// LeaveGame 在 login 侧不读登录态(gate 会为活着的连接续租登录态,但续租连续失败超过 SessionExpireMin 时它仍会过期,
+// 读了会误拒正常登出),只能在 gate 这一层要求。
 inline bool RequiresSuccessfulLogin(uint32_t messageId)
 {
 	return messageId == ClientPlayerLoginCreatePlayerMessageId ||
@@ -80,6 +81,8 @@ inline bool IsLoginReplySuccess(const ::google::protobuf::Message &reply)
 //     清登录态、给绑定的角色挂断线租约。客户端自己发等于在连接还活着时把 login 侧的会话状态切成「已断线」,gate 却还当它在线。
 //   - RequestGateMigration:gate 排空时自己合成(drain_migration.cpp 经 SendGateMigrationRequest 发),应答只给 gate 用来推 124
 //     (docs/design/gate-drain-session-migration.md §4.3)。客户端自己发就能绕开 gate 的迁移限速与选人条件,直接拿到一张换 gate 的票。
+//   - RenewSession:gate 为仍然连着的连接定期合成(login_session_renewal.cpp 经 SendLoginSessionRenewRequest 发),应答只给 gate
+//     用来排下一次续租(docs/design/gate-online-identity.md §10.4)。续租的节奏由 gate 按 login 给的间隔控制,不接受客户端自己发。
 //
 // 客户端入口按「未知 / 未授权消息号」拒绝它们(计非法包、不回包)。这道判定手写、不依赖生成物:生成的上行白名单
 // IsClientMessageId 按服务收号,它们所在的 ClientPlayerLogin 标了 OptionIsClientProtocolService,曾经一直在白名单里;
@@ -88,7 +91,8 @@ inline bool IsLoginReplySuccess(const ::google::protobuf::Message &reply)
 inline bool IsGateSynthesizedOnly(uint32_t messageId)
 {
 	return messageId == ClientPlayerLoginDisconnectMessageId ||
-		   messageId == ClientPlayerLoginRequestGateMigrationMessageId;
+		   messageId == ClientPlayerLoginRequestGateMigrationMessageId ||
+		   messageId == ClientPlayerLoginRenewSessionMessageId;
 }
 
 // 会话当前绑定的角色是否有效:BindSession(或先到的路由)把角色写进会话之后、客户端 LeaveGame 之前。

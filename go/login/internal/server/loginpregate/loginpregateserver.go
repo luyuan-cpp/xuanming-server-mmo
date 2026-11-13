@@ -2,9 +2,9 @@
 // goctl 1.8.5
 // Source: login.proto
 //
-// NOTE: QueryQueueStatus method handler added by hand alongside the proto
-// extension in proto/login/login.proto. When goctl regenerates this file,
-// preserve the QueryQueueStatus method below.
+// NOTE: QueryQueueStatus and GetZoneRoleCount method handlers added by hand
+// alongside the proto extensions in proto/login/login.proto. When goctl
+// regenerates this file, preserve both methods below.
 
 package server
 
@@ -40,4 +40,11 @@ func (s *LoginPreGateServer) AssignGate(ctx context.Context, in *login.AssignGat
 func (s *LoginPreGateServer) QueryQueueStatus(ctx context.Context, in *login.QueryQueueStatusRequest) (*login.QueryQueueStatusResponse, error) {
 	l := loginpregatelogic.NewQueryQueueStatusLogic(ctx, s.svcCtx)
 	return l.QueryQueueStatus(in)
+}
+
+// GetZoneRoleCount answers how many characters this zone has ever created
+// (data_service.CountZoneRoles). The gateway's role-capacity guard polls it.
+func (s *LoginPreGateServer) GetZoneRoleCount(ctx context.Context, in *login.ZoneRoleCountRequest) (*login.ZoneRoleCountResponse, error) {
+	l := loginpregatelogic.NewGetZoneRoleCountLogic(ctx, s.svcCtx)
+	return l.GetZoneRoleCount(in)
 }

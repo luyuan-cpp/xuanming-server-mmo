@@ -14,6 +14,7 @@ import (
 	"login/internal/config"
 	"login/internal/logic/pkg/auth"
 	"login/internal/logic/pkg/token"
+	"shared/authoritysql"
 	"shared/playerredis"
 	"shared/sqlpoolstats"
 )
@@ -22,7 +23,7 @@ import (
 // login 只有这一个 SQL 池,只在打开 PasswordAuth 时存在。
 const passwordAuthPool = "password_auth"
 
-// InitAuthProviders 按显式配置注册认证器。生产口令认证只读权威 MySQL 中的
+// InitAuthProviders 按显式配置注册认证器。生产口令认证只读权威 SQL(mmorpg 库,tidb 或 mysql 档)中的
 // Argon2id 哈希；没有显式启用时仍 fail-closed。开发共享密钥认证与生产认证
 // 互斥，避免配置合并时把弱入口带进生产。
 func InitAuthProviders() (cleanup func()) {
@@ -44,7 +45,7 @@ func InitAuthProviders() (cleanup func()) {
 	}
 
 	if productionPassword.Enabled {
-		provider, closeProvider, err := productionPasswordProviderFromConfig(productionPassword, config.AppConfig.EffectiveLoginRedis(), os.LookupEnv)
+		provider, closeProvider, err := productionPasswordProviderFromConfig(productionPassword, config.AppConfig.Mode, config.AppConfig.EffectiveLoginRedis(), os.LookupEnv)
 		if err != nil {
 			panic(fmt.Sprintf("initialize PasswordAuth provider: %v", err))
 		}
@@ -59,7 +60,7 @@ func InitAuthProviders() (cleanup func()) {
 			}
 			return []sqlpoolstats.Sample{{Pool: passwordAuthPool, Stats: stats}}
 		})
-		logx.Info("Production password auth registered (authoritative MySQL Argon2id, read-only)")
+		logx.Info("Production password auth registered (authoritative SQL, Argon2id, read-only)")
 	}
 	if devPassword.Enabled {
 		if err := validateDevelopmentPasswordMode(config.AppConfig.Mode); err != nil {
@@ -145,18 +146,51 @@ func passwordQuotaRedisConfig(loginRedis playerredis.Config) playerredis.Config 
 	return loginRedis
 }
 
-func productionPasswordProviderFromConfig(conf config.PasswordAuthConf, loginRedis playerredis.Config, lookup func(string) (string, bool)) (*auth.ProductionPasswordProvider, func(), error) {
+// passwordAuthority 是口令凭据库的档位与库名,由 passwordAuthorityFromConfig 从配置解析并核对。
+type passwordAuthority struct {
+	backend  authoritysql.Backend
+	database string
+}
+
+// passwordAuthorityFromConfig 解析口令凭据库的档位与库名,不读环境变量、不连库。
+//   - 档位:tidb | mysql,没写按 tidb(authoritysql.ParseBackend)。
+//   - 库名:没写取 auth.PasswordAuthDatabase。生产(非 dev / test,判据同 config.IsRelaxedMode)只接受这个值:
+//     口令凭据全服一份,放在 login 登记写者资格的那个库,不许指到存档库里那张同名旧表上(理由见 auth/password_schema.go)。
+//     dev / test 可以指到夹具库。DSN 里的库名是否与它一致由 authoritysql.Open 核对。
+func passwordAuthorityFromConfig(conf config.PasswordAuthConf, mode string) (passwordAuthority, error) {
+	backend, err := authoritysql.ParseBackend(conf.Backend)
+	if err != nil {
+		return passwordAuthority{}, fmt.Errorf("PasswordAuth.Backend: %w", err)
+	}
+	database := conf.Database
+	if database == "" {
+		database = auth.PasswordAuthDatabase
+	}
+	if database != auth.PasswordAuthDatabase && !config.IsRelaxedMode(mode) {
+		return passwordAuthority{}, fmt.Errorf("PasswordAuth.Database must be %q outside dev/test mode, got %q", auth.PasswordAuthDatabase, database)
+	}
+	return passwordAuthority{backend: backend, database: database}, nil
+}
+
+// productionPasswordProviderFromConfig 装配生产口令认证器。mode 是进程的运行模式(go-zero 的 Mode),只用来决定口令库名能不能偏离
+// auth.PasswordAuthDatabase。顺序:先做不碰外部依赖的校验(失败配额、档位与库名),再读 DSN、连库、连配额 Redis。
+func productionPasswordProviderFromConfig(conf config.PasswordAuthConf, mode string, loginRedis playerredis.Config, lookup func(string) (string, bool)) (*auth.ProductionPasswordProvider, func(), error) {
 	if err := conf.ValidateFailureQuota(); err != nil {
+		return nil, nil, err
+	}
+	authority, err := passwordAuthorityFromConfig(conf, mode)
+	if err != nil {
 		return nil, nil, err
 	}
 	dsn, err := passwordAuthDSNFromConfig(conf, lookup)
 	if err != nil {
 		return nil, nil, err
 	}
-	store, err := auth.NewSQLPasswordHashStore(dsn, conf.MaxOpenConns, conf.MaxIdleConns)
+	store, err := auth.NewSQLPasswordHashStore(context.Background(), dsn, authority.backend, authority.database, conf.MaxOpenConns, conf.MaxIdleConns)
 	if err != nil {
 		return nil, nil, err
 	}
+	logx.Infof("Password auth authority pool ready database=%s backend=%s max_open=%d", authority.database, authority.backend, conf.MaxOpenConns)
 	rdb, err := playerredis.New(passwordQuotaRedisConfig(loginRedis))
 	if err != nil {
 		_ = store.Close()

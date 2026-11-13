@@ -84,9 +84,7 @@ func lateCompleteAfterAbort(t *testing.T, s *Store, f *pb.MatchFormationRecord) 
 	decision, err := s.CommitBattleOutcome(ctx, &pb.CommitBattleOutcomeRequest{BattleId: f.BattleId, PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId, RawResultPayload: raw})
 	require.NoError(t, err)
 	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, decision)
-	var sources int
-	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_battle_settlement_source WHERE battle_id=?", f.BattleId).Scan(&sources))
-	require.Zero(t, sources, "作废的局没有任何个人结算来源")
+	requireOnlyVoidSources(t, s, f.BattleId, len(f.Members))
 }
 
 func requireStartedAndOccupied(t *testing.T, s *Store, battleID uint64, tickets []*pb.MatchAuthorityTicketRecord, why string) {

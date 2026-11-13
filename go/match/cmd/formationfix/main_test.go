@@ -87,17 +87,17 @@ func TestFormationfixArgumentsRejectedBeforeAnyCall(t *testing.T) {
 	}
 	for name, args := range map[string][]string{
 		"缺 endpoint":        {"show", "-battle", "42"},
-		"未知子命令":              {"-endpoint", "127.0.0.1:1", "purge"},
-		"show 缺 battle":      {"-endpoint", "127.0.0.1:1", "show"},
-		"list 条数越界":          {"-endpoint", "127.0.0.1:1", "list", "-limit", "101"},
-		"abort 缺操作人":         replace("-operator", ""),
-		"abort 操作人含控制字符":     replace("-operator", "ops\nalice"),
-		"abort 缺依据":          replace("-reason", "  "),
-		"abort 依据超长":         replace("-reason", strings.Repeat("x", 192)),
+		"未知子命令":             {"-endpoint", "127.0.0.1:1", "purge"},
+		"show 缺 battle":     {"-endpoint", "127.0.0.1:1", "show"},
+		"list 条数越界":         {"-endpoint", "127.0.0.1:1", "list", "-limit", "101"},
+		"abort 缺操作人":        replace("-operator", ""),
+		"abort 操作人含控制字符":    replace("-operator", "ops\nalice"),
+		"abort 缺依据":         replace("-reason", "  "),
+		"abort 依据超长":        replace("-reason", strings.Repeat("x", 192)),
 		"abort 摘要不是 64 位小写": replace("-expect-digest", strings.ToUpper(fixtureDigest)),
-		"abort 缺目标":          replace("-expect-target", ""),
-		"abort 二次确认不符":       replace("-confirm", "43"),
-		"abort 多余位置参数":       abortArgs("extra"),
+		"abort 缺目标":         replace("-expect-target", ""),
+		"abort 二次确认不符":      replace("-confirm", "43"),
+		"abort 多余位置参数":      abortArgs("extra"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness()

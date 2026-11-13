@@ -40,7 +40,8 @@ namespace gate_router_muduo
 bool SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardRequest &request,
                  const std::string &sessionDetailsBin);
 
-// gate 自己要处理应答的转发(排空迁移的 ClientPlayerLogin.RequestGateMigration,docs/design/gate-drain-session-migration.md §4.3)。
+// gate 自己要处理应答的转发(排空迁移的 ClientPlayerLogin.RequestGateMigration,docs/design/gate-drain-session-migration.md §4.3;
+// 登录态续租的 ClientPlayerLogin.RenewSession,docs/design/gate-online-identity.md §10.4)。
 // 与 SendForward 同一份请求构造(:path、两层 base64 的会话 metadata、调用方签名、截止),区别只在完成之后:
 // 不进回包桥、不推给客户端,把路由服回的 MessageContent 交给 done;调用失败、应答解析失败或签名失败时交 nullptr。
 // done 恰好被调用一次,在 gate 的 EventLoop 线程上;签名失败时同步调用。

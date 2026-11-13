@@ -71,6 +71,14 @@ on:
       - "cpp/libs/engine/muduo_windows/src/contrib/hiredis/**"
       - "tools/archived/muduo_linux_overlay/contrib/hiredis/**"
       - "third_party/muduo/contrib/hiredis/**"
+      - "cpp/libs/engine/muduo_windows/src/muduo/net/Acceptor.*"
+      - "cpp/libs/engine/muduo_windows/src/muduo/net/SocketsOps.cc"
+      - "tools/archived/muduo_linux_overlay/muduo/net/Acceptor.*"
+      - "tools/archived/muduo_linux_overlay/muduo/net/SocketsOps.cc"
+      - "third_party/muduo/muduo/net/Acceptor.*"
+      - "third_party/muduo/muduo/net/SocketsOps.cc"
+      - "cpp/libs/engine/core/node/system/node/process_fd_metrics.h"
+      - "deploy/observability/alloy/config.alloy"
   pull_request:
     branches: [main]
     paths:
@@ -142,6 +150,19 @@ on:
       - "cpp/libs/engine/muduo_windows/src/contrib/hiredis/**"
       - "tools/archived/muduo_linux_overlay/contrib/hiredis/**"
       - "third_party/muduo/contrib/hiredis/**"
+      # muduo Acceptor 的 accept 失败降级同样有三份副本(Windows 编译件、Linux overlay、业务 include 的头文件镜像):
+      # 头文件镜像与编译件不一致时类布局对不上,链接照样成功、运行期才出错,由 muduo_acceptor_copies_contract.tests.ps1 守住
+      - "cpp/libs/engine/muduo_windows/src/muduo/net/Acceptor.*"
+      - "cpp/libs/engine/muduo_windows/src/muduo/net/SocketsOps.cc"
+      - "tools/archived/muduo_linux_overlay/muduo/net/Acceptor.*"
+      - "tools/archived/muduo_linux_overlay/muduo/net/SocketsOps.cc"
+      - "third_party/muduo/muduo/net/Acceptor.*"
+      - "third_party/muduo/muduo/net/SocketsOps.cc"
+      # C++ 节点 fd 与 accept 降级指标的名字:告警规则按名字引用,由 cpp_node_resource_alerts_contract.tests.ps1 对照
+      - "cpp/libs/engine/core/node/system/node/process_fd_metrics.h"
+      # 本机 Alloy 的解析规则:k8s 上的 C++ sidecar 与容器日志 DaemonSet 照搬它,两边逐段一致由
+      # k8s_log_collection_contract.tests.ps1 核对。只改本机那份时不重跑,集群上的规则会悄悄落后
+      - "deploy/observability/alloy/config.alloy"
   workflow_dispatch:
 
 permissions:

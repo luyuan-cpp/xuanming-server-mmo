@@ -151,7 +151,7 @@ match 副本形态不变（RPC 前端 + 写者 + formation 执行者），共连
 
 ### 5.2 池归属（取代原"租约"）
 
-- 归属键 `(模式, 模板)` 编码为 `模式:模板`，用最高随机权重哈希（rendezvous / HRW）在成员表上选主。`internal/poolowner.Owner/Owns` 委托 `shared/workshard`，与 player_inbox、trade 共用打分实现：`SHA-256(成员 + NUL 字节 + 键)` 的前 8 字节按大端序取 `uint64`，分数最高者负责，同分取字典序较小的成员。结果与成员顺序无关；各服务仍各自维护成员表。
+- 归属键是撮合段的键（2026-11-12 起，见本节末「热池拆分」与 §5.2.1；原先一个 `(模式, 模板)` 一个键，编码为 `模式:模板`），用最高随机权重哈希（rendezvous / HRW）在成员表上选主。`internal/poolowner.Owner/Owns` 委托 `shared/workshard`，与 player_inbox、trade 共用打分实现：`SHA-256(成员 + NUL 字节 + 键)` 的前 8 字节按大端序取 `uint64`，分数最高者负责，同分取字典序较小的成员。结果与成员顺序无关；各服务仍各自维护成员表。
 - 2026-11-06 替换旧 FNV-1a 打分，修复短数字后缀的归属集中。此次算法切换会重新分配池与后台分片；项目尚未上线，归属不写入持久数据，无需数据迁移。固定新算法后，增成员只把部分键交给新成员，减成员只重分配原属该成员的键；固定样本的分散回归不承诺任意成员集合、任意键都均匀分配。成员生命周期以及未同步、空表时的处理保持下述规则。
 - 本实例注册成功后才进入成员表（`SetPoolMember`），关机注销前先退出。
 - **一条归属规则管全部后台工作（2026-11-06，未编译；缺口清单第 24 条）**：`svc.OwnsWork(key)`，撮合池与下面几项按片分工的工作共用。成员表为空（watch 还没同步，或 etcd 一直起不来）时全部副本都做，保活优先；成员表非空、但本实例不在其中时什么都不负责。归属只管分工，正确性都在各自的 SQL 提交点。
@@ -164,19 +164,98 @@ match 副本形态不变（RPC 前端 + 写者 + formation 执行者），共连
     - **终局发件箱**（`PublishBattleOutcomes`，2026-11-10 落码，未编译；缺口清单第 25 条）：整局结果（`match_battle_completion`，一局一行、没有 `player_id` 列）片号 = `battle_id`，键 `outcome-result`；个人结算（`match_battle_settlement_source`，首投与等待两页共用）片号 = `player_id`，键 `outcome-settlement`。条件在 `LIMIT` 之前，分片列都在扫描索引里。原先每个副本每 2 秒读同一个到期队头、在 `next_retry_ms` 认领 CAS 上空撞。积压读数与按票的 `SettlementLookupDue` 不分片。设计与验证见 [assetop-redelivery-sharding-20261110.md](assetop-redelivery-sharding-20261110.md) §2.5、§8。
   - **不在这条规则里**：到期终局恢复（`RecoverExpiredOutcomeLane`）由数据覆盖审计会话按车道轮转，所有副本都跑，同一成局靠行锁只写一份终局（两套做法互不依赖）。
 - 原计划的 `recovery_shard` 列与"提交前核对租约"的软围栏随租约表一起不做；成局推进改用 `battle_id` 取模，不需要新列。
-- **热池仍是单写者**：一个池只归一个副本，热池上限就是单副本能力（每轮一页、至多 8 个提交事务并发）。拆法（按首选机房拆本机房阶段、跨机房阶段单写）要有压测证据再做，见 §5.6 第 1 条。
-- **热池拆分定案方向（2026-11-11，缺口清单第 24 条；负责人 11-11 要求不等压测、现在定案）**。两级都只改「谁读哪一段票」，提交点（`claimTx` 的玩家锁、票行锁与 CAS）不变，§5.5 的正确性论证不变：
-  1. **本机房阶段按首选机房拆写者**：归属键加机房，（模式，模板，人数，机房）各归一个副本。本机房阶段本来就只把首选机房相同的人组在一起（§3.3），拆开不损匹配质量；跨机房阶段仍是（模式，模板，人数）一个写者，只读等满 `CrossRegionWaitSeconds` 的票。多机房部署时本机房阶段的吞吐随机房数扩。
-  2. **机房内再按玩家打散成 K 个子池**：只按机房拆，单机房部署仍是单写者，不满足「加机器就涨吞吐」。热门模板配置 K（缺省 1 = 不拆），子池写者只撮合入队不满一个合并时长的票，之后回到机房池由一个写者统一撮合。代价是前几秒候选人少 K 倍，只落在配置了 K > 1 的热门模板上。
-  - 存储：票与整队原件各加「首选机房」「子池号」两列，入队时写定，池索引按它们做前缀。首选机房按入队时的完整签名探测算，之后探测变了不改列，提交点照旧按现算复核（`store.go` 的机房校验）。11-05 退役的 `preferred_region` 列与两张投影表不复活：新列只给读页用，没有投影副本要保持一致。
+- **热池拆分（2026-11-12 落码，未生成、未编译；缺口清单第 24 条）**：一个池不再只归一个副本。本机房阶段按首选机房拆成机房段，热门模板再按玩家拆成 K 个子池段；跨机房阶段每个池一个跨机房段。每段一个归属键，照旧走 `svc.OwnsWork`。两级都只改「谁读哪一段票」，提交点（`claimTx` 的玩家锁、票行锁与 CAS）不变，§5.5 的正确性论证不变。细化见 §5.2.1，验证见 §12.8。
+  - 方向由「缺口清单压测项：统一压测方案与定案」会话 11-11 定（负责人当天要求不等压测、现在定案）：本机房阶段本来就只把首选机房相同的人组在一起（§3.3），按机房拆不损匹配质量，多机房部署时这一阶段的吞吐随机房数扩；单机房部署只按机房拆仍是单写者，不满足「加机器就涨吞吐」，所以热门模板再分 K 个子池，代价是前几秒候选人少 K 倍，只落在配置了 K > 1 的模板上。
+  - 细化时与方向稿不同的两处（理由见 §5.2.1 第 5、6 条）：子池号不落列，按 `player_id`（整队取发起者）取模、在索引项上过滤；首选机房列在探测刷新时跟着新原件重算，不是入队后就不再变。
   - 没选的做法：只调大单写者的提交并发（现在 8）是纵向扩，不随机器数涨，只作调参；内存撮合仍按 §5.6 的条件另议。
-  - 落码另开会话：match 模块同时有多个会话的未提交改动（`store.go`、`schema.go`、`work_owner.go` 等），要先把键的枚举、阶段与子池的切换时刻、指标、混版本行为写成细化设计，再分批落码。
+
+#### 5.2.1 热池拆分细化（2026-11-12，未生成、未编译）
+
+**1. 撮合段与归属键**（`internal/poolowner/segments.go`：`Segments`、`Segment.Key`、`Segment.Window`）
+
+| 段（指标 role） | 归属键 | 枚举 | 读哪些排队单位 | 跑哪些阶段（`poolgroup.Passes`） |
+|---|---|---|---|---|
+| 整池段 `pool` | `pool:模式:模板:人数` | 每组只有 1 人的池（PVE_SOLO、PVE_TEAM 1 人档） | 全池 | 先本机房、再跨机房（与拆分前相同） |
+| 机房段 `region` | `pool:模式:模板:人数:region:机房` | 其余每个池 × 机房列表里每个机房 | 首选机房列等于该机房；模板配了子池（K > 1）时只读等满合并时长的 | 只跑本机房阶段 |
+| 子池段 `sub` | `pool:模式:模板:人数:region:机房:sub:k` | K > 1 的模板：每个池 × 每个机房 × k = 0..K−1 | 首选机房列等于该机房、子池号为 k、入队不满合并时长 | 只跑本机房阶段 |
+| 跨机房段 `cross` | `pool:模式:模板:人数:cross` | 每个拆开的池一个 | 不分机房，等满 `CrossRegionWaitSeconds` 的 | 先跑本机房阶段占位（不提交），再跑跨机房阶段，只提交跨机房阶段的组 |
+
+- 每组 1 人的池不拆：组里没有陌生人，写者只是入队即时成局（§5.4）的兜底，即时成局本来就分散在处理入队请求的各副本上。按机房拆反而有坑：首选机房的节点全部下线时没有机房段会读这些票，满员单位「首选机房没节点就立即换机房」（D3）就没人做了。
+- 归属键带上人数档。原来按 `(模式, 模板)` 归属，同一模板的各人数档在一个副本上，理由是「为以后跨档合池留接口」（§2）；跨档合池在 §10 里不做，热池又常常就是一个模板的一个人数档，按模板归属会把这个模板的各档压在同一个副本上。`catalog.OwnerKey` 随之删掉。
+- 键都以 `pool:` 开头，与 `authority/work_owner.go` 的后台工作键（`formation:`、`team-launch:` 等）分开。
+
+**2. 机房列表**：本副本 stable battle 节点镜像（`BattleNodes`，etcd `BattleNodeService` 注册）里出现的 `physical_region`（非 0），不看可分配状态，也不扣本地熔断。
+
+- 各副本 watch 同一个前缀，看到的是同一份注册信息，与成员表同口径；watch 延迟期间短暂不一致，只会让某一段这一拍没人做或两个副本都做。
+- 不用可分配机房（`Placement.Regions`）枚举：它扣掉了本副本的本地熔断，各副本不同；负责某机房段的副本恰好熔断了那个机房的节点，就会整段跳过。成组时照旧只往可分配机房放（`poolgroup.Form` 的 regions 参数）。
+- 探测计划（`GetNetworkProbePlan`）从同一份镜像取目标机房，所以票上的首选机房都在列表里。例外是那个机房的节点之后全部下线：它的单位本来就成不了本机房组（本机房阶段要求首选机房可分配，§4 第 3 条），等满跨机房阈值后由跨机房段放到别的机房，与拆分前相同。整队成员首选机房不一致时首选机房列是 0，同理只有跨机房段读它（这样的单位本来也只能参加跨机房阶段，见 `poolgroup.Unit.Preferred`）。
+- 列表为空（还没有 battle 节点注册）时只剩跨机房段；这时本来就无处放置。
+
+**3. 两个阶段的切分**：记 W = `CrossRegionWaitSeconds`，M = `SubPoolMergeSeconds`，K = 模板的子池数，now = 本轮读一次的数据库时钟。
+
+- 机房段：K = 1 读首选机房为 R 的全部单位；K > 1 只读 `enqueued_ms ≤ now − M`。子池段：读首选机房为 R、子池号为 k、`enqueued_ms > now − M`。跨机房段：读 `enqueued_ms ≤ now − W`，不分机房。
+- 机房段与子池段按入队时刻分开，只在两个副本的本轮时钟不同时，边界上重叠几百毫秒。跨机房段读的老票也在机房段的页里，两段可能同时选中同一张票，由提交点裁决（§5.5），输的一方回滚，多一次冲突。
+- 跨机房段先在自己的页上照原顺序跑一遍本机房阶段，成的组不提交，只是把能在首选机房凑成组的老票让给机房段（`poolgroup.PassesCross`），再在剩下的单位上跑跨机房阶段。这保留了拆分前「同一页先本机房、再跨机房」的优先级：跨机房段只提交拆分前也只能跨机房成的组。
+- 仍会撞车的情形，以及为什么不另加机制（2026-11-12 定案）：老票 A 只能和机房段页里的新票凑本机房组，同时跨机房段能把 A 和别的机房的老票凑跨机房组。这要求两种机会**在同一轮里同时出现**：A 若早就有本机房的机会，机房段在 A 等满 W 之前就把它组走了；A 若早就有跨机房的机会，跨机房段在它等满 W 的那一轮就组走了。所以只有「新票刚到」与「另一个机房刚有票等满 W」落在同一轮时才撞，谁先提交谁成局、输的一方回滚，不会成错局。拆分前的单写者遇到同一轮的两种机会会先选本机房；拆分后是先提交者赢，只差在这一种同轮巧合上。为它在跨机房段里再读各机房的新票、或给老票加预留写，都会把读量或写量加回去，不值得。撞车的比例看 G4 表（第 8 条）。
+- 新票（等待 < W）在跨机房阶段本来就当不了锚点、也当不了候选（§4 第 3 条），跨机房段不读它们不丢任何组。
+- 合并时长必须小于 W（配置校验），所以进入跨机房阶段的票都已经回到机房段。
+
+**4. 跨机房段的翻页**：沿用 §5.3 第 2、3 条，按 `(enqueued_ms, player_id)` keyset 翻页，走原池索引 `(state,mode,config_id,team_size,team_id,enqueued_ms,player_id)`，条件是 `enqueued_ms ≤ now − W` 加 `(enqueued_ms, player_id) > 游标`。整页一组都没成才翻到下一页，读到区间尾或成了组就回队首。区间上界每轮随时钟前移，新等满 W 的票接在尾部，不用另记位置。整队照旧从队首读至多 64 支，条件同样是 `enqueued_ms ≤ now − W`：成员票与整队原件是同一个入队时刻（`EnqueueTeamLaunchTx`），单位的等待就是原件的等待。每段各有一个游标，只在本副本内存里，只用于调度。
+
+**5. 子池**
+
+- 配置：`GlobalMatch.SubPools` 按模板列出 `{Mode, ConfigId, Count}`，缺省为空 = 全部不拆；Count 1..64（1 = 不拆），同一模板只能写一行，只能写有多人池的模式（PVE_TEAM、1V1、5V5、PVP_TEAM）。合并时长 `GlobalMatch.SubPoolMergeSeconds` 缺省 5 秒，配了 K > 1 时须 ≥ 1 且小于 `CrossRegionWaitSeconds`。越界在加载配置时拒启；写了模板目录里没有的模板只打 ERROR、不拒启（它不起作用）。
+- 都不是提交点规则，不进全局策略指纹。滚动改配置时各副本的 K 可能短暂不同，只影响子池段的枚举：某个子池号一时没人读，这部分新票等满 M 后由机房段接着撮合，不会卡住。
+- 放 yaml 不放 PlayMode 表：K 和 M 是按负载调的调度参数；PlayMode 表管的是开放哪些入口、几个人，属于玩法数据。
+- 子池号 = 单排票的 `player_id`（整队取发起者 `actor_id`）对 K 取模，读页时在索引项上过滤（`MOD(player_id, K) = k`），**不落列**。与方向稿不同：它是主键的函数，存一份就是第二份真相（AGENTS §11.2 DRY）；不落列时改 K 也不用改数据。player_id 由发号器打散（AGENTS §7 不变量 1），取模足够均匀，与 `work_owner.go` 的 64 片同一个理由。
+- 代价：入队后的前 M 秒只能在 1/K 的新票里凑组；范围树前 10 秒只许同 zone（§3.2），这 M 秒里同 zone 的候选少 K 倍。配 K 的只该是候选本来就多的热门模板。
+- 只拆本机房阶段：跨机房阶段在 W 之后，早过了合并时长。
+
+**6. 存储**
+
+- 票表 `match_authority_ticket` 加字段 20、整队原件 `team_launch` 加字段 18，列名都是 `pool_region`（首选机房，uint32）。11-05 退役的票字段 17 `preferred_region` 仍是 reserved、不复用，两张投影表也不复活：新列不是投影副本，就在原件那一行上。
+- 单排票：`Join` 入队时按刚落库的探测原件算（`PreferredRegion(profile, now)`，与撮合、提交点同一个函数）；`CommitProfile` 刷新排队票的探测原件时，同一条 UPDATE 按新原件重算。
+  - 与方向稿「之后探测变了不改列」不同，理由：撮合与提交点判本机房都按当前原件现算的首选机房（§4、§5.5）。票的过期时刻就是回执里最早的过期时刻（`CommitNetworkProbe`），回执在票的有效期内全部有效，所以现算值只在原件被刷新时才变。列若不跟着改，首选机房变了的票会留在旧机房段的页里，和那一页的人都凑不成本机房组，只能等跨机房段；而客户端是在探测快过期时才重新探测的（robot 的 `networkProbeRefreshMargin`），这些恰恰是已经等得最久的票。跟着改只是同一条 UPDATE 多写一列，不多一次写入，列与原件始终一致，没有第二份要对账的副本。
+- 整队：`EnqueueTeamLaunchTx` 把原件改成排队态（state=2）的同一条 UPDATE 写入成员首选机房的共同值，成员不一致写 0（与撮合输入 `poolUnitInput` 的 Preferred 同一规则）。整队成员的探测原件入队后固定、不随单人探测刷新（`commitProfileOnce` 只刷 team_id=0 的票），所以值不再变。成员票上的这一列不写：单排读页只读 team_id=0 的票。
+- 回队（失败回队 `FinishFailed`、整队维护回队）不碰这一列：原件没变，值仍然对。直接开局（`reserveGroupTx`、`direct_admission.go`）的票在同一个事务里就被认领，从不以排队态可见，不写。
+- 这一列只给读页用：Go 侧读票的 `ticketColumns` / `teamLaunchColumns` 不带它（读出来恒为 0），提交点不读它；它也不是占用事实，不进 `TicketOccupiedSQL`。
+- 新索引，追加在原有索引之后（已有索引名不变）：
+  - 票：`(state,mode,config_id,team_size,team_id,pool_region,enqueued_ms,player_id)`；
+  - 整队：`(state,mode,config_id,target_size,pool_region,enqueued_ms,actor_id,request_high,request_low)`。
+  - 首选机房在等值前缀里，机房段顺着索引按入队序读。子池号不做前缀：做了前缀，机房段读一个机房的全部子池就要 K 路归并。子池段的 `MOD(player_id, K) = k` 在索引项上过滤（player_id / actor_id 本身是索引列），回表只取命中的行，代价是每轮最多扫「页大小 × K」个索引项，而且只扫入队不满 M 秒的那一截。
+  - 原池索引保留，给整池段与跨机房段用。票表的二级索引从 4 个变 5 个，排队态每变一次多维护一个索引项。
+  - `CheckCandidateIndexes` 核两条新索引，缺了拒启。
+
+**7. 提交点**：不变。`claimTx` 的玩家锁、票行锁与代次 / 状态 CAS，跨机房等待复核（`allPreferred`），`ClaimTeamUnits` 的机房与跨区等待校验，都按加锁读出的原票和数据库时钟现算，不读 `pool_region`。§5.5 的论证照旧成立：撮合段只决定谁读哪段票，两个段（或两个副本）同时选中同一张票时，只有一方的票行复核成功。
+
+唯一的配套改动在错误分类：票行复核失败（票已被别的段认领、撤单、回队退避、过期、探测原件刷新，或放置机房已不在硬延迟内）原来回一个普通错误，撮合侧当成结局未知，记一次排空 HOLD（`HoldRelay`）。拆分后跨机房段和机房段撞车是常态，这样每次排空都会停在 HOLD。改为哨兵 `authority.ErrClaimStale`（文案不变），归进 `expectedClaimRejection`：事务在提交之前就回滚了，什么都没写，结局是已知的。
+
+**8. 指标**
+
+- `match_pool_owned{role}`：本副本负责的撮合段数，role 取 pool / region / sub / cross。告警 `MatchPoolsUnowned`（`sum(match_pool_owned) == 0`）不用改；多副本冒烟的核对口径从「之和 = 池数」改成「之和 = 段数」。
+- 新增 `match_pool_segment_claim_total{role,outcome}`：按段角色计提交结果，outcome 与 `match_pool_claim_total` 相同。看冲突落在哪类段：cross 段的 conflict 偏高，说明跨机房段与机房段撞车多（第 3 条）。`stress_summarize.ps1` 的 G4 表按 role 出这两项（2026-11-12，钉名测试 `TestSegmentRolesMatchStressSummarize`）。
+- `match_pool_page_units{mode,team_size}` 改成本副本各本机房段（pool / region / sub）读到的可撮合单位数之和；跨机房段的页与机房段重叠，不计入。本轮不再负责的标签置 0。
+- `match_pool_round_seconds` 不变，一轮包含本副本的全部段。
+- 压测复核（[stress-gap-items-verification-20261111.md](../stress/stress-gap-items-verification-20261111.md) 第 24 条）照旧看 G1 的 rd/int 与 conflict%；G1 的 owned 列变成段数。
+
+**9. 混版本与上线前**：项目未上线，玩家数据可清空（负责人 2026-10-30）。
+
+- 新表结构清库重建：旧库缺 `pool_region` 时迁移器会补列（值为 0），但不会给已有表建新索引，`CheckCandidateIndexes` 拒启；照惯例清库后 `match -f <配置> -migrate`。
+- 新旧副本不混跑。真混跑了也不会成错局，只会变慢：旧副本不写 `pool_region`，它入队的票都在 0 上，只有跨机房段读得到，要等满 W；旧副本按 `(模式, 模板)` 归属、新副本按段归属，同一个池可能被两边同时撮合，多出提交冲突。
+
+**10. 定案（2026-11-12，负责人要求不留「以后再定」）**
+
+- 写者增量缓存与内存撮合：不做，见 §5.6。
+- K 与合并时长：缺省 K = 1（不拆）、M = 5 秒。哪个模板要拆，由运维看 G1 的 rd/int 与 G4 表在 `GlobalMatch.SubPools` 里配，改配置滚动生效、不改代码。这是调度参数，没有对比表之前不宣称吞吐提升（AGENTS §6）。
+- 跨机房段与机房段的撞车：不另加机制，推导见第 3 条；由提交点裁决，G4 表看比例。
+- 顺带改掉的两处（§6）：票表删两条没有读者的二级索引；整队读页从 `mode IN(5,0)` 改成 `mode=?`。
+- Java 版待做，只登记 PARITY（§13）。
 
 ### 5.3 写者一轮（按实现）
 
-1. 取本副本负责的池（`catalog.Pools()` 过滤归属）；读一次数据库时钟；可用机房 = battle 节点快照去掉本地熔断的节点。
-2. 每个池读一页单排票（`GlobalMatch.PoolPageSize`，默认 512，按 `(enqueued_ms, player_id)` keyset 翻页）与至多 64 支排队整队；页里已过期的单排票每池每轮至多 64 张按票号 CAS 置 4（`ExpireTickets`）。整队成员票过期仍由队伍维护整单撤队。
-3. 调 `poolgroup.Form` 得到候选组。整页一组都没成才翻到下一页，否则下一轮从队首重读，防止一页卡住的票挡住后面的人。
+1. 取本副本负责的撮合段（`poolowner.Segments` 枚举，`svc.OwnsWork` 过滤归属，§5.2.1）；读一次数据库时钟；可用机房 = battle 节点快照去掉本地熔断的节点。
+2. 每段读一页单排票（`GlobalMatch.PoolPageSize`，默认 512，按 `(enqueued_ms, player_id)` keyset 翻页，读哪一段见 §5.2.1 第 3 条）与至多 64 支排队整队；页里已过期的单排票每段每轮至多 64 张按票号 CAS 置 4（`ExpireTickets`，两段读到同一张时只有一边命中）。整队成员票过期仍由队伍维护整单撤队。
+3. 调 `poolgroup.Form` 得到候选组（机房段、子池段只跑本机房阶段，跨机房段只提交跨机房阶段的组）。整页一组都没成才翻到下一页，否则下一轮从队首重读，防止一页卡住的票挡住后面的人；每段各有一个游标。
 4. 每组先非阻塞占备战槽（`GlobalMatch.GatherSlots`，默认 256），占不到留到下一轮；本轮至多 8 个提交事务并发，给入队请求留数据库连接；整队先 `CheckParty` 复核，失效的整单撤队。
 5. 一轮总预算 3 秒（间隔取 `MatcherIntervalMs`，默认 500ms）。全部提交返回后本轮才结束，下一轮读到的已是提交后的状态，所以不需要"在途票"排除集。
 6. 未做：撮合前批量在线检查（改为肇事者剔除 + 票 TTL 兜底）；已禁用模板的票不主动撤（提交点拒绝、`CommitProfile` 不再续命，随 TTL 过期）；连接池拆分。
@@ -213,9 +292,10 @@ Join 事务提交后派一个后台任务（`claimImmediately`，3 秒预算，�
 ## 6. TiDB 热点治理（与 §5 同批或紧随）
 
 - **机房投影已退役（2026-11-05，未编译）**：`match_ticket_region`、`team_launch_region` 两张表连同写入（入队、成局、回队、取消、整队排队与维护）、只读投影的候选函数、投影修复函数，以及票上只为投影服务的 `preferred_region` 列（proto 字段 17 改 `reserved`）一并删除。第二批起撮合只读池索引，投影只写不读，留着等于每次入队、成局、回队、取消多写最多 16 行、多一套要保持一致的副本（AGENTS §11.5 第 3 条）。首选机房由撮合与提交点从 `network_profile` 现算（`authority.PreferredRegion`）。原先夹在整队投影写入里的整队原件校验（人数一致、票上 home 与原件一致、`requireTeamHomeGroupTx`）改为 `requireQueuedTeamGroupTx`，排队、维护、失败回队三处照旧调用。占用判定 `shared/matchentry` 去掉这一列，其余 14 项不变。旧库里的两张表与列迁移器不会删，清库重建（未上线，负责人已允许清空）。
-- 票表：读者迁走后删除 `formation_id`、`(state,enqueued_ms,player_id)`、`(state,mode,team_id,…)` 三个索引。
-- `match_formation`：改 NONCLUSTERED + SHARD_ROW_ID_BITS + PRE_SPLIT，与在途修复新增的列同批迁移（原计划的 `recovery_shard` 随租约表不做，见 §5.2）。
-- 条件项（有 KeyViz 或压测证据才做）：池索引按机房前缀拆分；热池按机房拆写者。
+- **票表二级索引（2026-11-12，未编译）**：删掉没有读者的 `formation_id` 与 `(state,mode,team_id,enqueued_ms,player_id)` 两条（全仓核过：票表的 UPDATE / DELETE 都按主键 `player_id`，不按主键的读只有撮合读页与已建房票巡检）。`(state,enqueued_ms,player_id)` 保留：已建房票巡检 `ReadyAfter` 按它给 state=3 的票翻页。加上 §5.2.1 新增的按首选机房索引，票表二级索引从 4 条变 3 条，排队态每变一次少维护一个索引项。索引名按位置生成（`idx_<表>_<序号>`），删了中间两条后面的序号会变，没有代码按名字引用；旧库清库重建。
+- **`match_formation` 主键不改 NONCLUSTERED（2026-11-12 定案）**：NONCLUSTERED + SHARD_ROW_ID_BITS + PRE_SPLIT 是给按时间递增的雪花主键防尾部写热点用的（TiDB 决策 D3）。`battle_id` 现在由发号器发、已经打散（AGENTS §7 不变量 1），聚簇主键的写入本来就散在各个 Region，不需要再打散。原计划的 `recovery_shard` 列随租约表不做（§5.2）。
+- **整队读页只认显式模式（2026-11-12，未编译）**：撮合读整队原件的条件从 `mode IN(5,0)` 改成 `mode=?`。`mode=0` 是旧原件按 PVE_TEAM 解释的写法，新原件由 `normalizeTeamMatchMode` 恒写 5；`IN` 两个值会让读页变成两段范围，TiDB 只能把这一段的整队全读出来再排序，读够一页就停不下来。项目未上线、清库重建，库里没有 `mode=0` 的原件；校验路径的 `TeamLaunchMode` 照旧兼容 0。
+- 池索引按首选机房前缀、热池按机房与子池拆写者：2026-11-12 已落码（§5.2.1，未编译），没有等 KeyViz 或压测证据（负责人 11-11 改口径「不用等压测数据了，先写完」）。
 
 ## 7. 模板目录
 
@@ -244,7 +324,7 @@ Join 事务提交后派一个后台任务（`claimImmediately`，3 秒预算，�
 - **评分按 `(player_id, mode)` 分开存**（R5，2026-11-05 已落码，未编译，待 Codex 验证，§12.6）：
   - 哪些模式计分只看 `ratingrule.Rated`（1V1、5V5、PVP_TEAM）。每个计分模式一条评分轨道：`match_rating` 主键 `(player_id, mode)`，分数和局数各算各的，打 1V1 不动 5V5 的分。PVP_TEAM 各档每侧人数共用一条轨道（与 R7 约定），和 1V1 是两条轨道。不计分的模式没有评分行，`Store.Rating`、`ApplyRating`、`StopRankSource` 收到它直接报错，不给缺省分。
   - **mode 同源**：单人入队读分用 JoinQueue 的 `mode`（已过模板白名单），整队入队的快照用队伍原件的 mode（`queueRatingCentiTx`，与单人入队同一条 SQL `authority.ratingCenti`）；5V5 蛇形分队用成局原件的 mode（`gather.teamAssignment`）；结算用结果的 `match_mode`。三处是同一个值：票的 mode → 成局原件 `mode` → `CreateBattleRequest.match_mode` → battle 回显到 `BattleResultEvent.match_mode`；新终局协议在 `CommitBattleOutcome` 提交点还核了结果的 mode 与持久建房原件、成局原件一致（`validateTerminalResult`）。点名成局（切磋、活动、整队直接开战）都不计分，票上的评分快照记 0，不为它读库。
-  - **榜按模式分开**：一张榜混进两种模式，批次的 `score_version`（这名玩家在本模式第几局）两边各数各的，1V1 的第 9 局会被 5V5 的第 3 局当成旧版本挡掉，或者把新分盖回旧分。所以每个计分模式一张榜：`match_rank_source` 主键 `(source_epoch, mode, shard)`、`match_rank_outbox` 主键 `(source_epoch, mode, shard, source_cursor)`，每个模式自己的 64 片，各片游标从 1 连续；发布循环按模式找（或打开）各自的榜，一个模式的榜打不开不拦别的模式。榜键 `board_type` 如下（其余固定为 GLOBAL、period `all`、第 1 代），是客户端契约（`GetRankPage` 按它找榜），两版服务器同值；唯一来源是 `authority.rankBoardTypes`，`TestRankBoardTypesCoverExactlyRatedModes` 钉住它与计分模式集合一一对应：
+  - **榜按模式分开**：一张榜混进两种模式，批次的 `score_version`（这名玩家在本模式第几局）两边各数各的，1V1 的第 9 局会被 5V5 的第 3 局当成旧版本挡掉，或者把新分盖回旧分。所以每个计分模式一张榜：`match_rank_source` 主键 `(source_epoch, mode, shard)`、`match_rank_outbox` 主键 `(source_epoch, mode, shard, source_cursor)`，每个模式自己的 64 片，各片游标从 1 连续；发布循环按模式找（或打开）各自的榜，一个模式的榜打不开不拦别的模式。榜键 `board_type` 如下（其余固定为 GLOBAL、period `all`、第 1 代），是客户端契约（`GetRankPage` 按它找榜），两版服务器同值。取值登记在 `proto/rank/rank.proto` 的 `RankBoardType`（2026-11-12 起；客户端与服务端都用生成常量，不写数字，已上线的值不改不复用）；哪个模式写哪张榜只看 `authority.rankBoardTypes`，`TestRankBoardTypesCoverExactlyRatedModes` 钉住它与计分模式集合一一对应、每个值都已在枚举里登记：
 
     | 模式 | board_type | 说明 |
     |---|---|---|
@@ -279,7 +359,12 @@ Join 事务提交后派一个后台任务（`claimImmediately`，3 秒预算，�
   - 战斗排队面板：4 人队的 5v5 档沿用已有的不可点样式；选中的档发不了时退回队伍人数那一档；提示行换成「4 人队可以打 4v4；5v5 需要 1～3 人或满 5 人。」这句文案没有设计稿依据，待设计确认。
   - 评分差上限要读成员的评分，客户端没有这份数据，只靠服务端回码提示。
   - EditMode 新增 `TeamClientTests` 两条：4 人队开 5v5 本地被拒、同一队开 4v4 正常发出；两个码各有自己的文案。
-  - 按模式的评分榜（board_type 2 / 3）客户端还没有入口：`RankClient` 只读 1V1 榜（board_type 1）。这是 R5 的残余，要先出界面设计。
+- 2026-11-12（R5 残余收口，Claude 写完，未生成、未编译）：`rank.proto` 新增枚举 `RankBoardType` 登记 `board_type` 取值（见 §8），`RankBoardKey.board_type` 仍是 uint32，线上取值不变。客户端论剑榜按模式分榜：
+  - 窗口标题右侧三个页签「PVP 匹配」「PVP 1v1」「PVP 5v5」（board_type 3 / 1 / 2），默认看 PVP_TEAM：客户端「匹配 PVP」入口只排 PVP_TEAM，玩家的评分在这张榜上；1V1 / 5V5 客户端没有排队入口。
+  - `RankClient`：快照按榜类型分开存，最后一次意图所在的榜就是选中的榜，翻页、「我的附近」、「最新榜」都跟选中榜走。切榜不作废在途请求（单请求在途与保守隔离契约不变），新榜排在后面；旧榜的迟到回包只进旧榜自己的快照，不出现在新榜上，也不改状态行。回包回显的榜类型与请求不符按读失败处理。超时作废全部榜的快照；换角色、换连接回到默认榜。
+  - 某个计分模式还没有一局入账时它的榜还没开（发布循环按模式惰性打开），读它回 `kRankBoardNotFound`，客户端显示「本期排行榜尚未开放。」。1V1 / 5V5 没有客户端入口，开服后这两个页签会一直是这句。
+  - **待设计确认**（没有设计稿，现用窗口已有的 `tab_normal` / `tab_selected` 素材，界面验收不能按原图还原宣称通过）：页签的形态与位置（现为标题右侧三个横向页签，原副标题缩成「全服排行 · 同分先达到者在前」放在页签右边）；页签文字（PVP_TEAM 的 1v1 档记在「PVP 匹配」，与「PVP 1v1」容易混）；选中态；默认页签；空榜文案（现为「榜上暂无记录，打一局本模式论剑即可上榜。」）与未开榜文案；1V1 / 5V5 没有排队入口时要不要显示这两个页签。
+  - EditMode `RankBoardSelectionTests` 12 条；`RankClientTests` 的回包改在默认榜上。
 
 ## 10. 不做
 
@@ -302,7 +387,8 @@ Join 事务提交后派一个后台任务（`claimImmediately`，3 秒预算，�
 | R5 | §8 PVP 口径：评分按模式分开、平局阈值、计分局禁观战核对 | 1V1 分边已落；评分按模式、榜按模式、平局判定已落码（2026-11-05，回合制缺口会话），未编译，待 Codex 验证（§12.6）：`match_rating` 主键 `(player_id, mode)`，投榜来源与 outbox 按 `(epoch, mode, shard)`，每个计分模式一张榜（board_type 1V1=1、5V5=2、PVP_TEAM=3），`StopRankSource` 按模式停；回合打满先看个人原件里 0 队是否全灭，旧版结果按 `catalog.RoundLimit`（模板 `time_limit` 换算），删 `RatingDrawRoundCap*`；计分局禁观战已做（位置见 §8）；Java 版待做 |
 | R6 | battle 上报可分配状态与房间数，match 按负载放置 | 已落码（2026-11-05，回合制缺口会话），未编译，待 Codex 验证（§12.4）：`NodeInfo.admission`（14）只在变化时写 etcd、按 watch 回读对账；`CreateBattleResponse.room_count`（5）随成功应答捎回；battleplace 跳过 CLOSED、UNSPECIFIED 视为可选，按「60 秒内的上报房间数 + 本副本在途」比较；指标 `match_battle_nodes{state}`（§5.1）。「可分配」判定已落为 `battle_admission::AcceptsNewRooms` + `BattleNodeImpl::LifecycleGrantsPermits`；match 侧落库前预检 `rejects_new_battles` 已落（§5.5），battle 侧填值复用这一判定，那一行仍待补 |
 | R7 | 人数档真人 PVP 计分组排（开头一节）：PVP_TEAM 计分、整队入队读分、按人数分桶与拆分模板选人、车队对等、分边平衡、提交点组内极差复核、每侧 5 人不收 4 人队、组队成员评分差上限 | 已落码（2026-11-05）。Codex 11-06 跑过纯单测，全过，4 条 R7 真库用例因没有 TiDB 跳过；11-10 跑过 robot 编译、vet、单测与夹具工具单测，全过。真库回归与冒烟都没跑过；11-11 改了冒烟判据、夹具工具与客户端（§9），这三处未编译（§12.5）。评分按模式分开存由 R5 负责；Java 版待做 |
-| R8 | 后台工作按片分工（缺口清单第 24 条）：成局推进、整队维护、闲置队伍到期、投榜与撮合池共用一条 `OwnsWork` 归属规则（§5.2）；评级来源停写后评分照记、不进榜、不卡结果消费（§8 R5「迟到与重复」） | 已落源码（2026-11-06，全服匹配方案讨论会话），未编译、未测试，待 Codex 验证（§12.7）；热池拆归属键按压测证据定（§5.2 末条） |
+| R8 | 后台工作按片分工（缺口清单第 24 条）：成局推进、整队维护、闲置队伍到期、投榜与撮合池共用一条 `OwnsWork` 归属规则（§5.2）；评级来源停写后评分照记、不进榜、不卡结果消费（§8 R5「迟到与重复」） | 已落源码（2026-11-06，全服匹配方案讨论会话），未编译、未测试，待 Codex 验证（§12.7）；热池拆分见 R9 |
+| R9 | 热池拆分（缺口清单第 24 条，§5.2.1）：撮合段（整池 / 机房 / 子池 / 跨机房）与按段归属键、票与整队原件的 `pool_region` 列与新索引、`GlobalMatch.SubPools` / `SubPoolMergeSeconds`、`poolgroup.Passes`、`authority.ErrClaimStale`、按段指标 | 已落码（2026-11-12，「缺口第 24 条：热池按机房与子池拆写者」会话），未生成、未编译、未测试，待 Codex 验证（§12.8）；Java 版待做 |
 
 **文件归属（2026-10-24 与并行会话约定）**：
 
@@ -497,7 +583,35 @@ Claude 只跑过 `gofmt`，没有编译、测试或生成。本批不改 proto�
    ```
    重点：`TestWorkTiDBPendingReturnsOnlyOwnedShards`、`TestWorkTiDBRankPublisherSendsOnlyOwnedShards`、`TestTeamTiDBMaintenanceReadsOnlyOwnedShards`。评级停写改了 4 处既有断言，从"停写即报错"改成"评分照记、不进榜、封榜批次总数不变"：`TestRatingTiDBShardedSourceCursorsVersionsAndStopTotal`、`TestRatingTiDBTransactionOutboxReplayAndStopBarrier`、`TestRatingTiDBModesKeepSeparateRatingsSourcesAndBoards`、整链 `TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss`（要 `RANK_MAIL_CHAIN_*` 环境，有才跑）。
 3. **部署合同**：`pwsh -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`（`match-alerts.yaml` 的 `MatchPoolsUnowned` 只改了描述）。
-4. **多副本冒烟**（本机起 2 个 match 副本，清空数据后）：两个副本的 `match_pool_owned` 之和等于目录里的池数；造几局失败成局，两边日志里推进的 battle_id 不重复；停掉一个副本，约一个 etcd 租约周期后另一个副本接手它的片（`match_pool_owned` 涨到全部）。
+4. **多副本冒烟**（本机起 2 个 match 副本，清空数据后）：两个副本的 `match_pool_owned` 之和等于目录里的池数；造几局失败成局，两边日志里推进的 battle_id 不重复；停掉一个副本，约一个 etcd 租约周期后另一个副本接手它的片（`match_pool_owned` 涨到全部）。（R9 之后 `match_pool_owned` 按 role 计撮合段数，「之和 = 池数」改按 §12.8 第 5 步核。）
+
+### 12.8 R9（2026-11-12：热池拆分）
+
+Claude 只跑过 `gofmt -l`（改动与新增的 Go 文件都无输出；`authority/schema.go` 里 `Tables()` 一段的对齐问题在 `4edb25640` 就有，不是本批），没有生成、编译或测试。本批改了 proto，先生成再编译；项目未上线，库清空重建。match 同时有「战斗剧本系统」会话的未提交改动（`global_pool_matcher.go` 的 `claimGroup` 成员段、`store.go` 的 `claimTx` 成员段、`gather.go`），本批避开了这些段落；红在别处先分清是哪批的。
+
+1. **proto**（仓库根，no-unity，可与别的批次合并成一次）：
+   ```bash
+   pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml
+   ```
+   本批改 `proto/match/match_authority.proto`（`MatchAuthorityTicketRecord.pool_region = 20`，OptionIndex 末尾追加一条）与 `proto/team/team_authority.proto`（`TeamLaunchRecord.pool_region = 18`，OptionIndex 末尾追加一条）。期望：`go/proto/match`、`go/proto/team` 的这两个 message 多出 `PoolRegion` 与 `GetPoolRegion()`；C++ 生成物（`match_authority.pb.*`、`team_authority.pb.*`）随之变化，没有 C++ 代码引用这两个字段，随下次 C++ 串行编译（`/m:1`）即可。robot 的 vendor 不引用这两个字段，下次 `go mod vendor` 时同步。
+2. **Go 编译、静态检查与单测**（工作目录 `go/match`）：
+   ```bash
+   go build ./... && go vet ./... && go test ./... -count=1
+   ```
+   通过标准：全部 PASS；没有 TiDB 时 `*TiDB*` 用例跳过属正常，如实报为未运行。新增纯单测：`poolgroup` 的 `TestPassesLocalSkipsCrossStage`、`TestPassesCrossEmitsOnlyCrossGroups`、`TestPassesZeroValueRunsBothStages`；`poolowner` 的 `TestSegmentsKeepSinglePlayerPoolsWhole`、`TestSegmentsSplitByRegionThenSubPool`、`TestSegmentsWithoutRegionsLeaveOnlyCross`、`TestSegmentKeysAreDistinctAndStable`、`TestSegmentWindowFollowsRole`、`TestRoleLabels`；`config` 的 `TestSubPoolsValidation`、`TestSubPoolCountDefaultsToOne`（既有 `TestMatchServiceYamlLoads` 要能加载多出的 `SubPoolMergeSeconds`）；`logic` 的 `TestSegmentSliceReadsTheSegmentWindow`、`TestSegmentPassesFollowRole`、`TestRegisteredRegionsIgnoreAdmission`、`TestExpectedClaimRejectionCoversStaleClaims`；`authority` 的 `TestUnitPoolRegionNeedsEveryMemberToAgree`、`TestPoolSliceFilterBindsOnlySetConditions`。删掉了 `catalog` 的 `TestOwnerKeyGroupsSizesOfOneTemplate`（`catalog.OwnerKey` 已删）。失败时保留编译错误全文、用例名与断言原文。
+3. **真库**（隔离的一次性 TiDB，库可清空；夹具自己按新 proto 建表，不要复用本批之前建的库；cwd `go/match`）：
+   ```bash
+   MATCH_IT_TIDB=127.0.0.1:<端口> MATCH_IT_REQUIRE_TIDB=1 go test ./internal/authority/... ./internal/team/... -count=1 -run 'PoolSlice|QueuedLaunchRecordsCommonPreferredRegion|ReplayAndClaimAtomicity|CancelledMemberDoesNotPartiallyClaim'
+   MATCH_IT_TIDB=127.0.0.1:<端口> MATCH_IT_REQUIRE_TIDB=1 go test ./internal/authority/... ./internal/team/... ./internal/logic/... -count=1
+   ```
+   重点：`TestPoolSliceTiDBJoinRecordsPreferredRegion`（入队写首选机房列、机房段只读本机房、整池段读全部、`CheckCandidateIndexes` 通过）、`TestPoolSliceTiDBSubPoolAndWindows`（子池段按 player_id 取模与入队时刻、拆了子池的机房段只读等满合并时长的、跨机房段不分机房）、`TestPoolSliceTiDBProfileRefreshMovesTicket`（探测刷新把票移到新机房段，票号与最初等待不变）、`TestPoolSliceTiDBTeamLaunchSlices`（整队按自己的列与发起者取模读，列为 0 的只有不分机房的段读到）、`TestPoolSliceTiDBSecondClaimOfSameTicketsIsStale`（第二次认领回 `ErrClaimStale`、整笔回滚），team 包的 `TestTeamTiDBQueuedLaunchRecordsCommonPreferredRegion`（成员一致写共同机房、不一致写 0）。`role_identity_native_test.go` 按文案断言票行复核失败，文案没变，应照常通过。通过标准：全部 PASS，Skip 不算。旧库（本批之前建的）：迁移器会补 `pool_region` 列，但不给已有表建新索引，`CheckCandidateIndexes` 报缺索引、常驻进程拒启，这是预期的 fail-closed：清库重建，不要手补索引或改断言。
+4. **部署合同**：`pwsh -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`。match 的 yaml 只多了 `SubPoolMergeSeconds: 5` 与注释；通过标准与改动前相同。
+5. **多副本冒烟**（本机起 2 个 match 副本，清空 redis / mysql / etcd 后起服）：
+   - 两个副本的 `match_pool_owned` 按 role 求和：pool = 每组 1 人的池数，region = 多人池数 × 机房数（battle 节点注册里的不同机房），cross = 多人池数，sub = 0（缺省不拆）。
+   - 1V1 两人成局，`match_pool_segment_claim_total{role="region",outcome="committed"}` 增长。跨机房段的成局在本机不好造（两人首选机房要不同），由纯单测与真库用例覆盖。
+   - 给 PVE_TEAM 模板 1 配 `SubPools: [{Mode: 5, ConfigId: 1, Count: 2}]` 后重启：`match_pool_owned{role="sub"}` 之和 = 多人 PVE_TEAM 池数 × 机房数 × 2；两人档两人同 zone 入队照常成局（计在 sub 或 region）；日志里没有 `has no effect`。
+   - 停掉一个副本，约一个 etcd 租约周期后另一个副本的各 role 段数涨到全部。
+   通过标准：以上各项成立，冒烟期间没有 `Failed to read pool tickets segment=`；优雅停机的排空报告不因成局冲突停在 HOLD。
 
 ## 13. Java 版（AGENTS.md §12）
 
@@ -510,8 +624,9 @@ Claude 只跑过 `gofmt`，没有编译、测试或生成。本批不改 proto�
 - Java 已有而 Go 待追的：离线撤单位（只写进本仓文档，不往 PARITY 加行）。单人即时成局 Go 第二批已追平。按可分配状态 + 房间数选节点（R6）Go 已于 2026-11-05 追平（未编译）：Java 版 battle 周期把 accepting / roomCount 写进 Redis 目录，Go 版只在变化时写 etcd、房间数随建房应答捎回（§5.1）。两版服务端内部实现不同（AGENTS §12 允许），对外语义相同：match 只选可分配的节点、按房间数比较负载。Java 已有等价，不往 Java 仓 PARITY.md 加行。
 - 前提：Java 全局匹配路径目前只有源码、没有编译和运行证据（match-spec.md:2418-2447），要先让它跑通。
 - 人数档真人 PVP 计分组排（开头一节，R7，2026-11-05）：Java 版待做，已登记 Java 仓 `PARITY.md`「2026-11-05 人数档真人 PVP 计分组排（Java 待做）」。Java 版人数档 PVP 的撮合本身也还没有（11-05 核对：game-match 主代码里 `PVP_TEAM` 只出现在观战可见性表），要一起做。客户端契约多两个 team_error 码（第 9、10 条），表数据两版共用，Java 版开战入口要回同样的码；没有新消息和字段。
-- 评分按模式分开、榜按模式、回合打满判平（§8，R5，2026-11-05）：Java 版待做，已登记 Java 仓 `PARITY.md`「2026-11-05 评分按模式分开、榜按模式、回合打满判平（R5，Java 待做）」。11-05 核对：Java 的 `match_rating` 每人一行，`RatingRankOutbox` 只开 `board_type` 1 一张榜。`board_type` 1 / 2 / 3（1V1 / 5V5 / PVP_TEAM）是客户端契约，两版同值；计分局禁观战 Java 已有（`SpectateVisibilityPolicy`）。
+- 评分按模式分开、榜按模式、回合打满判平（§8，R5，2026-11-05）：Java 版待做，已登记 Java 仓 `PARITY.md`「2026-11-05 评分按模式分开、榜按模式、回合打满判平（R5，Java 待做）」。11-05 核对：Java 的 `match_rating` 每人一行，`RatingRankOutbox` 只开 `board_type` 1 一张榜。`board_type` 1 / 2 / 3（1V1 / 5V5 / PVP_TEAM）是客户端契约，两版同值；计分局禁观战 Java 已有（`SpectateVisibilityPolicy`）。2026-11-12 取值登记进 `rank.proto` 的 `RankBoardType`、客户端按模式分页签：Java 待做（同步 proto 枚举、开榜用生成常量），已登记 Java 仓 `PARITY.md`「2026-11-12 榜类型登记进 rank.proto、客户端论剑榜按模式分页签（Java 待做）」。
 - 后台工作按片分工、评级停写不卡消费（§5.2、§8 R5「停写之后的新局」，R8，2026-11-06）：Java 版待做，2026-11-10 补登 Java 仓 `PARITY.md`「2026-11-10 全服匹配第四批：后台工作按片分工、评级停写不卡消费」。这是服务端内部改动，没有客户端契约。
+- 热池拆分（§5.2.1，R9，2026-11-12）：Java 版待做，已登记 Java 仓 `PARITY.md`「2026-11-12 全服匹配热池拆分：按首选机房与子池拆写者」。服务端内部改动，没有客户端契约；Java 的全局匹配还是单轮单局，要先追平「每池单写者 + 一轮多局」再做这一项。
 
 状态：Java 版全部待做（负责人 11-05 起定 Java 留作 todo，只登记、不写 Java 代码）。对应记录都在 Java 仓 `PARITY.md`：表格里「全服匹配：按怪物战斗模板分池…」一行（第一至第三批）、上面各条注明的补充条目，以及 2026-11-06「后台分片归属哈希修复与收件箱对账分工」（三个服务共用的打分实现）。表格里 2026-10-15「全球匹配区域优先与等待扩区」一行记的是本文之前的 Go 现状，2026-11-10 已把它的状态列改成指向「全服匹配」一行。这里一律按标题引用 PARITY 记录，不按行号：行号会随别的会话插行失效，原先写的「第 149、187 行」就是这样失效的。
 
@@ -520,7 +635,7 @@ Claude 只跑过 `gofmt`，没有编译、测试或生成。本批不改 proto�
 - 默认阈值（10 / 20 / 30 秒、180ms）都没有数据依据，冷门模板可能等待偏长；R0 指标出来后按模板定标。
 - 双向同意让刚入队的人在冷门池里要等自己的阈值；这是"同 zone 优先"的代价。
 - 未登记大区的 zone 跳过大区层；开新区要同步维护 ZoneGroup 号段。
-- 单写者在 S3 量级可能不够，需要按机房拆写者（§6 条件项）。
+- 单写者在 S3 量级可能不够：2026-11-12 已按首选机房与子池拆写者（§5.2.1），效果没有压测数据；跨机房段与机房段会争同一批老票，冲突率看 `match_pool_segment_claim_total{role="cross"}`。
 - 本文所有吞吐数字都是推算，没有压测证据前不宣称性能提升（AGENTS.md §6）。
 - 期限按模板（D6）的代价：已持久 Create 原件之后失败（含节点准入拒绝）的成局只能等唯一 SQL 终局，玩家被占用到"提交时刻 + 120 秒 + 模板时长"。缺省模板仍是 300 秒；开放长模板（如 3600 秒）前要先有"确定未建房即提前终局"，否则一次建房失败会把整组人卡一小时。2026-11-05 起分三层收窄：R6 让 match 不选正在排空的节点；落库前预检 `rejects_new_battles` 收窄"选中之后才排空"的窗口（battle 侧填值待 R6）；提前终局由数据覆盖审计会话评估落码。三者都落地之前不开放长模板。
 - PVP_TEAM 只在 PlayMode 第 6 行（`battle_config_id=1`）开放；客户端若按 0 入队会被白名单拒绝。

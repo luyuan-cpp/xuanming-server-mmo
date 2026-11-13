@@ -46,9 +46,14 @@ func resetMembers(mr *miniredis.Miniredis, key string, n int, players []uint64) 
 	}
 }
 
-// seedSceneMembers 把场景的成员集合铺成 n 人,players 在内。
+// seedSceneMembers 把 testZoneId 里场景的成员集合铺成 n 人,players 在内。场景在别的 zone 时用 seedSceneMembersInZone
+// (成员集合的键带场景所在 zone 的 tag,docs/design/redis-cluster-all-domains-20261110.md §3)。
 func seedSceneMembers(mr *miniredis.Miniredis, sceneID uint64, n int, players ...uint64) {
-	resetMembers(mr, instanceMembersKey(sceneID), n, players)
+	seedSceneMembersInZone(mr, testZoneId, sceneID, n, players...)
+}
+
+func seedSceneMembersInZone(mr *miniredis.Miniredis, zoneID uint32, sceneID uint64, n int, players ...uint64) {
+	resetMembers(mr, instanceMembersKey(zoneID, sceneID), n, players)
 }
 
 // seedNodeMembers 把节点的成员集合铺成 n 人,players 在内。
@@ -56,9 +61,9 @@ func seedNodeMembers(mr *miniredis.Miniredis, zoneID uint32, nodeID string, n in
 	resetMembers(mr, nodeMembersKey(zoneID, nodeID), n, players)
 }
 
-// seedSceneMembersVia / seedNodeMembersVia 与上面相同,给只拿着 svcCtx 的用例用。
+// seedSceneMembersVia / seedNodeMembersVia 与上面相同,给只拿着 svcCtx 的用例用;场景按 svcCtx 的 zone(本进程的 zone)。
 func seedSceneMembersVia(sc *svc.ServiceContext, sceneID uint64, n int, players ...uint64) {
-	resetMembersVia(sc, instanceMembersKey(sceneID), n, players)
+	resetMembersVia(sc, instanceMembersKey(sc.Config.ZoneId, sceneID), n, players)
 }
 
 func seedNodeMembersVia(sc *svc.ServiceContext, zoneID uint32, nodeID string, n int, players ...uint64) {
@@ -126,8 +131,9 @@ func adoptSeedMemberVia(sc *svc.ServiceContext, key string, player uint64) {
 	}
 }
 
+// adoptSceneMember 把玩家加进 testZoneId 里场景的成员集合。
 func adoptSceneMember(mr *miniredis.Miniredis, sceneID, player uint64) {
-	adoptMember(mr, instanceMembersKey(sceneID), player)
+	adoptMember(mr, instanceMembersKey(testZoneId, sceneID), player)
 }
 
 func adoptNodeMember(mr *miniredis.Miniredis, zoneID uint32, nodeID string, player uint64) {
@@ -146,8 +152,13 @@ func memberCountText(mr *miniredis.Miniredis, key string) string {
 }
 
 // sceneMemberCount / nodeMemberCount 直接读 miniredis(不经钩子),返回人数的十进制文本,键不存在是 "0"。
+// sceneMemberCount 读 testZoneId 里的场景;别的 zone 用 sceneMemberCountInZone。
 func sceneMemberCount(mr *miniredis.Miniredis, sceneID uint64) string {
-	return memberCountText(mr, instanceMembersKey(sceneID))
+	return sceneMemberCountInZone(mr, testZoneId, sceneID)
+}
+
+func sceneMemberCountInZone(mr *miniredis.Miniredis, zoneID uint32, sceneID uint64) string {
+	return memberCountText(mr, instanceMembersKey(zoneID, sceneID))
 }
 
 func nodeMemberCount(mr *miniredis.Miniredis, zoneID uint32, nodeID string) string {
@@ -156,7 +167,7 @@ func nodeMemberCount(mr *miniredis.Miniredis, zoneID uint32, nodeID string) stri
 
 // sceneCountText / nodeCountText 与上面相同,经业务句柄读。
 func sceneCountText(sc *svc.ServiceContext, sceneID uint64) string {
-	n, err := sc.Redis.Scard(instanceMembersKey(sceneID))
+	n, err := sc.Redis.Scard(instanceMembersKey(sc.Config.ZoneId, sceneID))
 	if err != nil {
 		panic(err)
 	}
@@ -203,7 +214,7 @@ func TestSceneMembers_RemoveWithoutAddCreatesNothing(t *testing.T) {
 
 	require.NoError(t, removeSceneMember(sc, player, sceneID, testZoneId, "node-A"))
 
-	assert.False(t, mr.Exists(instanceMembersKey(sceneID)))
+	assert.False(t, mr.Exists(instanceMembersKey(testZoneId, sceneID)))
 	assert.False(t, mr.Exists(nodeMembersKey(testZoneId, "node-A")))
 }
 
@@ -309,7 +320,7 @@ func TestEnterScene_ReleasingReservationKeepsExistingMember(t *testing.T) {
 	require.Equal(t, constants.ErrHandoffPending, resp.ErrorCode, "前提:跨节点落点没有标记,换手门回 18")
 
 	assert.Equal(t, "2", sceneMemberCount(mr, channel), "玩家还在这个频道里")
-	members, err := mr.SIsMember(instanceMembersKey(channel), strconv.FormatUint(playerID, 10))
+	members, err := mr.SIsMember(instanceMembersKey(testZoneId, channel), strconv.FormatUint(playerID, 10))
 	require.NoError(t, err)
 	assert.True(t, members)
 	assert.Equal(t, "3", nodeMemberCount(mr, testZoneId, "20"), "新节点的预占退回")
@@ -399,7 +410,7 @@ func TestRemoveSceneMember_AddsBackWhenPlacementLandsBeforeRemoval(t *testing.T)
 	require.True(t, fired.Load(), "钩子没触发,用例空转")
 	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
 	assert.Equal(t, "2", nodeMemberCount(mr, testZoneId, "10"))
-	inScene, err := mr.SIsMember(instanceMembersKey(sceneID), strconv.FormatUint(playerID, 10))
+	inScene, err := mr.SIsMember(instanceMembersKey(testZoneId, sceneID), strconv.FormatUint(playerID, 10))
 	require.NoError(t, err)
 	assert.True(t, inScene)
 }
@@ -436,14 +447,14 @@ func TestLeaveScene_MemberRemovalFailureIsReturnedForRetry(t *testing.T) {
 	raw := leaveCasLocationRaw(t, &scene_manager.PlayerLocation{SceneId: sceneID, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100})
 	seedLeaveCasFixture(t, mr, playerID, sceneID, raw, "1")
 	// 成员集合键被写成 string:第二步的 SREM 回 WRONGTYPE,第一步不受影响。
-	mr.Del(instanceMembersKey(sceneID))
-	require.NoError(t, mr.Set(instanceMembersKey(sceneID), "corrupt"))
+	mr.Del(instanceMembersKey(testZoneId, sceneID))
+	require.NoError(t, mr.Set(instanceMembersKey(testZoneId, sceneID), "corrupt"))
 
 	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(&scene_manager.LeaveSceneRequest{PlayerId: playerID, SceneId: sceneID})
 	require.Error(t, err)
 	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "第一步已提交")
 
-	mr.Del(instanceMembersKey(sceneID))
+	mr.Del(instanceMembersKey(testZoneId, sceneID))
 	seedSceneMembers(mr, sceneID, 2, playerID)
 	_, err = NewLeaveSceneLogic(context.Background(), sc).LeaveScene(&scene_manager.LeaveSceneRequest{PlayerId: playerID, SceneId: sceneID})
 	require.NoError(t, err)
@@ -454,8 +465,8 @@ func TestLeaveScene_MemberRemovalFailureIsReturnedForRetry(t *testing.T) {
 func TestReserveBestWorldChannel_PicksLeastMembersAndIsIdempotent(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "node-1")
 	const a, b, player = uint64(7710), uint64(7711), uint64(1107)
-	mr.Set(sceneNodeKey(a), "10")
-	mr.Set(sceneNodeKey(b), "20")
+	mr.Set(sceneNodeKey(testZoneId, a), "10")
+	mr.Set(sceneNodeKey(testZoneId, b), "20")
 	seedSceneMembers(mr, a, 3)
 	seedSceneMembers(mr, b, 1)
 	candidates := []WorldChannelCandidate{{SceneID: a, NodeID: "10", ZoneID: testZoneId}, {SceneID: b, NodeID: "20", ZoneID: testZoneId}}
@@ -478,12 +489,12 @@ func TestReserveBestWorldChannel_PicksLeastMembersAndIsIdempotent(t *testing.T) 
 func TestReserveBestWorldChannel_SkipsStaleCandidates(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "node-1")
 	const a, player = uint64(7712), uint64(1108)
-	mr.Set(sceneNodeKey(a), "20")
+	mr.Set(sceneNodeKey(testZoneId, a), "20")
 
 	sceneID, nodeID, _, err := ReserveBestWorldChannel(sc, []WorldChannelCandidate{{SceneID: a, NodeID: "10", ZoneID: testZoneId}}, player)
 	require.NoError(t, err)
 	assert.Zero(t, sceneID)
 	assert.Empty(t, nodeID)
-	assert.False(t, mr.Exists(instanceMembersKey(a)))
+	assert.False(t, mr.Exists(instanceMembersKey(testZoneId, a)))
 	assert.False(t, mr.Exists(nodeMembersKey(testZoneId, "10")))
 }

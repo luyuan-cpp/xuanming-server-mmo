@@ -25,7 +25,7 @@
 #     player-inbox-alerts.yaml 的 PlayerInboxAckAnomaly;它带 `> 0`,新 Pod 的 0 值序列不会误报,所以保留不动。
 #   - 打不开库时存盘回 Unavailable,scene 用同样的内容、同一个序号退避重试(0.5s 起,封顶 5s),进度只在 scene 内存里;
 #     认领回 Unavailable 时最多重试 30 秒,之后进场失败。scene 停机时还没落定的玩家,最后一次提交之后的进度会丢(日志 metric=player_store_shutdown_unsettled)。
-#   - 阈值都没有实测基线(这些取值所在的代码未压测),首轮演练后回头校准。
+#   - 阈值已定(2026-11-12),压测出基线后可调:依据是认领重试上限 30 秒与存盘重试封顶 5 秒,持续时间取其数十倍(5~10 分钟)才报,滤掉一次短暂重试风暴。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up

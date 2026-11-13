@@ -19,6 +19,11 @@
 //   caller(Go)、tid(C++)、logger / thread(Java);
 //   trace_id / span_id / player_id:三种语言同一套键名(docs/design/distributed-tracing.md §3.2、§9.1),
 //   只在那一行真带了值时才写,Java 没有 player_id。这三个值绝不能做成标签,Loki 会被撑爆。
+//
+// k8s 上照搬这里的规则(docs/ops/grafana-loki-local-logs.md §6):C++ 段的两条行尾正则在 sidecar 里
+// (tools/scripts/k8s_deploy.ps1 的 Get-CppLogSidecarConfigAlloy);Go 段、Java 段的 stage.match,以及 C++ 段的
+// gRPC / librdkafka 两段,在容器日志 DaemonSet 里(deploy/k8s/manifests/infra/pod-log-collector.yaml,那边不从行内取时间)。
+// 改这里要同批改那两处,两边逐段一致由 tools/scripts/tests/k8s_log_collection_contract.tests.ps1 核对。
 // ============================================================================
 
 logging {

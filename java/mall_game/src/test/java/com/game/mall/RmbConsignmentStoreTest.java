@@ -210,6 +210,33 @@ class RmbConsignmentStoreTest {
         }
     }
 
+    /**
+     * 同账号自买的入口只有这一处：下单事务里的 reserve 在建订单、占用寄售之前按账号拒绝，不看角色号。
+     * trade 的交付（go/trade/internal/commerce/rmb.go 的 deliver）对「买家账号等于卖家账号」的已付款意图只拒绝、没有退款出口，
+     * 靠的就是这种订单建不出来；要放开这条判断，先给 trade 的交付补上退款分支。
+     */
+    @Test void 同账号换一个角色也不能买自己的寄售_不建订单不占寄售_别的账号照常可买() {
+        try (var f = new Fixture()) {
+            f.register(1, 101);
+            // 卖家角色是 101；同一个账号用另一个角色 202 来买。
+            var selfBuy = new RmbConsignmentApi.Buy("1", "202", SELLER, "self-buy-other-role", "1");
+            rejects(409, () -> f.orders.createConsignment(selfBuy));
+            // 同一个请求号重放也一样被拒：第一次没有留下可重放的订单。
+            rejects(409, () -> f.orders.createConsignment(selfBuy));
+            assertEquals(0, f.db.count("oms_order"));
+            assertEquals(0, f.db.count("commerce_consignment_order"));
+            assertEquals(0, f.db.count("commerce_delivery_intent"));
+            var listing = f.rmb.get(new RmbConsignmentApi.Get("1"));
+            assertEquals("LISTED", listing.state());
+            assertNull(listing.orderId());
+            // 拒绝没有留下占用：别的账号照常可买。
+            var order = f.buy(1, 1);
+            assertEquals("AWAITING_PAYMENT", order.state());
+            assertEquals("LOCKED", f.rmb.get(new RmbConsignmentApi.Get("1")).state());
+            assertEquals(order.orderId(), f.rmb.get(new RmbConsignmentApi.Get("1")).orderId());
+        }
+    }
+
     @Test void 交付收据落库失败时收入与OMS一同回滚_恢复后只结一次() {
         try (var f = new Fixture()) {
             f.register(1, 101); var order = f.buy(1, 1); f.pay(order);

@@ -15,6 +15,7 @@ import (
 	dspb "proto/data_service"
 	storepb "proto/player_store"
 	"shared/accountdirectory"
+	"shared/dirshard"
 )
 
 // player_store 的访问(docs/design/player-save-direct-commit.md §6)。
@@ -61,23 +62,55 @@ type playerStoreOwnerState struct {
 	released bool
 }
 
-// playerStoreReadLimit 是账本和展示资料读最多占的连接数:不超过池的一半。
-func playerStoreReadLimit(maxOpenConn int) int {
+// readSlots 是一个连接池里留给账本、展示读的名额,最多占池的一半。
+//
+// 这些读和更要紧的工作共用连接池:目录分片的池上有登录的悲观事务,存档库的池上有建角、判死释放、交易冻结证据。
+// 好友列表、在线目录、队伍视图原来走 Redis,读量一大,不限的话会排满池的等待队列,登录和判死排到它们后面。
+// 所以留一半给别的工作;等不到名额的读按调用方的截止时间失败,展示和账本的调用方都能接受。
+//
+// 名额跟着池走,一个池一份:目录有 K 片、存档库有 K 个,各有各的池,读不同库的请求互不等待。
+// 2026-11-12 之前全进程只有一份,按一个池的一半发。K8s 把池按 K 摊到每库 2 条之后名额只剩 1,
+// 一个实例的账本和展示读全排成一队,加库、加片都不会变快。
+// 没有另开只读池:那要每个库、每一片多一组连接,而一半的名额已经保证读挤不掉写。
+type readSlots chan struct{}
+
+// newReadSlots 按池的连接上限发名额。
+func newReadSlots(maxOpenConn int) readSlots {
+	return make(readSlots, readSlotLimit(maxOpenConn))
+}
+
+// readSlotLimit 是 maxOpenConn 条连接的池里读最多占几条:一半,至少 1 条。
+func readSlotLimit(maxOpenConn int) int {
 	if limit := maxOpenConn / 2; limit > 0 {
 		return limit
 	}
 	return 1
 }
 
-// acquirePlayerStoreRead 取一个读名额,释放函数必须调用。好友列表、在线目录、队伍视图原来走 Redis,读量一大会把存档库的池占满,
-// 挤掉判死和建角的写。等不到名额就按调用方的截止时间失败,展示和账本的调用方都能接受。
-func (s *AccountDirectoryStore) acquirePlayerStoreRead(ctx context.Context) (func(), error) {
+// acquire 取一个名额,返回的释放函数必须调用。
+func (r readSlots) acquire(ctx context.Context) (func(), error) {
 	select {
-	case s.playerStoreReads <- struct{}{}:
-		return func() { <-s.playerStoreReads }, nil
+	case r <- struct{}{}:
+		return func() { <-r }, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// acquireDirectoryRead 占玩家所在目录分片的一个读名额,读路由的那一条查询用。
+func (s *AccountDirectoryStore) acquireDirectoryRead(ctx context.Context, playerID uint64) (func(), error) {
+	return s.directoryReads[dirshard.SlotOfPlayer(playerID, len(s.directoryReads))].acquire(ctx)
+}
+
+// readPlayerStorage 是账本读用的 playerStorage:读路由的那一条查询占目录分片的读名额。
+// 判死、建角直接调 playerStorage,不占名额,名额就是为了不让读挤掉它们。
+func (s *AccountDirectoryStore) readPlayerStorage(ctx context.Context, playerID uint64) (uint32, error) {
+	release, err := s.acquireDirectoryRead(ctx, playerID)
+	if err != nil {
+		return 0, err
+	}
+	defer release()
+	return s.playerStorage(ctx, playerID)
 }
 
 // playerStorage 按权威路由给出玩家所在的存档库。不在白名单里的落点不读:白名单是部署声明的可访问范围。
@@ -118,27 +151,23 @@ func (s *AccountDirectoryStore) ReadPlayerStoreProfile(ctx context.Context, play
 
 // readOwnerAndRow 在一条语句里强读写权行和一个数据行(kind),数据行解析成只含那一行字段的 PlayerDatabase。
 // 返回 (nil, nil, nil) = 没有写权行或路由;写权行在、数据行不在时 player 只有 player_id。
-// 只读,不加锁;占一个读名额(acquirePlayerStoreRead)。what 是行名(英文,只进错误文案;错误文案会进日志,AGENTS §2)。
+// 只读,不加锁;两条查询各占所在连接池的一个读名额(readSlots),不同时占两个。what 是行名(英文,只进错误文案;错误文案会进日志,AGENTS §2)。
 func (s *AccountDirectoryStore) readOwnerAndRow(ctx context.Context, playerID uint64, kind int32, what string) (*playerStoreOwnerState, *dbpb.PlayerDatabase, error) {
 	if s == nil || playerID == 0 {
 		return nil, nil, accountdirectory.ErrInvalid
 	}
-	release, err := s.acquirePlayerStoreRead(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer release()
-	storage, err := s.playerStorage(ctx, playerID)
+	storage, err := s.readPlayerStorage(ctx, playerID)
 	if err != nil {
 		if errors.Is(err, accountdirectory.ErrMissing) {
 			return nil, nil, nil
 		}
 		return nil, nil, err
 	}
-	db, _, err := s.stores.DB(ctx, storage)
+	db, release, err := s.stores.ReadDB(ctx, storage)
 	if err != nil {
 		return nil, nil, err
 	}
+	defer release()
 	rows, err := db.QueryContext(ctx, "SELECT kind,owner_epoch,save_seq,released,payload FROM player_store WHERE player_id=? AND kind IN (?,?)",
 		playerID, playerStoreOwnerKind, kind)
 	if err != nil {
@@ -193,12 +222,7 @@ func (s *AccountDirectoryStore) ReadPlayerDisplays(ctx context.Context, ids []ui
 	if len(unique) == 0 {
 		return map[uint64]*dspb.PlayerDisplay{}, nil
 	}
-	release, err := s.acquirePlayerStoreRead(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer release()
-	routes, err := routesAcrossShards(ctx, s.shards, unique)
+	routes, err := s.readDisplayRoutes(ctx, unique)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +237,41 @@ func (s *AccountDirectoryStore) ReadPlayerDisplays(ctx context.Context, ids []ui
 		}
 		byStorage[row.StorageID] = append(byStorage[row.StorageID], id)
 	}
-	return s.readDisplaysByStorage(ctx, byStorage), nil
+	out := s.readDisplaysByStorage(ctx, byStorage)
+	// 调用方已经超时或取消:结果里可能缺了没等到名额的落点,不能当成「这些人没有资料」交回去。
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// readDisplayRoutes 批量读路由,按玩家分片拆组,每片的那一条查询占这一片的读名额。
+// 任一片失败(含等不到名额)整批报错:半份路由会让调用方把查不到的人当成没有角色。
+func (s *AccountDirectoryStore) readDisplayRoutes(ctx context.Context, ids []uint64) (map[uint64]RouteRow, error) {
+	out := make(map[uint64]RouteRow, len(ids))
+	var mu sync.Mutex
+	err := s.shards.eachPlayerGroup(ids, func(db *sql.DB, players []uint64) error {
+		// 一组里的玩家都在同一片,拿第一个定名额。
+		release, err := s.acquireDirectoryRead(ctx, players[0])
+		if err != nil {
+			return err
+		}
+		defer release()
+		rows, err := loadRoutes(ctx, db, players)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		for id, row := range rows {
+			out[id] = row
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // readDisplaysByStorage 逐落点读展示资料。打不开或读不了的落点记日志后跳过,好友列表这类调用方只缺这个落点的玩家。
@@ -230,7 +288,10 @@ func (s *AccountDirectoryStore) readDisplaysByStorage(ctx context.Context, bySto
 		players := byStorage[storages[i]]
 		found, err := s.readDisplaysOfStorage(ctx, storages[i], players)
 		if err != nil {
-			logx.Errorf("[player-display] storage %d is unavailable; %d players skipped: %v", storages[i], len(players), err)
+			// 调用方已经超时或取消时不是这个落点的问题,不记「落点不可用」;ReadPlayerDisplays 会把 ctx 的错误交回去。
+			if ctx.Err() == nil {
+				logx.Errorf("[player-display] storage %d is unavailable; %d players skipped: %v", storages[i], len(players), err)
+			}
 			return nil
 		}
 		mu.Lock()
@@ -243,11 +304,13 @@ func (s *AccountDirectoryStore) readDisplaysByStorage(ctx context.Context, bySto
 	return out
 }
 
+// readDisplaysOfStorage 读一个落点上这些玩家的展示资料,占这个库的一个读名额。
 func (s *AccountDirectoryStore) readDisplaysOfStorage(ctx context.Context, storage uint32, players []uint64) (map[uint64]*dspb.PlayerDisplay, error) {
-	db, _, err := s.stores.DB(ctx, storage)
+	db, release, err := s.stores.ReadDB(ctx, storage)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	return readPlayerDisplaysIn(ctx, db, players)
 }
 

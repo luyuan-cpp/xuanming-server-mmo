@@ -154,3 +154,43 @@ FROM match_manual_resolution ORDER BY resolved_ms DESC LIMIT 50;
 - 已有冲突终局行、只有归档行的成局，工具只报告不处置，处置方案另行设计；
 - 目标核对只是辅助：`-expect-target` 按工单填才有用，照抄 `show` 的 `target=` 就核不出连错环境。真正防误操作的是按环境分开的密钥（另一个环境的密钥验签不过）与成局摘要（`battle_id` 与成局行逐字节绑定）；
 - Java 版待做：同一放行判据、同一锁序与 ABORT 事务入口、审计表、独立调用方密钥、缺省关闭。
+
+## 9. 战斗服进程失效时的自动作废（2026-11-11）
+
+设计见 [战斗进程失效的提前作废与作废通知](../design/battle-instance-loss-early-abort.md)。这一节不涉及人工处置工具，放在这里是因为值班查「这一局为什么作废」时会翻到这份手册。
+
+**现象与日志**
+
+- 战斗服进程崩溃后，匹配服按「原执行进程已不在」提前作废它上面的对局，不等截止。终局来源是 `MATCH_INSTANCE_GONE_ABORT`（`match_battle_completion.source_kind = 7`），计 `match_global_flow_total{stage="terminal",outcome="abort_instance_gone"}`。
+- 匹配服日志：
+  - `battle instance <uuid> confirmed gone`：一个实例被确认不在（每个实例每个副本一行）；
+  - `battle aborted early because its executing instance is gone: battle_id=...`：逐局一行；
+  - `global formation aborted: battle_id=... outcome=abort_instance_gone`：终局落库。
+- 过程计数在 `match_global_flow_total{stage="instance_loss"}`：
+  - `suspected`：补签问不到原实例，这一局进了可疑表；
+  - `evidence_first`、`instance_confirmed_gone`：实例的第一次观察、确认；
+  - `answered`：原实例应答了，撤出，不作废；
+  - `resolved`：这一局处理完；
+  - `suspect_rejected_full`：可疑表满了没进（上限 16384），这些局等截止作废；
+  - `store_error`：读成局或写作废失败，会重试。
+- 所有作废（含截止、帮会取消、人工处置）现在都会给每名成员投一份作废结算，场景服日志是 `metric=battle_void_settlement_applied`。个人发件箱的首投、等待积压会包含这些行。
+
+**要立刻处理的日志**
+
+| 日志 | 含义 | 处置 |
+|---|---|---|
+| `battle instance ... answered after it was confirmed gone` | 确认不在的实例又应答了，两次观察都错了。它上面已作废的局不会恢复 | 查这台战斗服到匹配服的网络（有没有回 RST 的防火墙）和它的 etcd 租约；升级给研发 |
+| `battle pod lookup disabled: GlobalMatch.BattlePodNamespace is empty` | 进程跑在 K8s 里却没配命名空间，Pod 证据失效 | 把 ConfigMap 模板里的 `GlobalMatch.BattlePodNamespace` 抄进 match 的 `runtimeConfigSecret`，滚动重启 |
+| `battle pod lookup failed` | 查 Pod 失败（每分钟至多一行） | 核对 `match-battle-pod-reader` 的 Role 与 RoleBinding 还在、ServiceAccount `match` 没被改；API server 是否可用 |
+| `metric=battle_void_settlement_malformed`（场景服） | 作废结算带了效果字段或身份不符，整笔延后 | 生产方缺陷，升级给研发；这名玩家的冻结由到期查询解开 |
+
+**战斗服 Pod 不许强删**
+
+- 不要用 `kubectl delete pod --force --grace-period=0` 删战斗服 Pod，也不要手工删 Node 对象。
+- 原因：匹配服的一种证据是「这个 IP 上已经没有存活的 Pod」。正常删除时，Pod 对象要等 kubelet 确认容器停了才消失；强删会让 Pod 对象先消失，而进程可能还活在失联的节点上。匹配服会把它上面在打的局作废，进程之后提交的结果被拒收：数据仍然一致，但这些局白打。
+- 要下线一台战斗服，按 `battle_room_manager.h` 里 `BeginRoomShutdown` 的说明走：打排空标签，等房间打完，再正常删除 GameServer。
+
+**不要做的事**
+
+- 不要手写 `GlobalMatch.BattlePodNamespace`。它由 `k8s_deploy.ps1` 按部署战斗服的命名空间生成；写成别的命名空间，「这个 IP 上已没有存活的 Pod」会恒成立，战斗服一时连不上就会被当成进程已死。
+- 不要给 ServiceAccount `match` 加别的权限，也不要把它换成命名空间的 default。

@@ -37,6 +37,9 @@ func (stubPlayerRouteStore) RegisterHome(context.Context, store.RouteRegisterReq
 func (stubPlayerRouteStore) GetRoutes(context.Context, []uint64) (map[uint64]store.RouteRow, error) {
 	return nil, nil
 }
+func (stubPlayerRouteStore) CountHomeZones(context.Context, []uint32) (uint64, error) {
+	return 0, nil
+}
 func (stubPlayerRouteStore) Close() error { return nil }
 
 // 接口一变,编译期先炸:装配处把 *store.RouteStore 直接当 PlayerRouteStore 用。

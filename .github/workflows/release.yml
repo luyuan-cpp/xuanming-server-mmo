@@ -118,16 +118,16 @@ jobs:
               $head = (& git -C $ws rev-parse HEAD | Out-String).Trim()
               $tagCommit = (& git -C $ws rev-parse -q --verify "refs/tags/$($env:RELEASE_VERSION)^{commit}" 2>$null | Out-String).Trim()
               if ($tagCommit -and $tagCommit -cne $head) {
-                  $problems.Add("git tag $($env:RELEASE_VERSION) 已存在且指向 ${tagCommit},本次检出的是 ${head}:版本号已被别的提交占用,请换新版本号")
+                  $problems.Add("git tag $($env:RELEASE_VERSION) already exists and points at ${tagCommit}, but this checkout is ${head}: the version is taken by another commit; pick a new version")
               }
           }
 
           # 取值与 tools/scripts/publish_images.ps1 的 FamilySpecs 一致;这里只为在构建前拒掉拼写错误,脚本里仍会再校验
           $knownFamilies = @('cpp', 'go', 'java')
           $families = @(([string]$env:RELEASE_FAMILIES) -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ } | Select-Object -Unique)
-          if ($families.Count -eq 0) { $problems.Add('families 为空,可选 go / java / cpp') }
+          if ($families.Count -eq 0) { $problems.Add('families is empty; choose from go / java / cpp') }
           $unknown = @($families | Where-Object { $knownFamilies -notcontains $_ })
-          if ($unknown.Count -gt 0) { $problems.Add("未知的镜像族:$($unknown -join ', '),可选 go / java / cpp") }
+          if ($unknown.Count -gt 0) { $problems.Add("unknown image families: $($unknown -join ', '); choose from go / java / cpp") }
 
           if ($problems.Count -gt 0) {
               Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '### 发布被拒绝:输入校验未通过'
@@ -139,7 +139,7 @@ jobs:
           }
 
           if ($families -contains 'cpp') {
-              Write-Output '::warning::families 含 cpp:需要 deploy/k8s/runtime/linux 下的 Linux 运行时 staging,全新检出的托管 runner 上没有,publish_images.ps1 会在构建前拒绝'
+              Write-Output '::warning::families includes cpp: it needs the Linux runtime staging under deploy/k8s/runtime/linux, which a fresh checkout on a hosted runner does not have; publish_images.ps1 refuses before building'
           }
           $familyList = @($knownFamilies | Where-Object { $families -contains $_ }) -join ','
           $hasGo = if ($families -contains 'go') { 'true' } else { 'false' }
@@ -248,13 +248,13 @@ jobs:
           $ref = [string]$env:PROTO2MYSQL_REF
 
           if ($external.Count -gt 1) {
-              $problems.Add("go.mod 里有 $($external.Count) 个不同的仓库外 replace 目标($(@($external.Keys) -join ', ')),本流程只支持一个(proto2mysql)")
+              $problems.Add("go.mod files have $($external.Count) different out-of-repo replace targets ($(@($external.Keys) -join ', ')); this workflow supports only one (proto2mysql)")
           }
           if ($entry.Conflict) {
-              $problems.Add("同一个仓库外目录 $target 被 replace 成了不同模块:$sources")
+              $problems.Add("the same out-of-repo directory $target is used as the replace target of different modules: $sources")
           }
           if ($module.Split('/')[-1] -cne 'proto2mysql') {
-              $problems.Add("仓库外 replace 模块 $module 不在支持清单里(只支持 proto2mysql,与 tools/scripts/go_svc_image.ps1 的 ExternalReplaceStages 一致):$sources")
+              $problems.Add("out-of-repo replace module $module is not supported (only proto2mysql, matching ExternalReplaceStages in tools/scripts/go_svc_image.ps1): $sources")
           }
           # go_svc_image.ps1 的 Get-ExternalBuildContexts 比的**不是模块路径,而是 replace 目标的目录名**
           # (`Split-Path -Leaf $abs`),因为该目录名要当作 Dockerfile.go-svc 里 `FROM scratch AS <名字>`
@@ -263,7 +263,7 @@ jobs:
           # 于是本步骤放行、几十分钟的构建跑到 go 族时才在 go_svc_image.ps1 里抛错。放在这里拒,省掉那段构建。
           $targetLeaf = Split-Path -Leaf $target
           if ($targetLeaf -cne 'proto2mysql') {
-              $problems.Add("replace 目标目录名是 '$targetLeaf',不是 'proto2mysql':tools/scripts/go_svc_image.ps1 的 ExternalReplaceStages 与 Dockerfile.go-svc 的占位 stage 都按目录名匹配,go 族构建会被拒。根因修法见 go_svc_image.ps1 注释(改为 require 已发布 tag 并删掉本地 replace,D-14);在那之前 families 不要含 go,或先把 replace 目标改回 proto2mysql。来源:$sources")
+              $problems.Add("replace target directory is named '$targetLeaf', not 'proto2mysql': ExternalReplaceStages in tools/scripts/go_svc_image.ps1 and the placeholder stage in Dockerfile.go-svc both match on the directory name, so the go family build would be refused. The root-cause fix is in the go_svc_image.ps1 comments (require a published tag and drop the local replace, D-14); until then leave go out of families, or point the replace target back to proto2mysql. Sources: $sources")
           }
           if ($canonicalRepo.ContainsKey($module)) {
               $repository = [string]$canonicalRepo[$module]
@@ -272,16 +272,16 @@ jobs:
               $repository = "$($Matches[1])/$($Matches[2])"
           }
           else {
-              $problems.Add("模块路径 $module 不是 github.com/<owner>/<repo> 形式,推不出公开仓库地址")
+              $problems.Add("module path $module is not of the form github.com/<owner>/<repo>; cannot derive the public repository")
           }
           if ([string]::IsNullOrEmpty($ref)) {
-              $problems.Add("$sources 把 $module 指向仓库外的本地修复版目录 ${target}。该目录的内容不等于 require 行里的版本(见对应 go.mod 注释),仓库里没有能可靠确定其提交的信息,不能猜。请在输入 proto2mysql_ref 填含该修复的 40 位 commit sha;或先给修复打 tag、删掉 replace 并升级 require(D-14)。")
+              $problems.Add("$sources points $module at the out-of-repo local fix directory ${target}. Its content is not the version on the require line (see that go.mod comment), and nothing in the repo pins its commit reliably, so it will not be guessed. Set the proto2mysql_ref input to the 40-character commit sha that contains the fix, or tag the fix first, drop the replace and bump the require (D-14).")
           }
           elseif ($ref -cnotmatch '^[0-9a-f]{40}$') {
-              $problems.Add("proto2mysql_ref='$ref' 不是 40 位小写 commit sha:tag 与分支都可能被移动(proto2mysql 的 v0.1.0 就被移动过),发布只接受不可变的提交号")
+              $problems.Add("proto2mysql_ref='$ref' is not a 40-character lowercase commit sha: tags and branches can move (proto2mysql v0.1.0 already did), so a release accepts only an immutable commit")
           }
           if (Test-Path -LiteralPath $target) {
-              $problems.Add("replace 目标 $target 在 runner 上已存在,拒绝覆盖(托管 runner 上不应出现;自托管 runner 请先清理)")
+              $problems.Add("replace target $target already exists on the runner; refusing to overwrite it (this should not happen on hosted runners; clean it up first on self-hosted runners)")
           }
 
           if ($problems.Count -gt 0) {
@@ -333,11 +333,11 @@ jobs:
               }
           }
           if ($declared -cne $env:EXT_MODULE) {
-              $problems.Add("检出的仓库 $($env:EXT_REPOSITORY) 声明的模块是 '$declared',不是 replace 的 $($env:EXT_MODULE)")
+              $problems.Add("checked-out repository $($env:EXT_REPOSITORY) declares module '$declared', not the replaced $($env:EXT_MODULE)")
           }
           $head = (& git -C $src rev-parse HEAD 2>$null | Out-String).Trim()
           if ($head -cne $env:PROTO2MYSQL_REF) {
-              $problems.Add("检出的提交 '$head' 不是输入的 proto2mysql_ref=$($env:PROTO2MYSQL_REF)")
+              $problems.Add("checked-out commit '$head' is not the requested proto2mysql_ref=$($env:PROTO2MYSQL_REF)")
           }
           if ($problems.Count -gt 0) {
               Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '### 发布被拒绝:仓库外 replace 模块检出结果不符'

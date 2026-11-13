@@ -442,3 +442,24 @@ func TestRetireRemovedSlotsCLIStopsBeforeLookingUpCredentials(t *testing.T) {
 		}
 	}
 }
+
+// 汇总行的 pending 是部署脚本判「这一轮收尾做完没有」的依据(k8s_deploy.ps1 Complete-SqlWriterSlotRetirement):
+// Pod 还在、闸门冻结、排空 run 开着、失败都算还没做完;结束了的、别处先结束的、又扩回来的不算。
+func TestRetirementReportCountsPendingCandidates(t *testing.T) {
+	report := retirementReport{replicasBefore: 1, replicasAfter: 1, slots: 4}
+	for _, outcome := range []string{slotRetired, slotAlreadyEnded, slotScaledBackUp, slotPodPresent, slotGateFrozen, slotDrainRunOpen, slotFailed} {
+		report.results = append(report.results, slotRetirementResult{ordinal: 2, schema: "zone_1_db", bootSeq: 3, outcome: outcome})
+	}
+	lines := report.lines("db")
+	if len(lines) != len(report.results)+1 {
+		t.Fatalf("每个候选一行,再加一行汇总: %v", lines)
+	}
+	want := "writer_authority command=retire-removed-slots statefulset=db replicas_before=1 replicas_after=1 roster_slots=4 candidates=7 retired=1 pending=4"
+	if summary := lines[len(lines)-1]; summary != want {
+		t.Fatalf("汇总行:\n got %s\nwant %s", summary, want)
+	}
+	done := retirementReport{slots: 4}.lines("db")
+	if len(done) != 1 || !strings.HasSuffix(done[0], " candidates=0 retired=0 pending=0") {
+		t.Fatalf("没有候选时汇总行 pending=0: %v", done)
+	}
+}

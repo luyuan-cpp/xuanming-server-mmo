@@ -36,12 +36,16 @@ inline constexpr uint64_t kUnlimited = std::numeric_limits<uint64_t>::max();
 
 // 非客户端 fd 的余量,只用作拒启门槛,不是进程可用 fd 的上限(进程实际可用的是抬起来之后的软限,通常就是硬限)。
 // 覆盖:节点间 TCP / gRPC 连接、Redis / Kafka / etcd 客户端、日志文件、每个 EventLoop 的 epoll / eventfd / timerfd,
-// 以及被拒客户端连接在 forceClose 完成前仍占着的 fd。按 2000 万在线推算(Z = 2000 万 ÷ 单 zone 45k~100k ≈ 200~445,
-// 每 zone 的 SM / DS 各 2 副本,见 docs/design/capacity-model-hok-scale.md §7.2):
-//   - gate(直连模式):到全服 scene_manager 约 2Z = 400~890 条(SM 不是 zone-scoped)+ zone 内 scene 数
-//     + login / match 副本;路由模式只连 scene + 路由服,更少;
-//   - scene:到全服 SM / DS 约 4Z = 800~1780 条 + zone 内 gate 数。
-// 两者都在 4096 以内,但这是推算:Z 超过约 900 或副本数变多时 4096 不再是保证,届时改本常数(或改成配置键)。
+// 以及被拒客户端连接在 forceClose 完成前仍占着的 fd。
+//
+// 取值 4096(2026-11-12 定案,不再等实测):
+//   - 2026-10-18 的推算里,最大的一项是「到全服 scene_manager 约 2Z~4Z 条」(Z 是 zone 数),所以当时留了
+//     「Z 超过约 900 要重新核」的尾巴。2026-11-05 起 scene_manager 按 zone 收窄(NodeUtils::IsZoneScopedNodeType),
+//     gate 到路由服也只连按 zone 取的 k 台(docs/design/connection-fanout-subsetting-20261106.md),这一项不再随 Z 增长;
+//   - 剩下随规模增长的只有 zone 内的 gate ↔ scene 全连接(每个节点至多本 zone 的对端台数)与全服池类型的副本数,
+//     都远小于 4096;
+//   - 这个数只决定「启动时要不要拒」。运行期够不够由指标看:process_open_fds / process_max_fds 超过 80% 告警
+//     (process_fd_metrics.h、deploy/k8s/cpp-node-resource-alerts.yaml),不靠这个常数估得准。
 inline constexpr uint64_t kNonClientReserve = 4096;
 
 // 软限抬升的上限。硬限是 infinity 或 1073741816 这类巨大值时只抬到这里,

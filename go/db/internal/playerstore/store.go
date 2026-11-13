@@ -67,25 +67,28 @@ func New(db *sql.DB, knownGen uint32, limits Limits) (*Store, error) {
 	if db == nil {
 		return nil, errors.New("playerstore: nil db")
 	}
-	if limits.MaxRowBytes <= 0 || limits.MaxRequestBytes < limits.MaxRowBytes {
-		return nil, fmt.Errorf("playerstore: invalid limits %+v", limits)
-	}
-	// 写权行的 payload 恒空,不算。
-	dataKinds := len(storepb.PlayerStoreKind_name) - 1
-	if limits.MaxRowBytes*dataKinds+claimResponseOverheadBytes > MaxClaimResponseBytes {
-		return nil, fmt.Errorf("playerstore: MaxRowBytes %d cannot fit %d rows into a claim response of %d bytes",
-			limits.MaxRowBytes, dataKinds, MaxClaimResponseBytes)
-	}
-	if err := checkAuditBudget(limits); err != nil {
+	if err := limits.validate(); err != nil {
 		return nil, err
 	}
 	return &Store{db: db, knownGen: knownGen, limits: limits, now: time.Now}, nil
 }
 
-// VerifySchema 启动时核对 player_store 的列都在。基线已跑过的库上 cmd/migrate 建不出新表,
-// 现有的启动核对只告警;而新路径缺表时每次存盘都报结果未知,scene 会一直重试,所以这里拒绝启动。
-func (s *Store) VerifySchema(ctx context.Context) error {
-	rows, err := s.db.QueryContext(ctx, sqlSelectColumns)
+func (limits Limits) validate() error {
+	if limits.MaxRowBytes <= 0 || limits.MaxRequestBytes < limits.MaxRowBytes {
+		return fmt.Errorf("playerstore: invalid limits %+v", limits)
+	}
+	// 写权行的 payload 恒空,不算。
+	dataKinds := len(storepb.PlayerStoreKind_name) - 1
+	if limits.MaxRowBytes*dataKinds+claimResponseOverheadBytes > MaxClaimResponseBytes {
+		return fmt.Errorf("playerstore: MaxRowBytes %d cannot fit %d rows into a claim response of %d bytes",
+			limits.MaxRowBytes, dataKinds, MaxClaimResponseBytes)
+	}
+	return checkAuditBudget(limits)
+}
+
+// VerifySchema 在首次打开地域存档库时核对玩家存档和审计发件箱的列。
+func VerifySchema(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, sqlSelectColumns)
 	if err != nil {
 		return fmt.Errorf("playerstore: read player_store columns: %w", err)
 	}
@@ -112,7 +115,7 @@ func (s *Store) VerifySchema(ctx context.Context) error {
 			"cmd/migrate cannot create the table, rebuild the database (the project has not launched)", missing)
 	}
 	// 发件箱和存档同一个事务写(audit_outbox.go),缺表同样让存盘一直结果未知。
-	return verifyAuditOutboxSchema(ctx, s.db)
+	return verifyAuditOutboxSchema(ctx, db)
 }
 
 // validateSave 是进事务前的拒绝,不碰库。返回 UNSPECIFIED 表示通过。

@@ -147,6 +147,38 @@ class ZoneConfigRepositoryWiringTest {
         assertTrue(repo.findById(ABSENT_ZONE).isEmpty(), "an absent zone is never inserted");
     }
 
+    // 本区角色上限(2026-11-12):新区缺省 0;只有它自己的写改它;按上限关闭是比较并写 —— 上限变了、为 0、
+    // 开关已关都一行不改(返回 0),命中才关上(返回 1),其余列不动。
+    @Test
+    void roleCapacityDefaultsZeroAndCloseAtCapacityIsConditional() {
+        repo.insertIfAbsent(zone(ZONE, "keep-me", 0, 6000, "", null, true, 9), T1);
+        assertEquals(0, repo.findById(ZONE).orElseThrow().getRoleCapacity(), "a new zone has no role capacity");
+        assertEquals(0, repo.closeCreateRoleAtRoleCapacity(ZONE, 0, T2), "no capacity, nothing to close");
+
+        repo.updateRoleCapacity(ZONE, 30000, T2);
+        ZoneConfig capped = repo.findById(ZONE).orElseThrow();
+        assertEquals(30000, capped.getRoleCapacity());
+        assertEquals("keep-me", capped.getName(), "the capacity write must not touch other columns");
+        assertFalse(capped.isCreateRoleClosed());
+
+        repo.updateSettings(ZONE, zone(ZONE, "renamed", 0, 7000, "", null, false, 1), T2);
+        assertEquals(30000, repo.findById(ZONE).orElseThrow().getRoleCapacity(), "a full-row PUT keeps the capacity");
+
+        assertEquals(0, repo.closeCreateRoleAtRoleCapacity(ZONE, 20000, T2), "a decision made with a stale capacity is void");
+        assertFalse(repo.findById(ZONE).orElseThrow().isCreateRoleClosed());
+
+        assertEquals(1, repo.closeCreateRoleAtRoleCapacity(ZONE, 30000, T2));
+        ZoneConfig closed = repo.findById(ZONE).orElseThrow();
+        assertTrue(closed.isCreateRoleClosed());
+        assertEquals(30000, closed.getRoleCapacity());
+        assertEquals(7000, closed.getCapacity(), "closing must not touch other columns");
+        assertEquals(0, repo.closeCreateRoleAtRoleCapacity(ZONE, 30000, T2), "already closed: nothing changes");
+
+        assertEquals(0, repo.closeCreateRoleAtRoleCapacity(ABSENT_ZONE, 30000, T2));
+        repo.updateRoleCapacity(ABSENT_ZONE, 10, T2);
+        assertTrue(repo.findById(ABSENT_ZONE).isEmpty(), "an absent zone is never inserted");
+    }
+
     @Test
     void deleteByZoneIdRunsInItsOwnTransactionAndReportsAffectedRows() {
         repo.insertIfAbsent(zone(ZONE, "x", 0, 5000, "", null, false, 0), T1);

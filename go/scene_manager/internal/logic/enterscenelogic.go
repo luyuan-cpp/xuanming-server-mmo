@@ -327,12 +327,14 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 
 	// 1. Determine the target zone.
 	//    - Caller provided zone_id: use it (explicit cross-zone teleport).
-	//    - sceneId != 0, no zone_id: look up scene:{id}:zone (reconnect / follow).
+	//    - sceneId != 0, no zone_id: 场景在本 zone 就是本 zone(ownZoneOfScene 只查本 zone 的
+	//      scene:{ctl:<z>}:<id>:node,docs/design/redis-cluster-all-domains-20261110.md §3.3)。不在本 zone(别的 zone 的,
+	//      或不存在)当没有记录,与下一条同样定去向,不往场景所在的 zone 重定向。
 	//    - sceneId == 0, no zone_id: 只跟随「落在具体节点上」的 PlayerLocation 的 zone
 	//      (GO-5,见下方第 1b 步),否则 GateZoneId(首登 —— gate zone = home zone)。
 	targetZoneId := in.ZoneId
 	if targetZoneId == 0 && in.SceneId != 0 {
-		targetZoneId = GetSceneZone(l.svcCtx, in.SceneId)
+		targetZoneId = ownZoneOfScene(l.svcCtx, in.SceneId)
 	}
 	currentLoc, currentLocRaw, currentLocTag, locErr := locationForRevision(l.svcCtx, in.PlayerId, in.OwnerRevision)
 	if locErr != nil {
@@ -364,9 +366,22 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	currentZoneID := uint32(0)
 	if currentLoc != nil {
 		currentZoneID = currentLoc.ZoneId
+		// 没有 zone_id 的历史记录:场景在本 zone 才认本 zone,否则仍当 zone 未知(§3.3,同第 1 步)。
 		if currentZoneID == 0 && currentLoc.SceneId != 0 {
-			currentZoneID = GetSceneZone(l.svcCtx, currentLoc.SceneId)
+			currentZoneID = ownZoneOfScene(l.svcCtx, currentLoc.SceneId)
 		}
+	}
+	// 持有者存活租约(holder_lease.go):下面三个判死接管点在各自的判定成立之后都要问一句「持有进程是不是还活着」。
+	// 一次请求至多读一次,三个点共用结论(整 zone 下线时前两个点会先后成立,不重复读、不重复计数);
+	// 只在 currentLoc 非 nil 时调用。
+	var liveHolder struct{ checked, blocks bool }
+	liveHolderBlocks := func(site string) bool {
+		if !liveHolder.checked {
+			liveHolder.checked = true
+			liveHolder.blocks = liveHolderBlocksTakeover(l.svcCtx, l.Logger, in.PlayerId, currentZoneID,
+				leaveReleaseEpoch(observedEpoch, currentLoc), site)
+		}
+		return liveHolder.blocks
 	}
 	// 合服 / 下线 zone 留下的陈旧 location:旧 zone 在 etcd 注册表里已经没有任何
 	// 场景节点,就不存在「老节点还在存盘」这件事,下面两道交接门禁守护的对象已经
@@ -374,7 +389,9 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 重定向、经目标区 Gate 直接落点)都会被换手门(ErrHandoffPending:死掉的
 	// 源永远写不出落盘标记)永久挡在门外。判定规则见 playerLocationOwnerGone
 	// (只认注册表的正面证据,负载集为空不算);拿不准一律沿用原拒绝。
-	if currentLoc != nil && l.playerLocationOwnerGone(currentLoc, currentZoneID) {
+	// 注册表的证据还要过持有者存活租约这一关:整个 zone 和 etcd 失联、进程却都活着时,
+	// 持有进程在续租,不能把它名下的玩家当成没有位置记录接走。下面两个判死接管点同理。
+	if currentLoc != nil && l.playerLocationOwnerGone(currentLoc, currentZoneID) && !liveHolderBlocks(holderLeaseSiteStaleLocation) {
 		l.Logger.Infof("Ignoring stale player location in offline zone: player=%d stale_zone=%d stale_node=%s stale_scene=%d gate_zone=%d target_zone=%d",
 			in.PlayerId, currentZoneID, currentLoc.GetNodeId(), currentLoc.GetSceneId(), in.GateZoneId, targetZoneId)
 		// raw 一并清空:route 失败回滚时 CAS 会把 key DEL 掉而不是把陈旧值写回去;
@@ -391,7 +408,8 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 且再入屏障已过。死掉的节点永远写不出 handoff 标记,不放行的话它名下的玩家会被
 	// ErrHandoffPending 永久挡在门外,只能等运维手工清 location —— 一次单节点崩溃变成
 	// 一批玩家进不了游戏。判定规则与「为什么这样是安全的」见 playerLocationOwnerDead。
-	if currentLoc != nil && l.playerLocationOwnerDead(currentLoc, currentZoneID) {
+	// 持有进程还在续存活租约时不接管:位置记录原样留着,请求照旧走下面的换手门(18),等它存盘释放或进程退出。
+	if currentLoc != nil && l.playerLocationOwnerDead(currentLoc, currentZoneID) && !liveHolderBlocks(holderLeaseSiteDeadOwnerTakeover) {
 		// 计数不在这里记:这之后还有若干**可重试**的拒绝(home_zone 不可用、epoch 冲突、
 		// 目标 zone 无可用节点),上游退避重试时同一名玩家会把它刷成实际接管数的好几倍,
 		// 而这条指标的判据正是「和当时在线数对得上」。落点确认成功后再记,见函数末尾。
@@ -411,6 +429,12 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	if currentLoc != nil {
 		switch l.playerLocationOwnerReplaced(in.PlayerId, currentLoc, currentZoneID, observedEpoch, barrierSiteReplacedOwnerTakeover) {
 		case ownerReplacedTakeover:
+			// 被顶替的旧进程还在续存活租约(它只是和 etcd 失联,节点号被新进程拿走):实体还在它内存里,不接管。
+			// 和屏障未过同样回可重试的 17:照旧路由会落到同号新进程上按原 epoch 登记,必被拒。
+			if liveHolderBlocks(holderLeaseSiteReplacedOwnerTakeover) {
+				return errResp(constants.ErrSceneReentryBarrier,
+					"location owner process was replaced by a new process reusing its node id but still renews its holder lease; retry"), nil
+			}
 			l.Logger.Infof("[OwnerReplaced] Location owner process was replaced by a new process reusing its node id and the reentry barrier elapsed; treating as unowned: player=%d zone=%d node=%s scene=%d owner_epoch=%d gate_zone=%d target_zone=%d",
 				in.PlayerId, currentZoneID, currentLoc.GetNodeId(), currentLoc.GetSceneId(), observedEpoch, in.GateZoneId, targetZoneId)
 			takenOverLoc, takenOverZone, takenOverReplaced = currentLoc, currentZoneID, true
@@ -574,10 +598,11 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//     照旧回可重试的 ErrSceneReentryBarrier:回落也只会撞上死节点的换手门(18),等屏障过了按死节点接管才对。
 	resumeSceneID := resumeSceneOf(in, sceneConfID, currentLoc, awaitingPlacement, currentZoneID, targetZoneId)
 	if resumeSceneID != 0 {
-		// 原场景是正在回收的频道(缩容摘线时写的 scene:{id}:draining):排空自己会把人改派到默认大世界
+		// 原场景是正在回收的频道(缩容摘线时写的 scene:{ctl:<z>}:<id>:draining):排空自己会把人改派到默认大世界
 		// (sweepDrainingWorldChannels 每拍对还有人的频道发 DestroyScene),回进去只会再被搬一次,直接按排空的去向走。
 		// 标记读不到同样回落:回落就是加回原场景之前的行为,不会更糟。只多一次 EXISTS,只在短重连 / 顶号上发生。
-		if draining, drainErr := l.svcCtx.Redis.Exists(sceneDrainingKey(resumeSceneID)); drainErr != nil || draining {
+		// resumeSceneOf 只在原场景就在目标 zone 时回它,所以标记按目标 zone 拼。
+		if draining, drainErr := l.svcCtx.Redis.Exists(sceneDrainingKey(targetZoneId, resumeSceneID)); drainErr != nil || draining {
 			metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonResumeSceneFallback)
 			l.Logger.Infof("[Reconnect] Previous scene is draining or its draining mark is unreadable; using default world: player=%d zone=%d scene=%d draining=%v err=%v",
 				in.PlayerId, targetZoneId, resumeSceneID, draining, drainErr)
@@ -739,10 +764,15 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// requestedAtMs 不置位),DiscardStaleHandoffEntity 不会因更新的一代把它销毁。
 	// 不这样做,「存量 location + 一直落回同节点」的玩家永远停在 0:帮会 B4c 让资产改动类 RPC 在
 	// epoch == 0 时回 RETRY(fail-closed),这类玩家在换一次节点之前资产操作会一直 RETRY ——
-	// B4c 依赖这一条。观察值非 0 的同节点落点仍不铸造(既有语义)。
+	// B4c 依赖这一条。location 记的 epoch 非 0 的同节点落点仍不铸造(既有语义)。
 	//
-	// 「持有节点缓存为 0」只从两处同时为 0 推出:owner_epoch 键(observedEpoch)**与** location 里记的
-	// epoch。location 记的是上一次派给这个节点的路由事件所带的值,它非 0 而键读到 0,说明持有节点缓存
+	// 判据看 location 记的 epoch,不要求键也读到 0(2026-11-12,zone-redis-regression-guard-20261022.md §4.3.4):
+	// 键读到 M ≠ 0 而 location 记 0,按现有写入方只可能是上一次这种铸造之后走了 keep 回滚(只退 location,键停在铸出值)。
+	// 那次铸造没确认落盘时 M 可能随 Redis 回退消失,不铸造就会把它原样下发 —— 正是两段回执要防的「下发没确认落盘的值」。
+	// 所以再铸一次:新值 max(M+1, 墙钟)经 WAITAOF 确认之后才下发。推路由失败而路由其实已投递时,持有节点缓存着 M,
+	// 新值更大,它按 max 采纳,存盘的写权行同一持有者照常放行。
+	//
+	// 反方向不能照搬:location 记的是上一次派给这个节点的路由事件所带的值,它非 0 而键读到 0,说明持有节点缓存
 	// 着 N ≠ 0、只是键单独丢了(2026-10-12 起本地 compose 也改为 noeviction,K8s 一直是 noeviction,正常
 	// 不会被单独淘汰;但手工 DEL 或共享库被误配成 allkeys-* 淘汰型(该键无 TTL,volatile-* 不会淘汰它)时
 	// 读数相同,所以这条防御保留)。此时铸出 1,持有节点
@@ -790,8 +820,9 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			recordedEpoch, in.PlayerId, nodeId)
 		observedEpoch = recordedEpoch
 	}
-	// 走到这里 samePhysicalNode 为真时 currentLoc 必非 nil。
-	sameNodeZeroMint := samePhysicalNode && observedEpoch == 0 && currentLoc.GetOwnerEpoch() == 0
+	// 走到这里 samePhysicalNode 为真时 currentLoc 必非 nil。只看 location 记的 0,键读到的是 0 还是 keep 回滚留下的铸出值
+	// 都铸造(见上面「判据看 location 记的 epoch」一段)。
+	sameNodeZeroMint := samePhysicalNode && currentLoc.GetOwnerEpoch() == 0
 	// identity / expectLoc 见第 1 步之后的身份裁决:写入裁决给出的身份;原文期望显式取观察原文(无 location =
 	// missing,否则 present),不留零值。死节点接管 / 陈旧 zone 把 currentLoc 清空,但观察原文仍在,落点同样
 	// 要求它没被改过。
@@ -848,6 +879,14 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				}
 			}
 			l.Logger.Infof("Player %d already in scene %d, sending route to gate (reconnect)", in.PlayerId, sceneId)
+			// 下发 location 记的那一代(zone-redis-regression-guard-20261022.md §4.3.4):location 记 0 而键读到 M ≠ 0 时,M 是上一次
+			// 同节点 epoch 0 铸造之后 keep 回滚留下的值,可能没确认落盘,不能原样下发。持有节点按 max 采纳,0 不覆盖它手里的任何值;
+			// 实体若要据此重建,得到的是 0(从未铸造的口径),下一次换图再铸新值。其余情形两者相同:落点脚本成对写键与 location,
+			// 键丢失时上面已按 location 补种,待确认回执已在第 3d 步确认并改写。
+			routedEpoch := observedEpoch
+			if currentLoc.GetOwnerEpoch() == 0 {
+				routedEpoch = 0
+			}
 			if in.GateId != "" {
 				// 同一落点重连**不铸造** epoch:归属没有变,持有节点手里的缓存值
 				// 必须继续等于 Redis 当前值。原样把观察到的值放进路由事件,节点若据此
@@ -857,14 +896,14 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				// 回滚会把身份退回旧会话,旧会话迟到的 LeaveScene 与身份完全相同而判 deleted(重开 b1),旧会话在途
 				// 的换图也会被判同会话放行(重开 d2)。不回滚是安全的:身份写入不动人数;本请求的会话此时已提交,
 				// 它自己最终的清理带的身份不小于当前身份,照样能删干净。
-				if err := l.routePlayerToGate(in, nodeId, sceneId, homeZoneID, observedEpoch); err != nil {
+				if err := l.routePlayerToGate(in, nodeId, sceneId, homeZoneID, routedEpoch); err != nil {
 					l.Logger.Errorf("Failed to route reconnecting player %d to gate: %v", in.PlayerId, err)
 					return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route player to gate failed: %v", err)), nil
 				}
 			} else if in.HostedPlacement {
 				// 托管角色的 location 已经指向这个场景:通常是上一条托管落点的事件还没被目标节点消费。照样再发一次,
 				// 让实体收敛到 location(scene 侧对"已在目标场景"幂等);失败只回 7,理由同上,不回滚。
-				if err := l.routePlacement(in, nodeId, hostedInstance, sceneId, homeZoneID, observedEpoch); err != nil {
+				if err := l.routePlacement(in, nodeId, hostedInstance, sceneId, homeZoneID, routedEpoch); err != nil {
 					l.Logger.Errorf("[HostedPlacement] failed to re-deliver same-placement hosted route for player %d: %v", in.PlayerId, err)
 					return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route hosted player to scene node failed: %v", err)), nil
 				}
@@ -901,6 +940,11 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 铸造已写进 Redis 却没确认落盘:placed 有效,不在这里返回 —— 6b 照常扣旧场景人数,随后在第 7 步之前按
 	// 「推路由失败」同一套回滚收尾(回滚确认生效后 rollbackEnterSceneAfterRouteFailure 把两边人数还回去)。
 	mintNotDurable := errors.Is(updateErr, errOwnerEpochMintNotDurable)
+	if errors.Is(updateErr, errOwnerEpochMintResultUnknown) {
+		// 铸造结果未知:placed 是计划写下的落点,首发可能已生效。人数此时还没动过(6a / 6b 在后面),回滚与退人数的顺序见该函数。
+		return l.rollbackUnknownMintResult(in, currentLoc, currentLocRaw, currentZoneID, placed, guard.requiredMarker,
+			sameNodeZeroMint, targetZoneId, sceneId, nodeId, updateErr), nil
+	}
 	if updateErr != nil && !mintNotDurable {
 		l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
 		if errors.Is(updateErr, errHandoffWithdrawn) {
@@ -1146,9 +1190,11 @@ func (l *EnterSceneLogic) commitSceneMember(playerID, sceneID uint64, zoneID uin
 //     僵尸手里的旧 epoch 之后每一次存盘都被 go/db 判 STALE_OWNER 并自毁。它不靠时间,屏障只是让这种交错少发生;
 //     两层同时在位才放行 —— 这正是阶段 1 落完之后才补这条的原因。
 //
-// 代价:死节点没来得及提交的那段进度丢失,新节点读到的是最后一次提交。只断了 etcd、过了屏障仍活着的老进程,
-// 最后一次提交之后的进度同样丢失,只丢不盖;它在身份不确认期间每 5 秒给玩家补存一次(C++ player_lifecycle.cpp 的
-// RunIdentityAtRiskSaves),丢失上限约 5 秒(data-consistency-guarantee-map-20261020.md §6.2 第 4 条)。
+// 代价:死节点没来得及提交的那段进度丢失,新节点读到的是最后一次提交。
+// 只断了 etcd、过了屏障仍活着的老进程不在这里放行:它在身份不确认期间给内存里的每名玩家续存活租约,调用点在本函数
+// 返回 true 之后还要过 liveHolderBlocksTakeover(holder_lease.go),租约在就不接管。租约那一层失效
+// (玩家域 Redis 对那个节点也不可达)时才回到「只丢不盖」:老进程同时每 5 秒给玩家补存一次(C++ player_lifecycle.cpp 的
+// RunIdentityAtRiskSaves),丢失上限约 5 秒(data-consistency-guarantee-map-20261020.md §6.2 第 4 条、§6.3 第 6 条)。
 //
 // 「死亡」要的是**正面证据**,不是「看不到它」:节点必须已经从 etcd 注册表里消失
 // (租约到期 / 主动注销,见 isNodeGoneFromRegistry)。只看 Redis 负载集不够 —— 负载集的
@@ -1283,12 +1329,13 @@ func awaitingPlacementExpired(loc *scene_manager.PlayerLocation, now time.Time) 
 // (docs/design/control-plane-zone-scoping-20261105.md §4.3)。判定改为 foreignZoneOpensWorldMap,不做解析、不预占:
 //   - 图不在 World 表里 = 没开。副本 / 镜像的 conf id、客户端乱填的 id 都落在这里(每个 zone 只为 World 表里的图
 //     铺频道,由世界频道初始化与自动扩缩容维护);
-//   - 目标 zone 在 etcd 里没有能承载大世界的场景节点 = 没开(没铺过频道,或节点全没了,第二条腿必然落不了地);
+//   - 目标 zone 在 etcd 里没有能用来落地的大世界节点 = 没开(节点全没了,或全在计划排空;口径与选点相同,
+//     见 hasWorldHostingRegistration),第二条腿必然落不了地;
 //   - 有节点但频道暂时全不可用(节点刚换代、满员)照常放行:陈旧频道由第二条腿的解析懒修复,
 //     指定了地图(conf≠0)时真落不进去,第二条腿回落默认大世界;conf=0 本身就是默认大世界,
 //     没有回落(见下)。这里拒它,就把目标区的过渡窗口变成了"传送不可用"。
-//   - 与原来读频道集合的差别只在目标 zone 刚起、节点已注册而领导者还没铺频道的那几秒:原来拒,现在放行,
-//     第二条腿解析不到时按原有失败处理(残余见设计稿 §6 第 1 条)。
+//   - 有节点而频道还没铺(目标 zone 刚起、领导者还没跑完世界频道初始化)照常放行:第二条腿当场补铺,领导者还没把
+//     节点放进负载集时在请求期限内等它(world_channel_on_demand.go)。
 //
 // 查哪张图 —— 必须与第二条腿解析时用的是同一张:
 //   - 请求指定了地图(conf≠0):就是它。第一条腿把它记进等待落点,第二条腿读出来解析。
@@ -1313,7 +1360,7 @@ func (l *EnterSceneLogic) rejectTravelToUnopenedMap(in *scene_manager.EnterScene
 	}
 	// 目标 zone 恒不是本 zone(调用方只在跨 zone 重定向里调),它的频道集合在它自己的控制域里,本进程不读
 	// (docs/design/control-plane-zone-scoping-20261105.md §4.3)。改为与 zone 无关的判定:图在 World 表里,
-	// 且 etcd 里目标 zone 有能承载大世界的场景节点(foreignZoneOpensWorldMap)。
+	// 且 etcd 里目标 zone 有能用来落地的大世界节点(foreignZoneOpensWorldMap)。
 	open, err := foreignZoneOpensWorldMap(l.ctx, l.svcCtx, targetZoneId, confID)
 	if err != nil {
 		l.Logger.Errorf("[Travel] Failed to read target zone scene node registry; skipping map precheck (second leg resolves destination): player=%d target_zone=%d map=%s scene_conf_id=%d err=%v",
@@ -1387,6 +1434,19 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 			notDurableErr, placeErr = placeErr, nil
 		}
 		if placeErr != nil {
+			if errors.Is(placeErr, errOwnerEpochMintResultUnknown) {
+				// 铸造结果未知:placed 是计划写下的等待落点,首发可能已生效。不推重定向,先按原字节回滚,再按回滚之后的 location
+				// 摘或留旧场景的成员身份(等待落点没有场景成员身份,不用退预占)。理由同同 zone 的 rollbackUnknownMintResult。
+				l.Logger.Errorf("[OwnerEpochMint] Mint EVAL result unknown during cross-zone admission; no redirect sent, rolling back the planned placement: player=%d epoch=%d target_zone=%d err=%v",
+					in.PlayerId, placed.epoch, targetZoneId, placeErr)
+				resp := errResp(constants.ErrKafkaRoute, fmt.Sprintf("owner epoch mint result unknown: %v", placeErr))
+				_, resp.OwnerEpochAfterRollback = rollbackPlacementAfterPushFailure(l.ctx, l.svcCtx, l.Logger, in.PlayerId,
+					currentLoc, currentLocRaw, currentZoneID, placed, placement.guard.requiredMarker, false)
+				if currentLoc != nil && currentLoc.SceneId != 0 {
+					l.releaseSceneMember(in.PlayerId, currentLoc.SceneId, currentZoneID, currentLoc.NodeId)
+				}
+				return resp, nil
+			}
 			if errors.Is(placeErr, errHandoffWithdrawn) {
 				metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonHandoffWithdrawn)
 				l.Logger.Errorf("[Handoff] Source scene withdrew handoff marker during cross-zone admission; no redirect sent for this request: player=%d target_zone=%d",
@@ -1441,6 +1501,32 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 		ErrorCode: 0,
 		Redirect:  redirect,
 	}, nil
+}
+
+// rollbackUnknownMintResult 收尾第 6 步铸造结果未知(errOwnerEpochMintResultUnknown):首发可能已生效,也可能没有。
+//
+//  1. 不推路由。用计划好的落点按原字节回滚(rollbackPlacementAfterPushFailure,凭标记的 bump 走两段回执):生效了就撤掉,
+//     铸出的值作废、一次都没下发;没生效或状态已被并发改写,回滚 CAS 不过、什么都不改。
+//  2. 回滚之后再退人数。人数只在第 6a / 6b 步动,这一支没走到那里;removeSceneMember 按当时的 location 保留重叠的成员身份,
+//     所以先回滚、后退人数,两种结局都对得上:location 指回旧落点(回滚了,或首发根本没生效)时,目标场景的预占被摘掉、
+//     旧场景的身份不动;回滚没做成而首发其实生效了,location 仍指向目标,预占留下当真,旧场景的身份被摘掉。
+//  3. 回 7(ErrKafkaRoute,可重试):C++ 源端走与推路由失败相同的取证路径,登录侧照常重试。
+//
+// 残余:首发卡在网络里、晚于这次回滚才执行时,回滚 CAS 不过(状态还是观察时那一份),首发随后照样生效,留下没确认落盘、
+// 指向从未载入玩家的目标的落点。要两件事叠加:传输错误让首发结果未知,而且首发在之后的回滚执行完以后才到 Redis。
+func (l *EnterSceneLogic) rollbackUnknownMintResult(in *scene_manager.EnterSceneRequest, currentLoc *scene_manager.PlayerLocation,
+	currentLocRaw string, currentZoneID uint32, placed placedLocation, requiredMarker string, keepMintedEpoch bool,
+	targetZoneID uint32, sceneID uint64, nodeID string, cause error) *scene_manager.EnterSceneResponse {
+	l.Logger.Errorf("[OwnerEpochMint] Mint EVAL result unknown; not routing, rolling back the planned placement: player=%d epoch=%d target_scene=%d target_node=%s err=%v",
+		in.PlayerId, placed.epoch, sceneID, nodeID, cause)
+	resp := errResp(constants.ErrKafkaRoute, fmt.Sprintf("owner epoch mint result unknown: %v", cause))
+	_, resp.OwnerEpochAfterRollback = rollbackPlacementAfterPushFailure(l.ctx, l.svcCtx, l.Logger, in.PlayerId,
+		currentLoc, currentLocRaw, currentZoneID, placed, requiredMarker, keepMintedEpoch)
+	l.releaseSceneMember(in.PlayerId, sceneID, targetZoneID, nodeID)
+	if currentLoc != nil && currentLoc.SceneId != 0 {
+		l.releaseSceneMember(in.PlayerId, currentLoc.SceneId, currentZoneID, currentLoc.NodeId)
+	}
+	return resp
 }
 
 // rejectUnconfirmedPendingRollback 把第 3d 步 confirmPendingRollbackLocation 的失败翻成应答(错误清单见该函数)。
@@ -1554,17 +1640,10 @@ func (l *EnterSceneLogic) sendRedirectToGate(in *scene_manager.EnterSceneRequest
 func (l *EnterSceneLogic) resolveScene(sceneId uint64, sceneConfId uint64, zoneId uint32) (uint64, string, error) {
 	// Case 1: exact scene instance specified.
 	if sceneId != 0 {
-		// 读出错必须拒绝,不能当成「没记录 zone」放过守卫:NodeId 只在 zone 内唯一,别的 zone 的场景
-		// 若属主号恰好与本 zone 某个活节点同号,下面会被当成本 zone 的活场景,玩家被派到没有它的节点。
-		mappedZone, err := lookupSceneZone(l.svcCtx, sceneId)
-		if err != nil {
-			return 0, "", fmt.Errorf("scene %d zone lookup failed: %w", sceneId, err)
-		}
-		if mappedZone != 0 && mappedZone != zoneId {
-			return 0, "", fmt.Errorf("scene %d belongs to zone %d, requested zone %d", sceneId, mappedZone, zoneId)
-		}
-		key := fmt.Sprintf("scene:%d:node", sceneId)
-		nodeId, err := l.svcCtx.Redis.Get(key)
+		// 只读请求 zone 的属主键 scene:{ctl:<z>}:<id>:node(docs/design/redis-cluster-all-domains-20261110.md §3.3)。
+		// 别的 zone 的场景在这里读不到,按下面的「查无此场景」拒绝:NodeId 只在 zone 内唯一,别的 zone 的场景若属主号恰好与
+		// 本 zone 某个活节点同号,当成本 zone 的活场景会把玩家派到没有它的节点。原来靠 scene:<id>:zone 守卫拦,那把键已删。
+		nodeId, err := l.svcCtx.Redis.Get(sceneNodeKey(zoneId, sceneId))
 		if err != nil {
 			return 0, "", fmt.Errorf("scene lookup failed: %w", err)
 		}
@@ -1828,7 +1907,8 @@ func (l *EnterSceneLogic) resolveSceneForEnter(sceneId uint64, sceneConfId uint6
 		sceneConfId = defaultConf
 	}
 
-	sid, nid, err := ReserveBestWorldChannelForEnter(l.ctx, l.svcCtx, sceneConfId, zoneId, playerId)
+	// 这张图一个频道都没有(zone 刚起、领导者还没铺完)时当场补铺再挑,与 CreateScene 的慢路径一致(world_channel_on_demand.go)。
+	sid, nid, err := reserveWorldChannelCreatingOnDemand(l.ctx, l.svcCtx, sceneConfId, zoneId, playerId)
 	if err != nil || sid == 0 {
 		return 0, "", false, fmt.Errorf("no available channel for conf %d in zone %d", sceneConfId, zoneId)
 	}

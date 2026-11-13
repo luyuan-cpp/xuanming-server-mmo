@@ -115,7 +115,7 @@ func TestEnterScene_ZeroZoneReconnectSkipsDrainingChannel(t *testing.T) {
 	// 回收中的线:已从在役集合摘到回收中集合,映射还在,等人走空。
 	seedSceneOnNode(mr, testZoneId, drainingID, "10", "1")
 	mr.SAdd(worldDrainingSetKey(testZoneId, defaultConf), fmt.Sprintf("%d", drainingID))
-	require.NoError(t, mr.Set(sceneDrainingKey(drainingID), "1"))
+	require.NoError(t, mr.Set(sceneDrainingKey(testZoneId, drainingID), "1"))
 	seedNodeMembers(mr, testZoneId, "10", 1)
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, drainingID, "10", testZoneId))
 	adoptSceneMember(mr, drainingID, playerID)

@@ -5,6 +5,7 @@
 > 2026-11-05 起有三份预留记录和全局号源登记处,首次初始化和事故恢复是两个入口。**未编译、未测试、未演练**,第一次按本手册操作之前先在 staging 走一遍 §5。
 > 2026-11-11 起地域码绑定加上部署身份(本进程所在 K8s 集群的 kube-system UID,运行期读),在用的码只能从绑定它的地域退役([交接 §8](../handoff/global-id-issuer-registry-20261105.md)),同样**未编译、未测试**。
 > 2026-11-11 第二批([交接 §9](../handoff/global-id-issuer-registry-20261105.md)):登记处只走双向 TLS;地域码只能按顺序认领;dev、test 不能连共用登记处;换码只换发号码(`-IdIssuerRegion`),存档库的地域编号不变。同样**未编译、未测试**。
+> 2026-11-12 第三批([交接 §10](../handoff/global-id-issuer-registry-20261105.md)):本地记录也写上部署身份,登记处丢码之后拷来的记录不能用来重新登记;没认领过的码只能按顺序跳过,不能隔空补墓碑;退役别的码用 `-id-issuer-retire-code`。同样**未编译、未测试**。
 
 ## 1. 要知道的事实
 
@@ -29,9 +30,14 @@
   - 集群级备份恢复(Velero、卷快照)会把数据目录里的集群号一起带过去。
 
   kube-system 的 UID 由 API server 建集群时生成,按对象恢复带不走。读它要求 data-service 的 ServiceAccount 能 get `namespaces/kube-system`,部署脚本随 data-service 一起 apply 这条权限(`deploy/k8s/manifests/go-svc/data-service-identity-rbac.yaml`)。读不到就不预留,指标 `identity_error`,手里的块照发。dev 不读。三套 etcd 的引导令牌也带上这个 UID,新部署出的 etcd 集群号各不相同。
+- **两份本地记录里也写着部署身份**:每次预留、初始化、恢复建记录时,写下它的那个 K8s 集群的身份。登记处有这个码时以登记处的绑定为准,不看它。登记处丢了这个码时,它是「谁是绑定的那一份」唯一幸存的证据:只有写下本地记录的那个环境能重新登记(§4.3)。
 - 地域码按从小到大、一个接一个认领。登记处的 `/id_registry/v1/next_region` 是下一个可认领的码,认领一次就推过去。初始化只能认领它本身:填大了报 `region codes are claimed in order`,什么都不写,免得一次填错就把中间的码永久烧掉。**用过的码永不再分配**:哪怕它那条记录丢了,它也小于 `next_region`,初始化照样拒绝。
+- 登记处开启之后,**有记录的码都小于 `next_region`**,发号器在每次补记录时守住这一条:
+  - 给一个从没认领过、又大于 `next_region` 的码补墓碑,拒绝(同样报 `region codes are claimed in order`)。放它进去的话,顺序认领走到这个码就既认领不了、也跳不过去,后面的码全部卡死。
+  - 墓碑恰好补在 `next_region` 上,就是「这个码不用了,跳过」:写墓碑,指针推到下一个(§4.6)。
+  - 在用的地域凭本地记录重新登记到 `next_region` 或之上(登记处重建时开启得太低),指针跟着推到它后面。
 - 第四道防线是时间下限:每块的起点不低于当前时间对应的计数器值。它只会把起点往上抬,坏时钟不会造成重号。
-- 记录的值:本地是 `{"counter":<计数器>,"authority":"<32 位十六进制>"}`;登记处是 `{"state":"active|retired","authority":...,"deployment":"k8s:<uid>","primary_cluster":...,"secondary_cluster":...,"high_water":...,"blocks":...}`。计数器是 `地域 << 57 | 秒 << 24 | 序号`,秒从 2026-01-01 UTC 起算。不认旧的纯数字格式。
+- 记录的值:本地是 `{"counter":<计数器>,"authority":"<32 位十六进制>","deployment":"k8s:<uid>"}`(dev 写的记录没有 `deployment`);登记处是 `{"state":"active|retired","authority":...,"deployment":"k8s:<uid>","primary_cluster":...,"secondary_cluster":...,"high_water":...,"blocks":...}`。计数器是 `地域 << 57 | 秒 << 24 | 序号`,秒从 2026-01-01 UTC 起算。不认旧的纯数字格式。
 - 发号器不用全局库。**恢复 `mmorpg_global` 不影响发号。**
 - **两套独立本地 etcd 是强规定**(AGENTS §7,负责人 2026-10-31 定)。配置校验要求三组地址两两没有交集;每次预留和运维操作再比 etcd 自己报的集群号,三套两两相同就拒绝,错误里带 `same etcd cluster`。
 - dev 档(`Mode: dev` 且 `IdSegment.AllowAutoSeed=true`)三份记录放同一套 etcd,缺什么第一次预留时自动补,不需要下面任何操作。压测前清空 etcd 没有问题。dev、test 不核地域码绑定,所以不能连共用登记处:配置里写了 `RegistryEtcd` 或 `RegistryTLS`,启动就报错。
@@ -175,11 +181,18 @@ kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /ap
 
 - **登记处被回档、本地完好**:不用手工修改水位,发号器按本地记录继续并把登记处抬上去,指标 `registry_behind`。差距超过一块时日志含 `more than one block behind`,但多次未完成的预留也会产生这条日志,须结合写失败和恢复记录判断,不能只凭日志断言回档。确认回档后查清楚是谁恢复了登记处。
 - **登记处丢了一个码**:这个地域预留和初始化都拒绝,日志 `not registered`。在这个地域跑 `-id-issuer-recover`(不带 rebind),按本地两份记录的最大值重新登记,输出 `re-registered region <码>`。
+  - 只有写下本地记录的那个环境能重新登记:发号器比对本地记录里的部署身份和本进程所在的 K8s 集群。
+  - 报 `local reservation records were not written by this deployment`,并列出记录里的身份和本环境的身份:这套环境的 etcd 数据是从别的环境拷来的(集群级备份恢复),或者是 2026-11-12 之前写的、没有身份的记录。拷来的记录可能比原地域发过的号旧,不是可信的上界,所以这里不能重新登记,加 `-id-issuer-rebind` 也不放行。登记处在的时候 rebind 是安全的,因为水位由登记处盖住;现在登记处没有这个码,过期的水位没有任何东西纠正。
+  - 这时分两种情况处置。**先不要退役这个码**:补了墓碑,原地域要是还在,就再也登记不回来了。
+    - 这套环境是克隆(原地域还在):它不该用这个码。去原地域跑 `-id-issuer-recover`;克隆要发号,就给它自己的码。
+    - 原地域确实已经不在,这里是它的灾备:这个码恢复不了。先确认原地域的 data-service 已经全部停掉,再按 §4.5 给这个地域换一个发号码。新码发号正常之后,才用 `-id-issuer-retire -id-issuer-retire-code <旧码>` 给旧码补墓碑,登记表里标「退役」。
 - **登记处整个丢了**:所有地域拒绝新块,新地域初始化报 `not opened`。重建,不从备份恢复:
   1. 重新部署登记处 etcd(托管集群 `infra-up -HostIdRegistry`),数据目录是空的。沿用原来的 Secret `etcd-id-registry-tls`,也就是同一个世界 CA、同一张服务端证书:换了 CA,所有地域都连不上,还得全世界重签客户端证书。换托管集群时,新的访问地址要先在服务端证书的 SAN 里(§6)。
   2. 每个在用的地域各跑一次 `-id-issuer-recover`,按本地记录重新登记。
-  3. 按[地域码登记表](open-new-region-runbook.md) §3,对每个用过、但第 2 步没有重新登记的码补墓碑。这包括已退役的码,也包括整个地域已经不在、记录全丢的码:不补的话,它会被当成没用过的码重新认领,新地域发的号就和它当年发过的撞上。做法:复制一份 data-service 配置,把 `IdSegment.Issuer.Region` 改成那个码,跑 `-id-issuer-retire`。登记处里没有这个码时不核绑定,不需要 `-id-issuer-retire-unbound`;它要是已经被第 2 步重新登记成在用的码,说明台账错了,停下来查。
+  3. 按[地域码登记表](open-new-region-runbook.md) §3,对每个用过、但第 2 步没有重新登记的码补墓碑。这包括已退役的码,也包括整个地域已经不在、记录全丢的码:不补的话,它会被当成没用过的码重新认领,新地域发的号就和它当年发过的撞上。做法:在任意一个地域的 data-service Pod 里,对每个码跑一次 `-id-issuer-retire -id-issuer-retire-code <码>`(§4.6)。登记处里没有这个码时不核绑定,不需要 `-id-issuer-retire-unbound`;它要是已经被第 2 步重新登记成在用的码,说明台账错了,停下来查。
+     这一步在开启之前做,发号器没有「下一个可认领的码」可以对照,填错的码也会写进去,所以写之前逐个核对台账。墓碑补到了一个没用过的码上时,第 4 步会被它卡住(开启必须高于全部已有记录)。不要为了让开启通过把 `next` 填大,那会烧掉中间的码。处置:确认登记处还没开启、这个码在台账里确实没用过,两个人核对之后用 `etcdctl del /id_registry/v1/region/<两位码>` 删掉这一条。这是唯一允许手工改登记处的情形。
   4. 开启登记处,下一个可认领的码取登记表里用过的最大码 +1:`-id-registry-open -id-registry-next <最大码+1>`。这一步之前任何初始化都被拒绝;`next` 不大于已登记的码时开启也被拒绝。
+  5. 开启之后才发现开低了(有用过的码不小于 `next`):在用的地域照常跑 `-id-issuer-recover`,重新登记时指针会推到它后面;已经不在的码,从 `next` 起一个一个按 §4.6 的办法跳过,直到 `next` 高于台账里用过的最大码。
 
 重新登记的前提是本地记录这时没有被回档。登记处和本地同时出事,本地记录取不到可信上界,走 §4.4。
 
@@ -212,7 +225,21 @@ kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /ap
 
 退役没有撤销入口,而 staging 和生产共用登记处,所以码还在用时,发号器只认从绑定它的那个部署环境执行。本地记录的地域和世系、本进程所在 K8s 集群的身份、两套 etcd 的集群号,都要和登记处一致。在别处执行一律拒绝,不写任何东西,输出 `refusing to retire region <码>, which is in use, from here`。
 
-地域已经下线、没法在那里执行时:确认它的 data-service 已经全部停掉、不会再发号,再从别处加 `-id-issuer-retire-unbound` 执行。这个开关跳过上面的核对。登记处里没有这个码时(§4.3 补墓碑、§4.4)不核绑定,不需要它。
+地域已经下线、没法在那里执行时:确认它的 data-service 已经全部停掉、不会再发号,再从别的地域的 data-service Pod 里执行,用 `-id-issuer-retire-code` 指明要退役的码,加 `-id-issuer-retire-unbound` 跳过上面的核对:
+
+```bash
+kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-retire -id-issuer-retire-code <码> -id-issuer-retire-unbound
+```
+
+`-id-issuer-retire-code` 让这一次退役操作别的码,不用为此去改配置里的地域码(配置里的码有部署注入的值把关,改了进程拒绝启动)。它必须是 1..63,显式给了不合法的值直接报错,不会回落到配置里的码。不带 `-id-issuer-retire-unbound` 时,在用的码照样被绑定核对拒绝。登记处里没有这个码时(§4.3 补墓碑、§4.4)不核绑定,不需要 `-id-issuer-retire-unbound`。
+
+登记处里没有记录的码,能不能补墓碑看它和 `next_region` 的关系(登记处没开启时不看,见 §4.3):
+
+| 这个码 | 结果 |
+|---|---|
+| 小于 `next_region`(用过,记录丢了) | 写墓碑 |
+| 等于 `next_region` | 写墓碑,`next_region` 推到下一个。这就是「跳过一个码」:这个码不给任何地域用了。命令是 `-id-issuer-retire -id-issuer-retire-code <next_region 的值>` |
+| 大于 `next_region`(从没认领过) | 拒绝,输出 `region codes are claimed in order ... there is nothing to retire`,什么都不写。多半是地域码填错了 |
 
 ### 4.7 不要做的事
 
@@ -223,6 +250,7 @@ kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /ap
 - 原来那一份(原来的 K8s 集群或那两套 etcd)还在给这个码发号时,不要 rebind。
 - 不要把用过的地域码分给别的地域。
 - 不要对一个还有地域在用的码加 `-id-issuer-retire-unbound`。它跳过绑定核对,退了就收不回来。
+- 登记处丢了码的时候,不要在数据是拷来的环境里退役这个码(§4.3)。发号器已经拒绝它重新登记;在这里补墓碑,会把原地域的码永久废掉。
 - 不要收回 data-service 读 `namespaces/kube-system` 的权限,也不要给它关掉 ServiceAccount 令牌挂载。读不到部署身份,发号器就不预留新块。
 - 不要把登记处的服务端私钥拷到托管集群以外,也不要给同一个世界签第二个 CA。别处有了能冒充登记处的证书,发号器就分不出连的是哪一套。
 - 不要为了让握手通过,把 `ca.crt` 换成别的 CA 或关掉 TLS。握手失败说明连错了或证书错了,按 §3 处置。
@@ -258,14 +286,15 @@ kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /ap
 3. 先拍本地两套 etcd 的快照,再发几块号,再把两套都恢复到那份快照:发号不停,新块在登记处水位之上,指标 `records_behind_registry` 增长。
 4. 删掉本地两份记录:发号器拒绝;`-id-issuer-recover` 不带 rebind 拒绝;带 rebind 之后恢复。
 5. 在另一个 K8s 集群里,用同一份清单和同一个地域码部署。这时两边本地 etcd 的集群号相同,只有部署身份不同。预期:初始化报 `was already claimed`,发号报 `not the ones bound`,登记处不变。再把原地域的 etcd 数据目录恢复过去(克隆快照),照样拒绝。
-6. 删掉登记处这个码的记录:发号器拒绝;`-id-issuer-recover` 重新登记之后恢复。
+6. 删掉登记处这个码的记录:发号器拒绝。先在第 5 步那个带克隆数据的集群里跑 `-id-issuer-recover`,带不带 `-id-issuer-rebind` 都试一次:都拒绝,报 `were not written by this deployment`,登记处仍然没有这个码。再在原地域跑 `-id-issuer-recover`:重新登记,发号恢复。
 7. 在另一个 K8s 集群里,对这个在用的码跑 `-id-issuer-retire`:拒绝,登记处不变。
+8. 用 `-id-issuer-retire -id-issuer-retire-code <码>` 退役一个远大于 `next_region` 的码:拒绝,`next_region` 不变。再对 `next_region` 本身跑一次:写墓碑,`next_region` 加一,之后的新码照常初始化。
 
 单机上的自动化演练(真 etcd、真快照恢复)由 Codex 按 [交接说明](../handoff/global-id-issuer-registry-20261105.md) 执行。
 
 ## 6. 证书怎么签
 
-用 openssl 1.1.1 以上,在一台不进任何集群的运维机上做;世界 CA 的私钥离线保存。下面 `<infra>` 是托管集群的 infra 命名空间,`<私网地址>` 是别的集群访问登记处的地址(域名或 IP,每个都要写进 SAN)。
+用 openssl 1.1.1 以上,在一台不进任何集群的运维机上做;世界 CA 的私钥离线保存。下面 `<infra>` 是托管集群的 infra 命名空间,`<私网地址>` 是别的集群访问登记处的地址,每个都要写进 SAN:域名写 `DNS:<域名>`,IP 写 `IP:<地址>`。发号器按 `RegistryEtcd` 里写的主机名或 IP 核对证书,配置里写的是什么,SAN 里就要有什么。
 
 ```bash
 # 世界 CA(全世界一次)

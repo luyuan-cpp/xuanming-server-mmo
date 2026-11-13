@@ -57,11 +57,12 @@ import (
 // 实体(踢人 + 回档)。Go 这边写 location 也走同一把 epoch 的 CAS,两条通道不
 // 各写各的。
 //
-// 唯一例外(2026-09-21,cross-zone-scene-travel.md §12.6.9):同物理节点、owner_epoch 键读到 0
-// **且** location 记的 epoch 也是 0(存量玩家,从未铸造过)时也铸造。上面「窗口内存盘被拒」的前提是
-// 持有节点缓存着非 0 值;缓存为 0 时 C++ 走不带 guard 的旧 Save,新值拒不了它。不铸的话这类玩家
-// 一直停在 0,帮会 B4c 的资产 RPC 对 epoch==0 一律回 RETRY。键读到 0 而 location 记着 N≠0(键被
-// 单独淘汰)时不铸造,先按 N 补种(SET NX)。推导与残余见 enterscenelogic.go 的 sameNodeZeroMint。
+// 唯一例外(2026-09-21,cross-zone-scene-travel.md §12.6.9):同物理节点、location 记的 epoch 是 0 时也铸造。
+// 键读到 0 是从未铸造过的存量玩家;键读到 M ≠ 0 是上一次这种铸造 keep 回滚留下的、可能没确认落盘的值,同样再铸一次,
+// 不把它原样下发(2026-11-12,zone-redis-regression-guard-20261022.md §4.3.4;同落点重连这时下发 location 记的 0)。
+// 上面「窗口内存盘被拒」的前提是持有节点缓存着非 0 值;缓存为 0 时 C++ 走不带 guard 的旧 Save,新值拒不了它。不铸的话
+// 这类玩家一直停在 0,帮会 B4c 的资产 RPC 对 epoch==0 一律回 RETRY。键读到 0 而 location 记着 N≠0(键被单独淘汰)时
+// 不铸造,先按 N 补种(SET NX)。推导与残余见 enterscenelogic.go 的 sameNodeZeroMint。
 // ---------------------------------------------------------------------------
 
 // luaLocationExpectCheck 是两段落点 Lua 共用的「location 原文期望」检查(scene-enter-chain-residuals.md §5.2 ③),
@@ -455,6 +456,16 @@ var errOwnerEpochConflict = errors.New("owner epoch advanced by a concurrent Ent
 // 用 errors.Is 判;具体原因在包装链里,只进日志。忘了特判它的调用方落进通用错误分支(回 3、不回滚、不发路由),
 // 新 epoch 照样没交出去,方向是 fail-closed。
 var errOwnerEpochMintNotDurable = errors.New("owner epoch mint not confirmed durable")
+
+// errOwnerEpochMintResultUnknown 表示铸造 EVAL 的结果未知,首发可能已经生效,也可能没有。两种来源:svc 报
+// ErrOwnerEpochMintResultUnknown(传输错误之后重发耗尽、预算不够、重发被拒等);或在新连接上重发之后回了 0 / -1 ——
+// 不凭标记的铸造认不出自己的写,凭标记时源端可能在两次发送之间撤回或取证删掉了标记。
+// 与 errOwnerEpochMintNotDurable 一样,placePlayerLocation 返回它时 placedLocation **有效**,是这次计划写下的落点。
+// 调用方不推路由 / 重定向,先用它按原字节回滚:生效了就撤掉,铸出的值作废、一次都没下发;没生效或状态已被并发改写,
+// 回滚 CAS 不过、什么都不改。再按回滚之后的 location 退人数,回 ErrKafkaRoute。以前这里回 19 / 3、不回滚:生效了的那次
+// 落点(没确认落盘的值、指向从未载入玩家的目标)留在 Redis 里,之后的同落点重连会原样下发它
+// (zone-redis-regression-guard-20261022.md §4.3.4)。
+var errOwnerEpochMintResultUnknown = errors.New("owner epoch mint result unknown")
 
 // errOwnerEpochMinterMissing:svcCtx.OwnerEpochMint 为 nil(生产恒非 nil,servicecontext.go)。不退回 go-zero 上无确认
 // 的铸造,一个字节都不写,调用方按通用落点错误回 3。

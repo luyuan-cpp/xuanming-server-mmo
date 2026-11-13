@@ -7,7 +7,10 @@
 #include "proto/common/component/player_network_comp.pb.h"  // PlayerSessionSnapshotComp:只有有网关会话的玩家才能收广播
 #include "Detour/DetourCommon.h"
 #include "spatial/constants/view.h"
+#include "spatial/system/facing.h"
+#include "generated/attribute/actorbaseattributess2c_attribute_sync.h"
 #include "proto/scene/player_scene.pb.h"
+#include "proto/scene/player_state_attribute_sync.pb.h"  // ActorBaseAttributesS2C:朝向变化标脏
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/npc_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
@@ -142,40 +145,21 @@ void ViewSystem::BroadcastMessageToVisiblePlayers(entt::entity entity, const uin
 
 void ViewSystem::LookAtPosition(entt::entity entity, const Vector3 &pos)
 {
-    auto *transformPtr = tlsEcs.actorRegistry.try_get<Transform>(entity);
-    if (!transformPtr) return;
-    auto &transform = *transformPtr;
+    auto *transform = tlsEcs.actorRegistry.try_get<Transform>(entity);
+    if (transform == nullptr) return;
 
-    // Compute direction towards target
-    dtReal targetLocation[] = {pos.x(), pos.y(), pos.z()};
-    dtReal location[] = {transform.location().x(), transform.location().y(), transform.location().z()};
-    dtReal direction[3] = {0, 0, 0};
-    dtVsub(direction, targetLocation, location);
-
-    // Zero-length direction means entity is already at target — nothing to face
-    if (dtVlenSqr(direction) < 1e-12f)
+    // 朝向口径见 facing.h:只转偏航、单位是度,与客户端上报同一份契约。
+    // 2026-11-12 前这里写的是弧度、俯仰放在 x(客户端把 x 当翻滚),新进视野的人看到的施法者朝向是错的。
+    const auto yaw = facing::YawDegreesToward(pos.x() - transform->location().x(),
+                                              pos.y() - transform->location().y());
+    if (!yaw)
     {
+        // 目标就在脚下或正上方:没有水平方向,保留原朝向。
         return;
     }
-
-    dtVnormalize(direction);
-
-    // Compute rotation Euler angles (radians).
-    //
-    // 本项目世界是 z-up:格子/AOI 全部拿 (x, y) 当地面平面(见 grid.cpp
-    // GetGridId 只取 x、y),客户端 UE 同为 z-up。旧写法照抄 Detour 的 y-up
-    // 约定(yaw = atan2(x, z)、pitch = asin(y)):同高度目标 direction 的
-    // z 恒为 0,yaw 恒等于 ±π/2 与实际方位无关,真实方位角全落进 pitch ——
-    // 写出的朝向是垃圾值。按 z-up 重算:偏航绕 z 轴(地面方位角),
-    // 俯仰用垂直轴 z。
-    const float yaw = atan2(direction[1], direction[0]);   // Rotation around Z axis (ground azimuth)
-    const float pitch = asin(direction[2]);                // Elevation from ground plane
-
-    // Update transform rotation (欧拉角约定:x=pitch, z=yaw,与 UE 的
-    // Pitch/Yaw 命名对齐;roll 恒 0)
-    transform.mutable_rotation()->set_x(pitch);
-    transform.mutable_rotation()->set_y(0);
-    transform.mutable_rotation()->set_z(yaw);
+    facing::SetYaw(*transform->mutable_rotation(), *yaw);
+    // 与其它写 Transform 的入口一致:标脏后由属性同步发给正在显示他的观察者。
+    SetActorBaseAttributesS2CAttrDirtyBit(entity, ActorBaseAttributesS2C::kTransformFieldNumber);
 }
 
 bool ViewSystem::IsStealthed(entt::entity entity)

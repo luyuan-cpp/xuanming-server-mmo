@@ -44,9 +44,10 @@ import java.util.function.LongSupplier;
  * 旧 watch 迟到的事件按代次丢弃。另外每 {@link #MAX_AGE_MS} 强制重新整段读一次:watch 若在半开连接上悄无声息地停住,
  * 镜像最多旧这么久(Kubernetes 的 reflector 同样定期重新 list)。
  *
- * <p>线程安全:状态都在 {@link #lock} 下读写;整段读不持锁,免得最长 listTimeoutMs 的等待卡住 jetcd 的事件回调线程。
- * 同一时刻只应有一个线程读同一个镜像(各自的 {@code @Scheduled} 任务);两次重新同步撞在一起时,先发起的那次抛异常、
- * 本轮按读失败处理。
+ * <p>线程安全:可以多个线程读同一个镜像(login 的镜像就由 login 发现与区服健康两个定时任务读)。状态都在 {@link #lock} 下读写;
+ * 整段读不持 {@link #lock},免得最长 listTimeoutMs 的等待卡住 jetcd 的事件回调线程。重新同步由 {@link #resyncLock} 串行化:
+ * 同一时刻只有一个线程在整段读,等在后面的线程拿到锁时镜像多半已经同步好,直接用,不再各读一遍。取锁顺序固定为
+ * resyncLock → lock,回调与 {@link #close()} 只取 lock。
  */
 final class EtcdPrefixMirror<T> implements AutoCloseable {
 
@@ -73,6 +74,8 @@ final class EtcdPrefixMirror<T> implements AutoCloseable {
     private final long listTimeoutMs;
     private final LongSupplier monotonicMs;
 
+    /** 串行化重新同步(整段读 + 重建 watch);持有它时可以再取 {@link #lock},反过来不行。 */
+    private final Object resyncLock = new Object();
     private final Object lock = new Object();
     // 以下字段都在 lock 下读写。
     private Map<String, Entry<T>> records = new TreeMap<>();
@@ -107,12 +110,24 @@ final class EtcdPrefixMirror<T> implements AutoCloseable {
      * @throws NodeDiscoveryException 需要整段读而 etcd 查询失败,或有记录无法解码;前缀下真的没有记录返回空列表
      */
     List<Entry<T>> entries() {
+        synchronized (lock) {
+            requireOpenLocked();
+            if (isFreshLocked()) {
+                return snapshotLocked();
+            }
+        }
+        synchronized (resyncLock) {
+            return resync();
+        }
+    }
+
+    /** 整段读一次并重建 watch;只在持有 {@link #resyncLock} 时调用。 */
+    private List<Entry<T>> resync() {
         long gen;
         synchronized (lock) {
-            if (closed) {
-                throw new NodeDiscoveryException("etcd mirror of " + prefix + " is closed", null);
-            }
-            if (synced && monotonicMs.getAsLong() - syncedAtMs < MAX_AGE_MS) {
+            requireOpenLocked();
+            if (isFreshLocked()) {
+                // 等 resyncLock 的这段时间里,前一个线程刚同步好。
                 return snapshotLocked();
             }
             gen = ++generation;
@@ -129,9 +144,8 @@ final class EtcdPrefixMirror<T> implements AutoCloseable {
         long revision = response.getHeader().getRevision();
 
         synchronized (lock) {
-            if (closed || gen != generation) {
-                throw new NodeDiscoveryException("etcd mirror of " + prefix + " was re-synchronized concurrently", null);
-            }
+            // 代次只在持有 resyncLock 时加一,这里不会被别的重新同步抢先;只可能在整段读期间被关闭。
+            requireOpenLocked();
             records = next;
             badKeys = bad;
             synced = true;
@@ -142,6 +156,17 @@ final class EtcdPrefixMirror<T> implements AutoCloseable {
                     Watch.listener(r -> onEvents(gen, r), e -> onWatchStopped(gen, e), () -> onWatchStopped(gen, null)));
             return snapshotLocked();
         }
+    }
+
+    private void requireOpenLocked() {
+        if (closed) {
+            throw new NodeDiscoveryException("etcd mirror of " + prefix + " is closed", null);
+        }
+    }
+
+    /** 镜像已同步、还没到强制重读的年龄。 */
+    private boolean isFreshLocked() {
+        return synced && monotonicMs.getAsLong() - syncedAtMs < MAX_AGE_MS;
     }
 
     @Override

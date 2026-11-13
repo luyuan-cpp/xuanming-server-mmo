@@ -81,7 +81,7 @@ ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOTOOLCHAIN=local GOPROXY=${GOPROXY}
 
 RUN actual="$(go env GOVERSION)" \
     && test "$actual" = "go1.27.2" \
-    || (echo "ERROR: Dockerfile.go-svc 要求 go1.27.2,实际 ${actual}" && exit 1)
+    || (echo "ERROR: Dockerfile.go-svc requires go1.27.2, got ${actual}" && exit 1)
 
 # git 只给 GOPROXY 的 direct 回退用(按 VCS 直接拉模块)。
 RUN apk add --no-cache git
@@ -147,7 +147,8 @@ FROM alpine:3.20.10@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d4
 # 属主按"只把确实要写的交出去"划分(2026-09-16 写路径审计:各服务 etc/*.yaml、服务代码里的文件写调用、
 # deploy/k8s/manifests/go-svc/*.yaml 的 volumeMounts):
 #   - /run/snowflake:唯一要写的目录,归 10001。SnowflakeCacheDir 默认值 ../../run/snowflake 从 WORKDIR /app
-#     归一化后就是它(login / match / scene_manager / guild 的 shared/snowflakealloc 会 MkdirAll + 写临时文件 + rename)。
+#     归一化后就是它(只有 scene_manager 的 shared/snowflakealloc 会 MkdirAll + 写临时文件 + rename;
+#     login、guild、match 已改由发号器发号,不再申领槽位、不写它)。
 #     K8s 上 ConfigMap 把它改成 /tmp/snowflake 并挂 emptyDir,这里兜的是 docker run / 未覆盖配置的场景。
 #   - /app、/generated/tables 以及其中的二进制、默认配置、策划表:只读,目录和文件都保持 root 所有(10001 可读、可执行)。
 #     目录也不交出去:目录写权限等于能删除 / 替换其中文件,进程被 RCE 后就能换掉自己的二进制或改表;

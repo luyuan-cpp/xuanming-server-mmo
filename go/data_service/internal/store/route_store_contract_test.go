@@ -130,6 +130,8 @@ func routeStmtLabel(query string) string {
 	switch {
 	case strings.HasPrefix(query, routeSelectRowsHeadSQL):
 		return "R13"
+	case strings.HasPrefix(query, routeCountHomeZonesHeadSQL):
+		return "R16"
 	case strings.HasPrefix(query, "ALTER TABLE "): // tidb-prepare 的 T2(用例再逐字比对整段文本)
 		return "ALTER_ATTR"
 	case strings.HasPrefix(query, "SPLIT TABLE "): // tidb-prepare 的 T3
@@ -970,6 +972,67 @@ func TestRouteReadsRejectShardMismatchRows(t *testing.T) {
 	got, err := st.GetRoutes(context.Background(), []uint64{6})
 	if !errors.Is(err, ErrRouteShardMismatch) || got != nil {
 		t.Fatalf("GetRoutes = (%+v, %v), want (nil, ErrRouteShardMismatch)", got, err)
+	}
+}
+
+// TestCountHomeZonesContract:R16 的语句与实参;入参非法(空、超过 RouteBatchLimit、区号 0 或越界)不发语句。
+func TestCountHomeZonesContract(t *testing.T) {
+	st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
+		"R16": {{rows: [][]driver.Value{{int64(42)}}}},
+	}})
+	ctx := context.Background()
+
+	for _, zones := range [][]uint32{nil, {}, {0}, {7, RouteHomeZoneMax + 1}, make([]uint32, RouteBatchLimit+1)} {
+		if _, err := st.CountHomeZones(ctx, zones); !errors.Is(err, ErrRouteInvalidArgument) {
+			t.Fatalf("CountHomeZones(%d zones) err = %v, want ErrRouteInvalidArgument", len(zones), err)
+		}
+	}
+	if got := fake.labels(); len(got) != 0 {
+		t.Fatalf("入参非法却发了语句:%v", got)
+	}
+
+	got, err := st.CountHomeZones(ctx, []uint32{7, 8})
+	if err != nil || got != 42 {
+		t.Fatalf("CountHomeZones = (%d, %v), want 42", got, err)
+	}
+	r16 := fake.callsWithLabel("R16")
+	if len(r16) != 1 || r16[0].sql != routeCountHomeZonesSQL(2) ||
+		!reflect.DeepEqual(r16[0].args, []driver.Value{uint64(7), uint64(8)}) {
+		t.Fatalf("R16 = %+v, want 一条 %q 实参 [7 8]", r16, routeCountHomeZonesSQL(2))
+	}
+	if want := "SELECT COUNT(*) FROM player_route WHERE home_zone IN (?, ?)"; routeCountHomeZonesSQL(2) != want {
+		t.Fatalf("routeCountHomeZonesSQL(2) = %q, want %q", routeCountHomeZonesSQL(2), want)
+	}
+}
+
+// TestCountHomeZonesSumsEveryDirectoryShard:目录分了片时每片各数一次再求和;任一片失败整次报错、不回部分和
+// (部分和偏小,调用方会当成「还没到上限」)。
+func TestCountHomeZonesSumsEveryDirectoryShard(t *testing.T) {
+	open := func(reply fakeRouteReply) (*sql.DB, *fakeRouteDB) {
+		fake := newFakeRouteDB(fakeRouteScript{replies: map[string][]fakeRouteReply{"R16": {reply}}})
+		db := sql.OpenDB(fakeRouteConnector{fake: fake})
+		t.Cleanup(func() { _ = db.Close() })
+		return db, fake
+	}
+	ctx := context.Background()
+
+	db0, fake0 := open(fakeRouteReply{rows: [][]driver.Value{{int64(5)}}})
+	db1, fake1 := open(fakeRouteReply{rows: [][]driver.Value{{int64(7)}}})
+	st := &RouteStore{pools: &shardPools{k: 2, names: []string{"dir_0", "dir_1"}, pools: []*sql.DB{db0, db1}}, writer: fakeRouteWriter}
+	got, err := st.CountHomeZones(ctx, []uint32{3})
+	if err != nil || got != 12 {
+		t.Fatalf("CountHomeZones = (%d, %v), want 5+7=12", got, err)
+	}
+	if len(fake0.callsWithLabel("R16")) != 1 || len(fake1.callsWithLabel("R16")) != 1 {
+		t.Fatalf("每片必须恰好数一次: shard0=%v shard1=%v", fake0.labels(), fake1.labels())
+	}
+
+	boom := errors.New("shard down")
+	db0, _ = open(fakeRouteReply{rows: [][]driver.Value{{int64(5)}}})
+	db1, _ = open(replyErr(boom))
+	st = &RouteStore{pools: &shardPools{k: 2, names: []string{"dir_0", "dir_1"}, pools: []*sql.DB{db0, db1}}, writer: fakeRouteWriter}
+	if got, err := st.CountHomeZones(ctx, []uint32{3}); !errors.Is(err, boom) || got != 0 {
+		t.Fatalf("一片失败 = (%d, %v), want (0, shard down)", got, err)
 	}
 }
 

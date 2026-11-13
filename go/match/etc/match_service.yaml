@@ -24,9 +24,18 @@ GlobalMatch:
   PartyRatingBonusPerMember: 25
   PartyRatingGapMax: 500
   PremadeGapStepSeconds: 10
-  # 每副本同时备战的成局上限、按池读单排票的页大小。
+  # 每副本同时备战的成局上限、每个撮合段每轮读单排票的页大小。
   GatherSlots: 256
   PoolPageSize: 512
+  # 热池拆分(docs/design/global-match-hierarchical-pools.md §5.2.1):多人池按首选机房拆成机房段,SubPools 里列出的模板
+  # 再在每个机房里按玩家拆成 Count 个子池;子池段只撮合入队不满 SubPoolMergeSeconds 的单位,之后回到机房段。
+  # 缺省不拆;Count 1..64,配了 Count > 1 时合并时长须小于 CrossRegionWaitSeconds,越界拒启。不是提交点规则,不进全局策略指纹。
+  # 示例(PVE_TEAM = 5 的模板 1 拆 4 个子池):
+  #   SubPools:
+  #     - Mode: 5
+  #       ConfigId: 1
+  #       Count: 4
+  SubPoolMergeSeconds: 5
   RankEndpoint: 127.0.0.1:51100
   RankSecretEnv: RANK_PRODUCER_SECRET_MATCH
   # 终局发件箱(整局结果发 Kafka、个人结算入 Inbox)的投递节拍、每轮批量与并发;默认与 2026-10-30 之前写死的行为一致。
@@ -53,6 +62,8 @@ Middlewares:
       - /match.MatchInternal/CancelActivityBattle
       - /match.MatchInternal/SetSpectateFeatured
       - /match.MatchInternal/GetBattleTerminalDecision
+      - /match.MatchInternal/ListPendingBattleScripts
+      - /match.MatchInternal/ReviewBattleScript
 Etcd:
   Hosts:
     - 127.0.0.1:2379

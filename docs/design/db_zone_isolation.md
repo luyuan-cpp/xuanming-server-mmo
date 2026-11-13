@@ -1,5 +1,7 @@
 # DB Zone Isolation (2026-04-11)
 
+> **已过期(2026-11-11)**: `zone_{N}_db` 这一族玩家库已退役,玩家存档只在每地域固定 K 个的地域存档库 `player_store_<编号>_db`,go/db 不再由 `ZoneId` 派生库名([总体方案 §7.2](./player-data-tidb-scaling-plan.md) A17c)。存盘 2026-10-30 起由 scene 直接提交,go/db 不再消费按 zone 派生的 `db_task_zone_{N}`([存盘规格](./player-save-direct-commit.md))。本文只作历史保留。
+
 > **修订(2026-08-15)**: 数据层决策演进为"单一 TiDB 集群上的全区全服数据层",本文"每 zone 独立 MySQL"前提被 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) 修订——Phase 1 中 `zone_{N}_db` 保留为同一 TiDB 集群上的**逻辑库**(库名派生与 `db_task_zone_{N}` topic 契约不变),Phase 2 收敛为全局库。
 
 ## 设计

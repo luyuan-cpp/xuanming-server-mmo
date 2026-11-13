@@ -382,7 +382,7 @@ func publishWorldChannelDirectory(svcCtx *svc.ServiceContext, zoneID uint32, con
 		nodeUsable := false
 		if !isClosing {
 			// 回收中的线状态已定,不必再读节点映射(排空收尾时它的映射本来就会先被删)。
-			nodeID, nodeErr := svcCtx.Redis.Get(sceneNodeKey(sceneID))
+			nodeID, nodeErr := svcCtx.Redis.Get(sceneNodeKey(zoneID, sceneID))
 			if nodeErr != nil {
 				return metrics.ChannelDirectoryPublishError, fmt.Errorf("读 scene %d 的节点映射失败: %w", sceneID, nodeErr)
 			}
@@ -390,7 +390,7 @@ func publishWorldChannelDirectory(svcCtx *svc.ServiceContext, zoneID uint32, con
 		}
 		// readScenePlayerCount 把读失败(含键类型不对)当 0:人数只用于展示和软上限,
 		// 而且全仓没有对账(world-channel-switch.md §9.3),不值得为它放弃整轮发布。
-		players := readScenePlayerCount(svcCtx, sceneID)
+		players := readScenePlayerCount(svcCtx, zoneID, sceneID)
 		channels = append(channels, &scenepb.SceneChannelInfo{
 			SceneId:     sceneID,
 			ChannelNo:   lineNo,

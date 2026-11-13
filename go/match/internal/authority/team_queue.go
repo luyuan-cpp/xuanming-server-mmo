@@ -40,6 +40,7 @@ func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *tea
 	members := append([]*teampb.TeamLaunchMember(nil), data.Members...)
 	sort.Slice(members, func(i, j int) bool { return members[i].Original.PlayerId < members[j].Original.PlayerId })
 	var group []*pb.MatchAuthorityTicketRecord
+	preferred := make([]uint32, 0, len(members)) // 成员各自的首选机房,算整队原件的 pool_region
 	for _, member := range members {
 		player := member.Original.PlayerId
 		if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", player, []byte{}); err != nil {
@@ -67,6 +68,7 @@ func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *tea
 		if expiry <= stamp || len(Latencies(profile, stamp, s.Config.HardLatencyMs)) == 0 {
 			return errors.New("team: 原成员地域测量已失效")
 		}
+		preferred = append(preferred, PreferredRegion(profile, stamp))
 		ticket := &pb.MatchAuthorityTicketRecord{PlayerId: player, Ticket: member.Ticket, RequestId: data.Original.Request.RequestId, Mode: mode, ConfigId: launch.ConfigId, TeamSize: launch.TargetSize, State: 1, EnqueuedMs: launch.EnqueuedMs, NotBeforeMs: launch.NotBeforeMs, ZoneId: data.Original.Zones[player], TeamId: launch.TeamId, NetworkProfile: payload, ExpiresMs: expiry, OwnerAccount: member.Original.OwnerAccount, OwnerRevision: member.Original.OwnerRevision}
 		// 计分模式（PVP_TEAM）把成员此刻的评分快照写进票，撮合与提交点按它算队伍分；非计分模式为 0。
 		if ticket.RatingCenti, err = s.queueRatingCentiTx(ctx, tx, player, mode); err != nil {
@@ -80,7 +82,8 @@ func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *tea
 	if err = s.requireQueuedTeamGroupTx(ctx, tx, launch, group); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE team_launch SET state=2 WHERE actor_id=? AND request_high=? AND request_low=? AND state=1", launch.ActorId, launch.RequestHigh, launch.RequestLow)
+	// 首选机房列只给读页分段用(global-match-hierarchical-pools.md §5.2.1 第 6 条):成员一致取它,不一致为 0,只有跨机房段读。
+	_, err = tx.ExecContext(ctx, "UPDATE team_launch SET state=2,pool_region=? WHERE actor_id=? AND request_high=? AND request_low=? AND state=1", unitPoolRegion(preferred), launch.ActorId, launch.RequestHigh, launch.RequestLow)
 	if err != nil {
 		return err
 	}

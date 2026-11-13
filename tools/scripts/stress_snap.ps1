@@ -56,6 +56,15 @@
 #   每次 INFO 抓取有 10s 进程级超时(超时即杀掉本次 docker / kubectl 进程),失败只在 job.log 记一行 FAIL、
 #   不写文件、不中断后面的 target 与时刻。建议 L-14 的 -Stages 带上 0,t0m 作 Redis 求差基线。
 #
+# C++ 节点(gate / scene / battle)的 /metrics(2026-11-12 起,docs/stress/stress-gap-items-verification-20261111.md §4):
+#   C++ 进程设了 MMORPG_METRICS_PORT 才开出口,本机缺省不开。两种给法,可以同时用(同名时 -CppEndpoints 优先):
+#   -CppMetricsBasePort N  按 run/pids/cpp_nodes.pid.json 的实例键与 lib/cpp_metrics_ports.ps1 的规则推出
+#                          http://127.0.0.1:<端口>/metrics;起节点时要给同一个基准(cpp_nodes.ps1 -MetricsBasePort N,
+#                          或经 dev_tools.ps1 起节点前设 $env:MMORPG_METRICS_BASE_PORT = 'N'),建议 19400。
+#   -CppEndpoints          hashtable,实例键 → URL(K8s 上 port-forward 之后手传),键必须是 lib/cpp_metrics_ports.ps1 认得的实例键。
+#   每个实例每个时刻存成 t{N}m_cpp_<实例键>.txt(如 t5m_cpp_scene_2.txt),stress_summarize.ps1 的 N1 表读它。
+#   -CppPidFile            覆盖 PID 文件路径(测试用);缺省是仓库的 run/pids/cpp_nodes.pid.json。
+#
 # Usage:
 #   pwsh tools/scripts/stress_snap.ps1 `
 #       -RunDir robot/logs/stress-45k-z1-r16-20260601-120000 `
@@ -94,10 +103,18 @@ param(
 
     [scriptblock]$RedisInfoProvider = $null,
 
-    [scriptblock]$RedisClusterNodesProvider = $null
+    [scriptblock]$RedisClusterNodesProvider = $null,
+
+    [hashtable]$CppEndpoints = @{},
+
+    [int]$CppMetricsBasePort = 0,
+
+    [string]$CppPidFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'lib/cpp_metrics_ports.ps1')
 
 # 单次 INFO 抓取(一个 docker / kubectl 进程)的上限,与 HTTP 抓取的 -TimeoutSec 10 同档。
 $RedisInfoTimeoutSec = 10
@@ -317,6 +334,28 @@ foreach ($svc in $Endpoints.Keys) {
     if ([string]$svc -like 'redis_*') {
         throw "Endpoints 键 '$svc' 以 redis_ 开头,t<N>m_$svc.txt 会被 stress_summarize.ps1 当成 Redis INFO 快照"
     }
+    if ([string]$svc -like 'cpp_*') {
+        throw "Endpoints 键 '$svc' 以 cpp_ 开头,t<N>m_$svc.txt 会被 stress_summarize.ps1 当成 C++ 节点快照;C++ 节点走 -CppEndpoints"
+    }
+}
+# C++ 节点的抓取地址:先按 PID 文件与基准端口推,再用 -CppEndpoints 覆盖同名的;键一律按实例键规则校验。
+$cppEndpointMap = [ordered]@{}
+if ($CppMetricsBasePort -gt 0) {
+    $pidPath = if ([string]::IsNullOrWhiteSpace($CppPidFile)) {
+        Join-Path $PSScriptRoot '../../run/pids/cpp_nodes.pid.json'
+    } else { $CppPidFile }
+    if (-not (Test-Path -LiteralPath $pidPath)) {
+        throw "-CppMetricsBasePort $CppMetricsBasePort given but the C++ node PID file '$pidPath' does not exist (start nodes with cpp_nodes.ps1 first)"
+    }
+    $pidMap = Get-Content -LiteralPath $pidPath -Raw | ConvertFrom-Json
+    foreach ($key in @($pidMap.PSObject.Properties.Name | Sort-Object)) {
+        $cppEndpointMap[$key] = "http://127.0.0.1:$(Get-CppMetricsPort -BasePort $CppMetricsBasePort -Key $key)/metrics"
+    }
+    if ($cppEndpointMap.Count -eq 0) { throw "C++ node PID file '$pidPath' lists no instance" }
+}
+foreach ($key in @($CppEndpoints.Keys | ForEach-Object { [string]$_ } | Sort-Object)) {
+    $null = ConvertFrom-CppInstanceKey -Key $key
+    $cppEndpointMap[$key] = [string]$CppEndpoints[$key]
 }
 foreach ($section in $RedisInfoSections) {
     if ($section -cnotmatch '^[a-z]+$') { throw "RedisInfoSections 里的 '$section' 非法:只许小写字母" }
@@ -349,6 +388,7 @@ function Write-JobLog($msg) {
 
 Write-JobLog "stress_snap started: runDir=$RunDir start=$StartTime stages=$Stages"
 Write-JobLog "endpoints: $($Endpoints.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } | Join-String -Separator ' ')"
+Write-JobLog "cpp endpoints: $(($cppEndpointMap.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ' ')"
 Write-JobLog "redis targets: $(($redisTargetList | ForEach-Object { "$($_.Name)=$($_.Spec)" }) -join ' ') sections=$($RedisInfoSections -join ',')$(if ($null -ne $RedisInfoProvider) { ' provider=injected' })"
 
 $stageList = $Stages.Split(',') | ForEach-Object { [int]$_.Trim() }
@@ -371,6 +411,18 @@ foreach ($mins in $stageList) {
             Write-JobLog "$tag $svc saved size=$($c.Length) ($url)"
         } catch {
             Write-JobLog "$tag $svc FAIL ($url): $($_.Exception.Message)"
+        }
+    }
+
+    foreach ($key in $cppEndpointMap.Keys) {
+        $url = $cppEndpointMap[$key]
+        $outFile = Join-Path $snapDir "${tag}_cpp_${key}.txt"
+        try {
+            $c = (Invoke-WebRequest -Uri $url -TimeoutSec 10 -UseBasicParsing).Content
+            Set-Content -Path $outFile -Value $c -Encoding UTF8
+            Write-JobLog "$tag cpp_$key saved size=$($c.Length) ($url)"
+        } catch {
+            Write-JobLog "$tag cpp_$key FAIL ($url): $($_.Exception.Message)"
         }
     }
 

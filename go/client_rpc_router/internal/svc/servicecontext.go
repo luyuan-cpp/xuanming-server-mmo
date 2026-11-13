@@ -13,9 +13,12 @@ import (
 	"client_rpc_router/internal/discovery"
 	"client_rpc_router/internal/metrics"
 
+	pb "proto/client_rpc_router"
 	base "proto/common/base"
+	loginproto "proto/login"
 
 	"shared/etcdwatch"
+	"shared/killswitch"
 	"shared/releasetrack"
 	"shared/safego"
 
@@ -49,6 +52,12 @@ type ServiceContext struct {
 	// Peers 是路由服自己这类节点(ClientRpcRouterNodeService)的发现镜像,只用来算本路由服在同轨道路由服里的名次,
 	// 决定全服池目标的挑选范围(discovery/subset.go)。不拨号、不进转发。
 	Peers *discovery.NodeWatcher
+
+	// KillSwitch 是热关停(docs/design/rpc-kill-switch.md §7)。路由服按**目标方法**(路由表里的 FullMethod)判,
+	// 不按本跳的 Forward 判:Forward 只是转发信封,受保护(通配规则不覆盖),与 scene 的 ProcessClientPlayerMessage 同理。
+	// 会话收尾 LeaveGame / Disconnect(gate 合成的断线通知也经 Forward)受保护。Build 时建好,规则为空即全放行;
+	// 生产入口再 Start(连 etcd)并在注册后 AddInstance。
+	KillSwitch *killswitch.Switch
 
 	// 以下由 subsetMu 保护。selfUUID 在注册成功后由 SetSubsetIdentity 设置,为空时全服池目标在全部实例里挑;
 	// subsetRank / subsetPeers 是上一次下发给目标 watcher 的名次,没变就不重建索引、不打日志。
@@ -108,15 +117,23 @@ func Build(c config.Config, dial func(endpoint string) (*grpc.ClientConn, error)
 			func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
 	}
 
+	selfName := base.ENodeType_name[int32(base.ENodeType_ClientRpcRouterNodeService)]
 	sc := &ServiceContext{
 		Config:         c,
 		ZoneScoped:     zoneScoped,
 		Targets:        targets,
 		Dial:           dial,
 		ForwardTimeout: c.ForwardTimeout(),
+		KillSwitch: killswitch.New(killswitch.Config{
+			NodeTypes: []string{selfName},
+			Protected: []string{
+				pb.ClientRpcRouter_Forward_FullMethodName,
+				loginproto.ClientPlayerLogin_LeaveGame_FullMethodName,
+				loginproto.ClientPlayerLogin_Disconnect_FullMethodName,
+			},
+		}),
 	}
 	// 同类路由服每变一次(上线、下线、定期全量对账)都重算一次名次;onCount 在 watcher 解锁之后调用。
-	selfName := base.ENodeType_name[int32(base.ENodeType_ClientRpcRouterNodeService)]
 	sc.Peers = discovery.NewNodeWatcher(selfName, selfName+".rpc/",
 		func(string, int) { sc.refreshSubsets() }, nil)
 	return sc, nil

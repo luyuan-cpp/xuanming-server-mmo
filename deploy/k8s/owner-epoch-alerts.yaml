@@ -52,7 +52,7 @@ spec:
             summary: "{{ $labels.namespace }} 的 owner_epoch 铸造未能确认落盘({{ $labels.result }})"
             description: >-
               铸造后 WAITAOF 没有确认到要求的落盘份数,本次进场已回滚并让客户端重试。偶发属正常;持续出现说明
-              Redis 刷盘或复制落后,进场会持续失败。核对 Redis 的 AOF 与从库状态;比例阈值待压测基线确定。
+              Redis 刷盘或复制落后,进场会持续失败。核对 Redis 的 AOF 与从库状态;阈值已定(2026-11-12),压测出基线后可调:铸造未确认在健康的 Redis(AOF everysec + 同步从库)上应为 0,故按「10 分钟内出现即报」,不用比例阈值;持续出现说明刷盘或复制落后。
 
         - alert: SceneManagerOwnerEpochMintClockBehind
           expr: |

@@ -87,9 +87,8 @@ func ownerEpochRaw(t *testing.T, sc *svc.ServiceContext, playerID uint64) string
 // seedSceneOnNode 摆一个已存在的场景实例:scene→node 映射、zone 映射、人数。
 func seedSceneOnNode(mr *miniredis.Miniredis, zoneID uint32, sceneID uint64, nodeID string, playerCount string) {
 	mr.ZAdd(nodeLoadKey(zoneID), 0, nodeID)
-	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, sceneID), nodeID)
-	mr.Set(fmt.Sprintf(SceneZoneKeyFmt, sceneID), fmt.Sprintf("%d", zoneID))
-	seedSceneMembers(mr, sceneID, mustAtoi(playerCount))
+	mr.Set(sceneNodeKey(zoneID, sceneID), nodeID)
+	seedSceneMembersInZone(mr, zoneID, sceneID, mustAtoi(playerCount))
 }
 
 // defaultWorldTestConf 是单测里顶替「World 表第一行」的默认大世界 conf。
@@ -2438,7 +2437,7 @@ func TestEnterScene_SceneDestroyedWhileEnteringIsCountedAsSceneGone(t *testing.T
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
 	seedNodeMembers(mr, testZoneId, "10", 4)
 	sc.HomeZone = &fakeHomeZoneClient{zone: testZoneId, onCall: func() {
-		mr.Del(fmt.Sprintf(SceneNodeKeyFmt, targetID))
+		mr.Del(sceneNodeKey(testZoneId, targetID))
 	}}
 	before := enterSceneRejectedCount(t, testZoneId, "scene_gone")
 
@@ -2659,8 +2658,8 @@ func TestEnterScene_DeadOwnerTakeoverDoesNotRecreateCountOfDestroyedScene(t *tes
 		targetID = uint64(7235)
 	)
 	seedPlayerOnDeadNode(t, sc, mr, playerID, oldScene, targetID)
-	mr.Del(fmt.Sprintf(SceneNodeKeyFmt, oldScene))
-	mr.Del(instanceMembersKey(oldScene))
+	mr.Del(sceneNodeKey(testZoneId, oldScene))
+	mr.Del(instanceMembersKey(testZoneId, oldScene))
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
@@ -2668,7 +2667,7 @@ func TestEnterScene_DeadOwnerTakeoverDoesNotRecreateCountOfDestroyedScene(t *tes
 	})
 	require.NoError(t, err)
 	require.Equal(t, uint32(0), resp.ErrorCode)
-	assert.False(t, mr.Exists(instanceMembersKey(oldScene)))
+	assert.False(t, mr.Exists(instanceMembersKey(testZoneId, oldScene)))
 }
 
 // leader 缺位时节点丢了租约:没有人写 Redis 的 death_at。本副本亲眼看到它从注册表消失,

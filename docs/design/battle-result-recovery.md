@@ -31,7 +31,7 @@
 
 | | (a) 存档里的有界列表(采用) | (b) match 终局事务写历史表 | (c) 复用 `match_battle_settlement_source` 加索引 | (d) 落地时把最近一局的 `BattleEndS2C` 再推一次 |
 |---|---|---|---|---|
-| 记的是什么 | 本人实际入账:消耗按实际持有夹紧,配置行已删的物品不记 | 终局原件 | 终局原件 | 终局原件 |
+| 记的是什么 | 本人实际入账:消耗按实际持有夹紧,被获得封禁的掉落与币种不记 | 终局原件 | 终局原件 | 终局原件 |
 | 与奖励的一致性 | 同一帧写、同一个事务提交;崩溃回到上次存盘时一起回退,收件箱重投后一起重做 | COMPLETE 时就有,早于入账;收件箱 DEFER 或按版本错位停用时,面板上的奖励背包里没有 | 同 (b);要等 `dispatch_state = 2` 才能当成已入账 | 一致,但推送至多一次 |
 | 扩展 | 跟着玩家存档按玩家分片;查询在 scene 内存里完成,不给任何服务加读 QPS | 全局表每局每人一行;每次落地多一次跨服务查询 | 同 (b) | 不加存储 |
 | 新增部件 | 一个持久组件、一个只在本文件内的按需组件 | 新表、保留期清理任务、新 match RPC、容量规划 | 新索引、新 match RPC;这张表是恢复原件,「保留到显式迁移 / 恢复流程接管」 | 无 |
@@ -75,12 +75,13 @@ message PlayerBattleResult {
   uint64 finished_at_ms = 8;  // 战斗结束时刻(battle 冻结终局时的 UTC 毫秒);0 = 结算原件没带
   uint64 settled_at_ms = 9;   // 奖励入账时刻(scene 应用结算时的 UTC 毫秒)
   repeated PlayerBattleResultCurrency currencies = 10;  // 按 currency_type 升序,只含非 0
-  repeated PlayerBattleResultItem items_gained = 11;    // 实际入包(含临时背包)的掉落,按 item_table_id 升序
+  repeated PlayerBattleResultItem items_gained = 11;    // 本人实得的掉落(入了人物背包或临时背包;items_mailed 时改由邮件发放),按 item_table_id 升序
   repeated PlayerBattleResultItem items_consumed = 12;  // 实际扣除的战斗消耗,按 item_table_id 升序
   bool lines_truncated = 13;  // 物品行超过上限被截掉了一部分
   bool seen = 14;             // 客户端已确认展示过
   uint32 match_mode = 15;     // MatchMode 数值;0 = 结算原件没带
   uint32 battle_config_id = 16; // 战斗配置号;0 = 结算原件没带
+  bool items_mailed = 17;     // 掉落两个包都放不下,整批改由邮件发放(2026-11-12)
 }
 
 message PlayerBattleResultComp {
@@ -91,7 +92,10 @@ message PlayerBattleResultComp {
 
 `player_database` 加 `PlayerBattleResultComp battle_results = 23 [(OptionPersistGroup) = 4];`。
 
-- **只记实际入账**:货币取整笔预检通过、实际调用 `AddCurrency` 的金额;掉落取剔除了配置行已删项之后的清单(这些项另记 `metric=battle_inbox_item_effect_skipped`,交人工补偿);消耗取 `min(要求, 实际持有)`。经验系统还没接入(`exp_gain` 只记日志),所以不记经验,接入时在同一写入点加字段。
+- **只记实际入账**:货币取整笔预检通过、实际调用 `AddCurrency` 的金额;掉落取剔除了被获得封禁项之后的清单(被封的项另记 `metric=battle_settlement_item_blocked`,不补发);消耗取 `min(要求, 实际持有)`。掉落或消耗里有本节点 Item 表查不到的配置号时整笔延后、这一局什么都不记(2026-11-11 起,`mixed-version-persist-field-protection.md` §13 第 10 条;此前是剔除这一项后照记)。经验系统还没接入(`exp_gain` 只记日志),所以不记经验,接入时在同一写入点加字段。
+- **改投邮件的掉落照常记**(2026-11-12,[战斗掉落改投邮件](battle-overflow-mail.md)):人物背包与临时格都放不下时,掉落整批进玩家存档的待寄队列、
+  之后寄成个人邮件。`items_gained` 照常列出这一批(玩家确实得到了,只是去处是邮箱),`items_mailed = true` 说明去处;
+  `BattleEndS2C.items_mailed` 取自同一条记录,客户端在结算界面道具行之后加一句提示。两个字段同一帧写、随同一次存档提交。
 - **枚举存 uint32**:common 不反向依赖 battle 包,与收件箱账本同口径。
 - **顺序显式**:新旧只看 `result_seq`,存放顺序只为确定性序列化。
 - **为什么放 PROFILE 组**:列表只在结算和客户端确认时变。放 ASSET 会让每一次资产写入(交易、商店、捐献)都带上它。原子性不受分组影响:一次存盘的所有脏行同事务提交(存盘直接提交 §1.1,「账本不变量 I3 由一次存盘的所有脏行同事务保证」)。

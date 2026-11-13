@@ -76,17 +76,6 @@ func (p Pool) Players() int {
 	return int(p.TeamSize)
 }
 
-// OwnerKey 是池归属的哈希键：同一模板的各人数档落在同一个写者上，
-// 以后做跨档合池不用跨副本协调。
-func (p Pool) OwnerKey() string {
-	return OwnerKey(p.Mode, p.ConfigId)
-}
-
-// OwnerKey 是 (模式, 模板) 的归属键，Pending 恢复按同一键分片。
-func OwnerKey(mode matchpb.MatchMode, configId uint32) string {
-	return fmt.Sprintf("%d:%d", uint32(mode), configId)
-}
-
 type templateKey struct {
 	mode     matchpb.MatchMode
 	configId uint32

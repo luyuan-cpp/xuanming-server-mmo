@@ -144,7 +144,16 @@ func (s *Switch) applyEvents(rules map[string]Rule, events []*clientv3.Event) bo
 		case clientv3.EventTypePut:
 			pattern, rule, valid := s.parseKV(key, ev.Kv.Value)
 			if !valid {
-				// 值坏了就当这条事件没发生,保留原有规则 —— fail-open。
+				// 值写坏了:与全量同步(fullSync 跳过坏值)同一口径,这个键等于没有规则 —— fail-open。
+				// 旧写法保留原规则,于是同一个键在 watch 上看还关着、下一次全量同步后又放开,两条路径不一致;
+				// 运维把 deny 改写坏(本想撤掉)时也会继续关停到下一次复核。
+				if pattern, ok := PatternFromKey(s.cfg.prefix(), key); ok {
+					if _, exists := rules[pattern]; exists {
+						delete(rules, pattern)
+						changed = true
+						logx.Infof("[killswitch] Rule dropped because its new value is malformed: %s", pattern)
+					}
+				}
 				continue
 			}
 			if old, exists := rules[pattern]; exists && old == rule {

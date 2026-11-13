@@ -109,7 +109,18 @@ securityContext:
 
 - getrlimit 后把软限抬到 min(硬限, 1048576),只抬不降、不动硬限(非 root 也能做)。
 - 需求 = 客户端面准入上限 + 4096 余量:gate = `GateMaxConnections` + 4096(默认 24096),battle = `BattleMaxConnections` + 4096(默认 8192),scene = 4096。配 0(仅 dev/test 合法)按 0 算。
-- 余量 4096 是推算,只是拒启门槛,进程实际可用的是抬起来的软限:gate 直连模式约 2Z 条到全服 scene_manager,scene 约 4Z 条到全服 SM / DS(Z ≈ 200~445,2000 万在线口径),都在 4096 以内;Z 超过约 900 或副本数变多时要重新核这个常数(推导见头文件注释)。
+- 余量 4096 只是拒启门槛,进程实际可用的是抬起来的软限。2026-11-12 定案维持 4096:scene_manager 11-05 起按 zone 收窄,gate 到路由服只连按 zone 取的几台,非客户端连接数不再随全服 zone 数增长(推导见头文件注释)。运行期够不够不靠这个常数,看下面的指标。
+- **运行期观测(2026-11-12,已落码、未编译)**:C++ 节点的 Prometheus 出口(`-CppMetricsPort`,缺省 9400)导出:
+  - `process_open_fds` / `process_max_fds`:当前打开的 fd 数与软限。超过 80% 持续 5 分钟报 `ProcessOpenFilesNearLimit`;
+  - `cpp_node_open_file_limit_required` / `cpp_node_open_file_limit_exempted`:启动门槛,以及是否带 `warn` 豁免在跑。带豁免超过 1 小时报 `CppNodeOpenFileLimitExempted`;
+  - `cpp_node_accept_exhausted_total{reason}`、`cpp_node_accept_paused_total`:accept 因 fd 或内存耗尽失败、监听暂停的次数,对应 `CppNodeAcceptResourceExhausted` 与持续 5 分钟以上的 `CppNodeAcceptResourceExhaustedSustained`。
+  - 告警文件 `deploy/k8s/cpp-node-resource-alerts.yaml`,手工 apply:`kubectl apply -n observability -f deploy/k8s/cpp-node-resource-alerts.yaml`。
+- **fd 或内存耗尽时 accept 的行为(2026-11-12,已落码、未编译)**:进程不再崩溃(原来 `ENFILE` / `ENOBUFS` / `ENOMEM` 会让 muduo 直接 abort,这台节点上的全部在线连接一起断)。
+  - fd 用尽:监听端接进排在最前的连接再立刻关掉,对端马上看到断开;做不到时暂停监听 100ms 再试。
+  - 内核缓冲或内存不足:暂停监听 100ms 再试。
+  - 已建立的连接不受影响。节点日志里每秒最多一行 `Acceptor: accept failed, errno=... action=... failures_since_last_report=...`。
+  - 处置:先看上面的 fd 指标;fd 跟着连接数涨就调低准入上限或加台数,持续上涨而连接数不涨多半是泄漏,保留现场(`ls -l /proc/<pid>/fd | awk '{print $NF}' | sort | uniq -c | sort -rn | head`)后重启这台。
+- **拒启与其他致命错误的最后一行(2026-11-12,已落码、未编译)**:C++ 节点任何一处 `LOG_FATAL` 在退出前都会把那一行同步写进 stderr,`kubectl logs --previous` 看得到。原来只有 fd 上限、客户端地址这几类拒启会写,gate / battle 的令牌密钥、连接上限等启动门禁只进异步日志文件,崩溃后找不到原因。
 - 抬完仍低于需求:缺省**拒绝启动**,stderr 一行 `FATAL open file limit config: role=... soft=... hard=... required=... shortfall=...`(`kubectl logs --previous` 可见),Pod 进 CrashLoop。多副本形态下新 Pod 起不来只会让滚动停住、旧 Pod 继续服务;全新 zone-up 则整个 zone 起不来。
   - **2026-10-18 更正(上一句把影响面说小了,按工作负载形态分开看)**:「只停住」只对滚动时 maxUnavailable 为 0 的工作负载成立。C++ 节点的 Deployment 模板(`k8s_deploy.ps1` 的 `New-NodeDeploymentYaml`)没写 strategy,按 K8s 缺省 25% / 25% 取整:
     - gate Deployment(podip 形态,缺省 2 副本):maxUnavailable = 0,确实只是停在滚动中途,旧 Pod 继续服务;

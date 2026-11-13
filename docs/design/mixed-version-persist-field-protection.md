@@ -2,7 +2,7 @@
 
 > **部分过期(2026-10-30)**:严格提交屏障的 Lua(C3)随 Redis 存盘删除,世代校验搬到 go/db 的提交事务里([player-save-direct-commit.md](./player-save-direct-commit.md) §2)。本文关于未知字段携带、覆盖世代的部分仍然有效,`warn` 模式和 `PersistSchemaRegressionMode` 已删除,现在总是拒写。
 
-> **状态**：设计稿 v0.9（2026-10-30，Claude）。经两轮只读对抗评审：v0.1 被推翻三处核心做法，v0.2 又发现一个必现的误报（S-A）以及若干缺口，v0.3 已按两轮结论修订。负责人 2026-10-19 通过 §13 第 1–5 条。v0.4 回写第 1 批实施中的调整，v0.5 回写第 3a 批的调整，v0.6 把 C3 的"只比第一次写入"改为写方令牌并随第 3b / 4 批落码（§5.2、§15），v0.7 回写第 3a′ / 第 5 批落码与两轮对抗复核的调整（欠款版本错位改为 `kVersionSkew`、按数量扣除标"暂无守卫"、越界包类型由 `PlayerBagsComp` 携带、§12 新增未核对值域与等级上限两行；§4.4、§12、§15），v0.8 回写第 6 批落码（退役字段残留不算版本错位、按数量扣除守卫、新币种的唯一取值表与版本错位；§0、R5、§4.4、§9、§12、§13、§15），v0.9 回写 §12.1 持久值域 D1–D6 与等级上限的落码（§0、§8.3、§12、§12.1、§12.2、§15），v0.10 回写第 7 批：台账封存门禁、战斗结算的币种版本错位、收件箱停用补打（§3.1、§8.1、§9、§12、§13、§15），v0.11 回写审计 r2-ps#6 / #7：欠款自动扣还守卫、神秘商人换轮 `Clear()`（§0、R5、§4.4、§15）。各批实施状态见 §9 表前的「实施状态」。
+> **状态**：设计稿 v0.9（2026-10-30，Claude）。经两轮只读对抗评审：v0.1 被推翻三处核心做法，v0.2 又发现一个必现的误报（S-A）以及若干缺口，v0.3 已按两轮结论修订。负责人 2026-10-19 通过 §13 第 1–5 条。v0.4 回写第 1 批实施中的调整，v0.5 回写第 3a 批的调整，v0.6 把 C3 的"只比第一次写入"改为写方令牌并随第 3b / 4 批落码（§5.2、§15），v0.7 回写第 3a′ / 第 5 批落码与两轮对抗复核的调整（欠款版本错位改为 `kVersionSkew`、按数量扣除标"暂无守卫"、越界包类型由 `PlayerBagsComp` 携带、§12 新增未核对值域与等级上限两行；§4.4、§12、§15），v0.8 回写第 6 批落码（退役字段残留不算版本错位、按数量扣除守卫、新币种的唯一取值表与版本错位；§0、R5、§4.4、§9、§12、§13、§15），v0.9 回写 §12.1 持久值域 D1–D6 与等级上限的落码（§0、§8.3、§12、§12.1、§12.2、§15），v0.10 回写第 7 批：台账封存门禁、战斗结算的币种版本错位、收件箱停用补打（§3.1、§8.1、§9、§12、§13、§15），v0.11 回写审计 r2-ps#6 / #7：欠款自动扣还守卫、神秘商人换轮 `Clear()`（§0、R5、§4.4、§15），v0.12 回写第 8 批：载荷新字段判版本错位、Item / Pet 表行只增不删、§13 第 10 条定案（§9、§12、§13、§15），v0.13 回写第 8 批收尾：战斗结算对查不到表的物品 / 宝宝种类改整笔 DEFER（§9、§12、§13、§15）。各批实施状态见 §9 表前的「实施状态」。
 > **起因**：2026-10-18 核对灰度 / 不停服 / 金丝雀时发现，新旧版本混跑会丢玩家持久字段。负责人 2026-10-19 要求先补三件事：①存盘保留不认识的字段；②Redis 父快照记录写方版本并校验；③go/db 只写改动列。先出设计。
 > **范围**：玩家数据链，即 C++ scene 内存 → Redis 父快照 `PlayerAllData:{id}` → Kafka `db_task_zone_*` → go/db → MySQL 两张玩家表；外加 login 冷加载、回档快照、离线工具这些旁路。guild、mail、trade 各自的库表，以及客户端契约，不在本文范围内（§12）。
 > **证据口径**：[C] 表示对照 2026-10-19 工作区代码读过；[I] 表示推断。相关文件正被其他会话修改，行号会漂移，所以正文以函数名为主。
@@ -463,7 +463,7 @@ v0.2 要求每次存盘都满足"加载世代 ≥ hash"，而写入成功后 has
 
 顺序被违反时，不丢已提交的数据：scene 的认领与存盘回 `SCHEMA_TOO_NEW`，scene 进场失败，或保留实体重试（2026-11-10 起）。之前带新行种的存盘会被旧 go/db 判成 INVALID，玩家下线时不存盘就销毁，见数据覆写审计 r2-ps#11。
 
-代价是：窗口期内新 scene 进不了人，在线进度只在 scene 内存里；scene 进程在 go/db 升上来之前退出，这部分进度会丢。所以这个顺序仍然要守。`k8s_deploy.ps1` 的 `zone-up` 现在先发 scene、后发 go/db，改成先发 go/db 并等它就绪是待办（r2 文档 §6「2026-11-10」批 S）。
+代价是：窗口期内新 scene 进不了人，在线进度只在 scene 内存里；scene 进程在 go/db 升上来之前退出，这部分进度会丢。所以这个顺序仍然要守。`k8s_deploy.ps1` 的 `zone-up` 先发 go/db（写者回收 CronJob 跟着提前），staging / prod 恒等它滚完再发 scene，dev 只在 `-WaitReady` 下等，口径与迁移 Job 门禁相同（2026-11-12，r2 文档 §6「2026-11-10」批 S；之前是先发 scene、后发 go/db）。跨 zone 的「go/db 全部 zone 先」仍靠发布顺序：按 zone 逐个跑 `zone-up` 时，前面 zone 的新 scene 只连本 zone 的 go/db，所以逐 zone 先 go/db 后 scene 就够。
 
 可选项（第 4 批）：在 go/db 的能力心跳里带上世代号，`k8s_deploy.ps1` 发布 scene 之前做只读预检。
 
@@ -548,10 +548,22 @@ v0.2 要求每次存盘都满足"加载世代 ≥ hash"，而写入成功后 has
     - Item / Pet 表行 id 只增不删：`data/schema` 里写 `(cfg_ids_permanent)`，导表器按台账 `tools/data_table_exporter/state/permanent_ids/*_ids.txt` 守住，表里少了台账里的 id 即整批不产出。
     - 资产通道第 8b 步 `where=asset_config`：「本节点表里查不到」改判为版本错位（RETRY + 1006、不记账）；配置号 0 仍是坏包。
     - 用例：`AssetOpSystemTest` 新增与改写 4 条（按数量扣出、入账、整件实例、重复配置号），回收用例改口径；导表器 `test_permanent_ids.py` 与 `test_schema_proto.py` 一条。
-    - 战斗结算对查不到表的掉落 / 消耗仍按 C-2 剔除该项、记 ERROR 交人工；改成整笔 DEFER 留给战斗线，当时 `player_battle.cpp` 正被别的会话改（交接 §24）。
+    - 战斗结算对查不到表的掉落 / 消耗当时仍按 C-2 剔除该项、记 ERROR 交人工；已在下面的「第 8 批收尾」改成整笔 DEFER。
   - **§13 第 10 条第 2、3 项**：照推荐定案，不改代码（见 §13）。
 
   文件与 Codex 命令见[交接 §24](../handoff/mixed-version-persist-handoff-20261019.md)。
+- **第 8 批收尾：已落码，未编译、未测试（Claude，代码 2026-11-11、用例与文档 11-12）**。scene 收件箱战斗结算执行器遇到「本节点 Item / Pet 表查不到」改为整笔 DEFER、零副作用（§13 第 10 条）：
+  - **物品**：`ApplySettlementToEntity` 在剔除封禁项、算实际可扣量之前判。消耗或掉落里有查不到的配置号，整笔返回 false，日志 `metric=persist_version_skew where=battle_item`（带 `side`、`config_id`）。`DropItemsWithoutConfigRow` 与 `metric=battle_inbox_item_effect_skipped` 已删。
+  - **宝宝**：玩家带进这一局的宝宝，种类在本节点 Pet 表查不到时，`CollectApplicableInboxPets` 不再跳过这一只，整笔返回 false，日志 `where=battle_pet`（带 `pet_id`、`pet_table_id`）。宝宝已不在身上、宝宝属性池缺配不属于这条规则，仍只跳过这一只。
+  - **不判版本错位**：不停用本域。收件箱照常本地退避重试（1s→60s），这一行热更到本节点之后续做即成功。
+  - 用例（bag_test）：
+    - `PlayerBattleSettlementItemTest.InboxDropWithConfigUnknownToThisNodeDefersWholeSettlement`；
+    - `PlayerBattleSettlementItemTest.InboxConsumptionWithConfigUnknownToThisNodeDefersWholeSettlement`；
+    - `PlayerBattleSettlementItemTest.InboxSettlementAppliesOnRetryOnceTheItemRowsAreHotUpdated`；
+    - `PlayerBattleSettlementTest.InboxPetConfigUnknownToThisNodeDefersWholeSettlement`；
+    - `PlayerBattleSettlementTest.InboxSettlementAppliesOnRetryOnceThePetRowIsHotUpdated`。
+
+  文件与 Codex 命令见[交接 §25](../handoff/mixed-version-persist-handoff-20261019.md)。
 
 | 批 | 内容 | 主要改动 | Codex 验证 |
 |---|---|---|---|
@@ -564,6 +576,7 @@ v0.2 要求每次存盘都满足"加载世代 ≥ hash"，而写入成功后 has
 | 6 | 退役字段残留过滤；按数量扣除守卫；新币种取值表与版本错位 | `persistschema/{render,generate}.go`、`unknown_field_carry.h`、`modules/bag/{item_store,bag_system,bag_service}.*`、`asset_op_system.cpp`、`player_equip.*`、`player_battle.cpp`（快照一行）、`proto/common/base/currency_type.proto`、`currency.h`、`currency_system.cpp`、`gm_sanction_inbox_executor.*`、`player_mystery_merchant.cpp`、战斗节点奖励档两处、`go/shared/currencytype`、Go 各入口、`go/trade/internal/commerce/engine.go`（托管阶段撤单）；测试见交接 §14 | 生成产物已在库，无需重新生成；`game.sln` 串行 `/m:1`；bag_test、currency_test、turn_battle_engine_test；Go 受影响模块 `go test ./...`、`go vet ./...`；trade 真库用例需 `COMMERCE_TEST_DSN` |
 | 7 | 台账封存门禁；战斗结算的币种版本错位 | `tools/proto_generator/protogen/internal/persistschema/{ledger,apply,generate}.go`、`cmd/root.go`、`proto/persist_schema_gen.txt`（只改表头注释）、`tools/scripts/{dev_tools,release_preflight}.ps1`、`docs/ops/release-checklist.md`、`cpp/libs/services/scene/battle/system/player_battle.cpp`、`player_inbox_{system.cpp,rules.h}`、`player_inbox_runtime_comp.h`、`deploy/k8s/player-inbox-alerts.yaml`；测试 `persistschema_test.go`、`dev_tools_proto_gen_exit.tests.ps1`、`release_common_version.tests.ps1`、`player_battle_settlement_test.cpp`、`player_inbox_system_test.cpp` | 先 `proto-gen-build`（生成器源码变了）；protogen `go test ./internal/persistschema/...`；两份 PowerShell 契约测试与 `k8s_deploy_contract` 的 LogQL 契约；`game.sln` 串行 `/m:1` 后跑 bag_test、currency_test |
 | 8 | 载荷新字段判版本错位；Item / Pet 表行 id 只增不删与资产通道「查不到表」改判版本错位 | `cpp/libs/engine/core/utils/proto/unknown_field_carry.h`、`player_inbox_{registry.h,registry.cpp,system.cpp}`、`asset_op_system.cpp`、`data/schema/{cfg_options,item_table,pet_table}.proto`、`tools/data_table_exporter/core/{permanent_ids,schema,schema_proto,orchestrator}.py`、`docs/design/guild-phase2/04-asset-channel.md`、`data/AGENTS.md`；测试 `bag_instance_data_test.cpp`、`player_inbox_system_test.cpp`、`asset_op_system_test.cpp`、`test_permanent_ids.py`、`test_schema_proto.py` | 导表器 pytest；导表一次（生成两份台账，与产物一起提交）；`game.sln` 串行 `/m:1` 后跑 bag_test、currency_test |
+| 8 收尾 | 战斗结算对本节点 Item / Pet 表查不到的物品、宝宝种类改整笔 DEFER | `cpp/libs/services/scene/battle/system/player_battle.{h,cpp}`；测试 `player_battle_settlement_test.cpp`；`docs/ops/player-inbox-runbook.md`（§5.2 A′、§6.1 表）、`docs/design/battle-result-recovery.md` | `game.sln` 串行 `/m:1` 后跑 bag_test |
 
 每批完成后在 `docs/PROGRESS.md` 追加一条，并注明 Java 版的状态（§11）。
 
@@ -633,7 +646,7 @@ v0.2 要求每次存盘都满足"加载世代 ≥ hash"，而写入成功后 has
 | 持久值域：越界的包类型 | 第 5 批前（同上）：`bag_marshal::Unmarshal` 丢弃越界条目；`capacities` 只输出 `kBagTypeCount` 个 | **第 5 批已落码**（Codex 10-24 运行旁证通过）：越界条目与多出的容量存进 `PlayerBagsComp::unsupportedBagTypes`，原样存回；本版本的玩法看不到也不碰它们，但它们仍参与跨包 guid 唯一性检查（`PlayerBagsComp::ContainsGuid`，资产通道入账用它；漏查会让同一实例在新旧两个包各落一份，2026-10-19 对抗复核 D-1） |
 | 持久值域：其他按配置表或代码常量解释的持久值（物品 config_id、任务 / 条件 config_id、宠物种类、属性加点维度、装备槽位、越界币种等） | **已核对（2026-10-22，只读代码 [C]，未编译，没有回滚场景用例）**，逐项见 §12.1：<br>- 会删 7 项（D1–D7）：属性加点维度、宝宝加点维度、属性加点超额整池返还、宝宝加点超额清空、职业技能重数压回、技能改职业 / 通用归属、战斗结算账本条数上限；<br>- 会改写 3 项（W1–W3）：装备栏槽位挪位、入场坐标吸附或拉回出生点、当前 HP / MP 夹到本版本上限；<br>- 其余 15 项原样保留，标"不适用"（N1–N15）：物品 config_id、堆叠数、包容量、动态包 profile、装备强化 / 词条 / 宝石、币种、任务 / 条件 / 成就 / 活动、资产通道账本、收件箱账本、限购记录、属性方案数、宝宝种类 / 数量 / 等级、职业、复活、不持久化的 buff / 称号 / 坐骑 / 时装。<br>原线索里"装备槽位挪位"属实（W1）；"查不到表的物品不丢""任务查不到表不删"属实（N1、N7）；"加点维度会删"属实（D1、D3） | **D1–D6 已于 2026-10-23 落码**（Codex 10-24 运行旁证通过）：原样携带、按本版本生效，见 §12.2；D7 已作废（2026-10-31 战斗结算账本移出玩家存档），W1–W3 接受。标"不适用"的值域随本次核对解除回滚限制；D1–D6 在回滚目标版本含这一批、且发布代码复跑通过之后解除（§8.3） |
 | 持久值域：代码常量上限（等级上限 `playerlevel::kMaxLevel`） | 2026-10-23 前（以及不含这一批的回滚目标版本）：加载时 `ClampToMaxLevel` 把超限等级压回（`player_database_loader.cpp`），连带 `ConvergeOverAllocation` 整池返还加点、出战宝宝等级高于主人时取消出战，随下一次存盘落库；新版提高上限后回滚 scene，再升回新版也恢复不了（2026-10-20 对抗复核 O-1） | **2026-10-23 已落码**（Codex 10-24 运行旁证通过）：存储等级原样携带，玩法统一读 `playerlevel::CappedLevel`；超额的加点池整池不生效、不删；出战只在等级真的变化时取消（§12.2）。代价：下调上限不再自动收敛，要配显式迁移。回滚目标版本含这一批、且发布代码复跑通过之后，提高等级上限的版本才可回滚 scene |
-| 收件箱、资产通道载荷的新字段与新枚举值 | **新枚举值（币种）第 6 批已落码**：取值表唯一来源是 `proto/common/base/currency_type.proto`；Go 各入口按同源取值表拒绝写错的值；scene 收件箱执行器遇到本二进制不认识的币种回 `kVersionSkew`（停用本域，实体重建后重拉），资产通道回 RETRY + `kFeatureUnavailable`（第 8b 步，不记账）。战斗结算的奖励币种同口径（第 7 批，2026-11-05）：battle 节点奖励档按同一张取值表校验，scene 收件箱战斗结算执行器遇到不认识的币种回 `kVersionSkew`（原来是 `kDefer`，本地续做只会空转），金额越界、重复币种这类坏载荷先判、照旧 `kDefer`。订正：此前这里写的"资产通道在已有改动之后遇到不认识的币种记 APPLIED_PARTIAL"不对，第 6 批之前实际是在第 8 步、任何改动之前记终态 REJECTED(kAssetInvalidBundle)。<br>**第 8 批（2026-11-11 落码，未编译）**：<br>- 载荷新字段：原先旧版执行器忽略新字段、记 APPLIED（Go 入箱拒未知字段，scene 不判）。现在收件箱载荷与资产通道请求整棵判未知字段，带本版本不认识、也不是已退役的字段即按版本错位处理：收件箱回 `kVersionSkew` 停用本域，资产通道第 8b 步回 RETRY + 1006。<br>- 新物品、新宝宝表行：原先资产通道入账查不到表时（物品 config、整件物品实例、宝宝 `pet_table_id` 三处，加上按数量扣出与 GM 回收）在第 8 步记终态 REJECTED，交易交付被拒后合同转人工，与加载侧原样保留（§12.1 N1 / N12）口径不一致。现在 Item / Pet 表行 id 只增不删（导表器守），资产通道把"本节点表里查不到"改判为版本错位（第 8b 步 RETRY、不记账），配置号 0 仍是坏包。<br>**仍未改**：战斗结算对查不到表的掉落 / 消耗按 C-2 剔除该项、记 ERROR 交人工。表行只增不删之后，查不到只可能是尚未热更到或更新版本的行，应改为整笔 DEFER；留给战斗线（交接 §24） | - 载荷新字段：已按"执行器遇到未知字段时 fail-closed"做（第 8 批）。发布次序：给收件箱载荷、资产通道请求加字段时，消费方 scene 全量之后生产方才写（§13 第 7 条）。<br>- 新物品、新宝宝表行：已按 §13 第 10 条定案做（第 8 批）。Go 各入口的配置存在校验：邮件附件、帮会商店已按同源物品表校验；交易交付的物品、宝宝来自卖方 scene 的托管原件，本来就是真实存在过的行。<br>- 新币种的发布次序：Go 侧全量升级完成之后才开始滚 scene（只有首次上线可以同版本整批起步）；scene 全量升级之前，GM 不得对新币种下处置，交易、邮件不得发放新币种 |
+| 收件箱、资产通道载荷的新字段与新枚举值 | **新枚举值（币种）第 6 批已落码**：取值表唯一来源是 `proto/common/base/currency_type.proto`；Go 各入口按同源取值表拒绝写错的值；scene 收件箱执行器遇到本二进制不认识的币种回 `kVersionSkew`（停用本域，实体重建后重拉），资产通道回 RETRY + `kFeatureUnavailable`（第 8b 步，不记账）。战斗结算的奖励币种同口径（第 7 批，2026-11-05）：battle 节点奖励档按同一张取值表校验，scene 收件箱战斗结算执行器遇到不认识的币种回 `kVersionSkew`（原来是 `kDefer`，本地续做只会空转），金额越界、重复币种这类坏载荷先判、照旧 `kDefer`。订正：此前这里写的"资产通道在已有改动之后遇到不认识的币种记 APPLIED_PARTIAL"不对，第 6 批之前实际是在第 8 步、任何改动之前记终态 REJECTED(kAssetInvalidBundle)。<br>**第 8 批（2026-11-11 落码，未编译）**：<br>- 载荷新字段：原先旧版执行器忽略新字段、记 APPLIED（Go 入箱拒未知字段，scene 不判）。现在收件箱载荷与资产通道请求整棵判未知字段，带本版本不认识、也不是已退役的字段即按版本错位处理：收件箱回 `kVersionSkew` 停用本域，资产通道第 8b 步回 RETRY + 1006。<br>- 新物品、新宝宝表行：原先资产通道入账查不到表时（物品 config、整件物品实例、宝宝 `pet_table_id` 三处，加上按数量扣出与 GM 回收）在第 8 步记终态 REJECTED，交易交付被拒后合同转人工，与加载侧原样保留（§12.1 N1 / N12）口径不一致。现在 Item / Pet 表行 id 只增不删（导表器守），资产通道把"本节点表里查不到"改判为版本错位（第 8b 步 RETRY、不记账），配置号 0 仍是坏包。<br>**战斗结算同口径（第 8 批收尾，2026-11-11 落码，未编译）**：scene 收件箱战斗结算执行器遇到本节点 Item 表查不到的掉落 / 消耗，或玩家带进这一局的宝宝种类在本节点 Pet 表查不到，整笔 DEFER、零副作用（`where=battle_item` / `where=battle_pet`），这一行热更到本节点之后本地续做即成功。原先的 C-2（只剔除查不到表的物品项、记 ERROR 交人工）与宝宝的 `pet_table_missing` 跳过作废：表行只增不删之后，剔除就是丢掉玩家这一局的掉落（交接 §25） | - 载荷新字段：已按"执行器遇到未知字段时 fail-closed"做（第 8 批）。发布次序：给收件箱载荷、资产通道请求加字段时，消费方 scene 全量之后生产方才写（§13 第 7 条）。<br>- 新物品、新宝宝表行：已按 §13 第 10 条定案做（第 8 批）。Go 各入口的配置存在校验：邮件附件、帮会商店已按同源物品表校验；交易交付的物品、宝宝来自卖方 scene 的托管原件，本来就是真实存在过的行。<br>- 新币种的发布次序：Go 侧全量升级完成之后才开始滚 scene（只有首次上线可以同版本整批起步）；scene 全量升级之前，GM 不得对新币种下处置，交易、邮件不得发放新币种 |
 | Kafka 控制面命令 | 遇到未知事件直接丢弃 | 新增事件类型时配发件箱或重投机制 |
 | guild、mail、trade 的库表 | 未核对 | 按本文的不变量逐个评估 |
 | 客户端契约 | 见 `published-contract-compatibility-20261017.md` | 已有独立方案 |
@@ -827,7 +840,10 @@ v0.2 要求每次存盘都满足"加载世代 ≥ hash"，而写入成功后 has
       - 有了这条规则，"表里查不到"只可能是更新版本或尚未热更到本节点的行。资产通道第 8b 步回 RETRY + 1006、不记账（`where=asset_config`）；配置号 0 在任何版本上都不合法，仍在第 8 步记终态拒绝。
       - Go 各入口的配置存在校验：邮件附件、帮会商店已按同源物品表校验；交易交付的物品、宝宝来自卖方 scene 的托管原件。
       - 原先担心的「已删行的入账永远 PENDING」由表行规则排除。
-      - 战斗结算的 C-2（剔除查不到表的项、记 ERROR 交人工）前提随之改变，应改为整笔 DEFER（热更到这一行之后本地续做即可成功）。本批没改：当时 `player_battle.cpp` 正被别的会话编辑，留给战斗线，见交接 §24。
+      - 战斗结算同口径（第 8 批收尾，2026-11-11 落码，未编译；交接 §25）。原先的 C-2（2026-10-30：只剔除查不到表的掉落 / 消耗、记 ERROR 交人工）是按「配置行可能被热更删掉」定的；表行只增不删之后，剔除就是丢掉玩家这一局的掉落。现在 scene 收件箱战斗结算执行器见到本节点 Item 表查不到的配置号，整笔 DEFER、零副作用（`where=battle_item`），这一行热更到本节点之后本地续做即成功，与号段暂缺、跨区冻结同一条路。
+        - 判 DEFER，不判 `kVersionSkew`：版本错位会停用整个域，要等实体重建才重拉；配置表在进程内热更，行到了本地重试就能成功。币种不一样，取值表编在二进制里，会话内永远不会认识，所以币种回 `kVersionSkew`。
+        - 宝宝同理（2026-11-12，核对同类入口时发现）：玩家带进这一局的宝宝，种类在本节点 Pet 表查不到时，原先只跳过这只宝宝的战后终值回写（`pet_table_missing`），现在同样整笔 DEFER（`where=battle_pet`）。宝宝已不在身上、宝宝属性池缺配不属于这条规则，仍只跳过这一只。
+        - 代价：这一行热更到本节点之前，这名玩家这一局的金币、掉落、任务进度都不到账，同域排在后面的局也等着，Match 的 ready 票不放。发布次序照第 7 条（消费方 scene 的表先到，生产方后产出），次序错了只是延后，不丢。
     - **GM 对新币种的处置是否改为"按 ID 透明执行"**：维持现状，不改代码。封锁、解封、挂欠款对币种只做按 ID 的集合或映射操作，旧 scene 照写本可以与新版本语义一致；但改为透明执行要放宽三个原语的契约，将来原语一旦按币种做事（例如查余额），这条前提会悄悄失效。发布纪律已要求 scene 全量之前不对新币种下处置，现状（回 `kVersionSkew` 停用本域，实体重建后重拉）只在纪律被打破时生效，且不丢数据。
     - **新币种的启用开关**：在第一次真正新增币种时再做（YAGNI，AGENTS §11.2），在那之前靠第 7 条的发布次序。做法届时照原推荐：把"二进制认识"与"运营已启用"分开，Go 入口判 `IsKnown(v) && enabled(v)`，`enabled` 来自部署配置白名单，上线顺序与收件箱 `EnqueueTypes` 一致（scene 全量 → 改配置开启）。
 
@@ -998,7 +1014,15 @@ v0.2 要求每次存盘都满足"加载世代 ≥ hash"，而写入成功后 has
 | 表行规则（§13 第 10 条第 1 项） | Item / Pet 表写 `(cfg_ids_permanent)`，导表器按台账拒绝删行；资产通道第 8b 步 `where=asset_config` 把"本节点表里查不到"改判为版本错位，配置号 0 仍是坏包 | 负责人 2026-11-11 要求待拍板项按标准做法定案；表行只增不删之后，"查不到"与"已删"不再混淆，RETRY 不会永远卡住 |
 | §13 第 10 条第 2、3 项 | GM 处置维持 `kVersionSkew`；新币种启用开关等第一次新增币种时再做 | 前者放宽原语契约的风险大于收益；后者 YAGNI，发布次序已覆盖 |
 | 评审清单（§13 第 7 条） | 加两条：给载荷 / 请求加字段的发布次序；删 Item / Pet 表行由导表器拒绝 | 与本批规则同步 |
-| 仍未改 | 战斗结算的 C-2（剔除查不到表的掉落 / 消耗）应改为整笔 DEFER | 前提随表行规则改变；`player_battle.cpp` 当时被别的会话编辑，留给战斗线（交接 §24） |
+| 当时未改（v0.13 已改） | 战斗结算的 C-2（剔除查不到表的掉落 / 消耗）应改为整笔 DEFER | 前提随表行规则改变；`player_battle.cpp` 当时被别的会话编辑（交接 §24） |
+
+### v0.13（第 8 批收尾：战斗结算对查不到表的物品 / 宝宝种类改整笔 DEFER，2026-11-11 ~ 12）
+
+| 项 | 调整 | 原因 |
+|---|---|---|
+| 战斗结算的物品（§12 载荷行、§13 第 10 条） | 掉落 / 消耗里有本节点 Item 表查不到的配置号时整笔 DEFER、零副作用，日志 `where=battle_item`；删掉 C-2 的剔除与 `metric=battle_inbox_item_effect_skipped` | C-2 的前提「行可能被热更删掉」已被表行规则排除，剔除等于丢掉玩家这一局的掉落；资产通道已回 RETRY，战斗结算是剩下的不一致点 |
+| 战斗结算的宝宝 | 玩家带着的宝宝种类在本节点 Pet 表查不到时整笔 DEFER，日志 `where=battle_pet`；不再按 `pet_table_missing` 跳过这一只 | 同一条表行规则，跳过会永久丢掉这只宝宝的战后终值；核对同类入口时发现，一并改 |
+| 判 DEFER，不判版本错位 | 收件箱本地退避重试，不停用本域 | 配置表在进程内热更，行到了本地续做即成功；`kVersionSkew` 要等实体重建才重拉 |
 
 ### v0.3（第二轮评审）
 

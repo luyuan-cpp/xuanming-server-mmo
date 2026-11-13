@@ -135,7 +135,6 @@ func newInitMoveCase(t *testing.T, sceneID uint64, opts ...redis.Option) *initMo
 	member := strconv.FormatUint(sceneID, 10)
 	_, err := mr.SAdd(worldChannelsKey(commitOrderZone, commitOrderConfID), member)
 	require.NoError(t, err)
-	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(commitOrderZone), 10)))
 	seedSceneOwnedBy(t, mr, commitOrderZone, sceneID, commitOrderDeadNode)
 
 	require.True(t, isNodeGoneFromRegistry(commitOrderZone, commitOrderDeadNode))
@@ -171,7 +170,7 @@ func TestInitDeadNodeReassign_TeardownRightAfterCommitLeavesNoGhost(t *testing.T
 
 	var createsAtCommit, createsAfterTeardown int64
 	hook.arm(func() {
-		owner, err := c.sc.Redis.Get(sceneNodeKey(sceneID))
+		owner, err := c.sc.Redis.Get(sceneNodeKey(commitOrderZone, sceneID))
 		require.NoError(t, err)
 		require.Equal(t, commitOrderLiveNode, owner, "前提:注入点在改派 CAS 落地之后")
 		createsAtCommit = c.live.fake.createCalls.Load()
@@ -218,7 +217,7 @@ func TestInitDeadNodeReassign_ChannelLeftServiceBeforeCommitReclaims(t *testing.
 	c := newInitMoveCase(t, sceneID)
 	member := strconv.FormatUint(sceneID, 10)
 	// 钩子跑在 miniredis 的服务端协程上:只能用 t.Errorf,不能用 require。
-	fired := identHookOnceBeforeEval(t, c.mr, sceneNodeKey(sceneID), func() {
+	fired := identHookOnceBeforeEval(t, c.mr, sceneNodeKey(commitOrderZone, sceneID), func() {
 		if _, err := c.mr.SRem(worldChannelsKey(commitOrderZone, commitOrderConfID), member); err != nil {
 			t.Errorf("simulate drain start: %v", err)
 		}
@@ -259,9 +258,8 @@ func seedDrainingChannelOwnedByDeadNode(t *testing.T) (*svc.ServiceContext, *min
 	t.Helper()
 	resetNodeDeathQueuesForTest(t)
 	sc, mr := newAutoscaleCtx(t)
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(102), drainOrderDeadOwner))
-	require.NoError(t, sc.Redis.Set(sceneZoneKey(102), strconv.FormatUint(uint64(testZoneId), 10)))
-	require.NoError(t, sc.Redis.Setex(sceneDrainingKey(102), "1", 300))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 102), drainOrderDeadOwner))
+	require.NoError(t, sc.Redis.Setex(sceneDrainingKey(testZoneId, 102), "1", 300))
 	_, err := sc.Redis.Sadd(worldDrainingSetKey(testZoneId, autoscaleTestConfID), "102")
 	require.NoError(t, err)
 	_, err = sc.Redis.Sadd(nodeScenesKey(testZoneId, drainOrderDeadOwner), "102")

@@ -7,6 +7,7 @@
 // 变异(每次一种)应当让下列用例变红:
 //   - ParseBudget 把 "0" 当成缺省值:BudgetZeroDisablesPlannedDrain 红(应急开关失效,SIGTERM 不再直接停机);
 //   - Decide 先看到期再看完成:DrainedWinsOverExpiryOnTheSameTick 红;
+//   - ComposeBuildLabel 丢掉修订:ComposesBuildAndPodRevision 红(同镜像滚动重启时分不出新旧两代 Pod);
 //   - HasOpenWorldPeer 不排除自己或不看 closed:NoTargetWhenOnlySelfOrClosedPeers 红;
 //   - Pacer 不封顶 1 秒的量:PacerCapsBurstAtOneSecondOfTokens 红;
 //   - ForScene 给副本带上原地图:DungeonGoesToDefaultWorld 红(副本图不是世界地图,scene_manager 会白走一步)。
@@ -72,6 +73,22 @@ TEST(PlannedDrainVerdict, DrainedWinsOverExpiryOnTheSameTick)
 {
 	const auto deadline = kT0;
 	EXPECT_EQ(planned_drain::Decide(true, kT0 + 1s, deadline), planned_drain::Verdict::kDrained);
+}
+
+// NodeInfo.build 把构建标识与工作负载修订拼在一起:同一个镜像滚动重启时,新旧两代 Pod 的修订不同,选点才分得出哪一代要留下。
+TEST(PlannedDrainBuildLabel, ComposesBuildAndPodRevision)
+{
+	EXPECT_EQ(planned_drain::ComposeBuildLabel("a1b2c3", "6d4b75cb6d"), "a1b2c3@6d4b75cb6d");
+	// 同镜像、不同修订必须是两个不同的值;同镜像、同修订必须相等。
+	EXPECT_NE(planned_drain::ComposeBuildLabel("a1b2c3", "6d4b75cb6d"), planned_drain::ComposeBuildLabel("a1b2c3", "7f9c8d5b44"));
+	EXPECT_EQ(planned_drain::ComposeBuildLabel("a1b2c3", "6d4b75cb6d"), planned_drain::ComposeBuildLabel("a1b2c3", "6d4b75cb6d"));
+}
+
+TEST(PlannedDrainBuildLabel, MissingPartsAreLeftOut)
+{
+	EXPECT_EQ(planned_drain::ComposeBuildLabel("a1b2c3", ""), "a1b2c3"); // Agones Fleet:没有修订
+	EXPECT_EQ(planned_drain::ComposeBuildLabel("", "6d4b75cb6d"), "6d4b75cb6d");
+	EXPECT_EQ(planned_drain::ComposeBuildLabel("", ""), ""); // 本机开发:没上报,不参与构建偏好
 }
 
 // ── scene_planned_drain_rules.h ──────────────────────────────────────────────────────────────────

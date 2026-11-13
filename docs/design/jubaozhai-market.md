@@ -547,6 +547,17 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 
 **行为变化**：最终发放没到账以前写 `stage=done`，op 行随即被标业务消费、过保留期会被清掉；现在写 `stage=manual`，op 行留到人工处理完。
 
+**转人工之后玩家撤不了单**（2026-11-12 修人民币寄售这一条，未编译、未运行）：转人工的合同只由人工处置入口改。玩家撤单的两个入口都按可撤阶段白名单判，`manual` 不在其中，撤单回 `kTradeOrderStateConflict`，合同行不变：
+
+- 通用合同：`Engine.Mutate` 的 `cancel`，一直是白名单。
+- 人民币寄售：`RmbConsignments.Cancel`，白名单是 `rmbCancellable`（各阶段见 §16），锁外的预检与合同行锁内的事务体用同一份判定。
+- 人民币寄售以前是排除式判定，只排除已结算、`rmb_delivery`、`rmb_refund`、已取消，漏了 `manual`。退回腿没到账或交付腿部分发放（这时买家已付款）转人工之后，卖家一撤，`status` 被改成 6 而 stage 仍是 `manual`，后果有四个：
+  - 合同从人工列表（`status=10`）里消失；
+  - 人工处置入口因 `status` 不是 10 拒绝；
+  - 引擎对 `manual` 不推进，这一行还一直排在 `Due` 队头；
+  - `deliver` 不再向商城回报 `MANUAL`，托管的资产或已付款的订单没有出口。
+- 回归测试 `go/trade/internal/commerce/rmb_cancel_test.go`：白名单逐阶段、被拒的撤单只读一次合同不开事务（不连库）；真库上转人工的合同撤单被拒且合同行逐字段不变、仍在人工列表、人工补发计划照常能算、商城仍收到 `MANUAL`，白名单里的阶段照常撤单并按取消结案。
+
 **三种处理**，都只改合同行，不碰 op 行，不发资产：
 
 | 动作 | 什么时候用 | 做什么 | 拒绝 |
@@ -566,13 +577,13 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 - 新腿不带 `op_id`。合同重新到期之后，发号、写 outbox、投递、记结局都由引擎的 `advance` 做，和玩家操作同一条写路径：原归属身份核对、按角色名只建一次的腿、单副本串行都不变。原腿和原 seq 不动，留作证据。
 - 版本条件让同一条命令只生效一次：重跑时版本已变，回「未改动」。不加 `-execute` 时只算计划，同样在锁下算。
 
-**鉴权与留痕**：v1 只做命令行，不开 RPC，与帮会 `assetopfix` 同一口径（90-consistency.md D4）：写库要带写者身份（`authoritysql.LoadWriterConfig`），只能在部署允许的 Pod 里连库；操作人、依据、二次确认、版本都必须给。留痕写进合同（`manual_actions`：动作、操作人、依据、时刻、处理前版本、转人工记录、新腿、被取代的腿；2026-11-11 起另有各动作的专用字段，见 §15.7.1），同时打 ERROR 级的 `[CommerceManual]` 行，原样贴进工单。
+**鉴权与留痕**：2026-11-12 起入口是 trade 的管理 RPC `TradeAdmin.ResolveManualContract`，由运行中的副本执行；运维工具 `commercefix` 只签名、调用、打印，不连库(原先的直连库命令行写法已删,原因见 §15.7.1「管理 RPC」)。调用方证明用 serviceauth(调用方 `ops-commerce`),操作人、依据、二次确认、版本、目标环境名都必须给。留痕写进合同（`manual_actions`：动作、操作人、依据、时刻、处理前版本、转人工记录、新腿、被取代的腿；2026-11-11 起另有各动作的专用字段，见 §15.7.1），服务端同时打 `[CommerceManual]` 行并回给工具，原样贴进工单。
 
 **残余**（2026-11-11 更新）：
 
 - 原主已换、部分发放、竞价与拍品互相引用、已部分成交的市场单：处置见 §15.7.1。
 - 实例托管被人工判定 APPLIED 时没有原件，退回不了，要按 `player_snapshot` 人工补发；部分扣出的实例、宝宝同理（§15.7.1 第 2 类）。
-- 管理 RPC、后台和审批流这一轮不做，理由见 §15.7.1「不做的」。
+- 管理 RPC 2026-11-12 已加（§15.7.1「管理 RPC」）；管理后台的页面与审批流不做，理由见 §15.7.1「仍不做的」。
 - Java 版待做，记在 `PARITY.md`。
 
 **回归测试**（都没有运行）：
@@ -583,7 +594,15 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 
 #### 15.7.1 2026-11-11 四类残余的标准处置（缺口清单第 2 条残余，未编译、未运行）
 
-**状态**：已落码，未编译、未测试，待 Codex 验证。实现在 `go/trade/internal/commerce/manual.go`（新动作）、`tick_isolation.go`（换主当场转人工）、`market.go` 与 `schedule.go`（子单转人工不再连带母单）、`engine.go`（`marketRemainder`）、命令行 `go/trade/cmd/commercefix`；手册 [§4.2、§4.3](../ops/trade-commerce-quarantine-runbook.md)。
+**状态**：已落码，未生成协议、未编译、未测试，待 Codex 验证。实现在：
+
+- `go/trade/internal/commerce/manual.go`（入口、锁序、留痕、show）与 `manual_plan.go`（六种动作的判定，纯函数）；
+- `tick_isolation.go`（换主当场转人工）、`role_authority.go`（归属判定）；
+- `market.go` 与 `schedule.go`（子单转人工不再连带母单，子单收尾唤醒两张母单）、`engine.go`（`marketRemainder`）；
+- 管理 RPC `TradeAdmin.ListManualContracts` / `ResolveManualContract`（`proto/trade/trade_admin.proto`，入口 `go/trade/internal/logic/manual_contract_ops.go`）；
+- 运维工具 `go/trade/cmd/commercefix` 改为只调这两个 RPC，不再直连库；
+
+手册 [§4.2、§4.3](../ops/trade-commerce-quarantine-runbook.md)。
 
 **四类共用的原则**（与 §15.7 相同，这里写成判据）：
 
@@ -704,7 +723,7 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 自动规则（新）：子单转人工不再连带母单。
 
 - 母单在子单都收尾之前不结案（撤单后的 `market_wait`、全部成交的 `market_open` 本来就等子单），转人工的子单算没收尾；剩下的挂单量照常成交或撤单。
-- 子单人工处理完、引擎把它推进到结案的那一步，唤醒母单（`filledParentToWake`）；子单转人工本身不再唤醒母单。
+- 子单人工处理完、引擎把它推进到结案的那一步，唤醒两张母单（`filledParentsToWake`：`parent_id` 是买单、`counterparty_id` 是卖单）；子单转人工本身不再唤醒母单。以前只唤醒买单，卖单要等 `inFlightRecheck` 兜底复查才发现子单收尾，这次一起修了。
 - 为什么：子单的资产在撮合时已从两边母单的托管里划出，母单自己的资产没有问题。以前一张子单出事就冻住母单剩下的挂单量，还多一张人工单。代价是母单在子单转人工期间每 30 秒复查一次（`inFlightRecheck`），量只取决于转人工的子单数。
 
 人工动作 `refund` 对已部分成交的母单放行：只退剩余部分，卖单退剩余数量的物品，买单退剩余数量 × 单价的货币，与玩家撤单同一个算法（`marketRemainder`）；已成交的部分归子单，不动。全部成交的母单拒绝：没有可退的托管，用 `resume`。成交子单仍不能单独退回（它的资产来自两张母单），按发放腿的规则用 `reissue`、`partial`、`redirect`。
@@ -713,14 +732,20 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 
 **留痕的新字段**（`TradeCommerceManualAction`，`proto/trade/trade_table.proto`）：`party`、`from_player_id`、`to_player_id`、`identity_before`、`identity_after`、`retargeted_legs`（`redirect`）；`linked_commerce_id`（`void-auction`，两张合同互指）；`partial_parts`（`partial`，每条腿与它的缺口）。都在 `workflow_proto` 里，不加表列，不用迁移。
 
-**不做的**：
+**管理 RPC**（2026-11-12 负责人要求查出的问题现在修、不留到以后，原定「有后台再加」改为这一轮做）：
 
-- 管理 RPC 与后台：这一轮不加。
-  - 本仓库没有管理后台会调它，加了也没有调用方。
-  - 帮会同类工具定过「v1 只做 CLI，少一个带签名的网络面」（[90-consistency.md](guild-phase2/90-consistency.md) D4）。
-  - 命令行已经要写者身份、只能在 trade Pod 里跑，留痕在合同里。
-  - 将来有后台时，按 match `formationfix` 的做法加 `TradeAdmin.ListManualContracts` / `ResolveManualContract`：serviceauth 专用调用方、核对环境名、演练与执行同一锁序。两个方法都调同一个 `commerce.ResolveManual`，不另写判定。
-- 审批流（两人复核）：命令行里的第二个名字证明不了身份，要有后台和登录身份才有意义，与上一条一起做。
+- 两个方法挂在 `TradeAdmin` 上：`ListManualContracts`（按 `(updated_ms, commerce_id)` 翻页，一页最多 500）与 `ResolveManualContract`（模式 SHOW / DRY_RUN / EXECUTE）。做法照 match 的 `formationfix` 入口：
+  - 调用方证明用 serviceauth，调用方只有 `ops-commerce`，密钥来自 `Commerce.ManualResolutionSecretEnv` 指名的环境变量，不与别的调用方共用。没配是关闭；配了但密钥不足 32 字节、环境名不合规或资产通道没开（没有合同引擎），启动日志打 ERROR，入口同样关闭。
+  - DRY_RUN / EXECUTE 要带 `expect_target`，与本部署的环境名 `Commerce.ManualResolutionEnvironment` 逐字相等，连错环境回 `target_mismatch`。
+  - 带客户端会话的调用被会话拦截器挡住，入口里再挡一层。
+  - 审计行 `[CommerceManual]` 由服务端打（执行成功打 ERROR，其余 INFO）并回给工具；操作人、依据、缺口这些自由文本一律 `%q`，防止在行里伪造字段。
+  - 只有 EXECUTE 提交结果未知时回 gRPC Unavailable，其余结论都是带内 verdict。
+- 为什么工具不再直连库：写者身份、角色护栏的权威读（改绑要读目录、要自愈副本）与本库写者闸门都在服务进程里。交给运行中的副本执行，人工处置与引擎同一进程模型，留痕时间也用引擎的时钟（`Due` 按它取到期行）。以前工具用自己机器的时钟写 `updated_ms`，时钟快了合同会晚到期。
+- `commerce.ResolveManual` / `ShowManual` 是唯一的判定入口，RPC 与将来的管理后台都调它，不另写一份。
+
+**仍不做的**：
+
+- 审批流（两人复核）：请求里的第二个名字证明不了身份，要有后台的登录身份才有意义；等有管理后台时在入口里接，判定不用改。
 - 官方商城、人民币寄售：它们的人工处理要和商城订单一起改，商城记的 MANUAL 不会因为交易侧补发自动变成已交付，不在这个工具。
 
 **回归测试**（都没有运行）：
@@ -730,15 +755,17 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
   - 改绑的腿改投与取代、拍品买方连带改最高出价人、目标是另一方拒绝；
   - 出价按拍品是否引用放行或拒绝；作废拍卖改两张合同、有发放到账拒绝；
   - 部分成交母单只退剩余、全部成交拒绝；整单退回不能跑两次；`owner_changed` 不能恢复、不能退回；`marketRemainder` 的四种情形。
-- 单测 `schedule_test.go`：子单转人工不唤醒母单。
-- 单测 `tick_isolation_test.go`：`ownerChanged` 的判定表。
-- 命令行 `commercefix/main_test.go`：新参数的解析与拒绝、`show` 列出部分发放的腿与参与方归属。
-- 真库 `manual_db_test.go` 每类三条：正常路径、重跑落空、与引擎或另一个操作人并发：
-  - 换主当场转人工，冻结照旧推迟；
-  - 部分发放补发；
-  - 作废拍卖与出价单退；
-  - 部分成交母单退剩余，子单转人工时母单照常收尾。
-- 真库 `tick_isolation_db_test.go`：原「角色换主按分钟级推迟」改成「换主转人工、冻结照旧推迟」。
+- 单测 `manual_test.go` 另有归属判定表(`TestPartyChangeTable`):同一身份、副本落后、过户、买回、同修订号换账号、删角、副本缺行。
+- 单测 `schedule_test.go`:子单收尾唤醒买单与卖单,子单转人工不唤醒。
+- 单测 `go/trade/internal/logic/manual_contract_ops_test.go`:入口装配(关闭、密钥太短、环境名不合规、没有合同引擎)、准入(入口关闭、密钥不对、调用方不对、签名换方法、带客户端会话)、连错环境、结论映射、DRY_RUN 不写、参数原样传入、审计行引号防伪造、SHOW、列表翻页。
+- 命令行 `commercefix/main_test.go`:参数写错不签名不拨号、密钥缺失只报变量名、请求带可验的签名、各结论的退出码、`show` 与 `list` 的输出。
+- 单测 `data/commerce_repo_test.go`:`Save` 的语句多了 `seller_player_id`。
+- 真库 `manual_db_test.go`,每类都有正常路径、重跑落空、并发三种:
+  - 换主当场转人工,改绑后撤单退给目标角色;目标被冻结时拒绝;两个操作人并发改绑只生效一次;
+  - 部分发放只补缺口,两个操作人并发只生效一次;
+  - 作废拍卖期间引擎推迟持有出价不影响版本;出价被引用时不能单退,接受之前转人工的可以退;
+  - 部分成交母单只退剩余,子单推进不碰母单;子单转人工时母单照常撤单、收尾。
+- 真库 `tick_isolation_db_test.go`:原「角色换主按分钟级推迟」改成「角色被冻结按分钟级推迟」(换主改由 `manual_db_test.go` 覆盖)。
 
 ### 15.8 2026-11-06 合同推进按片分工、没变化不重存（缺口清单第 16 条，未编译、未运行）
 
@@ -831,7 +858,20 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 
 本批继续使用同一 `oms_order`／`oms_order_item`、payment receipt、delivery/refund intent及receipt。寄售专表只保存listing、原资产合同引用、冻结人民币条款和订单关联，不另造订单或游戏钱包。官方SKU的库存仍在PMS；唯一托管资产不伪造成可补库存的官方SKU。寄售订单数量恒1、CNY分、冻结卖家账号、价格、费率和冷静期；自买按账号拒绝，不凭角色号不同放行。账号由trade从已认证会话及SQL目录获得，不接受普通客户端声明归属。
 
+自买的判定只在商城下单事务里（`RmbConsignmentStore.reserve`，先于建订单与占用listing），trade的购买入口不重复判。trade交付（`deliver`）里也比了买卖账号，那是纵深防御：买卖账号相同的订单建不出来，已付款意图正常走不到它。万一走到（商城那道判断被放开或绕过），`deliver`按「不能发货」处理，与买家角色已换主、买家账号已满同一条退款分支：记下退款决定，向商城回`REFUND_PENDING`，不发货给卖家自己的另一个角色，钱也不压在商城。2026-11-12之前这里每轮回`ErrConflict`，既不发货也不退款。商城`RmbConsignmentStoreTest`有专门用例守着下单入口；trade的回归测试是真库`TestTiDBRmbDeliverRefundsSelfPurchaseInsteadOfStalling`（未编译、未运行）。
+
 上架后默认公示48小时、随后寄售7天。首次登记按服务端时钟冻结时限；同listing／托管引用换条款拒绝，重复登记返回原原件。购买锁listing并在同一商城事务写OMS与关联、复核公示/到期/卖家账号/当前占用；买家请求号重放返回原订单，不重新判断已变化的当前售价。取消未付单释放该listing，已经到期则进入RETURNING。已取消后才确认的付款沿原REFUND_PENDING分支收口，不把已重新占用的listing交给迟到付款者。
+
+卖家撤单（`CancelRmbConsignment`）只记请求（`cancel_requested`、`status=6`），托管的退回由引擎推进。trade只在可撤阶段收（白名单`rmbCancellable`，2026-11-12起，未编译、未运行）；不能撤的回`kTradeOrderStateConflict`，合同行不变；白名单没列的阶段一律不能撤，新加的阶段默认不可撤。
+
+| 阶段 | 能否撤 | 说明 |
+|---|---|---|
+| `rmb_escrow`、`rmb_freezing`、`rmb_ready`、`rmb_registering`、`rmb_listed` | 能 | 买家付款之前。`rmb_registering`先重放原登记再撤；`rmb_listed`要商城先把listing改成RETURNING，买家抢先付了款就以商城收款为准，撤单请求作废 |
+| `rmb_return` | 能 | 已经在退回，重复请求照收 |
+| `rmb_returned` | 算成功 | 已取消，不再写 |
+| `rmb_delivery`、`rmb_refund` | 不能 | 买家已付款，结局由交付或商城退款决定 |
+| `manual` | 不能 | 已转人工，只能由人工处置入口处理（§15.7） |
+| `rmb_delivered` | 不能 | 已成交 |
 
 交付仅接受原trade合同的SQL终局回执。确认DELIVERED的同一商城事务登记卖家收入：`fee=ceil(gross*fee_bps/10000)`、`net=gross-fee`，默认500bps；计算分解商／余数避免乘法溢出。冷静期默认3天，期间不可提现。永久失败退款不能同时登记收入；人工状态不猜结局，不自动夺回唯一资产。后续真实拒付／损失归属另按实际渠道方案，不把mock退款宣称为这项已实现。
 

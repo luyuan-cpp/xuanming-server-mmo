@@ -1,8 +1,14 @@
 #pragma once
 
+#include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "entt/src/entt/entity/entity.hpp"
+#include "engine/core/type_define/type_define.h" // EntityVector
 
 class Location;
 class Rotation;
@@ -82,4 +88,79 @@ public:
         }
         return nowMs >= expireAtMs ? TeleportReportVerdict::kExpired : TeleportReportVerdict::kStale;
     }
+};
+
+// 一批移动广播里"谁收哪几条"的分组(ActorMoveBatch 用)。纯逻辑,头文件内联,供 cpp/tests/aoi_test 直接单测。
+//   receiversPerMove[i] = 第 i 条移动的接收者,条数不超过 64。
+//   要收的条目集合相同的接收者分在一组;moveMask 第 i 位为 1 表示这一组收第 i 条。
+//   组按其第一个接收者第一次出现的先后排,组内接收者也按第一次出现的先后;同一接收者重复出现只算一次。
+struct MoveReceiverGroup
+{
+	uint64_t moveMask{0};
+	EntityVector receivers;
+};
+
+inline std::vector<MoveReceiverGroup> GroupMoveReceivers(const std::vector<EntityVector>& receiversPerMove)
+{
+	assert(receiversPerMove.size() <= 64);
+	// 接收者 -> 他要收的条目(位掩码),按第一次出现的先后。
+	std::vector<std::pair<entt::entity, uint64_t>> wanted;
+	std::unordered_map<entt::entity, std::size_t> wantedIndex;
+	for (std::size_t move = 0; move < receiversPerMove.size(); ++move)
+	{
+		for (const auto receiver : receiversPerMove[move])
+		{
+			const auto [it, inserted] = wantedIndex.try_emplace(receiver, wanted.size());
+			if (inserted)
+			{
+				wanted.emplace_back(receiver, 0);
+			}
+			wanted[it->second].second |= uint64_t{1} << move;
+		}
+	}
+
+	std::vector<MoveReceiverGroup> groups;
+	std::unordered_map<uint64_t, std::size_t> groupIndex;
+	for (const auto& [receiver, moveMask] : wanted)
+	{
+		const auto [it, inserted] = groupIndex.try_emplace(moveMask, groups.size());
+		if (inserted)
+		{
+			groups.push_back(MoveReceiverGroup{moveMask, {}});
+		}
+		groups[it->second].receivers.push_back(receiver);
+	}
+	return groups;
+}
+
+// 同一 tick 里一批实体的移动广播,按接收者合并发出。
+//
+// 用途:组队跟随 —— 同一队形的队员常在同一 tick 起步、停步、拐弯、补校正,分开发时每个观察者每 tick 收好几条。
+// 合并后每个接收者每批只收一条:只收一个实体时是 ActorMoveS2C,收多个时是 ActorMoveListS2C
+// (客户端逐条按 ActorMoveS2C 处理,结果与分开发相同)。要收同一组实体的接收者共用一条消息:
+// 每组序列化一次、每个 gate 一个请求,与 MovementSystem::BroadcastMove 同一个形状。
+// 接收者口径、消息内容都与 BroadcastMove 相同,内容取 Flush 那一刻的 Transform / Velocity。
+//
+// 先后:批里的消息到 Flush 才发。同一实体在 Add 之后、Flush 之前另外直接发出的消息(瞬移、跟随状态)会跑到它前面 ——
+// 与那类消息有先后要求时不要进批,直接调 BroadcastMove(TeamFollowSystem 停止驱动一个队员时就是这样)。
+// 线程模型:scene 节点 loop 线程独占,在一次调用栈里 Add ... Flush。
+class ActorMoveBatch
+{
+public:
+	// 一批最多这么多个实体(分组用 64 位掩码)。登记满了再 Add 时,先把已登记的发出去。
+	static constexpr std::size_t kMaxEntities = 64;
+
+	// 登记 entity 这一批要广播移动;includeSelf 同 BroadcastMove。同一实体登记多次只发一条,includeSelf 取或。
+	void Add(entt::entity entity, bool includeSelf);
+	// 把全部登记发出并清空;没有登记时什么都不做。
+	void Flush();
+	[[nodiscard]] bool Empty() const { return entries_.empty(); }
+
+private:
+	struct Entry
+	{
+		entt::entity entity{entt::null};
+		bool includeSelf{false};
+	};
+	std::vector<Entry> entries_;
 };

@@ -187,6 +187,35 @@ func (s *DataServiceServer) GetMergedZones(context.Context, *emptypb.Empty) (*da
 	return &data_service.GetMergedZonesResponse{MergedInto: zones.Merges()}, nil
 }
 
+// CountZoneRoles 回答一个区一共建过多少角色(player_route 行数;建号后不删,删角不减),按合服之后的最终区算:
+// 合进来的源区一起数,zone 自己已被合走时按它的最终区回答(placement.MergedZones.Members)。网关按区服目录的角色上限
+// (zone_config.role_capacity)自动暂停创角时经 login 定时调它(docs/design/zone-full-handling.md §6),只读、可重试。
+//
+// zone 为 0 或越界回 InvalidArgument;合服映射没装配、库故障回 Unavailable + ErrCodeRouteStoreError,绝不回 0:
+// 0 会被当成「远没到上限」。调用方已放弃(ctx 取消 / 超时)时回它的取消原因。
+func (s *DataServiceServer) CountZoneRoles(ctx context.Context, req *data_service.CountZoneRolesRequest) (*data_service.CountZoneRolesResponse, error) {
+	zone := req.GetZoneId()
+	if zone == 0 || zone > store.RouteHomeZoneMax {
+		return nil, status.Errorf(codes.InvalidArgument, "error_code=%d: zone_id %d out of [1, %d]",
+			constants.ErrCodeInvalidRequest, zone, store.RouteHomeZoneMax)
+	}
+	zones := s.svcCtx.MergedZones.Snapshot()
+	if zones == nil {
+		logx.Errorf("[DataRoute] CountZoneRoles zone=%d: merged zone cache not assembled", zone)
+		return nil, errMergedZonesUnavailable()
+	}
+	members := zones.Members(zone)
+	roles, err := s.svcCtx.Router.CountZoneRoles(ctx, members)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, status.FromContextError(ctxErr).Err()
+		}
+		logx.Errorf("[DataRoute] CountZoneRoles zone=%d members=%v: %v", zone, members, err)
+		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
+	}
+	return &data_service.CountZoneRolesResponse{Roles: roles}, nil
+}
+
 // errMergedZonesUnavailable 是合服映射缓存没装配时的回复。
 func errMergedZonesUnavailable() error {
 	return status.Errorf(codes.Unavailable, "error_code=%d: merged zone cache not assembled", constants.ErrCodeRouteStoreError)

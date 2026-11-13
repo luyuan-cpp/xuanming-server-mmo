@@ -66,10 +66,6 @@ func main() {
 	flag.Parse()
 
 	conf.MustLoad(*configFile, &config.AppConfig)
-	// db-migrate Job 与 db 主进程读同一份 ConfigMap,同样从 MySQLPasswordEnv 指名的变量取口令(部署也给 Job 注入)。
-	if err := config.AppConfig.ResolveMySQLPassword(os.LookupEnv); err != nil {
-		log.Fatalf("config rejected: %v", err)
-	}
 	config.AppConfig.Normalize()
 
 	allow, err := proto_sql.AllowlistSpec().Resolve()

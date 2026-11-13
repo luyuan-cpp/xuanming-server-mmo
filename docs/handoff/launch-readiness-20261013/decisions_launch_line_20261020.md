@@ -31,6 +31,10 @@
 | B1-1 | 已落码:etcd 存活集为空时一直压住;骤降超过一半时压住 30 分钟或等缺席数恢复;阈值规则在 `shared/liveview` | `go/player_locator/internal/logic/gate_sweep.go` |
 | X-3 | 已落码:stress_snap 抓 data_service(:9260)与 Redis INFO,stress_summarize 出 data_service 归属读、存盘接口、Redis 负载各表 | AGENTS.md §6.1(2026-10-23 起) |
 | X-2 | 已做:`deploy/k8s/AGENTS.md` 已加「C++ 启动壳不加 `ulimit`」(负责人 10-22 确认) | 开服线交接 §3 第 5 项 B0-4 注 |
+| L-1 | 对象已不存在:新号免冷读(`NewPlayerSeed`)随「玩家存档只存 TiDB」删除,`go/login` 里已没有这个开关(2026-11-12 核对) | `go/login/etc/login.yaml`、`go/login/internal/config/config.go` |
+| L-2 | 已落码:挑 gate 时记本进程在途票,并补了两条 gate 健康告警(缺口清单第 7 条剩余) | PROGRESS 2026-11-11「挑 gate 记本进程在途票」 |
+| L-3 | 已落码:`LoginAdmin.RemovePlayersFromAccounts` 已接到账号目录的摘孤儿实现,不再返回 Unimplemented(2026-11-12 核对) | `go/login/internal/logic/loginadmin/removeplayersfromaccountslogic.go` |
+| OPS-2 的余量 | 2026-11-12 定案:非客户端 fd 余量维持 4096,不再等实测;运行期够不够由 `process_open_fds / process_max_fds` 的告警看。各节点池硬限的实测仍要运维做 | `cpp/libs/engine/core/node/system/node/open_file_limit.h`;`deploy/k8s/cpp-node-resource-alerts.yaml` |
 
 ## 0. 建议先定的几项
 

@@ -363,6 +363,7 @@ scene 认识这个类型,但本版本不能安全执行这一条。先按日志�
 - **欠款带新字段**:挂欠款时,玩家同币种的既有欠款带着更新版本的字段(更新版本的 scene 写下的,见 `mixed-version-persist-field-protection.md` §4.4)。日志 `AttachCurrencyDebt version skew: existing debt carries fields unknown to this version`。
 - **新币种**(2026-10-23 起):载荷里的币种不在本版本 scene 的取值表内,日志 `metric=persist_version_skew where=inbox_currency`,带 `executor` / `currency_type`。收件箱入箱已按 `proto/common/base/currency_type.proto` 拒绝写错的值,所以这只可能是更新版本加的币种:GM 在 scene 全量升级之前就对新币种下了处置(发布纪律不允许)。处置同下面第 1、2 条;第 3 条不适用,升级到认识这个币种的版本即解除。
 - **载荷带新字段**(2026-11-11 起,所有域都适用,包括战斗结算):载荷里有本版本 scene 不认识、也不是已退役(reserved)的字段,日志 `metric=persist_version_skew where=inbox_payload`,带 `type` / `field=<消息全名#字段号>`。这一条不调执行器。来源是更新版本的生产者(Go 各服务、battle 节点)在 scene 全量之前就写了新字段,违反了发布次序(`mixed-version-persist-field-protection.md` §13 第 7 条)。处置同下面第 1、2 条,升级到认识这个字段的版本即解除。
+- **不属于本节**:`metric=persist_version_skew where=battle_item` / `where=battle_pet`(2026-11-11 起)。战斗结算里的物品或宝宝种类在本节点配置表里查不到,这不停用本域,是**整笔延后**、本地退避重试,配置热更到本节点即自愈。处置见 §6.1 表里「物品 / 宝宝配置在本节点表里查不到」一行。
 
 **先排除版本错位再处理毒消息**:同一名玩家在几台旧版本节点之间换图或重建实体,每次重拉都会让这一行的 `delivery_count` +1,可能触发 `PlayerInboxPoisonSuspect`。告警指引的 `VoidItem(reason=QUARANTINED)` 会把一条合法处置作废:先查该玩家 scene 日志里有没有 `reason=version_skew` 或上面两种日志,有就按本节处理。
 出现在新旧 scene 混跑(滚动发布、金丝雀)期间;整体回滚到不认识这些字段的版本之后不会自行消失(见第 3 条)。这一条不记账、不确认,已定的前缀照常确认,行留在收件箱 PENDING。同域排在它后面的处置(例如 `GM_BLOCK_CURRENCY_GAIN`)也一起停住。
@@ -514,12 +515,12 @@ v1 **不做自动隔离**。
 
 | 原因 | scene 表现 | 恢复 |
 |---|---|---|
-| 宝宝 / 宠物配置缺失(宠物配置行被删、宠物已不在玩家身上、宠物属性池缺失) | 已改为**跳过该宠物的子效果**,其余照常应用,逐项 ERROR `metric=battle_inbox_pet_effect_skipped reason=pet_table_missing / pet_no_longer_owned / pet_pool_missing`。条目正常 APPLIED,不再卡住 | 不需要解卡。按日志里的 `battle_id` 与数量由负责人评估是否补偿;仍在跑旧版本的 scene 可能整笔延后,滚动升级 scene |
-| 物品配置行被热更删除(掉落或消耗项的 `config_id` 已不存在) | C++ 与 Java 正在改为**跳过该物品子效果**(ERROR `metric=battle_inbox_item_effect_skipped reason=item_table_missing`,其余照常应用)。还没跑到这一版的节点上,这份原件会一直延后或停用 | 首选把被删的配置行热更回来(只恢复那一行),下一次重试即应用;或把 scene 升到跳过版本。跳过的物品按日志人工补偿。**不要**为了解卡改原件或作废 |
+| 宝宝已不可用(宝宝已不在玩家身上、宝宝属性池缺配) | **跳过这只宝宝的子效果**,其余照常应用,逐项 ERROR `metric=battle_inbox_pet_effect_skipped reason=pet_no_longer_owned / pet_pool_missing`。条目正常 APPLIED,不会卡住 | 不需要解卡。按日志里的 `battle_id` 与数量由负责人评估是否补偿;属性池缺配是配表问题,补上配置 |
+| 物品 / 宝宝配置在本节点表里查不到(掉落或消耗项的 `config_id` 不在本节点 Item 表里,或玩家带进这一局的宝宝种类不在本节点 Pet 表里;2026-11-11 起) | **整笔延后、零副作用**,不剔除这一项、不跳过这只宝宝。WARN `metric=persist_version_skew where=battle_item`(带 `side=consumed/gained`、`config_id`)或 `where=battle_pet`(带 `pet_id`、`pet_table_id`),每次重试一条;scene 本地按 1s→60s 退避重试,不停用本域。Item / Pet 表行 id 只增不删(导表器 `(cfg_ids_permanent)` 门禁,`data/AGENTS.md`),所以查不到只可能是这一行还没热更到本节点,或结算 / 宝宝来自更新版本的节点 | 把配置表热更到含这一行的版本(或把 scene 滚动到含这一行的版本),下一次重试即应用;玩家换到已有这一行的节点时重拉也会应用。日志里的配置号在最新导表产物里也没有:查 battle / 发放方为什么写出不存在的配置号,按事故上报。**不要**作废、改原件,也**不要**为了解卡删改玩家的物品或宝宝。2026-10-30 ~ 11-11 的口径是只剔除查不到的物品项、跳过查不到种类的宝宝(日志 `battle_inbox_item_effect_skipped`、`pet_effect_skipped reason=pet_table_missing`),已作废:表行不会再被删,剔除就是丢掉玩家这一局的掉落 |
 | 产出封禁(全服 GainBlock 封了某物品 / 币种,或玩家被 GM 封锁了该币种的获取) | 与资产通道、旧路径同一口径(2026-11-05):**只跳过被封的币种 / 掉落,其余效果照常应用,结局 APPLIED**;被封部分这一局永久不入账、不抵欠款,解封后不补发。日志 `metric=battle_settlement_currency_blocked` / `battle_settlement_item_blocked`(source=inbox)。不会因封禁卡住条目,无需处置 |
 | 持久数据损坏或含未知字段(玩家背包实例 / 宠物 / 欠款带本版本不认识的字段,数量实例不可计数,或持久组件缺失) | 未知字段与不可计数实例判**版本错位、停用该域**;组件缺失则整笔延后 | 未知字段来自更新版本的 scene 写下的数据:把全网 scene 滚动到认识这些字段的版本(同 §5.2 A′),玩家重新落地即应用。确属损坏(没有任何版本认识):按事故上报负责人,走存档修复 / 回档流程(§9、`docs/ops/online-debug-data-fetch.md`),不要手改存档 |
 | 载荷坏值(结算原件解不开、带未知字段、终局值非法;或币种越界、同币种重复、金额超过 INT64_MAX) | 前三种判**版本错位、停用该域**,后三种**整笔延后**。原件不可变,重试永远是同一个结果 | 先查是不是更新版本的 battle 写出的字段(升级 scene 即可)。否则是 battle / match 的缺陷:按事故上报,修复只能靠能安全处理这份原件的新版本 scene;**不能**改载荷、作废或另发一份结算 |
-| 主包与临时格都满(主包放不下整批掉落,转临时格也放不下;2026-11-05 起临时格满了**不再挤掉旧物**,新到的整批一律拒绝,scene 打 WARN `metric=bag_grant_overflow_rejected`,首次与每连续 8 次一条、不带调用栈),或物品号段余量不足(`metric=battle_settlement_item_guid_shortage`) | **整笔延后**,玩家在线时本地退避重试;同一玩家收件箱后面的局按序也停在这里 | 让玩家把临时格的东西取回人物背包(客户端「临时格」页签的取回 / 全部取回,协议 `RetrieveTemporaryItems`,`docs/design/bag-rule-policy-layering.md` §6.6;这一局的战斗冻结还挂着时照样能取回)或整理背包腾出空间(整理要等冻结解开)。取回成功会经 `PlayerInboxSystem::OnBagSpaceFreed` 把这一条的下一次尝试提到现在,下一个 tick(约 1 秒)就重试,放得下即应用;整理等其它腾位方式不唤醒,照常等退避(最长约 60 秒)再重试(2026-11-06 起);号段不足时 scene 已自动请号段客户端续一段(日志带 `top_up=fetching`,2026-11-06 起),续上即自愈;`top_up=exceeds_max_step` / `unavailable` 打 ERROR,说明这一批要的新实例比一段最多能给的号(`IdSegments` 的 `MaxStep`)还多,或 item 号段未启用 / 已停机,查 `IdSegments` 的 `MaxStep` / `Enabled` 与发号器;结算照样只延后、不拒收,改好配置后下一次重试自愈。不需要服务端操作,**不要**作废或改原件 |
+| 主包与临时格都满、而掉落又没能改投邮件(2026-11-12 起两包都放不下时掉落改投邮件、这一局照常应用,见下「待寄邮件」;走到这一行说明邮件接不住:scene 没配 `MAIL_PRODUCER_SECRET_BATTLE`(启动日志有一行 `Battle overflow mail is disabled`)、待寄队列满(`metric=mail_outbox_full`)、或请求号暂时取不到(`metric=mail_outbox_request_id_shortage`)。临时格 2026-11-05 起满了**不再挤掉旧物**,新到的整批一律拒绝,scene 打 WARN `metric=bag_grant_overflow_rejected`,首次与每连续 8 次一条、不带调用栈),或物品号段余量不足(`metric=battle_settlement_item_guid_shortage`) | **整笔延后**,玩家在线时本地退避重试;同一玩家收件箱后面的局按序也停在这里 | 让玩家把临时格的东西取回人物背包(客户端「临时格」页签的取回 / 全部取回,协议 `RetrieveTemporaryItems`,`docs/design/bag-rule-policy-layering.md` §6.6;这一局的战斗冻结还挂着时照样能取回)或整理背包腾出空间(整理要等冻结解开)。取回成功会经 `PlayerInboxSystem::OnBagSpaceFreed` 把这一条的下一次尝试提到现在,下一个 tick(约 1 秒)就重试,放得下即应用;整理等其它腾位方式不唤醒,照常等退避(最长约 60 秒)再重试(2026-11-06 起);号段不足时 scene 已自动请号段客户端续一段(日志带 `top_up=fetching`,2026-11-06 起),续上即自愈;`top_up=exceeds_max_step` / `unavailable` 打 ERROR,说明这一批要的新实例比一段最多能给的号(`IdSegments` 的 `MaxStep`)还多,或 item 号段未启用 / 已停机,查 `IdSegments` 的 `MaxStep` / `Enabled` 与发号器;结算照样只延后、不拒收,改好配置后下一次重试自愈。不需要服务端操作,**不要**作废或改原件 |
 
 **战斗冻结续冻(2026-11-06,`docs/design/turn-battle-gap-closure.md` §11)**:FIGHTING 冻结到期时 scene 先向 match 查这一局的 SQL 终局,
 COMPLETE 而结算还没到本地、有可裁决原件而终局还没落定(NONE)、或者查不到,就续冻(每 30 秒一行 WARN
@@ -540,11 +541,33 @@ FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直�
   COMPLETE / PENDING / UNKNOWN 留着,**没有上限**。越过「冻结到期 + 15 分钟」仍没收尾,每 10 分钟一行 ERROR `metric=battle_item_hold_overdue`
   (值班查询 `count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_overdue" [10m]) > 0`)。
 - **处置**:按日志里的 `battle_id` 查结算为什么没到,走本节上面的步骤 —— 发件箱积压看下面「Match 个人结算首投积压」;
-  条目已在收件箱而整笔延后看上面的原因表(两包都满就让玩家腾位、取回临时格);match 查不到看 `battle_terminal_query_unknown` 的处置。
+  条目已在收件箱而整笔延后看上面的原因表(两包都满而没能改投邮件时,让玩家腾位、取回临时格);match 查不到看 `battle_terminal_query_unknown` 的处置。
   结算一应用,预留随之释放,不需要人工放。
 - **禁止**手改 `player_database.item_holds` 或用 GM 放掉预留来「解卡」:押着的就是结算要扣的东西,放掉等于让玩家把药白喝;
   结算若确实永远到不了(原件损坏),按事故上报负责人,走存档修复流程。
 - 玩家离线时被取消的备战只删锁,预留留在存档里,下次加载后按 SQL 终局收尾;这段时间这些道具押着,属预期。
+
+**待寄邮件(2026-11-12,`docs/design/battle-overflow-mail.md`)**:人物背包与临时格都放不下这一局的掉落时,结算照常应用,
+掉落整批记进玩家存档的待寄队列(`player_database.mail_outbox`),存档提交之后由 scene 以 `battle` 身份寄成个人邮件(标题「战斗奖励」),
+邮件回了 `mail_id` 才从队列里删。玩家腾出背包空位后在邮箱里领取。这类局不会卡在收件箱里,条目正常 APPLIED。
+
+- **正常的日志**:INFO `metric=battle_items_mailed`(每封一行,带 `battle_id`、`request_id`),之后 INFO `metric=mail_outbox_delivered`(带 `mail_id`)。
+  按 `request_id` 可以在邮件库里对到同一封(`sender_kind=5`)。
+- **会自己好的失败**:WARN `metric=mail_outbox_send_failed`(连续失败的第 1 次和之后每 8 次一行)、`metric=mail_outbox_send_lost`(在途超过调用期限没回)。
+  原因是邮件不可达、结果未知,或玩家邮箱满(`kMailRecipientBoxFull`,个人邮件上限 200 封)。条目留着按退避重试:
+  结果未知 1 秒起、封顶 60 秒;邮箱满 30 秒起、封顶 5 分钟。邮箱满的让玩家删信;其余查 mail 是否可用、scene 能否发现
+  `MailNodeService.rpc` 下的节点。只寄此刻登记在本节点、可改的玩家:离线、交接中的玩家等下次落地再寄,属预期。
+- **不会自己好的失败**:ERROR `metric=mail_outbox_stuck`(值班查询在 `deploy/k8s/asset-channel-alerts.yaml` 头注释),行里带 `reason=`:
+  - 没配密钥或签名失败 → 核对这个 zone namespace 的 `domain-service-secrets` 里 `mail-producer-battle` 与 infra namespace 的同值、至少 32 字节;
+  - 条目形状不合法(加载时另有 `metric=mail_outbox_invalid`)→ 按事故上报,走存档修复流程;
+  - `reason=mail_rejected` 时看 `tip=`(号以导表产物为准):
+    - `kMailAttachmentInvalid`:条目里的配置号在邮件服务的 Item 表里查不到。把配置表发到 mail(表行只增不删),补上之后下一次重试寄出;
+    - `kMailRequestConflict`:同一请求号在邮件库里已有内容不同的邮件。按事故上报,不要换请求号重发;
+    - `kInvalidParameter`:请求没过邮件的校验(标题正文长度、发件角色不符等),多半是两边版本不一致,按事故上报。
+  - 这些失败的条目仍留在队列里,按 30 秒起、封顶 5 分钟的间隔重试;原因修好之后自己寄出,不用人工重投。
+- **禁止**手改 `player_database.mail_outbox`,也不要为了「补发」另外用 `mailadmin` 发一封同样的附件:条目还在,寄到之后玩家会拿到两份。
+  确认条目已经不在(日志有对应 `request_id` 的 `mail_outbox_delivered`)再谈补偿。
+- 待寄队列至多 32 条。满了之后新的掉落回到上表「主包与临时格都满」的整笔延后,不会丢。
 
 **条目根本没进收件箱**:如果 `ListItems` 查不到这局,而 Match 侧该玩家的 `match_battle_settlement_source` 一直停在 `inbox_seq=0`
 (Match 指标 `match_outcome_outbox_backlog_rows{kind="first"}` 不降、`match_outcome_outbox_delivery_total{kind="first",outcome="failed"}` 在涨),先看收件箱的

@@ -167,8 +167,8 @@ muduo 每 8MiB 滚一个新文件且从不删旧文件。比这 8 个更早的�
 `grafana/alloy:v1.10.0` 载入节点。想排除 sidecar 干扰就带 `-NoCppLogSidecar` 重新部署 ——
 关掉后消失的只有 sidecar 容器、它的两个卷（`cpp-log-sidecar-config` / `cpp-log-sidecar-state`）
 和 pod 模板上的 `mmorpg.io/cpp-log-sidecar-config-hash` 注解（scene 的 Agones Fleet 上还会少一行 `container: <池名>`）；
-业务容器里的日志清理循环、`node-logs` 的 `sizeLimit: 2Gi`、`snowflake-cache` 的 64Mi 都是**无条件**渲染的，
-关掉 sidecar 不会把它们变回去。
+业务容器里的日志清理循环、`node-logs` 的 `sizeLimit: 2Gi` 都是**无条件**渲染的，
+关掉 sidecar 不会把它们变回去。（C++ Pod 2026-11-12 起不再挂 `snowflake-cache` 卷：C++ 的 snowflake 槽位客户端已删。）
 
 > 现状（2026-09-19）：上面这套形态**已落码，并在本机 kind 集群的临时 namespace 里端到端跑通过**
 > （假 C++ 节点写 muduo 格式行 + 真 Loki），但**从未在真实 zone / infra namespace 上 apply 过**。

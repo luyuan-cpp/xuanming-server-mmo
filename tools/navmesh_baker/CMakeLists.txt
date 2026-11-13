@@ -39,7 +39,10 @@ add_executable(navmesh_baker
     ${DETOUR_SOURCES}
 )
 
-target_include_directories(navmesh_baker PRIVATE ${UE5NAVMESH_DIR}/Public)
+add_executable(navmesh_query navmesh_query.cpp ${DETOUR_SOURCES})
+
+foreach(NAVMESH_TARGET navmesh_baker navmesh_query)
+target_include_directories(${NAVMESH_TARGET} PRIVATE ${UE5NAVMESH_DIR}/Public)
 
 if(WIN32)
     # 宏对齐 scene.vcxproj / third_party.vcxproj 里 ue5navmesh 的编译配置:
@@ -48,7 +51,7 @@ if(WIN32)
     #                    CoreMinimal.h 先 #include <Windows.h> 再 `using TCHAR = wchar_t;`,
     #                    没有 UNICODE 时 winnt.h 会先 typedef char TCHAR,与之冲突(C2371);
     #                    vcxproj 那边靠 CharacterSet=Unicode + 显式 _TCHAR_DEFINED 躲过,这里照抄。
-    target_compile_definitions(navmesh_baker PRIVATE
+    target_compile_definitions(${NAVMESH_TARGET} PRIVATE
         WIN32 UNICODE _UNICODE _TCHAR_DEFINED NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
 endif()
 
@@ -59,7 +62,8 @@ if(MSVC)
     # DetourAssert.h 只在 Debug 才 #include <assert.h>;scene 是 Debug 构建碰不到,
     # 烘焙器 Release 构建会 C3861 "assert 找不到标识符",强制包含一次即可
     # (NDEBUG 下 assert 展开为空,不改变行为)。
-    target_compile_options(navmesh_baker PRIVATE /utf-8 /bigobj /FIcassert)
+    target_compile_options(${NAVMESH_TARGET} PRIVATE /utf-8 /bigobj /FIcassert)
 else()
-    target_compile_options(navmesh_baker PRIVATE -include cassert)
+    target_compile_options(${NAVMESH_TARGET} PRIVATE -include cassert)
 endif()
+endforeach()

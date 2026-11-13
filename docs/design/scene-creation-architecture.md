@@ -694,7 +694,9 @@ Regression: `TestReconcileDeadNode_{DestroysOrphanInstances,PreservesWorldChanne
 (`dead_node_reconcile_takeover_test.go`, red on the pre-fix commit),
 `TestDeadNodeReconcile_{AbandonsAfterGiveUpDeadline,ScopeIsDeathTimeSnapshot,DropsMalformedTask}`,
 `TestDeadNodeReregister_*`(`dead_node_reregister_test.go`,R1-I5:同一代回来撤任务;换代或不知道是哪一代时 `death_at` 留着,
-屏障压着不收、走完后照常收尾(R15);清扫从旧镜像补实例号、迟到的结束不删计数)。
+屏障压着不收、走完后照常收尾(R15);清扫从旧镜像补实例号、迟到的结束不删计数。R1-I6 / R1-I7,2026-11-11~12:只有领导者撤任务、
+清 `death_at`,跟随者先看到也不动;动手前按 etcd 现读的注册表再判一次,读不到不拆;每轮有时间预算,到点让出、下一拍重判;
+逐个认领与结束任务核对任务身份,任务被撤或换了一次判死就停)。
 
 ### Observability (Prometheus)
 

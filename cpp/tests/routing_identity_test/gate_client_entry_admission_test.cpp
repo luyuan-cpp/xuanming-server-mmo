@@ -78,6 +78,12 @@ TEST(GateSynthesizedOnly, GateMigrationRequestIsRejectedAtClientEntry)
 	EXPECT_TRUE(gate_login_admission::IsGateSynthesizedOnly(ClientPlayerLoginRequestGateMigrationMessageId));
 }
 
+// 登录态续租同样只由 gate 合成:续租的节奏由 gate 按 login 给的间隔控制,不接受客户端自己发。
+TEST(GateSynthesizedOnly, RenewSessionIsRejectedAtClientEntry)
+{
+	EXPECT_TRUE(gate_login_admission::IsGateSynthesizedOnly(ClientPlayerLoginRenewSessionMessageId));
+}
+
 // 客户端能发起的 login 方法照常进入口。
 TEST(GateSynthesizedOnly, ClientInitiatedLoginMethodsAreNotAffected)
 {

@@ -159,7 +159,8 @@ func runChat(c config.Config) (runErr error) {
 	// RPC 级热关停(shared/killswitch,D-1 验收第四条):线上某个方法出事时往 etcd 写一个 key
 	// 秒级短路它。复用 svcCtx 的 etcd 客户端;Start 非阻塞,etcd 不可达一律放行(fail-open)。
 	ksCtx, ksCancel := context.WithCancel(context.Background())
-	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix})
+	// NodeTypes:认 type/ChatNodeService/ 下的规则;注册成功后再 AddInstance(docs/design/rpc-kill-switch.md §5)。
+	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix, NodeTypes: []string{base.ENodeType_name[int32(nodeType)]}})
 	ks.Start(ksCtx, svcCtx.Etcd)
 
 	var serverSlot lifecycle.ServerSlot
@@ -255,6 +256,7 @@ func runChat(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+	ks.AddInstance(nr.NodeUUID) // 认 instance/<本进程 uuid>/ 下的热关停规则
 
 	var prepared func(context.Context) (*serverbase.PreparedPublication, error)
 	if runtime != nil {

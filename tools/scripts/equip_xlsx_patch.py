@@ -77,7 +77,7 @@ try:
     import openpyxl
     from openpyxl.utils import get_column_letter
 except ImportError:  # pragma: no cover - 环境问题,给一句能照着做的话
-    sys.exit("缺少 openpyxl:请先执行  pip install openpyxl")
+    sys.exit("openpyxl is missing: run  pip install openpyxl  first")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
@@ -92,7 +92,7 @@ if str(EXPORTER_DIR) not in sys.path:
 try:
     from core.schema_proto import SchemaProtoError, build_table_schema, parse_schema_proto
 except ImportError as exc:  # pragma: no cover - 环境问题
-    sys.exit(f"无法载入导表器的 schema 解析器({exc}):请先执行  pip install pyyaml openpyxl")
+    sys.exit(f"cannot load the table exporter's schema parser ({exc}): run  pip install pyyaml openpyxl  first")
 
 # 主表版式(data/AGENTS.md):第 1 行列名 / 第 2-4 行留空 / 第 5 行中文说明(schema 注释首行的投影)/ 第 6 行起数据。
 HEADER_ROW = 1
@@ -347,7 +347,7 @@ LIMITER_TIP_MESSAGE = 1000
 # ════════════════════════════════════════════════════════════════════════════
 
 def fail(message: str) -> "NoReturn":
-    sys.exit(f"[中止] {message}")
+    sys.exit(f"[ABORT] {message}")
 
 
 def rel(path: Path) -> str:
@@ -356,10 +356,10 @@ def rel(path: Path) -> str:
 
 def only_sheet(wb, path: Path, expect_title: str | None = None):
     if len(wb.sheetnames) != 1:
-        fail(f"{path.name} 预期只有一个 sheet,实际 {wb.sheetnames}")
+        fail(f"{path.name} should have exactly one sheet, found {wb.sheetnames}")
     ws = wb[wb.sheetnames[0]]
     if expect_title is not None and ws.title != expect_title:
-        fail(f"{path.name} 的 sheet 名应为 {expect_title!r}(导表器按它匹配 schema),实际 {ws.title!r}")
+        fail(f"{path.name}: the sheet name should be {expect_title!r} (the table exporter matches the schema by it), got {ws.title!r}")
     return ws
 
 
@@ -391,7 +391,7 @@ def header_cells(ws) -> dict[str, int]:
         if not name:
             continue
         if name in out:
-            fail(f"{ws.title} 第 1 行有重复表头 {name!r}")
+            fail(f"{ws.title} row 1 has a duplicate header {name!r}")
         out[name] = c
     return out
 
@@ -408,10 +408,10 @@ def apply_patches_and_verify(xlsx_path: Path, sheet: str | None, wb, ws, before:
     """
     for row, col, value in patches:
         if value is None:
-            fail(f"内部错误:补丁里出现了空值({get_column_letter(col)}{row})")
+            fail(f"internal error: the patch contains an empty value ({get_column_letter(col)}{row})")
         if ws.cell(row=row, column=col).value is not None:
-            fail(f"{xlsx_path.name} 的 {get_column_letter(col)}{row} 已有内容 "
-                 f"{ws.cell(row=row, column=col).value!r},本脚本只写空格、不覆盖 —— 先查清是谁写的。")
+            fail(f"{xlsx_path.name} {get_column_letter(col)}{row} already has content "
+                 f"{ws.cell(row=row, column=col).value!r}; this script only writes empty cells and never overwrites -- find out who wrote it first.")
     for row, col, value in patches:
         ws.cell(row=row, column=col, value=value)
     wb.save(xlsx_path)
@@ -426,7 +426,7 @@ def apply_patches_and_verify(xlsx_path: Path, sheet: str | None, wb, ws, before:
     check_ws = only_sheet(openpyxl.load_workbook(xlsx_path), xlsx_path, sheet)
     diff = first_difference(sheet_matrix(check_ws), expected)
     if diff:
-        fail(f"保存后读回的 {xlsx_path.name} 与预期不符({diff})—— 立刻 git checkout -- {rel(xlsx_path)} 还原")
+        fail(f"after saving, {xlsx_path.name} read back is not as expected ({diff}) -- restore it now with git checkout -- {rel(xlsx_path)}")
     if bind_schema:
         bind(sheet, xlsx_path)
 
@@ -449,31 +449,31 @@ def schema_layout(sheet: str) -> list[FieldLayout]:
     """从权威 schema 读出每个字段的表头名、注释首行与列宽。顺序 = schema 声明顺序。"""
     path = schema_path(sheet)
     if not path.exists():
-        fail(f"找不到权威 schema {rel(path)}")
+        fail(f"authoritative schema {rel(path)} not found")
     try:
         messages = parse_schema_proto(path)
     except SchemaProtoError as exc:
-        fail(f"{rel(path)} 解析失败:{exc}")
+        fail(f"failed to parse {rel(path)}: {exc}")
     mains = [m for m in messages.values() if m.opts.get("cfg_sheet") == sheet]
     if len(mains) != 1:
-        fail(f"{rel(path)} 里应当恰好有一个 (cfg_sheet) = {sheet!r} 的 message")
+        fail(f"{rel(path)} should have exactly one message with (cfg_sheet) = {sheet!r}")
     layout: list[FieldLayout] = []
     for field in mains[0].fields:
         if field.opts.get("cfg_col") or field.opts.get("cfg_owner"):
-            fail(f"{path.name} 的字段 {field.name} 用了 (cfg_col) / (cfg_owner),本脚本没处理这种列,先同步脚本")
+            fail(f"{path.name}: field {field.name} uses (cfg_col) / (cfg_owner), which this script does not handle; update the script first")
         comment = field.comment.splitlines()[0].strip() if field.comment else ""
         slots = field.opts.get("cfg_slots")
         if field.type_expr in messages:                         # 子消息数组:每条占 len(子字段) 列
             subs = sorted(messages[field.type_expr].fields, key=lambda f: f.number)
             if not slots:
-                fail(f"{path.name} 的字段 {field.name} 是子消息数组,必须写 (cfg_slots)")
+                fail(f"{path.name}: field {field.name} is a repeated sub-message and must declare (cfg_slots)")
             layout.append(FieldLayout(field.name, comment, slots * len(subs), tuple(f.name for f in subs)))
         elif field.repeated or field.type_expr.startswith("map"):
-            fail(f"{path.name} 的字段 {field.name} 是标量数组 / map,本脚本没处理这种列,先同步脚本")
+            fail(f"{path.name}: field {field.name} is a repeated scalar / map, which this script does not handle; update the script first")
         else:
             layout.append(FieldLayout(field.name, comment, 1, ()))
     if not layout or layout[0].name != "id":
-        fail(f"{path.name} 的首个字段应为 id")
+        fail(f"{path.name}: the first field should be id")
     return layout
 
 
@@ -482,7 +482,7 @@ def bind(sheet: str, xlsx_path: Path):
     try:
         return build_table_schema(schema_path(sheet), xlsx_path)
     except SchemaProtoError as exc:
-        fail(f"权威 schema 与 {rel(xlsx_path)} 对不上(导表也会因此失败):{exc}")
+        fail(f"the authoritative schema does not match {rel(xlsx_path)} (the table export would fail too): {exc}")
 
 
 # ── 常量表自检 ───────────────────────────────────────────────────────────────
@@ -492,7 +492,7 @@ ATTR_ID_BY_NAME = {name: attr_id for attr_id, name, _e, _p, _pc in EQUIP_ATTRIBU
 
 def attr_id(name: str) -> int:
     if name not in ATTR_ID_BY_NAME:
-        fail(f"常量表引用了不存在的属性名 {name!r}")
+        fail(f"the constant tables reference an unknown attribute name {name!r}")
     return ATTR_ID_BY_NAME[name]
 
 
@@ -501,78 +501,78 @@ def self_check() -> None:
     ids = [row[0] for row in EQUIP_ATTRIBUTES]
     names = [row[1] for row in EQUIP_ATTRIBUTES]
     if len(set(ids)) != len(ids) or len(set(names)) != len(names):
-        fail("EQUIP_ATTRIBUTES 的 id 或显示名有重复")
+        fail("EQUIP_ATTRIBUTES has duplicate ids or display names")
 
     pooled: set[str] = set()
     for pool_id, members in EQUIP_AFFIX_POOLS.items():
         if len(members) != EQUIP_AFFIX_POOL_SIZES[pool_id] or len(set(members)) != len(members):
-            fail(f"属性池 {pool_id} 应有 {EQUIP_AFFIX_POOL_SIZES[pool_id]} 条且互不重复,实际 {len(members)} 条")
+            fail(f"attribute pool {pool_id} should have {EQUIP_AFFIX_POOL_SIZES[pool_id]} distinct entries, found {len(members)}")
         for name in members:
             attr_id(name)
         pooled.update(members)
 
     capped = [name for group, _caps in EQUIP_ATTRIBUTE_CAPS for name in group]
     if len(set(capped)) != len(capped):
-        fail("EQUIP_ATTRIBUTE_CAPS 里有属性出现了两次")
+        fail("EQUIP_ATTRIBUTE_CAPS lists an attribute twice")
     # 进池的属性必须有上限(否则掷不出来),有上限的属性必须进池(否则是死数据)。
     if set(capped) != pooled:
-        fail(f"上限表与属性池不一致:只在上限表 {sorted(set(capped) - pooled)},只在池里 {sorted(pooled - set(capped))}")
+        fail(f"the cap table and the attribute pools disagree: only in the cap table {sorted(set(capped) - pooled)}, only in the pools {sorted(pooled - set(capped))}")
     for group, caps in EQUIP_ATTRIBUTE_CAPS:
         if len(caps) != len(EQUIP_LEVEL_TIERS) or any(c <= 0 for c in caps) or list(caps) != sorted(caps):
-            fail(f"{group} 的上限应为 {len(EQUIP_LEVEL_TIERS)} 个不减的正数,实际 {caps}")
+            fail(f"{group}: caps should be {len(EQUIP_LEVEL_TIERS)} non-decreasing positive numbers, got {caps}")
     if max(EQUIP_LEVEL_TIERS) >= 1000 or max(ids) >= 1000:
-        fail("行号公式 attr_id * 1000 + level / pool_id * 1000 + attr_id 要求等级与属性 id 都 < 1000")
+        fail("the row id formulas attr_id * 1000 + level / pool_id * 1000 + attr_id require both the level and the attribute id to be < 1000")
 
     slot_ids = [s for s, _k, _n in EQUIP_SLOTS]
     if len(set(slot_ids)) != len(slot_ids) or any(s >= EQUIP_BAG_CAPACITY for s in slot_ids):
-        fail(f"EQUIP_SLOTS 的槽号必须互不重复且 < 装备栏容量 {EQUIP_BAG_CAPACITY}")
+        fail(f"EQUIP_SLOTS slot numbers must be distinct and < the equipment bag capacity {EQUIP_BAG_CAPACITY}")
     slot_kinds = {k for _s, k, _n in EQUIP_SLOTS}
     rule_ids = {r["id"] for r in EQUIP_AFFIX_RULES}
     if SAMPLE_AFFIX_RULE not in rule_ids:
-        fail(f"样例装备引用的掷值规则 {SAMPLE_AFFIX_RULE} 不在 EQUIP_AFFIX_RULES 里")
+        fail(f"the roll rule {SAMPLE_AFFIX_RULE} referenced by the sample equipment is not in EQUIP_AFFIX_RULES")
     for part in SAMPLE_EQUIP_PARTS:
         if part["equip_kind"] not in slot_kinds:
-            fail(f"样例装备的部位 {part['equip_kind']} 没有任何槽位接受")
+            fail(f"no slot accepts sample equipment kind {part['equip_kind']}")
         if part["affix_pool"] not in EQUIP_AFFIX_POOLS:
-            fail(f"样例装备引用了不存在的属性池 {part['affix_pool']}")
+            fail(f"the sample equipment references a missing attribute pool {part['affix_pool']}")
         if len(part["names"]) != len(EQUIP_LEVEL_TIERS):
-            fail(f"部位 {part['equip_kind']} 的名称应有 {len(EQUIP_LEVEL_TIERS)} 个")
+            fail(f"equipment kind {part['equip_kind']} should have {len(EQUIP_LEVEL_TIERS)} names")
         if part["icons"] is not None and len(part["icons"]) != len(EQUIP_LEVEL_TIERS):
-            fail(f"部位 {part['equip_kind']} 的图标应有 {len(EQUIP_LEVEL_TIERS)} 个")
+            fail(f"equipment kind {part['equip_kind']} should have {len(EQUIP_LEVEL_TIERS)} icons")
         for name, _per_level, _const in part["base_attr"]:
             attr_id(name)
 
     tip_names = [name for name, _t, _f in TIP_EQUIP_CODES]
     if len(set(tip_names)) != len(tip_names) or len(tip_names) > TIP_EQUIP_WIDTH:
-        fail("TIP_EQUIP_CODES 码名重复或超过段宽")
+        fail("TIP_EQUIP_CODES has duplicate code names or exceeds the range width")
 
     # ── 二期:强化与镶嵌 ──
     enhance_levels = [row[0] for row in EQUIP_ENHANCE_LEVELS]
     if enhance_levels != list(range(1, len(enhance_levels) + 1)):
-        fail(f"EQUIP_ENHANCE_LEVELS 的 id 必须从 1 起连续(强化上限 = 连续前缀的最大 id),实际 {enhance_levels}")
+        fail(f"EQUIP_ENHANCE_LEVELS ids must be consecutive from 1 (the enhance cap is the largest id of the consecutive prefix), got {enhance_levels}")
     previous_bonus = 0
     for level, bonus, rate, loss, gold, count in EQUIP_ENHANCE_LEVELS:
         if bonus < previous_bonus:
-            fail(f"强化 +{level} 的总加成 {bonus} 小于上一级的 {previous_bonus}(加成是总量,必须随等级不减)")
+            fail(f"enhance +{level}: total bonus {bonus} is below the previous level's {previous_bonus} (the bonus is a total and must not decrease with level)")
         previous_bonus = bonus
         if not 1 <= rate <= PERMYRIAD_BASE:
-            fail(f"强化 +{level} 的成功率 {rate} 不在 1..{PERMYRIAD_BASE}(0 = 必败的行,服务器会当成不可强化)")
+            fail(f"enhance +{level}: success rate {rate} is not within 1..{PERMYRIAD_BASE} (0 means a row that always fails, which the server treats as not enhanceable)")
         if loss < 0 or not 0 <= gold <= INT64_MAX:
-            fail(f"强化 +{level} 的掉级数 / 金币消耗越界:{loss} / {gold}")
+            fail(f"enhance +{level}: level loss / gold cost out of range: {loss} / {gold}")
         if count <= 0:
             # 材料固定是强化石(material_id != 0),此时数量为 0 会被服务器的表校验判为坏行。
-            fail(f"强化 +{level} 的材料数量必须 > 0(想不收材料要把 material_id 一并改成 0,先同步 equip_enhance_rows)")
+            fail(f"enhance +{level}: the material count must be > 0 (to take no material, set material_id to 0 as well and update equip_enhance_rows first)")
 
     gem_types = [gem_type for gem_type, _label, _attr, _values in EQUIP_GEM_TYPES]
     gem_labels = [label for _type, label, _attr, _values in EQUIP_GEM_TYPES]
     # 物品 id = 2000 + 类型 * 100 + 等级:类型占百位、等级占个位,所以两者都只能是 1..9。
     if len(set(gem_types)) != len(gem_types) or len(set(gem_labels)) != len(gem_labels) \
             or any(not 1 <= t <= 9 for t in gem_types) or not 1 <= len(GEM_GRADE_NAMES) <= 9:
-        fail("EQUIP_GEM_TYPES 的宝石类型 / 类型名必须互不重复,类型与等级数都在 1..9(物品 id 的百位与个位)")
+        fail("EQUIP_GEM_TYPES gem types / type names must be distinct, and both the type and the grade count must be within 1..9 (the hundreds and units digits of the item id)")
     for gem_type, label, attr_name, values in EQUIP_GEM_TYPES:
         attr_id(attr_name)          # 宝石引用的属性必须在 §2.1 属性清单里(EquipGem.attr_id 是外键)
         if len(values) != len(GEM_GRADE_NAMES) or any(v <= 0 for v in values) or list(values) != sorted(set(values)):
-            fail(f"{label}宝石应有 {len(GEM_GRADE_NAMES)} 个逐级递增的正数属性值,实际 {values}")
+            fail(f"gem {label} should have {len(GEM_GRADE_NAMES)} positive attribute values increasing by grade, got {values}")
 
     forge_item_ids = [row["id"] for row in forge_item_rows()]
     gem_ids = [row["id"] for row in equip_gem_rows()]
@@ -580,29 +580,29 @@ def self_check() -> None:
     if len(set(forge_item_ids)) != len(forge_item_ids) \
             or any(not FORGE_ITEM_ID_MIN <= i <= FORGE_ITEM_ID_MAX for i in forge_item_ids) \
             or sample_ids & set(forge_item_ids):
-        fail(f"强化材料与宝石的物品 id 必须互不重复、落在 {FORGE_ITEM_ID_MIN}–{FORGE_ITEM_ID_MAX} 段内,"
-             f"且不与样例装备重号,实际 {forge_item_ids}")
+        fail(f"item ids of enhance materials and gems must be distinct, within {FORGE_ITEM_ID_MIN}-{FORGE_ITEM_ID_MAX}, "
+             f"and must not collide with the sample equipment, got {forge_item_ids}")
     # EquipGem 的主键与 EquipEnhance.material_id 都是指向 Item 的外键:每一个都必须有同 id 的物品行,
     # 而且强化石不能同时是宝石(否则「按 config 扣材料」与「按 config 扣宝石」会抢同一堆物品)。
     if ENHANCE_MATERIAL_ID in gem_ids or sorted(gem_ids + [ENHANCE_MATERIAL_ID]) != sorted(forge_item_ids):
-        fail(f"物品行与强化材料 / 宝石表对不上:物品行 {sorted(forge_item_ids)},强化石 {ENHANCE_MATERIAL_ID},宝石 {sorted(gem_ids)}")
+        fail(f"item rows do not match the enhance material / gem tables: item rows {sorted(forge_item_ids)}, enhance stone {ENHANCE_MATERIAL_ID}, gems {sorted(gem_ids)}")
 
     sockets_by_kind: dict[int, list[int]] = {}
     for kind, socket, gem_type, _name in EQUIP_GEM_SOCKETS:
         if kind not in slot_kinds:
-            fail(f"孔位表的部位 {kind} 没有任何槽位接受(这件装备穿不上,孔是死数据)")
+            fail(f"no slot accepts socket-table equipment kind {kind} (it cannot be equipped, so its sockets are dead data)")
         if gem_type != GEM_TYPE_ANY and gem_type not in gem_types:
-            fail(f"部位 {kind} 的 {socket} 号孔接纳的宝石类型 {gem_type} 不在 EQUIP_GEM_TYPES 里")
+            fail(f"equipment kind {kind} socket {socket} accepts gem type {gem_type}, which is not in EQUIP_GEM_TYPES")
         sockets_by_kind.setdefault(kind, []).append(socket)
     for kind, sockets in sockets_by_kind.items():
         # 0..n-1 连续同时保证了不重复;n <= MAX_GEM_SOCKETS 同时保证了行号公式 equip_kind * 100 + socket 不进位。
         if sockets != list(range(len(sockets))) or len(sockets) > MAX_GEM_SOCKETS:
-            fail(f"部位 {kind} 的孔位号应按 0..n-1 连续填写且不超过 {MAX_GEM_SOCKETS} 个,实际 {sockets}")
+            fail(f"equipment kind {kind}: socket numbers should be consecutive 0..n-1 with at most {MAX_GEM_SOCKETS} sockets, got {sockets}")
 
     forge_tip_names = [name for name, _t, _f in TIP_FORGE_CODES]
     if len(set(tip_names + forge_tip_names)) != len(tip_names) + len(forge_tip_names) \
             or len(tip_names) + len(forge_tip_names) > TIP_EQUIP_WIDTH:
-        fail("TIP_FORGE_CODES 码名重复(含与一期 TIP_EQUIP_CODES 重名),或两期合计超过段宽")
+        fail("TIP_FORGE_CODES has duplicate code names (including clashes with phase-one TIP_EQUIP_CODES), or both phases together exceed the range width")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -652,14 +652,14 @@ def create_scalar_tables(tables: dict[str, list[dict]], dry_run: bool) -> None:
         xlsx_path = DATA_DIR / f"{sheet}.xlsx"
         layout = schema_layout(sheet)
         if any(f.width != 1 for f in layout):
-            fail(f"{sheet} 的 schema 里出现了非标量列,new-tables 只会写全标量表,先同步脚本")
+            fail(f"the {sheet} schema has non-scalar columns, but new-tables only writes all-scalar tables; update the script first")
         names = [f.name for f in layout]
         for row in rows:
             if list(row.keys()) != names:
-                fail(f"{sheet} 数据行的键 {list(row.keys())} 与 schema 字段 {names} 不一致 —— schema 改过列,先同步本脚本")
+                fail(f"{sheet}: data row keys {list(row.keys())} differ from the schema fields {names} -- the schema columns changed; update this script first")
         ids = [row["id"] for row in rows]
         if len(set(ids)) != len(ids):
-            fail(f"{sheet} 数据行 id 重复")
+            fail(f"{sheet}: duplicate data row ids")
 
         wanted = [[None] * len(names) for _ in range(DATA_BEGIN_ROW - 1 + len(rows))]
         wanted[HEADER_ROW - 1] = list(names)
@@ -672,7 +672,7 @@ def create_scalar_tables(tables: dict[str, list[dict]], dry_run: bool) -> None:
             if ws.title == sheet and first_difference(sheet_matrix(ws), wanted) is None:
                 print(f"[ALREADY CURRENT] {rel(xlsx_path)} exists with identical contents ({len(rows)} rows); file unchanged.")
                 continue
-            fail(f"{rel(xlsx_path)} 已存在但内容与本脚本不同(可能策划已调过数值)—— 本脚本不覆盖。")
+            fail(f"{rel(xlsx_path)} already exists with different contents (designers may have tuned the values) -- this script does not overwrite it.")
 
         print(f"Will create {rel(xlsx_path)}:sheet={sheet!r},{len(names)} columns x {len(rows)} data rows")
         print(f"  Columns: {names}")
@@ -692,7 +692,7 @@ def create_scalar_tables(tables: dict[str, list[dict]], dry_run: bool) -> None:
         check_ws = only_sheet(openpyxl.load_workbook(xlsx_path), xlsx_path, sheet)
         diff = first_difference(sheet_matrix(check_ws), wanted)
         if diff:
-            fail(f"保存后读回的 {xlsx_path.name} 与写入内容不一致({diff})—— 删除该文件后重试")
+            fail(f"after saving, {xlsx_path.name} read back differs from what was written ({diff}) -- delete the file and retry")
         bind(sheet, xlsx_path)
         print(f"[DONE] {rel(xlsx_path)}")
     if dry_run:
@@ -715,9 +715,9 @@ def cmd_item_columns(dry_run: bool) -> None:
     layout = {f.name: f for f in schema_layout(ITEM_SHEET)}
     missing_in_schema = [n for n in ITEM_NEW_COLUMNS if n not in layout]
     if missing_in_schema:
-        fail(f"{schema_path(ITEM_SHEET).name} 里没有字段 {missing_in_schema} —— schema 还没加这些字段")
+        fail(f"{schema_path(ITEM_SHEET).name} has no fields {missing_in_schema} -- the schema does not have them yet")
     if layout[ITEM_NEW_COLUMNS[-1]].width != 1:
-        fail(f"ITEM_NEW_COLUMNS 的最后一项 {ITEM_NEW_COLUMNS[-1]!r} 不是标量:最右一列必须是标量(见常量表上方的说明)")
+        fail(f"the last entry of ITEM_NEW_COLUMNS {ITEM_NEW_COLUMNS[-1]!r} is not a scalar: the rightmost column must be a scalar (see the note above the constant tables)")
 
     wb = openpyxl.load_workbook(ITEM_XLSX)
     ws = only_sheet(wb, ITEM_XLSX, ITEM_SHEET)
@@ -730,14 +730,14 @@ def cmd_item_columns(dry_run: bool) -> None:
         print(f"[ALREADY CURRENT] {rel(ITEM_XLSX)} already contains {list(ITEM_NEW_COLUMNS)} and passed schema binding; file unchanged.")
         return
     if present:
-        fail(f"{rel(ITEM_XLSX)} 只有一部分新列 {present}(缺 {[n for n in ITEM_NEW_COLUMNS if n not in header]})"
-             f" —— 不是本脚本写出来的状态,先查清再手工补齐。")
+        fail(f"{rel(ITEM_XLSX)} has only some of the new columns {present} (missing {[n for n in ITEM_NEW_COLUMNS if n not in header]})"
+             f" -- this is not a state this script writes; find out first, then complete it by hand.")
     unknown = [n for n in header if n not in layout]
     if unknown:
-        fail(f"{rel(ITEM_XLSX)} 第 1 行有 schema 里没有的列 {unknown}")
+        fail(f"{rel(ITEM_XLSX)} row 1 has columns that are not in the schema: {unknown}")
     if max(header.values()) != ws.max_column:
-        fail(f"{rel(ITEM_XLSX)} 的最右一列(第 {ws.max_column} 列)没有表头 —— 现有最后一个字段不是标量,"
-             f"或表右侧有游离数据;追加新列会把它们并进那个字段,先修表。")
+        fail(f"{rel(ITEM_XLSX)}: the rightmost column (column {ws.max_column}) has no header -- the current last field is not a scalar, "
+             f"or there is stray data on the right; appending new columns would merge it into that field. Fix the table first.")
 
     patches: list[Patch] = []
     col = ws.max_column + 1
@@ -804,10 +804,10 @@ def item_row_cells(row: dict, layout: list[FieldLayout], header: dict[str, int])
             continue
         per = len(field.sub_names)
         if len(value) * per > field.width:
-            fail(f"物品 {row['id']} 的 {field.name} 有 {len(value)} 条,超过 (cfg_slots) = {field.width // per}")
+            fail(f"item {row['id']}: {field.name} has {len(value)} entries, more than (cfg_slots) = {field.width // per}")
         for index, entry in enumerate(value):
             if len(entry) != per:
-                fail(f"物品 {row['id']} 的 {field.name} 第 {index + 1} 条应有 {per} 个值")
+                fail(f"item {row['id']}: entry {index + 1} of {field.name} should have {per} values")
             for offset, sub_value in enumerate(entry):
                 cells[col + index * per + offset] = sub_value
     return cells
@@ -815,20 +815,20 @@ def item_row_cells(row: dict, layout: list[FieldLayout], header: dict[str, int])
 
 def cmd_item_rows(dry_run: bool) -> None:
     if not (DATA_DIR / "EquipAffixRule.xlsx").exists():
-        fail("data/EquipAffixRule.xlsx 还不存在 —— 样例装备的 affix_rule 是指向它的外键,先执行 new-tables")
+        fail("data/EquipAffixRule.xlsx does not exist yet -- the sample equipment's affix_rule is a foreign key into it; run new-tables first")
     layout = schema_layout(ITEM_SHEET)
     rows = sample_equip_rows()
     for row in rows:
         if set(row.keys()) != {f.name for f in layout}:
-            fail(f"样例装备的键与 {schema_path(ITEM_SHEET).name} 的字段不一致 —— schema 改过列,先同步本脚本:"
-                 f"多 {sorted(set(row) - {f.name for f in layout})},少 {sorted({f.name for f in layout} - set(row))}")
+            fail(f"the sample equipment keys differ from the fields of {schema_path(ITEM_SHEET).name} -- the schema columns changed; update this script first: "
+                 f"extra {sorted(set(row) - {f.name for f in layout})}, missing {sorted({f.name for f in layout} - set(row))}")
 
     wb = openpyxl.load_workbook(ITEM_XLSX)
     ws = only_sheet(wb, ITEM_XLSX, ITEM_SHEET)
     before = sheet_matrix(ws)
     header = header_cells(ws)
     if any(f.name not in header for f in layout):
-        fail(f"{rel(ITEM_XLSX)} 还没有列 {[f.name for f in layout if f.name not in header]} —— 先执行 item-columns")
+        fail(f"{rel(ITEM_XLSX)} does not have columns {[f.name for f in layout if f.name not in header]} yet -- run item-columns first")
     bind(ITEM_SHEET, ITEM_XLSX)
 
     id_col = header["id"]
@@ -838,12 +838,12 @@ def cmd_item_rows(dry_run: bool) -> None:
         value = ws.cell(row=row_idx, column=id_col).value
         if value is None or value == "":
             if any(v is not None for v in before[row_idx - 1]):
-                fail(f"{rel(ITEM_XLSX)} 第 {row_idx} 行没有 id 却有数据 —— 先修表")
+                fail(f"{rel(ITEM_XLSX)} row {row_idx} has data but no id -- fix the table first")
             continue
         if not isinstance(value, (int, float)) or int(value) != value:
-            fail(f"{rel(ITEM_XLSX)} 第 {row_idx} 行的 id 不是整数:{value!r}")
+            fail(f"{rel(ITEM_XLSX)} row {row_idx}: id is not an integer: {value!r}")
         if int(value) in existing:
-            fail(f"{rel(ITEM_XLSX)} 里 id {int(value)} 出现了两次(第 {row_idx} 行)—— 先修表")
+            fail(f"{rel(ITEM_XLSX)} has id {int(value)} twice (row {row_idx}) -- fix the table first")
         existing[int(value)] = row_idx
         last_data_row = row_idx
 
@@ -855,11 +855,11 @@ def cmd_item_rows(dry_run: bool) -> None:
                 row_idx = existing[row["id"]]
                 actual = {c: v for c, v in enumerate(before[row_idx - 1], start=1) if v is not None}
                 if actual != wanted_cells[row["id"]]:
-                    fail(f"{rel(ITEM_XLSX)} 第 {row_idx} 行(id {row['id']})已存在,但内容与本脚本不同"
-                         f"(可能策划已调过数值)—— 本脚本不覆盖。")
+                    fail(f"{rel(ITEM_XLSX)} row {row_idx} (id {row['id']}) already exists with different contents"
+                         f" (designers may have tuned the values) -- this script does not overwrite it.")
             print(f"[ALREADY CURRENT] {rel(ITEM_XLSX)} already contains these {len(rows)} sample equipment items with identical contents; file unchanged.")
             return
-        fail(f"{rel(ITEM_XLSX)} 里这些 id 已被占用:{taken} —— 与样例装备的 id 段冲突(或只写进了一部分),先查清。")
+        fail(f"{rel(ITEM_XLSX)}: these ids are already taken: {taken} -- they collide with the sample equipment id range (or only part was written); find out first.")
 
     patches: list[Patch] = []
     print(f"{rel(ITEM_XLSX)}: existing {len(existing)} data rows; last row={last_data_row}; will append {len(rows)} rows"
@@ -889,7 +889,7 @@ SLOT_COLUMNS = ("id", "equip_kind", "name")
 def cmd_equip_slots(dry_run: bool) -> None:
     layout = schema_layout(SLOT_SHEET)
     if tuple(f.name for f in layout) != SLOT_COLUMNS:
-        fail(f"{schema_path(SLOT_SHEET).name} 的字段应为 {list(SLOT_COLUMNS)},实际 {[f.name for f in layout]} —— 先同步本脚本")
+        fail(f"{schema_path(SLOT_SHEET).name}: fields should be {list(SLOT_COLUMNS)}, got {[f.name for f in layout]} -- update this script first")
     name_comment = layout[2].comment
 
     wb = openpyxl.load_workbook(SLOT_XLSX)
@@ -897,7 +897,7 @@ def cmd_equip_slots(dry_run: bool) -> None:
     before = sheet_matrix(ws)
     header = header_cells(ws)
     if any(n not in SLOT_COLUMNS for n in header) or "id" not in header or "equip_kind" not in header:
-        fail(f"{rel(SLOT_XLSX)} 第 1 行应为 id / equip_kind(/ name),实际 {list(header)}")
+        fail(f"{rel(SLOT_XLSX)} row 1 should be id / equip_kind (/ name), got {list(header)}")
 
     patches: list[Patch] = []
     plan: list[str] = []
@@ -905,7 +905,7 @@ def cmd_equip_slots(dry_run: bool) -> None:
         name_col = header["name"]
     else:
         if max(header.values()) != ws.max_column:
-            fail(f"{rel(SLOT_XLSX)} 的最右一列没有表头,先修表")
+            fail(f"{rel(SLOT_XLSX)}: the rightmost column has no header; fix the table first")
         name_col = ws.max_column + 1
         patches.append((HEADER_ROW, name_col, "name"))
         if name_comment:
@@ -918,26 +918,26 @@ def cmd_equip_slots(dry_run: bool) -> None:
         value = ws.cell(row=row_idx, column=header["id"]).value
         if value is None or value == "":
             if any(v is not None for v in before[row_idx - 1]):
-                fail(f"{rel(SLOT_XLSX)} 第 {row_idx} 行没有 id 却有数据 —— 先修表")
+                fail(f"{rel(SLOT_XLSX)} row {row_idx} has data but no id -- fix the table first")
             continue
         if not isinstance(value, (int, float)) or int(value) != value:
-            fail(f"{rel(SLOT_XLSX)} 第 {row_idx} 行的 id 不是整数:{value!r}")
+            fail(f"{rel(SLOT_XLSX)} row {row_idx}: id is not an integer: {value!r}")
         if int(value) in existing:
-            fail(f"{rel(SLOT_XLSX)} 里槽号 {int(value)} 出现了两次 —— 先修表")
+            fail(f"{rel(SLOT_XLSX)} has slot {int(value)} twice -- fix the table first")
         existing[int(value)] = row_idx
         last_data_row = row_idx
 
     taken = [slot for slot, _k, _n in EQUIP_SLOTS if slot in existing]
     if taken and len(taken) != len(EQUIP_SLOTS):
-        fail(f"{rel(SLOT_XLSX)} 里槽号 {taken} 已存在但不是完整的 4 行 —— 先查清是谁加的。")
+        fail(f"{rel(SLOT_XLSX)}: slots {taken} exist but are not the complete 4 rows -- find out who added them first.")
     if taken:
         if "name" not in header:
-            fail(f"{rel(SLOT_XLSX)} 已有槽 {taken} 却没有 name 列 —— 不是本脚本写出来的状态,先查清。")
+            fail(f"{rel(SLOT_XLSX)} has slots {taken} but no name column -- this is not a state this script writes; find out first.")
         for slot, kind, name in EQUIP_SLOTS:
             row_idx = existing[slot]
             actual = (ws.cell(row=row_idx, column=header["equip_kind"]).value, ws.cell(row=row_idx, column=name_col).value)
             if actual != (kind, name):
-                fail(f"{rel(SLOT_XLSX)} 第 {row_idx} 行(槽 {slot})是 {actual},与要写的 {(kind, name)} 不同 —— 本脚本不覆盖。")
+                fail(f"{rel(SLOT_XLSX)} row {row_idx} (slot {slot}) is {actual}, different from the wanted {(kind, name)} -- this script does not overwrite it.")
     else:
         for offset, (slot, kind, name) in enumerate(EQUIP_SLOTS, start=1):
             row_idx = last_data_row + offset
@@ -979,7 +979,7 @@ def parse_group_header(name: str, row_idx: int) -> tuple[str, int, int]:
     try:
         return parts[0], int(kv["base"]), int(kv["width"])
     except (KeyError, ValueError):
-        fail(f"{TIP_XLSX.name} 第 {row_idx} 行 {name!r} 像组头却没有合法的 base= / width= —— 导表器也会拒绝,先修表")
+        fail(f"{TIP_XLSX.name} row {row_idx}: {name!r} looks like a group header but has no valid base= / width= -- the table exporter rejects it too; fix the table first")
 
 
 def tip_parse(matrix: list[list], fault_col: int):
@@ -1001,7 +1001,7 @@ def tip_parse(matrix: list[list], fault_col: int):
             groups.append(dict(name=group, base=base, width=width, row=row_idx, codes=[], code_rows=[]))
             continue
         if not groups:
-            fail(f"{TIP_XLSX.name} 第 {row_idx} 行的码 {name!r} 出现在第一个组头之前")
+            fail(f"{TIP_XLSX.name} row {row_idx}: code {name!r} appears before the first group header")
         fault = row[fault_col - 1] if fault_col <= len(row) else None
         groups[-1]["codes"].append((name, row[1] if len(row) > 1 else None, fault))
         groups[-1]["code_rows"].append(row_idx)
@@ -1014,7 +1014,7 @@ def cmd_tip_codes(dry_run: bool) -> None:
     before = sheet_matrix(ws)
     header = [str(v).strip().lower() if v is not None else "" for v in before[HEADER_ROW - 1]]
     if header[:2] != ["name", "commen"] or header.count("fault") != 1:
-        fail(f"{TIP_XLSX.name} 第 1 行应为 name / commen / … / fault(fault 恰好一列),实际 {before[HEADER_ROW - 1]}")
+        fail(f"{TIP_XLSX.name} row 1 should be name / commen / ... / fault (exactly one fault column), got {before[HEADER_ROW - 1]}")
     fault_col = header.index("fault") + 1
 
     groups, notes = tip_parse(before, fault_col)
@@ -1028,29 +1028,29 @@ def cmd_tip_codes(dry_run: bool) -> None:
         if (mine["base"], mine["width"]) == (TIP_EQUIP_BASE, TIP_EQUIP_WIDTH) and mine["codes"][:len(wanted)] == wanted:
             print(f"[ALREADY CURRENT] {header_text} (row {mine['row']}) already contains these {len(wanted)} codes (matching names / messages / fault); file unchanged.")
             return
-        fail(f"{TIP_XLSX.name} 第 {mine['row']} 行已有 //{TIP_EQUIP_GROUP} 组,但段声明或开头 {len(wanted)} 个码与本脚本不同 —— 先查清是谁加的。")
+        fail(f"{TIP_XLSX.name} row {mine['row']} already has group //{TIP_EQUIP_GROUP}, but its range declaration or first {len(wanted)} codes differ from this script -- find out who added it first.")
 
     # 以下三项都是「先核对再动手」:码名全表唯一、28000 段没被占、也没被说明行预留。
     owner = {code: g["name"] for g in groups for code, _t, _f in g["codes"]}
-    clash = [f"{n}(在 {owner[n]})" for n in new_names if n in owner]
+    clash = [f"{n} (in {owner[n]})" for n in new_names if n in owner]
     if clash:
-        fail(f"这些码名已在表里:{clash} —— 码名全局唯一(生成的 tip proto 没有 package),先查清。")
+        fail(f"these code names are already in the table: {clash} -- code names are globally unique (the generated tip proto has no package); find out first.")
     lo, hi = TIP_EQUIP_BASE, TIP_EQUIP_BASE + TIP_EQUIP_WIDTH
     overlap = [f"{g['name']} [{g['base']},{g['base'] + g['width']})" for g in groups
                if g["base"] < hi and lo < g["base"] + g["width"]]
     if overlap:
-        fail(f"段 [{lo},{hi}) 已被占用:{overlap} —— 改用下一个空闲整千段(改 TIP_EQUIP_BASE),"
-             f"并同步 docs/design/equipment-attributes.md §2.7 与 §10。")
-    reserved = [f"第 {row} 行 {text!r}" for row, text in notes if str(TIP_EQUIP_BASE) in text]
+        fail(f"range [{lo},{hi}) is already taken: {overlap} -- switch to the next free thousand-wide range (change TIP_EQUIP_BASE) "
+             f"and update docs/design/equipment-attributes.md §2.7 and §10.")
+    reserved = [f"row {row} {text!r}" for row, text in notes if str(TIP_EQUIP_BASE) in text]
     if reserved:
-        fail(f"{TIP_EQUIP_BASE} 段已被说明行预留:{reserved} —— 改用下一个空闲整千段并同步设计文档 §2.7 与 §10。")
+        fail(f"range {TIP_EQUIP_BASE} is reserved by note rows: {reserved} -- switch to the next free thousand-wide range and update design doc §2.7 and §10.")
     if TIP_STATE.exists():
         # 发号 state 里的整组是墓碑:表里删掉的组仍占着段。只读核对,不写 state。
         state_groups = json.loads(TIP_STATE.read_text(encoding="utf-8")).get("groups", {})
         tomb = [f"{n} [{g['base']},{g['base'] + g['width']})" for n, g in state_groups.items()
                 if int(g["base"]) < hi and lo < int(g["base"]) + int(g["width"])]
         if tomb:
-            fail(f"发号 state({rel(TIP_STATE)})里段 [{lo},{hi}) 已属于 {tomb} —— 换一个段,不要手改 state。")
+            fail(f"in the ID state ({rel(TIP_STATE)}), range [{lo},{hi}) already belongs to {tomb} -- pick another range; do not edit the state by hand.")
 
     last_row = max((r for r, row in enumerate(before, start=1) if any(v is not None for v in row)), default=0)
     header_row = last_row + 2          # 与既有组一样,组头前留一个空行
@@ -1073,7 +1073,7 @@ def cmd_tip_codes(dry_run: bool) -> None:
     groups_after, _notes = tip_parse(sheet_matrix(check_ws), fault_col)
     if [(g["name"], g["codes"]) for g in groups_after[:-1]] != [(g["name"], g["codes"]) for g in groups] \
             or groups_after[-1]["name"] != TIP_EQUIP_GROUP or groups_after[-1]["codes"] != wanted:
-        fail(f"保存后各组的码与预期不符 —— 立刻 git checkout -- {rel(TIP_XLSX)} 还原")
+        fail(f"after saving, the codes per group are not as expected -- restore it now with git checkout -- {rel(TIP_XLSX)}")
     print(f"[DONE] Groups {len(groups)} -> {len(groups_after)}; existing {len(owner)} codes unchanged."
           f" After export, confirm these {len(wanted)} codes have IDs {lo}..{lo + len(wanted) - 1}; tip_enum_ids.json contains additions only;"
           f" register the new domain's proto/tip/{TIP_EQUIP_GROUP}_tip.pb.{{h,cc}} in cpp/generated/table CMakeLists.txt and table.vcxproj.")
@@ -1092,7 +1092,7 @@ LIMITER_COLUMNS = ("id", "max_requests", "time_window", "tip_message")
 def resolve_message_ids() -> dict[str, int]:
     """方法名 -> 消息号。任何一个方法查不到就中止 —— 此时还没有打开过 xlsx,什么都不会写。"""
     if not MESSAGE_ID_TXT.is_file():
-        fail(f"找不到 {rel(MESSAGE_ID_TXT)} —— 消息号表由全量 proto-gen 生成,先跑 proto-gen。未写任何文件。")
+        fail(f"{rel(MESSAGE_ID_TXT)} not found -- the message ID table comes from the full proto-gen; run proto-gen first. No files were written.")
     ids: dict[str, int] = {}
     for line_no, line in enumerate(MESSAGE_ID_TXT.read_text(encoding="utf-8").splitlines(), start=1):
         line = line.strip()
@@ -1100,13 +1100,13 @@ def resolve_message_ids() -> dict[str, int]:
             continue
         number, sep, key = line.partition("=")
         if not sep or not number.isdigit():
-            fail(f"{MESSAGE_ID_TXT.name}:{line_no} 不是 `<号>=<服务名+方法名>` 形状:{line!r}")
+            fail(f"{MESSAGE_ID_TXT.name}:{line_no} is not of the form `<id>=<service name + method name>`: {line!r}")
         ids[key] = int(number)
     methods = list(LIMITER_NEW_METHODS) + list(LIMITER_BACKFILL_METHODS)
     missing = [LIMITER_SERVICE + m for m in methods if LIMITER_SERVICE + m not in ids]
     if missing:
-        fail(f"{MESSAGE_ID_TXT.name} 里找不到 {missing} —— 全量 proto-gen 还没跑(或没跑成功),消息号未定,"
-             f"现在不能填档位。未写任何文件。")
+        fail(f"{MESSAGE_ID_TXT.name} does not contain {missing} -- the full proto-gen has not run (or failed), so the message IDs are not settled "
+             f"and the tiers cannot be filled in yet. No files were written.")
     return {m: ids[LIMITER_SERVICE + m] for m in methods}
 
 
@@ -1119,7 +1119,7 @@ def cmd_message_limiter(dry_run: bool) -> None:
     header = header_cells(ws)
     for name in LIMITER_COLUMNS:
         if name not in header:
-            fail(f"{LIMITER_XLSX.name} 第 1 行找不到列 {name!r},实际表头 {list(header)}")
+            fail(f"{LIMITER_XLSX.name} row 1 has no column {name!r}; actual header {list(header)}")
 
     existing: dict[int, tuple] = {}
     last_data_row = DATA_BEGIN_ROW - 1
@@ -1128,9 +1128,9 @@ def cmd_message_limiter(dry_run: bool) -> None:
         if value is None or value == "":
             continue
         if not isinstance(value, (int, float)) or int(value) != value:
-            fail(f"{LIMITER_XLSX.name} 第 {row_idx} 行的 id 不是整数:{value!r}")
+            fail(f"{LIMITER_XLSX.name} row {row_idx}: id is not an integer: {value!r}")
         if int(value) in existing:
-            fail(f"{LIMITER_XLSX.name} 里消息号 {int(value)} 出现了两次(第 {row_idx} 行)—— 先修表")
+            fail(f"{LIMITER_XLSX.name} has message ID {int(value)} twice (row {row_idx}) -- fix the table first")
         existing[int(value)] = tuple(ws.cell(row=row_idx, column=header[name]).value for name in LIMITER_COLUMNS[1:])
         last_data_row = row_idx
 
@@ -1145,8 +1145,8 @@ def cmd_message_limiter(dry_run: bool) -> None:
                 print(f"  [KEEP] Message ID {message_id} ({LIMITER_SERVICE}{method}) exists in the table with tier {existing[message_id]}; unchanged.")
         elif existing[message_id] != wanted:
             # 最可能的原因:这个号以前属于别的方法(被释放的旧号易主),表里留着旧方法的档位。
-            fail(f"消息号 {message_id}({LIMITER_SERVICE}{method})在表里已有一行 {existing[message_id]},"
-                 f"与要写的 {wanted} 不同 —— 先确认那一行是谁的,本脚本不覆盖。")
+            fail(f"message ID {message_id} ({LIMITER_SERVICE}{method}) already has a row {existing[message_id]} in the table, "
+                 f"different from the wanted {wanted} -- find out whose row it is first; this script does not overwrite it.")
 
     if not to_append:
         print(f"[ALREADY CURRENT] All {len(message_ids)} bag / equipment message IDs exist in the table; file unchanged.")
@@ -1235,14 +1235,14 @@ def cmd_forge_item_rows(dry_run: bool) -> None:
     columns = list(rows[0])
     not_scalar = [n for n in columns if n not in layout or layout[n].width != 1]
     if not_scalar:
-        fail(f"{schema_path(ITEM_SHEET).name} 里 {not_scalar} 不是标量字段(或不存在)—— schema 改过列,先同步本脚本")
+        fail(f"{schema_path(ITEM_SHEET).name}: {not_scalar} are not scalar fields (or do not exist) -- the schema columns changed; update this script first")
 
     wb = openpyxl.load_workbook(ITEM_XLSX)
     ws = only_sheet(wb, ITEM_XLSX, ITEM_SHEET)
     before = sheet_matrix(ws)
     header = header_cells(ws)
     if any(n not in header for n in columns):
-        fail(f"{rel(ITEM_XLSX)} 还没有列 {[n for n in columns if n not in header]} —— 先执行 item-columns")
+        fail(f"{rel(ITEM_XLSX)} does not have columns {[n for n in columns if n not in header]} yet -- run item-columns first")
     bind(ITEM_SHEET, ITEM_XLSX)
 
     id_col = header["id"]
@@ -1252,12 +1252,12 @@ def cmd_forge_item_rows(dry_run: bool) -> None:
         value = ws.cell(row=row_idx, column=id_col).value
         if value is None or value == "":
             if any(v is not None for v in before[row_idx - 1]):
-                fail(f"{rel(ITEM_XLSX)} 第 {row_idx} 行没有 id 却有数据 —— 先修表")
+                fail(f"{rel(ITEM_XLSX)} row {row_idx} has data but no id -- fix the table first")
             continue
         if not isinstance(value, (int, float)) or int(value) != value:
-            fail(f"{rel(ITEM_XLSX)} 第 {row_idx} 行的 id 不是整数:{value!r}")
+            fail(f"{rel(ITEM_XLSX)} row {row_idx}: id is not an integer: {value!r}")
         if int(value) in existing:
-            fail(f"{rel(ITEM_XLSX)} 里 id {int(value)} 出现了两次(第 {row_idx} 行)—— 先修表")
+            fail(f"{rel(ITEM_XLSX)} has id {int(value)} twice (row {row_idx}) -- fix the table first")
         existing[int(value)] = row_idx
         last_data_row = row_idx
 
@@ -1269,26 +1269,26 @@ def cmd_forge_item_rows(dry_run: bool) -> None:
                 row_idx = existing[row["id"]]
                 actual = {c: v for c, v in enumerate(before[row_idx - 1], start=1) if v is not None}
                 if actual != wanted_cells[row["id"]]:
-                    fail(f"{rel(ITEM_XLSX)} 第 {row_idx} 行(id {row['id']})已存在,但内容与本脚本不同"
-                         f"(可能策划已调过数值)—— 本脚本不覆盖。")
-            print(f"[已是目标状态] {rel(ITEM_XLSX)} 已有这 {len(rows)} 行强化材料 / 宝石且内容一致,不改文件。")
+                    fail(f"{rel(ITEM_XLSX)} row {row_idx} (id {row['id']}) already exists with different contents"
+                         f" (designers may have tuned the values) -- this script does not overwrite it.")
+            print(f"[ALREADY CURRENT] {rel(ITEM_XLSX)} already has these {len(rows)} enhance material / gem rows with identical contents; file unchanged.")
             return
-        fail(f"{rel(ITEM_XLSX)} 里这些 id 已被占用:{taken} —— 与装备养成材料的 id 段冲突(或只写进了一部分),先查清。")
+        fail(f"{rel(ITEM_XLSX)}: these ids are already taken: {taken} -- they collide with the equipment growth material id range (or only part was written); find out first.")
 
     patches: list[Patch] = []
-    print(f"{rel(ITEM_XLSX)}:现有 {len(existing)} 行数据,末行是第 {last_data_row} 行;将追加 {len(rows)} 行"
-          f"(id {rows[0]['id']}..{rows[-1]['id']},与现有 id 无冲突;只写 {' / '.join(columns)},其余列留空):")
+    print(f"{rel(ITEM_XLSX)}: {len(existing)} data rows, last row {last_data_row}; will append {len(rows)} rows"
+          f" (id {rows[0]['id']}..{rows[-1]['id']}, no clash with existing ids; only {' / '.join(columns)} are written, other columns stay empty):")
     for offset, row in enumerate(rows, start=1):
         row_idx = last_data_row + offset
         patches.extend((row_idx, col, value) for col, value in sorted(wanted_cells[row["id"]].items()))
-        print(f"  第 {row_idx} 行: id={row['id']} {row['name']} max_stack={row['max_stack_size']} "
+        print(f"  row {row_idx}: id={row['id']} {row['name']} max_stack={row['max_stack_size']} "
               f"kind={row['equip_kind']} battle_usable={row['battle_usable']} | {row['description']}")
     if dry_run:
-        print("[dry-run] 未写文件。")
+        print("[dry-run] No files written.")
         return
     apply_patches_and_verify(ITEM_XLSX, ITEM_SHEET, wb, ws, before, patches, bind_schema=True)
-    print(f"[完成] {rel(ITEM_XLSX)} 数据行 {len(existing)} -> {len(existing) + len(rows)},原有行逐格一致。"
-          f"Item 表在战斗配表指纹内:导表后 scene 与 battle 必须用同一批产物重启。")
+    print(f"[DONE] {rel(ITEM_XLSX)} data rows {len(existing)} -> {len(existing) + len(rows)}; existing rows are identical cell by cell. "
+          f"The Item table is part of the battle config fingerprint: after exporting, restart scene and battle with the same batch of outputs.")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1317,7 +1317,7 @@ def cmd_forge_tip_codes(dry_run: bool) -> None:
     before = sheet_matrix(ws)
     header = [str(v).strip().lower() if v is not None else "" for v in before[HEADER_ROW - 1]]
     if header[:2] != ["name", "commen"] or header.count("fault") != 1:
-        fail(f"{TIP_XLSX.name} 第 1 行应为 name / commen / … / fault(fault 恰好一列),实际 {before[HEADER_ROW - 1]}")
+        fail(f"{TIP_XLSX.name} row 1 should be name / commen / ... / fault (exactly one fault column), got {before[HEADER_ROW - 1]}")
     fault_col = header.index("fault") + 1
 
     groups, notes = tip_parse(before, fault_col)
@@ -1328,26 +1328,26 @@ def cmd_forge_tip_codes(dry_run: bool) -> None:
 
     mine = next((g for g in groups if g["name"] == TIP_EQUIP_GROUP), None)
     if mine is None:
-        fail(f"{TIP_XLSX.name} 里还没有 {group_text} 组 —— 先执行 tip-codes")
+        fail(f"{TIP_XLSX.name} does not have group {group_text} yet -- run tip-codes first")
     if (mine["base"], mine["width"]) != (TIP_EQUIP_BASE, TIP_EQUIP_WIDTH) or mine["codes"][:len(phase1)] != phase1:
-        fail(f"{TIP_XLSX.name} 第 {mine['row']} 行的 {group_text} 组,段声明或开头 {len(phase1)} 个一期码与本脚本不同 —— 先查清是谁改的。")
+        fail(f"{TIP_XLSX.name} row {mine['row']}: group {group_text} has a range declaration or first {len(phase1)} phase-one codes that differ from this script -- find out who changed it first.")
     # 已是目标状态 = 这 11 个码紧跟在一期 11 个码之后,且逐项一致。不要求恰好在组尾:以后还会往组尾追加。
     tail = mine["codes"][len(phase1):]
     if tail[:len(wanted)] == wanted:
-        print(f"[已是目标状态] {group_text}(第 {mine['row']} 行)下,一期 {len(phase1)} 个码之后紧跟着这 {len(wanted)} 个"
-              f"强化 / 镶嵌码(码名 / 文案 / fault 一致),不改文件。")
+        print(f"[ALREADY CURRENT] in {group_text} (row {mine['row']}), the {len(phase1)} phase-one codes are directly followed by these {len(wanted)}"
+              f" enhance / inlay codes (same names / text / fault); file unchanged.")
         return
 
     # 以下三项都是「先核对再动手」:码名全表唯一、一期的码后面没有别人的码、发号 state 不会让新码错位。
     owner = {code: g["name"] for g in groups for code, _t, _f in g["codes"]}
     clash = [f"{n}(在 {owner[n]})" for n in new_names if n in owner]
     if clash:
-        fail(f"这些码名已在表里,但不是「紧跟一期 {len(phase1)} 个码、逐项一致」的状态:{clash} —— "
-             f"码名全局唯一;可能只写进了一部分,或文案被改过,先查清。")
+        fail(f"these code names are already in the table, but not in the state 'directly after the {len(phase1)} phase-one codes and identical': {clash} -- "
+             f"code names are globally unique; maybe only part was written, or the text was changed; find out first.")
     if tail:
         # 新码按行序取号。插到别人的码前面,会改掉它们将要拿到的号;排到它们后面,自己又不再紧跟一期。
-        fail(f"{group_text} 组在一期 {len(phase1)} 个码之后已经有别的码 {[n for n, _t, _f in tail]} —— "
-             f"本脚本不猜谁该排在前面,先与加这些码的一方对齐。")
+        fail(f"group {group_text} already has other codes {[n for n, _t, _f in tail]} after the {len(phase1)} phase-one codes -- "
+             f"this script does not guess which should come first; agree with whoever added those codes first.")
     lo = TIP_EQUIP_BASE + len(phase1)
     if TIP_STATE.exists():
         # 只读核对,不写 state。state 里没有本组 = 两期的码都还没发过号,按行序发,自然紧跟。
@@ -1355,8 +1355,8 @@ def cmd_forge_tip_codes(dry_run: bool) -> None:
             .get(TIP_EQUIP_GROUP, {}).get("ids", {})
         predicted = predict_tip_ids([n for n, _t, _f in phase1] + new_names, TIP_EQUIP_BASE, state_ids)
         if predicted != list(range(TIP_EQUIP_BASE, lo + len(wanted))):
-            fail(f"按发号 state({rel(TIP_STATE)})推算,{group_text} 组这 {len(predicted)} 个码拿到的号是 {predicted},"
-                 f"不是从 {TIP_EQUIP_BASE} 起连续 —— state 里本段已有别的已发号。不要手改 state,先查清。")
+            fail(f"per the ID state ({rel(TIP_STATE)}), these {len(predicted)} codes of group {group_text} would get IDs {predicted}, "
+                 f"not consecutive from {TIP_EQUIP_BASE} -- the state already has other issued IDs in this range. Do not edit the state by hand; find out first.")
 
     # 一期的最后一个码也是本组的最后一个码(上面已确认 tail 为空)。它之后到表尾全空就只写空格;
     # 后面还有别的组(别的分支先进了 main)就在组尾下一行插入,其后各行整体下移。
@@ -1364,19 +1364,19 @@ def cmd_forge_tip_codes(dry_run: bool) -> None:
     insert_at = last_code_row + 1
     trailing = [r for r in range(insert_at, len(before) + 1) if any(v is not None for v in before[r - 1])]
     if trailing:
-        how = f"其后第 {trailing[0]} 行起还有内容,将在第 {insert_at} 行前插入 {len(wanted)} 行(其后各行整体下移、内容不变)"
+        how = f"there is content from row {trailing[0]} on, so {len(wanted)} rows will be inserted before row {insert_at} (later rows shift down unchanged)"
     else:
-        how = f"其后到表尾全空,将直接写入第 {insert_at}..{insert_at + len(wanted) - 1} 行"
-    print(f"{TIP_XLSX.name}:{group_text} 组现有 {len(mine['codes'])} 个码,组尾是第 {last_code_row} 行 {phase1[-1][0]!r};{how}:")
+        how = f"everything after it is empty, so rows {insert_at}..{insert_at + len(wanted) - 1} will be written directly"
+    print(f"{TIP_XLSX.name}: group {group_text} has {len(mine['codes'])} codes, its last code is on row {last_code_row} {phase1[-1][0]!r}; {how}:")
     patches: list[Patch] = []
     for offset, (name, text, fault) in enumerate(wanted):
         row_idx = insert_at + offset
         patches += [(row_idx, 1, name), (row_idx, 2, text)]
         if fault is not None:
             patches.append((row_idx, fault_col, fault))
-        print(f"  第 {row_idx} 行: {name} | {text}" + (" | fault=1" if fault else ""))
+        print(f"  row {row_idx}: {name} | {text}" + (" | fault=1" if fault else ""))
     if dry_run:
-        print("[dry-run] 未写文件。")
+        print("[dry-run] No files written.")
         return
 
     shifted = before
@@ -1394,10 +1394,10 @@ def cmd_forge_tip_codes(dry_run: bool) -> None:
     expected_groups = [(g["name"], g["base"], g["width"], phase1 + wanted if g is mine else g["codes"]) for g in groups]
     if [(g["name"], g["base"], g["width"], g["codes"]) for g in groups_after] != expected_groups \
             or [text for _row, text in notes_after] != [text for _row, text in notes]:
-        fail(f"保存后各组的码与预期不符 —— 立刻 git checkout -- {rel(TIP_XLSX)} 还原")
-    print(f"[完成] {group_text} {len(phase1)} -> {len(phase1) + len(wanted)} 个码,其余 {len(groups) - 1} 个组的"
-          f"(码名, 文案, fault)逐项一致。导表后核对:这 {len(wanted)} 个码的 id 应为 {lo}..{lo + len(wanted) - 1}"
-          f"(紧跟一期的码),tip_enum_ids.json 只增不改;同一个域不用再登记工程文件。")
+        fail(f"after saving, the codes per group are not as expected -- restore it now with git checkout -- {rel(TIP_XLSX)}")
+    print(f"[DONE] {group_text} {len(phase1)} -> {len(phase1) + len(wanted)} codes; the other {len(groups) - 1} groups"
+          f" (name, text, fault) are unchanged. After exporting, check: the ids of these {len(wanted)} codes should be {lo}..{lo + len(wanted) - 1}"
+          f" (right after the phase-one codes), tip_enum_ids.json only grows; the same domain needs no project file registration.")
 
 
 COMMANDS = {

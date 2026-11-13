@@ -25,6 +25,11 @@ inline constexpr const char *kBudgetEnvVar = "MMORPG_PLANNED_DRAIN_BUDGET_SECOND
 // 不设 = 空串(本机开发),不校验取值:它是不透明的标签值,选点只比相等。
 inline constexpr const char *kBuildLabelEnvVar = "MMORPG_BUILD_LABEL";
 
+// Pod 所属的工作负载修订:Deployment 的 pod-template-hash、StatefulSet 的 controller-revision-hash,部署经 downward API 注入。
+// 同一个镜像只改配置或 rollout restart 时构建标识不变、修订会变;把它拼进 NodeInfo.build(ComposeBuildLabel),
+// 滚动重启时已经换好的那一代 Pod 才分得出来(§4.6)。不设 = 没有修订(Agones Fleet、本机开发),只用构建标识。
+inline constexpr const char *kPodRevisionEnvVar = "MMORPG_POD_REVISION";
+
 // 预算上限。K8s 宽限期是秒级整数,一天足够任何一种排空;更大的值多半是手误多写了几个 0。
 inline constexpr std::chrono::seconds kMaxBudget{24 * 60 * 60};
 
@@ -82,10 +87,31 @@ inline Budget BudgetFromEnv()
 	return ParseBudget(std::getenv(kBudgetEnvVar));
 }
 
+// 构建标识与工作负载修订拼成 NodeInfo.build:两样都有 = "<构建>@<修订>",只有一样 = 那一样,都没有 = 空串。
+// 选点的一方只比相等,不解析这个串。纯函数。
+inline std::string ComposeBuildLabel(const std::string_view build, const std::string_view revision)
+{
+	if (revision.empty())
+	{
+		return std::string(build);
+	}
+	if (build.empty())
+	{
+		return std::string(revision);
+	}
+	std::string label;
+	label.reserve(build.size() + 1 + revision.size());
+	label.append(build);
+	label.push_back('@');
+	label.append(revision);
+	return label;
+}
+
 inline std::string BuildLabelFromEnv()
 {
-	const char *raw = std::getenv(kBuildLabelEnvVar);
-	return raw != nullptr ? std::string(raw) : std::string();
+	const char *build = std::getenv(kBuildLabelEnvVar);
+	const char *revision = std::getenv(kPodRevisionEnvVar);
+	return ComposeBuildLabel(build != nullptr ? build : "", revision != nullptr ? revision : "");
 }
 
 // 计划排空一拍的结论。

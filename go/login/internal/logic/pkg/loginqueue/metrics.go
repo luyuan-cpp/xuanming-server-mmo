@@ -216,7 +216,7 @@ func recordExpired(zoneID uint32, reason string) {
 // RecordExpiredQueueDisabled is an exported helper for handlers that need
 // to surface "queue disabled" without going through ParseAndVerifyQueueToken.
 // Lives in the package's public API because the handler in
-// loginpregate/querystatuslogic.go records it directly.
+// loginpregate/queryqueuestatuslogic.go records it directly.
 func RecordExpiredQueueDisabled() {
 	recordExpired(0, ExpireReasonQueueDisabled)
 }

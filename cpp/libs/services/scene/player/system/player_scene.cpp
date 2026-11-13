@@ -47,6 +47,7 @@
 // 是为了不靠传递包含拿这些符号(本库 player_team.h / player_battle.cpp 同样显式包含)。
 #include "thread_context/redis_manager.h"
 #include <hiredis/hiredis.h>
+#include "engine/infra/storage/redis_cluster/redis_slot.h" // ZoneControlTag:分线目录键的控制域 tag
 
 #include <limits>
 #include <memory>
@@ -54,10 +55,6 @@
 #include <utility>
 
 namespace {
-
-// 分线目录的 Redis 键(STRING,值是 SceneChannelDirectory 的序列化字节);两个 %u 依次是 zone_id、scene_config_id。
-// 与 Go 侧 go/scene_manager/internal/logic/world_channel_directory.go 的 WorldChannelDirectoryKeyFmt 是同一份契约,改一边必须改另一边。
-constexpr char kWorldChannelDirectoryKeyFmt[] = "world_channel_directory:zone:%u:%u";
 
 // 镜像 CreateScene 的令牌序号(PlayerMirrorCreateInFlightComp.token)。与 tlsEcs 同属本线程,先自增再用,恒非 0。
 thread_local uint64_t tlsMirrorCreateTokenSeq = 0;
@@ -589,6 +586,12 @@ cobalt::task<void> CreateMirrorAndEnter(entt::entity originalPlayer, entt::entit
 }
 } // namespace
 
+std::string PlayerSceneSystem::WorldChannelDirectoryKey(uint32_t zoneId, uint32_t sceneConfigId)
+{
+	return "world_channel_directory:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId) +
+		   ":" + std::to_string(sceneConfigId);
+}
+
 void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirectory)
 {
 	if (!tlsEcs.actorRegistry.valid(player))
@@ -641,7 +644,7 @@ void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirec
 			const bool hasDirectory = ParseChannelDirectoryReply(reply, sceneConfigId, playerId, directory);
 			PushSceneInfo(player, sceneInfoCopy, hasDirectory ? &directory : nullptr);
 		},
-		(std::string("GET ") + kWorldChannelDirectoryKeyFmt).c_str(), GetZoneId(), sceneConfigId);
+		"GET %s", PlayerSceneSystem::WorldChannelDirectoryKey(GetZoneId(), sceneConfigId).c_str());
 	if (ret != REDIS_OK)
 	{
 		// 命令没被 hiredis 收下(连接正在断开 / 释放,或格式化失败)时回调永远不会被调用,

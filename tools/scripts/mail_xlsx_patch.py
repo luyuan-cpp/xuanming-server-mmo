@@ -44,7 +44,7 @@ try:
     import openpyxl
     from openpyxl.utils import get_column_letter
 except ImportError:  # pragma: no cover - 环境问题,给一句能照着做的话
-    sys.exit("缺少 openpyxl:请先执行  pip install openpyxl")
+    sys.exit("openpyxl is missing: run  pip install openpyxl  first")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
@@ -105,7 +105,7 @@ LIMITER_TIP_MESSAGE = 1000
 # ════════════════════════════════════════════════════════════════════════════
 
 def fail(message: str) -> "NoReturn":
-    sys.exit(f"[中止] {message}")
+    sys.exit(f"[ABORT] {message}")
 
 
 def rel(path: Path) -> str:
@@ -118,10 +118,10 @@ def file_digest(path: Path) -> str:
 
 def only_sheet(wb, path: Path, expect_title: str | None = None):
     if len(wb.sheetnames) != 1:
-        fail(f"{path.name} 预期只有一个 sheet,实际 {wb.sheetnames}")
+        fail(f"{path.name} should have exactly one sheet, found {wb.sheetnames}")
     ws = wb[wb.sheetnames[0]]
     if expect_title is not None and ws.title != expect_title:
-        fail(f"{path.name} 的 sheet 名应为 {expect_title!r}(导表器按它匹配 schema),实际 {ws.title!r}")
+        fail(f"{path.name}: the sheet name should be {expect_title!r} (the table exporter matches the schema by it), got {ws.title!r}")
     return ws
 
 
@@ -158,20 +158,20 @@ def apply_and_verify(xlsx_path: Path, sheet: str | None, wb, ws, before: list[li
     """
     for row, col, value in patches:
         if value is None:
-            fail(f"内部错误:补丁里出现了空值({get_column_letter(col)}{row})")
+            fail(f"internal error: the patch contains an empty value ({get_column_letter(col)}{row})")
         current = ws.cell(row=row, column=col).value
         if current is not None:
-            fail(f"{xlsx_path.name} 的 {get_column_letter(col)}{row} 已有内容 {current!r},"
-                 f"本脚本只写空格、不覆盖 —— 先查清是谁写的。")
+            fail(f"{xlsx_path.name} {get_column_letter(col)}{row} already has content {current!r}; "
+                 f"this script only writes empty cells and never overwrites -- find out who wrote it first.")
     for row, col, old, new in rewrites:
         current = ws.cell(row=row, column=col).value
         if current != old:
-            fail(f"{xlsx_path.name} 的 {get_column_letter(col)}{row} 现值是 {current!r},不是预期的 {old!r} —— 未写任何文件。")
+            fail(f"{xlsx_path.name} {get_column_letter(col)}{row} is currently {current!r}, not the expected {old!r} -- no files were written.")
         if new is None:
-            fail(f"内部错误:改写的新值为空({get_column_letter(col)}{row})")
+            fail(f"internal error: the rewrite value is empty ({get_column_letter(col)}{row})")
 
     if loaded_digest and file_digest(xlsx_path) != loaded_digest:
-        fail(f"{xlsx_path.name} 在本脚本载入之后被别的进程改过(并发写),保存会抹掉它的改动 —— 未写任何文件,重跑本脚本即可。")
+        fail(f"{xlsx_path.name} was changed by another process after this script loaded it (concurrent write); saving would erase that change -- no files were written; just rerun this script.")
     for row, col, value in patches:
         ws.cell(row=row, column=col, value=value)
     for row, col, _old, new in rewrites:
@@ -191,7 +191,7 @@ def apply_and_verify(xlsx_path: Path, sheet: str | None, wb, ws, before: list[li
     check_ws = only_sheet(openpyxl.load_workbook(xlsx_path), xlsx_path, sheet)
     diff = first_difference(sheet_matrix(check_ws), expected)
     if diff:
-        fail(f"保存后读回的 {xlsx_path.name} 与预期不符({diff})—— 立刻 git checkout -- {rel(xlsx_path)} 还原")
+        fail(f"after saving, {xlsx_path.name} read back is not as expected ({diff}) -- restore it now with git checkout -- {rel(xlsx_path)}")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -216,7 +216,7 @@ def parse_group_header(name: str, row_idx: int) -> tuple[str, int, int]:
     try:
         return parts[0], int(kv["base"]), int(kv["width"])
     except (KeyError, ValueError):
-        fail(f"{TIP_XLSX.name} 第 {row_idx} 行 {name!r} 像组头却没有合法的 base= / width= —— 导表器也会拒绝,先修表")
+        fail(f"{TIP_XLSX.name} row {row_idx}: {name!r} looks like a group header but has no valid base= / width= -- the table exporter rejects it too; fix the table first")
 
 
 def tip_parse(matrix: list[list], fault_col: int):
@@ -237,7 +237,7 @@ def tip_parse(matrix: list[list], fault_col: int):
             groups.append(dict(name=group, base=base, width=width, row=row_idx, codes=[]))
             continue
         if not groups:
-            fail(f"{TIP_XLSX.name} 第 {row_idx} 行的码 {name!r} 出现在第一个组头之前")
+            fail(f"{TIP_XLSX.name} row {row_idx}: code {name!r} appears before the first group header")
         fault = row[fault_col - 1] if fault_col <= len(row) else None
         groups[-1]["codes"].append((name, row[1] if len(row) > 1 else None, fault))
     return groups, notes
@@ -256,26 +256,26 @@ def reservation_rewrites(matrix: list[list], notes: list[tuple[int, str]], group
     if group_exists:
         olds = [row for row, _text in notes if matrix[row - 1][0] == TIP_RESERVATION_OLD]
         if len(olds) > 1:
-            fail(f"{TIP_XLSX.name} 里有 {len(olds)} 行相同的旧预留说明(第 {olds} 行)—— 先修表")
+            fail(f"{TIP_XLSX.name} has {len(olds)} identical old reservation notes (rows {olds}) -- fix the table first")
         return [(row, 1, TIP_RESERVATION_OLD, TIP_RESERVATION_NEW) for row in olds]
 
     mentioning = [(row, text) for row, text in notes if str(TIP_MAIL_BASE) in text]
     if any(t == TIP_RESERVATION_OLD for _r, t in mentioning) and any(t == TIP_RESERVATION_NEW for _r, t in mentioning):
-        fail(f"{TIP_XLSX.name} 里旧、新两版预留说明同时存在(第 {[r for r, _t in mentioning]} 行)—— 先修表,改写后会出现两行相同的说明")
+        fail(f"{TIP_XLSX.name} has both the old and the new reservation notes (rows {[r for r, _t in mentioning]}) -- fix the table first; rewriting would leave two identical notes")
     rewrites: list[Rewrite] = []
     for row, text in mentioning:
         if text == TIP_RESERVATION_NEW:
             continue
         if text != TIP_RESERVATION_OLD:
-            fail(f"{TIP_XLSX.name} 第 {row} 行的说明 {text!r} 提到了 {TIP_MAIL_BASE},但不是本脚本认识的那一行预留说明 —— "
-                 f"先确认 {TIP_MAIL_BASE} 段是不是被别的域预留了。")
+            fail(f"{TIP_XLSX.name} row {row}: note {text!r} mentions {TIP_MAIL_BASE} but is not the reservation note this script knows -- "
+                 f"first confirm whether range {TIP_MAIL_BASE} is reserved by another domain.")
         raw = matrix[row - 1][0]
         if raw != TIP_RESERVATION_OLD:
             # 去掉首尾空白后才相等:照原样改写会把别人留的空白抹掉,这里宁可不动。
-            fail(f"{TIP_XLSX.name} 第 {row} 行的预留说明首尾带空白({raw!r}),本脚本不改写 —— 手工确认后再跑。")
+            fail(f"{TIP_XLSX.name} row {row}: the reservation note has leading or trailing whitespace ({raw!r}); this script does not rewrite it -- confirm by hand, then rerun.")
         rewrites.append((row, 1, TIP_RESERVATION_OLD, TIP_RESERVATION_NEW))
     if len(rewrites) > 1:
-        fail(f"{TIP_XLSX.name} 里有 {len(rewrites)} 行相同的预留说明(第 {[r for r, *_ in rewrites]} 行)—— 先修表")
+        fail(f"{TIP_XLSX.name} has {len(rewrites)} identical reservation notes (rows {[r for r, *_ in rewrites]}) -- fix the table first")
     return rewrites
 
 
@@ -286,7 +286,7 @@ def cmd_tip_segment(dry_run: bool) -> None:
     before = sheet_matrix(ws)
     header = [str(v).strip().lower() if v is not None else "" for v in before[HEADER_ROW - 1]]
     if header[:2] != ["name", "commen"] or header.count("fault") != 1:
-        fail(f"{TIP_XLSX.name} 第 1 行应为 name / commen / … / fault(fault 恰好一列),实际 {before[HEADER_ROW - 1]}")
+        fail(f"{TIP_XLSX.name} row 1 should be name / commen / ... / fault (exactly one fault column), got {before[HEADER_ROW - 1]}")
     fault_col = header.index("fault") + 1
 
     groups, notes = tip_parse(before, fault_col)
@@ -300,8 +300,8 @@ def cmd_tip_segment(dry_run: bool) -> None:
     if mine is not None:
         # 已是目标状态 = 段声明一致,且这 8 个码是本组开头的连续一段。不要求恰好在组尾:M2 还会往组尾追加。
         if (mine["base"], mine["width"]) != (TIP_MAIL_BASE, TIP_MAIL_WIDTH) or mine["codes"][:len(wanted)] != wanted:
-            fail(f"{TIP_XLSX.name} 第 {mine['row']} 行已有 //{TIP_MAIL_GROUP} 组,但段声明或开头 {len(wanted)} 个码"
-                 f"(码名 / 文案 / fault 留空)与本脚本不同 —— 先查清是谁加的。")
+            fail(f"{TIP_XLSX.name} row {mine['row']} already has group //{TIP_MAIL_GROUP}, but its range declaration or first {len(wanted)} codes"
+                 f" (name / text / empty fault) differ from this script -- find out who added it first.")
         if not rewrites:
             print(f"[ALREADY CURRENT] {header_text} (row {mine['row']}) already contains these {len(wanted)} codes "
                   f"and the reservation note is up to date; file unchanged.")
@@ -310,15 +310,15 @@ def cmd_tip_segment(dry_run: bool) -> None:
     else:
         # 以下几项都是「先核对再动手」:码名全表唯一、17000 段没被占、发号 state 里也没有这一段的墓碑。
         owner = {code: g["name"] for g in groups for code, _t, _f in g["codes"]}
-        clash = [f"{n}(在 {owner[n]})" for n in new_names if n in owner]
+        clash = [f"{n} (in {owner[n]})" for n in new_names if n in owner]
         if clash:
-            fail(f"这些码名已在表里:{clash} —— 码名全局唯一(生成的 tip proto 没有 package),先查清。")
+            fail(f"these code names are already in the table: {clash} -- code names are globally unique (the generated tip proto has no package); find out first.")
         lo, hi = TIP_MAIL_BASE, TIP_MAIL_BASE + TIP_MAIL_WIDTH
         overlap = [f"{g['name']} [{g['base']},{g['base'] + g['width']})" for g in groups
                    if g["base"] < hi and lo < g["base"] + g["width"]]
         if overlap:
-            fail(f"段 [{lo},{hi}) 已被占用:{overlap} —— {TIP_MAIL_BASE} 是设计文档 §5.6 定下的段,"
-                 f"被占说明有人抢了号,先查清,不要自行换段。")
+            fail(f"range [{lo},{hi}) is already taken: {overlap} -- {TIP_MAIL_BASE} is the range fixed in design doc §5.6, "
+                 f"so someone took these IDs; find out first and do not switch ranges on your own.")
         if TIP_STATE.exists():
             # 发号 state 里的整组是墓碑:表里删掉的组仍占着段。只读核对,不写 state。
             # 唯一放行的墓碑是**本组自己的**:导表之后 Tip.xlsx 被别的会话整表覆盖、mail 组丢了(本脚本头注释说的那类事故),
@@ -337,7 +337,7 @@ def cmd_tip_segment(dry_run: bool) -> None:
                     continue
                 tomb.append(f"{n} [{g['base']},{int(g['base']) + int(g['width'])})")
             if tomb:
-                fail(f"发号 state({rel(TIP_STATE)})里段 [{lo},{hi}) 已属于 {tomb} —— 不要手改 state,先查清。")
+                fail(f"in the ID state ({rel(TIP_STATE)}), range [{lo},{hi}) already belongs to {tomb} -- do not edit the state by hand; find out first.")
 
         last_row = max((r for r, row in enumerate(before, start=1) if any(v is not None for v in row)), default=0)
         header_row = last_row + 2          # 与既有组一样,组头前留一个空行
@@ -363,7 +363,7 @@ def cmd_tip_segment(dry_run: bool) -> None:
     others_after = [(g["name"], g["base"], g["width"], g["codes"]) for g in groups_after if g["name"] != TIP_MAIL_GROUP]
     mine_after = [g for g in groups_after if g["name"] == TIP_MAIL_GROUP]
     if others_after != others_before or len(mine_after) != 1 or mine_after[0]["codes"][:len(wanted)] != wanted:
-        fail(f"保存后各组的码与预期不符 —— 立刻 git checkout -- {rel(TIP_XLSX)} 还原")
+        fail(f"after saving, the codes per group are not as expected -- restore it now with git checkout -- {rel(TIP_XLSX)}")
     lo = TIP_MAIL_BASE
     print(f"[DONE] Groups {len(groups)} -> {len(groups_after)}; all other groups unchanged (names / ranges / codes)."
           f" After export, confirm these {len(wanted)} codes have IDs {lo}..{lo + len(wanted) - 1}; tip_enum_ids.json contains additions only;"
@@ -384,7 +384,7 @@ LIMITER_COLUMNS = ("id", "max_requests", "time_window", "tip_message")
 def resolve_message_ids() -> dict[str, int]:
     """方法名 -> 消息号。任何一个方法查不到就中止 —— 此时还没有打开过 xlsx,什么都不会写。"""
     if not MESSAGE_ID_TXT.is_file():
-        fail(f"找不到 {rel(MESSAGE_ID_TXT)} —— 消息号表由全量 proto-gen 生成,先跑 proto-gen。未写任何文件。")
+        fail(f"{rel(MESSAGE_ID_TXT)} not found -- the message ID table comes from the full proto-gen; run proto-gen first. No files were written.")
     ids: dict[str, int] = {}
     owner: dict[int, str] = {}
     for line_no, line in enumerate(MESSAGE_ID_TXT.read_text(encoding="utf-8").splitlines(), start=1):
@@ -393,19 +393,19 @@ def resolve_message_ids() -> dict[str, int]:
             continue
         number, sep, key = line.partition("=")
         if not sep or not number.isdigit():
-            fail(f"{MESSAGE_ID_TXT.name}:{line_no} 不是 `<号>=<服务名+方法名>` 形状:{line!r}")
+            fail(f"{MESSAGE_ID_TXT.name}:{line_no} is not of the form `<id>=<service name + method name>`: {line!r}")
         if key in ids:
-            fail(f"{MESSAGE_ID_TXT.name}:{line_no} 的 {key!r} 出现了两次 —— 消息号表坏了,先修。未写任何文件。")
+            fail(f"{MESSAGE_ID_TXT.name}:{line_no}: {key!r} appears twice -- the message ID table is broken; fix it first. No files were written.")
         if int(number) in owner:
-            fail(f"{MESSAGE_ID_TXT.name}:{line_no} 的号 {number} 同时分给了 {owner[int(number)]} 与 {key}"
-                 f" —— 消息号表坏了,先修。未写任何文件。")
+            fail(f"{MESSAGE_ID_TXT.name}:{line_no}: ID {number} is assigned to both {owner[int(number)]} and {key}"
+                 f" -- the message ID table is broken; fix it first. No files were written.")
         ids[key] = int(number)
         owner[int(number)] = key
     needed = [LIMITER_SERVICE + m for m in list(LIMITER_METHODS) + [LIMITER_S2C_METHOD]]
     missing = [key for key in needed if key not in ids]
     if missing:
-        fail(f"{MESSAGE_ID_TXT.name} 里找不到 {missing} —— 含 mail 的全量 proto-gen 还没跑(或没跑成功),消息号未定,"
-             f"现在不能填档位。未写任何文件。")
+        fail(f"{MESSAGE_ID_TXT.name} does not contain {missing} -- the full proto-gen including mail has not run (or failed), so the message IDs are not settled "
+             f"and the tiers cannot be filled in yet. No files were written.")
     return {m: ids[LIMITER_SERVICE + m] for m in LIMITER_METHODS}
 
 
@@ -418,7 +418,7 @@ def header_cells(ws) -> dict[str, int]:
         if not name:
             continue
         if name in out:
-            fail(f"{ws.title} 第 1 行有重复表头 {name!r}")
+            fail(f"{ws.title} row 1 has a duplicate header {name!r}")
         out[name] = c
     return out
 
@@ -429,18 +429,18 @@ def bind_limiter_schema(after_write: bool) -> None:
     写之前先绑一次(after_write=False):绑不上就什么都不写 —— 否则表已改、核对却失败,重跑时又走
     "已是目标状态"分支、不再核对,失败被掩盖。写之后再绑一次,失败时提示还原。
     """
-    state = (f"{rel(LIMITER_XLSX)} 已写入 —— 先 git checkout -- {rel(LIMITER_XLSX)} 还原再查"
-             if after_write else "未写任何文件")
+    state = (f"{rel(LIMITER_XLSX)} was written -- restore it with git checkout -- {rel(LIMITER_XLSX)} before investigating"
+             if after_write else "no files were written")
     if str(EXPORTER_DIR) not in sys.path:
         sys.path.insert(0, str(EXPORTER_DIR))
     try:
         from core.schema_proto import SchemaProtoError, build_table_schema
     except ImportError as exc:  # pragma: no cover - 环境问题
-        fail(f"无法载入导表器的 schema 解析器({exc}):请先执行  pip install pyyaml openpyxl;{state}")
+        fail(f"cannot load the table exporter's schema parser ({exc}): run  pip install pyyaml openpyxl  first; {state}")
     try:
         build_table_schema(SCHEMA_DIR / f"{LIMITER_SHEET.lower()}_table.proto", LIMITER_XLSX)
     except SchemaProtoError as exc:
-        fail(f"权威 schema 与 {rel(LIMITER_XLSX)} 对不上(导表也会因此失败):{exc};{state}")
+        fail(f"the authoritative schema does not match {rel(LIMITER_XLSX)} (the table export would fail too): {exc}; {state}")
 
 
 def cmd_message_limiter(dry_run: bool) -> None:
@@ -454,7 +454,7 @@ def cmd_message_limiter(dry_run: bool) -> None:
     header = header_cells(ws)
     for name in LIMITER_COLUMNS:
         if name not in header:
-            fail(f"{LIMITER_XLSX.name} 第 1 行找不到列 {name!r},实际表头 {list(header)}")
+            fail(f"{LIMITER_XLSX.name} row 1 has no column {name!r}; actual header {list(header)}")
 
     existing: dict[int, tuple] = {}
     last_data_row = DATA_BEGIN_ROW - 1
@@ -463,9 +463,9 @@ def cmd_message_limiter(dry_run: bool) -> None:
         if value is None or value == "":
             continue
         if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) != value:
-            fail(f"{LIMITER_XLSX.name} 第 {row_idx} 行的 id 不是整数:{value!r}")
+            fail(f"{LIMITER_XLSX.name} row {row_idx}: id is not an integer: {value!r}")
         if int(value) in existing:
-            fail(f"{LIMITER_XLSX.name} 里消息号 {int(value)} 出现了两次(第 {row_idx} 行)—— 先修表")
+            fail(f"{LIMITER_XLSX.name} has message ID {int(value)} twice (row {row_idx}) -- fix the table first")
         existing[int(value)] = tuple(ws.cell(row=row_idx, column=header[name]).value for name in LIMITER_COLUMNS[1:])
         last_data_row = row_idx
 
@@ -477,8 +477,8 @@ def cmd_message_limiter(dry_run: bool) -> None:
             to_append.append((message_id, method, wanted))
         elif existing[message_id] != wanted:
             # 最可能的原因:这个号以前属于别的方法(被释放的旧号易主),表里留着旧方法的档位。
-            fail(f"消息号 {message_id}({LIMITER_SERVICE}{method})在表里已有一行 {existing[message_id]},"
-                 f"与要写的 {wanted} 不同 —— 先确认那一行是谁的,本脚本不覆盖。未写任何文件。")
+            fail(f"message ID {message_id} ({LIMITER_SERVICE}{method}) already has a row {existing[message_id]} in the table, "
+                 f"different from the wanted {wanted} -- find out whose row it is first; this script does not overwrite it. No files were written.")
 
     if not to_append:
         print(f"[ALREADY CURRENT] All {len(message_ids)} mail C2S message IDs exist in the table; file unchanged.")
@@ -511,23 +511,23 @@ def self_check() -> None:
     """常量表自检:写错常量比写错表更难发现,先在这里拦。"""
     names = [name for name, _t in TIP_MAIL_CODES]
     if len(set(names)) != len(names):
-        fail("内部错误:TIP_MAIL_CODES 里有重复码名")
+        fail("internal error: TIP_MAIL_CODES has duplicate code names")
     for name, text in TIP_MAIL_CODES:
         if not name.startswith("Mail") or not name.isidentifier() or not name.isascii():
-            fail(f"内部错误:码名 {name!r} 应当是 Mail 开头的 ASCII 标识符(码名全局唯一,靠域前缀防撞)")
+            fail(f"internal error: code name {name!r} should be an ASCII identifier starting with Mail (code names are globally unique; the domain prefix prevents clashes)")
         if not text or text != text.strip():
-            fail(f"内部错误:码 {name} 的文案为空或首尾带空白")
+            fail(f"internal error: the text of code {name} is empty or has leading/trailing whitespace")
     if len(TIP_MAIL_CODES) > TIP_MAIL_WIDTH:
-        fail("内部错误:码数超过段宽")
+        fail("internal error: the code count exceeds the range width")
     if is_group_header(TIP_RESERVATION_NEW) or is_group_header(TIP_RESERVATION_OLD):
-        fail("内部错误:预留说明会被导表器当成组头(// 后必须跟空白)")
+        fail("internal error: the table exporter would treat the reservation note as a group header (// must be followed by whitespace)")
     if str(TIP_MAIL_BASE) not in TIP_RESERVATION_OLD:
-        fail("内部错误:旧预留说明里应当提到本段的起始号")
+        fail("internal error: the old reservation note should mention the start ID of this range")
     for method, tier in LIMITER_METHODS.items():
         if not isinstance(tier, int) or tier <= 0:
-            fail(f"内部错误:{method} 的档位必须是正整数")
+            fail(f"internal error: the tier of {method} must be a positive integer")
     if LIMITER_S2C_METHOD in LIMITER_METHODS:
-        fail("内部错误:S2C 方法不进限流表")
+        fail("internal error: S2C methods do not go into the rate-limit table")
 
 
 def main() -> None:

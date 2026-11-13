@@ -29,7 +29,7 @@ from pathlib import Path
 try:
     import openpyxl
 except ImportError:  # pragma: no cover - 环境问题,给一句能照着做的话
-    sys.exit("缺少 openpyxl:请先执行  pip install openpyxl")
+    sys.exit("openpyxl is missing: run  pip install openpyxl  first")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -70,7 +70,7 @@ LIMITER_TIP_MESSAGE = 1000
 
 
 def fail(message: str) -> "NoReturn":
-    sys.exit(f"[中止] {message}")
+    sys.exit(f"[ABORT] {message}")
 
 
 # ── tip-text ─────────────────────────────────────────────────────────────────
@@ -105,17 +105,17 @@ def find_tip_row(ws) -> int:
         elif name == TIP_CODE_NAME:
             hits.append((row_idx, current))
     if len(hits) != 1:
-        fail(f"{TIP_XLSX.name} 里 A 列等于 {TIP_CODE_NAME!r} 的行应当恰好 1 行,实际 {len(hits)} 行:{hits}")
+        fail(f"{TIP_XLSX.name} should have exactly 1 row whose column A is {TIP_CODE_NAME!r}, found {len(hits)}: {hits}")
     row_idx, group = hits[0]
     if group != TIP_FRIEND_GROUP:
-        fail(f"{TIP_CODE_NAME} 在第 {row_idx} 行,但它所在的段是 {group!r} 而不是 {TIP_FRIEND_GROUP!r}")
+        fail(f"{TIP_CODE_NAME} is on row {row_idx}, but its range is {group!r} instead of {TIP_FRIEND_GROUP!r}")
     return row_idx
 
 
 def cmd_tip_text(dry_run: bool) -> None:
     wb = openpyxl.load_workbook(TIP_XLSX)
     if len(wb.sheetnames) != 1:
-        fail(f"{TIP_XLSX.name} 预期只有一个 sheet,实际 {wb.sheetnames}")
+        fail(f"{TIP_XLSX.name} should have exactly one sheet, found {wb.sheetnames}")
     ws = wb[wb.sheetnames[0]]
 
     before_counts = tip_group_counts(ws)
@@ -128,8 +128,8 @@ def cmd_tip_text(dry_run: bool) -> None:
         print(f"[ALREADY CURRENT] B{row_idx} = {TIP_NEW_TEXT!r}; file unchanged.")
         return
     if current != TIP_OLD_TEXT:
-        fail(f"B{row_idx} 现值是 {current!r},既不是旧文案 {TIP_OLD_TEXT!r} 也不是新文案 —— "
-             f"有人改过这一格,先确认再决定,本脚本不覆盖。")
+        fail(f"B{row_idx} is currently {current!r}, neither the old text {TIP_OLD_TEXT!r} nor the new text -- "
+             f"someone changed this cell; confirm before deciding. This script does not overwrite it.")
 
     print(f"B{row_idx}: {TIP_OLD_TEXT!r} -> {TIP_NEW_TEXT!r}")
     if dry_run:
@@ -143,12 +143,12 @@ def cmd_tip_text(dry_run: bool) -> None:
     check = openpyxl.load_workbook(TIP_XLSX)
     check_ws = check[check.sheetnames[0]]
     if check_ws.max_row != before_rows:
-        fail(f"保存后行数从 {before_rows} 变成 {check_ws.max_row} —— 立刻 git checkout -- {TIP_XLSX.relative_to(REPO_ROOT)} 还原")
+        fail(f"after saving, the row count changed from {before_rows} to {check_ws.max_row} -- restore it now with git checkout -- {TIP_XLSX.relative_to(REPO_ROOT)}")
     after_counts = tip_group_counts(check_ws)
     if after_counts != before_counts:
-        fail(f"保存后各段码数变了:{before_counts} -> {after_counts} —— 立刻还原该文件")
+        fail(f"after saving, the per-range code counts changed: {before_counts} -> {after_counts} -- restore the file now")
     if check_ws.cell(row=row_idx, column=2).value != TIP_NEW_TEXT:
-        fail("保存后读回的文案不是新文案 —— 立刻还原该文件")
+        fail("after saving, the text read back is not the new text -- restore the file now")
     print(f"[DONE] {sum(after_counts.values())} codes, {len(after_counts)} ranges; range counts unchanged;"
           f"{TIP_FRIEND_GROUP} range has {after_counts.get(TIP_FRIEND_GROUP)} codes.")
 
@@ -164,7 +164,7 @@ def load_message_ids() -> dict[str, int]:
             continue
         number, sep, key = line.partition("=")
         if not sep or not number.isdigit():
-            fail(f"{MESSAGE_ID_TXT.name}:{line_no} 不是 `<号>=<服务名+方法名>` 形状:{line!r}")
+            fail(f"{MESSAGE_ID_TXT.name}:{line_no} is not of the form `<id>=<service name + method name>`: {line!r}")
         ids[key] = int(number)
     return ids
 
@@ -173,8 +173,8 @@ def resolve_friend_ids() -> dict[str, int]:
     ids = load_message_ids()
     stale = sorted(key for key in ids if key.startswith(OLD_FRIEND_SERVICE))
     if stale:
-        fail(f"{MESSAGE_ID_TXT.name} 里还有旧服务名 {stale} —— 全量 proto-gen 还没跑(或没跑成功),"
-             f"消息号未定,现在不能填档位。")
+        fail(f"{MESSAGE_ID_TXT.name} still has the old service names {stale} -- the full proto-gen has not run (or failed), "
+             f"so the message IDs are not settled and the tiers cannot be filled in yet.")
     resolved: dict[str, int] = {}
     missing = []
     for method in LIMITER_TIERS:
@@ -184,7 +184,7 @@ def resolve_friend_ids() -> dict[str, int]:
         else:
             missing.append(key)
     if missing:
-        fail(f"{MESSAGE_ID_TXT.name} 里找不到 {missing} —— 全量 proto-gen 还没跑,或 friend.proto 的方法名变了。")
+        fail(f"{MESSAGE_ID_TXT.name} does not contain {missing} -- the full proto-gen has not run, or the friend.proto method names changed.")
     return resolved
 
 
@@ -193,7 +193,7 @@ def limiter_header_columns(ws) -> dict[str, int]:
     columns = {}
     for name in LIMITER_COLUMNS:
         if name not in header:
-            fail(f"{LIMITER_XLSX.name} 第 1 行找不到列 {name!r},实际表头 {header}")
+            fail(f"{LIMITER_XLSX.name} row 1 has no column {name!r}; actual header {header}")
         columns[name] = header.index(name) + 1
     return columns
 
@@ -203,7 +203,7 @@ def cmd_message_limiter(dry_run: bool) -> None:
 
     wb = openpyxl.load_workbook(LIMITER_XLSX)
     if len(wb.sheetnames) != 1:
-        fail(f"{LIMITER_XLSX.name} 预期只有一个 sheet,实际 {wb.sheetnames}")
+        fail(f"{LIMITER_XLSX.name} should have exactly one sheet, found {wb.sheetnames}")
     ws = wb[wb.sheetnames[0]]
     col = limiter_header_columns(ws)
 
@@ -214,10 +214,10 @@ def cmd_message_limiter(dry_run: bool) -> None:
         if value is None or value == "":
             continue
         if not isinstance(value, (int, float)) or int(value) != value:
-            fail(f"{LIMITER_XLSX.name} 第 {row_idx} 行的 id 不是整数:{value!r}")
+            fail(f"{LIMITER_XLSX.name} row {row_idx}: id is not an integer: {value!r}")
         message_id = int(value)
         if message_id in existing:
-            fail(f"{LIMITER_XLSX.name} 里消息号 {message_id} 出现了两次(第 {row_idx} 行)—— 先修表")
+            fail(f"{LIMITER_XLSX.name} has message ID {message_id} twice (row {row_idx}) -- fix the table first")
         existing[message_id] = tuple(ws.cell(row=row_idx, column=col[name]).value for name in LIMITER_COLUMNS[1:])
         last_data_row = row_idx
 
@@ -228,8 +228,8 @@ def cmd_message_limiter(dry_run: bool) -> None:
         if message_id in existing:
             if existing[message_id] != wanted:
                 # 最可能的原因:这个号以前属于别的方法(被释放的旧号易主),表里留着旧方法的档位。
-                fail(f"消息号 {message_id}({FRIEND_SERVICE}{method})在表里已有一行 {existing[message_id]},"
-                     f"与要写的 {wanted} 不同 —— 先确认那一行是谁的,本脚本不覆盖。")
+                fail(f"message ID {message_id} ({FRIEND_SERVICE}{method}) already has a row {existing[message_id]} in the table, "
+                     f"different from the wanted {wanted} -- find out whose row it is first; this script does not overwrite it.")
             continue
         to_append.append((message_id, method, wanted))
 
@@ -261,7 +261,7 @@ def cmd_message_limiter(dry_run: bool) -> None:
     ]
     expected = len(existing) + len(to_append)
     if len(check_ids) != expected or len(set(check_ids)) != expected:
-        fail(f"保存后数据行应为 {expected} 条且 id 唯一,实际 {len(check_ids)} 条 / {len(set(check_ids))} 个不同 id —— 立刻还原该文件")
+        fail(f"after saving there should be {expected} data rows with unique ids, found {len(check_ids)} rows / {len(set(check_ids))} distinct ids -- restore the file now")
     print(f"[DONE] Data rows {len(existing)} -> {expected}. Rerun the table exporter;"
           f"acceptance: the IDs above appear in generated/tables/messagelimiter.json, and manifest MessageLimiter rows = {expected}.")
 

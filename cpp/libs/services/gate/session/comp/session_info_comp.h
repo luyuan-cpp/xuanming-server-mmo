@@ -10,6 +10,17 @@
 #include "network/client_liveness.h"
 #include "pending_scene_entry_comp.h"
 #include "router_lane_item.h"
+#include "scene_lane_item.h"
+
+// 登录态续租在一条会话上的状态(docs/design/gate-online-identity.md §10.4)。
+// 只由 nodes/gate/handler/rpc/login_session_renewal.cpp 读写。
+enum class LoginRenewalState : uint8_t
+{
+	kIdle,             // 没有续租在排:还没登录成功,或 login 已回「没有可续的记录」
+	kQueued,           // 排着,等到期
+	kInFlight,         // 请求已发出,等应答
+	kInFlightRelogged, // 在途期间这条连接又登录成功过:应答若是「没有可续的记录」,它可能早于新的登录,要再问一次
+};
 
 struct SessionInfo
 {
@@ -110,6 +121,10 @@ struct SessionInfo
 	// 放在会话里 = 会话 erase 即取消,也不怕 session_id 复用(与 pendingSceneEntry 同一先例);
 	// 只由 nodes/gate/handler/rpc/client_request_lane.cpp 读写。
 	gate_lane::SessionRouterLane routerLane;
+	// 场景 lane:本会话发往 scene 的客户端消息按收包顺序单飞;玩家换场景节点的窗口里,scene 答复「确定未执行、稍后重投」的
+	// 请求留在这里按序重投(docs/design/client-scene-request-handoff-hold.md §4)。放在会话里 = 会话 erase 即取消,
+	// 换几次节点队列都跟着会话;只由 nodes/gate/handler/rpc/client_scene_lane.cpp 读写。
+	gate_scene_lane::SessionSceneLane sceneLane;
 
 	// 最近一次 RoutePlayerEvent 的决策(CPP-2);每次到达无条件覆盖,与是否转发成功无关。
 	// 只供 BindSession 晚到时按 node_id 重建欠账(scene_route_helper.h EntryForLateLoginBinding):
@@ -184,6 +199,10 @@ struct SessionInfo
 	std::chrono::steady_clock::time_point drainMigrationRetryAt{};
 	std::optional<std::chrono::steady_clock::time_point> lastEnterGameAt;
 	std::optional<std::chrono::steady_clock::time_point> redirectedAt;
+
+	// 登录态续租(docs/design/gate-online-identity.md §10.4):连接活着期间,gate 定期替它向 login 续租登录态、设备集成员与
+	// 绑定栅栏。放在会话里 = 会话 erase 即随之消失,到期登记按会话代次核对,不怕 session_id 复用。
+	LoginRenewalState loginRenewal{LoginRenewalState::kIdle};
 private:
 	NodeEntityMap nodeEntities; // Sparse map, only stores assigned node entities
 };

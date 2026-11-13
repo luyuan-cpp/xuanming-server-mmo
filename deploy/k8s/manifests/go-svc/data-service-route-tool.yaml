@@ -1,6 +1,7 @@
 # data-service-route-tool:路由运维工具 route-tool(tidb-prepare / freeze / unfreeze)的一次性 Job 模板(形状照 data-service-migrate.yaml)。
 #
-# 与 manifests/go-svc/data-service.yaml 同一镜像、同一 ConfigMap(go-svc-data-service-config),跑服务二进制自带的工具入口:
+# 与 manifests/go-svc/data-service.yaml 同一镜像,挂部署脚本渲染的 ConfigMap go-svc-data-service-config(在役 data-service 是写者,
+# 读的是运维预置 Secret 里抄的配置和槽位账号,不挂这份 ConfigMap;本 Job 用 ConfigMap 里的部署账号),跑服务二进制自带的工具入口:
 #   /app/service -f /app/etc/data_service.yaml -route-tool <子命令> [子命令参数]
 # (go/data_service/data_service.go 的 -route-tool;子命令与退出码见 go/data_service/internal/routetoolcli/cli.go 的 usage:
 #  0 完成 / 2 失败)。
@@ -54,8 +55,10 @@ spec:
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
-            # MySQL 口令:data-service 的配置(MySQLPasswordEnv)指名这个变量;Secret mysql-auth 由 k8s_deploy.ps1 先于本 Job 在本 namespace 建好
-            # (工作负载密钥目录,docs/design/workload-secrets-via-k8s-secret.md)。不写 optional:Secret 缺失时 Pod 起不来,不带空口令去连库。
+            # MySQL 口令:本 Job 挂的 ConfigMap go-svc-data-service-config 里口令写空串,MySQLPasswordEnv 指名这个变量(route_tool 读配置后填)。
+            # Secret mysql-auth 由 k8s_deploy.ps1 部署 data-service 时在本 namespace 建好(工作负载密钥目录的消费者 data-service-route-tool,
+            # docs/design/workload-secrets-via-k8s-secret.md)。本 Job 是 mysql-auth 唯一的读者:写者与迁移 Job 读运维预置 Secret 里的配置。
+            # 不写 optional:Secret 缺失时 Pod 起不来,不带空口令去连库。
             - name: MMORPG_MYSQL_PASSWORD
               valueFrom:
                 secretKeyRef: {name: mysql-auth, key: password, optional: false}
@@ -79,7 +82,7 @@ spec:
               printf '\n%s\n' "@@ROUTE_TOOL_STDOUT_END ${ROUTE_TOOL_RUN_ID}@@"
               exit "$rc"
             - route-tool
-          # 与 data-service.yaml 的 args 只差 -route-tool 及其后的子命令:同一份 ConfigMap,库名 / 账号与服务完全一致。
+          # 与 data-service.yaml 的 args 只差 -route-tool 及其后的子命令;库名与服务一致,账号是 ConfigMap 里的部署账号(MMORPG_MYSQL_USER)。
           args: PLACEHOLDER_ROUTE_TOOL_ARGS
           volumeMounts:
             - name: svc-config

@@ -68,9 +68,8 @@ func seedChannels(t *testing.T, sc *svc.ServiceContext, zoneID uint32, confID ui
 	for sceneID, players := range playersByScene {
 		_, err := sc.Redis.Sadd(worldChannelsKey(zoneID, confID), strconv.FormatUint(sceneID, 10))
 		require.NoError(t, err)
-		require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), "10"))
-		require.NoError(t, sc.Redis.Set(sceneZoneKey(sceneID), fmt.Sprintf("%d", zoneID)))
-		seedSceneMembersVia(sc, sceneID, int(players))
+		require.NoError(t, sc.Redis.Set(sceneNodeKey(zoneID, sceneID), "10"))
+		resetMembersVia(sc, instanceMembersKey(zoneID, sceneID), int(players), nil)
 	}
 	// 期望频道数与实际铺的数量对齐,否则 initWorldScenesForZone 会补建。
 	setDesiredWorldChannelCount(sc, zoneID, confID, len(playersByScene))
@@ -149,7 +148,7 @@ func TestAutoscale_DrainsUnderpopulatedChannel(t *testing.T) {
 	// 排空索引里有它,后续 tick 才找得回来继续收敛。
 	draining, _ := sc.Redis.Smembers(worldDrainingSetKey(testZoneId, autoscaleTestConfID))
 	assert.Contains(t, draining, "102")
-	assert.True(t, mr.Exists(sceneDrainingKey(102)))
+	assert.True(t, mr.Exists(sceneDrainingKey(testZoneId, 102)))
 }
 
 // **最少一个频道**:只剩一个时,再空也不缩。
@@ -222,7 +221,7 @@ func TestAutoscale_DrainingChannelWithResidentsStaysDraining(t *testing.T) {
 	seedSceneMembersVia(sc, 102, 12)
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 
-	assert.True(t, mr.Exists(sceneNodeKey(102)), "还有人时不能清掉 scene->node 映射")
+	assert.True(t, mr.Exists(sceneNodeKey(testZoneId, 102)), "还有人时不能清掉 scene->node 映射")
 	draining, _ := sc.Redis.Smembers(worldDrainingSetKey(testZoneId, autoscaleTestConfID))
 	assert.Contains(t, draining, "102")
 }
@@ -242,9 +241,8 @@ func TestAutoscale_DrainedChannelIsCleanedUp(t *testing.T) {
 	seedSceneMembersVia(sc, 102, 0)
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 
-	assert.False(t, mr.Exists(sceneNodeKey(102)))
-	assert.False(t, mr.Exists(sceneZoneKey(102)))
-	assert.False(t, mr.Exists(sceneDrainingKey(102)))
+	assert.False(t, mr.Exists(sceneNodeKey(testZoneId, 102)))
+	assert.False(t, mr.Exists(sceneDrainingKey(testZoneId, 102)))
 
 	draining, _ := sc.Redis.Smembers(worldDrainingSetKey(testZoneId, autoscaleTestConfID))
 	assert.NotContains(t, draining, "102")
@@ -369,7 +367,7 @@ func TestAutoscale_ScaleInYieldsToConcurrentLeaderCommit(t *testing.T) {
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"101", "102"}, routed, "本轮挑中的 102 不能再摘")
 	assert.Equal(t, 2, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
-	assert.False(t, mr.Exists(sceneDrainingKey(102)))
+	assert.False(t, mr.Exists(sceneDrainingKey(testZoneId, 102)))
 }
 
 // 扩容提交脚本本身:同一令牌重发(go-zero 句柄读超时后重发同一条 EVAL)回已提交、期望数只加一次;冷却期内别的令牌回冷却;
@@ -415,7 +413,7 @@ func TestBeginDrainScript_ReplayAndStaleRead(t *testing.T) {
 			[]string{
 				worldChannelsKey(testZoneId, autoscaleTestConfID),
 				worldDrainingSetKey(testZoneId, autoscaleTestConfID),
-				sceneDrainingKey(sceneID64),
+				sceneDrainingKey(testZoneId, sceneID64),
 				worldDesiredChannelsKey(testZoneId),
 				cooldownKey,
 			},

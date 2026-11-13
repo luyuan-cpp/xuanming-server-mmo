@@ -27,22 +27,43 @@ import (
 //   - archived_ms / issued_at_ms / next_retry_ms 都取 ABORT 落库的 SQL 时刻,发件箱积压年龄按它算。
 
 // voidSettlementFor 返回一名成员的作废结算正文。纯函数:只有身份、作废结局与展示字段,效果字段全部留空。
-// finished_at_ms 记 ABORT 落库的 SQL 时刻,供近期战斗结果展示;模式与配置号同样只供展示,不参与任何判定。
-func voidSettlementFor(f *pb.MatchFormationRecord, m *pb.MatchFormationMember, stamp uint64) *battlepb.BattleSettlementData {
+// side 是他所在方(memberSides);finished_at_ms 记 ABORT 落库的 SQL 时刻。所在方、时刻、模式与配置号都只供近期战斗结果展示,
+// 不参与任何判定。
+func voidSettlementFor(f *pb.MatchFormationRecord, playerID uint64, side uint32, stamp uint64) *battlepb.BattleSettlementData {
 	return &battlepb.BattleSettlementData{
 		BattleId:        f.BattleId,
-		PlayerId:        m.PlayerId,
+		PlayerId:        playerID,
 		Outcome:         battlepb.EBattleOutcome_BATTLE_OUTCOME_VOID,
-		PlayerTeamIndex: m.TeamIndex,
+		PlayerTeamIndex: side,
 		FinishedAtMs:    stamp,
 		MatchMode:       f.Mode,
 		BattleConfigId:  f.ConfigId,
 	}
 }
 
+// memberSides 返回各成员所在方。优先取持久 Create 原件里的分边(每种模式都有);原件缺失或解不开(只有人工处置会遇到)时
+// 用成局成员上记的分边(只有 PVP_TEAM 持久化,其余模式为 0)。纯函数。
+func memberSides(f *pb.MatchFormationRecord) map[uint64]uint32 {
+	sides := make(map[uint64]uint32, len(f.Members))
+	for _, m := range f.Members {
+		sides[m.PlayerId] = m.TeamIndex
+	}
+	request := &battlepb.CreateBattleRequest{}
+	if len(f.CreateRequest) == 0 || proto.Unmarshal(f.CreateRequest, request) != nil {
+		return sides
+	}
+	for _, player := range request.Players {
+		if _, member := sides[player.PlayerId]; member {
+			sides[player.PlayerId] = player.TeamIndex
+		}
+	}
+	return sides
+}
+
 // writeVoidSettlementSourcesTx 在 ABORT 的事务里给 f 的每名成员写一行作废结算来源。只由 commitAbortTx 调用:
 // 调用方已持全部原 P 与 formation 行锁,并已在锁内确认这一局没有终局行,所以这里不会与 COMPLETE 的个人来源撞主键。
 func writeVoidSettlementSourcesTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord, stamp uint64) error {
+	sides := memberSides(f)
 	for _, m := range f.Members {
 		var account string
 		var revision uint64
@@ -54,7 +75,7 @@ func writeVoidSettlementSourcesTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFo
 		if err != nil {
 			return err
 		}
-		body, err := proto.MarshalOptions{Deterministic: true}.Marshal(voidSettlementFor(f, m, stamp))
+		body, err := proto.MarshalOptions{Deterministic: true}.Marshal(voidSettlementFor(f, m.PlayerId, sides[m.PlayerId], stamp))
 		if err != nil {
 			return err
 		}

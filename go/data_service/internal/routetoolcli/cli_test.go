@@ -209,6 +209,48 @@ func TestRouteToolTiDBPrepareRealRunNeedsSchemaPrincipal(t *testing.T) {
 	assert.NotEmpty(t, stderr)
 }
 
+// routeToolPasswordEnv 是两条口令用例指名的变量(不用 MMORPG_MYSQL_PASSWORD:跑测的机器上可能真设了它)。
+const routeToolPasswordEnv = "MMORPG_ROUTE_TOOL_TEST_MYSQL_PASSWORD"
+
+// TestRunFillsMySQLPasswordFromTheNamedVariable:K8s 上 route-tool Job 挂的 ConfigMap 口令写空串、MySQLPasswordEnv 指名变量,
+// 开池之前要把变量的值填进 SnapshotMySQL.Password;输出里不出现口令。以前这条路径不填,工具拿空口令去连库。
+func TestRunFillsMySQLPasswordFromTheNamedVariable(t *testing.T) {
+	const password = "route-tool-secret-from-env-0123"
+	t.Setenv(routeToolPasswordEnv, password)
+	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t))+"SnapshotMySQL:\n  Password: \"\"\nMySQLPasswordEnv: "+routeToolPasswordEnv+"\n")
+	st := &fakeStore{rep: store.RouteTiDBPrepareReport{Engine: "mysql", Skipped: true}}
+	var opened config.Config
+	d := fakeDeps(&fakeCatalog{}, &fakeCloser{})
+	d.openRouteStore = func(c config.Config, _ authoritysql.Permission) (routeStore, error) {
+		opened = c
+		return st, nil
+	}
+
+	code, stdout, stderr := runCLIWith(d, "-f", path, "tidb-prepare", "-zones=1")
+
+	assert.Equal(t, routetool.ExitClean, code, stderr)
+	assert.Equal(t, password, opened.SnapshotMySQL.Password, "the pool must be opened with the password from the named variable")
+	assert.NotContains(t, stdout+stderr, password, "the password must not be printed")
+}
+
+// TestRunNamedMySQLPasswordVariableEmptyExitsTwo:指名了变量却是空值,在开池之前退出码 2,报错点名键与变量、不回显值。
+func TestRunNamedMySQLPasswordVariableEmptyExitsTwo(t *testing.T) {
+	t.Setenv(routeToolPasswordEnv, "")
+	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t))+"SnapshotMySQL:\n  Password: \"\"\nMySQLPasswordEnv: "+routeToolPasswordEnv+"\n")
+	d := fakeDeps(&fakeCatalog{}, &fakeCloser{})
+	d.openRouteStore = func(config.Config, authoritysql.Permission) (routeStore, error) {
+		t.Fatal("an unresolved MySQL password must not open the global DB")
+		return nil, nil
+	}
+
+	code, stdout, stderr := runCLIWith(d, "-f", path, "tidb-prepare", "-zones=1")
+
+	assert.Equal(t, routetool.ExitFailed, code)
+	assert.Empty(t, stdout)
+	assert.Contains(t, stderr, "MySQLPasswordEnv")
+	assert.Contains(t, stderr, routeToolPasswordEnv)
+}
+
 // TestRunTiDBPrepareUsesReaderAndClosesThePool:缺省 dry-run 走只读主体,入参原样交给 store,stdout 一行统计,跑完关池。
 func TestRunTiDBPrepareUsesReaderAndClosesThePool(t *testing.T) {
 	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t)))

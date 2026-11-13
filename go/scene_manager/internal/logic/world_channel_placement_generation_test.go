@@ -67,10 +67,10 @@ func freshPlacementGeneration(t *testing.T, sc *svc.ServiceContext, zoneID uint3
 // placementGenOf 读频道的代次高水位,键不存在时为 0。
 func placementGenOf(t *testing.T, mr *miniredis.Miniredis, sceneID uint64) uint64 {
 	t.Helper()
-	if !mr.Exists(scenePlacementGenKey(sceneID)) {
+	if !mr.Exists(scenePlacementGenKey(placementZone, sceneID)) {
 		return 0
 	}
-	raw, err := mr.Get(scenePlacementGenKey(sceneID))
+	raw, err := mr.Get(scenePlacementGenKey(placementZone, sceneID))
 	require.NoError(t, err)
 	generation, err := strconv.ParseUint(raw, 10, 64)
 	require.NoError(t, err)
@@ -130,7 +130,6 @@ func newPlacementMoveCase(t *testing.T, sceneID uint64, opts ...redis.Option) *p
 
 	_, err := mr.SAdd(worldChannelsKey(placementZone, placementConfID), strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
-	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(placementZone), 10)))
 	seedSceneOwnedBy(t, mr, placementZone, sceneID, placementNodeOwner)
 	return &placementMoveCase{sc: sc, mr: mr, owner: owner, target: target, sceneID: sceneID}
 }
@@ -160,7 +159,7 @@ func TestPlacementGeneration_StaleProposalChangesNothing(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 87402
 	seedSceneOwnedBy(t, mr, placementZone, sceneID, placementNodeOwner)
-	require.NoError(t, mr.Set(scenePlacementGenKey(sceneID), "5"))
+	require.NoError(t, mr.Set(scenePlacementGenKey(placementZone, sceneID), "5"))
 
 	require.False(t, reassignSceneNode(sc, placementZone, sceneID, placementNodeOwner, placementNodeTarget, 5), "与高水位相同的代次必须落空")
 	require.False(t, reassignSceneNode(sc, placementZone, sceneID, placementNodeOwner, placementNodeTarget, 4), "更旧的代次必须落空")
@@ -175,7 +174,7 @@ func TestPlacementGeneration_StaleProposalChangesNothing(t *testing.T) {
 	requireSceneOwner(t, sc, sceneID, placementNodeTarget)
 	require.EqualValues(t, 6, placementGenOf(t, mr, sceneID))
 
-	require.NoError(t, mr.Set(scenePlacementGenKey(sceneID), "9"))
+	require.NoError(t, mr.Set(scenePlacementGenKey(placementZone, sceneID), "9"))
 	require.True(t, reassignSceneNode(sc, placementZone, sceneID, placementNodeTarget, placementNodeOwner, 10), "10 比 9 新(按字典序比会判反)")
 	require.EqualValues(t, 10, placementGenOf(t, mr, sceneID))
 }
@@ -245,7 +244,7 @@ func TestPlacementGeneration_ReclaimKeepsOwnersEntityAndRaisesHighWater(t *testi
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	const sceneID uint64 = 87405
 	seedSceneOwnedBy(t, mr, placementZone, sceneID, placementNodeTarget)
-	require.NoError(t, mr.Set(scenePlacementGenKey(sceneID), "3"))
+	require.NoError(t, mr.Set(scenePlacementGenKey(placementZone, sceneID), "3"))
 	destroysBefore := sharedFakeSceneNode.destroyCalls.Load()
 
 	destroyUnownedMigrationTarget(context.Background(), sc, placementZone, placementConfID, sceneID, placementNodeTarget, 8)
@@ -266,7 +265,7 @@ func TestPlacementGeneration_ReclaimOfTornDownChannelWritesNothing(t *testing.T)
 	destroyUnownedMigrationTarget(context.Background(), sc, placementZone, placementConfID, tornDown, placementNodeTarget, 4)
 	require.Equal(t, destroysBefore+1, sharedFakeSceneNode.destroyCalls.Load(), "没有属主,预建的实体照样回收")
 	require.EqualValues(t, 4, sharedFakeSceneNode.lastDestroyGeneration.Load())
-	require.False(t, mr.Exists(scenePlacementGenKey(tornDown)), "频道已拆除,不得再写出高水位")
+	require.False(t, mr.Exists(scenePlacementGenKey(placementZone, tornDown)), "频道已拆除,不得再写出高水位")
 
 	_, err := mr.SAdd(worldChannelsKey(placementZone, placementConfID), strconv.FormatUint(unmapped, 10))
 	require.NoError(t, err)
@@ -290,7 +289,7 @@ func TestPlacementGeneration_InitEnsureCreatesAtCurrentGeneration(t *testing.T) 
 	require.Equal(t, channels[0], sharedFakeSceneNode.lastCreateScene.Load())
 	require.Zero(t, sharedFakeSceneNode.lastCreateGeneration.Load(), "新频道按代次 0 建")
 
-	require.NoError(t, mr.Set(scenePlacementGenKey(channels[0]), "7"))
+	require.NoError(t, mr.Set(scenePlacementGenKey(testZoneId, channels[0]), "7"))
 	createsBefore := sharedFakeSceneNode.createCalls.Load()
 	initWorldScenesForZone(ctx, sc, testZoneId, confIDs, true)
 	require.Equal(t, createsBefore+1, sharedFakeSceneNode.createCalls.Load())
@@ -311,7 +310,7 @@ func TestPlacementGeneration_CorruptHighWaterSkipsEnsure(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, channels, 1)
 
-	require.NoError(t, mr.Set(scenePlacementGenKey(channels[0]), "not-a-number"))
+	require.NoError(t, mr.Set(scenePlacementGenKey(testZoneId, channels[0]), "not-a-number"))
 	createsBefore := sharedFakeSceneNode.createCalls.Load()
 	before := readUnknownCount(t, testZoneId, readUnknownSiteWorldInit)
 	initWorldScenesForZone(ctx, sc, testZoneId, confIDs, true)
@@ -325,11 +324,11 @@ func TestPlacementGeneration_TeardownDeletesHighWater(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	for i, kind := range []string{teardownKindWorldDrain, teardownKindWorldOrphan} {
 		sceneID := uint64(87408 + i)
-		require.NoError(t, mr.Set(scenePlacementGenKey(sceneID), "12"))
+		require.NoError(t, mr.Set(scenePlacementGenKey(testZoneId, sceneID), "12"))
 		job := sceneTeardownJob{ZoneID: testZoneId, SceneID: sceneID, Kind: kind, Reason: "placement_generation_test"}
 
 		require.NoError(t, runSceneTeardown(context.Background(), sc, job, nil), kind)
-		require.False(t, mr.Exists(scenePlacementGenKey(sceneID)), "%s 的拆除任务必须删高水位", kind)
+		require.False(t, mr.Exists(scenePlacementGenKey(testZoneId, sceneID)), "%s 的拆除任务必须删高水位", kind)
 	}
 }
 
@@ -383,7 +382,6 @@ func TestExplicitDestroyScene_RejectsWorldChannels(t *testing.T) {
 	require.NoError(t, err)
 	for _, id := range []uint64{inService, draining} {
 		seedSceneOwnedBy(t, mr, testZoneId, id, "10")
-		require.NoError(t, mr.Set(sceneZoneKey(id), strconv.FormatUint(uint64(testZoneId), 10)))
 	}
 	destroysBefore := sharedFakeSceneNode.destroyCalls.Load()
 
@@ -406,7 +404,7 @@ func TestExplicitDestroyScene_RejectsWorldChannels(t *testing.T) {
 	require.Zero(t, resp.ErrorCode)
 	_, err = NewDestroySceneLogic(ctx, sc).DestroyScene(&scene_manager.DestroySceneRequest{SceneId: resp.SceneId, ZoneId: testZoneId})
 	require.NoError(t, err)
-	require.False(t, mr.Exists(sceneNodeKey(resp.SceneId)), "副本照常拆")
+	require.False(t, mr.Exists(sceneNodeKey(testZoneId, resp.SceneId)), "副本照常拆")
 }
 
 // 查不清目标是不是世界频道(读线集合失败)时拒绝,一个键不动;读恢复之后照常拆副本。
@@ -420,7 +418,7 @@ func TestExplicitDestroyScene_MembershipReadErrorRejects(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Zero(t, resp.ErrorCode)
-	owner, err := mr.Get(sceneNodeKey(resp.SceneId))
+	owner, err := mr.Get(sceneNodeKey(testZoneId, resp.SceneId))
 	require.NoError(t, err)
 
 	fired := injectRedisFaultsForTest(t, mr,
@@ -433,5 +431,5 @@ func TestExplicitDestroyScene_MembershipReadErrorRejects(t *testing.T) {
 
 	_, err = NewDestroySceneLogic(ctx, sc).DestroyScene(&scene_manager.DestroySceneRequest{SceneId: resp.SceneId, ZoneId: testZoneId})
 	require.NoError(t, err)
-	require.False(t, mr.Exists(sceneNodeKey(resp.SceneId)))
+	require.False(t, mr.Exists(sceneNodeKey(testZoneId, resp.SceneId)))
 }

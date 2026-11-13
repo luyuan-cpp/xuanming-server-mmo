@@ -19,11 +19,14 @@ Push-Location java/gateway_node
 try { mvn package } finally { Pop-Location }
 ```
 
-首次创建玩家区库前须准备 MySQL；在已启动的本地基础设施上按 [Go 说明](../../go/README.md) 执行迁移。db 默认不替代迁移工具自动创建缺失数据库：
+玩家存档在地域存档库里（本机是 dev 地域 0、K=1，只有 `player_store_1000000_db`；按区分的 `zone_<n>_db` 已退役，见[总体方案 §7.2](./player-data-tidb-scaling-plan.md)）。平时不用手工建：`start_game.ps1` 每次启动都会先建库、建表、给每个实例发写资格（`sql-boot-catalog-local`）。常驻的 db 进程不建库也不改表，要单独跑迁移时用迁移入口，`-storage-id` 必填：
 
 ```powershell
 Push-Location go/db
-try { go run ./cmd/migrate -f etc/db.yaml -command up -create-database } finally { Pop-Location }
+try {
+    $env:DB_ALLOWED_DATABASES = 'player_store_1000000_db'
+    go run ./cmd/migrate -f etc/db.yaml -storage-id 1000000 -command up -create-database
+} finally { Pop-Location }
 ```
 
 ## 2. 启动本地整套服务

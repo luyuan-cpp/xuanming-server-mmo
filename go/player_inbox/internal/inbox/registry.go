@@ -83,12 +83,38 @@ var payloadRules = map[inboxpb.PlayerInboxMessageType]payloadRule{
 }
 
 // 只核原件形状，不在Inbox重算战斗奖励；业务效果由Scene同一持久账本裁决。
+// 终局只收 A 胜 / B 胜 / 平局,以及 Match 的 ABORT 投来的作废结算(BATTLE_OUTCOME_VOID,2026-11-11,
+// docs/design/battle-instance-loss-early-abort.md §5):作废正文不许带任何效果(voidSettlementHasNoEffects)。
 func validateBattlePayload(m proto.Message) error {
 	p, ok := m.(*battlepb.BattleSettlementData)
-	if !ok || p.GetPlayerId() == 0 || p.GetBattleId() == 0 || p.GetOutcome() < battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN || p.GetOutcome() > battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW || battlePayloadHasUnknown(p.ProtoReflect()) {
+	if !ok || p.GetPlayerId() == 0 || p.GetBattleId() == 0 || battlePayloadHasUnknown(p.ProtoReflect()) {
 		return fmt.Errorf("%w: Battle原件身份或终局无效", errPayloadRule)
 	}
-	return nil
+	switch outcome := p.GetOutcome(); {
+	case outcome >= battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN && outcome <= battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW:
+		return nil
+	case outcome == battlepb.EBattleOutcome_BATTLE_OUTCOME_VOID && voidSettlementHasNoEffects(p):
+		return nil
+	}
+	return fmt.Errorf("%w: Battle原件身份或终局无效", errPayloadRule)
+}
+
+// voidSettlementFields 是作废结算允许带的字段:身份、作废结局与只供展示的字段。与 Match 写作废结算的字段
+// (go/match/internal/authority/void_settlement.go 的 voidSettlementFor)、scene 的 IsEffectFreeVoidSettlement 同一份名单。
+var voidSettlementFields = map[protoreflect.Name]bool{
+	"battle_id": true, "player_id": true, "outcome": true, "player_team_index": true,
+	"finished_at_ms": true, "match_mode": true, "battle_config_id": true,
+}
+
+// voidSettlementHasNoEffects 判作废结算正文里没有任何效果:出现名单之外的字段(现有的效果字段,或以后新加的)就不是作废结算。
+// 按「只许出现哪些」判而不是逐个列效果字段:以后给结算加新效果时,带着它的作废正文默认被拒,不会被悄悄放行。
+func voidSettlementHasNoEffects(p *battlepb.BattleSettlementData) bool {
+	clean := true
+	p.ProtoReflect().Range(func(field protoreflect.FieldDescriptor, _ protoreflect.Value) bool {
+		clean = voidSettlementFields[field.Name()]
+		return clean
+	})
+	return clean
 }
 
 func battlePayloadHasUnknown(m protoreflect.Message) bool {

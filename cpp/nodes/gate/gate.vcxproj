@@ -27,7 +27,9 @@
     <ClCompile Include="handler\rpc\client_session_handler.cpp" />
     <ClCompile Include="handler\rpc\client_heartbeat.cpp" />
     <ClCompile Include="handler\rpc\client_request_lane.cpp" />
+    <ClCompile Include="handler\rpc\client_scene_lane.cpp" />
     <ClCompile Include="handler\rpc\drain_migration.cpp" />
+    <ClCompile Include="handler\rpc\login_session_renewal.cpp" />
     <ClCompile Include="handler\rpc\router_muduo_forward.cpp" />
     <ClCompile Include="handler\rpc\router_subset.cpp" />
     <ClCompile Include="handler\rpc\rpc_reply_bridge.cpp" />
@@ -56,7 +58,9 @@
     <ClInclude Include="handler\rpc\client_session_handler.h" />
     <ClInclude Include="handler\rpc\client_heartbeat.h" />
     <ClInclude Include="handler\rpc\client_request_lane.h" />
+    <ClInclude Include="handler\rpc\client_scene_lane.h" />
     <ClInclude Include="handler\rpc\drain_migration.h" />
+    <ClInclude Include="handler\rpc\login_session_renewal.h" />
     <ClInclude Include="handler\rpc\router_muduo_forward.h" />
     <ClInclude Include="handler\rpc\router_subset.h" />
     <ClInclude Include="handler\rpc\router_subset_policy.h" />

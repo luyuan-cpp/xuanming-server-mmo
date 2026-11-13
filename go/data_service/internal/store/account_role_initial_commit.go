@@ -44,7 +44,5 @@ func (s *AccountDirectoryStore) ConfigurePlayerStores(storageIDs []uint32, optio
 		return err
 	}
 	s.stores = stores
-	// 读名额按存档库的池算:目录的池是每片的上限,K 大的时候收得很小,按它算会把整个进程的账本和展示读压成一条。
-	s.playerStoreReads = make(chan struct{}, playerStoreReadLimit(stores.options.MaxOpenConn))
 	return nil
 }

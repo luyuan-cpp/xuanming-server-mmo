@@ -29,6 +29,8 @@ func TestLegTxType(t *testing.T) {
 		{"buyer_debit_3/refund", 4, ret},
 		{"seller_return#2", 4, ret},
 		{"buyer_debit/refund#3", 4, ret},
+		{"buyer_surplus", 4, ret},
+		{"buyer_surplus#2", 4, ret},
 		{"seller_receive", 4, buy},
 		{"buyer_receive", 4, buy},
 		{"buyer_receive#2", 4, buy},

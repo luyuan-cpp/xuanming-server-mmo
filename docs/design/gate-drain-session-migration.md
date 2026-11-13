@@ -3,6 +3,7 @@
 > **状态**：设计稿 2026-11-05（Claude）。负责人在问答「gate 重启或灰度、金丝雀发布时 IP 和端口变了怎么办」之后点了「写设计稿」，11-06 点了「按建议落批 A」，§12 四项按本文的建议值执行。
 > - **批 A（login、协议、robot、排空脚本）**：11-06 已落码，落码与本文的差异见 §17。协议生成物已随主干快照提交（`a8af9372d` 等），**仍未编译、未测试**，Codex 验证清单在 `docs/PROGRESS.md` 2026-11-06 同名条目。
 > - **批 B（gate）**：11-10 已落码（负责人要求全部在 main 上做完），**未编译、未测试**，落码记录与验证清单见 §18 与 `docs/PROGRESS.md` 2026-11-10 同名条目。服务端到这里功能完整；迁移开关 `GateDrain.Migrate.Enabled` 默认关，打开前要等客户端的跳数清零（§10 第 2 条）上线、robot 集成跑过（§12 第 1 条）。
+> - **收尾批（2026-11-12）**：负责人要求「以后修的现在修、不等压测先按标准定」。客户端的跳数清零已落码，`Migrate.Enabled` 改为默认开，速率定为 20，选目标优先不在外出构建上的 gate（§7.3），gate 与 battle 的部署注入构建标识；另加一条守卫用例钉住 login 的 goctl 服务包装必须有 `RequestGateMigration`（**现在还没有，Codex 第一步跑 `go/build.ps1` 重生**）。落码记录见 §19，未编译、未测试。
 > - **Java 版**：待做，已在 Java 仓 `PARITY.md` 登记（§15）。
 > **核对基线**：HEAD `961f334a0` 加 11-05 工作区。当天二十多个会话同时在改，`gate_redirect.go`、`player_lifecycle.cpp`、`client_session_handler.cpp` 等文件都有别人未提交的改动，文中位置按函数名找，不写行号。
 > **上线状态**：未上线（见 [存盘围栏设计](db-write-fencing-mysql.md) 文末）。不为旧部署补兼容；新旧版本并存只考虑本功能自己滚动上线的那一段（§9）。
@@ -185,7 +186,7 @@ GateDrain:
   DrainedBelowPlayers: 0
   Deadline: 25m
   Migrate:
-    Enabled: false        # 第一批默认关,见 §12 第 1 条
+    Enabled: true         # 默认开(2026-11-12 定案,§12 第 1 条);false 是应急开关
     RatePerSecond: 20     # 每台排空中的 gate 每秒最多发起的迁移数
     StartAfter: 0s        # 标记 draining 之后多久开始迁移,留给玩家自然下线
 ```
@@ -231,10 +232,16 @@ GateDrain:
 - 之后每排空一台，迁走的人仍有一部分落在还没换的旧 gate 上，轮到那台时会再迁一次。
 - N 台 gate 的 zone，最坏情况下同一个玩家要迁 N−1 次。
 
-这带来两个问题：玩家每迁一次就换一次连接；第 4 次会撞上客户端的 3 跳上限。处理办法：
+这带来两个问题：玩家每迁一次就换一次连接；第 4 次会撞上客户端的 3 跳上限。两条都已处理（2026-11-12）：
 
-- **必做**：客户端和 robot 改成换连接后成功进场就把跳数清零（§10 第 2 条）。熔断原本防的是登录期重定向来回弹，那种来回弹不会成功进场，所以清零不削弱它。
-- **可选**（§12 第 3 条）：迁移选目标时，有与被排空 gate 轨道不同的合格 gate，就只在它们里面挑。换版和回退时，被排空的都是要淘汰的那条轨道，这样多数人只迁一次。普通重启时全 zone 只有一条轨道，这条规则不起作用。
+- **跳数清零**：客户端和 robot 都在成功进场（收到 NotifyEnterScene）时把跳数清零（§10 第 2 条）。熔断原本防的是登录期重定向来回弹，那种来回弹不会成功进场，所以清零不削弱它。
+- **优先迁到新构建**：迁移选目标时，合格目标里有不在「外出构建」上的，就只在它们里面挑；一个都没有才用全部合格目标（`loginqueue.PickMigrationTarget`）。
+  - 外出构建 = 本 zone 里至少有一台排空中 gate 的构建，取自 gate 自报的 `NodeInfo.build`。它由两样拼成：部署经 `MMORPG_BUILD_LABEL` 注入的构建标识（与 Pod 标签 `mmorpg.io/build` 同值），以及经 downward API 注入的工作负载修订 `MMORPG_POD_REVISION`（gate StatefulSet 的 `controller-revision-hash`、Deployment 的 `pod-template-hash`）。与 scene 选落点同一口径（[scene 计划排空](scene-node-planned-drain.md) §4.6）：不需要知道哪个版本更新，升级时被排空的是旧版本，回退时被排空的是新版本。
+  - 效果：第一台排空时还没有新构建的 gate，它上面的人只能迁到旧构建的 gate，之后还要再迁一次；从第二台起都迁到已换好的 gate 上，不再重复。一个玩家一轮换版最多迁 2 次，而不是 N−1 次。
+  - 满载、停写的 gate 在分档之前就被剔掉，新构建的 gate 装满之后自动回到全部合格目标，偏好不会把人留在要下线的 gate 上。
+  - 没上报构建（空串，本机开发）不产生偏好。
+  - 同一个镜像只改配置的换版：Pod 模板变了，工作负载修订跟着变，已重建的 gate 与还没换的 gate 分得出来，规则照样生效。模板完全没变、只是逐台删 Pod 重建时，新旧 Pod 是同一个修订，分不出来，这条规则不起作用，仍可能重复迁移（跳数清零保证不会被熔断）。
+  - 原稿设想按发布轨道分档；轨道只分 stable / canary，同轨道内换版分不出新旧，所以改按构建标识。
 
 ## 8. 可观测性
 
@@ -254,14 +261,14 @@ GateDrain:
 
 ## 9. 上线顺序与兼容
 
-- 本功能自己的滚动顺序：先 login（新方法与新配置，`Enabled` 默认关），再路由服（路由表需要重生时），最后 gate。
+- 本功能自己的滚动顺序：先 login（新方法与新配置），再路由服（路由表需要重生时），最后 gate。项目未上线，首次上线整批带上，`Enabled` 默认开。
 - gate 是逐台换的。没换到新版的 gate 收到许可事件会按白名单丢弃，照旧等自然排空。所以本功能第一次上线的那一轮换版用不上迁移，从下一轮开始生效。
 - 新 gate 调到旧 login 拿到「未实现」或错误：会话进入退避、不迁，不影响排空与删 Pod。
 - 关闭：把 `Migrate.Enabled` 置 false，最多一个 `lease_ms` 后所有 gate 停止迁移，不需要回滚二进制。
 
 ## 10. 要由客户端任务核实或修改的点
 
-本次没有读客户端仓。下列各条依据本仓文档与 robot 代码，落码前要由获授权的客户端任务逐条确认：
+设计时没有读客户端仓，下列各条依据本仓文档与 robot 代码写成。2026-11-12 负责人授权改客户端，逐条核对结果（客户端 `Assets/Scripts/Game/GameClient.cs`）：第 2 条原先没做，已落码；第 1、3、5、6 条客户端已有对应实现；第 4 条客户端按失败收口（提示「切换服务器失败，请重新登录」并断开），毫秒级竞态下玩家重新登录，数据不受影响。
 
 1. RedirectFlow 对同 zone 的 124（`target_zone_id = 0`）照常工作，进场后 `CurrentZoneId` 取票据里的 `zone_id`。
 2. 跳数上限改成成功进场（收到新连接上的 NotifyEnterScene）后清零。robot 在本仓，同批修改 `robot/pkg/redirect.go`。
@@ -303,12 +310,14 @@ GateDrain:
 
 压测（AGENTS §6，按 `stress_summarize.ps1` 的口径）：在负载下迁移一台满载 gate，与不迁移的基线对比 login、scene_manager EnterScene 各子阶段与 scene 入场耗时，据此定默认速率。
 
-## 12. 待负责人定
+## 12. 定案（2026-11-12）
 
-1. **`Migrate.Enabled` 的默认值**：建议第一批默认关；客户端跳数清零改完、一轮 robot 集成跑过之后改成默认开。
-2. **默认速率**：建议先用每台每秒 20 人，压测后再定。
-3. **选目标时是否偏向另一条轨道**（§7.3）：建议放到第二批，先看 robot 测出来的重复迁移次数。
-4. **战斗中的玩家是否延后迁移**：gate 现在不知道谁在战斗（战斗绑定已从 gate 移除）。建议不延后，靠客户端补签重建战斗直连（§10 第 3 条）。要延后，得由 scene 或 login 把战斗状态告诉 gate，需要另立项。
+负责人 2026-11-12：「查出来以后修的现在修；有些东西不等压测，先按最标准的定」。四项按下面执行：
+
+1. **`Migrate.Enabled` 默认开。** 客户端与 robot 的跳数清零都已落码。不开的话 gate 重启只能等玩家自己下线、到期断开，做不到无感。置 false 是应急开关。
+2. **默认速率 20 人/秒（每台排空中的 gate）。** 每迁一个人的负载等于一次短重连（Login + EnterGame + scene 换会话入场）。按[容量模型](capacity-model-hok-scale.md)一台 gate 约 4500 人，约 4 分钟迁完，远小于 25 分钟的排空期限；一台 gate 人数超过约 1.5 万（20 × 期限的一半）时再调大。压测只用来核对，不够时调参数。
+3. **选目标优先不在外出构建上的 gate**（§7.3），按构建标识而不是发布轨道分档。
+4. **战斗中的玩家不延后迁移。** gate 不知道谁在战斗（战斗绑定已从 gate 移除）；客户端在重定向完成后按 `battle_id` 补签重建战斗直连（`RedirectFlow` 成功回调里的 `BattleLink.HandleReconnectHint`）。
 
 ## 13. 残余
 
@@ -419,6 +428,24 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 
 ### 18.4 还没做的
 
-- **客户端**：跳数在成功进场后清零（§10 第 2 条）与 §10 其余核实项。负责人 11-10 说客户端代码交 Codex，步骤写在 `docs/PROGRESS.md` 2026-11-10 条目第 8 步；robot 已在批 A 改好。
-- **默认打开迁移**：等客户端改完、robot 集成跑过之后再改 `Migrate.Enabled` 的默认值（§12 第 1 条）；默认速率等压测（§12 第 2 条）。
-- **Java 版**：待做（§15）。
+批 B 当时留下的两项（客户端跳数清零、默认打开迁移）已在 2026-11-12 收尾批做完，见 §19。**Java 版**待做（§15）。
+
+## 19. 收尾批落码记录（2026-11-12，未编译、未测试）
+
+### 19.1 改了什么
+
+| 位置 | 改动 |
+|---|---|
+| 客户端 `Assets/Scripts/Game/GameClient.cs` | NotifyEnterScene 处理器调 `NoteSceneEnteredForRedirect`，把 `_redirectHops` 归零（与 robot 的 `NoteSceneEntered` 同语义）；重定向日志改用这一跳的序号 |
+| 客户端 `Assets/Tests/EditMode/Net/GameClientReconnectTests.cs` | `SceneEntryResetsRedirectHopsSoRepeatedGateMigrationsAreNotCutOff` |
+| `go/login/internal/config/config.go`、`gate_drain_conf_test.go`、`go/login/etc/login.yaml` | `Migrate.Enabled` 的 default 改 true；用例补「只写 Enabled: false 能关」「只写速率时开关仍是开」 |
+| `go/login/internal/logic/pkg/loginqueue/{gatetoken.go,gatedrain_migrate.go,gatedrain_migrate_test.go}` | `GateCandidate.Build`；`PickMigrationTarget` 在合格目标里优先不在外出构建上的（`outgoingBuilds`、`preferIncomingBuild`）；4 条用例 |
+| `go/login/internal/svc/{servicecontext.go,gate_migration_test.go}` | `buildGateCandidates` 带上 `NodeInfo.build`；接线用例 `TestPlanGateMigration_PrefersGatesOffTheOutgoingBuild` |
+| `go/login/goctl_wrappers_test.go`（新） | 逐个服务核对 goctl 服务包装实现了 pb 里的每个方法。**现在是红的**：`clientplayerloginserver.go` 还没有 `RequestGateMigration`，要先跑 `go/build.ps1` 重生 |
+| `tools/scripts/k8s_gate_drain.ps1`、`tests/k8s_gate_drain.tests.ps1` | 缺省迁移开关与 login 结构体同步为开；用例改为「缺省开、显式 false 关」 |
+| `tools/scripts/k8s_deploy.ps1`、`lib/k8s_client_entry.ps1`、`tests/scene_planned_drain_deploy.tests.ps1` | gate 与 battle 的每种编排都注入 `MMORPG_BUILD_LABEL`（`Get-CppBuildLabelEnvLines`、`PodCommon.BuildLabel`）；Deployment 与 StatefulSet 形态再经 downward API 注入 `MMORPG_POD_REVISION`（Fleet 不注入） |
+| `cpp/libs/engine/core/node/system/node/node_planned_drain.h`、`cpp/tests/cross_zone_test/planned_drain_test.cpp` | `ComposeBuildLabel`：`NodeInfo.build` = 构建标识 `@` 工作负载修订（`Node::InitRpcServer` 注册时写入，scene 计划排空批已落码）；用例 `PlannedDrainBuildLabel.*` |
+
+### 19.2 验证（交 Codex）
+
+命令与通过标准在 `docs/PROGRESS.md` 2026-11-12「无感重启收尾批」条目。顺序上先跑 `go/build.ps1` 重生 login 的 goctl 包装，再跑 login 单测；冒烟按 §11 起两台 gate，这次不用再手工打开迁移开关。

@@ -40,7 +40,7 @@ func TestWorldChannel_ReservesRoomOnHashTargetNode(t *testing.T) {
 	assert.Equal(t, []string{placement.Entry}, alloc.entriesOf("gs-a"))
 	assert.Equal(t, []string{placement.Entry}, agonesHoldsOf(t, sc, testZoneId), "登记之前在途占用一直在")
 
-	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5001))
+	gs, _ := sc.Redis.Get(sceneAgonesGsKey(testZoneId, 5001))
 	assert.Equal(t, "", gs, "预占不写记录:agones_gs 与频道其余状态在同一段登记脚本里写")
 }
 
@@ -81,7 +81,7 @@ func TestWorldChannel_FailsClosedWhenNoCapacityAnywhere(t *testing.T) {
 	assert.Equal(t, "", node)
 	assert.Nil(t, placement)
 
-	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5003))
+	gs, _ := sc.Redis.Get(sceneAgonesGsKey(testZoneId, 5003))
 	assert.Equal(t, "", gs, "没占到名额就不能留下映射")
 	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId), "没占到名额就不能留下在途占用")
 }
@@ -95,7 +95,7 @@ func TestWorldChannel_InertWhenAgonesDisabled(t *testing.T) {
 	assert.Equal(t, "10", node)
 	assert.Nil(t, placement)
 
-	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5004))
+	gs, _ := sc.Redis.Get(sceneAgonesGsKey(testZoneId, 5004))
 	assert.Equal(t, "", gs)
 }
 
@@ -130,7 +130,7 @@ func TestWorldChannel_TransferMovesRoomToNewNode(t *testing.T) {
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(5005), "20"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 5005), "20"))
 	seedAgonesRoom(t, sc, alloc, 5005, "gs-old")
 
 	require.True(t, moveAgonesRoomForTest(t, sc, 5005, "20"))
@@ -156,7 +156,7 @@ func TestWorldChannel_MoveRefusesAFullTargetWithoutFallback(t *testing.T) {
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "30", "10.0.0.7", testZoneId, constants.SceneNodeTypeMainWorld)
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(5006), "10"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 5006), "10"))
 	record := seedAgonesRoom(t, sc, alloc, 5006, "gs-old")
 
 	require.False(t, moveAgonesRoomForTest(t, sc, 5006, "20"), "目标满了就不搬")
@@ -166,7 +166,7 @@ func TestWorldChannel_MoveRefusesAFullTargetWithoutFallback(t *testing.T) {
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-spare"), "不回落时不交给 GSA 另挑")
 	allocations, _, _ := alloc.stats()
 	assert.Zero(t, allocations)
-	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5006))
+	gs, _ := sc.Redis.Get(sceneAgonesGsKey(testZoneId, 5006))
 	assert.Equal(t, record, gs, "记录必须仍指向真正持有名额的那一条")
 	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId), "没占到名额就不留在途占用")
 }
@@ -174,12 +174,12 @@ func TestWorldChannel_MoveRefusesAFullTargetWithoutFallback(t *testing.T) {
 // Agones 关闭时占名额与提交都是 no-op。
 func TestWorldChannel_TransferInertWhenAgonesDisabled(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(5007), "20"))
-	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(5007), "gs-old"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 5007), "20"))
+	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(testZoneId, 5007), "gs-old"))
 
 	require.True(t, moveAgonesRoomForTest(t, sc, 5007, "20"))
 
-	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5007))
+	gs, _ := sc.Redis.Get(sceneAgonesGsKey(testZoneId, 5007))
 	assert.Equal(t, "gs-old", gs)
 }
 
@@ -207,7 +207,7 @@ func TestWorldChannel_TransferBacksOutWhenOwnerMovedOn(t *testing.T) {
 			bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
 			record := ""
 			if tc.owner != "" {
-				require.NoError(t, sc.Redis.Set(sceneNodeKey(tc.sceneID), tc.owner))
+				require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, tc.sceneID), tc.owner))
 				record = seedAgonesRoom(t, sc, alloc, tc.sceneID, "gs-old")
 			}
 			oldRooms := alloc.roomsOf("gs-old")
@@ -216,7 +216,7 @@ func TestWorldChannel_TransferBacksOutWhenOwnerMovedOn(t *testing.T) {
 
 			assert.EqualValues(t, 0, alloc.roomsOf("gs-new"), "属主已不是新节点,这次占的那一条必须删掉")
 			assert.EqualValues(t, oldRooms, alloc.roomsOf("gs-old"), "旧名额归属主或销毁方处理,这里不得再还")
-			gs, err := sc.Redis.Get(sceneAgonesGsKey(tc.sceneID))
+			gs, err := sc.Redis.Get(sceneAgonesGsKey(testZoneId, tc.sceneID))
 			require.NoError(t, err)
 			assert.Equal(t, record, gs, "已销毁的场景不得重建出 agones_gs;被搬走的场景记录不动")
 			assert.Empty(t, agonesHoldsOf(t, sc, testZoneId))
@@ -235,7 +235,7 @@ func TestWorldChannel_TransferIsIdempotentForSameTarget(t *testing.T) {
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(5010), "20"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 5010), "20"))
 	seedAgonesRoom(t, sc, alloc, 5010, "gs-old")
 
 	require.True(t, moveAgonesRoomForTest(t, sc, 5010, "20"))
@@ -259,7 +259,7 @@ func TestWorldChannel_InterleavedTransfersToSameGameServerKeepTheRecordedEntry(t
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
 	const sceneID uint64 = 5011
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), "20"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, sceneID), "20"))
 	seedAgonesRoom(t, sc, alloc, sceneID, "gs-old")
 	ctx := context.Background()
 
@@ -298,7 +298,7 @@ func TestWorldChannel_DrainReleasesRoom(t *testing.T) {
 	require.Equal(t, 1, in)
 
 	// 人走干净后下一拍收尾。
-	sc.Redis.Set(sceneNodeKey(102), "10")
+	sc.Redis.Set(sceneNodeKey(testZoneId, 102), "10")
 	seedSceneMembersVia(sc, 102, 0)
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 

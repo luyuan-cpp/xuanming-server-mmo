@@ -542,33 +542,13 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	if err := l.recheckAccountRoleEntry(ctx, state); err != nil {
 		return sessionmanager.FirstLogin, err
 	}
-	// Stage observation: GetSession round-trip to player_locator.
-	getSessionTimer := observeStage(applyGetSessionSeconds)
-	existing, err := sessionmanager.GetSession(ctx, l.svcCtx.PlayerLocatorClient, state.playerID)
-	getSessionTimer()
+	// 读会话、定登录决策、铸登录代次并提交;记录在读与写之间被改过时在里面重做(commitEnterGameSession)。
+	committed, err := l.commitEnterGameSession(ctx, state)
 	if err != nil {
-		return sessionmanager.FirstLogin, err
+		return committed.decision, err
 	}
-
-	decision := sessionmanager.DecideEnterGame(existing, state.account)
-
-	// 登录代次:持锁、读到会话记录之后,写会话与踢线之前铸一次(scene-enter-session-fence.md §3.2 / §3.3)。
-	// 踢线排在 SetSession 提交之后(persistEnterGameSession,scene-enter-chain-residuals.md §2.2 ①)。
-	// 失败即链失败:带 0 继续会让 scene 按"旧版无代次"处理,已有代次的实体会拒掉这次合法登录。
-	loginGeneration, err := mintEnterLoginGeneration(ctx, l.svcCtx.PlayerRedis, state.playerID, existing, time.Now())
-	if err != nil {
-		return decision, err
-	}
-
-	// Stage observation: persistEnterGameSession (SetSession or Reconnect).
-	// Label by decision so the reconnect (CAS) tail doesn't get hidden by the
-	// first/replace (write) tail.
-	persistTimer := observeStage(applyPersistSessionSeconds, decisionLabel(decision))
-	version, err := l.persistEnterGameSession(ctx, decision, existing, state, loginGeneration)
-	persistTimer()
-	if err != nil {
-		return decision, err
-	}
+	existing, decision := committed.existing, committed.decision
+	loginGeneration, version := committed.loginGeneration, committed.version
 
 	// gate 连接会话栅栏的绑定点(docs/design/client-request-ordering.md §6.2):会话已写入、还没通知 gate 绑定。
 	// 与 Disconnect 的 sessionfence.Close 构成双边握手 —— 先关闭的,这里看到 closed;先绑定的,Close 读到玩家。
@@ -666,6 +646,72 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	return decision, nil
 }
 
+// enterGameSessionCommitAttempts 是「读会话 → 定登录决策 → 铸代次 → 提交」这段读改写最多做几遍。
+//
+// 只有 player_locator 明确回「记录在你读它之后变了」(sessionmanager.ErrSessionChanged)才重做:那次写入确定没有提交,
+// 改动也已经落定,重读就能看到。本链持有玩家锁,别的登录链进不来;能在读与写之间改记录的只有旧连接的断线上报
+// (ONLINE → DISCONNECTING,一条连接只发生一次)与断线租约到期后的清理,所以 3 遍足够,用完仍冲突就按链失败收尾。
+// 两遍之间不等待:冲突说明对方的写已经完成,没有什么可等的。
+const enterGameSessionCommitAttempts = 3
+
+// committedEnterSession 是会话提交点的产物,apply 段后面的步骤(绑栅栏、Bind、进场)都以它为准。
+type committedEnterSession struct {
+	existing        *sessionmanager.PlayerSession    // 提交所依据的旧会话记录;没有为 nil
+	decision        sessionmanager.EnterGameDecision // 按 existing 定的登录决策
+	loginGeneration uint64                           // 本链铸出、已随会话提交的登录代次
+	version         uint32                           // 提交后的会话版本
+}
+
+// commitEnterGameSession 读会话记录、定登录决策、铸登录代次并提交会话。
+//
+// 会话记录在本链读它之后被改过(sessionmanager.ErrSessionChanged)时从读开始重做,至多 enterGameSessionCommitAttempts 遍。
+// 这是 gate 排空迁移与跨 zone 重定向会遇到的交错:客户端先关旧连接、再在新连接上 EnterGame,旧 gate 的断线上报
+// 落在本链的读与写之间,按 ONLINE 定的顶号写入因版本对不上被拒。不重做的话这条链失败、给新连接推 3023,
+// 玩家在本该无感的迁移途中被打回登录界面;重做时读到 DISCONNECTING,改走短线重连接回原实体
+// (docs/design/gate-drain-session-migration.md §5)。
+// 其余错误(结果未知的超时、代次不前进、清理未完成、短线重连被拒)不重做,原样返回。
+//
+// 出错时返回值里的 decision 是最近一遍定下的决策(一遍都没定时为 FirstLogin),只供调用方打标签。
+func (l *EnterGameLogic) commitEnterGameSession(ctx context.Context, state enterGameSessionState) (committedEnterSession, error) {
+	var committed committedEnterSession
+	for attempt := 1; ; attempt++ {
+		// Stage observation: GetSession round-trip to player_locator.
+		getSessionTimer := observeStage(applyGetSessionSeconds)
+		existing, err := sessionmanager.GetSession(ctx, l.svcCtx.PlayerLocatorClient, state.playerID)
+		getSessionTimer()
+		if err != nil {
+			return committed, err
+		}
+		committed.existing = existing
+		committed.decision = sessionmanager.DecideEnterGame(existing, state.account)
+
+		// 登录代次:持锁、读到会话记录之后,写会话与踢线之前铸一次(scene-enter-session-fence.md §3.2 / §3.3)。
+		// 踢线排在 SetSession 提交之后(persistEnterGameSession,scene-enter-chain-residuals.md §2.2 ①)。
+		// 失败即链失败:带 0 继续会让 scene 按"旧版无代次"处理,已有代次的实体会拒掉这次合法登录。
+		// 重做的每一遍各铸一次,下限取这一遍读到的记录;上一遍铸了没提交的号直接作废。
+		committed.loginGeneration, err = mintEnterLoginGeneration(ctx, l.svcCtx.PlayerRedis, state.playerID, existing, time.Now())
+		if err != nil {
+			return committed, err
+		}
+
+		// Stage observation: persistEnterGameSession (SetSession or Reconnect).
+		// Label by decision so the reconnect (CAS) tail doesn't get hidden by the
+		// first/replace (write) tail.
+		persistTimer := observeStage(applyPersistSessionSeconds, decisionLabel(committed.decision))
+		committed.version, err = l.persistEnterGameSession(ctx, committed.decision, existing, state, committed.loginGeneration)
+		persistTimer()
+		if err == nil {
+			return committed, nil
+		}
+		if !errors.Is(err, sessionmanager.ErrSessionChanged) || attempt >= enterGameSessionCommitAttempts {
+			return committed, err
+		}
+		sessionCommitRedoTotal.Inc(decisionLabel(committed.decision))
+		logx.Infof("[enter-session] session record changed between read and write, redoing the commit: player=%d session=%d decision=%s attempt=%d/%d err=%v",
+			state.playerID, state.sessionID, decisionLabel(committed.decision), attempt, enterGameSessionCommitAttempts, err)
+	}
+}
+
 // bindSessionFence 在会话写入之后、通知 gate 绑定之前,把本连接登记为「绑定了 state.playerID」
 // (docs/design/client-request-ordering.md §6.2)。
 // 绑定失败时由本函数补偿,并返回 error 让后台链按失败收尾(不发 BindSession、不进场):
@@ -722,7 +768,8 @@ func (l *EnterGameLogic) compensateFenceBind(ctx context.Context, state enterGam
 // ReplaceLogin 的踢线排在 SetSession 提交**之后**、bindSessionFence 之前(scene-enter-chain-residuals.md §2.2 ①):
 // 先踢后提交时,提交失败(失锁、ctx 取消、版本冲突)的链也会把当前合法会话踢掉。不能再晚:等 EnterScene 成功
 // 再踢的话,EnterScene 被可重试码拒绝时记录已指向本链,旧设备却还在 scene 上照常游戏。
-// SetSession 报错时结果未知,用独立短超时复读一次消歧(settleReplaceLoginAfterSetSessionError)。
+// SetSession 报错分两种:locator 明确回「记录变了」(sessionmanager.ErrSessionChanged)时确定没提交,直接返回、
+// 由 commitEnterGameSession 重读重判;其余报错结果未知,用独立短超时复读一次消歧(settleReplaceLoginAfterSetSessionError)。
 func (l *EnterGameLogic) persistEnterGameSession(
 	ctx context.Context,
 	decision sessionmanager.EnterGameDecision,
@@ -743,6 +790,11 @@ func (l *EnterGameLogic) persistEnterGameSession(
 			LoginGeneration: loginGeneration,
 		})
 		if err := sessionmanager.SetSession(ctx, l.svcCtx.PlayerLocatorClient, newSession); err != nil {
+			// 记录在本链读它之后变了:locator 明确没有写入,不用复读消歧,也没有可踢的旧会话。
+			// 原样返回,由 commitEnterGameSession 重读重判。
+			if errors.Is(err, sessionmanager.ErrSessionChanged) {
+				return 0, err
+			}
 			if decision == sessionmanager.ReplaceLogin {
 				l.settleReplaceLoginAfterSetSessionError(ctx, existing, state, loginGeneration, err)
 			}

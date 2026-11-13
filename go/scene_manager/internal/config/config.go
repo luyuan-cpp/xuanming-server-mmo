@@ -750,7 +750,9 @@ type OwnerEpochMintConfig struct {
 }
 
 // OwnerEpochMint 的默认值与上界。
-// 超时上界 2000:专用客户端读超时 = 本值 + 1s;everysec 下本地确认最长约 1s,2000 已留出一倍余量。
+// 超时上界 2000:everysec 下本地确认最长约 1s,高可用下等副本刷盘与上报最坏近 2s。专用客户端读超时 = max(本值, 启动探针的等待 5s) + 1s
+// (svc/owner_epoch_mint.go ownerEpochMintClientConfig)。铸造通道的池按这个上界定(svc/owner_epoch_mint.go ownerEpochMintPoolSize,
+// Little 定律);yaml 里实际写的 WaitAOFTimeoutMs 算进 scene_manager_service.yaml 文件头的 Timeout 不等式(契约测试守),调大要同步 Timeout。
 const (
 	DefaultOwnerEpochMintWaitAOFNumLocal    = 1
 	DefaultOwnerEpochMintWaitAOFNumReplicas = 0

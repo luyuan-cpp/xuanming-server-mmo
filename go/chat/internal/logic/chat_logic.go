@@ -57,7 +57,7 @@ func (l *ChatLogic) SendChat(in *chatpb.SendChatRequest) (*chatpb.SendChatRespon
 	if msg == nil {
 		return reject(rejectBadRequest)
 	}
-	if _, r, ok := resolveLogKey(msg.Channel, actor, msg.TargetPlayerId); !ok {
+	if r, ok := channelAccepted(msg.Channel, actor, msg.TargetPlayerId); !ok {
 		return reject(r)
 	}
 	if len(msg.Content) > l.svcCtx.Config.MaxContentBytes || strings.TrimSpace(msg.Content) == "" {
@@ -81,7 +81,12 @@ func (l *ChatLogic) SendChat(in *chatpb.SendChatRequest) (*chatpb.SendChatRespon
 		return reject(rejectStorage)
 	}
 	if result.Tip != 0 {
-		svc.ObserveSend(label, svc.OutcomeRateLimited)
+		// 两种限流回同一个提示码;指标分开记,看得出是单人突发还是世界频道发言间隔在挡。
+		outcome := svc.OutcomeRateLimited
+		if result.Cooldown {
+			outcome = svc.OutcomeWorldCooldown
+		}
+		svc.ObserveSend(label, outcome)
 		return &chatpb.SendChatResponse{ErrorMessage: &base.TipInfoMessage{Id: result.Tip}}, nil
 	}
 	outcome := svc.OutcomeOK
@@ -108,7 +113,7 @@ func (l *ChatLogic) PullChatHistory(in *chatpb.PullChatHistoryRequest) (*chatpb.
 	if in == nil {
 		return reject(rejectBadRequest)
 	}
-	if _, r, ok := resolveLogKey(in.Channel, actor, in.PeerPlayerId); !ok {
+	if r, ok := channelAccepted(in.Channel, actor, in.PeerPlayerId); !ok {
 		return reject(r)
 	}
 	if l.ctx.Err() != nil || l.svcCtx.Authority == nil {
@@ -130,20 +135,21 @@ func (l *ChatLogic) PullChatHistory(in *chatpb.PullChatHistoryRequest) (*chatpb.
 	return &chatpb.PullChatHistoryResponse{Messages: messages}, nil
 }
 
-// 这里只决定纯参数资格；身份由 authority 校验，私聊分区保持双方player_id历史语义。
-func resolveLogKey(channel chatpb.ChatChannelType, self, peer uint64) (string, rejection, bool) {
+// channelAccepted 只决定纯参数资格:这个频道开不开放、私聊的对端合不合法。身份由 authority 校验;
+// 消息落在哪个流键也由 authority 决定(世界频道按发送者分段,私聊按双方 player_id),这里不再返回键名。
+func channelAccepted(channel chatpb.ChatChannelType, self, peer uint64) (rejection, bool) {
 	switch channel {
 	case chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD:
-		return "world-v2", rejection{}, true
+		return rejection{}, true
 	case chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_PRIVATE:
 		if peer == 0 || peer == self {
-			return "", rejectBadRequest, false
+			return rejectBadRequest, false
 		}
-		return "private-v2", rejection{}, true
+		return rejection{}, true
 	case chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_TEAM, chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_SYSTEM, chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_UNSPECIFIED:
-		return "", rejectChannelUnavailable, false
+		return rejectChannelUnavailable, false
 	default:
-		return "", rejectBadRequest, false
+		return rejectBadRequest, false
 	}
 }
 func clampHistoryLimit(requested uint32, def, max int) int {

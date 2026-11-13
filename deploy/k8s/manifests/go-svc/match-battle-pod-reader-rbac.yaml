@@ -1,0 +1,43 @@
+# match 查 battle 的原 Pod 还在不在所需的最小权限。
+#
+# battle 进程崩溃时,它内存里的房间与待提交的终局一起没了,这一局永远不会有结果。match 要确认「原执行进程已不在」才提前作废
+# (docs/design/battle-instance-loss-early-abort.md §4.2)。Agones 的 GameServer Pod 是 restartPolicy: Never,进程崩溃后 Pod 很快被删,
+# 原 IP 连上去只会超时,拿不到别的证据;所以 match 按原 IP 列出本命名空间的 Pod:一个存活的都没有(列表为空,或都是
+# Succeeded / Failed),就说明 kubelet 已确认原进程的容器停了(go/match/internal/battlepods)。
+#
+# 所有档位都 apply:match.yaml 的 Pod 模板写死了 serviceAccountName: match,ServiceAccount 必须存在。
+# k8s_deploy.ps1 在 match 的 StatefulSet 之前把本文件 apply 进基础设施命名空间(Apply-OneGoSvc),match 的金丝雀副本共用这个身份。
+#
+# 刻意只给 pods 的 list、只在本命名空间(Role 而不是 ClusterRole):battle 与 match 同在基础设施命名空间,match 没有理由能看到
+# 别的命名空间,也不需要 get / watch / 任何写权限。ServiceAccount 用专用的 match,不用命名空间的 default,免得把权限挂到整个命名空间。
+# Pod 模板不能关 automountServiceAccountToken:令牌就是查 Pod 的凭据。
+#
+# 运维约束(docs/ops/match-formation-manual-abort-runbook.md「battle Pod 不许强删」):不要用 --force --grace-period=0 强删 battle Pod,
+# 也不要手工删 Node 对象。这两种操作会让 Pod 对象先消失而进程可能还活着,match 会把它上面在打的局作废。
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: match
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: match-battle-pod-reader
+rules:
+  # 按 status.podIP 的 fieldSelector 列 Pod,只读 status.phase。
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: match-battle-pod-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: match-battle-pod-reader
+subjects:
+  - kind: ServiceAccount
+    name: match

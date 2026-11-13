@@ -240,21 +240,23 @@ protected:
 		tlsEcs.actorRegistry.emplace<PlayerMailOutboxComp>(player);
 		ASSERT_TRUE(ArmSegment(GuidKind::kTxLog, "txlog", 7700000, 7800000));
 
-		PlayerMailOutboxSystem::SetSendForTest([this](uint64_t to, const MailOutboxEntry& entry, PlayerMailOutboxSystem::SendDone done) {
+		// 换掉全部对外依赖:不读进程环境、不发请求、不碰存盘路径。
+		PlayerMailOutboxSystem::Dependencies dependencies;
+		dependencies.senderConfigured = [this] { return senderConfigured; };
+		dependencies.send = [this](uint64_t to, const MailOutboxEntry& entry, PlayerMailOutboxSystem::SendDone done) {
 			sends.push_back({to, entry.request_id(), std::move(done)});
 			return nextStart;
-		});
-		PlayerMailOutboxSystem::SetDurableCheckForTest(
-			[this](entt::entity, uint64_t requestId) { return durable.contains(requestId); });
+		};
+		dependencies.isDurable = [this](entt::entity, uint64_t requestId) { return durable.contains(requestId); };
+		dependencies.requestSave = [this](entt::entity, const char* reason) { saveRequests.emplace_back(reason); };
 		// 寄送回调与 Tick 从这里取「现在」:用例用 Tick(at) 推时钟,回调按同一个时刻记退避。
-		PlayerMailOutboxSystem::SetNowForTest([this] { return now; });
+		dependencies.nowMs = [this] { return now; };
+		PlayerMailOutboxSystem::SetDependenciesForTest(std::move(dependencies));
 	}
 
 	void TearDown() override
 	{
-		PlayerMailOutboxSystem::SetSendForTest({});
-		PlayerMailOutboxSystem::SetDurableCheckForTest({});
-		PlayerMailOutboxSystem::SetNowForTest({});
+		PlayerMailOutboxSystem::SetDependenciesForTest({});
 		// 进程级状态:txlog 号段回到 bag_test.cpp 的 main() 留下的「未启用」。
 		tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Reset();
 		tlsEcs.playerList.erase(playerId);
@@ -302,7 +304,9 @@ protected:
 	entt::entity player{entt::null};
 	std::vector<Sent> sends;
 	SendStart nextStart{SendStart::kSent};
+	bool senderConfigured{true};
 	std::set<uint64_t> durable;
+	std::vector<std::string> saveRequests; // 每次请求存盘的原因
 	uint64_t nextRequestId{5100};
 	uint64_t now{0};
 };
@@ -436,7 +440,49 @@ TEST_F(MailOutboxPlayerTest, PrepareRefusesWhenTheOutboxIsFullIdsRunOutOrTheComp
 	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerMailOutboxComp>(player));
 }
 
+// 没配发件密钥(没有部署 mail 的环境)不接改投:欠下一笔永远寄不出去的物品不如不欠,结算照旧整笔延后。
+TEST_F(MailOutboxPlayerTest, WithoutAConfiguredSenderTheOverflowIsNotTaken)
+{
+	senderConfigured = false;
+	EXPECT_FALSE(PlayerMailOutboxSystem::IsSenderConfigured());
+	const auto idsBefore = tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Available();
+	PlayerMailOutboxSystem::PreparedMails prepared;
+	EXPECT_EQ(kServiceUnavailable, PlayerMailOutboxSystem::PrepareBattleOverflow(player, kBattle, {{kPotion, 1}}, prepared));
+	EXPECT_TRUE(prepared.empty());
+	EXPECT_EQ(0, Outbox().entries_size());
+	EXPECT_EQ(idsBefore, tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Available()) << "一个请求号都没取";
+
+	senderConfigured = true;
+	EXPECT_TRUE(PlayerMailOutboxSystem::IsSenderConfigured());
+	EXPECT_EQ(kSuccess, PlayerMailOutboxSystem::PrepareBattleOverflow(player, kBattle, {{kPotion, 1}}, prepared));
+}
+
 // ── 寄送 ─────────────────────────────────────────────────────────────────────────────
+
+// 有条目而没有一条在已提交的存档快照里(刚加载,或结算那一笔还没落定):隔 5 秒请求一次存盘,不每拍都压;
+// 落盘之后就寄,寄到删掉条目后再请求一次存盘。
+TEST_F(MailOutboxPlayerTest, EntriesNotYetInACommittedSnapshotAskForASaveEveryFiveSeconds)
+{
+	const auto requestId = QueueEntry({{kPotion, 1}});
+	Tick(10'000);
+	EXPECT_TRUE(sends.empty());
+	ASSERT_EQ(1u, saveRequests.size());
+	EXPECT_EQ("mail_outbox_pending", saveRequests[0]);
+	Tick(11'000);
+	Tick(14'999);
+	EXPECT_EQ(1u, saveRequests.size()) << "5 秒之内不重复请求";
+	Tick(15'000);
+	EXPECT_EQ(2u, saveRequests.size());
+
+	durable.insert(requestId);
+	Tick(15'500);
+	ASSERT_EQ(1u, sends.size()) << "落盘之后就寄";
+	EXPECT_EQ(2u, saveRequests.size()) << "可寄了就不再为它请求存盘";
+	sends[0].done(SendOutcome{true, 0, 61});
+	EXPECT_EQ(0, Outbox().entries_size());
+	ASSERT_EQ(3u, saveRequests.size()) << "删条目之后请求存盘";
+	EXPECT_EQ("mail_outbox_delivered", saveRequests[2]);
+}
 
 TEST_F(MailOutboxPlayerTest, OnlyDurableEntriesAreSentOneAtATimeAndDeliveryRemovesThem)
 {

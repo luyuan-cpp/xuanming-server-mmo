@@ -150,8 +150,21 @@ type retirementReport struct {
 	results                       []slotRetirementResult
 }
 
+// stillPending 判一个结局是不是「被缩掉、这一轮还没能结束的在役一代」:Pod 还在、闸门冻结、排空 run 开着、失败。
+// 已结束(retired、already-ended)和又扩回来的(scaled-back-up,新 Pod 会换代)都不算。
+func stillPending(outcome string) bool {
+	switch outcome {
+	case slotRetired, slotAlreadyEnded, slotScaledBackUp:
+		return false
+	default:
+		return true
+	}
+}
+
+// lines 是写进日志的结果:每个候选一行,最后一行是汇总。汇总行的 pending 是部署脚本判「这一轮收尾做完没有」的依据
+// (k8s_deploy.ps1 Complete-SqlWriterSlotRetirement 按这一行的格式解析,改格式要同批改脚本与契约测试)。
 func (r retirementReport) lines(statefulSet string) []string {
-	retired := 0
+	retired, pending := 0, 0
 	lines := make([]string, 0, len(r.results)+1)
 	for _, result := range r.results {
 		line := fmt.Sprintf("writer_authority command=retire-removed-slots statefulset=%s slot=%d logical_db=%s boot_seq=%d result=%s", statefulSet, result.ordinal, result.schema, result.bootSeq, result.outcome)
@@ -161,10 +174,13 @@ func (r retirementReport) lines(statefulSet string) []string {
 		if result.outcome == slotRetired {
 			retired++
 		}
+		if stillPending(result.outcome) {
+			pending++
+		}
 		lines = append(lines, line)
 	}
-	return append(lines, fmt.Sprintf("writer_authority command=retire-removed-slots statefulset=%s replicas_before=%d replicas_after=%d roster_slots=%d candidates=%d retired=%d",
-		statefulSet, r.replicasBefore, r.replicasAfter, r.slots, len(r.results), retired))
+	return append(lines, fmt.Sprintf("writer_authority command=retire-removed-slots statefulset=%s replicas_before=%d replicas_after=%d roster_slots=%d candidates=%d retired=%d pending=%d",
+		statefulSet, r.replicasBefore, r.replicasAfter, r.slots, len(r.results), retired, pending))
 }
 
 // run 结束被缩掉槽位的在役一代。顺序就是这条命令的安全性所在:

@@ -1,0 +1,31 @@
+name: 日志文案英文守卫
+
+# AGENTS.md §2:服务和脚本的日志文案(含标准输出 / 标准错误上的诊断信息)必须是英文。
+# 2026-10-13(946ffd216)与 2026-11-10~12 各清理过一次全仓中文日志;没有守卫时中文日志会陆续长回来,
+# 本 workflow 每次提交都跑 tools/scripts/check_log_text_english.py,把清理后的状态钉住。
+# 覆盖范围、不在范围的内容、例外登记方式都只写在该脚本的头注释里,这里不重复。
+# 只读仓库文件,不编译、不联网,秒级完成。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  log-text-english:
+    name: 日志与控制台文案必须是英文
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 守卫自身的单元测试
+        run: python3 -m unittest discover -s tools/scripts/tests -p 'test_log_text_english*' -v
+
+      - name: 全仓扫描
+        run: python3 tools/scripts/check_log_text_english.py

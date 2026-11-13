@@ -198,9 +198,9 @@ def main() -> None:
     args = parser.parse_args()
     source_root = args.client_root.resolve() / "Assets/Resources/World/CurrentMaps20261009"
     result = sync(ROOT, source_root, args.baker.resolve(), args.verify)
-    print(f"{'验证' if args.verify else '同步'}通过: {len(result['maps'])} 张地图,67500 格导航一致")
+    print(f"{'Verify' if args.verify else 'Sync'} passed: {len(result['maps'])} maps, 67500 navigation cells consistent")
     if not args.verify:
-        print("接下来运行正式导表器,再用本工具 --verify 核对 BaseScene JSON/PB 与 manifest。")
+        print("Next, run the table exporter, then run this tool with --verify to check BaseScene JSON/PB against the manifest.")
 
 
 if __name__ == "__main__":

@@ -214,6 +214,17 @@
       <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)gate_drain_migration\</ObjectFileName>
     </ClCompile>
+    <!-- gate 登录态续租调度(handler/rpc/login_session_renewal.h,docs/design/gate-online-identity.md §10.4):被测源码直接编进测试,
+         发请求的出口注入替身,会话表 tlsSessionManager 来自 gate.lib。client_request_lane.cpp 在登录成功时调用它,
+         下面 lane 那组也靠这里的目标文件链接。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/handler/rpc/login_session_renewal.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_login_renewal\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/login_session_renewal_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_login_renewal\</ObjectFileName>
+    </ClCompile>
     <!-- gate 路由服子集(handler/rpc/router_subset_policy.h,docs/design/connection-fanout-subsetting-20261106.md §3.2):
          只测纯计算头,不编 router_subset.cpp(它拖着节点注册表与 gRPC 通道)。ObjectFileName 的理由同上。 -->
     <ClCompile Include="../../nodes/gate/tests/router_subset_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

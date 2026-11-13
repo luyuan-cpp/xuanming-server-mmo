@@ -278,6 +278,7 @@ func register() {
 		prometheus.MustRegister(outcomeCollectors()...)        // 全球终局恢复与终局发件箱(outcome.go)
 		prometheus.MustRegister(resultConsumerCollectors()...) // 对局结果消费组积压(result_consumer.go)
 		prometheus.MustRegister(battleReportCollectors()...)   // 战报回放(battle_report.go)
+		prometheus.MustRegister(battleScriptCollectors()...)   // 战斗剧本(battle_script.go)
 	})
 }
 

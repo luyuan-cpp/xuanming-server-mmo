@@ -27,7 +27,8 @@ import (
 // 这些组合要真库跑得一个个摆故障,而结局只取决于编排。flowSteps 是 directorySteps 的内存替身,语义抄 SQL 实现
 // (上限判定、nonce 比较并删、严格插入),真库上的对应用例见 account_directory_shard_tidb_test.go。
 
-const flowStorage uint32 = 7
+// flowStorage 必须是存档库编号(>= placement.FirstStorageID):区号值域的编号 PlayerStorePools 不认(zone 存档库已退役,A17c)。
+const flowStorage uint32 = 1000007
 
 var errFlow = errors.New("flow step failed")
 
@@ -75,7 +76,7 @@ func newFlowStore(maxRoles int) (*AccountDirectoryStore, *flowSteps) {
 		transfers:   map[uint64]*dbpb.AccountRoleTransferReceipt{},
 		storeOwners: map[uint64]lockedPlayerStoreOwner{},
 	}
-	return &AccountDirectoryStore{steps: steps, maxRoles: maxRoles, staleRefs: make(chan staleRefKey, staleRefQueueSize), playerStoreReads: make(chan struct{}, 1)}, steps
+	return &AccountDirectoryStore{steps: steps, maxRoles: maxRoles, staleRefs: make(chan staleRefKey, staleRefQueueSize), directoryReads: []readSlots{newReadSlots(2)}}, steps
 }
 
 func (f *flowSteps) step(name string) error {

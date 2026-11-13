@@ -188,7 +188,7 @@
 - **类型**:`*redis.Client` 改 `redis.UniversalClient`。
 - **放行的 pipeline**:今天 `PopAdmit` 把放行脚本放进普通 pipeline(`queue.go:992`)。集群客户端的 pipeline 在 EOF / 超时后会整批重发,这正是守卫拒绝「pipeline 里带 EVAL」的原因。改成先按槽取主节点,再用节点客户端发 pipeline,与 owner_epoch 铸造通道的做法相同(`playerredis.MasterForKey` + `NewNodeClient`)。
 - **死配置 `QueueShardCount`**:Go 代码没有任何地方读它(`config.go:596`、`login.yaml:51`)[C]。连同 `k8s_deploy.ps1` 的镜像和契约用例一起删。
-- **轮询间隔**:单 zone 的热度见 §6.2。服务端按名次拉长下发的 `RetryAfterMs`(`querystatuslogic.go:100`)。
+- **轮询间隔**:单 zone 的热度见 §6.2。服务端按名次拉长下发的 `RetryAfterMs`(`queryqueuestatuslogic.go`)。
   **2026-11-11 已由缺口清单第 14 条提前落码(未编译,`loginqueue.RetryAfterForRank`,规则见 `login-queue-2026-05.md` §14 第 10 条),第 4 批不用再做;下面几条是当时的设计口径。**
   - 前 2000 名每 2 秒一次;之后按预计等待时间线性增长,上限 30 秒。
   - 名次与总数的定义不变。

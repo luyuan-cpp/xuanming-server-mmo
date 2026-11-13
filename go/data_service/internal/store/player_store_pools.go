@@ -48,6 +48,8 @@ type PlayerStorePools struct {
 	flight  syncx.SingleFlight
 	// opener 打开一个库,nil 时走 openPool。单测换成替身。
 	opener func(schema string) (*sql.DB, error)
+	// reads 是每个库留给账本、展示读的名额(readSlots),白名单里的库各一份,构造后只读。
+	reads map[uint32]readSlots
 
 	mu       sync.RWMutex
 	pools    map[uint32]*sql.DB
@@ -72,6 +74,10 @@ func newPlayerStorePools(cfg MySQLConfig, backend authoritysql.Backend, storageI
 	if options.MaxIdleConn <= 0 {
 		options.MaxIdleConn = 2
 	}
+	reads := make(map[uint32]readSlots, len(allowed))
+	for id := range allowed {
+		reads[id] = newReadSlots(options.MaxOpenConn)
+	}
 	return &PlayerStorePools{
 		cfg:      cfg,
 		backend:  backend,
@@ -79,6 +85,7 @@ func newPlayerStorePools(cfg MySQLConfig, backend authoritysql.Backend, storageI
 		allowed:  allowed,
 		now:      time.Now,
 		flight:   syncx.NewSingleFlight(),
+		reads:    reads,
 		pools:    map[uint32]*sql.DB{},
 		failures: map[uint32]playerStoreOpenFailure{},
 	}, nil
@@ -112,6 +119,21 @@ func (p *PlayerStorePools) DB(_ context.Context, storageID uint32) (*sql.DB, str
 		return nil, "", fmt.Errorf("open player store %s: no pool", schema)
 	}
 	return db, schema, nil
+}
+
+// ReadDB 给账本和展示读用:返回落点的连接池,并占住这个库的一个读名额,release 必须在这次读用完连接之后调用。
+// 建角、判死释放、交易冻结证据走 DB,不占名额:名额就是为了不让读挤掉它们。
+// 先打开再取名额,第一次打开一个库的那几秒不占着名额。
+func (p *PlayerStorePools) ReadDB(ctx context.Context, storageID uint32) (db *sql.DB, release func(), err error) {
+	db, _, err = p.DB(ctx, storageID)
+	if err != nil {
+		return nil, nil, err
+	}
+	release, err = p.reads[storageID].acquire(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return db, release, nil
 }
 
 func (p *PlayerStorePools) open(storageID uint32, schema string) (*sql.DB, error) {

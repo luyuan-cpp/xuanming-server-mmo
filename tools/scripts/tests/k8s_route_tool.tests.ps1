@@ -284,7 +284,10 @@ Test-Case '子进程 -DryRun:退出码 0,打印 BEGIN / END MANIFEST 之间的 J
         $renderedArgs = Get-ManifestArgs -Manifest ($blocks[0] -replace "`r`n", "`n")
         Assert-Equal -Expected '-f|/app/etc/data_service.yaml|-route-tool|tidb-prepare' -Actual ($renderedArgs -join '|') -Because 'args 原样'
         Assert-Match -Text $withImage.Output -Pattern 'namespace=mmorpg-zone-z1 ' -Because 'namespace = <NamespacePrefix>-<ZoneName>'
-        Assert-NotMatch -Text $withImage.Output -Pattern '(?i)password|Mmorpg#' -Because 'DryRun 不读 ConfigMap,输出里不会有口令'
+        # 清单里有口令变量名 MMORPG_MYSQL_PASSWORD 与 Secret 的键名 password(工作负载密钥目录 mysql-auth),那不是口令;要核的是没有值。
+        Assert-NotMatch -Text $withImage.Output -Pattern 'Mmorpg#' -Because 'DryRun 不读 ConfigMap 与 Secret,输出里不会有口令值(dev 回落口令以 Mmorpg# 开头)'
+        Assert-Match -Text ($blocks[0] -replace "`r`n", "`n") -Pattern '(?m)^[ ]+- name: MMORPG_MYSQL_PASSWORD\n[ ]+valueFrom:\n[ ]+secretKeyRef: \{name: mysql-auth, key: password, optional: false\}$' -Because '口令只经 Secret mysql-auth 引用,不写 optional,清单里没有明文 value'
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($blocks[0], '(?m)^[ ]+- name: MMORPG_MYSQL_PASSWORD[ ]*\r?$').Count) -Because '口令变量只注入一次'
 
         $noImage = Invoke-ToolScript -ScriptName 'k8s_route_tool.ps1' -Env $fakeEnv -Arguments @('-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare', '-DryRun', '-ReportDir', $report)
         Assert-Equal -Expected 0 -Actual $noImage.ExitCode -Because "没给 -Image 的 DryRun 也应当成功。输出: $($noImage.Output)"

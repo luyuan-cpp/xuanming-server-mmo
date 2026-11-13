@@ -456,6 +456,19 @@ var (
 		Help:      "Ownership changes refused because the dead node's re-entry barrier had not elapsed, by site.",
 	}, []string{"zone_id", "site"})
 
+	// holderLeaseBlockedTotal 统计「持有节点已从 etcd 消失、屏障已过」的判死接管 / 判死释放,因为持有进程的存活租约
+	// (player:{id}:holder_lease,internal/logic/holder_lease.go)还在或读不出来而没有执行的次数。
+	// site 是代码里写死的点位名(dead_owner_takeover|stale_location|replaced_owner_takeover|leave_release),
+	// state 取 held(租约在:持有进程活着,只是没在 etcd 在册)或 unknown(玩家域 Redis 读失败,按在处理)。
+	//
+	// 稳态恒 0。held 非 0 说明有 scene 节点和 etcd 失联但进程还活着:玩家留在它上面照常玩,换节点的进场被 18 / 17 暂拒,
+	// 要去查那台节点到 etcd 的网络;unknown 非 0 查玩家域 Redis。只按 zone / site / state 分,player_id 只进日志。
+	holderLeaseBlockedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "holder_lease_blocked_total",
+		Help:      "Dead-owner takeovers and dead-holder releases not performed because the holder process still renews its holder lease (state=held) or the lease could not be read (state=unknown), by site.",
+	}, []string{"zone_id", "site", "state"})
+
 	// ownershipReadUnknownTotal:改派 / 销毁 / 清理 / 伸缩决策要用的 Redis 读出错(超时、断连、熔断),
 	// 拿不到「有值」还是「确实不存在」,该路径不按读错的结果行事(2026-10-22)。绝大多数 site 是本轮放弃、
 	// 什么都不写,等下一拍或上游重试;mirror_cascade 是例外:销毁已提交,退回提交前快照级联并保留索引。
@@ -771,6 +784,7 @@ func register() {
 			ownerEpochMintClockBehindTotal, ownerEpochMintDurableTotal, ownerEpochMintDurableSeconds,
 			ownerEpochRollbackReceiptTotal,
 			reentryBarrierBlockedTotal, deadNodeReconcilePending, deadNodeReconcileTotal,
+			holderLeaseBlockedTotal,
 			ownershipReadUnknownTotal,
 			enterSceneOwnerDeadTakeoverTotal, enterSceneOwnerReplacedTakeoverTotal, enterSceneHandoffAdmittedTotal,
 			ownerReplacedRecheckTotal,
@@ -1107,6 +1121,14 @@ func ObserveReentryBarrierBlocked(zoneID uint32, site string) {
 		strconv.FormatUint(uint64(zoneID), 10), site).Inc()
 }
 
+// ObserveHolderLeaseBlocked 记一次被持有者存活租约挡下的判死接管 / 判死释放,见 holderLeaseBlockedTotal。
+// site 与 state 必须取 internal/logic/holder_lease.go 的常量名。
+func ObserveHolderLeaseBlocked(zoneID uint32, site, state string) {
+	register()
+	holderLeaseBlockedTotal.WithLabelValues(
+		strconv.FormatUint(uint64(zoneID), 10), site, state).Inc()
+}
+
 // ObserveOwnershipReadUnknown 记一次因 Redis 读失败而放弃的改派 / 销毁 / 清理 / 伸缩决策。
 // site 必须取常量点位名,见 ownershipReadUnknownTotal 的注释。
 func ObserveOwnershipReadUnknown(zoneID uint32, site string) {
@@ -1272,8 +1294,9 @@ func ObserveEnterSceneStage(zoneID uint32, stage string, d time.Duration) {
 
 // ObserveMirrorColocate records one mirror placement outcome. outcome is
 // "hit" or "fallback". reason is only meaningful on fallbacks
-// ("no_mapping" | "zone_mismatch" | "node_dead" | "overloaded", 即
-// createscenelogic.go resolveMirrorSourceNode 的返回值); pass "ok"
+// ("no_mapping" | "node_dead" | "overloaded", 即 createscenelogic.go resolveMirrorSourceNode 的返回值;
+// 源在别的 zone 时也是 no_mapping,原来单列的 zone_mismatch 随 scene:<id>:zone 一起删,
+// docs/design/redis-cluster-all-domains-20261110.md §3.3); pass "ok"
 // for hit rows so the label set stays well-formed.
 func ObserveMirrorColocate(zoneID uint32, outcome, reason string) {
 	register()

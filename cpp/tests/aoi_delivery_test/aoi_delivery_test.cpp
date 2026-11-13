@@ -27,6 +27,8 @@
 #include "proto/scene/player_scene.pb.h"
 #include "proto/scene/scene_info.pb.h"
 #include "spatial/system/aoi_load.h"
+#include "spatial/system/facing.h"
+#include "spatial/system/view.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "thread_context/ecs_context.h"
 
@@ -1382,4 +1384,59 @@ TEST_F(AoiDeliveryTest, ActorLogKeepsPlayerIdentityAndFullEntitySeparate) {
     muduo::LogStream destroyed;
     destroyed << ActorLog(actor);
     EXPECT_EQ("player_id=0 entity=" + std::to_string(entt::to_integral(actor)), destroyed.buffer().toString());
+}
+
+// 朝向口径(spatial/system/facing.h,与客户端 WorldCoordinateConverter 同一份契约):
+// Rotation.z 是偏航角,单位度,朝向 = (cos z, sin z);x、y 恒 0。
+TEST(FacingTest, YawIsTheGroundAzimuthInDegrees) {
+    EXPECT_NEAR(0.0, facing::YawDegreesToward(2.0, 0.0).value(), 1e-9) << "+x(前)";
+    EXPECT_NEAR(90.0, facing::YawDegreesToward(0.0, 3.0).value(), 1e-9) << "+y(右):90 度,不是弧度 π/2";
+    EXPECT_NEAR(180.0, std::abs(facing::YawDegreesToward(-1.0, 0.0).value()), 1e-9);
+    EXPECT_NEAR(-90.0, facing::YawDegreesToward(0.0, -0.5).value(), 1e-9);
+    EXPECT_NEAR(45.0, facing::YawDegreesToward(1.0, 1.0).value(), 1e-9);
+    EXPECT_FALSE(facing::YawDegreesToward(0.0, 0.0).has_value()) << "原地没有方向";
+    EXPECT_FALSE(facing::YawDegreesToward(1e-7, -1e-7).has_value());
+
+    Rotation rotation;
+    rotation.set_x(0.3);
+    rotation.set_y(-0.2);
+    facing::SetYaw(rotation, 30.0);
+    EXPECT_EQ(0.0, rotation.x()) << "不翻滚";
+    EXPECT_EQ(0.0, rotation.y()) << "不俯仰";
+    EXPECT_EQ(30.0, rotation.z());
+}
+
+// 技能面向目标:只转偏航(度),目标在高处也不俯仰;Transform 标脏,由属性同步发给正在显示他的观察者。
+TEST_F(AoiDeliveryTest, LookAtPositionTurnsTheYawInDegreesAndMarksTheTransformDirty) {
+    const auto caster = Spawn(10, 10);
+    tlsEcs.actorRegistry.remove<ActorBaseAttributesS2CDirtyMaskComp>(caster);
+    Vector3 target;
+    target.set_x(10);
+    target.set_y(20);
+    target.set_z(5);
+
+    ViewSystem::LookAtPosition(caster, target);
+
+    const auto& rotation = tlsEcs.actorRegistry.get<Transform>(caster).rotation();
+    EXPECT_NEAR(90.0, rotation.z(), 1e-9);
+    EXPECT_EQ(0.0, rotation.x());
+    EXPECT_EQ(0.0, rotation.y());
+    const auto* dirty = tlsEcs.actorRegistry.try_get<ActorBaseAttributesS2CDirtyMaskComp>(caster);
+    ASSERT_NE(nullptr, dirty);
+    EXPECT_TRUE(dirty->dirtyMask.test(ActorBaseAttributesS2C::kTransformFieldNumber));
+}
+
+TEST_F(AoiDeliveryTest, LookAtPositionStraightAboveKeepsTheFacing) {
+    const auto caster = Spawn(10, 10);
+    tlsEcs.actorRegistry.get<Transform>(caster).mutable_rotation()->set_z(135.0);
+    tlsEcs.actorRegistry.remove<ActorBaseAttributesS2CDirtyMaskComp>(caster);
+    Vector3 overhead;
+    overhead.set_x(10);
+    overhead.set_y(10);
+    overhead.set_z(8);
+
+    ViewSystem::LookAtPosition(caster, overhead);
+
+    EXPECT_EQ(135.0, tlsEcs.actorRegistry.get<Transform>(caster).rotation().z()) << "没有水平方向:保留原朝向";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<ActorBaseAttributesS2CDirtyMaskComp>(caster)) << "没改就不标脏";
 }

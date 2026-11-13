@@ -199,6 +199,10 @@ Commerce:
   PetConfigs: []
   CurrencyTypes: []
   AllowInstances: false
+  # 人工处置入口(commercefix 调 TradeAdmin.ListManualContracts / ResolveManualContract),缺省关闭。
+  # 开启:密钥(≥32 字节)放进 Secret 注入这个变量名,再写本部署的环境名;手册 docs/ops/trade-commerce-quarantine-runbook.md §4.2。
+  ManualResolutionSecretEnv: ""
+  ManualResolutionEnvironment: ""
 Mall:
   URL: ""
   GatewaySecretEnv: COMMERCE_GATEWAY_SECRET

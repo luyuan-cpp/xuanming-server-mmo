@@ -25,6 +25,10 @@ var (
 	ErrProbeRequired = errors.New("缺少有效地域探测")
 	// ErrNoRegionWithinLatency：探测有效，但没有任何机房在硬延迟以内。
 	ErrNoRegionWithinLatency = errors.New("没有机房满足硬延迟")
+	// ErrClaimStale：提交点加锁读出的票与撮合读页时不一样了（已被别的撮合段或副本认领、撤单、回队退避、过期、探测原件刷新），
+	// 或放置机房已不在这名成员的硬延迟内。事务在提交之前回滚、什么都没写，结局已知：撮合侧把它当正常冲突计数，
+	// 不记排空 HOLD。拆写者之后跨机房段与机房段争同一批老票是常态（docs/design/global-match-hierarchical-pools.md §5.2.1 第 7 条）。
+	ErrClaimStale = errors.New("成局成员代次或地域条件已经变化")
 )
 
 // ConfigureMatchCatalog 在启动时装配模板目录与逐级放宽阈值，之后只读。

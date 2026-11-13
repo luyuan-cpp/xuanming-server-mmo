@@ -224,6 +224,7 @@ func newIntegrationSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minired
 func newIntegrationSvcCtxWithRedisOptions(t *testing.T, opts ...redis.Option) (*svc.ServiceContext, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
+	installSameTagGuard(t, mr) // 每段 Lua 的 KEYS 同 tag、不混域(scene_keys_contract_test.go)
 	rds := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"}, opts...)
 
 	c := config.Config{}
@@ -468,8 +469,7 @@ func TestIntegration_Rebalance_NodeGone_EndToEnd(t *testing.T) {
 
 	// Seed the world channel on node A.
 	mr.SAdd(worldChannelsKey(zoneId, confId), strconv.FormatUint(sceneId, 10))
-	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sceneId), hA.nodeID))
-	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:zone", sceneId), strconv.FormatUint(uint64(zoneId), 10)))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(zoneId, sceneId), hA.nodeID))
 	_, _ = sc.Redis.Incr(nodeSceneCountKey(zoneId, hA.nodeID)) // A now owns 1 scene
 
 	// Kill A.
@@ -490,7 +490,7 @@ func TestIntegration_Rebalance_NodeGone_EndToEnd(t *testing.T) {
 	require.Equal(t, int64(0), hA.fake.destroyCalls.Load(), "dead node must not receive DestroyScene")
 
 	// Redis state flipped to B and scene counters moved.
-	got, err := sc.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId))
+	got, err := sc.Redis.Get(sceneNodeKey(zoneId, sceneId))
 	require.NoError(t, err)
 	require.Equal(t, hB.nodeID, got)
 
@@ -526,8 +526,7 @@ func TestIntegration_Rebalance_BetterHome_EndToEnd(t *testing.T) {
 
 	// Seed: channel currently wrongly parked on A.
 	mr.SAdd(worldChannelsKey(zoneId, confId), strconv.FormatUint(sceneId, 10))
-	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sceneId), hA.nodeID))
-	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:zone", sceneId), strconv.FormatUint(uint64(zoneId), 10)))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(zoneId, sceneId), hA.nodeID))
 	_, _ = sc.Redis.Incr(nodeSceneCountKey(zoneId, hA.nodeID))
 	// Seed the reverse index the way the real scene registration would. The
 	// migration must move the sceneId from hA's set to hB's set; otherwise
@@ -544,7 +543,7 @@ func TestIntegration_Rebalance_BetterHome_EndToEnd(t *testing.T) {
 	require.Equal(t, int64(1), hA.fake.destroyCalls.Load(), "live A should have received best-effort DestroyScene")
 	require.Equal(t, sceneId, hA.fake.lastDestroyScene.Load())
 
-	got, err := sc.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId))
+	got, err := sc.Redis.Get(sceneNodeKey(zoneId, sceneId))
 	require.NoError(t, err)
 	require.Equal(t, hB.nodeID, got)
 
@@ -580,7 +579,7 @@ func TestIntegration_Rebalance_CreateSceneFailure_KeepsOldMapping(t *testing.T) 
 	registerWorldNodeFromHarness(t, sc, zoneId, hB)
 
 	mr.SAdd(worldChannelsKey(zoneId, confId), strconv.FormatUint(sceneId, 10))
-	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sceneId), hA.nodeID))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(zoneId, sceneId), hA.nodeID))
 	_, _ = sc.Redis.Incr(nodeSceneCountKey(zoneId, hA.nodeID))
 
 	killNode(sc, zoneId, hA.nodeID) // urgent scenario: A is dead, only B is available
@@ -594,7 +593,7 @@ func TestIntegration_Rebalance_CreateSceneFailure_KeepsOldMapping(t *testing.T) 
 
 	// CRITICAL: mapping must NOT have been flipped, because the channel
 	// doesn't actually live on B yet.
-	got, err := sc.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId))
+	got, err := sc.Redis.Get(sceneNodeKey(zoneId, sceneId))
 	require.NoError(t, err)
 	require.Equal(t, hA.nodeID, got, "scene mapping must stay on old node when CreateScene fails")
 
@@ -628,7 +627,7 @@ func TestIntegration_Rebalance_ActivePlayersBlockMigration(t *testing.T) {
 	sceneId := findSceneIdHashingTo(t, ring, hB.nodeID, 200)
 
 	mr.SAdd(worldChannelsKey(zoneId, confId), strconv.FormatUint(sceneId, 10))
-	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sceneId), hA.nodeID))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(zoneId, sceneId), hA.nodeID))
 	// 5 players online -> PlanWorldChannelRebalance must skip this channel.
 	seedSceneMembersVia(sc, sceneId, 5)
 
@@ -641,7 +640,7 @@ func TestIntegration_Rebalance_ActivePlayersBlockMigration(t *testing.T) {
 	require.Equal(t, int64(0), hB.fake.createCalls.Load())
 	require.Equal(t, int64(0), hB.fake.destroyCalls.Load())
 
-	got, err := sc.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId))
+	got, err := sc.Redis.Get(sceneNodeKey(zoneId, sceneId))
 	require.NoError(t, err)
 	require.Equal(t, hA.nodeID, got)
 }
@@ -701,8 +700,7 @@ func TestIntegration_Rebalance_CascadesDependentMirrors(t *testing.T) {
 
 	// Seed: source channel currently parked on A.
 	mr.SAdd(worldChannelsKey(zoneId, confId), strconv.FormatUint(sourceSceneId, 10))
-	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sourceSceneId), hA.nodeID))
-	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:zone", sourceSceneId), strconv.FormatUint(uint64(zoneId), 10)))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(zoneId, sourceSceneId), hA.nodeID))
 	_, _ = sc.Redis.Incr(nodeSceneCountKey(zoneId, hA.nodeID))
 	_, _ = sc.Redis.Sadd(nodeScenesKey(zoneId, hA.nodeID), strconv.FormatUint(sourceSceneId, 10))
 
@@ -728,7 +726,7 @@ func TestIntegration_Rebalance_CascadesDependentMirrors(t *testing.T) {
 	}
 	require.Equal(t, int64(3), hA.fake.createCalls.Load(), "hA receives 3 mirror creates during setup")
 
-	preCascade, _ := sc.Redis.Smembers(sceneMirrorsKey(sourceSceneId))
+	preCascade, _ := sc.Redis.Smembers(sceneMirrorsKey(zoneId, sourceSceneId))
 	require.Len(t, preCascade, 3, "setup: source's mirrors set must be populated")
 
 	// Reset the per-fake counters so post-rebalance assertions only see
@@ -749,17 +747,17 @@ func TestIntegration_Rebalance_CascadesDependentMirrors(t *testing.T) {
 
 	// (3) Every mirror is wiped from Redis.
 	for _, mid := range mirrorIds {
-		nid, _ := sc.Redis.Get(fmt.Sprintf("scene:%d:node", mid))
+		nid, _ := sc.Redis.Get(sceneNodeKey(zoneId, mid))
 		require.Equal(t, "", nid, "mirror %d must be force-destroyed after source migrated", mid)
 	}
 
 	// (4) Mirrors index is drained so the next mirror request for this
 	// source starts clean (and would now correctly land on hB).
-	postCascade, _ := sc.Redis.Smembers(sceneMirrorsKey(sourceSceneId))
+	postCascade, _ := sc.Redis.Smembers(sceneMirrorsKey(zoneId, sourceSceneId))
 	require.Empty(t, postCascade, "scene:{source}:mirrors must be drained after cascade")
 
 	// Source's scene mapping flipped to hB.
-	got, err := sc.Redis.Get(fmt.Sprintf("scene:%d:node", sourceSceneId))
+	got, err := sc.Redis.Get(sceneNodeKey(zoneId, sourceSceneId))
 	require.NoError(t, err)
 	require.Equal(t, hB.nodeID, got)
 }
@@ -819,7 +817,7 @@ func TestIntegration_Rebalance_UnconfirmedCreateSceneKeepsOldMapping(t *testing.
 	registerWorldNodeFromHarness(t, sc, zoneID, oldNode)
 	registerWorldNodeFromHarness(t, sc, zoneID, newNode)
 	mr.SAdd(worldChannelsKey(zoneID, configID), strconv.FormatUint(sceneID, 10))
-	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sceneID), oldNode.nodeID))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(zoneID, sceneID), oldNode.nodeID))
 	_, err := sc.Redis.Incr(nodeSceneCountKey(zoneID, oldNode.nodeID))
 	require.NoError(t, err)
 	killNode(sc, zoneID, oldNode.nodeID)
@@ -830,7 +828,7 @@ func TestIntegration_Rebalance_UnconfirmedCreateSceneKeepsOldMapping(t *testing.
 
 	require.EqualValues(t, 1, newNode.fake.createCalls.Load())
 	require.EqualValues(t, 0, newNode.fake.destroyCalls.Load())
-	mapped, err := sc.Redis.Get(fmt.Sprintf("scene:%d:node", sceneID))
+	mapped, err := sc.Redis.Get(sceneNodeKey(zoneID, sceneID))
 	require.NoError(t, err)
 	require.Equal(t, oldNode.nodeID, mapped, "RPC OK 但无创建证据时不得切换归属")
 	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(zoneID, oldNode.nodeID)))

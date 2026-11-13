@@ -336,6 +336,49 @@ class AdminZoneControllerTest {
         verify(repo, never()).insertIfAbsent(any(), any());
     }
 
+    // 本区角色上限(2026-11-12,区服满员处理 §6):先按主键加锁判存在,只写这一列,再回读;0 = 取消上限。
+    @Test
+    void roleCapacityLocksThenWritesOnlyThatColumnThenReadsBack() throws JsonProcessingException {
+        when(repo.lockZoneIdForUpdate(ZONE)).thenReturn(List.of(ZONE));
+        when(repo.findById(ZONE)).thenReturn(Optional.of(zone(ZONE, "z")));
+
+        assertEquals(HttpStatus.OK, controller.setRoleCapacity(ZONE, roleCapacityBody("{\"role_capacity\":30000}")).getStatusCode());
+        assertEquals(HttpStatus.OK, controller.setRoleCapacity(ZONE, roleCapacityBody("{\"role_capacity\":0}")).getStatusCode());
+
+        InOrder order = inOrder(repo);
+        order.verify(repo).lockZoneIdForUpdate(ZONE);
+        order.verify(repo).updateRoleCapacity(ZONE, 30000, NOW);
+        order.verify(repo).findById(ZONE);
+        order.verify(repo).lockZoneIdForUpdate(ZONE);
+        order.verify(repo).updateRoleCapacity(ZONE, 0, NOW);
+        order.verify(repo).findById(ZONE);
+        verifyNoMoreInteractions(repo);
+    }
+
+    // 缺字段(含写成驼峰、被 SNAKE_CASE 绑定忽略)或为负:400 且不碰库。漏传不能被当成 0(那等于取消上限)。
+    @Test
+    void roleCapacityRejectsMissingOrNegativeValueWithoutTouchingTheDatabase() throws JsonProcessingException {
+        assertEquals(HttpStatus.BAD_REQUEST, controller.setRoleCapacity(ZONE, null).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, controller.setRoleCapacity(ZONE, roleCapacityBody("{}")).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST,
+                controller.setRoleCapacity(ZONE, roleCapacityBody("{\"roleCapacity\":30000}")).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, controller.setRoleCapacity(ZONE, roleCapacityBody("{\"role_capacity\":-1}")).getStatusCode());
+        verifyNoInteractions(repo);
+    }
+
+    @Test
+    void roleCapacityReturnsNotFoundWhenRowAbsent() throws JsonProcessingException {
+        // 加锁点查没命中(mock 缺省返回空列表):回 404,上限不写、也不插入。
+        assertEquals(HttpStatus.NOT_FOUND, controller.setRoleCapacity(ZONE, roleCapacityBody("{\"role_capacity\":10}")).getStatusCode());
+        verify(repo).lockZoneIdForUpdate(ZONE);
+        verify(repo, never()).updateRoleCapacity(anyLong(), anyInt(), any());
+        verify(repo, never()).insertIfAbsent(any(), any());
+    }
+
+    private static AdminZoneController.RoleCapacityRequest roleCapacityBody(String json) throws JsonProcessingException {
+        return JSON.readValue(json, AdminZoneController.RoleCapacityRequest.class);
+    }
+
     @Test
     void updatePathsDoNotRetryDeadlockClassifiedFailures() {
         // update 路径的第一把锁是加锁点查,之后的 UPDATE 改同一条已持锁的记录、不再等锁,不可能是死锁牺牲者;

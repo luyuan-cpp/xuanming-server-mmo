@@ -337,7 +337,7 @@ func requireManuallyAborted(t *testing.T, s *Store, before *pb.MatchFormationRec
 		require.EqualValues(t, 4, ticketRow(t, s, original.PlayerId).State, "原票与 ABORT 同一事务结束")
 	}
 	require.Equal(t, 1, manualRows(t, s, before.BattleId))
-	require.Zero(t, settlementSources(t, s, before.BattleId), "作废的局没有任何个人结算来源")
+	requireOnlyVoidSources(t, s, before.BattleId, len(before.Members))
 }
 
 // 时钟偏差留下的 original_mismatch:到期恢复与 COMPLETE 永远裁决不了;人工演练不改行;执行恰好释放一次并在同一事务写审计;

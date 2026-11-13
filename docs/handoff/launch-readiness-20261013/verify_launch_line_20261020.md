@@ -24,6 +24,7 @@
 | §5 B0-4 | nofile 启动门槛 | `open_file_limit.h` 与 `open_file_limit_test.cpp` 字节未变(`node.cpp`、vcxproj 有他人改动)。Windows 侧:Codex 11-04 的整套运行里 `OpenFileLimit.*` 21/21 通过(`build/verification/loglevel-no-popup-20261105T021421360Z/client_endpoint_test/client_endpoint_test.stdout.log`)。**Linux 分支从未编译、运行过** | **仍要跑**:§5 第 4~8 步,都要先取得授权(Docker 构建、容器、kind) |
 | 部署接线 | `-NodeOpenFileLimitMode`、`maxUnavailable: 0`、`-WaitReady` 捞拒启行 | 已落码,命令在 PROGRESS「2026-10-22 B0-4 部署侧后续项」「B0-4 部署侧:包装入口透传 -NodeOpenFileLimitMode」两条;回滚脚本那部分已随 `k8s_zone_rollback.ps1` 退役 | **仍要跑**:按那两条执行 |
 | 新增 | login 注释与 CRITICAL 日志文案(11-11) | 见 PROGRESS「2026-11-11 开服线收尾核对」 | **仍要跑**:按那一条执行 |
+| 新增 | B0-4 当时登记的后续项(11-12):accept 资源耗尽不再崩溃、fd 用量指标与告警、致命日志写 stderr、余量定案 | 已落码,未编译。`open_file_limit.h` 只改了注释,上一行说的「字节未变」从这次起不再成立,`OpenFileLimit.*` 21 条要重跑。命令见 PROGRESS「2026-11-12 开服线:B0-4 后续项现在做完」 | **仍要跑**:按那一条执行;其中容器步骤并入 §5 第 4~8 步 |
 
 ## 0. 为什么重写
 

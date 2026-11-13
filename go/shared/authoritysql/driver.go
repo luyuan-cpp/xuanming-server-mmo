@@ -5,8 +5,10 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"math"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -66,10 +68,18 @@ type gateAttempt interface {
 }
 
 // sessionPolicy负责可信的固定SET和CURRENT_USER/部署身份校验；不得读环境、
-// 造UUID、注册或执行DDL。raw ResetSession之后也必须重新执行这些检查。
+// 造UUID、注册或执行DDL。
+//   - pin:新建物理连接时执行一次,固定会话变量,核对主体、实际库、(写者)世代与本 boot 的注册。
+//   - revalidate:连接从池里复用(ResetSession)时执行,只核对不经过这条连接也会在服务端变掉的事实;
+//     idle 是这条连接归还之后空闲了多久(从没归还过时是 idleUnknown),由它决定要不要发一条读去探测;
+//     哪些要核、哪些不用再核及其依据见 connector.revalidate。
 type sessionPolicy interface {
 	pin(context.Context, driver.Conn) error
+	revalidate(ctx context.Context, conn driver.Conn, idle time.Duration) error
 }
+
+// idleUnknown 表示不知道这条连接空闲了多久(database/sql 没在归还时问过 IsValid):按空闲很久处理,宁可多探测一次。
+const idleUnknown = time.Duration(math.MaxInt64)
 
 type serverOutcome uint8
 
@@ -173,6 +183,9 @@ type guardedConn struct {
 	// stale 报告建连时记下的映射版本是否已过期(搬库翻转了),nil = 这个连接池不按映射拨号。
 	// 在途事务不受影响:它还在旧集群上,旧集群已冻结,闸门拒绝,调用方重试时拿到新集群的连接。
 	stale func() bool
+	// returnedAt 是这条连接上一次归还连接池的时刻(IsValid 通过时记下),零值 = 还没归还过。
+	// ResetSession 用它算空闲时长,交给 sessionPolicy.revalidate 决定要不要探测。只在 mu 之下读写。
+	returnedAt time.Time
 }
 
 type guardedTx struct {
@@ -244,6 +257,13 @@ func (c *guardedConn) beginLocked(ctx context.Context, opts driver.TxOptions, au
 		rawTx, err = c.raw.Begin()
 	}
 	if err != nil {
+		// 带隔离级别的 BEGIN 在驱动里是两条语句:先 SET TRANSACTION ISOLATION LEVEL(只对下一笔事务生效),再 START TRANSACTION。
+		// 前一条成功、后一条失败时,待生效的隔离级别留在这条连接上,下一个借到它的调用方会带着别人的隔离级别开事务;
+		// 连接复用时不再重设会话(connector.revalidate),所以在这里丢掉这条连接。分不清失败在哪一条,一律按留下了处理。
+		// 这时事务没开成、业务语句一条没发,错误照原样返回,结局分类不变。
+		if opts.Isolation != 0 {
+			c.quarantined = true
+		}
 		return nil, c.preBusinessErrorLocked(err)
 	}
 	if rawTx == nil {
@@ -477,14 +497,20 @@ func (c *guardedConn) ResetSession(ctx context.Context) error {
 			return driver.ErrBadConn
 		}
 	}
-	if err := c.session.pin(ctx, c.raw); err != nil {
-		// 重放会话变量或核验身份失败:连接已断,或所在实例已降成只读。新连接在建连时重新核验,
-		// 降级的实例在那里被拒,错误照常回给调用方。
+	idle := idleUnknown
+	if !c.returnedAt.IsZero() {
+		idle = time.Since(c.returnedAt)
+	}
+	if err := c.session.revalidate(ctx, c.raw, idle); err != nil {
+		// 复用核对失败:连接已断(空闲探测没有回音)、会话被改过,或所在实例已降成只读。
+		// 新连接在建连时完整核验(pin),降级的实例在那里被拒,错误照常回给调用方。
 		c.quarantined = true
 		return driver.ErrBadConn
 	}
 	return nil
 }
+
+// IsValid 由 database/sql 在连接归还连接池时调用。通过时顺带记下归还时刻,供下一次借出算空闲时长。
 func (c *guardedConn) IsValid() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -495,9 +521,10 @@ func (c *guardedConn) IsValid() bool {
 	if c.stale != nil && c.stale() {
 		return false
 	}
-	if validator, ok := c.raw.(driver.Validator); ok {
-		return validator.IsValid()
+	if validator, ok := c.raw.(driver.Validator); ok && !validator.IsValid() {
+		return false
 	}
+	c.returnedAt = time.Now()
 	return true
 }
 func (c *guardedConn) CheckNamedValue(v *driver.NamedValue) error {

@@ -40,7 +40,11 @@ std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath)
 {
 	const bool festival = navPath.find("/festival_maps/") != std::string::npos ||
 		navPath.find("\\festival_maps\\") != std::string::npos;
-	if (festival)
+	const bool authored = navPath.find("/authored_maps/") != std::string::npos ||
+		navPath.find("\\authored_maps\\") != std::string::npos;
+	if (authored && std::filesystem::exists(navPath + ".mask"))
+	{ LOG_ERROR << "skip nav registration (authored nav has a residual legacy mask): " << navPath; return nullptr; }
+	if (festival || authored)
 	{
 		std::ifstream checksums(navPath + ".sha256");
 		std::string expectedNav, expectedMask, extra;
@@ -54,7 +58,7 @@ std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath)
 			return Sha256::HashToHex(bytes.str()) == expected;
 		};
 		// 在 Detour 解析前核 SHA，损坏的长度/索引不能进入旧 ABI 原生装载器。
-		if (!matches(navPath, expectedNav) || !matches(navPath + ".mask", expectedMask))
+		if (!matches(navPath, expectedNav) || !matches(navPath + (authored ? ".authored" : ".mask"), expectedMask))
 		{ LOG_ERROR << "skip nav registration (checksum mismatch): " << navPath; return nullptr; }
 	}
 	// 堆上就地构造:navQuery.init 会把 &navMesh 存进内部裸指针,
@@ -62,6 +66,12 @@ std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath)
 	// 再 emplace,浅拷贝进 map 后栈局部析构,map 里全是悬垂指针,
 	// 线程退出时再 double free)。
 	auto nav = std::make_shared<NavComp>();
+	if (authored)
+	{
+		if (!nav->authoredBounds.Load(navPath + ".authored"))
+		{ LOG_ERROR << "skip nav registration (invalid authored nav contract): " << navPath; return nullptr; }
+		nav->authoredFlat = true;
+	}
 	if (!RecastSystem::LoadNavMesh(navPath.c_str(), &nav->navMesh))
 	{
 		// fail-closed:加载失败绝不注册空网格 —— 查询方拿到一个
@@ -69,13 +79,36 @@ std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath)
 		LOG_ERROR << "skip nav registration (nav bin load failed): " << navPath;
 		return nullptr;
 	}
+	if (authored)
+	{
+		const dtNavMesh& mesh = nav->navMesh;
+		if (CountLoadedTiles(mesh) == 0)
+		{ LOG_ERROR << "skip nav registration (empty authored nav): " << navPath; return nullptr; }
+		// 手绘源合同要求原始水平面 Y=0；错误 profile、旧高度或损坏的有效数据
+		// 不能等到角色移动时再通过吸附修正。粗网格与细节网格都须核对。
+		for (int index = 0; index < mesh.getMaxTiles(); ++index)
+		{
+			const auto* tile = mesh.getTile(index);
+			if (!tile || !tile->header) continue;
+			auto onGround = [&nav](const dtReal* values, int count) {
+				for (int vertex = 0; vertex < count; ++vertex)
+					if (!std::isfinite(values[vertex * 3]) || !std::isfinite(values[vertex * 3 + 1]) ||
+						!std::isfinite(values[vertex * 3 + 2]) ||
+						std::abs(values[vertex * 3 + 1] - nav->authoredBounds.groundY) > 1e-6) return false;
+				return true;
+			};
+			if (!onGround(tile->verts, tile->header->vertCount) ||
+				!onGround(tile->detailVerts, tile->header->detailVertCount))
+			{ LOG_ERROR << "skip nav registration (authored nav ground mismatch): " << navPath; return nullptr; }
+		}
+	}
 	const dtStatus initStatus = nav->navQuery.init(&nav->navMesh, kMaxMeshQueryNodes);
 	if (dtStatusFailed(initStatus))
 	{
 		LOG_ERROR << "skip nav registration (navQuery init failed): " << navPath;
 		return nullptr;
 	}
-	if (festival || std::filesystem::exists(navPath + ".mask"))
+	if (!authored && (festival || std::filesystem::exists(navPath + ".mask")))
 	{
 		if (!nav->mask.Load(navPath + ".mask"))
 		{

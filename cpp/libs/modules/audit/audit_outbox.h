@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 
 #include <google/protobuf/repeated_ptr_field.h>
 
@@ -47,6 +48,15 @@ public:
     static bool EnqueueTransactionLog(uint64_t playerId, TransactionLogEntry entry);
     // 快照请求只带 snapshot_id、trigger、schema_version、zone_id;整档由 go/db 按提交后的行在事务里拼(设计 §6.2)。
     static bool EnqueueSnapshot(uint64_t playerId, PlayerSnapshotEntry request);
+
+    // 一条流水成功进了某名玩家的队列之后调用(同一线程,入队之后)。传空函数 = 不通知。
+    // 用途:货币、物品的每次变动都由 CurrencySystem、BagService 自己记流水,玩法代码绕不开这里,
+    // 所以 scene 在这一个收口处请求一次合并存盘(PlayerLifecycleSystem::RequestKeyProgressSave),资产变动约 1 秒内提交,
+    // 不靠每个玩法各自记得触发(docs/design/player-data-tidb-scaling-plan.md §4.5)。
+    // 约束:钩子里只许登记「稍后存盘」,不许同步存盘或再入队 —— 调用点在货币、背包的改动函数中间,改动还没做完。
+    // 快照请求不走这个钩子:要不要尽快提交由请求方决定(进场快照自己请求,snapshot_system 的其它触发不急)。
+    using TransactionLogQueuedHook = std::function<void(uint64_t playerId)>;
+    static void SetTransactionLogQueuedHook(TransactionLogQueuedHook hook);
 
     // 这名玩家水位不大于 mark 的记录还有没有。有就算没有脏行也要写一笔(设计 §5.2)。
     [[nodiscard]] static bool HasDue(uint64_t playerId, uint64_t mark);

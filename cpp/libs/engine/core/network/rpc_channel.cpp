@@ -18,6 +18,7 @@
 #include "network/rpc_trace_envelope.h"
 #include "network/traffic_statistics.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
+#include "kill_switch/kill_switch.h"
 
 using namespace std::placeholders;
 
@@ -1121,6 +1122,13 @@ void RpcChannel::CallServiceMethod(const TcpConnectionPtr &connection, const Gam
     if (method == nullptr)
     {
         RejectRequest(message, NO_METHOD);
+        return;
+    }
+    // 热关停(docs/design/rpc-kill-switch.md §7):方法解析之后、请求体解析之前判,被关停的请求不白解码。
+    // 回 KILL_SWITCH_DENIED:派发前拒绝,调用方按「确定未执行」处理。握手与 scene 的转发信封在豁免名单里(§8)。
+    if (kill_switch::CheckMessageId(messageId))
+    {
+        RejectRequest(message, KILL_SWITCH_DENIED);
         return;
     }
 

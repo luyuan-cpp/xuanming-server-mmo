@@ -13,7 +13,7 @@
 | 3 | 审计 topic 每分区 retention.bytes:prod / prod-like 4GiB,目标扛住 2 小时消费中断 | 一个 45k zone 峰时单分区进水 ≤ 0.5MB/s(快照 15KB) | `deploy/k8s/README.md`「审计 topic 的 retention.bytes」 |
 | 14 | 名次语义不改;服务端按名次拉长 `RetryAfterMs`(前 2000 名 2s,之后与名次成正比,上限 min(30s, AdmitTTL/2)) | 10 万人排队时轮询约降到固定 2s 的八分之一;客户端遵守 `retry_after_ms` | `login-queue-2026-05.md` §14 第 10 条 |
 | 15 | `snapshot_guid` 不分桶(本来不单调);不做按天分区 | 清理按桶随副本线性扩,能追上写入 | `audit-pipeline-horizontal-scale-20261106.md` §2.C、§2.D |
-| 24 | 定了拆法方向(按首选机房拆本机房阶段,单机房再分 K 个子池),落码另开会话 | 单写者在热池上会先到顶 | `global-match-hierarchical-pools.md` §5.2 |
+| 24 | 定了拆法方向(按首选机房拆本机房阶段,单机房再分 K 个子池);11-12 已落码(未编译,「缺口第 24 条:热池按机房与子池拆写者」会话) | 单写者在热池上会先到顶 | `global-match-hierarchical-pools.md` §5.2、§5.2.1 |
 | 30 | 命令 topic 不换代;场景亲和不做 | 每节点命令解码量 ≈ 总速率 ÷ 256;每次广播至多 G_z 份 | `connection-fanout-subsetting-20261106.md` §1、§3.5、§3.6 |
 | 33 | 住户预算保留 200 名 / 10 秒 / 节点 | 与 R18 每个 scene 节点约 17.5 次进场/秒同量级 | `scene-node-ownership-reconcile.md` §4.7 |
 
@@ -79,7 +79,8 @@ D、E 是故障演练,各单独一轮,不和别的档混跑;跑之前在复盘�
 ### 第 24 条 热池
 
 - 看:C 档 G1 表的 `rd/int`(轮耗时 p99 ÷ 轮间隔)、`conflict%`、队列深度;G3 表最热模式。
-- 判据:这条只复核「单写者会先到顶」这个前提,拆分本身另开会话落码。最热池 `rd/int` 持续 > 0.8 且冲突 < 5% 就说明单写者已到顶(设计 §5.6 第 1 条),拆分的优先级随之提高。
+- 判据:这条只复核「单写者会先到顶」这个前提。最热池 `rd/int` 持续 > 0.8 且冲突 < 5% 就说明单写者已到顶(设计 §5.6 第 1 条)。
+- 11-12 拆分已落码(设计 §5.2.1,未编译):G1 的 owned 列变成本副本负责的撮合段数(`match_pool_owned{role}` 之和);跨机房段与机房段争同一批老票的冲突看 `match_pool_segment_claim_total{role="cross",outcome="conflict"}`,汇总脚本还没有这一列,要补时按 role 分行。拆分前后各跑一轮同口径的 C 档,才能说吞吐有没有涨。
 - 汇总表:G1~G3 有。
 
 ### 第 30 条 命令 topic 与广播扇出

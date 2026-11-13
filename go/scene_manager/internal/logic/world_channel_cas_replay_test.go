@@ -160,7 +160,7 @@ func TestReassignSceneNode_ResendAfterLostReplyKeepsAppliedVerdict(t *testing.T)
 			require.True(t, reassign(sc, replayNodeOld, replayNodeNew), "重发不得把已落地的改派翻成落空")
 			require.True(t, hook.fired.Load(), "前提:改派的 EVAL 真的被重发了")
 
-			owner, err := mr.Get(sceneNodeKey(tc.sceneID))
+			owner, err := mr.Get(sceneNodeKey(reassignCASZone, tc.sceneID))
 			require.NoError(t, err)
 			require.Equal(t, replayNodeNew, owner)
 			requireSceneIndexedOnlyOn(t, sc, reassignCASZone, tc.sceneID, replayNodeNew, replayNodeOld)
@@ -169,7 +169,7 @@ func TestReassignSceneNode_ResendAfterLostReplyKeepsAppliedVerdict(t *testing.T)
 
 			// 回执只认同一个 token:另一次拿着陈旧判断的改派照常落空,一个键不动。
 			require.False(t, reassign(sc, replayNodeOld, replayNodeOther))
-			owner, err = mr.Get(sceneNodeKey(tc.sceneID))
+			owner, err = mr.Get(sceneNodeKey(reassignCASZone, tc.sceneID))
 			require.NoError(t, err)
 			require.Equal(t, replayNodeNew, owner)
 			require.False(t, mr.Exists(nodeSceneCountKey(reassignCASZone, replayNodeOther)))
@@ -190,7 +190,7 @@ func TestWorldChannel_TransferResendAfterLostReplyReleasesOldRoomOnce(t *testing
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
 	const sceneID uint64 = 87203
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), "20"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, sceneID), "20"))
 	seedAgonesRoom(t, sc, alloc, sceneID, "gs-old")
 
 	require.True(t, moveAgonesRoomForTest(t, sc, sceneID, "20"))
@@ -215,7 +215,7 @@ func TestReassignSceneNode_ReplyLostConfirmedByReceipt(t *testing.T) {
 			"回包丢了但回执确认已落地,必须按已改派返回")
 		require.True(t, hook.fired.Load(), "前提:改派的 EVAL 执行了、应答被换成错误")
 
-		owner, err := mr.Get(sceneNodeKey(sceneID))
+		owner, err := mr.Get(sceneNodeKey(reassignCASZone, sceneID))
 		require.NoError(t, err)
 		require.Equal(t, replayNodeNew, owner)
 		requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, replayNodeNew, replayNodeOld)
@@ -232,7 +232,7 @@ func TestReassignSceneNode_ReplyLostConfirmedByReceipt(t *testing.T) {
 		require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, replayNodeOld, replayNodeNew, freshPlacementGeneration(t, sc, reassignCASZone)),
 			"脚本落空时没有本次的回执,不能凭空当成已落地")
 		require.True(t, hook.fired.Load())
-		owner, err := mr.Get(sceneNodeKey(sceneID))
+		owner, err := mr.Get(sceneNodeKey(reassignCASZone, sceneID))
 		require.NoError(t, err)
 		require.Equal(t, replayNodeOther, owner)
 		require.Equal(t, []string{casReceiptAborted},
@@ -255,7 +255,7 @@ func TestReassignSceneNode_LateEvalAfterResolveChangesNothing(t *testing.T) {
 		"EVAL 没执行:问结局时作废,按落空返回")
 	require.EqualValues(t, reassignOwnerChanged, toInt64(hook.deliverLate(t, sc)), "作废之后才到的 EVAL 必须落空")
 
-	owner, err := mr.Get(sceneNodeKey(sceneID))
+	owner, err := mr.Get(sceneNodeKey(reassignCASZone, sceneID))
 	require.NoError(t, err)
 	require.Equal(t, replayNodeOld, owner, "晚到的 EVAL 不得改归属")
 	requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, replayNodeOld, replayNodeNew)
@@ -276,7 +276,7 @@ func TestWorldChannel_TransferReplyLostConfirmedByReceiptReleasesOldRoom(t *test
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
 	const sceneID uint64 = 87206
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), "20"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, sceneID), "20"))
 	seedAgonesRoom(t, sc, alloc, sceneID, "gs-old")
 
 	require.True(t, moveAgonesRoomForTest(t, sc, sceneID, "20"))
@@ -300,7 +300,7 @@ func TestWorldChannel_TransferLateEvalAfterResolveChangesNothing(t *testing.T) {
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
 	const sceneID uint64 = 87208
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), "20"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, sceneID), "20"))
 	record := seedAgonesRoom(t, sc, alloc, sceneID, "gs-old")
 
 	require.True(t, moveAgonesRoomForTest(t, sc, sceneID, "20"))
@@ -311,7 +311,7 @@ func TestWorldChannel_TransferLateEvalAfterResolveChangesNothing(t *testing.T) {
 	parts := toSlice(hook.deliverLate(t, sc))
 	require.Len(t, parts, 2)
 	require.EqualValues(t, agonesTransferStale, toInt64(parts[0]), "作废之后才到的 EVAL 必须落空")
-	gs, err := sc.Redis.Get(sceneAgonesGsKey(sceneID))
+	gs, err := sc.Redis.Get(sceneAgonesGsKey(testZoneId, sceneID))
 	require.NoError(t, err)
 	assert.Equal(t, record, gs, "晚到的 EVAL 不得把记录改到已经还掉的名额上")
 	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId), "放弃时在途占用一起删")

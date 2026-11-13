@@ -125,6 +125,14 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, d deps) i
 		fmt.Fprintf(stderr, "route_tool: load %s: %v\n", a.configPath, err)
 		return routetool.ExitFailed
 	}
+	// 口令可以由 MySQLPasswordEnv 指名的变量给:K8s 上 route-tool Job 挂的 ConfigMap 里口令写空串、指名 MMORPG_MYSQL_PASSWORD
+	// (Secret mysql-auth 注入)。连库之前填好;指名了却没有值即失败,不带空口令去连。报错只点键名与变量名。
+	resolved, err := c.ResolveMySQLPassword(os.LookupEnv)
+	if err != nil {
+		fmt.Fprintf(stderr, "route_tool: %v\n", err)
+		return routetool.ExitFailed
+	}
+	c = resolved
 	if _, err := authoritysql.ParseBackend(c.SnapshotMySQL.Backend); err != nil {
 		fmt.Fprintf(stderr, "route_tool: invalid SnapshotMySQL.Backend in %s: %v\n", a.configPath, err)
 		return routetool.ExitFailed

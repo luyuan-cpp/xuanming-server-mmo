@@ -83,6 +83,23 @@ namespace player_ownership
 		return "player:" + redis_slot::PlayerTag(playerId) + ":location";
 	}
 
+	// 持有者存活租约:字符串,值 = 持有进程的实例号(NodeInfo.node_uuid),PX kHolderLeaseTtlMs。
+	// 只在本节点身份不确认期间由持有进程给内存里的每名玩家续(PlayerLifecycleSystem::RenewHolderLeasesAtRisk,每 3 秒一次);
+	// scene_manager 只读:「持有节点已从 etcd 消失」的判死接管与判死释放之前看它,键还在就不按判死处理
+	// (go/scene_manager internal/logic/holder_lease.go)。身份确认时不写:那时节点在 etcd 在册,判死的前提不成立。
+	// 协调用途,存档的围栏仍是 TiDB 写权行。与 Go shared/ownerepoch.HolderLeaseKey 逐字一致,
+	// 金样见 cpp/tests/currency_test 的 PlayerDomainRedisKeysMatchGoContract。
+	inline std::string HolderLeaseRedisKey(uint64_t playerId)
+	{
+		return "player:" + redis_slot::PlayerTag(playerId) + ":holder_lease";
+	}
+
+	// 租约的存活毫秒数,直接作 SET ... PX 的实参。与 Go shared/ownerepoch.HolderLeaseTTL(15 秒)同值,
+	// go/scene_manager holder_lease_test.go 按下面这一行原文核对,改值要两边同改。
+	// 取值:要盖住几次续期失败(每 3 秒一次),又要比 scene_manager 的再入屏障(缺省 20 秒)短 ——
+	// 进程真死了租约先过期,不给死节点的接管加延迟。
+	inline constexpr std::string_view kHolderLeaseTtlMs = "15000";
+
 	// 交接标记的值格式 "{epoch}:{saved_at_ms}"。scene_manager 只解析冒号前的 epoch 与当前
 	// owner_epoch 比对;saved_at_ms 仅供排障(看"落盘到放行"隔了多久)。
 	inline std::string HandoffRedisValue(uint64_t epoch, uint64_t savedAtMs)

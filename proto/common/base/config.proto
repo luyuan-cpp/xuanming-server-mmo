@@ -128,8 +128,8 @@ message BaseDeployConfig {
     string spectate_token_secret = 24;
 
     // 集群号:部署级常量,由运维一次性设定(ConfigMap / yaml),策划不碰,默认 0。
-    // 只有 Go 的 snowflake 槽位协议(login-player / guild / scene-manager / match)消费它,
-    // 作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者
+    // 只有 Go 的 snowflake 槽位协议消费它(现在只剩 scene-manager 的 scene_id;login、guild、match
+    // 改由发号器发号,不再申领槽位),作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者
     // (scene 的永久 guid 走号段,不编码集群),这里只是同一份 yaml 口径的原样读入。
     // 取值 0..31。见 docs/design/node-id-overhaul-plan-20260908.md §5 / §7.5。
     uint32 cluster_id = 18;

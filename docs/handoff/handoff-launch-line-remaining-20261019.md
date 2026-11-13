@@ -24,6 +24,14 @@
 >   见 [verify_launch_line_20261020.md](launch-readiness-20261013/verify_launch_line_20261020.md) §0′ 和 PROGRESS「2026-11-11 开服线收尾核对」。
 > - **拍板清单**:已决定的条目见清单 §0′;其余条目归各自所属线与 `server-gap-audit-20261101.md`。
 > - **Java**:B0-4 仍是 Java 待做(PARITY 已登记)。本线没有新增 Java 待做。
+>
+> **(2026-11-12 补做:B0-4 条目当时登记为「后续项」的几条,负责人要求现在做完,不留到以后)**
+> - **accept 资源耗尽不再崩溃**(gate 准入设计 G6、G7、G8):fd 或内存耗尽时,muduo 原来直接 abort 整个进程。现在改为让位排掉连接或暂停监听 100ms,失败日志每秒最多一行。muduo 的三份副本一起改,由合同测试守住三份一致。
+> - **fd 用量观测**:C++ 节点导出 `process_open_fds` / `process_max_fds`、启动门槛与豁免状态、accept 降级次数;新增告警文件 `deploy/k8s/cpp-node-resource-alerts.yaml`。
+> - **致命日志写 stderr**:任何一处 `LOG_FATAL` 退出前都把最后一行写进 stderr。gate / battle 的启动门禁因此不用逐个改走 `FatalStartupConfig`。
+> - **余量定案**:`kNonClientReserve` 维持 4096,不再等实测,理由写在 `open_file_limit.h`。
+> - 以上都未编译、未运行。命令见 PROGRESS「2026-11-12 开服线:B0-4 后续项现在做完」。还剩运维要做的一件事:发布前读各节点池的 nofile 硬限(E11)。
+> - 同日核对:清单 L-1(新号免冷读)对象已删,L-3(摘孤儿管理入口)已落码,记在拍板清单 §0′。
 
 ## 0. 一句话
 

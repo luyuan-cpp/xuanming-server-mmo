@@ -31,10 +31,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"friend/internal/config"
+	"friend/internal/data"
 	"friend/internal/metrics"
 	"friend/internal/svc"
 
 	"shared/drainproof"
+	"shared/workshard"
 )
 
 // ── 假 SweepStore ───────────────────────────────────────────────
@@ -51,6 +53,10 @@ type sweepCall struct {
 	retentionDays int
 	batchLimit    int
 	nowMs         int64
+	// 传给 store 的分片归属判定,当场展开成可比较的值(函数值进不了 assert.Equal):
+	// unsharded = 传进来的是 nil(不分工,全部片);否则 ownedShards 是它认领的片号(升序)。
+	unsharded   bool
+	ownedShards []int
 
 	// ctxErr 是**进入方法那一刻**的 ctx.Err()。runSweepRound 返回时会 cancel 单轮 ctx,
 	// 事后再去读恒为 Canceled,看不出调用当时的状态,所以必须当场抄下来。
@@ -80,26 +86,52 @@ type fakeSweepStore struct {
 
 var _ SweepStore = (*fakeSweepStore)(nil)
 
-func (f *fakeSweepStore) record(ctx context.Context, method, mode string, retentionDays, batchLimit int, nowMs int64) {
+func (f *fakeSweepStore) record(ctx context.Context, method, mode string, retentionDays, batchLimit int, nowMs int64, owns func(key string) bool) {
 	deadline, hasDeadline := ctx.Deadline()
+	ownedShards := shardsClaimedBy(owns)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, sweepCall{
 		method: method, mode: mode, retentionDays: retentionDays, batchLimit: batchLimit, nowMs: nowMs,
+		unsharded: owns == nil, ownedShards: ownedShards,
 		ctxErr: ctx.Err(), deadline: deadline, hasDeadline: hasDeadline,
 	})
 }
 
-func (f *fakeSweepStore) SweepTerminalRequests(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64) (int64, int64, error) {
-	f.record(ctx, sweepMethodTerminal, mode, retentionDays, batchLimit, nowMs)
+// shardsClaimedBy 把归属判定展开成它认领的片号(升序);owns 为 nil 时返回 nil。
+// 归属键与生产同形:workshard.ShardKey(data.SweepWorkKind, 片号)。
+func shardsClaimedBy(owns func(key string) bool) []int {
+	if owns == nil {
+		return nil
+	}
+	claimed := []int{}
+	for shard := 0; shard < workshard.Shards; shard++ {
+		if owns(workshard.ShardKey(data.SweepWorkKind, shard)) {
+			claimed = append(claimed, shard)
+		}
+	}
+	return claimed
+}
+
+// ownsShards 返回只认领给定片的归属判定,与生产的 workshard.Membership.Owns 同一个形状(按归属键判)。
+func ownsShards(shards ...int) func(key string) bool {
+	claimed := make(map[string]bool, len(shards))
+	for _, shard := range shards {
+		claimed[workshard.ShardKey(data.SweepWorkKind, shard)] = true
+	}
+	return func(key string) bool { return claimed[key] }
+}
+
+func (f *fakeSweepStore) SweepTerminalRequests(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64, owns func(key string) bool) (int64, int64, error) {
+	f.record(ctx, sweepMethodTerminal, mode, retentionDays, batchLimit, nowMs, owns)
 	if f.afterCall != nil {
 		f.afterCall(ctx, sweepMethodTerminal)
 	}
 	return f.terminal.seen, f.terminal.deleted, f.terminal.err
 }
 
-func (f *fakeSweepStore) SweepIdleCapacityRows(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64) (int64, int64, error) {
-	f.record(ctx, sweepMethodIdle, mode, retentionDays, batchLimit, nowMs)
+func (f *fakeSweepStore) SweepIdleCapacityRows(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64, owns func(key string) bool) (int64, int64, error) {
+	f.record(ctx, sweepMethodIdle, mode, retentionDays, batchLimit, nowMs, owns)
 	if f.afterCall != nil {
 		f.afterCall(ctx, sweepMethodIdle)
 	}
@@ -178,7 +210,7 @@ func TestSweepRoundFeedsConfigAndClockVerbatim(t *testing.T) {
 			deps := newSweepDeps(store, sweep)
 			presetSweepGauges(mode)
 
-			deps.runSweepRound(context.Background())
+			deps.runSweepRound(context.Background(), nil)
 
 			calls := store.snapshot()
 			require.Len(t, calls, 2, "一轮必须恰好调用两个 Sweep 方法各一次")
@@ -215,7 +247,7 @@ func TestSweepRoundRefreshesGaugesWithZero(t *testing.T) {
 			deps := newSweepDeps(store, testSweepConf(mode))
 			presetSweepGauges(mode)
 
-			deps.runSweepRound(context.Background())
+			deps.runSweepRound(context.Background(), nil)
 
 			pending, ok := sweepGauge(t, sweepPendingGaugeName, mode)
 			require.True(t, ok)
@@ -236,7 +268,7 @@ func TestSweepRoundSharesOneBudget(t *testing.T) {
 	sweep := testSweepConf(config.SweepModeReportOnly)
 	deps := newSweepDeps(store, sweep)
 
-	deps.runSweepRound(context.Background())
+	deps.runSweepRound(context.Background(), nil)
 
 	calls := store.snapshot()
 	require.Len(t, calls, 2)
@@ -264,7 +296,7 @@ func TestSweepRoundRunsIdleCapacityEvenWhenTerminalFails(t *testing.T) {
 	deps := newSweepDeps(store, testSweepConf(mode))
 	presetSweepGauges(mode)
 
-	deps.runSweepRound(context.Background())
+	deps.runSweepRound(context.Background(), nil)
 
 	calls := store.snapshot()
 	require.Len(t, calls, 2, "前一段失败不得跳过后一段")
@@ -294,7 +326,7 @@ func TestSweepRoundIdleCapacityFailureIsContained(t *testing.T) {
 	deps := newSweepDeps(store, testSweepConf(mode))
 	presetSweepGauges(mode)
 
-	require.NotPanics(t, func() { deps.runSweepRound(context.Background()) })
+	require.NotPanics(t, func() { deps.runSweepRound(context.Background(), nil) })
 
 	require.Len(t, store.snapshot(), 2)
 	pending, ok := sweepGauge(t, sweepPendingGaugeName, mode)
@@ -328,7 +360,7 @@ func TestSweepRoundUnknownModeNeverBecomesAGaugeLabel(t *testing.T) {
 	presetSweepGauges(config.SweepModeReportOnly)
 	presetSweepGauges(config.SweepModeDelete)
 
-	deps.runSweepRound(context.Background())
+	deps.runSweepRound(context.Background(), nil)
 
 	calls := store.snapshot()
 	require.Len(t, calls, 2, "未知模式下两段照常交给 SQL 侧(它只数不删)")
@@ -390,7 +422,7 @@ func TestStartSweepDoesNotStartWithoutStore(t *testing.T) {
 	deps := newSweepDeps(nil, testSweepConf(config.SweepModeReportOnly))
 	require.Nil(t, deps.Sweeps, "夹具前提:这里必须是真正的 nil 接口")
 
-	assert.NotPanics(t, func() { StartSweep(context.Background(), deps) })
+	assert.NotPanics(t, func() { StartSweep(context.Background(), deps, nil) })
 }
 
 // TestStartSweepDoesNotStartWithNonPositiveInterval:Interval <= 0 时不启动。
@@ -403,7 +435,7 @@ func TestStartSweepDoesNotStartWithNonPositiveInterval(t *testing.T) {
 		sweep.Interval = interval
 		deps := newSweepDeps(store, sweep)
 
-		assert.NotPanics(t, func() { StartSweep(context.Background(), deps) }, "interval=%v", interval)
+		assert.NotPanics(t, func() { StartSweep(context.Background(), deps, nil) }, "interval=%v", interval)
 		assert.Empty(t, store.snapshot(), "interval=%v 时不应启动循环", interval)
 	}
 }
@@ -425,7 +457,7 @@ func TestStartSweepTicksThenExitsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var stop func(context.Context) error
-	require.NotPanics(t, func() { stop = StartSweep(ctx, deps) })
+	require.NotPanics(t, func() { stop = StartSweep(ctx, deps, nil) })
 	require.NotNil(t, stop)
 	join := func() error {
 		gate.CloseAdmission()
@@ -494,7 +526,7 @@ func TestStartSweepTicksThenExitsOnCancel(t *testing.T) {
 		acceptedDeps := newSweepDeps(acceptedStore, acceptedConf)
 		acceptedDeps.SvcCtx.RootAdmission = acceptedGate
 		var acceptedStop func(context.Context) error
-		require.NotPanics(t, func() { acceptedStop = StartSweep(acceptedCtx, acceptedDeps) })
+		require.NotPanics(t, func() { acceptedStop = StartSweep(acceptedCtx, acceptedDeps, nil) })
 		require.NotNil(t, acceptedStop)
 		joinAccepted := func() error {
 			acceptedGate.CloseAdmission()
@@ -524,4 +556,111 @@ func TestStartSweepTicksThenExitsOnCancel(t *testing.T) {
 		require.ErrorIs(t, err, drainproof.ErrClosed)
 		assert.Nil(t, finish)
 	})
+}
+
+// ── ⑤ 按片分工(2026-11-11,sweep.go 文件头「多副本:按片分工」)────────────────
+//
+// SQL 侧怎么按片取行由 data/sweep_repo_test.go 在真库上验;这一层只钉三件事:
+// 归属判定原样交给两段、本副本负责几片进了指标、成员表与清理循环同起同停。
+
+const sweepOwnedShardsGaugeName = "friend_sweep_owned_shards"
+
+// TestSweepRoundPassesShardOwnershipToBothStages:同一份归属判定交给两段,负责的片数进 Gauge。
+// 只交给一段的话,另一段会照旧数和删全部片 —— 多副本下又回到重复执行,而且两个行数 Gauge 的口径不一致。
+func TestSweepRoundPassesShardOwnershipToBothStages(t *testing.T) {
+	ensureMetricsRegistered(t)
+	store := &fakeSweepStore{}
+	deps := newSweepDeps(store, testSweepConf(config.SweepModeDelete))
+	metrics.SetSweepOwnedShards(sweepGaugeSentinel)
+
+	deps.runSweepRound(context.Background(), ownsShards(3, 5, 63))
+
+	calls := store.snapshot()
+	require.Len(t, calls, 2)
+	for _, c := range calls {
+		assert.False(t, c.unsharded, "%s 必须拿到归属判定,不能退回不分工", c.method)
+		assert.Equal(t, []int{3, 5, 63}, c.ownedShards, "%s 拿到的必须是本副本负责的那几片", c.method)
+	}
+	owned, ok := metricValue(t, sweepOwnedShardsGaugeName, map[string]string{})
+	require.True(t, ok)
+	assert.EqualValues(t, 3, owned)
+}
+
+// TestSweepRoundOwnedShardsGauge:不分工时是全部 64 片;一片都不负责(成员表里有别的副本、本副本还没注册)时是 0,
+// 两段仍然照常调用 —— SQL 侧拿到恒假条件,什么都不数不删,两个行数 Gauge 照常刷成 0。
+func TestSweepRoundOwnedShardsGauge(t *testing.T) {
+	ensureMetricsRegistered(t)
+	const mode = config.SweepModeDelete
+
+	t.Run("不分工", func(t *testing.T) {
+		store := &fakeSweepStore{}
+		deps := newSweepDeps(store, testSweepConf(mode))
+		metrics.SetSweepOwnedShards(sweepGaugeSentinel)
+
+		deps.runSweepRound(context.Background(), nil)
+
+		for _, c := range store.snapshot() {
+			assert.True(t, c.unsharded, "%s:没有成员表时不得凭空造一个归属判定", c.method)
+		}
+		owned, ok := metricValue(t, sweepOwnedShardsGaugeName, map[string]string{})
+		require.True(t, ok)
+		assert.EqualValues(t, workshard.Shards, owned)
+	})
+
+	t.Run("一片都不负责", func(t *testing.T) {
+		store := &fakeSweepStore{}
+		deps := newSweepDeps(store, testSweepConf(mode))
+		metrics.SetSweepOwnedShards(sweepGaugeSentinel)
+		presetSweepGauges(mode)
+
+		deps.runSweepRound(context.Background(), ownsShards())
+
+		calls := store.snapshot()
+		require.Len(t, calls, 2, "一片都不负责也照常走两段:跳过会让行数 Gauge 停在上一轮的值")
+		for _, c := range calls {
+			assert.False(t, c.unsharded)
+			assert.Empty(t, c.ownedShards)
+		}
+		owned, ok := metricValue(t, sweepOwnedShardsGaugeName, map[string]string{})
+		require.True(t, ok)
+		assert.Zero(t, owned)
+		pending, ok := sweepGauge(t, sweepPendingGaugeName, mode)
+		require.True(t, ok)
+		assert.Zero(t, pending)
+	})
+}
+
+// TestStartSweepRunsMembershipAndJoinsIt:传了成员表时,清理按成员表的归属判定跑,停止函数等成员表的轮询也退出。
+//
+// 夹具里没有 etcd(SvcCtx.Etcd 为 nil):workshard.Membership.Run 记一条错误后立刻返回,成员表保持为空,
+// 按它的规则「成员表为空 = 本副本做全部片」。所以这里看到的是「拿到了归属判定,且认领全部 64 片」,
+// 与不分工(unsharded)可以分开;各副本怎么分片是 shared/workshard 自己的测试面。
+func TestStartSweepRunsMembershipAndJoinsIt(t *testing.T) {
+	store := &fakeSweepStore{}
+	sweep := testSweepConf(config.SweepModeReportOnly)
+	sweep.Interval = time.Millisecond
+	deps := newSweepDeps(store, sweep)
+	gate := drainproof.New()
+	deps.SvcCtx.RootAdmission = gate
+	require.Nil(t, deps.SvcCtx.Etcd, "夹具前提:没有 etcd 客户端")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stop := StartSweep(ctx, deps, workshard.NewMembership("FriendNodeService.rpc/zone/1/"))
+	join := func() error {
+		gate.CloseAdmission()
+		cancel()
+		waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer waitCancel()
+		return errors.Join(stop(waitCtx), gate.Wait(waitCtx))
+	}
+	t.Cleanup(func() { assert.NoError(t, join(), "失败收尾也必须等清理循环与成员表轮询都退出") })
+
+	require.Eventually(t, func() bool { return len(store.snapshot()) >= 2 },
+		2*time.Second, 5*time.Millisecond, "传了成员表之后清理循环仍须按节拍调用 store")
+	for _, c := range store.snapshot() {
+		assert.False(t, c.unsharded, "%s:传了成员表就必须按它的归属判定跑", c.method)
+		assert.Len(t, c.ownedShards, workshard.Shards, "%s:成员表为空时本副本认领全部片", c.method)
+	}
+	require.NoError(t, join(), "停止函数必须等到清理循环与成员表轮询都真实退出")
 }

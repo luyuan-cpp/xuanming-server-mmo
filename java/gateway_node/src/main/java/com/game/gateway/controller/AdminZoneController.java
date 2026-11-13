@@ -33,7 +33,8 @@ import java.util.function.Supplier;
  * 区服改成开放,容量、推荐、排序、开服时间、维护文案一并被初值覆盖;create 撞上已存在的 zone_id 也走同样的整行覆盖。
  * 现在 create 只插不改(已存在且内容不同回 409),局部修改走 {@code /maintenance}、{@code /open}。
  * 「暂停创建新角色」(create_role_closed,2026-11-10)不在整行设置里:它是运营开关,只经 {@code /create-role/close}、
- * {@code /create-role/open} 改,POST 新建时取库缺省(开着),PUT 整行替换不碰它。
+ * {@code /create-role/open} 改,POST 新建时取库缺省(开着),PUT 整行替换不碰它。本区角色上限(role_capacity,2026-11-12)
+ * 同理,只经 {@code PUT /role-capacity} 改。
  *
  * <p>返回形状:200 + ZoneConfig JSON / 204 / 404 不变;新增 400(请求体不完整或不合法,原因记 WARN 日志)与
  * 409(create 撞上已存在且内容不同的区服,响应体是库里那一行)。时间戳上的有意变化写在各接口注释里。
@@ -216,6 +217,27 @@ public class AdminZoneController {
         return setCreateRoleClosed(zoneId, false);
     }
 
+    /**
+     * 设本区角色上限(2026-11-12,区服满员处理 §6)。PUT /admin/zones/1/role-capacity,Body: {@code {"role_capacity": 30000}},
+     * 0 = 不设上限。JSON 键是 snake_case(理由同 {@link #setMaintenance})。缺字段或为负回 400、不碰库。
+     *
+     * <p>本区一共建过的角色数到了上限,本区网关的 RoleCapacityGuard 至多一个检查周期内关上创角开关(与手工
+     * {@code /create-role/close} 是同一个开关,区服列表与 login 的生效路径相同)。上限是电平判断:角色数不低于上限时开关
+     * 会被反复关上,所以要放开先调高上限或置 0,再 {@code /create-role/open}。只改这一列,其余列不动;
+     * 存在性判定与不重试的理由同 {@link #update}。
+     */
+    @PutMapping("/{zoneId}/role-capacity")
+    public ResponseEntity<ZoneConfig> setRoleCapacity(@PathVariable Long zoneId,
+                                                      @RequestBody(required = false) RoleCapacityRequest req) {
+        if (req == null || req.roleCapacity() == null || req.roleCapacity() < 0) {
+            return rejected("role-capacity", zoneId, "role_capacity must be given and >= 0");
+        }
+        int roleCapacity = req.roleCapacity();
+        LocalDateTime at = now.get();
+        return okOrNotFound(writeExistingZone(zoneId,
+                () -> zoneConfigRepo.updateRoleCapacity(zoneId, roleCapacity, at)));
+    }
+
     private ResponseEntity<ZoneConfig> setCreateRoleClosed(Long zoneId, boolean closed) {
         LocalDateTime at = now.get();
         return okOrNotFound(writeExistingZone(zoneId,
@@ -264,4 +286,7 @@ public class AdminZoneController {
     }
 
     public record MaintenanceRequest(String maintenanceMsg) {}
+
+    /** {@link #setRoleCapacity} 的请求体。用包装类型:漏传字段是 null(回 400),不会被当成 0(= 取消上限)。 */
+    public record RoleCapacityRequest(Integer roleCapacity) {}
 }

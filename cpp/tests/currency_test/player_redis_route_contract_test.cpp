@@ -28,6 +28,8 @@
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/handoff_sql_barrier.h"
 #include "player/system/player_landing.h"
+#include "player/system/player_mystery_merchant.h"
+#include "player/system/player_scene.h"
 #include "player/system/relocate_confirm.h"
 
 namespace
@@ -72,9 +74,10 @@ namespace
 		return out;
 	}
 
+	// 与生产的玩家域句柄同一组策略(cpp/libs/services/scene/core/system/redis.cpp:kAllKeys + KeyDomain::kPlayer)。
 	CommandRoute PlayerRoute(const std::string& formatted)
 	{
-		return ResolveCommandRoute(formatted, std::nullopt, HashTagPolicy::kAllKeys);
+		return ResolveCommandRoute(formatted, std::nullopt, HashTagPolicy::kAllKeys, redis_cluster::KeyDomain::kPlayer);
 	}
 
 	// 按生产的格式串格式化:{%llu} 这种键形要过 hiredis 才知道最后长什么样。
@@ -205,10 +208,15 @@ namespace
 
 	TEST(PlayerRedisRouteContract, ControlDomainStaysOffThePlayerHandle)
 	{
-		// 控制域的键不带 hash tag(设计 §5.1),发到玩家域句柄当场拒绝。这两个键形与 player_scene.cpp 的
-		// world_channel_directory、player_mystery_merchant.cpp 的 mystery_merchant 相同,常量是那两个文件私有的。
-		EXPECT_EQ(PlayerRoute(Resp({"GET", "world_channel_directory:zone:1:2"})).reason, RouteRejectReason::kMissingHashTag);
-		EXPECT_EQ(PlayerRoute(Resp({"HGET", "mystery_merchant:zone:1", "state"})).reason, RouteRejectReason::kMissingHashTag);
+		// 控制域的键带本 zone 的控制集群 tag {ctl:<z>}(docs/design/redis-cluster-all-domains-20261110.md §3),发到玩家域
+		// 句柄当场拒绝,原因是 tag 属于另一个域。两把键取自生产的拼键函数,同时钉住与 Go 侧逐字节相同的键形
+		// (go/scene_manager 的 worldChannelDirectoryKey、mysteryMerchantKey)。
+		const std::string directoryKey = PlayerSceneSystem::WorldChannelDirectoryKey(1, 2);
+		const std::string merchantKey = PlayerMysteryMerchantSystem::RecordKey(1);
+		EXPECT_EQ(directoryKey, "world_channel_directory:{ctl:1}:2");
+		EXPECT_EQ(merchantKey, "mystery_merchant:{ctl:1}");
+		EXPECT_EQ(PlayerRoute(Resp({"GET", directoryKey})).reason, RouteRejectReason::kWrongDomainTag);
+		EXPECT_EQ(PlayerRoute(Resp({"HGET", merchantKey, "state"})).reason, RouteRejectReason::kWrongDomainTag);
 		// 玩家域不用 PUBLISH(Cluster 下普通 PUBLISH 全集群广播,设计 §5.12)。
 		EXPECT_EQ(PlayerRoute(Resp({"PUBLISH", player_landing::kAssetWakeChannel, "42"})).reason, RouteRejectReason::kUnknownCommand);
 		EXPECT_FALSE(redis_slot::HasHashTag(player_landing::kAssetWakeChannel));

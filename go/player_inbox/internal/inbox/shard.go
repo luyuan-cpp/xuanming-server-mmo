@@ -15,9 +15,9 @@ const ShardCount = inboxshard.ShardCount
 // RowShard 返回 player_id 所在的 shard = mix64(player_id) % 64。**全服务唯一的计算入口**,SQL 里一律传它的结果,
 // 不在别处取模(评审 L5)。
 //
-// 为什么先混合再取模:player_id 有两套号源(AGENTS §7.1)。存量 / 回退的 bwmarrin SnowFlake 低 9 位是 step,
-// 同一毫秒只建一个角色时 step = 0,直接 % 64 会把这批玩家全部压进 shard 0;号段 ID 的低位又是另一种分布。
-// mix64 与任何位布局无关,两种号源都能均匀打散,以后再换号源也不用动建表契约。
+// 为什么先混合再取模:分片不能依赖 player_id 的位布局。定这条契约时 player_id 还有 bwmarrin SnowFlake 一套号源,
+// 低 9 位是 step,同一毫秒只建一个角色时 step = 0,直接 % 64 会把这批玩家全部压进 shard 0。现在 player_id 只由
+// 发号器发(AGENTS §7 第 1 条;login 的 bwmarrin 号源 2026-11-12 已删),mix64 与任何位布局无关,换号源不用动建表契约。
 //
 // 这是建表契约(2026-10-16 首次建表前由 player_id % 64 改为现公式)。按旧公式写出的行**不会**被读出断言拦下
 // (评审 R3):按玩家的读写全都带 WHERE `shard` = RowShard(player_id),旧行根本查不出来,是静默不可见 ——

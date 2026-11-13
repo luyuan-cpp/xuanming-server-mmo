@@ -18,8 +18,9 @@ import (
 // **各自独立**反应,两条时间线之间没有任何互相等待:
 //
 //	T0          节点与 etcd 失联(进程仍在跑、仍在服务玩家、仍能存盘)
-//	T0+TTL/2    C++ 老节点的身份探针转为不确认(keepalive 应答超过半个租约没来),
-//	            此后每 5s 给所有可改的玩家补存一次(player_lifecycle.cpp 的 RunIdentityAtRiskSaves)
+//	T0+TTL/2    C++ 老节点的身份探针转为不确认(keepalive 应答超过半个租约没来),此后:
+//	            每 3s 给内存里的每名玩家续一次持有者存活租约(RenewHolderLeasesAtRisk,player:{id}:holder_lease,PX 15s);
+//	            每 5s 给所有可改的玩家补存一次(RunIdentityAtRiskSaves)。两者都在 player_lifecycle.cpp
 //	T0+TTL      etcd 租约到期
 //	            ├─ etcd 发 DELETE → Go 立刻判死 → resolveScene / rebalance /
 //	            │  孤儿收尾 改写 scene:{id}:node 并让新节点 CreateScene
@@ -36,8 +37,10 @@ import (
 // 自愈晚一个屏障时长 —— 代价有界且可自愈。
 //
 // **和 etcd 单边失联时屏障挡不住老节点**(2026-11-05 更正):重注册发不出去,不会走到冲突关停,老节点也不疏散,
-// 一直服务到它的存盘被拒。那时保证不回档的是 go/db 的写权行:新节点认领时把代次抬上去,老节点之后的每一笔存盘
-// 都被判 STALE_OWNER、实体销毁,只丢不盖。丢的是老节点最后一次存盘之后的进度,T0+TTL/2 起的补存把它压到约 5s
+// 进程照常服务玩家。2026-11-12 起这种节点名下的玩家不再被接管:屏障过后,判死接管与判死释放还要看持有者存活租约
+// (logic/holder_lease.go),老进程在续租就不按判死处理,玩家留在它上面,等他离开或进程退出、租约过期之后才接管。
+// 租约那一层失效(玩家域 Redis 对老节点也不可达)时才回到写权行兜底:新节点认领把代次抬上去,老节点之后的存盘
+// 被判 STALE_OWNER、实体销毁,只丢不盖,丢的是老节点最后一次存盘之后的进度,补存把它压到约 5s
 // (docs/design/data-consistency-guarantee-map-20261020.md §6)。
 //
 // 完整设计见 docs/design/scene-owner-reentry-barrier.md §3.2。

@@ -150,10 +150,6 @@ func (r agonesRoomsRound) reclaimOrphanEntries(gs agones.GameServerRooms) int {
 			continue
 		}
 		switch {
-		case verdict == agonesRoomForeign:
-			logx.Errorf("[AgonesReconcile] zone %d gs=%s: room entry %s belongs to a scene registered in another zone, leaving it",
-				r.zoneID, gs.Name, entry)
-			unconverged++
 		case verdict.reclaimable():
 			if err := releaseAgonesRoom(r.ctx, r.svcCtx, r.namespace, room, "reconcile_"+string(verdict)); err != nil {
 				unconverged++
@@ -238,7 +234,7 @@ func (r agonesRoomsRound) restoreRecordedRooms(gs agones.GameServerRooms) int {
 				continue
 			}
 			ids = append(ids, sceneID)
-			keys = append(keys, sceneNodeKey(sceneID), sceneAgonesGsKey(sceneID))
+			keys = append(keys, sceneNodeKey(r.zoneID, sceneID), sceneAgonesGsKey(r.zoneID, sceneID))
 		}
 		if len(ids) == 0 {
 			continue

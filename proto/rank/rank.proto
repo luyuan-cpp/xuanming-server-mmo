@@ -7,6 +7,17 @@ option (OptionFileDefaultNode) = NODE_RANK;
 
 enum RankScope { RANK_SCOPE_UNSPECIFIED = 0; RANK_SCOPE_GLOBAL = 1; RANK_SCOPE_GUILD = 2; RANK_SCOPE_INSTANCE = 3; RANK_SCOPE_CUSTOM = 4; }
 enum RankGenerationState { RANK_GENERATION_UNSPECIFIED = 0; RANK_GENERATION_OPEN = 1; RANK_GENERATION_SEALED = 2; }
+// RankBoardKey.board_type 的取值登记处(2026-11-12)。board_type 是客户端契约:客户端按它找榜,两版服务器取同值。
+// 新增一种榜先在这里登记一个值,生产者与客户端都用生成的常量,不写数字;已上线的值不改、不复用(同字段编号)。
+// 字段本身仍是 uint32:rank 服务是通用榜,不按这里校验取值。
+enum RankBoardType {
+  RANK_BOARD_TYPE_UNSPECIFIED = 0;
+  // 计分模式的评分榜,一个计分模式一张(docs/design/global-match-hierarchical-pools.md §8 R5);
+  // 模式到榜的映射只在 go/match/internal/authority/rating.go 的 rankBoardTypes。
+  RANK_BOARD_TYPE_MATCH_1V1 = 1;      // MATCH_MODE_1V1,沿用拆分前唯一那张评分榜的键
+  RANK_BOARD_TYPE_MATCH_5V5 = 2;      // MATCH_MODE_5V5
+  RANK_BOARD_TYPE_MATCH_PVP_TEAM = 3; // MATCH_MODE_PVP_TEAM,各档每侧人数共用一张
+}
 message RankBoardKey { uint32 board_type = 1; RankScope scope = 2; uint64 scope_id = 3; string period = 4; uint64 generation = 5; }
 message RankEntry {
   uint64 rank = 1;

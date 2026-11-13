@@ -26,7 +26,7 @@ Gate → 本地校验签名、目标 Gate 与到期时间 → 允许后续游戏
 2、3 两个消费入口用同一个签票函数 `loginqueue.NewAdmitSigner`（2026-11-05 起）：签之前复核放行时选定的 Gate，它仍在分档选出的
 那一档里就沿用，已停写、排空、满载或不在此刻的候选里就重挑（见下文「满载与停写的 gate」）。此前两处各写一个闭包，照签已选 Gate。
 
-代码：`go/login/internal/logic/loginpregate/assigngatelogic.go`、`querystatuslogic.go`、
+代码：`go/login/internal/logic/loginpregate/assigngatelogic.go`、`queryqueuestatuslogic.go`、
 `go/login/internal/logic/pkg/loginqueue/gatetoken.go`、`admit_recheck.go`。
 
 ### gate 目录怎么读、怎么挑（2026-10-18 起；已落码，未编译、未测试，待 Codex 验证）

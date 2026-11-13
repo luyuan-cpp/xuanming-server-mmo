@@ -5,10 +5,10 @@ package main
 //	dbmove plan     -db <逻辑库> -target-cluster <集群> [-run-id <id>] [-roster <名册>[,<名册>]]
 //	dbmove prepare  -db <逻辑库> -target-cluster <集群> -run-id <id> -roster <名册>[,<名册>]
 //	dbmove verify   -db <逻辑库> -run-id <id> -sync <复制>
-//	dbmove cutover  -db <逻辑库> -run-id <id> -sync <复制> -roster <名册>[,<名册>] -metrics-targets host:port[,host:port] [-budget 30s] [-max-lag 3s] [-verify-max-age 6h]
+//	dbmove cutover  -db <逻辑库> -run-id <id> -sync <复制> -roster <名册>[,<名册>] -metrics-targets host:port[,host:port] [-budget 30s] [-max-lag 3s] [-verify-max-age 6h] [-skip-final-compare]
 //	dbmove rollback -db <逻辑库> -run-id <id> [-target-lost]
 //	dbmove audit    -db <逻辑库> -run-id <id> -metrics-targets host:port[,host:port]
-//	dbmove cleanup  -db <逻辑库> -run-id <id> -confirm-drop [-retention 168h]
+//	dbmove cleanup  -db <逻辑库> -run-id <id> -sync <复制> -confirm-drop [-retention 168h]
 //
 // 退出码:
 //
@@ -25,7 +25,8 @@ package main
 //	MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256    物理身份摘要,按部署一份,搬库不换
 //	DBMOVE_SOURCE_DSN、DBMOVE_TARGET_DSN    两侧的维护身份:闸门和哨兵
 //	DBMOVE_SOURCE_ADMIN_DSN、DBMOVE_TARGET_ADMIN_DSN
-//	                                        两侧的管理员:建库、删库、校验和、读复制进度、账号(权限见手册 §2)
+//	                                        两侧的管理员:建库、删库、校验和、读复制进度、账号(权限见手册 §2)。
+//	                                        plan、prepare 也要源库这一个(查没有主键的表);mysql 档 cleanup 也要目标这一个(查复制通道撤掉了没有)
 //	DBMOVE_REGISTRAR_PRINCIPAL、MMORPG_SQL_SCHEMA_PRINCIPAL
 //	                                        注册和 schema 主体,cutover 必填:翻转之前核它们在目标上存在、授权齐全
 //	DBMOVE_VERIFY_SOURCE_DSN                mysql 档 verify 用的源库副本
@@ -104,6 +105,7 @@ type options struct {
 	allowAddrMismatch   bool
 	allowSharedAccounts bool
 	targetLost          bool
+	skipFinalCompare    bool
 	metricsTargets      []string
 	rosterFiles         []string
 	logDir              string
@@ -142,16 +144,17 @@ func parseOptions(args []string, errOut io.Writer) (options, error) {
 	fs.StringVar(&o.db, "db", "", "logical database to move (required)")
 	fs.StringVar(&o.targetCluster, "target-cluster", "", "plan, prepare: cluster name in SqlClusters to move to")
 	fs.StringVar(&o.runID, "run-id", "", "32 hex digits, the same for every step of one move (plan prints one)")
-	fs.StringVar(&o.sync, "sync", "", "verify, cutover: ticdc:<openapi address>:<changefeed> or mysql-gtid[:<channel>]")
+	fs.StringVar(&o.sync, "sync", "", "verify, cutover, cleanup: ticdc:<openapi address>:<changefeed> or mysql-gtid[:<channel>]; cleanup takes the one cutover used")
 	fs.DurationVar(&o.timeout, "timeout", commandTimeout(o.command), "time limit of the command; for cutover, of the checks before the freeze")
 	fs.DurationVar(&o.maxLag, "max-lag", 3*time.Second, "cutover: refuse to freeze when replication lags more than this")
-	fs.DurationVar(&o.budget, "budget", 30*time.Second, "cutover: longest the source stays frozen before the tool rolls back")
+	fs.DurationVar(&o.budget, "budget", 30*time.Second, "cutover: longest the source stays frozen before the tool rolls back; it has to hold one full comparison of both sides")
+	fs.BoolVar(&o.skipFinalCompare, "skip-final-compare", false, "cutover: do not compare the frozen source with the target before the flip (a database too large for the freeze window); audit is then the only check")
 	fs.DurationVar(&o.rollbackBudget, "rollback-budget", 15*time.Second, "cutover: when the window aborts, time to invalidate the flip, and again to unfreeze the source")
 	fs.DurationVar(&o.verifyMaxAge, "verify-max-age", 6*time.Hour, "cutover: refuse when the last successful verify started longer ago than this")
 	fs.DurationVar(&o.retention, "retention", 7*24*time.Hour, "cleanup: refuse to drop the source until this long after the flip")
 	fs.BoolVar(&o.confirmDrop, "confirm-drop", false, "cleanup: really drop the source database")
 	fs.BoolVar(&o.acknowledgeNoAudit, "acknowledge-no-audit", false, "cleanup: drop even though audit never succeeded for this run")
-	fs.BoolVar(&o.allowAddrMismatch, "allow-addr-mismatch", false, "accept DSNs whose address differs from SqlClusters (a tunnel to the same cluster)")
+	fs.BoolVar(&o.allowAddrMismatch, "allow-addr-mismatch", false, "accept DSNs whose address differs from SqlClusters (a tunnel to the same cluster); cleanup: also a TiCDC address that differs from the one cutover used")
 	fs.BoolVar(&o.allowSharedAccounts, "allow-shared-writer-accounts", false, "plan, prepare: leave writer accounts that also write other databases of the target cluster unlocked")
 	fs.BoolVar(&o.targetLost, "target-lost", false, "rollback: the target cannot be reached and never took writes: skip the flip marker check and do not lock its accounts")
 	metrics := fs.String("metrics-targets", "", "audit, cutover: host:port of every process that uses this database, comma separated")
@@ -200,6 +203,13 @@ func parseOptions(args []string, errOut io.Writer) (options, error) {
 		if len(o.metricsTargets) == 0 {
 			return options{}, errors.New("-metrics-targets is required: the host:port of every process that uses this database")
 		}
+	case cmdCleanup:
+		// 不给就拒绝,不是跳过检查:删源库之前要按它核复制流已经撤掉。
+		spec, err := parseSync(o.sync)
+		if err != nil {
+			return options{}, fmt.Errorf("cleanup checks that the replication stream is gone before it drops the source: %w", err)
+		}
+		o.syncSpec = spec
 	}
 	if o.budget <= 0 || o.rollbackBudget <= 0 || o.timeout <= 0 || o.maxLag <= 0 || o.verifyMaxAge <= 0 || o.retention < 0 {
 		return options{}, errors.New("durations must be positive")
@@ -233,7 +243,7 @@ func run(args []string, getenv func(string) string, out, errOut io.Writer) int {
 	// Ctrl-C 和 SIGTERM 取消 ctx:切换窗口里等于超预算,走同一条回滚。
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	m, closeAll, err := wire(ctx, o, getenv, out)
+	m, closeAll, err := wire(ctx, o, getenv, out, errOut)
 	if err != nil {
 		fmt.Fprintf(errOut, "ERROR: %v\n", err)
 		return exitCodeOf(err)
@@ -345,7 +355,7 @@ func loadRosterPrincipals(paths []string, db string) ([]string, error) {
 }
 
 // wire 按命令打开它要用的东西。一条命令只碰它真正要的连接:plan 不写任何库,audit 不碰闸门。
-func wire(ctx context.Context, o options, getenv func(string) string, out io.Writer) (*mover, func(), error) {
+func wire(ctx context.Context, o options, getenv func(string) string, out, errOut io.Writer) (*mover, func(), error) {
 	config, err := dbplacement.ConfigFromEnv(getenv)
 	if err != nil {
 		return nil, nil, refusedf("%v", err)
@@ -382,7 +392,7 @@ func wire(ctx context.Context, o options, getenv func(string) string, out io.Wri
 		}
 	}
 	runIDBytes, _ := hex.DecodeString(o.runID)
-	journal, err := openJournal(o.logDir, o.db, o.runID, out, time.Now)
+	journal, err := openJournal(o.logDir, o.db, o.runID, out, errOut, time.Now)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open the step log: %w", err)
 	}
@@ -413,6 +423,7 @@ func wire(ctx context.Context, o options, getenv func(string) string, out io.Wri
 			verifyMaxAge: o.verifyMaxAge, retention: o.retention, pollInterval: 200 * time.Millisecond,
 			confirmDrop: o.confirmDrop, acknowledgeNoAudit: o.acknowledgeNoAudit, metricsTargets: o.metricsTargets,
 			rosterPrincipals: rosterPrincipals, controlPrincipals: controlPrincipals, allowSharedAccounts: o.allowSharedAccounts, targetLost: o.targetLost,
+			feedEndpoint: o.syncSpec.api, skipFinalCompare: o.skipFinalCompare,
 		},
 		store:        timedStore{inner: dbplacement.NewStore(client)},
 		scrape:       scrapeVersion,
@@ -465,10 +476,17 @@ func wire(ctx context.Context, o options, getenv func(string) string, out io.Wri
 		if m.source, err = gateSideFrom(openGateFrom(envSourceDSN)); err != nil {
 			return fail(err)
 		}
+		// 源库的管理员只读:查没有主键的表。维护身份只看得到闸门表,查不全。
+		if m.sourceAdmin, err = adminSideFrom(openAdminFrom(envSourceAdminDSN)); err != nil {
+			return fail(err)
+		}
 		if m.targetAdmin, err = adminSideFrom(openAdminFrom(envTargetAdminDSN)); err != nil {
 			return fail(err)
 		}
 		if err := addrOf(&m.o.sourceAddr, envSourceDSN); err != nil {
+			return fail(err)
+		}
+		if err := addrOf(&m.o.sourceAdminAddr, envSourceAdminDSN); err != nil {
 			return fail(err)
 		}
 		if err := addrOf(&m.o.targetAddr, envTargetAdminDSN); err != nil {
@@ -523,6 +541,8 @@ func wire(ctx context.Context, o options, getenv func(string) string, out io.Wri
 			return fail(err)
 		}
 		m.repl = repl
+		// 窗口里的静止比对读两侧主库的当前数据:源库冻结着,目标还没开放,mysql 档这一次也不用副本。
+		m.openView = viewOpener(o.db, backend, getenv(envSourceAdminDSN), getenv(envTargetAdminDSN))
 	case cmdRollback:
 		if m.source, err = gateSideFrom(openGateFrom(envSourceDSN)); err != nil {
 			return fail(err)
@@ -558,6 +578,17 @@ func wire(ctx context.Context, o options, getenv func(string) string, out io.Wri
 		if err := addrOf(&m.o.sourceAddr, envSourceAdminDSN); err != nil {
 			return fail(err)
 		}
+		// 删源库之前要问复制流撤掉了没有。mysql 档的通道配在目标上,所以要连目标,地址同样要核。
+		if backend == authoritysql.BackendMySQL {
+			if err := addrOf(&m.o.targetAdminAddr, envTargetAdminDSN); err != nil {
+				return fail(err)
+			}
+		}
+		feeds, err := openFeedPresence(o, getenv, backend, &closers)
+		if err != nil {
+			return fail(err)
+		}
+		m.feeds = feeds
 	}
 	return m, closeAll, nil
 }
@@ -594,25 +625,27 @@ func viewOpener(schema string, backend authoritysql.Backend, sourceDSN, targetDS
 	}
 }
 
+// openRawFromEnv 用环境变量里的连接串建只读的原始连接,关闭动作记进 closers。
+func openRawFromEnv(getenv func(string) string, env string, closers *[]func() error) (*sql.DB, error) {
+	dsn := getenv(env)
+	if dsn == "" {
+		return nil, refusedf("%s is not set", env)
+	}
+	db, err := openRaw(dsn, 2)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", env, err)
+	}
+	*closers = append(*closers, db.Close)
+	return db, nil
+}
+
 // openReplication 建复制进度的读取。用管理员连接串,只读:维护身份读不了 tidb_cdc 和 performance_schema(手册 §2)。
 func openReplication(o options, getenv func(string) string, backend authoritysql.Backend, closers *[]func() error) (replication, error) {
-	openFrom := func(env string) (*sql.DB, error) {
-		dsn := getenv(env)
-		if dsn == "" {
-			return nil, refusedf("%s is not set", env)
-		}
-		db, err := openRaw(dsn, 2)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", env, err)
-		}
-		*closers = append(*closers, db.Close)
-		return db, nil
-	}
-	source, err := openFrom(envSourceAdminDSN)
+	source, err := openRawFromEnv(getenv, envSourceAdminDSN, closers)
 	if err != nil {
 		return nil, err
 	}
-	target, err := openFrom(envTargetAdminDSN)
+	target, err := openRawFromEnv(getenv, envTargetAdminDSN, closers)
 	if err != nil {
 		return nil, err
 	}
@@ -621,11 +654,23 @@ func openReplication(o options, getenv func(string) string, backend authoritysql
 	}
 	repl := &gtidReplication{channel: o.syncSpec.channel, source: source, target: target, schema: o.db}
 	if getenv(envVerifySourceDSN) != "" {
-		if repl.verifySource, err = openFrom(envVerifySourceDSN); err != nil {
+		if repl.verifySource, err = openRawFromEnv(getenv, envVerifySourceDSN, closers); err != nil {
 			return nil, err
 		}
 	}
 	return repl, nil
+}
+
+// openFeedPresence 建 cleanup 用的读取:只问复制流还在不在。TiDB 档问 TiCDC,不连库;mysql 档的通道配在目标上,连目标的管理员。
+func openFeedPresence(o options, getenv func(string) string, backend authoritysql.Backend, closers *[]func() error) (feedPresence, error) {
+	if backend == authoritysql.BackendTiDB {
+		return &ticdcReplication{api: o.syncSpec.api, changefeed: o.syncSpec.changefeed, client: &http.Client{Timeout: ticdcTimeout}}, nil
+	}
+	target, err := openRawFromEnv(getenv, envTargetAdminDSN, closers)
+	if err != nil {
+		return nil, err
+	}
+	return &gtidReplication{channel: o.syncSpec.channel, target: target}, nil
 }
 
 // fetchMetrics 读一个进程的 /metrics。

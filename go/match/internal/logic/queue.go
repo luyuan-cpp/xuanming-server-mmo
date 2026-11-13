@@ -42,6 +42,7 @@ func isPlayerBattleLocked(svcCtx *svc.ServiceContext, playerId uint64) (bool, er
 
 // gatherCreateStageWorst 是全员备战完成后到 CreateBattle 返回为止的最坏耗时预算:CreateBattle(createBattleTimeout)按两轮算 = 2 × 5s = 10s。
 // 成局原件固定了目标实例,这条路径不换节点;保留两轮是因为建房前还有能力查询、存原件、核对工作租约三次调用(各 3s 上限),
+// 以及战斗剧本解析(battle_script_gather.go,总预算 500ms,只读本库),
 // 公式没有单独计它们,由这一轮和 matchedTicketTTLFor 的 10s 余量吸收。
 const gatherCreateStageWorst = 2 * createBattleTimeout
 

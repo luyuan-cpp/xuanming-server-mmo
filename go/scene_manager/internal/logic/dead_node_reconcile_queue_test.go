@@ -100,14 +100,14 @@ func TestDeadNodeReconcile_AbandonsAfterGiveUpDeadline(t *testing.T) {
 	assert.False(t, mr.Exists(nodeReconcileScenesKey(takeoverZone, node)), "收尾范围随任务一起删")
 	assert.Equal(t, "<missing>", c.valueOrMissing(nodeSceneCountKey(takeoverZone, node)), "放弃时同样删计数,不留无界的正残留")
 	assert.False(t, mr.Exists(nodeMembersKey(takeoverZone, node)))
-	assert.Equal(t, node, c.valueOrMissing(sceneNodeKey(89941)), "没结论的场景不动")
+	assert.Equal(t, node, c.valueOrMissing(sceneNodeKey(takeoverZone, 89941)), "没结论的场景不动")
 	in, err := sc.Redis.Sismember(nodeScenesKey(takeoverZone, node), "89941")
 	require.NoError(t, err)
 	assert.True(t, in, "没结论的场景留在反向索引里")
 
 	hook.failing.Store(false)
 	assert.Equal(t, 0, c.drain(), "放弃之后任务已不在表里")
-	assert.Equal(t, node, c.valueOrMissing(sceneNodeKey(89941)))
+	assert.Equal(t, node, c.valueOrMissing(sceneNodeKey(takeoverZone, 89941)))
 }
 
 // 收尾范围是判死时刻的快照(R1-I2):判死之后、屏障过去之前,同一 node_id 的新化身建的场景(属主同样是这个
@@ -123,7 +123,7 @@ func TestDeadNodeReconcile_ScopeIsDeathTimeSnapshot(t *testing.T) {
 	assert.Equal(t, []string{"89951"}, scope)
 
 	late := strconv.FormatUint(lateScene, 10)
-	require.NoError(t, mr.Set(sceneNodeKey(lateScene), node))
+	require.NoError(t, mr.Set(sceneNodeKey(takeoverZone, lateScene), node))
 	_, err := mr.SAdd(nodeScenesKey(takeoverZone, node), late)
 	require.NoError(t, err)
 	_, err = mr.ZAdd(activeInstancesKey(takeoverZone), float64(nowUnix()), late)
@@ -131,8 +131,8 @@ func TestDeadNodeReconcile_ScopeIsDeathTimeSnapshot(t *testing.T) {
 	c.elapseBarrier(t)
 
 	assert.Equal(t, 1, c.drain())
-	assert.Equal(t, "<missing>", c.valueOrMissing(sceneNodeKey(89951)), "判死时名下的实例照常销毁")
-	assert.Equal(t, node, c.valueOrMissing(sceneNodeKey(lateScene)), "判死之后建到同一 node_id 上的场景不在收尾范围里")
+	assert.Equal(t, "<missing>", c.valueOrMissing(sceneNodeKey(takeoverZone, 89951)), "判死时名下的实例照常销毁")
+	assert.Equal(t, node, c.valueOrMissing(sceneNodeKey(takeoverZone, lateScene)), "判死之后建到同一 node_id 上的场景不在收尾范围里")
 	in, err := sc.Redis.Sismember(nodeScenesKey(takeoverZone, node), late)
 	require.NoError(t, err)
 	assert.True(t, in, "新场景的反向索引不得被摘")

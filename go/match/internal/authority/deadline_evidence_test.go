@@ -88,6 +88,11 @@ func TestJudgeDeadlineAbortTable(t *testing.T) {
 		{"持有宽限已过、仍持有", capAt + deadlineHeldPatienceMs, capAt + deadlineHeldPatienceMs, DeadlineEvidenceBattleStillHolds, deadlineAbortVerdict{abort: true, capped: true}},
 		{"持有宽限内有了证据", capAt + 1, capAt + deadlineHeldPatienceMs, DeadlineEvidenceNoRoom, deadlineAbortVerdict{abort: true}},
 		{"取值认不出按判不了", due, 1, DeadlineAbortEvidence(99), deadlineAbortVerdict{nextProbeMs: due + deadlineProbeBackoffMs}},
+		// 2026-11-11:第一次观察到原进程已不在、等复核。不据它作废;下一次取证排在复核间隔之后(比取证间隔多 2 秒),其余同判不了。
+		{"刚过宽限、原进程已不在但还没复核", due, 1, DeadlineEvidenceInstanceGonePending, deadlineAbortVerdict{nextProbeMs: due + instanceGoneRecheckMs}},
+		{"等复核时临近硬上限:排期截在硬上限上", capAt - 1000, 1, DeadlineEvidenceInstanceGonePending, deadlineAbortVerdict{nextProbeMs: capAt}},
+		{"硬上限、还在等复核", capAt, capAt, DeadlineEvidenceInstanceGonePending, deadlineAbortVerdict{abort: true, capped: true}},
+		{"持有宽限内、等复核也等", capAt + deadlineHeldPatienceMs - 1, capAt + deadlineHeldPatienceMs, DeadlineEvidenceInstanceGonePending, wait},
 	} {
 		require.Equal(t, c.want, judgeDeadlineAbort(deadline, c.stamp, c.retry, c.evidence), c.why)
 	}
@@ -136,6 +141,21 @@ func TestDeadlineAbortSceneConstantsMatchCpp(t *testing.T) {
 	require.Equal(t, sceneDeliveryMarginMs, cppConstant(t, playerBattle, "kInboxSettlementDeliveryMarginMs"))
 	require.Equal(t, sceneFreezeHoldCapMs, cppConstant(t, playerBattle, "kFreezeHoldCapMs"))
 	require.Equal(t, battleSlowReplayMs, 1000*cppConstant(t, resultCommit, "kSqlOutcomeSlowRetryInterval"))
+}
+
+// 2026-11-11:「原进程已不在」的复核间隔要盖住原进程停止应答之后还可能提交终局的最长时间 —— battle 停机先停听、再排空并补提交
+// (node.cpp kShutdownDrainBudget,秒),排空结束前发出的最后一次 CommitBattleOutcome 还有一个出站调用期限
+// (grpc_client_call.h kDefaultGrpcCallDeadlineMs)—— 再留 5 秒余量。C++ 改了这两个常量而不同步 InstanceGoneSettleMs,本用例转红。
+// 截止裁决的复核排期要晚于复核间隔(否则下一次取证过不了复核、白等一轮),又远小于硬上限(硬上限之内来得及复核)。
+func TestInstanceGoneSettleCoversBattleShutdownDrain(t *testing.T) {
+	const marginMs uint64 = 5000
+	drainMs := 1000 * cppConstant(t, "cpp/libs/engine/core/node/system/node/node.cpp", "kShutdownDrainBudget")
+	callDeadlineMs := cppConstant(t, "cpp/libs/engine/core/network/grpc_client_call.h", "kDefaultGrpcCallDeadlineMs")
+	require.GreaterOrEqual(t, InstanceGoneSettleMs, drainMs+callDeadlineMs+marginMs,
+		"复核间隔必须盖住 battle 的停机排空加最后一次终局提交的调用期限")
+	require.Greater(t, instanceGoneRecheckMs, InstanceGoneSettleMs, "截止裁决的复核排期要晚于复核间隔")
+	require.Less(t, 2*instanceGoneRecheckMs, deadlineAbortHardCapMs, "硬上限之内来得及做完一次复核")
+	require.Equal(t, "instance_gone_pending", DeadlineEvidenceInstanceGonePending.String(), "等复核有自己的等待计数标签")
 }
 
 // 硬上限与 scene 冻结到期之后的续冻一起定(cpp/libs/services/scene/battle/system/player_battle.h;三个常量任一改动,本用例与

@@ -407,7 +407,7 @@ func TestAuditComparesGateSeparately(t *testing.T) {
 	h := newHarness(t)
 	h.seedFlipped(false)
 	h.metrics["game:9101"] = 3
-	guild := tableDigest{Columns: "id", Rows: 3, Digest: "abc"}
+	guild := tableDigest{Structure: testStructure, Rows: 3, Digest: "abc"}
 	h.sourceView.tables = map[string]tableDigest{"guild": guild, "route_meta": {Digest: "frozen"}, "writer_slot": {Digest: "frozen"}, "db_move_sentinel": {Digest: "two rows"}}
 	h.targetView.tables = map[string]tableDigest{"guild": guild, "route_meta": {Digest: "opened"}, "writer_slot": {Digest: "opened"}, "db_move_sentinel": {Digest: "one row"}}
 	h.sourceView.gate = gateRows{Meta: gateMetaRow{Generation: "ab", WriterEpoch: 6, FreezeRunID: "0123"}}
@@ -688,7 +688,7 @@ func TestVerifyToleratesOneReleaseOnTargetGate(t *testing.T) {
 	seed := func() *harness {
 		h := newHarness(t)
 		h.seedMoving()
-		guild := tableDigest{Columns: "id", Rows: 3, Digest: "abc"}
+		guild := tableDigest{Structure: testStructure, Rows: 3, Digest: "abc"}
 		h.sourceView.tables = map[string]tableDigest{"guild": guild, "route_meta": {Digest: "frozen"}}
 		h.targetView.tables = map[string]tableDigest{"guild": guild, "route_meta": {Digest: "open"}}
 		h.sourceView.gate = gateRows{Meta: gateMetaRow{Generation: "ab", Writable: 0, WriterEpoch: 6, FreezeRunID: "0123"}}
@@ -703,5 +703,228 @@ func TestVerifyToleratesOneReleaseOnTargetGate(t *testing.T) {
 	h.targetView.gate = gateRows{Meta: gateMetaRow{Generation: "ab", Writable: 1, WriterEpoch: 8}}
 	if err := h.m.verify(context.Background()); !errors.Is(err, errMismatch) {
 		t.Fatalf("多于一次 release 要算不一致: %v", err)
+	}
+}
+
+func TestFeedChange(t *testing.T) {
+	verified := testFeed
+	if got := feedChange(&verified, testFeed); got != "" {
+		t.Fatalf("同一条流、同一份配置: %s", got)
+	}
+	if got := feedChange(nil, testFeed); !strings.Contains(got, "no verified replication stream") {
+		t.Fatalf("映射里没有记录: %s", got)
+	}
+	tests := []struct {
+		name   string
+		change func(feed *dbplacement.FeedIdentity)
+		want   string
+	}{
+		{"只改了过滤", func(feed *dbplacement.FeedIdentity) { feed.ConfigDigest = "config-2" }, "the config of the replication stream changed"},
+		{"同名删了重建", func(feed *dbplacement.FeedIdentity) { feed.CreateTime = "2026-10-31 11:00:00" }, "the replication stream changed"},
+		{"重建的同时改了过滤", func(feed *dbplacement.FeedIdentity) { feed.StartTs, feed.ConfigDigest = 999, "config-2" }, "the replication stream changed"},
+		{"目标删库重建", func(feed *dbplacement.FeedIdentity) { feed.TargetCreated = "2026-10-31 11:00:00" }, "the replication stream changed"},
+	}
+	for _, test := range tests {
+		now := testFeed
+		test.change(&now)
+		// 比开头:「配置变了」那句话里也含有「the replication stream changed」。
+		if got := feedChange(&verified, now); !strings.HasPrefix(got, test.want) {
+			t.Fatalf("%s: %s", test.name, got)
+		}
+	}
+}
+
+// 预检之后有人暂停 changefeed、改了过滤再恢复:id、start_ts、create_time 都没变,只有配置摘要变了。
+// 新的过滤一样能追上冻结点,被滤掉的写却不在目标上:按复制断开处理,回滚并清掉 verify 记录。
+func TestCutoverFeedConfigChangedInWindowRollsBackAndClearsVerify(t *testing.T) {
+	h := newHarness(t)
+	h.seedMoving()
+	h.repl.caughtUp = func() (bool, error) {
+		h.repl.replicate()
+		h.repl.feed.ConfigDigest = "config-2"
+		return true, nil
+	}
+	err := h.m.cutover(context.Background())
+	requireRolledBack(t, h, err)
+	if !errors.Is(err, errReplicationBroken) || !strings.Contains(err.Error(), "the config of the replication stream changed") {
+		t.Fatalf("要说清楚是配置变了: %v", err)
+	}
+	if move := h.placement().Move; move.VerifiedMs != 0 || move.VerifiedFeed != nil {
+		t.Fatalf("要清掉 verify 记录: %+v", move)
+	}
+	if h.log.has("view.source") || h.log.has("target.release") || h.log.has("store.flip") {
+		t.Fatalf("不能往下走: %v", h.log.events)
+	}
+}
+
+// 追平之后两边都不动,再比一次全量:读当前数据,不带快照。比过了才记目标位置、解锁账号、开目标闸门。
+func TestCutoverComparesQuiescentSidesBeforeOpeningTarget(t *testing.T) {
+	h := newHarness(t)
+	h.seedMoving()
+	// 上一次 verify 留下的快照位置不能带进窗口。
+	h.sourceView.snapshot, h.targetView.snapshot = "100", "200"
+	if err := h.m.cutover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, order := range [][2]string{
+		{"source.freeze", "view.source"},
+		{"repl.mark", "view.source"},
+		{"view.target", "store.put"},
+		{"view.target", "admin.unlock"},
+		{"view.target", "target.release"},
+		{"view.target", "store.flip"},
+	} {
+		h.log.mustPrecede(t, order[0], order[1])
+	}
+	if h.sourceView.snapshot != "" || h.targetView.snapshot != "" {
+		t.Fatalf("两边静止,读当前数据: %q %q", h.sourceView.snapshot, h.targetView.snapshot)
+	}
+	if !h.sourceView.closed || !h.targetView.closed {
+		t.Fatal("视图要关")
+	}
+	move := h.placement().Move
+	if move.FinalCompareSkipped || move.FeedEndpoint != testFeedEndpoint {
+		t.Fatalf("翻转要记下比过了,以及复制流是从哪个地址读的: %+v", move)
+	}
+	if h.errOut.Len() != 0 {
+		t.Fatalf("没有放弃保护就不该有告警: %s", h.errOut)
+	}
+}
+
+// verify 之后复制被跳过一段(changefeed 用 --overwrite-checkpoint-ts 恢复,往目标注入空事务跳过 GTID):
+// 位置和哨兵都对得上,只有数据对不上。不翻转,回滚,清掉 verify 记录。
+func TestCutoverFinalCompareMismatchRollsBackAndClearsVerify(t *testing.T) {
+	h := newHarness(t)
+	h.seedMoving()
+	h.store.records[testDB].Placement.Move.VerifyTookMs = 100
+	h.targetView.tables = map[string]tableDigest{"guild": {Structure: testStructure, Rows: 2, Digest: "abc"}}
+	err := h.m.cutover(context.Background())
+	requireRolledBack(t, h, err)
+	if !errors.Is(err, errTargetDiverged) || errors.Is(err, errMismatch) || !strings.Contains(err.Error(), "guild: source rows=3") {
+		t.Fatalf("要点名不一致的表,退出码按回滚算: %v", err)
+	}
+	move := h.placement().Move
+	if move.VerifiedMs != 0 || move.VerifiedFeed != nil || move.VerifyTookMs != 0 {
+		t.Fatalf("要清掉 verify 记录: %+v", move)
+	}
+	if move.TargetPoint != "" {
+		t.Fatalf("比不过就没走到记目标位置: %q", move.TargetPoint)
+	}
+	if h.log.has("admin.unlock") || h.log.has("admin.lock") || h.log.has("target.release") || h.log.has("store.flip") {
+		t.Fatalf("不一致就不碰目标、不翻转: %v", h.log.events)
+	}
+	// 回滚的顺序不变:先作废翻转,再解冻。
+	h.log.mustPrecede(t, "store.put", "source.release")
+	// 记录清掉了,不重新 verify 不能再切。
+	requireRefused(t, h.m.cutover(context.Background()), "no successful verify")
+}
+
+// 上一次窗口崩在打开目标闸门之后,这一次静止比对不一致:回滚照旧先作废翻转、把账号锁回去、再解冻。
+func TestCutoverFinalCompareMismatchAfterOpenedTargetRelocksThenUnfreezes(t *testing.T) {
+	h := newHarness(t)
+	h.seedOpenedTarget(t)
+	h.targetView.tables = map[string]tableDigest{"guild": {Structure: testStructure, Rows: 4, Digest: "abc"}}
+	err := h.m.cutover(context.Background())
+	requireRolledBack(t, h, err)
+	if !errors.Is(err, errTargetDiverged) {
+		t.Fatalf("要报两边不一致: %v", err)
+	}
+	h.log.mustPrecede(t, "store.put", "admin.lock")
+	h.log.mustPrecede(t, "admin.lock", "source.release")
+	if !h.targetAdmin.locked["writer@%"] {
+		t.Fatal("账号要锁回去")
+	}
+	if h.log.has("store.flip") {
+		t.Fatalf("不能翻转: %v", h.log.events)
+	}
+}
+
+// 比对本身没做成:回滚,但没有证据说数据不一致,verify 记录留着。底下哪怕是一条拒绝,冻结过又回滚的退出码也是 2。
+func TestCutoverFinalCompareFailureRollsBackKeepsVerify(t *testing.T) {
+	h := newHarness(t)
+	rec := h.seedMoving()
+	h.targetView.digestErr = noPrimaryKeyError("guild")
+	err := h.m.cutover(context.Background())
+	requireRolledBack(t, h, err)
+	if errors.Is(err, errRefused) || errors.Is(err, errTargetDiverged) || !strings.Contains(err.Error(), "table guild has no primary key") {
+		t.Fatalf("要带上原因,按回滚报: %v", err)
+	}
+	if got := h.placement().Move.VerifiedMs; got != rec.Placement.Move.VerifiedMs {
+		t.Fatalf("没比完不动 verify 记录: %d", got)
+	}
+	if h.log.has("target.release") || h.log.has("store.flip") {
+		t.Fatalf("没比完不能开目标: %v", h.log.events)
+	}
+}
+
+// 库太大,窗口里比不完:到预算就回滚,提示加大 -budget。
+func TestCutoverFinalCompareOverBudgetRollsBack(t *testing.T) {
+	h := newHarness(t)
+	rec := h.seedMoving()
+	h.m.o.budget = 30 * time.Millisecond
+	h.sourceView.stall = true
+	err := h.m.cutover(context.Background())
+	requireRolledBack(t, h, err)
+	if !strings.Contains(err.Error(), "-budget=30ms") {
+		t.Fatalf("要说明是预算里没比完: %v", err)
+	}
+	if got := h.placement().Move.VerifiedMs; got != rec.Placement.Move.VerifiedMs {
+		t.Fatalf("超预算不动 verify 记录: %d", got)
+	}
+	if h.log.has("target.release") || h.log.has("store.flip") {
+		t.Fatalf("没比完不能开目标: %v", h.log.events)
+	}
+}
+
+// 超大库显式跳过静止比对:不比,也不按 verify 的耗时卡预算;但要在标准错误输出告警,并把「跳过了」和翻转一起记进映射。
+func TestCutoverSkipFinalCompareWarnsAndRecords(t *testing.T) {
+	h := newHarness(t)
+	h.seedMoving()
+	h.m.o.skipFinalCompare = true
+	h.store.records[testDB].Placement.Move.VerifyTookMs = uint64(time.Hour.Milliseconds())
+	// 两边其实不一样也看不出来,这正是跳过的代价。
+	h.targetView.tables = map[string]tableDigest{"guild": {Structure: testStructure, Rows: 2, Digest: "abc"}}
+	if err := h.m.cutover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.log.has("view.source") || h.log.has("view.target") {
+		t.Fatalf("跳过就不比: %v", h.log.events)
+	}
+	if !strings.Contains(h.errOut.String(), "WARNING: [cutover] -skip-final-compare is set") {
+		t.Fatalf("要在标准错误输出告警: %q", h.errOut.String())
+	}
+	if strings.Contains(h.out.String(), "WARNING") {
+		t.Fatalf("告警走标准错误输出,不混在步骤输出里: %q", h.out.String())
+	}
+	if p := h.placement(); p.Cluster != testTarget || !p.Move.FinalCompareSkipped {
+		t.Fatalf("跳过要记进映射: %+v %+v", p, p.Move)
+	}
+}
+
+// 表没有主键:verify 拒绝并点名,不记成功。
+func TestVerifyRefusesTableWithoutPrimaryKey(t *testing.T) {
+	h := newHarness(t)
+	h.seedMoving()
+	h.store.records[testDB].Placement.Move.VerifiedMs = 0
+	h.sourceView.digestErr = noPrimaryKeyError("guild")
+	requireRefused(t, h.m.verify(context.Background()), "table guild has no primary key")
+	if h.placement().Move.VerifiedMs != 0 {
+		t.Fatal("不能记成功")
+	}
+}
+
+// 数据一样、表定义不一样(目标把唯一索引建成了普通索引):verify 判不一致,报出差在哪一行定义。
+func TestVerifyStructureMismatchRecordsNothing(t *testing.T) {
+	h := newHarness(t)
+	h.seedMoving()
+	h.store.records[testDB].Placement.Move.VerifiedMs = 0
+	h.sourceView.tables = map[string]tableDigest{"guild": {Structure: "column 1 \"id\"\nunique index \"uk_name\"", Rows: 3, Digest: "abc"}}
+	h.targetView.tables = map[string]tableDigest{"guild": {Structure: "column 1 \"id\"\nindex \"uk_name\"", Rows: 3, Digest: "abc"}}
+	err := h.m.verify(context.Background())
+	if !errors.Is(err, errMismatch) || !strings.Contains(err.Error(), "the table definition differs") || !strings.Contains(err.Error(), `only on the source [unique index "uk_name"]`) {
+		t.Fatalf("定义不同要算不一致: %v", err)
+	}
+	if h.placement().Move.VerifiedMs != 0 {
+		t.Fatal("不一致不能记成功")
 	}
 }

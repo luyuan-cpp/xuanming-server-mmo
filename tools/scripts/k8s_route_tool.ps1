@@ -8,7 +8,9 @@
     生产上 route-tool 并在 data_service 主程序里:`/app/service -f /app/etc/data_service.yaml -route-tool <子命令> [参数]`
     (go/data_service/data_service.go;子命令与退出码见 go/data_service/internal/routetoolcli/cli.go)。
     不 kubectl exec 进在役 Pod:一次性 Job 不占在役进程的资源,输出按运行号留档。本脚本渲染 deploy/k8s/manifests/go-svc/data-service-route-tool.yaml:
-    同一镜像(缺省取在役 statefulset/data-service 的镜像)、同一 ConfigMap(go-svc-data-service-config)、资源单独设。
+    同一镜像(缺省取在役 statefulset/data-service 的镜像)、挂部署脚本渲染的 ConfigMap go-svc-data-service-config、资源单独设。
+    ConfigMap 里 MySQL 口令写空串,MySQLPasswordEnv 指名 MMORPG_MYSQL_PASSWORD,Job 经 Secret mysql-auth 注入它;两样都由
+    k8s_deploy.ps1 部署 data-service 时在 zone namespace 建好,本脚本不建、不读。
 
     流程:
       1. 入口校验(任何 kubectl 之前):-RouteToolArgs 第一项必须是已知子命令;不许带 -f / -route-tool / -migrate / -version
@@ -31,7 +33,7 @@
     例外:参数绑定失败(pwsh -File 下缺 -ZoneName / -RouteToolArgs、-ZoneName 不合格式)发生在脚本运行之前,退出码是 pwsh 的 1;
     经 dev_tools.ps1 -Command k8s-route-tool 调用时由包装层兜成 2。
 
-    口令不进输出:本脚本不读 ConfigMap 内容(口令在里面),清单里只有 ConfigMap 的名字;route-tool 的 stderr 只带主机与库名。
+    口令不进输出:本脚本不读 ConfigMap 与 Secret 的内容,清单里只有 ConfigMap 与 Secret 的名字;route-tool 的 stderr 只带主机与库名。
     所有 kubectl 调用都有 HTTP 超时与进程级截止;kind 上务必显式传 -KubeContext kind-mmorpg。
 
 .EXAMPLE

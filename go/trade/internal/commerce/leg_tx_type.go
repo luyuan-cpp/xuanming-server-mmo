@@ -28,7 +28,8 @@ func legTxType(l *tradepb.TradeCommerceLeg) uint32 {
 }
 
 // isReturnLeg 判断一条发放腿是不是退回本人托管的资产。退回腿的角色名只有这几种:
-//   - seller_return、buyer_return、bid_return:撤单、过期、托管不成、竞价退款时由 plan / planRmb 建;
+//   - seller_return、buyer_return、bid_return:撤单、过期、托管不成、竞价退款、交付被拒整单退回时由 plan / planRmb 建;
+//   - buyer_surplus:撮合按卖价成交时,把买单按自己限价多冻的差价退给买家(market.go);
 //   - "<扣出腿>/refund":人工整单退回给每条已扣出的腿加的(manual.go 的 ManualRefund);
 //   - 以上几种被人工补发后带的 "#k" 后缀(manual.go 的 reissueRole)。
 //
@@ -37,7 +38,7 @@ func legTxType(l *tradepb.TradeCommerceLeg) uint32 {
 func isReturnLeg(role string) bool {
 	base, _, _ := strings.Cut(role, "#")
 	switch base {
-	case "seller_return", "buyer_return", "bid_return":
+	case "seller_return", "buyer_return", "bid_return", "buyer_surplus":
 		return true
 	}
 	return strings.HasSuffix(base, "/refund")

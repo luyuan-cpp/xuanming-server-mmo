@@ -74,12 +74,19 @@ func TestApplyEvents(t *testing.T) {
 			wantChanged: false,
 		},
 		{
-			// fail-open 的关键一条:值写坏了要当这条事件没发生,
-			// **保留原有规则**,绝不能把它解析成"关停"或把好规则冲掉。
-			name:        "PUT 坏值被忽略,原规则原样保留",
+			// fail-open 的关键一条:值写坏了绝不能解析成"关停"。与全量同步同一口径,
+			// 写坏的键等于没有规则:原来那条规则随之失效(而不是关到下一次全量复核)。
+			name:        "PUT 坏值等于没有规则,原规则随之失效",
 			start:       map[string]Rule{"LoginService/*": {Deny: true, Reason: "原值"}},
 			events:      []*clientv3.Event{putEvent(p+"LoginService/*", `{"deny":tru`)},
-			wantRules:   map[string]Rule{"LoginService/*": {Deny: true, Reason: "原值"}},
+			wantRules:   map[string]Rule{},
+			wantChanged: true,
+		},
+		{
+			name:        "PUT 坏值到一个没有规则的键不算变化",
+			start:       map[string]Rule{},
+			events:      []*clientv3.Event{putEvent(p+"LoginService/*", `{"deny":tru`)},
+			wantRules:   map[string]Rule{},
 			wantChanged: false,
 		},
 		{

@@ -103,8 +103,10 @@ func TestOrchestratedZonesIsOwnZoneOnly(t *testing.T) {
 }
 
 func TestLeaderLockKeyPerZone(t *testing.T) {
-	assert.Equal(t, "scene_manager:leader:lock:zone:101", LeaderLockKey(101))
+	// 锁与本 zone 的控制域键同一个 tag(docs/design/redis-cluster-all-domains-20261110.md §4.7)。
+	assert.Equal(t, "scene_manager:leader:lock:{ctl:101}", LeaderLockKey(101))
 	assert.NotEqual(t, LeaderLockKey(101), LeaderLockKey(102))
+	assert.Equal(t, redisslot.HashSlot(nodeLoadKey(101)), redisslot.HashSlot(LeaderLockKey(101)), "与本 zone 的负载集同槽")
 }
 
 func TestSceneNodeZonePrefixDoesNotMatchOtherZones(t *testing.T) {
@@ -233,20 +235,40 @@ func TestOwnsControlZoneSkipsForeignMembership(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "10")
 	// 本进程是 zone 1;往 zone 2 的成员集合写入一律跳过(由 zone 2 自己的对账收敛)。
 	require.NoError(t, addSceneMember(sc, 42, 900, 2, "20"))
-	assert.False(t, mr.Exists(instanceMembersKey(900)))
+	assert.False(t, mr.Exists(instanceMembersKey(2, 900)))
+	assert.False(t, mr.Exists(instanceMembersKey(testZoneId, 900)))
 	assert.False(t, mr.Exists(nodeMembersKey(2, "20")))
 	// 本 zone 照常写。
 	require.NoError(t, addSceneMember(sc, 42, 901, testZoneId, "10"))
-	ok, err := mr.SIsMember(instanceMembersKey(901), "42")
+	ok, err := mr.SIsMember(instanceMembersKey(testZoneId, 901), "42")
 	require.NoError(t, err)
 	assert.True(t, ok)
-	// 只给场景号:scene:{id}:zone 不是本 zone 就不动。
-	mr.Set(sceneZoneKey(902), "2")
-	mr.SAdd(instanceMembersKey(902), "42")
+	// 只给场景号(docs/design/redis-cluster-all-domains-20261110.md §3.3):按本进程的 zone 看属主键在不在。场景登记在
+	// 别的 zone 时本 zone 的键里没有它:不动,别的 zone 的成员一个都不摘,本 zone 也不凭空建出集合。
+	mr.Set(sceneNodeKey(2, 902), "20")
+	mr.SAdd(instanceMembersKey(2, 902), "42")
+	mr.SAdd(nodeMembersKey(2, "20"), "42")
 	require.NoError(t, removeScenePlayer(sc, 42, 902, 0))
-	ok, err = mr.SIsMember(instanceMembersKey(902), "42")
+	ok, err = mr.SIsMember(instanceMembersKey(2, 902), "42")
 	require.NoError(t, err)
 	assert.True(t, ok, "别的 zone 的场景成员不由本进程摘")
+	ok, err = mr.SIsMember(nodeMembersKey(2, "20"), "42")
+	require.NoError(t, err)
+	assert.True(t, ok, "别的 zone 的节点成员不由本进程摘")
+	assert.False(t, mr.Exists(instanceMembersKey(testZoneId, 902)), "本 zone 不凭空建出别的 zone 场景的集合")
+	// 场景在本 zone:按属主摘场景与节点两边的成员(location 已不指向它)。
+	mr.Set(sceneNodeKey(testZoneId, 903), "10")
+	mr.SAdd(instanceMembersKey(testZoneId, 903), "42")
+	mr.SAdd(nodeMembersKey(testZoneId, "10"), "42")
+	require.NoError(t, removeScenePlayer(sc, 42, 903, 0))
+	assert.False(t, mr.Exists(instanceMembersKey(testZoneId, 903)), "本 zone 的场景成员照常摘")
+	ok, err = mr.SIsMember(nodeMembersKey(testZoneId, "10"), "42")
+	require.NoError(t, err)
+	assert.False(t, ok, "本 zone 的节点成员照常摘")
+	// 读属主出错时回错误,由上游重试,不当成「不在本 zone」静默跳过。
+	mr.SetError("ERR injected")
+	require.Error(t, removeScenePlayer(sc, 42, 904, 0))
+	mr.SetError("")
 }
 
 // CreateScene 只替本 zone 登记场景:别的 zone 的请求在任何写入之前拒绝(路由不变量,§3.3)。

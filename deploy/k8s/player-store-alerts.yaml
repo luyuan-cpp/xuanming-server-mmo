@@ -17,7 +17,9 @@
 # 口径:
 #   - go/db 启动时把两个 op 的全部 result 以 0 预置(metrics.PrimePlayerStore),increase 抓得到第一次。
 #   - 按 namespace 聚合(一个 zone 一个 namespace),用的是 ServiceMonitor / PodMonitor 默认附加的 namespace 标签。
-#   - 阈值没有实测基线(都是「出现或持续出现就报」),阶段 B 压测出对比表之后回头校准;DbPlayerStoreLatencyHigh 的 500ms 同样是占位。
+#   - 阈值已定(2026-11-12),压测出基线后可调:故障类规则是「出现或持续出现就报」(这些结局在健康系统里恒为 0,不依赖基线);
+#     DbPlayerStoreLatencyHigh 取 P99 > 500ms 持续 10m,依据:存盘走 TiDB 一次事务(写权行校验 + player_store 行写),业界 OLTP 事务 P99 常用 100~500ms 作告警线,
+#     500ms 同时远低于 go/db 的 RPC 超时预算与 scene 存盘重试窗口,越线就开始挤占重试余量;10m 的 for 滤掉单次热点与 failover 抖动。
 #   - 只进看板、不设告警:SAVE_PLAYER_EQUAL、SAVE_PLAYER_OLDER_SEQ(重试和迟到的正常结局)、LOAD_AND_CLAIM_* 的写权结局(路由过期时 scene_manager 会重试)、
 #     db_player_store_row_bytes(看 payload 增长)。
 #   - scene 侧:存盘最终被拒(scene_player_store_save_refused_total{result})走 scene 的 Prometheus 出口,见文件末 scene.player-store 组;
@@ -121,7 +123,7 @@ spec:
           annotations:
             summary: "{{ $labels.namespace }} 的玩家存盘 P99 延迟 {{ $value | printf \"%.3f\" }}s({{ $labels.op }})"
             description: >-
-              P99 持续 10 分钟超过 500ms(占位阈值,没有压测基线)。查数据库:热点行、写冲突、连接池是否排队(mysql-connection-alerts.yaml)。
+              P99 持续 10 分钟超过 500ms(已定 2026-11-12,压测出基线后可调;依据见文件头口径)。查数据库:热点行、写冲突、连接池是否排队(mysql-connection-alerts.yaml)。
               scene 的周期存盘和关键立存都排在同一条路径上,延迟变大时丢失窗口跟着变大。
 
     # scene 侧:存盘最终被确定性拒绝。指标由 scene 的 Prometheus 出口导出(cpp/libs/services/scene/player/system/player_ownership_metrics.cpp,

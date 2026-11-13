@@ -83,8 +83,8 @@ func TestAgonesReconcile_HeldEntryIsKeptUntilItsDeadlineThenFencedOff(t *testing
 
 	reg := sceneRegistration{SceneID: sceneID, ZoneID: testZoneId, NodeID: "10", AgonesRoom: agonesRoom{GameServer: "gs-1", Entry: entry}}
 	require.Equal(t, registrationFenced, registerWorldChannel(sc, reg, 4242), "取消之后晚到的登记被挡住")
-	assert.False(t, mr.Exists(sceneNodeKey(sceneID)))
-	assert.False(t, mr.Exists(sceneAgonesGsKey(sceneID)), "记录不会指向一条已经删掉的条目")
+	assert.False(t, mr.Exists(sceneNodeKey(testZoneId, sceneID)))
+	assert.False(t, mr.Exists(sceneAgonesGsKey(testZoneId, sceneID)), "记录不会指向一条已经删掉的条目")
 }
 
 // 场景已销毁、拆除任务快照指向这一条:等拆除任务删(实体销毁之后才还名额);任务做完之后剩下的就是孤儿。
@@ -97,31 +97,40 @@ func TestAgonesReconcile_KeepsEntryOfAPendingTeardown(t *testing.T) {
 	alloc.addEntryForTest("gs-1", room.Entry)
 	reply, err := json.Marshal([]any{"claimed", "10", room.record(), "", ""})
 	require.NoError(t, err)
-	mr.HSet(sceneTeardownJobKey(sceneID), "token", "t-1", "kind", teardownKindInstance, "reason", "idle",
+	mr.HSet(sceneTeardownJobKey(testZoneId, sceneID), "token", "t-1", "kind", teardownKindInstance, "reason", "idle",
 		"claimed_at", "1", "reply", string(reply))
 	ctx := context.Background()
 
 	require.Equal(t, 0, ReconcileAgonesRoomsForZone(ctx, sc, testZoneId))
 	assert.Equal(t, []string{room.Entry}, alloc.entriesOf("gs-1"), "拆除任务还没做完,条目归它删")
 
-	mr.Del(sceneTeardownJobKey(sceneID))
+	mr.Del(sceneTeardownJobKey(testZoneId, sceneID))
 	require.Equal(t, 0, ReconcileAgonesRoomsForZone(ctx, sc, testZoneId))
 	assert.Empty(t, alloc.entriesOf("gs-1"))
 }
 
-// 不碰的两种,计入未收敛:场景登记在别的 zone(它的键只由那个 zone 读写),条目不是本服务写的格式(人工改过)。
-func TestAgonesReconcile_LeavesForeignAndUnrecognizedEntries(t *testing.T) {
+// 条目里的场景不在本 zone 的键里(登记在别的 zone,或已销毁):按孤儿删,只删 GameServer 上这一条,别的 zone 的场景键
+// 一把都不读、不动(docs/design/redis-cluster-all-domains-20261110.md §3.3、§10.1)。原来靠 scene:<id>:zone 认出别的 zone、
+// 留着不删(foreign),那把键已删。条目不是本服务写的格式(人工改过)的仍不碰,计入未收敛。
+func TestAgonesReconcile_ReclaimsEntryOfSceneNotInZoneAndLeavesUnrecognized(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	alloc := newFakeAllocator(&fakeGameServer{name: "gs-1", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 4})
 	withAgones(t, sc, alloc, true)
 	const foreignScene uint64 = 7005
 	foreign := newAgonesRoomEntry(foreignScene)
 	alloc.addEntryForTest("gs-1", foreign)
-	require.NoError(t, mr.Set(sceneZoneKey(foreignScene), strconv.FormatUint(uint64(testZoneId+1), 10)))
-	before := alloc.entriesOf("gs-1")
+	// 同一个场景号在别的 zone 有完整的记录,指着这一条:本 zone 的对账看不到它。
+	otherZone := testZoneId + 1
+	require.NoError(t, mr.Set(sceneNodeKey(otherZone, foreignScene), "10"))
+	require.NoError(t, mr.Set(sceneAgonesGsKey(otherZone, foreignScene), agonesRoom{GameServer: "gs-1", Entry: foreign}.record()))
+	require.Len(t, alloc.entriesOf("gs-1"), 2, "前提:一条认不出的占位,一条别的 zone 场景的条目")
 
-	require.Equal(t, 2, ReconcileAgonesRoomsForZone(context.Background(), sc, testZoneId))
-	assert.Equal(t, before, alloc.entriesOf("gs-1"), "两条都留着")
+	require.Equal(t, 1, ReconcileAgonesRoomsForZone(context.Background(), sc, testZoneId), "只剩认不出的那一条没收敛")
+	after := alloc.entriesOf("gs-1")
+	assert.NotContains(t, after, foreign, "场景不在本 zone 的条目按孤儿删")
+	assert.Len(t, after, 1, "认不出的条目留着")
+	assert.Equal(t, "10", mustGet(t, mr, sceneNodeKey(otherZone, foreignScene)), "别的 zone 的场景映射不动")
+	assert.True(t, mr.Exists(sceneAgonesGsKey(otherZone, foreignScene)), "别的 zone 的名额记录不动")
 }
 
 // 过期的在途占用,条目不在任何一台 GameServer 上(分配根本没发出去):取消。没到期的留着。
@@ -148,7 +157,7 @@ func newRestoreCase(t *testing.T, sceneID uint64, servers ...*fakeGameServer) (*
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
-	require.NoError(t, mr.Set(sceneNodeKey(sceneID), "10"))
+	require.NoError(t, mr.Set(sceneNodeKey(testZoneId, sceneID), "10"))
 	_, err := mr.SAdd(nodeScenesKey(testZoneId, "10"), strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 	return sc, alloc
@@ -160,7 +169,7 @@ func TestAgonesReconcile_AddsBackMissingRecordedEntry(t *testing.T) {
 	sc, alloc := newRestoreCase(t, sceneID,
 		&fakeGameServer{name: "gs-1", podIP: "10.0.0.8", state: "Allocated", capacity: 4})
 	room := agonesRoom{GameServer: "gs-1", Entry: newAgonesRoomEntry(sceneID)}
-	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(sceneID), room.record()))
+	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(testZoneId, sceneID), room.record()))
 	before := agonesReconciledCount(t, metrics.AgonesRoomsMissingAdded)
 
 	require.Equal(t, 0, reconcileOnce(sc))
@@ -174,7 +183,7 @@ func TestAgonesReconcile_MissingEntryOnFullGameServerIsReported(t *testing.T) {
 	sc, alloc := newRestoreCase(t, sceneID,
 		&fakeGameServer{name: "gs-1", podIP: "10.0.0.8", state: "Allocated", count: 2, capacity: 2})
 	room := agonesRoom{GameServer: "gs-1", Entry: newAgonesRoomEntry(sceneID)}
-	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(sceneID), room.record()))
+	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(testZoneId, sceneID), room.record()))
 	before := agonesReconciledCount(t, metrics.AgonesRoomsMissingNoCapacity)
 
 	// 两条占位条目认不出、各计一次;缺的那一条补不上再计一次。
@@ -213,7 +222,7 @@ func TestAgonesReconcile_RehomeOnFullGameServerKeepsTheOldRoom(t *testing.T) {
 	before := agonesReconciledCount(t, metrics.AgonesRoomsRehomeNoCapacity)
 
 	require.Equal(t, 1, reconcileOnce(sc))
-	record, err := sc.Redis.Get(sceneAgonesGsKey(sceneID))
+	record, err := sc.Redis.Get(sceneAgonesGsKey(testZoneId, sceneID))
 	require.NoError(t, err)
 	assert.Equal(t, recordedElsewhere, record)
 	assert.Equal(t, []string{parseAgonesRoom(occupant).Entry}, alloc.entriesOf("gs-1"))

@@ -398,7 +398,7 @@ func renderMessageIdFile(infos map[uint64]*internal.MethodInfo, reserved map[uin
 
 func WriteMessageIdFile() {
 	if err := utils2.WriteFileIfChanged(_config.Global.Paths.MessageIdFile, []byte(renderMessageIdFile(internal.RpcIdMethodMap, reservedMessageIdMap))); err != nil {
-		logger.Global.Fatal("写入消息号清单失败", zap.String("message_id_file", _config.Global.Paths.MessageIdFile), zap.Error(err))
+		logger.Global.Fatal("Failed to write the message ID file", zap.String("message_id_file", _config.Global.Paths.MessageIdFile), zap.Error(err))
 		return
 	}
 }
@@ -717,7 +717,7 @@ func writePlayerServiceInstanceFiles(wg *sync.WaitGroup, serviceType string, isP
 func WriteServiceRegisterInfoFile(wg *sync.WaitGroup) {
 	writeEventIdHeaderFiles()
 	if err := writeKafkaCommandEventWhitelistHeader(); err != nil {
-		logger.Global.Fatal("Kafka 白名单生成失败", zap.Error(err))
+		logger.Global.Fatal("Failed to generate the Kafka allowlist", zap.Error(err))
 	}
 	// 头文件(kMaxRpcMethodCount)必须先于 .cpp 同步落盘:若生成中途 Fatal 退出,
 	// 只允许出现"头已扩容而 .cpp 未更新"的安全方向(数组偏大无害);反向会让

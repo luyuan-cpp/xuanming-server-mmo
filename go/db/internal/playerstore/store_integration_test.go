@@ -20,7 +20,9 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/luyuancpp/proto2mysql"
 
+	dbpb "proto/common/database"
 	storepb "proto/player_store"
 )
 
@@ -72,11 +74,17 @@ func itStore(t *testing.T) (*Store, *sql.DB, context.Context) {
 	if _, err := db.ExecContext(ctx, itDDL); err != nil {
 		t.Fatal(err)
 	}
+	model := proto2mysql.NewDB()
+	outbox := &dbpb.PlayerAuditOutbox{}
+	model.RegisterTable(outbox)
+	if _, err := db.ExecContext(ctx, model.GetCreateTableSQL(outbox)); err != nil {
+		t.Fatal(err)
+	}
 	store, err := New(db, testKnownGen, DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.VerifySchema(ctx); err != nil {
+	if err := VerifySchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	return store, db, ctx
@@ -425,13 +433,13 @@ func TestIT_CanceledSaveLeavesNothing(t *testing.T) {
 	}
 }
 
-// 表不存在:VerifySchema 拒绝启动。
+// 表不存在:VerifySchema 拒绝打开这个存档库。
 func TestIT_VerifySchemaRejectsMissingTable(t *testing.T) {
 	store, db, ctx := itStore(t)
 	if _, err := db.ExecContext(ctx, "DROP TABLE player_store"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.VerifySchema(ctx); err == nil {
+	if err := VerifySchema(ctx, db); err == nil {
 		t.Fatal("missing table must be rejected")
 	}
 	if _, err := store.Save(ctx, &storepb.SavePlayerRequest{PlayerId: 7, OwnerEpoch: 100, SaveSeq: 1, SchemaGen: 1, InstanceId: instanceA}); err == nil {

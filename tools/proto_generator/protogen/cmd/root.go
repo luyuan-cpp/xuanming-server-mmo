@@ -75,15 +75,15 @@ func main() {
 		}
 	}
 	if exclusiveModes > 1 {
-		logger.Global.Fatal("--persist-schema-seal、--persist-schema-verify 与 --grpc-handler 只能选一个")
+		logger.Global.Fatal("--persist-schema-seal, --persist-schema-verify and --grpc-handler are mutually exclusive")
 	}
 	flag.Visit(func(option *flag.Flag) {
 		if option.Name == "grpc-handler" && strings.TrimSpace(*grpcHandler) == "" {
-			logger.Global.Fatal("--grpc-handler 必须指定源 proto，空值不能进入全量生成")
+			logger.Global.Fatal("--grpc-handler requires a source proto; an empty value must not fall through to full generation")
 		}
 	})
 	if flag.NArg() != 0 {
-		logger.Global.Fatal("不支持的命令参数", zap.Strings("arguments", flag.Args()))
+		logger.Global.Fatal("Unsupported command arguments", zap.Strings("arguments", flag.Args()))
 	}
 
 	start := time.Now()
@@ -118,9 +118,9 @@ func main() {
 	}
 	if *grpcHandler != "" {
 		if err := cppGen.GenerateGrpcHandler(*grpcHandler); err != nil {
-			logger.Global.Fatal("定向生成 gRPC handler 失败", zap.Error(err))
+			logger.Global.Fatal("Targeted gRPC handler generation failed", zap.Error(err))
 		}
-		logger.Global.Info("定向生成 gRPC handler 完成", zap.String("proto", *grpcHandler))
+		logger.Global.Info("Targeted gRPC handler generation finished", zap.String("proto", *grpcHandler))
 		return
 	}
 

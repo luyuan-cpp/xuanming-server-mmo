@@ -175,6 +175,18 @@ COMMIT;
      `deleteFriendEdges` 减计数时一并刷新 `created_ms`,让刚减过计数的行在一个保留期内不可回收。
 - **配置与观测**:复用 `Friend.Sweep` 的 Mode / RetentionDays / BatchLimit,没有新增配置键;新 Gauge
   `friend_sweep_idle_capacity_rows{mode}`。默认 `report_only` 同样只数不删。
+- **多副本按片分工(2026-11-11,[消除单节点总纲](no-single-node-horizontal-scaling-20261001.md) §9)**:终态申请清理与
+  容量行回收的候选读都只取本副本负责的片。片号 = 玩家 id % 64(`friend_request` 按发起方 `from_player_id`,
+  `friend_capacity` 按 `player_id`),归属键前缀 `friend-sweep`,由 etcd 里本 zone 注册的 stable friend 副本按最高随机
+  权重哈希分(`shared/workshard`,与 guild / trade 终态清理、player_inbox 对账同法)。片条件在 `LIMIT` 之前,每个副本
+  一轮各删自己片里的一批,清理吞吐随副本数增长;以前每个副本读同一批候选、抢同一批行,加副本只多出重复读和空删。
+  - 分工只省重复劳动,不承担正确性:逐行点锁加 `WHERE` 复核不变;成员表变化的几秒里同一片可能两个副本都删
+    (后到的删到 0 行),或一片一轮没人删(终态行多留一轮)。
+  - 「`updated_ms` 为 0 就拒删」的保险不分片:它判的是全表有没有写路径漏写,任一片出现这种行,所有副本都不删。
+  - 两个行数 Gauge 因此是**本副本负责的片**的读数,看全服积压要对各副本求和。新 Gauge `friend_sweep_owned_shards`
+    是本副本上一轮负责的片数,全部 stable 副本加起来应为 64;canary 不跑清理,不进成员表。
+  - 成员表还没读到或连续 30 秒读不到时,本副本做全部片(宁可重复,不让片没人清);成员表里有别的副本、本副本还没
+    注册完时,本副本一片都不做。
 - **存量库注意**:`go/schemamigrate` 对已存在的表只 `ADD COLUMN`、不补建索引(只出 warning)。friend 库
   从未上线,全新空库随 `CREATE TABLE` 建出索引;真遇到存量表要手工 `ADD INDEX`,否则候选读是全表扫。
 

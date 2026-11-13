@@ -146,12 +146,11 @@ func requireActiveInstance(t *testing.T, sc *svc.ServiceContext, zoneID uint32, 
 func TestOwnerReadInterleave_ReconcileSkipsSceneReassignedAfterOwnerRead(t *testing.T) {
 	const sceneID uint64 = 89701
 	member := strconv.FormatUint(sceneID, 10)
-	hook := &afterOwnerReadHook{key: sceneNodeKey(sceneID)}
+	hook := &afterOwnerReadHook{key: sceneNodeKey(interleaveZone, sceneID)}
 	live := startFakeSceneNode(t, interleaveNodeLive)
 	sc := newInterleaveSvcCtx(t, hook, live)
 
-	require.NoError(t, sc.Redis.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(interleaveZone), 10)))
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), interleaveNodeDead))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(interleaveZone, sceneID), interleaveNodeDead))
 	_, err := sc.Redis.Sadd(nodeScenesKey(interleaveZone, interleaveNodeDead), member)
 	require.NoError(t, err)
 	require.NoError(t, sc.Redis.Set(nodeSceneCountKey(interleaveZone, interleaveNodeDead), "1"))
@@ -172,11 +171,12 @@ func TestOwnerReadInterleave_ReconcileSkipsSceneReassignedAfterOwnerRead(t *test
 	})
 	entry := nodeEntry{nodeID: interleaveNodeDead}
 	entry.reg.ZoneId = interleaveZone
-	reconcileDeadNodeScenes(context.Background(), sc, entry, []string{member}, seedDeadNodeTaskForTest(t, sc, interleaveZone, interleaveNodeDead))
+	reconcileDeadNodeScenes(context.Background(), sc, entry, []string{member}, seedDeadNodeTaskForTest(t, sc, interleaveZone, interleaveNodeDead),
+		noPassBudgetForTest)
 
 	require.True(t, hook.fired.Load(), "改派必须真的插在收尾读属主之后")
 	require.EqualValues(t, 0, live.fake.destroyCalls.Load(), "收尾不得向新属主发 DestroyScene")
-	owner, err := sc.Redis.Get(sceneNodeKey(sceneID))
+	owner, err := sc.Redis.Get(sceneNodeKey(interleaveZone, sceneID))
 	require.NoError(t, err)
 	require.Equal(t, interleaveNodeLive, owner, "属主映射必须原样留给 live")
 	requireSceneIndexedOnlyOn(t, sc, interleaveZone, sceneID, interleaveNodeLive, interleaveNodeDead)
@@ -193,13 +193,12 @@ func TestOwnerReadInterleave_ReconcileSkipsSceneReassignedAfterOwnerRead(t *test
 func TestOwnerReadInterleave_ExplicitDestroyFollowsOwnerAtClaimTime(t *testing.T) {
 	const sceneID uint64 = 89702
 	member := strconv.FormatUint(sceneID, 10)
-	hook := &afterOwnerReadHook{key: sceneNodeKey(sceneID)}
+	hook := &afterOwnerReadHook{key: sceneNodeKey(interleaveZone, sceneID)}
 	nodeA := startFakeSceneNode(t, interleaveNodeA)
 	nodeB := startFakeSceneNode(t, interleaveNodeB)
 	sc := newInterleaveSvcCtx(t, hook, nodeA, nodeB)
 
-	require.NoError(t, sc.Redis.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(interleaveZone), 10)))
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), interleaveNodeA))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(interleaveZone, sceneID), interleaveNodeA))
 	_, err := sc.Redis.Sadd(nodeScenesKey(interleaveZone, interleaveNodeA), member)
 	require.NoError(t, err)
 	require.NoError(t, sc.Redis.Set(nodeSceneCountKey(interleaveZone, interleaveNodeA), "1"))
@@ -219,7 +218,7 @@ func TestOwnerReadInterleave_ExplicitDestroyFollowsOwnerAtClaimTime(t *testing.T
 	require.Equal(t, sceneID, nodeB.fake.lastDestroyScene.Load())
 	require.EqualValues(t, 0, nodeA.fake.destroyCalls.Load(), "A 已不是属主,不得收到 DestroyScene")
 
-	owner, err := sc.Redis.Get(sceneNodeKey(sceneID))
+	owner, err := sc.Redis.Get(sceneNodeKey(interleaveZone, sceneID))
 	require.NoError(t, err)
 	require.Empty(t, owner, "属主映射必须被抹掉")
 	for _, n := range []string{interleaveNodeA, interleaveNodeB} {

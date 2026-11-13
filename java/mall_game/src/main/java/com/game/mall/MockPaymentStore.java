@@ -75,7 +75,7 @@ public final class MockPaymentStore {
             throw new CommerceException(409, "mock请求号或原订单已绑定其他交易");
         } catch (CommerceException rejected) { throw rejected; }
         catch (RuntimeException unavailable) {
-            LOG.warn("本地mock付款失败 type={}", unavailable.getClass().getSimpleName());
+            LOG.warn("local mock payment failed type={}", unavailable.getClass().getSimpleName());
             throw new CommerceException(503, "mock付款暂不可用，已提交原件保留待恢复");
         }
     }
@@ -149,7 +149,7 @@ public final class MockPaymentStore {
                 try { orderId = next(phase); }
                 catch (RuntimeException unavailable) {
                     scanFailures++; drained[phase] = true;
-                    LOG.warn("本地mock扫描失败 phase={} type={}", phase, unavailable.getClass().getSimpleName());
+                    LOG.warn("local mock scan failed phase={} type={}", phase, unavailable.getClass().getSimpleName());
                     continue;
                 }
                 if (orderId == null) { drained[phase] = true; continue; }
@@ -162,7 +162,7 @@ public final class MockPaymentStore {
                     succeeded++;
                 } catch (RuntimeException unavailable) {
                     failed++;
-                    LOG.warn("本地mock投递失败 phase={} type={}", phase, unavailable.getClass().getSimpleName());
+                    LOG.warn("local mock delivery failed phase={} type={}", phase, unavailable.getClass().getSimpleName());
                 } finally {
                     cursors[phase].after = orderId; // 失败保留原件，先让本轮后项获得机会；到上界后再绕回。
                 }

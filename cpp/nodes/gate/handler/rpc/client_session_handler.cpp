@@ -1,12 +1,15 @@
 #include "client_session_handler.h"
 #include "client_heartbeat.h"
 #include "client_request_lane.h"
+#include "client_scene_lane.h"
 #include "drain_migration.h"
 #include "login_admission.h"
+#include "login_session_renewal.h"
 #include "rpc_reply_bridge.h"
 #include "scene_client_call_reply.h"
 #include "session_details_builder.h"
 #include "core/security/caller_auth.h"
+#include "kill_switch/kill_switch.h"
 #include "thread_context/trace_context_tls.h"
 
 #include <algorithm>
@@ -77,59 +80,19 @@ static void LogClientSecurityRejectionSampled(const char *reason, SessionId sess
 // 延后完成(等下游)时不必再改。超时 = 结果未知:回带请求 id 的 1003,不重发。
 constexpr std::chrono::milliseconds kGateToSceneClientCallTimeout{12000};
 
-// scene 对一条客户端消息的回包 / 失败落到客户端(docs/design/muduo-rpc-channel.md §8.1)。
-// 会话按 (session_id, 会话代次) 复核:session_id 被新连接复用之后,旧会话迟到的回包不得写进新会话的 socket。
-// 只由 HandleTcpNodeMessage 为内层响应非 Empty 的请求-响应类消息登记,RPC0 保证每次调用恰好回调一次,
-// 所以下面三种处置(原样下发 / 1003 信封 / 不下发)对同一请求恰好发生一次,判定见 scene_client_call_reply.h。
-static void ForwardSceneClientCallResult(SessionId sessionId, uint64_t incarnation, uint64_t clientRequestId,
-										 uint32_t innerMessageId, const RpcStatus &status,
-										 const std::shared_ptr<ProcessClientPlayerMessageResponse> &response)
-{
-	SessionInfo *session = gate_lane::FindLiveSession(sessionId, incarnation);
-	if (session == nullptr)
-	{
-		return; // 会话已关闭或号已复用:没有客户端可回(断线后的回包本来就无处可去)
-	}
-	using gate_scene_client_reply::Disposition;
-	const Disposition disposition = gate_scene_client_reply::Decide(status, response.get(), clientRequestId);
-	if (disposition == Disposition::kForwardContent)
-	{
-		if (const auto clientConn = session->conn.lock())
-		{
-			GetGateCodec().send(clientConn, response->message_content());
-		}
-		return;
-	}
-	if (!status.ok())
-	{
-		// 确定未执行(没发出去 / 对端派发前拒绝)或结果未知(超时 / 断连 / 关机):都回带请求 id 的 1003,
-		// 客户端不必干等自己的 15s 超时。结果未知时下游可能已执行,有副作用的请求靠业务侧栅栏与幂等兜底。
-		static uint64_t failedCount = 0;
-		if ((failedCount++ & 0x3FF) == 0)
-		{
-			LOG_WARN << "[TCP Node] scene call failed (sampled): status=" << status.name()
-					 << ", remote_error=" << status.remoteError() << ", message_id=" << innerMessageId
-					 << ", failed_total=" << failedCount;
-		}
-	}
-	else
-	{
-		// scene 派发前早退、应答里没有 message_content(docs/design/client-rpc-callback.md §7 R1):请求确定未执行。
-		// 请求号非 0 回带请求 id 的 1003,客户端不必干等 15s 超时;请求号为 0 没法关联,维持不下发。
-		// 早退的具体原因与会话在 scene 自己的日志里,这里只留趋势(每 1024 次一条)。
-		static uint64_t noContentCount = 0;
-		if ((noContentCount++ & 0x3FF) == 0)
-		{
-			LOG_WARN << "[TCP Node] scene reply has no message content (sampled): message_id=" << innerMessageId
-					 << ", envelope_sent=" << (disposition == Disposition::kServiceUnavailableEnvelope)
-					 << ", no_content_total=" << noContentCount;
-		}
-	}
-	if (disposition == Disposition::kServiceUnavailableEnvelope)
-	{
-		gate_lane::SendEnvelope(*session, clientRequestId, innerMessageId, kServiceUnavailable);
-	}
-}
+// 不变式 I6(docs/design/client-scene-request-handoff-hold.md §5):本超时 + 场景 lane 的等待上限 + 1000 ≤ 客户端请求超时(15000)。
+// 一条请求在 gate 最多先等 kMaxSceneLaneWait(排在别的请求后面,或玩家换场景节点时等重投),发出后最多再等本超时;
+// 两者相加必须早于客户端自己超时,否则客户端先放弃、gate 之后才把它交给 scene 执行。改其中任何一个值都要重算这条链。
+static_assert(kGateToSceneClientCallTimeout + gate_scene_lane::kMaxSceneLaneWait + std::chrono::milliseconds{1000} <=
+				  std::chrono::milliseconds{15000},
+			  "gate->scene call timeout + scene lane wait + 1000ms must not exceed the client request timeout");
+
+// scene 对一条客户端消息的回包 / 失败怎么落到客户端,由场景 lane 处置(client_scene_lane.cpp 的 OnSceneCallDone;
+// docs/design/muduo-rpc-channel.md §8.1、client-scene-request-handoff-hold.md §4.5):原样下发 / 1003 信封 / 不下发 /
+// 放回队头等重投,判定见 scene_client_call_reply.h。发送出口是 SendClientMessageToScene:定义在后面(紧挨它用到的
+// SendRequestErrorEnvelope 一组),构造函数注入时要先看到声明。
+static gate_scene_lane::SceneSendResult SendClientMessageToScene(SessionId sessionId, const SessionInfo &session,
+	const ClientRequest &request, bool oneWay, gate_scene_lane::CallSeq callSeq);
 
 // 直连调用按发出时的会话交桥,不依赖服务端是否回显会话 metadata。
 static void ForwardDirectGrpcCallResult(SessionId sessionId, uint64_t incarnation,
@@ -314,42 +277,47 @@ static bool SendViaRouter(const ClientRequest &request, const SessionDetails &se
 	return SendRawViaRouter(request, sessionDetails.SerializeAsString()) == gate_lane::RouterSendResult::kSent;
 }
 
-// 排空迁移向 login 要一张换 gate 的票(ClientPlayerLogin.RequestGateMigration,docs/design/gate-drain-session-migration.md §4.3),
-// 经 gate_drain_migration::SetRequestSender 注入。与断线通知同一种 gate 合成请求:会话身份走同一个 BuildSessionDetails、
-// 带会话代次(login 按 gate_instance_id + 会话代次认这条连接),gate_call_seq 留 0 —— 不进路由 lane,不占客户端请求的单飞槽,
-// 也不排在客户端请求后面。应答只交给 done,不进回包桥、不推给客户端;票据是否送出由 drain_migration 复核会话后决定。
+// gate 合成、应答只给 gate 自己用的 login 请求的统一出口(排空迁移要票、登录态续租)。这类请求的请求体为空,身份全在
+// SessionDetails 里。与断线通知同一种 gate 合成请求:会话身份走同一个 BuildSessionDetails、带会话代次(login 按
+// gate_instance_id + 会话代次认这条连接),gate_call_seq 留 0 —— 不进路由 lane,不占客户端请求的单飞槽,也不排在客户端请求后面。
+// 应答只交给 done,不进回包桥、不推给客户端。
+//   Reply      { bool delivered; Response response; } 形状的结构。delivered = false:调用失败或应答不可解析;
+//   sendDirect 直连模式下生成的 loginpb::SendClientPlayerLogin<方法>;
+//   what       日志里对这类请求的称呼(英文)。
 // 返回 false = 没发出(没有路由服 / login 实例、缺通道、会话序列化失败、直连模式签名失败),done 不会被调用;
-// 路由模式的签名失败由 SendForwardForInternalReply 同步回调 done(按调用失败退避),这里仍返回 true。
-static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInfo &session,
-	gate_drain_migration::ReplyCallback done)
+// 路由模式的签名失败由 SendForwardForInternalReply 同步回调 done(按调用失败处理),这里仍返回 true。
+template <typename Request, typename Response, typename Reply>
+static bool SendGateSynthesizedLoginRequest(const char *what, const uint32_t messageId, const SessionId sessionId,
+	const SessionInfo &session, std::function<void(const Reply &, std::chrono::steady_clock::time_point)> done,
+	void (*sendDirect)(entt::registry &, entt::entity, const Request &, GrpcDone<Response>, const GrpcCallOptions &))
 {
 	SessionDetails sessionDetails = BuildSessionDetails(sessionId, session.playerId, &session);
 	sessionDetails.set_session_incarnation(session.incarnation);
 	std::string sessionDetailsBin;
 	if (!sessionDetails.SerializeToString(&sessionDetailsBin))
 	{
-		LOG_ERROR << "Gate migration request not sent: session details serialization failed, session_id=" << sessionId;
+		LOG_ERROR << what << " not sent: session details serialization failed, session_id=" << sessionId;
 		return false;
 	}
-	const loginpb::GateMigrationRequest request;
+	const Request request;
 
 	if (gate_router_mode::IsRouterModeEnabled())
 	{
 		// 路由模式:gate 对 login 零 stub,合成一条 ClientRequest 经路由服转给同 zone 的 login(与断线通知同一条 Forward)。
-		muduo_grpc::Channel *routerChannel = PickRouterChannel(ClientPlayerLoginRequestGateMigrationMessageId);
+		muduo_grpc::Channel *routerChannel = PickRouterChannel(messageId);
 		if (routerChannel == nullptr)
 		{
 			return false;
 		}
-		ClientRequest migrationRequest;
-		migrationRequest.set_id(0);
-		migrationRequest.set_message_id(ClientPlayerLoginRequestGateMigrationMessageId);
-		migrationRequest.set_body(request.SerializeAsString());
-		gate_router_muduo::SendForwardForInternalReply(*routerChannel, MakeForwardRequest(migrationRequest), sessionDetailsBin,
+		ClientRequest synthesized;
+		synthesized.set_id(0);
+		synthesized.set_message_id(messageId);
+		synthesized.set_body(request.SerializeAsString());
+		gate_router_muduo::SendForwardForInternalReply(*routerChannel, MakeForwardRequest(synthesized), sessionDetailsBin,
 			[done = std::move(done)](const MessageContent *reply)
 			{
 				// 路由服把 login 的应答原样装进 MessageContent;信封带 tip(路由服或下游拒绝)或 body 解不出都按调用失败。
-				gate_drain_migration::RequestReply result;
+				Reply result;
 				result.delivered = reply != nullptr &&
 					!(reply->has_error_message() && reply->error_message().id() != 0) &&
 					result.response.ParseFromString(reply->serialized_message());
@@ -367,18 +335,15 @@ static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInf
 	GrpcCallOptions options;
 	options.metadata.emplace_back(kSessionBinMetaKey, sessionDetailsBin);
 	options.metadata.emplace_back(release_track::kMetadataKey, GetNodeInfo().release_track());
-	if (!caller_auth::Append(options.metadata,
-		gRpcMethodRegistry[ClientPlayerLoginRequestGateMigrationMessageId].grpcFullMethod,
-		sessionDetailsBin))
+	if (!caller_auth::Append(options.metadata, gRpcMethodRegistry[messageId].grpcFullMethod, sessionDetailsBin))
 	{
-		LOG_ERROR << "Gate migration request not sent: caller signature failed, session_id=" << sessionId;
+		LOG_ERROR << what << " not sent: caller signature failed, session_id=" << sessionId;
 		return false;
 	}
-	loginpb::SendClientPlayerLoginRequestGateMigration(
-		tlsNodeContextManager.GetRegistry(eNodeType::LoginNodeService), *loginNode, request,
-		[done = std::move(done)](const GrpcCallOutcome &outcome, const loginpb::GateMigrationResponse *response)
+	sendDirect(tlsNodeContextManager.GetRegistry(eNodeType::LoginNodeService), *loginNode, request,
+		[done = std::move(done)](const GrpcCallOutcome &outcome, const Response *response)
 		{
-			gate_drain_migration::RequestReply result;
+			Reply result;
 			result.delivered = outcome.ok() && response != nullptr;
 			if (result.delivered)
 			{
@@ -388,6 +353,26 @@ static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInf
 		},
 		options);
 	return true;
+}
+
+// 排空迁移向 login 要一张换 gate 的票(ClientPlayerLogin.RequestGateMigration,docs/design/gate-drain-session-migration.md §4.3),
+// 经 gate_drain_migration::SetRequestSender 注入。票据是否送出由 drain_migration 复核会话后决定。
+static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInfo &session,
+	gate_drain_migration::ReplyCallback done)
+{
+	return SendGateSynthesizedLoginRequest<loginpb::GateMigrationRequest, loginpb::GateMigrationResponse,
+		gate_drain_migration::RequestReply>("Gate migration request", ClientPlayerLoginRequestGateMigrationMessageId,
+		sessionId, session, std::move(done), &loginpb::SendClientPlayerLoginRequestGateMigration);
+}
+
+// 为仍然连着的连接向 login 续租登录态(ClientPlayerLogin.RenewSession,docs/design/gate-online-identity.md §10.4),
+// 经 gate_login_renewal::SetRequestSender 注入。什么时候发、应答怎么处置都在 login_session_renewal.cpp。
+static bool SendLoginSessionRenewRequest(const SessionId sessionId, const SessionInfo &session,
+	gate_login_renewal::ReplyCallback done)
+{
+	return SendGateSynthesizedLoginRequest<loginpb::RenewSessionRequest, loginpb::RenewSessionResponse,
+		gate_login_renewal::RequestReply>("Login session renewal", ClientPlayerLoginRenewSessionMessageId,
+		sessionId, session, std::move(done), &loginpb::SendClientPlayerLoginRenewSession);
 }
 
 // ---- 客户端 LeaveGame / EnterGame 的会话状态变化(client-request-ordering.md §4.4、§4.6;location-release-binding.md §3.5)----
@@ -499,6 +484,10 @@ GateClientSessionHandler::GateClientSessionHandler(ProtobufCodec &codec,
 	// 排空迁移的两个出口(drain_migration.h):向 login 要票、推 msg 124。同样是函数指针,不捕获对象。
 	gate_drain_migration::SetRequestSender(&SendGateMigrationRequest);
 	gate_drain_migration::SetRedirectPusher(&gate_redirect::PushRedirect);
+	// 登录态续租的出口(login_session_renewal.h):为仍然连着的连接向 login 发 RenewSession。同样是函数指针,不捕获对象。
+	gate_login_renewal::SetRequestSender(&SendLoginSessionRenewRequest);
+	// 场景 lane 的发送出口(client_scene_lane.h):把客户端消息交给会话当前绑定的 scene 节点。同样是函数指针,不捕获对象。
+	gate_scene_lane::SetSceneSender(&SendClientMessageToScene, kGateToSceneClientCallTimeout);
 
 	messageDispatcher.registerMessageCallback<ClientTokenVerifyRequest>(
 		std::bind(&GateClientSessionHandler::DispatchTokenVerify, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
@@ -1079,7 +1068,7 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 
 // gate 级失败回执:带请求 id 与原 message_id 的错误信封(client-request-ordering.md O6、§4.7),
 // 形状与 CheckMessageLimit / gate_lane::SendEnvelope 相同。不用 SendEnvelope 是因为它要 SessionInfo&
-// 去 lock 会话里的弱连接,而 HandleTcpNodeMessage 只拿到 const SessionInfo&;这里的 conn 是本次收包回调
+// 去 lock 会话里的弱连接,而调用方 HandleGrpcNodeMessage(直连模式)手里没有 SessionInfo&;这里的 conn 是本次收包回调
 // 上的连接,调用期间必然有效,直接用它,不为一次 lock 去 const_cast。
 // 不带 id 的 23 号 tip 会被客户端当成别的请求的失败(同一会话可能还有其他请求在等回包),所以请求回执一律走信封;
 // 推送类的 23(进场失败、被踢等)不是请求回执,不走这里。
@@ -1092,47 +1081,42 @@ static void SendRequestErrorEnvelope(const muduo::net::TcpConnectionPtr &conn, c
 	GetGateCodec().send(conn, envelope);
 }
 
-// Handle messages related to the game node
-void HandleTcpNodeMessage(const SessionInfo &session, const RpcClientMessagePtr &request, SessionId sessionId, const muduo::net::TcpConnectionPtr &conn)
+// 场景 lane 的发送出口(client_scene_lane.h,docs/design/client-scene-request-handoff-hold.md §4.4):把一条客户端消息交给
+// 会话当前绑定的 scene 节点。经 gate_scene_lane::SetSceneSender 注入;函数指针,不捕获对象(AGENTS.md §11.7)。
+//   - 单向消息(oneWay:内层方法的响应是 Empty,MoveStart / MoveStop / MoveSync 等):SendRequest 发出,scene 不回包 ——
+//     线上与改造前逐字节相同,不登记在途;
+//   - 请求-响应消息:CallMethod 发出,完成(回包或失败)恰好一次,转给 gate_scene_lane::OnSceneCallDone,由 lane 决定
+//     原样下发、回 1003,还是放回队头等重投。回调只捕获会话号、会话代次与调用序号(rpc_channel.h ClientDoneCallback 契约 (b))。
+// 没发出去分两种:会话的进场转发还欠着(pendingSceneEntry:路由已到 gate、还没交给 scene)回 kRetryLater,lane 稍后重投;
+// 否则回 kNoScene(没进游戏、路由已清、节点没有可用通道),lane 当场回带请求 id 的 1003。两种都确定没发出。
+static gate_scene_lane::SceneSendResult SendClientMessageToScene(const SessionId sessionId, const SessionInfo &session,
+	const ClientRequest &request, const bool oneWay, const gate_scene_lane::CallSeq callSeq)
 {
-	assert(request->message_id() < gRpcMethodRegistry.size());
-	auto &handlerMeta = gRpcMethodRegistry[request->message_id()];
+	assert(request.message_id() < gRpcMethodRegistry.size());
+	auto &handlerMeta = gRpcMethodRegistry[request.message_id()];
 
-	// Player sent message without being logged in — invalid node binding
-	const auto targetNodeEntity = session.GetNodeEntity(handlerMeta.targetNodeType);
-	auto &registry = tlsNodeContextManager.GetRegistry(handlerMeta.targetNodeType);
-	if (!registry.valid(targetNodeEntity))
-	{
-		LOG_WARN << "[TCP Node] Scene not ready, dropping message_id: " << request->message_id()
-				 << ", session_id: " << sessionId
-				 << ", node_type: " << handlerMeta.targetNodeType;
-
-		// 确定未发出:回带请求 id 的 1003(2026-10-15 起;原为 23 号 tip),客户端重试安全。不计非法包、不断连。
-		SendRequestErrorEnvelope(conn, *request, kServiceUnavailable);
-		return;
-	}
-
-	// 跨实体查询用 try_get 不用 get(CLAUDE.md §7 不变量 5)。
+	// 跨实体查询用 try_get 不用 get(AGENTS.md §7 不变量 5)。
 	// registry.valid() 只保证实体活着,不保证 RpcClientPtr 已经挂上去:
 	// 节点实体在握手/发现阶段就被 create() 出来,RpcClientPtr 是随后才 emplace 的,
 	// 而且组件在但 shared_ptr 为空同样可能(连接已断开正在重连)。
 	// 这两种情况下旧写法分别是 get 抛异常和空指针解引用 —— 都是把 gate 打崩,
 	// 而 gate 崩 = 该节点上所有在线玩家一起掉线。
 	// 本文件的 NotifySceneExitGame、gate_service_handler.cpp 的 BoundSceneInstance 已经是 try_get + 判空的写法。
-	const auto *tcpNode = registry.try_get<RpcClientPtr>(targetNodeEntity);
+	const auto targetNodeEntity = session.GetNodeEntity(handlerMeta.targetNodeType);
+	auto &registry = tlsNodeContextManager.GetRegistry(handlerMeta.targetNodeType);
+	const auto *tcpNode = registry.valid(targetNodeEntity) ? registry.try_get<RpcClientPtr>(targetNodeEntity) : nullptr;
 	if (tcpNode == nullptr || !*tcpNode)
 	{
-		LOG_WARN << "[TCP Node] RpcClient not attached, dropping message_id: " << request->message_id()
+		const bool sceneEntryOwed = session.pendingSceneEntry.has_value();
+		LOG_WARN << "[TCP Node] Scene not ready for message_id: " << request.message_id()
 				 << ", session_id: " << sessionId
-				 << ", node_type: " << handlerMeta.targetNodeType;
-
-		// 同上:确定未发出,回带请求 id 的 1003(原为 23 号 tip)。
-		SendRequestErrorEnvelope(conn, *request, kServiceUnavailable);
-		return;
+				 << ", node_type: " << handlerMeta.targetNodeType
+				 << ", scene_entry_owed: " << sceneEntryOwed;
+		return sceneEntryOwed ? gate_scene_lane::SceneSendResult::kRetryLater : gate_scene_lane::SceneSendResult::kNoScene;
 	}
 
 	ProcessClientPlayerMessageRequest message;
-	message.mutable_message_content()->set_serialized_message(request->body());
+	message.mutable_message_content()->set_serialized_message(request.body());
 	message.set_session_id(sessionId);
 	// 反向身份栅栏(R13):gate 的 routing node_id 被复用后,scene 侧同号 session 可能
 	// 仍映射着前任 gate 上的另一个玩家 —— 不带玩家身份的话,本客户端的每一条业务消息
@@ -1141,31 +1125,30 @@ void HandleTcpNodeMessage(const SessionInfo &session, const RpcClientMessagePtr 
 	{
 		message.set_player_id(session.playerId);
 	}
-	message.mutable_message_content()->set_id(request->id());
-	message.mutable_message_content()->set_message_id(request->message_id());
+	message.mutable_message_content()->set_id(request.id());
+	message.mutable_message_content()->set_message_id(request.message_id());
 
-	// 内层方法的响应是 Empty(MoveStart / MoveStop / MoveSync 等):单向发送,scene 不回包 —— 线上与改造前逐字节相同
-	// (client-request-ordering.md O2 的前提不变),不登记在途、不推失败回执,gate 最热的路径上零新增开销。
-	const auto *innerResponse = handlerMeta.responseProto.get();
-	if (innerResponse == nullptr || innerResponse->GetDescriptor() == ::Empty::GetDescriptor())
+	if (oneWay)
 	{
 		(*tcpNode)->SendRequest<SceneProcessClientPlayerMessageRpc>(message);
-		LOG_TRACE << "Sent one-way message to game node, session id: " << sessionId << ", message id: " << request->message_id();
-		return;
+		LOG_TRACE << "Sent one-way message to game node, session id: " << sessionId << ", message id: " << request.message_id();
+		return gate_scene_lane::SceneSendResult::kSentOneWay;
 	}
 
-	// 其余走每次调用回调(docs/design/muduo-rpc-channel.md §8.1):回包与失败都在这里落到客户端,
-	// 上下文在发出时捕获,不再靠 scene 回显 session_id 去查全局回包表。
+	// 每次调用回调(docs/design/muduo-rpc-channel.md §8.1):回包与失败都落到场景 lane,上下文在发出时捕获,
+	// 不靠 scene 回显 session_id 去查全局回包表。完成一律异步投递(RpcClient::CallMethod),不会在本函数返回前回调。
 	(*tcpNode)->CallMethod<SceneProcessClientPlayerMessageRpc>(
 		message,
-		[sessionId, incarnation = session.incarnation, clientRequestId = request->id(), innerMessageId = request->message_id()](
+		[sessionId, incarnation = session.incarnation, callSeq](
 			const RpcStatus &status, const std::shared_ptr<ProcessClientPlayerMessageResponse> &response)
 		{
-			ForwardSceneClientCallResult(sessionId, incarnation, clientRequestId, innerMessageId, status, response);
+			gate_scene_lane::OnSceneCallDone(sessionId, incarnation, callSeq, status, response.get(),
+											 std::chrono::steady_clock::now());
 		},
 		RpcCallOptions{kGateToSceneClientCallTimeout});
 
-	LOG_TRACE << "Sent message to game node, session id: " << sessionId << ", message id: " << request->message_id();
+	LOG_TRACE << "Sent message to game node, session id: " << sessionId << ", message id: " << request.message_id();
+	return gate_scene_lane::SceneSendResult::kSent;
 }
 
 void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn)
@@ -1421,6 +1404,18 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 		return;
 	}
 
+	// 热关停(docs/design/rpc-kill-switch.md §7):gate 是客户端入口,被关停的方法在这里回带请求 id 的信封 1003,
+	// 不转发、不进路由 lane。合法协议号,所以不计非法包、不断线;限流额度上面已经扣过(与 Java 版 gate 同口径)。
+	// 排在 GM 闸之后(生产环境的 GM 号仍按 GM 闸处置),排在 gate 本地服务与按协议分派之前:观战订阅同样关得掉,
+	// 直连与路由两种模式都覆盖。规则按 gate 自己的节点类型 / uuid 与全部范围判;下游节点范围的规则由下游自己判。
+	if (kill_switch::CheckMessageId(request->message_id()))
+	{
+		LOG_DEBUG << "Client request refused by kill switch, session_id=" << sessionId
+				  << ", message_id=" << request->message_id();
+		gate_lane::SendEnvelope(session, request->id(), request->message_id(), kServiceUnavailable);
+		return;
+	}
+
 	auto &messageInfo = gRpcMethodRegistry[request->message_id()];
 
 	// gate 本地服务(目前只有观战订阅 GateClientSpectate,battle-spectate-tiered-fanout.md §15.2):不转发、不进路由 lane,
@@ -1476,7 +1471,12 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 		{
 			return;
 		}
-		HandleTcpNodeMessage(session, request, sessionId, conn);
+		// 进会话的场景 lane(client_scene_lane.h):发往 scene 的消息按收包顺序单飞;玩家换场景节点的窗口里,scene 答复
+		// 「确定未执行、稍后重投」的请求留在 gate 按序重投,不丢、不乱序。内层方法的响应是 Empty 的是单向消息
+		// (MoveStart / MoveStop / MoveSync 等),scene 不回包。
+		const auto *innerResponse = messageInfo.responseProto.get();
+		const bool oneWay = innerResponse == nullptr || innerResponse->GetDescriptor() == ::Empty::GetDescriptor();
+		gate_scene_lane::Admit(sessionId, session, request, oneWay, std::chrono::steady_clock::now());
 	}
 	else if (messageInfo.protocol == PROTOCOL_GRPC)
 	{

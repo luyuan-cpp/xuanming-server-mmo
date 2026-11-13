@@ -765,6 +765,23 @@ TEST_F(TeamFollowDriveTest, OfflineFollowerKeepsWalkingBehindTheLeader)
     EXPECT_NEAR(X(follower_), 9.0 - kTeamFollowSpacing, 1e-6) << "离线的队员照样跟在队长身后一个间距";
 }
 
+// 朝向口径(spatial/system/facing.h):被驱动的队员面朝行进方向,Rotation.z 是偏航角(度),x、y 恒 0。
+TEST_F(TeamFollowDriveTest, DrivenFollowerFacesItsWalkingDirectionInDegrees)
+{
+    WalkLeader(4.5);
+    auto& leaderLocation = *tlsEcs.actorRegistry.get<Transform>(leader_).mutable_location();
+    for (int tick = 0; tick < 20; ++tick) // 在 x = 4.5 拐向 +y,走 9 米
+    {
+        leaderLocation.set_y(leaderLocation.y() + 0.45);
+        TeamFollowSystem::Update(0.05);
+    }
+    const auto& follower = tlsEcs.actorRegistry.get<Transform>(follower_);
+    EXPECT_NEAR(follower.location().x(), 4.5, 1e-6) << "已经过了拐角,沿 +y 走";
+    EXPECT_NEAR(follower.rotation().z(), 90.0, 1e-6) << "偏航 90 度,不是弧度 π/2";
+    EXPECT_EQ(follower.rotation().x(), 0.0);
+    EXPECT_EQ(follower.rotation().y(), 0.0);
+}
+
 TEST_F(TeamFollowDriveTest, FollowerInBattleWaitsAndCatchesUpAfterwards)
 {
     // 停在 WalkLeader 的整步上，避免最后一步落在轨迹采样阈值。

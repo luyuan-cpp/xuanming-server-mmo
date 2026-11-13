@@ -167,12 +167,15 @@ login 当前建角优先号段，号段耗尽且续段不可用时按配置明�
 | TiDB | 仓库不部署，按 TiDB 自己的滚动升级 | 重启后坏连接修复 R2，Codex 11-08 单测通过 | 滚动重启演练；`mmorpg` 库迁 TiDB（批 A）未编译，迁完之前它还在单实例 MySQL 上 |
 | Redis | 核心是哨兵主从，玩家域是 Cluster（先切主再删 Pod）；单主的部分重启就中断 | — | 全部上 Cluster 的 7 批未开工；主从切换窗口与选主（R7、R8） |
 
-同日按「最标准的方式」落码（未生成协议、未编译、未运行），设计与分批见 [scene 节点计划排空](scene-node-planned-drain.md)：
+同日起按「最标准的方式」落码，设计、分批与验证状态见 [scene 节点计划排空](scene-node-planned-drain.md)（11-11 的批 1~5 已随 Codex 11-12 全量构建编译通过，单测与冒烟未跑；11-12 的批 6 未编译）。上表是 11-11 落码之前的现状，下面是落码之后各行的变化：
 
 - **scene**：SIGTERM 与 Agones 排空标签先进计划排空 —— 关建场景准入、etcd 发布 admission = CLOSED；scene_manager 不再往它放东西，并把它的世界频道迁到别的节点（同 scene_id、有人也迁），老节点收到 DestroyScene 后按限速疏散住户，疏散请求带原频道与原地图，落到同一个频道、坐标保留；副本与没赶上的到自疏散时刻由节点自己疏散。完成或到预算才进普通停机。落点优先选不在外出构建上的节点（`NodeInfo.build`），滚动升级时就是新版本。上表 scene 行的五条缺口都在这批里补上；scene 内存状态（怪物、施法、副本进度）仍不搬。
-- **battle**：同一套 Node 计划排空 —— 关建房准入、等房间清零再停机。进程缺省关闭，要部署按对局时长调大宽限期并注入预算才生效。
-- **Agones**：旧构建的 Allocated GameServer 用 `tools/scripts/k8s_scene_roll.ps1` 逐台打排空标签。
-- 表里其余各行（gate 迁移开关、Go 服务逐个演练、Kafka acks、TiDB 演练、Redis 上 Cluster）不在这批，状态不变。
+- **battle**：同一套 Node 计划排空 —— 关建房准入、等房间清零再停机。K8s 部署的三种编排都把宽限期定为 330 秒（缺省模板一局的成局期限 300 秒 + 停机 25 秒 + 余量）并注入预算 305 秒；没注入的本机进程行为不变。
+- **Agones**：旧构建的 Allocated GameServer 用 `tools/scripts/k8s_scene_roll.ps1` 逐台打排空标签，`zone-up` 结尾会把命令打出来。
+- **gate**（11-12）：排空迁移改为默认开；客户端在成功进场后把重定向跳数清零（逐台换 gate 被迁多次不再撞 3 跳熔断）；迁移选目标优先不在外出构建上的 gate，一轮换版一个玩家最多迁 2 次（[gate 排空迁移](gate-drain-session-migration.md) §7.3、§19）。login 的 goctl 服务包装还缺 `RequestGateMigration`，Codex 重生之前迁移不会生效，已加守卫用例。
+- **Go 服务**（11-12）：逐个核对了进程停机时限、请求超时与 Pod 宽限期（[scene 计划排空](scene-node-planned-drain.md) §9「Go 服务停机时限」）。scene_manager、player_locator、client_rpc_router 的强退时限放宽到盖住最长在途请求；data-service 宽限期由 30 改为 70，对齐它自己 60 秒的停机预算。scene_manager 的领导者在停机时主动让位（原本就有），排空迁移由接任者的周期 rebalance 接着做。逐服务的滚动演练仍要在集群上跑。
+- **Kafka**（11-11）：拿 broker ACK 当提交点的两个写入器（scene_manager 路由命令、player_locator 清理命令）改 acks=all。审计流水（R13）的事务性发件箱由别的会话落码，状态以 [断线重连核对](infra-reconnect-overview.md) §4.1 为准。
+- 其余各行（etcd / TiDB 的滚动演练、`mmorpg` 库迁 TiDB、Redis 全部上 Cluster）是演练或别的会话在做的批次，状态不变。
 
 ## 4. 后续设计必须给出的契约
 

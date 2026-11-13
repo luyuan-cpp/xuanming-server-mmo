@@ -30,7 +30,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 
 | 类别 | 判据 | 典型组件 | 在哪里创建 | 读路径拿不到时 |
 |---|---|---|---|---|
-| **持久数据** | 会写进 DB / Redis | `CurrencyComp`、`PlayerCurrencyComp`、资产与结算账本、`LevelComp`、`BaseAttributesComp`、`PlayerPetComp`、背包、任务、`PlayerItemGainBlockComp`、`PlayerItemHoldComp` | **只在加载时**(`*MessageFieldsUnmarshal` / `InitPlayerFromAllData`) | 不变量被破坏:`LOG_ERROR` + fail-closed,**绝不补默认值**(`PlayerItemGainBlockComp`、`PlayerItemHoldComp` 的读路径例外见下文「单玩家物品获取封禁」「物品数量预留」两段) |
+| **持久数据** | 会写进 DB / Redis | `CurrencyComp`、`PlayerCurrencyComp`、资产与结算账本、`LevelComp`、`BaseAttributesComp`、`PlayerPetComp`、背包、任务、`PlayerItemGainBlockComp`、`PlayerItemHoldComp`、`PlayerMailOutboxComp` | **只在加载时**(`*MessageFieldsUnmarshal` / `InitPlayerFromAllData`) | 不变量被破坏:`LOG_ERROR` + fail-closed,**绝不补默认值**(`PlayerItemGainBlockComp`、`PlayerItemHoldComp` 的读路径例外见下文「单玩家物品获取封禁」「物品数量预留」两段) |
 | **按需状态**(延迟初始化) | 「没有」本身有明确含义:空、未激活、无冷却、不脏 | `CooldownTimeListComp`、`SkillContextCompMap`、`AoiListComp`、`SceneGridListComp`、施法阶段定时器、属性脏标记 | **该功能写入口第一次写时**,集中在一个命名函数里;结束时可以 `remove` | 正常分支:当作空 / 未激活处理,不是错误 |
 | **派生运行时数据** | 由其他组件算出来,实体存在期间必须有 | `DerivedAttributesComp`、`CombatStateFlagsComp` | 加载 / 创建流程直接调用初始化函数,在首个通知前创建并计算;后续重算只更新 | `LOG_ERROR` + 跳过本次处理;有返回码的请求明确失败 |
 
@@ -132,6 +132,15 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 单玩家物品获取封禁(2026-11-05,[收件箱设计](player-inbox-service.md) §2.2)是持久数据 `PlayerItemGainBlockComp`(`player_database.item_gain_block`):唯一创建点是加载,存盘缺它整份拒存;唯一写入方是收件箱 GM 域执行器,经 `GainBlockService::BlockPlayerItemGain / UnblockPlayerItemGain` 写,缺组件即拒绝、不补建。各物品获得入口只经 `GainBlockService::IsItemGainBlocked` 读它。**读路径是持久数据「读缺失即 fail-closed」的一处有记录的例外**:无效句柄只判全服,有效实体缺组件按「没有单人封禁」回答、不补建。理由与代价见收件箱设计 §2.2「读缺失的口径」:`BagService` 接受没有玩家上下文的容器级调用;缺组件的实体存盘被整份拒绝、资产通道与收件箱只在落盘后终结,发出的物品成不了盘上事实。2026-10-15 删除的旧 `PlayerItemBlockList` 及 `blockList` 参数没有恢复。
 
 物品数量预留(2026-11-10,[战斗道具预留](battle-item-reservation.md))是持久数据 `PlayerItemHoldComp`(`player_database.item_holds`,字段 26):唯一创建点是加载,存盘缺它整份拒存。规则在 `item_hold.h`,唯一的执行点是 `BagService`:写入口 `PlaceHold` 缺组件即拒绝(回 `kServiceUnavailable`,备战据此整笔拒绝)、不补建;`ReleaseHold` 缺组件是空操作。各出包入口只经 `BagService::HeldCount / RemovableCount / CheckRemovable` 读它。**读路径是与上一段同一类有记录的例外**:实体无效、传入的不是这名玩家的人物背包、或有效实体缺组件,都按「没有预留」回答、不补建。理由相同:`BagService` 接受没有玩家上下文的容器级调用;缺组件的实体存盘被整份拒绝,这时放出去的物品成不了盘上事实。
+
+待寄邮件(2026-11-12,[战斗掉落改投邮件](battle-overflow-mail.md))分两个组件,按上表各归各类:
+
+- 持久数据 `PlayerMailOutboxComp`(`player_database.mail_outbox`,字段 27):欠玩家、还没寄到邮件服务的物品。唯一创建点是加载,存盘缺它整份拒存。
+  写入口 `PlayerMailOutboxSystem::PrepareBattleOverflow` 缺组件即拒绝(回 `kServiceUnavailable`,结算据此回到整笔延后)、不补建;
+  寄送的 Tick 用 `view` 遍历,缺组件的实体不在其中。没有读缺失例外:它没有「没有玩家上下文」的调用方。
+- 按需状态 `MailOutboxSendStateComp`(定义在 `player_mail_outbox.cpp` 内,不落库):在途的那一封、连续失败次数、下次尝试时刻、上次请求存盘的时刻。
+  第一次要寄、或要记下请求存盘的时刻时由寄送逻辑创建(`SendOne` / `RequestSaveIfDue`),寄到之后待寄队列空了即摘。「没有」的含义是没有在途、没有退避;进程重启或换节点后从零数起,
+  重寄靠邮件按请求号判重,不靠这份状态。
 
 上述规则包含第 6 批审查修复；生成产物与运行验证状态以 [任务总索引](../handoff/ecs-refactor/README.md) 及本批回执为准，不能用静态阅读代替构建或测试证据。
 

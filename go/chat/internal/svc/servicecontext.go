@@ -182,6 +182,7 @@ const (
 	OutcomeChannelUnavailable = "channel_unavailable" // TEAM / SYSTEM / UNSPECIFIED
 	OutcomeTooLong            = "too_long"            // 内容超 MaxContentBytes 或 trim 后为空
 	OutcomeRateLimited        = "rate_limited"        // 超每秒条数
+	OutcomeWorldCooldown      = "world_cooldown"      // 世界频道发言间隔未到(回给客户端的仍是限流码)
 	OutcomeStorageError       = "storage_error"       // SQL依赖故障或提交未知
 )
 
@@ -189,7 +190,7 @@ var (
 	sendTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "chat",
 		Name:      "send_total",
-		Help:      "SendChat requests by channel (world|private|team|system|unspecified|unknown) and outcome (ok|duplicate|in_flight|no_session|bad_request|channel_unavailable|too_long|rate_limited|storage_error).",
+		Help:      "SendChat requests by channel (world|private|team|system|unspecified|unknown) and outcome (ok|duplicate|in_flight|no_session|bad_request|channel_unavailable|too_long|rate_limited|world_cooldown|storage_error).",
 	}, []string{"channel", "outcome"})
 
 	pullTotal = prometheus.NewCounterVec(prometheus.CounterOpts{

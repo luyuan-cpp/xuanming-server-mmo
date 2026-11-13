@@ -2,8 +2,11 @@
 #include "actor/actor_net_id.h"
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <cmath>
+#include <utility>
+#include <vector>
 
 #include "muduo/base/Logging.h"
 
@@ -54,6 +57,56 @@ namespace
 	{
 		return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::steady_clock::now().time_since_epoch()).count());
+	}
+
+	// 移动广播的接收者(口径见 MovementSystem::BroadcastMove 的注释),写进 receivers(先清空)。
+	void CollectMoveReceivers(const entt::entity entity, const bool includeSelf, EntityVector& receivers)
+	{
+		receivers.clear();
+		// 接收者 = 客户端正在显示我的观察者(AOI 反向索引中可见的那些):关注是单向的,
+		// 我是否看得见对方与此无关;网格范围外的显式关注者同样收到。没显示我的人(隐身、对方表满)
+		// 收到坐标既没有意义,也是在泄露位置。
+		InterestSystem::GetVisibleWatchers(entity, receivers);
+		// 没有会话快照的实体(NPC 等)没有客户端可发;留在名单里只会让广播函数为每一个打一条 ERROR。
+		std::erase_if(receivers, [](entt::entity observer)
+					  { return !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(observer); });
+		// 本人:只在会话有效时发(断线保留中的会话已被置无效,发了也只会打一条"找不到会话")。
+		if (includeSelf && std::ranges::find(receivers, entity) == receivers.end())
+		{
+			if (const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(entity);
+				session != nullptr && session->gate_session_id() != 0 && session->gate_session_id() != kInvalidSessionId)
+			{
+				receivers.push_back(entity);
+			}
+		}
+	}
+
+	// entity 此刻的移动状态写成 ActorMoveS2C。没有 Transform 或网络号时返回 false(后者记 ERROR)。
+	bool BuildActorMove(const entt::entity entity, ActorMoveS2C& move)
+	{
+		const auto* transform = tlsEcs.actorRegistry.try_get<Transform>(entity);
+		if (transform == nullptr)
+		{
+			return false;
+		}
+		const auto netId = actor_net_id::Of(tlsEcs.actorRegistry, entity);
+		if (netId == 0)
+		{
+			LOG_ERROR << "BroadcastMove: actor network id missing";
+			return false;
+		}
+		move.set_entity(netId);
+		*move.mutable_transform() = *transform;
+		bool moving = false;
+		if (const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(entity))
+		{
+			*move.mutable_velocity() = *velocity;
+			moving = velocity->x() != 0.0 || velocity->y() != 0.0 || velocity->z() != 0.0;
+		}
+		// 协议时间戳:客户端可见,用墙钟毫秒(与 MoveAckS2C.server_time_ms 同一口径)。
+		move.set_server_time_ms(TimeSystem::NowMilliseconds());
+		move.set_move_state(moving ? kMoveStateWalking : kMoveStateStopped);
+		return true;
 	}
 }
 
@@ -131,53 +184,94 @@ void MovementSystem::Update(const double delta)
 
 void MovementSystem::BroadcastMove(const entt::entity entity, const bool includeSelf)
 {
-	// 接收者 = 客户端正在显示我的观察者(AOI 反向索引中可见的那些):关注是单向的,
-	// 我是否看得见对方与此无关;网格范围外的显式关注者同样收到。没显示我的人(隐身、对方表满)
-	// 收到坐标既没有意义,也是在泄露位置。
-	EntityVector observers;
-	InterestSystem::GetVisibleWatchers(entity, observers);
-	// 没有会话快照的实体(NPC 等)没有客户端可发;留在名单里只会让广播函数为每一个打一条 ERROR。
-	std::erase_if(observers, [](entt::entity observer)
-				  { return !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(observer); });
-	// 本人:只在会话有效时发(断线保留中的会话已被置无效,发了也只会打一条"找不到会话")。
-	if (includeSelf && std::ranges::find(observers, entity) == observers.end())
-	{
-		if (const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(entity);
-			session != nullptr && session->gate_session_id() != 0 && session->gate_session_id() != kInvalidSessionId)
-		{
-			observers.push_back(entity);
-		}
-	}
-	if (observers.empty())
+	EntityVector receivers;
+	CollectMoveReceivers(entity, includeSelf, receivers);
+	if (receivers.empty())
 	{
 		return;
 	}
-	const auto* transform = tlsEcs.actorRegistry.try_get<Transform>(entity);
-	if (transform == nullptr)
-	{
-		return;
-	}
-
 	ActorMoveS2C move;
-	const auto netId = actor_net_id::Of(tlsEcs.actorRegistry, entity);
-	if (netId == 0)
+	if (!BuildActorMove(entity, move))
 	{
-		LOG_ERROR << "BroadcastMove: actor network id missing";
 		return;
 	}
-	move.set_entity(netId);
-	*move.mutable_transform() = *transform;
-	bool moving = false;
-	if (const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(entity))
-	{
-		*move.mutable_velocity() = *velocity;
-		moving = velocity->x() != 0.0 || velocity->y() != 0.0 || velocity->z() != 0.0;
-	}
-	// 协议时间戳:客户端可见,用墙钟毫秒(与 MoveAckS2C.server_time_ms 同一口径)。
-	move.set_server_time_ms(TimeSystem::NowMilliseconds());
-	move.set_move_state(moving ? kMoveStateWalking : kMoveStateStopped);
+	BroadcastToPlayerClients(SceneMovementClientPlayerNotifyActorMoveMessageId, move, receivers);
+}
 
-	BroadcastToPlayerClients(SceneMovementClientPlayerNotifyActorMoveMessageId, move, observers);
+void ActorMoveBatch::Add(const entt::entity entity, const bool includeSelf)
+{
+	if (const auto it = std::ranges::find(entries_, entity, &Entry::entity); it != entries_.end())
+	{
+		it->includeSelf = it->includeSelf || includeSelf;
+		return;
+	}
+	if (entries_.size() == kMaxEntities)
+	{
+		Flush();
+	}
+	entries_.push_back(Entry{entity, includeSelf});
+}
+
+void ActorMoveBatch::Flush()
+{
+	if (entries_.empty())
+	{
+		return;
+	}
+	// 只有一个实体:就是一次普通广播。
+	if (entries_.size() == 1)
+	{
+		const Entry only = entries_.front();
+		entries_.clear();
+		if (tlsEcs.actorRegistry.valid(only.entity))
+		{
+			MovementSystem::BroadcastMove(only.entity, only.includeSelf);
+		}
+		return;
+	}
+
+	// 每个实体一条移动(内容取此刻),连同各自的接收者;没有接收者或拿不到移动状态的跳过。
+	std::vector<ActorMoveS2C> moves;
+	std::vector<EntityVector> receiversPerMove;
+	moves.reserve(entries_.size());
+	receiversPerMove.reserve(entries_.size());
+	for (const auto& entry : entries_)
+	{
+		if (!tlsEcs.actorRegistry.valid(entry.entity))
+		{
+			continue;
+		}
+		EntityVector receivers;
+		CollectMoveReceivers(entry.entity, entry.includeSelf, receivers);
+		ActorMoveS2C move;
+		if (receivers.empty() || !BuildActorMove(entry.entity, move))
+		{
+			continue;
+		}
+		moves.push_back(std::move(move));
+		receiversPerMove.push_back(std::move(receivers));
+	}
+	entries_.clear();
+
+	// 要收同一组移动的接收者共用一条消息:一条时照旧发 ActorMoveS2C,多条时发 ActorMoveListS2C(按登记先后)。
+	for (const auto& group : GroupMoveReceivers(receiversPerMove))
+	{
+		if (std::has_single_bit(group.moveMask))
+		{
+			const auto only = static_cast<std::size_t>(std::countr_zero(group.moveMask));
+			BroadcastToPlayerClients(SceneMovementClientPlayerNotifyActorMoveMessageId, moves[only], group.receivers);
+			continue;
+		}
+		ActorMoveListS2C list;
+		for (std::size_t index = 0; index < moves.size(); ++index)
+		{
+			if ((group.moveMask >> index) & 1u)
+			{
+				*list.add_moves() = moves[index];
+			}
+		}
+		BroadcastToPlayerClients(SceneMovementClientPlayerNotifyActorMoveListMessageId, list, group.receivers);
+	}
 }
 
 

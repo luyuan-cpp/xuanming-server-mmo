@@ -26,7 +26,7 @@ func TestAutoscale_SkipsMirrorSourceAndDrainsAnotherChannel(t *testing.T) {
 
 	// 101 最闲但是镜像源;102 也够闲且没镜像;103 撑着人数不让缩到 0。
 	seedChannels(t, sc, testZoneId, autoscaleTestConfID, map[uint64]int64{101: 10, 102: 20, 103: 900})
-	_, err := sc.Redis.Sadd(sceneMirrorsKey(101), "9001")
+	_, err := sc.Redis.Sadd(sceneMirrorsKey(testZoneId, 101), "9001")
 	require.NoError(t, err)
 
 	_, in := AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
@@ -45,9 +45,9 @@ func TestAutoscale_NoScaleInWhenEveryIdleChannelIsAMirrorSource(t *testing.T) {
 	sc.Redis.Zadd(testLoadKey(), 0, "10")
 
 	seedChannels(t, sc, testZoneId, autoscaleTestConfID, map[uint64]int64{101: 10, 102: 20, 103: 900})
-	_, err := sc.Redis.Sadd(sceneMirrorsKey(101), "9001")
+	_, err := sc.Redis.Sadd(sceneMirrorsKey(testZoneId, 101), "9001")
 	require.NoError(t, err)
-	_, err = sc.Redis.Sadd(sceneMirrorsKey(102), "9002")
+	_, err = sc.Redis.Sadd(sceneMirrorsKey(testZoneId, 102), "9002")
 	require.NoError(t, err)
 
 	_, in := AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
@@ -67,7 +67,7 @@ func TestAutoscale_MirrorQueryFailureBlocksScaleIn(t *testing.T) {
 	seedChannels(t, sc, testZoneId, autoscaleTestConfID, map[uint64]int64{101: 10, 103: 900})
 
 	// 让 Redis 对 SMEMBERS 报错:mirrors 键换成非集合类型。
-	require.NoError(t, mr.Set(sceneMirrorsKey(101), "not-a-set"))
+	require.NoError(t, mr.Set(sceneMirrorsKey(testZoneId, 101), "not-a-set"))
 
 	_, in := AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 	assert.Equal(t, 0, in, "查不清镜像时必须放弃缩容")
@@ -89,26 +89,25 @@ func TestAutoscale_DrainCascadesMirrorsBornDuringTheDrainWindow(t *testing.T) {
 
 	// 排空进行中,有人以 101 为源建了个镜像。
 	const mirrorID uint64 = 9100
-	_, err := sc.Redis.Sadd(sceneMirrorsKey(101), strconv.FormatUint(mirrorID, 10))
+	_, err := sc.Redis.Sadd(sceneMirrorsKey(testZoneId, 101), strconv.FormatUint(mirrorID, 10))
 	require.NoError(t, err)
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(mirrorID), "10"))
-	require.NoError(t, sc.Redis.Set(sceneZoneKey(mirrorID), strconv.FormatUint(uint64(testZoneId), 10)))
-	require.NoError(t, sc.Redis.Set(sceneSourceKey(mirrorID), "101"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, mirrorID), "10"))
+	require.NoError(t, sc.Redis.Set(sceneSourceKey(testZoneId, mirrorID), "101"))
 
 	// 人走干净,下一拍收尾。
 	seedSceneMembersVia(sc, 101, 0)
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 
-	mirrorNode, _ := sc.Redis.Get(sceneNodeKey(mirrorID))
+	mirrorNode, _ := sc.Redis.Get(sceneNodeKey(testZoneId, mirrorID))
 	assert.Equal(t, "", mirrorNode, "源频道被缩掉后,镜像必须一起销毁,不能留成孤儿")
 
-	mirrorsLeft, _ := sc.Redis.Smembers(sceneMirrorsKey(101))
+	mirrorsLeft, _ := sc.Redis.Smembers(sceneMirrorsKey(testZoneId, 101))
 	assert.Empty(t, mirrorsLeft, "scene:{id}:mirrors 键不能泄漏")
 }
 
 // requireDraining 断言某频道已进入排空态。
 func requireDraining(sc *svc.ServiceContext, sceneID uint64) error {
-	if exists, _ := sc.Redis.Exists(sceneDrainingKey(sceneID)); !exists {
+	if exists, _ := sc.Redis.Exists(sceneDrainingKey(sc.Config.ZoneId, sceneID)); !exists {
 		return assertDrainErr(sceneID)
 	}
 	return nil

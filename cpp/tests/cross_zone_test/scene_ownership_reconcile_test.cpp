@@ -76,11 +76,15 @@ std::uint64_t Swept(so::SweepOutcome outcome)
 
 TEST(SceneOwnershipRules, KeysMatchTheSceneManagerKeys)
 {
-	// 跨语言契约:go/scene_manager/internal/logic/createscenelogic.go 的 SceneNodeKeyFmt = "scene:%d:node",
-	// node_holder.go 的 NodeHolderKeyFmt = "node:zone:%d:%s:holder"(Go 侧 TestNodeHolderKeyShape 钉同一个串)。
-	EXPECT_EQ(so::SceneNodeKey(0), "scene:0:node");
-	EXPECT_EQ(so::SceneNodeKey(18446744073709551615ULL), "scene:18446744073709551615:node");
-	EXPECT_EQ(so::NodeHolderKey(3, "17"), "node:zone:3:17:holder");
+	// 跨语言契约:go/scene_manager/internal/logic/createscenelogic.go 的 sceneNodeKey、node_holder.go 的 nodeHolderKey
+	// 渲染出来的键逐字节相同(Go 侧 TestCrossLanguageControlKeyGoldens 钉同样的串)。tag 是 {ctl:<zone>}
+	// (docs/design/redis-cluster-all-domains-20261110.md §3)。
+	EXPECT_EQ(so::SceneNodeKey(3, 0), "scene:{ctl:3}:0:node");
+	EXPECT_EQ(so::SceneNodeKey(3, 18446744073709551615ULL), "scene:{ctl:3}:18446744073709551615:node");
+	EXPECT_EQ(so::NodeHolderKey(3, "17"), "node:{ctl:3}:17:holder");
+	// 对账的一条 MGET 带持有者与本节点的场景属主:同一个 zone 的键必须同槽;不同 zone 是不同的键。
+	EXPECT_EQ(redis_slot::HashSlot(so::NodeHolderKey(3, "17")), redis_slot::HashSlot(so::SceneNodeKey(3, 42)));
+	EXPECT_NE(so::SceneNodeKey(3, 42), so::SceneNodeKey(4, 42));
 }
 
 TEST(SceneOwnershipRules, ClassifyReadings)

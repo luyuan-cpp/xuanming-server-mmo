@@ -16,8 +16,6 @@
 #     sandbox-mock container so the OAuth chain runs offline.
 #   - Prometheus block enabled on 0.0.0.0:9101 (container-internal)
 #     so the host-published :9101 scrape works.
-#   - SnowflakeCacheDir pinned to /tmp/snowflake (image WORKDIR is /app,
-#     so the Go default ../../run/snowflake would land on /run/snowflake).
 #   - DataServiceRpc discovers data_service through the host etcd; this
 #     compose has no data_service container, see the block below.
 #
@@ -62,21 +60,6 @@ Node:
     DialTimeout: 3s
     ReadTimeout: 3s
     WriteTimeout: 3s
-
-Snowflake:
-  Epoch: 1721473263000
-  NodeBits: 13
-  StepBits: 9
-
-# 部署级集群号(PlayerId 13 位 node 段的 cluster 位)。单机 compose 栈保持 0,
-# 与 go/login/etc/login.yaml 一致;两个集群共用一个 etcd 也不撞号。
-ClusterId: 0
-
-# PlayerId 槽位本地缓存目录(docs/design/node-id-overhaul-plan-20260908.md §3.5):
-# etcd 启动时不可达、缓存在 2h 内则用缓存的槽起服。镜像 WORKDIR 是 /app,Go 默认的
-# ../../run/snowflake 会落到 /run/snowflake;与 K8s ConfigMap 一样显式指到 /tmp/snowflake
-# (容器内可写,不挂卷:缓存是本容器自己的启动期草稿,重建容器就重新申领)。留空关闭。
-SnowflakeCacheDir: /tmp/snowflake
 
 Locker:
   AccountLockTTL: 30

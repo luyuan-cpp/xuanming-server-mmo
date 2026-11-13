@@ -13,7 +13,7 @@
 #   - C++ 节点的 Prometheus 出口(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400)。
 #   - A ServiceMonitor or PodMonitor pointed at that port.
 #
-# 阈值是经验值(设计稿 §3.5),待压测基线校准。处置沿用 node_command_topic.h 的契约:换代号、换更大的 P(2 的幂),
+# 阈值已定(2026-11-12),压测出基线后可调;依据见设计稿 §3.5:每秒 50 条是单节点解码白工的可感知量级(单核解码 protobuf 命令约每秒数万条,50 条只占千分之一,但 50 倍于自己的流量说明分区数 P 明显过小),10m 滤掉重启追赶。处置沿用 node_command_topic.h 的契约:换代号、换更大的 P(2 的幂),
 # 生产端与消费端按同一配置一起切换;不在同名 topic 上扩分区(扩分区会让 node_id % P 的映射在新旧进程之间对不上)。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
@@ -51,4 +51,4 @@ spec:
               这个 {{ $labels.node_type }} 节点每秒解码超过 50 条同分区别的节点的命令,且是发给它自己的 50 倍以上,
               持续 10 分钟。命令 topic 的分区数 P 相对节点数太小,每个节点白白解码大量命令。
               按 node_command_topic.h 的契约换代号、换更大的 P(2 的幂),生产端与消费端一起切换;不要在同名 topic 上扩分区。
-              阈值是经验值,压测有基线后校准(connection-fanout-subsetting-20261106.md §3.5)。
+              阈值已定(2026-11-12),压测出基线后可调(connection-fanout-subsetting-20261106.md §3.5)。

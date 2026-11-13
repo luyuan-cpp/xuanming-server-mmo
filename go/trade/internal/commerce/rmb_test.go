@@ -322,6 +322,37 @@ func TestTiDBRmbBuyerOwnershipChangePersistsRefundDecisionWithoutCredit(t *testi
 	require.Zero(t, credits)
 }
 
+// 买卖同账号的已付款意图(商城下单时那道同账号判断被放开或绕过才会出现):不发货给卖家自己的另一个角色,
+// 也不让已付的钱压在商城 —— 记下退款决定,向商城回 REFUND_PENDING。以前这里每轮回 ErrConflict,既不发货也不退款。
+func TestTiDBRmbDeliverRefundsSelfPurchaseInsteadOfStalling(t *testing.T) {
+	s, dir, probe := rmbRuntime(t)
+	r := rmbCreate(t, s, false)
+	require.NoError(t, rmbStep(t, s, r.CommerceId))
+	settleLegs(t, s.Engine, 2)
+	for n := 0; n < 3; n++ {
+		require.NoError(t, rmbStep(t, s, r.CommerceId))
+	}
+	_, w := state(t, s.Engine, r.CommerceId)
+	require.Equal(t, "account-11", w.Rmb.SellerAccount, "夹具前提:卖家账号是 account-11")
+	// 22 号角色与卖家同属 account-11,角色归属、归属版本都对得上:只有「买卖同账号」这一条不满足。
+	dir.Roles.Values = map[uint64]*dspb.AccountRoleOwnership{22: {Account: "account-11", OwnerRevision: 1, Role: &base.AccountSimplePlayer{PlayerId: 22}}}
+	in := rmbDelivery{Order: "00112233-4455-6677-8899-aabbccddeeff", Buyer: "22", Account: "account-11", Revision: "1", Listing: probe.Registers[0]["listingId"].(string), Reference: w.Rmb.EscrowReference, Proof: w.Rmb.EscrowProof, Amount: 101}
+
+	require.NoError(t, s.deliver(context.Background(), in))
+	// 同一个意图重放:回同一张回执,不重复决定。
+	require.NoError(t, s.deliver(context.Background(), in))
+	require.Len(t, probe.Receipts, 2)
+	require.Equal(t, probe.Receipts[0], probe.Receipts[1])
+	require.Equal(t, "REFUND_PENDING", probe.Receipts[0]["state"])
+	cur, cw := state(t, s.Engine, r.CommerceId)
+	require.Equal(t, "rmb_refund", cw.Stage)
+	require.EqualValues(t, 8, cur.Status)
+	require.Zero(t, cur.BuyerPlayerId, "没有进交付")
+	var credits int
+	require.NoError(t, s.Engine.Repo.DB.QueryRow("SELECT COUNT(*) FROM trade_asset_op WHERE stream=4").Scan(&credits))
+	require.Zero(t, credits, "不建任何发货原件")
+}
+
 // rmbCharacterInDelivery 把角色寄售推到买家已付款、进了 rmb_delivery。
 func rmbCharacterInDelivery(t *testing.T, s *RmbConsignments, dir *rmbDirectoryFixture, probe *rmbMallProbe) (*tradepb.TradeCommerceRecord, rmbDelivery) {
 	t.Helper()

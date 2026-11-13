@@ -13,6 +13,7 @@ import (
 	"match/internal/discovery"
 	"match/internal/metrics"
 	"match/internal/poolgroup"
+	"match/internal/poolowner"
 	"match/internal/ratingrule"
 	"match/internal/scope"
 	"match/internal/svc"
@@ -27,11 +28,13 @@ import (
 
 // 按池撮合（docs/design/global-match-hierarchical-pools.md §5）。
 //
-//   - 池 = (模式, 怪物战斗模板, 人数档)，来自模板目录（PlayMode 表）。同一模板的各人数档由同一个副本负责，
-//     副本之间按 match 实例注册表做最高随机权重哈希分工（poolowner），不再抢同一批票。
-//   - 每轮对负责的每个池读一页排队单位（单排票 + 整队），交给纯函数 poolgroup.Form 一次切出多组，
+//   - 池 = (模式, 怪物战斗模板, 人数档)，来自模板目录（PlayMode 表）。每个池切成撮合段（§5.2.1）：每组 1 人的池一个整池段；
+//     其余的池每个机房一个机房段（热门模板再按玩家拆子池段）、外加一个跨机房段。副本之间按 match 实例注册表对段的归属键
+//     做最高随机权重哈希分工（poolowner），一个热池不再只压在一个副本上。
+//   - 每轮对负责的每个段读一页排队单位（单排票 + 整队），交给纯函数 poolgroup.Form 一次切出多组，
 //     再并发提交；提交点（authority.claimTx / ClaimTeamUnits）在锁内用原票和数据库时钟复核全部规则。
-//   - 一轮里所有提交都在本轮结束前完成，下一轮读到的已是提交后的状态，同一张票不会被本副本选两次。
+//   - 一轮里所有提交都在本轮结束前完成，下一轮读到的已是提交后的状态，同一张票不会被本副本选两次；
+//     两个段（跨机房段与机房段、或两个副本）同时选中同一张票时，只有一方过得了提交点的票行复核（ErrClaimStale）。
 
 const (
 	poolRoundBudget      = 3 * time.Second // 一轮（读页、成组、提交）的总预算
@@ -47,15 +50,21 @@ func StartGlobalPoolMatcher(ctx context.Context, s *svc.ServiceContext) {
 	if interval <= 0 {
 		interval = 500 * time.Millisecond
 	}
-	m := &poolMatcher{s: s, cursors: map[catalog.Pool]authority.PoolCursor{}}
+	reportUnusedSubPools(s)
+	m := &poolMatcher{s: s, cursors: map[poolowner.Segment]authority.PoolCursor{}, pageLabels: map[poolLabel]bool{}}
 	s.StartSourceLoop(ctx, "match.global.pool", interval, m.round)
 }
 
 type poolMatcher struct {
 	s *svc.ServiceContext
-	// cursors 是各池的翻页位置，只由撮合循环这一个 goroutine 访问；只用于调度，不参与提交决策。
-	cursors map[catalog.Pool]authority.PoolCursor
+	// cursors 是各撮合段的翻页位置，只由撮合循环这一个 goroutine 访问；只用于调度，不参与提交决策。
+	cursors map[poolowner.Segment]authority.PoolCursor
+	// pageLabels 是上一轮写过 match_pool_page_units 的标签，本轮没读到的置 0。只由撮合循环访问。
+	pageLabels map[poolLabel]bool
 }
+
+// poolLabel 是 match_pool_page_units 的 (模式, 人数档) 标签。
+type poolLabel struct{ mode, teamSize string }
 
 // poolUnit 是一个不可拆的撮合单位的原件：单排票（launch 为 nil）或一支排队中的整队。
 type poolUnit struct {
@@ -66,6 +75,7 @@ type poolUnit struct {
 // poolClaim 是一个待提交的候选组，units 与 group.Units 一一对应。
 type poolClaim struct {
 	pool  catalog.Pool
+	role  poolowner.Role // 切出这一组的撮合段角色，只用于指标；入队即时成局不经撮合段，为零值
 	group poolgroup.Group
 	units []poolUnit
 	now   uint64
@@ -77,20 +87,24 @@ func (m *poolMatcher) round(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, poolRoundBudget)
 	defer cancel()
 	s := m.s
-	var owned []catalog.Pool
-	for _, pool := range s.Catalog.Pools() {
-		if s.OwnsWork(pool.OwnerKey()) {
-			owned = append(owned, pool)
-		}
-	}
-	metrics.SetPoolOwned(len(owned))
-	// battle 节点按选点状态计数(match_battle_nodes{state},R6):放在"本副本不负责任何池"的提前返回之前,
-	// 不撮合的副本也照常报。
+	// battle 节点按选点状态计数(match_battle_nodes{state},R6):放在"本副本不负责任何段"的提前返回之前,
+	// 不撮合的副本也照常报。同一份快照也给撮合段枚举机房列表。
 	nodes := s.BattleNodes.Snapshot()
 	for state, count := range s.Placement.Census(nodes) {
 		metrics.SetBattleNodes(state, count)
 	}
+	var owned []poolowner.Segment
+	for _, segment := range poolowner.Segments(s.Catalog.Pools(), registeredRegions(nodes), func(pool catalog.Pool) uint32 {
+		return s.Config.GlobalMatch.SubPoolCount(uint32(pool.Mode), pool.ConfigId)
+	}) {
+		if s.OwnsWork(segment.Key()) {
+			owned = append(owned, segment)
+		}
+	}
+	setSegmentsOwned(owned)
+	m.keepCursorsOf(owned)
 	if len(owned) == 0 {
+		m.publishPageUnits(nil)
 		return
 	}
 	now, err := s.Authority.Now(ctx)
@@ -100,29 +114,41 @@ func (m *poolMatcher) round(parent context.Context) {
 	}
 	regions := s.Placement.Regions(nodes)
 	var claims []poolClaim
-	for _, pool := range owned {
+	pageUnits := map[poolLabel]int{}
+	for _, segment := range owned {
 		if ctx.Err() != nil {
 			break
 		}
-		claims = append(claims, m.formPool(ctx, pool, now, regions)...)
+		formed, units := m.formSegment(ctx, segment, now, regions)
+		claims = append(claims, formed...)
+		// 跨机房段的页与机房段重叠(老票两边都读),不计入排队深度。
+		if segment.Role != poolowner.RoleCross {
+			pageUnits[pageLabelOf(segment.Pool)] += units
+		}
 	}
+	m.publishPageUnits(pageUnits)
 	m.claimAll(ctx, claims, nodes)
 }
 
-// formPool 读一页排队单位并切出候选组；同时终止页里已过期的单排票。
-func (m *poolMatcher) formPool(ctx context.Context, pool catalog.Pool, now uint64, regions map[uint32]bool) []poolClaim {
+// formSegment 读一个撮合段的一页排队单位并切出候选组;同时终止页里已过期的单排票。返回候选组与本页可撮合的单位数。
+func (m *poolMatcher) formSegment(ctx context.Context, segment poolowner.Segment, now uint64, regions map[uint32]bool) ([]poolClaim, int) {
 	s := m.s
+	pool := segment.Pool
+	slice, ok := segmentSlice(segment, now, s.Config.GlobalMatch.SubPoolMergeMs(), uint64(s.Config.GlobalMatch.CrossRegionWaitSeconds)*1000)
+	if !ok {
+		return nil, 0
+	}
 	pageSize := s.Config.GlobalMatch.PoolPage()
-	tickets, err := s.Authority.PoolTickets(ctx, pool, m.cursors[pool], pageSize)
+	tickets, err := s.Authority.SliceTickets(ctx, slice, m.cursors[segment], pageSize)
 	if err != nil {
-		logx.Errorf("[match.pool] Failed to read pool tickets mode=%s config=%d size=%d: %v", pool.Mode, pool.ConfigId, pool.TeamSize, err)
-		return nil
+		logx.Errorf("[match.pool] Failed to read pool tickets segment=%s: %v", segment.Key(), err)
+		return nil, 0
 	}
 	var launches []*teampb.TeamLaunchRecord
 	if pool.Mode == pb.MatchMode_MATCH_MODE_PVE_TEAM || pool.Mode == pb.MatchMode_MATCH_MODE_PVP_TEAM {
-		if launches, err = s.Authority.PoolTeamLaunches(ctx, pool, poolTeamLaunchLimit); err != nil {
-			logx.Errorf("[match.pool] Failed to read pool team launches mode=%s config=%d size=%d: %v", pool.Mode, pool.ConfigId, pool.TeamSize, err)
-			return nil
+		if launches, err = s.Authority.SliceTeamLaunches(ctx, slice, poolTeamLaunchLimit); err != nil {
+			logx.Errorf("[match.pool] Failed to read pool team launches segment=%s: %v", segment.Key(), err)
+			return nil, 0
 		}
 	}
 	var units []poolUnit
@@ -157,29 +183,134 @@ func (m *poolMatcher) formPool(ctx context.Context, pool catalog.Pool, now uint6
 		}
 	}
 	m.expire(ctx, pool, expired)
-	metrics.SetPoolPageUnits(pool.Mode.String(), strconv.FormatUint(uint64(pool.TeamSize), 10), len(units))
-	groups := poolgroup.Form(inputs, regions, now, poolPolicy(s, pool))
-	m.advanceCursor(pool, tickets, pageSize, len(groups))
+	groups := poolgroup.Form(inputs, regions, now, segmentPolicy(s, segment))
+	m.advanceCursor(segment, tickets, pageSize, len(groups))
 	claims := make([]poolClaim, 0, len(groups))
 	for _, group := range groups {
-		claim := poolClaim{pool: pool, group: group, now: now}
+		claim := poolClaim{pool: pool, role: segment.Role, group: group, now: now}
 		for _, index := range group.Units {
 			claim.units = append(claim.units, units[index])
 		}
 		claims = append(claims, claim)
 	}
-	return claims
+	return claims, len(units)
 }
 
-// advanceCursor：读到池尾或本页成了组，下一轮从队首重读；整页都凑不出组时翻到下一页，
+// advanceCursor：读到这一段的尾或本页成了组，下一轮从段首重读；整页都凑不出组时翻到下一页，
 // 防止一页卡住的票（例如机房暂时没有节点、整队装不进人数档）挡住后面能成局的人。
-func (m *poolMatcher) advanceCursor(pool catalog.Pool, tickets []*pb.MatchAuthorityTicketRecord, pageSize, formed int) {
+// 跨机房段的区间上界每轮随时钟前移，新等满阈值的票接在尾部，游标照用（§5.2.1 第 4 条）。
+func (m *poolMatcher) advanceCursor(segment poolowner.Segment, tickets []*pb.MatchAuthorityTicketRecord, pageSize, formed int) {
 	if len(tickets) < pageSize || formed > 0 {
-		delete(m.cursors, pool)
+		delete(m.cursors, segment)
 		return
 	}
 	last := tickets[len(tickets)-1]
-	m.cursors[pool] = authority.PoolCursor{EnqueuedMs: last.EnqueuedMs, PlayerId: last.PlayerId}
+	m.cursors[segment] = authority.PoolCursor{EnqueuedMs: last.EnqueuedMs, PlayerId: last.PlayerId}
+}
+
+// keepCursorsOf 丢掉本轮不再负责的段的游标:段换了主或机房下线后,旧位置不该在它回来时接着用。
+func (m *poolMatcher) keepCursorsOf(owned []poolowner.Segment) {
+	keep := make(map[poolowner.Segment]bool, len(owned))
+	for _, segment := range owned {
+		keep[segment] = true
+	}
+	for segment := range m.cursors {
+		if !keep[segment] {
+			delete(m.cursors, segment)
+		}
+	}
+}
+
+// publishPageUnits 写本轮各本机房段读到的可撮合单位数之和;上一轮写过、本轮没读到的标签置 0,
+// 不再负责某个池的副本不留着旧读数。
+func (m *poolMatcher) publishPageUnits(units map[poolLabel]int) {
+	for label := range m.pageLabels {
+		if _, ok := units[label]; !ok {
+			metrics.SetPoolPageUnits(label.mode, label.teamSize, 0)
+			delete(m.pageLabels, label)
+		}
+	}
+	for label, count := range units {
+		metrics.SetPoolPageUnits(label.mode, label.teamSize, count)
+		m.pageLabels[label] = true
+	}
+}
+
+func pageLabelOf(pool catalog.Pool) poolLabel {
+	return poolLabel{mode: pool.Mode.String(), teamSize: strconv.FormatUint(uint64(pool.TeamSize), 10)}
+}
+
+// setSegmentsOwned 按角色写本副本负责的撮合段数,每种角色都写(没有的写 0)。
+func setSegmentsOwned(owned []poolowner.Segment) {
+	counts := map[poolowner.Role]int{}
+	for _, segment := range owned {
+		counts[segment.Role]++
+	}
+	for _, role := range poolowner.Roles {
+		metrics.SetPoolOwned(role.String(), counts[role])
+	}
+}
+
+// registeredRegions 是撮合段枚举用的机房列表:stable battle 节点镜像里出现的 physical_region,不看可分配状态、不扣本地熔断。
+// 各副本 watch 同一个 etcd 前缀,看到同一份(§5.2.1 第 2 条);能不能往某个机房放只在成组时看(Placement.Regions)。
+// 0 与重复由 poolowner.Segments 去掉。
+func registeredRegions(nodes []discovery.NodeEntry) []uint32 {
+	out := make([]uint32, 0, len(nodes))
+	for _, node := range nodes {
+		if node.PhysicalRegion != 0 {
+			out = append(out, node.PhysicalRegion)
+		}
+	}
+	return out
+}
+
+// segmentSlice 把撮合段换成这一轮要读的那一段票(§5.2.1 第 3 条):机房段、子池段按首选机房读,子池段再按 id 取模、
+// 只读入队不满合并时长的;机房段配了子池时、跨机房段只读等满各自阈值的。ok 为 false:时钟还没走过阈值,本轮跳过这一段。
+func segmentSlice(segment poolowner.Segment, now, mergeMs, crossMs uint64) (authority.PoolSlice, bool) {
+	after, until, ok := segment.Window(now, mergeMs, crossMs)
+	if !ok {
+		return authority.PoolSlice{}, false
+	}
+	slice := authority.PoolSlice{Pool: segment.Pool, Region: segment.Region, AfterMs: after, UntilMs: until}
+	if segment.Role == poolowner.RoleSub {
+		slice.SubPools, slice.Sub = segment.SubPools, segment.Sub
+	}
+	return slice, true
+}
+
+// segmentPolicy 是撮合段的成组规则:与整池同一份 poolPolicy,只按段角色选跑哪些机房阶段。
+func segmentPolicy(s *svc.ServiceContext, segment poolowner.Segment) poolgroup.Policy {
+	policy := poolPolicy(s, segment.Pool)
+	policy.Passes = segmentPasses(segment.Role)
+	return policy
+}
+
+// segmentPasses:机房段、子池段只跑本机房阶段;跨机房段先跑本机房阶段占位、只提交跨机房阶段的组;整池段两个阶段都跑。
+func segmentPasses(role poolowner.Role) poolgroup.Passes {
+	switch role {
+	case poolowner.RoleRegion, poolowner.RoleSub:
+		return poolgroup.PassesLocal
+	case poolowner.RoleCross:
+		return poolgroup.PassesCross
+	}
+	return poolgroup.PassesBoth
+}
+
+// reportUnusedSubPools 在启动时核子池配置里的模板:目录里没有这个模板的多人池,那一行不起作用,打一条 ERROR,不拒启
+// (配置结构的越界已在加载时拒启,§5.2.1 第 5 条)。
+func reportUnusedSubPools(s *svc.ServiceContext) {
+	for _, entry := range s.Config.GlobalMatch.SubPools {
+		used := false
+		for _, pool := range s.Catalog.Pools() {
+			if uint32(pool.Mode) == entry.Mode && pool.ConfigId == entry.ConfigId && poolowner.Split(pool) {
+				used = true
+				break
+			}
+		}
+		if !used {
+			logx.Errorf("[match.pool] GlobalMatch.SubPools entry mode=%d config=%d matches no open multi-player pool in the PlayMode catalog; it has no effect", entry.Mode, entry.ConfigId)
+		}
+	}
 }
 
 func (m *poolMatcher) expire(ctx context.Context, pool catalog.Pool, tickets []*pb.MatchAuthorityTicketRecord) {
@@ -206,6 +337,7 @@ func (m *poolMatcher) claimAll(ctx context.Context, claims []poolClaim, nodes []
 		if !reserveGatherSlot(s) {
 			for _, skipped := range claims[index:] {
 				metrics.ObservePoolClaim(skipped.pool.Mode.String(), skipped.group.Level.String(), passLabel(skipped.group.Cross), metrics.PoolClaimNoSlot)
+				metrics.ObservePoolSegmentClaim(skipped.role.String(), metrics.PoolClaimNoSlot)
 			}
 			break
 		}
@@ -216,6 +348,7 @@ func (m *poolMatcher) claimAll(ctx context.Context, claims []poolClaim, nodes []
 			defer func() { <-limiter }()
 			outcome := claimGroup(ctx, s, claim, nodes)
 			metrics.ObservePoolClaim(claim.pool.Mode.String(), claim.group.Level.String(), passLabel(claim.group.Cross), outcome)
+			metrics.ObservePoolSegmentClaim(claim.role.String(), outcome)
 		})
 	}
 	wg.Wait()
@@ -257,10 +390,15 @@ func claimGroup(ctx context.Context, s *svc.ServiceContext, claim poolClaim, nod
 		if unit.launch != nil {
 			launches = append(launches, unit.launch)
 		}
+		side := uint32(0)
 		if claim.group.Sides != nil {
-			for _, ticket := range unit.tickets {
-				f.Members = append(f.Members, &pb.MatchFormationMember{PlayerId: ticket.PlayerId, Ticket: ticket.Ticket, TeamIndex: claim.group.Sides[i]})
-			}
+			side = claim.group.Sides[i]
+		}
+		for _, ticket := range unit.tickets {
+			// 整队开局的发起人就是该队队长:建房时这一方的战斗剧本按队长的选用(battle-script.md §5.2)。
+			// 没有分边的模式 side 恒为 0,由 gather 的 teamAssignment 另行分边,这里只是把队长标记带进成局原件
+			captain := unit.launch != nil && ticket.PlayerId == unit.launch.GetActorId()
+			f.Members = append(f.Members, &pb.MatchFormationMember{PlayerId: ticket.PlayerId, Ticket: ticket.Ticket, TeamIndex: side, Captain: captain})
 		}
 	}
 	switch claim.pool.Mode {
@@ -438,9 +576,10 @@ func reserveGatherSlot(s *svc.ServiceContext) bool {
 }
 
 // expectedClaimRejection 报告提交失败是不是撮合与提交之间的正常变化（不影响排空判定）：
-// 票被取消或已被别人提交、整队名单变化、范围、入口或评分规则在提交点不满足、home 迁移。
+// 票被取消或已被别的撮合段、别的副本先提交（ErrClaimStale，拆写者之后跨机房段与机房段撞车是常态）、整队名单变化、
+// 范围、入口或评分规则在提交点不满足、home 迁移。这些都在提交之前回滚，结局已知，不记排空 HOLD。
 func expectedClaimRejection(err error) bool {
-	for _, expected := range []error{authority.ErrScopeWait, authority.ErrTemplateClosed, authority.ErrDirectConflict, authority.ErrTeamLaunchActive, authority.ErrOriginalPlayer, authority.ErrTeamRoute, authority.ErrRatingSpread} {
+	for _, expected := range []error{authority.ErrClaimStale, authority.ErrScopeWait, authority.ErrTemplateClosed, authority.ErrDirectConflict, authority.ErrTeamLaunchActive, authority.ErrOriginalPlayer, authority.ErrTeamRoute, authority.ErrRatingSpread} {
 		if errors.Is(err, expected) {
 			return true
 		}

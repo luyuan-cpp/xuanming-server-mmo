@@ -199,15 +199,18 @@ func TestEtcdIntegration_StoreContract(t *testing.T) {
 	if err != nil || empty.Exists || empty.ClusterID == 0 {
 		t.Fatalf("empty record: %+v %v", empty, err)
 	}
-	if ok, err := store.CompareAndSwap(ctx, empty, 1<<62, testAuthority); err != nil || !ok {
+	if ok, err := store.CompareAndSwap(ctx, empty, 1<<62, testAuthority, "k8s:contract"); err != nil || !ok {
 		t.Fatalf("create: %v %v", ok, err)
 	}
-	if ok, err := store.CompareAndSwap(ctx, empty, 7, testAuthority); err != nil || ok {
+	if ok, err := store.CompareAndSwap(ctx, empty, 7, testAuthority, "k8s:contract"); err != nil || ok {
 		t.Fatalf("a second create from the same stale view must lose: %v %v", ok, err)
 	}
 	rec, err := store.Read(ctx)
-	if err != nil || rec.Value != 1<<62 || rec.Authority != testAuthority {
+	if err != nil || rec.Value != 1<<62 || rec.Authority != testAuthority || rec.Deployment != "k8s:contract" {
 		t.Fatalf("read back: %+v %v", rec, err)
+	}
+	if _, err := store.CompareAndSwap(ctx, rec, 1<<62+1, testAuthority, "Not A Valid Identity"); err == nil {
+		t.Fatal("a malformed deployment identity must not be written")
 	}
 	env.put(env.primary, root+"contract/record", []byte("12345"))
 	if _, err := store.Read(ctx); err == nil {
@@ -241,6 +244,24 @@ func TestEtcdIntegration_StoreContract(t *testing.T) {
 	}
 	if _, err := registry.ClaimNew(ctx, 3, claim); !errors.Is(err, ErrRegionClaimed) {
 		t.Fatalf("claim 3 twice: %v", err)
+	}
+	// 补记录守住「有记录的码都小于下一个可认领的码」(这时是 4):墓碑大于它拒绝;恰好等于它就跳过;
+	// 在用的码重新登记到它之上,把它推到自己后面;小于它的直接写。
+	tombstone := Claim{State: ClaimRetired}
+	if _, err := registry.CompareAndSwap(ctx, 9, ClaimRecord{}, tombstone); !errors.Is(err, ErrRegionOutOfOrder) {
+		t.Fatalf("tombstone above next: %v", err)
+	}
+	if ok, err := registry.CompareAndSwap(ctx, 4, ClaimRecord{}, tombstone); err != nil || !ok {
+		t.Fatalf("tombstone at next: %v %v", ok, err)
+	}
+	if ok, err := registry.CompareAndSwap(ctx, 7, ClaimRecord{}, claim); err != nil || !ok {
+		t.Fatalf("re-register above next: %v %v", ok, err)
+	}
+	if next, _, opened, err := registry.readNext(ctx); err != nil || !opened || next != 8 {
+		t.Fatalf("next claimable code %d (opened=%v err=%v), want 8", next, opened, err)
+	}
+	if ok, err := registry.CompareAndSwap(ctx, 2, ClaimRecord{}, tombstone); err != nil || !ok {
+		t.Fatalf("tombstone below next: %v %v", ok, err)
 	}
 	got, err := registry.Read(ctx, 3)
 	if err != nil || !got.Exists || got.Claim != claim || got.ClusterID == 0 {

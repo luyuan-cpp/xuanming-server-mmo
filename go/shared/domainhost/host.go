@@ -131,7 +131,8 @@ func serve(ctx context.Context, c Config, nodeType base.ENodeType, register func
 	defer root.CloseAdmission()
 	ctx, cancelServe := context.WithCancel(ctx)
 	defer cancelServe()
-	kill := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix})
+	// NodeTypes:认 type/<本服务的 eNodeType 名>/ 下的规则;注册成功后再 AddInstance(docs/design/rpc-kill-switch.md §5)。
+	kill := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix, NodeTypes: []string{base.ENodeType_name[int32(nodeType)]}})
 	traffic := grpcstats.New(grpcstats.Options{})
 	defer traffic.Disable()
 	// 使用仓库统一go-zero服务；NodeInfo由下面的单一注册生命周期负责，
@@ -278,6 +279,7 @@ func serve(ctx context.Context, c Config, nodeType base.ENodeType, register func
 		return err
 	}
 	registration.KeepAlive()
+	kill.AddInstance(registration.NodeUUID) // 认 instance/<本进程 uuid>/ 下的热关停规则
 	if listening != nil {
 		listening(registration.NodeUUID)
 	}

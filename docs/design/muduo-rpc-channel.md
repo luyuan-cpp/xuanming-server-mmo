@@ -86,6 +86,7 @@ enum GameErrorCode {
   TIMEOUT = 6;            // 线上不发;本地状态见 RpcStatusCode
   HANDLER_FAILED = 7;     // handler 显式失败(controller->SetFailed / RpcDoneCallback::Fail):handler 已运行
   REPLY_DROPPED = 8;      // handler 接管 done 后未完成即释放:结果未知
+  KILL_SWITCH_DENIED = 9; // 2026-11-12:被热关停规则拒绝,派发前拒绝、确定未执行(rpc-kill-switch.md)
 }
 message GameRpcMessage {
   GameMessageType type = 1; bytes request = 2; bytes response = 3; GameErrorCode error = 4; uint32 message_id = 5;

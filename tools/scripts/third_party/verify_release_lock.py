@@ -41,7 +41,7 @@ def verify_patch(repository, item, apply_patches):
         raise RuntimeError(f"补丁尚未应用：{item['path']}，请使用 --apply-patches")
     git(repository, "apply", "--check", str(patch))
     git(repository, "apply", str(patch))
-    print(f"已应用：{item['path']}")
+    print(f"Applied: {item['path']}")
 
 
 def main():
@@ -74,7 +74,7 @@ def main():
         for nested in entry.get("nested_patches", []):
             nested_repository = verify_repository(nested["repository"], nested["commit"])
             verify_patch(nested_repository, nested, args.apply_patches)
-    print(f"固定版本及兼容补丁检查通过：{len(entries)} 个子模块")
+    print(f"Pinned versions and compatibility patches verified: {len(entries)} submodules")
 
 
 if __name__ == "__main__":

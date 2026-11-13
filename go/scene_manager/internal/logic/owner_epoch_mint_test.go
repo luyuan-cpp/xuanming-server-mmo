@@ -54,6 +54,12 @@ type fakeOwnerEpochMinter struct {
 	queued []fakeDurability
 	// scripts 按调用顺序记下经过本接口的脚本(断言哪段脚本走了铸造通道)。
 	scripts []string
+	// unknownAfterEval > 0 时接下来这么多次调用先把 EVAL 执行掉,再回 svc.ErrOwnerEpochMintResultUnknown:模拟首发已生效、
+	// 回复丢了,重发也没拿到结论(铸造通道的「结果未知」)。
+	unknownAfterEval int
+	// resendAfterEval > 0 时接下来这么多次调用把 EVAL 执行两遍,交回第二遍的回复且 Attempts = 2:模拟首发已生效、回复丢了,
+	// 新连接上的原样重发拿到了回复(不凭标记的铸造会回 0)。
+	resendAfterEval int
 }
 
 // fakeDurability 是一次排队的落盘结论。
@@ -90,6 +96,14 @@ func (m *fakeOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script string
 		durability, durableErr = m.queued[0].durability, m.queued[0].err
 		m.queued = m.queued[1:]
 	}
+	unknown := m.unknownAfterEval > 0
+	if unknown {
+		m.unknownAfterEval--
+	}
+	resend := !unknown && m.resendAfterEval > 0
+	if resend {
+		m.resendAfterEval--
+	}
 	m.mu.Unlock()
 	if notSent {
 		return svc.MintEvalResult{}, svc.ErrOwnerEpochMintNotSent
@@ -98,10 +112,35 @@ func (m *fakeOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script string
 	if err != nil {
 		return svc.MintEvalResult{Attempts: 1}, err
 	}
+	if unknown {
+		return svc.MintEvalResult{Attempts: 3}, fmt.Errorf("%w after 3 attempt(s): test transport error", svc.ErrOwnerEpochMintResultUnknown)
+	}
+	attempts := 1
+	if resend {
+		reply, err = m.rds.EvalCtx(ctx, script, keys, args...)
+		if err != nil {
+			return svc.MintEvalResult{Attempts: 2}, fmt.Errorf("%w: %w", svc.ErrOwnerEpochMintResultUnknown, err)
+		}
+		attempts = 2
+	}
 	if afterEval != nil {
 		afterEval()
 	}
-	return svc.MintEvalResult{Reply: reply, Durability: durability, DurableErr: durableErr, Attempts: 1, Elapsed: time.Millisecond}, nil
+	return svc.MintEvalResult{Reply: reply, Durability: durability, DurableErr: durableErr, Attempts: attempts, Elapsed: time.Millisecond}, nil
+}
+
+// setUnknownAfterEval 让接下来 n 次调用执行 EVAL 之后回「结果未知」。
+func (m *fakeOwnerEpochMinter) setUnknownAfterEval(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.unknownAfterEval = n
+}
+
+// setResendAfterEval 让接下来 n 次调用把 EVAL 执行两遍,交回第二遍的回复(Attempts = 2)。
+func (m *fakeOwnerEpochMinter) setResendAfterEval(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.resendAfterEval = n
 }
 
 // setDurability 改之后每次铸造的落盘结论。
@@ -433,6 +472,220 @@ func TestEnterScene_SameNodeZeroEpochMintNotDurableKeepsEpoch(t *testing.T) {
 	targetCount := sceneCountText(sc, targetID)
 	assert.Equal(t, "3", oldCount)
 	assert.Equal(t, "4", targetCount)
+}
+
+// --- 铸造结果未知(errOwnerEpochMintResultUnknown)与同节点 epoch 0 的残留值(§4.3.4) ------------------------------
+
+// 首次落点的铸造 EVAL 结果未知(首发其实已生效、回复丢了,重发也没拿到结论):不推路由,按计划好的落点原字节回滚 ——
+// location 删掉、epoch 再进一格作废,目标场景预占退回,回 7。以前回 3、不回滚:生效了的落点(没确认落盘的 1)留在 Redis 里,
+// 之后的同落点重连会原样下发它。
+func TestEnterScene_FirstPlacementMintResultUnknownRollsBack(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6921)
+		targetID = uint64(7921)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "5")
+	testMinter(t, sc).setUnknownAfterEval(1)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Empty(t, *captured, "结果未知的铸造值一次都不下发")
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "生效了的首次落点被撤掉")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "铸出 1 → 回滚到 2,1 作废")
+	assert.Equal(t, "5", sceneCountText(sc, targetID), "目标场景预占退回")
+}
+
+// 首次落点的铸造首发已生效、回复丢了,新连接上的重发拿到了回复,却是 0(不凭标记的铸造认不出自己的写):按结果未知收尾,
+// 回滚撤掉那次落点,回 7。以前按并发冲突回 19、不回滚。
+func TestEnterScene_UnmarkedMintResendReturningZeroRollsBack(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6922)
+		targetID = uint64(7922)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "5")
+	testMinter(t, sc).setResendAfterEval(1)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode, "重发回 0 不再当成并发冲突")
+	assert.Empty(t, *captured)
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "首发写下的落点被撤掉")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	assert.Equal(t, "5", sceneCountText(sc, targetID), "目标场景预占退回")
+}
+
+// 凭标记的跨节点交接,铸造 EVAL 结果未知:按计划好的落点回滚到源节点,两段回执照常走 —— 这里回滚之后的落盘确认到了份数,
+// 回执改成正式回执,源端可以凭它采纳 3。不推路由,回 7;两边人数与回滚之后的 location 对得上。
+func TestEnterScene_HandoffMintResultUnknownRollsBackWithReceipt(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6923)
+		oldScene = uint64(7923)
+		targetID = uint64(7924)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
+	seedNodeMembers(mr, testZoneId, "10", 3)
+	seedNodeMembers(mr, testZoneId, "20", 4)
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
+	writeHandoffMarker(t, sc, playerID, 1)
+	withReachableSceneNode(t, sc, "10", "20")
+	testMinter(t, sc).setUnknownAfterEval(1)
+	testMinter(t, sc).resetScriptCalls()
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Equal(t, uint64(3), resp.OwnerEpochAfterRollback)
+	assert.Empty(t, *captured)
+	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID), "铸出 2 → 回滚到 3")
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, oldScene, loc.SceneId)
+	assert.Equal(t, "10", loc.NodeId)
+	assert.Equal(t, "1:1757000000000", loc.RollbackReceipt, "回滚之后的确认到了份数,改成正式回执")
+	assert.Equal(t, "4", sceneCountText(sc, targetID), "目标场景预占退回")
+	assert.Equal(t, "3", sceneCountText(sc, oldScene), "旧场景身份不动")
+	assert.Equal(t, "4", nodeCountText(sc, testZoneId, "20"), "目标节点预占退回")
+	assert.Equal(t, "3", nodeCountText(sc, testZoneId, "10"), "旧节点身份不动")
+	assert.Equal(t, []string{luaMintEpochAndSetLocation, luaConfirmPendingRollback}, testMinter(t, sc).scriptCalls(),
+		"回滚走共享连接池,铸造通道只收到铸造与之后的落盘确认")
+}
+
+// 跨 zone 第一条腿凭标记铸造,EVAL 结果未知:不推重定向,按计划好的等待落点回滚,location 回到源 zone,旧场景人数不动;回 7。
+func TestEnterScene_CrossZoneMintResultUnknownRollsBack(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6925)
+		oldScene = uint64(7927)
+	)
+	seedSceneOnNode(mr, 1, oldScene, "10", "3")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
+	writeHandoffMarker(t, sc, playerID, 1)
+	seedDefaultWorldChannel(t, mr, 2)
+	testMinter(t, sc).setUnknownAfterEval(1)
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, ZoneId: 2,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Nil(t, resp.Redirect, "结果未知时不推重定向")
+	assert.Equal(t, uint64(3), resp.OwnerEpochAfterRollback)
+	assert.Empty(t, *captured)
+	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, uint32(1), loc.ZoneId, "location 回到源 zone")
+	assert.Equal(t, oldScene, loc.SceneId)
+	assert.Equal(t, "1:1757000000000", loc.RollbackReceipt)
+	assert.Equal(t, "3", sceneCountText(sc, oldScene), "旧场景人数不动")
+}
+
+// 同节点 epoch 0 的铸造没确认落盘、keep 回滚之后,键里留着没确认的 1,location 仍记 0。重试同一次换图时必须再铸一次
+// (新值确认之后才下发),不能把 1 原样下发:1 可能随 Redis 回退消失(zone-redis-regression-guard-20261022.md §4.3.4)。
+func TestEnterScene_SameNodeLeftoverOfUnconfirmedZeroMintIsReminted(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6926)
+		oldScene = uint64(7928)
+		targetID = uint64(7929)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
+	require.NoError(t, err)
+	adoptSceneMember(mr, oldScene, playerID)
+	withReachableSceneNode(t, sc, "10")
+	enter := func() *scene_manager.EnterSceneResponse {
+		resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+			PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+			GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+		})
+		require.NoError(t, err)
+		return resp
+	}
+
+	testMinter(t, sc).setDurability(svc.MintDurabilityNotDurable, errTestWaitAOFShort)
+	require.Equal(t, constants.ErrKafkaRoute, enter().ErrorCode)
+	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "keep 回滚:键停在没确认的 1")
+	require.Empty(t, *captured)
+
+	testMinter(t, sc).setDurability(svc.MintDurabilityConfirmed, nil)
+	require.Equal(t, uint32(0), enter().ErrorCode)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(2), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch, "再铸一次:下发确认过的 2,不下发没确认的 1")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+}
+
+// 同上的残留状态(键 1 没确认、location 记 0),玩家重连回原场景(同落点):不铸造,下发 location 记的 0,不下发没确认的 1。
+func TestEnterScene_SamePlacementDoesNotRouteLeftoverOfZeroMint(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6927)
+		oldScene = uint64(7930)
+		targetID = uint64(7931)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
+	require.NoError(t, err)
+	adoptSceneMember(mr, oldScene, playerID)
+	withReachableSceneNode(t, sc, "10")
+
+	testMinter(t, sc).setDurability(svc.MintDurabilityNotDurable, errTestWaitAOFShort)
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "keep 回滚:键停在没确认的 1")
+
+	testMinter(t, sc).setDurability(svc.MintDurabilityConfirmed, nil)
+	resp, err = NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: oldScene, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(0), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch, "同落点重连下发 location 记的 0")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "同落点重连不铸造")
 }
 
 // 落盘确认关闭(两项份数都配 0):铸造照常放行、照常推路由。

@@ -12,6 +12,10 @@
 > 2026-11-10 补(**未编译、未测试**):离线托管的角色跟着队长换场景(同节点 / 本 zone 跨节点)—— 托管落点(§4.2):scene 发不带 gate 的
 > EnterScene,scene_manager 提交后直接给目标 scene 节点发 `PlayerHostedPlacementEvent`,目标节点不绑会话入场、按断线托管重建保留。
 > 新增协议字段与 Kafka 事件,要先跑协议生成;验证见 §10 第 6 条。
+>
+> 2026-11-12 补(**未编译、未测试**),把 §8 第 8、9 两条残余修掉:节点排空 / 疏散时离线托管中的角色按托管落点改派到别的节点、接着托管,
+> 走与在线玩家同一条改派链与待确认表(§4.3);托管落点提交之后目标节点没把人建起来时,目标节点按退避有限次重试同一条落点(§4.4)。
+> 没有新增协议字段;验证见 §10 第 7 条。
 
 ## 0. 一句话
 
@@ -84,7 +88,7 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 
 - 跨节点交接不会发起(`HasLiveGateSession`;例外是服务器替离线托管中的角色发起的交接,重发改为托管落点,§4.2);
 - 跨场景的队伍跟随不带 gate 去切(`player_team.cpp` 换场景分支的 `HasLiveSession`):普通保留中的留在原场景,离线托管中的改发托管落点(§4.2);同一场景里由服务器驱动的跟随不看会话,照常带着它走,只是不给它发跟随推送([team-follow-server-trail.md](team-follow-server-trail.md) §3.6,`team_follow_system.cpp` 的 `HasLiveGateSession`);
-- 排空、疏散只存盘不改派(`EnqueueRelocateTicket`);
+- 排空、疏散对普通保留中的角色只存盘不改派(`EnqueueRelocateTicket`);离线托管中的另发托管票据,按托管落点改派到别的节点(§4.3);
 - 推送不再发往 gate。
 
 登录身份组件留着,是因为租约到期的会话结束释放要按它判断「实体是不是还绑着这次登录」(`location-release-binding.md` §13)。
@@ -96,7 +100,7 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 
 到期:`ExpireConnectionLostHolds` 每秒扫描一次。保留满 25 秒的,先摘掉保留组件,再 `HandleExitGameNode(kClientDisconnect)`,与原来断线即退出是同一条路。
 
-被别的退出取代(租约到期的会话结束释放、排空、疏散、停机、交易封存):`HandleExitGameNode` 入口摘掉保留组件。首次挂退出意图时,`clientDisconnected` 置位,改派票据因此作废。
+被别的退出取代(租约到期的会话结束释放、排空、疏散、停机、交易封存):`HandleExitGameNode` 入口摘掉保留组件。首次挂退出意图时,`clientDisconnected` 置位,在线票据因此作废(普通保留中的角色本来就没有票据)。离线托管中的角色被排空 / 疏散时拿的是托管票据,派发按登录身份判、不看这一位,搬到别的节点接着托管(§4.3)。
 
 `PlayerConnectionLostComp` 属于「按需状态」(`ecs-component-access-rules.md`):没有它 = 连接正常或不在保留中。它是纯内存组件,不落库。
 
@@ -122,15 +126,16 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
   另外,同一场景里正被组队跟随驱动的,照常跟着队长走;队长换场景、换节点时跟过去(§4.2)。在队伍里却没接在队长身后的,
   1 秒扫描每 15 秒(按玩家号错开)替他重新走一遍跟随检查(`PlayerTeamSystem::OnOfflineHostingHeartbeat`,2026-11-11),
   相当于在线客户端没被驱动时隔几秒重新声明一次跟随,补上漏掉的信号(team-follow-server-trail.md §3.7)。
-- **结束**:新会话接回(§5,与普通保留同一判据)、月卡到期或确认不了(上面)、被别的退出取代(租约到期的会话结束释放、排空、疏散、停机、交易封存)。
+- **结束**:新会话接回(§5,与普通保留同一判据)、月卡到期或确认不了(上面)、被别的退出取代(租约到期的会话结束释放、停机、交易封存)。
+  排空 / 疏散不算结束:他拿着托管票据存盘退出,按托管落点搬到别的节点,在那里按断线托管重建保留、接着托管(§4.3)。
 
 时序为什么成立:普通保留靠 `kHoldWindow + 1 + 4 ≤ 30` 保证保留在 login 断线租约到期前结束(§7)。托管超过 30 秒,是因为 player_locator
 在月卡有效期间一直续租;它只在看到月卡失效(到期时刻之后)才让租约到期,而 scene 在到期前 `kHostingExitLead` 就退出,
 租约到期时退出存盘已经落地、断线释放标记已写,LeaveScene 照常当场拿到证据。两台机器的墙钟差超过这 5 秒时,可能走到
 「保留拖过租约」的慢路径(§7),只是清理多等一个 claim 超时,不影响数据。
 
-没做:托管中的角色不会自己去别处(不打怪、不自己换图;跟着队长换场景见 §4.2);节点排空 / 疏散时照原规则存盘退出,托管提前结束 ——
-把托管中的角色搬到别的节点用的是 §4.2 同一套"托管落点",排空 / 疏散改用它是后续(§8 第 8 条)。
+没做:托管中的角色不会自己去别处(不打怪、不自己换图;跟着队长换场景见 §4.2)。节点排空 / 疏散时,2026-11-12 起他不再存盘下线,
+而是按 §4.2 同一套托管落点改派到别的节点、到了接着托管(§4.3)。
 
 ### 4.2 离线托管的角色换场景:托管落点(2026-11-10,用户要求「队员开了离线挂机卡,然后完全杀掉客户端」也要跟着队长过去)
 
@@ -194,10 +199,125 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 | 推事件失败(broker 没 ACK) | 回滚落点,回 7;同节点:什么都没动;跨节点:源节点按既有取证(B4 / B5)解冻或采纳回滚后的代次,静默 |
 | EnterScene 传输失败(结果未知) | 同节点:若已提交,事件照样会到,实体照样换过去;跨节点:交给交接的应答看门狗与冻结上限裁决(与玩家自己换图相同) |
 | 事件重复 / 迟到 | 入场会话栅栏按登录代次挡住被新登录取代的旧事件;角色登记对在途的同一份上下文只重放;已在目标场景时幂等;实体在退出中不拉回 |
-| 事件丢了(目标节点消费前崩溃)、目标节点角色登记被拒、载入失败 | 不丢数据:玩家留在 location 指向的落点上无人持有;重新登录照常从盘上载入;不再登录的,月卡到期后 player_locator 停止续租,租约到期走会话结束释放清掉 location。期间他不在世界里(残余,§8 第 9 条) |
+| 目标节点角色登记被拒、交接栅栏登记失败、载入 / 认领失败、继承标记清理放弃 | 目标节点按退避有限次重试同一条落点,每次先读一次权威落点、确认仍指着本节点才试(§4.4);用尽仍没建出来的,玩家留在 location 指向的落点上无人持有,数据在盘上:重新登录照常从盘上载入,不再登录的,月卡到期后 player_locator 停止续租,租约到期走会话结束释放清掉 location |
+| 事件在消费前丢了(目标节点崩溃 / 被同号新进程顶替,实例号不对的事件被防僵尸过滤丢掉) | 与"托管中的角色随节点崩溃一起不在世界里"同一类,不补:数据在盘上,下次登录按死节点 / 被顶替节点的接管落点照常载入;不再登录的由月卡到期后的租约清理收尾(§8 第 9 条) |
 | 托管落点到了、月卡刚好到期 | 目标节点查月卡不成立,按普通 25 秒窗口退出(租约仍有续租余量,§7 的时序不受影响) |
 | 交接中重新登录 | 新登录的 EnterScene 抢先:location 记成新身份,在途的托管落点被 25 拒,源节点按 B4 静默解冻;托管落点抢先:新登录按新 location 派到目标节点,与目标节点的托管载入谁先谁后都由入场栅栏按代次收敛到新登录 |
 | 托管落点撞上仍有活会话的实体(按构造走不到) | `HandleEnterGameNode` 在摘会话之前直接拒,不碰会话 |
+
+### 4.3 节点排空 / 疏散时搬走离线托管的角色(2026-11-12)
+
+> 代码已写,**未编译、未测试**(验证见 §10 第 7 条)。取代 11-11 计划排空批 5 的写法(scene-node-planned-drain.md §4.4):那一版派发时
+> 去读已被退出入口摘掉的保留组件,每张托管票据都被作废、一个都没搬走过;票据也不进待确认表。
+
+**问题**:单场景排空(频道缩容、迁移拆老实体、归属对账,`BeginSceneDrain`)、计划排空(`PumpPlannedEvacuations`)与整节点疏散
+(身份冲突,`BeginEmergencyRelocateAll`)都按"抄票据 → 存盘 → 落地后改派"把住户搬走。改派票据原先只发给有活 gate 会话的人;
+离线托管中的角色没有活会话,只存盘下线,托管提前结束、组队跟随随之断掉 —— 他要等下一次登录才回到世界里,而开挂机月卡
+就是为了不登录。
+
+**做法:与在线玩家同一条改派链、同一张待确认表,只把路由换成托管落点。**
+
+| 步骤 | 在线玩家 | 离线托管中的角色 |
+|---|---|---|
+| 发票(`EnqueueRelocateTicket`) | 有活会话 → 抄会话、gate 号与实例号、去向提示 | `OfflineHostedIdentity` 有值 → 抄断开那次登录(会话号 + 代次)与去向提示,不抄 gate;已有一张前一次排空发的托管票据(那次退出已摘掉保留)→ 留着照样算。普通 25 秒保留(月卡还没确认)只存盘,理由同 §4.2 第 1 条 |
+| 退出(`HandleExitGameNode`) | 存盘,落地后收尾 | 同左;保留组件在入口摘掉(本节点上的托管到此为止,到目标节点重建),计 `hosted_relocating`,不算"被取代" |
+| 派发判定(`DispatchEmergencyRelocate`) | `DecideTicket`:退出期间客户端断线、或当前会话换了 → 作废 | `DecideHostedTicket`:断线是前提(保留中的退出意图一定记了 `clientDisconnected`),不看它;实体又绑上了活会话(新登录接回过)、或登录身份已不是票据那一次 → 作废(`void_session_replaced`) |
+| 标记 | 条件写 "E:ms"(owner_epoch 仍是 E、只消费实体缓存的 H) | 同左 |
+| A1′ | 消费了票据 → 不写断线释放标记(标记归改派);作废 → 按第一次退出原因判 | 同左 |
+| 请求 | `evacuation`、去向提示、gate | `evacuation`、去向提示、`hosted_placement`、不带 gate,会话号与代次 = 断开那次登录 |
+| scene_manager | 疏散解析 → 换手门 → 铸代 → CAS → 推 gate 路由 → 派 ReleasePlayer | 同左,只把推 gate 路由换成推 `PlayerHostedPlacementEvent`(§4.2 第 2 步);Go 侧没有为这个组合另写代码 |
+| 待确认表 | 登记条目,应答 / 传输失败 / 落回本节点推动,核实后定案 | 同一张表,条目带 `hosted`,三处不同见下 |
+| 到达 | gate 改绑,目标节点入场 | 目标节点按托管落点入场、不绑会话,按断线托管重建保留、查月卡,托管开始时由服务器开启组队跟随(§4.2 第 3 步);没建起来时目标节点自己补救(§4.4) |
+
+**待确认表对托管条目的三处不同**(契约在 `relocate_confirm.h` 文件头):
+
+1. **"踢线"不推送**(`push=no_client`):没有在场的客户端;条目里的会话号是断开那次登录的,可能已被同一玩家的新登录拿回
+   (gate 以同一 node_id 重启后会话序号从头发),推过去会踢掉一条合法会话。凭证判定与补写照常,让他下一次登录到别的节点时
+   过得了换手门。
+2. **按登录身份认人**:落地判定("实体已建出且是同一次登录")与踢线前的本地复核比 `PlayerLoginIdentityComp`(会话号 + 代次)
+   而不是快照会话 —— 托管落点不绑会话,快照会话恒无效;实体绑着活会话说明新登录接回过,不再是那一次(`RelocateEntryMatchesEntity`)。
+   托管落点回到本节点时按它带来的会话号对账(`HandleEnterGameNode` 第 1 步):同一次登录 → 落地等载入;别的 → 已被取代,不踢。
+3. **有界重发**:在线条目没生效就踢线,客户端被踢后自己重登,那就是重试;托管条目没有客户端,结清之后他要等下一次登录。
+   所以核实读到"仍在本节点的源场景"、而这次改派的结局证明 scene_manager 没有放行他时,先不结清,按 5 秒、20 秒各重发一次
+   (`relocate_confirm::ShouldResendHosted`、`kHostedResendDelays`):
+   - 证明"没放行"的证据:没发出去;被拒且拒绝码可重试(1 没有去处、4 目标实例号未同步、8 Redis、17 再入屏障、20 归属不可用,
+     都早于任何落点写,`PlayerLifecycleSystem::SmRejectionRetryableForHostedRelocate`);等不到完成通知或传输失败(走到"读到没变、
+     许踢"时已过 settle,scene_manager 不会再处理那一条)。
+   - 不重发的:成功应答(放行过,读到没变只可能是原样放回源场景,托管落点会送回本节点);5 / 18 / 25(形状不对、换手门不认这份
+     标记、会话已被取代,重发也一样);落地两类(落点已提交到本节点,补救归 §4.4 的看护);location 已不存在(租约清理 / 登出)。
+   - 两步:读到"没变"先定下、等一段(条目留在核实阶段,截止顺延);到点的那次核实仍读到"没变"才真发,发之前总有一次刚读到的
+     权威读数。重发沿用派发时写的标记(两次等待加各自的完成通知预算仍在 300 秒 TTL 内,单测钉着),不新写任何键;条目回到
+     `kMarkWriting` 后照派发路径发,关联号与 settle 重新起算,计 `hosted_resent`。
+   - 用尽或不重发 → 结清、不推送。他不在世界里,数据在盘上:下次登录照常载入;不再登录的,月卡到期后 player_locator 停止续租,
+     租约到期走会话结束释放清掉 location。
+
+**为什么进表而不是发完即忘**:不进表就没人看应答,scene_manager 的拒绝(排空时最常见的是暂时没有去处)只能静默丢下;停机谓词
+(`IsEmergencyRelocateDrained` / `IsPlannedDrainSettled` / 停机 drain 的 `relocate_confirms`)也不会等它的应答。进表之后这三个谓词都不用改:
+票据、在写的标记、待确认条目本来就在谓词里。托管条目的重发最多把条目的寿命延长约 2 分钟(两次等待加各自的完成通知预算),
+受各自的看门狗约束。
+
+**不变量**:与在线玩家的改派完全相同,托管落点那一段同 §4.2 的不变量表。另补两条:
+- 托管票据只在实体仍是那一次登录、没有活会话时派发:新登录接回过的,或身份被更新的登录取代的,都不会被替旧身份搬走。
+- 重发只在读到"仍在源场景"之后发生:位置被任何请求改走(包括新登录)时读数就不是"没变",条目按"已在别处"结清。
+
+**疏散中(身份冲突)**:确认阶段只读 Redis、不写玩家键的约束不变(凭证补写仍被身份闸挡住);重发是一次 EnterScene、由 scene_manager 写,
+与疏散开始时那一轮改派同一类,受冲突 drain 看门狗约束。
+
+### 4.4 托管落点提交之后目标节点没把人建起来:有界补救(2026-11-12)
+
+> 代码已写,**未编译、未测试**(验证见 §10 第 7 条)。纯判定、预算与状态迁移在 `player/system/hosted_placement_retry.h`。
+
+**问题**:托管落点的提交点是 scene_manager 推给目标节点的事件(broker ACK,§4.2 第 2 步)。提交之后 location 已指向目标节点、源节点
+已销毁实体;目标节点的入场链 —— 全局 SQL 角色登记(15 秒内最多 3 次)→ 交接栅栏登记(要求 owner_epoch 等于落点代次)→ 认领载入
+(30 秒)→ 继承标记清理(5 秒)→ EnterScene —— 任何一步失败,角色就不在任何节点上。在线玩家此时收到 kEnterSceneFailed、客户端
+自己重登;托管中的角色没有客户端。这些失败多半是下游短暂不可用(data_service、zone Redis、TiDB),隔几秒就好。
+
+**方案比较**:
+
+| 方案 | 做法 | 问题 |
+|---|---|---|
+| A. 目标节点有界重试(采用) | 目标节点给到达的落点登记一条看护;入场链结束而没建出实体时按退避读一次权威落点,仍指着本节点就用同一条落点再走一遍入场链 | 目标节点崩溃时看护随进程消失 —— 与"托管中的角色随节点崩溃一起不在世界里"同一类,已接受 |
+| B. scene_manager 对账 | 提交后记一条"待确认落点",定时核对目标节点有没有登记入场原件,没有就重发事件 | 要新增一份持久的待确认记录与扫描(还要选主或分片);入场原件在 data_service 的库里,scene_manager 去读就是跨库,得另开 RPC;它看不出失败是瞬时还是永久,只能盲重发 |
+| C. player_locator 对账 | 租约监视顺带检查托管中的角色有没有持有者 | player_locator 管会话租约,不知道实体在哪个节点建没建成,得反问 scene 节点;职责错位 |
+| D. 源节点确认 | 源节点等目标节点回执再结清 | 源节点放行后已销毁实体、不再持有任何状态(交接链的既有设计);组队跟随的跨节点交接根本没有源侧条目 |
+
+选 A 的理由:失败发生在目标节点,只有它知道这一次入场链停在哪一步;重试走与第一次完全相同的入场链,既有栅栏(交接栅栏按代次登记、
+继承标记清理按代次核对、TiDB 写权行按代次认领、入场会话栅栏按登录代次)把住一致性;不新增全局状态、不新增 RPC,状态只在目标节点
+内存里、按到达的落点数线性增长,水平扩展不受影响。代价就是表里第一行那一条。
+
+**做法**(契约写在 `hosted_placement_retry.h` 文件头):
+
+1. **登记**:`HandleHostedPlacement` 收到字段齐全的事件、本节点此刻**没有**这名玩家的实体(跨节点搬来;改派落回本节点时实体也已销毁)
+   时登记一条看护,再发起第一次入场链。同一玩家又来一条就整条替换(scene-cmd 按目标节点分区、key = player_id,后到的是更新的提交)。
+   本节点有实体的是同节点换图:失败了他还在原场景里、照常托管,由组队跟随的兜底重试(team-follow-server-trail.md §3.7)再带他走,不登记。
+2. **结清(成功)**:托管落点的载入建出实体时当场结清(`InitPlayerFromAllData`),不等下一拍 —— 刚建出的托管角色可能很快因月卡到期退出,
+   扫描再看就会误判成"这一次没建成";每拍扫描时本节点已有他的实体(例如新登录的入场链建的)也结清。
+3. **等**:入场链在途(`RoleAdmissionSystem::HasAdmissionInFlight`,或待入场表里有他)时不动,不区分是不是看护发起的那一次。
+4. **退避与重试**:一次入场链结束而没建出实体 → 退避(5 秒 / 20 秒 / 60 秒,最多重试 3 次)→ 到点先读权威落点(只读脚本
+   `relocate_confirm::kLuaReadPlacement`,同一个 slot 读回 owner_epoch 与 location;带 shebang 的脚本在只读副本 / 切主后的旧主上整体被拒,
+   不会拿滞后读数去重试一条已被改走的落点)。全部成立才重试(`DecideAfterRead`):location 在本 zone、本节点、这个场景;location 的会话
+   身份仍是这条落点的那一次登录;owner_epoch 仍是落点时的值;场景在本节点上还在。
+   - location 不在了 / 在别处 / 身份变了 / 代次变了 → 结清(别人已经做了决定:登出或租约清理、别的落点、新登录、归属推进);
+   - 判不清(location 解析失败、zone 为 0)→ 放弃;场景已不在本节点 → 放弃(重试也进不去,见残余);
+   - 读不到(Redis 不可用、ERROR、形状不对),或读的时候恰有别的入场链在途 → 1 秒后再读,不盲试。
+
+   重试 = 用同一条落点(同一代、同一身份、同一归属修订)再走一遍 `RoleAdmissionSystem::RequestEnter`。先读一次,是为了不在已经过时的
+   落点上白白登记一份全局 SQL 角色原件;读完之后才变的,由上面那些栅栏拒掉。
+5. **放弃**:重试用尽,或超出总预算(8 分钟:首次加三次重试各按入场链上限 90 秒算,再加 85 秒退避,`static_assert` 守着)→ ERROR。
+   他不在世界里,数据在盘上:下次登录照常载入;不再登录的由月卡到期后的租约清理收尾。
+6. **节点要走时不重试**:疏散中(身份冲突)、计划排空中、持久任务已停时不发起读与重试(新建的实体只会再被搬一次,或随停机退出),
+   看护到总预算自然放弃。看护表不进任何停机谓词。
+7. **线程模型与观测**:只在 scene 逻辑线程上;由 RedisSystem 的 1 秒定时器驱动(与改派待确认表同一个节拍),Redis 回调只按值捕获
+   player_id 与读的代际;容量 4096,满了不登记、只打 ERROR。日志前缀 `[HostedPlacementRetry]`(watching / attempt ended / retrying /
+   landed / resolved / gave up),每行带本线程的累计数。
+
+**残余**(写清楚,不补):
+- 事件在目标节点消费之前丢了(目标节点崩溃,或被同号新进程顶替、旧实例号的事件被防僵尸过滤丢掉):与"托管中的角色随节点崩溃一起
+  不在世界里"同一类。下次登录时 scene_manager 按死节点 / 被顶替进程的接管规则落点,照常载入;不再登录的由租约清理收尾。看护期间
+  目标节点崩溃同理。
+- 落点提交之后、事件消费之前目标场景被销毁(`give_up_scene_gone`):目标节点在这一代没有登记过交接资格,写不出合法的落盘标记,
+  替他重新问 scene_manager 时跨节点的落点过不了换手门;落点又只由 scene_manager 定、C++ 侧不复制选频道规则(scene-node-planned-drain.md §4.4)。
+  场景销毁之前排空会先把住户改派走,这个窗口只剩事件在 Kafka 里的那一小段;数据在盘上,下次登录照常进默认去向。
 
 ## 5. 重连接回
 
@@ -263,14 +383,21 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 5. 实时场景 CD 与 Buff:保留内重连沿用实体,运行时状态还在;保留到期之后才重连仍会丢。规则未定,见审计 §9.2。
 6. 保留中的实体仍被 AOI 当作观察者计算,发给它的推送在 scene 侧因为没有会话直接丢弃。量级等于断线未归的玩家数,不处理。
 7. 月卡离线托管:2026-11-06 已做(§4.1),挂机月卡有效的玩家断线后角色常驻到重连或月卡到期。ExitGame handler 里那条 TODO 指的就是这件事;托管中的角色还不会自己活动(§4.1 末段)。2026-11-10 起能跟着队长换场景、搬到本 zone 的别的节点(§4.2)。
-8. 节点排空 / 疏散时托管中的角色仍按原规则存盘退出,托管提前结束。改用 §4.2 的托管落点把他们改派到别的节点是后续:要动 `EnqueueRelocateTicket` 的"只给有活会话的人发票"与改派待确认表(它按会话踢线),本批没做。
-9. 托管落点提交之后目标节点没把人建起来(事件在消费前丢了、目标节点角色登记被拒、载入失败):不丢数据,但角色不在世界里,直到重新登录或月卡到期后租约清理(§4.2 失败表)。频率 = 目标节点在那一刻出故障的概率;要补的话是 scene_manager 在提交后按 location 核对"持有者有没有登记入场原件",没有就重发事件,本批没做。
+8. 节点排空 / 疏散时托管中的角色:2026-11-12 起按托管落点改派到别的节点、接着托管(§4.3),走与在线玩家同一条改派链与待确认表。
+   剩下的只有一种:scene_manager 一直不放行(重发两次用尽、或拒绝码不可重试),他不在世界里,直到下次登录(数据在盘上);不再登录的由
+   月卡到期后的租约清理收尾。在线玩家这时被踢、自己重登,结局相同,只是托管中的角色没有客户端替他立刻重登。
+9. 托管落点提交之后目标节点没把人建起来:2026-11-12 起目标节点按退避有限次重试同一条落点(§4.4,方案比较也在那里)。不补的两类:
+   事件在消费之前丢了(目标节点崩溃 / 被同号新进程顶替,与"托管角色随节点崩溃一起消失"同一类),以及提交之后目标场景被销毁;
+   理由见 §4.4 末的残余。
 
 ## 9. 双版本
 
 Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家的策略与 C++ 不同(`muduo-rpc-channel.md` §8.3 末段)。要做的是同一组行为:断线带原因、保留 25 秒、新会话接回、重连回原场景。
 
 2026-11-10 托管落点(§4.2):Java 版待做,只在 Java 仓 `PARITY.md` 末尾登记,本轮不写 Java 代码。客户端不可见(协议字段与 Kafka 事件都是服务端内部),要对齐的是行为:离线托管的队员跟着队长换场景、到了之后照常被接到队长身后。
+
+2026-11-12 排空 / 疏散改派托管角色(§4.3)与托管落点的看护(§4.4):同样只在 Java 仓 `PARITY.md` 末尾登记待做,客户端不可见。要对齐的行为:
+节点重启 / 缩容 / 疏散时离线托管中的角色被搬到别的节点、接着托管与跟随;搬迁被拒且能证明没放行时有界重发;落点到了目标节点却没建起来时有界重试。
 
 2026-11-06 核对 §5 第 3 步的判据修正时看过 Java 版,没有同类问题,没有改 Java 仓:Java gate 发进场前先让旧场景放掉旧玩家,scene 每次进场都重新加载、新建实例并完整入场(`game-scene` 的 `SceneWorld.onPlayerEnter` / `finishPlayerLoaded`),不复用实体,也就没有「按已摘掉的快照会话判换会话」这一步。Java 做断线保留的接回时若改成复用实体,要用 §5 的两条判据:换会话按登录身份判(会话号或登录代次变了),不能比已摘掉的会话;接回保留也比登录代次,不能只比会话号。
 
@@ -306,6 +433,19 @@ Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家
    - C++(`cross_zone_test`):`ConnectionLostHoldAfkPass.HostingNeedsAConfirmedPassWithTimeLeft`、
      `ConnectionLostHoldAfkPass.HostedFollowRecheckIsSpreadOverThePeriod`(11-11 兜底重试)、`HostedPlacementEcs.*` 2 条、`HostedPlacementReentry.*` 5 条、
      `TravelHandoffInitiatorEcs.*` 2 条;跟随侧见 team-follow-server-trail.md §8。
+7. 2026-11-12 排空 / 疏散改派托管角色(§4.3)与托管落点的看护(§4.4),**未编译、未测试**。命令与联机验收写在 `docs/PROGRESS.md` 同日条目,这里只列用例:
+   - C++(`cross_zone_test`)纯判定:`RelocateConfirmTicket.HostedTicketFollowsTheLoginIdentityNotTheDisconnect`、
+     `RelocateConfirmHosted.ResendOnlyWhenSceneManagerCannotHaveGrantedTheRelocate`、`RelocateConfirmHosted.OnlyTransientRejectionsBeforeAnyWriteAreRetryable`、
+     `RelocateConfirmTable.HostedResendWaitsThenReturnsToMarkWriting`、`HostedPlacementRetry.*` 3 条;改了一条既有用例的期望表:
+     `RelocateConfirmNames.CoverEveryValue` 的推送结果名表多了 `no_client`(新增取值,不是放宽)。
+   - C++ ECS:`RelocateConfirmEcs.HostedCharacterIsRelocatedThroughTheConfirmTableAndNeverPushed`(托管票据进表、身份是断开那次登录、
+     没有 gate、A1′ 让位;读不到时结清不推送)、`RelocateConfirmEcs.HostedTicketIsVoidedWhenTheLoginIdentityChanged`、
+     `RelocateConfirmEcs.HostedPlacementBackOnThisNodeLandsTheHostedEntry`(同一次登录 → landed_here,新登录 → superseded)、
+     `HostedPlacementRetryEcs.*` 2 条(登记、退避、读不到不重试、替换、超预算放弃;同节点不登记、有实体即结清)。
+   - Go(`enter_hosted_placement_test.go`):`TestEnterScene_HostedPlacementEvacuationLandsOnTheResolvedTarget`(托管落点带 evacuation:
+     按疏散去向派到原频道所在的节点、凭标记铸代、事件发到目标节点,之后才派 ReleasePlayer)。
+   - 宿主里没有 scene_manager / gate / 玩家域 Redis,所以"读到仍在源场景 → 重发"与"读到仍指着本节点 → 重试"这两条读后路径只有纯判定
+     与状态迁移的单测,真实链路留给联机验收。
 
 ## 11. 改动清单
 
@@ -336,3 +476,13 @@ Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家
     `connection_lost_hold.h`(`IsHosting`)、`player/comp/player_ownership_comp.h`(`PlayerTravelHandoffComp.serverInitiated`)。
   - scene 节点:`handler/event/player_placement_event_handler.{h,cpp}`(新增,守护段)、`scene.vcxproj` / `.filters`(登记)。
   - 跟随侧文件见 team-follow-server-trail.md §3.7。
+- 2026-11-12 排空 / 疏散改派托管角色(§4.3)与托管落点的看护(§4.4):
+  - scene 库:`player/system/relocate_confirm.h`(`DecideHostedTicket`、`GatePushResult::kNoClient`、`ShouldResendHosted` / `HostedResendDelay`、
+    条目的 `hosted` / `target` / `ownerRevision` / `hostedResends`、`Table::ArmHostedResend` / `BeginHostedResend`)、
+    `player/system/hosted_placement_retry.h`(新增)、`player_lifecycle.h`(`SmRejectionRetryableForHostedRelocate`、`ResendHostedRelocate`、
+    `SweepHostedPlacementRetries` / `HostedPlacementRetriesPending` / `PeekHostedPlacementRetry`、计数 `hosted_resent`)、
+    `player_lifecycle.cpp`(托管票据的发票 / 派发 / 请求、踢线与落地按登录身份认人、重发、看护的登记 / 结清 / 扫描 / 权威读、
+    托管落点按断开那次登录对账)、`core/system/redis.cpp`(1 秒节拍里调看护扫描)、`scene.vcxproj` / `.filters`(登记新头)。
+  - 测试:`cpp/tests/cross_zone_test/cross_zone_test.cpp`、`go/scene_manager/internal/logic/enter_hosted_placement_test.go`。
+  - 文档:本文 §4 / §4.1 / §4.2 / §4.3 / §4.4 / §8 / §10、team-follow-server-trail.md §3.7 / §8 / §9、scene-node-planned-drain.md §4.4 / §9、
+    cross-zone-scene-travel.md §13.8、`docs/ops/cross-zone-failure-test-runbook.md`([RelocateConfirm] 汇总行与 kick 行)。

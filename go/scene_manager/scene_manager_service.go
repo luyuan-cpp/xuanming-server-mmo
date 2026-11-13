@@ -25,6 +25,7 @@ import (
 	"shared/leader"
 	"shared/safego"
 	"shared/serverbase"
+	"shared/shutdownbudget"
 	"shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -55,6 +56,9 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	// 停机强退时限要盖住最长的在途请求(Timeout 8s 比 go-zero 缺省的 4.5s 长):滚动重启 scene_manager 时,
+	// 正在处理的 EnterScene(包括 scene 计划排空发来的疏散请求)要么做完、要么自己超时,不被强杀砍断。
+	shutdownbudget.Apply(&c.RpcServerConf)
 	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入):在建任何 Redis 客户端之前填好。
 	if err := c.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
 		logx.Must(fmt.Errorf("shared Redis password: %w", err))
@@ -204,7 +208,14 @@ func main() {
 	//
 	// Start 非阻塞:客户端为 nil、etcd 连不上、前缀下没有 key,一律放行
 	// (fail-open),因此这里既不需要判错也不需要 panic。
-	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix})
+	//
+	// NodeTypes:认 type/SceneManagerNodeService/ 下的规则;注册成功后再 AddInstance(docs/design/rpc-kill-switch.md §5)。
+	// LeaveScene 是会话收尾(受保护,§8):挡住它会让离场玩家的落点一直不释放,只有精确规则能关。
+	ks := killswitch.New(killswitch.Config{
+		Prefix:    c.KillSwitchPrefix,
+		NodeTypes: []string{base.ENodeType_name[int32(base.ENodeType_SceneManagerNodeService)]},
+		Protected: []string{scene_manager.SceneManager_LeaveScene_FullMethodName},
+	})
 	ks.Start(ctx, svcCtx.Etcd)
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
@@ -231,6 +242,7 @@ func main() {
 	}
 	nr.KeepAlive()
 	defer nr.Close()
+	ks.AddInstance(nr.Info.NodeUuid) // 认 instance/<本进程 uuid>/ 下的热关停规则
 
 	fmt.Println("\n=============================================================")
 	fmt.Println("  SCENE_MANAGER SERVICE STARTED SUCCESSFULLY")

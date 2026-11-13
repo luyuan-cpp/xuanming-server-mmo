@@ -1898,7 +1898,7 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
 **之后的压测验证**（交 Codex，按 AGENTS §6 全流程，对比表用 `stress_summarize.ps1` 出）：
 
 - **负载**：以玩家存盘（go/db）为主的写负载，单 zone、单存档库。存档副本数按 1 → 2 → 4 阶梯加，每档稳态不少于 5 分钟。
-- **客户端侧**：用新指标 `writer_gate_seconds{logical_db, phase}`（phase 取 `before_begin`、`enter`、`read`），和同一个库的写事务总耗时对比（go/db 存盘接口已有耗时直方图）。
+- **客户端侧**：用新指标 `writer_gate_seconds{logical_db, phase}`（phase 取 `before_begin`、`enter`、`read`；11-12 另加不在每笔事务上的 `pin`、`revalidate`），和同一个库的写事务总耗时对比（go/db 存盘接口已有耗时直方图）。
 - **库侧（TiDB）**：
   - 在 `information_schema.cluster_statements_summary` 里按语句摘要，看 `route_meta` 点读、`writer_slot` 改写或加锁读、`writer_registry` 读的执行次数与平均耗时，并与业务语句对比；
   - 用 Dashboard 的流量可视化（KeyViz）看 `writer_slot`、`route_meta` 所在 Region 的读写热度；
@@ -1922,3 +1922,28 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
    - 删掉 `enter` 里的 `registrationMatchesGrant` 判定：`TestGateDeniesWhenRegistrationRowIsMissing` 与 `TestGateClassifiesFrozenApartFromDenied/registry_主体不符是资格问题` 红；
    - 删掉 `enter` 里的 `|| meta.WriterEpoch != epoch`：`TestGateLockTouchEpochAdvancedDuringEnterIsFrozen` 红。
    - 合并读改成内连接之后，注册行缺失时一行都读不到，同样判拒绝。单测的假连接不解析 SQL，这一点只能由第 2 步的真库用例覆盖。
+
+### 2026-11-12 连接复用时不再重放会话固定（存盘规格 §9 第 1 条的①②；已落码，未编译、未运行）
+
+**问题**：`database/sql` 每次从池里取连接都调 `ResetSession`，守卫在里面把 `pin` 整个重放：十几条 `SET`、读主体与库名，写者池再读 `route_meta` 和两条注册核对，约 14 次往返。11-11 把事务内的闸门语句合成两条之后，一笔存盘约 22 次往返里有 14 次花在取连接上。
+
+**做法**（`go/shared/authoritysql`）：会话策略拆成 `pin`（新建物理连接时，内容不变）和 `revalidate`（复用时）。`revalidate` 在运行池（Reader、Writer）上，tidb 档不发语句，mysql 档只发一条主库核对；Schema、Operator 池照旧重放整个 `pin`。每笔写事务的往返：取连接 0（mysql 档 1）、BEGIN 前点读 1、BEGIN 1、闸门 2、业务语句、COMMIT 1。
+
+**依据**：
+
+1. 会话变量、默认库、登录主体只有语句能改；运行池的语句包络不放行 `SET`、`USE`、事务控制语句和 `SET_VAR` 提示；驱动的 `ResetSession` 只做本地存活检查，不重置服务端会话。
+2. 世代、冻结、slot、注册行每笔写事务都核，其中 slot 与注册在 slot 行锁之下；事务外的读过读闸门。复用时的那次核对不持锁，判完到事务开始之间照样会变，去掉它不会放过任何一笔本该被拒的写。
+3. REGISTER 收据只追加、按摘要取，注册行的摘要每笔写事务都核，收据全文建连时核一次就够。
+4. mysql 档的主库核对保留：主从切换不经过这条连接也会发生。
+
+**行为变化**：写者被退休或换代之后，池里已有的连接复用时不再被拒，拒绝发生在下一笔写事务里，调用方拿到确定的 `ErrWriterDenied`。纯读不需要写资格（11-06 读闸门），退休的写者还能用池里的旧连接读到连接生命周期结束；新建连接仍在 `pin` 里核注册。
+
+**验证**（交 Codex）：
+
+1. 在 `go/shared` 下（`GOTOOLCHAIN=local`）跑 `gofmt -l authoritysql/`（应无输出）、`go vet ./authoritysql/` 与 `go test -count=1 ./authoritysql/`。`revalidate_test.go` 的五条、`TestWriterDriverSessionOptionalInterfacesPreservePolicy`、`TestMySQLResetSessionRecheckAfterDemotion`、`TestObserveWriterGateRecordsEachPhase` 要过。
+2. 真库闸门用例按上一节第 2 步的门控各跑一轮（MySQL 与 TiDB、两种锁原语）。重点是 `writer_succession_tidb_test.go` 里「上一代的写要被拒」那几处：现在由闸门直接回 `ErrWriterDenied`。
+3. 变异取红（在 `%TEMP%` 副本里改，不动主仓）：
+   - 把 `revalidate` 的 mysql 档分支改成直接 `return nil`：`TestMySQLResetSessionRecheckAfterDemotion` 与 `TestMySQLRuntimeReuseOnlyVerifiesThePrimary` 红；
+   - 把 `revalidate` 改成一律 `return c.pin(ctx, conn)`：`TestTiDBRuntimeReuseSendsNoStatements`、`TestRetiredWriterPassesReuseAndIsRefusedByTheGate` 红；
+   - 在 `validateStatementEnvelope` 的放行清单里加上 `SET`：`TestRuntimeEnvelopeKeepsPinnedSessionFixed` 红。
+4. 压测对比（AGENTS §6 全流程）：看 `writer_gate_seconds` 各 `phase` 与存盘接口耗时直方图，对比表出来之后结论记在本节，不预先宣称提升。

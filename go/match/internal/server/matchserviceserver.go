@@ -103,3 +103,23 @@ func (s *MatchServiceServer) GetBattleReport(ctx context.Context, in *matchpb.Ge
 	l := logic.NewBattleReportLogic(ctx, s.svcCtx)
 	return l.GetBattleReport(in)
 }
+
+// ListBattleScripts 回官方剧本、本人的剧本与选用(客户端协议,docs/design/battle-script.md §7)。
+func (s *MatchServiceServer) ListBattleScripts(ctx context.Context, in *matchpb.ListBattleScriptsRequest) (*matchpb.ListBattleScriptsResponse, error) {
+	return logic.NewBattleScriptLogic(ctx, s.svcCtx).ListBattleScripts(in)
+}
+
+// SubmitBattleScript 新建或改写本人的剧本,存为待审的新版本(客户端协议)。
+func (s *MatchServiceServer) SubmitBattleScript(ctx context.Context, in *matchpb.SubmitBattleScriptRequest) (*matchpb.SubmitBattleScriptResponse, error) {
+	return logic.NewBattleScriptLogic(ctx, s.svcCtx).SubmitBattleScript(in)
+}
+
+// DeleteBattleScript 删除本人的剧本(客户端协议)。
+func (s *MatchServiceServer) DeleteBattleScript(ctx context.Context, in *matchpb.DeleteBattleScriptRequest) (*matchpb.DeleteBattleScriptResponse, error) {
+	return logic.NewBattleScriptLogic(ctx, s.svcCtx).DeleteBattleScript(in)
+}
+
+// SetBattleScriptLoadout 为某种对局选用剧本或清除选用(客户端协议)。
+func (s *MatchServiceServer) SetBattleScriptLoadout(ctx context.Context, in *matchpb.SetBattleScriptLoadoutRequest) (*matchpb.SetBattleScriptLoadoutResponse, error) {
+	return logic.NewBattleScriptLogic(ctx, s.svcCtx).SetBattleScriptLoadout(in)
+}

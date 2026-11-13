@@ -42,8 +42,10 @@ type Config struct {
 	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里两段的口令写空串。不写 = 照用字面量(本机)。
 	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
 	SharedRedisPasswordEnv string `json:",optional"`
-	// MySQLPasswordEnv 是 SnapshotMySQL 口令所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md)。
-	// 写了它,SnapshotMySQL.Password 必须写成空串(不写这一键会落回缺省值 apppass123,被当成字面量而拒启);不写 = 照用字面量(本机)。
+	// MySQLPasswordEnv 是 SnapshotMySQL 口令所在的环境变量名(docs/design/workload-secrets-via-k8s-secret.md §4.2)。K8s 上只有部署脚本
+	// 渲染的 ConfigMap go-svc-data-service-config 写它:那份 ConfigMap 由 route-tool Job 直接挂载,口令经 Secret mysql-auth 注入。
+	// 写者常驻进程与 -migrate 读运维预置 Secret 里的配置,口令写在 SnapshotMySQL.Password 里、不写本键。
+	// 写了它,SnapshotMySQL.Password 必须写成空串(不写这一键会落回缺省值 apppass123,被当成字面量而拒绝);不写 = 照用字面量(本机)。
 	// 由 ResolveMySQLPassword 在加载配置后、任何入口连库之前填好,变量缺失或为空即拒启。
 	MySQLPasswordEnv string `json:",optional"`
 	// PlayerRedis 是玩家域:读位置键 player:{id}:location。没写 Addrs 时指向 SharedRedis。只有 Recall.Enabled=true 时才连。
@@ -243,8 +245,8 @@ func (c Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) (
 }
 
 // ResolveMySQLPassword 按 MySQLPasswordEnv 填 SnapshotMySQL.Password,返回填好的副本;规则见 secretenv.Fill。
-// -migrate、-route-tool 与常驻启动都连库,所以在 conf.MustLoad 之后、分流到各入口之前调用(data_service.go);
-// 迁移与 route-tool 的 Job 同样注入这个变量。
+// 每个读配置后要连库的入口都调用:data_service.go 在 conf.MustLoad 之后、分流到 -migrate 与各运维入口之前;
+// -route-tool 自己读配置(routetoolcli),在它 conf.Load 之后。
 func (c Config) ResolveMySQLPassword(lookup func(string) (string, bool)) (Config, error) {
 	err := secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
 		secretenv.Target{Field: "SnapshotMySQL.Password", Value: &c.SnapshotMySQL.Password})

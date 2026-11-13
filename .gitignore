@@ -328,3 +328,7 @@ robot/.last_stress_dir.txt
 # Redis Secret 交接比对所需的历史脚本，避免被通用 scripts/ 规则忽略。
 !/docs/handoff/shared-redis-secret-20261106/shared-redis-secret-backup/tools/scripts/
 !/docs/handoff/shared-redis-secret-20261106/shared-redis-secret-backup/tools/scripts/k8s_deploy.ps1
+
+# 手绘导航的同源几何必须长期留存；仅放行本批两张地图。
+!/data/scene_nav_bin/authored_maps/26000/world-y-up.obj
+!/data/scene_nav_bin/authored_maps/26008/world-y-up.obj

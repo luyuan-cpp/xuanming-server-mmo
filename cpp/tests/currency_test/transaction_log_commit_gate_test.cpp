@@ -31,6 +31,8 @@ namespace
                 (void)AuditOutbox::Discard(player, "test teardown");
             }
             AuditOutbox::Enable(false);
+            // 用例里的钩子按引用捕获了栈上的变量,不能留到下一个用例。
+            AuditOutbox::SetTransactionLogQueuedHook(nullptr);
             TransactionLogSystem::SetPublisherForTest(nullptr);
         }
 
@@ -281,5 +283,77 @@ namespace
 
         EXPECT_EQ(AuditOutbox::PendingCount(kPlayerA), 0u);
         EXPECT_TRUE(published.empty()) << "宁可缺一条,也不绕开存盘直接发";
+    }
+
+    // 资产流水一入队就按那名玩家通知一次(总体方案 §4.5):scene 用它请求合并存盘,货币、物品变动约 1 秒内提交,
+    // 不靠每个玩法各自记得触发。通知发生在入队之后,被通知的一方此刻取快照就带得上这一条。
+    TEST_F(AuditOutboxTest, QueuedTransactionLogNotifiesTheHookAfterItIsQueued)
+    {
+        struct Notice
+        {
+            uint64_t player;
+            std::size_t pendingWhenNotified;
+            bool operator==(const Notice &other) const { return player == other.player && pendingWhenNotified == other.pendingWhenNotified; }
+        };
+        std::vector<Notice> notices;
+        AuditOutbox::SetTransactionLogQueuedHook([&notices](uint64_t playerId)
+        {
+            notices.push_back(Notice{playerId, AuditOutbox::PendingCount(playerId)});
+        });
+
+        TransactionLogSystem::RecordEntry(Gain(1, kPlayerA));
+        EXPECT_TRUE(notices.empty()) << "没开发件箱:流水直接发,没有要随存盘提交的记录,不通知";
+
+        AuditOutbox::Enable(true);
+        TransactionLogSystem::RecordEntry(Gain(2, kPlayerA));
+        TransactionLogSystem::RecordEntry(Spend(3, kPlayerB));
+        TransactionLogSystem::RecordEntry(Spend(4, kPlayerA));
+
+        EXPECT_EQ(notices, (std::vector<Notice>{{kPlayerA, 1}, {kPlayerB, 1}, {kPlayerA, 2}}))
+            << "每条入队通知一次、通知时这条已在队列里;合并成一笔存盘是请求存盘那一方的事";
+    }
+
+    // 没进队列的不通知:拒收的流水没有要提交的东西;两边都有玩家的流水直接发;快照请求要不要尽快提交由请求方自己决定。
+    TEST_F(AuditOutboxTest, RefusedDirectAndSnapshotRecordsDoNotNotifyTheHook)
+    {
+        AuditOutbox::Enable(true);
+        int notified = 0;
+        AuditOutbox::SetTransactionLogQueuedHook([&notified](uint64_t) { ++notified; });
+
+        TransactionLogEntry oversized = Gain(1, kPlayerA);
+        oversized.set_extra(std::string(AuditOutbox::kMaxRecordBytes, 'x'));
+        TransactionLogSystem::RecordEntry(oversized);
+        EXPECT_FALSE(AuditOutbox::EnqueueTransactionLog(0, Gain(2, kPlayerA))) << "没有玩家号:拒收";
+        TransactionLogEntry transfer = Gain(3, kPlayerA);
+        transfer.set_from_player(kPlayerB);
+        TransactionLogSystem::RecordEntry(transfer);
+        EXPECT_EQ(published, (std::vector<uint64_t>{3})) << "两边都有玩家的流水跟不了某一次提交,直接发";
+        EXPECT_TRUE(AuditOutbox::EnqueueSnapshot(kPlayerA, SnapshotRequest(4, kPlayerA)));
+        EXPECT_EQ(notified, 0);
+
+        // 清掉钩子之后照常入队,只是不再通知。
+        AuditOutbox::SetTransactionLogQueuedHook(nullptr);
+        TransactionLogSystem::RecordEntry(Gain(5, kPlayerA));
+        EXPECT_EQ(AuditOutbox::PendingCount(kPlayerA), 2u) << "快照请求和这条流水";
+        EXPECT_EQ(notified, 0);
+    }
+
+    // 钩子里换掉钩子自己(scene 重新装配存盘状态机时会重设)不能毁掉正在执行的函数对象。
+    TEST_F(AuditOutboxTest, HookMayReplaceItselfWhileRunning)
+    {
+        AuditOutbox::Enable(true);
+        int first = 0;
+        int second = 0;
+        AuditOutbox::SetTransactionLogQueuedHook([&first, &second](uint64_t)
+        {
+            AuditOutbox::SetTransactionLogQueuedHook([&second](uint64_t) { ++second; });
+            ++first;
+        });
+
+        TransactionLogSystem::RecordEntry(Gain(1, kPlayerA));
+        TransactionLogSystem::RecordEntry(Gain(2, kPlayerA));
+
+        EXPECT_EQ(first, 1);
+        EXPECT_EQ(second, 1);
     }
 } // namespace

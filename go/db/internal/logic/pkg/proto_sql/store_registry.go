@@ -6,6 +6,7 @@ import (
 	"db/internal/config"
 	"db/internal/dbguard"
 	"db/internal/metrics"
+	"db/internal/playerstore"
 	"errors"
 	"fmt"
 	"shared/authoritysql"
@@ -399,6 +400,10 @@ func OpenPlacementStore(ctx context.Context, dbName string, pool StorePoolOption
 	if err != nil {
 		_ = handle.Close()
 		return nil, err
+	}
+	if err := playerstore.VerifySchema(ctx, handle); err != nil {
+		_ = handle.Close()
+		return nil, fmt.Errorf("verify player store %s: %w", dbName, err)
 	}
 	store.Connector = connector
 	return store, nil

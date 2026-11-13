@@ -128,9 +128,13 @@ function Get-GateDrainContract {
         DefaultDeadlineSeconds        = 1500
         # 同一文件 GateDrainMigrateConf 的 default 标签(排空迁移,docs/design/gate-drain-session-migration.md)。
         # 本脚本只据此打印与估算迁移时长,不改变排空流程与预算校验。
-        DefaultMigrateEnabled           = $false
+        DefaultMigrateEnabled           = $true
         DefaultMigrateRatePerSecond     = 20
         DefaultMigrateStartAfterSeconds = 0
+        # go/shared/gatepick/eligibility.go 的 FullPercent:gate 人数到自报连接上限的这个百分比就算到水位,
+        # login 不再往它身上分人或迁人。本脚本只用它估算其余 gate 还能接多少人(Get-GateDrainPeerHeadroom),
+        # 测试钉住与源头一致。
+        GateFullPercent                 = 90
         # 轮询:一轮 = 至多 CallTimeoutSeconds 的查询 + PollIntervalSeconds 的睡眠。
         PollIntervalSeconds           = 5
         CallTimeoutSeconds            = 10
@@ -429,6 +433,64 @@ function Format-GateDrainMigrationLine {
         $Login.MigrateRatePerSecond, $Login.MigrateStartAfterSeconds, $Online, $estimateSeconds
 }
 
+# 同 zone 其余候选到水位为止还能接多少人(docs/design/gate-drain-session-migration.md §6)。纯函数,只看 etcd 记录里
+# gate 自报的在线数与连接上限,口径同 login 的 gatepick:水位 = ceil(max_connections × GateFullPercent / 100),
+# 已到水位的记 0。有候选没声明上限(max_connections 为 0:dev 下不设上限的 gate、旧版 gate)时无从封顶,Bounded = $false。
+# 估的是此刻的余量,有两处看不到:其余候选里已经在排空的不接新人,它们的标记在 Redis 里;停写(卡住)的 gate 要比较
+# 两次读取才认得出。两者都会让余量偏大,提示文案里写明。只用于提示,不改变排空流程。
+function Get-GateDrainPeerHeadroom {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Peers)
+    $contract = Get-GateDrainContract
+    $bounded = $true
+    $headroom = [long]0
+    $peerCount = 0
+    foreach ($peer in $Peers) {
+        if ($null -eq $peer) { continue }
+        $peerCount++
+        $maxConnections = [long]$peer.MaxConnections
+        if ($maxConnections -le 0) { $bounded = $false; continue }
+        # 整数算 ceil(max × 百分比 / 100):先凑成 100 的整倍数再除,不经过浮点。
+        $scaled = $maxConnections * [long]$contract.GateFullPercent + 99
+        $watermark = [long](($scaled - ($scaled % 100)) / 100)
+        $free = $watermark - [long]$peer.PlayerCount
+        if ($free -gt 0) { $headroom += $free }
+    }
+    return [pscustomobject]@{ Bounded = $bounded; Headroom = $headroom; PeerCount = $peerCount }
+}
+
+# 容量估算的一行说明。纯函数。Short = $true 表示这台 gate 上的人其余 gate 装不下,调用方用 Write-Warning 打出来:
+# 多出来的人迁不走(login 不往到水位的 gate 迁人,也不回落),只能留到期限、随删 Pod 断线。
+function Format-GateDrainCapacityLine {
+    param(
+        [Parameter(Mandatory = $true)]$Capacity,
+        [Parameter(Mandatory = $true)][long]$Online
+    )
+    $contract = Get-GateDrainContract
+    if (-not $Capacity.Bounded) {
+        return [pscustomobject]@{
+            Short = $false
+            Text  = ("[gate-drain] peer capacity: not estimated; at least one of the {0} other gate(s) in this zone does not declare " +
+                "max_connections, so there is no watermark to count against") -f $Capacity.PeerCount
+        }
+    }
+    if ($Capacity.Headroom -ge $Online) {
+        return [pscustomobject]@{
+            Short = $false
+            Text  = ("[gate-drain] peer capacity: {0} online here; the {1} other gate(s) can take about {2} more before their {3}% " +
+                "watermark, so everyone fits (gates that are already draining or stalled are not subtracted)") -f `
+                $Online, $Capacity.PeerCount, $Capacity.Headroom, $contract.GateFullPercent
+        }
+    }
+    return [pscustomobject]@{
+        Short = $true
+        Text  = ("[gate-drain] peer capacity is SHORT: {0} online here, but the {1} other gate(s) can take only about {2} more before " +
+            "their {3}% watermark. About {4} player(s) will find no migration target, stay on this gate, and be disconnected when the " +
+            "Pod is deleted after the deadline. Scale out the gate StatefulSet before draining, or accept that. Gates that are already " +
+            "draining or stalled are not subtracted, so the real shortfall can be larger") -f `
+            $Online, $Capacity.PeerCount, $Capacity.Headroom, $contract.GateFullPercent, ($Online - $Capacity.Headroom)
+    }
+}
+
 # 读 zone namespace 里 login 的 ConfigMap。它是 login 进程实际加载的配置,
 # Redis / etcd 的位置与排空判定参数都以它为准。
 function Get-LoginDrainContext {
@@ -562,6 +624,8 @@ function ConvertFrom-GateEtcdRecords {
         $endpoint = Get-GateNodeInfoField -Object $info -Names @('endpoint')
         $clientEndpoint = Get-GateNodeInfoField -Object $info -Names @('clientEndpoint', 'client_endpoint')
         $players = Get-GateNodeInfoField -Object $info -Names @('playerCount', 'player_count')
+        # gate 自报的客户端连接上限(NodeInfo.max_connections);省略 = 0 = 没声明上限。只用于容量估算。
+        $maxConnections = Get-GateNodeInfoField -Object $info -Names @('maxConnections', 'max_connections')
         $endpointPort = Get-GateNodeInfoField -Object $endpoint -Names @('port')
         $clientPort = Get-GateNodeInfoField -Object $clientEndpoint -Names @('port')
         # protojson 把 uint64 写成字符串,[uint64] 两种都接。
@@ -579,6 +643,7 @@ function ConvertFrom-GateEtcdRecords {
                 ZoneId       = if ($null -eq $zoneId) { [uint32]0 } else { [uint32]$zoneId }
                 Uuid         = [string](Get-GateNodeInfoField -Object $info -Names @('nodeUuid', 'node_uuid'))
                 PlayerCount  = if ($null -eq $players) { [uint32]0 } else { [uint32]$players }
+                MaxConnections = if ($null -eq $maxConnections) { [uint32]0 } else { [uint32]$maxConnections }
             })
     }
     return ,$records.ToArray()
@@ -1253,6 +1318,9 @@ function Invoke-GateDrain {
     Write-Host ("[gate-drain] {0} podIP={1} uid={2} -> node_id={3} uuid={4} online(etcd-reported)={5}; other candidate node_id values in this zone={6}" -f `
             $pod.Name, $pod.PodIp, $pod.Uid, $record.NodeId, $record.Uuid, $record.PlayerCount, ($peerIds -join ','))
     Write-Host (Format-GateDrainMigrationLine -Login $login -Online ([long]$record.PlayerCount))
+    # 其余 gate 装不装得下这台的人:只读 etcd 的估算,在任何写之前打出来(-DryRun 也打),装不下时是一条 WARNING。
+    $capacity = Format-GateDrainCapacityLine -Capacity (Get-GateDrainPeerHeadroom -Peers $peers) -Online ([long]$record.PlayerCount)
+    if ($capacity.Short) { Write-Warning $capacity.Text } else { Write-Host $capacity.Text }
 
     if ($DryRun) {
         Write-GateDrainDryRunPlan -Login $login -Pod $pod -Record $record -PeerNodeIds $peerIds -DrainTtlSeconds $DrainTtlSeconds `

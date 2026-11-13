@@ -3,6 +3,7 @@ package config
 import (
 	"testing"
 
+	"chat/internal/constants"
 	"chat/internal/textfilter"
 
 	"github.com/stretchr/testify/require"
@@ -29,4 +30,35 @@ func TestValidateSensitiveWordsBeforeServiceStartup(t *testing.T) {
 	cfg.HistoryMaxLimit = 200
 	cfg.SensitiveWords = make([]string, textfilter.MaxWords+1)
 	require.ErrorContains(t, cfg.Validate(), "SensitiveWords")
+}
+
+// 世界频道发言间隔只许在 [0, 上限] 内;历史可见窗口不得长过原件保留期减一天(原件到期由库删除)。
+func TestValidateWorldCooldownAndHistoryWindowAgainstRetention(t *testing.T) {
+	valid := func() Config {
+		cfg := Config{
+			ZoneId: 1, LeaseTTL: 60, MaxContentBytes: 512, RateLimitPerSecond: 5,
+			HistoryMaxEntries: 200, HistoryTTLSeconds: 604800, HistoryDefaultLimit: 20,
+			HistoryMaxLimit: 50, RequestIdTTLSeconds: 60,
+			DSNEnv: "CHAT_AUTHORITY_DSN", Backend: "tidb", MaxOpenConns: 16,
+		}
+		cfg.DataServiceRpc.Endpoints = []string{"127.0.0.1:9000"}
+		cfg.ListenOn = "127.0.0.1:50700"
+		cfg.Timeout = 3500
+		cfg.Etcd.Hosts = []string{"127.0.0.1:2379"}
+		return cfg
+	}
+	cfg := valid()
+	require.NoError(t, cfg.Validate(), "间隔 0 = 不限")
+	cfg.WorldChannelCooldownMs = constants.MaxWorldChannelCooldownMs
+	require.NoError(t, cfg.Validate())
+	cfg.WorldChannelCooldownMs = constants.MaxWorldChannelCooldownMs + 1
+	require.ErrorContains(t, cfg.Validate(), "WorldChannelCooldownMs")
+	cfg.WorldChannelCooldownMs = -1
+	require.ErrorContains(t, cfg.Validate(), "WorldChannelCooldownMs")
+
+	cfg = valid()
+	cfg.HistoryTTLSeconds = constants.MaxHistoryTTLSeconds
+	require.NoError(t, cfg.Validate())
+	cfg.HistoryTTLSeconds = constants.MaxHistoryTTLSeconds + 1
+	require.ErrorContains(t, cfg.Validate(), "HistoryTTLSeconds")
 }

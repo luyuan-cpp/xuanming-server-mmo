@@ -354,3 +354,49 @@ func TestEnterScene_HostedPlacementSamePlacementRedeliversRoute(t *testing.T) {
 	assert.Equal(t, target, placement.GetSceneId())
 	assert.Equal(t, uint64(1), placement.GetOwnerEpoch())
 }
+
+// 排空 / 疏散改派离线托管的角色(docs/design/player-connection-lost-hold.md §4.3):scene 节点发的托管落点同时带 evacuation。
+// scene_manager 按疏散去向解析(原频道已归别的节点 → 派过去),照常凭源节点为当前代写的标记铸新代、CAS 落点,提交点仍是
+// 推给目标节点的托管落点事件,提交之后才给源节点派 ReleasePlayer。Go 侧没有为这个组合另写代码,本用例钉住两个标志能一起用。
+func TestEnterScene_HostedPlacementEvacuationLandsOnTheResolvedTarget(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	rec := installReleaseDispatchRecorder(t, sc, nil)
+	capture := installHostedRouteCapture(sc, rec, nil)
+	const (
+		playerID = uint64(6994)
+		oldScene = uint64(8007)
+		target   = uint64(8008)
+	)
+	// 角色在节点 10 的 oldScene 里;去向提示里的原频道 target 已在节点 20 上(排空迁移挪过去之后的形态)。源节点已写当前代的标记。
+	releaseDispatchCrossNodeFixture(t, sc, mr, playerID, oldScene, target, true)
+	setKnownNodeInstanceForTest(t, testZoneId, "20", "scene-20-uuid")
+
+	in := hostedPlacementRequest(playerID, target)
+	in.Evacuation = true
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(in)
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode, resp.ErrorMessage)
+
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "换了持有者:凭标记铸新代")
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, target, loc.SceneId)
+	assert.Equal(t, "20", loc.NodeId, "疏散解析出的目标节点,不是源节点")
+
+	messages := capture.snapshot()
+	require.Len(t, messages, 1, "提交点是一条托管落点事件,不发 gate 路由")
+	assert.Equal(t, kafkacmd.SceneCommandPartition(20), messages[0].Partition)
+	cmd, placement := decodeHostedPlacement(t, messages[0])
+	assert.Equal(t, uint32(20), cmd.GetTargetSceneId())
+	assert.Equal(t, "scene-20-uuid", cmd.GetTargetInstanceId(), "防僵尸:带目标节点的实例号")
+	assert.Equal(t, target, placement.GetSceneId())
+	assert.Equal(t, uint64(2), placement.GetOwnerEpoch(), "目标节点拿新铸的代认领")
+	assert.Equal(t, hostedTestSession, placement.GetSessionId(), "身份仍是断开的那次登录")
+	assert.Equal(t, hostedTestGeneration, placement.GetLoginGeneration())
+
+	calls, events := rec.snapshot()
+	require.Len(t, calls, 1)
+	assert.Equal(t, "10", calls[0].oldNodeID)
+	assert.Equal(t, []string{"route", "release"}, events, "先过提交点(broker ACK),再派 ReleasePlayer")
+}

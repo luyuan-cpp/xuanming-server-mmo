@@ -1,12 +1,18 @@
-// password_admin 是受控的存量口令迁移工具。它只给尚未迁移为 Argon2id 的
-// 既有账号写入一次哈希，不提供自注册/再次改密，也不会把明文口令放进
-// 命令行参数、日志或 SQL 文件。
+// password_admin 是口令凭据的受控写入工具。凭据表是 mmorpg 库的 user_accounts(归属与形状见
+// internal/logic/pkg/auth/password_schema.go),login 进程自己永不写口令,写入只走这里:
+//   - 缺省:给已有、但还没有 Argon2id 哈希的账号写入一次哈希;
+//   - -create:开通一个新的口令账号,账号行不存在时建行并写入哈希。
+//
+// 不提供改密:账号已经有 Argon2id 哈希时拒绝覆盖。要重置,先由 DBA 把那一行的 password 置 NULL(停用),再用缺省方式写入新哈希。
+// 明文口令只从终端或 stdin 读,不进命令行参数、日志或 SQL 文件。写入走 login 的一次性 writer 资格(shared/authoritysql),
+// 档位取环境变量 MMORPG_SQL_BACKEND(tidb | mysql)。
 package main
 
 import (
 	"bufio"
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -22,113 +28,167 @@ import (
 )
 
 func main() {
-	account := flag.String("account", "", "要迁移口令哈希的既有账号")
-	dsnEnv := flag.String("dsn-env", "LOGIN_PASSWORD_MIGRATION_DSN", "保存迁移专用 MySQL DSN 的环境变量名")
-	passwordStdin := flag.Bool("password-stdin", false, "从 stdin 读取两行口令（批处理专用，禁止命令行参数）")
+	account := flag.String("account", "", "account to write a password hash for")
+	create := flag.Bool("create", false, "provision a new password account: insert the row when the account does not exist (refused when it exists)")
+	dsnEnv := flag.String("dsn-env", "LOGIN_PASSWORD_MIGRATION_DSN", "name of the environment variable holding the DSN of the credential database")
+	database := flag.String("database", auth.PasswordAuthDatabase, "logical database holding the credential table; the DSN must select it (production uses the default)")
+	passwordStdin := flag.Bool("password-stdin", false, "read the password as two lines from stdin (batch use only; never pass it as an argument)")
 	flag.Parse()
 
-	if err := run(*account, *dsnEnv, *passwordStdin); err != nil {
+	action, err := run(*account, *dsnEnv, *database, *create, *passwordStdin)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "password_admin failed: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("password hash migrated for the existing account")
+	if action == actionInsert {
+		fmt.Println("password account created with an Argon2id hash")
+		return
+	}
+	fmt.Println("password hash written for the existing account")
 }
 
-func run(account, dsnEnv string, passwordStdin bool) error {
+// credentialAction 是对一个账号要做的那一笔写入。
+type credentialAction int
+
+const (
+	// actionInsert:账号行不存在,建行并写入哈希(-create)。
+	actionInsert credentialAction = iota + 1
+	// actionSetHash:账号行存在、还没有 Argon2id 哈希,写入一次。
+	actionSetHash
+)
+
+// decideCredentialAction 按账号现状与 -create 决定做什么;不该做的情况返回错误,调用方不碰库。
+// matched 是按 account 等值读到的行数(主键保证至多一行;排序规则不区分大小写,所以 Alice 与 alice 是同一行);
+// hasArgon2idHash 是那一行已经有 Argon2id 哈希。
+func decideCredentialAction(matched int, hasArgon2idHash, create bool) (credentialAction, error) {
+	switch {
+	case matched > 1:
+		return 0, fmt.Errorf("account matched %d rows; the credential table must have account as its primary key", matched)
+	case matched == 0 && create:
+		return actionInsert, nil
+	case matched == 0:
+		return 0, errors.New("account does not exist; pass -create to provision a new password account")
+	case create:
+		return 0, errors.New("account already exists; run without -create to set the password of an existing account that has none")
+	case hasArgon2idHash:
+		return 0, errors.New("account already has an Argon2id hash; this tool does not change passwords (to reset: set password to NULL for that row, then run again)")
+	default:
+		return actionSetHash, nil
+	}
+}
+
+// run 做一笔口令写入并返回做了哪一种。顺序:先做不碰外部依赖的校验,再读口令,最后才消费一次性 writer 资格并连库 ——
+// 参数、库名或档位写错不能白白烧掉一份 boot grant。
+func run(account, dsnEnv, database string, create, passwordStdin bool) (credentialAction, error) {
 	if err := auth.ValidatePasswordAccount(account); err != nil {
-		return fmt.Errorf("invalid account: %w", err)
+		return 0, fmt.Errorf("invalid account: %w", err)
 	}
 	if strings.TrimSpace(dsnEnv) == "" {
-		return fmt.Errorf("dsn-env must not be empty")
+		return 0, errors.New("dsn-env must not be empty")
 	}
 	dsn := os.Getenv(dsnEnv)
 	if strings.TrimSpace(dsn) == "" {
-		return fmt.Errorf("DSN environment variable %q is missing or empty", dsnEnv)
+		return 0, fmt.Errorf("DSN environment variable %q is missing or empty", dsnEnv)
+	}
+	parsedDSN, err := mysqlDriver.ParseDSN(dsn)
+	if err != nil {
+		return 0, errors.New("credential database DSN is invalid")
+	}
+	// 口令凭据全服一份,在 mmorpg(缺省的 -database)。DSN 指到别的库(比如存档库里那张同名旧表)直接拒绝。
+	if database == "" || parsedDSN.DBName != database {
+		return 0, fmt.Errorf("the DSN must select the credential database %q", database)
+	}
+	backend, err := authoritysql.LoadBackend(os.Getenv)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", authoritysql.BackendEnv, err)
 	}
 
 	password, err := readPasswordTwice(passwordStdin)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	encoded, err := auth.HashPassword(password)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	parsedDSN, err := mysqlDriver.ParseDSN(dsn)
-	if err != nil || parsedDSN.DBName == "" {
-		return fmt.Errorf("migration MySQL DSN is invalid or has no database")
-	}
-	// 先于消费一次性 writer 资格:档位写错不能白白烧掉一份 boot grant。
-	backend, err := authoritysql.LoadBackend(os.Getenv)
-	if err != nil {
-		return err
-	}
 	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
 	if err != nil {
-		return fmt.Errorf("口令迁移缺一次性writer资格: %w", err)
+		return 0, fmt.Errorf("the one-time SQL writer grant is unavailable: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, parsedDSN.FormatDSN(), parsedDSN.DBName, backend, 1, authoritysql.Writer(writer))
+	db, err := authoritysql.Open(ctx, parsedDSN.FormatDSN(), database, backend, 1, authoritysql.Writer(writer))
 	if err != nil {
-		return fmt.Errorf("open MySQL: %w", err)
+		return 0, fmt.Errorf("open credential database: %w", err)
 	}
 	defer db.Close()
-	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("ping MySQL: %w", err)
+	// 表不是 password_auth_schema.sql 的形状就不写:没有主键的表上「一个账号只有一行」不成立,
+	// 写进去的哈希可能对不上登录时读到的那一行。
+	if err := auth.VerifyPasswordTableShape(ctx, db, database); err != nil {
+		return 0, err
 	}
+	return writeCredential(ctx, db, account, encoded, create)
+}
 
+// writeCredential 在一个事务里读出账号现状、决定并执行那一笔写入。
+// 先 FOR UPDATE 再写:行已存在时锁住它,判定与写入之间哈希不会被另一次运行改掉。行不存在时 RC 下没有间隙锁,
+// 两次并发的 -create 都会走到 INSERT,后到的一方撞主键唯一约束失败,不会出现两行。
+func writeCredential(ctx context.Context, db *sql.DB, account, encoded string, create bool) (credentialAction, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
+		return 0, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
 	rows, err := tx.QueryContext(ctx, "SELECT account, password FROM user_accounts WHERE account = ? FOR UPDATE", account)
 	if err != nil {
-		return fmt.Errorf("lock existing account: %w", err)
+		return 0, fmt.Errorf("lock account row: %w", err)
 	}
-	count := 0
-	alreadyMigrated := false
+	matched := 0
+	hasArgon2idHash := false
 	for rows.Next() {
 		var canonical string
 		var currentHash sql.NullString
 		if err := rows.Scan(&canonical, &currentHash); err != nil {
 			rows.Close()
-			return fmt.Errorf("scan existing account: %w", err)
+			return 0, fmt.Errorf("scan account row: %w", err)
 		}
-		count++
-		alreadyMigrated = strings.HasPrefix(currentHash.String, "$argon2id$")
+		matched++
+		hasArgon2idHash = strings.HasPrefix(currentHash.String, "$argon2id$")
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return fmt.Errorf("read existing account: %w", err)
+		return 0, fmt.Errorf("read account row: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return fmt.Errorf("close existing account query: %w", err)
+		return 0, fmt.Errorf("close account query: %w", err)
 	}
-	if count != 1 {
-		return fmt.Errorf("account must already exist exactly once; matched %d rows (registration is not supported)", count)
-	}
-	if alreadyMigrated {
-		return fmt.Errorf("account already has an Argon2id hash; password change/reset is not supported by this migration tool")
-	}
-	result, err := tx.ExecContext(ctx, "UPDATE user_accounts SET password = ? WHERE account = ?", encoded, account)
+
+	action, err := decideCredentialAction(matched, hasArgon2idHash, create)
 	if err != nil {
-		return fmt.Errorf("update password hash: %w", err)
+		return 0, err
+	}
+	var result sql.Result
+	if action == actionInsert {
+		result, err = tx.ExecContext(ctx, "INSERT INTO user_accounts (account, password) VALUES (?, ?)", account, encoded)
+	} else {
+		result, err = tx.ExecContext(ctx, "UPDATE user_accounts SET password = ? WHERE account = ?", encoded, account)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("write password hash: %w", err)
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("read update result: %w", err)
+		return 0, fmt.Errorf("read write result: %w", err)
 	}
 	if affected != 1 {
-		return fmt.Errorf("password update affected %d rows, expected exactly 1", affected)
+		return 0, fmt.Errorf("password write affected %d rows, expected exactly 1", affected)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit password update: %w", err)
+		return 0, fmt.Errorf("commit password write: %w", err)
 	}
-	return nil
+	return action, nil
 }
 
 func readPasswordTwice(fromStdin bool) (string, error) {

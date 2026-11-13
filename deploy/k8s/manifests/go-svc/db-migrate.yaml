@@ -93,11 +93,6 @@ spec:
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
-            # MySQL 口令:db 的配置(MySQLPasswordEnv)指名这个变量;Secret mysql-auth 由 k8s_deploy.ps1 先于本 Job 在本 namespace 建好
-            # (工作负载密钥目录,docs/design/workload-secrets-via-k8s-secret.md)。不写 optional:Secret 缺失时 Pod 起不来,不带空口令去连库。
-            - name: MMORPG_MYSQL_PASSWORD
-              valueFrom:
-                secretKeyRef: {name: mysql-auth, key: password, optional: false}
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
             # cmd/migrate 按这份白名单放行目标库,下面的脚本也按它逐库迁。值由 Apply-GoSvcMigrateJob 从 MMORPG_DB_ALLOWED_DATABASES 渲染。

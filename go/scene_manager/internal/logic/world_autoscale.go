@@ -42,8 +42,8 @@ const (
 	// WorldDesiredChannelsKeyFmt: hash confId -> 期望频道数。
 	WorldDesiredChannelsKeyFmt = "world_channels:desired:%s"
 	// SceneDrainingKeyFmt: 该频道正在排空(已从路由集合摘除,等玩家走干净)。
-	// 带 TTL,防止进程在排空中途挂掉后留下永久标记。
-	SceneDrainingKeyFmt = "scene:%d:draining"
+	// 带 TTL,防止进程在排空中途挂掉后留下永久标记。键是 scene:{ctl:<z>}:<id>:draining。
+	SceneDrainingKeyFmt = "scene:%s:%d:draining"
 	// WorldAutoscaleCooldownKeyFmt: 每个 (zone, confId) 的冷却窗口。
 	// 扩完不马上缩、缩完不马上扩,避免在阈值边缘抖动。
 	WorldAutoscaleCooldownKeyFmt = "world_channels:cooldown:%s:%d"
@@ -62,8 +62,8 @@ func worldDesiredChannelsKey(zoneID uint32) string {
 	return fmt.Sprintf(WorldDesiredChannelsKeyFmt, sceneControlTag(zoneID))
 }
 
-func sceneDrainingKey(sceneID uint64) string {
-	return fmt.Sprintf(SceneDrainingKeyFmt, sceneID)
+func sceneDrainingKey(zoneID uint32, sceneID uint64) string {
+	return fmt.Sprintf(SceneDrainingKeyFmt, sceneControlTag(zoneID), sceneID)
 }
 
 func worldAutoscaleCooldownKey(zoneID uint32, confID uint64) string {
@@ -283,7 +283,7 @@ func autoscaleOneWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 		// 它身上剩的人正在被改派走。
 		// 排空标记或人数任何一项读不到,这张图本轮不做决策:人数读错当 0 会把一个满员频道
 		// 挑成缩容对象,排空标记读错当「不在排空」会让它重复参与决策。伸缩是可选动作,下一拍再来。
-		draining, err := svcCtx.Redis.Exists(sceneDrainingKey(sceneID))
+		draining, err := svcCtx.Redis.Exists(sceneDrainingKey(zoneID, sceneID))
 		if err != nil {
 			noteReadUnknown(zoneID, readUnknownSiteAutoscaleDecide, fmt.Sprintf("draining flag of scene %d", sceneID), err)
 			return 0, 0
@@ -291,7 +291,7 @@ func autoscaleOneWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 		if draining {
 			continue
 		}
-		players, err := readScenePlayerCountChecked(svcCtx, sceneID)
+		players, err := readScenePlayerCountChecked(svcCtx, zoneID, sceneID)
 		if err != nil {
 			noteReadUnknown(zoneID, readUnknownSiteAutoscaleDecide, fmt.Sprintf("player count of scene %d", sceneID), err)
 			return 0, 0
@@ -323,7 +323,7 @@ func autoscaleOneWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 	// 且其余频道装得下它的人(不能把人并过去反而把别人推过扩容线)。
 	lightest := loads[0]
 	if len(loads) > minCh && lightest.players < cfg.ScaleInPlayerThreshold {
-		if victim, ok := pickScaleInVictim(svcCtx, loads, cfg); ok {
+		if victim, ok := pickScaleInVictim(svcCtx, zoneID, loads, cfg); ok {
 			// 冷却标记由排空脚本在同一步里写(2026-11-11 起,见 luaBeginDrainWorldChannel)。
 			if beginDrainWorldChannel(ctx, svcCtx, zoneID, confID, victim) {
 				return 0, 1
@@ -419,8 +419,8 @@ func hasHeadroomFor(loads []channelLoad, victim channelLoad, scaleOutThreshold i
 //
 // 查询失败时返回 true(当作"有镜像")—— 这是刻意的 fail-closed 方向:
 // 缩容是可选的省钱动作,查不清就别动,比误伤镜像里的玩家划算。
-func channelHasMirrors(svcCtx *svc.ServiceContext, sceneID uint64) bool {
-	members, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneID))
+func channelHasMirrors(svcCtx *svc.ServiceContext, zoneID uint32, sceneID uint64) bool {
+	members, err := svcCtx.Redis.Smembers(sceneMirrorsKey(zoneID, sceneID))
 	if err != nil {
 		logx.Errorf("[WorldAutoscale] cannot read mirrors of scene %d (%v); treating it as a mirror source",
 			sceneID, err)
@@ -440,13 +440,13 @@ func channelHasMirrors(svcCtx *svc.ServiceContext, sceneID uint64) bool {
 //  3. 其余频道装得下它的人,且不会因此把某个频道推过扩容线(否则缩完立刻扩,来回抖)。
 //
 // 不是只看 loads[0]:最闲的那个恰好托着镜像时,继续往下找仍然能缩容。
-func pickScaleInVictim(svcCtx *svc.ServiceContext, loads []channelLoad, cfg config.WorldAutoscaleConfig) (channelLoad, bool) {
+func pickScaleInVictim(svcCtx *svc.ServiceContext, zoneID uint32, loads []channelLoad, cfg config.WorldAutoscaleConfig) (channelLoad, bool) {
 	for _, candidate := range loads {
 		if candidate.players >= cfg.ScaleInPlayerThreshold {
 			// loads 升序,后面的只会更多人。
 			break
 		}
-		if channelHasMirrors(svcCtx, candidate.sceneID64) {
+		if channelHasMirrors(svcCtx, zoneID, candidate.sceneID64) {
 			logx.Infof("[WorldAutoscale] channel %s is a mirror source; not draining it", candidate.sceneID)
 			continue
 		}
@@ -514,7 +514,7 @@ func beginDrainWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zon
 		[]string{
 			worldChannelsKey(zoneID, confID),
 			worldDrainingSetKey(zoneID, confID),
-			sceneDrainingKey(victim.sceneID64),
+			sceneDrainingKey(zoneID, victim.sceneID64),
 			worldDesiredChannelsKey(zoneID),
 			worldAutoscaleCooldownKey(zoneID, confID),
 		},
@@ -584,7 +584,7 @@ func sweepDrainingWorldChannels(ctx context.Context, svcCtx *svc.ServiceContext,
 // 属主或人数读不到时本拍什么都不做:频道还在排空集合里,下一拍 sweep 重来。读错当「映射已没」
 // 会跳过 C++ DestroyScene 直接收尾,实体留在节点上;读错当「0 人」会在还有人时收尾。
 func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, sceneID uint64) {
-	nodeID, err := svcCtx.Redis.Get(sceneNodeKey(sceneID))
+	nodeID, err := svcCtx.Redis.Get(sceneNodeKey(zoneID, sceneID))
 	if err != nil {
 		noteReadUnknown(zoneID, readUnknownSiteAutoscaleDrain, fmt.Sprintf("owner of draining scene %d", sceneID), err)
 		return
@@ -616,7 +616,7 @@ func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone
 		return
 	}
 
-	players, err := readScenePlayerCountChecked(svcCtx, sceneID)
+	players, err := readScenePlayerCountChecked(svcCtx, zoneID, sceneID)
 	if err != nil {
 		noteReadUnknown(zoneID, readUnknownSiteAutoscaleDrain, fmt.Sprintf("player count of draining scene %d", sceneID), err)
 		return
@@ -641,7 +641,7 @@ func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone
 // finishDrainedChannel 清掉一个排空完成的频道的全部 Redis 状态。nodeID 是本拍读到的属主,空串表示
 // 映射已经没了。
 //
-// 场景键(属主映射、成员集合、zone、agones_gs)由 atomicTeardownScene 按本拍读到的属主 nodeID 一次性认领并删除,
+// 场景键(属主映射、成员集合、agones_gs)由 atomicTeardownScene 按本拍读到的属主 nodeID 一次性认领并删除,
 // 同一步把它从排空集合摘掉、改好属主的反向索引与计数、写下拆除任务(2026-10-23;拆除任务 2026-11-05)。以前是逐条
 // DEL:读到属主 X 之后、删映射之前,若有写者把频道改派到活节点 Y 并 CreateScene,逐条 DEL 会把 Y 上那份带着玩家的
 // 实体变成没有映射的孤儿,还会扣错节点的计数。现在属主已不是 nodeID(nodeID 为空时:期间被写入了属主)就一个键
@@ -649,7 +649,7 @@ func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone
 //
 // 镜像子集合在认领之前预读一次:读不到本拍什么都不做,频道留在排空集合等下一拍。
 func finishDrainedChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, sceneID uint64, nodeID string) {
-	preMirrorChildren, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneID))
+	preMirrorChildren, err := svcCtx.Redis.Smembers(sceneMirrorsKey(zoneID, sceneID))
 	if err != nil {
 		noteReadUnknown(zoneID, readUnknownSiteAutoscaleFinish, fmt.Sprintf("mirror set of draining scene %d", sceneID), err)
 		return
@@ -695,8 +695,8 @@ func runWorldDrainTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job 
 		deferred = append(deferred, "mirror cascade")
 	}
 	// 排空标记带 TTL,删不掉也会自己过期。
-	svcCtx.Redis.Del(sceneDrainingKey(sceneID))
-	if err := deletePlacementGeneration(svcCtx, sceneID); err != nil {
+	svcCtx.Redis.Del(sceneDrainingKey(zoneID, sceneID))
+	if err := deletePlacementGeneration(svcCtx, zoneID, sceneID); err != nil {
 		deferred = append(deferred, "delete the placement generation")
 	}
 	if nodeID != "" {

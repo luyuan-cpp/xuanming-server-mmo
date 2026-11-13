@@ -42,6 +42,21 @@ func TestPlanGateMigration_PicksAnotherGateOfThisZone(t *testing.T) {
 	}
 }
 
+// gate 自报的 NodeInfo.build 要一路带到选目标:逐台换版时只迁到已经换上新构建的 gate,哪怕旧构建的那台更空
+// (设计文档 §7.3;规则本身在 loginqueue.PickMigrationTarget 的单测里)。
+func TestPlanGateMigration_PrefersGatesOffTheOutgoingBuild(t *testing.T) {
+	draining, replaced, pending := migratingGate(1, 300, 30001), migratingGate(2, 200, 30002), migratingGate(3, 10, 30003)
+	draining.Build, replaced.Build, pending.Build = "v1", "v2", "v1"
+
+	target, result := planGateMigration(watched(draining, replaced, pending), 1, false, 1, "uuid-1", map[uint32]bool{1: true}, intnFirst)
+	if result != loginpb.GateMigrationResult_GATE_MIGRATION_RESULT_OK || target == nil {
+		t.Fatalf("result = %v target = %+v, want OK", result, target)
+	}
+	if target.NodeID != 2 {
+		t.Fatalf("target = gate %d, want gate 2: gate 3 is lighter but still on the outgoing build v1", target.NodeID)
+	}
+}
+
 // 调用方必须是本 zone 目录里的这一台、且正在排空;任何一条不满足都回 NOT_DRAINING,gate 据此停止本轮迁移。
 func TestPlanGateMigration_CallerMustBeThisZonesDrainingGate(t *testing.T) {
 	foreign := migratingGate(9, 0, 30009)

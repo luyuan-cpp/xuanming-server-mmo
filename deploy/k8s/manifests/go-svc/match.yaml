@@ -53,6 +53,11 @@ spec:
         prometheus.io/port: "9170"
         prometheus.io/path: "/metrics"
     spec:
+      # match 在运行期向 K8s 查 battle 的原 Pod 还在不在(GlobalMatch.BattlePodNamespace,go/match/internal/battlepods):
+      # battle 进程崩溃后据此提前作废它上面的对局,不让全员等到截止(docs/design/battle-instance-loss-early-abort.md §4.2)。
+      # 权限在 match-battle-pod-reader-rbac.yaml(只限本命名空间的 pods list),k8s_deploy.ps1 先于本 StatefulSet apply。
+      # 令牌就是查 Pod 的凭据,所以不能关 automountServiceAccountToken。
+      serviceAccountName: match
       affinity:
         podAntiAffinity:
           # 两个副本尽量不落同一节点,否则单节点故障等于全池不可用

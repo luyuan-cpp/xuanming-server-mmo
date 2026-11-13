@@ -1,5 +1,6 @@
 #include "nav_query.h"
 
+#include <algorithm>
 #include <limits>
 
 #include "Detour/DetourNavMeshQuery.h"
@@ -52,14 +53,21 @@ bool SnapNav(NavComp& nav, const NavVec& in, dtPolyRef& outRef, NavVec& outPos)
 {
 	if (!std::isfinite(in.v[0]) || !std::isfinite(in.v[1]) || !std::isfinite(in.v[2]) ||
 		(nav.strictMask && (!nav.mask.Contains(in.v[0], in.v[2]) ||
-		 std::abs(in.v[1]) > kFestivalGroundTolerance))) return false;
+		 std::abs(in.v[1]) > kFestivalGroundTolerance)) ||
+		(nav.authoredFlat && (!nav.authoredBounds.Contains(in.v[0], in.v[2]) ||
+		 std::abs(in.v[1] - nav.authoredBounds.groundY) > 0.02))) return false;
 	const dtQueryFilter filter;
 	outRef = 0;
 	const dtStatus status = nav.navQuery.findNearestPoly(
 		in.v, kSnapExtents, &filter, &outRef, outPos.v);
-	const bool accepted = dtStatusSucceed(status) && outRef != 0 && (!nav.strictMask ||
+	bool accepted = dtStatusSucceed(status) && outRef != 0 && (!nav.strictMask ||
 		(nav.mask.Contains(outPos.v[0], outPos.v[2]) && std::abs(outPos.v[0] - in.v[0]) <= 0.02 &&
 		 std::abs(outPos.v[2] - in.v[2]) <= 0.02 && std::abs(outPos.v[1]) <= 0.02));
+	if (accepted && nav.authoredFlat)
+		accepted = nav.authoredBounds.Contains(outPos.v[0], outPos.v[2]) &&
+			std::abs(outPos.v[0] - in.v[0]) <= 0.02 && std::abs(outPos.v[1] - in.v[1]) <= 0.02 &&
+			std::abs(outPos.v[2] - in.v[2]) <= 0.02 &&
+			std::abs(outPos.v[1] - nav.authoredBounds.groundY) <= 0.02;
 	if (accepted && nav.strictMask) outPos.v[1] = 0;
 	return accepted;
 }
@@ -70,7 +78,11 @@ bool NavQuerySystem::RequiresNavigation(const uint32_t sceneConfigId)
 {
 	const auto* row = BaseSceneTableManager::Instance().FindByIdSilent(sceneConfigId).first;
 	// 本批严格合同显式按目录声明；旧图的无导航兼容行为保持原状。
-	return row != nullptr && row->nav_bin_file().starts_with("data/scene_nav_bin/festival_maps/");
+	if (row == nullptr) return false;
+	std::string path = row->nav_bin_file();
+	std::replace(path.begin(), path.end(), '\\', '/');
+	return path.starts_with("data/scene_nav_bin/festival_maps/") ||
+		path.starts_with("data/scene_nav_bin/authored_maps/");
 }
 
 bool NavQuerySystem::MissingRequiredNavigation(const entt::entity player)
@@ -116,6 +128,9 @@ bool NavQuerySystem::ValidateMove(NavComp& nav, const Location& from, const Loca
 	clamped = from;
 	if (nav.strictMask && (!std::isfinite(to.z()) || std::abs(to.z()) > kFestivalGroundTolerance ||
 		!nav.mask.Segment(from.y(), from.x(), to.y(), to.x()))) return false;
+	if (nav.authoredFlat && (!std::isfinite(to.z()) ||
+		std::abs(to.z() - nav.authoredBounds.groundY) > 0.02 ||
+		!nav.authoredBounds.Contains(to.y(), to.x()))) return false;
 	dtPolyRef startRef = 0;
 	NavVec startPos{};
 	if (!SnapNav(nav, ToNav(from), startRef, startPos))
@@ -207,7 +222,8 @@ bool NavQuerySystem::FindPath(NavComp& nav, const Location& from, const Location
 
 	std::vector<dtPolyRef> polys(pathResult.size());
 	pathResult.copyRefs(polys.data(), static_cast<int>(polys.size()));
-	if (nav.strictMask && ((pathStatus & DT_PARTIAL_RESULT) || polys.back() != endRef)) return false;
+	if ((nav.strictMask || nav.authoredFlat) &&
+		((pathStatus & (DT_PARTIAL_RESULT | DT_OUT_OF_NODES)) || polys.back() != endRef)) return false;
 
 	dtQueryResult straight;
 	const dtStatus straightStatus = nav.navQuery.findStraightPath(
@@ -222,6 +238,9 @@ bool NavQuerySystem::FindPath(NavComp& nav, const Location& from, const Location
 	{
 		Location point;
 		ToServer(straight.getPos(i), point);
+		if (nav.authoredFlat && (!nav.authoredBounds.Contains(point.y(), point.x()) ||
+			std::abs(point.z() - nav.authoredBounds.groundY) > 0.02))
+		{ outPath.clear(); return false; }
 		outPath.push_back(point);
 	}
 	if (nav.strictMask)

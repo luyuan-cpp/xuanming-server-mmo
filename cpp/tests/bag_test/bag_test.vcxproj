@@ -185,6 +185,7 @@
     <ClCompile Include="player_battle_settlement_test.cpp" />
     <ClCompile Include="battle_freeze_hold_test.cpp" />
     <ClCompile Include="item_hold_test.cpp" />
+    <ClCompile Include="mail_outbox_test.cpp" />
     <ClCompile Include="player_mission_system_test.cpp" />
     <ClCompile Include="player_activity_schedule_test.cpp" />
     <ClCompile Include="player_activity_system_test.cpp" />

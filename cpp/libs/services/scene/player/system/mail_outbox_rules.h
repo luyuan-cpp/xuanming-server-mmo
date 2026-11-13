@@ -259,6 +259,10 @@ namespace mail_outbox_rules
 		return std::min(base << doublings, ceiling);
 	}
 
+	// 有条目而还没有一条出现在已提交的存档快照里时,隔多久请求一次存盘(与 player_inbox_rules::kResaveIntervalMs 同值:
+	// 等落盘期间补请求存盘的间隔)。不每拍都压:存盘路径故障时不变成重试风暴。
+	inline constexpr uint64_t kResaveIntervalMs = 5000;
+
 	// 失败日志的节拍:连续失败的第 1 次,之后每 8 次一行(同 player_inbox_rules::kStuckWarnEveryFailures 的取法,
 	// 封顶节奏下两行落在 [10m] 日志窗口之内)。
 	inline constexpr uint32_t kFailureLogEvery = 8;

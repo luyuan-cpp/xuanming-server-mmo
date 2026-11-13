@@ -37,6 +37,8 @@ namespace
         uint64_t lastMark{0};
         std::unordered_map<uint64_t, PlayerQueue> players;
         uint64_t overflowDropped{0};
+        // 流水入队之后的通知(SetTransactionLogQueuedHook);空 = 不通知。
+        AuditOutbox::TransactionLogQueuedHook transactionLogQueued;
     };
 
     State &Outbox()
@@ -123,7 +125,17 @@ bool AuditOutbox::EnqueueTransactionLog(uint64_t playerId, TransactionLogEntry e
         return false;
     }
     Push(playerId, bytes + kFieldOverheadBytes, Record{std::move(entry)});
+    // 拷一份再调:钩子里若换掉或清掉钩子,不能毁掉正在执行的那个函数对象。
+    if (const auto hook = Outbox().transactionLogQueued)
+    {
+        hook(playerId);
+    }
     return true;
+}
+
+void AuditOutbox::SetTransactionLogQueuedHook(TransactionLogQueuedHook hook)
+{
+    Outbox().transactionLogQueued = std::move(hook);
 }
 
 bool AuditOutbox::EnqueueSnapshot(uint64_t playerId, PlayerSnapshotEntry request)

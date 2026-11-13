@@ -13,6 +13,8 @@
 //     只比集群号不够:同一份清单部署到两个 K8s 集群,etcd 集群号相同;集群级备份恢复还会把集群号连同数据一起带走。
 //     重复部署、克隆旧配置和快照、复用退役码,在预留之前被拒绝。绑定拦不住的情形(整个 K8s 控制面连同 kube-system
 //     一起从备份克隆出第二个集群),登记处水位照样让两边串行,登记处完好时不会重号。
+//   - 两份本地记录也写着世系和部署身份。登记处丢了这个码时,它们是「谁是绑定的那一份」唯一幸存的证据:
+//     Recover 只让写下本地记录的那个部署环境重新登记;别的环境拿着拷过来的记录不行,那不是可信的上界。
 //   - 块在内存里、从不回读,所以存储回退影响不到手里已有的块。
 //   - 时钟只是最后一道防线:抬高块的起点。它只能把起点往上抬,坏时钟不会造成重号。正常路径不依赖时钟。
 //   - 首次初始化和事故恢复分开:Init 只给从没认领过的地域码;Recover 只按幸存记录取上界,拿不到可信上界就拒绝;
@@ -30,6 +32,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	mathrand "math/rand/v2"
 	"regexp"
 	"sync"
 	"time"
@@ -72,6 +75,12 @@ const (
 	reserveTimeout = 10 * time.Second
 	// reserveRetryBackoff 是预留失败后,下一次允许预留的最短间隔,防止把已经倒下的 etcd 打成雪崩。
 	reserveRetryBackoff = 500 * time.Millisecond
+
+	// reserveConflictBackoffBase、reserveConflictBackoffMax 是一次预留内部、CAS 冲突之后到下一轮重读之前的等待上限:
+	// 从 base 起逐轮翻倍,封顶 max,实际等待在 [0, 上限) 里均匀取(见 conflictPause)。7 次等待最多共约 1 秒,
+	// 远小于 reserveTimeout。
+	reserveConflictBackoffBase = 10 * time.Millisecond
+	reserveConflictBackoffMax  = 320 * time.Millisecond
 )
 
 // 登记处里一个地域码的状态。
@@ -100,9 +109,10 @@ var (
 		"data_service -id-registry-open, a registry that lost its data follows docs/ops/id-issuer-runbook.md §4.3")
 	// ErrRegionClaimed:初始化时发现这个码已经被认领过(无论是谁、无论是否退役),或者它小于登记处里下一个可认领的码。
 	ErrRegionClaimed = errors.New("id issuer: this region code was already claimed in the id registry; " +
-		"pick a code that was never used (docs/ops/open-new-region-runbook.md §3)")
+		"use the next claimable code from the region code ledger (docs/ops/open-new-region-runbook.md §3)")
 	// ErrRegionOutOfOrder:初始化的码大于登记处里下一个可认领的码。码只能按顺序认领:跳过去的码之后永远不能再认领,
 	// 一次填错(5 写成 50)就会烧掉中间整段,而码一共只有 63 个。初始化什么都不写。
+	// 给一个从没认领过、又大于下一个可认领的码的码补墓碑(Retire)也是它:同样什么都不写。
 	ErrRegionOutOfOrder = errors.New("id issuer: region codes are claimed in order and this one is above the next claimable code; " +
 		"use the next claimable code from the region code ledger (docs/ops/open-new-region-runbook.md §3)")
 	// ErrRegionRetired:这个码已退役,永不再发号。
@@ -115,6 +125,12 @@ var (
 	// ErrNoTrustedBound:登记处和本地都没有这个码的记录,没有任何东西盖得住发过的号,不能恢复。
 	ErrNoTrustedBound = errors.New("id issuer: no surviving record covers the ids this region code has issued; " +
 		"it cannot be recovered: retire it and initialize a new code (docs/ops/id-issuer-runbook.md §4.4)")
+	// ErrForeignRecords:登记处没有这个码,而本地记录不是本部署环境写下的(别的环境的 etcd 数据拷到了这里,或者记录里没有身份)。
+	// 拷来的记录可能比原环境发过的号旧,不是可信上界,不能据此重新登记;rebind 也不放行,因为这时没有登记处水位兜底。
+	ErrForeignRecords = errors.New("id issuer: the id registry has no entry for this region code and the local reservation records " +
+		"were not written by this deployment; copied records may be older than the ids already issued, so this deployment cannot " +
+		"re-register the code. Do not retire the code from here: the deployment that wrote the records runs -id-issuer-recover " +
+		"(docs/ops/id-issuer-runbook.md §4.3)")
 	// ErrSameCluster:两份本地记录,或登记处和某一份本地记录,落在同一套 etcd 上。只有 dev 例外。
 	ErrSameCluster = errors.New("id issuer: two reservation records are on the same etcd cluster")
 	// ErrRegionMismatch:记录里的地域和本发号器配置的不一致。
@@ -144,8 +160,12 @@ type Record struct {
 	Value uint64
 	// Authority 是这份记录所属的发号世系:-id-issuer-init 时随机生成,和登记处里的一致才是本地域的记录。
 	Authority string
-	Revision  int64
-	Exists    bool
+	// Deployment 是写下这份记录的部署环境身份(Options.Deployment 读到的值)。每次预留、初始化、恢复建记录时写入。
+	// 登记处有这个码时以登记处的绑定为准,不看它;登记处丢了这个码时,它是谁该重新登记唯一幸存的证据(Recover)。
+	// dev 写的记录为空。
+	Deployment string
+	Revision   int64
+	Exists     bool
 	// ClusterID 是存储自己报的集群号,记录不存在时也要给。0 = 这种存储给不出(只有内存实现)。
 	ClusterID uint64
 }
@@ -154,11 +174,11 @@ type Record struct {
 //
 // 契约:
 //   - Read 是线性读。值损坏时返回错误,不得当作不存在。
-//   - CompareAndSwap 仅当记录仍是 prev 时把记录写成 (value, authority)。false = 记录已被别人改过,没有写入;
+//   - CompareAndSwap 仅当记录仍是 prev 时把记录写成 (value, authority, deployment)。false = 记录已被别人改过,没有写入;
 //     返回错误 = 结果未知,调用方不得认为写入成功,也不得靠重读「值等于我写的」来认领。
 type CounterStore interface {
 	Read(ctx context.Context) (Record, error)
-	CompareAndSwap(ctx context.Context, prev Record, value uint64, authority string) (bool, error)
+	CompareAndSwap(ctx context.Context, prev Record, value uint64, authority, deployment string) (bool, error)
 	Close() error
 }
 
@@ -200,6 +220,14 @@ type Registry interface {
 	// Read 读一个码的记录。
 	Read(ctx context.Context, region uint8) (ClaimRecord, error)
 	// CompareAndSwap 仅当这个码的记录仍是 prev 时写入 next。false = 被别人改过,没有写入。
+	//
+	// prev 不存在时是给一个没有记录的码补一条(Recover 重新登记、Retire 补墓碑、dev 第一次预留时认领),同一个原子写里
+	// 守住「有记录的码都小于下一个可认领的码」。守不住的话,顺序认领走到这个码时既认领不了、也推不过去,之后的码全部卡死:
+	//   - 登记处没开启:直接写。开启时 Open 核对下一个可认领的码高于全部已有记录。
+	//   - 码小于下一个可认领的码:直接写,这是一个用过的码丢了记录。
+	//   - 码不小于下一个可认领的码:写入,并把下一个可认领的码推到 region+1。只接受两种:在用的码(Recover 凭幸存的
+	//     本地记录重新登记,说明登记处重建时开启得太低);或者 region 恰好等于下一个可认领的码的墓碑(这个码不用了,跳过)。
+	//     墓碑大于下一个可认领的码时返回 ErrRegionOutOfOrder、不写:没有证据说明中间的码用过,填错一次就烧掉一段。
 	CompareAndSwap(ctx context.Context, region uint8, prev ClaimRecord, next Claim) (bool, error)
 	// ClaimNew 原子地认领一个新码:仅当登记处已开启(否则 ErrRegistryNotOpened)、region 恰好等于下一个可认领的码
 	// (小于它是 ErrRegionClaimed,大于它是 ErrRegionOutOfOrder)、这个码没有记录时,写入 claim 并把下一个可认领的码推到 region+1。
@@ -286,6 +314,8 @@ type Issuer struct {
 
 	// monoNow 只用于退避判断,用单调时钟,不受 Options.Now 拨表影响。
 	monoNow func() time.Time
+	// pause 是一次预留里 CAS 冲突之后、下一轮重读之前的等待,生产是 conflictPause;单测换成不等待的。
+	pause func(ctx context.Context, attempt int) error
 
 	// deployment 是第一次读成功的部署身份,由 deploymentMu 保护。Pod 不会换集群,进程活着它就不变。
 	deploymentMu sync.Mutex
@@ -347,9 +377,36 @@ func New(opt Options) (*Issuer, error) {
 		base:    base,
 		limit:   base + valueMask + 1,
 		monoNow: time.Now,
+		pause:   conflictPause,
 		bg:      bg,
 		cancel:  cancel,
 	}, nil
+}
+
+// conflictPause 在一次 CAS 冲突之后、下一轮重读之前等一小会儿。attempt 是即将开始的轮次,从 1 起。
+// 等待上限从 reserveConflictBackoffBase 起逐轮翻倍,封顶 reserveConflictBackoffMax;实际等待在 [0, 上限) 里均匀取。
+//
+// 为什么要等:同一个地域的全部 data-service 副本共用这三份记录。它们同时预留时(整地域冷启动),不等就会同步地
+// 反复相撞:每撞一次,先写成功的那几份记录白白前进一块(只浪费值域,不会重号),reserveAttempts 轮很快用完。
+// 随机错开之后,多数副本下一轮读到的就是别人提交完的视图。ctx 到期或发号器关闭时立即返回它的错误。
+func conflictPause(ctx context.Context, attempt int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	timer := time.NewTimer(mathrand.N(conflictBackoffLimit(attempt)))
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// conflictBackoffLimit 是第 attempt 轮(从 1 起)开始之前等待的上限。
+func conflictBackoffLimit(attempt int) time.Duration {
+	// 移位封顶在 16:轮次再多,上限也早已被 reserveConflictBackoffMax 截住,不会溢出。
+	return min(reserveConflictBackoffBase<<min(max(attempt-1, 0), 16), reserveConflictBackoffMax)
 }
 
 // ValidAuthority 判断发号世系的格式:32 位小写十六进制。存储实现读到别的格式要当作记录损坏。
@@ -521,6 +578,8 @@ func (i *Issuer) read(ctx context.Context) (view, error) {
 //
 // 写序固定为主记录、副记录、登记处。所以正常情况下登记处不会高过本地两份,本地两份都落后登记处
 // 只能是本地被回档(ReserveLocalBehind)。
+//
+// 循环里每一处 continue 都是 CAS 冲突(别的副本也在预留),下一轮开始前先错开一小会儿(pause)。
 func (i *Issuer) reserve(ctx context.Context) (block, error) {
 	deployment, err := i.deploymentID(ctx)
 	if err != nil {
@@ -528,6 +587,11 @@ func (i *Issuer) reserve(ctx context.Context) (block, error) {
 		return block{}, err
 	}
 	for attempt := 0; attempt < reserveAttempts; attempt++ {
+		if attempt > 0 {
+			if err := i.pause(ctx, attempt); err != nil {
+				return block{}, fmt.Errorf("wait before retrying a conflicting reservation: %w", err)
+			}
+		}
 		v, err := i.read(ctx)
 		if err != nil {
 			i.observe(ReserveStoreError)
@@ -560,7 +624,7 @@ func (i *Issuer) reserve(ctx context.Context) (block, error) {
 
 		// 三份都是严格的仲裁点:任何一份冲突,这块都作废,从头再来。不能因为「重读到的值已经
 		// 不小于我的 end」就认领:etcd 回退的那一刻,两个副本可能算出同一块。
-		ok, err := i.opt.Primary.CompareAndSwap(ctx, v.p, end, authority)
+		ok, err := i.opt.Primary.CompareAndSwap(ctx, v.p, end, authority, deployment)
 		if err != nil {
 			i.observe(ReserveStoreError)
 			return block{}, fmt.Errorf("write primary record: %w", err)
@@ -569,7 +633,7 @@ func (i *Issuer) reserve(ctx context.Context) (block, error) {
 			i.observe(ReserveConflict)
 			continue
 		}
-		ok, err = i.opt.Secondary.CompareAndSwap(ctx, v.s, end, authority)
+		ok, err = i.opt.Secondary.CompareAndSwap(ctx, v.s, end, authority, deployment)
 		if err != nil {
 			i.observe(ReserveStoreError)
 			return block{}, fmt.Errorf("write secondary record: %w", err)
@@ -686,6 +750,20 @@ func (i *Issuer) boundHere(v view, deployment string) bool {
 	}
 	return deployment != "" && v.g.Deployment == deployment &&
 		v.p.ClusterID == v.g.PrimaryCluster && v.s.ClusterID == v.g.SecondaryCluster
+}
+
+// writtenHere:在的本地记录都是本部署环境写下的。只在登记处没有这个码时用(Recover):那时它是绑定唯一幸存的证据,
+// 也说明这些记录不是从别的环境拷来的旧数据。没有身份的记录(dev 写的,或本字段出现之前写的)证明不了是谁的,不算。dev 不比。
+func (i *Issuer) writtenHere(v view, deployment string) bool {
+	if i.opt.AllowBootstrap {
+		return true
+	}
+	for _, r := range []Record{v.p, v.s} {
+		if r.Exists && r.Deployment != deployment {
+			return false
+		}
+	}
+	return deployment != ""
 }
 
 // sameAuthority:在的本地记录都属于登记处里的世系。
@@ -825,7 +903,7 @@ func (i *Issuer) Init(ctx context.Context) (bool, error) {
 			if !ok {
 				continue // 有人同时认领:重读,按已认领处理
 			}
-			if err := i.createMissing(ctx, v, claim.HighWater, authority); err != nil {
+			if err := i.createMissing(ctx, v, claim.HighWater, authority, deployment); err != nil {
 				return false, err
 			}
 			return true, nil
@@ -849,7 +927,7 @@ func (i *Issuer) Init(ctx context.Context) (bool, error) {
 			}
 			return false, nil // 只缺一份:下一次预留按另一份补上
 		}
-		if err := i.createMissing(ctx, v, v.g.HighWater, v.g.Authority); err != nil {
+		if err := i.createMissing(ctx, v, v.g.HighWater, v.g.Authority, deployment); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -857,8 +935,9 @@ func (i *Issuer) Init(ctx context.Context) (bool, error) {
 	return false, ErrContended
 }
 
-// createMissing 建 v 里不存在的本地记录。任何一份写失败都返回错误,重跑同一个命令即可:已建的不会重建。
-func (i *Issuer) createMissing(ctx context.Context, v view, value uint64, authority string) error {
+// createMissing 建 v 里不存在的本地记录,写上世系和本部署环境的身份。任何一份写失败都返回错误,
+// 重跑同一个命令即可:已建的不会重建。
+func (i *Issuer) createMissing(ctx context.Context, v view, value uint64, authority, deployment string) error {
 	for _, r := range []struct {
 		name  string
 		store CounterStore
@@ -867,7 +946,7 @@ func (i *Issuer) createMissing(ctx context.Context, v view, value uint64, author
 		if r.rec.Exists {
 			continue
 		}
-		ok, err := r.store.CompareAndSwap(ctx, r.rec, value, authority)
+		ok, err := r.store.CompareAndSwap(ctx, r.rec, value, authority, deployment)
 		if err != nil {
 			return fmt.Errorf("create the %s record (outcome unknown, rerun the same command): %w", r.name, err)
 		}
@@ -881,7 +960,11 @@ func (i *Issuer) createMissing(ctx context.Context, v view, value uint64, author
 // Recover 修复事故之后的记录。上界只取幸存的记录,拿不到可信上界就拒绝,从不猜起点。
 // 只由运维显式调用(data_service -id-issuer-recover),运行路径不走这里。返回做了什么,给命令打印。
 //
-//   - 登记处没有这个码,本地还有记录:登记处丢了数据。按本地记录的最大值重新登记,绑定这两套 etcd。
+//   - 登记处没有这个码,本地还有记录:登记处丢了数据。按本地记录的最大值重新登记,绑定本部署环境和这两套 etcd。
+//     绑定的证据这时只剩本地记录里的部署身份:在的本地记录都是本部署环境写下的才重新登记(writtenHere)。
+//     不是(别的环境的 etcd 数据拷到了这里,或者记录没有身份):ErrForeignRecords,rebind 也不放行。拷来的记录可能比
+//     原环境发过的号旧;让它重新登记,原环境会被挡在外面,而这里从过期水位往上发的号会和原环境发过的重叠。
+//     登记处在的时候 rebind 是安全的,因为水位由登记处盖住;这里没有登记处,过期的水位没有任何东西纠正。
 //     本地也一份不剩:ErrNoTrustedBound,这个码不能再用。
 //   - 登记处有,本地两份都没了:按登记处水位重建两份本地记录。两份都没了就证明不了这两套 etcd 还是原来那两套,
 //     所以要 rebind;同一个部署环境里认领之后从没发过号的码(没做完的初始化)例外。
@@ -918,6 +1001,10 @@ func (i *Issuer) Recover(ctx context.Context, rebind bool) (string, error) {
 			if authority == "" {
 				return "", ErrNoTrustedBound
 			}
+			if !i.writtenHere(v, deployment) {
+				return "", fmt.Errorf("%w: the records were written by deployment %q (primary) and %q (secondary), this is deployment %q",
+					ErrForeignRecords, v.p.Deployment, v.s.Deployment, deployment)
+			}
 			// Blocks 记不回来,写 1:非 0 表示这个码发过号,Init 不会把它当成没做完的初始化。
 			claim := Claim{State: ClaimActive, Authority: authority, Deployment: deployment, PrimaryCluster: v.p.ClusterID,
 				SecondaryCluster: v.s.ClusterID, HighWater: max(v.p.Value, v.s.Value), Blocks: 1}
@@ -943,7 +1030,7 @@ func (i *Issuer) Recover(ctx context.Context, rebind bool) (string, error) {
 			return "nothing to repair: a missing or older local record is restored by the next reservation", nil
 		}
 		if bound && v.g.Blocks == 0 {
-			if err := i.createMissing(ctx, v, v.g.HighWater, v.g.Authority); err != nil {
+			if err := i.createMissing(ctx, v, v.g.HighWater, v.g.Authority, deployment); err != nil {
 				return "", err
 			}
 			return "completed an interrupted -id-issuer-init (the code never issued ids)", nil
@@ -964,7 +1051,7 @@ func (i *Issuer) Recover(ctx context.Context, rebind bool) (string, error) {
 				continue
 			}
 		}
-		if err := i.createMissing(ctx, v, claim.HighWater, claim.Authority); err != nil {
+		if err := i.createMissing(ctx, v, claim.HighWater, claim.Authority, deployment); err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("bound region %d to deployment %q and etcd clusters (%x, %x) above high_water=%d",
@@ -975,6 +1062,8 @@ func (i *Issuer) Recover(ctx context.Context, rebind bool) (string, error) {
 
 // Retire 让这个地域码永久退役:登记处留墓碑,之后预留、初始化、恢复全部拒绝,码永不再分配。
 // 登记处没有这个码时也写墓碑:登记处重建时按台账补回退役码,防止它被当成没用过的码重新认领。
+// 这样的墓碑只能补给用过的码,或者恰好是下一个可认领的码(跳过它);更大的码返回 ErrRegionOutOfOrder、不写,
+// 规则在 Registry.CompareAndSwap 的契约里。
 // 已经退役时什么也不做。只碰登记处,不碰本地记录;正在跑的发号器发完手里的块就停。
 //
 // 码还在用(active)时,只能从绑定它的那个部署环境退役(retirableHere)。退役没有撤销入口,码一共只有 63 个;
@@ -997,6 +1086,9 @@ func (i *Issuer) Retire(ctx context.Context, unbound bool) (bool, error) {
 		claim := g.Claim
 		claim.State = ClaimRetired
 		ok, err := i.opt.Registry.CompareAndSwap(ctx, i.opt.Region, g, claim)
+		if errors.Is(err, ErrRegionOutOfOrder) {
+			return false, err // 确定的拒绝:这个码没认领过,也不是下一个可认领的码,什么都没写
+		}
 		if err != nil {
 			return false, fmt.Errorf("retire the code (outcome unknown, rerun -id-issuer-retire): %w", err)
 		}

@@ -79,7 +79,6 @@ func newReconcileDeadOwnerCase(t *testing.T, sceneID uint64) *reconcileDeadOwner
 	registerWorldNodeFromHarness(t, sc, reconcileCASZone, live)
 
 	member := strconv.FormatUint(sceneID, 10)
-	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(reconcileCASZone), 10)))
 	seedSceneOwnedBy(t, mr, reconcileCASZone, sceneID, reconcileNodeDead)
 	_, err := mr.ZAdd(activeInstancesKey(reconcileCASZone), float64(nowUnix()), member)
 	require.NoError(t, err)
@@ -103,10 +102,10 @@ func TestReconcileDeadNode_ReassignedAfterOwnerRead_LeavesNewOwnerIntact(t *test
 	seedNodeMembers(c.mr, reconcileCASZone, reconcileNodeLive, mustAtoi(reconcileLiveNodePlayers))
 	// 改派成功的写者已把名额转到 live 的 GameServer(改派前在 live 上占名额,CAS 之后 commitReservedAgonesRoom 提交),
 	// 映射指向新名额。
-	require.NoError(t, c.mr.Set(sceneAgonesGsKey(c.sceneID), "gs-live"))
+	require.NoError(t, c.mr.Set(sceneAgonesGsKey(reconcileCASZone, c.sceneID), "gs-live"))
 
 	// 收尾的那次 GET:属主仍是 dead,收尾据此决定销毁。
-	owner, err := c.mr.Get(sceneNodeKey(c.sceneID))
+	owner, err := c.mr.Get(sceneNodeKey(reconcileCASZone, c.sceneID))
 	require.NoError(t, err)
 	require.Equal(t, reconcileNodeDead, owner)
 
@@ -119,7 +118,7 @@ func TestReconcileDeadNode_ReassignedAfterOwnerRead_LeavesNewOwnerIntact(t *test
 	require.NoError(t, err)
 	require.False(t, ok, "属主已改派到 live,收尾不得销毁这个实例")
 
-	owner, err = c.mr.Get(sceneNodeKey(c.sceneID))
+	owner, err = c.mr.Get(sceneNodeKey(reconcileCASZone, c.sceneID))
 	require.NoError(t, err)
 	require.Equal(t, reconcileNodeLive, owner, "属主映射必须原样留给 live")
 	requireSceneIndexedOnlyOn(t, c.sc, reconcileCASZone, c.sceneID, reconcileNodeLive, reconcileNodeDead)
@@ -130,8 +129,7 @@ func TestReconcileDeadNode_ReassignedAfterOwnerRead_LeavesNewOwnerIntact(t *test
 
 	// 其余场景键一个都没动。
 	require.Equal(t, reconcileScenePlayers, sceneMemberCount(c.mr, c.sceneID))
-	require.Equal(t, "gs-live", mustGet(t, c.mr, sceneAgonesGsKey(c.sceneID)))
-	require.Equal(t, strconv.FormatUint(uint64(reconcileCASZone), 10), mustGet(t, c.mr, sceneZoneKey(c.sceneID)))
+	require.Equal(t, "gs-live", mustGet(t, c.mr, sceneAgonesGsKey(reconcileCASZone, c.sceneID)))
 	requireActiveInstance(t, c.sc, reconcileCASZone, c.sceneID, true)
 }
 
@@ -148,9 +146,8 @@ func TestReconcileDeadNode_StillOwnedByDeadNode_Destroys(t *testing.T) {
 	require.True(t, ok, "属主仍是死节点,必须销毁")
 
 	member := strconv.FormatUint(c.sceneID, 10)
-	require.False(t, c.mr.Exists(sceneNodeKey(c.sceneID)))
-	require.False(t, c.mr.Exists(instanceMembersKey(c.sceneID)))
-	require.False(t, c.mr.Exists(sceneZoneKey(c.sceneID)))
+	require.False(t, c.mr.Exists(sceneNodeKey(reconcileCASZone, c.sceneID)))
+	require.False(t, c.mr.Exists(instanceMembersKey(reconcileCASZone, c.sceneID)))
 	requireActiveInstance(t, c.sc, reconcileCASZone, c.sceneID, false)
 	in, err := c.sc.Redis.Sismember(nodeScenesKey(reconcileCASZone, reconcileNodeDead), member)
 	require.NoError(t, err)
@@ -170,15 +167,14 @@ func TestAtomicDestroyForce_ExpectedOwnerMismatchTouchesNothing(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const reassigned, unmapped uint64 = 89503, 89504
 	for _, id := range []uint64{reassigned, unmapped} {
-		require.NoError(t, mr.Set(sceneZoneKey(id), "1"))
 		seedSceneMembers(mr, id, 3)
-		require.NoError(t, mr.Set(sceneMirrorFlagKey(id), "1"))
-		require.NoError(t, mr.Set(sceneSourceKey(id), "77"))
-		require.NoError(t, mr.Set(sceneAgonesGsKey(id), "gs-x"))
+		require.NoError(t, mr.Set(sceneMirrorFlagKey(reconcileCASZone, id), "1"))
+		require.NoError(t, mr.Set(sceneSourceKey(reconcileCASZone, id), "77"))
+		require.NoError(t, mr.Set(sceneAgonesGsKey(reconcileCASZone, id), "gs-x"))
 		_, err := mr.ZAdd(activeInstancesKey(reconcileCASZone), 1, strconv.FormatUint(id, 10))
 		require.NoError(t, err)
 	}
-	require.NoError(t, mr.Set(sceneNodeKey(reassigned), reconcileNodeLive))
+	require.NoError(t, mr.Set(sceneNodeKey(reconcileCASZone, reassigned), reconcileNodeLive))
 
 	for _, id := range []uint64{reassigned, unmapped} {
 		claim, err := AtomicDestroyForce(sc, reconcileCASZone, id, reconcileNodeDead, "node_death")
@@ -189,15 +185,14 @@ func TestAtomicDestroyForce_ExpectedOwnerMismatchTouchesNothing(t *testing.T) {
 		require.Empty(t, claim.Members)
 	}
 	for _, id := range []uint64{reassigned, unmapped} {
-		require.Equal(t, "1", mustGet(t, mr, sceneZoneKey(id)))
 		require.Equal(t, "3", sceneMemberCount(mr, id))
-		require.Equal(t, "1", mustGet(t, mr, sceneMirrorFlagKey(id)))
-		require.Equal(t, "77", mustGet(t, mr, sceneSourceKey(id)))
-		require.Equal(t, "gs-x", mustGet(t, mr, sceneAgonesGsKey(id)))
+		require.Equal(t, "1", mustGet(t, mr, sceneMirrorFlagKey(reconcileCASZone, id)))
+		require.Equal(t, "77", mustGet(t, mr, sceneSourceKey(reconcileCASZone, id)))
+		require.Equal(t, "gs-x", mustGet(t, mr, sceneAgonesGsKey(reconcileCASZone, id)))
 		requireActiveInstance(t, sc, reconcileCASZone, id, true)
 	}
-	require.Equal(t, reconcileNodeLive, mustGet(t, mr, sceneNodeKey(reassigned)))
-	require.False(t, mr.Exists(sceneNodeKey(unmapped)), "不得替不存在的映射建键")
+	require.Equal(t, reconcileNodeLive, mustGet(t, mr, sceneNodeKey(reconcileCASZone, reassigned)))
+	require.False(t, mr.Exists(sceneNodeKey(reconcileCASZone, unmapped)), "不得替不存在的映射建键")
 }
 
 // 期望属主为空串时谁是属主都拆(AtomicDestroyForce 先读属主、按读到的值认领)—— explicit / cascade /
@@ -205,9 +200,9 @@ func TestAtomicDestroyForce_ExpectedOwnerMismatchTouchesNothing(t *testing.T) {
 func TestAtomicDestroyForce_NoExpectedOwnerWipesWhoeverOwnsIt(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID, bystander uint64 = 89505, 89506
-	require.NoError(t, mr.Set(sceneNodeKey(sceneID), reconcileNodeLive))
+	require.NoError(t, mr.Set(sceneNodeKey(reconcileCASZone, sceneID), reconcileNodeLive))
 	seedSceneMembers(mr, sceneID, 4)
-	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), "gs-live"))
+	require.NoError(t, mr.Set(sceneAgonesGsKey(reconcileCASZone, sceneID), "gs-live"))
 	for _, id := range []uint64{sceneID, bystander} {
 		_, err := mr.ZAdd(activeInstancesKey(reconcileCASZone), 1, strconv.FormatUint(id, 10))
 		require.NoError(t, err)
@@ -220,9 +215,9 @@ func TestAtomicDestroyForce_NoExpectedOwnerWipesWhoeverOwnsIt(t *testing.T) {
 	require.Equal(t, "gs-live", claim.AgonesGs)
 	require.Len(t, claim.Members, 4)
 
-	require.False(t, mr.Exists(sceneNodeKey(sceneID)))
-	require.False(t, mr.Exists(instanceMembersKey(sceneID)))
-	require.False(t, mr.Exists(sceneAgonesGsKey(sceneID)))
+	require.False(t, mr.Exists(sceneNodeKey(reconcileCASZone, sceneID)))
+	require.False(t, mr.Exists(instanceMembersKey(reconcileCASZone, sceneID)))
+	require.False(t, mr.Exists(sceneAgonesGsKey(reconcileCASZone, sceneID)))
 	requireActiveInstance(t, sc, reconcileCASZone, sceneID, false)
 	requireActiveInstance(t, sc, reconcileCASZone, bystander, true)
 }
@@ -266,17 +261,17 @@ func TestReconcileDeadNode_DestroyScriptErrorKeepsMemberIndexed(t *testing.T) {
 	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
 	const sceneID uint64 = 89507
 	member := strconv.FormatUint(sceneID, 10)
-	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(reconcileCASZone), 10)))
 	seedSceneOwnedBy(t, mr, reconcileCASZone, sceneID, reconcileNodeDead)
 	_, err := mr.ZAdd(activeInstancesKey(reconcileCASZone), float64(nowUnix()), member)
 	require.NoError(t, err)
 
 	entry := nodeEntry{nodeID: reconcileNodeDead}
 	entry.reg.ZoneId = reconcileCASZone
-	reconcileDeadNodeScenes(context.Background(), sc, entry, []string{member}, seedDeadNodeTaskForTest(t, sc, reconcileCASZone, reconcileNodeDead))
+	reconcileDeadNodeScenes(context.Background(), sc, entry, []string{member}, seedDeadNodeTaskForTest(t, sc, reconcileCASZone, reconcileNodeDead),
+		noPassBudgetForTest)
 
 	require.True(t, hook.fired.Load(), "注入的脚本错误必须真的发生")
-	require.Equal(t, reconcileNodeDead, mustGet(t, mr, sceneNodeKey(sceneID)), "脚本没执行,属主映射原样")
+	require.Equal(t, reconcileNodeDead, mustGet(t, mr, sceneNodeKey(reconcileCASZone, sceneID)), "脚本没执行,属主映射原样")
 	requireSceneIndexedOnlyOn(t, sc, reconcileCASZone, sceneID, reconcileNodeDead)
 	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(reconcileCASZone, reconcileNodeDead)))
 	requireActiveInstance(t, sc, reconcileCASZone, sceneID, true)

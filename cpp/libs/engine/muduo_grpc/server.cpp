@@ -1222,8 +1222,18 @@ ServerSession::Verdict Server::RouteRequest(const RequestHeaders &headers)
         ++stats_.refusedOnShutdown; // 排空到期之后才开的流:没处理,客户端可透明重试(§15.3 Q4)
         return RefuseVerdict();
     }
-    if (methodIndex_.find(std::string_view(headers.path)) != methodIndex_.end())
+    if (const auto known = methodIndex_.find(std::string_view(headers.path)); known != methodIndex_.end())
     {
+        // 准入(ServerOptions::admission,节点接的是热关停):业务开始之前拒绝,请求体不收、handler 不执行。
+        // 拒绝的状态码由准入决定,计入 codes / methods 统计;逐条不打日志(准入方自己计数与采样)。
+        if (options_.admission)
+        {
+            if (auto denied = options_.admission(headers.path); denied && denied->code() != StatusCode::kOk)
+            {
+                CountStatus(known->second, denied->code());
+                return RejectVerdict(std::move(*denied));
+            }
+        }
         return AcceptVerdict();
     }
     // ServerSession 保证 path 能拆开;拆不开时按 grpc-go 同文案兜底。

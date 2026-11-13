@@ -302,6 +302,8 @@ func TestRankBoardTypesCoverExactlyRatedModes(t *testing.T) {
 			continue
 		}
 		require.NotZero(t, boardType, "模式 %s 的 board_type 不能是 0(rank 拒收)", mode)
+		_, registered := rankpb.RankBoardType_name[int32(boardType)]
+		require.True(t, registered, "模式 %s 的 board_type %d 没在 rank.proto 的 RankBoardType 登记,客户端没有对应常量", mode, boardType)
 		other, duplicate := seen[boardType]
 		require.False(t, duplicate, "模式 %s 与 %s 共用 board_type %d,两条评分轨道会写进同一张榜", mode, other, boardType)
 		seen[boardType] = mode

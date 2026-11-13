@@ -1,0 +1,181 @@
+# 日志采集在 kind 上的端到端核对夹具(docs/PROGRESS.md 2026-11-12「分布式日志阶段二」条目的第 4~5 步)。部署脚本不读它。
+#
+# 造三个假 Pod,各打几行与真进程同格式的日志,核对 C++ sidecar 与 Go / Java 采集 DaemonSet 推进 Loki 的标签与结构化元数据:
+#   fake-login    tier: go-svc。stdout 打 go-zero JSON(带 / 不带 trace,字符串 / 数字形态的 player_id)、内嵌 etcd 的 zap JSON、go-redis 文本;
+#                 另有一个 init 容器打一行,核对 init 容器不采。
+#   fake-gateway  tier: java-svc。stdout 打 logstash JSON(带 / 不带 traceId)、Spring 默认文本行加一段堆栈。
+#   fake-gate     app: gate,没有 tier(与真 gate Pod 一样)。按 muduo 格式往共享卷写文件,由 log-sidecar 读;
+#                 容器 stdout 打一行启动行,stderr 打 gRPC(glog 格式)、librdkafka 与未捕获异常三种行,由 DaemonSet 采。
+#                 log-sidecar 是 init 容器形态的原生 sidecar,DaemonSet 不采它自己的输出。
+# 每 20 秒重打一遍,查询窗口里总有新行。三个 trace_id 与 player_id 都是假值,只在这份夹具里出现。
+#
+# 前提:
+#   - 命名空间 mmorpg-zone-logcheck 符合缺省的 -NamespacePrefix(mmorpg-zone),DaemonSet 才会采它,zone 标签是 logcheck。
+#   - mmorpg-infra 里已有 Loki 与 DaemonSet pod-log-collector。
+#   - fake-gate 挂的 ConfigMap cpp-log-sidecar 由契约测试导出的 cpp-log-sidecar.alloy 建(PROGRESS 第 4 步的命令),
+#     它与部署脚本按缺省 infra 命名空间渲染的那一份逐字相同。它晚于本文件建也行:kubelet 会一直重试挂载。
+#   - kind 节点里预载了 busybox:1.36 与 grafana/alloy:v1.10.0。
+# 核对完删掉整个命名空间:kubectl delete namespace mmorpg-zone-logcheck。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mmorpg-zone-logcheck
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: log-samples
+  namespace: mmorpg-zone-logcheck
+data:
+  go.log: |
+    {"@timestamp":"2026-11-12T10:00:00.000+08:00","caller":"logic/entergamelogic.go:42","content":"logcheck go trace and player","level":"info","player_id":"4611686018427387905","span":"00f067aa0ba902b7","trace":"4bf92f3577b34da6a3ce929d0e0e4736"}
+    {"@timestamp":"2026-11-12T10:00:00.001+08:00","caller":"logic/numeric.go:7","content":"logcheck go numeric player id","level":"error","player_id":4611686018427387905}
+    {"@timestamp":"2026-11-12T10:00:00.002+08:00","caller":"svc/plain.go:3","content":"logcheck go no context","level":"info"}
+    {"level":"warn","ts":"2026-11-12T02:00:00.003Z","caller":"v3@v3.6.0/retry_interceptor.go:62","msg":"logcheck go zap line"}
+    redis: 2026/11/12 10:00:00 pool.go:617: logcheck go redis text line
+  java.log: |
+    {"@timestamp":"2026-11-12T10:00:00.000+08:00","@version":"1","message":"logcheck java trace","logger_name":"com.game.gateway.LogCheck","thread_name":"http-nio-8081-exec-1","level":"INFO","level_value":20000,"traceId":"0af7651916cd43dd8448eb211c80319c","spanId":"b7ad6b7169203331"}
+    {"@timestamp":"2026-11-12T10:00:00.001+08:00","@version":"1","message":"logcheck java no trace","logger_name":"com.game.gateway.LogCheck","thread_name":"scheduling-1","level":"WARN","level_value":30000}
+    2026-11-12T10:00:00.002+08:00 ERROR 1 --- [gateway-node] [           main] c.game.gateway.LogCheck                  : logcheck java text line
+    java.lang.IllegalStateException: logcheck java stack
+        at com.game.gateway.LogCheck.main(LogCheck.java:10)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fake-login
+  namespace: mmorpg-zone-logcheck
+  labels:
+    app: login-check
+    tier: go-svc
+spec:
+  initContainers:
+    # init 容器不该被采:Loki 里查不到这一行才对。
+    - name: wait
+      image: busybox:1.36
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/sh", "-c", "echo logcheck init container line"]
+  containers:
+    - name: login-check
+      image: busybox:1.36
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/sh", "-c", "while true; do cat /samples/go.log; sleep 20; done"]
+      volumeMounts:
+        - name: samples
+          mountPath: /samples
+          readOnly: true
+  volumes:
+    - name: samples
+      configMap:
+        name: log-samples
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fake-gateway
+  namespace: mmorpg-zone-logcheck
+  labels:
+    app: gateway-check
+    tier: java-svc
+spec:
+  containers:
+    - name: gateway-check
+      image: busybox:1.36
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/sh", "-c", "while true; do cat /samples/java.log; sleep 20; done"]
+      volumeMounts:
+        - name: samples
+          mountPath: /samples
+          readOnly: true
+  volumes:
+    - name: samples
+      configMap:
+        name: log-samples
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fake-gate
+  namespace: mmorpg-zone-logcheck
+  labels:
+    app: gate
+spec:
+  # sidecar 与 k8s_deploy.ps1 的 New-CppLogSidecarContainerYaml 同形:原生 sidecar,只读共享卷,读 /app/bin/logs/cpp_nodes/*.log。
+  initContainers:
+    - name: log-sidecar
+      image: grafana/alloy:v1.10.0
+      imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+      args:
+        - run
+        - --server.http.listen-addr=0.0.0.0:12345
+        - --storage.path=/var/lib/alloy
+        - /etc/alloy/config.alloy
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+      env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: ZONE_NAME
+          value: "logcheck"
+      volumeMounts:
+        - name: node-logs
+          mountPath: /app/bin/logs
+          readOnly: true
+        - name: cpp-log-sidecar-config
+          mountPath: /etc/alloy
+          readOnly: true
+        - name: cpp-log-sidecar-state
+          mountPath: /var/lib/alloy
+  containers:
+    - name: gate
+      image: busybox:1.36
+      imagePullPolicy: IfNotPresent
+      # muduo 行:<日期> <时间.微秒> <右对齐 5 列的线程号> <级别补到 6 列> <正文> - <文件:行>[ 上下文后缀]。
+      # 时间按东八区写(TZ=HKT-8),sidecar 按 Asia/Hong_Kong 解析;写成 UTC 会被算成 8 小时之后,Loki 静默丢弃(grafana-loki-local-logs.md §6.6)。
+      # 文件名照 muduo 滚动的格式 <节点>.<日期>-<时间>.<主机>.<pid>.log,sidecar 从这里取 service=gate、pid=1。
+      # stderr 上的三种行照真进程的格式:gRPC / abseil 是 glog 格式(首字母是级别),librdkafka 开头是 %<syslog 级别>|<epoch 秒>|,
+      # 未捕获异常是 libstdc++ 打的 terminate called ...;DaemonSet 按 CRI 时间入库,行内的时间不用。
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          mkdir -p /app/bin/logs/cpp_nodes
+          f=/app/bin/logs/cpp_nodes/gate.20261112-000000.fake-gate.1.log
+          echo "logcheck cpp stdout line"
+          while true; do
+            ts="`TZ=HKT-8 date '+%Y%m%d %H:%M:%S'`.000000"
+            echo "$ts  4321 INFO  logcheck cpp trace and player - gate.cpp:10 [ctx trace_id=5c1e7a0d3b9f4e2a8c6d0b1a2f3e4d5c span_id=6e0c63257de34c92 player_id=4611686018427387905]" >> "$f"
+            echo "$ts  4321 WARN  logcheck cpp player only - gate.cpp:11 [ctx player_id=4611686018427387905]" >> "$f"
+            echo "$ts  4321 INFO  logcheck cpp no context - gate.cpp:12" >> "$f"
+            echo "E1112 02:00:00.000000    4321 chttp2_transport.cc:1425] logcheck cpp grpc line" >&2
+            echo "%3|1794448800.000|FAIL|rdkafka#producer-1| logcheck cpp rdkafka line" >&2
+            echo "terminate called after throwing an instance of 'std::runtime_error'" >&2
+            echo "  what():  logcheck cpp uncaught exception" >&2
+            sleep 20
+          done
+      volumeMounts:
+        - name: node-logs
+          mountPath: /app/bin/logs
+  volumes:
+    - name: node-logs
+      emptyDir:
+        sizeLimit: 64Mi
+    - name: cpp-log-sidecar-config
+      configMap:
+        name: cpp-log-sidecar
+    - name: cpp-log-sidecar-state
+      emptyDir:
+        sizeLimit: 64Mi

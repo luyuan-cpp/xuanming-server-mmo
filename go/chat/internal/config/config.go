@@ -72,11 +72,17 @@ type Config struct {
 	// RateLimitPerSecond:每玩家每秒最多接受几条；按SQL时间固定秒窗口计数,并发在途时可能略超。
 	RateLimitPerSecond int `json:",default=5"`
 
+	// WorldChannelCooldownMs:同一名玩家相邻两条世界频道消息的最短间隔(毫秒),0 = 不限。只管世界频道,私聊只受 RateLimitPerSecond 约束。
+	// 世界频道一条消息要推给全服在线玩家,这个间隔把全服世界消息量压在「在线人数 ÷ 间隔」之内
+	// (docs/design/chat-world-channel-fanout.md §5)。被间隔挡下的请求回 kRateLimitExceeded,不落库、不占 request_id。
+	WorldChannelCooldownMs int `json:",default=5000"`
+
 	// HistoryMaxEntries:每个SQL频道窗口最多可见的最近条数。
 	HistoryMaxEntries int `json:",default=200"`
 
 	// HistoryTTLSeconds:频道窗口闲置TTL；保持旧LIST续期/过期间隔的可见历史语义。
-	// 显示过期不删除永久发送原件，旧UUID不能重新进入。
+	// 显示过期不删除发送原件,旧 UUID 不能重新进入;原件本身保留 constants.OriginalRetentionDays 天后由库删除,
+	// 所以本值不得超过 constants.MaxHistoryTTLSeconds(保留期减一天)。
 	HistoryTTLSeconds int `json:",default=604800"`
 
 	// HistoryDefaultLimit:PullChatHistory.limit=0 时取多少条。
@@ -85,7 +91,7 @@ type Config struct {
 	// HistoryMaxLimit:PullChatHistory.limit 的配置上限，不得超过MaxHistoryPullLimit。
 	HistoryMaxLimit int `json:",default=50"`
 
-	// RequestIdTTLSeconds只保留旧配置兼容；SQL成功收据永久保存，不再按此值删除。
+	// RequestIdTTLSeconds只保留旧配置兼容；SQL成功收据随原件保留 constants.OriginalRetentionDays 天,不按此值删除。
 	RequestIdTTLSeconds int `json:",default=60"`
 
 	// MetricsListenAddr:Prometheus /metrics 监听地址,留空关闭。
@@ -140,6 +146,13 @@ func (c *Config) Validate() error {
 	}
 	if c.WorldHistoryCacheMs < 0 || c.WorldHistoryCacheMs > constants.MaxWorldHistoryCacheMs {
 		return fmt.Errorf("WorldHistoryCacheMs(%d)必须在 [0, %d] 内", c.WorldHistoryCacheMs, constants.MaxWorldHistoryCacheMs)
+	}
+	if c.WorldChannelCooldownMs < 0 || c.WorldChannelCooldownMs > constants.MaxWorldChannelCooldownMs {
+		return fmt.Errorf("WorldChannelCooldownMs (%d) must be within [0, %d]", c.WorldChannelCooldownMs, constants.MaxWorldChannelCooldownMs)
+	}
+	if c.HistoryTTLSeconds > constants.MaxHistoryTTLSeconds {
+		return fmt.Errorf("HistoryTTLSeconds (%d) must not exceed %d: chat originals are deleted by the database after %d days, and messages still inside the visible window must not be deleted",
+			c.HistoryTTLSeconds, constants.MaxHistoryTTLSeconds, constants.OriginalRetentionDays)
 	}
 	if c.ZoneId == 0 {
 		return errors.New("ZoneId 必须非 0(K8s 全局服务用命令行 / ConfigMap 注入的 CurrentZoneId)")

@@ -60,6 +60,9 @@ type GateCandidate struct {
 	// Inflight 是本 login 进程在交票宽限(20s)内交给这台 gate、还没反映进 PlayerCount 的票数(GateInflight.Annotate 填)。
 	// 只参与挑选时比负载(load),不进容量记账、不参与满载判定。
 	Inflight uint32
+	// Build 是这台 gate 自报的部署构建标识(NodeInfo.build,与 Pod 标签 mmorpg.io/build 同值);空串 = 没上报(本机开发)。
+	// 只有排空迁移选目标时用:优先迁到不在外出构建上的 gate(PickMigrationTarget)。登录挑 gate 不看它。
+	Build string
 }
 
 // load 是挑 gate 时比的负载:上报人数加本进程在途票数。用 uint64 相加,接近 uint32 上限时也不回绕。

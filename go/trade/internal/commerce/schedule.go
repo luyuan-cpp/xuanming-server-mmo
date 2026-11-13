@@ -95,18 +95,25 @@ func waitsForTimeOrPlayers(r *tradepb.TradeCommerceRecord, w *tradepb.TradeComme
 	return false
 }
 
-// filledParentToWake 判这一步推进是不是让一张市场成交子单收尾了:子单(kind 4、side 0、有母单)从推进中变成
-// 已成交或已取消时,回它的母单号,由 advance 在提交之后唤醒母单(母单在 marketBarrier 里等子单收尾,
-// 见 waitsForOtherRows)。其余情况回 0。子单转人工不唤醒:母单接着等它被人工处理完,那之后引擎把子单推进到
-// 结案的那一步才唤醒(jubaozhai-market.md §15.7.1 第 4 类)。
-func filledParentToWake(before, after *tradepb.TradeCommerceRecord) uint64 {
-	if after.Kind != 4 || after.Side != 0 || after.ParentId == 0 {
-		return 0
+// filledParentsToWake 判这一步推进是不是让一张市场成交子单收尾了:子单(kind 4、side 0)从推进中变成已成交或已取消时,
+// 回它的两张母单(parent_id 是买单、counterparty_id 是卖单),由 advance 在提交之后唤醒(母单在 marketBarrier 里
+// 按 parent_id 或 counterparty_id 等子单收尾,见 waitsForOtherRows)。其余情况回空。
+// 2026-11-11 起两张都唤醒:以前只唤醒买单,卖单要等 inFlightRecheck 兜底复查才发现子单收尾。
+// 子单转人工不唤醒:母单接着等它被人工处理完,那之后引擎把子单推进到结案的那一步才唤醒(jubaozhai-market.md §15.7.1 第 4 类)。
+func filledParentsToWake(before, after *tradepb.TradeCommerceRecord) []uint64 {
+	if after.Kind != 4 || after.Side != 0 {
+		return nil
 	}
 	if fillSettledStatus(before.Status) || !fillSettledStatus(after.Status) {
-		return 0
+		return nil
 	}
-	return after.ParentId
+	var parents []uint64
+	for _, id := range []uint64{after.ParentId, after.CounterpartyId} {
+		if id != 0 {
+			parents = append(parents, id)
+		}
+	}
+	return parents
 }
 
 // fillSettledStatus 是 marketBarrier 认的子单收尾状态:已取消(7)与已成交(11)。转人工(10)不算收尾,

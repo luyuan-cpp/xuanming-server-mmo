@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -128,5 +129,28 @@ class LoginRpcClientParseTest {
         wrapperOut.writeByteArray(1, playerBytes.toByteArray());
         wrapperOut.flush();
         return wrapperBytes.toByteArray();
+    }
+
+    // proto/login/login.proto ZoneRoleCountRequest.zone_id = 1、ZoneRoleCountResponse.roles = 1(uint64)。
+    @Test
+    void zoneRoleCountRequestWritesZoneIdAsField1() throws IOException {
+        ByteArrayOutputStream want = new ByteArrayOutputStream();
+        CodedOutputStream out = CodedOutputStream.newInstance(want);
+        out.writeUInt32(1, 101);
+        out.flush();
+
+        assertArrayEquals(want.toByteArray(), new LoginRpcClient.ZoneRoleCountRequestProto(101).toBytes());
+    }
+
+    @Test
+    void parsesZoneRoleCountFromField1AndSkipsUnknownFields() throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        CodedOutputStream out = CodedOutputStream.newInstance(bytes);
+        out.writeString(9, "future field");
+        out.writeUInt64(1, 5_000_000_000L);
+        out.flush();
+
+        assertEquals(5_000_000_000L, LoginRpcClient.parseZoneRoleCountResponse(bytes.toByteArray()).roles);
+        assertEquals(0L, LoginRpcClient.parseZoneRoleCountResponse(new byte[0]).roles, "roles = 0 is encoded as absent");
     }
 }

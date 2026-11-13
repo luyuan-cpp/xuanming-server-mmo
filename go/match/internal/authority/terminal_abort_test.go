@@ -313,7 +313,7 @@ func TestCommitBattleOutcomeTiDBReplaysAbortForPermanentlyInvalidOriginal(t *tes
 	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, decision)
 	_, err = s.CommitBattleOutcome(ctx, &pb.CommitBattleOutcomeRequest{BattleId: f.BattleId, PlacementOperationId: "other-operation", TargetInstanceId: f.TargetInstanceId, RawResultPayload: raw})
 	require.ErrorIs(t, err, ErrBattleOutcomeOriginal, "别的原操作不能借这份 ABORT")
-	require.Zero(t, settlementSources(t, s, battleID))
+	requireOnlyVoidSources(t, s, battleID, len(f.Members))
 	require.Equal(t, 1, terminalRows(t, s, battleID))
 }
 
@@ -332,7 +332,7 @@ func TestCommitBattleOutcomeTiDBLockedPathReplaysAbortCommittedByAnotherReplica(
 	decision, err := s.commitBattleOutcomeLocked(ctx, req, event)
 	require.NoError(t, err)
 	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, decision)
-	require.Zero(t, settlementSources(t, s, battleID), "作废的局没有任何个人结算来源")
+	requireOnlyVoidSources(t, s, battleID, len(f.Members))
 	require.Equal(t, 1, terminalRows(t, s, battleID))
 }
 
@@ -563,7 +563,7 @@ func TestAbortWithoutRoomTiDBRacesCompleteForOneTerminal(t *testing.T) {
 			require.EqualValues(t, 3, ticketRow(t, s, original.PlayerId).State)
 		}
 	case pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT:
-		require.Zero(t, settlementSources(t, s, battleID))
+		requireOnlyVoidSources(t, s, battleID, len(f.Members))
 		for _, original := range tickets {
 			require.EqualValues(t, 4, ticketRow(t, s, original.PlayerId).State)
 		}

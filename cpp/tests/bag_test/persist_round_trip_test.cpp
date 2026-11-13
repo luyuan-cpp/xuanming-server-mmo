@@ -559,6 +559,7 @@ protected:
         battleResult->set_total_rounds(6);
         battleResult->set_finished_at_ms(1900000000000);
         battleResult->set_settled_at_ms(1900000001000);
+        battleResult->set_items_mailed(true); // 掉落两个包都放不下、改由邮件发放(battle-overflow-mail.md)
         auto *resultCurrency = battleResult->add_currencies();
         resultCurrency->set_currency_type(0);
         resultCurrency->set_amount(12);

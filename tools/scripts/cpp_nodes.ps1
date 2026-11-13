@@ -103,10 +103,20 @@ param(
     [string]$NodeIp = "",
     [string]$MaintenancePlanPath = "",
     [string]$StopReportPath = "",
-    [switch]$PrepareOnly
+    [switch]$PrepareOnly,
+
+    # 本机压测抓 C++ 指标用(docs/stress/stress-gap-items-verification-20261111.md §4):> 0 时给每个实例设一个独立的
+    # MMORPG_METRICS_PORT,规则在 lib/cpp_metrics_ports.ps1(基准 + 1000 × zone + 节点偏移 + 序号,建议基准 19400);
+    # stress_snap.ps1 -CppMetricsBasePort 传同一个基准就能按 PID 文件抓到全部实例。0 = 不设(沿用继承来的环境变量)。
+    # 没给参数时读环境变量 MMORPG_METRICS_BASE_PORT,这样经 dev_tools.ps1 -Command cpp-node-start / dev-start 起节点也能用。
+    [int]$MetricsBasePort = 0
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($MetricsBasePort -le 0 -and -not [string]::IsNullOrWhiteSpace($env:MMORPG_METRICS_BASE_PORT)) {
+    $MetricsBasePort = [int]$env:MMORPG_METRICS_BASE_PORT
+}
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot  = Resolve-Path (Join-Path $ScriptDir "..\..")
@@ -130,6 +140,7 @@ $LegacyPidFile = Join-Path $RepoRoot "bin\cpp_nodes.pid.json"
 . (Join-Path $ScriptDir "lib\producer_dev_secret.ps1")
 . (Join-Path $ScriptDir "lib\match_dev_secret.ps1")
 . (Join-Path $ScriptDir "lib\gate_identity_environment.ps1")
+. (Join-Path $ScriptDir "lib\cpp_metrics_ports.ps1")
 
 # ── Node catalogue ───────────────────────────────────────────────
 $NodeCatalogue = [ordered]@{
@@ -394,6 +405,9 @@ function Invoke-Start {
             # Start-Process has no native per-process env override on Windows
             # PowerShell. Both are restored in the finally block, including the
             # "was not set before" case.
+            # Prometheus 出口端口(-MetricsBasePort):先算端口再改任何环境变量,键认不出或端口越界直接报错,不留半改的环境。
+            $metricsPort = if ($MetricsBasePort -gt 0) { Get-CppMetricsPort -BasePort $MetricsBasePort -Key $instanceKey } else { 0 }
+            $prevMetricsPortEnv = $env:MMORPG_METRICS_PORT
             $prevZoneEnv   = $env:ZONE_ID
             $prevNodeIpEnv = $env:NODE_IP
             if ($Zone -gt 0) { $env:ZONE_ID = "$Zone" }
@@ -427,6 +441,7 @@ function Invoke-Start {
             $previousMatchDevSecrets = $null
             $previousGateIdentityEnvironment = $null
             try {
+                if ($metricsPort -gt 0) { $env:MMORPG_METRICS_PORT = "$metricsPort" }
                 if ($name -eq 'gate') {
                     $previousGateIdentityEnvironment = Enter-LocalGateIdentityEnvironment -RepoRoot $RepoRoot -AllowDevelopmentDefault ($env:GATE_RUN_MODE -in @('dev','test')) -IncludeSigningKey
                 }
@@ -455,6 +470,8 @@ function Invoke-Start {
                     -PassThru `
                     -WindowStyle Hidden
             } finally {
+                if ($null -eq $prevMetricsPortEnv) { Remove-Item Env:MMORPG_METRICS_PORT -ErrorAction SilentlyContinue }
+                else { $env:MMORPG_METRICS_PORT = $prevMetricsPortEnv }
                 if ($null -eq $prevZoneEnv) { Remove-Item Env:ZONE_ID -ErrorAction SilentlyContinue }
                 else { $env:ZONE_ID = $prevZoneEnv }
                 if ($null -eq $prevNodeIpEnv) { Remove-Item Env:NODE_IP -ErrorAction SilentlyContinue }
@@ -474,6 +491,7 @@ function Invoke-Start {
 
             $pids | Add-Member -NotePropertyName $instanceKey -NotePropertyValue $proc.Id -Force
             Write-Host "        PID $($proc.Id)  logs -> run\logs\cpp_nodes\$instanceKey.*.log" -ForegroundColor DarkGray
+            if ($metricsPort -gt 0) { Write-Host "        metrics -> http://127.0.0.1:$metricsPort/metrics" -ForegroundColor DarkGray }
             $launchedInstances += @{ Key = $instanceKey; LogFile = $logOut }
 
             # Small delay between launches (same pattern as original start_server.bat)

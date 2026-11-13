@@ -5,15 +5,25 @@ package sessionmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	comppb "proto/common/component"
 	plpb "proto/player_locator"
 	"shared/redisslot"
 )
+
+// ErrSessionChanged:会话记录在调用方读取之后被别的写者改过,player_locator 以 gRPC ABORTED 拒绝了这次写入
+// (go/player_locator/internal/logic/setsessionlogic.go 的 sessionChangedError)。
+//
+// 写入确定没有发生,不是结果未知;调用方应重读会话、重新走登录决策再写,不要原样重发
+// (clientplayerlogin 的 commitEnterGameSession)。其余错误一律不带这个值,调用方不得重做。
+var ErrSessionChanged = errors.New("player session changed since it was read")
 
 // PlayerSession is the Login-side view of a player session.
 // It mirrors player_locator.PlayerSession for local decision logic.
@@ -104,12 +114,17 @@ func GetSession(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID
 }
 
 // SetSession writes/overwrites a player session via player_locator.
+//
+// 记录在调用方读取之后变了(locator 回 ABORTED)时返回的错误带 ErrSessionChanged,原错误一并保留。
 func SetSession(ctx context.Context, plClient plpb.PlayerLocatorClient, session *PlayerSession) error {
 	_, err := plClient.SetSession(ctx, &plpb.SetSessionRequest{Session: toProto(session)})
-	if err != nil {
-		return fmt.Errorf("player_locator SetSession: %w", err)
+	if err == nil {
+		return nil
 	}
-	return nil
+	if status.Code(err) == codes.Aborted {
+		return fmt.Errorf("player_locator SetSession: %w: %w", ErrSessionChanged, err)
+	}
+	return fmt.Errorf("player_locator SetSession: %w", err)
 }
 
 // SetSessionDisconnecting marks the session as disconnecting with a 30s lease via player_locator.

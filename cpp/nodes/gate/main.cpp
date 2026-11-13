@@ -15,7 +15,9 @@
 #include "handler/rpc/client_session_handler.h"
 #include "handler/rpc/client_heartbeat.h"
 #include "handler/rpc/client_request_lane.h"
+#include "handler/rpc/client_scene_lane.h"
 #include "handler/rpc/drain_migration.h"
+#include "handler/rpc/login_session_renewal.h"
 #include "handler/rpc/router_muduo_forward.h"
 #include "handler/rpc/router_subset.h"
 #include "muduo_grpc/channel.h"
@@ -229,6 +231,9 @@ namespace
         // 排空迁移的每秒一拍与重定向滞留关闭(handler/rpc/drain_migration.cpp,docs/design/gate-drain-session-migration.md §4.3)。
         // 回调不捕获任何对象;没有迁移许可、也没有待关的滞留连接时每拍只做两次判空。
         TimerTaskComp drainMigrationTimer;
+        // 登录态续租的每秒一拍(handler/rpc/login_session_renewal.cpp,docs/design/gate-online-identity.md §10.4):
+        // 为仍然连着的连接定期向 login 续租登录态。回调不捕获任何对象;没有到期的续租时每拍只做一次堆顶比较。
+        TimerTaskComp loginRenewalTimer;
         bool sourceClosed = false;
 
         GateRuntimeContext()
@@ -520,8 +525,9 @@ int main(int argc, char *argv[])
                 context.sourceClosed = true;
                 context.dependencyGate.probeTimer.Cancel();
                 context.playerCountReportTimer.Cancel();
-                // 全部连接马上就要关:不再给它们要迁移票据,也不必再做滞留关闭。
+                // 全部连接马上就要关:不再给它们要迁移票据,也不必再做滞留关闭;登录态由随后的断线通知清理,不再续租。
                 context.drainMigrationTimer.Cancel();
+                context.loginRenewalTimer.Cancel();
                 auto &sessions = tlsSessionManager.sessions();
                 LOG_INFO << "Disconnecting " << sessions.size() << " client sessions before shutdown...";
                 for (auto &[sessionId, info] : sessions)
@@ -563,6 +569,7 @@ int main(int argc, char *argv[])
                     context.spectateSweepTimer.Cancel();
                     context.clientLivenessSweepTimer.Cancel();
                     context.drainMigrationTimer.Cancel();
+                    context.loginRenewalTimer.Cancel();
                 };
                 node.SetMaintenanceRelayStop(stopGateTimers);
                 node.SetBeforeTeardown(stopGateTimers);
@@ -635,6 +642,9 @@ int main(int argc, char *argv[])
                         // 路由 lane 的在途过期扫描同理:客户端连进来之后就可能有在途调用。在途索引为空时每轮只做一次堆顶比较。
                         context.routerLaneExpiryTimer.RunEvery(gate_lane::kSweepIntervalSeconds, [] {
                             gate_lane::ExpireDue(std::chrono::steady_clock::now());
+                            // 场景 lane 的定时重投挂在同一拍(handler/rpc/client_scene_lane.h):玩家换场景节点时留在 gate 的请求
+                            // 靠它按序重投。没有会话在等重投时每拍只做一次 empty();随本定时器一起取消。
+                            gate_scene_lane::Tick(std::chrono::steady_clock::now());
                         });
                         // 观战空闲巡检与指标行:回调不捕获对象,hub 按弱引用找,没有了就是空操作(AGENTS.md §11.7)。
                         context.spectateSweepTimer.RunEvery(gate_spectate::kSweepIntervalSeconds, [] {
@@ -650,6 +660,11 @@ int main(int argc, char *argv[])
                         // 与上面几个扫描一样紧跟客户端回调装上;关源(disconnectAllClients)时取消。
                         context.drainMigrationTimer.RunEvery(gate_drain_migration::kTickIntervalSeconds, [] {
                             gate_drain_migration::Tick(std::chrono::steady_clock::now());
+                        });
+                        // 登录态续租:登录成功的连接活着期间,按 login 给的间隔定期续租它的登录态、设备集成员与绑定栅栏
+                        // (docs/design/gate-online-identity.md §10.4)。同样紧跟客户端回调装上;关源时取消。
+                        context.loginRenewalTimer.RunEvery(gate_login_renewal::kTickIntervalSeconds, [] {
+                            gate_login_renewal::Tick(std::chrono::steady_clock::now());
                         });
 
                         // 依赖门:路由模式下等的是路由服而不是 login —— gate 这时根本不连

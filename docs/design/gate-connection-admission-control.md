@@ -142,14 +142,14 @@ cookie 一点忙不帮）；反过来，应用层再怎么改也吸收不了带�
 | G3 | **只有总量、没有速率**。每秒建 5000 条又立刻关的攻击者永远碰不到 `:468` 那条闸 | `client_message_processor.cpp:468` 是唯一判据 |
 | G4 | **`RLIMIT_NOFILE` 全链路无人设**：镜像没设、k8s 没有该 API 字段、进程从不 `setrlimit`。containerd 依赖 systemd v240+ 隐式默认 **soft=1024**——真正生效的上限很可能是 ~1000 而不是 20000，**`GateMaxConnections` 那条分支是够不着的死代码** | `Dockerfile.runtime`/`Dockerfile.cpp` 无 ulimit；`cpp/` 下 `setrlimit` 仅命中 Windows shim |
 | G5 | **muduo 两行 per-connection `LOG_INFO` 抵消了全部采样纪律** | `TcpServer.cc:80`（newConnection）+ `:109`（removeConnectionInLoop）**无条件**；`Logging.h:20-29` 里 `INFO==2`；`node.cpp:1092-1098` 把 `log_level` **直接 `static_cast`** 进 `muduo::Logger::LogLevel`；而 `bin/etc/base_deploy_config.yaml:25` 是 `LogLevel: 2`，注释却写「2=WARN」——**注释错了，实际是 INFO，这两行现在就在打**。更糟：proto3 缺键得 0 = **TRACE**。**（2026-11-10 状态：已修，见 P0-3。注释已按 muduo 枚举改正，键现位于 `bin/etc/base_deploy_config.yaml:31`，生产值定为 2 = INFO；缺键 / 越界拒启。两行 per-connection 日志两个平台都已是 `LOG_TRACE`：Windows 的 `muduo_windows` 与 `third_party/muduo` 自 `52ebf9e5d`（2026-04-13），Linux 的 `third_party/muduo-linux` 经 `tools/archived/muduo_linux_overlay/muduo/net/TcpServer.cc`（2026-11-10 落码，未编译）。上面「这两行现在就在打」是修复前的状态）** |
-| G6 | **`sockets::accept` 对 `ENFILE`/`ENOBUFS`/`ENOMEM` 直接 `LOG_FATAL` → abort** | `SocketsOps.cc:125-156`。即便把连接上限调到 1，只要内核在 accept 时返回 `ENOBUFS`（连接洪水的典型产物）gate 照样崩。这条与 gate 自己的上限**完全正交** |
-| G7 | **`Acceptor` 的 EMFILE 分支自带日志洪水**：`LOG_SYSERR` 在 `errno==EMFILE` 判断**之外**，LT epoll + EMFILE = 忙循环，每转一圈一行同步日志 | `Acceptor.cc` handleRead 的 else 分支第一行。应用层采样在这一层完全帮不上忙 |
-| G8 | **`idleFd_` 不是可靠兜底**：`close(idleFd_)` 与 `::accept` 之间被别的线程抢走名额时 `idleFd_` 会变成 -1 且**没有任何重新装填路径**（重开 `/dev/null` 的返回值根本不检查），对进程剩余生命周期彻底失效 | `Acceptor.cc` EMFILE 分支。gate 进程里 grpc/redis/kafka 客户端都在别的线程开 fd，窗口是存在的 |
+| G6 | **`sockets::accept` 对 `ENFILE`/`ENOBUFS`/`ENOMEM` 直接 `LOG_FATAL` → abort** | `SocketsOps.cc:125-156`。即便把连接上限调到 1，只要内核在 accept 时返回 `ENOBUFS`（连接洪水的典型产物）gate 照样崩。这条与 gate 自己的上限**完全正交**。**（2026-11-12 状态：已改，未编译，见 P0-4。）** |
+| G7 | **`Acceptor` 的 EMFILE 分支自带日志洪水**：`LOG_SYSERR` 在 `errno==EMFILE` 判断**之外**，LT epoll + EMFILE = 忙循环，每转一圈一行同步日志 | `Acceptor.cc` handleRead 的 else 分支第一行。应用层采样在这一层完全帮不上忙。**（2026-11-12 状态：已改，未编译，见 P0-4。）** |
+| G8 | **`idleFd_` 不是可靠兜底**：`close(idleFd_)` 与 `::accept` 之间被别的线程抢走名额时 `idleFd_` 会变成 -1 且**没有任何重新装填路径**（重开 `/dev/null` 的返回值根本不检查），对进程剩余生命周期彻底失效 | `Acceptor.cc` EMFILE 分支。gate 进程里 grpc/redis/kafka 客户端都在别的线程开 fd，窗口是存在的。**（2026-11-12 状态：已改，未编译，见 P0-4。）** |
 | G9 | **零 per-source 限制**，且**做之前有前置条件未满足**：`peerAddress()` 全仓只出现在 5 行日志里；而 `gate-entry` Service 未设 `externalTrafficPolicy` → 默认 `Cluster` → kube-proxy SNAT → `peerAddress()` 拿到的是 **node IP**。**(2026-09-29 更正:前置条件在 external 形态下已由部署层满足,podip 形态仍不满足,见下方 §4.2.1;per-source 限制本身仍为零)** | `k8s_deploy.ps1:928-947`（Service spec 只有 type/selector/ports）——**行号已漂移**,2026-09-29 现为 `tools/scripts/k8s_deploy.ps1:2405-2424` `New-GateServiceYaml` |
 | G10 | **pre-auth 路径的按包防护为零**：`DispatchClientRpcMessage` 在 `:736` 的 `verified` 判定**排在** `ValidateClientMessage`（`:707`）之前；`DispatchTokenVerify`（`:780`）从头到尾不调限流器、也不调 `CheckMessageSize` | 未认证连接可反复让 gate 缓冲 64KB（`codec.h:64`）+ adler32 + 反射建 message + parse |
 | G11 | **gate 容器 BestEffort**：无 `resources`、无探针、无 `securityContext`、无 PDB。`oom_score_adj=1000`，节点内存压力时最先被驱逐，且连接洪峰打的是整个 node | `k8s_deploy.ps1:560-632`（`New-NodeDeploymentYaml` 全文）。对照 go-svc 的 login/gateway 都配了 limits |
 | G12 | **131071 硬上限是借来的**：`network_utils.h:12` 借 `snow_flake.h:26` 的 `kNodeBits=17` 当 seq 位宽。编译期打开 `ENABLE_SNOWFLAKE_TESTING` 会让它**静默变成 511**，并让默认的 `GateMaxConnections: 20000` 在 `main.cpp:116` 直接 `LOG_FATAL` | 两个语义完全无关的常量共用一个名字 |
-| G13 | **应用侧零 Prometheus 埋点** | `cpp/nodes/gate` 全仓 grep 不到 prometheus。现在只能靠内核计数器 + 采样日志间接推断 |
+| G13 | **应用侧零 Prometheus 埋点** | `cpp/nodes/gate` 全仓 grep 不到 prometheus。现在只能靠内核计数器 + 采样日志间接推断。**（2026-11-12 状态：C++ 节点已有 Prometheus 出口，`MMORPG_METRICS_PORT`；fd 用量与 accept 降级的指标已加，见 P0-4。P1-4 列的连接类 SLI 仍未做。）** |
 
 > **2026-10-18 G4 落码说明(未编译、未验证,待 Codex 跑容器级对照与 kind 实测)**:进程启动时自抬软限并做门槛检查,
 > 位置在引擎的 `Node::Initialize`(`LoadConfigs` / `InitLogSystem` 之后、`InitRpcServer` 连 Redis 之前),gate / scene / battle 都经过这里;
@@ -228,9 +228,13 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 >    代价:误配 `GateMaxConnections` > 131071 又碰上硬限不够时,先看到的是 fd 拒启而不是 gate 的上限报错(拒启文案里带配置键和取值,仍可诊断)。
 > 2. **不学 Redis 下调 `maxclients`**,抬不够就拒启:下调会让准入上限悄悄失真(login 仍按配置上限往这台 gate 派人),scene 也没有上限可以下调。
 >    余量取固定 4096(推算:gate 直连模式约 2Z 条到全服 scene_manager,scene 约 4Z 条到全服 SM / DS,Z ≈ 200~445),只是拒启门槛。
+>    (2026-11-12 定案:维持 4096,不再等实测。scene_manager 11-05 起按 zone 收窄、gate 到路由服只连按 zone 取的 k 台,
+>    上面随 Z 增长的那几项已经不存在;运行期够不够改由 `process_open_fds / process_max_fds` 超过 80% 的告警看。理由写在 `open_file_limit.h`。)
 > 3. **加了运维豁免开关** `NODE_OPEN_FILE_LIMIT_MODE`(缺省 enforce,`warn` 时只打 WARN 继续启动;负责人 2026-10-17 拍板)。
 >    理由:硬限在节点运行时层面,各集群尚未实测,工作区又会被整区快照带进镜像,scene 的门槛没有配置可调,不能只剩回滚镜像一种应急手段。
 >    C++ 节点没有指标出口(G13),豁免只进 stdout 与日志。
+>    (2026-11-12 更正:C++ 节点现在有指标出口,豁免是否生效以 `cpp_node_open_file_limit_exempted` 导出,
+>    带豁免运行超过 1 小时由 `CppNodeOpenFileLimitExempted` 告警。)
 > 验收订正见 §9.2 的 2026-10-18 注:gate / scene 的 PID 1 可能是 `sh`,不要读 `/proc/1/limits`。
 >
 > **2026-10-18 评审补充**:① warn 的代价比「超出的连接 EMFILE」大:本节准入闸门在 accept 拿到 fd 之后才判,上限没调时客户端连接先占满 fd 表,
@@ -310,6 +314,27 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 > 已经是一份被本地魔改过的 muduo（整套 WIN32 分支）。但注意 `third_party/muduo`（Windows）
 > 与 `third_party/muduo-linux` 是**两份独立副本，必须同改**，否则 Windows 编过、Linux 的 clang `-Werror` 红。
 
+> **2026-11-12 落码说明（未编译、未运行，待 Codex 验证；G7、G8 一并处理）**
+>
+> 只把三个 errno 挪进「预期错误」不够：`Acceptor` 只对 `EMFILE` 让位，`ENFILE` / `ENOBUFS` / `ENOMEM` 不 abort 之后，监听 fd 一直可读，循环会原地空转，每圈还打两行 ERROR。所以改成下面这样：
+>
+> - **分类**：`Acceptor::classifyAcceptFailure(errno)` 是纯函数，把 accept 失败分成四类：
+>   - 等下一次：`EAGAIN`、`EINTR`；
+>   - 这一条连接没了，接着接下一条：`ECONNABORTED`、`EPROTO`、`EPERM`，以及 accept(2) 列出的已排队连接上的网络错误（`ENETDOWN`、`EHOSTUNREACH` 等。上游把其中的 `EOPNOTSUPP` 也当致命错误）；
+>   - fd 用尽：`EMFILE`、`ENFILE`；
+>   - 内核缓冲或内存不足：`ENOBUFS`、`ENOMEM`。
+> - **fd 用尽**：用空闲 fd 让位，接进排在最前的连接再立刻关掉，对端马上看到断开、可以换一台重试。空闲 fd 重新占位失败时记成 -1，下次进来先补占（G8）。让位做不成就暂停监听。
+> - **内存不足，或让位做不成**：暂停监听 100ms 再恢复。期间新连接留在内核的全连接队列里，循环不空转。恢复用的定时器只持存活令牌的 weak（AGENTS §11.7）。
+> - **日志**：失败日志最多每秒一行，带这一秒里攒下的次数（G7）。连接自己没了打 WARN，资源耗尽打 ERROR。
+> - **仍然 `LOG_FATAL` 的**：编程错误（`EBADF`、`EFAULT`、`EINVAL`、`ENOTSOCK`）与不认识的 errno。
+> - **指标**：`cpp_node_accept_exhausted_total{reason}`、`cpp_node_accept_paused_total`，以及进程 fd 用量 `process_open_fds` / `process_max_fds`、启动门槛 `cpp_node_open_file_limit_required` / `_exempted`（`process_fd_metrics.h`）。告警在 `deploy/k8s/cpp-node-resource-alerts.yaml`。
+> - **改了哪几份**：muduo 现在是三份副本，都要改，由 `tools/scripts/tests/muduo_acceptor_copies_contract.tests.ps1` 守住。
+>   - `tools/archived/muduo_linux_overlay/muduo/net/{Acceptor.h,Acceptor.cc,SocketsOps.cc}`：Linux 构建时覆盖进 muduo-linux，生产用的是这份；
+>   - `cpp/libs/engine/muduo_windows/src/muduo/net/` 下同名三个文件：Windows 编进 muduo.lib；
+>   - `third_party/muduo/muduo/net/` 下同名三个文件：业务代码 include 实际命中的头文件镜像。`Acceptor` 加了成员，镜像不同步会导致类布局对不上。
+> - **顺带**：任何一处 `LOG_FATAL` 在 abort 之前都会把最后一行同步写进 stderr（`node.cpp` 的 `EchoFatalLineToStderr`，经 `muduo::Logger::setFlush` 挂上）。gate / battle 的启动门禁原来直接 `LOG_FATAL`，Linux 上日志只进异步文件，`kubectl logs --previous` 里看不到原因；现在不用逐个调用点改。
+> - **这次没有碰**：把容量闸前移到 `Acceptor`（P1-1）、拒绝时发 RST（P1-2）、新建连接速率闸（P1-3）、连接类 SLI（P1-4），现状以各节为准。
+
 ### P1-1 · 把容量闸前移到 `Acceptor`（对应 G2）
 
 `TcpServer` 把 `acceptor_` 放在 private 且注释写着 "avoid revealing Acceptor"，
@@ -369,8 +394,8 @@ muduo 全库零 `SO_LINGER`，`TcpConnection` 也不暴露 fd，所以必须加 
 
 ⚠️ **改法与直觉不同**：C++ gate **没有静态 YAML**，它的 Deployment/Service 由
 `tools/scripts/k8s_deploy.ps1` 的 `New-NodeDeploymentYaml`（:560）/ `New-GateServiceYaml`（:928）
-在 apply 时 here-string 现拼。`deploy/k8s/manifests/go-svc/gateway.yaml` 和
-`java-svc/gateway.yaml` **都不是它**（是 Go/Java 的 HTTP 网关，ClusterIP:8080/8081）。
+在 apply 时 here-string 现拼。`deploy/k8s/manifests/java-svc/gateway.yaml` **不是它**
+（那是 Java 的 HTTP 网关，ClusterIP:8081；同名的 `go-svc/gateway.yaml` 是从不部署的旧清单，2026-11-12 已删）。
 改动必须落在那两个 PowerShell 函数里，并同步补一条
 `tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的契约断言（那里已经有对 `GateMaxConnections` 的断言先例）。
 

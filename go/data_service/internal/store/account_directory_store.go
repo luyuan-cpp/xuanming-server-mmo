@@ -40,8 +40,8 @@ type AccountDirectoryStore struct {
 	names roleNameRegistry
 	// 读路径发现的陈旧 ref,等后台清。
 	staleRefs chan staleRefKey
-	// 账本和展示资料读的名额,见 acquirePlayerStoreRead。
-	playerStoreReads chan struct{}
+	// directoryReads 是目录每一片留给账本、展示读的名额(readSlots),下标是片号。存档库那一侧的名额在 stores 里。
+	directoryReads []readSlots
 	// removalCursor 让删角收尾逐轮换起点。
 	removalCursor atomic.Uint64
 	// preparingCursor 让超时 PREPARING 的撤销逐轮换起点。
@@ -73,9 +73,14 @@ func NewAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, max
 	if err != nil {
 		return nil, err
 	}
+	// 每片一个池,每个池一份读名额;maxOpenConn 就是每片池的上限。
+	directoryReads := make([]readSlots, shards.k)
+	for slot := range directoryReads {
+		directoryReads[slot] = newReadSlots(maxOpenConn)
+	}
 	s := &AccountDirectoryStore{shards: shards, backend: backend, maxRoles: maxRoles, cfg: cfg,
-		staleRefs:        make(chan staleRefKey, staleRefQueueSize),
-		playerStoreReads: make(chan struct{}, playerStoreReadLimit(maxOpenConn))}
+		staleRefs:      make(chan staleRefKey, staleRefQueueSize),
+		directoryReads: directoryReads}
 	s.steps = &sqlDirectorySteps{shards: shards, directory: s}
 	return s, nil
 }

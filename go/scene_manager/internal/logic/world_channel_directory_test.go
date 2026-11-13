@@ -64,7 +64,7 @@ func seedDirectoryChannel(t *testing.T, mr *miniredis.Miniredis, sceneID uint64,
 	_, err := mr.SAdd(worldChannelsKey(testZoneId, directoryTestConfID), strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 	if nodeID != "" {
-		require.NoError(t, mr.Set(sceneNodeKey(sceneID), nodeID))
+		require.NoError(t, mr.Set(sceneNodeKey(testZoneId, sceneID), nodeID))
 	}
 	seedSceneMembers(mr, sceneID, int(players))
 }
@@ -472,8 +472,8 @@ func TestPublishWorldChannelDirectory_DrainedLineReleasesItsNumber(t *testing.T)
 	// B 走空并销毁(finishDrainedChannel:摘出回收中集合、删映射与人数),随后扩出新线 D。
 	_, err := mr.SRem(worldDrainingSetKey(testZoneId, directoryTestConfID), sceneKey(lineSceneB))
 	require.NoError(t, err)
-	mr.Del(sceneNodeKey(lineSceneB))
-	mr.Del(instanceMembersKey(lineSceneB))
+	mr.Del(sceneNodeKey(testZoneId, lineSceneB))
+	mr.Del(instanceMembersKey(testZoneId, lineSceneB))
 	seedDirectoryChannel(t, mr, lineSceneD, "10", 0)
 	require.Equal(t, 1, PublishWorldChannelDirectoriesForZone(ctx, sc, testZoneId, directoryTestNow))
 
@@ -507,8 +507,8 @@ func TestPublishWorldChannelDirectory_MoveToDrainingBetweenTheTwoReadsKeepsLineA
 	// A(1 线)彻底销毁,腾出 1 号:此后 C 只要丢过一次号,重发时就会从 3 变成 1。
 	_, err := mr.SRem(activeKey, sceneKey(lineSceneA))
 	require.NoError(t, err)
-	mr.Del(sceneNodeKey(lineSceneA))
-	mr.Del(instanceMembersKey(lineSceneA))
+	mr.Del(sceneNodeKey(testZoneId, lineSceneA))
+	mr.Del(instanceMembersKey(testZoneId, lineSceneA))
 	require.Equal(t, 1, PublishWorldChannelDirectoriesForZone(ctx, sc, testZoneId, directoryTestNow))
 	wantLineNos := map[string]string{sceneKey(lineSceneB): "2", sceneKey(lineSceneC): "3"}
 	require.Equal(t, wantLineNos, lineNoTable(t, sc))
@@ -577,9 +577,9 @@ func TestPublishWorldChannelDirectory_BadPlayerCountShowsZero(t *testing.T) {
 	sc, mr := newChannelDirectoryCtx(t)
 	seedDirectoryChannel(t, mr, lineSceneA, "10", 0)
 	seedDirectoryChannel(t, mr, lineSceneB, "10", 0)
-	require.NoError(t, mr.Set(instanceMembersKey(lineSceneB), "not-a-set"))
+	require.NoError(t, mr.Set(instanceMembersKey(testZoneId, lineSceneB), "not-a-set"))
 	seedDirectoryChannel(t, mr, lineSceneC, "10", 0)
-	mr.Del(instanceMembersKey(lineSceneC))
+	mr.Del(instanceMembersKey(testZoneId, lineSceneC))
 
 	require.Equal(t, 1, PublishWorldChannelDirectoriesForZone(context.Background(), sc, testZoneId, directoryTestNow))
 
@@ -655,7 +655,7 @@ func TestPublishWorldChannelDirectory_OneMapFailingDoesNotBlockOthers(t *testing
 
 	_, err := mr.SAdd(worldChannelsKey(testZoneId, otherConf), sceneKey(lineSceneB))
 	require.NoError(t, err)
-	require.NoError(t, mr.Set(sceneNodeKey(lineSceneB), "10"))
+	require.NoError(t, mr.Set(sceneNodeKey(testZoneId, lineSceneB), "10"))
 
 	assert.Equal(t, 1, PublishWorldChannelDirectoriesForZone(context.Background(), sc, testZoneId, directoryTestNow),
 		"只有 otherConf 发布成功")

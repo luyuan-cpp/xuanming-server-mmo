@@ -128,7 +128,6 @@ spec:
             - {name: sql-writer-grant, mountPath: /run/sql-writer/grant, readOnly: true}
             - {name: sql-writer-consume, mountPath: /run/sql-writer/consume}
             - {name: svc-config, mountPath: /app/etc, readOnly: true}
-            - {name: snowflake-cache, mountPath: /run/snowflake}
       volumes:
         - name: sql-writer-request
           secret: {secretName: PLACEHOLDER_SQL_WRITER_REQUEST_SECRET, defaultMode: 288}
@@ -140,8 +139,6 @@ spec:
           emptyDir: {medium: Memory, sizeLimit: 1Mi}
         - name: svc-config
           emptyDir: {medium: Memory, sizeLimit: 20Mi}
-        - name: snowflake-cache
-          emptyDir: {}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

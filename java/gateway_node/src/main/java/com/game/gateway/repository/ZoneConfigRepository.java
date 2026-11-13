@@ -77,6 +77,18 @@ public interface ZoneConfigRepository extends Repository<ZoneConfig, Long> {
     String UPDATE_CREATE_ROLE_CLOSED_JPQL = "UPDATE ZoneConfig z SET z.createRoleClosed = :closed, z.updatedAt = :now"
             + " WHERE z.zoneId = :zoneId";
 
+    /** {@link #updateRoleCapacity} 的语句(JPQL)。 */
+    String UPDATE_ROLE_CAPACITY_JPQL = "UPDATE ZoneConfig z SET z.roleCapacity = :roleCapacity, z.updatedAt = :now"
+            + " WHERE z.zoneId = :zoneId";
+
+    /**
+     * {@link #closeCreateRoleAtRoleCapacity} 的语句(JPQL):带条件的关闭。条件里的上限必须仍是做判断时读到的那个值、
+     * 且开关还开着,否则一行都不改。
+     */
+    String CLOSE_CREATE_ROLE_AT_ROLE_CAPACITY_JPQL = "UPDATE ZoneConfig z SET z.createRoleClosed = TRUE, z.updatedAt = :now"
+            + " WHERE z.zoneId = :zoneId AND z.roleCapacity = :roleCapacity AND z.roleCapacity > 0"
+            + " AND z.createRoleClosed = FALSE";
+
     /** {@link #deleteByZoneId} 的语句(JPQL)。Hibernate 翻译成按主键定位的单条 DELETE。 */
     String DELETE_BY_ID_JPQL = "DELETE FROM ZoneConfig z WHERE z.zoneId = :zoneId";
 
@@ -186,6 +198,31 @@ public interface ZoneConfigRepository extends Repository<ZoneConfig, Long> {
     @Query(UPDATE_CREATE_ROLE_CLOSED_JPQL)
     int updateCreateRoleClosed(@Param("zoneId") Long zoneId, @Param("closed") boolean closed,
                                @Param("now") LocalDateTime now);
+
+    /**
+     * 只改本区角色上限(0 = 不设),刷新 updated_at;其余列不动(2026-11-12)。区服不存在时什么也不写。
+     * 取锁与返回值口径同 {@link #updateSettings}。
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Transactional
+    @Query(UPDATE_ROLE_CAPACITY_JPQL)
+    int updateRoleCapacity(@Param("zoneId") Long zoneId, @Param("roleCapacity") int roleCapacity,
+                           @Param("now") LocalDateTime now);
+
+    /**
+     * 角色数到了上限,关上本区的创角开关(RoleCapacityGuard 用,2026-11-12)。比较并写:只有上限仍是 {@code roleCapacity}
+     * (判断时读到的值)、上限大于 0、开关还开着时才改,否则一行都不改。运维在判断之后调高上限、置 0 或已手工关上,
+     * 这次关闭都不生效,下一拍按新值重判,所以一个按旧上限做出的判断盖不掉运维更新的设置。
+     *
+     * <p>返回 1 = 这次关上了,0 = 条件已不成立(或区服不在)。与 {@link #updateSettings} 不同,这里的返回值可以用:
+     * 条件里含 {@code createRoleClosed = FALSE} 而 SET 把它改成 TRUE,命中的行一定被改,found rows 与 affected rows
+     * 相同。单条按主键的 UPDATE,只取这一条记录的 X。
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Transactional
+    @Query(CLOSE_CREATE_ROLE_AT_ROLE_CAPACITY_JPQL)
+    int closeCreateRoleAtRoleCapacity(@Param("zoneId") Long zoneId, @Param("roleCapacity") int roleCapacity,
+                                      @Param("now") LocalDateTime now);
 
     /**
      * 按主键删除,返回删掉的行数(0 = 本来就不在)。DELETE 的行数就是真正删掉的行数,不受 found rows 参数影响,

@@ -253,4 +253,30 @@ Test-Case '两份清单的对外名字一致:Service loki:3100 与 ConfigMap lok
     Assert-NotMatch -Text $deploy -Pattern '\$infraManifests \+= "loki\.yaml"' -Because '不再无条件追加单副本那份'
 }
 
+Test-Case '包装入口 dev_tools.ps1、k8s_image.ps1 声明并转传全部 Loki 参数:非 dev 档经它们做 infra 部署才给得出对象存储地址' {
+    # staging / prod 缺省是 3 副本,必须给 -LokiS3Endpoint 与 -LokiS3Bucket。包装入口传不进这些参数时,k8s-infra-up / k8s-all-up /
+    # k8s-release-all 在非 dev 档只能被 Assert-LokiDeployPreflight 拦下(2026-11-10 批 B 落码时漏了这一步)。
+    $names = @('LokiReplicas', 'LokiS3Endpoint', 'LokiS3Bucket', 'LokiS3Region', 'LokiS3ForcePathStyle', 'LokiS3Insecure', 'LokiS3DevFixture', 'ConfirmLokiTopologyChange')
+    $declared = {
+        param([string]$Script)
+        $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) $Script), [ref]$null, [ref]$errors)
+        if ($errors.Count -gt 0) { throw "$Script 语法错误: $($errors[0].Message)" }
+        return @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+    }
+    $deployLoki = @((& $declared 'k8s_deploy.ps1') | Where-Object { $_ -clike '*Loki*' -and $_ -cne 'LokiPushUrl' } | Sort-Object)
+    Assert-Equal -Expected (($names | Sort-Object) -join ',') -Actual ($deployLoki -join ',') -Because 'k8s_deploy.ps1 增减 Loki 参数时,本清单与两个包装入口要一起改'
+    foreach ($script in @('dev_tools.ps1', 'k8s_image.ps1')) {
+        $params = & $declared $script
+        $text = [IO.File]::ReadAllText((Join-Path (Get-ToolsScriptsDir) $script))
+        # dev_tools.ps1 有两条路都要转传:Invoke-K8sDeploy(直接调 k8s_deploy.ps1)与 Invoke-K8sImage(经 k8s_image.ps1)。
+        $expectedForwards = if ($script -ceq 'dev_tools.ps1') { 2 } else { 1 }
+        foreach ($name in $names) {
+            Assert-True -Condition ($params -ccontains $name) -Because "$script 声明 -$name"
+            $forwards = [regex]::Matches($text, '\$args\.' + [regex]::Escape($name) + ' = ').Count
+            Assert-Equal -Expected $expectedForwards -Actual $forwards -Because "$script 转传 -$name 的处数"
+        }
+    }
+}
+
 exit (Complete-TestRun -SuiteName 'in-cluster Loki deployment contract')

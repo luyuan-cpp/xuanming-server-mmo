@@ -34,6 +34,8 @@ class Service;
 
 // Prometheus /metrics 出口(core/metrics/metrics_http_exporter.h),完整定义只在 node.cpp 里需要。
 class MetricsHttpExporter;
+// 热关停的 etcd 同步(node/system/etcd/kill_switch_etcd_sync.h),完整定义只在 node.cpp 里需要。
+class KillSwitchEtcdSync;
 struct NodeMaintenanceControl;
 
 // Tracks a pending node removal that can be cancelled if the node re-registers.
@@ -297,6 +299,9 @@ protected:
     void StartKafkaPolling();
     virtual bool RegisterKafkaHandlers() { return kafkaHandlersFn_ ? kafkaHandlersFn_(*this) : true; }
     void InitEtcdService();
+    // 热关停(docs/design/rpc-kill-switch.md):登记本进程身份(节点类型、uuid),开独立的 etcd 同步。
+    // 只在 Initialize 里、InitRpcServer 定下身份之后调一次。
+    void InitKillSwitch();
     // 按 MMORPG_METRICS_PORT 开 Prometheus 出口(未设 = 不开;非法值拒启)。只在 Initialize 里调一次。
     void StartMetricsExporter();
 
@@ -342,6 +347,8 @@ protected:
     RpcServerPtr rpcServer;
     // /metrics 出口:在 loop 线程创建,FinalizeTeardownInLoop 里随出站连接一起释放(TcpServer 必须在 loop 活着时析构)。
     std::unique_ptr<MetricsHttpExporter> metricsExporter_;
+    // 热关停的独立 etcd 连接:InitKillSwitch 创建,CloseTransportOwnersInLoop 里与注册那条传输一起 Shutdown(loop 仍在运行)。
+    std::unique_ptr<KillSwitchEtcdSync> killSwitchSync_;
     TimerTaskComp serviceHealthMonitorTimer;
     // 注意:node_id / 端口的重试定时器住在 EtcdService(它才是驱动注册流的那个类)。
     // Node 这里曾经有一份同名成员,但从来没被 RunAfter 过,只在 Shutdown 里被 Cancel ——

@@ -1,0 +1,93 @@
+# C++ 节点(gate / scene / battle)fd 用量与 accept 降级的告警(gate 准入设计 G4 / G6,
+# docs/design/gate-connection-admission-control.md;B0-4 启动门槛的运行期观测面)。
+#
+# 指标由 C++ 节点的 Prometheus 出口导出(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400,
+# 抓取注解随 Pod 模板渲染),定义在 cpp/libs/engine/core/node/system/node/process_fd_metrics.h。
+#   - process_open_fds / process_max_fds 用的是 Prometheus 客户端库的标准名字,Go 服务(client_golang 的进程采集器)
+#     导出同名指标,所以第一条规则同时管住 C++ 节点与 Go 服务;只在 Linux 上有这两个序列。
+#   - cpp_node_accept_* 与 cpp_node_open_file_limit_* 只有 C++ 节点导出;accept 计数进程一启动就以 0 导出,
+#     increase() 抓得到第一次。
+# 规则引用的指标名与标签取值由 tools/scripts/tests/cpp_node_resource_alerts_contract.tests.ps1 对照 C++ 源码钉住。
+# 处置见 docs/ops/gate-kernel-tuning-runbook.md §3.1。
+#
+# 安装(与其余告警文件相同,手工 apply):
+#   kubectl apply -n observability -f deploy/k8s/cpp-node-resource-alerts.yaml
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cpp-node-resource-alerts
+  labels:
+    app: cpp-node
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: cpp-node.resources
+      interval: 30s
+      rules:
+        # fd 用量逼近软限。启动门槛只保证「准入上限 + 4096 余量」放得下;fd 泄漏、余量估小了、带豁免运行,
+        # 都会在这里先露头,比 accept 失败、Redis / Kafka / etcd 重连失败早。
+        - alert: ProcessOpenFilesNearLimit
+          expr: |
+            max by (namespace, instance) (process_open_fds / process_max_fds) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 打开的 fd 已超过软限的 80%({{ $value | printf \"%.2f\" }})"
+            description: >-
+              看这个进程的 process_open_fds 是持续上涨(泄漏)还是跟着连接数走(容量)。gate / battle 跟着连接数走时,
+              先把准入上限(GateMaxConnections / BattleMaxConnections)调到软限以内或加台数;节点池的 nofile 硬限太低时
+              按运维手册改节点运行时的 LimitNOFILE。fd 用尽之后节点间、Redis、Kafka、etcd 的重连都会失败,不要等到那时。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # accept 因资源耗尽失败过。监听端已降级(让位排掉连接或暂停监听),进程不会崩,但这段时间新连接进不来。
+        - alert: CppNodeAcceptResourceExhausted
+          expr: |
+            sum by (namespace, instance, reason) (increase(cpp_node_accept_exhausted_total[5m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} accept 因 {{ $labels.reason }} 耗尽失败({{ $value | printf \"%.0f\" }} 次 / 5 分钟)"
+            description: >-
+              reason=descriptors 是 fd 用尽(进程级 EMFILE 或全机级 ENFILE):对照 process_open_fds / process_max_fds 与节点的
+              fs.file-nr;reason=memory 是内核缓冲或内存不足(ENOBUFS / ENOMEM):看节点内存与 Pod 的内存限额。
+              节点日志里有限频的 `Acceptor: accept failed, errno=...` 行,带具体 errno 与当时采取的动作。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 耗尽持续了 5 分钟以上:这台节点一直接不进新连接,不是一次尖峰。
+        - alert: CppNodeAcceptResourceExhaustedSustained
+          expr: |
+            sum by (namespace, instance) (increase(cpp_node_accept_exhausted_total[5m])) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 连续 5 分钟以上 accept 因资源耗尽失败"
+            description: >-
+              这台节点持续接不进新连接。gate 上先把它从入口摘掉(排空)止血,再按 CppNodeAcceptResourceExhausted 的说明查
+              fd 与内存;cpp_node_accept_paused_total 也在涨说明连让位都做不到,监听在反复暂停。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 节点带着 NODE_OPEN_FILE_LIMIT_MODE=warn 豁免在跑:启动时软限低于需求。豁免只是「硬限暂时改不了又必须先起服」的
+        # 短时应急,留着就等于随时可能 fd 用尽。
+        - alert: CppNodeOpenFileLimitExempted
+          expr: |
+            max by (namespace, instance) (cpp_node_open_file_limit_exempted) == 1
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 已带 fd 上限豁免运行超过 1 小时"
+            description: >-
+              这个节点启动时 RLIMIT_NOFILE 软限低于 cpp_node_open_file_limit_required,靠 NODE_OPEN_FILE_LIMIT_MODE=warn 才起得来。
+              把节点池的 nofile 硬限调够(或把准入上限调到软限 − 4096 以内),然后去掉豁免重新部署
+              (k8s_deploy.ps1 不传 -NodeOpenFileLimitMode 即回到 enforce)。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md

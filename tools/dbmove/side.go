@@ -193,6 +193,26 @@ func (a *sqlAdmin) SchemaExists(ctx context.Context, schema string) (bool, error
 	return count != 0, err
 }
 
+// TablesWithoutPrimaryKey 见 adminSide。判据和校验和那边同一个(hasPrimaryKey):information_schema.statistics 里有没有 PRIMARY 这个索引。
+// 两条简单查询在这里做差:information_schema 上的关联子查询各后端支持得不一样。
+func (a *sqlAdmin) TablesWithoutPrimaryKey(ctx context.Context, schema string) ([]string, error) {
+	tables, err := queryNames(ctx, a.db, baseTablesSQL, schema)
+	if err != nil {
+		return nil, err
+	}
+	keyed, err := queryNames(ctx, a.db, "SELECT DISTINCT table_name FROM information_schema.statistics WHERE table_schema=? AND index_name=?", schema, primaryIndexName)
+	if err != nil {
+		return nil, err
+	}
+	var missing []string
+	for _, table := range tables {
+		if !slices.Contains(keyed, table) {
+			missing = append(missing, table)
+		}
+	}
+	return missing, nil
+}
+
 func (a *sqlAdmin) CreateSchema(ctx context.Context, schema, charset, collation string) error {
 	if !identifierRe.MatchString(schema) || !identifierRe.MatchString(charset) || !identifierRe.MatchString(collation) {
 		return errors.New("bad database name, charset or collation")

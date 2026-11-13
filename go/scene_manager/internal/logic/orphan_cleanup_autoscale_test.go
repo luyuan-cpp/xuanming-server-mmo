@@ -42,7 +42,7 @@ func TestOrphanCleanup_ReleasesAgonesRoomAndDesiredCount(t *testing.T) {
 
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-a"), "被删地图的频道必须把 Agones 名额还回去")
 
-	gs, _ := sc.Redis.Get(sceneAgonesGsKey(701))
+	gs, _ := sc.Redis.Get(sceneAgonesGsKey(testZoneId, 701))
 	assert.Equal(t, "", gs, "agones_gs 映射不能泄漏")
 
 	desired, _ := sc.Redis.Hget(worldDesiredChannelsKey(testZoneId), strconv.FormatUint(deadConf, 10))
@@ -70,19 +70,17 @@ func TestOrphanCleanup_AlsoCleansDrainingChannels(t *testing.T) {
 	drainingStr := strconv.FormatUint(drainingScene, 10)
 	_, err := sc.Redis.Sadd(worldDrainingSetKey(testZoneId, deadConf), drainingStr)
 	require.NoError(t, err)
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(drainingScene), "10"))
-	require.NoError(t, sc.Redis.Set(sceneZoneKey(drainingScene),
-		strconv.FormatUint(uint64(testZoneId), 10)))
-	require.NoError(t, sc.Redis.Setex(sceneDrainingKey(drainingScene), "1", 300))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, drainingScene), "10"))
+	require.NoError(t, sc.Redis.Setex(sceneDrainingKey(testZoneId, drainingScene), "1", 300))
 	seedAgonesRoom(t, sc, alloc, drainingScene, "gs-a")
 
 	removed := CleanupOrphanWorldChannels(ctx, sc)
 	require.Equal(t, 1, removed)
 
-	node, _ := sc.Redis.Get(sceneNodeKey(drainingScene))
+	node, _ := sc.Redis.Get(sceneNodeKey(testZoneId, drainingScene))
 	assert.Equal(t, "", node, "排空中的频道必须一起清掉,否则它的 key 永久残留")
 
-	mark, _ := sc.Redis.Exists(sceneDrainingKey(drainingScene))
+	mark, _ := sc.Redis.Exists(sceneDrainingKey(testZoneId, drainingScene))
 	assert.False(t, mark, "排空标记必须清掉")
 
 	// 两个频道各还一份名额:3 - 2 = 1。
@@ -104,7 +102,7 @@ func TestOrphanCleanup_LeavesValidConfUntouched(t *testing.T) {
 
 	assert.Equal(t, 0, CleanupOrphanWorldChannels(ctx, sc))
 
-	node, _ := sc.Redis.Get(sceneNodeKey(101))
+	node, _ := sc.Redis.Get(sceneNodeKey(testZoneId, 101))
 	assert.NotEqual(t, "", node)
 
 	desired, _ := sc.Redis.Hget(worldDesiredChannelsKey(testZoneId),
