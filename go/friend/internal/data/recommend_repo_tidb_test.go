@@ -46,7 +46,6 @@ import (
 	drivermysql "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 
 	"friend/internal/sqldialect"
 )
@@ -204,7 +203,7 @@ func resetFriendTiDBSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 func newFriendTiDBTestRepo(t *testing.T, db *sql.DB) *FriendRepo {
 	t.Helper()
 	mr := miniredis.RunT(t)
-	rdb := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
+	rdb := newControlTestRedis(t, mr)
 	opts := testFriendRepoOptions(testListReadHardLimit)
 	opts.SQLDialect = sqldialect.TiDB
 	return NewFriendRepo(rdb, db, opts)

@@ -1,0 +1,92 @@
+syntax = "proto3";
+package paymentpb;
+option go_package = "payment/proto/payment";
+import "proto/db/proto_option.proto";
+
+// 支付服务独占库 mmorpg_payment 的表结构,唯一事实源(port-decisions D-14;docs/design/payment-recharge.md §22.4)。
+// - 建表 / 加列只经 go/schemamigrate;业务 SQL 手写,行直接扫进本文件的 message,不另写 Go struct(AGENTS §3)。
+// - 主键只用整数列。两张表的主键都由自然键确定性派生,不向号段取号:收到渠道回调时不依赖 data_service。
+//   订单号是 UUID,拆成高低两个 uint64;渠道交易号取 SHA-256 的前 16 字节,读回后再比对原文。
+// - 字段号上线后不复用,删列写 reserved(AGENTS §4)。本文件不进客户端的协议清单。
+
+// 一笔渠道付款在商城那边的落账进度。
+enum PayMallState {
+  PAY_MALL_STATE_UNSPECIFIED = 0;
+  PAY_MALL_STATE_PENDING = 1;       // 还没被商城确认,推进任务按 next_attempt_ms 重投
+  PAY_MALL_STATE_BOUND = 2;         // 商城已记为订单本身的付款
+  PAY_MALL_STATE_REFUND_QUEUED = 3; // 商城已记下,但这笔钱转退款,原因在 mall_refund_reason
+  PAY_MALL_STATE_REJECTED = 4;      // 商城明确拒收,不再重投,人工处理
+  // 不投商城,人工处理:商户单号不是本服务发出的形状,或者本服务记账之前这笔钱已在渠道侧转了退款
+  // (不是经商城退款待办发起的,发货就会钱货两失)。原因写在 mall_last_error。
+  PAY_MALL_STATE_ORPHAN = 5;
+}
+
+// 一笔渠道付款的退款进度。只有商城的退款待办会发起退款,一笔付款至多退一次、全额退。
+enum PayRefundState {
+  PAY_REFUND_STATE_NONE = 0;
+  PAY_REFUND_STATE_REQUESTED = 1; // 渠道已受理,处理中
+  PAY_REFUND_STATE_SUCCEEDED = 2; // 渠道已退,待回执商城
+  PAY_REFUND_STATE_REPORTED = 3;  // 商城已确认退款回执
+  PAY_REFUND_STATE_FAILED = 4;    // 渠道明确退款失败,不再自动重试,人工处理
+}
+
+// 支付意图:一张商城订单至多一行,渠道在第一次建意图时定下,之后不变。
+message PaymentIntentRecord {
+  option (OptionTableName) = "payment_intent";
+  option (OptionPrimaryKey) = "order_hi,order_lo";
+  // 主动查单与到期关单的扫描:只扫 state=CREATED 的行。
+  option (OptionIndex) = "state,next_check_ms";
+
+  uint64 order_hi = 1;      // 商城订单号(UUID)的高 64 位
+  uint64 order_lo = 2;      // 低 64 位
+  string order_id = 3;      // 订单号原文,只读展示;定位用上面两列
+  uint64 player_id = 4;     // 买家,取自商城订单
+  uint32 channel = 5;       // PayChannel
+  uint64 amount_minor = 6;  // 建意图时商城冻结的应付金额
+  string currency = 7;
+  uint32 state = 8;         // PayIntentState
+  uint64 expire_ms = 9;     // 商城的支付截止时刻,也是报给渠道的订单失效时刻
+  uint64 next_check_ms = 10; // 下一次主动查单的时刻;领取时先推后,进程崩溃后到点重新可见
+  uint32 check_count = 11;
+  uint64 checked_ms = 12;   // 最近一次向渠道查单的时刻,客户端轮询触发的查单按它限频
+  uint64 created_ms = 13;
+  uint64 updated_ms = 14;
+  // 渠道侧的预下单引用:微信是 prepay_id(两小时有效),同一订单再次调起时复用,不再向微信下单;
+  // 支付宝的订单串在本服务本地签名,不需要它,为空。
+  string channel_ref = 15;
+  uint64 channel_ref_ms = 16; // 拿到 channel_ref 的时刻
+}
+
+// 渠道付款事实:渠道确认过的一笔钱。同一笔只记一行,金额币种是渠道实收值。
+message PaymentTxnRecord {
+  option (OptionTableName) = "payment_txn";
+  option (OptionPrimaryKey) = "channel,txn_hi,txn_lo";
+  // 推进商城的扫描:只扫 mall_state=PENDING 的行。
+  option (OptionIndex) = "mall_state,next_attempt_ms";
+
+  uint32 channel = 1;           // PayChannel
+  uint64 txn_hi = 2;            // SHA-256(transaction_id) 的第 0~7 字节
+  uint64 txn_lo = 3;            // 第 8~15 字节
+  string transaction_id = 4;    // 渠道交易号原文(微信 transaction_id、支付宝 trade_no),报给商城的就是它
+  uint64 order_hi = 5;          // 对应的支付意图;孤儿为 0
+  uint64 order_lo = 6;
+  string out_trade_no = 7;      // 渠道回报的商户单号原文,排查孤儿用
+  uint64 player_id = 8;         // 意图上的买家;孤儿为 0
+  uint64 paid_amount_minor = 9; // 渠道实收
+  string paid_currency = 10;
+  uint64 paid_ms = 11;          // 渠道给的支付完成时刻
+  uint32 mall_state = 12;       // PayMallState
+  string mall_refund_reason = 13; // 商城应答的 refundReason 原文
+  uint32 mall_attempts = 14;
+  uint64 next_attempt_ms = 15;  // 下一次投商城的时刻;领取时先推后
+  string mall_last_error = 16;  // 最近一次失败或转人工的原因类别,不含请求体与密钥
+  uint32 refund_state = 17;     // PayRefundState
+  string out_refund_no = 18;    // 报给渠道的退款单号,由渠道交易号确定性派生
+  string refund_id = 19;        // 报给商城的退款流水号
+  uint64 refund_ms = 20;        // 渠道给的退款完成时刻
+  uint32 refund_attempts = 21;
+  uint64 refund_next_ms = 22;   // 下一次处理退款的时刻;领取时先推后
+  string refund_last_error = 23;
+  uint64 created_ms = 24;
+  uint64 updated_ms = 25;
+}

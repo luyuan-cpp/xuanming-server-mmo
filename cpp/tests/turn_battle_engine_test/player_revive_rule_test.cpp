@@ -160,6 +160,52 @@ TEST(PlayerReviveRuleTest, ApplyingTwiceIsIdempotent) {
     EXPECT_EQ(attrs.SerializeAsString(), after.SerializeAsString());
 }
 
+// 职业常量每次加载都按职业表写回(存档里不存,2026-11-12):已有的值被覆盖,当前血蓝不动。
+TEST(PlayerReviveRuleTest, ClassConstantsOverwriteStoredValuesAndKeepVitals) {
+    BaseAttributesComp attrs;
+    attrs.set_health(123);
+    attrs.set_mana(7);
+    attrs.set_strength(77);
+    attrs.set_armor(33);
+    attrs.set_resistance(9);
+    attrs.set_critchance(4);
+    attrs.set_speed(41);
+
+    ApplyClassConstants(attrs, MakeClassRow());
+
+    EXPECT_EQ(attrs.strength(), 20u);
+    EXPECT_EQ(attrs.armor(), 10u);
+    EXPECT_EQ(attrs.resistance(), 5u);
+    EXPECT_EQ(attrs.critchance(), 10u);
+    EXPECT_EQ(attrs.speed(), 20u);
+    EXPECT_EQ(attrs.health(), 123u) << "当前血蓝是存档里唯一的真状态,不归职业表管";
+    EXPECT_EQ(attrs.mana(), 7u);
+}
+
+// 加载路径的组合:存档里只有血蓝 → 血量规则 → 职业常量。
+// 活人保住残血并拿到职业常量;0 血的(新号,或阵亡后下线)回满并拿到职业常量。
+TEST(PlayerReviveRuleTest, LoadedVitalsOnlyRecordEndsWithClassConstants) {
+    const ClassTable cls = MakeClassRow();
+
+    BaseAttributesComp alive;
+    alive.set_health(123);
+    alive.set_mana(7);
+    EXPECT_EQ(ApplyClassInitialAttributesOrRevive(alive, cls), PlayerReviveOutcome::kUntouched);
+    ApplyClassConstants(alive, cls);
+    EXPECT_EQ(alive.health(), 123u);
+    EXPECT_EQ(alive.mana(), 7u);
+    EXPECT_EQ(alive.strength(), 20u);
+    EXPECT_EQ(alive.critchance(), 10u);
+
+    BaseAttributesComp dead;  // 阵亡后下线:存档里血量 0,其余字段本来就不存
+    dead.set_mana(13);
+    EXPECT_EQ(ApplyClassInitialAttributesOrRevive(dead, cls), PlayerReviveOutcome::kInitialized);
+    ApplyClassConstants(dead, cls);
+    EXPECT_EQ(dead.health(), kInitHealth);
+    EXPECT_EQ(dead.mana(), kInitMana);
+    EXPECT_EQ(dead.strength(), 20u);
+}
+
 // 空表行(全 0 的 ClassTable)不该把活人打成 0 血:活着仍然不动
 TEST(PlayerReviveRuleTest, EmptyClassRowDoesNotHarmAlivePlayer) {
     BaseAttributesComp attrs;

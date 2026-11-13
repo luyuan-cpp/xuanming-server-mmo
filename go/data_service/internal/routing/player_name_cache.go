@@ -53,6 +53,16 @@ func NewPlayerNameCache(c redis.RedisConf) *PlayerNameCache {
 	return &PlayerNameCache{rds: redis.MustNewRedis(c)}
 }
 
+// OpenPlayerNameCache 同 NewPlayerNameCache,但配置不合法、连不上(c.NonBlock 为假时先 PING 一次)都回错误,不退出进程。
+// 给运维工具用(cmd/create_residual 修完名字要删缓存):工具要自己决定拒绝运行、给出固定文案。
+func OpenPlayerNameCache(c redis.RedisConf) (*PlayerNameCache, error) {
+	rds, err := redis.NewRedis(c)
+	if err != nil {
+		return nil, err
+	}
+	return &PlayerNameCache{rds: rds}, nil
+}
+
 // MGetPlayerNames 一次查多个玩家的名字缓存。
 //
 // 三态,调用方必须分清:

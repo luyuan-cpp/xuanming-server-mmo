@@ -112,9 +112,7 @@ func TestIntegrationInboxPermanentRequestCannotRebindAfterTransfer(t *testing.T)
 	if _, err = e.enqueue(t, player, 1, uint64(e.clock.ms.Load()), gainPayload(t, 1)); !errors.Is(err, ErrOriginalRole) {
 		t.Fatalf("旧request即使刷新签发时刻也不能换主: %v", err)
 	}
-	if _, err = e.store.SweepTerminal(itCtx(t), ^uint64(0), 500); err != nil {
-		t.Fatal(err)
-	}
+	// 终态行是永久收据,没有清理(设计 §9.1):原唯一行一直在,也不随换主补权。
 	old := e.item(t, player, first.Seq)
 	if old == nil || old.OwnerRevision != 1 || old.OwnerAccount == "new-inbox-owner" {
 		t.Fatalf("永久原唯一行被删除/补权: %+v", old)

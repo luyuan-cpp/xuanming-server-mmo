@@ -15,6 +15,8 @@
         -ConfirmLoginAuthProviderChange 只告警放行;只在 Assert-ClientEntryDeployPreflight 的非 DryRun 分支、本次部署 login 时调用;
       - 库契约里的三个名字与 k8s_deploy.ps1 的 $script:GoSvcInfo.login / $script:LoginOAuthSecretName 逐字相等;
       - dev_tools.ps1 Invoke-K8sDeploy 非空 / 被指定才透传这七个参数;Invoke-K8sImage 在调 k8s_image.ps1 之前逐个拒绝它们。
+    2026-11-12 起同一套判据也覆盖小游戏两段(-LoginWeChatMiniGame* / -LoginDouyinMiniGame*,AuthProviders.WeChatMiniGame / DouyinMiniGame),
+    本文件的往返、差异、照传串、防误关闸与两处包装入口用例都带上了它们。
     包装层 splat 键的 AST 契约在 k8s_client_entry_contract.tests.ps1。
     全部在进程内跑,kubectl 一律由同名替身函数顶替(函数先于外部命令解析),不碰任何集群。
     负向用例一律断错误文本,不只断有没有抛异常。
@@ -56,7 +58,12 @@ function New-AuthYaml {
     param([hashtable]$P = @{}, [string]$ReleaseProfile = 'dev')
     return New-LoginAuthProvidersYaml -WeChatAppId ([string]$P.WeChatAppId) -WeChatEndpoint ([string]$P.WeChatEndpoint) `
         -WeChatAllowOpenId ([bool]$P.WeChatAllowOpenId) -QQAppId ([string]$P.QQAppId) -QQEndpoint ([string]$P.QQEndpoint) `
-        -QQAllowOpenId ([bool]$P.QQAllowOpenId) -ReleaseProfile $ReleaseProfile -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET'
+        -QQAllowOpenId ([bool]$P.QQAllowOpenId) `
+        -WeChatMiniGameAppId ([string]$P.WeChatMiniGameAppId) -WeChatMiniGameEndpoint ([string]$P.WeChatMiniGameEndpoint) `
+        -WeChatMiniGameAllowOpenId ([bool]$P.WeChatMiniGameAllowOpenId) `
+        -DouyinMiniGameAppId ([string]$P.DouyinMiniGameAppId) -DouyinMiniGameEndpoint ([string]$P.DouyinMiniGameEndpoint) `
+        -DouyinMiniGameAllowOpenId ([bool]$P.DouyinMiniGameAllowOpenId) `
+        -ReleaseProfile $ReleaseProfile -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET'
 }
 
 # 把 AuthProviders 段嵌进一份 login.yaml 的前后文(插入点同 New-GoSvcConfigMapYaml:RequireClientEndpoint 之后、Kafka 之前)。
@@ -73,7 +80,11 @@ function Get-Drift {
     param([Parameter(Mandatory = $true)]$Live, [bool]$Secret = $false, [hashtable]$P = @{})
     return Get-LoginAuthProviderDrift -Live $Live -OAuthSecretPresent $Secret -WeChatAppId ([string]$P.WeChatAppId) `
         -WeChatEndpoint ([string]$P.WeChatEndpoint) -WeChatAllowOpenId ([bool]$P.WeChatAllowOpenId) -QQAppId ([string]$P.QQAppId) `
-        -QQEndpoint ([string]$P.QQEndpoint) -QQAllowOpenId ([bool]$P.QQAllowOpenId)
+        -QQEndpoint ([string]$P.QQEndpoint) -QQAllowOpenId ([bool]$P.QQAllowOpenId) `
+        -WeChatMiniGameAppId ([string]$P.WeChatMiniGameAppId) -WeChatMiniGameEndpoint ([string]$P.WeChatMiniGameEndpoint) `
+        -WeChatMiniGameAllowOpenId ([bool]$P.WeChatMiniGameAllowOpenId) `
+        -DouyinMiniGameAppId ([string]$P.DouyinMiniGameAppId) -DouyinMiniGameEndpoint ([string]$P.DouyinMiniGameEndpoint) `
+        -DouyinMiniGameAllowOpenId ([bool]$P.DouyinMiniGameAllowOpenId)
 }
 
 # 在 Base 上改几项 / 去掉几项,返回新表(不改 Base)。
@@ -107,7 +118,14 @@ $RoundTripCases = @(
     @{ Label = '两个都开,带沙箱 Endpoint(含路径、dev 档 http)与 openid 回落'
         P = @{ WeChatAppId = 'wx0123456789abcdef'; WeChatEndpoint = 'http://wechat-mock.contract.test:18090/sns'; WeChatAllowOpenId = $true
             QQAppId = '100000001'; QQEndpoint = 'https://qq-mock.contract.test'; QQAllowOpenId = $true }
-        Keep = '-LoginWeChatAppId wx0123456789abcdef -LoginWeChatEndpoint http://wechat-mock.contract.test:18090/sns -LoginWeChatAllowOpenId -LoginQQAppId 100000001 -LoginQQEndpoint https://qq-mock.contract.test -LoginQQAllowOpenId' }
+        Keep = '-LoginWeChatAppId wx0123456789abcdef -LoginWeChatEndpoint http://wechat-mock.contract.test:18090/sns -LoginWeChatAllowOpenId -LoginQQAppId 100000001 -LoginQQEndpoint https://qq-mock.contract.test -LoginQQAllowOpenId' },
+    @{ Label = '只开两个小游戏'; P = @{ WeChatMiniGameAppId = 'wxfedcba9876543210'; DouyinMiniGameAppId = 'tt0123456789abcdef' }
+        Keep = '-LoginWeChatMiniGameAppId wxfedcba9876543210 -LoginDouyinMiniGameAppId tt0123456789abcdef' },
+    @{ Label = '四个都开,小游戏带沙箱 Endpoint(dev 档 http)与 openid 回落(照传串按微信 / QQ / 微信小游戏 / 抖音小游戏的顺序)'
+        P = @{ WeChatAppId = 'wx0123456789abcdef'; QQAppId = '100000001'
+            WeChatMiniGameAppId = 'wxfedcba9876543210'; WeChatMiniGameEndpoint = 'http://wx-mini-mock.contract.test:18090'; WeChatMiniGameAllowOpenId = $true
+            DouyinMiniGameAppId = 'tt0123456789abcdef'; DouyinMiniGameEndpoint = 'https://dy-mini-mock.contract.test'; DouyinMiniGameAllowOpenId = $true }
+        Keep = '-LoginWeChatAppId wx0123456789abcdef -LoginQQAppId 100000001 -LoginWeChatMiniGameAppId wxfedcba9876543210 -LoginWeChatMiniGameEndpoint http://wx-mini-mock.contract.test:18090 -LoginWeChatMiniGameAllowOpenId -LoginDouyinMiniGameAppId tt0123456789abcdef -LoginDouyinMiniGameEndpoint https://dy-mini-mock.contract.test -LoginDouyinMiniGameAllowOpenId' }
 )
 foreach ($roundTrip in $RoundTripCases) {
     Test-Case "生成器 ↔ 解析器往返:$($roundTrip.Label) → 同一组参数零差异,照传串还原参数(LF 与 CRLF 都认)" {
@@ -172,6 +190,43 @@ foreach ($driftCase in $DriftCases) {
             Assert-True -Condition (@($drift.Drifts | Where-Object { $_ -match $pattern }).Count -eq 1) -Because "恰有一项匹配 /$pattern/(实际: $($drift.Drifts -join ' | '))"
         }
     }
+}
+
+# 小游戏两段(AuthProviders.WeChatMiniGame / DouyinMiniGame)的差异判定:规则与微信 / QQ 相同,关闭时各删自己的 AppSecret Secret。
+$MiniParams = @{ WeChatMiniGameAppId = 'wxfedcba9876543210'; WeChatMiniGameEndpoint = 'https://wx-mini-mock.contract.test'
+    DouyinMiniGameAppId = 'tt0123456789abcdef'; DouyinMiniGameAllowOpenId = $true }
+$MiniKeepText = '-LoginWeChatMiniGameAppId wxfedcba9876543210 -LoginWeChatMiniGameEndpoint https://wx-mini-mock.contract.test -LoginDouyinMiniGameAppId tt0123456789abcdef -LoginDouyinMiniGameAllowOpenId'
+$LiveMini = ConvertFrom-LoginAuthProvidersYaml -LoginYaml (New-LoginYamlWith -AuthYaml (New-AuthYaml -P $MiniParams))
+$MiniDriftCases = @(
+    @{ Label = '全部漏传:两个小游戏都关闭,各删自己的 AppSecret Secret'; Live = $LiveMini; P = @{}
+        Patterns = @('^线上已开 AuthProviders\.WeChatMiniGame,本次没给 -LoginWeChatMiniGameAppId:部署后 WeChatMiniGame 登录随新 Pod 关闭,并删除它的 AppSecret Secret$',
+            '^线上已开 AuthProviders\.DouyinMiniGame,本次没给 -LoginDouyinMiniGameAppId:部署后 DouyinMiniGame 登录随新 Pod 关闭,并删除它的 AppSecret Secret$') },
+    @{ Label = '漏传微信小游戏的 Endpoint:沙箱改连生产'; Live = $LiveMini; P = (Get-Params -Base $MiniParams -Remove 'WeChatMiniGameEndpoint')
+        Patterns = @('^AuthProviders\.WeChatMiniGame\.Endpoint:线上指向自定义 Endpoint\(沙箱\),本次没给 -LoginWeChatMiniGameEndpoint 会改连生产地址$') },
+    @{ Label = '漏传抖音小游戏的 AllowOpenId:RequireUnionId 翻回 true'; Live = $LiveMini; P = (Get-Params -Base $MiniParams -Remove 'DouyinMiniGameAllowOpenId')
+        Patterns = @('^AuthProviders\.DouyinMiniGame\.RequireUnionId:线上 RequireUnionId: false\(按 openid 建账号\),本次没给 -LoginDouyinMiniGameAllowOpenId 会翻回 true') },
+    @{ Label = '换了微信小游戏的 AppId'; Live = $LiveMini; P = (Get-Params -Base $MiniParams -Set @{ WeChatMiniGameAppId = 'wx1111111111111111' })
+        Patterns = @('^AuthProviders\.WeChatMiniGame\.AppId 与线上不同\(本次 -LoginWeChatMiniGameAppId 换了应用号\)$') },
+    @{ Label = '线上只开微信 App 与 QQ、本次加开两个小游戏'; Live = $LiveFull; Secret = $true; P = ($FullParams + $MiniParams); Patterns = @() },
+    @{ Label = '线上开着小游戏、本次照传小游戏却漏传微信 App 与 QQ(只报那两段)'; Live = (ConvertFrom-LoginAuthProvidersYaml -LoginYaml (New-LoginYamlWith -AuthYaml (New-AuthYaml -P ($FullParams + $MiniParams))))
+        Secret = $true; P = $MiniParams
+        Patterns = @('^线上已开 AuthProviders\.WeChat,本次没给 -LoginWeChatAppId', '^线上已开 AuthProviders\.QQ,本次没给 -LoginQQAppId') },
+    @{ Label = '照传全部小游戏'; Live = $LiveMini; P = $MiniParams; Patterns = @() }
+)
+foreach ($driftCase in $MiniDriftCases) {
+    Test-Case "差异判定(小游戏):$($driftCase.Label)" {
+        $drift = Get-Drift -Live $driftCase.Live -Secret ([bool]$driftCase.Secret) -P $driftCase.P
+        Assert-Equal -Expected $driftCase.Patterns.Count -Actual $drift.Drifts.Count -Because "差异逐项计数(实际: $($drift.Drifts -join ' | '))"
+        foreach ($pattern in $driftCase.Patterns) {
+            Assert-True -Condition (@($drift.Drifts | Where-Object { $_ -match $pattern }).Count -eq 1) -Because "恰有一项匹配 /$pattern/(实际: $($drift.Drifts -join ' | '))"
+        }
+        Assert-True -Condition (@($drift.Drifts | Where-Object { $_ -match '生成器不生成的 AuthProviders\.(WeChatMiniGame|DouyinMiniGame)' }).Count -eq 0) -Because '两个小游戏段是生成器生成的,不能被当成「本次会丢掉」的未知 provider'
+    }
+}
+
+Test-Case '照传串(小游戏):线上只开两个小游戏、本次全部漏传时,照传串还原两段的 AppId / Endpoint / AllowOpenId' {
+    $drift = Get-Drift -Live $LiveMini
+    Assert-Equal -Expected $MiniKeepText -Actual $drift.KeepArgs -Because '照传串 = 线上现状对应的参数,按微信小游戏、抖音小游戏的顺序'
 }
 
 Test-Case '照传串只按线上现状拼,与本次参数无关(全部漏传时报错里照抄它就能保持现状)' {
@@ -356,6 +411,42 @@ Test-Case 'k8s_deploy 防误关闸:全部 zone 判完再一次拒绝(只列有�
     Assert-Match -Text $errorText -Pattern 'kubectl failed \(exit 1\)' -Because '读不到就拒绝部署(查不到不等于没开)'
 }
 
+Test-Case 'k8s_deploy 防误关闸(小游戏):线上开着小游戏、本次漏传就拒绝并给出照传串;照传放行;漏传 AllowOpenId 同样拒绝(六个参数都传进了判据)' {
+    $NamespacePrefix = 'mmorpg-zone'
+    $KubeContext = 'contract-ctx'
+    $KubeConfig = 'C:/contract/kubeconfig'
+    $LoginWeChatAppId = ''; $LoginWeChatEndpoint = ''; $LoginWeChatAllowOpenId = [switch]$false
+    $LoginQQAppId = ''; $LoginQQEndpoint = ''; $LoginQQAllowOpenId = [switch]$false
+    $LoginWeChatMiniGameAppId = ''; $LoginWeChatMiniGameEndpoint = ''; $LoginWeChatMiniGameAllowOpenId = [switch]$false
+    $LoginDouyinMiniGameAppId = ''; $LoginDouyinMiniGameEndpoint = ''; $LoginDouyinMiniGameAllowOpenId = [switch]$false
+    $ConfirmLoginAuthProviderChange = [switch]$false
+    $miniConfigMap = New-LoginConfigMapJson -LoginYaml (New-LoginYamlWith -AuthYaml (New-AuthYaml -P $MiniParams))
+    function Invoke-ClientEntryKubectl {
+        param([string[]]$KubectlArgs, [string]$KubeContext, [string]$KubeConfig, [switch]$CaptureOutput, [switch]$AllowFailure)
+        Assert-Equal -Expected 'get' -Actual $KubectlArgs[0] -Because '防误关闸只能查询'
+        if ($KubectlArgs[1] -ceq 'configmap') { return [pscustomobject]@{ ExitCode = 0; Stdout = $miniConfigMap; Stderr = '' } }
+        if ($KubectlArgs[1] -ceq 'secret') { return [pscustomobject]@{ ExitCode = 0; Stdout = ''; Stderr = '' } }
+        throw "假 kubectl:没有规则命中这次调用:kubectl $($KubectlArgs -join ' ')"
+    }
+    $zones = @([pscustomobject]@{ Name = 'z1' })
+
+    $errorText = ''
+    try { Assert-LoginAuthProviderClusterState -Zones $zones } catch { $errorText = $_.Exception.Message }
+    Assert-Match -Text $errorText -Pattern 'login 第三方登录现状预检失败\(1 个 zone\),未做任何写操作' -Because '漏传两个小游戏的参数要拒绝'
+    Assert-Match -Text $errorText -Pattern ('线上已开 AuthProviders\.WeChatMiniGame[^\r\n]*要保持现状请照传 ' + [regex]::Escape($MiniKeepText) + ';确认要关闭或改动请加 -ConfirmLoginAuthProviderChange') -Because '报错给出小游戏的照传串与确认开关'
+
+    $LoginWeChatMiniGameAppId = $MiniParams.WeChatMiniGameAppId; $LoginWeChatMiniGameEndpoint = $MiniParams.WeChatMiniGameEndpoint
+    $LoginDouyinMiniGameAppId = $MiniParams.DouyinMiniGameAppId; $LoginDouyinMiniGameAllowOpenId = [switch]$true
+    $kept = @(Assert-LoginAuthProviderClusterState -Zones $zones 3>&1)
+    Assert-Equal -Expected 0 -Actual @($kept | Where-Object { $_ -is [System.Management.Automation.WarningRecord] }).Count -Because '照传小游戏参数即放行、不告警'
+
+    $LoginDouyinMiniGameAllowOpenId = [switch]$false
+    $errorText = ''
+    try { Assert-LoginAuthProviderClusterState -Zones $zones } catch { $errorText = $_.Exception.Message }
+    Assert-Match -Text $errorText -Pattern 'AuthProviders\.DouyinMiniGame\.RequireUnionId:线上 RequireUnionId: false' -Because '漏传 -LoginDouyinMiniGameAllowOpenId 同样拒绝(开关的值确实传进了判据)'
+    Assert-NotMatch -Text $errorText -Pattern 'AuthProviders\.WeChatMiniGame' -Because '微信小游戏照传了,不报'
+}
+
 Test-Case 'k8s_deploy 接入位置:防误关闸全文件只调一次,在 Assert-ClientEntryDeployPreflight 的 if ($DryRun) 的 else 分支、if ($deploysLogin) 之内,排在 Assert-ClientEntryClusterState 之后' {
     $guardCalls = @($DeployAst.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Assert-LoginAuthProviderClusterState' }, $true))
     Assert-Equal -Expected 1 -Actual $guardCalls.Count -Because '只有一个调用点'
@@ -401,14 +492,21 @@ function Invoke-DevToolsK8sDeployWith {
     New-Item -ItemType Directory -Path $fakeDir | Out-Null
     try {
         $fakeBody = @(
-            'param($LoginWeChatAppId = "<unset>", $LoginWeChatEndpoint = "<unset>", [switch]$LoginWeChatAllowOpenId, $LoginQQAppId = "<unset>", $LoginQQEndpoint = "<unset>", [switch]$LoginQQAllowOpenId, [switch]$ConfirmLoginAuthProviderChange)',
+            ('param($LoginWeChatAppId = "<unset>", $LoginWeChatEndpoint = "<unset>", [switch]$LoginWeChatAllowOpenId, $LoginQQAppId = "<unset>", $LoginQQEndpoint = "<unset>", [switch]$LoginQQAllowOpenId, [switch]$ConfirmLoginAuthProviderChange, ' +
+                '$LoginWeChatMiniGameAppId = "<unset>", $LoginWeChatMiniGameEndpoint = "<unset>", [switch]$LoginWeChatMiniGameAllowOpenId, $LoginDouyinMiniGameAppId = "<unset>", $LoginDouyinMiniGameEndpoint = "<unset>", [switch]$LoginDouyinMiniGameAllowOpenId)'),
             '"LoginWeChatAppId=$LoginWeChatAppId"',
             '"LoginWeChatEndpoint=$LoginWeChatEndpoint"',
             '"LoginWeChatAllowOpenId=$($PSBoundParameters.ContainsKey(''LoginWeChatAllowOpenId''))"',
             '"LoginQQAppId=$LoginQQAppId"',
             '"LoginQQEndpoint=$LoginQQEndpoint"',
             '"LoginQQAllowOpenId=$($PSBoundParameters.ContainsKey(''LoginQQAllowOpenId''))"',
-            '"ConfirmLoginAuthProviderChange=$($PSBoundParameters.ContainsKey(''ConfirmLoginAuthProviderChange''))"'
+            '"ConfirmLoginAuthProviderChange=$($PSBoundParameters.ContainsKey(''ConfirmLoginAuthProviderChange''))"',
+            '"LoginWeChatMiniGameAppId=$LoginWeChatMiniGameAppId"',
+            '"LoginWeChatMiniGameEndpoint=$LoginWeChatMiniGameEndpoint"',
+            '"LoginWeChatMiniGameAllowOpenId=$($PSBoundParameters.ContainsKey(''LoginWeChatMiniGameAllowOpenId''))"',
+            '"LoginDouyinMiniGameAppId=$LoginDouyinMiniGameAppId"',
+            '"LoginDouyinMiniGameEndpoint=$LoginDouyinMiniGameEndpoint"',
+            '"LoginDouyinMiniGameAllowOpenId=$($PSBoundParameters.ContainsKey(''LoginDouyinMiniGameAllowOpenId''))"'
         )
         Set-Content -LiteralPath (Join-Path $fakeDir 'k8s_deploy.ps1') -Encoding utf8 -Value $fakeBody
         $ScriptDir = $fakeDir
@@ -442,6 +540,28 @@ Test-Case 'dev_tools Invoke-K8sDeploy:七个第三方登录参数非空 / 被指
             'LoginQQAppId=100000001', 'LoginQQEndpoint=https://qq-mock.contract.test', 'LoginQQAllowOpenId=True', 'ConfirmLoginAuthProviderChange=True')) {
         Assert-Match -Text $all -Pattern ('(?m)^' + [regex]::Escape($expected) + '\r?$') -Because "给了就原样透传($expected),漏一个重部署就关掉或改掉线上第三方登录"
     }
+}
+
+Test-Case 'dev_tools Invoke-K8sDeploy:小游戏的六个参数非空 / 被指定才透传给 k8s_deploy.ps1,留空 / 空白不透传' {
+    $unset = Invoke-DevToolsK8sDeployWith -Variables @{}
+    foreach ($expected in @('LoginWeChatMiniGameAppId=<unset>', 'LoginWeChatMiniGameEndpoint=<unset>', 'LoginWeChatMiniGameAllowOpenId=False',
+            'LoginDouyinMiniGameAppId=<unset>', 'LoginDouyinMiniGameEndpoint=<unset>', 'LoginDouyinMiniGameAllowOpenId=False')) {
+        Assert-Match -Text $unset -Pattern ('(?m)^' + [regex]::Escape($expected) + '\r?$') -Because "没给就不透传($expected):默认值只在 k8s_deploy.ps1 一处"
+    }
+    $blank = Invoke-DevToolsK8sDeployWith -Variables @{ LoginWeChatMiniGameAppId = '   '; LoginDouyinMiniGameEndpoint = '' }
+    Assert-Match -Text $blank -Pattern '(?m)^LoginWeChatMiniGameAppId=<unset>\r?$' -Because '空白字符串不透传(透传了会被下游当成非法 AppId)'
+    Assert-Match -Text $blank -Pattern '(?m)^LoginDouyinMiniGameEndpoint=<unset>\r?$' -Because '空串不透传'
+
+    $all = Invoke-DevToolsK8sDeployWith -Variables @{
+        LoginWeChatMiniGameAppId = 'wxfedcba9876543210'; LoginWeChatMiniGameEndpoint = 'https://wx-mini-mock.contract.test'; LoginWeChatMiniGameAllowOpenId = $true
+        LoginDouyinMiniGameAppId = 'tt0123456789abcdef'; LoginDouyinMiniGameEndpoint = 'https://dy-mini-mock.contract.test'; LoginDouyinMiniGameAllowOpenId = $true
+    }
+    foreach ($expected in @('LoginWeChatMiniGameAppId=wxfedcba9876543210', 'LoginWeChatMiniGameEndpoint=https://wx-mini-mock.contract.test', 'LoginWeChatMiniGameAllowOpenId=True',
+            'LoginDouyinMiniGameAppId=tt0123456789abcdef', 'LoginDouyinMiniGameEndpoint=https://dy-mini-mock.contract.test', 'LoginDouyinMiniGameAllowOpenId=True')) {
+        Assert-Match -Text $all -Pattern ('(?m)^' + [regex]::Escape($expected) + '\r?$') -Because "给了就原样透传($expected),漏一个重部署就关掉或改掉线上的小游戏登录"
+    }
+    # 小游戏参数不影响微信 App / QQ 那七个的透传(各管各的)。
+    Assert-Match -Text $all -Pattern '(?m)^LoginWeChatAppId=<unset>\r?$' -Because '只给小游戏参数时,微信 App 的参数照旧不透传'
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -515,6 +635,23 @@ Test-Case 'dev_tools Invoke-K8sImage:第三方登录 -Login* 与 -ConfirmLoginAu
         @{ LoginWeChatAppId = 'wx0123456789abcdef' }, @{ LoginWeChatEndpoint = 'https://wechat-mock.contract.test' }, @{ LoginWeChatAllowOpenId = $true },
         @{ LoginQQAppId = '100000001' }, @{ LoginQQEndpoint = 'https://qq-mock.contract.test' }, @{ LoginQQAllowOpenId = $true },
         @{ ConfirmLoginAuthProviderChange = $true }
+    )
+    foreach ($variables in $cases) {
+        $name = @($variables.Keys)[0]
+        $reject = Invoke-DevToolsK8sImageWith -Variables $variables
+        Assert-True -Condition ($null -ne $reject.Error) -Because "-$name 经 k8s-release-* 不生效(k8s_image.ps1 不部署 login),显式给了必须拒绝而不是静默吞掉"
+        Assert-Match -Text $reject.Error -Pattern "k8s-image-\* / k8s-release-\* 不支持 [^:]*-$name(,|:)" -Because "错误文本必须点名 -$name"
+        Assert-True -Condition (-not $reject.DownstreamCalled) -Because "-${name}:拒绝必须早于调用 k8s_image.ps1(镜像构建与推送都在那边)"
+    }
+}
+
+Test-Case 'dev_tools Invoke-K8sImage:小游戏的六个参数在调 k8s_image.ps1 之前逐个拒绝(k8s_image.ps1 不部署 login)' {
+    $control = Invoke-DevToolsK8sImageWith -Variables @{}
+    Assert-True -Condition ($null -eq $control.Error -and $control.DownstreamCalled) -Because "对照组必须调到假 k8s_image.ps1。错误: $($control.Error)"
+    Assert-NotMatch -Text $control.DownstreamArgs -Pattern 'MiniGame' -Because '没给就不出现在下游参数里'
+    $cases = @(
+        @{ LoginWeChatMiniGameAppId = 'wxfedcba9876543210' }, @{ LoginWeChatMiniGameEndpoint = 'https://wx-mini-mock.contract.test' }, @{ LoginWeChatMiniGameAllowOpenId = $true },
+        @{ LoginDouyinMiniGameAppId = 'tt0123456789abcdef' }, @{ LoginDouyinMiniGameEndpoint = 'https://dy-mini-mock.contract.test' }, @{ LoginDouyinMiniGameAllowOpenId = $true }
     )
     foreach ($variables in $cases) {
         $name = @($variables.Keys)[0]

@@ -17,6 +17,11 @@
 // scene.lib 的测试工程里直接验证:cpp/tests/turn_battle_engine_test/player_revive_rule_test.cpp。
 // 取哪一行:class_id 目前未随 PlayerAllData 下发到 scene,各职业初值相同,取首行即可
 // (与 player_attribute.cpp 的 ResolveClassRow 同一口径);待 class_id 打通后按 class 取行。
+//
+// 存档里只有当前血蓝(2026-11-12):力量、护甲、抗性、暴击、速度只有职业表这一个来源,存盘时清掉
+// (PlayerDatabaseMessageFieldsMarshal),每次加载由 ApplyClassConstants 按职业表写回。所以从存档读出来的组件里
+// 力量、速度恒为 0,规则 1) 的「全新号」判定在加载路径上等价于「血量为 0」:新号和阵亡后下线的号走同一支,
+// 两者要做的事本来就一样(回满血蓝)。规则 2) 现在只在运行时(战斗结算把人打到 0 血)才走得到。
 
 #include "proto/common/component/actor_comp.pb.h"
 #include "table/proto/class_table.pb.h"
@@ -34,6 +39,18 @@ inline bool IsUninitializedBaseAttributes(const BaseAttributesComp& attrs) {
 	return attrs.health() == 0 && attrs.strength() == 0 && attrs.speed() == 0;
 }
 
+// 职业常量:力量、护甲、抗性、暴击取职业表,速度取职业表的起点(随后由 PlayerAttributeSystem::Recalculate 覆盖成
+// 算上加点和装备的值)。不碰当前血蓝。这些字段不落库,每次加载都调一次,所以改职业表对已经建好的角色同样生效。
+// 要做「每个角色各自成长」的基础值,把输入(已分配点、外部加成)放进 PlayerAttributeComp、在重算里产出;
+// 直接改这几个字段的话,下次加载就被职业表盖掉。
+inline void ApplyClassConstants(BaseAttributesComp& attrs, const ClassTable& cls) {
+	attrs.set_strength(cls.init_strength());
+	attrs.set_armor(cls.init_armor());
+	attrs.set_resistance(cls.init_resistance());
+	attrs.set_critchance(cls.init_critchance());
+	attrs.set_speed(cls.init_speed());
+}
+
 // maxHealth / maxMana 传 0 = 上限未知,退回 ClassTable 初值。
 inline PlayerReviveOutcome ApplyClassInitialAttributesOrRevive(
 	BaseAttributesComp& attrs, const ClassTable& cls,
@@ -43,11 +60,7 @@ inline PlayerReviveOutcome ApplyClassInitialAttributesOrRevive(
 	}
 	const bool uninitialized = IsUninitializedBaseAttributes(attrs);
 	if (uninitialized) {
-		attrs.set_strength(cls.init_strength());
-		attrs.set_armor(cls.init_armor());
-		attrs.set_resistance(cls.init_resistance());
-		attrs.set_critchance(cls.init_critchance());
-		attrs.set_speed(cls.init_speed());
+		ApplyClassConstants(attrs, cls);
 	}
 	// 初始化与复活都回满:有真实上限就回到真实上限,否则退回职业初值
 	attrs.set_health(maxHealth > 0 ? maxHealth : cls.init_health());

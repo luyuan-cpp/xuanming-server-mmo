@@ -122,7 +122,7 @@ func newEnterWiringHarness(t *testing.T, players []*pbbase.AccountSimplePlayer, 
 		pool:     pool,
 	}
 	h.l = NewEnterGameLogic(ctx, &svc.ServiceContext{
-		RedisClient: rdb, PlayerRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
+		ControlRedis: rdb, PlayerRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
 		PlayerNames:         playernamereg.New(h.registry),
 		PlayerLocatorClient: h.locator,
 		PreloadPool:         pool,

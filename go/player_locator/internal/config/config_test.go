@@ -81,14 +81,14 @@ func TestLeaseScanRound(t *testing.T) {
 	}
 }
 
-// PlayerRedis 段不写时由服务指向 RedisClient(svc.playerRedisConf):开发环境不用改配置就能跑。
+// PlayerRedis 段不写时由服务指向 ControlRedis(svc.playerRedisConf):开发环境不用改配置就能跑。
 func TestEtcYamlLeavesPlayerRedisToFallback(t *testing.T) {
 	var c Config
 	if err := conf.Load("../../etc/player_locator.yaml", &c); err != nil {
 		t.Fatalf("加载 etc/player_locator.yaml 失败: %v", err)
 	}
 	if len(c.PlayerRedis.Addrs) != 0 {
-		t.Fatalf("etc/player_locator.yaml 的 PlayerRedis.Addrs = %v;dev 环境靠缺省指向 RedisClient", c.PlayerRedis.Addrs)
+		t.Fatalf("etc/player_locator.yaml 的 PlayerRedis.Addrs = %v;dev 环境靠缺省指向 ControlRedis", c.PlayerRedis.Addrs)
 	}
 }
 

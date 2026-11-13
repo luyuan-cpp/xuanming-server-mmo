@@ -1,24 +1,32 @@
 package com.game.gateway.ratelimit;
 
+import io.lettuce.core.AbstractRedisClient;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
 import io.lettuce.core.TimeoutOptions;
+import io.lettuce.core.cluster.ClusterClientOptions;
+import io.lettuce.core.cluster.ClusterTopologyRefreshOptions;
+import io.lettuce.core.cluster.RedisClusterClient;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 钉住限流专用 Lettuce 连接的超时与断线语义(2026-10-15),以及限流打开时的阈值校验(2026-11-05)。
+ * 钉住限流专用 Lettuce 连接的超时与断线语义(2026-10-15)、限流打开时的阈值校验(2026-11-05),
+ * 以及单实例 / 集群两种形态的选择与集群选项(2026-11-12)。
  *
  * <p>为什么要钉:限流在 Tomcat 请求线程上同步调用。这里任何一项退回 Lettuce 缺省(连接缺省超时 60s、不开命令超时、
  * 断线时缓存命令等重连),Redis 卡住或断线时请求线程就会被逐个占住,直到线程池耗尽、liveness 超时、副本一起被杀,
@@ -83,16 +91,16 @@ class RateLimitConfigTest {
     }
 
     @Test
-    void redisClientBean_appliesTheseOptions() {
+    void redisClientBean_withoutClusterNodes_isStandaloneWithTheseOptions() {
         // 上面几例只钉工厂函数的返回值;这一例钉住接线:删掉 rateLimitRedisClient 里的 setOptions,
         // 运行时就退回 Lettuce 缺省(断线缓存命令、不开命令超时),而前面几例照样全绿。
         // RedisClient.create 不建连,这里不需要 Redis。
-        RateLimitConfig config = new RateLimitConfig();
-        ReflectionTestUtils.setField(config, "redisHost", "localhost");
-        ReflectionTestUtils.setField(config, "redisPort", 6379);
-        ReflectionTestUtils.setField(config, "redisPassword", "");
-        RedisClient client = config.rateLimitRedisClient();
+        RedisProperties redis = new RedisProperties();
+        redis.setHost("localhost");
+        redis.setPort(6379);
+        AbstractRedisClient client = new RateLimitConfig().rateLimitRedisClient(redis);
         try {
+            assertInstanceOf(RedisClient.class, client, "没写 spring.data.redis.cluster.nodes 时连单实例");
             ClientOptions options = client.getOptions();
             assertEquals(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS, options.getDisconnectedBehavior(),
                     "rateLimitRedisClient 必须把限流专用选项设到客户端上");
@@ -101,6 +109,76 @@ class RateLimitConfigTest {
         } finally {
             client.shutdown();
         }
+    }
+
+    @Test
+    void redisClientBean_withClusterNodes_isAClusterClientWithClusterOptions() {
+        // 写了集群种子:限流与自动配置的连接(健康检查)读的是同一个 spring.data.redis.cluster.nodes。
+        // RedisClusterClient.create 不建连,这里不需要 Redis。
+        RedisProperties redis = new RedisProperties();
+        RedisProperties.Cluster cluster = new RedisProperties.Cluster();
+        cluster.setNodes(List.of("redis-control-0.infra:6379", "redis-control-1.infra:6379"));
+        redis.setCluster(cluster);
+        redis.setPassword("s3cret");
+        AbstractRedisClient client = new RateLimitConfig().rateLimitRedisClient(redis);
+        try {
+            assertInstanceOf(RedisClusterClient.class, client, "写了集群种子就按集群连,两个桶可以在不同槽");
+            ClusterClientOptions options = assertInstanceOf(ClusterClientOptions.class, client.getOptions());
+            assertEquals(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS, options.getDisconnectedBehavior());
+            assertTrue(options.getTimeoutOptions().isTimeoutCommands(), "集群客户端上同样必须开命令超时");
+            assertEquals(1024, options.getRequestQueueSize());
+            assertTrue(options.getTopologyRefreshOptions().isPeriodicRefreshEnabled(), "集群客户端上必须开拓扑刷新");
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("deprecation") // getPassword 在 Lettuce 6.x 标了弃用,这里只用来确认口令是否写上
+    void clusterSeeds_parseHostPortWithTimeoutAndPassword() {
+        List<RedisURI> seeds = RateLimitConfig.rateLimitClusterSeeds(
+                Arrays.asList(" redis-control-0.infra:6379", "10.0.0.7:7100 "), "pw");
+
+        assertEquals(2, seeds.size());
+        assertEquals("redis-control-0.infra", seeds.get(0).getHost());
+        assertEquals(6379, seeds.get(0).getPort());
+        assertEquals("10.0.0.7", seeds.get(1).getHost());
+        assertEquals(7100, seeds.get(1).getPort());
+        for (RedisURI seed : seeds) {
+            assertEquals(EXPECTED_TIMEOUT, seed.getTimeout(), "每个种子都带限流的命令超时");
+            assertArrayEquals("pw".toCharArray(), seed.getPassword(), "每个种子都带口令");
+        }
+        assertTrue(RateLimitConfig.rateLimitClusterSeeds(List.of(), "pw").isEmpty(), "没写种子 = 单实例");
+        assertTrue(RateLimitConfig.rateLimitClusterSeeds(null, "pw").isEmpty());
+    }
+
+    @Test
+    void clusterSeeds_rejectMalformedEntries() {
+        for (String bad : new String[] {"", "redis-control-0", ":6379", "redis:", "redis:abc", "redis:0", "redis:65536"}) {
+            IllegalStateException e = assertThrows(IllegalStateException.class,
+                    () -> RateLimitConfig.rateLimitClusterSeeds(List.of("ok:6379", bad), ""),
+                    "'" + bad + "' 不是 host:port,必须拒启");
+            assertTrue(e.getMessage().contains("spring.data.redis.cluster.nodes"), "报错要指出是哪个键:" + e.getMessage());
+        }
+    }
+
+    @Test
+    void clusterClientOptions_matchTheStandaloneSemanticsAndRefreshTopology() {
+        ClusterClientOptions options = RateLimitConfig.rateLimitClusterClientOptions();
+
+        assertEquals(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS, options.getDisconnectedBehavior(),
+                "断线时命令必须立即失败走 fail-open");
+        assertTrue(options.isAutoReconnect());
+        TimeoutOptions.TimeoutSource source = options.getTimeoutOptions().getSource();
+        assertEquals(EXPECTED_TIMEOUT.toMillis(), source.getTimeUnit().toMillis(source.getTimeout(null)), "命令超时同单实例");
+        assertEquals(1024, options.getRequestQueueSize());
+        ClusterTopologyRefreshOptions refresh = options.getTopologyRefreshOptions();
+        assertTrue(refresh.isPeriodicRefreshEnabled(), "定期刷新兜底:一直没有请求落到变化的槽时也能跟上拓扑");
+        assertEquals(RateLimitConfig.CLUSTER_TOPOLOGY_REFRESH_PERIOD, refresh.getRefreshPeriod());
+        assertTrue(refresh.getAdaptiveRefreshTriggers().contains(ClusterTopologyRefreshOptions.RefreshTrigger.MOVED_REDIRECT),
+                "收到 MOVED 立即刷新:迁槽之后不让每条命令都多走一次重定向");
+        assertTrue(refresh.getAdaptiveRefreshTriggers().contains(ClusterTopologyRefreshOptions.RefreshTrigger.PERSISTENT_RECONNECTS),
+                "持续重连时立即刷新:换主之后不持续打到下线的旧主");
     }
 
     @Test

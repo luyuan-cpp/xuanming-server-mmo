@@ -3,7 +3,6 @@ package svc
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -11,14 +10,16 @@ import (
 	"login/internal/config"
 	"login/internal/logic/pkg/loginqueue"
 	basepb "proto/common/base"
+
+	"shared/gatepick"
 )
 
 // 本文件盯住 login 对 gate 排空判定循环的接线(集群外入口 D87):
 // 快照必须取 etcd 原始节点(不经选址 / 去重 / 排空过滤),配置必须正确换成判定参数,
-// 一轮判定必须能把已排空的 gate 写上 gate:{id}:drained。判定逻辑本身在 loginqueue 有矩阵测试。
+// 一轮判定必须能把已排空的 gate 写上 drained 标记(gate:{gm:<zone>}:<id>:drained)。判定逻辑本身在 loginqueue 有矩阵测试。
 
 func drainedKey(nodeID uint32) string {
-	return fmt.Sprintf(loginqueue.GateDrainedKeyFmt, nodeID)
+	return gatepick.DrainedKey(svcTestZone, nodeID)
 }
 
 // 快照除 nil 外一条不丢:陈旧记录、缺客户端地址、没有 endpoint 的记录都要留下,顺序与输入一致。
@@ -59,7 +60,7 @@ func TestGateDrainMonitorWiring_OneRoundMarksDrainedGate(t *testing.T) {
 		gateNode(4, 1, 150, "10.244.0.4", 7, clientAddr("127.0.0.1", 30000)),
 		gateNode(9, 1, 200, "10.244.0.9", 0, nil), // 在线已清空,等待缩容
 	}
-	if err := loginqueue.MarkGateDraining(ctx, rdb, 9, now, 600); err != nil {
+	if err := loginqueue.MarkGateDraining(ctx, rdb, svcTestZone, 9, now, 600); err != nil {
 		t.Fatalf("mark gate 9 draining: %v", err)
 	}
 	// node 4 上残留一个过期的 drained 标记(上一次缩容被取消),本轮必须清掉。
@@ -80,7 +81,7 @@ func TestGateDrainMonitorWiring_OneRoundMarksDrainedGate(t *testing.T) {
 		t.Fatalf("snapshot: %v", err)
 	}
 	policy := gateDrainPolicy(config.GateDrainConf{Interval: 5 * time.Second, Deadline: 25 * time.Minute})
-	drained := loginqueue.EvaluateDrainingGates(ctx, rdb, gates, policy, now)
+	drained := loginqueue.EvaluateDrainingGates(ctx, rdb, svcTestZone, gates, policy, now)
 
 	if len(drained) != 1 || drained[0].NodeID != 9 || drained[0].Reason != loginqueue.DrainReasonBelowThreshold {
 		t.Fatalf("本轮应只判定 node 9 排空(below_threshold),got %+v", drained)

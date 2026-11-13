@@ -42,11 +42,12 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/prometheus/client_golang/prometheus"
+	goredis "github.com/redis/go-redis/v9"
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"google.golang.org/protobuf/proto"
+	"shared/clusterredis"
 
 	"friend/internal/config"
 	"friend/internal/constants"
@@ -298,7 +299,7 @@ func newFixture(t *testing.T, tweak func(*config.Config)) *fixture {
 	t.Cleanup(func() { _ = playerRedis.Close() })
 	sc := &svc.ServiceContext{
 		Config:      cfg,
-		FriendRedis: redis.MustNewRedis(redis.RedisConf{Host: friendMr.Addr(), Type: "node"}),
+		FriendRedis: newFriendControlRedis(t, friendMr),
 		PlayerRedis: playerRedis,
 		// KafkaWriter 默认 nil = 本地没配 Brokers 的常态(svc 的注释写明了)。
 		// 要验"推没推"的用例自己调 withKafka 换成非 nil。
@@ -1204,4 +1205,15 @@ func TestSweepModeConstantsAreTheWireLiterals(t *testing.T) {
 	assert.Equal(t, config.SweepModeDelete, metrics.SweepModeDelete)
 	assert.Equal(t, config.SweepModeReportOnly, testFriendConf().Sweep.Mode,
 		"默认模式必须是 report_only:updated_ms 的写入方是本批刚补的,delete 是有风险的选择")
+}
+
+// newFriendControlRedis 是测试用的 FriendRedis:与生产同一个构造器与控制集群键守卫,连 miniredis。
+func newFriendControlRedis(t *testing.T, mr *miniredis.Miniredis) goredis.UniversalClient {
+	t.Helper()
+	rdb, err := clusterredis.New(clusterredis.Config{Addrs: []string{mr.Addr()}}, clusterredis.ControlClusterKeys)
+	if err != nil {
+		t.Fatalf("friend control redis for test: %v", err)
+	}
+	t.Cleanup(func() { _ = rdb.Close() })
+	return rdb
 }

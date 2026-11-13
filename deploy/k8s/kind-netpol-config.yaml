@@ -1,0 +1,37 @@
+# kind 本地集群配置:gRPC 口准入(NetworkPolicy)与 Pod 间透明加密(WireGuard)的实测专用。
+# 设计见 docs/design/gate-online-identity.md §10.2、§10.3;核验脚本是 tools/scripts/k8s_netpol_probe.ps1。
+#
+# 为什么另起一个集群:kind-config.yaml 的集群用 kind 默认的网络插件(kindnet),验的是集群外客户端入口;
+# 这里要的是一个真正执行 NetworkPolicy、能开 WireGuard 的网络插件,所以关掉默认插件、装 Calico。
+# 两个集群名字不同(mmorpg / mmorpg-netpol),可以同时存在;本文件不映射任何宿主机端口。
+#
+# ── 用法(PowerShell,工作目录 = 仓库根;独立 kubeconfig,不改默认 kubeconfig 的 current-context)──────────
+#   $env:KUBECONFIG = "$env:TEMP\kind-mmorpg-netpol.kubeconfig"
+#   kind create cluster --name mmorpg-netpol --config deploy/k8s/kind-netpol-config.yaml --kubeconfig $env:KUBECONFIG
+#   # 装 Calico。v3.31 系列支持本文件钉住的 Kubernetes 1.35;拉不到这个补丁版就用同一系列更新的补丁版,版本号记进回执。
+#   kubectl --context kind-mmorpg-netpol create -f https://raw.githubusercontent.com/projectcalico/calico/v3.31.2/manifests/calico.yaml
+#   kubectl --context kind-mmorpg-netpol -n kube-system rollout status ds/calico-node --timeout=600s
+#   # 要核对加密时打开 WireGuard(宿主机内核要有 WireGuard 模块;没有时 Calico 不报错,节点上不会出现公钥,核验脚本会点名)。
+#   # pwsh 7.3 起单引号里的 JSON 原样传给 kubectl;更早的 pwsh 把这一行放到 bash 里执行。
+#   kubectl --context kind-mmorpg-netpol patch felixconfiguration default --type=merge -p '{"spec":{"wireguardEnabled":true}}'
+#   # 部署(-NetworkPolicies on 才生成准入策略),然后实测:
+#   pwsh tools/scripts/k8s_netpol_probe.ps1 -KubeContext kind-mmorpg-netpol -KubeConfig $env:KUBECONFIG -PodNetworkEncryption calico-wireguard
+#   kind delete cluster --name mmorpg-netpol --kubeconfig $env:KUBECONFIG
+#
+# 要点:
+#   - 每条 kubectl / k8s_deploy.ps1 / k8s_netpol_probe.ps1 命令都显式点名 context(kind-mmorpg-netpol),理由同 kind-config.yaml 文件头:
+#     环境变量丢了直接报 context 不存在,而不是落到本机默认 context 的集群上。k8s_netpol_probe.ps1 不给 -KubeContext 就不运行。
+#   - podSubnet 与 Calico 清单缺省的地址池(CALICO_IPV4POOL_CIDR 缺省 192.168.0.0/16)一致,不用改 Calico 清单。
+#   - 两个节点:WireGuard 只加密跨节点的流量,单节点集群看不出隧道有没有建起来;NetworkPolicy 在单节点上也执行。
+#   - 节点镜像与 kind-config.yaml 钉同一个版本与摘要,两个集群跑同一个 Kubernetes。
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: mmorpg-netpol
+networking:
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
+  - role: worker
+    image: kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0

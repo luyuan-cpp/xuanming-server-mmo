@@ -98,7 +98,7 @@ func TestRegisterExposesEveryMetric(t *testing.T) {
 		"player_inbox_notify_total", "player_inbox_cursor_ahead_total", "player_inbox_fence_regressed_total",
 		"player_inbox_epoch_ahead_total", "player_inbox_reconcile_ledger_read_total",
 		"player_inbox_reconcile_inconsistent_rows", "player_inbox_reconcile_truncated_total", "player_inbox_reconcile_rounds_total",
-		"player_inbox_sweep_deleted_total", "player_inbox_fetch_scanned_rows",
+		"player_inbox_fetch_scanned_rows",
 		"player_inbox_delivered_unacked", "player_inbox_delivered_unacked_oldest_seconds", "player_inbox_open_items",
 		"player_inbox_oldest_open_age_seconds", "player_inbox_max_delivery_count", "player_inbox_notify_backlog",
 		"player_inbox_delivered_unacked_stale", "player_inbox_battle_producer_ready",
@@ -316,17 +316,6 @@ func TestBattleProducerReadyGauge(t *testing.T) {
 	SetBattleProducerReady(false)
 	if got := testutil.ToFloat64(battleProducerReady); got != 0 {
 		t.Fatalf("未装配应为 0,got %v", got)
-	}
-}
-
-// TestAddSweepDeletedIgnoresNonPositive:清理一轮没删到行不该动计数器。
-func TestAddSweepDeletedIgnoresNonPositive(t *testing.T) {
-	before := testutil.ToFloat64(sweepDeletedTotal)
-	AddSweepDeleted(0)
-	AddSweepDeleted(-3)
-	AddSweepDeleted(5)
-	if got := testutil.ToFloat64(sweepDeletedTotal) - before; got != 5 {
-		t.Fatalf("sweep_deleted_total 增量 = %v, want 5", got)
 	}
 }
 

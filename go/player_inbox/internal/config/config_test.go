@@ -98,8 +98,8 @@ func TestEtcYamlContractValues(t *testing.T) {
 		}
 	}
 	p := c.PlayerInbox
-	if p.TerminalRetentionDays != 30 || p.NotifyResendIntervalSeconds != 30 || p.ReconcileIntervalMinutes != 60 || p.ReconcileWindowHours != 24 {
-		t.Errorf("PlayerInbox = %+v, want 保留 30 天 / 补发 30s / 对账 60min / 窗口 24h(D14、§6.3、§9.3)", p)
+	if p.NotifyResendIntervalSeconds != 30 || p.ReconcileIntervalMinutes != 60 || p.ReconcileWindowHours != 24 {
+		t.Errorf("PlayerInbox = %+v, want 补发 30s / 对账 60min / 窗口 24h(§6.3、§9.3)", p)
 	}
 }
 
@@ -139,8 +139,6 @@ func validConfig() Config {
 		Kafka:          KafkaConf{Brokers: []string{"127.0.0.1:9092"}, WriteTimeoutMs: 2000},
 		DataServiceRpc: zrpc.RpcClientConf{Target: "127.0.0.1:9000"},
 		PlayerInbox: PlayerInboxConf{
-			TerminalRetentionDays:       30,
-			SweepIntervalSeconds:        600,
 			NotifyResendIntervalSeconds: 30,
 			GaugeIntervalSeconds:        60,
 			ReconcileIntervalMinutes:    60,
@@ -197,8 +195,6 @@ func TestValidate(t *testing.T) {
 			c.Middlewares.Stat = true
 			c.Middlewares.StatConf.IgnoreContentMethods = []string{inboxpb.PlayerInbox_FetchItems_FullMethodName}
 		}},
-		{"保留期不大于签发窗", func(c *Config) { c.PlayerInbox.TerminalRetentionDays = 7 }},
-		{"清理间隔越界", func(c *Config) { c.PlayerInbox.SweepIntervalSeconds = 1 }},
 		{"补发间隔越界", func(c *Config) { c.PlayerInbox.NotifyResendIntervalSeconds = 0 }},
 		{"gauge 间隔越界", func(c *Config) { c.PlayerInbox.GaugeIntervalSeconds = 0 }},
 		{"对账间隔越界", func(c *Config) { c.PlayerInbox.ReconcileIntervalMinutes = 1 }},

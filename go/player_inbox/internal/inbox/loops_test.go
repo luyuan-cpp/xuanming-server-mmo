@@ -18,7 +18,6 @@ import (
 // fakeMaintenance 记录每类后台操作被调用的次数与参数。
 type fakeMaintenance struct {
 	mu             sync.Mutex
-	sweeps         []uint64 // cutoffMs
 	dueScans       []uint32 // shard
 	dueBefore      []uint64
 	resends        []NotifyDue
@@ -32,14 +31,6 @@ type fakeMaintenance struct {
 	reconcileErr   error
 	due            map[uint32][]NotifyDue
 	calls          atomic.Int64
-}
-
-func (f *fakeMaintenance) SweepTerminal(_ context.Context, cutoffMs uint64, _ int) (int, error) {
-	f.calls.Add(1)
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.sweeps = append(f.sweeps, cutoffMs)
-	return 0, nil
 }
 
 func (f *fakeMaintenance) DueNotifications(_ context.Context, shard uint32, dueBeforeMs uint64, _ int) ([]NotifyDue, error) {
@@ -97,8 +88,6 @@ func (nopLedgers) ReadInboxLedger(context.Context, uint64) (*componentpb.PlayerI
 
 func testLoopConfig() LoopConfig {
 	return LoopConfig{
-		TerminalRetention: 30 * 24 * time.Hour,
-		SweepInterval:     time.Millisecond,
 		NotifyInterval:    time.Millisecond,
 		GaugeInterval:     time.Millisecond,
 		ReconcileInterval: time.Millisecond,
@@ -108,7 +97,7 @@ func testLoopConfig() LoopConfig {
 
 func fixedNow() time.Time { return time.UnixMilli(int64(testNowMs)) }
 
-// TestLoopsNeverRunWithoutLeadership:选主没当选,清理、补发、gauge 都不执行(设计 §6.3、§10:只在领导者上跑)。
+// TestLoopsNeverRunWithoutLeadership:选主没当选,补发、gauge 都不执行(设计 §6.3、§10:只在领导者上跑)。
 // 对账不归领导者(按分片分给每个副本,见 TestReconcileRunsWithoutLeadershipAndStopsWithRun),这里关掉它。
 func TestLoopsNeverRunWithoutLeadership(t *testing.T) {
 	store := &fakeMaintenance{}
@@ -130,7 +119,7 @@ func TestLoopsNeverRunWithoutLeadership(t *testing.T) {
 	}
 }
 
-// TestLoopsRunWhileLeaderAndStopOnLoss:当选后清理、补发、gauge 都跑;任期结束 whileLeader 等全部轮次退出才返回。
+// TestLoopsRunWhileLeaderAndStopOnLoss:当选后补发、gauge 都跑;任期结束 whileLeader 等全部轮次退出才返回。
 // 对账不随领导权起停,这里关掉它,免得把它的轮次算成「卸任后仍在执行」。
 func TestLoopsRunWhileLeaderAndStopOnLoss(t *testing.T) {
 	store := &fakeMaintenance{}
@@ -154,7 +143,7 @@ func TestLoopsRunWhileLeaderAndStopOnLoss(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		store.mu.Lock()
-		ok := len(store.sweeps) > 0 && len(store.dueScans) > 0 && store.gaugeScans > 0
+		ok := len(store.dueScans) > 0 && store.gaugeScans > 0
 		store.mu.Unlock()
 		if ok {
 			break
@@ -228,8 +217,8 @@ func TestGaugeRoundCutoffs(t *testing.T) {
 	}
 }
 
-// TestSweepAndReconcileWindows:清理截止 = now − 保留期;对账起点 = now − 窗口,起始分片 = (now / 间隔) × 4 % 64。
-func TestSweepAndReconcileWindows(t *testing.T) {
+// TestReconcileWindow:对账起点 = now − 窗口,起始分片 = (now / 间隔) × 4 % 64。
+func TestReconcileWindow(t *testing.T) {
 	store := &fakeMaintenance{}
 	cfg := testLoopConfig()
 	cfg.ReconcileInterval = time.Hour
@@ -238,12 +227,8 @@ func TestSweepAndReconcileWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	l.sweepRound(context.Background())
 	l.reconcileRound(context.Background(), &reconcileTally{})
 	nowMs := uint64(at.UnixMilli())
-	if want := nowMs - uint64(cfg.TerminalRetention.Milliseconds()); len(store.sweeps) != 1 || store.sweeps[0] != want {
-		t.Fatalf("sweep cutoff = %v, want [%d]", store.sweeps, want)
-	}
 	if want := nowMs - uint64(cfg.ReconcileWindow.Milliseconds()); len(store.reconcileArg) != 1 || store.reconcileArg[0] != want {
 		t.Fatalf("reconcile since = %v, want [%d]", store.reconcileArg, want)
 	}
@@ -515,9 +500,8 @@ func TestReconcileRunsWithoutLeadershipAndStopsWithRun(t *testing.T) {
 
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	if len(store.sweeps) != 0 || len(store.dueScans) != 0 || store.gaugeScans != 0 {
-		t.Fatalf("跟随者跑了领导者的循环: sweeps=%d dueScans=%d gauges=%d",
-			len(store.sweeps), len(store.dueScans), store.gaugeScans)
+	if len(store.dueScans) != 0 || store.gaugeScans != 0 {
+		t.Fatalf("跟随者跑了领导者的循环: dueScans=%d gauges=%d", len(store.dueScans), store.gaugeScans)
 	}
 	for _, order := range store.reconcileOrder {
 		if len(order) != 2 || !slices.Contains(order, 2) || !slices.Contains(order, 40) {
@@ -586,13 +570,11 @@ func TestReconcileTallyRetain(t *testing.T) {
 	}
 }
 
-// TestNewLoopsValidates:保留期必须大于签发窗;间隔必须为正;开对账必须有账本读取器。
+// TestNewLoopsValidates:间隔必须为正;开对账必须有账本读取器。
 func TestNewLoopsValidates(t *testing.T) {
 	campaign := func(context.Context, func(context.Context)) {}
 	store := &fakeMaintenance{}
 	bad := []func(c *LoopConfig){
-		func(c *LoopConfig) { c.TerminalRetention = 7 * 24 * time.Hour },
-		func(c *LoopConfig) { c.SweepInterval = 0 },
 		func(c *LoopConfig) { c.NotifyInterval = 0 },
 		func(c *LoopConfig) { c.GaugeInterval = -1 },
 		func(c *LoopConfig) { c.ReconcileWindow = 0 },

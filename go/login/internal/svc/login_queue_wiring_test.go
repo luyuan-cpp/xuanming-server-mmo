@@ -13,7 +13,7 @@ import (
 )
 
 // 本文件盯住 G1b 的接线:出队 leader 锁按本 login 的 Node.ZoneId 拆,
-// 锁键 = Queue.DispatcherLockKey + ":zone:" + ZoneId;开了排队却给不出合法 zone 时起服即失败。
+// 锁键 = Queue.DispatcherLockKey + ":{q:<ZoneId>}"(loginqueue.ZoneDispatcherLockKey);开了排队却给不出合法 zone 时起服即失败。
 //
 // 这几个用例改写包级 config.AppConfig,所以本包用例都不能加 t.Parallel()。
 
@@ -71,7 +71,7 @@ func TestInitLoginQueue_DispatcherLocksOwnZone(t *testing.T) {
 	config.AppConfig.Node.ZoneId = 7
 	config.AppConfig.Queue = loginQueueTestConf(base)
 
-	s := &ServiceContext{RedisClient: rdb}
+	s := &ServiceContext{ControlRedis: rdb}
 	s.initLoginQueue()
 	if s.QueueDispatcher == nil {
 		t.Fatal("Queue.Enabled=true must build a dispatcher")
@@ -121,7 +121,7 @@ func TestInitLoginQueue_ZeroZonePanicsWhenQueueEnabled(t *testing.T) {
 			t.Fatalf("panic = %v, want the dispatcher zone validation", recovered)
 		}
 	}()
-	(&ServiceContext{RedisClient: rdb}).initLoginQueue()
+	(&ServiceContext{ControlRedis: rdb}).initLoginQueue()
 }
 
 // (2026-10-15)开了排队时 QueueEntryTTL 非正、AdmitTTL 不足 1ms 即起服失败(loginqueue.ValidateTTLs),
@@ -156,7 +156,7 @@ func TestInitLoginQueue_NonPositiveTTLPanicsWhenQueueEnabled(t *testing.T) {
 			config.AppConfig.Queue.AdmitTTL = tc.admitTTL
 			config.AppConfig.Queue.QueueEntryTTL = tc.entryTTL
 
-			s := &ServiceContext{RedisClient: rdb}
+			s := &ServiceContext{ControlRedis: rdb}
 			defer func() {
 				recovered := recover()
 				if recovered == nil {
@@ -185,7 +185,7 @@ func TestInitLoginQueue_DisabledSkipsDispatcherValidation(t *testing.T) {
 	config.AppConfig.Queue = loginQueueTestConf("")
 	config.AppConfig.Queue.Enabled = false
 
-	s := &ServiceContext{RedisClient: rdb}
+	s := &ServiceContext{ControlRedis: rdb}
 	s.initLoginQueue()
 	if s.LoginQueue != nil || s.QueueDispatcher != nil {
 		t.Fatal("Queue.Enabled=false must build neither the queue nor the dispatcher")

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"player_inbox/internal/constants"
 	"player_inbox/internal/data"
 
 	inboxpb "proto/player_inbox"
@@ -51,10 +50,6 @@ var adminTokenEnvPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
 // 后台循环参数的合法区间。
 const (
-	minRetentionDays         = 8 // 必须大于签发窗 7 天(设计 §6.2 生产方契约、§9.1)
-	maxRetentionDays         = 365
-	minSweepIntervalSeconds  = 10
-	maxSweepIntervalSeconds  = 86400
 	minGaugeIntervalSeconds  = 5
 	maxGaugeIntervalSeconds  = 3600
 	minNotifyResendSeconds   = 5
@@ -140,10 +135,8 @@ type PlayerInboxConf struct {
 	// v1DisabledEnqueueTypes 里的类型(挂欠款)列进来即拒启。
 	EnqueueTypes []string `json:",optional"`
 
-	// TerminalRetentionDays保留旧配置兼容；全球item现为永久原请求收据，Sweep不再物删。
-	TerminalRetentionDays int `json:",default=30"`
-	// SweepIntervalSeconds:两轮清理之间的间隔;每轮最多删 500 行(设计 §9.1)。
-	SweepIntervalSeconds int `json:",default=600"`
+	// 原来的 TerminalRetentionDays、SweepIntervalSeconds 两项已删除(2026-11-12,数据覆写审计 r2-doc#2):终态行是永久收据,
+	// 没有清理循环(设计 §9.1)。旧配置里还写着这两个键也能启动,go-zero 把它们当未知键忽略。
 	// NotifyResendIntervalSeconds:提醒补发循环的间隔(设计 §6.3:30 秒一轮)。
 	NotifyResendIntervalSeconds int `json:",default=30"`
 	// GaugeIntervalSeconds:扫描型 gauge 的刷新间隔(设计 §9.4,只由领导者产出)。
@@ -388,18 +381,6 @@ func (c *Config) Validate() error {
 	}
 	if _, err := ParseEnqueueTypes(p.EnqueueTypes); err != nil {
 		return err
-	}
-	if p.TerminalRetentionDays < minRetentionDays || p.TerminalRetentionDays > maxRetentionDays {
-		return fmt.Errorf("PlayerInbox.TerminalRetentionDays(%d)必须在 [%d, %d] 内:必须大于签发窗 %v,"+
-			"否则遵守契约的重试可能在行被删后重复入箱", p.TerminalRetentionDays, minRetentionDays, maxRetentionDays,
-			constants.IssuedAtMaxPast)
-	}
-	if time.Duration(p.TerminalRetentionDays)*24*time.Hour <= constants.IssuedAtMaxPast {
-		return fmt.Errorf("PlayerInbox.TerminalRetentionDays(%d 天)必须大于签发窗 %v", p.TerminalRetentionDays, constants.IssuedAtMaxPast)
-	}
-	if p.SweepIntervalSeconds < minSweepIntervalSeconds || p.SweepIntervalSeconds > maxSweepIntervalSeconds {
-		return fmt.Errorf("PlayerInbox.SweepIntervalSeconds(%d)必须在 [%d, %d] 内",
-			p.SweepIntervalSeconds, minSweepIntervalSeconds, maxSweepIntervalSeconds)
 	}
 	if p.NotifyResendIntervalSeconds < minNotifyResendSeconds || p.NotifyResendIntervalSeconds > maxNotifyResendSeconds {
 		return fmt.Errorf("PlayerInbox.NotifyResendIntervalSeconds(%d)必须在 [%d, %d] 内",

@@ -76,7 +76,7 @@ struct PlayerBagsComp
     // Bag::SetCapacityForRestore(快照还原)覆盖。
     //
     // 2026-09-01:改走 BagProfile —— 一个包的**一整套规则**在一处装配。
-    // 此前这里只装配了布局一根轴,再加一根(准入 / 淘汰 / 过期)就要在这里
+    // 此前这里只装配了布局一根轴,再加一根(准入 / 过期)就要在这里
     // 多写一行、并且每处装配点都得记得同改。Profile 把"这个包是什么"收成
     // 一句话。见 docs/design/bag-rule-policy-layering.md §5.2。
     PlayerBagsComp()
@@ -88,7 +88,7 @@ struct PlayerBagsComp
         // 2026-11-05 之前它是先进先出,被挤掉的东西没有去处,等于真丢(审计 cpp-economy#2)。
         // 现在新入账在任何副作用之前被拒、由来源保留(战斗结算整笔延后),
         // 玩家经 RetrieveTemporaryItems 取回人物背包腾出位置后自动补发。
-        // 四个固定包因此全部是 RejectWhenFull:任何包都不会自动销毁玩家的东西。
+        // 背包没有淘汰策略(2026-11-12 整条删除):任何包都不会自动销毁玩家的东西。
         bags[kTemporary].SetProfile(BagProfile::Flat(kTempBagMaxCapacity));
     }
 
@@ -102,7 +102,7 @@ struct PlayerBagsComp
     // 本版本不认识的固定包类型的存档记录:BagAllData 里 bag_type ≥ kBagTypeCount 的条目,以及
     // capacities 下标 ≥ kBagTypeCount 的容量。新版本加了包类型、旧版本(或回滚后的版本)接手这名玩家时,
     // 这些记录原样携带、存盘原样写回,不丢(docs/design/mixed-version-persist-field-protection.md §12,第 5 批)。
-    // 本版本的玩法看不到、也不碰它们:不计入任何包的数量与容量,不参与入包、整理、淘汰。
+    // 本版本的玩法看不到、也不碰它们:不计入任何包的数量与容量,不参与入包、整理。
     // 只由 bag_marshal::Unmarshal 整体重填(重新还原时先清空)、bag_marshal::Marshal 原样追加;全网同版本时两者皆空。
     // 存的是整份 ItemEntry(含其中实例的未知字段),拷贝不会失败,存盘不需要另一道失败分支。
     struct UnsupportedBagTypeRecords

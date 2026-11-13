@@ -1,4 +1,5 @@
-# match 按池撮合的告警(docs/design/global-match-hierarchical-pools.md §5、§14)。安装方式与 rank / mail 相同:
+# match 按池撮合的告警(docs/design/global-match-hierarchical-pools.md §5、§14),以及后台循环的活性(组 match.loop-liveness,
+# docs/design/assetop-redelivery-sharding-20261110.md §14.10)。安装方式与 rank / mail 相同:
 #   kubectl apply -n observability -f deploy/k8s/match-alerts.yaml
 # 抓取前提:集群里要有按注解抓取 match 指标端口(9170,go/match/etc 下服务配置的 MetricsListenAddr)的 job 或 PodMonitor;
 # 本文件里以 match 加下划线开头的词都会被契约测试当成指标名核对,注释里不要写这种形状的文件名。
@@ -68,3 +69,27 @@ spec:
             description: >-
               本副本同时备战的成局数达到 GlobalMatch.GatherSlots。核 scene 备战与 battle 建房耗时;
               容量不够时加副本,不要只调大槽数掩盖下游变慢。
+
+    # 后台循环的活性(2026-11-12,缺口清单第 25 条第六批,docs/design/assetop-redelivery-sharding-20261110.md §14.10)。
+    # 经 StartSourceLoop / StartRelayLoop 起的循环(撮合、成局推进、到期终局恢复、整队维护、观战维护等)与投榜循环
+    # 各报一条「最近一次跑完一轮的时刻」,point 是循环的点位名。按副本、按点位逐条判,不聚合:撮合与投榜按片分给各副本,
+    # 一个副本的循环停住,别的副本照常推进,聚合会把它盖住。没起这个循环的副本、循环已经有意停止的副本没有序列,不会误报。
+    # 阈值 300 秒:现有循环最长 1 分钟一拍、一轮预算最长 30 秒(StartSourceLoop 的注释),300 秒是它们的 3 倍以上。
+    # 每一轮都 panic 时这条会响,同时还有 go-background-alerts.yaml 的 GoBackgroundPanicRecovered;终局发件箱另有一条,
+    # 在 match-outcome-outbox-alerts.yaml。
+    - name: match.loop-liveness
+      interval: 60s
+      rules:
+        - alert: MatchBackgroundLoopStalled
+          expr: |
+            time() - match_loop_last_run_unixtime > 300
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 的 match 后台循环 {{ $labels.point }} 超过 5 分钟没有跑完一轮"
+            description: >-
+              这个副本的 {{ $labels.point }} 已经 {{ $value | printf "%.0f" }} 秒没有跑完一轮:卡在某一轮里不返回、每一轮都 panic,
+              或循环意外退出(序列停在退出的那一刻)。撮合与投榜按片分工,停住的副本名下的撮合段、投榜片没人做,
+              这些段的排队不成局、排名不更新,别的副本照常推进。先按点位名查这个 Pod 的日志(goroutine_panic 事件带栈),
+              再看它连的库与 Redis;查不出就重启这个 Pod,它的片会换到别的副本。

@@ -1,0 +1,80 @@
+# Kafka 消费组 owner(go/shared/kafkautil 的 BoundConsumerGroup)的共用告警:死信、保留期丢失、HOLD(2026-11-12,
+# 排空框架残余第 3、8 条;设计 docs/design/kafka-bound-consumer-group.md §9,处置 docs/ops/kafka-bound-consumer-runbook.md)。
+# 安装方式与其它 PrometheusRule 相同:
+#   kubectl apply -n observability -f deploy/k8s/kafka-bound-consumer-alerts.yaml
+# 抓取前提:用到这个 owner 的服务的指标端口都被抓取 —— data_service 9260、guild 9220、match 9170(各自的 Pod 注解或 PodMonitor)。
+# 本文件里以 kafka 加下划线开头的词都会被契约测试当成指标名核对,注释里不要写这种形状的词。
+# 指标只带 group(消费组名,配置常量)与固定的 stage / cause,不带分区、offset、玩家或对局号;构造 owner 时预置为 0,
+# 第一次增长也能被 increase 抓到(死信序列只给打开了死信的组预置)。
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kafka-bound-consumer-alerts
+  labels:
+    app: kafka-consumers
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: kafka.bound-consumer
+      interval: 30s
+      rules:
+        # 有记录转了死信:回调失败到预算(guild-trial 20 次,约 7.5 分钟)或判成无法处理(解不出),原件写进 <group>-dlq 之后提交越过它。
+        # 数据没丢(死信保留 90 天),但这条没被处理:修好原因之后要人工重放。任何一条都响。
+        - alert: KafkaBoundConsumerDeadLettered
+          expr: |
+            sum by (group, cause) (increase(kafka_bound_consumer_dead_lettered_total[15m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "消费组 {{ $labels.group }} 有 {{ $value | printf \"%.0f\" }} 条记录转了死信({{ $labels.cause }})"
+            description: >-
+              原件(原 topic / 分区 / offset、key、value、headers、原因、次数)在死信 topic「消费组名-dlq」里,原 topic 的位点已越过它。
+              cause=exhausted:回调持续失败,多半是依赖(TiDB / Redis / 号段)长时间不可用,也可能是这一条触发了 bug;
+              cause=unprocessable:记录本身处理不了(解不出、违反契约),要先修生产者或解码。
+              按 docs/ops/kafka-bound-consumer-runbook.md 用手册里的死信工具列出、核对后重放;guild-trial 的历练若已登记,
+              巡检器多半已从 match 的 SQL 终局结算过,重放会走幂等闸门回「已结算」。
+
+        # 死信写不进去:记录留在原处、按退避重写,这个分区停在这一条上,直到死信写成功(不越过、不跳过)。
+        - alert: KafkaBoundConsumerDeadLetterWriteFailing
+          expr: |
+            sum by (group) (increase(kafka_bound_consumer_retry_total{stage="dead_letter"}[10m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "消费组 {{ $labels.group }} 写死信持续失败,所在分区停在毒丸上"
+            description: >-
+              查服务日志 `[kafka-bound]` 里 stage=dead_letter 的错误:死信 topic 不存在(启动时 EnsureTopics 没建成)、ISR 不足(acks=all 写不进)、
+              broker 不可达。修好 Kafka 侧之后自动写入并继续消费。积压期间盯住对应消费组的保留期丢失告警。
+
+        # 保留期删掉了本组还没处理的记录:**数据已丢**。owner 不静默跳过,而是 HOLD 并永久停止取新(维护排空也会因此 HOLD)。
+        - alert: KafkaBoundConsumerRetentionLoss
+          expr: |
+            sum by (group) (increase(kafka_bound_consumer_retention_loss_total[15m])) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "消费组 {{ $labels.group }} 发现保留期删掉了还没处理的记录,消费者已停"
+            description: >-
+              服务日志 `RECORDS DELETED BY RETENTION BEFORE THIS GROUP PROCESSED THEM` 一行给出分区、应到 offset 与日志起点(丢失范围)。
+              这个组在该分区上再也越不过缺口:每次打开分区都会因「提交点越过保留范围」再次 HOLD,data_service 会反复退出。
+              按 docs/ops/kafka-bound-consumer-runbook.md 记录丢失范围、上报负责人,停掉该组全部消费者后把该分区的组内位点重置到日志起点,再启动。
+
+        # owner 记了 HOLD(结局未知)。维护排空之外出现,就是这个消费组的 owner 永久停止取新了,要人看。
+        # 排空期间的 HOLD 由排空流程本身报出(收据 HOLD),这条照样会响,对照排空记录判断。
+        - alert: KafkaBoundConsumerHold
+          expr: |
+            sum by (group) (increase(kafka_bound_consumer_hold_total[15m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "消费组 {{ $labels.group }} 的 owner 记了 HOLD"
+            description: >-
+              查服务日志 `[kafka-bound]` 与服务自己的 HOLD 行(match「[rating] result consumer HOLD」、guild「Trial result consumer HOLD」、
+              data_service 退出原因):不变量破坏、提交点越过保留期、保留期丢失,或排空收尾核不到交还记录的结局。
+              维护排空之外出现时,处置见 docs/ops/kafka-bound-consumer-runbook.md,修复后重启该服务。

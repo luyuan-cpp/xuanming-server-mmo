@@ -12,12 +12,15 @@ package com.game.gateway.ratelimit;
 public interface RateLimitStore {
 
     /**
-     * 先判 IP 桶、再判区桶,一次原子地决定:
+     * 先判 IP 桶、再判区桶:
      * <ul>
      *   <li>IP 桶不足一个令牌 → {@link Admission.Kind#IP_EMPTY},两个桶都不扣;</li>
-     *   <li>区桶不足一个令牌 → {@link Admission.Kind#ZONE_EMPTY},两个桶都不扣(排队中的重试不吃 IP 桶);</li>
+     *   <li>区桶不足一个令牌 → {@link Admission.Kind#ZONE_EMPTY},两个桶都不算扣(排队中的重试不吃 IP 桶);</li>
      *   <li>都够 → {@link Admission.Kind#OK},两个桶各扣一个令牌。</li>
      * </ul>
+     * 两个桶不必在同一个原子操作里判(2026-11-12 起 Redis 实现是每个桶一段单键脚本,区桶空时退还 IP 令牌,两键可以在
+     * Redis Cluster 的不同节点上)。实现只许因此偏严(判定中途别的请求看到 IP 桶少一个令牌,或退还失败多扣一个),
+     * 不许偏松;细节见 {@link RedisRateLimitStore}。
      *
      * @param zone 区桶;null = 只判 IP 桶(zone_id = 0 的「任选一区」请求)
      */

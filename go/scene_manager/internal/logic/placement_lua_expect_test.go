@@ -27,7 +27,7 @@ func luaExpectEval(t *testing.T, sc *svc.ServiceContext, script string, playerID
 	if script == luaMintEpochAndSetLocation {
 		args = mintLuaArgs(args...)
 	}
-	result, err := sc.Redis.Eval(script, luaExpectKeys(playerID), args...)
+	result, err := playerRedisEval(sc, script, luaExpectKeys(playerID), args...)
 	require.NoError(t, err)
 	return fmt.Sprint(result)
 }
@@ -35,9 +35,9 @@ func luaExpectEval(t *testing.T, sc *svc.ServiceContext, script string, playerID
 // luaExpectSeed 摆 epoch 键与 location;loc 为空串时不写 location。
 func luaExpectSeed(t *testing.T, sc *svc.ServiceContext, playerID uint64, epoch string, loc string) {
 	t.Helper()
-	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), epoch))
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), epoch))
 	if loc != "" {
-		require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), loc))
+		require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), loc))
 	}
 }
 
@@ -107,7 +107,7 @@ func TestMintLuaLocationExpectModes(t *testing.T) {
 		sc, _ := newTestSvcCtxWithWorldScenes(t)
 		const playerID = uint64(6809)
 		luaExpectSeed(t, sc, playerID, "1", "rewritten")
-		require.NoError(t, sc.Redis.Set(ownerepoch.HandoffKey(playerID), "1:999"))
+		require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.HandoffKey(playerID), "1:999"))
 		assert.Equal(t, "0", luaExpectEval(t, sc, luaMintEpochAndSetLocation, playerID, "1", "new", "1:1757000000000", "present", "observed"))
 	})
 }
@@ -121,7 +121,7 @@ func TestMintLuaReplayRecognitionPrecedesLocationExpect(t *testing.T) {
 		marker   = "1:1757000000000"
 	)
 	luaExpectSeed(t, sc, playerID, "1", "observed")
-	require.NoError(t, sc.Redis.Set(ownerepoch.HandoffKey(playerID), marker))
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.HandoffKey(playerID), marker))
 
 	assert.Equal(t, "2", luaExpectEval(t, sc, luaMintEpochAndSetLocation, playerID, "1", "placed", marker, "present", "observed"))
 	// go-redis 原样重发同一条 EVAL:epoch 已是 2、location 已是 placed。

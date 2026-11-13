@@ -69,8 +69,6 @@ func testConfig() config.Config {
 	c.Kafka = config.KafkaConf{Brokers: []string{"127.0.0.1:9092"}, WriteTimeoutMs: 2000}
 	c.PlayerInbox = config.PlayerInboxConf{
 		EnqueueTypes:                []string{"PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN"},
-		TerminalRetentionDays:       30,
-		SweepIntervalSeconds:        600,
 		NotifyResendIntervalSeconds: 30,
 		GaugeIntervalSeconds:        60,
 		ReconcileIntervalMinutes:    60,

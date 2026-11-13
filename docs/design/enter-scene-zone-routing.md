@@ -173,6 +173,7 @@ SceneManager 正常启动已要求 `DataServiceRpc` 和角色目录签名能力�
 | `world_channels:zone:<zone>:<conf>` | 按运行区和地图配置维护的世界频道集合 |
 | `player:{<id>}:location` | `PlayerLocation`：scene_id、node_id、update_time、zone_id、owner_epoch、pending_scene_conf_id、rollback_receipt、session_id、login_generation |
 | `player:{<id>}:owner_epoch` | 持有归属代次；不随离场删除，不能通过删键重置 |
+| `player:{<id>}:owner_epoch_confirmed` | 已确认落盘的归属代次，TTL 7 天；只有 SceneManager 读写。不铸造就下发 owner_epoch 之前必须等于要下发的值，否则先确认落盘（[Redis 回退防护](zone-redis-regression-guard-20261022.md) §4.3.5） |
 | `player:{<id>}:handoff` | `<epoch>:<saved_at_ms>`；源 Scene 条件写入，特定失败回滚可由 SceneManager 转写，TTL 300 秒 |
 | `player:{<id>}:location_revision` | SQL 角色修订与位置原文摘要的绑定标签 |
 | `player:{<id>}:location_revision_floor` | 已观察角色修订下界，不是授权真源 |

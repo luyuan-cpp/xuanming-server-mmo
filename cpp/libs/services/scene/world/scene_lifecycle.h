@@ -3,6 +3,7 @@
 #include "engine/core/utils/registry/scene_entity.h"
 
 #include <cstddef>
+#include <cstdint>
 
 class CreateSceneRequest;
 class SceneInfoComp;
@@ -31,4 +32,13 @@ public:
     // 两个 CreateScene 入口在按 scene_id 去重之前、两个 DestroyScene 入口在查找实体之前判定:过期的建场景回空应答,
     // 过期的拆场景忽略。节点自己的归属对账器直接调 DestroyScene,不经这里。
     [[nodiscard]] static ScenePlacementFence& PlacementFence();
+
+    // CreateScene 的 zone 核对(docs/design/redis-cluster-all-domains-20261110.md §3.4),两个入口在任何副作用之前判定
+    // (gRPC 面在等 Agones 创建许可之前)。scene_manager 把场景的控制域键写在请求 zone 的 {ctl:<z>} 下,本节点的归属对账
+    // 只按自己的 zone 拼键:建了别的 zone 的场景,对账读不到它的属主,确认两次就会拆掉这个活场景。所以 zone 不是本节点的
+    // 就拒建,没填(0)同样拒建。纯函数。
+    [[nodiscard]] static constexpr bool AdmitsCreateZone(std::uint32_t requestZoneId, std::uint32_t nodeZoneId)
+    {
+        return requestZoneId != 0 && requestZoneId == nodeZoneId;
+    }
 };

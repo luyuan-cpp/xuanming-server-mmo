@@ -111,6 +111,14 @@ const (
 // (含触发家族吊销的重用),或所属家族已吊销。与存储故障、数据损坏区分开,调用方据此决定日志级别。
 var ErrRefreshRejected = errors.New("refresh token rejected")
 
+// ErrAccessRejected:access token 不能用来认证。格式不对、不是 access、未知、过期、所属家族已吊销,或存的记录与令牌对不上。
+// 与存储故障区分开:调用方据此决定是让客户端重新登录(拒绝),还是回故障让它稍后重试(Redis 抖动不该把人踢回登录页)。
+var ErrAccessRejected = errors.New("access token rejected")
+
+// errTokenRecordInvalid:令牌的键在,存的记录却损坏或与令牌对不上(身份字段缺失、家族号或账号 tag 不符)。
+// 这枚令牌没法兑现,对 access 按拒绝处理;Refresh 照旧按存储错误处理(行为不变)。
+var errTokenRecordInvalid = errors.New("token record invalid")
+
 // errMalformedToken:令牌字符串不是 <AccountTag>.<secret>,或类型与用途不符。没有访问 Redis,与「令牌不存在」对调用方是同一种无效令牌。
 var errMalformedToken = errors.New("token malformed")
 
@@ -306,14 +314,20 @@ func (m *Manager) Issue(ctx context.Context, account, authType, deviceID string)
 
 // ValidateAccess validates an access token, returns the account if valid.
 // 家族被吊销(重用、封顶淘汰、RevokeAll)之后,它签出的 access 即刻无效,不必等 2h 过期。
+//
+// 令牌本身不能用(格式、未知、过期、家族失效、记录对不上)的错误都包 ErrAccessRejected;
+// 没包它的是存储故障(读 Redis、跑校验脚本失败),令牌可能是好的,调用方应当回故障、让客户端稍后重试。
 func (m *Manager) ValidateAccess(ctx context.Context, accessToken string) (*TokenData, error) {
 	t, ok := parseToken(accessToken)
 	if !ok || t.kind != accessKind {
-		return nil, errMalformedToken
+		return nil, fmt.Errorf("%w: %w", ErrAccessRejected, errMalformedToken)
 	}
 	key := redisslot.AccessTokenKey(t.tag, t.secret)
 	raw, data, err := m.load(ctx, t, key)
 	if err != nil {
+		if errors.Is(err, errTokenNotFound) || errors.Is(err, errTokenRecordInvalid) {
+			return nil, fmt.Errorf("%w: %w", ErrAccessRejected, err)
+		}
 		return nil, err
 	}
 	valid, err := validateFamilyAccessScript.Run(ctx, m.rdb, []string{key, redisslot.RefreshFamilyKey(t.tag, t.familyID), redisslot.AccountRefreshKey(data.Account)}, raw, data.Account, t.familyID, redisslot.RefreshTokenKeyPrefix(t.tag)).Int64()
@@ -321,7 +335,7 @@ func (m *Manager) ValidateAccess(ctx context.Context, accessToken string) (*Toke
 		return nil, fmt.Errorf("validate token family: %w", err)
 	}
 	if valid != 1 {
-		return nil, fmt.Errorf("token family 已失效或不匹配")
+		return nil, fmt.Errorf("%w: token family 已失效或不匹配", ErrAccessRejected)
 	}
 	return data, nil
 }
@@ -619,16 +633,16 @@ func (m *Manager) load(ctx context.Context, t parsedToken, key string) ([]byte, 
 
 	var data TokenData
 	if err := json.Unmarshal(val, &data); err != nil {
-		return nil, nil, fmt.Errorf("unmarshal token data: %w", err)
+		return nil, nil, fmt.Errorf("%w: unmarshal token data: %v", errTokenRecordInvalid, err)
 	}
 	if data.Account == "" || data.AuthType == "" || data.CreatedAt <= 0 {
-		return nil, nil, fmt.Errorf("token payload 身份字段损坏")
+		return nil, nil, fmt.Errorf("%w: token payload 身份字段损坏", errTokenRecordInvalid)
 	}
 	if data.FamilyID != t.familyID {
-		return nil, nil, fmt.Errorf("token family 与令牌不符")
+		return nil, nil, fmt.Errorf("%w: token family 与令牌不符", errTokenRecordInvalid)
 	}
 	if redisslot.AccountTag(data.Account) != t.tag {
-		return nil, nil, fmt.Errorf("token tag 与账号不匹配")
+		return nil, nil, fmt.Errorf("%w: token tag 与账号不匹配", errTokenRecordInvalid)
 	}
 	return val, &data, nil
 }

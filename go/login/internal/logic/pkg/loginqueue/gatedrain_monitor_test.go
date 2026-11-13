@@ -10,6 +10,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"shared/gatepick"
 )
 
 // ── 纯判定函数 ──────────────────────────────────────────────────────────
@@ -62,16 +64,16 @@ func TestEvaluateDrainingGates_MarksDrainedOnlyForDrainingGates(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().Unix()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, now, 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, now, 600))
 
 	gates := []GateOnline{{NodeID: 1, PlayerCount: 0}, {NodeID: 2, PlayerCount: 0}}
-	drained := EvaluateDrainingGates(ctx, rdb, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
+	drained := EvaluateDrainingGates(ctx, rdb, testMarkZone, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
 
 	require.Len(t, drained, 1)
 	assert.EqualValues(t, 2, drained[0].NodeID)
 
-	assert.True(t, mr.Exists(gateDrainedKey(2)))
-	assert.False(t, mr.Exists(gateDrainedKey(1)), "没标 draining 的 gate 不该被判定")
+	assert.True(t, mr.Exists(gatepick.DrainedKey(testMarkZone, 2)))
+	assert.False(t, mr.Exists(gatepick.DrainedKey(testMarkZone, 1)), "没标 draining 的 gate 不该被判定")
 }
 
 // 还有人 -> 不打 drained 标记。
@@ -80,13 +82,13 @@ func TestEvaluateDrainingGates_BusyGateIsNotMarked(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().Unix()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, now, 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, now, 600))
 
 	gates := []GateOnline{{NodeID: 2, PlayerCount: 500}}
-	drained := EvaluateDrainingGates(ctx, rdb, gates, GateDrainPolicy{DrainedBelowPlayers: 0, DeadlineSeconds: 600}, now)
+	drained := EvaluateDrainingGates(ctx, rdb, testMarkZone, gates, GateDrainPolicy{DrainedBelowPlayers: 0, DeadlineSeconds: 600}, now)
 
 	assert.Empty(t, drained)
-	assert.False(t, mr.Exists(gateDrainedKey(2)))
+	assert.False(t, mr.Exists(gatepick.DrainedKey(testMarkZone, 2)))
 }
 
 // 取消排空后,残留的 drained 标记必须被清掉 ——
@@ -96,16 +98,16 @@ func TestEvaluateDrainingGates_ClearsStaleDrainedMark(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().Unix()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, now, 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, now, 600))
 	gates := []GateOnline{{NodeID: 2, PlayerCount: 0}}
-	EvaluateDrainingGates(ctx, rdb, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
-	require.True(t, mr.Exists(gateDrainedKey(2)))
+	EvaluateDrainingGates(ctx, rdb, testMarkZone, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
+	require.True(t, mr.Exists(gatepick.DrainedKey(testMarkZone, 2)))
 
 	// 运维取消了缩容。
-	require.NoError(t, ClearGateDraining(ctx, rdb, 2))
-	EvaluateDrainingGates(ctx, rdb, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
+	require.NoError(t, ClearGateDraining(ctx, rdb, testMarkZone, 2))
+	EvaluateDrainingGates(ctx, rdb, testMarkZone, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
 
-	assert.False(t, mr.Exists(gateDrainedKey(2)), "cancelled drain must not leave a stale drained mark")
+	assert.False(t, mr.Exists(gatepick.DrainedKey(testMarkZone, 2)), "cancelled drain must not leave a stale drained mark")
 }
 
 // drained 标记不能比 draining 标记活得久:draining 一过期 gate 就重新接客了。
@@ -114,14 +116,14 @@ func TestEvaluateDrainingGates_DrainedMarkDoesNotOutliveDrainingMark(t *testing.
 	ctx := context.Background()
 	now := time.Now().Unix()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, now, 60))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, now, 60))
 	gates := []GateOnline{{NodeID: 2, PlayerCount: 0}}
-	EvaluateDrainingGates(ctx, rdb, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
-	require.True(t, mr.Exists(gateDrainedKey(2)))
+	EvaluateDrainingGates(ctx, rdb, testMarkZone, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
+	require.True(t, mr.Exists(gatepick.DrainedKey(testMarkZone, 2)))
 
 	mr.FastForward(61 * time.Second)
-	assert.False(t, mr.Exists(gateDrainingKey(2)))
-	assert.False(t, mr.Exists(gateDrainedKey(2)))
+	assert.False(t, mr.Exists(gatepick.DrainingKey(testMarkZone, 2)))
+	assert.False(t, mr.Exists(gatepick.DrainedKey(testMarkZone, 2)))
 }
 
 // 超时放行时理由必须是 deadline,让运维知道这次缩容会断人。
@@ -130,15 +132,15 @@ func TestEvaluateDrainingGates_DeadlineReasonIsRecorded(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().Unix()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, now-700, 3600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, now-700, 3600))
 
 	gates := []GateOnline{{NodeID: 2, PlayerCount: 30}}
-	drained := EvaluateDrainingGates(ctx, rdb, gates, GateDrainPolicy{DrainedBelowPlayers: 0, DeadlineSeconds: 600}, now)
+	drained := EvaluateDrainingGates(ctx, rdb, testMarkZone, gates, GateDrainPolicy{DrainedBelowPlayers: 0, DeadlineSeconds: 600}, now)
 
 	require.Len(t, drained, 1)
 	assert.Equal(t, DrainReasonDeadline, drained[0].Reason)
 
-	stored, err := rdb.Get(ctx, gateDrainedKey(2)).Result()
+	stored, err := rdb.Get(ctx, gatepick.DrainedKey(testMarkZone, 2)).Result()
 	require.NoError(t, err)
 	assert.Equal(t, DrainReasonDeadline, stored)
 }
@@ -146,13 +148,13 @@ func TestEvaluateDrainingGates_DeadlineReasonIsRecorded(t *testing.T) {
 // 空输入 / nil 客户端不 panic。
 func TestEvaluateDrainingGates_DegenerateInputs(t *testing.T) {
 	ctx := context.Background()
-	assert.Nil(t, EvaluateDrainingGates(ctx, nil, []GateOnline{{NodeID: 1}}, GateDrainPolicy{}, 0))
+	assert.Nil(t, EvaluateDrainingGates(ctx, nil, testMarkZone, []GateOnline{{NodeID: 1}}, GateDrainPolicy{}, 0))
 
 	rdb, _ := newDrainRedis(t)
-	assert.Nil(t, EvaluateDrainingGates(ctx, rdb, nil, GateDrainPolicy{}, 0))
+	assert.Nil(t, EvaluateDrainingGates(ctx, rdb, testMarkZone, nil, GateDrainPolicy{}, 0))
 
 	// monitor 在参数不全时必须直接返回,不起 goroutine。
-	StartGateDrainMonitor(ctx, nil, nil, GateDrainPolicy{}, 0)
+	StartGateDrainMonitor(ctx, nil, testMarkZone, nil, GateDrainPolicy{}, 0)
 }
 
 // beforeRedisCmdHook 在指定命令发出前执行 fn,用来把"判定途中标记被改"这种并发时序
@@ -193,23 +195,23 @@ func TestEvaluateDrainingGates_DrainingDeletedMidEvaluationSkipsDrainedMark(t *t
 	ctx := context.Background()
 	now := time.Now().Unix()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, now, 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, now, 600))
 	// 上一轮留下、还没被清掉的 drained。
-	require.NoError(t, mr.Set(gateDrainedKey(2), DrainReasonBelowThreshold))
+	require.NoError(t, mr.Set(gatepick.DrainedKey(testMarkZone, 2), DrainReasonBelowThreshold))
 
 	fired := 0
 	rdb.AddHook(beforeRedisCmdHook{cmd: "ttl", fn: func() {
 		fired++
-		mr.Del(gateDrainingKey(2))
+		mr.Del(gatepick.DrainingKey(testMarkZone, 2))
 	}})
 
 	gates := []GateOnline{{NodeID: 2, PlayerCount: 0}}
-	drained := EvaluateDrainingGates(ctx, rdb, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
+	drained := EvaluateDrainingGates(ctx, rdb, testMarkZone, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
 
 	require.Equal(t, 1, fired, "删除必须恰好发生在读 TTL 之前,否则这条用例没测到竞态")
 	assert.Empty(t, drained, "draining 已撤的 gate 不能算作可缩容")
-	assert.False(t, mr.Exists(gateDrainingKey(2)))
-	assert.False(t, mr.Exists(gateDrainedKey(2)), "draining 已撤,drained 既不能补写也不能残留")
+	assert.False(t, mr.Exists(gatepick.DrainingKey(testMarkZone, 2)))
+	assert.False(t, mr.Exists(gatepick.DrainedKey(testMarkZone, 2)), "draining 已撤,drained 既不能补写也不能残留")
 }
 
 // 读 draining TTL 失败(网络抖动 / 超时)时跳过本轮写入 —— 旧实现在这里回落成 1h 补写,
@@ -219,7 +221,7 @@ func TestEvaluateDrainingGates_DrainingTTLReadErrorSkipsDrainedMark(t *testing.T
 	ctx := context.Background()
 	now := time.Now().Unix()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, now, 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, now, 600))
 
 	fired := 0
 	rdb.AddHook(beforeRedisCmdHook{
@@ -229,12 +231,12 @@ func TestEvaluateDrainingGates_DrainingTTLReadErrorSkipsDrainedMark(t *testing.T
 	})
 
 	gates := []GateOnline{{NodeID: 2, PlayerCount: 0}}
-	drained := EvaluateDrainingGates(ctx, rdb, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
+	drained := EvaluateDrainingGates(ctx, rdb, testMarkZone, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
 
 	require.Equal(t, 1, fired, "TTL 必须真的以错误返回,否则这条用例没测到失败分支")
 	assert.Empty(t, drained, "TTL 读失败的 gate 本轮不能算作可缩容")
-	assert.False(t, mr.Exists(gateDrainedKey(2)), "TTL 读失败时不能补写 drained")
-	assert.True(t, mr.Exists(gateDrainingKey(2)), "判定循环不碰 draining 本身")
+	assert.False(t, mr.Exists(gatepick.DrainedKey(testMarkZone, 2)), "TTL 读失败时不能补写 drained")
+	assert.True(t, mr.Exists(gatepick.DrainingKey(testMarkZone, 2)), "判定循环不碰 draining 本身")
 }
 
 // draining 拿不到正的剩余 TTL 时跳过写入,不能补一个猜的 TTL。
@@ -254,17 +256,17 @@ func TestEvaluateDrainingGates_DrainingWithoutPositiveTTLSkipsDrainedMark(t *tes
 			ctx := context.Background()
 			now := time.Now().Unix()
 
-			require.NoError(t, mr.Set(gateDrainingKey(2), strconv.FormatInt(now, 10)))
+			require.NoError(t, mr.Set(gatepick.DrainingKey(testMarkZone, 2), strconv.FormatInt(now, 10)))
 			if tc.ttl > 0 {
-				mr.SetTTL(gateDrainingKey(2), tc.ttl)
+				mr.SetTTL(gatepick.DrainingKey(testMarkZone, 2), tc.ttl)
 			}
 
 			gates := []GateOnline{{NodeID: 2, PlayerCount: 0}}
-			drained := EvaluateDrainingGates(ctx, rdb, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
+			drained := EvaluateDrainingGates(ctx, rdb, testMarkZone, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now)
 
 			assert.Empty(t, drained)
-			assert.False(t, mr.Exists(gateDrainedKey(2)), "拿不到正的剩余 TTL 时不能写 drained")
-			assert.True(t, mr.Exists(gateDrainingKey(2)), "判定循环不碰 draining 本身")
+			assert.False(t, mr.Exists(gatepick.DrainedKey(testMarkZone, 2)), "拿不到正的剩余 TTL 时不能写 drained")
+			assert.True(t, mr.Exists(gatepick.DrainingKey(testMarkZone, 2)), "判定循环不碰 draining 本身")
 		})
 	}
 }
@@ -275,11 +277,11 @@ func TestEvaluateDrainingGates_DrainedTTLFollowsDrainingRemainingTTL(t *testing.
 	ctx := context.Background()
 	now := time.Now().Unix()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, now, 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, now, 600))
 	mr.FastForward(100 * time.Second)
 
 	gates := []GateOnline{{NodeID: 2, PlayerCount: 0}}
-	require.Len(t, EvaluateDrainingGates(ctx, rdb, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now), 1)
+	require.Len(t, EvaluateDrainingGates(ctx, rdb, testMarkZone, gates, GateDrainPolicy{DrainedBelowPlayers: 0}, now), 1)
 
-	assert.Equal(t, 500*time.Second, mr.TTL(gateDrainedKey(2)))
+	assert.Equal(t, 500*time.Second, mr.TTL(gatepick.DrainedKey(testMarkZone, 2)))
 }

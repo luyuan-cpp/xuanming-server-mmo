@@ -58,16 +58,14 @@ func (r *GuildRepo) lockRolePrefix(ctx context.Context, tx *sql.Tx) error {
 	return err
 }
 
-// 受理预检用于读接口；读本库副本,不加锁。所有写仍在runTxBody持副本行锁复核同一份原会话。
+// CheckOriginalRole 是客户端入口的归属预检(docs/design/gate-online-identity.md §9.3),读接口靠它核归属:不加锁读本库副本,
+// 只判角色此刻是否仍归原会话身份,冻结不拦(rolefence.Guard.VerifyOwner,与 match、trade 同一个判据)。
+// 所有写仍在 runTxBody 持副本行锁按 rolefence.Check 复核同一份原会话:冻结的角色读得到自己的帮会数据,写不进去。
+// 确定不归回 ErrWriteConflict(目录里没有这名角色回 *rolefence.RoleNotFoundError);其余错误是这一次判不了。
 func (r *GuildRepo) CheckOriginalRole(ctx context.Context) error {
 	original, ok := roleidentity.Original(ctx)
 	if !ok || r.fence == nil {
 		return ErrWriteConflict
 	}
-	player := original.Role.PlayerId
-	expect := rolefence.Expect{PlayerID: player, Account: original.Account, OwnerRevision: original.OwnerRevision, Reject: ErrWriteConflict}
-	return r.fence.RunTx(ctx, func() error {
-		fence, err := rolefence.Read(ctx, r.db, player)
-		return rolefence.Check(fence, err, expect)
-	})
+	return r.fence.VerifyOwner(ctx, rolefence.Expect{PlayerID: original.Role.PlayerId, Account: original.Account, OwnerRevision: original.OwnerRevision, Reject: ErrWriteConflict})
 }

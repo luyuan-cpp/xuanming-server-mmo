@@ -183,7 +183,7 @@ func repairGateIndexMemberKeys(playerID uint64, gate string) []string {
 }
 
 // readGateIndexGen 读代次;键不存在时为 "0"(与 setGateIndexReadyIfGenScript 的比较口径一致)。
-func readGateIndexGen(ctx context.Context, rdb *redis.Client) (string, error) {
+func readGateIndexGen(ctx context.Context, rdb redis.UniversalClient) (string, error) {
 	gen, err := rdb.Get(ctx, gateIndexGenKey).Result()
 	if err == redis.Nil {
 		return "0", nil

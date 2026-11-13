@@ -32,6 +32,8 @@ func TestPlayerKeyGoldenVectors(t *testing.T) {
 		{BattleLockKey(maxID), "battle:lock:{18446744073709551615}"},
 		{BattleCtxKey(42), "battle:ctx:{42}"},
 		{AfkPassKey(42), "player:afk_pass:{42}"},
+		{HostedPresenceKey(42), "player:{42}:hosted_presence"},
+		{HostedReturnKey(42), "player:{42}:hosted_return"},
 		{SessionKey(42), "player:session:{42}"},
 		{SessionKey(maxID), "player:session:{18446744073709551615}"},
 	}
@@ -50,6 +52,7 @@ func TestPlayerKeysShareThePlayerSlot(t *testing.T) {
 			LocationKey(pid), LocationRevisionKey(pid), LocationRevisionFloorKey(pid), LeaveReleaseWaitKey(pid),
 			ChannelSwitchCooldownKey(pid), EnterSceneDedupKey(pid, "r"), LoginGenerationKey(pid), PlayerLockerKey(pid),
 			LoginIdempotentKey(pid, "r"), BattleLockKey(pid), BattleCtxKey(pid), AfkPassKey(pid), SessionKey(pid),
+			HostedPresenceKey(pid), HostedReturnKey(pid),
 		} {
 			if !HasHashTag(key) {
 				t.Errorf("pid %d: %q 没带 hash tag", pid, key)

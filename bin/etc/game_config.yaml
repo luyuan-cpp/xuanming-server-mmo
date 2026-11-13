@@ -18,27 +18,20 @@ ZoneId: 1
 # 环境变量 BATTLE_TABLE_FINGERPRINT_MODE 可覆盖(K8s 灰度用)。
 battle_table_fingerprint_mode: warn
 
-# Zone redis 配置
-zoneredis:
-  host: "127.0.0.1"        # Redis 服务器地址
-  port: 6379               # Redis 服务器端口
-  password: ""             # 空 = 不认证(本机无口令 Redis);带口令的环境用环境变量 ZONE_REDIS_PASSWORD 注入,值不进日志
-  db: 0                    # 使用的 Redis 数据库编号
-  timeout: 3000            # 连接 Redis 的超时时间（毫秒）
-  max_connections: 100     # 最大连接数
-  retry_interval: 1000     # 连接重试间隔时间（毫秒）
+# 控制集群 Redis(docs/design/redis-cluster-all-domains-20261110.md §4.2、§5.2),只有 scene 连它:scene_manager 写的分线目录、
+# 神秘商人读模型,场景归属对账,资产待办唤醒(SPUBLISH 分片频道)。gate、battle 不连 Redis。
+#   mode      standalone | cluster,其它取值 scene 拒绝启动
+#   seeds     host:port 列表。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑
+#   password  空 = 不认证(本机无口令 Redis);带口令的环境用环境变量 CONTROL_REDIS_PASSWORD 注入,值不进日志
+# 整段或单键缺失时取默认:standalone、127.0.0.1:6379、不认证。Cluster 只有 0 号库,不写库号。
+control_redis:
+  mode: standalone
+  seeds: ["127.0.0.1:6379"]
+  password: ""
 
-# 本 zone 的场景控制域 Redis(docs/design/control-plane-zone-scoping-20261105.md §4.5),只有 scene 连它:scene_manager 写的
-# 分线目录、神秘商人读模型。整段缺失 = 与上面的 zoneredis 是同一个实例,开发环境不用改。K8s 上指向本 zone 所属组的
-# redis-ctl-g<N>,由 k8s_deploy.ps1 渲染。写了这一段时 host 必填,口令不继承 zoneredis,可用环境变量
-# SCENE_CONTROL_REDIS_PASSWORD 注入,值不进日志。
-# scene_control_redis:
-#   host: "127.0.0.1"
-#   port: 6379
-#   password: ""
-
-# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它;上面的 zoneredis 是核心共享实例。
-# 整段缺失 = standalone,地址与口令沿用 zoneredis,开发环境不用改。上集群时打开:
+# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它。
+# 整段缺失 = 与上面的 control_redis 是同一个实例或集群(模式、种子与口令都沿用),开发环境不用改。上集群时打开,
+# 写了这一段就是另一个实例或集群,种子必填,口令不继承 control_redis:
 #   mode      standalone | cluster,其它取值 scene 拒绝启动
 #   seeds     host:port 列表。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑
 #   password  空 = 不认证;带口令的环境用环境变量 PLAYER_REDIS_PASSWORD 注入,值不进日志

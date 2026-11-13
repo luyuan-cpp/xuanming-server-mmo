@@ -69,6 +69,15 @@ for n in "${TIERS[@]}"; do
         | while read -r k; do [[ -n "$k" ]] && redis-cli -h "$node_host" -p "$node_port" DEL "$k" >/dev/null; done
     done
   done
+  # REDIS_CONTROL_NODES:控制集群(redis-control)全部节点的 host:port(空格分隔)。player_locator 的 gate 索引控制键
+  # (就绪 / 代次 / 审计 / 一遍的进度,形如 player:gate_index:<名>:{pl:gix})在控制集群上;SCAN 只看本节点,所以逐个主节点扫,
+  # 副本跳过。单实例开发时它们在本机实例上,上面那一轮已经清掉。
+  for node in ${REDIS_CONTROL_NODES:-}; do
+    node_host="${node%:*}"; node_port="${node##*:}"
+    [[ "$(redis-cli -h "$node_host" -p "$node_port" --raw role 2>/dev/null | head -n 1)" == "slave" ]] && continue
+    redis-cli -h "$node_host" -p "$node_port" --scan --pattern 'player:gate_index:*' 2>/dev/null \
+      | while read -r k; do [[ -n "$k" ]] && redis-cli -h "$node_host" -p "$node_port" DEL "$k" >/dev/null; done
+  done
 
   # Materialize a tier-specific config from the template.
   cfg="${ROBOT_DIR}/etc/robot.stress-${n}.yaml"

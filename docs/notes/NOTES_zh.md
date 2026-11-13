@@ -106,7 +106,7 @@
 | #251 | 跨场景消息投递 | `cross_scene_player_messaging.md` + `route_message_response_handler.cpp` |
 | #257 | 玩家跨服分区只是存储不同 | `cross_server_architecture_principle.md` |
 | #258 | AOI 优先级 | `aoi.cpp` + `aoi_priority_design.md` + `aoi_test/` |
-| #262 | 全服唯一 ID (Snowflake) | `go/shared/snowflake/snowflake.go` + `cpp/libs/engine/thread_context/snow_flake_manager.cpp` |
+| #262 | 全服唯一 ID (Snowflake) | 永久 ID 走发号器:`go/data_service/internal/idissuer/` + `go/shared/idsegment/` + `cpp/libs/modules/id_segment/`;snowflake 只剩 scene_id:`go/shared/snowflake/snowflake.go` |
 | #281 | 无状态/幂等 | `login-node-stateless-no-affinity.md` + `createscenelogic.go` |
 | #282 | 配置/表驱动可热更 | `generated/table/code/` + `tools/data_table_exporter/` |
 
@@ -386,7 +386,7 @@
 - **#253** 停服顺延活动 — `docs/design/activity_maintenance_auto_shift.md`
 - **#257** 玩家跨服分区只是存储不同 — `docs/design/cross_server_architecture_principle.md` + `mmo_cross_server_architecture.md`
 - **#258** AOI n×n 优化 — `cpp/libs/services/scene/spatial/system/aoi.cpp` + `docs/design/aoi_priority_design.md` + `cpp/tests/aoi_test/`
-- **#262** 全服唯一 ID — `go/shared/snowflake/snowflake.go` + `cpp/libs/engine/thread_context/snow_flake_manager.cpp`
+- **#262** 全服唯一 ID — 永久 ID 走发号器:`go/data_service/internal/idissuer/` + `go/shared/idsegment/` + `cpp/libs/modules/id_segment/`;snowflake 只剩 scene_id:`go/shared/snowflake/snowflake.go`
 - **#281** 无状态/幂等 — `docs/design/login-node-stateless-no-affinity.md` + `go/scene_manager/internal/logic/createscenelogic.go`
 - **#282** 配置/表驱动热更 — `cpp/generated/table/code/` + `tools/data_table_exporter/`
 

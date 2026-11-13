@@ -66,6 +66,14 @@ func BattleCtxKey(playerID uint64) string { return "battle:ctx:" + PlayerTag(pla
 // AfkPassKey 是挂机通行(月卡)键,值为到期 unix 秒。
 func AfkPassKey(playerID uint64) string { return "player:afk_pass:" + PlayerTag(playerID) }
 
+// HostedPresenceKey 是离线托管角色的在场心跳(值为写入的 scene 进程实例号,PX 60 秒),由此刻对他负责的 scene 节点续,
+// player_locator 只读(docs/design/player-connection-lost-hold.md §4.5)。
+func HostedPresenceKey(playerID uint64) string { return playerKey(playerID, "hosted_presence") }
+
+// HostedReturnKey 是托管归位信息 "v1:<zone>:<owner_revision>:<session_id>:<login_generation>"(EX = 月卡剩余秒数),
+// 由托管着他的 scene 节点写;player_locator 读它替没有节点负责的托管角色重新落点。
+func HostedReturnKey(playerID uint64) string { return playerKey(playerID, "hosted_return") }
+
 const (
 	sessionKeyPrefix = "player:session:"
 	// SessionKeyPattern 是扫全部会话键的 SCAN 模式。

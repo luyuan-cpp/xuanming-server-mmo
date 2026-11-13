@@ -83,5 +83,5 @@ private:
     std::array<GuidSegmentClient, kGuidKindCount> clients_;
 };
 
-// 每线程一份(与旧 tlsSnowflakeManager 同形态):只有 scene 的主循环线程启用其中的实例。
+// 每线程一份:只有 scene 的主循环线程启用其中的实例。
 extern thread_local GuidSegmentRegistry tlsGuidSegmentRegistry;

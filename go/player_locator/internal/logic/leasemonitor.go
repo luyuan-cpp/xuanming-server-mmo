@@ -345,6 +345,9 @@ func handleLeaseExpiry(ctx context.Context, svcCtx *svc.ServiceContext, claim le
 				return
 			}
 			logx.Infof("LeaseMonitor: player %d has active AFK pass, lease extended", claim.playerID)
+			// 续上之后对一次账:离线托管中的角色此刻有没有 scene 节点对他负责,没有就替他归位(hosted_resume.go)。
+			// 只在续租成功之后做:续不上说明会话已换代 / 被接回,这条 claim 已不代表这次断线。
+			resumeHostedIfLost(ctx, svcCtx, session, time.Now())
 			return
 		case afkPassUnknown:
 			if err := rearmLeaseClaim(ctx, svcCtx, claim, afkPassProbeRetrySeconds); err != nil {

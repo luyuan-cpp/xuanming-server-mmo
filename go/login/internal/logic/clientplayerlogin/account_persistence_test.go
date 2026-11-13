@@ -94,7 +94,7 @@ func TestLoginPersistsLegacyAccountAndKeepsAppearanceAcrossOldExpiry(t *testing.
 			authType := fmt.Sprintf("account-persistence-%d", accountPersistenceAuthSequence.Add(1))
 			auth.Register(authType, accountPersistenceAuth{account: accountName})
 			tokens := token.NewManager(rdb, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 30 * 24 * time.Hour})
-			logic := NewLoginLogic(ctx, &svc.ServiceContext{RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
+			logic := NewLoginLogic(ctx, &svc.ServiceContext{ControlRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
 				TokenManager: tokens})
 			loginSessionKey := redisslot.LoginSessionKey(redisslot.LoginConnectionID("gate-persistence", 1))
 			for attempt := 0; attempt < 2; attempt++ {

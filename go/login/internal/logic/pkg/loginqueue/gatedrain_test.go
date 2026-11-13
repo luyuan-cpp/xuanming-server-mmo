@@ -19,6 +19,10 @@ func newDrainRedis(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
 	return rdb, mr
 }
 
+// testMarkZone 是 gate 标记用例里 gate 所在的 zone(生产上是本 login 的 Node.ZoneId):标记键按它拼,
+// 例如 gate:{gm:1}:2:draining。与 candidates 夹具里的 ZoneID 同值。
+const testMarkZone uint32 = 1
+
 func candidates(ids ...uint32) []GateCandidate {
 	out := make([]GateCandidate, 0, len(ids))
 	for _, id := range ids {
@@ -51,10 +55,10 @@ func TestGateDrain_MarkedGateStaysAndIsNotPicked(t *testing.T) {
 	rdb, _ := newDrainRedis(t)
 	ctx := context.Background()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, time.Now().Unix(), 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, time.Now().Unix(), 600))
 
 	cs := candidates(1, 2, 3)
-	MarkDrainingGates(cs, DrainingGates(ctx, rdb, cs))
+	MarkDrainingGates(cs, DrainingGates(ctx, rdb, testMarkZone, cs))
 	assert.Equal(t, []uint32{1, 2, 3}, nodeIDsOf(cs), "排空中的 gate 不从候选集里剔除")
 	assert.Equal(t, []uint32{2}, drainingIDsOf(cs))
 	assert.ElementsMatch(t, []uint32{1, 3}, nodeIDsOf(eligibleGates(cs)))
@@ -66,7 +70,7 @@ func TestGateDrain_NoMarksMarksNobody(t *testing.T) {
 	ctx := context.Background()
 
 	cs := candidates(1, 2, 3)
-	MarkDrainingGates(cs, DrainingGates(ctx, rdb, cs))
+	MarkDrainingGates(cs, DrainingGates(ctx, rdb, testMarkZone, cs))
 	assert.Empty(t, drainingIDsOf(cs))
 }
 
@@ -75,11 +79,11 @@ func TestGateDrain_ClearRestoresGate(t *testing.T) {
 	rdb, _ := newDrainRedis(t)
 	ctx := context.Background()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, time.Now().Unix(), 600))
-	require.NoError(t, ClearGateDraining(ctx, rdb, 2))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, time.Now().Unix(), 600))
+	require.NoError(t, ClearGateDraining(ctx, rdb, testMarkZone, 2))
 
 	cs := candidates(1, 2)
-	MarkDrainingGates(cs, DrainingGates(ctx, rdb, cs))
+	MarkDrainingGates(cs, DrainingGates(ctx, rdb, testMarkZone, cs))
 	assert.Empty(t, drainingIDsOf(cs))
 }
 
@@ -89,14 +93,14 @@ func TestGateDrain_MarkExpiresAndGateComesBack(t *testing.T) {
 	rdb, mr := newDrainRedis(t)
 	ctx := context.Background()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, time.Now().Unix(), 60))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, time.Now().Unix(), 60))
 	cs := candidates(1, 2)
-	MarkDrainingGates(cs, DrainingGates(ctx, rdb, cs))
+	MarkDrainingGates(cs, DrainingGates(ctx, rdb, testMarkZone, cs))
 	require.Equal(t, []uint32{2}, drainingIDsOf(cs))
 
 	mr.FastForward(61 * time.Second)
 	fresh := candidates(1, 2)
-	MarkDrainingGates(fresh, DrainingGates(ctx, rdb, fresh))
+	MarkDrainingGates(fresh, DrainingGates(ctx, rdb, testMarkZone, fresh))
 	assert.Empty(t, drainingIDsOf(fresh))
 }
 
@@ -108,11 +112,11 @@ func TestGateDrain_AllDrainingStillPicks(t *testing.T) {
 	ctx := context.Background()
 
 	for _, id := range []uint32{1, 2, 3} {
-		require.NoError(t, MarkGateDraining(ctx, rdb, id, time.Now().Unix(), 600))
+		require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, id, time.Now().Unix(), 600))
 	}
 
 	cs := candidates(1, 2, 3)
-	MarkDrainingGates(cs, DrainingGates(ctx, rdb, cs))
+	MarkDrainingGates(cs, DrainingGates(ctx, rdb, testMarkZone, cs))
 	assert.ElementsMatch(t, []uint32{1, 2, 3}, nodeIDsOf(eligibleGates(cs)),
 		"refusing every login is worse than assigning to a draining gate")
 }
@@ -122,11 +126,11 @@ func TestGateDrain_RedisFailureIsFailOpen(t *testing.T) {
 	rdb, mr := newDrainRedis(t)
 	ctx := context.Background()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, time.Now().Unix(), 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, time.Now().Unix(), 600))
 	mr.Close() // Redis 没了
 
 	cs := candidates(1, 2, 3)
-	draining := DrainingGates(ctx, rdb, cs)
+	draining := DrainingGates(ctx, rdb, testMarkZone, cs)
 	assert.Nil(t, draining, "query failure must be treated as nobody draining")
 	MarkDrainingGates(cs, draining)
 	assert.Empty(t, drainingIDsOf(cs))
@@ -135,13 +139,13 @@ func TestGateDrain_RedisFailureIsFailOpen(t *testing.T) {
 // 空候选集 / nil 客户端不能 panic。
 func TestGateDrain_DegenerateInputs(t *testing.T) {
 	ctx := context.Background()
-	assert.Nil(t, DrainingGates(ctx, nil, candidates(1)))
+	assert.Nil(t, DrainingGates(ctx, nil, testMarkZone, candidates(1)))
 	MarkDrainingGates(nil, map[uint32]bool{1: true})
 
 	rdb, _ := newDrainRedis(t)
-	assert.Nil(t, DrainingGates(ctx, rdb, nil))
-	assert.Error(t, MarkGateDraining(ctx, nil, 1, 0, 60))
-	assert.Error(t, ClearGateDraining(ctx, nil, 1))
+	assert.Nil(t, DrainingGates(ctx, rdb, testMarkZone, nil))
+	assert.Error(t, MarkGateDraining(ctx, nil, testMarkZone, 1, 0, 60))
+	assert.Error(t, ClearGateDraining(ctx, nil, testMarkZone, 1))
 }
 
 // 排空不改 PickGate 的选择语义:只是不参与挑选。剩两台时随机二选一恰好等于取人数最少的那台,结果是确定的。
@@ -150,14 +154,14 @@ func TestGateDrain_PickGateSkipsDrainingLeastLoaded(t *testing.T) {
 	ctx := context.Background()
 
 	// 最闲的那台(id=1, 0 人)正在排空,应当选次闲的 id=3。
-	require.NoError(t, MarkGateDraining(ctx, rdb, 1, time.Now().Unix(), 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 1, time.Now().Unix(), 600))
 
 	cs := []GateCandidate{
 		{NodeID: 1, PlayerCount: 0},
 		{NodeID: 2, PlayerCount: 500},
 		{NodeID: 3, PlayerCount: 100},
 	}
-	MarkDrainingGates(cs, DrainingGates(ctx, rdb, cs))
+	MarkDrainingGates(cs, DrainingGates(ctx, rdb, testMarkZone, cs))
 
 	best, err := PickGate(cs)
 	require.NoError(t, err)

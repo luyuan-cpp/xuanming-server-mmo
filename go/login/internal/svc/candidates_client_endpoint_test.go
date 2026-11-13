@@ -196,8 +196,12 @@ func newSvcTestRedis(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
 // uncachedDrainMarks 是不缓存的排空标记查询:用例在两次调用之间打标记,要求下一次立即看到。
 // 生产路径按 zone 缓存 gateDrainMarkRefresh,缓存本身的用例在 loginqueue/gatedrain_cache_test.go。
 func uncachedDrainMarks(rdb *redis.Client) *loginqueue.DrainMarkCache {
-	return loginqueue.NewDrainMarkCache(rdb, 0, nil)
+	return loginqueue.NewDrainMarkCache(rdb, svcTestZone, 0, nil)
 }
+
+// svcTestZone 是本包 gate 标记用例里 gate 所在的 zone(生产上是本 login 的 Node.ZoneId,标记键按它拼)。
+// 与 gateNode 夹具里用的 zone 1 同值。
+const svcTestZone uint32 = 1
 
 // 顺序契约:先按客户端地址去重,再打 draining 标记;排空中的 gate 只打标记、不剔除(2026-11-06 起)。
 // gate-1 重建后新记录 node 9 与陈旧记录 node 5 报同一个地址,运维按 node_id 把活着的 node 9 标了排空。
@@ -220,7 +224,7 @@ func TestCandidatesFromNodes_DedupeRunsBeforeDrainingMark(t *testing.T) {
 		{NodeID: 9, IP: "127.0.0.1", Port: 30001, PlayerCount: 3, ZoneID: 1},
 	})
 
-	if err := loginqueue.MarkGateDraining(ctx, rdb, 9, time.Now().Unix(), 600); err != nil {
+	if err := loginqueue.MarkGateDraining(ctx, rdb, svcTestZone, 9, time.Now().Unix(), 600); err != nil {
 		t.Fatalf("mark gate 9 draining: %v", err)
 	}
 	want := []loginqueue.GateCandidate{

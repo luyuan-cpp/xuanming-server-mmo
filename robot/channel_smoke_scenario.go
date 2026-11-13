@@ -10,6 +10,9 @@ package main
 //	C3 选目标线:第一条 scene_id != 当前、state 为 SMOOTH / BUSY 的线。该地图只有 1 条线 → CHANNEL_SMOKE_SKIP;
 //	C4 切线:EnterScene(63){scene_config_id = 当前地图, scene_id = 目标线},同步应答必须无错(= 已受理);
 //	   到达 = 随后收到 NotifyEnterScene(79)且 scene_id == 目标线;
+//	C4-hold 受理之后、到达之前立刻发一条只读的 GetCurrencyList(54),必须拿到正常回包、不能是 1003:目标线在别的
+//	   scene 节点时这条请求正落在交接窗口里,gate 的场景 lane 把它留住、落地后重投
+//	   (docs/design/client-scene-request-handoff-hold.md);被限流(1008)时 SKIP;
 //	C5 再列线:恰有一条的 scene_id == 目标线,且两次目录里都出现的线 channel_no 不变(线号在线的生命周期内不变);
 //	C6 冷却(目录 switch_cooldown_seconds > 0 才做):立刻切回原线 → 同步应答无错(已受理),5s 内收到
 //	   SendTipToClient(23)且 id == kEnterSceneFailed,期间没有 scene_id == 原线的 NotifyEnterScene;
@@ -230,11 +233,14 @@ func RunChannelSmoke(cfg *config.Config) {
 	cooldown := time.Duration(firstDir.GetSwitchCooldownSeconds()) * time.Second
 	switchStart := time.Now()
 	retriedAfterCooldown := false
+	// 每次切线受理之后都发一条探测;只看最后那次(到达的那次)的结果。
+	var probe channelSmokeProbe
 	for {
-		rejectTip, err := bot.switchTo(sceneConfigId, targetScene, arriveTimeout)
+		rejectTip, probed, err := bot.switchToProbing(sceneConfigId, targetScene, arriveTimeout, true)
 		if err != nil {
 			fail("C4-switch", "%v", err)
 		}
+		probe = probed
 		if rejectTip == 0 {
 			break
 		}
@@ -258,6 +264,26 @@ func RunChannelSmoke(cfg *config.Config) {
 	switchedAt := time.Now()
 	pass("C4-switch", "target_scene=%d target_channel=%d elapsed=%s retried_after_cooldown=%t",
 		targetScene, targetNo, switchedAt.Sub(switchStart).Round(time.Millisecond), retriedAfterCooldown)
+
+	// ---- C4-hold:切线途中发出的请求不被拒 ----
+	switch {
+	case !probe.probed:
+		fail("C4-hold", "No probe was sent although the channel switch was accepted (robot defect)")
+	case probe.err != nil:
+		fail("C4-hold", "GetCurrencyList sent right after the accepted switch got no reply: %v. "+
+			"Check the gate log [scene_lane] summary (inflight_lost / expired_on_hold) and the scene log for this session", probe.err)
+	case probe.envelopeTip == tipChannelRateLimited:
+		skip("C4-hold", "GetCurrencyList sent right after the accepted switch was rate limited (tip=%d); the hold path was not checked this run",
+			probe.envelopeTip)
+	case probe.envelopeTip != 0:
+		fail("C4-hold", "GetCurrencyList sent right after the accepted switch was rejected with tip=%d%s. "+
+			"During a cross-node switch the gate scene lane should hold the request and replay it on the target node: "+
+			"check the gate log [scene_lane] summary (held / retry_verdicts / expired_on_hold / no_content) and the scene log "+
+			"'request left to the gate for retry during ownership handoff'", probe.envelopeTip, channelSmokeTipHint(probe.envelopeTip))
+	default:
+		pass("C4-hold", "GetCurrencyList sent right after the accepted switch got a normal reply in %s "+
+			"(a request held and replayed by the gate shows up as gate [scene_lane] summary held > 0)", probe.elapsed.Round(time.Millisecond))
+	}
 
 	// ---- C5:再列线 ----
 	secondPush, err := bot.fetchDirectory()
@@ -423,7 +449,9 @@ func channelSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats)
 // channelSmokeIsCallMessage:经 call 发出、回包只按请求号认领的请求消息号(恰好回一个包的方法)。
 // 这些号上 id = 0 的消息不是本场景的回包,onMessage 丢弃它们。
 func channelSmokeIsCallMessage(messageId uint32) bool {
-	if messageId == game.SceneSceneClientPlayerEnterSceneMessageId {
+	switch messageId {
+	case game.SceneSceneClientPlayerEnterSceneMessageId,
+		game.SceneCurrencyClientPlayerGetCurrencyListMessageId: // C4-hold 的探测请求
 		return true
 	}
 	// merchant-smoke 复用本文件的机器人会话,它经 call 发的请求消息号由它自己登记(mystery_merchant_smoke_scenario.go)。
@@ -668,26 +696,62 @@ func (b *channelSmokeBot) waitSwitchOutcome(since int, target uint64, timeout ti
 // switchTo 请求切到 target 并等结局。返回 (0, nil) = 已到达;(tip, nil) = 受理后被拒(玩家留在原线);
 // 同步应答带 tip、信封拒绝、进了别的场景、被踢、等不到结局都返回 error。
 func (b *channelSmokeBot) switchTo(sceneConfigId uint32, target uint64, timeout time.Duration) (uint32, error) {
+	rejectTip, _, err := b.switchToProbing(sceneConfigId, target, timeout, false)
+	return rejectTip, err
+}
+
+// switchToProbing 与 switchTo 相同;probe 为真时,在切线请求受理之后、等结局之前立刻发一条只读请求
+// (probeDuringSwitch),探测结果一并返回。没发探测(probe 为假,或切线没被受理)时探测结果的 probed 为假。
+func (b *channelSmokeBot) switchToProbing(sceneConfigId uint32, target uint64, timeout time.Duration, probe bool) (uint32, channelSmokeProbe, error) {
 	since, syncTip, err := b.requestEnterScene(sceneConfigId, target)
 	if err != nil {
-		return 0, err
+		return 0, channelSmokeProbe{}, err
 	}
 	if syncTip != 0 {
-		return 0, fmt.Errorf("EnterScene{scene_config_id=%d scene_id=%d} 同步应答 tip=%d%s,期望无错(已受理)",
+		return 0, channelSmokeProbe{}, fmt.Errorf("EnterScene{scene_config_id=%d scene_id=%d} 同步应答 tip=%d%s,期望无错(已受理)",
 			sceneConfigId, target, syncTip, channelSmokeTipHint(syncTip))
+	}
+	var probed channelSmokeProbe
+	if probe {
+		probed = b.probeDuringSwitch()
 	}
 	arrived, rejectTip, err := b.waitSwitchOutcome(since, target, timeout)
 	if errors.Is(err, errChannelSmokeNoOutcome) {
-		return 0, fmt.Errorf("切线已受理但没有结局:%w。目标线在别的 scene 节点时要走「冻结 → 存盘 → 写标记 → 重发」的交接链路,"+
+		return 0, probed, fmt.Errorf("切线已受理但没有结局:%w。目标线在别的 scene 节点时要走「冻结 → 存盘 → 写标记 → 重发」的交接链路,"+
 			"可调大 channel_smoke.arrive_timeout_seconds;同节点仍超时就看 scene_manager 的 EnterScene 日志与 gate 的进场转发日志", err)
 	}
 	if err != nil {
-		return 0, err
+		return 0, probed, err
 	}
 	if arrived {
-		return 0, nil
+		return 0, probed, nil
 	}
-	return rejectTip, nil
+	return rejectTip, probed, nil
+}
+
+// channelSmokeProbe 是 C4-hold 探测的结果:切线请求受理后立刻发出的那条只读请求拿到了什么。
+type channelSmokeProbe struct {
+	probed      bool          // 发过探测
+	envelopeTip uint32        // gate 级信封拒绝码;0 = 正常回包
+	elapsed     time.Duration // 从发出到拿到结局
+	err         error         // 等不到回包等传输层错误
+}
+
+// probeDuringSwitch 在切线请求受理之后立刻(不等 channelSmokeRequestSpacing)发一条只读的 GetCurrencyList,只等它自己的回包。
+//
+// 目标线在别的 scene 节点时,这条请求正好落在交接窗口里:源节点冻结、实体销毁、目标节点载入,哪一段都受理不了它。
+// gate 的场景 lane 把它留住、等玩家落到目标节点之后重投(docs/design/client-scene-request-handoff-hold.md),所以它应当拿到
+// 正常回包,而不是 1003。目标线在同一个节点时没有交接,它照常被受理。两种情况都应当是正常回包。
+// 机器人分不出这次切线跨没跨节点:要确认「留住并重投」这条路径真的走过,看 gate 日志 [scene_lane] summary 的 held。
+//
+// 限流:与切线请求紧挨着发。切线请求与它之前的那个请求至少隔 channelSmokeRequestSpacing,所以任意连续两个整秒里
+// 最多三条(上一个请求、切线、探测),没超过 gate 默认档(每两个整秒 3 次);仍被限流(1008)时调用方按 SKIP 处理。
+func (b *channelSmokeBot) probeDuringSwitch() channelSmokeProbe {
+	start := time.Now()
+	b.lastRequestAt = start
+	var response scene.GetCurrencyListResponse
+	envelopeTip, err := b.caller.call(game.SceneCurrencyClientPlayerGetCurrencyListMessageId, &scene.GetCurrencyListRequest{}, &response)
+	return channelSmokeProbe{probed: true, envelopeTip: envelopeTip, elapsed: time.Since(start), err: err}
 }
 
 // enteredSince 报告 since 之后是否收到过 scene_id == sceneId 的 NotifyEnterScene(不等待)。

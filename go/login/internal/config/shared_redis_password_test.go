@@ -69,3 +69,23 @@ func TestResolveSharedRedisPasswordFailsClosed(t *testing.T) {
 		t.Fatalf("a literal next to the env name must be rejected by key without echoing it, got %v", err)
 	}
 }
+
+// 控制集群写了地址(上了 redis-control)时,它的口令也由 SharedRedisPasswordEnv 填;同时写字面量与变量名照样拒启。
+func TestResolveSharedRedisPasswordFillsControlRedis(t *testing.T) {
+	c := Config{SharedRedisPasswordEnv: "SHARED_REDIS_PASSWORD"}
+	c.ControlRedis.Addrs = []string{"redis-control-0:6379", "redis-control-1:6379"}
+	c.ControlRedis.Cluster = true
+	if err := c.ResolveSharedRedisPassword(sharedRedisEnv(map[string]string{"SHARED_REDIS_PASSWORD": "pw-from-secret"})); err != nil {
+		t.Fatalf("ResolveSharedRedisPassword: %v", err)
+	}
+	if got := c.EffectiveControlRedis(); got.Password != "pw-from-secret" || !got.Cluster {
+		t.Fatalf("ControlRedis must carry the password from the env, got %+v", got.Describe())
+	}
+
+	both := Config{SharedRedisPasswordEnv: "SHARED_REDIS_PASSWORD"}
+	both.ControlRedis.Password = "stale-literal"
+	err := both.ResolveSharedRedisPassword(sharedRedisEnv(map[string]string{"SHARED_REDIS_PASSWORD": "pw"}))
+	if err == nil || !strings.Contains(err.Error(), "ControlRedis.Password") || strings.Contains(err.Error(), "stale-literal") {
+		t.Fatalf("a literal next to the env name must be rejected by key without echoing it, got %v", err)
+	}
+}

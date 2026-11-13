@@ -25,7 +25,6 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // ── 录制驱动 ────────────────────────────────────────────────
@@ -179,7 +178,7 @@ func (r *oneRowThenCancel) Next(dest []driver.Value) error {
 func newDeadlineRepo(t *testing.T, rec *deadlineRecorder) (*FriendRepo, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
-	rdb := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
+	rdb := newControlTestRedis(t, mr)
 	return NewFriendRepo(rdb, rec.openDB(t), testFriendRepoOptions(testListReadHardLimit)), mr
 }
 

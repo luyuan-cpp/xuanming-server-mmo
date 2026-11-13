@@ -108,7 +108,7 @@
 | #251 | Cross-scene message delivery | `cross_scene_player_messaging.md` + `route_message_response_handler.cpp` |
 | #257 | Cross-server player partitioning is storage-only | `cross_server_architecture_principle.md` |
 | #258 | AOI priority | `aoi.cpp` + `aoi_priority_design.md` + `aoi_test/` |
-| #262 | Globally unique ID (Snowflake) | `go/shared/snowflake/snowflake.go` + `cpp/libs/engine/thread_context/snow_flake_manager.cpp` |
+| #262 | Globally unique ID (Snowflake) | Permanent IDs come from the ID issuer: `go/data_service/internal/idissuer/` + `go/shared/idsegment/` + `cpp/libs/modules/id_segment/`; Snowflake is left only for scene_id: `go/shared/snowflake/snowflake.go` |
 | #281 | Stateless / idempotent | `login-node-stateless-no-affinity.md` + `createscenelogic.go` |
 | #282 | Config / table-driven hot-reload | `generated/table/code/` + `tools/data_table_exporter/` |
 
@@ -388,7 +388,7 @@ Pulled from ❌ Not done — infrastructure gaps that hurt when production break
 - **#253** Activity postponement on shutdown — `docs/design/activity_maintenance_auto_shift.md`
 - **#257** Cross-server zoning is storage-only — `docs/design/cross_server_architecture_principle.md` + `mmo_cross_server_architecture.md`
 - **#258** AOI n×n optimization — `cpp/libs/services/scene/spatial/system/aoi.cpp` + `docs/design/aoi_priority_design.md` + `cpp/tests/aoi_test/`
-- **#262** Global unique ID — `go/shared/snowflake/snowflake.go` + `cpp/libs/engine/thread_context/snow_flake_manager.cpp`
+- **#262** Global unique ID — permanent IDs come from the ID issuer: `go/data_service/internal/idissuer/` + `go/shared/idsegment/` + `cpp/libs/modules/id_segment/`; Snowflake is left only for scene_id: `go/shared/snowflake/snowflake.go`
 - **#281** Stateless / idempotent — `docs/design/login-node-stateless-no-affinity.md` + `go/scene_manager/internal/logic/createscenelogic.go`
 - **#282** Config-/table-driven hot reload — `cpp/generated/table/code/` + `tools/data_table_exporter/`
 

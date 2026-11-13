@@ -3,6 +3,7 @@ package com.game.gateway.ratelimit;
 import com.game.gateway.ratelimit.RateLimitStore.Admission;
 import com.game.gateway.ratelimit.RateLimitStore.Bucket;
 import io.lettuce.core.RedisClient;
+import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.codec.ByteArrayCodec;
@@ -24,7 +25,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 令牌桶 Lua({@link RedisRateLimitStore#ADMIT_SCRIPT})对真实 Redis 的行为(2026-11-05,服务器缺口清单第 29 条)。
+ * 令牌桶 Lua({@link RedisRateLimitStore#TAKE_SCRIPT}、{@link RedisRateLimitStore#REFUND_SCRIPT})对真实 Redis 的行为
+ * (2026-11-05,服务器缺口清单第 29 条;2026-11-12 起每个桶一段单键脚本,区桶空时退还 IP 令牌)。
+ * 集群形态(两个桶在不同槽)见 {@link RedisRateLimitStoreClusterIntegrationTest}。
  *
  * <p>只在设置了 {@code GATEWAY_RATE_LIMIT_REDIS_URL}(如 {@code redis://127.0.0.1:6390})时运行,指向一个一次性的
  * Redis 容器;K8s 钉的 7.2 与本地 compose 的 8.x 各跑一轮。每个用例用随机前缀的 {@code rl:it:*} 键,结束时删掉。
@@ -152,12 +155,36 @@ class RedisRateLimitStoreIntegrationTest {
 
         // 100ms 后区桶补了 0.3 个:还差 0.7 个,每秒 3 个 → 233.3ms,向上取整 234。
         assertEquals(Admission.zoneEmpty(234), store.admitAt(T + 100, ip, zone));
-        assertEquals(Arrays.asList(1000L, T), state(ip), "区桶空时 IP 桶不扣、不写");
+        // 退还时按补满时刻设了真实 TTL(这里不到一秒),后面还要用这个桶,先拉长。
+        holdTtl(ip);
+        // IP 桶先扣后还:状态记到这一次的时刻,余量与从没扣过时相同(1 + 0.1 个)。
+        assertEquals(Arrays.asList(1100L, T + 100), state(ip), "区桶空时 IP 令牌已退还,余量不变");
 
         // 此刻 IP 余量 1 + 0.1 = 1.1 个:只判 IP 还能放一个,之后才空。
         assertEquals(Admission.ok(), store.admitAt(T + 100, ip, null));
         holdTtl(ip);
         assertEquals(Admission.ipEmpty(), store.admitAt(T + 100, ip, null));
+    }
+
+    @Test
+    void zoneEmpty_onAFullIpBucket_leavesNoIpKey() {
+        Bucket ip = bucket("ip", 1, 2);
+        Bucket zone = bucket("zone", 1, 1);
+        seed(zone, 0, T);
+
+        assertEquals(Admission.zoneEmpty(1000), store.admitAt(T, ip, zone), "区桶差一个令牌、每秒补 1 个:等 1000ms");
+        assertEquals(0L, redis.exists(utf8(ip.key())),
+                "满桶扣一个再还回去还是满桶:键删掉(键不存在 = 满桶),不留一个按补满时刻才过期的键");
+    }
+
+    @Test
+    void refund_ofAMissingKeyDoesNothing() {
+        Bucket ip = bucket("ip", 1, 2);
+        Long reply = redis.eval(RedisRateLimitStore.REFUND_SCRIPT, ScriptOutputType.INTEGER,
+                new byte[][] {utf8(ip.key())}, utf8(Long.toString(T)), utf8("1"), utf8("2"));
+
+        assertEquals(0L, reply, "键不存在 = 已是满桶,没有可还的");
+        assertEquals(0L, redis.exists(utf8(ip.key())), "退还不凭空建出桶键");
     }
 
     @Test

@@ -8,8 +8,9 @@ import (
 
 // 读 Redis 出错时的统一收口(2026-10-22)。
 //
-// go-zero 的 Redis 读命令有三种结果:有值;确实不存在(Get 把 redis.Nil 吞成 ("", nil),Smembers 回空切片,
-// Exists 回 false;Hget / Zscore 不吞,回 redis.Nil);读错(超时、断连、熔断,回其它 err)。以前 `x, _ :=` 的写法
+// 控制集群句柄(controlredis.Client,2026-11-12 起;返回形状沿用之前的 go-zero 句柄)的读命令有三种结果:有值;确实不存在
+// (Get 把 redis.Nil 吞成 ("", nil),Smembers 回空切片,Exists 回 false;Hget / Zscore 不吞,回 redis.Nil);读错(超时、断连、
+// 键守卫拒绝、结果未知,回其它 err)。以前 `x, _ :=` 的写法
 // 把第三种并进第二种:读不到属主就当频道陈旧去改派,读不到 Agones 名额就不还、随后删键,读不到镜像集合
 // 就不级联、随后删索引。
 //

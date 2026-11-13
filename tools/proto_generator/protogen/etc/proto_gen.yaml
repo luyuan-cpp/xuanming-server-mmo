@@ -299,6 +299,15 @@ domain_meta:
         proto: "go/generated/rank/proto"
         handler: "go/generated/rank/handler"
         grpc: "go/generated/rank/grpc"
+  payment:
+    source: "{{proto_dir}}payment/"
+    rpc:
+      type: grpc
+    outputs:
+      go:
+        proto: "go/generated/payment/proto"
+        handler: "go/generated/payment/handler"
+        grpc: "go/generated/payment/grpc"
   login:
     source: "{{proto_dir}}login/"
     rpc:

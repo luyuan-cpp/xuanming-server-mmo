@@ -109,11 +109,6 @@ var (
 			"invalid = structurally broken ledger, cannot be used as evidence.",
 	}, []string{"result"})
 
-	sweepDeletedTotal = prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: namespace, Name: "sweep_deleted_total",
-		Help: "Terminal rows deleted after the retention window.",
-	})
-
 	// fetchScannedRows 是设计 §4.2 量级假设的触发指标:锁路径的 PENDING 扫描走「主键范围 + state 过滤」,
 	// 数的是数据库实际走过的行(含被过滤掉的终态行),不是返回的条数(返回最多 17 条,数它永远触发不了加索引)。
 	fetchScannedRows = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -227,13 +222,6 @@ func ResetReconcileInconsistent() {
 // SetReconcileOwnedShards 写入本副本此刻负责对账的分片数。
 func SetReconcileOwnedShards(n int) { reconcileOwnedShards.Set(float64(max(n, 0))) }
 
-// AddSweepDeleted 记清理删掉的行数。
-func AddSweepDeleted(n int) {
-	if n > 0 {
-		sweepDeletedTotal.Add(float64(n))
-	}
-}
-
 // ScanGauges 是一次扫描型 gauge 的结果。DeliveredUnacked / DeliveredUnackedOldestSeconds / MaxDeliveryCount 只算
 // 最后投递在最近 24 小时内的行;更早的已投递未确认行只计入 DeliveredUnackedStale(评审 M4)。
 type ScanGauges struct {
@@ -276,7 +264,7 @@ func Register(db *sql.DB) {
 			enqueueTotal, fetchTotal, ackTotal, voidTotal, notifyTotal,
 			cursorAheadTotal, fenceRegressedTotal, epochAheadTotal,
 			reconcileInconsistentRows, reconcileOwnedShards, reconcileTruncatedTotal, reconcileRoundsTotal, reconcileReadTotal,
-			sweepDeletedTotal, fetchScannedRows,
+			fetchScannedRows,
 			deliveredUnacked, deliveredUnackedStale, deliveredUnackedOldestSeconds, openItems, oldestOpenAgeSeconds,
 			maxDeliveryCount, notifyBacklog, battleProducerReady,
 		)
