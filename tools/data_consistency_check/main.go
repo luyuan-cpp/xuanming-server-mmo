@@ -19,7 +19,8 @@
 //   given player_id's home_zone.
 //
 //   归属只读 -route-db-dsn 指向的目录各片的 player_route(真源,见 route_source.go)。
-//   guild_rank:zone:* 不是映射,读 -redis-addr 指向的 Redis。
+//   guild_rank:zone:* 不是映射,读 -redis-addr 指向的 Redis:单实例,或 -redis-cluster 时的 Redis Cluster
+//   (逐个主节点 SCAN,见 guild_rank_check.go)。
 //
 //   It complements:
 //     - tools/merge_zone/audit_resources.go — pre-merge resource counts
@@ -50,7 +51,6 @@ import (
 	"time"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
-	"github.com/redis/go-redis/v9"
 )
 
 // CheckResult is one row in the consistency report.
@@ -82,7 +82,8 @@ type runConfig struct {
 	// accountDBs 是目录各片(P0-b)。复用-route-db-dsn，不读zone账号表。路由行和角色行都按玩家分片，所以各片各自能 JOIN。
 	accountDBs []*sql.DB
 	db         *sql.DB
-	rankRedis  *redis.Client // guild_rank:zone:* 所在的 Redis
+	// scanRankKeys 扫 guild_rank:zone:* 所在的 Redis(单实例或 Cluster 逐主节点,见 guild_rank_check.go)。
+	scanRankKeys keyScanner
 	// friendDB 是好友独占库 mmorpg_friend 的第二个连接(port-decisions D-14,2026-09-18)。
 	//
 	// 为什么不共用 db:-mysql-dsn 指的是 `mmorpg`(公会 / 账号那套),friend 已经搬走。
@@ -120,9 +121,12 @@ func main() {
 	// 置空 = 显式声明「本环境没有 mail」,mail 那条检查报 warn「NOT CHECKED」。
 	mailDSN := flag.String("mail-mysql-dsn", "root:@tcp(127.0.0.1:3306)/mmorpg_mail?charset=utf8mb4&parseTime=true&loc=Local",
 		"SQL DSN for the current M2/M3 mail-only database (same target as mail DSNEnv). Empty = skip the mail check and report it as NOT CHECKED")
-	redisAddr := flag.String("redis-addr", "127.0.0.1:6379", "Redis address holding guild_rank:zone:* keys")
+	redisAddr := flag.String("redis-addr", "127.0.0.1:6379",
+		"Redis holding guild_rank:zone:* keys: one address, or with -redis-cluster a comma-separated list of cluster seed nodes")
+	redisCluster := flag.Bool("redis-cluster", false,
+		"The guild Redis is a Redis Cluster: the rank check scans every master (each master only holds part of the keys)")
 	redisPwd := flag.String("redis-password", "", "Redis password")
-	redisDB := flag.Int("redis-db", 0, "Redis DB number")
+	redisDB := flag.Int("redis-db", 0, "Redis DB number (single instance only; a Redis Cluster only has DB 0)")
 	// 映射的真源是目录的 player_route(dev 基名是 testdb,K8s 是 mmorpg_global):live zones / 玩家数 / 好友端是否有归属都按它查。
 	routeDSN := flag.String("route-db-dsn", "",
 		"Directory database DSN, required. Its database name is the directory base name (SnapshotMySQL.DBName); the player_route source of truth lives on <base> or <base>_00..")
@@ -191,7 +195,10 @@ func main() {
 		}
 	}
 
-	rdb := redis.NewClient(&redis.Options{Addr: *redisAddr, Password: *redisPwd, DB: *redisDB})
+	rdb, err := newRankRedis(*redisAddr, *redisCluster, *redisPwd, *redisDB)
+	if err != nil {
+		log.Fatalf("guild rank redis: %v", err)
+	}
 	defer rdb.Close()
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		log.Fatalf("redis ping: %v", err)
@@ -265,7 +272,7 @@ func main() {
 	}
 	log.Printf("Live zones: %v", sortedKeys(knownZones))
 
-	cfg := runConfig{accountDBs: routeDBs, db: db, rankRedis: rdb, friendDB: friendDB, routes: routes, mailDB: mailDB, knownZones: knownZones, guildSchema: *guildSchema}
+	cfg := runConfig{accountDBs: routeDBs, db: db, scanRankKeys: scanEachMaster(rdb), friendDB: friendDB, routes: routes, mailDB: mailDB, knownZones: knownZones, guildSchema: *guildSchema}
 
 	// ── run checks ───────────────────────────────────────────────
 	//
@@ -333,6 +340,7 @@ func sortedKeys(m map[uint32]struct{}) []uint32 {
 // → warn「NOT CHECKED」,检查没开始;读到一半失败(逐行 Scan、迭代出错、按 id 回源失败)→ fail「CHECK FAILED」,
 // 已数到的部分不完整,不报(guild 例外一处:死区已确定、只是行数没数全时仍报 block,行数标为下界)。
 // 两种都不折算成「干净」或孤儿:「没查」和「查了是干净的」在报告里必须长得不一样。
+// 帮会榜(Redis)那条:句柄缺失报 warn「NOT CHECKED」;扫描任何一步失败报 fail「NOT CHECKED」、计数清零(见 guild_rank_check.go)。
 
 // checkGuildZoneFK — 每个 guild.zone_id 都应是 knownZones 里的区。
 //
@@ -410,52 +418,7 @@ func guildCheckFailed(r CheckResult, why string) CheckResult {
 	return r
 }
 
-// checkGuildRankZoneOrphans — guild_rank:zone:{id} ZSETs that point at
-// zones that are not in knownZones. 合服是别名合服,不改写玩家与路由行:已合走的源区仍在
-// player_route.home_zone 的取值里(显式 -live-zones 时要自己列上),所以源区的榜键不会在这里
-// 报孤儿;guild 服务会把源区的榜周期折叠进最终区并删掉旧键(merge-zone-runbook.md §4,
-// 默认一个折叠周期 10 秒)。这里报的是 knownZones 之外的区留下的榜键,
-// 即从未存在过的区,或折叠/重建出错后残留的键。
-func checkGuildRankZoneOrphans(ctx context.Context, cfg runConfig) CheckResult {
-	r := CheckResult{Name: "guild_rank:zone:*"}
-	var cur uint64
-	var orphanZones []uint32
-	for {
-		keys, next, err := cfg.rankRedis.Scan(ctx, cur, "guild_rank:zone:*", 200).Result()
-		if err != nil {
-			r.Severity = "warn"
-			r.SampleNotes = fmt.Sprintf("scan failed: %v", err)
-			return r
-		}
-		for _, k := range keys {
-			r.TotalCount++
-			parts := strings.Split(k, ":")
-			if len(parts) < 3 {
-				continue
-			}
-			z, err := strconv.ParseUint(parts[2], 10, 32)
-			if err != nil {
-				continue
-			}
-			if _, ok := cfg.knownZones[uint32(z)]; !ok {
-				orphanZones = append(orphanZones, uint32(z))
-				r.BadCount++
-			}
-		}
-		cur = next
-		if cur == 0 {
-			break
-		}
-	}
-	if r.BadCount == 0 {
-		r.Severity = "info"
-		r.SampleNotes = "no orphan rank ZSETs"
-		return r
-	}
-	r.Severity = "block"
-	r.SampleNotes = fmt.Sprintf("orphan rank ZSETs for dead zones %v — leftover from incomplete merge_zone run", orphanZones)
-	return r
-}
+// checkGuildRankZoneOrphans 在 guild_rank_check.go。
 
 // 同一全局SQL语句核有home_zone的路由玩家是否有有效账号目录；不读取Redis账号或按账号数猜人数。
 // 没有路由行的目录不在此检查范围；缺少显式全局句柄时报告未检查。

@@ -103,12 +103,16 @@ type kickLocator struct {
 	// 只在调用 applyLoadedPlayerSession 之前写。
 	getSessionReplies []kickGetSessionReply // 按调用序取;超出的调用重复最后一个
 	setSessionErr     error
-	onSetSession      func() // SetSession 收到请求时先执行(模拟心跳丢锁 chainCancel)
+	// setSessionErrs 按调用序给 SetSession 的结果(nil = 成功);超出的调用退回 setSessionErr。
+	// 会话提交重做的用例(entergame_session_changed_test.go)用它让前几次写入被拒、之后放行。
+	setSessionErrs []error
+	onSetSession   func() // SetSession 收到请求时先执行(模拟心跳丢锁 chainCancel)
 
 	mu                sync.Mutex
 	getSessionCalls   int
 	getSessionCtxs    []kickCtxObservation
 	setSessions       []*plpb.SetSessionRequest
+	reconnects        []*plpb.ReconnectRequest
 	disconnecting     []*plpb.SetDisconnectingRequest
 	disconnectingCtxs []kickCtxObservation
 }
@@ -150,11 +154,35 @@ func (f *kickLocator) SetSession(_ context.Context, in *plpb.SetSessionRequest, 
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	call := len(f.setSessions)
 	f.setSessions = append(f.setSessions, proto.Clone(in).(*plpb.SetSessionRequest))
+	if call < len(f.setSessionErrs) {
+		if err := f.setSessionErrs[call]; err != nil {
+			return nil, err
+		}
+		return &pbbase.Empty{}, nil
+	}
 	if f.setSessionErr != nil {
 		return nil, f.setSessionErr
 	}
 	return &pbbase.Empty{}, nil
+}
+
+// Reconnect 恒成功,回带请求里的会话号与代次(新版 locator 的行为);请求按调用序记下。
+func (f *kickLocator) Reconnect(_ context.Context, in *plpb.ReconnectRequest, _ ...grpc.CallOption) (*plpb.ReconnectResponse, error) {
+	f.events.add("Reconnect")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reconnects = append(f.reconnects, proto.Clone(in).(*plpb.ReconnectRequest))
+	return &plpb.ReconnectResponse{Success: true, Session: &plpb.PlayerSession{
+		PlayerId:        in.GetPlayerId(),
+		SessionId:       in.GetNewSessionId(),
+		GateId:          in.GetGateId(),
+		GateInstanceId:  in.GetGateInstanceId(),
+		Account:         in.GetAccount(),
+		State:           plpb.PlayerSessionState_SESSION_STATE_ONLINE,
+		LoginGeneration: in.GetLoginGeneration(),
+	}}, nil
 }
 
 func (f *kickLocator) SetDisconnecting(ctx context.Context, in *plpb.SetDisconnectingRequest, _ ...grpc.CallOption) (*pbbase.Empty, error) {
@@ -239,7 +267,7 @@ func newKickHarness(t *testing.T, existing *plpb.PlayerSession, chainInstance st
 	}
 	kicker := &kickRecorder{events: events}
 	l := NewEnterGameLogic(context.Background(), &svc.ServiceContext{
-		RedisClient: rdb, PlayerRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
+		ControlRedis: rdb, PlayerRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
 		PlayerLocatorClient: locator,
 	})
 	l.kicker = kicker

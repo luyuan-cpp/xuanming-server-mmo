@@ -80,6 +80,8 @@ public class LoginRpcClient {
     private static final String PREGATE_SERVICE      = "loginpb.LoginPreGate";
     private static final String METHOD_ASSIGN_GATE   = PREGATE_SERVICE + "/AssignGate";
     private static final String METHOD_QUEUE_STATUS  = PREGATE_SERVICE + "/QueryQueueStatus";
+    /** 本区角色总数(2026-11-12,角色上限守卫用)。 */
+    private static final String METHOD_ZONE_ROLE_COUNT = PREGATE_SERVICE + "/GetZoneRoleCount";
 
     private final LoginGrpcProperties props;
     /** 每个通道都挂的出站追踪拦截器(见类注释);注册表是 NOOP 时它原样放行,不做任何事。 */
@@ -121,6 +123,7 @@ public class LoginRpcClient {
     private final MethodDescriptor<RefreshTokenRequestProto, RefreshTokenResponseProto> refreshTokenMethod;
     private final MethodDescriptor<AssignGateRequestProto, AssignGateResponseProto> assignGateMethod;
     private final MethodDescriptor<QueryQueueStatusRequestProto, QueryQueueStatusResponseProto> queueStatusMethod;
+    private final MethodDescriptor<ZoneRoleCountRequestProto, ZoneRoleCountResponseProto> zoneRoleCountMethod;
 
     public LoginRpcClient(LoginGrpcProperties props, ObservationRegistry observationRegistry) {
         this.props = props;
@@ -148,6 +151,12 @@ public class LoginRpcClient {
                 .setFullMethodName(METHOD_QUEUE_STATUS)
                 .setRequestMarshaller(new QueryQueueStatusRequestMarshaller())
                 .setResponseMarshaller(new QueryQueueStatusResponseMarshaller())
+                .build();
+        this.zoneRoleCountMethod = MethodDescriptor.<ZoneRoleCountRequestProto, ZoneRoleCountResponseProto>newBuilder()
+                .setType(MethodDescriptor.MethodType.UNARY)
+                .setFullMethodName(METHOD_ZONE_ROLE_COUNT)
+                .setRequestMarshaller(new ZoneRoleCountRequestMarshaller())
+                .setResponseMarshaller(new ZoneRoleCountResponseMarshaller())
                 .build();
     }
 
@@ -349,6 +358,16 @@ public class LoginRpcClient {
         return unaryCall(queueStatusMethod, req, zoneId, true, false);
     }
 
+    /**
+     * 本区一共建过多少角色({@code LoginPreGate.GetZoneRoleCount},2026-11-12,RoleCapacityGuard 用):login 转问
+     * data_service,按合服之后的最终区算,删角不减。按区选路、没有该区的通道直接失败,不跨区兜底(login 也会拒绝别区的问)。
+     * 纯读,UNAVAILABLE / DEADLINE_EXCEEDED 按 {@code login.grpc.retry} 重试,可能落到同区另一个实例。
+     * 读不到时抛异常(StatusRuntimeException / IllegalStateException),从不返回一个兜底的 0。
+     */
+    public long getZoneRoleCount(int zoneId) {
+        return unaryCall(zoneRoleCountMethod, new ZoneRoleCountRequestProto(zoneId), zoneId, true, true).roles;
+    }
+
     private <Q, R> R unaryCall(
             MethodDescriptor<Q, R> method,
             Q req,
@@ -461,7 +480,7 @@ public class LoginRpcClient {
     /**
      * proto/login/login.proto LoginResponse:
      *   TipInfoMessage error_message = 1;                    (group/message — skipped, parsed lazily)
-     *   repeated AccountSimplePlayerWrapper players = 2;     (解析 wrapper.player 的 player_id=1 与 name=5;level 不在 proto 里)
+     *   repeated AccountSimplePlayerWrapper players = 2;     (解析 wrapper.player 的 player_id=1、zone_id=4 与 name=5;level 不在 proto 里)
      *   string access_token = 3;
      *   string refresh_token = 4;
      *   int64  access_token_expire = 5;
@@ -632,12 +651,14 @@ public class LoginRpcClient {
                     // repeated AccountSimplePlayerWrapper players:
                     //   wrapper.player = 1 (message) -> AccountSimplePlayer
                     //     player_id = 1 (varint)
+                    //     zone_id   = 4 (varint,角色现在所在的区;login 已按归属映射解析,0 = 旧数据未设置)
                     //     name      = 5 (string,角色名副本;真源是 data_service 全局库 player_name)
-                    // class_id / gender / zone_id(2/3/4)网关用不到,走 skipField。
+                    // class_id / gender(2/3)网关用不到,走 skipField。
                     // 老版本 login 不发字段 5,此时 name 保持 null,客户端按空名处理。
                     int len = in.readRawVarint32();
                     int oldLimit = in.pushLimit(len);
                     long playerId = 0;
+                    long zoneId = 0;
                     String name = null;
                     while (!in.isAtEnd()) {
                         int subTag = in.readTag();
@@ -652,6 +673,8 @@ public class LoginRpcClient {
                                 int pWire = pTag & 0x7;
                                 if (pField == 1 && pWire == 0) {
                                     playerId = in.readUInt64();
+                                } else if (pField == 4 && pWire == 0) {
+                                    zoneId = Integer.toUnsignedLong(in.readUInt32());
                                 } else if (pField == 5 && pWire == 2) {
                                     name = in.readStringRequireUtf8();
                                 } else {
@@ -666,6 +689,7 @@ public class LoginRpcClient {
                     in.popLimit(oldLimit);
                     LoginResponse.PlayerInfo p = new LoginResponse.PlayerInfo();
                     p.setPlayerId(playerId);
+                    p.setZoneId(zoneId);
                     p.setName(name);
                     resp.players.add(p);
                 }
@@ -716,10 +740,11 @@ public class LoginRpcClient {
     // ── AssignGate / QueryQueueStatus wire codecs ────────────────────
     //
     // proto/login/login.proto AssignGateRequest:
-    //   uint32 zone_id     = 1
-    //   string queue_token = 2
-    //   string account     = 3
-    //   string device_id   = 4
+    //   uint32 zone_id      = 1
+    //   string queue_token  = 2
+    //   (3 reserved:曾是客户端自报的 account,2026-11-12 删除,不要再写这个号)
+    //   string device_id    = 4
+    //   string access_token = 5
     //
     // AssignGateResponse: see proto for full layout. Tags here MUST match
     // the proto exactly — that's the entire wire-format contract this
@@ -730,13 +755,13 @@ public class LoginRpcClient {
     public static final class AssignGateRequestProto {
         public final int zoneId;
         public final String queueToken;
-        public final String account;
+        public final String accessToken;
         public final String deviceId;
 
-        public AssignGateRequestProto(int zoneId, String queueToken, String account, String deviceId) {
+        public AssignGateRequestProto(int zoneId, String queueToken, String accessToken, String deviceId) {
             this.zoneId = zoneId;
             this.queueToken = nullToEmpty(queueToken);
-            this.account = nullToEmpty(account);
+            this.accessToken = nullToEmpty(accessToken);
             this.deviceId = nullToEmpty(deviceId);
         }
 
@@ -745,8 +770,8 @@ public class LoginRpcClient {
             CodedOutputStream out = CodedOutputStream.newInstance(baos);
             if (zoneId != 0)             out.writeUInt32(1, zoneId);
             if (!queueToken.isEmpty())   out.writeString(2, queueToken);
-            if (!account.isEmpty())      out.writeString(3, account);
             if (!deviceId.isEmpty())     out.writeString(4, deviceId);
+            if (!accessToken.isEmpty())  out.writeString(5, accessToken);
             out.flush();
             return baos.toByteArray();
         }
@@ -760,7 +785,7 @@ public class LoginRpcClient {
         public long   tokenDeadline;
         public String error;
 
-        public int    status;          // 0=ADMITTED, 1=QUEUEING, 2=ERROR, 3=EXPIRED
+        public int    status;          // 0=ADMITTED, 1=QUEUEING, 2=ERROR, 3=EXPIRED, 4=UNAUTHENTICATED
         public String queueToken;
         public int    queueRank;
         public int    queueTotal;
@@ -902,6 +927,80 @@ public class LoginRpcClient {
                 case 9 -> resp.retryAfterMs   = in.readUInt32();
                 case 10 -> resp.error         = in.readString();
                 default -> in.skipField(tag);
+            }
+        }
+        return resp;
+    }
+
+    /**
+     * proto/login/login.proto ZoneRoleCountRequest:
+     *   uint32 zone_id = 1;
+     */
+    public static final class ZoneRoleCountRequestProto {
+        public final int zoneId;
+
+        public ZoneRoleCountRequestProto(int zoneId) {
+            this.zoneId = zoneId;
+        }
+
+        byte[] toBytes() throws IOException {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(8);
+            CodedOutputStream out = CodedOutputStream.newInstance(baos);
+            if (zoneId != 0) out.writeUInt32(1, zoneId);
+            out.flush();
+            return baos.toByteArray();
+        }
+    }
+
+    /**
+     * proto/login/login.proto ZoneRoleCountResponse:
+     *   uint64 roles = 1;
+     */
+    public static final class ZoneRoleCountResponseProto {
+        public long roles;
+    }
+
+    private static final class ZoneRoleCountRequestMarshaller implements MethodDescriptor.Marshaller<ZoneRoleCountRequestProto> {
+        @Override
+        public InputStream stream(ZoneRoleCountRequestProto value) {
+            try {
+                return new java.io.ByteArrayInputStream(value.toBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public ZoneRoleCountRequestProto parse(InputStream stream) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private static final class ZoneRoleCountResponseMarshaller implements MethodDescriptor.Marshaller<ZoneRoleCountResponseProto> {
+        @Override
+        public InputStream stream(ZoneRoleCountResponseProto value) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ZoneRoleCountResponseProto parse(InputStream stream) {
+            try {
+                return parseZoneRoleCountResponse(stream.readAllBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    static ZoneRoleCountResponseProto parseZoneRoleCountResponse(byte[] bytes) throws IOException {
+        ZoneRoleCountResponseProto resp = new ZoneRoleCountResponseProto();
+        CodedInputStream in = CodedInputStream.newInstance(bytes);
+        while (!in.isAtEnd()) {
+            int tag = in.readTag();
+            if (tag >>> 3 == 1) {
+                resp.roles = in.readUInt64();
+            } else {
+                in.skipField(tag);
             }
         }
         return resp;

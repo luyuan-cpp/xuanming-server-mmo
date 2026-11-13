@@ -73,26 +73,44 @@ Client ── POST ───►│ /api/assign-gate                             
                    └──────────────────────────────────────────────────────────┘
 
                    Redis (共享):
-                   ─ queue:zone:{zoneId}      ZSET, score=入队 ms, member=queueId
+                   ─ queue:{q:<zoneId>}      ZSET, score=入队 ms, member=queueId
                    ─ admit:{queueId}          STRING JSON{ip,port,payload,sig,deadline}, TTL=60s
-                   ─ admitted:zset:zone:{zoneId}  ZSET member=queueId | fast:<uuid>, score=占位到期毫秒(逐个到期;整键 TTL 只做垃圾回收)
+                   ─ admitted:zset:{q:<zoneId>}  ZSET member=queueId | fast:<uuid>, score=占位到期毫秒(逐个到期;整键 TTL 只做垃圾回收)
                    ─ queue:meta:{queueId}     HASH {account,device,zoneId,createdAt}, TTL=1h
                    ─ queue:token:{token}      STRING queueId, TTL=1h(token→queueId 反查)
-                   ─ dispatcher:lock:login_queue:zone:{zoneId}  STRING uuid, TTL=30s(本 zone leader 锁)
+                   ─ dispatcher:lock:login_queue:{q:<zoneId>}  STRING uuid, TTL=30s(本 zone leader 锁)
 ```
 
 > **(2026-10-15 更正,上图原文保留)** 上图键表里 `admit:{queueId}` 一行的值格式早已过时。R17 R1 修复(2026-06-04)起,放行槽只存 `AdmitSlot`:JSON `{"node_id","ip","port","zone_id"}`,即 dispatcher 挑中的 gate 端点及其 zone,**不含** `token_payload`、签名与 deadline(`go/login/internal/logic/pkg/loginqueue/queue.go:77-98`)。放行时写入:`SET admit:{queueId} <AdmitSlot JSON>`,TTL 仍为 `AdmitTTL`(默认 60s),与在途占位的 `EVAL admittedHoldScript` 排进同一个 MULTI(`queue.go:465-473`)。gate 票在客户端取走时才签:`Lookup` → `consumeAdmitAndSign` 先 `GETDEL admit:{queueId}`,再用调用方传入的 `SignAdmitFn` 现签(`queue.go:331-361`;签票实现是 `gatetoken.go` 的 `SignGateToken`),所以 gate 票的有效期从取走那一刻起算。同图 Dispatcher 框里「签 gate token → SET admit:{queueId}」也按此读:出队只挑 gate、不签票(§5 Dispatcher Loop 已是现行写法)。另:`queue:meta:{queueId}` 的字段名是 `zone_id`,不是 `zoneId`(`queue.go:207-212`)。
 
-> **(2026-10-15 更正,上图 AssignGate 第 4 步;原文保留)** 第 4 步「FreeSlots>0 且队列空 → 直接签 gate token」漏了占位:签票之前先调 `TryReserveFastPathSlot`(`go/login/internal/logic/loginpregate/assigngatelogic.go:110-129`;脚本与函数见 `go/login/internal/logic/pkg/loginqueue/queue.go:563-593`),一段 Lua 先清掉 `admitted:zset:zone:{z}` 里已到期的成员,未到期成员数 < `budget`(= `capacity − online`,注意不是 `free`)才写入成员 `fast:<uuid>`、分数 = 现在 + 交票宽限 20s(`defaultHandoffGrace`),并按「只增不减」续整键 TTL;返回 1 才签票。占不到(名额被并发请求占满)或脚本出错(Redis 抖动,fail-closed)都改走第 5 步入队,不签票。这个占位不撤,20s 后按分数自然到期,期间与排队路径的在途占位一起计入 `FreeSlots` 的 `admitted_inflight`,所以快速通道同样受容量约束,不是旁路。第 3 步(`Queue.Enabled=false`)与第 2 步(重连豁免)才是真正「直接签票」,不读不写任何排队键。占位的生命周期见 §5「在途占位的生命周期」表的「快速通道占位」一行。
+> **(2026-10-15 更正,上图 AssignGate 第 4 步;原文保留)** 第 4 步「FreeSlots>0 且队列空 → 直接签 gate token」漏了占位:签票之前先调 `TryReserveFastPathSlot`(`go/login/internal/logic/loginpregate/assigngatelogic.go:110-129`;脚本与函数见 `go/login/internal/logic/pkg/loginqueue/queue.go:563-593`),一段 Lua 先清掉 `admitted:zset:{q:<z>}` 里已到期的成员,未到期成员数 < `budget`(= `capacity − online`,注意不是 `free`)才写入成员 `fast:<uuid>`、分数 = 现在 + 交票宽限 20s(`defaultHandoffGrace`),并按「只增不减」续整键 TTL;返回 1 才签票。占不到(名额被并发请求占满)或脚本出错(Redis 抖动,fail-closed)都改走第 5 步入队,不签票。这个占位不撤,20s 后按分数自然到期,期间与排队路径的在途占位一起计入 `FreeSlots` 的 `admitted_inflight`,所以快速通道同样受容量约束,不是旁路。第 3 步(`Queue.Enabled=false`)与第 2 步(重连豁免)才是真正「直接签票」,不读不写任何排队键。占位的生命周期见 §5「在途占位的生命周期」表的「快速通道占位」一行。
 
 > **(2026-10-18 更正,上图 Dispatcher 框、AssignGate 第 1 步与键表;原文保留;已落码,未编译、未测试,待 Codex 验证)**
 > - Dispatcher 框「ZPOPMIN free 个 → 签 gate token → SET admit:{queueId}」改读:`ZRANGE` 读出前 `batch` 个候选(只读,条目仍在队列)→ 逐条挑 gate → 每条一段 `admitEntryScript`(2026-11-06 起第一条单发探路,之后每块至多 128 条放进一个 pipeline,见下文「一、出队」)。脚本先判成员仍在队列,再在同一段里写 meta 的 `admitted_at`、放行槽与在途占位,最后 `ZREM` 成员。gate 票仍在取走时才签。
 > - AssignGate 第 1 步与 QueryQueueStatus 的「验签 + Lookup」:`Lookup` 用验签得到的令牌里的 zone 定位队列键,并与 meta 的 `zone_id` 对账。
 > - 键表 `queue:meta:{queueId}` 与 `queue:token:{token}` 的「TTL=1h」改读**空闲 TTL**:入队时设 `QueueEntryTTL`;之后每次排队中的查询,剩余 TTL 不足 `QueueEntryTTL` 时续到 1.25 倍。所以条目空闲(自最后一次成功的排队中查询或入队起算)至少 `QueueEntryTTL`、至多 1.25 倍才过期;放行之后不再续期。
-> - `queue:zone:{zoneId}` 同样会被续期;入队对它改为 `EXPIRE NX` + `EXPIRE GT`,TTL 只增不减。
+> - `queue:{q:<zoneId>}` 同样会被续期;入队对它改为 `EXPIRE NX` + `EXPIRE GT`,TTL 只增不减。
 > - `queue:meta` 另有字段 `admitted_at`(10-15 起,放行时刻 unix 毫秒)。
 > - 排队令牌的签名过期固定为 24h(`loginqueue.queueTokenMaxAge`),不再等于 `QueueEntryTTL`(§6)。
 > - 推导与残余风险见 §5 决策树后的 2026-10-18 更正。
+
+> **(2026-11-12 更正,键形与句柄;全部 Redis 上 Cluster 第 4 批,[设计](redis-cluster-all-domains-20261110.md) §4.3;已落码,未编译、未测试,待 Codex 验证)**
+> 排队族的五把键与放行锁都带本 zone 的 hash tag `{q:<zone>}`,一个 zone 的这些键在 Redis Cluster 上同槽,入队的 MULTI、`lookupScript`、`admitEntryScript` 都能在集群上执行;不同 zone 散到不同槽。本文其余各处的旧键名按下表读(上图键表也按它读):
+>
+> | 旧键名 | 现键名 |
+> |---|---|
+> | `queue:zone:{zoneId}` | `queue:{q:<zoneId>}` |
+> | `admit:{queueId}` | `admit:{q:<zoneId>}:<queueId>` |
+> | `admitted:zset:zone:{zoneId}` | `admitted:zset:{q:<zoneId>}` |
+> | `queue:meta:{queueId}` | `queue:meta:{q:<zoneId>}:<queueId>` |
+> | `queue:token:{token}` | `queue:token:{q:<zoneId>}:<token>` |
+> | `<DispatcherLockKey>:zone:<zoneId>` | `<DispatcherLockKey>:{q:<zoneId>}`(K8s 上配置值已带 `:zone:<id>`,实际是 `dispatcher:lock:login_queue:zone:<id>:{q:<id>}`) |
+>
+> - zone 取验过签的令牌里的 zone(轮询、取走),或请求的 zone(入队、放行)。取走放行槽之后改占位的那一步,改按令牌里的 zone 拼 meta 键,并核对 meta 的 `zone_id` 与它相同才改。
+> - 句柄换成 `shared/clusterredis` 的控制集群客户端(顶层配置 `ControlRedis`,没写地址时就是 `Node.RedisClient` 那一个实例;`Node.QueueRedis` 照旧可单独指排队实例):发送前按控制集群键策略核对键,结果未知的命令不由客户端重发。本文各处「go-redis 超时后自动重发」这个来源随之没有了,REPLAYED 与重取分支照旧留着兜调用方的重试。
+> - 放行流水线不走集群客户端的 pipeline(它在连接出错后会整批重发),改为先取队列键所在槽的主节点,再在节点客户端上发(专用句柄不挂守卫,键由 `runAdmitScripts` 发送前自己核)。迁槽期间那一块收到 MOVED / ASK / TRYAGAIN 时,这一拍在那一块之后停下,条目原样留在队列,下一拍按新路由再放。
+> - `Node.QueueShardCount` 删掉:从来没有代码读它。
+> - `DispatcherLockKey` 的前缀不得含花括号,login 起服时拒绝:花括号会顶掉本 zone 的 tag,控制集群句柄会拒绝这把锁的每一条命令,本 zone 选不出 leader。
 
 ---
 
@@ -172,13 +190,31 @@ service LoginPreGate {
 3. !Queue.Enabled
      → fast path 签 token(legacy 行为,kill switch)
 
-4. FreeSlots > 0 且 ZCARD queue:zone:{id} == 0
+4. FreeSlots > 0 且 ZCARD queue:{q:<id>} == 0
      → fast path 签 token
 
 5. else
-     → Enqueue:ZADD queue:zone:{id} + 写 meta + token 反查索引
+     → Enqueue:ZADD queue:{q:<id>} + 写 meta + token 反查索引
      → 返回 status=QUEUEING + queue_token + rank
 ```
+
+> **(2026-11-12 更正,上树第 2 步、§4 的 `AssignGateRequest.account`、§8 与 §9;原文保留;已落码,未编译、未测试,待 Codex 验证)**
+> 原来的第 2 步用请求里客户端**自报**的 `account` 判「已有在线会话、免排队」,也拿它当排队身份:报出别人的账号名就能插队、冒用排队身份;
+> 第三方登录的客户端又不知道自己的账号名(`wx_<unionid>` 等由服务端算出),合法的免排队反而用不上。改为:
+> - **协议**:`AssignGateRequest` 删掉字段 3 `account`(`reserved 3; reserved "account";`),新增字段 5 `access_token`(`/api/login` 签发的那一个)。
+>   网关的 `/api/assign-gate` 请求体同步改成 `access_token`,不再收 `account`(客户端可见契约,Java 版同批,见 Java 仓 `PARITY.md`)。
+> - **决策树**:第 1 步(带 `queue_token` 重入)不变,排队令牌本身就是先前分配的凭证,不要求 access token。新的第 2 步是鉴权:
+>   账号只从 access token 解出(`authenticateAssignGate`,`go/login/internal/logic/loginpregate/assigngate_auth.go`)。令牌格式不对、未知、过期、
+>   家族已吊销 → `status=4`(UNAUTHENTICATED),网关回 HTTP 401,客户端提示重新登录;令牌存储故障 → `status=2`(ERROR,可重试)。
+>   不带令牌 = 匿名分配,只在旧 gate 凭据登录(`LegacyGateLoginEnabled`)开着时允许:旧流程「先分配 gate、连上再认证」,分配时还没有令牌。
+>   匿名分配不免排队,排队身份为空串。原来的第 2~5 步顺延为第 3~6 步,免排队与排队身份都只用鉴权得到的账号。
+> - **指标**:`login_assign_gate_auth_total{result}`,result 取 `authenticated` / `anonymous` / `rejected_anonymous` / `rejected_token` / `error`
+>   (不含排队重入)。关 `LegacyGateLoginEnabled` 之前看 `anonymous` 降到零。
+> - **网关冷却键**:冷却原来按 `account@ip`,现在按 access token 的 SHA-256 摘要(`tok:` + 前 16 字节十六进制)@ip,不把令牌原文放进内存键;
+>   匿名分配没有冷却键,只受 IP / zone 桶约束(见 [限流设计](./open-server-rate-limit-design.md) §二)。
+> - **客户端与 robot**:Unity 客户端在 `/api/login` 成功后带 access token 分配 gate,重连也只凭令牌,不再需要账号名;收到 401 提示
+>   「登录已失效,请重新登录」,不重试(断线重连按失败结束)。
+>   robot 用上一轮拿到的令牌分配 gate,收到 401 丢掉令牌改匿名重试一次(只在旧路径开着时成功)。
 
 > **(2026-10-15 更正,上图第 1 步「未命中 → status=QUEUEING + 当前 rank」;原文保留;已落码,未编译、未测试,待 Codex 验证)** 负责人 2026-10-15 按「最标准」定:放行之后客户端拿到确定的终态,不再停在名次 0。此前「未命中」一律回 QUEUEING,放行槽没人来取、按 `AdmitTTL` 过期之后再查,或已经取走过一次之后再查(回包丢失后重试、go-redis 超时重发 `GETDEL`),ZRANK 都落空,回「排队中、名次 0」,客户端一直轮询到 meta 按 `QueueEntryTTL`(1h)过期(§14 第 6 条)。现行判定(`go/login/internal/logic/pkg/loginqueue/queue.go` 的 `Lookup`,`:282` 起):
 >
@@ -209,7 +245,7 @@ service LoginPreGate {
 >
 > **一、出队(`PopAdmit`)**
 >
-> - **怎么出队。** 不再 `ZPOPMIN`。先 `ZRANGE queue:zone:{z} 0 n-1` 读出候选(只读,条目仍在队列),逐条挑 gate,再对每条跑一段 `admitEntryScript`。脚本的 KEYS 在放行槽、meta、在途占位之外多了队列键,只返回整数:
+> - **怎么出队。** 不再 `ZPOPMIN`。先 `ZRANGE queue:{q:<z>} 0 n-1` 读出候选(只读,条目仍在队列),逐条挑 gate,再对每条跑一段 `admitEntryScript`。脚本的 KEYS 在放行槽、meta、在途占位之外多了队列键,只返回整数:
 >   - GONE(1):成员已不在队列(另一副本或重叠 leader 已放行或已清理),什么都不写,不计数。
 >   - META_GONE(2):meta 不在或不是 hash,`ZREM` 成员,不写放行、不占名额、不计数。判据从「不存在」扩为「不是 hash」,类型损坏的 meta 不再是卡死整个 zone 的毒丸。
 >   - ALREADY(3):成员仍在队列,但 meta 已有 `admitted_at`。只可能是上一次非写满原因造成的部分写入,`ZREM`,不计数。
@@ -238,7 +274,7 @@ service LoginPreGate {
 > - **判定顺序(2026-11-06 起全在一段 `lookupScript` 里,一次往返;缺口清单第 14 条)。** 此前是 `GET queue:token:{token}`、`GETDEL admit:{queueId}`、再跑读状态脚本 `lookupStateScript` 三次往返,读状态脚本看到 `admitted_at` 时还要再 `GETDEL` 一次。
 >   1. TTL 不合法(`ValidateTTLs`)或 `signFn` 为 nil:回错误,不碰 Redis。前者是纵深防御,挡住绕过起服装配直接 `New` 的调用方,免得续期写出 `PEXPIRE 0` 当场删键。
 >   2. zone 为 0,或令牌拆不出 queueId:EXPIRED(`meta_gone`),不碰 Redis。queueId 从令牌正文取(`queueIDOfVerifiedToken`,与验签共用 `splitQueueToken` 的拆法),此前是 `GET` token 索引读出来的。
->   3. 跑一次 `lookupScript`,KEYS 是 meta、`queue:zone:{令牌里的 zone}`、token 索引与放行槽:
+>   3. 跑一次 `lookupScript`,KEYS 是 meta、`queue:{q:<令牌里的 zone>}`、token 索引与放行槽:
 >      - `GET` token 索引不在,或值不是这个 queueId:EXPIRED(`meta_gone`)。空闲超过 `QueueEntryTTL` 的条目走这里。索引按令牌全文建、值是 queueId,只有 `Enqueue` 签出的原令牌有索引,所以改写过正文的令牌取不到别人的放行槽(Poll 本身不验签,验签在调用方)。
 >      - `GETDEL admit:{queueId}` 取到:现签 gate 票,ADMITTED(签票之后读 meta、改占位各一次往返,每个条目只有这一次)。
 >      - meta 不在或不是 hash、meta 的 `zone_id` 与令牌不符:EXPIRED(`meta_gone`)。
@@ -248,7 +284,7 @@ service LoginPreGate {
 > - **在途窗口消失。** 「出队」与「写 `admitted_at`」在放行脚本的同一段里,读状态脚本与放行脚本互斥原子。所以旧的在途窗口(已 `ZPOPMIN`、还没写放行,回名次 0)不复存在,「HMGET 时还没放行、ZRANK 时已放行」的交错也随之消失。上面 10-15 更正中「没有 `admitted_at`:ZRANK 落空回名次 0」一条改读 `queue_gone`。
 > - **`queue_gone` 的来源。** 纯新版下只有三个:
 >   1. 整个 zone 空闲 ≥ `QueueEntryTTL` 之后,队列键先于某条 meta 过期。该条目空闲 ∈ [E, 1.25E],本来就该 EXPIRED,只是原因标签不同。
->   2. 人工 `ZREM` 成员或 `DEL queue:zone:<z>`(§15)。
+>   2. 人工 `ZREM` 成员或 `DEL queue:{q:<z>}`(§15)。
 >   3. 排队开着时混跑旧版 leader:旧版已 `ZPOPMIN`、还没写放行的条目。发布约束禁止这种情况,见下文第四部分。
 > - **往返数。** 排队中一次轮询 = 一次 `EVALSHA`(2026-11-06 起;10-18 版是 `GET` + `GETDEL` + 一次 `EVALSHA`,再之前是 `GET` + `GETDEL` + `HMGET` + `ZRANK` + `ZCARD`,5 → 3 → 1)。进程内首次调用会多一次 `NOSCRIPT` 回退。轮询从纯读变为「偶尔带写」(见下文第三部分的续期);脚本里的写只有 `GETDEL` 与 `PEXPIRE`,都不是 DENYOOM 命令,写满时轮询照常。Redis 侧每次轮询执行的命令数与此前大致相同,省下的是网络往返与命令解析;排队 10 万人时单台 Redis 是否扛得住仍要压测看(`stress_summarize` 的 R1 / R2)。
 > - **混跑。** 本次不改键名、键值格式与脚本之外的任何语义,新旧版本的 login 混跑时互不影响(旧版仍走三次往返,读写的是同一批键)。
@@ -330,7 +366,7 @@ online       = Σ(gate.PlayerCount for gate in 本 zone 的全部 gate 候选)
 ceiling      = zone_config.capacity(区服目录,经 etcd 读) || floor(max(online, 1) * SoftCapMultiplier)   // 读不到区服策略时才用软上限
 gate_cap     = Σ ceil(gate.max_connections × 90%) for gate in 在接客的那一档   // gatepick.AdmissionCapacity
 capacity     = min(ceiling, gate_cap)      // 在接客的 gate 里有 max_connections = 0 的(没声明上限)时 capacity = ceiling
-admitted_inflight = 清掉过期成员后的 ZCARD admitted:zset:zone:{z}
+admitted_inflight = 清掉过期成员后的 ZCARD admitted:zset:{q:<z>}
 free         = max(0, capacity - online - admitted_inflight)
 ```
 
@@ -373,7 +409,7 @@ free         = max(0, capacity - online - admitted_inflight)
 - **Q1**:快速通道的 `fast:<uuid>` 成员从不单独删除,每次写入又把整键 TTL 续上。已连上 gate 的快速通道玩家同时算进 `online` 和在途,持续有人登录时余量被重复扣到 0,「放一批、停最长 60s」。
 - **Q2**:取走即 SREM,而 gate 的人数要等下一次上报才涨。开区时每拍都按「在线 0、在途 0」再放一满批,能放进几倍容量。
 
-G4b-G 换成新键 `admitted:zset:zone:{z}`(ZSET,分数 = 占位到期的 Unix 毫秒),每个成员按自己的分数到期。完整推导、测试与评审记录见 [spec_G4b-G.md](../handoff/launch-readiness-20261013/spec_G4b-G.md)。
+G4b-G 换成新键 `admitted:zset:{q:<z>}`(ZSET,分数 = 占位到期的 Unix 毫秒),每个成员按自己的分数到期。完整推导、测试与评审记录见 [spec_G4b-G.md](../handoff/launch-readiness-20261013/spec_G4b-G.md)。
 
 一个占位成员的一生(`G` = 交票后宽限 20s,2026-10-15 起;10-13 至 10-15 为 15s。`now` = login 进程时钟的 Unix 毫秒):
 
@@ -394,7 +430,7 @@ G4b-G 换成新键 `admitted:zset:zone:{z}`(ZSET,分数 = 占位到期的 Unix �
 
 - **故障副本还在跑时**:它读的时候按自己的钟清理,别人写的、其实还有效的占位被早清,多放。
 - **故障副本恢复(NTP 校回)或被摘掉之后,不会立刻自愈**:它最后 20s / 60s 内写的占位,分数停在「故障钟 + 20s / 60s」,还要再过 δ 才到期。这段时间该 zone 的有效容量少掉这些占位(≤ 当时的 `capacity − online`)。清理只有 `-inf … now` 一个方向,而每次写占位都保证整键 TTL 至少剩 `W`,所以只要 zone 还有写入,整键 TTL 不兜底;整个 zone 完全停放时,最长约 `AdmitTTL` + 整键 TTL(默认 3 分钟)后自愈。旧实现没有「占位按某个副本的钟到期」这回事,这是新增的失败模式。
-- **判断与止血**:`redis-cli ZRANGE admitted:zset:zone:<z> 0 -1 WITHSCORES` 里有分数比当前毫秒时间戳大出 `max(AdmitTTL, 20s)` 以上的成员,就是这种残留。止血 `redis-cli DEL admitted:zset:zone:<z>`,代价是在途清零,最多多放一批 `capacity − online`(写在 runbook 模式 2)。
+- **判断与止血**:`redis-cli ZRANGE admitted:zset:{q:<z>} 0 -1 WITHSCORES` 里有分数比当前毫秒时间戳大出 `max(AdmitTTL, 20s)` 以上的成员,就是这种残留。止血 `redis-cli DEL admitted:zset:{q:<z>}`,代价是在途清零,最多多放一批 `capacity − online`(写在 runbook 模式 2)。
 - **退路**:偏差不可忽略时改用 Redis `TIME`。键、成员、分数含义都不变,新旧两种写法可以混跑。
 
 **20s 从哪来**:票交出去之后,这个人要「连上 gate(耗时 `c`)→ gate 下一次上报人数(C++ gate 每 10s 一次,`cpp/nodes/gate/main.cpp` 的 `playerCountReportTimer`)→ login 读 etcd(不缓存)」才出现在 `online` 里,最坏滞后 `c + 10s`。20s = 两个上报周期 = 一个周期的上报滞后 + 10s 建连与传播余量。Java 版是 15s,它的 gate 每 5s 发布一次,余量同为 10s。2026-10-13 本仓库照搬 15s,余量只有 5s;10-15 负责人按「最标准」改为 20s,两版余量对齐,宽限值本身不再相同。
@@ -414,7 +450,7 @@ G4b-G 换成新键 `admitted:zset:zone:{z}`(ZSET,分数 = 占位到期的 Unix �
 - 拿了票不连 gate,或连上很快就走:名额每约 22~23s(取走延迟 ≤ 轮询 2s + 一拍 1s,再加 20s)周转一次,任意这样一个窗口内经排队放行的人数 ≤ 窗口起点的 `C − O`。修复前这个周期是 2~3s(Q2)。
 - §11 与 runbook 里写于 2026-05 的节奏数字没有按这个上界标定过,待 L-14 重新标定。
 
-**新旧版本混跑与部署顺序**:旧 Pod 读写 `admitted:zone:{z}`(SET),新 Pod 读写 `admitted:zset:zone:{z}`(ZSET)。键不同,不会 `WRONGTYPE`;但两边互相看不见对方的占位。
+**新旧版本混跑与部署顺序**:旧 Pod 读写 `admitted:zone:{z}`(SET),新 Pod 读写 `admitted:zset:{q:<z>}`(ZSET)。键不同,不会 `WRONGTYPE`;但两边互相看不见对方的占位。
 
 - **要求的做法:排队关着滚**。`Queue.Enabled=false` 时不构造 `Queue`,新旧两种键都没人碰,滚动对占位记账是空操作(当前所有环境都是这个状态)。先在排队关闭下把所有 zone 的 login 滚到含 G4b-G 的版本,再打开排队。这条要求落在三处:`login.yaml` 上线清单第 0 步(手工打开排队的人照它做);K8s 上的合入顺序 G1b → G4b-G → G4b-2(只有 G4b-2 才写 `Queue` 段,它的契约用例 15 断言 `queue.go` 已是新键);本节与 runbook「故障应急」。
 - **排队开着滚**(只在本机或裸机有人手工打开过时可能),按谁经手逐格记账:
@@ -437,19 +473,19 @@ G4b-G 换成新键 `admitted:zset:zone:{z}`(ZSET,分数 = 占位到期的 Unix �
 
 ```
 zoneId = Node.ZoneId  // 只出本 zone;队列空直接跳过
-if ZCARD queue:zone:{zoneId} == 0: return   // 先判空,空闲 zone 不碰 gate 目录
+if ZCARD queue:{q:<zoneId>} == 0: return   // 先判空,空闲 zone 不碰 gate 目录
 candidates = CandidatesForZone(zoneId)      // 每个非空拍只取一次 gate 候选(2026-10-15 起)
 free = FreeSlots(candidates)                // 再算容量,与挑 gate 共用这一份候选
 if free <= 0: return
 batch = min(free, ZCARD)
-members = ZPOPMIN queue:zone:{zoneId} batch
+members = ZPOPMIN queue:{q:<zoneId>} batch
 picker = 本拍的挑 gate 器(candidates)        // 负载 = PlayerCount + 本拍已分给它的人数
 for each queueId in members:
     gate = picker.pick()                    // 取负载最少、同负载 NodeID 最小,选中后本拍计数 +1
     MULTI
       SET admit:{queueId} <AdmitSlot JSON:选好的 gate> EX AdmitTTL   // gate 票在取走时才签
       EVAL admittedHoldScript:              // 一段脚本(2026-10-15 起)
-        ZADD admitted:zset:zone:{zoneId} <now_ms + AdmitTTL> queueId   // 占位按自己的分数到期
+        ZADD admitted:zset:{q:<zoneId>} <now_ms + AdmitTTL> queueId   // 占位按自己的分数到期
         if PTTL < W: PEXPIRE W              // W = max(AdmitTTL, 20s) + 1min,整键 TTL 只延长不缩短
     EXEC
 ```
@@ -458,26 +494,26 @@ for each queueId in members:
 >
 > ```
 > zoneId = Node.ZoneId
-> if ZCARD queue:zone:{zoneId} == 0: return
+> if ZCARD queue:{q:<zoneId>} == 0: return
 > candidates = CandidatesForZone(zoneId)
 > free = FreeSlots(candidates)
 > if free <= 0: return                        // zone 满时不出队,队首孤儿也要等有空位那一拍才清
 > batch = min(free, ZCARD)
-> members = ZRANGE queue:zone:{zoneId} 0 batch-1   // 只读,条目仍在队列
+> members = ZRANGE queue:{q:<zoneId>} 0 batch-1   // 只读,条目仍在队列
 > picker = 本拍的挑 gate 器(candidates)
 > entries = [ (queueId, picker.pick()) for each queueId in members ]   // 挑失败或无 gate:跳过该条,它从未离开队列、分数不变
 > for each chunk in [entries[0:1], 之后每 128 条一块]:   // 2026-11-06 起:第一条单发探路,之后一块一个 pipeline、一次往返
 >     if ctx 已取消: return (已放行数, ctx.Err())    // 剩余条目原样留在队列
 >     对块里每条跑 admitEntryScript(单发 EVALSHA / pipeline 里 EVAL):   // 一段脚本,只返回整数,每条各自原子
->       if queueId 不在 queue:zone:{zoneId}:
+>       if queueId 不在 queue:{q:<zoneId>}:
 >           admitted_at == 本次放行时刻 ? REPLAYED(计数) : GONE
 >       if TYPE meta != hash: ZREM → META_GONE
 >       if meta 已有 admitted_at: ZREM → ALREADY
 >       HSET meta admitted_at <now_ms>        // 写段第一条必须是 DENYOOM 的 HSET:写满时整段被拒
 >       SET admit:{queueId} <AdmitSlot JSON> PX AdmitTTL
->       ZADD admitted:zset:zone:{zoneId} <now_ms + AdmitTTL> queueId
+>       ZADD admitted:zset:{q:<zoneId>} <now_ms + AdmitTTL> queueId
 >       if PTTL < W: PEXPIRE W
->       ZREM queue:zone:{zoneId} queueId → WRITTEN(计数)
+>       ZREM queue:{q:<zoneId>} queueId → WRITTEN(计数)
 >     块里有脚本出错: return (已放行数, err)   // 同块其余各条已照常执行;后面的块不发,原样留在队列
 > 有跳过的条目: return (已放行数, 首个跳过原因)
 > // dispatchOnce:先 recordAdmit(已放行数),err 非空且 ctx 未取消时打一行 ERROR
@@ -523,7 +559,7 @@ queue_token = base64url( JSON{kind:"queue", q:queueId, z:zoneId, e:expireTs} | "
   - **伪造防御不变。** 令牌离开 Redis 里的条目就没用,实际可用期 = min(24h, 条目存活),所以延长令牌过期不扩大被截获令牌的危害面。
   - **zone 来自令牌。** `Poll` 用验签得到的令牌里的 zone 定位队列键,并与 meta 的 `zone_id` 对账,不符回 EXPIRED(`meta_gone`)。
   - **要同步的地方。** 改 `queueTokenMaxAge` 时,要同步改 `ValidateTTLs` 的上界与本节。
-  - **密钥轮换的第 ③ 步要多等(2026-10-18 补注)。** 令牌只在入队时签一次,排队期间不换签。此前第 ③ 步(摘掉旧密钥)在第 ② 步(提升新密钥开始签)全量生效后等一个 `QueueEntryTTL` 即可;现在持续轮询的人能拿着旧密钥签的令牌排到 24h,第 ③ 步须在第 ② 步全量生效后至少等 `queueTokenMaxAge`(24h)。要提前,须确认各 zone 队首的入队时刻(`ZRANGE queue:zone:<z> 0 0 WITHSCORES`,分数 = 入队毫秒)都晚于第 ② 步全量生效时刻,且已过一个 `AdmitTTL`(已放行、未取走放行槽的人也持旧令牌)。否则在排玩家会按 `bad_signature` 回 EXPIRED(410)、丢掉排位,指标上记在 zone=unknown 下,与伪造流量混在一起。K8s 档位是单步轮换(只写 `Value`),本来就会让在排玩家重新入队(`open-server-rate-limit-design.md` §11.3 第 7 条),不受此条影响。`config/secrets.go` 包注释、`login.yaml` 的 Secrets 段与 `ParseAndVerifyQueueTokenMulti` 注释里的轮换说明尚未同步这一句,登记为后续项。
+  - **密钥轮换的第 ③ 步要多等(2026-10-18 补注)。** 令牌只在入队时签一次,排队期间不换签。此前第 ③ 步(摘掉旧密钥)在第 ② 步(提升新密钥开始签)全量生效后等一个 `QueueEntryTTL` 即可;现在持续轮询的人能拿着旧密钥签的令牌排到 24h,第 ③ 步须在第 ② 步全量生效后至少等 `queueTokenMaxAge`(24h)。要提前,须确认各 zone 队首的入队时刻(`ZRANGE queue:{q:<z>} 0 0 WITHSCORES`,分数 = 入队毫秒)都晚于第 ② 步全量生效时刻,且已过一个 `AdmitTTL`(已放行、未取走放行槽的人也持旧令牌)。否则在排玩家会按 `bad_signature` 回 EXPIRED(410)、丢掉排位,指标上记在 zone=unknown 下,与伪造流量混在一起。K8s 档位是单步轮换(只写 `Value`),本来就会让在排玩家重新入队(`open-server-rate-limit-design.md` §11.3 第 7 条),不受此条影响。`config/secrets.go` 包注释、`login.yaml` 的 Secrets 段与 `ParseAndVerifyQueueTokenMulti` 注释里的轮换说明尚未同步这一句,登记为后续项。
 
 ---
 
@@ -556,7 +592,7 @@ if lock.IsLocked() {
 - 锁键取配置 `Queue.DispatcherLockKey`,默认 `dispatcher:lock:login_queue`,全服只有一把。
 - 出队范围是 `activeZones`。它的注释说取「有 gate 的 zone ∪ 非空队列的 zone」,实现却只遍历 GateWatcher 的节点;而 GateWatcher 的 etcd 前缀带本进程 `Node.ZoneId`,所以结果只有本 zone。
 - 就算 leader 去遍历别的 zone 也出不了队:候选 gate 按 zone 过滤,本进程只看得见本 zone 的 gate,`FreeSlots` 对外 zone 报 `no gates for zone`。
-- 网关按 zone 把 AssignGate 路由到该 zone 的 login,`queue:zone:Z` 只会由 zone Z 的 login 写入。
+- 网关按 zone 把 AssignGate 路由到该 zone 的 login,`queue:{q:Z}` 只会由 zone Z 的 login 写入。
 
 多个 zone 共用一个 Redis 时(K8s 下所有 zone 的 login 都连同一个 Redis),只有抢到锁的那个 zone 出队,其它 zone 的 login 每 10s 重试一次、永远不出队。快速通道要求队列为空,所以非 leader zone 只要有一个人入队,之后进来的人全部入队,而每次 ZADD 都刷新 ZSET 的 TTL,队列永不过期——整个 zone 被堵死。
 
@@ -584,9 +620,9 @@ if lock.IsLocked() {
 
 **前提:锁与它保护的队列在同一个 Redis 实例上**。以后按用途拆 Redis 时,leader 锁必须跟着排队键走;拆开后 Redis 抖动会出现「锁还在、队列读不到」或反过来的组合,上面的有界分析就不成立。按 zone 分锁本身与「每 zone 一个 Redis」「全服共享一个 Redis」两种拓扑都兼容。
 
-**zone-down 与合服后旧 zone 的队列**:本修复不产生新的残留。源 zone S 的 login 下线后不再有人 ZADD,`queue:zone:S` 在最后一次入队后 `QueueEntryTTL`(1h)内过期,`admit:*` 在 `AdmitTTL`(60s)内过期,`admitted:zset:zone:S` 在最后一次写入后 `AdmitTTL + 1min`(默认 2 分钟)内整键过期,锁键 30s 内过期。目标 zone T 的 leader 只出 `queue:zone:T`;S 的排队玩家重新走 AssignGate 时按角色列表给出的归属 zone 进 T 的队,排队位次不迁移(§14 第 4 条)。合服回退把 S 拉起来后,S 的新 leader 自然接手。要立即清理见 §15。
+**zone-down 与合服后旧 zone 的队列**:本修复不产生新的残留。源 zone S 的 login 下线后不再有人 ZADD,`queue:{q:S}` 在最后一次入队后 `QueueEntryTTL`(1h)内过期,`admit:*` 在 `AdmitTTL`(60s)内过期,`admitted:zset:{q:S}` 在最后一次写入后 `AdmitTTL + 1min`(默认 2 分钟)内整键过期,锁键 30s 内过期。目标 zone T 的 leader 只出 `queue:{q:T}`;S 的排队玩家重新走 AssignGate 时按角色列表给出的归属 zone 进 T 的队,排队位次不迁移(§14 第 4 条)。合服回退把 S 拉起来后,S 的新 leader 自然接手。要立即清理见 §15。
 
-> **(2026-10-18 更正,上段 `queue:zone:S` 的过期时长;原文保留;未编译、未测试)** 队列键、meta 与 token 索引现在是空闲 TTL:排队中的查询会把它们续到 1.25×`QueueEntryTTL`,入队对队列键只增不减。所以「在最后一次入队后 `QueueEntryTTL`(1h)内过期」改读:在最后一次入队或排队中查询之后,至多约 1.25×`QueueEntryTTL` 内过期(§15 的 10-18 补注)。其余键的时长不变。
+> **(2026-10-18 更正,上段 `queue:{q:S}` 的过期时长;原文保留;未编译、未测试)** 队列键、meta 与 token 索引现在是空闲 TTL:排队中的查询会把它们续到 1.25×`QueueEntryTTL`,入队对队列键只增不减。所以「在最后一次入队后 `QueueEntryTTL`(1h)内过期」改读:在最后一次入队或排队中查询之后,至多约 1.25×`QueueEntryTTL` 内过期(§15 的 10-18 补注)。其余键的时长不变。
 
 **停机空窗(未核实,既有行为)**:SIGTERM 路径能否走到 `Dispatcher.Stop()` 主动释放锁尚未核实(login 与 scene_manager 的注释说法冲突)。最坏情况是锁按 TTL 过期,滚动升级时该 zone 最长约 40s(TTL + 备机重试周期 TTL/3)没有 leader,期间不放行、不丢人。修复前(全服锁)也是这样,不是 G1b 引入的回归。
 
@@ -602,6 +638,8 @@ if lock.IsLocked() {
 3. 若 `existing.GateID != ""` → 跳过排队,fast path
 
 **已知妥协**:目前账号→player_id 取列表第一项。多角色账号需要扩展(查 `playerId` 列表里哪个有 ONLINE/DISCONNECTING session),不影响本期发布,留 TODO。
+
+> **(2026-11-12 更正)** 上面的 `account` 现在是 access token 解出的账号,不再是请求里自报的值;匿名分配不走这一步。见 §5 末尾的更正。
 
 ---
 
@@ -619,6 +657,8 @@ AssignGate(account, deviceId, zoneId)
 ```
 
 robot 的 queue-aware 实现见 `robot/main.go::assignGateHTTPLocal` + `robot/http_assign_gate.go::AssignGateWithQueue`。
+
+> **(2026-11-12 更正)** 上树第一行的入参改为 `AssignGate(access_token, deviceId, zoneId)`;另多一个结果 status=4(网关回 401):令牌不能用,回到登录界面重新登录,不重试。见 §5 末尾的更正。
 
 > **(2026-10-15 更正,上面协议树原文保留)** 上树是排队初版的口径,与负责人 2026-10-15 定的客户端契约有三处出入,以 `docs/design/open-server-rate-limit-design.md` §11.5 的 2026-10-15 更正与补注为准:
 > - 「每 retryAfterMs 调 QueryQueueStatus」改为:每次等待 max(retryAfterMs, 2s) + [0, 20%] 抖动;QueryQueueStatus 连续失败时下限从 2s 起翻倍,封顶 30s,成功一次即复位。
@@ -659,9 +699,9 @@ Queue:
 缺省 `auto` 跟随 `-ReleaseProfile`:dev 不写(go-zero 零值 `Enabled=false`,产物与 G4b 之前逐字相同),staging / prod 写。写的时候:
 
 - `Enabled: true`;`DispatchInterval` / `AdmitTTL` / `QueueEntryTTL` / `SoftCapMultiplier` / `DefaultRetryAfterMs` / `DispatcherLockTTL` 从 `go/login/etc/login.yaml` 原样镜像。
-- `DispatcherLockKey: "dispatcher:lock:login_queue:zone:<本 zone>"`:写进 ConfigMap 的前缀已经带本 zone,login 再按 §7.1 拼一次 `:zone:<Node.ZoneId>`,
-  所以 **K8s 上本 zone 的实际锁键是 `dispatcher:lock:login_queue:zone:<id>:zone:<id>`**,选主日志 `[loginqueue] elected dispatcher leader zone=<id> key=…` 里打的也是它。
-  每个 zone 仍恰好一把锁;§3、§15 与 `docs/ops/login-queue-stress-runbook.md` 写的 `dispatcher:lock:login_queue:zone:<id>` 是本地 / compose 默认配置下的键名,在 K8s 上排查时按带两段 zone 的键查。
+- `DispatcherLockKey: "dispatcher:lock:login_queue:{q:<本 zone>}"`:写进 ConfigMap 的前缀已经带本 zone,login 再按 §7.1 拼一次 `:zone:<Node.ZoneId>`,
+  所以 **K8s 上本 zone 的实际锁键是 `dispatcher:lock:login_queue:{q:<id>}:{q:<id>}`**,选主日志 `[loginqueue] elected dispatcher leader zone=<id> key=…` 里打的也是它。
+  每个 zone 仍恰好一把锁;§3、§15 与 `docs/ops/login-queue-stress-runbook.md` 写的 `dispatcher:lock:login_queue:{q:<id>}` 是本地 / compose 默认配置下的键名,在 K8s 上排查时按带两段 zone 的键查。
   显式带 zone 是纵深防御:`kubectl rollout undo` 把 login 退回 §7.1 之前的镜像、而 ConfigMap 仍是开排队的这一份时,旧镜像原样使用配置值,照样按 zone 隔离,
   不会退回「全集群一个 leader、其它 zone 只进不出」。login 若改成「一个 leader 覆盖全部 zone」,这一行必须删掉,否则 N 个 leader 同时出队。
 - 不写区容量(2026-11-10 起;此前写本 zone 一项 `ZoneCapacityOverride`,值取 `$script:PeakShavingLaunchTier.LoginQueueZoneCapacity`,两者都已删)。
@@ -808,7 +848,7 @@ pwsh -File tools/scripts/k8s_deploy.ps1 -Command zone-up -ZoneName <zone> -ZoneI
   `/api/queue-status` 拿到 EXPIRED(gateway 回 410),丢掉 token 重走 `/api/assign-gate` 快速通道。关排队时部署不要求 `MMORPG_LOGIN_QUEUE_TOKEN_SECRET`。
 - 参数不粘滞:下一次部署(含回档 Step 6、合服后的 zone-up)不传 `-LoginQueue off`,staging / prod 就按档位恢复为开。原因排除前每次部署都要照传。
   - **(2026-10-15 更正,上一条原文保留)** 「按档位恢复为开」只在登录排队的合入门槛清掉之后成立:门槛未清时(`k8s_deploy.ps1` 的 `$script:LoginQueueMergeGateCleared` 为 `$false`),不传 `-LoginQueue` 在任何档位都是关,`-LoginQueue on` 被拒,本节的止血场景也就不会出现。见 §10 末尾的更正与 `docs/handoff/launch-readiness-20261013/spec_G4b.md` §7「合入门槛」。
-- 遗留的 `queue:*` / `admit*` 键按 TTL 自然过期,要立即清理见下面「清空堆积」。K8s 上锁键是 `dispatcher:lock:login_queue:zone:<id>:zone:<id>`(§10),
+- 遗留的 `queue:*` / `admit*` 键按 TTL 自然过期,要立即清理见下面「清空堆积」。K8s 上锁键是 `dispatcher:lock:login_queue:{q:<id>}:{q:<id>}`(§10),
   下面命令里的锁键在 K8s 上要换成它。
 
 **清空堆积**:
@@ -816,14 +856,14 @@ pwsh -File tools/scripts/k8s_deploy.ps1 -Command zone-up -ZoneName <zone> -ZoneI
 > 多 zone 共用 Redis 时,下面后三行(`admit:*` / `queue:meta:*` / `queue:token:*`)不分 zone,会清掉**全部 zone** 的放行槽和排队条目;只想清一个 zone 时只执行第一行,其余键按 TTL(60s / 1h)自然过期。
 
 ```
-redis-cli DEL queue:zone:1 admitted:zset:zone:1
+redis-cli DEL queue:{q:1} admitted:zset:{q:1}
 redis-cli --scan --pattern 'admit:*'        | xargs -r redis-cli DEL
 redis-cli --scan --pattern 'queue:meta:*'   | xargs -r redis-cli DEL
 redis-cli --scan --pattern 'queue:token:*'  | xargs -r redis-cli DEL
 # leader 锁一般不用删(30s 自然过期);确需强制换主:
-redis-cli DEL dispatcher:lock:login_queue:zone:1
+redis-cli DEL dispatcher:lock:login_queue:{q:1}
 # 合服后源 zone S 的队列残留会在 QueueEntryTTL(1h)内自行过期;要立即清:
-redis-cli DEL queue:zone:<S> admitted:zset:zone:<S> dispatcher:lock:login_queue:zone:<S>
+redis-cli DEL queue:{q:<S>} admitted:zset:{q:<S>} dispatcher:lock:login_queue:{q:<S>}
 # 旧键 admitted:zone:* 是 2026-10-13(G4b-G)之前版本的残留,最后一个旧版本停写后 60s 内自行过期,不用删
 ```
 
@@ -831,5 +871,5 @@ redis-cli DEL queue:zone:<S> admitted:zset:zone:<S> dispatcher:lock:login_queue:
 
 > **(2026-10-18 补注,本节;原文保留;未编译、未测试)** 队列键、meta 与 token 索引已是空闲 TTL(§5 决策树后的 2026-10-18 更正)。
 > - **自然过期的时长。** 不手工清理时,这三类键在最后一次入队或排队中查询之后,至多约 1.25×`QueueEntryTTL` 过期。上文「清空堆积」提示里的「60s / 1h」与代码块里「合服后源 zone S 的队列残留会在 QueueEntryTTL(1h)内自行过期」相应改读「60s / 至多约 1.25h」「至多约 1.25×QueueEntryTTL 内」。
-> - **`DEL queue:zone:<z>` 之后的客户端。** 仍在轮询的客户端,下一次查询立即收到 EXPIRED(`queue_gone`,gateway 410),丢掉 token 重走 `/api/assign-gate`。此前回「名次 0」,一直等到 meta 过期。`login_queue_expired_total{reason="queue_gone"}` 随之出现一个尖峰,属预期。
+> - **`DEL queue:{q:<z>}` 之后的客户端。** 仍在轮询的客户端,下一次查询立即收到 EXPIRED(`queue_gone`,gateway 410),丢掉 token 重走 `/api/assign-gate`。此前回「名次 0」,一直等到 meta 过期。`login_queue_expired_total{reason="queue_gone"}` 随之出现一个尖峰,属预期。
 > - **只删队列键、不清 meta 时。** 不在队列的条目不再续期,meta 与 token 索引按剩余 TTL 自然过期。

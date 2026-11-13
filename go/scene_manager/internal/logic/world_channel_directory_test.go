@@ -20,6 +20,7 @@ import (
 	"scene_manager/internal/config"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/leader"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/alicebob/miniredis/v2/server"
@@ -64,7 +65,7 @@ func seedDirectoryChannel(t *testing.T, mr *miniredis.Miniredis, sceneID uint64,
 	_, err := mr.SAdd(worldChannelsKey(testZoneId, directoryTestConfID), strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 	if nodeID != "" {
-		require.NoError(t, mr.Set(sceneNodeKey(sceneID), nodeID))
+		require.NoError(t, mr.Set(sceneNodeKey(testZoneId, sceneID), nodeID))
 	}
 	seedSceneMembers(mr, sceneID, int(players))
 }
@@ -336,7 +337,7 @@ func TestWorldChannelState_NoOverflowAtClampedLimit(t *testing.T) {
 		worldChannelState(false, true, 0, maxPlayers, 1))
 }
 
-// 目录 TTL = 3 × 发布周期 + 一个选主竞选间隔(锁 TTL / 3,向上取整到秒)。
+// 目录 TTL = 3 × 发布周期 + 一个选主竞选间隔(shared/leader.CampaignInterval:缺省 2s,不超过锁 TTL / 3,向上取整到秒)。
 func TestWorldChannelDirectoryTTLSeconds(t *testing.T) {
 	const day = 24 * 60 * 60
 	cases := []struct {
@@ -344,19 +345,19 @@ func TestWorldChannelDirectoryTTLSeconds(t *testing.T) {
 		leaderLockTTLSeconds int64
 		want                 int
 	}{
-		{2, 30, 16},             // 默认:3×2 + 30/3
-		{0, 30, 10},             // 不发布时只剩竞选间隔;函数本身不依赖调用方先判过
-		{1, 30, 13},             // 3×1 + 10
-		{30, 30, 100},           // 3×30 + 10
-		{2, 60, 26},             // 锁 TTL 调大,竞选间隔跟着变长:3×2 + 20
-		{2, 24, 14},             // 3×2 + 8
-		{2, 25, 15},             // 25/3 = 8.33 → 向上取整 9
-		{2, 31, 17},             // 31/3 = 10.33 → 11
-		{2, 1, 7},               // 不足 3 秒也按 1 秒算
-		{2, 0, 6},               // 锁 TTL 非正:不加(调用方传的是 EffectiveLeaderLockTTLSeconds,恒为正)
-		{2, -5, 6},              // 同上
-		{2, 1 << 40, 6 + day},   // 竞选间隔钳到一天
-		{day, 1 << 40, 4 * day}, // 两项都到上限:4 天,换算成 Redis EX 不溢出
+		{2, 30, 8},                // 默认:3×2 + 2(竞选间隔不再是 30/3 = 10)
+		{0, 30, 2},                // 不发布时只剩竞选间隔;函数本身不依赖调用方先判过
+		{1, 30, 5},                // 3×1 + 2
+		{30, 30, 92},              // 3×30 + 2
+		{2, 60, 8},                // 锁 TTL 调大,竞选间隔不变
+		{2, 6, 8},                 // 6/3 = 2,与缺省竞选间隔相同
+		{2, 4, 8},                 // 4/3 = 1.33s 比 2s 短,取它,向上取整 2
+		{2, 3, 7},                 // 3/3 = 1
+		{2, 1, 7},                 // 不足 1 秒也按 1 秒算
+		{2, 0, 6},                 // 锁 TTL 非正:不加(调用方传的是 EffectiveLeaderLockTTLSeconds,恒为正)
+		{2, -5, 6},                // 同上
+		{2, 1 << 40, 8},           // 锁 TTL 先钳到一天再换算,不溢出;竞选间隔仍是 2
+		{day, 1 << 40, 3*day + 2}, // 发布周期到上限:换算成 Redis EX 不溢出
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.want, worldChannelDirectoryTTLSeconds(tc.refreshSeconds, tc.leaderLockTTLSeconds),
@@ -366,12 +367,13 @@ func TestWorldChannelDirectoryTTLSeconds(t *testing.T) {
 
 // 目录 TTL 的设计意图:盖住领导者优雅让位时最长的无发布间隔(让位前最后一次发布 ≤ 1 个周期
 // + 接任者等竞选 ≤ 1 个竞选间隔 + 当选后等到下一个 tick ≤ 1 个周期),并留有余量。
-// 这条用例钉住「TTL 严格大于那个间隔」:换成与选主参数无关的固定下限(比如 10s)就会在这里失败 ——
-// 默认值下那个间隔是 2 + 10 + 2 = 14s。
+// 这条用例钉住「TTL 严格大于那个间隔」:竞选间隔若写死成比选主实际用的更短,就会在这里失败 ——
+// 默认值下那个间隔是 2 + 2 + 2 = 6s。竞选间隔按选主实际的等待算(shared/leader.CampaignInterval),向上取整到秒。
 func TestWorldChannelDirectoryTTLSeconds_CoversGracefulLeaderHandover(t *testing.T) {
 	for _, refreshSeconds := range []int64{1, 2, 5, 30} {
-		for _, leaderLockTTLSeconds := range []int64{24, 25, 30, 60} {
-			campaignCeilSeconds := (leaderLockTTLSeconds + 2) / 3
+		for _, leaderLockTTLSeconds := range []int64{3, 4, 24, 25, 30, 60} {
+			campaign := leader.CampaignInterval(time.Duration(leaderLockTTLSeconds)*time.Second, 0)
+			campaignCeilSeconds := int64((campaign + time.Second - 1) / time.Second)
 			longestGapSeconds := 2*refreshSeconds + campaignCeilSeconds
 			assert.Greater(t, int64(worldChannelDirectoryTTLSeconds(refreshSeconds, leaderLockTTLSeconds)), longestGapSeconds,
 				"refresh=%d leader_lock_ttl=%d", refreshSeconds, leaderLockTTLSeconds)
@@ -472,8 +474,8 @@ func TestPublishWorldChannelDirectory_DrainedLineReleasesItsNumber(t *testing.T)
 	// B 走空并销毁(finishDrainedChannel:摘出回收中集合、删映射与人数),随后扩出新线 D。
 	_, err := mr.SRem(worldDrainingSetKey(testZoneId, directoryTestConfID), sceneKey(lineSceneB))
 	require.NoError(t, err)
-	mr.Del(sceneNodeKey(lineSceneB))
-	mr.Del(instanceMembersKey(lineSceneB))
+	mr.Del(sceneNodeKey(testZoneId, lineSceneB))
+	mr.Del(instanceMembersKey(testZoneId, lineSceneB))
 	seedDirectoryChannel(t, mr, lineSceneD, "10", 0)
 	require.Equal(t, 1, PublishWorldChannelDirectoriesForZone(ctx, sc, testZoneId, directoryTestNow))
 
@@ -507,8 +509,8 @@ func TestPublishWorldChannelDirectory_MoveToDrainingBetweenTheTwoReadsKeepsLineA
 	// A(1 线)彻底销毁,腾出 1 号:此后 C 只要丢过一次号,重发时就会从 3 变成 1。
 	_, err := mr.SRem(activeKey, sceneKey(lineSceneA))
 	require.NoError(t, err)
-	mr.Del(sceneNodeKey(lineSceneA))
-	mr.Del(instanceMembersKey(lineSceneA))
+	mr.Del(sceneNodeKey(testZoneId, lineSceneA))
+	mr.Del(instanceMembersKey(testZoneId, lineSceneA))
 	require.Equal(t, 1, PublishWorldChannelDirectoriesForZone(ctx, sc, testZoneId, directoryTestNow))
 	wantLineNos := map[string]string{sceneKey(lineSceneB): "2", sceneKey(lineSceneC): "3"}
 	require.Equal(t, wantLineNos, lineNoTable(t, sc))
@@ -577,9 +579,9 @@ func TestPublishWorldChannelDirectory_BadPlayerCountShowsZero(t *testing.T) {
 	sc, mr := newChannelDirectoryCtx(t)
 	seedDirectoryChannel(t, mr, lineSceneA, "10", 0)
 	seedDirectoryChannel(t, mr, lineSceneB, "10", 0)
-	require.NoError(t, mr.Set(instanceMembersKey(lineSceneB), "not-a-set"))
+	require.NoError(t, mr.Set(instanceMembersKey(testZoneId, lineSceneB), "not-a-set"))
 	seedDirectoryChannel(t, mr, lineSceneC, "10", 0)
-	mr.Del(instanceMembersKey(lineSceneC))
+	mr.Del(instanceMembersKey(testZoneId, lineSceneC))
 
 	require.Equal(t, 1, PublishWorldChannelDirectoriesForZone(context.Background(), sc, testZoneId, directoryTestNow))
 
@@ -655,7 +657,7 @@ func TestPublishWorldChannelDirectory_OneMapFailingDoesNotBlockOthers(t *testing
 
 	_, err := mr.SAdd(worldChannelsKey(testZoneId, otherConf), sceneKey(lineSceneB))
 	require.NoError(t, err)
-	require.NoError(t, mr.Set(sceneNodeKey(lineSceneB), "10"))
+	require.NoError(t, mr.Set(sceneNodeKey(testZoneId, lineSceneB), "10"))
 
 	assert.Equal(t, 1, PublishWorldChannelDirectoriesForZone(context.Background(), sc, testZoneId, directoryTestNow),
 		"只有 otherConf 发布成功")
@@ -713,18 +715,18 @@ func TestPublishWorldChannelDirectory_Outcomes(t *testing.T) {
 
 // ── 跨语言契约 ───────────────────────────────────────────────────────────
 
-// 目录键名是 Go 与 C++ 之间的契约:scene 节点按同一格式拼键来读
-// (cpp/libs/services/scene/player/system/player_scene.cpp 的 kWorldChannelDirectoryKeyFmt,
-// 字面量是 "world_channel_directory:zone:%u:%u" —— 占位符写法随语言不同,渲染出来的键必须逐字节相同)。
+// 目录键名是 Go 与 C++ 之间的契约:scene 节点拼同一把键来读
+// (cpp/libs/services/scene/player/system/player_scene.cpp 的 PlayerSceneSystem::WorldChannelDirectoryKey,
+// C++ 侧 PlayerRedisRouteContract.ControlDomainStaysOffThePlayerHandle 钉同一个串)。渲染出来的键必须逐字节相同:
+// world_channel_directory:{ctl:<zone>}:<conf>,两边的 tag 都由各自的族表生成。
 // 这条断言钉住 Go 侧字面量与渲染结果;改它之前必须同批改 C++。
 func TestWorldChannelDirectoryKeyFmt_CrossLanguageContract(t *testing.T) {
-	assert.Equal(t, "world_channel_directory:zone:%d:%d", WorldChannelDirectoryKeyFmt)
-	assert.Equal(t, "world_channel_directory:zone:3:1001", worldChannelDirectoryKey(3, 1001))
+	assert.Equal(t, "world_channel_directory:%s:%d", WorldChannelDirectoryKeyFmt)
+	assert.Equal(t, "world_channel_directory:{ctl:3}:1001", worldChannelDirectoryKey(3, 1001))
 
-	// 线号表只有 scene_manager 自己读写,不是跨语言契约;钉住它是为了守住「不用 world_channels:zone:
-	// 前缀」这条约束(旧版本 scene_manager 的孤儿清理按那个前缀 SCAN、merge_zone 按那个前缀清源 zone,
-	// 会把它当成频道集合;新版本 2026-10-16 起改为点查)。
-	assert.Equal(t, "world_channel_lineno:zone:%d:%d", WorldChannelLineNoKeyFmt)
+	// 线号表只有 scene_manager 自己读写,不是跨语言契约;钉住它是为了守住「不用 world_channels: 前缀」这条约束
+	// (孤儿清理按频道集合的键形 world_channels:{ctl:<z>}:<conf> 解析,不能把它认成频道集合)。
+	assert.Equal(t, "world_channel_lineno:%s:%d", WorldChannelLineNoKeyFmt)
 	for _, key := range []string{worldChannelDirectoryKey(3, 1001), worldChannelLineNoKey(3, 1001)} {
 		_, _, isChannelSet := parseWorldChannelsKey(key)
 		assert.False(t, isChannelSet, "%s 不得被孤儿清理解析成频道集合", key)

@@ -63,6 +63,9 @@ func NewServer(opt ServerOptions) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := opt.Limits.validate(); err != nil {
+		return nil, err
+	}
 	metrics.PrimePlayerStore(opSave, playerStoreResultNames(storepb.SavePlayerResult_name))
 	metrics.PrimePlayerStore(opClaim, playerStoreResultNames(storepb.LoadAndClaimResult_name))
 	return &Server{verifier: verifier, open: opt.Open, resolve: opt.Resolve, knownGen: opt.KnownGen, limits: opt.Limits}, nil

@@ -21,17 +21,17 @@ func TestPublishGateStaleMarks_WritesOnlyStaleGates(t *testing.T) {
 		return []node.WatchedNode{{Info: healthy}, {Info: hung, Stale: true}, {Stale: true}}, nil // 最后一条 Info 为空,跳过
 	}
 
-	if err := publishGateStaleMarks(context.Background(), nodes, rdb); err != nil {
+	if err := publishGateStaleMarks(context.Background(), nodes, rdb, svcTestZone); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 
-	if !mr.Exists(gatepick.StaleKey(9)) {
+	if !mr.Exists(gatepick.StaleKey(svcTestZone, 9)) {
 		t.Fatal("镜像判为停写的 gate 9 应有停写标记")
 	}
-	if mr.Exists(gatepick.StaleKey(4)) {
+	if mr.Exists(gatepick.StaleKey(svcTestZone, 4)) {
 		t.Fatal("健康的 gate 4 不得有停写标记")
 	}
-	if got := mr.TTL(gatepick.StaleKey(9)); got != gatepick.StaleMarkTTL {
+	if got := mr.TTL(gatepick.StaleKey(svcTestZone, 9)); got != gatepick.StaleMarkTTL {
 		t.Fatalf("停写标记的过期时间 = %s,want %s", got, gatepick.StaleMarkTTL)
 	}
 }
@@ -41,7 +41,7 @@ func TestPublishGateStaleMarks_NodesErrorWritesNothing(t *testing.T) {
 	rdb, mr := newSvcTestRedis(t)
 	nodes := func(context.Context) ([]node.WatchedNode, error) { return nil, errors.New("etcd unavailable") }
 
-	if err := publishGateStaleMarks(context.Background(), nodes, rdb); err == nil {
+	if err := publishGateStaleMarks(context.Background(), nodes, rdb, svcTestZone); err == nil {
 		t.Fatal("读镜像失败应返回错误,由循环记日志")
 	}
 	if keys := mr.Keys(); len(keys) != 0 {
@@ -56,7 +56,7 @@ func TestPublishGateStaleMarks_NoStaleGatesWritesNothing(t *testing.T) {
 		return watched(gateNode(4, 1, 100, "10.244.0.4", 7, nil), gateNode(5, 1, 100, "10.244.0.5", 7, nil)), nil
 	}
 
-	if err := publishGateStaleMarks(context.Background(), nodes, rdb); err != nil {
+	if err := publishGateStaleMarks(context.Background(), nodes, rdb, svcTestZone); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 	if keys := mr.Keys(); len(keys) != 0 {

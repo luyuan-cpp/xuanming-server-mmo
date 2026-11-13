@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"os"
 	"strconv"
 	"time"
 
@@ -53,6 +54,8 @@ type Deps struct {
 	Mall        *commerce.Mall
 	Rmb         *commerce.RmbConsignments
 	RmbIdentity RmbIdentityResolver
+	// ManualOps 是转人工合同的人工处置入口(TradeAdmin.ListManualContracts / ResolveManualContract);nil = 入口关闭。
+	ManualOps *ManualContractOps
 }
 
 // NewDeps 用 ServiceContext 组装生产依赖。
@@ -61,7 +64,14 @@ func NewDeps(svcCtx *svc.ServiceContext) Deps {
 	if svcCtx.ListingIDSegment != nil { // 别把 nil *Client 装进非 nil 接口
 		ids = svcCtx.ListingIDSegment
 	}
+	// 人工处置入口缺省关闭;配了却装配不上(没有合同引擎、密钥无效、环境名不合规)时打 ERROR,入口保持关闭,不影响服务。
+	manualOps, err := NewManualContractOpsFromConfig(svcCtx.Commerce, svcCtx.Config.Commerce, os.Getenv)
+	if err != nil {
+		logx.Errorf("[trade] Manual contract resolution disabled: %v", err)
+		manualOps = nil
+	}
 	return Deps{
+		ManualOps:   manualOps,
 		Config:      svcCtx.Config,
 		Store:       data.NewListingRepo(svcCtx.DB, constants.StoreOpTimeout),
 		HomeZones:   NewDataServiceHomeZone(svcCtx.DataServiceClient, constants.HomeZoneLookupTimeout),

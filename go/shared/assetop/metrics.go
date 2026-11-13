@@ -1,12 +1,11 @@
 package assetop
 
 import (
-	"time"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	assetpb "proto/common/asset"
+	"shared/looplive"
 )
 
 // 指标(规格 §4.19 metrics.go、§4.41 的追加项)。
@@ -50,12 +49,11 @@ type Metrics struct {
 	// 告警(deploy/k8s/asset-channel-alerts.yaml 的 asset-channel.work-shards 组)按 sum by (namespace, service) 判它是否为 64。
 	ownedShards *prometheus.GaugeVec
 
-	// loopLastRun 是缺口清单第 25 条第四批追加(设计 §14.3):重投循环(Loop.Run)最近一次跑完一轮的时刻(Unix 秒)。
-	// 循环起来时写一次,每跑完一轮写一次(这一轮成败都写,panic 的那一轮不写),循环退出时删掉序列。
-	// 用不带可变 label 的 GaugeVec,理由同 ownedShards:没起循环的副本(canary、单测、离线工具)与已经停掉循环的副本都没有序列。
-	// 告警 AssetOpRedeliveryLoopStalled(asset-channel-alerts.yaml 的 asset-channel.loop-liveness 组)按副本逐条判它停住多久:
-	// 分片之后卡住的副本名下的片没人扫,而 assetop_owned_shards 之和仍是 64。
-	loopLastRun *prometheus.GaugeVec
+	// loopLive 是缺口清单第 25 条第四批追加(设计 §14.3):重投循环(Loop.Run)的活性,指标 assetop_loop_last_run_unixtime。
+	// 写入与删除的口径在 shared/looplive 的包注释,所有按片分工的循环共用一份。告警 AssetOpRedeliveryLoopStalled
+	// (asset-channel-alerts.yaml 的 asset-channel.loop-liveness 组)按副本逐条判它停住多久:分片之后停住的副本名下的片没人扫,
+	// 而 assetop_owned_shards 之和仍是 64。
+	loopLive *looplive.Gauge
 }
 
 // NewMetrics 在 reg 上注册本包的全部指标。
@@ -189,12 +187,12 @@ func newMetrics(reg prometheus.Registerer, service string) *Metrics {
 				"成员表变化的几秒里会多或少几片。只有绑了按片分工的重投循环才报",
 			ConstLabels: labels,
 		}, nil),
-		loopLastRun: f.NewGaugeVec(prometheus.GaugeOpts{
+		loopLive: looplive.NewRegistered(reg, prometheus.GaugeOpts{
 			Name: "assetop_loop_last_run_unixtime",
 			Help: "重投循环最近一次跑完一轮的时刻(Unix 秒,这一轮成败都算,panic 的那一轮不算;循环起来时也写一次)。" +
-				"只在循环运行时有序列;值长期不前进 = 循环卡在某一轮里",
+				"只在循环运行时有序列;值长期不前进 = 循环停住了",
 			ConstLabels: labels,
-		}, nil),
+		}),
 	}
 }
 
@@ -347,20 +345,12 @@ func (m *Metrics) setOwnedShards(n int) {
 	m.ownedShards.WithLabelValues().Set(float64(n))
 }
 
-// markLoopRun 记重投循环起来、或跑完一轮的时刻(Loop.Run)。
-func (m *Metrics) markLoopRun(now time.Time) {
+// loopLiveness 返回重投循环的活性 gauge。不接指标(m 为 nil)时回 nil:looplive.Gauge 的 nil 接收者照常跑每一轮,只是不写时刻。
+func (m *Metrics) loopLiveness() *looplive.Gauge {
 	if m == nil {
-		return
+		return nil
 	}
-	m.loopLastRun.WithLabelValues().Set(float64(now.Unix()))
-}
-
-// clearLoopRun 在重投循环退出时删掉活性序列:停掉的循环不该被当成卡住。
-func (m *Metrics) clearLoopRun() {
-	if m == nil {
-		return
-	}
-	m.loopLastRun.Reset()
+	return m.loopLive
 }
 
 // WakeResult 是 assetop_wake_total 的 result label(docs/design/landing-recovery-sync-digest.md §5.3)。

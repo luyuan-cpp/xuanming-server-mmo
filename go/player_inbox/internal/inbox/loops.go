@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	mathrand "math/rand/v2"
-	"shared/authoritysql"
 	"shared/drainproof"
 	"sync"
 	"time"
 
-	"player_inbox/internal/constants"
 	"player_inbox/internal/metrics"
 
 	"shared/safego"
@@ -17,12 +15,12 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// 后台循环(设计 §6.3、§9.1、§9.3、§9.4、§10):清理、提醒补发、扫描型 gauge、对账。
+// 后台循环(设计 §6.3、§9.3、§9.4、§10):提醒补发、扫描型 gauge、对账。
+// 没有清理循环:终态行是永久收据,不删(设计 §9.1)。原来空转的清理循环、SweepTerminal 与它的两个配置项
+// 2026-11-12 删除(数据覆写审计 r2-doc#2);将来要归档按设计 §9.1 的约束另行设计。
 //
-// 清理、补发、扫描型 gauge **只在领导者上跑**:领导者由 go/shared/leader 选举(核心 Redis 上的
+// 补发、扫描型 gauge **只在领导者上跑**:领导者由 go/shared/leader 选举(核心 Redis 上的
 // player_inbox:maintenance:leader)。它们的活只随异常增长(正常时近乎为零),单领导者加快速接任就够。
-//   - 清理现在是空转:终态行是永久收据,SweepTerminal 恒返回 0、不删任何行(设计 §9.1,数据覆写审计 r2-doc#2),
-//     循环只为保留调度接缝。TerminalRetention 的校验也只剩形式上的意义。
 //   - 补发的每一步都是 next_seq CAS,重叠执行最多多发一次提醒。
 //   - gauge 只由领导者产出,卸任时归零,避免 max() 聚合里留着卸任副本的旧值。
 //
@@ -38,10 +36,8 @@ import (
 
 // LoopConfig 是后台循环参数(来自 config.PlayerInboxConf)。
 type LoopConfig struct {
-	TerminalRetention time.Duration
-	SweepInterval     time.Duration
-	NotifyInterval    time.Duration
-	GaugeInterval     time.Duration
+	NotifyInterval time.Duration
+	GaugeInterval  time.Duration
 	// ReconcileInterval 为 0 = 不跑对账。开着时 ReconcileWindow 必须 ≥ 2 × ReconcileInterval(同 config.Validate)。
 	ReconcileInterval time.Duration
 	ReconcileWindow   time.Duration
@@ -52,8 +48,6 @@ type LoopConfig struct {
 
 // 每轮的工作量上限。
 const (
-	// sweepBudgetPerRound:每轮最多删 500 行(设计 §9.1)。
-	sweepBudgetPerRound = 500
 	// notifyPerShardLimit:补发每个分片每轮最多 100 条(设计 §6.3)。
 	notifyPerShardLimit = 100
 	// notifyGrace:补发只扫 notify_due_ms ≤ now − 5s 的行,不与请求内那次提醒抢(设计 §6.3)。
@@ -87,7 +81,6 @@ type Campaign func(ctx context.Context, whileLeader func(ctx context.Context))
 
 // MaintenanceStore 是后台循环需要的存储能力(*Store 实现它;单测注入假实现)。
 type MaintenanceStore interface {
-	SweepTerminal(ctx context.Context, cutoffMs uint64, budget int) (int, error)
 	DueNotifications(ctx context.Context, shard uint32, dueBeforeMs uint64, limit int) ([]NotifyDue, error)
 	// ResendNotify 补发一条;ctx 是本轮的 ctx,单次提醒的预算由实现自己加(没落定时的推迟不能被提醒耗尽的预算拖累)。
 	ResendNotify(ctx context.Context, d NotifyDue) NotifyResult
@@ -103,8 +96,7 @@ type ShardOwnership interface {
 
 // Loops 持有后台循环的依赖。构造后只读。
 type Loops struct {
-	// 启动前显式绑定；清理是 SOURCE，通知与对账承接历史工作归 RELAY。
-	RootAdmission  *drainproof.Session
+	// 启动前显式绑定;通知与对账承接历史工作,归 RELAY。后台循环里没有 SOURCE 类的写(原来的清理循环已删除)。
 	RelayAdmission *drainproof.Session
 	// ReconcileOwnership 在 Run 之前绑定。nil = 本副本负责全部分片,只用于单副本部署与单测;
 	// 多副本部署时必须绑定,否则每个副本都会对账全部分片(只读,结论不错,但读量随副本数翻倍)。
@@ -126,10 +118,7 @@ func NewLoops(store MaintenanceStore, ledgers LedgerReader, cfg LoopConfig, camp
 	if now == nil {
 		now = time.Now
 	}
-	if cfg.TerminalRetention <= constants.IssuedAtMaxPast {
-		return nil, errors.New("inbox: terminal retention must exceed the issued_at window (7d)")
-	}
-	if cfg.SweepInterval <= 0 || cfg.NotifyInterval <= 0 || cfg.GaugeInterval <= 0 || cfg.ReconcileInterval < 0 {
+	if cfg.NotifyInterval <= 0 || cfg.GaugeInterval <= 0 || cfg.ReconcileInterval < 0 {
 		return nil, errors.New("inbox: loop intervals must be positive (reconcile may be 0 = disabled)")
 	}
 	if cfg.ReconcileInterval > 0 && (ledgers == nil || cfg.ReconcileWindow <= 0) {
@@ -153,8 +142,8 @@ func randomJitter(n time.Duration) time.Duration {
 	return mathrand.N(n)
 }
 
-// Run 阻塞运行直到 ctx 结束:对账循环在每个副本上按分片归属跑(不看领导权);候选者循环当选后起清理、补发、
-// gauge 三个循环,丢失领导权即等它们退出。ctx 结束后等全部轮次退出才返回。
+// Run 阻塞运行直到 ctx 结束:对账循环在每个副本上按分片归属跑(不看领导权);候选者循环当选后起补发、
+// gauge 两个循环,丢失领导权即等它们退出。ctx 结束后等全部轮次退出才返回。
 func (l *Loops) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	if l.cfg.ReconcileInterval > 0 {
@@ -170,12 +159,11 @@ func (l *Loops) Run(ctx context.Context) {
 	metrics.ResetReconcileInconsistent()
 }
 
-// whileLeader 在任期内跑清理、补发、gauge;lctx 取消(丢锁 / 关停)后等它们全部退出再返回,
+// whileLeader 在任期内跑补发、gauge;lctx 取消(丢锁 / 关停)后等它们全部退出再返回,
 // 这样选主器释放锁、装配层关库时不会有在途轮次。
 func (l *Loops) whileLeader(lctx context.Context) {
-	logx.Info("[player_inbox] Maintenance leader acquired: sweep / notify resend / gauges run on this replica")
+	logx.Info("[player_inbox] Maintenance leader acquired: notify resend / gauges run on this replica")
 	var wg sync.WaitGroup
-	every(lctx, &wg, "player_inbox.sweep", l.cfg.SweepInterval, l.sweepRound)
 	every(lctx, &wg, "player_inbox.notify_resend", l.cfg.NotifyInterval, l.notifyRound)
 	every(lctx, &wg, "player_inbox.gauges", l.cfg.GaugeInterval, l.gaugeRound)
 	<-lctx.Done()
@@ -342,40 +330,6 @@ func (l *Loops) nowMs() uint64 {
 		return 0
 	}
 	return uint64(ms)
-}
-
-// sweepRound 清理保留期外的终态行(设计 §9.1)。
-func (l *Loops) sweepRound(ctx context.Context) {
-	if l.RootAdmission != nil {
-		finish, err := l.RootAdmission.Enter()
-		if err != nil {
-			return
-		}
-		defer finish()
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				l.RootAdmission.Hold()
-				panic(recovered)
-			}
-		}()
-	}
-	nowMs := l.nowMs()
-	retentionMs := uint64(l.cfg.TerminalRetention.Milliseconds())
-	if nowMs <= retentionMs {
-		return
-	}
-	deleted, err := l.store.SweepTerminal(ctx, nowMs-retentionMs, sweepBudgetPerRound)
-	// 闸门冻结是确定没写,下一轮接着清,不算结局未知。
-	if err != nil && l.RootAdmission != nil && !authoritysql.IsWriterFrozen(err) {
-		l.RootAdmission.Hold()
-	}
-	if err != nil && !errors.Is(err, context.Canceled) {
-		logx.Errorf("[player_inbox] Sweep round failed after deleting %d rows: %v", deleted, err)
-		return
-	}
-	if deleted > 0 {
-		logx.Infof("[player_inbox] Sweep deleted %d terminal rows older than %v", deleted, l.cfg.TerminalRetention)
-	}
 }
 
 // notifyRound 按分片轮转一轮补发到期提醒(设计 §6.3)。

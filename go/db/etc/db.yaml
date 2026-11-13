@@ -81,6 +81,20 @@ Placement:
   # ConnMaxLifetime 是 5 分钟,本值大于 300 等于不生效。
   StoreConnMaxIdleSeconds: 60
 
+# ── 审计发件箱转发(docs/design/player-audit-outbox.md §7)────────────────
+# 存盘事务把随这一笔交来的流水与快照写进存档库的 player_audit_outbox;这一段决定本副本把它投到哪里、多久扫一次。
+# Brokers 留空 = 不投:发件箱照常写,只积不丢,db_audit_outbox_relay_enabled 报 0,积压告警会响。
+# 转发按 (存档库, 片) 分给本地域的 stable go/db,每片同一时刻只有拿到命名锁的那个副本在投;canary 不投。
+# TopicGeneration 与两个基名必须和 go/data_service/etc/data_service.yaml 的 Kafka 段相同(单测核对):
+# 不同就是写进没人消费的 topic,保留期一到就没了。K8s 的 ConfigMap 由部署脚本从 data_service 那份渲染。
+AuditOutbox:
+  Brokers:
+    - 127.0.0.1:9092
+  TopicGeneration: 1
+  TransactionLogTopic: transaction_log_topic   # 基名;有效名带 _g<TopicGeneration>
+  SnapshotTopic: player_snapshot_topic         # 基名;同上
+  IntervalMs: 1000                             # 空闲时两轮之间的间隔,[100, 30000];整批读满时不等
+
 # Prometheus /metrics endpoint. Dev default; disable for prod by setting
 # empty string. Exposes db_player_store_requests_total{op,result}, db_player_store_seconds{op},
 # db_player_store_row_bytes{kind} and the placement store and pool gauges.

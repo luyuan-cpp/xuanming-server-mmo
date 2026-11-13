@@ -10,6 +10,7 @@
 #include "muduo/base/Logging.h"
 
 #include "battle_security.h"
+#include "kill_switch/kill_switch.h"
 #include "logic/battle_room_manager.h"
 #include "message_limiter/illegal_packet_counter.h"
 #include "node/system/node/node.h"
@@ -537,8 +538,15 @@ void BattleClientEdge::DispatchVerifiedRequest(DirectSession &session,
     reply.set_id(request.id());
     reply.set_message_id(request.message_id());
 
+    // 每个白名单方法都先经这里:热关停只判白名单内的方法,白名单外的号照旧走 default 计非法包。
     const auto parseOrReject = [&](::google::protobuf::Message &target) -> bool
     {
+        // 热关停(docs/design/rpc-kill-switch.md §7):被关停回信封 1003,不解析请求体、不计非法包(合法协议号)。
+        if (kill_switch::CheckMessageId(request.message_id()))
+        {
+            SendEnvelopeError(conn, request, kServiceUnavailable);
+            return false;
+        }
         if (target.ParseFromString(request.body()))
         {
             return true;

@@ -319,6 +319,24 @@ const (
 	kickResultSkipCrossInstance = "skip_cross_instance" // 会话号相同、gate 实例不同:方案 C 落地前只计数不踢(§12.3)
 )
 
+// ── 会话提交重做指标 ─────────────────────────────────────────────────────
+//
+// EnterGame 提交会话时,player_locator 回「记录在你读它之后变了」,本链重读重判再写一遍的次数
+// (entergamelogic.go commitEnterGameSession)。全称 `login_enter_session_commit_redo_total`。
+// decision 是被打断那一遍的登录决策(first | reconnect | replace,取值同 apply_persist_session_seconds),
+// **不放 player_id / session_id**;定位具体玩家靠同一处的 `[enter-session]` 日志。
+// 稳态接近 0。gate 排空迁移、跨 zone 重定向期间出现 replace 属正常:旧连接的断线上报与新连接的 EnterGame 交错。
+// 平时持续有数说明有别的写者在反复改同一条会话,要查是谁。
+var sessionCommitRedoTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+	Namespace: "login",
+	Subsystem: "",
+	Name:      "enter_session_commit_redo_total",
+	Help: "EnterGame session commits redone from the read because player_locator reported the session record " +
+		"changed between the chain's read and its write (gRPC ABORTED). " +
+		"Decision: the decision of the interrupted attempt (first | reconnect | replace).",
+	Labels: []string{"decision"},
+})
+
 // PrimeEnterGameMetrics 把 entergame_total{result="pool_saturated"} 预置成 0,让这条序列从起服起就存在。
 //
 // 理由与 PrimeCreatePlayerMetrics 相同:带 label 的 CounterVec 在某个 label 组合第一次写入之前同样不输出序列。

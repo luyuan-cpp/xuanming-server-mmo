@@ -24,6 +24,7 @@ const (
 	terminalAbortManual   = "abort_manual"   // 人工处置:formationfix 对永久 UNKNOWN 的成局写的 ABORT(manual_abort.go)
 	// 原执行实例的终局原件内容不合格、过了截止加宽限之后收到重放时写的 ABORT:terminalAbortRejectedOriginal,
 	// 定义与说明在 rejected_original_abort.go(2026-11-11)。
+	// 原执行进程确认已不在时提前写的 ABORT(截止之前也可以写):terminalAbortInstanceGone,定义与说明在 instance_gone.go(2026-11-11)。
 	// 截止 ABORT(到期恢复或帮会取消)越过硬上限、没有证据写下的(2026-11-06):这一局可能已经打完而结果作废,另打 ERROR。
 	terminalAbortDeadlineCap = "abort_deadline_cap"
 )
@@ -78,15 +79,33 @@ const (
 	// DeadlineEvidenceNoRoom:原实例对这份 operation 立了拒收墓碑并回 ABORTED:没有房间,以后也建不了。房间只在拿到 match
 	// 的签名决定之后或 30 小时本地清理之后才离开,所以 ABORTED 不会出现在「房间打完、COMPLETE 还在路上」的局上(NoRoomProof)。
 	DeadlineEvidenceNoRoom
-	// DeadlineEvidenceInstanceGone:原进程已不在 —— 原地址上应答的是另一个实例(battle 的实例 UUID 每个进程生成一次,
-	// 对不符的 UUID 拒 DestroyBattle、查询回空包);或原地址的 TCP 端口当场拒连(RST:主机在,端口上已没有进程在听)且已同步的
-	// 注册中心镜像里没有原实例。房间与待提交的终局只在 battle 进程内存里,进程不在就永远不会再提交。
+	// DeadlineEvidenceInstanceGone:原进程确认已不在 —— 两次相隔不少于 InstanceGoneSettleMs 的观察都说它不在,期间它没有
+	// 亲口应答过(复核在 logic/global_instance_loss.go 的 instanceLossTracker,按实例记、同实例的各局共用)。一次观察认三种:
+	// 原地址上应答的是另一个实例(battle 的实例 UUID 每个进程生成一次,对不符的 UUID 拒 DestroyBattle、查询回空包);
+	// 原地址的 TCP 端口当场拒连(RST:主机在,端口上已没有进程在听)且已同步的注册中心镜像里没有原实例;
+	// K8s 里 battle 所在命名空间已没有存活的 Pod 持有原 IP(2026-11-11,internal/battlepods)。
+	// 房间与待提交的终局只在 battle 进程内存里,进程不在就永远不会再提交。
 	// 不算的(评审修正 2026-11-06):只凭「注册中心查不到」(etcd 抖动、租约短暂失效时也查不到,§13.3 2026-10-22 同一口径);
 	// gRPC 调用失败,哪怕在期限之内当场失败(对端一连上就关、地址上不是 battle 时都会这样;最初取证走缓存连接,它停在
 	// TRANSIENT_FAILURE 时黑洞端点也当场回 Unavailable);
 	// 超时、主机或网络不可达;「原 node_id 已登记成另一个实例」(分区中的原进程还活着,恢复后重注册失败才停机,停机前还会补提交一轮)。
 	DeadlineEvidenceInstanceGone
+	// DeadlineEvidenceInstanceGonePending(2026-11-11):有一次观察说原进程已不在,还在等复核。裁决上与判不了相同(不据它作废),
+	// 只是下一次取证排在 instanceGoneRecheckMs 之后(judgeDeadlineAbort),保证那一次一定过得了复核间隔。
+	DeadlineEvidenceInstanceGonePending
 )
+
+// InstanceGoneSettleMs 是「原进程已不在」的复核间隔(2026-11-11,docs/design/battle-instance-loss-early-abort.md §4.3):
+// 同一个实例要有两次相隔不少于它的观察都说不在,才算确认;截止作废与提前作废(instance_gone.go)共用。
+// 它必须盖住原进程停止应答之后还可能提交终局的最长时间:battle 停机先停听、再排空并补提交(node.cpp kShutdownDrainBudget,
+// 15 秒),排空结束前发出的最后一次 CommitBattleOutcome 还有一个调用期限(grpc_client_call.h kDefaultGrpcCallDeadlineMs,10 秒)。
+// 过了这段,它的提交要么已经落库(作废事务在锁内读到终局行、什么都不做),要么已经失败。余量 5 秒;
+// TestInstanceGoneSettleCoversBattleShutdownDrain 读 C++ 源码核对。
+const InstanceGoneSettleMs uint64 = 30 * 1000
+
+// instanceGoneRecheckMs:截止裁决在第一次「已不在」观察之后隔多久再取证。比复核间隔多 2 秒:排期按 SQL 时钟,复核按取证副本的
+// 本机时钟,两边的钟速差与锁内时刻的先后都落在这 2 秒里,下一次取证一定过得了复核间隔,不会白等一轮。
+const instanceGoneRecheckMs = InstanceGoneSettleMs + 2000
 
 func (e DeadlineAbortEvidence) String() string {
 	switch e {
@@ -98,6 +117,8 @@ func (e DeadlineAbortEvidence) String() string {
 		return "no_room"
 	case DeadlineEvidenceInstanceGone:
 		return "instance_gone"
+	case DeadlineEvidenceInstanceGonePending:
+		return "instance_gone_pending"
 	}
 	return "invalid"
 }
@@ -198,6 +219,7 @@ func saturatingAddMs(a, b uint64) uint64 {
 //   - 没过截止 + 宽限:不作废(与 terminalAbortDue 同一分界);
 //   - 有证据(NoRoom / InstanceGone):作废;
 //   - 没到硬上限(battleStillHolds 或判不了):等,下次取证排在 min(stamp + 取证间隔, 硬上限);
+//     第一次观察到原进程已不在、等复核(InstanceGonePending)同样等,间隔换成 instanceGoneRecheckMs,其余分支与判不了相同;
 //   - 过了硬上限、持有宽限还没过(retry_at_ms 在硬上限之后且还没到):等,不论这一次证据如何(宽限给的是「看到过房间」的局);
 //   - 过了硬上限、原实例仍持有房间、持有宽限还没开始(retry_at_ms 不超过硬上限):排到 stamp + 持有宽限再看;
 //   - 其余(过了硬上限且判不了,或持有宽限已过):作废,计 abort_deadline_cap。
@@ -215,7 +237,11 @@ func judgeDeadlineAbort(deadlineMs, stampMs, retryAtMs uint64, evidence Deadline
 	capAt := deadlineAbortCapMs(deadlineMs)
 	switch {
 	case stampMs < capAt:
-		return deadlineAbortVerdict{nextProbeMs: min(saturatingAddMs(stampMs, deadlineProbeBackoffMs), capAt)}
+		wait := deadlineProbeBackoffMs
+		if evidence == DeadlineEvidenceInstanceGonePending {
+			wait = instanceGoneRecheckMs
+		}
+		return deadlineAbortVerdict{nextProbeMs: min(saturatingAddMs(stampMs, wait), capAt)}
 	case retryAtMs > capAt && stampMs < retryAtMs:
 		return deadlineAbortVerdict{}
 	case evidence == DeadlineEvidenceBattleStillHolds && retryAtMs <= capAt:

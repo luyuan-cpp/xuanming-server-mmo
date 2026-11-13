@@ -48,10 +48,24 @@ import (
 )
 
 const (
-	// ownerEpochMintPoolSize 是铸造专用客户端的池上限。单副本铸造吞吐上限 ≈ 池大小 / 平均占用(everysec 下约 0.5s)
-	// ≈ 2 × 池大小 次/s;超出时排队等连接,等待受请求 ctx 截止约束,超时按 Redis 错误失败(一个字节都没写)。
-	// 32 只是起点,以 §8.3 R-b 压测为准再定;改它要同改 k8s_deploy.ps1 Redis 连接总账 scene-manager 行的 Fixed。
-	ownerEpochMintPoolSize = 32
+	// ownerEpochMintPoolSize 是铸造专用客户端每个节点的池上限,按 Little 定律定:每个 SM 副本同时在等 WAITAOF 的铸造数
+	// ≈ 铸造速率 × 每次占住连接的时长(docs/design/zone-redis-regression-guard-20261022.md §4.3.3「吞吐与连接」,2026-11-12 定)。
+	//   - 速率取 ownerEpochMintTargetRatePerSecond:容量模型里每个 SM 实例 EnterScene 的上限 194/s,全部按铸造算,偏保守
+	//     (docs/design/capacity-model-hok-scale.md「scene_manager 数据面」一行;同节点换图、同落点重连不铸造);
+	//   - 时长取 WAITAOF 的等待上限 config.MaxOwnerEpochMintWaitAOFTimeoutMs(2000ms,高可用下 numreplicas=1 最坏近 2s);
+	//   - 玩家域 Redis Cluster 至少 ownerEpochMintMinPlayerRedisMasters 个主节点(k8s_deploy.ps1 -PlayerRedisMasters ≥ 3),
+	//     铸造的键按 slot 均摊到各主节点,每节点分到 1/3。
+	//   ⌈194 × 2 / 3⌉ = 130,TestOwnerEpochMintPoolSizeFollowsLittlesLaw 钉住这个算式。
+	// 池是懒建的(MinIdleConns 0),平时实际连接数随负载走;这个数是上限,也是连接总账按满额记的数。只有一个主节点的拓扑(本机
+	// 单实例、共享 Redis 高可用)下单个 SM 的铸造上限约为 池上限 / 占用:单实例约 130 次/s,高可用约 65 次/s;超出时排队等连接,
+	// 等待受铸造截止约束,等不到回 ErrOwnerEpochMintNotSent(一个字节都没写,EnterScene 回 3 可重试)。这两种拓扑只用于本机与小规模部署。
+	// 不上组提交:everysec 下各条连接上的 WAITAOF 本来就在等同一次后台刷盘、受益于同一次 GETACK,组提交省不下刷盘与副本上报,
+	// 只省连接数,却要让凑批的铸造多等一个刷盘周期,高可用下更容易超出 2000ms、回滚变多;容量靠 SM 副本数 × 主节点数水平扩展。
+	// 这个数就是 tools/scripts/k8s_deploy.ps1 Redis 连接总账 scene-manager 行的 PlayerFixed,两边要一起改(契约测试从这一行读字面量)。
+	ownerEpochMintPoolSize = 130
+	// ownerEpochMintTargetRatePerSecond / ownerEpochMintMinPlayerRedisMasters:ownerEpochMintPoolSize 的算式输入,见上。
+	ownerEpochMintTargetRatePerSecond   = 194
+	ownerEpochMintMinPlayerRedisMasters = 3
 	// ownerEpochMintWriteTimeout 是写命令的套接字超时(铸造脚本与 WAITAOF 都很小)。
 	ownerEpochMintWriteTimeout = 3 * time.Second
 	// ownerEpochMintReadTimeoutSlack:读超时在 WAITAOF 超时之外多给的时间,让 WAITAOF 的服务端超时先于客户端读超时到期。
@@ -91,9 +105,10 @@ const (
 type OwnerEpochMinter interface {
 	// NowMs 是 G3a 墙钟地板用的当前毫秒(Unix 毫秒)。
 	NowMs() uint64
-	// EvalAndConfirm 执行铸造脚本,并按配置确认这次写已落盘。返回 error 表示 EVAL 被 Redis 拒绝(确定性错误),
-	// 或重发耗尽仍不知道 EVAL 执行了没有,或一次都没到达 Redis(errors.Is(err, ErrOwnerEpochMintNotSent),一个字节都没改);
-	// error 为 nil 时 MintEvalResult.Reply 是脚本回复,Durability 是落盘结论。
+	// EvalAndConfirm 执行铸造脚本,并按配置确认这次写已落盘。返回 error 分三类:EVAL 被 Redis 拒绝(确定性错误,没执行);
+	// 结果未知(errors.Is(err, ErrOwnerEpochMintResultUnknown),首发可能已生效);一次都没到达 Redis
+	// (errors.Is(err, ErrOwnerEpochMintNotSent),一个字节都没改)。error 为 nil 时 MintEvalResult.Reply 是脚本回复,
+	// Durability 是落盘结论;Attempts > 1 时回复来自重发,首发可能已生效。
 	EvalAndConfirm(ctx context.Context, script string, keys []string, args ...any) (MintEvalResult, error)
 }
 
@@ -129,6 +144,21 @@ type MintEvalResult struct {
 // WAITAOF(不足 1ms,一条都没发);此前没有结果未知的发送,而这一次连连接都没拿到(池等待超时、拨号失败、新连接握手失败,
 // 见 errMintPipelineNotSent)。用 errors.Is 判,具体原因在包装链里。
 var ErrOwnerEpochMintNotSent = errors.New("owner epoch mint not sent: nothing reached redis")
+
+// ErrOwnerEpochMintResultUnknown:至少有一次发送「发出去了、结果未知」(传输错误、ctx 截止),最终也没拿到能说明它执行了
+// 没有的回复;或者在那之后的重发被拒、被重定向、没发出去。首发可能已经生效(epoch 与 location 都已推进),也可能没有。
+// 用 errors.Is 判,原因在包装链里。调用方必须当作「可能已写」:logic 用这次计划好的落点按原字节回滚(生效了就撤掉,
+// 没生效就是空操作),不得当成没写,也不得当成写成了。
+var ErrOwnerEpochMintResultUnknown = errors.New("owner epoch mint EVAL result unknown")
+
+// unknownIfEarlier 在此前已有结果未知的发送时,把这一次的终止错误标成 ErrOwnerEpochMintResultUnknown:首发可能已经生效,
+// 这一次的拒绝 / 重定向说明不了首发。earlier 为 nil 时原样返回 err。
+func unknownIfEarlier(err, earlier error) error {
+	if earlier == nil {
+		return err
+	}
+	return fmt.Errorf("%w (earlier attempt: %v): %w", ErrOwnerEpochMintResultUnknown, earlier, err)
+}
 
 // errMintPipelineNotSent:这一次尝试的 pipeline 没有发出去 —— 找不到持有 slot 的主节点,或连接都没拿到。go-redis 9.17 在这种情形
 // 只从 Pipelined 返回错误,不给任何一条命令设错误或值(MaxRetries=0 时 generalProcessPipeline 遇到「可重试」的取连接错误直接
@@ -232,9 +262,11 @@ func (m *RedisOwnerEpochMinter) WaitsForAOF() bool {
 //     预算兜底;此前已有结果未知的发送时仍按结果未知返回。ctx 在等连接时到期,go-redis 给各条命令设的是 ctx 错误,与发出去之后
 //     的读写失败分不开,按结果未知处理(保守一侧);
 //   - EVAL 是其余错误回复(脚本 error_reply、WRONGTYPE、OOM 等):确定性的,不重发,返回 error;
+//   - 此前已有结果未知的发送时,之后任何一种终止(重定向次数耗尽、预算不够、没发出去、被拒、重发耗尽)都包上
+//     ErrOwnerEpochMintResultUnknown:这一次的结局说明不了首发;
 //   - EVAL 传输错误(发出去之后读写失败、ctx 截止):结果未知,退避后在新连接上重发整条 pipeline,最多 ownerEpochMintAttempts 次。
 //     首发若已生效,凭标记的铸造会被脚本的重放识别认出来;脚本在识别分支里把 owner_epoch 原值写回一次,所以新连接上的
-//     WAITAOF 仍覆盖首发那次写。不凭标记的铸造认不出,重发回 0(已登记的残余,调用方据 Attempts 打日志);
+//     WAITAOF 仍覆盖首发那次写。不凭标记的铸造认不出,重发回 0;调用方据 Attempts > 1 把它当结果未知,按原字节回滚;
 //   - EVAL 有回复之后不再重发:WAITAOF 的结论原样写进 Durability,由调用方按「推送失败」处理不满足的情形。
 func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script string, keys []string, args ...any) (MintEvalResult, error) {
 	if len(keys) == 0 {
@@ -259,7 +291,7 @@ func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script strin
 					return MintEvalResult{}, fmt.Errorf("%w: deadline budget too short for WAITAOF", ErrOwnerEpochMintNotSent)
 				}
 				return MintEvalResult{Attempts: attempt - 1},
-					fmt.Errorf("owner epoch mint EVAL result unknown after %d attempt(s), no budget left to resend: %w", attempt-1, lastErr)
+					fmt.Errorf("%w after %d attempt(s), no budget left to resend: %w", ErrOwnerEpochMintResultUnknown, attempt-1, lastErr)
 			}
 		}
 
@@ -281,8 +313,8 @@ func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script strin
 		if kind, addr := playerredis.ClassifyNotExecuted(evalErr); kind != playerredis.NotExecutedNo {
 			notExecuted++
 			if notExecuted > ownerEpochMintNotExecutedLimit {
-				return MintEvalResult{Attempts: attempt},
-					fmt.Errorf("owner epoch mint EVAL still redirected after %d resend(s): %w", ownerEpochMintNotExecutedLimit, evalErr)
+				return MintEvalResult{Attempts: attempt}, unknownIfEarlier(
+					fmt.Errorf("owner epoch mint EVAL still redirected after %d resend(s): %w", ownerEpochMintNotExecutedLimit, evalErr), lastErr)
 			}
 			if kind == playerredis.NotExecutedAsk {
 				askAddr = addr
@@ -290,8 +322,8 @@ func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script strin
 			}
 			playerredis.ReloadTopology(ctx, m.client)
 			if err := sleepCtx(ctx, mintNotExecutedBackoff()); err != nil {
-				return MintEvalResult{Attempts: attempt},
-					fmt.Errorf("owner epoch mint EVAL redirected and the retry wait ended (%v): %w", err, evalErr)
+				return MintEvalResult{Attempts: attempt}, unknownIfEarlier(
+					fmt.Errorf("owner epoch mint EVAL redirected and the retry wait ended (%v): %w", err, evalErr), lastErr)
 			}
 			continue
 		}
@@ -303,21 +335,22 @@ func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script strin
 				return MintEvalResult{}, fmt.Errorf("%w: %w", ErrOwnerEpochMintNotSent, evalErr)
 			}
 			return MintEvalResult{Attempts: attempt - 1},
-				fmt.Errorf("owner epoch mint EVAL result unknown after %d attempt(s); the resend never reached redis: %w (earlier unknown result: %v)", attempt-1, evalErr, lastErr)
+				fmt.Errorf("%w after %d attempt(s); the resend never reached redis: %w (earlier unknown result: %v)", ErrOwnerEpochMintResultUnknown, attempt-1, evalErr, lastErr)
 		}
 		if isRedisErrorReply(evalErr) {
-			return MintEvalResult{Attempts: attempt},
-				fmt.Errorf("owner epoch mint script rejected by redis (deterministic, not resent): %w", evalErr)
+			// 首发若结果未知,这一次的拒绝(例如 OOM)说明不了首发有没有执行。
+			return MintEvalResult{Attempts: attempt}, unknownIfEarlier(
+				fmt.Errorf("owner epoch mint script rejected by redis (deterministic, not resent): %w", evalErr), lastErr)
 		}
 
 		lastErr = evalErr
 		if attempt >= ownerEpochMintAttempts {
 			return MintEvalResult{Attempts: attempt},
-				fmt.Errorf("owner epoch mint EVAL result unknown after %d attempt(s): %w", attempt, lastErr)
+				fmt.Errorf("%w after %d attempt(s): %w", ErrOwnerEpochMintResultUnknown, attempt, lastErr)
 		}
 		if err := sleepCtx(ctx, mintRetryBackoff()); err != nil {
 			return MintEvalResult{Attempts: attempt},
-				fmt.Errorf("owner epoch mint EVAL result unknown after %d attempt(s) (retry wait: %v): %w", attempt, err, lastErr)
+				fmt.Errorf("%w after %d attempt(s) (retry wait: %v): %w", ErrOwnerEpochMintResultUnknown, attempt, err, lastErr)
 		}
 		attempt++
 	}

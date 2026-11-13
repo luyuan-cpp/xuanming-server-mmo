@@ -12,12 +12,10 @@
 #     docker-compose.yml infra stack on the host is reachable).
 #   - ListenOn changed back to :51000 (Hyper-V port reservation is
 #     a Windows-host problem; Linux containers don't hit it).
-#   - AuthProviders.WeChat / QQ have Endpoint pointed at the sibling
-#     sandbox-mock container so the OAuth chain runs offline.
+#   - AuthProviders.WeChat / QQ / WeChatMiniGame / DouyinMiniGame / Apple / Google have Endpoint
+#     pointed at the sibling sandbox-mock container so the OAuth chain runs offline.
 #   - Prometheus block enabled on 0.0.0.0:9101 (container-internal)
 #     so the host-published :9101 scrape works.
-#   - SnowflakeCacheDir pinned to /tmp/snowflake (image WORKDIR is /app,
-#     so the Go default ../../run/snowflake would land on /run/snowflake).
 #   - DataServiceRpc discovers data_service through the host etcd; this
 #     compose has no data_service container, see the block below.
 #
@@ -51,7 +49,6 @@ Node:
   SessionExpireMin: 30
   MaxLoginDevices: 3
   LeaseTTL: 500
-  QueueShardCount: 50
   MaxLoginDuration: 5m
   LogoutGraceTime: 5s
   RedisClient:
@@ -62,21 +59,6 @@ Node:
     DialTimeout: 3s
     ReadTimeout: 3s
     WriteTimeout: 3s
-
-Snowflake:
-  Epoch: 1721473263000
-  NodeBits: 13
-  StepBits: 9
-
-# 部署级集群号(PlayerId 13 位 node 段的 cluster 位)。单机 compose 栈保持 0,
-# 与 go/login/etc/login.yaml 一致;两个集群共用一个 etcd 也不撞号。
-ClusterId: 0
-
-# PlayerId 槽位本地缓存目录(docs/design/node-id-overhaul-plan-20260908.md §3.5):
-# etcd 启动时不可达、缓存在 2h 内则用缓存的槽起服。镜像 WORKDIR 是 /app,Go 默认的
-# ../../run/snowflake 会落到 /run/snowflake;与 K8s ConfigMap 一样显式指到 /tmp/snowflake
-# (容器内可写,不挂卷:缓存是本容器自己的启动期草稿,重建容器就重新申领)。留空关闭。
-SnowflakeCacheDir: /tmp/snowflake
 
 Locker:
   AccountLockTTL: 30
@@ -195,6 +177,29 @@ AuthProviders:
   # go/login/cmd/sandbox_mock),否则每次都按 client_id mismatch 拒绝。QQ 不需要 AppKey。
   QQ:
     AppId: "100000001"
+    Endpoint: "http://sandbox-mock:18090"
+
+  # 微信小游戏(auth_type: wechat_minigame)。mock 的 /sns/jscode2session 同样只对以 U 开头的 code 返回 unionid。
+  # AppId 必须与上面 App 形态的 WeChat 不同,写成一样 login 拒绝启动。
+  WeChatMiniGame:
+    AppId: "wx_sandbox_minigame"
+    AppSecret: "sandbox_secret_keep_it_local"
+    Endpoint: "http://sandbox-mock:18090"
+
+  # 抖音小游戏(auth_type: douyin_minigame)。mock 的 /mgplatform/api/apps/jscode2session 对任何 code 都返回 unionid。
+  DouyinMiniGame:
+    AppId: "tt_sandbox_minigame"
+    AppSecret: "sandbox_secret_keep_it_local"
+    Endpoint: "http://sandbox-mock:18090"
+
+  # Sign in with Apple / Google 登录(auth_type: apple / google)。没有密钥,login 去 Endpoint 取公钥验签。
+  # 令牌由 mock 代替客户端 SDK 签发:GET http://sandbox-mock:18090/mock/apple/id_token?user=<种子>&aud=<下面的 ClientId>
+  # (Google 换成 /mock/google/id_token)。aud 写错的令牌按 aud 不符拒绝。
+  Apple:
+    ClientId: "com.example.sandbox"
+    Endpoint: "http://sandbox-mock:18090"
+  Google:
+    ClientId: "sandbox-client.apps.googleusercontent.com"
     Endpoint: "http://sandbox-mock:18090"
 
 Kafka:

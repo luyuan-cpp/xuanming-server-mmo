@@ -50,7 +50,8 @@ public:
     //
     // 补缴扣还:该币种欠款有效(未冻结、未过期)时先扣还、扣满即删,余下的再入账。欠款带更新版本才有的字段时
     // (与 DebtCarriesUnknownFields 同一判据)本版本不扣还也不删除,按冻结处理、全额入账,并打
-    // metric=persist_version_skew where=currency_clawback 的 WARN(docs/design/mixed-version-persist-field-protection.md §4.4)。
+    // metric=persist_version_skew where=currency_clawback 的 WARN(docs/design/mixed-version-persist-field-protection.md §4.4);
+    // 同一时刻 currency_clawback_stats 的进程计数加一(scene 导出为 scene_currency_clawback_version_skew_total,有告警)。
     //
     // **判定顺序是契约的一部分**:amount<=0 与类型越界这两条零副作用的纯参数校验
     // 排在冻结 / 封禁之前。冻结中的玩家传一个越界币种,得到的仍是 kInvalidParameter
@@ -59,6 +60,14 @@ public:
     static uint32_t AddCurrency(entt::entity player, CurrencyType type, int64_t amount,
                                 TransactionType txType = TX_CURRENCY_ADD,
                                 uint64_t correlationId = 0);
+
+    // 这笔收入按补缴先扣之后入账,余额会不会溢出 uint64,即 AddCurrency 会不会因溢出回 kInvalidParameter。
+    // 只读、零副作用,不建组件、不补余额槽位;与 AddCurrency 用同一份扣还计划,两处结论一致。
+    // 给要在任何改动之前判掉溢出的调用方用:资产通道 Credit 先发物品后发货币,溢出留到入账才判,物品已经发出,
+    // 成了部分到账(数据覆写审计 r2-trade#1 一并修)。
+    // amount 为 0、币种越界、缺 CurrencyComp 或 PlayerCurrencyComp 都回 false:这些由 AddCurrency 自己按原口径拒绝。
+    // 欠款恰好在预检与入账之间过期(秒级边界)时两次结论可能不同;那一笔照旧由 AddCurrency 拒绝,不回绕。
+    static bool CreditOverflows(entt::entity player, CurrencyType type, uint64_t amount);
 
     // Deduct currency from a player. amount must be > 0; returns error code if
     // the parameter is invalid or the player has insufficient funds.
@@ -102,6 +111,14 @@ public:
     // 命中回 kVersionSkew(收件箱停用本域,实体重建后重拉;docs/design/mixed-version-persist-field-protection.md §4.4)。
     // 结果可能在会话内变化(这笔欠款被删除后变 false;AddCurrency 不会把它还清删除),调用方不能把一次 true 当成"本会话一直做不了"。
     static bool DebtCarriesUnknownFields(entt::entity player, CurrencyType type);
+
+    // ── 免除 / 调整 / 冻结欠款:今天没有任何生产入口(2026-11-12 复核)──
+    // GM 的 SceneRollbackClientPlayer.GmWaiveDebt / GmAdjustDebt / GmFreezeDebt 早已删除(proto/message_id.txt 106 / 113 / 109 记为 reserved),
+    // 收件箱的 GM 处置域只有挂欠款(GmSanctionInboxExecutor::AttachCurrencyDebt,它在调 AttachDebt 之前先判 DebtCarriesUnknownFields),
+    // 下面三个函数只有单测调用。**接任何生产入口(GM 指令、收件箱新类型)之前,必须先补与 AddCurrency 同类的守卫**:
+    // DebtCarriesUnknownFields 为真时不改、不删这笔欠款,打 metric=persist_version_skew 的 WARN(where 取入口名)并计数,
+    // 调用方按版本错位处理、不记终态 —— 否则免除会整条删掉新字段、调整与冻结会按旧口径改写它
+    // (docs/design/mixed-version-persist-field-protection.md §4.4 欠款合并一行)。
 
     // Write off all remaining debt for the given currency type.
     static uint64_t WaiveDebt(entt::entity player, CurrencyType type,

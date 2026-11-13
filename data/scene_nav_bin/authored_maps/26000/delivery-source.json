@@ -1,0 +1,151 @@
+{
+  "mapKey": "26000-mid-autumn",
+  "sceneId": 26000,
+  "sceneConfigId": 26000,
+  "appearance": "mid-autumn",
+  "authoredAsset": "Assets/MapNavigationDrafts/Festival20261111/26000-mid-autumn.asset",
+  "authoredAssetGuid": "cba6b37b52a47cf4ca0424b245c6b51f",
+  "authoredAssetSha256": "401ce609036473e50afc24c0e35990cde82ff80a8303e8e62f79645417f6fdf2",
+  "sourceAssetPath": "D:\\luyuan\\mmorpg-client\\Assets\\MapNavigationDrafts\\Festival20261111\\26000-mid-autumn.asset",
+  "sourceAssetSha256": "401ce609036473e50afc24c0e35990cde82ff80a8303e8e62f79645417f6fdf2",
+  "navMeshAsset": "Assets/MapNavigationDrafts/Festival20261111/26000-mid-autumn.navmesh-9d2185138bdcb22c.asset",
+  "navMeshGuid": "c871785b2398fba4cbddeab29609e37a",
+  "navMeshAssetSha256": "afec23c154e96428869cc021bc097ec4e74251638557d9e95db5129acea7540f",
+  "bakedGeometrySha256": "9d2185138bdcb22cd7c296a028d28c93d24b8dd3b48ec96da36b1a7e16ac78d4",
+  "authoringGeometryHash": "9d2185138bdcb22cd7c296a028d28c93d24b8dd3b48ec96da36b1a7e16ac78d4",
+  "isBakeCurrent": true,
+  "worldRect": {
+    "x": 0.0,
+    "z": 0.0,
+    "width": 300.0,
+    "depth": 240.0
+  },
+  "boundsConfirmed": false,
+  "authoredSpawnSet": true,
+  "authoredSpawnUnity": [
+    110.921211,
+    0.0,
+    33.47244
+  ],
+  "testSpawnUnity": [
+    110.921211,
+    0.0,
+    33.47244
+  ],
+  "spawnUnity": [
+    110.921211,
+    0.0,
+    33.47244
+  ],
+  "testSpawnServer": [
+    33.47244,
+    110.921211,
+    0.0
+  ],
+  "spawnReason": "Author-saved spawn, kept unchanged",
+  "candidateCount": 1739,
+  "sampledConnectedGroupSizes": [
+    1739
+  ],
+  "selectedSpawnClearance": 25.17244,
+  "polygons": [
+    {
+      "index": 0,
+      "name": "地面1",
+      "blocked": false,
+      "points": 88
+    },
+    {
+      "index": 1,
+      "name": "障碍2",
+      "blocked": true,
+      "points": 113
+    },
+    {
+      "index": 2,
+      "name": "障碍3",
+      "blocked": true,
+      "points": 23
+    },
+    {
+      "index": 3,
+      "name": "障碍4",
+      "blocked": true,
+      "points": 51
+    },
+    {
+      "index": 4,
+      "name": "障碍5",
+      "blocked": true,
+      "points": 18
+    },
+    {
+      "index": 5,
+      "name": "障碍6",
+      "blocked": true,
+      "points": 30
+    },
+    {
+      "index": 6,
+      "name": "障碍7",
+      "blocked": true,
+      "points": 13
+    },
+    {
+      "index": 7,
+      "name": "障碍8",
+      "blocked": true,
+      "points": 13
+    },
+    {
+      "index": 8,
+      "name": "障碍9",
+      "blocked": true,
+      "points": 5
+    }
+  ],
+  "sourceVertexCount": 9063,
+  "sourceTriangleCount": 3021,
+  "exportDirectory": "D:\\luyuan\\mmorpg-client\\.codex-artifacts\\authored-festival-export-20261112\\delivery\\26000-mid-autumn",
+  "sourceJsonSha256": "627418cbf0f686584742014fa2dec23196e4c17d8d2f11f1655f6d255622a6c9",
+  "sourceSha256": "627418cbf0f686584742014fa2dec23196e4c17d8d2f11f1655f6d255622a6c9",
+  "authoringJsonSha256": "2e4a495efa61e471a49891e527b08b72d345259fe99e817f7fe3bc8a1cf72c27",
+  "objSha256": "d74b8e85b812f1037ec6c5ccd5f08cd8e6a81ad49e5ddf853f3650914e93f343",
+  "serverBakeArgumentsSha256": "456e3cf6d2f8726afcb1826655088ab3bd3f641347845caaa4fa9541ba28107b",
+  "unityQueriesSha256": "a2d3e7c088678bcc64211c9caf9f414e23d6e40357fda8a9afdc48f15e30c5f5",
+  "agent": {
+    "typeId": 0,
+    "radius": 0.4,
+    "height": 1.8,
+    "climb": 0.3,
+    "slope": 45.0,
+    "voxelSize": 0.1
+  },
+  "bakeContract": {
+    "revision": "authored-flat-v2",
+    "serverProfile": "authored-flat",
+    "tileSizeVoxels": 256,
+    "minRegionAreaWorld": 0.0,
+    "unity": {
+      "overrideVoxelSize": true,
+      "overrideTileSize": true,
+      "heightMesh": true,
+      "ledgeDropHeight": 0,
+      "maxJumpAcrossDistance": 0,
+      "groundPointTolerancePerAxis": 0.02,
+      "cellHeight": "not exposed by Unity NavMeshBuildSettings"
+    },
+    "serverOnly": {
+      "cellHeight": 0.2,
+      "filterLedges": true,
+      "mergeRegionAreaVoxels": 400,
+      "walkableClimbVoxels": 1.0,
+      "effectiveClimb": 0.2,
+      "climbQuantization": "floor(agentClimb / cellHeight)",
+      "heightPolicy": "authored-flat restores the original coplanar OBJ height"
+    },
+    "queryEquivalence": "NOT_PROVEN; paired-query validation required"
+  },
+  "serverAcceptance": "NOT_RUN",
+  "liveGameAcceptance": "NOT_RUN"
+}

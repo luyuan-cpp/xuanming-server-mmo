@@ -1,0 +1,646 @@
+# 容器日志采集:每个节点一个 Alloy(DaemonSet),读 kubelet 落在 /var/log/pods 的容器 stdout / stderr,
+# 推给与 C++ 日志 sidecar 同一个 Loki(docs/ops/grafana-loki-local-logs.md §6.11,docs/design/distributed-tracing.md §9.2)。
+#
+# 为什么要它:
+#   - Go(go-zero logx)与 Java(Spring Boot 的 logstash JSON)只写 stdout,不采的话日志只在 kubectl logs 里,Pod 一重建就没了。
+#   - C++ 节点的业务日志不在这里:Linux 下 muduo 不往 stdout 写,由每个 C++ Pod 里的 sidecar 直接读文件(k8s_deploy.ps1 的 New-CppLogSidecar*)。
+#     但 C++ 容器自己的 stdout / stderr 上还有 sidecar 读不到的东西:gRPC / abseil 与 librdkafka 的日志、未捕获异常的崩溃现场、
+#     gate 的启动行。这些也由本 DaemonSet 采,与 sidecar 的流同属 job=cpp_nodes,多了 container / stream 两个标签,不会并进同一条流。
+#
+# 由 tools/scripts/k8s_deploy.ps1 的 New-PodLogCollectorManifestText 渲染,随 infra-up(或不带 -SkipInfra 的 all-up)部署进 infra 命名空间。
+# 与 C++ sidecar 同开同关(-NoCppLogSidecar 两路都关),推送地址也是同一个(集群内 Loki,或 -LokiPushUrl)。
+# 文件里的占位(前后各两个下划线的大写词)全由那个函数替换,有一个没换掉就拒绝 apply;不要绕过脚本直接 apply 本文件。
+#
+# 采哪些:infra 命名空间与各 zone 命名空间(<-NamespacePrefix>-<zone 名>)里的这几类 Pod 的普通容器:
+#   - 清单标了 tier: go-svc / java-svc 的 Go / Java 工作负载;
+#   - 没有 tier、app 是 gate / scene / scene-world / scene-instance / battle(金丝雀再加 -canary)的 C++ 节点。
+#   init 容器不采(等 MySQL 的小循环,以及 C++ 的日志 sidecar 本身);infra 里的 etcd / Kafka / Redis / Loki 与本采集器自己都不采。
+# 标签与本机观测台对齐(docs/ops/grafana-loki-local-logs.md §3、§6.4):env=k8s、job、lang、service、zone、namespace、pod、container、stream、level。
+#   trace_id / span_id / player_id 与 caller / logger / thread / tid / filename 只进结构化元数据,绝不做标签。
+#
+# 权限:
+#   - 读 /var/log/pods 要 root:日志文件属主是 root,别的用户读不了(containerd 建的是 0640)。容器以 uid 0 运行,但丢掉全部 capabilities、
+#     禁止提权、根文件系统只读,只能按文件属主的身份读;/var/log/pods 只读挂载。
+#   - 列 Pod 要集群级权限(zone 命名空间随时会新建):ClusterRole mmorpg-pod-log-reader 只给 pods 的 list / watch,全集群一份;
+#     ClusterRoleBinding 的名字带 infra 命名空间,infra-down(Remove-Infra)删完命名空间再按名字删它;ClusterRole 留给同一集群里别的部署。
+#   - Pod Security Admission 的 baseline / restricted 档不允许 hostPath:infra 命名空间打了这类 enforce 标签时,DaemonSet 建得出来,
+#     Pod 一个都起不来(kubectl describe daemonset 里是 FailedCreate),要给 infra 命名空间放行 privileged 档。
+#
+# 读取位置(positions)落在宿主机 /var/lib/mmorpg-pod-log-collector/<infra 命名空间>:DaemonSet 换 Pod(改配置、换镜像、节点重启)之后接着读,
+#   不重推整份日志。每个 infra 命名空间一个目录,同一集群里的两套部署不会写同一份 positions。infra-down 不删这个目录。
+# 改配置 = 滚动重启本 DaemonSet:Pod 模板上的 mmorpg.io/pod-log-collector-config-hash 是整份渲染结果的指纹,
+#   只改 ConfigMap 不会让跑着的 Alloy 重读配置。滚动期间每个节点停采几秒,重启后从 positions 接着读;
+#   只有停采的那几秒里正好赶上 kubelet 轮转日志文件(默认每 10MiB 一次),轮转走的那一小段才会漏读。业务 Pod 不受影响。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-log-collector
+  labels:
+    app: pod-log-collector
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mmorpg-pod-log-reader
+  labels:
+    app: pod-log-collector
+rules:
+  # discovery.kubernetes 用 informer,只要 list / watch;不碰 Secret、ConfigMap。
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mmorpg-pod-log-reader-__INFRA_NAMESPACE__
+  labels:
+    app: pod-log-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mmorpg-pod-log-reader
+subjects:
+  - kind: ServiceAccount
+    name: pod-log-collector
+    namespace: __INFRA_NAMESPACE__
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pod-log-collector
+  labels:
+    app: pod-log-collector
+data:
+  config.alloy: |
+    // 事实源是 deploy/k8s/manifests/infra/pod-log-collector.yaml,由 tools/scripts/k8s_deploy.ps1 渲染,不要直接改集群里的副本。
+    // 解析规则照搬本机 deploy/observability/alloy/config.alloy 的 Go 段、Java 段与 C++ 段的 gRPC / librdkafka 两段,只差两处:
+    //   1. 不按文件名取标签:标签取自 Pod 的元数据(下面的 discovery.relabel)。
+    //   2. 不从行内取时间,用 CRI 时间戳(容器运行时收下这一行的时刻,纳秒,UTC)。本机从行内取,是因为读文件没有别的时间来源;
+    //      集群里每一行都带运行时的时间,与行内时间差在毫秒内。本机 go-redis 那段按开发机时区(America/New_York)解析,
+    //      搬进容器会把时间算到未来,Loki 以 400 拒收,loki.write 对 4xx 不重试,整批丢掉,所以这里没有那段。
+    // 两边逐段一致由 tools/scripts/tests/k8s_log_collection_contract.tests.ps1 核对:改了本机那份,这里同批改。
+    logging {
+      level  = "warn"
+      format = "logfmt"
+    }
+
+    loki.write "out" {
+      endpoint {
+        url = "__LOKI_PUSH_URL__"
+      }
+      external_labels = {
+        env = "k8s",
+      }
+    }
+
+    // 只发现本节点上的 Pod(字段选择器 spec.nodeName),每个采集器不 watch 全集群的 Pod。
+    discovery.kubernetes "pods" {
+      role = "pod"
+      selectors {
+        role  = "pod"
+        field = "spec.nodeName=" + sys.env("NODE_NAME")
+      }
+    }
+
+    // 一个目标 = 一个容器的日志目录。
+    discovery.relabel "pods" {
+      targets = discovery.kubernetes.pods.targets
+
+      // 只要本部署的命名空间:infra 与各 zone。同一集群里另一套部署(另一个 infra 命名空间)的 Pod 归它自己的采集器。
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        regex         = "__INFRA_NAMESPACE__|__ZONE_NAMESPACE_PREFIX__-.+"
+        action        = "keep"
+      }
+      // init 容器不采:等 MySQL 之类的小循环不是业务进程,C++ 的日志 sidecar(原生 sidecar 也在 initContainers 里)打的是 Alloy 自己的日志。
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_init"]
+        regex         = "true"
+        action        = "drop"
+      }
+
+      // 认语言,job / lang 与本机同值。Go / Java 看清单的 tier 标签。
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_tier"]
+        regex         = "go-svc"
+        target_label  = "job"
+        replacement   = "go_services"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_tier"]
+        regex         = "go-svc"
+        target_label  = "lang"
+        replacement   = "go"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_tier"]
+        regex         = "java-svc"
+        target_label  = "job"
+        replacement   = "java"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_tier"]
+        regex         = "java-svc"
+        target_label  = "lang"
+        replacement   = "java"
+      }
+
+      // service:清单的 app 标签。K8s 名字用连字符(data-service),本机用下划线(data_service),下面的 loki.process 里统一成下划线。
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app"]
+        target_label  = "service"
+      }
+
+      // C++ 节点:没有 tier,app 是 gate / scene / scene-world / scene-instance / battle(金丝雀再加 -canary)。
+      // service 取节点角色 gate / scene / battle,与 sidecar 从 muduo 文件名取的同值。
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_tier", "__meta_kubernetes_pod_label_app"]
+        separator     = ";"
+        regex         = ";(gate|scene|battle)(?:-world|-instance)?(?:-canary)?"
+        target_label  = "job"
+        replacement   = "cpp_nodes"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_tier", "__meta_kubernetes_pod_label_app"]
+        separator     = ";"
+        regex         = ";(gate|scene|battle)(?:-world|-instance)?(?:-canary)?"
+        target_label  = "lang"
+        replacement   = "cpp"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_tier", "__meta_kubernetes_pod_label_app"]
+        separator     = ";"
+        regex         = ";(gate|scene|battle)(?:-world|-instance)?(?:-canary)?"
+        target_label  = "service"
+        replacement   = "$1"
+      }
+
+      // 认不出语言的(infra 里的 etcd / Kafka / Redis / Loki 等、本采集器自己)不采。
+      rule {
+        source_labels = ["job"]
+        regex         = ".+"
+        action        = "keep"
+      }
+
+      // zone:zone 命名空间是 <前缀>-<zone 名>,取 zone 名,与 C++ sidecar 的 ZONE_NAME 同值;
+      // infra 命名空间里的全局服务与 battle 池记 global,与 battle 池的 sidecar 同值。两条的先后不能换:前缀碰巧也匹配 infra 命名空间时以 global 为准。
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        regex         = "__ZONE_NAMESPACE_PREFIX__-(.+)"
+        target_label  = "zone"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        regex         = "__INFRA_NAMESPACE__"
+        target_label  = "zone"
+        replacement   = "global"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+      // 一个 Pod 里有多个普通容器时(例如 Agones 往 GameServer Pod 里加的 SDK sidecar),各路日志靠这个标签分开,不会并成一条流。
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+
+      // kubelet 的落盘位置:/var/log/pods/<命名空间>_<Pod 名>_<UID>/<容器名>/<重启次数>.log。
+      // 只认 *.log:轮转下来的旧文件叫 <n>.log.<时间戳>(压缩后再加 .gz),不会再读一遍。
+      rule {
+        source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+        separator     = "/"
+        target_label  = "__path__"
+        replacement   = "/var/log/pods/*$1/*.log"
+      }
+    }
+
+    // 按语言分三条管道,与本机 config.alloy 的 go_services / java / cpp_nodes 三段一一对应。
+    discovery.relabel "go_services" {
+      targets = discovery.relabel.pods.output
+
+      rule {
+        source_labels = ["job"]
+        regex         = "go_services"
+        action        = "keep"
+      }
+    }
+
+    discovery.relabel "java" {
+      targets = discovery.relabel.pods.output
+
+      rule {
+        source_labels = ["job"]
+        regex         = "java"
+        action        = "keep"
+      }
+    }
+
+    discovery.relabel "cpp_nodes" {
+      targets = discovery.relabel.pods.output
+
+      rule {
+        source_labels = ["job"]
+        regex         = "cpp_nodes"
+        action        = "keep"
+      }
+    }
+
+    local.file_match "go_services" {
+      path_targets = discovery.relabel.go_services.output
+      sync_period  = "5s"
+    }
+
+    loki.source.file "go_services" {
+      targets    = local.file_match.go_services.targets
+      forward_to = [loki.process.go_services.receiver]
+
+      file_watch {
+        min_poll_frequency = "500ms"
+        max_poll_frequency = "2s"
+      }
+    }
+
+    local.file_match "java" {
+      path_targets = discovery.relabel.java.output
+      sync_period  = "5s"
+    }
+
+    loki.source.file "java" {
+      targets    = local.file_match.java.targets
+      forward_to = [loki.process.java.receiver]
+
+      file_watch {
+        min_poll_frequency = "500ms"
+        max_poll_frequency = "2s"
+      }
+    }
+
+    local.file_match "cpp_nodes" {
+      path_targets = discovery.relabel.cpp_nodes.output
+      sync_period  = "5s"
+    }
+
+    loki.source.file "cpp_nodes" {
+      targets    = local.file_match.cpp_nodes.targets
+      forward_to = [loki.process.cpp_nodes.receiver]
+
+      file_watch {
+        min_poll_frequency = "500ms"
+        max_poll_frequency = "2s"
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Go 服务(go-zero logx,一行一条 JSON)。下面的 stage.match 照搬本机 config.alloy 的第 1 段,只去掉了取时间的几步。
+    // -------------------------------------------------------------------------
+    loki.process "go_services" {
+      forward_to = [loki.write.out.receiver]
+
+      // CRI 行格式:<RFC3339Nano 时间> <stdout|stderr> <F|P> <正文>。取出正文与 stream 标签(stdout / stderr,与本机同值),
+      // 时间取行首的 CRI 时间戳;被容器运行时切开的超长行(P 标记)在这里拼回一行。
+      stage.cri {}
+
+      stage.template {
+        source   = "service"
+        template = `{{ Replace .Value "-" "_" -1 }}`
+      }
+      stage.labels {
+        values = { service = "" }
+      }
+
+      // go-zero 自己的 JSON 行。本机这段还取 "@timestamp" 当时间,这里用 CRI 时间。
+      stage.match {
+        selector = `{job="go_services"} |~ "^\\{" |~ "\"level\":\"[A-Za-z]+\"" |~ "\"@timestamp\""`
+
+        stage.json {
+          expressions = {
+            level  = "level",
+            caller = "caller",
+          }
+        }
+        stage.template {
+          source   = "level"
+          template = `{{ ToLower .Value }}`
+        }
+        stage.labels {
+          values = { level = "" }
+        }
+        stage.structured_metadata {
+          values = { caller = "" }
+        }
+      }
+
+      // 链路追踪字段(docs/design/distributed-tracing.md §3.2、§9.1),与本机逐字相同:go-zero 带 ctx 打的行有 "trace" / "span",
+      // 经 tracing.PlayerFieldInterceptor 的行有 "player_id"。只对真带了这些键的行取值,不给其余的行写空值。
+      // player_id 只认字符串形态("player_id":"123"):写成 JSON 数字的 id 会被 stage.json 按 float64 解析,
+      // 超过 2^53 时末几位被悄悄改掉,宁可不取也不能取错。选择器里的 "键":" 不会命中 content 里转义过的 \"键\":。
+      stage.match {
+        selector = `{job="go_services"} |~ "^\\{" |= "\"trace\":\""`
+
+        stage.json {
+          expressions = {
+            trace_id = "trace",
+            span_id  = "span",
+          }
+        }
+        stage.structured_metadata {
+          values = {
+            trace_id = "",
+            span_id  = "",
+          }
+        }
+      }
+      stage.match {
+        selector = `{job="go_services"} |~ "^\\{" |= "\"player_id\":\""`
+
+        stage.json {
+          expressions = { player_id = "player_id" }
+        }
+        stage.structured_metadata {
+          values = { player_id = "" }
+        }
+      }
+
+      // 内嵌 etcd 客户端(zap)的 JSON 行。本机这段主要是按 "ts" 取时间;这里用 CRI 时间,只剩取级别与 caller,
+      // 与上面 go-zero 那段取的东西一样。保留成两段,是为了与本机逐段对得上。
+      stage.match {
+        selector = `{job="go_services"} |~ "^\\{" |~ "\"level\":\"[A-Za-z]+\"" !~ "\"@timestamp\""`
+
+        stage.json {
+          expressions = {
+            level  = "level",
+            caller = "caller",
+          }
+        }
+        stage.template {
+          source   = "level"
+          template = `{{ ToLower .Value }}`
+        }
+        stage.labels {
+          values = { level = "" }
+        }
+        stage.structured_metadata {
+          values = { caller = "" }
+        }
+      }
+
+      // 本机还有一段 go-redis 纯文本行("redis: 2026/09/15 22:58:28 ..."),只做按开发机时区取时间,这里用 CRI 时间,不需要(见文件头)。
+
+      // filename 是 /var/log/pods/<命名空间>_<Pod 名>_<UID>/<容器名>/<重启次数>.log,容器每重启一次、Pod 每换一次都变;
+      // 留成流标签会白白多出流,转存结构化元数据(与 C++ sidecar 同做法,docs/ops/grafana-loki-local-logs.md §6.4)。
+      stage.structured_metadata {
+        values = { filename = "" }
+      }
+      stage.label_drop {
+        values = ["filename"]
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Java(Spring Boot:gateway)。下面的多行合并与 stage.match 照搬本机 config.alloy 的第 3 段,只去掉了取时间的几步。
+    // -------------------------------------------------------------------------
+    loki.process "java" {
+      forward_to = [loki.write.out.receiver]
+
+      stage.cri {}
+
+      // 堆栈续行(不以 { 或日期开头)并入上一条。行头与本机逐字相同:容器里没有 Maven,那几个分支用不上,留着不碍事。
+      stage.multiline {
+        firstline     = `^(\{|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}|WARNING: |\[(INFO|WARNING|ERROR)\] |Hibernate: |Download(ing|ed) from [^:]+: )`
+        max_wait_time = "2s"
+        max_lines     = 256
+      }
+
+      stage.template {
+        source   = "service"
+        template = `{{ Replace .Value "-" "_" -1 }}`
+      }
+      stage.labels {
+        values = { service = "" }
+      }
+
+      // A. JSON 行(logging.structured.format.console=logstash)。本机这段还取 "@timestamp" 当时间,这里用 CRI 时间。
+      stage.match {
+        selector = `{job="java"} |~ "^\\{" |~ "\"level\":\"[A-Za-z]+\""`
+
+        stage.json {
+          expressions = {
+            level  = "level",
+            logger = "logger_name",
+            thread = "thread_name",
+          }
+        }
+        stage.template {
+          source   = "level"
+          template = `{{ ToLower .Value }}`
+        }
+        stage.labels {
+          values = { level = "" }
+        }
+        stage.structured_metadata {
+          values = {
+            logger = "",
+            thread = "",
+          }
+        }
+      }
+
+      // A 的链路追踪字段,与本机逐字相同:Micrometer Tracing 把 traceId / spanId 放进 MDC,logstash 格式把 MDC 写成顶层字段。
+      // 只对真带了 traceId 的行取值,统一改名成 trace_id / span_id。
+      stage.match {
+        selector = `{job="java"} |~ "^\\{" |= "\"traceId\":\""`
+
+        stage.json {
+          expressions = {
+            trace_id = "traceId",
+            span_id  = "spanId",
+          }
+        }
+        stage.structured_metadata {
+          values = {
+            trace_id = "",
+            span_id  = "",
+          }
+        }
+      }
+
+      // B. Spring Boot 默认文本行(没重新打包的旧 jar)。正则与本机逐字相同,其中取出的 ts 不用,时间用 CRI 时间。
+      stage.match {
+        selector = `{job="java"} |~ "^\\d{4}-\\d{2}-\\d{2}T\\S+\\s+(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\\s+\\d+\\s+---\\s"`
+
+        stage.regex {
+          expression = `^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(?:[+-]\d{2}:\d{2}|Z)?)\s+(?P<level>[A-Z]+)\s+(?P<pid>\d+)\s+---\s+(?:\[(?P<app>[^\]]*)\]\s+)?\[\s*(?P<thread>[^\]]*)\]\s+(?P<logger>\S+)\s*:\s`
+        }
+        stage.template {
+          source   = "level"
+          template = `{{ ToLower .Value }}`
+        }
+        stage.labels {
+          values = { level = "" }
+        }
+        stage.structured_metadata {
+          values = {
+            logger = "",
+            thread = "",
+          }
+        }
+      }
+
+      stage.structured_metadata {
+        values = { filename = "" }
+      }
+      stage.label_drop {
+        values = ["filename"]
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // C++ 节点容器自己的 stdout / stderr。gRPC / abseil 与 librdkafka 两段照搬本机 config.alloy 第 2 段,只去掉了取时间的几步。
+    // 本机第 2 段的 muduo 行不在这里(Linux 下不进 stdout,由 sidecar 读文件);"Assertion failed: " 是 Windows 的 MSVC 行型,
+    // Linux 上没有(release 带 -DNDEBUG 编掉了 assert)。这里另加一段未捕获异常,本机那条链路的崩溃另有行型,不需要它。
+    // -------------------------------------------------------------------------
+    loki.process "cpp_nodes" {
+      forward_to = [loki.write.out.receiver]
+
+      stage.cri {}
+
+      // gRPC / abseil(glog 格式):首字母是级别(E=error W=warn I=info F=fatal)。本机这段还要补年份、按 UTC 取时间,这里用 CRI 时间。
+      stage.match {
+        selector = `{job="cpp_nodes"} |~ "^[EWIF]\\d{4} \\d{2}:\\d{2}:\\d{2}\\.\\d{6} +\\d+ "`
+
+        stage.regex {
+          expression = `^(?P<glog_level>[EWIF])(?P<glog_md>\d{4}) (?P<glog_time>\d{2}:\d{2}:\d{2}\.\d{6}) +(?P<tid>\d+) `
+        }
+        stage.template {
+          source   = "level"
+          template = `{{ if eq .glog_level "E" }}error{{ else if eq .glog_level "W" }}warn{{ else if eq .glog_level "F" }}fatal{{ else }}info{{ end }}`
+        }
+        stage.labels {
+          values = { level = "" }
+        }
+        stage.structured_metadata {
+          values = { tid = "" }
+        }
+      }
+
+      // librdkafka:开头的 %N 是 syslog 级别(0-3 = error,4 = warn,5-6 = info,7 = debug)。本机这段还按 epoch 秒取时间,这里用 CRI 时间。
+      // Kafka 连不上时这里会刷一大批 ERROR,不打 level 的话错误面板一条都统计不到。
+      stage.match {
+        selector = `{job="cpp_nodes"} |~ "^%[0-7]\\|[0-9]+\\.[0-9]+\\|"`
+
+        stage.regex {
+          expression = `^%(?P<rdk_sev>[0-7])\|(?P<rdk_epoch_sec>\d+)\.\d+\|`
+        }
+        stage.template {
+          source   = "level"
+          template = `{{ if le .rdk_sev "3" }}error{{ else if eq .rdk_sev "4" }}warn{{ else if eq .rdk_sev "7" }}debug{{ else }}info{{ end }}`
+        }
+        stage.labels {
+          values = { level = "" }
+        }
+      }
+
+      // 未捕获的 C++ 异常:libstdc++ 在 abort 之前往 stderr 打 "terminate called after throwing an instance of '...'",
+      // 下一行 "  what():  ..." 是原因(单独成条,同一个 Pod 里按时间挨着)。这行不经 muduo,sidecar 读不到;按 fatal 记,
+      // {job="cpp_nodes", level="fatal"} 才查得到这类崩溃。
+      stage.match {
+        selector = `{job="cpp_nodes"} |~ "^terminate called "`
+
+        stage.static_labels {
+          values = { level = "fatal" }
+        }
+      }
+
+      stage.structured_metadata {
+        values = { filename = "" }
+      }
+      stage.label_drop {
+        values = ["filename"]
+      }
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: pod-log-collector
+  labels:
+    app: pod-log-collector
+spec:
+  selector:
+    matchLabels:
+      app: pod-log-collector
+  template:
+    metadata:
+      labels:
+        app: pod-log-collector
+      annotations:
+        mmorpg.io/pod-log-collector-config-hash: "__POD_LOG_COLLECTOR_CONFIG_HASH__"
+    spec:
+      serviceAccountName: pod-log-collector
+      # 带 NoSchedule 污点的节点(专用节点池)上的 Pod 也要采。NoExecute 类的 not-ready / unreachable 由 DaemonSet 控制器自动容忍。
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: alloy
+          # 与 C++ 日志 sidecar 同一个镜像(-CppLogSidecarImage):版本钉死的理由见 docs/ops/grafana-loki-local-logs.md §1,kind 上也只要预载一个。
+          image: __POD_LOG_COLLECTOR_IMAGE__
+          imagePullPolicy: IfNotPresent
+          args:
+            - run
+            # 绑 0.0.0.0:Pod 外才够得着 /metrics(loki_source_file_files_active_total、loki_write_sent_entries_total)。
+            - --server.http.listen-addr=0.0.0.0:12345
+            - --storage.path=/var/lib/alloy
+            - /etc/alloy/config.alloy
+          ports:
+            - containerPort: 12345
+              name: alloy-http
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          # 为什么是 root 见文件头;能收的都收了。
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+              readOnly: true
+            - name: pod-logs
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/alloy
+      volumes:
+        - name: config
+          configMap:
+            name: pod-log-collector
+        - name: pod-logs
+          hostPath:
+            path: /var/log/pods
+            type: Directory
+        - name: state
+          hostPath:
+            path: /var/lib/mmorpg-pod-log-collector/__INFRA_NAMESPACE__
+            type: DirectoryOrCreate

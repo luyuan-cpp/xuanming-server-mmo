@@ -162,6 +162,26 @@ class CommerceHttpFlowTest {
         assertEquals(1, count("commerce_refund_intent"));
         assertEquals(1, count("commerce_delivery_intent"));
         assertEquals(2, stockValue("stock"));
+
+        // 已付订单又收到一笔金额币种都对的付款(重复付款,2026-11-12 补 HTTP 层用例):与金额不符同形,回 200、落库,
+        // refundReason 为 DUPLICATE_PAYMENT,重放回同一结论。订单本身那笔的重放仍不带退款原因 —— 适配器只靠 refundReason
+        // 分清「重复付款」与「正常回放」,两者的 HTTP 状态与订单视图完全相同。
+        byte[] duplicate = json.writeValueAsBytes(Map.of("orderId", orderId, "channel", "test-channel", "transactionId", "HttpDuplicate001", "amountMinor", 2500, "currency", "CNY"));
+        HttpResponse<String> duplicated = call("POST", "/internal/payments", "payment", "payment-adapter", duplicate);
+        assertEquals(200, duplicated.statusCode(), duplicated.body());
+        JsonNode duplicateOutcome = json.readTree(duplicated.body());
+        assertEquals("DUPLICATE_PAYMENT", duplicateOutcome.path("refundReason").asText());
+        assertEquals(paidOutcome.path("order"), duplicateOutcome.path("order"), "重复付款不绑定订单,订单视图不变");
+        HttpResponse<String> duplicateReplay = call("POST", "/internal/payments", "payment", "payment-adapter", duplicate);
+        assertEquals(200, duplicateReplay.statusCode(), duplicateReplay.body());
+        assertEquals(duplicateOutcome, json.readTree(duplicateReplay.body()), "重复付款重放回同一结论,仍带 DUPLICATE_PAYMENT");
+        HttpResponse<String> ownReplay = call("POST", "/internal/payments", "payment", "payment-adapter", payment);
+        assertEquals(200, ownReplay.statusCode(), ownReplay.body());
+        assertEquals(paidOutcome, json.readTree(ownReplay.body()), "订单本身那笔的重放仍不带退款原因");
+        assertEquals(3, count("commerce_payment_receipt"));
+        assertEquals(2, count("commerce_refund_intent"), "重复付款排进退款,重放不再加一条");
+        assertEquals(1, count("commerce_delivery_intent"), "重复付款不发第二份交付");
+        assertEquals(2, stockValue("stock"), "重复付款不扣第二次库存");
         assertEquals(404, call("POST", "/api/orders/" + orderId + "/cancel", "gateway", BUYER, new byte[0]).statusCode());
         assertEquals(409, call("POST", "/api/orders/cancel", "gateway", BUYER, ownedQuery).statusCode());
 

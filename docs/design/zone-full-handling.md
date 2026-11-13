@@ -17,15 +17,15 @@
 
 | 环节 | 做法 | 位置 |
 |---|---|---|
-| 区容量的唯一来源 | 网关区服目录 `zone_config.capacity`（运维经 `PUT /admin/zones/<id>` 改）。login 不再有自己的容量配置 | §3 |
+| 区容量的唯一来源 | 网关区服目录 `zone_config.capacity`（运维经 `PUT /admin/zones/<id>` 改：先 GET 拿 ETag，PUT 带 If-Match，见 `java/README.md`）。login 不再有自己的容量配置 | §3 |
 | 区服策略传给 login | 本区网关把 `capacity` 与 `create_role_closed` 写到 etcd `/mmorpg/zone_policy/zone/<id>`，本区 login 每 2 秒读一次 | §3 |
 | 排队按 gate 承载封顶 | 实际区容量 = min(目录容量, 在接客的 gate 到 90% 水位一共能接的人数) | §4 |
 | 列表「爆满」 | 负载档的分母用同一个封顶后的容量 | §5 |
 | 推荐区 | 只推荐开放、能建角、不爆满的区；一个都不剩时推荐最空的开放区 | §5 |
-| 暂停创建新角色 | 运维开关 `create_role_closed`：已有角色照常进，login 拒绝 CreatePlayer；列表标「暂停创角」 | §6 |
+| 暂停创建新角色 | 开关 `create_role_closed`：已有角色照常进，login 拒绝 CreatePlayer；列表标「暂停创角」。运维手工开关，或设本区角色上限 `role_capacity`，到了由网关自动关上 | §6 |
 | 默认 gate 台数 | zone 清单与运维模板改为每区 3 台（3 × 18000 = 54000 ≥ 45000） | §7 |
 
-在线高峰由登录排队承担；「暂停创角」按本区角色总量由运维决定，不跟随某一时刻的在线人数自动开关（否则排队进来的新玩家会在建角时被拒，体验更差）。
+在线高峰由登录排队承担；「暂停创角」只跟本区角色总量走（运维手工，或按 `role_capacity` 自动），不跟随某一时刻的在线人数自动开关（否则排队进来的新玩家会在建角时被拒，体验更差）。
 
 ## 3. 区服策略：一个来源，经 etcd 发布
 
@@ -66,7 +66,21 @@
 - login 在 CreatePlayer 第 2 步（取到账号）之后、第 3 步（建角锁）之前判断，拒绝路径不碰任何存储：回 tip `kLoginZoneCreateRoleClosed`「该区服已暂停创建新角色，请选择其他区服」（`data/tip/Tip.xlsx` 登录段新行，码号由导表器分配）。
 - 只拦新建：账号在本区的已有角色照常登录进场；Login 角色列表、EnterGame 不受影响。
 - 客户端：区服列表副标题加「暂停创角」；建角被拒时显示上面的文案并回选服界面（`GameClient.CreatePlayerCo`）。
-- 什么时候开关：运维按本区角色总量判断（开新区导量时关老区）。本批不做按角色数自动开关：要一份按区的角色计数（`player_route` 归 data_service），等有运营需求再加，不影响这里的接口。
+- 排队之前的预判（2026-11-12）：账号在所选区有没有角色，原来要排完队、连上 gate 之后才知道，新玩家会白排一次队再在建角时被拒。现在网关 `/api/login` 的 `players[]` 每项带 `zone_id`（角色现在所在的区，login 已按归属映射解析；0 = 不知道），客户端在要 gate 之前判断：所选区 `create_role_closed`、且角色列表里没有一个在这个区（`zone_id` 等于所选区或为 0 都算有），就直接显示同一句文案回选服界面，不去排队（`GameClient.MustCreateRoleInClosedZone`）。只在确定没有时才拦：老网关不发 `zone_id`、区服列表过期时照常走完整流程，由 login 在 CreatePlayer 裁定。已经在队里时区服才被关上的新玩家拦不到，仍在建角时被拒。
+- 什么时候开关：按本区角色总量（开新区导量时关老区）。运维可以手工开关（`POST /admin/zones/<id>/create-role/close|open`），也可以给本区设角色上限，到了自动关，见下面「按角色上限自动关」。
+
+### 按角色上限自动关（2026-11-12）
+
+- 配置：`zone_config.role_capacity`，0 = 不设上限（缺省）。只经 `PUT /admin/zones/<id>/role-capacity`（Body `{"role_capacity": 30000}`）改，PUT 整行替换不碰它，新建区服取库缺省 0。
+- 角色数：本区一共建过多少角色，即 `player_route` 里归属落在本区的行数。按合服之后的最终区算（被合进来的源区一起数；问一个已被合走的区，按它的最终区回答，`placement.MergedZones.Members`），删角不减（删角只在账号目录写墓碑，路由行不删）。这是导量口径的「注册角色数」，不是活跃人数。
+- 链路：本区网关的 `RoleCapacityGuard` 每 10 秒（`role-capacity.check-interval-ms`）问本区 login `LoginPreGate.GetZoneRoleCount`，login 转问 data_service `CountZoneRoles`。data_service 在目录 K 片上各数一次再求和，走 `idx_route_home(home_zone, …)` 的索引范围，只读索引不回表；任一片失败整次报错，不回部分和。只问「设了上限、创角开关还开着」的区：没设上限不用问；开关关着就没有新角色，数不再涨，也没有要做的决定。所以问量只随正在导量的区的个数增长，关满的区不再有周期计数，与网关副本数、区的总数都无关。
+- 网关不直连 data_service：沿用已有的按区 login 通道（分区选路、保活、发现都现成），不新增网络边与部署配置；login 只把本区的数原样带回，问到别区回 InvalidArgument。
+- 关闭：角色数不低于上限、开关还开着时，比较并写 `UPDATE … SET create_role_closed = TRUE WHERE zone_id = ? AND role_capacity = <判断时读到的上限> AND role_capacity > 0 AND create_role_closed = FALSE`。运维在判断之后调了上限、置 0 或已手工关上，这次关闭一行都不改，下一拍按新值重判；同区几个网关副本同时判断，也只有一个生效。关上之后的生效路径与手工关完全相同（列表、推荐、login 拦截），网关记一条 WARN。
+- 只关不开，电平判断：角色数不低于上限时，手工打开会在下一拍被关回去。要放开，先调高上限或置 0，再 `/create-role/open`。
+- 问不到不关：login 或 data_service 不可用时只记这一区的 error（`gateway_role_capacity_check_total{outcome="error"}`），下一拍再问。问不到不等于满了，建角本身也要经过这两个服务。持续 10 分钟问不到由 `GatewayRoleCapacityCheckFailing` 告警（`deploy/k8s/gateway-zone-policy-alerts.yaml`）。
+- 软上限：到线之后，至多一个检查周期（10 秒）、一次策略发布（5 秒）与 login 读策略（2 秒）内建出的角色会超出，约 17 秒的建角量。硬上限要在建角事务里串行化一个按区计数行，一个区的建角吞吐被压成单行写，与水平扩展冲突；导量上限本来就是软目标，所以按软上限定。
+- 观测：`gateway_zone_role_count{zone}`、`gateway_zone_role_capacity{zone}`（只有问过的区有序列；开关关着时前者停在关上那一刻的读数，后者跟着区服目录走，上限置 0 后回 0）；data_service 侧 `data_service_route_read_total{path="zone_count"}`。
+- 没有区能建角：守卫会在无人值守时关上创角开关，最后一个能建角的区被关上之后，新玩家选哪个区都建不了角。每个网关副本导出 `gateway_zones_open`（区服列表里显示开放的区数）与 `gateway_zones_accepting_new_players`（其中没暂停创角的区数），口径与区服列表同源（`NewPlayerCapacityMetrics`）；有开放的区却没有一个能建角、持续 5 分钟，由 `GatewayNoZoneAcceptsNewCharacters`（critical）呼人：开放预备好的新区，或调高上限后再打开。全服维护（没有开放的区）不响；列表读不到时两个数是 NaN，也不响。不做「自动开下一个预告区」：开区要先有部署好的区服，是运营决定。
 
 ## 7. gate 台数
 
@@ -75,12 +89,15 @@
 ## 8. 迁移与兼容
 
 - 项目未上线，`zone_config` 加列不做在线迁移：已有的本机 / K8s `mmorpg` 库要重建，或手工执行
-  `ALTER TABLE zone_config ADD COLUMN create_role_closed BIT(1) NOT NULL DEFAULT 0 AFTER sort_order;`（网关 `ddl-auto: validate`，缺列拒启）。
+  `ALTER TABLE zone_config ADD COLUMN create_role_closed BIT(1) NOT NULL DEFAULT 0 AFTER sort_order;` 与
+  `ALTER TABLE zone_config ADD COLUMN role_capacity INT NOT NULL DEFAULT 0 AFTER create_role_closed;`（网关 `ddl-auto: validate`，缺列拒启）。
+- 角色上限的链路加了两个 RPC（login `LoginPreGate.GetZoneRoleCount`、data_service `CountZoneRoles`），都是新增方法。新网关配旧 login 时调用回 UNIMPLEMENTED，按「问不到」处理、不关；不设上限时根本不调。
 - login 删了 `Queue.ZoneCapacityOverride`，部署脚本不再渲染它。旧 ConfigMap 里残留这个键时 go-zero 忽略未知键，不影响启动。
 - 区服列表加字段、`recommended` 改为服务端计算，都是向后兼容的 JSON 变化。新 tip 码要 Codex 跑导表器（服务端与客户端生成物）。
+- `/api/login` 的 `players[]` 加 `zone_id`（2026-11-12）同样只加字段：老客户端忽略它，新客户端连老网关时读到 0、不做预判。
 
 ## 9. 残余与后续
 
 - 排队仍受合入门禁关着（`$script:LoginQueueMergeGateCleared = $false`）：排队关着时快速通道不判容量，§4 不起作用，gate 硬上限兜底。
-- 按角色总量自动暂停创角（§6 末）未做。
-- Java 版：区服目录、推荐、建角拦截、排队容量封顶都待做（Java 的排队在 game-gateway 里，容量本来就取区服目录；gate 还没有连接上限字段）。
+- 按角色上限自动暂停创角（§6）2026-11-12 落码，未编译、未测试。
+- Java 版：区服目录、推荐、建角拦截、排队容量封顶、按角色上限自动关都待做（Java 的排队在 game-gateway 里，容量本来就取区服目录；gate 还没有连接上限字段）。

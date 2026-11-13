@@ -23,10 +23,14 @@
 //   - Disconnect 抢在第 2 步之前:设备集留一个陈旧成员,它的登录态已不存在,下一次 PruneStaleFromDeviceSet 剔除;
 //   - Disconnect 的清理(Cleanup)同样是两步,SREM 之后 DEL 之前中断时登录态随 TTL 过期,连接已关闭,没有人会再用它。
 //
+// 寿命(Node.SessionExpireMin)只是「连接断了、Disconnect 又没送到」时的回收兜底。连接活着期间由 gate 定期续租(Renew,
+// docs/design/gate-online-identity.md §10.4),所以在线多久登录态就在多久,设备数上限按在线连接计。
+//
 // Operations:
 //
 //	RefOf:          从 gate 带来的 SessionDetails 取本连接的登录态身份。
 //	RegisterDevice: 登录提交的第 2 步。
+//	Renew:          gate 为活着的连接续租登录态、设备集成员与绑定栅栏。
 //	GetAccount:     读本连接的账号。
 //	Cleanup:        删本连接的登录态并移出设备集。
 package loginsession
@@ -102,6 +106,60 @@ func RegisterDevice(ctx context.Context, rdb redis.UniversalClient, account stri
 		return nil
 	})
 	return err
+}
+
+// renewTotal 按结果计 gate 代发的续租。result 只取 renewed / restored / gone / error。稳态下 error 与 restored 都应为 0:
+// restored 是登录态已经过期、这次按绑定记录里的账号副本重建的(续租曾连续失败超过登录态寿命)。
+// gone 对应离开游戏之后、断线清理之后迟到的续租,数量随玩家行为变化,不是故障。
+var renewTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "loginsession_renew_total",
+	Help: "Session renewals requested by gate for live connections, by result (renewed / restored / gone / error).",
+}, []string{"result"})
+
+// RenewAfter 返回 gate 下一次续租的间隔:寿命的三分之一,连续失败两次之后登录态仍在。
+// gate 不另配寿命,以 login 在 RenewSession 应答里给的这个值为准。
+func RenewAfter(ttl time.Duration) time.Duration {
+	return ttl / 3
+}
+
+// Renew 为仍然连着的连接续租它在 login 的按连接记录,由 gate 定期代发的 RenewSession 调用
+// (docs/design/gate-online-identity.md §10.4)。两步,原因与登录提交相同(登录态按连接分布、设备集按账号分布,不同槽):
+//
+//  1. sessionfence.Renew:连接没关才续登录态与绑定栅栏,检查与续期在同一段脚本里;登录态已经过期而连接还绑着角色时,
+//     按绑定记录里的账号副本重建登录态;
+//  2. 登录态在(含刚重建的)时 RegisterDevice:把本连接重新登记进设备集并续期。用 SADD 而不是只续期:成员万一丢了
+//     (设备集被清掉、或先于登录态到期)也在这里补回,在线的连接一定被计入设备数。
+//
+// 所以续租曾连续失败超过登录态寿命(login 或登录域 Redis 长时间不可用)时,恢复之后的第一次续租就把还在游戏里的连接
+// 重新计入设备数,不必等它重新登录。还没进游戏的连接没有绑定记录,登录态过期就是没有可续的。
+//
+// kept = false 表示这条连接已没有可续的记录(离开游戏之后、已按断线处理、记录已过期),什么都没写,gate 停止续租。
+// 两步之间被 Disconnect 抢先时设备集留一个陈旧成员,与登录提交的同类竞态一样,由下一次 PruneStaleFromDeviceSet 剔除。
+// 任何一步报错都返回 error:续租可以原样重试,gate 退避之后再发。
+func Renew(ctx context.Context, rdb redis.UniversalClient, ref Ref, ttl time.Duration) (kept bool, err error) {
+	renewal, err := sessionfence.Renew(ctx, rdb, ref.Fence(), ttl)
+	if err != nil {
+		renewTotal.WithLabelValues("error").Inc()
+		return false, err
+	}
+	if renewal.Account != "" {
+		if err := RegisterDevice(ctx, rdb, renewal.Account, ref, ttl); err != nil {
+			renewTotal.WithLabelValues("error").Inc()
+			return false, err
+		}
+	}
+	if !renewal.Kept {
+		renewTotal.WithLabelValues("gone").Inc()
+		return false, nil
+	}
+	if renewal.Restored {
+		// 走到这里说明这条连接的续租曾连续失败超过登录态寿命。逐条打:它只在故障恢复后出现,每条连接至多一次。
+		renewTotal.WithLabelValues("restored").Inc()
+		logx.Infof("Login session restored from the bound connection record after it expired: session=%s", ref.DeviceMember())
+		return true, nil
+	}
+	renewTotal.WithLabelValues("renewed").Inc()
+	return true, nil
 }
 
 // PruneStaleFromDeviceSet scans the per-account device set and removes any

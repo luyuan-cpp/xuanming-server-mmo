@@ -179,7 +179,7 @@ func testReconcilerDeps(view clusterView, clock *testClock) reconcilerDeps {
 	return reconcilerDeps{
 		view:     view,
 		now:      clock.Now,
-		newPacer: func(int) pacer { return noopPacer{} },
+		newPacer: func(float64) pacer { return noopPacer{} },
 		newTicker: func(time.Duration) (func(context.Context) error, func()) {
 			return func(ctx context.Context) error { return ctx.Err() }, func() {}
 		},
@@ -1609,9 +1609,9 @@ func TestRun_WaitsForRepairLoopBeforeReturning(t *testing.T) {
 // 两个限速器分开:转换限速给清扫,扫描限速给补建 / 审计;转换限速调低时每拍成员预算被截到半拍的量。
 func TestSeparatePacersAndBudget(t *testing.T) {
 	sc, mr := newTestSvcCtx(t)
-	var rates []int
+	var rates []float64
 	deps := testReconcilerDeps(newFakeClusterView(), newTestClock())
-	deps.newPacer = func(perSecond int) pacer {
+	deps.newPacer = func(perSecond float64) pacer {
 		rates = append(rates, perSecond)
 		return &intervalPacer{}
 	}
@@ -1622,7 +1622,7 @@ func TestSeparatePacersAndBudget(t *testing.T) {
 	s := newGateSweeper(sc, registrySlotsOwner{mr}, cfg, testReconcileInterval, deps)
 	r := newSessionReconciler(sc, cfg, testReconcileInterval, deps)
 
-	assert.Equal(t, []int{100, 7}, rates)
+	assert.Equal(t, []float64{100, 7}, rates)
 	assert.NotSame(t, s.transitionPacer, r.scanPacer)
 	assert.Equal(t, 3000, s.memberBudget, "100/s × 60s / 2")
 }

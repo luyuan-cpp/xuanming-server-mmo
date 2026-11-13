@@ -1,7 +1,7 @@
 # Prometheus alert rules for the mail service(邮件,go/mail)。
 #
 # 来源:docs/design/mail-system.md §4.7(告警)、§4.6(sweep 指标)、§12.2 偏差第 10 条(invalid_rows 计数器带 _total);
-#       2026-11-11 sweep 按 mail_id 分片、MailSweepStalled 改按副本判(docs/design/assetop-redelivery-sharding-20261110.md §14),
+#       2026-11-11 sweep 按邮件号分片、MailSweepStalled 改按副本判(docs/design/assetop-redelivery-sharding-20261110.md §14),
 #       截断告警 MailSystemListTruncated 删除(ListMails 已没有截断路径,docs/design/mail-system.md 文末 2026-11-11 节)。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 player-inbox-alerts.yaml / owner-epoch-alerts.yaml 同法:
@@ -12,7 +12,7 @@
 #     集群里要有 ServiceMonitor / PodMonitor(或按注解抓取的 job)指向它,否则本文件的规则一条都不会触发。
 #
 # 聚合口径:
-#   - sweep 按 mail_id 分 64 片,分给本 zone 注册的 stable 副本(与附件重投同一份成员表),每个副本只清自己的片;
+#   - sweep 按邮件号分 64 片,分给本 zone 注册的 stable 副本(与附件重投同一份成员表),每个副本只清自己的片;
 #     mail_sweep_last_run_unixtime 只在清理循环运行时有序列(canary 不跑清理,没有序列)→ MailSweepStalled 按副本逐条判,不聚合:
 #     一个副本卡住,它名下的片就没人清,别的副本还在推进,max() 看不出来;
 #   - 计数器每个副本各报一份 → sum(increase(...)) 跨副本求和(无效行抽样也按片分了,各副本样本不重叠);
@@ -39,10 +39,12 @@ spec:
     - name: mail.sweep
       interval: 60s
       rules:
-        # sweep 循环卡住:清理循环起来时写一次 mail_sweep_last_run_unixtime,之后每轮跑完(含失败、含 0 行、含 report_only)
-        # 写这一轮结束的时刻,循环退出时删掉序列。它在某个副本上长期不前进,只可能是那个副本的循环卡在某一轮里。
-        # 按副本判、不聚合:sweep 按 mail_id 分片之后,卡住的副本名下的片没人清,别的副本照常推进(设计
-        # docs/design/assetop-redelivery-sharding-20261110.md §14.3)。
+        # sweep 循环停住:清理循环起来时写一次 mail_sweep_last_run_unixtime,之后每一轮正常返回(含失败、含 0 行、含 report_only)
+        # 就写这一轮结束的时刻;panic 的那一轮被兜住、不写,循环接着跑(点位 mail.expired_sweep);循环有意停止时删掉序列。
+        # 它在某个副本上长期不前进,要么那个副本的循环卡在某一轮里,要么每一轮都 panic。
+        # 按副本判、不聚合:sweep 按邮件号分片之后,停住的副本名下的片没人清,别的副本照常推进(设计
+        # docs/design/assetop-redelivery-sharding-20261110.md §14.3;口径在 go/shared/looplive)。
+        # 只 panic 过一两轮、循环还在跑的情形由 go-background-alerts.yaml 的 GoBackgroundPanicRecovered 报。
         # 阈值 = 3 × Sweep.Interval。ConfigMap 里 Sweep.Interval 取自 go/mail/etc/mail.yaml(当前 5m = 300s);
         # 改 Interval 时同步改这里的 900(k8s_deploy_contract.tests.ps1 钉住两者)。首轮之前至多一个周期的随机抖动,由起来时那次写入盖住。
         # 后果:卡住副本名下那些片的过期邮件不再被物理删除,ListMails 每次要多扫这些行(§4.7)。
@@ -56,9 +58,9 @@ spec:
             summary: "mail 副本 {{ $labels.pod }} 的过期清理已超过 3 个周期没有跑完一轮"
             description: >-
               这个副本的 mail_sweep_last_run_unixtime 停在 {{ $value | printf "%.0f" }} 秒之前,它名下那些片的过期邮件没人清。
-              sweep 的单轮预算是 30 秒,一轮跑不完会在下一轮接着清,正常不会长期不前进 —— 长期不前进说明这个副本的清理循环卡住了
-              (一轮里 panic 会让进程退出,不会停在这里)。看这个副本的 goroutine 栈与 "[mail] bounded sweep failed" 日志,
-              再重启它或把它缩掉:它从 etcd 摘掉之后,它的片由别的副本接手。
+              sweep 的单轮预算是 30 秒,一轮跑不完会在下一轮接着清,正常不会长期不前进 —— 长期不前进说明这个副本的清理循环卡在某一轮里,
+              或者每一轮都 panic(看 safego_panic_total{point="mail.expired_sweep"} 与日志事件 goroutine_panic 的栈)。
+              再看这个副本的 goroutine 栈与 "[mail] bounded sweep failed" 日志,然后重启它或把它缩掉:它从 etcd 摘掉之后,它的片由别的副本接手。
 
         # expire_ms = 0 的行:发件校验要求 expire_ms > sent_ms,出现这种行只能是有人绕过发件路径直接写库。
         # sweep 对它们只计数不删(fail-closed),不处理就会永远留着。

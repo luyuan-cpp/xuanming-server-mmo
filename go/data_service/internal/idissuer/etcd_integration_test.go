@@ -199,15 +199,18 @@ func TestEtcdIntegration_StoreContract(t *testing.T) {
 	if err != nil || empty.Exists || empty.ClusterID == 0 {
 		t.Fatalf("empty record: %+v %v", empty, err)
 	}
-	if ok, err := store.CompareAndSwap(ctx, empty, 1<<62, testAuthority); err != nil || !ok {
+	if ok, err := store.CompareAndSwap(ctx, empty, 1<<62, testAuthority, "k8s:contract"); err != nil || !ok {
 		t.Fatalf("create: %v %v", ok, err)
 	}
-	if ok, err := store.CompareAndSwap(ctx, empty, 7, testAuthority); err != nil || ok {
+	if ok, err := store.CompareAndSwap(ctx, empty, 7, testAuthority, "k8s:contract"); err != nil || ok {
 		t.Fatalf("a second create from the same stale view must lose: %v %v", ok, err)
 	}
 	rec, err := store.Read(ctx)
-	if err != nil || rec.Value != 1<<62 || rec.Authority != testAuthority {
+	if err != nil || rec.Value != 1<<62 || rec.Authority != testAuthority || rec.Deployment != "k8s:contract" {
 		t.Fatalf("read back: %+v %v", rec, err)
+	}
+	if _, err := store.CompareAndSwap(ctx, rec, 1<<62+1, testAuthority, "Not A Valid Identity"); err == nil {
+		t.Fatal("a malformed deployment identity must not be written")
 	}
 	env.put(env.primary, root+"contract/record", []byte("12345"))
 	if _, err := store.Read(ctx); err == nil {
@@ -222,6 +225,13 @@ func TestEtcdIntegration_StoreContract(t *testing.T) {
 	claim := Claim{State: ClaimActive, Authority: testAuthority, Deployment: "k8s:contract", PrimaryCluster: 1, SecondaryCluster: 2, HighWater: 1}
 	if _, err := registry.ClaimNew(ctx, 3, claim); !errors.Is(err, ErrRegistryNotOpened) {
 		t.Fatalf("claim before open: %v", err)
+	}
+	// 没有指针时补墓碑没有东西可以对照:拒绝,什么都不写。
+	if ok, err := registry.CompareAndSwap(ctx, 4, ClaimRecord{}, Claim{State: ClaimRetired}); ok || !errors.Is(err, ErrRegistryNotOpened) {
+		t.Fatalf("tombstone without a pointer: ok=%v err=%v, want ErrRegistryNotOpened", ok, err)
+	}
+	if got, err := registry.Read(ctx, 4); err != nil || got.Exists {
+		t.Fatalf("the refused tombstone must not be written: %+v %v", got, err)
 	}
 	if opened, err := registry.Open(ctx, 3); err != nil || !opened {
 		t.Fatalf("open: %v %v", opened, err)
@@ -242,6 +252,24 @@ func TestEtcdIntegration_StoreContract(t *testing.T) {
 	if _, err := registry.ClaimNew(ctx, 3, claim); !errors.Is(err, ErrRegionClaimed) {
 		t.Fatalf("claim 3 twice: %v", err)
 	}
+	// 补记录守住「有记录的码都小于下一个可认领的码」(这时是 4):墓碑大于它拒绝;恰好等于它就跳过;
+	// 在用的码重新登记到它之上,把它推到自己后面;小于它的直接写。
+	tombstone := Claim{State: ClaimRetired}
+	if _, err := registry.CompareAndSwap(ctx, 9, ClaimRecord{}, tombstone); !errors.Is(err, ErrRegionOutOfOrder) {
+		t.Fatalf("tombstone above next: %v", err)
+	}
+	if ok, err := registry.CompareAndSwap(ctx, 4, ClaimRecord{}, tombstone); err != nil || !ok {
+		t.Fatalf("tombstone at next: %v %v", ok, err)
+	}
+	if ok, err := registry.CompareAndSwap(ctx, 7, ClaimRecord{}, claim); err != nil || !ok {
+		t.Fatalf("re-register above next: %v %v", ok, err)
+	}
+	if p, err := registry.readPointer(ctx); err != nil || !p.declared || p.rebuilding || p.next != 8 {
+		t.Fatalf("pointer %+v (err=%v), want 8 and opened", p, err)
+	}
+	if ok, err := registry.CompareAndSwap(ctx, 2, ClaimRecord{}, tombstone); err != nil || !ok {
+		t.Fatalf("tombstone below next: %v %v", ok, err)
+	}
 	got, err := registry.Read(ctx, 3)
 	if err != nil || !got.Exists || got.Claim != claim || got.ClusterID == 0 {
 		t.Fatalf("read claim: %+v %v", got, err)
@@ -249,6 +277,71 @@ func TestEtcdIntegration_StoreContract(t *testing.T) {
 	env.put(env.registry, root+"contract/registry/region/03", []byte(`{"state":"active"}`))
 	if _, err := registry.Read(ctx, 3); err == nil {
 		t.Fatal("a claim without authority must be reported as corrupt")
+	}
+}
+
+// 重建契约:有地域记录却没有指针的登记处不能直接开启;声明重建之后补记录按指针核对、推指针时仍在重建中、不开放认领;
+// 结束重建要对上登记处里的值。
+func TestEtcdIntegration_RebuildContract(t *testing.T) {
+	root := itRoot(t)
+	env := newItEnv(t, root, itEndpoints(t, "MMORPG_ID_ISSUER_IT_PRIMARY"), itEndpoints(t, "MMORPG_ID_ISSUER_IT_SECONDARY"), itEndpoints(t, "MMORPG_ID_ISSUER_IT_REGISTRY"))
+	ctx := context.Background()
+	registry, err := newEtcdRegistryAt(env.registry, root+"rebuild/registry/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer registry.Close()
+	active := Claim{State: ClaimActive, Authority: testAuthority, Deployment: "k8s:contract", PrimaryCluster: 1, SecondaryCluster: 2, HighWater: 1}
+	tombstone := Claim{State: ClaimRetired}
+
+	// 在用的地域先于声明重建重新登记:可以。之后直接开启被拒,声明不能低于它。
+	if ok, err := registry.CompareAndSwap(ctx, 2, ClaimRecord{}, active); err != nil || !ok {
+		t.Fatalf("re-register before the declaration: %v %v", ok, err)
+	}
+	if opened, err := registry.Open(ctx, 3); opened || !errors.Is(err, ErrRegistryNeedsRebuild) {
+		t.Fatalf("open a registry that lost its data: opened=%v err=%v, want ErrRegistryNeedsRebuild", opened, err)
+	}
+	if declared, err := registry.BeginRebuild(ctx, 2); declared || !errors.Is(err, ErrRegionClaimed) {
+		t.Fatalf("declare at a registered code: declared=%v err=%v, want ErrRegionClaimed", declared, err)
+	}
+	if declared, err := registry.BeginRebuild(ctx, 5); err != nil || !declared {
+		t.Fatalf("declare: %v %v", declared, err)
+	}
+	if declared, err := registry.BeginRebuild(ctx, 9); err != nil || declared {
+		t.Fatalf("a second declaration must do nothing: %v %v", declared, err)
+	}
+	if _, err := registry.ClaimNew(ctx, 5, active); !errors.Is(err, ErrRegistryRebuilding) {
+		t.Fatalf("claim while rebuilding: %v", err)
+	}
+	if ok, err := registry.CompareAndSwap(ctx, 4, ClaimRecord{}, tombstone); err != nil || !ok {
+		t.Fatalf("tombstone below the pointer: %v %v", ok, err)
+	}
+	if _, err := registry.CompareAndSwap(ctx, 40, ClaimRecord{}, tombstone); !errors.Is(err, ErrRegionOutOfOrder) {
+		t.Fatalf("tombstone above the pointer: %v", err)
+	}
+	if ok, err := registry.CompareAndSwap(ctx, 5, ClaimRecord{}, tombstone); err != nil || !ok {
+		t.Fatalf("skip the pointer: %v %v", ok, err)
+	}
+	if ok, err := registry.CompareAndSwap(ctx, 8, ClaimRecord{}, active); err != nil || !ok {
+		t.Fatalf("re-register above the pointer: %v %v", ok, err)
+	}
+	if p, err := registry.readPointer(ctx); err != nil || !p.declared || !p.rebuilding || p.next != 9 {
+		t.Fatalf("pointer %+v (err=%v), want 9 and still rebuilding", p, err)
+	}
+	if opened, err := registry.Open(ctx, 5); opened || !errors.Is(err, ErrNextRegionMismatch) {
+		t.Fatalf("finish with a stale value: opened=%v err=%v, want ErrNextRegionMismatch", opened, err)
+	}
+	if opened, err := registry.Open(ctx, 9); err != nil || !opened {
+		t.Fatalf("finish the rebuild: %v %v", opened, err)
+	}
+	if opened, err := registry.Open(ctx, 9); err != nil || opened {
+		t.Fatalf("a second open must do nothing: %v %v", opened, err)
+	}
+	if ok, err := registry.ClaimNew(ctx, 9, active); err != nil || !ok {
+		t.Fatalf("claim the next code after the rebuild: %v %v", ok, err)
+	}
+	if p, err := registry.readPointer(ctx); err != nil || !p.declared || p.rebuilding || p.next != 10 {
+		t.Fatalf("pointer %+v (err=%v), want 10 and opened", p, err)
 	}
 }
 

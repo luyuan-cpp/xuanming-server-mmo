@@ -151,7 +151,7 @@ func newCreatePlayerHarnessWithNames(t *testing.T, resolver *homezone.Resolver, 
 	}
 
 	l := NewCreatePlayerLogic(ctx, &svc.ServiceContext{
-		RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
+		ControlRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
 		PlayerIDMinter: &idsegment.Minter{Name: "player_id", Segment: &fakeSegment{id: hzPlayerID}},
 		HomeZone:       resolver,
 		PlayerNames:    playernamereg.New(names),

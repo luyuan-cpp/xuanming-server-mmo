@@ -1,7 +1,7 @@
 // Package secretenv 把配置里「指名环境变量」的密钥填进配置字段。
 //
 // K8s 上密钥只放 Secret,经 secretKeyRef 注入容器环境变量(tools/scripts/k8s_deploy.ps1)。ConfigMap 里密钥字段写空串,另有一个键写变量的名字
-// (如 MySQLPasswordEnv: MMORPG_MYSQL_PASSWORD)。服务加载配置之后调 Fill,把变量的值填进对应字段;之后建连接、校验读到的都是填好的值。
+// (如 scene-manager 的 GateTokenSecretEnv: MMORPG_GATE_TOKEN_SECRET)。服务加载配置之后调 Fill,把变量的值填进对应字段;之后建连接、校验读到的都是填好的值。
 // 规则与取舍见 docs/design/workload-secrets-via-k8s-secret.md。共享 Redis 口令经 shared/redisauth 走同一条规则。
 //
 // 两个取舍:
@@ -15,14 +15,14 @@ import (
 	"fmt"
 )
 
-// Target 是一个要填密钥的配置字段。Field 是它在配置文件里的键路径(如 "MySQL.Password"),只用于报错。
+// Target 是一个要填密钥的配置字段。Field 是它在配置文件里的键路径(如 "GateTokenSecret"),只用于报错。
 type Target struct {
 	Field string
 	Value *string
 }
 
 // Fill 在 envName 非空时,把环境变量 envName 的值写进每个 target。envKey 是配置里写变量名的那个键的路径
-// (如 "MySQLPasswordEnv"),只用于报错。
+// (如 "GateTokenSecretEnv"),只用于报错。
 //   - envName 为空:什么都不做,各字段照用配置里的字面量(本机 etc/*.yaml 的情形)。
 //   - 环境变量缺席或为空串:返回错误。配置写明密钥在这个变量里、变量却没有值,带着空密钥起来只会把错误推迟到第一次连接或验签,
 //     不如启动即失败。K8s 上 secretKeyRef 不写 optional,Secret 缺失时 Pod 根本起不来;走到这里的是绕过部署脚本的情形。

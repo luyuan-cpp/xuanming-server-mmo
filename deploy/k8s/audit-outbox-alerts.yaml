@@ -1,0 +1,190 @@
+# 审计发件箱的告警(docs/design/player-audit-outbox.md §5.6、§9;断线重连 R13)。
+#
+# 链路:scene 把流水与快照请求随存盘交给 go/db,go/db 在提交存档的同一个 TiDB 事务里写进存档库的 player_audit_outbox,
+# 转发循环(go/db/internal/auditoutbox)投到两个审计 topic、broker 全副本确认之后删除,data_service 消费落库。
+# 「发件箱里有这条」等于「它描述的改动已提交」,所以这里的积压不会丢数据;代价是流水库落后:GM 回收按流水汇总应扣金额,
+# 积压期间发起的回收会少算这段时间的改动(人工终结工具以已提交账本为证据,不受影响)。真正丢数据的只有两种:
+# go/db 跳过的坏记录(AuditOutboxRecordsSkipped)与 scene 一侧丢掉的记录(scene.audit-outbox 组)。
+#
+# 安装方式与 player-store-alerts.yaml 相同:
+#   kubectl apply -n observability -f deploy/k8s/audit-outbox-alerts.yaml
+# 抓取前提:
+#   - go/db 的指标端口 9160(manifests/go-svc/db.yaml 的 prometheus.io/port 注解,本地惯例同值,AGENTS.md §6.1);
+#   - scene.audit-outbox 组另需 scene 的 Prometheus 出口(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400);
+#   - 指向这些端口的 ServiceMonitor 或 PodMonitor。
+#
+# 口径:
+#   - 转发按 (存档库, 片) 分给本地域全部 stable go/db(跨 zone),所以 go/db 的转发类规则在全集群上聚合,不按 namespace 分;
+#     活性规则按副本逐条判,不聚合(一个副本停住时别的副本照常推进,聚合会把它盖住)。
+#   - db_audit_outbox_oldest_pending_age_seconds 是各副本最近一轮在自己负责的单位里看到的最老未投记录的年龄,健康时一拍(1 秒)之内;
+#     没起转发的副本恒报 0,所以转发全停时年龄规则看不见,由 AuditOutboxRelayDisabled 与 AuditOutboxUnitsUnowned 补上。
+#   - 阈值已定(2026-11-12),压测出基线后可调;依据写在各条规则上面。
+#   - 审计 topic 换代时用 k8s_deploy.ps1 -AuditOutboxRelay paused 暂停转发(docs/ops/audit-topic-generation-bump-runbook.md §2.2),
+#     暂停期间年龄类规则与 AuditOutboxRelayDisabled 会响:按手册先在 Alertmanager 静默这几条,恢复转发之后解除。
+#   - 告警名与引用的指标名由 tools/scripts/tests/audit_outbox_alerts_contract.tests.ps1 对照 Go / C++ 源码核对。
+#     本文件里以 db 加下划线或 scene 加下划线开头的词都会被当成指标名核对,注释里不要写这种形状的文件名或表名。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: audit-outbox-alerts
+  labels:
+    app: db
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: db.audit-outbox
+      interval: 30s
+      rules:
+        # 5 分钟:健康时最老未投记录一拍之内就投出去,5 分钟意味着 Kafka 或存档库已经持续不可用了好几轮退避(退避上限 30 秒);
+        # for 5m 滤掉 broker 滚动重启这类几分钟内自愈的抖动。
+        - alert: AuditOutboxForwardingLagging
+          expr: |
+            max by (kind) (db_audit_outbox_oldest_pending_age_seconds) > 300
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "审计发件箱的 {{ $labels.kind }} 积压超过 5 分钟"
+            description: >-
+              最老一条还没投到 Kafka 的 {{ $labels.kind }} 已经等了 {{ $value | printf "%.0f" }} 秒。数据在存档库的发件箱里,不丢;
+              这段时间流水库落后,GM 回收(按流水汇总应扣金额)会少算积压的这段改动,先别发起回收。按 stage 看 db_audit_outbox_relay_errors_total:
+              produce 在涨查 Kafka(broker、topic 是否预建、acks=all 的副本数);read / delete 在涨查存档库(连接池、写者闸门冻结);
+              都不涨而年龄在涨是个别行一直投不出去(go/db 日志 `[audit_outbox] Relay produce failed`,行太大或被 broker 拒收)。
+              正在按换代手册暂停转发(-AuditOutboxRelay paused)时这条是预期的。
+            runbook_url: docs/design/player-audit-outbox.md
+
+        # 30 分钟:积压已经长到值班要介入的程度。不丢数据,但流水库落后半小时以上,这段时间里的 GM 回收会少扣,
+        # 存档库里的发件箱也在长(快照一行可到几百 KB)。for 5m 与上一条同口径。
+        - alert: AuditOutboxForwardingStalled
+          expr: |
+            max by (kind) (db_audit_outbox_oldest_pending_age_seconds) > 1800
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "审计发件箱的 {{ $labels.kind }} 积压超过 30 分钟"
+            description: >-
+              最老一条还没投出的 {{ $labels.kind }} 已经等了 {{ $value | printf "%.0f" }} 秒。数据仍在存档库的发件箱里、不丢,
+              恢复之后按写入时间顺序排空;在排空之前不要发起 GM 回收(它按流水汇总应扣金额,会少扣这段时间的改动)。先按 AuditOutboxForwardingLagging
+              的步骤找卡在哪一步(Kafka / 存档库 / 个别行),再看存档库里发件箱的大小。暂停转发期间这条同样是预期的,按手册静默。
+            runbook_url: docs/design/player-audit-outbox.md
+
+        # 跳过 = 存档照常提交、这一条审计记录没写进发件箱(设计 §6.3),健康时恒 0,出现就报。
+        # 计数在提交之后才记(结果未知的重试不会重复计)。
+        - alert: AuditOutboxRecordsSkipped
+          expr: |
+            sum by (namespace, reason) (increase(db_audit_outbox_records_skipped_total[10m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 go/db 跳过了审计记录({{ $labels.reason }})"
+            description: >-
+              过去 10 分钟 {{ $value | printf "%.0f" }} 条。存档照常提交了,这几条流水 / 快照没写进发件箱,不会再补。
+              invalid = scene 交来的记录号为 0 或玩家号对不上(scene 的 bug);unknown_row_kind = 这名玩家有本 go/db 不认识的行(go/db 比 scene 旧,
+              或有退役行残留),快照拼不全;too_large = 快照超过 4 MiB 或流水超过 64 KiB;undecodable = 行拼接后解不开(行被写坏)。
+              go/db 日志 `[audit_outbox] ... skipped` 点名了玩家与记录号。
+            runbook_url: docs/design/player-audit-outbox.md
+
+        # 全部副本都没在转发:没有一条记录被投出,年龄规则也看不见(没起转发的副本恒报 0)。
+        # 10 分钟:滚动发布时新旧副本交替,单个副本的 0 只持续几十秒;canary 恒为 0,但 stable 副本在转发时 max 是 1。
+        - alert: AuditOutboxRelayDisabled
+          expr: |
+            max(db_audit_outbox_relay_enabled) == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "没有任何 go/db 副本在转发审计发件箱"
+            description: >-
+              全部 go/db 副本的 db_audit_outbox_relay_enabled 都是 0,已持续 10 分钟。流水与快照照常随存盘写进发件箱、不丢,但一条都没有投出去,
+              流水库里看不到这段时间的任何改动,GM 回收会少扣。go/db 启动日志写明了原因:`AuditOutbox.Brokers is empty`(db 的 ConfigMap 没写 Kafka 地址;
+              换代手册的暂停转发就是这样,恢复见手册 §2.7)、`Invalid release track`、`Audit outbox relay not started`(配置不合法)。
+              修好配置之后 rollout restart statefulset/db。
+            runbook_url: docs/design/player-audit-outbox.md
+
+        # 有单位没人负责:某个 stable 副本登记在成员表里、分到了单位,却没在转发(那一个 zone 的 db ConfigMap 没写 Kafka 地址、
+        # 版本太旧),或者各副本看到的成员表不一致。这些单位的积压年龄没人上报,年龄规则看不见。for 5m 滤掉滚动发布时成员表变化的那几拍。
+        - alert: AuditOutboxUnitsUnowned
+          expr: |
+            sum(db_audit_outbox_relay_owned_units) < max(db_audit_outbox_relay_units)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "审计发件箱有转发单位没有副本负责"
+            description: >-
+              各 go/db 副本负责的 (存档库, 片) 单位数加起来只有 {{ $value | printf "%.0f" }} 个,少于单位总数 db_audit_outbox_relay_units,已持续 5 分钟。
+              缺的那几片的流水与快照只积不投(不丢),积压年龄也没人上报。按 pod 展开 db_audit_outbox_relay_owned_units 与
+              db_audit_outbox_relay_enabled:relay_enabled 为 0 的 stable 副本就是没在转发的那个,看它的启动日志与 db ConfigMap 的 AuditOutbox.Brokers;
+              都在转发而数对不上,对比各副本日志里的成员表(etcd 前缀 PlayerStoreNodeService.rpc/zone/)。
+            runbook_url: docs/design/player-audit-outbox.md
+
+    # 转发循环的活性(口径在 go/shared/looplive,与 match.outcome-outbox-liveness 相同)。循环停住的副本还登记在成员表里、
+    # 占着自己那些单位,别的副本不会接手;它名下的积压年龄也不再更新。按副本逐条判、不聚合。
+    # 阈值:两次写时刻之间最长 = 一轮最长(passBudget 30 秒 + 在途的一批与这个单位的探测、取锁、放锁约 35 秒)+ 两轮之间最长的等待
+    # (退避上限 30 秒、AuditOutbox.IntervalMs 上限 30 秒,取大者)≈ 95 秒;取约 5 倍 = 600 秒。常量在 go/db/internal/auditoutbox/relay.go、
+    # sql.go 与 go/db/internal/config/audit_outbox.go,契约测试按它们核这个倍数。一轮 panic 不写时刻,每一轮都 panic 时时刻不前进,
+    # 由这条报出;只 panic 过一两轮由 go-background-alerts.yaml 的 GoBackgroundPanicRecovered 报(点位 db.audit_outbox_relay)。
+    - name: db.audit-outbox-liveness
+      interval: 30s
+      rules:
+        - alert: AuditOutboxRelayLoopStalled
+          expr: |
+            time() - db_audit_outbox_relay_last_run_unixtime > 600
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "go/db 副本 {{ $labels.pod }} 的审计发件箱转发循环卡住了"
+            description: >-
+              这个副本的转发循环已经 {{ $value | printf "%.0f" }} 秒没有跑完一轮(正常一轮不超过约 65 秒)。它名下那些单位的流水与快照
+              只积不投(不丢),积压年龄也停在旧值。循环要么卡在某一轮里(看这个副本的 goroutine 栈),要么每一轮都 panic
+              (看 safego_panic_total{point="db.audit_outbox_relay"} 与日志事件 goroutine_panic 的栈);随后重启这个副本,
+              它从 etcd 摘掉之后它的单位由别的副本接手。
+            runbook_url: docs/design/player-audit-outbox.md
+
+    # scene 一侧丢掉的审计记录(设计 §5.6)。指标由 scene 的 Prometheus 出口导出(cpp/libs/services/scene/player/system/player_save_metrics.cpp,
+    # 计数在 cpp/libs/modules/audit/audit_outbox_stats.h,启动即以 0 导出,increase 抓得到第一次)。
+    # 审计不挡游戏:每丢一条,它描述的货币、物品改动照常生效、照常随存盘提交,所以每一次都是「已提交的改动少了一条流水 / 快照」,健康时恒 0。
+    - name: scene.audit-outbox
+      interval: 30s
+      rules:
+        - alert: SceneAuditRecordsDropped
+          expr: |
+            sum by (namespace, reason) (increase(scene_audit_outbox_records_dropped_total[10m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene 丢了审计记录({{ $labels.reason }})"
+            description: >-
+              过去 10 分钟 {{ $value | printf "%.0f" }} 条。这些流水 / 快照描述的改动照常提交了,记录本身不会再补。scene 日志里同一时刻有一行 ERROR,
+              点名了玩家与关联号:overflow = 一名玩家的存盘很久没提交、排着的记录到了内存上限(metric=audit_outbox_overflow,同时看 DbPlayerStoreCommitFailures);
+              too_large = 单条超过 64 KiB(metric=audit_outbox_record_too_large,调用方往 extra 里塞了大段内容);no_single_owner = 流水没有恰好一名玩家
+              (metric=txlog_refused_no_single_owner,调用方的 bug);outbox_disabled = 这个进程没开审计发件箱却在记流水或请求快照;
+              no_id = txlog / snapshot 号段没号(metric=txlog_refused_no_id / snapshot_refused_no_id,查 data_service 的号段续段)。
+            runbook_url: docs/design/player-audit-outbox.md
+
+        # 混版本:带了审计记录的存盘提交了,go/db 却没写发件箱(go/db 比 scene 旧,不认识审计字段)。记录没丢,留在队列里随下一笔再交;
+        # 一直不升级 go/db,队列到上限之后才开始按 overflow 丢。发布次序是先 go/db、再 scene(设计 §10),出现就报。
+        - alert: SceneAuditStoreTooOld
+          expr: |
+            sum by (namespace) (increase(scene_audit_outbox_store_too_old_total[10m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 go/db 比 scene 旧,不写审计发件箱"
+            description: >-
+              过去 10 分钟 {{ $value | printf "%.0f" }} 笔带审计记录的存盘提交了,go/db 却没有写发件箱(scene 日志 metric=audit_outbox_store_too_old)。
+              记录还在 scene 的队列里,随下一笔存盘再交,暂时不丢;尽快把这个 zone 的 go/db 升到不低于 scene 的版本。
+              拖到 SceneAuditRecordsDropped 出现 overflow 时就开始丢了。
+            runbook_url: docs/design/player-audit-outbox.md

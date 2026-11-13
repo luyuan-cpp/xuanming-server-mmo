@@ -29,6 +29,11 @@
 //	                                  (后缀逐字节不变,同一 Lua 原子步骤,EX 同为 HandoffTTL)。
 //	                                  scene_manager 仍然从不删除这个键;放行之后它自然过时,
 //	                                  靠 TTL 回收。
+//	player:{player_id}:holder_lease  持有进程的实例号,PX 15000。持有进程只在自己的节点身份不确认期间续
+//	                                  (每 3 秒一次);scene_manager 只读:判死接管与判死释放之前看它,
+//	                                  键还在就不按判死处理。见 HolderLeaseKey。
+//	player:{player_id}:owner_epoch_confirmed  已确认落盘的 epoch(十进制),EX 7 天。只有 scene_manager 读写,
+//	                                  C++ 不碰。不铸造就下发 epoch 之前必须等于要下发的值,见 ConfirmedKey。
 //
 // 回滚回执(player:{id}:location 里的 PlayerLocation.rollback_receipt,scene_manager 写、C++ 源 scene 读)有两种形态
 // (zone-redis-regression-guard-20261022.md §4.3.4 两段回执):
@@ -69,6 +74,37 @@ func OwnerEpochKey(playerID uint64) string {
 // 两个键只差后缀。C++ player_ownership::HandoffRedisKey 与它逐字一致。
 func HandoffKey(playerID uint64) string {
 	return "player:" + redisslot.PlayerTag(playerID) + ":handoff"
+}
+
+// HolderLeaseTTL 是持有者存活租约的存活时间。写的一方是 C++ 持有进程(PX,player_ownership::kHolderLeaseTtlMs),
+// 每 3 秒续一次;两边改值必须同拍。它要比 scene_manager 的再入屏障(缺省 20 秒)短:进程真死了,租约先于屏障过期,
+// 不给死节点的接管加延迟。
+const HolderLeaseTTL = 15 * time.Second
+
+// HolderLeaseKey 返回 player:{<id>}:holder_lease:持有者存活租约,字符串,值是持有进程的实例号(NodeInfo.node_uuid)。
+//
+// 持有进程只在自己的节点身份不确认期间(etcd keepalive 迟到、重注册中、紧急疏散中)给内存里的每名玩家续这个键;
+// scene_manager 在「持有节点已从 etcd 消失」这类判死接管与判死释放之前读它,键还在就说明持有进程活着、实体还在它内存里,
+// 不按判死处理(scene_manager internal/logic/holder_lease.go)。身份确认时不写:那时节点在 etcd 在册,判死的前提不成立。
+// 它只是协调用途,存档的围栏仍是 TiDB 的写权行。C++ player_ownership::HolderLeaseRedisKey 与它逐字一致。
+func HolderLeaseKey(playerID uint64) string {
+	return "player:" + redisslot.PlayerTag(playerID) + ":holder_lease"
+}
+
+// ConfirmedTTL 是已确认位点的存活时间。位点过期只会让下一次不铸造的下发多确认一次(缺失 = 没确认),不影响正确性;
+// 给它 TTL 是为了不给每名玩家永久多留一把键。只有 scene_manager 用。
+const ConfirmedTTL = 7 * 24 * time.Hour
+
+// ConfirmedKey 返回 player:{<id>}:owner_epoch_confirmed:已确认落盘的归属 epoch(规范十进制串)。
+//
+// owner_epoch 是写进 Redis 内存的值,这把键是其中已经确认落盘的那个值(zone-redis-regression-guard-20261022.md §4.3.5)。
+// scene_manager 拿到 WAITAOF 的确认之后把那个值写进来(铸造之后,或回滚之后的落盘确认之后);不铸造就要把观察到的 epoch
+// 交给节点之前(同落点重连、同物理节点换图、dev 旁路),这把键必须恰好等于要下发的值,否则先确认落盘再下发。
+//
+// 缺失、过期、值对不上都按「没确认」处理:它丢了只会多确认一次,不会放过没确认的值。所以写它不等落盘,也不做 CAS。
+// 只有 scene_manager 读写;C++ 不读不写,持有节点手里的 epoch 只来自路由事件。
+func ConfirmedKey(playerID uint64) string {
+	return "player:" + redisslot.PlayerTag(playerID) + ":owner_epoch_confirmed"
 }
 
 // ErrMalformedHandoff 表示 handoff 标记的值不是 "{epoch}:{saved_at_ms}"。

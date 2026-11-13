@@ -173,8 +173,9 @@ run even once. On kind, `grafana/alloy:v1.10.0` must be loaded into the node fir
 sidecar out, redeploy with `-NoCppLogSidecar`: that removes only the sidecar container, its two
 volumes (`cpp-log-sidecar-config` / `cpp-log-sidecar-state`) and the pod-template annotation
 `mmorpg.io/cpp-log-sidecar-config-hash` (plus the `container: <pool-name>` line on the scene Agones
-Fleet). The in-container log cleanup loop, the `node-logs` `sizeLimit: 2Gi` and the 64Mi
-`snowflake-cache` volume are rendered **unconditionally** and stay exactly as they are.
+Fleet). The in-container log cleanup loop and the `node-logs` `sizeLimit: 2Gi` are rendered
+**unconditionally** and stay exactly as they are. (C++ pods no longer carry a `snowflake-cache`
+volume since 2026-11-12: the C++ snowflake slot client is gone.)
 
 > Status (2026-09-19): this shape is **committed and passed an end-to-end run in a temporary
 > namespace on a local kind cluster** (fake C++ node writing muduo-format lines + real Loki), but it

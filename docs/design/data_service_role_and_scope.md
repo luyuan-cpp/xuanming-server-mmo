@@ -16,7 +16,7 @@
 
 ## 与 Login 的关系
 
-Login 已经依赖 data_service：建角前领取 PlayerId 号段、登记角色名与归属，角色列表和进场时查询权威 home_zone。`go/login/internal/svc/servicecontext.go` 装配共用的 `DataServiceClient`；`player_id_minter.go`、`home_zone.go` 与 `playernamereg` 分别封装调用。缺少归属/名字客户端会拒绝建角；号段失败按发号配置处理，默认禁止回退 Snowflake。
+Login 已经依赖 data_service：建角前领取 PlayerId 号段、登记角色名与归属，角色列表和进场时查询权威 home_zone。`go/login/internal/svc/servicecontext.go` 装配共用的 `DataServiceClient`；`player_id_minter.go`、`home_zone.go` 与 `playernamereg` 分别封装调用。缺少归属/名字客户端会拒绝建角；号段失败即建角失败，没有 Snowflake 回退。
 
 玩家 blob 走另一条链：EnterGame 先检查 Redis 父键，缺失时通过 Kafka 发 DBTask 读取子表，由 TaskResultDispatcher 的 Pub/Sub 回调拼装父键。EnterGame 的成功应答只表示已受理，真正进场由后续 Scene 通知确认。`sync_loader.go` 中的同步辅助路径不代表当前 EnterGame 在等待 BLPOP。目录与发号依赖的故障语义、预算及数据读路径应分别排查。
 
@@ -76,7 +76,7 @@ sarama 只读探针按 broker 视角报消费组 lag(全部分区合计与单分
 关停顺序:`main` 先 cancel 消费者 ctx、有界等它们退出(8s,`kafkaShutdownGrace`),**之后**才 `svcCtx.Close()` 关连接池。反过来的话 txlog 的 `flushOnShutdown` 只会拿到一个已经关掉的池,那段"关停前尽力落最后一批"等于从来没写过。等超时就照常关池:未提交的 offset 会在下次启动时重放,`tx_id` 主键与 `snapshot_guid` 去重让重放幂等。
 
 #### topic 名带代号(`Kafka.TopicGeneration`,默认 1)
-有效名 = `<基名>_g<TopicGeneration>`,当前即 `transaction_log_topic_g1` / `player_snapshot_topic_g1`。C++ 生产者已由部署配置 `AuditTopicGeneration` 拼接代号，入口见 `cpp/libs/modules/transaction_log/transaction_log_system.h`、`cpp/libs/modules/snapshot/snapshot_system.h`；必须与 Go 的 `Kafka.TopicGeneration` 同步，不能再按“修改两处编译期常量”操作。
+有效名 = `<基名>_g<TopicGeneration>`,当前即 `transaction_log_topic_g1` / `player_snapshot_topic_g1`。2026-11-12 起生产者是 go/db 的审计发件箱转发（`docs/design/player-audit-outbox.md`）：scene 把流水与快照请求随存盘写进存档库的 `player_audit_outbox`，不直接发 Kafka；go/db 按 `AuditOutbox.TopicGeneration` 拼代号，与本服务共用 `go/shared/kafkautil/audit_topic.go::AuditTopicName`。K8s 上 db 的 ConfigMap 从本服务的 `Kafka` 段渲染，本机 `go/db/etc/db.yaml` 要与 `Kafka.TopicGeneration` 及两个基名保持相等（单测与启动脚本会核）。原来 C++ 的 `AuditTopicGeneration` 已删。
 
 为什么连第一代也带后缀(与 go/db 的 `DbTaskTopicForGeneration` 在 `<=1` 时用裸名不同):broker 开着 `auto.create.topics.enable` 且 `num.partitions=1`(`deploy/docker-compose.yml` 的 `KAFKA_NUM_PARTITIONS=1`;k8s 清单没设,同样是默认 1),C++ 生产者一发消息就把**裸名字**的 topic 自动建成 1 分区。`EnsureTopics` 拿 6/3 的契约去比,只会永远返回 `partition contract mismatch`,两条消费者一条都起不来,唯一症状是每 30s 一条 Error 日志,而流水/快照全被保留期吃掉。带代号的名字与那两个自动建出来的裸 topic 互不相干。
 
@@ -150,7 +150,7 @@ Kafka:
 - 本地 yaml 的 `SnapshotMySQL.DBName` 仍为 `testdb`；目标库是否存在及账号是否获授权取决于环境，不能从 yaml 推断本机实时状态。联调前应预建目标库并授权，或显式选择已获授权的全局库；迁移失败会导致相应 store 不可用，不能把服务端口已监听视为数据能力就绪。
 
 ### 已澄清(不再是缺口)
-- C++ 审计 topic 已按 `AuditTopicGeneration` 生成带代号的名字，部署渲染的 data-service 配置也包含 `Kafka.TopicGeneration`；旧版“生产者仍发裸 topic”的待办已完成。换代仍需同步配置并按审计 topic 换代 runbook 排空旧代。
+- 审计 topic 的生产者（2026-11-12 起是 go/db 的审计发件箱转发）按 `AuditOutbox.TopicGeneration` 生成带代号的名字，部署把 data-service 的 `Kafka.TopicGeneration` 与两个基名渲染进 db 的 ConfigMap；旧版“生产者仍发裸 topic”的待办已完成。换代仍需同步配置并按审计 topic 换代 runbook 排空旧代（停写改为暂停 go/db 的转发，不停服）。
 - ~~表 proto `transaction_log` 没有 `zone_id` 字段,消费者收到的 `zone_id` 被丢弃~~ —— **已过时**:`rollback_database_table.proto` 的 `transaction_log` 已有 `uint32 zone_id = 15`,`store.txLogHasZoneColumn` 因此为 true,`InsertBatchIgnore` 的列序里带着 `zone_id`,`NewTransactionLogStore` 那条 Error 不会打。回归用例 `TestTransactionLogStore_TimestampSecAndZoneLand` 直接断言这一列真的落库。
 - **玩家数据路由失败一律回 ErrCodeRedis(1),不另分码**(2026-10-19 裁决):LoadPlayerData / SavePlayerData / SetPlayerField / DeletePlayerData / GetPlayerField 与 CreatePlayerSnapshot 第 3 步,在路由失败(映射缺席、值畸形、mapping Redis 故障或熔断、ReadRequiresReady 回源失败、zone 未配集群)时都回 1。理由:in-band 数据路径上「没有映射」分不清是不存在的 id,还是「有数据、映射丢了」的事故,只能 fail-closed 当故障;4 不在 FaultCodeSet 里,改成 4 会让 rpc_inband_fault 与 inband_fault_total 哑掉,还会和快照的「无数据」4 混在一起;30 在当前部署(DevRedis + RouteStore.Mode: redis)下不可达。原因只在 `[DataRoute] <op> player=<id>:` 的 ERROR 日志里。账本读(GetPlayerAssetOpLedger / GetPlayerInboxLedger)路由失败回 Unavailable,message 带原因,绝不 NotFound(login 的 homezone.IsUnmapped 与 player_inbox 的 isHomeZoneUnmapped 会把 NotFound 当「无映射→回退」)。合服围栏是例外:写路径回 22(规则拒绝),见「写门禁契约」。等 Regions 或 ReadRequiresReady=true 上线、且这些 RPC 有了真实调用方时,再按调用方需要评估独立码;届时须同时改 FaultCodeSet,以及 snapshot_logic / rollback_logic 里把 err 再折回 1 的地方。
 

@@ -1819,7 +1819,7 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
 - P8 每个 boot 都必须恰有一个 pin 的 SHA256 等于 ConsumerReadyFrontierDigest。它指向正式 ConsumerReadiness 的原字节；无消费者也必须在真实入口准备后报告显式空组。消费组按真实 generation/member 与完整配置目录聚合各副本 assignment，并集等于配置分区全集；P9 在同消费 owner 锁或线程内复核当前状态并开放 SOURCE。
 - C++ 新命令流使用 assign(node_id % P)，不参加消费组，也不写 broker committed。它保持原 target_instance_id 防僵尸语义：P0 记录真实手动 assignment/物理 topic UUID 与位置；P3 poll 到固定尾部后停止并 join，P4 用本窗 leader 实读 end 核其位置。手动分区原件不伪填 generation 或 committed；允许不同 node 同读一个分区。新 boot 的 node_id 可重新分配，P8 按稳定 SOURCE、原 topic UUID/P 核新 node_id % P 与新 instance，实际初始化时读 end 并固定绝对起点后暂停；P8 保证 start == position 且 earliest <= position <= 当前 end，允许暂停期间新增消息。P9 从这个原起点继续，不重新 seek 到已增长的新 end。legacy per-node topic/group 若新 ID 不属于 P0 固定目录则 HOLD；完整采用新命令流的部署应在 P0 固定既有 DisableLegacyPerNodeTopic 配置。
 - 不改写 IssuerClosure 的 P0 SourceEvidence。P3 新生成的 manual-closure.report.json 由 NonSqlClosureEvidence 的原件 pin 引用，在固定 boot 私有目录独占创建；P4 leader 原件分别保留采样时刻，不把 P3 时间伪作 P4 观察。P3 relay 前沿包含真实 manual 报告摘要。
-- Kafka 手动批处理接口的 ProcessingNotCommitted 只接收已证明未提交的失败，保留原 T/P/O 票据并由同 reader/owner 跨代重放，实际 commit 后才结清；分区回到本 owner 时组内已提交位点已越过它（别的属主处理并提交过），按组内位点结清（2026-11-05，见下文「Kafka 消费组 owner 的再均衡与暂时失败」）。ProcessingOutcomeUnknown 永久 HOLD。调用方不能以重建 group 丢弃旧票据，也不能为提交再复制大 payload。
+- Kafka 手动批处理接口的 ProcessingNotCommitted 只接收已证明未提交的失败，保留原 T/P/O 票据并由同 reader/owner 跨代重放，实际 commit 后才结清；分区回到本 owner 时组内已提交位点已越过它（别的属主处理并提交过），按组内位点结清（2026-11-05；分区不再回来时由收尾按组内已提交位点核一次，2026-11-12，见 [kafka-bound-consumer-group.md](kafka-bound-consumer-group.md) §6、§8）。ProcessingOutcomeUnknown 永久 HOLD。调用方不能以重建 group 丢弃旧票据，也不能为提交再复制大 payload。
 - SQL inbox 的持久 PENDING/DELIVERED 是待办事实，不是本机未返回调用。P3 等已接收 RPC、轮次、通知 CAS 与资源实际结束，待办留在冻结库供新 boot 幂等续做。Redis PubSub 去重若仅抑制优化唤醒且 SQL ListDue 定时兜底，不被虚构成持久消费组；其线程和回调仍必须真实 join。
 - 普通常态工具保留 NORMAL 权限与既有业务门禁，只读命令使用 Reader。有限工具无 run 时的正常退役使用既有非 run RETIRE：先真实结束并关闭资源，再由独立 Operator 原子退役；如 P0 已经建立，必须转同 run 的闭合证据或 HOLD。Seal 只关闭本机 SQL 能力，不能冒充目录 RETIRED。该启动器已在候选脚本中接入固定二进制/参数、真实退出与原请求 RETIRE；仍须实际执行验证。有限工具若绑定 SQL_RELEASED runtime 必须拒绝，不能绕过 prepared/open 流程立即发起业务。
 
@@ -1829,32 +1829,7 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
 - Redis 维护 nonce 由同 run 固定键 `sql:writer:maintenance:<run_id 小写十六进制>:nonce` 承载，值为 P0 固定的 16 字节 nonce 小写十六进制，类型必须是 string、PTTL 必须为 -1。P0 在持久独占 attempt 文件之后只执行一次 SET NX；已有 attempt 只允许读回，缺键或 FLUSHDB 后不能重新播种。每个实际 address/DB 恰有一份 BASELINE_V1 原件进 Plan.SourcePins；P4 的 SCAN_V2 在实际扫描前后读取身份、nonce 与 PTTL，并把原件时间窗纳入同轮观察。不能用输入 nonce 回填或旧恢复标记代替实际观察。
 - 路由 P7 使用单次 Redis Lua 同时读取 INFO 身份、nonce、ready marker 和 watermark，审核前后的身份、nonce 与标记原件必须一致；SQL 前后也比较完整 run/meta 与原冻结收据，不能只分别接受 FROZEN/RELEASE_READY 阶段。审核来源固定为 P0 已钉的四份实际查询源码。大二进制不作为 16 MiB 证据正文读取；正规构建与实际启动产物的 SHA 由执行记录另行绑定，P7 来源 pin 本身不证明源码与二进制对应。
 
-**2026-11-05 Kafka 消费组 owner 的再均衡与暂时失败（r2-kc#1；`go/shared/kafkautil/group_lag.go` 的 `BoundConsumerGroup`，收据经 `go/shared/drainproof` 汇入 RELAY；未编译、未测试，待 Codex）**
-
-问题：`BoundConsumerGroup` 原来把「这条没结清」一律当未知结局。handler 返回错误、handler 返回前代次已失效、提交失败、分区拉取或打开失败、等下一代次失败，都 fail（relay HOLD）并 `StopFetching`，此后永久不取新；`Run` 只能跑一次，调用方（guild 历练结算、match 评分与结算来源归档、data_service 审计与快照落库）只记 HOLD、不重建。kafka-go 是 eager 再均衡，任一副本重启、扩缩容、滚动发布都结束全组代次：恰有记录在 handler 或提交中的副本永久停止，它离组又触发下一轮，可连锁停掉其余副本；TiDB 抖动几秒同样停。data_service 更重：owner 的 HOLD 经 `ConsumerOwner.Errors()` 让整个进程退出，再均衡变成连锁重启。位点没提交、不丢，但 topic 只保留 7 天。
-
-决定：handler 与批处理落库本来就要求幂等，所以「没提交」是确定结局，不是未知结局。
-
-- 一个 owner 跨越本进程的全部代次。`Run` 等下一代次失败（协调者不可达、join / sync / 读位点失败、RebalanceInProgress）只计数、记日志、有界退避后继续等；kafka-go 的组循环自己带 JoinGroupBackoff 重新入组。分区打开失败（leader 不可读）与拉取失败退避后重试，不结束 owner。
-- handler 模式下一条已接纳记录只有三种结局：
-  - 结清（Settled）：handler 成功且以本代次提交成功。代次的 ctx 已结束也照常提交：eager 再均衡准备期 broker 仍接受旧代次的提交，本代次的协调者连接要等全部 Start 回调返回才关；被拒（IllegalGeneration、UnknownMemberId、RebalanceInProgress）就按下一种处理。
-  - 交还（Released）：没结清，owner 仍在运行而本代次已不再消费。不提交，交还 Kafka，由下一代次的属主（可能还是本 owner）从组内已提交位点重投；票据结束，不记 HOLD。
-  - HOLD：owner 已终止（控制面 `StopFetching`，或 `Run` 的 ctx 结束）仍没结清。这一条与修复前相同：排空期间结不了的记录必须记未知结局。`Run` 的 ctx 结束也算终止，因为之后不会再有重试或重投；match 的 `StopAndReport` 就是先取消主 ctx、再调 `CloseAndReport`。
-
-  代次还在、owner 没终止时，失败按 1s 起翻倍、封顶 30s、带抖动的退避原地重试同一条：handler 成功过就只重试提交，不重复调用；退避被代次结束打断时不再调用 handler（新属主可能已在处理同一条）。代次已结束时刚拉到的记录不接纳；只是 `StopFetching` 而代次仍在时照常接纳并结清。重试不设次数上限，这是对 AGENTS §11.3 的有意偏离：跳过这一条等于丢结果，停下就是本缺陷本身；每次调用仍有 HandlerTimeout，退避封顶并带抖动，分区卡住由 lag 告警发现。
-- reader 模式（data_service 批处理）：`CommitMessages` 在代次 ctx 已结束时照常用交付它们的代次提交（`waitDelivered` 让该代次等这些记录结清才关）；代次还在时提交失败先有界重试 3 次（200ms 起翻倍，持 commitMu 所以要短）。仍失败时 owner 已终止 → HOLD；否则把这次覆盖的已交付记录交还，返回 `*UncommittedError`（`errors.Is(err, ErrUncommitted)`）。data_service 的 `ownedReader` 据此只摘掉在途集合与 `ConsumerOwner` 票据（计 `releasedCount`，并入 `SettledDigest`），不 hold、不排空兄弟消费者；已落库的会被同分区更高位点的提交覆盖，或由下一代次重投后 INSERT IGNORE / 按 guid 去重。提交成功就是确定结局，调用方 ctx 到点不改写它。
-- `ProcessingNotCommitted` 的确定性恢复票据：分区回到本 owner 时若组内已提交位点越过票据（新代次的 initial > 票据 offset），说明组内某个属主处理并提交过它，票据按 `GROUP_COMMITTED_PAST` 结清。不结清它会永久悬着，之后同分区更高位点的提交还会被「越过尚未恢复的已交付前缀」拒绝并 HOLD。只有 initial 确是组内已提交位点（assignment 带真实 offset）才这样结清：组在该分区从没提交过（FirstOffset）时 initial 只是日志起点，起点越过票据说明它没被任何属主提交就被保留期删掉（数据 topic 有 retention.bytes，积压时会发生），不能记成已结清，按 `errBoundReplayLost` HOLD 并停止取新（2026-11-06 评审修正）。
-- 仍然 fail（HOLD 并停止取新）的只剩不能自愈的情形：reader 返回的分区或 offset 与代次不符；assignment 为负或重复；分区 reader 在 worker 退出前被关闭；组被提前关闭；组内已提交位点早于日志起点或晚于日志终点（保留期删掉了未消费的消息，或 topic 重建、日志截断，继续读等于静默跳过）；确定性恢复票据没被提交就被保留期删掉（见上条）；relay 已关闭仍拉到新记录；结清过程本身 panic。handler 的 panic 由 safego 记栈后按一次失败处理（guild 的 handler 内部另记 `relay.Hold`：排空时 HOLD，消费不停）。
-- 长寿 owner 的内存有界：代次原件逐代保留最近 1024 代，更早的折叠进收据的 `Compacted`（只累加计数，折叠时结局不平即 HOLD）；已结清恢复票据的原件保留最近 16384 条，更早的折叠为计数加链式摘要（`CompactedReplay`）。原来的「代次原件超过 1024 即 HOLD」「已结清恢复票据超过 16384 即 HOLD」在 owner 跨再均衡之后会变成定时炸弹，已去掉；未结清票据的 16384 上限不变。
-- 排空判据不变：`CloseAndReport` 仍要求每条已接纳记录有确定结局，逐代核 `Accepted == Settled + Replayed + Released`。Released 只出现在 owner 终止之前，排空期间结不了的记录只会是 HOLD。P4 仍以 broker 上 committed == end 核全组排空，本机收据不替代它。P8 / P9 的活代次复核不变：P8 之后发生再均衡，`ValidatePrepared` / `WithConsumerReadiness` 仍回 HOLD、拒绝开放，但消费继续。
-- 调用方：guild 生产路径每次回调只试一次（`processRecordOnce`），重试交给 owner，退避期间不占 serial，一次再均衡不必等 5 分钟 HandlerTimeout 才放手；启动时确保 topic 失败每 30s 重试，不记 HOLD。match 评分沿用 `processResultRecord`（内部 3 次、写闸冻结不占次数）。data_service 见上。
-- 可观测：`kafka_bound_consumer_retry_total{group,stage}`（stage：join / open / fetch / handle / commit）、`kafka_bound_consumer_released_total{group}`、`kafka_bound_consumer_hold_total{group}`（共享包惰性注册，构造时预置 0），日志前缀 `[kafka-bound]`。match 新增结果消费组 lag 探针（`kafkautil.RunGroupLagProbe`，每 30s，`match_result_consumer_*`）与告警 `deploy/k8s/match-result-consumer-alerts.yaml`；data_service 新增 `DataServiceAuditConsumerStalled`（有积压、消费循环 up、15 分钟零处理）。
-- 回归（未运行）：`go/shared/kafkautil/bound_consumer_test.go`（在途再均衡后继续消费、暂时失败原地恢复、排空时仍 HOLD、入组与拉取失败不停、打开失败与越过保留期、reader 模式代次结束后提交结清或交还、存活代次的提交有界重试与终止时 HOLD、重放票据按组内位点结清、重放票据没被提交就被保留期删掉时 HOLD、历史窗口有界、lag 探针重连）；`go/data_service/internal/kafka/owned_reader_test.go`；`go/guild/internal/kafka/trial_result_bound_test.go`；契约 `k8s_deploy_contract.tests.ps1` 的 match-result-consumer-alerts 用例。
-- 残余：
-  - 排空时各副本相继离组，每次离组都结束剩余副本的代次；在途记录先尝试旧代次提交（准备期通常成功），被拒才 HOLD。这类 HOLD 只能按 ABORTED_CLOSED 重试同一 run。
-  - 确定性恢复票据所在的分区漂到别的副本、之后没再回来时，票据仍悬着，本机排空收据 HOLD（fail-closed）。要结清需读组内已提交位点，另批。
-  - 毒丸（match 解码失败、handler 恒失败）不会自己越过：分区停在那一条上，按封顶 30s 的退避重试，靠 lag 告警发现、人工处置。
-  - guild 历练消费组还没有 lag 探针与告警，仍靠 `GuildTrialResultOverdue` 间接发现。
+**Kafka 消费组 owner 的再均衡、暂时失败、死信与排空收据**：已移到 [kafka-bound-consumer-group.md](kafka-bound-consumer-group.md)（2026-11-12 起按现行机制写，本节原文不再维护）。
 
 **上线状态（负责人 2026-10-18 确认：尚未上线）**
 
@@ -1898,7 +1873,7 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
 **之后的压测验证**（交 Codex，按 AGENTS §6 全流程，对比表用 `stress_summarize.ps1` 出）：
 
 - **负载**：以玩家存盘（go/db）为主的写负载，单 zone、单存档库。存档副本数按 1 → 2 → 4 阶梯加，每档稳态不少于 5 分钟。
-- **客户端侧**：用新指标 `writer_gate_seconds{logical_db, phase}`（phase 取 `before_begin`、`enter`、`read`），和同一个库的写事务总耗时对比（go/db 存盘接口已有耗时直方图）。
+- **客户端侧**：用新指标 `writer_gate_seconds{logical_db, phase}`（phase 取 `before_begin`、`enter`、`read`；11-12 另加不在每笔事务上的 `pin`、`revalidate`），和同一个库的写事务总耗时对比（go/db 存盘接口已有耗时直方图）。
 - **库侧（TiDB）**：
   - 在 `information_schema.cluster_statements_summary` 里按语句摘要，看 `route_meta` 点读、`writer_slot` 改写或加锁读、`writer_registry` 读的执行次数与平均耗时，并与业务语句对比；
   - 用 Dashboard 的流量可视化（KeyViz）看 `writer_slot`、`route_meta` 所在 Region 的读写热度；
@@ -1922,3 +1897,50 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
    - 删掉 `enter` 里的 `registrationMatchesGrant` 判定：`TestGateDeniesWhenRegistrationRowIsMissing` 与 `TestGateClassifiesFrozenApartFromDenied/registry_主体不符是资格问题` 红；
    - 删掉 `enter` 里的 `|| meta.WriterEpoch != epoch`：`TestGateLockTouchEpochAdvancedDuringEnterIsFrozen` 红。
    - 合并读改成内连接之后，注册行缺失时一行都读不到，同样判拒绝。单测的假连接不解析 SQL，这一点只能由第 2 步的真库用例覆盖。
+
+### 2026-11-12 连接复用时不再重放会话固定（存盘规格 §9 第 1 条的①②；已落码，未编译、未运行）
+
+**问题**：`database/sql` 每次从池里取连接都调 `ResetSession`，守卫在里面把 `pin` 整个重放：十几条 `SET`、读主体与库名，写者池再读 `route_meta` 和两条注册核对，约 14 次往返。11-11 把事务内的闸门语句合成两条之后，一笔存盘约 22 次往返里有 14 次花在取连接上。
+
+**做法**（`go/shared/authoritysql`）：会话策略拆成 `pin`（新建物理连接时，内容不变）和 `revalidate`（复用时）。`revalidate` 在运行池（Reader、Writer）上，tidb 档刚用过的连接不发语句（空闲超过 500ms 的发一条读，见下面「评审后的补强」），mysql 档只发一条主库核对；Schema、Operator 池照旧重放整个 `pin`。每笔写事务的往返：取连接 0（mysql 档 1；tidb 档空闲超过 500ms 的连接 1）、BEGIN 前点读 1、BEGIN 1、闸门 2、业务语句、COMMIT 1。
+
+**依据**：
+
+1. 会话变量、默认库、登录主体只有语句能改；运行池的语句包络不放行 `SET`、`USE`、事务控制语句和 `SET_VAR` 提示；驱动的 `ResetSession` 只做本地存活检查，不重置服务端会话。
+2. 世代、冻结、slot、注册行每笔写事务都核，其中 slot 与注册在 slot 行锁之下；事务外的读过读闸门。复用时的那次核对不持锁，判完到事务开始之间照样会变，去掉它不会放过任何一笔本该被拒的写。
+3. REGISTER 收据只追加、按摘要取，注册行的摘要每笔写事务都核，收据全文建连时核一次就够。
+4. mysql 档的主库核对保留：主从切换不经过这条连接也会发生。
+
+**行为变化**：写者被退休或换代之后，池里已有的连接复用时不再被拒，拒绝发生在下一笔写事务里，调用方拿到确定的 `ErrWriterDenied`。纯读不需要写资格（11-06 读闸门），退休的写者还能用池里的旧连接读到连接生命周期结束；新建连接仍在 `pin` 里核注册。
+
+**验证**（交 Codex）：
+
+1. 在 `go/shared` 下（`GOTOOLCHAIN=local`）跑 `gofmt -l authoritysql/`（应无输出）、`go vet ./authoritysql/` 与 `go test -count=1 ./authoritysql/`。`revalidate_test.go` 的全部用例（落码时五条，评审补强后九条）、`TestWriterDriverSessionOptionalInterfacesPreservePolicy`、`TestMySQLResetSessionRecheckAfterDemotion`、`TestObserveWriterGateRecordsEachPhase` 要过。
+2. 真库闸门用例按上一节第 2 步的门控各跑一轮（MySQL 与 TiDB、两种锁原语）。重点是 `writer_succession_tidb_test.go` 里「上一代的写要被拒」那几处：现在由闸门直接回 `ErrWriterDenied`。
+3. 变异取红（在 `%TEMP%` 副本里改，不动主仓）：
+   - 把 `revalidate` 的 mysql 档分支改成直接 `return nil`：`TestMySQLResetSessionRecheckAfterDemotion` 与 `TestMySQLRuntimeReuseOnlyVerifiesThePrimary` 红；
+   - 把 `revalidate` 改成一律 `return c.pin(ctx, conn)`：`TestTiDBRuntimeReuseSendsNoStatements`、`TestRetiredWriterPassesReuseAndIsRefusedByTheGate` 红；
+   - 在 `validateStatementEnvelope` 的放行清单里加上 `SET`：`TestRuntimeEnvelopeKeepsPinnedSessionFixed` 红。
+4. 压测对比（AGENTS §6 全流程）：看 `writer_gate_seconds` 各 `phase` 与存盘接口耗时直方图，对比表出来之后结论记在本节，不预先宣称提升。
+
+**评审后的补强**（同日，「分布式锁安全性与一致性」会话逐行评审上面的改动后补；已落码，未编译、未运行）。语句包络、驱动 v1.9.0 / v1.9.3 的 `ResetSession`、每笔写事务的闸门核对都对着源码核过，上面四条依据成立，主体方案不动。补三处：
+
+1. **空闲探测。** 重放 `pin` 时第一条 `SET` 顺带是一次主动探测，去掉重放也就去掉了它。对端没发 FIN 就消失的连接（TiDB 节点宕机、网络分区），驱动的本地存活检查看不出来：写者池上这次调用的闸门读失败、BeginTx 回传输错误；Reader 池上那条读经 `failLocked`（没有事务）被包成 `ErrOutcomeUnknown`。断线重连 R2 修好的「失效连接透明换掉」对这类连接失效。
+   - 做法照 HikariCP 的 `aliveBypassWindow`：连接归还后空闲不到 500ms（`idleProbeAfter`）又被借出的不探测，空闲更久的复用时发一条读。归还时刻在 `guardedConn.IsValid` 通过时记下，`ResetSession` 把空闲时长交给 `revalidate`。
+   - 这条读是建连时固定的那组会话变量（`tidbSessionSQL`；判定 `tidbSessionPinned` 与 `AssertCurrentSession` 共用）。一次往返同时确认对端还在、会话没被改过。失败或不符回 `ErrBadConn`，这时还没发业务语句，`database/sql` 换连接。
+   - 热路径不变：存盘高峰时连接几毫秒就被再次借出，仍是每笔 8 次往返。低流量时每次借出多一次往返。
+2. **「驱动复用时不重置会话」有了守卫。** 这条前提原先只靠读驱动源码确认。空闲探测读回的就是固定的会话变量，驱动哪天开始在复用时重置会话，探测判成不符、连接被换掉并重新 `pin`，不会带着缺省会话做权威读写；真库用例 `TestPinnedSessionSurvivesPoolReuse` 在升级驱动时先红。刚用过的连接不探测，所以这是纵深防御，不是每次借出都核。
+3. **带隔离级别的 BEGIN 失败就丢连接。** mail、match、rank 在这些池上用 `LevelRepeatableRead`。驱动把它拆成 `SET TRANSACTION ISOLATION LEVEL …`（只对下一笔事务生效）和 `START TRANSACTION` 两条；前一条成功、后一条被拒时，待生效的隔离级别留在连接上，复用时已没人重设。`guardedConn.beginLocked` 在带非缺省隔离级别的 BEGIN 失败时隔离这条连接，错误原样返回。
+
+另更正上面「行为变化」里退休写者旧连接的可读时长：go/db 的存档库池是 5 分钟，`authoritysql.Open` 建的池是 15 分钟（`SetConnMaxLifetime`）。
+
+**补强的验证**（并入上面第 1~3 步，交 Codex）：
+
+- 单测：`revalidate_test.go` 现在九条（新增 `TestTiDBRuntimeReuseAfterIdleSendsOneSessionRead`、`TestTiDBSessionReadAcceptsDriverNativeIntegers`、`TestTiDBRuntimeReuseAfterIdleRejectsDeadPeerAndDriftedSession`、`TestIdleTiDBConnectionFailingProbeIsDiscarded`）；`driver_test.go` 新增 `TestWriterDriverResetSessionReportsIdleSinceReturn`、`TestWriterDriverBeginFailureWithIsolationDiscardsConnection`。
+- 真库：`reuse_session_tidb_test.go` 的 `TestPinnedSessionSurvivesPoolReuse`，门控同 `twoLogicalDBFixture`，MySQL 与 TiDB 各一轮。它同时验证探测读回的列形状和代码认的一致：不一致时好连接会被判坏、连接号变化，用例报「连接被重建了」。
+- 变异取红（同样在 `%TEMP%` 副本里改）：
+  - 把 `revalidate` 里 `idle < idleProbeAfter` 改成恒真（永不探测）：`TestTiDBRuntimeReuseAfterIdleSendsOneSessionRead`、`TestTiDBRuntimeReuseAfterIdleRejectsDeadPeerAndDriftedSession`、`TestIdleTiDBConnectionFailingProbeIsDiscarded` 红；
+  - 删掉 `IsValid` 里记 `returnedAt` 的那一行：`TestWriterDriverResetSessionReportsIdleSinceReturn` 红；
+  - 删掉 `beginLocked` 里 `opts.Isolation != 0` 的隔离：`TestWriterDriverBeginFailureWithIsolationDiscardsConnection/repeatable_read` 红；
+  - 把 `verifyTiDBSession` 里两处 `unsignedValue` 换成只认文本的解析：`TestTiDBSessionReadAcceptsDriverNativeIntegers` 红。
+- 冒烟口径随之变化：tidb 档的 `writer_gate_seconds_count{phase="revalidate"}` 不再恒为空，连接空闲超过 500ms 后再借出时加一；持续有流量时不增长。

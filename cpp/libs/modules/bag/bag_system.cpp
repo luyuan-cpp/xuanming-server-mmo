@@ -61,30 +61,19 @@ void Bag::SetAdmission(std::unique_ptr<IAdmissionPolicy> admission)
 	admission_ = std::move(admission);
 }
 
-void Bag::SetEviction(std::unique_ptr<IEvictionPolicy> eviction)
-{
-	if (eviction == nullptr)
-	{
-		LOG_ERROR << "Bag::SetEviction: null eviction policy rejected, player " << PlayerGuid();
-		return;
-	}
-	// 同 SetAdmission:纯策略对象,不重新解释任何已存状态,所以不要求空包。
-	eviction_ = std::move(eviction);
-}
-
 void Bag::SetProfile(BagProfile profile)
 {
 	// **整套一起换,或者一根都不换。**
-	// SetLayout 对非空包会拒绝(槽位号含义会变);若只拦它、放行另外两根,就得到
-	// "旧布局 + 新淘汰策略"这种半套 profile —— 一个从不淘汰的包从此会挤掉玩家的
-	// 东西。所以在这里统一把关,不靠三个 setter 各自的守卫。
+	// SetLayout 对非空包会拒绝(槽位号含义会变);若只拦它、放行准入,就得到
+	// "旧布局 + 新准入"这种半套 profile —— 包的规则从此对不上它记下的 profile id,
+	// 还原时按 id 装配出来的是另一套。所以在这里统一把关,不靠两个 setter 各自的守卫。
 	if (store_.Size() > 0)
 	{
 		LOG_ERROR << "Bag::SetProfile refused: bag still holds " << store_.Size()
 			<< " item(s); a profile can only be installed on an empty bag. player " << PlayerGuid();
 		return;
 	}
-	if (profile.layout == nullptr || profile.admission == nullptr || profile.eviction == nullptr)
+	if (profile.layout == nullptr || profile.admission == nullptr)
 	{
 		LOG_ERROR << "Bag::SetProfile refused: incomplete profile (some axis is null). player "
 			<< PlayerGuid();
@@ -92,7 +81,6 @@ void Bag::SetProfile(BagProfile profile)
 	}
 	SetLayout(std::move(profile.layout));
 	SetAdmission(std::move(profile.admission));
-	SetEviction(std::move(profile.eviction));
 	profileId_ = profile.id;
 }
 
@@ -132,8 +120,7 @@ ItemComp *Bag::GetItemCompByPos(uint32_t pos)
 // ── 容量预检:plan 问实例层,reserve 问布局层 ─────────────────────────────
 
 uint32_t Bag::PlanInstances(const ItemCountMap &itemsToAdd, ItemCountMap *instancesByConfigOut,
-							std::size_t *totalInstancesOut,
-							const std::unordered_set<Guid> *exclude)
+							std::size_t *totalInstancesOut)
 {
 	// plan(实例层,零副作用):可叠加物品先填满同 config 现有堆叠的空余,只有
 	// 溢出部分才需要**新建实例**;不可叠加(maxStack==1)每个单位一个实例。
@@ -142,7 +129,7 @@ uint32_t Bag::PlanInstances(const ItemCountMap &itemsToAdd, ItemCountMap *instan
 	// 现在前者在这里算,后者由 CanReserve 回答。
 	AssertCapacityInvariant();
 
-	const ItemCountMap freeRoomByConfig = store_.MeasureFreeRoomPerConfig(itemsToAdd, exclude);
+	const ItemCountMap freeRoomByConfig = store_.MeasureFreeRoomPerConfig(itemsToAdd);
 
 	// 逐 config 算出"要为它新建几个实例",顺带按 config 留一份明细 ——
 	// 具名槽的 reserve 要按**部位**汇总,只有一个总数是答不出来的
@@ -193,13 +180,8 @@ uint32_t Bag::PlanInstances(const ItemCountMap &itemsToAdd, ItemCountMap *instan
 uint32_t Bag::CheckSpaceFor(const ItemCountMap &itemsToAdd, std::size_t *instancesNeededOut)
 {
 	// 只读预检(不改背包):背包能否一次性放下 itemsToAdd 的每一项?
-	//
-	// **纯预测,刻意不问淘汰。** 它回答的是"照现在这样放得下吗",而不是"腾一腾
-	// 能不能放下" —— 后者会销毁玩家的东西,不能藏在一个名字里带 Check 的函数里。
-	// 真入包路径(AddItems)走 PlanInstances + PlanEviction。
-	//
-	// 副作用:对会淘汰的包(配了 EvictOldestFirst 的;2026-11-05 起没有生产包这样配,临时格也是满即拒),
-	// 这个函数会说"放不下",而实际 AddItems 能成功。这是刻意的 —— 预测就该按不破坏现状回答。
+	// 与真入包(AddItems)同一套 PlanInstances + CanReserve:背包满了就拒、从不腾位,
+	// 所以同一份数量清单这里说"放得下",同一时刻交给 AddItems 在空间上也放得下。
 	ItemCountMap instancesByConfig;
 	std::size_t instancesNeeded = 0;
 	RETURN_ON_ERROR(PlanInstances(itemsToAdd, &instancesByConfig, &instancesNeeded));
@@ -595,12 +577,10 @@ static void InitializeNewInstance(const ItemInstanceInitializer *instanceInitial
 }
 
 uint32_t Bag::AddItem(const InitItemParam &param, std::vector<Guid> *writtenGuidsOut,
-					  std::vector<DestroyedInstance> *evictedOut,
 					  const ItemInstanceInitializer *instanceInitializer)
 {
 	std::vector<GuidVector> written;
-	const auto result = AddItems(std::vector<InitItemParam>{param}, evictedOut, &written,
-								 instanceInitializer);
+	const auto result = AddItems(std::vector<InitItemParam>{param}, &written, instanceInitializer);
 	if (result == kSuccess && writtenGuidsOut != nullptr && !written.empty())
 	{
 		writtenGuidsOut->insert(writtenGuidsOut->end(), written.front().begin(), written.front().end());
@@ -609,7 +589,6 @@ uint32_t Bag::AddItem(const InitItemParam &param, std::vector<Guid> *writtenGuid
 }
 
 uint32_t Bag::AddItems(const ItemCountMap &itemsToAdd,
-					   std::vector<DestroyedInstance> *evictedOut,
 					   std::vector<GuidVector> *writtenByEntryOut,
 					   const ItemInstanceInitializer *instanceInitializer)
 {
@@ -622,11 +601,10 @@ uint32_t Bag::AddItems(const ItemCountMap &itemsToAdd,
 		param.itemPBComp.set_size(count);
 		entries.push_back(std::move(param));
 	}
-	return AddItems(entries, evictedOut, writtenByEntryOut, instanceInitializer);
+	return AddItems(entries, writtenByEntryOut, instanceInitializer);
 }
 
 uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
-					   std::vector<DestroyedInstance> *evictedOut,
 					   std::vector<GuidVector> *writtenByEntryOut,
 					   const ItemInstanceInitializer *instanceInitializer)
 {
@@ -674,14 +652,22 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 		}
 	}
 
-	GuidVector victims;
+	// plan + reserve:可合堆的单位先填既有堆,溢出部分与独立实例各要新建几个实例,照现状摆不摆得下。
+	// 满了就拒、从不腾位:背包没有淘汰策略(2026-11-12 删除了整条淘汰轴,docs/design/bag-rule-policy-layering.md §3)。
+	ItemCountMap instancesByConfig;
 	std::size_t newInstanceCount = 0;
-	if (!PlanEviction(stackUnits, evictedOut != nullptr, victims, &newInstanceCount, &separateInstances))
+	RETURN_ON_ERROR(PlanInstances(stackUnits, &instancesByConfig, &newInstanceCount));
+	for (const auto &[configId, count] : separateInstances)
 	{
-		// 放不下(淘汰也腾不够)是玩家随手能造出来的常规拒绝:静默返回,怎么记由调用方决定 ——
+		instancesByConfig[configId] += count;
+		newInstanceCount += count;
+	}
+	if (!CanReserve(instancesByConfig, newInstanceCount))
+	{
+		// 放不下是玩家随手能造出来的常规拒绝:静默返回,怎么记由调用方决定 ——
 		// BagService 的入包入口经 RETURN_ON_ERROR 打 WARN;战斗结算两包都满时按玩家限频打 WARN(§6.6)。
 		// 以前这里打 ERROR + 调用栈,两包都满的玩家每次结算重试(最长约 60 秒一次)就刷两条。
-		// 真正的故障不靠这里:PlanEviction / PlanInstances / CanReserve 在各自的故障分支里打 ERROR。
+		// 真正的故障不靠这里:PlanInstances / CanReserve 在各自的故障分支里打 ERROR。
 		return kBagItemNotStacked;
 	}
 
@@ -708,19 +694,6 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 
 	// 候选仓库隔离合堆、盖章和实例初始化；失败时原仓库及其入包水位保持不变。
 	ItemStore candidate = store_;
-	std::vector<DestroyedInstance> evicted;
-	for (const auto guid : victims)
-	{
-		const auto *item = candidate.Find(guid);
-		if (item == nullptr)
-		{
-			LOG_ERROR << "Bag::AddItems: eviction policy returned a guid not in the store, batch unchanged. player=" << PlayerGuid();
-			assert(false && "淘汰策略返回仓库外身份");
-			return PrintStackAndReturnError(kInvalidTableData);
-		}
-		evicted.push_back({guid, item->config_id(), item->size()});
-		candidate.Erase(guid);
-	}
 	std::vector<std::pair<Guid, uint32_t>> newItems;
 	std::vector<GuidVector> written(itemsToAdd.size());
 	std::size_t nextMint = 0;
@@ -776,10 +749,6 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 		assert(false && "布局无法创建事务候选");
 		return PrintStackAndReturnError(kInvalidTableData);
 	}
-	for (const auto guid : victims)
-	{
-		candidateLayout->Remove(guid);
-	}
 	for (const auto &[guid, configId] : newItems)
 	{
 		if (PlaceInstance(guid, configId, candidateLayout.get()) == kInvalidSlot)
@@ -790,10 +759,6 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 	// 单一场景逻辑线程，无回调的提交段同时发布两层候选。
 	store_ = std::move(candidate);
 	layout_ = std::move(candidateLayout);
-	if (evictedOut != nullptr)
-	{
-		evictedOut->insert(evictedOut->end(), evicted.begin(), evicted.end());
-	}
 	if (writtenByEntryOut != nullptr)
 	{
 		writtenByEntryOut->insert(writtenByEntryOut->end(), written.begin(), written.end());
@@ -913,134 +878,6 @@ std::size_t Bag::CountFreeSlotsForKind(uint32_t kind) const
 		}
 	}
 	return counted.size();
-}
-
-bool Bag::PlanEviction(const ItemCountMap &unitsToAdd, bool allowEviction,
-					   GuidVector &victimOrder, std::size_t *totalInstancesOut,
-					   const ItemCountMap *separateInstances)
-{
-	victimOrder.clear();
-	const auto plan = [&](ItemCountMap &need, std::size_t &total, const std::unordered_set<Guid> *excluded = nullptr)
-	{
-		if (PlanInstances(unitsToAdd, &need, &total, excluded) != kSuccess)
-		{
-			return false;
-		}
-		if (separateInstances != nullptr)
-		{
-			for (const auto &[configId, count] : *separateInstances)
-			{
-				need[configId] += count;
-				total += count;
-			}
-		}
-		if (totalInstancesOut != nullptr)
-		{
-			*totalInstancesOut = total;
-		}
-		return true;
-	};
-	// 第一问永远是"照现在这样放得下吗" —— 放得下就什么都不做,淘汰只在真放不下时发生。
-	ItemCountMap need;
-	std::size_t needTotal = 0;
-	if (!plan(need, needTotal))
-	{
-		return false; // 配置 / 准入问题;调用方在这之前已用 PlanInstances 拿过精确错误码
-	}
-	if (CanReserve(need, needTotal))
-	{
-		return true;
-	}
-
-	// 具名槽布局**一律不淘汰**。
-	//
-	// "为了给新手镯腾位而销毁你正戴着的手镯"不是任何游戏想要的行为;而且具名槽
-	// 的位是按部位分桶的,"腾一个位"得先回答"腾哪个部位的",那是另一套账。
-	// BagProfile::Equipment 已经配了 RejectWhenFull,这里是第二道锁 ——
-	// 有人日后手工 SetEviction 到装备栏上,也不会把装备烧掉。
-	if (layout_->HasSlotSemantics())
-	{
-		return false;
-	}
-
-	// **没有回执就不淘汰。** 被销毁的实例必须经 evictedOut 交给 BagService 落
-	// LogItemDestroy —— item_uuid 是外挂回收的关联键。此前这只是一句"生产代码请走
-	// BagService"的注释,任何直接调纯容器的调用方都能无声销毁玩家资产;现在是闸:
-	// 不带回执的调用在会淘汰的包上按 RejectWhenFull 处理。
-	if (!allowEviction)
-	{
-		LOG_ERROR << "Bag::PlanEviction: eviction would be needed but no receipt sink was "
-			<< "given (evictedOut == nullptr); refusing to destroy anything. Route through "
-			<< "BagService. player " << PlayerGuid();
-		return false;
-	}
-
-	// 容量不是标量的布局(格子背包:空格数够却因碎片摆不进去)—— 淘汰不知道怎么
-	// 腾出一块连续矩形,按 RejectWhenFull 处理。这不是编程错误,不吼。
-	// 自由格布局下 1 实例恒占 1 格,到不了这里(CanFit 假 ⇔ 空格数 < 需求)。
-	const std::size_t freeCells = layout_->FreeCells();
-	if (freeCells >= needTotal)
-	{
-		return false;
-	}
-
-	// ── 先算到不动点,再销毁 ─────────────────────────────────────────────
-	// 关键:被挤掉的可能正是本批打算并进去的未满堆(临时格里同种材料的旧堆恰恰
-	// 最早进包)。把牺牲者当作**已不存在**重新规划,需求会变大;需求变大就多选
-	// 牺牲者;直到"腾出的格子 >= 排除牺牲者后的需求"稳定下来。全程零副作用,
-	// 稳定了才动手 —— 于是"腾不够就一件都不动"是结构保证,不是祈愿。
-	//
-	// 收敛:牺牲者集合每轮严格变大(否则退出),上界是 store_.Size() 轮。
-	// 先进先出是前缀稳定的(最早 k 个 ⊂ 最早 k+1 个),并集不改变它;对不前缀
-	// 稳定的未来策略,并集保证单调。
-	std::unordered_set<Guid> victimSet;
-	bool converged = false;
-	for (std::size_t round = 0; round <= store_.Size(); ++round)
-	{
-		ItemCountMap needIfEvicted;
-		std::size_t needIfEvictedTotal = 0;
-		if (!plan(needIfEvicted, needIfEvictedTotal, &victimSet))
-		{
-			return false;
-		}
-		const std::size_t shortfall =
-			needIfEvictedTotal > freeCells ? needIfEvictedTotal - freeCells : 0;
-		if (shortfall <= victimSet.size())
-		{
-			converged = true; // 腾出的格子够了
-			break;
-		}
-
-		const GuidVector picked = eviction_->SelectVictims(shortfall, store_, *layout_);
-		if (picked.size() < shortfall)
-		{
-			// RejectWhenFull 恒走这条(返回空),等于拆分前"背包满了"的行为。
-			// EvictOldestFirst 腾不够时也走这条 —— 一件都不动。
-			return false;
-		}
-		bool grew = false;
-		for (const Guid guid : picked)
-		{
-			if (victimSet.insert(guid).second)
-			{
-				victimOrder.push_back(guid);
-				grew = true;
-			}
-		}
-		if (!grew)
-		{
-			return false; // 策略给不出新的牺牲者却仍不够:腾不够,一件都不动
-		}
-	}
-	if (!converged)
-	{
-		LOG_ERROR << "Bag::PlanEviction: eviction planning did not converge within "
-			<< store_.Size() << " round(s); refusing without destroying anything. player "
-			<< PlayerGuid();
-		return false;
-	}
-
-	return true;
 }
 
 bool Bag::CanReserve(const ItemCountMap &instancesByConfig, std::size_t totalInstances) const
@@ -1305,7 +1142,6 @@ uint32_t Bag::PutInstance(ItemComp item, std::optional<uint32_t> slot)
 	{
 		// 自动找位的 reserve:CanReserve 与下面 commit 用的 PlaceInstance 在同一个条件上
 		// 分叉(HasSlotSemantics),它说能放,PlaceInstance 就一定落得了位。
-		// **刻意不走 PlanEviction**:搬运绝不为了腾位销毁东西,临时格也一样。
 		if (!CanReserve({{configId, uint32_t{1}}}, 1))
 		{
 			return PrintStackAndReturnError(kBagAddItemBagFull);
@@ -1314,7 +1150,7 @@ uint32_t Bag::PutInstance(ItemComp item, std::optional<uint32_t> slot)
 
 	// ── 校验全过,现在才允许改状态 ──────────────────────────────────────
 	// 入包序号是"本包内的先后",不随实例搬家:ItemStore::Insert 对非 0 值会原样保留并把
-	// 水位抬到它之上,带着源包的序号进来,先进先出就按别的包的时间线挤人了。
+	// 水位抬到它之上,带着源包的序号进来,本包的实例序(ItemStore::AcquiredBefore)就按别的包的时间线排了。
 	item.set_acquire_seq(0);
 
 	if (store_.Insert(std::move(item)) == nullptr)

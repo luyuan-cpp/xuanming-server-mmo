@@ -30,8 +30,13 @@ const WorldStreamShards = 8
 const MaxWorldChannelCooldownMs = 600000
 
 // OriginalRetentionDays 是聊天原件(chat_send_authority)在 TiDB 上的保留天数,到期由表的 TTL 属性在库里删除(authority/schema.go),
-// 运行账号仍然没有 DELETE。它必须不短于历史可见窗口 HistoryTTLSeconds(配置校验守着);请求去重只回看几秒到几分钟,远短于它。
+// 运行账号仍然没有 DELETE。请求去重只回看几秒到几分钟,远短于它;超过保留期的旧 request_id 重发会被当成新请求。
+// 这是存储布局契约(钉在策略行里):改它要连表上的 TTL 属性一起显式迁移。
 const OriginalRetentionDays = 30
+
+// MaxHistoryTTLSeconds 是历史可见窗口 HistoryTTLSeconds 的上限:比保留期短一天。还在可见窗口里的消息不能被库删掉;
+// 留出的一天盖住保留期列按 UTC 写、集群时区不是 UTC 时最多十几个小时的偏差,以及 TTL 任务的调度间隔只会晚删、不会早删。
+const MaxHistoryTTLSeconds = (OriginalRetentionDays - 1) * 86400
 
 const (
 	// ErrInvalidParameter:取不到会话(缺 / 坏 x-session-detail-bin)、请求体缺 message、

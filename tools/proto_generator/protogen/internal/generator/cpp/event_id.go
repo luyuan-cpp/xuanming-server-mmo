@@ -99,7 +99,7 @@ func registerProtoEvents(protoRelativeDir string, files []os.DirEntry) {
 			ingress, ingressErr := classifyEventIngress(filepath.Join(protoRelativeDir, file.Name()), descriptor,
 				_config.Global.PathLists.ProtoDirs.LogicEvent, _config.Global.PathLists.ProtoDirs.ContractsKafka)
 			if ingressErr != nil {
-				logger.Global.Fatal("事件入口标注校验失败", zap.String("message", messageName), zap.Error(ingressErr))
+				logger.Global.Fatal("Event ingress annotation check failed", zap.String("message", messageName), zap.Error(ingressErr))
 			}
 			idName := buildEventIdName(packageName, messageName)
 			for _, existing := range globalProtoEventList {
@@ -370,7 +370,7 @@ func renderEventIdFile(infos map[uint64]*ProtoEventInfo, reserved map[uint64]str
 
 func WriteEventIdFile() {
 	if err := utils2.WriteFileIfChanged(_config.Global.Paths.EventIdFile, []byte(renderEventIdFile(eventIdInfoMap, reservedEventIdMap))); err != nil {
-		logger.Global.Fatal("写入事件号清单失败", zap.String("event_id_file", _config.Global.Paths.EventIdFile), zap.Error(err))
+		logger.Global.Fatal("Failed to write the event ID file", zap.String("event_id_file", _config.Global.Paths.EventIdFile), zap.Error(err))
 		return
 	}
 }
@@ -423,7 +423,7 @@ func writeEventIdHeaderFiles() {
 
 		outputPath := _config.Global.Paths.ServiceInfoDir + headerFileName
 		if err := utils2.WriteFileIfChanged(outputPath, []byte(builder.String())); err != nil {
-			logger.Global.Fatal("写入事件号头文件失败", zap.String("file_path", outputPath), zap.Error(err))
+			logger.Global.Fatal("Failed to write the event ID header file", zap.String("file_path", outputPath), zap.Error(err))
 			return
 		}
 	}

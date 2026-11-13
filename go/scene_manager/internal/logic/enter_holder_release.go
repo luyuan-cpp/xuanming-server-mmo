@@ -27,6 +27,14 @@ import (
 //     之后任何一次重登的进场都排在它后面,不会出现「迟到的释放退掉刚重新绑上的新会话」。
 //   - 请求带上这次登录的身份(covered_*,§13):超时(failed)之后释放若迟到执行,而客户端已重登、落回 X 并以同一 epoch
 //     复用实体,X 看到实体绑着比它更新的登录,不退出。同步应答管「送达了」的先后,身份管「没送达、迟到了」的那一半。
+//
+// 托管归位(docs/design/player-connection-lost-hold.md §4.5)是第二种合格的来源:player_locator 续租时发现离线托管中的角色
+// 没有任何 scene 节点对他负责(在场心跳过期),替他发一条 hosted_placement、不带 gate、关联号 0 的 EnterScene。它撞上 18 的
+// 典型情形是 location 指着一个已经不持有他的节点(排空改派没放行、目标节点看护放弃、落点之后场景被销毁),要的正是同一套
+// 「请持有节点补凭证 → 拿不出资格时 §17 撤销」。与登录有两处不同:
+//   - 身份:归位代表的就是 location 记的那一次登录(会话号与代次逐一相等、代次非 0),不是更新的登录;
+//   - 释放带 keep_held:持有节点上只要有他的实体就什么都不做,只在完全不持有时补凭证 —— 归位只把没人持有的角色放回世界,
+//     在场心跳偶尔写不上时不能把正在托管他的节点上的实体退掉。
 
 // enterHolderReleaseVerdict 是 EnterScene 换手门以 18 拒绝之后的释放判定。除 eligible 外的名字同时是
 // scene_manager_enter_holder_release_total 的 verdict 标签;eligible 派发后按结果记 delivered / failed。
@@ -41,6 +49,7 @@ const (
 	enterHolderReleaseNotLogin
 	// enterHolderReleaseIdentityNotNewer:登录请求,但落点身份不是严格更新:同会话(LeaveGame 后同连接重进,gate 已代发 ExitGame)、
 	// legacy(请求无代次)、location 无代次(旧版写入方留下的,证明不了它的会话比这次登录旧)。只等,不请。
+	// 托管归位:location 记的不是这次归位代表的那一次登录(被更新的登录改写过,或无代次)。同样只等,不请。
 	enterHolderReleaseIdentityNotNewer
 	// enterHolderReleaseLegacyEpochZero:观察到的 owner_epoch 为 0。scene 对期望 0 按「不带版本」释放(release_fence
 	// kReleaseUnversioned,不比对缓存),不能替它发;存量玩家的换手门本来也没有可比的代际。
@@ -86,8 +95,8 @@ const (
 // 玩家照旧等旧会话清理,不会误退持有者。
 type enterHolderReleaseFacts struct {
 	enabled           bool   // 持有者释放协议开着(EffectiveLeaveSceneHolderReleaseWait 的 enabled)
-	loginRequest      bool   // correlation_id == 0
-	identityNewer     bool   // identityStrictlyNewer
+	loginRequest      bool   // correlation_id == 0(login,或 player_locator 的托管归位)
+	identityCovers    bool   // 登录:identityStrictlyNewer;托管归位:identityIsHostedLogin
 	epoch             uint64 // 本次请求观察到的 owner_epoch(换手门比对的同一个值)
 	holderAddressable bool   // location 有持有节点号且 zone 已知
 	chainAlive        bool   // 请求上下文未结束
@@ -100,7 +109,7 @@ func decideEnterHolderRelease(f enterHolderReleaseFacts) enterHolderReleaseVerdi
 		return enterHolderReleaseDisabled
 	case !f.loginRequest:
 		return enterHolderReleaseNotLogin
-	case !f.identityNewer:
+	case !f.identityCovers:
 		return enterHolderReleaseIdentityNotNewer
 	case f.epoch == 0:
 		return enterHolderReleaseLegacyEpochZero
@@ -120,6 +129,18 @@ func identityStrictlyNewer(verdict placementVerdict, loc placementIdentity) bool
 	return verdict == placementAdmitNewer && loc.loginGeneration != 0
 }
 
+// identityIsHostedLogin:托管归位代表的正是 location 记的那一次登录 —— 会话号与代次逐一相等、代次非 0。decidePlacementIdentity
+// 的 same_session 只比会话号(代次取大),gate 以同一 node_id 重启后会话号会复用,这里不借它,按两项逐一比。
+func identityIsHostedLogin(loc, req placementIdentity) bool {
+	return loc.loginGeneration != 0 && loc == req
+}
+
+// isHostedResume:player_locator 替离线托管中的角色发的托管归位(hosted_placement、关联号 0)。scene 节点发的托管落点
+// 都经 SendCorrelatedEnterScene 带非 0 关联号。
+func isHostedResume(in *scene_manager.EnterSceneRequest) bool {
+	return in.GetHostedPlacement() && in.GetCorrelationId() == 0
+}
+
 // enterHolderReleaseTimeout 是等持有节点应答的上限。login 调 EnterScene 的预算见 login.yaml SceneManagerRpc.Timeout(现为 10s),
 // 这里只占一小段;超时按 failed 记,照常回 18,下一次重登再请。
 const enterHolderReleaseTimeout = 1 * time.Second
@@ -127,7 +148,7 @@ const enterHolderReleaseTimeout = 1 * time.Second
 // enterHolderReleaseRequester 是同步发 session_ended 释放的接缝,默认 RequestNodeReleaseEndedSession。
 // covered 传这次登录自己的身份(不是 location 记的旧身份):登录链持锁期间不存在比它更新的登录(§12.4 (d)),
 // 本节点上不比它新的那一份 —— location 上被取代的旧会话、被它取代的中间会话、经 gate 补发绑上它自己的那一份 —— 都该退出;
-// 只填 location 的身份会漏掉后两种,让持有者永远不释放(§13.2)。
+// 只填 location 的身份会漏掉后两种,让持有者永远不释放(§13.2)。托管归位时 covered 就是 location 的身份,keepHeld = true。
 // 与 LeaveScene 的 sessionEndedReleaseDispatcher(后台协程)不同,这里必须**同步**返回:回 18 之前要确认释放已在持有节点执行完
 // (文件头最后一条)。包级钩子只为单测替换,生产从不改它;替换的用例必须用 t.Cleanup 还原。
 var enterHolderReleaseRequester = RequestNodeReleaseEndedSession
@@ -140,40 +161,45 @@ func (l *EnterSceneLogic) requestHolderReleaseForLogin(in *scene_manager.EnterSc
 	locZoneID uint32, observedEpoch uint64, identityVerdict placementVerdict) bool {
 	_, enabled := l.svcCtx.Config.EffectiveLeaveSceneHolderReleaseWait()
 	locIdentity := identityOfLocation(loc)
+	hostedResume := isHostedResume(in)
+	identityCovers := identityStrictlyNewer(identityVerdict, locIdentity)
+	if hostedResume {
+		identityCovers = identityIsHostedLogin(locIdentity, identityOfEnterRequest(in))
+	}
 	verdict := decideEnterHolderRelease(enterHolderReleaseFacts{
 		enabled:           enabled,
 		loginRequest:      in.GetCorrelationId() == 0,
-		identityNewer:     identityStrictlyNewer(identityVerdict, locIdentity),
+		identityCovers:    identityCovers,
 		epoch:             observedEpoch,
 		holderAddressable: loc.GetNodeId() != "" && locZoneID != 0,
 		chainAlive:        l.ctx.Err() == nil,
 	})
 	if verdict != enterHolderReleaseEligible {
 		metrics.ObserveEnterHolderRelease(verdict.String())
-		// scene 自发的第一跳是 18 的常规来源、开关关闭是运维决定,都不打行;其余是登录撞门却没请释放,留一行备查。
+		// scene 自发的第一跳是 18 的常规来源、开关关闭是运维决定,都不打行;其余是登录 / 托管归位撞门却没请释放,留一行备查。
 		if verdict != enterHolderReleaseNotLogin && verdict != enterHolderReleaseDisabled {
-			l.Logger.Infof("[EnterHolderRelease] login rejected by handoff gate; not requesting holder release: verdict=%s player=%d owner_epoch=%d holder_zone=%d holder_node=%s request_session=%d request_generation=%d location_session=%d location_generation=%d identity=%s",
-				verdict, in.PlayerId, observedEpoch, locZoneID, loc.GetNodeId(), in.SessionId, in.LoginGeneration,
+			l.Logger.Infof("[EnterHolderRelease] request rejected by handoff gate; not requesting holder release: verdict=%s hosted_resume=%v player=%d owner_epoch=%d holder_zone=%d holder_node=%s request_session=%d request_generation=%d location_session=%d location_generation=%d identity=%s",
+				verdict, hostedResume, in.PlayerId, observedEpoch, locZoneID, loc.GetNodeId(), in.SessionId, in.LoginGeneration,
 				locIdentity.sessionID, locIdentity.loginGeneration, identityVerdict)
 		}
 		return false
 	}
 
-	// 截止取 1s 与登录链剩余预算中较短的一个:登录链取消时这次请求一并取消,不在发起方已经放弃之后还去动持有者。
+	// 截止取 1s 与请求剩余预算中较短的一个:请求链取消时这次请求一并取消,不在发起方已经放弃之后还去动持有者。
 	ctx, cancel := context.WithTimeout(l.ctx, enterHolderReleaseTimeout)
 	defer cancel()
 	start := time.Now()
 	if err := enterHolderReleaseRequester(ctx, l.svcCtx, locZoneID, loc.GetNodeId(), in.PlayerId, observedEpoch,
-		identityOfEnterRequest(in)); err != nil {
+		identityOfEnterRequest(in), hostedResume); err != nil {
 		metrics.ObserveEnterHolderRelease(enterHolderReleaseOutcomeFailed)
-		l.Logger.Errorf("[EnterHolderRelease] session-ended release to location holder failed (next login retry will resend): player=%d owner_epoch=%d holder_zone=%d holder_node=%s request_session=%d request_generation=%d location_session=%d location_generation=%d elapsed=%s err=%v",
-			in.PlayerId, observedEpoch, locZoneID, loc.GetNodeId(), in.SessionId, in.LoginGeneration,
+		l.Logger.Errorf("[EnterHolderRelease] session-ended release to location holder failed (next retry will resend): hosted_resume=%v player=%d owner_epoch=%d holder_zone=%d holder_node=%s request_session=%d request_generation=%d location_session=%d location_generation=%d elapsed=%s err=%v",
+			hostedResume, in.PlayerId, observedEpoch, locZoneID, loc.GetNodeId(), in.SessionId, in.LoginGeneration,
 			locIdentity.sessionID, locIdentity.loginGeneration, time.Since(start), err)
 		return true
 	}
 	metrics.ObserveEnterHolderRelease(enterHolderReleaseOutcomeDelivered)
-	l.Logger.Infof("[EnterHolderRelease] session-ended release delivered to location holder: player=%d owner_epoch=%d holder_zone=%d holder_node=%s request_session=%d request_generation=%d location_session=%d location_generation=%d elapsed=%s",
-		in.PlayerId, observedEpoch, locZoneID, loc.GetNodeId(), in.SessionId, in.LoginGeneration,
+	l.Logger.Infof("[EnterHolderRelease] session-ended release delivered to location holder: hosted_resume=%v player=%d owner_epoch=%d holder_zone=%d holder_node=%s request_session=%d request_generation=%d location_session=%d location_generation=%d elapsed=%s",
+		hostedResume, in.PlayerId, observedEpoch, locZoneID, loc.GetNodeId(), in.SessionId, in.LoginGeneration,
 		locIdentity.sessionID, locIdentity.loginGeneration, time.Since(start))
 	return true
 }

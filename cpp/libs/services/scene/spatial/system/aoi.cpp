@@ -9,6 +9,7 @@
 #include "spatial/comp/scene_node_scene_comp.h"
 #include "spatial/constants/aoi_priority.h"
 #include "spatial/constants/view.h"
+#include "spatial/system/actor_motion.h"  // 移动消息的内容与"是否在走"的判据:新观察者进视野时的补发
 #include "spatial/system/aoi_load.h"
 #include "spatial/system/grid.h"
 #include "spatial/system/interest.h"
@@ -16,12 +17,16 @@
 #include "macros/return_define.h"
 #include "muduo/base/Logging.h"
 #include "proto/common/component/actor_comp.pb.h"
+#include "proto/common/component/player_network_comp.pb.h"  // PlayerSessionSnapshotComp:移动补发只给有客户端的观察者
 #include "proto/common/component/team_comp.pb.h"
+#include "rpc/service_metadata/player_movement_service_metadata.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "core/utils/stat/stat.h"
+#include "proto/scene/player_movement.pb.h"
 #include "proto/scene/player_scene.pb.h"
 #include "proto/scene/scene_info.pb.h"  // SceneInfoComp:每个场景实体都有,用来遍历本线程的场景
 #include "network/client_message_sender.h"
+#include "time/system/time.h"
 #include <modules/scene/comp/scene_comp.h>
 
 #include <unordered_set>
@@ -70,6 +75,20 @@ bool AppendActorDestroy(ActorListDestroyS2C& message, entt::entity target)
         return false;
     }
     message.add_entity(netId);
+    return true;
+}
+
+// target 此刻的移动状态(内容口径在 actor_motion.h,与 MovementSystem::BroadcastMove 发的是同一份)。
+// 没有 Transform 或网络号时返回 false;网络号缺失在创建那一步已经记过 ERROR,这里不重复记。
+bool BuildActorMove(entt::entity target, uint64_t serverTimeMs, ActorMoveS2C& move)
+{
+    const auto* transform = tlsEcs.actorRegistry.try_get<Transform>(target);
+    const auto netId = actor_net_id::Of(tlsEcs.actorRegistry, target);
+    if (transform == nullptr || netId == 0)
+    {
+        return false;
+    }
+    actor_motion::FillActorMove(netId, *transform, tlsEcs.actorRegistry.try_get<Velocity>(target), serverTimeMs, move);
     return true;
 }
 
@@ -442,6 +461,44 @@ void AoiSystem::SendVisibilityChanges(const AoiVisibilityChanges& changes, entt:
             BroadcastToPlayerClients(SceneSceneClientPlayerNotifyActorListCreateMessageId, createMsg, watchers);
         }
     }
+
+    // 4) 新看见的目标正在走:创建之后补它此刻的移动状态。一个目标发 ActorMoveS2C,几个目标合成一条 ActorMoveListS2C,
+    //    分组方式同创建。移动广播只发给当时已经在看的人,不补的话后来者要等它的下一次广播才看到它在走
+    //    (客户端移动中约 250 ms 上报一次),这之前它停在创建时的位置。站着的目标不用补:创建消息已带位置和朝向。
+    //    "正在走"按 actor_motion::IsAdvancing 判(服务器在推进他的位置),不只看速度非零。
+    //    只发给有客户端的观察者,与移动广播同一口径。必须排在创建之后:客户端丢弃未知实体的移动。
+    std::map<entt::entity, EntityUnorderedSet> moveByTarget;
+    EntityVector advancing;
+    uint64_t serverTimeMs = 0;
+    static thread_local ActorMoveListS2C moveListMsg;
+    static thread_local ActorMoveS2C moveMsg;
+    for (const auto& [watcher, delta] : byWatcher) {
+        if (delta.created.empty() || !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(watcher)) continue;
+        advancing.clear();
+        for (const auto target : delta.created) {
+            if (actor_motion::IsAdvancing(tlsEcs.actorRegistry, target)) advancing.push_back(target);
+        }
+        if (advancing.empty()) continue;
+        if (serverTimeMs == 0) serverTimeMs = TimeSystem::NowMilliseconds();
+        if (advancing.size() == 1) {
+            moveByTarget[advancing.front()].insert(watcher);
+            continue;
+        }
+        moveListMsg.Clear();
+        for (const auto target : advancing) {
+            if (!BuildActorMove(target, serverTimeMs, *moveListMsg.add_moves())) {
+                moveListMsg.mutable_moves()->RemoveLast();
+            }
+        }
+        if (!moveListMsg.moves().empty()) {
+            SendToPlayerClient(SceneMovementClientPlayerNotifyActorMoveListMessageId, moveListMsg, watcher);
+        }
+    }
+    for (const auto& [target, watchers] : moveByTarget) {
+        if (BuildActorMove(target, serverTimeMs, moveMsg)) {
+            BroadcastToPlayerClients(SceneMovementClientPlayerNotifyActorMoveMessageId, moveMsg, watchers);
+        }
+    }
 }
 
 void AoiSystem::OnLeaveScene(entt::entity entity) {
@@ -527,4 +584,25 @@ void AoiSystem::RemoveEntityFromGrid(const Hex& hex, SceneGridListComp& gridList
             gridList.erase(gridIt);
         }
     }
+}
+
+void AoiSystem::ResendVisibleTargets(entt::entity watcher) {
+    if (!tlsEcs.actorRegistry.valid(watcher)) {
+        return;
+    }
+    // 读路径:没有关注表就是什么都没在显示,不补建。
+    const auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    if (list == nullptr) {
+        return;
+    }
+    // 对新客户端来说,显示中的每个目标都是刚出现:记成一批「显示」,交给下发出口照常组包。关系与名额原样不动,
+    // 所以这一批里只有 watcher 一个收件人。
+    AoiVisibilityChanges changes;
+    changes.changes.reserve(list->VisibleCount());
+    for (const auto& [target, entry] : list->entries) {
+        if (entry.visible) {
+            changes.changes.push_back({watcher, target, true});
+        }
+    }
+    SendVisibilityChanges(changes);
 }

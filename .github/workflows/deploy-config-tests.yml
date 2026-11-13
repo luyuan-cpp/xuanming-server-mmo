@@ -47,6 +47,9 @@ on:
       - "go/login/internal/logic/pkg/loginqueue/dispatcher.go"
       - "go/login/internal/logic/pkg/loginqueue/queue.go"
       - "go/login/internal/svc/servicecontext.go"
+      - "go/login/internal/svc/auth_init.go"
+      - "go/login/internal/logic/pkg/auth/password_provider.go"
+      - "go/login/internal/logic/pkg/auth/password_schema.go"
       - "go/mail/internal/metrics/**"
       - "go/rank/internal/metrics/**"
       - "go/match/internal/metrics/**"
@@ -56,6 +59,11 @@ on:
       - "go/guild/internal/svc/merged_zones.go"
       - "go/trade/internal/svc/servicecontext.go"
       - "go/data_service/internal/metrics/**"
+      - "go/data_service/internal/svc/directory_events.go"
+      - "go/data_service/internal/svc/role_fence.go"
+      - "go/data_service/internal/store/account_directory_events.go"
+      - "go/data_service/internal/store/account_role_name.go"
+      - "go/data_service/internal/store/account_role_ref.go"
       - "go/db/internal/metrics/**"
       - "go/db/internal/playerstore/server.go"
       - "proto/player_store/player_store.proto"
@@ -71,6 +79,33 @@ on:
       - "cpp/libs/engine/muduo_windows/src/contrib/hiredis/**"
       - "tools/archived/muduo_linux_overlay/contrib/hiredis/**"
       - "third_party/muduo/contrib/hiredis/**"
+      - "cpp/libs/engine/muduo_windows/src/muduo/net/Acceptor.*"
+      - "cpp/libs/engine/muduo_windows/src/muduo/net/SocketsOps.cc"
+      - "tools/archived/muduo_linux_overlay/muduo/net/Acceptor.*"
+      - "tools/archived/muduo_linux_overlay/muduo/net/SocketsOps.cc"
+      - "third_party/muduo/muduo/net/Acceptor.*"
+      - "third_party/muduo/muduo/net/SocketsOps.cc"
+      - "cpp/libs/engine/muduo_windows/src/muduo/net/TcpServer.*"
+      - "tools/archived/muduo_linux_overlay/muduo/net/TcpServer.*"
+      - "third_party/muduo/muduo/net/TcpServer.*"
+      - "cpp/libs/engine/core/node/system/node/process_fd_metrics.h"
+      - "cpp/nodes/gate/handler/rpc/connection_admission.*"
+      - "cpp/nodes/gate/handler/rpc/client_session_handler.cpp"
+      - "cpp/nodes/gate/main.cpp"
+      - "cpp/libs/services/scene/player/system/currency_metrics.cpp"
+      - "cpp/libs/modules/currency/system/currency_clawback_stats.h"
+      - "cpp/libs/modules/currency/system/currency_system.cpp"
+      - "cpp/nodes/scene/main.cpp"
+      - "deploy/observability/alloy/config.alloy"
+      - "go/db/internal/auditoutbox/**"
+      - "go/db/internal/config/audit_outbox.go"
+      - "go/db/internal/playerstore/audit_outbox.go"
+      - "cpp/libs/modules/audit/**"
+      - "cpp/libs/modules/transaction_log/transaction_log_system.cpp"
+      - "cpp/libs/modules/snapshot/snapshot_system.cpp"
+      - "cpp/libs/services/scene/player/system/player_save_metrics.cpp"
+      - "cpp/libs/services/scene/player/system/player_store_client.cpp"
+      - "cpp/nodes/scene/main.cpp"
   pull_request:
     branches: [main]
     paths:
@@ -105,6 +140,12 @@ on:
       - "go/login/internal/logic/pkg/loginqueue/dispatcher.go"
       - "go/login/internal/logic/pkg/loginqueue/queue.go"
       - "go/login/internal/svc/servicecontext.go"
+      # login 口令登录部署开关的契约用例(login_password_auth_deploy_contract.tests.ps1)直接读的源码:失败配额池的每节点上限
+      # (auth_init.go passwordQuotaRedisPoolSize)、每次 Argon2id 的内存与并发上限(password_provider.go)、口令库名(password_schema.go)。
+      # 配置段的键集合读的是上面已列的 config.go。改了它们而不重跑,Redis 总账、login 的内存加量与配置模板会悄悄落后。
+      - "go/login/internal/svc/auth_init.go"
+      - "go/login/internal/logic/pkg/auth/password_provider.go"
+      - "go/login/internal/logic/pkg/auth/password_schema.go"
       # 邮件告警的指标名核对用例(k8s_deploy_contract.tests.ps1「mail-alerts.yaml」)直接读 metrics.go 拼指标全名:
       # 只改这里把指标改了名,告警会静默失效,不重跑就看不出来
       - "go/mail/internal/metrics/**"
@@ -123,6 +164,13 @@ on:
       - "go/guild/internal/svc/merged_zones.go"
       - "go/trade/internal/svc/servicecontext.go"
       - "go/data_service/internal/metrics/**"
+      # 账号目录告警(data_service_account_directory_alerts_contract.tests.ps1)另读这几份源码:预置序列的装配、
+      # 后台收尾与判陈旧写指标的调用、reason / step 的封闭集合、告警让值班去搜的日志原文。只改它们也会让告警静默失效
+      - "go/data_service/internal/svc/directory_events.go"
+      - "go/data_service/internal/svc/role_fence.go"
+      - "go/data_service/internal/store/account_directory_events.go"
+      - "go/data_service/internal/store/account_role_name.go"
+      - "go/data_service/internal/store/account_role_ref.go"
       - "go/db/internal/metrics/**"
       - "go/db/internal/playerstore/server.go"
       - "proto/player_store/player_store.proto"
@@ -142,6 +190,46 @@ on:
       - "cpp/libs/engine/muduo_windows/src/contrib/hiredis/**"
       - "tools/archived/muduo_linux_overlay/contrib/hiredis/**"
       - "third_party/muduo/contrib/hiredis/**"
+      # muduo Acceptor 的 accept 失败降级同样有三份副本(Windows 编译件、Linux overlay、业务 include 的头文件镜像):
+      # 头文件镜像与编译件不一致时类布局对不上,链接照样成功、运行期才出错,由 muduo_acceptor_copies_contract.tests.ps1 守住
+      - "cpp/libs/engine/muduo_windows/src/muduo/net/Acceptor.*"
+      - "cpp/libs/engine/muduo_windows/src/muduo/net/SocketsOps.cc"
+      - "tools/archived/muduo_linux_overlay/muduo/net/Acceptor.*"
+      - "tools/archived/muduo_linux_overlay/muduo/net/SocketsOps.cc"
+      - "third_party/muduo/muduo/net/Acceptor.*"
+      - "third_party/muduo/muduo/net/SocketsOps.cc"
+      # 准入回调经 TcpServer 转给 Acceptor,同样是三份副本(同一份契约测试的 A1 / A6)
+      - "cpp/libs/engine/muduo_windows/src/muduo/net/TcpServer.*"
+      - "tools/archived/muduo_linux_overlay/muduo/net/TcpServer.*"
+      - "third_party/muduo/muduo/net/TcpServer.*"
+      # C++ 节点 fd 与 accept 降级指标的名字:告警规则按名字引用,由 cpp_node_resource_alerts_contract.tests.ps1 对照
+      - "cpp/libs/engine/core/node/system/node/process_fd_metrics.h"
+      # gate 连接准入的指标名、拒绝原因与装配(准入回调、指标登记、关源):告警规则按名字引用,
+      # 少接一行就整个不生效,由 gate_connection_alerts_contract.tests.ps1 对照源码
+      - "cpp/nodes/gate/handler/rpc/connection_admission.*"
+      - "cpp/nodes/gate/handler/rpc/client_session_handler.cpp"
+      - "cpp/nodes/gate/main.cpp"
+      # scene 补缴版本错位计数的指标名、自增点与登记(告警规则按名字引用,改名或少登记一行就永远不响),
+      # 由 persist_version_skew_alerts_contract.tests.ps1 对照源码
+      - "cpp/libs/services/scene/player/system/currency_metrics.cpp"
+      - "cpp/libs/modules/currency/system/currency_clawback_stats.h"
+      - "cpp/libs/modules/currency/system/currency_system.cpp"
+      - "cpp/nodes/scene/main.cpp"
+      # 本机 Alloy 的解析规则:k8s 上的 C++ sidecar 与容器日志 DaemonSet 照搬它,两边逐段一致由
+      # k8s_log_collection_contract.tests.ps1 核对。只改本机那份时不重跑,集群上的规则会悄悄落后
+      - "deploy/observability/alloy/config.alloy"
+      # 审计发件箱告警(audit_outbox_alerts_contract.tests.ps1)对照的源码:转发循环的活性接线与阈值常量(auditoutbox、config)、
+      # go/db 跳过原因(playerstore/audit_outbox.go)、scene 侧丢弃原因与计数点(modules/audit、记流水与快照的入口、存盘状态机)、
+      # 导出它们的采集回调与登记(player_save_metrics.cpp、scene main)。只改这些文件把名字或常量改了,告警会静默失效
+      - "go/db/internal/auditoutbox/**"
+      - "go/db/internal/config/audit_outbox.go"
+      - "go/db/internal/playerstore/audit_outbox.go"
+      - "cpp/libs/modules/audit/**"
+      - "cpp/libs/modules/transaction_log/transaction_log_system.cpp"
+      - "cpp/libs/modules/snapshot/snapshot_system.cpp"
+      - "cpp/libs/services/scene/player/system/player_save_metrics.cpp"
+      - "cpp/libs/services/scene/player/system/player_store_client.cpp"
+      - "cpp/nodes/scene/main.cpp"
   workflow_dispatch:
 
 permissions:

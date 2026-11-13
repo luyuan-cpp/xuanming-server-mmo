@@ -89,4 +89,20 @@ public final class CommerceApi {
                         String currency, String state, long paymentDeadlineMs) {}
     // 仅供已认证的 payment 角色查原订单；金额与归属均由服务器原记录返回。
     public record OrderQuery(@NotBlank @Size(max=36) String orderId) {}
+
+    /**
+     * POST /internal/payments/revision 的请求(payment 角色,payment-recharge.md §22.6):渠道翻转了一笔已记下的付款。
+     * revision 是这笔钱的修订号,奇数 = 已被渠道撤销(fact=REVOKED),大于 0 的偶数 = 撤销又被撤回(fact=PAID)。
+     * orderId 是这笔付款报给商城时所报的订单(绑定的那张,或异常付款冲的那张),商城按它先锁订单行,与付款、退款同一锁序。
+     */
+    public record Revision(String orderId, String channel, String transactionId, int revision, String fact) {}
+
+    /** 修订的应答:商城当前记下的修订号与事实(请求的修订号不大于已记的也回 200,原样回当前值),以及订单当前状态。 */
+    public record RevisionOutcome(int revision, String fact, String orderState) {}
+
+    /**
+     * POST /internal/refunds/close 的请求(payment 角色):这笔付款的渠道退款做不了(渠道没有开发者退款接口,或渠道明确失败),
+     * 退款待办转人工,不再列在待退款里。订单本身那笔(取消后迟到、交付被拒)转人工时订单一并转 MANUAL。
+     */
+    public record RefundClosure(String orderId, String channel, String paymentTransactionId, String reason) {}
 }

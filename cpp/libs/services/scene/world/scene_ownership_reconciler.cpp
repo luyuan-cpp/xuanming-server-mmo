@@ -18,7 +18,7 @@
 #include "proto/common/base/node.pb.h"
 #include "proto/scene/scene_info.pb.h"
 #include "thread_context/ecs_context.h"
-#include "thread_context/redis_manager.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "world/scene_lifecycle.h"
 
 namespace scene_ownership
@@ -434,19 +434,23 @@ std::optional<scene_ownership::SweepOutcome> SceneOwnershipReconciler::SweepOnce
 	return Sweep(session_);
 }
 
-bool SceneOwnershipReconciler::SendOwnerRead(hiredis::Hiredis &redis, const std::shared_ptr<Session> &session,
+bool SceneOwnershipReconciler::SendOwnerRead(RedisClusterClient &redis, const std::shared_ptr<Session> &session,
 											 std::vector<scene_ownership::PendingCheck> batch,
 											 const std::string &holderKey, const std::string &selfNodeId,
 											 const std::string &selfUuid, scene_ownership::Clock::time_point issuedAt,
 											 const std::shared_ptr<scene_ownership::ReleaseBudget> &budget)
 {
-	// MGET <本节点号持有者> scene:{id}:node ...:键名按长度传参,不经格式串。
+	// MGET <本节点号持有者> scene:{ctl:<z>}:<id>:node ...:键名按长度传参,不经格式串。
+	// 全部按本节点的 zone 拼(与 holderKey 同一个 tag,同槽,docs/design/redis-cluster-all-domains-20261110.md §3.4):
+	// 本节点只承载本 zone 的场景(CreateScene 入口按 zone 拒绝别的 zone 的场景,两边都核)。控制集群句柄的守卫要求多键
+	// 同一个 tag,哪天这里混进别的 tag,命令当场被拒(kSendFailed),不会发出跨槽的 MGET。
 	std::vector<std::string> keys;
 	keys.reserve(batch.size() + 1);
 	keys.push_back(holderKey);
+	const std::uint32_t zoneId = GetZoneId();
 	for (const auto &check : batch)
 	{
-		keys.push_back(scene_ownership::SceneNodeKey(check.sceneId));
+		keys.push_back(scene_ownership::SceneNodeKey(zoneId, check.sceneId));
 	}
 	static constexpr char kMget[] = "MGET";
 	std::vector<const char *> argv;
@@ -461,15 +465,10 @@ bool SceneOwnershipReconciler::SendOwnerRead(hiredis::Hiredis &redis, const std:
 		argvLen.push_back(key.size());
 	}
 
-	char *formatted = nullptr;
-	const auto length = ::redisFormatCommandArgv(&formatted, static_cast<int>(argv.size()), argv.data(), argvLen.data());
-	if (length < 0 || formatted == nullptr)
-	{
-		return false;
-	}
 	// 回调只按值捕获:Session 的 weak_ptr、这一批的实体句柄与核对状态号、发读时的节点号 / uuid / 时刻、本轮预算
-	// (AGENTS.md §11.7)。MGET 不改数据:任何结局(含断线时的空应答)都不在维护前沿留下 UNKNOWN。
-	const int ret = redis.formattedCommand(
+	// (AGENTS.md §11.7)。MGET 不改数据(SideEffects::kNone):任何结局(含断线时的空应答)都不在维护前沿留下 UNKNOWN。
+	// 同一轮的几批同 slot,集群客户端按发出顺序停等,应答也按这个顺序回来。
+	const int ret = redis.commandArgv(
 		[weak = std::weak_ptr<Session>(session), batch = std::move(batch), selfNodeId, selfUuid, issuedAt,
 		 budget](hiredis::Hiredis *, redisReply *reply)
 		{
@@ -493,8 +492,7 @@ bool SceneOwnershipReconciler::SendOwnerRead(hiredis::Hiredis &redis, const std:
 																   live->IdentityConfirmed());
 			scene_ownership::ApplyReadings(batch, readings.owners, selfNodeId, slotHolder, issuedAt, *budget);
 		},
-		formatted, static_cast<std::size_t>(length), &hiredis::Hiredis::hasNoSideEffect);
-	::redisFreeCommand(formatted);
+		static_cast<int>(argv.size()), argv.data(), argvLen.data(), RedisClusterClient::SideEffects::kNone);
 	return ret == REDIS_OK;
 }
 
@@ -509,8 +507,8 @@ scene_ownership::SweepOutcome SceneOwnershipReconciler::Sweep(const std::shared_
 
 	// 不看本节点的 etcd 身份:「映射不是本节点号」与「本节点号被更新的登记接走」都不依赖 etcd 就成立。etcd 整体故障时
 	// scene_manager 不会判任何节点死亡、映射不变,读到的都是本节点,什么也不做;只有本节点单边失联、被判死之后,映射才会变。
-	auto &redis = tlsSceneControlRedis.GetConnection();
-	if (!redis || !redis->connected())
+	RedisClusterClient &redis = tlsControlRedis;
+	if (!redis.connected())
 	{
 		return finish(SweepOutcome::kRedisUnavailable);
 	}
@@ -538,7 +536,7 @@ scene_ownership::SweepOutcome SceneOwnershipReconciler::Sweep(const std::shared_
 		std::vector<scene_ownership::PendingCheck> batch(checks.begin() + static_cast<std::ptrdiff_t>(begin),
 														 checks.begin() + static_cast<std::ptrdiff_t>(end));
 		const std::size_t batchSize = batch.size();
-		if (SendOwnerRead(*redis, session, std::move(batch), holderKey, selfNodeId, selfUuid, issuedAt, budget))
+		if (SendOwnerRead(redis, session, std::move(batch), holderKey, selfNodeId, selfUuid, issuedAt, budget))
 		{
 			++session->readsInFlight;
 			continue;

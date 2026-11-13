@@ -18,6 +18,7 @@ package main
 //
 //	冻结之前任何一步失败          什么都没变,退出码 1(拒绝)或 2(没做成)。
 //	冻结失败 / 复制断开 / 超预算   先作废翻转,再解冻源库,退出码 2。state 还是 MOVING,可以重跑。复制断开还要清掉 verify 记录。
+//	静止比对不一致                 追平之后源库和目标内容不同:verify 之后复制漏了写,或者目标被写过。同上回滚,清掉 verify 记录。
 //	翻转 CAS 冲突                 映射被别人改了。这个 run 已翻转算成功;还归这个 run 就回滚;都不是就不动,退出码 3。
 //	翻转时 etcd 不通或没有回音     结局未知。作废不了就绝不解冻:解冻之后如果翻转其实成了,旧进程和新进程会各写一边。
 //	                              源库保持冻结,退出码 3,等 etcd 恢复后重跑 cutover 或 rollback,读到的映射决定结局。
@@ -30,6 +31,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -57,6 +59,10 @@ var (
 
 	// errStrayWriter:翻转之前有写者连着目标。闸门表是复制过去的,没冻结时它能过闸,所以它可能已经写过目标,校验记录不再算数。
 	errStrayWriter = errors.New("writer accounts are connected to the target before the flip")
+
+	// errTargetDiverged:源库冻结、复制追平之后,目标和源库的内容还是不同。verify 之后复制漏了一段写,或者目标被别人写过,校验记录不再算数。
+	// 它不带 errMismatch:窗口已经冻结过又回滚了,退出码和别的回滚原因一样是 2。
+	errTargetDiverged = errors.New("the target differs from the frozen source after replication caught up")
 )
 
 func refusedf(format string, args ...any) error {
@@ -120,6 +126,8 @@ type gateState struct {
 type adminSide interface {
 	ServerBackend(ctx context.Context) (string, error)
 	SchemaExists(ctx context.Context, schema string) (bool, error)
+	// TablesWithoutPrimaryKey 列这个库里没有主键的表。
+	TablesWithoutPrimaryKey(ctx context.Context, schema string) ([]string, error)
 	CreateSchema(ctx context.Context, schema, charset, collation string) error
 	DropSchema(ctx context.Context, schema string) error
 	AccountExists(ctx context.Context, principal string) (bool, error)
@@ -172,6 +180,10 @@ type moverOptions struct {
 	confirmDrop        bool
 	acknowledgeNoAudit bool
 	metricsTargets     []string
+
+	feedEndpoint     string        // -sync 里的 TiCDC OpenAPI 地址,MySQL 档为空。cutover 记进映射,cleanup 比
+	compareBudget    time.Duration // -compare-budget:切换窗口里那次静止比对的时限,不算在 budget 里
+	skipFinalCompare bool          // -skip-final-compare
 }
 
 type mover struct {
@@ -182,6 +194,8 @@ type mover struct {
 	sourceAdmin adminSide
 	targetAdmin adminSide
 	repl        replication
+	// feeds 只有 cleanup 用:删源库之前问复制流还在不在。
+	feeds feedPresence
 	// openView 打开一侧的校验和视图。snapshot 为空表示当前数据。
 	openView func(ctx context.Context, role, snapshot string) (checksumView, error)
 	// scrape 读一个进程的 db_placement_version;没有这个序列时 found=false。
@@ -317,6 +331,19 @@ func (m *mover) checkNewMove(ctx context.Context, rec dbplacement.Record) error 
 	}
 	if exists {
 		return refusedf("the target cluster already has a database %s: a move starts from an empty target", m.o.db)
+	}
+	return m.requirePrimaryKeys(ctx)
+}
+
+// requirePrimaryKeys 拒绝搬有无主键表的库。逐行摘要用 BIT_XOR 合并,完全相同的两行互相抵消,这种表比不出差异;
+// TiCDC 也不同步既没有主键、又没有非空唯一键的表。verify 按同一个判据再拦一次(noPrimaryKeyError),这里是为了在起复制之前就说清楚。
+func (m *mover) requirePrimaryKeys(ctx context.Context) error {
+	tables, err := m.sourceAdmin.TablesWithoutPrimaryKey(ctx, m.o.db)
+	if err != nil {
+		return fmt.Errorf("list the tables of %s without a primary key: %w", m.o.db, err)
+	}
+	if len(tables) != 0 {
+		return refusedf("these tables of %s have no primary key and cannot be moved, their contents cannot be verified: %s. Give each a primary key first", m.o.db, strings.Join(tables, ", "))
 	}
 	return nil
 }
@@ -539,23 +566,30 @@ func (m *mover) verify(ctx context.Context) error {
 		verifiedMs = point.AtMs
 	}
 	m.logf("verify", "comparing at %s", point.Detail)
+	compareStarted := m.now()
 	mismatches, err := m.compare(ctx, "verify", point.Source, point.Target)
 	if err != nil {
 		return err
 	}
+	compareTook := max(m.now().Sub(compareStarted), 0)
 	if err := m.repl.RecheckVerifyPoint(ctx, point); err != nil {
 		return err
 	}
 	if len(mismatches) != 0 {
 		return fmt.Errorf("%w: %d table(s) differ: %s", errMismatch, len(mismatches), strings.Join(mismatches, "; "))
 	}
-	// 校验和要算很久,这段时间复制可能被重建。流变了,比过的数据和之后复制过来的数据之间可能有缺口。
+	// 校验和要算很久,这段时间复制可能被重建、过滤可能被改。流变了,比过的数据和之后复制过来的数据之间可能有缺口。
 	feed, err := m.repl.Identity(ctx)
 	if err != nil {
 		return fmt.Errorf("read the replication stream after comparing: %w", err)
 	}
 	if feed != point.Feed {
-		return refusedf("the replication stream changed during verify (%+v, now %+v): run verify again", point.Feed, feed)
+		return refusedf("the replication stream or its config changed during verify (%+v, now %+v): run verify again", point.Feed, feed)
+	}
+	// 复制流的身份按映射值里的写法打进本地日志:映射要手工写回时(etcd 从备份恢复)原样抄回 move.verified_feed,cleanup 靠它核这条流撤掉了没有。
+	feedJSON, err := json.Marshal(feed)
+	if err != nil {
+		return fmt.Errorf("encode the replication stream: %w", err)
 	}
 	cur, err := m.store.Get(ctx, m.o.db)
 	if err != nil {
@@ -568,10 +602,12 @@ func (m *mover) verify(ctx context.Context) error {
 	next.Move.VerifiedMs = verifiedMs
 	next.Move.VerifiedFeed = &feed
 	next.Move.VerifiedPrimaryTs = point.PrimaryTs
+	next.Move.VerifyTookMs = uint64(compareTook.Milliseconds())
 	if err := m.store.CompareAndPut(ctx, m.o.db, cur.ModRevision, next); err != nil {
 		return fmt.Errorf("record the verify result (re-run verify): %w", err)
 	}
-	m.logf("verify", "ok: every table matches. cutover accepts this result for %s", m.o.verifyMaxAge)
+	m.logf("verify", "ok: every table matches, the comparison took %s, replication stream %s. cutover accepts this result for %s and compares once more inside the freeze window",
+		compareTook.Round(time.Millisecond), feedJSON, m.o.verifyMaxAge)
 	return nil
 }
 
@@ -677,17 +713,20 @@ func (m *mover) cutover(ctx context.Context) error {
 	if age := m.now().Sub(time.UnixMilli(int64(verifiedMs))); age > m.o.verifyMaxAge {
 		return refusedf("the last verify is %s old, older than -verify-max-age=%s: run verify again", age.Round(time.Second), m.o.verifyMaxAge)
 	}
+	if m.o.skipFinalCompare {
+		m.log.warn("cutover", skipFinalCompareWarning)
+	} else if err := m.checkFinalCompareFits(rec.Placement.Move); err != nil {
+		return err
+	}
 	preflight, cancel := context.WithTimeout(ctx, m.o.preflight)
 	err = m.cutoverPreflight(preflight, rec.Placement.Move)
 	cancel()
 	if err != nil {
 		return err
 	}
-	// 窗口从这里开始。超预算的那一步拿到 ctx 过期,走 abortWindow。
-	window, cancel := context.WithTimeout(ctx, m.o.budget)
-	defer cancel()
+	// 窗口从这里开始,时限在 runWindow 里分段给。超预算的那一步拿到 ctx 过期,走 abortWindow。
 	started := m.now()
-	if err := m.runWindow(window, rec); err != nil {
+	if err := m.runWindow(ctx, rec); err != nil {
 		return err
 	}
 	windowTook := m.now().Sub(started).Round(time.Millisecond)
@@ -699,7 +738,7 @@ func (m *mover) cutover(ctx context.Context) error {
 	if err := m.writeFlipMarker(marker, flipped); err != nil {
 		return err
 	}
-	m.logf("cutover", "ok: %s flipped to cluster %s, version %d. The window took %s. The source stays frozen. Next: stop the replication, run audit",
+	m.logf("cutover", "ok: %s flipped to cluster %s, version %d. The window took %s. The source stays frozen. Next: remove the replication (cleanup does not drop the source while it exists), run audit",
 		m.o.db, rec.Placement.Move.TargetCluster, flipped.Version, windowTook)
 	return nil
 }
@@ -724,14 +763,45 @@ func (m *mover) writeFlipMarker(ctx context.Context, placement dbplacement.Place
 	return nil
 }
 
-// checkFeedUnchanged 核复制流还是 verify 时那一条。流断过之后用较新的位置重建,延迟回到 0、校验记录还在,中间那段写却没复制过去。
+// skipFinalCompareWarning 是 -skip-final-compare 的告警,打到标准错误输出并写进本地日志。
+const skipFinalCompareWarning = "-skip-final-compare is set: the frozen source and the target are NOT compared before the flip. " +
+	"Writes that replication skipped after the last verify stay unnoticed until audit. Run audit right after the flip and keep the source until it passes"
+
+// checkFinalCompareFits 在冻结之前估窗口里那次静止比对装不装得下。它和 verify 做的是同一件事(全量比一遍),所以拿 verify 的耗时估:
+// 明知比不完还去冻结,业务白停一次。要冻结多久由运维用 -compare-budget 明说,工具不替他放宽。
+func (m *mover) checkFinalCompareFits(move *dbplacement.Move) error {
+	if took := time.Duration(move.VerifyTookMs) * time.Millisecond; took >= m.o.compareBudget {
+		return refusedf("the last verify needed %s to compare the tables and the freeze window compares them once more, which -compare-budget=%s cannot hold. Nothing was changed: pass a larger -compare-budget (the source stays frozen that long), or -skip-final-compare, see docs/ops/db-move-runbook.md §4",
+			took.Round(time.Second), m.o.compareBudget)
+	}
+	return nil
+}
+
+// feedChange 说明当前的复制流和 verify 记下的差在哪,相同时回空串。只有配置摘要不同是流没换、配置被改了,单独说清楚。
+func feedChange(verified *dbplacement.FeedIdentity, now dbplacement.FeedIdentity) string {
+	if verified == nil {
+		return fmt.Sprintf("the mapping has no verified replication stream (now %+v)", now)
+	}
+	if *verified == now {
+		return ""
+	}
+	sameStream := *verified
+	sameStream.ConfigDigest = now.ConfigDigest
+	if sameStream == now {
+		return fmt.Sprintf("the config of the replication stream changed since the last verify (digest %s, now %s): its filter or skip rules were edited", verified.ConfigDigest, now.ConfigDigest)
+	}
+	return fmt.Sprintf("the replication stream changed since the last verify (%+v, now %+v)", *verified, now)
+}
+
+// checkFeedUnchanged 核复制流还是 verify 时那一条,配置也没动过。流断过之后用较新的位置重建,或者过滤被改过,
+// 延迟回到 0、校验记录还在,中间那段写却没复制过去。
 func (m *mover) checkFeedUnchanged(ctx context.Context, move *dbplacement.Move) error {
 	feed, err := m.repl.Identity(ctx)
 	if err != nil {
 		return refusedf("replication is not ready, nothing was changed: %v", err)
 	}
-	if move.VerifiedFeed == nil || *move.VerifiedFeed != feed {
-		return refusedf("the replication stream changed since the last verify (now %+v): writes in between may be missing on the target. Nothing was changed: run verify again", feed)
+	if change := feedChange(move.VerifiedFeed, feed); change != "" {
+		return refusedf("%s: writes in between may be missing on the target. Nothing was changed: run verify again", change)
 	}
 	return nil
 }
@@ -839,9 +909,13 @@ func (m *mover) cutoverPreflight(ctx context.Context, move *dbplacement.Move) er
 	return m.checkProcessesKnowCluster(ctx, move.TargetCluster)
 }
 
-func (m *mover) runWindow(ctx context.Context, rec dbplacement.Record) error {
+// runWindow 是切换窗口。-budget 管窗口里静止比对以外的全部时间:冻结、等复制追平、解锁、开闸门、翻转。
+// 静止比对有自己的上限(-compare-budget),它跑的时候 -budget 不走:库大了比对要很久,不能因此把「等复制追平最多等多久」也一起放宽。
+func (m *mover) runWindow(parent context.Context, rec dbplacement.Record) error {
 	// 记过目标位置,说明上一次窗口走到过翻转附近,它发出的翻转可能还没有结局。这次即使还没发翻转,etcd 不通时也不能解冻。
 	earlierFlipPossible := rec.Placement.Move.TargetPoint != ""
+	ctx, stopCatchUp := context.WithTimeout(parent, m.o.budget)
+	defer stopCatchUp()
 	frozen, err := m.freezeSource(ctx)
 	if err != nil {
 		return m.abortWindow(rec, earlierFlipPossible, fmt.Errorf("freeze the source: %w", err))
@@ -872,6 +946,15 @@ func (m *mover) runWindow(ctx context.Context, rec dbplacement.Record) error {
 	if !targetGateReady(targetMeta, frozen, m.o.runIDBytes) {
 		return m.abortWindow(rec, earlierFlipPossible, fmt.Errorf("the target gate (epoch %d, writable %d) does not match the frozen source (epoch %d): the gate tables did not replicate", targetMeta.WriterEpoch, targetMeta.Writable, frozen.WriterEpoch))
 	}
+	// -budget 还剩多少,留给比对之后的几步。
+	budgetEnds, _ := ctx.Deadline()
+	budgetLeft := time.Until(budgetEnds)
+	// 排在记目标位置前面:比不过时还没解锁过账号、没开过目标闸门,回滚不用碰目标。
+	if err := m.finalCompare(parent); err != nil {
+		return m.abortWindow(rec, earlierFlipPossible, err)
+	}
+	ctx, stopOpen := context.WithTimeout(parent, budgetLeft)
+	defer stopOpen()
 	recorded, err := m.recordTargetPoint(ctx, rec, targetMeta)
 	if err != nil {
 		return m.abortWindow(rec, earlierFlipPossible, fmt.Errorf("record the target point: %w", err))
@@ -893,6 +976,9 @@ func (m *mover) runWindow(ctx context.Context, rec dbplacement.Record) error {
 	next.Version++
 	next.State = dbplacement.StateActive
 	next.Move.FlippedMs = m.nowMs()
+	// 和翻转同一次写:cleanup 按 FeedEndpoint 找这条复制流,跳过静止比对这件事也留在映射里。
+	next.Move.FeedEndpoint = m.o.feedEndpoint
+	next.Move.FinalCompareSkipped = m.o.skipFinalCompare
 	// 提交点。
 	err = m.store.CompareAndPut(ctx, m.o.db, rec.ModRevision, next)
 	if err == nil {
@@ -902,18 +988,43 @@ func (m *mover) runWindow(ctx context.Context, rec dbplacement.Record) error {
 	return m.abortWindow(rec, true, fmt.Errorf("flip the mapping: %w", err))
 }
 
-// recheckFeedInWindow 冻结之后再核一次复制流。预检之后流可能被删了重建:新流的 checkpoint 一样能越过冻结点,目标也能读到哨兵,中间那段写却不在目标上。
-// 流变了按复制断开处理,回滚时清掉 verify 记录。
+// recheckFeedInWindow 冻结之后再核一次复制流。预检之后流可能被删了重建、过滤可能被改:新流的 checkpoint 一样能越过冻结点,目标也能读到哨兵,中间那段写却不在目标上。
+// 流或它的配置变了按复制断开处理,回滚时清掉 verify 记录。
 func (m *mover) recheckFeedInWindow(ctx context.Context, move *dbplacement.Move) error {
 	feed, err := m.repl.Identity(ctx)
-	switch {
-	case errors.Is(err, errReplicationBroken):
+	if errors.Is(err, errReplicationBroken) {
 		return err
-	case err != nil:
-		return fmt.Errorf("read the replication stream: %v", err)
-	case move.VerifiedFeed == nil || *move.VerifiedFeed != feed:
-		return fmt.Errorf("%w: the stream changed since the last verify (now %+v)", errReplicationBroken, feed)
 	}
+	if err != nil {
+		return fmt.Errorf("read the replication stream: %v", err)
+	}
+	if change := feedChange(move.VerifiedFeed, feed); change != "" {
+		return fmt.Errorf("%w: %s", errReplicationBroken, change)
+	}
+	return nil
+}
+
+// finalCompare 在两边都静止的时候把全量再比一次:源库冻结着,复制追平了,目标的闸门还没开。
+// verify 之后复制被跳过一段(changefeed 用 --overwrite-checkpoint-ts 恢复、往目标注入空事务跳过 GTID),位置和哨兵照样对得上,
+// 只有比数据才看得出目标少了写入。两边都不动,读当前数据就行:不用 syncpoint,MySQL 档也不用副本(源库冻结着,CHECKSUM TABLE 的读锁挡不到写入)。
+// 回的错误不带 errRefused、errMismatch:窗口已经冻结过,回滚之后的退出码是 2,和别的回滚原因一样。
+func (m *mover) finalCompare(parent context.Context) error {
+	if m.o.skipFinalCompare {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(parent, m.o.compareBudget)
+	defer cancel()
+	started := m.now()
+	mismatches, err := m.compare(ctx, "cutover", "", "")
+	switch {
+	case err != nil && ctx.Err() != nil:
+		return fmt.Errorf("comparing the frozen source with the target was cut short (-compare-budget=%s): %v. If it ran out of time, pass a larger -compare-budget", m.o.compareBudget, err)
+	case err != nil:
+		return fmt.Errorf("compare the frozen source with the target: %v", err)
+	case len(mismatches) != 0:
+		return fmt.Errorf("%w: %d table(s) differ: %s. Writes that replication skipped after the last verify, or writes made on the target, would look like this", errTargetDiverged, len(mismatches), strings.Join(mismatches, "; "))
+	}
+	m.logf("cutover", "the frozen source and the target match, compared in %s", max(m.now().Sub(started), 0).Round(time.Millisecond))
 	return nil
 }
 
@@ -1092,7 +1203,7 @@ func (m *mover) abortWindow(rec dbplacement.Record, mayHaveFlipped bool, cause e
 }
 
 // invalidateFlip 写一次映射让窗口里可能还在路上的翻转 CAS 失效(它带的是旧 ModRevision)。写成功之后这个 run 就翻转不了了。
-// 回滚的原因是复制断了,或者有写者提前连着目标时,顺手清掉 verify 记录:这段时间的写有没有丢、目标有没有被写过,只有重新校验才知道。
+// 回滚的原因是复制断了、有写者提前连着目标,或者静止比对不一致时,顺手清掉 verify 记录:这段时间的写有没有丢、目标有没有被写过,只有重新校验才知道。
 func (m *mover) invalidateFlip(ctx context.Context, rec dbplacement.Record, cause error) flipVerdict {
 	for {
 		cur, err := m.store.Get(ctx, m.o.db)
@@ -1108,8 +1219,8 @@ func (m *mover) invalidateFlip(ctx context.Context, rec dbplacement.Record, caus
 			}
 			next := clonePlacement(p)
 			next.Move.AbortedMs = m.nowMs()
-			if errors.Is(cause, errReplicationBroken) || errors.Is(cause, errStrayWriter) {
-				next.Move.VerifiedMs, next.Move.VerifiedFeed, next.Move.VerifiedPrimaryTs = 0, nil, 0
+			if errors.Is(cause, errReplicationBroken) || errors.Is(cause, errStrayWriter) || errors.Is(cause, errTargetDiverged) {
+				next.Move.VerifiedMs, next.Move.VerifiedFeed, next.Move.VerifiedPrimaryTs, next.Move.VerifyTookMs = 0, nil, 0, 0
 			}
 			if err = m.store.CompareAndPut(ctx, m.o.db, cur.ModRevision, next); err == nil {
 				return flipInvalidated
@@ -1241,7 +1352,31 @@ func (m *mover) compareAudit(ctx context.Context, targetPoint string) ([]string,
 	return compareSides(ctx, source, target, func(format string, args ...any) { m.logf("audit", format, args...) })
 }
 
+// requireFeedRemoved 在删源库之前核喂过目标的那条复制流已经不存在。DROP DATABASE 也是一条会被复制的语句:
+// changefeed 只是暂停、通道只是 STOP REPLICA 的话,它一恢复就把这条 DROP 送到目标,把正在收写入的库整个删掉。
+// 所以流只要还在就拒绝,不管它是什么状态;查不成也拒绝,不知道不等于没有。
+func (m *mover) requireFeedRemoved(ctx context.Context, move *dbplacement.Move) error {
+	if move.VerifiedFeed == nil {
+		return refusedf("the mapping of %s does not record the replication stream that fed the target, so nothing can prove it is gone. Nothing was dropped: put move.verified_feed back from the step log of run %s, see docs/ops/db-move-runbook.md §6", m.o.db, m.o.runID)
+	}
+	// 换一个 TiCDC 去问,答「没有这个 changefeed」不说明它已经撤掉:只认 cutover 读过这条流的那个地址。
+	if move.FeedEndpoint != m.o.feedEndpoint && !m.o.allowAddrMismatch {
+		return refusedf("cutover read the replication stream through %q but -sync points at %q: another TiCDC not knowing the changefeed proves nothing. Nothing was dropped: pass the -sync that cutover used, or -allow-addr-mismatch when this is another address of the same TiCDC cluster", move.FeedEndpoint, m.o.feedEndpoint)
+	}
+	exists, detail, err := m.feeds.StillExists(ctx, *move.VerifiedFeed)
+	switch {
+	case errors.Is(err, errRefused):
+		return err
+	case err != nil:
+		return refusedf("cannot tell whether the replication stream of this move is gone, nothing was dropped: %v", err)
+	case exists:
+		return refusedf("%s: DROP DATABASE on the source would replicate to cluster %s and drop the live database there. Nothing was dropped: remove the replication first (docs/ops/db-move-runbook.md §4 step 6), then re-run cleanup", detail, move.TargetCluster)
+	}
+	return nil
+}
+
 // cleanup 删源库。保留期内拒绝,必须显式 -confirm-drop。闸门不是这个 run 冻结的就不删:那不是一个已搬走的库。
+// 复制流没撤掉也不删(requireFeedRemoved)。
 func (m *mover) cleanup(ctx context.Context) error {
 	rec, err := m.store.Get(ctx, m.o.db)
 	if err != nil {
@@ -1264,7 +1399,8 @@ func (m *mover) cleanup(ctx context.Context) error {
 	if !m.o.confirmDrop {
 		return refusedf("this drops database %s on cluster %s: pass -confirm-drop", m.o.db, move.SourceCluster)
 	}
-	if err := m.checkEndpoints(move.SourceCluster, ""); err != nil {
+	// 目标的连接串只有 MySQL 档给(通道配在目标上),给了就一起核:查错了集群,「没有这个通道」不算数。
+	if err := m.checkEndpoints(move.SourceCluster, move.TargetCluster); err != nil {
 		return err
 	}
 	exists, err := m.sourceAdmin.SchemaExists(ctx, m.o.db)
@@ -1278,6 +1414,10 @@ func (m *mover) cleanup(ctx context.Context) error {
 		}
 		if !frozen {
 			return refusedf("the gate of %s on cluster %s is not frozen by run %s: it is not safe to drop, check the DSN", m.o.db, move.SourceCluster, m.o.runID)
+		}
+		// 紧挨着 DROP:核完到删库之间留给别人重新起复制的时间越短越好。
+		if err := m.requireFeedRemoved(ctx, move); err != nil {
+			return err
 		}
 		if err := m.sourceAdmin.DropSchema(ctx, m.o.db); err != nil {
 			return fmt.Errorf("drop the source (re-run cleanup): %w", err)

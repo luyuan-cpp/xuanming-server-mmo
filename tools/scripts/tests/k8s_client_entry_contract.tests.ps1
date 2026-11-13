@@ -305,7 +305,7 @@ exit 0
 
 # 库生成器的公共容器参数(关 sidecar:生成器单测只看本库渲染的部分)。
 function New-TestPodCommon {
-    return New-ClientEntryPodCommon -Image $NodeImageRef -ImagePullPolicy 'IfNotPresent' -SnowflakeCacheDir '/app/snowflake-cache' -LogVolumeSizeLimit '2Gi'
+    return New-ClientEntryPodCommon -Image $NodeImageRef -ImagePullPolicy 'IfNotPresent' -LogVolumeSizeLimit '2Gi'
 }
 
 # 进程内调用的 lib 生成器,返回值一律先经这里再断言。lib 按 .gitattributes「*.ps1 eol=crlf」签出(Linux CI 同样),
@@ -590,7 +590,7 @@ Test-Case '库:battle hostPort Deployment —— 只有客户端口 20000 占 ho
 Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotations 段(sidecar 在前);都不给时不写 annotations,只给 sidecar 时与之前逐字相同' {
     # k8s_deploy.ps1 经 -PodAnnotations 传 zone Redis 口令指纹(P0-A 第二批,Get-CppZoneRedisAuthAnnotations)。同一个 Pod 模板只能有一个
     # annotations: 段(重复键的 YAML 各解析器行为不一),所以它与 sidecar 指纹必须由 Get-ClientEntryPodAnnotationBlock 一次写出。
-    $commonArgs = @{ Image = $NodeImageRef; ImagePullPolicy = 'IfNotPresent'; SnowflakeCacheDir = '/app/snowflake-cache'; LogVolumeSizeLimit = '2Gi' }
+    $commonArgs = @{ Image = $NodeImageRef; ImagePullPolicy = 'IfNotPresent'; LogVolumeSizeLimit = '2Gi' }
     $sidecarArgs = @{
         SidecarContainerYaml = "- name: log-sidecar`n  image: registry.invalid/test/alloy:v0"
         SidecarVolumeYaml    = "- name: alloy-config`n  configMap:`n    name: cpp-log-sidecar-config"
@@ -640,7 +640,7 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
 Test-Case '库:-SecretEnv 渲染成 secretKeyRef(optional: false)、接在公共 env 之后,三个生成器都写;不给或空列表时逐字不变;名字非法、缺键、重名在打包时 throw' {
     # k8s_deploy.ps1 经 -SecretEnv 传 zone Redis 口令 ZONE_REDIS_PASSWORD(Get-CppZoneRedisSecretEnvEntries):口令只在 Secret redis-auth 里,
     # 不进 battle-node-config / node-config。optional: false 让 Secret 缺失的 Pod 停在 CreateContainerConfigError,不带空口令起来。
-    $commonArgs = @{ Image = $NodeImageRef; ImagePullPolicy = 'IfNotPresent'; SnowflakeCacheDir = '/app/snowflake-cache'; LogVolumeSizeLimit = '2Gi' }
+    $commonArgs = @{ Image = $NodeImageRef; ImagePullPolicy = 'IfNotPresent'; LogVolumeSizeLimit = '2Gi' }
     $secretEnv = @(@{ Name = 'ZONE_REDIS_PASSWORD'; SecretName = 'redis-auth'; SecretKey = 'password' })
     $plain = New-ClientEntryPodCommon @commonArgs
     $emptySecret = New-ClientEntryPodCommon @commonArgs -SecretEnv @()
@@ -661,7 +661,7 @@ Test-Case '库:-SecretEnv 渲染成 secretKeyRef(optional: false)、接在公共
         Assert-NotMatch -Text $plainDoc -Pattern 'ZONE_REDIS_PASSWORD' -Because "$($r.Name):不传时不写"
         Assert-Match -Text $secretDoc -Pattern $refPattern -Because "$($r.Name):渲染成 secretKeyRef,且 optional: false"
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($secretDoc, '(?m)^[ ]+- name: ZONE_REDIS_PASSWORD$').Count) -Because "$($r.Name):只写一份"
-        Assert-True -Condition ($secretDoc.IndexOf('- name: SNOWFLAKE_CACHE_DIR') -ge 0 -and $secretDoc.IndexOf('- name: SNOWFLAKE_CACHE_DIR') -lt $secretDoc.IndexOf('- name: ZONE_REDIS_PASSWORD')) -Because "$($r.Name):接在公共 env 之后(排在前面的 env 才能被 `$(VAR) 引用,它不被任何 env 引用,放最后不影响展开)"
+        Assert-True -Condition ($secretDoc.IndexOf('- name: RPC_PORT') -ge 0 -and $secretDoc.IndexOf('- name: RPC_PORT') -lt $secretDoc.IndexOf('- name: ZONE_REDIS_PASSWORD')) -Because "$($r.Name):接在公共 env 之后(排在前面的 env 才能被 `$(VAR) 引用,它不被任何 env 引用,放最后不影响展开)"
         Assert-NotMatch -Text $secretDoc -Pattern 'changed-after-pack' -Because "$($r.Name):打包时拷一份,之后改调用方的列表不影响"
     }
 
@@ -1534,18 +1534,26 @@ function Invoke-DeployWithFakeKubectl {
     # 网关的 mmorpg 在全球权威入口上,和 Go 服务一样所有档位都要显式给(Resolve-GatewaySqlMode,在 Assert-LogicalDbPreflight 里核);
     # 本节测的不是这条闸,同 Invoke-EntryDryRun 补虚构入口。用例自己给了就用它的。
     if (-not $all.ContainsKey('GlobalAuthorityTiDBHost')) { $all.GlobalAuthorityTiDBHost = 'tidb.invalid:4000' }
-    # 非 dev 档必须给 -PlayerRedisMasters,非 DryRun 还要读线上的 statefulset/redis-player(Assert-RedisPlayerPreflight)。本节用例测的不是这条闸:
-    # 补上参数与口令,让假 kubectl 答集群已在。用例自己的规则不匹配这条调用,放在最前不影响它们。
+    # 非 dev 档必须给 -PlayerRedisMasters 与 -ControlRedisMasters,非 DryRun 还要读线上的 statefulset/redis-player 与 statefulset/redis-control
+    # (Assert-RedisClusterPreflight)。本节用例测的不是这条闸:补上参数与口令,让假 kubectl 答两套集群都已在。用例自己的规则不匹配这两条调用,放在最前不影响它们。
     if ([string]$DeployArgs.ReleaseProfile -in @('staging', 'prod')) {
         $all.PlayerRedisMasters = 3
+        $all.ControlRedisMasters = 3
         # 逻辑库的闸同理(Assert-LogicalDbPreflight)。
         $all.DirectoryLogicalShards = 64
         $all.Region = 1
         $all.IdRegistryEtcd = 'id-registry.invalid:2379'
-        $Rules = @(@{ Pattern = '^get statefulset redis-player\b'; ExitCode = 0; Stdout = '6' }) + @($Rules)
-        if (-not $Env.ContainsKey('MMORPG_PLAYER_REDIS_PASSWORD')) {
-            $Env = @{} + $Env
-            $Env['MMORPG_PLAYER_REDIS_PASSWORD'] = 'contract-player-redis-pw-01'
+        $Rules = @(
+            @{ Pattern = '^get statefulset redis-player\b'; ExitCode = 0; Stdout = '6' }
+            @{ Pattern = '^get statefulset redis-control\b'; ExitCode = 0; Stdout = '6' }
+        ) + @($Rules)
+        foreach ($passwordFixture in @(
+                @{ Name = 'MMORPG_PLAYER_REDIS_PASSWORD'; Value = 'contract-player-redis-pw-01' }
+                @{ Name = 'MMORPG_CONTROL_REDIS_PASSWORD'; Value = 'contract-control-redis-pw-01' })) {
+            if (-not $Env.ContainsKey($passwordFixture.Name)) {
+                $Env = @{} + $Env
+                $Env[$passwordFixture.Name] = $passwordFixture.Value
+            }
         }
     }
     Set-Content -LiteralPath "$prefix.args.json" -Encoding utf8 -Value ($all | ConvertTo-Json -Depth 5)
@@ -1747,10 +1755,8 @@ $ProdSecretEnv = @{
     MMORPG_INTERNAL_AUTH_SIGNING_KEY = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60'
     MMORPG_INTERNAL_AUTH_PUBLIC_KEYS = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
     MMORPG_MYSQL_USER           = 'contract_ce_app'
-    MMORPG_MYSQL_PASSWORD       = 'contract-ce-mysql-pw-01'
     MMORPG_REDIS_PASSWORD       = 'contract-ce-redis-pw-01'
     MMORPG_GATEWAY_DB_USER      = 'contract_ce_gateway'
-    MMORPG_GATEWAY_DB_PASSWORD  = 'contract-ce-gwdb-pw-01'
 }
 $AdminKeyPurpose = 'Java Gateway 管理面口令(X-Admin-Key / admin.api-key)'
 $AdminKeyCases = @(
@@ -1865,15 +1871,20 @@ $ClientEntryWrapperKeys = @('ClientEntryMode', 'ClientPublicHost', 'GateClientHo
     'RequireClientEndpoint', 'AllowDisruptiveSwitch')
 # 共享 Redis 按用途拆实例(G4a 第 1a 批)三条包装链都透传的键(非 auto / 非空 / 被指定时才传,见各包装函数)。
 $RedisSplitWrapperKeys = @('RedisSplit', 'ConfirmRedisSplitSwitch', 'RedisQueueMaxMemory', 'RedisCtlMaxMemory', 'ConfirmRedisCtlSwitch')
-# 玩家域 Redis Cluster 三条包装链都透传的键(给了才传)。不粘滞:漏传 = staging / prod 被拒,dev 则把服务渲染回单实例。
-$PlayerRedisWrapperKeys = @('PlayerRedisMasters', 'PlayerRedisReplicasPerMaster', 'PlayerRedisMaxMemory', 'PlayerRedisStorage')
+# 玩家域与控制两套 Redis Cluster 三条包装链都透传的键(给了才传)。不粘滞:漏传 = staging / prod 被拒,dev 则把服务渲染回单实例(玩家域)或不建集群(控制)。
+$PlayerRedisWrapperKeys = @('PlayerRedisMasters', 'PlayerRedisReplicasPerMaster', 'PlayerRedisMaxMemory', 'PlayerRedisStorage',
+    'ControlRedisMasters', 'ControlRedisReplicasPerMaster', 'ControlRedisMaxMemory', 'ControlRedisStorage')
 # 逻辑库只走 dev_tools → k8s_deploy(给了才传):k8s_image.ps1 不部署 Go 服务,用不到它们。不粘滞:漏传 = staging / prod 被拒。
 $LogicalDbWrapperKeys = @('DirectoryLogicalShards', 'Region', 'IdIssuerRegion', 'PlayerStoreShards', 'SqlClusters', 'SqlDefaultCluster')
 $WrapperPairs = @(
     @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sDeploy'; Downstream = 'k8s_deploy.ps1'
-        Forwarded = $ClientEntryWrapperKeys + @('GatewayIngressHost', 'GatewayIngressClassName', 'GatewayIngressTlsSecret', 'GatewayTrustedProxies', 'LoginDevPasswordAuth', 'GateRouterMode',
+        Forwarded = $ClientEntryWrapperKeys + @('GatewayIngressHost', 'GatewayIngressClassName', 'GatewayIngressTlsSecret', 'GatewayTrustedProxies', 'LoginDevPasswordAuth', 'LoginPasswordAuth', 'GateRouterMode',
             # login 第三方登录(微信 / QQ)与它的防误关确认开关:不粘滞,包装入口漏传 = 重新部署时关掉或改掉线上第三方登录。
             'LoginWeChatAppId', 'LoginWeChatEndpoint', 'LoginWeChatAllowOpenId', 'LoginQQAppId', 'LoginQQEndpoint', 'LoginQQAllowOpenId', 'ConfirmLoginAuthProviderChange',
+            # 小游戏登录(微信小游戏 / 抖音小游戏)的六个参数,口径同上。
+            'LoginWeChatMiniGameAppId', 'LoginWeChatMiniGameEndpoint', 'LoginWeChatMiniGameAllowOpenId', 'LoginDouyinMiniGameAppId', 'LoginDouyinMiniGameEndpoint', 'LoginDouyinMiniGameAllowOpenId',
+            # Apple / Google 登录的四个参数,口径同上。
+            'LoginAppleClientId', 'LoginAppleEndpoint', 'LoginGoogleClientId', 'LoginGoogleEndpoint',
             # B0-4 nofile 豁免开关:不粘滞,包装入口漏传 = 以 warn 运行的环境经包装入口重新部署时落回 enforce、硬限不够即拒启。
             # 其后 + 拼上共享 Redis 按用途拆实例(G4a 第 1a 批)的键:漏传 -RedisSplit = 想切回共享拓扑(被 k8s_deploy 的切换闸拦下),
             # 漏传确认 / 容量 = 切不过去;k8s-redis-wipe 的确认开关只走这一条包装链。用 + 拼接而不写进本逗号列表:逗号比 + 结合得紧,会变成嵌套数组。
@@ -1904,9 +1915,12 @@ Test-Case 'k8s_deploy.ps1 的集群外入口参数名与类型(包装层与文�
     $expected = [ordered]@{
         ClientEntryMode = 'String'; RequireClientEndpoint = 'String'; ClientPublicHost = 'String'; GateClientHostTemplate = 'String'; GateNodePortBase = 'Int32'
         GateExternalTrafficPolicy = 'String'; BattleOrchestrator = 'String'; GatewayIngressHost = 'String'; GatewayIngressClassName = 'String'
-        GatewayIngressTlsSecret = 'String'; GatewayTrustedProxies = 'String'; LoginDevPasswordAuth = 'SwitchParameter'; AllowDisruptiveSwitch = 'SwitchParameter'
+        GatewayIngressTlsSecret = 'String'; GatewayTrustedProxies = 'String'; LoginDevPasswordAuth = 'SwitchParameter'; LoginPasswordAuth = 'SwitchParameter'; AllowDisruptiveSwitch = 'SwitchParameter'
         LoginWeChatAppId = 'String'; LoginWeChatEndpoint = 'String'; LoginWeChatAllowOpenId = 'SwitchParameter'; LoginQQAppId = 'String'; LoginQQEndpoint = 'String'
         LoginQQAllowOpenId = 'SwitchParameter'; ConfirmLoginAuthProviderChange = 'SwitchParameter'
+        LoginWeChatMiniGameAppId = 'String'; LoginWeChatMiniGameEndpoint = 'String'; LoginWeChatMiniGameAllowOpenId = 'SwitchParameter'
+        LoginDouyinMiniGameAppId = 'String'; LoginDouyinMiniGameEndpoint = 'String'; LoginDouyinMiniGameAllowOpenId = 'SwitchParameter'
+        LoginAppleClientId = 'String'; LoginAppleEndpoint = 'String'; LoginGoogleClientId = 'String'; LoginGoogleEndpoint = 'String'
     }
     foreach ($name in $expected.Keys) {
         Assert-Equal -Expected $expected[$name] -Actual $types[$name] -Because "k8s_deploy.ps1 -$name 的类型(GatewayTrustedProxies 为逗号分隔字符串,开关类为 switch)"

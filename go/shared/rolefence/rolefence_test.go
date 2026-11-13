@@ -35,6 +35,7 @@ type fakeFenceDB struct {
 	commits   int
 	rollbacks int
 	locked    []uint64
+	reads     []uint64 // 不加锁的读(readSQL),归属预检用
 	applies   int
 	lockErr   error
 	applyErr  error
@@ -127,11 +128,15 @@ func (c *fakeFenceConn) QueryContext(_ context.Context, query string, args []dri
 	if f.lockErr != nil {
 		return nil, f.lockErr
 	}
-	if query != lockSQL {
+	if query != lockSQL && query != readSQL {
 		return nil, fmt.Errorf("unexpected statement: %s", query)
 	}
 	player := args[0].Value.(uint64)
-	f.locked = append(f.locked, player)
+	if query == lockSQL {
+		f.locked = append(f.locked, player)
+	} else {
+		f.reads = append(f.reads, player)
+	}
 	fence, ok := f.rows[player]
 	return &fakeFenceRows{fence: fence, left: ok}, nil
 }

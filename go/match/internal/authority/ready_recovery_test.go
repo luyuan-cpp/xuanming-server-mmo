@@ -47,9 +47,7 @@ func TestReadyTiDBExpiredOutcomeRecoveryScansLostReplyAndReady(t *testing.T) {
 			decision, err := s.CommitBattleOutcome(ctx, request)
 			require.NoError(t, err)
 			require.Equal(t, row.Decision, decision, "迟到COMPLETE不能越过已提交ABORT")
-			var people int
-			require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_battle_settlement_source").Scan(&people))
-			require.Zero(t, people)
+			requireOnlyVoidSources(t, s, f.BattleId, len(f.Members))
 		})
 	}
 }

@@ -29,18 +29,24 @@ func (kv *scanInterleaveKV) Get(ctx context.Context, key string, opts ...clientv
 	return resp, err
 }
 
-func TestEtcdIntegration_OpenRechecksConcurrentRegionEntry(t *testing.T) {
+// 声明指针(-id-registry-rebuild 声明重建、-id-registry-open 直接开启)和并发的重新登记抢在一起:扫描之后、提交之前插进来
+// 一条在用码的记录,提交点必须连同范围一起复核。重建要求指针高于全部已有码;直接开启要求一条记录都没有(有就是丢过数据)。
+// 没有指针时补墓碑一律拒绝,所以并发写者只有重新登记一种。
+func TestEtcdIntegration_DeclaringThePointerRechecksConcurrentRegionEntry(t *testing.T) {
 	endpoints := itEndpoints(t, "MMORPG_ID_ISSUER_IT_REGISTRY")
+	rebuild := func(ctx context.Context, r *EtcdRegistry) (bool, error) { return r.BeginRebuild(ctx, 9) }
+	open := func(ctx context.Context, r *EtcdRegistry) (bool, error) { return r.Open(ctx, 9) }
 	for _, tc := range []struct {
-		name   string
-		region uint8
-		state  string
-		refuse bool
+		name       string
+		region     uint8
+		declare    func(context.Context, *EtcdRegistry) (bool, error)
+		rebuilding bool
+		refusal    error // nil = 声明成功
 	}{
-		{"同码恢复", 9, ClaimActive, true},
-		{"更大码恢复", 10, ClaimActive, true},
-		{"同码退役", 9, ClaimRetired, true},
-		{"更小码恢复", 8, ClaimActive, false},
+		{"重建:同码恢复", 9, rebuild, true, ErrRegionClaimed},
+		{"重建:更大码恢复", 10, rebuild, true, ErrRegionClaimed},
+		{"重建:更小码恢复", 8, rebuild, true, nil},
+		{"开启:更小码恢复", 8, open, false, ErrRegistryNeedsRebuild},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -58,24 +64,24 @@ func TestEtcdIntegration_OpenRechecksConcurrentRegionEntry(t *testing.T) {
 				}
 			}()
 			r.cli.KV = &scanInterleaveKV{KV: r.cli.KV, prefix: r.root + "region/", after: func() {
-				claim := Claim{State: tc.state, Authority: testAuthority, PrimaryCluster: 1, SecondaryCluster: 2,
+				claim := Claim{State: ClaimActive, Authority: testAuthority, PrimaryCluster: 1, SecondaryCluster: 2,
 					HighWater: uint64(tc.region)<<regionShift | 1, Blocks: 1}
 				ok, err := r.CompareAndSwap(ctx, tc.region, ClaimRecord{}, claim)
 				if err != nil || !ok {
 					t.Fatalf("并发写者未提交: ok=%v err=%v", ok, err)
 				}
 			}}
-			opened, err := r.Open(ctx, 9)
-			if tc.refuse {
-				if opened || !errors.Is(err, ErrRegionClaimed) {
-					t.Fatalf("并发新增已用码后必须拒绝开启: opened=%v err=%v", opened, err)
+			declared, err := tc.declare(ctx, r)
+			if tc.refusal != nil {
+				if declared || !errors.Is(err, tc.refusal) {
+					t.Fatalf("并发新增记录后必须拒绝声明: declared=%v err=%v, want %v", declared, err, tc.refusal)
 				}
-			} else if !opened || err != nil {
-				t.Fatalf("所有已用码仍小于起点时应能开启: opened=%v err=%v", opened, err)
+			} else if !declared || err != nil {
+				t.Fatalf("所有已用码仍小于指针时应能声明: declared=%v err=%v", declared, err)
 			}
-			next, _, exists, err := r.readNext(ctx)
-			if err != nil || exists == tc.refuse || (exists && next != 9) {
-				t.Fatalf("开启结果与持久状态不符: next=%d exists=%v err=%v", next, exists, err)
+			p, err := r.readPointer(ctx)
+			if err != nil || p.declared == (tc.refusal != nil) || (p.declared && (p.next != 9 || p.rebuilding != tc.rebuilding)) {
+				t.Fatalf("声明结果与持久状态不符: pointer=%+v err=%v", p, err)
 			}
 		})
 	}

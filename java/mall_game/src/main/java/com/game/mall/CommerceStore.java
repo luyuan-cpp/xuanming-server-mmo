@@ -26,8 +26,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class CommerceStore {
     private static final Logger LOG = LoggerFactory.getLogger(CommerceStore.class);
     static final long MAX_AMOUNT_MINOR = 9_000_000_000_000_000L;
-    /** 已付过的订单状态(待交付、已交付、退款中、已退款、人工):再来的付款不再绑定订单。 */
-    private static final Set<Integer> PAID_STATES = Set.of(1, 2, 5, 6, 7);
+    /** 已付过的订单状态(待交付、已交付、退款中、已退款、人工、扣回中、已扣回):再来的付款不再绑定订单。 */
+    private static final Set<Integer> PAID_STATES = Set.of(1, 2, 5, 6, 7, 8, 9);
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
     private final Clock clock;
@@ -95,7 +95,13 @@ public class CommerceStore {
                 if (changed != 1) { throw new CommerceException(409, "库存不足"); }
                 jdbc.update("INSERT INTO oms_order_item(order_sn,product_id,product_sku_id,product_sku_code,product_quantity,product_price_minor) VALUES (?,?,?,?,?,?)",
                         orderId, model.getProductId(), in.skuId(), model.getSkuCode(), in.quantity(), unitPrice);
-                if(jdbc.update("INSERT INTO commerce_order_grant(order_sn,item_config_id,count_per_unit,title) SELECT ?,item_config_id,count_per_unit,title FROM commerce_sku_grant WHERE sku_id=? AND item_config_id>0 AND count_per_unit>0 AND count_per_unit*?<=4096 AND CHAR_LENGTH(TRIM(title))>0",orderId,in.skuId(),in.quantity())!=1)throw new CommerceException(409,"SKU没有合法游戏交付映射或单次数量越界");
+                // 发放物二选一(物品或货币)冻结进订单;物品一单至多 4096 件,货币一单至多 DeliveryStore.MAX_CURRENCY_GRANT
+                // (商城金额上限的同一量级)。货币乘数量先转 DECIMAL 再比:BIGINT 相乘越界在 MySQL / TiDB 是报错而不是假。
+                if(jdbc.update("INSERT INTO commerce_order_grant(order_sn,item_config_id,count_per_unit,currency_type,currency_amount,title) "
+                    + "SELECT ?,item_config_id,count_per_unit,currency_type,currency_amount,title FROM commerce_sku_grant WHERE sku_id=? AND CHAR_LENGTH(TRIM(title))>0 AND ("
+                    + "(item_config_id>0 AND count_per_unit>0 AND count_per_unit*?<=4096 AND currency_type=0 AND currency_amount=0) OR "
+                    + "(item_config_id=0 AND count_per_unit=0 AND currency_type>=0 AND currency_amount>0 AND CAST(currency_amount AS DECIMAL(30,0))*?<=?))",
+                    orderId,in.skuId(),in.quantity(),in.quantity(),DeliveryStore.MAX_CURRENCY_GRANT)!=1)throw new CommerceException(409,"SKU没有合法游戏交付映射或单次数量越界");
                 return view(Objects.requireNonNull(byId(orderId, false)));
             }));
         } catch (DuplicateKeyException conflict) {
@@ -440,8 +446,15 @@ public class CommerceStore {
         return rows.getFirst();
     }
     private CommerceApi.Order view(Stored value) {
-        String state = switch (value.model().getStatus()) { case 0 -> "AWAITING_PAYMENT"; case 1 -> "DELIVERY_PENDING"; case 2 -> "DELIVERED"; case 4 -> "CANCELLED"; case 5 -> "REFUND_PENDING"; case 6 -> "REFUNDED"; case 7 -> "MANUAL"; default -> throw new CommerceException(503, "订单状态无法处理"); };
-        return new CommerceApi.Order(value.model().getOrderSn(), value.buyer(), value.skuId(), value.quantity(), value.model().getPayAmount().longValueExact(), value.currency(), state, value.deadline());
+        return new CommerceApi.Order(value.model().getOrderSn(), value.buyer(), value.skuId(), value.quantity(), value.model().getPayAmount().longValueExact(), value.currency(), stateName(value.model().getStatus()), value.deadline());
+    }
+
+    /**
+     * oms_order.status 的对外名称。8 / 9 是渠道修订付款之后的发放收敛(PaymentRevisionStore):REVERSING 收敛中
+     * (撤销后扣回,或撤销被撤回后补发)、REVERSED 已扣回;收敛完成且该持有时回到 DELIVERED。
+     */
+    static String stateName(int status) {
+        return switch (status) { case 0 -> "AWAITING_PAYMENT"; case 1 -> "DELIVERY_PENDING"; case 2 -> "DELIVERED"; case 4 -> "CANCELLED"; case 5 -> "REFUND_PENDING"; case 6 -> "REFUNDED"; case 7 -> "MANUAL"; case 8 -> "REVERSING"; case 9 -> "REVERSED"; default -> throw new CommerceException(503, "订单状态无法处理"); };
     }
     private static void requireOrderId(String id) {
         if (id == null || !id.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) { throw new CommerceException(400, "订单号非法"); }

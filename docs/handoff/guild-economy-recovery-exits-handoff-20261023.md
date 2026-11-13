@@ -91,7 +91,7 @@ Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests 
 
 ## 3. 残余（不阻塞）
 
-- 首发仍在服务端途中、重发恰在玩家离帮后到达：重发回 14002，首发若在离帮前已拿到成员行锁仍会提交。不会重复扣款，只是「原请求未执行」的提示不准，结算推送到达后页面自会更新。
+- 原记的「首发仍在服务端途中、重发恰在玩家离帮后到达：重发回 14002，首发仍会提交，『原请求未执行』提示不准」**不会发生**（2026-11-13 复核两版代码后删去）：预留事务与退帮 / 请离 / 解散锁同一条本人成员行，首发先拿到锁时离帮要等它连同去重记录一起提交；服务端回 14002 只依据已提交的状态，回之前幂等包装第 3 道还会在主库上再查一次去重记录，因此一定按首发结果答复。查不到就说明首发没先拿到锁，它进事务后读不到成员行而回滚，提示属实。推导与覆盖用例见 `05-economy.md` §5.44.1 同名段落。
 - 记录损坏出口已按负责人后续要求纳入本任务，见 §5；真实读取或权限故障仍须先恢复存储可读性，不能盲删。
 
 ## 4. 2026-11-05 Codex 实现与验证
@@ -397,3 +397,23 @@ Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests 
 **保留的首轮联网失败**：`guild-recovery-online-845b7bda2be74b63ba0ff075cac7d803/` 在账号 HTTP 预检出现一次 5 秒、零响应字节的传输超时，尚未建角或改资产，原因未确证。随后独立实际业务探针返回 HTTP 200 / code 0 / 零角色，作为补充业务就绪检查；第二次用全新账号 / 目录复验通过。没有修改客户端超时或测试断言，两轮证据均保留。隔离栈清理与非本轮容器对照见 `online-stack/` 的最终结果。
 
 **证据**：`build/verification/guild-recovery-notice-20261110/` 下 `guild-net-editmode-green.xml/.log`、`guild-net-editmode-green-exit.txt`、`verification-summary.json`、`source-before-green.json`、`source-after-green.json`；四条红灯在 `synchronous-notice-red.xml/.log`。首次失败、并行编译失败、正式生成、依赖安装与隔离环境检查证据均保留。
+
+### 8.7 2026-11-13 Claude Code 复核 §8.6 回执
+
+**结论**：Codex 的补修成立。审核第 1、2、4、5 条与 §8.5 两处到此收尾；第 6 条随协议第 4 批走，第 3 条只是证据丢失的记录。只读复核，未改代码，未编译，未运行。
+
+- **补修复核**：旧代码在 `Reject` 返回之后才执行 `_economyRecoveryNotice = Status`。`Reject → Changed → SetClient → Render → MaybeAutoRequest` 会在返回前同步发出本页补拉，补拉里的 `TakeRecoveryNotice()` 取不到结论，`Status` 也已改成「正在读取」，登记进去的就成了加载提示。`RejectEconomyRecovery` 把登记提到通知之前；它的 `if (Busy) return;` 与 `Reject` 自身的守卫相同，`recovering` 为假时行为与原来完全一样。红灯的断言原文（补拉后变成「捐献信息已更新 / 帮会商店已更新」）与这个推导一致。
+- **同类入口排查**：恢复流程里其余的登记点都在任何同步通知之前。`ConcludedOutsideOriginalGuild` 与 `AfterEconomyReject` 直接写 `Status`，不触发 `Changed`；成功分支在带文案重拉之前登记；`Refresh(结论)` 回调里的 `Apply` 不发通知。`AssetsChanged` 只让 `GuildUiRoot` 重拉背包，`GuildWindow` 不订阅背包事件，不会经它同步补拉。没有发现第二处晚登记。
+- **证据核对**：`guild-net-editmode-green.xml` 437/437（帮会 323、网络 114），27 条按名字全部通过，含新增的 `UnconfirmedReplayConclusionSurvivesTheVisiblePageReload` 两条；`synchronous-notice-red.xml` 4/4 失败；联网第二轮 `results.xml` 1/1。跑绿时的 `GuildClient.cs`（CRLF 下 `fa9ebedc…`）与客户端提交 `8e3687e1` 一致；两份用例文件与 `GuildWindow.cs` 与当前客户端工作区一致。
+- **提交状态**：客户端补修在 `8e3687e1`，`Docs/GuildUI.md` 在 `5b4b8c38`；服务端 §8.6、经济规格与 PROGRESS 两条在 `4edb25640`。回执里的「未提交」已过时。
+- **之后的源码变化**：客户端 `2978c807`（11-12）只把 `EconomyRequestId()` 改成调共用的 `ClientRequestKeys.TryCreate`，没有碰恢复与提示路径。逐行核对过：两者等价，都用密码学随机源、键非 0，拿不到随机数时返回失败、不发包、照旧提示「无法安全生成请求编号」。它的验证归客户端请求幂等键那项工作，不影响本节结论；但严格说，437/437 对应的是 `8e3687e1`，不是当前 HEAD。
+- **§3 的残余已删**：原记的「首发在途、重发恰在离帮后到达时回 14002、提示不准」复核两版代码后确认不会发生。预留事务与退帮 / 请离 / 解散锁同一条成员行，「已离帮」只依据已提交的状态，第 3 道还会在主库上再查一次。§3 与 `05-economy.md` §5.44.1 已改正文，没有代码改动。
+- **首轮联网超时**：用例第 80 行的账号预检走正式 `GatewayHttpClient`，超时 5 秒。Unity 日志是 `Curl error 28 … 5000 milliseconds with 0 bytes received`；网关日志只截到栈启动时，没有覆盖那次请求；事后诊断探针的登录只用了 79 毫秒。原因仍无法确证，也没有找到代码缺陷，所以不改客户端超时。客户端 `Docs/GuildUI.md` 的联网验收节已补两条：开跑前先做 `/api/server-list` 与诊断账号 `/api/login` 的业务就绪探针；失败时先用 `docker logs` 保存网关与 login 的日志。下次再出现就能定因。
+- **未做**：§8.3–§8.5 的可选变异红灯没有跑，这三处用例的有效性只有绿灯与代码审阅作证；联网冒烟用的是冻结参考后端，不代表当前服务端的全部改动。两版服务端无改动，Java 版不涉及。本节未提交。
+
+**给 Codex**（可选；本功能已没有待写的代码）。客户端仓 `D:\luyuan\mmorpg-client`，先关掉占用该工程的 Unity：
+
+1. 在当前客户端 HEAD 按 §8.1 的命令重跑帮会与网络两个 EditMode 程序集，覆盖 `2978c807` 之后的源码。通过标准：零失败、零跳过、退出 0，按名字找到 §8.6 核对过的 27 条与 `UnconfirmedReplayConclusionSurvivesTheVisiblePageReload` 两条。
+2. 同一轮补变异红灯：§8.3 末第 2 步（含 §8.4 那一项）与 §8.5 第 2 步。每项做完立即恢复，再用 `git diff` 核对只剩原来的改动。
+3. 结果 XML、日志与源码摘要存到服务端 `build/verification/guild-recovery-notice-20261113/`。
+4. 要对当前服务端再跑联网冒烟时，先按客户端 `Docs/GuildUI.md` 联网验收节新补的业务就绪探针执行；失败时先留网关与 login 的日志。

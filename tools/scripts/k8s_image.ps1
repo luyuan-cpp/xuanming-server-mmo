@@ -121,16 +121,6 @@ param(
     # 不粘滞:以 warn 运行的环境经本脚本发版却不传,会落回 enforce。追加在末尾,理由同上方"新参数一律追加在末尾"。
     [ValidateSet("", "enforce", "warn", IgnoreCase = $false)]
     [string]$NodeOpenFileLimitMode = "",
-    # 共享 Redis 按用途拆实例(G4a 第 1a 批),透传给 k8s_deploy.ps1 同名参数,语义见那边参数注释。
-    #   -RedisSplit:auto(缺省)= 不透传;none / queue 才透传。本脚本不部署 login / gateway,只有 release-all(不带 -SkipInfra)的
-    #     infra-up 会按 queue apply 排队实例;release-zone 给了也不改任何 ConfigMap。
-    #   -ConfirmRedisSplitSwitch:switch 只在被指定时透传(本脚本不部署 login / gateway,通常用不到)。
-    #   -RedisQueueMaxMemory:queue 实例的 maxmemory,非空才透传;release 档 release-all 带 -RedisSplit queue 时必填(k8s_deploy.ps1 校验)。
-    # 追加在末尾,理由同上方"新参数一律追加在末尾"。
-    [ValidateSet("auto", "none", "queue")]
-    [string]$RedisSplit = "auto",
-    [switch]$ConfirmRedisSplitSwitch,
-    [string]$RedisQueueMaxMemory = "",
     # 玩家域 Redis Cluster,透传给 k8s_deploy.ps1 同名参数,语义见那边参数注释。主节点数与副本数 0 = 不透传,容量非空才透传。
     # staging / prod 的 release-zone、release-all 必须给主节点数:scene 的 player_redis 由它决定。容量只对 release-all(不带 -SkipInfra)有意义。
     [ValidateRange(0, 512)]
@@ -139,10 +129,28 @@ param(
     [int]$PlayerRedisReplicasPerMaster = 0,
     [string]$PlayerRedisMaxMemory = "",
     [string]$PlayerRedisStorage = "",
-    # 控制域实例 redis-ctl-g<N>(缺口第 5 条),透传给 k8s_deploy.ps1 同名参数:容量非空才传,确认开关被指定才传。
+    # Loki 的形态与对象存储(docs/design/no-single-node-horizontal-scaling-20261001.md §10),透传给 k8s_deploy.ps1 同名参数,
+    # 语义与校验都在那边(Assert-LokiDeployPreflight)。只有 release-all(不带 -SkipInfra)会 apply Loki,release-zone 用不到。
+    # staging / prod 缺省是 3 副本:必须给 -LokiS3Endpoint 与 -LokiS3Bucket;访问密钥走环境变量 MMORPG_LOKI_S3_ACCESS_KEY_ID /
+    # MMORPG_LOKI_S3_SECRET_ACCESS_KEY,不经参数。以前这组参数传不进来,非 dev 档的 release-all 会在 Loki 的前置检查上被拦下。
+    # 副本数 0 = 不透传(k8s_deploy.ps1 按档位取),字符串非空才透传,switch 只在被指定时透传。追加在末尾,理由同上方"新参数一律追加在末尾"。
+    [int]$LokiReplicas = 0,
+    [string]$LokiS3Endpoint = "",
+    [string]$LokiS3Bucket = "",
+    [string]$LokiS3Region = "",
+    [switch]$LokiS3ForcePathStyle,
+    [switch]$LokiS3Insecure,
+    [switch]$LokiS3DevFixture,
+    [switch]$ConfirmLokiTopologyChange,
+    # 控制 Redis Cluster redis-control(缺口第 34 条第 6a 批),透传给 k8s_deploy.ps1 同名参数,口径同上面 -PlayerRedis* 四个:
+    # 主节点数与副本数 0 = 不透传,容量非空才透传。staging / prod 的 release-zone、release-all 必须给主节点数。
     # 追加在末尾,理由同上方"新参数一律追加在末尾"。
-    [string]$RedisCtlMaxMemory = "",
-    [switch]$ConfirmRedisCtlSwitch
+    [ValidateRange(0, 512)]
+    [int]$ControlRedisMasters = 0,
+    [ValidateRange(0, 2)]
+    [int]$ControlRedisReplicasPerMaster = 0,
+    [string]$ControlRedisMaxMemory = "",
+    [string]$ControlRedisStorage = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -463,18 +471,24 @@ function Invoke-K8sDeploy {
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
     if ($RedisReplicas -gt 0) { $args.RedisReplicas = $RedisReplicas }
-    # 按用途拆实例(G4a 第 1a 批):-RedisSplit 非 auto 才传,确认开关只在被指定时传,容量非空才传。
-    if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $args.RedisSplit = $RedisSplit }
-    if ($ConfirmRedisSplitSwitch) { $args.ConfirmRedisSplitSwitch = $true }
-    if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $args.RedisQueueMaxMemory = $RedisQueueMaxMemory }
-    # 控制域实例 redis-ctl-g<N>(缺口第 5 条)同一口径:容量非空才传,确认开关只在被指定时传;闸只在 k8s_deploy.ps1(Assert-RedisCtlPreflight)。
-    if (-not [string]::IsNullOrWhiteSpace($RedisCtlMaxMemory)) { $args.RedisCtlMaxMemory = $RedisCtlMaxMemory }
-    if ($ConfirmRedisCtlSwitch) { $args.ConfirmRedisCtlSwitch = $true }
-    # 玩家域 Redis Cluster:非 0 / 非空才传。
+    # 玩家域与控制两套 Redis Cluster:非 0 / 非空才传。
     if ($PlayerRedisMasters -gt 0) { $args.PlayerRedisMasters = $PlayerRedisMasters }
     if ($PlayerRedisReplicasPerMaster -gt 0) { $args.PlayerRedisReplicasPerMaster = $PlayerRedisReplicasPerMaster }
     if (-not [string]::IsNullOrWhiteSpace($PlayerRedisMaxMemory)) { $args.PlayerRedisMaxMemory = $PlayerRedisMaxMemory }
     if (-not [string]::IsNullOrWhiteSpace($PlayerRedisStorage)) { $args.PlayerRedisStorage = $PlayerRedisStorage }
+    if ($ControlRedisMasters -gt 0) { $args.ControlRedisMasters = $ControlRedisMasters }
+    if ($ControlRedisReplicasPerMaster -gt 0) { $args.ControlRedisReplicasPerMaster = $ControlRedisReplicasPerMaster }
+    if (-not [string]::IsNullOrWhiteSpace($ControlRedisMaxMemory)) { $args.ControlRedisMaxMemory = $ControlRedisMaxMemory }
+    if (-not [string]::IsNullOrWhiteSpace($ControlRedisStorage)) { $args.ControlRedisStorage = $ControlRedisStorage }
+    # Loki 的形态与对象存储:非 0 / 非空 / 被指定才传。档位规则、拓扑变更闸与 S3 参数校验只在 k8s_deploy.ps1(Assert-LokiDeployPreflight)。
+    if ($LokiReplicas -gt 0) { $args.LokiReplicas = $LokiReplicas }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Endpoint)) { $args.LokiS3Endpoint = $LokiS3Endpoint }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Bucket)) { $args.LokiS3Bucket = $LokiS3Bucket }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Region)) { $args.LokiS3Region = $LokiS3Region }
+    if ($LokiS3ForcePathStyle) { $args.LokiS3ForcePathStyle = $true }
+    if ($LokiS3Insecure) { $args.LokiS3Insecure = $true }
+    if ($LokiS3DevFixture) { $args.LokiS3DevFixture = $true }
+    if ($ConfirmLokiTopologyChange) { $args.ConfirmLokiTopologyChange = $true }
     # 同一口径留空不透传。本函数从不传 -GoSvcRegistry,k8s_deploy.ps1 因此不部署 login / scene_manager,
     # 这个值只进它的组合预检、不写进 ConfigMap;"不生效"的告警在脚本入口打(见 switch ($Command) 之前),这里只透传。
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }

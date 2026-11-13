@@ -1,7 +1,8 @@
 # 审计 topic 加分区与离线换代 Runbook(player_snapshot / transaction_log)
 
 > 状态:2026-10-13 随 G2a「快照审计管道扩容」落地;2026-11-06 改为「加分区原地做、减分区才换代」(缺口清单第 15 条,
-> [审计流水链路的水平扩展](../design/audit-pipeline-horizontal-scale-20261106.md) §2.A)。代码与本文**未经运行验证**,验证项见 §9。
+> [审计流水链路的水平扩展](../design/audit-pipeline-horizontal-scale-20261106.md) §2.A)。2026-11-12 起审计 topic 的生产者是 go/db 的审计发件箱转发
+> ([审计发件箱](../design/player-audit-outbox.md),断线重连 R13),换代的「停写」改为暂停转发,**不再停服**(§2.2)。代码与本文**未经运行验证**,验证项见 §9。
 > 适用:`player_snapshot_topic` / `transaction_log_topic` 改分区数;以及与它们相关的积压、保留期、落库并发的运维判断。
 > 换代的原则同 [db-task-kafka-partition-contract.md](../design/db-task-kafka-partition-contract.md) 的离线流程:**停写 → 排空 → 三方同改 → 消费者先起、生产者后起**。
 > **不在 TiDB Phase 1 迁移窗口里做**(D5「借迁移之机误动 topic / partition」,[global-data-layer-tidb-decision.md](../design/global-data-layer-tidb-decision.md))。
@@ -16,16 +17,19 @@
   2. 调大 `go/data_service/etc/data_service.yaml` 的 `Kafka.TransactionLogPartitions` / `SnapshotPartitions`(同步 `config.go` 的 `default=` 标签)。
   3. K8s:`k8s_deploy.ps1 -Command infra-kafka-topics -WaitReady`(Job 带 `grow`,少了原地加),再 `zone-up` 滚动 data-service;
      本机:重启 data_service 即可(启动时 `EnsureTopics` 加)。日志见 `kafka topic ... partitions grown in place: 6 -> 12`。
-  4. 再加 data-service 副本或调大 `Kafka.*MaxInflightFlushes`(§5)。C++ 生产者靠 librdkafka 定期刷新元数据(缺省 5 分钟)看到新分区,
-     之前照旧写老分区,不丢不乱;新分区由消费组再均衡分给各副本,从头消费。
+  4. 再加 data-service 副本或调大 `Kafka.*MaxInflightFlushes`(§5)。生产者(go/db 的审计发件箱转发)靠 kafka-go 定期刷新元数据
+     (`Transport.MetadataTTL` 缺省 6 秒)看到新分区,之前照旧写老分区,不丢不乱;新分区由消费组再均衡分给各副本,从头消费。
   - 回滚到 2026-11-06 以前的 data-service 二进制之前,先把配置的分区数调成 broker 上的实际值(旧版 `EnsureTopics` 要求相等),或者换代。
 - **减分区 / 换名 / 换保留策略需要新 topic 时 = 换一代**:Kafka 不能减分区。有效名 `<基名>_g<N>` 里的 N +1,按下面 §1~§3 离线做。
   其余 topic(go/db、login 的有序 topic,命令 / 观战 / 世界频道 topic)照旧是**不可变契约**:原地 `--alter --partitions` 会重映射哈希,顺序或寻址就断了。
-- 两个审计 topic **共用一个世代号**:`go/data_service/etc/data_service.yaml` 的 `Kafka.TopicGeneration` ↔ C++ 的
-  `AuditTopicGeneration`(`bin/etc/base_deploy_config.yaml`)。只想扩快照,流水也会一起换到新 topic(流水分区数可以不变)。
-- 生产者只有 C++ scene,消费者只有 data_service(所有 zone 共用一个消费组)。
+- 两个审计 topic **共用一个世代号**:`go/data_service/etc/data_service.yaml` 的 `Kafka.TopicGeneration` ↔ go/db 的
+  `AuditOutbox.TopicGeneration`(本机是 `go/db/etc/db.yaml`;K8s 的 db ConfigMap 由 `k8s_deploy.ps1` 从 data_service.yaml 渲染,不抄 db.yaml)。
+  只想扩快照,流水也会一起换到新 topic(流水分区数可以不变)。
+- 生产者只有 go/db 的审计发件箱转发(2026-11-12 起;scene 把流水与快照请求随存盘写进存档库的 `player_audit_outbox`,不直接发 Kafka),
+  消费者只有 data_service(所有 zone 共用一个消费组)。
 - **旧文档的顺序会丢数(已修正)**:`deploy/k8s/README.md` 以前写的是「建出 `*_g2` → 滚 data-service 与 scene → 老 topic 排空后删」。
-  data-service 先切到 g2 后就不再消费 g1,而 scene 没滚完之前仍在写 g1 —— g1 的尾部无人消费,保留期一到就丢。必须按本文的「停写 → 排空 → 切」。
+  data-service 先切到 g2 后就不再消费 g1,而生产者(当时是 scene)没切完之前仍在写 g1 —— g1 的尾部无人消费,保留期一到就丢。
+  必须按本文的「停写 → 排空 → 切」。
 
 ## 1. 决策与预算(开工前,负责人拍板)
 
@@ -43,7 +47,10 @@
   例:S=12、T=6、Z=2 → 9GiB + 10GiB = 19GiB,**已经顶到 20Gi PVC**(`deploy/k8s/manifests/infra/kafka.yaml`)。
   broker 盘满 = 所有 zone 的存盘与命令一起停,事故面远大于审计本身。所以 **S=12 的前提是同批扩 Kafka PVC**
   (或给审计 topic 单独设更小的 topic 级 `retention.bytes`,但那会缩短 §4 的 T_safe,与保留期决策冲突)。
-- **时机**:开服前做,topic 里只有测试数据,排空是空操作,窗口最短。**开服后做 = 全服停服维护**(scene 是唯一生产者,停写 = 停所有 scene)。
+- **时机**:开服前做,topic 里只有测试数据,排空是空操作,窗口最短。开服后也**不用停服**(2026-11-12 起):停写 = 暂停 go/db 的转发(§2.2),
+  玩家照常游戏、照常存盘,流水与快照在存档库的发件箱里排着,恢复转发之后按写入时间顺序投进新一代。代价有两个:
+  暂停期间流水库看不到新改动,GM 回收按流水汇总应扣金额,窗口里不要发起回收(人工终结工具以已提交账本为证据,不受影响);发件箱随暂停时长增长,
+  约为(流水速率 × 约 200 字节 + 快照速率 R × 平均快照字节)× 暂停时长,快照为主 —— 暂停要短,长时间暂停之前先看存档库的存储余量。
 
 ## 2. 步骤
 
@@ -55,20 +62,31 @@
 |---|---|
 | `go/data_service/etc/data_service.yaml` | `Kafka.TopicGeneration: N+1`、`SnapshotPartitions: S`(需要时 `TransactionLogPartitions: T`) |
 | `go/data_service/internal/config/config.go` | `KafkaConfig` 里对应的 `default=` 标签与注释同步(缺键时不要落回旧数;marker 会让不一致的实例启动失败,但别依赖它) |
-| `bin/etc/base_deploy_config.yaml` | `AuditTopicGeneration: N+1`(C++ 生产者;K8s 的 node ConfigMap 由 `k8s_deploy.ps1` 从 data_service.yaml 镜像,不抄这份) |
+| `go/db/etc/db.yaml` | `AuditOutbox.TopicGeneration: N+1`(本机 go/db;同批改了基名就同改 `TransactionLogTopic` / `SnapshotTopic`)。K8s 的 db ConfigMap 由 `k8s_deploy.ps1` 从 data_service.yaml 渲染,不抄这份 |
 | `deploy/docker-compose.yml` | `KAFKA_INIT_AUDIT_TOPIC_GENERATION` 默认值;`kafka-topic-init` 里写死的最少分区数 6 / 3(`create_topic` / `ensure_min_partitions` 两处,只在要降到 6 / 3 以下时才改) |
 | `tools/scripts/start_game.ps1` | 本机预建清单里审计主题的最少分区数(6 / 3,`GrowOnly`);主题名与保留期仍与 data_service.yaml 逐项核对 |
 | 描述性文字 | `deploy/k8s/README.md`「Kafka 审计 topic 预建」、`deploy/k8s/manifests/go-svc/data-service.yaml` 头注、`deploy/k8s/manifests/infra/kafka-topic-init.yaml` 头注、`docs/design/data_service_role_and_scope.md` |
 | `deploy/k8s/data-service-audit-alerts.yaml` | 换代本身**不用**改:`DataServiceAuditLagHigh` 比的是单分区最大积压,阈值与分区数无关(§4)。同批改了每分区 `retention.bytes` 时才按 §4 重算,并在注释里写明出处 |
 
-契约测试 `tools/scripts/tests/k8s_deploy_contract.tests.ps1`(AuditTopicGeneration 与 TopicGeneration 相等、
-data-service ConfigMap 的 Kafka 键与服务 yaml 相等)应自动跟随;改完先让它跑绿。
+契约测试 `tools/scripts/tests/k8s_deploy_contract.tests.ps1`(db ConfigMap 的 `AuditOutbox` 与 data-service 的 `Kafka` 段同源、
+本机 db.yaml 与 data_service.yaml 的三个键相等、data-service ConfigMap 的 Kafka 键与服务 yaml 相等)与 go/db 的单测
+`go/db/internal/config/audit_outbox_test.go` 应自动跟随;改完先让它们跑绿。
 
-### 2.2 停写
+### 2.2 停写:暂停 go/db 的转发
 
-停掉**所有 zone 的所有 scene**(K8s:按本集群的编排形态把 scene 工作负载缩到 0;本机:停掉全部 scene 进程)。
+**在改配置之前的提交上做**(与线上同一个检出、同一组镜像 tag):在 2.1 的新提交上跑 `zone-up` 会同时把 data-service 的 ConfigMap 改成 N+1,
+镜像 tag 也跟着变,data-service 随之滚到新代 —— 还没排空的 g N 尾部从此没人消费。
 
-核对:用 `kafka-get-offsets.sh`(或 `kafka-run-class.sh kafka.tools.GetOffsetShell`)取两个 g N topic 各分区的 end offset,
+- K8s:每个 zone 跑一次 `pwsh -File tools/scripts/k8s_deploy.ps1 -Command zone-up <平时的参数> -AuditOutboxRelay paused`
+  (多 zone 用 `all-up`),再 `kubectl -n <zone-ns> rollout restart statefulset/db`。参数把 db ConfigMap 的 `AuditOutbox.Brokers` 渲染成空列表,
+  重启之后的 go/db 不起转发;流水与快照照常随存盘写进存档库的 `player_audit_outbox`,只积不投、不丢。转发按 (存档库, 片) 在本地域**全部 zone** 的
+  go/db 之间分工,所以每个 zone 都要暂停,漏一个 zone 它的副本就还在往 g N 投。参数不粘滞,部署输出里有一行 `Audit outbox relay is PAUSED` 警告。
+- 本机 / compose:停掉 go/db(本机没有真玩家,存盘跟着暂停也无妨),或者把 `go/db/etc/db.yaml` 的 `AuditOutbox.Brokers` 临时改成 `[]` 再重启 go/db。
+- 告警:暂停期间 `AuditOutboxForwardingLagging` / `AuditOutboxForwardingStalled`(积压年龄)与 `AuditOutboxRelayDisabled`(全部副本都没在转发)
+  会响(`deploy/k8s/audit-outbox-alerts.yaml`),先在 Alertmanager 静默这几条,§2.7 恢复转发之后解除。
+
+核对:每个 go/db Pod 的日志有 `AuditOutbox.Brokers is empty`,`db_audit_outbox_relay_enabled` 全部为 0;
+再用 `kafka-get-offsets.sh`(或 `kafka-run-class.sh kafka.tools.GetOffsetShell`)取两个 g N topic 各分区的 end offset,
 间隔 2 分钟取两次,**完全不变**才算停写完成。
 
 ### 2.3 排空
@@ -84,47 +102,57 @@ g N 的 data-service 保持运行。
   条数怎么取:日志 `AUDIT DATA LOST` 是探针的采样值,只是下界;精确条数看 `[kafka-go]` 的 `skipping from offset` 行,
   消费者期间重建过(停机冷却 / 重启 / rebalance)的看 `starting at offset` 与 `seeking to offset` 两行之差(口径见 §7)。
 
-### 2.4 停 data-service
+### 2.4 预建新代 topic
 
-所有 zone。
+data-service 照常运行,不停:它同时管路由读与号段,停了玩家就进不来;转发暂停之后 g N 不再进新消息,排空完的 data-service 在 §2.5 滚动重启即可
+(2026-11-12 以前这一步是「停 data-service」,那时全服已经停服)。
 
-### 2.5 预建新代 topic
-
-- K8s:`pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-kafka-topics -WaitReady`(Job 从改过的 data_service.yaml 取基名 / 分区数 / 保留期 / 代号)。
+- K8s:在 2.1 的新提交上跑 `pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-kafka-topics -WaitReady`(Job 从改过的 data_service.yaml 取基名 / 分区数 / 保留期 / 代号)。
 - compose:`docker compose -f deploy/docker-compose.yml up kafka-topic-init`。
 
 核对:`kafka-topics.sh --describe --topic player_snapshot_topic_g<N+1>`:`PartitionCount: S`、`Configs` 里 `retention.ms=2592000000`;
 流水 topic 同样核对。
 
-### 2.6 起 data-service(新配置)
+### 2.5 切 data-service 到新代
 
-- K8s 上「新配置」= 用改过的仓库重新生成并 apply **两份** ConfigMap:`go-svc-data-service-config`(`Kafka.TopicGeneration` / `*Partitions`)
-  与 `node-config`(`AuditTopicGeneration`,由 data_service.yaml 镜像)。本仓的生成入口是 `k8s_deploy.ps1 -Command zone-up`
-  (多 zone 用 `all-up`),参数与平时部署相同;之后 `kubectl -n <zone-ns> rollout restart statefulset/data-service`。
-- **在起任何 scene 之前**核对:`kubectl -n <zone-ns> get cm node-config -o yaml` 里 `AuditTopicGeneration: N+1`,
-  `go-svc-data-service-config` 里 `TopicGeneration: N+1`。不要只靠契约测试。
+- K8s:在 2.1 的新提交上,每个 zone 跑 `zone-up <平时的参数> -AuditOutboxRelay paused`(多 zone 用 `all-up`):两份 ConfigMap 一起换成新代 ——
+  `go-svc-data-service-config`(`Kafka.TopicGeneration` / `*Partitions`)与 `go-svc-db-config`(`AuditOutbox.TopicGeneration`,从 data_service.yaml 渲染),
+  转发仍然暂停(`Brokers: []`)。之后 `kubectl -n <zone-ns> rollout restart statefulset/data-service`;镜像 tag 跟着新提交变了的话,
+  `zone-up` 本身就会滚动各工作负载(go/db 滚动之后照样是暂停的)。
+- 本机:重启 data_service。
 - 日志应见 `[kafka] consumers started: ... topic=player_snapshot_topic_g<N+1> ... p=S`(2026-11-06 起审计 topic 不再建 marker,没有 `kafka immutable partition marker ensured` 这一行);
   `data_service_kafka_consumer_up` = 1。
-
-### 2.7 起 scene(新 AuditTopicGeneration)
-
-**必须晚于 2.5**:broker 开着 `auto.create.topics.enable` + `num.partitions=1`,scene 抢先发消息会把新 topic 建成 1 分区、
-保留期继承 broker 默认值(分区数能被 init / data-service 原地补上,但抢先写进去的消息落在哪个分区由不得你,排障多一个变量)。
-最好也晚于 2.6(先看到消费者起来,排障时少一个变量)。
-`zone-up` 会把 scene 与 data-service 一起滚动:只要 2.5 已完成就是安全的。
 
 > 补注(2026-10-15,未经运行验证):data-service 的 lag 探针不再可能自动建 topic(sarama `Metadata.AllowAutoTopicCreation = false`,
 > 负责人 2026-10-15 按「最标准」定)。它指着的 topic 不存在时只会探测失败:日志 `lag probe failed`(broker 回 UNKNOWN_TOPIC_OR_PARTITION
 > 时错误文本含 `does not exist on this broker`;broker 侧回哪个码未实测)、`lag_probe_total{result="error"}`,
 > 持续 15 分钟即 `DataServiceAuditLagProbeBlind`,不再可能把它误建成 1 分区。
-> 探针在 data-service 启动的 `EnsureTopics` 成功之后才起,按本流程(2.5 预建在先)碰不到不存在的 topic;换代期间若见到这条失明,
-> 先 `kafka-topics.sh --describe` 查该 topic 是否被删 / 未建。预建(2.5)仍是前置步骤:scene 生产者与 broker 的 auto.create 不受这项改动影响。
+> 探针在 data-service 启动的 `EnsureTopics` 成功之后才起,按本流程(2.4 预建在先)碰不到不存在的 topic;换代期间若见到这条失明,
+> 先 `kafka-topics.sh --describe` 查该 topic 是否被删 / 未建。
+
+### 2.6 恢复转发之前核对配置
+
+每个 zone:`kubectl -n <zone-ns> get cm go-svc-data-service-config -o yaml` 里 `TopicGeneration: N+1`;
+`kubectl -n <zone-ns> get cm go-svc-db-config -o yaml` 的 `AuditOutbox` 段里 `TopicGeneration: N+1`、基名与 data-service 那份相同、`Brokers: []`。
+不要只靠契约测试。本机核 `go/db/etc/db.yaml` 与 data_service.yaml(`start_game.ps1` 预建前也会核,不等就拒绝)。
+
+### 2.7 恢复转发(新代)
+
+**必须晚于 2.4 与 2.5**。go/db 的 Writer 不自动建 topic(`AllowAutoTopicCreation=false`):topic 还没建时只会投递失败、退避重试,行留在发件箱,不丢;
+但先建 topic、先看到消费者起来,排障时少两个变量。
+
+- K8s:在 2.1 的新提交上,每个 zone 跑 `zone-up <平时的参数>`(不带 `-AuditOutboxRelay`),再 `kubectl -n <zone-ns> rollout restart statefulset/db`。
+- 本机:起 go/db(新配置;改过 `Brokers` 的改回来)。
+- go/db 日志应见 `[audit_outbox] Audit outbox relay started: ... transaction_log_topic=transaction_log_topic_g<N+1> snapshot_topic=player_snapshot_topic_g<N+1>`;
+  `max(db_audit_outbox_relay_enabled)` = 1。暂停期间积下的记录按写入时间顺序投进新一代,`db_audit_outbox_oldest_pending_age_seconds` 回到 1 秒量级之后,
+  解除 §2.2 的告警静默。
 
 ### 2.8 验证
 
 - 一个账号登录 / 登出 → `player_snapshot` 表出现 2 行新 guid(source=1)。
 - 新 topic 上消费组 offset 前进、`LAG` ≈ 0;`lag_messages` 指标同。
-- Loki:`{job="cpp_nodes", service="scene"} |= "[SnapshotSystem] Kafka send failed"` 无新增。
+- go/db:`db_audit_outbox_relay_errors_total{stage="produce"}` 不再增长,`db_audit_outbox_forwarded_total` 在涨;
+  scene:`scene_audit_outbox_records_dropped_total` 没有增长(`deploy/k8s/audit-outbox-alerts.yaml` 的规则都已恢复)。
 
 ### 2.9 收尾
 
@@ -132,7 +160,7 @@ g N 的 data-service 保持运行。
 
 ## 3. 回滚
 
-同样「停写 → 排空 g N+1 → 三方切回 g N」。
+同样「暂停转发 → 排空 g N+1 → data-service 与 go/db 两份配置切回 g N → 恢复转发」,步骤同 §2.2 ~ §2.7(这一次 §2.2 在 N+1 的提交上做)。
 
 - g N 的组 offset 若已超过 `offsets.retention.minutes`(Kafka 默认 7 天)被清,消费者会从 g N 最早位置重读
   (`StartOffset=FirstOffset`)—— 由 snapshot_guid / tx_id 去重保证幂等,只是多耗时间。
@@ -168,15 +196,20 @@ g N 的 data-service 保持运行。
 
 ## 5. 批量 / 并发旋钮(G2a,`Kafka.*`)
 
-| 键 | 默认(= 2026-10-12 之前的行为) | 合法范围 | 建议开服值(待压测) |
+| 键 | 默认(= 2026-10-12 之前的行为) | 合法范围 | 开服值(已定(2026-11-12),压测出基线后可调;依据见表下) |
 |---|---|---|---|
 | `SnapshotBatchMaxRows` | 1(逐条落、逐条提交) | [1, 256] | 16 |
 | `SnapshotBatchMaxBytes` | 4194304(软上限,加入后检查,最多超出一条) | [65536, 33554432] | 4194304 |
 | `SnapshotFlushIntervalMs` | 0(不等待,只拼已排队的) | [0, 5000] | 200 |
 | `SnapshotMaxInflightFlushes` | 1(本实例同时落库的分区数) | [1, max(1, SnapshotMySQL.MaxOpenConn − 1)] | 2 |
-| `TransactionLogMaxInflightFlushes`(2026-11-06) | 1(流水本实例同时落库的分区数;每分区各攒 200 行 / 200ms 一批) | [1, max(1, SnapshotMySQL.MaxOpenConn − 1)] | 一个副本分到 ≥ 2 个流水分区时调到 2(待压测) |
+| `TransactionLogMaxInflightFlushes`(2026-11-06) | 1(流水本实例同时落库的分区数;每分区各攒 200 行 / 200ms 一批) | [1, max(1, SnapshotMySQL.MaxOpenConn − 1)] | 一个副本分到 ≥ 2 个流水分区时调到 2 |
 | `LagProbeIntervalMs` | 30000(yaml 刻意打开;0 = 关) | 0 或 [5000, 600000] | 30000 |
 
+- 开服值的依据(2026-11-12 定):`SnapshotBatchMaxRows` 16 把提交次数降到逐条的 1/16,快照按 §4 示例的 300KB 算时字节上限先到(约 13 条),行数上限只在小快照时起作用;
+  `SnapshotBatchMaxBytes` 4MiB 与下面 TiDB 一条要求的批字节上限同值,一批最多超出一条,低于 TiKV `raft-entry-max-size` 缺省 8MB 与 MySQL `max_allowed_packet` 64MiB;
+  `SnapshotFlushIntervalMs` 200 与流水消费者「每分区 200ms 一批」同口径,凑批最多多等 200ms;`SnapshotMaxInflightFlushes` 2 在范围上限 `SnapshotMySQL.MaxOpenConn − 1`(现 5 − 1 = 4)
+  之内留出号段、名字登记与 GM 读的连接;流水并发同理。服务 yaml 里仍是左列默认值(现状),按本表改服务 yaml 打开;打开批量之前照下面「打开批量的前置」第 2 条核内存护栏,
+  吞吐提升照第 1 条出对比表再说(AGENTS §6)。
 - 越界 = data_service 拒启(exit 1,日志 `invalid Kafka consumer config`)。K8s ConfigMap 从服务 yaml 镜像这六个键,改服务 yaml 即可。
 - 流水消费者 2026-11-06 起和快照一样每个分区一个 worker(`go/data_service/internal/kafka/partition_workers.go`):各分区各攒各的批、各自先落库后提交,
   一个分区重试用尽就停下整个消费者;排空时各分区落完手里的批再退出。`data_service_kafka_consumer_flush_seconds{consumer="transaction_log"}`
@@ -214,15 +247,16 @@ g N 的 data-service 保持运行。
 | `DataServiceAuditRetentionGap` | critical | **数据已丢**。探针在 15 分钟内采到过一次缺口就响(`max_over_time(...[15m]) > 0`、`for: 0m`),缺口消失后约 15 分钟才 resolve,resolve 不代表数据找回。日志 `AUDIT DATA LOST`(采样下界)与 `[kafka-go]` 的 `skipping from offset` 行;消费者重建过的看 `starting at offset` / `seeking to offset` 两行之差(见表后说明);上报负责人 |
 | `DataServiceAuditLagHigh` | critical | 某个分区逼近删除线(比的是单分区最大积压,§4);先分清库慢(FlushSlow)还是消费者停了(ConsumerStopped);合计 `lag_messages` 与它接近 = 积压集中在一个分区 |
 | `DataServiceTxLogLagHigh` | warning | 流水落后;`[transaction_log] STOPPED:` |
-| `DataServiceAuditConsumerStalled` | warning | 某个分区上组内已提交位点停下之后又新到了消息,位点 15 分钟没再前进(`data_service_kafka_consumer_commit_stall_seconds` ≥ 900,lag 探针按分区算),且消费循环报 up:专抓「活着但不前进」(2026-11-05,r2-kc#1;2026-11-06 改判据)。只认新到的消息:reader 模式提交失败交还的已落库记录会在低流量 topic 上一直挂着积压,那不算卡住,旧判据「有积压 + 15 分钟零处理」在这里误报;代价是分区上一条新消息都不来时看不见。消费组 owner 遇再均衡与暂时失败不停,日志 `[kafka-bound]` 是它在原地重试(等不到代次 / 打开分区 / 拉取 / 提交),`kafka_bound_consumer_retry_total{stage}` 看卡在哪一步;Kafka 侧修好后自动追上。按分区判,单个实例卡住也会响 |
+| `DataServiceAuditConsumerStalled` | warning | 有积压的分区上(组内已提交位点低于日志末端),已提交位点 15 分钟没动(`data_service_kafka_consumer_commit_stall_seconds` ≥ 900,lag 探针按分区算),且消费循环报 up:专抓「活着但不前进」(2026-11-05,r2-kc#1;2026-11-12 改判据)。不依赖新消息到达,收不到新消息的分区卡住也看得见。2026-11-06 到 11-12 曾只认「位点停下之后新到的消息」,因为 reader 模式提交失败交还的已落库记录当时会在安静分区上一直挂着积压;现在消费组 owner 交还时结束本代次、由下一代次立即重投并提交,不再有这种积压(设计 [kafka-bound-consumer-group.md](../design/kafka-bound-consumer-group.md) §8)。消费组 owner 遇再均衡与暂时失败不停,日志 `[kafka-bound]` 是它在原地重试(等不到代次 / 打开分区 / 拉取 / 提交),`kafka_bound_consumer_retry_total{stage}` 看卡在哪一步;Kafka 侧修好后自动追上。按分区判,单个实例卡住也会响 |
 | `DataServiceAuditLagProbeBlind` | warning | 按实例触发:该实例的探针 15 分钟没成功过,它的 lag / retention_gap 是陈值(照样参与积压类告警的 max,先按 instance 展开指标排除);所有实例都在报时积压类告警都不可信;日志 `lag probe failed` |
 | `DataServiceAuditFlushSlow` | warning | 全局库排队;见 §6 |
 | `DataServiceAuditMessagesSkipped` | warning | 坏消息被跳过(未落库);日志 `undecodable` / `invalid snapshot` / `oversize snapshot`。计数在解码时记:`ConsumerStopped` 同时在响时会随每次重放重复累加,条数以日志里去重后的 partition / offset 为准 |
 | `DataServiceAuditBatchIsolated` | info | 批量失败、逐条兜底成功;多半是包 / 事务大小,调小批字节或批行数 |
 
-- C++ 生产端的发送失败不在 Prometheus(scene 没有指标端点)。Loki 值班查询:`{job="cpp_nodes", service="scene"} |= "[SnapshotSystem] Kafka send failed"`
-  (LOG_ERROR,任何日志级别都在;C++ 日志流没有 `app` 标签,写成 `{app="scene"}` 恒为空,选择器写法见 `deploy/k8s/player-inbox-alerts.yaml`)。`Snapshot captured ... size=` 是 LOG_INFO、且在**入队**时打,不代表投递成功;
-  用它统计大小分布时确认 scene 日志级别 ≤ INFO。
+- 生产端是 go/db 的审计发件箱转发(2026-11-12 起;此前 C++ scene 直接发 Kafka,这里原来的 Loki 查询 `[SnapshotSystem] Kafka send failed` 已经没有对应日志)。
+  投递失败不丢:行留在存档库的发件箱,退避重试。积压、跳过、转发全停、单位没人负责、转发循环卡住与 scene 一侧丢掉的记录,规则都在
+  `deploy/k8s/audit-outbox-alerts.yaml`(指标 `db_audit_outbox_*` 与 scene 的 `scene_audit_outbox_*`)。scene 日志 `[SnapshotSystem] Snapshot requested:` 是 LOG_INFO,
+  在快照请求**入队**时打,不代表快照已提交或已投递;单条快照多大看消费端 `data_service_kafka_consumer_message_bytes`(§8)。
 - 保留期删掉未消费的消息之后 kafka-go 会自动跳到日志起点。它留下什么日志分两种情形(kafka-go v0.4.47,已按 tag 源码核对,
   组模式与非组模式相同;data_service 把这些行接到了自己的日志,前缀 `[kafka-go] topic=... group=...`):
   - 消费者**运行中**被保留期追上:Error 级的 `... skipping from offset X to Y (N messages)`,N 是精确条数。
@@ -232,6 +266,10 @@ g N 的 data-service 保持运行。
     「DB 故障 → 停机 → 冷却 60s → 重建」这条主要的丢失路径走的正是这里:DB 持续故障期间每次重建都会打一对,
     位点没提交时 A 不变、B 随保留期推进逐次变大 —— 同一个 A 取 B 最大的那一对,A 变过(中途有过提交)的各段相加。
     两行是 Info 级,日志级别高于 info 时看不到。
+  - 2026-11-12 起消费组 owner 不再接纳跳过之后的记录:取到的记录越过应到位点、而日志起点已越过应到位点时 HOLD 并停止取新
+    (日志 `RECORDS DELETED BY RETENTION BEFORE THIS GROUP PROCESSED THEM` 给出分区、应到位点与日志起点,告警 `KafkaBoundConsumerRetentionLoss`);
+    打开分区时已提交位点早于日志起点同样 HOLD。data_service 随之退出,重启后在该分区上反复 HOLD,直到按
+    [kafka-bound-consumer-runbook.md](kafka-bound-consumer-runbook.md) §3 记下丢失范围、重置位点。上面两种 `[kafka-go]` 行仍是条数的旁证。
   - 探针的 `AUDIT DATA LOST` 行是每轮(默认 30s)的采样值,只是下界,消费者越过缺口并提交后不再出现;
     消费者已读入未提交的消息所在段被删、其实没丢时也会出现(见下一条 ②),丢没丢以 `[kafka-go]` 行为准。
   - `DataServiceAuditRetentionGap` 对探针采到的任何一次缺口都立即呼叫(2026-10-15 按负责人「按最标准的去做」改定,取代原来的 `for: 2m`;
@@ -254,26 +292,30 @@ g N 的 data-service 保持运行。
     至少发出一次通知。不满足时先对照 ① 查抓取与探针间隔,确是窗口不够再按规则注释里的下限公式(评估间隔 + 探针间隔)重新取窗口;
     演练结果写进规则注释,替换「待压测 / 故障演练确认」。
 
-## 8. 消息大小链路(核对结论,本次不改)
+## 8. 消息大小链路(2026-11-12 按审计发件箱重写)
 
 | 环节 | 上限 |
 |---|---|
-| C++ 生产者 `message.max.bytes` | **约 1,000,000 字节**(librdkafka 默认;本仓未设) |
-| broker `message.max.bytes` / topic `max.message.bytes` | 1,048,588(Kafka 默认;未设) |
+| scene 存盘请求(`PlayerStoreClient::Options::maxRequestBytes`) | 4 MiB − 64 KiB。其中审计记录一笔至多 512 KiB(`AuditOutbox::kMaxBytesPerSave`,带不完的由紧接着的下一笔带);单条流水 / 快照请求 64 KiB(`kMaxRecordBytes`,超了在 scene 拒收并计 `scene_audit_outbox_records_dropped_total{reason="too_large"}`) |
+| go/db 拼出的一份快照(`playerstore.MaxAuditSnapshotBytes`) | **4 MiB**。超了跳过这份快照、存档照常提交,计 `db_audit_outbox_records_skipped_total{reason="too_large"}`;单条流水 64 KiB 同理 |
+| 发件箱一行(`player_audit_outbox.payload`) | MEDIUMBLOB 16 MiB − 1;TiDB 上一行受 `txn-entry-size-limit` 约束(默认 6MB),4 MiB 的快照放得下 |
+| 转发的一次请求(kafka-go `BatchBytes`,`go/db/internal/auditoutbox/kafka.go`) | 流水 1 MiB(流水 topic 沿用 broker 缺省的 `max.message.bytes`);快照 16 MiB(= 快照 topic 的 `max.message.bytes`)。单行超过「上限 − 1 KiB」的不发,留在发件箱,积压年龄告警会响 |
+| broker `message.max.bytes` / topic `max.message.bytes` | broker 1,048,588(Kafka 默认;未设);快照 topic 16MiB(data_service 启动时 `EnsureTopics` 设到 topic 上) |
 | kafka-go reader `MaxBytes` | 16MiB |
 | 消费者 `MaxBlobBytes` | 16MiB − 1(MEDIUMBLOB) |
 | MySQL `max_allowed_packet` | 64MiB(8.0 默认;未设) |
 | TiDB `txn-entry-size-limit` | 默认 6MB(dev 已配 32MiB) |
 
-**有效上限约 1MB,在生产端本地**:超过的快照在 `produce()` 里被拒(按 librdkafka 公开行为推断,本仓未实测),
-`CaptureAndSend` 只打 `Kafka send failed` 并返回 0,调用方忽略返回值 —— 这个玩家这一次的快照就没有了,且 C++ 侧没有指标。
-消费端的 16MiB 上限从来到不了。单条快照实际多大本仓没有数据:看消费端 `message_bytes` 直方图(只看得到发成功的)与 scene 日志。
-将来调高上限到 > 6MB 时,TiDB 的 `txn-entry-size-limit` 必须同步,否则那条消息成为毒丸、卡住所在分区。
+**有效上限 4 MiB,在 go/db 的提交事务里**:超过的快照跳过、计数并告警(`AuditOutboxRecordsSkipped`),存档照常提交 ——
+这名玩家这一次的快照就没有了,下一次触发照常拍。4 MiB 低于 TiDB 一行的 6MB 与快照 topic 的 16MiB,消费端的 16MiB 上限到不了。
+2026-11-12 以前的有效上限是 C++ 生产者本地的约 1MB,超了只打一行 ERROR、没有指标,那条路径已经删掉。
+单条快照多大:看消费端 `data_service_kafka_consumer_message_bytes`(只看得到投出去的)与 go/db 的 `db_player_store_row_bytes{kind}`
+(一份快照约等于这名玩家全部行之和)。将来调高 4 MiB 时,TiDB 的 `txn-entry-size-limit`、发件箱一行与快照 topic 的上限要一起核。
 
 ## 9. 待负责人拍板 / 待验证
 
 - **拍板项**(G2a 规格 §15;凡涉及「快照是否必达 / 是否可丢」的都在这里,代码一律未改):
-  Q-1 保留策略(2026-11-11 已定:扛住 2 小时消费中断、审计 topic 每分区 4GiB,见 §4「保留期与积压」)、Q-2 快照 > 约 1MB 在生产端丢弃、Q-3 毒丸行永久卡住消费者(维持 / 跳过)、Q-4 开服期快照策略、
+  Q-1 保留策略(2026-11-11 已定:扛住 2 小时消费中断、审计 topic 每分区 4GiB,见 §4「保留期与积压」)、Q-2 快照超上限时丢弃(2026-11-12 随审计发件箱定:上限 4 MiB 在 go/db,超了跳过、计数并告警,见 §8)、Q-3 毒丸行永久卡住消费者(维持 / 跳过)、Q-4 开服期快照策略、
   Q-5 新分区数与换代时机(前提:同批扩 PVC)、Q-6 在线换代、Q-7 何时打开批量、Q-8 单分区停机是否只停该分区、Q-9 内存护栏。
 - **待 Codex 验证**:G2a 的单测、真库集成、部署生成器契约测试、`promtool check rules`、本机端到端冒烟与 L-14 压测,
   命令与通过标准见 G2a 交付说明;本文的步骤在第一次真实换代前没有被演练过。
@@ -291,3 +333,7 @@ g N 的 data-service 保持运行。
   与更常见的「消费者已读入未提交的消息所在段被删」(可持续多轮探针、日志条数为 0);规则文件头的抓取前提补「抓取间隔 ≤ LagProbeIntervalMs」。
 - 2026-10-15(负责人按「最标准」定,未经运行验证):lag 探针关掉 sarama 的自动建 topic(`go/shared/kafkautil/group_lag.go`
   `newGroupLagProberConfig`),topic 不存在时报失明而不是可能把它建成 1 分区;§2.7 末补注。依据见 G2a 规格 §4.5 的「已定」注。
+- 2026-11-12(审计发件箱,断线重连 R13,未经运行验证):生产者从 C++ scene 改为 go/db 的发件箱转发,C++ 的 `AuditTopicGeneration` 删掉,
+  世代号改在 go/db 的 `AuditOutbox.TopicGeneration`(K8s 从 data_service.yaml 渲染进 db 的 ConfigMap)。§2.2 停写改为 `-AuditOutboxRelay paused`
+  暂停转发、不停服(要在改配置之前的提交上做);删掉「停 data-service」(它还管路由与号段);§2.4 ~ §2.8 按「预建 → 切 data-service → 核对 → 恢复转发 → 验证」重排,
+  原 §2.7 的补注移到 §2.5;§0、§1、§3、§7、§8、§9 Q-2 同步。

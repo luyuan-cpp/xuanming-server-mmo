@@ -409,8 +409,9 @@ void KafkaConsumer::dispatch(const std::string& topic, std::string payload, cons
     struct Ticket { std::shared_ptr<DispatchLedger> ledger; bool returned=false; ~Ticket(){std::lock_guard<std::mutex> lock(ledger->mutex);++ledger->settled;if(!returned)ledger->unknown=true;} };
     // 回调在消息头带来的 trace 下执行:合法就建子 span,没有或不合法就开新根(docs/design/distributed-tracing.md §5.4)。
     // 不论在 poll 线程上就地执行还是投递到 loop 线程,都不接执行线程上碰巧在场的上下文。
+    // 这个子 span 就是本条消息的 consumer span(§10.3),名字是 topic,覆盖回调的执行,父是生产端的 producer span。
     struct Work { std::shared_ptr<Ticket> ticket; MessageCallback callback; std::string topic,payload; tracing::TraceContext trace;
-        void Run(){ const tracing::ScopedIncoming incoming(trace); callback(topic,payload); callback={}; ticket->returned=true; } };
+        void Run(){ const tracing::ScopedIncoming incoming(trace, tracing::SpanKind::kConsumer, tracing::SpanSystem::kKafka, tracing::SpanName{topic}); callback(topic,payload); callback={}; ticket->returned=true; } };
     const auto work=std::make_shared<Work>(); work->ticket=std::make_shared<Ticket>();work->ticket->ledger=ledger;
     work->callback=msgCallback_;work->topic=topic;work->payload=std::move(payload);work->trace=trace;
     if(dispatchLoop_) dispatchLoop_->get().queueInLoop([work]{work->Run();}); else work->Run();

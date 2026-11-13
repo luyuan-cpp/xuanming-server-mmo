@@ -28,6 +28,45 @@ constexpr uint32_t kAuditSnapshotSampleAll = 1000;
 // GameConfig.player_inbox.periodic_fetch_minutes 的缺省值(docs/design/player-inbox-service.md §7.3、D14)。
 // proto3 的 uint32 默认是 0,而 0 的含义是"关闭在线兜底",所以缺键时必须由加载器显式写入,不能依赖 proto 默认。
 constexpr uint32_t kDefaultPlayerInboxPeriodicFetchMinutes = 30;
+
+// GameConfig.control_redis 整段或 seeds 缺失时的种子:本机单实例,同 Go 各服务 ControlRedis 不写 Addrs 时的缺省。
+constexpr char kDefaultControlRedisSeed[] = "127.0.0.1:6379";
+
+// 读一段 Redis 句柄配置(control_redis / player_redis)的 mode、seeds、password,只读入不补默认;这一段不存在时什么也不做。
+// seeds 写成标量时迭代不出元素,会悄悄落到缺省地址,连错 Redis 也没有任何提示,所以当场拒绝加载。
+bool ReadRedisClusterSection(const YAML::Node &root, const char *key, const std::string &filename,
+                             GameConfig::RedisClusterConfig &out)
+{
+    const YAML::Node node = root[key];
+    if (!node)
+    {
+        return true;
+    }
+    if (node["mode"])
+    {
+        out.set_mode(node["mode"].as<std::string>());
+    }
+    if (const YAML::Node seedsNode = node["seeds"]; seedsNode)
+    {
+        if (!seedsNode.IsSequence())
+        {
+            const std::string reason = std::string(key) + ".seeds must be a list of host:port in " + filename + "; refusing to start";
+            std::fprintf(stderr, "FATAL %s config: %s\n", key, reason.c_str());
+            std::fflush(stderr);
+            LOG_FATAL << "readGameConfig: " << reason;
+            return false; // LOG_FATAL 已 abort;这一行只为控制流明确
+        }
+        for (const auto &seed : seedsNode)
+        {
+            out.add_seeds(seed.as<std::string>());
+        }
+    }
+    if (node["password"])
+    {
+        out.set_password(node["password"].as<std::string>());
+    }
+    return true;
+}
 } // namespace
 
 [[noreturn]] void node_log_level::RejectStartup(const std::string &reason)
@@ -145,7 +184,7 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.set_spectate_token_secret(root["SpectateTokenSecret"].as<std::string>());
 	}
 
-	// 三把令牌密钥的环境变量覆盖(后者生效,与 ZONE_REDIS_PASSWORD 同一模式):K8s 上它们只放 Secret,经 secretKeyRef 注入同名变量,
+	// 三把令牌密钥的环境变量覆盖(后者生效,与 CONTROL_REDIS_PASSWORD 同一模式):K8s 上它们只放 Secret,经 secretKeyRef 注入同名变量,
 	// node-config / battle-node-config 里写空串(docs/design/workload-secrets-via-k8s-secret.md §4.1)。本机不设变量,照用 yaml。
 	// 缺变量时取 yaml 的值;生产档下为空由各节点既有的空密钥校验拒启。值不进日志。
 	if (const char *envSecret = GetNonEmptyEnv("MMORPG_GATE_TOKEN_SECRET"))
@@ -177,13 +216,8 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.set_cluster_id(root["ClusterId"].as<uint32_t>());
 	}
 
-	// 审计 topic 世代号(见 config.proto audit_topic_generation / modules/audit/audit_topic.h)。
-	// 可以不写:不写 = 0 = 按第一代(_g1)处理,存量 yaml 不改也能起。
-	// 必须与 go/data_service 的 Kafka.TopicGeneration 相等,否则流水 / 快照写进没人消费的 topic。
-	if (root["AuditTopicGeneration"])
-	{
-		baseConfig.set_audit_topic_generation(root["AuditTopicGeneration"].as<uint32_t>());
-	}
+	// AuditTopicGeneration(审计 topic 世代号)2026-11-12 起不再读:C++ 不直接发审计 topic,流水与快照随玩家存盘进
+	// go/db 的审计发件箱(docs/design/player-audit-outbox.md)。旧 yaml 里残留这一键不报错,只是没人读。
 
 	// 永久 guid 号段(见 config.proto IdSegmentConfig):一种 GUID 一块配置,按 Kind 名字
 	// 对上 GuidSegmentRegistry 里的实例(item / txlog / snapshot;以后 pet / guild 只加一块)。
@@ -215,6 +249,13 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 				kindConfig.set_max_step(kindNode["MaxStep"].as<uint32_t>());
 			}
 		}
+	}
+
+	// span 导出地址(见 config.proto TracingConfig,docs/design/distributed-tracing.md §10.3)。可以不写:缺席 = 不导出。
+	// 这里只原样读入;地址是否合法、OTEL_* 环境变量的覆盖由 Node::StartSpanExporter 经 ResolveOtlpExportSettings 判定。
+	if (root["Tracing"] && root["Tracing"]["OtlpTracesEndpoint"])
+	{
+		baseConfig.mutable_tracing()->set_otlp_traces_endpoint(root["Tracing"]["OtlpTracesEndpoint"].as<std::string>());
 	}
 
 	// C++ 节点 unary gRPC 调用的 deadline(见 config.proto GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
@@ -375,123 +416,63 @@ bool readGameConfig(const std::string &filename, GameConfig &gameConfig)
 		}
 	}
 
-	// Parse zone Redis config
-	if (root["zoneredis"])
+	// 2026-11-12 起不再读 zoneredis 与 scene_control_redis(docs/design/redis-cluster-all-domains-20261110.md §4.2):gate、battle 不连 Redis,
+	// scene 只连下面的 control_redis 与 player_redis。旧段还在说明这份配置是按旧形状渲染的,scene 会连到 control_redis 的缺省地址,
+	// 所以打一条 WARN 指出来(gate、battle 不受影响)。
+	if (root["zoneredis"] || root["scene_control_redis"])
 	{
-		YAML::Node zoneredisNode = root["zoneredis"];
-
-		if (zoneredisNode["host"])
-		{
-			gameConfig.mutable_zone_redis()->set_host(zoneredisNode["host"].as<std::string>());
-		}
-		if (zoneredisNode["port"])
-		{
-			gameConfig.mutable_zone_redis()->set_port(zoneredisNode["port"].as<uint32_t>());
-		}
-		if (zoneredisNode["password"])
-		{
-			gameConfig.mutable_zone_redis()->set_password(zoneredisNode["password"].as<std::string>());
-		}
-		if (zoneredisNode["db"])
-		{
-			gameConfig.mutable_zone_redis()->set_db(zoneredisNode["db"].as<uint32_t>());
-		}
-
-		// 口令的环境变量覆盖(后者生效,与上面 SCENE_NODE_TYPE / ZONE_ID 同一模式):带口令的环境从 Secret
-		// 注入,不写进 yaml;本机验收也不必改被跟踪的文件。口令值不进日志。
-		if (const char *envPassword = GetNonEmptyEnv("ZONE_REDIS_PASSWORD"))
-		{
-			gameConfig.mutable_zone_redis()->set_password(envPassword);
-			LOG_INFO << "ZONE_REDIS_PASSWORD env override applied (value hidden)";
-		}
-	}
-	else
-	{
-		LOG_ERROR << "Warning: zoneredis configuration not found in config file.";
-		return false;
+		LOG_WARN << "readGameConfig: " << filename << " still has zoneredis / scene_control_redis, which are no longer read; "
+				 << "scene connects to control_redis" << (root["control_redis"] ? "" : " (absent here, so the local default)");
 	}
 
-	// 本 zone 的场景控制域 Redis(docs/design/control-plane-zone-scoping-20261105.md §4.5):scene 读 scene_manager 写的读模型。
-	// 整段缺失时取上面的 zoneredis(此刻已含 ZONE_REDIS_PASSWORD 覆盖),开发环境不用改配置;写了这一段就是另一个实例,
-	// host 必填,口令只认显式值与 SCENE_CONTROL_REDIS_PASSWORD,不继承 zoneredis 的。只有 scene 连它,gate、battle 读到也不用。
+	// 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.2、§5.2):分线目录、神秘商人、场景归属对账与资产待办唤醒,
+	// 只有 scene 连它。整段或单键缺失时显式取默认:standalone、种子 127.0.0.1:6379、不认证(同 Go 各服务 ControlRedis 的缺省,
+	// 本机开发不用改配置)。口令可被 CONTROL_REDIS_PASSWORD 覆盖(后者生效,与上面 SCENE_NODE_TYPE / ZONE_ID 同一模式):
+	// K8s 上口令只在 Secret 里,经 secretKeyRef 注入,不写进 yaml;口令值不进日志。
+	// 这里只读入与补默认,取值由消费方 scene 的 RedisSystem 在启动时校验:gate、battle 不连 Redis,配错了不该拖累它们。
 	{
-		auto *sceneControl = gameConfig.mutable_scene_control_redis();
-		sceneControl->Clear();
-		if (const YAML::Node node = root["scene_control_redis"]; node)
+		auto *controlRedis = gameConfig.mutable_control_redis();
+		controlRedis->Clear(); // seeds 是 repeated,同一个对象再读一遍不能累加
+		if (!ReadRedisClusterSection(root, "control_redis", filename, *controlRedis))
 		{
-			if (!node["host"])
+			return false;
+		}
+		if (controlRedis->mode().empty())
+		{
+			controlRedis->set_mode("standalone");
+		}
+		if (controlRedis->mode() == "standalone" && controlRedis->seeds().empty())
+		{
+			controlRedis->add_seeds(kDefaultControlRedisSeed);
+		}
+		if (const char *envPassword = GetNonEmptyEnv("CONTROL_REDIS_PASSWORD"))
+		{
+			controlRedis->set_password(envPassword);
+			LOG_INFO << "CONTROL_REDIS_PASSWORD env override applied (value hidden)";
+		}
+	}
+
+	// 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6)。整段缺失时显式取上面的 control_redis(模式、种子与口令,
+	// 此刻已含 CONTROL_REDIS_PASSWORD 覆盖),同 Go 各服务 PlayerRedis 回落到 ControlRedis,开发环境不用改配置。
+	// 写了这一段就是另一个实例或集群:mode 缺省 standalone,种子与口令只认这一段的显式值,不继承 control_redis;
+	// 种子没写就留空,由 scene 启动时拒绝,不悄悄连到控制集群上。
+	{
+		auto *playerRedis = gameConfig.mutable_player_redis();
+		playerRedis->Clear(); // seeds 是 repeated,同一个对象再读一遍不能累加
+		if (root["player_redis"])
+		{
+			if (!ReadRedisClusterSection(root, "player_redis", filename, *playerRedis))
 			{
-				const std::string reason = "scene_control_redis.host is required when the section is present in " + filename + "; refusing to start";
-				std::fprintf(stderr, "FATAL scene_control_redis config: %s\n", reason.c_str());
-				std::fflush(stderr);
-				LOG_FATAL << "readGameConfig: " << reason;
-				return false; // LOG_FATAL 已 abort;这一行只为控制流明确
+				return false;
 			}
-			sceneControl->set_host(node["host"].as<std::string>());
-			sceneControl->set_port(node["port"] ? node["port"].as<uint32_t>() : 6379u);
-			if (node["password"])
+			if (playerRedis->mode().empty())
 			{
-				sceneControl->set_password(node["password"].as<std::string>());
-			}
-			if (node["db"])
-			{
-				sceneControl->set_db(node["db"].as<uint32_t>());
+				playerRedis->set_mode("standalone");
 			}
 		}
 		else
 		{
-			sceneControl->CopyFrom(gameConfig.zone_redis());
-		}
-		if (const char *envPassword = GetNonEmptyEnv("SCENE_CONTROL_REDIS_PASSWORD"))
-		{
-			sceneControl->set_password(envPassword);
-			LOG_INFO << "SCENE_CONTROL_REDIS_PASSWORD env override applied (value hidden)";
-		}
-	}
-
-	// 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6)。整段或单键缺失时显式取默认:
-	// mode = standalone;standalone 又没写 seeds 时地址与口令都沿用上面的 zoneredis(此刻已含 ZONE_REDIS_PASSWORD 覆盖),开发环境不用改配置。
-	// 写了 seeds 就是另一个实例,口令只认显式值,不继承。
-	// 这里只读入与补默认,取值由消费方 scene 的 RedisSystem 在启动时校验:gate、battle 不连玩家域,配错了不该拖累它们。
-	{
-		auto *playerRedis = gameConfig.mutable_player_redis();
-		playerRedis->Clear(); // seeds 是 repeated,同一个对象再读一遍不能累加
-		if (const YAML::Node playerRedisNode = root["player_redis"]; playerRedisNode)
-		{
-			if (playerRedisNode["mode"])
-			{
-				playerRedis->set_mode(playerRedisNode["mode"].as<std::string>());
-			}
-			if (const YAML::Node seedsNode = playerRedisNode["seeds"]; seedsNode)
-			{
-				// 写成标量时迭代不出元素,standalone 下会悄悄回落到 zone_redis,连错 Redis 也没有任何提示。
-				if (!seedsNode.IsSequence())
-				{
-					const std::string reason = "player_redis.seeds must be a list of host:port in " + filename + "; refusing to start";
-					std::fprintf(stderr, "FATAL player_redis config: %s\n", reason.c_str());
-					std::fflush(stderr);
-					LOG_FATAL << "readGameConfig: " << reason;
-					return false; // LOG_FATAL 已 abort;这一行只为控制流明确
-				}
-				for (const auto &seed : seedsNode)
-				{
-					playerRedis->add_seeds(seed.as<std::string>());
-				}
-			}
-			if (playerRedisNode["password"])
-			{
-				playerRedis->set_password(playerRedisNode["password"].as<std::string>());
-			}
-		}
-		if (playerRedis->mode().empty())
-		{
-			playerRedis->set_mode("standalone");
-		}
-		if (playerRedis->mode() == "standalone" && playerRedis->seeds().empty())
-		{
-			const auto &zoneRedis = gameConfig.zone_redis();
-			playerRedis->add_seeds(zoneRedis.host() + ":" + std::to_string(zoneRedis.port()));
-			playerRedis->set_password(zoneRedis.password());
+			playerRedis->CopyFrom(gameConfig.control_redis());
 		}
 		if (const char *envPassword = GetNonEmptyEnv("PLAYER_REDIS_PASSWORD"))
 		{

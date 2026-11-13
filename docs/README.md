@@ -63,6 +63,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [auth-provider-framework.md](design/auth-provider-framework.md) — Auth Provider Framework
 - [client-access-band-routing.md](design/client-access-band-routing.md) — 客户端接入的标准形态，与 gate 按号段整体转发给路由服（client-rpc-router 续篇，D51–D64）
 - [client-request-ordering.md](design/client-request-ordering.md) — 客户端请求按会话保序:路由服水平扩展下的乱序修复(gate 路由 lane)
+- [client-scene-request-handoff-hold.md](design/client-scene-request-handoff-hold.md) — 换场景节点期间的玩家消息:客户端请求在 gate 暂存并按序重投(场景 lane);附服务器发给玩家的各类消息在换节点时的处置对照
 - [client-request-idempotency.md](design/client-request-idempotency.md) — 客户端请求幂等键：场景服经济操作的去重账本，随存档落盘（防连点与结果未知后的重发，2026-11-05 起）
 - [client-rpc-router.md](design/client-rpc-router.md) — 客户端 RPC 路由服(client_rpc_router):gate 唯一的 gRPC 目标
 - [dual-token-authentication.md](design/dual-token-authentication.md) — Dual Token Authentication Design (Access + Refresh)
@@ -112,9 +113,11 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
-- [battle-instance-loss-early-abort.md](design/battle-instance-loss-early-abort.md) — 战斗进程失效的提前作废与作废通知：原进程确定不在时约 1 分钟内判作废，所有作废经结算链送到场景服并通知客户端（2026-11-11 方案已定案，未落码）
+- [battle-instance-loss-early-abort.md](design/battle-instance-loss-early-abort.md) — 战斗进程失效的提前作废与作废通知：原进程确定不在时约 1 分钟内判作废，所有作废经结算链送到场景服并通知客户端（2026-11-12 服务端与客户端已落码，未编译）
 - [battle-item-reservation.md](design/battle-item-reservation.md) — 战斗道具预留：备战时押住带进战斗的道具，结算从预留里扣，作废或取消时释放；冻结解开后晚到的结算不再按持有量夹紧（2026-11-10 已落码，未编译）
+- [battle-overflow-mail.md](design/battle-overflow-mail.md) — 战斗掉落两包都放不下时改投邮件：掉落记进玩家存档的待寄队列、与结算同一次提交，落盘后由 scene 以 battle 身份寄出，邮件回了 mail_id 才删（2026-11-12 已落码，未编译）
 - [battle-report-replay.md](design/battle-report-replay.md) — 回合制战斗战报回放：只录 PVP，观众版帧随终局原件同事务存进 match 库，每名玩家保留最近 100 条（2026-11-06 已落码，未编译）
+- [battle-script.md](design/battle-script.md) — 战斗剧本：protobuf 规则表（角色位 → 条件 / 目标 / 行动），match 按队长选用 > 官方绑定解析后冻结进建房原件；玩家上传、运营审核；评分局只开官方剧本（2026-11-12 已落码，未编译）
 - [battle-result-recovery.md](design/battle-result-recovery.md) — 战斗结果重登恢复：近期战斗结果随结算同一次存档提交，客户端落地查询（2026-11-05，未编译）
 - [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（提案）
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)
@@ -229,9 +232,11 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [grpc-muduo-transport.md](design/grpc-muduo-transport.md) — C++ gRPC 传输改由 muduo 驱动(nghttp2 + 自有 gRPC 调用语义)
 - [hashed-timing-wheel.md](design/hashed-timing-wheel.md) — Hashed Timing Wheel
 - [infra-reconnect-overview.md](design/infra-reconnect-overview.md) — 断线重连：处理原则与各服务现状（Redis / MySQL·TiDB / etcd / Kafka / gRPC / 节点链路，2026-11-06 按代码重写，含 19 条缺口）
+- [kafka-bound-consumer-group.md](design/kafka-bound-consumer-group.md) — Kafka 消费组 owner(BoundConsumerGroup):再均衡与暂时失败原地重试、有界重试后转死信、排空时交给新属主并按组内位点核收据、保留期丢失不静默跳过(2026-11-12 从 db-write-fencing-mysql.md 迁出;当日改动未编译)
 - [kafka-topic-retention-strategy.md](design/kafka-topic-retention-strategy.md) — Kafka topic 保留与耐久策略
 - [muduo-rpc-channel.md](design/muduo-rpc-channel.md) — 节点间 muduo RPC:每次调用的回调、延后回包与完整的完成语义(RpcChannel 改造)
 - [muduo-timer-cancellation-hazards.md](design/muduo-timer-cancellation-hazards.md) — muduo 定时器取消语义与野引用
+- [rpc-kill-switch.md](design/rpc-kill-switch.md) — RPC 热关停：节点（类型 / 实例）、服务、方法三级，C++ 与 Go 同一套 etcd 规则；运维经 gateway `/admin/killswitch` 写、各进程自己 watch；会话收尾与补偿方法受保护；go-zero 自带的只有自动熔断 / 降载（2026-11-12 落码未编译）
 - [no-single-node-horizontal-scaling-20261001.md](design/no-single-node-horizontal-scaling-20261001.md) — 消除单节点:所有服务都能水平扩展(2026-10-01)
 - [player-handler-deferred-reply.md](design/player-handler-deferred-reply.md) — 玩家级 handler 延后完成(PlayerCallContext)
 - [shared-redis-split-by-purpose.md](design/shared-redis-split-by-purpose.md) — 共享 Redis 按用途拆实例(G4a 设计稿)
@@ -293,6 +298,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [mmo-massive-world-cell-direction.md](design/mmo-massive-world-cell-direction.md) — 万人同屏与大世界：多进程 cell 方向（以后做成实时 MMO 时才实施）
 - [player-data-tidb-scaling-plan.md](design/player-data-tidb-scaling-plan.md) — 玩家数据只存 TiDB 与全链路水平扩展:总体方案
 - [player-save-direct-commit.md](design/player-save-direct-commit.md) — 存盘直接提交 TiDB:落码规格
+- [player-audit-outbox.md](design/player-audit-outbox.md) — 玩家审计发件箱:流水与快照随存盘同事务写发件箱、go/db 转发(断线重连 R13)
 - [published-contract-compatibility-20261017.md](design/published-contract-compatibility-20261017.md) — 两套已发布客户端契约的合并兼容方案
 - [redis-player-store-cluster.md](design/redis-player-store-cluster.md) — 玩家态 Redis 集群化：物理水平扩展设计
 - [zone-redis-regression-guard-20261022.md](design/zone-redis-regression-guard-20261022.md) — zone Redis 回退防护：「Redis 回退一族」6 条 low 的合并设计
@@ -313,7 +319,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 #### 运维手册
 
-- [audit-topic-generation-bump-runbook.md](ops/audit-topic-generation-bump-runbook.md) — 审计 topic 加分区(在线原地加)与离线换代 Runbook(player_snapshot / transaction_log)
+- [audit-topic-generation-bump-runbook.md](ops/audit-topic-generation-bump-runbook.md) — 审计 topic 加分区(在线原地加)与换代 Runbook(player_snapshot / transaction_log;2026-11-12 起换代暂停 go/db 转发、不停服)
 - [cross-zone-failure-test-runbook.md](ops/cross-zone-failure-test-runbook.md) — 跨 Zone 传送 / 归属交接 失败场景测试 Runbook
 - [db-move-runbook.md](ops/db-move-runbook.md) — 不停服搬逻辑库操作手册
 - [etcd-maintenance-runbook.md](ops/etcd-maintenance-runbook.md) — etcd MVCC 压缩与空间维护 Runbook
@@ -322,6 +328,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [id-issuer-runbook.md](ops/id-issuer-runbook.md) — 发号器运维手册
 - [k8s-docker-desktop-troubleshooting.md](ops/k8s-docker-desktop-troubleshooting.md) — K8s Docker Desktop Troubleshooting Guide · [EN](ops/k8s-docker-desktop-troubleshooting_en.md) · [中文](ops/k8s-docker-desktop-troubleshooting_zh.md)
 - [k8s-open-server-runbook.md](ops/k8s-open-server-runbook.md) — K8s 开服操作手册 · [EN](ops/k8s-open-server-runbook_en.md) · [中文](ops/k8s-open-server-runbook_zh.md)
+- [kafka-bound-consumer-runbook.md](ops/kafka-bound-consumer-runbook.md) — Kafka 消费组 owner 运维手册:死信查看与人工重放(`go/shared/cmd/kafka_dlq`)、保留期丢失处置、排空收据 HOLD
 - [kafka-cluster-production-runbook.md](ops/kafka-cluster-production-runbook.md) — Kafka 集群化生产部署 Runbook
 - [linux-staging-stress-runbook.md](ops/linux-staging-stress-runbook.md) — Linux Staging 部署 + 阶梯压测留位
 - [log-management.md](ops/log-management.md) — Log Management

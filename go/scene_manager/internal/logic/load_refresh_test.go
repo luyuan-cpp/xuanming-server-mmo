@@ -12,12 +12,12 @@ import (
 
 	"github.com/alicebob/miniredis/v2/server"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/breaker"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 
 	"scene_manager/internal/metrics"
+	"shared/redisslot"
 )
 
 // allLoadRefreshOutcomesForTest 是 load_refresh_total 的全部 outcome。
@@ -43,29 +43,26 @@ func (e redisReplyErrorForTest) Error() string { return string(e) }
 
 func (redisReplyErrorForTest) RedisError() {}
 
-// pipeline 里一条计数 GET 的判定。熔断拒绝时命令没执行、err 也不回填,结果是 ("", nil):
-// 它绝不能被读成「计数为 0、读取成功」。
+// pipeline 里一条计数 GET 的判定。回调没被调用时命令没执行、err 也不回填,结果是 ("", nil):
+// 它绝不能被读成「计数为 0、读取成功」。整批没执行的情形调用方先按 pipelineBatchRejected 跳过。
+// (2026-11-12 起句柄是控制集群句柄,go-zero 的熔断拒绝随 go-zero 句柄退役,不再单列。)
 func TestClassifyCounterReply(t *testing.T) {
-	someErr := errors.New("first failed command in the batch")
 	cases := []struct {
-		name          string
-		val           string
-		err, batchErr error
-		wantCount     int64
-		wantOK        bool
+		name      string
+		val       string
+		err       error
+		wantCount int64
+		wantOK    bool
 	}{
-		{"breaker open, command never ran", "", nil, breaker.ErrServiceUnavailable, 0, false},
-		{"breaker open, wrapped", "", nil, fmt.Errorf("pipeline: %w", breaker.ErrServiceUnavailable), 0, false},
-		{"not executed and no batch error", "", nil, nil, 0, false},
-		{"key missing", "", redis.Nil, redis.Nil, 0, true},
-		{"value present while another command failed", "7", nil, someErr, 7, true},
-		{"value present", "42", nil, nil, 42, true},
-		{"command error", "", errors.New("WRONGTYPE"), someErr, 0, false},
-		{"malformed value", "abc", nil, nil, 0, false},
+		{"not executed", "", nil, 0, false},
+		{"key missing", "", redis.Nil, 0, true},
+		{"value present", "42", nil, 42, true},
+		{"command error", "", errors.New("WRONGTYPE"), 0, false},
+		{"malformed value", "abc", nil, 0, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, ok := classifyCounterReply(c.val, c.err, c.batchErr)
+			got, ok := classifyCounterReply(c.val, c.err)
 			assert.Equal(t, c.wantOK, ok)
 			assert.Equal(t, c.wantCount, got)
 		})
@@ -77,26 +74,22 @@ type memberCountReplyForTest struct{}
 
 func (memberCountReplyForTest) Result() (int64, error) { return 0, nil }
 
-// 一条 SCARD 可不可信:键不存在回 0 是可信的「没有人」,熔断拒绝留下的零值不是。
+// 一条 SCARD 可不可信:键不存在回 0 是可信的「没有人」,回调没被调用留下的零值不是。
 func TestClassifyMemberCountReply(t *testing.T) {
-	someErr := errors.New("first failed command in the batch")
 	executed := memberCountReplyForTest{}
 	cases := []struct {
-		name          string
-		reply         memberCountReply
-		err, batchErr error
-		wantOK        bool
+		name   string
+		reply  memberCountReply
+		err    error
+		wantOK bool
 	}{
-		{"callback never ran", nil, nil, nil, false},
-		{"breaker open, command never ran", executed, nil, breaker.ErrServiceUnavailable, false},
-		{"breaker open, wrapped", executed, nil, fmt.Errorf("pipeline: %w", breaker.ErrServiceUnavailable), false},
-		{"key missing reads as nobody", executed, nil, nil, true},
-		{"count present while another command failed", executed, nil, someErr, true},
-		{"command error", executed, errors.New("WRONGTYPE"), someErr, false},
+		{"callback never ran", nil, nil, false},
+		{"key missing reads as nobody", executed, nil, true},
+		{"command error", executed, errors.New("WRONGTYPE"), false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.wantOK, classifyMemberCountReply(c.reply, c.err, c.batchErr))
+			assert.Equal(t, c.wantOK, classifyMemberCountReply(c.reply, c.err))
 		})
 	}
 }
@@ -112,8 +105,8 @@ func TestPipelineBatchRejected(t *testing.T) {
 	}{
 		{"executed cleanly", nil, []error{nil, nil}, false},
 		{"redis.Nil is the first error", redis.Nil, []error{redis.Nil, nil}, false},
-		{"breaker open", breaker.ErrServiceUnavailable, []error{nil, nil}, true},
-		{"breaker open even if a command carries an error", breaker.ErrServiceUnavailable, []error{someErr}, true},
+		// 控制集群句柄的键守卫整批拒绝时把同一个错误回填到每条命令:不按「没执行」整批跳过,而是逐条判失败。
+		{"guard error filled into every command", someErr, []error{someErr, someErr}, false},
 		{"error landed on no command", someErr, []error{nil, nil}, true},
 		{"error landed on no command (callback never ran)", someErr, []error{nil}, true},
 		{"commands carry their own errors", someErr, []error{nil, someErr}, false},
@@ -266,7 +259,7 @@ func TestRefreshLoadScores_LosingLeadershipDuringReadsWritesNothing(t *testing.T
 func TestRefreshLoadScores_SpansMultiplePipelineBatches(t *testing.T) {
 	sc, mr := newLoadRefreshScopeCtx(t)
 	const zone = uint32(99)
-	// 读每批 512 个节点,共 3 批(第 3 批是 991024..991026);写 = 每节点一条 SET + 一条 ZADD,共 1028 条、2 批,
+	// 读每批 512 个节点,共 3 批(第 3 批是 991024..991026);写 = 每节点一条 SET + 分数 ZADD(每 512 个成员一条,共 3 条),共 1030 条、2 批,
 	// 991026 的类型镜像是第 1027 条,落在第 2 个写批。
 	total := loadRefreshPipelineMaxCmds + 3
 	// 一千多个节点的每节点序列不留给后面的用例。
@@ -445,4 +438,34 @@ func TestResetLeaderGaugesDropsNodeSeries(t *testing.T) {
 		_, exported = nodeGaugeSeriesForTest(t, name)["1/968"]
 		assert.False(t, exported, "%s 降级后必须清掉", name)
 	}
+}
+
+// 一次刷新只碰本 zone 的键:读批(scene_count、成员集合)、写批(类型镜像、负载集)与带围栏 ZADD 的选主锁键都带同一个
+// {ctl:<z>},集群里落在同一个主节点上,整批判定(pipelineBatchRejected)对着的就是一个节点
+// (docs/design/redis-cluster-all-domains-20261110.md §4.1「pipeline」一条,第 2b 批核对)。
+func TestLoadRefreshBatchesStayOnOneZoneTag(t *testing.T) {
+	const zone = uint32(7)
+	want := sceneControlTag(zone)
+	tagOf := func(key string) string {
+		tag, ok := redisslot.HashTag(key)
+		require.True(t, ok, "%s 没有 tag", key)
+		return "{" + tag + "}"
+	}
+	for _, node := range []string{"10", "11"} {
+		assert.Equal(t, want, tagOf(nodeSceneCountKey(zone, node)))
+		assert.Equal(t, want, tagOf(nodeMembersKey(zone, node)))
+	}
+	sc, _ := newTestSvcCtx(t, "10")
+	byZone := map[uint32][]loadRefreshNode{zone: {
+		{zoneID: zone, nodeID: "10", readOK: true, sceneCount: 1},
+		{zoneID: zone, nodeID: "11"},
+	}}
+	cmds := buildLoadRefreshWrites(sc, []uint32{zone}, byZone)
+	require.NotEmpty(t, cmds)
+	for _, c := range cmds {
+		key, ok := c.args[1].(string)
+		require.True(t, ok, "%v", c.args)
+		assert.Equal(t, want, tagOf(key), "%v", c.args)
+	}
+	assert.Equal(t, want, tagOf(LeaderLockKey(zone)), "带围栏的 ZADD 把选主锁键与负载集放进同一段脚本")
 }

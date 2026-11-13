@@ -495,7 +495,7 @@ static uint32_t AddItems(entt::entity playerEntity, Bag& bag,
 - 2026-10-15 起 Bag 候选提交，mutated 出参已删，物品失败恒零改动；整批成功后才发布实例、布局、回执与流水。
 - `LogItemCreate(..., txType, correlationId)`。
 
-资产通道只往 `kInventory` 发放。主背包采用 RejectWhenFull；任何物品入包拒绝都不改资产。
+资产通道只往 `kInventory` 发放。主背包满了就拒（背包没有淘汰策略，不会为腾位挤掉旧物）；任何物品入包拒绝都不改资产。
 
 ## 4.12 GM 货币指令闸门
 

@@ -14,6 +14,7 @@
 #include "spatial/system/nav_query.h"
 #include "spatial/manager/scene_nav.h"
 #include "player/player_gm_guard.h" // 客户端 GM 指令统一闸门(guild-phase2 §S4 4.34)
+#include "kill_switch/kill_switch.h"  // 热关停:玩家方法按内层真实方法判(docs/design/rpc-kill-switch.md §7)
 #include "battle/system/player_battle.h"
 #include "rpc/player_service_interface.h"
 #include "network/rpc_channel.h"          // IsDispatchableMessageId:消息号越界或注册表空槽都不可派发
@@ -30,6 +31,7 @@
 #include "core/utils/proto/proto_field_checker.h"
 #include "network/network_utils.h"
 #include "player/comp/afk_comp.h"
+#include "player/player_handoff_gate.h" // 归属交接在途时请求留给 gate 重投(client-scene-request-handoff-hold.md §4.3)
 #include "frame/manager/frame_time.h"
 #include "rpc/service_metadata/player_lifecycle_service_metadata.h"
 #include "proto/scene/scene_info.pb.h"
@@ -81,6 +83,18 @@ namespace
 				 << sessionId << " mapped_player_id=" << mappedPlayerId
 				 << " claimed_player_id=" << claimedPlayerId << " message_id=" << messageId;
 		return false;
+	}
+
+	// 告诉 gate「这条请求确定未执行,等一等就能受理」(docs/design/client-scene-request-handoff-hold.md §4.3):
+	// gate 的场景 lane 把它放回会话队头,在有界等待内按收包顺序重投到玩家当时所在的节点。
+	// 调用之后不得再写 message_content(gate 以「没有 message_content」作为未派发的前提)。
+	// 旧版 gate 不认识这个字段,照旧按「没有 message_content」回 1003,与改造前相同。
+	void MarkRetryLater(::ProcessClientPlayerMessageResponse *response)
+	{
+		if (response != nullptr)
+		{
+			response->set_dispatch_verdict(CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER);
+		}
 	}
 
 	// 泛型应答按字段名写拒绝码;契约与生成层守卫见 services/player/rpc/player_service_interface.h。
@@ -180,7 +194,22 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 	const auto it = SessionMap().find(sessionId);
 	if (it == SessionMap().end())
 	{
-		LOG_ERROR << "ProcessClientPlayerMessage: session id not found " << sessionId << ", message id " << msg.message_id();
+		// 逐条只打 DEBUG,趋势每 1024 条留一行 WARN:换节点窗口里这是常态(gate 的路由还没切过来),条数由客户端发包速率决定,
+		// gate 重投还会让同一条请求多来几次;逐条打 ERROR 等于把日志按客户端包速率放大。
+		static uint64_t unknownSessionCount = 0;
+		if ((unknownSessionCount++ & 0x3FF) == 0)
+		{
+			LOG_WARN << "ProcessClientPlayerMessage: session id not found (sampled), latest_session_id=" << sessionId
+					 << " latest_message_id=" << msg.message_id() << " not_found_total=" << unknownSessionCount;
+		}
+		LOG_DEBUG << "ProcessClientPlayerMessage: session id not found " << sessionId << ", message id " << msg.message_id();
+		// gate 认为这条会话绑在本节点、本节点却不认识它:要么玩家刚被放行去了别的节点(gate 的路由还没切过来),
+		// 要么入场登记还没走完。两种都是过渡态,请求确定未执行。换节点执行含义不变的请求让 gate 稍后按序重投;
+		// 其余(绑在当前场景上的请求、单向消息)照旧空应答,gate 回 1003。规则在 player_handoff_gate.h。
+		if (scene_handoff_gate::ShouldAnswerRetryLater(scene_handoff_gate::EntryState::kSessionUnknown, entt::null, *method))
+		{
+			MarkRetryLater(response);
+		}
 		return;
 	}
 
@@ -208,8 +237,20 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 		}
 		else
 		{
-			LOG_WARN << "ProcessClientPlayerMessage: player not loaded for player_id=" << it->second
+			// 同上:存档载入期间到达的客户端消息逐条只打 DEBUG,趋势每 1024 条留一行 WARN。
+			static uint64_t notLoadedCount = 0;
+			if ((notLoadedCount++ & 0x3FF) == 0)
+			{
+				LOG_WARN << "ProcessClientPlayerMessage: player not loaded yet (sampled), latest_message_id=" << msg.message_id()
+						 << " not_loaded_total=" << notLoadedCount;
+			}
+			LOG_DEBUG << "ProcessClientPlayerMessage: player not loaded for player_id=" << it->second
 					 << " message_id=" << msg.message_id() << " (likely still loading from Redis)";
+			// 存档载入中:请求确定未执行,载入完成后就能受理。同上,只对换节点执行含义不变的请求让 gate 稍后按序重投。
+			if (scene_handoff_gate::ShouldAnswerRetryLater(scene_handoff_gate::EntryState::kPlayerNotLoaded, entt::null, *method))
+			{
+				MarkRetryLater(response);
+			}
 		}
 		return;
 	}
@@ -283,6 +324,41 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 				  << " is exiting; dropping message_id=" << msg.message_id() << " method=" << methodName;
 		WriteRejectTip(*playerResponse, kFeatureUnavailable);
 	}
+	else if (scene_handoff_gate::ShouldAnswerRetryLater(scene_handoff_gate::EntryState::kPlayerPresent, player, *method))
+	{
+		// 归属交接在途,且这条请求换节点执行含义不变(player_handoff_gate.h 的服务白名单):不派发,让 gate 把它留在会话队头,
+		// 交接出结果后按收包顺序重投。绑在当前场景上的请求(换图、瞬移、放技能等)不在白名单里,照旧往下派发、由 handler 当场处置
+		// (docs/design/client-scene-request-handoff-hold.md §4.3)。应答不带 message_content,直接返回。
+		// 排在退出闸之后(退出优先)、GM 闸与热关停之前(那两道由最终执行的节点判)。逐条只打 DEBUG,趋势每 1024 条留一行。
+		static uint64_t heldForHandoffCount = 0;
+		if ((heldForHandoffCount++ & 0x3FF) == 0)
+		{
+			LOG_INFO << "ProcessClientPlayerMessage: request left to the gate for retry during ownership handoff (sampled)"
+					 << " message_id=" << msg.message_id() << " held_total=" << heldForHandoffCount;
+		}
+		LOG_DEBUG << "ProcessClientPlayerMessage: player_id=" << it->second
+				  << " ownership handoff in flight; answering retry-later for message_id=" << msg.message_id()
+				  << " method=" << methodName;
+		MarkRetryLater(response);
+		return;
+	}
+	else if (scene_handoff_gate::IsStaleForThisScene(*method, request->received_on_previous_route()))
+	{
+		// gate 收到这条消息时会话还绑在别的场景路由上(它在 gate 的场景 lane 里排着等过一次换场景或换节点,换完才发到这里),
+		// 而它的含义绑在当时那个场景上(换图、瞬移、放技能、神秘商人、移动等):不在这个场景执行
+		// (docs/design/client-scene-request-handoff-hold.md S13)。改造前这类消息在交接窗口里一律被拒,这里保持同一结果。
+		// 请求-响应类不带 message_content,gate 回带请求 id 的 1003(确定未执行);单向消息不回包。
+		static uint64_t staleRouteCount = 0;
+		if ((staleRouteCount++ & 0x3FF) == 0)
+		{
+			LOG_INFO << "ProcessClientPlayerMessage: scene-bound message received under a previous scene route is not executed (sampled)"
+					 << " message_id=" << msg.message_id() << " stale_total=" << staleRouteCount;
+		}
+		LOG_DEBUG << "ProcessClientPlayerMessage: player_id=" << it->second
+				  << " message_id=" << msg.message_id() << " method=" << methodName
+				  << " was received under a previous scene route; not executed";
+		return;
+	}
 	else if (scene_gm_guard::IsClientGmMethodName(methodName) &&
 		scene_gm_guard::RejectGmClientRpc(methodName.c_str()))
 	{
@@ -310,6 +386,15 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 		// GM 闸不走 CallMethod,与退出闸共用 WriteRejectTip 直接写本次应答。
 		// Empty 应答没有 error_message 字段,不写。
 		WriteRejectTip(*playerResponse, kFeatureUnavailable);
+	}
+	else if (kill_switch::CheckMessageId(msg.message_id()))
+	{
+		// 热关停(docs/design/rpc-kill-switch.md §7):RPC0 层不判转发信封 ProcessClientPlayerMessage,
+		// 在这里按内层真实方法、按本 scene 的节点类型 / uuid 判;ExitGame 在豁免名单里,节点被整体关停时玩家照样能下线存盘。
+		// 回 1003(与 gate 入口同码);Empty 应答的单向方法不回包。
+		LOG_DEBUG << "ProcessClientPlayerMessage: refused by kill switch, player_id=" << it->second
+				  << " message_id=" << msg.message_id() << " method=" << methodName;
+		WriteRejectTip(*playerResponse, kServiceUnavailable);
 	}
 	else
 	{
@@ -411,6 +496,14 @@ void SceneHandler::CreateScene(::google::protobuf::RpcController* controller, co
 	{
 		LOG_ERROR << "CreateScene: config_id=" << request->config_id()
 				  << " scene_id=" << request->scene_id() << ", both must be non-zero";
+		return;
+	}
+	// zone 不是本节点的就拒建,判在取 Agones 许可之前(与 gRPC 入口同一判定,SceneLifecycle::AdmitsCreateZone)。空应答。
+	if (!SceneLifecycle::AdmitsCreateZone(request->zone_id(), GetZoneId()))
+	{
+		LOG_ERROR << "CreateScene rejected: scene zone does not match this node, scene_id=" << request->scene_id()
+				  << " request_zone_id=" << request->zone_id() << " node_zone_id=" << GetZoneId()
+				  << " (metric=scene_create_zone_mismatch)";
 		return;
 	}
 

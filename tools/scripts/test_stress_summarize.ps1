@@ -117,6 +117,7 @@ Set-Content -Path (Join-Path $snapDirForTest "t18m_db.txt") -Value $fakeDbSnapsh
 #     - row_bytes:LOCATION 100 行,sum 12800 → 128 字节,桶 le=256:100 → p99 插值到 253;CHARACTER 有 count 没有桶 → p99 n/a;
 #       其余组没有序列 → n/a。
 #     - sql_in_use 跨 pool 求和 3 + 1 = 4;open_err = error 6 + rejected 0;cooldown 跨 pool 求和 0 + 1 = 1。
+#       (go/db 2026-11-11 起只导出 pool="store" 一类;这里留两个类别名只为钉住汇总脚本「跨 pool 求和」的口径,名字本身没有含义。)
 $fakeDbSnapshotStore = @"
 # TYPE db_player_store_seconds histogram
 db_player_store_seconds_bucket{op="save",le="0.001"} 10
@@ -305,10 +306,23 @@ Set-Content -Path (Join-Path $snapDirForTest "t5m_ds.txt") -Value $fakeDsOld -En
 #       group 层 committed 8,桶 le=20:8 → p50 15.0s、p95 19.5s;global 层只有 no_node → committed 0,等待族在、这层没序列 → 0 - -。
 #     - G3:mode 按字典序 1V1 / PVE_SOLO / PVE_TEAM。1V1 committed 48、全部 56 → 8.9%,units 30,没有即时成局 → 0 0;
 #       PVE_SOLO 只有即时成局 → committed 0、0/0 打 "-"、units 0、imm 9 / 10;PVE_TEAM committed 2、全部 3、没有 conflict → 0.0%、units 12。
-#     - t5m_match 是没有按池撮合指标的旧版 match → G1 全 n/a,G2 全 n/a,G3 一行 n/a。
+#     - G4(热池拆分,2026-11-12):owned 按 role 是 pool 1 / region 2 / cross 1、sub 没有序列(之和 4,就是 G1 的 owned);
+#       segment_claim 与 pool_claim 同一批提交按段角色拆开:pool committed 2、no_node 1 → 0.0%;region committed 45、conflict 1 → 2.2%;
+#       sub 族在、没有序列 → 全 0、0/0 打 "-";cross committed 3、conflict 4、no_slot 3 → 40.0%。
+#     - t5m_match 是没有按池撮合指标的旧版 match → G1 全 n/a,G2 全 n/a,G3 一行 n/a,G4 每个 role 全 n/a。
 $fakeMatchNew = @"
 # TYPE match_pool_owned gauge
-match_pool_owned 4
+match_pool_owned{role="pool"} 1
+match_pool_owned{role="region"} 2
+match_pool_owned{role="cross"} 1
+# TYPE match_pool_segment_claim_total counter
+match_pool_segment_claim_total{outcome="committed",role="pool"} 2
+match_pool_segment_claim_total{outcome="no_node",role="pool"} 1
+match_pool_segment_claim_total{outcome="committed",role="region"} 45
+match_pool_segment_claim_total{outcome="conflict",role="region"} 1
+match_pool_segment_claim_total{outcome="committed",role="cross"} 3
+match_pool_segment_claim_total{outcome="conflict",role="cross"} 4
+match_pool_segment_claim_total{outcome="no_slot",role="cross"} 3
 # TYPE match_pool_page_units gauge
 match_pool_page_units{mode="MATCH_MODE_1V1",team_size="0"} 30
 match_pool_page_units{mode="MATCH_MODE_PVE_TEAM",team_size="3"} 12
@@ -810,6 +824,25 @@ Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G3 Match by mode' `
 Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G3 Match by mode' `
     -Pattern '^\s*t5m_match\s+\|\s+n/a\s+\|\s+n/a\s+n/a\s+\|\s+n/a\s+\|\s+n/a\s+n/a\s*$' `
     -Reason "an old match without any mode label prints a single n/a row"
+
+Assert-HeaderMatches -Lines $outputLines `
+    -Pattern 'role\s+\|\s+owned\s+\|\s+committed\s+conflict\s+no_node\s+no_slot\s+id_err\s+party_end\s+\|\s+conflict%\s*$' `
+    -Reason "G4 Match by segment role table must keep its column order"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G4 Match by segment role' `
+    -Pattern '^\s*t18m_match\s+\|\s+pool\s+\|\s+1\s+\|\s+2\s+0\s+1\s+0\s+0\s+0\s+\|\s+0\.0%\s*$' `
+    -Reason "pool segments: owned count and their claims, no conflict"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G4 Match by segment role' `
+    -Pattern '^\s*t18m_match\s+\|\s+region\s+\|\s+2\s+\|\s+45\s+1\s+0\s+0\s+0\s+0\s+\|\s+2\.2%\s*$' `
+    -Reason "region segments: conflict% within the role"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G4 Match by segment role' `
+    -Pattern '^\s*t18m_match\s+\|\s+sub\s+\|\s+0\s+\|\s+0\s+0\s+0\s+0\s+0\s+0\s+\|\s+-\s*$' `
+    -Reason "a role without series prints 0 when both families exist, and '-' for 0/0"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G4 Match by segment role' `
+    -Pattern '^\s*t18m_match\s+\|\s+cross\s+\|\s+1\s+\|\s+3\s+4\s+0\s+3\s+0\s+0\s+\|\s+40\.0%\s*$' `
+    -Reason "cross segments: conflicts with region segments show up here"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G4 Match by segment role' `
+    -Pattern '^\s*t5m_match\s+\|\s+cross\s+\|\s+n/a\s+\|(\s+n/a){6}\s+\|\s+n/a\s*$' `
+    -Reason "a match without segment metrics must print n/a, not 0"
 
 Assert-HeaderMatches -Lines $outputLines `
     -Pattern 'leader\s+view_hold\s+\|\s+idx_ok\s+idx_err\s+idx_held\s+\|\s+to_disc\s+cas\s+pruned\s+repaired\s+audit_rep\s+errors\s+\|\s+dead_gates\s+dead_members\s+\|\s+stale_inst\s+\|\s+rpc_n\s+rpc_avg\s+rpc_p99\s*$' `

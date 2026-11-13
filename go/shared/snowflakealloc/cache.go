@@ -15,7 +15,9 @@ import (
 // 在协议上仍是我的(别人 Q 内不会申领;etcd 不通时别人也拿不到新号),可以直接用
 // 缓存的槽起服,发号地板 = lastWatermark + lead,后台重试注册。
 //
-// 字段名是跨语言契约(C++ 侧同格式),不要改。
+// 字段名是磁盘格式,不要改名:已有的缓存文件必须照样能读。新字段一律 omitempty,老文件缺字段读成 0;
+// 删掉的字段(2026-11-12 删了 login 毫秒水位的 lastWatermarkMs / localHighWaterMs / watermarkMsRev)留在老文件里,
+// 读时被 encoding/json 忽略。C++ 的槽位客户端已删,这份格式现在只有本包读写。
 type cacheRecord struct {
 	Kind        string `json:"kind"`
 	Cluster     uint32 `json:"cluster"`
@@ -24,10 +26,8 @@ type cacheRecord struct {
 	Incarnation int64  `json:"incarnation"`
 	// LastWatermark 是最近一次成功写入 watermark/<slot> 的值(snowflake.Epoch 起的秒,含前推)。
 	LastWatermark uint64 `json:"lastWatermark"`
-	// LastWatermarkMs 是 login 毫秒水位(Unix ms)最近一次成功写入的值;非 login 恒 0。
-	LastWatermarkMs uint64 `json:"lastWatermarkMs,omitempty"`
-	// LocalHighWaterSec / LocalHighWaterMs 是本进程**打算发到**的最高逻辑时刻(与
-	// LastWatermark* 的差别只在于"有没有等 etcd 确认")。
+	// LocalHighWaterSec 是本进程**打算发到**的最高逻辑秒(与 LastWatermark 的差别只在于
+	// "有没有等 etcd 确认")。
 	//
 	// 为什么必须单独记一份:etcd 不可达时水位 Txn 全部失败,LastWatermark 冻在最后一次
 	// 成功写,而发号器还能继续发 F(2h)之久 —— 期间它可以借位到墙钟前面
@@ -40,7 +40,6 @@ type cacheRecord struct {
 	//
 	// omitempty + 老文件缺字段读出来是 0(被 max 吃掉),所以旧缓存文件仍然可读。
 	LocalHighWaterSec uint64 `json:"localHighWaterSec,omitempty"`
-	LocalHighWaterMs  uint64 `json:"localHighWaterMs,omitempty"`
 	// LastAckWall 是最近一次水位写成功时的墙钟(Unix ms)。**只有它**是启动资格闸
 	// (now − LastAckWall < F);本地高水位只抬地板,不延长资格。
 	//
@@ -48,21 +47,20 @@ type cacheRecord struct {
 	// **不刷新**:健康跑了很久后崩溃、且重启时 etcd 恰好也不通,缓存会因它早于 F 而不可用,
 	// 只能等 etcd —— 双重故障,§7.5-5 明确接受;故障期间崩溃则由故障首写保证它是新鲜的。
 	LastAckWall int64 `json:"lastAckWall"`
-	// WatermarkRev / WatermarkMsRev 是落盘那一刻本进程对 watermark/<slot>、watermark_ms/<slot>
-	// 最后观测到的 ModRevision(0 = 没观测过或 key 不存在)。缓存启动之后,etcd 回来时前任的
+	// WatermarkRev 是落盘那一刻本进程对 watermark/<slot> 最后观测到的 ModRevision
+	// (0 = 没观测过或 key 不存在)。缓存启动之后,etcd 回来时前任的
 	// slots key 多半已随 lease 过期,reclaim 要凭它证明"这段时间没人写过水位"才肯把 key 重新
 	// Create 出来(allocator.go reclaim,第一轮数据审计 §4 第 21 条)。
 	//
 	// 只在既有的落盘时机抄入,不因 revision 变化额外写盘(§7.5-5 稳态零写盘不变)。所以优雅
 	// 退出与故障期崩溃时它是准的;稳态崩溃时它落后于前任后来的写入 —— 落后只会让重建比较
 	// 不成立而 fence(多一次重启),不会放行。缺字段的旧文件读成 0:只要水位 key 存在,同样 fence。
-	WatermarkRev   int64 `json:"watermarkRev,omitempty"`
-	WatermarkMsRev int64 `json:"watermarkMsRev,omitempty"`
+	WatermarkRev int64 `json:"watermarkRev,omitempty"`
 }
 
 // DefaultCachePath 给出消费方约定的缓存文件路径:<dir>/snowflake-<kind>-<affinity>.json。
-// 文件名带亲和键:同一主机多实例(match 的 host#port、scene_manager 的 host_port、
-// 本地 -Zone 双 login)各自一份,不互相覆盖。dir 为空 = 关闭缓存。
+// 文件名带亲和键:同一主机多实例(scene_manager 的 host_<监听端口>)各自一份,不互相覆盖。
+// dir 为空 = 关闭缓存。
 func DefaultCachePath(dir, kind, affinity string) string {
 	if dir == "" {
 		return ""

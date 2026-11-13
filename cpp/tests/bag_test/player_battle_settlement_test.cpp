@@ -24,6 +24,8 @@
 #include "modules/mission/system/mission.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/item_hold.h" // 战斗道具预留(battle-item-reservation.md)
+#include "services/scene/player/system/player_mail_outbox.h" // 两包都放不下时掉落改投邮件(battle-overflow-mail.md)
+#include "table/proto/tip/bag_error_tip.pb.h" // kBagItemNotStacked:改投也接不住时带回的延后原因
 #include "modules/bag/bag_system.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/bag/item_system.h"
@@ -53,6 +55,7 @@
 #include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/comp/last_persisted_snapshot_comp.h"
 #include "services/scene/player/system/player_mission.h"
+#include "services/scene/player/system/player_pet.h" // PetSystem::kPoolOwnerPet:宝宝属性池有配的前置断言
 #include "services/scene/player/system/role_admission_system.h"
 #include "services/scene/player/system/player_inbox_registry.h"
 #include "services/scene/player/system/player_inbox_rules.h"
@@ -841,13 +844,53 @@ TEST_F(PlayerBattleSettlementTest, InboxUnownedPetSkipsOnlyRetiredPetEffect) {
     EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
 }
 
-TEST_F(PlayerBattleSettlementTest, InboxMissingPetTableSkipsOnlyThatPetEffect) {
+// 玩家还带着这只宝宝,它的种类在本节点 Pet 表里查不到:整笔 DEFER、零副作用,不跳过这一只(2026-11-12)。
+// Pet 表与 Item 表同一条规则(行 id 只增不删,cfg_ids_permanent):查不到只可能是这一行还没热更到本节点,或宝宝来自更新版本;
+// 跳过就永久丢掉它的战后终值。原先按「种类行可能被删」只跳过这一只、其余照常 APPLIED
+// (原名 InboxMissingPetTableSkipsOnlyThatPetEffect)。
+TEST_F(PlayerBattleSettlementTest, InboxPetConfigUnknownToThisNodeDefersWholeSettlement) {
     auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
     auto* pet = pets.add_pets(); pet->set_pet_id(911); pet->set_pet_table_id(UINT32_MAX); pet->set_health(17);
     settlement.add_pets()->set_pet_id(911);
     const auto before = pets.SerializeAsString();
-    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
     EXPECT_EQ(before, pets.SerializeAsString());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "同一笔里的金币也不先发";
+    EXPECT_EQ(0u, KillProgress());
+    EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_EQ(0, Results().entries_size()) << "延后的结算不记近期结果";
+}
+
+// 整笔延后的那一局,热更把这只宝宝的种类行补到本节点之后重试即 APPLIED:宝宝的战后终值照写,金币与击杀到账。
+// 摘行与热更的手法同 ScopedItemRowsNotYetHotUpdated:从主键索引里摘掉 = 还没热更到,重新加载整张表 = 热更到了。
+TEST_F(PlayerBattleSettlementTest, InboxSettlementAppliesOnRetryOnceThePetRowIsHotUpdated) {
+    PetTableManager::Instance().Load(); AttributePoolTableManager::Instance().Load();
+    ASSERT_GT(PetTableManager::Instance().FindAll().data_size(), 0);
+    ASSERT_FALSE(AttributePoolTableManager::Instance().GetByOwnerType(PetSystem::kPoolOwnerPet).empty())
+        << "前置:宝宝属性池有配,否则这只宝宝的效果会按 pet_pool_missing 跳过";
+    const uint32_t petTableId = PetTableManager::Instance().FindAll().data(0).id();
+    auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    auto* pet = pets.add_pets(); pet->set_pet_id(911); pet->set_pet_table_id(petTableId); pet->set_health(17);
+    auto* effect = settlement.add_pets(); effect->set_pet_id(911); effect->set_health(1);
+    const auto payload = settlement.SerializeAsString();
+    const auto before = pets.SerializeAsString();
+
+    // 用例中途失败也把整张表加载回来,不把缺行的表漏给后面的用例。
+    struct ReloadPetTableOnExit {
+        ~ReloadPetTableOnExit() { PetTableManager::Instance().Load(); }
+    } reloadOnExit;
+    const_cast<PetTableManager::IdMapType&>(PetTableManager::Instance().GetIdMap()).erase(petTableId);
+    ASSERT_FALSE(PetTableManager::Instance().Exists(petTableId)) << "前置:这只宝宝的种类行还没热更到";
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, payload).kind);
+    EXPECT_EQ(before, pets.SerializeAsString());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, KillProgress());
+
+    PetTableManager::Instance().Load(); // 热更到了
+    ASSERT_TRUE(PetTableManager::Instance().Exists(petTableId));
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, payload).kind)
+        << "同一份原件,种类行热更到之后本地续做即成功";
+    EXPECT_NE(before, pets.SerializeAsString()) << "宝宝的战后终值写进去了,没有被跳过";
     EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(2u, KillProgress());
 }
@@ -963,6 +1006,17 @@ protected:
         auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
         for (auto& bag : bags.bags) bag.SetPlayerGuid(Guid{playerId});
         bags.bags[kInventory].ExpandCapacity(20);
+        // 待寄邮件是持久数据,生产里由加载创建(battle-overflow-mail.md)。
+        tlsEcs.actorRegistry.emplace<PlayerMailOutboxComp>(player);
+        // 两包都放不下时的改投邮件在本夹具里缺省关着(发件方视为未配置),不看进程环境里有没有发件密钥:
+        // 下面「两包都满就整笔延后」的用例盯的正是改投接不住时的兜底。改投本身的用例用 EnableOverflowMail 打开。
+        PlayerMailOutboxSystem::Dependencies withoutMail;
+        withoutMail.senderConfigured = [] { return false; };
+        PlayerMailOutboxSystem::SetDependenciesForTest(std::move(withoutMail));
+    }
+    void TearDown() override {
+        PlayerMailOutboxSystem::SetDependenciesForTest({});
+        PlayerBattleSettlementTest::TearDown();
     }
     Bag& Inventory() {
         return tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
@@ -970,6 +1024,43 @@ protected:
     Bag& Temporary() {
         return tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kTemporary];
     }
+    PlayerMailOutboxComp& Outbox() { return tlsEcs.actorRegistry.get<PlayerMailOutboxComp>(player); }
+    // 寄出去的一封(寄送替身收下的):回调由用例决定什么时候、以什么结果回。
+    struct SentMail {
+        uint64_t playerId{0};
+        uint64_t requestId{0};
+        PlayerMailOutboxSystem::SendDone done;
+    };
+    // 打开两包都放不下时的改投邮件:发件方视为已配置,寄送收进 sentMails,请求存盘只计数,时钟取 mailNowMs。
+    // 落盘判定不换:用正式的那一个(最近一次已提交的存档快照里有这一条才寄)。
+    void EnableOverflowMail() {
+        PlayerMailOutboxSystem::Dependencies dependencies;
+        dependencies.senderConfigured = [] { return true; };
+        dependencies.send = [this](uint64_t to, const MailOutboxEntry& entry, PlayerMailOutboxSystem::SendDone done) {
+            sentMails.push_back({to, entry.request_id(), std::move(done)});
+            return PlayerMailOutboxSystem::SendStart::kSent;
+        };
+        dependencies.requestSave = [this](entt::entity, const char*) { ++mailSaveRequests; };
+        dependencies.nowMs = [this] { return mailNowMs; };
+        PlayerMailOutboxSystem::SetDependenciesForTest(std::move(dependencies));
+    }
+    // 模拟一次提交:收件箱账本与待寄邮件随同一份快照落盘(生产里是同一次 Marshal、同一个事务)。
+    void CommitLedgerAndOutboxSnapshot() {
+        PlayerAllData persisted;
+        auto* first = persisted.mutable_player_database_data();
+        first->set_player_id(playerId);
+        first->mutable_inbox_ledger()->CopyFrom(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player));
+        first->mutable_mail_outbox()->CopyFrom(Outbox());
+        persisted.set_last_save_seq(++saveSeq);
+        const auto source = std::make_shared<const PlayerAllData>(persisted);
+        const auto committed = RoleAdmissionSystem::CaptureSnapshotCommit(player, source, 7, saveSeq);
+        ASSERT_TRUE(static_cast<bool>(committed));
+        committed();
+        tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player).Replace(*source);
+    }
+    std::vector<SentMail> sentMails;
+    int mailSaveRequests{0};
+    uint64_t mailNowMs{1'000'000};
     void GiveItem(uint32_t configId, uint32_t count) {
         InitItemParam param;
         param.itemPBComp.set_config_id(configId);
@@ -1074,8 +1165,11 @@ public:
         PlayerInboxSystem::SetPersistFnForTest(&CountingPersist);
         PlayerInboxSystem::SetTransportForTest(&CaptureCompositionInboxFetch, &CaptureCompositionInboxAck);
         PlayerInboxSystem::SetConsumerConfigForTest(true, true, 0);
+        // 与 scene main 同一处装配:背包「腾位通知」的订阅方是收件箱(bag_service.h)。取回唤醒的两条用例靠它。
+        BagService::SetSpaceFreedListener(&PlayerInboxSystem::OnBagSpaceFreed);
     }
     ~ScopedCompositionInbox() {
+        BagService::SetSpaceFreedListener(nullptr);
         PlayerInboxSystem::SetConsumerConfigForTest(false, false, 0);
         PlayerInboxSystem::SetTransportForTest(nullptr, nullptr);
         PlayerInboxSystem::SetPersistFnForTest(nullptr); PlayerInboxSystem::SetNowFnForTest(nullptr);
@@ -1479,16 +1573,15 @@ TEST_F(PlayerBattleSettlementTest, BattleResultIsPublishedEvenWhenThePlayerAlrea
     EXPECT_EQ(settlement.battle_id(), visible.results(0).battle_id());
 }
 
-// 记的是本人实际入账,不是终局原件:消耗按实际持有夹紧,配置行已删的掉落不记,其余照实,与背包实际变化一致。
+// 记的是本人实际入账,不是终局原件:消耗按实际持有夹紧,其余照实,与背包实际变化一致。
+// 被封禁的掉落不记,见 InboxGlobalItemBlockSkipsOnlyTheBlockedDropAndAppliesTheRest;本节点表里查不到的掉落整笔延后、
+// 这一局什么都不记,见 InboxDropWithConfigUnknownToThisNodeDefersWholeSettlement。
 TEST_F(PlayerBattleSettlementItemTest, InboxBattleResultRecordsActualAmountsNotTheTerminalSource)
 {
     ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
-    constexpr uint32_t kDeletedConfig = 0x7FFFFFF3u;
-    ASSERT_FALSE(ItemTableManager::Instance().Exists(kDeletedConfig)) << "前置:配置行不存在";
     ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 1));
     SetConsumed(kSettlementStackItem, 3); // 原件要求扣 3,实际只持有 1
     SetGained(kSettlementDropItem, 2);
-    SetGained(kDeletedConfig, 3);
     EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
     EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementDropItem));
     EXPECT_EQ(0u, Inventory().GetTotalItemCount(kSettlementStackItem));
@@ -1498,7 +1591,7 @@ TEST_F(PlayerBattleSettlementItemTest, InboxBattleResultRecordsActualAmountsNotT
     ASSERT_EQ(1, recorded.items_consumed_size());
     EXPECT_EQ(kSettlementStackItem, recorded.items_consumed(0).item_table_id());
     EXPECT_EQ(1u, recorded.items_consumed(0).count()) << "按实际持有夹紧,不是原件里的 3";
-    ASSERT_EQ(1, recorded.items_gained_size()) << "配置行已删的掉落不记";
+    ASSERT_EQ(1, recorded.items_gained_size());
     EXPECT_EQ(kSettlementDropItem, recorded.items_gained(0).item_table_id());
     EXPECT_EQ(2u, recorded.items_gained(0).count());
     EXPECT_FALSE(recorded.lines_truncated());
@@ -1661,6 +1754,155 @@ TEST_F(PlayerBattleSettlementItemTest, InboxAdmissionChangeDuringCandidateInitia
     EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementNonStackItem)); EXPECT_EQ(2u, KillProgress());
 }
 
+// ---------------------------------------------------------------------------
+// 两包都放不下时掉落改投邮件(2026-11-11,docs/design/battle-overflow-mail.md)
+// 以前:人物背包与临时格都放不下就整笔延后,金币、任务进度、气血都卡着;人物背包里全是被押的道具、临时格也满时,
+// 玩家腾不出任何位置,这一局一直结不了。
+// 现在:这一局照常应用,掉落整批记进存档里的待寄队列(与扣消耗、入账同一帧、同一次存档),存档确认提交之后寄进邮箱。
+// 改投接不住(没配发件方、待寄队列满、请求号暂缺)时才回到整笔延后 —— 本段之后几条「两包都满就延后」的用例盯的是这条兜底。
+// ---------------------------------------------------------------------------
+
+TEST_F(PlayerBattleSettlementItemTest, InboxFullBagsMailTheDropsAndApplyTheRestOfTheSettlement)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    EnableOverflowMail();
+    Inventory().SetCapacityForRestore(1); Temporary().SetCapacityForRestore(0);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    SetConsumed(kSettlementStackItem, 1); SetGained(kSettlementNonStackItem, 1); SetGained(kSettlementDropItem, 2);
+    const auto slots = Inventory().GridSlots();
+
+    const auto applied = PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString());
+    ASSERT_EQ(PlayerInboxExecKind::kApplied, applied.kind) << "两包都满不再拖住整笔结算";
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem)) << "消耗照常扣";
+    EXPECT_EQ(slots, Inventory().GridSlots()) << "掉落一件都没进人物背包";
+    EXPECT_EQ(0u, Temporary().OccupiedGridCount());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(0u, BagService::ConsecutiveGrantOverflowRejections(player)) << "接住了不算一次放不下";
+
+    ASSERT_EQ(1, Outbox().entries_size()) << "整批掉落一封";
+    const auto& entry = Outbox().entries(0);
+    EXPECT_NE(0u, entry.request_id());
+    EXPECT_EQ(static_cast<uint32_t>(mail_outbox_rules::MailOutboxSource::kBattleOverflow), entry.source());
+    EXPECT_EQ(settlement.battle_id(), entry.source_id());
+    ASSERT_EQ(2, entry.items_size());
+    EXPECT_EQ(kSettlementNonStackItem, entry.items(0).config_id()); EXPECT_EQ(1u, entry.items(0).count());
+    EXPECT_EQ(kSettlementDropItem, entry.items(1).config_id()); EXPECT_EQ(2u, entry.items(1).count());
+    EXPECT_TRUE(mail_outbox_rules::Validate(Outbox()).empty()) << mail_outbox_rules::Validate(Outbox());
+
+    ASSERT_EQ(1, Results().entries_size()) << "这一局照常记近期结果";
+    EXPECT_TRUE(Results().entries(0).items_mailed()) << "客户端据此提示去邮箱领取";
+    EXPECT_EQ(2, Results().entries(0).items_gained_size()) << "改投的掉落也是本人实得";
+    EXPECT_TRUE(sentMails.empty()) << "应用结算这一帧不寄:要等存档确认提交";
+}
+
+// 放得下就不寄:改投只在两个包都放不下时发生。
+TEST_F(PlayerBattleSettlementItemTest, InboxDropsThatFitTheBagsAreNotMailed)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    EnableOverflowMail();
+    SetGained(kSettlementNonStackItem, 1);
+    ASSERT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementNonStackItem));
+    EXPECT_EQ(0, Outbox().entries_size());
+    ASSERT_EQ(1, Results().entries_size());
+    EXPECT_FALSE(Results().entries(0).items_mailed());
+}
+
+// 改投接不住(待寄队列满:邮件长期寄不出去)时回到整笔延后,零副作用;延后原因照旧带 kBagItemNotStacked ——
+// 玩家从临时格取回腾位之后,PlayerInboxSystem::OnBagSpaceFreed 照样提前这一类延后。
+TEST_F(PlayerBattleSettlementItemTest, InboxFullBagsDeferWhenTheOutboxCannotTakeTheDrops)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    EnableOverflowMail();
+    for (std::size_t i = 0; i < mail_outbox_rules::kMaxEntries; ++i) {
+        mail_outbox_rules::Append(Outbox(), 7000 + i, mail_outbox_rules::MailOutboxSource::kBattleOverflow, 1, "t", "b",
+                                  {{kSettlementDropItem, 1}}, 1);
+    }
+    Inventory().SetCapacityForRestore(1); Temporary().SetCapacityForRestore(0);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    SetConsumed(kSettlementStackItem, 1); SetGained(kSettlementNonStackItem, 1);
+    const auto outboxBefore = Outbox().SerializeAsString();
+
+    const auto deferred = PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString());
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, deferred.kind);
+    EXPECT_EQ(static_cast<uint32_t>(kBagItemNotStacked), deferred.reason) << "仍按「背包放不下」分类,取回之后定向唤醒";
+    EXPECT_EQ(outboxBefore, Outbox().SerializeAsString());
+    EXPECT_EQ(3u, Inventory().GetTotalItemCount(kSettlementStackItem));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, KillProgress());
+    EXPECT_EQ(1u, BagService::ConsecutiveGrantOverflowRejections(player));
+    EXPECT_EQ(0, Results().entries_size());
+}
+
+// 改投不绕过道具预留:本局的消耗照常从自己的预留里扣、扣完释放;掉落进待寄队列。
+// 这正是原来腾不出位置的那种局面 —— 人物背包里只有被押着的满堆,临时格也满。
+TEST_F(PlayerBattleSettlementItemTest, InboxFullBagsOfHeldItemsStillSettleByMailingTheDrops)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    EnableOverflowMail();
+    tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player); // 持久数据,生产里由加载创建
+    Inventory().SetCapacityForRestore(1); Temporary().SetCapacityForRestore(0);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    ASSERT_EQ(kSuccess, BagService::PlaceHold(player, settlement.battle_id(), item_hold::ItemHoldKind::kBattle,
+                                              {{kSettlementStackItem, 3}}, /*createdAtMs=*/1, /*reviewAfterMs=*/2));
+    SetConsumed(kSettlementStackItem, 1); SetGained(kSettlementNonStackItem, 1);
+
+    ASSERT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem)) << "从本局预留里扣出";
+    EXPECT_EQ(0, tlsEcs.actorRegistry.get<PlayerItemHoldComp>(player).holds_size()) << "结算应用之后预留释放";
+    ASSERT_EQ(1, Outbox().entries_size());
+    EXPECT_EQ(kSettlementNonStackItem, Outbox().entries(0).items(0).config_id());
+}
+
+// 整条链(正式的收件箱状态机、执行器与落盘判定):结算那一笔存档确认提交之前不寄 —— 此刻进程崩了,结算会重做,
+// 邮件却已经发出,物品就多一份。提交之后才寄;邮件回了 mail_id 才删条目,并请求存盘。
+TEST_F(PlayerBattleSettlementItemTest, InboxMailedDropsAreSentOnlyAfterTheSettlementCommits)
+{
+    ScopedCompositionInbox inbox;
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    const auto confirmed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(confirmed.has_value());
+    RoleAdmissionSystem::Dependencies dependencies;
+    dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gCompositionInboxNowMs)); };
+    dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"battle-sql-test-scene", "4242", 1}; };
+    dependencies.confirmedAdmissions.push_back(*confirmed);
+    RoleAdmissionSystem::ScopedDependencies proof(std::move(dependencies));
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player);
+    EnableOverflowMail();
+    Inventory().SetCapacityForRestore(1); Temporary().SetCapacityForRestore(0);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    SetConsumed(kSettlementStackItem, 1); SetGained(kSettlementNonStackItem, 1);
+
+    PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, gCompositionInboxFetches.size());
+    RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+    ASSERT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "两包都满,这一局照常应用";
+    ASSERT_EQ(1, Outbox().entries_size());
+    const uint64_t requestId = Outbox().entries(0).request_id();
+
+    PlayerMailOutboxSystem::TickAt(mailNowMs);
+    EXPECT_TRUE(sentMails.empty()) << "结算还没提交:不寄";
+    EXPECT_EQ(1, mailSaveRequests) << "条目还没落盘,请求一次存盘";
+
+    ASSERT_NO_FATAL_FAILURE(CommitLedgerAndOutboxSnapshot());
+    PlayerMailOutboxSystem::TickAt(mailNowMs);
+    ASSERT_EQ(1u, sentMails.size()) << "提交之后才寄";
+    EXPECT_EQ(playerId, sentMails[0].playerId);
+    EXPECT_EQ(requestId, sentMails[0].requestId);
+    EXPECT_EQ(1, Outbox().entries_size()) << "邮件还没回:条目留着";
+
+    sentMails[0].done(PlayerMailOutboxSystem::SendOutcome{true, 0, 9100});
+    EXPECT_EQ(0, Outbox().entries_size()) << "回了 mail_id 才删";
+    EXPECT_EQ(2, mailSaveRequests) << "删条目之后请求存盘";
+}
+
+// 兜底:改投接不住时(本夹具缺省没配发件方)两包都满仍整笔延后,零副作用。
 TEST_F(PlayerBattleSettlementItemTest, InboxFullBagsKeepConsumptionGoldHealthAndKillsUnchanged)
 {
     ScopedPreparedExchangeSegments segments;
@@ -1836,6 +2078,49 @@ TEST_F(PlayerBattleSettlementItemTest, InboxBagSpaceFreedLeavesOtherExecutorDefe
     EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "retried once the backoff is due";
 }
 
+// 2026-11-12:唤醒不只来自临时格取回。人物背包里任何经 BagService 出包成功的操作都发「腾位通知」(bag_service.h),
+// 这里是上架托管 / 寄出走的那个入口 RemoveItemsByGuid:两包都满而整笔延后的那一局,下一拍就整笔应用,不用等退避。
+// 走正式的收件箱状态机与执行器,只替换时钟、传输与存盘回执(ScopedCompositionInbox,订阅方与 scene main 同一处装配)。
+TEST_F(PlayerBattleSettlementItemTest, InboxRetriesABagFullDeferOnTheNextTickAfterAnItemLeavesTheInventory)
+{
+    ScopedCompositionInbox inbox;
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    const auto confirmed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(confirmed.has_value());
+    RoleAdmissionSystem::Dependencies dependencies;
+    dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gCompositionInboxNowMs)); };
+    dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"battle-sql-test-scene", "4242", 1}; };
+    dependencies.confirmedAdmissions.push_back(*confirmed);
+    RoleAdmissionSystem::ScopedDependencies proof(std::move(dependencies));
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player);
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_FIGHTING);
+    constexpr Guid kListedItem = 9300006;    // 在两个号段之外
+    constexpr Guid kParkedTemporaryItem = 9300007;
+    Inventory().SetCapacityForRestore(3); Temporary().SetCapacityForRestore(1);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));                              // 人物背包 1/3
+    Inventory().InsertItemForRestore(kListedItem, kSettlementNonStackItem, 1, 1, 1);          // 人物背包 2/3
+    Temporary().InsertItemForRestore(kParkedTemporaryItem, kSettlementNonStackItem, 1, 0, 1); // 临时格 1/1
+    SetConsumed(kSettlementStackItem, 1); SetGained(kSettlementNonStackItem, 2);              // 要两格:人物背包只空一格,临时格满
+
+    PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, gCompositionInboxFetches.size());
+    RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+    ASSERT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "both bags are full: the whole settlement waits";
+    PlayerInboxSystem::Tick();
+    ASSERT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "without freed space it waits for the backoff";
+
+    // 这一件被扣出人物背包(资产通道上架托管 / 寄出走的就是这个入口;不判战斗,D48):人物背包空出第二格。
+    ASSERT_EQ(kSuccess, BagService::RemoveItemsByGuid(player, Inventory(), {kListedItem}, TX_AUCTION_SELL, 1));
+    PlayerInboxSystem::Tick(); // 时钟没动:同一时刻的下一拍
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "applied on the next tick, without waiting for the backoff";
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementNonStackItem)) << "both drops landed in the freed inventory";
+    EXPECT_EQ(1u, gCompositionInboxFetches.size()) << "the local copy was retried, nothing was fetched again";
+}
+
 TEST_F(PlayerBattleSettlementItemTest, InboxCommittedConsumptionSurvivesBattleUsableHotReloadAndPreservesOtherInstances)
 {
     ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
@@ -1929,42 +2214,95 @@ TEST_F(PlayerBattleSettlementItemTest, InboxCannotConsumeAnotherBattlesHold)
     EXPECT_EQ(2u, item_hold::HeldCount(holds, kSettlementStackItem));
 }
 
-// C-2(2026-10-30):掉落物的配置行已被热更删掉(这里用一个表里不存在的配置号,对执行器而言与删行等价)。
-// 改动前 ConsumeInventoryAndGrant 对查不到行的配置整笔回 kInvalidParameter,执行器回 DEFER,这一局的金币、任务、HP
-// 与其余掉落永远卡在收件箱里。现在只剔除这一项(记 ERROR metric=battle_inbox_item_effect_skipped),其余照常 APPLIED。
-TEST_F(PlayerBattleSettlementItemTest, InboxDropWithDeletedConfigRowSkipsOnlyThatDrop)
+// ---- 结算里有本节点 Item 表查不到的配置号:整笔 DEFER(2026-11-11,混版本持久字段保护设计 §13 第 10 条)----
+//
+// Item 表行 id 只增不删(导表器按 cfg_ids_permanent 守住),所以查不到只可能是这一行还没热更到本节点,或结算来自更新版本的
+// battle 节点。整笔 DEFER、零副作用,热更到这一行之后本地续做即可成功。
+// 2026-10-30 的旧口径(C-2)按「行可能被热更删掉」定:只剔除这一项、其余照常 APPLIED。行不会再被删之后,
+// 剔除就是丢掉玩家这一局的掉落,所以这两条用例的期望从 APPLIED 改成了 DEFER。
+
+// 掉落里有查不到的配置号(这里用一个表里没有的号):同一笔里查得到的掉落、金币、击杀与 HP 也都不动,不铸号、不记流水。
+TEST_F(PlayerBattleSettlementItemTest, InboxDropWithConfigUnknownToThisNodeDefersWholeSettlement)
 {
     ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
-    constexpr uint32_t kDeletedConfig = 0x7FFFFFF1u;
-    ASSERT_FALSE(ItemTableManager::Instance().Exists(kDeletedConfig)) << "前置:配置行不存在";
+    constexpr uint32_t kUnknownConfig = 0x7FFFFFF1u;
+    ASSERT_FALSE(ItemTableManager::Instance().Exists(kUnknownConfig)) << "前置:本节点表里没有这一行";
     SetGained(kSettlementDropItem, 2);
-    SetGained(kDeletedConfig, 3);
-    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
-    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementDropItem)) << "其余掉落照常入包";
-    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kDeletedConfig));
-    EXPECT_EQ(0u, Temporary().OccupiedGridCount());
-    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
-    EXPECT_EQ(2u, KillProgress());
-    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    SetGained(kUnknownConfig, 3);
+    const auto itemGuidsBefore = tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available();
+    const auto txGuidsBefore = tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Available();
+    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kDefer));
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kSettlementDropItem)) << "查得到的那一种掉落也不先发";
+    EXPECT_EQ(itemGuidsBefore, tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available()) << "没有铸新实例的号";
+    EXPECT_EQ(txGuidsBefore, tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Available()) << "没有记流水";
+    // 再试一次还是同一个结论,并且不带「背包放不下」的原因:腾背包不会把它提前,照常退避到这一行热更到为止。
+    const auto retried = PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString());
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, retried.kind);
+    EXPECT_EQ(0u, retried.reason);
 }
 
-// C-2:消耗物的配置行已被热更删掉。改动前 HasUnsupportedInboxConsumption 把「行不存在」判成版本错位,执行器回
-// kVersionSkew,整个战斗结算域对这名玩家停用。现在只剔除这一项、不停域,其余效果(含另一种已知消耗)照常到账。
+// 消耗里有查不到的配置号:同样整笔 DEFER,同一笔里查得到的消耗也不扣;查不到的那一项不按「持有 0」夹紧后照常应用。
+// 这不是版本错位:不停用整个战斗结算域(kVersionSkew 要等实体重建才重拉),本地退避重试即可。
 // 行还在而玩家实例带未知字段,仍按版本错位(InboxUnknownConsumedInstanceCannotBeDowngradedToOrdinaryQuantity)。
-TEST_F(PlayerBattleSettlementItemTest, InboxConsumptionWithDeletedConfigRowDoesNotHaltDomain)
+TEST_F(PlayerBattleSettlementItemTest, InboxConsumptionWithConfigUnknownToThisNodeDefersWholeSettlement)
 {
     ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
-    constexpr uint32_t kDeletedConfig = 0x7FFFFFF2u;
-    ASSERT_FALSE(ItemTableManager::Instance().Exists(kDeletedConfig)) << "前置:配置行不存在";
+    constexpr uint32_t kUnknownConfig = 0x7FFFFFF2u;
+    ASSERT_FALSE(ItemTableManager::Instance().Exists(kUnknownConfig)) << "前置:本节点表里没有这一行";
     ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
     SetConsumed(kSettlementStackItem, 1);
-    SetConsumed(kDeletedConfig, 2);
-    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind)
-        << "改动前是 kVersionSkew:停用整个战斗结算域";
-    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem)) << "已知消耗照常扣";
+    SetConsumed(kUnknownConfig, 2);
+    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kDefer));
+    EXPECT_EQ(3u, Inventory().GetTotalItemCount(kSettlementStackItem)) << "查得到的消耗也不先扣";
+}
+
+// 把几行从本节点 Item 表的主键索引里摘掉,模拟「这几行还没热更到本节点」:查行与 Exists 都走这份索引
+// (与 player_equip_test 的 EditableEnhanceIndex 同一类手段)。HotUpdate() 就是热更本身:重新加载整张表,行回来。
+// 析构时无条件再加载一次:用例中途失败也不把缺行的表漏给后面的用例。
+class ScopedItemRowsNotYetHotUpdated {
+public:
+    explicit ScopedItemRowsNotYetHotUpdated(std::initializer_list<uint32_t> configIds) {
+        auto& index = const_cast<ItemTableManager::IdMapType&>(ItemTableManager::Instance().GetIdMap());
+        for (const uint32_t configId : configIds) index.erase(configId);
+    }
+    ~ScopedItemRowsNotYetHotUpdated() { HotUpdate(); }
+    ScopedItemRowsNotYetHotUpdated(const ScopedItemRowsNotYetHotUpdated&) = delete;
+    ScopedItemRowsNotYetHotUpdated& operator=(const ScopedItemRowsNotYetHotUpdated&) = delete;
+    void HotUpdate() { ItemTableManager::Instance().Load(); }
+};
+
+// 整笔延后的那一局,热更把缺的行补到本节点之后重试即 APPLIED,与从未延后过的结算一样:延后期间什么都没动
+// (这一局的道具预留也原样押着,不会被别的出口拿走),重试时消耗从预留里扣、掉落入包、金币 / 击杀 / HP 到账。
+// 生产里重试由收件箱本地退避驱动(1s → 60s,不重新拉取),这里直接再调一次执行器。
+TEST_F(PlayerBattleSettlementItemTest, InboxSettlementAppliesOnRetryOnceTheItemRowsAreHotUpdated)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player); // 持久数据,生产里由加载创建
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3)); // 铺底与建预留在摘行之前:入包要查行
+    ASSERT_EQ(kSuccess, BagService::PlaceHold(player, settlement.battle_id(), item_hold::ItemHoldKind::kBattle,
+                                              {{kSettlementStackItem, 3}}, 1, 2));
+    SetConsumed(kSettlementStackItem, 2);
+    SetGained(kSettlementDropItem, 2);
+    const auto payload = settlement.SerializeAsString();
+
+    ScopedItemRowsNotYetHotUpdated lagging{kSettlementStackItem, kSettlementDropItem};
+    ASSERT_FALSE(ItemTableManager::Instance().Exists(kSettlementStackItem)) << "前置:消耗的那一行还没热更到";
+    ASSERT_FALSE(ItemTableManager::Instance().Exists(kSettlementDropItem)) << "前置:掉落的那一行还没热更到";
+    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kDefer));
+    EXPECT_EQ(1, tlsEcs.actorRegistry.get<PlayerItemHoldComp>(player).holds_size()) << "延后不放这一局的道具预留";
+
+    lagging.HotUpdate();
+    ASSERT_TRUE(ItemTableManager::Instance().Exists(kSettlementStackItem));
+    ASSERT_TRUE(ItemTableManager::Instance().Exists(kSettlementDropItem));
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, payload).kind)
+        << "同一份原件,行热更到之后本地续做即成功";
+    EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementStackItem)) << "消耗从预留里扣出";
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementDropItem)) << "掉落入包";
+    EXPECT_EQ(0, tlsEcs.actorRegistry.get<PlayerItemHoldComp>(player).holds_size()) << "应用之后预留释放";
     EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(2u, KillProgress());
     EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_EQ(1, Results().entries_size()) << "延后那一次不记近期结果,应用这一次记一条";
 }
 
 TEST_F(PlayerBattleSettlementItemTest, InboxMissionRewardFailureRetainsClaimableEntitlement)

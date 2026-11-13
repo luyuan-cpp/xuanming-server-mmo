@@ -1797,7 +1797,7 @@ FinalizeShutdownInLoop(阶段 0)
 
 ### 16.3 配置与预算
 
-配置真源为 `proto/common/base/config.proto` 的 `BaseDeployConfig.grpc_client = 21`（`GrpcClientConfig.call_deadline_ms`），部署值在 `bin/etc/base_deploy_config.yaml` 的 `GrpcClient.CallDeadlineMs`，键为目标 `eNodeType` 名称。未配置的类型使用 `kDefaultGrpcCallDeadlineMs = 10000`；未知名称或值为 0 时记 ERROR 并忽略该项，保留默认值。
+配置真源为 `proto/common/base/config.proto` 的 `BaseDeployConfig.grpc_client = 21`（`GrpcClientConfig.call_deadline_ms`），部署值在 `bin/etc/base_deploy_config.yaml` 的 `GrpcClient.CallDeadlineMs`，键为目标 `eNodeType` 名称。未配置的类型使用 `kDefaultGrpcCallDeadlineMs = 10000`；未知名称或值为 0 时记 ERROR 并忽略该项，保留默认值。有 Go 服务端的八个目标由部署门禁要求显式列出（§16.4），内置默认不承诺盖住任何 Go 服务的 Timeout（SceneManager、PlayerStore 的 deadline 都比它宽），依赖调用结果的下限常量按服务端允许的最小 deadline 取，不按内置默认取。
 
 `Node::Initialize` 在 `LoadConfigs()` 后、`InitEtcdService()` 前调用 `grpc_call_deadline::Apply`，将值写入生成客户端各文件的原子默认值，并留存供 `grpc_call_deadline::Get(nodeType)` 查询。业务调用的截止以 `steady_clock` 计算。
 
@@ -1805,7 +1805,7 @@ FinalizeShutdownInLoop(阶段 0)
 
 | 目标节点类型 | C++ deadline（ms） | 当前 Go 顶层 Timeout（ms） | 本地派生预算 |
 |---|---:|---:|---|
-| SceneManagerNodeService | 10000 | 8000 | 普通换图 / 镜像在途 TTL = deadline + 1000ms；交接另有原权威裁决预算 |
+| SceneManagerNodeService | 13500 | 11500 | 普通换图 / 镜像在途 TTL = deadline + 1000ms（14.5s）；疏散 / 排空改派 settle = deadline + 5000ms（18.5s，下限 19s）；交接另有原权威裁决预算。2026-11-12 起，原 10000 / 8000：Timeout 加上了角色目录强读与铸造的 WAITAOF 两段（[跨区传送](cross-zone-scene-travel.md) §13.5） |
 | DataServiceNodeService | 4000 | 未写，默认 2000 | 号段 fetchTimeout = deadline + 1s |
 | ClientRpcRouterNodeService | 8000 | 6000 | 路由内部预算另见 [请求顺序契约](client-request-ordering.md) |
 | MatchNodeService | 7000 | 4000 | gate 直连模式 |

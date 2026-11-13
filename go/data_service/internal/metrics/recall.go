@@ -2,7 +2,8 @@ package metrics
 
 import (
 	"sync"
-	"time"
+
+	"shared/looplive"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -23,10 +24,10 @@ var (
 	// recallDispatchListErrors 是派发读到期 PLANNED 行失败的轮数(这一轮什么都没派)。recall_dispatch_total 是逐行结果,
 	// 读队头失败不是某一行的结果,单独计;与重投的 assetop_store_errors_total{op="list"} 对应。
 	recallDispatchListErrors prometheus.Counter
-	// recallDispatchLastRun 是派发循环最近一次跑完一轮的时刻(Unix 秒;缺口清单第 25 条第四批,
-	// docs/design/assetop-redelivery-sharding-20261110.md §14.3)。用不带可变 label 的 GaugeVec:循环起来才有序列、
-	// 退出就删,没装配回收通道(Recall.Enabled=false)或已经停掉循环的副本都没有序列,告警 RecallDispatchLoopStalled 不用另滤 0。
-	recallDispatchLastRun *prometheus.GaugeVec
+	// recallDispatchLive 是派发循环的活性,指标 data_service_recall_dispatch_last_run_unixtime(缺口清单第 25 条第四批,
+	// docs/design/assetop-redelivery-sharding-20261110.md §14.3;口径在 shared/looplive 的包注释)。没装配回收通道
+	// (Recall.Enabled=false)或已经有意停掉循环的副本没有序列,告警 RecallDispatchLoopStalled 不用另滤 0。
+	recallDispatchLive *looplive.Gauge
 )
 
 func registerRecallDispatch() {
@@ -44,12 +45,12 @@ func registerRecallDispatch() {
 			Name:      "recall_dispatch_list_errors_total",
 			Help:      "GM batch recall dispatch rounds whose read of due PLANNED rows failed (that round dispatched nothing).",
 		})
-		recallDispatchLastRun = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		recallDispatchLive = looplive.NewRegistered(prometheus.DefaultRegisterer, prometheus.GaugeOpts{
 			Subsystem: subsystem,
 			Name:      "recall_dispatch_last_run_unixtime",
 			Help: "Unix time at which the GM recall dispatch loop last finished a round, failed rounds included " +
 				"(a panicking round is not); also written when the loop starts. The series exists only while the loop runs.",
-		}, nil)
+		})
 	})
 }
 
@@ -65,14 +66,8 @@ func ObserveRecallDispatchListError() {
 	recallDispatchListErrors.Inc()
 }
 
-// MarkRecallDispatchRun 记派发循环起来、或跑完一轮的时刻(有告警 RecallDispatchLoopStalled:它长期不前进 = 循环卡在某一轮里)。
-func MarkRecallDispatchRun(now time.Time) {
+// RecallDispatchLive 返回派发循环的活性 gauge(有告警 RecallDispatchLoopStalled:它长期不前进 = 这个副本的派发循环停住了)。
+func RecallDispatchLive() *looplive.Gauge {
 	registerRecallDispatch()
-	recallDispatchLastRun.WithLabelValues().Set(float64(now.Unix()))
-}
-
-// ClearRecallDispatchRun 在派发循环退出时删掉活性序列:停掉的循环不该被当成卡住。
-func ClearRecallDispatchRun() {
-	registerRecallDispatch()
-	recallDispatchLastRun.Reset()
+	return recallDispatchLive
 }

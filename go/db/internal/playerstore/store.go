@@ -23,7 +23,9 @@ const (
 	sqlSelectRows  = "SELECT kind,payload FROM player_store WHERE player_id=? AND kind>0"
 	sqlSaveHead    = "INSERT INTO player_store (player_id,kind,owner_epoch,save_seq,schema_gen,holder_instance,released,payload) VALUES "
 	sqlSaveRow     = "(?,?,?,?,?,?,?,?)"
-	sqlSaveTail    = " ON DUPLICATE KEY UPDATE owner_epoch=VALUES(owner_epoch),save_seq=VALUES(save_seq),schema_gen=VALUES(schema_gen)," +
+	// schema_gen 取 GREATEST:写权行记的是这份存档写过的最高世代,只升不降。带数据行的存盘世代不会低于它(decideSave 判倒退),
+	// 取不取大都一样;不带行的空行释放可能带着更低的世代(decide.go),不能让它把写权行的世代拉低。
+	sqlSaveTail = " ON DUPLICATE KEY UPDATE owner_epoch=VALUES(owner_epoch),save_seq=VALUES(save_seq),schema_gen=GREATEST(schema_gen,VALUES(schema_gen))," +
 		"holder_instance=VALUES(holder_instance),released=VALUES(released),payload=VALUES(payload)"
 	sqlSelectColumns = "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='player_store'"
 )
@@ -67,25 +69,28 @@ func New(db *sql.DB, knownGen uint32, limits Limits) (*Store, error) {
 	if db == nil {
 		return nil, errors.New("playerstore: nil db")
 	}
-	if limits.MaxRowBytes <= 0 || limits.MaxRequestBytes < limits.MaxRowBytes {
-		return nil, fmt.Errorf("playerstore: invalid limits %+v", limits)
-	}
-	// 写权行的 payload 恒空,不算。
-	dataKinds := len(storepb.PlayerStoreKind_name) - 1
-	if limits.MaxRowBytes*dataKinds+claimResponseOverheadBytes > MaxClaimResponseBytes {
-		return nil, fmt.Errorf("playerstore: MaxRowBytes %d cannot fit %d rows into a claim response of %d bytes",
-			limits.MaxRowBytes, dataKinds, MaxClaimResponseBytes)
-	}
-	if err := checkAuditBudget(limits); err != nil {
+	if err := limits.validate(); err != nil {
 		return nil, err
 	}
 	return &Store{db: db, knownGen: knownGen, limits: limits, now: time.Now}, nil
 }
 
-// VerifySchema 启动时核对 player_store 的列都在。基线已跑过的库上 cmd/migrate 建不出新表,
-// 现有的启动核对只告警;而新路径缺表时每次存盘都报结果未知,scene 会一直重试,所以这里拒绝启动。
-func (s *Store) VerifySchema(ctx context.Context) error {
-	rows, err := s.db.QueryContext(ctx, sqlSelectColumns)
+func (limits Limits) validate() error {
+	if limits.MaxRowBytes <= 0 || limits.MaxRequestBytes < limits.MaxRowBytes {
+		return fmt.Errorf("playerstore: invalid limits %+v", limits)
+	}
+	// 写权行的 payload 恒空,不算。
+	dataKinds := len(storepb.PlayerStoreKind_name) - 1
+	if limits.MaxRowBytes*dataKinds+claimResponseOverheadBytes > MaxClaimResponseBytes {
+		return fmt.Errorf("playerstore: MaxRowBytes %d cannot fit %d rows into a claim response of %d bytes",
+			limits.MaxRowBytes, dataKinds, MaxClaimResponseBytes)
+	}
+	return checkAuditBudget(limits)
+}
+
+// VerifySchema 在首次打开地域存档库时核对玩家存档和审计发件箱的列。
+func VerifySchema(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, sqlSelectColumns)
 	if err != nil {
 		return fmt.Errorf("playerstore: read player_store columns: %w", err)
 	}
@@ -112,7 +117,7 @@ func (s *Store) VerifySchema(ctx context.Context) error {
 			"cmd/migrate cannot create the table, rebuild the database (the project has not launched)", missing)
 	}
 	// 发件箱和存档同一个事务写(audit_outbox.go),缺表同样让存盘一直结果未知。
-	return verifyAuditOutboxSchema(ctx, s.db)
+	return verifyAuditOutboxSchema(ctx, db)
 }
 
 // validateSave 是进事务前的拒绝,不碰库。返回 UNSPECIFIED 表示通过。
@@ -169,7 +174,7 @@ func (s *Store) Save(ctx context.Context, req *storepb.SavePlayerRequest) (*stor
 	if err != nil {
 		return nil, err
 	}
-	result := decideSave(row, req.GetOwnerEpoch(), req.GetSaveSeq(), req.GetSchemaGen(), req.GetInstanceId(), s.knownGen)
+	result := decideSave(row, req.GetOwnerEpoch(), req.GetSaveSeq(), req.GetSchemaGen(), len(req.GetRows()) > 0, req.GetInstanceId(), s.knownGen)
 	resp := &storepb.SavePlayerResponse{Result: result}
 	if row != nil {
 		resp.RowOwnerEpoch, resp.RowSaveSeq = row.ownerEpoch, row.saveSeq

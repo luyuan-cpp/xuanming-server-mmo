@@ -10,6 +10,10 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	mysqlDriver "github.com/go-sql-driver/mysql"
+
+	"shared/authoritysql"
 )
 
 type fakePasswordHashStore struct {
@@ -237,15 +241,24 @@ func TestValidatePasswordAccountMatchesStorageBoundary(t *testing.T) {
 	}
 }
 
-// 真实 MySQL 只读烟测：CI/运维显式提供三个环境变量时才运行，不创建、
+// 真实权威库只读烟测：CI/运维显式提供环境变量时才运行，不创建、
 // 更新或删除任何数据。账号应已由 password_admin 写入 Argon2id PHC。
+// LOGIN_TEST_PASSWORD_BACKEND 取 tidb 或 mysql，不设按 tidb；口令库名取 DSN 里的库名（生产是 mmorpg）。
 func TestSQLPasswordHashStoreIntegrationReadOnly(t *testing.T) {
 	dsn := os.Getenv("LOGIN_TEST_PASSWORD_DSN")
 	account := os.Getenv("LOGIN_TEST_PASSWORD_ACCOUNT")
 	if dsn == "" || account == "" {
-		t.Skip("set LOGIN_TEST_PASSWORD_DSN and LOGIN_TEST_PASSWORD_ACCOUNT for the read-only MySQL integration test")
+		t.Skip("set LOGIN_TEST_PASSWORD_DSN and LOGIN_TEST_PASSWORD_ACCOUNT for the read-only authority integration test")
 	}
-	store, err := NewSQLPasswordHashStore(dsn, 1, 0)
+	backend, err := authoritysql.ParseBackend(os.Getenv("LOGIN_TEST_PASSWORD_BACKEND"))
+	if err != nil {
+		t.Fatalf("LOGIN_TEST_PASSWORD_BACKEND: %v", err)
+	}
+	parsed, err := mysqlDriver.ParseDSN(dsn)
+	if err != nil || parsed.DBName == "" {
+		t.Fatal("LOGIN_TEST_PASSWORD_DSN is invalid or selects no database")
+	}
+	store, err := NewSQLPasswordHashStore(context.Background(), dsn, backend, parsed.DBName, 1, 0)
 	if err != nil {
 		t.Fatalf("NewSQLPasswordHashStore: %v", err)
 	}

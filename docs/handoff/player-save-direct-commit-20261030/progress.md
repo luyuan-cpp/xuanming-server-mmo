@@ -747,7 +747,9 @@ pwsh -NoProfile -File tools/scripts/tests/docker_debug_sql_boot.tests.ps1
 双区生成和启动,前置是当前源码的 `go-svc-build`(不带 `-GoServices`)和本地独立数据库。下面的命令用 MySQL 档;用 TiDB 时先设 `MMORPG_GLOBAL_AUTHORITY_TIDB_HOST`,并去掉 `-LocalMySQL`。
 
 ```powershell
-$env:MMORPG_DB_ALLOWED_DATABASES='zone_990017_db,zone_990018_db'
+# 2026-11-11 A17c 起存档库和区无关:两个区共用 go/login Placement 推出的存档库(本机只有 player_store_1000000_db)。
+# 白名单可以不设;要设就必须恰好是这几个库,以前的 zone_990017_db,zone_990018_db 会被拒绝。
+$env:MMORPG_DB_ALLOWED_DATABASES='player_store_1000000_db'
 & tools/scripts/dev_tools.ps1 -Command sql-boot-catalog-local -Zones 990017,990018 -ZonePortOffsets '990017=0,990018=1000'
 $env:MMORPG_SQL_BOOT_CATALOG=(Resolve-Path run/secrets/sql-boot-local/catalog.json).Path
 pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-start-exe -Zone 990017 -ZonePortOffset 0 -LocalMySQL
@@ -815,7 +817,7 @@ pwsh -NoProfile -File tools/scripts/tests/run_ownership_fault_fullstack.ps1 `
 | 变量 | 内容 |
 |---|---|
 | `OWNERSHIP_FAULT_PASSWORD` | 机器人账号密码 |
-| `OWNERSHIP_FAULT_PLAYER_DSN` | 库名必须是 `zone_990017_db`、tcp、回环地址。专用本机 dev 观测账号,要有 `player_store` 的 `SELECT`、`SELECT ... FOR UPDATE` 所需权限,以及全局 `PROCESS`。不要改生产账号 |
+| `OWNERSHIP_FAULT_PLAYER_DSN` | 库名必须是 `player_store_1000000_db`(2026-11-11 A17c 起玩家存档在地域存档库,以前是 `zone_990017_db`)、tcp、回环地址。专用本机 dev 观测账号,要有 `player_store` 的 `SELECT`、`SELECT ... FOR UPDATE` 所需权限,以及全局 `PROCESS`。不要改生产账号 |
 | `OWNERSHIP_FAULT_SM_CONFIG` | 本轮 z990017 实际 scene_manager 配置的绝对路径。etcd、Redis 控制域(`Redis` 段)、玩家域(`PlayerRedis`,没写 `Addrs` 时指向控制域实例,单实例和 Cluster 都按配置走)、再入屏障都从这里读。地址全部要求回环 |
 | `OWNERSHIP_FAULT_REENTRY_BARRIER_SECONDS` | 仅当上面配置没写 `SceneReentryBarrierSeconds` 时必填,填实际生效值(当前内部常量 `constants.SceneReentryBarrier` 是 20)。两处都没有就失败,不补缺省 |
 
@@ -1035,3 +1037,19 @@ Codex 在上面第 5 步之后加跑:`pwsh -File tools/scripts/test_stress_summa
    - `[SaveTiming]` 的 `periodic_tick_n` 每 30 秒约 300。
 
 失败时保留:生成器的完整输出、msbuild 第一个 error、gtest 失败用例的断言原文。
+
+## A17c 收尾、资产变动约 1 秒内存盘、A18 闸门往返(2026-11-12,Claude)
+
+改了什么、为什么、Codex 的逐步验证命令都在 `docs/PROGRESS.md` 2026-11-12「存档库和区脱钩 A17c 收尾、资产变动约 1 秒内存盘、写者闸门往返收敛 A18」一条,这里不重复。要点:
+
+- **A17c**:Go 部分 Codex 11-12 已在调试栈跑通(双机器人进场),并补了两处漏改(compose 的 `db-migrate` 缺 `-storage-id`、go/db 存盘接口启动时拿区号开库)。PowerShell 契约测试、`go/shared/placement` 与 `go/data_service` 的单测、本机 `start_game.ps1`、K8s 都还没跑。
+- **资产存盘**:只写了源码和测试,未编译。钩子在 `AuditOutbox::SetTransactionLogQueuedHook`,scene 在 `MakePlayerStoreOptions` 接上。带 EventLoop 的 C++ 用例可能多登记一次关键进度存盘,红了把用例名和断言贴回来。
+- **A18**:只写了源码和测试,未编译。正确性依据在 `go/shared/authoritysql/pool.go` 的 `revalidate` 注释和存盘围栏设计文末「2026-11-12」一节;真库闸门用例(MySQL、TiDB 各一轮,两种锁原语)和压测对比没跑。
+- 本文前面「双区生成和启动」的白名单、`OWNERSHIP_FAULT_PLAYER_DSN` 的库名已按 A17c 改成 `player_store_1000000_db`。
+
+## 11-12 晚到 11-13 的后续(Claude)
+
+- 基础属性只存当前血蓝、存盘规格里过渡期说法改正与定案:PROGRESS 2026-11-12 同名条目,有 Codex 步骤。
+- 资产变动存盘通知挪到记流水的判定之后(流水被拒收也请求存盘):PROGRESS 2026-11-12 同名条目;接口和三条钩子用例归审计发件箱会话,以它的条目为准。
+- 11-13:总体方案 §3.2~§3.4、§7.1、§12 第 8 项、阶段 B 与开头证据说明里的过时说法改成现状,只改文档(PROGRESS 2026-11-13 条目)。
+- 这条线没有待写的代码。Codex 依次按「A17c 收尾…」「账本与展示读的名额…」「基础属性只存当前血蓝…」「资产变动存盘通知挪到…」四条验证,回执写在本文末尾。

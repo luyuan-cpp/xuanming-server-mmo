@@ -17,8 +17,8 @@
 //      tx_type / correlation_id / extra;能数的只有"落了几条" —— 每条流水恰好向 txlog
 //      号段要一次 tx_id(做法同 bag_test.cpp 的 GuidSourcePolicyTest)。所以这里钉的是
 //      「一条回执一条流水」「一件没扣就一条都不落」。流水里的类型 / 关联键 / extra 是不是
-//      传进去的那三个值,这组用例读不到 —— 已知的覆盖上限(与 bag_test.cpp 里
-//      EvictionPolicyTest 记的那条同源)。实现里那一处是七个实参写全的调用,三者类型各不
+//      传进去的那三个值,这组用例读不到 —— 已知的覆盖上限(单测里所有流水用例都一样,
+//      只能数条数)。实现里那一处是七个实参写全的调用,三者类型各不
 //      相同(uint64 / string / 枚举),顺序写反编译不过,这是眼下唯一的防线。
 //
 // 夹具自带:SetUp 自己加载 Item 表、自己启用 txlog 号段,TearDown 把 txlog 号段复位回

@@ -19,6 +19,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	dto "github.com/prometheus/client_model/go"
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -182,6 +183,7 @@ const (
 	OutcomeChannelUnavailable = "channel_unavailable" // TEAM / SYSTEM / UNSPECIFIED
 	OutcomeTooLong            = "too_long"            // 内容超 MaxContentBytes 或 trim 后为空
 	OutcomeRateLimited        = "rate_limited"        // 超每秒条数
+	OutcomeWorldCooldown      = "world_cooldown"      // 世界频道发言间隔未到(回给客户端的仍是限流码)
 	OutcomeStorageError       = "storage_error"       // SQL依赖故障或提交未知
 )
 
@@ -189,7 +191,7 @@ var (
 	sendTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "chat",
 		Name:      "send_total",
-		Help:      "SendChat requests by channel (world|private|team|system|unspecified|unknown) and outcome (ok|duplicate|in_flight|no_session|bad_request|channel_unavailable|too_long|rate_limited|storage_error).",
+		Help:      "SendChat requests by channel (world|private|team|system|unspecified|unknown) and outcome (ok|duplicate|in_flight|no_session|bad_request|channel_unavailable|too_long|rate_limited|world_cooldown|storage_error).",
 	}, []string{"channel", "outcome"})
 
 	pullTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -223,6 +225,15 @@ func ChannelLabel(channel chatpb.ChatChannelType) string {
 // ObserveSend 记录一次 SendChat 的终态。
 func ObserveSend(channel string, outcome string) {
 	sendTotal.WithLabelValues(channel, outcome).Inc()
+}
+
+// SendTotalValue 读回某 (channel, outcome) 的计数,给单测断言用;计数器本身不导出,业务代码只能经 ObserveSend 改它。
+func SendTotalValue(channel string, outcome string) float64 {
+	var metric dto.Metric
+	if err := sendTotal.WithLabelValues(channel, outcome).Write(&metric); err != nil {
+		return 0
+	}
+	return metric.GetCounter().GetValue()
 }
 
 // ObservePull 记录一次 PullChatHistory 的终态。

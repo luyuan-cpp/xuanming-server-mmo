@@ -22,11 +22,16 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"shared/tracing"
 )
 
 const (
@@ -209,6 +214,48 @@ func TestMuduoServerInterop(t *testing.T) {
 			if strings.HasPrefix(key, "grpc-") || key == "user-agent" || key == "content-type" || key == "te" {
 				t.Fatalf("reserved header %q leaked into metadata", key)
 			}
+		}
+	})
+
+	// 分布式日志(docs/design/distributed-tracing.md §5.3、§11):Go 侧 tracing.UnaryClientInterceptor 写的 traceparent
+	// 经真实的 HTTP/2 帧到达 muduo_grpc 服务端的 metadata,值与 Go 侧写的逐字相同。C++ 侧把 metadata 解析成 trace
+	// 由 grpc_client_loopback_test 覆盖,两段合起来就是跨语言的整条传播。
+	t.Run("TraceparentFromTheGoInterceptorReachesServerMetadata", func(t *testing.T) {
+		previousProvider := otel.GetTracerProvider()
+		previousPropagator := otel.GetTextMapPropagator()
+		otel.SetTracerProvider(sdktrace.NewTracerProvider())
+		otel.SetTextMapPropagator(propagation.TraceContext{})
+		defer func() {
+			otel.SetTracerProvider(previousProvider)
+			otel.SetTextMapPropagator(previousPropagator)
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		ctx, caller := otel.Tracer("interop").Start(ctx, "caller")
+		defer caller.End()
+
+		var resp []byte
+		invoker := func(ctx context.Context, method string, _, _ any, cc *grpc.ClientConn, _ ...grpc.CallOption) error {
+			var err error
+			resp, err = invokeRaw(ctx, cc, method, nil)
+			return err
+		}
+		if err := tracing.UnaryClientInterceptor()(ctx, interopMetadata, nil, nil, conn, invoker); err != nil {
+			t.Fatalf("Metadata through the tracing interceptor: %v", err)
+		}
+		var traceparent string
+		for _, line := range strings.Split(strings.TrimSuffix(string(resp), "\n"), "\n") {
+			if value, ok := strings.CutPrefix(line, "traceparent="); ok {
+				traceparent = value
+			}
+		}
+		want := caller.SpanContext().TraceID().String()
+		if len(traceparent) != 55 || !strings.HasPrefix(traceparent, "00-"+want+"-") {
+			t.Fatalf("server saw traceparent %q, want a W3C value carrying trace %s", traceparent, want)
+		}
+		if strings.Contains(traceparent, caller.SpanContext().SpanID().String()) {
+			t.Fatalf("traceparent %q should name the interceptor's client span, not the caller span", traceparent)
 		}
 	})
 

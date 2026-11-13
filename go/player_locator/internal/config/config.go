@@ -5,19 +5,23 @@ import (
 
 	"github.com/zeromicro/go-zero/zrpc"
 
+	"shared/clusterredis"
 	"shared/playerredis"
 	"shared/redisauth"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
-	RedisClient RedisConf `json:"RedisClient"` // 控制域:选主锁、就绪标记、代次、审计时间
-	// SharedRedisPasswordEnv 是 RedisClient 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret redis-auth 里,
-	// 经 secretKeyRef 注入;ConfigMap 里 RedisClient.Password 写空串。不写 = 照用 Password 字面量(本机)。
-	// 由 ResolveSharedRedisPassword 在建任何 Redis 客户端之前填好,变量缺失或为空即拒启。
+	// ControlRedis 是控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1;2026-11-12 取代 RedisClient 段):
+	// 选主锁、就绪标记、代次、审计时间、一遍的进度。除选主锁外的键共用 {pl:gix},守卫是 clusterredis.ControlClusterKeys。
+	// 不写 Addrs = 本机 127.0.0.1:6379 单实例(EffectiveControlRedis)。
+	ControlRedis clusterredis.Config `json:",optional"`
+	// SharedRedisPasswordEnv 是 ControlRedis 口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret 里,
+	// 经 secretKeyRef 注入;ConfigMap 里 ControlRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在建任何 Redis 客户端之前填好,变量缺失或为空即拒启。ControlRedis.PasswordEnv 不用(变量缺失时静默落成空口令)。
 	SharedRedisPasswordEnv string `json:",optional"`
 	// PlayerRedis 是玩家域:会话、断线租约、gate 索引、分片登记,上线后是 Redis Cluster
-	// (docs/design/redis-player-store-cluster.md §5.7、§5.9)。整段不写时指向 RedisClient 这个单实例。
+	// (docs/design/redis-player-store-cluster.md §5.7、§5.9)。整段不写时指向 ControlRedis 这个单实例。
 	PlayerRedis     playerredis.Config `json:"PlayerRedis,optional"`
 	Kafka           KafkaConf          `json:"Kafka"`
 	Node            NodeConf           `json:"Node"`
@@ -33,21 +37,38 @@ type Config struct {
 	KillSwitchPrefix string `json:"KillSwitchPrefix,optional"`
 }
 
-type RedisConf struct {
-	Host     string `json:"Host"`
-	Password string `json:"Password"`
-	DB       int    `json:"DB"`
-	// PoolSize 是 go-redis 连接池上限(共享 Redis 连接总账,P0-E 第 3 批)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
-	// 随 CPU limit 漂移;负数起服即失败(svc.NewServiceContext)。K8s 上 tools/scripts/k8s_deploy.ps1 从
-	// etc/player_locator.yaml 镜像 RedisClient.PoolSize 并要求正整数,Redis 连接总账读同一个键。
-	PoolSize int `json:"PoolSize,optional"`
+// 没写 ControlRedis.Addrs 时的回落:本机单实例。连接池 20(K8s 上 tools/scripts/k8s_deploy.ps1 从 etc/player_locator.yaml 镜像
+// ControlRedis.PoolSizePerNode,Redis 连接总账读同一个键);超时沿用换句柄之前 go-redis 缺省的量级
+// (拨号 5s、读写 3s、取连接 4s),写成常量,不随 CPU limit 漂移。
+const (
+	controlRedisFallbackAddr     = "127.0.0.1:6379"
+	controlRedisFallbackPoolSize = 20
+	redisFallbackDialTimeoutMs   = 5000
+	redisFallbackIOTimeoutMs     = 3000
+	redisFallbackPoolTimeoutMs   = 4000
+)
+
+// EffectiveControlRedis 返回生效的控制集群配置:写了 ControlRedis.Addrs 就用它,否则指向本机单实例。
+// 段里单独写的池与超时优先于回落值(clusterredis.Config.OrDefault)。
+func (c *Config) EffectiveControlRedis() clusterredis.Config {
+	return c.ControlRedis.OrDefault(clusterredis.Config{
+		Addrs:           []string{controlRedisFallbackAddr},
+		Username:        c.ControlRedis.Username,
+		Password:        c.ControlRedis.Password,
+		TLS:             c.ControlRedis.TLS,
+		PoolSizePerNode: controlRedisFallbackPoolSize,
+		DialTimeoutMs:   redisFallbackDialTimeoutMs,
+		ReadTimeoutMs:   redisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  redisFallbackIOTimeoutMs,
+		PoolTimeoutMs:   redisFallbackPoolTimeoutMs,
+	})
 }
 
-// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 RedisClient.Password,规则见 redisauth.Apply。
-// 玩家域没写 Addrs 时回落到 RedisClient(svc 的 playerRedisConf),填完之后用的也是这个口令。
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 ControlRedis.Password,规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落到 ControlRedis(svc 的 playerRedisConf),填完之后用的也是这个口令。
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
 	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
-		redisauth.Target{Field: "RedisClient.Password", Password: &c.RedisClient.Password})
+		redisauth.Target{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password})
 }
 
 type KafkaConf struct {
@@ -104,14 +125,20 @@ func (c LeaseConf) ScanRound() time.Duration {
 }
 
 // ReconcileConf 各字段零值取默认值。默认值都是推断值([I]),需要 V0 实测后校准。
-// 限速与预算都按副本计:死 gate 清扫分给了各副本,全服的量 = 持段副本数 × 这些值。
+// 两种口径,别混:
+//   - ScanPagesPerSecond 是**全服预算**(2026-11-12 起):补建 / 审计按段分给各副本时,每个副本只拿「持有的段数 / 段总数」那一份,
+//     各副本加起来就是它,与副本数无关。它保护的是玩家域 Redis,加 player_locator 副本不该加重 Redis 的负担。
+//   - MaxTransitionsPerSecond、DeadGateMembersPerRound 仍按副本计:死 gate 清扫分给了各副本,全服的量 = 持段副本数 × 这些值。
+//     它们管的是一台 gate 死后把它的会话清掉有多快,量由死掉的 gate 上的人数封顶,副本越多清得越快正是想要的。
 type ReconcileConf struct {
 	// AuditIntervalSeconds 是索引就绪后定期审计(全键扫描补漏成员 + 清各 gate 索引里的脏成员)的周期。
 	// 0 = 86400;-1 = 就绪后不再定期审计(未就绪时的补建不受影响)。审计时机持久化在 Redis,换主不重置。
 	AuditIntervalSeconds int64 `json:"AuditIntervalSeconds,optional"`
 	// ScanCount 是补建 / 审计扫描 SCAN 与 SSCAN 每页的 COUNT 提示。0 = 1000。
 	ScanCount int64 `json:"ScanCount,optional"`
-	// ScanPagesPerSecond 是补建 / 审计扫描每秒最多发出的页数:一页是一次 SCAN 的结果、ScanCount 把索引键,或一把大索引键的续页。
+	// ScanPagesPerSecond 是补建 / 审计扫描**全服**每秒最多发出的页数:一页是一次 SCAN 的结果、ScanCount 把索引键,或一把大索引键的续页。
+	// leader 自己扫(单实例玩家域)时它就是 leader 的限速;按段分给各副本时每个副本拿自己的份额(logic.scanBudgetShare)。
+	// 一遍的耗时 ≈ 总页数 / 本值,不随副本数变;要更快就随 Redis 的余量调大它。
 	// 0 = 200;负数 = 不限速(只用于本机与单测,生产不要用:会拉高 Redis 延迟)。
 	ScanPagesPerSecond int `json:"ScanPagesPerSecond,optional"`
 	// MaxTransitionsPerSecond 是对账把死 gate 上的 ONLINE 会话转成 DISCONNECTING 的速率上限。

@@ -15,7 +15,7 @@ import (
 
 	"shared/assetop"
 	"shared/authoritysql"
-	"shared/safego"
+	"shared/looplive"
 	"shared/workshard"
 
 	"github.com/go-sql-driver/mysql"
@@ -1251,21 +1251,16 @@ var cleanupDeletedTotal = promauto.With(prometheus.DefaultRegisterer).NewCounter
 // recordCleanupDeleted:生产实现计指标;单测可替换为记录器(同 guild 的惯例,不去读全局注册表)。
 var recordCleanupDeleted = func(n int64) { cleanupDeletedTotal.Add(float64(n)) }
 
-// cleanupLastRun 是终态清理循环的活性(缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8):
-// 最近一次跑完一轮的时刻(Unix 秒)。清理按 player_id 分片之后,一个副本的循环卡住,它名下的片就没人清,
-// 而 assetop_cleanup_deleted_total 的总和照样在涨,看不出来。不带可变 label 的 GaugeVec:循环起来才有序列、退出就删,
-// 没开 CleanupEnabled 的副本没有序列;告警 AssetOpCleanupLoopStalled 按副本判。
-var cleanupLastRun = promauto.With(prometheus.DefaultRegisterer).NewGaugeVec(prometheus.GaugeOpts{
+// CleanupLive 是终态清理循环的活性,指标 trade_assetop_cleanup_last_run_unixtime(缺口清单第 25 条第五批,
+// docs/design/assetop-redelivery-sharding-20261110.md §14.8;口径在 shared/looplive 的包注释)。清理按 player_id 分片之后,
+// 一个副本的循环停住,它名下的片就没人清,而 assetop_cleanup_deleted_total 的总和照样在涨,看不出来;告警
+// AssetOpCleanupLoopStalled 按副本判。没开 CleanupEnabled 的副本没有序列。RunCleanup 与 svc.StartAssetOpCleanup
+// 两处循环共用(一个进程只起其中一个)。
+var CleanupLive = looplive.NewRegistered(prometheus.DefaultRegisterer, prometheus.GaugeOpts{
 	Subsystem: "trade",
 	Name:      "assetop_cleanup_last_run_unixtime",
 	Help:      "终态资产指令清理循环最近一次跑完一轮的时刻(Unix 秒,这一轮成败都算,panic 的那一轮不算;循环起来时也写一次)。只在循环运行时有序列。",
-}, nil)
-
-// MarkCleanupRun 记终态清理循环起来、或跑完一轮的时刻(RunCleanup 与 svc.StartAssetOpCleanup 两处循环共用)。
-func MarkCleanupRun(now time.Time) { cleanupLastRun.WithLabelValues().Set(float64(now.Unix())) }
-
-// ClearCleanupRun 在终态清理循环退出时删掉活性序列:停掉的循环不该被当成卡住。
-func ClearCleanupRun() { cleanupLastRun.Reset() }
+})
 
 // cleanupPoint 是清理 goroutine 与每一轮 recover 的 safego 点位名(safego_panic_total 的 label,必须是常量)。
 const cleanupPoint = "trade.asset_op_cleanup"
@@ -1283,25 +1278,26 @@ func (r *AssetOpRepo) RunCleanup(ctx context.Context, c CleanupConf) {
 			c.Interval, c.TerminalRetention)
 		return
 	}
-	// 活性:起来时写一次,每跑完一轮写一次(这一轮成败都写,panic 的那一轮由 safego.Run 兜住、不写),退出时删掉序列。
-	MarkCleanupRun(time.Now())
-	defer ClearCleanupRun()
+	// 活性(CleanupLive):起来时写一次;每一轮正常返回(成败都算)就写这一刻,panic 的一轮不写;ctx 结束、有意停止时删掉序列。
+	CleanupLive.Mark(time.Now())
 	timer := time.NewTimer(time.Duration(rand.Int64N(int64(c.Interval))))
 	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			CleanupLive.Stop()
 			return
 		case <-timer.C:
 		}
-		safego.Run(cleanupPoint, func() {
+		CleanupLive.Round(cleanupPoint, func() {
 			deleted, err := r.CleanupTerminalOpsOwned(ctx, time.Now(), c.TerminalRetention, workshard.SQLFilter(c.Owns, CleanupWorkKind, "player_id"))
 			if err != nil && ctx.Err() == nil {
 				logx.Errorf("[TradeAsset] Terminal asset op cleanup failed (deleted %d before the error): %v", deleted, err)
-			} else if deleted > 0 {
+				return
+			}
+			if deleted > 0 {
 				logx.Infof("[TradeAsset] Terminal asset op cleanup deleted %d row(s) older than %v", deleted, c.TerminalRetention)
 			}
-			MarkCleanupRun(time.Now())
 		})
 		timer.Reset(c.Interval)
 	}

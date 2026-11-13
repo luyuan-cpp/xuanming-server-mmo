@@ -1,7 +1,7 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-    玩家域 Redis Cluster 的容量基准:逐档加压,按 INFO 求差出每个主节点的 ops 与主线程 CPU,判定是否真的压到了饱和。
+    Redis Cluster(玩家域 redis-player、控制 redis-control,同一份模板)的容量基准:逐档加压,按 INFO 求差出每个主节点的 ops 与主线程 CPU,判定是否真的压到了饱和。
 
 .DESCRIPTION
     口径见 docs/design/redis-player-store-cluster.md §14.3 第 1、2 项。容量结论只认这样的证据:每个主的主线程 CPU 接近 100%,总 ops 进入平台期,
@@ -9,13 +9,14 @@
 
     负载是 redis-benchmark --cluster 跑一段 Lua:写 location、写会话 hash、铸一次代次。键带 {tag},redis-benchmark 把它换成当前连接所在主节点的 slot,
     所以三个键同槽,客户端均摊到每个主节点。键名前缀 capbench:,全部带 600 秒 TTL。
-    这段 Lua 只是玩家域写路径的近似,不是线上流量的回放。端到端结论走 AGENTS.md §6 的压测流程(§14.3 第 5 项),本脚本不替代它。
+    这段 Lua 只是玩家域写路径的近似,不是线上流量的回放;压控制集群时用的是同一段负载,得到的是每主节点的同口径基线,不是控制域流量的容量。
+    端到端结论走 AGENTS.md §6 的压测流程(§14.3 第 5 项),本脚本不替代它。
 
     读数全部来自服务端 INFO 求差(total_commands_processed、cmdstat_eval、used_cpu_*_main_thread、total_error_replies),不读 redis-benchmark 的输出:
     它被 timeout 杀掉时没有汇总行,而且压测端看到的数字说明不了服务端有没有饱和。
     预热段不计入:连接爬升期的 ops 没有意义。
 
-    压测端与主节点抢 CPU 时结论不成立。K8s 上压测端是单独的 Pod,与 redis-player 反亲和(preferred),落在同一台机器时告警并记进结果;
+    压测端与主节点抢 CPU 时结论不成立。K8s 上压测端是单独的 Pod,与目标集群的 Pod(app=<statefulset>)反亲和(preferred),落在同一台机器时告警并记进结果;
     本机 docker 必然同机,只能用来验证脚本本身和做相对比较。
 
     写入保护:K8s 的 namespace 必须匹配 ^mmorpg-stress-(同 k8s_deploy.ps1 的 redis-wipe)。
@@ -49,13 +50,14 @@ param(
     # 判饱和的阈值:每个主的主线程 CPU 不低于它,且最后一档总 ops 比上一档增长低于 -PlateauGrowthPercent。
     [ValidateRange(1, 100)][double]$SaturatedCpuPercent = 90,
     [ValidateRange(0.1, 100)][double]$PlateauGrowthPercent = 5,
-    # 压测端镜像,缺省与集群同一个(deploy/k8s/manifests/infra/redis-player-cluster.yaml)。
+    # 压测端镜像,缺省与集群同一个(deploy/k8s/manifests/infra/redis-cluster.yaml)。
     [string]$Image = 'redis:8.10.2@sha256:6f81e8915c60b065a524e6967e0ad1c639ba6efa84d669f823683ea04d9150ee',
     [string]$OutDir = '',
     [string]$DockerContext = 'desktop-linux',
     [string]$KubeContext = '',
     # 口令所在的 Secret(同 namespace),压测端 Pod 经它拿 REDIS_PASSWORD。没开认证时 optional 不影响。
-    [string]$AuthSecret = 'redis-player-auth',
+    # 留空 = <statefulset>-auth(k8s_deploy.ps1 的命名:redis-player-auth、redis-control-auth)。
+    [string]$AuthSecret = '',
     [switch]$DryRun
 )
 
@@ -413,9 +415,14 @@ function Wait-CapacityBenchmark {
     }
 }
 
-# K8s 压测端 Pod:和 redis-player 反亲和(preferred,单节点的 kind 上也能起来),口令走 Secret,不上命令行。
+# K8s 压测端 Pod:和目标集群的 Pod 反亲和(preferred,单节点的 kind 上也能起来),口令走 Secret,不上命令行。
 function New-CapacityBenchPodManifest {
-    param([Parameter(Mandatory = $true)][string]$Namespace)
+    param(
+        [Parameter(Mandatory = $true)][string]$Namespace,
+        # 目标集群的 StatefulSet 名,它的 Pod 带 app=<名字>(redis-cluster.yaml)。
+        [Parameter(Mandatory = $true)][string]$StatefulSet,
+        [Parameter(Mandatory = $true)][string]$AuthSecretName
+    )
     return @"
 apiVersion: v1
 kind: Pod
@@ -434,7 +441,7 @@ spec:
           podAffinityTerm:
             labelSelector:
               matchLabels:
-                app: redis-player
+                app: $StatefulSet
             topologyKey: kubernetes.io/hostname
   containers:
     - name: bench
@@ -444,7 +451,7 @@ spec:
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: $AuthSecret
+              name: $AuthSecretName
               key: password
               optional: true
       resources:
@@ -477,12 +484,14 @@ function Start-CapacityBenchPod {
 $targetSpec = ConvertFrom-CapacityTarget -Spec $Target
 $steps = ConvertFrom-CapacitySteps -Text $ClientSteps
 $tailSeconds = 20
+# K8s 目标的口令 Secret:没给就按部署脚本的命名取 <statefulset>-auth。
+$authSecretName = if (-not [string]::IsNullOrWhiteSpace($AuthSecret)) { $AuthSecret.Trim() } elseif ($targetSpec.Kind -eq 'k8s') { "$($targetSpec.StatefulSet)-auth" } else { '' }
 
 if ($DryRun) {
     Write-Host "[dry-run] target=$Target kind=$($targetSpec.Kind) steps=$($steps -join ',') stage=${StageSeconds}s warmup=${WarmupSeconds}s threads=$Threads pipeline=$Pipeline keyspace=$KeySpace"
     if ($targetSpec.Kind -eq 'k8s') {
         Write-Host "[dry-run] would apply pod/$($script:BenchPodName) in namespace $($targetSpec.Namespace):"
-        Write-Host (New-CapacityBenchPodManifest -Namespace $targetSpec.Namespace)
+        Write-Host (New-CapacityBenchPodManifest -Namespace $targetSpec.Namespace -StatefulSet $targetSpec.StatefulSet -AuthSecretName $authSecretName)
     }
     foreach ($clients in $steps) {
         $benchArgs = New-CapacityBenchmarkArguments -SeedHost '<first master>' -SeedPort $targetSpec.Port -Clients $clients -Threads $Threads -Pipeline $Pipeline -KeySpace $KeySpace
@@ -509,7 +518,7 @@ $clock = [System.Diagnostics.Stopwatch]::StartNew()
 try {
     if ($targetSpec.Kind -eq 'k8s') {
         $manifestPath = Join-Path $OutDir 'bench-pod.yaml'
-        [System.IO.File]::WriteAllText($manifestPath, (New-CapacityBenchPodManifest -Namespace $targetSpec.Namespace))
+        [System.IO.File]::WriteAllText($manifestPath, (New-CapacityBenchPodManifest -Namespace $targetSpec.Namespace -StatefulSet $targetSpec.StatefulSet -AuthSecretName $authSecretName))
         $colocated = Start-CapacityBenchPod -TargetSpec $targetSpec -ManifestPath $manifestPath
     }
     if ($colocated) {

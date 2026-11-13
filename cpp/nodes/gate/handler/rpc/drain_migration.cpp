@@ -3,6 +3,7 @@
 #include <deque>
 
 #include "login_admission.h"
+#include "metrics/metrics_registry.h"
 #include "muduo/base/Logging.h"
 #include "muduo/net/TcpConnection.h"
 #include "session/manager/session_manager.h"
@@ -173,7 +174,9 @@ Candidate Classify(const SessionInfo &session, SteadyTime now)
 	// 路由 lane 还有在途或排队的请求时不迁,留到下一拍(client-request-ordering.md O9,2026-11-10 补):推 124 会让排队项不再发出
 	// (逐条回 1003),排在慢请求后面的 LeaveGame 这类请求就白发了;在途那条的回包也还没回来。应答到达时 OnReply 按本函数复核,
 	// 要票期间 lane 变忙同样不推。代价只是这条连接晚一拍迁:正常会话的 lane 绝大多数时刻是空的。
-	if (session.routerLane.Depth() != 0)
+	// 场景 lane 同理(client-scene-request-handoff-hold.md §4.6):还有发往 scene 的请求在途、排队或等重投时不迁,
+	// 免得客户端到新 gate 上发的请求抢在它们前面执行。请求-响应在途只有毫秒级,等重投最长 2 s,晚一两拍迁。
+	if (session.routerLane.Depth() != 0 || !session.sceneLane.Empty())
 	{
 		return Candidate::kSkip;
 	}
@@ -312,6 +315,55 @@ bool LeaseActive(SteadyTime now)
 const Counters &GetCounters()
 {
 	return tlsCounters;
+}
+
+void CollectMetrics(prometheus_text::Writer &writer)
+{
+	using prometheus_text::MetricType;
+	const Counters &c = tlsCounters;
+
+	writer.BeginFamily("gate_drain_migration_total",
+					   "Gate drain migration outcomes since process start. requested: ticket requests sent to login; "
+					   "offered: msg 124 redirects pushed; the rest are the ways a request ended without a redirect.",
+					   MetricType::kCounter);
+	writer.Sample({{"result", "requested"}}, c.requested);
+	writer.Sample({{"result", "not_sent"}}, c.notSent);
+	writer.Sample({{"result", "offered"}}, c.offered);
+	writer.Sample({{"result", "not_draining"}}, c.notDraining);
+	writer.Sample({{"result", "disabled"}}, c.disabled);
+	writer.Sample({{"result", "no_target"}}, c.noTarget);
+	writer.Sample({{"result", "failed"}}, c.failed);
+	writer.Sample({{"result", "stale_reply"}}, c.staleReply);
+	writer.Sample({{"result", "push_dropped"}}, c.pushDropped);
+
+	writer.BeginFamily("gate_drain_migration_lease_total",
+					   "Migration leases from login since process start. received counts renewals too; "
+					   "stopped counts expiry, zero rate or duration, and NOT_DRAINING / DISABLED replies.",
+					   MetricType::kCounter);
+	writer.Sample({{"event", "received"}}, c.leases);
+	writer.Sample({{"event", "stopped"}}, c.leasesStopped);
+
+	writer.BeginFamily("gate_drain_migration_active", "1 while a migration lease is in effect on this gate, else 0.",
+					   MetricType::kGauge);
+	writer.Sample({}, tlsLease.active ? 1 : 0);
+
+	writer.BeginFamily("gate_drain_migration_in_flight", "Ticket requests sent to login and not answered yet.",
+					   MetricType::kGauge);
+	writer.Sample({}, tlsInFlight);
+
+	writer.BeginFamily("gate_redirect_linger_closed_total",
+					   "Connections closed by the gate because they were still connected a full linger period after a "
+					   "msg 124 redirect (drain migration and cross-zone travel).",
+					   MetricType::kCounter);
+	writer.Sample({}, c.lingerClosed);
+}
+
+void RegisterMetrics()
+{
+	if (!GlobalMetricsRegistry().Register("gate_drain_migration", &CollectMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector gate_drain_migration is already registered";
+	}
 }
 
 void ResetForTesting()

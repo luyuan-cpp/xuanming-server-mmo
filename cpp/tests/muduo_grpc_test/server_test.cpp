@@ -718,6 +718,50 @@ TEST_F(ServerLoopbackTest, UnknownServiceAndMethodAreUnimplementedWithGrpcGoMess
     EXPECT_EQ(Stats().dispatched, 0u);
 }
 
+// 准入钩子(ServerOptions::admission;节点接热关停,docs/design/rpc-kill-switch.md §7):收到请求头即判,
+// 返回状态就以它结束调用、handler 不执行;放行照常派发;未注册的方法不经准入,仍是 UNIMPLEMENTED。
+TEST_F(ServerLoopbackTest, ServerAdmissionRejectsBeforeDispatchWithTheGivenStatus)
+{
+    const auto deny = std::make_shared<bool>(true);
+    const auto seen = std::make_shared<std::vector<std::string>>();
+    ServerOptions options = QuietOptions();
+    options.admission = [deny, seen](const std::string &path) -> std::optional<Status>
+    {
+        seen->push_back(path);
+        if (*deny)
+        {
+            return Status(StatusCode::kUnavailable, "killswitch: method " + path + " is disabled");
+        }
+        return std::nullopt;
+    };
+    ASSERT_NE(StartServer(options), nullptr);
+    const auto channel = MakeChannel();
+    ASSERT_NE(channel, nullptr);
+
+    const auto denied = StartCall(*channel, kEchoPath, "ping");
+    ASSERT_TRUE(RunUntil([&] { return denied->count > 0; }, 5s));
+    EXPECT_EQ(denied->result.status.code(), StatusCode::kUnavailable);
+    EXPECT_EQ(denied->result.status.message(), std::string("killswitch: method ") + kEchoPath + " is disabled");
+    EXPECT_EQ(state_->invocations, 0u) << "a denied call never reaches the handler";
+    EXPECT_EQ(Stats().dispatched, 0u);
+    EXPECT_EQ(Stats().codes.at(14), 1u);
+    EXPECT_EQ(Stats().methods.at("Echo").at(14), 1u);
+    ASSERT_EQ(seen->size(), 1u);
+    EXPECT_EQ(seen->front(), kEchoPath);
+
+    const auto unknown = StartCall(*channel, std::string("/") + kServiceName + "/Nope", "x");
+    ASSERT_TRUE(RunUntil([&] { return unknown->count > 0; }, 5s));
+    EXPECT_EQ(unknown->result.status.code(), StatusCode::kUnimplemented);
+    EXPECT_EQ(seen->size(), 1u) << "unregistered methods are not offered to admission";
+
+    *deny = false;
+    const auto allowed = StartCall(*channel, kEchoPath, "pong");
+    ASSERT_TRUE(RunUntil([&] { return allowed->count > 0; }, 5s));
+    ASSERT_TRUE(allowed->result.status.ok()) << allowed->result.status.ToString();
+    EXPECT_EQ(allowed->result.response, "echo:pong");
+    EXPECT_EQ(state_->invocations, 1u);
+}
+
 TEST_F(ServerLoopbackTest, ZeroGrpcTimeoutIsRejectedWithoutDispatch)
 {
     ASSERT_NE(StartServer(), nullptr);

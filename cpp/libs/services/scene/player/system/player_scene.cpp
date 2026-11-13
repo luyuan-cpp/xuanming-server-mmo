@@ -41,12 +41,13 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/scene_error_tip.pb.h"
 #include <thread_context/ecs_context.h>
-// 以下几个头只为 SendSceneInfo 的分线目录转发:场景控制域 Redis 的异步 GET(tlsSceneControlRedis)、hiredis 应答类型
+// 以下几个头只为 SendSceneInfo 的分线目录转发:控制集群的异步 GET(tlsControlRedis)、hiredis 应答类型
 // (redisReply / REDIS_REPLY_* / REDIS_OK)、长度保护与命令拼接。
-// hiredis.h 已被 redis_manager.h 经 muduo 的 Hiredis.h 带进来,这里显式再包含一次,
+// hiredis.h 已被集群客户端头经 muduo 的 Hiredis.h 带进来,这里显式再包含一次,
 // 是为了不靠传递包含拿这些符号(本库 player_team.h / player_battle.cpp 同样显式包含)。
-#include "thread_context/redis_manager.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include <hiredis/hiredis.h>
+#include "engine/infra/storage/redis_cluster/redis_slot.h" // ZoneControlTag:分线目录键的控制域 tag
 
 #include <limits>
 #include <memory>
@@ -55,12 +56,11 @@
 
 namespace {
 
-// 分线目录的 Redis 键(STRING,值是 SceneChannelDirectory 的序列化字节);两个 %u 依次是 zone_id、scene_config_id。
-// 与 Go 侧 go/scene_manager/internal/logic/world_channel_directory.go 的 WorldChannelDirectoryKeyFmt 是同一份契约,改一边必须改另一边。
-constexpr char kWorldChannelDirectoryKeyFmt[] = "world_channel_directory:zone:%u:%u";
-
 // 镜像 CreateScene 的令牌序号(PlayerMirrorCreateInFlightComp.token)。与 tlsEcs 同属本线程,先自增再用,恒非 0。
 thread_local uint64_t tlsMirrorCreateTokenSeq = 0;
+
+// 「已在目标场景、给新客户端重发入场画面」的累计次数(PlayerSceneSystem::EntrySnapshotResendCount)。
+thread_local uint64_t tlsEntrySnapshotResends = 0;
 
 namespace asio = boost::asio;
 namespace cobalt = boost::cobalt;
@@ -92,12 +92,10 @@ auto AwaitMirrorCreate(EventLoop& loop, entt::entity node, const ::scene_manager
 cobalt::task<void> CreateMirrorAndEnter(entt::entity player, entt::entity manager,
 	::scene_manager::CreateSceneRequest request, PlayerSceneSystem::MirrorCreateSubmit submit);
 
-// 分线目录在本 zone 的场景控制域实例里(scene_manager 写,docs/design/control-plane-zone-scoping-20261105.md §4.5),
-// 不在核心 zoneredis 里。
-bool SceneControlRedisReady()
+// 分线目录在控制集群里(scene_manager 写,键带本 zone 的 {ctl:<z>},docs/design/redis-cluster-all-domains-20261110.md §4.2)。
+bool ControlRedisReady()
 {
-	auto& redis = tlsSceneControlRedis.GetConnection();
-	return redis && redis->connected();
+	return tlsControlRedis.connected();
 }
 
 // 异步回调里的身份核对:实体仍存在,且仍是发命令时的那名玩家(实体槽位被复用后 Guid 会不同)。
@@ -246,11 +244,38 @@ uint32_t PlayerSceneSystem::CheckEnterScene(entt::entity player, SceneEntity sce
 	return CheckEnterScene(guid != nullptr ? guid->value : Guid{0}, scene);
 }
 
+namespace
+{
+// 入场画面里只属于玩家自己的两条:入场通知与自身的创建。完整入场与「给新客户端重发」共用这一处,
+// 两条路发给客户端的内容必须一致。
+// 自身的创建只有这里发:AOI 可见性遍历刻意跳过 observer 本身(aoi.cpp ForEachNearbyEntity 的 other != entity 判断),
+// 单人在线时客户端收不到别的 ActorCreate,本地角色、相机绑定、移动控制器都建不起来。
+// 客户端靠 guid == player_id 识别并绑定本地角色。
+void SendOwnSceneEntry(entt::entity player, const SceneInfoComp& sceneInfo)
+{
+	EnterSceneS2C message;
+	message.mutable_scene_info()->CopyFrom(sceneInfo);
+	SendToPlayerClient(SceneSceneClientPlayerNotifyEnterSceneMessageId, message, player);
+
+	ActorCreateS2C selfCreate;
+	const auto netId = actor_net_id::Of(tlsEcs.actorRegistry, player);
+	if (netId != 0)
+	{
+		ViewSystem::FillActorCreateMessageInfo(player, netId, selfCreate);
+		SendToPlayerClient(SceneSceneClientPlayerNotifyActorCreateMessageId, selfCreate, player);
+	}
+	else
+	{
+		LOG_ERROR << "HandleEnterScene: self actor notification skipped, network id missing";
+	}
+}
+} // namespace
+
 // 组队跟随(原第 5 步 OnGetTeamInfo / OnGetLeaderLocation)已迁到 PlayerTeamSystem
 // (player_team.{h,cpp},team-system.md §F.2):调用点改为 HandleEnterScene 之后,
 // 因为本函数开头的"已在目标场景"幂等早退会让同场景重连漏掉刷新。
 
-bool PlayerSceneSystem::HandleEnterScene(entt::entity player, SceneEntity scene)
+bool PlayerSceneSystem::HandleEnterScene(entt::entity player, SceneEntity scene, EntryClient client)
 {
 	const EntryOwnershipGuard ownership(player);
 	if (!ownership.IsCurrent()) return false;
@@ -272,13 +297,27 @@ bool PlayerSceneSystem::HandleEnterScene(entt::entity player, SceneEntity scene)
 	}
 	SceneInfoComp targetSceneInfo(*sceneInfo);
 
-	// 0. Idempotency: if player is already in the target scene, skip.
+	// 0. 已在目标场景:场景绑定、格子与 AOI 关系都不动。
+	//    同一个客户端的重复路由:它已有入场画面,幂等跳过。
+	//    换了客户端(断线保留内重连、顶号、gate 排空迁移):新客户端里什么都没有,把入场画面重发给它 —— 入场通知、
+	//    自身的创建,以及当前显示中的目标。别人对他的关注原样留着,邻居的画面不变。2026-11-12 之前这里是先离场、
+	//    再完整入场,邻居会看到他先销毁再创建,显式关注(队伍、交手)也跟着被清掉重建。
 	auto *oldSceneComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
 	const auto oldScene = oldSceneComp != nullptr ? oldSceneComp->sceneEntity : SceneEntity{entt::null};
 	if (oldScene == scene)
 	{
+		if (client == EntryClient::kSame)
+		{
+			LOG_INFO << "HandleEnterScene: player " << tlsEcs.GetPlayerId(player)
+			         << " already in scene_id=" << targetSceneInfo.scene_id() << ", skipping";
+			return true;
+		}
+		SendOwnSceneEntry(player, targetSceneInfo);
+		AoiSystem::ResendVisibleTargets(player);
+		++tlsEntrySnapshotResends;
 		LOG_INFO << "HandleEnterScene: player " << tlsEcs.GetPlayerId(player)
-		         << " already in scene_id=" << targetSceneInfo.scene_id() << ", skipping";
+		         << " already in scene_id=" << targetSceneInfo.scene_id()
+		         << ", entry snapshot resent to its new client session";
 		return true;
 	}
 
@@ -300,33 +339,14 @@ bool PlayerSceneSystem::HandleEnterScene(entt::entity player, SceneEntity scene)
 	tlsEcs.actorRegistry.get_or_emplace<SceneEntityComp>(player).sceneEntity = scene;
 
 	// 3.5 服务器权威落位:Transform 来自 DB(新号是 proto 默认 (0,0,0),旧号可能
-	// 存着旧地图/别的场景的坐标),必须在自身 ActorCreate(4.5)与 AOI 广播之前
+	// 存着旧地图/别的场景的坐标),必须在自身 ActorCreate(第 4 步)与 AOI 广播之前
 	// 校验它在目标场景导航网格上,不在就落到场景出生点。否则客户端会本地把
 	// 人挪到城内、服务器仍在 (0,0,0),首次移动的 MoveAck 把客户端拉回原点卡死
 	// (2026-09-05 移动诊断)。同图换线/重登保留合法坐标,换地图落到目标出生点。
 	SceneSpawnSystem::EnsureValidEnterLocation(player, scene, mapChanged);
 
-	// 4. Notify client of scene entry.
-	EnterSceneS2C message;
-	message.mutable_scene_info()->CopyFrom(targetSceneInfo);
-	SendToPlayerClient(SceneSceneClientPlayerNotifyEnterSceneMessageId, message, player);
-
-	// 4.5 补发"自己"的 ActorCreate:AOI 可见性遍历刻意跳过 observer 本身
-	// (aoi.cpp ForEachNearbyEntity 的 other != entity 判断),因此
-	// 除这里之外没有任何路径把玩家自己的 actor 下发给客户端——单人在线时
-	// 客户端将收不到任何 ActorCreate,本地角色/相机绑定/移动控制器全部
-	// 无法建立。客户端靠 guid == player_id 识别并绑定本地角色。
-	ActorCreateS2C selfCreate;
-	const auto netId = actor_net_id::Of(tlsEcs.actorRegistry, player);
-	if (netId != 0)
-	{
-		ViewSystem::FillActorCreateMessageInfo(player, netId, selfCreate);
-		SendToPlayerClient(SceneSceneClientPlayerNotifyActorCreateMessageId, selfCreate, player);
-	}
-	else
-	{
-		LOG_ERROR << "HandleEnterScene: self actor notification skipped, network id missing";
-	}
+	// 4. 入场通知与自身的创建。附近的人由 AOI 在下一次 Update 首次入格时下发。
+	SendOwnSceneEntry(player, targetSceneInfo);
 
 	LOG_INFO << "HandleEnterScene: player " << tlsEcs.GetPlayerId(player)
 			 << " entered scene_id=" << targetSceneInfo.scene_id();
@@ -341,6 +361,11 @@ void PlayerSceneSystem::LeaveCurrentScene(entt::entity player)
 	}
 	AoiSystem::OnLeaveScene(player);
 	tlsEcs.actorRegistry.remove<SceneEntityComp, Hex>(player);
+}
+
+uint64_t PlayerSceneSystem::EntrySnapshotResendCount()
+{
+	return tlsEntrySnapshotResends;
 }
 
 bool PlayerSceneSystem::RequestEnterMirrorScene(entt::entity player, uint32_t mirrorConfigId, MirrorCreateSubmit submit)
@@ -589,6 +614,12 @@ cobalt::task<void> CreateMirrorAndEnter(entt::entity originalPlayer, entt::entit
 }
 } // namespace
 
+std::string PlayerSceneSystem::WorldChannelDirectoryKey(uint32_t zoneId, uint32_t sceneConfigId)
+{
+	return "world_channel_directory:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId) +
+		   ":" + std::to_string(sceneConfigId);
+}
+
 void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirectory)
 {
 	if (!tlsEcs.actorRegistry.valid(player))
@@ -610,7 +641,7 @@ void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirec
 								sceneInfo->scene_config_id() != 0;
 	// 调用方没要目录(withChannelDirectory == false)时不读 Redis:与加目录之前的开销完全相同。
 	// 实体上没有 Guid(playerId == 0)时回调里无从核对"还是不是这名玩家",同样不走异步。
-	if (!withChannelDirectory || !isWorldChannel || playerId == 0 || !SceneControlRedisReady())
+	if (!withChannelDirectory || !isWorldChannel || playerId == 0 || !ControlRedisReady())
 	{
 		PushSceneInfo(player, *sceneInfo, nullptr);
 		return;
@@ -620,7 +651,10 @@ void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirec
 	// 捕获一律用 init-capture:MSVC 对 entt::entity 的简单捕获有 C3495(.github/copilot-instructions.md)。
 	const uint64_t sceneId = sceneInfo->scene_id();
 	const uint32_t sceneConfigId = sceneInfo->scene_config_id();
-	const int ret = tlsSceneControlRedis.GetConnection()->command(
+	// 集群客户端自己把回调绑到提交这一刻的 trace 上,回调里推给客户端的 scene_info 接在这次请求的 trace 下
+	// (docs/design/distributed-tracing.md §4.3)。整个 zone 的控制域键同一个 slot:本进程的控制域读在这个 slot 上停等,
+	// 排队满时 command 回 REDIS_ERR,走下面「不带目录也推」的分支。
+	const int ret = tlsControlRedis.command(
 		[player = player, playerId = playerId, sceneId = sceneId, sceneConfigId = sceneConfigId,
 		 sceneInfoCopy = *sceneInfo](hiredis::Hiredis*, redisReply* reply) {
 			if (!IsSamePlayer(player, playerId))
@@ -641,10 +675,10 @@ void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirec
 			const bool hasDirectory = ParseChannelDirectoryReply(reply, sceneConfigId, playerId, directory);
 			PushSceneInfo(player, sceneInfoCopy, hasDirectory ? &directory : nullptr);
 		},
-		(std::string("GET ") + kWorldChannelDirectoryKeyFmt).c_str(), GetZoneId(), sceneConfigId);
+		"GET %s", PlayerSceneSystem::WorldChannelDirectoryKey(GetZoneId(), sceneConfigId).c_str());
 	if (ret != REDIS_OK)
 	{
-		// 命令没被 hiredis 收下(连接正在断开 / 释放,或格式化失败)时回调永远不会被调用,
+		// 命令没被收下(守卫拒绝、slot 没有可用连接、排队满,或格式化失败)时回调永远不会被调用,
 		// 必须在这里补推,否则客户端等不到任何应答。sceneInfo 此刻仍有效:command 不会同步执行回调,
 		// 也不碰 ECS。
 		LOG_WARN << "SendSceneInfo: channel directory read command not sent;directory omitted this time, player_id=" << playerId

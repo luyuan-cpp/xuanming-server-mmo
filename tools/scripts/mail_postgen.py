@@ -54,7 +54,7 @@ TIP_GO_FILE = "mail_error_tip.pb.go"
 
 
 def fail(message: str) -> "NoReturn":
-    sys.exit(f"[中止] {message}")
+    sys.exit(f"[ABORT] {message}")
 
 
 def rel(path: Path) -> str:
@@ -73,9 +73,9 @@ def parse_message_ids(text: str, where: str) -> dict[str, int]:
             continue
         number, sep, key = line.partition("=")
         if not sep or not number.isdigit():
-            fail(f"{where}:{line_no} 不是 `<号>=<服务名+方法名>` 形状:{line!r}")
+            fail(f"{where}:{line_no} is not of the form `<id>=<service name + method name>`: {line!r}")
         if key in ids:
-            fail(f"{where}:{line_no} 的 {key!r} 出现了两次")
+            fail(f"{where}:{line_no}: {key!r} appears twice")
         ids[key] = int(number)
     return ids
 
@@ -83,7 +83,7 @@ def parse_message_ids(text: str, where: str) -> dict[str, int]:
 def load_message_ids() -> dict[str, int]:
     path = REPO / "proto" / "message_id.txt"
     if not path.is_file():
-        fail(f"找不到 {rel(path)} —— 消息号表由全量 proto-gen 生成,先跑 proto-gen")
+        fail(f"{rel(path)} not found -- the message ID table comes from the full proto-gen; run proto-gen first")
     return parse_message_ids(path.read_text(encoding="utf-8"), rel(path))
 
 
@@ -103,10 +103,10 @@ def cmd_verify(_dry_run: bool) -> None:
     wanted = ["ClientPlayerMail" + m for m in CLIENT_METHODS] + ["MailAdmin" + m for m in ADMIN_METHODS]
     missing = [k for k in wanted if k not in ids]
     if missing:
-        problems.append(f"proto/message_id.txt 缺 {missing}(含 mail 的全量 proto-gen 没跑或没跑完)")
+        problems.append(f"proto/message_id.txt is missing {missing} (the full proto-gen including mail did not run or did not finish)")
     extra = sorted(k for k in ids if (k.startswith("ClientPlayerMail") or k.startswith("MailAdmin")) and k not in wanted)
     if extra:
-        problems.append(f"proto/message_id.txt 多出 {extra}(mail.proto / mail_admin.proto 的方法与本脚本的清单不一致)")
+        problems.append(f"proto/message_id.txt has extra {extra} (the mail.proto / mail_admin.proto methods differ from this script's list)")
     # 不要求号从 0 连续:生成器(service_register_info.go 的 InitMessageId)会把空出来的号分给新方法、
     # WriteMessageIdFile 跳过没人用的号,所以有方法被删的那次生成里 mail 可能拿到中间的旧号,文件里也可能留空洞。
     # 真正的不变量是:号不重复;生成之前就有的方法号不变(否则线上客户端与新服务端错解包)。
@@ -114,49 +114,49 @@ def cmd_verify(_dry_run: bool) -> None:
     seen: dict[int, str] = {}
     for key, number in ids.items():
         if number in seen:
-            problems.append(f"proto/message_id.txt 的号 {number} 同时分给了 {seen[number]} 与 {key}")
+            problems.append(f"proto/message_id.txt assigns ID {number} to both {seen[number]} and {key}")
         seen[number] = key
     before = committed_message_ids()
     if before is None:
-        print("[SKIP] 拿不到 HEAD:proto/message_id.txt,跳过\"已有方法号不变\"的核对")
+        print("[SKIP] HEAD:proto/message_id.txt is unavailable; skipping the \"existing method IDs unchanged\" check")
     else:
         moved = sorted(f"{k}: {before[k]} -> {ids[k]}" for k in before if k in ids and ids[k] != before[k])
         if moved:
-            problems.append(f"生成之前就有的方法号变了(会让已发布的客户端错解包):{moved}")
+            problems.append(f"method IDs that existed before generation changed (released clients would decode packets wrongly): {moved}")
 
     route = REPO / "go" / "client_rpc_router" / "generated" / "pb" / "game" / "route_table.go"
     route_text = route.read_text(encoding="utf-8") if route.is_file() else ""
     for key in wanted:
         line = next((l for l in route_text.splitlines() if l.strip().startswith(key + "MessageId:")), None)
         if line is None:
-            problems.append(f"{rel(route)} 没有 {key} 这一行")
+            problems.append(f"{rel(route)} has no {key} line")
             continue
         want_client = "true" if key.startswith("ClientPlayerMail") else "false"
         if "ENodeType_MailNodeService" not in line:
-            problems.append(f"{rel(route)} 的 {key} 目标节点不是 MailNodeService:{line.strip()}")
+            problems.append(f"{rel(route)}: {key} does not target MailNodeService: {line.strip()}")
         if f"ClientProtocol: {want_client}" not in line:
-            problems.append(f"{rel(route)} 的 {key} 应为 ClientProtocol: {want_client}:{line.strip()}")
+            problems.append(f"{rel(route)}: {key} should be ClientProtocol: {want_client}: {line.strip()}")
 
     go_dir = REPO / "go" / "proto" / "mail"
     for name in GO_PROTO_FILES:
         if not (go_dir / name).is_file():
-            problems.append(f"缺 {rel(go_dir / name)}")
+            problems.append(f"missing {rel(go_dir / name)}")
     for name in ("message_id.go", "event_id.go"):
         p = REPO / "go" / "mail" / "generated" / "pb" / "game" / name
         if not p.is_file():
-            problems.append(f"缺 {rel(p)}")
+            problems.append(f"missing {rel(p)}")
     tip_go = REPO / "go" / "shared" / "generated" / "pb" / "table" / TIP_GO_FILE
     if not tip_go.is_file():
-        problems.append(f"缺 {rel(tip_go)}(导表没跑?)")
+        problems.append(f"missing {rel(tip_go)} (did the table export run?)")
 
     registry_h = REPO / "cpp" / "generated" / "rpc" / "service_metadata" / "rpc_event_registry.h"
     if not registry_h.is_file():
-        problems.append(f"缺 {rel(registry_h)}(全量 proto-gen 没跑完?),无法核对 kMaxRpcMethodCount")
+        problems.append(f"missing {rel(registry_h)} (did the full proto-gen finish?); cannot check kMaxRpcMethodCount")
     else:
         m = re.search(r"kMaxRpcMethodCount\s*=\s*(\d+)", registry_h.read_text(encoding="utf-8"))
         if not m or int(m.group(1)) != max(numbers) + 1:
-            problems.append(f"{rel(registry_h)} 的 kMaxRpcMethodCount 应为 {max(numbers) + 1}(最大消息号 + 1),"
-                            f"实际 {m.group(1) if m else '找不到'} —— 生成器中途退出过,重跑一次 proto-gen")
+            problems.append(f"{rel(registry_h)}: kMaxRpcMethodCount should be {max(numbers) + 1} (largest message ID + 1), "
+                            f"actual {m.group(1) if m else 'not found'} -- the generator exited midway; rerun proto-gen")
 
     if problems:
         print("[FAIL] proto-gen output check:")
@@ -225,7 +225,7 @@ class ProjectEdit:
         if entry.cmake_path is not None:
             lists = list(re.finditer(r"(?ms)^set\(SOURCE_FILES[ \t]*\r?\n(.*?)^\)", self.text))
             if len(lists) != 1:
-                fail(f"{self.rel}: SOURCE_FILES 必须恰好一段，不能安全去重")
+                fail(f"{self.rel}: SOURCE_FILES must appear exactly once; cannot deduplicate safely")
             source_list = lists[0]
             pattern = r"(?m)^[ \t]*" + re.escape(entry.cmake_path) + r"[ \t]*(?:\r?\n|$)"
             matches = list(re.finditer(pattern, self.text[source_list.start(1):source_list.end(1)]))
@@ -239,7 +239,7 @@ class ProjectEdit:
                 current = item
                 while current is not None:
                     if "Condition" in current.attrib:
-                        fail(f"{self.rel}: 重复登记带 Condition，不能自动去重: {entry.key}")
+                        fail(f"{self.rel}: a duplicate registration carries a Condition; cannot deduplicate automatically: {entry.key}")
                     current = parents.get(current)
                 children = list(item)
                 default_filter = SRC if entry.tag == "ClCompile" else HDR
@@ -248,7 +248,7 @@ class ProjectEdit:
                                and not children[0].attrib and not list(children[0])
                                and children[0].text == default_filter)
                 if set(item.attrib) != {"Include"} or (children and not safe_filter):
-                    fail(f"{self.rel}: 重复登记的元数据不等价，不能自动去重: {entry.key}")
+                    fail(f"{self.rel}: duplicate registrations have different metadata; cannot deduplicate automatically: {entry.key}")
             # 只剪掉重复项所在的原始片段，不重新序列化 XML，保留其余字节与换行。
             pattern = (r"(?ms)^[ \t]*<(?P<tag>ClCompile|ClInclude)\b[^>]*?"
                        r"(?:/>|>.*?</(?P=tag)>)[ \t]*(?:\r?\n|$)")
@@ -259,7 +259,7 @@ class ProjectEdit:
                         and ntpath.normpath(item.attrib["Include"]).casefold() == entry.include):
                     spans.append(match.span())
             if len(spans) != len(items):
-                fail(f"{self.rel}: 重复登记不是独立条目，不能安全去重: {entry.key}")
+                fail(f"{self.rel}: duplicate registrations are not standalone entries; cannot deduplicate safely: {entry.key}")
         for start, end in reversed(spans[1:]):
             self.text = self.text[:start] + self.text[end:]
             self.changed += 1
@@ -272,9 +272,9 @@ class ProjectEdit:
             if count == 1:
                 return self.text.index(anchor) + len(anchor), eol
             if count > 1:
-                fail(f"{self.rel}: friend 的登记锚点出现了 {count} 次(应恰好 1 次):{anchor_lines[0].strip()[:100]!r}")
-        fail(f"{self.rel}: 找不到 friend 的登记锚点(换行符试过 CRLF 与 LF):{anchor_lines[0].strip()[:100]!r}"
-             f" —— friend 的登记被人改过,先看清再改本脚本")
+                fail(f"{self.rel}: the friend registration anchor appears {count} times (expected exactly 1): {anchor_lines[0].strip()[:100]!r}")
+        fail(f"{self.rel}: friend registration anchor not found (tried both CRLF and LF): {anchor_lines[0].strip()[:100]!r}"
+             f" -- someone changed the friend registration; look at it before changing this script")
 
     def plan(self, anchor_lines: list[str], entries: list[Entry]) -> None:
         # 合并可能同时保留域钩子与通用生成器的登记；先收敛已有重复，再补缺项。
@@ -444,13 +444,14 @@ def cmd_register_cpp(dry_run: bool, allow_missing: bool = False, allow_unknown: 
         for s in stray:
             print("  - " + s)
         if not allow_unknown:
-            fail("有本脚本不认识的 mail 生成物(见上)—— 生成器换了产物形状;看清是否要登记、改好本脚本再跑。"
-                 "确认它们不需要登记时加 --allow-unknown。未写任何文件。")
+            fail("there are mail outputs this script does not know (see above): the generator changed its output shape; "
+                 "check whether they need registering and fix this script before rerunning. "
+                 "Pass --allow-unknown once you have confirmed they need no registration. No files were written.")
     if missing:
-        msg = "以下期望的生成文件不存在:" + ", ".join(missing)
+        msg = "these expected generated files are missing: " + ", ".join(missing)
         if not allow_missing:
-            fail(msg + " —— 全量 proto-gen 没跑,或生成器换了产物形状;看清后再改本脚本,不要手补文件。未写任何文件。")
-        print("[SKIP] " + msg + "(--allow-missing:只登记已存在的文件)")
+            fail(msg + " -- the full proto-gen did not run, or the generator changed its output shape; check before changing this script, do not hand-write the files. No files were written.")
+        print("[SKIP] " + msg + " (--allow-missing: only registering files that exist)")
 
     print("register-cpp:")
     for e in edits:
@@ -470,14 +471,14 @@ def cmd_vendor_robot(dry_run: bool) -> None:
                   REPO / "robot" / "vendor" / "shared" / "generated" / "pb" / "table" / TIP_GO_FILE))
     for src, _dst in pairs:
         if not src.is_file():
-            fail(f"缺 {rel(src)} —— 先跑导表与全量 proto-gen。未写任何文件。")
+            fail(f"missing {rel(src)} -- run the table export and the full proto-gen first. No files were written.")
     src_extra = sorted(p.name for p in src_dir.glob("*.go") if p.name not in GO_PROTO_FILES)
     if src_extra:
-        fail(f"go/proto/mail 里有本脚本清单之外的文件 {src_extra}(生成器多出了产物?)—— 先把它们加进 GO_PROTO_FILES"
-             f" 再同步,否则 robot/vendor 会缺文件。未写任何文件。")
+        fail(f"go/proto/mail has files outside this script's list {src_extra} (did the generator add outputs?) -- add them to GO_PROTO_FILES"
+             f" before syncing, or robot/vendor will miss files. No files were written.")
     dst_extra = sorted(p.name for p in dst_dir.glob("*.go") if p.name not in GO_PROTO_FILES) if dst_dir.is_dir() else []
     if dst_extra:
-        fail(f"robot/vendor/proto/mail 里有 go/proto/mail 没有的文件 {dst_extra} —— 先查清再删。未写任何文件。")
+        fail(f"robot/vendor/proto/mail has files that go/proto/mail does not have {dst_extra} -- find out why before deleting them. No files were written.")
 
     modules = REPO / "robot" / "vendor" / "modules.txt"
     text = modules.read_bytes().decode("utf-8")
@@ -488,7 +489,7 @@ def cmd_vendor_robot(dry_run: bool) -> None:
         try:
             start = next(i for i, l in enumerate(lines) if l.startswith("# proto v0.0.0"))
         except StopIteration:
-            fail("robot/vendor/modules.txt 里找不到 `# proto v0.0.0 => ../go/proto` 模块段。未写任何文件。")
+            fail("robot/vendor/modules.txt has no `# proto v0.0.0 => ../go/proto` module section. No files were written.")
         i = start + 1
         while i < len(lines) and lines[i].startswith("## "):
             i += 1

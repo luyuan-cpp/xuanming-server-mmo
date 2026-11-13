@@ -9,6 +9,11 @@ management:
     web:
       exposure:
         include: health,info
+  # 链路追踪(docs/design/distributed-tracing.md §7):每个请求都采样,只进日志,不导出 span。
+  # 配置节点只在内网,照常接收调用方的 traceparent(公网入口的网关才藏掉)。
+  tracing:
+    sampling:
+      probability: 1.0
 
 # 日志:控制台一行一条 JSON(logstash 风格),与 gateway_node 一致,便于 Alloy 采进 Loki。
 logging:

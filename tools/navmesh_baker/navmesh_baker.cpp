@@ -10,6 +10,11 @@
 //       独立地图的相同150×150位图,必须显式传 --probe 指定该场景出生点。
 //   --obj <mesh.obj>
 //       通用 OBJ 三角网输入(未来真 3D 场景从 Unity 导出用这条路)。
+//       手绘图片地图追加 --profile authored-flat：必须为同一水平面的有限顶点，
+//       且显式提供原始出生脚点 --probe。专用模式在光栅化之后将粗网格和细节网格
+//       高度恢复为输入平面；不会修改 OBJ、出生点或探针容差，也不影响通用三维输入。
+//       该模式默认 slope=45、tile=256、minRegionArea=0；客户端仍显式传同源参数。
+//       --agent-slope 为角度，--min-region-area / --merge-region-area 为世界平方米。
 //
 // 输出:
 //   --out <scene.bin>  'MSET' v1 格式 tile 集,与
@@ -35,10 +40,11 @@
 //   网格不可走"的带子里,服务器每 0.25s 截回一次、客户端重规划再走进去,形成
 //   每秒 4 次的回拉循环。平面带洞地形上洞里本来就没有多边形,悬崖过滤除了制造
 //   这条带子没有任何作用;真 3D 场景(--obj)仍默认开启。
-//   地面几何放在 y = -ch:Recast 光栅化把恰好压在体素边界上的平面向上取整
+//   旧位图模式的地面几何放在 y = -ch:Recast 光栅化把恰好压在体素边界上的平面向上取整
 //   一个体素,几何放在 y=0 时可走面会落在 +ch(0.2m);下移一个体素后可走面
 //   回到 y≈0(探针输出 nearest 的 y 可以直接核对,偏 ±0.2 说明取整模型
-//   和这里的假设不一致,改 kGroundY 即可,不影响水平语义)。
+//   和这里的假设不一致)。此补偿仅用于旧位图生成器；通用 OBJ 不做平面恢复，
+//   手绘平面必须显式选择 authored-flat，禁止以提高脚点代替恢复正确地面高度。
 //
 // 出生点探针(数据契约自检):
 //   --probe x,y,z   Unity 坐标(米,Y-up),可重复。烘焙完成后对最终网格做
@@ -57,7 +63,9 @@
 //       --out data/scene_nav_bin/tianyong_scene.bin
 
 #include <cctype>
+#include <cerrno>
 #include <cmath>
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -333,7 +341,8 @@ bool LoadObj(const std::string& path, TriMesh& mesh)
 		if (tag == "v")
 		{
 			double x = 0, y = 0, z = 0;
-			ls >> x >> y >> z;
+			if (!(ls >> x >> y >> z) || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+			{ std::fprintf(stderr, "error: invalid or nonfinite OBJ vertex\n"); return false; }
 			mesh.verts.push_back(x);
 			mesh.verts.push_back(y);
 			mesh.verts.push_back(z);
@@ -344,10 +353,17 @@ bool LoadObj(const std::string& path, TriMesh& mesh)
 			std::string item;
 			while (ls >> item)
 			{
-				const int raw = std::atoi(item.c_str());  // "12/3/4" -> 12
-				if (raw == 0) continue;
+				char* end = nullptr;
+				errno = 0;
+				const long raw = std::strtol(item.c_str(), &end, 10);  // "12/3/4" -> 12
+				if (end == item.c_str() || (*end != '/' && *end != '\0') || errno == ERANGE ||
+					raw == 0 || raw < INT_MIN || raw > INT_MAX)
+				{ std::fprintf(stderr, "error: invalid OBJ face index\n"); return false; }
 				const int nverts = static_cast<int>(mesh.verts.size() / 3);
-				face.push_back(raw > 0 ? raw - 1 : nverts + raw);
+				const long index = raw > 0 ? raw - 1 : nverts + raw;
+				if (index < 0 || index >= nverts)
+				{ std::fprintf(stderr, "error: OBJ face index is out of range\n"); return false; }
+				face.push_back(static_cast<int>(index));
 			}
 			for (size_t i = 2; i < face.size(); ++i)
 			{
@@ -379,7 +395,45 @@ struct BakeConfig
 	// 悬崖过滤(见文件头):painted-city 模式关掉,网格边界才与 mask 格线重合;
 	// --obj 真 3D 场景保持 Recast 默认行为。
 	bool filterLedges = true;
+	// 手绘平面显式选择；旧位图和通用三维 OBJ 保留原有烘焙行为。
+	bool authoredFlat = false;
+	double groundY = 0;
+	double minRegionArea = -1;    // 平方米；负值表示沿用旧的 64 个体素。
+	double mergeRegionArea = -1;  // 平方米；负值表示沿用旧的 400 个体素。
 };
+
+// 命令行数值必须完整、有限，不能把尾随字符或溢出值交给 Recast。
+bool ParseBakeNumber(const char* text, double& out)
+{
+	char* end = nullptr;
+	errno = 0;
+	out = std::strtod(text, &end);
+	return text != end && *end == '\0' && errno != ERANGE && std::isfinite(out);
+}
+
+bool ValidateAuthoredPlane(const TriMesh& mesh, BakeConfig& bake)
+{
+	if (mesh.verts.empty() || mesh.verts.size() % 3 != 0) return false;
+	bake.groundY = mesh.verts[1];
+	for (size_t i = 0; i < mesh.verts.size(); i += 3)
+	{
+		if (!std::isfinite(mesh.verts[i]) || !std::isfinite(mesh.verts[i + 1]) ||
+			!std::isfinite(mesh.verts[i + 2]) || mesh.verts[i + 1] != bake.groundY)
+		{
+			std::fprintf(stderr, "error: authored-flat requires finite, coplanar horizontal OBJ vertices\n");
+			return false;
+		}
+	}
+	for (int index : mesh.tris)
+	{
+		if (index < 0 || static_cast<size_t>(index) >= mesh.verts.size() / 3)
+		{
+			std::fprintf(stderr, "error: authored-flat OBJ face index is out of range\n");
+			return false;
+		}
+	}
+	return true;
+}
 
 class StdoutBuildContext final : public rcContext
 {
@@ -408,8 +462,10 @@ unsigned char* BuildTile(rcContext& ctx, const TriMesh& mesh, const BakeConfig& 
 	cfg.walkableRadius = static_cast<int>(std::ceil(bake.agentRadius / cfg.cs));
 	cfg.maxEdgeLen = static_cast<int>(12.0 / cfg.cs);
 	cfg.maxSimplificationError = 1.3;
-	cfg.minRegionArea = 8 * 8;
-	cfg.mergeRegionArea = 20 * 20;
+	cfg.minRegionArea = bake.minRegionArea < 0 ? 8 * 8 :
+		static_cast<int>(std::ceil(bake.minRegionArea / (cfg.cs * cfg.cs)));
+	cfg.mergeRegionArea = bake.mergeRegionArea < 0 ? 20 * 20 :
+		static_cast<int>(std::ceil(bake.mergeRegionArea / (cfg.cs * cfg.cs)));
 	cfg.regionPartitioning = RC_REGION_WATERSHED;
 	cfg.regionChunkSize = bake.tileSizeVx / 2;
 	cfg.maxVertsPerPoly = DT_VERTS_PER_POLYGON;
@@ -550,6 +606,15 @@ unsigned char* BuildTile(rcContext& ctx, const TriMesh& mesh, const BakeConfig& 
 	}
 	rcFreeCompactHeightfield(chf);
 	rcFreeContourSet(cset);
+	if (bake.authoredFlat)
+	{
+		// 光栅化的 span 顶面量化会使水平地面上浮一个 ch。此模式已验证全部输入
+		// 顶点处于同一原始水平面，故将粗网格及细节网格恢复到该面；不移动 OBJ、
+		// 角色脚点或探针，也不把这种平面恢复应用于三维地形和旧位图模式。
+		pmesh->bmin[1] = bake.groundY;
+		for (int i = 0; i < pmesh->nverts; ++i) pmesh->verts[i * 3 + 1] = 0;
+		for (int i = 0; i < dmesh->nverts; ++i) dmesh->verts[i * 3 + 1] = bake.groundY;
+	}
 
 	unsigned char* navData = nullptr;
 	int navDataSize = 0;
@@ -825,12 +890,17 @@ int main(int argc, char** argv)
 	std::vector<ProbePoint> probes;
 	bool defaultProbe = true;
 	int filterLedgesArg = -1;  // -1 = 按模式默认(painted-city 关,obj 开)
+	bool slopeExplicit = false;
+	bool tileSizeExplicit = false;
+	bool minRegionExplicit = false;
+	std::string profile;
 
 	for (int i = 1; i < argc; ++i)
 	{
 		const std::string arg = argv[i];
 		auto next = [&]() -> const char* { return i + 1 < argc ? argv[++i] : ""; };
-		if (arg == "--filter-ledges") filterLedgesArg = std::atoi(next());
+		if (arg == "--profile") profile = next();
+		else if (arg == "--filter-ledges") filterLedgesArg = std::atoi(next());
 		else if (arg == "--painted-city") paintedCityPath = next();
 		else if (arg == "--mask-base64") maskBase64Path = next();
 		else if (arg == "--mask-grid")
@@ -850,12 +920,31 @@ int main(int argc, char** argv)
 		}
 		else if (arg == "--obj") objPath = next();
 		else if (arg == "--out") outPath = next();
-		else if (arg == "--cs") bake.cellSize = std::atof(next());
-		else if (arg == "--ch") bake.cellHeight = std::atof(next());
-		else if (arg == "--agent-radius") bake.agentRadius = std::atof(next());
-		else if (arg == "--agent-height") bake.agentHeight = std::atof(next());
-		else if (arg == "--agent-climb") bake.agentMaxClimb = std::atof(next());
-		else if (arg == "--tile-size") bake.tileSizeVx = std::atoi(next());
+		else if (arg == "--cs" || arg == "--ch" || arg == "--agent-radius" ||
+			arg == "--agent-height" || arg == "--agent-climb" || arg == "--agent-slope" ||
+			arg == "--min-region-area" || arg == "--merge-region-area" || arg == "--tile-size")
+		{
+			double value = 0;
+			if (!ParseBakeNumber(next(), value))
+			{ std::fprintf(stderr, "error: invalid numeric value for %s\n", arg.c_str()); return 1; }
+			if (arg == "--cs") bake.cellSize = value;
+			else if (arg == "--ch") bake.cellHeight = value;
+			else if (arg == "--agent-radius") bake.agentRadius = value;
+			else if (arg == "--agent-height") bake.agentHeight = value;
+			else if (arg == "--agent-climb") bake.agentMaxClimb = value;
+			else if (arg == "--agent-slope") { bake.walkableSlopeDeg = value; slopeExplicit = true; }
+			else if (arg == "--min-region-area") { bake.minRegionArea = value; minRegionExplicit = true; }
+			else if (arg == "--merge-region-area") bake.mergeRegionArea = value;
+			else
+			{
+				if (value != std::floor(value) || value < 16 || value > 1024)
+				{ std::fprintf(stderr, "error: invalid tile size\n"); return 1; }
+				bake.tileSizeVx = static_cast<int>(value);
+				tileSizeExplicit = true;
+			}
+			if ((arg == "--min-region-area" || arg == "--merge-region-area") && value < 0)
+			{ std::fprintf(stderr, "error: region area must be nonnegative\n"); return 1; }
+		}
 		else if (arg == "--probe")
 		{
 			ProbePoint p;
@@ -874,6 +963,19 @@ int main(int argc, char** argv)
 			return 1;
 		}
 	}
+	if (!profile.empty() && profile != "legacy" && profile != "authored-flat")
+	{ std::fprintf(stderr, "error: unknown bake profile: %s\n", profile.c_str()); return 1; }
+	bake.authoredFlat = profile == "authored-flat";
+	if (bake.authoredFlat)
+	{
+		if (objPath.empty())
+		{ std::fprintf(stderr, "error: authored-flat requires --obj input\n"); return 1; }
+		if (probes.empty())
+		{ std::fprintf(stderr, "error: authored-flat requires at least one explicit --probe x,y,z\n"); return 1; }
+		if (!slopeExplicit) bake.walkableSlopeDeg = 45;
+		if (!tileSizeExplicit) bake.tileSizeVx = 256;
+		if (!minRegionExplicit) bake.minRegionArea = 0;
+	}
 	if (outPath.empty() || (static_cast<int>(!paintedCityPath.empty()) +
 		static_cast<int>(!maskBase64Path.empty()) + static_cast<int>(!objPath.empty()) != 1))
 	{
@@ -881,7 +983,8 @@ int main(int argc, char** argv)
 			"usage: navmesh_baker (--painted-city <TianyongPaintedCity.cs> | --mask-base64 <mask.txt> | --obj <mesh.obj>)"
 			" --out <scene.bin>\n"
 			"       [--cs 0.25] [--ch 0.2] [--agent-radius 0] [--agent-height 1.8]"
-			" [--agent-climb 0.35] [--tile-size 128]\n"
+			" [--agent-climb 0.35] [--agent-slope 50] [--tile-size 128]\n"
+			"       [--profile legacy|authored-flat] [--min-region-area m2] [--merge-region-area m2]\n"
 			"       [--probe x,y,z ...] [--no-default-probe] [--filter-ledges 0|1]\n");
 		return 1;
 	}
@@ -895,6 +998,12 @@ int main(int argc, char** argv)
 		!std::isfinite(bake.agentRadius) || bake.agentRadius < 0 ||
 		!std::isfinite(bake.agentHeight) || bake.agentHeight <= 0 ||
 		!std::isfinite(bake.agentMaxClimb) || bake.agentMaxClimb < 0 ||
+		bake.walkableSlopeDeg < 0 || bake.walkableSlopeDeg >= 90 ||
+		bake.agentHeight / bake.cellHeight > RC_SPAN_MAX_HEIGHT ||
+		bake.agentMaxClimb / bake.cellHeight > RC_SPAN_MAX_HEIGHT ||
+		bake.agentRadius / bake.cellSize > 1024 ||
+		(bake.minRegionArea >= 0 && bake.minRegionArea / (bake.cellSize * bake.cellSize) > INT_MAX) ||
+		(bake.mergeRegionArea >= 0 && bake.mergeRegionArea / (bake.cellSize * bake.cellSize) > INT_MAX) ||
 		bake.tileSizeVx < 16 || bake.tileSizeVx > 1024)
 	{ std::fprintf(stderr, "error: invalid mask geometry or bake parameters\n"); return 1; }
 	bake.filterLedges = filterLedgesArg >= 0 ? filterLedgesArg != 0 :
@@ -934,6 +1043,18 @@ int main(int argc, char** argv)
 		std::fprintf(stderr, "error: input has no walkable geometry, nothing to bake\n");
 		return 1;
 	}
+	if (bake.authoredFlat && !ValidateAuthoredPlane(mesh, bake)) return 1;
+	std::printf("bake config: profile=%s cs=%.17g ch=%.17g agent_radius=%.17g agent_height=%.17g "
+		"agent_climb=%.17g agent_slope=%.17g tile_size=%d min_region_area=%.17g "
+		"merge_region_area=%.17g ground_y=%.17g walkable_radius_voxels=%d "
+		"walkable_height_voxels=%d walkable_climb_voxels=%d\n",
+		bake.authoredFlat ? "authored-flat" : "legacy", bake.cellSize, bake.cellHeight,
+		bake.agentRadius, bake.agentHeight, bake.agentMaxClimb, bake.walkableSlopeDeg,
+		bake.tileSizeVx, bake.minRegionArea < 0 ? 64 * bake.cellSize * bake.cellSize : bake.minRegionArea,
+		bake.mergeRegionArea < 0 ? 400 * bake.cellSize * bake.cellSize : bake.mergeRegionArea,
+		bake.authoredFlat ? bake.groundY : 0, static_cast<int>(std::ceil(bake.agentRadius / bake.cellSize)),
+		static_cast<int>(std::ceil(bake.agentHeight / bake.cellHeight)),
+		static_cast<int>(std::floor(bake.agentMaxClimb / bake.cellHeight)));
 
 	double bmin[3] = {1e300, 1e300, 1e300};
 	double bmax[3] = {-1e300, -1e300, -1e300};

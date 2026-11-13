@@ -5,7 +5,7 @@
 # 指标定义(名字以代码为准,本文件只引用;tools/scripts/tests/k8s_deploy_contract.tests.ps1 从源码核对):
 #   - data_service(go/data_service/internal/metrics,PrimeRoute 启动时以 0 预置全部取值):
 #       data_service_route_register_total{outcome}     每次 RegisterPlayerZone 恰好计一次
-#       data_service_route_read_total{path,result}     player_route 的 SQL 读,home 每次读计一次,batch 每块计一次
+#       data_service_route_read_total{path,result}     player_route 的 SQL 读,home 每次读计一次,batch 每块计一次,zone_count(按区数角色)每次计数计一次
 #   - 定时重读合服映射(placement.MergedZoneCache),四个服务同一形状,result = ok | error,启动时以 0 预置:
 #       data_service_merged_zone_refresh_total         读目录第 0 片的 zone_merged_into
 #       match_merged_zone_refresh_total                读 data_service.GetMergedZones
@@ -25,7 +25,7 @@
 #   - 归属读写直接落全局库,读错就是 RPC 回 Unavailable(绝不回 NotFound),调用方 fail-closed,所以读写错误是这里最要紧的信号。
 #   - 只进看板、不设告警:route_register_total 除 store_error 以外的 outcome(conflict 是业务冲突)、route_read_total 的 ok / not_found。
 #   - 刷新失败时进程继续用旧映射(启动时读不到才拒启),最坏是一次可重试的拒绝,所以都是 warning;正在合服时先别往下走。
-#   - 阈值没有实测基线(任何一次持续即报),阶段 B 压测出对比表之后回头校准。
+#   - 阈值已定(2026-11-12),压测出基线后可调:健康时读写错误与刷新失败恒为 0,故按「持续出现即报」定,不依赖基线;for 取值沿用本目录 warning 级惯例(5~10 分钟,滤掉单次抓取抖动与一次 etcd / TiDB 选主切换)。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up
@@ -69,7 +69,8 @@ spec:
             summary: "{{ $labels.namespace }} 的建角登记持续失败({{ $labels.outcome }})"
             description: >-
               过去 5 分钟约 {{ $value | printf "%.0f" }} 次 RegisterPlayerZone 以 {{ $labels.outcome }} 失败,对应的建角都被拒绝。
-              先看映射写者是不是被冻结(route-tool freeze;K8s 上用 tools/scripts/k8s_route_tool.ps1 起一次性 Job),
+              先看映射写者是不是被冻结(route_meta.writable=0:route-tool freeze 冻结、unfreeze 解冻,两者在运维机上用维护身份跑,
+              不经 K8s Job,见 docs/ops/k8s-open-server-runbook.md §1「route-tool 的身份」),
               否则查全局库(连接数、锁等待、RouteStore.MaxOpenConn)。逐条明细在 data_service 日志 `[RegisterPlayerZone]` 的 ERROR 行。
 
     # 合服只写 zone_merged_into 一条映射,各服务定时重读,读的时候把记录里的原始区解析成最终区(docs/ops/merge-zone-runbook.md)。

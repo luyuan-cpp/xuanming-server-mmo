@@ -260,7 +260,7 @@ go/db 只在 SQL 提交了版本 V 之后才发布 `ACK = V`，而 V 来自 C++ 
   - 残余：`redis-start.sh` 在「没有哨兵能指认主」时按约定让 redis-0 当主（`redis-ha.yaml:233`），这可能把落后的节点拉起来当主。此时身份已变，G1 兜加载、G3a 兜重铸、G4 让持有者被拒可观测。
 - **代价**（未实测，不得据此宣称结论）：everysec 下 WAITAOF 要等下一次后台刷盘，按源码阅读推断平均约 0.5s、最坏约 1s；HA 还要加从库刷盘。超时的代码缺省是 1500ms，`scene_manager_service.yaml` 与 K8s 渲染取 2000（理由见 §4.3.3「时间预算」）。
   - 只在持有者变化时付出：首次登录、跨节点交接、跨 zone。同节点换图、同落点重连不铸造，不受影响。
-  - 必须按 §8.3 R-b 压测。
+  - 池大小与时间预算 2026-11-12 已按推算定案（§4.3.3「时间预算」「吞吐与连接」），§8.3 R-b 压测只用来核对推算。
 - **配置**：`OwnerEpochMint.WaitAOFNumLocal` / `WaitAOFNumReplicas` / `WaitAOFTimeoutMs`（`go/scene_manager/internal/config/config.go` 的 `OwnerEpochMintConfig`）：两项都写 0 等于不发 WAITAOF，启动时打一行 ERROR；开启时启动先探一次，失败拒启。探针在每个主节点的同一条连接上先写一个探针键（`scene_manager:owner_epoch_mint_probe:{n}`，Cluster 下挑落在该节点 slot 上的 tag，TTL 60s），再发 WAITAOF，等待取 max(配置值, 5s)。2026-11-10 起这样做：新连接没写过东西时偏移为 0，副本记的刷盘偏移初值也是 0，没开 AOF 的副本从不上报，0 ≥ 0 照样计数，不先写的探针查不出「副本没开 AOF」（Claude 审核第 3 条，第二轮审核会话同意）。
 - **连接总账**：在 `k8s_deploy.ps1` 的池表里给 scene_manager 加 Fixed 连接，写法同 db 行的 `Fixed 2`。
 
@@ -286,18 +286,22 @@ go/db 只在 SQL 提交了版本 V 之后才发布 `ACK = V`，而 V 来自 C++ 
 | `not_durable`：份数不足，含服务端等满超时 | 内存里已推进，落盘未知 | **不推**路由 / 重定向；用这次落点单调回滚（bump；同节点 epoch 0 的铸造走 keep）。凭标记的 bump 走两段回执（§4.3.4，推路由失败的回滚同样）：回滚先经共享连接池生效、写待确认回执，再在铸造通道上用确认脚本写回原值并等 WAITAOF，确认落盘才把回执改成正式回执，否则留在待确认形态、源端不采纳；人数随回滚结果退回 | 7 `ErrKafkaRoute`，回显同推路由失败 |
 | `error`：WAITAOF 被拒、回复形状不对、回复读失败 | 同上 | 同上 | 7 |
 | 没发送：剩余预算不足 1ms，或连连接都没拿到（池等待超时、拨号失败、握手失败；2026-11-10 起认得出，见下） | 一个字节都没写 | 不推路由，退回预占 | 3 `ErrUpdateLocation` |
-| EVAL 结果未知，重发 3 次耗尽 | 首发可能已生效 | 同以前 go-zero 自动重发耗尽 | 3 |
+| EVAL 结果未知：重发耗尽、之后的重发被拒 / 没发出去，或重发回 0 / -1（2026-11-12 起） | 首发可能已生效，也可能还没到 Redis | **不推**路由 / 重定向；同一段回滚脚本原子地二选一（§4.3.5）：首发生效了就按原字节回滚（同 `not_durable` 一行），值作废、一次都没下发；首发还没生效就把它作废，之后再到也写不进去；状态已被并发改写则什么都不改。之后再按当时的 location 退人数 | 7 |
 | 关闭：两项份数都写 0 | — | 不确认，照常推路由，启动时打 ERROR | 0 |
 
 - **复用 7，不新增码**：C++ 对 7 的处置沿用推路由失败那一套（源端原子取证；`SmRejectedBeforeAnyPlacementWrite` 不收 7）。取证读到正式回执照旧采纳（B5）；读到待确认回执走 2026-11-10 新增的 B5′，不采纳（§4.3.4）。3 同样不在「一定没写」名单里，「没发送」回 3 只会少踢、不会误踢。
 - **没确认之后的回滚也要确认**：原稿认为回滚不必等 WAITAOF（AOF 与复制流是单一有序日志，回滚留下则铸造必然留下），把「确认不足之后又切主，铸造与回滚一起丢失，而源端已凭回执采纳」列为偶发残余。这条判断不成立：确认不足多半正是刷盘或副本落后，紧接着的切主正是落后副本被提升，两者正相关；源端采纳之后还会随强制存盘把写权行抬上去，成了 Redis 不认识的持有者（后果见 §3 表）。2026-11-10 起改为两段回执（§4.3.4）。推路由失败的回滚同样两段：铸造确认过，回滚写下的却是另一个值，它的落盘要单独确认。
-- 不凭标记的铸造（首次落点、等待落点的第二条腿、同节点 epoch 0）遇到「首发结果未知、重发回 0」时仍回 19，这是已登记的残余。现在会打一行 `[OwnerEpochMint] mint EVAL resent after an unknown first result …`，带重发次数。
-- 同落点重连、同节点换图下发的是观察值，不铸造。正常流程里这个值在铸造当时已确认落盘；location 带待确认回执时先确认落盘再下发（§4.3.4）。可能未落盘就被下发的只剩：上一条残余、同节点 epoch 0 铸造没确认之后的 keep 回滚（§4.3.4 残余）、G3b 关闭期间铸出的值。
+- **结果未知也回滚**（2026-11-12）：以前不凭标记的铸造（首次落点、等待落点的第二条腿、同节点 epoch 0）遇到「首发结果未知、重发回 0」时回 19，重发耗尽回 3，都不回滚。首发其实生效了的话，Redis 里留下没确认落盘、指向从未载入玩家的目标的落点，之后的同落点重连会原样下发它。现在 svc 在此前有过结果未知的发送时，把之后的任何终止都标成 `ErrOwnerEpochMintResultUnknown`；logic 把重发回 0 / -1 也算作结果未知（凭标记时源端可能在两次发送之间删掉了标记，重放识别认不出）。`placePlayerLocation` 交回计划写下的落点，调用方回滚或作废，再按之后的 location 退人数（`enterscenelogic.go` 的 `rollbackUnknownMintResult`，跨 zone 第一条腿同法）。首发还没到 Redis 的情形由作废收住，见 §4.3.5。
+- 同落点重连、同节点换图下发的是观察值，不铸造。这个值必须确认过落盘：已确认位点等于它才直接下发，否则当场确认（§4.3.5）；location 带待确认回执时先确认落盘并改写回执再下发（§4.3.4）。location 记 0 时：同节点换图一律再铸一次，同落点重连下发 location 记的 0（§4.3.4，同节点 epoch 0 一条）。可能未落盘就被下发的只剩 G3b 关闭期间铸出的值。
 
 **时间预算**
 
-- 铸造截止 = 请求截止 −（`KafkaWriteTimeoutSeconds` + 300ms），见 `owner_epoch.go` 的 `ownerEpochMintContext`。WAITAOF 实际等待 = min(`WaitAOFTimeoutMs`, 铸造截止前剩余 − 100ms)，先截断成整毫秒，不足 1ms 不发（WAITAOF 的 timeout 0 是无限阻塞）。这样铸造之后的同步推路由（writer 自己的 5s）与回滚 Lua 一定还在 zrpc `Timeout`（8000ms）之内，失败应答回得到 C++ 源端，不会退化成 30s 看门狗。
-- 按现值：归属查询很快时等满 `WaitAOFTimeoutMs`；归属查询用满 1500ms 时只剩约 1100ms。`Timeout ≥ 归属查询 + Kafka + 1500` 这条不等式不变：WAITAOF 只用剩下的时间，会被截断，不会越界。
+- 铸造截止 = 请求截止 −（`KafkaWriteTimeoutSeconds` + 300ms），见 `owner_epoch.go` 的 `ownerEpochMintContext`。WAITAOF 实际等待 = min(`WaitAOFTimeoutMs`, 铸造截止前剩余 − 100ms)，先截断成整毫秒，不足 1ms 不发（WAITAOF 的 timeout 0 是无限阻塞）。这样铸造之后的同步推路由（writer 自己的 5s）与回滚 Lua 一定还在 zrpc `Timeout` 之内，失败应答回得到 C++ 源端，不会退化成 30s 看门狗。
+- **zrpc `Timeout` 取成功路径上逐段串行的预算之和**（2026-11-12 定，原 8000）：角色目录强读 1500（`svc/role_directory.go` 的 `roleDirectoryLookupTimeout`）+ 归属查询 `HomeZoneLookupTimeoutMs` 1500 + `WaitAOFTimeoutMs` 2000 + `KafkaWriteTimeoutSeconds` 5000 + Redis 往返余量 1500 = **11500**。
+  - 为什么改：原不等式 `Timeout ≥ 归属查询 + Kafka + 1500` 漏了角色目录强读与 WAITAOF 两段。成功路径最坏要 11500，`Timeout` 却只有 8000：前置两个 RPC 在各自上限之内、只是慢一点，铸造的 WAITAOF 就被截短（两者都用满时铸造预算 2700 − 3000 < 0，一条都不发、回 3），首登与换节点白白失败。这是可用性缺陷，不是性能偏好：各段都没超时，整体却失败。
+  - 按新值：前置 RPC 在各自上限之内时，WAITAOF 总能等满 `WaitAOFTimeoutMs`，推路由总能用满 Kafka 写超时。契约测试 `Get-SceneManagerTimeoutBudgetViolations` 按新不等式核服务 yaml 与 ConfigMap，角色目录强读的数从 Go 源码读。
+  - 上游同批放宽，守住「上游比下游宽 2000」：C++ `GrpcClient.CallDeadlineMs.SceneManagerNodeService` 13500，login `SceneManagerRpc.Timeout` 13500；C++ 疏散 / 排空改派的 settle 窗口从 deadline 派生为 18.5s，下限 `relocate_confirm::kSmSettleWindow` 由 15s 调到 19s（Go 跨语言测试 `TestRelocateSettleFloorCoversSceneManagerTimeout` 守）。源端 30s 应答看门狗、70s 冻结上限不变，仍远大于 13.5s。客户端的换图请求先应答、结果另推，等入场的预算 60s，不受影响。
+  - 代价：只在下游慢时拉长最坏耗时（失败应答最晚 11.5s 回到源端，原 8s），正常路径不变。
 - 专用客户端 `ReadTimeout = max(WaitAOFTimeoutMs, 启动探针的 WAITAOF 等待 5s) + 1s`，服务端超时先到。go-redis 读 pipeline 回复时只按客户端的 ReadTimeout 设读截止；只按铸造算的话，启动探针会先在客户端读超时，把「副本份数不足」报成连接问题（2026-11-11 第二轮审核修正）。运行期的铸造与确认都带请求截止，截止更早，放宽它不影响运行期；取连接的排队同样受铸造截止约束。
 - **`WaitAOFTimeoutMs` 取 2000（配置上限），不取 go/db 的 1500**。`numreplicas=1` 时，要等副本自己按 everysec 刷盘，还要等副本上报：副本只在每秒一次的 `replicationCron` 里、或收到主节点 GETACK 时上报已刷盘偏移，而 GETACK 只在有 WAIT / WAITAOF 进来时发一次（`replication.c` `replicationRequestAckFromSlaves`、`replconfCommand` getack 分支）。低负载时，副本刷盘时刻 F 与上报相位 P 近似独立均匀分布于 [0, 1s)：等待 = P（P ≥ F）或 P + 1s（P < F），平均约 1s、最坏近 2s。1500 会让约 1/8 的铸造回 7 [I]。高负载时别的 WAITAOF 带来的 GETACK 会让上报提前。单实例只等本地刷盘（≤ 约 1s），上限调高对它没有影响。
 
@@ -305,8 +309,13 @@ go/db 只在 SQL 提交了版本 V 之后才发布 `ACK = V`，而 V 来自 C++ 
 
 - 只在持有者变化时付出：首次登录、跨节点交接、跨 zone 第一条腿、等待落点的第二条腿、同节点 epoch 0。同节点换图、同落点重连不铸造，不受影响。
 - 单实例：本地确认要等下一次后台 fsync，平均约 0.5s、最坏约 1s。高可用：平均约 1s、最坏近 2s（上一条）。`EnterSceneStageUpdateLoc` 子阶段的耗时含这段等待；`scene_manager_owner_epoch_mint_durable_seconds` 单独给出整条 pipeline 的往返。
-- **吞吐上限**：每条连接在 WAITAOF 期间被占住。单副本约 32 条 ÷ 每次占用时长：单实例约 64 次/s，高可用约 32–64 次/s；每 zone 2 个副本，加倍。超出时排队等连接，等待受铸造截止约束，超时回 3（可重试）。登录 ramp 超过这个量级时，**升级路线是组提交**，不是简单调大池（调大池会推高总账、maxclients 与代理 maxconn）：由一个确认协程在粘连连接上，对一批已经拿到回复的铸造做一次「写围栏键 + WAITAOF」，一次 fsync 覆盖整批（go/db 当年的重试入队用过同样的写法，那份实现已随存档迁 TiDB 删除）。组提交在 Cluster 下要每个主节点一个确认协程，围栏键落在该节点的 slot 上，届时与第 6 批一起设计。
-- 是否上组提交、`ownerEpochMintPoolSize` 取多少，以 §8.3 R-b 为准：开、关 G3b 各跑一轮登录 ramp + 跨节点换图，按 AGENTS §6 出对比表。拿到对比表之前，不对延迟下结论。
+- **吞吐与连接（2026-11-12 定，不等压测）**：每条连接在 WAITAOF 期间被占住，并发铸造数 ≈ 铸造速率 × 占用时长（Little 定律），池按它定。
+  - `ownerEpochMintPoolSize` = ⌈每个 SM 的铸造速率 × 占用上限 ÷ 最少主节点数⌉ = ⌈194/s × 2s ÷ 3⌉ = **130**（每节点，原 32）。194/s 是[容量模型](capacity-model-hok-scale.md)里每个 SM 实例 EnterScene 的上限，全部按铸造算（偏保守：同节点换图、同落点重连不铸造）；2s 是 `MaxOwnerEpochMintWaitAOFTimeoutMs`；3 是玩家域集群主节点数的下限（`-PlayerRedisMasters ≥ 3`），铸造的键按 slot 均摊。单测 `TestOwnerEpochMintPoolSizeFollowsLittlesLaw` 钉住算式，连接总账 scene-manager 行的 `PlayerFixed` 同步为 130。
+  - 池是懒建的，平时连接数随负载走，130 是上限，也是总账按满额记的数。按规划档（4 个 zone，每 zone 2 个 SM 副本加滚动多出的 1 个）每节点多记约 1200 条，离 maxclients 40000 的 80% 水位还很远。
+  - 只有一个主节点的拓扑（本机单实例、共享 Redis 高可用）下，单个 SM 的上限约为 130 ÷ 占用：单实例约 130 次/s，高可用约 65 次/s。超出时排队等连接，等待受铸造截止约束，等不到回 not_sent（一个字节都没写，回 3 可重试）。这两种拓扑只用于本机与小规模部署，生产建玩家域集群。
+  - 容量靠水平扩展：加 SM 副本摊薄每个副本的速率，加主节点摊薄每个节点的连接，入口还有排队与限流（[登录排队](login-queue-2026-05.md)）把进场速率压在容量之内。
+- **不上组提交**（2026-11-12 定，原稿把它列为升级路线）：组提交指一批铸造共用一条连接、一次 WAITAOF 覆盖整批。everysec 下 WAITAOF 本身不触发 fsync，各连接上并发的 WAITAOF 本来就在等同一次后台刷盘；有一个 WAITAOF 阻塞时发出的 GETACK 也让所有等待者一起受益。所以组提交省不下刷盘，也省不下副本上报，只省连接数。代价是凑批：一轮在等的时候到达的铸造要排到下一轮，最坏多等一个刷盘周期，高可用下 `numreplicas=1` 本来最坏就近 2s，再多等就超出 2000ms、回滚变多。连接数按上一条定、靠水平扩展解决，比引入凑批更简单，延迟也更好（owner_epoch 独立审核会话 2026-11-12 的分析）。
+- R-b 压测（§8.3）不再是定池子的前提，只用来核对上面的推算：铸造耗时分布、`not_durable` 比例与连接峰值。拿到对比表之前，不对延迟下结论。
 
 **三种拓扑下的取值**
 
@@ -371,20 +380,28 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
 - 每次凭标记的回滚之后多一次落盘确认（单实例平均约 0.5s、HA 约 1s）。确认的截止是请求截止前 300ms（留给改写回执与回包），能用的预算按分支不同：
   - 铸造没确认落盘：不再推路由，约剩 Kafka 同步写超时那么多（5s），确认来得及；
   - 推路由失败、Kafka 很快报错（broker 不可达）：同样约剩 5s；
-  - 推路由失败、Kafka 写满超时：剩 `2.7s −（前置 RPC + 铸造等待）`（按现值：zrpc 8s − Kafka 写超时 5s − 留给回包的 300ms）。前置 RPC 与铸造都快时约 2s，来得及；两者都慢时可能不足 1ms，确认不发，回执留在待确认形态。
+  - 推路由失败、Kafka 写满超时：剩 `6.2s −（前置 RPC + 铸造等待）`（按现值：zrpc 11.5s − Kafka 写超时 5s − 留给回包的 300ms；2026-11-12 以前 zrpc 是 8s，只剩 2.7s 减前两段）。前置 RPC 与铸造都快时约 5s，来得及；前面各段都用满上限（角色目录 1.5s + 归属查询 1.5s + 铸造 2s）时约 1.2s，单实例一般来得及，高可用下可能确认不到，回执留在待确认形态。
 - 回滚确认不了时，源端多踢一次线。之后挑到别的节点会回 18：取证脚本已删掉本族标记，LeaveScene 拿不到释放证据，要等无资格撤销的宽限（`UnqualifiedHolderRevokeGraceSeconds`，缺省 120s，可配 (85, 600]）过去才清掉 location（同 B6）。落回原节点时多一次确认，不用等。
 - 只在 Redis 刷盘或副本落后、或 Kafka 故障期间出现，平时零代价。`owner_epoch_rollback_receipt_total{site="rollback",result="not_sent"}` 能看到预算不够的那一类。
 
 **残余（不在本次范围）**：
 
 - **C++ 自己的写不等落盘**（取证删本族标记、`kResumeFenceLua` 恢复资格原件）：切主丢掉它们时，源端内存里的资格原件与 Redis 对不上，之后的交接被拒。这沿用 §0 第 2 条「C++ 写不加 WAITAOF」的口径，本次不变。
-- **同节点 epoch 0 的铸造（`sameNodeZeroMint`）没确认落盘**：走 keep 回滚之后，owner_epoch 键里留着没确认的铸出值，location 记的是 0、没有回执，下一次同节点不铸造的落点会原样下发它。只有从未铸造过的存量玩家（epoch 0）才走得到这条路；项目未上线、数据清空之后走不到，记为低级残余，不改（第二轮审核会话指出）。
+
+**同节点 epoch 0 铸造的 keep 回滚（2026-11-12 修正，第二轮审核会话指出并落码）**：
+
+- 问题：`sameNodeZeroMint` 没确认落盘（或推路由失败）之后走 keep 回滚，location 退回、记的是 0，owner_epoch 键停在铸出值 M，没有回执。以前同节点的下一次落点按「键非 0 就不铸造」走不铸造的 CAS，同落点重连在第 4 步直接下发观察值，两条都会把可能没确认落盘的 M 原样下发。
+- 做法：
+  - 同节点换图的判据改成只看 location 记的 epoch：location 记 0 就铸造，不要求键也读到 0。新值 max(M+1, 墙钟) 经 WAITAOF 确认之后才下发。推路由失败而路由其实已投递时，持有节点缓存着 M，新值更大，它按 max 采纳；
+  - 同落点重连在 location 记 0 时下发 location 记的 0，不下发键里的 M。持有节点按 max 采纳，0 不覆盖它手里的任何值。实体若要据此重建，得到的是 0，按从未铸造的口径受限，下一次换图再铸新值。
+- 只有从未铸造过的存量玩家（epoch 0）才走得到这条路，项目未上线、数据清空之后走不到。修它是为了不留一条「下发没确认落盘的值」的路径。
+- dev 旁路（`AllowUnsafeCrossNodeHandoff`）的跨节点不铸造落点下发的也是观察值，由 §4.3.5 的已确认位点那道闸一并管住：键里留着没确认的铸出值时，先确认落盘再下发。
 
 **指标**：`scene_manager_owner_epoch_rollback_receipt_total{site, result}`：
 
-- `site`：`rollback` 是 not_durable 之后的回滚，`enter` 是 EnterScene 下发前的确认；
+- `site`：`rollback` 是 not_durable 之后的回滚，`enter` 是 EnterScene 下发带待确认回执的 location 之前的确认，`handout` 是已确认位点对不上时的确认（§4.3.5，没有回执要改）；
 - `result`：`confirmed` / `pending` / `not_sent` / `superseded` / `error`；
-- 健康时只有 `rollback/confirmed` 随 not_durable 增长；`pending` 持续增长 = 刷盘或副本持续落后；
+- 健康时只有 `rollback/confirmed` 随 not_durable 增长；`pending` 持续增长 = 刷盘或副本持续落后；`handout` 健康时应近 0，它增长说明有铸造没走完，或位点写丢了、过期了；
 - C++ 汇总行新增 `rollback_unconfirmed`，见跨区故障注入手册；
 - 告警 `SceneManagerOwnerEpochRollbackReceiptPending`（`deploy/k8s/owner-epoch-alerts.yaml`，`result!="confirmed"` 的 10 分钟增量 > 0，warning）。
 
@@ -395,10 +412,79 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
   - 回滚脚本的重放分支与回 0 分支一个字节都不写；确认脚本只在三把键原样时写回，铸造通道依次只收到铸造与确认两段脚本；
   - 改写回执连同修订侧车，复核不过不写，重复改写认成已改写；
   - 同落点遇到待确认回执：确认后下发；确认不了回 7、不下发、原样保留；
-  - 铸造的落点不触发确认。
+  - 铸造的落点不触发确认；
+  - 2026-11-12 补：
+    - 铸造结果未知时回滚：首次落点、不凭标记的重发回 0、凭标记交接（之后确认成正式回执）、跨 zone 第一条腿；
+    - 同节点 epoch 0 的 keep 残留：换图时再铸，同落点重连下发 0。
+    - svc 层：此前有过结果未知的发送时，之后的终止都包上 `ErrOwnerEpochMintResultUnknown`。
 - `shared/ownerepoch`：两种形态的往返。
 - 跨语言：前缀逐字核对 C++。
 - C++ `cross_zone_test`：B5′ 纯判定（交叉校验全成立也不采纳、epoch 未变仍最先判、location 解析不了不看回执）；真实取证入口的 B5′ 收口；名字表与汇总行字段。
+
+#### 4.3.5 结果未知的作废与已确认位点（2026-11-12 落码，未编译、未测试，待 Codex 验证）
+
+来源：第二轮独立审核登记的两条残余（「首发晚于回滚才执行」「dev 旁路下发观察值」），负责人要求现在修。修的时候顺着同一类问题又查出两条没登记的，一并收口。
+
+**G3b 要守的只有一句话**：一个 owner_epoch 值，确认落盘之后才许交给节点。§4.3.2～§4.3.4 是在请求流程里守它：铸造的请求自己确认，回滚出来的值靠回执的两种形态。请求没走完时，这两处都守不住：
+
+| 情形 | 留下的状态 | 以前的结果 |
+|---|---|---|
+| 铸造结果未知，首发晚于收尾的回滚才执行 | 回滚 CAS 不过，首发随后生效：location 指向从未载入玩家的目标，epoch 没确认 | 之后的同落点重连原样下发；换到别的节点要等无资格撤销的宽限 |
+| 铸造写进了 Redis、落盘没确认，回滚又没做成（Redis 出错，或所凭标记已被源端取走） | 同上 | 同落点重连原样下发 |
+| 铸造写进了 Redis，scene_manager 在确认之前退出 | 同上 | 同上 |
+| dev 旁路的跨节点不铸造落点，键里留着没确认的铸出值 | — | 原样下发 |
+
+第一条里的两件事不是独立的。让首发结果未知的原因多半是 Redis 停顿；停顿期间首发与收尾的回滚各自排在自己的连接上，恢复之后谁先执行不一定。
+
+**做法一：作废（收住第一条）**
+
+- 铸造结果未知时，收尾不再只按「已生效」回滚。同一段回滚脚本（`luaRollbackPlayerPlacement`）原子地二选一：
+  - 状态已是本次落点：首发生效了，照常回滚；
+  - 状态还是本次铸造观察到的那一份（epoch、location 原文、修订侧车都没变）：首发还没生效，把它作废；
+  - 两者都不是：被别的请求改过，什么都不改。
+- 作废的写法按有没有持有者分：
+  - **不凭标记**（首次落点、第二条腿、死节点接管）：直接写成回滚之后的状态，epoch 越过本该铸出的值。首发比的是「epoch 等于观察值」，从此不成立。终态与「生效了再回滚」完全相同，没有新状态；这几种落点没有持有者，抬 epoch 不伤任何人。
+  - **凭标记**（跨节点、跨 zone 交接）：只删掉所凭的标记。首发要求标记原样还在，删掉之后它回 -1。epoch 与 location 不动，源端仍持有玩家，收到 7 之后取证读到「epoch 没变」照常解冻。不抬 epoch 的原因：抬了源端就得凭回执采纳，回执又要等落盘确认，而铸造通道刚出过错，多半确认不了，白踢一次线。
+  - **同节点 epoch 0 的铸造**不作废：持有节点可能已经缓存了铸出值，抬 epoch 会废黜它。这类玩家只有存量数据才有，留给做法二。
+- 效果：收尾的脚本与迟到的首发谁先在 Redis 上执行都收得住。首发在先，回滚分支撤掉它；脚本在先，作废，首发写不进去。
+- 入口是 `rollbackOrVoidUnknownMint`，同 zone 第 6 步与跨 zone 第一条腿的结果未知分支调用。推路由失败、铸造没确认落盘的回滚不带作废参数，行为不变：那两种情形铸造确定已经生效。
+- 计数：`scene_manager_enter_scene_rollback_total{outcome="voided"}`（不凭标记）与 `{outcome="marker_voided"}`（凭标记）。
+- 残余：收尾的这条 EVAL 自己一个字节都没到 Redis（连接都拿不到）时，首发之后仍可能生效。它留下的值由做法二管住。
+
+**做法二：已确认位点（收住其余三条，以及做法一的残余）**
+
+- 新键 `player:{id}:owner_epoch_confirmed`（`ownerepoch.ConfirmedKey`，EX 7 天）：已确认落盘的那个 epoch 值。只有 scene_manager 读写，C++ 不碰。
+- **写**：拿到 WAITAOF 确认的地方写它，共三处：
+  - 铸造之后（`placePlayerLocationCtx`）；
+  - 回滚之后的落盘确认之后（两段回执的第二段）；
+  - 下面这道闸自己确认之后；
+  - 落盘确认整个关闭时照样写，不比铸造更严。
+- **读**：EnterScene 第 3e 步。不铸造就要把观察到的 epoch 交给节点时（同落点重连、同物理节点换图、dev 旁路）：
+  - 位点恰好等于要下发的值：直接下发；
+  - 否则先经铸造通道确认落盘（`luaConfirmPendingRollback` 写回原值，紧跟 WAITAOF，与 3d 同一段脚本），确认了记下位点再继续；
+  - 确认不了就不下发（7 / 19 / 3 / ErrRedis），这些拒绝都在任何人数扣减与落点写之前。
+- **缺省是「没确认」**：键缺失、过期、读失败、值对不上都走确认。所以位点丢了、切主时没跟上、或以后新增的写者忘了写它，都只是多确认一次，不会把没确认的值放出去。写位点因此不用等落盘，也不用 CAS。
+- 为什么不靠时间（「写下超过若干秒就算落盘」）：副本宕机或全量同步期间，WAITAOF 会一直不满足，等多久都不算确认；那正是铸造回 7、最需要这道闸的时候。
+- 不发路由的请求（没有 GateId，也不是托管落点）不下发任何值，不查位点。同落点重连在 location 记 0 时下发的是 0，没有值要确认。
+- 代价（未实测，不得据此宣称结论）：
+  - 每次确认过的铸造多一条 SETEX，每次带路由的不铸造落点多一次 GET，都不等落盘；
+  - 位点对不上时多一次落盘确认（单实例平均约 0.5s、HA 约 1s）。健康时几乎不发生，`scene_manager_owner_epoch_rollback_receipt_total{site="handout"}` 能看到；
+  - 每名近 7 天活跃过的玩家多一把键。TTL 到期只会让下一次不铸造的下发多确认一次。
+
+**保证**：路由事件、托管落点事件里带的非 0 epoch，都是确认过落盘的值，不论它是本请求铸的、回滚写下的，还是以前某次没走完的铸造留下的。例外只剩 G3b 整个关闭。
+
+**测试（未运行）**：
+
+- Go `logic/owner_epoch_mint_test.go`，替身新增「首发被扣住、稍后才到」模式（`setWithholdEval` / `deliverWithheld`）：
+  - 作废：首次落点（epoch 越过铸出值，迟到的首发回 0）；同 zone 交接与跨 zone 第一条腿（只删标记，迟到的首发回 -1，location 与 epoch 原样）；同节点 epoch 0 不作废；
+  - 回滚脚本直测：不带作废参数时行为不变；带参数时没生效就作废、已生效照常回滚、被别人改过回 0；凭标记时只删自己那一份标记；
+  - 位点：确认过的铸造记位点，没确认的不记；同落点重连与同节点换图在位点齐全时铸造通道一条都不收，位点缺失时先确认再下发，确认不了回 7；
+  - 叠加：结果未知、回滚的 EVAL 出错、首发迟到生效之后，重试落回同一落点时先确认再下发。
+- `logic/owner_epoch_test.go`：`TestClassifyRollbackReply` 补 6 / 7 两个返回值。
+- `logic/owner_epoch_crosslang_test.go`：用 C++ 的取证脚本核对，标记被作废删掉之后源端读到 epoch 没变、location 原样（按「归属没变」解冻）。
+- `logic/owner_epoch_realredis_test.go`：作废分支在真实 Redis 上的两种写法（设 `MMORPG_TEST_REDIS_ADDR` 才跑）。
+- `shared/ownerepoch`、`shared/redisslot`：新键的形状、同槽与保留后缀登记。
+- 直接摆 location 的测试助手 `identSeedLocation` 同时摆位点，代表一条正常铸造并确认过的落点。
 
 ### 4.4 G4：C++ 存盘被拒细分（只检测）
 
@@ -468,7 +554,7 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
 | `DbSaveBarrierAckAhead` | 绝对值 > 0 | warning。描述写明：多半由 Redis 回退引起，玩家登录时自动采纳；同时看 `login_redis_identity_change_total` |
 | `LoginParentLoadSqlBehind` | `verdict="sql_behind"` 绝对值 > 0 | critical：SQL 侧回档或损坏 |
 | `LoginParentLoadReconcilingPersistent` | `verdict="reconciling"` 在 30 分钟内持续增长 | critical：转人工 `save_barrier_restore` |
-| `SceneManagerMintNotDurable` | `result="not_durable"` 占比超过阈值 | warning，阈值待压测 |
+| `SceneManagerOwnerEpochMintNotDurable` | 10 分钟内出现 `result!="confirmed"`（not_durable / error）即报：健康的 AOF everysec + 同步副本上它应为 0，不用比例阈值（2026-11-12 定，见 `deploy/k8s/owner-epoch-alerts.yaml`） | warning |
 | `SceneOwnerCounterBehind` | LogQL `owner_counter_behind` > 0 | critical |
 
 ## 8. 回归测试清单（交 Codex）
@@ -517,7 +603,7 @@ INFO 相关的 Lua 只能在真 Redis 上测（miniredis 不支持 `INFO server`
 ### 8.3 压测（AGENTS §6，先存 prev-summary）
 
 - **R-a**：Redis 重启后集中重新登录，对比基线的 entergame_total、dataloader 阶段、DB 读任务 QPS 和 Kafka lag。
-- **R-b**：开、关 G3b 各跑一轮登录 ramp + 跨节点换图，对比 SM EnterScene 子阶段。子阶段要新增 `mint_durable`，`stress_summarize.ps1` 对应段要同批改。
+- **R-b**：开、关 G3b 各跑一轮登录 ramp + 跨节点换图，对比 SM EnterScene 子阶段。子阶段要新增 `mint_durable`，`stress_summarize.ps1` 对应段要同批改。2026-11-12 起它不再是定池子、定超时的前提（负责人定「先按标准做法定，不等压测」，见 §4.3.3），只核对推算：铸造耗时分布、`not_durable` 比例、铸造通道的连接峰值。
 
 没有对比表之前，不对 R-a、R-b 下任何性能结论。
 
@@ -580,7 +666,7 @@ INFO 相关的 Lua 只能在真 Redis 上测（miniredis 不支持 `INFO server`
 负责人 2026-10-22 指示「项目没上线，玩家数据可以完全清空，按最标准的方式做完」，§13 各项按推荐取：
 - 第 1 条：P1–P3 全做；
 - 第 2 条：V2 / V7 自动采纳；
-- 第 3 条：G3b 做，R-b 压测之后再定池大小与告警阈值；
+- 第 3 条：G3b 做，R-b 压测之后再定池大小与告警阈值；2026-11-12 负责人改为不等压测：池按 Little 定律定为每节点 130、不上组提交、zrpc Timeout 按逐段预算之和定为 11500（§4.3.3），告警阈值见 §7 与 `deploy/k8s/owner-epoch-alerts.yaml`；
 - 第 4、5 条：接受，理由见本节「与 TiDB 方向的关系」。
 
 全部改动都没有编译、没有测试，验证清单见 `docs/PROGRESS.md` 的「2026-10-30 zone Redis 回退防护落码收尾」条目，交 Codex 执行。

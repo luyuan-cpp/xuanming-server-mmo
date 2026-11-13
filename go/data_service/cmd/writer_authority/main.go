@@ -52,12 +52,41 @@ func prepareSchema(ctx context.Context, schema string, getenv func(string) strin
 // businessDDLLimit 是 -ddl-file 的大小上限:网关的 schema.sql 只有几 KB,给足余量,又不让误传的大文件读进内存。
 const businessDDLLimit = 1 << 20
 
-// loadBusinessDDL 读 prepare-schema 建完闸门表之后要执行的业务表 DDL(-ddl-file)。只给没有 Go 迁移入口的 Java 服务用:
-// 网关的 mmorpg 库在 TiDB 上没有别的建表入口(docs/design/no-single-node-horizontal-scaling-20261001.md §6.3)。
+// ddlFileList 收集可重复的 -ddl-file,按命令行上的先后执行。一个逻辑库可以有不止一个没有 Go 迁移入口的属主:
+// mmorpg 上是网关的区目录表(java/gateway_node 的 schema.sql)和 login 的口令凭据表(go/login/model/password_auth_schema.sql),
+// 各带各的建表文件,不合并成一份。
+type ddlFileList []string
+
+func (l *ddlFileList) String() string { return strings.Join(*l, ",") }
+
+func (l *ddlFileList) Set(path string) error {
+	if path == "" {
+		return errors.New("ddl-file must not be empty")
+	}
+	*l = append(*l, path)
+	return nil
+}
+
+// loadBusinessDDLFiles 依次读每个 -ddl-file 并校验,返回合在一起的语句。任何一个文件不合格就整体拒绝,一句都不执行。
+// 错误里只带文件名,不带目录。
+func loadBusinessDDLFiles(paths []string) ([]string, error) {
+	var statements []string
+	for _, path := range paths {
+		loaded, err := loadBusinessDDL(path)
+		if err != nil {
+			return nil, fmt.Errorf("ddl-file %s: %w", filepath.Base(path), err)
+		}
+		statements = append(statements, loaded...)
+	}
+	return statements, nil
+}
+
+// loadBusinessDDL 读 prepare-schema 建完闸门表之后要执行的业务表 DDL(-ddl-file)。只给没有 Go 迁移入口的属主用:
+// 网关与 login 在 mmorpg 库上没有别的建表入口(docs/design/no-single-node-horizontal-scaling-20261001.md §6.3)。
 //
-// 去掉整行注释(--)后按分号拆句。只认两种幂等语句:CREATE TABLE IF NOT EXISTS 与 INSERT IGNORE INTO,表名不许带库名;
+// 拆句见 splitBusinessDDL(引号里的分号不拆)。只认两种幂等语句:CREATE TABLE IF NOT EXISTS 与 INSERT IGNORE INTO,表名不许带库名;
 // 其余(USE、DROP、ALTER、DELETE、UPDATE、普通 INSERT……)整份拒绝,一句都不执行 —— Job 重跑必须无害,也不能借这个入口
-// 改别的库。字符串里带分号的语句会被拆坏,拆出来的片段过不了这道检查,同样整份拒绝。
+// 改别的库。
 func loadBusinessDDL(path string) ([]string, error) {
 	if !filepath.IsAbs(path) {
 		return nil, errors.New("ddl-file must be an absolute path")
@@ -74,28 +103,94 @@ func loadBusinessDDL(path string) ([]string, error) {
 	if len(raw) > businessDDLLimit {
 		return nil, errors.New("ddl-file is larger than the size limit")
 	}
-	var kept []string
-	for _, line := range strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "--") {
-			continue
-		}
-		kept = append(kept, line)
+	statements, err := splitBusinessDDL(strings.ReplaceAll(string(raw), "\r\n", "\n"))
+	if err != nil {
+		return nil, err
 	}
-	var statements []string
-	for _, part := range strings.Split(strings.Join(kept, "\n"), ";") {
-		statement := strings.TrimSpace(part)
-		if statement == "" {
-			continue
-		}
+	for _, statement := range statements {
 		if err := checkBusinessDDLStatement(statement); err != nil {
 			return nil, err
 		}
-		statements = append(statements, statement)
 	}
 	if len(statements) == 0 {
 		return nil, errors.New("ddl-file has no statement to run")
 	}
 	return statements, nil
+}
+
+// splitBusinessDDL 把建表文件拆成语句:去掉 "-- " 注释(整行或行尾),按引号之外的分号拆句,空语句丢掉。
+//
+// 引号内的分号与 "--" 原样保留:COMMENT '…;…' 这样的列注释是合法 DDL。2026-11-12 之前这里按分号硬拆,
+// 网关 schema.sql 的列注释里一出现分号,整份文件就被下游的语句检查拒掉。引号指单引号、双引号字符串与反引号标识符;
+// 同一个引号连写两次是转义,字符串里反斜杠转义下一个字符(MySQL 与 TiDB 的缺省词法)。
+//
+// 不认的写法一律报错,不猜:引号没闭合;引号之外出现 "#" 或 "/*"(块注释里可以藏 /*! … */ 这类可执行内容,建表文件用不着)。
+// 按字节扫描对 UTF-8 是安全的:多字节字符的后续字节都不落在 ASCII 范围里。
+func splitBusinessDDL(text string) ([]string, error) {
+	var statements []string
+	var current strings.Builder
+	flush := func() {
+		if statement := strings.TrimSpace(current.String()); statement != "" {
+			statements = append(statements, statement)
+		}
+		current.Reset()
+	}
+	for i := 0; i < len(text); i++ {
+		switch c := text[i]; {
+		case c == '\'' || c == '"' || c == '`':
+			end, err := quotedEnd(text, i)
+			if err != nil {
+				return nil, err
+			}
+			current.WriteString(text[i : end+1])
+			i = end
+		case c == '-' && startsLineComment(text, i):
+			for i < len(text) && text[i] != '\n' {
+				i++
+			}
+			current.WriteByte('\n')
+		case c == '#' || (c == '/' && i+1 < len(text) && text[i+1] == '*'):
+			return nil, errors.New(`ddl-file supports only "-- " comments outside quoted text`)
+		case c == ';':
+			flush()
+		default:
+			current.WriteByte(c)
+		}
+	}
+	flush()
+	return statements, nil
+}
+
+// startsLineComment 报告 text[i:] 是不是一个 "--" 行注释的开头:两个连字符之后必须是空白或文件结尾(MySQL 的规则,
+// "a--b" 是减负数,不是注释)。
+func startsLineComment(text string, i int) bool {
+	if i+1 >= len(text) || text[i+1] != '-' {
+		return false
+	}
+	if i+2 == len(text) {
+		return true
+	}
+	next := text[i+2]
+	return next == ' ' || next == '\t' || next == '\n' || next == '\r'
+}
+
+// quotedEnd 返回从 start 处那个引号开始的引用文本的结束引号下标。同一个引号连写两次是转义;
+// 字符串(单、双引号)里反斜杠转义下一个字符,反引号标识符里没有反斜杠转义。
+func quotedEnd(text string, start int) (int, error) {
+	quote := text[start]
+	for i := start + 1; i < len(text); i++ {
+		switch {
+		case text[i] == '\\' && quote != '`':
+			i++
+		case text[i] == quote:
+			if i+1 < len(text) && text[i+1] == quote {
+				i++
+				continue
+			}
+			return i, nil
+		}
+	}
+	return 0, errors.New("ddl-file has an unterminated quoted string or identifier")
 }
 
 // checkBusinessDDLStatement 只放行 CREATE TABLE IF NOT EXISTS <表> 与 INSERT IGNORE INTO <表>,表名不带库名。
@@ -184,7 +279,8 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 	flags := flag.NewFlagSet("writer_authority", flag.ContinueOnError)
 	command := flags.String("command", "", "register、retire、status、retire-removed-slots、prepare-schema或publication只读资格")
 	schemaName := flags.String("schema", "", "prepare-schema的显式目标逻辑库")
-	ddlFile := flags.String("ddl-file", "", "absolute path of business-table DDL that prepare-schema runs in the same logical database after the gate tables (idempotent statements only)")
+	var ddlFiles ddlFileList
+	flags.Var(&ddlFiles, "ddl-file", "absolute path of business-table DDL that prepare-schema runs in the same logical database after the gate tables (idempotent statements only); repeatable, files run in the order given")
 	requestPath := flags.String("request", "", "单个正式Request/维护Receipt protojson绝对路径")
 	requestSHA := flags.String("request-sha256", "", "publication原件的固定原字节SHA")
 	preparedPath := flags.String("prepared", "", "实际prepared.source.json绝对路径")
@@ -212,22 +308,18 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 			}
 		})
 		if mixed || flags.NArg() != 0 || *timeout <= 0 || *timeout > 60*time.Second {
-			return errors.New("prepare-schema accepts only an explicit -schema, an optional -ddl-file and a positive -timeout of at most 60s; lifecycle flags are not allowed")
+			return errors.New("prepare-schema accepts only an explicit -schema, optional -ddl-file flags and a positive -timeout of at most 60s; lifecycle flags are not allowed")
 		}
-		// 先校验整份 DDL 再连库:文件有一句不合格就一句都不执行,也不先建闸门表。
-		var businessDDL []string
-		if *ddlFile != "" {
-			statements, err := loadBusinessDDL(*ddlFile)
-			if err != nil {
-				return err
-			}
-			businessDDL = statements
+		// 先校验全部 DDL 文件再连库:有一句不合格就一句都不执行,也不先建闸门表。
+		businessDDL, err := loadBusinessDDLFiles(ddlFiles)
+		if err != nil {
+			return err
 		}
 		ctx, cancel := context.WithTimeout(parent, *timeout)
 		defer cancel()
 		return prepareSchemaWithDDL(ctx, *schemaName, getenv, businessDDL)
 	}
-	if *schemaName != "" || *ddlFile != "" {
+	if *schemaName != "" || len(ddlFiles) != 0 {
 		return errors.New("-schema and -ddl-file are only for prepare-schema")
 	}
 	if *command == "verify-publication-prestart" || *command == "verify-publication-runtime" {
@@ -390,6 +482,7 @@ func runRegister(ctx context.Context, o registerOptions, getenv func(string) str
 		open: func(request *dbpb.SqlWriterLifecycleReceipt_Request) (registrationCatalog, error) {
 			return opener.open(request)
 		},
+		identity:   func(ctx context.Context) (string, error) { return registrarIdentity(ctx, getenv) },
 		loadRecord: loadBootRecord,
 		saveRecord: saveBootRecord,
 		now:        time.Now,
@@ -638,10 +731,13 @@ type slotRegistration struct {
 	deploymentID string
 	physical     []byte
 	open         func(*dbpb.SqlWriterLifecycleReceipt_Request) (registrationCatalog, error)
-	loadRecord   func(path string) (*dbpb.SqlWriterBootRoster_Entry, error)
-	saveRecord   func(path string, entry *dbpb.SqlWriterBootRoster_Entry) error
-	now          func() time.Time
-	random       io.Reader
+	// identity 回登记这一代的工作负载身份(registered_by):K8s 里是本 Pod 的 ServiceAccount 连同 UID,集群外是空串(registrarIdentity)。
+	// 只在现场生成一代时调一次;init 重跑读启动记录,不再问。
+	identity   func(ctx context.Context) (string, error)
+	loadRecord func(path string) (*dbpb.SqlWriterBootRoster_Entry, error)
+	saveRecord func(path string, entry *dbpb.SqlWriterBootRoster_Entry) error
+	now        func() time.Time
+	random     io.Reader
 }
 
 // bootRecordPath 是本 Pod 的启动记录:和 grant 在同一个私有 emptyDir,Pod 在它就在,Pod 换了它跟着没。
@@ -731,7 +827,11 @@ func (r slotRegistration) boot(ctx context.Context, template *dbpb.SqlWriterBoot
 		}
 		bootSeq = latest.BootSeq + 1
 	}
-	minted, err := mintBoot(template, r.deploymentID, bootSeq, r.now(), r.random)
+	registeredBy, err := r.identity(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	minted, err := mintBoot(template, r.deploymentID, registeredBy, bootSeq, r.now(), r.random)
 	if err != nil {
 		return nil, false, err
 	}
@@ -739,7 +839,8 @@ func (r slotRegistration) boot(ctx context.Context, template *dbpb.SqlWriterBoot
 }
 
 // mintBoot 按槽位模板生成一代:writer_key、instance_id 每代新,各库同一个 boot_seq,request_id 每库一个,然后规范化出注册摘要。
-func mintBoot(template *dbpb.SqlWriterBootRoster_Entry, deploymentID string, bootSeq uint64, now time.Time, random io.Reader) (*dbpb.SqlWriterBootRoster_Entry, error) {
+// registeredBy 是登记这一代的工作负载身份,各库相同,算进摘要:登记之后改不了(缩容收尾按它判归属,§5.9)。
+func mintBoot(template *dbpb.SqlWriterBootRoster_Entry, deploymentID, registeredBy string, bootSeq uint64, now time.Time, random io.Reader) (*dbpb.SqlWriterBootRoster_Entry, error) {
 	writerKey, err := randomID(random)
 	if err != nil {
 		return nil, err
@@ -754,6 +855,7 @@ func mintBoot(template *dbpb.SqlWriterBootRoster_Entry, deploymentID string, boo
 			return nil, err
 		}
 		request.DeploymentId = deploymentID
+		request.RegisteredBy = registeredBy
 		request.Writer.WriterKey = bytes.Clone(writerKey)
 		request.Writer.InstanceId = bytes.Clone(instanceID)
 		request.Writer.RegisteredMs = uint64(now.UnixMilli())
@@ -783,6 +885,7 @@ func stripIdentity(request *dbpb.SqlWriterLifecycleReceipt_Request) *dbpb.SqlWri
 	stripped := proto.Clone(request).(*dbpb.SqlWriterLifecycleReceipt_Request)
 	stripped.RequestId = nil
 	stripped.DeploymentId = ""
+	stripped.RegisteredBy = ""
 	if stripped.Writer != nil {
 		stripped.Writer.WriterKey = nil
 		stripped.Writer.InstanceId = nil
@@ -810,7 +913,7 @@ func recordMatchesTemplate(record, template *dbpb.SqlWriterBootRoster_Entry, dep
 		if request == nil || request.Writer == nil || first.Writer == nil || request.DeploymentId != deploymentID {
 			return refuse
 		}
-		if !bytes.Equal(request.Writer.WriterKey, first.Writer.WriterKey) || !bytes.Equal(request.Writer.InstanceId, first.Writer.InstanceId) || request.Writer.BootSeq != first.Writer.BootSeq {
+		if !bytes.Equal(request.Writer.WriterKey, first.Writer.WriterKey) || !bytes.Equal(request.Writer.InstanceId, first.Writer.InstanceId) || request.Writer.BootSeq != first.Writer.BootSeq || request.RegisteredBy != first.RegisteredBy {
 			return refuse
 		}
 		canonical, err := authoritysql.CanonicalRegistrationRequest(request)
@@ -901,8 +1004,8 @@ func validateSlotTemplate(request *dbpb.SqlWriterLifecycleReceipt_Request, physi
 		return errors.New("a slot carries a request that is not a REGISTER template")
 	}
 	writer := request.Writer
-	if len(request.RequestId) != 0 || request.DeploymentId != "" || len(writer.WriterKey) != 0 || len(writer.InstanceId) != 0 || len(writer.RegistrationDigest) != 0 || writer.RegisteredMs != 0 || writer.BootSeq != 0 {
-		return errors.New("a REGISTER template must leave request_id, deployment_id, writer_key, instance_id, registration_digest, registered_ms and boot_seq empty: the registrar makes them for each boot")
+	if len(request.RequestId) != 0 || request.DeploymentId != "" || request.RegisteredBy != "" || len(writer.WriterKey) != 0 || len(writer.InstanceId) != 0 || len(writer.RegistrationDigest) != 0 || writer.RegisteredMs != 0 || writer.BootSeq != 0 {
+		return errors.New("a REGISTER template must leave request_id, deployment_id, registered_by, writer_key, instance_id, registration_digest, registered_ms and boot_seq empty: the registrar makes them for each boot")
 	}
 	if request.ExpectedEpoch != 0 || request.ExpectedCatalogRevision != 0 || len(request.SuccessorRequestId) != 0 || writer.State != dbpb.SqlWriterRegistry_ACTIVE || len(writer.RetirementRequestId) != 0 || len(writer.RetirementDigest) != 0 || writer.RetiredMs != 0 {
 		return errors.New("a REGISTER template carries epoch, catalog revision, successor or retirement fields")

@@ -138,7 +138,7 @@
 ### D87 gate 用 StatefulSet + 每序号 Service,不进 Agones
 
 - 形态:`podManagementPolicy: Parallel`,`updateStrategy: OnDelete`;PDB 名 `gate`,`maxUnavailable: 0`;headless Service `gate-headless`;每序号 Service `gate-<i>`。
-- 滚动一律走 `tools/scripts/k8s_gate_drain.ps1`:标 `gate:{id}:draining` → 等 `gate:{id}:drained` → 删 Pod。脚本不做缩容。
+- 滚动一律走 `tools/scripts/k8s_gate_drain.ps1`:标 `gate:{gm:<zone>}:<id>:draining` → 等 `gate:{gm:<zone>}:<id>:drained` → 删 Pod。脚本不做缩容。
 - 理由:gate 只要有长连接就恒为 Allocated,Fleet 滚动永远收敛不了;Health 失败一次就会删掉整台 gate;仓里的 Agones 链路从没上过集群;StatefulSet 保留了现有的 readinessProbe。
 - 否决方案:评审稿 standard-ops 的方案①让 gate 也进 Agones。它被 correctness 评审判为致命问题:gate 的全员入口会依赖一条从未上过集群的链路。ingress_final 原稿即采用 StatefulSet,本文沿用。
 - **与原稿差异**:原稿写「保留现有 `Wait-ForStatefulSetReady`」,这不成立。`kubectl rollout status` 对 OnDelete 的 StatefulSet 直接报错,就绪等待改用新增的 `Wait-ForGateStatefulSetReady`(`lib/k8s_client_entry.ps1:1790`),轮询 `.status.readyReplicas`。
@@ -253,8 +253,8 @@
 | `CLIENT_ENDPOINT_REQUIRED` | `0` \| `1`;缺省 0,其他值致命;none + 1 是矛盾配置,致命 | C++ `client_endpoint.h:35`;external 形态的 gate / battle 模板写 1 |
 | `HOST_IP` | fieldRef `status.hostIP`,只参与 `CLIENT_ENDPOINT_HOST` 的计算 | gate StatefulSet、battle hostPort Deployment 模板 |
 | `POD_NAME` | fieldRef `metadata.name`,gate 由它的后缀算序号 | gate StatefulSet 模板与启动 shell |
-| `gate:<id>:draining` | 值 = 标记时刻的整数 Unix 秒(取 Redis `TIME`),带 EX TTL | 由排空脚本写;login `loginqueue` 的 `GateDrainingKeyFmt` 读;scene_manager `gate_redirect.go` 的 `gateDrainingKeyFmt` 也读(2026-10-18 起,契约测试钉住三处一致) |
-| `gate:<id>:drained` | 值 = `below_threshold` \| `deadline`;TTL 跟随 draining 的剩余 TTL | 由 login `gatedrain_monitor.go` 写;排空脚本读 |
+| `gate:{gm:<zone>}:<id>:draining` | 值 = 标记时刻的整数 Unix 秒(取 Redis `TIME`),带 EX TTL | 由排空脚本写;login `loginqueue` 读;scene_manager `gate_redirect.go` 也读(2026-10-18 起)。键名只在 `go/shared/gatepick/marks.go` 定义一份,契约测试钉住它与脚本一致。2026-11-12 起带本 zone 的 hash tag(一个 zone 的标记同槽,zone 取 login 的 `Node.ZoneId`) |
+| `gate:{gm:<zone>}:<id>:drained` | 值 = `below_threshold` \| `deadline`;TTL 跟随 draining 的剩余 TTL | 由 login `gatedrain_monitor.go` 写;排空脚本读 |
 | `GateDrain.Interval` / `DrainedBelowPlayers` / `Deadline` | login 排空判定参数,默认 5s / 0 / 25m | `go/login/internal/config/config.go:132-145`;排空脚本从 login ConfigMap 读取并校验 TTL |
 | `RequireClientEndpoint` | login / scene_manager 配置的顶层布尔键,默认 false;ConfigMap 里只能是字面量 true / false | `go/login/internal/config/config.go:115`、scene_manager config;`k8s_deploy.ps1 -RequireClientEndpoint`;排空脚本也读它 |
 | `mmorpg_client_endpoint_select_total{result}` | `client` \| `fallback` \| `rejected` \| `deduped` | `go/shared/clientendpoint/metrics.go` |
@@ -364,8 +364,8 @@ pwsh -File tools/scripts/k8s_gate_drain.ps1 -ZoneName <zone> -Ordinal <i> -Delet
   1. 从 zone 的 login ConfigMap(`go-svc-login-config` / `login.yaml`)读出 zone_id、Redis、etcd、`RequireClientEndpoint` 与 GateDrain 参数。
   2. 在写之前校验预算。
   3. 取 Pod `gate-<i>` 的 podIP,在 etcd 里按 `endpoint.ip` 定位唯一的 NodeInfo,得到 node_id;0 条或多条都报错。
-  4. 以 Redis 服务器的 `TIME` 为标记时刻,用一次原子 EVAL 写 `gate:<id>:draining`:同 zone 其余候选都已在排空时,什么都不写并拒绝;否则先 DEL 残留的 drained,再 `SET … NX EX <ttl>`。写完立即复核 Pod UID 与 etcd 里的进程身份,变了就撤回标记并中止。
-  5. 每 5s 轮询 `gate:<id>:drained`,期间定期复核被排空的进程还在不在。
+  4. 以 Redis 服务器的 `TIME` 为标记时刻,用一次原子 EVAL 写 `gate:{gm:<zone>}:<id>:draining`:同 zone 其余候选都已在排空时,什么都不写并拒绝;否则先 DEL 残留的 drained,再 `SET … NX EX <ttl>`。写完立即复核 Pod UID 与 etcd 里的进程身份,变了就撤回标记并中止。
+  5. 每 5s 轮询 `gate:{gm:<zone>}:<id>:drained`,期间定期复核被排空的进程还在不在。
   6. 只有带 `-DeletePod` 才删 Pod。删之后等旧进程的 etcd 记录消失,再清掉两个标记,最后等新 Pod 与 StatefulSet 就绪。
 - **退出码**:
   - `0`:完成。含 `-DryRun`,以及不带 `-DeletePod` 时到 drained 为止。
@@ -375,8 +375,8 @@ pwsh -File tools/scripts/k8s_gate_drain.ps1 -ZoneName <zone> -Ordinal <i> -Delet
 - **单副本 zone 不能无损排空**:login 的 `FilterDrainingGates` 在候选全部 draining 时会忽略标记照常分配,标了也挡不住新玩家。脚本在任何 Redis 写之前拒绝(原子 EVAL 回 `NO_UNDRAINED_PEER`;`-DryRun` 也会按 etcd 判定并拒绝)。要先把该 zone 扩到 ≥2 个 gate 再排空。
 - `reason=deadline` 时打醒目警告:这台 gate 上还有玩家,删 Pod 会让他们断线重连。
 - **排空期间迁移**(login `GateDrain.Migrate`,默认关;[gate 排空迁移](gate-drain-session-migration.md),2026-11-10 服务端两批落码,未编译):打开后 login 每个判定周期给排空中的 gate 发迁移许可,gate 每秒按 `RatePerSecond` 个把已登录的连接经 msg 124 迁到同 zone 的其他 gate,玩家在断线保留的租约内回到原场景,通常远早于 Deadline 就出现 `drained=below_threshold`。脚本只打印迁移开关、速率与按在线数估算的时长,流程与预算校验不变。客户端的跳数清零上线、robot 集成跑过之前不要打开。
-- 取消排空:在 login 所连的 Redis 上执行 `DEL gate:<id>:draining gate:<id>:drained`。
-- **脚本不做缩容**。直接 scale StatefulSet 之后,要等旧 node_id 的 etcd 记录消失,再手工 `DEL gate:<id>:draining gate:<id>:drained`。不清的话,因为 node_id 全局唯一、按最小空闲号复用,而 login 的 Redis 跨 zone 共用,之后拿到这个 node_id 的 gate(可能在任意 zone)在 TTL 内分不到玩家。
+- 取消排空:在 login 写 gate 标记的 Redis 上执行 `redis-cli -c DEL 'gate:{gm:<zone>}:<id>:draining' 'gate:{gm:<zone>}:<id>:drained'`(两键同槽)。
+- **脚本不做缩容**。直接 scale StatefulSet 之后,要等旧 node_id 的 etcd 记录消失,再手工执行上面那条 DEL。不清的话,因为 node_id 全局唯一、按最小空闲号复用,之后本 zone 里拿到这个 node_id 的 gate 在 TTL 内分不到玩家(2026-11-12 起标记键带 zone,别的 zone 拿到同号不受影响)。
 - 依赖:脚本 `kubectl exec` 进 `svc/etcd` 背后的 Pod、`statefulset/redis` 的 redis 容器(2026-10-19 起;共享 Redis 高可用形态下 `svc/redis` 指向 haproxy 代理,代理镜像没有 redis-cli),再按 login 配置里的 Service 地址连回同一个 Service(高可用形态下经代理落到主),需要 pods/exec 权限;etcd 与单实例 Redis 依赖集群支持 hairpin 流量,高可用 Redis 经 redis-proxy、不涉及 hairpin(脚本的失败提示两种形态都写)。Redis 若用 ACL 禁了 EVAL,脚本会 fail-closed 拒绝。这三项都要在 kind 上顺带验证。
 
 ### GateDrain 配置与 Deadline 约束

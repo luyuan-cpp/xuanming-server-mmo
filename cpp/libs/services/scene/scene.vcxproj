@@ -82,6 +82,8 @@
     <ClInclude Include="player\system\travel_freeze_cap.h" />
     <ClInclude Include="player\system\connection_lost_hold.h" />
     <ClInclude Include="player\system\relocate_confirm.h" />
+    <ClInclude Include="player\system\hosted_placement_retry.h" />
+    <ClInclude Include="player\system\hosted_presence.h" />
     <ClInclude Include="player\system\enter_fence.h" />
     <ClInclude Include="player\system\release_fence.h" />
     <ClInclude Include="player\system\save_seq.h" />
@@ -90,6 +92,7 @@
     <ClInclude Include="player\system\player_lifecycle.h" />
     <ClInclude Include="player\system\player_ownership_metrics.h" />
     <ClInclude Include="player\system\player_save_metrics.h" />
+    <ClInclude Include="player\system\currency_metrics.h" />
     <ClInclude Include="player\system\save_timing_stats.h" />
     <ClInclude Include="player\system\player_scene.h" />
     <ClInclude Include="player\system\player_team.h" />
@@ -111,6 +114,7 @@
     <ClInclude Include="player\system\player_level_rules.h" />
     <ClInclude Include="player\system\stress_test_probe.h" />
     <ClInclude Include="player\system\player_tip.h" />
+    <ClInclude Include="spatial\comp\authored_nav_bounds.h" />
     <ClInclude Include="spatial\comp\grid_comp.h" />
     <ClInclude Include="spatial\comp\nav_comp.h" />
     <ClInclude Include="spatial\comp\scene_node_scene_comp.h" />
@@ -119,7 +123,9 @@
     <ClInclude Include="spatial\constants\view.h" />
     <ClInclude Include="spatial\manager\scene_nav.h" />
     <ClInclude Include="spatial\system\aoi.h" />
+    <ClInclude Include="spatial\system\actor_motion.h" />
     <ClInclude Include="spatial\system\aoi_load.h" />
+    <ClInclude Include="spatial\system\facing.h" />
     <ClInclude Include="spatial\system\grid.h" />
     <ClInclude Include="spatial\system\interest.h" />
     <ClInclude Include="spatial\system\movement.h" />
@@ -175,6 +181,7 @@
     <ClCompile Include="player\system\player_lifecycle.cpp" />
     <ClCompile Include="player\system\player_ownership_metrics.cpp" />
     <ClCompile Include="player\system\player_save_metrics.cpp" />
+    <ClCompile Include="player\system\currency_metrics.cpp" />
     <ClCompile Include="player\system\role_admission_system.cpp" />
     <ClCompile Include="player\system\player_scene.cpp" />
     <ClCompile Include="player\system\player_team.cpp" />

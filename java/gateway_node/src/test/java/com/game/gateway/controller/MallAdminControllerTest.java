@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.game.gateway.config.MallAdminProperties;
 import com.game.gateway.service.MallAdminClient;
+import io.micrometer.observation.ObservationRegistry;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.MappingMatch;
@@ -105,7 +106,7 @@ class MallAdminControllerTest {
         props.setSecret(MALL_SECRET);
         props.validate();
         // 真配置包含本例签名材料；目标保持禁用，页面也不得调用HTTP适配器。
-        var client = spy(new MallAdminClient(props, new ObjectMapper()));
+        var client = spy(new MallAdminClient(props, new ObjectMapper(), ObservationRegistry.NOOP));
         try {
             var mvc = mvc(client, KEY);
             for (var prefix : PREFIXES) {

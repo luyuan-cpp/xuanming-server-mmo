@@ -1,5 +1,6 @@
 #include "rpc_reply_bridge.h"
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -10,6 +11,7 @@
 #include "client_request_lane.h"
 #include "gate_codec.h"
 #include "login_admission.h"
+#include "login_session_renewal.h"
 #include "proto/common/base/message.pb.h"
 #include "proto/common/base/session.pb.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
@@ -69,6 +71,8 @@ void DeliverReply(const SessionDetails &sessionDetails, const ::google::protobuf
         gate_login_admission::IsLoginReplySuccess(reply))
     {
         it->second.loginSucceeded = true;
+        // 从这次登录起,连接活着期间由 gate 定期向 login 续租登录态(login_session_renewal.h)。
+        gate_login_renewal::NoteLoginSucceeded(it->first, it->second, std::chrono::steady_clock::now());
     }
     const auto clientConn = it->second.conn.lock();
     if (!clientConn)

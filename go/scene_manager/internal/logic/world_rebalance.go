@@ -11,8 +11,8 @@ import (
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // rebalanceReason describes why a channel is being moved. Used only for logs
@@ -199,7 +199,7 @@ func planChannelMoves(svcCtx *svc.ServiceContext, zoneId uint32, confIds []uint6
 			// (2026-10-23)。读错当「没有属主」会排出一次注定被 CAS 驳回、却先在新节点上建了实体的
 			// 迁移;人数读错当 0 会把有人的频道从活属主身上搬走 —— reassignSceneNode 的 CAS 只比属主、
 			// 不看人数,同一 scene_id 两个节点上都有玩家。
-			curNode, err := svcCtx.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId))
+			curNode, err := svcCtx.Redis.Get(sceneNodeKey(zoneId, sceneId))
 			if err != nil {
 				noteReadUnknown(zoneId, readUnknownSiteRebalancePlan, fmt.Sprintf("owner of scene %d (conf %d)", sceneId, confId), err)
 				continue
@@ -226,7 +226,7 @@ func planChannelMoves(svcCtx *svc.ServiceContext, zoneId uint32, confIds []uint6
 				// "不在 world pool" 同时包含两种情况：进程真死了，以及进程
 				// 仍活着但 role 刚被改成非 world。后者若还有玩家，直接换
 				// scene:{id}:node 就是未实现的跨节点热迁移，必须 fail-closed。
-				count, err := readScenePlayerCountChecked(svcCtx, sceneId)
+				count, err := readScenePlayerCountChecked(svcCtx, zoneId, sceneId)
 				if err != nil {
 					noteReadUnknown(zoneId, readUnknownSiteRebalancePlan, fmt.Sprintf("player count of scene %d (conf %d)", sceneId, confId), err)
 					continue
@@ -262,7 +262,7 @@ func planChannelMoves(svcCtx *svc.ServiceContext, zoneId uint32, confIds []uint6
 				})
 				continue
 			}
-			count, err := readScenePlayerCountChecked(svcCtx, sceneId)
+			count, err := readScenePlayerCountChecked(svcCtx, zoneId, sceneId)
 			if err != nil {
 				noteReadUnknown(zoneId, readUnknownSiteRebalancePlan, fmt.Sprintf("player count of scene %d (conf %d)", sceneId, confId), err)
 				continue
@@ -354,7 +354,7 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	// mirror for this source would correctly land on newNode — but the
 	// already-existing mirrors on oldNode are now stranded.
 	// 读不到就不知道迁走之后要级联哪些镜像:这次迁移作废,归属不动,回收刚建的实体,下一拍重新规划。
-	dependentMirrors, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
+	dependentMirrors, err := svcCtx.Redis.Smembers(sceneMirrorsKey(zoneId, sceneId))
 	if err != nil {
 		noteReadUnknown(zoneId, readUnknownSiteRebalancePlan, fmt.Sprintf("mirror set of scene %d before migrating it to %s", sceneId, newNode), err)
 		settleLostChannelMove(ctx, svcCtx, zoneId, confId, sceneId, newNode, generation, placement)
@@ -474,25 +474,14 @@ func cascadeMirrorsOnSourceMigration(ctx context.Context, svcCtx *svc.ServiceCon
 	//   - 级联范围是迁移之前的快照,快照之后挂上来的镜像不在其中,整键删除会让它们从索引里消失,
 	//     channelHasMirrors 看不到它们,源频道可能被缩容排空,镜像成孤儿;
 	//   - 销毁回 error = 读不到它的状态,本轮没销毁(destroyInstanceInternal 提交前读不到镜像源 /
-	//     子集合、或这里读不到它的 zone 时都 fail-closed),它还活着,必须留在索引里。
+	//     子集合时 fail-closed),它还活着,必须留在索引里。
 	// 集合被摘空后 Redis 自动回收键。
+	// 子集合与镜像都在本 zone 的键里(docs/design/redis-cluster-all-domains-20261110.md §3.3):镜像不在本 zone(别的 zone 的,
+	// 或已销毁)时认领读不到映射、一个键都不动,按已处理从索引里摘掉。原来先读 scene:<id>:zone 比 zone,那把键已删。
 	handled := make([]any, 0, len(mirrorIds))
 	for _, m := range mirrorIds {
 		mid, err := strconv.ParseUint(m, 10, 64)
 		if err != nil || mid == sourceSceneId {
-			continue
-		}
-		// 读不到镜像的 zone 就不猜:本轮不拆,留在索引里。
-		mirrorZone, zoneErr := lookupSceneZone(svcCtx, mid)
-		if zoneErr != nil {
-			noteReadUnknown(zoneId, readUnknownSiteMirrorCascade,
-				fmt.Sprintf("zone of mirror %d (source %d migrated), keeping it and its index entry", mid, sourceSceneId), zoneErr)
-			continue
-		}
-		if mirrorZone != 0 && mirrorZone != zoneId {
-			logx.Infof("[Rebalance] mirror %d of source %d is registered in zone %d, not %d; unlinking it and leaving it to that zone",
-				mid, sourceSceneId, mirrorZone, zoneId)
-			handled = append(handled, m)
 			continue
 		}
 		logx.Infof("[Rebalance] cascading mirror %d (source %d migrated %s -> %s) in zone %d",
@@ -505,6 +494,6 @@ func cascadeMirrorsOnSourceMigration(ctx context.Context, svcCtx *svc.ServiceCon
 		handled = append(handled, m)
 	}
 	if len(handled) > 0 {
-		svcCtx.Redis.Srem(sceneMirrorsKey(sourceSceneId), handled...)
+		svcCtx.Redis.Srem(sceneMirrorsKey(zoneId, sourceSceneId), handled...)
 	}
 }

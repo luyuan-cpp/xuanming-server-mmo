@@ -10,7 +10,7 @@
 	设计与模式矩阵见 docs/design/k8s-client-entry.md(ingress_final D80 / D81 / D86–D91)。
 
 	约定:
-	  1. **不读任何脚本级变量**。k8s_deploy.ps1 的 $NodeImage / $SnowflakeCacheDir / 日志 sidecar
+	  1. **不读任何脚本级变量**。k8s_deploy.ps1 的 $NodeImage / 日志 sidecar
 	     等一律经参数传入(公共容器参数先用 New-ClientEntryPodCommon 打包),本文件可以单独 dot-source 测试。
 	  2. 生成函数是纯函数:只拼 YAML 字符串,不调 kubectl、不写文件、不打日志;返回值一律是 LF 换行(本文件按
 	     .gitattributes 以 CRLF 检出,here-string 会带 CR,返回前经 ConvertTo-ClientEntryLf 统一)。YAML 一律用**空格**缩进
@@ -57,10 +57,16 @@
 	    ConvertFrom-LoginAuthProvidersYaml -LoginYaml                                     → { Present; Providers; Errors }
 	    Get-LoginAuthProviderDrift      -Live -OAuthSecretPresent [-WeChatAppId ''] [-WeChatEndpoint '']
 	                                    [-WeChatAllowOpenId $false] [-QQAppId ''] [-QQEndpoint ''] [-QQAllowOpenId $false]
+	                                    [-WeChatMiniGameAppId ''] [-WeChatMiniGameEndpoint ''] [-WeChatMiniGameAllowOpenId $false]
+	                                    [-DouyinMiniGameAppId ''] [-DouyinMiniGameEndpoint ''] [-DouyinMiniGameAllowOpenId $false]
+	                                    [-AppleClientId ''] [-AppleEndpoint ''] [-GoogleClientId ''] [-GoogleEndpoint '']
 	                                    → { Drifts = string[]; KeepArgs }(login 第三方登录防误关闸,见第 9 节)
+	    ConvertFrom-LoginPasswordAuthYaml -LoginYaml                                      → { Present; Enabled; Errors }
+	    Get-LoginPasswordAuthDrift      -Live -Enabled                                    → { Drifts = string[]; KeepArgs }
+	                                    (login 口令登录防误关闸,见第 10 节)
 
 	  生成器(纯函数,返回 YAML 字符串)
-	    New-ClientEntryPodCommon        -Image -ImagePullPolicy -SnowflakeCacheDir -LogVolumeSizeLimit
+	    New-ClientEntryPodCommon        -Image -ImagePullPolicy -LogVolumeSizeLimit
 	                                    [-LogPrunerCommand ''] [-GrpcServerMaxPollers 0(已退役,取值被忽略)]
 	                                    [-SidecarContainerYaml ''] [-SidecarVolumeYaml ''] [-SidecarConfigHash '']
 	                                    [-PodAnnotations $null] [-OpenFileLimitMode ''(B0-4 豁免开关,留空不写)]
@@ -110,6 +116,8 @@
 	    Remove-StaleGateOrdinalServices -Namespace -Replicas -KubeContext -KubeConfig
 	    Get-LoginAuthProviderLiveState  -Namespace -KubeContext -KubeConfig               → { ConfigMapPresent; Live; OAuthSecretPresent }
 	                                    (只读,不支持 -DryRun:调用方在 DryRun 下不调用;kubectl 失败 throw)
+	    Get-LoginPasswordAuthLiveState  -Namespace -KubeContext -KubeConfig               → { ConfigMapPresent; Live }
+	                                    (同上:只读、不支持 -DryRun、kubectl 失败 throw;读同一份 login ConfigMap 的 PasswordAuth 段)
 
 	  内部辅助(接入方不要直接依赖,签名可能调整):ConvertFrom-ClientEntryYamlScalar、ConvertTo-ClientEntryLf、ConvertTo-ClientEntryYamlString、Add-ClientEntryIndent、
 	    Get-ClientEntryMember、Test-ClientEntryHostName、ConvertTo-ClientEntryCidrList、Get-ClientEntryInvalidCidrs、
@@ -222,6 +230,12 @@ function Get-ClientEntryContract {
 		# 金丝雀 Pod 的标签(发布轨道设计 §5.3):和上面的 env 同一判据,只有 canary 才写,stable 不写(模板逐字不变,不触发滚动)。
 		# 用来 kubectl -l 筛金丝雀 Pod,以及 Prometheus 把它映射成目标标签(没有这个标签 = stable,见 docs/ops/release-track-canary-runbook.md)。
 		ReleaseTrackPodLabel       = 'mmorpg.io/release-track'
+		# 部署构建标识(C++ node_planned_drain.h kBuildLabelEnvVar,写进 NodeInfo.build;值与 Pod 标签 mmorpg.io/build 相同)。
+		# k8s_deploy.ps1 经 PodCommon.BuildLabel 写进本库的 C++ 生成器(Get-ClientEntryNodeBaseEnv),该脚本自己的两个模板
+		# (Get-CppBuildLabelEnvLines)写同一个名字。选落点的一方据此避开「有节点在排空的构建」(新版本优先)。
+		BuildLabelEnv              = 'MMORPG_BUILD_LABEL'
+		# Pod 所属的工作负载修订(C++ node_planned_drain.h kPodRevisionEnvVar),经 downward API 取 Pod 标签,拼进 NodeInfo.build。
+		PodRevisionEnv             = 'MMORPG_POD_REVISION'
 		# gate 出站调用的会话身份签名私钥(cpp/libs/engine/core/security/caller_auth.h kSigningKeyEnv,32 字节 Ed25519 种子的十六进制)
 		# 与验证方公钥列表(kPublicKeysEnv)。gate main.cpp 在私钥缺失、格式不对或与公钥列表不配对时拒绝启动,所以两种入口形态都必须带:
 		# 本库 New-GateStatefulSetYaml(external)与 k8s_deploy.ps1 New-NodeDeploymentYaml 的 gate 分支(podip)都按这些名字写,
@@ -639,7 +653,7 @@ function Resolve-BattleFleetHealth {
 	k8s_deploy.ps1 接入示例(sidecar 片段用任意缩进渲染,本库去掉公共前导空格后按各模板的列位置重新缩进;
 	-ItemIndent 是必填且不收空串,传两个空格即可):
 	    $podCommon = New-ClientEntryPodCommon -Image $NodeImage -ImagePullPolicy $ImagePullPolicy `
-	        -SnowflakeCacheDir $SnowflakeCacheDir -LogVolumeSizeLimit $CppLogVolumeSizeLimit `
+	        -LogVolumeSizeLimit $CppLogVolumeSizeLimit `
 	        -LogPrunerCommand $CppLogPrunerCommand `
 	        -SidecarContainerYaml (New-CppLogSidecarContainerYaml -ItemIndent '  ' -CurrentZoneName <zone|global> -AsNativeSidecar) `
 	        -SidecarVolumeYaml (New-CppLogSidecarVolumeYaml -ItemIndent '  ') `
@@ -655,7 +669,6 @@ function New-ClientEntryPodCommon {
 	param(
 		[Parameter(Mandatory = $true)][string]$Image,
 		[Parameter(Mandatory = $true)][ValidateSet('Always', 'IfNotPresent', 'Never')][string]$ImagePullPolicy,
-		[Parameter(Mandatory = $true)][string]$SnowflakeCacheDir,
 		[Parameter(Mandatory = $true)][string]$LogVolumeSizeLimit,
 		# 形如 "(while true; ...; done &) && ",拼在 mkdir 与启动命令之间;不得含双引号。
 		[AllowEmptyString()][string]$LogPrunerCommand = '',
@@ -678,6 +691,9 @@ function New-ClientEntryPodCommon {
 		# 发布轨道(k8s_deploy.ps1 -ReleaseTrack)。留空或 stable = 不写 env(C++ 不设即 stable),生成物与不传时逐字相同;
 		# canary 写 MMORPG_RELEASE_TRACK=canary。只收小写,在渲染时(Get-ClientEntryNodeBaseEnv)校验。
 		[AllowEmptyString()][string]$ReleaseTrack = '',
+		# 部署构建标识(k8s_deploy.ps1 Get-CppBuildLabelValue,与 Pod 标签 mmorpg.io/build 同值)。留空 = 不写 MMORPG_BUILD_LABEL
+		# (C++ 的 NodeInfo.build 为空 = 没上报,不参与构建偏好),生成物与不传时逐字相同。
+		[AllowEmptyString()][string]$BuildLabel = '',
 		# 经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey },按给出的顺序接在公共 env 之后,渲染成 secretKeyRef(optional: false)。
 		# 留空 = 不加,生成物与不传时逐字相同。名字不是大写环境变量名、三项有空、或名字重复,在这里 throw。
 		[AllowNull()][AllowEmptyCollection()][object[]]$SecretEnv = @()
@@ -719,7 +735,6 @@ function New-ClientEntryPodCommon {
 		Image                = $Image
 		# 规范大小写(约定 7):imagePullPolicy 是区分大小写的 K8s 枚举。
 		ImagePullPolicy      = ConvertTo-ClientEntryCanonicalName -Value $ImagePullPolicy -Allowed @('Always', 'IfNotPresent', 'Never')
-		SnowflakeCacheDir    = $SnowflakeCacheDir
 		LogVolumeSizeLimit   = $LogVolumeSizeLimit
 		LogPrunerCommand     = $LogPrunerCommand
 		SidecarEnabled       = ($given.Count -eq 3)
@@ -730,6 +745,7 @@ function New-ClientEntryPodCommon {
 		OpenFileLimitMode    = $OpenFileLimitMode
 		MetricsPort          = $MetricsPort
 		ReleaseTrack         = $ReleaseTrack
+		BuildLabel           = $BuildLabel
 		SecretEnv            = $secretEnvCopy
 	}
 }
@@ -768,19 +784,22 @@ function Get-ClientEntryEnvYaml {
 	return ($lines -join "`n")
 }
 
-# C++ 节点共有的 env:集群内身份(POD_IP + RPC_PORT)、发号槽缓存目录;末尾接 PodCommon.SecretEnv(zone Redis 口令等)。
+# C++ 节点共有的 env:集群内身份(POD_IP + RPC_PORT);末尾接 PodCommon.SecretEnv(zone Redis 口令等)。
+# SNOWFLAKE_CACHE_DIR 已删(2026-11-12):C++ 的 snowflake 槽位客户端早已随永久 guid 改走号段删掉,没有读者。
 # GRPC_SERVER_MAX_POLLERS 已退役(grpc-muduo-transport.md §15.11),不再注入。
 # 与 New-NodeDeploymentYaml 同口径,只是不写 D92 禁用的第二个端口变量(RPC_PORT 优先,行为不变)。
 function Get-ClientEntryNodeBaseEnv {
 	param(
 		[Parameter(Mandatory = $true)]$PodCommon,
-		[Parameter(Mandatory = $true)][int]$RpcPort
+		[Parameter(Mandatory = $true)][int]$RpcPort,
+		# Pod 上记着工作负载修订的标签名:StatefulSet 是 controller-revision-hash,Deployment 是 pod-template-hash,
+		# Agones Fleet 的 Pod 没有,留空。只在 PodCommon 带构建标识时生效,见下面写 PodRevisionEnv 的地方。
+		[AllowEmptyString()][string]$RevisionLabelKey = ''
 	)
 	$entries = @(
 		@{ Name = 'POD_IP'; FieldPath = 'status.podIP' },
 		@{ Name = 'RPC_PORT'; Value = [string]$RpcPort }
 	)
-	$entries += @{ Name = 'SNOWFLAKE_CACHE_DIR'; Value = $PodCommon.SnowflakeCacheDir }
 	# B0-4 运维豁免开关:只有显式给值才写(缺省不写 = C++ 按 enforce),与 k8s_deploy.ps1 的 New-NodeDeploymentYaml / New-SceneFleetYaml 同口径。
 	# 经 Get-ClientEntryMember 读:调用方自己拼的 PodCommon 可能没有这个成员(缺席 = 不写)。校验放在这里而不是 New-ClientEntryPodCommon:
 	# 这是值写进 YAML 的唯一入口,手拼的 PodCommon 也绕不过去。区分大小写(-cnotin):C++ 只认小写,大写会被进程静默当成 enforce。
@@ -806,6 +825,16 @@ function Get-ClientEntryNodeBaseEnv {
 		}
 		if ($releaseTrack -ceq 'canary') {
 			$entries += @{ Name = $contract.ReleaseTrackEnv; Value = $releaseTrack }
+		}
+	}
+	# 部署构建标识:同样经 Get-ClientEntryMember 读,缺成员或空串 = 不写(C++ 的 NodeInfo.build 为空 = 没上报)。
+	# 工作负载修订跟着构建标识一起写(经 downward API 取 Pod 标签),C++ 把两者拼成 NodeInfo.build:同一个镜像只改配置或
+	# rollout restart 时构建标识不变、修订会变,已经换好的那一代 Pod 才分得出来。没有构建标识时不写,生成物与不传时逐字相同。
+	$buildLabel = [string](Get-ClientEntryMember -Object $PodCommon -Path @('BuildLabel'))
+	if (-not [string]::IsNullOrWhiteSpace($buildLabel)) {
+		$entries += @{ Name = $contract.BuildLabelEnv; Value = $buildLabel }
+		if (-not [string]::IsNullOrEmpty($RevisionLabelKey)) {
+			$entries += @{ Name = $contract.PodRevisionEnv; FieldPath = "metadata.labels['$RevisionLabelKey']" }
 		}
 	}
 	# 经 Secret 注入的附加 env(PodCommon.SecretEnv,New-ClientEntryPodCommon 打包时已校验):缺成员或空列表 = 不写。
@@ -877,8 +906,7 @@ function Get-ClientEntryVolumeMountYaml {
 	$k = $ItemIndent + '  '
 	return (@(
 		"$ItemIndent- name: node-config", "${k}mountPath: /app/bin/etc", "${k}readOnly: true",
-		"$ItemIndent- name: node-logs", "${k}mountPath: /app/bin/logs",
-		"$ItemIndent- name: snowflake-cache", "${k}mountPath: $($PodCommon.SnowflakeCacheDir)"
+		"$ItemIndent- name: node-logs", "${k}mountPath: /app/bin/logs"
 	) -join "`n")
 }
 
@@ -891,8 +919,7 @@ function Get-ClientEntryPodVolumeYaml {
 	$k = $ItemIndent + '  '
 	$text = (@(
 		"$ItemIndent- name: node-config", "${k}configMap:", "${k}  name: $ConfigMapName",
-		"$ItemIndent- name: node-logs", "${k}emptyDir: { sizeLimit: $($PodCommon.LogVolumeSizeLimit) }",
-		"$ItemIndent- name: snowflake-cache", "${k}emptyDir: { sizeLimit: 64Mi }"
+		"$ItemIndent- name: node-logs", "${k}emptyDir: { sizeLimit: $($PodCommon.LogVolumeSizeLimit) }"
 	) -join "`n")
 	if ($PodCommon.SidecarEnabled) {
 		$text += "`n" + (Add-ClientEntryIndent -Text $PodCommon.SidecarVolumeYaml -Indent $ItemIndent)
@@ -1020,7 +1047,8 @@ function New-GateStatefulSetYaml {
 	$contract = Get-ClientEntryContract
 	$replicas = @($Plan.Ordinals).Count
 
-	$envEntries = Get-ClientEntryNodeBaseEnv -PodCommon $PodCommon -RpcPort $RpcPort
+	# StatefulSet 的 Pod 带 controller-revision-hash:逐台换 gate 时,已重建的 Pod 与还没换的 Pod 修订不同(哪怕镜像没变)。
+	$envEntries = Get-ClientEntryNodeBaseEnv -PodCommon $PodCommon -RpcPort $RpcPort -RevisionLabelKey 'controller-revision-hash'
 	$envEntries += @(
 		@{ Name = 'GATE_CLIENT_RPC_ROUTER'; Value = $GateRouterMode },
 		@{ Name = $contract.InternalAuthSecretEnv; SecretName = $contract.InternalAuthSecretName; SecretKey = $contract.InternalAuthSecretKey },
@@ -1375,7 +1403,8 @@ function New-BattleHostPortDeploymentYaml {
 	# 缺省值 $(HOST_IP) 是交给 kubelet 的依赖展开,不是 PowerShell 子表达式(契约里用单引号定义)。
 	$clientHost = if ([string]::IsNullOrWhiteSpace($ClientPublicHost)) { $contract.BattleHostPortDefaultClientHost } else { $ClientPublicHost }
 
-	$envEntries = Get-ClientEntryNodeBaseEnv -PodCommon $PodCommon -RpcPort $RpcPort
+	# Deployment 的 Pod 带 pod-template-hash(与 k8s_deploy.ps1 New-NodeDeploymentYaml 同一个标签)。
+	$envEntries = Get-ClientEntryNodeBaseEnv -PodCommon $PodCommon -RpcPort $RpcPort -RevisionLabelKey 'pod-template-hash'
 	$envEntries += @(
 		@{ Name = 'HOST_IP'; FieldPath = 'status.hostIP' },
 		@{ Name = $contract.ClientEndpointSourceEnv; Value = $contract.ClientEndpointSourceStatic },
@@ -2398,6 +2427,9 @@ function Remove-StaleGateOrdinalServices {
 # k8s_deploy.ps1 的 -LoginWeChatAppId / -LoginWeChatEndpoint / -LoginWeChatAllowOpenId / -LoginQQAppId / -LoginQQEndpoint /
 # -LoginQQAllowOpenId 不粘滞:漏传就按「没开」渲染 login ConfigMap,上次开着的 provider 随新 Pod 关闭,微信的 Secret login-oauth
 # 被删掉;漏传 Endpoint 把沙箱改连生产地址,漏传 AllowOpenId 把 RequireUnionId 翻回 true。apply 不报错,玩家却登不上。
+# 小游戏两段(-LoginWeChatMiniGame* / -LoginDouyinMiniGame* 各三个参数,AuthProviders.WeChatMiniGame / DouyinMiniGame,2026-11-12)同理。
+# Apple / Google 两段(-LoginApple* / -LoginGoogle* 各两个参数,AuthProviders.Apple / Google,2026-11-13)也一样,只是标识键是 ClientId,
+# 没有 RequireUnionId。
 # 本节的判据由 k8s_deploy.ps1 Assert-LoginAuthProviderClusterState 在写操作之前调用。
 
 # 内部辅助:login.yaml 里一个块映射值的标量 → 字符串;认不出返回 $null。只认生成器会写的形状:双引号(内部不含 \ 与 ")、
@@ -2425,9 +2457,10 @@ function ConvertFrom-ClientEntryYamlScalar {
 	返回 { Present; Providers; Errors }:
 	  - Present:有没有顶格 AuthProviders 键(任何大小写 / 引号写法)。
 	  - Providers:ordered,provider 名按原样保存、按不区分大小写比较(与 go-zero 一致;只差大小写的两个名字算重复)
-	    → { AppId; Endpoint; RequireUnionId; OtherKeys }。
-	    RequireUnionId 缺省 $true(与 login 的缺省一致);AppSecretEnv 是生成器常量,读到也不参与比对;
-	    其余键名进 OtherKeys(手工改过 ConfigMap 才会有,本次部署会丢掉它们)。
+	    → { AppId; ClientId; Endpoint; RequireUnionId; HasRequireUnionId; OtherKeys }。
+	    AppId 与 ClientId 是两种标识键(App / 小游戏写 AppId,Apple / Google 写 ClientId),哪种该出现由比对方按 provider 判定;
+	    同一个 provider 两个都写记进 Errors。RequireUnionId 缺省 $true(与 login 的缺省一致),HasRequireUnionId 说明它写没写;
+	    AppSecretEnv 是生成器常量,读到也不参与比对;其余键名进 OtherKeys(手工改过 ConfigMap 才会有,本次部署会丢掉它们)。
 	  - Errors:认不出的形状(同一行带值 / flow 写法、制表符缩进、重复的 AuthProviders / provider / 键、不在 provider 下的键、
 	    值认不出、RequireUnionId 不是裸 true / false)。非空时调用方必须当作「判不出」(fail-closed),不能当作没开第三方登录。
 	Errors 只写行号与键名,不回显值。
@@ -2473,7 +2506,7 @@ function ConvertFrom-LoginAuthProvidersYaml {
 				$current = $null
 				continue
 			}
-			$current = [pscustomobject]@{ AppId = ''; Endpoint = ''; RequireUnionId = $true; OtherKeys = [System.Collections.Generic.List[string]]::new() }
+			$current = [pscustomobject]@{ AppId = ''; ClientId = ''; Endpoint = ''; RequireUnionId = $true; HasRequireUnionId = $false; OtherKeys = [System.Collections.Generic.List[string]]::new() }
 			$providers[$currentName] = $current
 			$seenKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 			continue
@@ -2495,10 +2528,18 @@ function ConvertFrom-LoginAuthProvidersYaml {
 				continue
 			}
 			switch -CaseSensitive ($key) {
-				'AppId' { $current.AppId = $value }
+				'AppId' {
+					$current.AppId = $value
+					if ($seenKeys.Contains('ClientId')) { $errors.Add("第 $lineNo 行:AuthProviders.$currentName 同时写了 AppId 与 ClientId") }
+				}
+				'ClientId' {
+					$current.ClientId = $value
+					if ($seenKeys.Contains('AppId')) { $errors.Add("第 $lineNo 行:AuthProviders.$currentName 同时写了 AppId 与 ClientId") }
+				}
 				'Endpoint' { $current.Endpoint = $value }
 				'AppSecretEnv' { }
 				'RequireUnionId' {
+					$current.HasRequireUnionId = $true
 					# 只认裸 true / false(YAML 1.2 core 的三种大小写写法);带引号就是字符串,login 解析 bool 时拒启,这里判不出。
 					if ($raw.Trim() -cmatch '^(?<b>true|True|TRUE|false|False|FALSE)(?:[ \t]+#.*)?\z') {
 						$current.RequireUnionId = ($Matches['b'] -ieq 'true')
@@ -2522,15 +2563,18 @@ function ConvertFrom-LoginAuthProvidersYaml {
 
 .DESCRIPTION
 	-Live 是 ConvertFrom-LoginAuthProvidersYaml 的结果,-OAuthSecretPresent 是 Secret login-oauth 在不在;其余参数是本次的
-	六个 -Login* 取值(形状已由 k8s_deploy.ps1 Get-LoginAuthProviderParamErrors 校验过,这里不再校验)。判据:
+	-Login* 取值(微信、QQ、微信小游戏、抖音小游戏各三个,Apple、Google 各两个;形状已由 k8s_deploy.ps1 Get-LoginAuthProviderParamErrors
+	校验过,这里不再校验)。每个 provider 有自己的标识键:App / 小游戏是 AppId,Apple / Google 是 ClientId(下文的「标识」)。判据:
 	  - 线上没有、本次新开的 provider:不算差异(开启是显式的)。
-	  - 线上有、本次没给 AppId:关闭(WeChat 还会删掉 Secret login-oauth)。
-	  - 两边都有:AppId / Endpoint / RequireUnionId 任一不同;线上有生成器不写的键(OtherKeys,本次会丢)。
-	  - 线上有 WeChat / QQ 之外的 provider:生成器不生成,本次会丢。
+	  - 线上有、本次没给标识:关闭(WeChat 还会删掉 Secret login-oauth,小游戏两段各删自己的 AppSecret Secret)。
+	  - 两边都有:标识 / Endpoint / RequireUnionId(Apple / Google 没有这一项)任一不同;线上有生成器不写的键(OtherKeys,
+	    写错了种类的标识键,Apple / Google 段里的 RequireUnionId),本次会丢。
+	  - 线上有生成器不生成的 provider(WeChat / QQ / WeChatMiniGame / DouyinMiniGame / Apple / Google 之外的):本次会丢。
 	  - Secret 在、ConfigMap 里却没有 AuthProviders.WeChat、本次也不开微信:会删掉 Secret。像是上次部署中途失败的残留,
 	    也算一项差异,让人核对后再决定。
 	  - Live.Errors 非空:判不出,整体算一项差异(fail-closed),其余比对照常做。
-	KeepArgs:按线上现状「要保持就照传」的参数串(只含 WeChat / QQ;线上两者都没有时为空串)。值只在落进安全字符集时回显
+	小游戏两段的 AppSecret Secret 不探测残留(-OAuthSecretPresent 只管微信 App 那一个):线上与本次都没有这个渠道时,删掉一个没人引用的 Secret 不影响登录。
+	KeepArgs:按线上现状「要保持就照传」的参数串(只含生成器生成的四个 provider;线上一个都没有时为空串)。值只在落进安全字符集时回显
 	(AppId 为 [A-Za-z0-9_.-];Endpoint 为 http(s)://主机[:端口][/路径],与 k8s_deploy.ps1 参数门禁同一形状),否则写 <见 ConfigMap>,
 	不把手改进去的任意文本打进日志,也不让人照抄形状不对的值。只比字符集与形状:端口范围(1–65535)与「非 dev 档不收 http://」
 	这两项不在这里复查,照抄后由下一次部署的参数门禁(Get-LoginAuthProviderParamErrors)在写操作之前报出。
@@ -2545,7 +2589,17 @@ function Get-LoginAuthProviderDrift {
 		[bool]$WeChatAllowOpenId = $false,
 		[AllowEmptyString()][string]$QQAppId = '',
 		[AllowEmptyString()][string]$QQEndpoint = '',
-		[bool]$QQAllowOpenId = $false
+		[bool]$QQAllowOpenId = $false,
+		[AllowEmptyString()][string]$WeChatMiniGameAppId = '',
+		[AllowEmptyString()][string]$WeChatMiniGameEndpoint = '',
+		[bool]$WeChatMiniGameAllowOpenId = $false,
+		[AllowEmptyString()][string]$DouyinMiniGameAppId = '',
+		[AllowEmptyString()][string]$DouyinMiniGameEndpoint = '',
+		[bool]$DouyinMiniGameAllowOpenId = $false,
+		[AllowEmptyString()][string]$AppleClientId = '',
+		[AllowEmptyString()][string]$AppleEndpoint = '',
+		[AllowEmptyString()][string]$GoogleClientId = '',
+		[AllowEmptyString()][string]$GoogleEndpoint = ''
 	)
 
 	$contract = Get-ClientEntryContract
@@ -2563,20 +2617,35 @@ function Get-LoginAuthProviderDrift {
 		$drifts.Add("线上 login ConfigMap 的 AuthProviders 段认不出($(@($liveErrors) -join ';')),判不出本次会不会关掉或改掉第三方登录")
 	}
 
+	# CloseTail:关掉这个 provider 时部署还会顺带做的事,拼在「随新 Pod 关闭」后面。小游戏两段的 AppSecret 各有一个单键 Secret
+	# (k8s_deploy.ps1 的工作负载密钥目录),关掉时一并删;这里不写它们的 Secret 名,不和那张表多出一处要逐字相等的约定。
+	# IdKey / OtherIdKey:这个 provider 的标识键与另一种(写错了种类)。AllowParam 为空 = 没有 RequireUnionId 这一项(Apple / Google)。
 	$wanted = @(
-		[pscustomobject]@{ Name = 'WeChat'; Param = '-LoginWeChatAppId'; EndpointParam = '-LoginWeChatEndpoint'; AllowParam = '-LoginWeChatAllowOpenId'; AppId = $WeChatAppId; Endpoint = $WeChatEndpoint; AllowOpenId = $WeChatAllowOpenId }
-		[pscustomobject]@{ Name = 'QQ'; Param = '-LoginQQAppId'; EndpointParam = '-LoginQQEndpoint'; AllowParam = '-LoginQQAllowOpenId'; AppId = $QQAppId; Endpoint = $QQEndpoint; AllowOpenId = $QQAllowOpenId }
+		[pscustomobject]@{ Name = 'WeChat'; IdKey = 'AppId'; OtherIdKey = 'ClientId'; Param = '-LoginWeChatAppId'; EndpointParam = '-LoginWeChatEndpoint'; AllowParam = '-LoginWeChatAllowOpenId'; AppId = $WeChatAppId; Endpoint = $WeChatEndpoint; AllowOpenId = $WeChatAllowOpenId; CloseTail = ",并删除 Secret $secretName" }
+		[pscustomobject]@{ Name = 'QQ'; IdKey = 'AppId'; OtherIdKey = 'ClientId'; Param = '-LoginQQAppId'; EndpointParam = '-LoginQQEndpoint'; AllowParam = '-LoginQQAllowOpenId'; AppId = $QQAppId; Endpoint = $QQEndpoint; AllowOpenId = $QQAllowOpenId; CloseTail = '' }
+		[pscustomobject]@{ Name = 'WeChatMiniGame'; IdKey = 'AppId'; OtherIdKey = 'ClientId'; Param = '-LoginWeChatMiniGameAppId'; EndpointParam = '-LoginWeChatMiniGameEndpoint'; AllowParam = '-LoginWeChatMiniGameAllowOpenId'; AppId = $WeChatMiniGameAppId; Endpoint = $WeChatMiniGameEndpoint; AllowOpenId = $WeChatMiniGameAllowOpenId; CloseTail = ',并删除它的 AppSecret Secret' }
+		[pscustomobject]@{ Name = 'DouyinMiniGame'; IdKey = 'AppId'; OtherIdKey = 'ClientId'; Param = '-LoginDouyinMiniGameAppId'; EndpointParam = '-LoginDouyinMiniGameEndpoint'; AllowParam = '-LoginDouyinMiniGameAllowOpenId'; AppId = $DouyinMiniGameAppId; Endpoint = $DouyinMiniGameEndpoint; AllowOpenId = $DouyinMiniGameAllowOpenId; CloseTail = ',并删除它的 AppSecret Secret' }
+		[pscustomobject]@{ Name = 'Apple'; IdKey = 'ClientId'; OtherIdKey = 'AppId'; Param = '-LoginAppleClientId'; EndpointParam = '-LoginAppleEndpoint'; AllowParam = ''; AppId = $AppleClientId; Endpoint = $AppleEndpoint; AllowOpenId = $false; CloseTail = '' }
+		[pscustomobject]@{ Name = 'Google'; IdKey = 'ClientId'; OtherIdKey = 'AppId'; Param = '-LoginGoogleClientId'; EndpointParam = '-LoginGoogleEndpoint'; AllowParam = ''; AppId = $GoogleClientId; Endpoint = $GoogleEndpoint; AllowOpenId = $false; CloseTail = '' }
 	)
 	foreach ($w in $wanted) {
 		$live = Get-ClientEntryMember -Object $liveProviders -Path $w.Name
 		if ($null -eq $live) { continue }
 
-		$liveAppId = [string](Get-ClientEntryMember -Object $live -Path 'AppId')
+		$liveAppId = [string](Get-ClientEntryMember -Object $live -Path $w.IdKey)
+		$liveWrongId = [string](Get-ClientEntryMember -Object $live -Path $w.OtherIdKey)
 		$liveEndpoint = [string](Get-ClientEntryMember -Object $live -Path 'Endpoint')
 		# 缺这个成员按 login 的缺省 true 算([bool]$null 是 $false,不能直接转)。
 		$liveRequireUnionIdRaw = Get-ClientEntryMember -Object $live -Path 'RequireUnionId'
 		$liveRequireUnionId = if ($null -eq $liveRequireUnionIdRaw) { $true } else { [bool]$liveRequireUnionIdRaw }
 		$liveOtherKeys = @(@(Get-ClientEntryMember -Object $live -Path 'OtherKeys') | Where-Object { -not [string]::IsNullOrEmpty($_) })
+		# 生成器不会写的键:写错了种类的标识键;没有 unionid 策略的渠道写了 RequireUnionId(经 JSON 往返的旧对象没有 HasRequireUnionId 成员,
+		# 那时按值判断:只有 false 能看出来写过)。
+		if ($liveWrongId -ne '') { $liveOtherKeys += $w.OtherIdKey }
+		if ($w.AllowParam -eq '') {
+			$hasRequireUnionId = [bool](Get-ClientEntryMember -Object $live -Path 'HasRequireUnionId')
+			if ($hasRequireUnionId -or -not $liveRequireUnionId) { $liveOtherKeys += 'RequireUnionId' }
+		}
 
 		$shownAppId = if ($liveAppId -cmatch '^[A-Za-z0-9_.-]+\z') { $liveAppId } else { '<见 ConfigMap>' }
 		$keepArgs.Add("$($w.Param) $shownAppId")
@@ -2586,15 +2655,15 @@ function Get-LoginAuthProviderDrift {
 			$shownEndpoint = if ($liveEndpoint -cmatch '^https?://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%/-]*)?\z') { $liveEndpoint } else { '<见 ConfigMap>' }
 			$keepArgs.Add("$($w.EndpointParam) $shownEndpoint")
 		}
-		if (-not $liveRequireUnionId) { $keepArgs.Add($w.AllowParam) }
+		if ($w.AllowParam -ne '' -and -not $liveRequireUnionId) { $keepArgs.Add($w.AllowParam) }
 
 		if ([string]::IsNullOrEmpty($w.AppId)) {
-			$tail = if ($w.Name -ceq 'WeChat') { ",并删除 Secret $secretName" } else { '' }
-			$drifts.Add("线上已开 AuthProviders.$($w.Name),本次没给 $($w.Param):部署后 $($w.Name) 登录随新 Pod 关闭$tail")
+			$drifts.Add("线上已开 AuthProviders.$($w.Name),本次没给 $($w.Param):部署后 $($w.Name) 登录随新 Pod 关闭$($w.CloseTail)")
 			continue
 		}
 		if ($liveAppId -cne $w.AppId) {
-			$drifts.Add("AuthProviders.$($w.Name).AppId 与线上不同(本次 $($w.Param) 换了应用号)")
+			$what = if ($w.IdKey -ceq 'ClientId') { '换了客户端 ID,还按旧 ID 请求令牌的客户端全部按 aud 不符被拒' } else { '换了应用号' }
+			$drifts.Add("AuthProviders.$($w.Name).$($w.IdKey) 与线上不同(本次 $($w.Param) $what)")
 		}
 		if ($liveEndpoint -cne $w.Endpoint) {
 			$change = if ($w.Endpoint -eq '') { '线上指向自定义 Endpoint(沙箱),本次没给 ' + $w.EndpointParam + ' 会改连生产地址' }
@@ -2603,7 +2672,7 @@ function Get-LoginAuthProviderDrift {
 			$drifts.Add("AuthProviders.$($w.Name).Endpoint:$change")
 		}
 		$wantRequireUnionId = -not $w.AllowOpenId
-		if ($liveRequireUnionId -ne $wantRequireUnionId) {
+		if ($w.AllowParam -ne '' -and $liveRequireUnionId -ne $wantRequireUnionId) {
 			$change = if ($wantRequireUnionId) { "线上 RequireUnionId: false(按 openid 建账号),本次没给 $($w.AllowParam) 会翻回 true,拿不到 unionid 的玩家登录失败" }
 			else { "线上 RequireUnionId 为 true,本次 $($w.AllowParam) 会改成 false(以后接入 unionid 会把同一玩家分裂成两个账号)" }
 			$drifts.Add("AuthProviders.$($w.Name).RequireUnionId:$change")
@@ -2614,8 +2683,9 @@ function Get-LoginAuthProviderDrift {
 	}
 
 	# 名字比较不区分大小写,与上面经 Get-ClientEntryMember 按名字取值的口径一致。
+	$generatedNames = @($wanted | ForEach-Object { $_.Name })
 	foreach ($name in $liveProviderNames) {
-		if ($name -in @('WeChat', 'QQ')) { continue }
+		if ($name -in $generatedNames) { continue }
 		$drifts.Add("线上有生成器不生成的 AuthProviders.$name,本次部署会丢掉")
 	}
 
@@ -2667,4 +2737,162 @@ function Get-LoginAuthProviderLiveState {
 		return [pscustomobject]@{ ConfigMapPresent = $true; Live = (& $unreadable "configmap/$($contract.LoginConfigMapName) 没有 data.$($contract.LoginConfigMapKey)"); OAuthSecretPresent = $secretPresent }
 	}
 	return [pscustomobject]@{ ConfigMapPresent = $true; Live = (ConvertFrom-LoginAuthProvidersYaml -LoginYaml ([string]$loginYaml)); OAuthSecretPresent = $secretPresent }
+}
+
+# ─────────────────────────────────────────────────────────────────
+# 10. login 口令登录(PasswordAuth)的防误关闸:线上现状 vs 本次开关
+# ─────────────────────────────────────────────────────────────────
+#
+# k8s_deploy.ps1 的 -LoginPasswordAuth 不粘滞:漏传就按「没开」渲染 login 的配置模板,新 Pod 不再注入口令库连接串。login 读的是
+# 运维预置的 runtimeConfigSecret,那里的 PasswordAuth 还开着,于是滚到的 Pod 因为变量缺失拒绝启动,之后任何 login Pod 重建都起不来。
+# 本节的判据由 k8s_deploy.ps1 Assert-LoginPasswordAuthClusterState 在写操作之前调用。与第 9 节分开写:两边读的是同一份 ConfigMap 里互不相干的两段,判据各自独立。
+
+<#
+.SYNOPSIS
+	从 login.yaml 文本里读出顶层 PasswordAuth 段开没开(形状同 k8s_deploy.ps1 New-LoginPasswordAuthYaml),供防误关闸比对。纯函数。
+
+.DESCRIPTION
+	只认生成器写出的块映射:顶格 `PasswordAuth:`,两格缩进的 `键: 值`;空行与整行注释跳过,遇到下一个顶格键结束。
+	login 读配置时键名不区分大小写,所以顶格键按不区分大小写、可带引号找:`passwordAuth:`、`"PasswordAuth":` 在 login 里照样生效,
+	写法又不是生成器的,一律记进 Errors(判不出),不当成没开。顶格的 DevPasswordAuth 是另一个键,不算。
+	返回 { Present; Enabled; Errors }:
+	  - Present:有没有顶格 PasswordAuth 键(任何大小写 / 引号写法)。
+	  - Enabled:段里的 Enabled 是不是 true。没有这一行按 login 的缺省 false。
+	  - Errors:认不出的形状(顶格键写法不是生成器的、出现多次、同一行带值、制表符缩进、Enabled 重复或不是裸 true / false、
+	    段里有不是两格缩进 `键: 值` 的行)。非空时调用方必须当作「判不出」(fail-closed),不能当作没开口令登录。
+	Errors 只写行号与键名,不回显值。
+#>
+function ConvertFrom-LoginPasswordAuthYaml {
+	param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$LoginYaml)
+
+	$errors = [System.Collections.Generic.List[string]]::new()
+	$lines = @((ConvertTo-ClientEntryLf -Text $LoginYaml) -split "`n")
+	$headerIndexes = @(for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '^["'']?PasswordAuth["'']?[ \t]*:') { $i } })
+	if ($headerIndexes.Count -eq 0) {
+		return [pscustomobject]@{ Present = $false; Enabled = $false; Errors = [string[]]@() }
+	}
+	if ($headerIndexes.Count -gt 1) {
+		$errors.Add("top-level PasswordAuth appears $($headerIndexes.Count) times")
+	}
+	foreach ($headerIndex in $headerIndexes) {
+		if ($lines[$headerIndex] -cnotmatch '^PasswordAuth[ \t]*:') {
+			$errors.Add("line $($headerIndex + 1): the top-level key PasswordAuth is not spelled the way the generator writes it (login reads keys case-insensitively, so it still takes effect)")
+		}
+	}
+	if ($lines[$headerIndexes[0]] -notmatch '^["'']?PasswordAuth["'']?[ \t]*:[ \t]*(#.*)?\z') {
+		$errors.Add("line $($headerIndexes[0] + 1): PasswordAuth is not a block mapping (it has a value on the same line)")
+	}
+
+	$enabled = $false
+	$enabledSeen = $false
+	for ($i = $headerIndexes[0] + 1; $i -lt $lines.Count; $i++) {
+		$line = $lines[$i].TrimEnd("`r")
+		$lineNo = $i + 1
+		if ($line -cmatch '^[ \t]*(#.*)?\z') { continue }
+		if ($line -cmatch '^[^ \t]') { break }
+		if ($line -cmatch '^ *\t') {
+			$errors.Add("line ${lineNo}: tab indentation")
+			continue
+		}
+		$key = ''
+		$raw = ''
+		if ($line -cmatch '^  (?<key>[A-Za-z0-9_]+)[ \t]*:(?<raw>.*)\z') {
+			$key = $Matches['key']
+			$raw = $Matches['raw']
+		}
+		else {
+			$errors.Add("line ${lineNo}: unrecognised shape inside PasswordAuth (only two-space indented 'Key: value' lines are understood)")
+			continue
+		}
+		# login 读键名不区分大小写:enabled / ENABLED 同样生效,按同一个键处理。
+		if ($key -ine 'Enabled') { continue }
+		if ($enabledSeen) {
+			$errors.Add("line ${lineNo}: PasswordAuth.Enabled appears more than once")
+			continue
+		}
+		$enabledSeen = $true
+		# 只认裸 true / false;带引号是字符串,login 解析 bool 时拒绝启动,这里判不出。
+		if ($raw.Trim() -cmatch '^(?<b>true|True|TRUE|false|False|FALSE)(?:[ \t]+#.*)?\z') {
+			$enabled = ($Matches['b'] -ieq 'true')
+		}
+		else {
+			$errors.Add("line ${lineNo}: PasswordAuth.Enabled is not a bare true / false")
+		}
+	}
+	return [pscustomobject]@{ Present = $true; Enabled = $enabled; Errors = [string[]]$errors.ToArray() }
+}
+
+<#
+.SYNOPSIS
+	login 口令登录「线上现状 vs 本次开关」的差异。纯函数,返回 { Drifts = string[]; KeepArgs = string }。
+
+.DESCRIPTION
+	-Live 是 ConvertFrom-LoginPasswordAuthYaml 的结果,-Enabled 是本次给没给 -LoginPasswordAuth。判据:
+	  - 线上没开、本次新开:不算差异(开启是显式的)。
+	  - 线上开着、本次没给:关闭。新 Pod 不再有连接串、Secret 被删,而运行配置里口令登录还开着。
+	  - 线上开着、本次也给:不算差异。段里的各项上限每次按 go/login/etc/login.yaml 重写,连接串变了由 Pod 模板指纹滚动,都是显式的改动。
+	  - Live.Errors 非空:判不出。本次没给开关时算一项差异(fail-closed);本次给了开关则不拦:模板会被整段重写成生成器的形状。
+	KeepArgs:线上开着或判不出时是 '-LoginPasswordAuth',否则空串。「确认要关」的开关名由调用方拼在结尾。
+	文本里没有密钥:本函数拿不到连接串。
+#>
+function Get-LoginPasswordAuthDrift {
+	param(
+		[Parameter(Mandatory = $true)]$Live,
+		[Parameter(Mandatory = $true)][bool]$Enabled
+	)
+
+	$drifts = [System.Collections.Generic.List[string]]::new()
+	$liveErrors = @(@(Get-ClientEntryMember -Object $Live -Path 'Errors') | Where-Object { -not [string]::IsNullOrEmpty($_) })
+	$liveEnabled = [bool](Get-ClientEntryMember -Object $Live -Path 'Enabled')
+	if ($Enabled) {
+		return [pscustomobject]@{ Drifts = [string[]]@(); KeepArgs = '' }
+	}
+	if (@($liveErrors).Count -gt 0) {
+		$drifts.Add("the PasswordAuth section of the live login ConfigMap cannot be read ($(@($liveErrors) -join '; ')), so it is unknown whether this deployment turns password login off")
+	}
+	if ($liveEnabled) {
+		$drifts.Add('password login is on in the live login ConfigMap and -LoginPasswordAuth was not given: new login Pods are rendered without the connection string while the runtime config Secret still enables PasswordAuth, so every Pod the rollout replaces refuses to start')
+	}
+	$keepArgs = if ($drifts.Count -gt 0) { '-LoginPasswordAuth' } else { '' }
+	return [pscustomobject]@{ Drifts = [string[]]$drifts.ToArray(); KeepArgs = $keepArgs }
+}
+
+<#
+.SYNOPSIS
+	读一个 zone namespace 里 login 配置模板的 PasswordAuth 段现状。只读,返回 { ConfigMapPresent; Live }。
+
+.DESCRIPTION
+	名字取自 Get-ClientEntryContract(LoginConfigMapName / LoginConfigMapKey),与第 9 节读的是同一份 ConfigMap。
+	ConfigMap 不存在 = 线上没有 login 配置(首次部署,或 namespace 已删):Live.Present 为 $false。ConfigMap 在却没有配置键、
+	或返回不是 JSON:记进 Live.Errors(判不出,调用方 fail-closed)。
+	任何 kubectl 失败都 throw(集群不可达、Forbidden):查不到不等于没开。不支持 DryRun,调用方在 DryRun 下不调用。
+	这里看的是部署脚本上次渲染的模板,不是 login 实际读的 runtimeConfigSecret:本进程不读那份 Secret 的值。
+#>
+function Get-LoginPasswordAuthLiveState {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][AllowEmptyString()][string]$KubeContext,
+		[Parameter(Mandatory = $true)][AllowEmptyString()][string]$KubeConfig
+	)
+
+	$contract = Get-ClientEntryContract
+	$configMap = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'configmap', $contract.LoginConfigMapName, '-n', $Namespace, '--ignore-not-found', '-o', 'json') `
+		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput
+	if ([string]::IsNullOrWhiteSpace($configMap.Stdout)) {
+		return [pscustomobject]@{ ConfigMapPresent = $false; Live = (ConvertFrom-LoginPasswordAuthYaml -LoginYaml '') }
+	}
+	$unreadable = {
+		param([string]$Reason)
+		[pscustomobject]@{ Present = $true; Enabled = $false; Errors = [string[]]@($Reason) }
+	}
+	$document = $null
+	try { $document = $configMap.Stdout | ConvertFrom-Json -ErrorAction Stop }
+	catch {
+		return [pscustomobject]@{ ConfigMapPresent = $true; Live = (& $unreadable "configmap/$($contract.LoginConfigMapName) did not come back as JSON") }
+	}
+	$loginYaml = Get-ClientEntryMember -Object $document -Path 'data', $contract.LoginConfigMapKey
+	if ($null -eq $loginYaml) {
+		return [pscustomobject]@{ ConfigMapPresent = $true; Live = (& $unreadable "configmap/$($contract.LoginConfigMapName) has no data.$($contract.LoginConfigMapKey)") }
+	}
+	return [pscustomobject]@{ ConfigMapPresent = $true; Live = (ConvertFrom-LoginPasswordAuthYaml -LoginYaml ([string]$loginYaml)) }
 }

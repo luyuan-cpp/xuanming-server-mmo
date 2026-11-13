@@ -25,6 +25,7 @@ import (
 	"shared/drainproof"
 	"shared/rolefence"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -113,12 +114,6 @@ func main() {
 	var c config.Config
 	// conf.MustLoad 会自动调用 (*Config).Validate(go-zero v1.10.0),不合法即 Fatalf 退出,理由同 chat.go。
 	conf.MustLoad(*configFile, &c)
-	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入)。-migrate 与常驻启动都连库,所以放在迁移分支之前;
-	// 迁移 Job 同样注入这个变量。退出码与迁移入口的 ExitFailed 一致。
-	if err := c.ResolveMySQLPassword(os.LookupEnv); err != nil {
-		fmt.Fprintf(os.Stderr, "[trade] %v\n", err)
-		os.Exit(schemamigrate.ExitFailed)
-	}
 
 	if *migrateOnly {
 		os.Exit(runMigration(c, *allowModify, svc.OpenSchemaMySQL, migrateUp))
@@ -299,7 +294,8 @@ func runTrade(c config.Config) (runErr error) {
 	// RPC 级热关停(shared/killswitch):复用 svcCtx 的 etcd 客户端;Start 非阻塞,etcd 不可达一律放行。
 	ksCtx, ksCancel := context.WithCancel(context.Background())
 	stopKillSwitch = ksCancel
-	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix})
+	// NodeTypes:认 type/TradeNodeService/ 下的规则;注册成功后再 AddInstance(docs/design/rpc-kill-switch.md §5)。
+	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix, NodeTypes: []string{base.ENodeType_name[int32(nodeType)]}})
 	ks.Start(ksCtx, svcCtx.Etcd)
 
 	deps := logic.NewDeps(svcCtx)
@@ -330,8 +326,12 @@ func runTrade(c config.Config) (runErr error) {
 	if entryErr != nil {
 		return entryErr
 	}
+	ownership, ownershipErr := roleidentity.OwnershipInterceptor(svcCtx.Roles.VerifyOriginalOwner, commerce.OwnerRejected)
+	if ownershipErr != nil {
+		return ownershipErr
+	}
 	s.AddUnaryInterceptors(serverbase.RootAdmission(root), gateIdentity)
-	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, onlineEntry)...)
+	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, onlineEntry, ownership)...)
 
 	// **先起 gRPC,再注册**(契约 §2)。Start 在监听失败时 panic:recover 成错误交回主线程,
 	// 走同一条收尾后以非 0 退出(进程拉起方 / K8s 仍可见),不带着已创建的资源直接崩。
@@ -383,6 +383,7 @@ func runTrade(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+	ks.AddInstance(nr.NodeUUID) // 认 instance/<本进程 uuid>/ 下的热关停规则
 	// 注册拿到 node_uuid 之后合同推进才按片分工;之前成员表里若已有别的副本,本副本不推进任何片。
 	svcCtx.BindWorkMember(nr.NodeUUID)
 
@@ -472,8 +473,9 @@ func exitRequested(ctx context.Context) bool {
 
 // buildUnaryInterceptors 组装本服务的一元拦截器链。返回的切片顺序**就是执行顺序**(第一个是最外层)。
 // 抽成函数是为了让链本身可测(trade_test.go),理由同 chat / guild。
-// onlineEntry 是在线域共用的入口准入(roleidentity.EntryInterceptor),由装配层传入,不得为 nil。
-func buildUnaryInterceptors(ks *killswitch.Switch, onlineEntry grpc.UnaryServerInterceptor) []grpc.UnaryServerInterceptor {
+// onlineEntry 是在线域共用的入口准入(roleidentity.EntryInterceptor),ownership 是其后的原角色归属预检
+// (roleidentity.OwnershipInterceptor),都由装配层传入,不得为 nil。
+func buildUnaryInterceptors(ks *killswitch.Switch, onlineEntry, ownership grpc.UnaryServerInterceptor) []grpc.UnaryServerInterceptor {
 	return []grpc.UnaryServerInterceptor{
 		// ① 流量统计最外层:被热关停短路、被会话准入拒绝的请求也要被统计到。
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
@@ -486,7 +488,12 @@ func buildUnaryInterceptors(ks *killswitch.Switch, onlineEntry grpc.UnaryServerI
 		//    不带会话的内部调用放行。放在 serverbase 之前:被拒绝的调用没进业务链路,不计入业务耗时。
 		onlineEntry,
 
-		// ④ in-band 故障定性:handler 一律 `return resp, nil`,这层读 TipInfoMessage.id 按 Tip.xlsx 的
+		// ④ 原角色归属预检(§9.3):带原身份的客户端请求不加锁读一次本库护栏副本,角色已不归这份原身份 → PermissionDenied,
+		//    这一次判不了 → Aborted。浏览、详情、我的货架、收藏、盘口挂单列表不进合同事务,靠这一层核归属;
+		//    合同写入仍在提交点持锁复核。紧跟入口准入:它要用 ③ 捕获的原身份,被拒绝的调用同样没进业务链路。
+		ownership,
+
+		// ⑤ in-band 故障定性:handler 一律 `return resp, nil`,这层读 TipInfoMessage.id 按 Tip.xlsx 的
 		//    fault 列定性(kServiceUnavailable = 故障告警,其余 = 业务拒绝)。紧贴 handler。
 		serverbase.UnaryInterceptor(serverbase.Options{
 			TipClassifier: constants.TipClassifier(),
@@ -511,6 +518,7 @@ func schemaOptions() schemamigrate.Options {
 //   - 常驻入口拒绝 AutoMigrate=true；表结构必须先由独立迁移命令准备。
 //     多副本同时起:Up 内部 GET_LOCK 串行化;等锁超时返回 ErrLockBusy,本副本拒启动后由进程拉起方重试。
 //   - false:只跑只读 Plan;有待执行语句或需人工项 → 返回错误,并带上补救命令。
+//   - 缺普通索引从 Warning 升级成阻断(见 missingIndexError)。
 func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan schemaRunner) error {
 	opts := schemaOptions()
 	if c.ShouldAutoMigrate() {
@@ -528,7 +536,26 @@ func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan sch
 			"(待执行 %d 条、需人工 %d 项),拒绝启动;先执行 %s",
 			data.DatabaseName, len(report.Statements), len(report.Manual), migrateRemedyCommand)
 	}
-	return nil
+	// Report.Clean() 只看 Statements 与 Manual,缺索引落在 Warnings 里,所以单独判。
+	return missingIndexError(report)
+}
+
+// missingIndexError 把缺普通索引从告警升级成阻断错误;没有缺索引时返回 nil。
+//
+// schemamigrate 对**已存在的表**只 ADD COLUMN,不会补建 proto 新声明的普通索引 —— 它把这件事记成 Warning,
+// 而 Warning 不进 ExitCode。放过去等于带着缺索引的表对外服务:依赖这些索引的查询与后台扫描退化成全表扫,全程零报错。
+// 判断按报告项的结构化类别(Report.MissingIndexes),不匹配告警文案。
+// 这是全仓口径(friend / guild / mail / rank 相同;trade 2026-11-12 补齐):缺索引即拒启,-migrate 以 4 退出。
+// 补救命令不指向 -migrate:它同样不补建索引,指过去只会让人白跑一趟。
+func missingIndexError(r schemamigrate.Report) error {
+	missing := schemamigrate.Messages(r.MissingIndexes())
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("[trade] 库 %s 缺 %d 个 proto 声明的普通索引,拒绝启动"+
+		"(schemamigrate 对已存在的表不自动补建;按告警里的表名与索引名手工 "+
+		"`ALTER TABLE <表> ADD INDEX <索引名> (<列...>);`,或在开发期直接删库重建): %s",
+		data.DatabaseName, len(missing), strings.Join(missing, "; "))
 }
 
 // runMigration 是 -migrate 的实现:只连 MySQL(配了 DbPlacement 时先读一次 etcd 里的映射),不起 gRPC、不连 data_service。
@@ -549,6 +576,14 @@ func runMigration(c config.Config, allowModify bool, openMySQL func(config.MySQL
 	report, err := up(context.Background(), db, opts)
 	printReport(os.Stdout, report)
 	code := schemamigrate.ExitCode(report, err)
+	// 缺索引在 schemamigrate 里只是 Warning,不进 ExitCode。trade-migrate Job 只看退出码:这里不升级成 ExitManual 的话,
+	// Job 会绿着结束,随后起来的 trade Pod 又被 ensureSchema 拦下。两条路径用同一个判据;迁移本身已失败时不改退出码。
+	if code == schemamigrate.ExitOK {
+		if missErr := missingIndexError(report); missErr != nil {
+			fmt.Fprintf(os.Stderr, "schema migration needs manual action (exit %d): %v\n", schemamigrate.ExitManual, missErr)
+			return schemamigrate.ExitManual
+		}
+	}
 	switch {
 	case err != nil:
 		fmt.Fprintf(os.Stderr, "schema migration FAILED (exit %d): %v\n", code, err)

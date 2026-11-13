@@ -7,6 +7,8 @@
 
 #include <muduo/base/Logging.h>
 
+#include "audit_outbox_stats.h"
+
 namespace
 {
     // 每条记录在 SavePlayerRequest 的 repeated 字段里多出的字段头:1 字节 tag + 至多 3 字节长度(单条不超过 64 KiB)。
@@ -60,6 +62,7 @@ namespace
     }
 
     // 记录已经核过非空、未超单条上限。单条上限小于每人字节上限,所以丢到队空一定放得下。
+    // 上限只为封住内存(头文件 kMaxRecordsPerPlayer):排着的记录超过一笔的预算并不丢,AttachDue 分笔交出。
     void Push(uint64_t playerId, std::size_t bytes, Record record)
     {
         auto &state = Outbox();
@@ -68,12 +71,13 @@ namespace
                (queue.records.size() >= AuditOutbox::kMaxRecordsPerPlayer || queue.bytes + bytes > AuditOutbox::kMaxBytesPerPlayer))
         {
             const auto &oldest = queue.records.front();
+            audit_outbox_stats::IncDropped(audit_outbox_stats::DropReason::kOverflow);
             if (state.overflowDropped++ % kOverflowLogEveryN == 0)
             {
                 LOG_ERROR << "AuditOutbox: player " << playerId << " has " << queue.records.size() << " audit records ("
-                          << queue.bytes << " bytes) waiting for a save commit; dropping the oldest " << KindName(oldest.record)
-                          << " record_id=" << RecordId(oldest.record)
-                          << " instead of letting one save carry more than the transport budget"
+                          << queue.bytes << " bytes) waiting for a save commit, which means no save of this player has committed"
+                          << " for a long time; dropping the oldest " << KindName(oldest.record)
+                          << " record_id=" << RecordId(oldest.record) << " to bound memory"
                           << " (dropped_total=" << state.overflowDropped << ", metric=audit_outbox_overflow)";
             }
             queue.bytes -= oldest.bytes;
@@ -91,6 +95,7 @@ namespace
         }
         if (serializedBytes + kFieldOverheadBytes > AuditOutbox::kMaxRecordBytes)
         {
+            audit_outbox_stats::IncDropped(audit_outbox_stats::DropReason::kTooLarge);
             LOG_ERROR << "AuditOutbox: refusing a " << kind << " record of player " << playerId << " record_id=" << recordId
                       << ": " << serializedBytes << " bytes exceeds the per-record limit " << AuditOutbox::kMaxRecordBytes
                       << " (metric=audit_outbox_record_too_large)";
@@ -145,20 +150,28 @@ bool AuditOutbox::HasDue(uint64_t playerId, uint64_t mark)
     return it != players.end() && !it->second.records.empty() && it->second.records.front().mark <= mark;
 }
 
-void AuditOutbox::AttachDue(uint64_t playerId, uint64_t mark,
-                            google::protobuf::RepeatedPtrField<TransactionLogEntry> &transactionLogs,
-                            google::protobuf::RepeatedPtrField<PlayerSnapshotEntry> &snapshots)
+AuditOutbox::Attached AuditOutbox::AttachDue(uint64_t playerId, uint64_t mark,
+                                             google::protobuf::RepeatedPtrField<TransactionLogEntry> &transactionLogs,
+                                             google::protobuf::RepeatedPtrField<PlayerSnapshotEntry> &snapshots)
 {
+    Attached attached;
     const auto &players = Outbox().players;
     const auto it = players.find(playerId);
     if (it == players.end())
     {
-        return;
+        return attached;
     }
+    std::size_t attachedBytes = 0;
     for (const auto &queued : it->second.records)
     {
         if (queued.mark > mark)
         {
+            break;
+        }
+        // 一笔的预算用完:剩下的留给下一笔。第一条总是带上(单条上限小于一笔的预算,见头文件的 static_assert)。
+        if (attached.through != 0 && attachedBytes + queued.bytes > kMaxBytesPerSave)
+        {
+            attached.more = true;
             break;
         }
         if (const auto *entry = std::get_if<TransactionLogEntry>(&queued.record))
@@ -169,7 +182,10 @@ void AuditOutbox::AttachDue(uint64_t playerId, uint64_t mark,
         {
             *snapshots.Add() = std::get<PlayerSnapshotEntry>(queued.record);
         }
+        attachedBytes += queued.bytes;
+        attached.through = queued.mark;
     }
+    return attached;
 }
 
 void AuditOutbox::AckThrough(uint64_t playerId, uint64_t mark)

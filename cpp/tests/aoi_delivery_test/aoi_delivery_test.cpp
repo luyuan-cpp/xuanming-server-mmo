@@ -9,6 +9,7 @@
 #include "rpc/service_metadata/player_state_attribute_sync_service_metadata.h"
 #include <algorithm>
 #include <limits>
+#include <optional>
 #include <vector>
 #include "hexagons_grid.h"
 #include "spatial/system/aoi.h"
@@ -20,13 +21,23 @@
 #include "combat/engagement/comp/combat_engagement_comp.h"
 #include "combat/engagement/system/combat_engagement.h"
 #include "modules/scene/comp/scene_comp.h"
+#include "player/comp/afk_comp.h"
+#include "player/comp/player_frozen_comp.h"
+#include "player/comp/team_follow_comp.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/base_comp.pb.h"
+#include "proto/common/component/battle_comp.pb.h"
 #include "proto/common/component/npc_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
+#include "proto/common/component/player_network_comp.pb.h"
+#include "proto/scene/player_movement.pb.h"
 #include "proto/scene/player_scene.pb.h"
 #include "proto/scene/scene_info.pb.h"
+#include "spatial/system/actor_motion.h"
 #include "spatial/system/aoi_load.h"
+#include "spatial/system/facing.h"
+#include "spatial/system/view.h"
+#include "rpc/service_metadata/player_movement_service_metadata.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "thread_context/ecs_context.h"
 
@@ -93,6 +104,50 @@ double CreatedX(entt::entity receiver, entt::entity target) {
     return x;
 }
 
+// receiver 最近一次收到的 target 创建消息里的 Transform;没收到返回空。
+std::optional<Transform> CreatedTransform(entt::entity receiver, entt::entity target) {
+    std::optional<Transform> created;
+    for (const auto& sent : deliveries) {
+        if (sent.receiver != receiver || sent.messageId != SceneSceneClientPlayerNotifyActorListCreateMessageId) continue;
+        ActorListCreateS2C message;
+        EXPECT_TRUE(message.ParseFromString(sent.body));
+        for (const auto& actor : message.actor_list()) {
+            if (actor.entity() == actor_net_id::Of(tlsEcs.actorRegistry, target)) created = actor.transform();
+        }
+    }
+    return created;
+}
+
+// receiver 收到的 target 的移动,按到达先后:ActorMoveS2C 整条,或 ActorMoveListS2C 里 target 的那一项。
+std::vector<ActorMoveS2C> MovesFor(entt::entity receiver, entt::entity target) {
+    std::vector<ActorMoveS2C> moves;
+    const auto netId = actor_net_id::Of(tlsEcs.actorRegistry, target);
+    for (const auto& sent : deliveries) {
+        if (sent.receiver != receiver) continue;
+        if (sent.messageId == SceneMovementClientPlayerNotifyActorMoveMessageId) {
+            ActorMoveS2C move;
+            EXPECT_TRUE(move.ParseFromString(sent.body));
+            if (move.entity() == netId) moves.push_back(move);
+        } else if (sent.messageId == SceneMovementClientPlayerNotifyActorMoveListMessageId) {
+            ActorMoveListS2C list;
+            EXPECT_TRUE(list.ParseFromString(sent.body));
+            for (const auto& move : list.moves()) {
+                if (move.entity() == netId) moves.push_back(move);
+            }
+        }
+    }
+    return moves;
+}
+
+// receiver 收到的消息号,按到达先后。
+std::vector<uint32_t> MessageIdsFor(entt::entity receiver) {
+    std::vector<uint32_t> ids;
+    for (const auto& sent : deliveries) {
+        if (sent.receiver == receiver) ids.push_back(sent.messageId);
+    }
+    return ids;
+}
+
 // 移动、属性、技能广播的接收者:反向索引里可见的观察者。
 EntityUnorderedSet VisibleWatchersOf(entt::entity target) {
     EntityVector watchers;
@@ -152,6 +207,16 @@ protected:
         auto& location = *tlsEcs.actorRegistry.get<Transform>(entity).mutable_location();
         location.set_x(x);
         location.set_y(y);
+    }
+    // 挂上客户端会话:移动(含进视野补发)只发给有客户端的观察者。Spawn 出来的实体默认没有。
+    static void GiveClient(entt::entity entity) {
+        tlsEcs.actorRegistry.emplace<PlayerSessionSnapshotComp>(entity);
+    }
+    // 给实体一个水平速度(只写组件,不推进位置)。
+    static void Walk(entt::entity entity, double velocityX, double velocityY) {
+        auto& velocity = tlsEcs.actorRegistry.get_or_emplace<Velocity>(entity);
+        velocity.set_x(velocityX);
+        velocity.set_y(velocityY);
     }
 };
 }
@@ -1382,4 +1447,324 @@ TEST_F(AoiDeliveryTest, ActorLogKeepsPlayerIdentityAndFullEntitySeparate) {
     muduo::LogStream destroyed;
     destroyed << ActorLog(actor);
     EXPECT_EQ("player_id=0 entity=" + std::to_string(entt::to_integral(actor)), destroyed.buffer().toString());
+}
+
+// 朝向口径(spatial/system/facing.h,与客户端 WorldCoordinateConverter 同一份契约):
+// Rotation.z 是偏航角,单位度,朝向 = (cos z, sin z);x、y 恒 0。
+TEST(FacingTest, YawIsTheGroundAzimuthInDegrees) {
+    EXPECT_NEAR(0.0, facing::YawDegreesToward(2.0, 0.0).value(), 1e-9) << "+x(前)";
+    EXPECT_NEAR(90.0, facing::YawDegreesToward(0.0, 3.0).value(), 1e-9) << "+y(右):90 度,不是弧度 π/2";
+    EXPECT_NEAR(180.0, std::abs(facing::YawDegreesToward(-1.0, 0.0).value()), 1e-9);
+    EXPECT_NEAR(-90.0, facing::YawDegreesToward(0.0, -0.5).value(), 1e-9);
+    EXPECT_NEAR(45.0, facing::YawDegreesToward(1.0, 1.0).value(), 1e-9);
+    EXPECT_FALSE(facing::YawDegreesToward(0.0, 0.0).has_value()) << "原地没有方向";
+    EXPECT_FALSE(facing::YawDegreesToward(1e-7, -1e-7).has_value());
+
+    Rotation rotation;
+    rotation.set_x(0.3);
+    rotation.set_y(-0.2);
+    facing::SetYaw(rotation, 30.0);
+    EXPECT_EQ(0.0, rotation.x()) << "不翻滚";
+    EXPECT_EQ(0.0, rotation.y()) << "不俯仰";
+    EXPECT_EQ(30.0, rotation.z());
+}
+
+// 技能面向目标:只转偏航(度),目标在高处也不俯仰;Transform 标脏,由属性同步发给正在显示他的观察者。
+TEST_F(AoiDeliveryTest, LookAtPositionTurnsTheYawInDegreesAndMarksTheTransformDirty) {
+    const auto caster = Spawn(10, 10);
+    tlsEcs.actorRegistry.remove<ActorBaseAttributesS2CDirtyMaskComp>(caster);
+    Vector3 target;
+    target.set_x(10);
+    target.set_y(20);
+    target.set_z(5);
+
+    ViewSystem::LookAtPosition(caster, target);
+
+    const auto& rotation = tlsEcs.actorRegistry.get<Transform>(caster).rotation();
+    EXPECT_NEAR(90.0, rotation.z(), 1e-9);
+    EXPECT_EQ(0.0, rotation.x());
+    EXPECT_EQ(0.0, rotation.y());
+    const auto* dirty = tlsEcs.actorRegistry.try_get<ActorBaseAttributesS2CDirtyMaskComp>(caster);
+    ASSERT_NE(nullptr, dirty);
+    EXPECT_TRUE(dirty->dirtyMask.test(ActorBaseAttributesS2C::kTransformFieldNumber));
+}
+
+TEST_F(AoiDeliveryTest, LookAtPositionStraightAboveKeepsTheFacing) {
+    const auto caster = Spawn(10, 10);
+    tlsEcs.actorRegistry.get<Transform>(caster).mutable_rotation()->set_z(135.0);
+    tlsEcs.actorRegistry.remove<ActorBaseAttributesS2CDirtyMaskComp>(caster);
+    Vector3 overhead;
+    overhead.set_x(10);
+    overhead.set_y(10);
+    overhead.set_z(8);
+
+    ViewSystem::LookAtPosition(caster, overhead);
+
+    EXPECT_EQ(135.0, tlsEcs.actorRegistry.get<Transform>(caster).rotation().z()) << "没有水平方向:保留原朝向";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<ActorBaseAttributesS2CDirtyMaskComp>(caster)) << "没改就不标脏";
+}
+
+// 创建消息的 Transform 口径(21 / 47 同一份,与 Java 版一致):位置恒带、朝向写过才带、缩放不发。
+// 站着不动的人不会再发任何带朝向的消息,后进视野的人只能从创建消息知道他朝哪边站。
+TEST_F(AoiDeliveryTest, CreateCarriesTheStandingActorsFacingToANewObserver) {
+    const auto standing = Spawn(2, 1);
+    auto& standingTransform = tlsEcs.actorRegistry.get<Transform>(standing);
+    facing::SetYaw(*standingTransform.mutable_rotation(), 135.0);
+    standingTransform.mutable_scale()->set_x(2.0);
+    AoiSystem::Update(0);
+    deliveries.clear();
+
+    const auto newcomer = Spawn(2, 4);
+    AoiSystem::Update(0);
+
+    const auto created = CreatedTransform(newcomer, standing);
+    ASSERT_TRUE(created.has_value()) << "后来者收到站着的人的创建";
+    EXPECT_EQ(2.0, created->location().x());
+    EXPECT_EQ(1.0, created->location().y());
+    ASSERT_TRUE(created->has_rotation()) << "站着不动也带朝向,不用等他下一次移动";
+    EXPECT_EQ(135.0, created->rotation().z());
+    EXPECT_EQ(0.0, created->rotation().x());
+    EXPECT_EQ(0.0, created->rotation().y());
+    EXPECT_FALSE(created->has_scale()) << "缩放不发";
+}
+
+// 朝向没写过(Transform 里没有 rotation)就不带:创建消息不凭空造一个全零朝向。
+TEST_F(AoiDeliveryTest, CreateOmitsFacingThatWasNeverWritten) {
+    const auto standing = Spawn(2, 1);
+    ASSERT_FALSE(tlsEcs.actorRegistry.get<Transform>(standing).has_rotation()) << "前置条件:没写过朝向";
+    AoiSystem::Update(0);
+    deliveries.clear();
+
+    const auto newcomer = Spawn(2, 4);
+    AoiSystem::Update(0);
+
+    const auto created = CreatedTransform(newcomer, standing);
+    ASSERT_TRUE(created.has_value());
+    EXPECT_TRUE(created->has_location());
+    EXPECT_FALSE(created->has_rotation());
+}
+
+// ---------------------------------------------------------------------------
+// 进视野补发移动(2026-11-12):创建之后,新看见的目标正在走就补它此刻的移动状态。
+// 移动广播只发给当时已经在看的人,后来的观察者靠这一条才立刻看到它在走,不用等它的下一次广播。
+// 一个目标发 ActorMoveS2C(133),几个目标合成一条 ActorMoveListS2C(135)。
+// ---------------------------------------------------------------------------
+
+TEST_F(AoiDeliveryTest, NewObserverGetsAWalkingActorsMoveRightAfterItsCreate) {
+    const auto observer = Spawn(0, 0);
+    GiveClient(observer);
+    const auto clientless = Spawn(1, 0); // 没有客户端的观察者(NPC 之类):照常建关系,不发移动
+    const auto walker = Spawn(0, 14);
+    GiveClient(walker);
+    Walk(walker, 0, -2);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(VisibleWatchersOf(walker).empty()) << "前置条件:起点在视野外";
+    deliveries.clear();
+    broadcasts.clear();
+
+    MoveTo(walker, 0, 5);
+    AoiSystem::Update(0);
+
+    EXPECT_EQ((std::vector<uint32_t>{SceneSceneClientPlayerNotifyActorListCreateMessageId,
+                                     SceneMovementClientPlayerNotifyActorMoveMessageId}),
+              MessageIdsFor(observer))
+        << "先创建、后移动:客户端丢弃未知实体的移动";
+    const auto moves = MovesFor(observer, walker);
+    ASSERT_EQ(1u, moves.size());
+    EXPECT_EQ(5.0, moves[0].transform().location().y()) << "此刻的权威位置";
+    EXPECT_EQ(-2.0, moves[0].velocity().y());
+    EXPECT_EQ(actor_motion::kMoveStateWalking, moves[0].move_state());
+    EXPECT_NE(0u, moves[0].server_time_ms());
+
+    EXPECT_EQ(1, CreatesFor(clientless, walker));
+    EXPECT_TRUE(MovesFor(clientless, walker).empty()) << "没有客户端的观察者不发移动";
+
+    EXPECT_EQ((std::vector<uint32_t>{SceneSceneClientPlayerNotifyActorListCreateMessageId}), MessageIdsFor(walker))
+        << "他看见的两个人都站着:只有创建,不补移动";
+}
+
+TEST_F(AoiDeliveryTest, NewObserverGetsOneListForSeveralWalkingActors) {
+    const auto walkerA = Spawn(0, 0);
+    Walk(walkerA, 1, 0);
+    const auto walkerB = Spawn(1, 0);
+    Walk(walkerB, 0, 1);
+    const auto standing = Spawn(2, 0);
+    AoiSystem::Update(0);
+    deliveries.clear();
+    broadcasts.clear();
+
+    const auto newcomer = Spawn(0, 3);
+    GiveClient(newcomer);
+    AoiSystem::Update(0);
+
+    EXPECT_EQ((std::vector<uint32_t>{SceneSceneClientPlayerNotifyActorListCreateMessageId,
+                                     SceneMovementClientPlayerNotifyActorMoveListMessageId}),
+              MessageIdsFor(newcomer))
+        << "三个创建合成一条列表,两个在走的合成一条移动列表";
+    const auto movesOfA = MovesFor(newcomer, walkerA);
+    ASSERT_EQ(1u, movesOfA.size());
+    EXPECT_EQ(1.0, movesOfA[0].velocity().x());
+    const auto movesOfB = MovesFor(newcomer, walkerB);
+    ASSERT_EQ(1u, movesOfB.size());
+    EXPECT_EQ(1.0, movesOfB[0].velocity().y());
+    EXPECT_TRUE(MovesFor(newcomer, standing).empty()) << "站着的目标不补:创建消息已带位置和朝向";
+}
+
+// 停着的人速度可能只是残留(服务器停止积分时不清速度,等客户端的 MoveStop):
+// 不能当成在走发给新观察者,否则对方会从当前位置凭空外推出一段。
+TEST_F(AoiDeliveryTest, ResidualVelocityOfAHeldActorIsNotSentToANewObserver) {
+    const auto afk = Spawn(0, 0);
+    Walk(afk, 1, 0);
+    tlsEcs.actorRegistry.emplace<AfkComp>(afk);
+    const auto frozen = Spawn(1, 0);
+    Walk(frozen, 1, 0);
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(frozen);
+    const auto fighting = Spawn(2, 0);
+    Walk(fighting, 1, 0);
+    tlsEcs.actorRegistry.emplace<InBattleComp>(fighting);
+    AoiSystem::Update(0);
+    deliveries.clear();
+    broadcasts.clear();
+
+    const auto newcomer = Spawn(0, 3);
+    GiveClient(newcomer);
+    AoiSystem::Update(0);
+
+    EXPECT_EQ(1, CreatesFor(newcomer, afk));
+    EXPECT_EQ(1, CreatesFor(newcomer, frozen));
+    EXPECT_EQ(1, CreatesFor(newcomer, fighting));
+    EXPECT_EQ((std::vector<uint32_t>{SceneSceneClientPlayerNotifyActorListCreateMessageId}), MessageIdsFor(newcomer))
+        << "挂机、冻结、战斗在途:只有创建";
+}
+
+// 组队随从的位置由 TeamFollowSystem 每 tick 写:他在走,带着挂机标记(离线托管)也一样。
+TEST_F(AoiDeliveryTest, ServerDrivenFollowerCountsAsWalkingEvenWithTheAfkMark) {
+    const auto follower = Spawn(0, 0);
+    Walk(follower, 1.5, 0);
+    tlsEcs.actorRegistry.emplace<TeamFollowerComp>(follower);
+    tlsEcs.actorRegistry.emplace<AfkComp>(follower);
+    AoiSystem::Update(0);
+    deliveries.clear();
+    broadcasts.clear();
+
+    const auto newcomer = Spawn(0, 3);
+    GiveClient(newcomer);
+    AoiSystem::Update(0);
+
+    const auto moves = MovesFor(newcomer, follower);
+    ASSERT_EQ(1u, moves.size());
+    EXPECT_EQ(1.5, moves[0].velocity().x());
+    EXPECT_EQ(actor_motion::kMoveStateWalking, moves[0].move_state());
+}
+
+// 移动消息的内容口径(spatial/system/actor_motion.h):移动广播与进视野补发发的是同一份。
+TEST(ActorMotionTest, FillWritesTheWholeTransformVelocityTimeAndState) {
+    Transform transform;
+    transform.mutable_location()->set_x(3);
+    facing::SetYaw(*transform.mutable_rotation(), 90.0);
+    Velocity walking;
+    walking.set_y(2);
+
+    ActorMoveS2C move;
+    actor_motion::FillActorMove(77, transform, &walking, 123456, move);
+    EXPECT_EQ(77u, move.entity());
+    EXPECT_EQ(3.0, move.transform().location().x());
+    EXPECT_EQ(90.0, move.transform().rotation().z());
+    EXPECT_EQ(2.0, move.velocity().y());
+    EXPECT_EQ(123456u, move.server_time_ms());
+    EXPECT_EQ(actor_motion::kMoveStateWalking, move.move_state());
+
+    // 复用同一个消息对象:先清空再写,不带上一次的速度。
+    actor_motion::FillActorMove(78, transform, nullptr, 123457, move);
+    EXPECT_EQ(78u, move.entity());
+    EXPECT_FALSE(move.has_velocity()) << "没有 Velocity 组件:不带速度";
+    EXPECT_EQ(actor_motion::kMoveStateStopped, move.move_state());
+
+    Velocity stopped;
+    actor_motion::FillActorMove(79, transform, &stopped, 123458, move);
+    EXPECT_TRUE(move.has_velocity()) << "有组件就带,零速就是停下的通知";
+    EXPECT_EQ(actor_motion::kMoveStateStopped, move.move_state());
+}
+
+// ---------------------------------------------------------------------------
+// 观察者换了客户端(2026-11-12,AoiSystem::ResendVisibleTargets):断线保留内重连、顶号、gate 排空迁移之后,
+// 角色还在场景里,新客户端里一个 actor 都没有。只把它当前显示中的目标重发给它;别的观察者什么都收不到,
+// 所以邻居看不到它先消失再出现。调用方是 PlayerSceneSystem::HandleEnterScene 的「已在目标场景、换了客户端」。
+// ---------------------------------------------------------------------------
+
+TEST_F(AoiDeliveryTest, ResendVisibleTargetsReplaysTheWatchersViewAndTouchesNobodyElse) {
+    const auto watcher = Spawn(0, 0);
+    const auto nearby = Spawn(1, 0);
+    const auto followed = Spawn(500, 500);   // 网格之外,靠显式关注显示
+    const auto hidden = Spawn(-500, -500);   // 显式关注着,但目标隐身:关系在,暂不显示
+    AoiSystem::Update(0);
+    ASSERT_TRUE(AoiSystem::Follow(watcher, followed, SkillGrant(1)));
+    ASSERT_TRUE(AoiSystem::Follow(watcher, hidden, SkillGrant(2)));
+    tlsEcs.actorRegistry.emplace<StealthedTagComp>(hidden);
+    AoiSystem::RefreshTargetVisibility(hidden);
+    const auto& view = tlsEcs.actorRegistry.get<AoiListComp>(watcher);
+    ASSERT_TRUE(view.IsVisible(nearby));
+    ASSERT_TRUE(view.IsVisible(followed));
+    ASSERT_TRUE(view.HasRelation(hidden));
+    ASSERT_FALSE(view.IsVisible(hidden));
+    MoveTo(followed, 505, 500); // 重发带此刻的位置,不是首次创建时的
+    const auto entriesBefore = view.entries.size();
+    const auto visibleBefore = view.VisibleCount();
+    const auto watchersBefore = VisibleWatchersOf(watcher);
+    ASSERT_EQ((EntityUnorderedSet{nearby}), watchersBefore);
+    deliveries.clear();
+    broadcasts.clear();
+
+    AoiSystem::ResendVisibleTargets(watcher);
+
+    EXPECT_EQ(1, CreatesFor(watcher, nearby));
+    EXPECT_EQ(1, CreatesFor(watcher, followed));
+    EXPECT_DOUBLE_EQ(505.0, CreatedX(watcher, followed)) << "按最新状态重发";
+    EXPECT_EQ(0, CreatesFor(watcher, hidden)) << "暂时不可见的显式关注不发,目标现身时由原有入口创建";
+    EXPECT_EQ((std::vector<uint32_t>{SceneSceneClientPlayerNotifyActorListCreateMessageId}), MessageIdsFor(watcher))
+        << "显示中的目标合成一条列表";
+    EXPECT_TRUE(MessageIdsFor(nearby).empty()) << "邻居什么都收不到:看不到他先消失再出现";
+    EXPECT_TRUE(MessageIdsFor(followed).empty());
+    EXPECT_TRUE(MessageIdsFor(hidden).empty());
+
+    EXPECT_EQ(entriesBefore, view.entries.size()) << "只发消息,不改关系";
+    EXPECT_EQ(visibleBefore, view.VisibleCount()) << "不占新名额";
+    EXPECT_EQ(watchersBefore, VisibleWatchersOf(watcher)) << "别人对他的关注原样留着";
+    EXPECT_TRUE(tlsEcs.actorRegistry.all_of<Hex>(watcher)) << "格子不动";
+
+    // 之后的可见性变化照常:隐身的目标现身,由原有入口创建一次。
+    deliveries.clear();
+    tlsEcs.actorRegistry.remove<StealthedTagComp>(hidden);
+    AoiSystem::RefreshTargetVisibility(hidden);
+    EXPECT_EQ(1, CreatesFor(watcher, hidden));
+}
+
+TEST_F(AoiDeliveryTest, ResendVisibleTargetsAddsTheMoveOfWalkingTargetsAndSkipsEmptyViews) {
+    const auto watcher = Spawn(0, 0);
+    GiveClient(watcher);
+    const auto walker = Spawn(1, 0);
+    Walk(walker, 0, 2);
+    AoiSystem::Update(0);
+    const auto loner = Spawn(500, 500); // 视野里没有任何人,连关注表都没有
+    AoiSystem::Update(0);
+    ASSERT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(loner));
+    deliveries.clear();
+    broadcasts.clear();
+
+    AoiSystem::ResendVisibleTargets(watcher);
+
+    EXPECT_EQ((std::vector<uint32_t>{SceneSceneClientPlayerNotifyActorListCreateMessageId,
+                                     SceneMovementClientPlayerNotifyActorMoveMessageId}),
+              MessageIdsFor(watcher))
+        << "与首次进视野同一个出口:先创建,正在走的目标再补一条移动";
+    const auto moves = MovesFor(watcher, walker);
+    ASSERT_EQ(1u, moves.size());
+    EXPECT_EQ(2.0, moves[0].velocity().y());
+    EXPECT_TRUE(MessageIdsFor(walker).empty());
+
+    deliveries.clear();
+    AoiSystem::ResendVisibleTargets(loner);
+    AoiSystem::ResendVisibleTargets(entt::null);
+    EXPECT_TRUE(deliveries.empty()) << "没有显示中的目标就没有可发的";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(loner)) << "读路径不补建关注表";
 }

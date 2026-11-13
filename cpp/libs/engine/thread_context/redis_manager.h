@@ -17,6 +17,8 @@ struct RedisConnectOptions
 {
 	// 重连间隔的默认值;Connect 收到非正数时也回落到它。
 	static constexpr double kDefaultReconnectIntervalSec = 3.0;
+	// 重连抖动上限的默认值,见 reconnectJitterSec。
+	static constexpr double kDefaultReconnectJitterSec = 1.0;
 	// 存活探测的默认值;Connect 收到非正数时也回落到它们。
 	static constexpr double kDefaultLivenessProbeIntervalSec = 5.0;
 	static constexpr double kDefaultLivenessTimeoutSec = 15.0;
@@ -24,9 +26,15 @@ struct RedisConnectOptions
 	// 空 = 不认证(dev / 本机无口令 Redis,行为与 2026-10 之前相同);
 	// 非空 = 每条新连接(首次建连与每次重连)建立后发出的第一条命令就是 AUTH,收到 +OK 才对业务可见。
 	std::string password;
-	// 断线重连间隔(秒),同时是一次 AUTH 握手的截止时间(从连上算起)。
+	// 断线重连的基础间隔(秒)。实际周期 = 它 + 本次 Connect 抽出的抖动(见 reconnectJitterSec),
+	// 这个周期同时是一次 AUTH 握手的截止时间(从连上算起)。
 	// 可注入只是为了让回归用例不必等满默认值;生产保持默认。
 	double reconnectIntervalSec = kDefaultReconnectIntervalSec;
+	// 重连抖动上限(秒):每次 Connect 在基础间隔上加一个 [0, 该值) 的随机量,同一个 Connect 周期内不变。
+	// 没有它,Redis 重启或网络恢复时全体进程按同一节拍回连,建连与 AUTH 同时压到刚起来的实例上
+	// (docs/design/infra-reconnect-overview.md §4 R18)。集群客户端的每条节点连接各抽一次。
+	// 0 或负数 = 不加抖动;时序断言精确到重连间隔的回归用例传 0,生产保持默认。
+	double reconnectJitterSec = kDefaultReconnectJitterSec;
 	// 存活探测(契约见 RedisManager::Connect):每隔这么多秒检查一次对业务可见的连接,没有探测 PING 在途就发一条。
 	double livenessProbeIntervalSec = kDefaultLivenessProbeIntervalSec;
 	// 探测 PING 发出后这么多秒仍没有应答,就把连接当成已断开:摘下、释放、走既有重连。
@@ -108,6 +116,13 @@ public:
 	// 因此回调内同步 Connect / Shutdown 或释放连接时，旧连接在分发结束后的 pending 阶段才真正销毁。
 	void SetReconnectCallback(const ReconnectCallback &cb) { reconnectCb_ = cb; }
 
+	// 本次 Connect 周期实际使用的重连周期(秒):基础间隔加抽出的抖动。Connect 之前是默认基础间隔。
+	double ReconnectPeriodSec() const { return reconnectPeriodSec_; }
+
+	// 重连周期 = 基础间隔 + jitterSec × unitRandom。unitRandom 是调用方给的 [0, 1) 随机数,超出范围(含 NaN)按 0 算;
+	// jitterSec 不是正数时不加抖动。纯函数,随机数由调用方给,方便单测。
+	static double JitteredReconnectIntervalSec(double baseSec, double jitterSec, double unitRandom);
+
 private:
 	void ScheduleReconnect();
 	void CancelReconnectTimer();
@@ -128,7 +143,7 @@ private:
 	void ResetLivenessProbe();
 
 	// 重连、存活探测定时器及排进 queueInLoop 的任务用它判断本对象是否还活着、是否还处在同一个 Connect 周期。
-	// 本类不由 shared_ptr 持有(tlsRedis 是 thread_local 值),拿不到 weak_ptr<自己>,用这枚令牌代替(AGENTS.md §11.7):
+	// 本类不由 shared_ptr 持有(集群客户端按值 / unique_ptr 持有每条节点连接),拿不到 weak_ptr<自己>,用这枚令牌代替(AGENTS.md §11.7):
 	// 闭包只捕获它的 weak_ptr 和 this,先 lock,失败即返回,成功才碰 this(单线程 loop,lock 与使用之间不会被析构)。
 	// Connect 换新令牌、Shutdown(析构经 Shutdown)清空令牌,此前排队的闭包一律失效。
 	struct LifetimeToken
@@ -139,7 +154,7 @@ private:
 	// 连接 / 断线 / AUTH / PING 回调均先锁 lifetimeToken_；Shutdown / Connect 作废令牌后，旧连接即使延迟
 	// 销毁也不能再访问管理器。释放前清连接与断线回调；在途业务命令仍由 hiredis 以空应答收尾。
 	// 重连与存活探测的定时器、排队任务都先锁 lifetimeToken_ 再访问 this；Shutdown 仍须在 EventLoop 析构前执行，
-	// 以取消定时器并释放 Hiredis Channel。tlsRedis 是 thread_local，不能指望其析构晚于 loop 时再兜底。
+	// 以取消定时器并释放 Hiredis Channel。持有方(集群客户端)可能是 thread_local，不能指望其析构晚于 loop 时再兜底。
 	// 不变量:重连定时器只在 connection_ 不可用时运行,所以移交时被替换掉的只会是占位对象或已断开的旧连接
 	// (二者 context 都已为空,析构不触发任何回调)。存活探测摘下连接时先换上占位对象再 ScheduleReconnect,不破坏它。
 	//
@@ -154,6 +169,8 @@ private:
 	std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
 	muduo::net::InetAddress redisAddr_;
 	RedisConnectOptions options_;
+	// 本次 Connect 周期的重连周期(秒),Connect 里定下后不变;重连定时器与 AUTH 握手截止都用它。
+	double reconnectPeriodSec_ = RedisConnectOptions::kDefaultReconnectIntervalSec;
 	muduo::net::TimerId reconnectTimerId_;
 	bool reconnectTimerActive_ = false;
 	// 只在 loop 线程访问；每次安排与取消都换代，使已投递的旧重建任务失效。
@@ -174,18 +191,12 @@ private:
 	std::shared_ptr<LifetimeToken> lifetimeToken_;           // 见 LifetimeToken;未 Connect 或已 Shutdown 时为空
 };
 
-// 核心共享实例句柄(game_config.yaml 的 zoneredis):PUBLISH assetop:wake 等全局用途,订阅者 guild、trade 只连核心。
-// 每个 C++ 节点一条连接。
-// 玩家域键(带 {player_id} 的键)走 tlsPlayerRedis,声明在 infra/storage/redis_cluster/redis_cluster_client.h。
-extern thread_local RedisManager tlsRedis;
-
-// 本 zone 的场景控制域句柄(game_config.yaml 的 scene_control_redis,docs/design/control-plane-zone-scoping-20261105.md §4.5):
-// scene_manager 写进本 zone 所属组控制域实例(redis-ctl-g<N>)的读模型 —— 世界分线目录、神秘商人。只有 scene 在
-// RedisSystem::Initialize 里建连;gate、battle 不连,这里恒未连接(GetConnection() 为空,调用点按「Redis 不可用」处理)。
-// 配置缺省时与 zoneredis 指向同一个实例(开发环境不用改)。
-extern thread_local RedisManager tlsSceneControlRedis;
+// 本类只是一条连接(带 AUTH、存活探测与重连)。业务不直接持有它:scene 的两个 Redis 句柄 tlsPlayerRedis(玩家域)与
+// tlsControlRedis(控制集群)都是 RedisClusterClient,每个节点一条 RedisManager,声明在
+// infra/storage/redis_cluster/redis_cluster_client.h(docs/design/redis-cluster-all-domains-20261110.md §4.2)。
+// gate、battle 不连 Redis。
 
 // 把配置里的 Redis 主机名与端口解析成地址:看起来像 IP 字面量就直接用,否则 DNS 解析,失败按 1s 间隔重试,
 // 10 次仍失败就致命退出(与 etcd 端点同口径;不再按字面量处理,见 docs/design/infra-reconnect-overview.md §4 R9)。
-// 只在节点启动阶段调用(会阻塞)。两条控制面连接共用,不各写一份。
+// 只在节点启动阶段调用(会阻塞)。scene 解析两个集群句柄的种子共用它,不各写一份。
 muduo::net::InetAddress ResolveRedisAddress(const std::string &host, uint16_t port);

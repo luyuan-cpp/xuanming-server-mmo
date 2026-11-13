@@ -26,7 +26,7 @@ Gate → 本地校验签名、目标 Gate 与到期时间 → 允许后续游戏
 2、3 两个消费入口用同一个签票函数 `loginqueue.NewAdmitSigner`（2026-11-05 起）：签之前复核放行时选定的 Gate，它仍在分档选出的
 那一档里就沿用，已停写、排空、满载或不在此刻的候选里就重挑（见下文「满载与停写的 gate」）。此前两处各写一个闭包，照签已选 Gate。
 
-代码：`go/login/internal/logic/loginpregate/assigngatelogic.go`、`querystatuslogic.go`、
+代码：`go/login/internal/logic/loginpregate/assigngatelogic.go`、`queryqueuestatuslogic.go`、
 `go/login/internal/logic/pkg/loginqueue/gatetoken.go`、`admit_recheck.go`。
 
 ### gate 目录怎么读、怎么挑（2026-10-18 起；已落码，未编译、未测试，待 Codex 验证）
@@ -76,7 +76,7 @@ scene_manager 跨 zone 重定向共用；Java 版 `game-discovery` 的 `GatePick
 读失败放行；键名 `gate:%d:draining` 在 scene_manager 里抄了一份，由 `tools/scripts/tests/k8s_gate_drain.tests.ps1`
 钉住与 login、排空脚本三处一致。scene_manager 经**自己的** Redis 连接读标记，今天与 login 的 `Node.RedisClient` 是同一实例；
 **拆 Redis（G4a）把排空标记挪到 redis-queue 时，scene_manager 这条读也要一起指过去**（G4a 修订稿需把 scene_manager 列为
-`gate:{id}:draining` 的读者；2026-10-19 注：已在 `shared-redis-split-by-purpose.md` §2.2 A 表、§3.2.1 约束 1 与 §20.5 登记），否则读不到标记、退回不过滤。另一个隐含前提：go-zero 的 `RedisConf` 没有 DB 字段，scene_manager
+`gate:{gm:<zone>}:<id>:draining` 的读者；2026-10-19 注：已在 `shared-redis-split-by-purpose.md` §2.2 A 表、§3.2.1 约束 1 与 §20.5 登记），否则读不到标记、退回不过滤。另一个隐含前提：go-zero 的 `RedisConf` 没有 DB 字段，scene_manager
 只能读 DB 0；login 的 `Node.RedisClient.DB` 改成非 0 时要同步处理。两边读标记的客户端不同（login 用 go-redis，经
 `loginqueue.DrainMarkCache` 按 zone 缓存 1 秒；scene_manager 用 go-zero，每次重定向一次 MGET），各读各的；怎么用标记只有
 `gatepick.Eligible` 一份（2026-11-06 起；此前 login 的 `FilterDrainingGates` 与 scene_manager 的 `filterDrainingTargets` 各写了一份
@@ -122,7 +122,7 @@ scene_manager 跨 zone 重定向共用；Java 版 `game-discovery` 的 `GatePick
   10% 余量给人数上报滞后：login 看到的人数最多晚约 15s。余量不保证不超，这 15s 里分给它的人超过上限的 10% 时仍会顶满，
   由 gate 按 `GateMaxConnections` 拒连兜底。`max_connections` 为 0（dev 下不设上限、旧版 gate）不按上限判。
   没有用「只在较低一半里二选一」：它在 n≤4 时等于回到确定性取最少。
-- **排空**：运维缩容前用 `tools/scripts/k8s_gate_drain.ps1` 打 `gate:<id>:draining` 标记（带 TTL）。排空中的 gate 照常服务已在线的
+- **排空**：运维缩容前用 `tools/scripts/k8s_gate_drain.ps1` 打 `gate:{gm:<zone>}:<id>:draining` 标记（带 TTL）。排空中的 gate 照常服务已在线的
   玩家，只是不再分新玩家；它连得上，所以排在停写的 gate 前面。login 的标记经 `DrainMarkCache` 按 zone 缓存 1 秒、查询失败放行；
   scene_manager 每次重定向一次 MGET、失败放行。排空脚本标记前要求同 zone 还有没排空的候选：全部排空时分档退到「连得上的」照常分配，
   标了挡不住新玩家（脚本侧的说明见 `Select-GateDrainPeers`）。
@@ -167,7 +167,7 @@ scene_manager 跨 zone 重定向共用；Java 版 `game-discovery` 的 `GatePick
 - **停写标记**（2026-11-10 起；已落码，未编译、未测试）：由目标 zone 里本来就在持续观察本 zone gate 的一方发布判定，做法同 Kubernetes
   节点控制器：观察者用自己的单调时钟判，消费者只读结果。
   - **写**：login 的 `NodeWatcher` 对本 zone 的 gate 做 list-watch、按 ModRevision 判停写（`WatchedNode.Stale`）。各 login 副本每个
-    上报周期（`gatepick.ReportPeriod`）读一次镜像，给判为停写的 gate 写 `gatepick.StaleKey`（`gate:<node_id>:stale`，值 `"1"`，
+    上报周期（`gatepick.ReportPeriod`）读一次镜像，给判为停写的 gate 写 `gatepick.StaleKey`（`gate:{gm:<zone>}:<node_id>:stale`，值 `"1"`，
     过期 `gatepick.StaleMarkTTL` = 30s），不主动删：恢复后不再续写，30s 内自然过期。写在 login 的 `Node.RedisClient`（核心实例，
     与排空标记同一处）。代码：`go/login/internal/logic/pkg/loginqueue/gatestale.go`（`PublishStaleMarks`）、
     `go/login/internal/svc/gate_stale_publisher.go`（循环与接线，`Start` 起、`CloseSource` 停）。正常时一台都不停写，零写入；

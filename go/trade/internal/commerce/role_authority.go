@@ -50,6 +50,27 @@ func (a *RoleAuthority) Lock(ctx context.Context, tx *sql.Tx, expects ...rolefen
 	return err
 }
 
+// VerifyOriginalOwner 是客户端入口的归属预检(docs/design/gate-online-identity.md §9.3):不加锁读本库护栏副本,
+// 判 ctx 里原会话身份的角色此刻是否仍归它。浏览、详情、我的货架、收藏、盘口挂单列表不进合同事务,这是它们唯一的归属检查;
+// 合同写入照旧在 lockRoles 持锁复核。
+//
+// 不看冻结:卖家把自己这名角色挂人民币寄售之后角色就是冻结的,重放与查询仍要放行(verifyReplayActor)。
+// 确定不归(已换主、已删、目录里没有)回 ErrConflict;其余错误是这一次判不了,入口按可重试处理。
+func (a *RoleAuthority) VerifyOriginalOwner(ctx context.Context) error {
+	original, ok := roleidentity.Original(ctx)
+	if !ok || a == nil {
+		return ErrConflict
+	}
+	err := a.guard.VerifyOwner(ctx, rolefence.Expect{PlayerID: original.Role.GetPlayerId(), Account: original.Account, OwnerRevision: original.OwnerRevision, Reject: ErrConflict})
+	if errors.Is(err, rolefence.ErrRoleNotFound) {
+		return ErrConflict
+	}
+	return err
+}
+
+// OwnerRejected 判 VerifyOriginalOwner 的错误是不是确定不归;为假就是这一次判不了。
+func OwnerRejected(err error) bool { return errors.Is(err, ErrConflict) }
+
 func (a *RoleAuthority) Ownership(ctx context.Context, tx *sql.Tx, player uint64) (*dspb.AccountRoleOwnership, error) {
 	if player == 0 {
 		return nil, ErrConflict
@@ -195,6 +216,7 @@ func readRoleFacts(ctx context.Context, tx *sql.Tx, roles RoleLocker, players []
 	slices.Sort(sorted)
 	sorted = slices.Compact(sorted)
 	facts := make(map[uint64]roleFact, len(sorted))
+	var missing []uint64
 	for _, player := range sorted {
 		owned, err := roles.Ownership(ctx, tx, player)
 		var stale *rolefence.StaleError
@@ -202,9 +224,8 @@ func readRoleFacts(ctx context.Context, tx *sql.Tx, roles RoleLocker, players []
 		case err == nil:
 			facts[player] = roleFact{owned: owned}
 		case errors.As(err, &stale):
-			if heal {
-				return nil, err
-			}
+			// 缺行的一次收齐再自愈(与 rolefence.LockAll 同一做法):逐个回的话第二名还要再自愈一次,就被 RunTx 当成真实拒绝了。
+			missing = append(missing, player)
 			facts[player] = roleFact{unknown: true}
 		case errors.Is(err, ErrConflict):
 			// Ownership 只在账号已清空(删角墓碑)时回 ErrConflict;player 为 0 的已在上面跳过。
@@ -212,6 +233,9 @@ func readRoleFacts(ctx context.Context, tx *sql.Tx, roles RoleLocker, players []
 		default:
 			return nil, err
 		}
+	}
+	if heal && len(missing) > 0 {
+		return nil, &rolefence.StaleError{Players: missing, Reject: roleConflict()}
 	}
 	return facts, nil
 }

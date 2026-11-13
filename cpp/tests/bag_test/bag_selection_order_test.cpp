@@ -13,7 +13,6 @@
 #include "modules/bag/bag_service.h"
 #include "modules/bag/bag_system.h"
 #include "modules/bag/item_store.h"
-#include "fifo_eviction_profile_for_test.h" // 先进先出的测试包(生产已无包淘汰,§6.6)
 #include "modules/gain_block/gain_block_service.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "table/code/equipslot_table.h"
@@ -338,19 +337,6 @@ TEST_F(BagSelectionOrderTest, BatchDrainReportsConfigsBeforeSlotOrder)
     EXPECT_EQ(kGuidC, drained[0].guid);
     EXPECT_EQ(kGuidB, drained[1].guid);
     EXPECT_EQ(kGuidA, drained[2].guid);
-}
-
-TEST_F(BagSelectionOrderTest, EvictionTieOnEqualSeqEvictsSmallerGuidFirst)
-{
-    Bag bag;
-    bag.SetProfile(FifoEvictingProfileForTest(2));
-    bag.InsertItemForRestore(kGuidB, 3, 1, 0, 5);
-    bag.InsertItemForRestore(kGuidA, 3, 1, 1, 5);
-    std::vector<DestroyedInstance> evicted;
-    ASSERT_EQ(kSuccess, bag.AddItem(MakeGrant(3, 1), nullptr, &evicted));
-    ASSERT_EQ(1u, evicted.size());
-    EXPECT_EQ(kGuidA, evicted[0].guid);
-    EXPECT_NE(nullptr, bag.GetItemCompByGuid(kGuidB));
 }
 
 TEST_F(BagSelectionOrderTest, SnapshotReplayKeepsIterationOrder)

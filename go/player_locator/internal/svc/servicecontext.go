@@ -11,6 +11,7 @@ import (
 
 	"player_locator/internal/config"
 	smpb "proto/scene_manager"
+	"shared/clusterredis"
 	"shared/generated/table"
 	"shared/kafkacmd"
 	"shared/playerredis"
@@ -21,37 +22,40 @@ const leaseCleanupWakeBuffer = 1024
 
 type ServiceContext struct {
 	Config config.Config
-	// RedisClient 是控制域:选主锁、就绪标记、代次、审计时间。
-	RedisClient *redis.Client
+	// RedisClient 是控制集群句柄(shared/clusterredis,ControlRedis 段,ControlClusterKeys 键策略;2026-11-12 起):
+	// 选主锁、就绪标记、代次、审计时间、一遍的进度。字段名沿用,单测与调用方不用跟着改。
+	RedisClient redis.UniversalClient
 	// PlayerRedis 是玩家域:会话、断线租约、gate 索引、分片登记、AFK 通行、位置(只读)。
 	PlayerRedis        redis.UniversalClient
 	KafkaWriter        *kafkago.Writer
 	SceneManagerClient smpb.SceneManagerClient
 	// LeaseCleanupWake 叫醒本进程的 LeaseMonitor 立刻处理一个 slot(见 wakeLeaseMonitorAt)。nil = 不叫醒,只靠常规轮转。
 	LeaseCleanupWake chan uint16
+	// zoneSceneManagers 是别的 zone 的 scene_manager 客户端(托管归位用,zone_scene_manager.go)。nil = 只认本 zone。
+	zoneSceneManagers *zoneSceneManagers
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
 	table.LoadTables(c.TableDir, false)
 
-	if c.RedisClient.PoolSize < 0 {
-		panic(fmt.Errorf("RedisClient.PoolSize=%d must be >= 0 (0 = go-redis default 10 x GOMAXPROCS)", c.RedisClient.PoolSize))
+	if err := c.ControlRedis.ValidateSection(); err != nil {
+		panic(fmt.Errorf("ControlRedis: %w", err))
 	}
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     c.RedisClient.Host,
-		Password: c.RedisClient.Password,
-		DB:       c.RedisClient.DB,
-		// 共享 Redis 连接总账按它记账(0 = go-redis 缺省 10 × GOMAXPROCS),见 config.RedisConf.PoolSize。
-		PoolSize: c.RedisClient.PoolSize,
-	})
-
+	if c.ControlRedis.PasswordEnv != "" {
+		panic(fmt.Errorf("ControlRedis.PasswordEnv is not used: name the password variable in SharedRedisPasswordEnv"))
+	}
+	controlConf := c.EffectiveControlRedis()
+	rdb, err := clusterredis.New(controlConf, clusterredis.ControlClusterKeys)
+	if err != nil {
+		panic(fmt.Errorf("failed to build control redis client: %w", err))
+	}
 	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		panic(fmt.Errorf("failed to connect Redis: %w", err))
+		panic(fmt.Errorf("failed to connect control redis: %w", err))
 	}
-	// 生效值(缺省时是 go-redis 算出来的 10 × GOMAXPROCS):核对 ConfigMap 镜像的 PoolSize 是否真的被加载。
-	logx.Infof("Redis client %s DB=%d pool_size=%d", c.RedisClient.Host, c.RedisClient.DB, rdb.Options().PoolSize)
+	// 生效的池上限:核对 ConfigMap 镜像的 PoolSizePerNode 是否真的被加载。
+	logx.Infof("Control redis client %s", controlConf.Describe())
 
-	playerConf, err := playerRedisConf(c)
+	playerConf, err := playerRedisConf(c, controlConf)
 	if err != nil {
 		panic(err)
 	}
@@ -86,9 +90,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// SceneManager zrpc client (via etcd discovery).
 	var smClient smpb.SceneManagerClient
+	var zoneManagers *zoneSceneManagers
 	if len(c.SceneManagerRpc.Etcd.Hosts) > 0 {
 		cli := zrpc.MustNewClient(c.SceneManagerRpc)
 		smClient = smpb.NewSceneManagerClient(cli.Conn())
+		zoneManagers = newZoneSceneManagers(c.SceneManagerRpc, c.Node.ZoneId)
 	}
 
 	return &ServiceContext{
@@ -98,23 +104,27 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		KafkaWriter:        w,
 		SceneManagerClient: smClient,
 		LeaseCleanupWake:   make(chan uint16, leaseCleanupWakeBuffer),
+		zoneSceneManagers:  zoneManagers,
 	}
 }
 
-// playerRedisConf 是玩家域客户端的配置:没写 PlayerRedis 段时指向 RedisClient 这个单实例,沿用它的连接池上限与
-// go-redis 缺省超时,开发环境和还没渲染这一段的 ConfigMap 不用改就能跑。玩家域只用 DB 0,所以 RedisClient.DB 不是 0
+// playerRedisConf 是玩家域客户端的配置:没写 PlayerRedis 段时指向 ControlRedis 那一个实例(control 是它的生效配置),
+// 沿用它的连接池上限与超时,开发环境和还没渲染这一段的 ConfigMap 不用改就能跑。玩家域只用 DB 0,所以 ControlRedis.DB 不是 0
 // 时不能这样缺省:会话会悄悄换一个 DB,读会话的别的服务看不到。
-func playerRedisConf(c config.Config) (playerredis.Config, error) {
+func playerRedisConf(c config.Config, control clusterredis.Config) (playerredis.Config, error) {
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
 		return playerredis.Config{}, fmt.Errorf("PlayerRedis: %w", err)
 	}
-	if len(c.PlayerRedis.Addrs) == 0 && c.RedisClient.DB != 0 {
-		return playerredis.Config{}, fmt.Errorf("PlayerRedis is not set and RedisClient.DB=%d: the player domain only uses DB 0, set PlayerRedis.Addrs explicitly", c.RedisClient.DB)
+	if len(c.PlayerRedis.Addrs) == 0 && control.DB != 0 {
+		return playerredis.Config{}, fmt.Errorf("PlayerRedis is not set and ControlRedis.DB=%d: the player domain only uses DB 0, set PlayerRedis.Addrs explicitly", control.DB)
 	}
 	return c.PlayerRedis.OrDefault(playerredis.Config{
-		Addrs:           []string{c.RedisClient.Host},
-		Password:        c.RedisClient.Password,
-		PoolSizePerNode: min(c.RedisClient.PoolSize, playerredis.MaxPoolSizePerNode),
+		Addrs:           control.Addrs,
+		Cluster:         control.Cluster,
+		Username:        control.Username,
+		Password:        control.Password,
+		TLS:             control.TLS,
+		PoolSizePerNode: min(control.PoolSizePerNode, playerredis.MaxPoolSizePerNode),
 		DialTimeoutMs:   5000,
 		ReadTimeoutMs:   3000,
 		WriteTimeoutMs:  3000,

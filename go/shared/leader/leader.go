@@ -21,6 +21,10 @@
 //
 // 锁的属主凭据是每次竞选新生成的随机值,续期与释放都带属主校验,
 // 不存在"续了别人的锁"或"删了别人的锁"。
+//
+// 这把锁只保证「最终只有一个领导者」,不保证任一时刻只有一个:自我降级靠本地时钟,进程卡顿、
+// 或 Redis 主从切换丢了锁时,旧领导者在下一次心跳之前仍以为自己在任。所以领导者独占的写不能只凭
+// IsLeader:要么本身幂等、要么带按对象的条件,要么带上 Token 在写脚本里核对锁键(见 Elector.Token)。
 package leader
 
 import (
@@ -62,8 +66,9 @@ end
 `
 )
 
-// Store 是选主锁需要的最小 Redis 能力。go-zero 与 go-redis 两套客户端
-// 各有一个适配器(见 store_gozero.go / store_goredis.go),单测用内存假实现。
+// Store 是选主锁需要的最小 Redis 能力。go-redis 的单机客户端与 UniversalClient 各有一个适配器
+// (见 store_goredis.go / store_universal.go),单测用内存假实现。go-zero 句柄的适配器 2026-11-12 随最后一个调用方
+// (scene_manager 换控制集群句柄)删除。
 type Store interface {
 	// SetNX 对应 SET key value NX EX,拿到锁返回 true。
 	SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error)
@@ -80,10 +85,21 @@ type CallBounder interface {
 	MaxCallDuration() time.Duration
 }
 
+// DefaultRetryPeriod 是跟随者两次竞选之间的缺省间隔,取 client-go leaderelection 的缺省值(RetryPeriod 2s)。
+//
+// 它与心跳间隔(TTL/3)分开:心跳间隔要给瞬时抖动留出 TTL 内 2~3 次续期机会,竞选间隔只决定「锁空出来之后
+// 多久有人接任」。两者绑在一起时缺省 TTL 30s 的竞选间隔是 10s:每次滚动重启,现任主动让位之后要白等最多 10s
+// 才有新领导者,这段时间选主任务(scene_manager 的排空迁移与死节点接管、login 的排队放行等)全部停摆
+// (docs/design/scene-node-planned-drain.md §9「选主交接」)。竞选间隔只影响 SETNX 的频率,不影响锁的安全性。
+const DefaultRetryPeriod = 2 * time.Second
+
 // Options 是 New 的可选项。零值可用。
 type Options struct {
-	// TTL 是锁的存活时间,默认 30s。心跳间隔 = TTL/3,竞选重试间隔同。
+	// TTL 是锁的存活时间,默认 30s。心跳间隔 = TTL/3。
 	TTL time.Duration
+	// RetryPeriod 是没当选时两次竞选之间的间隔。<= 0 取 DefaultRetryPeriod;不超过心跳间隔(TTL/3),
+	// 超过时按心跳间隔算。
+	RetryPeriod time.Duration
 	// ID 是本实例的身份标识(通常传 hostname / pod 名),只用于日志与
 	// 锁值前缀,方便排障时 redis-cli GET 一眼看出领导者是谁。
 	ID string
@@ -98,18 +114,21 @@ type Options struct {
 //	go e.Run(ctx, nil)                  // 只维持领导权,用 e.IsLeader() 判定
 //	go e.Run(ctx, func(lctx context.Context) { ... })  // 当选后跑临界区
 type Elector struct {
-	store    Store
-	key      string
-	ttl      time.Duration
-	id       string
-	onState  func(bool)
-	isLeader atomic.Bool
+	store       Store
+	key         string
+	ttl         time.Duration
+	retryPeriod time.Duration
+	id          string
+	onState     func(bool)
+	isLeader    atomic.Bool
 
 	// stopped/leadCancel 支撑 Stop():优雅退出时主动让位,
 	// 而不是把锁留到 TTL 自然过期。
 	stopped    atomic.Bool
 	mu         sync.Mutex
 	leadCancel context.CancelFunc
+	// token 是本任期写进锁键的值,不在任时为空串(见 Token)。由 mu 保护。
+	token string
 }
 
 // New 构造一个选举器。key 是全体候选副本共用的锁 key。
@@ -118,17 +137,41 @@ func New(store Store, key string, opts Options) *Elector {
 	if ttl <= 0 {
 		ttl = 30 * time.Second
 	}
+	retryPeriod := opts.RetryPeriod
+	if retryPeriod <= 0 {
+		retryPeriod = DefaultRetryPeriod
+	}
 	id := opts.ID
 	if id == "" {
 		id = "unknown"
 	}
 	return &Elector{
-		store:   store,
-		key:     key,
-		ttl:     ttl,
-		id:      id,
-		onState: opts.OnStateChange,
+		store:       store,
+		key:         key,
+		ttl:         ttl,
+		retryPeriod: retryPeriod,
+		id:          id,
+		onState:     opts.OnStateChange,
 	}
+}
+
+// heartbeatInterval 是续期心跳的间隔 = TTL/3:TTL 内有 2~3 次续期机会兜住瞬时 Redis 抖动。
+// 下限只做除零保护 —— 生产 TTL 是秒级(默认 30s),毫秒级 TTL 仅用于单测。
+func heartbeatInterval(ttl time.Duration) time.Duration {
+	return max(ttl/3, 10*time.Millisecond)
+}
+
+// CampaignInterval 是锁空出来之后跟随者最迟多久再竞选一次:竞选间隔 retryPeriod(<= 0 取 DefaultRetryPeriod)与
+// 心跳间隔(TTL/3)取小。Run 按它等待;别处要按选主参数推算「接任最迟多久」(例如 scene_manager 分线目录的 TTL)时
+// 调它,不要自己再写一遍。ttl 与 New 的口径相同:<= 0 按缺省 30s。
+func CampaignInterval(ttl, retryPeriod time.Duration) time.Duration {
+	if ttl <= 0 {
+		ttl = 30 * time.Second
+	}
+	if retryPeriod <= 0 {
+		retryPeriod = DefaultRetryPeriod
+	}
+	return min(retryPeriod, heartbeatInterval(ttl))
 }
 
 // IsLeader 报告本实例当前是否持有领导权。跨 goroutine 安全,
@@ -137,18 +180,32 @@ func (e *Elector) IsLeader() bool {
 	return e.isLeader.Load()
 }
 
+// Token 返回本任期写进锁键的值,不在任时返回空串。跨 goroutine 安全。
+//
+// 它给领导者独占的写做围栏:写脚本在同一段里先核对锁键的值仍等于它,再写数据(锁键要和数据键同槽)。
+// IsLeader 是本进程对自己的判断,会过时 —— 进程卡顿到锁过期,或 Redis 主从切换丢了锁之后,在下一次心跳之前它仍为真。
+// 带着 Token 的写这时会被拒:锁键里已经是别人的值,或者空了。由存锁的那台 Redis 在写的那一刻判定谁是属主,
+// 不依赖任何一方的时钟。只凭 IsLeader 做的写没有这层保证,要么本身幂等,要么自带按对象的条件。
+func (e *Elector) Token() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.token
+}
+
+func (e *Elector) setToken(token string) {
+	e.mu.Lock()
+	e.token = token
+	e.mu.Unlock()
+}
+
 // Run 阻塞运行候选者循环,直到 ctx 结束;通常 `go e.Run(...)`。
 //
 // 每次当选后调用 whileLeader(lctx):lctx 在丢锁或 ctx 结束时取消;
 // whileLeader 返回后释放锁、重新竞选。传 nil 等价于"持有领导权直到丢失"。
 // whileLeader 主动提前返回视为让位:释放锁并回到候选者循环。
 func (e *Elector) Run(ctx context.Context, whileLeader func(ctx context.Context)) {
-	// 心跳/竞选间隔 = TTL/3:TTL 内有 2~3 次续期机会兜住瞬时 Redis 抖动。
-	// 下限只做除零保护 —— 生产 TTL 是秒级(默认 30s),毫秒级 TTL 仅用于单测。
-	interval := e.ttl / 3
-	if interval < 10*time.Millisecond {
-		interval = 10 * time.Millisecond
-	}
+	interval := heartbeatInterval(e.ttl)
+	retry := CampaignInterval(e.ttl, e.retryPeriod)
 	if whileLeader == nil {
 		whileLeader = func(lctx context.Context) { <-lctx.Done() }
 	}
@@ -179,16 +236,18 @@ func (e *Elector) Run(ctx context.Context, whileLeader func(ctx context.Context)
 			logx.Errorf("[leader] campaign setnx key=%s id=%s failed: %v", e.key, e.id, err)
 		}
 		if err != nil || !ok {
-			// 已有领导者,或 Redis 抖动 —— 等一拍再竞选。
+			// 已有领导者,或 Redis 抖动 —— 等一个竞选间隔再竞选。
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(interval):
+			case <-time.After(retry):
 				continue
 			}
 		}
 
 		logx.Infof("[leader] elected key=%s id=%s ttl=%s", e.key, e.id, e.ttl)
+		// 先有围栏值、后有领导权:IsLeader 为真时 Token 一定已是本任期的值。
+		e.setToken(val)
 		e.isLeader.Store(true)
 		e.notify(true)
 
@@ -205,6 +264,7 @@ func (e *Elector) Run(ctx context.Context, whileLeader func(ctx context.Context)
 
 		stopHB()
 		e.isLeader.Store(false)
+		e.setToken("")
 		e.notify(false)
 
 		// 尽力释放:丢锁场景下 key 已易主,属主校验会拒绝删除,无害。

@@ -3,14 +3,18 @@
 //
 // # 与既有副本的关系(契约 zone_contract_v1 §2)
 //
-// 本包是**唯一实现**,语义以本包为准,不要反向往副本里补丁。旧副本都 import proto 模块、又是
-// internal 包,跨 module 引不到,只能逐字复制 —— 这正是"改一处漏六处"的来源。迁移进度:
-//   - 已迁:friend 的 internal/node 已删,直接用本包;match / scene_manager / data_service /
-//     client_rpc_router 的 internal/noderegistry 自 2026-11-10 起是薄适配层,只保留各自的调用面
-//     (Register / KeepAlive / Close / Info)与 NodeInfo 填法,分配、续租、重注册、注销都转调本包
-//     (docs/design/infra-reconnect-overview.md R3、R4)。
-//   - 未迁:guild、player_locator 的 internal/node(player_locator 把能力键放进同一个注册事务),
-//     以及 login 的异源实现(internal/logic/pkg/etcd,原号被占就退出进程)。形状与本包不同,另起批次。
+// 本包是**唯一实现**,语义以本包为准,不要反向往副本里补丁。Go 侧的节点注册原来有多份副本:它们都 import
+// proto 模块、又是 internal 包,跨 module 引不到,只能逐字复制 —— 这正是"改一处漏六处"的来源。
+// 迁移进度(docs/design/infra-reconnect-overview.md R3、R4):
+//   - 直接用本包:chat、friend(原 internal/node 已删)、trade、player_inbox、db(PlayerStore)、
+//     match 的 TeamNodeService,以及经 shared/domainhost 的 rank、mail;
+//   - 薄适配层(2026-11-10):match / scene_manager / data_service / client_rpc_router 的 internal/noderegistry,
+//     只保留各自的调用面与 NodeInfo 填法,分配、续租、重注册、注销都转调本包;
+//   - 未迁:guild、player_locator 的 internal/node,以及 login 的 internal/logic/pkg/node(原号被占就退出进程)。
+//     player_locator 把能力键放进同一个注册事务,本包已为它备好 Spec.LeaseBoundMarkers(2026-11-12,见下文),
+//     迁移时改成薄适配层即可。
+//
+// 新的注册需求加在本包里,不要在副本或适配层再写一份分配或重注册逻辑。
 //
 // # 为什么不 import proto
 //
@@ -36,7 +40,8 @@
 //   - ExitProcess:Revoke 新租约后 logx.Error + os.Exit(1),交给编排器重启。
 //     适用于 login 以及任何以 NodeId 派生持久身份或 per-node topic(`{type}-{id}`)的服务——
 //     这类服务在进程内换号,等于把旧身份上的在途消息 / 状态悄悄丢给了别人。
-//     D-11 的前提是"node_id = worker id"只对 C++ / login 成立,Go 全局服务不成立。
+//     D-11 定稿时 C++ 与 login 的 node_id 还兼作 Snowflake worker id;现在 node_id 不喂给任何发号器,
+//     选哪一档只看它有没有派生持久身份或 per-node topic。
 //
 // # 发布轨道(docs/design/release-track-gray-canary.md §2.1)
 //
@@ -44,6 +49,20 @@
 // 本包在 Register 时读 releasetrack.FromEnv,取值非法就拒注册(进而拒启动)。放在这里而不是
 // 让每个服务自己填,是为了不留漏填的口子:canary 进程漏写轨道,就会被当成 stable 接 stable 的流量。
 // BuildValue 若自己写了 releaseTrack,必须与进程轨道一致,否则拒注册。
+//
+// # 租约绑定标记(Spec.LeaseBoundMarkers)
+//
+// 有的服务要让别的进程判断「这个注册着的实例具不具备某项能力」。player_locator 的对账 leader 就这样找
+// 不维护 gate 会话索引的旧版写者:注册表里有 NodeInfo、却没有同 uuid 能力键的实例
+// (docs/design/player-locator-gate-session-index.md §6)。这种判断要求标记与 NodeInfo 同生同灭,
+// 所以标记不由服务另写,而是交给本包:每个前缀多写一个「前缀 + NodeUUID」键,与双 key 在同一笔 Txn 里写、
+// 挂同一个租约。首次注册、失租后重夺原号、换号重新分配三条路径都带上,registrationPuts 是唯一的拼装点。
+//
+// Close 先用 Txn 删双 key、再 Revoke 租约,标记随 Revoke 消失:中间只会出现「有标记、没有 NodeInfo」,
+// 不会反过来;Revoke 失败时标记随租约到期消失。本包只把标记当不透明的键,不解释业务含义。
+//
+// 前缀不得为空、不得重复(同一笔 Txn 里重复的键会被 etcd 拒绝),也不得落在 Prefix+"/" 之下:
+// 那棵子树由 C++ 与各发现方按 NodeInfo 解析,本包扫已占 node_id 时也整棵读它。
 //
 // # 使用顺序
 //
@@ -86,7 +105,6 @@ import (
 
 	"shared/releasetrack"
 	"shared/safego"
-	"shared/snowflake"
 )
 
 // ReclaimPolicy 决定"失租后原 node_id 已被别人占用"时怎么办,见包注释「失租策略两档」。
@@ -132,6 +150,9 @@ type Spec struct {
 	// OnNodeIDChanged 可选:ReallocateNewID 换号成功后在 keepalive goroutine 里同步回调,
 	// 不要在里面阻塞;panic 会被 safego 兜住,不影响后续 keepalive。
 	OnNodeIDChanged func(oldID, newID uint32)
+	// LeaseBoundMarkers 可选:每个前缀多写一个「前缀 + NodeUUID」键,与双 key 同一笔注册 Txn、同一个租约,
+	// 首次注册、失租后重夺原号、换号重新分配三条路径都带上。用途与对前缀的约束见包注释「租约绑定标记」。
+	LeaseBoundMarkers []string
 	// LogPrefix 可选,空则用 "[NodeRegistry <Prefix>]"。
 	LogPrefix string
 }
@@ -147,6 +168,8 @@ type Registration struct {
 	nodeID atomic.Uint32
 	// track 是本进程的发布轨道,Register 时从环境变量解析一次,之后不变;每次 buildValue 写进 releaseTrack。
 	track releasetrack.Track
+	// markerKeys 是 Spec.LeaseBoundMarkers 展开成的标记键(前缀 + NodeUUID),构造后只读。
+	markerKeys []string
 
 	// ctx 是注册句柄自身的生命周期(keepalive / 重注册的全部 etcd 调用都挂在它下面),
 	// 与 Register 的入参 ctx(启动期超时)无关;Close 取消它。
@@ -177,8 +200,11 @@ type Registration struct {
 const (
 	// nodeIDMin:0 永远保留为"未分配 / 非法值"(C++ 同口径),扫描时也一律忽略。
 	nodeIDMin uint32 = 1
-	// nodeIDMax 与 Snowflake worker id 位宽对齐,与既有副本同值。
-	nodeIDMax = uint32(snowflake.NodeMask)
+	// nodeIDMax 是 node_id 的上界(含),分配时从 nodeIDMin 顺序扫到它为止。node_id 只是服务发现路径
+	// 和 NodeInfo 里的编号,不喂给任何发号器:永久 ID 由 data_service 发号器发,scene_manager 的 scene_id
+	// 由 shared/snowflakealloc 另行申领槽位,都与 node_id 无关。取值 1<<17-1 与 C++ NodeAllocator 的
+	// kMaxNodeId 相同,各语言的分配器用同一个上界;它远大于任何一种节点的实例数。
+	nodeIDMax uint32 = 1<<17 - 1
 
 	// nodeIDSegment 是两种 key 共有的尾段标记,已占 id 统一从它后面取。
 	nodeIDSegment = "/node_id/"
@@ -374,13 +400,14 @@ func (r *Registration) Close() {
 func newRegistration(cli *clientv3.Client, spec Spec, nodeUUID string, track releasetrack.Track) *Registration {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Registration{
-		NodeUUID: nodeUUID,
-		cli:      cli,
-		spec:     spec,
-		track:    track,
-		ctx:      ctx,
-		cancel:   cancel,
-		loopDone: make(chan struct{}),
+		NodeUUID:   nodeUUID,
+		cli:        cli,
+		spec:       spec,
+		track:      track,
+		markerKeys: markerKeysFor(spec.LeaseBoundMarkers, nodeUUID),
+		ctx:        ctx,
+		cancel:     cancel,
+		loopDone:   make(chan struct{}),
 	}
 }
 
@@ -421,6 +448,26 @@ func (s Spec) validate() error {
 		return fmt.Errorf("%w: nil BuildValue", errInvalidSpec)
 	case s.OnReclaimFailed != ReallocateNewID && s.OnReclaimFailed != ExitProcess:
 		return fmt.Errorf("%w: unknown OnReclaimFailed %s", errInvalidSpec, s.OnReclaimFailed)
+	}
+	return validateMarkerPrefixes(s.Prefix, s.LeaseBoundMarkers)
+}
+
+// validateMarkerPrefixes 校验 Spec.LeaseBoundMarkers,约束的理由见包注释「租约绑定标记」。
+// 重复的前缀在这里拒掉而不是留给 etcd:那样每次注册、每轮重注册的 Txn 都会失败,报的还是一个与配置无关的错。
+func validateMarkerPrefixes(registryPrefix string, markers []string) error {
+	subtree := registryPrefix + "/"
+	seen := make(map[string]struct{}, len(markers))
+	for _, marker := range markers {
+		switch {
+		case marker == "":
+			return fmt.Errorf("%w: empty LeaseBoundMarkers prefix", errInvalidSpec)
+		case strings.HasPrefix(marker, subtree):
+			return fmt.Errorf("%w: LeaseBoundMarkers prefix %q must not live under %q", errInvalidSpec, marker, subtree)
+		}
+		if _, dup := seen[marker]; dup {
+			return fmt.Errorf("%w: duplicate LeaseBoundMarkers prefix %q", errInvalidSpec, marker)
+		}
+		seen[marker] = struct{}{}
 	}
 	return nil
 }
@@ -604,8 +651,7 @@ func (r *Registration) allocate(ctx context.Context, lease clientv3.LeaseID) (ui
 		}
 		ok, err := claimNodeID(ctx, r.cli,
 			AllocationKey(r.spec.Prefix, r.spec.NodeType, id),
-			RpcPath(r.spec.Prefix, r.spec.ZoneId, r.spec.NodeType, id),
-			r.NodeUUID, value, lease)
+			r.registrationPuts(id, value, lease))
 		if err != nil {
 			return 0, "", fmt.Errorf("claim node_id=%d: %w", id, err)
 		}
@@ -617,14 +663,42 @@ func (r *Registration) allocate(ctx context.Context, lease clientv3.LeaseID) (ui
 	return 0, "", fmt.Errorf("%w in [%d, %d] (prefix=%s)", errNoAvailableNodeID, nodeIDMin, nodeIDMax, r.spec.Prefix)
 }
 
-// claimNodeID:同一租约、同一 Txn,allocKey 不存在才写双 key(契约 §2)。
-func claimNodeID(ctx context.Context, cli *clientv3.Client, allocKey, rpcKey, nodeUUID, value string, lease clientv3.LeaseID) (bool, error) {
+// markerValue 是标记键的值。标记只看键在不在,值没有含义;沿用 player_locator 能力键一直写的 "1"。
+const markerValue = "1"
+
+// markerKeysFor 把标记前缀展开成本进程的标记键(前缀 + NodeUUID),顺序与前缀一致;没有前缀时返回 nil。
+// NodeUUID 进程内不变,所以一个句柄的标记键在它的生命周期里不变。
+func markerKeysFor(prefixes []string, nodeUUID string) []string {
+	if len(prefixes) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		keys = append(keys, prefix+nodeUUID)
+	}
+	return keys
+}
+
+// registrationPuts 是把 node_id 注册到 lease 上要写的全部键:allocKey、rpcKey,再加各标记键,都挂同一个租约。
+// 首次注册与换号(claimNodeID)、重夺原号(reclaimNodeID)只从这里取 Put,三条路径写的因此是同一组键:
+// 哪条路径少写了标记,租约一换就会留下「有 NodeInfo、没有标记」的实例(见包注释「租约绑定标记」)。
+func (r *Registration) registrationPuts(id uint32, value string, lease clientv3.LeaseID) []clientv3.Op {
+	puts := make([]clientv3.Op, 0, 2+len(r.markerKeys))
+	puts = append(puts,
+		clientv3.OpPut(AllocationKey(r.spec.Prefix, r.spec.NodeType, id), r.NodeUUID, clientv3.WithLease(lease)),
+		clientv3.OpPut(RpcPath(r.spec.Prefix, r.spec.ZoneId, r.spec.NodeType, id), value, clientv3.WithLease(lease)),
+	)
+	for _, key := range r.markerKeys {
+		puts = append(puts, clientv3.OpPut(key, markerValue, clientv3.WithLease(lease)))
+	}
+	return puts
+}
+
+// claimNodeID:allocKey 不存在才写入 puts(registrationPuts 的产物),同一租约、同一 Txn(契约 §2)。
+func claimNodeID(ctx context.Context, cli *clientv3.Client, allocKey string, puts []clientv3.Op) (bool, error) {
 	resp, err := cli.Txn(ctx).
 		If(clientv3.Compare(clientv3.Version(allocKey), "=", 0)).
-		Then(
-			clientv3.OpPut(allocKey, nodeUUID, clientv3.WithLease(lease)),
-			clientv3.OpPut(rpcKey, value, clientv3.WithLease(lease)),
-		).
+		Then(puts...).
 		Commit()
 	if err != nil {
 		return false, err
@@ -639,11 +713,10 @@ func claimNodeID(ctx context.Context, cli *clientv3.Client, allocKey, rpcKey, no
 // 为什么不能只判 Version==0(既有副本的写法):第二种状态下会被误判成"被别人占了",
 // ReallocateNewID 平白换号,ExitProcess 则直接把一个没人抢的进程杀掉。拆成两笔 Txn 也不行,
 // key 恰在两笔之间过期时两头落空(snowflakealloc F2 同一教训)。
-func reclaimNodeID(ctx context.Context, cli *clientv3.Client, allocKey, rpcKey, nodeUUID, value string, lease clientv3.LeaseID) (bool, error) {
-	puts := []clientv3.Op{
-		clientv3.OpPut(allocKey, nodeUUID, clientv3.WithLease(lease)),
-		clientv3.OpPut(rpcKey, value, clientv3.WithLease(lease)),
-	}
+//
+// puts 是 registrationPuts 的产物,两种状态写的是同一组键。第二种状态下标记键也还挂在旧租约上,
+// 必须随双 key 一起改挂:调用方随后会撤销旧租约,留在上面的键会被一并删掉。
+func reclaimNodeID(ctx context.Context, cli *clientv3.Client, allocKey, nodeUUID string, puts []clientv3.Op) (bool, error) {
 	resp, err := cli.Txn(ctx).
 		If(clientv3.Compare(clientv3.Version(allocKey), "=", 0)).
 		Then(puts...).
@@ -811,8 +884,8 @@ func (r *Registration) reRegisterOnce(oldLease clientv3.LeaseID) attemptResult {
 	}
 	newLease := grant.ID
 
-	_, oldID, rpcKey, allocKey, value := r.snapshot()
-	reclaimed, err := reclaimNodeID(ctx, r.cli, allocKey, rpcKey, r.NodeUUID, value, newLease)
+	_, oldID, _, allocKey, value := r.snapshot()
+	reclaimed, err := reclaimNodeID(ctx, r.cli, allocKey, r.NodeUUID, r.registrationPuts(oldID, value, newLease))
 	if err != nil {
 		revokeLease(r.cli, newLease, r.logPrefix())
 		logx.Errorf("%s re-register: reclaim txn node_id=%d failed: %v", r.logPrefix(), oldID, err)
@@ -824,7 +897,7 @@ func (r *Registration) reRegisterOnce(oldLease clientv3.LeaseID) attemptResult {
 			return attemptStop
 		}
 		observeReRegisterSuccess(r.spec.Prefix)
-		// 双 key 已改挂新租约,旧租约上不再有我们的 key;旧租约若服务端还活着就顺手结束它。
+		// 双 key 与标记键都已改挂新租约,旧租约上不再有我们的 key;旧租约若服务端还活着就顺手结束它。
 		revokeLease(r.cli, oldLease, "")
 		logx.Infof("%s re-register: reclaimed original node_id=%d lease=%x", r.logPrefix(), oldID, int64(newLease))
 		return attemptRegistered

@@ -8,11 +8,11 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// DrainMarkCache 是 gate 排空标记(gate:<id>:draining)的按 zone 读穿透缓存(2026-11-05,服务器缺口清单第 31 条)。
+// DrainMarkCache 是 gate 排空标记(gate:{gm:<zone>}:<id>:draining)的按 zone 读穿透缓存(2026-11-05,服务器缺口清单第 31 条)。
 //
 // 为什么要缓存:选 gate 的每条路径 —— AssignGate 快速通道、容量判断、dispatcher 每一拍、取走放行时的复核 —— 都经
-// CandidatesForZone,原来每次各打一次 MGET。标记在全服共用的核心 Redis 上,开服洪峰时这几条路径的调用量是登录量的
-// 几倍,读量随全服登录量一起涨。排空是分钟级的计划内动作,标记晚一两秒生效无关紧要:这里把一次查询结果按 zone 缓存
+// CandidatesForZone,原来每次各打一次 MGET。开服洪峰时这几条路径的调用量是登录量的几倍,一个 zone 的标记又都在同一个槽上
+// (hash tag 按 zone 打),读量随本 zone 的登录量一起涨。排空是分钟级的计划内动作,标记晚一两秒生效无关紧要:这里把一次查询结果按 zone 缓存
 // refresh 时长,同一 zone 在这段时间里的所有选 gate 共用一份,每个 login 实例每个 zone 每 refresh 至多查一次。
 //
 // 晚生效的这 refresh 时长不改变排空的完成条件:标记之前签出的票在票有效期内照样能连上这台 gate,gate 的在线数
@@ -29,9 +29,12 @@ import (
 //
 // 线程安全。零值不可用,用 NewDrainMarkCache 构造;nil *DrainMarkCache 的 Draining 返回 nil(不打排空标记)。
 type DrainMarkCache struct {
-	rdb     *redis.Client
-	refresh time.Duration
-	now     func() time.Time
+	rdb redis.UniversalClient
+	// markZone 是标记键里的 zone:本 login 的 Node.ZoneId(见 gatedrain.go 里对 zoneID 的说明)。
+	// 它不是 Draining 的 zoneID 参数:那个只是缓存的分区键,可以是 0(不按 zone 过滤的那一份候选)。
+	markZone uint32
+	refresh  time.Duration
+	now      func() time.Time
 
 	mu    sync.Mutex
 	zones map[uint32]*drainZoneEntry
@@ -44,16 +47,17 @@ type drainZoneEntry struct {
 }
 
 // NewDrainMarkCache 构造缓存。rdb 为 nil 时 Draining 一律返回 nil(不打排空标记,同原来 rdb 为 nil 的路径);
-// now 为 nil 时用 time.Now(带单调时钟读数,过期判断不受墙钟回拨影响)。
-func NewDrainMarkCache(rdb *redis.Client, refresh time.Duration, now func() time.Time) *DrainMarkCache {
+// markZone 是本 login 的 Node.ZoneId,标记键按它拼;now 为 nil 时用 time.Now(带单调时钟读数,过期判断不受墙钟回拨影响)。
+func NewDrainMarkCache(rdb redis.UniversalClient, markZone uint32, refresh time.Duration, now func() time.Time) *DrainMarkCache {
 	if now == nil {
 		now = time.Now
 	}
-	return &DrainMarkCache{rdb: rdb, refresh: refresh, now: now, zones: make(map[uint32]*drainZoneEntry)}
+	return &DrainMarkCache{rdb: rdb, markZone: markZone, refresh: refresh, now: now, zones: make(map[uint32]*drainZoneEntry)}
 }
 
 // Draining 返回 candidates 里哪些 gate 正在排空;结果交给 MarkDrainingGates 打标记,调用方只读不改。
-// zoneID 是缓存的分区键,与 CandidatesForZone 的 zoneID 相同(0 = 不按 zone 过滤的那一份)。
+// zoneID 是缓存的分区键,与 CandidatesForZone 的 zoneID 相同(0 = 不按 zone 过滤的那一份)。候选全部来自本 login 的
+// GateWatcher,都是 markZone 的 gate,所以不管分区键是几,标记都按 markZone 读。
 // 候选为空时不查、不建缓存条目,所以条目数不超过真正有 gate 的 zone 数。
 func (c *DrainMarkCache) Draining(ctx context.Context, zoneID uint32, candidates []GateCandidate) map[uint32]bool {
 	if c == nil || c.rdb == nil || len(candidates) == 0 {
@@ -66,7 +70,7 @@ func (c *DrainMarkCache) Draining(ctx context.Context, zoneID uint32, candidates
 	if c.refresh > 0 && now.Before(entry.expires) {
 		return entry.draining
 	}
-	entry.draining = DrainingGates(ctx, c.rdb, candidates)
+	entry.draining = DrainingGates(ctx, c.rdb, c.markZone, candidates)
 	entry.expires = now.Add(c.refresh)
 	return entry.draining
 }

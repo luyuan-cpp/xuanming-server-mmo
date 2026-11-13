@@ -70,7 +70,7 @@ func TestEnterScene_ZeroZoneReconnectReturnsToPreviousScene(t *testing.T) {
 	adoptSceneMember(mr, dungeonID, playerID)
 	adoptNodeMember(mr, testZoneId, "10", playerID)
 	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-	beforeRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	beforeRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
 	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
@@ -90,7 +90,7 @@ func TestEnterScene_ZeroZoneReconnectReturnsToPreviousScene(t *testing.T) {
 	assert.Equal(t, uint32(10), event.TargetNodeId)
 	assert.Equal(t, uint64(1), event.OwnerEpoch, "同落点重连原样带当前 epoch")
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "同落点重连不铸造")
-	afterRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	afterRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, beforeRaw, afterRaw, "同落点重连不改写 location")
 	assert.Equal(t, "1", sceneCountText(sc, dungeonID), "重连不重复计人数")
 	assert.Equal(t, "0", sceneCountText(sc, channelID), "没有去挑默认频道,也就没有预占")
@@ -115,7 +115,7 @@ func TestEnterScene_ZeroZoneReconnectSkipsDrainingChannel(t *testing.T) {
 	// 回收中的线:已从在役集合摘到回收中集合,映射还在,等人走空。
 	seedSceneOnNode(mr, testZoneId, drainingID, "10", "1")
 	mr.SAdd(worldDrainingSetKey(testZoneId, defaultConf), fmt.Sprintf("%d", drainingID))
-	require.NoError(t, mr.Set(sceneDrainingKey(drainingID), "1"))
+	require.NoError(t, mr.Set(sceneDrainingKey(testZoneId, drainingID), "1"))
 	seedNodeMembers(mr, testZoneId, "10", 1)
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, drainingID, "10", testZoneId))
 	adoptSceneMember(mr, drainingID, playerID)

@@ -89,7 +89,12 @@ type AccessTokenProvider struct {
 func (p *AccessTokenProvider) Validate(ctx context.Context, accessToken string) (*AuthResult, error) {
 	data, err := p.TokenManager.ValidateAccess(ctx, accessToken)
 	if err != nil {
-		return nil, fmt.Errorf("access token invalid: %w", err)
+		if errors.Is(err, token.ErrAccessRejected) {
+			return nil, fmt.Errorf("access token invalid: %w", err)
+		}
+		// 令牌存储故障(读 Redis、跑校验脚本失败)不是凭证的问题:标 ErrProviderUnavailable,调用方回故障码,客户端稍后重试。
+		// 以前一律当凭证无效回 kLoginAccountNotFound,Redis 抖一下就把在线玩家踢回登录页,第三方登录的还得重新拉起渠道授权。
+		return nil, providerFault(fmt.Errorf("access token lookup failed: %w", err))
 	}
 	logx.Infof("Access token validated: account=%s auth_type=%s", data.Account, data.AuthType)
 	return &AuthResult{Account: data.Account}, nil
@@ -349,9 +354,18 @@ func oauthRequestError(provider, stage string, err error) error {
 // oauthGet 发一次渠道 GET 并读回应答体。这里的失败全部标 ErrProviderUnavailable:还没轮到解析玩家凭证。
 // 错误文案只带固定阶段(oauthRequestError)与状态码,不带 URL —— 查询串里有 code / access_token / secret。
 func oauthGet(ctx context.Context, client *http.Client, provider, rawURL string) ([]byte, error) {
+	return oauthGetWithHeader(ctx, client, provider, rawURL, nil)
+}
+
+// oauthGetWithHeader 同 oauthGet,另带请求头(抖音小游戏的 code2Session 要求 Content-Type: application/json)。
+// 状态码检查、应答限长与错误脱敏只有这一份实现;header 为 nil 时就是 oauthGet。
+func oauthGetWithHeader(ctx context.Context, client *http.Client, provider, rawURL string, header http.Header) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, providerFault(oauthRequestError(provider, "build request", err))
+	}
+	if header != nil {
+		req.Header = header.Clone()
 	}
 	resp, err := httpClientOrDefault(client).Do(req)
 	if err != nil {

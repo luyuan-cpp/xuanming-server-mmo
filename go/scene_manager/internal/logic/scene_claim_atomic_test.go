@@ -8,8 +8,8 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/alicebob/miniredis/v2/server"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 
 	"scene_manager/internal/svc"
 )
@@ -51,13 +51,12 @@ func seedClaimScene(t *testing.T, mr *miniredis.Miniredis, sceneID uint64, node,
 	seedClaimSceneInZone(t, mr, claimTestZone, sceneID, node, gs, members)
 }
 
-// seedClaimSceneInZone 同 seedClaimScene,实例登记在 zone(scene:{id}:zone 与 active 集合都按它写)。
+// seedClaimSceneInZone 同 seedClaimScene,实例登记在 zone(场景键带 zone 的 tag,active 集合也按它写)。
 func seedClaimSceneInZone(t *testing.T, mr *miniredis.Miniredis, zone uint32, sceneID uint64, node, gs string, members int) {
 	t.Helper()
-	require.NoError(t, mr.Set(sceneNodeKey(sceneID), node))
-	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(zone), 10)))
-	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), gs))
-	seedSceneMembers(mr, sceneID, members)
+	require.NoError(t, mr.Set(sceneNodeKey(zone, sceneID), node))
+	require.NoError(t, mr.Set(sceneAgonesGsKey(zone, sceneID), gs))
+	seedSceneMembersInZone(mr, zone, sceneID, members)
 	_, err := mr.ZAdd(activeInstancesKey(zone), 1, strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 }
@@ -65,7 +64,7 @@ func seedClaimSceneInZone(t *testing.T, mr *miniredis.Miniredis, zone uint32, sc
 // requireTeardownPending 断言场景的拆除任务是否还在待办里(任务键与待办集合两边一致)。
 func requireTeardownPending(t *testing.T, mr *miniredis.Miniredis, zoneID uint32, sceneID uint64, want bool) {
 	t.Helper()
-	require.Equal(t, want, mr.Exists(sceneTeardownJobKey(sceneID)), "拆除任务键")
+	require.Equal(t, want, mr.Exists(sceneTeardownJobKey(zoneID, sceneID)), "拆除任务键")
 	_, err := mr.ZScore(sceneTeardownPendingKey(zoneID), strconv.FormatUint(sceneID, 10))
 	require.Equal(t, want, err == nil, "待办集合成员")
 }
@@ -75,14 +74,14 @@ func requireTeardownPending(t *testing.T, mr *miniredis.Miniredis, zoneID uint32
 // (scene_teardown_job_test.go)。
 func TestSceneClaim_ForceReplyLostLeavesTheTeardownJob(t *testing.T) {
 	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstanceForce}
-	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
+	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, hook)
 	const sceneID uint64 = 89601
 	seedClaimScene(t, mr, sceneID, "node-a", "gs-a", 2)
 
 	_, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "", "explicit")
 	require.Error(t, err)
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
-	require.False(t, mr.Exists(sceneNodeKey(sceneID)), "脚本已执行")
+	require.False(t, mr.Exists(sceneNodeKey(claimTestZone, sceneID)), "脚本已执行")
 	requireTeardownPending(t, mr, claimTestZone, sceneID, true)
 
 	claim, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "", "explicit")
@@ -94,7 +93,7 @@ func TestSceneClaim_ForceReplyLostLeavesTheTeardownJob(t *testing.T) {
 // 空闲回收同理。旧代码(2026-11-01 之前)把重发当成「有人进场」,重新 ZADD 并丢掉 agones_gs,实例成永久僵尸。
 func TestSceneClaim_IdleReplyLostLeavesTheTeardownJob(t *testing.T) {
 	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstance}
-	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
+	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, hook)
 	const sceneID uint64 = 89602
 	seedClaimScene(t, mr, sceneID, "node-a", "gs-a", 0)
 
@@ -141,7 +140,7 @@ func TestSceneClaim_SameTokenReplaysAndOtherTokenDoesNot(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, other.Claimed, "别的认领不得拿到快照")
 
-	require.Zero(t, mr.TTL(sceneTeardownJobKey(sceneID)), "拆除任务不带 TTL,做完副作用才删")
+	require.Zero(t, mr.TTL(sceneTeardownJobKey(claimTestZone, sceneID)), "拆除任务不带 TTL,做完副作用才删")
 	requireTeardownPending(t, mr, claimTestZone, sceneID, true)
 }
 
@@ -149,7 +148,7 @@ func TestSceneClaim_SameTokenReplaysAndOtherTokenDoesNot(t *testing.T) {
 func TestClaimIdleSceneTeardown_MappingMissingIsCleanedNotReseeded(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 89604
-	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), "gs-left"))
+	require.NoError(t, mr.Set(sceneAgonesGsKey(claimTestZone, sceneID), "gs-left"))
 	_, err := mr.ZAdd(activeInstancesKey(claimTestZone), 1, strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 
@@ -159,7 +158,7 @@ func TestClaimIdleSceneTeardown_MappingMissingIsCleanedNotReseeded(t *testing.T)
 	require.Empty(t, claim.NodeID)
 	require.Equal(t, "gs-left", claim.AgonesGs)
 	requireActiveInstance(t, sc, claimTestZone, sceneID, false)
-	require.False(t, mr.Exists(sceneAgonesGsKey(sceneID)))
+	require.False(t, mr.Exists(sceneAgonesGsKey(claimTestZone, sceneID)))
 }
 
 // 同样的残留走完整的空闲销毁:不 ZADD 回去。旧代码的 ZADD 在脚本外。
@@ -188,8 +187,8 @@ func TestClaimIdleSceneTeardown_BusyReseedsOnlyListedScene(t *testing.T) {
 	score, err := mr.ZScore(activeInstancesKey(claimTestZone), member)
 	require.NoError(t, err)
 	require.Greater(t, score, float64(1), "空闲时钟要重置")
-	require.Equal(t, "node-a", mustGet(t, mr, sceneNodeKey(sceneID)))
-	require.Equal(t, "gs-a", mustGet(t, mr, sceneAgonesGsKey(sceneID)))
+	require.Equal(t, "node-a", mustGet(t, mr, sceneNodeKey(claimTestZone, sceneID)))
+	require.Equal(t, "gs-a", mustGet(t, mr, sceneAgonesGsKey(claimTestZone, sceneID)))
 
 	_, err = mr.ZRem(activeInstancesKey(claimTestZone), member)
 	require.NoError(t, err)
@@ -203,13 +202,13 @@ func TestClaimIdleSceneTeardown_BusyReseedsOnlyListedScene(t *testing.T) {
 func TestAtomicDestroyForce_NoOwnerDoesNotClaimUnmappedScene(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 89607
-	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), "gs-x"))
+	require.NoError(t, mr.Set(sceneAgonesGsKey(claimTestZone, sceneID), "gs-x"))
 
 	claim, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "", "explicit")
 	require.NoError(t, err)
 	require.False(t, claim.Claimed)
 	require.Empty(t, claim.AgonesGs)
-	require.Equal(t, "gs-x", mustGet(t, mr, sceneAgonesGsKey(sceneID)))
+	require.Equal(t, "gs-x", mustGet(t, mr, sceneAgonesGsKey(claimTestZone, sceneID)))
 	requireTeardownPending(t, mr, claimTestZone, sceneID, false)
 }
 
@@ -224,12 +223,12 @@ func TestRollbackInstanceAllocation_WipesEverythingOnce(t *testing.T) {
 	)
 	member := strconv.FormatUint(sceneID, 10)
 	seedClaimScene(t, mr, sceneID, node, "gs-a", 0)
-	require.NoError(t, mr.Set(sceneMirrorFlagKey(sceneID), "1"))
-	require.NoError(t, mr.Set(sceneSourceKey(sceneID), strconv.FormatUint(source, 10)))
+	require.NoError(t, mr.Set(sceneMirrorFlagKey(claimTestZone, sceneID), "1"))
+	require.NoError(t, mr.Set(sceneSourceKey(claimTestZone, sceneID), strconv.FormatUint(source, 10)))
 	require.NoError(t, mr.Set(nodeSceneCountKey(claimTestZone, node), "3"))
 	_, err := mr.SAdd(nodeScenesKey(claimTestZone, node), member, "other-scene")
 	require.NoError(t, err)
-	_, err = mr.SAdd(sceneMirrorsKey(source), member, strconv.FormatUint(sibling, 10))
+	_, err = mr.SAdd(sceneMirrorsKey(claimTestZone, source), member, strconv.FormatUint(sibling, 10))
 	require.NoError(t, err)
 
 	// 与 atomicRollbackInstanceAllocation 的请求相同,只是 token 固定,好验证重发。
@@ -248,8 +247,8 @@ func TestRollbackInstanceAllocation_WipesEverythingOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, first, again, "重发回原快照")
 
-	for _, key := range []string{sceneNodeKey(sceneID), sceneZoneKey(sceneID), sceneAgonesGsKey(sceneID),
-		sceneMirrorFlagKey(sceneID), sceneSourceKey(sceneID), instanceMembersKey(sceneID)} {
+	for _, key := range []string{sceneNodeKey(claimTestZone, sceneID), sceneAgonesGsKey(claimTestZone, sceneID),
+		sceneMirrorFlagKey(claimTestZone, sceneID), sceneSourceKey(claimTestZone, sceneID), instanceMembersKey(claimTestZone, sceneID)} {
 		require.False(t, mr.Exists(key), key)
 	}
 	requireActiveInstance(t, sc, claimTestZone, sceneID, false)
@@ -261,7 +260,7 @@ func TestRollbackInstanceAllocation_WipesEverythingOnce(t *testing.T) {
 	// 镜像源的子集合由回滚的副作用按快照里的镜像源摘(源在别的 zone 时登记没写 scene:{id}:source,快照里就没有)。
 	job := sceneTeardownJob{ZoneID: claimTestZone, SceneID: sceneID, Kind: teardownKindRollback, Reason: "create_rpc_failed", Claim: first}
 	require.NoError(t, runRollbackTeardown(context.Background(), sc, job))
-	mirrors, err := mr.Members(sceneMirrorsKey(source))
+	mirrors, err := mr.Members(sceneMirrorsKey(claimTestZone, source))
 	require.NoError(t, err)
 	require.Equal(t, []string{strconv.FormatUint(sibling, 10)}, mirrors)
 }
@@ -276,8 +275,8 @@ func TestRollbackInstanceAllocation_OwnerChangedTouchesNothing(t *testing.T) {
 	claim, err := atomicRollbackInstanceAllocation(sc, claimTestZone, sceneID, "node-old")
 	require.NoError(t, err)
 	require.False(t, claim.Claimed)
-	require.Equal(t, "node-new", mustGet(t, mr, sceneNodeKey(sceneID)))
-	require.Equal(t, "gs-a", mustGet(t, mr, sceneAgonesGsKey(sceneID)))
+	require.Equal(t, "node-new", mustGet(t, mr, sceneNodeKey(claimTestZone, sceneID)))
+	require.Equal(t, "gs-a", mustGet(t, mr, sceneAgonesGsKey(claimTestZone, sceneID)))
 	require.Equal(t, "3", mustGet(t, mr, nodeSceneCountKey(claimTestZone, "node-old")))
 	requireActiveInstance(t, sc, claimTestZone, sceneID, true)
 }
@@ -298,7 +297,7 @@ func TestBeginDrain_MovesChannelInOneStep(t *testing.T) {
 	draining, err := sc.Redis.Smembers(worldDrainingSetKey(testZoneId, autoscaleTestConfID))
 	require.NoError(t, err)
 	require.Equal(t, []string{"102"}, draining)
-	require.Positive(t, mr.TTL(sceneDrainingKey(102)), "排空标记要带 TTL")
+	require.Positive(t, mr.TTL(sceneDrainingKey(testZoneId, 102)), "排空标记要带 TTL")
 	require.Equal(t, 1, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
 
 	again := beginDrainWorldChannel(context.Background(), sc, testZoneId, autoscaleTestConfID,
@@ -332,6 +331,6 @@ func TestBeginDrain_ScriptFailureLeavesChannelRouted(t *testing.T) {
 	draining, err := sc.Redis.Smembers(worldDrainingSetKey(testZoneId, autoscaleTestConfID))
 	require.NoError(t, err)
 	require.Empty(t, draining)
-	require.False(t, mr.Exists(sceneDrainingKey(102)))
+	require.False(t, mr.Exists(sceneDrainingKey(testZoneId, 102)))
 	require.Equal(t, 2, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
 }

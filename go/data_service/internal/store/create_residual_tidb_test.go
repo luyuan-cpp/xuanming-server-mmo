@@ -23,6 +23,13 @@ import (
 
 func residualAuditorOnFixture(t *testing.T, f *directoryShardFixture) (*CreateResidualAuditor, *PlayerNameStore) {
 	t.Helper()
+	auditor, names, _ := residualAuditorWithCacheOnFixture(t, f)
+	return auditor, names
+}
+
+// residualAuditorWithCacheOnFixture 同 residualAuditorOnFixture,另把名字缓存换成记录器(名字每修一处都要删这名玩家的缓存)。
+func residualAuditorWithCacheOnFixture(t *testing.T, f *directoryShardFixture) (*CreateResidualAuditor, *PlayerNameStore, *recordedNameCache) {
+	t.Helper()
 	dsn, err := f.SQL.OperatorDSN(dirshard.DirectoryDBName(f.Base, 0, shardFixtureK))
 	require.NoError(t, err)
 	admin, err := mysql.ParseDSN(dsn)
@@ -36,9 +43,10 @@ func residualAuditorOnFixture(t *testing.T, f *directoryShardFixture) (*CreateRe
 	names, err := NewPlayerNameStore(conf)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, names.Close()) })
-	auditor, err := NewCreateResidualAuditor(directory, names, time.Now)
+	cache := &recordedNameCache{}
+	auditor, err := NewCreateResidualAuditor(directory, names, cache, time.Now)
 	require.NoError(t, err)
-	return auditor, names
+	return auditor, names, cache
 }
 
 // residualRunAllShards 逐片跑完一轮,结论按 player 排序。

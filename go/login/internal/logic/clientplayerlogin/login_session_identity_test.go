@@ -89,7 +89,7 @@ func newIdentityHarness(t *testing.T) *identityHarness {
 	require.NoError(t, rdb.Set(ctx, constants.PlayerToAccountKey(identityVictimPlayer), identityVictimAccount, 0).Err())
 
 	return &identityHarness{rdb: rdb, mr: mr, svcCtx: &svc.ServiceContext{
-		RedisClient: rdb, PlayerRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
+		ControlRedis: rdb, PlayerRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
 		TokenManager: token.NewManager(rdb, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 30 * 24 * time.Hour}),
 	}}
 }

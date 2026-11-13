@@ -85,7 +85,7 @@ func newGateSweeper(svcCtx *svc.ServiceContext, owner slotOwner, cfg config.Reco
 		cfg:             cfg,
 		interval:        interval,
 		deps:            deps,
-		transitionPacer: deps.newPacer(cfg.MaxTransitionsPerSecond),
+		transitionPacer: deps.newPacer(float64(cfg.MaxTransitionsPerSecond)),
 		memberBudget:    budget,
 		suspects:        make(map[string]int),
 		liveView:        liveview.NewGate(liveViewHold, liveview.RecoverBelowThreshold),

@@ -40,7 +40,7 @@ try:
     import openpyxl
     from openpyxl.utils import get_column_letter
 except ImportError:  # pragma: no cover - 环境问题,给一句能照着做的话
-    sys.exit("缺少 openpyxl:请先执行  pip install openpyxl")
+    sys.exit("openpyxl is missing: run  pip install openpyxl  first")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TIP_XLSX = REPO_ROOT / "data" / "tip" / "Tip.xlsx"
@@ -96,7 +96,7 @@ Patch = tuple[int, int, object]     # (行, 列, 值),行列都从 1 起
 
 
 def fail(message: str) -> "NoReturn":
-    sys.exit(f"[中止] {message}")
+    sys.exit(f"[ABORT] {message}")
 
 
 def rel(path: Path) -> str:
@@ -105,7 +105,7 @@ def rel(path: Path) -> str:
 
 def only_sheet(wb, path: Path):
     if len(wb.sheetnames) != 1:
-        fail(f"{path.name} 预期只有一个 sheet,实际 {wb.sheetnames}")
+        fail(f"{path.name} should have exactly one sheet, found {wb.sheetnames}")
     return wb[wb.sheetnames[0]]
 
 
@@ -133,10 +133,10 @@ def apply_patches_and_verify(xlsx_path: Path, wb, ws, before: list[list], patche
     也保证重复执行不会把同一批数据叠写两遍。"""
     for row, col, value in patches:
         if value is None:
-            fail(f"内部错误:补丁里出现了空值({get_column_letter(col)}{row})")
+            fail(f"internal error: the patch contains an empty value ({get_column_letter(col)}{row})")
         if ws.cell(row=row, column=col).value is not None:
-            fail(f"{xlsx_path.name} 的 {get_column_letter(col)}{row} 已有内容 "
-                 f"{ws.cell(row=row, column=col).value!r},本脚本只写空格、不覆盖 —— 先查清是谁写的。")
+            fail(f"{xlsx_path.name} {get_column_letter(col)}{row} already has content "
+                 f"{ws.cell(row=row, column=col).value!r}; this script only writes empty cells and never overwrites -- find out who wrote it first.")
     for row, col, value in patches:
         ws.cell(row=row, column=col, value=value)
     wb.save(xlsx_path)
@@ -151,7 +151,7 @@ def apply_patches_and_verify(xlsx_path: Path, wb, ws, before: list[list], patche
     check_ws = only_sheet(openpyxl.load_workbook(xlsx_path), xlsx_path)
     diff = first_difference(sheet_matrix(check_ws), expected)
     if diff:
-        fail(f"保存后读回的 {xlsx_path.name} 与预期不符({diff})—— 立刻 git checkout -- {rel(xlsx_path)} 还原")
+        fail(f"after saving, {xlsx_path.name} read back is not as expected ({diff}) -- restore it now with git checkout -- {rel(xlsx_path)}")
 
 
 # ── Tip.xlsx 解析(判据与导表器 enum_gen._parse_tip_sheet 一致)──────────────
@@ -167,7 +167,7 @@ def parse_group_header(name: str, row_idx: int) -> tuple[str, int, int]:
     try:
         return parts[0], int(kv["base"]), int(kv["width"])
     except (KeyError, ValueError):
-        fail(f"{TIP_XLSX.name} 第 {row_idx} 行 {name!r} 像组头却没有合法的 base= / width= —— 导表器也会拒绝,先修表")
+        fail(f"{TIP_XLSX.name} row {row_idx}: {name!r} looks like a group header but has no valid base= / width= -- the table exporter rejects it too; fix the table first")
 
 
 def tip_parse(matrix: list[list], fault_col: int):
@@ -189,7 +189,7 @@ def tip_parse(matrix: list[list], fault_col: int):
             groups.append(dict(name=group, base=base, width=width, row=row_idx, codes=[], code_rows=[]))
             continue
         if not groups:
-            fail(f"{TIP_XLSX.name} 第 {row_idx} 行的码 {name!r} 出现在第一个组头之前")
+            fail(f"{TIP_XLSX.name} row {row_idx}: code {name!r} appears before the first group header")
         fault = row[fault_col - 1] if fault_col <= len(row) else None
         groups[-1]["codes"].append((name, row[1] if len(row) > 1 else None, fault))
         groups[-1]["code_rows"].append(row_idx)
@@ -208,13 +208,13 @@ def generated_segments() -> list[tuple[str, int, int]]:
 def self_check() -> None:
     names = [name for name, _t, _f in TIP_CODES]
     if len(set(names)) != len(names) or len(names) > TIP_WIDTH:
-        fail("TIP_CODES 码名重复或超过段宽")
+        fail("TIP_CODES has duplicate code names or exceeds the range width")
     if any(not name.startswith("PlayerInbox") or not name.isidentifier() or name.startswith("k") for name in names):
-        fail("TIP_CODES 码名必须是合法标识符、以 PlayerInbox 开头、不带 k 前缀")
+        fail("TIP_CODES names must be valid identifiers that start with PlayerInbox and have no k prefix")
     if [name for name, _t, fault in TIP_CODES if fault] != ["PlayerInboxStoreUnavailable"]:
-        fail("TIP_CODES 里只有 PlayerInboxStoreUnavailable 是服务端故障(设计 §5.3)")
+        fail("TIP_CODES: only PlayerInboxStoreUnavailable is a server fault (design §5.3)")
     if any(not text or not text.strip() for _n, text, _f in TIP_CODES):
-        fail("TIP_CODES 文案不能为空")
+        fail("TIP_CODES text must not be empty")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -227,7 +227,7 @@ def cmd_tip_codes(dry_run: bool) -> None:
     before = sheet_matrix(ws)
     header = [str(v).strip().lower() if v is not None else "" for v in before[HEADER_ROW - 1]]
     if header[:2] != ["name", "commen"] or header.count("fault") != 1:
-        fail(f"{TIP_XLSX.name} 第 1 行应为 name / commen / … / fault(fault 恰好一列),实际 {before[HEADER_ROW - 1]}")
+        fail(f"{TIP_XLSX.name} row 1 should be name / commen / ... / fault (exactly one fault column), got {before[HEADER_ROW - 1]}")
     fault_col = header.index("fault") + 1
 
     groups, notes = tip_parse(before, fault_col)
@@ -239,25 +239,25 @@ def cmd_tip_codes(dry_run: bool) -> None:
     if mine is not None:
         # 已是目标状态 = 段声明一致,且这 15 个码是本组开头的连续一段。不要求恰好在组尾:以后还会往组尾追加。
         if (mine["base"], mine["width"]) == (TIP_BASE, TIP_WIDTH) and mine["codes"][:len(wanted)] == wanted:
-            print(f"[已是目标状态] {header_text}(第 {mine['row']} 行)下已有这 {len(wanted)} 个码"
-                  f"(码名 / 文案 / fault 一致),不改文件。")
+            print(f"[ALREADY CURRENT] {header_text} (row {mine['row']}) already has these {len(wanted)} codes"
+                  f" (same names / text / fault); file unchanged.")
             return
-        fail(f"{TIP_XLSX.name} 第 {mine['row']} 行已有 //{TIP_GROUP} 组,但段声明或开头 {len(wanted)} 个码与本脚本不同"
-             f"(可能只写进了一部分,或被手改过)—— 先查清是谁改的,本脚本不猜。")
+        fail(f"{TIP_XLSX.name} row {mine['row']} already has group //{TIP_GROUP}, but its range declaration or first {len(wanted)} codes differ from this script"
+             f" (maybe only partly written, or edited by hand) -- find out who changed it first; this script does not guess.")
 
     # 以下都是「先核对再动手」:码名全表唯一、29000 段没被表 / 说明行 / 发号 state / 已生成段表占用。
     owner = {code: g["name"] for g in groups for code, _t, _f in g["codes"]}
-    clash = [f"{n}(在 {owner[n]})" for n in new_names if n in owner]
+    clash = [f"{n} (in {owner[n]})" for n in new_names if n in owner]
     if clash:
-        fail(f"这些码名已在表里:{clash} —— 码名全局唯一(生成的 tip proto 没有 package),先查清。")
+        fail(f"these code names are already in the table: {clash} -- code names are globally unique (the generated tip proto has no package); find out first.")
     lo, hi = TIP_BASE, TIP_BASE + TIP_WIDTH
     overlap = [f"{g['name']} [{g['base']},{g['base'] + g['width']})" for g in groups
                if g["base"] < hi and lo < g["base"] + g["width"]]
     if overlap:
-        fail(f"段 [{lo},{hi}) 已被表里的组占用:{overlap} —— 改用下一个空闲整千段并同步设计 §5.3。")
-    reserved = [f"第 {row} 行 {text!r}" for row, text in notes if str(TIP_BASE) in text]
+        fail(f"range [{lo},{hi}) is already taken by groups in the table: {overlap} -- switch to the next free thousand-wide range and update design §5.3.")
+    reserved = [f"row {row} {text!r}" for row, text in notes if str(TIP_BASE) in text]
     if reserved:
-        fail(f"{TIP_BASE} 段已被说明行预留:{reserved} —— 改用下一个空闲整千段并同步设计 §5.3。")
+        fail(f"range {TIP_BASE} is reserved by note rows: {reserved} -- switch to the next free thousand-wide range and update design §5.3.")
     if TIP_STATE.exists():
         # 发号 state 里的整组是墓碑:表里删掉的组仍占着段。只读核对,不写 state。
         state = json.loads(TIP_STATE.read_text(encoding="utf-8"))
@@ -265,32 +265,32 @@ def cmd_tip_codes(dry_run: bool) -> None:
         tomb = [f"{n} [{g['base']},{g['base'] + g['width']})" for n, g in state_groups.items()
                 if int(g["base"]) < hi and lo < int(g["base"]) + int(g["width"])]
         if tomb:
-            fail(f"发号 state({rel(TIP_STATE)})里段 [{lo},{hi}) 已属于 {tomb} —— 换一个段,不要手改 state。")
+            fail(f"in the ID state ({rel(TIP_STATE)}), range [{lo},{hi}) already belongs to {tomb} -- pick another range; do not edit the state by hand.")
         state_names = {name: g_name for g_name, g in state_groups.items() for name in g.get("ids", {})}
         state_names.update({entry.get("name"): f"legacy:{entry.get('group')}"
                             for entry in state.get("legacy_ids", {}).values() if isinstance(entry, dict)})
-        state_clash = [f"{n}(在 {state_names[n]})" for n in new_names if n in state_names]
+        state_clash = [f"{n} (in {state_names[n]})" for n in new_names if n in state_names]
         if state_clash:
-            fail(f"这些码名已在发号 state 里(可能是墓碑):{state_clash} —— 码名全局唯一,换名字,不要手改 state。")
+            fail(f"these code names are already in the ID state (maybe tombstones): {state_clash} -- code names are globally unique; rename them, do not edit the state by hand.")
     seg_overlap = [f"{name} [{base},{base + width})" for name, base, width in generated_segments()
                    if base < hi and lo < base + width]
     if seg_overlap:
-        fail(f"已生成的 {rel(TIP_SEGMENTS_GO)} 里段 [{lo},{hi}) 已属于 {seg_overlap} —— 换一个段。")
+        fail(f"in the generated {rel(TIP_SEGMENTS_GO)}, range [{lo},{hi}) already belongs to {seg_overlap} -- pick another range.")
 
     last_row = max((r for r, row in enumerate(before, start=1) if any(v is not None for v in row)), default=0)
     header_row = last_row + 2          # 与既有组一样,组头前留一个空行
     patches: list[Patch] = [(header_row, 1, header_text)]
-    print(f"{TIP_XLSX.name}:现有 {len(groups)} 个组、{len(owner)} 个码;最后一个非空行是第 {last_row} 行;"
-          f"段 [{lo},{hi}) 空闲;{len(new_names)} 个码名全局唯一。将追加:")
-    print(f"  第 {header_row} 行: {header_text}")
+    print(f"{TIP_XLSX.name}: {len(groups)} groups, {len(owner)} codes; last non-empty row {last_row}; "
+          f"range [{lo},{hi}) is free; all {len(new_names)} code names are globally unique. Will append:")
+    print(f"  row {header_row}: {header_text}")
     for offset, (name, text, fault) in enumerate(wanted, start=1):
         row_idx = header_row + offset
         patches += [(row_idx, 1, name), (row_idx, 2, text)]
         if fault is not None:
             patches.append((row_idx, fault_col, fault))
-        print(f"  第 {row_idx} 行: {name} | {text}" + (" | fault=1" if fault else ""))
+        print(f"  row {row_idx}: {name} | {text}" + (" | fault=1" if fault else ""))
     if dry_run:
-        print("[dry-run] 未写文件。")
+        print("[dry-run] No files written.")
         return
     apply_patches_and_verify(TIP_XLSX, wb, ws, before, patches)
 
@@ -301,11 +301,11 @@ def cmd_tip_codes(dry_run: bool) -> None:
         + [(TIP_GROUP, TIP_BASE, TIP_WIDTH, wanted)]
     if [(g["name"], g["base"], g["width"], g["codes"]) for g in groups_after] != expected_groups \
             or [text for _row, text in notes_after] != [text for _row, text in notes]:
-        fail(f"保存后各组的码与预期不符 —— 立刻 git checkout -- {rel(TIP_XLSX)} 还原")
-    print(f"[完成] 组 {len(groups)} -> {len(groups_after)};既有 {len(owner)} 个码(码名, 文案, fault)逐项不变。"
-          f"导表后核对:这 {len(wanted)} 个码的 id 应为 {lo}..{lo + len(wanted) - 1};tip_enum_ids.json 只增不改;"
-          f"faults.go 新段只有 PlayerInboxStoreUnavailable;把新生成的 proto/tip/{TIP_GROUP}_tip.pb.{{h,cc}} "
-          f"登记进 cpp/generated/table 的 CMakeLists.txt / table.vcxproj / table.vcxproj.filters。")
+        fail(f"after saving, the codes per group are not as expected -- restore it now with git checkout -- {rel(TIP_XLSX)}")
+    print(f"[DONE] groups {len(groups)} -> {len(groups_after)}; the existing {len(owner)} codes (name, text, fault) are unchanged. "
+          f"After exporting, check: the ids of these {len(wanted)} codes should be {lo}..{lo + len(wanted) - 1}; tip_enum_ids.json only grows; "
+          f"the new range in faults.go has only PlayerInboxStoreUnavailable; register the newly generated proto/tip/{TIP_GROUP}_tip.pb.{{h,cc}} "
+          f"in CMakeLists.txt / table.vcxproj / table.vcxproj.filters under cpp/generated/table.")
 
 
 COMMANDS = {

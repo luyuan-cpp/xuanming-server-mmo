@@ -23,7 +23,7 @@ import (
 
 const trialLobbyColumns = "lobby_id,guild_id,activity_id,initiator_player_id,state,view_proto,original_proto,consent_proto,expires_ms,launch_deadline_ms,battle_id,created_ms,updated_ms"
 
-func NewSQLTrialLobbyRepo(rdb *redis.Client, guilds *GuildRepo, mint func(context.Context) (uint64, error)) (*TrialLobbyRepo, error) {
+func NewSQLTrialLobbyRepo(rdb redis.UniversalClient, guilds *GuildRepo, mint func(context.Context) (uint64, error)) (*TrialLobbyRepo, error) {
 	if rdb == nil || guilds == nil || guilds.fence == nil || mint == nil {
 		return nil, errors.New("历练SQL大厅权威依赖缺失")
 	}

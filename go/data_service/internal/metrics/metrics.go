@@ -56,8 +56,9 @@ var (
 		Buckets:   []float64{1, 2, 4, 8, 16, 32, 64, 128, 256},
 	}, []string{"consumer"})
 
-	// 每条消息 value 的字节数(含坏消息)。1000000 那一档对着 C++ 生产者 librdkafka 默认的 message.max.bytes:
-	// 超过它的快照在生产端就被拒了,这里看不到 —— 所以 p99 贴近这一档就该查 scene 日志的 "Kafka send failed"。
+	// 每条消息 value 的字节数(含坏消息)。1000000 那一档对着流水 topic 的 broker 缺省上限(约 1 MiB);快照一份至多 4 MiB
+	// (写入端 go/db 的 MaxAuditSnapshotBytes)。超了的记录在 go/db 那边就被跳过或留在发件箱(db_audit_outbox_records_skipped_total
+	// {reason="too_large"}、go/db 日志 [audit_outbox]),这里看不到 —— 所以 p99 贴近 4 MiB 那一档就该查 go/db 的这两处。
 	kafkaConsumerMessageBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Subsystem: subsystem,
 		Name:      "kafka_consumer_message_bytes",
@@ -92,14 +93,14 @@ var (
 		Help:      "Messages deleted by topic retention before this consumer group consumed them (sum over partitions of log-start minus committed). > 0 means audit data is lost.",
 	}, []string{"consumer"})
 
-	// 消费组卡住的判据(DataServiceAuditConsumerStalled,r2-kc#1 评审跟进):某个分区上已提交位点停下之后又新到了消息、
-	// 而位点一直没再动,最久的那个分区停了多少秒(kafkautil.CommitStall,RequireArrivals)。探针按分区算,每个 consumer 一条序列,
-	// 不按分区出序列。只认新到的消息:reader 模式提交失败交还的已落库记录会在低流量分区上一直挂着积压,那不算卡住。
-	// 不由 PrimeKafkaConsumer 预置:探针没成功过,就不该有一个看着像「没卡住」的 0。每个实例报同一个组的值,告警取 max。
+	// 消费组卡住的判据(DataServiceAuditConsumerStalled):有积压的分区上(组内已提交位点低于日志末端),已提交位点最久多少秒没动
+	// (kafkautil.CommitStall,探针按分区跨轮算)。不依赖新消息到达(2026-11-12 起):收不到新消息的分区卡住也看得见。
+	// 每个 consumer 一条序列,不按分区出序列。不由 PrimeKafkaConsumer 预置:探针没成功过,就不该有一个看着像「没卡住」的 0。
+	// 每个实例报同一个组的值,告警取 max。
 	kafkaConsumerCommitStallSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "kafka_consumer_commit_stall_seconds",
-		Help:      "Longest time any partition has gone without its committed offset advancing although new messages arrived after it stopped, as seen by the lag probe (0 = no such partition).",
+		Help:      "Longest time any partition with a backlog (committed offset below the log end) has gone without its committed offset advancing, as seen by the lag probe (0 = every backlogged partition is advancing).",
 	}, []string{"consumer"})
 
 	// auditRetentionDeletedRowsTotal、auditRetentionFailuresTotal:审计表清理(store.RunAuditRetention)。table 只有两个值。
@@ -136,12 +137,13 @@ var (
 	// idIssuerReserveTotal 是发号器预留块的结果。ok 正常很少发生;one_record_missing / record_behind
 	// 说明某一份本地记录丢失或回退过,records_behind_registry 说明本地两套 etcd 都被旧数据覆盖过,
 	// registry_behind 持续出现说明登记处被回档过,ahead_of_clock 说明时钟曾跳到未来,
-	// identity_error 说明读不到本部署环境的身份(K8s API 或 RBAC),都要人看一眼。
+	// identity_error 说明读不到本部署环境的身份(K8s API 或 RBAC),
+	// records_behind_issuer 说明有记录低于活着的发号进程确认过的水位(被回档或丢了,作证检查已经抬回去),都要人看一眼。
 	idIssuerReserveTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "id_issuer_reserve_total",
 		Help: "Id issuer block reservations by result (ok|conflict|store_error|refused|one_record_missing|record_behind|" +
-			"records_behind_registry|registry_behind|ahead_of_clock|identity_error).",
+			"records_behind_registry|registry_behind|ahead_of_clock|identity_error|records_behind_issuer).",
 	}, []string{"result"})
 
 	// ── 玩家名字注册表(设计 docs/design/guild-phase2/03-names.md §3.6)────
@@ -233,15 +235,16 @@ var (
 			"error (the read failed; the RPC answers Unavailable).",
 	}, []string{"path", "result"})
 
-	// 后台判陈旧留下的建角 ref:角色行不在,但角色有提交过的证据(或者证据核不全),没写墓碑、没删
-	// (store.SweepResult.Held,docs/ops/mysql-backup-pitr-runbook.md §4.1a)。每一轮都会把还留着的再计一次,
-	// 所以速率非零就是有 ref 等人处理;逐条的 player_id 和证据在 `[account-role-ref]` 的 ERROR 日志里。没有 label。
+	// 后台判陈旧新留下的建角 ref:角色行不在,但角色有提交过的证据(或者证据核不全),没写墓碑、没删,标成保留
+	// (store.SweepResult.Held,docs/ops/mysql-backup-pitr-runbook.md §4.1a)。2026-11-12 起标了保留的不再每轮重扫,同一条只计一次;
+	// 还留着多少条看 gauge account_role_ref_held(account_directory.go,告警按它)。逐条的 player_id 和证据在 `[account-role-ref]` 的
+	// ERROR 日志里。没有 label。
 	roleRefTombstoneHeldTotal = prometheus.NewCounter(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "account_role_ref_tombstone_held_total",
-		Help: "Stale create refs the background sweep kept without a tombstone because the role row is missing but the role shows committed " +
-			"evidence (bound name, played player_store rows) or the evidence cannot be read in full. Counted again on every sweep while " +
-			"they stay; any increase needs a look (create_residual or by hand).",
+		Help: "Stale create refs the background sweep newly kept for review without a tombstone because the role row is missing but the role shows " +
+			"committed evidence (bound name, played player_store rows) or the evidence cannot be read in full. Counted once when the ref is marked held; " +
+			"the number still held is data_service_account_role_ref_held.",
 	})
 
 	registerOnce sync.Once
@@ -262,7 +265,8 @@ const (
 const (
 	RouteReadPathHome      = "home"
 	RouteReadPathBatch     = "batch"
-	RouteReadPathPlacement = "placement" // go/db 选库读落点(GetPlayerRoute)
+	RouteReadPathPlacement = "placement"  // go/db 选库读落点(GetPlayerRoute)
+	RouteReadPathZoneCount = "zone_count" // 按区数角色(CountZoneRoles),每次计数计一次
 
 	RouteReadResultOK       = "ok"
 	RouteReadResultNotFound = "not_found"
@@ -280,7 +284,7 @@ var (
 		RouteRegisterInvalid,
 	}
 
-	// routeReadSeries 是 route_read_total 里**会出现**的 path × result 组合(8 条):batch 没有逐 id 的缺席结论,
+	// routeReadSeries 是 route_read_total 里**会出现**的 path × result 组合(10 条):batch、zone_count 没有缺席结论,
 	// 不出现的组合不预置,免得面板上多出恒为 0、看着像「在跑」的序列。
 	routeReadSeries = [][2]string{
 		{RouteReadPathHome, RouteReadResultOK},
@@ -291,6 +295,8 @@ var (
 		{RouteReadPathPlacement, RouteReadResultOK},
 		{RouteReadPathPlacement, RouteReadResultNotFound},
 		{RouteReadPathPlacement, RouteReadResultError},
+		{RouteReadPathZoneCount, RouteReadResultOK},
+		{RouteReadPathZoneCount, RouteReadResultError},
 	}
 )
 
@@ -315,7 +321,7 @@ func register() {
 	})
 }
 
-// ObserveRoleRefTombstoneHeld 记一轮后台判陈旧留下(没写墓碑)的建角 ref 条数(store.SweepResult.Held)。
+// ObserveRoleRefTombstoneHeld 记一轮后台判陈旧新标成保留(没写墓碑)的建角 ref 条数(store.SweepResult.Held)。
 func ObserveRoleRefTombstoneHeld(n int) {
 	register()
 	if n > 0 {
@@ -323,7 +329,7 @@ func ObserveRoleRefTombstoneHeld(n int) {
 	}
 }
 
-// PrimeRoute 把 route_register_total(7 条)与 route_read_total(8 条)的封闭集合逐个预置为 0(data_service.go 启动路径):
+// PrimeRoute 把 route_register_total(7 条)与 route_read_total(10 条)的封闭集合逐个预置为 0(data_service.go 启动路径):
 // store_error 这类一辈子可能只发生几次的结局,序列不预先存在的话 `increase(...) > 0` 恰好漏掉第一次。
 func PrimeRoute() {
 	register()

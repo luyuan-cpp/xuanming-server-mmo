@@ -285,7 +285,7 @@ def refresh(workspace: Path, archive_argument: str) -> dict[str, Any]:
     new_tree.mkdir(exist_ok=False)
     old_tree_archived = False
     try:
-        print(f"复制 {len(modules)} 个已核对模块的直属 include/boost -> {new_tree}", flush=True)
+        print(f"Copying the top-level include/boost of {len(modules)} verified modules -> {new_tree}", flush=True)
         files = copy_headers(boost_root, new_tree, modules)
         validate_new_tree(new_tree, files)
         if git_root_head(boost_root) != boost_head or sha256_file(boost_root / ".gitmodules") != gitmodules_sha256:
@@ -338,7 +338,7 @@ def main() -> int:
     try:
         result = refresh(workspace, arguments.archive)
     except (OSError, RuntimeError, ValueError) as error:
-        print(f"Boost 聚合头刷新失败：{error}", file=sys.stderr)
+        print(f"Boost umbrella header refresh failed: {error}", file=sys.stderr)
         return 1
     print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
     return 0

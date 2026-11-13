@@ -71,6 +71,9 @@ type FeedIdentity struct {
 	// TargetCreated 是目标库闸门表的建表时间。从全量重来会删库重建,这时上面的字段可能都不变
 	// (MySQL 的通道名和来源、TiDB 用 pause 和 resume 时的 changefeed),只有它会变。
 	TargetCreated string `json:"target_created,omitempty"`
+	// ConfigDigest 是这条流上决定「复制哪些内容」的配置的摘要:TiDB 档是 changefeed 的整份 config(过滤规则、忽略的事务都在里面),
+	// MySQL 档是通道的复制过滤。verify 之后改过滤,上面的字段一个都不变,改完却有一段写不再复制过去,所以它也算身份的一部分。
+	ConfigDigest string `json:"config_digest,omitempty"`
 }
 
 // Move 是 tools/dbmove 这一次搬迁的记录,写在映射值里。进程不读它。
@@ -81,10 +84,12 @@ type Move struct {
 	PreparedMs    uint64 `json:"prepared_ms,omitempty"`
 	// VerifiedMs 是 verify 比对的那个位置的时刻。TiDB 档取 primary_ts 的物理时间,MySQL 档取 verify 开始的时刻。
 	VerifiedMs uint64 `json:"verified_ms,omitempty"`
-	// VerifiedFeed 是 verify 时的复制流。cutover 比它,变了就要重跑 verify。
+	// VerifiedFeed 是 verify 时的复制流。cutover 比它,变了就要重跑 verify;cleanup 删源库之前按它核这条流已经撤掉。
 	VerifiedFeed *FeedIdentity `json:"verified_feed,omitempty"`
 	// VerifiedPrimaryTs 是 verify 站的 TiCDC primary_ts,MySQL 档为 0。只用于排查。
 	VerifiedPrimaryTs uint64 `json:"verified_primary_ts,omitempty"`
+	// VerifyTookMs 是 verify 那次全量比对花的时间。切换窗口里两边静止之后还要再比一次,cutover 拿它估:-compare-budget 装不下就在冻结之前拒绝。
+	VerifyTookMs uint64 `json:"verify_took_ms,omitempty"`
 	// LockedAccounts 是 prepare 在目标上 ACCOUNT LOCK 的写者账号,cutover 按它解锁,rollback 按它再锁一遍。
 	LockedAccounts []string `json:"locked_accounts,omitempty"`
 	// SharedAccounts 是还在写目标集群上别的库、所以没锁的写者账号(-allow-shared-writer-accounts)。
@@ -98,6 +103,12 @@ type Move struct {
 	// TargetPoint 是目标库闸门打开之前的位置(TiDB:TSO;MySQL:gtid_executed),audit 在这个位置上比校验和。
 	// 打开闸门之前就写进映射:窗口崩在打开之后时,重跑要复用它,重读的话位置已经包含了那次打开。
 	TargetPoint string `json:"target_point,omitempty"`
+	// FeedEndpoint 是翻转时 -sync 给的 TiCDC OpenAPI 地址。MySQL 档为空:通道配在目标上,连目标就查得到。
+	// cleanup 删源库之前只在这个地址上查 changefeed 还在不在:换一个 TiCDC 去问,答「没有」不说明它已经撤掉。
+	FeedEndpoint string `json:"feed_endpoint,omitempty"`
+	// FinalCompareSkipped 表示这次翻转用 -skip-final-compare 跳过了切换窗口里的静止比对(源库冻结、复制追平之后两边再比一次全量)。
+	// 跳过之后,verify 以后复制有没有漏写,翻转之前没有人查过,只能靠 audit 事后发现。
+	FinalCompareSkipped bool `json:"final_compare_skipped,omitempty"`
 }
 
 // Placement 是映射值。没有键时等于 {配置的默认集群, 0, ACTIVE}。

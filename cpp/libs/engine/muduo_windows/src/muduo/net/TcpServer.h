@@ -8,6 +8,9 @@
 //
 // This is a public header file, it must only include public header files.
 
+// LOCAL DELTA(与 Linux 覆盖件 tools/archived/muduo_linux_overlay/muduo/net/TcpServer.h 同一改动,两边要一起改):
+// 加 setAdmissionCallback,把准入回调转给 Acceptor。只多一个成员函数,类的数据成员不变。
+
 #ifndef MUDUO_NET_TCPSERVER_H
 #define MUDUO_NET_TCPSERVER_H
 
@@ -88,6 +91,15 @@ class TcpServer : noncopyable
   /// Not thread safe.
   void setWriteCompleteCallback(const WriteCompleteCallback& cb)
   { writeCompleteCallback_ = cb; }
+
+  /// LOCAL DELTA: Set admission callback (docs/design/gate-connection-admission-control.md P1-1).
+  /// Asked once per accepted socket in the acceptor loop, before any per-connection
+  /// object is built. Returning false closes the socket at once with a RST: no
+  /// TcpConnection, no buffers, no connection map entry, no connection callback.
+  /// Only for criteria that do not depend on who the peer is (total count, global
+  /// rate, shutting down). Not thread safe: call it in the loop thread.
+  typedef std::function<bool (const InetAddress& peerAddr)> AdmissionCallback;
+  void setAdmissionCallback(const AdmissionCallback& cb);
 
  private:
   /// Not thread safe, but in loop

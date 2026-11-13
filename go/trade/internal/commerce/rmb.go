@@ -136,6 +136,27 @@ func (s *RmbConsignments) save(ctx context.Context, old *tradepb.TradeCommerceRe
 		return s.Engine.Repo.Save(ctx, tx, r, w, s.Engine.now())
 	})
 }
+
+// rmbCancellable 是人民币寄售的可撤阶段白名单,与通用合同撤单(Engine.Mutate 的 "cancel")同一种写法:只有列出的阶段收卖家的撤单请求,
+// 没列出的一律拒绝,以后新加的阶段默认不可撤。Cancel 的预检与事务体都按它判。
+//
+// 列出的是买家付款之前、引擎还认 CancelRequested 的阶段;rmb_return 已经在退回,再撤一次只是重复请求,照收。
+// 没列出的阶段与不能撤的原因:
+//   - rmb_delivery:买家已付款,正在交付;
+//   - rmb_refund:买家已付款,等商城退款。状态改走的话 deliver 不再回报 REFUND_PENDING,钱退不出去;退款之后商城发回退意图,合同自己走到取消;
+//   - manual:已转人工,只能由人工处置入口处理(manual.go)。2026-11-12 之前这里是排除式判定,漏了 manual:卖家一撤,status 被改成
+//     CancelPending 而 stage 仍是 manual,合同从人工列表(status=10)里消失,人工处置入口因 status 不是 Manual 拒绝,引擎对 manual 不推进,
+//     deliver 也不再向商城回报 MANUAL,托管的资产或已付款的订单从此没有出口;
+//   - rmb_delivered、rmb_returned:已结案(已取消的由 Cancel 先按幂等成功回掉)。
+func rmbCancellable(stage string) bool {
+	switch stage {
+	case "rmb_escrow", "rmb_freezing", "rmb_ready", "rmb_registering", "rmb_listed", "rmb_return":
+		return true
+	}
+	return false
+}
+
+// Cancel 记下卖家的撤单请求,托管的退回由后台推进完成。只收可撤阶段(rmbCancellable);已取消的再撤一次算成功。
 func (s *RmbConsignments) Cancel(ctx context.Context, account string, id uint64) error {
 	r, err := s.Engine.clientContract(ctx, id)
 	if err != nil {
@@ -148,15 +169,15 @@ func (s *RmbConsignments) Cancel(ctx context.Context, account string, id uint64)
 	if r.Kind != 6 || w.Rmb == nil || w.Rmb.SellerAccount != account {
 		return ErrMissing
 	}
-	// rmb_refund 是买家已付款、等商城退款:状态改走的话 deliver 就不再回报 REFUND_PENDING,钱退不出去。退款之后商城发回退意图,合同自己走到取消。
-	if r.Status == Settled || w.Stage == "rmb_delivery" || w.Stage == "rmb_refund" {
-		return ErrConflict
-	}
 	if r.Status == Cancelled {
 		return nil
 	}
+	if !rmbCancellable(w.Stage) {
+		return ErrConflict
+	}
 	return s.save(ctx, r, func(tx *sql.Tx, r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) error {
-		if w.Stage == "rmb_delivery" || w.Stage == "rmb_refund" || r.Status == Settled {
+		// 合同行锁内按同一张白名单再判一次:提交点自己复核,不靠锁外的预检。
+		if !rmbCancellable(w.Stage) {
 			return ErrConflict
 		}
 		w.CancelRequested = true
@@ -608,7 +629,11 @@ func (s *RmbConsignments) deliver(ctx context.Context, in rmbDelivery) error {
 		if err != nil {
 			return noWrite(err)
 		}
-		if full || owned.Account != in.Account || owned.OwnerRevision != revision || owned.TradeListingId != 0 {
+		// 买卖同账号的已付款意图不能发货(托管不能发给卖家自己的另一个角色),也只能退款。商城下单时已按账号拒绝
+		// (java/mall_game RmbConsignmentStore.reserve,先于建订单与占用寄售),正常走不到;那道判断若被放开或绕过,
+		// 这里把钱退回去,而不是每轮回 ErrConflict、让已付的钱一直压在商城(2026-11-12 之前的行为)。
+		selfPurchase := in.Account == t.SellerAccount
+		if selfPurchase || full || owned.Account != in.Account || owned.OwnerRevision != revision || owned.TradeListingId != 0 {
 			// 本订单尚未建任何credit/Transfer原件；目标角色已换主只能退款，不能换一个账号继续发货。
 			// 买家账号已满也一样:还没进交付,没有过户原件,直接退款,不用先取消冻结(商城回退时 cancelRole 才放开角色)。
 			if err := s.save(ctx, r, func(_ *sql.Tx, r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) error {
@@ -667,6 +692,8 @@ func (s *RmbConsignments) deliver(ctx context.Context, in rmbDelivery) error {
 				}
 				return nil
 			}
+			// 买卖同账号的意图已经在上面走了退款分支(卖家账号挂单之后不变),走不到后一个条件。
+			// 锁内再判一次是提交点自己的复核:宁可不发货,也不把托管发给卖家自己的另一个角色。
 			if cw.Stage != "rmb_listed" || in.Account == ct.SellerAccount {
 				return ErrConflict
 			}

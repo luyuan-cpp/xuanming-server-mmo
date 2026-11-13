@@ -13,7 +13,6 @@
 
 #include "admission_policy.h"
 #include "container_layout.h"
-#include "eviction_policy.h"
 #include "item_store.h"
 #include "item_system.h"
 
@@ -135,9 +134,9 @@ enum class CompactPolicy : uint8_t
 // 一个地方** —— 于是"这个包是什么"有了唯一的定义点,而不是每加一根轴就
 // 多一处必须记得同改的调用点。
 //
-// 今天有三根轴(布局 + 准入 + 淘汰)。过期是后面的字段,加进来时调用点一行
-// 都不用改 —— 这正是做成 struct 而不是三个 setter 的理由。
-// 见 docs/design/bag-rule-policy-layering.md §3 的轴清单。
+// 今天有两根轴(布局 + 准入)。以后真有新的一根(例如过期)就加一个字段,调用点一行
+// 都不用改 —— 这正是做成 struct 而不是逐轴 setter 的理由。淘汰轴 2026-11-12 整条删除
+// (没有实现、也没有调用方):背包满了一律就拒。见 docs/design/bag-rule-policy-layering.md §3 的轴清单。
 //
 // 刻意**不带容量**:容量是 profile 给的**起点**,随后会被玩法解锁
 // (ExpandCapacity)或快照还原(SetCapacityForRestore)覆盖,它是状态不是规则。
@@ -151,59 +150,46 @@ struct BagProfile
 {
     std::unique_ptr<IContainerLayout> layout;
     std::unique_ptr<IAdmissionPolicy> admission;
-    std::unique_ptr<IEvictionPolicy> eviction;
 
     // 这套规则的注册 id。跟着包走进快照,还原时据此重新装配。
     // 固定包留 0:它们不经注册表,BagType 就是身份。
     uint32_t id{kBagProfileUnspecified};
 
-    // 人物背包 / 仓库 / 临时格:自由格 + 什么都收 + 满了就拒。
+    // 人物背包 / 仓库 / 临时格:自由格 + 什么都收。
     // 三者只有容量不同,所以共用一个工厂 —— 免得多一个只差一个数字的函数。
     //
-    // 临时格 2026-11-05 之前配的是先进先出淘汰(EvictOldestFirst),满 200 件后新掉落会销毁最早进包的那件 ——
-    // 被挤掉的东西没有任何去处,就是真丢(审计 cpp-economy#2)。现在满了同样就拒:入账方在任何副作用之前被拒,
-    // 由来源保留(战斗结算整笔延后),玩家经 RetrieveTemporaryItems 取回腾位后再补发。
+    // 临时格 2026-11-05 之前配的是先进先出淘汰,满 200 件后新掉落会销毁最早进包的那件 ——
+    // 被挤掉的东西没有任何去处,就是真丢(审计 cpp-economy#2)。现在它和所有包一样满了就拒:入账方在任何副作用之前被拒,
+    // 由来源决定去处(战斗结算先改投邮件,邮件也接不住才整笔延后,玩家腾出位置后经 BagService 的「腾位通知」提前重试)。
     // 见 docs/design/bag-rule-policy-layering.md §6.6。
     static BagProfile Flat(std::size_t capacity)
     {
         return BagProfile{std::make_unique<FlatLayout>(capacity),
-                          std::make_unique<AcceptAll>(),
-                          std::make_unique<RejectWhenFull>()};
+                          std::make_unique<AcceptAll>()};
     }
 
-    // 装备栏:具名槽(绝不被整理重排)+ 满了就拒。
+    // 装备栏:具名槽(绝不被整理重排)。
     //
     // 「只收声明了部位的东西」**不在 admission 里** —— 它与"该进哪个槽、那个
     // 部位还有没有空槽"是同一个判定,必须与 Bag::PlaceInstance 同源,所以留在
     // 桥层(Bag::CanReserve)。这里给 AcceptAll 不是"没规则",是"准入这一根轴
     // 上没有额外规则"。详见 admission_policy.h 顶部那段。
-    //
-    // 淘汰给 RejectWhenFull 是**硬要求**,不是默认值:"为了给新手镯腾位而销毁
-    // 你正戴着的手镯"不是任何游戏想要的行为。桥层对具名槽布局额外上了一道锁
-    // (Bag::PlanEviction 直接拒绝淘汰),两道一起才够。
     static BagProfile Equipment(std::size_t slotCount)
     {
         return BagProfile{std::make_unique<FixedSlotLayout>(slotCount),
-                          std::make_unique<AcceptAll>(),
-                          std::make_unique<RejectWhenFull>()};
+                          std::make_unique<AcceptAll>()};
     }
 
-    // (2026-11-05 删除了 Temporary() 工厂:临时格改用上面的 Flat,见那里的说明。今天没有任何生产包配
-    //  会淘汰的策略;要给哪个包配淘汰,先得给被挤掉的东西一个去处,否则就是丢数据。)
+    // (2026-11-05 删除了 Temporary() 工厂:临时格改用上面的 Flat,见那里的说明。)
 
-    // 节日 / 活动包:自由格 + **只收名单上的道具** + 满了就拒。
-    //
-    // 满了拒而不是先进先出,是刻意的:活动道具通常是限量发放的凭证 / 材料,
-    // "为了塞新的而挤掉旧的"在这里是丢失而不是缓冲。要 FIFO 的活动自己注册
-    // 一个换掉 eviction 的 profile 即可 —— 这正是三根轴正交的好处。
+    // 节日 / 活动包:自由格 + **只收名单上的道具**。
     //
     // 名单由创建这个包的玩法给出(活动系统本来就知道自己发哪些道具),
     // 不需要在物品表上加 tag 列。见 admission_policy.h 里 AcceptByConfigSet 的说明。
     static BagProfile Festival(std::size_t capacity, std::unordered_set<uint32_t> allowedConfigs)
     {
         return BagProfile{std::make_unique<FlatLayout>(capacity),
-                          std::make_unique<AcceptByConfigSet>(std::move(allowedConfigs)),
-                          std::make_unique<RejectWhenFull>()};
+                          std::make_unique<AcceptByConfigSet>(std::move(allowedConfigs))};
     }
 };
 
@@ -231,14 +217,6 @@ public:
     // 换成 AcceptByTag(节日包)只需在这里换一个对象,其余三层都不用动。
     void SetAdmission(std::unique_ptr<IAdmissionPolicy> admission);
     [[nodiscard]] const IAdmissionPolicy &Admission() const { return *admission_; }
-
-    // ── 淘汰策略 ──────────────────────────────────────────────────────
-    // 默认 RejectWhenFull,即拆分前的唯一行为(那句 `// TODO: overflow to
-    // temp bag or mail` 底下直接返回"背包满了")。四个固定包今天都是它。
-    // 换成 EvictOldestFirst(先进先出)只需在这里换一个对象 —— 但被挤掉的实例没有去处时那就是丢数据,
-    // 临时格因此在 2026-11-05 改回满即拒(BagProfile::Flat 的说明)。
-    void SetEviction(std::unique_ptr<IEvictionPolicy> eviction);
-    [[nodiscard]] const IEvictionPolicy &Eviction() const { return *eviction_; }
 
     // 一次装配一整套规则。生产代码请走这个,不要逐轴 Set —— 每加一根轴,
     // 逐轴调用的地方都得记得同改一遍,而 Profile 只改一处。
@@ -274,7 +252,7 @@ public:
     ItemComp *GetItemCompByPos(uint32_t pos);
 
     // instancesNeededOut(可为 nullptr)回执:这一批总共要**新建多少个实例**。
-    // 只预测当前空位；真正入包还会按最终淘汰结果重新规划并预留 ID。
+    // 只读预测;真正入包(AddItems)按同一套规划重算一遍,再预留 ID。
     uint32_t CheckSpaceFor(const ItemCountMap &itemsToAdd,
                            std::size_t *instancesNeededOut = nullptr);
 
@@ -287,26 +265,20 @@ public:
 
     // CheckQuantities 映射成 tip 码,静默:kSuccess / kFeatureUnavailable(版本错位)/ kBagInsufficientItems。
     [[nodiscard]] uint32_t CheckItemsAvailable(const ItemCountMap &requiredItems) const;
-    // evictedOut(可为 nullptr)按退役顺序收集**本次入包为了腾位而销毁的实例**
-    // (销毁前抓拍 guid/config/size)。只有配了会淘汰的策略(EvictOldestFirst)的包才会非空;
-    // 2026-11-05 起四个固定包都是 RejectWhenFull,生产路径上恒为空。
-    // 与 MergeAndCompact 的 destroyedOut 是同一个形状、同一个理由:被挤掉的
-    // item_uuid 是 transaction_log 做外挂回收的关联键,不留痕追溯链就断了。
-    // 生产代码请走 BagService::AddItem / AddItems,那里会把回执落成流水。
+    // 生产代码请走 BagService::AddItem / AddItems:那里先过跨区冻结与封禁闸,再按 writtenByEntryOut 落获得流水。
+    // 满了就拒,从不为腾位销毁已有物品(背包没有淘汰策略,2026-11-12 删除了整条淘汰轴)。
     // 先完成最终空间规划及全部发号，再发布整批实例和布局；失败时所有输出保持原值。
     // writtenByEntryOut 与 map 的配置升序或 vector 的输入顺序一一对应，供服务层提交后落流水。
     // 候选复制的时间与临时内存随本包实例和布局大小增长，换取失败时不依赖反向回滚。
     // 日志契约(2026-11-06 定):放不下回 kBagItemNotStacked,**不打任何日志、不打调用栈** —— 背包满是玩家自己能造出来的
     // 业务拒绝,不是故障。要日志的入口自己打:BagService 的入包入口经 RETURN_ON_ERROR 打一条带错误码的 WARN;
     // 战斗结算两包都满时按玩家限频打 metric=bag_grant_overflow_rejected。**新接的入口别指望这里替你记**。
-    // 真正的故障照打 ERROR,在各自的分支里:PlanEviction(要淘汰却没有回执、淘汰规划不收敛)、PlanInstances(配置 / 准入)、
+    // 真正的故障照打 ERROR,在各自的分支里:PlanInstances(配置 / 准入)、
     // CanReserve(具名槽按部位不够)、落位失败(规划说放得下、布局却落不了位,ERROR + 调用栈)、发号失败。
     uint32_t AddItems(const ItemCountMap &itemsToAdd,
-                      std::vector<DestroyedInstance> *evictedOut = nullptr,
                       std::vector<GuidVector> *writtenByEntryOut = nullptr,
                       const ItemInstanceInitializer *instanceInitializer = nullptr);
     uint32_t AddItems(const std::vector<InitItemParam> &itemsToAdd,
-                      std::vector<DestroyedInstance> *evictedOut = nullptr,
                       std::vector<GuidVector> *writtenByEntryOut = nullptr,
                       const ItemInstanceInitializer *instanceInitializer = nullptr);
     // 全或无:任何一种不够就整体失败(kBagInsufficientItems),绝不做部分删除。
@@ -328,7 +300,7 @@ public:
     // 指向同一堆,"按 guid 还回去"在那一侧就不成立了。
     //
     // removableOut(可为 nullptr)按入参顺序给出**销毁前抓拍**的 (guid, config, size),
-    // 编排层拿它落流水 —— 与 AddItems 的 evictedOut 同一个形状、同一个理由。
+    // 编排层拿它落流水 —— 与 MergeAndCompact 的 destroyedOut 同一个形状、同一个理由。
     //
     // 返回 kSuccess,或 kAssetInvalidBundle(REJECTED 类,终局拒绝):空列表、
     // 同一 guid 报两次、guid 不在本包、config 查不到表、可叠加物品、实例 size != 1。
@@ -380,7 +352,6 @@ public:
     // `!has_equip()` 时各调一次;可叠加物品一律不调。
     uint32_t AddItem(const InitItemParam &initItemParam,
                      std::vector<Guid> *writtenGuidsOut = nullptr,
-                     std::vector<DestroyedInstance> *evictedOut = nullptr,
                      const ItemInstanceInitializer *instanceInitializer = nullptr);
     uint32_t RemoveItem(Guid guid);
 
@@ -420,9 +391,9 @@ public:
     //            (见 InsertItemForRestore 的落位规则),同部位多槽不会在重登后互换。
     //
     // acquire_seq 在函数内清 0,由本包重新盖章:那是「同一背包内的入包先后」,带着源包
-    // 的序号进来会抬高本包水位、打乱先进先出。
+    // 的序号进来会抬高本包水位、打乱本包的实例序(遍历、扣除与整理的平局都按它排,ItemStore::AcquiredBefore)。
     //
-    // **不触发淘汰**(包满就拒,哪怕是临时格):搬运不该销毁任何东西。准入策略照常问。
+    // 包满就拒(搬运不销毁任何东西)。准入策略照常问。
     // 返回:
     //   kBagAddItemInvalidGuid        item_id 无效(0 / kInvalidGuid)
     //   kBagAddItemInvalidParam       config_id == 0、size != 1、可叠加物品、本包准入不收、
@@ -442,7 +413,7 @@ public:
     // ── 包间批量搬运(同一玩家名下的两个包;全或无)──────────────────────────
     //
     // 把本包里 guids 这几件按给定顺序搬进 target。搬的是**整份实例**,不是数量,所以它
-    // **不铸号、不掷属性、不触发淘汰、不改任何一种物品的总数**:
+    // **不铸号、不掷属性、不改任何一种物品的总数**:
     //   * 不能并堆的实例(不可叠加、带实例数据、带更新版本字段 —— ItemStore::IsIndependentInstance)
     //     原样搬过去:guid、equip 段、未知字段一个都不改,在 target 里另占一格;
     //   * 可叠加的实例先灌进 target 里同 config 的未满堆(与入包同一套 PlanStackIntoExistingStacks),
@@ -622,6 +593,14 @@ private:
     // 会给出不一致的答案 —— 那正是下面 CanReserve 要消灭的那类 bug。
     [[nodiscard]] std::size_t CountFreeSlotsForKind(uint32_t kind) const;
 
+    // plan 段:校验配置表与准入,算出这一批**要为每个 config 新建几个实例**。
+    // 零副作用,不问摆不摆得下 —— 那是 reserve 的事。
+    //
+    // 两个调用方,结尾都是 CanReserve:CheckSpaceFor(公开预测)= PlanInstances + CanReserve;
+    // AddItems(真入包)再把不能合堆的独立实例加进需求,然后 CanReserve。
+    uint32_t PlanInstances(const ItemCountMap &itemsToAdd, ItemCountMap *instancesByConfigOut,
+                           std::size_t *totalInstancesOut);
+
     // reserve 段:这一批**新实例**摆不摆得下。零副作用。
     //
     // instancesByConfig 是 config -> 本次要为它新建的实例数(不是单位数 ——
@@ -635,29 +614,8 @@ private:
     // 第 3 只手镯通过预检,然后在 commit 中途放不下,留下**前两只已入包却返回
     // 失败**的半批 —— 正是 AddItems 注释里发誓不会发生的那件事。
     // 详见 docs/design/bag-rule-policy-layering.md §6.1。
-    // plan 段:校验配置表与准入,算出这一批**要为每个 config 新建几个实例**。
-    // 零副作用,不问摆不摆得下 —— 那是 reserve 的事。
-    //
-    // 抽出来是因为它有两个用途且**不能共用同一个结尾**:
-    //   * CheckSpaceFor(公开预测,必须纯)= PlanInstances + CanReserve
-    //   * AddItems(真入包,可淘汰)      = PlanInstances + PlanEviction
-    // 从前两者是一个函数,于是会淘汰的包在批量路径上根本没机会淘汰:
-    // CheckSpaceFor 先一步把整批拒了。
-    //
-    // exclude(可为 nullptr):把这些 guid 的实例当作已不存在来算 —— 淘汰腾位前
-    // 用它回答"如果这几件被挤掉,这批还要新建几个实例"。见 PlanEviction。
-    uint32_t PlanInstances(const ItemCountMap &itemsToAdd, ItemCountMap *instancesByConfigOut,
-                           std::size_t *totalInstancesOut,
-                           const std::unordered_set<Guid> *exclude = nullptr);
-
     [[nodiscard]] bool CanReserve(const ItemCountMap &instancesByConfig,
                                   std::size_t totalInstances) const;
-
-    // 不动点纯规划：排除候选牺牲者后重算需求；具名槽不淘汰，缺回执不淘汰。
-    // 独立实例数不参与普通合堆，返回的实例数包含淘汰后的真实需求。
-    [[nodiscard]] bool PlanEviction(const ItemCountMap &unitsToAdd, bool allowEviction,
-                                    GuidVector &victims, std::size_t *totalInstancesOut = nullptr,
-                                    const ItemCountMap *separateInstances = nullptr);
 
     // 把一个实例放进布局:
     //   * 具名槽布局(装备栏)-> 按「物品的部位 + 槽位表」找第一个空的接受槽,
@@ -693,9 +651,6 @@ private:
     // 默认什么都收 —— 与 layout_ 默认扁平同理:默认值必须等于拆分前的行为,
     // 否则 bag_marshal 那些默认构造出来的动态包会悄悄换语义。
     std::unique_ptr<IAdmissionPolicy> admission_{std::make_unique<AcceptAll>()};
-    // 默认满了就拒 —— 同上,默认值必须等于拆分前的行为。一个默认构造出来的包
-    // 绝不能自作主张挤掉玩家的东西。
-    std::unique_ptr<IEvictionPolicy> eviction_{std::make_unique<RejectWhenFull>()};
     uint32_t profileId_{kBagProfileUnspecified};
     Guid playerGuid{kInvalidGuid};
 };

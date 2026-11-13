@@ -321,11 +321,11 @@ func TestRollbackAndInheritClearAreMutuallyExclusive(t *testing.T) {
 		sc, mr := newTestSvcCtxWithWorldScenes(t)
 		require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, 7381, "10", testZoneId))
 		require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-		oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		oldRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		oldLoc, err := GetPlayerLocation(context.Background(), sc, playerID)
 		require.NoError(t, err)
 		writeHandoffMarker(t, sc, playerID, 1)
-		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+		marker, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 		placed, err := placePlayerLocation(sc, playerID, 7382, "20", testZoneId,
 			placementGuard{observedEpoch: 1, mint: true, requiredMarker: marker})
 		require.NoError(t, err)
@@ -341,14 +341,14 @@ func TestRollbackAndInheritClearAreMutuallyExclusive(t *testing.T) {
 		owner := strconv.FormatUint(n, 10)
 		fenceKey := fmt.Sprintf("player:{%d}:handoff_fence", playerID)
 		held := owner + "|destination|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("b", 32)
-		prior, _ := sc.Redis.Hget(fenceKey, "handoff_fence")
+		prior, _ := playerRedisHget(sc, fenceKey, "handoff_fence")
 		keys := []string{ownerepoch.OwnerEpochKey(playerID), fenceKey, ownerepoch.HandoffKey(playerID)}
-		result, err := sc.Redis.Eval(cppLuaRegisterFence, keys, owner, held, prior)
+		result, err := playerRedisEval(sc, cppLuaRegisterFence, keys, owner, held, prior)
 		require.NoError(t, err)
 		if fmt.Sprint(result) != "1" {
 			return fmt.Sprint(result)
 		}
-		result, err = sc.Redis.Eval(cppLuaInheritClear, keys, owner, held)
+		result, err = playerRedisEval(sc, cppLuaInheritClear, keys, owner, held)
 		require.NoError(t, err)
 		return fmt.Sprint(result)
 	}
@@ -367,7 +367,7 @@ func TestRollbackAndInheritClearAreMutuallyExclusive(t *testing.T) {
 		assert.Equal(t, uint64(0), echo, "没回滚就不回显")
 		assert.Equal(t, markerGoneBefore+1, enterSceneRollbackCount(t, rollbackOutcomeMarkerGone))
 		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "归属留在 B")
-		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		assert.Equal(t, placed.raw, raw, "location 仍是本次落点:源端取证读到 (2, 指向 B) 自行销毁")
 		assert.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)), "marker_gone 不写转写标记")
 	})
@@ -382,7 +382,7 @@ func TestRollbackAndInheritClearAreMutuallyExclusive(t *testing.T) {
 
 		// 迟到投递的路由让 B 载入(N = 2):owner_epoch 已是 3,A2′ 回 -1,B 拒建实体、认领不了 2。
 		assert.Equal(t, "-1", inheritClear(t, sc, playerID, 2))
-		forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+		forwarded, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 		assert.Equal(t, plan.forwardMarker, forwarded, "核对不过一个标记都不删:转写标记留给源端取证 / 改派")
 		assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
 
@@ -418,9 +418,9 @@ func TestUnmarkedRollbackAndRegistrationAreMutuallyExclusive(t *testing.T) {
 		owner := strconv.FormatUint(n, 10)
 		fenceKey := fmt.Sprintf("player:{%d}:handoff_fence", playerID)
 		held := owner + "|destination|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("b", 32)
-		prior, _ := sc.Redis.Hget(fenceKey, "handoff_fence")
+		prior, _ := playerRedisHget(sc, fenceKey, "handoff_fence")
 		keys := []string{ownerepoch.OwnerEpochKey(playerID), fenceKey, ownerepoch.HandoffKey(playerID)}
-		result, err := sc.Redis.Eval(cppLuaRegisterFence, keys, owner, held, prior)
+		result, err := playerRedisEval(sc, cppLuaRegisterFence, keys, owner, held, prior)
 		require.NoError(t, err)
 		return fmt.Sprint(result)
 	}
@@ -438,7 +438,7 @@ func TestUnmarkedRollbackAndRegistrationAreMutuallyExclusive(t *testing.T) {
 		assert.Zero(t, echo, "没回滚就不回显")
 		assert.Equal(t, registeredBefore+1, enterSceneRollbackCount(t, rollbackOutcomeTargetRegistered))
 		assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "归属留在 B")
-		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		assert.Equal(t, placed.raw, raw, "location 仍指向 B:之后的换图 / 重登按 B 是持有者走换手门")
 	})
 
@@ -473,7 +473,7 @@ func TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt(t *testing.T) {
 			require.NoError(t, mr.Set(ownerepoch.OwnerEpochKey(playerID), "5"))
 		}
 		mr.HSet(fenceKey, "handoff_fence", published)
-		result, err := sc.Redis.Eval(cppLuaJudgeTravelOutcome,
+		result, err := playerRedisEval(sc, cppLuaJudgeTravelOutcome,
 			[]string{ownerepoch.OwnerEpochKey(playerID), fenceKey, ownerepoch.HandoffKey(playerID), getPlayerLocationKey(playerID)},
 			held, published, revoked, savedAt)
 		require.NoError(t, err)
@@ -495,7 +495,7 @@ func TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt(t *testing.T) {
 		}
 		for i, c := range cases {
 			playerID := uint64(6391 + i)
-			require.NoError(t, sc.Redis.Set(ownerepoch.HandoffKey(playerID), c.mark))
+			require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.HandoffKey(playerID), c.mark))
 			judge(t, playerID)
 			assert.Equal(t, !c.deleted, mr.Exists(ownerepoch.HandoffKey(playerID)), "mark=%s", c.mark)
 		}
@@ -515,9 +515,9 @@ func TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt(t *testing.T) {
 		}
 		oldBytes, err := gproto.Marshal(old)
 		require.NoError(t, err)
-		require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), string(oldBytes)))
-		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "5"))
-		require.NoError(t, sc.Redis.Set(ownerepoch.HandoffKey(playerID), marker))
+		require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), string(oldBytes)))
+		require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "5"))
+		require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.HandoffKey(playerID), marker))
 
 		// 凭 "5:t" 铸出 6(落点节点 20),推路由失败:bump 回滚到 7,回执 "5:t",标记转写成 "7:t"。
 		placed, err := placePlayerLocation(sc, playerID, 7399, "20", testZoneId,
@@ -529,7 +529,7 @@ func TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt(t *testing.T) {
 		restored, echo := rollbackPlayerPlacement(sc, NewEnterSceneLogic(context.Background(), sc).Logger, playerID, placed, plan)
 		require.True(t, restored)
 		require.Equal(t, uint64(7), echo)
-		forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+		forwarded, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 		require.Equal(t, "7:"+savedAt, forwarded)
 
 		reply := judge(t, playerID)
@@ -547,12 +547,46 @@ func TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt(t *testing.T) {
 		assert.Equal(t, testZoneId, loc.ZoneId)
 
 		// 源端采纳之后,任何凭这一族标记的铸造都过不了门:标记已被取证原子删掉(铸造 Lua 回 -1)。
-		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation,
+		result, err := playerRedisEval(sc, luaMintEpochAndSetLocation,
 			[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
 			mintLuaArgs("7", "late-bytes", "7:"+savedAt)...)
 		require.NoError(t, err)
 		assert.Equal(t, "-1", fmt.Sprint(result))
 		assert.Equal(t, "7", ownerEpochRaw(t, sc, playerID))
+	})
+
+	// 铸造结果未知而首发还没生效:scene_manager 的作废只删掉所凭的标记(owner_epoch.go luaRollbackPlayerPlacement「作废」,
+	// zone-redis-regression-guard-20261022.md §4.3.5)。源端随后取证:标记已不在不算错,读到的 epoch 没变、location 仍指回
+	// 自己且没有回执 —— C++ 按「归属没变」解冻(ClassifyOwnership 最先判 epoch 没变)。
+	t.Run("marker_voided_by_scene_manager_reads_as_unchanged", func(t *testing.T) {
+		const playerID = uint64(6399)
+		marker := "5:" + savedAt
+		old := &scene_manager.PlayerLocation{
+			SceneId: 7400, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 5, UpdateTime: 1_757_000_000,
+		}
+		oldBytes, err := gproto.Marshal(old)
+		require.NoError(t, err)
+		oldRaw := string(oldBytes)
+		require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), oldRaw))
+		require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "5"))
+		require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.HandoffKey(playerID), marker))
+
+		// 本该凭 "5:t" 铸出 6 的那次铸造还没到 Redis;收尾的回滚带着作废参数先到。
+		placed := placedLocation{epoch: 6, minted: true, raw: "planned-bytes",
+			observedEpoch: 5, observedRaw: oldRaw, observedKnown: true}
+		plan, err := planRouteRollbackWith(old, oldRaw, testZoneId, placed, marker, false, true)
+		require.NoError(t, err)
+		plan.voidUnapplied = true
+		result, err := playerRedisEval(sc, luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), rollbackPlacementArgs(placed, plan)...)
+		require.NoError(t, err)
+		require.Equal(t, "7", fmt.Sprint(result))
+		require.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)), "所凭的标记被删掉")
+
+		reply := judge(t, playerID)
+		assert.Equal(t, "5", reply[0], "epoch 没变:源端手里的值仍然有效")
+		locRaw, ok := reply[1].(string)
+		require.True(t, ok, "location 必须是字符串,实际 %T", reply[1])
+		assert.Equal(t, oldRaw, locRaw, "location 原样:指回源节点,没有回执")
 	})
 }
 
@@ -569,7 +603,7 @@ func TestHandoffFenceRejectsLateRegistrationPublishAndRevocation(t *testing.T) {
 	newer := makeFence("7", "scene", "2", "c", "H", "d")
 	eval := func(script string, args ...any) string {
 		t.Helper()
-		v, err := sc.Redis.Eval(script, keys, args...)
+		v, err := playerRedisEval(sc, script, keys, args...)
 		require.NoError(t, err)
 		return fmt.Sprint(v)
 	}
@@ -606,11 +640,11 @@ func TestPendingRegistrationCancellationPreventsLateRegisterEvenWithoutMark(t *t
 	require.NoError(t, mr.Set(keys[0], "7"))
 	held := "7|scene|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("b", 32)
 	revoked := "7|scene|1|" + strings.Repeat("a", 32) + "|R|" + strings.Repeat("c", 32)
-	v, err := sc.Redis.Eval(cppLuaCancelRegistration, keys, "7", held, "", revoked)
+	v, err := playerRedisEval(sc, cppLuaCancelRegistration, keys, "7", held, "", revoked)
 	require.NoError(t, err)
 	require.Equal(t, "1", fmt.Sprint(v))
 	before := mr.Dump()
-	v, err = sc.Redis.Eval(cppLuaRegisterFence, keys, "7", held, "")
+	v, err = playerRedisEval(sc, cppLuaRegisterFence, keys, "7", held, "")
 	require.NoError(t, err)
 	require.Equal(t, "-2", fmt.Sprint(v))
 	require.Equal(t, before, mr.Dump())
@@ -642,7 +676,7 @@ func TestResumeFenceAcceptsRollbackEpochAtLeastPlusTwo(t *testing.T) {
 			candidate := tc.target + "|scene|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("e", 32)
 			mr.HSet(fenceKey, "handoff_fence", revoked)
 
-			v, err := sc.Redis.Eval(cppLuaResumeFence, keys, revoked, candidate, tc.target, "original-location")
+			v, err := playerRedisEval(sc, cppLuaResumeFence, keys, revoked, candidate, tc.target, "original-location")
 			if tc.ok {
 				require.NoError(t, err)
 				assert.Equal(t, "1", fmt.Sprint(v))
@@ -671,7 +705,7 @@ func TestStableHandoffTransitionCandidateRecoversLostReplies(t *testing.T) {
 			candidate := target + "|scene|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("e", 32)
 			mr.HSet(fenceKey, "handoff_fence", revoked)
 			for i := 0; i < 2; i++ {
-				v, err := sc.Redis.Eval(cppLuaResumeFence, keys, revoked, candidate, target, "original-location")
+				v, err := playerRedisEval(sc, cppLuaResumeFence, keys, revoked, candidate, target, "original-location")
 				require.NoError(t, err)
 				require.Equal(t, "1", fmt.Sprint(v))
 			}
@@ -682,7 +716,7 @@ func TestStableHandoffTransitionCandidateRecoversLostReplies(t *testing.T) {
 				wantRelease = "0"
 			}
 			before := mr.Dump()
-			v, err := sc.Redis.Eval(cppLuaReleaseFence, keys[:3], "7", "7:1000", "300", held, frozen)
+			v, err := playerRedisEval(sc, cppLuaReleaseFence, keys[:3], "7", "7:1000", "300", held, frozen)
 			require.NoError(t, err)
 			require.Equal(t, wantRelease, fmt.Sprint(v))
 			require.Equal(t, before, mr.Dump())
@@ -717,10 +751,10 @@ func TestHandoffDamagedOwnershipAndMarkerRejectBeforeAnyMutation(t *testing.T) {
 			}
 			mr.HSet(fenceKey, "handoff_fence", published)
 			before := mr.Dump()
-			_, err := sc.Redis.Eval(cppLuaJudgeTravelOutcome, keys, held, published, revoked, "1000")
+			_, err := playerRedisEval(sc, cppLuaJudgeTravelOutcome, keys, held, published, revoked, "1000")
 			require.Error(t, err)
 			require.Equal(t, before, mr.Dump())
-			_, err = sc.Redis.Eval(cppLuaRevokeFence, keys[:3], held, published, revoked, "1000")
+			_, err = playerRedisEval(sc, cppLuaRevokeFence, keys[:3], held, published, revoked, "1000")
 			require.Error(t, err)
 			require.Equal(t, before, mr.Dump())
 		})
@@ -748,7 +782,7 @@ func TestLateMarkWritesFromReplacedConnectionNeverOpenHandoffGate(t *testing.T) 
 	}
 	eval := func(t *testing.T, sc *svc.ServiceContext, script string, keys []string, args ...any) any {
 		t.Helper()
-		v, err := sc.Redis.Eval(script, keys, args...)
+		v, err := playerRedisEval(sc, script, keys, args...)
 		require.NoError(t, err)
 		return v
 	}
@@ -758,7 +792,7 @@ func TestLateMarkWritesFromReplacedConnectionNeverOpenHandoffGate(t *testing.T) 
 		verdict, err := checkHandoffCommitted(sc, id, epoch)
 		require.NoError(t, err)
 		require.False(t, verdict.committed, "换手门放行 = 不存盘就铸 E+1,目标读到冻结时的父快照")
-		raw, _ := sc.Redis.Get(ownerepoch.HandoffKey(id))
+		raw, _ := playerRedisGet(sc, ownerepoch.HandoffKey(id))
 		require.False(t, markerReleasesEpoch(raw, epoch), "LeaveScene 不得把迟到标记当释放证据删 location")
 	}
 
@@ -850,7 +884,7 @@ func TestLateMarkWritesFromReplacedConnectionNeverOpenHandoffGate(t *testing.T) 
 		verdict, err := checkHandoffCommitted(sc, id, epoch)
 		require.NoError(t, err)
 		require.True(t, verdict.committed)
-		raw, _ := sc.Redis.Get(ownerepoch.HandoffKey(id))
+		raw, _ := playerRedisGet(sc, ownerepoch.HandoffKey(id))
 		require.True(t, markerReleasesEpoch(raw, epoch))
 	})
 }

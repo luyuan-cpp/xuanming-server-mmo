@@ -36,7 +36,10 @@ type TransactionLogRow struct {
 
 // TransactionLogQuery holds filter criteria for QueryTransactionLog.
 type TransactionLogQuery struct {
-	PlayerID     uint64   // 0 = all players
+	PlayerID uint64 // 0 = all players;非 0 时 from_player 或 to_player 是这名玩家
+	// ToPlayerID 非 0 时只要这名玩家收到的流水(to_player = ?),不能和 PlayerID 同时给。GM 回收按指令补查同指令流水用它:
+	// 配上 CorrelationIDs 走 (to_player, correlation_id) 索引,不再按玩家扫完保留期内的全部流水。
+	ToPlayerID   uint64
 	TimeStart    uint64   // 0 = no lower bound
 	TimeEnd      uint64   // 0 = no upper bound
 	TxTypes      []uint32 // empty = all types
@@ -177,12 +180,20 @@ func (s *TransactionLogStore) QueryLog(ctx context.Context, q *TransactionLogQue
 	var conditions []string
 	var args []interface{}
 
-	if q.PlayerID > 0 {
+	switch {
+	case q.PlayerID > 0 && q.ToPlayerID > 0:
+		// 两个玩家条件的语义不同(双向 / 只收到方),同时给说明调用方拼错了,不猜。
+		return nil, 0, fmt.Errorf("query transaction_log: PlayerID and ToPlayerID are mutually exclusive")
+	case q.ToPlayerID > 0:
+		// 只要收到方:等值 to_player 配上 correlation_id IN 走 (to_player, correlation_id) 索引;同样不带分桶谓词。
+		conditions = append(conditions, "to_player = ?")
+		args = append(args, q.ToPlayerID)
+	case q.PlayerID > 0:
 		// 按玩家走 (from_player, timestamp_sec) / (to_player, timestamp_sec):玩家号打散,不需要分桶,也不带分桶谓词,
 		// 免得优化器改走按段扫的时间索引。
 		conditions = append(conditions, "(from_player = ? OR to_player = ?)")
 		args = append(args, q.PlayerID, q.PlayerID)
-	} else {
+	default:
 		// 没有玩家条件时按时间 / tx_type / item_config_id 扫:这些索引在时间列前有 shard(audit_shard.go)。
 		conditions = append(conditions, auditShardInSQL)
 	}

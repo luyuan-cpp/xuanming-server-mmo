@@ -61,15 +61,17 @@ function New-SqlWriterCatalogFixture {
 
 <#
 .SYNOPSIS
-    给跑 k8s_deploy.ps1 的子进程补玩家域 Redis Cluster 和逻辑库的参数,返回 @{ Arguments; Env }。
+    给跑 k8s_deploy.ps1 的子进程补两套 Redis Cluster(玩家域、控制)和逻辑库的参数,返回 @{ Arguments; Env }。
 
 .DESCRIPTION
-    staging / prod 必须显式给 -PlayerRedisMasters,要 apply 集群时还要容量,开了集群还要口令(docs/design/redis-player-store-cluster.md §5.1)。
+    staging / prod 必须显式给 -PlayerRedisMasters 与 -ControlRedisMasters,要 apply 集群时还要容量,开了集群还要口令
+    (docs/design/redis-player-store-cluster.md §5.1;控制集群同一套函数,docs/design/redis-cluster-all-domains-20261110.md §10 第 6a 批)。
     同样必须显式给 -DirectoryLogicalShards(prod 只能是 64)、-Region(docs/design/horizontal-scale-logical-db.md §5.1、§9)、
     -PlayerStoreShards(每地域的存档库数,docs/design/player-data-tidb-scaling-plan.md §7.2)
     和 -IdRegistryEtcd(全局号源登记处,docs/ops/id-issuer-runbook.md §1)。
     绝大多数用例测的不是这些闸,不补的话全部非 dev 档的 DryRun 都停在这里。
-    用例自己给了 -PlayerRedisMasters(含 0,测闸本身)就原样不动;-Env 写了 MMORPG_PLAYER_REDIS_PASSWORD(含空串)就用它。
+    两套集群各补各的:用例自己给了某一套的主节点数(含 0,测闸本身)就不动那一套,另一套照补;
+    -Env 写了 MMORPG_PLAYER_REDIS_PASSWORD / MMORPG_CONTROL_REDIS_PASSWORD(含空串)就用它。
     -DirectoryLogicalShards、-Region、-PlayerStoreShards 同理(测闸本身时给 0、-1、0)。
     dev 档不补:dev 缺省不建集群,K=1、地域 0,这是要钉住的行为。
 #>
@@ -89,14 +91,21 @@ function Add-PlayerRedisDeployFixture {
     # 全局号源登记处同理(Resolve-IdRegistryEtcd):测闸本身时用例自己给 -IdRegistryEtcd ''。
     if ($Arguments -notcontains '-IdRegistryEtcd' -and $Arguments -notcontains '-HostIdRegistry') { $logicalDb += @('-IdRegistryEtcd', 'id-registry.invalid:2379') }
     $result.Arguments = @($Arguments) + $logicalDb
-    if ($Arguments -contains '-PlayerRedisMasters') { return $result }
-    $added = @('-PlayerRedisMasters', '3')
     # 容量只在本次 apply 集群时生效,zone-up 带上它只会多一条 NoEffect 警告。
-    if (($Arguments -contains 'infra-up') -or ($Arguments -contains 'all-up')) { $added += @('-PlayerRedisMaxMemory', '1gb', '-PlayerRedisStorage', '8Gi') }
-    $result.Arguments = @($result.Arguments) + $added
-    if (-not $Env.ContainsKey('MMORPG_PLAYER_REDIS_PASSWORD')) {
-        $result.Env = @{} + $Env
-        $result.Env['MMORPG_PLAYER_REDIS_PASSWORD'] = 'contract-player-redis-pw-01'
+    $deploysInfra = ($Arguments -contains 'infra-up') -or ($Arguments -contains 'all-up')
+    $clusters = @(
+        @{ Prefix = '-PlayerRedis'; PasswordEnv = 'MMORPG_PLAYER_REDIS_PASSWORD'; Password = 'contract-player-redis-pw-01' }
+        @{ Prefix = '-ControlRedis'; PasswordEnv = 'MMORPG_CONTROL_REDIS_PASSWORD'; Password = 'contract-control-redis-pw-01' }
+    )
+    foreach ($cluster in $clusters) {
+        if ($Arguments -contains "$($cluster.Prefix)Masters") { continue }
+        $added = @("$($cluster.Prefix)Masters", '3')
+        if ($deploysInfra) { $added += @("$($cluster.Prefix)MaxMemory", '1gb', "$($cluster.Prefix)Storage", '8Gi') }
+        $result.Arguments = @($result.Arguments) + $added
+        if (-not $result.Env.ContainsKey($cluster.PasswordEnv)) {
+            $result.Env = @{} + $result.Env
+            $result.Env[$cluster.PasswordEnv] = $cluster.Password
+        }
     }
     return $result
 }

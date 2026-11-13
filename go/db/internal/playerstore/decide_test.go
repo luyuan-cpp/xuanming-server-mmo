@@ -44,11 +44,32 @@ func TestDecideSave(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := decideSave(tc.row, tc.e, tc.q, tc.gen, tc.instance, testKnownGen)
+			got := decideSave(tc.row, tc.e, tc.q, tc.gen, true, tc.instance, testKnownGen)
 			if got != tc.want {
 				t.Fatalf("decideSave = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// 不带数据行的存盘不判世代倒退:旧 scene 持有更新世代的存档、实体已经没了时发的空行释放,带的是它自己二进制的世代。
+// 别的判定照旧;带行的同一笔仍然是倒退。
+func TestDecideSave_RowlessSaveIsNotARegression(t *testing.T) {
+	held := &ownerRow{ownerEpoch: 10, saveSeq: 5, schemaGen: 3, holder: instanceA}
+	if got := decideSave(held, 10, 6, 2, false, instanceA, testKnownGen); got != storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED {
+		t.Fatalf("rowless save with an older generation = %v, want COMMITTED", got)
+	}
+	if got := decideSave(held, 10, 6, 2, true, instanceA, testKnownGen); got != storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_REGRESSED {
+		t.Fatalf("the same save with rows = %v, want SCHEMA_REGRESSED", got)
+	}
+	if got := decideSave(held, 10, 6, testKnownGen+1, false, instanceA, testKnownGen); got != storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW {
+		t.Fatalf("rowless save newer than the store = %v, want SCHEMA_TOO_NEW", got)
+	}
+	if got := decideSave(held, 9, 6, 2, false, instanceA, testKnownGen); got != storepb.SavePlayerResult_SAVE_PLAYER_STALE_OWNER {
+		t.Fatalf("rowless save from a stale owner = %v, want STALE_OWNER", got)
+	}
+	if got := decideSave(held, 10, 6, 2, false, instanceB, testKnownGen); got != storepb.SavePlayerResult_SAVE_PLAYER_NOT_HOLDER {
+		t.Fatalf("rowless save from another instance = %v, want NOT_HOLDER", got)
 	}
 }
 
@@ -71,8 +92,14 @@ func TestDecideClaim(t *testing.T) {
 		{"同实例重进:幂等", row(10, 1, instanceA), 10, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
 		{"新号初行", row(1, 1, []byte{}), 1, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
 		{"换持有者:抬代次", row(10, 1, instanceB), 11, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
-		{"库里世代比 scene 新", row(10, testKnownGen+1, instanceB), 11, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},
+		// 旧 scene 接手更新世代写过的存档:放行。scene 把不认识的内容原样带回,存盘世代取 max(自己的, 加载到的)。
+		{"库里世代比 scene 新、go/db 认识:照常认领", row(10, testKnownGen, instanceB), 11, instanceA, testKnownGen - 1, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
+		{"库里世代比 scene 新:同实例重进也放行", row(10, testKnownGen, instanceA), 10, instanceA, testKnownGen - 1, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
 		{"库里世代等于 scene", row(10, testKnownGen, instanceB), 11, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED},
+		// go/db 回退到比存档更旧的版本:认领就拒、不抬代次。放进来的话,之后每一笔存盘都被判 SCHEMA_TOO_NEW。
+		{"库里世代比 go/db 新:不抬代次", row(10, testKnownGen+1, instanceB), 11, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},
+		{"库里世代比 go/db 新:旧 scene 也一样", row(10, testKnownGen+1, instanceB), 11, instanceA, testKnownGen - 1, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},
+		{"库里世代比 go/db 新:同实例重进也不放行", row(10, testKnownGen+1, instanceA), 10, instanceA, testKnownGen, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},
 		// 数据覆写审计 r2-ps#11:新 scene 先于 go/db 上线时不能拿到旧 go/db 的写权,否则旧持有者被围住、新 scene 却存不进。
 		{"scene 比 go/db 新:不抬代次", row(10, 1, instanceB), 11, instanceA, testKnownGen + 1, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},
 		{"scene 比 go/db 新:同实例重进也不放行", row(10, 1, instanceA), 10, instanceA, testKnownGen + 1, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW},

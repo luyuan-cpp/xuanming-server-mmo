@@ -28,6 +28,9 @@ type fakeRouteStore struct {
 	rows      map[uint64]store.RouteRow
 	readErr   error
 	readCalls [][]uint64
+
+	countErr   error
+	countCalls [][]uint32
 }
 
 func (f *fakeRouteStore) RegisterHome(_ context.Context, req store.RouteRegisterRequest) (store.RouteRegisterResult, error) {
@@ -47,6 +50,25 @@ func (f *fakeRouteStore) GetRoutes(_ context.Context, ids []uint64) (map[uint64]
 		}
 	}
 	return out, nil
+}
+
+// CountHomeZones 数 rows 里归属落在 zones 的行(重复的区不重复计)。
+func (f *fakeRouteStore) CountHomeZones(_ context.Context, zones []uint32) (uint64, error) {
+	f.countCalls = append(f.countCalls, append([]uint32(nil), zones...))
+	if f.countErr != nil {
+		return 0, f.countErr
+	}
+	in := make(map[uint32]bool, len(zones))
+	for _, zone := range zones {
+		in[zone] = true
+	}
+	var roles uint64
+	for _, row := range f.rows {
+		if row.HasHome() && in[row.HomeZone] {
+			roles++
+		}
+	}
+	return roles, nil
 }
 
 // routeMetric 读默认注册表里一条计数器序列的当前值;序列不存在回 0。计数是进程级累加的,用例一律比较增量。
@@ -363,4 +385,37 @@ func TestGetPlayerRoute(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	assert.NotErrorIs(t, err, ErrRouteStore, "调用方放弃不算库故障")
 	assert.Equal(t, failedBefore, readCount(t, "placement", "error"))
+}
+
+// CountZoneRoles:原样把区列表交给 store、计一次 ok;库故障包 ErrRouteStore 并计 error;store 没装配同样 fail-closed;
+// 调用方已放弃时不计 error、不包 ErrRouteStore。
+func TestRouter_CountZoneRoles(t *testing.T) {
+	ctx := context.Background()
+	fake := &fakeRouteStore{rows: map[uint64]store.RouteRow{
+		1: {PlayerID: 1, HomeZone: 5, Rev: 1},
+		2: {PlayerID: 2, HomeZone: 6, Rev: 1},
+		3: {PlayerID: 3, HomeZone: 9, Rev: 1},
+		4: {PlayerID: 4, StorageID: 7, PlacementVersion: 1, Rev: 1}, // 只有落点、没有归属
+	}}
+	okBefore, errBefore := readCount(t, "zone_count", "ok"), readCount(t, "zone_count", "error")
+	roles, err := NewRouter(fake).CountZoneRoles(ctx, []uint32{5, 6})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(2), roles)
+	assert.Equal(t, [][]uint32{{5, 6}}, fake.countCalls, "区列表原样交给 store,路由器不解析合服")
+	assert.Equal(t, okBefore+1, readCount(t, "zone_count", "ok"))
+
+	boom := errors.New("tidb down")
+	_, err = NewRouter(&fakeRouteStore{countErr: boom}).CountZoneRoles(ctx, []uint32{5})
+	require.ErrorIs(t, err, ErrRouteStore)
+	require.ErrorIs(t, err, boom)
+	_, err = NewRouter(nil).CountZoneRoles(ctx, []uint32{5})
+	require.ErrorIs(t, err, ErrRouteStore)
+	assert.Equal(t, errBefore+2, readCount(t, "zone_count", "error"))
+
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = NewRouter(&fakeRouteStore{countErr: boom}).CountZoneRoles(canceled, []uint32{5})
+	require.ErrorIs(t, err, context.Canceled)
+	require.NotErrorIs(t, err, ErrRouteStore)
+	assert.Equal(t, errBefore+2, readCount(t, "zone_count", "error"), "调用方放弃不是库故障")
 }

@@ -24,6 +24,7 @@
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/player_attribute.h"
+#include "player/system/player_lifecycle.h"
 
 #include "table/code/attributedimension_table.h"
 #include "table/code/equipaffixpool_table.h"
@@ -1067,6 +1068,11 @@ uint32_t PlayerEquipSystem::Equip(entt::entity player, Guid itemId) {
 	LOG_INFO << "[PlayerEquip] Equipped: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId
 			 << " config=" << configId << " slot=" << targetSlot << " replaced_guid="
 			 << (replacing ? replacedGuid : 0);
+	// 装到空槽 = 人物背包少一件、空出一格;替换时换下的旧装备放回人物背包,格数不变,不通知。
+	// 这是 BagService 之外唯一把实例移出人物背包的入口,按 bag_service.h「腾位通知」在成功之后自己通知一次。
+	if (!replacing) {
+		BagService::NotifySpaceFreed(player, inventory);
+	}
 	return kSuccess;
 }
 
@@ -1314,6 +1320,10 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 			 << " material_count=" << (needsMaterial ? materialCount : 0);
 	outcome.success = success;
 	outcome.level = newLevel;
+	// 16. 掷出的结果尽快落库(总体方案 §4.5):崩溃回档会让玩家丢掉这次结果,也让同一次强化有机会重掷。
+	//     扣了金币或材料时,资产流水已经请求过存盘(AuditOutbox 的入队钩子);这里再请求一次,
+	//     表里这一级既不要金币也不要材料时同样约 1 秒内提交。重复请求合并成一笔。
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "equip_enhanced");
 	return kSuccess;
 }
 
@@ -1502,7 +1512,7 @@ uint32_t PlayerEquipSystem::RemoveGem(entt::entity player, Guid itemId, uint32_t
 	if (addErr == kAssetBlocked) {
 		// 获得封禁(全服封禁或本人被 GM 封禁该宝石):业务拒绝,不是故障。宝石留在装备上不会丢,
 		// 解封后照常取下;客户端按 27005 显示「该资产当前被禁止获取」。
-		LOG_WARN << "[PlayerEquip] gem removal refused: gaining this gem is blocked, gem stays socketed: player_id=" << tlsEcs.GetPlayerId(player)
+		LOG_WARN << "[PlayerEquip] Gem removal refused, gaining this gem is blocked, gem stays socketed: player_id=" << tlsEcs.GetPlayerId(player)
 				 << " guid=" << itemId << " config=" << configId << " socket=" << socket << " gem_config=" << gemConfigId;
 		return kAssetBlocked;
 	}

@@ -22,6 +22,7 @@
 #include "player/system/attribute_allocation_rules.h"
 #include "player/system/pet_rules.h"
 #include "player/system/player_level_rules.h"
+#include "player/system/player_lifecycle.h"
 
 #include "rpc/service_metadata/player_pet_service_metadata.h"
 #include "table/code/attributeautoplan_table.h"
@@ -924,6 +925,9 @@ uint32_t PetSystem::GrantPet(entt::entity player, uint32_t petTableId, uint64_t&
 	petIdOut = petId;
 	LOG_INFO << "[PlayerPet] Pet granted: player_id=" << tlsEcs.GetPlayerId(player) << " pet_id=" << petId
 			 << " pet_table_id=" << petTableId << " level=" << pet->level();
+	// 宝宝不在背包里,发放不记物品流水,资产流水那个收口带不到它;资质又是掷出来的、出生即定终身。
+	// 所以这里自己请求一次关键进度存盘(约 1 秒内提交):崩溃回档会让玩家丢掉这只宝宝,也让资质有机会重掷(总体方案 §4.5)。
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "pet_granted");
 	return kSuccess;
 }
 

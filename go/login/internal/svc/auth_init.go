@@ -14,6 +14,7 @@ import (
 	"login/internal/config"
 	"login/internal/logic/pkg/auth"
 	"login/internal/logic/pkg/token"
+	"shared/authoritysql"
 	"shared/playerredis"
 	"shared/sqlpoolstats"
 )
@@ -22,7 +23,7 @@ import (
 // login 只有这一个 SQL 池,只在打开 PasswordAuth 时存在。
 const passwordAuthPool = "password_auth"
 
-// InitAuthProviders 按显式配置注册认证器。生产口令认证只读权威 MySQL 中的
+// InitAuthProviders 按显式配置注册认证器。生产口令认证只读权威 SQL(mmorpg 库,tidb 或 mysql 档)中的
 // Argon2id 哈希；没有显式启用时仍 fail-closed。开发共享密钥认证与生产认证
 // 互斥，避免配置合并时把弱入口带进生产。
 func InitAuthProviders() (cleanup func()) {
@@ -44,7 +45,7 @@ func InitAuthProviders() (cleanup func()) {
 	}
 
 	if productionPassword.Enabled {
-		provider, closeProvider, err := productionPasswordProviderFromConfig(productionPassword, config.AppConfig.EffectiveLoginRedis(), os.LookupEnv)
+		provider, closeProvider, err := productionPasswordProviderFromConfig(productionPassword, config.AppConfig.Mode, config.AppConfig.EffectiveLoginRedis(), os.LookupEnv)
 		if err != nil {
 			panic(fmt.Sprintf("initialize PasswordAuth provider: %v", err))
 		}
@@ -59,7 +60,7 @@ func InitAuthProviders() (cleanup func()) {
 			}
 			return []sqlpoolstats.Sample{{Pool: passwordAuthPool, Stats: stats}}
 		})
-		logx.Info("Production password auth registered (authoritative MySQL Argon2id, read-only)")
+		logx.Info("Production password auth registered (authoritative SQL, Argon2id, read-only)")
 	}
 	if devPassword.Enabled {
 		if err := validateDevelopmentPasswordMode(config.AppConfig.Mode); err != nil {
@@ -128,15 +129,62 @@ func InitAuthProviders() (cleanup func()) {
 		})
 		logx.Info("Auth provider registered: netease")
 	}
+
+	// 小游戏渠道(微信 wx.login、抖音 tt.login),与上面 App 形态的 wechat 是不同的 auth_type。
+	if cfg.WeChatMiniGame != nil {
+		provider, err := weChatMiniGameProviderFromConfig(cfg.WeChatMiniGame, providerSecrets)
+		if err != nil {
+			panic(fmt.Sprintf("invalid AuthProviders.WeChatMiniGame configuration: %v", err))
+		}
+		auth.Register(auth.WeChatMiniGameAuthType, provider)
+		logx.Infof("Auth provider registered: %s (require_unionid=%v endpoint_override=%q)",
+			auth.WeChatMiniGameAuthType, cfg.WeChatMiniGame.RequireUnionId, cfg.WeChatMiniGame.Endpoint)
+	}
+
+	if cfg.DouyinMiniGame != nil {
+		provider, err := douyinMiniGameProviderFromConfig(cfg.DouyinMiniGame, providerSecrets)
+		if err != nil {
+			panic(fmt.Sprintf("invalid AuthProviders.DouyinMiniGame configuration: %v", err))
+		}
+		auth.Register(auth.DouyinMiniGameAuthType, provider)
+		logx.Infof("Auth provider registered: %s (require_unionid=%v endpoint_override=%q)",
+			auth.DouyinMiniGameAuthType, cfg.DouyinMiniGame.RequireUnionId, cfg.DouyinMiniGame.Endpoint)
+	}
+
+	// 海外渠道:身份令牌按渠道公钥验签,没有密钥(ClientId 与 Endpoint 已由 ResolveSecrets 校验)。
+	if cfg.Apple != nil {
+		auth.Register(auth.AppleAuthType, appleProviderFromConfig(cfg.Apple))
+		logx.Infof("Auth provider registered: %s (client_id=%q endpoint_override=%q)",
+			auth.AppleAuthType, cfg.Apple.ClientId, cfg.Apple.Endpoint)
+	}
+	if cfg.Google != nil {
+		auth.Register(auth.GoogleAuthType, googleProviderFromConfig(cfg.Google))
+		logx.Infof("Auth provider registered: %s (client_id=%q endpoint_override=%q)",
+			auth.GoogleAuthType, cfg.Google.ClientId, cfg.Google.Endpoint)
+	}
 	initialized = true
 	return cleanup
 }
+
+// appleProviderFromConfig / googleProviderFromConfig 只组装不注册(同 weChatProviderFromConfig);用默认的 5s HTTP 客户端取公钥。
+func appleProviderFromConfig(conf *config.IdTokenAuthConf) *auth.IdTokenProvider {
+	return auth.NewAppleProvider(conf.ClientId, conf.Endpoint, nil)
+}
+
+func googleProviderFromConfig(conf *config.IdTokenAuthConf) *auth.IdTokenProvider {
+	return auth.NewGoogleProvider(conf.ClientId, conf.Endpoint, nil)
+}
+
+// passwordQuotaRedisPoolSize 是口令失败配额专用小池的每节点连接上限。K8s 部署的 Redis 连接总账按这个数给每个 login 副本记账
+// (tools/scripts/k8s_deploy.ps1 Get-RedisConnectionLedgerInputs / Get-RedisClusterConnectionLedgerInputs -Cluster player 的 login 行),契约测试从这里读,
+// 改了要同步那两行。
+const passwordQuotaRedisPoolSize = 4
 
 // 口令配额在登录域。专用小池使认证依赖具有独立硬上限；不继承主缓存池的等待策略。
 // 地址、口令、集群形态随登录域,连接数与超时是这条路径自己的预算;认 ctx 截止、不重放结果未知的命令由 playerredis 保证。
 func passwordQuotaRedisConfig(loginRedis playerredis.Config) playerredis.Config {
 	budgetMs := int(auth.PasswordQuotaBudget.Milliseconds())
-	loginRedis.PoolSizePerNode = 4
+	loginRedis.PoolSizePerNode = passwordQuotaRedisPoolSize
 	loginRedis.DisableContextTimeout = false
 	loginRedis.DialTimeoutMs = budgetMs
 	loginRedis.ReadTimeoutMs = budgetMs
@@ -145,18 +193,51 @@ func passwordQuotaRedisConfig(loginRedis playerredis.Config) playerredis.Config 
 	return loginRedis
 }
 
-func productionPasswordProviderFromConfig(conf config.PasswordAuthConf, loginRedis playerredis.Config, lookup func(string) (string, bool)) (*auth.ProductionPasswordProvider, func(), error) {
+// passwordAuthority 是口令凭据库的档位与库名,由 passwordAuthorityFromConfig 从配置解析并核对。
+type passwordAuthority struct {
+	backend  authoritysql.Backend
+	database string
+}
+
+// passwordAuthorityFromConfig 解析口令凭据库的档位与库名,不读环境变量、不连库。
+//   - 档位:tidb | mysql,没写按 tidb(authoritysql.ParseBackend)。
+//   - 库名:没写取 auth.PasswordAuthDatabase。生产(非 dev / test,判据同 config.IsRelaxedMode)只接受这个值:
+//     口令凭据全服一份,放在 login 登记写者资格的那个库,不许指到存档库里那张同名旧表上(理由见 auth/password_schema.go)。
+//     dev / test 可以指到夹具库。DSN 里的库名是否与它一致由 authoritysql.Open 核对。
+func passwordAuthorityFromConfig(conf config.PasswordAuthConf, mode string) (passwordAuthority, error) {
+	backend, err := authoritysql.ParseBackend(conf.Backend)
+	if err != nil {
+		return passwordAuthority{}, fmt.Errorf("PasswordAuth.Backend: %w", err)
+	}
+	database := conf.Database
+	if database == "" {
+		database = auth.PasswordAuthDatabase
+	}
+	if database != auth.PasswordAuthDatabase && !config.IsRelaxedMode(mode) {
+		return passwordAuthority{}, fmt.Errorf("PasswordAuth.Database must be %q outside dev/test mode, got %q", auth.PasswordAuthDatabase, database)
+	}
+	return passwordAuthority{backend: backend, database: database}, nil
+}
+
+// productionPasswordProviderFromConfig 装配生产口令认证器。mode 是进程的运行模式(go-zero 的 Mode),只用来决定口令库名能不能偏离
+// auth.PasswordAuthDatabase。顺序:先做不碰外部依赖的校验(失败配额、档位与库名),再读 DSN、连库、连配额 Redis。
+func productionPasswordProviderFromConfig(conf config.PasswordAuthConf, mode string, loginRedis playerredis.Config, lookup func(string) (string, bool)) (*auth.ProductionPasswordProvider, func(), error) {
 	if err := conf.ValidateFailureQuota(); err != nil {
+		return nil, nil, err
+	}
+	authority, err := passwordAuthorityFromConfig(conf, mode)
+	if err != nil {
 		return nil, nil, err
 	}
 	dsn, err := passwordAuthDSNFromConfig(conf, lookup)
 	if err != nil {
 		return nil, nil, err
 	}
-	store, err := auth.NewSQLPasswordHashStore(dsn, conf.MaxOpenConns, conf.MaxIdleConns)
+	store, err := auth.NewSQLPasswordHashStore(context.Background(), dsn, authority.backend, authority.database, conf.MaxOpenConns, conf.MaxIdleConns)
 	if err != nil {
 		return nil, nil, err
 	}
+	logx.Infof("Password auth authority pool ready database=%s backend=%s max_open=%d", authority.database, authority.backend, conf.MaxOpenConns)
 	rdb, err := playerredis.New(passwordQuotaRedisConfig(loginRedis))
 	if err != nil {
 		_ = store.Close()
@@ -248,6 +329,32 @@ func qqProviderFromConfig(conf *config.QQAuthConf, secrets config.AuthProviderSe
 		AllowOpenIdFallback:   !conf.RequireUnionId,
 		DisableUnionIdRequest: !conf.RequestUnionId,
 	}
+}
+
+// weChatMiniGameProviderFromConfig 同 weChatProviderFromConfig:只组装不注册,密钥只取 ResolveSecrets 的结果。
+func weChatMiniGameProviderFromConfig(conf *config.MiniGameAuthConf, secrets config.AuthProviderSecrets) (*auth.WeChatMiniGameProvider, error) {
+	if secrets.WeChatMiniGameAppSecret == "" {
+		return nil, fmt.Errorf("AppSecret was not resolved; config.ResolveSecrets must run before InitAuthProviders")
+	}
+	return &auth.WeChatMiniGameProvider{
+		AppId:               conf.AppId,
+		AppSecret:           secrets.WeChatMiniGameAppSecret,
+		Endpoint:            conf.Endpoint,
+		AllowOpenIdFallback: !conf.RequireUnionId,
+	}, nil
+}
+
+// douyinMiniGameProviderFromConfig 同 weChatMiniGameProviderFromConfig。
+func douyinMiniGameProviderFromConfig(conf *config.MiniGameAuthConf, secrets config.AuthProviderSecrets) (*auth.DouyinMiniGameProvider, error) {
+	if secrets.DouyinMiniGameAppSecret == "" {
+		return nil, fmt.Errorf("AppSecret was not resolved; config.ResolveSecrets must run before InitAuthProviders")
+	}
+	return &auth.DouyinMiniGameProvider{
+		AppId:               conf.AppId,
+		AppSecret:           secrets.DouyinMiniGameAppSecret,
+		Endpoint:            conf.Endpoint,
+		AllowOpenIdFallback: !conf.RequireUnionId,
+	}, nil
 }
 
 // RegisterAccessTokenProvider registers the access_token provider.

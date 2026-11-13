@@ -1,7 +1,7 @@
 # 客户端请求幂等键：场景服经济操作的去重账本（随存档落盘）
 
 **Created:** 2026-11-05
-**状态:** 三处接入点都已落码：神秘商人购买、新建加点方案、强化。强化接在「数据覆写审计 R2 交接」会话交付的 `expected_level` 之上。2026-11-06 负责人定「改成存盘」，账本从内存改为玩家存档字段 25。服务端代码随 `a8af9372d` 入库；2026-11-08 Codex 的 `build/verification/naming-audit-20261108/` 跑过 §8 的单测：`bag_test` 932 条通过、0 条失败（本功能新增的 40 条全是 OK），`cross_zone_test` 458 条通过。§8 第 6 步的 robot 冒烟还没改、也没跑；Unity 客户端细则已交 Codex（§6），还没实施；Java 版待做（§7）。
+**状态:** 三处接入点都已落码：神秘商人购买、新建加点方案、强化。强化接在「数据覆写审计 R2 交接」会话交付的 `expected_level` 之上。2026-11-06 负责人定「改成存盘」，账本从内存改为玩家存档字段 25。服务端代码随 `a8af9372d` 入库；2026-11-08 Codex 的 `build/verification/naming-audit-20261108/` 跑过 §8 的单测：`bag_test` 932 条通过、0 条失败、2 条跳过（跳过的与本功能无关；本功能新增的 40 条全是 OK），`cross_zone_test` 458 条通过。Unity 客户端 2026-11-12 已按 §6 与交接文档落码（客户端仓 main，未生成、未编译、未运行，见 `docs/PROGRESS.md` 同日「客户端·强化期望等级与幂等键、临时格取回、进场失败后换角」条）。§8 第 6 步的 robot 冒烟 2026-11-13 已改完三个场景（未编译、未运行，见 `docs/PROGRESS.md` 同日条目）。跨连接恢复（交接 §9）仍没做；Java 版待做（§7）。
 **任务来源:** 负责人 2026-11-05：「玩家经常做一些和经济相关的，比如使用道具，服务器响应没回来，它又对着原来道具使用一次……玩家真正意图是只使用一次」。同键换参数要拒绝（「防客户端 bug 把旧键用在新操作上 这个也要」），防重和幂等「这两个也要」。11-05 先定「不要存盘，也不要太复杂」；11-06 问「如果存盘的话怎么弄最标准，能搞成一个配置存不存盘吗」，看过 §5.3 的取舍后定「改成存盘」，不做开关。
 **关联:** [client-rpc-callback.md](client-rpc-callback.md)（§2.2：结果未知时复用业务幂等键重发）、[client-request-ordering.md](client-request-ordering.md)（§4.8：`gate_call_seq` 不能当幂等键；§5.2 I5：gate → scene 超时回 1003、不重发）、[data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md)（r2-equip#1）、[equipment-enhance-inlay.md](equipment-enhance-inlay.md)、[mystery-merchant.md](mystery-merchant.md)、[ecs-component-access-rules.md](ecs-component-access-rules.md)、[player-save-direct-commit.md](player-save-direct-commit.md)（存盘分行）、帮会经济的同类先例 `go/guild/internal/logic/economy_logic.go` 的 `withClientRequest`。
 
@@ -49,7 +49,7 @@
 3. 拿到明确结果之后才换新键。之后再点就是新的一次操作。
 4. 收到 `replayed = true`，按「首次那一次已经成功」处理：套用回包里的快照，不提示失败。
 5. 同一个键收到 `kInvalidParameter`，说明客户端自己把旧键用在了新操作上，按缺陷记日志。
-6. 服务端记录随存档走，重连之后、甚至换了节点之后带原键重发都是安全的。客户端第一版仍只在同一条连接上自动重发（§6），重连之后先刷新快照给玩家看，是为了少做一段跨连接保留待发请求的逻辑，不是因为服务端会忘。
+6. 服务端记录随存档走，重连之后、甚至换了节点之后带原键重发都是安全的，前提是这个键还在账本里：没有被同一玩家之后 32 次以上带键的操作挤出去（§2.2 第 7 条），账本也没有被人工清空（§5.2）。客户端第一版仍只在同一条连接上自动重发（§6），重连之后先刷新快照给玩家看，是为了少做一段跨连接保留待发请求的逻辑，不是因为服务端会忘。
 
 ### 2.2 服务端
 
@@ -120,9 +120,9 @@
 
 | 接入点 | 位置 | 首次结果 | 状态 |
 |---|---|---|---|
-| 神秘商人购买 | `PlayerMysteryMerchantSystem::Buy`：入口在 `valid(player)` 之后查账；成交后 `Remember`；成功组应答抽成 `FillSuccessReply`，供首次与重放共用 | 无（货架与背包取当前） | 已落码，未编译 |
-| 新建加点方案 | `SceneAttributeClientPlayerHandler::CreateAttributeScheme` | `created_scheme_id` | 已落码，未编译 |
-| 强化 | `SceneBagClientPlayerHandler::EnhanceEquip`：先查键，命中就重放；没命中才进 `PlayerEquipSystem::Enhance`（里面有 `expected_level` 乐观比较）。指纹含 `item_id` 与 `expected_level` | `enhance_success`、`enhance_level` | 已落码，未编译 |
+| 神秘商人购买 | `PlayerMysteryMerchantSystem::Buy`：入口在 `valid(player)` 之后查账；成交后 `Remember`；成功组应答抽成 `FillSuccessReply`，供首次与重放共用 | 无（货架与背包取当前） | 2026-11-08 单测通过；robot 冒烟未跑 |
+| 新建加点方案 | `SceneAttributeClientPlayerHandler::CreateAttributeScheme` | `created_scheme_id` | 2026-11-08 单测通过；robot 冒烟未跑 |
+| 强化 | `SceneBagClientPlayerHandler::EnhanceEquip`：先查键，命中就重放；没命中才进 `PlayerEquipSystem::Enhance`（里面有 `expected_level` 乐观比较）。指纹含 `item_id` 与 `expected_level` | `enhance_success`、`enhance_level` | 2026-11-08 单测通过；robot 冒烟未跑 |
 
 协议字段：
 
@@ -152,7 +152,16 @@
 - **账本判坏**：这名玩家带键的强化、神秘商人购买、新建方案一律回 `kServiceUnavailable`、不执行，其余玩法和登录不受影响，直到修复。
   - 信号：加载时打一条 ERROR `[ClientRequest] metric=client_request_ledger_invalid source=loader`，带 `player_id` 与 `reason=`；之后每次带键请求打一条 WARN `metric=client_request_unavailable reason=ledger_invalid`。Loki ruler 接线之前，值班固定查询（与收件箱同一个流选择器，见 `deploy/k8s/player-inbox-alerts.yaml` 文件头）：`count_over_time({job="cpp_nodes", service="scene"} |= "[ClientRequest]" |= "metric=client_request_ledger_invalid" [10m]) > 0`。
   - `reason=ledger_missing` 不是数据问题：持久组件没挂上，是加载代码的缺陷，修代码，不动存档。
-  - 处置：账本只由本功能写入，判坏只可能来自缺陷，先留存原账本写进工单，再修缺陷。修存档时，**在玩家离线时清空这个字段**是安全的。客户端只在一条连接上重发几秒，玩家离线时没有在途的重发；最坏情况是清空那一刻恰好有一次重发，它会被当成新操作执行一次。这一点和收件箱账本不同：收件箱的条目会被投递方长期重投，所以那边禁止清空（`player-inbox-runbook.md` §10.4）。项目上线前玩家数据可以整体清空，不需要专门工具；上线后的写回方式由负责人定。
+  - 处置：账本只由本功能写入，判坏只可能来自缺陷，先留存原账本写进工单，再修缺陷。项目上线前玩家数据可以整体清空，不需要专门工具；上线后的写回手段由负责人定，写回的内容按下面的要求。
+  - **整体清空不是无条件安全的**（2026-11-13 改正，原文写的是「玩家离线时清空是安全的」）。账本里每一条记录都代表一次已经生效的操作（只记成功，§3.5）。清空会丢掉这名玩家全部的去重记录，之后任何一次带旧键的重发都会被当成新操作：再扣一次、再买一份、再建一个方案。
+  - **修复只修坏处，不删合法的键**。按 `Validate` 判坏的几种原因逐条处理，修完必须能过 `Validate`：
+    - 键为 0 的记录删掉。键为 0 的请求不查账本，这种记录对不上任何请求，删了不丢东西。
+    - 同一个键出现多次时，只留 seq 最大的一条。留下一条，带这个键的重发就只会被重放或按「换了参数」拒绝，不会再执行。
+    - 指纹不是 16 字节的记录不删：键留着，指纹改成 16 个零字节。这个键再来时按「换了参数」回 `kInvalidParameter`，不会再执行；删掉它，这个键的重发就会再执行一次。
+    - 条数超过 256 时，只留 seq 最大的 32 条，与正常淘汰留下的一样。
+    - seq 为 0、重复或不小于 `next_seq` 时，按原来的 seq 排序（相同的按数组下标）重排成 1..n，`next_seq = n + 1`。
+  - 整体清空只在两个条件同时满足时才可以用：玩家离线；能登录这名玩家的客户端都只在同一条连接上重发。Unity 第一版（2026-11-12）满足后一条：结果不明时在同一条连接上原样重发一次，断线或换了连接就不再重发。两个条件都成立时没有在途的重发，清空不会让已生效的操作再执行；「离线」判断不准、清空那一刻恰好有一次重发时，那一次会被当成新操作执行。robot 的神秘商人冒烟会重登之后带原键重发（§8 第 6 步），只用测试账号，不对它做修复。客户端一旦做了 §6 的跨连接、跨 App 重启恢复，整体清空就不能再用：客户端可能拿着一个待确认的请求，过几天重新登录时才带原键重发，清空之后这次重发会再执行一次。
+  - 这一点和收件箱账本不同：收件箱的条目会被投递方长期重投，那边任何情况下都禁止清空（`player-inbox-runbook.md` §10.4）。
 
 ### 5.3 为什么不做成开关（负责人 2026-11-06 定）
 
@@ -173,7 +182,7 @@
 - 三个调用点原本就有单飞：回包没到时再点不发第二个包。这一条保留；不为第二次点击生成新键。
 - 每次点击（本地检查都过了之后）生成一个新键，写进请求。生成方法与帮会经济共用一个实现（`ClientRequestKeys.TryCreate`，照 `GuildClient.EconomyRequestId`）。
 - 结果不明（`rpc timeout` 或信封 1003）、连接没变、还没重发过时：原样重发一次（同一个键、其余字段不变）。重发也不明，就走各调用点现有的「结果未知」收尾。
-- 断线、连接换了：第一版不重发，重拉快照，让玩家看过结果再决定。服务端记录随存档走，以后要做跨连接、跨 App 重启的自动恢复是安全的：照帮会用 `DurableRequestFileStore` 在本地记下待确认的请求，重连后带原键重发。这是可选后续，不在第一版。
+- 断线、连接换了：第一版不重发，重拉快照，让玩家看过结果再决定。服务端记录随存档走，以后要做跨连接、跨 App 重启的自动恢复是安全的：照帮会用 `DurableRequestFileStore` 在本地记下待确认的请求，重连后带原键重发。这是可选后续，不在第一版。做这个后续时有两个前提：待确认的请求在本地保留期间，同一玩家带键的操作不能超过账本容量（32 条，§2.2 第 7 条），否则那个键会被挤出去；§5.2 的人工修复不能再用整体清空，只能用逐条修复。
 - `replayed = true` 按成功处理：它就是首次的结果，玩家之前没看到过。
 - 强化请求同时要填 `expected_level`（`equipment-enhance-inlay.md` §6.1），否则强化过一次的装备会一直被拒。
 
@@ -192,7 +201,7 @@
    - `bag_test.exe --gtest_filter=ClientRequestLedgerTest.*:ClientRequestDedupTest.*:ClientRequestAttributeSchemeTest.*:PlayerMysteryMerchantTest.*:PlayerEquipTest.Enhance*:PersistRoundTripTest.*:PlayerFeaturePersistenceTest.MarshalRefusesWhenAnyPersistedComponentIsMissing`。
    - 强化的 4 条新用例：`EnhanceResendWithTheSameClientKey*`（2 条）、`EnhanceWithAClientKeyReusedForAnotherOperationIsRefused`、`EnhanceRefusedForGoldDoesNotRememberTheClientKey`。
 5. 回归：`bag_test.exe` 全量；`cross_zone_test.exe` 全量（它的手搭玩家补了新组件）。
-6. 冒烟：robot 是客户端代码，由 Codex 按[交接文档](../handoff/client-request-idempotency-unity-20261106.md) §8 改三个冒烟场景（强化、神秘商人、新建方案），每个都加「同一个键原样重发一次」，神秘商人另加「重登后带原键重发」。然后在 dev 环境里跑。项目未上线，跑之前可以清空玩家数据。
+6. 冒烟：三个冒烟场景（强化、神秘商人、新建方案）2026-11-13 已按[交接文档](../handoff/client-request-idempotency-unity-20261106.md) §8 改完：每个都加了「同一个键原样重发一次」，神秘商人另加了「重登后带原键重发」。Codex 编译 robot 并在 dev 环境里跑，命令见 `docs/PROGRESS.md` 2026-11-13 条目。项目未上线，跑之前清空玩家数据：新建方案那一步要求账号还没开满方案。
 7. 通过标准：全绿；三个冒烟的退出码都是 0。失败时保留第一个失败用例名和断言原文，不改断言、不连续重试。
 
 ## 9. 变更记录
@@ -205,3 +214,7 @@
   - 负责人定「改成存盘」：账本改为 `player_database` 字段 25（WALLET 组），组件改为持久数据，指纹改为 SHA-256 前 16 字节，淘汰改按显式 seq，加载校验与失效标签照收件箱账本。不做开关（§5.3）。
   - 夹具同步：满套持久组件的手搭玩家（`bag_test.cpp`、`cross_zone_test.cpp`、两个 `EmplaceIfAbsent` 补齐函数）都挂上新组件；「缺组件整份拒存」清单与存盘往返用例都覆盖到它。
   - `player_database_1` 由「玩家数据存储策略优化」会话同期删除，与本改动互不影响；它会把字段 25 补进 `player-save-direct-commit.md` §1.1 的钱包行。
+- 2026-11-13：
+  - robot 三个冒烟场景按交接 §8 补上同键重发，神秘商人另补重登后重发（§8 第 6 步）。未编译、未运行。
+  - §5.2 改正：原文说「玩家离线时清空这个字段是安全的」，这个说法过宽。清空会丢掉全部去重记录，带旧键的重发会再执行一次，只在两个条件同时满足时才不出事（玩家离线；客户端只在同一条连接上重发）。修复改为默认逐条修、不删合法的键。§2.1 第 6 条补上保留期前提；§6 的跨连接恢复补上它对 §5.2 的约束。
+  - §4 的状态列按 2026-11-08 的单测结果更新。

@@ -111,8 +111,15 @@ class ZoneWhitelistUpsertLockOrderMySqlTest {
     /** 旧 add = save(entry) 时 Hibernate 发出的普通 INSERT 形状,只给对照组用。 */
     private static final String LEGACY_SAVE_INSERT_SQL =
             "INSERT INTO zone_whitelist (id, zone_id, account_id, note) VALUES (?, ?, ?, ?)";
-    /** add 在同一事务里的回读,与 findByZoneIdAndAccountId 同形。 */
-    private static final String READ_BACK_SQL = "SELECT id FROM zone_whitelist WHERE zone_id = ? AND account_id = ?";
+    /**
+     * add 在同一事务里的回读:生产的 {@link ZoneWhitelistRepository#FIND_BY_KEY_FOR_UPDATE_SQL}(2026-11-12 起是加锁读,
+     * 同一个常量,命名参数按出现顺序换成占位符:先 zone_id、后 account_id,与 {@link #readBack} 的绑定顺序一致)。
+     * 要锁的记录 upsert 都已锁住,回读不该多出任何等待:upsert 用例因此也证明换成加锁读之后 ODKU 仍然只排队。
+     */
+    private static final String READ_BACK_SQL = ZoneWhitelistRepository.FIND_BY_KEY_FOR_UPDATE_SQL
+            .replace(":zoneId", "?").replace(":accountId", "?");
+    /** 旧 add(save 之后 findByZoneIdAndAccountId)的回读:普通一致性读,只给对照组用,保持旧代码的形状。 */
+    private static final String LEGACY_READ_BACK_SQL = "SELECT id FROM zone_whitelist WHERE zone_id = ? AND account_id = ?";
 
     /** null = 真库可用;否则是跳过 / 判红的原因。 */
     private static String unusableReason;
@@ -139,7 +146,7 @@ class ZoneWhitelistUpsertLockOrderMySqlTest {
     void upsertBehindPendingDeleteOnlyQueues() throws Exception {
         List<Optional<SQLException>> outcomes = runScenario(ACCOUNT_UPSERT, (c, note) -> {
             UPSERT.executeUpdate(c, upsertParams(ACCOUNT_UPSERT, note));
-            readBack(c, ACCOUNT_UPSERT);
+            readBack(c, READ_BACK_SQL, ACCOUNT_UPSERT);
         });
 
         for (int i = 0; i < outcomes.size(); i++) {
@@ -176,7 +183,7 @@ class ZoneWhitelistUpsertLockOrderMySqlTest {
                     ps.setString(4, note);
                     ps.executeUpdate();
                 }
-                readBack(c, ACCOUNT_LEGACY);
+                readBack(c, LEGACY_READ_BACK_SQL, ACCOUNT_LEGACY);
             });
 
             String where = "第 " + round + "/" + LEGACY_ROUNDS + " 轮,实际结局: " + describe(outcomes);
@@ -218,8 +225,8 @@ class ZoneWhitelistUpsertLockOrderMySqlTest {
         return Map.of("id", RowIds.next(), "zoneId", ZONE, "accountId", account, "note", note);
     }
 
-    private static void readBack(Connection c, long account) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(READ_BACK_SQL)) {
+    private static void readBack(Connection c, String sql, long account) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setLong(1, ZONE);
             ps.setLong(2, account);
             ps.executeQuery().close();

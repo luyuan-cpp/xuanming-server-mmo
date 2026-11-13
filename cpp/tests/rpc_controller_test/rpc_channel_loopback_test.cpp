@@ -1290,6 +1290,8 @@ TEST_F(RpcChannelLoopback, RemoteErrorsMapToTheCallerStatus)
     const std::vector<ExpectedMapping> expected{
         {"no_service", NO_SERVICE, RpcStatusCode::kRemoteRejected, true, false},
         {"invalid_request", INVALID_REQUEST, RpcStatusCode::kRemoteRejected, true, false},
+        // 热关停(docs/design/rpc-kill-switch.md §7):派发前拒绝,确定未执行。
+        {"kill_switch_denied", KILL_SWITCH_DENIED, RpcStatusCode::kRemoteRejected, true, false},
         {"handler_failed", HANDLER_FAILED, RpcStatusCode::kRemoteFailed, false, false},
         {"reply_dropped", REPLY_DROPPED, RpcStatusCode::kReplyDropped, false, true},
     };

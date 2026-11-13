@@ -30,12 +30,16 @@ const (
 	// 转发循环按 (存档库, 片) 分工、按片扫描。片号写在主键里,改它要清表(项目未上线可以直接改)。
 	AuditOutboxShards = 16
 
-	// MaxAuditBytesPerSave 与 C++ AuditOutbox::kMaxBytesPerPlayer 同值(单测读头文件核对):scene 每名玩家排着的审计记录不超过它,
-	// 所以一笔存盘总能带走全部到期记录,不必拆成两笔(设计 §5.1)。New 用它核行预算还装不装得下审计。
+	// MaxAuditBytesPerSave:scene 一笔存盘最多带这么多审计记录(C++ AuditOutbox::kMaxBytesPerSave,单测读头文件核对),
+	// 带不完的由紧接着的下一笔带(设计 §5.1)。New 用它核行预算还装不装得下审计:装不下时 scene 会在本地按 TOO_LARGE 拒掉整笔存盘。
 	MaxAuditBytesPerSave = 512 << 10
 	// MaxAuditSnapshotBytes 是一份快照(序列化后的 PlayerSnapshotEntry)的上限:低于 TiDB 单 KV 6 MiB、
 	// 快照 topic 的 max.message.bytes 16 MiB。超了只跳过这份快照,存盘照常提交(设计 §6.3)。
 	MaxAuditSnapshotBytes = 4 << 20
+	// MaxAuditTransactionLogBytes 是一条流水(序列化后的 TransactionLogEntry)的上限,与 C++ AuditOutbox::kMaxRecordBytes 同值
+	// (单测读头文件核对)。scene 入队时已经按它拒收;这里再核一次,是因为一行进了发件箱就必须投得出去:流水 topic 用 broker
+	// 缺省的约 1 MiB 上限,装不进一次请求的行会永远卡在发件箱里(设计 §6.3)。
+	MaxAuditTransactionLogBytes = 64 << 10
 
 	// maxSaveRequestBytes 与 C++ PlayerStoreClient::Options::maxRequestBytes 的缺省值相同:gRPC 单消息 4 MiB 减签名余量。
 	// scene 发送前按它预检,超了就在本地按 TOO_LARGE 拒掉整笔存盘。
@@ -61,7 +65,7 @@ var requiredAuditOutboxColumns = []string{"shard", "kind", "created_ms", "player
 const (
 	AuditSkipInvalid        = "invalid"          // 流水 tx_id 为 0,或快照请求 snapshot_id 为 0、玩家号对不上
 	AuditSkipUnknownRowKind = "unknown_row_kind" // 这名玩家有本 go/db 不认识的行,拼出来会缺字段
-	AuditSkipTooLarge       = "too_large"        // 拼出来的快照超过 MaxAuditSnapshotBytes
+	AuditSkipTooLarge       = "too_large"        // 拼出来的快照超过 MaxAuditSnapshotBytes,或流水超过 MaxAuditTransactionLogBytes
 	AuditSkipUndecodable    = "undecodable"      // 行拼接后解不开(行被写坏)
 )
 
@@ -132,6 +136,12 @@ func writeAuditOutbox(ctx context.Context, tx *sql.Tx, req *storepb.SavePlayerRe
 		if err != nil {
 			summary.skip(AuditSkipInvalid)
 			logx.Errorf("[audit_outbox] cannot marshal transaction log tx_id=%d of player %d: %v", entry.GetTxId(), req.GetPlayerId(), err)
+			continue
+		}
+		if len(payload) > MaxAuditTransactionLogBytes {
+			summary.skip(AuditSkipTooLarge)
+			logx.Errorf("[audit_outbox] transaction log tx_id=%d of player %d is %d bytes, over the %d-byte limit; skipped",
+				entry.GetTxId(), req.GetPlayerId(), len(payload), MaxAuditTransactionLogBytes)
 			continue
 		}
 		records = append(records, auditRecord{kind: storepb.PlayerAuditKind_PLAYER_AUDIT_KIND_TRANSACTION_LOG, recordID: entry.GetTxId(), payload: payload})

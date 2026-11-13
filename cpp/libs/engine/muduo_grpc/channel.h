@@ -96,11 +96,12 @@ struct UnaryCallResult;
 using UnaryCallback = std::function<void(UnaryCallResult &&result)>;
 
 // 出站拦截:每次发起 unary 调用时在调用线程上执行一次,位置紧接在 StartUnaryCall 判空 done 之后(早于停机、在途上限、
-// 消息大小和 metadata 校验,所以本地拒绝也走包装后的回调)。可往 metadata 追加键;返回值替换完成回调,包装必须
-// 恰好调用一次原回调,不改变「恰好一次、永不在 StartUnaryCall 内同步执行」的契约。返回空回调是编程错误(LOG_FATAL)。
+// 消息大小和 metadata 校验,所以本地拒绝也走包装后的回调)。method 是本次调用的 ":path"("/pkg.Svc/Method"),
+// 只在拦截器执行期间有效;可往 metadata 追加键;返回值替换完成回调,包装必须恰好调用一次原回调,
+// 不改变「恰好一次、永不在 StartUnaryCall 内同步执行」的契约。返回空回调是编程错误(LOG_FATAL)。
 // 传输层不认识这些键,也不看包装做了什么;链路追踪的实现在 engine 的 core/network/grpc_trace_hooks.h
-// (docs/design/distributed-tracing.md §5.3)。双向流不经过它。
-using UnaryCallInterceptor = std::function<UnaryCallback(Metadata &metadata, UnaryCallback done)>;
+// (docs/design/distributed-tracing.md §5.3,阶段三起用 method 给 client span 命名,§10.3)。双向流不经过它。
+using UnaryCallInterceptor = std::function<UnaryCallback(const std::string &method, Metadata &metadata, UnaryCallback done)>;
 
 struct ChannelOptions
 {

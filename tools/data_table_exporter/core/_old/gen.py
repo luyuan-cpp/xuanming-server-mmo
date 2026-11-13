@@ -42,11 +42,11 @@ def get_copy_tasks():
                     src_dir = Path(paths.SRC_GO)
                     dst_dir = dst_go_grpc / item.name / paths.GENERATED_DIR
                     copy_tasks.append((src_dir, dst_dir))
-                    logger.info(f"添加复制任务: {src_dir} -> {dst_dir}")
+                    logger.info(f"Added copy task: {src_dir} -> {dst_dir}")
         else:
-            logger.warning(f"GRPC服务目录不存在或不是目录: {grpc_service_dir}")
+            logger.warning(f"gRPC service directory is missing or not a directory: {grpc_service_dir}")
     except Exception as e:
-        logger.error(f"设置GRPC复制任务时出错: {e}")
+        logger.error(f"Failed to set up gRPC copy tasks: {e}")
 
     return copy_tasks
 
@@ -115,10 +115,10 @@ def create_directories(dirs):
         if not dir_path.exists():
             try:
                 dir_path.mkdir(parents=True, exist_ok=True)
-                logger.info(f"创建目录: {dir_path}")
+                logger.info(f"Created directory: {dir_path}")
                 created += 1
             except Exception as e:
-                logger.error(f"创建目录 {dir_path} 失败: {e}")
+                logger.error(f"Failed to create directory {dir_path}: {e}")
     return created
 
 
@@ -129,7 +129,7 @@ def run_commands(cmds, timeout=300):
 
     for cmd in cmds:
         try:
-            logger.info(f"执行命令: {cmd}")
+            logger.info(f"Running command: {cmd}")
             result = subprocess.run(
                 cmd,
                 shell=True,
@@ -140,24 +140,24 @@ def run_commands(cmds, timeout=300):
             )
 
             if result.stdout:
-                logger.info(f"命令输出: {result.stdout.strip()}")
+                logger.info(f"Command output: {result.stdout.strip()}")
             if result.stderr:
                 if "ERROR" in result.stderr:
-                    logger.error(f"命令错误输出: {result.stderr.strip()}")
+                    logger.error(f"Command error output: {result.stderr.strip()}")
                     failed += 1
                 else:
-                    logger.info(f"命令标准错误: {result.stderr.strip()}")
+                    logger.info(f"Command stderr: {result.stderr.strip()}")
 
             success += 1
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"命令 '{cmd}' 执行失败 (返回码: {e.returncode}): {e.stderr}")
+            logger.error(f"Command '{cmd}' failed (exit code: {e.returncode}): {e.stderr}")
             failed += 1
         except subprocess.TimeoutExpired:
-            logger.error(f"命令 '{cmd}' 执行超时")
+            logger.error(f"Command '{cmd}' timed out")
             failed += 1
         except Exception as e:
-            logger.error(f"命令 '{cmd}' 执行时发生错误: {str(e)}")
+            logger.error(f"Command '{cmd}' raised an error: {str(e)}")
             failed += 1
 
     return success, failed
@@ -170,26 +170,26 @@ def execute_copy_tasks(tasks):
 
     for src, dst in tasks:
         try:
-            logger.info(f"正在从 {src} 复制到 {dst} (带MD5校验)...")
+            logger.info(f"Copying {src} to {dst} (with MD5 check)...")
             md5_copy(str(src), str(dst))
             copied += 1
         except Exception as e:
-            logger.error(f"复制 {src} 到 {dst} 失败: {e}")
+            logger.error(f"Failed to copy {src} to {dst}: {e}")
             failed += 1
 
     return copied, failed
 
 
 def main():
-    logger.info("===== 开始项目构建流程 =====")
+    logger.info("===== Project build started =====")
 
     # 获取所有需要创建的目录
     all_directories = get_all_directories()
 
     # 创建目录
-    logger.info("===== 开始创建目录 =====")
+    logger.info("===== Creating directories =====")
     created_dirs = create_directories(all_directories)
-    logger.info(f"目录创建完成，共创建 {created_dirs} 个新目录")
+    logger.info(f"Directories created: {created_dirs} new")
 
     # 定义需要执行的命令
     commands = [
@@ -207,23 +207,23 @@ def main():
     ]
 
     # 执行命令
-    logger.info("===== 开始执行生成命令 =====")
+    logger.info("===== Running generator commands =====")
     cmd_success, cmd_failed = run_commands(commands)
-    logger.info(f"命令执行完成，成功: {cmd_success}, 失败: {cmd_failed}")
+    logger.info(f"Commands finished: succeeded {cmd_success}, failed {cmd_failed}")
 
     # 执行复制任务
-    logger.info("===== 开始执行文件复制 =====")
+    logger.info("===== Copying files =====")
     copy_success, copy_failed = execute_copy_tasks(copy_tasks)
-    logger.info(f"文件复制完成，成功: {copy_success}, 失败: {copy_failed}")
+    logger.info(f"File copy finished: succeeded {copy_success}, failed {copy_failed}")
 
     # 总结
-    logger.info("===== 项目构建流程结束 =====")
-    logger.info(f"总览: 目录创建 {created_dirs} 个, 命令成功 {cmd_success} 个, 复制成功 {copy_success} 个")
+    logger.info("===== Project build finished =====")
+    logger.info(f"Summary: directories created {created_dirs}, commands succeeded {cmd_success}, copies succeeded {copy_success}")
 
     if cmd_failed > 0 or copy_failed > 0:
-        logger.warning(f"注意: 有 {cmd_failed} 个命令和 {copy_failed} 个复制任务失败")
+        logger.warning(f"Note: {cmd_failed} commands and {copy_failed} copy tasks failed")
     else:
-        logger.info("所有操作均成功完成!")
+        logger.info("All operations completed successfully!")
 
 
 if __name__ == "__main__":

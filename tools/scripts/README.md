@@ -100,6 +100,8 @@ python -X utf8 -B tools/scripts/start_docker_debug.py --execute
 
 入口仅操作 `desktop-linux` 上的 `xuanming-debug-current` 原容器，要求基础初始化和写者注册任务已成功完成。16 个常驻服务及五个写者注册容器须与当前 `.env` 指定的镜像、挂载、端口及显式环境变量一致；不会重跑的历史初始化、迁移和 login 注册容器只核对成功状态与实际身份、配置及挂载基线，不要求追溯更新成最新业务镜像。正常运行的服务只检查，不重复启动或注册；停止的 `db`、`data-service`、`match`、`player-inbox`、`gateway` 先重新执行各自原注册容器，取得新授权，再启动服务。login 不消费 SQL 授权，不重跑它的注册任务。所有服务已经正常运行时，重复执行只做检查。
 
+现有容器使用手绘节庆地图时，日常启动会从容器的 Compose 标签识别部署批次的 `compose.authored.json`。预检逐项核对六个服务的开发表只读挂载和三个 C++ 节点的导航只读挂载，并将这些文件与覆盖配置的摘要纳入启动基线。该部署批次的配置和表目录需要保留。
+
 每次调用独立保存 `build/verification/docker-start-<UTC>/`，包含启动计划、旧退出状态和结果。Compose 显式卷核对原卷名与读写属性；镜像声明的默认匿名卷核对原身份、目标、匿名标签、驱动及存在状态，所有实际挂载卷均纳入前后不变的基线，不要求匿名卷带 Compose 项目标签。脚本不构建、不拉取镜像、不重建容器、不清卷、不重放初始化或迁移；任一步失败立即停止并显示脱敏原因，保留已启动的服务及失败证据，不自动重试。成功输出 `Server startup completed.`，表示运行就绪检查完成；源码一致性仍由 VS Code 附加前检查执行，不能据此断言旧崩溃原因已修复。
 
 默认客户端入口为 `http://127.0.0.1:8081`，同一网关另保留 `http://127.0.0.1:18081`；gate 为 `127.0.0.1:28000`，battle 为 `127.0.0.1:28010`。可用 `--gateway-port` 调整附加 HTTP 端口、用 `--gate-port` / `--battle-port` 调整对应入口；`8081` 保留给客户端默认网关。VS Code 附加到固定名称的三个调试容器。此栈只启用登录、建角、主世界进场、战斗与全球匹配结算所需服务，未启动域的请求按现有路由契约失败。校验配置时使用 `docker compose ... config --quiet`，不要把展开后的配置与 `.env` 打印或上传。
@@ -142,7 +144,9 @@ player_redis:
 
 清库:`pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`,单实例加开发集群的每个主节点(`lib/redis_local_flush.ps1`)。`FLUSHALL` 在 Cluster 里只清本节点,不要只对一个节点执行。压测快照的 target 写 `docker-cluster:redis-player-cluster-0:7100`(`stress_snap.ps1`)。
 
-### redis_cluster_capacity.ps1(玩家域容量基准)
+压测抓本机 C++ 节点的 `/metrics`(2026-11-12 起):C++ 进程设了 `MMORPG_METRICS_PORT` 才开出口,本机缺省不开。起节点前设 `$env:MMORPG_METRICS_BASE_PORT = '19400'`(或 `cpp_nodes.ps1 -MetricsBasePort 19400`),每个实例按 `lib/cpp_metrics_ports.ps1` 拿一个端口(gate 19401…、scene 19501…、battle 19601…,`-Zone N` 再加 1000 × N);`stress_snap.ps1 -CppMetricsBasePort 19400` 按 `run/pids/cpp_nodes.pid.json` 逐个抓成 `t<N>m_cpp_<实例键>.txt`,`stress_summarize.ps1` 的 N1 表读它们。契约测试 `tests/stress_cpp_metrics.tests.ps1`。
+
+### redis_cluster_capacity.ps1(Redis Cluster 容量基准:玩家域 redis-player、控制 redis-control)
 
 逐档加压,按 `INFO` 求差出每个主节点的 ops 和主线程 CPU,判定有没有真的压到饱和(设计 §14.3)。副本数、代理数、连接数都不是证据。
 
@@ -159,7 +163,8 @@ pwsh -File tools/scripts/redis_cluster_capacity.ps1 -Target docker-cluster:redis
 - 三条都成立才算饱和:最后一档每个主的主线程 CPU ≥ `-SaturatedCpuPercent`(缺省 90)、总 ops 比上一档增长 < `-PlateauGrowthPercent`(缺省 5)、错误回复不超过千分之一。没到就加 `-ClientSteps` 的上限、`-Threads`、`-Pipeline`,或换更大的压测端。
 - 结果在 `-OutDir`(缺省 `build/redis-capacity-<时间>`):`capacity.txt`、`capacity.json`、每档每节点的 `INFO` 原文。
 - K8s 的 namespace 必须匹配 `^mmorpg-stress-`:它往集群里写键、把主线程压满。键前缀 `capbench:`,全部带 600 秒 TTL。
-- 负载是一段 Lua(写 location、写会话 hash、铸代次),只是玩家域写路径的近似。端到端结论走 AGENTS.md §6 的压测流程。
+- 负载是一段 Lua(写 location、写会话 hash、铸代次),只是玩家域写路径的近似;压控制集群(`-Target k8s-cluster:<ns>/redis-control`)用同一段负载,得到的是每主节点的同口径基线。端到端结论走 AGENTS.md §6 的压测流程。
+- K8s 目标的口令 Secret 缺省取 `<statefulset>-auth`(`redis-player-auth`、`redis-control-auth`),要别的用 `-AuthSecret`;压测端与 `app=<statefulset>` 的 Pod 反亲和。
 
 ### start_game.ps1（本机游戏一键启动）
 
@@ -339,6 +344,21 @@ Dependencies:
 - `cmake`
 - `clang-tidy` (required)
 - `include-what-you-use` (optional but preferred when available)
+
+### check_log_text_english.py（日志文案英文守卫）
+
+AGENTS.md §2 规定服务和脚本的日志文案用英文。本脚本静态扫描 go / cpp / java / robot / tools / deploy，
+发现直接写在日志、控制台输出、panic / sys.exit 调用里的中文字面量就以退出码 1 失败；CI 由
+`.github/workflows/log-text-english.yml` 在每次提交上运行。覆盖范围、不在范围的内容（返回的错误、
+throw、注释、测试、生成代码等）与例外登记方式只写在脚本头注释里。
+
+```bash
+python3 tools/scripts/check_log_text_english.py
+python3 -m unittest discover -s tools/scripts/tests -p 'test_log_text_english*' -v
+```
+
+确实要保留中文的例外登记在 `tools/scripts/log_text_english_allowlist.txt`（路径、原文片段、原因三列），
+修好之后要删掉对应行，否则检查会报「stale allowlist entry」。
 
 ### 第三方版本固定与补丁恢复
 
@@ -602,13 +622,37 @@ pwsh -File dev_tools.ps1 -Command proto-gen-run -ConfigPath ../proto_generator/p
 
 ### 本机 Docker 修改后重编与断点
 
-在仓库根执行 `python tools/scripts/rebuild_docker_debug.py cpp`、`python tools/scripts/rebuild_docker_debug.py go --services login` 或 `python tools/scripts/rebuild_docker_debug.py java`，分别更新 C++ 三节点、Go 登录服或 Java 网关。入口先构建独占镜像，核对当前源码与产物，再只重建对应服务（写者连同它的注册步骤 `<服务>-sql-boot`，`--services sql-boot` 只换镜像）；现有数据卷和随机开发密码保留，写者账号每次重建都换。`--build-only` 只构建，不更新配置或容器。
+修改 C++、Go 或 Java 后，在仓库根执行统一入口：
 
-`build_docker_cpp_debug.py` 使用本机已验证 SDK 和 `Debug/-O0`，SDK 来源及依赖守卫位于忽略目录 `build/docker-debug-current/cpp-toolchain.json`；依赖源码变化时停止，不复用不匹配 SDK。`build_docker_go_debug.py` 使用当前 Go 1.27.2、`all=-N -l` 与固定 Delve v1.27.2，逐服务串行构建。`build_docker_java_debug.py` 使用已有 JDK 23/Maven 离线单线程执行测试、打包并核验行号表。三个底层构建器只输出本地镜像及 `--output/result.json`，不自行更新运行栈。
+```powershell
+python -X utf8 -B tools/scripts/rebuild_all_docker_debug.py
+```
+
+如果此前的统一批次在配置刷新和容器更新前停止，可显式加 `--resume-builds-from <旧批次目录>`。例如在仓库根执行：
+
+```powershell
+python -X utf8 -B tools/scripts/rebuild_all_docker_debug.py --resume-builds-from build/verification/docker-rebuild-all-20261112T040700.029055Z
+```
+
+入口为新批次重新预检、采集当前运行状态，并核对旧批次已成功的连续 C++ / Go 阶段。候选的完整来源、运行资源、SDK、基础镜像、Debug 构建参数和本机镜像 ID 都须与证据相符；任一核对失败即停止。新回执用 `reused_from` 标出每个复用阶段的来源。可先用同一参数加 `--check` 只读验证资格。Java 阶段按本次配置重新创建或核验 fixture，从头运行构建及测试。省略复用参数时，入口按通常流程重新构建所选语言。
+
+默认按 C++ → Go → Java 串行调用底层构建器：C++ 三节点 `gate`、`scene`、`battle`；Go 八服务 `login`、`db`、`data-service`、`scene-manager`、`player-locator`、`client-rpc-router`、`match`、`player-inbox`，以及 `sql-boot` 注册工具和 `db-migrate` 存档库迁移工具；Java `gateway`。`DB_MIGRATE_IMAGE` 随构建结果发布到原批次的配置，供下次显式迁移使用。全部构建成功且来源一致后，才执行 `prepare --refresh-existing`，保留 canonical `build/docker-debug-current/.env` 指向的原批次目录、端口、密码和卷前缀，再调用一次 `update_images`。全量更新只重建 12 个运行服务及 6 个写者注册步骤（`<服务>-sql-boot`），不重跑 init、migrate 或基础设施；最后核对健康、源码来源和镜像。写者账号每次重建都换。
+
+已有调试栈在 Docker Desktop 重启后可直接执行同一条命令。完成所选语言、SDK、fixture 和运行栈预检后，入口持项目启动锁，按 MySQL → Redis → etcd → Kafka 的顺序恢复已退出的原容器。启动前核对容器完整 ID、配置、镜像、挂载卷、端口及项目运行状态；每项只发一次 `docker start`，最多等待 360 秒达到健康，再继续下一项。已健康的服务直接通过。已有服务运行但不健康、检测到身份或配置变化、启动失败或超时均停止编译，已成功恢复的基础服务及本轮启动回执保留在现场。恢复阶段仅涉及这四个基础服务。
+
+加 `--check` 可只读预检，终端和 `preflight.json` 中的 `infraReady` 和 `pendingResume` 分别显示实际就绪状态和执行模式将恢复的服务。`--check` 仅写本次审计文件。加 `--languages cpp,go` 等可选择语言子集，执行顺序仍为 C++ → Go → Java。配置变动、身份迁移或缺少生成器版本记录时，子集更新会受到保守检查，应按报错要求执行全量更新。
+
+Java 默认自动创建本次调用独占的三容器 TiDB 8.5.8 测试 fixture，经正式 producer 生成新的 `NORMAL` writer grant，再执行原有完整测试。无需手动配置十项 fixture 变量。统一入口会先检查本地工具、辅助程序、固定镜像及端口等前提；缺失时在 C++/Go 编译前停止。`--check` 只做只读检查，不创建 fixture。实际环境仅在轮到 Java 构建时创建，Java 构建和来源验证全部成功后才退休 writer 并清理本次 fixture，清理成功后才刷新配置和更新服务。创建、构建、验证或清理失败均停止并保留证据与尚存的 fixture，不自动重试，不跳过测试或复用旧 JAR。
+
+如需自定义外部 fixture，八项核心变量中任一已设置就选择外部模式，必须完整提供 `MMORPG_AUTHORITY_IT_JDBC_URL`、`MMORPG_SQL_USERNAME`、`MMORPG_SQL_PASSWORD`、`MMORPG_SQL_WRITER_GRANT_FILE`、`MMORPG_SQL_WRITER_GRANT_SHA256`、`MMORPG_SQL_DEPLOYMENT_ID`、`MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256`、`MMORPG_SQL_WRITER_CONSUME_DIR`，以及 `MMORPG_SQL_PRIVATE_FILE_HELPER` 和 `MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256`。JDBC URL 仅接受 `jdbc:mysql://127.0.0.1:<port>/<schema>` 或 `jdbc:mysql://localhost:<port>/<schema>`，必须显式指定端口和单个 schema，不接受 URL 参数、用户信息或多主机形式。仅配置 private-file helper 两项仍可使用自动模式。外部 fixture 不由统一入口退休或删除；两种模式传给 Java 的子环境均移除 `COMMERCE_IT_*` 和 SQL schema/registrar/maintenance 管理 DSN。公开 receipt 只记录 fixture 模式和阶段，不记录凭据或私有 context。离线单元测试用于验证编排契约，不代表已完成真实编译或部署。
+
+任一步骤失败即停止，不自动重试；日志保存在 `build/verification/docker-rebuild-all-<UTC>/`。容器更新阶段失败会保留已完成的更新状态，不提供全事务回滚。配置未变化时仍可使用原单语言入口 `python tools/scripts/rebuild_docker_debug.py cpp`、`python tools/scripts/rebuild_docker_debug.py go --services login` 或 `python tools/scripts/rebuild_docker_debug.py java`；配置或来源检查报错时使用上面的统一入口。旧入口的 `--build-only` 只构建，不更新配置或容器，`--services sql-boot` 只换工具镜像。
+
+`build_docker_cpp_debug.py` 使用本机已验证且有效的 SDK 和 `Debug/-O0`，SDK 来源及依赖守卫位于忽略目录 `build/docker-debug-current/cpp-toolchain.json`；依赖源码变化时停止，不复用不匹配 SDK。`build_docker_go_debug.py` 使用当前 Go 1.27.2、`all=-N -l` 与固定 Delve v1.27.2，逐服务串行构建，并可能按原流程构建固定版本调试器，不能假设全流程完全离线。`build_docker_java_debug.py` 使用已有 JDK 23/Maven 和固定版本 protoc，按原有测试前置离线单线程执行测试、打包并核验行号表。三个底层构建器只输出本地镜像及 `--output/result.json`，不自行更新运行栈。
 
 `docker_cpp_sdk_guard.py` 收集 SDK 及独立依赖的实际文件集合；`docker_debug_manifest.py` 在容器构建中核验冻结源码、维护按 SHA 变化失效的对象缓存，并登记最终编译参数、节点与调试符号摘要。
 
-VS Code 的“终端 → 运行任务”提供对应的“Docker：重编并更新”任务。“运行和调试”提供 C++ 三节点、Go 七服务及 Java Gateway 的附加配置，每项附加前执行源码检查。也可执行 `python tools/scripts/rebuild_docker_debug.py check --services scene` 单独检查。Go 普通服务不编译的 `*_test.go` 不参与运行源码一致性判定。完整操作与端口见 `docs/design/docker_k8s_build_deploy.md`。
+VS Code 的“终端 → 运行任务”提供对应的“Docker：重编并更新”任务。“运行和调试”提供 C++ 三节点、Go 服务及 Java Gateway 的附加配置，每项附加前执行源码检查。也可执行 `python tools/scripts/rebuild_docker_debug.py check --services scene` 单独检查。Go 普通服务不编译的 `*_test.go` 不参与运行源码一致性判定。完整操作与端口见 `docs/design/docker_k8s_build_deploy.md`。
 
 - 维护中的 PowerShell 入口使用 PowerShell 7（`pwsh`）；不要假设 Windows PowerShell 5.1 兼容。
 - Use `-Verbose` flag for detailed output

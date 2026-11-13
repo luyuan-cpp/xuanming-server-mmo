@@ -6,6 +6,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.game.gateway.config.MallAdminProperties;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationHandler;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.transport.SenderContext;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
@@ -182,8 +186,39 @@ class MallAdminClientTest {
         return HexFormat.of().formatHex(mac.doFinal(bytes(canonical)));
     }
 
+    /** 出站观测的发送端约定(docs/design/distributed-tracing.md §7)：观测 start 时经载体写入的传播头会随请求上线，签名照常可验。 */
+    @Test void 观测写入的traceparent随请求上线_签名不受影响_无观测时不带() throws Exception {
+        var observations = ObservationRegistry.create();
+        observations.observationConfig().observationHandler(new InjectingSenderHandler());
+        try (var fixture = new Upstream(observations)) {
+            fixture.reply.set(new Response(200, bytes("{}"), null, false));
+            assertEquals(200, fixture.client.execute("skus/list", BODY).status());
+            var request = fixture.take();
+            assertEquals(TRACEPARENT, request.traceparent());
+            assertEquals(sign(request, request.path(), request.body()), request.signature());
+            fixture.assertHealthy();
+        }
+        try (var fixture = new Upstream()) {
+            fixture.reply.set(new Response(200, bytes("{}"), null, false));
+            assertEquals(200, fixture.client.execute("skus/list", BODY).status());
+            assertNull(fixture.take().traceparent(), "NOOP 注册表不开观测，也不写传播头");
+            fixture.assertHealthy();
+        }
+    }
+
+    private static final String TRACEPARENT = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+    /** 只做 Spring Boot 的 PropagatingSenderTracingObservationHandler 注入那一步：start 时往载体写固定的 traceparent。 */
+    private static final class InjectingSenderHandler implements ObservationHandler<SenderContext<?>> {
+        @Override public void onStart(SenderContext<?> context) { inject(context); }
+        private static <C> void inject(SenderContext<C> context) {
+            context.getSetter().set(context.getCarrier(), "traceparent", TRACEPARENT);
+        }
+        @Override public boolean supportsContext(Observation.Context context) { return context instanceof SenderContext; }
+    }
+
     private record Request(String method, String path, String query, byte[] body, String contentType,
-        String subject, String timestamp, String nonce, String signature) {}
+        String subject, String timestamp, String nonce, String signature, String traceparent) {}
     private record Response(int status, byte[] body, String location, boolean clientMayCancel) {}
 
     private static final class Upstream implements AutoCloseable {
@@ -191,6 +226,7 @@ class MallAdminClientTest {
         final ExecutorService serverExecutor;
         final ExecutorService httpExecutor;
         final HttpClient http;
+        final ObservationRegistry observations;
         final MallAdminClient client;
         final List<MallAdminClient> clients = new ArrayList<>();
         final AtomicReference<Response> reply = new AtomicReference<>(new Response(200, bytes("{}"), null, false));
@@ -199,6 +235,11 @@ class MallAdminClientTest {
         final ConcurrentLinkedQueue<Throwable> failures = new ConcurrentLinkedQueue<>();
 
         Upstream() throws IOException {
+            this(ObservationRegistry.NOOP);
+        }
+
+        Upstream(ObservationRegistry observations) throws IOException {
+            this.observations = observations;
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             serverExecutor = Executors.newFixedThreadPool(2);
             httpExecutor = Executors.newFixedThreadPool(2);
@@ -227,13 +268,13 @@ class MallAdminClientTest {
         }
 
         MallAdminClient client(MallAdminProperties props) {
-            var value = new MallAdminClient(props, new ObjectMapper(), http, CLOCK);
+            var value = new MallAdminClient(props, new ObjectMapper(), http, CLOCK, observations);
             clients.add(value);
             return value;
         }
 
         MallAdminClient defaultClient() {
-            var value = new MallAdminClient(properties(), new ObjectMapper());
+            var value = new MallAdminClient(properties(), new ObjectMapper(), observations);
             clients.add(value);
             return value;
         }
@@ -255,7 +296,8 @@ class MallAdminClientTest {
                 requests.add(new Request(exchange.getRequestMethod(), exchange.getRequestURI().getRawPath(),
                     exchange.getRequestURI().getRawQuery(), body, headers.getFirst("Content-Type"),
                     headers.getFirst("X-Commerce-Subject"), headers.getFirst("X-Commerce-Timestamp"),
-                    headers.getFirst("X-Commerce-Nonce"), headers.getFirst("X-Commerce-Signature")));
+                    headers.getFirst("X-Commerce-Nonce"), headers.getFirst("X-Commerce-Signature"),
+                    headers.getFirst("traceparent")));
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 if (response.location() != null) { exchange.getResponseHeaders().set("Location", response.location()); }
                 try {

@@ -18,6 +18,7 @@
 #include "core/security/service_call_auth.h"
 #include "engine/config/player_store_path.h"
 #include "grpc_client/player_store/player_store_grpc_client.h"
+#include "modules/audit/audit_outbox_stats.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "player/system/save_timing_stats.h"
 #include "proto/common/base/common.pb.h"
@@ -39,6 +40,9 @@ namespace
     constexpr uint32_t kFailureLogEveryN = 12;
     // go/db 提交了却没写审计发件箱(go/db 比 scene 旧):全进程第一次和此后每这么多次打一条,发布顺序错了时不刷屏。
     constexpr uint64_t kAuditNotWrittenLogEveryN = 1000;
+    // 认领到本二进制不认识的内容(行里的未知顶层字段、更新版本才有的行):全进程第一次和此后每这么多次打一条。
+    // 新旧版本混跑的窗口里每次进场都会遇到,逐条打会刷屏。
+    constexpr uint64_t kCarriedClaimLogEveryN = 1000;
 
     template<class Reply>
     struct AttemptResult
@@ -136,7 +140,8 @@ PlayerStoreClient* PlayerStoreClient::ResolveOwner(const std::weak_ptr<Lifetime>
 }
 
 
-bool PlayerStoreClient::Seed(Guid playerId, uint32_t storageId, uint64_t ownerEpoch, uint64_t committedSaveSeq, player_store_rows::KindBytes confirmed)
+bool PlayerStoreClient::Seed(Guid playerId, uint32_t storageId, uint64_t ownerEpoch, uint64_t committedSaveSeq, player_store_rows::KindBytes confirmed,
+                             player_store_rows::KindBytes carried)
 {
     if (HasUnsettled(playerId))
     {
@@ -146,6 +151,9 @@ bool PlayerStoreClient::Seed(Guid playerId, uint32_t storageId, uint64_t ownerEp
     state.storageId = storageId;
     state.ownerEpoch = ownerEpoch;
     state.confirmed = std::move(confirmed);
+    // 每次播种都整份换掉:上一次认领带回的内容不留到这一次。
+    state.carried = std::move(carried);
+    state.hasCarried = std::any_of(state.carried.begin(), state.carried.end(), [](const std::string &bytes) { return !bytes.empty(); });
     state.uncertain.reset();
     // 认领时库里已经把 released 清成 0。
     state.releaseCommitted = false;
@@ -196,6 +204,18 @@ bool PlayerStoreClient::Forget(Guid playerId)
     }
     states_.erase(playerId);
     return true;
+}
+
+void PlayerStoreClient::AppendCarried(const State &state, player_store_rows::KindBytes &rows)
+{
+    if (!state.hasCarried)
+    {
+        return;
+    }
+    for (std::size_t kind = 1; kind < player_store_rows::kKindCount; ++kind)
+    {
+        rows[kind] += state.carried[kind];
+    }
 }
 
 PlayerStoreClient::KindSet PlayerStoreClient::DirtyKinds(const State &state, const player_store_rows::KindBytes &rows) const
@@ -249,7 +269,18 @@ bool PlayerStoreClient::DeferPeriodicSave(Guid playerId, const player_store_rows
         return false;
     }
     const KindSet &piggyback = PiggybackKinds();
-    const KindSet dirty = DirtyKinds(state, rows);
+    // 和 Submit 同一把尺子:接上认领时带回的未知字段再比。没有带回内容时(全网同一版本的常态)不拷贝。
+    KindSet dirty;
+    if (state.hasCarried)
+    {
+        player_store_rows::KindBytes composed = rows;
+        AppendCarried(state, composed);
+        dirty = DirtyKinds(state, composed);
+    }
+    else
+    {
+        dirty = DirtyKinds(state, rows);
+    }
     // 一定要写的情况:有别的行脏(位置照样顺带写出去);只顺带的行结果未决(库里是哪一份不知道,不能拖);
     // 上一笔带着 release 或代次落后(Start 会强制写一笔)。没有任何变化时交给 Submit 判「已落盘」,计数照旧。
     if (dirty.none() || (dirty & ~piggyback).any() || (state.uncertain & piggyback).any() ||
@@ -276,6 +307,9 @@ PlayerStoreClient::SubmitResult PlayerStoreClient::Submit(Guid playerId, player_
     }
     if (!SceneTaskScope::IsDurableAccepting()) return SubmitResult::kStopped;
     State &state = it->second;
+    // 投影结果只有本二进制认识的字段。先接上认领时带回的未知字段:下面比脏、排队、发送、确认用的都是要写进库的整行。
+    // 只在这里接一次;状态机内部再用的行(排队的快照、续笔用的 confirmed)都已经是整行。
+    AppendCarried(state, rows);
     // 快照就是调用方此刻的内存,水位要在这时取:之后再发生的改动不在这份快照里。
     const uint64_t commitMark = options_.commitMark ? options_.commitMark() : 0;
     // pending 非空也算忙:回调里再次 Submit 时,这份快照比 pending 新,不能抢到它前面发出去。
@@ -346,11 +380,23 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
     request.set_instance_id(options_.instanceId());
     request.set_release(submitOptions.release);
     // 审计记录随这一笔交出去:go/db 在提交存档的同一个事务里写进发件箱。只在这里拷一次,重试发的是同一份请求。
+    AuditAttachment attached;
     if (options_.attachAudit)
     {
-        options_.attachAudit(playerId, commitMark, request);
+        attached = options_.attachAudit(playerId, commitMark, request);
     }
     inflight.carriesAudit = request.transaction_logs_size() > 0 || request.audit_snapshots_size() > 0;
+    // 都带上了:这份快照里的审计记录提交后全部放行。没带完:只放行到带上的最后一条,剩下的还没进库。
+    inflight.auditAckMark = attached.more ? attached.through : commitMark;
+    if (attached.more && !state.auditStalled)
+    {
+        // 到期的审计记录超过一笔的预算(存盘中断很久之后才会出现):分笔。这一笔先把行和前一段记录提交,不带 release:
+        // release 之后别的节点可以认领,剩下的记录就没有机会由本节点提交了。调用方要的 release 与回调留给最后一笔(Finish)。
+        // 行已经随这一笔写了,续笔不必再被强制写一次。
+        inflight.continuation = submitOptions;
+        inflight.continuation->force = false;
+        request.set_release(false);
+    }
 
     std::string stampedProfile;
     const bool stamped = options_.stampProfile && dirty.any();
@@ -484,6 +530,10 @@ void PlayerStoreClient::HandleSaveResponse(Guid playerId, State &state, const pl
         // 带了审计记录却没有 audit_outbox_written:go/db 不认识审计字段(比 scene 旧),存档提交了、审计被它丢了。
         // 行照常确认;审计记录不放行,留在队列里随下一笔再交(docs/design/player-audit-outbox.md §5.2、§10)。
         const bool auditWritten = !state.inflight->carriesAudit || response.audit_outbox_written();
+        if (!auditWritten)
+        {
+            audit_outbox_stats::IncStoreTooOld();
+        }
         if (!auditWritten && auditNotWrittenCount_++ % kAuditNotWrittenLogEveryN == 0)
         {
             LOG_ERROR << "[player_store] save of player " << playerId << " seq " << request.save_seq()
@@ -565,10 +615,28 @@ void PlayerStoreClient::Finish(Guid playerId, State &state, const SaveResult &re
         state.releaseCommitted = finished.request.release();
         state.committedOwnerEpoch = finished.request.owner_epoch();
         state.committedSaveSeq = finished.request.save_seq();
+        if (finished.carriesAudit)
+        {
+            state.auditStalled = !auditWritten;
+        }
         // 先放行再回调:回调里可能销毁实体,那之后还没放行的会被当成没落库丢掉。
         if (auditWritten)
         {
-            NotifyCommittedThrough(playerId, finished.commitMark);
+            NotifyCommittedThrough(playerId, finished.auditAckMark);
+        }
+        if (finished.continuation.has_value() && !state.pending.has_value())
+        {
+            // 这一笔的审计记录没带完(Start 里分笔):行已经提交,紧接着再发一笔带剩下的记录,内容就是刚确认的行(没有脏行)。
+            // 调用方的 release 与回调都交给它 —— 对调用方来说,这次存盘到最后一笔提交才算完成;它被拒,调用方看到的就是被拒。
+            // 排队位置上已经有更新的快照时不用补:那份的水位更大,会带走剩下的记录,release 也以它为准,这一笔照常回调。
+            Pending next;
+            next.rows = state.confirmed;
+            next.options = *finished.continuation;
+            next.callbacks = std::move(finished.callbacks);
+            next.commitMark = finished.commitMark;
+            state.pending.emplace(std::move(next));
+            Advance(playerId);
+            return;
         }
     }
     // 回调里可能再次 Submit(进 pending),也可能 Forget,之后不再使用 state。
@@ -780,20 +848,49 @@ boost::cobalt::task<void> PlayerStoreClient::RunClaimAttempt(std::weak_ptr<Lifet
     }
 
     player_store_rows::KindBytes confirmed;
+    player_store_rows::KindBytes carried;
+    std::size_t carriedRows = 0;
+    std::size_t newerRows = 0;
     for (const auto &row : response->rows())
     {
         const auto kind = static_cast<std::size_t>(row.kind());
-        // 退役号(旧分行布局的 1、2)也算未知:按现在的分行解读别的布局写的行会丢字段(规格 §1.1)。
+        // 更新版本才有的行:不读、不播种。本二进制不会写它,库里那一行原样留着(player_store_projection.h IsNewerKind)。
+        if (player_store_rows::IsNewerKind(kind))
+        {
+            ++newerRows;
+            continue;
+        }
+        // 剩下不是数据行的只有退役号(旧分行布局的 1、2、5):按现在的分行解读别的布局写的行会丢字段(规格 §1.1)。
         if (!player_store_rows::IsDataKind(kind))
         {
-            LOG_ERROR << "[player_store] claim of player " << playerId << " returned an unknown or retired kind " << kind
-                      << " (a row from another row layout; the project has not launched, rebuild the database)";
+            LOG_ERROR << "[player_store] claim of player " << playerId << " returned a retired kind " << kind
+                      << " (a row from a retired row layout; the project has not launched, rebuild the database)";
             owner->FinishClaim(playerId, nullptr);
             co_return;
         }
+        // 这一行里本二进制不认识的顶层字段:取出来随播种存下,之后每次写这一行都接回去(头文件类注释)。
+        if (owner->options_.carriedBytes)
+        {
+            if (!owner->options_.carriedBytes(row.payload(), carried[kind]))
+            {
+                LOG_ERROR << "[player_store] claim of player " << playerId << " returned a row of kind " << kind
+                          << " that cannot be parsed; refusing the entry";
+                owner->FinishClaim(playerId, nullptr);
+                co_return;
+            }
+            carriedRows += carried[kind].empty() ? 0 : 1;
+        }
         confirmed[kind] = row.payload();
     }
-    if (!owner->Seed(playerId, response->storage_id(), response->owner_epoch(), response->save_seq(), std::move(confirmed)))
+    // 全网同一版本、也没有退役字段残留时两个数都是 0,不打。全进程第一次和此后每 kCarriedClaimLogEveryN 次打一条。
+    if ((carriedRows != 0 || newerRows != 0) && owner->carriedClaimCount_++ % kCarriedClaimLogEveryN == 0)
+    {
+        LOG_INFO << "[player_store] claim of player " << playerId << " holds data this build does not know: unknown top-level fields in "
+                 << carriedRows << " row(s) are carried back on every write, " << newerRows
+                 << " row(s) of newer kinds are left untouched (total=" << owner->carriedClaimCount_
+                 << ", metric=player_store_claim_carried)";
+    }
+    if (!owner->Seed(playerId, response->storage_id(), response->owner_epoch(), response->save_seq(), std::move(confirmed), std::move(carried)))
     {
         LOG_ERROR << "[player_store] claim of player " << playerId << " landed while a save is unsettled; refusing the entry";
         owner->FinishClaim(playerId, nullptr);

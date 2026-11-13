@@ -2,7 +2,6 @@ package logic
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -71,7 +70,7 @@ func worldSceneOwnersForTest(t *testing.T, ctx context.Context, sc *svc.ServiceC
 		sceneIDs, err := GetAllWorldChannels(ctx, sc, confID, testZoneId)
 		require.NoError(t, err)
 		for _, sceneID := range sceneIDs {
-			node, err := mr.Get(fmt.Sprintf("scene:%d:node", sceneID))
+			node, err := mr.Get(sceneNodeKey(testZoneId, sceneID))
 			require.NoError(t, err, "scene %d 没有属主映射", sceneID)
 			owners[sceneID] = node
 		}

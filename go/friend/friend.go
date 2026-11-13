@@ -117,12 +117,6 @@ func main() {
 	var c config.Config
 	// conf.MustLoad 会自动调用 (*Config).Validate(go-zero v1.10.0),不合法即 Fatalf 退出,理由同 trade.go。
 	conf.MustLoad(*configFile, &c)
-	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入)。-migrate 与常驻启动都连库,所以放在迁移分支之前;
-	// 迁移 Job 同样注入这个变量。退出码与迁移入口的 ExitFailed 一致。
-	if err := c.ResolveMySQLPassword(os.LookupEnv); err != nil {
-		fmt.Fprintf(os.Stderr, "[friend] %v\n", err)
-		os.Exit(schemamigrate.ExitFailed)
-	}
 
 	if *migrateOnly {
 		openAuthority := func(mysqlConf config.MySQLConf) (*sql.DB, error) {
@@ -281,7 +275,8 @@ func runFriend(c config.Config) (runErr error) {
 	// RPC 级热关停(shared/killswitch):复用 svcCtx 的 etcd 客户端;Start 非阻塞,etcd 不可达一律放行。
 	ksCtx, ksCancel := context.WithCancel(context.Background())
 	stopKillSwitch = ksCancel
-	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix})
+	// NodeTypes:认 type/FriendNodeService/ 下的规则;注册成功后再 AddInstance(docs/design/rpc-kill-switch.md §5)。
+	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix, NodeTypes: []string{base.ENodeType_name[int32(nodeType)]}})
 	ks.Start(ksCtx, svcCtx.Etcd)
 
 	serverReady := make(chan struct{})
@@ -364,6 +359,7 @@ func runFriend(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+	ks.AddInstance(nr.NodeUUID) // 认 instance/<本进程 uuid>/ 下的热关停规则
 	// 注册之后才知道本副本在成员表里的身份;NodeUUID 进程内不变,失租换 node_id 重注册也不变。
 	sweepShards.SetSelf(nr.NodeUUID)
 
@@ -401,8 +397,8 @@ func runFriend(c config.Config) (runErr error) {
 	// MySQLTarget 只含 host / 库名 / 用户名,绝不含密码。
 	fmt.Printf("  mysql:         %s\n", svc.MySQLTarget(c.MySQL))
 	fmt.Printf("  schema:        %s\n", schemaModeLabel(c))
-	// 两个 Redis 句柄不同源时必须一眼看出来:FriendRedis 未配置会回落到共享库,
-	// 那种形态下 friend 的私有 key 与 player:session:{id} 可能挤在同一个实例上。
+	// 两个 Redis 句柄的落点都打出来:控制集群(ControlRedis,friend 私有 key)与玩家域(PlayerRedis)。
+	// PlayerRedis 没写 Addrs 时回落到 ControlRedis,那种形态下两者挤在同一个实例上。
 	fmt.Printf("  friend_redis:  %s\n", svcCtx.FriendRedisTarget)
 	playerRedisConf := c.EffectivePlayerRedis()
 	fmt.Printf("  player_redis:  %s\n", playerRedisConf.Describe())
@@ -513,11 +509,7 @@ func schemaOptions() schemamigrate.Options {
 // 同样在扫 —— 全程零报错,只有翻慢查询日志才看得出来。
 // 口径与 guild 一致(go/guild/guild.go 的同名函数),别在 friend 这边单独放宽。
 func missingIndexWarnings(r schemamigrate.Report) []string {
-	var missing []string
-	for _, f := range r.MissingIndexes() {
-		missing = append(missing, f.Message)
-	}
-	return missing
+	return schemamigrate.Messages(r.MissingIndexes())
 }
 
 // missingIndexError 把"缺索引"从告警升级成阻断错误;没有缺索引时返回 nil。

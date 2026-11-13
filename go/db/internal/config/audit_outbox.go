@@ -26,11 +26,12 @@ type AuditOutboxConfig struct {
 	IntervalMs int `json:"IntervalMs,optional"`
 }
 
-// 转发节拍的缺省值与边界。
+// 转发节拍的缺省值与边界。上限 30 秒与转发的退避上限相同:两轮之间最长等这么久,活性告警
+// (deploy/k8s/audit-outbox-alerts.yaml 的停摆规则)的阈值按它加一轮的最长耗时算,调大上限要同步阈值与契约测试。
 const (
 	DefaultAuditOutboxIntervalMs = 1000
 	MinAuditOutboxIntervalMs     = 100
-	MaxAuditOutboxIntervalMs     = 60000
+	MaxAuditOutboxIntervalMs     = 30000
 )
 
 // Normalized 返回回填了缺省值的副本。

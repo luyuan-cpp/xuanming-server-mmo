@@ -133,7 +133,7 @@ Commit
 | `go/friend/internal/data/block_repo.go`(新) | `Block` / `Unblock` / `ListBlocks`;删边按 `RowsAffected` 减计数;两个方向的 pending 一并置 rejected |
 | `go/friend/internal/data/session_reader.go`(新) | `player:session:{id}` 批量 MGET → `PlayerSession`;只认 `SESSION_STATE_ONLINE`;按 `ListReadHardLimit` 分批;失败降级全部离线 |
 | `go/friend/internal/data/recommend_repo.go` + `internal/logic/recommend.go`(新) | 共同好友 → 随机兜底;`exclude` 超 `RecommendMaxExclude` 回 `ErrInvalidParameter`(gate 单包 1KB) |
-| `go/friend/internal/data/sweep_repo.go` + `internal/logic/sweep.go`(新) | 终态申请清理;默认 `report_only` 只 COUNT + WARN + 更新 gauge;多副本各跑各的、不引入 leader |
+| `go/friend/internal/data/sweep_repo.go` + `internal/logic/sweep.go`(新) | 终态申请清理;默认 `report_only` 只 COUNT + WARN + 更新 gauge;不引入 leader,2026-11-11 起多副本按玩家 id 分 64 片各清各的(见[好友持久化架构](friend-persistence-architecture.md)「多副本按片分工」) |
 | `go/friend/internal/logic/push.go`(新) | S2C 推送三步(读会话 → 组命令 → 写 Kafka);不返回 error |
 | `go/friend/internal/logic/rate_quota.go`(新) | 每分钟申请配额;单 key Lua、Cluster 安全;Redis 故障 **fail-open** |
 | `go/friend/internal/logic/friend_logic.go` | 存储故障全面 in-band;整请求预算;请求体 id 校验;接四个新 RPC;`FriendStore` / `SessionStore` 接口 + 三行编译期接缝断言 |

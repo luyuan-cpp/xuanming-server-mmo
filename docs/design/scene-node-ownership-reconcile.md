@@ -10,7 +10,7 @@ Java 版只登记待做(§11)。
 
 ## 1. 结论
 
-scene 节点每 10 秒用一条 MGET 读本节点号的持有者记录 `node:zone:{z}:{n}:holder` 和本地全部场景的 `scene:{id}:node`
+scene 节点每 10 秒用一条 MGET 读本节点号的持有者记录 `node:{ctl:<z>}:{n}:holder` 和本地全部场景的 `scene:{ctl:<z>}:<id>:node`
 (经本 zone 的场景控制域句柄 `tlsSceneControlRedis`,只读)。一个本地实体满足下面两条,就按本轮的住户预算走与 scene_manager
 发来的 DestroyScene 完全相同的路径:`SceneLifecycle::DestroyScene` → `PlayerLifecycleSystem::BeginSceneDrain` 把住户存盘后改派,
 没有绑定了才销毁实体。
@@ -61,15 +61,16 @@ etcd 整体故障时所有节点同时失租,节点分不清「etcd 挂了」和
 
 ### 4.1 期望状态的事实源
 
-- **场景属主** `scene:{id}:node`:值是属主 node_id 的十进制串(Go 侧 `strconv.FormatUint`,`createscenelogic.go` 的 `SceneNodeKeyFmt`)。
-- **节点号持有者** `node:zone:{z}:{n}:holder`:值是 `"<etcd ModRevision>:<node_uuid>"`,这个节点号最近一次登记的进程(§4.6)。
+- **场景属主** `scene:{ctl:<z>}:<id>:node`:值是属主 node_id 的十进制串(Go 侧 `strconv.FormatUint`,`createscenelogic.go` 的 `SceneNodeKeyFmt`)。
+- **节点号持有者** `node:{ctl:<z>}:{n}:holder`:值是 `"<etcd ModRevision>:<node_uuid>"`,这个节点号最近一次登记的进程(§4.6)。
 - 两把键的 C++ 写法在 `scene_ownership::SceneNodeKey` / `NodeHolderKey`,与 Go 侧是跨语言契约,改名必须同批改
   (C++ 用例 `KeysMatchTheSceneManagerKeys`、Go 用例 `TestNodeHolderKeyShape` 钉住同一个串)。
 - 只读。节点不写控制域任何键:不变量「zone z 的控制域键只由 zone z 的 scene_manager 读写」(control-plane-zone-scoping §4.3)不变。
-- 只看 `scene:{id}:node`,不读 `scene:{id}:zone`:节点只托管本 zone scene_manager 建的场景(发现按 zone 收窄,scene_manager 只认得本 zone
-  的节点),场景号全局唯一,别的 zone 不会改写本 zone 场景的映射(认领脚本比 zone、CreateScene 拒别的 zone)。真出现「映射等于本节点号、
+- 只看本 zone 的 `scene:{ctl:<z>}:<id>:node`(tag 用本节点的 `GetZoneId()`,与持有者键同槽,一条 MGET 读完):节点只托管本 zone scene_manager
+  建的场景(发现按 zone 收窄,scene_manager 只认得本 zone 的节点),场景号全局唯一,别的 zone 的场景键带别的 zone 的 tag,不会改写本 zone 场景的
+  映射(CreateScene 拒别的 zone;2026-11-12 起 `scene:<id>:zone` 删除,redis-cluster-all-domains-20261110.md §3.3、§3.4)。真出现「映射等于本节点号、
   却是别的 zone 写的」这种违例,结果是留着不拆,方向安全。
-- 不读反向索引 `node:zone:{z}:{n}:scenes`:那是派生索引,路由与收尾的判据都是映射本身。
+- 不读反向索引 `node:{ctl:<z>}:{n}:scenes`:那是派生索引,路由与收尾的判据都是映射本身。
 
 ### 4.2 判定(`world/scene_ownership_rules.h`,纯函数)
 
@@ -154,20 +155,20 @@ A 判死时没被改派(比如 B 在屏障走完之前就登记了,这个号看�
 **scene_manager 写持有者**(`go/scene_manager/internal/logic/node_holder.go`):
 
 - 每次 watch PUT(每个副本都写,与死亡标记的清除同一口径)与领导者的全量同步,把这次登记写成
-  `node:zone:{z}:{n}:holder = "<etcd ModRevision>:<node_uuid>"`,TTL 24 小时(全量同步约每分钟给在册节点续一次)。旁边同写同过期一个
-  `node:zone:{z}:{n}:holder_epoch`,记着写入时本 zone 的 etcd 纪元(见下)。C++ 只读持有者记录本身。
+  `node:{ctl:<z>}:{n}:holder = "<etcd ModRevision>:<node_uuid>"`,TTL 24 小时(全量同步约每分钟给在册节点续一次)。旁边同写同过期一个
+  `node:{ctl:<z>}:{n}:holder_epoch`,记着写入时本 zone 的 etcd 纪元(见下)。C++ 只读持有者记录本身。
 - 同一个纪元里,Lua 只在新值的修订号不小于已存值时覆盖(十进制串先比长度再比字典序,与放置代次同一个比较函数,大于 2^53 不丢精度)。
   ModRevision 是 etcd 全局单调的修订号,B 只能在 A 的分配键过期之后登记,它那次登记的修订号一定更大;副本之间先后乱序也盖不回旧的。
 - 不随 DELETE 删除:节点死了,它是这个号最后一次登记的进程仍是事实,新进程登记时自然覆盖。没有 node_uuid 或修订号的登记不写。
 - 只发已过存活集闸门的快照:批量发布放在 `applyNodeSnapshot` 的领导者分支里,闸门(B1-1)拒掉的残缺快照在替换镜像之前就返回了。
-- 键以 `node:zone:{z}:` 开头,与其他节点级控制域键一样只由本 zone 的 scene_manager 写,合服按前缀清得到;不带 hash tag。
+- 键以 `node:{ctl:<z>}:` 开头,与其他节点级控制域键一样只由本 zone 的 scene_manager 写,合服按前缀清得到;不带 hash tag。
 
 **etcd 修订号倒退**(换成新集群、修订号从 1 重计,或者不带 `--bump-revision` 从快照恢复;运维规定所有节点重启,
 `docs/ops/etcd-maintenance-runbook.md` §7a):倒退之前写下的记录与新登记的修订号不可比,单调写会把修订号更小的新登记拒掉。
 所以修订号只在同一个**纪元**里比:
 
-- 已存记录的纪元不是当前纪元(`scene_manager:etcd_epoch:zone:{z}`,没有时按 0)时,写入不比修订号、直接覆盖。
-- 纪元只由领导者推进。每轮全量同步先读本 zone 的修订号水位 `scene_manager:etcd_revision_seen:zone:{z}`(领导者读到过的 etcd 当前修订号
+- 已存记录的纪元不是当前纪元(`scene_manager:etcd_epoch:{ctl:<z>}`,没有时按 0)时,写入不比修订号、直接覆盖。
+- 纪元只由领导者推进。每轮全量同步先读本 zone 的修订号水位 `scene_manager:etcd_revision_seen:{ctl:<z>}`(领导者读到过的 etcd 当前修订号
   的最大值),再线性一致地读 etcd 当前修订号 C。C 小于水位就是倒退了:一个脚本里比较并写,水位仍是刚读到的值时纪元加一、水位降到 C;
   ERROR、计数与告警见 §8。随后照常发布快照,快照里在册的号当场换成新纪元的记录;不在快照里的号,旧记录留在旧纪元,
   下一次登记时直接被覆盖。不倒退时水位抬到 C,只升不降。两个 zone 级键不设 TTL,只由本 zone 的领导者写。
@@ -253,7 +254,7 @@ A 判死时没被改派(比如 B 在屏障走完之前就登记了,这个号看�
 | 副本实例(Instance / InstanceCross 节点) | 登记脚本先写映射,再 CreateScene;失败回滚删映射、发 DestroyScene | 死节点收尾拆掉:`no_mapping`,排空,住户回大世界 |
 | 镜像 | 按实例登记,属主 = 与镜像源共置的节点(`resolveMirrorSourceNode`),写的是承载它的节点 | 同实例。源频道被迁走时 scene_manager 级联拆镜像;DestroyScene 丢了也由这里收掉 |
 | 本节点号已被新进程接走,频道留在这个号上 | 映射仍是这个号 | `superseded`,全部排空,住户回到 B 上的同号频道 |
-| 正在缩容排空的频道(`scene:{id}:draining`) | 映射仍是本节点 | `self`,不动,由 scene_manager 的排空负责 |
+| 正在缩容排空的频道(`scene:{ctl:<z>}:<id>:draining`) | 映射仍是本节点 | `self`,不动,由 scene_manager 的排空负责 |
 | 正在迁往本节点的预建 | 映射还指旧属主 | 宽限期内不动;命中已有实体时宽限期重算 |
 | 迁走之后旧属主上的实体 | 映射已是新属主 | `other_node`,与 scene_manager 随后发来的 DestroyScene 同一个动作,谁先到都一样 |
 
@@ -359,7 +360,7 @@ scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_tot
      丢掉的最多是一次抬升,不会变成没有。剩下只有人手工删键,etcd 运维手册 §7a 写明不要删。
    - **为什么不另做「从持有者记录反推水位」**:那要每轮多读一遍在册节点的持有者与纪元旁记,只为覆盖手工删键这一种情形,得不偿失。
    - **退路**:计划内的换集群之后,某个 zone 没亮 `SceneManagerEtcdRevisionRegressed`(按手册每个 zone 应亮一次),确认 etcd 确实倒退之后,
-     在那个 zone 的控制域实例上手工 `INCR scene_manager:etcd_epoch:zone:<z>`。效果与自动换纪元相同:该 zone 全部持有者记录让位给
+     在那个 zone 的控制域实例上手工 `INCR scene_manager:etcd_epoch:{ctl:<z>}`。效果与自动换纪元相同:该 zone 全部持有者记录让位给
      下一次登记。不需要时多做一次,也只是全部记录重写一遍,不会误判排空。
 10. **倒退时没重启的老进程认不出被接走**:它记着倒退之前的大修订号,新集群里接走它节点号的登记修订号更小。所以 etcd 运维手册 §7a
     要求修订号倒退后重启全部 scene 节点;告警 `SceneManagerEtcdRevisionRegressed` 提醒这一步。

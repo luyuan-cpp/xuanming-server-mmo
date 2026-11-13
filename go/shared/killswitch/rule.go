@@ -87,6 +87,66 @@ func PatternFromKey(prefix, key string) (string, bool) {
 	return p, true
 }
 
+// 范围段(docs/design/rpc-kill-switch.md §4):相对键以这两个词开头时,下一段是范围值,其余是目标。
+// 两个词是保留字(proto 服务名是大驼峰,不会冲突)。
+const (
+	typeScopeSegment     = "type/"
+	instanceScopeSegment = "instance/"
+)
+
+// scopeKind 是一条规则的作用范围。
+type scopeKind uint8
+
+const (
+	scopeAll      scopeKind = iota // <目标>:全部进程
+	scopeNodeType                  // type/<eNodeType 名>/<目标>
+	scopeInstance                  // instance/<节点 uuid>/<目标>
+)
+
+// splitScope 把相对键(PatternFromKey 的结果)拆成范围、范围值与目标。
+// ok 为 false 表示范围段残缺(type/、type/X、instance//*):这不是一条规则,任何进程都不认。
+func splitScope(pattern string) (kind scopeKind, value, target string, ok bool) {
+	rest := ""
+	switch {
+	case strings.HasPrefix(pattern, typeScopeSegment):
+		kind, rest = scopeNodeType, strings.TrimPrefix(pattern, typeScopeSegment)
+	case strings.HasPrefix(pattern, instanceScopeSegment):
+		kind, rest = scopeInstance, strings.TrimPrefix(pattern, instanceScopeSegment)
+	default:
+		return scopeAll, "", pattern, pattern != ""
+	}
+	slash := strings.Index(rest, "/")
+	if slash <= 0 || slash == len(rest)-1 {
+		return kind, "", "", false
+	}
+	return kind, rest[:slash], rest[slash+1:], true
+}
+
+// TypeScopePrefix / InstanceScopePrefix 返回某个范围下规则键的前缀(不含 etcd 前缀),
+// 给管理工具与测试拼键用:TypeScopePrefix("SceneNodeService") + "Scene/*"。
+func TypeScopePrefix(nodeType string) string { return typeScopeSegment + nodeType + "/" }
+
+func InstanceScopePrefix(nodeUUID string) string { return instanceScopeSegment + nodeUUID + "/" }
+
+// ExactKeys 是 MatchKeys 里精确到方法的那几项(全限定服务名 → 短服务名),受保护的方法只认它们。
+// 不是 "服务/方法" 形状时只有整条精确匹配。
+func ExactKeys(fullMethod string) []string {
+	m := strings.TrimPrefix(fullMethod, "/")
+	if m == "" {
+		return nil
+	}
+	slash := strings.LastIndex(m, "/")
+	if slash <= 0 || slash == len(m)-1 {
+		return []string{m}
+	}
+	svcFull, method := m[:slash], m[slash+1:]
+	keys := []string{svcFull + "/" + method}
+	if dot := strings.LastIndex(svcFull, "."); dot >= 0 && dot+1 < len(svcFull) {
+		keys = append(keys, svcFull[dot+1:]+"/"+method)
+	}
+	return keys
+}
+
 // MatchKeys 按**从精确到宽泛**的顺序返回一个 gRPC 全方法名的候选匹配键。
 //
 //	"/login.LoginService/Login" →

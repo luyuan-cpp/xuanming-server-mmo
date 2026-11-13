@@ -65,10 +65,6 @@ func main() {
 
 	// Load config
 	conf.MustLoad(*configFile, &config.AppConfig)
-	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入):指名了变量却没有值就拒启,不带空口令去连库。
-	if err := config.AppConfig.ResolveMySQLPassword(os.LookupEnv); err != nil {
-		panic(fmt.Sprintf("config rejected: %v", err))
-	}
 	// 回填 optional 段的默认值(迁移超时、连接池)。见 config.Normalize 注释。
 	config.AppConfig.Normalize()
 
@@ -146,7 +142,9 @@ func main() {
 	//
 	// New 出来立刻可用(规则为空 = 全放行),Start 非阻塞、etcd 为 nil 也合法,
 	// 所以整段接线不会让 db 的启动多出任何一个失败点。
-	ks := killswitch.New(killswitch.Config{})
+	// NodeTypes:本进程以 PlayerStoreNodeService 注册(player_store_wiring.go),认 type/PlayerStoreNodeService/ 下的规则;
+	// 注册成功后再 AddInstance(docs/design/rpc-kill-switch.md §5)。
+	ks := killswitch.New(killswitch.Config{NodeTypes: []string{playerStoreNodeTypeName()}})
 	ksCtx, ksCancel := context.WithCancel(context.Background())
 	defer ksCancel()
 	etcdCli := newKillSwitchEtcdClient(config.AppConfig.Etcd)
@@ -161,6 +159,9 @@ func main() {
 	if maintenanceRuntime != nil {
 		rootAdmission = drainproof.NewPrepared()
 	}
+	// RELAY:审计发件箱转发循环(audit_outbox_wiring.go)每处理一个单位进一次。维护排空先关 SOURCE(上面的 RPC 入口),
+	// 再关它、等在途的单位做完,然后才封写资格、关连接池(internal/drain)。与别的服务一样,它不跟着 SOURCE 预备。
+	auditRelayAdmission := drainproof.New()
 	// 存盘(docs/design/player-save-direct-commit.md)。
 	playerStoreServer, err := newPlayerStoreServer(&config.AppConfig, stores)
 	if err != nil {
@@ -213,11 +214,19 @@ func main() {
 	// (2026-09-03 kind 实跑)。go-zero 的 Start() 是阻塞的(内部先注册 etcd 再 Serve,
 	// 出错走 logx.Must 直接退出),放到 goroutine 里,主 goroutine 仍按下面的信号退出。
 	go s.Start()
-	unregister, err := registerPlayerStoreNode(&config.AppConfig)
+	var playerStoreNodeUUID string
+	unregister, err := registerPlayerStoreNode(&config.AppConfig, func(nodeUUID string) {
+		ks.AddInstance(nodeUUID) // 认 instance/<本进程 uuid>/ 下的热关停规则
+		playerStoreNodeUUID = nodeUUID
+	})
 	if err != nil {
 		panic(fmt.Sprintf("player store node registration failed: %v", err))
 	}
 	defer unregister()
+	// 审计发件箱转发(docs/design/player-audit-outbox.md §7):分工按本进程的注册身份算,所以在注册之后起;
+	// defer 后进先出,停机时它先于注销停下。没配 Kafka 或 canary 副本不起,发件箱只积不丢。
+	auditRelay := startAuditOutboxRelay(&config.AppConfig, stores, auditRelayAdmission, etcdCli, playerStoreNodeUUID)
+	defer auditRelay.Stop()
 	if maintenanceRuntime != nil {
 		go func() {
 			// 没有消费者要追平,存盘接口开放之前没有别的前沿。
@@ -266,8 +275,10 @@ func main() {
 					return nil, err
 				}
 				return rootAdmission.SettledDigest(ctx)
-			}); err != nil {
+			}, auditRelayAdmission); err != nil {
 				rootAdmission.CloseAdmission()
+				// 排空结局不明时转发循环也停下,和 RPC 入口一样不再开始新的写;发件箱里的行留给接手的 boot。
+				auditRelayAdmission.CloseAdmission()
 				logx.Errorf("maintenance same-boot drain HOLD: %v", err)
 			}
 		}()

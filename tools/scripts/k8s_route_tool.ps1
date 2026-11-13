@@ -1,20 +1,30 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-    在 K8s 上以一次性 Job 跑 data_service 的路由运维工具 route-tool(tidb-prepare / freeze / unfreeze),等它结束,
+    在 K8s 上以一次性 Job 跑 data_service 的路由运维工具 route-tool 的 tidb-prepare,等它结束,
     把 stdout / stderr 存进报告目录,按容器退出码原样返回。
 
 .DESCRIPTION
     生产上 route-tool 并在 data_service 主程序里:`/app/service -f /app/etc/data_service.yaml -route-tool <子命令> [参数]`
     (go/data_service/data_service.go;子命令与退出码见 go/data_service/internal/routetoolcli/cli.go)。
     不 kubectl exec 进在役 Pod:一次性 Job 不占在役进程的资源,输出按运行号留档。本脚本渲染 deploy/k8s/manifests/go-svc/data-service-route-tool.yaml:
-    同一镜像(缺省取在役 statefulset/data-service 的镜像)、同一 ConfigMap(go-svc-data-service-config)、资源单独设。
+    同一镜像(缺省取在役 statefulset/data-service 的镜像)、挂部署脚本渲染的 ConfigMap go-svc-data-service-config、资源单独设。
+    连库身份是 data-service 的 schema 身份:SQL boot 目录(环境变量 MMORPG_SQL_K8S_BOOT_CATALOG,与 k8s_deploy.ps1 同一份)里
+    <namespace>/data-service 条目的 schemaPermissionSecret,键 dsn 与 principal,运维预置在 zone namespace(data-service-migrate 用的同一份)。
+    本脚本只读目录里的 Secret 名,不读 Secret 的内容。route_tool 不用 ConfigMap 里的账号(写者用自己槽位的账号,部署也不往集群放共享数据库口令)。
+
+    只跑 tidb-prepare。freeze / unfreeze 用维护 owner 的身份(MMORPG_SQL_MAINTENANCE_DSN、MMORPG_SQL_OPERATOR_PRINCIPAL、
+    MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256)与本机的维护原件、票据,和 maintenance_drain.ps1 的 freeze / release 阶段一样在运维机上跑:
+    `data_service -f <data_service.yaml> -route-tool freeze ...`(或 go/data_service 下 `go run ./cmd/route_tool -f ...`)。
+    维护身份不进集群,本脚本对这两个子命令在任何 kubectl 之前拒绝(退出码 2)并给出这段跑法。
 
     流程:
-      1. 入口校验(任何 kubectl 之前):-RouteToolArgs 第一项必须是已知子命令;不许带 -f / -route-tool / -migrate / -version
+      1. 入口校验(任何 kubectl 之前):-RouteToolArgs 第一项必须是本脚本能跑的子命令;不许带 -f / -route-tool / -migrate / -version
          (这几项由本脚本固定);不许有换行等控制字符;只有一项且含空白 = 把整条命令行塞成了一个字符串,拒绝(不替你按空格切)。
-      2. 只读核对:zone namespace 存在;**全部 namespace** 里没有在途的 route-tool Job(同一个全局库只许一个在跑);
-         没给 -Image 时读 statefulset/data-service 的镜像与拉取策略。
+         再从 SQL boot 目录取 schema 身份的 Secret 名,目录没给、没有这个 zone 的 data-service 条目或名字不合格同样拒绝。
+      2. 只读核对:zone namespace 存在;schema 身份的 Secret 在这个 namespace 里、有 dsn 与 principal 两个键(只读键名;
+         缺了的话 Pod 会停在 CreateContainerConfigError,要等到 activeDeadlineSeconds 才判失败);**全部 namespace** 里没有在途的
+         route-tool Job(同一个全局库只许一个在跑);没给 -Image 时读 statefulset/data-service 的镜像与拉取策略。
       3. 渲染 Job(名字 data-service-route-tool-<运行号>,每次新名字、不删上一次的),写进报告目录的 manifest.yaml,kubectl apply。
       4. 有界轮询 Job 终态(预算 = -TimeoutSeconds + 120s;Job 自己的 activeDeadlineSeconds = -TimeoutSeconds,到点由 K8s 杀掉)。
       5. 取 Pod 的容器退出码与日志:日志按带运行号的标记切回 stdout.txt / stderr.txt(Job 模板里 sh 包了一层,见模板注释),
@@ -22,6 +32,7 @@
 
     -DryRun 只做第 1 步与渲染,把 Job 清单打印出来(夹在 --- BEGIN MANIFEST --- / --- END MANIFEST --- 之间,与 k8s_deploy.ps1 同一标记),
     不调用 kubectl、不建报告目录。没给 -Image 时清单里的镜像写成说明文字(真跑时从 statefulset/data-service 读)。
+    DryRun 同样要 SQL boot 目录(清单里要写 Secret 名)。
 
     退出码:route-tool 容器的退出码原样返回 —— 0 完成 / 2 失败。
     本脚本自己失败(参数不合法、kubectl 失败、namespace 不存在、已有在途 Job、等不到终态、容器退出码不是这两个、取不到退出码)一律 2,
@@ -31,7 +42,9 @@
     例外:参数绑定失败(pwsh -File 下缺 -ZoneName / -RouteToolArgs、-ZoneName 不合格式)发生在脚本运行之前,退出码是 pwsh 的 1;
     经 dev_tools.ps1 -Command k8s-route-tool 调用时由包装层兜成 2。
 
-    口令不进输出:本脚本不读 ConfigMap 内容(口令在里面),清单里只有 ConfigMap 的名字;route-tool 的 stderr 只带主机与库名。
+    口令不进输出:本脚本不读 ConfigMap 的内容,Secret 只读键名(kubectl 的 go-template 只输出键,值不进本进程),清单里只有
+    ConfigMap 与 Secret 的名字;route-tool 的 stderr 只带主机与库名。所以操作者要能 get 这个 Secret(k8s_deploy.ps1 的写权限已含)。
+    SQL boot 目录是运维本机的文件(与 k8s_deploy.ps1 同一份),里面只有 Secret 名与摘要,本脚本只读不写。
     所有 kubectl 调用都有 HTTP 超时与进程级截止;kind 上务必显式传 -KubeContext kind-mmorpg。
 
 .EXAMPLE
@@ -83,6 +96,8 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = [IO.Path]::GetFullPath((Join-Path $ScriptDir '../..'))
 # Resolve-ImagePullPolicy:与 k8s_deploy.ps1 同一份推导规则。路径逐级 Join-Path:契约测试也跑在 Linux 上,不写反斜杠字面量。
 . (Join-Path (Join-Path $ScriptDir 'lib') 'release_common.ps1')
+# Read-MaintenanceJson:读 SQL boot 目录,与 k8s_deploy.ps1 同一个严格解析(重复键、大小写混淆键一律拒绝)。只定义函数,dot-source 不执行维护命令。
+. (Join-Path $ScriptDir 'maintenance_drain.ps1')
 
 # 本脚本与 Job 模板、data_service 入口之间的全部字面量契约,集中在一处;tools/scripts/tests/k8s_route_tool.tests.ps1 逐项钉住。
 function Get-RouteToolContract {
@@ -99,8 +114,17 @@ function Get-RouteToolContract {
         ConfigMapName           = 'go-svc-data-service-config'
         # 与 data-service.yaml 的 args 前两项相同,再接 -route-tool(data_service.go 的 flag)。
         FixedArgs               = @('-f', '/app/etc/data_service.yaml', '-route-tool')
-        # routetoolcli/cli.go 的 sub* 常量。新增子命令时先在 cli.go 加,再加到这里(测试钉住 cli.go 里的每个子命令都在这张表里)。
-        Subcommands             = @('tidb-prepare', 'freeze', 'unfreeze')
+        # routetoolcli/cli.go 的 sub* 常量,分两组(测试钉住 cli.go 里的每个子命令都恰好在其中一组):
+        #   Subcommands:本脚本以 Job 跑,连库身份是 data-service 的 schema 身份;
+        #   OperatorSideSubcommands:用维护 owner 的身份,在运维机上跑(见文件头),本脚本拒绝。
+        Subcommands             = @('tidb-prepare')
+        OperatorSideSubcommands = @('freeze', 'unfreeze')
+        # SQL boot 目录:环境变量名、取哪个工作负载的条目、条目里 schema 身份的 Secret 名字段(与 k8s_deploy.ps1 Get-SqlWriterCatalogEntry 同一份目录)。
+        BootCatalogEnv          = 'MMORPG_SQL_K8S_BOOT_CATALOG'
+        BootCatalogWorkload     = 'data-service'
+        SchemaSecretField       = 'schemaPermissionSecret'
+        # 这份 Secret 里 Job 模板引用的键(secretKeyRef,不写 optional):dsn → MMORPG_SQL_SCHEMA_DSN,principal → MMORPG_SQL_SCHEMA_PRINCIPAL。
+        SchemaSecretKeys        = @('dsn', 'principal')
         # 由本脚本固定的入口参数(Go flag 认 -x 与 --x、-x=v):出现在 -RouteToolArgs 里一律拒绝。
         ReservedFlags           = @('f', 'route-tool', 'migrate', 'version')
         # route-tool 的退出码(cli.go usage):原样返回。本脚本自己的失败也用 Failed。
@@ -155,10 +179,39 @@ function Get-RouteToolArgErrors {
         }
     }
     $sub = $items[0]
-    if (-not ($contract.Subcommands -ccontains $sub)) {
+    if ($contract.OperatorSideSubcommands -ccontains $sub) {
+        $errors.Add("'$sub' does not run as a K8s Job: freeze / unfreeze use the maintenance owner's identity (MMORPG_SQL_MAINTENANCE_DSN, MMORPG_SQL_OPERATOR_PRINCIPAL, MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256) and the local maintenance request and ticket, which stay off the cluster. Run it on the operator machine like the freeze / release phases of maintenance_drain.ps1: data_service -f <data_service.yaml> -route-tool $sub ...")
+    }
+    elseif (-not ($contract.Subcommands -ccontains $sub)) {
         $errors.Add("-RouteToolArgs 第一项 '$sub' 不是已知子命令;可选:$($contract.Subcommands -join ' / ')")
     }
     return [string[]]$errors.ToArray()
+}
+
+# schema 身份的 Secret 名:SQL boot 目录(环境变量 MMORPG_SQL_K8S_BOOT_CATALOG,与 k8s_deploy.ps1 同一份)里 <namespace>/data-service
+# 条目的 schemaPermissionSecret。只读名字,不读 Secret 的内容。目录没给、读不了、没有这个条目或字段、名字不是合法的 Secret 名,一律 throw
+# (fail-closed:不猜名字,也不换别的身份)。
+function Get-RouteToolSchemaPermissionSecret {
+    param([Parameter(Mandatory = $true)][string]$Namespace)
+    $contract = Get-RouteToolContract
+    $catalogFile = [Environment]::GetEnvironmentVariable($contract.BootCatalogEnv, 'Process')
+    if ([string]::IsNullOrWhiteSpace($catalogFile)) {
+        throw "$($contract.BootCatalogEnv) is not set: route-tool takes the schema identity of data-service from the SQL boot catalog, the same file k8s_deploy.ps1 reads"
+    }
+    $catalog = Read-MaintenanceJson -Path $catalogFile
+    $key = "$Namespace/$($contract.BootCatalogWorkload)"
+    if (-not $catalog.Contains($key)) {
+        throw "the SQL boot catalog has no entry $key"
+    }
+    $entry = $catalog[$key]
+    if ($entry -isnot [Collections.IDictionary] -or -not $entry.Contains($contract.SchemaSecretField)) {
+        throw "the SQL boot catalog entry $key has no $($contract.SchemaSecretField)"
+    }
+    $name = [string]$entry[$contract.SchemaSecretField]
+    if ($name -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$') {
+        throw "$($contract.SchemaSecretField) of the SQL boot catalog entry $key is not a valid Secret name"
+    }
+    return $name
 }
 
 # 运行号:yyyyMMdd-HHmmss-<4 位十六进制>,只含小写字母、数字与 '-'(进 Job 名与标签值)。时间与随机数显式传入,便于测试。
@@ -186,10 +239,13 @@ function New-RouteToolJobManifest {
         [Parameter(Mandatory = $true)][string]$Image,
         [Parameter(Mandatory = $true)][string]$PullPolicy,
         [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [Parameter(Mandatory = $true)][int]$TimeoutSeconds
+        [Parameter(Mandatory = $true)][int]$TimeoutSeconds,
+        # schema 身份的 Secret 名(Get-RouteToolSchemaPermissionSecret);进 secretKeyRef 的流式写法,只许合法的 Secret 名。
+        [Parameter(Mandatory = $true)][string]$SchemaPermissionSecret
     )
     $contract = Get-RouteToolContract
     if ($RunId -notmatch '^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$') { throw "运行号 '$RunId' 形状不对(应为 yyyyMMdd-HHmmss-xxxx)" }
+    if ($SchemaPermissionSecret -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$') { throw "the schema identity Secret name '$SchemaPermissionSecret' is not a valid Secret name" }
     if ($PullPolicy -cnotin @('Always', 'IfNotPresent', 'Never')) { throw "拉取策略 '$PullPolicy' 不是 Always / IfNotPresent / Never" }
     if ([string]::IsNullOrWhiteSpace($Image) -or $Image -match '[\x00-\x1F\x7F]') { throw "镜像引用为空或含控制字符" }
     $argErrors = @(Get-RouteToolArgErrors -Arguments $Arguments)
@@ -203,6 +259,7 @@ function New-RouteToolJobManifest {
     $text = $text.Replace('PLACEHOLDER_PULL_POLICY', $PullPolicy)
     $text = $text.Replace('PLACEHOLDER_ACTIVE_DEADLINE_SECONDS', [string]$TimeoutSeconds)
     $text = $text.Replace('PLACEHOLDER_ROUTE_TOOL_ARGS', (ConvertTo-RouteToolArgsYaml -Arguments $Arguments))
+    $text = $text.Replace('PLACEHOLDER_SCHEMA_PERMISSION_SECRET', $SchemaPermissionSecret)
     $leftover = @([regex]::Matches($text, '(__[A-Z][A-Z0-9_]*__|PLACEHOLDER_[A-Z_]+)') | ForEach-Object { $_.Value } | Sort-Object -Unique)
     if ($leftover.Count -gt 0) {
         throw "Job 模板 $($contract.JobTemplate) 里有未替换的占位:$($leftover -join ', ')。请在 New-RouteToolJobManifest 里补对应的替换。"
@@ -380,6 +437,30 @@ function Get-ActiveRouteToolJobs {
     return [string[]]$active.ToArray()
 }
 
+# schema 身份的 Secret 在这个 namespace 里,而且有 Job 模板引用的每个键(Get-RouteToolContract.SchemaSecretKeys)。
+# Job 的 secretKeyRef 不写 optional:Secret 或键缺了,Pod 停在 CreateContainerConfigError,Job 要等到 activeDeadlineSeconds
+# (缺省 40 分钟)才判失败,还看不出原因;所以在建任何东西之前查。只读键名:go-template 第一行固定输出 found(区分「没有这个
+# Secret」与「Secret 没有键」),之后每行一个键,值不出 kubectl。缺 Secret、缺键、读不了一律 throw,调用方按 preflight 失败返回 2。
+function Assert-RouteToolSchemaSecretKeys {
+    param(
+        [Parameter(Mandatory = $true)][string]$Namespace,
+        [Parameter(Mandatory = $true)][string]$SecretName
+    )
+    $contract = Get-RouteToolContract
+    $template = 'go-template=found{{"\n"}}{{range $key, $value := .data}}{{$key}}{{"\n"}}{{end}}'
+    $text = Invoke-RouteToolKubectlChecked -Arguments @('get', 'secret', $SecretName, '-n', $Namespace, '--ignore-not-found', '-o', $template) `
+        -What "read the key names of Secret $SecretName in namespace $Namespace"
+    $lines = @(([string]$text -replace "`r", '') -split "`n" | Where-Object { $_ -ne '' })
+    if ($lines.Count -eq 0 -or $lines[0] -cne 'found') {
+        throw "Secret $SecretName (the schema identity of data-service named by the SQL boot catalog) does not exist in namespace ${Namespace}: provision it with the keys $($contract.SchemaSecretKeys -join ' and ') first (docs/ops/k8s-open-server-runbook.md section 1)"
+    }
+    $keys = @($lines | Select-Object -Skip 1)
+    $missing = @($contract.SchemaSecretKeys | Where-Object { $keys -cnotcontains $_ })
+    if ($missing.Count -gt 0) {
+        throw "Secret $SecretName in namespace $Namespace lacks the key(s) $($missing -join ', '): the Job reads $($contract.SchemaSecretKeys -join ' and ') from it (docs/ops/k8s-open-server-runbook.md section 1)"
+    }
+}
+
 # Job 当前状态:Phase(running / complete / failed / absent)、Uid、终态原因。查询失败返回 Phase=unknown(由调用方计入重试)。
 function Get-RouteToolJobState {
     param(
@@ -474,22 +555,31 @@ function Invoke-RouteTool {
         return $contract.ExitFailed
     }
     $subcommand = $RouteToolArgs[0]
+    # 连库身份的 Secret 名:DryRun 与真跑都要(清单里要写它),在任何 kubectl 之前取,取不到什么都不建。
+    try {
+        $schemaSecret = Get-RouteToolSchemaPermissionSecret -Namespace $namespace
+    }
+    catch {
+        Write-Host "[route-tool] cannot take the schema identity Secret of data-service from the SQL boot catalog, nothing was created: $($_.Exception.Message)"
+        return $contract.ExitFailed
+    }
 
     if ($DryRun) {
         try {
             $jobImage = if ([string]::IsNullOrWhiteSpace($Image)) { "(resolved at run time from statefulset/$($contract.WorkloadName) in $namespace)" } else { $Image }
             $jobPullPolicy = if ([string]::IsNullOrWhiteSpace($Image)) { 'IfNotPresent' } else { Resolve-ImagePullPolicy -ImageRef $Image }
             $manifest = New-RouteToolJobManifest -TemplateText $templateText -RunId $runId -Image $jobImage -PullPolicy $jobPullPolicy `
-                -Arguments $RouteToolArgs -TimeoutSeconds $TimeoutSeconds
+                -Arguments $RouteToolArgs -TimeoutSeconds $TimeoutSeconds -SchemaPermissionSecret $schemaSecret
         }
         catch {
             Write-Host "[route-tool] cannot render the Job manifest, nothing was created: $($_.Exception.Message)"
             return $contract.ExitFailed
         }
-        Write-Host "[dry-run] route-tool job=$jobName namespace=$namespace subcommand=$subcommand timeout=${TimeoutSeconds}s (kubectl is not called, no report directory is created)"
+        Write-Host "[dry-run] route-tool job=$jobName namespace=$namespace subcommand=$subcommand schema_secret=$schemaSecret timeout=${TimeoutSeconds}s (kubectl is not called, no report directory is created)"
         if ([string]::IsNullOrWhiteSpace($Image)) {
             Write-Host "[dry-run] -Image not given: a real run reads image and imagePullPolicy from statefulset/$($contract.WorkloadName); the rendered imagePullPolicy is a placeholder"
         }
+        Write-Host "[dry-run] a real run first checks that Secret $schemaSecret in $namespace has the keys $($contract.SchemaSecretKeys -join ' and ') (key names only)"
         Write-Host '--- BEGIN MANIFEST ---'
         Write-Host $manifest
         Write-Host '--- END MANIFEST ---'
@@ -502,8 +592,9 @@ function Invoke-RouteTool {
     }
 
     try {
-        # 只读核对:namespace 在;没有在途的 route-tool Job;镜像。
+        # 只读核对:namespace 在;schema 身份的 Secret 有 dsn 与 principal;没有在途的 route-tool Job;镜像。
         $null = Invoke-RouteToolKubectlChecked -Arguments @('get', 'namespace', $namespace, '-o', 'name') -What "确认 namespace $namespace 存在"
+        Assert-RouteToolSchemaSecretKeys -Namespace $namespace -SecretName $schemaSecret
         $active = @(Get-ActiveRouteToolJobs)
         if ($active.Count -gt 0) {
             Write-Host "[route-tool] refusing to start: route-tool job(s) still running: $($active -join ', '). They all work on the same global database; wait for them or delete them after checking their logs (kubectl -n <ns> logs job/<name>)."
@@ -519,7 +610,7 @@ function Invoke-RouteTool {
             $jobPullPolicy = Resolve-ImagePullPolicy -ImageRef $Image
         }
         $manifest = New-RouteToolJobManifest -TemplateText $templateText -RunId $runId -Image $jobImage -PullPolicy $jobPullPolicy `
-            -Arguments $RouteToolArgs -TimeoutSeconds $TimeoutSeconds
+            -Arguments $RouteToolArgs -TimeoutSeconds $TimeoutSeconds -SchemaPermissionSecret $schemaSecret
     }
     catch {
         Write-Host "[route-tool] preflight failed, nothing was created: $($_.Exception.Message)"
@@ -539,12 +630,12 @@ function Invoke-RouteTool {
     }
     $summary = [ordered]@{
         run_id = $runId; zone = $ZoneName; namespace = $namespace; job = $jobName; image = $jobImage
-        subcommand = $subcommand; args = ($RouteToolArgs -join ' '); timeout_seconds = $TimeoutSeconds
+        subcommand = $subcommand; args = ($RouteToolArgs -join ' '); timeout_seconds = $TimeoutSeconds; schema_secret = $schemaSecret
         started_at = (Get-Date).ToString('o'); job_phase = ''; job_reason = ''; pod = ''; container_exit_code = ''
         verdict = ''; exit_code = ''; note = ''
     }
     $summaryPath = Join-Path $report 'summary.txt'
-    Write-Host "[route-tool] run=$runId job=$jobName namespace=$namespace subcommand=$subcommand image=$jobImage report=$report"
+    Write-Host "[route-tool] run=$runId job=$jobName namespace=$namespace subcommand=$subcommand schema_secret=$schemaSecret image=$jobImage report=$report"
 
     try {
         $null = Invoke-RouteToolKubectlChecked -Arguments @('apply', '-n', $namespace, '-f', $manifestPath) -What "apply Job $jobName"

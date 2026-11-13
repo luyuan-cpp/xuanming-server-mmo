@@ -39,7 +39,7 @@ func (f *fakeFencer) Fence() { f.fenced = true }
 func TestHandle_OwnershipLostSignalsLostAndFences(t *testing.T) {
 	h := newTestHandle(7)
 	f := &fakeFencer{}
-	h.AttachFencer(f)
+	h.attachFencer(f)
 
 	h.onOwnershipLost("slot key now holds uuid other")
 
@@ -109,8 +109,8 @@ func TestOptions_ResolveDefaultsAndValidation(t *testing.T) {
 	if r.ttl != 60 || r.quarantine != 4*time.Hour || r.fenceAfter != 2*time.Hour {
 		t.Fatalf("defaults: ttl=%d Q=%v F=%v", r.ttl, r.quarantine, r.fenceAfter)
 	}
-	if r.clusterBits != 5 || r.slotBits != 12 || r.maxSlot != 4095 {
-		t.Fatalf("defaults: cluster%d slot%d max=%d", r.clusterBits, r.slotBits, r.maxSlot)
+	if r.maxSlot != 4095 {
+		t.Fatalf("defaults: max=%d", r.maxSlot)
 	}
 
 	if _, err := (Options{Quarantine: time.Hour, FenceAfter: time.Hour}).resolve(); !errors.Is(err, ErrInvalidOptions) {
@@ -130,27 +130,19 @@ func TestOptions_ResolveDefaultsAndValidation(t *testing.T) {
 	if _, err := (Options{MaxSlot: 4096}).resolve(); !errors.Is(err, ErrInvalidOptions) {
 		t.Fatalf("MaxSlot 4096 越过 12 位必须拒绝, got %v", err)
 	}
-
-	// login 的 13 位布局 [cluster3][slot10]
-	lr, err := (Options{ClusterBits: 3, SlotBits: 10, ClusterID: 7}).resolve()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if lr.maxSlot != 1023 {
-		t.Fatalf("login MaxSlot=%d, 期望 1023", lr.maxSlot)
-	}
-	if _, err := (Options{ClusterBits: 3, SlotBits: 10, ClusterID: 8}).resolve(); !errors.Is(err, ErrInvalidOptions) {
-		t.Fatalf("login cluster 8 越过 3 位必须拒绝, got %v", err)
+	// 上界本身合法:cluster 31、MaxSlot 4095 是 [cluster5][slot12] 的最大值。
+	if r, err := (Options{ClusterID: 31, MaxSlot: 4095}).resolve(); err != nil || r.cluster != 31 || r.maxSlot != 4095 {
+		t.Fatalf("上界必须接受, got cluster=%d max=%d err=%v", r.cluster, r.maxSlot, err)
 	}
 }
 
 // 缓存路径带 kind 与亲和键,同主机多实例(host#port / host_port)各自一份;非法字符替换。
 func TestDefaultCachePath(t *testing.T) {
-	if DefaultCachePath("", "guild", "h") != "" {
+	if DefaultCachePath("", "scene-manager", "h") != "" {
 		t.Fatal("dir 为空必须关闭缓存")
 	}
-	got := DefaultCachePath("d", "login-player", "host#127.0.0.1:50500")
-	want := filepath.Join("d", "snowflake-login-player-host_127.0.0.1_50500.json")
+	got := DefaultCachePath("d", "scene-manager", "host#127.0.0.1:50500")
+	want := filepath.Join("d", "snowflake-scene-manager-host_127.0.0.1_50500.json")
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}

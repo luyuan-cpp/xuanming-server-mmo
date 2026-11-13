@@ -57,11 +57,12 @@ import (
 // 实体(踢人 + 回档)。Go 这边写 location 也走同一把 epoch 的 CAS,两条通道不
 // 各写各的。
 //
-// 唯一例外(2026-09-21,cross-zone-scene-travel.md §12.6.9):同物理节点、owner_epoch 键读到 0
-// **且** location 记的 epoch 也是 0(存量玩家,从未铸造过)时也铸造。上面「窗口内存盘被拒」的前提是
-// 持有节点缓存着非 0 值;缓存为 0 时 C++ 走不带 guard 的旧 Save,新值拒不了它。不铸的话这类玩家
-// 一直停在 0,帮会 B4c 的资产 RPC 对 epoch==0 一律回 RETRY。键读到 0 而 location 记着 N≠0(键被
-// 单独淘汰)时不铸造,先按 N 补种(SET NX)。推导与残余见 enterscenelogic.go 的 sameNodeZeroMint。
+// 唯一例外(2026-09-21,cross-zone-scene-travel.md §12.6.9):同物理节点、location 记的 epoch 是 0 时也铸造。
+// 键读到 0 是从未铸造过的存量玩家;键读到 M ≠ 0 是上一次这种铸造 keep 回滚留下的、可能没确认落盘的值,同样再铸一次,
+// 不把它原样下发(2026-11-12,zone-redis-regression-guard-20261022.md §4.3.4;同落点重连这时下发 location 记的 0)。
+// 上面「窗口内存盘被拒」的前提是持有节点缓存着非 0 值;缓存为 0 时 C++ 走不带 guard 的旧 Save,新值拒不了它。不铸的话
+// 这类玩家一直停在 0,帮会 B4c 的资产 RPC 对 epoch==0 一律回 RETRY。键读到 0 而 location 记着 N≠0(键被单独淘汰)时
+// 不铸造,先按 N 补种(SET NX)。推导与残余见 enterscenelogic.go 的 sameNodeZeroMint。
 // ---------------------------------------------------------------------------
 
 // luaLocationExpectCheck 是两段落点 Lua 共用的「location 原文期望」检查(scene-enter-chain-residuals.md §5.2 ③),
@@ -285,6 +286,11 @@ return 1
 //	ARGV[6] = 转写后的标记 "{N+2}:{原标记冒号后的原文}";空串 = 不转写(不凭标记 / keep)
 //	ARGV[7] = 转写标记的 TTL 秒数(ownerepoch.HandoffTTL)
 //	ARGV[8..10] = 本次落点核过的修订地板 / 本次写下的侧车原文 / 回滚后要恢复的侧车原文(location_revision.go)
+//	ARGV[11..14] = 作废用,只有「铸造结果未知」的 bump 回滚才给(见下「作废」),其余调用不传:
+//	          ARGV[11] 本次铸造观察到的 epoch(规范十进制;不传或空串 = 不作废)
+//	          ARGV[12] 本次铸造观察到的 location 原文(空串 = 当时没有 location)
+//	          ARGV[13] 本次铸造观察到的修订侧车原文(空串 = 没有)
+//	          ARGV[14] 回滚之后的 epoch(= ARGV[3] + 1 的规范十进制,Go 侧算好,不经 Lua double)
 //
 // ARGV[2] 由调用方预先算好(planRouteRollback):bump 时恢复出的 location 已带 owner_epoch = N+2 与
 // rollback_receipt = ARGV[5];keep 时是旧 location 的原字节。
@@ -297,6 +303,8 @@ return 1
 //	3            凭标记铸造,但所凭标记已不是那一份:**一个字节都不动**,保留本次落点;
 //	4            不凭标记铸造,但交接资格原件已属于 N+1(目标节点已在 N+1 下登记):**一个字节都不动**,保留本次落点;
 //	5            不凭标记铸造,资格原件比 N+1 新或写坏了(协议写者写不出,数据被动过):不当证据,**一个字节都不动**;
+//	6            作废,不凭标记:首发没生效,已直接写成回滚之后的状态(epoch = ARGV[14],location = ARGV[2]);
+//	7            作废,凭标记:首发没生效,所凭标记已删掉(或本来就不在了),epoch 与 location **一个字节都不动**;
 //	0            location 或 epoch 已被并发请求推进,什么都没改(否则会覆盖后来者刚提交的归属)。
 //
 // 为什么 epoch 不退回旧值(旧写法把键 SET 回 N,两条已确认伤害):
@@ -356,18 +364,52 @@ return 1
 // 相同(UpdateTime 秒级,多副本间还有时钟偏差),证明不了是本请求所为,误报会让调用方多还一次人数。
 //
 // tonumber 比较:epoch 远小于 2^53,双精度下精确;cur 被写坏(非数字)时得 nil,比较为假,回 0。
+//
+// 作废(返回 6 / 7,2026-11-12,zone-redis-regression-guard-20261022.md §4.3.5)—— 只对铸造结果未知的 bump 回滚:
+// 结果未知时首发可能还没到 Redis:卡在连接里,或 Redis 停顿期间与本脚本一起排在各自的连接上、恢复之后谁先执行不一定。
+// 只按「已生效」回滚的话,首发晚于本脚本执行时回滚 CAS 不过,首发随后照样生效,留下一条没人知道的落点。所以走到最后
+// (状态既不是本次落点,也不是回滚之后)时,再认一次「状态还是本次铸造观察到的那一份」(epoch == ARGV[11]、
+// location == ARGV[12]、侧车 == ARGV[13]);是,就让迟到的首发再也过不了它自己的 CAS:
+//   - 不凭标记(首次落点 / 第二条腿 / 死节点接管):直接写成回滚之后的状态,epoch 越过铸出值(ARGV[14])。首发比的是
+//     「epoch == 观察值」,从此不成立。终态与「生效了再回滚」完全相同,重发照样走上面的重放识别回 2。这几种落点没有
+//     持有者,抬 epoch 不伤任何人。不看交接资格原件:铸出值从未进过 Redis,不可能有节点在它之下登记过。
+//   - 凭标记(跨节点 / 跨 zone 交接):只删掉所凭的标记。首发要求标记原样还在,删掉之后它回 -1。epoch 与 location 不动:
+//     源端仍持有玩家,手里的 epoch 仍然有效,收到 7 之后取证读到「epoch 没变」照常解冻(它取证时自己也会删这份标记)。
+//     不抬 epoch:抬了源端就得凭回执采纳,回执又要等落盘确认,而铸造通道刚出过错,多半确认不了,白踢一次线。
+//     标记已经不在(源端先取证 / 撤回了)同样回 7:首发一样过不了标记比对。
+//   - keep(同节点 epoch 0 的铸造)不作废:持有节点可能已经缓存了铸出值,抬 epoch 会废黜它。调用方不给 ARGV[11]。
+//
+// 于是本脚本与迟到的首发谁先执行都收得住:首发在先,上面的回滚分支撤掉它;本脚本在先,作废,首发写不进去。
+// 状态被别的请求改过(既不是观察到的那一份,也不是本次落点)照旧回 0。侧车只在作废分支里才认观察到的那一份(ARGV[13]),
+// 回滚与重放识别两个分支对侧车的要求不变。
 const luaRollbackPlayerPlacement = luaCppHandoffFenceHelpers + `
+local void_epoch = ARGV[11]
+local void_requested = void_epoch ~= nil and void_epoch ~= ''
+local tag_is_placement, tag_is_observed = true, true
 if ARGV[8] ~= nil and ARGV[8] ~= '' then
     if redis.call('GET',KEYS[5]) ~= ARGV[8] then return 0 end
     local tag = redis.call('GET',KEYS[4]) or ''
-    if tag ~= ARGV[9] and tag ~= ARGV[10] then return 0 end
+    tag_is_placement = tag == ARGV[9] or tag == ARGV[10]
+    tag_is_observed = void_requested and tag == ARGV[13]
+    if not tag_is_placement and not tag_is_observed then return 0 end
 end
 local loc = redis.call("GET", KEYS[1])
 local cur = redis.call("GET", KEYS[2])
 if cur == false then
     cur = "0"
 end
-if loc == ARGV[1] and cur == ARGV[3] then
+local function restore_location()
+    if ARGV[2] == "" then
+        redis.call("DEL", KEYS[1])
+    else
+        redis.call("SET", KEYS[1], ARGV[2])
+    end
+    if KEYS[4] ~= nil then
+        if ARGV[10] ~= nil and ARGV[10] ~= '' then redis.call('SET',KEYS[4],ARGV[10])
+        else redis.call('DEL',KEYS[4]) end
+    end
+end
+if tag_is_placement and loc == ARGV[1] and cur == ARGV[3] then
     if ARGV[5] ~= "" and redis.call("GET", KEYS[3]) ~= ARGV[5] then
         return 3
     end
@@ -394,15 +436,7 @@ if loc == ARGV[1] and cur == ARGV[3] then
     if ARGV[4] == "bump" then
         after = redis.call("INCR", KEYS[2])
     end
-    if ARGV[2] == "" then
-        redis.call("DEL", KEYS[1])
-    else
-        redis.call("SET", KEYS[1], ARGV[2])
-    end
-    if KEYS[4] ~= nil then
-        if ARGV[10] ~= nil and ARGV[10] ~= '' then redis.call('SET',KEYS[4],ARGV[10])
-        else redis.call('DEL',KEYS[4]) end
-    end
+    restore_location()
     if ARGV[6] ~= "" then
         redis.call("SET", KEYS[3], ARGV[6], "EX", ARGV[7])
     end
@@ -411,10 +445,24 @@ if loc == ARGV[1] and cur == ARGV[3] then
     end
     return 1
 end
-if ARGV[4] == "bump" and tonumber(cur) == tonumber(ARGV[3]) + 1 then
+if tag_is_placement and ARGV[4] == "bump" and tonumber(cur) == tonumber(ARGV[3]) + 1 then
     if (ARGV[2] == "" and loc == false) or (ARGV[2] ~= "" and loc == ARGV[2]) then
         return 2
     end
+end
+if void_requested and tag_is_observed and ARGV[4] == "bump" and cur == void_epoch and (loc or "") == ARGV[12] then
+    if ARGV[5] ~= "" then
+        if redis.call("GET", KEYS[3]) == ARGV[5] then
+            redis.call("DEL", KEYS[3])
+        end
+        return 7
+    end
+    if ARGV[14] == nil or ARGV[14] == "" then
+        return redis.error_reply("ROUTE_ROLLBACK void shape")
+    end
+    redis.call("SET", KEYS[2], ARGV[14])
+    restore_location()
+    return 6
 end
 return 0
 `
@@ -427,7 +475,9 @@ return 0
 //	target_registered 不凭标记铸造的回滚发现目标节点已在本次铸出的代次下登记(Kafka 报错但已投递),
 //	             一个字节都没动,本次落点保留;
 //	fence_not_proof 不凭标记铸造的回滚读到比本次铸出值新、或写坏了的交接资格原件,不当证据,一个字节都没动;
-//	plan_error   回滚计划构造失败(planRouteRollback,按构造不可达),没有回滚。
+//	plan_error   回滚计划构造失败(planRouteRollback,按构造不可达),没有回滚;
+//	voided       铸造结果未知、首发没生效、不凭标记:已直接写成回滚之后的状态,迟到的首发 CAS 不过;
+//	marker_voided 铸造结果未知、首发没生效、凭标记:所凭标记已删掉(或已不在),epoch 与 location 没动。
 const (
 	rollbackOutcomeRolledBack        = "rolled_back"
 	rollbackOutcomeAlreadyRolledBack = "already_rolled_back"
@@ -437,6 +487,8 @@ const (
 	rollbackOutcomeTargetRegistered  = "target_registered"
 	rollbackOutcomeFenceNotProof     = "fence_not_proof"
 	rollbackOutcomePlanError         = "plan_error"
+	rollbackOutcomeVoided            = "voided"
+	rollbackOutcomeMarkerVoided      = "marker_voided"
 )
 
 // errOwnerEpochConflict 表示落点 CAS 失败:epoch 或 location 被并发推进 —— 有并发的 EnterScene 抢先推进了
@@ -455,6 +507,16 @@ var errOwnerEpochConflict = errors.New("owner epoch advanced by a concurrent Ent
 // 用 errors.Is 判;具体原因在包装链里,只进日志。忘了特判它的调用方落进通用错误分支(回 3、不回滚、不发路由),
 // 新 epoch 照样没交出去,方向是 fail-closed。
 var errOwnerEpochMintNotDurable = errors.New("owner epoch mint not confirmed durable")
+
+// errOwnerEpochMintResultUnknown 表示铸造 EVAL 的结果未知,首发可能已经生效,也可能没有。两种来源:svc 报
+// ErrOwnerEpochMintResultUnknown(传输错误之后重发耗尽、预算不够、重发被拒等);或在新连接上重发之后回了 0 / -1 ——
+// 不凭标记的铸造认不出自己的写,凭标记时源端可能在两次发送之间撤回或取证删掉了标记。
+// 与 errOwnerEpochMintNotDurable 一样,placePlayerLocation 返回它时 placedLocation **有效**,是这次计划写下的落点。
+// 调用方不推路由 / 重定向,先用它回滚或作废(rollbackOrVoidUnknownMint):生效了就按原字节撤掉,铸出的值作废、一次都没下发;
+// 还没生效就把迟到的首发作废;状态已被并发改写则什么都不改。再按之后的 location 退人数,回 ErrKafkaRoute。以前这里回 19 / 3、不回滚:生效了的那次
+// 落点(没确认落盘的值、指向从未载入玩家的目标)留在 Redis 里,之后的同落点重连会原样下发它
+// (zone-redis-regression-guard-20261022.md §4.3.4)。
+var errOwnerEpochMintResultUnknown = errors.New("owner epoch mint result unknown")
 
 // errOwnerEpochMinterMissing:svcCtx.OwnerEpochMint 为 nil(生产恒非 nil,servicecontext.go)。不退回 go-zero 上无确认
 // 的铸造,一个字节都不写,调用方按通用落点错误回 3。
@@ -548,13 +610,16 @@ type routeRollbackPlan struct {
 	// (requiredMarker)的原文。回滚确认落盘之后由 upgradeRollbackReceipt 按 CAS 把 restoredRaw 改成它
 	// (docs/design/zone-redis-regression-guard-20261022.md §4.3.4)。
 	finalRaw string
+	// voidUnapplied 只在铸造结果未知的回滚里为真(rollbackOrVoidUnknownMint):状态还是本次铸造观察到的那一份时,同一段脚本
+	// 把迟到的首发作废(luaRollbackPlayerPlacement「作废」)。只对 bump 成立,而且要有观察原文可比(placed.observedKnown)。
+	voidUnapplied bool
 }
 
 // planRouteRollback 决定路由 / 重定向失败后怎么撤掉本次落点(取代旧的 rollbackEpochFor:旧写法把 epoch
 // 退回旧值,会同值重铸并让合法持有者的存盘被永久判 stale,见 luaRollbackPlayerPlacement)。
 //
 //   - old / oldRaw:本次 EnterScene 开头读到的旧 location 与其原文(陈旧 zone / 死节点接管时调用方已把两者
-//     一起清空,回滚 = DEL);oldZoneID:调用方按 scene:{id}:zone 解析出的旧 zone,是权威值。
+//     一起清空,回滚 = DEL);oldZoneID:调用方按位置记录(没有 zone_id 的历史记录按 ownZoneOfScene)解析出的旧 zone,是权威值。
 //   - requiredMarker:本次铸造所凭的 handoff 标记原文(placementGuard.requiredMarker)。
 //   - keepMintedEpoch:同物理节点 epoch 0 的铸造(enterscenelogic.go sameNodeZeroMint)。
 //
@@ -665,6 +730,8 @@ type rollbackVerdict struct {
 //	3     marker_gone,没回滚
 //	4     不凭标记的 bump → target_registered,没回滚;其余计划按构造不可能 → redis_error
 //	5     不凭标记的 bump → fence_not_proof,没回滚;其余计划按构造不可能 → redis_error
+//	6     要求作废、不凭标记 → voided:状态已是回滚之后的那一份(restored),回显 epochAfter;其余计划 → redis_error
+//	7     要求作废、凭标记 → marker_voided:epoch 与 location 没动(不算 restored),不回显;其余计划 → redis_error
 //	0     superseded,没回滚
 //	其余  redis_error(结果未知),没回滚 —— 不混进 superseded,那会把约定漂移藏成「并发推进」
 func classifyRollbackReply(signed int64, plan routeRollbackPlan) rollbackVerdict {
@@ -685,6 +752,10 @@ func classifyRollbackReply(signed int64, plan routeRollbackPlan) rollbackVerdict
 		return rollbackVerdict{outcome: rollbackOutcomeTargetRegistered}
 	case signed == 5 && bump && plan.requiredMarker == "":
 		return rollbackVerdict{outcome: rollbackOutcomeFenceNotProof}
+	case signed == 6 && bump && plan.voidUnapplied && plan.requiredMarker == "":
+		return rollbackVerdict{outcome: rollbackOutcomeVoided, restored: true, echo: plan.epochAfter}
+	case signed == 7 && bump && plan.voidUnapplied && plan.requiredMarker != "":
+		return rollbackVerdict{outcome: rollbackOutcomeMarkerVoided}
 	case signed == 0:
 		return rollbackVerdict{outcome: rollbackOutcomeSuperseded}
 	default:
@@ -744,10 +815,16 @@ func rollbackPlayerPlacement(svcCtx *svc.ServiceContext, log logx.Logger, player
 }
 
 // rollbackPlacementArgs 是 luaRollbackPlayerPlacement 的 ARGV(布局见脚本注释),首发与重发用同一份。
+// 作废用的 ARGV[11..14] 只在 plan.voidUnapplied 时追加;不追加时脚本读到 nil,作废分支整段不走。
 func rollbackPlacementArgs(placed placedLocation, plan routeRollbackPlan) []any {
-	return []any{placed.raw, plan.restoredRaw, strconv.FormatUint(placed.epoch, 10), plan.mode.String(),
+	args := []any{placed.raw, plan.restoredRaw, strconv.FormatUint(placed.epoch, 10), plan.mode.String(),
 		plan.requiredMarker, plan.forwardMarker, strconv.FormatInt(int64(ownerepoch.HandoffTTL.Seconds()), 10),
 		optionalRevisionText(placed.revision), placed.tag, restoreRevisionTag(placed, plan.restoredRaw)}
+	if plan.voidUnapplied {
+		args = append(args, strconv.FormatUint(placed.observedEpoch, 10), placed.observedRaw, placed.previousTag,
+			strconv.FormatUint(plan.epochAfter, 10))
+	}
+	return args
 }
 
 // judgeRollbackResult 把一次回滚 EVAL 的结果(回复或错误)翻成 rollbackVerdict,计 scene_manager_enter_scene_rollback_total
@@ -796,6 +873,12 @@ func judgeRollbackResult(log logx.Logger, playerID uint64, placed placedLocation
 	case rollbackOutcomeSuperseded:
 		log.Errorf("[RouteRollback] outcome=%s concurrent request advanced player location or epoch; skipping stale-state overwrite and player-count rollback: player=%d mode=%s epoch=%d",
 			rollbackOutcomeSuperseded, playerID, plan.mode, placed.epoch)
+	case rollbackOutcomeVoided:
+		log.Errorf("[RouteRollback] outcome=%s mint with an unknown result had not applied; wrote the rolled-back state so a late first attempt fails its CAS: player=%d observed_epoch=%d epoch_after=%d",
+			rollbackOutcomeVoided, playerID, placed.observedEpoch, plan.epochAfter)
+	case rollbackOutcomeMarkerVoided:
+		log.Errorf("[RouteRollback] outcome=%s mint with an unknown result had not applied; removed the handoff marker it relied on so a late first attempt is refused, epoch and location untouched: player=%d observed_epoch=%d required_marker=%q",
+			rollbackOutcomeMarkerVoided, playerID, placed.observedEpoch, plan.requiredMarker)
 	default:
 		log.Errorf("[RouteRollback] outcome=%s rollback Lua returned value outside contract; treating outcome as unknown: player=%d mode=%s epoch=%d reply=%d",
 			verdict.outcome, playerID, plan.mode, placed.epoch, signed)
@@ -819,9 +902,10 @@ func judgeRollbackResult(log logx.Logger, playerID uint64, placed placedLocation
 // 推路由失败的回滚同样两段:铸造确认过,回滚写下的却是另一个值,它的落盘要单独确认(rollbackPlacementAfterPushFailure)。
 // ---------------------------------------------------------------------------
 
-// errPendingRollbackNotDurable:EnterScene 观察到的 location 带待确认回执,确认它落盘时 WAITAOF 没确认到要求的份数,或 WAITAOF
-// 本身出错。确认脚本只把 owner_epoch 原值写回,状态一个字节都没变;调用方回 ErrKafkaRoute(可重试),不下发 epoch。
-var errPendingRollbackNotDurable = errors.New("owner epoch of a pending rollback receipt not confirmed durable")
+// errOwnerEpochNotConfirmed:确认一个已经写进 Redis 的 owner_epoch 落盘时,WAITAOF 没确认到要求的份数,或 WAITAOF 本身出错。
+// 两处会遇到:location 带待确认回执(第 3d 步),或不铸造就要下发的 epoch 没有已确认位点(ensureOwnerEpochConfirmed)。
+// 确认脚本只把 owner_epoch 原值写回,状态一个字节都没变;调用方回 ErrKafkaRoute(可重试),不下发 epoch。
+var errOwnerEpochNotConfirmed = errors.New("owner epoch not confirmed durable")
 
 // ownerEpochRollbackConfirmContext 给回滚之后的落盘确认(确认脚本 + WAITAOF)一个截止:请求截止前留
 // ownerEpochMintRouteReserveSlack 给改写回执与回包。走到回滚时不会再推路由,剩下的时间都可以给它:铸造没确认落盘时
@@ -897,6 +981,32 @@ func durabilityAllowsReceipt(d svc.MintDurability) bool {
 func rollbackPlacementAfterPushFailure(ctx context.Context, svcCtx *svc.ServiceContext, log logx.Logger, playerID uint64,
 	old *smpb.PlayerLocation, oldRaw string, oldZoneID uint32, placed placedLocation,
 	requiredMarker string, keepMintedEpoch bool) (restored bool, echo uint64) {
+	return rollbackPlacement(ctx, svcCtx, log, playerID, old, oldRaw, oldZoneID, placed, requiredMarker, keepMintedEpoch, false)
+}
+
+// rollbackOrVoidUnknownMint 收尾一次结果未知的铸造(errOwnerEpochMintResultUnknown):首发可能已经生效,也可能还没到 Redis。
+// 同一段回滚脚本原子地二选一(luaRollbackPlayerPlacement):
+//
+//   - 状态已是本次落点 = 首发生效了:按 rollbackPlacementAfterPushFailure 同一套回滚(凭标记的 bump 走两段回执);
+//   - 状态还是本次铸造观察到的那一份 = 首发没生效:作废,让迟到的首发再也过不了它的 CAS(voided / marker_voided);
+//   - 两者都不是 = 被别的请求改过:什么都不改(superseded)。
+//
+// 所以回滚与迟到的首发谁先在 Redis 上执行都收得住。作废只对 bump 做,并且要有观察原文可比:同节点 epoch 0 的铸造(keep)、
+// 原文期望为 any 的落点(测试夹具)退化成只回滚。返回值同 rollbackPlacementAfterPushFailure:voided 时 location 已是回滚
+// 之后的状态(restored = true),marker_voided 时 location 没动(restored = false)。
+//
+// 残余:本函数这条 EVAL 自己一个字节都没到 Redis(连接都拿不到)时,首发之后仍可能生效,留下一条没确认落盘的落点。它不会被
+// 原样下发:不铸造就下发 epoch 之前有已确认位点那道闸(ensureOwnerEpochConfirmed)。
+func rollbackOrVoidUnknownMint(ctx context.Context, svcCtx *svc.ServiceContext, log logx.Logger, playerID uint64,
+	old *smpb.PlayerLocation, oldRaw string, oldZoneID uint32, placed placedLocation,
+	requiredMarker string, keepMintedEpoch bool) (restored bool, echo uint64) {
+	return rollbackPlacement(ctx, svcCtx, log, playerID, old, oldRaw, oldZoneID, placed, requiredMarker, keepMintedEpoch, true)
+}
+
+// rollbackPlacement 是上面两个入口的本体;voidUnapplied 为真时在回滚计划上打开作废(见 rollbackOrVoidUnknownMint)。
+func rollbackPlacement(ctx context.Context, svcCtx *svc.ServiceContext, log logx.Logger, playerID uint64,
+	old *smpb.PlayerLocation, oldRaw string, oldZoneID uint32, placed placedLocation,
+	requiredMarker string, keepMintedEpoch bool, voidUnapplied bool) (restored bool, echo uint64) {
 	plan, err := planRouteRollbackWith(old, oldRaw, oldZoneID, placed, requiredMarker, keepMintedEpoch, true)
 	if err != nil {
 		metrics.ObserveEnterSceneRollback(rollbackOutcomePlanError)
@@ -904,11 +1014,13 @@ func rollbackPlacementAfterPushFailure(ctx context.Context, svcCtx *svc.ServiceC
 			rollbackOutcomePlanError, playerID, placed.epoch, placed.minted, requiredMarker, err)
 		return false, 0
 	}
+	plan.voidUnapplied = voidUnapplied && plan.mode == rollbackModeBump && placed.observedKnown
 	result, evalErr := playerRedisEval(svcCtx, luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), rollbackPlacementArgs(placed, plan)...)
 	verdict := judgeRollbackResult(log, playerID, placed, plan, result, evalErr)
 	if plan.finalRaw == "" || !verdict.restored || verdict.drift {
-		// 没有回执要确认:不凭标记 / keep;或回滚 Lua 什么都没写(marker_gone / target_registered / fence_not_proof /
-		// superseded / redis_error);或返回值与计划对不上(drift,约定被改岔了,不改回执,fail-closed)。
+		// 没有回执要确认:不凭标记 / keep(含不凭标记的作废 voided);或回滚 Lua 没动 location(marker_gone / target_registered /
+		// fence_not_proof / superseded / redis_error,以及只删标记的 marker_voided);或返回值与计划对不上(drift,约定被改岔了,
+		// 不改回执,fail-closed)。
 		return verdict.restored, verdict.echo
 	}
 	confirmCtx, cancel := ownerEpochRollbackConfirmContext(ctx)
@@ -927,11 +1039,12 @@ func rollbackPlacementAfterPushFailure(ctx context.Context, svcCtx *svc.ServiceC
 //
 // 计 owner_epoch_rollback_receipt_total{site},返回记下的 result;err 非 nil 时回执留在待确认形态:
 //   - errOwnerEpochConflict:三把键之一已变(复核或改写时);
-//   - errPendingRollbackNotDurable:没确认到份数 / WAITAOF 出错;
+//   - errOwnerEpochNotConfirmed:没确认到份数 / WAITAOF 出错;
 //   - svc.ErrOwnerEpochMintNotSent、errOwnerEpochMinterMissing:一条都没发(预算不够、取不到连接、没装铸造通道);
 //   - 其余:Redis 错误、结果未知或约定被改岔。
 //
-// 除了确认成功之后的那次改写,状态一个字节都没变(确认脚本只把 owner_epoch 原值写回)。
+// 除了确认成功之后的那次改写与已确认位点,状态一个字节都没变(确认脚本只把 owner_epoch 原值写回)。
+// 前半段(确认落盘、记位点)是 confirmOwnerEpochDurable,与不铸造下发之前的那道闸共用。
 func confirmRollbackReceipt(ctx context.Context, svcCtx *svc.ServiceContext, log logx.Logger, site string, playerID, epoch uint64,
 	pendingRaw, pendingTag, finalRaw, finalTag string) (string, error) {
 	fail := func(result string, err error) (string, error) {
@@ -940,27 +1053,8 @@ func confirmRollbackReceipt(ctx context.Context, svcCtx *svc.ServiceContext, log
 			site, playerID, epoch, result, err)
 		return result, err
 	}
-	if svcCtx.OwnerEpochMint == nil {
-		return fail(metrics.OwnerEpochRollbackReceiptNotSent, errOwnerEpochMinterMissing)
-	}
-	res, err := svcCtx.OwnerEpochMint.EvalAndConfirm(ctx, luaConfirmPendingRollback, rollbackReceiptKeys(playerID),
-		strconv.FormatUint(epoch, 10), pendingRaw, pendingTag)
-	if err != nil {
-		if errors.Is(err, svc.ErrOwnerEpochMintNotSent) {
-			return fail(metrics.OwnerEpochRollbackReceiptNotSent, err)
-		}
-		return fail(metrics.OwnerEpochRollbackReceiptError, err)
-	}
-	switch fmt.Sprint(res.Reply) {
-	case "1":
-	case "0":
-		return fail(metrics.OwnerEpochRollbackReceiptSuperseded, errOwnerEpochConflict)
-	default:
-		return fail(metrics.OwnerEpochRollbackReceiptError,
-			fmt.Errorf("pending rollback confirm Lua returned value outside contract: %v", res.Reply))
-	}
-	if !durabilityAllowsReceipt(res.Durability) {
-		return fail(metrics.OwnerEpochRollbackReceiptPending, fmt.Errorf("%w: %v", errPendingRollbackNotDurable, res.DurableErr))
+	if result, err := confirmOwnerEpochDurable(ctx, svcCtx, playerID, epoch, pendingRaw, pendingTag); err != nil {
+		return fail(result, err)
 	}
 	switch outcome := upgradeRollbackReceipt(svcCtx, log, site, playerID, epoch, pendingRaw, pendingTag, finalRaw, finalTag); outcome {
 	case metrics.OwnerEpochRollbackReceiptConfirmed:
@@ -1008,7 +1102,7 @@ func upgradeRollbackReceipt(svcCtx *svc.ServiceContext, log logx.Logger, site st
 // 成功时返回改写之后的 location、原文与修订标签,调用方用它们替换本次观察:后面的落点 CAS、同落点身份写都以它为期望。
 // 失败一律不下发 epoch,除了成功时那次改写,状态一个字节都没变(确认脚本只写回原值):
 //   - errOwnerEpochConflict:三把键之一在观察之后变了,或改写时变了(调用方回 19,可重试);
-//   - errPendingRollbackNotDurable:没确认到份数 / WAITAOF 出错(回 7);
+//   - errOwnerEpochNotConfirmed:没确认到份数 / WAITAOF 出错(回 7);
 //   - svc.ErrOwnerEpochMintNotSent、errOwnerEpochMinterMissing:一条都没发(回 3);
 //   - 其余:Redis 错误、结果未知或约定被改岔(回 ErrRedis)。
 //
@@ -1044,6 +1138,112 @@ func confirmPendingRollbackLocation(ctx context.Context, svcCtx *svc.ServiceCont
 		return nil, "", "", err
 	}
 	return upgraded, finalRaw, finalTag, nil
+}
+
+// ---------------------------------------------------------------------------
+// 已确认位点(docs/design/zone-redis-regression-guard-20261022.md §4.3.5)
+//
+// G3b 要守的只有一句话:一个 owner_epoch 值,确认落盘之后才许交给节点。铸造的落点在本请求里就确认了(EVAL 与 WAITAOF 同一条
+// 连接)。不铸造的落点(同落点重连、同物理节点换图、dev 旁路)下发的是观察到的值,以前默认「它在铸造当时确认过」。铸造没
+// 走完时这个默认不成立,而留下来的状态与正常落点逐字节相同,事后分不出来:
+//   - 铸造写进了 Redis,落盘没确认,回滚又没做成(Redis 出错,或所凭标记已被源端取走);
+//   - 铸造写进了 Redis,scene_manager 在确认之前退出了;
+//   - 铸造结果未知,收尾的回滚一个字节都没到 Redis,首发之后才生效。
+//
+// 所以把「确认过」记成一件事实:ownerepoch.ConfirmedKey 存已确认落盘的那个值。拿到确认的地方写它(铸造之后、回滚之后的
+// 落盘确认之后、下面这道闸自己确认之后);不铸造就下发之前读它,恰好等于要下发的值才直接下发,否则先确认。
+// 缺省是「没确认」:键缺失、过期、读失败、值对不上都走确认。所以位点丢了、或以后新增的写者忘了写它,只会多确认一次,
+// 不会把没确认的值放出去;写位点也就不需要等落盘、不需要 CAS。
+// ---------------------------------------------------------------------------
+
+// markOwnerEpochConfirmed 记下「epoch 这个值的那次写已确认落盘」。调用方必须刚拿到它的确认(WAITAOF 满足,或落盘确认整个关闭)。
+// 写失败只打日志:位点没记上,下一次不铸造的下发会再确认一次。epoch 为 0(从未铸造)不记。
+func markOwnerEpochConfirmed(svcCtx *svc.ServiceContext, playerID, epoch uint64) {
+	if epoch == 0 {
+		return
+	}
+	if err := playerRedisSetex(svcCtx, ownerepoch.ConfirmedKey(playerID), strconv.FormatUint(epoch, 10),
+		int(ownerepoch.ConfirmedTTL.Seconds())); err != nil {
+		logx.Errorf("[OwnerEpochConfirmed] failed to record the confirmed owner_epoch; the next unminted hand-out will confirm it again: player=%d epoch=%d err=%v",
+			playerID, epoch, err)
+	}
+}
+
+// ownerEpochMarkedConfirmed 报告已确认位点是否恰好等于 epoch。读失败按「没确认」算(调用方随后走确认,那一步自己会把
+// Redis 故障报出来),所以不返回 error。
+func ownerEpochMarkedConfirmed(svcCtx *svc.ServiceContext, playerID, epoch uint64) bool {
+	raw, err := playerRedisGet(svcCtx, ownerepoch.ConfirmedKey(playerID))
+	if err != nil {
+		logx.Errorf("[OwnerEpochConfirmed] failed to read the confirmed owner_epoch; treating it as unconfirmed: player=%d epoch=%d err=%v",
+			playerID, epoch, err)
+		return false
+	}
+	return raw == strconv.FormatUint(epoch, 10)
+}
+
+// confirmOwnerEpochDurable 确认「owner_epoch = epoch、location = raw、修订侧车 = tag」这一份状态已经落盘,确认之后记下已确认位点。
+// 经铸造通道发 luaConfirmPendingRollback(三把键原样未变时把 owner_epoch 原值写回一次),同一条连接紧跟 WAITAOF:写回的偏移
+// 排在产生这份状态的那次写之后,AOF 与复制流都是单一有序日志,它落盘说明那次写也落盘了。
+//
+// 返回 (result, err):result 取 metrics.OwnerEpochRollbackReceipt*,由调用方按自己的 site 计数。err 非 nil 时状态一个字节都没变:
+//   - errOwnerEpochConflict(superseded):三把键之一已不是期望的那一份;
+//   - errOwnerEpochNotConfirmed(pending):没确认到份数 / WAITAOF 出错;
+//   - svc.ErrOwnerEpochMintNotSent、errOwnerEpochMinterMissing(not_sent):一条都没发;
+//   - 其余(error):Redis 错误、结果未知或约定被改岔。
+//
+// 两项份数都配 0(落盘确认关闭)时照样算确认:铸造本身也不等,这里不比铸造更严。
+func confirmOwnerEpochDurable(ctx context.Context, svcCtx *svc.ServiceContext, playerID, epoch uint64, raw, tag string) (string, error) {
+	if svcCtx.OwnerEpochMint == nil {
+		return metrics.OwnerEpochRollbackReceiptNotSent, errOwnerEpochMinterMissing
+	}
+	res, err := svcCtx.OwnerEpochMint.EvalAndConfirm(ctx, luaConfirmPendingRollback, rollbackReceiptKeys(playerID),
+		strconv.FormatUint(epoch, 10), raw, tag)
+	if err != nil {
+		if errors.Is(err, svc.ErrOwnerEpochMintNotSent) {
+			return metrics.OwnerEpochRollbackReceiptNotSent, err
+		}
+		return metrics.OwnerEpochRollbackReceiptError, err
+	}
+	switch fmt.Sprint(res.Reply) {
+	case "1":
+	case "0":
+		return metrics.OwnerEpochRollbackReceiptSuperseded, errOwnerEpochConflict
+	default:
+		return metrics.OwnerEpochRollbackReceiptError,
+			fmt.Errorf("owner epoch confirm Lua returned value outside contract: %v", res.Reply)
+	}
+	if !durabilityAllowsReceipt(res.Durability) {
+		return metrics.OwnerEpochRollbackReceiptPending, fmt.Errorf("%w: %v", errOwnerEpochNotConfirmed, res.DurableErr)
+	}
+	markOwnerEpochConfirmed(svcCtx, playerID, epoch)
+	return metrics.OwnerEpochRollbackReceiptConfirmed, nil
+}
+
+// ensureOwnerEpochConfirmed 是不铸造就把观察到的 epoch 交给节点之前的那道闸(EnterScene 第 3e 步)。raw / tag 是本次
+// EnterScene 开头观察到的 location 原文与修订侧车,epoch 是要下发的值(非 0)。
+//
+// 已确认位点恰好等于 epoch:直接放行,只多一次读。否则当场确认(confirmOwnerEpochDurable),确认了才放行。
+// 失败时不下发 epoch,状态一个字节都没变,错误清单同 confirmOwnerEpochDurable;调用方用 rejectUnconfirmedOwnerEpoch 翻成应答。
+// 截止按铸造同一口径推出(ownerEpochMintContext):确认之后还要同步推路由。
+//
+// 计 owner_epoch_rollback_receipt_total{site="handout"}。健康时这里几乎不走确认:铸造确认之后位点随即记下。
+func ensureOwnerEpochConfirmed(ctx context.Context, svcCtx *svc.ServiceContext, log logx.Logger, playerID, epoch uint64, raw, tag string) error {
+	if ownerEpochMarkedConfirmed(svcCtx, playerID, epoch) {
+		return nil
+	}
+	site := metrics.OwnerEpochRollbackReceiptSiteHandout
+	mintCtx, cancel := ownerEpochMintContext(ctx, &svcCtx.Config)
+	defer cancel()
+	result, err := confirmOwnerEpochDurable(mintCtx, svcCtx, playerID, epoch, raw, tag)
+	metrics.ObserveOwnerEpochRollbackReceipt(site, result)
+	if err != nil {
+		log.Errorf("[OwnerEpochConfirmed] site=%s observed owner_epoch has no confirmed mark and could not be confirmed durable; it is not routed: player=%d epoch=%d result=%s err=%v",
+			site, playerID, epoch, result, err)
+		return err
+	}
+	log.Infof("[OwnerEpochConfirmed] site=%s observed owner_epoch had no confirmed mark; confirmed durable before routing: player=%d epoch=%d",
+		site, playerID, epoch)
+	return nil
 }
 
 // handoffVerdict 是一次 handoff 标记比对的结论。

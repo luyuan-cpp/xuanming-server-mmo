@@ -780,16 +780,65 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 
 ## §19 2026-10-21 聊天角色过户与SQL权威修订
 
-本节取代§9仅凭会话player_id授权、Redis历史与60秒幂等决定的旧语义。Go `go/chat` 与Java `game-chat` 的客户端PB不变，继续开放世界与私聊，原始字节长度先验、敏感词过滤、返回条数与窗口阈值继续生效。缺SQL、原登录账号、wire修订或路由围栏时拒绝，不回落旧Redis路径。
+> 2026-11-12 按现行代码改写第 1、3、4、5、7 段。改了三件事，推导见 [TiDB 总体方案](player-data-tidb-scaling-plan.md) §8.1 第 2 条、[逻辑库规格](horizontal-scale-logical-db.md) §3.4、[世界频道扇出](chat-world-channel-fanout.md) §3：
+>
+> - 身份核对已搬到发送事务之外，改走目录 RPC；
+> - 事务里只剩聊天自己的表（逻辑库自治，AGENTS §7.6）；
+> - 世界频道改读本副本快照。
+>
+> 原文写的「route / 64 片合服围栏、P 锁内限速与拒绝」已不存在。
+
+本节取代§9仅凭会话player_id授权、Redis历史与60秒幂等决定的旧语义。Go `go/chat` 与Java `game-chat` 的客户端PB不变，继续开放世界与私聊，原始字节长度先验、敏感词过滤、返回条数与窗口阈值继续生效。缺 SQL、缺原会话身份（原账号、owner_revision）或目录核对不过时拒绝，不回落任何 Redis 路径。
 
 `chat_send_authority`是唯一发送决定与历史真源：主键为玩家和原request_id，保存原账号/修订、确定性完整SendChatRequest字节及SHA256、已过滤ChatMessage字节、服务端SQL时间、固定成功结果。内部SQL列没有跨服务调用面，直接复用已有PB作为BLOB，不另造PB或重复PB结构。`chat_policy`固定同服规则指纹；副本限速、历史和敏感词规则不同即拒启。两表只由显式`-migrate`创建，普通启动只核结构、索引与已有策略。
 
-一次完整提交前缀为meta、caller的route/64片合服围栏、路由原件复核、P，再核原gate UUID/incarnation对应登录账号、原wire owner_revision及无交易冻结。原账号取自 gate 签名的会话身份原件（`roleidentity.Original`，见 [gate-online-identity.md](gate-online-identity.md)），chat 不读 login 的 Redis；当前目录不能替旧请求补身份。私聊对端沿用非0且非自己的既有纯参数资格，不新增目录存在要求；已有request_id只能重放首次原件。SQL提交是唯一发送线性化点，同一P内按SQL固定秒窗口计数限速。限速拒绝不写永久收据，之后同一ID仍可重试，只有成功接受才永久占用原ID。提交未知不换ID自动重试，原ID可查回同一决定；空request_id保留“每次新发”语义，由服务端生成不可预测内部ID。
+**身份核对**在发送事务之外（`go/chat/internal/authority/actor_verify.go`）：
 
-私聊stream继续只由双方玩家ID组成，按无符号ID排序；角色过户或ABA后合法新owner仍保留该角色已有历史。旧owner迟到请求在P内即被拒绝；新owner不能重放旧owner的原发送UUID。Pull只核caller的route/P至SQL结果全部读完，不因peer被删除而抹掉合法历史，按stream/state/accepted_ms/player_id/request_id覆盖索引读取min(调用limit,HistoryMaxLimit,HistoryMaxEntries)条，不由Redis先筛选，因此Redis丢失、旧快照或旧UUID不能改变授权与已提交历史。
+- 身份取 gate 签名的会话身份原件，包括玩家、原账号、owner_revision（`roleidentity.Original`，见 [gate-online-identity.md](gate-online-identity.md)）。chat 不读 login 的 Redis，当前目录也不能替旧请求补身份。
+- 调目录 `GetRoleFenceState` 核对。目录里没有、已删除、换了主（账号或修订不同）、被最终冻结（`FreezeFinal`），都拒绝；读不到是故障，原样返回、不写缓存。
+- 成功结果按（玩家、账号、修订）在进程内缓存 `ActorVerifyTTLSeconds`：缺省 30 秒，上限 3600，0 = 每次都读。到期时间从读之前算起，用单调时钟。
+- **代价**（聊天不写资产，可以接受）：
+  - 角色挂牌或过户之后，旧会话最多还能发、拉 TTL 秒；
+  - TTL=0 也有一条消息的窗口：读到旧归属之后、提交之前过户完成，这条消息照样落库，记在角色名下。
+- 发送事务里只有聊天自己的表，不持角色锁，不跨库。
 
-一次Pull的硬预算为200条：配置与Store构造均拒HistoryMaxLimit大于200，读取再以同一常量钳制。HistoryMaxEntries可独立配置容量，但不能扩大单次持P查询预算。
+**发送规则**：
 
-窗口保留原LIST续期语义：最新接受时间距SQL当前时间达到TTL则为空；倒序读取时遇相邻接受时间间隔达到TTL即截断，避免冷窗口过期后新消息复活之前的历史，再按客户端limit钳制返回。排序时间来自SQL，时间相同以玩家ID和原request_id作稳定唯一序。窗口和条数控制可见历史，永久原UUID、身份、摘要与结果不删除，防过户后同ID重新入场；本批保留原PB正文，代价是SQL容量随发送量增长，未把显示TTL伪装成永久原件清理授权。chat 不建任何 Redis 句柄（2026-11-11 删掉了两个从不发命令的旧缓存句柄与 `ChatRedis` 配置段），没有第二份投影工作器或授权真相。
+- 私聊对端沿用非 0 且非自己的既有纯参数资格，不新增目录存在要求。
+- 已有 request_id 只能重放首次原件；重放时，收据里的原账号与修订必须与本次会话一致。
+- SQL 提交是唯一发送线性化点。同一 request_id 的并发首发由主键裁决，输家撞唯一键（1062）后转读赢家已提交的原件，走同一条重放判定。
+- 限速按 SQL 时间的固定秒窗口计数，计数与插入之间不加锁：
+  - 同一玩家同时在途的请求可能都看到未满，超额上限是这名玩家同时在途的请求数；
+  - 这是第二道闸，第一道是 gate 按会话和消息号限频。
+- 世界频道另有按人的发言间隔（2026-11-12，`WorldChannelCooldownMs` 缺省 5000 毫秒，0 = 不限）：同一名玩家相邻两条世界消息至少隔这么久，只管世界频道。被挡的请求回同一个限流码，指标记 `world_cooldown`。它同样是近似的，理由与每秒限速相同。见 [chat-world-channel-fanout.md](chat-world-channel-fanout.md) §5.1。
+- 限速与发言间隔的拒绝都不写收据，之后同一 ID 仍可重试，只有成功接受才占用原 ID。
+- 提交未知不换 ID 自动重试，原 ID 可查回同一决定。
+- 空 request_id 保留「每次新发」语义，由服务端生成不可预测的内部 ID。
 
-验证必须分层记录：纯逻辑/原会话单测、TiDB同P换主/冻结/合服互斥、并发同UUID、延迟提交与回包丢失、旧owner拒绝及合法新owner保留角色历史、SQL限速/窗口边界以及强连接策略分别验收。源码修订不等于上述真实验证已经通过，旧仅Redis聊天的成功记录只保留为历史范围证据。
+**私聊与拉取**：
+
+- 私聊 stream 只由双方玩家 ID 组成，按无符号 ID 排序；角色过户或 ABA 之后，合法新 owner 仍保留该角色已有的历史。
+- 旧 owner 的迟到请求由目录核对拒绝，缓存窗口内除外（见上）。新 owner 不能重放旧 owner 的原发送 UUID：收据里的账号与修订对不上。
+- Pull 同样先核原会话身份，不因 peer 被删除而抹掉合法历史。
+- 私聊按 stream/state/accepted_ms/player_id/request_id 覆盖索引，读取 min(调用 limit, HistoryMaxLimit, HistoryMaxEntries) 条。
+- 世界频道读本副本的近窗快照（`go/chat/internal/authority/world_window.go`，`WorldHistoryCacheMs` 缺省 500 毫秒、上限 5000）：
+  - 快照只放已提交的原始行，读失败不缓存；
+  - 别的副本刚发的消息，最多晚这么久出现在本副本的历史里；
+  - 本副本发送提交后立即作废快照，保证读己之写。
+- 世界频道的写入按发送者分 8 段（2026-11-12，流键 `world-v3:<player_id % 8>`），读的时候各段各取最新 N 行、合并后取前 N 行，顺序与单段相同。分段是为了拆开 TiDB 上的索引追加热点，见 [chat-world-channel-fanout.md](chat-world-channel-fanout.md) §5.3。
+- 全程没有 Redis 参与，Redis 丢失或旧 UUID 都不能改变授权与已提交历史。
+
+一次Pull的硬预算为200条：配置与Store构造均拒HistoryMaxLimit大于200，读取再以同一常量钳制。HistoryMaxEntries可独立配置容量，但不能扩大单次查询的预算。
+
+窗口保留原LIST续期语义：最新接受时间距SQL当前时间达到TTL则为空；倒序读取时遇相邻接受时间间隔达到TTL即截断，避免冷窗口过期后新消息复活之前的历史，再按客户端limit钳制返回。排序时间来自SQL，时间相同以玩家ID和原request_id作稳定唯一序。窗口和条数控制可见历史；原 UUID、身份、摘要与结果在保留期内不删除，防过户后同 ID 重新入场。原件保留 30 天（2026-11-12，`constants.OriginalRetentionDays`），到期由 TiDB 的 TTL 任务在库里删除，运行账号仍然没有 DELETE；可见窗口 `HistoryTTLSeconds` 因此不得超过 29 天，超过保留期的旧 ID 重发会被当成新请求。以前这张表只增不减。见 [chat-world-channel-fanout.md](chat-world-channel-fanout.md) §5.2。chat 不建任何 Redis 句柄（2026-11-11 删掉了两个从不发命令的旧缓存句柄与 `ChatRedis` 配置段），没有第二份投影工作器或授权真相。
+
+验证必须分层记录，以下各项分别验收：
+
+- 纯逻辑 / 原会话单测；
+- 目录核对（换主、最终冻结、删除）与缓存到期；
+- 并发同 UUID（主键裁决）；
+- 延迟提交与回包丢失；
+- 旧 owner 拒绝，以及合法新 owner 保留角色历史；
+- SQL 限速与窗口边界；
+- 世界频道快照（过期重读、读己之写）；
+- 强连接策略。源码修订不等于上述真实验证已经通过，旧仅Redis聊天的成功记录只保留为历史范围证据。

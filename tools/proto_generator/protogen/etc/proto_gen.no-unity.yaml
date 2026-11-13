@@ -297,6 +297,15 @@ domain_meta:
         proto: "go/generated/rank/proto"
         handler: "go/generated/rank/handler"
         grpc: "go/generated/rank/grpc"
+  payment:
+    source: "{{proto_dir}}payment/"
+    rpc:
+      type: grpc
+    outputs:
+      go:
+        proto: "go/generated/payment/proto"
+        handler: "go/generated/payment/handler"
+        grpc: "go/generated/payment/grpc"
   login:
     source: "{{proto_dir}}login/"
     rpc:
@@ -445,6 +454,19 @@ domain_meta:
         proto: "go/generated/contracts/proto"
       cpp:
         proto: "cpp/generated/contracts/proto"
+
+  # 官方 opentelemetry-proto v1.3.1 的拷贝(docs/design/distributed-tracing.md §10.3):C++ 的 span 导出器用它编码
+  # OTLP/HTTP 的 ExportTraceServiceRequest。只有消息(拷贝时删掉了 TraceService),不发消息号、不生成 handler;
+  # 只出 C++(形状同 scene / gate),也不进 go/proto 的统一 Go 绑定(internal/generator/go/unified.go 的
+  # unifiedGoExcludedDirs):Go 用官方模块 go.opentelemetry.io/proto/otlp,两份同名消息链进同一个程序会在 init 时冲突。
+  # 不登记本块 C++ 就不生成(BuildProtocCpp 只遍历 domain_meta)。proto_gen.yaml 必须同步。
+  opentelemetry:
+    source: "{{proto_dir}}opentelemetry/"
+    rpc:
+      type: none
+    outputs:
+      cpp:
+        proto: "cpp/generated/opentelemetry/proto"
 
   guild:
     source: "{{proto_dir}}guild/"

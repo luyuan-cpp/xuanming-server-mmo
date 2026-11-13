@@ -21,7 +21,8 @@
 //     成员帮贡,必须失效缓存),以及 data_service(经 DataServiceRpc 只读已提交账本;没配就拒绝执行)。
 //     不 LoadTables、不连 Kafka,不推送(GuildAssetStore.OnFinalized 保持 nil);etcd 只用于 data_service 的服务发现,
 //     配了 DbPlacement 时另读一次映射。
-//   - 人工终结**不置 durable**(那不是 scene 的确认),只开放 applied / aborted 两种结局(裁决 E);
+//   - 人工终结**不置 durable**(那不是 scene 的确认),也不改 last_outcome / last_reason:终态行上留着最后一次投递时 scene
+//     实际回的值,事后核对用;谁终结的看 resolved_by。只开放 applied / aborted 两种结局(裁决 E);
 //     对侧账与自动终结共用 GuildAssetStore 里的同一个函数。
 //   - 走包级 assetop.ResolveManually,不造 Loop(那需要假 Applier 和假循环参数,造出来就会被人拿去真跑)。
 //
@@ -42,7 +43,6 @@ import (
 	"unicode"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -55,6 +55,7 @@ import (
 	pb "proto/guild"
 	"shared/assetop"
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/drainproof"
 )
@@ -135,11 +136,13 @@ type opStore interface {
 	ResolveManuallyIfQuiet(ctx context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error)
 }
 
-// toolDeps 是 list / resolve 的依赖:库、已提交账本,以及判「从未应用」要的安静间隔。
+// toolDeps 是 list / resolve 的依赖:库、已提交账本、判「从未应用」要的安静间隔,以及时钟。
+// 时钟显式传入(withStore 给 time.Now):行够不够老、安静不安静、人工终结写下的时刻都按它算,单测用固定时钟。
 type toolDeps struct {
 	store    opStore
 	ledger   assetop.StoreLedgerReader
 	quietGap time.Duration
+	now      func() time.Time
 }
 
 func main() {
@@ -294,7 +297,7 @@ func withStore(configPath string, readOnly bool, plan, directory, digest string,
 	}()
 	// 判「从未应用」的安静间隔:assetop.ManualQuietFloor(30 分钟)与本服务重投租约取较大者,口径同 trade 工具。
 	quietGap := assetop.ManualQuietGap(time.Duration(c.AssetOp.LeaseMs) * time.Millisecond)
-	result = fn(ctx, toolDeps{store: store, ledger: ledger, quietGap: quietGap})
+	result = fn(ctx, toolDeps{store: store, ledger: ledger, quietGap: quietGap, now: time.Now})
 	completed = true
 	return result
 }
@@ -338,16 +341,18 @@ func openStore(ctx context.Context, c config.Config, permission authoritysql.Per
 		return nil, nil, fmt.Errorf("连接 MySQL(库 %s)失败: %w", data.DatabaseName, err)
 	}
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     c.RedisClient.Host,
-		Password: c.RedisClient.Password,
-		DB:       c.RedisClient.DB,
-	})
+	// 与服务进程同一个控制集群句柄(ControlRedis 段、同一套键策略):缓存失效脚本的两把键同 tag,集群下照样执行。
+	redisConf := c.EffectiveControlRedis()
+	rdb, err := clusterredis.New(redisConf, clusterredis.ControlClusterKeys)
+	if err != nil {
+		_ = db.Close()
+		return nil, nil, fmt.Errorf("ControlRedis 配置不合法,拒绝执行: %w", err)
+	}
 	if err := rdb.Ping(pingCtx).Err(); err != nil {
 		_ = rdb.Close()
 		_ = db.Close()
-		return nil, nil, fmt.Errorf("连接缓存 Redis %s (DB %d) 失败,拒绝执行(终结后无法失效帮会 / 成员缓存): %w",
-			c.RedisClient.Host, c.RedisClient.DB, err)
+		return nil, nil, fmt.Errorf("连接缓存 Redis(%s)失败,拒绝执行(终结后无法失效帮会 / 成员缓存): %w",
+			redisConf.Describe(), err)
 	}
 
 	repo := data.NewGuildRepo(rdb, db, c.Cache.DefaultTTL)
@@ -440,7 +445,7 @@ func parseList(args []string, stderr io.Writer) (listOptions, bool) {
 }
 
 func runList(ctx context.Context, deps toolDeps, o listOptions, stdout, stderr io.Writer) int {
-	now := time.Now()
+	now := deps.now()
 	nowMs := uint64(now.UnixMilli())
 	createdBeforeMs := uint64(now.Add(-time.Duration(o.minAgeMin) * time.Minute).UnixMilli())
 	rows, err := deps.store.ListStuck(ctx, createdBeforeMs, o.limit)
@@ -605,7 +610,7 @@ func runResolve(ctx context.Context, deps toolDeps, o resolveOptions, stdout, st
 		fmt.Fprintf(stderr, "op_id=%d does not exist\n", o.opID)
 		return exitRejected
 	}
-	nowMs := uint64(time.Now().UnixMilli())
+	nowMs := uint64(deps.now().UnixMilli())
 	if err := checkResolvable(row, nowMs, o.force); err != nil {
 		fmt.Fprintf(stderr, "Refusing to finalize op_id=%d: %v\n", o.opID, err)
 		return exitRejected
@@ -635,7 +640,7 @@ func runResolve(ctx context.Context, deps toolDeps, o resolveOptions, stdout, st
 		Final:    o.final,
 		Operator: o.operator,
 		Reason:   o.reason,
-	}, nil, time.Now)
+	}, nil, deps.now)
 
 	// 审计行无论成败都打(ERROR 级确保进日志检索),并原样打到 stdout 供贴进运维工单。
 	// 末尾带证据与 force:凭什么判的、跳过了哪条前置,事后追责必须看得到。

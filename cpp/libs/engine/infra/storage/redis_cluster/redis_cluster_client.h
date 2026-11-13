@@ -1,7 +1,7 @@
 #pragma once
 
 // RedisClusterClient:C++ 的 Redis 集群路由层(docs/design/redis-player-store-cluster.md §5.6)。
-// 每个 loop 线程一个(与 tlsRedis 同样 thread_local),所有方法只能在该 loop 线程调用。
+// 每个 loop 线程一个(tlsPlayerRedis、tlsControlRedis 都是 thread_local),所有方法只能在该 loop 线程调用。
 // 决策逻辑都在不碰网络的纯逻辑类里:redis_command_route(解析与守卫)、redis_reply_classifier(错误归类)、
 // redis_slot_queues(停等与预算)、redis_cluster_topology(CLUSTER SLOTS、slot 表、刷新节拍)。本类只负责把它们接到连接上。
 //
@@ -30,6 +30,7 @@
 
 #include <chrono>
 #include <cstdarg>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -54,7 +55,8 @@ struct RedisClusterOptions
 	// 必须是 IP 字面量,调用方启动时解析一次(运行期不做阻塞 DNS)。standalone 恰好一个;cluster 至少一个,
 	// 种子只用来拿拓扑,不是主节点的种子在拓扑到达后断开。
 	std::vector<redis_cluster::NodeEndpoint> seeds;
-	// 每条节点连接的口令、重连间隔与存活探测。重连间隔会再加上 reconnectJitterSec 以内的随机抖动。
+	// 每条节点连接的口令、重连间隔与存活探测。重连抖动也在这里(connect.reconnectJitterSec,默认 1s):
+	// 每条节点连接建连时各抽一次,避免主切换或网络恢复时全部节点连接同一刻回连。
 	RedisConnectOptions connect;
 	// 玩家域句柄取 kAllKeys(§5.1 的接缝规则)。
 	redis_cluster::HashTagPolicy hashTagPolicy = redis_cluster::HashTagPolicy::kMultiKeyOnly;
@@ -68,7 +70,6 @@ struct RedisClusterOptions
 	// 全部已知节点连不上持续这么久,就把种子连回来重新拿拓扑。不能一断就连:启动时种子退场之后,
 	// 主节点还在握手的那一小段同样是「一个都没连上」,不该把种子又招回来。
 	redis_cluster::Duration seedFallbackDelay = std::chrono::seconds(5);
-	double reconnectJitterSec = 1.0;
 };
 
 // 进程启动以来的累计计数,只增不减。没有玩家维度,可直接进日志或指标。
@@ -95,6 +96,15 @@ public:
 	using CommandCallback = hiredis::Hiredis::CommandCallback;
 	using ReconnectCallback = std::function<void(const redis_cluster::NodeEndpoint&)>;
 
+	// 命令会不会改数据。只影响维护前沿的记账(同 hiredis::Hiredis::hasNoSideEffect):kNone 的命令任何结局
+	// (含断线时的空应答)都不留下 UNKNOWN,否则一次在途的读撞上断线就会永久卡住进程的维护排空。
+	// command / commandForKey 一律按 kMayWrite 记(与 Hiredis::command 相同)。
+	enum class SideEffects : uint8_t
+	{
+		kMayWrite,
+		kNone,
+	};
+
 	RedisClusterClient();
 	~RedisClusterClient();
 
@@ -119,6 +129,11 @@ public:
 	// 但路由键必须与键同 slot。
 	int commandForKey(std::string_view routingKey, const CommandCallback& cb, muduo::StringArg fmt, ...);
 
+	// 按参数数组提交:参数可以含任意字节、个数不定(例如归属对账一次读几百个键的 MGET),不经格式串。
+	// argv[0] 是命令名;argvlen 与 argv 一一对应。按命令自身的键路由;守卫、停等、错误与回调契约同 command。
+	// sideEffects 由调用方显式给出(只读命令给 kNone),只影响维护前沿的记账。
+	int commandArgv(const CommandCallback& cb, int argc, const char** argv, const std::size_t* argvlen, SideEffects sideEffects);
+
 	// 拓扑已就绪且至少一个节点已连接。这不保证某个具体 slot 可用,那要看 command 的返回值。
 	bool connected() const;
 
@@ -133,7 +148,14 @@ private:
 	ReconnectCallback reconnectCb_;
 };
 
-// 玩家域句柄(设计 §5.1、§5.6),与 tlsRedis 同样 thread_local,只在 scene 上由 RedisSystem 建连;gate、battle 不访问玩家域,
-// 这里恒未连接(connected() 为假,command() 返回 REDIS_ERR)。控制域仍走 tlsRedis。
+// 两个句柄都只在 scene 上由 RedisSystem 建连;gate、battle 不连 Redis,这里恒未连接(connected() 为假,command() 返回 REDIS_ERR)。
 // 不放进 thread_context:本头 include 了 redis_manager.h,放过去就成了头文件与静态库的循环依赖。
+//
+// 玩家域句柄(设计 §5.1、§5.6;game_config.yaml 的 player_redis):键策略 kAllKeys + KeyDomain::kPlayer。
 extern thread_local RedisClusterClient tlsPlayerRedis;
+
+// 控制集群句柄(docs/design/redis-cluster-all-domains-20261110.md §4.2、§5.2;game_config.yaml 的 control_redis):
+// 键策略 kMultiKeyOnly + KeyDomain::kControl,单键可以不带 tag,带 tag 只能是登记过的控制族,多键必须同一个 tag,
+// 玩家域的 tag 当场拒绝。用它的只有四处:分线目录 GET、神秘商人 HGET、场景归属对账 MGET(都带本 zone 的 {ctl:<z>}),
+// 资产待办唤醒 SPUBLISH(分片频道 assetop:wake:{aw:<k>})。
+extern thread_local RedisClusterClient tlsControlRedis;

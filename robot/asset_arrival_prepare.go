@@ -152,9 +152,8 @@ func validateAssetArrivalAssignment(reply *httpAssignGateResponse) error {
 }
 
 func openAssetArrivalSession(cfg *config.Config, stats *metrics.Stats) (*equipSmokeSession, error) {
-	reply, err := assignAssetArrivalGate(cfg.GatewayAddr, &httpAssignGateRequest{
-		ZoneID: cfg.ZoneID, Account: cfg.AssetArrivalPrepare.Account,
-	}, 5*time.Second)
+	// 匿名分配:本机专用栈不开排队,账号在连上 gate 之后才认证(prepareBehaviorClient)。
+	reply, err := assignAssetArrivalGate(cfg.GatewayAddr, &httpAssignGateRequest{ZoneID: cfg.ZoneID}, 5*time.Second)
 	if err != nil {
 		return nil, err
 	}

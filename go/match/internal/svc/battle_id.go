@@ -9,8 +9,8 @@ import (
 	"shared/idsegment"
 )
 
-// BattleIDBizTag 是发号器里 battle_id / challenge_id / team_id 共用的业务键。
-// 三种 id 共用一个号段所以互不重复;都是打散的计数器值,不能解析、不能比大小。
+// BattleIDBizTag 是发号器里 battle_id / challenge_id / team_id / 玩家战斗剧本 id 共用的业务键。
+// 几种 id 共用一个号段所以互不重复;都是打散的计数器值,不能解析、不能比大小。
 const BattleIDBizTag = "battle"
 
 // battleIDMintTimeout 是发一个 id 的预算。手里有号时不等待;两段都用完、data_service 又不通才会等到这么久。

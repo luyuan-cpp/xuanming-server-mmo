@@ -32,13 +32,13 @@
 
 **部署侧与服务配置的键名契约**(K8s ConfigMap 由 `k8s_deploy.ps1` 生成,键名必须与 `go/player_inbox/internal/config` 逐字一致):
 `Name` / `ListenOn` / `Timeout` / `Mode` / `Middlewares.StatConf.IgnoreContentMethods` / `Etcd{Hosts, Key:""}` / `ZoneId` / `LeaseTTL` / `MetricsListenAddr` / `KillSwitchPrefix` /
-`MySQL{Host, User, Password, DBName, MaxOpenConn, MaxIdleConn}` / `Schema.AutoMigrate` / `CoreRedis{Host, Password, DB, PoolSize}` /
-`Kafka{Brokers, WriteTimeoutMs}` / `DataServiceRpc` / `PlayerInbox{AdminTokenEnv, EnqueueTypes, TerminalRetentionDays, SweepIntervalSeconds,
-NotifyResendIntervalSeconds, GaugeIntervalSeconds, ReconcileIntervalMinutes, ReconcileWindowHours}`。
+`MySQL{Host, User, Password, DBName, MaxOpenConn, MaxIdleConn}` / `Schema.AutoMigrate` / `ControlRedis{Addrs, Password, PoolSizePerNode}`(2026-11-12 取代 `CoreRedis`,集群部署另写 `Cluster`) /
+`Kafka{Brokers, WriteTimeoutMs}` / `DataServiceRpc` / `PlayerInbox{AdminTokenEnv, EnqueueTypes,
+NotifyResendIntervalSeconds, GaugeIntervalSeconds, ReconcileIntervalMinutes, ReconcileWindowHours}`。原来的 `TerminalRetentionDays`、`SweepIntervalSeconds` 2026-11-12 随空转的清理循环删除(终态行是永久收据,设计 §9.1);旧配置里还留着也能启动,go-zero 忽略未知键。
 - `PlayerInbox.AdminTokenEnv` 是口令所在的环境变量名,非空时从该变量取口令;与字面 `AdminToken` 二选一,两者都非空拒启。仓库里的 `etc/player_inbox.yaml` 永远不带口令值。
 - `Middlewares` 段从服务 yaml 整段复制,只屏蔽 `FetchItems` / `AckItems` 的请求体日志(评审 L12)。go-zero 的 Stat 缺省开着,这时没列这两个方法,
   `config.Validate` 就拒启,`player-inbox-migrate` Job 也一样。**所以部署脚本不能晚于这一版 Go 上线**(§2 前置)。
-- `CoreRedis.PoolSize` 必须是正整数(当前 20),Redis 连接总账读同一个键;读写超时 1s 与 `ContextTimeoutEnabled` 写在代码里,不是配置项。
+- `ControlRedis.PoolSizePerNode` 必须是正整数(当前 20),Redis 连接总账读同一个键;读写超时不写即各 1s(`config.EffectiveControlRedis`),ctx 截止约束由 `shared/clusterredis` 缺省开启。
 
 **它不是什么**:不是邮件、不是资产通道。收件箱不可用不阻断进场(IB-7):scene 只退避。GM 处置只有一个域 `SCENE_GM_SANCTION`,注册了五种类型:
 `GM_BLOCK_CURRENCY_GAIN` / `GM_UNBLOCK_CURRENCY_GAIN` / `GM_ATTACH_CURRENCY_DEBT`,以及 2026-11-05 起的单玩家物品获取封禁 `GM_BLOCK_ITEM_GAIN` / `GM_UNBLOCK_ITEM_GAIN`(设计 §2.2)。
@@ -74,7 +74,7 @@ NotifyResendIntervalSeconds, GaugeIntervalSeconds, ReconcileIntervalMinutes, Rec
 | 3 | 部署收件箱服务,`EnqueueTypes` **为空** | `player-inbox` 两副本 Ready;etcd 有 `PlayerInboxNodeService.rpc/...` 键;`GmSanctionPlayer` 返回 `kPlayerInboxDisabled`;写路径打印 `player-inbox consumer gate: consumer_enabled=false ... enqueue_types=0 ... OK` |
 | 4 | 全部 scene 升级,`consumer_enabled=false`(`bin/etc/game_config.yaml` 仓库默认是 `true`,要走这一步先改成 `false` 并提交;K8s:逐 zone `zone-up`) | **这就是回滚下限**。存档能原样往返 `inbox_ledger`,scene 不发 Fetch(收件箱 `player_inbox_fetch_total` 不涨)。每个 scene 启动时打一行 WARN `[PlayerInbox] metric=inbox_consumer_disabled`,之后每 5 分钟补打一行:这一步出现它是预期的 |
 | 5 | 打开消费:把 `bin/etc/game_config.yaml` 的 `player_inbox.consumer_enabled` 改成 `true` 并提交,再逐 zone `zone-up` 并滚动 scene(ConfigMap 变了不会自己重启 C++ 进程)。可以加 `-PlayerInboxConsumer on`,把预期写进命令(§2.1) | 门禁行变为 `consumer_enabled=true`;scene 启动行变为 INFO `[PlayerInbox] consumer_enabled=1 ...`,`metric=inbox_consumer_disabled` 不再出现;`player_inbox_fetch_total{path="fast"}` 随登录上涨,`fence` 以 `NO_STREAM` 为主 |
-| 6 | 打开入箱:改服务 yaml 的 `PlayerInbox.EnqueueTypes` 并提交,重跑 `infra-up`。**GM 域只能填** `PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN`、`PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN`、`PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN`、`PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN`(按需填其中几种)。第 5 步没做完(有 zone 线上 node-config 还是 `false`),门禁会拒绝(§2.1)。<br>交易资产通道开着时,还要知道:被封禁获取的玩家参与的托管交易,成交所得那条腿会被拒,合同转人工,解封后要 `commercefix reissue` 补发。退回本人托管的资产不受影响(2026-11-10,数据覆写审计 r2-trade#1);「交付先买家后卖家、被拒自动退回」做完之前,这一点都成立,见聚宝斋设计 §6.2 末 | 门禁行为 `enqueue_types=2 ... live=zones_consumer_enabled=N/N OK`(N = 线上 zone 数,两个数相等);生成期打印的 ConfigMap 里 `EnqueueTypes` 有值;一次测试处置能入箱并在测试账号上生效 |
+| 6 | 打开入箱:改服务 yaml 的 `PlayerInbox.EnqueueTypes` 并提交,重跑 `infra-up`。**GM 域只能填** `PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN`、`PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN`、`PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN`、`PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN`(按需填其中几种)。第 5 步没做完(有 zone 线上 node-config 还是 `false`),门禁会拒绝(§2.1)。<br>交易资产通道开着时,还要知道:被封禁获取的玩家参与的托管交易,交付先发买家那条。买家那条被拒时整单自动退回(货回卖家、钱回买家,寄售因此撤下,不转人工);卖家那条被拒时合同转人工,卖家解封后要 `commercefix reissue` 补发。退回本人托管的资产不受封禁影响(2026-11-10~12,数据覆写审计 r2-trade#1,见聚宝斋设计 §6.2 末) | 门禁行为 `enqueue_types=2 ... live=zones_consumer_enabled=N/N OK`(N = 线上 zone 数,两个数相等);生成期打印的 ConfigMap 里 `EnqueueTypes` 有值;一次测试处置能入箱并在测试账号上生效 |
 
 **v1 不开 `GM_ATTACH_CURRENCY_DEBT`**(原因见 §1):
 - 白名单里出现它,`config.Validate` 与装配层都拒启(`config.ParseEnqueueTypes`)。
@@ -363,6 +363,7 @@ scene 认识这个类型,但本版本不能安全执行这一条。先按日志�
 - **欠款带新字段**:挂欠款时,玩家同币种的既有欠款带着更新版本的字段(更新版本的 scene 写下的,见 `mixed-version-persist-field-protection.md` §4.4)。日志 `AttachCurrencyDebt version skew: existing debt carries fields unknown to this version`。
 - **新币种**(2026-10-23 起):载荷里的币种不在本版本 scene 的取值表内,日志 `metric=persist_version_skew where=inbox_currency`,带 `executor` / `currency_type`。收件箱入箱已按 `proto/common/base/currency_type.proto` 拒绝写错的值,所以这只可能是更新版本加的币种:GM 在 scene 全量升级之前就对新币种下了处置(发布纪律不允许)。处置同下面第 1、2 条;第 3 条不适用,升级到认识这个币种的版本即解除。
 - **载荷带新字段**(2026-11-11 起,所有域都适用,包括战斗结算):载荷里有本版本 scene 不认识、也不是已退役(reserved)的字段,日志 `metric=persist_version_skew where=inbox_payload`,带 `type` / `field=<消息全名#字段号>`。这一条不调执行器。来源是更新版本的生产者(Go 各服务、battle 节点)在 scene 全量之前就写了新字段,违反了发布次序(`mixed-version-persist-field-protection.md` §13 第 7 条)。处置同下面第 1、2 条,升级到认识这个字段的版本即解除。
+- **不属于本节**:`metric=persist_version_skew where=battle_item` / `where=battle_pet`(2026-11-11 起)。战斗结算里的物品或宝宝种类在本节点配置表里查不到,这不停用本域,是**整笔延后**、本地退避重试,配置热更到本节点即自愈。处置见 §6.1 表里「物品 / 宝宝配置在本节点表里查不到」一行。
 
 **先排除版本错位再处理毒消息**:同一名玩家在几台旧版本节点之间换图或重建实体,每次重拉都会让这一行的 `delivery_count` +1,可能触发 `PlayerInboxPoisonSuspect`。告警指引的 `VoidItem(reason=QUARANTINED)` 会把一条合法处置作废:先查该玩家 scene 日志里有没有 `reason=version_skew` 或上面两种日志,有就按本节处理。
 出现在新旧 scene 混跑(滚动发布、金丝雀)期间;整体回滚到不认识这些字段的版本之后不会自行消失(见第 3 条)。这一条不记账、不确认,已定的前缀照常确认,行留在收件箱 PENDING。同域排在它后面的处置(例如 `GM_BLOCK_CURRENCY_GAIN`)也一起停住。
@@ -514,12 +515,12 @@ v1 **不做自动隔离**。
 
 | 原因 | scene 表现 | 恢复 |
 |---|---|---|
-| 宝宝 / 宠物配置缺失(宠物配置行被删、宠物已不在玩家身上、宠物属性池缺失) | 已改为**跳过该宠物的子效果**,其余照常应用,逐项 ERROR `metric=battle_inbox_pet_effect_skipped reason=pet_table_missing / pet_no_longer_owned / pet_pool_missing`。条目正常 APPLIED,不再卡住 | 不需要解卡。按日志里的 `battle_id` 与数量由负责人评估是否补偿;仍在跑旧版本的 scene 可能整笔延后,滚动升级 scene |
-| 物品配置行被热更删除(掉落或消耗项的 `config_id` 已不存在) | C++ 与 Java 正在改为**跳过该物品子效果**(ERROR `metric=battle_inbox_item_effect_skipped reason=item_table_missing`,其余照常应用)。还没跑到这一版的节点上,这份原件会一直延后或停用 | 首选把被删的配置行热更回来(只恢复那一行),下一次重试即应用;或把 scene 升到跳过版本。跳过的物品按日志人工补偿。**不要**为了解卡改原件或作废 |
+| 宝宝已不可用(宝宝已不在玩家身上、宝宝属性池缺配) | **跳过这只宝宝的子效果**,其余照常应用,逐项 ERROR `metric=battle_inbox_pet_effect_skipped reason=pet_no_longer_owned / pet_pool_missing`。条目正常 APPLIED,不会卡住 | 不需要解卡。按日志里的 `battle_id` 与数量由负责人评估是否补偿;属性池缺配是配表问题,补上配置 |
+| 物品 / 宝宝配置在本节点表里查不到(掉落或消耗项的 `config_id` 不在本节点 Item 表里,或玩家带进这一局的宝宝种类不在本节点 Pet 表里;2026-11-11 起) | **整笔延后、零副作用**,不剔除这一项、不跳过这只宝宝。WARN `metric=persist_version_skew where=battle_item`(带 `side=consumed/gained`、`config_id`)或 `where=battle_pet`(带 `pet_id`、`pet_table_id`),每次重试一条;scene 本地按 1s→60s 退避重试,不停用本域。Item / Pet 表行 id 只增不删(导表器 `(cfg_ids_permanent)` 门禁,`data/AGENTS.md`),所以查不到只可能是这一行还没热更到本节点,或结算 / 宝宝来自更新版本的节点 | 把配置表热更到含这一行的版本(或把 scene 滚动到含这一行的版本),下一次重试即应用;玩家换到已有这一行的节点时重拉也会应用。日志里的配置号在最新导表产物里也没有:查 battle / 发放方为什么写出不存在的配置号,按事故上报。**不要**作废、改原件,也**不要**为了解卡删改玩家的物品或宝宝。2026-10-30 ~ 11-11 的口径是只剔除查不到的物品项、跳过查不到种类的宝宝(日志 `battle_inbox_item_effect_skipped`、`pet_effect_skipped reason=pet_table_missing`),已作废:表行不会再被删,剔除就是丢掉玩家这一局的掉落 |
 | 产出封禁(全服 GainBlock 封了某物品 / 币种,或玩家被 GM 封锁了该币种的获取) | 与资产通道、旧路径同一口径(2026-11-05):**只跳过被封的币种 / 掉落,其余效果照常应用,结局 APPLIED**;被封部分这一局永久不入账、不抵欠款,解封后不补发。日志 `metric=battle_settlement_currency_blocked` / `battle_settlement_item_blocked`(source=inbox)。不会因封禁卡住条目,无需处置 |
 | 持久数据损坏或含未知字段(玩家背包实例 / 宠物 / 欠款带本版本不认识的字段,数量实例不可计数,或持久组件缺失) | 未知字段与不可计数实例判**版本错位、停用该域**;组件缺失则整笔延后 | 未知字段来自更新版本的 scene 写下的数据:把全网 scene 滚动到认识这些字段的版本(同 §5.2 A′),玩家重新落地即应用。确属损坏(没有任何版本认识):按事故上报负责人,走存档修复 / 回档流程(§9、`docs/ops/online-debug-data-fetch.md`),不要手改存档 |
 | 载荷坏值(结算原件解不开、带未知字段、终局值非法;或币种越界、同币种重复、金额超过 INT64_MAX) | 前三种判**版本错位、停用该域**,后三种**整笔延后**。原件不可变,重试永远是同一个结果 | 先查是不是更新版本的 battle 写出的字段(升级 scene 即可)。否则是 battle / match 的缺陷:按事故上报,修复只能靠能安全处理这份原件的新版本 scene;**不能**改载荷、作废或另发一份结算 |
-| 主包与临时格都满(主包放不下整批掉落,转临时格也放不下;2026-11-05 起临时格满了**不再挤掉旧物**,新到的整批一律拒绝,scene 打 WARN `metric=bag_grant_overflow_rejected`,首次与每连续 8 次一条、不带调用栈),或物品号段余量不足(`metric=battle_settlement_item_guid_shortage`) | **整笔延后**,玩家在线时本地退避重试;同一玩家收件箱后面的局按序也停在这里 | 让玩家把临时格的东西取回人物背包(客户端「临时格」页签的取回 / 全部取回,协议 `RetrieveTemporaryItems`,`docs/design/bag-rule-policy-layering.md` §6.6;这一局的战斗冻结还挂着时照样能取回)或整理背包腾出空间(整理要等冻结解开)。取回成功会经 `PlayerInboxSystem::OnBagSpaceFreed` 把这一条的下一次尝试提到现在,下一个 tick(约 1 秒)就重试,放得下即应用;整理等其它腾位方式不唤醒,照常等退避(最长约 60 秒)再重试(2026-11-06 起);号段不足时 scene 已自动请号段客户端续一段(日志带 `top_up=fetching`,2026-11-06 起),续上即自愈;`top_up=exceeds_max_step` / `unavailable` 打 ERROR,说明这一批要的新实例比一段最多能给的号(`IdSegments` 的 `MaxStep`)还多,或 item 号段未启用 / 已停机,查 `IdSegments` 的 `MaxStep` / `Enabled` 与发号器;结算照样只延后、不拒收,改好配置后下一次重试自愈。不需要服务端操作,**不要**作废或改原件 |
+| 主包与临时格都满、而掉落又没能改投邮件(2026-11-12 起两包都放不下时掉落改投邮件、这一局照常应用,见下「待寄邮件」;走到这一行说明邮件接不住:scene 没配 `MAIL_PRODUCER_SECRET_BATTLE`(启动日志有一行 `Battle overflow mail is disabled`)、待寄队列满(`metric=mail_outbox_full`)、或请求号暂时取不到(`metric=mail_outbox_request_id_shortage`)。临时格 2026-11-05 起满了**不再挤掉旧物**,新到的整批一律拒绝,scene 打 WARN `metric=bag_grant_overflow_rejected`,首次与每连续 8 次一条、不带调用栈),或物品号段余量不足(`metric=battle_settlement_item_guid_shortage`) | **整笔延后**,玩家在线时本地退避重试;同一玩家收件箱后面的局按序也停在这里 | 让玩家把临时格的东西取回人物背包(客户端「临时格」页签的取回 / 全部取回,协议 `RetrieveTemporaryItems`,`docs/design/bag-rule-policy-layering.md` §6.6;这一局的战斗冻结还挂着时照样能取回)或整理背包腾出空间(整理要等冻结解开)。取回成功会经 `PlayerInboxSystem::OnBagSpaceFreed` 把这一条的下一次尝试提到现在,下一个 tick(约 1 秒)就重试,放得下即应用;整理等其它腾位方式不唤醒,照常等退避(最长约 60 秒)再重试(2026-11-06 起);号段不足时 scene 已自动请号段客户端续一段(日志带 `top_up=fetching`,2026-11-06 起),续上即自愈;`top_up=exceeds_max_step` / `unavailable` 打 ERROR,说明这一批要的新实例比一段最多能给的号(`IdSegments` 的 `MaxStep`)还多,或 item 号段未启用 / 已停机,查 `IdSegments` 的 `MaxStep` / `Enabled` 与发号器;结算照样只延后、不拒收,改好配置后下一次重试自愈。不需要服务端操作,**不要**作废或改原件 |
 
 **战斗冻结续冻(2026-11-06,`docs/design/turn-battle-gap-closure.md` §11)**:FIGHTING 冻结到期时 scene 先向 match 查这一局的 SQL 终局,
 COMPLETE 而结算还没到本地、有可裁决原件而终局还没落定(NONE)、或者查不到,就续冻(每 30 秒一行 WARN
@@ -540,11 +541,35 @@ FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直�
   COMPLETE / PENDING / UNKNOWN 留着,**没有上限**。越过「冻结到期 + 15 分钟」仍没收尾,每 10 分钟一行 ERROR `metric=battle_item_hold_overdue`
   (值班查询 `count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_overdue" [10m]) > 0`)。
 - **处置**:按日志里的 `battle_id` 查结算为什么没到,走本节上面的步骤 —— 发件箱积压看下面「Match 个人结算首投积压」;
-  条目已在收件箱而整笔延后看上面的原因表(两包都满就让玩家腾位、取回临时格);match 查不到看 `battle_terminal_query_unknown` 的处置。
+  条目已在收件箱而整笔延后看上面的原因表(两包都满而没能改投邮件时,让玩家腾位、取回临时格);match 查不到看 `battle_terminal_query_unknown` 的处置。
   结算一应用,预留随之释放,不需要人工放。
 - **禁止**手改 `player_database.item_holds` 或用 GM 放掉预留来「解卡」:押着的就是结算要扣的东西,放掉等于让玩家把药白喝;
   结算若确实永远到不了(原件损坏),按事故上报负责人,走存档修复流程。
 - 玩家离线时被取消的备战只删锁,预留留在存档里,下次加载后按 SQL 终局收尾;这段时间这些道具押着,属预期。
+
+**待寄邮件(2026-11-12,`docs/design/battle-overflow-mail.md`)**:人物背包与临时格都放不下这一局的掉落时,结算照常应用,
+掉落整批记进玩家存档的待寄队列(`player_database.mail_outbox`),存档提交之后由 scene 以 `battle` 身份寄成个人邮件(标题「战斗奖励」),
+邮件回了 `mail_id` 才从队列里删。玩家腾出背包空位后在邮箱里领取。这类局不会卡在收件箱里,条目正常 APPLIED。
+
+- **正常的日志**:INFO `metric=battle_items_mailed`(每封一行,带 `battle_id`、`request_id`),之后 INFO `metric=mail_outbox_delivered`(带 `mail_id`)。
+  按 `request_id` 可以在邮件库里对到同一封(`sender_kind=5`)。
+- **会自己好的失败**:WARN `metric=mail_outbox_send_failed`(连续失败的第 1 次和之后每 8 次一行)、`metric=mail_outbox_send_lost`(在途超过调用期限没回)。
+  原因是邮件不可达、结果未知,或玩家邮箱满(`kMailRecipientBoxFull`,个人邮件上限 200 封)。条目留着按退避重试:
+  结果未知 1 秒起、封顶 60 秒;邮箱满 30 秒起、封顶 5 分钟。邮箱满的让玩家删信;其余查 mail 是否可用、scene 能否发现
+  `MailNodeService.rpc` 下的节点。只寄此刻登记在本节点、可改的玩家:离线、交接中的玩家等下次落地再寄,属预期。
+- **不会自己好的失败**:ERROR `metric=mail_outbox_stuck`(值班查询在 `deploy/k8s/asset-channel-alerts.yaml` 头注释),行里带 `reason=`:
+  - 没配密钥或本地签名失败（`reason=no_secret` / `reason=sign_failed`）→ 核对这个 zone namespace 的 `domain-service-secrets` 里 `mail-producer-battle` 与 infra namespace 的同值、至少 32 字节;
+  - 验签被拒（`reason=signature_rejected`）→ 两边 `MAIL_PRODUCER_SECRET_BATTLE` 不同，或两边时钟相差超过 5 分钟。核对两边同值（见 [K8s 开服手册](k8s-open-server-runbook.md) §1），时钟按 NTP 修；改好后按退避自动寄出。被拒的请求邮件没有写，不会重复。
+  - 条目形状不合法(加载时另有 `metric=mail_outbox_invalid`)→ 按事故上报,走存档修复流程;
+  - `reason=mail_rejected` 时看 `tip=`(号以导表产物为准):
+    - `kMailAttachmentInvalid`:条目里的配置号在邮件服务的 Item 表里查不到。把配置表发到 mail(表行只增不删),补上之后下一次重试寄出;
+    - `kMailRequestConflict`:同一请求号在邮件库里已有内容不同的邮件。按事故上报,不要换请求号重发;
+    - `kInvalidParameter`:请求没过邮件的校验(标题正文长度、发件角色不符等),多半是两边版本不一致,按事故上报。
+  - 这些失败的条目仍留在队列里按退避重试(邮件拒收的 30 秒起、封顶 5 分钟,每次重试一行;没发出去的 1 秒起、封顶 60 秒,
+    第 1 次和之后每 8 次一行)。原因修好之后自己寄出,不用人工重投。
+- **禁止**手改 `player_database.mail_outbox`,也不要为了「补发」另外用 `mailadmin` 发一封同样的附件:条目还在,寄到之后玩家会拿到两份。
+  确认条目已经不在(日志有对应 `request_id` 的 `mail_outbox_delivered`)再谈补偿。
+- 待寄队列至多 32 条。满了之后新的掉落回到上表「主包与临时格都满」的整笔延后,不会丢。
 
 **条目根本没进收件箱**:如果 `ListItems` 查不到这局,而 Match 侧该玩家的 `match_battle_settlement_source` 一直停在 `inbox_seq=0`
 (Match 指标 `match_outcome_outbox_backlog_rows{kind="first"}` 不降、`match_outcome_outbox_delivery_total{kind="first",outcome="failed"}` 在涨),先看收件箱的
@@ -710,7 +735,7 @@ FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直�
 - 回 `kPlayerInboxStoreUnavailable`:除了库或 data_service 故障(可重试),还可能是**账本结构不合法**。
   - 后者收件箱同时打 ERROR `ReconcilePlayer failed`,错误里带 `persisted inbox ledger of player=<id> is structurally invalid`;
   - 重试不会好,按 §10.4 处理。回包里没有专门的字段区分两者,看日志。
-- 一名玩家最多读 5000 行;超出时打 ERROR `ReconcilePlayer read only the first 5000 rows`,结果不完整。
+- 按 (domain, seq) 翻页读完这名玩家的全部条目行(每页 1000 行),结果是完整的;读不完(超时、库或 data_service 故障)回错误,不回部分结果(2026-11-12 起;原先一次最多读 5000 行,超出时只打 ERROR、结果不完整)。条目行永久保留,老玩家的战斗结算行多,耗时随行数增长;只核 GM 处置时带上 `domain`。
 
 ### 10.4 账本损坏(`metric=inbox_ledger_invalid` / `metric=inbox_registry_broken`)
 

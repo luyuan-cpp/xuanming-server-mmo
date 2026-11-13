@@ -460,6 +460,13 @@ X 的处置与 §3.3 完全相同 —— 本质上是**替崩溃的 gate 补发�
 
 零值输入判 `disabled`:漏填只会少请,不会误退持有者。
 
+**托管归位**(2026-11-12,[player-connection-lost-hold.md](player-connection-lost-hold.md) §4.5)是第二种过得了第 1 行的来源:player_locator 替
+没有节点负责的离线托管角色发的 `hosted_placement`、关联号 0 的 EnterScene。它代表的正是 location 记的那一次登录,所以第 2 行对它换一个判据:
+会话号与代次逐一相等、代次非 0(`identityIsHostedLogin`;same_session 只比会话号,不借它)。合格时同样同步请,但请求带
+`ReleasePlayerRequest.keep_held = true`:持有节点只要有他的实体就什么都不做(计 `session_ended_kept_held`),只在完全不持有时按 §3.3 补写凭证。
+归位只把没人持有的角色放回世界,不能把正在托管他的节点上的实体按断线退掉。请过之后同样接 §17 的撤销检查。scene 节点自发的托管落点
+(带关联号)照旧停在第 1 行。
+
 ### 12.4 为什么不会退掉一个正在玩的合法持有者
 
 释放只能作用于 X 上缓存 epoch 恰好为 E 的那一份实体(R4)。要证明的是:**派发的那一刻,这份实体服务的会话已经被这次登录取代,

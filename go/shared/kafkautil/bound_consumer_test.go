@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -108,6 +109,11 @@ type boundHarness struct {
 	// commitErr 决定一次提交的结局(nil = 成功);sleepFn 决定一次退避(nil = 立即返回 ctx.Err()==nil)。
 	commitErr func(generation int32, next int64) error
 	sleepFn   func(ctx context.Context) bool
+	// groupCommitted 是收尾核对读到的组内已提交位点(分区 0;read 从 1 起计),nil = 一律 -1(组在该分区没提交过)。
+	groupCommitted func(read int) int64
+	committedReads int
+	// logStart 是取到的记录前面有缺口时读到的日志起点;nil = 用例不该走到这里(读到就判失败)。
+	logStart func() (int64, error)
 }
 
 func newBoundHarness(t *testing.T, handler func(context.Context, kafkago.Message) error) *boundHarness {
@@ -151,6 +157,41 @@ func (h *boundHarness) attach(t *testing.T, owner *BoundConsumerGroup) {
 	owner.openReader = h.openReader
 	owner.commitOffsets = h.commitOffsets
 	owner.sleep = h.sleep
+	owner.readCommitted = h.readCommitted
+	owner.readLogStart = h.readLogStart
+	owner.now = func() time.Time { return time.UnixMilli(1_700_000_000_000) }
+}
+
+func (h *boundHarness) readCommitted(_ context.Context, _ string, partitions []int32) (map[int32]int64, error) {
+	h.mu.Lock()
+	h.committedReads++
+	read, fn := h.committedReads, h.groupCommitted
+	h.mu.Unlock()
+	out := make(map[int32]int64, len(partitions))
+	for _, partition := range partitions {
+		out[partition] = -1
+		if fn != nil {
+			out[partition] = fn(read)
+		}
+	}
+	return out, nil
+}
+
+func (h *boundHarness) readLogStart(context.Context, string, int) (int64, error) {
+	h.mu.Lock()
+	fn := h.logStart
+	h.mu.Unlock()
+	if fn == nil {
+		h.t.Error("用例没预期读日志起点(取到的记录前面出现了缺口)")
+		return 0, errors.New("unexpected log start read")
+	}
+	return fn()
+}
+
+func (h *boundHarness) committedReadCount() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.committedReads
 }
 
 func (h *boundHarness) start() {
@@ -469,11 +510,17 @@ func TestBoundConsumerGroupRetriesTransientFailureInPlaceAndRecovers(t *testing.
 	}
 }
 
-// 真正的维护排空(StopFetching)时,没结清的已接纳记录仍按收据记 HOLD:排空语义不变,不能把「没提交」洗成已结清。
-func TestBoundConsumerGroupDrainHoldsRecordThatCannotSettle(t *testing.T) {
+// 维护排空(StopFetching)时退避中的记录不再重试,交还给新属主;收尾按组内已提交位点核结局。没有任何属主提交越过它
+// (组内位点一直是 -1)时,预算用完记 HOLD:不能把「没提交」洗成已结清。票据在记 HOLD 之后结束,relay 不会挂住。
+// 退避与收尾轮询都经替身:进入收尾之前退避等到被打断,之后立即返回(预算按轮数用完,不等墙钟)。
+func TestBoundConsumerGroupDrainHoldsHandoffThatNoOwnerSettles(t *testing.T) {
 	h := newBoundHarness(t, func(context.Context, kafkago.Message) error { return errors.New("tidb: write conflict") })
 	backingOff := make(chan struct{}, 1)
+	var closing atomic.Bool
 	h.sleepFn = func(ctx context.Context) bool {
+		if closing.Load() {
+			return ctx.Err() == nil
+		}
 		select {
 		case backingOff <- struct{}{}:
 		default:
@@ -486,13 +533,17 @@ func TestBoundConsumerGroupDrainHoldsRecordThatCannotSettle(t *testing.T) {
 	h.deliver(1, kafkago.FirstOffset)
 	reader.push(0, "a")
 	waitSignal(t, backingOff, "处理失败后进入退避")
+	closing.Store(true)
 	raw, err := h.stop()
-	if !errors.Is(err, drainproof.ErrHold) || raw != nil {
-		t.Fatalf("排空时没结清的记录必须 HOLD: %v %s", err, raw)
+	if !errors.Is(err, drainproof.ErrHold) || !errors.Is(err, errBoundTicketUnconfirmed) || raw != nil {
+		t.Fatalf("没有属主结清的交还记录必须 HOLD: %v %s", err, raw)
+	}
+	if reads := h.committedReadCount(); reads != boundTicketConfirmPolls {
+		t.Fatalf("收尾核对应读满 %d 轮组内位点再 HOLD: %d", boundTicketConfirmPolls, reads)
 	}
 	h.relay.CloseAdmission()
 	if err := h.relay.Wait(context.Background()); !errors.Is(err, drainproof.ErrHold) {
-		t.Fatalf("relay 没有保留未知结局: %v", err)
+		t.Fatalf("relay 没有保留未知结局(或票据没结束): %v", err)
 	}
 	if commits := h.commitsOf(1); len(commits) != 0 {
 		t.Fatalf("没处理成功的记录被提交: %+v", commits)
@@ -610,54 +661,97 @@ func TestBoundMessageReaderCommitAfterGenerationEndSettlesOrReleases(t *testing.
 	}
 }
 
-// reader 模式:代次还在时提交失败先有界重试(共 3 次,200ms 起翻倍);仍失败就交还重投、不 HOLD。
-// owner 已终止(StopFetching)时同样的失败才记 HOLD,排空语义不变。
-func TestBoundMessageReaderCommitRetriesWhileAliveAndHoldsOnlyWhenTerminating(t *testing.T) {
-	relay := drainproof.New()
-	owner, err := NewBoundMessageReader(boundTestConfig(), relay)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sleeps []time.Duration
-	owner.sleep = func(ctx context.Context, d time.Duration) bool { sleeps = append(sleeps, d); return ctx.Err() == nil }
-	generation := &kafkago.Generation{ID: 4, GroupID: "results-group", MemberID: "member"}
-	partition := &boundPartition{topic: boundTestTopic, partition: 0, initial: 20, committed: 20, pending: map[int64]*boundDelivery{}}
-	owner.generation = generation
-	owner.generationContext = context.Background()
-	owner.generationCancel = func() {}
-	owner.partitions = map[string]*boundPartition{boundPartitionKey(boundTestTopic, 0): partition}
-	owner.initialized = true
-	for _, offset := range []int64{20, 21} {
-		owner.messages <- &boundDelivery{generation: generation, partition: partition, message: kafkago.Message{Topic: boundTestTopic, Partition: 0, Offset: offset, Value: []byte("row")}}
-		if _, err := owner.FetchMessage(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-	}
-	attempts := 0
-	owner.commitOffsets = func(*kafkago.Generation, map[string]map[int]int64) error {
-		attempts++
-		return errors.New("[15] Group Coordinator Not Available")
-	}
-	if err := owner.CommitMessages(context.Background(), metadata(20)); !errors.Is(err, ErrUncommitted) {
-		t.Fatalf("代次还在、重试用尽应交还重投: %v", err)
-	}
-	if attempts != boundCommitAttempts || fmt.Sprint(sleeps) != fmt.Sprint([]time.Duration{200 * time.Millisecond, 400 * time.Millisecond}) {
-		t.Fatalf("提交重试次数或间隔不对: attempts=%d sleeps=%v", attempts, sleeps)
-	}
-	if owner.failure != nil || relay.Pending() != 1 {
-		t.Fatalf("运行中的提交失败不该 HOLD: failure=%v pending=%d", owner.failure, relay.Pending())
-	}
-	owner.StopFetching()
-	if err := owner.CommitMessages(context.Background(), metadata(21)); err == nil || errors.Is(err, ErrUncommitted) {
-		t.Fatalf("终止后提交失败不能当成交还重投: %v", err)
-	}
-	if owner.failure == nil {
-		t.Fatal("终止后没结清的记录必须 HOLD")
-	}
-	owner.waitDelivered(context.Background(), generation, owner.partitions)
-	relay.CloseAdmission()
-	if err := relay.Wait(context.Background()); !errors.Is(err, drainproof.ErrHold) {
-		t.Fatalf("relay 没有保留未知结局: %v", err)
+// reader 模式:代次还在时提交失败先有界重试(共 3 次,200ms 起翻倍);仍失败就交还重投、不 HOLD,并结束本代次
+// (下一代次立即重投,第 7 条)。owner 已终止(StopFetching,排空时逐个离组)时同样的失败交给新属主(第 1 条):不 HOLD,
+// 票据留到 CloseAndReport 读组内已提交位点 —— 新属主提交越过了就结清,没越过才 HOLD。
+func TestBoundMessageReaderCommitRetriesWhileAliveAndHandsOffWhenTerminating(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		groupCommitted int64
+		wantHold       bool
+	}{
+		{name: "新属主提交越过:结清", groupCommitted: 22},
+		{name: "组内位点没越过:HOLD", groupCommitted: 21, wantHold: true},
+		{name: "组在该分区没提交过:HOLD", groupCommitted: -1, wantHold: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			relay := drainproof.New()
+			owner, err := NewBoundMessageReader(boundTestConfig(), relay)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var sleeps []time.Duration
+			owner.sleep = func(ctx context.Context, d time.Duration) bool { sleeps = append(sleeps, d); return ctx.Err() == nil }
+			reads := 0
+			owner.readCommitted = func(context.Context, string, []int32) (map[int32]int64, error) {
+				reads++
+				return map[int32]int64{0: tc.groupCommitted}, nil
+			}
+			restarts := 0
+			generation := &kafkago.Generation{ID: 4, GroupID: "results-group", MemberID: "member"}
+			partition := &boundPartition{topic: boundTestTopic, partition: 0, initial: 20, committed: 20, pending: map[int64]*boundDelivery{}}
+			owner.generation = generation
+			owner.generationContext = context.Background()
+			owner.generationCancel = func() { restarts++ }
+			owner.partitions = map[string]*boundPartition{boundPartitionKey(boundTestTopic, 0): partition}
+			owner.initialized = true
+			for _, offset := range []int64{20, 21} {
+				owner.messages <- &boundDelivery{generation: generation, partition: partition, message: kafkago.Message{Topic: boundTestTopic, Partition: 0, Offset: offset, Value: []byte("row")}}
+				if _, err := owner.FetchMessage(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			attempts := 0
+			owner.commitOffsets = func(*kafkago.Generation, map[string]map[int]int64) error {
+				attempts++
+				return errors.New("[15] Group Coordinator Not Available")
+			}
+			if err := owner.CommitMessages(context.Background(), metadata(20)); !errors.Is(err, ErrUncommitted) {
+				t.Fatalf("代次还在、重试用尽应交还重投: %v", err)
+			}
+			if attempts != boundCommitAttempts || fmt.Sprint(sleeps) != fmt.Sprint([]time.Duration{200 * time.Millisecond, 400 * time.Millisecond}) {
+				t.Fatalf("提交重试次数或间隔不对: attempts=%d sleeps=%v", attempts, sleeps)
+			}
+			if owner.failure != nil || relay.Pending() != 1 {
+				t.Fatalf("运行中的提交失败不该 HOLD: failure=%v pending=%d", owner.failure, relay.Pending())
+			}
+			if restarts != 1 || owner.initialized {
+				t.Fatalf("交还已落库的记录要结束本代次、让下一代次立即重投: restarts=%d initialized=%v", restarts, owner.initialized)
+			}
+
+			owner.StopFetching()
+			attempts = 0
+			if err := owner.CommitMessages(context.Background(), metadata(21)); !errors.Is(err, ErrUncommitted) {
+				t.Fatalf("终止时提交被拒应交给新属主(交还重投),不是未知结局: %v", err)
+			}
+			if attempts != 1 || owner.failure != nil || relay.Pending() != 1 || len(owner.handoffs) != 1 || partition.handedOff != 1 || partition.released != 2 {
+				t.Fatalf("终止时不重试、不 HOLD、票据留给收尾核对: attempts=%d failure=%v pending=%d handoffs=%d handedOff=%d released=%d",
+					attempts, owner.failure, relay.Pending(), len(owner.handoffs), partition.handedOff, partition.released)
+			}
+			if restarts != 1 {
+				t.Fatalf("终止时不再结束代次(owner 要离组了): restarts=%d", restarts)
+			}
+			owner.waitDelivered(context.Background(), generation, owner.partitions)
+
+			raw, err := owner.CloseAndReport(context.Background())
+			relay.CloseAdmission()
+			waitErr := relay.Wait(context.Background())
+			if tc.wantHold {
+				if !errors.Is(err, drainproof.ErrHold) || !errors.Is(err, errBoundTicketUnconfirmed) || raw != nil || reads != boundTicketConfirmPolls {
+					t.Fatalf("核不到新属主提交越过,必须 HOLD: err=%v reads=%d raw=%s", err, reads, raw)
+				}
+				if !errors.Is(waitErr, drainproof.ErrHold) {
+					t.Fatalf("relay 没有保留未知结局(或票据没结束): %v", waitErr)
+				}
+				return
+			}
+			if err != nil || waitErr != nil || reads != 1 {
+				t.Fatalf("新属主提交越过之后收据必须成立: err=%v wait=%v reads=%d", err, waitErr, reads)
+			}
+			if !bytes.Contains(raw, []byte(`"ResolvedHandoffs":[{"Topic":"results","Partition":0,"Offset":21,"Generation":4,"GroupCommitted":22}]`)) {
+				t.Fatalf("收据没有记下核到的交还结局: %s", raw)
+			}
+		})
 	}
 }
 
@@ -968,25 +1062,19 @@ func TestCommitStallTracksBacklogWhoseCommittedOffsetDoesNotMove(t *testing.T) {
 	}
 }
 
-// RequireArrivals(reader 模式口径):位点停下之后没有新消息时(提交失败交还的已落库记录挂着积压)不计时,
-// 来了新消息而位点不动才计;消费者把新消息连同交还的几条一并提交后,位点动了就从头计。
-func TestCommitStallRequiringArrivalsIgnoresReleasedBacklogOnQuietPartition(t *testing.T) {
+// 第 7 条:判据不依赖新消息到达。收不到新消息的分区(日志末端不再增长)位点停着、积压不为 0,照样计时;
+// 以前 data_service 用的 RequireArrivals 口径在这里恒报 0,分区卡住看不见。
+func TestCommitStallReportsQuietPartitionWithoutNewArrivals(t *testing.T) {
 	at := func(seconds int64) time.Time { return time.Unix(1_000_000+seconds, 0) }
-	stall := CommitStall{RequireArrivals: true}
-	for _, seconds := range []int64{0, 900, 3600, 86400} {
-		if got := stall.Observe(at(seconds), []PartitionOffsets{{Partition: 0, Committed: 10, End: 12}}); got != 0 {
-			t.Fatalf("没有新消息的积压不算卡住(第 %d 秒): %v", seconds, got)
+	var stall CommitStall
+	stall.Observe(at(0), []PartitionOffsets{{Partition: 0, Committed: 10, End: 12}})
+	for _, seconds := range []int64{900, 3600} {
+		if got := stall.Observe(at(seconds), []PartitionOffsets{{Partition: 0, Committed: 10, End: 12}}); got != time.Duration(seconds)*time.Second {
+			t.Fatalf("没有新消息、位点停着的积压也要计时(第 %d 秒): %v", seconds, got)
 		}
 	}
-	stall.Observe(at(90000), []PartitionOffsets{{Partition: 0, Committed: 10, End: 13}})
-	if got := stall.Observe(at(90900), []PartitionOffsets{{Partition: 0, Committed: 10, End: 20}}); got != 900*time.Second {
-		t.Fatalf("新消息到了 900 秒位点仍不动, 应报 900s: %v", got)
-	}
-	if got := stall.Observe(at(90930), []PartitionOffsets{{Partition: 0, Committed: 20, End: 21}}); got != 0 {
-		t.Fatalf("位点动了应从头计: %v", got)
-	}
-	if got := stall.Observe(at(91830), []PartitionOffsets{{Partition: 0, Committed: 20, End: 21}}); got != 0 {
-		t.Fatalf("位点停下之后没有新消息, 仍不计时: %v", got)
+	if got := stall.Observe(at(3630), []PartitionOffsets{{Partition: 0, Committed: 12, End: 12}}); got != 0 {
+		t.Fatalf("积压清零不算停滞: %v", got)
 	}
 }
 

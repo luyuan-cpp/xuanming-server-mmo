@@ -52,7 +52,7 @@ spec:
             summary: "{{ $labels.namespace }} 的 owner_epoch 铸造未能确认落盘({{ $labels.result }})"
             description: >-
               铸造后 WAITAOF 没有确认到要求的落盘份数,本次进场已回滚并让客户端重试。偶发属正常;持续出现说明
-              Redis 刷盘或复制落后,进场会持续失败。核对 Redis 的 AOF 与从库状态;比例阈值待压测基线确定。
+              Redis 刷盘或复制落后,进场会持续失败。核对 Redis 的 AOF 与从库状态;阈值已定(2026-11-12),压测出基线后可调:铸造未确认在健康的 Redis(AOF everysec + 同步从库)上应为 0,故按「10 分钟内出现即报」,不用比例阈值;持续出现说明刷盘或复制落后。
 
         - alert: SceneManagerOwnerEpochMintClockBehind
           expr: |
@@ -82,3 +82,5 @@ spec:
               同时出现属同一原因:Redis 刷盘或副本落后,核对 Redis 的 AOF 与从库状态。site=rollback 的 not_sent 与 pending 在 Kafka
               写满超时时也会响:推路由用掉了大半请求预算,留给确认的时间不够(不足 1ms 记 not_sent,等不到份数记 pending),
               这时对照 scene_manager 的 Kafka 投递失败,Redis 本身未必有问题。
+              site=handout(同一文档 §4.3.5)没有回执:不铸造就要下发的 epoch 没有已确认位点,当场确认又没成,这次进场回可重试错误、
+              不下发 epoch。它说明此前有铸造没走完(scene_manager 中途退出、回滚没做成)或位点写丢了,而此刻 Redis 又确认不了落盘。

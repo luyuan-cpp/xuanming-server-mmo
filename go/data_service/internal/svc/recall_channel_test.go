@@ -19,10 +19,10 @@ import (
 	rfpb "proto/role_fence"
 	"shared/accountdirectory"
 	"shared/assetop"
+	"shared/clusterredis"
 	"shared/drainproof"
 	sharedregistry "shared/noderegistry"
 	"shared/rolefence"
-	"shared/safego"
 	"shared/workshard"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -89,13 +89,13 @@ func recallEnv(values map[string]string) func(string) string {
 // 通道装配失败要在连任何东西之前报出来:Enabled=true 时缺密钥、缺 Redis 地址都拒启。
 func TestNewRecallChannel_RefusesIncompleteConfigBeforeConnecting(t *testing.T) {
 	secret := map[string]string{RecallAssetSecretEnv: "0123456789abcdef0123456789abcdef"}
-	enabled := config.Config{Recall: config.RecallConfig{Enabled: true}, SharedRedis: config.SharedRedisConf{Host: "127.0.0.1:1"}}
+	enabled := config.Config{Recall: config.RecallConfig{Enabled: true}, ControlRedis: clusterredis.Config{Addrs: []string{"127.0.0.1:1"}}}
 	enabled.Etcd.Hosts = []string{"127.0.0.1:1"}
 
 	noHost := enabled
-	noHost.SharedRedis.Host = ""
+	noHost.ControlRedis.Addrs = nil
 	_, err := newRecallChannel(noHost, nil, nil, nil, recallEnv(secret))
-	require.ErrorContains(t, err, "SharedRedis.Host")
+	require.ErrorContains(t, err, "ControlRedis.Addrs")
 
 	_, err = newRecallChannel(enabled, nil, nil, nil, recallEnv(nil))
 	require.ErrorContains(t, err, RecallAssetSecretEnv)
@@ -325,75 +325,70 @@ func recallDispatchListErrors(t *testing.T) float64 {
 	return 0
 }
 
-// 读到期 PLANNED 行失败:这一轮什么都不派,计一次 list_errors(读队头失败不是某一行的结果,不进 recall_dispatch_total),
-// 不打 Hold(纯读,没有结局未知);这一轮照样算跑完,活性时刻照写。
-func TestDispatchRoundCountsListFailures(t *testing.T) {
+// 读到期 PLANNED 行失败:这一拍什么都不派,计一次 list_errors(读队头失败不是某一行的结果,不进 recall_dispatch_total),
+// 不打 Hold(纯读,没有结局未知);这一拍照样算跑完,活性时刻照写。
+func TestDispatchTickCountsListFailures(t *testing.T) {
+	live := metrics.RecallDispatchLive()
 	fake := newFakeDispatchStore(64*1000 + 1)
 	fake.listErr = errors.New("ledger database unavailable")
 	r := dispatchReplica(fake, "uuid-a", func() []string { return []string{"uuid-a"} })
 	before := recallDispatchListErrors(t)
-	r.dispatchOnce(context.Background())
+	live.Mark(time.Unix(1000, 0))
+	require.True(t, r.dispatchTick(context.Background()), "读失败是这一拍自己处理过的失败,算正常跑完")
 	assert.Equal(t, before+1, recallDispatchListErrors(t), "读队头失败计一次")
-	assert.Zero(t, fake.dispatchedTimes(1), "读失败的一轮什么都不派")
-	_, ok := recallDispatchLastRun()
-	assert.True(t, ok, "读失败的一轮也算跑完,写活性时刻")
+	assert.Zero(t, fake.dispatchedTimes(1), "读失败的一拍什么都不派")
+	value, ok := live.Value()
+	require.True(t, ok)
+	assert.Greater(t, value, float64(1000), "读失败的一拍也算跑完,把活性时刻往前写")
 	r.relay.CloseAdmission()
 	require.NoError(t, r.relay.Wait(context.Background()), "纯读失败不打 Hold,排空证明不受影响")
+	live.Stop()
 }
 
-// recallDispatchLastRun 读 data_service_recall_dispatch_last_run_unixtime;没有序列(或读不出)时 ok=false。
-// 不接 *testing.T:require.Eventually 在别的 goroutine 里调条件函数,那里不能 FailNow。
-func recallDispatchLastRun() (value float64, ok bool) {
-	families, err := prometheus.DefaultGatherer.Gather()
-	if err != nil {
-		return 0, false
-	}
-	for _, mf := range families {
-		if mf.GetName() == "data_service_recall_dispatch_last_run_unixtime" && len(mf.GetMetric()) == 1 {
-			return mf.GetMetric()[0].GetGauge().GetValue(), true
-		}
-	}
-	return 0, false
-}
-
-// 派发循环的活性:每跑完一轮写这一轮结束的时刻;这一轮 panic(safego 兜住)时不写,值停在上一轮;循环起来就有序列、退出就删。
-func TestDispatchLoopLivenessMarksFinishedRoundsOnly(t *testing.T) {
-	_, err := prometheus.DefaultGatherer.Gather()
-	require.NoError(t, err, "夹具前提:默认注册表读得出来")
-	metrics.ClearRecallDispatchRun()
-	_, ok := recallDispatchLastRun()
+// 派发循环的活性:一拍正常跑完就写这一刻;这一拍 panic 时被兜住,不写、值停在上一拍,并且已经打了 Hold(结局未知);
+// 下一拍照常跑。循环起来就有序列,ctx 结束、有意停止时删掉。
+func TestDispatchLoopLiveness(t *testing.T) {
+	live := metrics.RecallDispatchLive()
+	live.Stop()
+	_, ok := live.Value()
 	require.False(t, ok, "循环没起来时不该有活性序列")
 
 	fake := newFakeDispatchStore(64*1000 + 1)
 	r := dispatchReplica(fake, "uuid-a", func() []string { return []string{"uuid-a"} })
 	before := time.Now().Unix()
-	r.dispatchOnce(context.Background())
-	value, ok := recallDispatchLastRun()
-	require.True(t, ok, "跑完一轮之后应有活性序列")
+	require.True(t, r.dispatchTick(context.Background()))
+	value, ok := live.Value()
+	require.True(t, ok, "跑完一拍之后应有活性序列")
 	assert.GreaterOrEqual(t, value, float64(before))
 	assert.LessOrEqual(t, value, float64(time.Now().Unix()))
+	assert.Equal(t, 1, fake.dispatchedTimes(1), "夹具前提:这一拍派成了那一行")
 
-	metrics.MarkRecallDispatchRun(time.Unix(1000, 0))
+	live.Mark(time.Unix(1000, 0))
 	fake.mu.Lock()
 	fake.listPanics = true
 	fake.mu.Unlock()
-	require.False(t, safego.Run(recallDispatchPoint, func() { r.dispatchOnce(context.Background()) }), "夹具前提:这一轮 panic")
-	value, ok = recallDispatchLastRun()
+	require.False(t, r.dispatchTick(context.Background()), "panic 的一拍被兜住,回 false,不往外抛")
+	value, ok = live.Value()
 	require.True(t, ok)
-	assert.Equal(t, float64(1000), value, "panic 的那一轮不写活性时刻")
-	assert.Equal(t, 1, fake.dispatchedTimes(1), "夹具前提:第一轮派成了那一行,panic 那一轮没有别的副作用")
+	assert.Equal(t, float64(1000), value, "panic 的那一拍不写活性时刻")
 
-	metrics.ClearRecallDispatchRun()
 	fake.mu.Lock()
 	fake.listPanics = false
 	fake.mu.Unlock()
+	require.True(t, r.dispatchTick(context.Background()), "panic 之后下一拍照常跑")
+	value, _ = live.Value()
+	assert.Greater(t, value, float64(1000))
+	r.relay.CloseAdmission()
+	require.ErrorIs(t, r.relay.Wait(context.Background()), drainproof.ErrHold, "panic 的那一拍结局未知,排空证明要停在 HOLD")
+
+	live.Stop()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); r.runDispatch(ctx) }()
-	require.Eventually(t, func() bool { _, ok := recallDispatchLastRun(); return ok }, 2*time.Second, 10*time.Millisecond,
-		"循环一起来就写一次,不等第一轮")
+	require.Eventually(t, func() bool { _, ok := live.Value(); return ok }, 2*time.Second, 10*time.Millisecond,
+		"循环一起来就写一次,不等第一拍")
 	cancel()
 	<-done
-	_, ok = recallDispatchLastRun()
-	assert.False(t, ok, "循环退出之后删掉序列:停掉的循环不算卡住")
+	_, ok = live.Value()
+	assert.False(t, ok, "循环有意停止之后删掉序列:停掉的循环不算卡住")
 }

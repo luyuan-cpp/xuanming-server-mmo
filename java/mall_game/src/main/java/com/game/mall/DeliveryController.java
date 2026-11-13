@@ -39,6 +39,23 @@ public final class DeliveryController {
         payment(request);
         store.refunded(input);
     }
+    // 渠道退不了的退款待办转人工(契约见 CommerceApi.RefundClosure)。
+    @PostMapping("/internal/refunds/close")
+    public void closeRefund(HttpServletRequest request, @RequestBody CommerceApi.RefundClosure input) {
+        payment(request);
+        store.closeRefund(input);
+    }
+    // 扣回待办与回执(付款被渠道修订之后的发放收敛,见 DeliveryApi.ReversalEntry)。
+    @PostMapping("/internal/reversals/poll")
+    public DeliveryApi.ReversalPage reversals(HttpServletRequest request, @RequestBody DeliveryApi.Poll input) {
+        check(request);
+        return store.reversals(input);
+    }
+    @PostMapping("/internal/reversals/receipt")
+    public void reversalReceipt(HttpServletRequest request, @RequestBody DeliveryApi.ReversalReceipt input) {
+        check(request);
+        store.reversalReceipt(input);
+    }
     private void payment(HttpServletRequest request) {
         if (!"payment".equals(request.getAttribute(HmacAuthentication.ROLE)))
             throw new CommerceException(401, "退款渠道调用方认证失败");

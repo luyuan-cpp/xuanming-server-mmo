@@ -12,6 +12,7 @@
 #include "spatial/system/nav_query.h"
 #include "spatial/manager/scene_nav.h"
 #include "thread_context/ecs_context.h"
+#include "network/node_utils.h" // GetZoneId:CreateScene 的 zone 核对
 #include "muduo/base/Logging.h"
 #include "battle/system/player_battle.h"
 #include "player/system/asset_op_system.h"
@@ -22,6 +23,8 @@ namespace
 // 停机开始后 CreateScene 的拒绝文案(grpc-muduo-transport.md §15.3 Q9)。不是跨语言契约:
 // SceneManager 收到任何错误都回滚,不匹配文案。
 constexpr char kSceneNodeShuttingDownMessage[] = "scene_node_shutting_down";
+// 请求的 zone 不是本节点的(SceneLifecycle::AdmitsCreateZone)时的拒绝文案,同样不是跨语言契约。
+constexpr char kSceneZoneMismatchMessage[] = "scene_zone_mismatch";
 boost::cobalt::task<void> CreateSceneWithPermit(muduo::net::EventLoop& loop,
     std::shared_ptr<GrpcUnaryCall<::CreateSceneRequest, ::CreateSceneResponse>> call)
 {
@@ -159,11 +162,12 @@ void SceneNodeGrpcImpl::HandleReleasePlayer(const ::scene_node::ReleasePlayerReq
     // 纯判定见 player/system/release_fence.h)。session_ended 是会话结束释放(没有接手节点,
     // docs/design/location-release-binding.md §3.3),走 HandleSessionEndedRelease;covered_* 是这次释放覆盖到的最新登录身份
     // (§13,代次 0 = 旧版 scene_manager),实体已绑上更新的登录时不退出。交接释放不看 covered_*。
+    // keep_held 是托管归位撞门时的释放(player-connection-lost-hold.md §4.5):本节点持有就什么都不做,只在完全不持有时补凭证。
     if (request->session_ended())
     {
         PlayerLifecycleSystem::HandleSessionEndedRelease(request->player_id(), request->expected_owner_epoch(),
                                                          request->covered_session_id(),
-                                                         request->covered_login_generation());
+                                                         request->covered_login_generation(), request->keep_held());
         return;
     }
     PlayerLifecycleSystem::HandleReleaseFromSceneManager(request->player_id(), request->expected_owner_epoch(),
@@ -244,6 +248,16 @@ void SceneNodeGrpcImpl::CreateScene(const std::shared_ptr<CreateSceneCall>& call
     {
         LOG_WARN << "[gRPC] CreateScene rejected: scene node is shutting down, scene_id=" << request->scene_id();
         call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
+        return;
+    }
+    // zone 不是本节点的就拒建(SceneLifecycle::AdmitsCreateZone),判在等 Agones 许可之前:别的 zone 的建场景不能让本进程
+    // 被 Allocate。这是调用方的错,不是暂时故障:回 FAILED_PRECONDITION,scene_manager 对任何错误都回滚。
+    if (!SceneLifecycle::AdmitsCreateZone(request->zone_id(), GetZoneId()))
+    {
+        LOG_ERROR << "[gRPC] CreateScene rejected: scene zone does not match this node, scene_id=" << request->scene_id()
+                  << " request_zone_id=" << request->zone_id() << " node_zone_id=" << GetZoneId()
+                  << " (metric=scene_create_zone_mismatch)";
+        call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kFailedPrecondition, kSceneZoneMismatchMessage));
         return;
     }
     // Agones 高密度模式:进程必须先被 Allocate,才能创建第一个场景。

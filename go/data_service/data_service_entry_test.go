@@ -35,8 +35,15 @@ func TestSelectEntry(t *testing.T) {
 		{name: "id issuer retire unbound", flags: entryFlags{issuerRetire: true, issuerRetireUnbound: true}, want: entryIdIssuerRetire},
 		{name: "retire-unbound alone", flags: entryFlags{issuerRetireUnbound: true}, wantErr: true},
 		{name: "retire-unbound with recover", flags: entryFlags{issuerRecover: true, issuerRetireUnbound: true}, wantErr: true},
+		{name: "id issuer retire another code", flags: entryFlags{issuerRetire: true, issuerRetireCode: true}, want: entryIdIssuerRetire},
+		{name: "retire-code alone", flags: entryFlags{issuerRetireCode: true}, wantErr: true},
+		{name: "retire-code with init", flags: entryFlags{issuerInit: true, issuerRetireCode: true}, wantErr: true},
 		{name: "id registry open", flags: entryFlags{registryOpen: true}, want: entryIdRegistryOpen},
 		{name: "registry open and init", flags: entryFlags{registryOpen: true, issuerInit: true}, wantErr: true},
+		{name: "id registry rebuild", flags: entryFlags{registryRebuild: true}, want: entryIdRegistryRebuild},
+		{name: "registry rebuild and open", flags: entryFlags{registryRebuild: true, registryOpen: true}, wantErr: true},
+		{name: "registry rebuild and recover", flags: entryFlags{registryRebuild: true, issuerRecover: true}, wantErr: true},
+		{name: "positional arguments with registry rebuild", flags: entryFlags{registryRebuild: true}, args: []string{"x"}, wantErr: true},
 		{name: "positional arguments with recover", flags: entryFlags{issuerRecover: true}, args: []string{"x"}, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -51,5 +58,21 @@ func TestSelectEntry(t *testing.T) {
 				t.Fatalf("selectEntry(%+v, %q) = (%d, %v), want (%d, nil)", tc.flags, tc.args, got, err, tc.want)
 			}
 		})
+	}
+}
+
+// -id-issuer-retire-code:没给时退役配置里的码;显式给的值必须是 1..63。不合法的值一律报错,不回落到配置里的码:
+// 那是本地域正在用的码,在本地域退役它会直接通过。
+func TestRetireIssuerFactory(t *testing.T) {
+	if factory, err := retireIssuerFactory(false, -1); err != nil || factory == nil {
+		t.Fatalf("without the flag: factory=%v err=%v", factory != nil, err)
+	}
+	if factory, err := retireIssuerFactory(true, 7); err != nil || factory == nil {
+		t.Fatalf("code 7: factory=%v err=%v", factory != nil, err)
+	}
+	for _, code := range []int{-5, -1, 0, 64} {
+		if factory, err := retireIssuerFactory(true, code); err == nil || factory != nil {
+			t.Errorf("code %d given explicitly must be refused, got factory=%v err=%v", code, factory != nil, err)
+		}
 	}
 }

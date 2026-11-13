@@ -137,7 +137,7 @@ func dispatchOption(t OptionType, desc interface{}, opts interface{}, context *O
 			defer wg.Done()
 
 			if err := fn(desc, opts, context); err != nil {
-				logger.Global.Fatal("执行协议 option 生成回调失败",
+				logger.Global.Fatal("Proto option generation callback failed",
 					zap.Int("option_type", int(t)),
 					zap.Error(err),
 					zap.String("desc_type", getTypeString(desc)),

@@ -2,7 +2,7 @@
 
 package data
 
-// 集成测试:公会归属 zone 的**权威来源**是 MySQL,不是 guild:v2:{id} 缓存。
+// 集成测试:公会归属 zone 的**权威来源**是 MySQL,不是 guild:v2:{g:<id>} 缓存。
 //
 // 跑法:  go test -tags=integration ./internal/data/...
 // 连接参数默认取 etc/guild.yaml 的 MySQL.DataSource(本地 docker:
@@ -304,7 +304,7 @@ func TestUpdateGuildScore_DoesNotWaitForTheMaintenanceLock(t *testing.T) {
 	ctx := context.Background()
 	const guildID uint64 = 5142
 	seedGuild(t, db, guildID, "lock-free", 30)
-	require.NoError(t, repo.rdb.Set(ctx, guildRankLockKey, "rebuild-elsewhere", time.Minute).Err())
+	require.NoError(t, repo.rdb.Set(ctx, guildRankLockKey(30), "rebuild-elsewhere", time.Minute).Err())
 
 	short, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -313,7 +313,7 @@ func TestUpdateGuildScore_DoesNotWaitForTheMaintenanceLock(t *testing.T) {
 	got, err := repo.rdb.ZScore(ctx, zoneRankKey(30), fmt.Sprint(guildID)).Result()
 	require.NoError(t, err)
 	assert.Equal(t, float64(300), got)
-	assert.Equal(t, "rebuild-elsewhere", repo.rdb.Get(ctx, guildRankLockKey).Val())
+	assert.Equal(t, "rebuild-elsewhere", repo.rdb.Get(ctx, guildRankLockKey(30)).Val())
 }
 
 // 解散之后,解散前已提交的那次写分才写榜:被墓碑拒绝,帮会不回到榜上;解散之后再写分直接回 ErrGuildGone。
@@ -336,22 +336,27 @@ func TestDisbandPath_LateScoreWriteDoesNotResurrect(t *testing.T) {
 	assert.ErrorIs(t, repo.UpdateGuildScore(ctx, guildID, 30, 500), ErrGuildGone)
 }
 
-// beforeFirstPipelineHook 在被测客户端发出第一条 pipeline 之前跑一次 inject。RebuildRanks 的第一条 pipeline
-// 是合并快照,inject 正好落在「快照已读完、还没合并」这个窗口里。
-type beforeFirstPipelineHook struct {
+// beforeFirstScriptHook 在被测客户端发出第一条脚本(EVAL / EVALSHA)之前跑一次 inject。RebuildRanks 先读快照、再拿各区
+// 维护锁(SET NX,不是脚本),第一条脚本是合并快照,inject 正好落在「快照已读完、还没合并」这个窗口里。
+// 写榜脚本逐条发、不进 pipeline(guild_repo.go rankScriptsOneByOne),所以钩在单条命令上。
+type beforeFirstScriptHook struct {
 	once   sync.Once
 	inject func()
 }
 
-func (h *beforeFirstPipelineHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *beforeFirstScriptHook) DialHook(next redis.DialHook) redis.DialHook { return next }
 
-func (h *beforeFirstPipelineHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook { return next }
-
-func (h *beforeFirstPipelineHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
-	return func(ctx context.Context, cmds []redis.Cmder) error {
-		h.once.Do(h.inject)
-		return next(ctx, cmds)
+func (h *beforeFirstScriptHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if name := cmd.Name(); name == "eval" || name == "evalsha" {
+			h.once.Do(h.inject)
+		}
+		return next(ctx, cmd)
 	}
+}
+
+func (h *beforeFirstScriptHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
 }
 
 // newSecondRepo 是同一个库、同一个 Redis 上的另一个副本(自己的连接,不带被测客户端的钩子)。
@@ -371,7 +376,7 @@ func TestRebuildRanks_KeepsAScoreWrittenDuringTheRebuild(t *testing.T) {
 	seedGuild(t, db, guildID, "racing-writer", 30)
 	require.NoError(t, repo.UpdateGuildScore(ctx, guildID, 30, 10))
 	other := newSecondRepo(t, db, mr)
-	repo.rdb.AddHook(&beforeFirstPipelineHook{inject: func() {
+	repo.rdb.AddHook(&beforeFirstScriptHook{inject: func() {
 		require.NoError(t, other.UpdateGuildScore(ctx, guildID, 30, 999))
 	}})
 
@@ -392,7 +397,7 @@ func TestRebuildRanks_KeepsAGuildCreatedDuringTheRebuild(t *testing.T) {
 	)
 	seedGuild(t, db, existing, "already-there", 30)
 	other := newSecondRepo(t, db, mr)
-	repo.rdb.AddHook(&beforeFirstPipelineHook{inject: func() {
+	repo.rdb.AddHook(&beforeFirstScriptHook{inject: func() {
 		seedGuild(t, db, created, "created-mid-rebuild", 30)
 		require.NoError(t, other.AddNewGuildToRank(ctx, created, 30))
 	}})

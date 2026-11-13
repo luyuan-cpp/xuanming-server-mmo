@@ -13,15 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"player_inbox/internal/constants"
 	"player_inbox/internal/data"
 
 	inboxpb "proto/player_inbox"
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/playerredis"
 	"shared/redisauth"
-	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -52,10 +51,6 @@ var adminTokenEnvPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
 // 后台循环参数的合法区间。
 const (
-	minRetentionDays         = 8 // 必须大于签发窗 7 天(设计 §6.2 生产方契约、§9.1)
-	maxRetentionDays         = 365
-	minSweepIntervalSeconds  = 10
-	maxSweepIntervalSeconds  = 86400
 	minGaugeIntervalSeconds  = 5
 	maxGaugeIntervalSeconds  = 3600
 	minNotifyResendSeconds   = 5
@@ -69,7 +64,7 @@ const (
 // Config 是 player_inbox 服务的全部配置。
 //
 // 不声明名为 Redis 的字段:嵌入的 zrpc.RpcServerConf 已带 `Redis`,同名会在加载期报 "conflict key Redis"。
-// 核心 Redis 因此叫 CoreRedis。
+// 控制集群因此叫 ControlRedis(2026-11-12 取代 CoreRedis 段,docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1)。
 type Config struct {
 	zrpc.RpcServerConf
 
@@ -93,23 +88,20 @@ type Config struct {
 	// Schema:建表策略,见 SchemaConf.AutoMigrate。整段可缺失。
 	Schema SchemaConf `json:",optional"`
 
-	// CoreRedis:控制域 Redis,只放维护选主锁 player_inbox:maintenance:leader(清理 / 补发提醒 / gauge / 对账只在领导者上跑)。
-	// 没写 PlayerRedis.Addrs 时玩家键也在这一实例上,所以 Validate 拒绝空 Host。
-	CoreRedis RedisConf `json:"CoreRedis"`
+	// ControlRedis:控制集群(shared/clusterredis),只放维护选主锁 player_inbox:maintenance:leader(补发提醒 / gauge / 对账只在领导者上跑)。
+	// 单键、不带 tag。没写 PlayerRedis.Addrs 时玩家键也在这一实例上,所以 Validate 拒绝空 Addrs。
+	ControlRedis clusterredis.Config `json:",optional"`
 
-	// SharedRedisPasswordEnv 是 CoreRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret redis-auth 里,
-	// 经 secretKeyRef 注入;ConfigMap 里 CoreRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
-	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
+	// SharedRedisPasswordEnv 是 ControlRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret redis-auth 里,
+	// 经 secretKeyRef 注入;ConfigMap 里 ControlRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。ControlRedis.PasswordEnv 不用(变量缺失时静默落成空口令)。
 	SharedRedisPasswordEnv string `json:",optional"`
-	// MySQLPasswordEnv 是 MySQL.Password 所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md);
-	// ConfigMap 里 MySQL.Password 写空串。不写 = 照用 Password 字面量(本机)。由 ResolveMySQLPassword 在加载配置后填好,变量缺失或为空即拒启。
-	MySQLPasswordEnv string `json:",optional"`
 
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8),只读两类东西:
 	//   - player:{id}:owner_epoch:仅STALE分类诊断，不是消费授权上界；
 	//   - player:{id}:location:在线提醒定位玩家所在 scene 节点。
 	// 指错实例的表现是 R 永远是 0(所有 Fetch 判 EPOCH_AHEAD)、提醒永远发不出。
-	// 读取走 EffectivePlayerRedis():没写 Addrs 时指向 CoreRedis 那一个实例,开发环境不用改。
+	// 读取走 EffectivePlayerRedis():没写 Addrs 时指向 ControlRedis 那一个实例,开发环境不用改。
 	PlayerRedis playerredis.Config `json:",optional"`
 
 	// Kafka:在线提醒写 scene-cmd_g<N>(kafkacmd 寻址)。只是提醒,丢了由落地拉取与在线兜底补上。
@@ -144,10 +136,8 @@ type PlayerInboxConf struct {
 	// v1DisabledEnqueueTypes 里的类型(挂欠款)列进来即拒启。
 	EnqueueTypes []string `json:",optional"`
 
-	// TerminalRetentionDays保留旧配置兼容；全球item现为永久原请求收据，Sweep不再物删。
-	TerminalRetentionDays int `json:",default=30"`
-	// SweepIntervalSeconds:两轮清理之间的间隔;每轮最多删 500 行(设计 §9.1)。
-	SweepIntervalSeconds int `json:",default=600"`
+	// 原来的 TerminalRetentionDays、SweepIntervalSeconds 两项已删除(2026-11-12,数据覆写审计 r2-doc#2):终态行是永久收据,
+	// 没有清理循环(设计 §9.1)。旧配置里还写着这两个键也能启动,go-zero 把它们当未知键忽略。
 	// NotifyResendIntervalSeconds:提醒补发循环的间隔(设计 §6.3:30 秒一轮)。
 	NotifyResendIntervalSeconds int `json:",default=30"`
 	// GaugeIntervalSeconds:扫描型 gauge 的刷新间隔(设计 §9.4,只由领导者产出)。
@@ -162,46 +152,46 @@ type PlayerInboxConf struct {
 	ReconcileWindowHours int `json:",default=24"`
 }
 
-// RedisConf 是 go-redis 客户端的连接参数。刻意不用 go-zero 的 redis.RedisConf:那份结构没有 DB 字段
-// (填了会被静默忽略),也设不了连接池上限。形状与 go/trade 的 SharedRedis 逐字一致。
-type RedisConf struct {
-	Host     string `json:"Host"`
-	Password string `json:"Password,optional"`
-	DB       int    `json:"DB,optional"`
-	// PoolSize 是 go-redis 连接池上限(共享 Redis 连接总账,P0-E 第 3 批)。**必须显式写正整数**(评审 L7,Validate 拒绝 ≤ 0):
-	// 0 在 go-redis 里是缺省 10 × GOMAXPROCS,随 CPU limit 漂移,总账就不是集群的账。K8s 上 tools/scripts/k8s_deploy.ps1
-	// 从 etc/player_inbox.yaml 镜像 CoreRedis.PoolSize 并要求正整数,Redis 连接总账读同一个键。
-	// 围栏上界、在线提醒与选主锁共用这一个池。
-	PoolSize int `json:"PoolSize,optional"`
+// redisIOTimeoutMs:ControlRedis 没写读写超时、玩家域回落时的取值,与换句柄之前显式写的 1s 同口径(评审 L7)。
+// 加上 clusterredis 缺省开启的 ctx 截止约束(DisableContextTimeout=false),500ms 的 owner_epoch 预算、整请求预算都管得住 socket 读。
+// 选主心跳(shared/leader)的单次续期最坏耗时因此仍是续期 ctx 本身的 2s,FenceAfter 门槛 20s、降级最晚 22s 完成(TTL 30s)。
+const redisIOTimeoutMs = 1000
+
+// EffectiveControlRedis 返回生效的控制集群配置:段里没写的读写超时取 redisIOTimeoutMs。
+// 连接池上限不给回落值:Validate 要求显式写正整数(评审 L7),总账才对得上。
+func (c *Config) EffectiveControlRedis() clusterredis.Config {
+	control := c.ControlRedis
+	if control.ReadTimeoutMs == 0 {
+		control.ReadTimeoutMs = redisIOTimeoutMs
+	}
+	if control.WriteTimeoutMs == 0 {
+		control.WriteTimeoutMs = redisIOTimeoutMs
+	}
+	return control
 }
 
-// playerRedisFallbackIOTimeoutMs:没写 PlayerRedis.Addrs 时的读写超时,与 CoreRedis 客户端的 1s 同口径(svc.coreRedisOptions)。
-const playerRedisFallbackIOTimeoutMs = 1000
-
-// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 CoreRedis 那一个实例,连接池同 CoreRedis.PoolSize。
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 ControlRedis 那一个实例,连接池同 ControlRedis.PoolSizePerNode。
 func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	control := c.EffectiveControlRedis()
 	return c.PlayerRedis.OrDefault(playerredis.Config{
-		Addrs:           []string{c.CoreRedis.Host},
-		Password:        c.CoreRedis.Password,
-		PoolSizePerNode: min(c.CoreRedis.PoolSize, playerredis.MaxPoolSizePerNode),
-		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
-		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
+		Addrs:           control.Addrs,
+		Cluster:         control.Cluster,
+		Username:        control.Username,
+		Password:        control.Password,
+		DB:              control.DB,
+		TLS:             control.TLS,
+		PoolSizePerNode: min(control.PoolSizePerNode, playerredis.MaxPoolSizePerNode),
+		ReadTimeoutMs:   redisIOTimeoutMs,
+		WriteTimeoutMs:  redisIOTimeoutMs,
 	})
 }
 
-// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 CoreRedis.Password,规则见 redisauth.Apply。
-// 玩家域没写 Addrs 时回落到 CoreRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 ControlRedis.Password,规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落到 ControlRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
 // -migrate 不连 Redis,只在常驻启动时调用(player_inbox.go)。
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
 	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
-		redisauth.Target{Field: "CoreRedis.Password", Password: &c.CoreRedis.Password})
-}
-
-// ResolveMySQLPassword 按 MySQLPasswordEnv 填 MySQL.Password,规则见 secretenv.Fill。-migrate 与常驻启动都连库,
-// 所以在 conf.MustLoad 之后、迁移分支之前调用(player_inbox.go);player-inbox-migrate Job 同样注入这个变量。
-func (c *Config) ResolveMySQLPassword(lookup func(string) (string, bool)) error {
-	return secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
-		secretenv.Target{Field: "MySQL.Password", Value: &c.MySQL.Password})
+		redisauth.Target{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password})
 }
 
 // KafkaConf 是在线提醒用的 Kafka 生产者参数。
@@ -361,13 +351,19 @@ func (c *Config) Validate() error {
 			c.MySQL.MaxOpenConn, c.MySQL.MaxIdleConn)
 	}
 
-	if c.CoreRedis.Host == "" {
-		return errors.New("CoreRedis.Host 不能为空:围栏上界读 player:{id}:owner_epoch、在线提醒读 player:{id}:location," +
-			"两者都在与 C++ scene 相同的核心 Redis 上")
+	if len(c.ControlRedis.Addrs) == 0 {
+		return errors.New("ControlRedis.Addrs 不能为空:选主锁在这里,没写 PlayerRedis.Addrs 时围栏上界读 player:{id}:owner_epoch、" +
+			"在线提醒读 player:{id}:location 也在这里(与 C++ scene 相同的实例)")
 	}
-	if c.CoreRedis.PoolSize <= 0 {
-		return fmt.Errorf("CoreRedis.PoolSize(%d)必须显式写正整数:0 在 go-redis 里是缺省 10 × GOMAXPROCS,"+
-			"随 CPU limit 漂移,Redis 连接总账(k8s_deploy.ps1 镜像同一个键)就对不上", c.CoreRedis.PoolSize)
+	if err := c.ControlRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("ControlRedis: %w", err)
+	}
+	if c.ControlRedis.PasswordEnv != "" {
+		return errors.New("ControlRedis.PasswordEnv 不用:口令变量名写在 SharedRedisPasswordEnv(变量缺失时拒启)")
+	}
+	if c.ControlRedis.PoolSizePerNode <= 0 {
+		return fmt.Errorf("ControlRedis.PoolSizePerNode(%d)必须显式写正整数:0 = 客户端缺省值,"+
+			"随版本漂移,Redis 连接总账(k8s_deploy.ps1 镜像同一个键)就对不上", c.ControlRedis.PoolSizePerNode)
 	}
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
 		return fmt.Errorf("PlayerRedis: %w", err)
@@ -399,18 +395,6 @@ func (c *Config) Validate() error {
 	}
 	if _, err := ParseEnqueueTypes(p.EnqueueTypes); err != nil {
 		return err
-	}
-	if p.TerminalRetentionDays < minRetentionDays || p.TerminalRetentionDays > maxRetentionDays {
-		return fmt.Errorf("PlayerInbox.TerminalRetentionDays(%d)必须在 [%d, %d] 内:必须大于签发窗 %v,"+
-			"否则遵守契约的重试可能在行被删后重复入箱", p.TerminalRetentionDays, minRetentionDays, maxRetentionDays,
-			constants.IssuedAtMaxPast)
-	}
-	if time.Duration(p.TerminalRetentionDays)*24*time.Hour <= constants.IssuedAtMaxPast {
-		return fmt.Errorf("PlayerInbox.TerminalRetentionDays(%d 天)必须大于签发窗 %v", p.TerminalRetentionDays, constants.IssuedAtMaxPast)
-	}
-	if p.SweepIntervalSeconds < minSweepIntervalSeconds || p.SweepIntervalSeconds > maxSweepIntervalSeconds {
-		return fmt.Errorf("PlayerInbox.SweepIntervalSeconds(%d)必须在 [%d, %d] 内",
-			p.SweepIntervalSeconds, minSweepIntervalSeconds, maxSweepIntervalSeconds)
 	}
 	if p.NotifyResendIntervalSeconds < minNotifyResendSeconds || p.NotifyResendIntervalSeconds > maxNotifyResendSeconds {
 		return fmt.Errorf("PlayerInbox.NotifyResendIntervalSeconds(%d)必须在 [%d, %d] 内",

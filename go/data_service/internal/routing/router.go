@@ -18,13 +18,15 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// RouteStore 是路由器对全局库的全部依赖。由消费方(本包)定义:路由器只需要这两个方法,单测注入假实现;
+// RouteStore 是路由器对全局库的全部依赖。由消费方(本包)定义:路由器只需要这三个方法,单测注入假实现;
 // *store.RouteStore 逐字满足。svc 那边再加一个 Close 组成 svc.PlayerRouteStore。
 type RouteStore interface {
 	// RegisterHome 是建角登记的库内提交点(W1)。
 	RegisterHome(ctx context.Context, req store.RouteRegisterRequest) (store.RouteRegisterResult, error)
 	// GetRoutes 按 id 批量点查,事务外一致读,缺席的 id 不出现在结果里。
 	GetRoutes(ctx context.Context, ids []uint64) (map[uint64]store.RouteRow, error)
+	// CountHomeZones 数归属落在这些原始区的路由行(R16),目录各片求和,任一片失败整次报错。
+	CountHomeZones(ctx context.Context, zones []uint32) (uint64, error)
 }
 
 var (
@@ -195,6 +197,29 @@ func (r *Router) BatchGetPlayerHomeZone(ctx context.Context, playerIDs []uint64)
 		metrics.ObserveRouteRead(path, metrics.RouteReadResultOK)
 	}
 	return result, nil
+}
+
+// CountZoneRoles 数 zones 这些原始区一共建过多少角色(R16,建号后不删,删角不减)。zones 由 handler 按合服映射展开
+// (placement.MergedZones.Members),这里不解析合服。
+//
+// 每次调用记一次 route_read_total{path="zone_count"};错误语义同 readRoutes:store 没装配、库故障(含 zones 非法)
+// 包 ErrRouteStore 并计 error;失败时 ctx 已取消 / 超时则不计 error、不包 ErrRouteStore,错误链带 ctx 的错误。
+func (r *Router) CountZoneRoles(ctx context.Context, zones []uint32) (uint64, error) {
+	const path = metrics.RouteReadPathZoneCount
+	if r.routeStore == nil {
+		metrics.ObserveRouteRead(path, metrics.RouteReadResultError)
+		return 0, fmt.Errorf("%w: role count of zones %v: route store not assembled", ErrRouteStore, zones)
+	}
+	roles, err := r.routeStore.CountHomeZones(ctx, zones)
+	if err == nil {
+		metrics.ObserveRouteRead(path, metrics.RouteReadResultOK)
+		return roles, nil
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return 0, fmt.Errorf("role count of zones %v abandoned by the caller: %w (last error: %v)", zones, ctxErr, err)
+	}
+	metrics.ObserveRouteRead(path, metrics.RouteReadResultError)
+	return 0, fmt.Errorf("%w: role count of zones %v: %w", ErrRouteStore, zones, err)
 }
 
 // readRoutes 读一块路由行。读失败时才在这里计数,成功的结局由调用方计。

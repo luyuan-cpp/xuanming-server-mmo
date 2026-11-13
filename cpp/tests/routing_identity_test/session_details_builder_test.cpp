@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -119,6 +121,37 @@ TEST(GateAuthenticatedIdentity, SignerRefusesUnpairedOrMalformedKeys)
     EXPECT_EQ(metadata[3].first, "x-caller-sig");
     EXPECT_EQ(metadata[3].second.size(), caller_auth::kSignatureBytes * 2);
     EXPECT_FALSE(caller_auth::Append(metadata, "no-leading-slash", ""));
+    caller_auth::ProcessSigningKey().reset();
+}
+
+// gate 每个发往 Go 服务的请求签一次名(caller_auth::Append):一次 SHA-256、一次 Ed25519 签名、一个随机 nonce。
+// 这里量出单次的平均耗时并打进测试日志,给容量估算用:一个 IO 线程每秒最多能签 1 秒 / 单次耗时 个请求。
+// 上限放得很宽,只拦数量级的退化(比如每次签名都重新解析私钥),不当性能结论;结论以压测为准。
+TEST(GateAuthenticatedIdentity, SigningCostPerRequestIsReported)
+{
+    ASSERT_TRUE(caller_auth::InitProcessSigner(kRfc8032Test1Seed, kRfc8032Test1PublicKey).empty());
+    SessionDetails detail;
+    detail.set_session_id(17);
+    detail.set_gate_instance_id("gate-original");
+    detail.set_session_incarnation(19);
+    detail.set_player_id(100);
+    detail.set_owner_revision(3);
+    detail.set_authenticated_account("original-account");
+    const std::string subject = detail.SerializeAsString();
+
+    constexpr int kRounds = 2000;
+    std::vector<std::pair<std::string, std::string>> metadata;
+    const auto begin = std::chrono::steady_clock::now();
+    for (int i = 0; i < kRounds; ++i)
+    {
+        metadata.clear();
+        ASSERT_TRUE(caller_auth::Append(metadata, "/match.MatchService/JoinQueue", subject));
+    }
+    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - begin);
+    const double microsPerRequest = static_cast<double>(elapsed.count()) / kRounds / 1000.0;
+    std::cout << "[caller_auth] sign cost: " << microsPerRequest << " us/request over " << kRounds << " rounds" << std::endl;
+    RecordProperty("caller_auth_sign_micros_per_request", std::to_string(microsPerRequest));
+    EXPECT_LT(microsPerRequest, 2000.0) << "单次签名超过 2 毫秒,比 Ed25519 的正常量级高出两个数量级";
     caller_auth::ProcessSigningKey().reset();
 }
 

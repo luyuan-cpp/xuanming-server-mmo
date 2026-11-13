@@ -1,4 +1,4 @@
-# 玩家域 Redis Cluster 的本机开发版:3 主 3 从,版本与 K8s 清单(deploy/k8s/manifests/infra/redis-player-cluster.yaml)同一个镜像摘要。
+# 玩家域 Redis Cluster 的本机开发版:3 主 3 从,版本与 K8s 清单(deploy/k8s/manifests/infra/redis-cluster.yaml,玩家域与控制集群共用)同一个镜像摘要。
 # 真集群验证用(docs/design/redis-player-store-cluster.md §14.2),开发时不需要它:不写 PlayerRedis / player_redis 就是单实例。
 #
 #   docker --context desktop-linux compose -f deploy/compose.redis-cluster.yml up -d

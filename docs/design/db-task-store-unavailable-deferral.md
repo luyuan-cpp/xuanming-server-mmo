@@ -152,7 +152,7 @@
 | `DbStoreCoolingDown` | 有库在冷却，持续 1 分钟 | critical |
 | `DbTaskDeadLetterAdded` | 10 分钟内有新死信 | warning（工具落地前）|
 | `DbTaskDeadLetterNonEmpty` | 死信列表非空，持续 1 小时 | info |
-| `DbTaskRetryQueueGrowing` | ready 超过 1000 条持续 10 分钟 | warning，阈值待压测确认 |
+| `DbTaskRetryQueueGrowing` | ready 超过 1000 条持续 10 分钟 | warning；阈值不再定值:规则已随 go/db 消费链删除(2026-10-30,见文首),2026-11-12 核对仓库里已没有它 |
 
 - **死信告警的处置**写在告警描述里：保留现场，不要清空；按日志归因；上报。**不要用 redis-cli 把条目搬回 ready**：预算耗尽的条目里重试次数已满，下一拍认领时会被立刻送回死信（评审 F5）。
 - 存量环境上线前先记录各 zone 的死信长度，否则 `DbTaskDeadLetterNonEmpty` 部署后常亮。

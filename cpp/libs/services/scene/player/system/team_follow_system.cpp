@@ -27,6 +27,7 @@
 #include "proto/scene/player_state_attribute_sync.pb.h"
 #include "rpc/service_metadata/player_movement_service_metadata.h"
 #include "spatial/comp/nav_comp.h"
+#include "spatial/system/facing.h"
 #include "spatial/system/movement.h"
 #include "spatial/system/nav_query.h"
 #include "thread_context/ecs_context.h"
@@ -164,8 +165,8 @@ namespace
 		};
 	}
 
-	// 停在原地:清零速度;上一条广播还带着行走速度时补一条停步(观察者与本人都按它外推)。
-	void StopMotion(entt::entity follower, TeamFollowerComp& driven)
+	// 停在原地:清零速度;上一条广播还带着行走速度时补一条停步(观察者与本人都按它外推),登记进 moves,由调用方发出。
+	void StopMotion(entt::entity follower, TeamFollowerComp& driven, ActorMoveBatch& moves)
 	{
 		auto& registry = tlsEcs.actorRegistry;
 		if (auto* velocity = registry.try_get<Velocity>(follower);
@@ -176,7 +177,7 @@ namespace
 		}
 		if (driven.broadcastMoving)
 		{
-			MovementSystem::BroadcastMove(follower, /*includeSelf=*/true);
+			moves.Add(follower, /*includeSelf=*/true);
 			driven.broadcastMoving = false;
 			driven.broadcastVelocityX = 0.0;
 			driven.broadcastVelocityY = 0.0;
@@ -184,9 +185,9 @@ namespace
 		}
 	}
 
-	// 把一步走位写进 Transform / Velocity,按节流规则广播(观察者 + 本人)。
+	// 把一步走位写进 Transform / Velocity,按节流规则广播(观察者 + 本人;登记进 moves,由调用方发出)。
 	bool ApplyWalkStep(entt::entity follower, TeamFollowerComp& driven, const TeamFollowStep& step,
-		double deltaSeconds)
+		double deltaSeconds, ActorMoveBatch& moves)
 	{
 		auto& registry = tlsEcs.actorRegistry;
 		auto* transform = registry.try_get<Transform>(follower);
@@ -196,7 +197,7 @@ namespace
 		}
 		if (step.moved <= 0.0 || deltaSeconds <= 0.0)
 		{
-			StopMotion(follower, driven);
+			StopMotion(follower, driven, moves);
 			return true;
 		}
 
@@ -224,16 +225,10 @@ namespace
 		location->set_x(target.x);
 		location->set_y(target.y);
 		location->set_z(target.z);
-		if (dx * dx + dy * dy > 1e-12)
+		// 朝向沿行进方向,口径见 spatial/system/facing.h(偏航角,度);这一 tick 没有水平位移时保留原朝向。
+		if (const auto yaw = facing::YawDegreesToward(dx, dy))
 		{
-			// 朝向沿行进方向,与客户端上报同一口径(客户端 WorldCoordinateConverter):Rotation.z 是 Unity 的偏航角,
-			// 单位是**度**;服务器坐标里朝向 = (cos z, sin z),所以 z = atan2(dy, dx) 换成度。x / y(俯仰、翻滚)取 0。
-			// 不能照抄 ViewSystem::LookAtPosition(它写的是弧度,与客户端口径不一致)。
-			constexpr double kRadiansToDegrees = 180.0 / 3.14159265358979323846;
-			auto* rotation = transform->mutable_rotation();
-			rotation->set_x(0.0);
-			rotation->set_y(0.0);
-			rotation->set_z(std::atan2(dy, dx) * kRadiansToDegrees);
+			facing::SetYaw(*transform->mutable_rotation(), *yaw);
 		}
 		SetActorBaseAttributesS2CAttrDirtyBit(follower, ActorBaseAttributesS2C::kTransformFieldNumber);
 
@@ -251,7 +246,7 @@ namespace
 		const TeamFollowBroadcastState now{true, velocity.x(), velocity.y()};
 		if (TeamFollowShouldBroadcast(last, now, frame - driven.broadcastFrame))
 		{
-			MovementSystem::BroadcastMove(follower, /*includeSelf=*/true);
+			moves.Add(follower, /*includeSelf=*/true);
 			driven.broadcastMoving = true;
 			driven.broadcastVelocityX = now.velocityX;
 			driven.broadcastVelocityY = now.velocityY;
@@ -294,7 +289,11 @@ namespace
 		}
 		const uint64_t leaderPlayerId = driven->leaderPlayerId;
 		// 先停:此后 MovementSystem 不再排除他,不清零的话会按队形最后写的速度继续积分。
-		StopMotion(follower, *driven);
+		// 停步就地发出、不进本 tick 的合并批:保持它在下面的"停止驱动"(SendFollowState)之前发出。
+		// 两者走不同发送路径,到达先后本来不保证,客户端只在被驱动期间用发给自己的移动(设计 §5 第 3 条)。
+		ActorMoveBatch stop;
+		StopMotion(follower, *driven, stop);
+		stop.Flush();
 		registry.remove<TeamFollowerComp>(follower);
 		// 队长离开本节点(交接、退出、实体没了):记下"在等队长的去留",有结论之后 PlayerTeamSystem 再跟一次
 		// (TeamFollowAwaitLeaderComp 的说明)。暂离中的不记:他本来就不想跟。
@@ -548,6 +547,8 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 	static thread_local std::vector<std::pair<entt::entity, TeamFollowStopReason>> dissolving;
 	static thread_local std::vector<std::pair<uint64_t, TeamFollowStopReason>> leaving;
 	static thread_local std::vector<TeamFollowStep> steps;
+	// 同一队形这一 tick 的移动广播合成一批,队形处理完就发(ActorMoveBatch:每个接收者每批只收一条)。
+	static thread_local ActorMoveBatch moves;
 	dissolving.clear();
 
 	for (auto&& [leader, comp] : registry.view<TeamFollowFormationComp>().each())
@@ -566,9 +567,10 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 				const auto follower = LivePlayer(member.playerId);
 				if (auto* driven = follower != entt::null ? registry.try_get<TeamFollowerComp>(follower) : nullptr)
 				{
-					StopMotion(follower, *driven);
+					StopMotion(follower, *driven, moves);
 				}
 			}
+			moves.Flush();
 			continue;
 		}
 
@@ -620,7 +622,7 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 			}
 			if (step.suspended)
 			{
-				StopMotion(follower, *driven);
+				StopMotion(follower, *driven, moves);
 				continue;
 			}
 			if (step.placed)
@@ -631,10 +633,13 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 					TeamFollowSystem::Detach(follower, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
 				continue;
 			}
-			if (!ApplyWalkStep(follower, *driven, step, deltaSeconds))
+			if (!ApplyWalkStep(follower, *driven, step, deltaSeconds, moves))
 				TeamFollowSystem::Detach(follower, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
 		}
+		moves.Flush();
 	}
+	// 兜底:上面任何一条提前 continue 的分支漏发,也在这一 tick 之内发出,不留到下一 tick。
+	moves.Flush();
 
 	for (const auto& [leader, reason] : dissolving)
 	{

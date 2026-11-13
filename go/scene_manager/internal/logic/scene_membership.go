@@ -14,8 +14,8 @@ import (
 
 // 场景与节点的成员集合(docs/design/redis-player-store-cluster.md §5.10)。
 //
-//	instance:<scene>:members         SET,成员是十进制 player_id;场景人数 = SCARD
-//	node:{ctl:<zone>}:<node>:members SET,同上;节点人数 = SCARD,只进负载分与每节点指标
+//	instance:{ctl:<zone>}:<scene>:members SET,成员是十进制 player_id;场景人数 = SCARD
+//	node:{ctl:<zone>}:<node>:members      SET,同上;节点人数 = SCARD,只进负载分与每节点指标
 //
 // 这两把键在控制域(svcCtx.Redis),不带玩家域的 tag;位置等玩家域键在 svcCtx.PlayerRedis,一段 Lua 不能同时碰两边,
 // 所以「删位置」与「摘成员」是两步。计数器在两步之间失败时人数永久多计(实例永不销毁),集合没有这个问题:
@@ -37,14 +37,14 @@ import (
 // (实例不销毁、选线躲着它)。
 
 const (
-	// InstanceMembersKeyFmt 是场景的成员集合,见文件头。
-	InstanceMembersKeyFmt = "instance:%d:members"
-	// NodeMembersKeyFmt 是节点的成员集合,见文件头。第一个 %s 是 sceneControlTag(zone)。
+	// InstanceMembersKeyFmt 是场景的成员集合,见文件头。两个格式里第一个 %s 都是 sceneControlTag(zone)。
+	InstanceMembersKeyFmt = "instance:%s:%d:members"
+	// NodeMembersKeyFmt 是节点的成员集合,见文件头。
 	NodeMembersKeyFmt = "node:%s:%s:members"
 )
 
-func instanceMembersKey(sceneID uint64) string {
-	return fmt.Sprintf(InstanceMembersKeyFmt, sceneID)
+func instanceMembersKey(zoneID uint32, sceneID uint64) string {
+	return fmt.Sprintf(InstanceMembersKeyFmt, sceneControlTag(zoneID), sceneID)
 }
 
 func nodeMembersKey(zoneID uint32, nodeID string) string {
@@ -67,13 +67,17 @@ end
 return 1
 `
 
-// sceneMemberKeys 组一次增减涉及的集合。sceneID 为 0 不动场景集合;zoneID 为 0 或 nodeID 为空不动节点集合。
+// sceneMemberKeys 组一次增减涉及的集合,两把键同一个 zone 的 tag。zoneID 为 0 时一个都不动(键要按 zone 拼);
+// sceneID 为 0 不动场景集合;nodeID 为空不动节点集合。调用方都先过了 skipForeignZoneMembership,zoneID 是本进程的 zone。
 func sceneMemberKeys(sceneID uint64, zoneID uint32, nodeID string) []string {
+	if zoneID == 0 {
+		return nil
+	}
 	keys := make([]string, 0, 2)
 	if sceneID != 0 {
-		keys = append(keys, instanceMembersKey(sceneID))
+		keys = append(keys, instanceMembersKey(zoneID, sceneID))
 	}
-	if zoneID != 0 && nodeID != "" {
+	if nodeID != "" {
 		keys = append(keys, nodeMembersKey(zoneID, nodeID))
 	}
 	return keys
@@ -155,20 +159,33 @@ func locationOverlap(loc *scene_manager.PlayerLocation, sceneID uint64, zoneID u
 	return scene, node
 }
 
-// removeScenePlayer 按场景此刻的属主摘成员,给手里只有场景号的路径用(离场、撤销)。zoneID 为 0 时按 scene:{id}:zone 补。
+// removeScenePlayer 按场景此刻的属主摘成员,给手里只有场景号的路径用(离场、撤销)。
 // 场景被改派过时玩家当初进的是旧节点的集合,而改派只发生在旧节点已死之后,它的集合由死节点收尾删掉。
-// scene:{id}:zone 只在本组的控制域实例里查:读不到(场景在别的组,或已销毁)或不是本 zone,就不动(§4.3)。
+//
+// zoneID 为 0(只给了场景号)时按本进程的 zone,看本 zone 的 scene:{ctl:<z>}:<id>:node 在不在
+// (docs/design/redis-cluster-all-domains-20261110.md §3.3):不在(场景在别的 zone,或已销毁)就不动,计一次跳过,
+// 与原来「scene:<id>:zone 读不到或不是本 zone 就不动」同一个结局;读失败回错误,由上游重试(LeaveScene 的错误语义)。
+// 不先判就摘的话,摘完之后的「location 又指回这里就加回去」会在本 zone 凭空建出别的 zone 场景的成员集合。
 func removeScenePlayer(svcCtx *svc.ServiceContext, playerID, sceneID uint64, zoneID uint32) error {
 	if sceneID == 0 {
 		return nil
 	}
 	if zoneID == 0 {
-		zoneID = GetSceneZone(svcCtx, sceneID)
+		own := svcCtx.Config.ZoneId
+		nodeID, err := svcCtx.Redis.Get(sceneNodeKey(own, sceneID))
+		if err != nil {
+			return fmt.Errorf("read owner of scene %d in zone %d: %w", sceneID, own, err)
+		}
+		if nodeID == "" {
+			metrics.ObserveForeignZoneSkip(metrics.ForeignZoneSkipSiteScenePlayer)
+			return nil
+		}
+		return removeSceneMember(svcCtx, playerID, sceneID, own, nodeID)
 	}
 	if skipForeignZoneMembership(svcCtx, zoneID, metrics.ForeignZoneSkipSiteScenePlayer) {
 		return nil
 	}
-	return removeSceneMember(svcCtx, playerID, sceneID, zoneID, lookupSceneNode(svcCtx, sceneID))
+	return removeSceneMember(svcCtx, playerID, sceneID, zoneID, lookupSceneNode(svcCtx, zoneID, sceneID))
 }
 
 // removeResidualSceneMembers 把被销毁场景 sceneID 剩下的成员从节点集合里摘掉,members 来自销毁脚本的返回值。
@@ -221,8 +238,8 @@ func removeResidualNodeMember(svcCtx *svc.ServiceContext, keys []string, playerI
 // readScenePlayerCount 读一个场景的在线人数。读不到当 0。
 // 只给读错无害的地方用:分线目录的展示、选线(预占由 Lua 原子完成)、空闲扫描(销毁脚本里再判一次)。
 // 伸缩决策、排空推进和迁移规划用 readScenePlayerCountChecked:读错不能当 0。
-func readScenePlayerCount(svcCtx *svc.ServiceContext, sceneID uint64) int64 {
-	n, err := svcCtx.Redis.Scard(instanceMembersKey(sceneID))
+func readScenePlayerCount(svcCtx *svc.ServiceContext, zoneID uint32, sceneID uint64) int64 {
+	n, err := svcCtx.Redis.Scard(instanceMembersKey(zoneID, sceneID))
 	if err != nil {
 		return 0
 	}

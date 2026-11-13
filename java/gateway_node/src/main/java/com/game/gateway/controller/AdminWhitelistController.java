@@ -1,5 +1,6 @@
 package com.game.gateway.controller;
 
+import com.game.gateway.dto.FieldViolation;
 import com.game.gateway.entity.ZoneWhitelist;
 import com.game.gateway.repository.ZoneWhitelistRepository;
 import org.springframework.http.ResponseEntity;
@@ -36,11 +37,14 @@ public class AdminWhitelistController {
      *       ODKU 天然就是幂等语义。</li>
      *   <li><b>忽略请求体里的 id</b>,只按业务键定位。旧写法带 id 时 save() 走 merge,会按主键把那一行改成另一组
      *       (zone_id, account_id) —— 既是越过业务键改数据,也是「先主键、后唯一键」的反向取锁。</li>
-     *   <li>缺 zone_id / account_id 回 400(旧写法是 Hibernate 非空校验失败,冒成 500)。</li>
+     *   <li>缺 zone_id / account_id 回 400(旧写法是 Hibernate 非空校验失败,冒成 500)。2026-11-12 起 400 带
+     *       problem details 错误体(字段名 + 原因码,见 {@link AdminProblems}),之前不带响应体。</li>
      * </ul>
      *
-     * <p>upsert 与回读在同一个事务里:upsert 持有该行的 X 直到提交,其间并发的 remove 删不掉它,回读必然命中;
-     * 回读是普通一致性读、不加锁,整个事务的锁集与单条 upsert 相同。
+     * <p>upsert 与回读在同一个事务里:upsert 持有该行的 X 直到提交,其间并发的 remove 删不掉它。回读用加锁读
+     * ({@link ZoneWhitelistRepository#findByZoneIdAndAccountIdForUpdate},2026-11-12):它读最新的已提交版本加本事务的修改,
+     * 「已存在、note 没变」时也看得见那一行,回读必然命中,与隔离级别无关;要锁的记录 upsert 都已锁住,整个事务的锁集与单条
+     * upsert 相同。之前是普通一致性读,TiDB 的 RR 下可能看不见别人在本事务开始之后提交的那一行。
      * 回读还兜住行号撞号(不同副本同一毫秒,见 {@code com.game.gateway.entity.RowIds}):ODKU 这时改的是别人那一行的 note、
      * 这一行没写进去,回读不到,或者读到的 note 不是这次写的,就抛错,整个事务回滚,那一行的 note 也还原。
      *
@@ -48,18 +52,24 @@ public class AdminWhitelistController {
      * 1213,收敛论证也在那里。
      */
     @PostMapping
-    public ResponseEntity<ZoneWhitelist> add(@RequestBody ZoneWhitelist entry) {
-        if (entry.getZoneId() == null || entry.getAccountId() == null) {
-            return ResponseEntity.badRequest().build();
+    public ResponseEntity<ZoneWhitelist> add(@RequestBody(required = false) ZoneWhitelist entry) {
+        if (entry == null) {
+            throw AdminProblems.badRequest(FieldViolation.missing(null, "request body is missing"));
+        }
+        if (entry.getZoneId() == null) {
+            throw AdminProblems.badRequest(FieldViolation.missing("zone_id", "zone_id is required"));
+        }
+        if (entry.getAccountId() == null) {
+            throw AdminProblems.badRequest(FieldViolation.missing("account_id", "account_id is required"));
         }
         long zoneId = entry.getZoneId();
         long accountId = entry.getAccountId();
         String note = entry.getNote();
         ZoneWhitelist stored = InnoDbDeadlockRetry.execute(tx, "whitelist add", zoneId, () -> {
             whitelistRepo.upsert(zoneId, accountId, note);
-            ZoneWhitelist row = whitelistRepo.findByZoneIdAndAccountId(zoneId, accountId)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "zone_whitelist upsert 之后同一事务内回读不到该行(行号撞号,或违反事务可见性),zone_id=" + zoneId));
+            ZoneWhitelist row = whitelistRepo.findByZoneIdAndAccountIdForUpdate(zoneId, accountId)
+                    .orElseThrow(() -> new IllegalStateException("zone_whitelist row invisible after upsert in the same"
+                            + " transaction (row id collision, or a visibility violation), zone_id=" + zoneId));
             if (!Objects.equals(row.getNote(), note)) {
                 throw new IllegalStateException("zone_whitelist upsert hit another row (row id collision), zone_id=" + zoneId);
             }

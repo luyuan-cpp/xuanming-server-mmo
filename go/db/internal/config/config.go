@@ -5,7 +5,6 @@ import (
 
 	"shared/authoritysql"
 	"shared/dbplacement"
-	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/zrpc"
 )
@@ -33,10 +32,6 @@ type Config struct {
 	// DbPlacement:逻辑库按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 Database.Hosts。
 	// 和上面的 Placement 不是一回事:Placement 管玩家落在哪个库,DbPlacement 管库落在哪个物理集群。
 	DbPlacement dbplacement.Config `json:"DbPlacement,optional"`
-
-	// MySQLPasswordEnv:MySQL 口令所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md)。
-	// 写了它,ServerConfig.Database.Passwd 必须为空,由 ResolveMySQLPassword 在加载配置后填;本机 etc/db.yaml 不写,照用 Passwd。
-	MySQLPasswordEnv string `json:",optional"`
 
 	// AuditOutbox:审计发件箱转发循环(docs/design/player-audit-outbox.md §7),见 audit_outbox.go 的 AuditOutboxConfig。
 	AuditOutbox AuditOutboxConfig `json:"AuditOutbox,optional"`
@@ -86,9 +81,9 @@ type PlayerStoreConfig struct {
 
 // DatabaseConfig holds database connection settings.
 type DatabaseConfig struct {
-	Hosts       string `json:"Hosts"`
-	User        string `json:"User"`
-	Passwd      string `json:"Passwd"`
+	Hosts  string `json:"Hosts"`
+	User   string `json:"User"`
+	Passwd string `json:"Passwd"`
 	// DBName 只给迁移入口用:cmd/migrate 按 -storage-id 派生目标存档库名填进来。常驻进程不连固定的库,
 	// 每个存档库按需打开,池参数在 Placement.Store*(A17c 删了本区库和它的 MaxOpenConn / MaxIdleConn)。
 	DBName string `json:"DBName,optional"`
@@ -253,6 +248,9 @@ func (c *Config) Normalize() {
 	if p.StoreConnMaxIdleSeconds <= 0 {
 		p.StoreConnMaxIdleSeconds = DefaultPlacementStoreConnMaxIdleSeconds
 	}
+
+	// 审计发件箱转发:0 / 空取缺省(audit_outbox.go)。
+	c.AuditOutbox = c.AuditOutbox.Normalized()
 }
 
 // Validate 校验配置。conf.Load 在 Normalize 之前自动调用一次,启动路径在 Normalize 之后再调一次,本方法对两者都安全。
@@ -262,14 +260,11 @@ func (c *Config) Validate() error {
 	if err := c.RpcServerConf.Validate(); err != nil {
 		return err
 	}
+	// 回填之前也按回填之后的值核:IntervalMs 越界、两个 topic 同名都拒启,不悄悄夹紧。
+	if err := c.AuditOutbox.Normalized().Validate(); err != nil {
+		return err
+	}
 	return c.ValidateGlobalAuthority()
-}
-
-// ResolveMySQLPassword 按 MySQLPasswordEnv 把 MySQL 口令填进 ServerConfig.Database.Passwd,规则见 secretenv.Fill
-// (变量缺席或为空、或 Passwd 同时写了字面量都返回错误)。主进程与 cmd/migrate 在 conf.MustLoad 之后、连库之前调用;lookup 生产传 os.LookupEnv。
-func (c *Config) ResolveMySQLPassword(lookup func(string) (string, bool)) error {
-	return secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
-		secretenv.Target{Field: "ServerConfig.Database.Passwd", Value: &c.ServerConfig.Database.Passwd})
 }
 
 // ValidateGlobalAuthority 是普通服务启动的配置门禁,不执行 DDL。Mode 不放宽它。

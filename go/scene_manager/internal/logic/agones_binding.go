@@ -23,11 +23,11 @@ import (
 // 见 agones_room_ledger.go);非高密度模式只有 GameServer 名。
 //
 // 这个记录是**归还的唯一依据**:创建失败、节点死亡、销毁时都要按它精确删掉那一条。不存这一条就只能猜,
-// 猜错等于把别的进程的容量凭空放大。
-const SceneAgonesGsKeyFmt = "scene:%d:agones_gs"
+// 猜错等于把别的进程的容量凭空放大。键是 scene:{ctl:<z>}:<id>:agones_gs,%s 是 sceneControlTag(zone)。
+const SceneAgonesGsKeyFmt = "scene:%s:%d:agones_gs"
 
-func sceneAgonesGsKey(sceneID uint64) string {
-	return fmt.Sprintf(SceneAgonesGsKeyFmt, sceneID)
+func sceneAgonesGsKey(zoneID uint32, sceneID uint64) string {
+	return fmt.Sprintf(SceneAgonesGsKeyFmt, sceneControlTag(zoneID), sceneID)
 }
 
 // 全局分配器句柄。用 setter 而不是塞进 ServiceContext,是为了让单元测试
@@ -434,7 +434,7 @@ func commitReservedAgonesRoom(ctx context.Context, svcCtx *svc.ServiceContext, z
 // KEYS[1] = scene:{id}:node
 // KEYS[2] = scene:{id}:agones_gs
 // KEYS[3] = scene:{id}:agones_transfer_receipt:{token},本次调用的回执(见下)
-// KEYS[4] = 本 zone 的在途占用 agones_rooms:zone:{z}:holds
+// KEYS[4] = 本 zone 的在途占用 agones_rooms:{ctl:<z>}:holds(四把键同一个 zone 的 tag,同槽)
 // ARGV[1] = newNode
 // ARGV[2] = 新记录「新 GameServer/条目」
 // ARGV[3] = 回执存活秒数
@@ -484,8 +484,9 @@ return {1, prev}
 `
 
 // sceneAgonesTransferReceiptKey 是 luaCommitAgonesRoomTransfer 一次调用的回执键,存活 sceneClaimRecordTTLSeconds。
-func sceneAgonesTransferReceiptKey(sceneID uint64, token string) string {
-	return fmt.Sprintf("scene:%d:agones_transfer_receipt:%s", sceneID, token)
+// 与脚本里的其余键同一个 zone 的 tag(scene:{ctl:<z>}:<id>:agones_transfer_receipt:<token>)。
+func sceneAgonesTransferReceiptKey(zoneID uint32, sceneID uint64, token string) string {
+	return fmt.Sprintf("scene:%s:%d:agones_transfer_receipt:%s", sceneControlTag(zoneID), sceneID, token)
 }
 
 const (
@@ -545,8 +546,8 @@ func commitAgonesRoomTransfer(
 	room := placement.room()
 
 	// 每次调用一个新 token、一把自己的回执键,go-redis 内部重发带同一个,脚本据此认出重发(见 luaCommitAgonesRoomTransfer)。
-	receiptKey := sceneAgonesTransferReceiptKey(sceneID, uuid.NewString())
-	keys := []string{sceneNodeKey(sceneID), sceneAgonesGsKey(sceneID), receiptKey, agonesRoomHoldsKey(zoneID)}
+	receiptKey := sceneAgonesTransferReceiptKey(zoneID, sceneID, uuid.NewString())
+	keys := []string{sceneNodeKey(zoneID, sceneID), sceneAgonesGsKey(zoneID, sceneID), receiptKey, agonesRoomHoldsKey(zoneID)}
 	raw, err := svcCtx.Redis.Eval(luaCommitAgonesRoomTransfer, keys,
 		newNode, room.record(), sceneClaimRecordTTLSeconds, room.Entry, room.GameServer)
 	var status int64

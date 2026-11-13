@@ -206,7 +206,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
-      terminationGracePeriodSeconds: 30
+      # 70 = preStop 5s + 进程自己的停机预算 60s(data_service.go shutdownRuntime:关入口、停 Kafka 消费并提交位点、等中继排空)
+      # + 余量 5s。进程用 NotifyContext 接管了 SIGTERM,go-zero 的强退不生效,宽限期短于这个数时 K8s 会在排空中途
+      # SIGKILL(等同崩溃,数据由重投兜底,但这一轮排空白做)。调小 shutdownRuntime 的预算时同步调小这里。
+      terminationGracePeriodSeconds: 70
       volumes:
         - name: sql-writer-request
           secret: {secretName: PLACEHOLDER_SQL_WRITER_REQUEST_SECRET, defaultMode: 288}

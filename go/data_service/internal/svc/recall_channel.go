@@ -20,6 +20,7 @@ import (
 	"shared/assetop"
 	"shared/assetopwake"
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/dirshard"
 	"shared/drainproof"
 	"shared/etcdwatch"
@@ -224,7 +225,7 @@ type RecallChannel struct {
 	wake        *assetopwake.Subscriber
 	watcher     *scenenode.Watcher
 	conns       *scenenode.ConnCache
-	redis       *redis.Client
+	redis       redis.UniversalClient // 控制集群句柄(ControlRedis 段):唤醒订阅与去重键
 	playerRedis redis.UniversalClient
 	etcd        *clientv3.Client
 	// members 是重投循环按片分工的成员表(本 zone 注册的 stable data_service 实例,recallShardMembersPrefix)。
@@ -277,10 +278,13 @@ func newRecallChannel(c config.Config, recall *store.RecallStore, assets PlayerS
 
 	ping, cancel := context.WithTimeout(context.Background(), recallRedisPingTimeout)
 	defer cancel()
-	ch.redis = redis.NewClient(&redis.Options{Addr: c.SharedRedis.Host, Password: c.SharedRedis.Password,
-		DB: c.SharedRedis.DB, PoolSize: c.SharedRedis.PoolSize})
+	controlConf := c.EffectiveControlRedis()
+	ch.redis, err = clusterredis.New(controlConf, clusterredis.ControlClusterKeys)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ControlRedis config: %w", err)
+	}
 	if err = ch.redis.Ping(ping).Err(); err != nil {
-		return nil, fmt.Errorf("connect shared Redis %s (DB %d); landing wake lives there: %w", c.SharedRedis.Host, c.SharedRedis.DB, err)
+		return nil, fmt.Errorf("connect control Redis (%s); landing wake lives there: %w", controlConf.Describe(), err)
 	}
 	playerConf := c.EffectivePlayerRedis()
 	ch.playerRedis, err = playerredis.New(playerConf)
@@ -425,30 +429,30 @@ func (r *RecallChannel) closeResources() error {
 	return r.closeErr
 }
 
-// runDispatch 每 recallDispatchInterval 派发一轮,直到 ctx 结束。
+// runDispatch 每 recallDispatchInterval 派发一拍,直到 ctx 结束。
 //
-// 活性(data_service_recall_dispatch_last_run_unixtime,第四批,设计 §14.3):起来时写一次,每跑完一轮写一次(这一轮成败都写),
-// 退出时删掉序列。值停住 = 循环卡在某一轮里,或每一轮都 panic;分片之后它名下的片没人派,有告警 RecallDispatchLoopStalled。
+// 活性(data_service_recall_dispatch_last_run_unixtime,第四批,设计 §14.3;口径在 shared/looplive 的包注释):起来时写一次;
+// 每一拍正常返回(成败都算)就写这一刻,panic 的一拍不写;ctx 结束、有意停止时删掉序列。值停住 = 循环卡在某一拍里,
+// 或每一拍都 panic;分片之后它名下的片没人派,有告警 RecallDispatchLoopStalled。
 func (r *RecallChannel) runDispatch(ctx context.Context) {
 	ticker := time.NewTicker(recallDispatchInterval)
 	defer ticker.Stop()
-	metrics.MarkRecallDispatchRun(time.Now())
-	defer metrics.ClearRecallDispatchRun()
+	metrics.RecallDispatchLive().Mark(time.Now())
 	for {
 		select {
 		case <-ctx.Done():
+			metrics.RecallDispatchLive().Stop()
 			return
 		case <-ticker.C:
-			safego.Run(recallDispatchPoint, func() { r.dispatchOnce(ctx) })
+			r.dispatchTick(ctx)
 		}
 	}
 }
 
-// dispatchOnce 是派发循环的一轮:dispatchRound 返回之后记活性时刻。dispatchRound panic 时(打 Hold 之后重新抛出,
-// 由 safego.Run 兜住)走不到记时刻这一步:每一轮都 panic 的循环要当停摆报出来。
-func (r *RecallChannel) dispatchOnce(ctx context.Context) {
-	r.dispatchRound(ctx)
-	metrics.MarkRecallDispatchRun(time.Now())
+// dispatchTick 是派发循环的一拍,返回这一拍是否正常跑完。dispatchRound panic 时(它先打 Hold 再重新抛出)由 Round 里的 safego 兜住:
+// 不写活性时刻,循环接着跑下一拍。
+func (r *RecallChannel) dispatchTick(ctx context.Context) bool {
+	return metrics.RecallDispatchLive().Round(recallDispatchPoint, func() { r.dispatchRound(ctx) })
 }
 
 // dispatchRound 派发一轮。每一轮走 RELAY 门禁。提交结局不明的失败打 Hold,闸门冻结不算:这一笔确定没写,下一轮接着做。

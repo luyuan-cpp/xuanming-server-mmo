@@ -31,6 +31,7 @@ import (
 	pspb "proto/player_store"
 	smpb "proto/scene_manager"
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/ownerepoch"
 	"shared/playerredis"
 	"shared/redisslot"
@@ -297,8 +298,10 @@ func (r *ownershipFaultRig) zombie(t *testing.T) {
 		if err != nil || len(current.Kvs) != 0 {
 			return false
 		}
-		// 键形与 scene_manager logic.NodeDeathAtKeyFmt 相同,在控制域;那边是 internal 包,这里引用不到。
-		raw, err := r.control.Get(deadCtx, fmt.Sprintf("node:zone:%d:%s:death_at", loc.GetZoneId(), loc.GetNodeId())).Result()
+		// 键形与 scene_manager logic.nodeDeathAtKey 相同(node:{ctl:<z>}:<n>:death_at,docs/design/redis-cluster-all-domains-20261110.md
+		// §4.1),在控制域;那边是 internal 包,这里引用不到,tag 由同一张族表生成。
+		raw, err := r.control.Get(deadCtx, fmt.Sprintf("node:%s:%s:death_at",
+			redisslot.ZoneControlTag(redisslot.ControlFamilySceneControl, loc.GetZoneId()), loc.GetNodeId())).Result()
 		if err != nil {
 			return false
 		}
@@ -410,7 +413,7 @@ func ownershipFaultRedis(t *testing.T, cfg ownershipFaultManagerConfig) (redis.U
 	for _, addr := range append(append([]string(nil), controlConfig.Addrs...), playerConfig.Addrs...) {
 		ownershipFaultLocal(t, addr)
 	}
-	// 控制域的判死标记没有玩家 hash tag，不能挂玩家域的键守卫。
+	// 控制域的判死标记带控制集群的 tag {ctl:<z>}，不是玩家域的 tag，不能挂玩家域的键守卫。
 	control := redis.NewUniversalClient(&controlConfig)
 	player, err := playerredis.New(playerConfig)
 	if err != nil {
@@ -425,7 +428,7 @@ func ownershipFaultRedis(t *testing.T, cfg ownershipFaultManagerConfig) (redis.U
 
 func TestOwnershipFaultControlRedisReadsDeathMark(t *testing.T) {
 	server := miniredis.RunT(t)
-	const deathKey = "node:zone:990017:1:death_at"
+	const deathKey = "node:{ctl:990017}:1:death_at"
 	if err := server.Set(deathKey, "1793800000000"); err != nil {
 		t.Fatal(err)
 	}
@@ -436,10 +439,10 @@ func TestOwnershipFaultControlRedisReadsDeathMark(t *testing.T) {
 
 	value, err := control.Get(t.Context(), deathKey).Result()
 	if err != nil || value != "1793800000000" {
-		t.Fatalf("控制域应读取未加 hash tag 的判死标记，实际 %q，错误 %v", value, err)
+		t.Fatalf("控制域应读取带控制集群 tag 的判死标记，实际 %q，错误 %v", value, err)
 	}
-	if err := player.Get(t.Context(), deathKey).Err(); !errors.Is(err, playerredis.ErrUntaggedKey) {
-		t.Fatalf("玩家域应继续拒绝未加 hash tag 的键，实际错误 %v", err)
+	if err := player.Get(t.Context(), deathKey).Err(); !errors.Is(err, clusterredis.ErrWrongDomainTag) {
+		t.Fatalf("玩家域应拒绝带控制集群 tag 的键，实际错误 %v", err)
 	}
 }
 

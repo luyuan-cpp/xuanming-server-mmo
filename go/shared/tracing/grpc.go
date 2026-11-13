@@ -3,7 +3,8 @@
 // go-zero 的 zrpc 服务端和客户端已经按 W3C traceparent 传播,并把 trace / span 写进带 ctx 的日志;
 // 这里只补 zrpc 之外的路径:
 //   - 裸 grpc.NewClient 的出站拦截(Go 调 C++ 节点等,UnaryClientInterceptor);
-//   - 给 handler 日志加 player_id 的服务端拦截器(PlayerFieldInterceptor)。
+//   - 给 handler 日志加 player_id 的服务端拦截器(PlayerFieldInterceptor);
+//   - 调我们自己服务的裸 http.Client 出站请求(trade 调商城,DoHTTP,在 http.go)。
 //
 // Kafka 消息头的载体按客户端库分在子包 kafkagotrace、saramatrace(第 5 批),理由见各子包的包注释。
 package tracing

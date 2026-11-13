@@ -42,7 +42,7 @@
 # 表达式按 namespace 分组(zone 级服务每个 zone 一个 namespace)。namespace 是抓取配置附加的目标 label:
 # 抓取配置没有附加它时各 zone 会被并成一组 —— 不报错,但分不清 zone,求和类的比值也会被摊平。
 #
-# 阈值:本文件每一条的阈值与 for 时长都是按总账规划档推算或凭经验取的占位值,**待压测确认**
+# 阈值:本文件每一条的阈值与 for 时长已定(2026-11-12),压测出基线后可调;依据是总账规划档推算与业界连接池常用口径(使用率 80% 预警、90% 饱和、获取等待 100ms、for 5~15 分钟)
 # (各条规则上方另有标注;AGENTS.md §6:没有压测对比不下容量结论)。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
@@ -76,7 +76,7 @@ spec:
         # for: 0m —— 一次被拒就可能已有存盘在重试、已有玩家进不了场,不等。
         # Connection_errors_max_connections 是 SHOW GLOBAL STATUS 的固定行,exporter 起来就应以 0 值导出,increase 抓得到第一次
         # (凭记忆,部署 exporter 时一并核对;若它其实是「首次发生才出现」的序列,改用绝对值)。
-        # 阈值(> 0、5 分钟窗口)待压测确认。
+        # 阈值(> 0、5 分钟窗口)已定(2026-11-12),压测出基线后可调:被拒连接在健康系统里恒为 0。
         - alert: MysqlConnectionsRefused
           expr: |
             sum(increase(mysql_global_status_connection_errors_total{error="max_connections"}[5m])) > 0
@@ -105,7 +105,7 @@ spec:
         # 副作用:max_over_time[5m] 会把一次越线保持 5 分钟,与 for 5m 叠加后,单个越线样本基本就会触发 —— 有意如此
         # (尖峰本身就说明余量不足)。两次抓取之间的尖峰仍然看不到。
         # 注意规划档峰值对上限只留约 10% 余量(mysql.yaml「连接上限」注释),也就是规划规模下各池打满时,一次滚动发布
-        # 本身就会越过 80%。总账按池上限算,实际连接数通常低于名义值,所以 0.8 与 for 5m 只是占位值,**待压测确认**:
+        # 本身就会越过 80%。总账按池上限算,实际连接数通常低于名义值,所以 0.8 与 for 5m 已定(2026-11-12,依据:连接池使用率 80% 预警是业界常用口径),压测出基线后可调:
         # 拿到实际稳态连接数后按「稳态 + 滚动余量」重定。
         # 两个指标来自同一个 exporter 实例,label 集相同,一对一匹配;有多个 MySQL 实例时各算各的。
         - alert: MysqlConnectionsNearMax
@@ -134,7 +134,7 @@ spec:
         # 没人排队时分母为 0,商是 NaN,比较为假,不触发。
         # wait_* 是类别内求和的 counter,靠「池常驻不删」保持单调(go/shared/sqlpoolstats/collector.go 包注释);
         # 以后给池加回收,求和回退会被当成 counter reset,这条要跟着改口径。
-        # 0.1 秒 / 每秒 1 次 / for 10m 都是占位值,待压测确认。
+        # 0.1 秒 / 每秒 1 次 / for 10m 已定(2026-11-12),压测出基线后可调:依据是池内获取连接等待超过 100ms 已显著吃掉单次存盘事务的预算(DbPlayerStoreLatencyHigh 的 500ms),10m 滤掉发布抖动。
         - alert: SqlPoolSlowAcquire
           expr: |
             (
@@ -162,7 +162,7 @@ spec:
         # 任一池不限(MaxOpenConn = 0)时 max_open 导出为 +Inf,商为 0;类别里没有池时是 0 / 0 = NaN:两种都不触发。
         # 这里按 (namespace, sql_client, pool) 对各副本求和后再比:一个副本满、另一个闲时会被摊平,
         # 要看单副本,去掉 sum 按 instance 查。
-        # 0.9 / for 15m 是占位值,待压测确认。
+        # 0.9 / for 15m 已定(2026-11-12),压测出基线后可调:依据是池使用率 90% 持续 15 分钟已不是尖峰而是常态饱和,业界常用 90% 作饱和线。
         - alert: SqlPoolSaturated
           expr: |
             sum by (namespace, sql_client, pool) (mmorpg_sql_pool_in_use_connections)
@@ -185,7 +185,7 @@ spec:
         # **阈值必须单独占一行,不要改写成别的形状**;改规划档必须同改这一行(反之亦然),并重算连接预算。
         # pool 的取值写死为 go/db/internal/metrics 的 PoolStore,改常量必须同改这里。
         # mmorpg_sql_pool_pools 对声明的类别每次抓取都输出(没有池时为 0),不存在序列从无到有的漏报。
-        # 这是事后信号:库已经打开、池已经建好才会响。阈值来自规划档,规划档本身待压测确认。
+        # 这是事后信号:库已经打开、池已经建好才会响。阈值来自规划档(已定 2026-11-12),规划档数值压测出基线后可调。
         - alert: DbStorePoolsBeyondPlan
           expr: |
             max by (namespace, instance) (mmorpg_sql_pool_pools{sql_client="db", pool="store"}) > 64
@@ -203,7 +203,7 @@ spec:
     # ── Java gateway(Hikari 连接池)──────────────────────────────────────────
     # gateway 在管理端口 8082 的 /actuator/prometheus 上导出 Micrometer 的 hikaricp_connections_*{pool="gateway"}(文件头 Scrape prerequisites)。
     # gateway 的池很小(jar 内 maximum-pool-size 5、connection-timeout 3000ms,计入 MySQL 连接总账),取连接超时就是 assign-gate /
-    # server-list 回 5xx,所以按「超时出现就报」写,不等池长期满。阈值与 for 都是占位值,待压测确认。
+    # server-list 回 5xx,所以按「超时出现就报」写,不等池长期满。阈值与 for 已定(2026-11-12),压测出基线后可调:依据是 connection-timeout 3000ms 超时一出现就是 5xx,不等池长期满。
     - name: sql-pool.gateway
       interval: 30s
       rules:

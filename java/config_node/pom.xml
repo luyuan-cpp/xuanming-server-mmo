@@ -32,6 +32,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- 链路追踪(docs/design/distributed-tracing.md §7):日志带 traceId / spanId,接住内网调用方的 traceparent;
+             版本由 Spring Boot BOM 管理,不加导出器 -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
 
         <!-- Protobuf runtime + JSON support -->
         <dependency>

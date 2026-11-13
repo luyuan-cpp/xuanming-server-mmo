@@ -156,3 +156,27 @@ func TestTransactionLogStore_QueryLogByCorrelationIDs(t *testing.T) {
 	assert.Zero(t, total)
 	assert.Empty(t, got)
 }
+
+// GM 回收补查同指令流水只按收到方(ToPlayerID):同一个指令号下这名玩家转出的流水不回,别人收到的也不回;不带时间窗。
+func TestTransactionLogStore_QueryLogByReceiverAndCorrelationIDs(t *testing.T) {
+	db := storetest.NewMigratedDB(t)
+	ts := newTxLogStore(t, db)
+	ctx := context.Background()
+
+	received, sent, other, otherInstruction := txRow(11), txRow(12), txRow(13), txRow(14)
+	received.CorrelationID, received.Timestamp = 901, 1 // 远在任何时间窗之外
+	sent.CorrelationID, sent.FromPlayer, sent.ToPlayer = 901, 200, 300
+	other.CorrelationID, other.ToPlayer = 901, 400
+	otherInstruction.CorrelationID = 902
+	_, err := ts.InsertBatchIgnore(ctx, []*store.TransactionLogRow{received, sent, other, otherInstruction})
+	require.NoError(t, err)
+
+	got, total, err := ts.QueryLog(ctx, &store.TransactionLogQuery{ToPlayerID: 200, CorrelationIDs: []uint64{901}, Limit: 100})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(1), total)
+	require.Len(t, got, 1)
+	assert.Equal(t, uint64(11), got[0].TxID, "只回收到方是 200 的那条")
+
+	_, _, err = ts.QueryLog(ctx, &store.TransactionLogQuery{PlayerID: 200, ToPlayerID: 200, CorrelationIDs: []uint64{901}})
+	require.Error(t, err, "两个玩家条件不能同时给")
+}

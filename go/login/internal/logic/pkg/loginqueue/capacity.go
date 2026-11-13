@@ -16,7 +16,7 @@
 // GateMaxConnections 无声拒掉。封顶之后 gate 到水位时排队就开始拦人;gate 坏了、被排空时承载随之下降,排队跟着收紧。
 //
 // Free-slots calculation deliberately includes in-flight placeholders
-// (`admitted:zset:zone:{zoneId}`, see Queue.AdmittedCount):
+// (`admitted:zset:{q:<zone>}`, see Queue.AdmittedCount):
 //
 //	freeSlots = capacity - online - admitted
 //
@@ -68,7 +68,7 @@ type CapacityProvider interface {
 //	ceiling   = ZoneCapacity(zone) || floor(max(online, 1) * softCapMultiplier)
 //	gateCap   = gatepick.AdmissionCapacity(candidates): 在接客的 gate 到水位一共能接的人数
 //	cap       = min(ceiling, gateCap);数进来的 gate 里有没声明上限的(MaxConnections=0)时 cap = ceiling
-//	admitted  = live members of admitted:zset:zone:{zone} (expired ones dropped first)
+//	admitted  = live members of admitted:zset:{q:<zone>} (expired ones dropped first)
 //	free      = max(0, cap - online - admitted)
 //
 // We use max(online, 1) in the fallback so a brand-new zone (online=0)

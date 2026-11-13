@@ -2,6 +2,8 @@
 
 > **2026-11-05 评分与评分榜按模式分开(R5,未编译)**:评分按 `(player_id, mode)` 存,每个计分模式一张榜:`board_type` 1 = 1V1(沿用原来那张榜的键)、2 = 5V5、3 = PVP_TEAM,其余键固定为 GLOBAL、period `all`、第 1 代;投榜来源与 outbox 按 `(epoch, mode, shard)` 分,封榜按模式停写。计分局回合打满按平局不再读 `RatingDrawRoundCap*`(已删),先看个人原件里 0 队是否全灭。rank 服务没有改动。下文「一个全服榜、不分模式」「按模式分榜拆不出两份分」与 `RatingDrawRoundCapFor` 的描述只作历史保留,现行口径见 [global-match-hierarchical-pools.md](global-match-hierarchical-pools.md) §8。
 
+> **2026-11-12 `board_type` 取值登记进 proto(未生成、未编译)**:`rank.proto` 新增枚举 `RankBoardType`(1 = MATCH_1V1、2 = MATCH_5V5、3 = MATCH_PVP_TEAM),match 与客户端都用生成常量,不再各写数字;`RankBoardKey.board_type` 仍是 uint32,rank 服务是通用榜,不按枚举校验。新增一种榜先在枚举里登记一个值,已上线的值不改不复用。客户端论剑榜按模式分三个页签、默认看 PVP_TEAM 榜,见 [global-match-hierarchical-pools.md](global-match-hierarchical-pools.md) §9。
+
 > **2026-10-30**:`match-rating-snapshot` topic、`PlayerRatingSnapshotEvent`、`RatingSnapshot*` 配置、`-MatchRatingSnapshotPublish` 都已删除。评分只在全球权威库(`match_rating`、`match_rating_applied`),写榜走 `match_rank_source` 和 `go/match/internal/authority/rank_publisher.go`。下文 §2.4、§5.4 等关于这个 topic 的内容只作历史保留。
 
 > **2026-10-19 主干合并口径**：现役为 SQL 权威的通用榜代次、封榜、快照及邮件奖励链，配置入口为 `go/rank/etc/rank.yaml`（DSNEnv、RequireTiDB、MaxOpenConns、MailRpc、Producers）。R2/R2b 的 Redis/Kafka 消费榜、redis-rank 和消费类告警保留为历史设计，不能与现役同时作为写者启用。全局服务登记、端口、冗余部署和失败可观测性继续保留。
@@ -165,7 +167,7 @@
 
 | 公会榜做法(`go/guild/internal/data/guild_repo.go`) | rank 为什么不照抄 |
 |---|---|
-| 键 `guild_rank:zone:<id>` / `guild_rank:version:<id>` / `guild_rank:tombstone:<id>` / `guild_rank:maintenance_lock` | `RebuildRanks` 会 `SCAN guild_rank:zone:*`,把每张榜上与 MySQL 对不上的成员摘掉;摘榜、折叠也按这几个键名读写。别的服务以 `guild_rank` 开头的键会被当成公会榜改写。**rank 的所有键不得以 `guild_rank` 开头**;同理避开 `match:*`(match 已有 `match:{mq}:rank:*`) |
+| 键 `guild_rank:zone:{gr:<id>}` / `guild_rank:version:{gr:<id>}` / `guild_rank:tombstone:{gr:<id>}` / `guild_rank:maintenance_lock:{gr:<id>}`(2026-11-12 起带控制集群 tag) | `RebuildRanks` 按 zone 清单(从 SQL 推出)逐张读 `guild_rank:zone:{gr:<id>}`,把每张榜上与 MySQL 对不上的成员摘掉;摘榜、折叠也按这几个键名读写。别的服务以 `guild_rank` 开头的键会被当成公会榜改写。**rank 的所有键不得以 `guild_rank` 开头**;同理避开 `match:*`(match 已有 `match:{mq}:rank:*`) |
 | MySQL `guild.score` 是权威,ZSET 是读加速 | rank v1 **没有**持久化副本,权威在 match(§3.5) |
 | 写分不拿锁(2026-11-11 起):按 `guild.score_version` 的 Lua 条件写入;全服 SETNX 锁只让启动重建与合服折叠互斥 | 同样不拿全局锁:玩家评分每局每人一次,全局锁会把写路径串行化;rank 单条写是一条 Lua,本身原子 |
 | 版本来自 MySQL:`guild.score_version` 在写分事务里加 1,榜上只接受不比已记版本旧的分数 | 版本来自上游:Kafka 会乱序与重放,必须带单调版本(`rating_gen`, `games`) |

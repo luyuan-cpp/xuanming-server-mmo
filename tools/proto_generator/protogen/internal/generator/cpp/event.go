@@ -179,7 +179,7 @@ func filterKafkaIngressFiles(protoRelativeDir string, files []os.DirEntry) []os.
 	for _, file := range files {
 		messages, err := parseProtoMessages(filepath.Join(_config.Global.Paths.ProtoDir, protoRelativeDir, file.Name()))
 		if err != nil {
-			logger.Global.Fatal("读取 Kafka 入口 proto 失败", zap.String("file", file.Name()), zap.Error(err))
+			logger.Global.Fatal("Failed to read Kafka ingress proto", zap.String("file", file.Name()), zap.Error(err))
 		}
 		if len(kafkaIngressMessages(protoRelativeDir, file, messages)) > 0 {
 			result = append(result, file)
@@ -259,13 +259,13 @@ func generateEventHandlerFiles(wg *sync.WaitGroup, file os.DirEntry, protoRelati
 	}
 
 	if err := utils2.RenderTemplateToFile("internal/template/event_handler.h.tmpl", headerFilePath, tmplData); err != nil {
-		logger.Global.Fatal("生成事件处理器头文件失败",
+		logger.Global.Fatal("Failed to generate event handler header",
 			zap.String("header_file", headerFilePath),
 			zap.Error(err),
 		)
 	}
 	if err := utils2.RenderTemplateToFile("internal/template/event_handler.cpp.tmpl", cppFilePath, tmplData); err != nil {
-		logger.Global.Fatal("生成事件处理器源文件失败",
+		logger.Global.Fatal("Failed to generate event handler source",
 			zap.String("cpp_file", cppFilePath),
 			zap.Error(err),
 		)

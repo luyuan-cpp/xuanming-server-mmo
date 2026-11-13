@@ -18,9 +18,13 @@ package main
 //   3. 强化两次 —— 先在背包里、穿上后再来一次。对账一律以**强化前那份快照**里的 enhance_next 为准:
 //      金币差 = cost_gold、材料差 = material_count、成功则等级 +1、失败则 max(0, 等级 − fail_level_loss);
 //      success_rate = 10000 必须成功,其余两种结果都接受(强化失败不是错误,见 §5 不变量 10)。
-//      每次请求的 expected_level 都取发请求前那份快照里的 enhance_level。背包里那一次之后再按强化前的等级
-//      原样重发一次(模拟结局未知后的重发):等级变了就必须回 kEquipEnhanceLevelChanged、两个包不变;
-//      等级没变(失败且不掉级)时那是一次合法的新强化,这一条跳过;
+//      每次请求的 expected_level 都取发请求前那份快照里的 enhance_level;每次强化带一个新的幂等键 client_request_id。
+//      背包里那一次之后:
+//        a. 用同一个请求对象原样重发一次(同一个键,模拟结果不明后的重发,docs/design/client-request-idempotency.md):
+//           服务器先查键、后比等级,不论首次成败、等级变没变,都必须回首次的成败与等级并标 replayed,
+//           两份快照与首次应答逐项相同 —— 不再扣、不再掷、不再掉级;
+//        b. 再用新键、仍按强化前的等级发一次(模拟快照过期,或旧键已被挤出账本):等级变了就必须回
+//           kEquipEnhanceLevelChanged、两个包不变;等级没变(失败且不掉级)时那是一次合法的新强化,这一条跳过;
 //      穿着且等级变了:服务器推属性面板,物伤 / 法伤恰好各变了基础属性行的差值;等级没变:面板不变;
 //   4. 镶嵌:0 号孔嵌 2101 → 该孔 gem_config_id = 2101 且带 attr、背包里 2101 少 1、面板物伤 / 法伤各 + 宝石值;
 //      同一个孔再嵌 → kEquipGemSocketOccupied,两个包不变;
@@ -129,6 +133,7 @@ type equipForgeChange struct {
 	equipChange        // bag / equipment / tip / panelSeq,语义同穿脱(业务拒绝时两个包为 nil)
 	success     bool   // 仅强化:本次掷骰是否成功。false 不是错误 —— tip 仍为 0、两个包照常带回
 	level       uint32 // 仅强化:操作后的强化等级
+	replayed    bool   // 仅强化:应答标了 replayed —— 同一个幂等键的重发,success / level 是首次的结果,两个包取此刻的
 }
 
 // RunEquipForgeSmoke 是 main.go `mode: equip-forge-smoke` 的入口。
@@ -356,15 +361,20 @@ func RunEquipForgeSmoke(cfg *config.Config) {
 	if bags, err = equipForgeFund(session, bags, targetId); err != nil {
 		fail("enhance-bag-fund", "%v", err)
 	}
-	// expected_level 填强化前那份快照里的等级(EnhanceEquipRequest 的乐观比较)
+	// expected_level 填强化前那份快照里的等级(EnhanceEquipRequest 的乐观比较)。请求对象留着:下面原样重发一次
 	beforeEnhance, _ := bags.item(targetId)
 	levelBefore := beforeEnhance.GetEnhanceLevel()
-	forged, err := equipForgeEnhance(session, targetId, levelBefore)
+	enhanceRequest := &scene.EnhanceEquipRequest{ItemId: targetId, ExpectedLevel: levelBefore, ClientRequestId: smokeClientRequestKey()}
+	forged, err := equipForgeSendEnhance(session, enhanceRequest)
 	if err != nil {
 		fail("enhance-bag", "%v", err)
 	}
 	if forged.tip != 0 {
 		fail("enhance-bag", "强化背包里的装备被拒: tip=%s(强化前 +%d)", equipTipText(forged.tip), startLevel)
+	}
+	if forged.replayed {
+		fail("enhance-bag", "the first enhance with a fresh client_request_id=%d came back replayed = true",
+			enhanceRequest.GetClientRequestId())
 	}
 	after := equipForgeBags{inventory: forged.bag, equipment: forged.equipment}
 	if err := checkEquipForgeEnhance(bags, after, targetId, forged.success, forged.level); err != nil {
@@ -378,21 +388,33 @@ func RunEquipForgeSmoke(cfg *config.Config) {
 	if err := session.expectBagsUnchanged(after.inventory, after.equipment); err != nil {
 		fail("enhance-bag-snapshot", "强化响应里的快照与随后 GetBag 读到的不一致: %v", err)
 	}
-	// 结局未知之后的重发(审计 r2-equip#1):按强化前的等级原样再发一次。等级变了(成功,或失败掉了级)就必须
-	// 回 kEquipEnhanceLevelChanged、两个包原样 —— 不再扣一次、不再掷一次、不再掉一次级。
-	// 等级没变(失败且不掉级)时它与玩家再点一次无法区分,是一次合法的新强化,这一条跳过。
-	replayChecked := forged.level != levelBefore
-	if replayChecked {
-		replay, err := equipForgeEnhance(session, targetId, levelBefore)
+	// 结果不明之后的重发(docs/design/client-request-idempotency.md §2.1):同一个请求对象原样再发一次,键与 expected_level
+	// 都不变。服务器先查键、后比等级,所以不论首次成败、等级变没变,都必须回首次的成败与等级并标 replayed,
+	// 两份快照与首次应答逐项相同 —— 不再扣一次、不再掷一次、不再掉一次级。
+	replay, err := equipForgeSendEnhance(session, enhanceRequest)
+	if err != nil {
+		fail("replay", "%v", err)
+	}
+	if err := checkEquipForgeReplay(forged, replay); err != nil {
+		fail("replay", "resending the same EnhanceEquip request (client_request_id=%d, expected_level=%d): %v",
+			enhanceRequest.GetClientRequestId(), levelBefore, err)
+	}
+	// 快照过期的新一次强化(审计 r2-equip#1):新键,仍按强化前的等级发。这也是旧键被挤出账本之后重发的样子 ——
+	// 服务器认不出它是重发,只能靠 expected_level 兜住。等级变了(成功,或失败掉了级)就必须回 kEquipEnhanceLevelChanged、
+	// 两个包原样。等级没变(失败且不掉级)时它与玩家再点一次无法区分,是一次合法的新强化,这一条跳过。
+	staleLevelChecked := forged.level != levelBefore
+	if staleLevelChecked {
+		stale, err := equipForgeEnhance(session, targetId, levelBefore)
 		if err != nil {
-			fail("enhance-bag-replay", "%v", err)
+			fail("enhance-bag-stale-level", "%v", err)
 		}
-		if replay.tip != equipForgeTipEnhanceLevelChanged {
-			fail("enhance-bag-replay", "按强化前的等级 +%d 重发应回 %s,实际 tip=%s(0 = 又被受理了一次:重发会重复扣费、重复掉级)",
-				levelBefore, equipTipText(equipForgeTipEnhanceLevelChanged), equipTipText(replay.tip))
+		if stale.tip != equipForgeTipEnhanceLevelChanged {
+			fail("enhance-bag-stale-level", "a new enhance (fresh key) that still carries expected_level=%d must get %s, got tip=%s "+
+				"(0 = accepted on a stale level: a resend whose key was evicted from the ledger would be charged again)",
+				levelBefore, equipTipText(equipForgeTipEnhanceLevelChanged), equipTipText(stale.tip))
 		}
 		if err := session.expectBagsUnchanged(after.inventory, after.equipment); err != nil {
-			fail("enhance-bag-replay-unchanged", "重发被拒之后: %v", err)
+			fail("enhance-bag-stale-level-unchanged", "after the stale-level enhance was refused: %v", err)
 		}
 	}
 	bags = after
@@ -400,7 +422,8 @@ func RunEquipForgeSmoke(cfg *config.Config) {
 	bagLevel := forged.level
 	zap.L().Info("[equip-forge-smoke] step 3a: enhanced in bag",
 		zap.String("outcome", bagOutcome), zap.Uint32("level_before", levelBefore), zap.Uint32("level_after", bagLevel),
-		zap.Bool("replay_rejected", replayChecked),
+		zap.Uint64("replayed_client_request_id", enhanceRequest.GetClientRequestId()),
+		zap.Bool("stale_level_rejected", staleLevelChecked),
 		zap.Uint64("gold_left", equipForgeGold(bags.inventory)),
 		zap.String("base_attrs", equipLinesText(target.GetBaseAttrs())))
 
@@ -666,16 +689,23 @@ func equipForgeRequest(s *equipSmokeSession, messageId uint32, request proto.Mes
 	}
 	change.bag, change.equipment = response.GetBag(), response.GetEquipment()
 	if enhanced, ok := body.(*scene.EnhanceEquipResponse); ok {
-		change.success, change.level = enhanced.GetSuccess(), enhanced.GetEnhanceLevel()
+		change.success, change.level, change.replayed = enhanced.GetSuccess(), enhanced.GetEnhanceLevel(), enhanced.GetReplayed()
 	}
 	return change, nil
 }
 
+// equipForgeEnhance 发起**一次新的**强化:请求带一个新的幂等键(smokeClientRequestKey)。
 // expectedLevel = 发请求前那份快照里目标的 enhance_level(EnhanceEquipRequest.expected_level):服务器拿它与有效等级
-// 做乐观比较,对不上回 kEquipEnhanceLevelChanged、什么都不动。
+// 做乐观比较,对不上回 kEquipEnhanceLevelChanged、什么都不动。要重发同一次强化时不能再调它(会换键),
+// 自己组请求、留住对象,经 equipForgeSendEnhance 原样再发。
 func equipForgeEnhance(s *equipSmokeSession, itemId uint64, expectedLevel uint32) (equipForgeChange, error) {
-	return equipForgeRequest(s, game.SceneBagClientPlayerEnhanceEquipMessageId,
-		&scene.EnhanceEquipRequest{ItemId: itemId, ExpectedLevel: expectedLevel})
+	return equipForgeSendEnhance(s,
+		&scene.EnhanceEquipRequest{ItemId: itemId, ExpectedLevel: expectedLevel, ClientRequestId: smokeClientRequestKey()})
+}
+
+// equipForgeSendEnhance 发一份调用方组好的强化请求。重发同一次操作时传同一个对象:键与其余字段都不变。
+func equipForgeSendEnhance(s *equipSmokeSession, request *scene.EnhanceEquipRequest) (equipForgeChange, error) {
+	return equipForgeRequest(s, game.SceneBagClientPlayerEnhanceEquipMessageId, request)
 }
 
 func equipForgeInlay(s *equipSmokeSession, itemId uint64, socket, gemConfigId uint32) (equipForgeChange, error) {
@@ -1276,6 +1306,35 @@ func checkEquipForgeEnhance(before, after equipForgeBags, itemId uint64, success
 	if success && now.GetEnhanceBonusPermyriad() != next.GetBonusPermyriad() {
 		return fmt.Errorf("强化成功后 enhance_bonus_permyriad=%d,而强化前预览的 bonus_permyriad=%d",
 			now.GetEnhanceBonusPermyriad(), next.GetBonusPermyriad())
+	}
+	return nil
+}
+
+// checkEquipForgeReplay 核对同一个强化请求原样重发的结果(docs/design/client-request-idempotency.md §2.2):
+// first 是首次被受理的那次,replay 是带同一个键、其余字段也不变的重发。要求:受理(tip 0)且标 replayed;
+// 成败与等级是首次的;两份快照与首次应答里的逐项相同 —— 金币、材料、目标都没有再动。
+// 首次与重发之间不许夹别的写操作,否则快照本来就会变。
+func checkEquipForgeReplay(first, replay equipForgeChange) error {
+	if replay.tip != 0 {
+		return fmt.Errorf("refused with tip=%s; a resend with the original key must get the first outcome back", equipTipText(replay.tip))
+	}
+	if !replay.replayed {
+		return fmt.Errorf("replayed = false: the server ran the resend as a new enhance")
+	}
+	if replay.success != first.success || replay.level != first.level {
+		return fmt.Errorf("outcome success=%t level=%d differs from the first reply success=%t level=%d",
+			replay.success, replay.level, first.success, first.level)
+	}
+	if firstGold, gold := equipForgeGold(first.bag), equipForgeGold(replay.bag); gold != firstGold {
+		return fmt.Errorf("gold went from %d to %d: the resend was charged again", firstGold, gold)
+	}
+	if !featureBagsEqual(first.bag, replay.bag) {
+		return fmt.Errorf("the inventory snapshot differs from the first reply (%d -> %d items): materials or the target changed again",
+			len(first.bag.GetItems()), len(replay.bag.GetItems()))
+	}
+	if !featureBagsEqual(first.equipment, replay.equipment) {
+		return fmt.Errorf("the equipment snapshot differs from the first reply (%d -> %d items)",
+			len(first.equipment.GetItems()), len(replay.equipment.GetItems()))
 	}
 	return nil
 }

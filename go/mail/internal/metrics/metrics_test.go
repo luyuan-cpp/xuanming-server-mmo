@@ -41,10 +41,11 @@ func TestPrebuiltZeroSeries(t *testing.T) {
 	}
 }
 
-// 清理循环的活性 gauge(缺口清单第 25 条第四批):不预建,循环写过才有序列、值就是写入的时刻,循环退出删掉序列。
-func TestSweepLastRunExistsOnlyWhileTheLoopRuns(t *testing.T) {
+// 清理循环的活性 gauge(缺口清单第 25 条第四批):Register 把它挂进默认注册表,名字是 mail_sweep_last_run_unixtime;
+// 不预建,循环写过才有序列、值就是写入的时刻,循环有意停止后删掉序列(canary 不跑清理,/metrics 上不能出现一个 0)。
+func TestSweepLiveIsRegisteredAndExistsOnlyWhileTheLoopRuns(t *testing.T) {
 	Register()
-	lastRun := func() (float64, bool) {
+	exported := func() (float64, bool) {
 		families, err := prometheus.DefaultGatherer.Gather()
 		require.NoError(t, err)
 		for _, mf := range families {
@@ -54,18 +55,18 @@ func TestSweepLastRunExistsOnlyWhileTheLoopRuns(t *testing.T) {
 		}
 		return 0, false
 	}
-	ClearSweepRun()
-	_, ok := lastRun()
-	assert.False(t, ok, "没写过(或循环已退出)时不该有序列")
+	SweepLive.Stop()
+	_, ok := exported()
+	assert.False(t, ok, "没写过(或循环已停止)时不该有序列")
 
-	MarkSweepRun(time.Unix(1234, 0))
-	value, ok := lastRun()
-	require.True(t, ok)
+	SweepLive.Mark(time.Unix(1234, 0))
+	value, ok := exported()
+	require.True(t, ok, "写过之后默认注册表里应有这条序列")
 	assert.Equal(t, float64(1234), value)
 
-	ClearSweepRun()
-	_, ok = lastRun()
-	assert.False(t, ok, "循环退出之后删掉序列")
+	SweepLive.Stop()
+	_, ok = exported()
+	assert.False(t, ok, "循环停止之后删掉序列")
 }
 
 // TestSweepModeLabelsMatchConfig:mode label 的两个取值与 config 的合法模式逐字相同(本包是叶子包,不 import config;

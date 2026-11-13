@@ -10,6 +10,7 @@
 #include "engine/core/type_define/type_define.h"
 #include "engine/core/time/system/time.h"
 #include "modules/audit/audit_outbox.h"
+#include "modules/audit/audit_outbox_stats.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "node_config_manager.h"
 
@@ -36,8 +37,9 @@ uint64_t SnapshotSystem::RequestAuditSnapshot(entt::entity player, SnapshotTrigg
     // 快照只能随存盘提交:没开审计发件箱的进程没有存盘,快照没有落库的地方。放在领号之前,不消耗号段。
     if (!AuditOutbox::Enabled())
     {
+        audit_outbox_stats::IncDropped(audit_outbox_stats::DropReason::kOutboxDisabled);
         LOG_ERROR << "[SnapshotSystem] Audit outbox is not enabled in this process; skipping snapshot for player " << playerId
-                  << " trigger=" << static_cast<int>(trigger);
+                  << " trigger=" << static_cast<int>(trigger) << " (metric=snapshot_refused_outbox_disabled)";
         return 0;
     }
 
@@ -49,10 +51,11 @@ uint64_t SnapshotSystem::RequestAuditSnapshot(entt::entity player, SnapshotTrigg
         // snapshot 号段没号(种类未启用、两段耗尽且 data_service 还没把续段送回来)。
         // 快照只是回滚兜底,宁可少一条也不能写 snapshot_id=0 —— 那会和别的节点、
         // 别的时刻的 0 号快照互相覆盖,反而毁掉回滚链路。真正的存盘不受影响。没有 snowflake 回退,fail-closed。
+        audit_outbox_stats::IncDropped(audit_outbox_stats::DropReason::kNoId);
         LOG_ERROR << "[SnapshotSystem] snapshot id segment not ready; "
                   << "skipping snapshot for player " << playerId
                   << " trigger=" << static_cast<int>(trigger) << " "
-                  << tlsGuidSegmentRegistry.Get(GuidKind::kSnapshot).Describe();
+                  << tlsGuidSegmentRegistry.Get(GuidKind::kSnapshot).Describe() << " (metric=snapshot_refused_no_id)";
         return 0;
     }
 

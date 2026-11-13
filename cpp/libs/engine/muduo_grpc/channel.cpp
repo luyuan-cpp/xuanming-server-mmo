@@ -288,7 +288,7 @@ void Channel::StartUnaryCall(UnaryCallRequest request, UnaryCallback done)
     // 出站拦截排在所有本地检查之前:下面任何一条本地拒绝也走包装后的回调(ChannelOptions::unaryInterceptor)。
     if (options_.unaryInterceptor)
     {
-        done = options_.unaryInterceptor(request.metadata, std::move(done));
+        done = options_.unaryInterceptor(request.method, request.metadata, std::move(done));
         if (!done)
         {
             LOG_FATAL << "muduo_grpc::Channel unary interceptor returned an empty completion callback, method="

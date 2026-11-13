@@ -144,6 +144,7 @@ func SlotIndexTag(slot uint16) string {
 var reservedPlayerKeySuffixes = map[string]struct{}{
 	"asset_sql_commit":        {}, // go/db 资产 SQL 提交证据(shared/assetop)
 	"owner_epoch":             {}, // 归属代次(shared/ownerepoch)
+	"owner_epoch_confirmed":   {}, // 已确认落盘的归属代次(shared/ownerepoch ConfirmedKey)
 	"handoff":                 {}, // 已落盘标记(shared/ownerepoch)
 	"handoff_fence":           {}, // 交接资格(shared/handofffence)
 	"location":                {}, // 位置

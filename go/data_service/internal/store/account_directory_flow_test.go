@@ -27,7 +27,8 @@ import (
 // 这些组合要真库跑得一个个摆故障,而结局只取决于编排。flowSteps 是 directorySteps 的内存替身,语义抄 SQL 实现
 // (上限判定、nonce 比较并删、严格插入),真库上的对应用例见 account_directory_shard_tidb_test.go。
 
-const flowStorage uint32 = 7
+// flowStorage 必须是存档库编号(>= placement.FirstStorageID):区号值域的编号 PlayerStorePools 不认(zone 存档库已退役,A17c)。
+const flowStorage uint32 = 1000007
 
 var errFlow = errors.New("flow step failed")
 
@@ -58,6 +59,9 @@ type flowSteps struct {
 
 	// evidence 是 committedEvidence 的应答:player → 提交过的证据。没有的回空(没有证据,照常写墓碑)。
 	evidence map[uint64]string
+	// heldReasons 是 holdRef 写下的保留原因:player → 原因;heldClock 摆 held_ms(单调递增,代替库时钟)。
+	heldReasons map[uint64]string
+	heldClock   uint64
 }
 
 func newFlowStore(maxRoles int) (*AccountDirectoryStore, *flowSteps) {
@@ -75,7 +79,7 @@ func newFlowStore(maxRoles int) (*AccountDirectoryStore, *flowSteps) {
 		transfers:   map[uint64]*dbpb.AccountRoleTransferReceipt{},
 		storeOwners: map[uint64]lockedPlayerStoreOwner{},
 	}
-	return &AccountDirectoryStore{steps: steps, maxRoles: maxRoles, staleRefs: make(chan staleRefKey, staleRefQueueSize), playerStoreReads: make(chan struct{}, 1)}, steps
+	return &AccountDirectoryStore{steps: steps, maxRoles: maxRoles, staleRefs: make(chan staleRefKey, staleRefQueueSize), directoryReads: []readSlots{newReadSlots(2)}}, steps
 }
 
 func (f *flowSteps) step(name string) error {
@@ -108,7 +112,7 @@ func (f *flowSteps) count(name string) int { return len(f.only(name)) }
 
 // writes 是调用记录里所有写目录或存档的步骤。
 func (f *flowSteps) writes() []string {
-	return f.only("ensureAccount", "reserveRef", "activateRef", "promoteRef", "dropRef", "writeInitialRows", "commitRole", "tombstoneMissingRole", "commitTransfer", "raiseStoreEpoch", "markHoldersDrained")
+	return f.only("ensureAccount", "reserveRef", "activateRef", "promoteRef", "dropRef", "holdRef", "writeInitialRows", "commitRole", "tombstoneMissingRole", "commitTransfer", "raiseStoreEpoch", "markHoldersDrained")
 }
 
 // routed 给一个角色配好路由,回这个角色。
@@ -234,6 +238,18 @@ func (f *flowSteps) scanPendingRefs(_ context.Context, olderThan time.Duration, 
 	if err := f.step("scanPendingRefs"); err != nil {
 		return nil, err
 	}
+	var out []roleRef
+	for _, ref := range f.allRefs() {
+		// 和 SQL 一样不扫标了保留的(held_ms = 0)。
+		if ref.State == refStatePending && ref.HeldMs == 0 && ref.AgeMs >= uint64(olderThan.Milliseconds()) && len(out) < limit {
+			out = append(out, ref)
+		}
+	}
+	return out, nil
+}
+
+// allRefs 按账号、player_id 升序列出全部 ref。
+func (f *flowSteps) allRefs() []roleRef {
 	accounts := make([]string, 0, len(f.refs))
 	for account := range f.refs {
 		accounts = append(accounts, account)
@@ -241,13 +257,59 @@ func (f *flowSteps) scanPendingRefs(_ context.Context, olderThan time.Duration, 
 	sort.Strings(accounts)
 	var out []roleRef
 	for _, account := range accounts {
-		for _, ref := range f.refList(account) {
-			if ref.State == refStatePending && ref.AgeMs >= uint64(olderThan.Milliseconds()) && len(out) < limit {
-				out = append(out, ref)
-			}
+		out = append(out, f.refList(account)...)
+	}
+	return out
+}
+
+// holdRef 语义抄 SQL:按 nonce 比较,只标 PENDING;再标一次刷新 held_ms。
+func (f *flowSteps) holdRef(_ context.Context, account string, ref roleRef, reason string) error {
+	if err := f.step("holdRef"); err != nil {
+		return err
+	}
+	current, ok := f.refs[account][ref.PlayerID]
+	if !ok || current.Nonce != ref.Nonce || current.State != refStatePending {
+		return nil
+	}
+	f.heldClock++
+	current.HeldMs = f.heldClock
+	f.refs[account][ref.PlayerID] = current
+	if f.heldReasons == nil {
+		f.heldReasons = map[uint64]string{}
+	}
+	f.heldReasons[ref.PlayerID] = reason
+	return nil
+}
+
+// scanHeldRefs 语义抄 SQL:只取标了保留的 PENDING,按 held_ms 从旧到新。
+func (f *flowSteps) scanHeldRefs(_ context.Context, limit int) ([]roleRef, error) {
+	if err := f.step("scanHeldRefs"); err != nil {
+		return nil, err
+	}
+	var held []roleRef
+	for _, ref := range f.allRefs() {
+		if ref.State == refStatePending && ref.HeldMs != 0 {
+			held = append(held, ref)
 		}
 	}
-	return out, nil
+	sort.SliceStable(held, func(i, j int) bool { return held[i].HeldMs < held[j].HeldMs })
+	if len(held) > limit {
+		held = held[:limit]
+	}
+	return held, nil
+}
+
+func (f *flowSteps) countHeldRefs(context.Context) (int, error) {
+	if err := f.step("countHeldRefs"); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, ref := range f.allRefs() {
+		if ref.State == refStatePending && ref.HeldMs != 0 {
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (f *flowSteps) readOwner(_ context.Context, player uint64) (*dspb.AccountRoleOwnership, error) {
@@ -1036,7 +1098,7 @@ func TestReapRefTombstoneLosesToLateCreate(t *testing.T) {
 // 玩家片早于提交),或者证据核不全:不写墓碑、不删 ref,回 errRefHeldForReview,留给核账工具或人工。证据读不到时这一拍什么都不写。
 func TestReapRefKeepsStaleCreateRefOfACommittedRole(t *testing.T) {
 	aged := roleRef{PlayerID: 11, State: refStatePending, HomeZone: 1, AgeMs: uint64(refPendingGrace.Milliseconds())}
-	for _, evidence := range []string{committedEvidenceNameBound, committedEvidenceStoreSaved, committedEvidenceNoRoute,
+	for _, evidence := range []string{committedEvidenceNameBound, committedEvidenceStoreSaved, committedEvidenceRefActive, committedEvidenceNoRoute,
 		committedEvidenceStoreUnlisted, committedEvidenceNamesUnwired} {
 		t.Run(evidence, func(t *testing.T) {
 			s, steps := newFlowStore(5)
@@ -1046,10 +1108,24 @@ func TestReapRefKeepsStaleCreateRefOfACommittedRole(t *testing.T) {
 			require.ErrorIs(t, err, errRefHeldForReview)
 			require.False(t, dropped)
 			require.Equal(t, refStatePending, steps.refs["owner"][11].State, "ref 留着")
+			require.NotZero(t, steps.refs["owner"][11].HeldMs, "标成保留:后台扫描从此跳过它")
+			require.Equal(t, evidence, steps.heldReasons[11], "保留原因就是证据")
 			require.Nil(t, steps.owners[11], "不写墓碑")
 			require.Zero(t, steps.count("tombstoneMissingRole"))
 		})
 	}
+	t.Run("标保留失败_什么都没变_回那个错误", func(t *testing.T) {
+		s, steps := newFlowStore(5)
+		steps.evidence = map[uint64]string{11: committedEvidenceStoreSaved}
+		steps.putRef("owner", aged)
+		steps.fail["holdRef"] = []error{errFlow}
+		dropped, err := s.reapRef(context.Background(), "owner", steps.refs["owner"][11])
+		require.ErrorIs(t, err, errFlow)
+		require.NotErrorIs(t, err, errRefHeldForReview, "没标上就不算留下,下一拍照常重判")
+		require.False(t, dropped)
+		require.Zero(t, steps.refs["owner"][11].HeldMs)
+		require.Nil(t, steps.owners[11])
+	})
 	t.Run("证据读不到_这一拍不写", func(t *testing.T) {
 		s, steps := newFlowStore(5)
 		steps.putRef("owner", aged)
@@ -1071,7 +1147,7 @@ func TestReapRefKeepsStaleCreateRefOfACommittedRole(t *testing.T) {
 	})
 }
 
-// 后台一轮里留下的 ref 计进 Held,不算失败,没有证据的照常清;账号满了要淘汰陈旧 ref 时,留下的那条不删,建角照实回满。
+// 后台一轮里新留下的 ref 计进 Held,不算失败,没有证据的照常清;账号满了要淘汰陈旧 ref 时,留下的那条不删,建角照实回满。
 func TestSweepAndEvictionHoldCommittedRoles(t *testing.T) {
 	ctx := context.Background()
 	old := uint64(refPendingGrace.Milliseconds())
@@ -1082,7 +1158,7 @@ func TestSweepAndEvictionHoldCommittedRoles(t *testing.T) {
 	steps.putRef("late", roleRef{PlayerID: 3, State: refStatePending, HomeZone: 1, AgeMs: old})
 	result, err := s.SweepStaleRefs(ctx, refPendingGrace, 64)
 	require.NoError(t, err)
-	require.Equal(t, SweepResult{Scanned: 2, Dropped: 1, Held: 1}, result)
+	require.Equal(t, SweepResult{Scanned: 2, Dropped: 1, Held: 1, HeldTotal: 1, HeldCounted: true}, result)
 	require.Contains(t, steps.refs["held"], uint64(2))
 	require.Nil(t, steps.owners[2])
 	require.NotContains(t, steps.refs["late"], uint64(3))
@@ -1229,7 +1305,7 @@ func TestSweepStaleRefs(t *testing.T) {
 		steps.putRef("young", roleRef{PlayerID: 3, State: refStatePending, HomeZone: 1})
 		result, err := s.SweepStaleRefs(ctx, refPendingGrace, 64)
 		require.NoError(t, err)
-		require.Equal(t, SweepResult{Scanned: 2, Dropped: 2}, result)
+		require.Equal(t, SweepResult{Scanned: 2, Dropped: 2, HeldCounted: true}, result)
 		require.NotContains(t, steps.refs["owner"], uint64(1))
 		require.NotContains(t, steps.refs["late"], uint64(2))
 		require.Contains(t, steps.refs["young"], uint64(3))
@@ -1260,7 +1336,7 @@ func TestSweepStaleRefs(t *testing.T) {
 		steps.fail["dropRef"] = []error{errFlow}
 		result, err := s.SweepStaleRefs(ctx, refPendingGrace, 64)
 		require.ErrorIs(t, err, errFlow)
-		require.Equal(t, SweepResult{Scanned: 2, Dropped: 1, Failed: 1}, result)
+		require.Equal(t, SweepResult{Scanned: 2, Dropped: 1, Failed: 1, HeldCounted: true}, result)
 	})
 
 	t.Run("扫描失败回错误", func(t *testing.T) {

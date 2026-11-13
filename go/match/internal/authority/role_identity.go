@@ -44,6 +44,27 @@ func (s *Store) Fenced(ctx context.Context, attempt func() error) error {
 	return err
 }
 
+// VerifyOriginalOwner 是客户端入口的归属预检(docs/design/gate-online-identity.md §9.3):不加锁读本库护栏副本,
+// 判 ctx 里原会话身份的角色此刻是否仍归它。战报列表与回放、作战脚本列表这些只读方法不经 Fenced,这是它们唯一的归属检查;
+// 排队、应战、组队、网络探测等写入仍在提交点持副本行锁按同一份原件复核。
+//
+// 只判归属、不看冻结(rolefence.CheckOwner)。确定不归(已换主、已删、目录里没有)回 ErrOriginalPlayer;
+// 其余错误是这一次判不了,入口按可重试处理。
+func (s *Store) VerifyOriginalOwner(ctx context.Context) error {
+	original, ok := roleidentity.Original(ctx)
+	if !ok || s == nil || s.fence == nil {
+		return ErrOriginalPlayer
+	}
+	err := s.fence.VerifyOwner(ctx, rolefence.Expect{PlayerID: original.Role.GetPlayerId(), Account: original.Account, OwnerRevision: original.OwnerRevision, Reject: ErrOriginalPlayer})
+	if errors.Is(err, rolefence.ErrRoleNotFound) {
+		return ErrOriginalPlayer
+	}
+	return err
+}
+
+// OwnerRejected 判 VerifyOriginalOwner 的错误是不是确定不归;为假就是这一次判不了。
+func OwnerRejected(err error) bool { return errors.Is(err, ErrOriginalPlayer) }
+
 // lockOriginalFences 按 player_id 升序锁全部原件的副本行,先于所有匹配票、成局、意图行。
 // 原件必须带完整身份:修订号 0 在 Expect 里的意思是「没有原身份」,这里不能放进去。
 func lockOriginalFences(ctx context.Context, tx *sql.Tx, originals []*pb.MatchAuthorityTicketRecord) error {

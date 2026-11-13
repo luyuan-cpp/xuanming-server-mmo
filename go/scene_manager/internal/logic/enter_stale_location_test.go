@@ -63,8 +63,7 @@ func unregisterKnownNodeForTest(key string) {
 // **整键不存在**,也没有 death_at。zone 1 在注册表里是否还有节点由用例决定。返回 location 原文。
 func seedHolderInZone1MissingLoadSet(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Miniredis, playerID, oldScene uint64) string {
 	t.Helper()
-	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, oldScene), "10")
-	mr.Set(fmt.Sprintf(SceneZoneKeyFmt, oldScene), "1")
+	mr.Set(sceneNodeKey(testZoneId, oldScene), "10")
 	seedSceneMembers(mr, oldScene, 5)
 	raw := identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: oldScene, NodeId: "10", ZoneId: 1, OwnerEpoch: 1, UpdateTime: 100,
@@ -110,7 +109,7 @@ func TestEnterScene_MissingLoadSetWhileZoneRegisteredKeepsHandoffGate(t *testing
 	assert.Empty(t, *captured, "不得发路由")
 	assert.Equal(t, "3", sceneCountText(sc, targetID))
 	assert.Equal(t, "8", nodeCountText(sc, 2, "20"))
-	assert.Equal(t, "5", sceneCountText(sc, oldScene))
+	assert.Equal(t, "5", sceneMemberCountInZone(mr, testZoneId, oldScene), "zone 1 的旧场景不动")
 }
 
 // 登录不指定去向(ZoneId = 0、SceneId = 0),从 zone 2 的 gate 进来;位置记在 zone 1 的 node 10,zone 1 的负载集整键丢失。
@@ -185,7 +184,7 @@ func TestEnterScene_LoginOverMissingLoadSetDecidedByRegistry(t *testing.T) {
 			assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "陈旧位置被过滤后按首次落点铸造")
 			event := decodeRoutePlayerEvent(t, (*captured)[0])
 			assert.Equal(t, uint64(2), event.GetOwnerEpoch())
-			assert.Equal(t, "5", sceneCountText(sc, oldScene), "下线 zone 的旧场景计数不去碰")
+			assert.Equal(t, "5", sceneMemberCountInZone(mr, testZoneId, oldScene), "下线 zone 的旧场景计数不去碰")
 		})
 	}
 }

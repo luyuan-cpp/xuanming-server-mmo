@@ -5,6 +5,14 @@
 > 由来源保留(战斗结算整笔延后);新增 `RetrieveTemporaryItems` 让玩家把临时格的东西取回人物背包。
 > 四个固定包从此全部是 `RejectWhenFull`,`EvictOldestFirst` 留在淘汰轴上、没有生产使用者。下面 2026-09 的状态说明保留为历史。
 >
+> **2026-11-12 变更(§6.6;未编译,待 Codex 验证):** `EvictOldestFirst` 连同它的用例一起删除;
+> 背包腾位改由 `BagService` 统一发「腾位通知」唤醒收件箱(不只临时格取回);「全部取回」全或无定为口径。
+>
+> **2026-11-12(补;未编译,待 Codex 验证):淘汰轴整条删除**(§3、§6.6 (2))。`IEvictionPolicy` / `RejectWhenFull`
+> (`eviction_policy.h` 删掉)、`BagProfile::eviction`、`Bag::SetEviction` / `Eviction()` / `PlanEviction`、`AddItem` / `AddItems`
+> 的淘汰回执参数、`BagService::LogEvictedInstances`,以及 `ItemStore` 两个规划函数只为淘汰存在的 `exclude` 参数一起删掉。
+> 背包满了一律就拒,没有任何代码路径会为腾位销毁玩家的东西。下文提到淘汰轴的地方,除特别注明外都是历史。
+>
 > **状态(2026-09-02):三个原始需求全部落码,P0/P1/P2 清零,未编译。**
 >
 > 用户最初问的三件事,现在都有完整实现与回归用例:
@@ -111,7 +119,7 @@
 |---|---|---|---|
 | **摆放** `IContainerLayout` | 放哪一格 | 有(写槽位) | ✅ 已有 |
 | **准入** `IAdmissionPolicy` | 这个包收不收这种东西 | **无**(纯谓词) | ✅ 接口 + `AcceptAll` 已落码;`AcceptByTag`(节日包)待第 5 步 |
-| **淘汰** `IEvictionPolicy` | 满了挤掉谁 | **有**(唯一一个) | ✅ 已落码:`RejectWhenFull`(四个固定包,2026-11-05 起含临时格)+ `EvictOldestFirst`(保留在轴上,无生产使用者,§6.6);FIFO 序已是真入包序号,见 §6.2 |
+| ~~**淘汰** `IEvictionPolicy`~~ | 满了挤掉谁 | 有 | 🗑 **2026-11-12 整条删除**。唯一会淘汰的 `EvictOldestFirst` 先删(临时格 2026-11-05 起已满即拒,§6.6),剩下的接口、`RejectWhenFull`、桥层分支与回执没有实现、也没有调用方。背包满了一律就拒,这是容器本身的行为,不再是一根可替换的轴。要重新引入见 §3.2 |
 | **排序 / 整理** | 能不能重排、按什么排 | 有 | ✅ `SupportsCompaction()` + `CompactPolicy` |
 | **流出** `IWithdrawPolicy` | 能不能拿出去 / 移到别的包 | 无 | ❌ 缺 → 绑定 / 任务道具 / 活动期结束(第 7 步,等使用者) |
 | **过期** | 整包什么时候清 | 有 | ❌ 缺 |
@@ -127,15 +135,25 @@
 
 - **准入 / 流出必须是纯谓词** —— 只有零副作用,才能塞进 `reserve` 之前而不破坏三段。
   一旦准入检查会改状态,"失败一定发生在 reserve 之前,绝无半写状态"这句话就作废。
-- **淘汰是唯一会改状态的规则** —— 所以它必须**有回执**,理由见 §6.2。
+- 淘汰曾是唯一会改状态的规则,所以它必须**有回执**,理由见 §6.2。2026-11-12 淘汰轴删除后,
+  现存的规则轴都不改状态;以后若引入会改状态的规则,同样必须有回执。
 
-### 3.2 淘汰不能自己销毁
+### 3.2 淘汰不能自己销毁(2026-11-12 起淘汰轴已删除,本节留作重新引入时的纪律)
 
 与 `ItemStore::MergePartialStacks` 同一条纪律:**销毁必须两层成对进行,那是桥层的活**。
 淘汰策略只负责**选出**该退役哪些 guid,由 `Bag` 执行销毁、由 `BagService` 落流水。
 
 `Bag::AddNonStackableItem` 里那句 `// TODO: overflow to temp bag or mail` 就是这一轴的
-占位符 —— 它今天的实现是隐式的 `RejectWhenFull`。
+占位符 —— 当年的实现是隐式的 `RejectWhenFull`。
+
+删掉的理由:`EvictOldestFirst` 删了之后,这一轴只剩「满了就拒」一种实现、零个会淘汰的实现,接口、桥层的不动点规划、
+回执参数和落流水都没有调用方(YAGNI)。以后真要给某个包做淘汰,按这个顺序来:
+
+1. 先给被挤掉的东西一个去处(例如改投邮件),否则就是丢数据(§6.6 (1),审计 cpp-economy#2);
+2. 再重新引入这一轴,守住当年踩出来的几条:先算到不动点再销毁(§6.5.1 族 A)、具名槽不淘汰(§6.2 (3))、
+   没有回执就不淘汰(§6.5.2)、所有纯预检排在销毁之前(§7 红线 7);
+3. 删除前的实现与用例都在提交 4edb25640(`cpp/libs/modules/bag/eviction_policy.{h,cpp}`、`Bag::PlanEviction`、
+   `cpp/tests/bag_test/` 里的那组用例,清单见 §6.6 (2)),可照着恢复。
 
 ---
 
@@ -211,24 +229,8 @@ class AllOf       final : public IAdmissionPolicy {};  // 待做:Composite,规�
 但凡将来出现"这个包最多收 3 件任务道具"这种**跟占用有关**的规则,它同样不该
 进准入层,而要走 `CanReserve` 那条路。
 
-```cpp
-// eviction_policy.h —— 唯一有副作用的轴,所以必须回执
-class IEvictionPolicy
-{
-public:
-    virtual ~IEvictionPolicy() = default;
-
-    // 要腾出 needed 个实例位,应该退役哪些 guid(按退役顺序)。
-    // **它自己不销毁任何东西** —— 见 §3.2。
-    [[nodiscard]] virtual GuidVector SelectVictims(
-        std::size_t needed,
-        const ItemStore &store,
-        const IContainerLayout &layout) const = 0;
-};
-
-class RejectWhenFull   final : public IEvictionPolicy {};  // 返回空 = 拒绝入包,今天的行为
-class EvictOldestFirst final : public IEvictionPolicy {};  // 临时包 FIFO
-```
+(2026-11-12 前这里还画着淘汰轴 `IEvictionPolicy` 的形状:`SelectVictims(needed, store, layout)` 只选不毁,
+`RejectWhenFull` 返回空、`EvictOldestFirst` 按入包先后选。整条轴已删除,见 §3 与 §3.2。)
 
 ### 5.2 装配点(已落码)
 
@@ -240,16 +242,17 @@ class EvictOldestFirst final : public IEvictionPolicy {};  // 临时包 FIFO
 bags[kInventory].SetProfile(BagProfile::Flat(kBagMaxCapacity));
 bags[kWarehouse].SetProfile(BagProfile::Flat(kWarehouseMaxCapacity));
 bags[kEquipment].SetProfile(BagProfile::Equipment(kEquipmentCapacity));
-bags[kTemporary].SetProfile(BagProfile::Temporary(kTempBagMaxCapacity)); // 先进先出
+bags[kTemporary].SetProfile(BagProfile::Flat(kTempBagMaxCapacity)); // 2026-11-05 起满即拒,同人物背包
 
 // 待做(第 5 步):节日包按表装配
 dynamicBags_[eventId].SetProfile(BagProfile::FromTable(profileId));
 ```
 
-`BagProfile` 今天是 `{layout, admission, eviction}` 三个 `unique_ptr`;`expiry` 是
-后面的字段 —— **加字段时上面四行一个字都不用改**,这正是做成 struct 而不是三个
-setter 的理由。加淘汰轴时兑现了这句话:只多了一个字段、一个 `Temporary()` 工厂,
-装配点只有 `kTemporary` 那一行从 `Flat` 换成了 `Temporary`。
+`BagProfile` 今天是 `{layout, admission}` 两个 `unique_ptr` 加一个注册 id;以后真有新的一根轴
+(例如 `expiry`)就加一个字段 —— **加字段时上面四行一个字都不用改**,这正是做成 struct 而不是逐轴
+setter 的理由。2026-09 加淘汰轴时兑现过这句话:只多了一个字段、一个 `Temporary()` 工厂,
+装配点只有 `kTemporary` 那一行从 `Flat` 换成了 `Temporary`;2026-11-05 临时格改回 `Flat`、
+2026-11-12 淘汰轴整条删除,装配点同样只动了 `kTemporary` 那一行。
 
 `Flat()` 收一个容量参数(三个自由格包只差这个数字),`Equipment()` 收槽位数。
 容量刻意**不写死在 profile 里**:它是 profile 给的**起点**,随后会被
@@ -374,11 +377,11 @@ grep -rn "\.AddItem\|AddItems" --include=*.cpp cpp/libs/services cpp/nodes
 (掉落拾取或邮件领取都行),让这套规则有第一个真实使用者。这与第 7 步的判据
 是同一条:**没有使用者的东西不要提前造。**
 
-### 6.2 临时背包 FIFO —— 已落码,2026-11-05 起临时格不再使用(机制保留在淘汰轴上)
+### 6.2 临时背包 FIFO —— 2026-11-05 起停用,2026-11-12 连同淘汰轴删除(本节为历史)
 
-> 2026-11-05:临时格改为满即拒,理由与新协议见 §6.6。本节讲的 `EvictOldestFirst`、真入包序号、不动点规划、
-> 回执落流水都还在代码里(淘汰轴的契约,由 bag_test 用测试专用的 `FifoEvictingProfileForTest` 钉着),
-> 只是没有生产包再配它。下文「临时格用它」一类说法是 2026-09 的状态。
+> 2026-11-05:临时格改为满即拒,理由与新协议见 §6.6。2026-11-12:`EvictOldestFirst` 与测试专用的
+> `FifoEvictingProfileForTest` 一起删除,随后整条淘汰轴删除(§3、§6.6 (2))。真入包序号还在(包内实例序仍按它排)。
+> 下文的回执、不动点规划、具名槽不淘汰都是 2026-09 的实现,今天的代码里已经没有;它们是重新引入淘汰时要守的纪律(§3.2)。
 
 #### (1) 挤掉的东西是玩家资产,不能无声消失
 
@@ -560,6 +563,9 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 未被证伪的 13 条由人工逐条复核。**结果:18 条全部成立**(其中 1 条降为"存疑,
 加防御")。
 
+> 2026-11-12 淘汰轴整条删除:族 A 的不动点规划与 `exclude` 集、P2 的「没有回执就不淘汰」与「格子碎片按 `RejectWhenFull`
+> 处理」随轴删掉,本节其余修法仍在(`SetProfile` 整套换或不换,今天是两根轴)。§6.5.3 列的淘汰相关用例的去向见 §6.6 (2)。
+
 #### 6.5.1 P0(3 族 5 条)—— 全部是淘汰轴引入的,全部已修
 
 > 2026-10-15 起 `ReserveOrEvict` / `ReserveForBatchAdd` / `ReserveBatch` 已删除，由 `Bag::AddItems` 候选提交取代；下文为历史。
@@ -622,18 +628,57 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 #### (2) 决定
 
 - **临时格满即拒**:`PlayerBagsComp` 给临时格装 `BagProfile::Flat(kTempBagMaxCapacity)`(与人物背包 / 仓库同一个工厂,只差容量);
-  删除 `BagProfile::Temporary`。四个固定包从此全部 `RejectWhenFull`,用例 `BagProfileTest.NoFixedBagEvicts` 钉住。
-- `EvictOldestFirst` 与 `Bag::PlanEviction` 的淘汰分支留在淘汰轴上,没有生产使用者;机制用例改用测试专用的
-  `cpp/tests/bag_test/fifo_eviction_profile_for_test.h`。要给哪个包重新配淘汰,先得给被挤掉的东西一个去处(例如改投邮件),否则就是丢数据。
+  删除 `BagProfile::Temporary`。四个固定包从此全部满即拒(当时由 `BagProfileTest.NoFixedBagEvicts` 核对四个包都配
+  `RejectWhenFull`;2026-11-12 这条随淘汰轴删掉,行为回归由 `BagProfileTest.FullTemporaryBagRefusesNewItemsAndKeepsTheOldest` 守着)。
+- ~~`EvictOldestFirst` 与 `Bag::PlanEviction` 的淘汰分支留在淘汰轴上,没有生产使用者;机制用例改用测试专用的
+  `cpp/tests/bag_test/fifo_eviction_profile_for_test.h`。~~ **2026-11-12 起**:`EvictOldestFirst`(`eviction_policy.cpp` 整个删掉)
+  与测试专用的 `fifo_eviction_profile_for_test.h` 一起删除。
+- **2026-11-12(补):淘汰轴整条删除。** 删掉的是 `eviction_policy.h`(`IEvictionPolicy` + `RejectWhenFull`)、`BagProfile::eviction`、
+  `Bag::SetEviction` / `Eviction()` / `PlanEviction`(不动点规划)、`AddItem` / `AddItems` 的 `evictedOut` 回执参数、
+  `BagService::LogEvictedInstances` 与同步整笔候选里借用淘汰策略的 `BorrowedEviction`、`ItemStore::MeasureFreeRoomPerConfig` /
+  `PlanStackIntoExistingStacks` 只为淘汰存在的 `exclude` 参数。`Bag::AddItems` 现在是 `PlanInstances` + 独立实例 + `CanReserve`,
+  与 `CheckSpaceFor` 同一套规划,放不下就静默回 `kBagItemNotStacked`;顺带去掉了一条假 ERROR(直接调容器、包满又没传回执时,
+  旧代码会打「eviction would be needed but no receipt sink」)。
+  删之前全仓核对过:调用方只在背包模块和它的用例里;配置表 schema(`data/schema`)与 proto 没有淘汰相关的字段,
+  不用导表。`acquire_seq` 仍在用(包内实例序),两个源 proto 里它的注释从「淘汰策略按它排序」改成今天的用途;
+  只改注释、线上格式不变,proto-gen 刷新一下生成代码里的注释即可。
+  要给哪个包重新做淘汰,按 §3.2 的顺序来;实现与下面这组用例都在提交 4edb25640。
+  - 删掉的(全靠会淘汰的包才有意义):`bag_test.cpp` 的 `EvictionPolicyTest.FifoBagEvictsOldestAndReportsIt`、
+    `EvictsNothingWhenItCannotFreeEnough`、`NamedSlotsNeverEvictEvenWithAnEvictingPolicy`、`CheckSpaceForStaysPureAndNeverEvicts`、
+    `BatchAddEvictsOldestThroughPublicEntry`、`BatchAddPreservesExistingInstancesWhenItAlreadyFits`、`EvictingTheMergeTargetStillLandsEverything`、
+    `EvictingTheMergeTargetInABatchStillLandsEverything`、`MergeTargetThatIsNotOldestSurvivesAndAbsorbs`、`NoReceiptSinkMeansNoEviction`、
+    `ServiceLevelAddEvictsThroughTheReservePath`,`AcquireSeqTest.FifoFollowsSequenceNotGuid`,
+    `BagServiceEvictionTest.ServiceLevelAddEvictsOnAFullFifoBag`,`BagSegmentNotReadyTest.EvictionNeverHappensBeforeAPureCheckCanRefuse`、
+    `StackableSpillNeverEvictsWhenSegmentIsUnavailable`;`bag_java_parity_test.cpp` 的 `BagJavaParityTest.PostEvictionMintFailurePreservesOldItemsLayoutAndReceipts`;
+    `bag_selection_order_test.cpp` 的 `BagSelectionOrderTest.EvictionTieOnEqualSeqEvictsSmallerGuidFirst`。
+  - 改写的(钉的是别的性质,淘汰包只是载体,换成满了或放得下的自由格包):`EvictionPolicyTest.PreassignedGuidCollisionRefusesBeforeEvicting`
+    → `BagTest.PreassignedGuidCollisionIsRefusedBeforeSpacePlanning`;`BagProfileTest.SetProfileOnANonEmptyBagChangesNothing`(改换节日包、核对准入轴);
+    `BagSegmentNotReadyTest.VectorBatchMintsOnlyWhatTheFinalPlanNeedsWhenSegmentIsUnavailable`(去掉「按 FIFO 淘汰」一形);
+    `BagJavaParityTest.ServiceMintFailureReportsUnmutatedAndKeepsBothOldInstances`(改成放得下、只缺号);
+    `BagInstanceDataTest.PutInstanceNeverEvictsEvenOnAnEvictingBag` → `PutInstanceRefusesAFullFlatBagAndChangesNothing`。
+  - (补)整轴删除时再删的:`BagProfileTest.NoFixedBagEvicts`、`EvictionPolicyTest.RejectWhenFullNeverSelectsAnyone`(都在核对淘汰策略对象本身)、
+    `EvictionPolicyTest.DefaultBagRefusesInsteadOfEvicting`(与 `BagTest.AddNewGridItemFull` 重复)、
+    `BagServiceEvictionTest.ServiceLevelAddNeverEvictsOnNonEvictingBags`(与 `BagProfileTest.FullTemporaryBagRefusesNewItemsAndKeepsTheOldest` 重复)。
+  - (补)整轴删除时改的:去掉回执实参与「回执为空」断言 —— `BagProfileTest.FullTemporaryBagRefusesNewItemsAndKeepsTheOldest`、
+    `BagTest.PreassignedGuidCollisionIsRefusedBeforeSpacePlanning`、`BagSegmentNotReadyTest.VectorBatchMintsOnlyWhatTheFinalPlanNeedsWhenSegmentIsUnavailable`;
+    `FestivalBagTest.FullFestivalBagRefusesInsteadOfEvicting` → `FullFestivalBagRefusesAndKeepsWhatItHolds`;
+    `EvictionPolicyTest.ZeroCountEntryRefusesWholeBatchBeforeAnyWrite` 改挂 `BagTest`(钉的性质与淘汰无关);
+    `bag_instance_data_test.cpp` 四处、`bag_java_parity_test.cpp` 三处调用改成新签名(`AddItem(param, written, initializer)` /
+    `AddItems(items, writtenByEntry, initializer)`)。
 - **新增取回**:`SceneBagClientPlayer.RetrieveTemporaryItems`(method index 8,只追加在末尾),临时格 → 人物背包。
-- 不选「溢出改发邮件」:邮件附件走跨服务的资产通道(异步、有托管与重投),为一件已经在玩家名下的实例再造一次托管,
-  链路与故障面都比同节点、同步、两包候选的一次搬运大得多;「满了就让来源保留」已经做到不丢数据。
+- **临时格里已有的东西不改发邮件**:它们已经是玩家名下的实例,取回是同节点、同步、两包候选的一次搬运;改发邮件要为同一件实例
+  再造一次跨服务的托管与重投,链路与故障面都大得多。
+- **新到的掉落两个包都放不下时改投邮件**(2026-11-12,负责人 2026-11-11 定「背包满是放到邮件里面的」,
+  [battle-overflow-mail.md](battle-overflow-mail.md))。2026-11-05 的初稿是「满了就让来源保留」,即整笔结算延后。它不丢数据,
+  但有一个腾不出位置的局面:人物背包里全是被战斗道具预留押着的满堆、临时格也满,玩家没有丢弃、出售、存仓入口,这一局一直结不了。
+  改投的是还没铸成实例的掉落(配置号与数量),不涉及已有实例的托管:掉落记进玩家存档里的待寄队列,与扣消耗、入账同一次存档提交,
+  落盘之后才寄,邮件按请求号判重。先人物背包、再临时格、都放不下才改投,临时格与取回协议不变。
 
 #### (3) 入账来源逐个核对:都是任何副作用之前的干净拒绝
 
 | 来源 | 落哪个包 | 放不下时 | 来源怎么保留 |
 |---|---|---|---|
-| v1 战斗结算(收件箱 `ApplyInboxSettlement` → `ApplySettlementToEntity` → `ConsumeInventoryAndGrant`) | 人物背包;放不下整批转临时格 | 两包都放不下:整笔回容器的放不下码,两包候选丢弃,消耗与 `beforeCommit`(货币、身份复核)都没跑;打 `metric=bag_grant_overflow_rejected` WARN(按玩家限频,见下「日志节拍」) | `ApplySettlementToEntity` 返回 false → 收件箱整笔 DEFER,玩家在线时本地退避重试 |
+| v1 战斗结算(收件箱 `ApplyInboxSettlement` → `ApplySettlementToEntity` → `ConsumeInventoryAndGrant`) | 人物背包;放不下整批转临时格;两包都放不下整批改投邮件(2026-11-12) | 两包都放不下:问 `GrantOverflowRoute` 接不接。接得住:掉落一件不进包,记进玩家存档的待寄队列,消耗、货币等其余效果照常提交。接不住(没配发件密钥、待寄队列满、请求号暂缺):整笔拒绝(回待寄一侧给的原因码;收件箱记的延后原因仍是放不下,取回临时格照样唤醒),两包候选丢弃,消耗与 `beforeCommit`(货币、身份复核)都没跑;打 `metric=bag_grant_overflow_rejected` WARN(按玩家限频,见下「日志节拍」) | 接得住:待寄条目随结算那一次存档提交,落盘后寄出,邮件回了 `mail_id` 才删。接不住:`ApplySettlementToEntity` 返回 false → 收件箱整笔 DEFER,玩家在线时本地退避重试 |
 | 任务领奖 `PlayerMissionSystem::ClaimReward` | 只人物背包 | `BagService::AddItems` 候选提交被拒,一件不发 | 领取位在发奖成功之后才清,失败不消耗领取权 |
 | 活跃度领奖 `PlayerActivitySystem`(领奖入口) | 只人物背包 | 同上 | 领取记录在发奖成功之后才写 |
 | 资产通道(邮件附件、交易、聚宝斋过户;`ApplyCredit`) | 只人物背包 | `CheckSpaceFor`(含转入的完整实例)预检不过 → `RETRY + kAssetBagFull`,一件不动 | 来源按 RETRY 重投;邮件附件停在「正在到账」 |
@@ -641,6 +686,7 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 | 取下宝石 / GM 发物 | 只人物背包 | `kEquipGemBagFull` / 原样透传;取下是「先发物后抹宝石」 | 宝石留在装备上 |
 
 生产代码里写临时格的只有 `ConsumeInventoryAndGrant`(`kTemporary` 其余命中是存档往返与资产通道的扣除顺序)。
+带 `GrantOverflowRoute` 的调用方也只有战斗结算一处;其余来源放不下时仍是上表的干净拒绝,不改投邮件。
 
 #### (4) 取回协议
 
@@ -688,8 +734,20 @@ rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemp
   - 取 8 的理由同 `player_inbox_rules::kStuckWarnEveryFailures`:封顶后两条最多相隔约 8 分钟,落在 [10m] 日志窗口之内,每个卡住的
     在线玩家每小时 7~9 行。按次数不按时间,确定、可测。用例 `GrantOverflowLogCadenceTest.*`,连续次数的增减由
     `InboxDeferredForFullBagsAppliesAfterARetrieveDuringTheBattle` 钉住。
-- **取回后唤醒**(2026-11-06):真搬了东西之后,`PlayerBagSystem::RetrieveTemporary` 调 `PlayerInboxSystem::OnBagSpaceFreed`。
-  单件取回与全部取回都调;全部取回时临时格本来就空,什么都没搬,不调。
+- **腾位唤醒**(2026-11-06 起只有取回会唤醒,2026-11-12 起凡是腾出位置的成功操作都唤醒):人物背包或临时格移走了东西之后,
+  `BagService` 发一次「腾位通知」(`bag_service.h`),订阅方 `PlayerInboxSystem::OnBagSpaceFreed` 由 scene main 在
+  `PlayerInboxSystem::Initialize` 之后经 `BagService::SetSpaceFreedListener` 装上(依赖倒置:背包层不认识收件箱)。
+  - 出口只有一个、收在背包层:`BagService` 的出包入口在成功之后各调一次 `NotifySpaceFreed` —— `RemoveItem`、`RemoveItemsExact`、
+    `RemoveItemsByGuid`(整批成功)、`RemoveItemsClamped` 与 `ConsumeInventoryAndGrant`(真扣到了东西)、`MergeAndCompact` /
+    `SortByPlayerRequest`(合堆退役了实例)、`RetrieveFromTemporary`(临时格搬走了实例)。玩法入口一个都不自己调收件箱:
+    强化扣材料、镶嵌扣宝石、资产通道寄出 / 上架托管 / 帮会捐献、GM 回收、战斗结算扣消耗、整理、临时格取回都经过上面这些入口;
+    以后的使用、出售、丢弃、存仓库也一样。`BagService` 之外移出人物背包的入口只有穿戴(`PlayerEquipSystem::Equip` 经
+    `Bag::TakeInstance`):装到空槽时自己调一次 `NotifySpaceFreed`,替换时格数不变、不调 —— 与它在纯校验段问
+    `CheckRemovableInstances` 是同一条规矩(battle-item-reservation.md §4)。
+  - 判据:只看人物背包与临时格(入账只落这两个包;按地址比,仓库、装备栏、动态包、候选副本都不算);失败、一件没动的调用不通知;
+    不算净值(兑换里的获得、取回进人物背包占了多少位不管),订阅方只是把下一次尝试提前,放不下就照常退避。
+  - 订阅方可能就在收件箱执行器的调用栈里被调(战斗结算经 `ConsumeInventoryAndGrant` 扣消耗):它只改调度字段,那一域随后由执行器的
+    结局照常改写下一次检查时刻,重入安全。
   - 它与 `OnBattleFreezeCleared` 同形,只处理「执行器因背包放不下而 DEFER」的域:`deferReason == kExecutorDefer`,
     且执行器带回的原因是 `kBagItemNotStacked`。处在 `kIdle` / `kApplying` 的域,把 `nextCheckMs` 提到现在,下一个 Tick 按原有规则续做。
   - 原因怎么带回:`ApplyInboxSettlement` 看这一次调用里「连续放不下」的计数涨没涨,涨了就在 DEFER 的 `reason` 里带
@@ -697,8 +755,14 @@ rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemp
   - 不改任何判定:不清 `failStreak`(腾出的位置可能还不够,重试仍放不下时照常退避、日志节拍照常),不动 `recheckRequested`,
     不在调用栈里同步续做,在途的那一轮不打断。别的域(前置闸、传输、执行器别的原因造成的延后)一律不碰。
   - 用例:`PlayerBattleSettlementItemTest.InboxRetriesABagFullDeferOnTheNextTickAfterARetrieve`(时钟不动,下一拍就整笔应用,
-    GM 域的调度状态一点不动);`InboxBagSpaceFreedLeavesOtherExecutorDefersOnTheirBackoff`(执行器别的原因造成的延后,
-    取回之后仍等退避)。
+    GM 域的调度状态一点不动);`InboxRetriesABagFullDeferOnTheNextTickAfterAnItemLeavesTheInventory`(2026-11-12,不是取回、
+    而是上架托管 / 寄出那个出包入口腾的位,同样下一拍应用);`InboxBagSpaceFreedLeavesOtherExecutorDefersOnTheirBackoff`(执行器别的原因造成的延后,
+    取回之后仍等退避)。出口本身:`BagSpaceFreedTest.*`(新文件 `cpp/tests/bag_test/bag_space_freed_test.cpp`,逐个入口核对通知次数、
+    只认人物背包与临时格、失败与冻结不通知、没装订阅方时无事);穿戴:`PlayerEquipTest.EquipIntoAnEmptySlotSendsTheSpaceFreedNoticeAndAReplacementDoesNot`。
+- **全部取回是全或无(已定口径,2026-11-12)**:人物背包放不下这一整批就整批拒(`kBagTemporaryRetrieveBagFull`),两包都不动,
+  不做「能放多少放多少」。理由:一次操作要么全做要么不做,回执只有成功 / 失败两种,重发天然幂等(整格取回的重发见临时格已空即成功);
+  部分成功要再设计「哪几件进了、哪几件没进」的回执与客户端对账,换来的只是少点几次。玩家人物背包差格子时改成一件一件取
+  (每件一个 `item_id` 请求),客户端在 `BagTemporaryRetrieveBagFull` 时提示即可。两版同此口径。
 - **限流**:吃 MessageLimiter 默认档 3(约 1.5 次 / 秒),不另加行。
 
 #### (5) 客户端要做的(独立客户端仓,本批不改)
@@ -706,46 +770,65 @@ rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemp
 - 背包界面加「临时格」页签(`GetBag(bag_type = 3)`,`can_sort = false`);每件物品一个「取回」(`item_id`),页签上一个「全部取回」(`take_all`)。
 - 成功:用响应里的 `bag`、`temporary` 两份全量整体覆盖人物背包与临时格的缓存。失败按码提示:
   `BagTemporaryItemNotFound` → 重拉两个包;`BagTemporaryRetrieveBagFull` → 提示整理背包或改成一件一件取;`BagTemporaryRetrieveBusy` → 稍后再试。
-- 临时格占用 = `layout.slots` 条数 / `layout.capacity`。满了(建议 ≥ 90% 就提示)在背包与战斗结算界面显著提示:
-  「临时格已满,新的战斗奖励暂存,取回后自动补发」。
+- 临时格占用 = `layout.slots` 条数 / `layout.capacity`。满了(建议 ≥ 90% 就提示)在背包界面显著提示。
+  2026-11-12 起两个包都放不下的战斗掉落改由邮件发放:`BattleEndS2C.items_mailed` 为真时,结算界面在道具行之后提示
+  「背包已满,以上道具改由邮件发放,请留意邮箱」(客户端已做,`BattleResultPanel`)。
 - 传输失败(1003)不自动重发,只重拉两个包。新消息号由 proto-gen 发,客户端只引用生成常量;文案以导表产物为准。
+- 2026-11-12 客户端已按本节落码(客户端仓 main,未生成、未编译、未运行):入口在背包页「工具 → 临时格」,另有一个面板,
+  不是背包页里的页签;取回单飞、两次发包至少隔 700 毫秒;进游戏、从战斗界面回到大世界、打开背包页时各拉一次临时格。
+  细节与 Codex 命令见 `docs/PROGRESS.md` 同日「客户端·强化期望等级与幂等键、临时格取回、进场失败后换角」条。
 
 #### (6) 用例与验证
 
 - 容器 `BagMoveInstancesTest.*`、玩法入口与 handler `TemporaryRetrieveTest.*`(新文件 `cpp/tests/bag_test/bag_temporary_retrieve_test.cpp`,已登记 `bag_test.vcxproj` 与 `.filters`)。
-- 满即拒:`BagProfileTest.NoFixedBagEvicts`(由 `OnlyTheTemporaryBagEvicts` 反转)、`BagProfileTest.FullTemporaryBagRefusesNewItemsAndKeepsTheOldest`。
+- 满即拒:`BagProfileTest.FullTemporaryBagRefusesNewItemsAndKeepsTheOldest`(`NoFixedBagEvicts` 由 `OnlyTheTemporaryBagEvicts` 反转而来,
+  2026-11-12 随淘汰轴删掉,见 (2))。
 - 结算回归:`PlayerBattleSettlementItemTest.InboxFullTemporaryBagIsNeverEvictedAndTheWholeSettlementDefers`、
   `PreparedExchangeFullTemporaryBagRefusesTheWholeGrantWithoutEvicting`(改动前分别是 kApplied 与 kSuccess:最早那件被挤掉);
   `InboxDeferredForFullBagsAppliesAfterARetrieveDuringTheBattle`(冻结还挂着时取回、重试即整笔应用;初稿下取回回 Busy;
   同时钉住「连续放不下」计数:每次延后加一、整批发放成功归 0)。
 - 日志节拍:`GrantOverflowLogCadenceTest.WarnsOnTheFirstRejectionAndThenEveryEighth`(纯函数;日志本身单测读不到)。
-- 取回后唤醒:`InboxRetriesABagFullDeferOnTheNextTickAfterARetrieve`、`InboxBagSpaceFreedLeavesOtherExecutorDefersOnTheirBackoff`
-  (都在 `PlayerBattleSettlementItemTest`,走正式的收件箱状态机与执行器)。
+- 腾位唤醒:`InboxRetriesABagFullDeferOnTheNextTickAfterARetrieve`、`InboxRetriesABagFullDeferOnTheNextTickAfterAnItemLeavesTheInventory`(2026-11-12)、
+  `InboxBagSpaceFreedLeavesOtherExecutorDefersOnTheirBackoff`(都在 `PlayerBattleSettlementItemTest`,走正式的收件箱状态机与执行器);
+  出口逐入口 `BagSpaceFreedTest.*`(`bag_space_freed_test.cpp`,2026-11-12);穿戴 `PlayerEquipTest.EquipIntoAnEmptySlotSendsTheSpaceFreedNoticeAndAReplacementDoesNot`。
 - 命令与通过标准见本批交付说明与 PROGRESS 当日条目(导表 → proto-gen-run(no-unity)→ MSBuild 串行 → bag_test / currency_test)。
 
 #### (7) 残余
 
-- 临时格满时战斗结算会一直延后:这一局的金币、任务进度、HP 都要等玩家取回腾位后才到账,收件箱后面的局按序也停在这里。
-  这是「不丢数据」的代价,靠客户端把「临时格已满」明明白白地告诉玩家;若要「腾不出位置也先发金币」,得拆整笔结算的原子性,另议。
-- 整格取回是全或无:人物背包差一格就整批拒,玩家要改成一件一件取。若要「能放多少放多少」,协议与回执要另设计。
+- 两个包都放不下时,2026-11-12 起掉落改投邮件,这一局的金币、任务进度、HP 照常到账,收件箱后面的局不再停在这里
+  ([battle-overflow-mail.md](battle-overflow-mail.md))。整笔结算仍是原子的:掉落的去处换成了同一份存档里的待寄队列,没有拆开。
+  只有邮件接不住时(没配发件密钥的环境、待寄队列满、请求号暂缺)才回到以前的整笔延后,那时要等玩家取回腾位。
+- ~~整格取回是全或无:人物背包差一格就整批拒,玩家要改成一件一件取。若要「能放多少放多少」,协议与回执要另设计。~~
+  2026-11-12 起不再是残余,定为口径,见上 (4)「全部取回是全或无」。
 - 「两包都满就整笔延后」是**玩家可控**的延后。2026-11-10 起由战斗道具预留堵上
   ([battle-item-reservation.md](battle-item-reservation.md),负责人选的是上面列过的第二种做法「对尚未结算那一局的战斗道具拒扣」):
   备战时把快照里的道具押住,冻结按期限(含续冻上限)解开之后,这些道具仍转不走、用不掉,结算晚到时照样从预留里扣,
   不再按持有夹紧。冻结解开之后玩家能整理、穿脱、转走别的东西来腾位,取回临时格后结算即应用。
-  仍剩一种极端情形:人物背包里全是被押着的满堆、临时格也满,玩家腾不出任何位置,那一局结算一直延后、预留一直在
-  (玩家其余照常);出口是丢弃或存仓入口,另议。
-- 只有临时格取回会唤醒收件箱(见上「取回后唤醒」)。整理、穿戴、强化扣材料等别的腾位方式不唤醒,延后的结算照常等退避
-  (封顶约 60 秒)再重试。
-- `EvictOldestFirst` 与 `PlanEviction` 的淘汰分支无生产使用者,是否删除另议(删除要连带改约 20 条机制用例)。
-- `player_battle.cpp` 战斗快照取道具那段注释仍说临时格「会 FIFO」,本批未改(该文件由别的会话持有),行为以本节为准。
+  当时还剩一种极端情形:人物背包里全是被押着的满堆、临时格也满,玩家腾不出任何位置,那一局结算一直延后、预留一直在。
+  2026-11-12 由改投邮件解掉:两包都放不下时掉落进邮件,结算照常应用、预留随之释放,不需要新开丢弃或存仓入口。
+  2026-11-12 按源码复核「不取回、熬过续冻上限、解冻后转走本局用掉的消耗品,晚到的结算按持有量夹紧」这个窗口,已封住:
+  续冻到上限只解冻、不放预留(`ResolveExpiredFightingFreeze` / `OnExpiredFightingTerminalAnswer` 越过上限的两支);人物背包里减少数量的
+  入口只有 `BagService` 的出包入口与穿戴,全都不拿被预留占住的数量(资产通道寄出 / 托管、GM 回收回 RETRY + `kAssetInBattle`,
+  强化、镶嵌、穿戴回 `kFeatureUnavailable`);下一局的快照与结算也只动自己那份;晚到的结算 `ConsumeInventoryAndGrant(consumeFromHoldId = battle_id)`
+  从本局预留里扣,扣完同帧释放。预留只在结算应用、或 SQL 终局是 ABORT / 没有可裁决原件、或备战取消时释放(battle-item-reservation.md §2、§4)。
+  守着它的用例:`BattleItemHoldTest.*`(含到上限只解冻、交易扣款回 RETRY)、`PlayerBattleSettlementItemTest.InboxConsumesFromItsOwnHoldAndReleasesIt`、
+  `InboxCannotConsumeAnotherBattlesHold`、`PlayerEquipTest.EquipRefusesToTakeTheLastHeldUnitOutOfTheInventory`。
+- ~~只有临时格取回会唤醒收件箱。~~ 2026-11-12 已改:凡是让人物背包或临时格腾出位置的成功操作都经 `BagService` 的「腾位通知」唤醒(见上 (4)「腾位唤醒」)。
+- ~~`EvictOldestFirst` 与 `PlanEviction` 的淘汰分支无生产使用者,是否删除另议。~~ 2026-11-12 `EvictOldestFirst` 连同用例删除(见 (2))。
+  ~~剩下的是 `Bag::PlanEviction` 的淘汰分支、`AddItem` / `AddItems` 的淘汰回执与 `BagService` 的 `LogEvictedInstances`,另开一批。~~
+  同日(补)整条淘汰轴删除,不再是残余(见 (2))。实际要改的调用只有背包模块与它的用例里的二十来处,不是早先估的上百处:
+  绝大多数用例只传物品、不传回执,签名换了也不用动。
+- ~~`player_battle.cpp` 战斗快照取道具那段注释仍说临时格「会 FIFO」。~~ 2026-11-12 已改正。
 
 ## 7. 红线(别把已经挖开的缝焊回去)
 
 1. **布局层永远不许认识 `config_id`。** split 文档 §2.2 的唯一判据。准入规则要查表
    → 它属于桥层。
 2. **准入 / 流出必须零副作用**,才能放进 `reserve` 之前保住三段纪律。
-3. **淘汰必须回执**,由 `BagService` 落流水。纯容器不写流水,这条已经定了。
-4. **不要一个大 `IBagRule`。** 六个轴六个小接口,各自可单测、可组合。
+3. **销毁实例必须回执**,由 `BagService` 落流水。纯容器不写流水,这条已经定了。原文是「淘汰必须回执」;
+   淘汰轴 2026-11-12 删除后,走这条的是整理(`MergeAndCompact` 的 `destroyedOut`)与按 guid 扣出(`removableOut`),
+   以后重新引入淘汰同样适用。
+4. **不要一个大 `IBagRule`。** 一根轴一个小接口,各自可单测、可组合。
 5. **不要把策略对象序列化进快照。** 快照存 `profile_id`,还原时**重新装配**。
    策略是代码 + 配置,不是玩家数据。
 6. **`BagType` 枚举不为活动增殖**,动态包走 `dynamicBags_`。
@@ -755,6 +838,7 @@ rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemp
    `ReserveOrEvict` 后面,都会造成**已经挤掉了玩家的东西、然后整批拒绝**。
    落码时在四处都踩了这一脚(见 §6.3),已全部修正并由用例
    `BagFencedGeneratorTest.EvictionNeverHappensBeforeAPureCheckCanRefuse` 钉住。
+   (2026-11-12:那条用例随先进先出删掉,随后淘汰轴整条删除,入包的 reserve 段重新是纯的。这条红线留给以后任何会改状态的规则。)
 8. **入包严格、还原宽容。** split 文档 §11.2(d) 那条区别对准入规则同样适用:
    往节日包里塞非节日道具要拒;**但快照还原时不许因为规则不匹配就丢玩家东西**
    (表被裁过 / 活动已下线 / 脏数据都可能触发)。*位置可以变,物品不能丢。*
@@ -770,7 +854,7 @@ rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemp
 | 3 | 抽 `IAdmissionPolicy` + `BagProfile` 装配器 | ✅ 已落码,未编译 | 新增 `admission_policy.h`(仅头文件);`bag_system.{h,cpp}`、`player_bags_comp.h`、`modules.vcxproj` |
 | 4 | ~~加 `CfgItem.tag` + `CfgBagProfile` 两张表~~ → **改用注册表 + 名单式准入** | ✅ 已落码(等价替代,§6.4);tag 列仍待日后 | 新增 `bag_profile_registry.{h,cpp}`、`AcceptByConfigSet` |
 | 5 | 节日包:准入 + `DynamicBagData.profile_id` + 还原路径 | ✅ 已落码,未编译 | proto + `bag_marshal.cpp` + `BagProfile::Festival` |
-| 6 | `IEvictionPolicy` + `EvictOldestFirst` + 流水回执 | ✅ 已落码,未编译 | 新增 `eviction_policy.{h,cpp}`;`bag_system.{h,cpp}`、`bag_service.{h,cpp}`、`player_bags_comp.h` |
+| 6 | `IEvictionPolicy` + `EvictOldestFirst` + 流水回执 | 🗑 2026-09-01 落码;2026-11-12 整条删除(§3、§6.6 (2)) | 当年新增 `eviction_policy.{h,cpp}`,两个文件都已删除 |
 | 6b | `ItemEntry`/`ItemComp` 加入包序号(**字段 13 / 4**),`AcquisitionOrderOf` 改读它 | ✅ 已落码,未编译 | 两个源 proto + `ItemStore::Insert` 盖章 + `bag_marshal` |
 | 7 | `IWithdrawPolicy`(绑定 / 任务道具 / 活动结束) | ⬜ **等有真实使用者再做** | —— |
 
@@ -816,6 +900,7 @@ rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemp
    2026-09-01 ~ 2026-11-05 的行为。被挤掉的实例虽然逐条落了 `LogItemDestroy`,东西本身没有任何去处 ——
    对玩家就是真丢(审计 cpp-economy#2)。**2026-11-05 起临时格与另外三个包一样满了就拒**,
    新入账在任何副作用之前被拒、由来源保留,玩家用 `RetrieveTemporaryItems` 取回腾位(§6.6)。
+   2026-11-12 起战斗掉落两个包都放不下时整批改投邮件,不再整笔延后(§6.6 (2))。
 
 错误码不变,线上协议与持久化格式不变,公开 API **只增不改**
 (新增的都是带默认值的可选参数与新方法)。
@@ -836,6 +921,7 @@ rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemp
   `modules.lib` + `scene.lib`,而 `bag_marshal.obj` 里 `entt::basic_storage<PlayerBagsComp>`
   的模板实例化带着旧步长 —— 只重编 modules 会复现 split 文档 §9.1 记录的
   `is_power_of_two` 断言 / `emplace` 读 `0xFFFF…` 访问违例。
+  (2026-11-12 删掉 `eviction_` 时 `sizeof(Bag)` 又变了一次,同样要连 scene 与所有链接它的测试工程一起重编。)
 - **新文件**:`cpp/libs/modules/bag/admission_policy.h` 已注册进 `modules.vcxproj`
   的 `ClInclude`。它是**纯头文件,没有 .cpp**,所以 `CMakeLists.txt` 的
   `SOURCE_FILES`(只列 .cpp)无需改动 —— 若 Linux 侧报"找不到符号",先确认这一点。

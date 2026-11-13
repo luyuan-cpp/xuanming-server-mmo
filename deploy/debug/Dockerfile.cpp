@@ -11,7 +11,7 @@ ARG BUILD_JOBS=1
 ARG CPP_CACHE_KEY
 
 RUN python3 --version
-RUN python3 -c 'import os,re,sys; key=os.environ.get("CPP_CACHE_KEY", ""); jobs=os.environ.get("BUILD_JOBS", ""); sys.exit(0 if re.fullmatch("[0-9a-f]{64}", key) and re.fullmatch("[0-9]+", jobs) and int(jobs)>0 else "CPP_CACHE_KEY 必须为精确 deps SHA 的 64 位小写十六进制部分，BUILD_JOBS 必须为正整数")'
+RUN python3 -c 'import os,re,sys; key=os.environ.get("CPP_CACHE_KEY", ""); jobs=os.environ.get("BUILD_JOBS", ""); sys.exit(0 if re.fullmatch("[0-9a-f]{64}", key) and re.fullmatch("[0-9]+", jobs) and int(jobs)>0 else "CPP_CACHE_KEY must be the 64-character lowercase hex part of the exact deps SHA, and BUILD_JOBS must be a positive integer")'
 
 # SDK 镜像可能带有验证时的旧业务源；COPY 不会删除旧文件，先清空明确的应用输入。
 # 已安装 SDK 位于 /usr/local 与 lib，保留；本轮对象缓存另由下方挂载提供。

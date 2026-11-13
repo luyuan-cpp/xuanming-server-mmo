@@ -371,13 +371,17 @@ var (
 	//   redis_error          go-redis 重试耗尽仍出错(或返回值无法解读):Redis 里可能留着本次落点。跨 zone
 	//                        第一条腿上源 scene 会重置客户端(tip + 踢线 34);同 zone 路由失败上玩家会挂在哑连接上
 	//   plan_error           回滚计划构造失败(按构造不可达),没有回滚,终态同 redis_error;应恒 0,出现即代码缺陷
+	//   voided               铸造结果未知、首发其实没生效,不凭标记:同一段脚本直接写成回滚之后的状态(epoch 越过铸出值),
+	//                        迟到的首发 CAS 不过。只在铸造结果未知的回滚里出现
+	//   marker_voided        铸造结果未知、首发其实没生效,凭标记:删掉所凭的标记(已不在也算),迟到的首发过不了标记比对;
+	//                        epoch 与 location 不动,源端照常解冻。只在铸造结果未知的回滚里出现
 	// 分母是「推路由 / 重定向失败」的次数,本身就该很少;redis_error 应恒 0,告警见
 	// deploy/k8s/scene-manager-alerts.yaml SceneManagerEnterSceneRollbackRedisError。
 	// 只按 outcome 分,不带 zone_id / player_id。
 	enterSceneRollbackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_rollback_total",
-		Help:      "EnterScene placement rollbacks after a failed gate route/redirect push, by outcome (rolled_back|already_rolled_back|marker_gone|target_registered|fence_not_proof|superseded|redis_error|plan_error). rolled_back = location restored; a minted owner_epoch moves forward one more step, never back.",
+		Help:      "EnterScene placement rollbacks after a failed gate route/redirect push, by outcome (rolled_back|already_rolled_back|marker_gone|target_registered|fence_not_proof|superseded|redis_error|plan_error|voided|marker_voided). rolled_back = location restored; a minted owner_epoch moves forward one more step, never back. voided / marker_voided = a mint with an unknown result had not applied and can no longer apply.",
 	}, []string{"outcome"})
 
 	// enterSceneMintReplayRecognizedTotal 统计铸造 owner_epoch 的 EVAL 被 go-redis 原样重发
@@ -425,6 +429,8 @@ var (
 	// site:
 	//   rollback  凭标记的 bump 回滚之后的落盘确认(推路由失败或铸造没确认落盘,logic rollbackPlacementAfterPushFailure)
 	//   enter     EnterScene 要下发一条带待确认回执的 location 记的 epoch 之前的确认(logic confirmPendingRollbackLocation)
+	//   handout   EnterScene 不铸造就要下发观察到的 epoch、而已确认位点不等于它时的确认(logic ensureOwnerEpochConfirmed,
+	//             §4.3.5)。没有回执要改;result 的含义同 enter,confirmed = 已确认落盘并记下位点,可以下发
 	// result:
 	//   confirmed   回滚(或观察到的待确认回滚)已确认落盘,回执已改成正式回执:源端可凭它采纳,epoch 可以下发
 	//   pending     落盘没确认:回执留在待确认形态。rollback 处源端按"标记已发出"收口(踢线、不存盘销毁);enter 处回 7 不下发
@@ -433,11 +439,12 @@ var (
 	//   superseded  复核或改写时 epoch / location 已被并发推进,什么都没写(enter 处回 19)
 	//   error       Redis 出错或回复无法解读:rollback 处回执停在待确认形态或回滚结果未知;enter 处回 ErrRedis
 	// 健康时只有 rollback/confirmed 随 not_durable 与推路由失败一起增长;pending 持续增长 = 刷盘或副本持续落后;
-	// rollback/not_sent 成批出现多半是 Kafka 写满超时、留给确认的预算不够。起服预置全部组合为 0。
+	// rollback/not_sent 成批出现多半是 Kafka 写满超时、留给确认的预算不够。handout 健康时应近 0:铸造确认之后位点随即记下,
+	// 它增长说明有铸造没走完(SM 中途退出、回滚没做成)或位点写丢了 / 过期了。起服预置全部组合为 0。
 	ownerEpochRollbackReceiptTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "owner_epoch_rollback_receipt_total",
-		Help:      "Two-phase rollback receipts after an unconfirmed owner_epoch mint, by site (rollback|enter) and result (confirmed|pending|not_sent|superseded|error).",
+		Help:      "Durability confirmations of an owner_epoch that was not confirmed when written, by site (rollback|enter|handout) and result (confirmed|pending|not_sent|superseded|error). rollback / enter are the two-phase rollback receipt; handout is the confirmation before routing an observed epoch whose confirmed mark is missing.",
 	}, []string{"site", "result"})
 
 	// reentryBarrierBlockedTotal 统计因「老属主节点刚判死、再入屏障未到」而被
@@ -456,11 +463,24 @@ var (
 		Help:      "Ownership changes refused because the dead node's re-entry barrier had not elapsed, by site.",
 	}, []string{"zone_id", "site"})
 
+	// holderLeaseBlockedTotal 统计「持有节点已从 etcd 消失、屏障已过」的判死接管 / 判死释放,因为持有进程的存活租约
+	// (player:{id}:holder_lease,internal/logic/holder_lease.go)还在或读不出来而没有执行的次数。
+	// site 是代码里写死的点位名(dead_owner_takeover|stale_location|replaced_owner_takeover|leave_release),
+	// state 取 held(租约在:持有进程活着,只是没在 etcd 在册)或 unknown(玩家域 Redis 读失败,按在处理)。
+	//
+	// 稳态恒 0。held 非 0 说明有 scene 节点和 etcd 失联但进程还活着:玩家留在它上面照常玩,换节点的进场被 18 / 17 暂拒,
+	// 要去查那台节点到 etcd 的网络;unknown 非 0 查玩家域 Redis。只按 zone / site / state 分,player_id 只进日志。
+	holderLeaseBlockedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "holder_lease_blocked_total",
+		Help:      "Dead-owner takeovers and dead-holder releases not performed because the holder process still renews its holder lease (state=held) or the lease could not be read (state=unknown), by site.",
+	}, []string{"zone_id", "site", "state"})
+
 	// ownershipReadUnknownTotal:改派 / 销毁 / 清理 / 伸缩决策要用的 Redis 读出错(超时、断连、熔断),
 	// 拿不到「有值」还是「确实不存在」,该路径不按读错的结果行事(2026-10-22)。绝大多数 site 是本轮放弃、
 	// 什么都不写,等下一拍或上游重试;mirror_cascade 是例外:销毁已提交,退回提交前快照级联并保留索引。
 	// 每个 site 的具体做法见 internal/logic/read_unknown.go 的 readUnknownSite* 常量注释。
-	// go-zero 的 Get 把 redis.Nil 吞成 ("", nil),以前 `x, _ :=` 的写法会把这种「不知道」当成「不存在」,
+	// 控制集群句柄的 Get 把 redis.Nil 吞成 ("", nil)(沿用 go-zero 句柄的形状),以前 `x, _ :=` 的写法会把这种「不知道」当成「不存在」,
 	// 进而改写归属、删映射、不还 Agones 名额。
 	// site 只取那些常量,绝不拼进 scene_id / node_id。
 	// 稳态应接近 0;持续非 0 说明 Redis 在抖动,对应路径的自愈 / 回收会因此停住(方向安全,但要人看)。
@@ -508,7 +528,7 @@ var (
 		Help:      "etcd re-checks made while deciding whether a player's holding scene process was replaced by a new process reusing its node id, by result.",
 	}, []string{"zone_id", "result"})
 
-	// deadNodeReconcilePending 是本 zone 还没收完的死节点收尾任务数(Redis 任务表 scene_manager:dead_node_reconcile:zone:{z},
+	// deadNodeReconcilePending 是本 zone 还没收完的死节点收尾任务数(Redis 任务表 scene_manager:dead_node_reconcile:{ctl:<z>},
 	// 含屏障未过的与有成员没结论、等下一拍重试的),只由本 zone 的领导者发布,降级的副本把自己发过的 zone 写回 0。
 	// 它应该在一个屏障时长内回到 0;长期不为 0 = 收尾链路卡住了,看 dead_node_reconcile_total 的 retry / abandoned。
 	deadNodeReconcilePending = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -646,10 +666,11 @@ var (
 	//   conflict    scene_id 已被占用(或登记落地后场景已被销毁或改派),这一次一个键都没写,名额不还 —— 任何一次都该查发号器
 	//   aborted     EVAL 回错,用同一 token 作废成功:登记没落地,预占的 Agones 名额已归还
 	//   unknown     作废也失败,结局未知:名额没还(可能多占一份),看 agones_counter_drift
+	//   over_desired 只有世界频道:在役频道数已不小于期望数,没登记。出现说明补建锁没挡住并发(丢锁或补建超过锁 TTL)
 	sceneRegistrationTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "scene_registration_total",
-		Help:      "New scene registration script outcomes by kind (instance|world_channel) and outcome (registered|conflict|aborted|fenced|unknown). fenced: the Agones room hold expired and was reclaimed before the registration ran.",
+		Help:      "New scene registration script outcomes by kind (instance|world_channel) and outcome (registered|conflict|aborted|fenced|over_desired|unknown). fenced: the Agones room hold expired and was reclaimed before the registration ran. over_desired: the map already had its desired number of world channels.",
 	}, []string{"zone_id", "kind", "outcome"})
 
 	// sceneTeardownJobsTotal:拆除任务(internal/logic/scene_teardown_job.go)的结局。
@@ -771,6 +792,7 @@ func register() {
 			ownerEpochMintClockBehindTotal, ownerEpochMintDurableTotal, ownerEpochMintDurableSeconds,
 			ownerEpochRollbackReceiptTotal,
 			reentryBarrierBlockedTotal, deadNodeReconcilePending, deadNodeReconcileTotal,
+			holderLeaseBlockedTotal,
 			ownershipReadUnknownTotal,
 			enterSceneOwnerDeadTakeoverTotal, enterSceneOwnerReplacedTakeoverTotal, enterSceneHandoffAdmittedTotal,
 			ownerReplacedRecheckTotal,
@@ -844,6 +866,7 @@ func ObserveOwnerEpochMintDurable(result string, d time.Duration) {
 const (
 	OwnerEpochRollbackReceiptSiteRollback = "rollback"
 	OwnerEpochRollbackReceiptSiteEnter    = "enter"
+	OwnerEpochRollbackReceiptSiteHandout  = "handout"
 
 	OwnerEpochRollbackReceiptConfirmed  = "confirmed"
 	OwnerEpochRollbackReceiptPending    = "pending"
@@ -857,6 +880,7 @@ var (
 	ownerEpochRollbackReceiptSites = [...]string{
 		OwnerEpochRollbackReceiptSiteRollback,
 		OwnerEpochRollbackReceiptSiteEnter,
+		OwnerEpochRollbackReceiptSiteHandout,
 	}
 	ownerEpochRollbackReceiptResults = [...]string{
 		OwnerEpochRollbackReceiptConfirmed,
@@ -1107,6 +1131,14 @@ func ObserveReentryBarrierBlocked(zoneID uint32, site string) {
 		strconv.FormatUint(uint64(zoneID), 10), site).Inc()
 }
 
+// ObserveHolderLeaseBlocked 记一次被持有者存活租约挡下的判死接管 / 判死释放,见 holderLeaseBlockedTotal。
+// site 与 state 必须取 internal/logic/holder_lease.go 的常量名。
+func ObserveHolderLeaseBlocked(zoneID uint32, site, state string) {
+	register()
+	holderLeaseBlockedTotal.WithLabelValues(
+		strconv.FormatUint(uint64(zoneID), 10), site, state).Inc()
+}
+
 // ObserveOwnershipReadUnknown 记一次因 Redis 读失败而放弃的改派 / 销毁 / 清理 / 伸缩决策。
 // site 必须取常量点位名,见 ownershipReadUnknownTotal 的注释。
 func ObserveOwnershipReadUnknown(zoneID uint32, site string) {
@@ -1272,8 +1304,9 @@ func ObserveEnterSceneStage(zoneID uint32, stage string, d time.Duration) {
 
 // ObserveMirrorColocate records one mirror placement outcome. outcome is
 // "hit" or "fallback". reason is only meaningful on fallbacks
-// ("no_mapping" | "zone_mismatch" | "node_dead" | "overloaded", 即
-// createscenelogic.go resolveMirrorSourceNode 的返回值); pass "ok"
+// ("no_mapping" | "node_dead" | "overloaded", 即 createscenelogic.go resolveMirrorSourceNode 的返回值;
+// 源在别的 zone 时也是 no_mapping,原来单列的 zone_mismatch 随 scene:<id>:zone 一起删,
+// docs/design/redis-cluster-all-domains-20261110.md §3.3); pass "ok"
 // for hit rows so the label set stays well-formed.
 func ObserveMirrorColocate(zoneID uint32, outcome, reason string) {
 	register()

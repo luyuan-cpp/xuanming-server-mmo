@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	pb "proto/player_locator"
+	"shared/clusterredis"
 	"shared/playerredis"
 	"shared/redisslot"
 )
@@ -57,13 +58,35 @@ func TestScriptKeysShareThePlayerSlot(t *testing.T) {
 	}
 }
 
-// 控制域的键一律不带 hash tag,不和玩家键混。
-func TestControlDomainKeysCarryNoHashTag(t *testing.T) {
-	for _, key := range []string{
-		gateIndexReadyKey, gateIndexGenKey, gateIndexLastAuditKey, gateIndexAuditCooldownKey, reconcilerLeaderKey,
-	} {
-		assert.False(t, redisslot.HasHashTag(key), key)
+// 控制域的 7 把键共用控制集群的 {pl:gix}(设计 §4.8):带它们的 5 段 Lua 在 Redis Cluster 上同槽,并过得了控制集群句柄的守卫;
+// 它们不能长成玩家域的形状(玩家域句柄拒收)。选主锁是单键,不带 tag。
+func TestControlDomainKeysShareThePlayerLocatorTag(t *testing.T) {
+	controlKeys := []string{
+		gateIndexReadyKey, gateIndexGenKey, gateIndexLastAuditKey, gateIndexAuditCooldownKey,
+		gateIndexPassKey, gateIndexPassSeqKey, gateIndexPassProgressKey,
 	}
+	want := "{pl:gix}"
+	for _, key := range controlKeys {
+		tag, tagged := redisslot.HashTag(key)
+		require.True(t, tagged, key)
+		assert.Equal(t, want, "{"+tag+"}", key)
+		assert.True(t, redisslot.IsControlTag(tag), key)
+		assert.Equal(t, redisslot.HashSlot(controlKeys[0]), redisslot.HashSlot(key), key)
+		assert.ErrorIs(t, playerredis.CheckKeys([]string{key}), clusterredis.ErrWrongDomainTag, key)
+	}
+	// 5 段多键 Lua 的 KEYS(与生产调用点逐字一致)。
+	scripts := map[string][]string{
+		"markLegacyWritersScript":      {gateIndexGenKey, gateIndexReadyKey},
+		"setGateIndexReadyIfGenScript": {gateIndexGenKey, gateIndexReadyKey, gateIndexLastAuditKey},
+		"beginPassScript":              {gateIndexPassKey, gateIndexPassSeqKey, gateIndexPassProgressKey},
+		"endPassScript":                {gateIndexPassKey, gateIndexPassProgressKey},
+		"passAdvanceScript":            {gateIndexPassKey, gateIndexPassProgressKey},
+	}
+	for name, keys := range scripts {
+		assert.NoError(t, clusterredis.ControlClusterKeys.CheckKeys(keys), name)
+	}
+	assert.False(t, redisslot.HasHashTag(reconcilerLeaderKey), reconcilerLeaderKey)
+	assert.NoError(t, clusterredis.ControlClusterKeys.CheckKeys([]string{reconcilerLeaderKey}))
 }
 
 // 走一遍真实的会话生命周期、清扫与补建,核对玩家域上发出的每一条 EVAL:全部 KEYS 带 tag 且同 slot,脚本一段都不漏。

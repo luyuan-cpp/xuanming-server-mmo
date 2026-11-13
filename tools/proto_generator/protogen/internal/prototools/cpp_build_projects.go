@@ -39,7 +39,7 @@ func SyncCppBuildProjects(wg *sync.WaitGroup) {
 		return
 	}
 	if err := syncCppBuildProjects(_config.Global.Paths.ProtoDir, _config.Global.Paths.OutputRoot); err != nil {
-		logger.Global.Fatal("同步 C++ 生成工程失败", zap.Error(err))
+		logger.Global.Fatal("Failed to sync the generated C++ projects", zap.Error(err))
 	}
 }
 

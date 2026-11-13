@@ -7,6 +7,10 @@
 #
 # 固定账号 robot_9101(前缀必须 robot_ 才走 login 侧 DevPasswordAuth,改名会直接登录失败)。
 # 断言逐条对应 docs/design/player-attribute-allocation.md 的服务端契约。
+#
+# 新建方案带客户端幂等键(docs/design/client-request-idempotency.md):建成之后同一个请求原样重发(step=replay),
+# 必须标 replayed、scheme_id 相同、方案数与金币不变,OK 行带 create_replay=checked。方案上限是 3,同一个账号跑到
+# 第三遍起已经开满、建不出新方案,这一步跳过,OK 行是 create_replay=skipped_limit —— 要覆盖它就先清掉玩家数据再跑。
 
 gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
 zone_id: 1 # 目标 zone(0 = 从 /api/server-list 自动选推荐 zone)

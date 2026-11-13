@@ -11,8 +11,13 @@
 //   - tidb-prepare:对路由表设防合并并预切 Region;MySQL 上跳过(没有 Region)。
 //   - freeze / unfreeze:经正式维护原件与票据冻结 / 解冻映射写者(route_meta.writable)。
 //
-// 与 data_service 读同一份 yaml:目录取 SnapshotMySQL、Directory 段,连接池大小取 RouteStore 段,tidb-prepare 逐片做;
-// freeze / unfreeze 一次一个逻辑库,库名在维护原件里。整段仍按服务的口径校验(非法即退出码 2)。
+// 与 data_service 读同一份 yaml:库名、后端与映射取 SnapshotMySQL 段,分片数取 Directory 段,连接池大小取 RouteStore 段,
+// tidb-prepare 逐片做;freeze / unfreeze 一次一个逻辑库,库名在维护原件里。整段仍按服务的口径校验(非法即退出码 2)。
+//
+// 连库的账号、口令与地址不取 yaml,只取这个子命令的控制身份(环境变量,与 cmd/writer_authority、tools/scripts/maintenance_drain.ps1
+// 同名同口径):tidb-prepare 用 schema 身份 MMORPG_SQL_SCHEMA_DSN(真执行另核 MMORPG_SQL_SCHEMA_PRINCIPAL),freeze / unfreeze 用
+// 维护身份 MMORPG_SQL_MAINTENANCE_DSN(另核 MMORPG_SQL_OPERATOR_PRINCIPAL 与 MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256)。
+// 常驻 data_service 是写者,yaml 里是它槽位自己的账号,一次性工具不借用(docs/design/workload-secrets-via-k8s-secret.md §4.2)。
 package routetoolcli
 
 import (
@@ -53,11 +58,21 @@ const (
 	subUnfreeze    = "unfreeze"
 )
 
+// 两种控制身份的连接串所在的环境变量。名字与 cmd/writer_authority、tools/scripts/maintenance_drain.ps1 相同,一个身份全仓一个名字。
+const (
+	schemaDSNEnv      = "MMORPG_SQL_SCHEMA_DSN"
+	maintenanceDSNEnv = "MMORPG_SQL_MAINTENANCE_DSN"
+)
+
 const usage = `用法:
   route_tool -f <data_service.yaml> tidb-prepare -zones=1,2[,…] [-storages=1000000[,…]] [-dry-run=true] [-timeout=30m]
   route_tool -f <data_service.yaml> freeze -maintenance-request=<绝对路径> -maintenance-sha256=<摘要> -ticket-id=<票据ID> [-reason=<文本>] [-freeze-timeout=5s] [-timeout=30m]
   route_tool -f <data_service.yaml> unfreeze -maintenance-request=<RELEASE请求> -maintenance-sha256=<摘要> -ticket-id=<票据ID> [-freeze-timeout=5s] [-timeout=30m]
   (K8s 上同一套子命令走主程序:data_service -f <yaml> -route-tool <子命令> [参数])
+
+连库身份(环境变量,yaml 里的账号不用):
+  tidb-prepare       MMORPG_SQL_SCHEMA_DSN;真执行另要 MMORPG_SQL_SCHEMA_PRINCIPAL
+  freeze / unfreeze  MMORPG_SQL_MAINTENANCE_DSN、MMORPG_SQL_OPERATOR_PRINCIPAL、MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
 
 退出码:0 完成(tidb-prepare 在 MySQL 上跳过也是 0,MySQL 没有 Region);2 失败(参数 / 配置 / 连接 / 查询 / 写入 / 超时)。`
 
@@ -132,6 +147,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, d deps) i
 	c.RouteStore = c.RouteStore.Normalize()
 	if err := c.RouteStore.Validate(); err != nil {
 		fmt.Fprintf(stderr, "route_tool: invalid RouteStore config in %s: %v\n", a.configPath, err)
+		return routetool.ExitFailed
+	}
+	// 账号、口令与地址换成这个子命令的控制身份(包注释);之后建池、打印连接目标用的都是它。缺了或解析不了即退出码 2,不回落 yaml 里的账号。
+	c, err = withControlAccount(c, controlDSNEnv(a.sub), os.Getenv)
+	if err != nil {
+		fmt.Fprintf(stderr, "route_tool: %v\n", err)
 		return routetool.ExitFailed
 	}
 
@@ -337,6 +358,30 @@ func openRouteStore(c config.Config, permission authoritysql.Permission) (routeS
 	return st, nil
 }
 
+// controlDSNEnv 是这个子命令的控制身份连接串所在的环境变量:tidb-prepare(含 dry-run)用 schema 身份,freeze / unfreeze 用维护身份。
+func controlDSNEnv(sub string) string {
+	if sub == subTiDBPrepare {
+		return schemaDSNEnv
+	}
+	return maintenanceDSNEnv
+}
+
+// withControlAccount 返回把 SnapshotMySQL 的账号、口令与地址换成 envName 那条连接串之后的配置;库名、后端、映射与分片仍取 yaml。
+// 变量缺失或为空、解析不了、没有账号或不是 tcp 地址都返回错误,不回落 yaml 里的账号。错误只点变量名,不回显连接串(里面有口令)。
+// 只取这三项:route_tool 的连接串由 store / openMaintenance 按固定格式重新拼,别的参数本来就不带。
+func withControlAccount(c config.Config, envName string, getenv func(string) string) (config.Config, error) {
+	raw := getenv(envName)
+	if raw == "" {
+		return config.Config{}, fmt.Errorf("%s is not set: route_tool connects with that control account, never with the account in the data_service config", envName)
+	}
+	parsed, err := mysql.ParseDSN(raw)
+	if err != nil || parsed.User == "" || parsed.Net != "tcp" {
+		return config.Config{}, fmt.Errorf("%s is not a usable connection string: it needs an account and a tcp address", envName)
+	}
+	c.SnapshotMySQL.User, c.SnapshotMySQL.Password, c.SnapshotMySQL.Host = parsed.User, parsed.Passwd, parsed.Addr
+	return c, nil
+}
+
 // tidbPreparePermission 选 tidb-prepare 的 SQL 主体:真执行只用独立的 Schema 主体,dry-run 只读。
 // freeze / unfreeze 的 Operator 主体在 openMaintenance 里加载。
 func tidbPreparePermission(dryRun bool) (authoritysql.Permission, error) {
@@ -427,6 +472,7 @@ func openMaintenance(ctx context.Context, c config.Config, a cliArgs) (*maintena
 	if err != nil {
 		return nil, err
 	}
+	// 账号、口令与地址已是维护身份(run 里的 withControlAccount 按 MMORPG_SQL_MAINTENANCE_DSN 换过),不是 yaml 里的账号。
 	cfg := svc.MySQLConfigOf(c)
 	dsn := mysql.NewConfig()
 	dsn.User = cfg.User

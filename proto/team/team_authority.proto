@@ -124,8 +124,9 @@ message TeamLaunchData {
 message TeamLaunchRecord {
   option (OptionTableName) = "team_launch";
   option (OptionPrimaryKey) = "actor_id,request_high,request_low";
-  // 第三条是按池读排队整队的索引（authority.PoolTeamLaunches）。
-  option (OptionIndex) = "state,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low;state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low";
+  // 第三条是按池读排队整队的索引（authority.SliceTeamLaunches 的整池段与跨机房段）；第四条按首选机房读（机房段、子池段，
+  // docs/design/global-match-hierarchical-pools.md §5.2.1），子池号在索引项上按 actor_id 取模过滤。
+  option (OptionIndex) = "state,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low;state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low;state,mode,config_id,target_size,pool_region,enqueued_ms,actor_id,request_high,request_low";
   uint64 actor_id = 1;
   uint64 request_high = 2;
   uint64 request_low = 3;
@@ -142,7 +143,13 @@ message TeamLaunchRecord {
   bytes payload = 14;
   string owner_account = 15;
   uint64 owner_revision = 16;
-  uint32 mode = 17; // 0按旧PVE_TEAM解释；新人数档PVP为7，须与原请求一致。
+  // 新原件由 normalizeTeamMatchMode 写定：PVE_TEAM 为 5，人数档 PVP 为 7，须与原请求一致。0 是旧原件的写法，校验路径仍按 PVE_TEAM
+  // 解释（authority.TeamLaunchMode）；撮合读页只认显式的 5 / 7（global-match-hierarchical-pools.md §5.2.1 第 6 条，未上线、清库重建）。
+  uint32 mode = 17;
+  // 首选机房（docs/design/global-match-hierarchical-pools.md §5.2.1 热池拆分），只给撮合读页分段用，提交点不读：
+  // EnqueueTeamLaunchTx 改成排队态的同一条 UPDATE 写入成员首选机房的共同值，不一致写 0（只有跨机房段读）。
+  // 成员探测原件入队后固定，值不再变。Go 侧 teamLaunchColumns 不读它。
+  uint32 pool_region = 18;
 }
 // 仅为玩家挂起域护栏检索；必须JOIN原launch核状态，不可作为另一个权威来源。
 message TeamLaunchRoleRecord {

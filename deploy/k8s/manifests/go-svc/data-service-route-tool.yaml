@@ -1,9 +1,12 @@
-# data-service-route-tool:路由运维工具 route-tool(tidb-prepare / freeze / unfreeze)的一次性 Job 模板(形状照 data-service-migrate.yaml)。
+# data-service-route-tool:路由运维工具 route-tool 的 tidb-prepare 一次性 Job 模板(形状照 data-service-migrate.yaml)。
+# freeze / unfreeze 不经本 Job:它们用维护 owner 的身份(MMORPG_SQL_MAINTENANCE_DSN 与 operator 主体),和 maintenance_drain.ps1 的
+# freeze / release 阶段一样在运维机上跑,维护身份不进集群(k8s_route_tool.ps1 对它们直接拒绝并给出跑法)。
 #
-# 与 manifests/go-svc/data-service.yaml 同一镜像、同一 ConfigMap(go-svc-data-service-config),跑服务二进制自带的工具入口:
+# 与 manifests/go-svc/data-service.yaml 同一镜像,挂部署脚本渲染的 ConfigMap go-svc-data-service-config,只用里面的库名、后端、映射与分片
+# (在役 data-service 是写者,读运维预置 Secret 里抄的配置和槽位账号,不挂这份 ConfigMap),跑服务二进制自带的工具入口:
 #   /app/service -f /app/etc/data_service.yaml -route-tool <子命令> [子命令参数]
 # (go/data_service/data_service.go 的 -route-tool;子命令与退出码见 go/data_service/internal/routetoolcli/cli.go 的 usage:
-#  0 完成 / 2 失败)。
+#  0 完成 / 2 失败)。连库账号是 data-service 的 schema 身份(下面 env 段),与 data-service-migrate 同一份 Secret。
 #
 # 为什么是独立 Job,不 kubectl exec 进在役 Pod:不占在役进程的资源,输出按运行号留档。
 #
@@ -15,8 +18,9 @@
 #   IMAGE / PULL_POLICY      缺省取在役 statefulset/data-service 的镜像与拉取策略(同一二进制、同一份配置)
 #   ACTIVE_DEADLINE_SECONDS  脚本的 -TimeoutSeconds:到点 K8s 杀掉 Pod、Job 判 Failed(DeadlineExceeded)
 #   ROUTE_TOOL_ARGS          ["-f", "/app/etc/data_service.yaml", "-route-tool", <子命令>, <参数>…](JSON 数组,逐项转义)
+#   SCHEMA_PERMISSION_SECRET SQL boot 目录(环境变量 MMORPG_SQL_K8S_BOOT_CATALOG)里 <namespace>/data-service 条目的 schemaPermissionSecret
 #
-# 不自动重试:backoffLimit 0、restartPolicy Never。子命令都幂等,但 freeze / unfreeze 这类写操作重跑与否
+# 不自动重试:backoffLimit 0、restartPolicy Never。tidb-prepare 幂等,但真执行(-dry-run=false)重跑与否
 # 要由人看过上一次的输出再定;节点排空 / 抢占导致的驱逐同样直接判 Failed,由运维重跑。
 # ttlSecondsAfterFinished 留一天:之后 K8s 自己删 Job 与 Pod;报告目录里的 stdout / stderr 才是长期留档。
 #
@@ -54,11 +58,15 @@ spec:
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
-            # MySQL 口令:data-service 的配置(MySQLPasswordEnv)指名这个变量;Secret mysql-auth 由 k8s_deploy.ps1 先于本 Job 在本 namespace 建好
-            # (工作负载密钥目录,docs/design/workload-secrets-via-k8s-secret.md)。不写 optional:Secret 缺失时 Pod 起不来,不带空口令去连库。
-            - name: MMORPG_MYSQL_PASSWORD
+            # 连库身份:data-service 的 schema 身份(连接串 dsn 与主体 principal),运维按开服手册 §1 预置在本 namespace,data-service-migrate
+            # 读的就是这一份;Secret 名由 k8s_route_tool.ps1 从 SQL boot 目录取。route_tool 只用它的账号与地址,ConfigMap 里的账号不用
+            # (go/data_service/internal/routetoolcli 包注释);真执行再核主体。不写 optional:Secret 或键缺失时 Pod 起不来,不换别的身份去连库。
+            - name: MMORPG_SQL_SCHEMA_DSN
               valueFrom:
-                secretKeyRef: {name: mysql-auth, key: password, optional: false}
+                secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: dsn, optional: false}
+            - name: MMORPG_SQL_SCHEMA_PRINCIPAL
+              valueFrom:
+                secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: principal, optional: false}
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
             # 标记行带运行号:stderr 里碰巧出现同样的字样也切不错。
@@ -79,7 +87,7 @@ spec:
               printf '\n%s\n' "@@ROUTE_TOOL_STDOUT_END ${ROUTE_TOOL_RUN_ID}@@"
               exit "$rc"
             - route-tool
-          # 与 data-service.yaml 的 args 只差 -route-tool 及其后的子命令:同一份 ConfigMap,库名 / 账号与服务完全一致。
+          # 与 data-service.yaml 的 args 只差 -route-tool 及其后的子命令;库名与服务一致,账号是上面 env 段的 schema 身份。
           args: PLACEHOLDER_ROUTE_TOOL_ARGS
           volumeMounts:
             - name: svc-config

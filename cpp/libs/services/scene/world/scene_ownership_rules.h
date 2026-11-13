@@ -5,8 +5,9 @@
 //
 // 期望状态的事实源是 scene_manager 写在本 zone 控制域 Redis 里的两把键,节点只读、不写控制域任何键
 // (control-plane-zone-scoping-20261105.md §4.3:zone z 的控制域键只由 zone z 的 scene_manager 读写):
-//   - scene:{id}:node:场景的属主 node_id(十进制串);
+//   - scene:{ctl:<z>}:<id>:node:场景的属主 node_id(十进制串);
 //   - node:{ctl:<z>}:<n>:holder:本节点号最近一次登记的进程("<etcd ModRevision>:<node_uuid>",§4.6)。
+// 两把键都带本 zone 的 tag {ctl:<z>},一条 MGET 同槽(docs/design/redis-cluster-all-domains-20261110.md §3.4)。
 // 一个本地实体「不归本节点」= 映射不是本节点号,或者本节点号已被更新的登记接走(那时映射里的号指的是别的进程)。
 // 满足下面两条才排空并销毁:
 //   1. 连续 kNotMineConfirmations 次读到「不归本节点」(读失败不算证据,不改连击数);
@@ -59,11 +60,12 @@ inline constexpr std::size_t kMaxScenesPerRead = 256;
 // go/db、TiDB)都是无状态或可扩的,按 zone 规模扩副本。偏小时 SceneOwnershipReleaseBacklog 会响,设计稿 §4.7。
 inline constexpr std::size_t kMaxRelocationsPerSweep = 200;
 
-// scene_manager 写的场景属主键。跨语言契约:与 go/scene_manager/internal/logic/createscenelogic.go 的
-// SceneNodeKeyFmt("scene:%d:node")是同一个键,两边改名必须同批改。
-inline std::string SceneNodeKey(std::uint64_t sceneId)
+// scene_manager 写的场景属主键 scene:{ctl:<z>}:<id>:node。跨语言契约:与 go/scene_manager/internal/logic/createscenelogic.go 的
+// sceneNodeKey 渲染出来的键逐字节相同,两边改名必须同批改;tag 由族表生成(docs/design/redis-cluster-all-domains-20261110.md §3)。
+inline std::string SceneNodeKey(std::uint32_t zoneId, std::uint64_t sceneId)
 {
-	return "scene:" + std::to_string(sceneId) + ":node";
+	return "scene:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId) + ":" +
+		   std::to_string(sceneId) + ":node";
 }
 
 // scene_manager 写的节点号持有者键 node:{ctl:<z>}:<n>:holder。跨语言契约:与 go/scene_manager/internal/logic/node_holder.go 的

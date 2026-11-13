@@ -47,12 +47,14 @@ func NewAssignGateLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Assign
 //     (returns ADMITTED if dispatcher already promoted, else QUEUEING).
 //     (2026-10-18 补注:也可能回 EXPIRED——admit_window_passed / meta_gone / queue_gone,
 //     判定顺序见 loginqueue.Queue.Poll;传给 Poll 的 zone 一律取自已验签的令牌。)
-//  2. Reconnect/replace exemption: caller already has a live PlayerSession
+//  2. Authenticate: account comes only from req.access_token (authenticateAssignGate, assigngate_auth.go).
+//     Invalid token → UNAUTHENTICATED; no token → anonymous only while LegacyGateLoginEnabled.
+//  3. Reconnect/replace exemption: the authenticated account already has a live PlayerSession
 //     → bypass queue, sign gate token bound to the existing gate.
-//     (Disabled when Queue.Enabled=false; reconnect handling is unchanged.)
-//  3. Queue disabled (kill switch): legacy behavior, sign and return.
-//  4. Queue enabled + capacity available + queue empty: sign and return.
-//  5. Otherwise: enqueue, return QUEUEING.
+//     (Disabled when Queue.Enabled=false or anonymous; reconnect handling is unchanged.)
+//  4. Queue disabled (kill switch): legacy behavior, sign and return.
+//  5. Queue enabled + capacity available + queue empty: sign and return.
+//  6. Otherwise: enqueue (queue identity = authenticated account, "" if anonymous), return QUEUEING.
 //
 // Errors are surfaced via AssignGateResponse.error (HTTP 200 with body) so
 // the Java Gateway shim doesn't need separate error-mapping plumbing.
@@ -65,8 +67,14 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 		return l.handleReentry(in.QueueToken)
 	}
 
-	// 2. Reconnect/replace exemption (queue path only): if a live session
-	//    exists for this account, bypass the queue entirely. We deliberately
+	// 2. 鉴权。身份只从 access token 解出,不看请求正文;排队重入在上面已经返回,排队令牌本身就是先前分配的凭证。
+	account, denied := authenticateAssignGate(l.ctx, l.svcCtx.TokenManager, in.AccessToken, config.AppConfig.LegacyGateLoginEnabled)
+	if denied != nil {
+		return denied, nil
+	}
+
+	// 3. Reconnect/replace exemption (queue path only): if a live session
+	//    exists for the authenticated account, bypass the queue entirely. We deliberately
 	//    gate this on queueEnabled — without the queue, the legacy fast path
 	//    already handles reconnects implicitly via the gate's
 	//    ClientTokenVerifyRequest → BindSession flow.
@@ -79,14 +87,14 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 	//    because session state lives in player_locator, not on the gate
 	//    itself. The point of the exemption is "don't make a player who's
 	//    already in the world wait in line" — not "give them the same gate".
-	if queueEnabled && in.Account != "" {
-		if existing := l.lookupSessionByAccount(in.Account); existing != nil && existing.GateID != "" {
-			logx.Infof("[loginqueue] bypass queue (reconnect) account=%s gate=%s", in.Account, existing.GateID)
+	if queueEnabled && account != "" {
+		if existing := l.lookupSessionByAccount(account); existing != nil && existing.GateID != "" {
+			logx.Infof("[loginqueue] bypass queue (reconnect) account=%s gate=%s", account, existing.GateID)
 			return l.signFastPath(in.ZoneId)
 		}
 	}
 
-	// 3-4. Fast path: queue disabled OR capacity available.
+	// 4-5. Fast path: queue disabled OR capacity available.
 	if !queueEnabled {
 		return l.signFastPath(in.ZoneId)
 	}
@@ -127,8 +135,8 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 		// 占位没抢到 = 名额已被并发请求占满,改走入队。
 	}
 
-	// 5. Enqueue.
-	res, err := l.svcCtx.LoginQueue.Enqueue(l.ctx, in.ZoneId, in.Account, in.DeviceId)
+	// 6. Enqueue. 排队身份是鉴权得到的账号(匿名分配为空串,与改动之前不带账号的 robot 相同)。
+	res, err := l.svcCtx.LoginQueue.Enqueue(l.ctx, in.ZoneId, account, in.DeviceId)
 	if err != nil {
 		logx.Errorf("[loginqueue] Enqueue zone=%d err=%v", in.ZoneId, err)
 		return &loginpb.AssignGateResponse{Status: uint32(loginqueue.StatusError), Error: "queue write failed"}, nil

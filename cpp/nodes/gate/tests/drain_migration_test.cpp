@@ -3,11 +3,12 @@
 // 不进 gate.vcxproj,登记在 cpp/tests/routing_identity_test/routing_identity_test.vcxproj,被测源码直接编进测试。
 // 两个出口(要票、推 124)注入替身:要票替身记下请求、把回调攒起来,由用例回放成各种应答;推送替身照真实出口的收尾
 // 标记会话。时刻全部由用例给定,被测代码不读时钟。滞留关闭要真的关一条连接,那一组用真实的回环 TCP
-// (夹具同 gate_push_delivery_test.cpp)。计数是进程累计的 thread_local,SetUp 里 ResetForTesting 清零。
+// (夹具在 loopback_connection.h)。计数是进程累计的 thread_local,SetUp 里 ResetForTesting 清零。
 // 会话表是 unordered_map,遍历顺序不确定:用例只断言「要了几张票、各要过一次」,不断言先后。
 //
-// 没覆盖的一层:两个真实出口(client_session_handler.cpp 的 SendGateMigrationRequest、gate_redirect_delivery.cpp 的
-// PushRedirect)与 main.cpp 的定时器。它们拖着节点注册表、路由 lane 与 gRPC 通道,进不了这个工程;靠核对调用点与 robot 冒烟。
+// 真实的推送出口 PushRedirect 另有 gate_redirect_delivery_test.cpp。没覆盖的一层:要票出口
+// (client_session_handler.cpp 的 SendGateMigrationRequest)与 main.cpp 的定时器,它们拖着节点注册表与 gRPC 通道,
+// 进不了这个工程;靠核对调用点与 robot 冒烟(mode: gate-migrate-smoke,robot/gate_migrate_smoke_scenario.go)。
 
 #include <gtest/gtest.h>
 
@@ -22,23 +23,9 @@
 #include <vector>
 
 #include "handler/rpc/drain_migration.h"
+#include "loopback_connection.h"
 #include "muduo/net/EventLoop.h"
-#include "muduo/net/InetAddress.h"
-#include "muduo/net/TcpClient.h"
-#include "muduo/net/TcpConnection.h"
-#include "muduo/net/TcpServer.h"
 #include "session/manager/session_manager.h"
-
-// 借空闲回环端口用(FindFreeLoopbackPort)。放在项目头之后:Windows 上 muduo 头已按正确顺序引入过 WinSock。
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#endif
 
 namespace
 {
@@ -541,193 +528,43 @@ TEST_F(DrainMigration, LingerEntryOfAClosedSessionIsDropped)
 	EXPECT_EQ(GetCounters().lingerClosed, 0u);
 }
 
+// 计数原样写进 /metrics:与汇总日志读同一份,标签只有封闭的 result / event,不带玩家号与会话号(AGENTS.md §9)。
+TEST_F(DrainMigration, CountersAreExportedAsPrometheusMetrics)
+{
+	AddInGame(1, kPlayerA, 1);
+	gate_drain_migration::OnLease(Lease(10), kT0);
+	Tick(kT0);
+	Answer(0, Reply(loginpb::GATE_MIGRATION_RESULT_OK), kT0);
+
+	prometheus_text::Writer writer;
+	gate_drain_migration::CollectMetrics(writer);
+
+	const std::string &text = writer.Text();
+	EXPECT_EQ(writer.DroppedSamples(), 0u) << text;
+	for (const char *line : {
+			 "gate_drain_migration_total{result=\"requested\"} 1\n",
+			 "gate_drain_migration_total{result=\"offered\"} 1\n",
+			 "gate_drain_migration_total{result=\"no_target\"} 0\n",
+			 "gate_drain_migration_lease_total{event=\"received\"} 1\n",
+			 "gate_drain_migration_lease_total{event=\"stopped\"} 0\n",
+			 "gate_drain_migration_active 1\n",
+			 "gate_drain_migration_in_flight 0\n",
+			 "gate_redirect_linger_closed_total 0\n",
+		 })
+	{
+		EXPECT_NE(text.find(line), std::string::npos) << "missing sample line: " << line << "in:\n" << text;
+	}
+	EXPECT_EQ(text.find("player_id"), std::string::npos);
+	EXPECT_EQ(text.find("session_id"), std::string::npos);
+}
+
 // ---- 滞留关闭:要一条真实连接 ----
 
 namespace
 {
-	// 只作活性上限,不作判据(同 gate_push_delivery_test 的 kLoopLivenessSec)。
-	constexpr double kLoopLivenessSec = 5.0;
-	constexpr double kLoopPollIntervalSec = 0.005;
-
-	// 向 OS 借一个空闲回环端口(muduo 的 TcpServer 不暴露实际绑定端口)。失败返回 0。
-	uint16_t FindFreeLoopbackPort()
-	{
-#ifdef _WIN32
-		const SOCKET s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (s == INVALID_SOCKET)
-		{
-			return 0;
-		}
-		int len = sizeof(sockaddr_in);
-#else
-		const int s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (s < 0)
-		{
-			return 0;
-		}
-		socklen_t len = sizeof(sockaddr_in);
-#endif
-		sockaddr_in addr{};
-		addr.sin_family = AF_INET;
-		addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-		addr.sin_port = 0;
-		uint16_t port = 0;
-		if (::bind(s, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0 &&
-			::getsockname(s, reinterpret_cast<sockaddr *>(&addr), &len) == 0)
-		{
-			port = ntohs(addr.sin_port);
-		}
-#ifdef _WIN32
-		::closesocket(s);
-#else
-		::close(s);
-#endif
-		return port;
-	}
-
-	// 在测试线程上驱动 loop,直到 done() 为真或活性上限到期,返回 done() 是否成立。条件满足后经两跳
-	// queueInLoop 再 quit(同 Node 关机,AGENTS.md §11.7)。做法与理由同 gate_push_delivery_test.cpp 的同名函数。
-	bool DriveLoopUntil(muduo::net::EventLoop &loop, std::function<bool()> done)
-	{
-		struct DriveState
-		{
-			std::function<bool()> done;
-			bool quitting = false;
-		};
-		const auto state = std::make_shared<DriveState>();
-		state->done = std::move(done);
-		auto *const loopPtr = &loop;
-		const auto checkTimer = loop.runEvery(kLoopPollIntervalSec, [loopPtr, weak = std::weak_ptr<DriveState>(state)] {
-			const auto current = weak.lock();
-			if (!current || current->quitting || !current->done())
-			{
-				return;
-			}
-			current->quitting = true;
-			loopPtr->queueInLoop([loopPtr, weak] {
-				loopPtr->queueInLoop([loopPtr, weak] {
-					if (weak.lock())
-					{
-						loopPtr->quit();
-					}
-				});
-			});
-		});
-		const auto livenessTimer = loop.runAfter(kLoopLivenessSec, [loopPtr] { loopPtr->quit(); });
-		loop.loop();
-		loop.cancel(checkTimer);
-		loop.cancel(livenessTimer);
-		return state->done();
-	}
-
-	// 一条真实的回环 TCP 连接,拆除顺序与理由同 gate_push_delivery_test.cpp 的 LoopbackConnection。
-	// 连接回调只捕获 weak_ptr<Probe>,本类只存服务端连接的 weak(AGENTS.md §11.7)。
-	class LoopbackConnection
-	{
-	public:
-		explicit LoopbackConnection(muduo::net::EventLoop &loop) : loop_(loop) {}
-		~LoopbackConnection() { Close(); }
-		LoopbackConnection(const LoopbackConnection &) = delete;
-		LoopbackConnection &operator=(const LoopbackConnection &) = delete;
-
-		bool Open(const std::string &name)
-		{
-			const uint16_t port = FindFreeLoopbackPort();
-			if (port == 0)
-			{
-				return false;
-			}
-			server_ = std::make_unique<muduo::net::TcpServer>(
-				&loop_, muduo::net::InetAddress(port, /*loopbackOnly=*/true), name + "_server");
-			server_->setConnectionCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &conn) {
-				const auto probe = weak.lock();
-				if (!probe)
-				{
-					return;
-				}
-				if (conn->connected())
-				{
-					probe->serverSide = conn;
-					probe->serverUp = true;
-				}
-				else
-				{
-					probe->serverDown = true;
-				}
-			});
-			server_->start();
-			client_ = std::make_unique<muduo::net::TcpClient>(
-				&loop_, muduo::net::InetAddress("127.0.0.1", port), name + "_client");
-			client_->setConnectionCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &conn) {
-				const auto probe = weak.lock();
-				if (!probe)
-				{
-					return;
-				}
-				if (conn->connected())
-				{
-					probe->clientUp = true;
-				}
-				else
-				{
-					probe->clientDown = true;
-				}
-			});
-			client_->connect();
-			return DriveLoopUntil(loop_, [probe = probe_] { return probe->serverUp && probe->clientUp; });
-		}
-
-		// 服务端连接,挂进会话表用。调用方不要长期持有返回的强引用:muduo 关连接不关 fd、要等连接析构,
-		// 强引用不放手客户端就等不到 EOF。
-		muduo::net::TcpConnectionPtr ServerSide() const { return probe_->serverSide.lock(); }
-		bool ServerSideConnected() const
-		{
-			const auto serverSide = probe_->serverSide.lock();
-			return serverSide && serverSide->connected();
-		}
-		// 两端是否都已断开(服务端关连接之后,客户端读到 EOF)。
-		bool BothSidesDown() const { return probe_->serverDown && probe_->clientDown; }
-
-	private:
-		struct Probe
-		{
-			std::weak_ptr<muduo::net::TcpConnection> serverSide;
-			bool serverUp = false;
-			bool serverDown = false;
-			bool clientUp = false;
-			bool clientDown = false;
-		};
-
-		void Close()
-		{
-			if (!client_ && !server_)
-			{
-				return;
-			}
-			if (client_)
-			{
-				client_->disconnect();
-			}
-			const bool closed = DriveLoopUntil(loop_, [probe = probe_] {
-				return (!probe->serverUp || probe->serverDown) && (!probe->clientUp || probe->clientDown);
-			});
-			if (!closed)
-			{
-				ADD_FAILURE() << "loopback connection did not close within liveness bound";
-				(void)client_.release();
-				(void)server_.release();
-				return;
-			}
-			client_.reset();
-			server_.reset();
-			(void)DriveLoopUntil(loop_, [] { return true; });
-		}
-
-		muduo::net::EventLoop &loop_;
-		const std::shared_ptr<Probe> probe_ = std::make_shared<Probe>();
-		std::unique_ptr<muduo::net::TcpServer> server_;
-		std::unique_ptr<muduo::net::TcpClient> client_;
-	};
+	// 回环连接与循环驱动取自 gate 单测共用的夹具(loopback_connection.h)。
+	using gate_test::DriveLoopUntil;
+	using gate_test::LoopbackConnection;
 
 	class DrainMigrationLinger : public testing::Test
 	{

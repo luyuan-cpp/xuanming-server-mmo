@@ -35,6 +35,12 @@ type PlayerStoreDeadHolderFence interface {
 
 const RoleDirectorySecretEnv = "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER"
 
+// roleDirectoryLookupTimeout 是一次角色目录只读查询(Lookup、ReadPlayerStoreHolder)的预算。EnterScene 每次进场都先做一次
+// Lookup(logic/location_revision.go),它串在 EnterScene 的成功路径上:etc/scene_manager_service.yaml 文件头的 Timeout 不等式
+// 把它算在内,tools/scripts/tests/k8s_deploy_contract.tests.ps1 从这一行读数(写成「整数 * time.Millisecond」,改写法要同步那边)。
+// 调大它必须同步调大那个 Timeout。
+const roleDirectoryLookupTimeout = 1500 * time.Millisecond
+
 func roleDirectorySecret(c config.Config, getenv func(string) string) (string, error) {
 	rpc := c.DataServiceRpc
 	if rpc.Etcd.Key == "" && len(rpc.Endpoints) == 0 && rpc.Target == "" {
@@ -85,7 +91,7 @@ func (c *roleDirectoryClient) releaseDeadPlayerStoreHolder(ctx context.Context, 
 
 // ReadPlayerStoreHolder 见 data_service 同名 RPC,判死释放的第一步。只读,预算与 Lookup 相同。
 func (c *roleDirectoryClient) ReadPlayerStoreHolder(ctx context.Context, player uint64) (*dspb.ReadPlayerStoreHolderResponse, error) {
-	call, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	call, cancel := context.WithTimeout(ctx, roleDirectoryLookupTimeout)
 	defer cancel()
 	in := &dspb.ReadPlayerStoreHolderRequest{PlayerId: player}
 	if err := serviceauth.Sign(accountdirectory.MethodPrefix+"ReadPlayerStoreHolder", in, "scene_manager", c.secret, uint64(time.Now().UnixMilli())); err != nil {
@@ -95,7 +101,7 @@ func (c *roleDirectoryClient) ReadPlayerStoreHolder(ctx context.Context, player 
 }
 
 func (c *roleDirectoryClient) Lookup(ctx context.Context, player uint64) (*dspb.AccountRoleOwnership, error) {
-	call, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	call, cancel := context.WithTimeout(ctx, roleDirectoryLookupTimeout)
 	defer cancel()
 	in := &dspb.LookupAccountRoleRequest{PlayerId: player}
 	if err := serviceauth.Sign(accountdirectory.MethodPrefix+"LookupAccountRole", in, "scene_manager", c.secret, uint64(time.Now().UnixMilli())); err != nil {

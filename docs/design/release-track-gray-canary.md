@@ -117,7 +117,7 @@ battle 是全局池。一局战斗的成员全部来自 canary 会话时，放�
 | 4 晋升 | 第 3 批判定通过后，逐 zone `zone-up -ReleaseTrack stable -NodeImage <新>`；全部 zone 换完后跑一次不带 `-CanaryServices`、`-CanaryBattleReplicas` 的 `infra-up -GoSvcTag <新> -NodeImage <新>`：稳定版（含 battle）换成新版本，随后删掉全部 `<svc>-canary` 与 `battle-canary` | 新版本成为 stable，金丝雀轨道清空 |
 | 中止 | 先停新流量：跑一次不带 `-CanaryServices`（或只列要留下的服务）、不带 `-CanaryBattleReplicas` 的 `infra-up`，其余参数照旧，删掉 `<svc>-canary` 与 `battle-canary`；来不及跑部署时直接删这几个工作负载。金丝雀会话随即退回 stable，还没开局的金丝雀局改放 stable battle；`battle-canary` 上正在打的局随 Pod 结束，能等就等这些局打完再删。zone 级回退：`zone-up -ReleaseTrack stable -NodeImage <旧>` | zone 回退受 [混版本持久字段保护](mixed-version-persist-field-protection.md) 的回退门禁约束，不满足就向前修复，不承诺一键任意回退 |
 
-持久 schema 升世代的版本不能按 zone 金丝雀 go/db，按混版本文档的顺序：先 DDL，再 go/db 全部 zone，再 login，最后 scene。
+持久 schema 升世代的版本不能按 zone 金丝雀 go/db，按混版本文档 §8.2 的顺序：先对每个 zone 跑 `zone-up -ZoneId <z> -NodeImage <线上版本的节点镜像> -GoSvcTag <新>`，把全部 zone 的 Go 服务（含 go/db）升上去、C++ 节点不动；全部滚完之后再按上表第 1 步开金丝雀 zone、逐批换 scene。加字段不改表，没有 DDL 这一步；login 不读玩家存档，不参与。
 
 ### 2.8 金丝雀判定
 
@@ -164,9 +164,9 @@ zone 少于 2 个时没有同时段的 stable 可比，不能按本节做金丝�
 - 轨道只决定由哪个版本的二进制处理请求，不参与任何提交判定。提交点仍由各服务的事务、owner epoch、围栏和幂等保证，混轨不放宽一致性。前提是两个版本的在线协议和持久数据双向兼容，按混版本持久字段保护文档的规则执行。
 - 不会出现「一段有状态流程跨两个版本」：zone 内状态整 zone 一条轨道；会话的轨道跟着 TCP 连接；全局服务的金丝雀只处理请求，状态在 SQL 权威；战斗整局一条轨道。
   - 跨 zone 传送是例外：玩家从金丝雀 zone 去 stable zone 时，玩家存档要被另一个版本的 scene 认领。
-    - 金丝雀版本升过存档世代时，stable scene 的认领会被 go/db 判 `SCHEMA_TOO_NEW` 挡住（`decideClaim`，不抬代次），玩家进场失败，不丢数据。这是可用性问题。
-    - 金丝雀 zone 回退之后，同样挡住在金丝雀版本上存过盘的玩家。
-    - 所以升存档世代的版本不按 zone 金丝雀，按混版本设计 §8.2 的顺序发布（2026-11-10，数据覆写审计第 3 轮时钟与混版一路的核对）。
+    - 金丝雀版本升过存档世代时，stable scene 照常认领在金丝雀版本上存过盘的存档：不认识的内容原样带回，存盘世代取 max(自己的, 加载到的)，金丝雀版本才有的功能在 stable 上不可用（混版本设计 §4.2、§5.2，2026-11-12）。金丝雀 zone 回退 scene 之后也一样。
+    - 前提是全部 zone 的 go/db 已经认识这个世代：玩家会带着新世代的存档跨到别的 zone。所以升存档世代的版本先把全部 zone 的 go/db 升上去，scene 再按 zone 金丝雀（混版本设计 §8.2）。顺序错了，认领回 `SCHEMA_TOO_NEW`、玩家进场失败，不丢数据。
+    - 2026-11-10 到 11-12 之间，stable scene 的认领会因为「存档世代比 scene 新」被 go/db 挡住（`decideClaim`），所以那时写的是「升存档世代的版本不按 zone 金丝雀」。
 - 退回只有一个方向，canary 会话退到 stable。stable 会话永远不会被送进新版本。
 
 ## 4. 水平扩展

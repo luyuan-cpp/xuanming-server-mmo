@@ -26,6 +26,8 @@ ONESHOTS = set(INIT) | {name + "-sql-boot" for name in WRITERS | {"login"}}
 # 这些容器只保留成功历史，不参与日常恢复；业务镜像更新不会追溯更新旧迁移容器。
 HISTORY_ONLY = set(INIT) | {"login-sql-boot"}
 NODE_PORTS = {"gate": 10000, "scene": 20001, "battle": 20000}
+AUTHORED_TABLE_TARGETS = {**dict.fromkeys(NODE_PORTS, '/app/generated/generated_tables'),
+                          **dict.fromkeys(('login', 'scene-manager', 'player-locator'), '/generated/tables')}
 OUT = None
 
 
@@ -47,10 +49,10 @@ def env_values(data):
     return result
 
 
-def run(args, timeout=60, env=None):
+def run(args, timeout=60, env=None, input_text=None):
     # 子进程的原始输出可能含配置秘密；不写回执、不回显错误文本。
     value = subprocess.run(args, cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=timeout, env=env)
+                           errors="replace", timeout=timeout, env=env, input=input_text)
     require(value.returncode == 0, f"Command failed with exit code {value.returncode}")
     return value.stdout
 
@@ -63,7 +65,43 @@ def hashed(value):
     return sha(json.dumps(value, sort_keys=True, separators=(',', ':')).encode())
 
 
-def host_bind_path(source):
+def authored_overlay(rows):
+    # 仅识别手绘节庆部署使用的第三份 Compose，不执行容器标签指定的任意配置。
+    candidates = set()
+    for row in rows:
+        labels = row['Config']['Labels']
+        files = [Path(p) for p in labels.get('com.docker.compose.project.config_files', '').split(',')]
+        if not any(path.name == 'compose.authored.json' for path in files):
+            continue
+        require(files[:-1] == COMPOSE_FILES and files[-1].name == 'compose.authored.json',
+                'Unexpected authored Compose file order')
+        candidates.add(files[-1])
+    if not candidates:
+        return None, None, None, {}
+    require(len(candidates) == 1, 'Multiple authored Compose overlays')
+    overlay = candidates.pop()
+    require(overlay.parent.parent == ROOT / 'build/verification'
+            and re.fullmatch(r'authored-festival-[A-Za-z0-9_.-]+', overlay.parent.name)
+            and overlay.is_file() and overlay.resolve() == overlay,
+            'Unexpected authored Compose overlay path')
+
+    tables = overlay.parent / 'tables/generated/tables'
+    navigation = ROOT / 'data/scene_nav_bin/authored_maps'
+    require(all(path.is_dir() and path.resolve() == path for path in (tables, navigation)),
+            'Authored bind directory is missing or redirected')
+    allowed = {name: {target: tables} for name, target in AUTHORED_TABLE_TARGETS.items()}
+    for name in NODE_PORTS:
+        allowed[name]['/app/data/scene_nav_bin/authored_maps'] = navigation
+    expected = {'services': {name: {'volumes': [
+        {'type': 'bind', 'source': path.as_posix(), 'target': target, 'read_only': True}
+        for target, path in mounts.items()]} for name, mounts in allowed.items()}}
+    original = overlay.read_bytes()
+    require(json.loads(original) == expected, 'Unauthorized authored Compose overlay')
+    # 将脚本构造的等价配置交给 Compose，避免重复解析磁盘原文。
+    return overlay, original, json.dumps(expected), allowed
+
+
+def host_bind_path(source, allowed_source=None):
     # Docker Desktop 可能返回宿主路径，也可能返回其 Linux 挂载映射。
     match = re.fullmatch(r'/run/desktop/mnt/host/([a-zA-Z])/(.+)', source)
     if match:
@@ -75,21 +113,30 @@ def host_bind_path(source):
     path = Path(source)
     require(path.is_absolute() and path.exists(), 'Bind source unavailable')
     resolved = path.resolve()
-    require(resolved.is_relative_to((ROOT / 'build/docker-debug-current').resolve()),
+    require(resolved == allowed_source or resolved.is_relative_to((ROOT / 'build/docker-debug-current').resolve()),
             'Bind source outside staged directory')
     return resolved
 
 
-def binding_hashes(rows):
+def binding_hashes(rows, allowed=None):
     # 原件只读入内存求摘要；不记录文件内容、环境变量或凭据。
-    sources = sorted({m['Source'] for row in rows for m in row['Mounts'] if m['Type'] == 'bind'})
+    sources = {}
+    for row in rows:
+        targets = allowed.get(row['Config']['Labels'].get('com.docker.compose.service'), {}) if allowed else {}
+        for mount in row['Mounts']:
+            if mount['Type'] == 'bind':
+                source = mount['Source']
+                allowed_source = targets.get(mount['Destination']) if mount['RW'] is False else None
+                sources[source] = host_bind_path(source, allowed_source)
     result = {}
-    for source in sources:
-        path = host_bind_path(source)
-        files = [path] if path.is_file() else sorted(p for p in path.rglob('*') if p.is_file())
-        require(all(not p.is_symlink() and p.resolve().is_relative_to(path if path.is_dir() else path.parent)
-                    for p in files), 'Escaping file in bind source')
-        result[sha(source.encode())] = hashed([(str(p.relative_to(path)) if path.is_dir() else '.', sha(p.read_bytes())) for p in files])
+    for source, path in sources.items():
+        if path.is_file():
+            files = [('.', sha(path.read_bytes()))]
+        else:
+            entries = sorted(path.rglob('*'))
+            require(all(not p.is_symlink() and p.resolve() == p for p in entries), 'Redirected entry in bind source')
+            files = [(str(p.relative_to(path)), sha(p.read_bytes())) for p in entries if p.is_file()]
+        result[sha(source.encode())] = hashed(files)
     return result
 
 
@@ -153,7 +200,7 @@ def event(kind, **data):
     print(json.dumps(value), flush=True)
 
 
-def compose_contract():
+def compose_contract(overlay_input=None):
     original = ENV.read_bytes()
     values = env_values(original)
     require(values.get('COMPOSE_PROJECT_NAME', PROJECT) == PROJECT, 'Unexpected configured project')
@@ -162,7 +209,11 @@ def compose_contract():
     command = DOCKER + ['compose', '--project-name', PROJECT, '--env-file', str(ENV)]
     for path in COMPOSE_FILES:
         command += ['-f', str(path)]
-    config = json.loads(run(command + ['config', '--format', 'json'], env=child_env))
+    options = {'env': child_env}
+    if overlay_input is not None:
+        command += ['-f', '-']
+        options['input_text'] = overlay_input
+    config = json.loads(run(command + ['config', '--format', 'json'], **options))
     require(config.get('name') == PROJECT, 'Unexpected resolved project')
     require(set(config['services']) == set(INFRA) | set(APPS) | ONESHOTS
             and len(config['services']) == 28, 'Unexpected Compose service set')
@@ -229,11 +280,12 @@ def validate_mounts(name, row, service, volume_definitions, image_volumes, volum
 
 
 def inventory():
-    config, env_sha = compose_contract()
     selected = run(DOCKER + ['ps', '-aq', '--no-trunc', '--filter',
         'label=com.docker.compose.project=' + PROJECT]).split()
     require(len(selected) in (28, 29) and len(set(selected)) == len(selected), 'Unexpected project container count')
     rows = inspect(selected)
+    overlay, overlay_bytes, overlay_input, allowed = authored_overlay(rows)
+    config, env_sha = compose_contract(overlay_input)
     image_volumes = {}
     for identity in sorted({row['Image'] for row in rows}):
         declared = json.loads(run(DOCKER + ['image', 'inspect', '--format', '{{json .Config.Volumes}}', identity]))
@@ -285,10 +337,13 @@ def inventory():
             services[name] = row
             continue
         require(row['Image'] == image_ids[config['services'][name]['image']], 'Current image differs from container: ' + name)
-        expected_binds = sorted((v['target'], str(host_bind_path(v['source'])), bool(v.get('read_only', False)))
-                                for v in config['services'][name].get('volumes', []) if v['type'] == 'bind')
-        actual_binds = sorted((v['Destination'], str(host_bind_path(v['Source'])), not v['RW'])
-                              for v in row['Mounts'] if v['Type'] == 'bind')
+        targets = allowed.get(name, {})
+        expected_binds = sorted(
+            (v['target'], host_bind_path(v['source'], targets.get(v['target'])), bool(v.get('read_only', False)))
+            for v in config['services'][name].get('volumes', []) if v['type'] == 'bind')
+        actual_binds = sorted(
+            (v['Destination'], host_bind_path(v['Source'], targets.get(v['Destination'])), not v['RW'])
+            for v in row['Mounts'] if v['Type'] == 'bind')
         require(actual_binds == expected_binds, 'Bind mounts differ from Compose: ' + name)
         # 比较只在内存中进行；错误、日志和回执都不保存环境变量内容。
         actual_env = dict(value.split('=', 1) for value in row['Config'].get('Env', []))
@@ -311,9 +366,13 @@ def inventory():
     require(named <= set(volume_names), 'Named volume is not in the project volume baseline')
     node_ports = {name: int(config['services'][name]['environment']['RPC_PORT']) for name in NODE_PORTS}
     require(node_ports == NODE_PORTS, 'Current node ports differ from the qualified readiness probe')
-    binds = binding_hashes(list(services.values()))
-    require(binds == binding_hashes(list(services.values())), 'Staged bind files changed during inventory')
-    contract = {'project': PROJECT, 'envSha256': env_sha, 'composeSha256': {str(p): sha(p.read_bytes()) for p in COMPOSE_FILES},
+    binds = binding_hashes(list(services.values()), allowed)
+    require(binds == binding_hashes(list(services.values()), allowed), 'Bind files changed during inventory')
+    compose_sha = {str(path): sha(path.read_bytes()) for path in COMPOSE_FILES}
+    if overlay is not None:
+        require(overlay.read_bytes() == overlay_bytes, 'Authored Compose overlay changed during inventory')
+        compose_sha[str(overlay)] = sha(overlay_bytes)
+    contract = {'project': PROJECT, 'envSha256': env_sha, 'composeSha256': compose_sha,
                 'scriptSha256': sha(Path(__file__).read_bytes()),
                 'configSha256': hashed(config), 'ids': {n: r['Id'] for n, r in services.items()},
                 'images': {n: r['Image'] for n, r in services.items()},

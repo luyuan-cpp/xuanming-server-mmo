@@ -12,7 +12,6 @@
 
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
-#include "fifo_eviction_profile_for_test.h" // 先进先出的测试包(生产已无包淘汰,§6.6)
 #include "modules/gain_block/gain_block_service.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "services/scene/player/system/bag_marshal.h"
@@ -126,9 +125,11 @@ protected:
         EXPECT_TRUE(ArmParitySegment(1, uint64_t{1} << 54));
     }
 
-    void FillEvictingBag(Bag &bag)
+    // 一个未满堆(还能并 1 个)加一件不可叠加物品,自由格 4 格、空 2 格。2026-11-12 前这里装的是满了的先进先出包
+    // (要淘汰才放得下);先进先出删了之后改成放得下、只缺号的形状。
+    void FillTwoOfFourSlots(Bag &bag)
     {
-        bag.SetProfile(FifoEvictingProfileForTest(2));
+        bag.SetProfile(BagProfile::Flat(4));
         bag.InsertItemForRestore(kOldStack, 10, maxStack - 1, 0, 1);
         bag.InsertItemForRestore(kOldOther, 3, 1, 1, 2);
     }
@@ -169,32 +170,17 @@ TEST_F(BagJavaParityTest, BagLevelRestoreStampsLegacyZeroAfterLaterExistingStamp
     EXPECT_EQ(72u, bag.GetItemCompByPos(2)->acquire_seq());
 }
 
-TEST_F(BagJavaParityTest, PostEvictionMintFailurePreservesOldItemsLayoutAndReceipts)
-{
-    Bag bag;
-    FillEvictingBag(bag);
-    const auto before = CaptureParityBag(bag);
-    ASSERT_TRUE(ArmParitySegment(98200000, 98200001));
-    std::vector<DestroyedInstance> evicted{{123, 3, 1}};
-    std::vector<GuidVector> written{{456}};
-
-    // 修复前按淘汰前的一个新实例预检，先销毁两件旧物，再因实际需要两个号而失败。
-    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItems(ItemCountMap{{10, maxStack + 1}}, &evicted, &written));
-    EXPECT_EQ(before, CaptureParityBag(bag));
-    EXPECT_EQ(1u, evicted.size());
-    EXPECT_EQ(123u, evicted.front().guid);
-    EXPECT_EQ((std::vector<GuidVector>{{456}}), written);
-    EXPECT_TRUE(bag.IsLayerConsistent());
-}
-
+// 编排层入口:放得下,但最终规划要两个新实例、号段只有一个号 —— 整批拒,连「并进未满堆的那 1 个」也不落,
+// 两件旧物与布局原样(先铸齐全部的号再动包)。2026-11-12 前同组还有一条淘汰之后才缺号的用例,随先进先出删了。
 TEST_F(BagJavaParityTest, ServiceMintFailureReportsUnmutatedAndKeepsBothOldInstances)
 {
     Bag bag;
-    FillEvictingBag(bag);
+    FillTwoOfFourSlots(bag);
     const auto before = CaptureParityBag(bag);
     ASSERT_TRUE(ArmParitySegment(98300000, 98300001));
+    // 并 1 进 kOldStack 之后还剩 2 × maxStack 个,要 2 个新实例;空格有 2 个,放得下,拒绝只可能来自铸号。
     EXPECT_EQ(kBagAddItemInvalidParam,
-              BagService::AddItems(entt::null, bag, ItemCountMap{{10, maxStack + 1}},
+              BagService::AddItems(entt::null, bag, ItemCountMap{{10, 2 * maxStack + 1}},
                                    TX_SYSTEM_GRANT, 0, {}));
     EXPECT_EQ(before, CaptureParityBag(bag));
     EXPECT_TRUE(bag.IsLayerConsistent());
@@ -232,7 +218,7 @@ TEST_F(BagJavaParityTest, AllIdsAreReservedBeforeAnyInstanceInitializerRuns)
     std::vector<Guid> written;
 
     // 修复前回调后才铸第二个号，失败留下半批；先铸齐后不再依赖号源当前是否可用。
-    EXPECT_EQ(kSuccess, bag.AddItem(ParityGrant(3, 2), &written, nullptr, &initialize));
+    EXPECT_EQ(kSuccess, bag.AddItem(ParityGrant(3, 2), &written, &initialize));
     EXPECT_EQ(2, callbacks);
     EXPECT_EQ(2u, written.size());
     EXPECT_EQ(3u, bag.OccupiedGridCount());
@@ -248,7 +234,7 @@ TEST_F(BagJavaParityTest, SuccessfulBatchReturnsEachEntriesActualWrittenGuids)
     preassigned.itemPBComp.set_item_id(kOldOther);
     std::vector<GuidVector> written;
 
-    ASSERT_EQ(kSuccess, bag.AddItems(std::vector<InitItemParam>{ParityGrant(10, 2), preassigned}, nullptr, &written));
+    ASSERT_EQ(kSuccess, bag.AddItems(std::vector<InitItemParam>{ParityGrant(10, 2), preassigned}, &written));
     ASSERT_EQ(2u, written.size());
     ASSERT_EQ(2u, written[0].size());
     EXPECT_EQ(kOldStack, written[0][0]);
@@ -265,7 +251,7 @@ TEST_F(BagJavaParityTest, CandidatePlacementFailureKeepsOriginalLayoutAndAllRece
     const auto *layoutBefore = &bag.Layout();
     std::vector<GuidVector> written{{123}};
 
-    EXPECT_EQ(kBagItemNotStacked, bag.AddItems(ItemCountMap{{3, 2}}, nullptr, &written));
+    EXPECT_EQ(kBagItemNotStacked, bag.AddItems(ItemCountMap{{3, 2}}, &written));
     EXPECT_EQ(before, CaptureParityBag(bag));
     EXPECT_EQ(layoutBefore, &bag.Layout());
     EXPECT_EQ(3u, bag.Capacity());

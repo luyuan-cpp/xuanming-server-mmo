@@ -49,7 +49,7 @@ func GenerateGrpcHandler(protoPath string) error {
 	}
 	defer func() {
 		if err := removeGrpcHandlerTempDir(tempDir); err != nil {
-			logger.Global.Warn("清理临时 gRPC 描述目录失败", zap.String("path", tempDir), zap.Error(err))
+			logger.Global.Warn("Failed to clean up the temporary gRPC descriptor directory", zap.String("path", tempDir), zap.Error(err))
 		}
 	}()
 	descriptorPath := filepath.Join(tempDir, "handler.desc")

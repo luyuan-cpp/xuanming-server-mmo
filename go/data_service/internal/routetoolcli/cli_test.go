@@ -171,10 +171,11 @@ func TestRouteToolInvalidRouteStoreExitsTwo(t *testing.T) {
 
 // TestRouteToolTiDBPrepareOnlyTouchesTheGlobalDB:两个地址都指向刚关掉的不同端口,经原装配接口核实际全局库目标与调用次数;
 // 错误必须脱敏,不能靠泄露 MySQL 地址识别来源。名字缓存的 Redis 不连。
-// SnapshotMySQL.Host 必须显式写:不写会回落默认 127.0.0.1:3306,本机可能真有 MySQL。
+// 全局库地址来自 schema 身份的连接串;yaml 里的 SnapshotMySQL.Host 写成另一个地址,证明它不被用。
 func TestRouteToolTiDBPrepareOnlyTouchesTheGlobalDB(t *testing.T) {
 	redisAddr, mysqlAddr := twoClosedLocalAddrs(t)
-	path := writeYaml(t, fmt.Sprintf(minimalYaml, redisAddr)+fmt.Sprintf("SnapshotMySQL:\n  Host: %s\n", mysqlAddr))
+	setControlDSNs(t, mysqlAddr)
+	path := writeYaml(t, fmt.Sprintf(minimalYaml, redisAddr)+"SnapshotMySQL:\n  Host: yaml-host.invalid:3306\n")
 
 	globalOpens := 0
 	d := defaultDeps()
@@ -197,6 +198,7 @@ func TestRouteToolTiDBPrepareOnlyTouchesTheGlobalDB(t *testing.T) {
 // TestRouteToolTiDBPrepareRealRunNeedsSchemaPrincipal:真执行要独立的 Schema 主体,缺了在开池之前退出码 2。
 func TestRouteToolTiDBPrepareRealRunNeedsSchemaPrincipal(t *testing.T) {
 	t.Setenv("MMORPG_SQL_SCHEMA_PRINCIPAL", "")
+	setControlDSNs(t, closedLocalAddr(t))
 	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t)))
 	d := defaultDeps()
 	d.openRouteStore = func(config.Config, authoritysql.Permission) (routeStore, error) {
@@ -209,8 +211,86 @@ func TestRouteToolTiDBPrepareRealRunNeedsSchemaPrincipal(t *testing.T) {
 	assert.NotEmpty(t, stderr)
 }
 
+// TestRunConnectsWithTheSubcommandControlAccount:tidb-prepare 用 schema 身份、freeze 用维护身份的账号、口令与地址,
+// yaml 里 SnapshotMySQL 的账号口令地址一律不用(常驻 data_service 是写者,那是它槽位自己的);库名照旧取 yaml。输出里不出现口令。
+func TestRunConnectsWithTheSubcommandControlAccount(t *testing.T) {
+	t.Setenv(schemaDSNEnv, "route_schema:schema-secret-0123@tcp(schema-host.invalid:4000)/mmorpg_global")
+	t.Setenv(maintenanceDSNEnv, "route_operator:operator-secret-0123@tcp(operator-host.invalid:4000)/mmorpg_global")
+	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t))+
+		"SnapshotMySQL:\n  Host: yaml-host.invalid:3306\n  User: yaml_user\n  Password: yaml-secret\n  DBName: mmorpg_global\n")
+
+	var prepared config.Config
+	d := fakeDeps(&fakeCatalog{}, &fakeCloser{})
+	d.openRouteStore = func(c config.Config, _ authoritysql.Permission) (routeStore, error) {
+		prepared = c
+		return &fakeStore{rep: store.RouteTiDBPrepareReport{Engine: "mysql", Skipped: true}}, nil
+	}
+	code, stdout, stderr := runCLIWith(d, "-f", path, "tidb-prepare", "-zones=1")
+	require.Equal(t, routetool.ExitClean, code, stderr)
+	assert.Equal(t, "route_schema", prepared.SnapshotMySQL.User)
+	assert.Equal(t, "schema-secret-0123", prepared.SnapshotMySQL.Password)
+	assert.Equal(t, "schema-host.invalid:4000", prepared.SnapshotMySQL.Host)
+	assert.Equal(t, "mmorpg_global", prepared.SnapshotMySQL.DBName, "库名仍取 yaml")
+	assert.NotContains(t, stdout+stderr, "schema-secret-0123", "口令不进输出")
+
+	var maintained config.Config
+	d = fakeDeps(&fakeCatalog{}, &fakeCloser{})
+	open := d.openMaintenance
+	d.openMaintenance = func(ctx context.Context, c config.Config, a cliArgs) (*maintenanceInput, error) {
+		maintained = c
+		return open(ctx, c, a)
+	}
+	code, stdout, stderr = runCLIWith(d, "-f", path, "freeze")
+	require.Equal(t, routetool.ExitClean, code, stderr)
+	assert.Equal(t, "route_operator", maintained.SnapshotMySQL.User)
+	assert.Equal(t, "operator-secret-0123", maintained.SnapshotMySQL.Password)
+	assert.Equal(t, "operator-host.invalid:4000", maintained.SnapshotMySQL.Host)
+	assert.True(t, strings.HasPrefix(stderr, "route_tool freeze: global_db=operator-host.invalid:4000/mmorpg_global\n"), "连接目标打的是实际连的那一个:%s", stderr)
+	assert.NotContains(t, stdout+stderr, "operator-secret-0123", "口令不进输出")
+}
+
+// TestRunWithoutAUsableControlDSNExitsTwo:这个子命令的控制身份连接串缺了、为空或解析不了,在开池 / 连库之前退出码 2,
+// 报错点名变量、不回显连接串,也不回落 yaml 里的账号。
+func TestRunWithoutAUsableControlDSNExitsTwo(t *testing.T) {
+	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t))+"SnapshotMySQL:\n  User: yaml_user\n  Password: yaml-secret\n")
+	for _, c := range []struct {
+		name, sub, env, value string
+	}{
+		{"tidb-prepare without the schema DSN", subTiDBPrepare, schemaDSNEnv, ""},
+		{"tidb-prepare with a garbled schema DSN", subTiDBPrepare, schemaDSNEnv, "not a dsn but has-a-secret-0123"},
+		{"tidb-prepare with a schema DSN that names no account", subTiDBPrepare, schemaDSNEnv, ":no-user-secret-0123@tcp(127.0.0.1:4000)/mmorpg_global"},
+		{"freeze without the maintenance DSN", subFreeze, maintenanceDSNEnv, ""},
+		{"unfreeze over a unix socket", subUnfreeze, maintenanceDSNEnv, "route_operator:socket-secret-0123@unix(/tmp/mysql.sock)/mmorpg_global"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			setControlDSNs(t, closedLocalAddr(t))
+			t.Setenv(c.env, c.value)
+			d := fakeDeps(&fakeCatalog{}, &fakeCloser{})
+			d.openRouteStore = func(config.Config, authoritysql.Permission) (routeStore, error) {
+				t.Fatal("must not open the global DB without a usable control account")
+				return nil, nil
+			}
+			d.openMaintenance = func(context.Context, config.Config, cliArgs) (*maintenanceInput, error) {
+				t.Fatal("must not open the maintenance connection without a usable control account")
+				return nil, nil
+			}
+			args := []string{"-f", path, c.sub}
+			if c.sub == subTiDBPrepare {
+				args = append(args, "-zones=1") // 过参数校验,才走得到连库身份那一步
+			}
+			code, stdout, stderr := runCLIWith(d, args...)
+			assert.Equal(t, routetool.ExitFailed, code)
+			assert.Empty(t, stdout)
+			assert.Contains(t, stderr, c.env, "报错点名变量")
+			assert.NotContains(t, stderr, "secret-0123", "不回显连接串里的口令")
+			assert.NotContains(t, stderr, "yaml-secret", "不回落、也不提 yaml 里的账号")
+		})
+	}
+}
+
 // TestRunTiDBPrepareUsesReaderAndClosesThePool:缺省 dry-run 走只读主体,入参原样交给 store,stdout 一行统计,跑完关池。
 func TestRunTiDBPrepareUsesReaderAndClosesThePool(t *testing.T) {
+	setControlDSNs(t, closedLocalAddr(t))
 	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t)))
 	st := &fakeStore{rep: store.RouteTiDBPrepareReport{Engine: "mysql", Version: "8.0.36", Skipped: true}}
 	var permission authoritysql.Permission
@@ -235,6 +315,7 @@ func TestRunTiDBPrepareUsesReaderAndClosesThePool(t *testing.T) {
 
 // TestRunPoolCloseFailureExitsTwo:关不掉连接算整次失败,不能报成功。
 func TestRunPoolCloseFailureExitsTwo(t *testing.T) {
+	setControlDSNs(t, closedLocalAddr(t))
 	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t)))
 	closeErr := errors.New("close failed")
 
@@ -250,10 +331,11 @@ func TestRunPoolCloseFailureExitsTwo(t *testing.T) {
 	assert.Contains(t, stderr, "close failed")
 }
 
-// TestRunFreezeThenUnfreeze:各提交一次、stdout 恰好一行统计、stderr 第一行是连接目标、维护连接跑完就关;
+// TestRunFreezeThenUnfreeze:各提交一次、stdout 恰好一行统计、stderr 第一行是连接目标(维护身份连接串里的地址)、维护连接跑完就关;
 // freeze / unfreeze 都不开业务的 route store(fakeDeps 里一开就报错)。
 func TestRunFreezeThenUnfreeze(t *testing.T) {
-	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t))+"SnapshotMySQL:\n  Host: 127.0.0.1:3999\n  DBName: mmorpg\n")
+	setControlDSNs(t, "127.0.0.1:3999")
+	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t))+"SnapshotMySQL:\n  DBName: mmorpg\n")
 	catalog := &fakeCatalog{}
 	db := &fakeCloser{}
 
@@ -275,6 +357,7 @@ func TestRunFreezeThenUnfreeze(t *testing.T) {
 
 // TestRunCatalogFailureExitsTwo:Catalog 拒绝 → 退出码 2、不出统计行、连接照样关。
 func TestRunCatalogFailureExitsTwo(t *testing.T) {
+	setControlDSNs(t, closedLocalAddr(t))
 	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t)))
 	for _, sub := range []string{subFreeze, subUnfreeze} {
 		db := &fakeCloser{}
@@ -288,6 +371,7 @@ func TestRunCatalogFailureExitsTwo(t *testing.T) {
 
 // TestRunFreezeUnreachableDBExitsTwo:维护连接开不起来 → 退出码 2、不出统计行。
 func TestRunFreezeUnreachableDBExitsTwo(t *testing.T) {
+	setControlDSNs(t, closedLocalAddr(t))
 	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t)))
 	d := fakeDeps(&fakeCatalog{}, &fakeCloser{})
 	d.openMaintenance = func(context.Context, config.Config, cliArgs) (*maintenanceInput, error) {
@@ -302,6 +386,7 @@ func TestRunFreezeUnreachableDBExitsTwo(t *testing.T) {
 
 // TestRunStdoutCarriesOnlyTheSummary:stdout 只有一行统计;Catalog 打的 logx 日志进 stderr,不进 stdout。
 func TestRunStdoutCarriesOnlyTheSummary(t *testing.T) {
+	setControlDSNs(t, closedLocalAddr(t))
 	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t)))
 	catalog := &fakeCatalog{logOnFreeze: "fake catalog: freeze log line"}
 
@@ -324,9 +409,10 @@ func TestRunProductionMaintenanceRequiresOriginalBeforeConnecting(t *testing.T) 
 }
 
 // TestRunProductionMaintenanceRejectsWrongDigestBeforeConnecting:默认入口原件摘要对不上,在连库之前退出码 2
-// (全局库地址是刚关掉的端口,走到连库就会是另一条错误)。
+// (维护身份的地址是刚关掉的端口,走到连库就会是另一条错误)。
 func TestRunProductionMaintenanceRejectsWrongDigestBeforeConnecting(t *testing.T) {
-	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t))+fmt.Sprintf("SnapshotMySQL:\n  Host: %s\n", closedLocalAddr(t)))
+	setControlDSNs(t, closedLocalAddr(t))
+	path := writeYaml(t, fmt.Sprintf(minimalYaml, closedLocalAddr(t)))
 	original := filepath.Join(t.TempDir(), "request.json")
 	require.NoError(t, os.WriteFile(original, []byte("{}"), 0o600))
 	for _, sub := range []string{subFreeze, subUnfreeze} {
@@ -416,13 +502,12 @@ func unitMaintenanceRequest(sub string) *pb.SqlWriterMaintenanceReceipt {
 	return &pb.SqlWriterMaintenanceReceipt{Kind: pb.SqlWriterMaintenanceReceipt_FREEZE}
 }
 
-// minimalYaml 是能被 conf.Load 接受的最小配置(同 internal/config 的 minimalYaml),NameCacheRedis.Host 由用例填。
+// minimalYaml 是能被 conf.Load 接受的最小配置(同 internal/config 的 minimalYaml),控制集群地址(名字读缓存所在)由用例填。
 const minimalYaml = `
 Name: dataservice.rpc
 ListenOn: 127.0.0.1:0
-NameCacheRedis:
-  Host: %s
-  Type: node
+ControlRedis:
+  Addrs: [%s]
 `
 
 func writeYaml(t *testing.T, content string) string {
@@ -430,6 +515,14 @@ func writeYaml(t *testing.T, content string) string {
 	path := filepath.Join(t.TempDir(), "data_service.yaml")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 	return path
+}
+
+// setControlDSNs 给两种控制身份各设一条指向 addr 的连接串(route_tool 只从它们取账号与地址,用例多数不真连库)。
+// 用 t.Setenv:跑测的机器上可能真设了这两个变量,用例结束自动还原。
+func setControlDSNs(t *testing.T, addr string) {
+	t.Helper()
+	t.Setenv(schemaDSNEnv, "route_schema:schema-pw@tcp("+addr+")/mmorpg_global")
+	t.Setenv(maintenanceDSNEnv, "route_operator:operator-pw@tcp("+addr+")/mmorpg_global")
 }
 
 // closedLocalAddr 返回一个刚关掉的本机端口:连它必然被拒绝。

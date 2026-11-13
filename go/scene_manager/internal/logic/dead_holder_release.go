@@ -35,7 +35,10 @@ import (
 //     资产操作的自动放弃与这次清理都等到玩家下次进场(新认领换掉写权行与 location)或那个进程下线,不丢不盖,
 //     同 player-save-direct-commit.md §9 第 8 条已接受的残余。旧实现在这里直接释放,交接回滚的竞态下会把现任踢掉。
 //   - 第 2 步之后、第 3 步提交之前(一次 RPC 的工夫)H 重注册、玩家同节点重连**复用实体**(不调认领,claim_seq 不变),
-//     释放照样挡住它。要完全闭合得让持有进程失租重注册之后先在写权行上留痕,属于 handover-single-writer-v#1 的「失租冻结」,不在这一处。
+//     释放照样挡住它。2026-11-12 起这个窗口由持有者存活租约收口(holder_lease.go):失租的持有进程在身份不确认期间给内存里的
+//     每名玩家续租,LeaveScene 的释放判定(judgeHolderRelease)看到租约就不判 owner_dead,走不到本函数;
+//     重注册成功之后最后一次续的租约还会留到过期(至多 15 秒),盖住本副本镜像滞后的那一段。
+//     只有租约续不上(玩家域 Redis 对那个节点也不可达)时窗口才还在。
 func releaseDeadPlayerStoreHolder(ctx context.Context, svcCtx *svc.ServiceContext, playerID, locationEpoch uint64) error {
 	result, err := releaseDeadPlayerStoreHolderOnce(ctx, svcCtx, playerID, locationEpoch)
 	metrics.ObserveDeadHolderRelease(result)

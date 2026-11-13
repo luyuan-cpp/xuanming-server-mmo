@@ -63,7 +63,7 @@ func CopyProtoToGenDir(wg *sync.WaitGroup) {
 		if _config.Global.Generators.EnableRobotProto {
 			destDir := _config.Global.Paths.RobotGeneratedProto
 			if err := copyProtoToDir(_config.Global.Paths.ProtoDir, destDir); err != nil {
-				logger.Global.Warn("复制 Robot 协议源失败",
+				logger.Global.Warn("Failed to copy robot proto sources",
 					zap.String("copy_type", "robot generation dir"),
 					zap.String("dir", destDir),
 					zap.Error(err),

@@ -100,10 +100,118 @@ def check_config_inputs(services: list[str]) -> None:
     for name in names:
         if recorded.get(name) != digest(REPO / name):
             raise RuntimeError("运行配置源已变化：" + name
-                + "；请先用原端口参数运行 prepare_docker_debug.py，再重编更新对应服务")
+                + "；请用 python -X utf8 -B tools/scripts/rebuild_all_docker_debug.py "
+                  "保留原栈设置、刷新配置并重编更新整套服务（Java 真库测试前置仍须具备）")
 
 
-def check(services: list[str], output: Path | None = None) -> bool:
+TABLE_TARGETS = {**dict.fromkeys(CPP, "/app/generated/generated_tables"),
+                 **dict.fromkeys(("login", "scene-manager", "player-locator"), "/generated/tables")}
+
+
+def load_runtime_data_manifest(path: Path) -> dict:
+    try:
+        return _load_runtime_data_manifest(path)
+    except (KeyError, TypeError, AttributeError, OSError, ValueError) as error:
+        raise RuntimeError("Invalid runtime data manifest: " + str(error)) from error
+
+
+def _load_runtime_data_manifest(path: Path) -> dict:
+    """仅接受来源及全部摘要均锁定的显式开发表，不改镜像编译身份。"""
+    data = json.loads(path.read_text("utf-8-sig"))
+    if data.get("schemaVersion") != 1 or data.get("developmentOnly") is not True or data.get("productionTravelEnabled") is not False:
+        raise RuntimeError("Runtime data manifest is not explicitly development-only")
+    for field in ("exportDelivery", "sourceExport"):
+        item = data[field]
+        if digest(Path(item["path"])) != item["sha256"]:
+            raise RuntimeError("Runtime data source binding changed: " + field)
+    report = json.loads(Path(data["sourceExport"]["path"]).read_text("utf-8-sig"))
+    if (report.get("developmentOnly") is not True or report.get("productionTravelEnabled") is not False
+            or report.get("exportDeliverySha256") != data["exportDelivery"]["sha256"]):
+        raise RuntimeError("Table export development/source identity mismatch")
+    books = data.get("sourceWorkbooks", {})
+    if set(books) != {"BaseScene.xlsx", "World.xlsx"}:
+        raise RuntimeError("Expected the two copied source workbooks")
+    for name, item in books.items():
+        if (Path(item["path"]).name != name or digest(Path(item["path"])) != item["sha256"]
+                or report.get("sourceWorkbookSha256", {}).get(name) != item["sha256"]):
+            raise RuntimeError("Copied source workbook changed: " + name)
+    directory = Path(data["tableDirectory"]).resolve()
+    if directory != Path(report["generatedTables"]).resolve():
+        raise RuntimeError("Exported table directory identity mismatch")
+    table_manifest = directory / "manifest.json"
+    manifest_sha = digest(table_manifest)
+    if (table_manifest.resolve().parent != directory or manifest_sha != data["officialTableManifestSha256"]
+            or manifest_sha != report["officialTableManifestSha256"]):
+        raise RuntimeError("Official table manifest changed")
+    official = json.loads(table_manifest.read_text("utf-8-sig"))
+    if official["table_count"] != len(official["tables"]):
+        raise RuntimeError("Official table manifest count mismatch")
+    recorded_sources = {table.get("source", {}).get("file"): table.get("source", {}).get("sha256")
+                        for table in official["tables"]}
+    if any(recorded_sources.get(name) != item["sha256"] for name, item in books.items()):
+        raise RuntimeError("Official table manifest does not bind the copied source workbooks")
+    expected = {"manifest.json": manifest_sha}
+    for table in official["tables"]:
+        for artifact in table["artifacts"]:
+            name = artifact["file"]
+            if (not re.fullmatch(r"[a-z0-9_]+\.(json|pb)", name) or name in expected
+                    or (directory / name).resolve().parent != directory
+                    or (directory / name).stat().st_size != artifact["size"]):
+                raise RuntimeError("Invalid official table artifact path/size")
+            expected[name] = artifact["sha256"]
+    # 正式导表器还输出未列入表 manifest 的 Tip 文案；只允许保持 baseline 摘要不变。
+    supplemental = report.get("supplementalTableSha256", {})
+    if (set(supplemental) - {"tip_text.json"}
+            or any(report.get("unchangedTableSha256", {}).get(n) != sha for n, sha in supplemental.items())):
+        raise RuntimeError("Unsupported or changed supplemental table artifact")
+    expected.update(supplemental)
+    if expected != data["tableSha256"] or expected != report["tableSha256"]:
+        raise RuntimeError("Official table artifact set/SHA differs from runtime data receipt")
+    if {p.name for p in directory.iterdir() if p.is_file()} != set(expected):
+        raise RuntimeError("Runtime table directory has unrecorded files")
+    if any(digest(directory / name) != value for name, value in expected.items()):
+        raise RuntimeError("Runtime table SHA mismatch")
+    services = data.get("services", {})
+    if not services or not set(services).issubset(TABLE_TARGETS):
+        raise RuntimeError("Unsupported runtime table consumer")
+    for service, mount in services.items():
+        if (mount.get("target") != TABLE_TARGETS[service] or mount.get("readOnly") is not True
+                or Path(mount["source"]).resolve() != directory):
+            raise RuntimeError("Runtime table mount is outside the allowed table directory")
+    data["manifestSha256"] = digest(path)
+    data["supplementalTableSha256"] = supplemental
+    return data
+
+
+def normalized_bind_source(value: str) -> str:
+    value = value.replace("\\", "/").rstrip("/")
+    for prefix in ("/run/desktop/mnt/host/", "/host_mnt/"):
+        if value.startswith(prefix):
+            rest = value[len(prefix):]
+            if re.match(r"[a-zA-Z]/", rest):
+                value = rest[0] + ":/" + rest[2:]
+    return value.casefold() if re.match(r"[a-zA-Z]:/", value) else value
+
+
+def runtime_table_artifacts(service: str, container: str, artifacts: dict, data: dict | None) -> dict:
+    if data is None or service not in data["services"]:
+        return artifacts
+    mount = data["services"][service]
+    mounts = json.loads(execute(DOCKER + ["inspect", "--format", "{{json .Mounts}}", container]))
+    matches = [m for m in mounts if m.get("Destination") == mount["target"]]
+    if (len(matches) != 1 or matches[0].get("Type") != "bind" or matches[0].get("RW") is not False
+            or normalized_bind_source(matches[0].get("Source", "")) != normalized_bind_source(str(Path(mount["source"]).resolve()))):
+        raise RuntimeError("Runtime tables must use the recorded read-only bind mount")
+    for name, sha in data.get("supplementalTableSha256", {}).items():
+        original = artifacts.get(mount["target"] + "/" + name)
+        if service not in CPP and original != sha:
+            raise RuntimeError("Supplemental table differs from the compiled image artifact")
+    # 白名单只替换表文件摘要；二进制、符号及其余原始产物仍逐项校验。
+    return {**artifacts, **{mount["target"] + "/" + name: sha for name, sha in data["tableSha256"].items()}}
+
+
+def check(services: list[str], output: Path | None = None, runtime_data_manifest: Path | None = None) -> bool:
+    runtime_data = load_runtime_data_manifest(runtime_data_manifest) if runtime_data_manifest else None
     success = True
     receipts = []
     # 三个 C++ 节点使用同一批源码；一次检查内共享本次扫描，避免反复遍历 SDK。
@@ -141,24 +249,28 @@ def check(services: list[str], output: Path | None = None) -> bool:
                 if current.get(name) != expected:
                     record["differences"].append(name)
             for name in sorted(set(current) - set(expected_files)):
-                record["differences"].append(name + "（新增）")
+                record["differences"].append(name + " (new)")
             artifacts = manifest.get("artifacts", {})
             if not artifacts or any((not p.startswith(("/app/", "/generated/tables/")) and p != "/usr/local/bin/dlv")
                 or ".." in PurePosixPath(p).parts for p in artifacts):
                 raise RuntimeError("镜像产物摘要缺失或路径非法")
+            artifacts = runtime_table_artifacts(service, container, artifacts, runtime_data)
+            if runtime_data is not None and service in runtime_data["services"]:
+                record["runtimeDataManifestSha256"] = runtime_data["manifestSha256"]
+                record["officialTableManifestSha256"] = runtime_data["officialTableManifestSha256"]
             hashes = execute(DOCKER + ["exec", container, "sha256sum", "--", *artifacts]).splitlines()
             actual = {line[66:]: line[:64] for line in hashes if len(line) > 66}
             if actual != artifacts:
                 raise RuntimeError("容器二进制或调试符号已偏离构建清单")
             record["sourceCount"] = len(expected_files)
             record["success"] = not record["differences"]
-            print(f"{service}：" + (f"源码与产物一致（{record['sourceCount']} 文件）" if record["success"]
-                else f"{len(record['differences'])} 份源码已变化，须重新构建"))
+            print(f"{service}: " + (f"sources match the built artifacts ({record['sourceCount']} files)" if record["success"]
+                else f"{len(record['differences'])} source files changed; rebuild required"))
             for name in record["differences"][:8]:
                 print("  " + name)
         except (RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as error:
             record["error"] = str(error)
-            print(f"{service}：检查未通过，{error}")
+            print(f"{service}: check failed: {error}")
         success = success and record["success"]
         receipts.append(record)
     if output is not None:
@@ -205,7 +317,10 @@ def main() -> int:
     parser.add_argument("--services", help="逗号分隔；C++ 默认三个节点，Go 默认 login，Java 默认 gateway")
     parser.add_argument("--jobs", type=int, default=1, choices=range(1, 5))
     parser.add_argument("--build-only", action="store_true", help="仅构建，不修改配置或更新容器")
+    parser.add_argument("--runtime-data-manifest", type=Path, help="仅 check：来源与 SHA 锁定的本机开发表挂载清单")
     args = parser.parse_args()
+    if args.runtime_data_manifest is not None and args.language != "check":
+        parser.error("--runtime-data-manifest 仅允许 check")
     defaults = {"cpp": CPP, "go": ("login",), "java": ("gateway",), "check": ("scene",)}
     services = args.services.split(",") if args.services else list(defaults[args.language])
     allowed = {"cpp": CPP, "go": GO, "java": ("gateway",), "check": tuple(name for name in IMAGE_KEYS if name not in ONE_SHOT)}
@@ -216,7 +331,7 @@ def main() -> int:
     if args.language == "go" and args.jobs != 1:
         parser.error("Go 调试构建固定串行 --jobs 1")
     if args.language == "check":
-        return 0 if check(services) else 1
+        return 0 if check(services, runtime_data_manifest=args.runtime_data_manifest) else 1
     check_config_inputs(services)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     root = REPO / "build/verification" / ("docker-rebuild-" + args.language + "-" + stamp)
@@ -229,17 +344,17 @@ def main() -> int:
                "--output", str(root / "build"), "--base-images", str(base_file)]
     if args.language != "java":
         command += ["--services", ",".join(services), "--jobs", str(args.jobs)]
-    print("本轮证据：" + str(root), flush=True)
+    print("Evidence for this run: " + str(root), flush=True)
     # 子构建器自行保存日志；失败立即返回，不替换正在运行的服务。
     result = subprocess.run(command, cwd=REPO)
     if result.returncode:
-        print("构建失败，现有容器未更新；请检查本轮 build 目录。")
+        print("Build failed; running containers were not updated. Check this run's build directory.")
         return result.returncode
     build = json.loads((root / "build/result.json").read_text("utf-8-sig"))
     if not build.get("success") or set(build.get("images", {})) != set(services):
         raise RuntimeError("构建结果不完整，未更新容器")
     if args.build_only:
-        print("构建完成；按要求未修改配置或更新容器。")
+        print("Build finished; as requested, configuration and containers were not changed.")
         return 0
     update_images(build["images"])
     running = [s for s in services if s not in ONE_SHOT]
@@ -252,11 +367,11 @@ def main() -> int:
             "--force-recreate", "--wait", "--wait-timeout", "180", *targets], cwd=REPO,
             stdout=log, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
     if result.returncode:
-        print("容器更新失败，配置与现场已保留；检查 " + str(root / "recreate.log"))
+        print("Container update failed; configuration and state were kept. Check " + str(root / "recreate.log"))
         return result.returncode
     if not check(running, root / "verification.json"):
         return 1
-    print("构建、容器更新及源码检查完成，可以在 VS Code 按 F5 附加。")
+    print("Build, container update and source check finished; press F5 in VS Code to attach.")
     return 0
 
 
@@ -267,5 +382,5 @@ if __name__ == "__main__":
         sys.stderr.reconfigure(encoding="utf-8")
         raise SystemExit(main())
     except (RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as error:
-        print("已停止：" + str(error), file=sys.stderr)
+        print("Stopped: " + str(error), file=sys.stderr)
         raise SystemExit(1)

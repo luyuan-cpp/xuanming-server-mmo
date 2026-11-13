@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -66,6 +67,27 @@ public interface ZoneWhitelistRepository extends Repository<ZoneWhitelist, Long>
 
     /** 按业务键点查。普通一致性读,不加锁。 */
     Optional<ZoneWhitelist> findByZoneIdAndAccountId(Long zoneId, Long accountId);
+
+    /**
+     * {@link #findByZoneIdAndAccountIdForUpdate} 的语句:按业务键的加锁读整行。写成原生 SQL,MySQL、TiDB、H2 上执行同一份文本,
+     * 真库锁序回归用例也执行这一份。
+     */
+    String FIND_BY_KEY_FOR_UPDATE_SQL =
+            "SELECT * FROM zone_whitelist WHERE zone_id = :zoneId AND account_id = :accountId FOR UPDATE";
+
+    /**
+     * 按业务键的加锁读,给 {@link #upsert} 之后在同一事务里回读用(2026-11-12,与 ZoneConfigRepository#findByIdForUpdate
+     * 同一理由)。加锁读在 MySQL 与 TiDB 上都读最新的已提交版本加本事务自己的修改,不看事务快照:upsert 走「已存在、note 没变」
+     * 时本事务没有自己的修改,普通回读能不能看见那一行取决于快照建在哪(TiDB 的 RR 建在事务开始时),加锁读不取决于隔离级别。
+     *
+     * <p>取锁:要锁的 uk 项与主键记录,upsert 已经在本事务里锁住(插入分支是自己插的、带隐式锁,重复键分支是 X),这里不再等,
+     * 方向也与 upsert 相同(uk 项 → 主键)。只在行号撞号(upsert 改到了别人那一行,本键没有行)时它可能在一条未提交删除的
+     * 删除标记项上排队,删除是单语句事务、随即提交,构不成环。只能在调用方的事务里调用,声明为 MANDATORY。
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = FIND_BY_KEY_FOR_UPDATE_SQL, nativeQuery = true)
+    Optional<ZoneWhitelist> findByZoneIdAndAccountIdForUpdate(@Param("zoneId") Long zoneId,
+                                                              @Param("accountId") Long accountId);
 
     /**
      * 按业务键幂等写入:不存在则插入,已存在则只改 note。返回值是驱动报告的行数,调用方不应依赖它区分插入与更新

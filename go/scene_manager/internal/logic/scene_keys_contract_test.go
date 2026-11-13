@@ -1,15 +1,17 @@
 package logic
 
-// 玩家域与控制域的键形契约(docs/design/redis-player-store-cluster.md §5.2、§14.1)。
+// 玩家域与控制域的键形契约(docs/design/redis-player-store-cluster.md §5.2、§14.1;
+// docs/design/redis-cluster-all-domains-20261110.md §3)。
 //
-// 玩家域分片成 Redis Cluster 之后,一段 Lua 的全部 KEYS 必须同 slot,否则 Redis 回 CROSSSLOT;
-// 控制域留在单实例,键里不能出现 hash tag,否则它看起来像玩家键,混进玩家域脚本时不会有任何提示。
-// 开发环境连的还是单实例,跨 slot 不会报错,所以由这里提前拦住。
+// 两个域都上 Redis Cluster,一段 Lua 的全部 KEYS 必须同 slot,否则 Redis 回 CROSSSLOT:
+//   - 玩家域的键带玩家的 tag(十进制 player_id 或 slot-tag),一段脚本只碰一名玩家;
+//   - 控制域的键带 zone 的控制集群 tag {ctl:<z>}(登记过的族前缀),一段脚本只碰一个 zone。
+// 两个域靠 tag 的形状区分(redisslot.IsControlTag)。开发环境连的还是单实例,跨 slot 不会报错,所以由这里提前拦住;
+// 公用夹具装的 installSameTagGuard 让包里每个跑过 Lua 的用例都核一遍。
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strconv"
 	"sync"
@@ -19,10 +21,8 @@ import (
 	"github.com/alicebob/miniredis/v2/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 
 	"proto/scene_manager"
-	"shared/gatepick"
 	"shared/handofffence"
 	"shared/ownerepoch"
 	"shared/redisslot"
@@ -62,6 +62,7 @@ func TestPlayerDomainSingleKeysShareThePlayerSlot(t *testing.T) {
 		redisslot.EnterSceneDedupKey(playerID, "req-1"),
 		ownerepoch.OwnerEpochKey(playerID),
 		ownerepoch.HandoffKey(playerID),
+		ownerepoch.HolderLeaseKey(playerID),
 		handofffence.Key(playerID),
 	} {
 		assert.True(t, redisslot.HasHashTag(key), "%s 必须带玩家 tag", key)
@@ -69,27 +70,26 @@ func TestPlayerDomainSingleKeysShareThePlayerSlot(t *testing.T) {
 	}
 }
 
-// 控制域的键一律不带 hash tag。
-func TestControlDomainKeysCarryNoHashTag(t *testing.T) {
-	const (
-		sceneID = uint64(1234567890123)
-		confID  = uint64(3300)
-		zoneID  = uint32(7)
-		nodeID  = "10"
-	)
-	for _, key := range []string{
-		sceneNodeKey(sceneID),
-		sceneZoneKey(sceneID),
-		sceneMirrorFlagKey(sceneID),
-		sceneSourceKey(sceneID),
-		sceneMirrorsKey(sceneID),
-		sceneAgonesGsKey(sceneID),
-		sceneTeardownJobKey(sceneID),
+// controlDomainKeysForTest 列出 scene_manager 控制域的全部键族(以 zone 为键的与以场景号为键的),每族一把。
+// 加键族时这里跟着加:TestControlDomainKeysCarryTheZoneTag 据此核对形状。
+// gate 标记(shared/gatepick)不在这里:它们是 gm 族,第 4 批(2026-11-12)已改成 gate:{gm:<z>}:<id>:…(设计稿 §4.4);
+// 形状、登记过的族与同槽钉在 shared/gatepick/marks_test.go,本包读标记按目标 zone 拼键钉在 gate_redirect_draining_test.go。
+func controlDomainKeysForTest(zoneID uint32, sceneID, confID uint64, nodeID string) []string {
+	return []string{
+		sceneNodeKey(zoneID, sceneID),
+		sceneMirrorFlagKey(zoneID, sceneID),
+		sceneSourceKey(zoneID, sceneID),
+		sceneMirrorsKey(zoneID, sceneID),
+		sceneAgonesGsKey(zoneID, sceneID),
+		sceneAgonesTransferReceiptKey(zoneID, sceneID, "token-1"),
+		sceneReassignReceiptKey(zoneID, sceneID, "token-1"),
+		scenePlacementGenKey(zoneID, sceneID),
+		sceneDrainingKey(zoneID, sceneID),
+		sceneTeardownJobKey(zoneID, sceneID),
+		sceneRegistrationRecordKey(zoneID, sceneID),
+		instanceMembersKey(zoneID, sceneID),
 		sceneTeardownPendingKey(zoneID),
 		agonesRoomHoldsKey(zoneID),
-		sceneRegistrationRecordKey(sceneID),
-		sceneDrainingKey(sceneID),
-		instanceMembersKey(sceneID),
 		nodeMembersKey(zoneID, nodeID),
 		nodeScenesKey(zoneID, nodeID),
 		nodeSceneCountKey(zoneID, nodeID),
@@ -110,15 +110,84 @@ func TestControlDomainKeysCarryNoHashTag(t *testing.T) {
 		worldChannelLineNoKey(zoneID, confID),
 		worldChannelDirectoryKey(zoneID, confID),
 		worldPlacementSeqKey(zoneID),
-		scenePlacementGenKey(sceneID),
+		worldInitLockKey(zoneID),
 		mysteryMerchantKey(zoneID),
 		deadNodeReconcileTasksKey(zoneID),
 		LeaderLockKey(zoneID),
-		fmt.Sprintf(worldInitLockKeyFmt, zoneID),
-		gatepick.DrainingKey(5),
-		gatepick.StaleKey(5),
-	} {
-		assert.False(t, redisslot.HasHashTag(key), "控制域键 %s 不得带 hash tag", key)
+	}
+}
+
+// 控制域的键一律带本 zone 的控制集群 tag {ctl:<z>}(docs/design/redis-cluster-all-domains-20261110.md §3):tag 必须是登记过的族,
+// 不得是玩家域的形状;同一个 zone 的键同槽,不同 zone 的键是不同的键。
+func TestControlDomainKeysCarryTheZoneTag(t *testing.T) {
+	const (
+		sceneID = uint64(1234567890123)
+		confID  = uint64(3300)
+		zoneID  = uint32(7)
+		nodeID  = "10"
+	)
+	want := sceneControlTag(zoneID)
+	require.Equal(t, "{ctl:7}", want)
+	for _, key := range controlDomainKeysForTest(zoneID, sceneID, confID, nodeID) {
+		tag, ok := redisslot.HashTag(key)
+		require.True(t, ok, "控制域键 %s 必须带 hash tag", key)
+		assert.True(t, redisslot.IsControlTag(tag), "控制域键 %s 的 tag 必须是控制集群登记过的族", key)
+		assert.Equal(t, want, "{"+tag+"}", "控制域键 %s 必须带本 zone 的 tag", key)
+		assert.Equal(t, redisslot.HashSlot(want), redisslot.HashSlot(key), "控制域键 %s 必须与本 zone 的其余键同槽", key)
+	}
+	other := controlDomainKeysForTest(zoneID+1, sceneID, confID, nodeID)
+	for i, key := range controlDomainKeysForTest(zoneID, sceneID, confID, nodeID) {
+		assert.NotEqual(t, key, other[i], "不同 zone 必须是不同的键")
+	}
+}
+
+// 跨语言键的金样:C++ scene 节点按同一形状拼键来读(scene_ownership_rules.h 的 SceneNodeKey / NodeHolderKey,
+// PlayerSceneSystem::WorldChannelDirectoryKey,PlayerMysteryMerchantSystem::RecordKey)。C++ 侧的
+// SceneOwnershipRules.KeysMatchTheSceneManagerKeys 与 PlayerRedisRouteContract.ControlDomainStaysOffThePlayerHandle 钉同样的串;
+// 改这里必须同批改那里。
+func TestCrossLanguageControlKeyGoldens(t *testing.T) {
+	assert.Equal(t, "scene:{ctl:3}:0:node", sceneNodeKey(3, 0))
+	assert.Equal(t, "scene:{ctl:3}:18446744073709551615:node", sceneNodeKey(3, 18446744073709551615))
+	assert.Equal(t, "node:{ctl:3}:17:holder", nodeHolderKey(3, "17"))
+	assert.Equal(t, "world_channel_directory:{ctl:1}:2", worldChannelDirectoryKey(1, 2))
+	assert.Equal(t, "mystery_merchant:{ctl:1}", mysteryMerchantKey(1))
+}
+
+// 每段控制域脚本的全部 KEYS 同一个 tag(docs/design/redis-cluster-all-domains-20261110.md §3.1「多键命令必须同 tag」)。
+// 这里列的是带可选键、分支最多的那几组,KEYS 由生产代码的函数拼:认领(带期望属主、摘集合、死节点收尾任务表)、登记
+// (带镜像源的子集合)、成员。别的脚本由 installSameTagGuard 在跑过它们的用例里逐条核。
+func TestControlScriptKeysShareOneTag(t *testing.T) {
+	const (
+		zoneID  = uint32(7)
+		sceneID = uint64(1234567890123)
+		source  = uint64(1234567890124)
+		confID  = uint64(3300)
+		nodeID  = "10"
+	)
+	claim := sceneTeardownRequest{ZoneID: zoneID, SceneID: sceneID, ExpectedOwner: nodeID,
+		UnlistKeys:   []string{worldChannelsKey(zoneID, confID), worldDrainingSetKey(zoneID, confID)},
+		DeadNodeTask: &deadNodeTaskFence{tasksKey: deadNodeReconcileTasksKey(zoneID), member: "7/10", queuedAtMs: 1}}
+	instanceKeys, _ := instanceRegistrationParams(instanceRegistration{
+		sceneRegistration: sceneRegistration{SceneID: sceneID, ZoneID: zoneID, NodeID: nodeID},
+		Mirror:            true,
+		SourceSceneID:     source,
+	})
+	worldReg := sceneRegistration{SceneID: sceneID, ZoneID: zoneID, NodeID: nodeID}
+	scripts := map[string][]string{
+		"销毁认领(期望属主 + 摘集合 + 收尾任务表)": claim.keys(),
+		"销毁认领(只有场景键)":             sceneTeardownRequest{ZoneID: zoneID, SceneID: sceneID}.keys(),
+		"实例登记(带镜像源)":              instanceKeys,
+		"世界频道登记":                   worldChannelRegistrationKeys(worldReg, confID),
+		"增减成员":                     sceneMemberKeys(sceneID, zoneID, nodeID),
+	}
+	want := sceneControlTag(zoneID)
+	for name, keys := range scripts {
+		require.GreaterOrEqual(t, len(keys), 2, name)
+		for _, key := range keys {
+			tag, ok := redisslot.HashTag(key)
+			require.True(t, ok, "%s: %s 没有 tag", name, key)
+			assert.Equal(t, want, "{"+tag+"}", "%s: %s 不在本 zone 的 tag 下", name, key)
+		}
 	}
 }
 
@@ -148,31 +217,84 @@ func installEvalKeyRecorder(t *testing.T, mr *miniredis.Miniredis) *evalKeyRecor
 	return rec
 }
 
-// requireOneDomain 断言每段脚本的 KEYS 要么全是同一 slot 的玩家键,要么全是控制域键;返回两边各有几段脚本。
+// requireOneDomain 断言每段脚本的 KEYS 要么全是同一 slot 的玩家键,要么全是同一个控制集群 tag 的控制域键;返回两边各有几段
+// 脚本。按 tag 的形状分域(redisslot.IsControlTag):控制集群的 tag 是登记过的族前缀,玩家域是 player_id 或 slot-tag。
 func (r *evalKeyRecorder) requireOneDomain(t *testing.T) (playerScripts, controlScripts int) {
 	t.Helper()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, keys := range r.keys {
-		tagged := 0
-		for _, key := range keys {
-			if redisslot.HasHashTag(key) {
-				tagged++
-			}
-		}
-		switch tagged {
-		case 0:
+		switch scriptDomain(t, keys) {
+		case scriptDomainControl:
 			controlScripts++
-		case len(keys):
+		case scriptDomainPlayer:
 			playerScripts++
-			for _, key := range keys {
-				assert.Equal(t, redisslot.HashSlot(keys[0]), redisslot.HashSlot(key), "同一段脚本的玩家键必须同 slot: %v", keys)
-			}
-		default:
-			assert.Fail(t, "玩家键和控制域键混在一段脚本里", "%v", keys)
 		}
 	}
 	return playerScripts, controlScripts
+}
+
+// scriptDomainKind 是一段脚本的 KEYS 所属的域。
+type scriptDomainKind int
+
+const (
+	scriptDomainNone    scriptDomainKind = iota // 不带键的脚本,或已报错
+	scriptDomainControl                         // 全部是控制集群的键
+	scriptDomainPlayer                          // 全部是玩家域的键
+)
+
+// scriptDomain 判一段脚本的 KEYS 属于哪个域,并断言:每把键都带 tag;不混域;控制域同一个 tag,玩家域同 slot。
+func scriptDomain(t *testing.T, keys []string) scriptDomainKind {
+	t.Helper()
+	if len(keys) == 0 {
+		return scriptDomainNone
+	}
+	control, player := 0, 0
+	for _, key := range keys {
+		tag, ok := redisslot.HashTag(key)
+		switch {
+		case !ok:
+			assert.Fail(t, "脚本里有不带 hash tag 的键", "%s in %v", key, keys)
+			return scriptDomainNone
+		case redisslot.IsControlTag(tag):
+			control++
+		default:
+			player++
+		}
+	}
+	switch {
+	case control == len(keys):
+		first, _ := redisslot.HashTag(keys[0])
+		for _, key := range keys {
+			tag, _ := redisslot.HashTag(key)
+			assert.Equal(t, first, tag, "同一段脚本的控制域键必须同一个 tag: %v", keys)
+		}
+		return scriptDomainControl
+	case player == len(keys):
+		for _, key := range keys {
+			assert.Equal(t, redisslot.HashSlot(keys[0]), redisslot.HashSlot(key), "同一段脚本的玩家键必须同 slot: %v", keys)
+		}
+		return scriptDomainPlayer
+	default:
+		assert.Fail(t, "玩家键和控制域键混在一段脚本里", "%v", keys)
+		return scriptDomainNone
+	}
+}
+
+// installSameTagGuard 装在公用夹具的 miniredis 上(newTestSvcCtx、newTestSvcCtxWithWorldScenes、
+// newIntegrationSvcCtxWithRedisOptions):记下每条 EVAL / EVALSHA 的 KEYS,用例结束时逐段核 scriptDomain。包里每个跑过 Lua
+// 的用例都因此核一遍「每段控制域脚本的全部 KEYS 同 tag」——单实例上跨槽不报错,上了 Cluster 才会 CROSSSLOT。
+// 用例自己装 SetPreHook(或调 mr.SetError,共用同一个钩子槽位)之后本守卫让位,之后的命令不再记录,不影响用例本身。
+func installSameTagGuard(t *testing.T, mr *miniredis.Miniredis) {
+	t.Helper()
+	rec := installEvalKeyRecorder(t, mr)
+	t.Cleanup(func() {
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		for _, keys := range rec.keys {
+			scriptDomain(t, keys)
+		}
+	})
 }
 
 // 走一遍真实的进场、重连、换图、路由失败回滚、离场:途中发出的每一段脚本都不跨域、不跨 slot。上面的静态清单只覆盖
@@ -235,7 +357,7 @@ func TestPlayerDomainAndControlDomainCanLiveOnSeparateInstances(t *testing.T) {
 	playerMr := miniredis.RunT(t)
 	sc.PlayerRedis = newTestPlayerRedis(t, playerMr)
 	// 铸造走玩家域:测试替身同样换到玩家域实例上。
-	sc.OwnerEpochMint = newFakeOwnerEpochMinter(redis.MustNewRedis(redis.RedisConf{Host: playerMr.Addr(), Type: "node"}))
+	sc.OwnerEpochMint = newFakeOwnerEpochMinter(sc.PlayerRedis)
 	sc.Kafka = &countingKafkaWriter{}
 	sc.Config.KafkaWriteTimeoutSeconds = 1
 	const (
@@ -267,7 +389,7 @@ func TestPlayerDomainAndControlDomainCanLiveOnSeparateInstances(t *testing.T) {
 	require.False(t, controlMr.Exists(ownerepoch.OwnerEpochKey(playerID)), "玩家键不得落到控制域")
 	require.Equal(t, "1", sceneMemberCount(controlMr, sceneA), "成员在控制域")
 	require.Equal(t, "1", nodeMemberCount(controlMr, testZoneId, "10"), "成员在控制域")
-	require.False(t, playerMr.Exists(instanceMembersKey(sceneA)), "成员不得落到玩家域")
+	require.False(t, playerMr.Exists(instanceMembersKey(testZoneId, sceneA)), "成员不得落到玩家域")
 
 	require.Zero(t, enter(&scene_manager.EnterSceneRequest{SceneId: sceneA, SessionId: 22, LoginGeneration: identGenB}))
 

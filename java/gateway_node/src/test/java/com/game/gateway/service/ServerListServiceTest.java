@@ -146,6 +146,7 @@ class ServerListServiceTest {
         ZoneConfig open = makeZone(2L, "zone-2", 0);
         when(zoneConfigRepo.findAll()).thenReturn(List.of(preview, open));
         when(probeService.getAutoStatus(1L)).thenReturn(AutoZoneStatus.DOWN);
+        when(probeService.getLoadLevel(1L)).thenReturn(null);
         stubOpen(2L, LoadLevel.SMOOTH, 0.1);
 
         assertEquals(List.of(false, true), recommendedFlags(serverListService.getServerList()));

@@ -11,9 +11,13 @@
 1. C++ 节点对 zone-scoped 类型只 Range、只 watch `<Svc>.rpc/zone/<本 zone>/`。SceneManager 归入 zone-scoped,scene 与 gate 只连本 zone 的 scene_manager。
 2. 每 2 秒一次的全前缀 Range 改为 60 秒兜底、±20% 抖动。正常靠 watch,断流、压缩和 watch 被取消时逐前缀重拉。
 3. gate 每 10 秒重写一次 etcd 记录的做法不变,它是 login 与 scene_manager 判断 gate 停写的心跳(缺口第 7 条)。收窄监听方之后,这些写只扇出到本 zone 的监听者。这一点偏离容量模型 A1「人数不再写 etcd」,理由见 §3.2。
-4. scene_manager 按 zone 选主,锁是 `scene_manager:leader:lock:zone:<z>`。每个进程只服务配置里的 `ZoneId`,只 watch 这个 zone 的场景节点,`knownNodes` 只放这个 zone。
+4. scene_manager 按 zone 选主,锁是 `scene_manager:leader:lock:{ctl:<z>}`。每个进程只服务配置里的 `ZoneId`,只 watch 这个 zone 的场景节点,`knownNodes` 只放这个 zone。
 5. 判断别的 zone 的节点时,按需直读 etcd 的那个 zone 前缀,并用本副本「第一次看到它不在」的时刻做再入屏障(§3.5)。
 6. K8s 上 go-zero 的发现键按 zone 加后缀 `.z<zone>`,login、player_locator 只连本 zone 的 scene_manager。本机多 zone 脚本 `go_services.ps1` 早就这样做。
+   唯一的例外(2026-11-12):player_locator 的托管归位([player-connection-lost-hold.md](player-connection-lost-hold.md) §4.5)把 EnterScene
+   发给角色所在 zone 的 scene_manager —— 租约监视按 slot 分片、不按 zone 分,认领到的托管角色可能在别的 zone,而 scene_manager 只放本 zone
+   的落点。别的 zone 的发现键由本 zone 的键换后缀得到,按需建客户端(`go/player_locator/internal/svc/zone_scene_manager.go`);
+   键不带后缀的单 zone 部署只连本 zone。离场通知(LeaveScene)仍发给本 zone 的 scene_manager。
 
 **第 5 条:控制域 Redis 按 zone 组分实例,不上 Cluster。**
 
@@ -42,7 +46,7 @@
 | 跨 zone 的注册表判定 | `load_reporter.go:192-211` | `isZoneGoneFromRegistry` 依赖全服镜像,文件注释写明收窄前要先改 |
 | go-zero 发现键 | `k8s_deploy.ps1:10275`、`:10395` | K8s 上 `scenemanagerservice.rpc` 不带 zone,login 与 player_locator 连全服 scene_manager |
 | 控制域 Redis | `k8s_deploy.ps1:10396-10400` | 每个 zone 的 scene-manager 都连核心 `redis.<infra>` |
-| 场景键 | `scene_atomic.go:279-288`、`createscenelogic.go:20-74` | `scene:<id>:node` 等只按场景号,不带 zone、没有 hash tag |
+| 场景键 | `scene_atomic.go:279-288`、`createscenelogic.go:20-74` | `scene:{ctl:<z>}:<id>:node` 等只按场景号,不带 zone、没有 hash tag |
 | 全服键 | `reentry_barrier.go:238`、`zone_registry.go` | `scene_manager:dead_node_reconcile`、`scene_manager:zones` |
 | C++ 读控制域 | `player_scene.cpp:59`、`player_mystery_merchant.cpp:52`、`player_landing.cpp:255` | scene 经 `zoneredis`(核心)读分线目录、神秘商人,并 PUBLISH 落点唤醒 |
 
@@ -68,7 +72,7 @@
 
 ### 3.3 scene_manager 按 zone 选主与收窄
 
-- 选主锁 `scene_manager:leader:lock:zone:<z>`,`z` 是配置的 `ZoneId`,锁在 z 所属控制域实例上。`LeaderLockKey` 配置项删除(只有一处读取,没有任何配置写它):锁名由 zone 决定,配置写错就会让两个 zone 抢一把锁,或一个 zone 没人编排。
+- 选主锁 `scene_manager:leader:lock:{ctl:<z>}`,`z` 是配置的 `ZoneId`,锁在 z 所属控制域实例上。`LeaderLockKey` 配置项删除(只有一处读取,没有任何配置写它):锁名由 zone 决定,配置写错就会让两个 zone 抢一把锁,或一个 zone 没人编排。
 - 一个进程只编排一个 zone。领导者的全部循环(补频道、rebalance、死节点清扫与收尾、空闲回收、自动扩缩容、分线目录、神秘商人、成员对账、孤儿频道清理、Agones 对账)只处理 `ZoneId`。`GetActiveZones()` 改名为 `orchestratedZones(svcCtx)`,恒返回 `[ZoneId]`;本 zone 一个节点都没有时照样扫,能清掉最后一个节点死后留下的负载集与孤儿实例,原来靠 zone 登记集合补的那个口子随之消失。
 - watch 与全量同步的前缀改为 `SceneNodeService.rpc/zone/<ZoneId>/`,`knownNodes` 只有本 zone;快照或 watch 里自称别的 zone 的注册按部署错配丢弃(watch PUT 按删除收尾)。存活集闸门(第 9 条,`node_view_gate.go` 的 `sceneNodeViewGate.check`)按 zone 计算,读基线与清扫的 zone 范围 `nodeViewZones(svcCtx)` 恒为本 zone。
 - 每节点的 Prometheus 序列只有本 zone 的领导者导出;`nodes_by_role` 只发本 zone。
@@ -130,13 +134,13 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 
 | 键族 | 放在哪 | 谁读写 |
 |---|---|---|
-| 场景路由 `scene:<id>:node|zone|source|mirror|mirrors|draining|agones_gs|claim`、成员 `instance:<id>:members`、`node:zone:<z>:<n>:*`、`instances:zone:<z>:active`、`scene_nodes:zone:<z>:load`、世界频道 `world_channels:*:zone:<z>:*`、分线目录与线号、神秘商人、`world_init:lock:zone:<z>` | zone 所属组的 `redis-ctl-g<N>` | 本 zone 的 scene_manager;C++ scene 只读分线目录、神秘商人,以及归属对账读的本地场景 `scene:<id>:node` 与本节点号的 `node:zone:<z>:<n>:holder`(2026-11-06 / 11-10,scene-node-ownership-reconcile.md) |
-| 选主锁 `scene_manager:leader:lock:zone:<z>`(原 `scene_manager:leader:lock`) | 同上 | 本 zone 的 scene_manager |
-| 死节点收尾任务 `scene_manager:dead_node_reconcile:zone:<z>`(原全服一张) | 同上 | 本 zone 的领导者 |
-| etcd 修订号水位 `scene_manager:etcd_revision_seen:zone:<z>` 与 etcd 纪元 `scene_manager:etcd_epoch:zone:<z>`(2026-11-10,节点号持有者认 etcd 倒退用,scene-node-ownership-reconcile.md §4.6) | 同上 | 本 zone 的领导者写;纪元由各副本写持有者时在同一段 Lua 里读 |
+| 场景路由 `scene:{ctl:<z>}:<id>:node|source|mirror|mirrors|draining|agones_gs|teardown|registration|placement_gen`、成员 `instance:{ctl:<z>}:<id>:members`、`node:{ctl:<z>}:<n>:*`、`instances:{ctl:<z>}:active`、`scene_nodes:{ctl:<z>}:load`、世界频道 `world_channels:*:zone:<z>:*`、分线目录与线号、神秘商人、`world_init:lock:{ctl:<z>}` | zone 所属组的 `redis-ctl-g<N>` | 本 zone 的 scene_manager;C++ scene 只读分线目录、神秘商人,以及归属对账读的本地场景 `scene:{ctl:<z>}:<id>:node` 与本节点号的 `node:{ctl:<z>}:<n>:holder`(2026-11-06 / 11-10,scene-node-ownership-reconcile.md) |
+| 选主锁 `scene_manager:leader:lock:{ctl:<z>}`(原 `scene_manager:leader:lock`) | 同上 | 本 zone 的 scene_manager |
+| 死节点收尾任务 `scene_manager:dead_node_reconcile:{ctl:<z>}`(原全服一张) | 同上 | 本 zone 的领导者 |
+| etcd 修订号水位 `scene_manager:etcd_revision_seen:{ctl:<z>}` 与 etcd 纪元 `scene_manager:etcd_epoch:{ctl:<z>}`(2026-11-10,节点号持有者认 etcd 倒退用,scene-node-ownership-reconcile.md §4.6) | 同上 | 本 zone 的领导者写;纪元由各副本写持有者时在同一段 Lua 里读 |
 | `scene_manager:zones` | **删除** | — |
-| gate 排空标记 `gate:<id>:draining|drained` | 核心(G4a §25.3 的 10-23 订正) | scene_manager 只读,经新句柄 `CoreRedis` |
-| gate 停写标记 `gate:<id>:stale`(2026-11-10,键名在 `go/shared/gatepick/marks.go`) | 核心,与排空标记同一实例 | login 各副本写(本 zone 判为停写的 gate,过期 30s、不主动删,经 `Node.RedisClient`);scene_manager 只读,经 `CoreRedis`,与排空标记同一次 MGET(gate-load-balancing-design.md「满载与停写的 gate」) |
+| gate 排空标记 `gate:{gm:<zone>}:<id>:draining|drained` | 核心(G4a §25.3 的 10-23 订正) | scene_manager 只读,经新句柄 `CoreRedis` |
+| gate 停写标记 `gate:{gm:<zone>}:<id>:stale`(2026-11-10,键名在 `go/shared/gatepick/marks.go`) | 核心,与排空标记同一实例 | login 各副本写(本 zone 判为停写的 gate,过期 30s、不主动删,经 `Node.RedisClient`);scene_manager 只读,经 `CoreRedis`,与排空标记同一次 MGET(gate-load-balancing-design.md「满载与停写的 gate」) |
 | 落点唤醒频道 | 核心 | C++ scene PUBLISH,guild、trade 订阅 |
 | 玩家域 `player:{<id>}:*`、进场去重 | 玩家域(不动) | 经 `PlayerRedis`。没建玩家域集群时各服务的玩家域都回落到核心;scene_manager 的回落取 `CoreRedis`,**不取** `Redis` 段(那是控制域实例),否则 location / owner_epoch 在两个实例上各有一份(2026-11-10 订正,`config.go` `EffectivePlayerRedis`) |
 
@@ -148,13 +152,13 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 
 1. zone 登记集合删除。`sweepStaleLoadSetMembers`、`CleanupOrphanWorldChannels`、成员对账只处理 `ZoneId`。
 2. 数据面上凡是可能带别的 zone 的入口,都显式判一次 `ownsControlZone(zone)`:
-   - 跨 zone 传送的预检 `rejectTravelToUnopenedMap`:目标 zone 恒不是本 zone,原来 SCARD 目标 zone 的频道集合。改为与 zone 无关的判定:地图在 World 表里,且 etcd 里那个 zone 至少有一个能承载大世界的场景节点。它原本就是 fail-open 的提前拒绝,不是安全门(etcd 读失败照旧放行)。与原判定的差别只在「目标 zone 刚起、节点已注册但领导者还没铺频道」的几秒:原来拒,现在放行,第二条腿解析不到场景时按原有失败处理。
+   - 跨 zone 传送的预检 `rejectTravelToUnopenedMap`:目标 zone 恒不是本 zone,原来 SCARD 目标 zone 的频道集合。改为与 zone 无关的判定:地图在 World 表里,且 etcd 里那个 zone 至少有一个能用来落地的大世界节点,判据与选点相同(没在计划排空、身份不歧义、类型对,`hasWorldHostingRegistration`)。它原本就是 fail-open 的提前拒绝,不是安全门(etcd 读失败照旧放行)。与原判定的差别在「目标 zone 刚起、节点已注册但领导者还没铺频道」的几秒:原来拒,现在放行;第二条腿在一个频道都没有时当场补铺,领导者还没把节点放进负载集时在请求期限内等它(§6 第 1 条)。
    - 成员集合的增减(`addSceneMember` / `removeSceneMember` / `removeScenePlayer`):别的 zone 一律不动,只记 `scene_manager_foreign_zone_skip_total{site}`。成员集合是派生索引,权威是玩家域的 location;别的 zone 留下的陈旧成员由那个 zone 的成员对账在 2 分钟宽限后摘掉(`scene_member_reconcile.go`,redis-player-store-cluster.md §5.10)。没摘过的成员,回滚时也不需要加回。
-   - `removeScenePlayer` 只给场景号、不给 zone 时(LeaveScene 的两处清理),先读本组的 `scene:<id>:zone`:读不到,或者不是本 zone,就不动。
+   - `removeScenePlayer` 只给场景号、不给 zone 时(LeaveScene 的两处清理),按本进程的 zone 看 `scene:{ctl:<z>}:<id>:node` 在不在:不在(场景在别的 zone,或已销毁)就不动。(2026-11-12 起:控制域键带 zone 的 tag,`scene:<id>:zone` 删除,redis-cluster-all-domains-20261110.md §3.3。)
    - 别的 zone 的节点判活见 §3.5,不读那个 zone 的负载集和 death_at。
-   - 建镜像时源场景记录在别的 zone(`scene:{源}:zone` 不是本 zone,或读失败):不按源去重,也不把新镜像登记成源的子镜像(不写 `scene:{源}:mirrors` 与 `scene:{镜像}:source`)。新镜像照样带镜像标记、按镜像的短超时空闲回收,只是源销毁时不级联到它。源没有 zone 记录(不在本组实例里)时照旧登记:那份子集合在本组实例里,只有本 zone 读写,随镜像销毁摘掉。(2026-11-06,「场景销毁认领」会话报的漏口。)
+   - 建镜像时源场景只按本 zone 的键查(2026-11-12 起,redis-cluster-all-domains-20261110.md §3.3):源在别的 zone 时本 zone 的键里没有它,与源已销毁同一个结局——源克隆镜像回 `ErrSourceSceneGone`;带自己配置的镜像照建,共置按 `no_mapping` 回落,子集合与反向索引写在本 zone 的键里(`scene:{ctl:<z>}:<源>:mirrors`、`scene:{ctl:<z>}:<镜像>:source`),源所在 zone 的级联读不到它们,随镜像销毁摘掉。(原来按 `scene:{源}:zone` 认出别的 zone、不登记子镜像,是 2026-11-06「场景销毁认领」会话报的漏口;那把键已删。)
    - CreateScene 与 EnterScene 一样,请求的 zone 不是本进程的 zone 就在任何写入之前拒绝。
-   - 销毁路径(2026-11-06,「场景销毁认领」会话):认领脚本在同一步比对 `scene:{id}:zone`,不是认领方的 zone(或记录损坏)就回 `foreign`、一个键都不动;镜像级联与源迁移级联跳过登记在别的 zone 的子镜像,留给那个 zone 的空闲回收;镜像拆除时只从本 zone 或本实例里没有 zone 记录的源的子集合摘自己;显式 DestroyScene 的 `zone_id` 不是本进程的 zone 就在任何读写之前拒绝,没填按本进程的 zone。详见 scene-creation-architecture.md「销毁只改本 zone 的键」。
+   - 销毁路径:认领只读本 zone 的键(2026-11-12 起场景键带 zone 的 tag),别的 zone 的场景读不到映射,按映射不存在处理、一个键都不动;镜像级联与源迁移级联对不在本 zone 的子镜像认领落空、不拆;镜像拆除从本 zone 的源子集合摘自己。(2026-11-06「场景销毁认领」会话加的 `scene:{id}:zone` 比对与 `foreign` 结局随那把键删除;显式 DestroyScene 拿到只登记在别的 zone 的场景,从回错误改为与「映射已不存在」同样幂等成功。)显式 DestroyScene 的 `zone_id` 不是本进程的 zone 就在任何读写之前拒绝,没填按本进程的 zone。详见 scene-creation-architecture.md「销毁只改本 zone 的键」。
 3. 同组的键在同一个实例上,读得到也不读:组的划分是部署细节,行为不能随组的划分而变。
 
 为什么不会丢数据、不破坏一致性:
@@ -168,8 +172,8 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 
 | 脚本 | 位置 | 键 | 结论 |
 |---|---|---|---|
-| 三段认领 / 空闲回收 / force 销毁 | `scene_atomic.go` `sceneClaimKeys` 及 `:367`、`:385` | 场景键 + `instances:zone:<z>:active` + `node:zone:<z>:<n>:*` | 同一 zone |
-| 加成员 / 选最空频道 | `scene_atomic.go:398-454` | 场景键 + `node:zone:<z>:<n>:members` | 同一 zone(候选都是本 zone 频道) |
+| 三段认领 / 空闲回收 / force 销毁 | `scene_atomic.go` `sceneClaimKeys` 及 `:367`、`:385` | 场景键 + `instances:{ctl:<z>}:active` + `node:{ctl:<z>}:<n>:*` | 同一 zone |
+| 加成员 / 选最空频道 | `scene_atomic.go:398-454` | 场景键 + `node:{ctl:<z>}:<n>:members` | 同一 zone(候选都是本 zone 频道) |
 | 成员增减 | `scene_membership.go` `sceneMemberKeys` | 场景成员 + 节点成员 | 同一 zone |
 | 场景登记 | `scene_registration.go:182-191` | 场景键 + 节点计数 / 反向索引 + 频道集合 | 同一 zone |
 | 改派 | `world_init.go` `casReassignSceneNode` | 场景键 + 频道集合 | 同一 zone |
@@ -177,7 +181,7 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 | 线号 | `world_channel_directory.go:173` | 一个键 | — |
 | 神秘商人 | `mystery_merchant.go:421` | 一个键 | — |
 | Agones 名额转移 | `agones_binding.go:377` | 场景键 | 同一 zone |
-| 死节点收尾入队 / 出队 | `reentry_barrier.go:337`、`:507-512` | 任务表 + `node:zone:<z>:<n>:*` + 负载集 | 原任务表是全服键;改成按 zone 之后同一 zone |
+| 死节点收尾入队 / 出队 | `reentry_barrier.go:337`、`:507-512` | 任务表 + `node:{ctl:<z>}:<n>:*` + 负载集 | 原任务表是全服键;改成按 zone 之后同一 zone |
 | 选主锁 | `shared/leader` | 一个键 | — |
 
 没有跨 zone 的原子操作,不需要拆。以后新增脚本,键必须属于同一个 zone;契约测试 `control_zone_keys_contract_test.go` 钉住两个改名键的形状,以及「没有全服键」。
@@ -185,13 +189,13 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 ### 4.5 C++ scene 的控制域句柄
 
 - `game_config.yaml` 新段 `scene_control_redis`(host、port、password、db),对应 `GameConfig.scene_control_redis = 11`,类型复用 `ZoneRedisConfig`。整段缺失时沿用 `zoneredis`,开发环境不用改。口令可被环境变量 `SCENE_CONTROL_REDIS_PASSWORD` 覆盖,值不进日志。
-- scene 进程多一个 `RedisManager`(`tlsSceneControlRedis`),认证与重连契约与 `zoneredis` 相同。读它的有 `player_scene.cpp` 的分线目录、`player_mystery_merchant.cpp` 的神秘商人,以及 `world/scene_ownership_reconciler.cpp` 的归属对账(本地场景的 `scene:<id>:node` 与本节点号持有者,只读,scene-node-ownership-reconcile.md)。
+- scene 进程多一个 `RedisManager`(`tlsSceneControlRedis`),认证与重连契约与 `zoneredis` 相同。读它的有 `player_scene.cpp` 的分线目录、`player_mystery_merchant.cpp` 的神秘商人,以及 `world/scene_ownership_reconciler.cpp` 的归属对账(本地场景的 `scene:{ctl:<z>}:<id>:node` 与本节点号持有者,只读,scene-node-ownership-reconcile.md)。
 - gate、battle 不连它。落点唤醒的 PUBLISH 仍走 `zoneredis`(核心)。
 
 ### 4.6 K8s
 
 - **实例**:infra-up 对 zones 配置里出现过的每个组 apply 一份 `redis-ctl-g<N>`,模板与排队实例相同。实例名、maxmemory 由参数决定,形态与核心同一套 `-RedisReplicas` 规则。**不受 `-RedisSplit` 控制**:控制域实例从首次部署起就是这个形态,不做迁移、不做灰度。
-- **容量**:`-RedisCtlMaxMemory`,dev 档缺省 128mb,release 档缺省 1gb(G4a §25.3 第 19 条给排队实例定的每组初值,待压测复核)。与排队实例「release 档必须显式给」不同:控制域实例不受开关控制、每次 infra 部署都 apply,缺省就拒会让每次 release 部署都多带一个参数;压测定下容量之后改缺省。noeviction,写满拒写。
+- **容量**:`-RedisCtlMaxMemory`,dev 档缺省 128mb,release 档缺省 1gb(G4a §25.3 第 19 条给排队实例定的每组初值;已定(2026-11-12),压测出基线后可调)。依据:控制域只放按场景、节点计的协调键(场景键、场景与节点成员、频道集合、选主锁、死节点收尾任务,§4.4),都是可由对账收敛的派生索引;成员按在线人数计,一个 zone 几千人也只有 MB 级 [I],1gb 给一个组里的多个 zone 留足余量;noeviction 写满即拒写、本组 zone 进不了场景,所以宁大勿小;容器内存按 2 × maxmemory 渲染,给 AOF 重写的写时复制。与排队实例「release 档必须显式给」不同:控制域实例不受开关控制、每次 infra 部署都 apply,缺省就拒会让每次 release 部署都多带一个参数;压测出基线后按 G4a §6.3 的「maxmemory = 峰值 × 1.5」改缺省。noeviction,写满拒写。
 - **scene-manager ConfigMap**:`Redis.Host` 改为 `redis-ctl-g<N>.<infra>:6379`,新增 `CoreRedis` 段指向核心;`Etcd.Key` 加 zone 后缀。
 - **C++ node-config**:scene 的 `scene_control_redis.host` 写本 zone 组的实例。
 - **切换闸**:非 DryRun 的 zone 写路径读线上 scene-manager ConfigMap 的 `Redis.Host`。线上存在且与本次渲染不同,就拒绝,除非带 `-ConfirmRedisCtlSwitch`。切过去之后新实例是空的,本 zone 的场景路由要从零重建:先停本 zone 的 scene 节点再切。上线前的环境数据可以清空,带确认开关即可。
@@ -209,23 +213,27 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 
 ## 6. 残余与风险
 
-1. 跨 zone 传送预检在目标 zone 刚起的几秒内会放过(§4.3 第 2 条)。
-2. 位置落在别的 zone、持有节点已死时,玩家要多等一个再入屏障(§3.5)。
+1. 跨 zone 传送预检与目标 zone 刚起的那几秒(2026-11-12 修掉)。预检只读 etcd,看「目标 zone 有没有能用来落地的大世界节点」(§4.3 第 2 条);原来读频道集合时会拒掉的那几秒(节点已注册、频道还没铺)现在放行,第二条腿过去以前会落不了地。这时源 scene 已经销毁了实体,客户端只提示「进入场景失败,请稍后再试」,玩家要自己重进。修了三处:
+   - 第二条腿与所有进场一样,一张大世界图一个频道都没有时当场补铺再挑(`world_channel_on_demand.go`),与 CreateScene 早有的慢路径同一个做法。补铺只用负载集里的节点:负载集由领导者维护,体现它对节点存活的裁决。负载集里还没有可用节点、本副本的 etcd 镜像里却已经有可用注册,说明领导者还没完成第一次同步,在请求期限内按退避(100 ms 起、封顶 1 s、±20% 抖动,最多 5 s)等它;镜像里也没有就立刻失败。同一进程同一 (zone, 图) 同一时刻只补一次,多副本之间靠 zone 锁串行。
+   - 预检改用与选点同一个判据(`hasWorldHostingRegistration`):计划排空中(admission CLOSED)的节点、身份歧义的节点不算。原来只看节点类型:目标 zone 的大世界节点全在排空时预检放行,第二条腿却选不到点,排空持续多久就失败多久。
+   - 「有节点、频道暂时全不可用(满员、属主刚死)」照旧放行:第二条腿懒改派,指定的地图落不进去时回落默认大世界。
+   剩下的只有目标 zone 的 scene_manager 进程自己还没起、或领导者超过 5 秒还没同步完,这种情况同 zone 的首登同样失败,属于 zone 整体不可用,不是本设计的口子。
+2. 位置落在别的 zone、持有节点已死时,玩家要多等一个再入屏障(§3.5,默认约 20 秒)。这是有意的安全余量,不是待修项:屏障防的是失租后还在跑的老进程最后几秒的写入,只能从「已知它不在了」的时刻起算。本 zone 用领导者写的 `death_at`;别的 zone 的 `death_at` 在那个 zone 的控制域里,按 §4.3 不读,本副本能证明的最早时刻就是自己第一次看到它不在 etcd 里。要更早只能去问那个 zone 的 scene_manager,§5 否决了跨 zone 转发,理由不变。这条路径只在「玩家离线很久、回来时位置还落在别的 zone 的死节点上」才会多等,回可重试拒绝,不丢数据。
 3. 只给场景号、不给 zone 的 EnterScene 只能解析本组的场景。2026-11-11 核对过全部调用方,没有人这样调:
    - `SceneManager.EnterScene` 的 gRPC 调用方只有 C++ scene 与 login,go 其余服务、`tools/`、`robot/`、Java 网关里都没有。
    - C++ 的请求都填 `zone_id`(例如 `player_scene_handler.cpp` 的 `req.set_zone_id(GetZoneId())`)。
    - login 的 `SceneId` 恒为 0(`resolveEnterSceneRoute`):要么给本 zone 或归属 zone,要么 `ZoneId` 也为 0,由 scene_manager 按 location 决定去向。
    - robot 走客户端协议,经 gate 到 scene,最后是上面 C++ 那条路径。
    以后新增调用方必须同时给 zone。
-4. zone 换组只能停写迁移(§4.1)。
-5. 跨 zone 重定向挑 gate 仍是每次直读 etcd(第 7 条会话加了停写过滤),不在本设计范围。
+4. zone 换组只能停写迁移(§4.1)。这是「按 zone 组分实例」这个形态本身的代价;负责人 2026-11-10 改为全部上 Cluster(缺口第 34 条,[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md)),控制域按 `{ctl:<z>}` 打 tag,扩容按 slot 原子迁移,「组」随之退役。
+5. 跨 zone 重定向挑 gate 每次直读一次 etcd,这是有意的,不改。读量等于跨 zone 重定向的速率,每次只读目标 zone 的 gate 前缀(几十条),随规模线性增长,没有平方项。第 7 条的停写判定(`staleGateIDs`)靠的就是每次直读拿到的 ModRevision 序列,改成缓存或 watch 要另造一套判定,不会更简单。
 6. 全局池服务(data_service、match、battle、client-rpc-router、player_inbox、team)仍是全服 watch。它们实例少、键很少变,读量随 N_cpp 线性增长,不是平方项。
-7. scene_manager 的进场去重键 `enter_scene:dedup:` 不在控制域,本设计没有动它。
+7. scene_manager 的进场去重键 `enter_scene:dedup:` 在玩家域,本设计没有动它。
 8. Redis 连接总账(2026-11-10 补齐):控制域实例单独一份,写路径每组打一行 `Redis ctl connection ledger:`(`Get-RedisCtlConnectionLedgerInputs` / `Write-RedisCtlConnectionLedger`)。每个 scene-manager 副本一个 go-zero 缺省池(按 GOMAXPROCS 2 计 20 条),每个 scene 进程 1 条 `scene_control_redis`;规划档按全部 zone 落在同一组算,高可用形态另按单个代理算一次水位,超水位只告警。核心总账 scene-manager 那一行原样保留:那一池现在是 `CoreRedis`(地址不同,go-zero 另建一个池),不是多算。控制域实例 `MAXCLIENTS` 10000,同组几个 zone 远到不了。
 9. `redis-split-status`(2026-11-10 补齐):每个 zone 另查控制域一段,即 scene-manager 的 `Redis.Host`、node-config 的 `scene_control_redis.host` 是否都是本组实例,`deployment/scene-manager` 是否滚完,本组 `redis-ctl-g<N>` 是否在且就绪(同组只查一次);任一不满足退出码 1。`redis-wipe` 覆盖 `redis-ctl-g<N>`。
-10. 合服:源 zone 下线后没有领导者再处理 `scene_manager:dead_node_reconcile:zone:<S>`。合服流程不清源区的 Redis 热状态(`tools/merge_zone` 只改映射,不连 Redis),这张表与 `scene_nodes:zone:<S>:*` 一样留作没人读的垃圾键,不删:撤销合服、把源区节点拉回来时,源区的领导者照表里剩下的接着收尾,与进程重启后接手同一条路径,删了反而丢掉这些死节点的收尾。想让表里不留任务,收源区 namespace 前看 `scene_manager_dead_node_reconcile_pending{zone_id="<S>"}` 回到 0,写在 [合服手册](../ops/merge-zone-runbook.md) §8 末尾(2026-11-10)。
+10. 合服:源 zone 下线后没有领导者再处理 `scene_manager:dead_node_reconcile:{ctl:<S>}`。合服流程不清源区的 Redis 热状态(`tools/merge_zone` 只改映射,不连 Redis),这张表与 `scene_nodes:{ctl:<S>}:*` 一样留作没人读的垃圾键,不删:撤销合服、把源区节点拉回来时,源区的领导者照表里剩下的接着收尾,与进程重启后接手同一条路径,删了反而丢掉这些死节点的收尾。想让表里不留任务,收源区 namespace 前看 `scene_manager_dead_node_reconcile_pending{zone_id="<S>"}` 回到 0,写在 [合服手册](../ops/merge-zone-runbook.md) §8 末尾(2026-11-10)。
 11. K8s 的 player-locator ConfigMap 已有 `SceneManagerRpc` 段,键是 `scenemanagerservice.rpc.z<zone>`,只连本 zone 的 scene_manager。这一段由断线重连那条线补上(`infra-reconnect-overview.md` §4 R20),键的规则同 §3.6。
-12. §3.1 收窄带来的选号问题:node_id 的分配键 `<Svc>.rpc/allocated/...` 全服唯一,`NodeAllocator::SelectNodeId` 却只看发现快照里的同类节点。收窄之后 gate、scene 只看得到本 zone 的同类,新节点会逐个去撞别的 zone 已占的号,每撞一次等 1 秒,zone 越多启动越慢。修法由缺口第 30 条批 3 做:分配键 CAS 失败时列出全服已分配的号,下次选号排除(只改 `etcd_manager.cpp`、`etcd_helper`、`node_allocator`),见 [连接扇出子集化](connection-fanout-subsetting-20261106.md) §2 末段与 §3.4(2026-11-10 登记)。
+12. §3.1 收窄带来的选号问题:node_id 的分配键 `<Svc>.rpc/allocated/...` 全服唯一,`NodeAllocator::SelectNodeId` 却只看发现快照里的同类节点。收窄之后 gate、scene 只看得到本 zone 的同类,新节点会逐个去撞别的 zone 已占的号,每撞一次等 1 秒,zone 越多启动越慢。已由缺口第 30 条批 3 修掉(已落码,未编译):分配键 CAS 失败时用 keys_only 列出全服已分配的号,下次选号排除(`etcd_helper.cpp`、`etcd_manager.cpp`、`node_allocator`),见 [连接扇出子集化](connection-fanout-subsetting-20261106.md) §2 末段与 §3.4。
 
 ## 7. 分批与文件
 
@@ -258,6 +266,16 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 - 诊断文案按 AGENTS §2 改英文:控制域一段的 throw / 告警 / 问题文本,以及 `ConvertFrom-RedisQueueInstanceLive` 的 7 条问题文本。后者去掉了写死的「login / gateway 指向的实例」,因为控制域实例也用它;`k8s_redis_split_contract` 的 9 条匹配同步改了。
 - `deploy/k8s/README.md`:总账与 `redis-split-status` 各加一段,`redis-wipe` 的实例清单补 `redis-ctl-g<N>`。
 
+2026-11-12 订正(§6 第 1 条改为修掉;第 2、5 条写成有意的取舍;未运行):
+
+- 新文件 `go/scene_manager/internal/logic/world_channel_on_demand.go`:`reserveWorldChannelCreatingOnDemand` 是进场挑大世界频道的新入口,`resolveSceneForEnter` 改调它(`enterscenelogic.go` 只改这一处调用和 `rejectTravelToUnopenedMap` 的注释)。
+  - 只在「World 表里的图、频道集合 SCARD 为 0」时补铺,挑回 0 的其他原因(都满、属主都死且没有活节点)不补。
+  - 补铺前先等负载集里有可用节点(只在本副本镜像里已有可用注册时等),等完再查一次集合,领导者已经铺好就不重复发 CreateScene。
+  - 同进程按 (zone, conf) 合并,写法同 `channel_move_flight.go`。
+- `foreign_zone_registry.go`:新增 `hasWorldHostingRegistration`,预检与补铺前的「镜像里有没有可用注册」共用它,与 `getNodesForPurpose` 同口径(不算排空中、身份歧义的节点)。
+- 新测试 `world_channel_on_demand_test.go`,共 9 条:首登与第二条腿当场补铺、等领导者、三种不等的情形、频道在却不可用时不补、等待期间领导者铺好了就用它的、同进程合并与等待者按自己期限放弃、预检不算排空与歧义节点。
+- 与 [全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) 第 2a 批对过文件:新文件只调现有的键构造函数,跟着它的改名走。
+
 ## 8. 交给 Codex 的验证
 
 全部在仓库根目录执行,按顺序。C++ MSBuild 必须串行 `/m:1`。
@@ -269,6 +287,7 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 2. **Go**:
    - `cd go/scene_manager && go vet ./... && go test ./... -count=1`
    - 通过标准:全部通过;新用例 `TestForeignOwnerDead*`、`TestForeignZoneGone*`、`TestForeignRegisteredInstance*`、`TestOrchestratedZonesIsOwnZoneOnly`、`TestLeaderLockKeyPerZone`、`TestSceneNodeZonePrefixDoesNotMatchOtherZones`、`TestOwnsControlZoneSkipsForeignMembership`、`TestTravelMapPrecheckUsesEtcd*`、`TestControlZoneKeysContract*`、`TestSweepStaleLoadSetMembers_OnlyOwnZoneNoScan`、`TestCleanupOrphanWorldChannels_OwnZoneOnlyWithoutScan`、`TestDeadNodeReconcile_DropsMalformedTask`(含别的 zone 的成员)都在列表里且通过。
+   - 2026-11-12 新增:`go test ./internal/logic/ -count=1 -v -run 'TestEnterScene_FirstLoginCreatesDefaultWorldChannelOnDemand|TestEnterScene_TravelSecondLegCreatesDefaultWorldChannelOnDemand|TestEnterScene_OnDemand|TestJoinWorldChannelOnDemand_|TestTravelMapPrecheckUsesEtcd_'` 全部 PASS(新文件 9 条 + 原有预检 3 条),再跑全量。修复前红的取法写在 `world_channel_on_demand_test.go` 文件头。
    - 失败时保留 `go test -v` 的失败用例输出;本批改了约 60 个用例的夹具(进程 zone、别的 zone 替身),先看失败是不是夹具没跟上。
 3. **C++**:先编库,再编测试(库改了不重编,测试会链接旧的 lib):
    - `msbuild cpp/libs/engine/engine.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`

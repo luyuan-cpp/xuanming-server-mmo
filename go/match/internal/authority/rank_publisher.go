@@ -13,13 +13,28 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
+	"match/internal/metrics"
 	rankpb "proto/rank"
 	"shared/serviceauth"
 	"shared/tracing"
 )
 
+// rankPublishPoint 是投榜每一轮的点位名:safego_panic_total 与 match_loop_last_run_unixtime 的 point label,必须是常量。
+const rankPublishPoint = "match.rank_publish"
+
 // RunRankPublisher 只从已提交 outbox 按片顺发；RPC超时不推进本地游标，重试同业务ID/载荷仅更新认证时间。
+//
+// 每一轮各自 recover(2026-11-12):一轮 panic 打 HOLD(结局未知),只丢这一轮,循环接着跑。原来 panic 一路抛出去把进程打死:
+// 投榜按 (模式, 来源片) 分给各副本,一条解释不了的行会先打死负责它那一片的副本,片换主之后再打死下一个。
+// 兜住的 panic 计 safego_panic_total{point},告警 GoBackgroundPanicRecovered 按点位报(deploy/k8s/go-background-alerts.yaml)。
+// 游标在库里、只在确认之后推进,丢一轮下一轮从同一位置重投。
+//
+// 活性(metrics.LoopLive 里 match.rank_publish 那一条;缺口清单第 25 条第六批,口径在 shared/looplive 的包注释):一进来就写一次,
+// 下面任何一处意料之外的 return(参数不对、建不了连接)都把序列停在这一刻,由停摆告警 MatchBackgroundLoopStalled 报出来;
+// 每一轮正常返回(成败都算)就写这一刻,panic 的一轮不写;只有 ctx 结束才删序列。
 func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string, admissions ...*drainproof.Session) {
+	live := metrics.LoopLive.For(rankPublishPoint)
+	live.Mark(time.Now())
 	var relay *drainproof.Session
 	if len(admissions) > 1 {
 		return
@@ -47,34 +62,39 @@ func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string, ad
 	defer ticker.Stop()
 	for {
 		if ctx.Err() != nil {
+			live.Stop()
 			return
 		}
 		call, cancel := context.WithTimeout(context.WithoutCancel(ctx), rankPublishRoundTimeout)
-		e = func() (resultErr error) {
-			if relay != nil {
-				finish, err := relay.Enter()
-				if err != nil {
-					return err
+		e = nil
+		live.Round(rankPublishPoint, func() {
+			e = func() (resultErr error) {
+				if relay != nil {
+					finish, err := relay.Enter()
+					if err != nil {
+						return err
+					}
+					defer finish()
+					defer func() {
+						if recovered := recover(); recovered != nil {
+							relay.Hold()
+							panic(recovered)
+						}
+						if resultErr != nil && !authoritysql.IsWriterFrozen(resultErr) {
+							relay.Hold()
+						}
+					}()
 				}
-				defer finish()
-				defer func() {
-					if recovered := recover(); recovered != nil {
-						relay.Hold()
-						panic(recovered)
-					}
-					if resultErr != nil && !authoritysql.IsWriterFrozen(resultErr) {
-						relay.Hold()
-					}
-				}()
-			}
-			return s.PublishRankOnce(call, client, secret)
-		}()
+				return s.PublishRankOnce(call, client, secret)
+			}()
+		})
 		cancel()
 		if e != nil && ctx.Err() == nil {
 			logx.Errorf("rating rank publishing awaiting recovery: %v", e)
 		}
 		select {
 		case <-ctx.Done():
+			live.Stop()
 			return
 		case <-ticker.C:
 		}

@@ -136,7 +136,7 @@
 
 控制域里与玩家相关、但**不进**玩家域的键（不带玩家 tag）：`player_to_account:<id>`（login 账号反查）、`assetop:wake:<svc>:<pid>`（guild / trade 的唤醒去重）、`instance:<scene>:members`、`node:zone:<z>:<node>:members`（场景与节点成员，§5.10）。它们不与玩家域键出现在同一条命令里，`scene_keys_contract_test.go` 钉住 scene_manager 这一侧。
 
-**data_service 命名空间**：`player:{<id>}:<字段>` 是 data_service 的字段命名空间，新进入该前缀的后缀（owner_epoch、handoff、handoff_fence、location、location_revision、location_revision_floor、leave_release_wait、channel_switch_cooldown、leave_tomb、login_generation、sync_digest，加上已有的 save_barrier、asset_sql_commit）统一由 Go 共享包 `shared/redisslot` 的保留后缀表登记（第 1 批已落），`isReservedPlayerField` 改为查这张表，不再逐个比键名。今后任何模块新增 `player:{<id>}:` 键，必须登记到这张表（契约测试枚举核对）。
+**data_service 命名空间**：`player:{<id>}:<字段>` 是 data_service 的字段命名空间，新进入该前缀的后缀（owner_epoch、owner_epoch_confirmed、handoff、handoff_fence、location、location_revision、location_revision_floor、leave_release_wait、channel_switch_cooldown、leave_tomb、login_generation、sync_digest，加上已有的 save_barrier、asset_sql_commit）统一由 Go 共享包 `shared/redisslot` 的保留后缀表登记（第 1 批已落），`isReservedPlayerField` 改为查这张表，不再逐个比键名。今后任何模块新增 `player:{<id>}:` 键，必须登记到这张表（契约测试枚举核对）。
 
 **slot 与 slot-tag**（两种语言逐字一致，金样向量钉住；第 1 批已落 `go/shared/redisslot` 与 `cpp/libs/engine/infra/storage/redis_cluster/redis_slot.h`）：
 
@@ -214,7 +214,7 @@
 - **单键命令不强制 hash tag**：§5.1 的「玩家域只接受带 tag 的键」目前只在多键路径上检查。第 3 批改名之前现有单键大多没有 tag，强制就接不上线；改名完成后再决定是否打开。（第 5c 批已打开，见下。）
 - **维护前沿**：`Hiredis::MaintenanceState` 把任何错误应答记成 UNKNOWN，MOVED 会让进程永远过不了维护排空，所以 `formattedCommand` 多一个可选的 `NotExecutedPredicate`，判定为「确定没有执行」的错误不算 UNKNOWN。路由层接受的每条命令也单独计入 `ProcessMaintenance()` 直到最终结果：排队与退避中的命令不在任何连接上，否则排空会把它们漏掉。
 - **`Hiredis.h` 实际有三份**：`muduo_windows`（编译 muduo.lib）、`tools/archived/muduo_linux_overlay`（Linux 覆盖件）、`third_party/muduo/contrib/hiredis`（业务代码 `#include <muduo/contrib/hiredis/Hiredis.h>` 实际命中的就是这份）。改接口要三处同改；`.cc` 只有前两份在编译。
-- **重连抖动**靠给每个节点的 `reconnectIntervalSec` 加 `[0, 1s)` 的随机量实现，`RedisManager` 未改。
+- **重连抖动**由每条节点连接的 `RedisManager` 自己加：`RedisConnectOptions::reconnectJitterSec`（默认 1s），每次 `Connect` 在基础间隔上抽一个 `[0, 1s)` 的随机量，同一个 Connect 周期内不变。2026-11-12 起集群客户端不再自己算，只把 `options.connect` 原样传给各节点连接；单实例句柄（核心、场景控制域）因此也带上同样的抖动（[断线重连总纲](infra-reconnect-overview.md) R18）。
 - **断连发现有延迟的一种情况**：退避中的队头要等下一次重试才发现节点断了（最迟 1s）；在途命令是立刻空应答。`RedisManager` 没有断线回调，这条延迟换来不改它。
 - **种子回退**：全部已知节点连不上持续 5s（`seedFallbackDelay`）才把种子连回来。
 
@@ -496,7 +496,7 @@ C_master = N_cpp + Σ_svc ( R_svc × p_svc )
 - **`PruneStaleFromDeviceSet`** 跨连接读登录态,改 `MGetBySlot`。
 - **删旧 gate 兼容**:`RefOf` 的 legacy 分支、`Ref.WriteKeys` 双写、`loginsession.Save` 两步写、`loginsession_legacy_key_total` 全部删除。没有会话代次的连接直接拒绝。
 - **读者**:chat、friend、guild、match 经 `shared/loginsession` 读登录态,改成同一个键构造函数,客户端类型换 `UniversalClient`。
-- **排队**:`queue:zone:*`、`admitted:zset:zone:*` 已按 zone 组拆实例,不动。
+- **排队**:`queue:{q:*}`、`admitted:zset:{q:*}` 已按 zone 组拆实例,不动。
 - **玩家键**:`player_locker`、`login_idempotent`、`login_generation` 已在第 3 批带 `{pid}`,属于玩家域,不属于登录域。
 
 **第 11 批实现补充(2026-10-31,未编译)。**
@@ -585,7 +585,7 @@ Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与�
 **第 10 批实现补充(2026-10-31,未运行)。**
 
 - **参数**:`k8s_deploy.ps1` 的 `-PlayerRedisMasters`(dev 缺省 0 不建集群,staging、prod 必须显式、至少 3)、`-PlayerRedisReplicasPerMaster`、`-PlayerRedisMaxMemory`、`-PlayerRedisStorage`,口令 `MMORPG_PLAYER_REDIS_PASSWORD`。都不粘滞。登录域和玩家域共用这一个集群;Go 配置上能拆,部署脚本目前只渲染共用形态。
-- **清单**:`redis-player-cluster.yaml`。镜像摘要取自 Java 版 `deploy/compose/infra.yaml` 的 `redis:8.10.2`。Docker Hub 同一个标签 10-22 重建过,摘要不同:钉摘要就是防这个。
+- **清单**:`redis-player-cluster.yaml`(2026-11-12 起并进两套集群共用的 `redis-cluster.yaml`,按集群名渲染,见全部上 Cluster 设计 §10 第 6a 批)。镜像摘要取自 Java 版 `deploy/compose/infra.yaml` 的 `redis:8.10.2`。Docker Hub 同一个标签 10-22 重建过,摘要不同:钉摘要就是防这个。
 - **`updateStrategy: OnDelete`**:改模板不自动重启节点。`RollingUpdate` 不知道谁是主,一次 apply 可能连着打掉一对主从。代价是 `rollout status` 不可用,就绪看建群 Job。
 - **建群 Job**:全部节点空白才 `--cluster create`,否则只核对。一半空白一半有状态可能是扩容新起的节点,也可能是 PVC 丢了,脚本分不清,所以不碰。Job 从不跑 `--cluster fix`。
 - **总账**:部署脚本按池上限记,不按 §6.1 的活跃连接估算,偏保守。登录域的池算进同一行。不建集群时这些池都记在控制域那一份上。

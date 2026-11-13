@@ -14,7 +14,9 @@ import (
 	"shared/safego"
 )
 
-// RedisLocker 不关心锁键在哪个域:玩家锁用玩家域句柄(PlayerRedis),账号锁与排队 dispatcher 选主用控制域句柄。
+// RedisLocker 不关心锁键在哪个域:玩家锁用玩家域句柄(PlayerRedis),账号锁与建角锁用登录域句柄(LoginRedis),
+// 排队 dispatcher 选主用控制集群句柄(锁键带本 zone 的 tag {q:<zone>},loginqueue.ZoneDispatcherLockKey)。
+// 三条命令(SET NX、续期与释放两段单键脚本)都只碰一个键,在两种句柄的守卫下都能发。
 type RedisLocker struct {
 	client redis.UniversalClient
 }

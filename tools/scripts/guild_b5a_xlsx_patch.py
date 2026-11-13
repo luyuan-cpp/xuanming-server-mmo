@@ -40,7 +40,7 @@ from pathlib import Path
 try:
     import openpyxl
 except ImportError:  # pragma: no cover - 环境问题,给一句能照着做的话
-    sys.exit("缺少 openpyxl:请先执行  pip install openpyxl")
+    sys.exit("openpyxl is missing: run  pip install openpyxl  first")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
@@ -53,12 +53,12 @@ DATA_BEGIN_ROW = 6
 
 
 def fail(message: str) -> "NoReturn":
-    sys.exit(f"[中止] {message}")
+    sys.exit(f"[ABORT] {message}")
 
 
 def only_sheet(wb, path: Path):
     if len(wb.sheetnames) != 1:
-        fail(f"{path.name} 预期只有一个 sheet,实际 {wb.sheetnames}")
+        fail(f"{path.name} should have exactly one sheet, found {wb.sheetnames}")
     return wb[wb.sheetnames[0]]
 
 
@@ -116,7 +116,7 @@ def read_schema_columns(schema_path: Path, expect_sheet: str) -> list[tuple[str,
     text = schema_path.read_text(encoding="utf-8")
     sheet = SCHEMA_SHEET_RE.search(text)
     if not sheet or sheet.group(1) != expect_sheet:
-        fail(f"{schema_path.name} 的 cfg_sheet 应为 {expect_sheet!r},实际 {sheet.group(1) if sheet else None!r}")
+        fail(f"{schema_path.name}: cfg_sheet should be {expect_sheet!r}, got {sheet.group(1) if sheet else None!r}")
     columns: list[tuple[str, str]] = []
     pending_comment: list[str] = []
     in_message = False
@@ -136,7 +136,7 @@ def read_schema_columns(schema_path: Path, expect_sheet: str) -> list[tuple[str,
             columns.append((field.group(1), pending_comment[0] if pending_comment else ""))
         pending_comment = []
     if not columns or columns[0][0] != "id":
-        fail(f"{schema_path.name} 解析出的首列应为 id,实际 {columns[:1]}")
+        fail(f"{schema_path.name}: the first parsed column should be id, got {columns[:1]}")
     return columns
 
 
@@ -151,10 +151,10 @@ def cmd_new_tables(dry_run: bool) -> None:
         names = [name for name, _ in columns]
         for row in spec["rows"]:
             if list(row.keys()) != names:
-                fail(f"{sheet_name} 数据行的键 {list(row.keys())} 与 schema 字段 {names} 不一致 —— schema 改过列,先同步本脚本")
+                fail(f"{sheet_name}: data row keys {list(row.keys())} differ from the schema fields {names} -- the schema columns changed; update this script first")
         ids = [row["id"] for row in spec["rows"]]
         if len(set(ids)) != len(ids):
-            fail(f"{sheet_name} 数据行 id 重复:{ids}")
+            fail(f"{sheet_name}: duplicate data row ids: {ids}")
 
         wanted = [[None] * len(names) for _ in range(DATA_BEGIN_ROW - 1 + len(spec["rows"]))]
         wanted[HEADER_ROW - 1] = list(names)
@@ -169,7 +169,7 @@ def cmd_new_tables(dry_run: bool) -> None:
             if ws.title == sheet_name and current == padded:
                 print(f"[ALREADY CURRENT] {xlsx_path.relative_to(REPO_ROOT)} exists with identical contents; file unchanged.")
                 continue
-            fail(f"{xlsx_path.relative_to(REPO_ROOT)} 已存在但内容与本脚本不同(可能策划已调过数值)—— 本脚本不覆盖。")
+            fail(f"{xlsx_path.relative_to(REPO_ROOT)} already exists with different contents (designers may have tuned the values) -- this script does not overwrite it.")
 
         print(f"Will create {xlsx_path.relative_to(REPO_ROOT)}:sheet={sheet_name!r},{len(names)} columns x {len(spec['rows'])} data rows")
         print(f"  Columns: {names}")
@@ -187,7 +187,7 @@ def cmd_new_tables(dry_run: bool) -> None:
 
         check_ws = only_sheet(openpyxl.load_workbook(xlsx_path), xlsx_path)
         if check_ws.title != sheet_name or sheet_matrix(check_ws, len(names)) != wanted:
-            fail(f"保存后读回的 {xlsx_path.name} 与写入内容不一致 —— 删除该文件后重试")
+            fail(f"after saving, {xlsx_path.name} read back differs from what was written -- delete the file and retry")
         print(f"[DONE] {xlsx_path.relative_to(REPO_ROOT)}")
     if dry_run:
         print("[dry-run] No files written.")
@@ -242,7 +242,7 @@ def tip_groups(rows: list[tuple[int, str, object, object]]) -> dict[str, list[st
             if not is_group_header(name):
                 continue  # 说明行
             if "base=" not in name:
-                fail(f"{TIP_XLSX.name} 第 {row_idx} 行 {name!r} 像组头却没有 base= —— 导表器也会拒绝,先修表")
+                fail(f"{TIP_XLSX.name} row {row_idx}: {name!r} looks like a group header but has no base= -- the table exporter rejects it too; fix the table first")
             current = name.split()[0]
             groups.setdefault(current, [])
             continue
@@ -257,7 +257,7 @@ def cmd_tip_codes(dry_run: bool) -> None:
     rows_before = tip_rows(ws)
     groups_before = tip_groups(rows_before)
     if TIP_GUILD_GROUP not in groups_before:
-        fail(f"{TIP_XLSX.name} 里找不到组头 {TIP_GUILD_GROUP}")
+        fail(f"group header {TIP_GUILD_GROUP} not found in {TIP_XLSX.name}")
 
     all_codes = [n for codes in groups_before.values() for n in codes]
     new_names = [name for name, _ in TIP_NEW_CODES]
@@ -270,7 +270,7 @@ def cmd_tip_codes(dry_run: bool) -> None:
             if guild_codes[start:start + len(new_names)] == new_names:
                 print(f"[ALREADY CURRENT] {TIP_GUILD_GROUP} contains these {len(new_names)} codes consecutively and in the same order; file unchanged.")
                 return
-        fail(f"这些码已在表里,但不是连续、按序位于 {TIP_GUILD_GROUP} 组内:{present} —— 码名全局唯一,先查清是谁加的。")
+        fail(f"these codes are already in the table but not consecutive and in order inside group {TIP_GUILD_GROUP}: {present} -- code names are globally unique; find out who added them first.")
 
     # 组尾 = 组头之后、下一个 "//" 行(或空行)之前的最后一个码所在行。
     header_row = next(r for r, n, _b, _c in rows_before if is_group_header(n) and n.split()[0] == TIP_GUILD_GROUP)
@@ -307,8 +307,8 @@ def cmd_tip_codes(dry_run: bool) -> None:
                 + [(a, b, c) for row, a, b, c in rows_before if row >= insert_at])
     if rows_after != expected:
         first_diff = next((i for i, (x, y) in enumerate(zip(rows_after, expected)) if x != y), min(len(rows_after), len(expected)))
-        fail(f"保存后读回的内容与预期不符(第一处差异在第 {first_diff + 1} 个非空行;读回 {len(rows_after)} 行,预期 {len(expected)} 行)"
-             f" —— 立刻 git checkout -- {TIP_XLSX.relative_to(REPO_ROOT).as_posix()} 还原")
+        fail(f"after saving, the content read back is not as expected (first difference at non-empty row {first_diff + 1}; read back {len(rows_after)} rows, expected {len(expected)})"
+             f" -- restore it now with git checkout -- {TIP_XLSX.relative_to(REPO_ROOT).as_posix()}")
     groups_after = tip_groups(tip_rows(check_ws))
     print(f"[DONE] {TIP_GUILD_GROUP} range {len(groups_before[TIP_GUILD_GROUP])} -> {len(groups_after[TIP_GUILD_GROUP])} codes;"
           f" other {len(groups_after) - 1} ranges and existing {len(rows_before)} rows unchanged."
@@ -342,11 +342,11 @@ def resolve_guild_ids() -> dict[str, int]:
             continue
         number, sep, key = line.partition("=")
         if not sep or not number.isdigit():
-            fail(f"{MESSAGE_ID_TXT.name}:{line_no} 不是 `<号>=<服务名+方法名>` 形状:{line!r}")
+            fail(f"{MESSAGE_ID_TXT.name}:{line_no} is not of the form `<id>=<service name + method name>`: {line!r}")
         ids[key] = int(number)
     missing = [GUILD_SERVICE + m for m in LIMITER_TIERS if GUILD_SERVICE + m not in ids]
     if missing:
-        fail(f"{MESSAGE_ID_TXT.name} 里找不到 {missing} —— 全量 proto-gen 还没跑(或没跑成功),消息号未定,现在不能填档位。")
+        fail(f"{MESSAGE_ID_TXT.name} does not contain {missing} -- the full proto-gen has not run (or failed), so the message IDs are not settled and the tiers cannot be filled in yet.")
     return {m: ids[GUILD_SERVICE + m] for m in LIMITER_TIERS}
 
 
@@ -359,7 +359,7 @@ def cmd_message_limiter(dry_run: bool) -> None:
     col = {}
     for name in LIMITER_COLUMNS:
         if name not in header:
-            fail(f"{LIMITER_XLSX.name} 第 1 行找不到列 {name!r},实际表头 {header}")
+            fail(f"{LIMITER_XLSX.name} row 1 has no column {name!r}; actual header {header}")
         col[name] = header.index(name) + 1
 
     existing: dict[int, tuple] = {}
@@ -369,10 +369,10 @@ def cmd_message_limiter(dry_run: bool) -> None:
         if value is None or value == "":
             continue
         if not isinstance(value, (int, float)) or int(value) != value:
-            fail(f"{LIMITER_XLSX.name} 第 {row_idx} 行的 id 不是整数:{value!r}")
+            fail(f"{LIMITER_XLSX.name} row {row_idx}: id is not an integer: {value!r}")
         message_id = int(value)
         if message_id in existing:
-            fail(f"{LIMITER_XLSX.name} 里消息号 {message_id} 出现了两次(第 {row_idx} 行)—— 先修表")
+            fail(f"{LIMITER_XLSX.name} has message ID {message_id} twice (row {row_idx}) -- fix the table first")
         existing[message_id] = tuple(ws.cell(row=row_idx, column=col[name]).value for name in LIMITER_COLUMNS[1:])
         last_data_row = row_idx
 
@@ -383,8 +383,8 @@ def cmd_message_limiter(dry_run: bool) -> None:
         if message_id in existing:
             if existing[message_id] != wanted:
                 # 最可能的原因:这个号以前属于别的方法(被释放的旧号易主),表里留着旧方法的档位。
-                fail(f"消息号 {message_id}({GUILD_SERVICE}{method})在表里已有一行 {existing[message_id]},"
-                     f"与要写的 {wanted} 不同 —— 先确认那一行是谁的,本脚本不覆盖。")
+                fail(f"message ID {message_id} ({GUILD_SERVICE}{method}) already has a row {existing[message_id]} in the table, "
+                     f"different from the wanted {wanted} -- find out whose row it is first; this script does not overwrite it.")
             continue
         to_append.append((message_id, method, wanted))
 
@@ -417,8 +417,8 @@ def cmd_message_limiter(dry_run: bool) -> None:
     expected = dict(existing)
     expected.update({message_id: wanted for message_id, _m, wanted in to_append})
     if after != expected:
-        fail(f"保存后的数据行与预期不符(应为原有 {len(existing)} 行原样 + 新增 {len(to_append)} 行)—— "
-             f"立刻 git checkout -- {LIMITER_XLSX.relative_to(REPO_ROOT).as_posix()} 还原")
+        fail(f"after saving, the data rows are not as expected (should be the original {len(existing)} rows unchanged + {len(to_append)} new rows) -- "
+             f"restore it now with git checkout -- {LIMITER_XLSX.relative_to(REPO_ROOT).as_posix()}")
     print(f"[DONE] Data rows {len(existing)} -> {len(after)}. Rerun the table exporter;"
           f" acceptance: the IDs above appear in generated/tables/messagelimiter.json."
           f" During deployment, restart router -> gate (reload MessageLimiter) -> guild in that order (90-consistency.md Y-12).")

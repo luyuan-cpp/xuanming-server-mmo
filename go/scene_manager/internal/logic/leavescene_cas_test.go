@@ -54,8 +54,7 @@ func seedLeaveCasFixture(t *testing.T, mr *miniredis.Miniredis, playerID, sceneI
 	}
 	seedSceneMembers(mr, sceneID, mustAtoi(count), members...)
 	seedNodeMembers(mr, testZoneId, "10", mustAtoi(count), members...)
-	require.NoError(t, mr.Set(sceneNodeKey(sceneID), "10"))
-	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(testZoneId), 10)))
+	require.NoError(t, mr.Set(sceneNodeKey(testZoneId, sceneID), "10"))
 	loc := &scene_manager.PlayerLocation{}
 	if err := gproto.Unmarshal([]byte(raw), loc); err == nil && loc.GetOwnerEpoch() != 0 {
 		epoch := strconv.FormatUint(loc.GetOwnerEpoch(), 10)
@@ -97,7 +96,7 @@ func TestDeletePlayerLocationIfUnchanged_Outcomes(t *testing.T) {
 	assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
 
 	// scene:{id}:node 读不到:只摘场景成员,节点集合键不传给脚本,也就不会被建出来。
-	mr.Del(sceneNodeKey(sceneID))
+	mr.Del(sceneNodeKey(testZoneId, sceneID))
 	mr.Del(nodeMembersKey(testZoneId, "10"))
 	seedSceneMembers(mr, sceneID, 2, playerID)
 	require.NoError(t, mr.Set(locKey, l1))
@@ -135,7 +134,7 @@ func TestDeletePlayerLocationIfUnchanged_ReplayRemovesMemberOnce(t *testing.T) {
 	outcome, err = deletePlayerLocationIfUnchanged(sc, playerID, l1, testZoneId, sceneID)
 	require.NoError(t, err)
 	assert.Equal(t, leaveOutcomeDeleted, outcome)
-	assert.False(t, mr.Exists(instanceMembersKey(sceneID)))
+	assert.False(t, mr.Exists(instanceMembersKey(testZoneId, sceneID)))
 	assert.False(t, mr.Exists(nodeMembersKey(testZoneId, "10")))
 }
 

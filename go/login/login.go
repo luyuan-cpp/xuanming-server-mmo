@@ -28,6 +28,7 @@ import (
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
+	"shared/shutdownbudget"
 	"shared/tracing"
 	"strconv"
 	"syscall"
@@ -71,6 +72,9 @@ func main() {
 	// 需要从环境变量取的密钥一律写成 *Env 字段(PasswordAuth.DSNEnv、Secrets.*.Env、AuthProviders.WeChat.AppSecretEnv),
 	// 照旧文档写成 "${VAR}" 的字面量由下面的 ResolveSecrets 拒绝启动(config/auth_providers.go)。
 	conf.MustLoad(*configFile, &config.AppConfig)
+	// 停机强退时限要盖住在途请求与已受理的 EnterGame 后台链(loginlogic.EnterGameShutdownDrain):计划重启时进游戏的玩家
+	// 要么进场、要么收到失败提示,而不是被拦腰砍断后干等客户端超时。必须在建 zrpc 服务之前。
+	shutdownbudget.ApplyWithBackgroundDrain(&config.AppConfig.RpcServerConf, loginlogic.EnterGameShutdownDrain)
 	if err := config.AppConfig.ValidateGlobalAuthority(os.Getenv); err != nil {
 		panic(fmt.Errorf("global Login configuration rejected; refusing to start: %w", err))
 	}
@@ -229,7 +233,7 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 
 	// 这条 etcd 连接给热关停规则的 watch 用(newKillSwitch);复用 login 既有的 etcd 客户端工厂,不另拼一份配置。
 	// PlayerId 只由发号器发(svc/player_id_minter.go,data_service.AllocateIdSegment):login 不申领 snowflake 槽位、
-	// 不写水位,也没有失槽退出(2026-11-11 删)。
+	// 不写水位,也没有失槽退出(2026-11-12 删)。
 	etcdCli, err := node.NewEtcdClient()
 	if err != nil {
 		logx.Errorf("Failed to create etcd client: %v", err)
@@ -249,7 +253,8 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 	// Start gRPC server
 	// etcdCli 直接复用上面建的那一个 —— login 到 etcd 只该有这一条业务连接,
 	// 再 New 一个既多一份 keepalive 心跳,也多一处会漏关的资源。
-	if err := startServer(ksCtx, cfg, ctx, etcdCli); err != nil {
+	// 节点 uuid 给热关停认 instance/<uuid>/ 下的规则(docs/design/rpc-kill-switch.md §5)。
+	if err := startServer(ksCtx, cfg, ctx, etcdCli, loginNode.Info.NodeUuid); err != nil {
 		logx.Errorf("Failed to start gRPC server: %v", err)
 		return err
 	}
@@ -299,7 +304,11 @@ func newSessionInterceptor(cfg config.Config, getenv func(string) string) (grpc.
 // 所以这里**不检查 cli 是否为 nil 就直接传下去**是刻意的 —— 库里对 nil
 // 的处理(打一条 Info 然后全放行)正是我们要的语义,在外面再补一个
 // "拿不到 etcd 就报错返回"只会把 fail-open 改成 fail-closed。
-func newKillSwitch(watchCtx context.Context, cfg config.Config, cli *clientv3.Client) *killswitch.Switch {
+//
+// 范围与受保护的方法(docs/design/rpc-kill-switch.md §5、§8):认 type/LoginNodeService/ 与 instance/<nodeUUID>/
+// 下的规则;LeaveGame 与 Disconnect 是会话收尾,只认精确规则 —— 挡住它们会让登录会话一直不释放、重登被拒,
+// 断线通知(gate 合成的 58 号)也经它们到达。
+func newKillSwitch(watchCtx context.Context, cfg config.Config, cli *clientv3.Client, nodeUUID string) *killswitch.Switch {
 	if cfg.KillSwitch.Disabled {
 		logx.Error("SECURITY/OPS WARNING: RPC kill switch explicitly disabled by configuration (KillSwitch.Disabled=true), " +
 			"individual methods cannot be disabled through etcd within seconds during incidents; deployment required")
@@ -310,14 +319,20 @@ func newKillSwitch(watchCtx context.Context, cfg config.Config, cli *clientv3.Cl
 		Prefix:        cfg.KillSwitch.Prefix,
 		StaleAfter:    cfg.KillSwitch.StaleAfter,
 		ResyncBackoff: cfg.KillSwitch.ResyncBackoff,
+		NodeTypes:     []string{login_proto.ENodeType_name[int32(nodeType)]},
+		Protected: []string{
+			login_proto_login.ClientPlayerLogin_LeaveGame_FullMethodName,
+			login_proto_login.ClientPlayerLogin_Disconnect_FullMethodName,
+		},
 	})
+	ks.AddInstance(nodeUUID)
 	ks.Start(watchCtx, cli)
 	return ks
 }
 
 // startServer configures and starts the gRPC server.
 func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceContext,
-	etcdCli *clientv3.Client) error {
+	etcdCli *clientv3.Client, nodeUUID string) error {
 	rpclogging.ProtectCredentials(&cfg.RpcServerConf)
 	server := zrpc.MustNewServer(cfg.RpcServerConf, func(grpcServer *grpc.Server) {
 		login_proto_login.RegisterClientPlayerLoginServer(grpcServer, loginserver.NewClientPlayerLoginServer(ctx))
@@ -388,7 +403,7 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 		defer done()
 		return handler(callCtx, req)
 	})
-	if ks := newKillSwitch(watchCtx, cfg, etcdCli); ks != nil {
+	if ks := newKillSwitch(watchCtx, cfg, etcdCli, nodeUUID); ks != nil {
 		interceptors = append(interceptors, ks.UnaryServerInterceptor())
 	}
 	// LoginAdmin 的口令闸门排在身份闸门前面:身份闸门只校验带了身份声明的调用,挡不住运维接口。
@@ -424,11 +439,14 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	}
 	fmt.Printf("  kafka:       %v\n", cfg.Kafka.Brokers)
 	fmt.Printf("  redis:       %s\n", cfg.Node.RedisClient.Host)
-	// 排队与放行锁所在实例(G4a 第 1a 批):没配 Node.QueueRedis 时与上一行共用同一个 client。
+	// 控制集群(gate 标记;没配 Node.QueueRedis 时也承载排队与放行锁):没写 ControlRedis.Addrs 时就是上一行那个实例。
+	controlRedisConf := cfg.EffectiveControlRedis()
+	fmt.Printf("  control redis: %s\n", controlRedisConf.Describe())
+	// 排队与放行锁所在实例(G4a 第 1a 批):没配 Node.QueueRedis 时与上一行共用同一个句柄。
 	if cfg.Node.QueueRedis != nil {
 		fmt.Printf("  queue redis: %s\n", cfg.Node.QueueRedis.Host)
 	} else {
-		fmt.Printf("  queue redis: shared\n")
+		fmt.Printf("  queue redis: shared with control redis\n")
 	}
 	playerRedisConf, loginRedisConf := cfg.EffectivePlayerRedis(), cfg.EffectiveLoginRedis()
 	fmt.Printf("  player redis: %s\n", playerRedisConf.Describe())

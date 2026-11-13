@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace scene_manager
 {
@@ -52,9 +53,23 @@ public:
 	[[nodiscard]] static uint32_t CheckEnterScene(Guid playerId, SceneEntity scene);
 	[[nodiscard]] static uint32_t CheckEnterScene(entt::entity player, SceneEntity scene);
 
+	// 进场请求背后的客户端是不是玩家已在场景里时的那一个。只影响「已在目标场景」这一种情况怎么处理。
+	enum class EntryClient : uint8_t
+	{
+		kSame, // 同一次登录的重复路由:客户端已有入场画面,幂等跳过
+		kNew,  // 换了客户端(断线保留内重连、顶号、gate 排空迁移):只给新客户端重发入场画面,见 HandleEnterScene
+	};
+
 	// true 表示已绑定目标场景(含幂等命中);输入无效或场景不存在返回 false。
 	// 调用方只有成功后才可写登录态、触发后续落地逻辑。
-	[[nodiscard]] static bool HandleEnterScene(entt::entity player, SceneEntity scene);
+	// 已在目标场景、client 为 kNew 时:只给新客户端重发入场画面(入场通知、自身的创建、当前显示中的目标),
+	// 场景绑定、格子与 AOI 关系都不动,所以别的玩家看不到他先消失再出现。不在目标场景时 client 不起作用,照常完整入场。
+	[[nodiscard]] static bool HandleEnterScene(entt::entity player, SceneEntity scene,
+											   EntryClient client = EntryClient::kSame);
+
+	// 本线程累计的「已在目标场景、给新客户端重发入场画面」次数,只增不减。诊断与单测用:
+	// 单测宿主没有 gate,看不到发出的消息。
+	[[nodiscard]] static uint64_t EntrySnapshotResendCount();
 
 	// AOI 先用仍在的 Hex / SceneEntityComp 清理格子和观察者,再成对摘除场景绑定与 Hex。
 	// 否则重连复用实体、落点 Hex 未变时不会重新入格;无效实体或不在场景里时 no-op。
@@ -94,4 +109,9 @@ public:
 	// 实体已销毁、实体槽位已被别的玩家复用、或玩家已换到别的场景(客户端进新场景后会重新请求)。
 	// 只在 scene 节点 loop 线程调用(hiredis 回调也在该线程)。由客户端请求触发,不在 per-tick 路径上。
 	static void SendSceneInfo(entt::entity player, bool withChannelDirectory);
+
+	// 分线目录的 Redis 键 world_channel_directory:{ctl:<zone>}:<scene_config_id>(STRING,值是 SceneChannelDirectory 的序列化字节)。
+	// 跨语言契约:与 go/scene_manager/internal/logic/world_channel_directory.go 的 worldChannelDirectoryKey 渲染出来的键逐字节相同,
+	// 改一边必须改另一边;tag 由族表生成(docs/design/redis-cluster-all-domains-20261110.md §3)。
+	[[nodiscard]] static std::string WorldChannelDirectoryKey(uint32_t zoneId, uint32_t sceneConfigId);
 };

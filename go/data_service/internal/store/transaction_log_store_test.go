@@ -1,9 +1,39 @@
 package store
 
 import (
+	"context"
 	"slices"
 	"testing"
+
+	dbpb "proto/common/database"
+
+	"github.com/luyuancpp/proto2mysql"
 )
+
+// TestTransactionLogHasReceiverCorrelationIndex 钉住 proto 的 OptionIndex(不连库,解 proto2mysql 生成的建表语句):
+// GM 回收按指令补查同指令流水(TransactionLogQuery.ToPlayerID + CorrelationIDs)要有 (to_player, correlation_id) 这条索引,
+// 而且排在最后一条:proto2mysql 按位置起索引名,插在中间会让已有库的索引名对不上。
+func TestTransactionLogHasReceiverCorrelationIndex(t *testing.T) {
+	model := proto2mysql.NewDB()
+	model.RegisterTable(&dbpb.TransactionLog{})
+	ddl := model.GetCreateTableSQL(&dbpb.TransactionLog{})
+	indexes := parseWantedIndexes(ddl)
+	if len(indexes) == 0 {
+		t.Fatalf("没从建表语句里解出任何索引:\n%s", ddl)
+	}
+	last := indexes[len(indexes)-1]
+	if !slices.Equal(last.cols, []string{"to_player", "correlation_id"}) {
+		t.Fatalf("最后一条索引是 %s %v,要的是 (to_player, correlation_id):\n%s", last.name, last.cols, ddl)
+	}
+}
+
+// TestQueryLogRejectsBothPlayerConditions:双向玩家条件和只收到方的条件语义不同,同时给就是调用方拼错了,不发 SQL。
+func TestQueryLogRejectsBothPlayerConditions(t *testing.T) {
+	s := &TransactionLogStore{} // db 为 nil:走到发 SQL 就会 panic,能证明校验在发 SQL 之前
+	if _, _, err := s.QueryLog(context.Background(), &TransactionLogQuery{PlayerID: 1, ToPlayerID: 1}); err == nil {
+		t.Fatal("PlayerID 和 ToPlayerID 同时给必须拒绝")
+	}
+}
 
 // TestTxLogRowsInLockOrder 钉住流水多行 INSERT IGNORE 的取锁顺序:按 tx_id 升序,且不改调用方的切片。
 // 到达序拼批在 rebalance 重叠时会让两个实例在主键上反序互等(1213),见 InsertBatchIgnore 的注释;

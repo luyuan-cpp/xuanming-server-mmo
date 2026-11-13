@@ -1024,6 +1024,51 @@ TEST_F(AssetOpSystemTest, TradeReturnOfOwnEscrowIgnoresGainBlocks)
 	EXPECT_NE(nullptr, Ledger(ASSET_OP_STREAM_TRADE_CREDIT));
 }
 
+// 入账会让余额溢出 uint64 时,在一切改动之前记确定拒绝(数据覆写审计 r2-trade#1 一并修)。原先货币排在物品之后入账,
+// 溢出要到 AddCurrency 才判:物品已经入包,成了部分到账;一点没改时又回 RETRY,永远重投。
+// 判定按补缴扣还后的净额,与 AddCurrency 同一份扣还计划:欠款把这笔收入全抵掉时不溢出,照常应用。
+TEST_F(AssetOpSystemTest, CreditThatWouldOverflowACurrencyIsRejectedBeforeAnyChange)
+{
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	GiveBags();
+	constexpr uint32_t kStackable = 10;
+	// 直接写余额(同 currency_add_guard_test 的 SetBalance):用 AddCurrency 堆到这么大,会顺带触发异常检测。
+	constexpr uint64_t nearlyFull = std::numeric_limits<uint64_t>::max() - 5;
+	auto& balances = tlsEcs.actorRegistry.get<CurrencyComp>(player_);
+	while (balances.values_size() <= static_cast<int>(kCurrencyGold)) balances.add_values(0);
+	balances.set_values(static_cast<int>(kCurrencyGold), nearlyFull);
+	ASSERT_EQ(nearlyFull, Gold());
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+
+	const auto credit = [&](uint64_t seq)
+	{
+		auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, seq, 10, TX_GUILD_SHOP);
+		auto* stack = request.mutable_bundle()->add_items();
+		stack->set_config_id(kStackable);
+		stack->set_count(2);
+		return CallCredit(request);
+	};
+
+	EXPECT_TRUE(CurrencySystem::CreditOverflows(player_, kCurrencyGold, 10));
+	const auto rejected = credit(1);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, rejected.outcome()) << "确定拒绝,不回 RETRY";
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), rejected.reason().id());
+	EXPECT_EQ(nearlyFull, Gold());
+	EXPECT_EQ(0u, inventory.GetTotalItemCount(kStackable)) << "物品一件都不发";
+	EXPECT_NE(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT)) << "已记账:结局固定";
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, credit(1).outcome()) << "同一 seq 重投只读回放";
+	EXPECT_EQ(0u, inventory.GetTotalItemCount(kStackable));
+
+	// 欠款把这笔收入全抵掉:净入账 0,不溢出,照常应用。
+	ASSERT_EQ(static_cast<uint32_t>(kSuccess), CurrencySystem::AttachDebt(player_, kCurrencyGold, 50, "test", "gm"));
+	EXPECT_FALSE(CurrencySystem::CreditOverflows(player_, kCurrencyGold, 10));
+	const auto applied = credit(2);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, applied.outcome());
+	EXPECT_FALSE(applied.partial());
+	EXPECT_EQ(nearlyFull, Gold()) << "10 全额抵扣欠款,余额不变";
+	EXPECT_EQ(2u, inventory.GetTotalItemCount(kStackable));
+}
+
 TEST_F(AssetOpSystemTest, CreditFirstCurrencyFailsRetry)
 {
 	// 只有 1 条货币且失败 → 一点没改,回 RETRY 且不记账(可安全重投)。

@@ -176,8 +176,23 @@ func TestEvalAndConfirmScriptErrorIsNotResent(t *testing.T) {
 
 	res, err := m.EvalAndConfirm(context.Background(), `return redis.error_reply("boom")`, []string{testMintKey})
 	require.Error(t, err)
+	assert.False(t, errors.Is(err, ErrOwnerEpochMintResultUnknown), "首发就被拒:确定没执行,不是结果未知")
 	assert.Equal(t, 1, res.Attempts)
 	assert.Len(t, rec.recordedPipelines(), 1)
+}
+
+// 首发结果未知之后的重发被 Redis 拒绝(例如 OOM):这一次的拒绝说明不了首发有没有执行,必须仍报结果未知,
+// 调用方才会按「可能已写」回滚,而不是当成没写。
+func TestEvalAndConfirmRejectAfterUnknownStaysUnknown(t *testing.T) {
+	m, rec, _ := newRecordedMinter(t, config.OwnerEpochMintConfig{})
+	rec.faults = []pipelineFault{faultEOF}
+	rec.replies = []error{testRedisError("OOM command not allowed when used memory > 'maxmemory'.")}
+
+	res, err := m.EvalAndConfirm(context.Background(), testIncrScript, []string{testMintKey})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrOwnerEpochMintResultUnknown)
+	assert.Equal(t, 2, res.Attempts)
+	assert.Len(t, rec.recordedPipelines(), 2)
 }
 
 // EVAL 结果未知(传输错误)时在新连接上重发整条 pipeline;这里首发根本没发出去,所以脚本只执行了一次。
@@ -201,6 +216,7 @@ func TestEvalAndConfirmGivesUpAfterBoundedAttempts(t *testing.T) {
 	res, err := m.EvalAndConfirm(context.Background(), testIncrScript, []string{testMintKey})
 	require.Error(t, err)
 	assert.False(t, errors.Is(err, ErrOwnerEpochMintNotSent))
+	assert.ErrorIs(t, err, ErrOwnerEpochMintResultUnknown, "调用方据此按「可能已写」回滚")
 	assert.Equal(t, ownerEpochMintAttempts, res.Attempts)
 	assert.Len(t, rec.recordedPipelines(), ownerEpochMintAttempts)
 }
@@ -246,6 +262,7 @@ func TestEvalAndConfirmUnsentResendAfterUnknownStaysUnknown(t *testing.T) {
 	res, err := m.EvalAndConfirm(context.Background(), testIncrScript, []string{testMintKey})
 	require.Error(t, err)
 	assert.False(t, errors.Is(err, ErrOwnerEpochMintNotSent), "首发结果未知,不能报成没发")
+	assert.ErrorIs(t, err, ErrOwnerEpochMintResultUnknown)
 	assert.Equal(t, 1, res.Attempts, "只有首发那一次可能到达过 Redis")
 	assert.Len(t, rec.recordedPipelines(), 2)
 }
@@ -466,4 +483,15 @@ func TestNewRedisOwnerEpochMinterRejectsBadInput(t *testing.T) {
 
 	_, err = NewRedisOwnerEpochMinter(playerredis.Config{}, config.OwnerEpochMintConfig{}, WallClockMs)
 	require.Error(t, err, "玩家域配置没有地址")
+}
+
+// 池上限按 Little 定律定(ownerEpochMintPoolSize 的注释):每节点 = ⌈每个 SM 的铸造速率 × WAITAOF 等待上限 / 最少主节点数⌉。
+// 钉住的是算式本身:谁改了速率目标、等待上限(config.MaxOwnerEpochMintWaitAOFTimeoutMs)或主节点下限而没重算字面量,这里变红;
+// 字面量变了还要同步 k8s_deploy.ps1 连接总账的 PlayerFixed(契约测试从源码读这一行)。
+func TestOwnerEpochMintPoolSizeFollowsLittlesLaw(t *testing.T) {
+	concurrentPerSM := ownerEpochMintTargetRatePerSecond * config.MaxOwnerEpochMintWaitAOFTimeoutMs // 次/s × 毫秒
+	perNode := (concurrentPerSM + ownerEpochMintMinPlayerRedisMasters*1000 - 1) / (ownerEpochMintMinPlayerRedisMasters * 1000)
+	assert.Equal(t, perNode, ownerEpochMintPoolSize,
+		"ownerEpochMintPoolSize 必须等于 ⌈%d/s × %dms / %d 个主节点⌉", ownerEpochMintTargetRatePerSecond,
+		config.MaxOwnerEpochMintWaitAOFTimeoutMs, ownerEpochMintMinPlayerRedisMasters)
 }

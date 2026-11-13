@@ -1,0 +1,55 @@
+# Go 服务后台 goroutine / 后台循环 panic 的告警(2026-11-12;docs/design/assetop-redelivery-sharding-20261110.md §14.3)。
+#
+# 指标 safego_panic_total{point} 由 go/shared/safego 注册在默认注册表上,所有 Go 服务共用同一个名字:
+# safego.Go / safego.Run / safego.Loop 与 go/shared/looplive 的 Round 兜住一次 panic 就加一,point 是代码里写死的点位名
+# (不带 player_id 之类的实体 id)。兜住的含义是「进程没死、循环还在跑」,所以它是静的:不告警就没人知道。
+#
+# 为什么要报:
+#   - 一轮 panic 意味着那一轮做到一半、结局未知。走排空门禁的后台循环(资产指令重投、GM 回收派发、过期清理、终局发件箱、
+#     撮合、投榜等)在 panic 时已经把本进程的排空证明打成 HOLD,要重启才清得掉。
+#   - 按片分工的循环每一轮各自 recover(一条坏数据不该随着片换主把副本挨个打死),于是「反复 panic」表现为循环空转:
+#     对应的停摆规则(asset-channel-alerts.yaml 的 …LoopStalled、mail-alerts.yaml 的 MailSweepStalled、
+#     match-outcome-outbox-alerts.yaml 的 MatchOutcomeOutboxLoopStalled)会响;只 panic 一两次的,只有这里报。
+#
+# 为什么直接判大于 0、不用 increase():计数序列在某个点位第一次 panic 时才出现(之前没有序列,不是 0),increase() 看不到第一次;
+# 进程重启才清零。所以告警从第一次 panic 一直挂到这个 Pod 重启 —— 修掉根因、重启,它才消失;这与 HOLD 同寿命。
+#
+# 抓取前提:各 Go 服务的指标端口已有 ServiceMonitor / PodMonitor(或按注解抓取的 job),与各服务自己的告警文件相同。
+# 没有任何 panic 时这个指标没有序列,规则既不触发也不报错。
+#
+# 契约测试:tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1(指标名、label、式子的形状)。
+#
+# 安装(与其余告警文件相同,手工 apply):
+#   kubectl apply -n observability -f deploy/k8s/go-background-alerts.yaml
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: go-background-alerts
+  labels:
+    app: go-svc
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: go.background-panic
+      interval: 60s
+      rules:
+        - alert: GoBackgroundPanicRecovered
+          expr: |
+            max by (namespace, pod, point) (safego_panic_total) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 的后台点位 {{ $labels.point }} panic 过"
+            description: >-
+              这个副本的 {{ $labels.point }} 已经 panic 过 {{ $value | printf "%.0f" }} 次(被兜住,进程没有重启)。
+              每一次都意味着那一轮做到一半、结局未知;走排空门禁的后台循环此时已经把这个进程的排空证明打成 HOLD。
+              按日志事件 goroutine_panic 与点位名找到栈,修掉根因(多半是一行解释不了的数据或一处没判空),再重启这个 Pod。
+              同一个循环反复 panic 时对应的停摆规则会跟着响。告警在这个 Pod 重启之前一直在。

@@ -178,7 +178,7 @@ type AssetPipeline struct {
 	watcher *scenenode.Watcher
 	conns   *scenenode.ConnCache
 
-	// wake 订阅 scene 发布的落地唤醒(核心 Redis 频道 assetop:wake);AssetOp.Wake 关闭时为 nil。构造后只读。
+	// wake 订阅 scene 发布的落地唤醒(控制集群上的分片频道 assetop:wake:{aw:<player_id % 64>},SSUBSCRIBE 订全部 64 个);AssetOp.Wake 关闭时为 nil。构造后只读。
 	wake *assetopwake.Subscriber
 	// maintenanceOn:本副本的配置是否开了日对账或自动放弃(两项都关时不竞选,省一把锁)。构造后只读。
 	maintenanceOn bool
@@ -199,7 +199,8 @@ type AssetPipeline struct {
 	wg       sync.WaitGroup
 }
 
-// maintenanceLeaderKey 是"资产通道维护(日对账 + 自动放弃)"选主锁的键,放在 guild 全局 Redis(RedisClient,全体副本共享)。
+// maintenanceLeaderKey 是"资产通道维护(日对账 + 自动放弃)"选主锁的键,放在控制集群(ControlRedis,全体副本共享)。
+// 单键锁,不带 hash tag(docs/design/redis-cluster-all-domains-20261110.md §3.2「不带 tag 的单键族」)。
 // 与历练巡检租约 guild:trial:sweep:lease 同一个前缀风格;值是竞选者的节点 uuid + 随机串,排障时 GET 一眼看出谁在跑。
 const maintenanceLeaderKey = "guild:assetop:maintenance:leader"
 
@@ -209,8 +210,8 @@ const maintenanceLeaderKey = "guild:assetop:maintenance:leader"
 // playerRedis 读 player:{id}:location:必须是 scene / scene_manager 写这把键的同一个玩家域(svcCtx.PlayerRedis),指错的表现是所有玩家
 // "不在线"、资产指令永远 PENDING,且没有任何报错。
 //
-// 落地唤醒(AssetOp.Wake 开启时)订阅的是控制域的 wakeRedis:scene 在核心 Redis(`redis` 实例 DB 0)上 PUBLISH assetop:wake,
-// 本服务里指向它的正是 PlayerLocatorRedis 这一份配置(设计 §2「唤醒通道」)。Pub/Sub 不分 DB,但实例指错的表现同样是
+// 落地唤醒(AssetOp.Wake 开启时)订阅的是控制域的 wakeRedis:scene 向控制集群 SPUBLISH 分片频道 assetop:wake:{aw:<player_id % 64>},
+// 本服务里指向它的是 ControlRedis 这一份配置(设计 §2「唤醒通道」;2026-11-12 起取代 PlayerLocatorRedis 段)。Pub/Sub 不分 DB,但实例指错的表现同样是
 // 永远收不到唤醒、只剩原退避,且不报错。
 //
 // 不连任何东西:ConnCache 惰性拨号,watcher 在 Start 里才连 etcd,Redis 在第一次定位 / Start 订阅时才连。
@@ -222,7 +223,7 @@ func NewAssetPipeline(c config.AssetOpConf, retryBase time.Duration, playerRedis
 		return nil, errors.New("guild: 资产管线缺位置键 Redis(player:{id}:location)")
 	}
 	if wakeRedis == nil {
-		return nil, errors.New("guild: 资产管线缺唤醒频道 Redis(assetop:wake)")
+		return nil, errors.New("guild: 资产管线缺唤醒频道 Redis(assetop:wake:{aw:N} 分片频道)")
 	}
 	signer, err := NewAssetOpSigner()
 	if err != nil {
@@ -294,7 +295,7 @@ func NewAssetPipeline(c config.AssetOpConf, retryBase time.Duration, playerRedis
 // 必须在 Start 之前调用(同 AttachPersistedLedger:Start 之后再写字段就是数据竞争,这里打 ERROR、不生效);nil 接收者安全。
 // rdb 为 nil 时不竞选、打 ERROR:维护不跑只会少对账、不放弃(fail-closed),不影响资产正确性。
 // 配置里对账与放弃都关着时不竞选,只打 INFO。id 是竞选者标识(节点 uuid),只进锁值与日志。
-func (p *AssetPipeline) AttachMaintenanceLeader(rdb *redis.Client, id string) {
+func (p *AssetPipeline) AttachMaintenanceLeader(rdb redis.UniversalClient, id string) {
 	if p == nil {
 		return
 	}
@@ -312,7 +313,7 @@ func (p *AssetPipeline) AttachMaintenanceLeader(rdb *redis.Client, id string) {
 		logx.Error("[guild] Asset channel maintenance not started: no Redis client for leader election; pending audit and automatic abandon will not run")
 		return
 	}
-	p.maintenance = leader.New(leader.NewGoRedisStore(rdb), maintenanceLeaderKey, leader.Options{
+	p.maintenance = leader.New(leader.NewUniversalStore(rdb), maintenanceLeaderKey, leader.Options{
 		ID: id,
 		OnStateChange: func(leading bool) {
 			if leading {

@@ -33,6 +33,7 @@ import (
 	smpb "proto/scene_manager"
 	"shared/accountdirectory"
 	"shared/clientendpoint"
+	"shared/clusterredis"
 	"shared/generated/table"
 	"shared/idsegment"
 	"shared/playerredis"
@@ -55,11 +56,15 @@ type ServiceContext struct {
 	idSegmentNeverUsed bool
 	idSegmentFrontier  []byte
 	AccountDirectory   accountdirectory.Directory
-	// RedisClient 是控制域:gate 排空标记。键不带 hash tag,不经玩家域守卫。
-	RedisClient *redis.Client
-	// QueueRedis 只给排队(loginqueue.Queue)与放行锁(loginqueue.Dispatcher)用。Node.QueueRedis 没配置时
-	// 与 RedisClient 是同一个指针(newQueueRedis)。gate 排空标记仍走 RedisClient。
-	QueueRedis *redis.Client
+	// ControlRedis 是控制集群句柄(shared/clusterredis,ControlClusterKeys 键策略;2026-11-12 取代不带守卫的 RedisClient):
+	// gate 排空 / 已排空 / 停写标记(gm 族)。没写 ControlRedis.Addrs 时连的是 Node.RedisClient 那一个实例。
+	ControlRedis redis.UniversalClient
+	// QueueRedis 只给排队(loginqueue.Queue)与放行锁(loginqueue.Dispatcher)用(q 族),键策略同上。Node.QueueRedis 没配置时
+	// 与 ControlRedis 是同一个客户端(newQueueRedis)。gate 标记始终走 ControlRedis。
+	QueueRedis redis.UniversalClient
+	// queueAdmitRedis 是放行流水线专用的句柄:与 QueueRedis 连同一处,不挂发送前守卫(mustNewQueueAdmitRedis)。
+	// 只在 Queue.Enabled 时建;nil 时 initLoginQueue 不换句柄(只构造了 ServiceContext 的单测,句柄本来就不带守卫)。
+	queueAdmitRedis redis.UniversalClient
 	// PlayerRedis 是玩家域句柄(shared/playerredis,生产是 Redis Cluster):player_locker、login_idempotent、login_generation。
 	PlayerRedis redis.UniversalClient
 	// LoginRedis 是登录域句柄(同上,部署上可以与玩家域共用一个 Cluster):连接栅栏、登录态、设备集、令牌。
@@ -150,21 +155,15 @@ func NewServiceContext() *ServiceContext {
 		}
 	}()
 
-	// Initialize Redis client
-	redisHost := config.AppConfig.Node.RedisClient.Host
-	redisDB := int(config.AppConfig.Node.RedisClient.DB)
-	if err := config.AppConfig.Node.RedisClient.ValidatePoolSize(); err != nil {
-		panic(fmt.Errorf("Node.RedisClient: %w", err))
+	// 控制集群句柄:gate 标记,以及没单独配排队实例时的排队与放行锁。四个句柄都经 shared/clusterredis 建:
+	// 发送前按各自的键策略核对键,结果未知的命令不由客户端重发;连不上或配置非法起服即失败。
+	controlConf := config.AppConfig.EffectiveControlRedis()
+	controlRedis := mustNewControlRedis(ctx, "ControlRedis", controlConf)
+	queueRedis, queueConf := newQueueRedis(ctx, controlRedis, controlConf, config.AppConfig.EffectiveQueueRedis())
+	var queueAdmitRedis redis.UniversalClient
+	if config.AppConfig.Queue.Enabled {
+		queueAdmitRedis = mustNewQueueAdmitRedis(ctx, queueConf)
 	}
-
-	redisClient := redis.NewClient(redisOptions(config.AppConfig.Node.RedisClient))
-
-	if err := redisClient.Ping(ctx).Err(); err != nil {
-		panic(fmt.Errorf("failed to connect Redis: %w", err))
-	}
-	// 生效值(缺省时是 go-redis 算出来的 10 × GOMAXPROCS):核对 ConfigMap 镜像的 PoolSize 是否真的被加载。
-	logx.Infof("Redis client %s DB=%d pool_size=%d", redisHost, redisDB, redisClient.Options().PoolSize)
-	queueRedis := newQueueRedis(ctx, redisClient, config.AppConfig.Node.QueueRedis)
 	playerRedis := mustNewDomainRedis(ctx, "PlayerRedis", config.AppConfig.EffectivePlayerRedis())
 	loginRedis := mustNewDomainRedis(ctx, "LoginRedis", config.AppConfig.EffectiveLoginRedis())
 
@@ -232,8 +231,9 @@ func NewServiceContext() *ServiceContext {
 		authCleanup:         authCleanup,
 		rootAdmission:       drainproof.New(),
 		preloads:            drainproof.New(),
-		RedisClient:         redisClient,
+		ControlRedis:        controlRedis,
 		QueueRedis:          queueRedis,
+		queueAdmitRedis:     queueAdmitRedis,
 		PlayerRedis:         playerRedis,
 		LoginRedis:          loginRedis,
 		KafkaClient:         kafkaClient,
@@ -254,55 +254,39 @@ func NewServiceContext() *ServiceContext {
 	return sc
 }
 
-// redisOptions 把 Node 段的 RedisConf 原样映射成 go-redis 连接选项,配置里写了的每一项都要真的生效。
-// 超时为 0 时沿用 go-redis 缺省(拨号 5s、读写 3s);PoolSize 为 0 时是缺省 10 × GOMAXPROCS,
-// 共享 Redis 连接总账按它记账(见 config.RedisConf.PoolSize)。
-// 2026-10-23 之前这里没传三项超时,etc/login.yaml 与 K8s ConfigMap 写的 DialTimeout 3s 被静默忽略
-// (shared-redis-split-by-purpose.md §2.5 第 8 条)。
-func redisOptions(c config.RedisConf) *redis.Options {
-	return &redis.Options{
-		Addr:             c.Host,
-		Password:         c.Password,
-		DB:               int(c.DB),
-		PoolSize:         c.PoolSize,
-		DialTimeout:      c.DialTimeout,
-		ReadTimeout:      c.ReadTimeout,
-		WriteTimeout:     c.WriteTimeout,
-		DisableIndentity: true, // suppress CLIENT SETINFO on Redis < 7.2
-	}
-}
-
-// queueRedis 是 initLoginQueue 取排队句柄的唯一入口。QueueRedis 为 nil 只出现在只构造了 RedisClient 的
-// ServiceContext(单测);按「未配置 = 与核心共用」处理,与 newQueueRedis 的缺省同一语义。
-func (s *ServiceContext) queueRedis() *redis.Client {
+// queueRedis 是 initLoginQueue 取排队句柄的唯一入口。QueueRedis 为 nil 只出现在只构造了 ControlRedis 的
+// ServiceContext(单测);按「未配置 = 与控制集群句柄共用」处理,与 newQueueRedis 的缺省同一语义。
+func (s *ServiceContext) queueRedis() redis.UniversalClient {
 	if s.QueueRedis != nil {
 		return s.QueueRedis
 	}
-	return s.RedisClient
+	return s.ControlRedis
 }
 
-// newQueueRedis 返回排队与放行锁用的 Redis 句柄。c 为 nil(Node.QueueRedis 整段没写)时原样返回 core:
-// 同一个指针、不多开连接池,行为与拆分前逐字相同。配置了就按 redisOptions 另建一个 client,
-// 与核心同口径:PoolSize 非法或 Ping 不通直接 panic(起服即失败),错误里带句柄名与 Host、不带口令。
-func newQueueRedis(ctx context.Context, core *redis.Client, c *config.RedisConf) *redis.Client {
-	if c == nil {
-		logx.Infof("Redis queue client: shared with core %s", core.Options().Addr)
-		return core
+// newQueueRedis 返回排队与放行锁用的句柄,以及它所连实例的配置(放行流水线的专用句柄按它另建)。
+// split 为 nil(Node.QueueRedis 整段没写)时原样返回控制集群的句柄与配置:同一个客户端、不多开连接池。
+// 配置了就按同一个构造器另建一个,键策略相同;配置非法或 Ping 不通起服即失败。
+func newQueueRedis(ctx context.Context, control redis.UniversalClient, controlConf clusterredis.Config,
+	split *clusterredis.Config) (redis.UniversalClient, clusterredis.Config) {
+	if split == nil {
+		logx.Info("Redis queue client: shared with ControlRedis")
+		return control, controlConf
 	}
-	if err := c.ValidatePoolSize(); err != nil {
-		panic(fmt.Errorf("Node.QueueRedis: %w", err))
-	}
-	client := redis.NewClient(redisOptions(*c))
-	if err := client.Ping(ctx).Err(); err != nil {
-		panic(fmt.Errorf("failed to connect Node.QueueRedis %s: %w", c.Host, err))
-	}
-	logx.Infof("Redis queue client %s DB=%d pool_size=%d", c.Host, c.DB, client.Options().PoolSize)
-	return client
+	return mustNewControlRedis(ctx, "Node.QueueRedis", *split), *split
 }
 
 // mustNewDomainRedis 按配置建玩家域或登录域句柄,配置非法或连不上起服即失败。错误与日志不带口令。
 func mustNewDomainRedis(ctx context.Context, name string, c playerredis.Config) redis.UniversalClient {
-	client, err := playerredis.New(c)
+	return mustNewGuardedRedis(ctx, name, c, clusterredis.PlayerDomainKeys)
+}
+
+// mustNewControlRedis 按配置建控制集群句柄(gate 标记、排队与放行锁),口径同 mustNewDomainRedis,只是键策略不同。
+func mustNewControlRedis(ctx context.Context, name string, c clusterredis.Config) redis.UniversalClient {
+	return mustNewGuardedRedis(ctx, name, c, clusterredis.ControlClusterKeys)
+}
+
+func mustNewGuardedRedis(ctx context.Context, name string, c clusterredis.Config, keys clusterredis.KeyPolicy) redis.UniversalClient {
+	client, err := clusterredis.New(c, keys)
 	if err != nil {
 		panic(fmt.Errorf("%s: %w", name, err))
 	}
@@ -310,7 +294,25 @@ func mustNewDomainRedis(ctx context.Context, name string, c playerredis.Config) 
 		_ = client.Close()
 		panic(fmt.Errorf("failed to connect %s (%s): %w", name, c.Describe(), err))
 	}
-	logx.Infof("Redis %s client %s", name, c.Describe())
+	logx.Infof("Redis %s client %s keys=%s", name, c.Describe(), keys)
+	return client
+}
+
+// mustNewQueueAdmitRedis 建放行流水线专用的句柄(loginqueue.Queue.UseAdmitPipelineClient):与排队句柄连同一处,
+// 不挂发送前守卫 —— 守卫拒绝 pipeline 里的 EVAL,而放行流水线只发给队列键所在槽的主节点、节点客户端不自动重发,
+// 那条拒绝的理由在这里不成立(键的规则由 loginqueue 发送前自己核)。每个节点一条连接就够:只有本 zone 的 dispatcher leader
+// 用它,一次只发一块;空闲 ConnMaxIdleSeconds 后回落到零连接,备机不占连接。
+func mustNewQueueAdmitRedis(ctx context.Context, c clusterredis.Config) redis.UniversalClient {
+	c.PoolSizePerNode = 1
+	client, err := clusterredis.NewPinned(c)
+	if err != nil {
+		panic(fmt.Errorf("login queue admit pipeline redis: %w", err))
+	}
+	if err := client.Ping(ctx).Err(); err != nil {
+		_ = client.Close()
+		panic(fmt.Errorf("failed to connect the login queue admit pipeline redis (%s): %w", c.Describe(), err))
+	}
+	logx.Infof("Redis queue admit pipeline client %s", c.Describe())
 	return client
 }
 
@@ -441,7 +443,7 @@ func candidatesFromNodes(ctx context.Context, drain *loginqueue.DrainMarkCache, 
 }
 
 // gateDrainMarkRefresh 是排空标记缓存的时长(2026-11-05,缺口清单第 31 条):每个 login 实例每个 zone 每秒至多
-// 查一次 gate:<id>:draining。排空是分钟级的计划内动作,晚 1 秒生效无关紧要;调大会让缩容前多分进来几秒的玩家
+// 查一次排空标记(gate:{gm:<zone>}:<id>:draining)。排空是分钟级的计划内动作,晚 1 秒生效无关紧要;调大会让缩容前多分进来几秒的玩家
 // (他们之后照常随排空流程改派),调小则回到每次都查。
 const gateDrainMarkRefresh = time.Second
 
@@ -505,6 +507,7 @@ func buildGateCandidates(nodes []node.WatchedNode, zoneID uint32, require bool) 
 				ZoneID:         n.ZoneId,
 				MaxConnections: n.MaxConnections,
 				Stale:          w.Stale,
+				Build:          n.GetBuild(),
 			},
 			launchTime: n.LaunchTime,
 		})
@@ -574,7 +577,7 @@ func (s *ServiceContext) initLoginQueue() {
 	s.queueCapProvider = &gateWatcherCapacityProvider{
 		watcher:               s.GateWatcher,
 		policy:                s.ZonePolicy,
-		drain:                 loginqueue.NewDrainMarkCache(s.RedisClient, gateDrainMarkRefresh, nil),
+		drain:                 loginqueue.NewDrainMarkCache(s.ControlRedis, config.AppConfig.Node.ZoneId, gateDrainMarkRefresh, nil),
 		requireClientEndpoint: config.AppConfig.RequireClientEndpoint,
 		inflight:              s.gateInflight,
 	}
@@ -598,6 +601,10 @@ func (s *ServiceContext) initLoginQueue() {
 		cfg.AdmitTTL,
 		s.QueueTokenSigningSecret(),
 	)
+	// 放行流水线走专用句柄(不带守卫、发给槽位所在主节点),见 mustNewQueueAdmitRedis。
+	if s.queueAdmitRedis != nil {
+		s.LoginQueue.UseAdmitPipelineClient(s.queueAdmitRedis)
+	}
 
 	// 出队只能覆盖本 zone:GateWatcher 的前缀带 Node.ZoneId(见 NewServiceContext 的 gatePrefix),
 	// FreeSlots 和挑 gate 都只看得见本 zone 的 gate。所以锁也只抢本 zone 那一把:同 zone 的副本
@@ -665,8 +672,8 @@ func (s *ServiceContext) startGateWatcher() {
 }
 
 // startGateDrainMonitor 起 gate 排空判定循环(集群外入口 D87:标 draining → 等 drained → 删 Pod
-// 的中间一步)。k8s_gate_drain.ps1 标完 gate:{id}:draining 后,靠它在在线掉到阈值或等到期限时
-// 写 gate:{id}:drained,脚本见到标记才删 Pod。不起它,drained 永远不会出现,gate 滚动只能等脚本超时。
+// 的中间一步)。k8s_gate_drain.ps1 标完排空标记(gate:{gm:<zone>}:<id>:draining)后,靠它在在线掉到阈值或等到期限时
+// 写上 drained 标记,脚本见到标记才删 Pod。不起它,drained 永远不会出现,gate 滚动只能等脚本超时。
 //
 // 快照取 GateWatcher 的原始节点,**不能**复用 CandidatesForZone / buildGateCandidates:那条链会跳过
 // 缺客户端地址的 gate、按地址去重、剔除 draining,而正在排空的 gate 恰恰是这里要看的。
@@ -679,7 +686,7 @@ func (s *ServiceContext) startGateDrainMonitor() {
 	cfg := config.AppConfig.GateDrain
 	if s.GateWatcher == nil || cfg.Interval <= 0 {
 		logx.Errorf("[GateDrain] monitor NOT started (GateDrain.Interval=%s, gate watcher present=%v): "+
-			"gate:{id}:drained will never be written and k8s_gate_drain.ps1 can only time out",
+			"the drained mark will never be written and k8s_gate_drain.ps1 can only time out",
 			cfg.Interval, s.GateWatcher != nil)
 		return
 	}
@@ -707,7 +714,7 @@ func (s *ServiceContext) startGateDrainMonitor() {
 						logx.Errorf("gate drain snapshot failed: %v", err)
 						return
 					}
-					loginqueue.EvaluateDrainingGates(ctx, s.RedisClient, gates, policy, time.Now().Unix())
+					loginqueue.EvaluateDrainingGates(ctx, s.ControlRedis, config.AppConfig.Node.ZoneId, gates, policy, time.Now().Unix())
 					s.sendDrainMigrationLeases(ctx, gates, migratePolicy)
 				})
 			}

@@ -239,9 +239,16 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 ## 5. `GateMaxConnections` —— 客户端连接硬上限
 
 `bin/etc/base_deploy_config.yaml` 的 `GateMaxConnections` 限制单个 gate 同时持有的
-客户端 TCP 会话。闸门在分配 session id / `SessionInfo` 之前执行;超限连接直接关闭,
-不向 Login 发送断线 RPC。容量拒绝日志每 1024 条汇总一次,无会话的断开回调不逐条
-写日志。
+客户端 TCP 会话。
+
+**(2026-11-12,未编译)闸门在 accept 处**:muduo `Acceptor` 的准入回调(`handler/rpc/connection_admission.h`,
+`main.cpp` 经 `TcpServer::setAdmissionCallback` 装上)在 accept 成功之后、`TcpConnection` 建出来之前依次判
+关源、总量、新建速率;被拒的连接当场以 RST 关闭,gate 不为它建任何对象,内核不留 TIME_WAIT,也不会有断开回调。
+新建速率是一个全局令牌桶:缺省桶深等于连接上限、持续速率是上限的 1%/秒(下限 100),
+用 `GATE_ACCEPT_RATE_PER_SECOND` / `GATE_ACCEPT_BURST` 覆盖,写错拒绝启动。
+连接回调里原来那道总量判定(分配 session id / `SessionInfo` 之前)留作第二道;走到它的连接直接关闭,
+不向 Login 发送断线 RPC。拒绝日志每 1024 条汇总一次,无会话的断开回调不逐条写日志。
+接纳、拒绝(按原因)、未验签连接数与握手耗时都有指标,见设计文档 P1-4 与运维手册 §3.2。
 
 公网拒绝路径遵守同一口径:未认证消息、无效 token、未知 protobuf 和 codec 解析错误
 都只做采样日志。handler 一旦拒绝,codec 会停止分发当前 read 中剩余的 pipeline 帧;
@@ -258,6 +265,10 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 **(2026-11-06,未编译)握手期限已加**:建连 10 秒内不验签就关,判据是距建连的时长,不看期间有没有发字节;
 验签之后 30 秒收不到任何一帧也关(客户端心跳,见 `docs/design/gate-client-heartbeat.md`)。所以未认证连接每条最多占
 10 秒,不再能长期占槽;但持续高速建连仍能占满全部槽位,未认证连接的独立预算与 LRU 淘汰还没做。
+
+**(2026-11-12,未编译)新建速率闸给「持续高速建连」加了上界**:只建连不验签的来源第一次能在 10 秒内占满全部槽位
+(桶深等于上限),之后稳态最多占住上限的 10%(速率 × 握手期限)。这段时间里合法新连接与它抢同一个速率桶,
+所以独立预算与 LRU 淘汰仍然要做;已连上的玩家不受影响。
 
 > **这最后一句是一个已知的、成建制的缺口，不是措辞上的保留。** 它的完整分析、业界对照
 > （nginx / HAProxy / Envoy / sshd / Redis / PostgreSQL 的对应机制）、两条拒绝路线的取舍，

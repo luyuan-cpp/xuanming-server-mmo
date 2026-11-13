@@ -181,19 +181,13 @@ ItemStore::QuantityVerdict ItemStore::CheckQuantities(const ItemCountMap &requir
 
 // ── 堆叠语义 ─────────────────────────────────────────────────────────────
 
-ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted,
-                                                 const std::unordered_set<Guid> *exclude) const
+ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted) const
 {
     ItemCountMap freeRoomByConfig;
     // 空余总量与遍历顺序无关；Bag 已在扣空时释放实例，加载也跳过旧档零堆。
     for (const auto &[guid, item] : items_)
     {
         if (!wanted.contains(item.config_id()))
-        {
-            continue;
-        }
-        // 被排除的实例视同不存在 —— 它的空余不能算给这一批。
-        if (exclude != nullptr && exclude->contains(guid))
         {
             continue;
         }
@@ -216,8 +210,7 @@ ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted,
 }
 
 uint32_t ItemStore::PlanStackIntoExistingStacks(const ItemComp &proto, uint32_t maxStackSize,
-                                                std::vector<StackFill> &outFillPlan,
-                                                const std::unordered_set<Guid> *exclude) const
+                                                std::vector<StackFill> &outFillPlan) const
 {
     uint32_t remaining = proto.size();
     for (const auto *entry : InAcquireOrder())
@@ -230,10 +223,6 @@ uint32_t ItemStore::PlanStackIntoExistingStacks(const ItemComp &proto, uint32_t 
         if (!CanStack(item, proto))
         {
             continue;
-        }
-        if (exclude != nullptr && exclude->contains(guid))
-        {
-            continue; // 视同不存在,见头文件
         }
         if (item.size() > maxStackSize)
         {
@@ -259,12 +248,12 @@ void ItemStore::ApplyStackFill(const std::vector<StackFill> &fillPlan,
 {
     for (const auto &plan : fillPlan)
     {
-        // 淘汰后桥层必须重新规划。找不到 guid 是顺序错误,不得凭空补回已销毁实例。
+        // 计划只对规划时的这份仓库有效。找不到 guid 是顺序错误(计划过期),不得凭空补回已销毁实例。
         auto *item = Find(plan.guid);
         if (item == nullptr)
         {
             LOG_ERROR << "ItemStore::ApplyStackFill: plan references destroyed guid=" << plan.guid
-                      << ", unwritten_count=" << plan.amount << "; must re-plan after eviction";
+                      << ", unwritten_count=" << plan.amount << "; the plan is stale, re-plan against the current store";
             continue;
         }
         item->set_size(item->size() + plan.amount);

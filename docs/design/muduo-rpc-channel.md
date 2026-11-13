@@ -86,6 +86,7 @@ enum GameErrorCode {
   TIMEOUT = 6;            // 线上不发;本地状态见 RpcStatusCode
   HANDLER_FAILED = 7;     // handler 显式失败(controller->SetFailed / RpcDoneCallback::Fail):handler 已运行
   REPLY_DROPPED = 8;      // handler 接管 done 后未完成即释放:结果未知
+  KILL_SWITCH_DENIED = 9; // 2026-11-12:被热关停规则拒绝,派发前拒绝、确定未执行(rpc-kill-switch.md)
 }
 message GameRpcMessage {
   GameMessageType type = 1; bytes request = 2; bytes response = 3; GameErrorCode error = 4; uint32 message_id = 5;
@@ -370,6 +371,8 @@ gRPC 本地延后完成未排空(`GrpcClientLocalCompletionsDrained()` 为假)�
 ## 8. 调用点迁移
 
 ### 8.1 gate → scene 客户端消息(`HandleTcpNodeMessage`)
+
+> 2026-11-12 补:这条路径现在经过 gate 的会话场景 lane([client-scene-request-handoff-hold.md](./client-scene-request-handoff-hold.md))。`HandleTcpNodeMessage` 改成了 lane 的发送出口 `SendClientMessageToScene`,完成回调改交 `gate_scene_lane::OnSceneCallDone`(原 `ForwardSceneClientCallResult` 并入其中),lambda 只捕获 `{sessionId, incarnation, callSeq}`。请求-响应消息按会话单飞;「`ok` 但无内容」多了一种处置:scene 答复 `dispatch_verdict = RETRY_LATER` 时放回队头重投,其余照旧回 1003。下文其余内容不变。
 
 按**内层**方法分流:`gRpcMethodRegistry[innerId].responseProto` 是 Empty(MoveStart / MoveStop / MoveSync 等,`player_movement.proto:106-108`)→ `SendRequest`(id=0):
 不登记、不回包,线上与今天逐字节相同(`client-request-ordering.md` O2 的前提不变)。否则 `CallMethod<SceneProcessClientPlayerMessageRpc>`,

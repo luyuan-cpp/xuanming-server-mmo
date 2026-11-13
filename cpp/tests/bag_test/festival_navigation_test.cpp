@@ -3,6 +3,8 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <string>
 
 #include "config/node_config_manager.h"
@@ -25,12 +27,16 @@ namespace fs = std::filesystem;
 class FestivalNavigationTest : public testing::Test {
 protected:
     virtual uint32_t SceneId() const { return 19004; }
+    virtual uint32_t SourceSceneId() const { return SceneId(); }
+    virtual std::string MapPath() const {
+        return "data/scene_nav_bin/festival_maps/" + std::to_string(SceneId());
+    }
     void SetUp() override {
         oldConfig = tlsNodeConfigManager.GetBaseDeployConfig();
         oldNav = std::move(SceneNavManager::Instance().sceneNav);
         // 从运行配置取真实已交付导航；每个失败用例只破坏自己的临时副本。
-        const std::string mapPath = "data/scene_nav_bin/festival_maps/" + std::to_string(SceneId());
-        source = fs::path(GetDataRootDir()) / mapPath;
+        const std::string mapPath = MapPath();
+        source = fs::path(GetDataRootDir()) / "data/scene_nav_bin/festival_maps" / std::to_string(SourceSceneId());
         ASSERT_TRUE(fs::exists(source / "scene.bin")) << source.string();
         temporary = fs::temp_directory_path() / ("festival-nav-" + std::to_string(
             std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -69,10 +75,10 @@ protected:
     }
     void LoadAndExpectRejected() {
         NavigationSystem::LoadNavBins();
-        EXPECT_EQ(nullptr, SceneNavManager::Instance().Get(19004));
-        EXPECT_TRUE(NavQuerySystem::RequiresNavigation(19004));
+        EXPECT_EQ(nullptr, SceneNavManager::Instance().Get(SceneId()));
+        EXPECT_TRUE(NavQuerySystem::RequiresNavigation(SceneId()));
         const auto scene = tlsEcs.sceneRegistry.create();
-        tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene).set_scene_config_id(19004);
+        tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene).set_scene_config_id(SceneId());
         EXPECT_EQ(kServiceUnavailable, PlayerSceneSystem::CheckEnterScene(Guid{42}, scene));
         const auto actor = tlsEcs.actorRegistry.create();
         tlsEcs.actorRegistry.emplace<SceneEntityComp>(actor).sceneEntity = scene;
@@ -184,5 +190,88 @@ TEST_F(FestivalNavigationTest, CorruptNavBinIsRejectedBeforeDetourParse) {
 TEST_F(FestivalNavigationTest, CorruptExactMaskRejectsRegistrationAndEntry) {
     std::ofstream out(folder / "scene.bin.mask",std::ios::app); out << "unexpected"; out.close();
     LoadAndExpectRejected();
+}
+
+class AuthoredNavigationTest : public FestivalNavigationTest {
+protected:
+    uint32_t SceneId() const override { return 26000; }
+    uint32_t SourceSceneId() const override { return 19004; }
+    std::string MapPath() const override { return "data/scene_nav_bin/authored_maps/26000"; }
+    void SetUp() override {
+        FestivalNavigationTest::SetUp();
+        ASSERT_FALSE(HasFatalFailure());
+        NavMask originalBounds;
+        ASSERT_TRUE(originalBounds.Load((folder / "scene.bin.mask").string()));
+        fs::remove(folder / "scene.bin.mask");
+        std::ostringstream text;
+        text << std::setprecision(17) << "ANAV 1\n" << originalBounds.effectiveX << ' '
+             << originalBounds.effectiveZ << ' ' << originalBounds.effectiveWidth << ' '
+             << originalBounds.effectiveHeight << " 0\n";
+        WriteContract(text.str());
+    }
+    void WriteContract(const std::string& text) {
+        std::ofstream contract(folder / "scene.bin.authored", std::ios::binary | std::ios::trunc);
+        contract << text; contract.close();
+        Resign();
+    }
+    void Resign() {
+        auto hash = [](const fs::path& path) {
+            std::ifstream in(path, std::ios::binary); std::ostringstream data; data << in.rdbuf();
+            return Sha256::HashToHex(data.str());
+        };
+        std::ofstream checksums(folder / "scene.bin.sha256", std::ios::trunc);
+        checksums << hash(folder / "scene.bin") << '\n' << hash(folder / "scene.bin.authored") << '\n';
+    }
+};
+
+TEST_F(AuthoredNavigationTest, RealLoaderRegistersRequiredNavWithoutLegacyMask) {
+    NavigationSystem::LoadNavBins();
+    auto* nav = SceneNavManager::Instance().Get(SceneId());
+    ASSERT_NE(nullptr, nav);
+    EXPECT_FALSE(nav->strictMask);
+    EXPECT_TRUE(NavQuerySystem::RequiresNavigation(SceneId()));
+    Location accepted;
+    EXPECT_TRUE(NavQuerySystem::ValidateMove(*nav, spawn, spawn, accepted));
+    EXPECT_DOUBLE_EQ(0, accepted.z());
+}
+TEST_F(AuthoredNavigationTest, MissingContractRejectsRegistrationAndEntry) {
+    fs::remove(folder / "scene.bin.authored"); LoadAndExpectRejected();
+}
+TEST_F(AuthoredNavigationTest, MissingChecksumsRejectsRegistrationAndEntry) {
+    fs::remove(folder / "scene.bin.sha256"); LoadAndExpectRejected();
+}
+TEST_F(AuthoredNavigationTest, CorruptNavIsRejectedBeforeDetourParse) {
+    std::ofstream out(folder / "scene.bin", std::ios::binary | std::ios::trunc); out << "bad"; out.close();
+    LoadAndExpectRejected();
+}
+TEST_F(AuthoredNavigationTest, CorruptContractChecksumIsRejected) {
+    std::ofstream out(folder / "scene.bin.authored", std::ios::app); out << "unexpected"; out.close();
+    LoadAndExpectRejected();
+}
+TEST_F(AuthoredNavigationTest, ResidualLegacyMaskIsRejected) {
+    fs::copy_file(source / "scene.bin.mask", folder / "scene.bin.mask"); LoadAndExpectRejected();
+}
+TEST_F(AuthoredNavigationTest, InvalidSignedContractCannotChangeGroundOrIgnoreTrailingGarbage) {
+    for (const char* text : {"ANAV 2\n0 0 300 240 0\n", "ANAV 1\n0 0 0 240 0\n",
+                             "ANAV 1\n0 0 300 240 0.2\n", "ANAV 1\n0 0 300 240\n",
+                             "ANAV 1\n0 0 300 240 0 trailing\n", "ANAV 1\nnan 0 300 240 0\n"}) {
+        WriteContract(text); LoadAndExpectRejected();
+    }
+}
+TEST_F(AuthoredNavigationTest, OriginalGroundToleranceRejectsThreeCentimeterOrRaisedFootPoint) {
+    NavigationSystem::LoadNavBins();
+    auto* nav = SceneNavManager::Instance().Get(SceneId());
+    ASSERT_NE(nullptr, nav);
+    for (double height : {-0.03, 0.03, 0.2, std::numeric_limits<double>::quiet_NaN()}) {
+        Location target = spawn, accepted; target.set_z(height);
+        EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, target, accepted));
+        EXPECT_FALSE(NavQuerySystem::ValidateMove(*nav, spawn, target, accepted));
+    }
+}
+TEST_F(AuthoredNavigationTest, HalfOpenBoundsRejectExactEastEdgeAndOutside) {
+    // 把有效东边界放在原出生点上；即使附近有同一多边形，也必须拒绝吸附和注册。
+    std::ostringstream text;
+    text << std::setprecision(17) << "ANAV 1\n0 0 " << spawn.y() << " 300 0\n";
+    WriteContract(text.str()); LoadAndExpectRejected();
 }
 } // namespace

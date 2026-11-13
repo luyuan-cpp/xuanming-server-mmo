@@ -85,7 +85,13 @@ func autoscaleOutcomeCount(t *testing.T, zoneID uint32, action, outcome string) 
 
 func requireSceneOwner(t *testing.T, sc *svc.ServiceContext, sceneID uint64, want string, msgAndArgs ...interface{}) {
 	t.Helper()
-	got, err := sc.Redis.Get(sceneNodeKey(sceneID))
+	requireSceneOwnerInZone(t, sc, sc.Config.ZoneId, sceneID, want, msgAndArgs...)
+}
+
+// requireSceneOwnerInZone 同 requireSceneOwner,场景在 zoneID(属主键带场景所在 zone 的 tag)。
+func requireSceneOwnerInZone(t *testing.T, sc *svc.ServiceContext, zoneID uint32, sceneID uint64, want string, msgAndArgs ...interface{}) {
+	t.Helper()
+	got, err := sc.Redis.Get(sceneNodeKey(zoneID, sceneID))
 	require.NoError(t, err)
 	require.Equal(t, want, got, msgAndArgs...)
 }
@@ -121,7 +127,7 @@ func TestSelectOrRecoverWorldChannel_OwnerReadErrorIsNotStale(t *testing.T) {
 	sc, mr := seedLiveWorldChannelForReadUnknown(t)
 	ctx := context.Background()
 	before := readUnknownCount(t, testZoneId, readUnknownSiteWorldPick)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(501), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(testZoneId, 501), times: 1})
 
 	sid, nid, err := SelectOrRecoverWorldChannel(ctx, sc, readUnknownWorldConf, testZoneId)
 	require.EqualValues(t, 1, fired.Load())
@@ -143,7 +149,7 @@ func TestReserveBestWorldChannelForEnter_OwnerReadErrorIsNotStale(t *testing.T) 
 	sc, mr := seedLiveWorldChannelForReadUnknown(t)
 	ctx := context.Background()
 	before := readUnknownCount(t, testZoneId, readUnknownSiteWorldPick)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(501), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(testZoneId, 501), times: 1})
 
 	sid, _, err := ReserveBestWorldChannelForEnter(ctx, sc, readUnknownWorldConf, testZoneId, readUnknownPlayer)
 	require.EqualValues(t, 1, fired.Load())
@@ -186,10 +192,10 @@ func TestLazyReassignStaleWorldChannel_RechecksOwnerBeforeWrite(t *testing.T) {
 
 	t.Run("read error leaves ownership alone", func(t *testing.T) {
 		sc, mr := newCtx(t)
-		require.NoError(t, sc.Redis.Set(sceneNodeKey(502), "10"))
+		require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 502), "10"))
 		createsBefore := sharedFakeSceneNode.createCalls.Load()
 		before := readUnknownCount(t, testZoneId, readUnknownSiteWorldLazy)
-		fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(502), times: 1})
+		fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(testZoneId, 502), times: 1})
 
 		assert.False(t, reassign(sc))
 		require.EqualValues(t, 1, fired.Load())
@@ -202,7 +208,7 @@ func TestLazyReassignStaleWorldChannel_RechecksOwnerBeforeWrite(t *testing.T) {
 		sc, mr := newCtx(t)
 		// 判陈旧之后被补建 / 被 rebalance 改派到了活节点:CAS 只比属主,放过去就会把它从活节点搬走。
 		mr.ZAdd(nodeLoadKey(testZoneId), 0, "30")
-		require.NoError(t, sc.Redis.Set(sceneNodeKey(502), "30"))
+		require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 502), "30"))
 		createsBefore := sharedFakeSceneNode.createCalls.Load()
 
 		assert.False(t, reassign(sc))
@@ -212,7 +218,7 @@ func TestLazyReassignStaleWorldChannel_RechecksOwnerBeforeWrite(t *testing.T) {
 
 	t.Run("dead owner inside the reentry barrier", func(t *testing.T) {
 		sc, _ := newCtx(t)
-		require.NoError(t, sc.Redis.Set(sceneNodeKey(502), "10"))
+		require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 502), "10"))
 		require.NoError(t, markNodeDeath(sc, testZoneId, "10"))
 		createsBefore := sharedFakeSceneNode.createCalls.Load()
 
@@ -223,7 +229,7 @@ func TestLazyReassignStaleWorldChannel_RechecksOwnerBeforeWrite(t *testing.T) {
 
 	t.Run("dead owner without a recent death mark", func(t *testing.T) {
 		sc, _ := newCtx(t)
-		require.NoError(t, sc.Redis.Set(sceneNodeKey(502), "10"))
+		require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 502), "10"))
 
 		assert.True(t, reassign(sc))
 		requireSceneOwner(t, sc, 502, "20")
@@ -256,11 +262,11 @@ func TestLazyReassignStaleWorldChannel_RechecksOwnerBeforeWrite(t *testing.T) {
 	t.Run("CAS lost after the entity was pre-created", func(t *testing.T) {
 		sc, mr := newCtx(t)
 		mr.ZAdd(nodeLoadKey(testZoneId), 0, "30")
-		require.NoError(t, sc.Redis.Set(sceneNodeKey(502), "10"))
+		require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 502), "10"))
 		// 复核通过、实体已在 "20" 上预建之后,别的写者抢先把归属改到 "30"。
 		// 钩子跑在 miniredis 的服务端协程上:只能用 t.Errorf,不能用 require。
-		fired := identHookOnceBeforeEval(t, mr, sceneNodeKey(502), func() {
-			if err := mr.Set(sceneNodeKey(502), "30"); err != nil {
+		fired := identHookOnceBeforeEval(t, mr, sceneNodeKey(testZoneId, 502), func() {
+			if err := mr.Set(sceneNodeKey(testZoneId, 502), "30"); err != nil {
 				t.Errorf("simulate concurrent reassign: %v", err)
 			}
 		})
@@ -321,7 +327,7 @@ func TestInitWorldScenes_EnsureLoopOwnerReadErrorSkipsChannel(t *testing.T) {
 	createsBefore := sharedFakeSceneNode.createCalls.Load()
 	before := readUnknownCount(t, testZoneId, readUnknownSiteWorldInit)
 	// 补发循环用一条 MGET 读属主与放置代次(2026-11-06),MGET 的第一个键就是属主键。
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "MGET", key: sceneNodeKey(channels[0]), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "MGET", key: sceneNodeKey(testZoneId, channels[0]), times: 1})
 	initWorldScenesForZone(ctx, sc, testZoneId, confIDs, true)
 	require.EqualValues(t, 1, fired.Load())
 	assert.Equal(t, createsBefore, sharedFakeSceneNode.createCalls.Load(), "读不到属主就不知道该发给谁")
@@ -415,8 +421,8 @@ func TestAutoscale_DecisionReadErrorSkipsTheRound(t *testing.T) {
 		name string
 		rule redisFaultRule
 	}{
-		{"draining flag", redisFaultRule{cmd: "EXISTS", key: sceneDrainingKey(101), times: 1}},
-		{"player count", redisFaultRule{cmd: "SCARD", key: instanceMembersKey(101), times: 1}},
+		{"draining flag", redisFaultRule{cmd: "EXISTS", key: sceneDrainingKey(testZoneId, 101), times: 1}},
+		{"player count", redisFaultRule{cmd: "SCARD", key: instanceMembersKey(testZoneId, 101), times: 1}},
 		{"cooldown flag", redisFaultRule{cmd: "EXISTS", key: worldAutoscaleCooldownKey(testZoneId, autoscaleTestConfID), times: 1}},
 	}
 	for _, tc := range cases {
@@ -497,7 +503,7 @@ func TestAutoscale_DrainStepReadErrorKeepsDrainingState(t *testing.T) {
 		ctx := context.Background()
 		seedSceneMembersVia(sc, 102, 0)
 		before := readUnknownCount(t, testZoneId, readUnknownSiteAutoscaleDrain)
-		fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(102), times: 1})
+		fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(testZoneId, 102), times: 1})
 
 		sweepDrainingWorldChannels(ctx, sc, testZoneId)
 		require.EqualValues(t, 1, fired.Load())
@@ -514,7 +520,7 @@ func TestAutoscale_DrainStepReadErrorKeepsDrainingState(t *testing.T) {
 		seedSceneMembersVia(sc, 102, 12)
 		before := readUnknownCount(t, testZoneId, readUnknownSiteAutoscaleDrain)
 		fired := injectRedisFaultsForTest(t, mr,
-			redisFaultRule{cmd: "SCARD", key: instanceMembersKey(102), times: 1})
+			redisFaultRule{cmd: "SCARD", key: instanceMembersKey(testZoneId, 102), times: 1})
 
 		sweepDrainingWorldChannels(ctx, sc, testZoneId)
 		require.EqualValues(t, 1, fired.Load())
@@ -567,15 +573,15 @@ func TestAutoscale_FinishDrainAtomicDestroyFailureKeepsRoomMapping(t *testing.T)
 	record := seedAgonesRoom(t, sc, alloc, 102, "gs-a")
 	_, in := AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 	require.Equal(t, 1, in)
-	sc.Redis.Set(sceneNodeKey(102), "10")
+	sc.Redis.Set(sceneNodeKey(testZoneId, 102), "10")
 	seedSceneMembersVia(sc, 102, 0)
 
 	before := autoscaleOutcomeCount(t, testZoneId, "scale_in", "error")
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneAgonesGsKey(102), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneAgonesGsKey(testZoneId, 102), times: 1})
 	sweepDrainingWorldChannels(ctx, sc, testZoneId)
 	require.EqualValues(t, 1, fired.Load())
 	requireSceneOwner(t, sc, 102, "10", "脚本报错的这一拍一个键都不能删")
-	gs, err := sc.Redis.Get(sceneAgonesGsKey(102))
+	gs, err := sc.Redis.Get(sceneAgonesGsKey(testZoneId, 102))
 	require.NoError(t, err)
 	assert.Equal(t, record, gs, "agones_gs 映射是归还名额的唯一依据,不能删")
 	assert.EqualValues(t, 2, alloc.roomsOf("gs-a"))
@@ -594,8 +600,8 @@ func TestAutoscale_FinishDrainSkipsWhenOwnerChangedBeforeDestroy(t *testing.T) {
 	ctx := context.Background()
 	seedSceneMembersVia(sc, 102, 0)
 	// 钩子跑在 miniredis 的服务端协程上:只能用 t.Errorf,不能用 require(FailNow 必须在用例协程里调)。
-	fired := identHookOnceBeforeEval(t, mr, sceneNodeKey(102), func() {
-		if err := mr.Set(sceneNodeKey(102), "20"); err != nil {
+	fired := identHookOnceBeforeEval(t, mr, sceneNodeKey(testZoneId, 102), func() {
+		if err := mr.Set(sceneNodeKey(testZoneId, 102), "20"); err != nil {
 			t.Errorf("simulate concurrent reassign: %v", err)
 		}
 	})
@@ -664,19 +670,18 @@ func TestAutoscale_FinishDrainMirrorReadErrorKeepsMirrorIndex(t *testing.T) {
 	ctx := context.Background()
 	const mirrorID uint64 = 9100
 	mirrorStr := strconv.FormatUint(mirrorID, 10)
-	_, err := sc.Redis.Sadd(sceneMirrorsKey(102), mirrorStr)
+	_, err := sc.Redis.Sadd(sceneMirrorsKey(testZoneId, 102), mirrorStr)
 	require.NoError(t, err)
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(mirrorID), "10"))
-	require.NoError(t, sc.Redis.Set(sceneZoneKey(mirrorID), strconv.FormatUint(uint64(testZoneId), 10)))
-	require.NoError(t, sc.Redis.Set(sceneSourceKey(mirrorID), "102"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, mirrorID), "10"))
+	require.NoError(t, sc.Redis.Set(sceneSourceKey(testZoneId, mirrorID), "102"))
 	seedSceneMembersVia(sc, 102, 0)
 
 	before := readUnknownCount(t, testZoneId, readUnknownSiteAutoscaleFinish)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(102), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(testZoneId, 102), times: 1})
 	sweepDrainingWorldChannels(ctx, sc, testZoneId)
 	require.EqualValues(t, 1, fired.Load())
 	requireStillDraining(t, sc, 102)
-	mirrors, err := sc.Redis.Smembers(sceneMirrorsKey(102))
+	mirrors, err := sc.Redis.Smembers(sceneMirrorsKey(testZoneId, 102))
 	require.NoError(t, err)
 	assert.Equal(t, []string{mirrorStr}, mirrors, "读错时镜像索引不能删")
 	requireSceneOwner(t, sc, mirrorID, "10")
@@ -711,7 +716,7 @@ func createInstanceWithMirrorForReadUnknown(t *testing.T) (*svc.ServiceContext, 
 		SceneType:      scene_manager.SceneType_SCENE_TYPE_INSTANCE,
 	})
 	require.NoError(t, err)
-	members, err := sc.Redis.Smembers(sceneMirrorsKey(parent.SceneId))
+	members, err := sc.Redis.Smembers(sceneMirrorsKey(testZoneId, parent.SceneId))
 	require.NoError(t, err)
 	require.Equal(t, []string{strconv.FormatUint(mirror.SceneId, 10)}, members, "前提不成立:镜像没有登记到源的子集合")
 	return sc, mr, parent.SceneId, mirror.SceneId
@@ -723,13 +728,13 @@ func TestDestroyInstance_IdleMirrorReadErrorAbandonsRound(t *testing.T) {
 	sc, mr, parent, mirror := createInstanceWithMirrorForReadUnknown(t)
 	ctx := context.Background()
 	before := readUnknownCount(t, testZoneId, readUnknownSiteInstanceDestroy)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(parent), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(testZoneId, parent), times: 1})
 
 	destroyInstance(ctx, sc, testZoneId, parent)
 	require.EqualValues(t, 1, fired.Load())
 	requireSceneOwner(t, sc, parent, "10", "读不到子集合时不能提交销毁")
 	requireSceneOwner(t, sc, mirror, "10")
-	members, err := sc.Redis.Smembers(sceneMirrorsKey(parent))
+	members, err := sc.Redis.Smembers(sceneMirrorsKey(testZoneId, parent))
 	require.NoError(t, err)
 	assert.Equal(t, []string{strconv.FormatUint(mirror, 10)}, members)
 	assert.Equal(t, before+1, readUnknownCount(t, testZoneId, readUnknownSiteInstanceDestroy))
@@ -746,7 +751,7 @@ func TestDestroyInstanceForce_MirrorPreReadErrorAbandonsRound(t *testing.T) {
 	sc, mr, parent, mirror := createInstanceWithMirrorForReadUnknown(t)
 	ctx := context.Background()
 	before := readUnknownCount(t, testZoneId, readUnknownSiteInstanceDestroy)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(parent), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(testZoneId, parent), times: 1})
 
 	destroyed, err := destroyInstanceForce(ctx, sc, testZoneId, parent, "explicit")
 	require.EqualValues(t, 1, fired.Load())
@@ -773,7 +778,7 @@ func TestDestroyInstance_SourceReadErrorAbandonsRound(t *testing.T) {
 	ctx := context.Background()
 	mirrorStr := strconv.FormatUint(mirror, 10)
 	before := readUnknownCount(t, testZoneId, readUnknownSiteInstanceDestroy)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneSourceKey(mirror), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneSourceKey(testZoneId, mirror), times: 1})
 
 	destroyInstance(ctx, sc, testZoneId, mirror)
 	require.EqualValues(t, 1, fired.Load())
@@ -782,7 +787,7 @@ func TestDestroyInstance_SourceReadErrorAbandonsRound(t *testing.T) {
 
 	destroyInstance(ctx, sc, testZoneId, mirror)
 	requireSceneOwner(t, sc, mirror, "")
-	members, err := sc.Redis.Smembers(sceneMirrorsKey(parent))
+	members, err := sc.Redis.Smembers(sceneMirrorsKey(testZoneId, parent))
 	require.NoError(t, err)
 	assert.NotContains(t, members, mirrorStr, "镜像销毁后必须从源的子集合里摘掉自己")
 }
@@ -793,7 +798,7 @@ func TestCascadeDestroyMirrors_ChildFailureKeepsSourceIndex(t *testing.T) {
 	sc, mr, parent, mirror := createInstanceWithMirrorForReadUnknown(t)
 	ctx := context.Background()
 	mirrorStr := strconv.FormatUint(mirror, 10)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneSourceKey(mirror), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneSourceKey(testZoneId, mirror), times: 1})
 
 	destroyed, err := destroyInstanceForce(ctx, sc, testZoneId, parent, "explicit")
 	require.EqualValues(t, 1, fired.Load())
@@ -801,13 +806,13 @@ func TestCascadeDestroyMirrors_ChildFailureKeepsSourceIndex(t *testing.T) {
 	assert.True(t, destroyed, "源自己的读都成功,源照常销毁")
 	requireSceneOwner(t, sc, parent, "")
 	requireSceneOwner(t, sc, mirror, "10", "子镜像本轮没销毁")
-	members, err := sc.Redis.Smembers(sceneMirrorsKey(parent))
+	members, err := sc.Redis.Smembers(sceneMirrorsKey(testZoneId, parent))
 	require.NoError(t, err)
 	assert.Equal(t, []string{mirrorStr}, members, "有子镜像没销毁时不能删源的子集合索引")
 
 	destroyInstance(ctx, sc, testZoneId, mirror)
 	requireSceneOwner(t, sc, mirror, "")
-	members, err = sc.Redis.Smembers(sceneMirrorsKey(parent))
+	members, err = sc.Redis.Smembers(sceneMirrorsKey(testZoneId, parent))
 	require.NoError(t, err)
 	assert.Empty(t, members, "子镜像销毁时把自己从源的子集合里摘掉")
 }
@@ -817,11 +822,11 @@ func TestCascadeDestroyMirrors_ChildFailureKeepsSourceIndex(t *testing.T) {
 // 这个用例按设计会写(提交已发生),计入的是 mirror_cascade 而不是 instance_destroy。
 func TestDestroyInstanceForce_MirrorPostReadErrorCascadesSnapshotAndKeepsIndex(t *testing.T) {
 	sc, mr, parent, mirror := createInstanceWithMirrorForReadUnknown(t)
-	_, err := sc.Redis.Sadd(sceneMirrorsKey(parent), "9999")
+	_, err := sc.Redis.Sadd(sceneMirrorsKey(testZoneId, parent), "9999")
 	require.NoError(t, err)
 	before := readUnknownCount(t, testZoneId, readUnknownSiteMirrorCascade)
 	fired := injectRedisFaultsForTest(t, mr,
-		redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(parent), skip: 1, times: 1})
+		redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(testZoneId, parent), skip: 1, times: 1})
 
 	destroyed, err := destroyInstanceForce(context.Background(), sc, testZoneId, parent, "explicit")
 	require.EqualValues(t, 1, fired.Load())
@@ -829,7 +834,7 @@ func TestDestroyInstanceForce_MirrorPostReadErrorCascadesSnapshotAndKeepsIndex(t
 	assert.True(t, destroyed)
 	requireSceneOwner(t, sc, parent, "")
 	requireSceneOwner(t, sc, mirror, "", "按预读快照级联")
-	members, err := sc.Redis.Smembers(sceneMirrorsKey(parent))
+	members, err := sc.Redis.Smembers(sceneMirrorsKey(testZoneId, parent))
 	require.NoError(t, err)
 	assert.Equal(t, []string{"9999"}, members, "重读失败时不能删子集合索引")
 	assert.Equal(t, before+1, readUnknownCount(t, testZoneId, readUnknownSiteMirrorCascade))
@@ -856,7 +861,7 @@ func TestPlanWorldChannelRebalance_ReadErrorSkipsChannel(t *testing.T) {
 
 		before := readUnknownCount(t, testZoneId, readUnknownSiteRebalancePlan)
 		fired := injectRedisFaultsForTest(t, mr,
-			redisFaultRule{cmd: "SCARD", key: instanceMembersKey(sceneID), times: 1})
+			redisFaultRule{cmd: "SCARD", key: instanceMembersKey(testZoneId, sceneID), times: 1})
 		urgent, opportunistic, _ := PlanWorldChannelRebalance(sc, testZoneId, []uint64{readUnknownWorldConf})
 		require.EqualValues(t, 1, fired.Load())
 		assert.Empty(t, urgent)
@@ -888,12 +893,12 @@ func TestPlanWorldChannelRebalance_ReadErrorSkipsChannel(t *testing.T) {
 func TestCascadeMirrorsOnSourceMigration_ChildFailureKeepsIndex(t *testing.T) {
 	sc, mr, parent, mirror := createInstanceWithMirrorForReadUnknown(t)
 	mirrorStr := strconv.FormatUint(mirror, 10)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneSourceKey(mirror), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneSourceKey(testZoneId, mirror), times: 1})
 
 	cascadeMirrorsOnSourceMigration(context.Background(), sc, testZoneId, parent, []string{mirrorStr}, "10", "20")
 	require.EqualValues(t, 1, fired.Load())
 	requireSceneOwner(t, sc, mirror, "10", "读不到镜像源的镜像本轮不销毁")
-	members, err := sc.Redis.Smembers(sceneMirrorsKey(parent))
+	members, err := sc.Redis.Smembers(sceneMirrorsKey(testZoneId, parent))
 	require.NoError(t, err)
 	assert.Equal(t, []string{mirrorStr}, members, "有镜像没销毁时不能删源的子集合索引")
 }
@@ -905,7 +910,7 @@ func TestMigrateWorldChannel_MirrorReadErrorInvalidatesMigration(t *testing.T) {
 	createsBefore := sharedFakeSceneNode.createCalls.Load()
 	destroysBefore := sharedFakeSceneNode.destroyCalls.Load()
 	before := readUnknownCount(t, testZoneId, readUnknownSiteRebalancePlan)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(501), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "SMEMBERS", key: sceneMirrorsKey(testZoneId, 501), times: 1})
 
 	assert.False(t, migrateWorldChannel(context.Background(), sc, testZoneId, readUnknownWorldConf, 501, "10", "20", reasonBetterHome))
 	require.EqualValues(t, 1, fired.Load())
@@ -924,7 +929,7 @@ func TestMigrateWorldChannel_MirrorReadErrorInvalidatesMigration(t *testing.T) {
 func TestCreateScene_MainWorldOwnerReadErrorReturnsErrRedis(t *testing.T) {
 	sc, mr := seedLiveWorldChannelForReadUnknown(t)
 	createCallsBefore := sharedFakeSceneNode.createCalls.Load()
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(501), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(testZoneId, 501), times: 1})
 
 	resp, err := NewCreateSceneLogic(context.Background(), sc).CreateScene(&scene_manager.CreateSceneRequest{
 		SceneConfId: readUnknownWorldConf,
@@ -946,7 +951,7 @@ func TestCreateScene_MirrorDedupReadErrorKeepsLiveMirrorIndexed(t *testing.T) {
 	sc.Config.MirrorDedupBySource = true
 	mirrorStr := strconv.FormatUint(mirror, 10)
 	before := readUnknownCount(t, testZoneId, readUnknownSiteMirrorDedup)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(mirror), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(testZoneId, mirror), times: 1})
 
 	resp, err := NewCreateSceneLogic(context.Background(), sc).CreateScene(&scene_manager.CreateSceneRequest{
 		SceneConfId:    2001,
@@ -959,7 +964,7 @@ func TestCreateScene_MirrorDedupReadErrorKeepsLiveMirrorIndexed(t *testing.T) {
 	require.EqualValues(t, 1, fired.Load())
 	require.Zero(t, resp.ErrorCode)
 	assert.NotEqual(t, mirror, resp.SceneId, "读不到属主时不复用")
-	members, err := sc.Redis.Smembers(sceneMirrorsKey(parent))
+	members, err := sc.Redis.Smembers(sceneMirrorsKey(testZoneId, parent))
 	require.NoError(t, err)
 	assert.Contains(t, members, mirrorStr, "活着的镜像不能被当成陈旧条目摘掉")
 	assert.Contains(t, members, strconv.FormatUint(resp.SceneId, 10))
@@ -982,7 +987,7 @@ func TestOrphanCleanup_DrainingSetReadErrorDefersGroup(t *testing.T) {
 	seedChannels(t, sc, testZoneId, readUnknownOrphanConf, map[uint64]int64{901: 0})
 	_, err := sc.Redis.Sadd(worldDrainingSetKey(testZoneId, readUnknownOrphanConf), "902")
 	require.NoError(t, err)
-	require.NoError(t, sc.Redis.Set(sceneNodeKey(902), "10"))
+	require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 902), "10"))
 
 	before := readUnknownCount(t, testZoneId, readUnknownSiteOrphanCleanup)
 	fired := injectRedisFaultsForTest(t, mr,
@@ -1010,7 +1015,7 @@ func TestOrphanCleanup_OwnerReadErrorDoesNotBypassReentryBarrier(t *testing.T) {
 	require.NoError(t, markNodeDeath(sc, testZoneId, "10"))
 
 	before := readUnknownCount(t, testZoneId, readUnknownSiteOrphanCleanup)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(911), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(testZoneId, 911), times: 1})
 	assert.Equal(t, 0, CleanupOrphanWorldChannels(ctx, sc))
 	require.EqualValues(t, 1, fired.Load())
 	requireSceneOwner(t, sc, 911, "10", "老属主刚判死,读错也不能清")
@@ -1035,11 +1040,11 @@ func TestOrphanCleanup_AtomicDestroyFailureKeepsRoomMapping(t *testing.T) {
 	seedChannels(t, sc, testZoneId, readUnknownOrphanConf, map[uint64]int64{921: 0})
 	record := seedAgonesRoom(t, sc, alloc, 921, "gs-a")
 
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneAgonesGsKey(921), times: 1})
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneAgonesGsKey(testZoneId, 921), times: 1})
 	assert.Equal(t, 0, CleanupOrphanWorldChannels(ctx, sc))
 	require.EqualValues(t, 1, fired.Load())
 	requireSceneOwner(t, sc, 921, "10", "脚本报错时还没动这个场景")
-	gs, err := sc.Redis.Get(sceneAgonesGsKey(921))
+	gs, err := sc.Redis.Get(sceneAgonesGsKey(testZoneId, 921))
 	require.NoError(t, err)
 	assert.Equal(t, record, gs)
 	assert.EqualValues(t, 2, alloc.roomsOf("gs-a"))
@@ -1077,8 +1082,8 @@ func TestOrphanCleanup_SkipsSceneWhoseOwnerChangedBeforeDestroy(t *testing.T) {
 	sc.Redis.Zadd(testLoadKey(), 0, "20")
 	seedChannels(t, sc, testZoneId, readUnknownOrphanConf, map[uint64]int64{931: 0, 932: 0})
 	// 钩子跑在 miniredis 的服务端协程上:只能用 t.Errorf,不能用 require。
-	fired := identHookOnceBeforeEval(t, mr, sceneNodeKey(931), func() {
-		if err := mr.Set(sceneNodeKey(931), "20"); err != nil {
+	fired := identHookOnceBeforeEval(t, mr, sceneNodeKey(testZoneId, 931), func() {
+		if err := mr.Set(sceneNodeKey(testZoneId, 931), "20"); err != nil {
 			t.Errorf("simulate concurrent reassign: %v", err)
 		}
 	})
@@ -1103,11 +1108,11 @@ func TestOrphanCleanup_SkipsSceneThatGainedAnOwnerBeforeDestroy(t *testing.T) {
 	ctx := context.Background()
 	sc.Redis.Zadd(testLoadKey(), 0, "20")
 	seedChannels(t, sc, testZoneId, readUnknownOrphanConf, map[uint64]int64{941: 0})
-	_, err := sc.Redis.Del(sceneNodeKey(941)) // 第一段读到的是「映射不存在」
+	_, err := sc.Redis.Del(sceneNodeKey(testZoneId, 941)) // 第一段读到的是「映射不存在」
 	require.NoError(t, err)
 	// 钩子跑在 miniredis 的服务端协程上:只能用 t.Errorf,不能用 require。
-	fired := identHookOnceBeforeEval(t, mr, sceneNodeKey(941), func() {
-		if err := mr.Set(sceneNodeKey(941), "20"); err != nil {
+	fired := identHookOnceBeforeEval(t, mr, sceneNodeKey(testZoneId, 941), func() {
+		if err := mr.Set(sceneNodeKey(testZoneId, 941), "20"); err != nil {
 			t.Errorf("simulate concurrent lazy reassign: %v", err)
 		}
 	})

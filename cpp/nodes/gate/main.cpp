@@ -15,7 +15,10 @@
 #include "handler/rpc/client_session_handler.h"
 #include "handler/rpc/client_heartbeat.h"
 #include "handler/rpc/client_request_lane.h"
+#include "handler/rpc/client_scene_lane.h"
+#include "handler/rpc/connection_admission.h"
 #include "handler/rpc/drain_migration.h"
+#include "handler/rpc/login_session_renewal.h"
 #include "handler/rpc/router_muduo_forward.h"
 #include "handler/rpc/router_subset.h"
 #include "muduo_grpc/channel.h"
@@ -151,6 +154,31 @@ namespace
         LOG_INFO << "Client connection limit ENFORCED, max_connections=" << maxConnections;
     }
 
+    // 启动:客户端连接准入的参数(handler/rpc/connection_admission.h,docs/design/gate-connection-admission-control.md
+    // P1-1 ~ P1-3)。总量上限就是上面校验过的 gate_max_connections;新建连接速率闸缺省由它推导,
+    // GATE_ACCEPT_RATE_PER_SECOND / GATE_ACCEPT_BURST 可覆盖。两个变量写错就拒绝启动:带着一个没人知道的速率上限
+    // 跑起来,比起不来更难查。
+    void ConfigureConnectionAdmissionOrDie()
+    {
+        const auto configuredMaxConnections = gNodeConfigManager.GetBaseDeployConfig().gate_max_connections();
+        const auto effectiveMaxConnections =
+            gate_connection_admission::EffectiveMaxConnections(configuredMaxConnections);
+        std::string error;
+        const auto rateLimit = gate_connection_admission::ResolveRateLimit(
+            std::getenv(gate_connection_admission::kAcceptRateEnv),
+            std::getenv(gate_connection_admission::kAcceptBurstEnv), effectiveMaxConnections, error);
+        if (!rateLimit)
+        {
+            LOG_FATAL << "Refusing to start: " << error;
+            return;
+        }
+        gate_connection_admission::Configure(configuredMaxConnections, *rateLimit);
+        LOG_INFO << "Client connection admission ENFORCED at accept, max_connections=" << effectiveMaxConnections
+                 << " accept_rate_per_second=" << rateLimit->perSecond << " accept_burst=" << rateLimit->burst
+                 << " (override the rate gate with " << gate_connection_admission::kAcceptRateEnv << " / "
+                 << gate_connection_admission::kAcceptBurstEnv << ")";
+    }
+
     // 启动门禁:观战凭证密钥(docs/design/battle-spectate-tiered-fanout.md §15.7,口径同 battle 令牌)。
     // prod 下空密钥、过短、与 gate / battle 令牌密钥相同都拒绝启动:密钥短了凭证可以伪造给任意玩家,相同则信任域没分开。
     // dev / test 放行并 WARN。这里的放行只是让进程起得来,不是跳过校验:没有密钥时所有 SubscribeSpectate 一律拒绝
@@ -229,6 +257,9 @@ namespace
         // 排空迁移的每秒一拍与重定向滞留关闭(handler/rpc/drain_migration.cpp,docs/design/gate-drain-session-migration.md §4.3)。
         // 回调不捕获任何对象;没有迁移许可、也没有待关的滞留连接时每拍只做两次判空。
         TimerTaskComp drainMigrationTimer;
+        // 登录态续租的每秒一拍(handler/rpc/login_session_renewal.cpp,docs/design/gate-online-identity.md §10.4):
+        // 为仍然连着的连接定期向 login 续租登录态。回调不捕获任何对象;没有到期的续租时每拍只做一次堆顶比较。
+        TimerTaskComp loginRenewalTimer;
         bool sourceClosed = false;
 
         GateRuntimeContext()
@@ -466,6 +497,7 @@ int main(int argc, char *argv[])
             ValidateGateTokenSecretOrDie();
             ValidateGateConnectionLimitOrDie();
             ValidateSpectateTokenSecretOrDie();
+            ConfigureConnectionAdmissionOrDie();
 
             // 连接上限随注册与每 10s 的人数上报写进 etcd:login 挑 gate 时剔除人数到上限 90% 的 gate
             // (docs/design/gate-load-balancing-design.md「满载与停写的 gate」)。dev 下为 0 表示不设上限,login 不按上限过滤。
@@ -518,10 +550,14 @@ int main(int argc, char *argv[])
             auto disconnectAllClients = [&context](Node &)
             {
                 context.sourceClosed = true;
+                // 同一时刻让 accept 处的准入闸也关源:之后的新连接在建 TcpConnection 之前就以 RST 拒掉
+                // (下面连接回调里的 sourceClosed 检查留作第二道)。
+                gate_connection_admission::CloseSource();
                 context.dependencyGate.probeTimer.Cancel();
                 context.playerCountReportTimer.Cancel();
-                // 全部连接马上就要关:不再给它们要迁移票据,也不必再做滞留关闭。
+                // 全部连接马上就要关:不再给它们要迁移票据,也不必再做滞留关闭;登录态由随后的断线通知清理,不再续租。
                 context.drainMigrationTimer.Cancel();
+                context.loginRenewalTimer.Cancel();
                 auto &sessions = tlsSessionManager.sessions();
                 LOG_INFO << "Disconnecting " << sessions.size() << " client sessions before shutdown...";
                 for (auto &[sessionId, info] : sessions)
@@ -563,6 +599,7 @@ int main(int argc, char *argv[])
                     context.spectateSweepTimer.Cancel();
                     context.clientLivenessSweepTimer.Cancel();
                     context.drainMigrationTimer.Cancel();
+                    context.loginRenewalTimer.Cancel();
                 };
                 node.SetMaintenanceRelayStop(stopGateTimers);
                 node.SetBeforeTeardown(stopGateTimers);
@@ -582,6 +619,12 @@ int main(int argc, char *argv[])
                                        { disconnectAllClients(n); });
 
             InitGateCodec(context.codec);
+
+            // 排空迁移与重定向滞留关闭的计数挂到 Prometheus 出口(设了 MMORPG_METRICS_PORT 才有出口,
+            // 见 metrics_http_exporter.h)。采集回调在本 loop 上执行,读的就是本线程的计数。
+            gate_drain_migration::RegisterMetrics();
+            // 连接类指标(会话数、未验签连接数、接纳 / 拒绝计数、握手耗时)同样挂到出口,见 handler/rpc/connection_admission.h。
+            gate_connection_admission::RegisterMetrics();
 
             // Post-startup: attach client TCP callbacks + initialize session ID generator.
             // Override connection/message callbacks BEFORE WaitAndRun so that any
@@ -615,6 +658,14 @@ int main(int argc, char *argv[])
                             LOG_INFO << gate_version::StartupLine("GATE", nodeIdText.c_str(), zoneIdText.c_str());
                         }
 
+                        // 准入回调:accept 之后、TcpConnection 建出来之前判关源、总量与新建速率,被拒的连接当场以 RST 关闭,
+                        // 不建任何每连接对象(handler/rpc/connection_admission.h)。回调不捕获任何对象,状态在该模块的
+                        // 线程局部变量里(AGENTS.md §11.7)。与下面两个回调一起、在 session_id 的 node 段种好之后装上:
+                        // 本函数在 StartRpcServer 的调用栈上执行,监听 fd 的第一个可读事件要等这里返回之后才会被处理。
+                        n.GetTcpServer().setAdmissionCallback(
+                            [](const muduo::net::InetAddress& peer) {
+                                return gate_connection_admission::AdmitConnection(peer, std::chrono::steady_clock::now());
+                            });
                         n.GetTcpServer().setConnectionCallback(
                             [&context](const TcpConnectionPtr& conn) {
                                 if (context.sourceClosed && conn->connected()) { conn->forceClose(); return; }
@@ -635,6 +686,9 @@ int main(int argc, char *argv[])
                         // 路由 lane 的在途过期扫描同理:客户端连进来之后就可能有在途调用。在途索引为空时每轮只做一次堆顶比较。
                         context.routerLaneExpiryTimer.RunEvery(gate_lane::kSweepIntervalSeconds, [] {
                             gate_lane::ExpireDue(std::chrono::steady_clock::now());
+                            // 场景 lane 的定时重投挂在同一拍(handler/rpc/client_scene_lane.h):玩家换场景节点时留在 gate 的请求
+                            // 靠它按序重投。没有会话在等重投时每拍只做一次 empty();随本定时器一起取消。
+                            gate_scene_lane::Tick(std::chrono::steady_clock::now());
                         });
                         // 观战空闲巡检与指标行:回调不捕获对象,hub 按弱引用找,没有了就是空操作(AGENTS.md §11.7)。
                         context.spectateSweepTimer.RunEvery(gate_spectate::kSweepIntervalSeconds, [] {
@@ -650,6 +704,11 @@ int main(int argc, char *argv[])
                         // 与上面几个扫描一样紧跟客户端回调装上;关源(disconnectAllClients)时取消。
                         context.drainMigrationTimer.RunEvery(gate_drain_migration::kTickIntervalSeconds, [] {
                             gate_drain_migration::Tick(std::chrono::steady_clock::now());
+                        });
+                        // 登录态续租:登录成功的连接活着期间,按 login 给的间隔定期续租它的登录态、设备集成员与绑定栅栏
+                        // (docs/design/gate-online-identity.md §10.4)。同样紧跟客户端回调装上;关源时取消。
+                        context.loginRenewalTimer.RunEvery(gate_login_renewal::kTickIntervalSeconds, [] {
+                            gate_login_renewal::Tick(std::chrono::steady_clock::now());
                         });
 
                         // 依赖门:路由模式下等的是路由服而不是 login —— gate 这时根本不连

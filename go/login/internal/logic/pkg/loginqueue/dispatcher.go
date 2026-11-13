@@ -1,5 +1,5 @@
 // dispatcher.go — 每个 zone 一个 leader 的出队 goroutine:把本 zone 队列里的条目
-// 放行成 admit:{queueId}。
+// 放行成放行槽(admitKey)。
 //
 // Why leader-elect (instead of every login replica draining):
 //
@@ -48,7 +48,7 @@ package loginqueue
 import (
 	"context"
 	"errors"
-	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -57,6 +57,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 
+	"shared/leader"
 	"shared/safego"
 )
 
@@ -65,7 +66,7 @@ import (
 type Dispatcher struct {
 	queue        *Queue
 	provider     CapacityProvider
-	rdb          *redis.Client
+	rdb          redis.UniversalClient
 	hmacSecret   []byte
 	gateTokenTTL time.Duration
 
@@ -106,7 +107,7 @@ type Dispatcher struct {
 func NewDispatcher(
 	queue *Queue,
 	provider CapacityProvider,
-	rdb *redis.Client,
+	rdb redis.UniversalClient,
 	hmacSecret []byte,
 	gateTokenTTL time.Duration,
 	interval time.Duration,
@@ -120,6 +121,12 @@ func NewDispatcher(
 	}
 	if lockKeyBase == "" {
 		return nil, errors.New("loginqueue: dispatcher lock key base must be non-empty")
+	}
+	// 锁键 = 前缀 + 本 zone 的 hash tag(ZoneDispatcherLockKey)。前缀里带花括号时,取槽认的是前缀里那一对,
+	// 锁键就不在本 zone 的排队槽上;控制集群句柄还会因为 tag 不是登记过的族拒绝这把锁的每一条命令,
+	// 本 zone 永远选不出 leader、只进不出。起服即失败,不带病上线。
+	if strings.ContainsAny(lockKeyBase, "{}") {
+		return nil, errors.New("loginqueue: dispatcher lock key base must not contain '{' or '}' (the zone hash tag is appended)")
 	}
 	if interval <= 0 {
 		return nil, errors.New("loginqueue: dispatch interval must be positive")
@@ -142,11 +149,13 @@ func NewDispatcher(
 	}, nil
 }
 
-// ZoneDispatcherLockKey 返回 zone 级出队 leader 锁键 <base>:zone:<zoneID>。
+// ZoneDispatcherLockKey 返回 zone 级出队 leader 锁键 <base>:{q:<zoneID>}。
 // 同一 zone 的 login 副本抢同一把锁,不同 zone 互不相干。
-// 排查时用:redis-cli GET dispatcher:lock:login_queue:zone:1
+// 锁键与本 zone 的排队键共用 hash tag(queueTag),在集群里同槽:以后放行要在同一段脚本里核对任期时,
+// 锁键可以直接写进 KEYS(docs/design/redis-cluster-all-domains-20261110.md §4.7)。
+// 排查时用:redis-cli -c GET 'dispatcher:lock:login_queue:{q:1}'
 func ZoneDispatcherLockKey(base string, zoneID uint32) string {
-	return fmt.Sprintf("%s:zone:%d", base, zoneID)
+	return base + ":" + queueTag(zoneID)
 }
 
 // Start launches the leader-election + drain goroutine. Returns immediately.
@@ -211,6 +220,14 @@ func (d *Dispatcher) Stop() {
 	<-d.stopped
 }
 
+// campaignRetry 是没当选时两次竞选之间的间隔,纯函数。与 shared/leader 同一口径(leader.DefaultRetryPeriod),
+// 不跟着锁 TTL 走:现任主动让位之后最迟这么久就有新的放行者。跟着 TTL/3 走时缺省 30s 的 TTL 是 10s,
+// 每次滚动重启 login,排队都会停止放行这么久(docs/design/scene-node-planned-drain.md §9「选主交接」)。
+// 下限 1s 与任期内 panic 之后的退避同口径,只影响单测里的毫秒级 TTL。
+func campaignRetry(lockTTL time.Duration) time.Duration {
+	return min(max(lockTTL/3, time.Second), leader.DefaultRetryPeriod)
+}
+
 // electAndRun is the outer loop: keep trying to become leader. When elected,
 // run one term (leadOneTerm) until we lose the lease or shutdown is requested.
 func (d *Dispatcher) electAndRun(ctx context.Context) {
@@ -218,6 +235,8 @@ func (d *Dispatcher) electAndRun(ctx context.Context) {
 
 	rl := locker.NewRedisLocker(d.rdb)
 	backoff := max(d.lockTTL/3, time.Second)
+	// 任期内 panic 之后的退避仍用 backoff:那是给代码缺陷降频,不是等锁。
+	retry := campaignRetry(d.lockTTL)
 
 	for {
 		if ctx.Err() != nil {
@@ -232,7 +251,7 @@ func (d *Dispatcher) electAndRun(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(backoff):
+			case <-time.After(retry):
 				continue
 			}
 		}

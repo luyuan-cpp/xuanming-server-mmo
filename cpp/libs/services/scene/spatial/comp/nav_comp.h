@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Detour/DetourNavMeshQuery.h"
+#include "authored_nav_bounds.h"
 #include "nav_mask.h"
 
 // 场景导航网格 + 查询器。
@@ -23,4 +24,6 @@ struct NavComp
     dtNavMeshQuery navQuery;
     NavMask mask;
     bool strictMask = false;
+    AuthoredNavBounds authoredBounds;
+    bool authoredFlat = false;
 };

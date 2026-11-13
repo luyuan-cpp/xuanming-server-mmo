@@ -22,6 +22,7 @@ import (
 	dspb "proto/data_service"
 	matchpb "proto/match"
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/generated/table"
@@ -62,9 +63,10 @@ type ServiceContext struct {
 	sourceStop       func(context.Context) error
 	sourceClosed     bool
 	Config           config.Config
-	RedisClient      *redis.Client
-	// PlayerLocatorRedisClient 只剩控制域:订阅 assetop:wake,写唤醒去重键。玩家键一律走 PlayerRedis。
-	PlayerLocatorRedisClient *redis.Client
+	// ControlRedis 是控制集群句柄(shared/clusterredis,ControlClusterKeys 键策略;2026-11-12 取代 RedisClient 与
+	// PlayerLocatorRedisClient):帮会缓存、帮会榜、维护锁与选主锁、配额、租约,以及 assetop:wake 订阅与去重键。
+	// 玩家键一律走 PlayerRedis。
+	ControlRedis redis.UniversalClient
 	// PlayerRedis 是玩家域句柄(shared/playerredis):会话、位置、战斗锁。键一律带 {player_id},发送前经守卫核对。
 	PlayerRedis        redis.UniversalClient
 	DB                 *sql.DB
@@ -114,32 +116,16 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	}
 	table.LoadTables(c.TableDir, false)
 
-	// PoolSize:0 = go-redis 缺省 10 × GOMAXPROCS,负数已被 config.Validate 拒绝(见 config.RedisConf.PoolSize)。
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     c.RedisClient.Host,
-		Password: c.RedisClient.Password,
-		DB:       c.RedisClient.DB,
-		PoolSize: c.RedisClient.PoolSize,
-	})
-
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		panic(fmt.Errorf("failed to connect global Redis: %w", err))
+	// 控制集群一个句柄:节点客户端不自动重发结果未知的命令(R8),发送前按控制集群键策略核对。
+	controlRedisConf := c.EffectiveControlRedis()
+	controlRdb, err := clusterredis.New(controlRedisConf, clusterredis.ControlClusterKeys)
+	if err != nil {
+		panic(fmt.Errorf("invalid ControlRedis config: %w", err))
 	}
-
-	plRedisConf := c.PlayerLocatorRedis
-	if plRedisConf.Host == "" {
-		plRedisConf = c.RedisClient
-		plRedisConf.DB = 0
+	if err := controlRdb.Ping(context.Background()).Err(); err != nil {
+		panic(fmt.Errorf("failed to connect control Redis (%s): %w", controlRedisConf.Describe(), err))
 	}
-	plRdb := redis.NewClient(&redis.Options{
-		Addr:     plRedisConf.Host,
-		Password: plRedisConf.Password,
-		DB:       plRedisConf.DB,
-		PoolSize: plRedisConf.PoolSize,
-	})
-	if err := plRdb.Ping(context.Background()).Err(); err != nil {
-		panic(fmt.Errorf("failed to connect player locator Redis: %w", err))
-	}
+	logx.Infof("[ServiceContext] control redis %s", controlRedisConf.Describe())
 	playerRedisConf := c.EffectivePlayerRedis()
 	playerRdb, err := playerredis.New(playerRedisConf)
 	if err != nil {
@@ -207,17 +193,16 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic(fmt.Errorf("invalid PlayerRedis config: %w", err))
 	}
 	sc := &ServiceContext{
-		WriterConfig:             writer,
-		RootAdmission:            root,
-		RelayAdmission:           relay,
-		RelayIngress:             drainproof.New(),
-		Config:                   c,
-		RedisClient:              rdb,
-		PlayerLocatorRedisClient: plRdb,
-		PlayerRedis:              playerRdb,
-		DB:                       db,
-		KafkaWriter:              w,
-		GateCommandBuilder:       guildkafka.NewGateCommandBuilder(),
+		WriterConfig:       writer,
+		RootAdmission:      root,
+		RelayAdmission:     relay,
+		RelayIngress:       drainproof.New(),
+		Config:             c,
+		ControlRedis:       controlRdb,
+		PlayerRedis:        playerRdb,
+		DB:                 db,
+		KafkaWriter:        w,
+		GateCommandBuilder: guildkafka.NewGateCommandBuilder(),
 		// 服务名 "guild" 只作 player_sync_bump_total 的 service label(有界常量,不带任何 id)。
 		PlayerSyncBumper:      playersync.NewBumper(playersync.NewGoRedisEvaler(syncRdb), playerSyncServiceName),
 		PlayerSyncRedisClient: syncRdb,
@@ -459,11 +444,8 @@ func (s *ServiceContext) StopAndReport(ctx context.Context) error {
 	if s.PlayerRedis != nil {
 		result = errors.Join(result, s.PlayerRedis.Close())
 	}
-	if s.PlayerLocatorRedisClient != nil {
-		result = errors.Join(result, s.PlayerLocatorRedisClient.Close())
-	}
-	if s.RedisClient != nil {
-		result = errors.Join(result, s.RedisClient.Close())
+	if s.ControlRedis != nil {
+		result = errors.Join(result, s.ControlRedis.Close())
 	}
 	if s.DB != nil {
 		result = errors.Join(result, s.DB.Close())

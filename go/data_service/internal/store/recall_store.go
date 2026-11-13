@@ -683,16 +683,36 @@ func (s *RecallStore) closeRoleGone(ctx context.Context, op RecallPlanned, nowMs
 
 // recallSettlement 是一行走到终局的全部输入。line 为 nil 表示没有回收结果,整行算缺口。
 type recallSettlement struct {
-	opID       uint64
-	from, to   uint32
-	line       *assetpb.AssetRecallLine
-	outcome    uint32
-	reason     uint32
+	opID     uint64
+	from, to uint32
+	line     *assetpb.AssetRecallLine
+	// answer 是终结所凭的 scene 答复(重投循环拿到的落盘结局),写进 last_outcome / last_reason 并置 durable=1。
+	// nil 表示这次终结不是 scene 的答复(人工终结、ROLE_GONE):这三列一个都不动,留着最后一次投递时 scene 的答复,事后核对用。
+	answer     *recallAnswer
 	resolvedBy string
 	resolution string
 	// witness 只有人工终结带:读证据那一刻行上的 lease_until_ms、last_send_ms。持行锁时对不上就不终结。
 	witness *assetop.QuietWitness
 }
+
+// recallAnswer 是 scene 的一次答复:结局与原因码(assetpb.AssetOpOutcome 的数值、AssetReason)。
+type recallAnswer struct {
+	outcome, reason uint32
+}
+
+// gm_recall_op 的 durable、last_outcome、last_reason 三列描述同一件事:**最后一次 scene 答复**。last_outcome / last_reason 是那次答复
+// 的结局与原因码;durable=1 表示那次答复报告结局已经落盘(写进了玩家存档),只有这样的答复才能终结一行(assetop.Result.Terminal)。
+// 重排(Reschedule)每次按答复覆盖三列;自动终结(Finalize)把终结所凭的答复写进去,所以 durable 恒为 1。
+// 人工终结和 ROLE_GONE 不是 scene 的答复,三列都不动:终态行上留着最后一次投递时 scene 实际回的是什么,事后和账本、流水对得上;
+// 「这一行是谁终结的」看 resolved_by(人工终结写操作人,自动终结与 ROLE_GONE 为空),不看 durable。
+const (
+	// settleRecallOpWithAnswerSQL 是自动终结:写终态、明细,以及终结所凭的 scene 答复。
+	settleRecallOpWithAnswerSQL = `UPDATE gm_recall_op SET status=?,durable=1,last_outcome=?,last_reason=?,lease_until_ms=0,updated_ms=?,
+		taken=?,debt=?,shortfall=?,resolved_by=?,resolve_reason=? WHERE op_id=?`
+	// settleRecallOpSQL 是人工终结与 ROLE_GONE:只写终态、明细与经办信息,durable、last_outcome、last_reason 保留原值。
+	settleRecallOpSQL = `UPDATE gm_recall_op SET status=?,lease_until_ms=0,updated_ms=?,
+		taken=?,debt=?,shortfall=?,resolved_by=?,resolve_reason=? WHERE op_id=?`
+)
 
 // settle 在调用方事务里走一行的终局:批次行 → op 行 → 改 op → 改批次,减到 0 写结束审计。回这一行是否本次终结。
 // 行已经不在 from 状态时什么都不改,回 false:这是「一次且仅一次」的最后一道闸。人工终结另比见证,对不上同样回 false。
@@ -732,9 +752,13 @@ func (s *RecallStore) settle(ctx context.Context, tx *sql.Tx, st recallSettlemen
 			return false, err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE gm_recall_op SET status=?,durable=1,last_outcome=?,last_reason=?,lease_until_ms=0,updated_ms=?,
-		taken=?,debt=?,shortfall=?,resolved_by=?,resolve_reason=? WHERE op_id=?`,
-		st.to, st.outcome, st.reason, nowMs, taken, debt, shortfall, st.resolvedBy, st.resolution, st.opID); err != nil {
+	if st.answer != nil {
+		_, err = tx.ExecContext(ctx, settleRecallOpWithAnswerSQL,
+			st.to, st.answer.outcome, st.answer.reason, nowMs, taken, debt, shortfall, st.resolvedBy, st.resolution, st.opID)
+	} else {
+		_, err = tx.ExecContext(ctx, settleRecallOpSQL, st.to, nowMs, taken, debt, shortfall, st.resolvedBy, st.resolution, st.opID)
+	}
+	if err != nil {
 		return false, err
 	}
 
@@ -1018,7 +1042,7 @@ func (s *RecallStore) Finalize(ctx context.Context, op assetop.Op, status asseto
 	if !res.SQLCommitted {
 		return false, errors.New("recall finalize without SQL commit proof")
 	}
-	st := recallSettlement{opID: op.OpID, from: recallStatusPending, outcome: uint32(res.Outcome), reason: res.Reason}
+	st := recallSettlement{opID: op.OpID, from: recallStatusPending, answer: &recallAnswer{outcome: uint32(res.Outcome), reason: res.Reason}}
 	switch status {
 	case assetop.StatusApplied, assetop.StatusAppliedPartial:
 		line, ok := assetop.RecallLineOf(op, res.Snapshot)
@@ -1079,6 +1103,7 @@ func (s *RecallStore) ListPendingByPlayer(ctx context.Context, playerID uint64, 
 // ResolveManuallyIfQuiet 是人工终结唯一的写路径(调用方 logic.ResolveRecallOp 先按已提交账本判过证据)。
 // 只收拒绝、中止、部分:全额结果只能来自 scene 的明细。和 Finalize 走同一个 settle,另要求行上的 lease_until_ms、
 // last_send_ms 仍是 witness(读证据时的值)。回 false、什么都不改:行已不是 PENDING,或读证据之后有人领过、发过它。
+// 人工终结不是 scene 的答复:durable、last_outcome、last_reason 保留最后一次投递时的值(见 settleRecallOpSQL 上方的说明)。
 //
 // 没有不带见证的人工终结:回收不给 assetop.Loop 挂 Manual,不核证据的口子不留。
 func (s *RecallStore) ResolveManuallyIfQuiet(ctx context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error) {

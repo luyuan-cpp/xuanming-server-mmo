@@ -189,7 +189,7 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 		}
 		planned[sceneId] = struct{}{}
 		// 属主读错当「没有属主」会绕过屏障,而下面会删掉映射。
-		nodeId, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+		nodeId, err := svcCtx.Redis.Get(sceneNodeKey(zone, sceneId))
 		if err != nil {
 			noteReadUnknown(zone, readUnknownSiteOrphanCleanup, fmt.Sprintf("owner of scene %d (conf %d)", sceneId, confId), err)
 			return false
@@ -219,8 +219,8 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 	svcCtx.Redis.Del(drainingKey)
 	// 线号表与分线目录(world_channel_directory.go)同样按 (zone, conf) 存。这张图已不在 World 表里,
 	// 目录发布循环不会再碰它们:线号表没有 TTL,不删就是永久垃圾;目录有 TTL,顺手删只是让客户端
-	// 不必再等它过期。两把键刻意不用 world_channels:zone: 前缀(滚动窗口里仍在跑的旧版本 scene_manager
-	// 按这个前缀 SCAN,会把它们当成频道集合;merge_zone 也按这个前缀清源 zone),所以要在这里点名删。
+	// 不必再等它过期。两把键刻意不用频道集合的键形 world_channels:{ctl:<z>}:<conf>(不能被认成频道集合),
+	// 不随频道集合一起删,所以要在这里点名删。
 	svcCtx.Redis.Del(worldChannelLineNoKey(zone, confId))
 	svcCtx.Redis.Del(worldChannelDirectoryKey(zone, confId))
 
@@ -299,9 +299,9 @@ func runWorldOrphanTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job
 	if err := unlinkFromSourceMirrors(svcCtx, zone, sceneID, job.Claim.Source); err != nil {
 		deferred = append(deferred, "unlink from the source's mirror set")
 	}
-	svcCtx.Redis.Del(sceneMirrorsKey(sceneID))
-	svcCtx.Redis.Del(sceneDrainingKey(sceneID))
-	if err := deletePlacementGeneration(svcCtx, sceneID); err != nil {
+	svcCtx.Redis.Del(sceneMirrorsKey(zone, sceneID))
+	svcCtx.Redis.Del(sceneDrainingKey(zone, sceneID))
+	if err := deletePlacementGeneration(svcCtx, zone, sceneID); err != nil {
 		deferred = append(deferred, "delete the placement generation")
 	}
 	if nodeID != "" {

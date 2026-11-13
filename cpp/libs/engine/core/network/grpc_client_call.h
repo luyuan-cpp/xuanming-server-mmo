@@ -15,8 +15,12 @@ namespace google::protobuf { class Message; }
 // 与传输无关:不含任何官方 gRPC 类型。2026-10-15 第 3 批起生成客户端走 muduo_grpc::Channel,第 5 批删除官方运行时。
 
 // C++ 节点 unary gRPC 调用的内置 deadline(毫秒)。bin/etc/base_deploy_config.yaml 的 GrpcClient.CallDeadlineMs
-// 没配到的目标节点类型用它(grpc_call_deadline::Apply)。取值须大于各 Go 服务 zrpc 服务端 Timeout 的最大值
-// (scene_manager 8000)加 2000 余量:下游先超时,调用方才收得到带真实错误码的应答(上游比下游宽)。
+// 没配到的目标节点类型用它(grpc_call_deadline::Apply)。有 Go 服务端的八个目标(SceneManager / DataService /
+// ClientRpcRouter / Match / Login / PlayerInbox / PlayerStore / Mail)不靠它:部署门禁(k8s_deploy.ps1 的
+// Assert-GrpcClientDeadlineBudget)要求它们在配置里显式列出,且 ≥ 对应服务 zrpc Timeout + 2000(上游比下游宽:下游先超时,
+// 调用方才收得到带真实错误码的应答)。这八项的 deadline 已有比本值宽的(SceneManager 13500,scene_manager Timeout 11500;
+// PlayerStore 14000),所以本值不承诺盖住任何 Go 服务的 Timeout,只兜没列出的类型与没 Apply 配置的宿主(单测)。
+// 依赖调用结果的下限常量(如 relocate_confirm::kSmSettleWindow)按服务端允许的最小 deadline 取,不按本值取。
 inline constexpr uint32_t kDefaultGrpcCallDeadlineMs = 10000;
 
 // gRPC metadata:有序的键值对。随请求发出的按 Send 传入的原值保存(SessionMD 应用编码之前);

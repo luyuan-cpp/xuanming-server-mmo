@@ -14,6 +14,8 @@
 #include <utility>
 #include <vector>
 
+#include "services/scene/player/system/relocate_target.h" // 纯头:托管条目重发时要带回原来的去向提示
+
 // 疏散 / 排空改派的"待确认表"—— 纯常量、纯判定与纯容器,不含 entt / redis / muduo / protobuf,不读任何时钟,
 // 可单测(cpp/tests/cross_zone_test 的 RelocateConfirm*)。风格同 handoff_mark_withdraw.h / exit_release_mark.h /
 // travel_freeze_cap.h。粘合代码在 player_lifecycle.cpp(DispatchEmergencyRelocate / TrackRelocateDispatch /
@@ -50,6 +52,10 @@
 //   * 无法核实(连续 kVerifyBudget 读不到)时,只有"本节点替他发的请求都确定没写过落点"才踢
 //     (ShouldKickUnverified)。本节点读不到 ≠ scene_manager 写不了。
 //   * 疏散中的确认阶段只读 Redis、只推 gate,不写任何玩家键(补写被身份闸挡住,kSkipIdentity)。
+//   * 托管条目(Registration::hosted,离线托管的角色,docs/design/player-connection-lost-hold.md §4.3):会话号与代次是
+//     断开那次登录的身份,没有 gate。"踢线"一律不推送(GatePushResult::kNoClient),只做凭证判定与补写;落地判定与
+//     踢线前的本地复核比登录身份(托管落点不绑会话,快照会话恒无效);核实读到仍在源场景、且能证明 scene_manager
+//     没有放行他时,有界重发同一条改派(ShouldResendHosted),不新写任何键。在线条目不重发:被踢的客户端自己重登就是重试。
 //   * 表只活在 scene 逻辑线程的 thread_local 里,无锁。进程退出丢表无害:只是少踢,玩家自己重登。
 //
 // 时间一律由调用方传入(显式依赖,AGENTS §11.2),本文件不读任何时钟。
@@ -74,13 +80,17 @@ namespace relocate_confirm
 	inline constexpr std::chrono::seconds kSettleAfterCallDeadline{5};
 
 	// settle 窗口的下限。settle 窗口 = 发出改派之后 scene_manager 还可能改 location 的最长时间:发出后 deadline
-	// (zrpc Timeout 8s + 2s)之内必有应答或传输失败,其后 handler 最多再跑一个 kSettleAfterCallDeadline,所以
-	// sentAt + deadline + 5s 之后它不会再动 location。10 + 5 = 15。实际取值由 BudgetsFor 从 deadline 派生,
-	// 本常量只是下限(deadline 被配小时窗口不跟着缩)。
+	// 之内必有应答或传输失败,其后 handler 最多再跑一个 kSettleAfterCallDeadline,所以 sentAt + deadline + 5s 之后
+	// 它不会再动 location。实际取值由 BudgetsFor 从 deadline 派生,本常量只是下限(deadline 被配小、或宿主没 Apply 配置
+	// 落到内置缺省 10000 时窗口不跟着缩)。下限按 scene_manager 允许的最小 deadline 取:zrpc Timeout 11.5s + 2s = 13.5s
+	// (base_deploy_config.yaml 的 SceneManagerNodeService,部署门禁守着 deadline ≥ Timeout + 2000),13.5 + 5 = 18.5,
+	// 取整 19。2026-11-12 以前 Timeout 是 8s、下限 15;scene_manager 把角色目录强读与铸造的 WAITAOF 算进预算之后调大。
+	// **跨配置契约:调大 scene_manager 的 zrpc Timeout 或 KafkaWriteTimeoutSeconds 必须同步本常量**(由
+	// go/scene_manager/internal/logic/relocate_settle_crosslang_test.go 按数字守着)。
 	// 已知残余:kafka-go 在冷连接池或 topic 元数据还没缓存时,元数据查询不受 KafkaWriteTimeoutSeconds 约束,handler 可能
 	// 比本常量多跑一段;两者相等时也没给失败回滚的 EVAL 留余量(Go 侧守卫只保证数字没被单边调大)。回滚 EVAL 在 go-redis 重试下可能更慢;请求在客户端通道里排队到 deadline 前一刻才被服务端收到时,
 	// handler 也可能越过本窗口。后果是误踢一次、location 停在目标上,只伤活性(重登即恢复)。
-	inline constexpr std::chrono::seconds kSmSettleWindow{15};
+	inline constexpr std::chrono::seconds kSmSettleWindow{19};
 
 	// 等完成通知(应答或传输失败)的兜底下限。每次调用都带 deadline,完成通知正常一定在 deadline 内到;本预算只兜
 	// "完成通知永远不来"(例如 scene_manager 节点在调用途中被摘除)。到期按 kNoReply 转核实。
@@ -117,7 +127,8 @@ namespace relocate_confirm
 	// (grpc_call_deadline::Get(eNodeType::SceneManagerNodeService);该头要求依赖调用结果的预算一律从它派生)。
 	//   settleWindow = max(kSmSettleWindow, deadline + kSettleAfterCallDeadline)
 	//   replyWait    = max(kReplyWaitBudget, settleWindow + kSettleAfterCallDeadline)
-	// deadline = 10000ms 时得 {15s, 30s}。replyWait 恒大于 settleWindow,所以 kNoReply 出现时一定已过 settleAt。
+	// deadline = 13500ms(base_deploy_config.yaml)时派生值 18.5s 低于下限,得 {19s, 30s};内置缺省 10000ms 同样得 {19s, 30s}。
+	// replyWait 恒大于 settleWindow,所以 kNoReply 出现时一定已过 settleAt。
 	constexpr Budgets BudgetsFor(std::chrono::milliseconds smCallDeadline)
 	{
 		// seconds 与 milliseconds 直接喂给 std::max 时模板实参推导失败,先各自转成 Clock::duration 再比。
@@ -391,12 +402,15 @@ namespace relocate_confirm
 		return index < kOutcomeCount ? kOutcomeNames[index] : "?";
 	}
 
-	// 按会话直推 gate 的结果(现 3 种)。汇总行里的 key 加前缀 push_。
+	// 按会话直推 gate 的结果(现 4 种)。汇总行里的 key 加前缀 push_。
 	enum class GatePushResult : uint8_t
 	{
 		kSent,		   // 已交给 RpcSession(底层发送无返回值,不代表客户端收到)
 		kGateGone,	   // 找不到 gate / 没有 RpcSession / 连接已断 / 票据没有有效会话
 		kGateReplaced, // gate 实例已不是发票时那一个(会话随旧 gate 消失)
+		// 托管条目(Registration::hosted):角色是离线托管的,没有在场的客户端,不推。条目里的会话号是断开那次登录的,
+		// 可能已被同一玩家的新登录拿回(gate 以同一 node_id 重启后会话序号从头发),推过去会踢掉一条合法会话。
+		kNoClient,
 
 		kCount
 	};
@@ -407,6 +421,7 @@ namespace relocate_confirm
 		"sent",
 		"gate_gone",
 		"gate_replaced",
+		"no_client",
 	};
 	static_assert(std::size(kGatePushResultNames) == kGatePushResultCount,
 				  "kGatePushResultNames 必须与 GatePushResult 一一对应");
@@ -524,6 +539,20 @@ namespace relocate_confirm
 			return TicketDecision::kVoidClientGone;
 		}
 		if (currentSessionBound && !currentIsTicketSession)
+		{
+			return TicketDecision::kVoidSessionReplaced;
+		}
+		return TicketDecision::kDispatch;
+	}
+
+	// 托管票据(离线托管的角色,docs/design/player-connection-lost-hold.md §4.3)取出之后发不发改派。
+	//   currentSessionBound      实体此刻绑着一条有效会话:有新登录接回过他,已不是离线托管;
+	//   identityIsTicketIdentity 实体的登录身份(PlayerLoginIdentityComp)仍是票据记的那一次登录(会话号与代次都相同)。
+	// 不看 clientDisconnected:断线是托管票据的前提(保留中的角色一进退出就记了它),托管落点也不需要客户端在场。
+	// 作废的两种都按 kVoidSessionReplaced 计 —— 与在线票据同义:票据代表的那次登录已不是实体当前的身份。
+	constexpr TicketDecision DecideHostedTicket(bool currentSessionBound, bool identityIsTicketIdentity)
+	{
+		if (currentSessionBound || !identityIsTicketIdentity)
 		{
 			return TicketDecision::kVoidSessionReplaced;
 		}
@@ -699,6 +728,59 @@ namespace relocate_confirm
 			return true;
 		case Evidence::kReplyRejected:
 			return rejectedBeforeAnyPlacementWrite;
+		default:
+			return false;
+		}
+	}
+
+	// ── 托管条目的有界重发(docs/design/player-connection-lost-hold.md §4.3)──────────────────────────────
+	// 在线条目改派没生效就踢线,客户端被踢后自己重登 —— 那就是重试。托管条目没有客户端:结清之后角色要等下一次登录才回到
+	// 世界里(挂机月卡可能还有好几天)。所以只要能证明 scene_manager 没有放行他,就由本节点把同一条改派再发一次。
+	// 第 i 次重发前等 kHostedResendDelays[i],等完先重读一次确认仍没变才发(重读就是下一次核实)。两次等待共 25 秒,
+	// 加上各自的 settle 也远在派发时所写标记的 300 秒 TTL 之内:重发沿用那份标记,不新写任何键。
+	inline constexpr std::chrono::seconds kHostedResendDelays[] = {std::chrono::seconds{5}, std::chrono::seconds{20}};
+	inline constexpr uint32_t kMaxHostedResends = static_cast<uint32_t>(std::size(kHostedResendDelays));
+
+	// 第 resendsDone 次重发之前等多久;次数用尽时为空。
+	constexpr std::optional<Clock::duration> HostedResendDelay(uint32_t resendsDone)
+	{
+		if (resendsDone >= kMaxHostedResends)
+		{
+			return std::nullopt;
+		}
+		return Clock::duration{kHostedResendDelays[resendsDone]};
+	}
+
+	// 核实读到结论之后,托管条目重发而不结清的条件(全部满足才重发):
+	//   hosted                 是托管条目;
+	//   verdict == kUnchanged  location 仍指向本节点上的源场景:没有任何请求把他放到别处。kAbsent(location 已被删:租约清理、
+	//                          登出)不重发 —— 别的流程已经替他收了尾;
+	//   证据证明 scene_manager 没有放行本次改派:
+	//     kNotSent             根本没发出去(注册表为空 / 写标记的回调一直没来);
+	//     kReplyRejected       被拒,且拒绝码可重试(rejectionRetryable,由 PlayerLifecycleSystem::SmRejectionRetryableForHostedRelocate
+	//                          给出:没有去处、目标实例号未同步、Redis、再入屏障、归属不可用,都发生在任何落点写之前,隔一会儿就可能成)。
+	//                          请求形状不对、会话已被取代、换手门不认标记,重发也一样,不重发;
+	//     kNoReply / kTransportFailed  结果未知,但走到"读到没变、许踢"时已过 settle(MayKickBeforeSettle 对它们恒假),
+	//                          scene_manager 不会再处理那一条;推路由失败被回滚放回源场景的也在这里,回滚转写的标记照样认得出;
+	//     kReplySucceeded      不重发:放行过,读到没变只可能是原样放回了源场景,托管落点会送回本节点;
+	//     落地两类(kLandingAbandoned / kLandingTimeout)不重发:落点已提交到本节点,补救归目标节点自己的看护
+	//                          (hosted_placement_retry.h),不是重新问 scene_manager;
+	//   resendsDone < kMaxHostedResends。
+	constexpr bool ShouldResendHosted(bool hosted, Evidence evidence, Verdict verdict, bool rejectionRetryable,
+									  uint32_t resendsDone)
+	{
+		if (!hosted || verdict != Verdict::kUnchanged || resendsDone >= kMaxHostedResends)
+		{
+			return false;
+		}
+		switch (evidence)
+		{
+		case Evidence::kNotSent:
+		case Evidence::kNoReply:
+		case Evidence::kTransportFailed:
+			return true;
+		case Evidence::kReplyRejected:
+			return rejectionRetryable;
 		default:
 			return false;
 		}
@@ -925,6 +1007,12 @@ namespace relocate_confirm
 		// 本节点替他发出的更早 EnterScene 还可能被处理(见 RequestOutcomeUnsettled)。默认取保守的一侧:
 		// 漏填只会多等到 settle、读不到时不盲踢。
 		bool earlierEnterSceneMayReply{true};
+		// 托管条目(离线托管的角色,文件头"契约"):sessionId / loginGeneration 是断开那次登录,gateNodeId 为 0、gateInstanceId 为空。
+		// 粘合层逐字段显式赋值;在线票据保持 false。
+		bool hosted{false};
+		// 托管条目重发时要原样带回的两项(在线条目不重发,只进日志):派发时的去向提示与归属修订。
+		relocate_target::Target target{};
+		uint64_t ownerRevision{0};
 	};
 
 	struct Entry : Registration
@@ -945,6 +1033,8 @@ namespace relocate_confirm
 		// 重发只看 nextVerifyAt,Redis 重连成功时也不提前(R14,见 CollectDue)。
 		bool retryPending{false};
 		uint32_t verifyGen{0};		// 核实代际:只由 MarkVerifySent 自增
+		uint32_t hostedResends{0};		// 托管条目已重发的次数(BeginHostedResend 自增)
+		bool hostedResendArmed{false};	// 托管条目已决定重发、在等下一次核实确认仍没变(ArmHostedResend 置位)
 		Clock::time_point createdAt{};
 		Clock::time_point sentAt{};
 		// 当前阶段的截止时刻。各阶段含义不同:写标记的回调 / 等完成通知 / 本轮核实 / 落地等载入。
@@ -1039,6 +1129,16 @@ namespace relocate_confirm
 
 		std::size_t size() const { return entries_.size(); }
 
+		// 逐条只读访问(无序)。给每秒的托管在场心跳挑出托管条目用(player-connection-lost-hold.md §4.5);fn 里不许改表。
+		template <typename Fn>
+		void ForEachEntry(Fn &&fn) const
+		{
+			for (const auto &item : entries_)
+			{
+				fn(item.second);
+			}
+		}
+
 		std::array<std::size_t, kPhaseCount> CountByPhase() const
 		{
 			std::array<std::size_t, kPhaseCount> counts{};
@@ -1132,6 +1232,34 @@ namespace relocate_confirm
 			entry.verifyInFlight = false;
 			entry.retryPending = true;
 			entry.nextVerifyAt = now + kVerifyRetryInterval;
+		}
+
+		// 托管条目读到"没变"、该重发(ShouldResendHosted):先等 delay,到点的那次核实再确认一遍仍没变才真发。
+		// 留在 kVerifying;本轮核实的截止顺延到那次重读之后还有一整轮(同 WaitForSettle)。清 verifyInFlight,不动 verifyGen。
+		static void ArmHostedResend(Entry &entry, Clock::time_point now, Clock::duration delay)
+		{
+			entry.hostedResendArmed = true;
+			entry.nextVerifyAt = now + delay;
+			entry.deadline = (std::max)(entry.deadline, entry.nextVerifyAt + kVerifyBudget);
+			entry.verifyInFlight = false;
+			entry.retryPending = false;
+		}
+
+		// 托管条目的重发即将经派发路径发出:回到 kMarkWriting(TrackRelocateDispatch / SendEmergencyRelocateEnterScene 只认这个
+		// 阶段),上一条请求的完成状态清掉 —— 它已有结论(没发出去、在任何落点写之前被拒,或已过 settle),证据回到初值。
+		// 关联号、sentAt 与 settle 由随后的 MarkSent 重算;earlierEnterSceneMayReply 不动(只会让之后多等,不会误判)。
+		static void BeginHostedResend(Entry &entry, Clock::time_point now)
+		{
+			entry.phase = Phase::kMarkWriting;
+			entry.deadline = now + kMarkWriteBudget;
+			entry.evidence = Evidence::kNotSent;
+			entry.correlationId = 0;
+			entry.completionSeen = false;
+			entry.replyErrorCode = 0;
+			entry.verifyInFlight = false;
+			entry.retryPending = false;
+			entry.hostedResendArmed = false;
+			++entry.hostedResends;
 		}
 
 		// 转入(或留在)落地等载入。

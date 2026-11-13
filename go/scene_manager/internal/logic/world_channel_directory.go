@@ -12,6 +12,7 @@ import (
 
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/leader"
 	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -58,22 +59,22 @@ const (
 	//
 	// 加一个竞选间隔:领导者**优雅让位**(每次滚动更新都会发生)时目录不能断档。那时最长的无发布间隔 =
 	//   让位前最后一次发布距让位 ≤ 1 个发布周期
-	//   + 接任者等到自己的下一次竞选 ≤ 1 个竞选间隔(shared/leader:锁 TTL / 3,默认 30s / 3 = 10s)
+	//   + 接任者等到自己的下一次竞选 ≤ 1 个竞选间隔(shared/leader.CampaignInterval:缺省 2s,不超过锁 TTL / 3)
 	//   + 当选后等到发布循环的下一个 tick ≤ 1 个发布周期(safego.Loop 只按 ticker 跑,没有「当选即发」)
 	// 即 2 个周期 + 1 个竞选间隔;3 轮里多出来的那 1 个周期是余量(放锁、SETNX、首轮发布本身的耗时)。
-	// 默认值下:无发布间隔最长 2 + 10 + 2 = 14s,TTL = 3 × 2 + 10 = 16s。
-	// 竞选间隔必须按选主参数算、不能写死:调大 LeaderLockTTLSeconds 时它跟着变长。
+	// 默认值下:无发布间隔最长 2 + 2 + 2 = 6s,TTL = 3 × 2 + 2 = 8s。
+	// 竞选间隔必须从 shared/leader 取、不能写死:选主的竞选参数变了它跟着变。
 	//
 	// **盖不住领导者崩溃**(进程被杀、来不及放锁):接任者要先等锁自己过期,无发布间隔最长约
-	// 1 个周期 + 锁 TTL + 1 个竞选间隔 + 1 个周期(默认 2 + 30 + 10 + 2 = 44s),目录会缺失最多约 28s,
-	// 客户端显示「线路信息暂不可用」(切线本身不受影响)。这是取舍不是遗漏:要盖住得把 TTL 拉到 45s 以上,
+	// 1 个周期 + 锁 TTL + 1 个竞选间隔 + 1 个周期(默认 2 + 30 + 2 + 2 = 36s),目录会缺失最多约 28s,
+	// 客户端显示「线路信息暂不可用」(切线本身不受影响)。这是取舍不是遗漏:要盖住得把 TTL 拉到 37s 以上,
 	// 代价是领导者全挂时那份不再更新的旧目录也要多留这么久。
 	// 过期才是「目录不可信」的信号,所以不能没有 TTL:领导者全挂时旧目录必须自己消失。
 	worldChannelDirectoryTTLRounds int64 = 3
 
-	// worldChannelDirectoryMaxCampaignSeconds:计入目录 TTL 的竞选间隔上限(一天)。锁 TTL 配到三天以上
-	// 只可能是笔误;钳住是为了让目录 TTL 换算成 Redis EX(int)时不溢出(发布周期那一项在 config.go 已钳)。
-	worldChannelDirectoryMaxCampaignSeconds int64 = 24 * 60 * 60
+	// worldChannelDirectoryMaxLockTTLSeconds:换算竞选间隔之前把锁 TTL 钳到一天。锁 TTL 配到这么大只可能是笔误;
+	// 钳住是为了换成 time.Duration 时不溢出(竞选间隔本身不超过 2s,发布周期那一项在 config.go 已钳)。
+	worldChannelDirectoryMaxLockTTLSeconds int64 = 24 * 60 * 60
 )
 
 func worldChannelLineNoKey(zoneID uint32, confID uint64) string {
@@ -289,15 +290,14 @@ func worldChannelNodeUsable(svcCtx *svc.ServiceContext, zoneID uint32, nodeID st
 //
 // 两个入参都传取值方法的返回值:refreshSeconds = ChannelSwitch.EffectiveDirectoryRefreshSeconds()(≥ 0),
 // leaderLockTTLSeconds = Config.EffectiveLeaderLockTTLSeconds()(> 0),此时结果恒 ≥ 1。
-// 竞选间隔是锁 TTL 的 1/3(shared/leader Elector.Run 的 interval),这里向上取整到秒:
-// 锁 TTL 不是 3 的倍数时宁可多盖不到 1 秒,也不能少盖。
+// 竞选间隔取 shared/leader.CampaignInterval(与 scene_manager_service.go 的选主一样用缺省竞选间隔),这里向上取整到秒:
+// 不是整秒时宁可多盖不到 1 秒,也不能少盖。
 func worldChannelDirectoryTTLSeconds(refreshSeconds, leaderLockTTLSeconds int64) int {
 	campaignSeconds := int64(0)
 	if leaderLockTTLSeconds > 0 {
-		campaignSeconds = (leaderLockTTLSeconds-1)/3 + 1
-	}
-	if campaignSeconds > worldChannelDirectoryMaxCampaignSeconds {
-		campaignSeconds = worldChannelDirectoryMaxCampaignSeconds
+		lockTTL := time.Duration(min(leaderLockTTLSeconds, worldChannelDirectoryMaxLockTTLSeconds)) * time.Second
+		campaign := leader.CampaignInterval(lockTTL, 0)
+		campaignSeconds = int64((campaign + time.Second - 1) / time.Second)
 	}
 	return int(refreshSeconds*worldChannelDirectoryTTLRounds + campaignSeconds)
 }
@@ -382,7 +382,7 @@ func publishWorldChannelDirectory(svcCtx *svc.ServiceContext, zoneID uint32, con
 		nodeUsable := false
 		if !isClosing {
 			// 回收中的线状态已定,不必再读节点映射(排空收尾时它的映射本来就会先被删)。
-			nodeID, nodeErr := svcCtx.Redis.Get(sceneNodeKey(sceneID))
+			nodeID, nodeErr := svcCtx.Redis.Get(sceneNodeKey(zoneID, sceneID))
 			if nodeErr != nil {
 				return metrics.ChannelDirectoryPublishError, fmt.Errorf("读 scene %d 的节点映射失败: %w", sceneID, nodeErr)
 			}
@@ -390,7 +390,7 @@ func publishWorldChannelDirectory(svcCtx *svc.ServiceContext, zoneID uint32, con
 		}
 		// readScenePlayerCount 把读失败(含键类型不对)当 0:人数只用于展示和软上限,
 		// 而且全仓没有对账(world-channel-switch.md §9.3),不值得为它放弃整轮发布。
-		players := readScenePlayerCount(svcCtx, sceneID)
+		players := readScenePlayerCount(svcCtx, zoneID, sceneID)
 		channels = append(channels, &scenepb.SceneChannelInfo{
 			SceneId:     sceneID,
 			ChannelNo:   lineNo,

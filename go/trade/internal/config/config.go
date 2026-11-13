@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"shared/clusterredis"
 	"shared/playerredis"
 	"trade/internal/data"
 
@@ -28,7 +29,6 @@ import (
 	"shared/dbplacement"
 	"shared/idsegment"
 	"shared/redisauth"
-	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -105,34 +105,28 @@ type Config struct {
 	// Market:市场范围、分页与收藏上限。
 	Market MarketConf `json:"Market"`
 
-	// SharedRedis:**共享单库** Redis。资产通道在这一实例上:
-	//   - 没写 PlayerRedis.Addrs 时,玩家域的 player:{id}:location 也在这里(见下面的 PlayerRedis);
-	//   - 订阅 scene 发布的落地唤醒频道 assetop:wake,另写两类本服务自己的键:唤醒的跨副本去重键
-	//     assetop:wake:trade:{player_id}(shared/assetopwake)与维护选主锁 trade:assetop:maintenance:leader(shared/leader)。
+	// ControlRedis:控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1;2026-11-12 取代 SharedRedis 段)。
+	// 资产通道在这一实例上:订阅 scene 发布的落地唤醒分片频道 assetop:wake:{aw:N}(64 个),另写两类本服务自己的单键:唤醒的跨副本去重键
+	// assetop:wake:trade:{player_id}(shared/assetopwake)与维护选主锁 trade:assetop:maintenance:leader(shared/leader)。
+	// 没写 PlayerRedis.Addrs 时,玩家域的 player:{id}:location 也在这里(见下面的 PlayerRedis)。键守卫是 clusterredis.ControlClusterKeys。
 	//
-	// 字段名**不能**叫 Redis:嵌入的 zrpc.RpcServerConf 已经有一个 Redis 字段
-	// (go-zero 的 RedisKeyConf,给 Auth 用),同名会在 conf.MustLoad 阶段直接报
-	// "conflict key Redis" 而不是被忽略。match 的同一份契约键读取也叫 SharedRedis
-	// (cross-zone-matchmaking D2),这里沿用同一个名字。
+	// 段名不叫 Redis:嵌入的 zrpc.RpcServerConf 已经有一个 Redis 字段(go-zero 的 RedisKeyConf,给 Auth 用),
+	// 同名会在 conf.MustLoad 阶段直接报 "conflict key Redis"。
 	//
-	// K8s 上必须指向与 C++ scene 相同的那一份共享 Redis(不是 trade 自己的库):
-	// 位置键的写者是 scene / scene_manager,读错实例 = 永远找不到人 = 资产指令永远 NOT_HERE。
+	// K8s 上唤醒频道必须与 C++ scene 发布的是同一份 Redis:指错 = 永远收不到唤醒,只剩原退避,且不报错。
 	//
-	// 只有 AssetOp.Enabled=true 时才会真的去拨它(装配层判);关着时这一段不被使用,
-	// 但仍要求填写:留着它才能一眼看出"打开开关要连哪份 Redis",也避免放松一条既有守卫。
-	SharedRedis RedisConf `json:"SharedRedis"`
+	// 只有 AssetOp.Enabled=true 时才会真的去拨它(装配层判);关着时这一段不被使用,但仍要求写明 Addrs:
+	// 留着它才能一眼看出"打开开关要连哪份 Redis",也避免放松一条既有守卫(Validate)。
+	ControlRedis clusterredis.Config `json:",optional"`
 
-	// SharedRedisPasswordEnv 是 SharedRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret redis-auth 里,
-	// 经 secretKeyRef 注入;ConfigMap 里 SharedRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
-	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
+	// SharedRedisPasswordEnv 是 ControlRedis 口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret 里,
+	// 经 secretKeyRef 注入;ConfigMap 里 ControlRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。ControlRedis.PasswordEnv 不用(变量缺失时静默落成空口令)。
 	SharedRedisPasswordEnv string `json:",optional"`
-	// MySQLPasswordEnv 是 MySQL.Password 所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md);
-	// ConfigMap 里 MySQL.Password 写空串。不写 = 照用 Password 字面量(本机)。由 ResolveMySQLPassword 在加载配置后填好,变量缺失或为空即拒启。
-	MySQLPasswordEnv string `json:",optional"`
 
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.8):资产通道读 player:{id}:location。
-	// SharedRedis 留给控制域(唤醒频道与去重键、选主锁)。读取走 EffectivePlayerRedis():没写 Addrs 时指向 SharedRedis 那一个实例,
-	// 开发环境不用改。与 SharedRedis 一样,只有 AssetOp.Enabled=true 时才会真的去拨它。
+	// ControlRedis 留给控制域(唤醒频道与去重键、选主锁)。读取走 EffectivePlayerRedis():没写 Addrs 时指向 ControlRedis 那一个实例,
+	// 开发环境不用改。与 ControlRedis 一样,只有 AssetOp.Enabled=true 时才会真的去拨它。
 	PlayerRedis playerredis.Config `json:",optional"`
 
 	// AssetOp:通用资产通道的开关与密钥来源。**整段可缺失,缺失即关闭**(见 AssetOpConf)。
@@ -159,7 +153,17 @@ type CommerceConf struct {
 	PetConfigs     []uint32          `json:",optional"`
 	CurrencyTypes  []uint32          `json:",optional"`
 	AllowInstances bool              `json:",optional"`
+	// ManualResolutionSecretEnv:人工处置入口(TradeAdmin.ListManualContracts / ResolveManualContract,运维工具 commercefix 调)
+	// 的 serviceauth 密钥所在的环境变量名,调用方只有 ManualResolutionCaller,不与别的调用方共用。空 = 入口关闭,一律 PermissionDenied。
+	// 只写变量名;密钥值由部署从 K8s Secret 注入,不进 yaml / ConfigMap(2026-11-11,jubaozhai-market.md §15.7.1)。
+	ManualResolutionSecretEnv string `json:",optional"`
+	// ManualResolutionEnvironment:本部署的环境名(例如 prod-global、staging-global),1~64 个 ASCII 字母、数字或 . _ -。
+	// 工具的 -expect-target 要与它逐字相等,连错环境时服务端回 target_mismatch;开了入口却没写有效值时入口保持关闭。
+	ManualResolutionEnvironment string `json:",optional"`
 }
+
+// ManualResolutionCaller 是 TradeAdmin.ListManualContracts / ResolveManualContract 唯一接受的 serviceauth 调用方。
+const ManualResolutionCaller = "ops-commerce"
 
 // AssetOpConf 是通用资产通道(guild-phase2/04-asset-channel.md §S4)的开关与密钥来源。
 //
@@ -251,7 +255,7 @@ type AssetOpConf struct {
 // 要做到"Wake 段没写 = 开、并发 4、超时 10s",默认值只能由读取方法给出;Enabled 用 *bool 区分"没写"(nil = 开)
 // 与"显式写 false"(关)。默认值的唯一来源是 shared/assetopwake 的 DefaultConcurrency / DefaultWakeTimeout,
 // 这里不另抄数字。跨副本去重窗口不开放配置(固定 assetopwake.DefaultDedupTTL,对齐 scene 侧 5 秒合并窗口,同 guild)。
-// 订阅只在 AssetOp.Enabled 时装配(svc.newAssetChannel),订的是 SharedRedis 那一个实例(scene 发布在同一实例)。
+// 订阅只在 AssetOp.Enabled 时装配(svc.newAssetChannel),订的是 ControlRedis 那一个实例(scene 发布在同一实例)。
 type AssetOpWakeConf struct {
 	// Enabled:nil(没写)或 true = 订阅;显式 false = 不订阅,PENDING 行只按原退避 / 停放档重投(只慢不错)。
 	Enabled *bool `json:",optional"`
@@ -374,53 +378,50 @@ func (a AssetOpConf) validateCleanup() error {
 
 // RedisConf 是 go-redis 客户端的连接参数。
 //
-// 刻意不用 go-zero 的 redis.RedisConf:那份结构没有 DB 字段(填了会被静默忽略),也设不了连接池上限,
-// 而位置键在共享库的 DB 0。字段与 go/guild/internal/config.RedisConf 一一对应(guild 那份的 Password / DB 不是 optional)。
-type RedisConf struct {
-	Host     string `json:"Host"`
-	Password string `json:"Password,optional"`
-	DB       int    `json:"DB,optional"`
-	// PoolSize 是 go-redis 连接池上限(共享 Redis 连接总账,P0-E 第 3 批)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
-	// 随 CPU limit 漂移;负数由 Validate 拒绝。K8s 上 tools/scripts/k8s_deploy.ps1 从 etc/trade.yaml 镜像
-	// SharedRedis.PoolSize 并要求正整数,Redis 连接总账读同一个键。落地唤醒的 Pub/Sub 连接不占池名额。
-	PoolSize int `json:"PoolSize,optional"`
-}
-
-// playerRedisFallbackPoolSize / IOTimeoutMs:没写 PlayerRedis.Addrs 且 SharedRedis.PoolSize 也没写时的连接池,以及读写超时。
-// 与换句柄之前的 go-redis 缺省同量级(K8s 上 GOMAXPROCS 按 2 算),写成常量,不随 CPU limit 漂移。
+// redisFallbackPoolSize / IOTimeoutMs:ControlRedis、PlayerRedis 没写池与读写超时时的取值。与换句柄之前的 go-redis 缺省同量级
+// (K8s 上 GOMAXPROCS 按 2 算),写成常量,不随 CPU limit 漂移。K8s 上 tools/scripts/k8s_deploy.ps1 从 etc/trade.yaml 镜像
+// ControlRedis.PoolSizePerNode 并要求正整数,Redis 连接总账读同一个键。落地唤醒的 Pub/Sub 连接不占池名额。
 const (
-	playerRedisFallbackPoolSize    = 20
-	playerRedisFallbackIOTimeoutMs = 3000
+	redisFallbackPoolSize    = 20
+	redisFallbackIOTimeoutMs = 3000
 )
 
-// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 SharedRedis 那一个实例。
-func (c *Config) EffectivePlayerRedis() playerredis.Config {
-	pool := c.SharedRedis.PoolSize
-	if pool == 0 {
-		pool = playerRedisFallbackPoolSize
+// EffectiveControlRedis 返回生效的控制集群配置:段里没写的池与读写超时取回落值。Validate 已要求写了 Addrs。
+func (c *Config) EffectiveControlRedis() clusterredis.Config {
+	control := c.ControlRedis
+	if control.PoolSizePerNode == 0 {
+		control.PoolSizePerNode = redisFallbackPoolSize
 	}
+	if control.ReadTimeoutMs == 0 {
+		control.ReadTimeoutMs = redisFallbackIOTimeoutMs
+	}
+	if control.WriteTimeoutMs == 0 {
+		control.WriteTimeoutMs = redisFallbackIOTimeoutMs
+	}
+	return control
+}
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 ControlRedis 那一个实例。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	control := c.EffectiveControlRedis()
 	return c.PlayerRedis.OrDefault(playerredis.Config{
-		Addrs:           []string{c.SharedRedis.Host},
-		Password:        c.SharedRedis.Password,
-		PoolSizePerNode: min(pool, playerredis.MaxPoolSizePerNode),
-		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
-		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
+		Addrs:           control.Addrs,
+		Cluster:         control.Cluster,
+		Username:        control.Username,
+		Password:        control.Password,
+		TLS:             control.TLS,
+		PoolSizePerNode: min(control.PoolSizePerNode, playerredis.MaxPoolSizePerNode),
+		ReadTimeoutMs:   redisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  redisFallbackIOTimeoutMs,
 	})
 }
 
-// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 SharedRedis.Password,规则见 redisauth.Apply。
-// 玩家域没写 Addrs 时回落到 SharedRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 ControlRedis.Password,规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落到 ControlRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
 // -migrate 不连 Redis,只在常驻启动时调用(trade.go)。
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
 	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
-		redisauth.Target{Field: "SharedRedis.Password", Password: &c.SharedRedis.Password})
-}
-
-// ResolveMySQLPassword 按 MySQLPasswordEnv 填 MySQL.Password,规则见 secretenv.Fill。-migrate 与常驻启动都连库,
-// 所以在 conf.MustLoad 之后、迁移分支之前调用(trade.go);trade-migrate Job 同样注入这个变量。
-func (c *Config) ResolveMySQLPassword(lookup func(string) (string, bool)) error {
-	return secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
-		secretenv.Target{Field: "MySQL.Password", Value: &c.MySQL.Password})
+		redisauth.Target{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password})
 }
 
 // MySQLConf 是 mmorpg_trade 的连接参数。
@@ -589,15 +590,18 @@ func (c *Config) Validate() error {
 			c.Market.DefaultPageSize, c.Market.MaxPageSize)
 	}
 
-	// SharedRedis 必填:缺它 = 资产通道找不到玩家 = 托管 / 交付永远悬挂。玩家资产路径
-	// fail-closed(AGENTS §11.3),宁可在启动期点名缺哪一段,也不要起一个"浏览能用、
+	// ControlRedis.Addrs 必填:缺它 = 资产通道收不到唤醒、没写 PlayerRedis 时也找不到玩家 = 托管 / 交付永远悬挂。
+	// 玩家资产路径 fail-closed(AGENTS §11.3),宁可在启动期点名缺哪一段,也不要起一个"浏览能用、
 	// 一上架就永远卡住"的 trade。
-	if c.SharedRedis.Host == "" {
-		return errors.New("SharedRedis.Host 不能为空:资产通道按 player:{id}:location 定位玩家所在 scene," +
-			"该键在与 C++ scene 相同的共享 Redis 上")
+	if len(c.ControlRedis.Addrs) == 0 {
+		return errors.New("ControlRedis.Addrs 不能为空:资产通道订阅 scene 发布的落地唤醒," +
+			"没写 PlayerRedis.Addrs 时还按 player:{id}:location 定位玩家所在 scene")
 	}
-	if c.SharedRedis.PoolSize < 0 {
-		return fmt.Errorf("SharedRedis.PoolSize(%d)不能为负:0 = go-redis 缺省 10 × GOMAXPROCS", c.SharedRedis.PoolSize)
+	if err := c.ControlRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("ControlRedis: %w", err)
+	}
+	if c.ControlRedis.PasswordEnv != "" {
+		return errors.New("ControlRedis.PasswordEnv 不用:口令变量名写在 SharedRedisPasswordEnv(变量缺失时拒启)")
 	}
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
 		return fmt.Errorf("PlayerRedis: %w", err)

@@ -13,6 +13,7 @@ import (
 	"shared/dbplacement"
 	"shared/rolefence"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
 )
@@ -89,10 +90,29 @@ func OpenAuthorityWithPermission(ctx context.Context, c config.Config, migrate b
 		}
 		return db, nil, nil
 	}
-	store, err := authority.New(ctx, db, states, backend, authority.Rules{MaxContentBytes: c.MaxContentBytes, RateLimitPerSecond: c.RateLimitPerSecond, HistoryMaxEntries: c.HistoryMaxEntries, HistoryTTLSeconds: c.HistoryTTLSeconds, HistoryDefaultLimit: c.HistoryDefaultLimit, HistoryMaxLimit: c.HistoryMaxLimit, SensitiveWords: c.SensitiveWords, ActorVerifyTTLSeconds: c.ActorVerifyTTLSeconds, WorldHistoryCacheMs: c.WorldHistoryCacheMs})
+	store, err := authority.New(ctx, db, states, backend, authority.Rules{MaxContentBytes: c.MaxContentBytes, RateLimitPerSecond: c.RateLimitPerSecond, HistoryMaxEntries: c.HistoryMaxEntries, HistoryTTLSeconds: c.HistoryTTLSeconds, HistoryDefaultLimit: c.HistoryDefaultLimit, HistoryMaxLimit: c.HistoryMaxLimit, SensitiveWords: c.SensitiveWords, ActorVerifyTTLSeconds: c.ActorVerifyTTLSeconds, WorldHistoryCacheMs: c.WorldHistoryCacheMs, WorldChannelCooldownMs: c.WorldChannelCooldownMs})
 	if err != nil {
 		db.Close()
 		return nil, nil, err
 	}
+	reportRetention(ctx, db, backend)
 	return db, store, nil
+}
+
+// reportRetention 在 TiDB 档核对原件表的保留期属性(authority/schema.go 的 TTL),不在或没开就打一行 ERROR,不拒启:
+// 后果是表只增不减,数据没有错。MySQL 没有 TTL,开发用 MySQL 时不查。
+func reportRetention(ctx context.Context, db *sql.DB, backend authoritysql.Backend) {
+	if backend != authoritysql.BackendTiDB {
+		return
+	}
+	enabled, err := authority.RetentionEnabled(ctx, db)
+	if err != nil {
+		logx.Errorf("[chat] Could not read the retention attribute of chat_send_authority: %v", err)
+		return
+	}
+	if !enabled {
+		logx.Error("[chat] chat_send_authority has no enabled TTL attribute: chat originals are never deleted and the table grows without bound. Recreate the table with -migrate on an empty database, or restore the TTL attribute.")
+		return
+	}
+	logx.Info("[chat] chat_send_authority retention is enabled (TiDB TTL)")
 }

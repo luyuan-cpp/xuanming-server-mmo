@@ -132,11 +132,15 @@ Test-Case '部署脚本:登记处只在 -HostIdRegistry 的集群起,地址写�
 
 Test-Case '运维手册:初始化、恢复、退役、开启登记处是分开的入口,恢复不靠手算余量' {
     $runbook = Read-RepoText (Join-Path $script:RepoRoot 'docs/ops/id-issuer-runbook.md')
-    foreach ($flag in @('-id-registry-open', '-id-issuer-init', '-id-issuer-recover', '-id-issuer-rebind', '-id-issuer-retire')) {
-        Assert-Match -Text $runbook -Pattern ([regex]::Escape($flag)) -Because "手册要写 $flag 什么时候用"
+    $entry = Read-RepoText (Join-Path $script:RepoRoot 'go/data_service/data_service.go')
+    foreach ($flag in @('-id-registry-open', '-id-registry-rebuild', '-id-issuer-init', '-id-issuer-recover', '-id-issuer-rebind',
+            '-id-issuer-retire', '-id-issuer-retire-unbound', '-id-issuer-retire-code')) {
+        Assert-Match -Text $runbook -Pattern ([regex]::Escape($flag) + '(?![a-z-])') -Because "手册要写 $flag 什么时候用"
+        Assert-Match -Text $entry -Pattern ('flag\.(Bool|Int)\("' + [regex]::Escape($flag.TrimStart('-')) + '"') -Because "手册里的 $flag 必须是 data_service 真有的参数"
     }
     Assert-NotMatch -Text $runbook -Pattern '30 \* 86400' -Because '恢复取幸存记录的上界,不再手算时间余量'
     Assert-NotMatch -Text $runbook -Pattern 'etcdctl put /id_issuer' -Because '不再手工改记录'
+    Assert-NotMatch -Text $runbook -Pattern 'etcdctl del /id_registry' -Because '重建先声明指针再补墓碑,填错的墓碑写不进去,不再有手工删登记处记录的例外'
 }
 
 Test-Case '-Region 注入 data-service 主容器,初始化命令用私有目录里生效的配置' {
@@ -168,6 +172,41 @@ Test-Case 'match 走号段发 battle_id,ConfigMap 取自服务 yaml,不再申领
     Assert-Match -Text $deploy -Pattern "Get-AuthoritativeYamlBlock -RelativePath \`$matchYaml -Key 'IdSegment'" -Because 'K8s 的号段配置要和服务 yaml 同源'
     Assert-Match -Text $deploy -Pattern '(?m)^\$\{matchIdSegmentBlock\}\s*$' -Because '漏了这一行,K8s 上 match 起不来'
     Assert-NotMatch -Text (Read-RepoText $script:MatchManifestPath) -Pattern 'snowflake' -Because 'match 不再申领 snowflake 槽位,不需要缓存卷'
+}
+
+# login、guild 2026-11-12 删掉了 snowflake 槽位申领:PlayerId、guild_id、op_id 只由号段发,集群号、槽位缓存目录、
+# bwmarrin 位宽这些键已没有消费者。go-zero 忽略未知键,写回来也不报错,所以在这里钉住。
+Test-Case 'login、guild 只由号段发号,服务 yaml、K8s ConfigMap 模板与清单都不再有 snowflake 槽位' {
+    foreach ($path in @('go/login/etc/login.yaml', 'go/guild/etc/guild.yaml', 'deploy/login-stack.linux/login.yaml')) {
+        Assert-NotMatch -Text (Read-RepoText (Join-Path $script:RepoRoot $path)) -Pattern '(?m)^(Snowflake|ClusterId|SnowflakeCacheDir)\s*:' `
+            -Because "$path 不该再写 snowflake 槽位配置"
+    }
+    foreach ($path in @('deploy/k8s/manifests/go-svc/login.yaml', 'deploy/k8s/manifests/go-svc/guild.yaml')) {
+        Assert-NotMatch -Text (Read-RepoText (Join-Path $script:RepoRoot $path)) -Pattern 'snowflake' -Because "$path 不需要槽位缓存卷"
+    }
+    Assert-True -Condition ($script:DeployFunctions.ContainsKey('New-GuildServiceConfigYaml')) -Because '夹具前提:k8s_deploy.ps1 里有 New-GuildServiceConfigYaml'
+    Assert-NotMatch -Text $script:DeployFunctions['New-GuildServiceConfigYaml'].Extent.Text -Pattern '(?m)^(ClusterId|SnowflakeCacheDir)\s*:' `
+        -Because 'guild 的 ConfigMap 模板不写集群号与槽位缓存目录'
+    Assert-True -Condition ($script:DeployFunctions.ContainsKey('New-GoSvcConfigMapYaml')) -Because '夹具前提:k8s_deploy.ps1 里有 New-GoSvcConfigMapYaml'
+    $goSvcText = $script:DeployFunctions['New-GoSvcConfigMapYaml'].Extent.Text -replace "`r`n", "`n"
+    $loginTemplate = [regex]::Match($goSvcText, '(?s)\n\t*"login" \{\s*\n@"\n(.*?)\n"@')
+    Assert-True -Condition $loginTemplate.Success -Because '夹具前提:New-GoSvcConfigMapYaml 里有 login 的 ConfigMap 模板'
+    Assert-NotMatch -Text $loginTemplate.Groups[1].Value -Pattern '(?m)^(Snowflake|ClusterId|SnowflakeCacheDir)\s*:' `
+        -Because 'login 的 ConfigMap 模板不写 bwmarrin 位宽、集群号与槽位缓存目录'
+}
+
+# C++ 的 snowflake 槽位客户端早已随永久 guid 改走号段删掉,C++ 进程不读 SNOWFLAKE_CACHE_DIR。gate / scene / battle 的
+# 工作负载 2026-11-12 起不再注入这个变量、不再挂 snowflake-cache 卷;申领槽位的只剩 scene-manager(它的清单照旧挂)。
+Test-Case 'C++ 节点的 Deployment、Fleet、StatefulSet 不注入 SNOWFLAKE_CACHE_DIR,也不挂 snowflake-cache 卷' {
+    foreach ($name in @('New-NodeDeploymentYaml', 'New-SceneFleetYaml')) {
+        Assert-True -Condition ($script:DeployFunctions.ContainsKey($name)) -Because "夹具前提:k8s_deploy.ps1 里有 $name"
+        Assert-NotMatch -Text (Get-NonCommentText ($script:DeployFunctions[$name].Extent.Text -replace "`r`n", "`n")) -Pattern 'SNOWFLAKE_CACHE_DIR|snowflake-cache' `
+            -Because "$name 生成的 C++ 工作负载不该再带槽位缓存"
+    }
+    $lib = Get-NonCommentText (Read-RepoText (Join-Path $script:RepoRoot 'tools/scripts/lib/k8s_client_entry.ps1'))
+    Assert-NotMatch -Text $lib -Pattern 'SNOWFLAKE_CACHE_DIR|snowflake-cache|SnowflakeCacheDir' -Because 'gate StatefulSet、battle Fleet / hostPort 共用的 Pod 公共参数里不该再有槽位缓存'
+    Assert-Match -Text (Read-RepoText (Join-Path $script:RepoRoot 'deploy/k8s/manifests/go-svc/scene-manager.yaml')) -Pattern 'name: snowflake-cache' `
+        -Because 'scene-manager 仍申领 scene_id 槽位,缓存卷要保留'
 }
 
 # ── 地域码绑定的部署侧(docs/handoff/global-id-issuer-registry-20261105.md §8.4)────────────────────────────

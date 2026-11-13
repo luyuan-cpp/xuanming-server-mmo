@@ -30,9 +30,9 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 
 	"scene_manager/internal/svc"
 )
@@ -66,8 +66,7 @@ func newTakeoverCase(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Minired
 	require.NoError(t, err)
 	for _, id := range scenes {
 		member := strconv.FormatUint(id, 10)
-		require.NoError(t, mr.Set(sceneZoneKey(id), strconv.FormatUint(uint64(takeoverZone), 10)))
-		require.NoError(t, mr.Set(sceneNodeKey(id), node))
+		require.NoError(t, mr.Set(sceneNodeKey(takeoverZone, id), node))
 		_, err = mr.SAdd(nodeScenesKey(takeoverZone, node), member)
 		require.NoError(t, err)
 		_, err = mr.ZAdd(activeInstancesKey(takeoverZone), float64(nowUnix()), member)
@@ -121,7 +120,7 @@ func (c *takeoverCase) requireIntact(t *testing.T, why string) {
 	assert.Equal(t, strconv.Itoa(takeoverScenePlayers*len(c.scenes)), nodeMemberCount(c.mr, takeoverZone, c.node),
 		"%s: 节点成员", why)
 	for _, id := range c.scenes {
-		assert.Equal(t, c.node, c.valueOrMissing(sceneNodeKey(id)), "%s: scene %d 的属主映射", why, id)
+		assert.Equal(t, c.node, c.valueOrMissing(sceneNodeKey(takeoverZone, id)), "%s: scene %d 的属主映射", why, id)
 		in, err := c.sc.Redis.Sismember(nodeScenesKey(takeoverZone, c.node), strconv.FormatUint(id, 10))
 		require.NoError(t, err)
 		assert.True(t, in, "%s: scene %d 必须留在死节点的反向索引里", why, id)
@@ -133,8 +132,8 @@ func (c *takeoverCase) requireIntact(t *testing.T, why string) {
 func (c *takeoverCase) requireCleanedUp(t *testing.T, why string) {
 	t.Helper()
 	for _, id := range c.scenes {
-		assert.Equal(t, "<missing>", c.valueOrMissing(sceneNodeKey(id)), "%s: scene %d 是死节点的孤儿实例,必须销毁", why, id)
-		assert.False(t, c.mr.Exists(instanceMembersKey(id)), "%s: scene %d 的成员集合", why, id)
+		assert.Equal(t, "<missing>", c.valueOrMissing(sceneNodeKey(takeoverZone, id)), "%s: scene %d 是死节点的孤儿实例,必须销毁", why, id)
+		assert.False(t, c.mr.Exists(instanceMembersKey(takeoverZone, id)), "%s: scene %d 的成员集合", why, id)
 		in, err := c.sc.Redis.Sismember(nodeScenesKey(takeoverZone, c.node), strconv.FormatUint(id, 10))
 		require.NoError(t, err)
 		assert.False(t, in, "%s: scene %d 不得留在死节点的反向索引里", why, id)
@@ -194,7 +193,7 @@ func TestDeadNodeReconcileTakeover_FollowerLeavesCountersAndTaskAlone(t *testing
 // 修复前:报错的场景留在反向索引里,但计数照删、任务照出队,没有任何重试。
 func TestDeadNodeReconcileTakeover_FailedSceneRetriedNextTick(t *testing.T) {
 	hook := &failFirstEvalHook{script: luaAtomicDestroyOrphanOfDeadNode}
-	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
+	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, hook)
 	c := newTakeoverCase(t, sc, mr, "8992", 89921)
 	c.declareDead(t)
 	c.elapseBarrier(t)
@@ -240,10 +239,10 @@ func (h *demoteAfterFirstOwnerReadHook) ProcessHook(next redis.ProcessHook) redi
 // 修复前:旧领导者中途停下后照样删计数、出队,剩下的场景再没有人收。
 func TestDeadNodeReconcileTakeover_LeadershipLostMidSweepRestTakenOver(t *testing.T) {
 	hook := &demoteAfterFirstOwnerReadHook{keys: map[string]struct{}{
-		sceneNodeKey(89931): {},
-		sceneNodeKey(89932): {},
+		sceneNodeKey(takeoverZone, 89931): {},
+		sceneNodeKey(takeoverZone, 89932): {},
 	}}
-	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
+	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, hook)
 	c := newTakeoverCase(t, sc, mr, "8993", 89931, 89932)
 	hook.demote = func() { c.leading.Store(false) }
 	c.declareDead(t)

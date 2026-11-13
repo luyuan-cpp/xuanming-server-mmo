@@ -10,6 +10,7 @@ import (
 	"player_inbox/internal/data"
 
 	inboxpb "proto/player_inbox"
+	"shared/clusterredis"
 	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -49,12 +50,12 @@ func TestEtcYamlContractValues(t *testing.T) {
 	if c.ShouldAutoMigrate() {
 		t.Error("本地dev也必须显式迁移，常驻默认仅核对表结构")
 	}
-	if c.CoreRedis.Host == "" || c.CoreRedis.DB != 0 {
-		t.Errorf("CoreRedis = %+v:段名必须逐字是 CoreRedis,DB 必须是 0(owner_epoch / location 所在库)", c.CoreRedis)
+	if len(c.ControlRedis.Addrs) == 0 || c.ControlRedis.DB != 0 {
+		t.Errorf("ControlRedis = %+v:段名必须逐字是 ControlRedis,DB 必须是 0(owner_epoch / location 所在库)", c.ControlRedis)
 	}
 	// 连接池上限要显式写正整数:k8s_deploy.ps1 把它镜像进 ConfigMap 并要求正整数,Redis 连接总账读同一个键。
-	if c.CoreRedis.PoolSize <= 0 {
-		t.Errorf("CoreRedis.PoolSize = %d, want > 0(共享 Redis 连接总账按它记账)", c.CoreRedis.PoolSize)
+	if c.ControlRedis.PoolSizePerNode <= 0 {
+		t.Errorf("ControlRedis.PoolSizePerNode = %d, want > 0(共享 Redis 连接总账按它记账)", c.ControlRedis.PoolSizePerNode)
 	}
 	if len(c.Kafka.Brokers) == 0 {
 		t.Error("Kafka.Brokers 为空:段名写错或整段漏写")
@@ -98,8 +99,8 @@ func TestEtcYamlContractValues(t *testing.T) {
 		}
 	}
 	p := c.PlayerInbox
-	if p.TerminalRetentionDays != 30 || p.NotifyResendIntervalSeconds != 30 || p.ReconcileIntervalMinutes != 60 || p.ReconcileWindowHours != 24 {
-		t.Errorf("PlayerInbox = %+v, want 保留 30 天 / 补发 30s / 对账 60min / 窗口 24h(D14、§6.3、§9.3)", p)
+	if p.NotifyResendIntervalSeconds != 30 || p.ReconcileIntervalMinutes != 60 || p.ReconcileWindowHours != 24 {
+		t.Errorf("PlayerInbox = %+v, want 补发 30s / 对账 60min / 窗口 24h(§6.3、§9.3)", p)
 	}
 }
 
@@ -135,12 +136,10 @@ func validConfig() Config {
 		MySQL: MySQLConf{
 			Host: "127.0.0.1:3306", User: "appuser", DBName: data.DatabaseName, MaxOpenConn: 20, MaxIdleConn: 5,
 		},
-		CoreRedis:      RedisConf{Host: "127.0.0.1:6379", PoolSize: 20},
+		ControlRedis:   clusterredis.Config{Addrs: []string{"127.0.0.1:6379"}, PoolSizePerNode: 20},
 		Kafka:          KafkaConf{Brokers: []string{"127.0.0.1:9092"}, WriteTimeoutMs: 2000},
 		DataServiceRpc: zrpc.RpcClientConf{Target: "127.0.0.1:9000"},
 		PlayerInbox: PlayerInboxConf{
-			TerminalRetentionDays:       30,
-			SweepIntervalSeconds:        600,
 			NotifyResendIntervalSeconds: 30,
 			GaugeIntervalSeconds:        60,
 			ReconcileIntervalMinutes:    60,
@@ -172,10 +171,13 @@ func TestValidate(t *testing.T) {
 		{"库名不是独占库", func(c *Config) { c.MySQL.DBName = "mmorpg_global" }},
 		{"MySQL.Host 为空", func(c *Config) { c.MySQL.Host = "" }},
 		{"连接池非正", func(c *Config) { c.MySQL.MaxOpenConn = 0 }},
-		{"CoreRedis 为空", func(c *Config) { c.CoreRedis.Host = "" }},
-		{"CoreRedis.PoolSize 为负", func(c *Config) { c.CoreRedis.PoolSize = -1 }},
-		// 评审 L7:0 = go-redis 缺省 10 × GOMAXPROCS,随 CPU limit 漂移,Redis 连接总账就不是集群的账。
-		{"CoreRedis.PoolSize 为 0(必须显式)", func(c *Config) { c.CoreRedis.PoolSize = 0 }},
+		{"ControlRedis 为空", func(c *Config) { c.ControlRedis.Addrs = nil }},
+		{"ControlRedis.PoolSizePerNode 为负", func(c *Config) { c.ControlRedis.PoolSizePerNode = -1 }},
+		// 评审 L7:0 = 客户端缺省值,随版本漂移,Redis 连接总账就不是集群的账。
+		{"ControlRedis.PoolSizePerNode 为 0(必须显式)", func(c *Config) { c.ControlRedis.PoolSizePerNode = 0 }},
+		{"ControlRedis.PasswordEnv 不用", func(c *Config) { c.ControlRedis.PasswordEnv = "SOME_VAR" }},
+		{"ControlRedis 单实例写了多个地址", func(c *Config) { c.ControlRedis.Addrs = []string{"a:6379", "b:6379"} }},
+		{"ControlRedis.Cluster 没写种子", func(c *Config) { c.ControlRedis = clusterredis.Config{Cluster: true, PoolSizePerNode: 20} }},
 		{"Kafka 为空", func(c *Config) { c.Kafka.Brokers = nil }},
 		{"Kafka 超时非正", func(c *Config) { c.Kafka.WriteTimeoutMs = 0 }},
 		{"DataServiceRpc 没有目标", func(c *Config) { c.DataServiceRpc = zrpc.RpcClientConf{} }},
@@ -197,8 +199,6 @@ func TestValidate(t *testing.T) {
 			c.Middlewares.Stat = true
 			c.Middlewares.StatConf.IgnoreContentMethods = []string{inboxpb.PlayerInbox_FetchItems_FullMethodName}
 		}},
-		{"保留期不大于签发窗", func(c *Config) { c.PlayerInbox.TerminalRetentionDays = 7 }},
-		{"清理间隔越界", func(c *Config) { c.PlayerInbox.SweepIntervalSeconds = 1 }},
 		{"补发间隔越界", func(c *Config) { c.PlayerInbox.NotifyResendIntervalSeconds = 0 }},
 		{"gauge 间隔越界", func(c *Config) { c.PlayerInbox.GaugeIntervalSeconds = 0 }},
 		{"对账间隔越界", func(c *Config) { c.PlayerInbox.ReconcileIntervalMinutes = 1 }},
@@ -345,13 +345,13 @@ func TestResolveAdminToken(t *testing.T) {
 	}
 }
 
-// 没写 PlayerRedis.Addrs:玩家域指向 CoreRedis 那一个实例;写了就完全按它来;Cluster 没写种子拒启。
+// 没写 PlayerRedis.Addrs:玩家域指向 ControlRedis 那一个实例;写了就完全按它来;Cluster 没写种子拒启。
 func TestEffectivePlayerRedis(t *testing.T) {
 	c := validConfig()
-	c.CoreRedis = RedisConf{Host: "core:6379", Password: "core-secret", PoolSize: 9}
+	c.ControlRedis = clusterredis.Config{Addrs: []string{"core:6379"}, Password: "core-secret", PoolSizePerNode: 9}
 	got := c.EffectivePlayerRedis()
 	if len(got.Addrs) != 1 || got.Addrs[0] != "core:6379" || got.Password != "core-secret" || got.PoolSizePerNode != 9 {
-		t.Fatalf("没写 Addrs 应指向 CoreRedis: %+v", got)
+		t.Fatalf("没写 Addrs 应指向 ControlRedis: %+v", got)
 	}
 
 	c.PlayerRedis = playerredis.Config{Addrs: []string{"a:7000", "b:7000"}, Cluster: true}

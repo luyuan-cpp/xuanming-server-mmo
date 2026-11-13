@@ -26,6 +26,9 @@ spring:
     # 部署侧镜像时按下限 250 核对。同样由 ConfigMap 镜像、契约测试与 GatewayDataSourcePoolConfigTest 钉住。
     # 2026-10-15 更正:上面「服务器列表与公告每次请求查一次(不缓存)」对服务器列表已过时 —— ServerListService 改为 zone_config
     # 行 1s 短缓存,过期瞬间的并发请求合并成一次 findAll,查库失败不缓存(G2b §9 第 7 条);公告仍每次查库。
+    # 2026-11-12 更正:上面「健康探测每 5s 一次 findAll」已过时 —— 健康探测改读 etcd 里的汇总,不查库;后台查库的是本副本负责的区
+    # (gateway.home-zone-ids,K8s 上只有本区)的三个定时任务,各按主键点查一行:ZoneHealthPublisher 与 ZonePolicyPublisher 每 5 秒、
+    # RoleCapacityGuard 每 10 秒。
     # 2026-10-16 补注:合并查库时等待方的时间预算 ServerListService.ZONE_ROWS_LOAD_WAIT_MILLIS 与本段 connection-timeout
     # 同口径写死 3000(Hikari 把 0 当无限等,不能直接照搬),改 connection-timeout 时同步改它。connection-timeout 只限取连接:
     # 两份 JDBC URL(这里与 K8s ConfigMap)都没配 socketTimeout、也没配查询超时,已取到连接后的查询本身没有上限,登记为后续。
@@ -51,6 +54,15 @@ spring:
     redis:
       host: localhost
       port: 6379
+  # 后台定时任务的线程数(2026-11-12)。Spring 缺省只有 1 个调度线程,全部 @Scheduled 任务排队跑:一个任务卡在自己的依赖上
+  # (问 login 最坏 6 秒、查库最坏 10 秒、etcd 整段读最坏 5 秒),别的任务全被拖住。健康汇总的发布者每拍续一次 etcd 租约
+  # (ZoneHealthPublisher,租约 15 秒),被拖过头记录就随租约消失,全部网关把这个区显示成「不知道」。
+  # 取值 = 任务数,每个任务各有线程可用(同一个任务仍然一次只跑一个):LoginNodeDiscovery、ZoneHealthProbeService、
+  # ZoneHealthPublisher、ZonePolicyPublisher、RoleCapacityGuard。加定时任务时同步加大,ScheduledTaskThreadsTest 钉住「不少于任务数」。
+  task:
+    scheduling:
+      pool:
+        size: 5
 
 # etcd
 etcd:
@@ -122,8 +134,9 @@ zone-probe:
   interval-ms: 5000
   # 探测失败时只在此 TTL 内提供最近一次完整成功快照；冷启动与过期快照
   # 都显式返回 UNKNOWN，不能伪装成全区 DOWN/维护。
+  # 2026-11-11 起它同时是健康汇总发布者的 etcd 租约时长(LeasedEtcdWriter),必须不小于 interval-ms 的两倍,否则拒绝启动。
   status-ttl-ms: 15000
-  gate-stale-threshold-seconds: 30
+  # (2026-11-12 删掉 gate-stale-threshold-seconds:从没有代码读它。gate 停写由 login 按 etcd 版本判,见 go/shared/gatepick。)
 
 # 本副本负责的区(2026-11-11,服务器缺口清单第 29 条;HomeZoneProperties)。替某个区往共享存储发布东西的组件
 # (健康汇总、区服策略,都写 etcd)只发布这些区,每个区的写入方只有本区的网关副本。这里是本机缺省:

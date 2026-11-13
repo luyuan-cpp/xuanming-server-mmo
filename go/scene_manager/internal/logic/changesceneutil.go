@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -86,6 +87,13 @@ type placedLocation struct {
 	minted bool
 	// raw 是写进 player:{id}:location 的精确 protobuf 字节。
 	raw string
+	// observedEpoch / observedRaw 是这次写入发出时所凭的前提:落点 Lua 的 epoch 期望值与 location 原文期望(missing 时为空串)。
+	// 铸造结果未知的回滚用它们认出「首发还没生效」并把它作废(owner_epoch.go luaRollbackPlayerPlacement「作废」)。
+	// 侧车的观察值就是上面的 previousTag。observedKnown 为 false = 原文期望是 any(测试夹具、UpdatePlayerLocation),
+	// 没有可比的原文,不作废。
+	observedEpoch uint64
+	observedRaw   string
+	observedKnown bool
 }
 
 // placementGuard 是一次落点的并发前提,全部来自本次 EnterScene 开头的同一次观察。
@@ -192,12 +200,13 @@ func placePlayerLocation(svcCtx *svc.ServiceContext, playerId uint64, sceneId ui
 // (ownerEpochMintContext,给铸造之后的同步推路由留足时间)。
 //
 // mint=true 的铸造经 svcCtx.OwnerEpochMint 执行:铸造 EVAL 与紧随的 WAITAOF 在同一条连接、同一个 pipeline 里
-// (docs/design/zone-redis-regression-guard-20261022.md §4.3.2 G3b)。返回值在原有之外多两种:
+// (docs/design/zone-redis-regression-guard-20261022.md §4.3.2 G3b)。返回值在原有之外多三种:
 //   - errOwnerEpochMintNotDurable(包装):铸造已写进 Redis 但没确认落盘,**placed 有效**,调用方按推路由失败回滚;
-//   - svc.ErrOwnerEpochMintNotSent(errors.Is 可判):剩余预算不够发一次 WAITAOF,一条都没发,Redis 一个字节都没改;
+//   - errOwnerEpochMintResultUnknown(包装):铸造 EVAL 结果未知(svc 报结果未知,或重发之后回 0 / -1),首发可能已生效,
+//     **placed 有效**(是这次计划写下的落点,连同它所凭的观察值),调用方回滚或作废、不推路由(见该哨兵的注释);
+//   - svc.ErrOwnerEpochMintNotSent(errors.Is 可判):一次都没到达 Redis(预算不够发 WAITAOF、取不到连接),一个字节都没改;
 //     调用方按通用落点错误回 3。
 //
-// 铸造 EVAL 结果未知(传输错误重发耗尽)时返回普通错误:首发可能已生效,与以前 go-zero 自动重发耗尽同一语义。
 // mint=false 的 CAS 写不铸造新 epoch,不发 WAITAOF,走 svcCtx.PlayerRedis。
 func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64, sceneId uint64, nodeId string, zoneId uint32,
 	guard placementGuard) (placedLocation, error) {
@@ -240,6 +249,9 @@ func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, pla
 	keys := placementKeys(playerId)
 	args := []any{strconv.FormatUint(observedEpoch, 10), raw, guard.requiredMarker,
 		guard.expectLoc.mode.luaArg(), guard.expectLoc.raw, optionalRevisionText(guard.ownerRevision), locationRevisionTag(guard.ownerRevision, raw), guard.observedTag}
+	// planned 是这次要写下的落点。成功时原样返回;铸造没确认落盘或结果未知时也原样交回,供调用方按原字节回滚。
+	planned := placedLocation{epoch: placedEpoch, minted: mint, raw: raw, revision: guard.ownerRevision, tag: locationRevisionTag(guard.ownerRevision, raw), previousTag: guard.observedTag,
+		observedEpoch: observedEpoch, observedRaw: guard.expectLoc.raw, observedKnown: guard.expectLoc.mode != locationExpectAny}
 	var result any
 	var minted svc.MintEvalResult
 	if mint {
@@ -248,6 +260,9 @@ func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, pla
 		minted, err = svcCtx.OwnerEpochMint.EvalAndConfirm(mintCtx, script, keys, args...)
 		cancel()
 		if err != nil {
+			if errors.Is(err, svc.ErrOwnerEpochMintResultUnknown) {
+				return planned, fmt.Errorf("%w: %w", errOwnerEpochMintResultUnknown, err)
+			}
 			return placedLocation{}, err
 		}
 		result = minted.Reply
@@ -265,17 +280,19 @@ func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, pla
 	if mint {
 		signed, replayed = decodeMintReply(signed)
 	}
+	if signed <= 0 && mint && minted.Attempts > 1 {
+		// 首发结果未知、在新连接上重发后回 0 / -1:不凭标记的铸造(首次落点、等待落点的第二条腿、同节点 epoch 0)认不出自己的写;
+		// 凭标记的铸造,源端可能在两次发送之间撤回或取证删掉了标记,重放识别也就认不出。首发可能已生效 —— 交回计划好的落点,
+		// 由调用方回滚或作废(errOwnerEpochMintResultUnknown):生效了就按原字节撤掉,还没生效就作废,被并发改写则什么都不改。
+		// 以前这里按并发冲突回 19、不回滚,生效了的落点会留在 Redis 里被之后的同落点重连原样下发。
+		logx.Errorf("[OwnerEpochMint] mint EVAL resent after an unknown first result and the CAS now fails; the first attempt may have applied, rolling back the planned placement: player=%d observed_epoch=%d attempts=%d marker=%v reply=%d",
+			playerId, observedEpoch, minted.Attempts, guard.requiredMarker != "", signed)
+		return planned, fmt.Errorf("%w: resend after an unknown first result returned %d", errOwnerEpochMintResultUnknown, signed)
+	}
 	if signed == -1 {
 		return placedLocation{}, errHandoffWithdrawn
 	}
 	if signed <= 0 {
-		if mint && minted.Attempts > 1 {
-			// 首发结果未知、在新连接上重发后回 0。凭标记的铸造会被重放识别认出来,走不到这里;不凭标记的铸造(首次落点、
-			// 等待落点的第二条腿、同节点 epoch 0)认不出自己的写,首发可能已生效 —— 已登记的残余(owner_epoch.go
-			// luaMintEpochAndSetLocation「不带标记的铸造不做识别」),照旧按并发冲突回 19、不发路由、不回滚。
-			logx.Errorf("[OwnerEpochMint] mint EVAL resent after an unknown first result and the CAS now fails; the first attempt may have applied: player=%d observed_epoch=%d attempts=%d marker=%v",
-				playerId, observedEpoch, minted.Attempts, guard.requiredMarker != "")
-		}
 		return placedLocation{}, errOwnerEpochConflict
 	}
 	returned := uint64(signed)
@@ -296,14 +313,15 @@ func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, pla
 		logx.Infof("[MintReplay] player=%d epoch=%d zone=%d attempts=%d: owner_epoch mint EVAL was resent after an unknown result; recognised as this request's own write",
 			playerId, placedEpoch, zoneId, minted.Attempts)
 	}
-	placed := placedLocation{epoch: placedEpoch, minted: mint, raw: raw, revision: guard.ownerRevision, tag: locationRevisionTag(guard.ownerRevision, raw), previousTag: guard.observedTag}
 	if mint {
-		// 写进 Redis 的铸造才判落盘(上面 CAS 落败 / 标记撤回什么都没写,已经返回)。没确认时 placed 原样交回,供回滚。
+		// 写进 Redis 的铸造才判落盘(上面 CAS 落败 / 标记撤回什么都没写,已经返回)。没确认时 planned 原样交回,供回滚。
 		if err := observeMintDurability(minted); err != nil {
-			return placed, err
+			return planned, err
 		}
+		// 确认到了(或落盘确认整个关闭):记下已确认位点,之后不铸造就下发这个值的落点不用再确认一次(owner_epoch.go「已确认位点」)。
+		markOwnerEpochConfirmed(svcCtx, playerId, placedEpoch)
 	}
-	return placed, nil
+	return planned, nil
 }
 
 // decodeMintReply 把 luaMintEpochAndSetLocation 的返回值拆成 (epoch 或状态码, 是否重放识别命中)。
@@ -368,27 +386,17 @@ func DeletePlayerLocation(ctx context.Context, svcCtx *svc.ServiceContext, playe
 	return svcCtx.PlayerRedis.Del(ctx, getPlayerLocationKey(playerId)).Err()
 }
 
-// GetSceneZone looks up the zone_id for a scene from Redis (scene:{id}:zone).
-// Returns 0 if not found —— 读出错与值损坏也返回 0。0 会被调用方当作「没记录 zone」放行的
-// 判定(例如 resolveScene 的跨 zone 守卫)要改用 lookupSceneZone。
-func GetSceneZone(svcCtx *svc.ServiceContext, sceneId uint64) uint32 {
-	z, _ := lookupSceneZone(svcCtx, sceneId)
-	return z
-}
-
-// lookupSceneZone 读 scene:{id}:zone,区分「没记录」(0, nil)与「读出错 / 值损坏」(0, err)。
-func lookupSceneZone(svcCtx *svc.ServiceContext, sceneId uint64) (uint32, error) {
-	// go-zero 的 Get 把 redis.Nil 吞成 ("", nil):键不存在就是 val 为空这一支。
-	val, err := svcCtx.Redis.Get(sceneZoneKey(sceneId))
-	if err != nil {
-		return 0, err
+// ownZoneOfScene 回答「只给了场景号,它在哪个 zone」:场景在本进程的 zone 时回本 zone,否则回 0(没有记录)。
+//
+// 场景所在的 zone 不再单独存一把键(原 scene:<id>:zone 与读它的 GetSceneZone / lookupSceneZone,2026-11-12 删):
+// zone 已是场景键地址的一部分(scene:{ctl:<z>}:<id>:*),控制域只读本 zone 的键(docs/design/redis-cluster-all-domains-20261110.md
+// §3.3)。所以别的 zone 的场景、已销毁的场景与读失败都回 0,与原来「scene:<id>:zone 没有记录」走同一个结局;调用方
+// 拿到 0 时按各自「zone 未知」的口径处理(EnterScene 落回第 1b 步的去向,判死不认)。
+func ownZoneOfScene(svcCtx *svc.ServiceContext, sceneID uint64) uint32 {
+	own := svcCtx.Config.ZoneId
+	exists, err := svcCtx.Redis.Exists(sceneNodeKey(own, sceneID))
+	if err != nil || !exists {
+		return 0
 	}
-	if val == "" {
-		return 0, nil
-	}
-	z, err := strconv.ParseUint(val, 10, 32)
-	if err != nil {
-		return 0, fmt.Errorf("invalid %s value %q: %w", sceneZoneKey(sceneId), val, err)
-	}
-	return uint32(z), nil
+	return own
 }

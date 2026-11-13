@@ -103,7 +103,7 @@ func cleanupZoneIdleInstances(ctx context.Context, svcCtx *svc.ServiceContext, z
 		}
 
 		// Check player count. 读失败当 0:下面的 ClaimIdleSceneTeardown 在脚本里再判一次 SCARD。
-		playerCount := readScenePlayerCount(svcCtx, sceneId)
+		playerCount := readScenePlayerCount(svcCtx, zoneId, sceneId)
 
 		if playerCount > 0 {
 			// Instance is active, update its "last active" time.
@@ -114,7 +114,7 @@ func cleanupZoneIdleInstances(ctx context.Context, svcCtx *svc.ServiceContext, z
 
 		// Pick the right idle budget for this scene kind.
 		isMirror := false
-		if flag, _ := svcCtx.Redis.Get(sceneMirrorFlagKey(sceneId)); flag == "1" {
+		if flag, _ := svcCtx.Redis.Get(sceneMirrorFlagKey(zoneId, sceneId)); flag == "1" {
 			isMirror = true
 		}
 		timeoutSec := instanceTimeout
@@ -160,7 +160,7 @@ func cleanupZoneIdleInstances(ctx context.Context, svcCtx *svc.ServiceContext, z
 //   - Cascades into any mirrors whose source is this scene, reading
 //     scene:{id}:mirrors only after the claim succeeds (the destroy scripts
 //     never touch that set), so an aborted idle CAS leaves the mirrors alone.
-//   - Un-links this scene from node:zone:{zoneId}:{nodeId}:scenes and (if it is itself
+//   - Un-links this scene from node:{ctl:<zone>}:<nodeId>:scenes and (if it is itself
 //     a mirror) from scene:{sourceId}:mirrors.
 //
 // The force variants are destroyInstanceForce (no owner check) and
@@ -206,7 +206,7 @@ func destroyInstanceForce(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 // deadNode 为空时拒绝而不是照常销毁:空串表示「谁是属主都拆」,会退化成修复前的无条件销毁。
 //
 // 任务身份与属主比对、删除在同一个脚本里核:收尾在每条任务开始时判过「判死的那一代回来没有」,但一轮要逐个认领
-// 许多场景,判断之后它才回来的话,只有认领时的核对拦得住(luaSceneClaimDeadNodeTaskCheck)。
+// 许多场景,这期间任务被别的进程撤了(换主时新旧领导者短暂重叠)的话,只有认领时的核对拦得住(luaSceneClaimDeadNodeTaskCheck)。
 func destroyOrphanOfDeadNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, deadNode string, task deadNodeTaskFence) (bool, error) {
 	if deadNode == "" {
 		err := fmt.Errorf("destroyOrphanOfDeadNode: empty dead node for scene %d (zone %d)", sceneId, zoneId)
@@ -251,7 +251,7 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	//
 	// 属主、agones_gs、成员、镜像源、镜像标记都不在这里预读,一律取认领应答:扫描接手一个没做完的任务时
 	// 这些键早已删了,只有认领时的快照可用。脚本里的读与删同一步,不存在「提交了却不知道镜像源」的窗口。
-	preMirrorChildren, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
+	preMirrorChildren, err := svcCtx.Redis.Smembers(sceneMirrorsKey(zoneId, sceneId))
 	if err != nil {
 		noteReadUnknown(zoneId, readUnknownSiteInstanceDestroy, fmt.Sprintf("mirror set of scene %d", sceneId), err)
 		return false, err
@@ -288,17 +288,11 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 		// 死节点收尾任务已被撤(判死的那一代回来了)或换成了新的一次判死:认领脚本一个键都没动(R1-I6)。
 		return false, errDeadNodeCleanupWithdrawn
 	}
-	if claim.Foreign {
-		// 场景登记在别的 zone:它的键只由那个 zone 的 scene_manager 读写,认领脚本一个键都没动。不该发生(各条销毁
-		// 路径只从本 zone 的索引里找场景,显式 DestroyScene 在入口拒绝别的 zone),回错误让它显形。
-		err := fmt.Errorf("%w: scene %d, destroy requested for zone %d", errSceneInOtherZone, sceneId, zoneId)
-		logx.Errorf("[InstanceLifecycle] %v; nothing changed", err)
-		return false, err
-	}
 	if !claim.Claimed {
 		// 空闲回收:场景里来了人(脚本已经重置了空闲时钟),或属主在读与认领之间变了,下一拍公平地重判。
 		// force:别的认领已经拿走了它(级联 / 计数 / 归还归那次),或者带了期望属主而属主已不是它 —— 场景归别人了,
-		// 一个键都没动。
+		// 一个键都没动。场景不在 zoneId 的键里(别的 zone 的场景,或已销毁)同样落在这里:认领只读本 zone 的键
+		// (docs/design/redis-cluster-all-domains-20261110.md §3.3),一个键都没动。
 		return false, nil
 	}
 
@@ -364,7 +358,7 @@ func runInstanceTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job sc
 // 不删索引时回 false,调用方的拆除任务留给扫描重做:重做时重读子集合,只剩还没销毁的那些。子镜像在那之前空闲了
 // 也会被空闲销毁收走,销毁时把自己从这个集合 SREM 掉,集合空了 Redis 自动回收键。
 func cascadeDestroyMirrors(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, preRead []string, reason string) bool {
-	children, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
+	children, err := svcCtx.Redis.Smembers(sceneMirrorsKey(zoneId, sceneId))
 	keepIndex := err != nil
 	if err != nil {
 		noteReadUnknown(zoneId, readUnknownSiteMirrorCascade,
@@ -378,22 +372,9 @@ func cascadeDestroyMirrors(ctx context.Context, svcCtx *svc.ServiceContext, zone
 			continue
 		}
 		// 只拆本 zone 的子镜像(docs/design/control-plane-zone-scoping-20261105.md §4.3:zone z 的控制域键只由 zone z 的
-		// scene_manager 读写)。子镜像登记在别的 zone 时不拆:它的映射、active 集合、节点计数都是那个 zone 的键,由那个
-		// zone 的空闲回收收走;这里的子集合是本 zone 的键,随下面的 DEL 一起删,不再列着它。新建镜像时源在别的 zone
-		// 就不登记成子镜像(createInstance),这里给更早登记的数据兜底;认领脚本还会在同一步再比一次 zone。
-		// 读不到它的 zone 就不猜:本轮不拆、保留索引,拆除任务留着重做。
-		childZone, zoneErr := lookupSceneZone(svcCtx, childId)
-		if zoneErr != nil {
-			noteReadUnknown(zoneId, readUnknownSiteMirrorCascade,
-				fmt.Sprintf("zone of mirror %d (source %d), keeping it and the index", childId, sceneId), zoneErr)
-			keepIndex = true
-			continue
-		}
-		if childZone != 0 && childZone != zoneId {
-			logx.Infof("[InstanceLifecycle] Mirror %d of scene %d is registered in zone %d, not %d; leaving it to that zone",
-				childId, sceneId, childZone, zoneId)
-			continue
-		}
+		// scene_manager 读写)。子集合与子镜像的键都带本 zone 的 tag(docs/design/redis-cluster-all-domains-20261110.md §3.3):
+		// 认领只读本 zone 的 scene:{ctl:<z>}:<子>:*,子镜像不在本 zone(别的 zone 的,或已销毁)时读不到映射、认领落空,
+		// 一个键都不动,不会拆到别的 zone 的场景。原来先读 scene:<id>:zone 比 zone,那把键已删。
 		logx.Infof("[InstanceLifecycle] Cascade-destroying mirror %d (source %d, reason %s)", childId, sceneId, reason)
 		// Force-destroy: the source is going away, "still has players"
 		// doesn't rescue the mirror.
@@ -406,15 +387,15 @@ func cascadeDestroyMirrors(ctx context.Context, svcCtx *svc.ServiceContext, zone
 	if keepIndex {
 		return false
 	}
-	svcCtx.Redis.Del(sceneMirrorsKey(sceneId))
+	svcCtx.Redis.Del(sceneMirrorsKey(zoneId, sceneId))
 	return true
 }
 
-// lookupSceneNode resolves the node currently hosting a scene, returning ""
+// lookupSceneNode resolves the node currently hosting a scene in zoneId, returning ""
 // when the mapping is missing. Used by the member helpers; a missing
 // mapping is a soft error (the per-node set keeps at most one stale member).
 // 读错也回 "":这里只决定要不要顺带摘节点集合,不摘只是多留一个成员,由对账收掉(scene_member_reconcile.go)。
-func lookupSceneNode(svcCtx *svc.ServiceContext, sceneId uint64) string {
-	nodeId, _ := svcCtx.Redis.Get(fmt.Sprintf(SceneNodeKeyFmt, sceneId))
+func lookupSceneNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) string {
+	nodeId, _ := svcCtx.Redis.Get(sceneNodeKey(zoneId, sceneId))
 	return nodeId
 }

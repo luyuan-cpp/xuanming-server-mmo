@@ -14,6 +14,7 @@ import (
 
 	commonpb "proto/common/base"
 	"proto/scene_manager"
+	"scene_manager/internal/controlredis"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 	"shared/clientendpoint"
@@ -21,7 +22,6 @@ import (
 	"shared/nodeinfo"
 
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/protobuf/proto"
@@ -65,8 +65,10 @@ func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZo
 	// 读完 etcd 立即取时刻:停写时长按「这次读返回」算,读 Redis 标记的 MGET 不算进去。
 	stale := staleGateIDs(&svcCtx.RedirectGateRevisions, targetZoneId, records, time.Now())
 	gates := gateRecordNodes(records)
-	// 两种标记都在核心实例(G4a §25.3 的 10-23 订正),不在本 zone 的控制域实例里(control-plane-zone-scoping-20261105.md §4.2)。
-	draining, publishedStale := gateRedisMarks(ctx, svcCtx.CoreRedis, gates)
+	// 两种标记都在控制集群上(gm 族,redis-cluster-all-domains-20261110.md §3.2),与本进程的控制域键是同一个句柄。
+	// 键按目标 zone 打 tag(gate:{gm:<targetZoneId>}:<id>:…,同稿 §4.4):这里读的 etcd 前缀
+	// 与目标 zone 的 login、排空脚本用的是同一个 zone 号,三方落在同一组键上。
+	draining, publishedStale := gateRedisMarks(ctx, svcCtx.Redis, targetZoneId, gates)
 	marks := gateMarks{
 		draining: draining,
 		stale:    unionMarks(stale, publishedStale),
@@ -190,25 +192,26 @@ func selectGateTargets(nodes []*commonpb.NodeInfo, requireClientEndpoint bool) [
 // gateRedisMarks 一次 MGET 读出每台 gate 的两种标记(键名在 shared/gatepick,只定义一份):排空标记(运维缩容前打的,
 // 写者是 tools/scripts/k8s_gate_drain.ps1)与停写标记(目标 zone 的 login 判出的,loginqueue.PublishStaleMarks)。
 // 键序:前 len(nodes) 个是排空键、后 len(nodes) 个是停写键,各自与 nodes 的下标对应。
+// zoneID 是 nodes 所在的 zone(fetchGateNodes 读的那个 etcd 前缀里的 zone):2N 个键共用 tag {gm:<zoneID>},
+// 在集群里同槽,一条 MGET 就能读完;键里的 zone 取这一个参数,不取每条 NodeInfo 自报的 zone_id,保证整条 MGET 不跨槽。
 //
 // 失败方向是放行(两个都返回 nil、打 ERROR),与 login 的 loginqueue.DrainingGates 同语义:跨 zone 重定向因为读不到标记就拒绝,
 // 比分到一台稍后排空、或卡住的 gate 更糟;读不到停写标记时退回只靠本进程历史,与没有这条标记时一样。
 // 只查有 endpoint 的节点(fetchGateNodes 已过滤)。
 //
-// 两种标记都由 login 的 Node.RedisClient 所在的核心实例承载,这里经 svcCtx.CoreRedis 读;两个隐含前提,任一被打破都会让这里
-// 静默读不到标记、退回不过滤:
-//   - 部署时 scene-manager ConfigMap 的 CoreRedis 必须指向 login 的 Node.RedisClient 同一实例(control-plane-zone-scoping §4.2);
-//   - go-zero 的 RedisConf 没有 DB 字段,scene_manager 只能读 DB 0;login 的 Node.RedisClient.DB 改成非 0 时要同步处理。
-func gateRedisMarks(ctx context.Context, rdb *redis.Redis, nodes []*commonpb.NodeInfo) (draining, stale map[uint32]bool) {
+// 两种标记由目标 zone 的 login 与排空脚本写在控制集群上,这里经控制集群句柄 svcCtx.Redis 读(2026-11-12 起,原来经核心实例的
+// CoreRedis 句柄)。隐含前提:部署时 scene-manager 的 ControlRedis 与 login 写 gate 标记的那一段指向同一个控制集群;
+// 被打破时这里静默读不到标记、退回不过滤。键都带同一个 {gm:<zoneID>},控制集群句柄的守卫放行这条多键 MGET。
+func gateRedisMarks(ctx context.Context, rdb *controlredis.Client, zoneID uint32, nodes []*commonpb.NodeInfo) (draining, stale map[uint32]bool) {
 	if rdb == nil || len(nodes) == 0 {
 		return nil, nil
 	}
 	keys := make([]string, 0, 2*len(nodes))
 	for _, n := range nodes {
-		keys = append(keys, gatepick.DrainingKey(n.GetNodeId()))
+		keys = append(keys, gatepick.DrainingKey(zoneID, n.GetNodeId()))
 	}
 	for _, n := range nodes {
-		keys = append(keys, gatepick.StaleKey(n.GetNodeId()))
+		keys = append(keys, gatepick.StaleKey(zoneID, n.GetNodeId()))
 	}
 	values, err := rdb.MgetCtx(ctx, keys...)
 	if err != nil {
@@ -218,7 +221,7 @@ func gateRedisMarks(ctx context.Context, rdb *redis.Redis, nodes []*commonpb.Nod
 	draining = make(map[uint32]bool)
 	stale = make(map[uint32]bool)
 	for i, v := range values {
-		// go-zero 的 MGET 把不存在的键返回成空串;排空标记的值是 Unix 秒,停写标记的值是 "1",都不会是空串。
+		// 控制集群句柄的 MGET 把不存在的键返回成空串;排空标记的值是 Unix 秒,停写标记的值是 "1",都不会是空串。
 		if v == "" || i >= len(keys) {
 			continue
 		}

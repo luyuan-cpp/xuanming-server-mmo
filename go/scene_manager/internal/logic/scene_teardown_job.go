@@ -25,7 +25,7 @@ import (
 // 节点上留下没有映射的实体,Agones 的 rooms 多占一份,源频道的子集合挂着死 id。
 //
 // 做法是事务性发件箱:
-//   - 认领脚本在提交的同一步写任务 scene:{id}:teardown(hash,不带 TTL),并把场景放进本 zone 的待办有序集合
+//   - 认领脚本在提交的同一步写任务 scene:{ctl:<z>}:<id>:teardown(hash,不带 TTL),并把场景放进本 zone 的待办有序集合
 //     scene_teardown:{ctl:<z>}:pending,分数是认领时刻。认领提交了,任务就一定在;任务在,别的认领一律落空。
 //   - 认领方当场按任务做副作用(completeSceneTeardown),全部做完才删任务。
 //   - 没做完的(进程退出、某一步失败、Eval 回错让调用方以为没认领到)留在待办里。本 zone 的领导者每
@@ -63,8 +63,9 @@ const (
 	sceneTeardownJobTimeout = 10 * time.Second
 )
 
-func sceneTeardownJobKey(sceneID uint64) string {
-	return fmt.Sprintf("scene:%d:teardown", sceneID)
+// sceneTeardownJobKey 是拆除任务 scene:{ctl:<z>}:<id>:teardown,与待办、场景的其余键同一个 zone 的 tag。
+func sceneTeardownJobKey(zoneID uint32, sceneID uint64) string {
+	return fmt.Sprintf("scene:%s:%d:teardown", sceneControlTag(zoneID), sceneID)
 }
 
 func sceneTeardownPendingKey(zoneID uint32) string {
@@ -125,36 +126,25 @@ func releaseTeardownRoom(ctx context.Context, svcCtx *svc.ServiceContext, job sc
 	return releaseAgonesRoom(ctx, svcCtx, agonesNamespace(svcCtx), parseAgonesRoom(job.Claim.AgonesGs), job.Reason)
 }
 
-// unlinkFromSourceMirrors 把场景从它的镜像源的子集合 scene:{源}:mirrors 里摘掉。source 是认领快照里的镜像源
+// unlinkFromSourceMirrors 把场景从它的镜像源的子集合 scene:{ctl:<z>}:<源>:mirrors 里摘掉。source 是认领快照里的镜像源
 // (十进制 scene_id,空串表示不是镜像)。
 //
-// 源登记在别的 zone 时不动:那个子集合是那个 zone 的键,只由它的 scene_manager 读写
-// (docs/design/control-plane-zone-scoping-20261105.md §4.3)。新建镜像时源登记在同组别的 zone 就不写
-// scene:{id}:source(createInstance),这里给更早登记的数据兜底。本实例里没有源的 zone 记录时照摘:源已经销毁
-// (zone 记录随销毁删掉),或源在别的组的实例里;两种情况下这份子集合都只有本 zone 写。读不到或解析不了源的 zone、
-// SREM 失败时回错误,调用方的拆除任务留着重做。
+// 子集合与镜像同在本 zone 的键里(登记脚本按本 zone 写,docs/design/redis-cluster-all-domains-20261110.md §3.3),
+// 只有本 zone 读写,源在不在、在哪个 zone 都照摘:源已销毁或从来不在本 zone 时集合不存在,SREM 什么都不动。
+// 原来先读 scene:<源>:zone、源在别的 zone 就不动,那把键已删。SREM 失败时回错误,调用方的拆除任务留着重做。
 func unlinkFromSourceMirrors(svcCtx *svc.ServiceContext, zoneID uint32, sceneID uint64, source string) error {
 	sourceID, _ := strconv.ParseUint(source, 10, 64)
 	if sourceID == 0 {
 		return nil
 	}
-	sourceZone, err := lookupSceneZone(svcCtx, sourceID)
-	if err != nil {
-		return err
-	}
-	if sourceZone != 0 && sourceZone != zoneID {
-		logx.Infof("[SceneTeardown] scene %d: its mirror source %d is registered in zone %d, not %d; leaving the source's mirror set to that zone",
-			sceneID, sourceID, sourceZone, zoneID)
-		return nil
-	}
-	_, err = svcCtx.Redis.Srem(sceneMirrorsKey(sourceID), strconv.FormatUint(sceneID, 10))
+	_, err := svcCtx.Redis.Srem(sceneMirrorsKey(zoneID, sourceID), strconv.FormatUint(sceneID, 10))
 	return err
 }
 
 // finishSceneTeardownJob 删掉做完的任务。回 false:任务已被别人做完删掉,调用方不要再记完成。
 func finishSceneTeardownJob(svcCtx *svc.ServiceContext, job sceneTeardownJob) (bool, error) {
 	raw, err := svcCtx.Redis.Eval(luaFinishSceneTeardown,
-		[]string{sceneTeardownJobKey(job.SceneID), sceneTeardownPendingKey(job.ZoneID)},
+		[]string{sceneTeardownJobKey(job.ZoneID, job.SceneID), sceneTeardownPendingKey(job.ZoneID)},
 		strconv.FormatUint(job.SceneID, 10), job.Claim.Token)
 	if err != nil {
 		return false, err
@@ -226,7 +216,7 @@ func onSceneTeardownFinished(job sceneTeardownJob) {
 
 // loadSceneTeardownJob 读一条任务。任务不在时 ok=false。
 func loadSceneTeardownJob(svcCtx *svc.ServiceContext, zoneID uint32, sceneID uint64) (sceneTeardownJob, bool, error) {
-	fields, err := svcCtx.Redis.Hmget(sceneTeardownJobKey(sceneID), "token", "kind", "reason", "reply")
+	fields, err := svcCtx.Redis.Hmget(sceneTeardownJobKey(zoneID, sceneID), "token", "kind", "reason", "reply")
 	if err != nil {
 		return sceneTeardownJob{}, false, err
 	}
@@ -289,7 +279,7 @@ func sweepSceneTeardownJobs(ctx context.Context, svcCtx *svc.ServiceContext, zon
 		}
 		if !ok {
 			if _, err := svcCtx.Redis.Eval(luaDropDanglingTeardown,
-				[]string{sceneTeardownJobKey(sceneID), pendingKey}, strconv.FormatUint(sceneID, 10)); err != nil {
+				[]string{sceneTeardownJobKey(zoneID, sceneID), pendingKey}, strconv.FormatUint(sceneID, 10)); err != nil {
 				logx.Errorf("[SceneTeardown] zone=%d scene=%d: dropping a pending entry without a job failed: %v", zoneID, sceneID, err)
 			}
 			continue

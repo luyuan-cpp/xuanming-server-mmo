@@ -38,6 +38,9 @@ import (
 // 评审补(2026-11-10):取证不再经 discovery 的进程级连接缓存,每次单独建连、用完即关(dialOriginalInstance,原因见那里)。
 // 判据不变,仍只认 TCP 拒连:一次性连接上的 RPC 照样可能在期限之内失败(对端一连上就关、地址上不是 battle),
 // gRPC 错误说明不了原地址是什么状态。
+// 2026-11-11(docs/design/battle-instance-loss-early-abort.md §4):「原进程已不在」多一种旁证(K8s 里已没有存活的 Pod 持有
+// 原 IP),并且单次观察不再直接作数:要按实例过复核(两次相隔不少于 authority.InstanceGoneSettleMs,期间原实例没有亲口应答)。
+// 同一套旁证与复核也给截止之前的提前作废用(global_instance_loss.go),那条路径与原实例只做只读查询。
 
 // originalInstanceAnswer 是一次「立墓碑再查询」的原始结果。queryErr 为 nil 时 query 非 nil。
 type originalInstanceAnswer struct {
@@ -62,6 +65,22 @@ func askOriginalInstance(ctx context.Context, f *pb.MatchFormationRecord) origin
 	_, destroyErr := client.DestroyBattle(ctx, &battlepb.DestroyBattleRequest{BattleId: f.BattleId, Reason: "global_match_abort_if_absent", PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId})
 	query, queryErr := client.QueryBattleCreation(ctx, &battlepb.QueryBattleCreationRequest{BattleId: f.BattleId, PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId})
 	return originalInstanceAnswer{query: query, destroyErr: destroyErr, queryErr: queryErr}
+}
+
+// errTombstoneNotAttempted 标在只查询的交互上:没有立墓碑,所以它的 ABORTED 回包不能当成「没有房间」的证据。
+var errTombstoneNotAttempted = errors.New("tombstone not attempted: query-only observation")
+
+// queryOriginalInstance 只向原执行实例查询这份 operation,不发 DestroyBattle。提前作废(global_instance_loss.go)用它:
+// 那时可能还没过原件的准入期限,建房的 Create 还在途,DestroyBattle 会给尚无房间的原操作立拒收墓碑,把一局本来建得成的
+// 战斗作废掉(补签是客户端可以随时触发的)。QueryBattleCreation 在 battle 侧只读。连接同样单独建、用完即关。
+func queryOriginalInstance(ctx context.Context, f *pb.MatchFormationRecord) originalInstanceAnswer {
+	conn, err := dialOriginalInstance(f.TargetEndpoint)
+	if err != nil {
+		return originalInstanceAnswer{destroyErr: err, queryErr: err}
+	}
+	defer func() { _ = conn.Close() }()
+	query, queryErr := battlepb.NewBattleNodeClient(conn).QueryBattleCreation(ctx, &battlepb.QueryBattleCreationRequest{BattleId: f.BattleId, PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId})
+	return originalInstanceAnswer{query: query, destroyErr: errTombstoneNotAttempted, queryErr: queryErr}
 }
 
 // dialOriginalInstance 为一次「立墓碑再查询」单独建一条 gRPC 连接,调用方用完即关(评审补 2026-11-10)。
@@ -113,25 +132,57 @@ func battleRegistryOf(s *svc.ServiceContext, f *pb.MatchFormationRecord) battleR
 	return view
 }
 
-// classifyDeadlineEvidence 把一次「立墓碑再查询」的结果、原地址是否当场拒连、注册中心镜像与 K8s 里原 IP 上还有没有 Pod
-// 归成一次观察的结论,纯函数;各取值的含义见 authority.DeadlineAbortEvidence。拿不准一律 Undetermined,由硬上限兜底。
-// 这只是一次观察:InstanceGone 还要过复核(instanceLossTracker,两次相隔不少于 instanceGoneSettle)才能据以作废,
-// 截止作废与提前作废都这样(global_instance_loss.go)。
-// refused:查询没成之后另起的一次 TCP 拨号被原地址当场拒绝(originalAddressRefuses);podGone:battle 所在命名空间里已没有任何
-// Pod 持有原 IP(battlepods.Lookup.Gone,没配命名空间时恒为假)。
-//   - 查询回显的就是原实例:ABORTED 且本次立墓碑成功 → NoRoom;PRESENT → BattleStillHolds;其余(UNKNOWN:同一 battle_id
-//     记着别的 operation;立墓碑没成)→ Undetermined。原实例亲口作答时,注册中心与 Pod 查询说什么都不作数;
-//   - 查询成功却没有回显实例:原地址上应答的是另一个 battle 进程(实例 UUID 每个进程生成一次,不符时 battle 回空包)
-//     → InstanceGone;回显了别的实例(battle 不会这样回)→ Undetermined;
-//   - 查询失败:原地址的 TCP 端口当场拒连、且镜像已同步、原实例已不在册 → InstanceGone;K8s 里原 IP 上已没有 Pod → InstanceGone
-//     (Pod 对象要等 kubelet 确认容器已停才会消失;Agones 下进程崩溃后 Pod 很快被删,原 IP 只会超时,前一条拿不到);
-//     其余一律 Undetermined —— 超时、黑洞、主机或网络不可达、连得上却不是 battle、gRPC 当场回 Unavailable(对端一连上就关;
-//     修复前的缓存连接停在 TRANSIENT_FAILURE 时也是这样)、镜像没同步过、原实例仍在册、原 IP 上还有 Pod。
-//     只凭「注册中心查不到」或「原 node_id 已登记成另一个实例」都不算(分区中的原进程还活着,恢复后还会补提交)。
-//     拒连仍要求已不在册:Windows 监听队列满、防火墙按 REJECT 配置时活着的进程也会回 RST,而它还持有租约。
+// instanceSighting 是一次观察对「原执行进程还在不在」的结论。它是实例级的:battle 的实例 UUID 每个进程生成一次,
+// 同一个实例上的各局看到的是同一个事实,所以复核按实例记、各局共用(global_instance_loss.go 的 instanceLossTracker)。
+type instanceSighting uint8
+
+const (
+	// instanceUndetermined:判不了 —— 超时、黑洞、主机或网络不可达、连得上却不是 battle、gRPC 当场回 Unavailable、
+	// 镜像没同步过、原实例仍在册、原 IP 上还有存活的 Pod、回显了别的实例(battle 不会这样回)。
+	instanceUndetermined instanceSighting = iota
+	// instanceAnswered:原实例亲口应答(查询回显了它自己的实例号),它还活着。这时注册中心与 Pod 查询说什么都不作数。
+	instanceAnswered
+	// instanceSeenGone:这一次观察说原进程已不在,三种之一:
+	//   - 查询成功却没有回显实例:原地址上应答的是另一个 battle 进程(实例号不符时 battle 回空包);
+	//   - 查询失败,原地址的 TCP 端口当场拒连,且镜像已同步、原实例已不在册;
+	//   - 查询失败,K8s 里 battle 所在命名空间已没有存活的 Pod 持有原 IP(Agones 下进程崩溃后 Pod 很快被删,
+	//     原 IP 只会超时,前两种都拿不到)。
+	// 只是一次观察,要过复核(两次相隔不少于 authority.InstanceGoneSettleMs)才能据以作废。
+	instanceSeenGone
+)
+
+// classifyInstanceSighting 把与原实例的一次交互、原地址是否当场拒连、注册中心镜像与 Pod 查询归成实例级结论,纯函数。
+// refused:查询没成之后另起的一次 TCP 拨号被原地址当场拒绝(originalAddressRefuses);podGone:K8s 里已没有存活的 Pod 持有
+// 原 IP(battlepods.Lookup.Gone,没配命名空间时恒为假)。
+// 只凭「注册中心查不到」或「原 node_id 已登记成另一个实例」都不算(分区中的原进程还活着,恢复后还会补提交)。
+// 拒连必须同时已不在册:Windows 的监听队列满、防火墙按 REJECT 配置时,活着的进程所在地址也会回 RST,而它还持有租约;
+// 正常停机也是先停听、排空并补提交、最后才撤销租约,排空窗口里的拒连不算。
+func classifyInstanceSighting(f *pb.MatchFormationRecord, answer originalInstanceAnswer, refused bool, registry battleRegistryView, podGone bool) instanceSighting {
+	if answer.queryErr == nil {
+		instance, echoed := f.GetTargetInstanceId(), answer.query.GetTargetInstanceId()
+		switch {
+		case instance != "" && echoed == instance:
+			return instanceAnswered
+		case echoed == "":
+			return instanceSeenGone
+		}
+		return instanceUndetermined
+	}
+	if (refused && registry.forgotten()) || podGone {
+		return instanceSeenGone
+	}
+	return instanceUndetermined
+}
+
+// classifyDeadlineEvidence 把一次「立墓碑再查询」归成截止作废的单次证据,纯函数;各取值的含义见 authority.DeadlineAbortEvidence。
+// 实例级结论取自 classifyInstanceSighting;原实例亲口应答时再看这一局:ABORTED 且本次立墓碑成功 → NoRoom;PRESENT →
+// BattleStillHolds;其余(UNKNOWN:同一 battle_id 记着别的 operation;ABSENT;立墓碑没成)→ Undetermined。
+// 拿不准一律 Undetermined,由硬上限兜底。返回的 InstanceGone 只是一次观察,还要过复核(instanceLossTracker.deadlineEvidence)。
 func classifyDeadlineEvidence(f *pb.MatchFormationRecord, answer originalInstanceAnswer, refused bool, registry battleRegistryView, podGone bool) authority.DeadlineAbortEvidence {
-	instance := f.GetTargetInstanceId()
-	if answer.queryErr == nil && instance != "" && answer.query.GetTargetInstanceId() == instance {
+	switch classifyInstanceSighting(f, answer, refused, registry, podGone) {
+	case instanceSeenGone:
+		return authority.DeadlineEvidenceInstanceGone
+	case instanceAnswered:
 		switch answer.query.GetState() {
 		case battlepb.BattleCreationState_BATTLE_CREATION_ABORTED:
 			if answer.destroyErr == nil {
@@ -140,19 +191,6 @@ func classifyDeadlineEvidence(f *pb.MatchFormationRecord, answer originalInstanc
 		case battlepb.BattleCreationState_BATTLE_CREATION_PRESENT:
 			return authority.DeadlineEvidenceBattleStillHolds
 		}
-		return authority.DeadlineEvidenceUndetermined
-	}
-	if answer.queryErr == nil {
-		if answer.query.GetTargetInstanceId() == "" {
-			return authority.DeadlineEvidenceInstanceGone
-		}
-		return authority.DeadlineEvidenceUndetermined
-	}
-	if refused && registry.forgotten() {
-		return authority.DeadlineEvidenceInstanceGone
-	}
-	if podGone {
-		return authority.DeadlineEvidenceInstanceGone
 	}
 	return authority.DeadlineEvidenceUndetermined
 }
@@ -186,32 +224,68 @@ func connectionRefused(err error) bool {
 	return runtime.GOOS == "windows" && errors.Is(err, wsaeConnRefused)
 }
 
-// deadlineEvidenceProbe 组装一次取证观察:ask 是与原实例的那一次交互;registry 读注册中心镜像(在交互之后读,反映最新登记);
-// 查询没成、且镜像已同步而原实例已不在册时,refuses 另起一次 TCP 拨号看原地址是否当场拒连(其余情况拒连也不算证据,不拨,
-// 免得在黑洞端点上白等期限);podGone 问 K8s 原 IP 上还有没有 Pod,与 ask 并行:原 IP 是黑洞时 ask 要等满期限,串在后面就
-// 永远问不到 API server,而这正是 Pod 证据要覆盖的情形。可被多个 goroutine 同时调用(到期恢复一页并行取证):四者都只读共享状态。
-// 返回的是单次观察,InstanceGone 还要过复核(instanceLossTracker.confirmed)。
-func deadlineEvidenceProbe(ask func(context.Context, *pb.MatchFormationRecord) originalInstanceAnswer, refuses func(context.Context, string) bool, registry func(*pb.MatchFormationRecord) battleRegistryView, podGone func(context.Context, string) bool) authority.DeadlineAbortProbe {
+// originalInstanceAsk 是与原执行实例的一次交互:askOriginalInstance(立墓碑再查询,截止作废用)或 queryOriginalInstance
+// (只查询,提前作废用)。
+type originalInstanceAsk func(context.Context, *pb.MatchFormationRecord) originalInstanceAnswer
+
+// originalInstanceWitness 是那一次交互之外的三样旁证来源,截止作废与提前作废共用一套。三者都只读共享状态,可被多个
+// goroutine 同时调用。podGone 为 nil = 不查 Pod。
+type originalInstanceWitness struct {
+	refuses  func(ctx context.Context, endpoint string) bool     // 原地址是否当场拒连(originalAddressRefuses)
+	registry func(f *pb.MatchFormationRecord) battleRegistryView // 注册中心镜像(battleRegistryOf)
+	podGone  func(ctx context.Context, endpoint string) bool     // K8s 里已没有存活的 Pod 持有原 IP(newBattlePodGone)
+}
+
+// originalInstanceObservation 是一次观察取到的全部原始事实。
+type originalInstanceObservation struct {
+	answer   originalInstanceAnswer
+	refused  bool
+	registry battleRegistryView
+	podGone  bool
+}
+
+// observe 做一次观察:ask 与原实例交互;registry 在交互之后读,反映最新登记;查询没成、且镜像已同步而原实例已不在册时,
+// 另起一次 TCP 拨号看原地址是否当场拒连(其余情况拒连也不算证据,不拨,免得在黑洞端点上白等期限)。
+// Pod 查询与 ask 并行:原 IP 是黑洞时 ask 要等满期限,串在后面就问不到 API server 了,而这正是 Pod 证据要覆盖的情形。
+func (w originalInstanceWitness) observe(ctx context.Context, f *pb.MatchFormationRecord, ask originalInstanceAsk) originalInstanceObservation {
+	pod := make(chan bool, 1)
+	go func() { pod <- w.podGone != nil && w.podGone(ctx, f.GetTargetEndpoint()) }()
+	answer := ask(ctx, f)
+	view := w.registry(f)
+	refused := answer.queryErr != nil && view.forgotten() && w.refuses(ctx, f.GetTargetEndpoint())
+	return originalInstanceObservation{answer: answer, refused: refused, registry: view, podGone: <-pod}
+}
+
+// deadlineEvidenceProbe 组装截止作废的单次取证(到期恢复一页并行取证,可被多个 goroutine 同时调用)。
+// 返回的 InstanceGone 只是一次观察,还要过复核(instanceLossTracker.deadlineEvidence)。
+func deadlineEvidenceProbe(ask originalInstanceAsk, witness originalInstanceWitness) authority.DeadlineAbortProbe {
 	return func(ctx context.Context, f *pb.MatchFormationRecord) authority.DeadlineAbortEvidence {
-		pod := make(chan bool, 1)
-		go func() { pod <- podGone(ctx, f.GetTargetEndpoint()) }()
-		answer := ask(ctx, f)
-		view := registry(f)
-		refused := answer.queryErr != nil && view.forgotten() && refuses(ctx, f.GetTargetEndpoint())
-		return classifyDeadlineEvidence(f, answer, refused, view, <-pod)
+		seen := witness.observe(ctx, f, ask)
+		return classifyDeadlineEvidence(f, seen.answer, seen.refused, seen.registry, seen.podGone)
+	}
+}
+
+// instanceSightingProbe 组装提前作废的单次观察,只要实例级结论。
+func instanceSightingProbe(ask originalInstanceAsk, witness originalInstanceWitness) func(context.Context, *pb.MatchFormationRecord) instanceSighting {
+	return func(ctx context.Context, f *pb.MatchFormationRecord) instanceSighting {
+		seen := witness.observe(ctx, f, ask)
+		return classifyInstanceSighting(f, seen.answer, seen.refused, seen.registry, seen.podGone)
 	}
 }
 
 // BindDeadlineAbortEvidence 把生产取证接到成局权威上(authority.Store.BindDeadlineAbortProbe),同时装配原执行进程失效的提前作废
-// (s.BattleInstanceLoss)。两条路径共用一次观察(deadlineEvidenceProbe)与一个复核记录器(instanceLossTracker),所以「原执行进程
-// 已不在」只有一份判据与一条复核规则。match_service 在起任何后台循环、注册任何 RPC 之前调用一次;stable 与 canary 副本都要接
-// (帮会取消是 RPC,两条轨道都可能收到)。提前作废的取证循环另由 StartBattleInstanceLossWatcher 只在跑后台任务的副本上启动。
+// (s.BattleInstanceLoss,global_instance_loss.go)。两条路径共用一套旁证与一个按实例的复核记录器(instanceLossTracker),
+// 所以「原执行进程已不在」只有一份判据与一条复核规则;区别只在与原实例的那一次交互:截止之后立墓碑再查询,截止之前只查询
+// (建房还可能在途,不能立墓碑)。match_service 在起任何后台循环、注册任何 RPC 之前调用一次;stable 与 canary 副本都要接
+// (帮会取消与补签都是 RPC,两条轨道都可能收到)。提前作废的取证循环另由 StartBattleInstanceLossWatcher 启动。
 // 没接时一律判不了:截止 ABORT 只在硬上限之后才写(fail-closed,但全员要多占约 10 分钟)。
 func BindDeadlineAbortEvidence(s *svc.ServiceContext) {
-	sighting := deadlineEvidenceProbe(askOriginalInstance, originalAddressRefuses, func(f *pb.MatchFormationRecord) battleRegistryView {
-		return battleRegistryOf(s, f)
-	}, newBattlePodGone(s.Config.GlobalMatch.BattlePodNamespace, time.Now))
+	witness := originalInstanceWitness{
+		refuses:  originalAddressRefuses,
+		registry: func(f *pb.MatchFormationRecord) battleRegistryView { return battleRegistryOf(s, f) },
+		podGone:  newBattlePodGone(s.Config.GlobalMatch.BattlePodNamespace, time.Now),
+	}
 	tracker := newInstanceLossTracker(time.Now)
-	s.Authority.BindDeadlineAbortProbe(tracker.confirmed(sighting))
-	s.BattleInstanceLoss = newInstanceLossWatcher(s.Authority, sighting, tracker, s.HoldRelay, time.Now)
+	s.Authority.BindDeadlineAbortProbe(tracker.deadlineEvidence(deadlineEvidenceProbe(askOriginalInstance, witness)))
+	s.BattleInstanceLoss = newInstanceLossWatcher(s.Authority, instanceSightingProbe(queryOriginalInstance, witness), tracker, s.HoldRelay, time.Now)
 }

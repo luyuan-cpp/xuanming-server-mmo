@@ -213,8 +213,8 @@ func TestResolveEvacuationTarget(t *testing.T) {
 	})
 
 	t.Run("original channel still on the source node", func(t *testing.T) {
-		require.NoError(t, sc.Redis.Set(sceneNodeKey(555), "10"))
-		t.Cleanup(func() { _ = sc.Redis.Set(sceneNodeKey(555), "30") })
+		require.NoError(t, sc.Redis.Set(sceneNodeKey(testZoneId, 555), "10"))
+		t.Cleanup(func() { _ = sc.Redis.Set(sceneNodeKey(testZoneId, 555), "30") })
 		sid, nid, reserved, err := l.resolveEvacuationTarget(channelReq, "10", testZoneId)
 		require.NoError(t, err)
 		assert.Equal(t, uint64(556), sid, "不派回将要拆掉的那份实例,改落同图别的频道")

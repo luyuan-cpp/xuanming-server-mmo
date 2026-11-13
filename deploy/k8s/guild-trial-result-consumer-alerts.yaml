@@ -1,0 +1,80 @@
+# guild 历练结果消费组(topic Activity.TrialResult.Topic、组 Activity.TrialResult.GroupID,缺省 match-results / guild-trial)的积压告警
+# (2026-11-12,排空框架残余第 4 条;判据照 match-result-consumer-alerts.yaml,设计 docs/design/kafka-bound-consumer-group.md §9)。
+# 安装方式与 match-result-consumer-alerts.yaml 相同:
+#   kubectl apply -n observability -f deploy/k8s/guild-trial-result-consumer-alerts.yaml
+# 抓取前提:按注解抓取 guild 指标端口 9220 的 job 或 PodMonitor(deploy/k8s/manifests/go-svc/guild.yaml 已带注解)。没有序列时规则不触发,
+# 和「一切正常」长得一样。本文件里以 guild 加下划线开头的词都会被契约测试当成指标名核对,注释里不要写这种形状的文件名。
+#
+# 积压由 guild 进程内的 lag 探针每 30s 从 broker 读出(组的已提交位点 vs 日志起止,kafkautil.RunGroupLagProbe),
+# 与消费本身无关:消费者停了、卡在一条消息上,探针照样报。所有副本读同一个组、报同一个数,规则一律取 max;
+# 某副本探针失败时它的 gauge 是陈值(保留上一次的值),照样参与 max,由按实例触发的 GuildTrialResultLagProbeBlind 点名。
+# canary 副本不加入这个消费组,也不起探针(发布轨道设计 §2.5)。
+#
+# 消费者语义(go/shared/kafkautil 的 BoundConsumerGroup,handler 模式):逐条处理、逐条同步提交;遇再均衡与暂时失败不停 ——
+# 代次还在就退避原地重试同一条,代次结束就交还 Kafka 由新属主重投;同一条失败 20 次(约 7.5 分钟)写进死信 topic guild-trial-dlq
+# 后提交越过它(死信告警见 kafka-bound-consumer-alerts.yaml)。只有不变量破坏、提交点越过保留期、保留期删掉了没处理的记录,
+# 或维护排空收尾核不到交还记录的结局,才 HOLD 并永久停止取新(日志「[GuildTrial] Trial result consumer HOLD」)。
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: guild-trial-result-consumer-alerts
+  labels:
+    app: guild
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: guild.trial-result-consumer
+      interval: 30s
+      rules:
+        # 积压不前进:有积压的分区上,组内已提交位点 15 分钟没动(与 MatchResultConsumerLagging 同一判据)。
+        # guild_trial_result_consumer_commit_stall_seconds 由 lag 探针跨轮按分区算(kafkautil.CommitStall):位点一动、或积压清零即从头计;
+        # 不看合计积压(高负载下几乎从不为 0 而位点一直在前进),也不要求新消息到达(安静分区上卡在一条上也报)。
+        # 正常情况下 20 次失败、约 7.5 分钟就转死信越过毒丸,所以位点停 15 分钟说明转死信也没走通(死信写不进、owner 停了、Kafka 侧故障)。
+        # gauge 已经是持续时长,for 0m;各副本各自计时取 max,进程重启从 0 重计(全部副本同时重启后最多晚 15 分钟才响)。
+        - alert: GuildTrialResultConsumerLagging
+          expr: |
+            max(guild_trial_result_consumer_commit_stall_seconds) >= 900
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "历练结果消费组有积压的分区上已提交位点 {{ $value | humanizeDuration }} 没有前进"
+            description: >-
+              历练结算跟着停:帮贡、资金、物品晚到(已登记的对局由巡检器在结果超时后从 match 的 SQL 终局兜底结算)。
+              先查 guild 日志:`[kafka-bound]` 行是原地重试(看 stage 与错误,TiDB / Redis 故障先修,恢复后自动追上);
+              stage=dead_letter 是死信写不进去(查 guild-trial-dlq 与 broker);「[GuildTrial] Trial result consumer HOLD」是 owner 永久停止取新,
+              按 docs/ops/kafka-bound-consumer-runbook.md 处置后重启 guild。
+              对照合计积压 guild_trial_result_consumer_lag_messages 与单分区最大积压 guild_trial_result_consumer_lag_max_partition_messages:
+              两者接近 = 卡在一个分区。topic 只保留 7 天,积压到那之前必须处置,否则 GuildTrialResultConsumerRetentionGap 会响(结果已丢)。
+
+        # 保留期已经删掉了还没消费的对局结果:**历练结果已丢**。任何一次出现都响:取窗口最大值、for 0m,窗口 15m 的取法同 MatchResultConsumerRetentionGap。
+        - alert: GuildTrialResultConsumerRetentionGap
+          expr: |
+            max(max_over_time(guild_trial_result_consumer_retention_gap_messages[15m])) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "match-results 的保留期删掉了约 {{ $value | printf \"%.0f\" }} 条历练消费组还没提交到的对局结果"
+            description: >-
+              这些局若是帮会历练,结算没有经过结果消费(采样值,是下界;guild 日志另有 `TRIAL RESULTS LOST` 行)。
+              已登记的对局由巡检器从 match 权威库的 SQL 终局结算,没有登记行的只能人工补:按对局号对照 match 的终局行与 guild 的历练对局表核对。
+              缺口消失后告警还会保持约 15 分钟,resolve 不代表结果找回。根因通常是消费者长时间停摆或卡住(先看 GuildTrialResultConsumerLagging)。
+
+        # 探针失明(按实例):15 分钟内一次都没探成、且有失败。它的 lag / retention_gap 是陈值,上面两条此时都不可信。
+        - alert: GuildTrialResultLagProbeBlind
+          expr: |
+            sum by (instance) (increase(guild_trial_result_consumer_lag_probe_total{result="ok"}[15m])) == 0
+            and
+            sum by (instance) (increase(guild_trial_result_consumer_lag_probe_total{result="error"}[15m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }} 上历练结果消费组的 lag 探针 15 分钟没有成功过"
+            description: >-
+              该实例的 guild_trial_result_consumer_lag_messages / guild_trial_result_consumer_retention_gap_messages 是陈值。
+              查该实例 guild 日志 `Trial result consumer lag probe failed`(broker 不可达、消费组位点拉取失败,
+              或 committed 越过 log end = topic 被删了重建)。所有实例都在报本告警时,积压与丢结果告警此刻都不可信。

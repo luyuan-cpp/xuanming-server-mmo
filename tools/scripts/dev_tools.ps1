@@ -105,7 +105,7 @@
     # 都只留在 k8s_deploy.ps1 一处),非空才透传;枚举型保留 ValidateSet,拼错在本入口就拒,不等到下游。
     # 生效范围:battle 是全局池,只在 infra-up 路径部署,所以 -BattleOrchestrator 只对 k8s-infra-up / k8s-all-up /
     # k8s-release-all(均不带 -SkipInfra)生效。gateway Ingress 由 zone-up 随 gateway 生成(k8s-zone-up、k8s-all-up 的各 zone,
-    # 需部署 Java 服务),k8s-infra-up 上给 -Gateway* 只会得到下游的"被忽略"警告。-Gateway* 与 -LoginDevPasswordAuth
+    # 需部署 Java 服务),k8s-infra-up 上给 -Gateway* 只会得到下游的"被忽略"警告。-Gateway*、-LoginDevPasswordAuth 与 -LoginPasswordAuth
     # 落在 Go / Java 服务上,而 k8s_image.ps1 不部署 Go / Java 服务,所以 k8s-image-* / k8s-release-* 显式给了会被
     # Invoke-K8sImage 拒绝;-RequireClientEndpoint 例外地照常透传(见它的参数注释)。
     # 模式不粘滞:k8s_deploy.ps1 每次按本次参数重新生成 gate / battle 工作负载,不从集群读回旧值。以 external 运行的
@@ -130,6 +130,10 @@
     # switch 只在被指定时透传,共享密钥走环境变量 / Secret,不经参数。不粘滞:dev zone 依赖开发口令登录时重新部署要照传,
     # 漏传则生成的 login 没有任何认证配置。
     [switch]$LoginDevPasswordAuth,
+    # 集群内 login 的口令登录(PasswordAuth),各档位都可用,与 -LoginDevPasswordAuth 互斥,由 k8s_deploy.ps1 校验。switch 只在被指定时透传;
+    # 口令库连接串在运维预置的 Secret 里(SQL boot 目录 login 条目的 passwordAuthSecret),不经参数、不经部署机环境变量。不粘滞:开着口令登录的 zone 重新部署要照传,
+    # 漏传时 k8s_deploy.ps1 按集群现状在任何写操作之前拒绝(要关就加 -ConfirmLoginAuthProviderChange)。
+    [switch]$LoginPasswordAuth,
     # login / scene_manager ConfigMap 的 RequireClientEndpoint(auto | true | false),透传给 k8s_deploy.ps1(k8s-zone-up /
     # k8s-all-up)与 k8s_image.ps1(k8s-release-*);取值口径与上线窗口(逐个 zone 切 external 时
     # 已切 zone 传 false)见 k8s_deploy.ps1 同名参数注释。留空不透传 = 下游默认 auto(跟随 -ClientEntryMode)。
@@ -149,14 +153,6 @@
     # 它决定 db / data-service 的 WAITAOF 副本份数,k8s_deploy.ps1 的 zone-up 没收到时跟随线上 sts/redis,收到而与线上不同即拒绝。
     [ValidateRange(0, 3)]
     [int]$RedisReplicas = 0,
-    # 共享 Redis 按用途拆实例(G4a 第 1a 批),透传给 k8s_deploy.ps1 / k8s_image.ps1 同名参数,语义见 k8s_deploy.ps1 参数注释。
-    #   -RedisSplit:auto(缺省)= 不透传,由 k8s_deploy.ps1 解析(所有档位不拆;zone 写路径跟随线上);none / queue 才透传。
-    #   -ConfirmRedisSplitSwitch:确认本次就是要改 login / gateway 的排队 Redis 地址,switch 只在被指定时透传。
-    #   -RedisQueueMaxMemory:queue 实例的 maxmemory(如 1gb),非空才透传;只对会 apply infra 的入口有意义。
-    [ValidateSet("auto", "none", "queue")]
-    [string]$RedisSplit = "auto",
-    [switch]$ConfirmRedisSplitSwitch,
-    [string]$RedisQueueMaxMemory = "",
     # k8s-redis-wipe 的显式确认(压测前清空部署拓扑里的每个 Redis 实例,AGENTS.md §6.2),透传给 k8s_deploy.ps1 -Command redis-wipe;
     # 那边还要求 -InfraNamespace 匹配 ^mmorpg-stress-。switch 只在被指定时透传。
     [switch]$ConfirmWipeAllRedis,
@@ -168,6 +164,18 @@
     [int]$PlayerRedisReplicasPerMaster = 0,
     [string]$PlayerRedisMaxMemory = "",
     [string]$PlayerRedisStorage = "",
+    # Loki 的形态与对象存储(docs/design/no-single-node-horizontal-scaling-20261001.md §10),透传给 k8s_deploy.ps1 / k8s_image.ps1 同名参数,
+    # 语义与校验都在 k8s_deploy.ps1(Assert-LokiDeployPreflight)。只对会 apply infra 的入口有意义:k8s-infra-up、k8s-all-up、k8s-release-all。
+    # staging / prod 缺省是 3 副本:必须给 -LokiS3Endpoint 与 -LokiS3Bucket;访问密钥走环境变量 MMORPG_LOKI_S3_ACCESS_KEY_ID /
+    # MMORPG_LOKI_S3_SECRET_ACCESS_KEY,不经参数。副本数 0 = 不透传(按档位取),字符串非空才透传,switch 只在被指定时透传。
+    [int]$LokiReplicas = 0,
+    [string]$LokiS3Endpoint = "",
+    [string]$LokiS3Bucket = "",
+    [string]$LokiS3Region = "",
+    [switch]$LokiS3ForcePathStyle,
+    [switch]$LokiS3Insecure,
+    [switch]$LokiS3DevFixture,
+    [switch]$ConfirmLokiTopologyChange,
     [switch]$SkipInfra,
     [switch]$SkipGoSvc,
     [string]$GoSvcRegistry = "ghcr.io/luyuancpp",
@@ -313,10 +321,33 @@
     # 全局号源登记处(k8s_deploy.ps1 同名参数,docs/ops/id-issuer-runbook.md §1)。留空 / 不给不转发,档位规则只在 k8s_deploy.ps1。
     [string]$IdRegistryEtcd = "",
     [switch]$HostIdRegistry,
-    # 控制域实例 redis-ctl-g<N>(缺口第 5 条),透传给 k8s_deploy.ps1 同名参数:-RedisCtlMaxMemory 非空才传,-ConfirmRedisCtlSwitch 被指定才传。
+    # 集群内 login 的小游戏登录(微信小游戏 / 抖音小游戏),透传给 k8s_deploy.ps1 同名参数(k8s-zone-up / k8s-all-up)。口径同上面微信 / QQ 那六个:
+    # 语义、形状校验与两把 AppSecret(环境变量 MMORPG_LOGIN_WECHAT_MINIGAME_APP_SECRET / MMORPG_LOGIN_DOUYIN_MINIGAME_APP_SECRET,不经参数)
+    # 都只在 k8s_deploy.ps1 一处;字符串非空才透传,switch 只在被指定时透传;不粘滞,漏传由 k8s_deploy.ps1 的防误关闸在写操作之前拦下,
+    # 确要关闭或改动加 -ConfirmLoginAuthProviderChange。k8s-image-* / k8s-release-* 显式给了即拒绝。
     # 追加在末尾:本脚本没有显式 Position,改变声明顺序会改变位置参数绑定。
-    [string]$RedisCtlMaxMemory = "",
-    [switch]$ConfirmRedisCtlSwitch
+    [string]$LoginWeChatMiniGameAppId = "",
+    [string]$LoginWeChatMiniGameEndpoint = "",
+    [switch]$LoginWeChatMiniGameAllowOpenId,
+    [string]$LoginDouyinMiniGameAppId = "",
+    [string]$LoginDouyinMiniGameEndpoint = "",
+    [switch]$LoginDouyinMiniGameAllowOpenId,
+    # 控制 Redis Cluster redis-control(缺口第 34 条第 6a 批),透传给 k8s_deploy.ps1 / k8s_image.ps1 同名参数,口径同上面 -PlayerRedis* 四个:
+    # 主节点数与副本数 0 = 不透传,容量非空才透传;档位规则与变更闸只在 k8s_deploy.ps1(Assert-RedisClusterPreflight)。
+    # 追加在末尾:本脚本没有显式 Position,改变声明顺序会改变位置参数绑定。
+    [ValidateRange(0, 512)]
+    [int]$ControlRedisMasters = 0,
+    [ValidateRange(0, 2)]
+    [int]$ControlRedisReplicasPerMaster = 0,
+    [string]$ControlRedisMaxMemory = "",
+    [string]$ControlRedisStorage = "",
+    # 集群内 login 的海外渠道登录(Sign in with Apple / Google 登录),透传给 k8s_deploy.ps1 同名参数(k8s-zone-up / k8s-all-up)。
+    # 口径同上面小游戏那六个,只是没有密钥、没有 AllowOpenId;非空才透传,k8s-image-* / k8s-release-* 显式给了即拒绝。
+    # 追加在末尾:本脚本没有显式 Position,改变声明顺序会改变位置参数绑定。
+    [string]$LoginAppleClientId = "",
+    [string]$LoginAppleEndpoint = "",
+    [string]$LoginGoogleClientId = "",
+    [string]$LoginGoogleEndpoint = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -804,6 +835,7 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressTlsSecret)) { $args.GatewayIngressTlsSecret = $GatewayIngressTlsSecret }
     if (-not [string]::IsNullOrWhiteSpace($GatewayTrustedProxies)) { $args.GatewayTrustedProxies = $GatewayTrustedProxies }
     if ($LoginDevPasswordAuth) { $args.LoginDevPasswordAuth = $true }
+    if ($LoginPasswordAuth) { $args.LoginPasswordAuth = $true }
     # login 第三方登录(微信 / QQ)同一口径:字符串非空才传,switch 只在被指定时传。漏传的防误关闸在 k8s_deploy.ps1
     # (Assert-LoginAuthProviderClusterState,非 DryRun、任何写操作之前),本函数只透传,不复制规则。
     if (-not [string]::IsNullOrWhiteSpace($LoginWeChatAppId)) { $args.LoginWeChatAppId = $LoginWeChatAppId }
@@ -812,6 +844,18 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($LoginQQAppId)) { $args.LoginQQAppId = $LoginQQAppId }
     if (-not [string]::IsNullOrWhiteSpace($LoginQQEndpoint)) { $args.LoginQQEndpoint = $LoginQQEndpoint }
     if ($LoginQQAllowOpenId) { $args.LoginQQAllowOpenId = $true }
+    # 小游戏两段(微信小游戏 / 抖音小游戏)同一口径。
+    if (-not [string]::IsNullOrWhiteSpace($LoginWeChatMiniGameAppId)) { $args.LoginWeChatMiniGameAppId = $LoginWeChatMiniGameAppId }
+    if (-not [string]::IsNullOrWhiteSpace($LoginWeChatMiniGameEndpoint)) { $args.LoginWeChatMiniGameEndpoint = $LoginWeChatMiniGameEndpoint }
+    if ($LoginWeChatMiniGameAllowOpenId) { $args.LoginWeChatMiniGameAllowOpenId = $true }
+    if (-not [string]::IsNullOrWhiteSpace($LoginDouyinMiniGameAppId)) { $args.LoginDouyinMiniGameAppId = $LoginDouyinMiniGameAppId }
+    if (-not [string]::IsNullOrWhiteSpace($LoginDouyinMiniGameEndpoint)) { $args.LoginDouyinMiniGameEndpoint = $LoginDouyinMiniGameEndpoint }
+    if ($LoginDouyinMiniGameAllowOpenId) { $args.LoginDouyinMiniGameAllowOpenId = $true }
+    # Apple / Google 两段同一口径(没有 AllowOpenId)。
+    if (-not [string]::IsNullOrWhiteSpace($LoginAppleClientId)) { $args.LoginAppleClientId = $LoginAppleClientId }
+    if (-not [string]::IsNullOrWhiteSpace($LoginAppleEndpoint)) { $args.LoginAppleEndpoint = $LoginAppleEndpoint }
+    if (-not [string]::IsNullOrWhiteSpace($LoginGoogleClientId)) { $args.LoginGoogleClientId = $LoginGoogleClientId }
+    if (-not [string]::IsNullOrWhiteSpace($LoginGoogleEndpoint)) { $args.LoginGoogleEndpoint = $LoginGoogleEndpoint }
     if ($ConfirmLoginAuthProviderChange) { $args.ConfirmLoginAuthProviderChange = $true }
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
@@ -819,21 +863,26 @@ function Invoke-K8sDeploy {
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
     # 共享 Redis 的形态:非 0 才传(0 = k8s_deploy.ps1 按档位取)。
     if ($RedisReplicas -gt 0) { $args.RedisReplicas = $RedisReplicas }
-    # 共享 Redis 按用途拆实例(G4a 第 1a 批):-RedisSplit 非 auto 才传(auto 是 k8s_deploy.ps1 的缺省),确认开关只在被指定时传,
-    # 容量非空才传。防静默切换的闸只在 k8s_deploy.ps1(Assert-RedisPurposeSwitchIsSafe),本函数只透传。
-    if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $args.RedisSplit = $RedisSplit }
-    if ($ConfirmRedisSplitSwitch) { $args.ConfirmRedisSplitSwitch = $true }
-    if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $args.RedisQueueMaxMemory = $RedisQueueMaxMemory }
-    # 控制域实例 redis-ctl-g<N>(缺口第 5 条)同一口径:容量非空才传,确认开关只在被指定时传;闸只在 k8s_deploy.ps1(Assert-RedisCtlPreflight)。
-    if (-not [string]::IsNullOrWhiteSpace($RedisCtlMaxMemory)) { $args.RedisCtlMaxMemory = $RedisCtlMaxMemory }
-    if ($ConfirmRedisCtlSwitch) { $args.ConfirmRedisCtlSwitch = $true }
     # k8s-redis-wipe 的确认,同一口径。准入(namespace 规则 + 确认)只在 k8s_deploy.ps1 的 Invoke-RedisWipe 判。
     if ($ConfirmWipeAllRedis) { $args.ConfirmWipeAllRedis = $true }
-    # 玩家域 Redis Cluster:非 0 / 非空才传。档位规则与变更闸只在 k8s_deploy.ps1(Assert-RedisPlayerPreflight)。
+    # 玩家域与控制两套 Redis Cluster:非 0 / 非空才传。档位规则与变更闸只在 k8s_deploy.ps1(Assert-RedisClusterPreflight)。
     if ($PlayerRedisMasters -gt 0) { $args.PlayerRedisMasters = $PlayerRedisMasters }
     if ($PlayerRedisReplicasPerMaster -gt 0) { $args.PlayerRedisReplicasPerMaster = $PlayerRedisReplicasPerMaster }
     if (-not [string]::IsNullOrWhiteSpace($PlayerRedisMaxMemory)) { $args.PlayerRedisMaxMemory = $PlayerRedisMaxMemory }
     if (-not [string]::IsNullOrWhiteSpace($PlayerRedisStorage)) { $args.PlayerRedisStorage = $PlayerRedisStorage }
+    if ($ControlRedisMasters -gt 0) { $args.ControlRedisMasters = $ControlRedisMasters }
+    if ($ControlRedisReplicasPerMaster -gt 0) { $args.ControlRedisReplicasPerMaster = $ControlRedisReplicasPerMaster }
+    if (-not [string]::IsNullOrWhiteSpace($ControlRedisMaxMemory)) { $args.ControlRedisMaxMemory = $ControlRedisMaxMemory }
+    if (-not [string]::IsNullOrWhiteSpace($ControlRedisStorage)) { $args.ControlRedisStorage = $ControlRedisStorage }
+    # Loki 的形态与对象存储:非 0 / 非空 / 被指定才传。档位规则、拓扑变更闸与 S3 参数校验只在 k8s_deploy.ps1(Assert-LokiDeployPreflight)。
+    if ($LokiReplicas -gt 0) { $args.LokiReplicas = $LokiReplicas }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Endpoint)) { $args.LokiS3Endpoint = $LokiS3Endpoint }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Bucket)) { $args.LokiS3Bucket = $LokiS3Bucket }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Region)) { $args.LokiS3Region = $LokiS3Region }
+    if ($LokiS3ForcePathStyle) { $args.LokiS3ForcePathStyle = $true }
+    if ($LokiS3Insecure) { $args.LokiS3Insecure = $true }
+    if ($LokiS3DevFixture) { $args.LokiS3DevFixture = $true }
+    if ($ConfirmLokiTopologyChange) { $args.ConfirmLokiTopologyChange = $true }
     # 逻辑库:给了才传。档位规则只在 k8s_deploy.ps1(Assert-LogicalDbPreflight)。
     if ($DirectoryLogicalShards -gt 0) { $args.DirectoryLogicalShards = $DirectoryLogicalShards }
     if ($Region -ge 0) { $args.Region = $Region }
@@ -971,6 +1020,7 @@ function Invoke-K8sImage {
     if ($AgonesHighDensity) { $notForwarded += '-AgonesHighDensity' }
     if ($AgonesAutoscale) { $notForwarded += '-AgonesAutoscale' }
     if ($LoginDevPasswordAuth) { $notForwarded += '-LoginDevPasswordAuth' }
+    if ($LoginPasswordAuth) { $notForwarded += '-LoginPasswordAuth' }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressHost)) { $notForwarded += '-GatewayIngressHost' }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressClassName)) { $notForwarded += '-GatewayIngressClassName' }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressTlsSecret)) { $notForwarded += '-GatewayIngressTlsSecret' }
@@ -983,6 +1033,16 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($LoginQQAppId)) { $notForwarded += '-LoginQQAppId' }
     if (-not [string]::IsNullOrWhiteSpace($LoginQQEndpoint)) { $notForwarded += '-LoginQQEndpoint' }
     if ($LoginQQAllowOpenId) { $notForwarded += '-LoginQQAllowOpenId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginWeChatMiniGameAppId)) { $notForwarded += '-LoginWeChatMiniGameAppId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginWeChatMiniGameEndpoint)) { $notForwarded += '-LoginWeChatMiniGameEndpoint' }
+    if ($LoginWeChatMiniGameAllowOpenId) { $notForwarded += '-LoginWeChatMiniGameAllowOpenId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginDouyinMiniGameAppId)) { $notForwarded += '-LoginDouyinMiniGameAppId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginDouyinMiniGameEndpoint)) { $notForwarded += '-LoginDouyinMiniGameEndpoint' }
+    if ($LoginDouyinMiniGameAllowOpenId) { $notForwarded += '-LoginDouyinMiniGameAllowOpenId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginAppleClientId)) { $notForwarded += '-LoginAppleClientId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginAppleEndpoint)) { $notForwarded += '-LoginAppleEndpoint' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginGoogleClientId)) { $notForwarded += '-LoginGoogleClientId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginGoogleEndpoint)) { $notForwarded += '-LoginGoogleEndpoint' }
     if ($ConfirmLoginAuthProviderChange) { $notForwarded += '-ConfirmLoginAuthProviderChange' }
     if ($notForwarded.Count -gt 0) {
         throw "k8s-image-* / k8s-release-* 不支持 $($notForwarded -join ', '):k8s_image.ps1 不部署 Go / Java 服务,也不支持 Agones 高密度 / FleetAutoscaler。请改用 k8s-infra-up / k8s-zone-up / k8s-all-up(直接调 k8s_deploy.ps1)。"
@@ -1048,7 +1108,7 @@ function Invoke-K8sImage {
         $args.NodeOpenFileLimitMode = $NodeOpenFileLimitMode
     }
     # 集群外入口参数,口径同 Invoke-K8sDeploy(k8s_image.ps1 原样转给 k8s_deploy.ps1)。
-    # -Gateway* / -LoginDevPasswordAuth / 第三方登录的 -Login* 与 -ConfirmLoginAuthProviderChange 不在此列,已在函数开头拒绝
+    # -Gateway* / -LoginDevPasswordAuth / -LoginPasswordAuth / 第三方登录的 -Login* 与 -ConfirmLoginAuthProviderChange 不在此列,已在函数开头拒绝
     # (k8s_image.ps1 也不声明它们)。
     if (-not [string]::IsNullOrWhiteSpace($ClientEntryMode)) { $args.ClientEntryMode = $ClientEntryMode }
     if (-not [string]::IsNullOrWhiteSpace($ClientPublicHost)) { $args.ClientPublicHost = $ClientPublicHost }
@@ -1062,19 +1122,24 @@ function Invoke-K8sImage {
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
     # 共享 Redis 的形态同一口径:非 0 才传。
     if ($RedisReplicas -gt 0) { $args.RedisReplicas = $RedisReplicas }
-    # 按用途拆实例(G4a 第 1a 批)同一口径:-RedisSplit 非 auto 才传,确认开关只在被指定时传,容量非空才传。k8s_image.ps1 不部署
-    # login / gateway,只有 release-all(不带 -SkipInfra)的 infra-up 会按 -RedisSplit queue apply 排队实例。
-    if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $args.RedisSplit = $RedisSplit }
-    if ($ConfirmRedisSplitSwitch) { $args.ConfirmRedisSplitSwitch = $true }
-    if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $args.RedisQueueMaxMemory = $RedisQueueMaxMemory }
-    # 控制域实例 redis-ctl-g<N>(缺口第 5 条)同一口径:容量非空才传,确认开关只在被指定时传;闸只在 k8s_deploy.ps1(Assert-RedisCtlPreflight)。
-    if (-not [string]::IsNullOrWhiteSpace($RedisCtlMaxMemory)) { $args.RedisCtlMaxMemory = $RedisCtlMaxMemory }
-    if ($ConfirmRedisCtlSwitch) { $args.ConfirmRedisCtlSwitch = $true }
-    # 玩家域 Redis Cluster 同一口径:scene 的 player_redis 由它决定,staging / prod 发版必须给主节点数。
+    # 玩家域 Redis Cluster 同一口径:scene 的 player_redis 由它决定,staging / prod 发版必须给主节点数。控制集群同样必须给。
     if ($PlayerRedisMasters -gt 0) { $args.PlayerRedisMasters = $PlayerRedisMasters }
     if ($PlayerRedisReplicasPerMaster -gt 0) { $args.PlayerRedisReplicasPerMaster = $PlayerRedisReplicasPerMaster }
     if (-not [string]::IsNullOrWhiteSpace($PlayerRedisMaxMemory)) { $args.PlayerRedisMaxMemory = $PlayerRedisMaxMemory }
     if (-not [string]::IsNullOrWhiteSpace($PlayerRedisStorage)) { $args.PlayerRedisStorage = $PlayerRedisStorage }
+    if ($ControlRedisMasters -gt 0) { $args.ControlRedisMasters = $ControlRedisMasters }
+    if ($ControlRedisReplicasPerMaster -gt 0) { $args.ControlRedisReplicasPerMaster = $ControlRedisReplicasPerMaster }
+    if (-not [string]::IsNullOrWhiteSpace($ControlRedisMaxMemory)) { $args.ControlRedisMaxMemory = $ControlRedisMaxMemory }
+    if (-not [string]::IsNullOrWhiteSpace($ControlRedisStorage)) { $args.ControlRedisStorage = $ControlRedisStorage }
+    # Loki 的形态与对象存储同一口径:release-all(不带 -SkipInfra)会 apply Loki,staging / prod 的 3 副本形态必须给 S3 参数。
+    if ($LokiReplicas -gt 0) { $args.LokiReplicas = $LokiReplicas }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Endpoint)) { $args.LokiS3Endpoint = $LokiS3Endpoint }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Bucket)) { $args.LokiS3Bucket = $LokiS3Bucket }
+    if (-not [string]::IsNullOrWhiteSpace($LokiS3Region)) { $args.LokiS3Region = $LokiS3Region }
+    if ($LokiS3ForcePathStyle) { $args.LokiS3ForcePathStyle = $true }
+    if ($LokiS3Insecure) { $args.LokiS3Insecure = $true }
+    if ($LokiS3DevFixture) { $args.LokiS3DevFixture = $true }
+    if ($ConfirmLokiTopologyChange) { $args.ConfirmLokiTopologyChange = $true }
     # 留空不透传;k8s_image.ps1 不部署 login / scene_manager,给了由它告警"只参与预检、不改写 ConfigMap"。
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }
     if ($WaitReady) {
@@ -1367,12 +1432,10 @@ Other common commands:
     -Command k8s-infra-up | k8s-infra-down | k8s-infra-status
         Manage shared infrastructure (etcd/redis/kafka/mysql) in the mmorpg-infra namespace.
     -Command k8s-redis-split-status | k8s-redis-wipe -ConfirmWipeAllRedis
-        Shared Redis split by purpose (G4a batch 1a, -RedisSplit none|queue, forwarded to k8s_deploy.ps1 with
-        -ConfirmRedisSplitSwitch / -RedisQueueMaxMemory): split-status prints each zone's login / gateway queue Redis
-        address and rollout state, then the shape and readiness of the queue instance they point at (exit 1 on mismatch,
-        unfinished rollout, or an instance that is absent or not ready); wipe flushes every Redis instance of a
-        stress environment, every primary of the player cluster included, and checks DBSIZE=0
-        (-InfraNamespace must match ^mmorpg-stress-). See deploy/k8s/README.md.
+        Redis operations: split-status prints the readiness and CLUSTER INFO of the player and control Redis Clusters
+        (exit 1 when one is deployed but not healthy; an absent cluster is not a failure); wipe flushes every Redis
+        instance of a stress environment, every primary of both clusters included, and checks DBSIZE=0
+        (-InfraNamespace must match ^mmorpg-stress-). See docs/ops/redis-player-cluster-runbook.md.
     -Command redis-wipe-local -ConfirmWipeAllRedis
         Flush the local compose Redis and every primary of the local player cluster (deploy/compose.redis-cluster.yml)
         when it is running, then check DBSIZE=0 on each. The cleanup step of AGENTS.md section 6.2 on this machine.
@@ -1386,8 +1449,9 @@ Other common commands:
     -Command k8s-image-preflight | k8s-build-image | k8s-push-image | k8s-release-zone | k8s-release-all
     -Command k8s-route-tool -ZoneName <zone> -RouteToolArgs @('<subcommand>', ...) [-RouteToolTimeoutSeconds <s>]
             [-RouteToolImage <image>] [-RouteToolReportDir <dir>] [-DryRun] [-KubeContext <ctx>]
-        Run data_service's route-tool (tidb-prepare / freeze / unfreeze) as a one-off K8s Job via
-        tools/scripts/k8s_route_tool.ps1; exits with the container's code (0 done / 2 failed).
+        Run data_service's route-tool tidb-prepare as a one-off K8s Job via tools/scripts/k8s_route_tool.ps1,
+        connecting as data-service's schema identity (needs MMORPG_SQL_K8S_BOOT_CATALOG); exits with the
+        container's code (0 done / 2 failed). freeze / unfreeze run on the operator machine, not as a Job.
 
 Zone merge (合服) commands, online, no downtime — full SOP: docs/ops/merge-zone-runbook.md
     A merge writes one row to zone_merged_into and moves no data; every real merge or unmerge also

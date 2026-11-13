@@ -1,7 +1,7 @@
 package metrics
 
 import (
-	"time"
+	"shared/looplive"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -35,25 +35,20 @@ var (
 		Subsystem: subsystem, Name: "global_deadline_abort_overdue_oldest_seconds",
 		Help: "上一项里最早一局已超期多少秒(每分钟巡检;没有超期为 0)。",
 	})
-	// outcomeOutboxLastRun 是终局发件箱投递循环的活性(缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8)。
-	// 发件箱按片分给各 stable 副本之后,一个副本的循环卡住,它名下的片就没人投,别的副本照常推进。不带可变 label 的 GaugeVec:
-	// 循环起来才有序列、退出就删,canary(不跑发件箱)与停机中的副本都没有序列;告警 MatchOutcomeOutboxLoopStalled 按副本判。
-	outcomeOutboxLastRun = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	// OutcomeOutboxLive 是终局发件箱投递循环的活性,指标 match_outcome_outbox_last_run_unixtime(缺口清单第 25 条第五批,
+	// docs/design/assetop-redelivery-sharding-20261110.md §14.8;口径在 shared/looplive 的包注释)。发件箱按片分给各 stable 副本之后,
+	// 一个副本的循环停住,它名下的片就没人投,别的副本照常推进;告警 MatchOutcomeOutboxLoopStalled 按副本判。
+	// canary(不跑发件箱)与已经有意停掉循环的副本没有序列。只由 svc 的 runOutcomeOutbox 写。
+	OutcomeOutboxLive = looplive.New(prometheus.GaugeOpts{
 		Subsystem: subsystem, Name: "outcome_outbox_last_run_unixtime",
-		Help: "终局发件箱投递循环最近一次跑完一轮的时刻(Unix 秒,这一轮成败都算;循环起来时也写一次)。只在循环运行时有序列;值长期不前进 = 循环卡在某一轮里。",
-	}, nil)
+		Help: "终局发件箱投递循环最近一次跑完一轮的时刻(Unix 秒,这一轮成败都算,panic 的那一轮不算;循环起来时也写一次)。只在循环运行时有序列;值长期不前进 = 循环停住了。",
+	})
 )
 
 func outcomeCollectors() []prometheus.Collector {
 	return []prometheus.Collector{globalExpiredStranded, outcomeOutboxBacklogRows, outcomeOutboxOldestAge, outcomeOutboxDeliveryTotal,
-		globalDeadlineAbortOverdue, globalDeadlineAbortOverdueOldest, outcomeOutboxLastRun}
+		globalDeadlineAbortOverdue, globalDeadlineAbortOverdueOldest, OutcomeOutboxLive.Collector()}
 }
-
-// MarkOutcomeOutboxRun 记终局发件箱投递循环起来、或跑完一轮的时刻(有告警 MatchOutcomeOutboxLoopStalled:长期不前进 = 循环卡住)。
-func MarkOutcomeOutboxRun(now time.Time) { outcomeOutboxLastRun.WithLabelValues().Set(float64(now.Unix())) }
-
-// ClearOutcomeOutboxRun 在投递循环退出时删掉活性序列:停掉的循环不该被当成卡住。
-func ClearOutcomeOutboxRun() { outcomeOutboxLastRun.Reset() }
 
 // SetGlobalDeadlineAbortOverdue 写「超期未作废」的存量与最早一局超期的秒数(0 也写:恢复跟上之后读数要能回落)。
 func SetGlobalDeadlineAbortOverdue(count uint64, oldestOverdueSeconds float64) {

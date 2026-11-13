@@ -7,7 +7,9 @@ package svc
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,8 +24,6 @@ import (
 	"shared/drainproof"
 	"shared/scenenode"
 	"shared/workshard"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // TestAssetOpCleanupOwner:终态清理的按片分工(缺口清单第 25 条第二批)复用重投与合同推进那份成员表。
@@ -223,18 +223,21 @@ func TestStartAssetOpCleanupStopWaits(t *testing.T) {
 	}
 }
 
-// cleanupLastRunSeries 报默认注册表里有没有 trade_assetop_cleanup_last_run_unixtime 的序列。
-func cleanupLastRunSeries() bool {
-	families, err := prometheus.DefaultGatherer.Gather()
-	if err != nil {
-		return false
+// cleanupLive 报清理循环的活性序列此刻在不在。
+func cleanupLive() bool {
+	_, ok := data.CleanupLive.Value()
+	return ok
+}
+
+// sourceHeld 报告排空 SOURCE 是否被打过 HOLD(结局未知)。会关掉它的入口,只在用例收尾时调。
+func sourceHeld(t *testing.T, owner *drainproof.Session) bool {
+	t.Helper()
+	owner.CloseAdmission()
+	err := owner.Wait(context.Background())
+	if err != nil && !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("夹具前提:关掉入口后 Wait 只该回 nil 或 ErrHold,实际 %v", err)
 	}
-	for _, mf := range families {
-		if mf.GetName() == "trade_assetop_cleanup_last_run_unixtime" && len(mf.GetMetric()) == 1 {
-			return true
-		}
-	}
-	return false
+	return err != nil
 }
 
 // TestStartAssetOpCleanupWithSourceMarksLiveness:生产路径(带排空 SOURCE)的清理循环一起来就写活性时刻,stop 之后删掉序列
@@ -247,13 +250,13 @@ func TestStartAssetOpCleanupWithSourceMarksLiveness(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	c := recoveryDefaults()
 	c.CleanupIntervalMinutes = 1440
-	data.ClearCleanupRun()
+	data.CleanupLive.Stop()
 	stop, err := StartAssetOpCleanup(db, c, nil, drainproof.New())
 	if err != nil {
 		t.Fatalf("StartAssetOpCleanup: %v", err)
 	}
 	deadline := time.Now().Add(2 * time.Second)
-	for !cleanupLastRunSeries() {
+	for !cleanupLive() {
 		if time.Now().After(deadline) {
 			stop()
 			t.Fatal("清理循环起来之后应先写一次活性时刻")
@@ -261,8 +264,83 @@ func TestStartAssetOpCleanupWithSourceMarksLiveness(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	stop()
-	if cleanupLastRunSeries() {
+	if cleanupLive() {
 		t.Fatal("stop 之后应删掉活性序列")
+	}
+}
+
+// TestSourcedCleanupSurvivesAPanickingRound:一轮 panic 之后清理循环接着跑后面的轮次(缺口清单第 25 条第五批的缺陷修复)。
+// 原来整个 goroutine 共用一个 recover:第一轮 panic,循环就退出了,进程还活着、还在成员表里,它名下的片从此没人清。
+// 同时钉住:panic 的那一轮打了 HOLD(结局未知);循环停止后删掉活性序列。
+func TestSourcedCleanupSurvivesAPanickingRound(t *testing.T) {
+	owner := drainproof.New()
+	var rounds atomic.Int32
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	data.CleanupLive.Stop()
+	go func() {
+		defer close(done)
+		runSourcedCleanup(ctx, owner, 2*time.Millisecond, func(context.Context) error {
+			if rounds.Add(1) == 1 {
+				panic("test: poisoned asset op row")
+			}
+			return nil
+		})
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for rounds.Load() < 3 {
+		if time.Now().After(deadline) {
+			cancel()
+			<-done
+			t.Fatalf("第一轮 panic 之后循环应接着跑,2 秒内只跑了 %d 轮", rounds.Load())
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if !cleanupLive() {
+		t.Error("循环还在跑,活性序列应当在")
+	}
+	cancel()
+	<-done
+	if cleanupLive() {
+		t.Error("循环停止之后应删掉活性序列")
+	}
+	if !sourceHeld(t, owner) {
+		t.Error("panic 的那一轮结局未知,排空证明应停在 HOLD")
+	}
+}
+
+// TestSourcedCleanupRound:一轮清理与排空 SOURCE 的三种交互 —— 入口已关就跳过;出错打 HOLD;闸门冻结不打(确定没写)。
+// 每一轮拿到的 ctx 带自己的预算,不随循环的 ctx 取消(停机不会把一笔删除截在半路)。
+func TestSourcedCleanupRound(t *testing.T) {
+	closed := drainproof.New()
+	closed.CloseAdmission()
+	ran := false
+	sourcedCleanupRound(context.Background(), closed, func(context.Context) error { ran = true; return nil })
+	if ran {
+		t.Error("入口关了之后不该再开新的一轮")
+	}
+
+	failing := drainproof.New()
+	sourcedCleanupRound(context.Background(), failing, func(context.Context) error { return errors.New("database unavailable") })
+	if !sourceHeld(t, failing) {
+		t.Error("清理出错:这一轮删到哪一步不知道,排空证明应停在 HOLD")
+	}
+
+	healthy := drainproof.New()
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	var roundErr error
+	var hasDeadline bool
+	sourcedCleanupRound(cancelled, healthy, func(budget context.Context) error {
+		roundErr = budget.Err()
+		_, hasDeadline = budget.Deadline()
+		return nil
+	})
+	if roundErr != nil || !hasDeadline {
+		t.Errorf("进了入口的一轮用自己的预算跑完,不随循环的 ctx 取消:err=%v 有期限=%t", roundErr, hasDeadline)
+	}
+	if sourceHeld(t, healthy) {
+		t.Error("正常跑完的一轮不该打 HOLD")
 	}
 }
 

@@ -34,6 +34,13 @@ class Service;
 
 // Prometheus /metrics 出口(core/metrics/metrics_http_exporter.h),完整定义只在 node.cpp 里需要。
 class MetricsHttpExporter;
+// span 导出线程(core/tracing/otlp_span_exporter.h,docs/design/distributed-tracing.md §10.3),完整定义只在 node.cpp 里需要。
+namespace tracing
+{
+class OtlpSpanExporter;
+} // namespace tracing
+// 热关停的 etcd 同步(node/system/etcd/kill_switch_etcd_sync.h),完整定义只在 node.cpp 里需要。
+class KillSwitchEtcdSync;
 struct NodeMaintenanceControl;
 
 // Tracks a pending node removal that can be cancelled if the node re-registers.
@@ -157,7 +164,7 @@ public:
     // 拆除前钩子:普通停机与身份冲突停机(含 loop 异常退出后 ~Node 的兜底排空)都会经 FinalizeTeardownInLoop 调用它,
     // 每个 Node **至多一次**(走到拆除才调),在 loop 线程上。
     // 时刻:Kafka producer 的最后一次有界 flush(kafkaManager.Shutdown)刚做完、它派发的投递回执已进调用方的账本;
-    // Redis(tlsRedis)、ECS、节点注册表都还没拆,异步日志也还在写文件。适合「停掉还会推进业务的定时器 + 把停机时
+    // Redis(scene 的 tlsControlRedis / tlsPlayerRedis)、ECS、节点注册表都还没拆,异步日志也还在写文件。适合「停掉还会推进业务的定时器 + 把停机时
     // 仍未落定的事打进日志」这类收账动作:Node 析构之后 AsyncOutput 在 Linux 上什么都不写,那时打的日志会静默丢失。
     // 钩子里不得再发起需要等待的异步工作(之后只剩拆除),也不得同步阻塞。
     Node &SetBeforeTeardown(BeforeTeardownFn fn)
@@ -297,8 +304,16 @@ protected:
     void StartKafkaPolling();
     virtual bool RegisterKafkaHandlers() { return kafkaHandlersFn_ ? kafkaHandlersFn_(*this) : true; }
     void InitEtcdService();
+    // 热关停(docs/design/rpc-kill-switch.md):登记本进程身份(节点类型、uuid),开独立的 etcd 同步。
+    // 只在 Initialize 里、InitRpcServer 定下身份之后调一次。
+    void InitKillSwitch();
     // 按 MMORPG_METRICS_PORT 开 Prometheus 出口(未设 = 不开;非法值拒启)。只在 Initialize 里调一次。
     void StartMetricsExporter();
+    // 起 span 导出线程并装上进程的 span 去处;没配地址(或被 OTEL_* 关掉)时什么都不起。要在 InitRpcServer 之后:
+    // 资源属性用节点类型、uuid 与 zone。
+    void StartSpanExporter();
+    // 摘掉进程的 span 去处,冲刷剩下的(有界),停导出线程。幂等。
+    void StopSpanExporter();
 
     // gRPC server lifecycle (called automatically if services registered).
     void StartGrpcServer();
@@ -342,6 +357,9 @@ protected:
     RpcServerPtr rpcServer;
     // /metrics 出口:在 loop 线程创建,FinalizeTeardownInLoop 里随出站连接一起释放(TcpServer 必须在 loop 活着时析构)。
     std::unique_ptr<MetricsHttpExporter> metricsExporter_;
+    std::unique_ptr<tracing::OtlpSpanExporter> spanExporter_;
+    // 热关停的独立 etcd 连接:InitKillSwitch 创建,CloseTransportOwnersInLoop 里与注册那条传输一起 Shutdown(loop 仍在运行)。
+    std::unique_ptr<KillSwitchEtcdSync> killSwitchSync_;
     TimerTaskComp serviceHealthMonitorTimer;
     // 注意:node_id / 端口的重试定时器住在 EtcdService(它才是驱动注册流的那个类)。
     // Node 这里曾经有一份同名成员,但从来没被 RunAfter 过,只在 Shutdown 里被 Cancel ——

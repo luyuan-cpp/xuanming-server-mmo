@@ -3,6 +3,10 @@
 > **Status:** 2026-05-14 — in-process buffer landed
 > (`error_reporter.h`); shipping to a central server (Sentry-style)
 > is not done. This doc explains the split and what comes next.
+>
+> **2026-11-12 核对现状：** 切片 A 接了四处（`RpcChannel` 的 `rpc_error_in` / `rpc_error_out`，gate 的
+> `illegal_packet` 与 `router_lane_expired`），`HandleFatalSignal` 那一处没接；切片 D（SIGUSR2 转储）已在
+> `Node` 里接好；切片 B、C、E 没做。同日事件带上了日志上下文（见下文「日志上下文」），未编译。
 
 ---
 
@@ -79,9 +83,7 @@ mattered — currently overkill.
 
 `error_reporter::Instance()` returns a `static` local Buffer. Leak-on-
 exit by construction — avoids "an error is recorded during static
-destructor teardown" lifetime races. Same pattern used by
-`SnowFlakeManager` (`thread_context/snow_flake_manager.cpp`) in this
-codebase.
+destructor teardown" lifetime races.
 
 ---
 
@@ -92,9 +94,21 @@ codebase.
 | `cpp/libs/engine/core/error_reporter/error_reporter.h` (new) | `Buffer { Record / Drain / Snapshot / TotalCount / DroppedCount / CurrentSize }` + namespace-level `Record(code, tag, msg)` convenience + `Instance()` singleton. Header-only, depends on `<mutex>` / `<deque>` / `<atomic>` only. |
 | `docs/design/error-reporting.md` (this file) | Decision record. |
 
-Nothing is wired to the buffer yet — sites that should call
-`error_reporter::Record` are listed in slice A below. The buffer
-just sits ready.
+现在接了哪些调用点见文首的核对；还没接的列在下面的切片 A 里。
+
+### 日志上下文（2026-11-12）
+
+每条事件记下录入那一刻线程上的 trace 与玩家（`docs/design/distributed-tracing.md` §13 第 4 条）：
+
+| 字段 | 来源 | 没有时 |
+|---|---|---|
+| `trace` | `tracing::Current()` | `IsValid()` 为 false |
+| `player_id` | `tracing::CurrentPlayerId()` | 0 |
+
+- 业务照旧调 `error_reporter::Record(code, tag, msg)`，由它取当前线程的值；`Buffer::Record` 改为显式接收这两项，本身不读线程局部状态，单测可以直接构造。
+- JSONL 转储按日志行尾后缀的口径「有值才写」：有 trace 写 `trace_id`（32 位）与 `span_id`（16 位），有玩家写 `player_id`。`player_id` 写成十进制字符串，jq 这类按双精度解析数字的工具读超过 2^53 的 id 也不丢精度。
+- 用途：拿转储里的 `trace_id` 到 Loki 查同一请求在各服务的全部日志。
+- 用例：`cpp/tests/rpc_controller_test/error_reporter_test.cpp`。
 
 ---
 

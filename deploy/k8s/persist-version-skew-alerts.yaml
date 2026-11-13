@@ -1,0 +1,60 @@
+# scene 侧混版本持久字段保护(版本错位)的告警(docs/design/mixed-version-persist-field-protection.md §4.4)。
+#
+# 指标由 scene 的 Prometheus 出口导出(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400,
+# 抓取注解随 Pod 模板渲染),定义在 cpp/libs/services/scene/player/system/currency_metrics.cpp,计数在
+# cpp/libs/modules/currency/system/currency_clawback_stats.h:
+#   scene_currency_clawback_version_skew_total   counter,没有标签。补缴扣还(CurrencySystem::AddCurrency)遇到带着更新版本字段的欠款,
+#                                                按冻结处理、不扣还也不删除、收入全额入账的次数;与逐次的
+#                                                `metric=persist_version_skew where=currency_clawback` WARN 同一时刻、同一口径。
+# 进程启动时以 0 导出,increase() 抓得到第一次,不需要「新序列」分支。instance = 被抓取的 scene Pod。
+# 规则引用的指标名由 tools/scripts/tests/persist_version_skew_alerts_contract.tests.ps1 对照 C++ 源码钉住。
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/persist-version-skew-alerts.yaml
+#
+# Scrape prerequisites:
+#   - scene 的 Prometheus 出口有 ServiceMonitor / PodMonitor(或按注解抓取的 job)指向它,并写出 namespace 标签。
+#
+# 口径(阈值已定 2026-11-12,不等压测):
+#   - 健康系统里恒为 0:更新版本给欠款加的字段要等认识它的版本全量之后才写(两版发布,设计 §13 第 7 条),旧版本节点碰不到这种欠款。
+#     所以「出现就报」(for: 0m),不依赖基线。级别 warning:不丢数据,这段时间这名玩家这一币种的补缴暂停、收入全额到账,
+#     欠款与新字段原样保留,落到新版本节点后按新口径收。
+#   - 按 namespace 聚合(一个 zone 一个 namespace)。
+#   - 版本错位的其余 where(asset_debit / asset_currency / asset_request / asset_config / asset_recall / inbox_payload / inbox_currency /
+#     battle_item / battle_pet 等)还只在 scene 日志里,值班固定查询见 asset-channel-alerts.yaml 与 player-inbox-alerts.yaml 文件头;
+#     哪个导出成指标了,就在本文件的组里加规则。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: persist-version-skew-alerts
+  labels:
+    app: scene
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: scene.persist-version-skew
+      interval: 30s
+      rules:
+        # 有 scene 遇到了它不认识的欠款字段,跳过了补缴扣还。要么有节点停在旧版本或被回滚,要么发布次序被打破
+        # (认识新字段的版本还没全量,就有节点写了带新字段的欠款)。
+        - alert: SceneCurrencyClawbackVersionSkew
+          expr: |
+            sum by (namespace) (increase(scene_currency_clawback_version_skew_total[10m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene 因欠款带更新版本字段跳过了补缴扣还"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次。这些玩家这一币种的补缴暂停,收入全额到账,欠款与新字段原样保留,不丢。
+              从 scene 日志 `metric=persist_version_skew where=currency_clawback` 拿 player_id 与 currency_type,
+              再看是哪台 scene 打的:它的版本不认识这笔欠款的新字段。把它滚动到认识这些字段的版本(或停止回滚),之后的入账照新口径扣还。
+              发布已全量仍在出现,查是谁在旧版本还在跑时就写了带新字段的欠款(发布次序违规,设计 §13 第 7 条)。不要人工删改欠款。
+            runbook_url: docs/design/mixed-version-persist-field-protection.md

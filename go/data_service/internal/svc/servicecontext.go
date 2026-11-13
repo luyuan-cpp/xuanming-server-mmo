@@ -21,6 +21,7 @@ import (
 	dspb "proto/data_service"
 	"shared/accountdirectory"
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/dirshard"
 	"shared/drainproof"
@@ -443,6 +444,14 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 
 	var upstreamClosers []interface{ Close() error }
 
+	// 名字读缓存走控制集群(ControlRedis,键守卫 ControlClusterKeys;docs/design/redis-cluster-all-domains-20261110.md §4.8)。
+	// 建句柄不拨号;配置不合法就拒启,与原 go-zero MustNewRedis 同口径。句柄随服务关闭。
+	nameCacheRedis, err := clusterredis.New(c.EffectiveControlRedis(), clusterredis.ControlClusterKeys)
+	if err != nil {
+		panic(fmt.Sprintf("data_service cannot build the player name cache client (ControlRedis): %v", err))
+	}
+	upstreamClosers = append(upstreamClosers, nameCacheRedis)
+
 	s := &ServiceContext{
 		upstreamClosers:      upstreamClosers,
 		Writer:               writerConfig,
@@ -452,7 +461,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		RelayIngress:         drainproof.New(),
 		Config:               c,
 		Router:               routing.NewRouter(routerStore),
-		PlayerNameCache:      routing.NewPlayerNameCache(c.NameCacheRedis),
+		PlayerNameCache:      routing.NewPlayerNameCache(nameCacheRedis),
 		SnapshotStore:        snapshotStore,
 		AccountDirectoryAuth: directoryAuth,
 		TxLogStore:           transactionLogStore,
@@ -477,6 +486,8 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		// 名字行「预留 → 绑定」(docs/design/guild-phase2/03-names.md §3.4a):目录建角提交之后绑定、删角之后释放,
 		// ReleasePlayerName 释放预留态之前由目录证明角色永远不会提交。两边用同一份 mysqlCfg 开,是同一组目录逻辑库。
 		directory.ConfigurePlayerNames(nameRegistry)
+		// 绑定、删角收尾没做完时计数告警,补回或删掉名字行之后删名字缓存(directory_events.go)。
+		s.configureDirectoryObservers(directory)
 		s.PlayerRoleSeals = directory
 		var verifier store.RoleFreezeVerifier
 		if c.AccountDirectory.RoleTradeSQLProof.Enabled {
@@ -666,17 +677,31 @@ func checkExpectedRegion(expected string, region uint32) error {
 	return nil
 }
 
-// NewIdIssuer 按配置装配发号器。只校验配置、读登记处的 TLS 证书文件,不连 etcd。服务启动和 -id-issuer-init 共用。
+// NewIdIssuer 按配置装配发号器。只校验配置、读登记处的 TLS 证书文件,不连 etcd。服务启动和 -id-issuer-init 等运维入口共用。
+// 配置里的地域码要和部署注入的一致(checkExpectedRegion)。
 func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
+	if err := checkExpectedRegion(os.Getenv(envExpectedIdRegion), c.IdSegment.Issuer.Region); err != nil {
+		return nil, err
+	}
+	return newIdIssuer(c)
+}
+
+// NewIdIssuerForRegionCode 装配一个操作指定地域码的发号器,只给运维入口用(data_service -id-issuer-retire-code):
+// 给别的码补墓碑、跳过下一个可认领的码、退役一个已经不在的地域。操作的本来就不是本地域的码,所以不和部署注入的地域码比。
+// 它用的仍是本环境的两套 etcd 和部署身份:码还在用时,本地记录属于别的地域,绑定核对照样拒绝,除非显式 unbound。
+func NewIdIssuerForRegionCode(c config.Config, code uint32) (*idissuer.Issuer, error) {
+	c.IdSegment.Issuer.Region = code
+	return newIdIssuer(c)
+}
+
+// newIdIssuer 是装配本身:地域码范围、档位、三组 etcd 地址、登记处 TLS、部署身份读取器。
+func newIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if c.IdSegment.Issuer.Region > uint32(idissuer.MaxRegion) {
 		return nil, fmt.Errorf("IdSegment.Issuer.Region = %d exceeds %d", c.IdSegment.Issuer.Region, idissuer.MaxRegion)
 	}
 	// 地域码 0 只给 dev、test。Region 是可选字段,漏写就是 0;生产也能用 0 的话,两个地域都漏写时 ID 会撞,而且不报错。
 	if c.IdSegment.Issuer.Region == 0 && c.Mode != service.DevMode && c.Mode != service.TestMode {
 		return nil, fmt.Errorf("IdSegment.Issuer.Region must be 1..%d when Mode=%q: 0 is reserved for dev and test", idissuer.MaxRegion, c.Mode)
-	}
-	if err := checkExpectedRegion(os.Getenv(envExpectedIdRegion), c.IdSegment.Issuer.Region); err != nil {
-		return nil, err
 	}
 	// 两套独立 etcd 是强规定(AGENTS §7)。AllowAutoSeed 会让三份记录回落到同一套,只有 dev、test 能开。
 	if c.IdSegment.AllowAutoSeed && c.Mode != service.DevMode && c.Mode != service.TestMode {

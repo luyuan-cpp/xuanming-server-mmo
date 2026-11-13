@@ -53,13 +53,18 @@ CREATE TABLE IF NOT EXISTS commerce_official_owner (
 -- 商城收到的每一笔付款都在这里占一行，(channel, transaction_id) 全局唯一；amount_minor / currency 是渠道实收值。
 -- order_sn 是这笔付款绑定的订单，一单至多绑定一笔；为 NULL 表示异常付款，没有绑定任何订单，
 -- 冲的是哪张订单、为什么没绑定见 commerce_abnormal_payment，退款见 commerce_refund_intent。
+-- revision / fact 是这笔钱的修订号与当前事实(payment-recharge.md §22.6):0 = 付款;渠道每翻转一次加 1,奇数 = 已被渠道撤销
+-- (用户在渠道侧退款、作废),大于 0 的偶数 = 撤销又被撤回。只接受更大的修订号,过时的盖不住新的。
 CREATE TABLE IF NOT EXISTS commerce_payment_receipt (
   channel VARBINARY(32) NOT NULL,
   transaction_id VARBINARY(128) NOT NULL,
   order_sn VARCHAR(36) NULL,
   amount_minor BIGINT NOT NULL,
   currency VARCHAR(16) NOT NULL,
-  PRIMARY KEY (channel, transaction_id), UNIQUE (order_sn)
+  revision INT NOT NULL DEFAULT 0,
+  fact VARCHAR(8) NOT NULL DEFAULT 'PAID',
+  PRIMARY KEY (channel, transaction_id), UNIQUE (order_sn),
+  CHECK (revision >= 0), CHECK (fact IN ('PAID','REVOKED')), CHECK ((revision % 2 = 1) = (fact = 'REVOKED'))
 );
 -- 异常付款：钱进了渠道却不能算作订单的付款，上表 order_sn 为 NULL 的每一行在这里恰有一行，同一事务写入。
 -- reason：DUPLICATE_PAYMENT 订单已由另一笔付清(2026-11-05，第一轮数据审计 §4 第 19 条)；
@@ -93,8 +98,11 @@ CREATE TABLE IF NOT EXISTS commerce_request_nonce (
 );
 -- 安装成功才盖章；应用只读验证，不自行重跑 DDL。此安装脚本仅用于全新独立库。
 -- 游戏交付扩展：仅创建新的可靠合同表，绝不修改已经支付订单的事实。
-CREATE TABLE IF NOT EXISTS commerce_sku_grant (sku_id BIGINT PRIMARY KEY,item_config_id INT NOT NULL,count_per_unit INT NOT NULL,title VARCHAR(128) NOT NULL,CHECK (item_config_id>0),CHECK (count_per_unit>0 AND count_per_unit<=4096));
-CREATE TABLE IF NOT EXISTS commerce_order_grant (order_sn VARCHAR(36) PRIMARY KEY,item_config_id INT NOT NULL,count_per_unit INT NOT NULL,title VARCHAR(128) NOT NULL);
+-- 发放物二选一:物品(item_config_id × count_per_unit)或货币(currency_type × currency_amount,如充值灵石包);下单时冻结进 commerce_order_grant。
+-- 货币种类 0 是银两(CurrencyType 枚举),有没有货币发放看 currency_amount 是否大于 0。
+CREATE TABLE IF NOT EXISTS commerce_sku_grant (sku_id BIGINT PRIMARY KEY,item_config_id INT NOT NULL,count_per_unit INT NOT NULL,currency_type INT NOT NULL DEFAULT 0,currency_amount BIGINT NOT NULL DEFAULT 0,title VARCHAR(128) NOT NULL,
+  CHECK ((item_config_id>0 AND count_per_unit>0 AND count_per_unit<=4096 AND currency_type=0 AND currency_amount=0) OR (item_config_id=0 AND count_per_unit=0 AND currency_type>=0 AND currency_amount>0 AND currency_amount<=9000000000000000)));
+CREATE TABLE IF NOT EXISTS commerce_order_grant (order_sn VARCHAR(36) PRIMARY KEY,item_config_id INT NOT NULL,count_per_unit INT NOT NULL,currency_type INT NOT NULL DEFAULT 0,currency_amount BIGINT NOT NULL DEFAULT 0,title VARCHAR(128) NOT NULL);
 CREATE TABLE IF NOT EXISTS commerce_delivery_receipt (order_sn VARCHAR(36) PRIMARY KEY,trade_order_id VARCHAR(20) NOT NULL,state VARCHAR(24) NOT NULL,proof VARCHAR(64) NOT NULL);
 -- 退款待办与退款回执按被退的那笔付款 (channel, transaction_id) 识别(2026-11-05 起；之前按 order_sn，一单只能退一笔)：
 -- 一张订单可以同时有订单本身的退款和几笔异常付款的退款。source 决定退款回执是否推进订单(取值即 CommerceApi.RefundReason)：
@@ -106,10 +114,14 @@ CREATE TABLE IF NOT EXISTS commerce_refund_intent (
   order_sn VARCHAR(36) NOT NULL,
   source VARCHAR(24) NOT NULL,
   status VARCHAR(24) NOT NULL,
+  close_reason VARCHAR(64) NULL,
   PRIMARY KEY (channel, transaction_id),
   INDEX idx_commerce_refund_pending (status, order_sn),
   CHECK (source IN ('CANCELLED_LATE','DELIVERY_REJECTED','DUPLICATE_PAYMENT','AMOUNT_MISMATCH','CURRENCY_MISMATCH')),
-  CHECK (status IN ('PENDING','REFUNDED'))
+  -- MANUAL:渠道退不了(没有开发者退款接口,或渠道明确退款失败),或渠道撤销之后又撤回了撤销(钱又回到商户),转人工,
+  -- 不再列在待退款里;原因在 close_reason。REVOKED:渠道自己把这笔钱退给了用户(用户侧退款、作废),不用再退。
+  -- 两者都由 payment 角色写(/internal/refunds/close 与 /internal/payments/revision,PaymentRevisionStore)。
+  CHECK (status IN ('PENDING','REFUNDED','MANUAL','REVOKED'))
 );
 -- payment_transaction_id 是被退的那笔付款，transaction_id 是渠道的退款流水；一笔付款只认一条退款流水。
 CREATE TABLE IF NOT EXISTS commerce_refund_receipt (
@@ -244,5 +256,27 @@ CREATE TABLE IF NOT EXISTS commerce_mock_payout (
   CHECK(amount_fen>0), CHECK(successful IN (0,1)), CHECK(applied IN (0,1))
 );
 
--- 合同戳须与 SchemaVerifier.STORAGE_CONTRACT 一致；2026-11-10 起换新，之前装的库(退款待办 CHECK 认不出金额币种不符)须重装。
-INSERT INTO commerce_schema_version(version,storage_contract) VALUES (1,'mall-game-official-sku-v1-minor-units-abnormal-payment');
+-- 渠道修订引起的发放收敛(payment-recharge.md §22.6,PaymentRevisionStore 写):官方订单绑定的那笔付款被渠道撤销(用户侧退款、作废)
+-- 或撤销又被撤回时,一张订单一行,记最新修订号;修订号前进就改写这一行并重新置 PENDING。奇数修订号 = 买家不该再持有这份发放,
+-- 大于 0 的偶数 = 该持有。trade 把发放收敛到最新修订号之后回执(DeliveryStore.reversalReceipt),回执按 (订单, 修订号) 幂等;
+-- 只有最新修订号的回执改这一行与订单状态:REVERSED → 9 已扣回、DELIVERED → 2 已交付、MANUAL → 7 人工。待收敛期间订单为 8 扣回中。
+-- 这一行存在即表示订单状态归这条流程管:此后的交付回执只了结交付待办,不再推进订单(DeliveryStore.receipt)。
+CREATE TABLE IF NOT EXISTS commerce_reversal_intent (
+  order_sn VARCHAR(36) PRIMARY KEY,
+  revision INT NOT NULL,
+  status VARCHAR(24) NOT NULL,
+  updated_ms BIGINT NOT NULL,
+  INDEX idx_commerce_reversal_pending (status, updated_ms, order_sn),
+  CHECK (revision > 0), CHECK (status IN ('PENDING','REVERSED','DELIVERED','MANUAL')), CHECK (updated_ms >= 0)
+);
+CREATE TABLE IF NOT EXISTS commerce_reversal_receipt (
+  order_sn VARCHAR(36) NOT NULL,
+  revision INT NOT NULL,
+  trade_order_id VARCHAR(20) NOT NULL,
+  state VARCHAR(24) NOT NULL,
+  proof VARCHAR(64) NOT NULL,
+  PRIMARY KEY (order_sn, revision)
+);
+
+-- 合同戳须与 SchemaVerifier.STORAGE_CONTRACT 一致；2026-11-13 起换新(货币发放、付款修订、扣回待办、退款转人工),之前装的库须重装。
+INSERT INTO commerce_schema_version(version,storage_contract) VALUES (1,'mall-game-official-sku-v2-currency-grant-payment-revision');

@@ -56,6 +56,13 @@ void TcpServer::setThreadNum(int numThreads)
   threadPool_->setThreadNum(numThreads);
 }
 
+// LOCAL DELTA(与 Linux 覆盖件同一改动): 转给 Acceptor(见 Acceptor::setAdmissionCallback)。Acceptor 是内部类,不经 TcpServer 应用层够不着它。
+void TcpServer::setAdmissionCallback(const AdmissionCallback& cb)
+{
+  loop_->assertInLoopThread();
+  acceptor_->setAdmissionCallback(cb);
+}
+
 void TcpServer::start()
 {
   if (started_.getAndSet(1) == 0)

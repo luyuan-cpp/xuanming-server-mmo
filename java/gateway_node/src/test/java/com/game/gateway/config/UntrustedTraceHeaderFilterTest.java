@@ -2,6 +2,7 @@ package com.game.gateway.config;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -39,7 +40,37 @@ class UntrustedTraceHeaderFilterTest {
             assertEquals(-1L, downstream.getDateHeader(name), name);
         }
         List<String> names = Collections.list(downstream.getHeaderNames());
-        assertTrue(names.stream().noneMatch(UntrustedTraceHeaderFilter::isTraceHeader), names.toString());
+        assertTrue(names.stream().noneMatch(
+                name -> UntrustedTraceHeaderFilter.PROPAGATION_HEADERS.contains(name.toLowerCase(Locale.ROOT))),
+                names.toString());
+    }
+
+    @Test
+    void configuredRemoteBaggageFieldsAreHiddenToo() throws Exception {
+        MockHttpServletRequest request = requestWithTraceHeaders();
+        request.addHeader("X-Player-Tier", "gold");
+        HttpServletRequest downstream = filter(request, List.of(" x-player-tier ", ""));
+
+        assertNull(downstream.getHeader("X-Player-Tier"));
+        assertNull(downstream.getHeader("x-player-tier"));
+        assertFalse(Collections.list(downstream.getHeaderNames()).contains("X-Player-Tier"));
+        // 只多藏配置里的字段,其余头照旧。
+        assertEquals("203.0.113.7", downstream.getHeader("X-Forwarded-For"));
+    }
+
+    @Test
+    void remoteBaggageFieldsAreReadFromTheSpringProperty() {
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty(UntrustedTraceHeaderFilter.REMOTE_FIELDS_PROPERTY, "X-Player-Tier,x-region");
+        UntrustedTraceHeaderFilter configured = new UntrustedTraceHeaderFilter(environment);
+        assertTrue(configured.isHidden("x-player-tier"));
+        assertTrue(configured.isHidden("X-Region"));
+        assertTrue(configured.isHidden("traceparent"));
+        assertFalse(configured.isHidden("X-Forwarded-For"));
+
+        UntrustedTraceHeaderFilter unconfigured = new UntrustedTraceHeaderFilter(new MockEnvironment());
+        assertTrue(unconfigured.isHidden("baggage"));
+        assertFalse(unconfigured.isHidden("x-player-tier"));
     }
 
     @Test
@@ -72,10 +103,15 @@ class UntrustedTraceHeaderFilterTest {
         return request;
     }
 
-    /** 跑一次过滤器,返回它交给下游的请求。 */
+    /** 跑一次过滤器(没配远程 baggage 字段),返回它交给下游的请求。 */
     private static HttpServletRequest filter(MockHttpServletRequest request) throws Exception {
+        return filter(request, List.of());
+    }
+
+    private static HttpServletRequest filter(MockHttpServletRequest request, List<String> remoteBaggageFields)
+            throws Exception {
         AtomicReference<HttpServletRequest> downstream = new AtomicReference<>();
-        new UntrustedTraceHeaderFilter().doFilter(request, new MockHttpServletResponse(),
+        new UntrustedTraceHeaderFilter(remoteBaggageFields).doFilter(request, new MockHttpServletResponse(),
                 (req, res) -> downstream.set((HttpServletRequest) req));
         assertNotNull(downstream.get(), "filter must pass the request on");
         return downstream.get();

@@ -432,3 +432,124 @@ E2E 列待本轮真实运行回执补充；所有行仍为 `clientOnly=true`。
 本轮改动尚未提交，不能把基础 HEAD 当作配套交付提交号。最终记录需同时填写客户端和
 服务器实际提交号（未提交则明确注明）、构建输入摘要、镜像 ID、运行配置/导航 SHA、
 逐图 E2E 回执和未解决项；不得仅用 Pull 成功或镜像标签代替这些身份信息。
+
+## 2026-11-12 手绘图片地图的平面 OBJ 入口
+
+图片分块只承担显示。客户端手绘可走区并扣除障碍后生成同一份 Unity Y-up、X/Z 地面
+三角网：客户端由官方 NavMeshBuilder 烘焙，服务端继续使用本工具链的 UE5 double ABI
+Recast/Detour。Unity NavMeshData 与 MSET v1 不直接互换。
+
+为这种水平平面显式添加 `--profile authored-flat`，不能把通用三维 OBJ 或现有位图模式
+默认为该模式。它要求 `--obj` 的所有顶点有限且具有相同 Y，并要求显式原始脚点探针。
+Recast span 取整曾使 Y=0 的 OBJ 输出可走面位于 Y=0.2；专用模式在构建粗网格和细节
+网格后将两者高度恢复为输入的原始水平面。没有移动 OBJ、出生脚点或改大 2cm 探针容差。
+通用 OBJ 及旧位图的高度处理、有效默认参数和输出格式保持原样。
+
+共享参数由客户端显式导出：`--cs`、`--agent-radius`、`--agent-height`、`--agent-climb`、
+`--agent-slope`、`--tile-size`、`--min-region-area`。坡度单位为度，最小区域单位为世界
+平方米，服务端使用 `ceil(area / (cs * cs))` 转为体素面积。手绘模式缺省 tile=256、
+minRegionArea=0、slope=45；旧模式仍为 tile=128、64 个最小区域体素及 slope=50。
+`--merge-region-area` 同样接受平方米，但仍属服务端专有，缺省为 400 个体素。
+`--ch` 当前仍固定 0.2，`--filter-ledges 1` 保持显式；Unity 未公开独立 cellHeight，
+因此不能把 ch、合并区域和过滤过程声称为精确等价。工具打印原始参数及半径/高度/台阶的
+体素取整值；台阶按 `floor(climb/ch)` 取整，不能仅凭相同输入值声称最终边界与拓扑一致。
+
+新增离线 `navmesh_query` 使用同 ABI 读取真实落盘 MSET：重复 `--point x,y,z` 查询
+原点是否在网格、nearest，重复 `--route sx,sy,sz,ex,ey,ez` 查询完整路径、拐点及直线
+阻挡。输入保持 Unity 坐标，输出 JSON；不启动服务器、不修改导航数据。它只支持当前
+烘焙器的地面多边形，拒绝 off-mesh 连接和损坏/超限文件，不能代替运行端场景加载验收。
+
+本轮离线构建及回归证据位于 `build/verification/navmesh-authored-flat-20261112/`，
+包含原脚点失败及修复结果、原工具副本与 SHA、旧位图/矩形位图/通用 OBJ 的 MSET 字节
+对比、新模式及真实落盘查询测试。未改正式 MSET、源表、出生高度、mask 或运行服务。
+现有 `/festival_maps/` 的 mask/SHA/有效范围合同仍需在正式接入时另外对齐，不能仅将
+新 OBJ 的 MSET 直接替换进去。同级独立的完整 Java 游戏服务器仍沿用现有合同，尚未
+接入本次手绘 OBJ 模式；这不指当前本仓 C++ 栈使用的 `java/gateway_node` HTTP 网关。
+
+### 手绘地图运行端合同（2026-11-12）
+
+手绘地图使用独立的 `data/scene_nav_bin/authored_maps/<mapId>/scene.bin`，不替换旧节庆
+位图目录。该路径与 `festival_maps/` 一样要求导航存在：缺失或拒绝装载时，场景入场和
+移动均拒绝，不能回退为无阻挡。首批 26000 对应中秋、26008 对应春节；空白的 26008
+中秋草稿不被当作已交付导航，具体外观、作者资产、同源 OBJ、参数和出生点记录在交付清单。
+
+每份 MSET 必须配两个文件：`scene.bin.authored` 为 ASCII 文本，完整格式如下；
+`scene.bin.sha256` 为 MSET 与 `.authored` 的两个小写 SHA-256，以空白分隔，不能有其它字段。
+
+```text
+ANAV 1
+minX minZ width height groundY
+```
+
+范围沿用作者原世界矩形，所有字段有限、宽高为正且上界可表示；有效矩形为左下包含、
+右上不包含。当前 `groundY` 必须为零。读取拒绝缺字段、未知版本和尾随垃圾，SHA 在
+Detour 解析前核对，并拒绝同目录残留 `scene.bin.mask`。加载后对所有粗/细节顶点检查
+原始平面高度，表中的出生点再经真实查询检查，不能用附近网格吸附来掩盖错误出生点。
+
+手绘模式的原点与 nearest 在 X/Y/Z 每轴最多相差 2cm，原脚点还须处于有效矩形及原地面。
+移动直线阻挡由真实 Detour raycast 裁决，完整路径必须到达终点多边形；断岛的 partial
+结果拒绝。该模式不再加载或校验旧位图，也不保留第二份旧 mask 作为平行可走真相。
+旧位图模式的格线/对角线和脚底高度兼容规则保持原样。换轴仍只在 NavQuerySystem 的
+服务器 Z-up 与导航 Unity Y-up 边界完成，OBJ、合同范围和 baker 探针不重复换轴。
+
+这里规定的是运行装载与查询合同；源表正式导出、构建镜像、导航文件部署及真实进场/移动
+证据须分别登记，不能由离线查询通过推断已经更新当前服务器。
+
+### 本地开发数据与原生验证结果（2026-11-12）
+
+本次开发 overlay 在原 21 行 BaseScene 上追加两行，未替换正式源表及原有地图。26000
+使用中秋作者源，Unity 脚点为 `(110.921211,0,33.47244)`，服务器表坐标为
+`(33.47244,110.921211,0)`；26008 使用春节作者源，开发测试脚点为
+Unity `(122.5,0,127.5)`、服务器 `(127.5,122.5,0)`。26008 草稿尚未设置出生点，后者
+来自其已烘焙最大连通域的安全测试位置，只记录在交付清单及开发配置，未写回用户草稿。
+两图范围分别为 `(0,0,300,240)`、`(0,0,300,225)`；作者的 `boundsConfirmed=false`
+保持，不能将本次开发试图当作正式业务世界比例已验收。26008 中秋仍未交付导航。
+
+Windows 当前 modules、scene、bag_test 依赖按 `/m:1` 实际构建完成，完整裸指针门禁通过。
+为恢复既有门禁，仅将 `asset_op_system.cpp` 故障日志结构中的 `const char* table` 改成
+`std::string table`，没有改资产业务；导航读取 Detour tile 使用公开的 const 重载。
+24 项相关原生测试全部通过，包含 9 项手绘装载/坏合同/缺文件/残留 mask/原脚点/半开边界
+回归及既有节庆、断岛和出生测试。9 项手绘故障注入使用原有已交付网格的隔离副本，不冒充
+两张用户地图的全面路线验收；另一项真实 `LoadNavBins` 测试则使用新开发 overlay 全部
+23 行，逐项核对真实导航登记和原出生脚点，确实加载了两图当前安装的 authored MSET。
+
+负对照使用 HEAD 旧 navigation/nav_query 源在忽略目录编译，并优先链接到专用测试副本；
+同一 9 项手绘回归均在目标行为断言上失败。当前绿色测试可执行文件原件 SHA 前后相同，
+没有覆盖当前程序或修改主源码来取红。早期旧依赖链接、既有裸指针门禁和最小测试配置的
+失败日志均保留，不把这些环境/构建失败当作行为回归证据。
+
+证据位于 `build/verification/authored-nav-runtime-20261112/`：`native-summary.json`、
+`green-native.xml/.log`、`counterfactual-red.xml/.log`、`counterfactual-inputs.json`、
+`final-source.json` 和构建日志。这里证明本地 C++ 开发 overlay 的原生装载与查询行为；
+当前运行栈是否更新及真实游戏交互由部署回执另记。同级独立的完整 Java 游戏服务器仍未
+接入本次手绘导航；本仓当前栈的 `java/gateway_node` 网关继续承担 HTTP 入口，不解析
+MSET。客户端打包及发布画面也不属于这些原生测试的验收范围。
+
+### 本机开发栈部署与后端联机验证（2026-11-12）
+
+本机开发栈本轮更新已通过最终部署检查，回执状态为 `DEPLOYED_AND_VERIFIED`：
+先更新 gate、scene、battle，再完成 login-sql-boot 及 scene-manager、player-locator、
+login 更新。三 C++ 节点共用构建标签 `debug-20261112t140808.551745z`，不可变镜像 ID 为
+`sha256:bfb8190e6ec06cfb9a4f14e1899868b55bec9d0f843cae119858a8262d342804`。
+六个业务服务的源码与运行数据检查全部通过，scene 启动日志实际登记了 26000 和 26008；
+16 份运行文件完成 SHA 核对，其它容器身份保持，历史 one-off 容器保留。详细回执为
+`build/verification/authored-festival-20261112/deployment-20261112-r2/result.json`，
+配套 `source-and-runtime-data-check.json`、`scene-authored-navigation.log` 与日志来源记录。
+
+开发登录入口为 `http://127.0.0.1:18085`，区号为 1，测试场景模板为 26000 中秋与
+26008 春节。此 HTTP 网关是当前本仓 C++ 栈中的 `java/gateway_node`，继续复用当前入口；
+它不解析 MSET。尚未接入本次 ANAV 的是同级独立完整 Java 游戏服务器，不是此网关。
+客户端接入及打包按同级客户端 `Docs/Handoffs/Doubao-FestivalAuthoredNavMesh-20261112.md`
+读取共同 delivery、脚点、外观和地址，26008 中秋仍未交付导航。
+
+后端网络 E2E 已通过：`TestAuthoredFestivalNavMeshE2E` 实际运行 44.22 秒，完成当前
+HTTP 登录、两图真实进场及移动验证，报告中 `26000-mid-autumn`、`26008-spring` 均为
+PASS。证据为 `build/verification/authored-nav-e2e-20261112/actual-e2e-r2.json` 和
+`network-r2.log`。首份探针采用旧认证 fixture，在登录阶段收到 2000 拒绝，尚未进入地图；
+修正独立测试为当前 HTTP 与开发认证约定后得到本次 r2 结果，首份失败证据仍保留。
+
+这些结果覆盖本机 C++ 开发 overlay 的部署和后端网络行为。两图仍保留作者未确认的
+世界尺度状态，正式源表及旧地图未被开发配置替换。真实 Unity Player 的导航接入、
+客户端打包、游戏内试走及画面验收由豆包继续完成；本轮后端 E2E 没有运行 Unity Player。
+安全部署、E2E 和原生收据副本已交到客户端
+`Docs/VerificationEvidence/authored-festival-delivery-20261112/`，与前述作者源和共同交付清单配套。

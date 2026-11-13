@@ -9,6 +9,7 @@ import java.util.logging.Logger;
 /**
  * 池内侧的physical DataSource adapter。每次新连接先初始化/核验，再交受管Connection；
  * getConnection(user,password)不提供切换principal的旁门。
+ * mysql 档另把对端复核交给受管 Connection:每个事务进入前、连接池探活时都在同一条物理连接上再核一次主库(serverCheck)。
  */
 public final class AuthorityDataSource implements DataSource {
     public static final String STRONG_SESSION_SQL="SET SESSION tidb_snapshot='',tidb_read_staleness=0,"
@@ -21,8 +22,12 @@ public final class AuthorityDataSource implements DataSource {
     private static final String J_MALL_MYSQL="SET SESSION sql_mode=CONCAT(@@SESSION.sql_mode,',STRICT_TRANS_TABLES'),innodb_lock_wait_timeout=5";
     private static final String R_MALL_INIT="SET SESSION tidb_snapshot='',tidb_txn_mode='pessimistic',tidb_replica_read='leader',tidb_read_consistency='strict',tidb_read_staleness=0,tidb_low_resolution_tso=OFF,sql_mode='STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION',innodb_lock_wait_timeout=5";
     private static final String R_MALL_MYSQL="SET SESSION sql_mode='STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION',innodb_lock_wait_timeout=5";
-    /** mysql 档逐物理连接的核对,与 Go 的 authoritysql(mysqlServerSQL)同一组判据。 */
+    /** tidb 档与 ANY 档识别对端用:版本串与 version_comment 都读,理由见 isTiDb。 */
+    static final String SERVER_IDENTITY_SQL="SELECT VERSION(),@@version_comment";
+    /** mysql 档的对端核对(建连时与每个事务进入前都用),与 Go 的 authoritysql(mysqlServerSQL)同一组判据。 */
     static final String MYSQL_SERVER_SQL="SELECT VERSION(),@@version_comment,@@read_only,@@super_read_only";
+    /** 对端核对语句的超时秒数,与写者闸门的语句同一个量级(WriterAuthority 里也是 3)。 */
+    private static final int SERVER_CHECK_TIMEOUT_SECONDS=3;
     /** mysql 档的会话固定:与 TiDB 档同样是 RC 加严格模式,不发任何 tidb_* 语句。 */
     static final String MYSQL_SESSION_SQL="SET SESSION transaction_isolation='READ-COMMITTED',sql_mode=CONCAT(@@SESSION.sql_mode,',STRICT_TRANS_TABLES')";
 
@@ -120,8 +125,17 @@ public final class AuthorityDataSource implements DataSource {
     }
     @Override public Connection getConnection()throws SQLException{
         Connection raw=DriverManager.getConnection(url,properties);
-        try{initialize(raw,backend,initialization);return AuthorityConnection.wrap(raw,authority);}
+        try{initialize(raw,backend,initialization);return AuthorityConnection.wrap(raw,authority,serverCheck(backend));}
         catch(SQLException|RuntimeException|Error failure){try{raw.close();}catch(SQLException close){failure.addSuppressed(close);}throw failure;}
+    }
+    /**
+     * 这一档在每个事务进入前要在同一条物理连接上做的对端复核;返回 null 表示不用复核(不发语句)。
+     * 只有 mysql 档需要:主从切换之后,池里的老连接可能还连着已经降成只读的旧主库,只在建连时核一次拦不住
+     * (Go 侧是每次从池里取用连接都再核一次对端,见 shared/authoritysql 的 guardedConn.ResetSession)。
+     * tidb 档的对端没有会随时间变化的角色,强会话变量在建连时固定,业务 SQL 改不了它们。
+     */
+    static AuthorityConnection.ServerCheck serverCheck(Backend backend){
+        return backend==Backend.MYSQL?AuthorityDataSource::verifyMySqlPrimary:null;
     }
     /** 仅physical adapter安装阶段使用；输入必须是上面已审固定SQL等集。requireTiDb=true 是 TIDB 档,false 是 ANY 档。 */
     public static void initialize(Connection raw,boolean requireTiDb,List<String> sqls)throws SQLException{
@@ -138,7 +152,7 @@ public final class AuthorityDataSource implements DataSource {
         }
         boolean requireTiDb=backend==Backend.TIDB;
         boolean tidb=false;
-        if(!h2)try(var s=raw.createStatement();var r=s.executeQuery("SELECT VERSION()")){tidb=r.next()&&r.getString(1).toLowerCase(Locale.ROOT).contains("tidb");}
+        if(!h2)try(var s=raw.createStatement();var r=s.executeQuery(SERVER_IDENTITY_SQL)){tidb=r.next()&&isTiDb(r.getString(1),r.getString(2));}
         if(requireTiDb&&!tidb)throw new SQLException("normal生产连接必须是真实TiDB");
         for(String sql:accepted){
             if(sql.equals(STRONG_SESSION_SQL))continue;
@@ -158,14 +172,12 @@ public final class AuthorityDataSource implements DataSource {
     }
     /**
      * mysql 档:先核对端再动会话。每条新的物理连接都核:主从切换之后同一地址可能已经是从库,只在启动时核一次拦不住。
+     * 已经在池里的连接由每个事务进入前的复核管(serverCheck)。
      * TiDB 的强会话语句(STRONG_SESSION_SQL)跳过,别的带 tidb_* 的初始化语句拒绝。
      */
     private static void initializeMySqlPrimary(Connection raw,boolean h2,List<String> accepted)throws SQLException{
         if(h2)throw new SQLException("mmorpg.sql.backend=mysql needs a MySQL primary, got H2");
-        try(var s=raw.createStatement();var r=s.executeQuery(MYSQL_SERVER_SQL)){
-            if(!r.next())throw new SQLException("mmorpg.sql.backend=mysql could not read the server version and read-only flags");
-            checkMySqlServer(r.getString(1),r.getString(2),r.getLong(3),r.getLong(4));
-        }
+        verifyMySqlPrimary(raw);
         for(String sql:accepted){
             if(sql.equals(STRONG_SESSION_SQL))continue;
             if(sql.contains("tidb_"))throw new SQLException("mmorpg.sql.backend=mysql does not accept TiDB session initialization");
@@ -177,12 +189,32 @@ public final class AuthorityDataSource implements DataSource {
         }
     }
     /**
-     * mysql 档的纯判定,与 Go 的 authoritysql.checkMySQLServer 同一判据:版本串与 version_comment 都看(TiDB 配了 server-version 时
-     * VERSION() 里没有 TiDB 字样);只读实例一律拒绝 —— 持 SUPER 的账号写得进从库,写进去就是静默分叉,权威读也要读到最新提交。
+     * 在一条物理连接上核对对端是可写的 MySQL 主库。建连时与每个事务进入前走的是同一个函数,判据只有 checkMySqlServer 一份。
+     * 语句带超时:对端卡住时不能让取连接或进入事务无限等。
+     */
+    static void verifyMySqlPrimary(Connection raw)throws SQLException{
+        try(var s=raw.createStatement()){
+            s.setQueryTimeout(SERVER_CHECK_TIMEOUT_SECONDS);
+            try(var r=s.executeQuery(MYSQL_SERVER_SQL)){
+                if(!r.next())throw new SQLException("mmorpg.sql.backend=mysql could not read the server version and read-only flags");
+                checkMySqlServer(r.getString(1),r.getString(2),r.getLong(3),r.getLong(4));
+            }
+        }
+    }
+    /**
+     * 对端是不是 TiDB。版本串与 version_comment 都看:TiDB 配了 server-version 时 VERSION() 里没有 TiDB 字样,
+     * 而 version_comment 不受影响(与 Go 的 authoritysql 同一判据,2026-10-13 在 v8.5.2 上实测)。
+     * 只看 VERSION() 的话,tidb 档会把这样一套真 TiDB 拒在门外,ANY 档会漏掉给它固定强会话。
+     */
+    static boolean isTiDb(String version,String comment){
+        return ((version==null?"":version)+" "+(comment==null?"":comment)).toLowerCase(Locale.ROOT).contains("tidb");
+    }
+    /**
+     * mysql 档的纯判定,与 Go 的 authoritysql.checkMySQLServer 同一判据:对端不能是 TiDB(识别见 isTiDb);
+     * 只读实例一律拒绝 —— 持 SUPER 的账号写得进从库,写进去就是静默分叉,权威读也要读到最新提交。
      */
     static void checkMySqlServer(String version,String comment,long readOnly,long superReadOnly)throws SQLException{
-        String text=((version==null?"":version)+" "+(comment==null?"":comment)).toLowerCase(Locale.ROOT);
-        if(text.contains("tidb"))throw new SQLException("mmorpg.sql.backend=mysql is connected to TiDB");
+        if(isTiDb(version,comment))throw new SQLException("mmorpg.sql.backend=mysql is connected to TiDB");
         if(readOnly!=0||superReadOnly!=0)throw new SQLException("mmorpg.sql.backend=mysql must connect to the primary (read_only="+readOnly+" super_read_only="+superReadOnly+")");
     }
     @Override public Connection getConnection(String user,String password)throws SQLException{

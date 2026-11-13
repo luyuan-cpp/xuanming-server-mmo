@@ -30,9 +30,10 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	drivermysql "github.com/go-sql-driver/mysql"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
+	"shared/clusterredis"
 
 	"friend/internal/sqldialect"
 )
@@ -247,6 +248,18 @@ func withProductionSessionIsolation(dsn string) string {
 // newFriendTestRepo 给一个挂在 miniredis 上的 repo。
 // 缓存用 miniredis 而不是真 Redis:本文件要验的是 MySQL 侧语义,缓存只需要"能用、
 // 能失效",miniredis 自带 gopher-lua,两条 Lua 真实执行,够了。
+// newControlTestRedis 是测试用的控制集群句柄:与生产同一个构造器与键守卫(clusterredis.ControlClusterKeys),
+// 连 miniredis 单实例。缓存脚本的两把键不同 tag 时,守卫在这里就拒绝。
+func newControlTestRedis(t *testing.T, mr *miniredis.Miniredis) goredis.UniversalClient {
+	t.Helper()
+	rdb, err := clusterredis.New(clusterredis.Config{Addrs: []string{mr.Addr()}}, clusterredis.ControlClusterKeys)
+	if err != nil {
+		t.Fatalf("control redis for test: %v", err)
+	}
+	t.Cleanup(func() { _ = rdb.Close() })
+	return rdb
+}
+
 func newFriendTestRepo(t *testing.T, db *sql.DB) (*FriendRepo, *miniredis.Miniredis) {
 	t.Helper()
 	// 默认上限取得足够大,让绝大多数用例不必关心它;要验限幅的用例自己传小值。
@@ -260,7 +273,7 @@ const testListReadHardLimit uint32 = 1000
 func newFriendTestRepoWithLimit(t *testing.T, db *sql.DB, listReadHardLimit uint32) (*FriendRepo, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
-	rdb := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
+	rdb := newControlTestRedis(t, mr)
 	return NewFriendRepo(rdb, db, testFriendRepoOptions(listReadHardLimit)), mr
 }
 
@@ -307,7 +320,7 @@ func TestSQLDialectDetect_OnRealMySQL(t *testing.T) {
 func newCacheOnlyRepo(t *testing.T) (*FriendRepo, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
-	rdb := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
+	rdb := newControlTestRedis(t, mr)
 	return NewFriendRepo(rdb, nil, testFriendRepoOptions(testListReadHardLimit)), mr
 }
 
@@ -1343,21 +1356,21 @@ func TestRunGuardedWrite_ExhaustedMissingRowsFailClosed(t *testing.T) {
 
 func TestVersionedCache_RejectsStaleFillAfterWriteInvalidation(t *testing.T) {
 	repo, mr := newCacheOnlyRepo(t)
-	rdb := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
+	rdb := newControlTestRedis(t, mr)
 	ctx := context.Background()
 	key := friendListKey(42)
 
 	// reader 在 DB 读取前观察到 generation=0；writer 随后提交并失效缓存。
 	require.NoError(t, repo.invalidateCaches(ctx, key))
-	// go-zero 的 EvalCtx 吃脚本正文、返回 (any, error);Lua number 经 go-redis 解出来是 int64。
-	result, err := rdb.EvalCtx(
+	// Eval 吃脚本正文、返回 (any, error);Lua number 经 go-redis 解出来是 int64。
+	result, err := rdb.Eval(
 		ctx,
 		fillFriendCacheScript,
 		[]string{friendCacheGenerationKey(key), key},
 		"0",
 		`[{"friend_player_id":99}]`,
 		strconv.FormatInt(time.Minute.Milliseconds(), 10),
-	)
+	).Result()
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), result)
 	assert.False(t, mr.Exists(key), "写入前读到的旧快照不得在失效之后回填")

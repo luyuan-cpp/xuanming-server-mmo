@@ -24,7 +24,7 @@ spec:
   replicas: 2
   # 多副本安全的前提(2026-08-15 起):world_autoscale / agones_reconcile /
   # instance_lifecycle / load_reporter 的变更动作已由 shared/leader 的 Redis
-  # 选主锁收敛到单一领导者(scene_manager:leader:lock,TTL 30s,心跳 TTL/3),
+  # 选主锁收敛到单一领导者(每个 zone 一把 scene_manager:leader:lock:{ctl:<z>},TTL 30s,心跳 TTL/3),
   # 跟随者只跑 RPC 数据面与 etcd watch 内存镜像。滚动更新新旧 pod 并存时也
   # 只有一个领导者,故不再需要 Recreate;领导者 pod 挂掉后,幸存副本最迟
   # ~TTL 内接管并用一次 fullSync 补齐缺位窗口内漏掉的变更。

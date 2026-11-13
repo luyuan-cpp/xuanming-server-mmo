@@ -38,7 +38,7 @@ func TestEnterGame_SecondRoleRejectedAfterFenceOperationTTL(t *testing.T) {
 	t.Cleanup(func() { _ = rdb.Close() })
 	locator := &fenceLocator{}
 	svcCtx := &svc.ServiceContext{
-		RedisClient: rdb, PlayerRedis: rdb, LoginRedis: rdb,
+		ControlRedis: rdb, PlayerRedis: rdb, LoginRedis: rdb,
 		AccountDirectory: fixtureDirectory(t, rdb), PlayerLocatorClient: locator,
 	}
 	ctx := fenceWiringCtx(0)

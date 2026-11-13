@@ -49,20 +49,20 @@ import (
 const metricNamespace = "login_queue"
 
 var (
-	// queueSizeGauge mirrors ZCARD queue:zone:{zone}. Updated periodically
+	// queueSizeGauge mirrors ZCARD queue:{q:<zone>}. Updated periodically
 	// by the dispatcher (every drain tick) and on Enqueue/Poll paths so
 	// scrape granularity matches dispatcher granularity.
 	queueSizeGauge = metric.NewGaugeVec(&metric.GaugeVecOpts{
 		Namespace: metricNamespace,
 		Subsystem: "",
 		Name:      "size",
-		Help: "Current length of the AssignGate login queue per zone (ZCARD queue:zone:{zone}). " +
+		Help: "Current length of the AssignGate login queue per zone (ZCARD queue:{q:<zone>}). " +
 			"Healthy: drops to 0 within a few minutes after open-server burst. " +
 			"Red flag: monotonically rising — dispatcher likely stalled.",
 		Labels: []string{"zone"},
 	})
 
-	// admittedInflightGauge 是清掉过期成员之后 admitted:zset:zone:{zone} 的成员数:
+	// admittedInflightGauge 是清掉过期成员之后 admitted:zset:{q:<zone>} 的成员数:
 	// 已放行还没来取的,加上票已交出去、还在交票后宽限(20s)之内的(排队取走与快速通道)。
 	// 容量记账用它(FreeSlots 减去这一项)。
 	admittedInflightGauge = metric.NewGaugeVec(&metric.GaugeVecOpts{
@@ -71,7 +71,7 @@ var (
 		Name:      "admitted_inflight",
 		Help: "In-flight admission placeholders per zone: admits not yet picked up, plus gate " +
 			"tokens handed out within the last 20s handoff grace (queue consume and fast path). " +
-			"ZCARD admitted:zset:zone:{zone} after dropping expired members. Sitting at " +
+			"ZCARD admitted:zset:{q:<zone>} after dropping expired members. Sitting at " +
 			"(capacity - online) while login_queue_size > 0 is normal back-pressure; if gate " +
 			"PlayerCount does not grow at the same time, clients are not redeeming their admits.",
 		Labels: []string{"zone"},
@@ -216,7 +216,7 @@ func recordExpired(zoneID uint32, reason string) {
 // RecordExpiredQueueDisabled is an exported helper for handlers that need
 // to surface "queue disabled" without going through ParseAndVerifyQueueToken.
 // Lives in the package's public API because the handler in
-// loginpregate/querystatuslogic.go records it directly.
+// loginpregate/queryqueuestatuslogic.go records it directly.
 func RecordExpiredQueueDisabled() {
 	recordExpired(0, ExpireReasonQueueDisabled)
 }

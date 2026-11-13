@@ -42,6 +42,7 @@ import (
 	"os"
 	"shared/authoritysql/sqltest"
 	"shared/rolefence"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1251,21 +1252,18 @@ func TestIntegrationAuditRecordsWhatWasDone(t *testing.T) {
 		t.Fatalf("「谁、为什么」仍取调用方: %+v", v)
 	}
 
-	// a 由消费方 SKIPPED 终结;保留期过后 a、b 两条终态行都被清理,审计行仍答得出「做了什么」。
+	// a 由消费方 SKIPPED 终结;a、b 两条终态行是永久收据(没有清理,设计 §9.1),审计行照样答得出「做了什么」。
 	e.fetch(t, pid, 1, 0, 0)
 	if ack := e.ack(t, pid, 1, dec(a, outSkipped, uint32(quarantined), ridA)); ack.GetResults()[0].GetState() != stateVoided {
 		t.Fatalf("a SKIPPED 应终结为 VOIDED: %+v", ack.GetResults())
 	}
-	if n, err := e.store.SweepTerminal(ctx, testNowMs+1, 500); err != nil || n != 0 {
-		t.Fatalf("永久唯一收据不得清理 = %d (%v), want 0", n, err)
-	}
 	if e.item(t, pid, a) == nil || e.item(t, pid, b) == nil {
 		t.Fatal("a、b 的终态唯一收据必须保留")
 	}
-	check("清理后 a 的作废审计", auditRecord(t, e.db, pid, a, voidAudit), a, ridA, issuedA, payloadA, quarantined)
-	check("清理后 b 的入箱审计", auditRecord(t, e.db, pid, b, sanction), b, ridB, issuedB, payloadB, noReason)
+	check("终结后 a 的作废审计", auditRecord(t, e.db, pid, a, voidAudit), a, ridA, issuedA, payloadA, quarantined)
+	check("终结后 b 的入箱审计", auditRecord(t, e.db, pid, b, sanction), b, ridB, issuedB, payloadB, noReason)
 	if n := auditCount(t, e.db, pid); n != 4 {
-		t.Fatalf("审计行 = %d, want 4(2 次入箱 + 2 次作废),清理不得动审计", n)
+		t.Fatalf("审计行 = %d, want 4(2 次入箱 + 2 次作废),终结不得动审计", n)
 	}
 }
 
@@ -1403,42 +1401,7 @@ func TestIntegrationForceVoid(t *testing.T) {
 }
 
 // ── 后台循环的存储操作 ───────────────────────────────────────────────────
-
-func TestIntegrationSweepPreservesPermanentRequestRows(t *testing.T) {
-	e := openIntegration(t)
-	const pid = uint64(6001)
-	// T0:入箱 a、b;只投递 a 并确认 APPLIED(a.updated_ms = T0)。
-	a := e.mustEnqueue(t, pid, 1).Seq
-	b := e.mustEnqueue(t, pid, 2).Seq
-	e.epochs.set(pid, 1)
-	e.fetch(t, pid, 1, 0, 1)
-	e.ack(t, pid, 1, dec(a, outApplied, 0, 1))
-	// T0+60s:投递并确认 b(b.updated_ms = T0+60s)。
-	e.clock.advance(60_000)
-	e.fetch(t, pid, 1, 0, 0)
-	e.ack(t, pid, 1, dec(b, outApplied, 0, 2))
-	// 回到 T0 再入箱 c:PENDING 且 updated_ms = T0(seq 由 next_seq 保证仍单调)。
-	e.clock.set(testNowMs)
-	c := e.mustEnqueue(t, pid, 3).Seq
-
-	cutoff := testNowMs + 30_000 // 只有 a 是「保留期外的终态行」
-	deleted, err := e.store.SweepTerminal(itCtx(t), cutoff, 500)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if deleted != 0 {
-		t.Fatalf("deleted = %d, want 0(永久唯一收据)", deleted)
-	}
-	if e.item(t, pid, a) == nil {
-		t.Fatal("旧终态行 a 仍须阻止历史request换主重入")
-	}
-	if e.item(t, pid, b) == nil || e.item(t, pid, c) == nil {
-		t.Fatal("保留期内的终态行 b 与 PENDING 行 c 不得删除")
-	}
-	if e.stream(t, pid) == nil || auditCount(t, e.db, pid) != 3 {
-		t.Fatal("流行与审计行永不自动删除")
-	}
-}
+// 没有清理:终态行是永久收据(设计 §9.1)。原来验证空转清理不删行的用例随 SweepTerminal 一起删除(2026-11-12)。
 
 // TestIntegrationNotifyCASSameMillisecond:同一毫秒两次入箱时,拿旧 next_seq 的补发不能清掉新入箱的提醒(设计 §6.3,无 ABA)。
 func TestIntegrationNotifyCASSameMillisecond(t *testing.T) {
@@ -1892,5 +1855,73 @@ func TestIntegrationCheckRowShards(t *testing.T) {
 	}
 	if err := CheckRowShards(ctx, e.db); err != nil {
 		t.Fatalf("全部改回之后应通过: %v", err)
+	}
+}
+
+// TestIntegrationPlayerItemsPagingReadsEveryRow 钉住 ReconcilePlayer 读条目行的键集翻页(forEachPlayerItemsPage,2026-11-12):
+// 按 (domain, seq) 升序一页一页读完这名玩家的全部行,不漏、不重、不读别的玩家;指定域时只读那个域;
+// 行数正好是页长整数倍时多读一页空页收尾。以前一次至多读 5000 行,超出只打 ERROR、回半份结果。
+func TestIntegrationPlayerItemsPagingReadsEveryRow(t *testing.T) {
+	e := openIntegration(t)
+	const pid, other = uint64(5301), uint64(5302)
+	spec, _ := e.store.registry.Domain(gmDomain)
+	n := min(uint64(5), uint64(spec.GetMaxPending()))
+	if n < 3 {
+		t.Fatalf("GM 域 max_pending=%d,不够造跨页的行", spec.GetMaxPending())
+	}
+	var want []uint64
+	for i := uint64(1); i <= n; i++ {
+		want = append(want, e.mustEnqueue(t, pid, i).Seq)
+	}
+	e.mustEnqueue(t, other, 1) // 别的玩家的行不在结果里
+	ctx := itCtx(t)
+
+	for _, tc := range []struct {
+		name     string
+		domain   inboxpb.PlayerInboxDomain
+		pageSize int
+	}{
+		{"全部域,页长 2", inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_UNSPECIFIED, 2},
+		{"指定域,页长 2", gmDomain, 2},
+		{"页长整除行数", gmDomain, int(n)},
+		{"一页读完", inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_UNSPECIFIED, playerItemsPageSize},
+	} {
+		var got []uint64
+		pages := 0
+		err := e.store.forEachPlayerItemsPage(ctx, pid, tc.domain, tc.pageSize, func(rows []*inboxpb.PlayerInboxItemRow) error {
+			pages++
+			if len(rows) == 0 || len(rows) > tc.pageSize {
+				t.Fatalf("%s: 第 %d 页 %d 行,页长 %d", tc.name, pages, len(rows), tc.pageSize)
+			}
+			for _, row := range rows {
+				if row.GetPlayerId() != pid || row.GetDomain() != uint32(gmDomain) {
+					t.Fatalf("%s: 读到别的玩家或别的域的行 %+v", tc.name, row)
+				}
+				got = append(got, row.GetSeq())
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("%s: seq = %v, want %v", tc.name, got, want)
+		}
+		if wantPages := (len(want) + tc.pageSize - 1) / tc.pageSize; pages != wantPages {
+			t.Fatalf("%s: 交给 visit %d 页, want %d(空页不交给 visit)", tc.name, pages, wantPages)
+		}
+	}
+
+	stop := errors.New("visit 要求停下")
+	calls := 0
+	err := e.store.forEachPlayerItemsPage(ctx, pid, gmDomain, 1, func([]*inboxpb.PlayerInboxItemRow) error {
+		calls++
+		return stop
+	})
+	if !errors.Is(err, stop) || calls != 1 {
+		t.Fatalf("visit 出错要停在那一页并原样返回: calls=%d err=%v", calls, err)
+	}
+	if err := e.store.forEachPlayerItemsPage(ctx, pid, gmDomain, 0, func([]*inboxpb.PlayerInboxItemRow) error { return nil }); err == nil {
+		t.Fatal("页长 0 必须报错,不能死循环或当成读完")
 	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"shared/authoritysql"
+	"shared/dbplacement"
 )
 
 func flagsFor(command string, extra ...string) []string {
@@ -34,10 +36,13 @@ func TestParseOptionsAccepted(t *testing.T) {
 		flagsFor(cmdPrepare, "-target-cluster", "b", "-run-id", testRun, "-roster", "a.json,b.json"),
 		flagsFor(cmdVerify, "-run-id", testRun, "-sync", "ticdc:127.0.0.1:8300:feed-1"),
 		flagsFor(cmdCutover, "-run-id", testRun, "-sync", "mysql-gtid", "-budget", "5s", "-roster", "a.json", "-metrics-targets", "a:1"),
+		flagsFor(cmdCutover, "-run-id", testRun, "-sync", "mysql-gtid", "-roster", "a.json", "-metrics-targets", "a:1", "-compare-budget", "20m"),
+		flagsFor(cmdCutover, "-run-id", testRun, "-sync", "mysql-gtid", "-roster", "a.json", "-metrics-targets", "a:1", "-skip-final-compare"),
 		flagsFor(cmdRollback, "-run-id", testRun),
 		flagsFor(cmdRollback, "-run-id", testRun, "-target-lost"),
 		flagsFor(cmdAudit, "-run-id", testRun, "-metrics-targets", "a:1, b:2"),
-		flagsFor(cmdCleanup, "-run-id", testRun, "-confirm-drop"),
+		flagsFor(cmdCleanup, "-run-id", testRun, "-sync", "ticdc:127.0.0.1:8300:feed-1", "-confirm-drop"),
+		flagsFor(cmdCleanup, "-run-id", testRun, "-sync", "mysql-gtid:move_1", "-confirm-drop", "-retention", "0s"),
 	}
 	for _, args := range cases {
 		if _, err := parseOptions(args, io.Discard); err != nil {
@@ -54,8 +59,16 @@ func TestParseOptionsAccepted(t *testing.T) {
 	if o.runID != testRun {
 		t.Fatalf("run id 统一小写,和映射值里的比: %s", o.runID)
 	}
-	if o.budget != 30*time.Second || o.retention != 7*24*time.Hour {
-		t.Fatalf("缺省值: budget=%s retention=%s", o.budget, o.retention)
+	if o.budget != 30*time.Second || o.compareBudget != 30*time.Second || o.retention != 7*24*time.Hour {
+		t.Fatalf("缺省值: budget=%s compare-budget=%s retention=%s", o.budget, o.compareBudget, o.retention)
+	}
+	if o.skipFinalCompare {
+		t.Fatal("静止比对缺省要做,跳过必须显式给参数")
+	}
+	// cleanup 的 -sync 解析出来,删源库之前按它去问复制流撤掉了没有。
+	o, err = parseOptions(flagsFor(cmdCleanup, "-run-id", testRun, "-sync", "ticdc:cdc-a:8300:feed-1", "-confirm-drop"), io.Discard)
+	if err != nil || o.syncSpec.api != "http://cdc-a:8300" || o.syncSpec.changefeed != "feed-1" {
+		t.Fatalf("cleanup 的 -sync: %+v %v", o.syncSpec, err)
 	}
 }
 
@@ -76,6 +89,10 @@ func TestParseOptionsRefused(t *testing.T) {
 		"audit 缺进程":     flagsFor(cmdAudit, "-run-id", testRun),
 		"多余参数":          flagsFor(cmdRollback, "-run-id", testRun, "secret"),
 		"预算非正":          flagsFor(cmdCutover, "-run-id", testRun, "-sync", "mysql-gtid", "-budget", "0s"),
+		"比对时限非正":        flagsFor(cmdCutover, "-run-id", testRun, "-sync", "mysql-gtid", "-roster", "a.json", "-metrics-targets", "a:1", "-compare-budget", "0s"),
+		// 不给 -sync 就没法核复制流撤掉了没有:拒绝,不是跳过这道检查。
+		"cleanup 缺 sync":  flagsFor(cmdCleanup, "-run-id", testRun, "-confirm-drop"),
+		"cleanup sync 写错": flagsFor(cmdCleanup, "-run-id", testRun, "-sync", "ticdc:feed", "-confirm-drop"),
 	}
 	for name, args := range cases {
 		if _, err := parseOptions(args, io.Discard); err == nil {
@@ -237,6 +254,97 @@ func TestTicdcDetail(t *testing.T) {
 	respond(http.StatusInternalServerError, "")
 	if _, err := repl.CaughtUp(ctx, "1"); err == nil || errors.Is(err, errReplicationBroken) {
 		t.Fatalf("TiCDC 抖动不算断开: %v", err)
+	}
+}
+
+// cleanup 删源库之前问 TiCDC:changefeed 还在不在。只有 TiCDC 明确说「没有」才算撤掉了。
+func TestTicdcStillExists(t *testing.T) {
+	var mu sync.Mutex
+	var body string
+	code := http.StatusOK
+	requests := 0
+	respond := func(newCode int, newBody string) {
+		mu.Lock()
+		defer mu.Unlock()
+		code, body = newCode, newBody
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/changefeeds/feed-1" {
+			t.Errorf("路径: %s", r.URL.Path)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		requests++
+		w.WriteHeader(code)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+	// cleanup 只连 TiCDC,两侧的库都不连。
+	repl := &ticdcReplication{api: server.URL, changefeed: "feed-1", client: server.Client()}
+	ctx := context.Background()
+	feed := testFeed
+
+	// 在跑、暂停(stopped)、出错都算还在:它一恢复就接着复制,源库上的 DROP DATABASE 会跟着过去。
+	for _, state := range []string{"normal", "warning", "stopped", "failed", "error", "finished", "removed"} {
+		respond(http.StatusOK, `{"id":"feed-1","state":"`+state+`","checkpoint_ts":7}`)
+		exists, detail, err := repl.StillExists(ctx, feed)
+		if err != nil || !exists || !strings.Contains(detail, "feed-1") || !strings.Contains(detail, state) {
+			t.Fatalf("%s 的 changefeed 算还在: %v %q %v", state, exists, detail, err)
+		}
+	}
+	// TiCDC 对不存在的 changefeed 回 400 加错误码:这才是撤掉了。
+	respond(http.StatusBadRequest, `{"error_msg":"changefeed not exists","error_code":"CDC:ErrChangeFeedNotExists"}`)
+	if exists, _, err := repl.StillExists(ctx, feed); err != nil || exists {
+		t.Fatalf("明确回答没有才算撤掉: %v %v", exists, err)
+	}
+	// 说不清的回答一律不算撤掉。
+	for name, answer := range map[string]struct {
+		code int
+		body string
+	}{
+		"光秃秃的 404,可能碰到了别的 HTTP 服务": {http.StatusNotFound, ""},
+		"别的 400":            {http.StatusBadRequest, `{"error_msg":"bad param","error_code":"CDC:ErrAPIInvalidParam"}`},
+		"TiCDC 出错":          {http.StatusInternalServerError, ""},
+		"网关出错":              {http.StatusBadGateway, "<html>"},
+		"200 但不是 TiCDC 的回答": {http.StatusOK, "<html>"},
+	} {
+		respond(answer.code, answer.body)
+		if exists, _, err := repl.StillExists(ctx, feed); err == nil || exists || errors.Is(err, errRefused) {
+			t.Fatalf("%s: 查不成要回错误,由 cleanup 拒绝: %v %v", name, exists, err)
+		}
+	}
+	// -sync 指的不是 verify 记下的那条流:拒绝,连问都不问。
+	mu.Lock()
+	before := requests
+	mu.Unlock()
+	other := testFeed
+	other.Changefeed = "feed-2"
+	if _, _, err := repl.StillExists(ctx, other); !errors.Is(err, errRefused) || !strings.Contains(err.Error(), "feed-2") {
+		t.Fatalf("问错了流要拒绝: %v", err)
+	}
+	// 映射里记的是 mysql 档的通道,-sync 却给了 changefeed。
+	if _, _, err := repl.StillExists(ctx, dbplacement.FeedIdentity{Channel: "dbmove"}); !errors.Is(err, errRefused) {
+		t.Fatalf("档位对不上要拒绝: %v", err)
+	}
+	mu.Lock()
+	after := requests
+	mu.Unlock()
+	if after != before {
+		t.Fatalf("流对不上时不该去问 TiCDC: 多问了 %d 次", after-before)
+	}
+	server.Close()
+	if exists, _, err := repl.StillExists(ctx, feed); err == nil || exists {
+		t.Fatalf("连不上要回错误: %v %v", exists, err)
+	}
+}
+
+// mysql 档:-sync 给的通道不是 verify 记下的那一个时拒绝,不去查目标。
+func TestGTIDStillExistsRefusesAnotherChannel(t *testing.T) {
+	repl := &gtidReplication{channel: "dbmove"}
+	for _, feed := range []dbplacement.FeedIdentity{{Channel: "move_1", SourceUUID: "uuid"}, testFeed} {
+		if _, _, err := repl.StillExists(context.Background(), feed); !errors.Is(err, errRefused) || !strings.Contains(err.Error(), "dbmove") {
+			t.Fatalf("问错了通道要拒绝: %+v %v", feed, err)
+		}
 	}
 }
 
@@ -565,14 +673,203 @@ func TestChangefeedDetailKeepsDocumentedFieldName(t *testing.T) {
 	}
 }
 
+// 逐行摘要的拼法是契约:每列各取 MD5(定长),NULL 用不是十六进制的 'N' 顶替,再拼起来取 MD5。
+// 值不直接用分隔符连在一起:那样 'a,b'、'c' 和 'a'、'b,c' 是同一串。真库上的效果见 TestITChecksumMatchesAndCatchesDifference。
 func TestTiDBRowDigestSQL(t *testing.T) {
 	got := tidbRowDigestSQL("`db`.`t`", []string{"id", "name"})
-	for _, want := range []string{
-		"BIT_XOR(", "MD5(", "CONCAT_WS(',',`id`,`name`,CONCAT(ISNULL(`id`),ISNULL(`name`)))", "FROM `db`.`t`", "SELECT COUNT(*),",
+	want := "SELECT COUNT(*),BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT(IFNULL(MD5(`id`),'N'),IFNULL(MD5(`name`),'N'))),1,16),16,10) AS UNSIGNED)) FROM `db`.`t`"
+	if got != want {
+		t.Fatalf("逐行摘要:\n got %s\nwant %s", got, want)
+	}
+	if strings.Contains(got, "CONCAT_WS") {
+		t.Fatalf("不能把各列的值用分隔符直接连起来: %s", got)
+	}
+	// 顶替 NULL 的字符不能是十六进制:否则和某个 MD5 的开头分不开。
+	if strings.ContainsAny(rowDigestNull, "0123456789abcdefABCDEF") || len(rowDigestNull) != 1 {
+		t.Fatalf("顶替 NULL 的字符: %q", rowDigestNull)
+	}
+	// 列名里的反引号要转义。
+	if got := tidbRowDigestSQL("`db`.`t`", []string{"a`b"}); !strings.Contains(got, "MD5(`a``b`)") {
+		t.Fatalf("列名转义: %s", got)
+	}
+}
+
+func TestStructureText(t *testing.T) {
+	columns := []columnDef{
+		{Name: "id", Type: "bigint unsigned", Nullable: "NO", Extra: "auto_increment"},
+		{Name: "name", Type: "varchar(64)", Collation: "utf8mb4_bin", Nullable: "NO", Default: sql.NullString{String: "", Valid: true}},
+		{Name: "note", Type: "text", Collation: "utf8mb4_bin", Nullable: "YES"},
+	}
+	parts := []indexPart{
+		{Index: "PRIMARY", Unique: true, Type: "BTREE", Column: "id", Order: "A"},
+		{Index: "idx_note", Type: "BTREE", Column: "note", Prefix: "16", Order: "A"},
+		{Index: "uk_name", Unique: true, Type: "BTREE", Column: "name", Order: "A"},
+		{Index: "uk_name", Unique: true, Type: "BTREE", Column: "id", Order: "A"},
+	}
+	base := structureText(columns, parts)
+	want := strings.Join([]string{
+		`column 1 "id" type="bigint unsigned" collation="" nullable=NO default=none extra="auto_increment" generated=""`,
+		`column 2 "name" type="varchar(64)" collation="utf8mb4_bin" nullable=NO default="" extra="" generated=""`,
+		`column 3 "note" type="text" collation="utf8mb4_bin" nullable=YES default=none extra="" generated=""`,
+		`primary key "PRIMARY" type="BTREE" ("id" expression="" prefix="" order="A")`,
+		`index "idx_note" type="BTREE" ("note" expression="" prefix="16" order="A")`,
+		`unique index "uk_name" type="BTREE" ("name" expression="" prefix="" order="A", "id" expression="" prefix="" order="A")`,
+	}, "\n")
+	if base != want {
+		t.Fatalf("表定义的文本:\n got %s\nwant %s", base, want)
+	}
+	// 每一样单独变,文本都要变:数据摘要相同也判不一致。
+	otherDefault := sql.NullString{String: "x", Valid: true}
+	for name, change := range map[string]func(columns []columnDef, parts []indexPart){
+		"列类型":        func(columns []columnDef, _ []indexPart) { columns[0].Type = "bigint" },
+		"排序规则":       func(columns []columnDef, _ []indexPart) { columns[1].Collation = "utf8mb4_general_ci" },
+		"可空性":        func(columns []columnDef, _ []indexPart) { columns[2].Nullable = "NO" },
+		"缺省值没了":      func(columns []columnDef, _ []indexPart) { columns[1].Default = sql.NullString{} },
+		"缺省值不同":      func(columns []columnDef, _ []indexPart) { columns[1].Default = otherDefault },
+		"自增没了":       func(columns []columnDef, _ []indexPart) { columns[0].Extra = "" },
+		"成了生成列":      func(columns []columnDef, _ []indexPart) { columns[2].Generated = "concat(`name`,'x')" },
+		"唯一索引成了普通索引": func(_ []columnDef, parts []indexPart) { parts[2].Unique, parts[3].Unique = false, false },
+		"索引的列序":      func(_ []columnDef, parts []indexPart) { parts[2].Column, parts[3].Column = "id", "name" },
+		"前缀长度":       func(_ []columnDef, parts []indexPart) { parts[1].Prefix = "32" },
+		"升降序":        func(_ []columnDef, parts []indexPart) { parts[1].Order = "D" },
+		"索引类型":       func(_ []columnDef, parts []indexPart) { parts[1].Type = "HASH" },
+		"成了表达式索引":    func(_ []columnDef, parts []indexPart) { parts[1].Column, parts[1].Expression = "", "lower(`note`)" },
+		"主键换了列":      func(_ []columnDef, parts []indexPart) { parts[0].Column = "name" },
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("缺 %q: %s", want, got)
+		changedColumns, changedParts := slices.Clone(columns), slices.Clone(parts)
+		change(changedColumns, changedParts)
+		if structureText(changedColumns, changedParts) == base {
+			t.Fatalf("%s 变了,表定义的文本却没变", name)
 		}
+	}
+	if structureText(columns[:2], parts) == base || structureText(columns, parts[:2]) == base {
+		t.Fatal("少一列、少一个索引都要看得出来")
+	}
+	if structureText([]columnDef{columns[1], columns[0], columns[2]}, parts) == base {
+		t.Fatal("列换了顺序要看得出来")
+	}
+	// 索引之间谁先谁后不影响文本(服务器按哪种排序规则返回都一样),同一个索引里列的先后保留。
+	if got := structureText(columns, []indexPart{parts[2], parts[3], parts[1], parts[0]}); got != base {
+		t.Fatalf("索引的返回顺序不该影响文本:\n%s", got)
+	}
+	// 值里的换行、引号被转义,不会让一列的定义看起来像两行。
+	tricky := structureText([]columnDef{{Name: "a", Type: "varchar(8)", Nullable: "YES", Default: sql.NullString{String: "x\ncolumn 2 \"b\"", Valid: true}}}, nil)
+	if strings.Count(tricky, "\n") != 0 {
+		t.Fatalf("缺省值里的换行要转义: %q", tricky)
+	}
+}
+
+func TestPrimaryKeyIsRequired(t *testing.T) {
+	if !hasPrimaryKey([]indexPart{{Index: "uk_name", Unique: true}, {Index: "PRIMARY", Unique: true}}) {
+		t.Fatal("有主键")
+	}
+	// 只有唯一索引不算主键;没有任何索引也不算。
+	if hasPrimaryKey([]indexPart{{Index: "uk_name", Unique: true}}) || hasPrimaryKey(nil) {
+		t.Fatal("没有主键")
+	}
+	err := noPrimaryKeyError("guild_log")
+	if !errors.Is(err, errRefused) || !strings.Contains(err.Error(), "table guild_log has no primary key") {
+		t.Fatalf("要拒绝并点名是哪张表: %v", err)
+	}
+}
+
+func TestLinesMissingFrom(t *testing.T) {
+	a, b := "one\ntwo\nthree", "three\none\nfour"
+	if got := strings.Join(linesMissingFrom(a, b), ","); got != "two" {
+		t.Fatalf("a 独有: %s", got)
+	}
+	if got := strings.Join(linesMissingFrom(b, a), ","); got != "four" {
+		t.Fatalf("b 独有: %s", got)
+	}
+	if got := linesMissingFrom(a, a); len(got) != 0 {
+		t.Fatalf("相同: %v", got)
+	}
+}
+
+// changefeed 的配置摘要:内容变了就变,TiCDC 回的字段顺序变了不变。
+func TestChangefeedConfigDigest(t *testing.T) {
+	identity := func(config string) (dbplacement.FeedIdentity, error) {
+		var d changefeedDetail
+		raw := `{"state":"normal","start_ts":5,"create_time":"2026-10-31 10:00:00.000","config":` + config + `}`
+		if err := json.Unmarshal([]byte(raw), &d); err != nil {
+			t.Fatal(err)
+		}
+		return changefeedIdentity("feed-1", d)
+	}
+	base, err := identity(`{"enable_sync_point":true,"sync_point_interval":"30s","filter":{"rules":["mmorpg_guild.*"],"ignore_txn_start_ts":[450000000000000001]}}`)
+	if err != nil || len(base.ConfigDigest) != 64 || base.Changefeed != "feed-1" || base.StartTs != 5 {
+		t.Fatalf("身份要带配置摘要: %+v %v", base, err)
+	}
+	reordered, err := identity(`{"filter": {"ignore_txn_start_ts": [450000000000000001], "rules": ["mmorpg_guild.*"]}, "sync_point_interval": "30s", "enable_sync_point": true}`)
+	if err != nil || reordered != base {
+		t.Fatalf("字段顺序和空白不算变化: %+v %v", reordered, err)
+	}
+	for name, config := range map[string]string{
+		"多滤掉一张表":  `{"enable_sync_point":true,"sync_point_interval":"30s","filter":{"rules":["mmorpg_guild.*","!mmorpg_guild.guild_log"],"ignore_txn_start_ts":[450000000000000001]}}`,
+		"多忽略一个事务": `{"enable_sync_point":true,"sync_point_interval":"30s","filter":{"rules":["mmorpg_guild.*"],"ignore_txn_start_ts":[450000000000000001,450000000000000065]}}`,
+		// 两个 TSO 只差最低一位,按 float64 解出来是同一个数。
+		"忽略的事务换了一个": `{"enable_sync_point":true,"sync_point_interval":"30s","filter":{"rules":["mmorpg_guild.*"],"ignore_txn_start_ts":[450000000000000002]}}`,
+		"加了事件过滤":    `{"enable_sync_point":true,"sync_point_interval":"30s","filter":{"rules":["mmorpg_guild.*"],"ignore_txn_start_ts":[450000000000000001],"event_filters":[{"matcher":["mmorpg_guild.*"],"ignore_event":["delete"]}]}}`,
+		"不再强制复制":    `{"enable_sync_point":true,"sync_point_interval":"30s","force_replicate":false,"filter":{"rules":["mmorpg_guild.*"],"ignore_txn_start_ts":[450000000000000001]}}`,
+	} {
+		changed, err := identity(config)
+		if err != nil || changed.ConfigDigest == base.ConfigDigest {
+			t.Fatalf("%s: 配置变了摘要要变: %+v %v", name, changed, err)
+		}
+		// 别的身份字段都没变:只靠 id、start_ts、create_time 看不出这种改动。
+		changed.ConfigDigest = base.ConfigDigest
+		if changed != base {
+			t.Fatalf("%s: %+v", name, changed)
+		}
+	}
+	for name, config := range map[string]string{"没有 config": `null`, "空的 config": `{}`, "不是对象": `"x"`} {
+		if _, err := identity(config); !errors.Is(err, errRefused) || !strings.Contains(err.Error(), "cannot tell whether its filter was edited") {
+			t.Fatalf("%s: 读不到配置就分不出过滤改没改,要拒绝: %v", name, err)
+		}
+	}
+}
+
+// 应用出错就跳过的开关:开着的时候目标少了写入也看不出来,所以 verify 和 cutover 都拒绝。
+func TestCheckNoSilentSkip(t *testing.T) {
+	for _, ok := range [][2]string{{"OFF", "STRICT"}, {"off", "strict"}, {"", "STRICT"}, {" OFF ", " STRICT "}} {
+		if err := checkNoSilentSkip(ok[0], ok[1]); err != nil {
+			t.Fatalf("缺省设置: %q %q: %v", ok[0], ok[1], err)
+		}
+	}
+	for name, bad := range map[string][3]string{
+		"跳过列出的错误码":    {"1062,1032", "STRICT", "replica_skip_errors=1062,1032"},
+		"全部跳过":        {"ALL", "STRICT", "replica_skip_errors=ALL"},
+		"跳过对象已存在":     {"ddl_exist_errors", "STRICT", "replica_skip_errors=ddl_exist_errors"},
+		"幂等模式":        {"OFF", "IDEMPOTENT", "replica_exec_mode=IDEMPOTENT"},
+		"读不出应用模式也不放行": {"OFF", "", "replica_exec_mode="},
+	} {
+		err := checkNoSilentSkip(bad[0], bad[1])
+		if !errors.Is(err, errRefused) || !strings.Contains(err.Error(), bad[2]) {
+			t.Fatalf("%s: 要拒绝并点名开关: %v", name, err)
+		}
+	}
+}
+
+// 通道过滤的摘要:过滤变了就变。
+func TestChannelFilterDigest(t *testing.T) {
+	doDB := channelFilter("REPLICATE_DO_DB", "mmorpg_guild")
+	base := channelFilterDigest([]string{doDB})
+	if len(base) != 64 || base != channelFilterDigest([]string{doDB}) {
+		t.Fatalf("同样的过滤同样的摘要: %s", base)
+	}
+	for name, filters := range map[string][]string{
+		"撤掉了过滤":   nil,
+		"多忽略一张表":  {doDB, channelFilter("REPLICATE_IGNORE_TABLE", "mmorpg_guild.guild_log")},
+		"换了库":     {channelFilter("REPLICATE_DO_DB", "mmorpg_mail")},
+		"换了过滤的种类": {channelFilter("REPLICATE_IGNORE_DB", "mmorpg_guild")},
+	} {
+		if channelFilterDigest(filters) == base {
+			t.Fatalf("%s: 过滤变了摘要要变", name)
+		}
+	}
+	// 名字和规则各自加引号转义:一条规则里的换行、等号不会被当成下一条过滤。
+	if channelFilterDigest([]string{channelFilter("A", "x\nB=y")}) == channelFilterDigest([]string{channelFilter("A", "x"), channelFilter("B", "y")}) {
+		t.Fatal("一条过滤和两条过滤不能是同一个摘要")
 	}
 }
 
@@ -596,9 +893,9 @@ func (mapView) GateRows(context.Context) (gateRows, error) { return gateRows{}, 
 func (mapView) Close() error                               { return nil }
 
 func TestCompareViews(t *testing.T) {
-	row := tableDigest{Columns: "id", Rows: 1, KVs: 2, Digest: "x"}
+	row := tableDigest{Structure: testStructure, Rows: 1, KVs: 2, Digest: "x"}
 	source := mapView{tables: map[string]tableDigest{"a": row, "b": row, "c": row}}
-	target := mapView{tables: map[string]tableDigest{"a": row, "b": {Columns: "id", Rows: 1, KVs: 3, Digest: "x"}, "d": row}}
+	target := mapView{tables: map[string]tableDigest{"a": row, "b": {Structure: testStructure, Rows: 1, KVs: 3, Digest: "x"}, "d": row}}
 	mismatches, err := compareViews(context.Background(), source, target, func(string, ...any) {})
 	if err != nil {
 		t.Fatal(err)
@@ -612,11 +909,12 @@ func TestCompareViews(t *testing.T) {
 	if len(mismatches) != 3 {
 		t.Fatalf("a 是一致的: %v", mismatches)
 	}
-	// 只差列顺序也算不一致:同样的值摘要会不同,不能当成巧合放过。
-	reordered := mapView{tables: map[string]tableDigest{"a": {Columns: "x,id", Rows: 1, KVs: 2, Digest: "x"}}}
-	mismatches, err = compareViews(context.Background(), mapView{tables: map[string]tableDigest{"a": row}}, reordered, func(string, ...any) {})
-	if err != nil || len(mismatches) != 1 {
-		t.Fatalf("列不同: %v %v", mismatches, err)
+	// 数据一样、表定义不一样(目标把唯一索引建成了普通索引)也算不一致,报出差在哪一行定义。
+	unique := tableDigest{Structure: "column 1 \"id\"\nunique index \"uk_name\"", Rows: 1, KVs: 2, Digest: "x"}
+	plain := tableDigest{Structure: "column 1 \"id\"\nindex \"uk_name\"", Rows: 1, KVs: 2, Digest: "x"}
+	mismatches, err = compareViews(context.Background(), mapView{tables: map[string]tableDigest{"a": unique}}, mapView{tables: map[string]tableDigest{"a": plain}}, func(string, ...any) {})
+	if err != nil || len(mismatches) != 1 || mismatches[0] != `a: the table definition differs: only on the source [unique index "uk_name"], only on the target [index "uk_name"]` {
+		t.Fatalf("定义不同: %v %v", mismatches, err)
 	}
 	if _, err := compareViews(context.Background(), mapView{}, mapView{}, func(string, ...any) {}); err == nil {
 		t.Fatal("源库没有表要报错:指错库不能算一致")
@@ -630,7 +928,7 @@ func TestCompareViews(t *testing.T) {
 func TestJournalWritesFileWithoutSecrets(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested")
 	var out bytes.Buffer
-	j, err := openJournal(dir, testDB, testRun, &out, time.Now)
+	j, err := openJournal(dir, testDB, testRun, &out, io.Discard, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -655,7 +953,7 @@ func TestJournalWritesFileWithoutSecrets(t *testing.T) {
 		t.Fatalf("屏幕: %s", out.String())
 	}
 	// 同一个 run 重跑是追加。
-	j, err = openJournal(dir, testDB, testRun, io.Discard, time.Now)
+	j, err = openJournal(dir, testDB, testRun, io.Discard, io.Discard, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -664,6 +962,34 @@ func TestJournalWritesFileWithoutSecrets(t *testing.T) {
 	raw, _ = os.ReadFile(filepath.Join(dir, "dbmove-"+testDB+"-"+testRun+".log"))
 	if len(strings.Split(strings.TrimSpace(string(raw)), "\n")) != 3 {
 		t.Fatalf("要追加: %s", raw)
+	}
+}
+
+// 告警(运维放弃了一道保护)走标准错误输出,不混在步骤输出里;也写进本地文件,事后查得到。
+func TestJournalWarnGoesToStderrAndFile(t *testing.T) {
+	dir := t.TempDir()
+	var out, errOut bytes.Buffer
+	j, err := openJournal(dir, testDB, testRun, &out, &errOut, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.warn("cutover", "-skip-final-compare is set")
+	if err := j.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := errOut.String(); got != "WARNING: [cutover] -skip-final-compare is set\n" {
+		t.Fatalf("标准错误输出: %q", got)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("告警不写标准输出: %q", out.String())
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "dbmove-"+testDB+"-"+testRun+".log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entry struct{ Time, Step, Line string }
+	if err := json.Unmarshal(bytes.TrimSpace(raw), &entry); err != nil || entry.Step != "cutover" || entry.Line != "WARNING: -skip-final-compare is set" || entry.Time == "" {
+		t.Fatalf("本地日志要留下这条告警: %s %v", raw, err)
 	}
 }
 

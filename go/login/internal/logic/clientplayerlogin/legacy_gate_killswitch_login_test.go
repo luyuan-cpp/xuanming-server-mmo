@@ -106,7 +106,7 @@ func newKillSwitchEnv(t *testing.T, legacyGateLoginEnabled bool, account string)
 	return &killSwitchEnv{
 		mr:             mr,
 		rdb:            rdb,
-		svcCtx:         &svc.ServiceContext{RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb), TokenManager: tokens},
+		svcCtx:         &svc.ServiceContext{ControlRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb), TokenManager: tokens},
 		thirdPartyType: thirdPartyType,
 		thirdParty:     thirdParty,
 	}

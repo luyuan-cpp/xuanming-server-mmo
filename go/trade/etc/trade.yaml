@@ -102,27 +102,22 @@ Market:
   MaxPage: 100
   MaxFavoritesPerPlayer: 100
 
-# 共享单库 Redis(与 C++ scene / scene_manager 同一实例)。通用资产通道(guild-phase2/04-asset-channel.md §S4)在这里:
-#   读位置键 player:{id}:location —— scene_manager 写,值是 PlayerLocation protobuf;据此定位玩家所在 scene 节点,
-#     再直连该节点的 SceneNodeGrpc 调 AssetDebit / AssetCredit / AssetAbortDebit;
-#   订阅落地唤醒频道 assetop:wake(scene 发布),另写唤醒去重键 assetop:wake:trade:{id}
-#     与维护选主锁 trade:assetop:maintenance:leader。
+# 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1;2026-11-12 取代 SharedRedis 段)。通用资产通道
+# (guild-phase2/04-asset-channel.md §S4)在这里订阅落地唤醒的 64 个分片频道 assetop:wake:{aw:N}(scene SPUBLISH,必须同一集群),另写唤醒去重键
+# assetop:wake:trade:{id} 与维护选主锁 trade:assetop:maintenance:leader;没写 PlayerRedis.Addrs 时位置键 player:{id}:location 也读这里
+# (scene_manager 写,据此定位玩家所在 scene 节点,再直连该节点的 SceneNodeGrpc 调 AssetDebit / AssetCredit / AssetAbortDebit)。
 #
 # 段名不能改成 Redis:go-zero 的 zrpc.RpcServerConf 已经有同名字段,加载期会报 conflict key Redis。
-# DB 必须是 **0**(位置键所在库);指到别的实例或别的库 = 永远找不到人 = 托管 / 交付永远悬挂,
-# 所以 config.Validate 拒绝空 Host。
-SharedRedis:
-  Host: 127.0.0.1:6379
-  Password: ""
-  DB: 0
-  # go-redis 连接池上限(P0-E 第 3 批,共享 Redis 连接总账)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
-  # 随 CPU limit 漂移(本机 Windows 上是 10 × 核数);负数 config.Validate 拒启。20 = K8s 上 GOMAXPROCS 按 2 时的缺省值。
-  # 落地唤醒的 Pub/Sub 连接不占池名额。tools/scripts/k8s_deploy.ps1 把它镜像进 trade ConfigMap(要求正整数),
-  # Redis 连接总账读同一个键:改它看部署时打印的 "Redis connection ledger" 一行。
-  PoolSize: 20
+# 指错实例 = 收不到唤醒、找不到人 = 托管 / 交付悬挂,所以 config.Validate 拒绝空 Addrs。集群部署写种子地址并打开 Cluster。
+# PoolSizePerNode 是每个节点的连接池上限(20 = 换句柄之前 K8s 上 GOMAXPROCS 按 2 时的 go-redis 缺省值);负数拒启。
+# 落地唤醒的 Pub/Sub 连接不占池名额。tools/scripts/k8s_deploy.ps1 把它镜像进 trade ConfigMap(要求正整数),
+# Redis 连接总账读同一个键:改它看部署时打印的 "Redis connection ledger" 一行。口令写 Password,或在 SharedRedisPasswordEnv 指名变量。
+ControlRedis:
+  Addrs: [127.0.0.1:6379]
+  PoolSizePerNode: 20
 
 # 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.8):资产通道读 player:{id}:location。
-# 上面的 SharedRedis 留给控制域(唤醒频道与去重键、维护选主锁)。不写 Addrs = 指向 SharedRedis。集群部署写种子地址并打开 Cluster:
+# 上面的 ControlRedis 留给控制域(唤醒频道与去重键、维护选主锁)。不写 Addrs = 指向 ControlRedis。集群部署写种子地址并打开 Cluster:
 #   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
 #   Cluster: true
 # PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。
@@ -134,7 +129,7 @@ PlayerRedis:
 # 这是代码级的默认拒绝:一份配置被抄到预发 / 生产时,少抄这一段的结果是"通道关着",
 # 不是"通道悄悄开着"。本地默认也保持 false —— 抄走这份文件同样带不走一个打开的开关。
 #
-# 关闭时:不拨上面的 SharedRedis、不建 scene 节点镜像、不起 outbox 重投循环;
+# 关闭时:不拨上面的 ControlRedis、不建 scene 节点镜像、不起 outbox 重投循环;
 #         浏览 / 详情 / 收藏照常,上架托管与交付一律以错误返回。
 # 打开时:Enabled 改 true,并确保本进程环境里有 SecretEnv 指定的那把密钥 ——
 #         缺失或去空白后不足 32 字节 → **trade 拒绝启动**(fail-closed,不降级)。
@@ -155,8 +150,8 @@ PlayerRedis:
 # (默认值的事实源是 shared/assetop.DefaultLoopConfig 与 shared/assetopwake 的 Default*):
 #   停放档 / 自动放弃 / 日对账 / 落地唤醒只在 Enabled=true 时生效与校验;
 #   终态行清理(Cleanup*)与 Enabled 独立(同 guild):通道关着时历史终态行照样要清。
-# 日对账与自动放弃由多副本里经 Redis 选主(SharedRedis 上的 trade:assetop:maintenance:leader)选出的一个副本执行;
-# 落地唤醒订阅 SharedRedis 上的 assetop:wake 频道(scene 在玩家进场完成时发布)。
+# 日对账与自动放弃由多副本里经 Redis 选主(ControlRedis 上的 trade:assetop:maintenance:leader)选出的一个副本执行;
+# 落地唤醒订阅 ControlRedis 上的 assetop:wake:{aw:N} 分片频道(scene 在玩家进场完成时 SPUBLISH)。
 #
 # 键名与 internal/config/config.go 的 json tag 逐字一致。k8s_deploy.ps1 的 trade ConfigMap 只镜像 Enabled(所有档位固定 false)
 # 与 SecretEnv,下面的落地恢复与 Cleanup* 键刻意不镜像:Enabled 固定 false 时落地恢复参数没有消费者;CleanupEnabled 在 K8s 上
@@ -179,7 +174,7 @@ AssetOp:
   # 日对账(§6.2,只读):每 24 小时把 PENDING 行按 online_retry / offline / alert / abandon_candidate 计数,
   # 刷 assetop_pending_rows{class} 与 assetop_pending_class_oldest_age_seconds{class}。0 = 不跑。
   AuditIntervalMs: 86400000
-  # 落地唤醒订阅(§5.3),键与默认值同 guild 的 AssetOp.Wake:订阅 SharedRedis 上的 assetop:wake,玩家进场完成后
+  # 落地唤醒订阅(§5.3),键与默认值同 guild 的 AssetOp.Wake:订阅 ControlRedis 上的 assetop:wake:{aw:N} 分片频道,玩家进场完成后
   # 立即重投他的 PENDING 行,不再等退避 / 停放档。唤醒只是提示,丢了退回原退避,只慢不错。
   # Enabled 不写 = 开;Concurrency 不写 = 4([1, 64],满了直接丢);TimeoutMs 不写 = 10000
   # (必须大于单行预算 2500ms:写 0 或 [5000, 60000])。跨副本去重窗口固定 5 秒(对齐 scene 的合并窗口),不开放配置。
@@ -199,6 +194,10 @@ Commerce:
   PetConfigs: []
   CurrencyTypes: []
   AllowInstances: false
+  # 人工处置入口(commercefix 调 TradeAdmin.ListManualContracts / ResolveManualContract),缺省关闭。
+  # 开启:密钥(≥32 字节)放进 Secret 注入这个变量名,再写本部署的环境名;手册 docs/ops/trade-commerce-quarantine-runbook.md §4.2。
+  ManualResolutionSecretEnv: ""
+  ManualResolutionEnvironment: ""
 Mall:
   URL: ""
   GatewaySecretEnv: COMMERCE_GATEWAY_SECRET

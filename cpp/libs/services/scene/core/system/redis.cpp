@@ -18,6 +18,7 @@
 #include "player/system/release_fence.h" // [ReleaseFence] 汇总行
 #include "player/system/save_seq.h"      // [SaveSeq] 汇总行
 #include "player/system/save_timing_stats.h"
+#include "engine/core/time/system/time.h" // 托管在场心跳按墙钟秒错开(RefreshHostedPresence)
 #include "thread_context/ecs_context.h"
 #include "thread_context/redis_manager.h"
 
@@ -28,10 +29,12 @@ using namespace muduo::net;
 
 namespace
 {
-	// 部署配置 → 路由层参数(docs/design/redis-player-store-cluster.md §5.6)。配置错误写进 error 返回 false,调用方拒绝启动;
-	// error 不含口令。主机名只在这里解析一次:路由层只认 IP 字面量,运行期不做阻塞 DNS。解析失败同样拒绝启动,
-	// 进程重启会重新解析;带着连不上的种子起来,玩家域就永远不可用。
-	bool BuildPlayerRedisOptions(const GameConfig::PlayerRedisConfig& config, RedisClusterOptions& options, std::string& error)
+	// 部署配置的一段(player_redis / control_redis)→ 路由层的模式、种子与口令(docs/design/redis-player-store-cluster.md §5.6)。
+	// 键策略不在这里定,由调用方按句柄所属的域设置。配置错误写进 error 返回 false,调用方拒绝启动;error 不含口令。
+	// 主机名只在这里解析一次:路由层只认 IP 字面量,运行期不做阻塞 DNS。解析走 ResolveRedisAddress(失败按 1s 间隔重试 10 次,
+	// 仍失败就致命退出,infra-reconnect-overview.md §4 R9):带着连不上的种子起来,这个句柄就永远不可用,进程重启会重新解析。
+	bool BuildRedisClusterOptions(const char* section, const GameConfig::RedisClusterConfig& config, RedisClusterOptions& options,
+								  std::string& error)
 	{
 		if (config.mode() == "standalone")
 		{
@@ -43,12 +46,12 @@ namespace
 		}
 		else
 		{
-			error = "player_redis.mode must be standalone or cluster, got '" + config.mode() + "'";
+			error = std::string(section) + ".mode must be standalone or cluster, got '" + config.mode() + "'";
 			return false;
 		}
 		if (config.seeds().empty() || (options.mode == RedisClusterMode::kStandalone && config.seeds().size() != 1))
 		{
-			error = "player_redis.seeds has " + std::to_string(config.seeds().size()) + " entries, mode " + config.mode() +
+			error = std::string(section) + ".seeds has " + std::to_string(config.seeds().size()) + " entries, mode " + config.mode() +
 					(options.mode == RedisClusterMode::kStandalone ? " needs exactly one" : " needs at least one");
 			return false;
 		}
@@ -57,32 +60,22 @@ namespace
 			const std::optional<redis_cluster::HostPort> parts = redis_cluster::SplitHostPort(seed);
 			if (!parts)
 			{
-				error = "player_redis seed '" + seed + "' is not host:port";
+				error = std::string(section) + " seed '" + seed + "' is not host:port";
 				return false;
 			}
 			std::string ip(parts->host);
 			if (!redis_cluster::IsIpLiteral(ip))
 			{
-				muduo::net::InetAddress resolved(parts->port);
-				if (!muduo::net::InetAddress::resolve(ip, &resolved))
-				{
-					error = "player_redis seed '" + seed + "' could not be resolved";
-					return false;
-				}
-				ip = resolved.toIp();
+				ip = ResolveRedisAddress(ip, parts->port).toIp();
 			}
 			options.seeds.push_back(redis_cluster::NodeEndpoint{std::move(ip), parts->port});
 		}
 		options.connect.password = config.password();
-		// 玩家域只接受带 hash tag 的键(§5.1):控制域的键发到这个句柄当场拒绝,单实例开发时也一样。
-		options.hashTagPolicy = redis_cluster::HashTagPolicy::kAllKeys;
-		// 控制集群的键也带 tag(全部 Redis 上 Cluster §3.1),只看「有没有 tag」拦不住它们,再按 tag 的形状拒绝。
-		options.keyDomain = redis_cluster::KeyDomain::kPlayer;
 		return true;
 	}
 
-	// 只打模式、种子和开关,不打口令。
-	void LogPlayerRedisOptions(const RedisClusterOptions& options)
+	// 只打模式、种子和开关,不打口令。label 是日志里的句柄名("Player Redis" / "Control Redis")。
+	void LogRedisClusterOptions(const char* label, const RedisClusterOptions& options)
 	{
 		std::string seeds;
 		for (const redis_cluster::NodeEndpoint& seed : options.seeds)
@@ -93,13 +86,14 @@ namespace
 			}
 			seeds += seed.ToString();
 		}
-		LOG_INFO << "Player Redis: mode=" << (options.mode == RedisClusterMode::kCluster ? "cluster" : "standalone")
+		LOG_INFO << label << ": mode=" << (options.mode == RedisClusterMode::kCluster ? "cluster" : "standalone")
 				 << " seeds=" << seeds << " auth=" << (options.connect.password.empty() ? "off" : "on");
 	}
 
-	std::string FormatPlayerRedisStats(const RedisClusterStats& stats)
+	// prefix 是行首标签([PlayerRedis] / [ControlRedis]),其后的 key=value 写法由 tools/scripts/stress_summarize.ps1 解析,改了要同步改脚本。
+	std::string FormatRedisClusterStats(const char* prefix, const RedisClusterStats& stats)
 	{
-		return "[PlayerRedis] rejected_by_guard=" + std::to_string(stats.rejectedByGuard) +
+		return std::string(prefix) + " rejected_by_guard=" + std::to_string(stats.rejectedByGuard) +
 			   " rejected_not_connected=" + std::to_string(stats.rejectedNotConnected) +
 			   " rejected_queue_full=" + std::to_string(stats.rejectedQueueFull) +
 			   " moved=" + std::to_string(stats.movedRedirects) +
@@ -110,6 +104,27 @@ namespace
 			   " aborted=" + std::to_string(stats.abortedCommands) +
 			   " topology_applied=" + std::to_string(stats.topologyApplied) +
 			   " topology_refresh_failures=" + std::to_string(stats.topologyRefreshFailures);
+	}
+
+	// 有变化才打一行,并把 last 更新成这次的计数。这一拍里拒绝类或预算耗尽有增长时升 WARN:这些命令没有执行,
+	// 调用方走的是各自的失败路径。重定向是迁移时的常态,只打 INFO。
+	void LogRedisClusterStatsIfChanged(const char* prefix, const RedisClusterStats& current, RedisClusterStats& last)
+	{
+		if (current == last)
+		{
+			return;
+		}
+		const bool alarming = current.rejectedByGuard > last.rejectedByGuard || current.rejectedQueueFull > last.rejectedQueueFull ||
+							  current.budgetExhausted > last.budgetExhausted;
+		if (alarming)
+		{
+			LOG_WARN << FormatRedisClusterStats(prefix, current);
+		}
+		else
+		{
+			LOG_INFO << FormatRedisClusterStats(prefix, current);
+		}
+		last = current;
 	}
 } // namespace
 
@@ -126,11 +141,16 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 
 	RedisClusterOptions playerRedisOptions;
 	std::string playerRedisError;
-	if (!BuildPlayerRedisOptions(tlsNodeConfigManager.GetGameConfig().player_redis(), playerRedisOptions, playerRedisError))
+	if (!BuildRedisClusterOptions("player_redis", tlsNodeConfigManager.GetGameConfig().player_redis(), playerRedisOptions,
+								  playerRedisError))
 	{
 		LOG_FATAL << "[PlayerRedis] refused to start: " << playerRedisError;
 	}
-	LogPlayerRedisOptions(playerRedisOptions);
+	// 玩家域只接受带 hash tag 的键(§5.1):控制域的键发到这个句柄当场拒绝,单实例开发时也一样。
+	playerRedisOptions.hashTagPolicy = redis_cluster::HashTagPolicy::kAllKeys;
+	// 控制集群的键也带 tag(全部 Redis 上 Cluster §3.1),只看「有没有 tag」拦不住它们,再按 tag 的形状拒绝。
+	playerRedisOptions.keyDomain = redis_cluster::KeyDomain::kPlayer;
+	LogRedisClusterOptions("Player Redis", playerRedisOptions);
 
 	// 刻意不挂重连回调(docs/design/infra-reconnect-overview.md §4 R14;负责人 2026-11-05 定:重连成功不做业务逻辑)。
 	// 这里原来在任一主节点握手完成时补发 handoff 撤回、A2′ 与改派核实,并且忽略各条目的重试间隔。补发本来就是幂等的,
@@ -143,24 +163,22 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 	// 到期只看各条目自己的重试时刻。
     tlsPlayerRedis.Connect(loop, std::move(playerRedisOptions));
 
-	// 本 zone 的场景控制域(docs/design/control-plane-zone-scoping-20261105.md §4.5):scene_manager 写在本 zone 所属组控制域实例
-	// 里的读模型(世界分线目录、神秘商人)。认证、重连与存活探测契约与 zoneredis 相同;配置缺省时与 zoneredis 是同一个实例。
-	// 库号只认 0,口径同 Node 连 zoneredis(跨运行时契约把库号钉在 0)。
+	// 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.2、§5.2):scene_manager 写的读模型(世界分线目录、神秘商人)、
+	// 场景归属对账的 MGET、资产待办唤醒的 SPUBLISH。原来的两个单实例句柄(核心 zoneredis 上的唤醒、本 zone 组控制域实例上的
+	// 读模型)合成这一个。Cluster 只有 0 号库,不需要库号。同样不挂重连回调:四处用法都是一次性的,丢了等下一拍或退回原退避(R14 口径)。
 	{
-		const auto &sceneControl = tlsNodeConfigManager.GetGameConfig().scene_control_redis();
-		if (sceneControl.db() != 0)
+		RedisClusterOptions controlRedisOptions;
+		std::string controlRedisError;
+		if (!BuildRedisClusterOptions("control_redis", tlsNodeConfigManager.GetGameConfig().control_redis(), controlRedisOptions,
+									  controlRedisError))
 		{
-			LOG_FATAL << "[SceneControlRedis] refused to start: scene_control_redis.db=" << sceneControl.db()
-					  << " is not supported; every runtime shares Redis db 0";
+			LOG_FATAL << "[ControlRedis] refused to start: " << controlRedisError;
 		}
-		const muduo::net::InetAddress sceneControlAddress =
-			ResolveRedisAddress(sceneControl.host(), static_cast<uint16_t>(sceneControl.port()));
-		// 只打开关,不打口令。
-		LOG_INFO << "Scene control Redis address: " << sceneControlAddress.toIpPort()
-				 << ", auth: " << (sceneControl.password().empty() ? "off" : "on");
-		RedisConnectOptions sceneControlOptions;
-		sceneControlOptions.password = sceneControl.password();
-		tlsSceneControlRedis.Connect(loop, sceneControlAddress, std::move(sceneControlOptions));
+		// 单键可以不带 tag;带 tag 只能是登记过的控制族;多键必须同一个 tag(碰巧同 slot 也拒绝)。玩家域的 tag 发过来当场拒绝。
+		controlRedisOptions.hashTagPolicy = redis_cluster::HashTagPolicy::kMultiKeyOnly;
+		controlRedisOptions.keyDomain = redis_cluster::KeyDomain::kControl;
+		LogRedisClusterOptions("Control Redis", controlRedisOptions);
+		tlsControlRedis.Connect(loop, std::move(controlRedisOptions));
 	}
 
     // 协调用途的 Redis 写(继承标记清理、handoff 标记撤回、改派核实)的 1s 重试节拍。
@@ -176,18 +194,26 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         // 改派待确认表的各阶段截止、核实的首发 / 重发、落地条目的检查,与撤回表、A2′ 用同一个 1s 节拍(单调时钟的
         // 时刻在这里取一次、显式传入)。表空时直接返回。静态函数,不引入新的绑定。
         // BeginShutdown 只取消周期存盘,本定时器在停机 drain 期间仍在跑:停机谓词等待确认表清空靠的就是它。
-        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now()); });
+        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now());
+        // 托管落点的看护(目标节点没把人建起来时的有界重试,hosted_placement_retry.h)同一个节拍。表空时直接返回;
+        // 节点疏散 / 计划排空 / 停机期间它自己不再读、不再重试。静态函数,不引入新的绑定。
+        PlayerLifecycleSystem::SweepHostedPlacementRetries(hosted_placement_retry::Clock::now());
+        // 离线托管角色的在场心跳与托管归位信息(hosted_presence.h,player-connection-lost-hold.md §4.5)同一个节拍:
+        // 每名托管角色 20 秒一次,按玩家号错开。停机 drain 期间照常续:带着托管改派票据退出中、改派待确认的角色
+        // 节点还在对他负责,不让 player_locator 在改派有结论之前就替他归位。静态函数,不引入新的绑定。
+        PlayerLifecycleSystem::RefreshHostedPresence(TimeSystem::NowSecondsUTC()); });
     retryTimerActive_ = true;
 
     // 每 30 秒打一轮计数快照。
     static constexpr double kQueueSnapshotIntervalSec = 30.0;
     // lastEnterFence:上一次打出 [EnterFence] 时的计数(只在本定时器里读写,逻辑线程上;初值全 0 = 第一次有计数就打)。
     // lastReleaseFence:上一次打出 [ReleaseFence] 时的计数(同上,只在本定时器里读写)。
-    // lastPlayerRedis:上一次打出 [PlayerRedis] 时的计数(同上)。
+    // lastPlayerRedis / lastControlRedis:上一次打出 [PlayerRedis] / [ControlRedis] 时的计数(同上)。
     // lastSaveTiming:上一次打 [SaveTiming] 时的存盘分段耗时累计值(同上),这一行打的是两次之间的窗口值。
     snapshotTimerId_ = loop->runEvery(kQueueSnapshotIntervalSec, [lastEnterFence = enter_fence_stats::Snapshot{},
                                                                   lastReleaseFence = release_fence_stats::Snapshot{},
                                                                   lastPlayerRedis = RedisClusterStats{},
+                                                                  lastControlRedis = RedisClusterStats{},
                                                                   lastSaveTiming = save_timing_stats::Snapshot{}]() mutable
                                       {
         // 格式由 tools/scripts/stress_summarize.ps1 解析:前缀和 key=value 的写法不要改,改了要同步改脚本。
@@ -354,6 +380,8 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                 line += '=';
                 line += std::to_string(releaseFenceStats.credentialQualifications[i]);
             }
+            // 2026-11-12 追加在行尾:带 keep_held 的会话结束释放(托管归位撞门)遇到本节点持有、按约定不动的次数。
+            line += " session_ended_kept_held=" + std::to_string(releaseFenceStats.sessionEndedKeptHeld);
             if (releaseFenceStats.AlarmingIncreaseSince(lastReleaseFence))
             {
                 LOG_WARN << line;
@@ -364,24 +392,10 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
             }
             lastReleaseFence = releaseFenceStats;
         }
-        // 玩家域路由层的累计计数(redis-player-store-cluster.md §8.1 观察项),有变化才打。单独一行、单独前缀,不动上面几行的解析格式。
-        // 这一拍里拒绝类或预算耗尽有增长时升 WARN:这些命令没有执行,调用方走的是各自的失败路径。重定向是迁移时的常态,只打 INFO。
-        const RedisClusterStats playerRedisStats = tlsPlayerRedis.stats();
-        if (playerRedisStats != lastPlayerRedis)
-        {
-            const bool alarming = playerRedisStats.rejectedByGuard > lastPlayerRedis.rejectedByGuard ||
-                                  playerRedisStats.rejectedQueueFull > lastPlayerRedis.rejectedQueueFull ||
-                                  playerRedisStats.budgetExhausted > lastPlayerRedis.budgetExhausted;
-            if (alarming)
-            {
-                LOG_WARN << FormatPlayerRedisStats(playerRedisStats);
-            }
-            else
-            {
-                LOG_INFO << FormatPlayerRedisStats(playerRedisStats);
-            }
-            lastPlayerRedis = playerRedisStats;
-        } });
+        // 两个集群句柄路由层的累计计数(redis-player-store-cluster.md §8.1 观察项),有变化才打。各自单独一行、单独前缀,
+        // 不动上面几行的解析格式。
+        LogRedisClusterStatsIfChanged("[PlayerRedis]", tlsPlayerRedis.stats(), lastPlayerRedis);
+        LogRedisClusterStatsIfChanged("[ControlRedis]", tlsControlRedis.stats(), lastControlRedis); });
     snapshotTimerActive_ = true;
 
     // 周期存盘,限定 scene 崩溃时的丢失窗口。缺省 60 秒;

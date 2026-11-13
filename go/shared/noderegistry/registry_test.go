@@ -16,7 +16,6 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"shared/releasetrack"
-	"shared/snowflake"
 )
 
 const (
@@ -56,13 +55,14 @@ func TestKeyFormatsMatchCpp(t *testing.T) {
 	}
 }
 
-// node_id 区间与既有副本、C++ 同口径:0 保留,上界 = Snowflake worker 位宽。
-func TestNodeIDRangeMatchesSnowflake(t *testing.T) {
+// node_id 区间与既有副本、C++ NodeAllocator 同口径:0 保留,上界 1<<17-1(= C++ kMaxNodeId)。
+// node_id 不喂给任何发号器,上界不跟发号器的位宽走;改它要同步 guild / player_locator 的副本与 C++。
+func TestNodeIDRangeMatchesCpp(t *testing.T) {
 	if nodeIDMin != 1 {
 		t.Fatalf("nodeIDMin = %d, want 1 (0 is reserved)", nodeIDMin)
 	}
-	if uint64(nodeIDMax) != snowflake.NodeMask {
-		t.Fatalf("nodeIDMax = %d, want snowflake.NodeMask %d", nodeIDMax, snowflake.NodeMask)
+	if nodeIDMax != 131071 {
+		t.Fatalf("nodeIDMax = %d, want 131071 (C++ NodeAllocator kMaxNodeId)", nodeIDMax)
 	}
 }
 

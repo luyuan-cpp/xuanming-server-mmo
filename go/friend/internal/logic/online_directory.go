@@ -23,7 +23,7 @@ func (l *FriendLogic) listOnlinePlayers(ctx context.Context, caller uint64, req 
 		return reject(constants.ErrStorage, "online directory limiter unavailable")
 	}
 	// 分页也计额度；每分钟 60 页，独立于加好友申请额度。读故障 fail-closed。
-	countRaw, err := rds.EvalCtx(ctx, requestQuotaScript, []string{fmt.Sprintf("friend:{directory:%d}", caller)}, "60")
+	countRaw, err := rds.Eval(ctx, requestQuotaScript, []string{fmt.Sprintf("friend:{directory:%d}", caller)}, "60").Result()
 	if err != nil {
 		logx.WithContext(ctx).Errorf("[friend] Failed to read online directory rate limit: %v", err)
 		return reject(constants.ErrStorage, "online directory limiter unavailable")

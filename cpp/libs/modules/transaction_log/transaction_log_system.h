@@ -9,29 +9,24 @@
 #include "modules/currency/constants/currency.h"
 #include "proto/common/rollback/transaction_log.pb.h"
 
-// Kafka topic for transaction log entries —— 这里是**基名**,不是实际发送用的名字。
-//
-// 实际名字带 topic 世代后缀 `_g<N>`(modules/audit/audit_topic.h 的 AuditTopicName,0 = 第一代),世代号来自部署配置
-// AuditTopicGeneration,与 go/data_service 的 Kafka.TopicGeneration、go/db 的 AuditOutbox.TopicGeneration 对齐;
-// 不一致就是写进没人消费的 topic,流水静默丢失。**别把这个常量直接交给 KafkaProducer** —— 裸名字会被 broker 自动建成
-// 1 分区。2026-11-11 起 scene 上的流水由 go/db 的审计发件箱转发(下面类注释),C++ 只直接发不进发件箱的那一小部分。
-constexpr char kTransactionLogTopicBase[] = "transaction_log_topic";
-
-// Builds TransactionLogEntry messages. Gameplay never waits on them: refusals and failures are logged.
+// Builds TransactionLogEntry messages. Gameplay never waits on them: refusals are logged.
 //
 // Usage:
 //   TransactionLogSystem::LogCurrencyAdd(player, kCurrencyGold, 100, balanceBefore, balanceAfter);
-//   TransactionLogSystem::LogItemTransfer(fromPlayer, toPlayer, itemUuid, configId, qty, TX_TRADE, corrId);
+//   TransactionLogSystem::LogItemDestroy(player, itemUuid, configId, qty, corrId);
 //
-// 流水跟着存盘提交走,而且和存档在同一个事务里落库(2026-11-11,审计发件箱,docs/design/player-audit-outbox.md):
+// 流水只有一条出路:随玩家存盘提交,和存档在同一个事务里落库(2026-11-11,审计发件箱,docs/design/player-audit-outbox.md)。
 // 流水描述的是玩家存档里的改动。改动在内存里一发生就发 Kafka 的话,存盘最终没提交(scene 崩溃、实体被废黜、
 // 存盘被确定性拒绝)时,流水里会留下一笔从未落库的收益或扣减:人工终结工具会凭它判「scene 已应用」(一物两得),
 // GM 回收会按它多挂一笔玩家从没拿到的欠款;反过来提交之后才发 Kafka(11-05 的提交闸门),Kafka 不可用超过
-// message.timeout.ms 或进程在发送前崩溃,已提交的改动就没有流水(断线重连 R13)。所以 scene 上开了审计发件箱
-// (AuditOutbox::Enable)之后,只涉及一名玩家的流水进这名玩家的审计队列,随他的下一笔存盘交给 go/db,
-// 与存档在同一个 TiDB 事务里写进发件箱,再由 go/db 的转发循环投 Kafka。于是「流水里有这条」等于「这笔改动已提交」,
-// 反过来也成立(Kafka 停多久都不丢)。
-// 不进发件箱的(没开发件箱的进程:battle、单测、工具;两边都有玩家或都没有玩家的流水)照旧直接发 Kafka,发送失败只打 ERROR。
+// message.timeout.ms 或进程在发送前崩溃,已提交的改动就没有流水(断线重连 R13)。所以每条流水进它那名玩家的审计队列
+// (AuditOutbox),随他的下一笔存盘交给 go/db,与存档在同一个 TiDB 事务里写进发件箱,再由 go/db 的转发循环投 Kafka。
+// 于是「流水里有这条」等于「这笔改动已提交」,反过来也成立(Kafka 停多久都不丢)。
+//
+// C++ 不直接发审计 topic,没有第二条出路:
+//   - 一条流水必须只涉及一名玩家(from_player、to_player 恰好填一个),才能随那名玩家的存盘提交。两名玩家之间的转移记成两条
+//     (转出方一条、转入方一条,同一个 correlation_id),各随各的存盘;两边都填或都不填的流水拒收并打 ERROR。
+//   - 没开审计发件箱的进程(没有存盘:battle、工具、没装配存盘状态机的单测)记流水同样拒收并打 ERROR。
 //
 // 线程:只在所属逻辑线程上调用;审计队列是线程局部的,scene 上就是 tlsEcs 所在的那条线程。
 class TransactionLogSystem
@@ -68,16 +63,7 @@ public:
         uint64_t debtRemaining);
 
     // ── Item operations ──────────────────────────────────────────────────
-
-    // Log an item being transferred between two players (or player ↔ system).
-    static void LogItemTransfer(
-        uint64_t fromPlayerId,
-        uint64_t toPlayerId,
-        uint64_t itemUuid,
-        uint32_t configId,
-        uint32_t quantity,
-        TransactionType txType,
-        uint64_t correlationId = 0);
+    // 两名玩家之间转移物品没有单独的入口:转出方记 LogItemDestroy、转入方记 LogItemCreate,带同一个 correlationId(类注释)。
 
     // Log an item being created (quest reward, GM grant, etc.).
     // correlationId / extra 可选:战斗掉落传 battle_id 与来源 JSON,
@@ -111,18 +97,23 @@ public:
 
     // ── Generic / low-level ──────────────────────────────────────────────
 
-    // Build and record a fully custom entry. 开了审计发件箱时,只涉及一名玩家的流水进这名玩家的审计队列(见类注释),
-    // 排队、放行与丢弃由 AuditOutbox 和存盘状态机处置;其余直接发 Kafka。
+    // Record a fully custom entry:盖上 zone,进它那名玩家的审计队列(类注释);排队、放行与丢弃由 AuditOutbox 和存盘状态机处置。
+    // tx_id 无效(号段没号)、不是恰好一名玩家、没开审计发件箱、单条超限时拒收,打 ERROR 并按原因计数(audit_outbox_stats)。
+    // 有单一玩家时,不论收下还是被拒,判定之后都调一次 SetAssetChangedHook 装的钩子。
     static void RecordEntry(const TransactionLogEntry &entry);
 
-    // 单测用:替换直接发送(缺省发 Kafka)。只影响不进发件箱的流水。传空函数恢复缺省。
-    using Publisher = std::function<void(const TransactionLogEntry &entry)>;
-    static void SetPublisherForTest(Publisher publisher);
+    // 资产变动通知:每条流水只要指名了恰好一名玩家,RecordEntry 判定完(收下或被拒)就按这名玩家调一次。传空函数 = 不通知。
+    // 用途:货币、物品的每次变动都由 CurrencySystem、BagService 自己记流水,玩法代码绕不开这里,所以 scene 在这一个收口处
+    // 请求一次合并存盘(PlayerLifecycleSystem::RequestKeyProgressSave),资产变动约 1 秒内提交,不靠每个玩法各自记得触发
+    // (docs/design/player-data-tidb-scaling-plan.md §4.5)。通知跟着「资产变了」走,不跟着「流水收下了」走:
+    // 流水被拒(号段断供、单条超限)时货币、物品照样已经在内存里变了,同样要尽快存盘,否则崩溃时多丢的正好是资产。
+    // 没有单一玩家的流水不通知:不知道该请谁存盘(scene 里也没有这样的调用方)。快照请求不走这里,要不要尽快提交由请求方决定。
+    // 约束:钩子里只许登记「稍后存盘」,不许同步存盘或再记流水 —— 调用点在货币、背包的改动函数中间,改动还没做完。
+    // 线程:钩子是线程局部的,与审计队列同一条线程;钩子里可以换掉或清掉钩子自己。
+    using AssetChangedHook = std::function<void(uint64_t playerId)>;
+    static void SetAssetChangedHook(AssetChangedHook hook);
 
 private:
-    // 序列化并直接发 Kafka(或单测替换的发送函数)。只给不进发件箱的流水用,失败只打 ERROR。
-    static void Publish(const TransactionLogEntry &entry);
-
     // Get the player_id from an entity. Returns 0 if not resolvable.
     static uint64_t ResolvePlayerId(entt::entity player);
 

@@ -12,7 +12,7 @@
 #include "node/system/node/node_kafka_command_handler.h"
 #include "table/code/all_table.h"
 #include "thread_context/ecs_context.h"
-#include "thread_context/redis_manager.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 
 #include <google/protobuf/stubs/common.h>
 
@@ -176,8 +176,8 @@ int RunNodeMain(StartNodeFn&& startNode)
     startNode(loop);
     // 兜底处理未经 Node::FinalizeShutdownInLoop() 就离开 loop 的入口;
     // 调用幂等,Hiredis Channel 必须在 EventLoop 析构前释放。
-    tlsRedis.Shutdown();
-    tlsSceneControlRedis.Shutdown(); // 只有 scene 连过;其它节点是空操作
+    tlsControlRedis.Shutdown(); // 只有 scene 连过;其它节点是空操作
+    tlsPlayerRedis.Shutdown();
     tlsEcs.Clear();
     google::protobuf::ShutdownProtobufLibrary();
     return 0;

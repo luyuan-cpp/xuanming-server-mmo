@@ -119,6 +119,10 @@ func createSceneOnNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId u
 	if req.SceneId == 0 {
 		return nil, fmt.Errorf("CreateScene refused: scene id must be nonzero")
 	}
+	// 场景所属的 zone(docs/design/redis-cluster-all-domains-20261110.md §3.4):场景的控制域键写在本进程 zone 的 {ctl:<z>} 下,
+	// scene 节点的归属对账只按节点自己的 zone 拼键,所以节点核对这一项,不是本节点的 zone 就拒建(FAILED_PRECONDITION)。
+	// 填本进程的 zone,不填拨号用的 zoneId:调用方拨错 zone 时由节点拒掉,而不是在别的 zone 的节点上建出一个之后会被对账拆掉的场景。
+	req.ZoneId = svcCtx.Config.ZoneId
 	conn, err := getOrDialNode(ctx, svcCtx, zoneId, nodeId)
 	if err != nil {
 		return nil, fmt.Errorf("dial scene node %s: %w", nodeId, err)
@@ -194,14 +198,17 @@ func RequestNodeReleasePlayer(ctx context.Context, svcCtx *svc.ServiceContext, z
 // 写 A1′ 标记;完全不持有 → 按 owner_epoch 条件补写凭证标记;其余忽略。没有接手节点,target 两项留空。
 // covered 是这次释放覆盖到的最新登录身份(§13):持有节点上的实体已绑上比它新的登录时不退出,迟到的释放因此退不掉新会话。
 // 零值 = 不带身份,scene 按只比 owner_epoch 的旧行为处理。
+// keepHeld(ReleasePlayerRequest.keep_held)= 托管归位撞门时的释放(player-connection-lost-hold.md §4.5):持有节点只要有实体就
+// 什么都不做,只在完全不持有时补写凭证。LeaveScene 一侧恒 false。
 func RequestNodeReleaseEndedSession(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string,
-	playerId uint64, expectedOwnerEpoch uint64, covered placementIdentity) error {
+	playerId uint64, expectedOwnerEpoch uint64, covered placementIdentity, keepHeld bool) error {
 	return callReleasePlayer(ctx, svcCtx, zoneId, nodeId, &scenenodepb.ReleasePlayerRequest{
 		PlayerId:               playerId,
 		ExpectedOwnerEpoch:     expectedOwnerEpoch,
 		SessionEnded:           true,
 		CoveredSessionId:       covered.sessionID,
 		CoveredLoginGeneration: covered.loginGeneration,
+		KeepHeld:               keepHeld,
 	})
 }
 
@@ -214,9 +221,9 @@ func callReleasePlayer(ctx context.Context, svcCtx *svc.ServiceContext, zoneId u
 
 	client := scenenodepb.NewSceneNodeGrpcClient(conn)
 	if _, err := client.ReleasePlayer(ctx, req); err != nil {
-		return fmt.Errorf("ReleasePlayer RPC to node %s (expected_owner_epoch=%d session_ended=%v covered=%d/%d): %w",
+		return fmt.Errorf("ReleasePlayer RPC to node %s (expected_owner_epoch=%d session_ended=%v covered=%d/%d keep_held=%v): %w",
 			nodeId, req.GetExpectedOwnerEpoch(), req.GetSessionEnded(), req.GetCoveredSessionId(),
-			req.GetCoveredLoginGeneration(), err)
+			req.GetCoveredLoginGeneration(), req.GetKeepHeld(), err)
 	}
 
 	return nil
@@ -459,7 +466,7 @@ func dispatchSessionEndedRelease(svcCtx *svc.ServiceContext, zoneID uint32, node
 	safego.Go(SafePointReleasePlayer, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
-		if err := RequestNodeReleaseEndedSession(ctx, svcCtx, zoneID, nodeID, playerID, expectedOwnerEpoch, covered); err != nil {
+		if err := RequestNodeReleaseEndedSession(ctx, svcCtx, zoneID, nodeID, playerID, expectedOwnerEpoch, covered, false); err != nil {
 			logx.Errorf("[LeaveRelease] session-ended ReleasePlayer failed (next LeaveScene retry will resend): player=%d zone=%d node=%s expected_owner_epoch=%d covered_session=%d covered_generation=%d err=%v",
 				playerID, zoneID, nodeID, expectedOwnerEpoch, covered.sessionID, covered.loginGeneration, err)
 			return

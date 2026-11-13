@@ -10,12 +10,18 @@
 // 寄送(Tick,每秒一次,每名玩家至多一封在途):
 //   - 只寄「最近一次已提交的存档快照里已经有」的条目(RoleAdmissionSystem::IsSnapshotCommitted,与收件箱确认、资产通道的
 //     落盘判定同一个依据):结算还没落盘就寄出,进程一崩结算会重做,邮件却已经发出,物品就多了一份。
+//     有条目而还没有这样的快照(刚加载,或结算那一笔还没落定)时每 mail_outbox_rules::kResaveIntervalMs 请求一次存盘:
+//     加载之后第一笔存盘哪怕没有脏行也会写(SavePlayerImpl),存档里带回来的条目因此很快可寄。
 //   - 玩家此刻可改(player_mutability)才寄:删条目是存档改动;交接、退出中、没有归属围栏时由下一个持有者再寄。
 //   - 以 battle 身份签 MailAdmin.SendPersonalMail(密钥 MAIL_PRODUCER_SECRET_BATTLE,只有 scene 与 mail 两端持有)。
 //     请求由条目逐字段确定性重建、不带过期时刻(邮件按首次落库那一刻算有效期);邮件按 (sender_kind, request_id) 先判重,
 //     同一条重寄只会拿回原邮件。
-//   - 回了 mail_id 才删条目,并请求一次关键进度存盘。其余一律留着按退避重试(mail_outbox_rules::RetryDelayMs),
+//   - 回了 mail_id 才删条目,并请求一次存盘。其余一律留着按退避重试(mail_outbox_rules::RetryDelayMs),
 //     没有放弃:物品不能因为寄不出去而消失。删了还没落盘就崩,下一次加载重寄,邮件回原邮件,再删。
+//
+// 没配发件密钥的环境(没有部署 mail 的调试栈)不接改投:PrepareBattleOverflow 回 kServiceUnavailable,结算照旧整笔延后,
+// 玩家从临时格取回腾位后直接入包。欠下一笔永远寄不出去的物品不如不欠。
+//
 // 线程模型:只在 scene loop 线程调用。寄送回调不持实体句柄,按 player_id 重新取实体。
 
 #include <cstdint>
@@ -49,10 +55,14 @@ public:
 	};
 	using PreparedMails = std::vector<PreparedMail>;
 
+	// 本进程发不发得出邮件:配了 battle 发件密钥(至少 32 字节)。只读环境,不发请求。
+	static bool IsSenderConfigured();
+
 	// 战斗结算两包都放不下时,在任何副作用之前备好待寄条目:分封、逐封取请求号(发号器 txlog 段)、核待寄队列余量。
 	// 返回 kSuccess 时 out 是备好的条目;否则 out 为空,回:
 	//   kInvalidParameter   —— 空批次或 battleId 为 0;
-	//   kServiceUnavailable —— 玩家身上缺 PlayerMailOutboxComp(加载不变量被破坏,ERROR),或请求号暂取不到(号段暂缺,WARN);
+	//   kServiceUnavailable —— 没配发件密钥(不接改投);玩家身上缺 PlayerMailOutboxComp(加载不变量被破坏,ERROR);
+	//                          或请求号暂取不到(号段暂缺,WARN);
 	//   kBagItemNotStacked  —— 待寄队列放不下这几封(邮件长期寄不出去,WARN)。
 	// 只取号,不改存档;取了号而这一笔最终没提交,号作废即可(发号器的号不要求连续)。
 	static uint32_t PrepareBattleOverflow(entt::entity player, uint64_t battleId, const mail_outbox_rules::MailItems& items,
@@ -71,6 +81,9 @@ public:
 		bool callOk{false};
 		uint32_t tipId{0};
 		uint64_t mailId{0};
+		// mail 以 gRPC UNAUTHENTICATED 拒了签名(判据见 mail_outbox_rules::IsSignatureRejected):邮件没写,按拒收的节奏
+		// 退避、留着条目,每次失败都打 ERROR mail_outbox_stuck。与 tipId 无关,在 OnSendDone 里先于 ClassifySend 判。
+		bool signatureRejected{false};
 	};
 	using SendDone = std::function<void(SendOutcome)>;
 	// 发一封的结果。只有 kSent 之后 done 会被调用(在 loop 线程上恰好一次,从不在本次调用栈内同步调用);
@@ -79,15 +92,12 @@ public:
 	{
 		kSent,
 		kNoReadyNode,  // 发现里没有就绪的 mail 节点:多是短暂不可达
-		kNoSecret,     // 没配 MAIL_PRODUCER_SECRET_BATTLE:部署问题,要人处理
+		kNoSecret,     // 没配 MAIL_PRODUCER_SECRET_BATTLE(条目是别的环境带来的):部署问题,要人处理
 		kInvalidEntry, // 条目形状不合法(加载时已打过 mail_outbox_invalid):邮件不会收,要人处理
-		kSignFailed,   // 密钥不足 32 字节等:部署问题,要人处理
+		kSignFailed,   // 签名失败:要人处理
 
 		kCount
 	};
-	using SendFn = std::function<SendStart(uint64_t playerId, const MailOutboxEntry& entry, SendDone done)>;
-	// 这一条是否已在最近一次已提交的存档快照里(可以寄)。
-	using DurableFn = std::function<bool(entt::entity player, uint64_t requestId)>;
 
 	// 由条目逐字段确定性地建出发给邮件的请求(不签名):sender_kind = 5(battle)、收件人 = playerId、物品按条目原序
 	// (config_id 升序)、不带过期时刻(邮件按首次落库那一刻算有效期)。同一条目每次建出的字节相同,邮件据此判重。
@@ -99,9 +109,20 @@ public:
 	// 其余只处理当前在途的那一次,按 mail_outbox_rules::ClassifySend 记一次失败并退避。实体已不在或换了人时什么都不做。
 	static void OnSendDone(uint64_t playerId, uint64_t requestId, uint64_t attempt, SendOutcome outcome, uint64_t nowMs);
 
-	// 单测替身。传空恢复生产实现。生产代码不调用。
-	static void SetSendForTest(SendFn fn);
-	static void SetDurableCheckForTest(DurableFn fn);
-	// 时钟(UTC 毫秒):Tick 与寄送回调都从它取「现在」。传空恢复 TimeSystem::NowMillisecondsUTC。
-	static void SetNowForTest(std::function<uint64_t()> fn);
+	// 本系统对外部世界的全部依赖。生产用缺省实现;单测经 SetDependenciesForTest 替换其中几项。
+	struct Dependencies
+	{
+		// 发不发得出邮件(IsSenderConfigured 的实现)。生产:读发件密钥环境变量。
+		std::function<bool()> senderConfigured;
+		// 发一封。生产:签名后经发现里就绪的 mail 节点调 MailAdmin.SendPersonalMail。
+		std::function<SendStart(uint64_t playerId, const MailOutboxEntry& entry, SendDone done)> send;
+		// 这一条是否已在最近一次已提交的存档快照里(可以寄)。生产:PlayerLastPersistedSnapshotComp + IsSnapshotCommitted。
+		std::function<bool(entt::entity player, uint64_t requestId)> isDurable;
+		// 请求尽快存一次盘。生产:PlayerLifecycleSystem::RequestKeyProgressSave。reason 只进日志。
+		std::function<void(entt::entity player, const char* reason)> requestSave;
+		// 现在(UTC 毫秒):Tick 与寄送回调都从它取。生产:TimeSystem::NowMillisecondsUTC。
+		std::function<uint64_t()> nowMs;
+	};
+	// 换掉依赖:没填的成员用生产实现补齐,传 {} 即全部恢复生产实现。生产代码不调用。
+	static void SetDependenciesForTest(Dependencies dependencies);
 };

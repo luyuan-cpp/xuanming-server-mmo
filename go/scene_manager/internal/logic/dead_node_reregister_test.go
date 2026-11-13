@@ -19,24 +19,29 @@ package logic
 // 的 switch),SameInstanceKeepsItsInstances 与 SweepRecordsTheInstanceFromTheMirror 红在 requireIntact。
 // 完整的变异清单与命令见 docs/PROGRESS.md 2026-11-05「死节点收尾认出失租后回来的同一进程」。
 //
-// 2026-11-11 R15 残余(infra-reconnect-overview.md §4.1 R15 一行)的四条用例在文件末尾,节点号 8779~8782。红的取法同样用变异,
-// 每次只做一处:
+// 2026-11-11~12 R15 残余(infra-reconnect-overview.md §4.1 R15 一行)的七条用例在文件末尾,节点号 8779~8785。红的取法同样用
+// 变异,每次只做一处:
 //   - 变异 J:去掉 clearNodeDeathForInstance 里的 `|| !isLeader()`(跟随者照旧清 death_at),FollowerSeeingTheReturn 红;
 //   - 变异 K:luaAtomicDestroyOrphanOfDeadNode 去掉 luaSceneClaimDeadNodeTaskCheck(认领不核对任务),ReturnMidSweep 与
 //     ClaimChecksTheCleanupTask 红;
-//   - 变异 L:luaFinishDeadNodeReconcile 只看成员在不在、不比入队时刻(退回改前),StaleFinishLeavesANewerDeathAlone 红。
+//   - 变异 L:luaFinishDeadNodeReconcile 只看成员在不在、不比入队时刻(退回改前),StaleFinishLeavesANewerDeathAlone 红;
+//   - 变异 M:删掉 drainPendingDeadNodeReconciles 里 cancelDeadNodeReconcileIfRegisteredInEtcd 那一段 switch,
+//     EtcdShowsTheReturnBeforeTheMirror 红;
+//   - 变异 N:cancelDeadNodeReconcileIfRegisteredInEtcd 读注册表出错时改回 instanceNotBack,EtcdReadFailureDestroysNothing 红;
+//   - 变异 O:去掉 reconcileDeadNodeScenes 里按时间预算 break 的那一段,PassBudgetYieldsAndRechecks 红。
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
@@ -300,11 +305,12 @@ func TestDeadNodeReregister_FollowerSeeingTheReturnLeavesTheBarrier(t *testing.T
 }
 
 // 一轮收尾进行到一半(第一个场景已认领)时,判死的那一代回来、任务被撤:剩下的场景一个都不拆,计数不删,任务按已出队计。
-// 生产里撤销来自领导者的 watch goroutine,与收尾 goroutine 并发;这里在第一次认领脚本返回之后同步插进去。
+// 同一进程里处理 watch 事件与收尾在同一个循环里先后执行,一轮中途撤任务的是别的进程:换主时新领导者处理了这次重新注册,
+// 本进程还没察觉自己已降级、仍在跑这一轮。这里在第一次认领脚本返回之后同步插进去。
 // 修复前逐个认领只比对属主,回来的就是这个 node_id,剩下的照拆。
 func TestDeadNodeReregister_ReturnMidSweepStopsTheRest(t *testing.T) {
 	hook := &afterEvalHook{script: luaAtomicDestroyOrphanOfDeadNode}
-	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
+	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, hook)
 	c := newTakeoverCase(t, sc, mr, "8780", 87801, 87802)
 	putNodeRegistrationForTest(t, sc, c.node, "inst-a")
 	deleteNodeRegistrationForTest(t, sc, mr, c.node)
@@ -320,7 +326,7 @@ func TestDeadNodeReregister_ReturnMidSweepStopsTheRest(t *testing.T) {
 
 	var destroyed, intact []uint64
 	for _, id := range c.scenes {
-		if mr.Exists(sceneNodeKey(id)) {
+		if mr.Exists(sceneNodeKey(takeoverZone, id)) {
 			intact = append(intact, id)
 		} else {
 			destroyed = append(destroyed, id)
@@ -329,7 +335,7 @@ func TestDeadNodeReregister_ReturnMidSweepStopsTheRest(t *testing.T) {
 	require.Len(t, destroyed, 1, "撤销之前认领的那一个已经拆了,不可恢复")
 	require.Len(t, intact, 1, "撤销之后的一个都不拆")
 	survivor := intact[0]
-	assert.Equal(t, c.node, mustGet(t, mr, sceneNodeKey(survivor)), "留下的实例属主原样")
+	assert.Equal(t, c.node, mustGet(t, mr, sceneNodeKey(takeoverZone, survivor)), "留下的实例属主原样")
 	in, err := sc.Redis.Sismember(nodeScenesKey(takeoverZone, c.node), strconv.FormatUint(survivor, 10))
 	require.NoError(t, err)
 	assert.True(t, in, "留下的实例必须留在反向索引里")
@@ -338,7 +344,7 @@ func TestDeadNodeReregister_ReturnMidSweepStopsTheRest(t *testing.T) {
 	_, queued := pendingDeadNodeForTest(t, mr, takeoverZone, c.node)
 	assert.False(t, queued, "任务已撤")
 	assert.Equal(t, 0, c.drain(), "任务已撤,没有可做的")
-	assert.Equal(t, c.node, mustGet(t, mr, sceneNodeKey(survivor)), "下一拍也不拆")
+	assert.Equal(t, c.node, mustGet(t, mr, sceneNodeKey(takeoverZone, survivor)), "下一拍也不拆")
 }
 
 // 逐个认领核对任务身份:入队时刻对不上(撤销之后同一 node_id 又判死了一次,表里是新任务)时一个键都不动、
@@ -363,7 +369,7 @@ func TestDeadNodeReregister_ClaimChecksTheCleanupTask(t *testing.T) {
 	ok, err = destroyOrphanOfDeadNode(ctx, sc, takeoverZone, c.scenes[0], c.node, current)
 	require.NoError(t, err)
 	assert.True(t, ok, "任务身份对得上才拆")
-	assert.False(t, mr.Exists(sceneNodeKey(c.scenes[0])))
+	assert.False(t, mr.Exists(sceneNodeKey(takeoverZone, c.scenes[0])))
 }
 
 // 撤销之后同一 node_id 又判死了一次,表里是新任务(同一成员,入队时刻更晚)。手里还拿着上一次任务的领导者来结束或放弃它,
@@ -387,4 +393,111 @@ func TestDeadNodeReregister_StaleFinishLeavesANewerDeathAlone(t *testing.T) {
 		assert.True(t, mr.Exists(nodeReconcileScenesKey(takeoverZone, c.node)), "新任务的收尾范围原样(abandon=%v)", abandon)
 		c.requireIntact(t, fmt.Sprintf("上一次任务的结束不得删计数(abandon=%v)", abandon))
 	}
+}
+
+// noPassBudgetForTest 是 reconcileDeadNodeScenes 的「这一轮不限时间」(零值),给直接调它的用例用。
+var noPassBudgetForTest time.Time
+
+// setDeadNodeReconcilePassBudgetForTest 把一轮收尾的时间预算改成 budget,用例结束恢复。
+func setDeadNodeReconcilePassBudgetForTest(t *testing.T, budget time.Duration) {
+	t.Helper()
+	prev := deadNodeReconcilePassBudget
+	deadNodeReconcilePassBudget = budget
+	t.Cleanup(func() { deadNodeReconcilePassBudget = prev })
+}
+
+// overrideZoneRegistryForTest 让 fetchZoneRegistry(收尾动手前的 etcd 现读)按 fetch 给结论,用例结束恢复成公共替身
+// (注册表 = 本进程镜像,installTestZoneFakes)。
+func overrideZoneRegistryForTest(t *testing.T, fetch func(ctx context.Context, zoneID uint32) ([]nodeEntry, error)) {
+	t.Helper()
+	prev := zoneRegistryFetchOverride
+	zoneRegistryFetchOverride = fetch
+	t.Cleanup(func() { zoneRegistryFetchOverride = prev })
+}
+
+// scenesStillMappedForTest 数还有属主映射(没被拆)的场景。
+func scenesStillMappedForTest(c *takeoverCase) int {
+	n := 0
+	for _, id := range c.scenes {
+		if c.mr.Exists(sceneNodeKey(takeoverZone, id)) {
+			n++
+		}
+	}
+	return n
+}
+
+// 判死的那一代已经重新注册,但这一拍的收尾跑在它的 watch 事件之前(同一个循环里排在后面),镜像里还没有它:屏障过了也
+// 不拆,动手前按 etcd 现读的注册表认出它、撤任务(R1-I7)。修复前只看镜像,屏障一过照拆。
+func TestDeadNodeReregister_EtcdShowsTheReturnBeforeTheMirror(t *testing.T) {
+	sc, mr := newTestSvcCtx(t, "")
+	c := newTakeoverCase(t, sc, mr, "8783", 87831, 87832)
+	putNodeRegistrationForTest(t, sc, c.node, "inst-a")
+	deleteNodeRegistrationForTest(t, sc, mr, c.node)
+	c.elapseBarrier(t)
+	returned := nodeEntry{nodeID: c.node}
+	returned.reg.ZoneId = takeoverZone
+	returned.reg.NodeUuid = "inst-a"
+	overrideZoneRegistryForTest(t, func(context.Context, uint32) ([]nodeEntry, error) {
+		return []nodeEntry{returned}, nil
+	})
+	require.Empty(t, registeredInstancesOf(takeoverZone, c.node), "前提:镜像里还没有它")
+	backBefore := deadNodeReconcileCountForTest(t, metrics.DeadNodeReconcileOutcomeInstanceBack)
+
+	assert.Equal(t, 1, c.drain(), "撤掉的任务算出队")
+	c.requireIntact(t, "etcd 里判死的那一代已在册,不得拆")
+	_, queued := pendingDeadNodeForTest(t, mr, takeoverZone, c.node)
+	assert.False(t, queued, "任务已撤")
+	assert.False(t, mr.Exists(nodeDeathAtKey(takeoverZone, c.node)), "撤任务的同一步清 death_at")
+	assert.Equal(t, backBefore+1, deadNodeReconcileCountForTest(t, metrics.DeadNodeReconcileOutcomeInstanceBack))
+}
+
+// 屏障过了,但读不到 etcd 注册表:这一拍一个都不拆、任务留着、不起重试计时;读得到之后照常收尾(拿不到证据不拆)。
+func TestDeadNodeReregister_EtcdReadFailureDestroysNothing(t *testing.T) {
+	sc, mr := newTestSvcCtx(t, "")
+	c := newTakeoverCase(t, sc, mr, "8784", 87841)
+	c.declareDead(t)
+	c.elapseBarrier(t)
+	failing := true
+	overrideZoneRegistryForTest(t, func(context.Context, uint32) ([]nodeEntry, error) {
+		if failing {
+			return nil, errors.New("injected etcd read failure")
+		}
+		return nil, nil
+	})
+	retryBefore := deadNodeReconcileCountForTest(t, metrics.DeadNodeReconcileOutcomeRetry)
+
+	assert.Equal(t, 0, c.drain(), "读不到注册表:这一拍不拆")
+	c.requireIntact(t, "读不到注册表:一个键都不动")
+	_, queued := pendingDeadNodeForTest(t, mr, takeoverZone, c.node)
+	assert.True(t, queued, "任务留着,下一拍再判")
+	assert.Equal(t, retryBefore, deadNodeReconcileCountForTest(t, metrics.DeadNodeReconcileOutcomeRetry), "没动手,不算一轮失败")
+
+	failing = false
+	assert.Equal(t, 1, c.drain(), "读得到之后照常收尾")
+	c.requireCleanedUp(t, "读得到之后照常收尾")
+}
+
+// 一轮的时间预算用完就让出(这里调成 0,每轮一个):剩下的场景留在收尾范围里,不算失败;下一拍先重新判一遍,判死的那一代
+// 在两轮之间回来时,剩下的一个都不拆(R1-I7)。
+func TestDeadNodeReregister_PassBudgetYieldsAndRechecks(t *testing.T) {
+	setDeadNodeReconcilePassBudgetForTest(t, 0)
+	sc, mr := newTestSvcCtx(t, "")
+	c := newTakeoverCase(t, sc, mr, "8785", 87851, 87852, 87853)
+	putNodeRegistrationForTest(t, sc, c.node, "inst-a")
+	deleteNodeRegistrationForTest(t, sc, mr, c.node)
+	c.elapseBarrier(t)
+	retryBefore := deadNodeReconcileCountForTest(t, metrics.DeadNodeReconcileOutcomeRetry)
+
+	assert.Equal(t, 0, c.drain(), "预算用完:这一轮只拆一个,任务没做完")
+	assert.Equal(t, 2, scenesStillMappedForTest(c), "这一轮只拆一个")
+	scope, queued := pendingDeadNodeForTest(t, mr, takeoverZone, c.node)
+	require.True(t, queued, "任务留着")
+	assert.Len(t, scope, 2, "拆掉的那一个摘出收尾范围,没轮到的留着")
+	assert.Equal(t, retryBefore, deadNodeReconcileCountForTest(t, metrics.DeadNodeReconcileOutcomeRetry), "让出不算一轮失败")
+
+	putNodeRegistrationForTest(t, sc, c.node, "inst-a") // 两轮之间,领导者处理了判死那一代的重新注册
+	assert.Equal(t, 0, c.drain(), "任务已撤,没有可做的")
+	assert.Equal(t, 2, scenesStillMappedForTest(c), "回来之后剩下的一个都不拆")
+	_, queued = pendingDeadNodeForTest(t, mr, takeoverZone, c.node)
+	assert.False(t, queued, "任务已撤")
 }

@@ -13,8 +13,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	mysqlDriver "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/argon2"
+
+	"shared/authoritysql"
 )
 
 const (
@@ -60,45 +61,44 @@ type PasswordHashStore interface {
 	LookupPasswordHash(ctx context.Context, account string) (canonicalAccount, encodedHash string, found bool, err error)
 }
 
-// SQLPasswordHashStore 从 user_accounts.password 读取 Argon2id PHC 字符串。
-// 这个存储只读；存量迁移走离线工具，注册/改密尚未开放，Login RPC 永不写口令。
+// SQLPasswordHashStore 从口令凭据表(user_accounts.password)读取 Argon2id PHC 字符串。
+// 这个存储只读；账号开通与口令写入走离线工具(cmd/password_admin)，自助注册/改密尚未开放，Login RPC 永不写口令。
 type SQLPasswordHashStore struct {
 	db *sql.DB
 }
 
-func NewSQLPasswordHashStore(dsn string, maxOpenConns, maxIdleConns int) (*SQLPasswordHashStore, error) {
-	if strings.TrimSpace(dsn) == "" {
-		return nil, fmt.Errorf("password auth MySQL DSN is empty")
-	}
-	parsed, err := mysqlDriver.ParseDSN(dsn)
-	if err != nil {
-		return nil, errors.New("password auth MySQL DSN is invalid")
-	}
-	if parsed.DBName == "" {
-		return nil, fmt.Errorf("password auth MySQL DSN must select a database")
-	}
+// passwordStoreStartupBudget 是打开只读权威池并核对表形状的总预算。
+const passwordStoreStartupBudget = 10 * time.Second
 
-	db, err := sql.Open("mysql", parsed.FormatDSN())
-	if err != nil {
-		return nil, fmt.Errorf("open password auth MySQL: %w", err)
+// NewSQLPasswordHashStore 打开口令凭据的只读权威池,并核对凭据表的形状(见 password_schema.go)。
+//
+// 走 shared/authoritysql 而不是裸 sql.Open:每条物理连接按 backend 固定成强一致读(tidb 档只读 leader、不读陈旧快照,
+// mysql 档只连可写主库,连到从库或对端档位不符就拒绝),语句只许读,DSN 里的库名必须就是 database。
+// 认证拿陈旧的口令哈希做判定,改密或停用之后旧口令在延迟窗口里仍能登录,所以这里不接受任何可能读到旧数据的连接。
+//
+// database 在生产是 PasswordAuthDatabase(svc 的装配按运行模式核对);dev / test 可以传夹具库。
+// maxOpenConns <= 0 取 20;上限由 authoritysql 定(128)。maxIdleConns 在 (0, maxOpenConns) 内才生效,其余取 authoritysql 的缺省(等于 maxOpenConns):
+// 每条新建的物理连接都要重新固定会话,不留空闲连接等于每次登录多跑一遍会话初始化。
+func NewSQLPasswordHashStore(ctx context.Context, dsn string, backend authoritysql.Backend, database string, maxOpenConns, maxIdleConns int) (*SQLPasswordHashStore, error) {
+	if strings.TrimSpace(dsn) == "" {
+		return nil, errors.New("password auth DSN is empty")
 	}
 	if maxOpenConns <= 0 {
 		maxOpenConns = 20
 	}
-	if maxIdleConns < 0 {
-		maxIdleConns = 0
-	}
-	if maxIdleConns > maxOpenConns {
-		maxIdleConns = maxOpenConns
-	}
-	db.SetMaxOpenConns(maxOpenConns)
-	db.SetMaxIdleConns(maxIdleConns)
-
-	pingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	startup, cancel := context.WithTimeout(ctx, passwordStoreStartupBudget)
 	defer cancel()
-	if err := db.PingContext(pingCtx); err != nil {
+	db, err := authoritysql.Open(startup, dsn, database, backend, maxOpenConns, authoritysql.Reader())
+	if err != nil {
+		// authoritysql 的错误不含连接串;库名与档位不是秘密,带上它们才分得清是配置写错还是库不通。
+		return nil, fmt.Errorf("open password auth authority pool (database=%s backend=%s): %w", database, backend, err)
+	}
+	if maxIdleConns > 0 && maxIdleConns < maxOpenConns {
+		db.SetMaxIdleConns(maxIdleConns)
+	}
+	if err := VerifyPasswordTableShape(startup, db, database); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("ping password auth MySQL: %w", err)
+		return nil, err
 	}
 	return &SQLPasswordHashStore{db: db}, nil
 }

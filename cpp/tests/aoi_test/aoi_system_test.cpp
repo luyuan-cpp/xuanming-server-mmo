@@ -1332,3 +1332,64 @@ TEST(TeleportReportVerdictTest, FarReportAtOrAfterDeadlineExpires)
     EXPECT_EQ(MovementSystem::JudgeReportAfterTeleport(250.0, 4000, 4000), TeleportReportVerdict::kExpired);
     EXPECT_EQ(MovementSystem::JudgeReportAfterTeleport(250.0, 9000, 4000), TeleportReportVerdict::kExpired);
 }
+
+// ---------------------------------------------------------------------------
+// 纯函数:GroupMoveReceivers(ActorMoveBatch 合并移动广播时"谁收哪几条")
+// ---------------------------------------------------------------------------
+
+namespace
+{
+entt::entity MoveReceiver(uint32_t id)
+{
+    return static_cast<entt::entity>(id);
+}
+} // namespace
+
+// 同一队形的两名队员同一 tick 起步:各自收自己的(本人)也收对方的(观察者),旁观者两条都收 —— 三人一组、一条消息。
+TEST(MoveReceiverGroupingTest, ColumnSeenByTheSameReceiversIsOneMessage)
+{
+    const auto memberA = MoveReceiver(1);
+    const auto memberB = MoveReceiver(2);
+    const auto bystander = MoveReceiver(3);
+    const auto groups = GroupMoveReceivers({{bystander, memberB, memberA}, {bystander, memberA, memberB}});
+    ASSERT_EQ(groups.size(), 1u);
+    EXPECT_EQ(groups[0].moveMask, 0b11u);
+    EXPECT_EQ(groups[0].receivers, (EntityVector{bystander, memberB, memberA})) << "按第一次出现的先后";
+}
+
+// 视野不同的接收者按要收的集合分组:各收各的那几条,谁也不多收、不漏收。
+TEST(MoveReceiverGroupingTest, ReceiversSeeingDifferentMembersGetDifferentMessages)
+{
+    const auto seesFirstOnly = MoveReceiver(10);
+    const auto seesBoth = MoveReceiver(11);
+    const auto seesSecondOnly = MoveReceiver(12);
+    const auto groups = GroupMoveReceivers({{seesFirstOnly, seesBoth}, {seesBoth, seesSecondOnly}});
+    ASSERT_EQ(groups.size(), 3u);
+    EXPECT_EQ(groups[0].moveMask, 0b01u);
+    EXPECT_EQ(groups[0].receivers, EntityVector{seesFirstOnly});
+    EXPECT_EQ(groups[1].moveMask, 0b11u);
+    EXPECT_EQ(groups[1].receivers, EntityVector{seesBoth});
+    EXPECT_EQ(groups[2].moveMask, 0b10u);
+    EXPECT_EQ(groups[2].receivers, EntityVector{seesSecondOnly});
+}
+
+TEST(MoveReceiverGroupingTest, RepeatedReceiverCountsOnceAndMovesWithoutReceiversAreDropped)
+{
+    const auto observer = MoveReceiver(20);
+    const auto groups = GroupMoveReceivers({{observer, observer}, {}});
+    ASSERT_EQ(groups.size(), 1u);
+    EXPECT_EQ(groups[0].moveMask, 0b01u);
+    EXPECT_EQ(groups[0].receivers, EntityVector{observer});
+
+    EXPECT_TRUE(GroupMoveReceivers({}).empty());
+}
+
+// 一批的上限(ActorMoveBatch::kMaxEntities = 64)正好用满 64 位掩码,最高位不溢出。
+TEST(MoveReceiverGroupingTest, FullBatchUsesEveryBitOfTheMask)
+{
+    const auto observer = MoveReceiver(30);
+    const std::vector<EntityVector> receiversPerMove(ActorMoveBatch::kMaxEntities, EntityVector{observer});
+    const auto groups = GroupMoveReceivers(receiversPerMove);
+    ASSERT_EQ(groups.size(), 1u);
+    EXPECT_EQ(groups[0].moveMask, ~uint64_t{0});
+}

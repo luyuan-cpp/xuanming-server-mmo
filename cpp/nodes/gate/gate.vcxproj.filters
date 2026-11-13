@@ -36,13 +36,25 @@
     <ClCompile Include="handler\rpc\client_session_handler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="handler\rpc\client_scene_lane.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="handler\rpc\client_request_lane.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="handler\rpc\client_heartbeat.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="handler\rpc\client_entry_admission.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="handler\rpc\connection_admission.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="handler\rpc\drain_migration.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="handler\rpc\login_session_renewal.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="handler\rpc\router_muduo_forward.cpp">
@@ -101,13 +113,25 @@
     <ClInclude Include="handler\rpc\client_session_handler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="handler\rpc\client_scene_lane.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="handler\rpc\client_request_lane.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="handler\rpc\client_heartbeat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="handler\rpc\client_entry_admission.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="handler\rpc\connection_admission.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="handler\rpc\drain_migration.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="handler\rpc\login_session_renewal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="handler\rpc\router_muduo_forward.h">

@@ -58,9 +58,12 @@ param(
 
     # mysql tables to truncate in every player store of this region (same set as currency_crash_window.ps1).
     # 玩家存档只在 player_store;player_database 只是内存形状,不建表(player_database_1 已于 2026-11-05 删除),写进来 TRUNCATE 会在第一条就中断。
+    # player_audit_outbox 是审计发件箱(docs/design/player-audit-outbox.md §3):不清的话上一轮没投完的流水与快照会在这一轮投出去,
+    # 落进一份已经清空的账本。排在最后:基线早于它的旧库缺这张表,mysql 客户端在第一条出错的语句处停下,排在前面会拦住其余几张表。
     [string[]]$MySqlTables = @(
         'player_store','player_centre_database',
-        'user_accounts','account_share_database'
+        'user_accounts','account_share_database',
+        'player_audit_outbox'
     ),
 
     # data_service 全局库(go/data_service/etc/data_service.yaml 的 SnapshotMySQL.DBName):
@@ -114,7 +117,8 @@ function Invoke-Baseline {
 # 只处理已存在的表:没跑过迁移的库里一张都没有,是合法状态。
 #
 # 本脚本只连本机 mysql 容器。TiDB 环境的清库按 docs/design/tidb-phase1-and-launch-readiness.md §3.5 做:
-# TiDB 上 TRUNCATE 会换表 ID、丢掉预切与 table attributes,清完要重跑 `route_tool -f <yaml> tidb-prepare -zones=… -dry-run=false`。
+# TiDB 上 TRUNCATE 会换表 ID、丢掉预切与 table attributes,清完要重跑 `route_tool -f <yaml> tidb-prepare -zones=… -dry-run=false`
+# (连库身份取 MMORPG_SQL_SCHEMA_DSN 与 MMORPG_SQL_SCHEMA_PRINCIPAL,不用 yaml 里的账号)。
 # 既有全量本地 reset 同时清全局角色目录；Redis清空不再删除SQL归属。仅原显式wipe门禁允许执行。
 # 目录每片一个库(zone_merged_into、zone_merge_history 只在第 0 片,只清已存在的表),流水库没有这些表,只复位 route_meta。
 $RouteDataTables   = @('account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role_removal', 'account_role', 'account_role_ref', 'account_directory', 'player_name_owner', 'player_route', 'zone_merged_into', 'zone_merge_history')

@@ -418,6 +418,8 @@ namespace release_fence
 //                            release_fence::kCredentialQualificationNames。credential_write == 各项之和 + 在途读;
 //                            qualified == written + epoch_moved + superseded + failed + 在途 CAS。no_qualification /
 //                            malformed 有增长时整行升 WARN(release_fence::QualificationAlarming)
+//   session_ended_kept_held  带 keep_held 的会话结束释放(托管归位撞门,player-connection-lost-hold.md §4.5)遇到本节点
+//                            持有该玩家、按约定不动的次数。追加在行尾;偶发正常(心跳短暂写不上),持续增长看 [HostedPresence]
 //   binding_<结论>           本节点持有、归属代际已判释放的会话结束释放再过登录身份判定的分布(§13),key 见
 //                            release_fence::kSessionEndedBindingNames。会话结束释放在 verdicts[] 里记的只是代际判定:
 //                            代际放行而 binding_skip_* 挡下的那几次同样记在 verdicts 的 release 系列里,实际退出次数要相减
@@ -435,6 +437,7 @@ namespace release_fence_stats
 		std::array<std::atomic<uint64_t>, release_fence::kSessionEndedBindingCount> bindingDecisions{};
 		std::atomic<uint64_t> credentialSuperseded{0};
 		std::array<std::atomic<uint64_t>, release_fence::kCredentialQualificationCount> credentialQualifications{};
+		std::atomic<uint64_t> sessionEndedKeptHeld{0};
 	};
 
 	inline Counters &Get()
@@ -497,6 +500,7 @@ namespace release_fence_stats
 		std::array<uint64_t, release_fence::kSessionEndedBindingCount> bindingDecisions{};
 		uint64_t credentialSuperseded{0};
 		std::array<uint64_t, release_fence::kCredentialQualificationCount> credentialQualifications{};
+		uint64_t sessionEndedKeptHeld{0};
 
 		bool operator==(const Snapshot &) const = default;
 
@@ -556,6 +560,7 @@ namespace release_fence_stats
 		{
 			snapshot.credentialQualifications[i] = counters.credentialQualifications[i].load(std::memory_order_relaxed);
 		}
+		snapshot.sessionEndedKeptHeld = counters.sessionEndedKeptHeld.load(std::memory_order_relaxed);
 		return snapshot;
 	}
 } // namespace release_fence_stats

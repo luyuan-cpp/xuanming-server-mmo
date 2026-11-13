@@ -45,7 +45,7 @@
 
 Fetch追加完整`RoleAdmissionIdentity`与`ServiceCallAuth`（字段8/9），Ack为7/8。只接受scene签名、禁止客户端会话metadata；缺场景签名secret拒启。每次消费包括空流/空箱都在同P内核目录原修订、原scene instance、generation尚未closed及完整已登记proto，不能仅比较E整数。请求E必须与原件一致；通过SQL完整原件授权后，只与持久stream高水位比较，Redis仅供STALE诊断，历史Redis快照不再裁决授权。响应载荷仍不公开私有owner字段。
 
-item原唯一行改为永久收据，正常终态仍精确为APPLIED/REJECTED/VOIDED/SETTLED_UNKNOWN。`SweepTerminal`保留调度接缝并返回0，不再物删；因此旧request不能在换主、旧实例重投或原保留期之后再次入箱。代价是容量随已接纳GM处置数增长；原永久审计本就保留完整载荷，本批没有新增第二份业务真相。未来归档必须保留同一唯一键、原摘要和原owner墓碑，不能恢复有限TTL去重。
+item原唯一行改为永久收据，正常终态仍精确为APPLIED/REJECTED/VOIDED/SETTLED_UNKNOWN。不再物删（空转的清理循环与`SweepTerminal`已于2026-11-12删除，见§9.1）；因此旧request不能在换主、旧实例重投或原保留期之后再次入箱。代价是容量随已接纳GM处置数增长；原永久审计本就保留完整载荷，本批没有新增第二份业务真相。未来归档必须保留同一唯一键、原摘要和原owner墓碑，不能恢复有限TTL去重。
 
 分片事实源移入`shared/inboxshard`，旧`inbox.RowShard`兼容转发，data_service挂起查询调用相同公式。旧SQL状态机集成夹具迁到本机真实TiDB并保留显式验收开关，目录P与完整入场原件均用真实SQL行；路由五表从DS唯一DDL常量经Go AST读取，保留正式NULL/CHECK语义，不用proto通用迁移的空字符串代替。新增源码覆盖封存持P竞争、换主旧request拒绝、永久收据、完整原件不匹配、已closed世代拒绝，以及维护围栏先提交时新增/消费/作废/后台CAS无副作用、空箱也核路由与可写开关。集成端点必须显式注入已核任务所有的数值loopback端口，本批实际端点为24000，不默认连接4000。正式生成及运行证据由统一验收记录，既有2026-10-18证据不能覆盖这些改动。
 
@@ -323,7 +323,7 @@ D3 已于 2026-10-15 拍板：独立进程 `go/player_inbox`，按 D-14 独占�
 - **读缺失的口径**（持久数据「读缺失即 fail-closed」规则的一处有记录的例外，见 `ecs-component-access-rules.md`）：判定对无效句柄（`entt::null`）只判全服；有效实体缺封禁表时按「没有单人封禁」回答、不补建。理由：`BagService` 的入口历来接受没有玩家上下文的容器级调用；这个组件唯一的创建点是加载，缺了说明加载不变量已被破坏，而同一实体的存盘会因缺组件整份拒绝，资产通道与收件箱只在落盘之后才终结 / 确认，所以这种状态下发出的物品成不了盘上事实，封禁绕不过去。代价是这个实体的会话内存里可能短暂多出被封物品（随实体不存盘丢弃）；线索是存盘拒绝的 ERROR（`missing=PlayerItemGainBlockComp`）。写入口（Block / Unblock）缺组件一律拒绝、不补建。
 - **交易退回不算获得**（2026-11-10，数据覆写审计 r2-trade#1）：
   - 交易把玩家自己托管的资产还给他（撤单、过期、整单退款、竞价退回），带交易类型 `TX_AUCTION_RETURN`。资产转入、`AddCurrency`、两种带交易类型的 `BagService::AddItems`，都先问 `GainBlockService::CountsAsGain`，对它不判封禁，与「同一所有者内部搬运」同一口径。
-  - 交易的成交所得照常判封禁：被拒后合同转人工，解封后补发；交付顺序的改进写在[聚宝斋设计](jubaozhai-market.md) §6.2 末「获取封禁与托管交易」。打开 GM 封禁处置时，在途交易受的影响见手册 §2 第 6 步。
+  - 交易的成交所得照常判封禁。交付先买家、后卖家（2026-11-12）：买家那条被拒时整单自动退回，卖家那条被拒时合同转人工、解封后补发，见[聚宝斋设计](jubaozhai-market.md) §6.2 末「获取封禁与托管交易」。打开 GM 封禁处置时，在途交易受的影响见手册 §2 第 6 步。
 - **已知边界**：战斗结算里被封的掉落是「这一局不发」而不是「整笔延后」，玩家与客服按 `metric=battle_settlement_item_blocked` 的 battle_id 查。宝石取下被拦是业务拒绝而不是故障：取下入口单独认出 `kAssetBlocked`，原样回 27005 并打 WARN（`PlayerEquipSystem::RemoveGem`，用例 `PlayerEquipTest.RemoveGemOfAGainBannedGemIsRefusedAndKeepsTheGem`）。
 - **运维查询**（2026-11-06 补，源码已改，未编译、未测试）：`PlayerInboxAdmin.GetItemGainBlocks(player_id)`，同样要 `x-admin-token`，只读、不写审计。回包两部分：
   - `blocked_item_config_ids`：玩家**已落盘**存档里的本人封禁表。player_inbox 不能跨库读存档库（AGENTS §7 #6），经 data_service 新增的只读 RPC `GetPlayerItemGainBlock` 读资料行（kind=PROFILE）的 `item_gain_block`；读法、错误口径与 `GetPlayerInboxLedger` 相同（data_service 两者共用 `readPersistedPlayerRow`，存档读共用 `readOwnerAndRow`）：没有写权行 `found=false`，读不成一律是错误、绝不退化成「没有」。
@@ -514,7 +514,7 @@ message player_inbox_audit {
 - **seq 来源**：不用 AUTO_RANDOM，也不依赖 AUTO_INCREMENT。seq 由流行显式分配，带时间下界。
 - **shard 模数**：64，与 `placement.RouteRowShard` 相同，但**常量独立定义**。两张表的模数各自是建表时定下的契约，不联动修改。
 - **shard 公式**：`shard = mix64(player_id) % 64`，`mix64` 是 splitmix64 的终结函数，只由 `inbox.RowShard` 计算（`shard.go`）。
-  - **2026-10-16 首次建表前**由 `player_id % 64` 改为现公式（评审 L5）。存量和回退的 bwmarrin SnowFlake ID 低 9 位是 step，同一毫秒只建一个角色时 step=0，直接取模会把这批玩家全压进 shard 0。mix64 与位布局无关，两套号源都能打散。
+  - **2026-10-16 首次建表前**由 `player_id % 64` 改为现公式（评审 L5）。当时存量和回退的 bwmarrin SnowFlake ID 低 9 位是 step，同一毫秒只建一个角色时 step=0，直接取模会把这批玩家全压进 shard 0。mix64 与位布局无关，换号源不用动公式。bwmarrin 号源 2026-11-12 已删，player_id 现在只由发号器发，公式不变。
   - 上线之后再改公式等于迁移全部主键。`placement.RouteRowShard` 有同样的问题，已登记给 data_service 负责人。
   - **旧公式写出的行对按玩家的读写静默不可见**：所有按玩家的 SQL 都带 `WHERE shard = RowShard(player_id)`，旧行查不出来，锁内判重读不到它，同一 request_id 会再入箱一次（IB-2 失效）；只有按分片扫描的读会撞上读出断言。所以按旧公式写过数据的库必须先清空收件箱三张表。
   - **启动核对**：启动路径与 `-migrate` 在表结构对齐之后跑 `inbox.CheckRowShards`，逐表核对 `(shard, player_id)`。有一行不一致就拒启；`-migrate` 按「需人工」退出（退出码 4），K8s Job 停下而不是反复重试。
@@ -1250,11 +1250,11 @@ v1 不接版本摘要（D4 已拍板）。只有当落地拉取的负载超出�
 （2026-11-10 按 §1 第 48 行的「永久收据」重写，数据覆写审计 r2-doc#2。原文写的是「终态行保留 30 天、领导者清理循环逐行 DELETE」，代码早已不删。）
 
 - **条目行全部永久保留**，包括终态行、PENDING 行、流行和审计行。原唯一行是这个 request 的永久收据：删了它，旧的 GM `request_id` 就能在换主、旧实例重投或原保留期之后再次入箱。判重靠收据还在，不靠时间窗。
-- `SweepTerminal` 保留调度接缝，恒返回 0、不删任何行（`store_maintenance.go`）。领导者上的清理循环照常起，只是空转；`TerminalRetentionDays`、`SweepIntervalSeconds` 两个配置项现在只给这个空转的循环用。
+- **没有清理循环**（2026-11-12，数据覆写审计 r2-doc#2）。原来领导者上空转的清理循环、恒返回 0 的 `SweepTerminal`、`TerminalRetentionDays` 与 `SweepIntervalSeconds` 两个配置项、`player_inbox_sweep_deleted_total` 指标一起删除：它们不删任何行，留着只会让人以为调保留期能控制容量。旧配置里还写着这两个键也能启动（go-zero 忽略未知键）。将来要归档，按下面最后一条的约束另行设计。
 - **容量**：条目行随两类入箱永久增长。
   - GM 处置：每条处置一行。
   - 战斗结算：每局全球对局给每名成员一行，这是增长的大头。
-  - Fetch、挂起护栏都走 `(shard, player_id, state)` 索引，行数增长不影响它们的正确性。单玩家对账 `ReconcilePlayer` 一次最多读 5000 行，老玩家超过这个数时只做部分核对（`store_maintenance.go`），手册与指标按此口径解读。
+  - Fetch、挂起护栏都走 `(shard, player_id, state)` 索引，行数增长不影响它们的正确性。单玩家对账 `ReconcilePlayer` 按 (domain, seq) 主键键集翻页读完这名玩家的全部行（每页 1000 行，`store_maintenance.go` 的 `forEachPlayerItemsPage`），结果完整；耗时随行数线性增长，读不完回错误，不回部分结果（2026-11-12 起；原先一次最多读 5000 行，老玩家超过这个数时只做部分核对）。
 - 将来要归档，必须保留同一唯一键、原摘要和原 owner 墓碑，不能恢复有限 TTL 的去重（§1 第 48 行）。
 
 ### 9.2 过期
@@ -1325,7 +1325,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
   - `player_inbox_reconcile_truncated_total`：对账轮次没覆盖完整个窗口（§9.3）
   - `player_inbox_reconcile_rounds_total{result}`：ok / error / timeout
   - `player_inbox_reconcile_ledger_read_total{result}`：found / absent / error / invalid
-  - `player_inbox_sweep_deleted_total`
+  - ~~`player_inbox_sweep_deleted_total`~~：已删（2026-11-12），没有清理循环（§9.1）。
   - ~~`player_inbox_reconcile_mismatch_total`~~：已删（评审 L11），由下面的 gauge 取代。
   - 启动时按封闭集合预置零值序列的只有 notify_total、reconcile_rounds_total、reconcile_ledger_read_total 三组；enqueue / fetch / ack / void 没有预置，引用它们的告警另带一支 `X unless X offset <窗口>`，接住「从无到 1」。
 - **扫描型 gauge**（只由领导者产出，避免多个副本重复上报后被放大；告警和看板一律用 `max()` 聚合）：
@@ -1520,7 +1520,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 | 分片（L5） | mix64 参考值；bwmarrin ID 在新公式下打散；旧公式的行被 `CheckRowShards` 点名、启动拒绝 |
 | 提醒（L6） | 落定 / 退避两类结局；退避 30 秒起、封顶 30 分钟；`node_missing` 悬满 1 小时才落定；积压仍计入退避中的行 |
 | 审计（L9） | 内容列只取自条目行；条目行清理之后审计行仍答得出「做了什么」 |
-| 配置 | 挂欠款进白名单即拒启；对账窗口 ≥ 2 × 间隔；`Middlewares.Stat` 开着时 Fetch / Ack 必须列进 `IgnoreContentMethods`（评审 L12，不记请求体）；`CoreRedis.PoolSize` 必须为正 |
+| 配置 | 挂欠款进白名单即拒启；对账窗口 ≥ 2 × 间隔；`Middlewares.Stat` 开着时 Fetch / Ack 必须列进 `IgnoreContentMethods`（评审 L12，不记请求体）；`ControlRedis.PoolSizePerNode` 必须为正 |
 | 告警守卫 | `TestAlertRulesReferenceRegisteredMetrics`：告警文件里的指标名都已注册 |
 | 测试库守卫（L14） | 集成测试 DROP 之前库名必须命中 `^(player_inbox_it\|player_inbox_it_\d+_\d+)$` |
 

@@ -2,6 +2,7 @@
 
 #include "gate_codec.h"
 #include "handler/rpc/client_request_lane.h"
+#include "handler/rpc/client_scene_lane.h"
 #include "proto/common/base/message.pb.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
 #include "session/manager/session_manager.h"
@@ -42,6 +43,9 @@ gate_drain_migration::PushOutcome PushRedirect(SessionId sessionId, Guid ticketP
 	// 在 client_session_handler.cpp 的 RejectedBehindQueuedLeaveGame 里见到已重定向即回带 id 的 1003(两种模式都生效);
 	// 只有直连模式的 gRPC 请求(HandleGrpcNodeMessage)按 O7 维持现状、不在 gate 拦截。
 	gate_lane::OnSessionRedirected(session);
+	// 场景 lane 同理(docs/design/client-scene-request-handoff-hold.md §4.6):跨 zone 传送时玩家正在离开原场景节点,
+	// 还排着或在等重投的 scene 请求等不到受理,同样先逐条回 1003 再推 124。
+	gate_scene_lane::OnSessionRedirected(sessionId, session);
 
 	MessageContent content;
 	content.set_message_id(SceneClientPlayerCommonRedirectToGateMessageId);

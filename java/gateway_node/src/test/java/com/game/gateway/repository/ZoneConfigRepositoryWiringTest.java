@@ -5,10 +5,12 @@ import com.game.gateway.dto.ZoneSettingsRequest;
 import com.game.gateway.entity.ZoneConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.IllegalTransactionStateException;
@@ -16,6 +18,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.ErrorResponseException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,7 +30,8 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * <p>验「语句经 Spring Data / Hibernate 真的能执行、语义对」:native ODKU 的命名参数绑定(含 open_time 为 null、
  * 同名参数 :now 出现两次)、已存在的行一列不改(第一轮数据审计 §4 第 18 条)、JPQL 批量 UPDATE / DELETE、
- * COALESCE 保留维护文案,以及控制器各写接口的 200 / 204 / 400 / 404 / 409 与「update 绝不插入」。
+ * COALESCE 保留维护文案、行版本(每条 UPDATE 加一、整行替换带版本条件、ODKU 已存在分支不动版本,2026-11-12)、
+ * 加锁回读必须在调用方事务里,以及控制器各写接口的 200 / 204 / 400 / 404 / 409 / 412 / 428 与「update 绝不插入」。
  * <b>不验锁行为</b>:H2 没有 InnoDB 的锁语义,
  * 锁序由 {@link ZoneConfigUpsertLockOrderMySqlTest} 在真 MySQL 上验。
  *
@@ -88,11 +92,11 @@ class ZoneConfigRepositoryWiringTest {
 
     @Test
     void updateSettingsNeverInsertsAndKeepsCreatedAt() {
-        repo.updateSettings(ABSENT_ZONE, zone(ABSENT_ZONE, "ghost", 0, 1, "", null, false, 0), T1);
+        assertEquals(0, repo.updateSettings(ABSENT_ZONE, zone(ABSENT_ZONE, "ghost", 0, 1, "", null, false, 0), 1L, T1));
         assertTrue(repo.findById(ABSENT_ZONE).isEmpty(), "更新不存在的区服不得把它插进来");
 
         repo.insertIfAbsent(zone(ZONE, "a", 0, 5000, "", null, false, 0), T1);
-        repo.updateSettings(ZONE, zone(ZONE, "b", 2, 100, "关服", null, true, 3), T2);
+        assertEquals(1, repo.updateSettings(ZONE, zone(ZONE, "b", 2, 100, "关服", null, true, 3), versionOf(ZONE), T2));
 
         ZoneConfig z = repo.findById(ZONE).orElseThrow();
         assertEquals("b", z.getName());
@@ -138,12 +142,44 @@ class ZoneConfigRepositoryWiringTest {
         assertEquals(0, closed.getManualStatus());
         assertEquals(T2, closed.getUpdatedAt());
 
-        repo.updateSettings(ZONE, zone(ZONE, "renamed", 0, 7000, "", null, false, 1), T2);
+        assertEquals(1, repo.updateSettings(ZONE, zone(ZONE, "renamed", 0, 7000, "", null, false, 1), versionOf(ZONE), T2));
         assertTrue(repo.findById(ZONE).orElseThrow().isCreateRoleClosed(), "a full-row PUT keeps the toggle");
 
         repo.updateCreateRoleClosed(ZONE, false, T2);
         assertFalse(repo.findById(ZONE).orElseThrow().isCreateRoleClosed());
         repo.updateCreateRoleClosed(ABSENT_ZONE, true, T2);
+        assertTrue(repo.findById(ABSENT_ZONE).isEmpty(), "an absent zone is never inserted");
+    }
+
+    // 本区角色上限(2026-11-12):新区缺省 0;只有它自己的写改它;按上限关闭是比较并写 —— 上限变了、为 0、
+    // 开关已关都一行不改(返回 0),命中才关上(返回 1),其余列不动。
+    @Test
+    void roleCapacityDefaultsZeroAndCloseAtCapacityIsConditional() {
+        repo.insertIfAbsent(zone(ZONE, "keep-me", 0, 6000, "", null, true, 9), T1);
+        assertEquals(0, repo.findById(ZONE).orElseThrow().getRoleCapacity(), "a new zone has no role capacity");
+        assertEquals(0, repo.closeCreateRoleAtRoleCapacity(ZONE, 0, T2), "no capacity, nothing to close");
+
+        repo.updateRoleCapacity(ZONE, 30000, T2);
+        ZoneConfig capped = repo.findById(ZONE).orElseThrow();
+        assertEquals(30000, capped.getRoleCapacity());
+        assertEquals("keep-me", capped.getName(), "the capacity write must not touch other columns");
+        assertFalse(capped.isCreateRoleClosed());
+
+        assertEquals(1, repo.updateSettings(ZONE, zone(ZONE, "renamed", 0, 7000, "", null, false, 1), versionOf(ZONE), T2));
+        assertEquals(30000, repo.findById(ZONE).orElseThrow().getRoleCapacity(), "a full-row PUT keeps the capacity");
+
+        assertEquals(0, repo.closeCreateRoleAtRoleCapacity(ZONE, 20000, T2), "a decision made with a stale capacity is void");
+        assertFalse(repo.findById(ZONE).orElseThrow().isCreateRoleClosed());
+
+        assertEquals(1, repo.closeCreateRoleAtRoleCapacity(ZONE, 30000, T2));
+        ZoneConfig closed = repo.findById(ZONE).orElseThrow();
+        assertTrue(closed.isCreateRoleClosed());
+        assertEquals(30000, closed.getRoleCapacity());
+        assertEquals(7000, closed.getCapacity(), "closing must not touch other columns");
+        assertEquals(0, repo.closeCreateRoleAtRoleCapacity(ZONE, 30000, T2), "already closed: nothing changes");
+
+        assertEquals(0, repo.closeCreateRoleAtRoleCapacity(ABSENT_ZONE, 30000, T2));
+        repo.updateRoleCapacity(ABSENT_ZONE, 10, T2);
         assertTrue(repo.findById(ABSENT_ZONE).isEmpty(), "an absent zone is never inserted");
     }
 
@@ -167,6 +203,58 @@ class ZoneConfigRepositoryWiringTest {
         assertThrows(IllegalTransactionStateException.class, () -> repo.lockZoneIdForUpdate(ZONE));
     }
 
+    // create 的加锁回读(2026-11-12):事务里读得到整行,行不在是空;同样只许在调用方事务里调用。
+    @Test
+    void findByIdForUpdateReadsTheRowAndRequiresCallerTransaction() {
+        repo.insertIfAbsent(zone(ZONE, "z", 0, 5000, "", null, false, 0), T1);
+        TransactionTemplate tx = new TransactionTemplate(txManager);
+
+        assertEquals("z", tx.execute(status -> repo.findByIdForUpdate(ZONE)).orElseThrow().getName());
+        assertTrue(tx.execute(status -> repo.findByIdForUpdate(ABSENT_ZONE)).isEmpty());
+        assertThrows(IllegalTransactionStateException.class, () -> repo.findByIdForUpdate(ZONE));
+    }
+
+    // 行版本(2026-11-12):插入取调用方给的起始值,ODKU 已存在分支不动它;每条 UPDATE 加一;整行替换只在版本相符时写。
+    @Test
+    void rowVersionStartsAtTheInsertedValueAndEveryWriteBumpsIt() {
+        ZoneConfig seed = zone(ZONE, "v", 0, 5000, "", null, false, 0);
+        seed.setVersion(500L);
+        repo.insertIfAbsent(seed, T1);
+        assertEquals(500L, versionOf(ZONE), "插入取调用方给的起始版本");
+        ZoneConfig again = zone(ZONE, "other", 1, 9000, "x", null, true, 2);
+        again.setVersion(7L);
+        repo.insertIfAbsent(again, T2);
+        assertEquals(500L, versionOf(ZONE), "已存在分支一列不改,版本也不动");
+
+        // 整行替换:版本不符一行不改(返回 0,内容、版本、updated_at 都不变);相符才写,版本加一。
+        assertEquals(0, repo.updateSettings(ZONE, zone(ZONE, "stale", 2, 1, "", null, false, 0), 499L, T2));
+        ZoneConfig untouched = repo.findById(ZONE).orElseThrow();
+        assertEquals("v", untouched.getName());
+        assertEquals(500L, untouched.getVersion());
+        assertEquals(T1, untouched.getUpdatedAt());
+        assertEquals(1, repo.updateSettings(ZONE, zone(ZONE, "fresh", 0, 6000, "", null, false, 0), 500L, T2));
+        assertEquals(501L, versionOf(ZONE));
+        assertEquals(0, repo.updateSettings(ZONE, zone(ZONE, "second", 0, 6000, "", null, false, 0), 500L, T2),
+                "两个运维基于同一次 GET 的整行替换:先到的写进去,后到的条件不再成立");
+        assertEquals("fresh", repo.findById(ZONE).orElseThrow().getName());
+
+        // 局部修改与按上限关创角不带版本条件,但都加一;值没变的写也是一个新版本。
+        repo.updateManualStatus(ZONE, 1, "m", T2);
+        assertEquals(502L, versionOf(ZONE));
+        repo.updateCreateRoleClosed(ZONE, false, T2);
+        assertEquals(503L, versionOf(ZONE), "值没变的写也加一");
+        repo.updateRoleCapacity(ZONE, 10, T2);
+        assertEquals(504L, versionOf(ZONE));
+        assertEquals(1, repo.closeCreateRoleAtRoleCapacity(ZONE, 10, T2));
+        assertEquals(505L, versionOf(ZONE));
+        assertEquals(0, repo.closeCreateRoleAtRoleCapacity(ZONE, 10, T2));
+        assertEquals(505L, versionOf(ZONE), "条件不成立的写一行不改,版本也不动");
+
+        // 基于局部修改之前那个版本的整行替换必须失败:不能把刚置的维护状态用旧整行改回开放。
+        assertEquals(0, repo.updateSettings(ZONE, zone(ZONE, "late", 0, 6000, "", null, false, 0), 501L, T2));
+        assertEquals(1, repo.findById(ZONE).orElseThrow().getManualStatus());
+    }
+
     @Test
     void controllerWritePathsEndToEnd() {
         AdminZoneController controller = new AdminZoneController(repo, new TransactionTemplate(txManager));
@@ -187,21 +275,37 @@ class ZoneConfigRepositoryWiringTest {
         assertEquals(5000, untouched.getCapacity());
         assertEquals("维护中", untouched.getMaintenanceMsg());
 
+        String etag = controller.getById(ZONE).getHeaders().getETag();
+        assertNotNull(etag, "GET 回 ETag");
         ZoneSettingsRequest partial = new ZoneSettingsRequest();
         partial.setName("only-name");
-        assertEquals(HttpStatus.BAD_REQUEST, controller.update(ZONE, partial).getStatusCode(), "只给 name 的 PUT 回 400");
+        assertEquals(HttpStatus.BAD_REQUEST, refusal(() -> controller.update(ZONE, etag, partial)), "只给 name 的 PUT 回 400");
         assertEquals(1, repo.findById(ZONE).orElseThrow().getManualStatus(), "被拒的 PUT 一列都不写");
+        assertEquals(HttpStatus.PRECONDITION_REQUIRED,
+                refusal(() -> controller.update(ZONE, null, settings(null, "z3", 1, 5000, "维护中", null, false, 0))),
+                "没带 If-Match 回 428");
+        assertEquals("z", repo.findById(ZONE).orElseThrow().getName(), "428 一列都不写");
 
-        assertEquals(HttpStatus.OK, controller.update(ZONE, settings(null, "z3", 1, 5000, "维护中", null, false, 0)).getStatusCode());
+        assertEquals(HttpStatus.OK, controller.update(ZONE, etag, settings(null, "z3", 1, 5000, "维护中", null, false, 0)).getStatusCode());
+        // 拿同一次 GET 的 ETag 再整行 PUT:两个运维先后 GET 再 PUT 时,后到的就是这样被挡下的。412,一列都不写。
+        assertEquals(HttpStatus.PRECONDITION_FAILED,
+                refusal(() -> controller.update(ZONE, etag, settings(null, "z4", 0, 9000, "", null, true, 9))));
+        assertEquals("z3", repo.findById(ZONE).orElseThrow().getName(), "412 一列都不写");
+        assertNotEquals(etag, controller.getById(ZONE).getHeaders().getETag(), "写过之后 ETag 变了");
         assertEquals(HttpStatus.NOT_FOUND,
-                controller.update(ABSENT_ZONE, settings(null, "ghost", 0, 5000, "", null, false, 0)).getStatusCode());
+                controller.update(ABSENT_ZONE, etag, settings(null, "ghost", 0, 5000, "", null, false, 0)).getStatusCode());
         assertTrue(repo.findById(ABSENT_ZONE).isEmpty(), "update 不存在的区服回 404,且不得插入");
 
+        String beforeMaintenance = controller.getById(ZONE).getHeaders().getETag();
         ZoneConfig maintenance = controller.setMaintenance(ZONE, new AdminZoneController.MaintenanceRequest("m")).getBody();
         assertNotNull(maintenance);
         assertEquals(1, maintenance.getManualStatus());
         assertEquals("z3", maintenance.getName());
         assertEquals(HttpStatus.NOT_FOUND, controller.setMaintenance(ABSENT_ZONE, null).getStatusCode());
+        // 局部命令不带 If-Match,但让版本加一:基于命令之前那次 GET 的整行 PUT 回 412,维护状态不会被旧整行改回开放。
+        assertEquals(HttpStatus.PRECONDITION_FAILED,
+                refusal(() -> controller.update(ZONE, beforeMaintenance, settings(null, "z3", 0, 5000, "", null, false, 0))));
+        assertEquals(1, repo.findById(ZONE).orElseThrow().getManualStatus());
 
         ZoneConfig open = controller.setOpen(ZONE).getBody();
         assertNotNull(open);
@@ -212,6 +316,16 @@ class ZoneConfigRepositoryWiringTest {
         assertEquals(HttpStatus.NO_CONTENT, controller.delete(ZONE).getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND, controller.delete(ZONE).getStatusCode());
         assertTrue(repo.findById(ZONE).isEmpty());
+    }
+
+    /** 这一区当前的行版本(库内值)。 */
+    private long versionOf(long zoneId) {
+        return repo.findById(zoneId).orElseThrow().getVersion();
+    }
+
+    /** 控制器以 problem details 拒绝时的状态码;没有拒绝就判红。 */
+    private static HttpStatusCode refusal(Executable call) {
+        return assertThrows(ErrorResponseException.class, call).getStatusCode();
     }
 
     /** 控制器的请求体:每个业务字段都给(openTime 经 setter 记为「给了」,null 就是没有开服时间)。 */

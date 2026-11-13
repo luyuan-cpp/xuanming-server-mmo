@@ -1,6 +1,7 @@
 package commerce
 
 import (
+	"slices"
 	"testing"
 
 	tradepb "proto/trade"
@@ -57,37 +58,35 @@ func TestNextDueMsByStage(t *testing.T) {
 	}
 }
 
-// 缺口清单第 16 条:成交子单从推进中变成已成交、已取消时唤醒母单;别的变化、别的种类都不唤醒。
-// 2026-11-11 起子单转人工不再连带母单,也不唤醒它(jubaozhai-market.md §15.7.1 第 4 类)。
-func TestFilledParentToWake(t *testing.T) {
+// 缺口清单第 16 条:成交子单从推进中变成已成交、已取消时唤醒两张母单(买单与卖单);别的变化、别的种类都不唤醒。
+// 2026-11-11 起卖单也唤醒(以前只唤醒买单,卖单要等兜底复查);子单转人工不再连带母单,也不唤醒它
+// (jubaozhai-market.md §15.7.1 第 4 类)。
+func TestFilledParentsToWake(t *testing.T) {
 	fill := func(status uint32) *tradepb.TradeCommerceRecord {
-		return &tradepb.TradeCommerceRecord{Kind: 4, Side: 0, ParentId: 900, Status: status}
+		return &tradepb.TradeCommerceRecord{Kind: 4, Side: 0, ParentId: 900, CounterpartyId: 901, Status: status}
 	}
 	for _, settled := range []uint32{Settled, Cancelled} {
-		if got := filledParentToWake(fill(Delivering), fill(settled)); got != 900 {
-			t.Errorf("子单收尾为 %d 时应唤醒母单,得到 %d", settled, got)
+		if got := filledParentsToWake(fill(Delivering), fill(settled)); !slices.Equal(got, []uint64{900, 901}) {
+			t.Errorf("子单收尾为 %d 时应唤醒买单与卖单,得到 %v", settled, got)
 		}
 	}
-	if got := filledParentToWake(fill(Delivering), fill(Manual)); got != 0 {
-		t.Errorf("子单转人工不算收尾,不唤醒母单: %d", got)
+	if got := filledParentsToWake(fill(Delivering), fill(Manual)); got != nil {
+		t.Errorf("子单转人工不算收尾,不唤醒母单: %v", got)
 	}
-	if got := filledParentToWake(fill(Delivering), fill(Settled)); got != 900 {
-		t.Errorf("人工处理完的子单(状态已回到推进中)结案时照常唤醒母单: %d", got)
+	if got := filledParentsToWake(fill(Escrowing), fill(Delivering)); got != nil {
+		t.Errorf("子单还在推进,不应唤醒母单: %v", got)
 	}
-	if got := filledParentToWake(fill(Escrowing), fill(Delivering)); got != 0 {
-		t.Errorf("子单还在推进,不应唤醒母单: %d", got)
-	}
-	if got := filledParentToWake(fill(Settled), fill(Settled)); got != 0 {
-		t.Errorf("已收尾的子单再推进一次不重复唤醒: %d", got)
+	if got := filledParentsToWake(fill(Settled), fill(Settled)); got != nil {
+		t.Errorf("已收尾的子单再推进一次不重复唤醒: %v", got)
 	}
 	parent := &tradepb.TradeCommerceRecord{Kind: 4, Side: 1, Status: Escrowing}
 	done := &tradepb.TradeCommerceRecord{Kind: 4, Side: 1, Status: Settled}
-	if got := filledParentToWake(parent, done); got != 0 {
-		t.Errorf("母单自己结案不唤醒谁: %d", got)
+	if got := filledParentsToWake(parent, done); got != nil {
+		t.Errorf("母单自己结案不唤醒谁: %v", got)
 	}
 	consignment := &tradepb.TradeCommerceRecord{Kind: 3, ParentId: 900, Status: Settled}
-	if got := filledParentToWake(&tradepb.TradeCommerceRecord{Kind: 3, ParentId: 900, Status: Delivering}, consignment); got != 0 {
-		t.Errorf("不是市场子单不唤醒: %d", got)
+	if got := filledParentsToWake(&tradepb.TradeCommerceRecord{Kind: 3, ParentId: 900, Status: Delivering}, consignment); got != nil {
+		t.Errorf("不是市场子单不唤醒: %v", got)
 	}
 }
 
@@ -105,5 +104,31 @@ func TestShardFiltersFollowOwns(t *testing.T) {
 	}
 	if e.commerceShards().Args()[0] != 3 || e.receiptShards().Args()[0] != 9 {
 		t.Fatal("两类工作各自按自己的键分工")
+	}
+}
+
+// 拍品结案(成交或按撤单)的那一步回它引用的出价,供 advance 提交之后唤醒(delivery_order.go 的拍卖退回靠它及时退款);其余情况回 0。
+func TestFinishedLotBid(t *testing.T) {
+	w := &tradepb.TradeCommerceWorkflow{WinningBidId: 42}
+	lot := func(status uint32) *tradepb.TradeCommerceRecord { return &tradepb.TradeCommerceRecord{Kind: 5, Status: status} }
+	cases := []struct {
+		name          string
+		before, after *tradepb.TradeCommerceRecord
+		want          uint64
+	}{
+		{"成交", lot(Delivering), lot(Settled), 42},
+		{"整单退回后按撤单结案", lot(CancelPending), lot(Cancelled), 42},
+		{"还在交付", lot(Delivering), lot(Delivering), 0},
+		{"转人工不算结案", lot(Delivering), lot(Manual), 0},
+		{"已经结案的再推一次", lot(Settled), lot(Settled), 0},
+		{"不是拍品", &tradepb.TradeCommerceRecord{Kind: 3, Status: Delivering}, &tradepb.TradeCommerceRecord{Kind: 3, Status: Settled}, 0},
+	}
+	for _, tc := range cases {
+		if got := finishedLotBid(tc.before, tc.after, w); got != tc.want {
+			t.Errorf("%s: finishedLotBid = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+	if got := finishedLotBid(lot(CancelPending), lot(Cancelled), &tradepb.TradeCommerceWorkflow{}); got != 0 {
+		t.Errorf("没有出价的拍品撤单: finishedLotBid = %d, want 0", got)
 	}
 }

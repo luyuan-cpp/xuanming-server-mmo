@@ -243,6 +243,16 @@ namespace mail_outbox_rules
 			   tipId == static_cast<uint32_t>(kMailRequestConflict) || tipId == static_cast<uint32_t>(kInvalidParameter);
 	}
 
+	// mail 的 MailAdmin 对验签不过的请求回 gRPC UNAUTHENTICATED(go/mail/internal/server/server.go 的 caller)。
+	// 成因只有两种,重试都不会自己变好,要人处理:两边 MAIL_PRODUCER_SECRET_BATTLE 不同;或两边时钟相差超过 5 分钟
+	// (go/shared/serviceauth 的签名时间窗口)。验签在业务之前,邮件没有写:与 ClassifySend 的「结果未知」不同,
+	// 这里按拒收重试不会重复。值 16 与 grpc::StatusCode::UNAUTHENTICATED 同值(与 grpc_client_call.h 同一约定)。
+	inline constexpr uint32_t kGrpcStatusUnauthenticated = 16;
+	constexpr bool IsSignatureRejected(const uint32_t grpcStatusCode)
+	{
+		return grpcStatusCode == kGrpcStatusUnauthenticated;
+	}
+
 	// 寄送失败之后多久再试:按连续失败次数(含本次,>= 1)翻倍,最多翻 8 次再封顶。没有放弃:物品不能因为寄不出去而消失。
 	//   结果未知(含没发出去):1 秒起,封顶 60 秒 —— 多是邮件短暂不可达,恢复要快;
 	//   明确拒收:30 秒起,封顶 5 分钟 —— 邮箱满要等玩家删信,删完最多再等 5 分钟。
@@ -259,8 +269,15 @@ namespace mail_outbox_rules
 		return std::min(base << doublings, ceiling);
 	}
 
-	// 失败日志的节拍:连续失败的第 1 次,之后每 8 次一行(同 player_inbox_rules::kStuckWarnEveryFailures 的取法,
-	// 封顶节奏下两行落在 [10m] 日志窗口之内)。
+	// 有条目而还没有一条出现在已提交的存档快照里时,隔多久请求一次存盘(与 player_inbox_rules::kResaveIntervalMs 同值:
+	// 等落盘期间补请求存盘的间隔)。不每拍都压:存盘路径故障时不变成重试风暴。
+	inline constexpr uint64_t kResaveIntervalMs = 5000;
+
+	// 失败日志的节拍:连续失败的第 1 次,之后每 8 次一行(同 player_inbox_rules::kStuckWarnEveryFailures 的取法)。
+	// 用在按「结果未知」节奏重试的失败上(没发出去、邮件不可达、结果未知):重试封顶 60 秒,封顶后约 8 分钟一行,
+	// 落在 [10m] 日志窗口之内。邮箱满的 WARN 也用它(封顶 5 分钟,约 40 分钟一行;它等玩家删信,没有值班查询盯着)。
+	// 要人处理的拒收(NeedsManualFollowUp)不用这个节拍,每次失败都打:按拒收节奏封顶后 40 分钟才一行,
+	// 值班查询 metric=mail_outbox_stuck 的 [10m] 窗口里大多数时候会是空的。
 	inline constexpr uint32_t kFailureLogEvery = 8;
 	constexpr bool IsFailureLogDue(const uint32_t failStreak)
 	{

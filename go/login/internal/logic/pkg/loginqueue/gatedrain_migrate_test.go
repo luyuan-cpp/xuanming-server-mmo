@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"shared/gatepick"
 )
 
 // 本文件钉住 gate 排空迁移在 login 一侧的判定(docs/design/gate-drain-session-migration.md §4.4)。
@@ -97,14 +99,14 @@ func TestDecideDrainMigration_ClockSkewWaitsForStartAfter(t *testing.T) {
 func TestDrainMigrationsDue_OnlyDrainingGatesAboveThreshold(t *testing.T) {
 	rdb, _ := newDrainRedis(t)
 	ctx := context.Background()
-	require.NoError(t, rdb.Set(ctx, gateDrainingKey(1), "1000", time.Hour).Err())
-	require.NoError(t, rdb.Set(ctx, gateDrainingKey(2), "1000", time.Hour).Err())
+	require.NoError(t, rdb.Set(ctx, gatepick.DrainingKey(testMarkZone, 1), "1000", time.Hour).Err())
+	require.NoError(t, rdb.Set(ctx, gatepick.DrainingKey(testMarkZone, 2), "1000", time.Hour).Err())
 
 	p := migratePolicy()
 	p.DrainedBelowPlayers = 3
 	gates := []GateOnline{drainingGate(1, 100), drainingGate(2, 3), drainingGate(3, 500)}
 
-	due := DrainMigrationsDue(ctx, rdb, gates, p, 1010)
+	due := DrainMigrationsDue(ctx, rdb, testMarkZone, gates, p, 1010)
 	require.Len(t, due, 1, "2 已够阈值,3 没在排空")
 	assert.EqualValues(t, 1, due[0].NodeID)
 	assert.Equal(t, "uuid-1", due[0].InstanceID)
@@ -114,19 +116,19 @@ func TestDrainMigrationsDue_OnlyDrainingGatesAboveThreshold(t *testing.T) {
 func TestDrainMigrationsDue_DisabledReadsNothing(t *testing.T) {
 	rdb, mr := newDrainRedis(t)
 	ctx := context.Background()
-	require.NoError(t, rdb.Set(ctx, gateDrainingKey(1), "1000", time.Hour).Err())
+	require.NoError(t, rdb.Set(ctx, gatepick.DrainingKey(testMarkZone, 1), "1000", time.Hour).Err())
 	mr.Close() // 关闭时若还去读 Redis 会报错;返回 nil 而不出错说明根本没读
 
 	p := migratePolicy()
 	p.Enabled = false
-	assert.Nil(t, DrainMigrationsDue(ctx, rdb, []GateOnline{drainingGate(1, 100)}, p, 1010))
+	assert.Nil(t, DrainMigrationsDue(ctx, rdb, testMarkZone, []GateOnline{drainingGate(1, 100)}, p, 1010))
 }
 
 // 读不到标记时本拍一条都不发:方向是少迁,不误迁。
 func TestDrainMigrationsDue_ReadErrorSendsNothing(t *testing.T) {
 	rdb, mr := newDrainRedis(t)
 	mr.Close()
-	assert.Nil(t, DrainMigrationsDue(context.Background(), rdb, []GateOnline{drainingGate(1, 100)}, migratePolicy(), 1010))
+	assert.Nil(t, DrainMigrationsDue(context.Background(), rdb, testMarkZone, []GateOnline{drainingGate(1, 100)}, migratePolicy(), 1010))
 }
 
 // ── DrainingGateSet ─────────────────────────────────────────────────────
@@ -134,22 +136,22 @@ func TestDrainMigrationsDue_ReadErrorSendsNothing(t *testing.T) {
 func TestDrainingGateSet_ReportsMarksAndFailsClosed(t *testing.T) {
 	rdb, mr := newDrainRedis(t)
 	ctx := context.Background()
-	require.NoError(t, rdb.Set(ctx, gateDrainingKey(2), "1000", time.Hour).Err())
+	require.NoError(t, rdb.Set(ctx, gatepick.DrainingKey(testMarkZone, 2), "1000", time.Hour).Err())
 
-	set, err := DrainingGateSet(ctx, rdb, []uint32{1, 2, 3})
+	set, err := DrainingGateSet(ctx, rdb, testMarkZone, []uint32{1, 2, 3})
 	require.NoError(t, err)
 	assert.Equal(t, map[uint32]bool{2: true}, set)
 
-	empty, err := DrainingGateSet(ctx, rdb, nil)
+	empty, err := DrainingGateSet(ctx, rdb, testMarkZone, nil)
 	require.NoError(t, err)
 	assert.Empty(t, empty)
 
 	mr.Close()
-	set, err = DrainingGateSet(ctx, rdb, []uint32{1, 2})
+	set, err = DrainingGateSet(ctx, rdb, testMarkZone, []uint32{1, 2})
 	assert.Error(t, err, "读失败必须报错:签票时不知道谁在排空就不签")
 	assert.Nil(t, set)
 
-	_, err = DrainingGateSet(ctx, nil, []uint32{1})
+	_, err = DrainingGateSet(ctx, nil, testMarkZone, []uint32{1})
 	assert.Error(t, err)
 }
 
@@ -194,6 +196,65 @@ func TestPickMigrationTarget_TwoChoicesTakesTheLighter(t *testing.T) {
 	target, ok := PickMigrationTarget(cs, nil, 1, intnZero)
 	require.True(t, ok)
 	assert.EqualValues(t, 6, target.NodeID)
+}
+
+// 逐台换版:1 在排空(旧构建),2 已换成新构建,3、4 还是旧构建。目标只在新构建里挑,哪怕它人更多。
+func TestPickMigrationTarget_PrefersGatesNotOnTheOutgoingBuild(t *testing.T) {
+	cs := candidates(1, 2, 3, 4)
+	cs[0].Build, cs[1].Build, cs[2].Build, cs[3].Build = "v1", "v2", "v1", "v1"
+	cs[1].PlayerCount = 50
+	draining := map[uint32]bool{1: true}
+
+	for _, intn := range []func(int) int{intnZero, func(n int) int { return n - 1 }} {
+		target, ok := PickMigrationTarget(cs, draining, 1, intn)
+		require.True(t, ok)
+		assert.EqualValues(t, 2, target.NodeID, "3、4 与被排空的 1 同构建,迁过去还要再迁一次")
+	}
+	assert.Equal(t, []uint32{1, 2, 3, 4}, nodeIDsOf(cs), "不改入参")
+}
+
+// 偏好不能把人留在要下线的 gate 上:没有新构建的合格目标时用全部合格目标。
+func TestPickMigrationTarget_BuildPreferenceFallsBackToAllEligible(t *testing.T) {
+	// 第一台排空时还没有新构建的 gate。
+	cs := candidates(1, 2, 3)
+	cs[0].Build, cs[1].Build, cs[2].Build = "v1", "v1", "v1"
+	cs[1].PlayerCount = 9
+	target, ok := PickMigrationTarget(cs, map[uint32]bool{1: true}, 1, intnZero)
+	require.True(t, ok)
+	assert.EqualValues(t, 3, target.NodeID, "同构建的两台里二选一取轻的")
+
+	// 新构建的那台满了:它在合格筛选里就被剔掉,剩下旧构建的照迁。
+	cs = candidates(1, 2, 3)
+	cs[0].Build, cs[1].Build, cs[2].Build = "v1", "v2", "v1"
+	cs[1].PlayerCount, cs[1].MaxConnections = 100, 100
+	target, ok = PickMigrationTarget(cs, map[uint32]bool{1: true}, 1, intnZero)
+	require.True(t, ok)
+	assert.EqualValues(t, 3, target.NodeID)
+}
+
+// 没上报构建就没有依据:排空中的 gate 没报构建时不产生偏好;目标没报构建时算首选。
+func TestPickMigrationTarget_UnreportedBuildCarriesNoPreference(t *testing.T) {
+	cs := candidates(1, 2, 3)
+	cs[1].Build, cs[2].Build = "v2", "v1"
+	cs[1].PlayerCount = 9
+	target, ok := PickMigrationTarget(cs, map[uint32]bool{1: true}, 1, intnZero)
+	require.True(t, ok)
+	assert.EqualValues(t, 3, target.NodeID, "1 没报构建:没有外出构建,按负载挑")
+
+	cs = candidates(1, 2, 3)
+	cs[0].Build, cs[2].Build = "v1", "v1"
+	target, ok = PickMigrationTarget(cs, map[uint32]bool{1: true}, 1, intnZero)
+	require.True(t, ok)
+	assert.EqualValues(t, 2, target.NodeID, "2 没报构建算首选,3 在外出构建上")
+}
+
+func TestOutgoingBuilds(t *testing.T) {
+	cs := candidates(1, 2, 3, 4)
+	cs[0].Build, cs[1].Build, cs[2].Build = "v1", "v2", "v3"
+
+	assert.Empty(t, outgoingBuilds(cs, nil), "没有排空中的 gate")
+	assert.Equal(t, map[string]bool{"v1": true, "v3": true}, outgoingBuilds(cs, map[uint32]bool{1: true, 3: true, 4: true}),
+		"4 在排空但没报构建,不算")
 }
 
 // ── 票据 ────────────────────────────────────────────────────────────────

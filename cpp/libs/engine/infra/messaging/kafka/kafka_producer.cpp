@@ -215,7 +215,12 @@ RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::stri
 	}
 
 	// trace 在调用方线程上取一次,同一次 send 里的重试带同一个值(docs/design/distributed-tracing.md §5.4)。
-	const std::string traceparent = kafka_trace::TraceparentOf(tracing::Current());
+	// 阶段三(§10.3)起消息头带的是本次发送的 producer span 的上下文:当前 span 的子 span,消费端的 consumer span 以它为父。
+	// 它覆盖这次 send(入 librdkafka 队列与重试),不等投递回执:回执异步到达,与这条请求的耗时无关(OTel 消息约定的 send span)。
+	// 不在 trace 里的发送是空 span,消息头不带 trace,与改动前逐字节相同。
+	tracing::PendingSpan span = tracing::PendingSpan::StartChildOf(
+		tracing::Current(), tracing::SpanKind::kProducer, tracing::SpanSystem::kKafka, tracing::SpanName{topic});
+	const std::string traceparent = kafka_trace::TraceparentOf(span.Context());
 	RdKafka::ErrorCode resp = produceOnce(topic, message, key, partition, traceparent);
 	switch (kafka_producer_policy::ClassifyProduceResult(resp)) {
 	case ProduceAction::kAccepted:
@@ -238,6 +243,10 @@ RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::stri
 		break;
 	}
 
+	if (resp != RdKafka::ERR_NO_ERROR) {
+		span.SetError(RdKafka::err2str(resp));
+	}
+	span.End();
 	if (resp != RdKafka::ERR_NO_ERROR) {
 		kafka_producer_stats::IncProduceRejected();
 		logFailure("[Kafka] Produce rejected (message NOT queued): topic=" + topic + " key=" + key

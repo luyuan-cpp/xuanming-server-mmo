@@ -5,11 +5,13 @@ import com.game.gateway.repository.ZoneWhitelistRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.web.ErrorResponseException;
 
 import java.sql.SQLException;
 import java.sql.SQLTransactionRollbackException;
@@ -53,7 +55,7 @@ class AdminWhitelistControllerTest {
     @Test
     void addUpsertsByNaturalKeyIgnoresBodyIdAndReturnsStoredRow() {
         ZoneWhitelist stored = row(1001L, "qa");
-        when(repo.findByZoneIdAndAccountId(ZONE, ACCOUNT)).thenReturn(Optional.of(stored));
+        when(repo.findByZoneIdAndAccountIdForUpdate(ZONE, ACCOUNT)).thenReturn(Optional.of(stored));
 
         ZoneWhitelist body = request(ZONE, ACCOUNT, "qa");
         body.setId(999L); // 请求体里的 id 必须被忽略
@@ -63,15 +65,24 @@ class AdminWhitelistControllerTest {
         assertEquals(HttpStatus.OK, resp.getStatusCode());
         assertSame(stored, resp.getBody(), "返回库里那一行,而不是回显请求体");
         verify(repo).upsert(ZONE, ACCOUNT, "qa");
-        verify(repo).findByZoneIdAndAccountId(ZONE, ACCOUNT);
+        verify(repo).findByZoneIdAndAccountIdForUpdate(ZONE, ACCOUNT);
         verifyNoMoreInteractions(repo);
     }
 
     @Test
     void addRejectsMissingNaturalKeyWithoutTouchingDb() {
-        assertEquals(HttpStatus.BAD_REQUEST, controller.add(request(null, ACCOUNT, "x")).getStatusCode());
-        assertEquals(HttpStatus.BAD_REQUEST, controller.add(request(ZONE, null, "x")).getStatusCode());
+        // 2026-11-12 起 400 带 problem details 错误体:点名缺的是哪个字段(线上 JSON 名),原因码 missing。
+        assertMissing("zone_id", () -> controller.add(request(null, ACCOUNT, "x")));
+        assertMissing("account_id", () -> controller.add(request(ZONE, null, "x")));
+        assertMissing(null, () -> controller.add(null));
         verifyNoInteractions(repo);
+    }
+
+    private static void assertMissing(String field, Executable call) {
+        ErrorResponseException refused = assertThrows(ErrorResponseException.class, call);
+        assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+        assertEquals("missing", refused.getBody().getProperties().get("reason"));
+        assertEquals(field, refused.getBody().getProperties().get("field"));
     }
 
     @Test
@@ -79,14 +90,14 @@ class AdminWhitelistControllerTest {
         when(repo.upsert(ZONE, ACCOUNT, "n"))
                 .thenThrow(deadlock())
                 .thenReturn(1);
-        when(repo.findByZoneIdAndAccountId(ZONE, ACCOUNT)).thenReturn(Optional.of(row(5L, "n")));
+        when(repo.findByZoneIdAndAccountIdForUpdate(ZONE, ACCOUNT)).thenReturn(Optional.of(row(5L, "n")));
 
         ResponseEntity<ZoneWhitelist> resp = controller.add(request(ZONE, ACCOUNT, "n"));
 
         assertEquals(HttpStatus.OK, resp.getStatusCode());
         verify(repo, times(2)).upsert(ZONE, ACCOUNT, "n");
         // 第一次 upsert 就失败了,回读只在成功的那一轮发生一次。
-        verify(repo, times(1)).findByZoneIdAndAccountId(ZONE, ACCOUNT);
+        verify(repo, times(1)).findByZoneIdAndAccountIdForUpdate(ZONE, ACCOUNT);
     }
 
     @Test
@@ -99,7 +110,7 @@ class AdminWhitelistControllerTest {
 
         assertSame(dl, thrown, "用尽重试后原样抛出,不包装、不吞");
         verify(repo, times(InnoDbDeadlockRetry.MAX_ATTEMPTS)).upsert(ZONE, ACCOUNT, "n");
-        verify(repo, never()).findByZoneIdAndAccountId(anyLong(), anyLong());
+        verify(repo, never()).findByZoneIdAndAccountIdForUpdate(anyLong(), anyLong());
     }
 
     @Test
@@ -136,7 +147,7 @@ class AdminWhitelistControllerTest {
 
     @Test
     void addFailsLoudlyWhenRowIsInvisibleAfterUpsert() {
-        when(repo.findByZoneIdAndAccountId(ZONE, ACCOUNT)).thenReturn(Optional.empty());
+        when(repo.findByZoneIdAndAccountIdForUpdate(ZONE, ACCOUNT)).thenReturn(Optional.empty());
 
         assertThrows(IllegalStateException.class, () -> controller.add(request(ZONE, ACCOUNT, "n")));
         verify(repo, times(1)).upsert(ZONE, ACCOUNT, "n");
@@ -145,7 +156,7 @@ class AdminWhitelistControllerTest {
     /** 行号撞上别的行:ODKU 改了那一行,这一行还是旧 note。必须抛错让事务回滚,不能回 200。 */
     @Test
     void addFailsLoudlyWhenReadBackNoteIsNotOurs() {
-        when(repo.findByZoneIdAndAccountId(ZONE, ACCOUNT)).thenReturn(Optional.of(row(5L, "old")));
+        when(repo.findByZoneIdAndAccountIdForUpdate(ZONE, ACCOUNT)).thenReturn(Optional.of(row(5L, "old")));
 
         assertThrows(IllegalStateException.class, () -> controller.add(request(ZONE, ACCOUNT, "n")));
         verify(repo, times(1)).upsert(ZONE, ACCOUNT, "n");

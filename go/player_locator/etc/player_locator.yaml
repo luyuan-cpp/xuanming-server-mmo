@@ -8,18 +8,18 @@ Etcd:
     - 127.0.0.1:2379
   Key: playerlocator.rpc
 
-RedisClient:
-  Host: 127.0.0.1:6379
-  Password: ""
-  DB: 0
-  # go-redis 连接池上限(P0-E 第 3 批,共享 Redis 连接总账)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
-  # 随 CPU limit 漂移(本机 Windows 上是 10 × 核数)。20 = K8s 上 GOMAXPROCS 按 2 时的缺省值,显式写出后不再随 CPU limit 变。
-  # tools/scripts/k8s_deploy.ps1 把它镜像进 player-locator ConfigMap(要求正整数),Redis 连接总账读同一个键:
-  # 改它看部署时打印的 "Redis connection ledger" 一行。
-  PoolSize: 20
+# 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1;2026-11-12 取代 RedisClient 段):
+# 选主锁、gate 索引的就绪标记、代次、审计时间与一遍的进度(7 把键共用 {pl:gix})。不写 Addrs = 本机 127.0.0.1:6379 单实例;
+# 集群部署写种子地址并打开 Cluster。口令写 Password 字面量,或在 SharedRedisPasswordEnv 指名变量。
+# PoolSizePerNode 是每个节点的连接池上限(20 = K8s 上 GOMAXPROCS 按 2 时 go-redis 的缺省值,显式写出后不随 CPU limit 变)。
+# tools/scripts/k8s_deploy.ps1 把它镜像进 player-locator ConfigMap(要求正整数),Redis 连接总账读同一个键:
+# 改它看部署时打印的 "Redis connection ledger" 一行。
+ControlRedis:
+  Addrs: [127.0.0.1:6379]
+  PoolSizePerNode: 20
 
 # 玩家域 Redis(会话、断线租约、gate 索引、分片登记),上线后是 Redis Cluster,设计见 docs/design/redis-player-store-cluster.md §5.7、§5.9。
-# 整段不写时指向上面 RedisClient 这个单实例,沿用它的 PoolSize,开发环境不用改。要拆开时写:
+# 整段不写时指向上面 ControlRedis 这个单实例,沿用它的 PoolSizePerNode,开发环境不用改。要拆开时写:
 # PlayerRedis:
 #   Addrs:
 #     - 127.0.0.1:7000     # Cluster 下是种子地址
@@ -63,7 +63,8 @@ Lease:
   #     AuditIntervalSeconds: 索引就绪后定期审计的周期,默认 86400;-1 = 就绪后不再审计(未就绪时照常补建)。
   #       审计 = 限速的全键 SCAN 补漏成员 + 各 gate 索引的脏成员清理,时机记在 Redis,换主不重置。
   #     ScanCount: 补建 / 审计每页 SCAN、SSCAN 的 COUNT,默认 1000。
-  #     ScanPagesPerSecond: 补建 / 审计每秒最多几页,默认 200;负数不限速(只给本机与单测)。
+  #     ScanPagesPerSecond: 补建 / 审计全服每秒最多几页,默认 200;负数不限速(只给本机与单测)。
+  #       它是全服预算:按段分给各副本时每个副本只拿「持有的段数 / 256」那一份,加副本不会加重玩家域 Redis 的负担。
   #     MaxTransitionsPerSecond: 每个副本把死 gate 上 ONLINE → DISCONNECTING 的速率上限,默认 1000;负数不限速。
   #       每拍只用半个拍长去转换,大面积 gate 故障时每个副本的持续速率约为它的一半,估恢复时间按一半乘持段副本数(设计文档 §7)。
   #     DeadGateMembersPerRound: 每个副本一拍最多检查多少个死 gate 索引成员,默认 30000,超出留到下一拍。

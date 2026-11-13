@@ -20,7 +20,7 @@
 // 客户端连接意外断开时(gate 代发 ExitGame,reason = EXIT_GAME_REASON_DISCONNECTED),scene 不再立刻存盘销毁:
 // 角色停在原地(清速度、广播停步,仍在场景与 AOI 里),留 kHoldWindow。窗口内同一角色的新会话进场
 // (login 判 ShortReconnect / ReplaceLogin,scene_manager 按 location 派回原场景)直接接回这个实体,
-// EnterScene 按"换会话"先离场再完整入场,新客户端拿到入场通知、自身与当前邻居;到期还没人接回,
+// EnterScene 按"换会话"把入场画面重发给新客户端(入场通知、自身与当前邻居),角色不离场、邻居的画面不变;到期还没人接回,
 // 按客户端断线退出,与原来断线即退出走同一条路(存盘、写断线释放标记、销毁)。
 // 主动登出(LOGOUT)、租约到期关假死连接(LEASE_EXPIRED)、旧版 gate(UNSPECIFIED)仍立即退出。
 //

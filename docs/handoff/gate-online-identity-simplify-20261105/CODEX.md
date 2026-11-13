@@ -2,7 +2,7 @@
 
 本批由 Claude 改代码，**未编译、未运行任何测试**（只对改动文件跑过 `gofmt -l`，无输出）。设计见 [gate 在线身份](../../design/gate-online-identity.md) §9.2，计划见同目录 [PLAN.md](PLAN.md)。
 
-**两批合在一次验证里**：负责人 11-06 要求在上一批（删在线域 login Redis 回退）验收之前就落码。请先按 [上一批执行清单](../gate-online-identity-single-source-20261105/CODEX.md) 的步骤跑，再跑本文件的步骤；失败时按文末文件清单判断属于哪一批，回执写清。上一批 CODEX.md 里点名的 `original_role_interceptor_test.go`、`identity_test.go` 等已被本批删除或重写，以本批为准。第 3 批（guild 三个读方法删无会话分支，设计 §9.6 第 1 条）见第 7 节，在第 1、2 批之后执行。第 4 批（删 guild 请求体里被忽略的字段、删全服帮会榜，设计 §9.6 第 2、3 条，2026-11-10）见第 8 节，最后执行；它改了 `guild.proto` 的字段，工作区里只有这一份协议，所以第 1 节的生成就已经带上第 4 批的字段删除。
+**两批合在一次验证里**：负责人 11-06 要求在上一批（删在线域 login Redis 回退）验收之前就落码。请先按 [上一批执行清单](../gate-online-identity-single-source-20261105/CODEX.md) 的步骤跑，再跑本文件的步骤；失败时按文末文件清单判断属于哪一批，回执写清。上一批 CODEX.md 里点名的 `original_role_interceptor_test.go`、`identity_test.go` 等已被本批删除或重写，以本批为准。第 3 批（guild 三个读方法删无会话分支，设计 §9.6 第 1 条）见第 7 节，在第 1、2 批之后执行。第 4 批（删 guild 请求体里被忽略的字段、删全服帮会榜，设计 §9.6 第 2、3 条，2026-11-10）见第 8 节，最后执行；它改了 `guild.proto` 的字段，工作区里只有这一份协议，所以第 1 节的生成就已经带上第 4 批的字段删除。设计 §7 的已知边界另有两节：第 9 节是批 1（gate 改 Ed25519 签名），第 10 节是批 2～4 与读路径归属预检（2026-11-12）；第 10 节给 `login.proto` 加了一个方法，同样会被第 1 节的生成带上，但它还要求生成之后跑一次 `go/build.ps1`（见第 10 节第 1 步）。
 
 ## 改了什么
 
@@ -418,9 +418,264 @@ git worktree remove --force $env:TEMP\gate-simplify-red
   - 本文件、`docs/PROGRESS.md`
   - Java 仓 `PARITY.md`
 
+## 10. §7 批 2～4 与读路径归属预检（2026-11-12 落码，未生成、未编译、未运行）
+
+设计见 [gate 在线身份](../../design/gate-online-identity.md) §9.3「读路径归属」、§10.2～§10.4。负责人 2026-11-12 要求把设计里留作「以后再定」的事项现在定案并落码，不等压测。本节没有生成协议、没有编译、没有运行任何测试：只对改动的 Go 文件跑过 `gofmt -l`（无输出），对改动的 `.ps1` 做过语法解析（0 错误）。
+
+改了什么：
+
+- **批 2，在线服务端口白名单**（§10.2）：`k8s_deploy.ps1` 的 `$script:GrpcAllowLists` 补齐 login、chat、friend、trade、mail、rank 六份清单；原有的 match、mail 清单各补一个漏掉的真实调用方（battle → match，scene → mail）。预发与生产必须 `-NetworkPolicies on`（或 `MMORPG_NETWORK_POLICIES=on`），新增 `Assert-NetworkPoliciesPreflight`。
+- **批 3，Pod 间加密前检**（§10.3）：`-PodNetworkEncryption`，代码已随 4edb25640 入库，本节只补验证。
+- **批 4，gate 续租登录态**（§10.4）：
+  - 协议：`proto/login/login.proto` 加 SERVER_ONLY 的 `ClientPlayerLogin.RenewSession`。
+  - login：`sessionfence.Renew`（一段 Lua）、`loginsession.Renew` / `RenewAfter`、`renewsessionlogic.go`，指标 `loginsession_renew_total{result}`。
+  - gate：新模块 `gate_login_renewal`（`login_session_renewal.{h,cpp}`），`SessionInfo::loginRenewal`，两处登录成功点调 `NoteLoginSucceeded`，`main.cpp` 起每秒一拍的定时器；`SendGateMigrationRequest` 与续租共用一个出口模板 `SendGateSynthesizedLoginRequest`；客户端发来 `RenewSession` 在入口拒绝。
+- **读路径归属预检**（§9.3）：
+  - 共享：`roleidentity.OwnershipInterceptor`（由 guild 的 `session.OriginalIdentityInterceptor` 提上来）；`rolefence.CheckOwner` 与 `Guard.VerifyOwner`。
+  - match、trade 装上预检；guild 改用共享的那一份，判定不变。trade 的角色护栏改为无条件装配，盘口挂单列表补 `OwnsRecord` 筛选。
+- **gate 签名耗时**（§10.1）：`routing_identity_test` 加 `SigningCostPerRequestIsReported`，只打数、设一个 2 毫秒的宽上限。
+
+客户端可见的变化：
+
+- 消息号表多一个 `ClientPlayerLoginRenewSession`。客户端不发这个消息，Unity 代码不用改，只需随协议生成更新消息号表。
+- 过户、删角之后旧连接在 match、trade 上的请求（含只读）现在回 `kServiceUnavailable` 信封（路由服把入口的 gRPC 错误统一转成它），不再返回数据。正常玩家不受影响。
+- 角色过户之后，新主在盘口挂单列表里看不到旧主留下的历史挂单。
+
+1. **生成**（仓库根）。`login.proto` 是客户端可见的协议文件，用**默认配置**，它会同时写同级客户端仓 `../mmorpg-client`。
+
+   ```powershell
+   git status --short > $env:TEMP\gate-b234-before.txt
+   pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build
+   pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run
+   pwsh -NoProfile -ExecutionPolicy Bypass -File go/build.ps1
+   Push-Location robot; go mod vendor; Pop-Location
+   git status --short > $env:TEMP\gate-b234-after.txt
+   rg -n 'RenewSession' go/proto/login go/login/internal/server/clientplayerlogin go/shared/generated/clientrpc proto/message_id.txt
+   rg -n 'ClientPlayerLoginRenewSessionMessageId|SendClientPlayerLoginRenewSession' cpp/generated
+   ```
+
+   通过标准：
+   - `go/proto/login` 里有 `RenewSessionRequest` / `RenewSessionResponse` 与 `ClientPlayerLogin_RenewSession_FullMethodName`。
+   - `go/login/internal/server/clientplayerlogin/clientplayerloginserver.go` 里的 `RenewSession` 调 `clientplayerloginlogic.NewRenewSessionLogic(ctx, s.svcCtx)`，`RequestGateMigration` 也接上了（它此前一直缺）。`go/build.ps1` 不能覆盖手写的 `renewsessionlogic.go`：跑完用 `git diff --stat go/login/internal/logic/clientplayerlogin/renewsessionlogic.go` 确认它没被改写；被改写就还原这一个文件并报告。
+   - `go/shared/generated/clientrpc` 里**没有** `RenewSession`（SERVER_ONLY 不进客户端可发起集合）。
+   - `cpp/generated` 里有 `ClientPlayerLoginRenewSessionMessageId` 与 `SendClientPlayerLoginRenewSession`。名字不同就以生成物为准报告，gate 的 `client_session_handler.cpp` 与 `login_admission.h` 按 `RequestGateMigration` 的同名规则引用它们。
+   - 前后两份 `git status` 的差只应多出 login 协议的生成物、消息号表、login 的 goctl 包装，以及客户端仓的对应生成物。别的差异停下报告。
+
+2. **静态检查**（仓库根）：
+
+   ```powershell
+   rg -n 'OriginalIdentityInterceptor' go --glob '!**/vendor/**'
+   rg -n 'OwnershipInterceptor' go/guild/guild.go go/match/match_service.go go/trade/trade.go
+   gofmt -l go/shared/roleidentity go/shared/rolefence go/shared/serverbase go/login/internal go/guild/guild.go go/guild/guild_test.go go/match/match_service.go go/match/match_service_ownership_test.go go/match/internal/authority/role_identity.go go/match/internal/authority/role_identity_native_test.go go/trade/trade.go go/trade/trade_test.go go/trade/internal/svc/servicecontext.go go/trade/internal/commerce/role_authority.go go/trade/internal/commerce/role_fence_tidb_test.go go/trade/internal/logic/commerce_logic.go go/trade/internal/logic/market_orders_owner_test.go
+   ```
+
+   通过标准：第一条无输出；第二条三个文件各有一处；`gofmt -l` 对列出的路径无输出（`go/login/internal` 里别的会话的文件若有输出，只记录，不改）。
+
+3. **Go 构建、vet 与测试**（串行，每个模块单独执行）：
+
+   ```powershell
+   Push-Location go/shared
+   go build ./... ; go vet ./...
+   go test -count=1 ./roleidentity/... ./rolefence/... ./serverbase/... ./callerauth/...
+   Pop-Location
+   foreach ($m in 'login','guild','match','trade','chat','friend','mail','rank') {
+       Push-Location "go/$m"; go build ./... ; go vet ./... ; go test -count=1 ./... ; Pop-Location
+   }
+   ```
+
+   - 通过标准：build / vet 无输出，test 全绿。失败保留完整输出，不自动重试，不改断言。
+   - 重点用例（回执里点名确认跑到了）：
+     - `shared/roleidentity`：`ownership_test.go` 的 6 个 `TestOwnershipInterceptor*`。
+     - `shared/rolefence`：`owner_test.go` 的 `TestCheckOwner`（14 个子用例）与 13 个 `TestVerifyOwner*`，其中 `TestVerifyOwnerFrozenReplicaBehindTransferRejectsPreviousOwner` 是这次唯一要守住的洞；原有的 `TestCheck`、`TestRunTx*`、`TestLockAll*` 不回退（测试用的假驱动现在也认不加锁的读语句）。
+     - `login`：`sessionfence` 的 `fence_renew_test.go`、`loginsession` 的 `renew_test.go`、`clientplayerlogin` 的 `renewsession_test.go` 全部用例，其中 `TestRenewedConnectionsStillCountAgainstTheDeviceLimit` 与 `TestWithoutRenewalConnectionsStopCountingAfterTheLifetime` 是一对对照。第 11 节在这三个文件里又加了「登录态过期后重建」的用例，并把 `TestRenewWithoutLoginSessionStillKeepsBinding` 改名为 `TestRenewWithoutAccountCopyKeepsBindingButDoesNotInventALoginSession`，用例名单以第 11 节为准。
+     - `guild`：`TestOwnershipPrecheckWiredIntoUnaryChain`（4 个子用例）、`TestOwnershipPrecheckSkipsCallsWithoutOriginal`；`internal/session` 里原来的 `identity_test.go` 已随拦截器一起删除，是预期的。
+     - `match`：`match_service_ownership_test.go` 的 4 个，含按源码结构核对 main 的 `TestMainInstallsOwnershipPrecheckRightAfterOnlineEntry`。
+     - `trade`：`TestBuildUnaryInterceptorsOrder`（链长由 4 变 5）、`TestOwnershipPrecheckWiredIntoUnaryChain`（3 个子用例）、`TestOwnershipPrecheckSkipsInternalCalls`；`internal/logic` 的 `TestListMarketOrdersShowsOnlyOrdersOfTheCallersOriginalIdentity`。
+   - 真库用例，有环境才跑，没有就写「未跑」，不要为它借别的会话的容器：
+     - match（`MATCH_IT_TIDB`，`MATCH_IT_REQUIRE_TIDB=1`）：`go test -count=1 -run 'TestAuthorityTiDBVerifyOriginalOwner' ./internal/authority/`，两个用例。
+     - trade（`COMMERCE_TEST_DSN`，`COMMERCE_REQUIRE_TIDB=1`）：`go test -count=1 -run 'TestTiDBVerifyOriginalOwner' ./internal/commerce/`，两个用例。
+
+4. **C++**（串行 `/m:1`；`SessionInfo` 加了字段，必须整解重编，不能只编测试工程）：
+
+   ```powershell
+   msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64
+   pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter routing_identity_test
+   ```
+
+   - 通过标准：0 错误；下列用例全过，其余不回退：
+     - `LoginSessionRenewal.*` 15 个与 `LoginSessionRenewalInterval.IsClampedAndSpreadBySessionId`；
+     - `GateSynthesizedOnly.RenewSessionIsRejectedAtClientEntry`；
+     - `GateAuthenticatedIdentity.SigningCostPerRequestIsReported`。回执抄下它打的那一行 `[caller_auth] sign cost: … us/request` 与机器型号，只记数，不下性能结论（AGENTS.md §6）。
+   - `gate.vcxproj` 与 `routing_identity_test.vcxproj` 都登记了 `login_session_renewal.cpp`。Linux 的 CMakeLists 由 `build_linux.sh` 按 vcxproj 生成，不要手改。
+   - 这几个文件别的会话也在改（`session_info_comp.h`、`client_session_handler.cpp`、`main.cpp`、两个 vcxproj）。编译报重复定义或缺符号时，先看是不是合并顺序的问题，保留首条错误报告。
+
+5. **部署脚本契约测试**（pwsh 7，仓库根）：
+
+   ```powershell
+   foreach ($t in 'k8s_deploy_contract','logical_db_deploy_contract','k8s_migrate_gate','k8s_client_entry_contract','lobby_authority_render') {
+       pwsh -NoProfile -File "tools/scripts/tests/$t.tests.ps1"
+   }
+   ```
+
+   - 通过标准：全部通过。失败按用例名报告。
+   - 本节新增或改过的用例（`k8s_deploy_contract`）：
+     - `login 的 gRPC 口准入(zone namespace):…`
+     - `gRPC 口准入的部署前检(gate-online-identity.md §10.2):…`
+     - `Pod 间加密(gate-online-identity.md §10.3):…`
+     - `infra-up -AssetOps on:… guild / match 的准入策略名单逐字钉住 …`（名单表里多了 chat、friend、trade、mail、rank，match 多了 battle）
+     - `gRPC 准入名单里的每个 app 标签都对应一个真实工作负载 …`
+     - `资产通道默认关:…`（关闭时要删的同名策略多了六个）
+   - `logical_db_deploy_contract` 的护栏参与者循环现在是 guild、match、trade、mail、friend。
+
+6. **本机冒烟**（dev 档）：
+   1. 续租。把 login 配置里的 `Node.SessionExpireMin` 临时改成 `1`（间隔约 20 秒），起 gate、login 与在线服务，机器人 Login → EnterGame 后保持在线 3 分钟以上：
+      - login 的 `/metrics`：`loginsession_renew_total{result="renewed"}` 持续增长，`result="error"` 为 0；
+      - gate 日志每分钟一行 `[LoginRenewal] summary …`，`renewed` 增长、`failed` 为 0；
+      - 登录域 Redis 里这条连接的 `login_session` 键 3 分钟后还在（`TTL` 为正）。对照：不续租时它 1 分钟就过期。
+      - 机器人断线后，`renewed` 不再为它增长；键在 1 分钟内消失或被断线清理删除。
+      - 测完把 `SessionExpireMin` 改回去。
+   2. 没跑 `go/build.ps1` 的反例不用专门造；若 gate 日志里 `failed` 持续增长、login 日志有 `Unimplemented`，就是第 1 步的 goctl 包装没生成。
+   3. 归属预检。机器人正常登录后各发一个 match（战报列表）、trade（浏览、我的货架）、guild 请求，全部成功；三个服务的 `online_entry_rejected_total{reason=~"ownership_.*"}` 为 0。trade 在 `AssetOp.Enabled=false` 下也要能启动并服务浏览（角色护栏现在无条件装配，本机启动器已注入 `MMORPG_ROLE_FENCE_SECRET_TRADE`）。
+   4. 部署预览（不连集群）：
+
+      ```powershell
+      pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -ReleaseProfile prod -DryRun <其余 prod 必填参数同契约测试的 $ProdArgs>
+      pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -ReleaseProfile prod -DryRun -NetworkPolicies on -PodNetworkEncryption cilium-wireguard <同上>
+      ```
+
+      第一条的输出里有两行 `WARNING:`（没开白名单、没声明加密）；第二条没有这两行，并生成 `chat-grpc-allowlist` 等策略。
+   5. kind 上的真策略冒烟（要 Calico 或 Cilium）从没跑过，本节也不要求；没环境就在回执里写「未跑」。
+
+7. **回执注明**：批 2、批 3 只有契约测试与预览证据，没有在执行 NetworkPolicy 的集群上验过；批 4 与归属预检的真库用例跑没跑；性能只有 gate 签名的单次耗时一个数，没有压测对比；Java 只登记待做。
+
+第 10 节文件：
+
+- 协议：`proto/login/login.proto`（另有会话同时加了 `GetZoneRoleCount`，不属于本节）。
+- login：`go/login/internal/logic/pkg/sessionfence/fence.go`、`fence_renew_test.go`（新增）；`pkg/loginsession/loginsession.go`、`renew_test.go`（新增）；`internal/logic/clientplayerlogin/renewsessionlogic.go`、`renewsession_test.go`（新增）。
+- gate：
+  - `cpp/nodes/gate/handler/rpc/login_session_renewal.{h,cpp}`（新增）、`client_session_handler.cpp`、`login_admission.h`、`client_request_lane.cpp`、`rpc_reply_bridge.cpp`、`router_muduo_forward.h`（注释）、`cpp/nodes/gate/main.cpp`、`gate.vcxproj`、`gate.vcxproj.filters`；
+  - `cpp/libs/services/gate/session/comp/session_info_comp.h`；
+  - 测试：`cpp/nodes/gate/tests/login_session_renewal_test.cpp`（新增）、`cpp/tests/routing_identity_test/{routing_identity_test.vcxproj,gate_client_entry_admission_test.cpp,session_details_builder_test.cpp}`。
+- 归属预检：
+  - shared：`go/shared/roleidentity/ownership.go`、`ownership_test.go`（新增）、`session.go`（指标说明）；`go/shared/rolefence/rolefence.go`、`guard.go`、`owner_test.go`（新增）、`rolefence_test.go`（假驱动）；`go/shared/serverbase/interceptor.go`（注释）。
+  - match：`match_service.go`、`match_service_ownership_test.go`（新增）、`internal/authority/role_identity.go`、`role_identity_native_test.go`。
+  - trade：`trade.go`、`trade_test.go`、`internal/svc/servicecontext.go`、`internal/commerce/role_authority.go`、`role_fence_tidb_test.go`、`internal/logic/commerce_logic.go`、`market_orders_owner_test.go`（新增）。
+  - guild：`guild.go`、`guild_test.go`；删除 `internal/session/identity.go`、`identity_test.go`。
+- 部署：`tools/scripts/k8s_deploy.ps1`、`tools/scripts/tests/{k8s_deploy_contract,logical_db_deploy_contract}.tests.ps1`、`deploy/k8s/README.md`。
+- 文档：`docs/design/gate-online-identity.md`（顶部状态、§1、§2、§5～§10）、`docs/design/horizontal-scale-logical-db.md`（§3.6 两处）、本文件、`docs/PROGRESS.md`、Java 仓 `PARITY.md`。
+
+## 11. §7 残余收尾：续租重建、guild 预检统一、不连库的用例、加密逐节点核对、集群实测（2026-11-12 第二批，未编译、未运行）
+
+设计见 [gate 在线身份](../../design/gate-online-identity.md) §7.1、§7.3、§9.3「读路径归属」、§10.2「实测」、§10.3、§10.4「登录态过期之后的重建」。负责人看了第 10 节的残余后要求「以后修的现在修」。本节不改协议，可以与第 10 节合在一次生成、一次整解里验证。本节没有编译，也没有运行任何测试：只对改动的 Go 文件跑过 `gofmt -l`（无输出），对改动的 `.ps1` 做过语法解析（0 错误）。
+
+改了什么：
+
+- **续租重建登录态**（§10.4，残余第 3 条）：
+  - `sessionfence` 的绑定脚本把登录态里的账号抄进栅栏记录（字段 `account`），绑定期间重新登录时 `CommitLogin` 跟着改，`Leave` 解除绑定时连同副本一起删。
+  - `Renew` 在登录态已过期、连接没关、仍绑着角色时按副本重建登录态，回 `Restored`。`loginsession.Renew` 随之重新登记设备，计 `loginsession_renew_total{result="restored"}` 并逐条打一行 INFO。
+  - 删登录态的只有断线与离开游戏两条路径，它们都先关掉重建的来源（`Close` 标 `closed`、`Leave` 删绑定与副本），所以重建复活不了被清掉的登录态。
+- **guild 预检与 match / trade 统一为只判归属**（§9.3，残余第 4 条）：`GuildRepo.CheckOriginalRole` 改调 `rolefence.Guard.VerifyOwner`。依据是逐个核过 guild 的客户端写入都在提交点按 `rolefence.Check` 持锁复核，冻结的角色写不进去（设计 §9.3「guild 统一的依据」逐类列了）。
+- **归属预检补不连库的用例**（残余第 2 条）：`shared/rolefence/fencetest` 新增内存护栏副本 `MemoryReplica`。match、trade、guild 各一组预检用例随普通 `go test` 跑，真库用例保留。
+- **trade 护栏无条件装配有了机械守卫**（残余第 5 条）：注入路径本来就齐（K8s `trade.yaml` 非 optional、docker 调试栈 `:?`、本机启动器），这次加源码结构测试，钉住护栏不在任何条件里装配。
+- **Pod 间加密前检改为逐节点核对**（§10.3）：
+  - 新库 `tools/scripts/lib/pod_network_encryption.ps1`。`Get-PodNetworkEncryptionProbe` 从 `k8s_deploy.ps1` 搬过来，新增逐节点证据（Calico 的 Node 注解 `projectcalico.org/WireguardPublicKey`、Cilium 的 CiliumNode 注解 `network.cilium.io/wg-pub-key`）和共用的集群核对 `Get-PodNetworkEncryptionClusterProblems`。
+  - `k8s_deploy.ps1` 的 `Assert-PodNetworkEncryptionPreflight` 改用它：开关打开、某个节点却没有公钥，同样拒绝部署。
+- **集群实测**（§10.2「实测」，残余第 1 条）：
+  - 新脚本 `tools/scripts/k8s_netpol_probe.ps1`：在部署好的集群上逐份策略核对「名单里的连得上、名单之外的连不上」，并按上一条逐节点核对加密。
+  - 用例 `tools/scripts/tests/k8s_netpol_probe.tests.ps1`；kind 配置 `deploy/k8s/kind-netpol-config.yaml`（关掉 kindnet、装 Calico、两个节点）。
+
+客户端可见的变化：没有。
+
+1. **静态检查**（仓库根）：
+
+   ```powershell
+   gofmt -l go/login/internal/logic/pkg/sessionfence go/login/internal/logic/pkg/loginsession go/login/internal/logic/clientplayerlogin/renewsession_test.go go/login/internal/logic/clientplayerlogin/renewsessionlogic.go go/shared/rolefence go/guild/guild.go go/guild/guild_test.go go/guild/internal/data/role_trade_guard.go go/guild/internal/data/role_owner_precheck_test.go go/guild/internal/data/role_fence_tidb_test.go go/match/internal/authority/role_identity_owner_test.go go/trade/internal/commerce/role_authority_owner_test.go go/trade/internal/svc/role_fence_wiring_test.go
+   rg -n '^function Get-PodNetworkEncryption' tools/scripts --glob '*.ps1'
+   ```
+
+   通过标准：`gofmt -l` 无输出；第二条只命中 `tools/scripts/lib/pod_network_encryption.ps1`（四个函数），`k8s_deploy.ps1` 里不再有这一组定义。
+
+2. **Go 构建、vet 与测试**（串行，每个模块单独执行）：
+
+   ```powershell
+   Push-Location go/shared; go vet ./rolefence/... ; go test -count=1 ./rolefence/... ; Pop-Location
+   foreach ($m in 'login','guild','match','trade') {
+       Push-Location "go/$m"; go build ./... ; go vet ./... ; go test -count=1 ./... ; Pop-Location
+   }
+   ```
+
+   - 通过标准：build / vet 无输出，test 全绿。失败保留完整输出，不自动重试，不改断言。
+   - 重点用例（回执里点名确认跑到了）：
+     - `shared/rolefence/fencetest`：`TestMemoryReplica*` 4 个，其中 `TestMemoryReplicaSpeaksTheReplicaStatementsOfRolefence` 钉住替身认得 rolefence 真正发出的两条语句。
+     - `login` 的 `sessionfence`：
+       - 新增 `TestRenewRestoresExpiredLoginSessionOfABoundConnection`、`TestRenewRestoresTheAccountOfTheLatestLoginOnTheConnection`、`TestRenewDoesNotRestoreOnceTheBindingIsGone`（2 个子用例）、`TestRenewDoesNotRestoreForAConnectionThatNeverEnteredTheGame`、`TestLeaveDropsTheAccountCopySoALaterBindingCannotInheritIt`。
+       - 改名：`TestRenewWithoutAccountCopyKeepsBindingButDoesNotInventALoginSession`。
+       - 加了两条路径：`TestRenewScriptPassesTheClusterGuard`（绑定、重建）。
+     - `login` 的 `loginsession`：`TestRenewRestoresAConnectionInGameAfterALongOutage`、`TestRenewDoesNotRestoreAfterTheConnectionLeftTheGame`。
+     - `login` 的 `clientplayerlogin`：`TestRenewalAfterALongOutageCountsConnectionsInGameAgain`。
+     - `login` 原有的栅栏用例不回退：`sessionfence` 的 `fence_test.go`、`fence_binding_lifetime_test.go`、`fence_leave_replay_test.go`，`clientplayerlogin` 的 `session_fence_*`、`leavegame_fence_failure_test.go`、`disconnect_session_header_test.go`。绑定脚本现在多碰一个登录态键，它们都经过绑定。
+     - `guild`：
+       - `role_owner_precheck_test.go` 的 4 个 `TestCheckOriginalRole*`。
+       - 真库用例 `TestTiDBRoleFenceFrozenRoleRejectsGuildWritesAndThawHeals` 的断言改了：冻结时写入仍拒，入口预检放行，并多读一次目录。有环境才跑。
+     - `match`：`role_identity_owner_test.go` 的 5 个 `TestVerifyOriginalOwner*`。
+     - `trade`：`role_authority_owner_test.go` 的 4 个 `TestVerifyOriginalOwner*`；`internal/svc` 的 `TestRoleAuthorityIsWiredUnconditionally`。
+
+3. **部署脚本契约测试**（pwsh 7，仓库根）：
+
+   ```powershell
+   foreach ($t in 'k8s_netpol_probe','k8s_deploy_contract') { pwsh -NoProfile -File "tools/scripts/tests/$t.tests.ps1" }
+   ```
+
+   - 通过标准：全部通过。失败按用例名报告。
+   - `k8s_netpol_probe`（新）：
+     - 纯函数：解析、靶子、计划、清单、命令、判定、对照、加密逐节点核对；
+     - 进程内跑主流程四种集群：执行策略、不执行策略、探测 namespace 是别人的、只读预览；
+     - 两条与 `k8s_deploy.ps1` 的契约：生成器的形状、两边的 `-PodNetworkEncryption` 取值。
+   - `k8s_deploy_contract`：`Pod 间加密(gate-online-identity.md §10.3):…` 一条改为从新库取核对项，并断言部署脚本 dot-source 新库、前检走共用的集群核对。
+
+4. **kind 上实测**（要 Docker、kind 与外网；没有就在回执里写「未跑」和原因）：
+   1. 按 `deploy/k8s/kind-netpol-config.yaml` 文件头建集群 `mmorpg-netpol`、装 Calico、打开 WireGuard。回执记 `kind version`、`kubectl version` 与 Calico 版本。
+   2. 按 [k8s-client-entry.md](../../design/k8s-client-entry.md) 的「kind 端到端验证」一节把镜像装进集群并部署。差别有三：
+      - context 换成 `kind-mmorpg-netpol`；
+      - `infra-up` 与 `zone-up` 都带 `-NetworkPolicies on`；
+      - dev 档即可（dev 不强制加密声明）。
+   3. 跑：
+
+      ```powershell
+      pwsh -NoProfile -File tools/scripts/k8s_netpol_probe.ps1 -KubeContext kind-mmorpg-netpol -KubeConfig "$env:TEMP\kind-mmorpg-netpol.kubeconfig" -PodNetworkEncryption calico-wireguard
+      ```
+
+      - 通过标准：退出 0。回执附报告目录（`run/netpol-probe/<运行号>/`）里的 `summary.txt` 与 `results.txt`。
+      - `note:` 行（没起的金丝雀目标）不算失败。
+   4. 失败时按 `results.txt` 的 reason 列归类：
+      - `listed caller could not connect`：名单漏了真实调用方，或靶子没在监听。先看靶子 Pod 的日志。
+      - `does not enforce NetworkPolicy`：网络插件没执行策略。查 Calico 是否就绪。
+      - `ENCRYPTION PROBLEM … nodes have no …`：宿主机内核没有 WireGuard 模块。附 `kubectl get nodes -o yaml` 里 `WireguardPublicKey` 那几行；这一项可以单独记为环境限制，把 `-PodNetworkEncryption` 换成 `none` 重跑，只验准入。
+   5. 部署前检的逐节点核对与实测脚本共用 `Get-PodNetworkEncryptionClusterProblems`，第 3 步的加密结果就是它在真集群上的证据，不用另跑 staging 档部署。
+
+5. **回执注明**：
+   - 第 4 步跑没跑、跑在哪个网络插件与内核上；
+   - WireGuard 那一项是否因环境限制换成了 `none`；
+   - Go 真库用例跑没跑；
+   - Java 只登记待做。
+
+第 11 节文件：
+
+- login：`go/login/internal/logic/pkg/sessionfence/fence.go`、`fence_renew_test.go`；`pkg/loginsession/loginsession.go`、`renew_test.go`；`internal/logic/clientplayerlogin/renewsessionlogic.go`（注释）、`renewsession_test.go`。
+- shared：`go/shared/rolefence/fencetest/memory.go`、`memory_test.go`（新增）。
+- guild：`go/guild/guild.go`（注释）、`guild_test.go`、`internal/data/role_trade_guard.go`、`role_fence_tidb_test.go`、`role_owner_precheck_test.go`（新增）。
+- match：`go/match/internal/authority/role_identity_owner_test.go`（新增）。
+- trade：`go/trade/internal/commerce/role_authority_owner_test.go`、`internal/svc/role_fence_wiring_test.go`（新增）。
+- 部署：
+  - `tools/scripts/lib/pod_network_encryption.ps1`、`tools/scripts/k8s_netpol_probe.ps1`、`tools/scripts/tests/k8s_netpol_probe.tests.ps1`、`deploy/k8s/kind-netpol-config.yaml`（新增）；
+  - `tools/scripts/k8s_deploy.ps1`（dot-source 新库、删 `Get-PodNetworkEncryptionProbe`、前检走共用核对、参数注释）；
+  - `tools/scripts/tests/k8s_deploy_contract.tests.ps1`（一条用例改为从新库取）；
+  - `deploy/k8s/README.md`。
+- 文档：`docs/design/gate-online-identity.md`（顶部状态、§5、§7.1、§7.3、§9.3、§10.2、§10.3、§10.4）、本文件（第 10 节一条用例名单、第 11 节、回执与范围）、`docs/PROGRESS.md`、Java 仓 `PARITY.md`。
+
 ## 回执与范围
 
-- 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批、第 1～4 批中的哪一批，还是第 9 节的 §7 批 1（Ed25519 签名）。第 9 节不改协议，不需要重新生成；它改了 C++ gate，要整解重编。
+- 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批、第 1～4 批中的哪一批、第 9 节的 §7 批 1（Ed25519 签名），第 10 节的 §7 批 2～4 与读路径归属预检，还是第 11 节的残余收尾。第 11 节不改协议、不改 C++，跟着第 10 节的 Go 与部署脚本步骤一起跑，另有一步 kind 实测。第 9 节不改协议，不需要重新生成；它改了 C++ gate，要整解重编。第 10 节改了 `login.proto`，要先生成并跑 `go/build.ps1`，再整解重编 C++；第 9、10 两节可以合在一次生成与一次整解里验证。
 - 第 1～3 批：C++ 不改，不需要 C++ 编译；客户端不改、不重编；Java 版不适用（设计 §8）。生成步骤若产生 `cpp/generated` 差异，除第 4 批的 `cpp/generated/proto/guild/guild.pb.{h,cc}` 之外，停下报告。（2026-11-11 补注：`proto/guild/guild_db.proto` 加了 `GuildRecord.score_version = 12`，所以 `cpp/generated/proto/guild/guild_db.pb.{h,cc}` 与 `go/proto/guild/guild_db.pb.go` 的差异也是预期的，见 `docs/PROGRESS.md` 2026-11-11「帮会积分写入不再抢全服锁」。）
 - 第 4 批：C++ 手写代码不改，但 guild 的 C++ 生成物会变，要重编 C++；客户端要按新协议重新生成并重编（第 8 节）。Java 版本轮不写代码，只在 Java 仓 `PARITY.md` 记 TODO（设计 §8）。
 

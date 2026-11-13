@@ -134,11 +134,11 @@ jobs:
           _validate_java_code_outputs(cfg, tables)
 
           faults = sum(len(g["faults"]) for g in groups.values())
-          print(f"tip 码轴自检通过：{len(groups)} 组，{faults} 个码标为服务端故障")
+          print(f"tip axis self-check passed: {len(groups)} groups, {faults} codes marked as server faults")
           for name, g in sorted(groups.items(), key=lambda kv: kv[1]["base"]):
               used = len(g["ids"])
-              print(f"  {name:24} base={g['base']:<6} 已用 {used:<4} 余量 {g['width'] - used}"
-                    f"  故障 {len(g['faults'])}")
+              print(f"  {name:24} base={g['base']:<6} used {used:<4} free {g['width'] - used}"
+                    f"  faults {len(g['faults'])}")
           PY
 
       - name: 校验 tip state 只增不减
@@ -155,7 +155,7 @@ jobs:
 
           base = os.environ.get("BASE_SHA", "")
           if not base or set(base) == {"0"}:
-              print("workflow_dispatch/初始 push 无可比较基线，跳过历史演进检查")
+              print("workflow_dispatch / initial push has no baseline to compare; skipping the history check")
               raise SystemExit(0)
 
           repo_path = "tools/data_table_exporter/state/mapping/tip_enum_ids/tip_enum_ids.json"
@@ -166,7 +166,7 @@ jobs:
               encoding="utf-8"
           ))
           _check_tip_state_evolution(previous, current)
-          print(f"tip state 相对 {base[:12]} 保持只增不减")
+          print(f"tip state stays append-only relative to {base[:12]}")
           PY
 
       - name: 校验 Tip 受控产物无漂移
@@ -263,14 +263,14 @@ jobs:
 
           def values(path, pattern):
               if not path.is_file():
-                  raise SystemExit(f"缺少 Tip 生成产物: {path}")
+                  raise SystemExit(f"missing Tip generated output: {path}")
               return {name: int(value) for name, value in pattern.findall(
                   path.read_text(encoding="utf-8")
               )}
 
           sources = sorted(proto_dir.glob("*_tip.proto"))
           if not sources:
-              raise SystemExit("没有找到 Tip proto 源产物")
+              raise SystemExit("no Tip proto source outputs found")
 
           cmake = (repo / "cpp/generated/table/CMakeLists.txt").read_text(encoding="utf-8")
           vcxproj = (repo / "cpp/generated/table/table.vcxproj").read_text(encoding="utf-8")
@@ -280,7 +280,7 @@ jobs:
               *sorted((repo / "generated/code/proto/java/tip").glob("*.java")),
               *sorted((repo / "generated/code/proto/java/operator").glob("*.java")),
           ]
-          errors.extend(f"Java protobuf 仍有旧布局产物 {path}" for path in legacy_java)
+          errors.extend(f"Java protobuf still has legacy-layout output {path}" for path in legacy_java)
           for source in sources:
               stem = source.stem
               expected = values(source, proto_re)
@@ -292,51 +292,51 @@ jobs:
               got_java_generated = values(java_generated, java_re)
               got_java_deployed = values(java_deployed, java_re)
               if got_go != expected:
-                  errors.append(f"{stem}: Go pb 枚举与 proto 源不一致")
+                  errors.append(f"{stem}: Go pb enum differs from the proto source")
               if got_cpp != expected:
-                  errors.append(f"{stem}: C++ pb 枚举与 proto 源不一致")
+                  errors.append(f"{stem}: C++ pb enum differs from the proto source")
               if got_java_generated != expected:
-                  errors.append(f"{stem}: Java pb 枚举与 proto 源不一致")
+                  errors.append(f"{stem}: Java pb enum differs from the proto source")
               if got_java_deployed != expected:
-                  errors.append(f"{stem}: Java 部署副本与 proto 源不一致")
+                  errors.append(f"{stem}: deployed Java copy differs from the proto source")
               if "package com.game.table;" not in java_generated.read_text(encoding="utf-8"):
-                  errors.append(f"{stem}: Java pb 没有进入 com.game.table 包")
+                  errors.append(f"{stem}: Java pb is not in package com.game.table")
               java_source = java_generated.read_text(encoding="utf-8")
               gencode_version = re.search(r"Protobuf Java Version: ([0-9.]+)", java_source)
               runtime_version = re.search(
                   r"<protobuf\.version>([0-9.]+)</protobuf\.version>", java_pom
               )
               if not gencode_version or not runtime_version:
-                  errors.append(f"{stem}: 无法核对 Java gencode/runtime 版本")
+                  errors.append(f"{stem}: cannot check the Java gencode/runtime versions")
               elif gencode_version.group(1) != runtime_version.group(1):
                   errors.append(
-                      f"{stem}: Java gencode {gencode_version.group(1)} 与 "
-                      f"runtime {runtime_version.group(1)} 不一致"
+                      f"{stem}: Java gencode {gencode_version.group(1)} differs from "
+                      f"runtime {runtime_version.group(1)}"
                   )
               for legacy in (
                   repo / "generated/code/proto/java" / java_name,
                   repo / "generated/code/proto/java/tip" / java_name,
               ):
                   if legacy.exists():
-                      errors.append(f"{stem}: 仍有未部署的 Java 重复产物 {legacy}")
+                      errors.append(f"{stem}: an undeployed duplicate Java output remains: {legacy}")
               if f"proto/tip/{stem}.pb.cc" not in cmake:
-                  errors.append(f"{stem}: CMakeLists.txt 未纳入 .pb.cc")
+                  errors.append(f"{stem}: CMakeLists.txt does not include the .pb.cc")
               h_item = f'proto\\tip\\{stem}.pb.h'
               cc_item = f'proto\\tip\\{stem}.pb.cc'
               if h_item not in vcxproj or cc_item not in vcxproj:
-                  errors.append(f"{stem}: table.vcxproj 未同时纳入 .pb.h/.pb.cc")
+                  errors.append(f"{stem}: table.vcxproj does not include both the .pb.h and the .pb.cc")
 
           cfg = load_config()
           java_sources = [item["src"] for item in cfg.java.deploy]
           java_target = cfg.java.deploy[0]["dst"]
           errors.extend(
-              f"Java 部署目标存在陈旧产物 {path}"
+              f"stale output in the Java deploy target: {path}"
               for path in report_orphans(java_sources, java_target)
           )
 
           if errors:
-              raise SystemExit("Tip 绑定闭环校验失败:\n  " + "\n  ".join(errors))
-          print(f"Tip 三语言 protobuf/C++ wiring 自检通过: {len(sources)} 组")
+              raise SystemExit("Tip binding closure check failed:\n  " + "\n  ".join(errors))
+          print(f"Tip protobuf/C++ wiring self-check passed for all three languages: {len(sources)} groups")
           PY
 
       # data/AGENTS.md 里的配置表索引是给人和 agent 检索用的。腐坏的索引比没有索引更坏

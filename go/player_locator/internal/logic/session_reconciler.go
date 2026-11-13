@@ -103,9 +103,10 @@ type ReconcilerParams struct {
 // reconcilerDeps 是对账循环的外部依赖:生产由 productionReconcilerDeps 装配,单测注入假实现(固定 now、
 // 不限速的 pacer、受控的拍),不依赖墙钟。
 type reconcilerDeps struct {
-	view     clusterView
-	now      func() time.Time
-	newPacer func(perSecond int) pacer
+	view clusterView
+	now  func() time.Time
+	// newPacer 造一个每秒最多放行 perSecond 次的限速器(≤ 0 不限速)。小数是给分摊后的份额用的(scanBudgetShare)。
+	newPacer func(perSecond float64) pacer
 	// newTicker 返回「等到下一拍」与它的停止函数。
 	newTicker func(interval time.Duration) (wait func(ctx context.Context) error, stop func())
 	// sleep 等一段时间或 ctx 结束:补建循环的间隔、让位后再竞选前的等待、扫描单页重试的退避。
@@ -210,7 +211,7 @@ func StartSessionReconciler(ctx context.Context, svcCtx *svc.ServiceContext, p R
 		safego.Go("player_locator.index_pass", func() { worker.run(ctx) })
 	}
 
-	elector := leader.New(leader.NewGoRedisStore(svcCtx.RedisClient), reconcilerLeaderKey, leader.Options{
+	elector := leader.New(leader.NewUniversalStore(svcCtx.RedisClient), reconcilerLeaderKey, leader.Options{
 		TTL:           reconcilerLeaderTTL,
 		ID:            p.LeaderID,
 		OnStateChange: onReconcilerLeaderChange,
@@ -264,12 +265,13 @@ func campaignSessionReconciler(
 
 // sessionReconciler 是一个 leader 任期内的对账状态:写者检查、就绪标记、补建 / 审计。换主即新建。
 type sessionReconciler struct {
-	ctrl     *redis.Client         // 控制域:就绪、代次、审计时间
+	ctrl     redis.UniversalClient // 控制集群:就绪、代次、审计时间、一遍的进度(键带 {pl:gix})
 	player   redis.UniversalClient // 玩家域:会话、索引、登记集
 	cfg      config.ReconcileConf
 	interval time.Duration
 	deps     reconcilerDeps
-	// scanPacer 只给补建 / 审计循环。
+	// scanPacer 只给补建 / 审计循环。leader 自己扫(单实例玩家域)时是整份预算 ScanPagesPerSecond;
+	// 按段分给各副本时(indexPassWorker),每做一段之前按本副本持有的段数换成自己的份额。
 	scanPacer pacer
 }
 
@@ -280,7 +282,7 @@ func newSessionReconciler(svcCtx *svc.ServiceContext, cfg config.ReconcileConf, 
 		cfg:       cfg,
 		interval:  interval,
 		deps:      deps,
-		scanPacer: deps.newPacer(cfg.ScanPagesPerSecond),
+		scanPacer: deps.newPacer(float64(cfg.ScanPagesPerSecond)),
 	}
 }
 

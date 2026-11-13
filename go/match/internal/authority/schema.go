@@ -30,7 +30,7 @@ func Tables() []proto.Message {
 		&pb.MatchDirectIntentRecord{}, &pb.MatchFormationRecord{}, &pb.MatchRatingRecord{},
 		&pb.MatchRatingAppliedRecord{}, &pb.MatchRankSourceRecord{}, &pb.MatchRankOutboxRecord{},
 		&pb.MatchBattleCompletionRecord{}, &pb.MatchBattleSettlementSourceRecord{}, &pb.MatchRoleOccupancyRecord{},
-		&pb.MatchManualResolutionRecord{}, // 人工处置审计(2026-11-05,manual_abort.go)
+		&pb.MatchManualResolutionRecord{},                                  // 人工处置审计(2026-11-05,manual_abort.go)
 		&pb.MatchBattleReportRecord{}, &pb.MatchPlayerBattleReportRecord{}, // 战报回放(battle_report.go)
 		&pb.MatchBattleScriptRecord{}, &pb.MatchBattleScriptReviewRecord{}, &pb.MatchBattleScriptLoadoutRecord{}, // 战斗剧本(battle_script.go)
 		&teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{},
@@ -70,7 +70,9 @@ func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 		return closeErr
 	}
 	for table, required := range map[string][]string{
-		"match_authority_ticket":     {"state,enqueued_ms,player_id", "state,mode,team_id,enqueued_ms,player_id", "state,mode,config_id,team_size,team_id,enqueued_ms,player_id"},
+		// 带 pool_region 的是按首选机房读页的(机房段、子池段,docs/design/global-match-hierarchical-pools.md §5.2.1);team_launch 同理。
+		// 票表的 formation_id 与 (state,mode,team_id,…) 两条没有读者,2026-11-12 已从 proto 删掉(§6),这里不再要求。
+		"match_authority_ticket":     {"state,enqueued_ms,player_id", "state,mode,config_id,team_size,team_id,enqueued_ms,player_id", "state,mode,config_id,team_size,team_id,pool_region,enqueued_ms,player_id"},
 		"match_challenge_invitation": {"target_player_id,state,expires_ms,challenge_id", "challenger_player_id,state,expires_ms,challenge_id"},
 		"match_direct_intent":        {"exit_prepared,cancelled,battle_id,kind,owner_id,request_high,request_low"},
 		"match_join_intent":          {"state,player_id,request_high,request_low"},
@@ -79,7 +81,7 @@ func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 		"team_authority":             {"state,idle_expires_ms,team_id"},
 		"team_invite_index":          {"invitee_id,expires_ms,team_id"},
 		"team_application_index":     {"applicant_id,expires_ms,team_id"},
-		"team_launch":                {"state,enqueued_ms,actor_id,request_high,request_low", "team_id,state,enqueued_ms,actor_id,request_high,request_low", "state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low"},
+		"team_launch":                {"state,enqueued_ms,actor_id,request_high,request_low", "team_id,state,enqueued_ms,actor_id,request_high,request_low", "state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low", "state,mode,config_id,target_size,pool_region,enqueued_ms,actor_id,request_high,request_low"},
 		"team_launch_role":           {"player_id,state,actor_id,request_high,request_low"},
 	} {
 		for _, columns := range required {

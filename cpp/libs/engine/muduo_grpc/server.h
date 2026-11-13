@@ -25,7 +25,8 @@
 // 线上不变量(由 server_test 锁住):
 //   * 服务端自己产生的 UNAVAILABLE,文案永远不等于 "battle_not_allocatable"(那是 battle 守护段的跨语言契约,
 //     go/match 按状态码加文案精确匹配,据此跳过 DestroyBattle)。本类只产生 "server dropped the call without
-//     completing it" 与 "server shutting down" 两种 UNAVAILABLE。
+//     completing it" 与 "server shutting down" 两种 UNAVAILABLE;准入钩子(ServerOptions::admission)拒绝时用它
+//     自己给的状态,节点的热关停文案以 "killswitch: " 开头,同样不会等于那个文案。
 //   * 「业务可能已执行」的失败只用 DEADLINE_EXCEEDED / UNAVAILABLE / CANCELLED;业务开始之前的拒绝才用
 //     INTERNAL / UNIMPLEMENTED / RESOURCE_EXHAUSTED / REFUSED_STREAM。例外见 §15.13:应答超过 4MiB 时回
 //     RESOURCE_EXHAUSTED(Go 客户端收包时本来也报同一个码),并打 ERROR。
@@ -73,18 +74,28 @@ namespace detail
 class ServerConnection;
 } // namespace detail
 
-// 派发拦截:派发泵每次调用 unary handler 时包一层。参数是本次调用的 metadata 和执行 handler 的 invoke。
-//   * metadata 只能在调用 invoke 之前读:handler 可能同步完成,并随调用记录一起释放它。
+// 派发拦截:派发泵每次调用 unary handler 时包一层。参数是本次调用的 ":path"("/pkg.Svc/Method")、metadata 和执行 handler 的 invoke。
+//   * methodPath 在服务端存活期间一直有效(方法表在 Start 之后不变);metadata 只能在调用 invoke 之前读:
+//     handler 可能同步完成,并随调用记录一起释放它。
 //   * 实现应当恰好调用一次 invoke,并在 handler 执行期间保持它需要的上下文。多调的被忽略;一次都没调的,服务端补调一次
 //     并打 ERROR。所以 handler 总是恰好执行一次。
 // 传输层不认识 metadata 里的键;链路追踪的实现在 engine 的 core/network/grpc_trace_hooks.h
-// (docs/design/distributed-tracing.md §5.3)。
-using UnaryDispatchInterceptor = std::function<void(const Metadata &metadata, const std::function<void()> &invoke)>;
+// (docs/design/distributed-tracing.md §5.3,阶段三起用 methodPath 给 server span 命名,§10.3)。
+using UnaryDispatchInterceptor =
+    std::function<void(const std::string &methodPath, const Metadata &metadata, const std::function<void()> &invoke)>;
+
+// 准入:收到请求头、确认方法已注册之后调用,参数是 ":path"("/pkg.Svc/Method")。返回状态 = 拒绝这次调用:
+// 不收请求体、不排队、不派发,直接以该状态结束(trailers-only),handler 不执行;nullopt = 放行。
+// 只在 loop 线程调用,必须便宜、不阻塞、不抛异常。传输层不认识它的语义;节点用它接热关停
+// (docs/design/rpc-kill-switch.md §7)。返回 OK 状态视为放行。
+using UnaryAdmission = std::function<std::optional<Status>(const std::string &methodPath)>;
 
 struct ServerOptions
 {
     // 派发拦截;空 = 直接调用 handler。见上面 UnaryDispatchInterceptor。
     UnaryDispatchInterceptor dispatchInterceptor;
+    // 头部阶段准入;空 = 全部放行。见上面 UnaryAdmission。
+    UnaryAdmission admission;
     std::string name{"grpc"};                           // 只用于连接名与日志
     ServerSessionOptions session;
     size_t maxSendMessageBytes{4 * 1024 * 1024};

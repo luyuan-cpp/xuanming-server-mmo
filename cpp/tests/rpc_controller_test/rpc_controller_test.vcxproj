@@ -177,6 +177,9 @@
     <ClCompile Include="redis_cluster_logic_test.cpp" />
     <ClCompile Include="redis_cluster_client_test.cpp" />
     <ClCompile Include="prometheus_text_test.cpp" />
+    <ClCompile Include="process_fd_metrics_test.cpp" />
+    <ClCompile Include="acceptor_failure_policy_test.cpp" />
+    <ClCompile Include="acceptor_admission_test.cpp" />
     <ClCompile Include="inflight_index_test.cpp" />
     <ClCompile Include="rpc_channel_loopback_test.cpp" />
     <ClCompile Include="rpc_chain_test.cpp" />
@@ -184,7 +187,9 @@
     <ClCompile Include="trace_context_test.cpp" />
     <ClCompile Include="log_context_suffix_test.cpp" />
     <ClCompile Include="player_field_test.cpp" />
+    <ClCompile Include="error_reporter_test.cpp" />
     <ClCompile Include="rpc_trace_envelope_test.cpp" />
+    <ClCompile Include="kill_switch_test.cpp" />
     <ClCompile Include="../../nodes/battle/tests/battle_admission_gate_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>

@@ -138,8 +138,11 @@ public class ServerListService {
         }
     }
 
-    /** 新玩家能在这个区建角色:区服显示开放,且没有暂停创建新角色。推荐区只在这些区里挑。 */
-    private static boolean acceptsNewPlayers(ZoneInfoDto dto) {
+    /**
+     * 新玩家能在这个区建角色:区服显示开放,且没有暂停创建新角色。推荐区只在这些区里挑;
+     * {@link NewPlayerCapacityMetrics} 用同一个判据数「还能建角的区」,所以是包级可见。
+     */
+    static boolean acceptsNewPlayers(ZoneInfoDto dto) {
         return dto.getStatus() == ZoneDisplayStatus.OPEN && !dto.isCreateRoleClosed();
     }
 

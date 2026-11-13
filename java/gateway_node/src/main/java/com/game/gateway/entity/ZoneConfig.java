@@ -1,5 +1,6 @@
 package com.game.gateway.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import org.hibernate.annotations.ColumnDefault;
 
@@ -49,6 +50,35 @@ public class ZoneConfig {
     @ColumnDefault("false")
     private boolean createRoleClosed;
 
+    /**
+     * 本区角色上限(2026-11-12,区服满员处理 §6):本区一共建过的角色数(data_service 按合服之后的最终区数,删角不减)
+     * 到了这个数,本区网关的 RoleCapacityGuard 就把 {@link #createRoleClosed} 关上。0 = 不设上限。软上限:到线后
+     * 至多一个检查周期加一次策略发布内建出的角色会超出,见 docs/design/zone-full-handling.md §6。
+     * 运维开关,只经 {@code PUT /admin/zones/{id}/role-capacity} 改;POST 新建区服时取库缺省(0),PUT 整行替换不碰它。
+     * {@code @ColumnDefault} 的理由同 {@link #createRoleClosed}。
+     */
+    @Column(name = "role_capacity", nullable = false)
+    @ColumnDefault("0")
+    private int roleCapacity;
+
+    /**
+     * 行版本(2026-11-12,区服目录乐观并发):这一行每被写一次加一,{@code GET /admin/zones/{id}} 拿它作 ETag,整行替换的
+     * {@code PUT} 必须带 If-Match,比较与写入在同一条条件 UPDATE 里(ZoneConfigRepository#updateSettings)。新行的起始值
+     * 见 AdminZoneController#create;种子行不写这一列,取库缺省 1。
+     *
+     * <ul>
+     *   <li>只经 ZoneConfigRepository 的写语句改。不用 JPA 的 {@code @Version}:写入全是显式语句,{@code @Version} 只在实体
+     *       flush 时生效,这里一次也用不上,还会改掉仓库类注释里「merge 判不出新旧」那段论证的前提。</li>
+     *   <li>不进 JSON:版本只经 ETag / If-Match 两个头往返。放进响应体会诱导调用方自己拼 If-Match,或以为 PUT 体里带的
+     *       version 会被采用。</li>
+     *   <li>{@code @ColumnDefault} 与 schema.sql 一致,测试库按实体建表时也有这个缺省。</li>
+     * </ul>
+     */
+    @JsonIgnore
+    @Column(name = "version", nullable = false)
+    @ColumnDefault("1")
+    private long version = 1;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -94,6 +124,12 @@ public class ZoneConfig {
 
     public boolean isCreateRoleClosed() { return createRoleClosed; }
     public void setCreateRoleClosed(boolean createRoleClosed) { this.createRoleClosed = createRoleClosed; }
+
+    public int getRoleCapacity() { return roleCapacity; }
+    public void setRoleCapacity(int roleCapacity) { this.roleCapacity = roleCapacity; }
+
+    public long getVersion() { return version; }
+    public void setVersion(long version) { this.version = version; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

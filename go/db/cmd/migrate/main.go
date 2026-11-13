@@ -66,10 +66,6 @@ func main() {
 	flag.Parse()
 
 	conf.MustLoad(*configFile, &config.AppConfig)
-	// db-migrate Job 与 db 主进程读同一份 ConfigMap,同样从 MySQLPasswordEnv 指名的变量取口令(部署也给 Job 注入)。
-	if err := config.AppConfig.ResolveMySQLPassword(os.LookupEnv); err != nil {
-		log.Fatalf("config rejected: %v", err)
-	}
 	config.AppConfig.Normalize()
 
 	allow, err := proto_sql.AllowlistSpec().Resolve()
@@ -273,7 +269,12 @@ func runUp(ctx context.Context, runner *migrate.Runner, db *sql.DB, allowModify 
 			log.Fatalf("ensure writer gate tables on %s: %v", report.Database, err)
 		}
 	}
-	if len(report.Warnings) > 0 {
+	// TiDB 上按片号预切审计发件箱(presplit.go),幂等;切不成只影响写入分散,按 NEEDS-REVIEW 报。
+	presplitWarnings := presplitTiDBTables(ctx, db, report.Database, report.DryRun)
+	for _, w := range presplitWarnings {
+		logf("  NEEDS-REVIEW %s", w)
+	}
+	if len(report.Warnings) > 0 || len(presplitWarnings) > 0 {
 		// 退 4 = 迁移本身成功,但有需要人工过目的漂移。部署脚本可以据此告警
 		// 而不中断发布。
 		os.Exit(4)

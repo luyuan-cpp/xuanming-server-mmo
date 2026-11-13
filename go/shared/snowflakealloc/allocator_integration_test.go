@@ -244,7 +244,7 @@ func TestAllocateConcurrentUnique(t *testing.T) {
 	}
 }
 
-// 不同 kind(guild / scene-manager)互不干扰,各自从 0 开始。
+// 不同 kind 互不干扰,各自从 0 开始(两个测试专用 kind;生产现在只有 scene-manager 一种 kind 申领槽位)。
 func TestAllocateDifferentKindsIsolated(t *testing.T) {
 	cli := newTestClient(t)
 	kindA, kindB := uniqueKind(t), uniqueKind(t)
@@ -288,22 +288,6 @@ func TestAllocateClustersIsolatedAndComposed(t *testing.T) {
 	}
 	if _, cl, sl, _ := DecodeID(id); cl != 1 || sl != 0 {
 		t.Fatalf("id %d decodes to cluster=%d slot=%d", id, cl, sl)
-	}
-}
-
-// login 布局:13 位 node 段切 [cluster3][slot10],MaxSlot=1023,worker=(cluster<<10)|slot。
-func TestAllocateLoginLayout(t *testing.T) {
-	cli := newTestClient(t)
-	kind := uniqueKind(t)
-	cleanupKind(t, cli, kind)
-
-	h := alloc(t, cli, kind, "h", Options{ClusterBits: 3, SlotBits: 10, ClusterID: 2})
-	defer h.Close()
-	if h.r.maxSlot != 1023 {
-		t.Fatalf("maxSlot=%d", h.r.maxSlot)
-	}
-	if h.WorkerID != 2<<10|h.Slot {
-		t.Fatalf("worker=%d slot=%d", h.WorkerID, h.Slot)
 	}
 }
 
@@ -384,31 +368,25 @@ func TestLegacyKeysStillQuarantineAndOccupy(t *testing.T) {
 	ctx := context.Background()
 
 	now := snowflake.NowEpochSec()
-	// slot 0:旧秒级水位刚写过;slot 1:旧毫秒水位(login guard_ms)刚写过;
-	// slot 2:旧版本进程仍活着(snowflake_ids/2 存在)。
+	// slot 0:旧秒级水位刚写过;slot 1:旧版本进程仍活着(snowflake_ids/1 存在)。
+	// 旧布局的毫秒水位 guard_ms 只有 login 写过,2026-11-12 起不再读,不在这里造。
 	mustPut := func(k, v string) {
 		if _, err := cli.Put(ctx, k, v); err != nil {
 			t.Fatal(err)
 		}
 	}
 	mustPut(legacy+"/snowflake_guard/0", strconv.FormatUint(now, 10))
-	mustPut(legacy+"/guard_ms/1", strconv.FormatInt(time.Now().UnixMilli(), 10))
-	mustPut(legacy+"/snowflake_ids/2", "old-host")
+	mustPut(legacy+"/snowflake_ids/1", "old-host")
 
 	h := alloc(t, cli, kind, "h", Options{LegacyPrefix: legacy})
 	defer h.Close()
-	if h.Slot != 3 {
-		t.Fatalf("旧布局的水位 / 活 id 必须被算进去,期望 slot 3, got %d", h.Slot)
+	if h.Slot != 2 {
+		t.Fatalf("旧布局的水位 / 活 id 必须被算进去,期望 slot 2, got %d", h.Slot)
 	}
 	// 新 key 与旧 key 的地板取 max。
-	mustPut(legacy+"/snowflake_guard/3", strconv.FormatUint(now+100, 10))
-	if floor, _, err := readWatermarkFloor(ctx, cli, kind, h.r, 3); err != nil || floor < now+100 {
+	mustPut(legacy+"/snowflake_guard/2", strconv.FormatUint(now+100, 10))
+	if floor, _, err := readWatermarkFloor(ctx, cli, kind, h.r, 2); err != nil || floor < now+100 {
 		t.Fatalf("floor=%d err=%v, 期望 ≥ %d", floor, err, now+100)
-	}
-	// login 的毫秒地板同样读旧 key 取 max。
-	mustPut(legacy+"/guard_ms/3", "999999999999999")
-	if ms, err := h.ReadMsWatermark(ctx); err != nil || ms != 999999999999999 {
-		t.Fatalf("ms=%d err=%v", ms, err)
 	}
 }
 
@@ -626,7 +604,7 @@ func TestGuardWatermarkNeverGoesBackwardUnderConcurrency(t *testing.T) {
 }
 
 // 2026-09-02 事故回归:同 hostname 的第二个进程在第一个进程仍存活时**不得**接管其槽
-// (本地按 -Zone 起第二个 login 抢走 worker 0,zone1 login 检测到 ownership lost 自杀)。
+// (当时 login 还申领槽位:本地按 -Zone 起第二个 login 抢走 worker 0,zone1 login 检测到 ownership lost 自杀)。
 // 期望:第二次分配拿到不同的槽,且第一个 Handle 的 Lost() 保持未关闭。
 func TestAllocateSameHostnameDoesNotStealLiveLease(t *testing.T) {
 	cli := newTestClient(t)
@@ -656,36 +634,6 @@ func TestAllocateSameHostnameDoesNotStealLiveLease(t *testing.T) {
 	}
 	if isClosed(hd2.Lost()) {
 		t.Fatal("second process lost ownership")
-	}
-}
-
-// 毫秒水位(login):带归属校验,单调,Ack 闸;读回取 max。
-func TestMsWatermark_RoundTripAndOwnershipCheck(t *testing.T) {
-	cli := newTestClient(t)
-	kind := uniqueKind(t)
-	cleanupKind(t, cli, kind)
-
-	h := alloc(t, cli, kind, "h", Options{ClusterBits: 3, SlotBits: 10})
-	defer h.Close()
-	ctx := context.Background()
-	if ms, err := h.ReadMsWatermark(ctx); err != nil || ms != 0 {
-		t.Fatalf("fresh slot ms watermark=%d err=%v", ms, err)
-	}
-	if err := h.PutMsWatermark(ctx, 5000); err != nil {
-		t.Fatal(err)
-	}
-	if err := h.PutMsWatermark(ctx, 4000); err != nil { // 不回退
-		t.Fatal(err)
-	}
-	if ms, err := h.ReadMsWatermark(ctx); err != nil || ms != 5000 {
-		t.Fatalf("ms=%d err=%v, 期望 5000", ms, err)
-	}
-	// 槽被删(lease 过期)时写不进去,不 Ack,不 markLost。
-	if _, err := cli.Delete(ctx, h.sKey()); err != nil {
-		t.Fatal(err)
-	}
-	if err := h.PutMsWatermark(ctx, 6000); err == nil {
-		t.Fatal("槽不在我们的 uuid 上时毫秒水位必须拒写")
 	}
 }
 
@@ -744,10 +692,10 @@ func TestLocalCacheNotRewrittenOnSteadyStateAcks(t *testing.T) {
 	}
 
 	time.Sleep(5500 * time.Millisecond) // ≥ 5 个后台 tick,每个都 Ack 成功
-	if stale, age := h.FenceClock().Stale(); stale || age > 2*time.Second {
+	if stale, age := h.fence.Stale(); stale || age > 2*time.Second {
 		t.Fatalf("前置条件不成立:后台循环没有在 Ack(stale=%v age=%v)", stale, age)
 	}
-	if !h.FenceClock().LastAckWall().After(time.UnixMilli(first.LastAckWall).Add(4 * time.Second)) {
+	if !h.fence.LastAckWall().After(time.UnixMilli(first.LastAckWall).Add(4 * time.Second)) {
 		t.Fatal("前置条件不成立:后台循环没有连续 Ack 至少 5 拍")
 	}
 	if degraded(h) {
@@ -849,7 +797,7 @@ func TestLocalCache_OutageWritesEveryTickAndRecoveryStopsWriting(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if !h.FenceClock().LastAckWall().After(time.UnixMilli(first.LastAckWall)) {
+	if !h.fence.LastAckWall().After(time.UnixMilli(first.LastAckWall)) {
 		t.Fatal("退出故障模式必须伴随一次新的 Ack")
 	}
 	recovered := writes.Load()
@@ -993,25 +941,6 @@ func TestRollingUpgrade_LegacyBinaryCannotTakeALiveSlot(t *testing.T) {
 	}
 }
 
-// F1 的毫秒面(login):PutMsWatermark 同样要镜像到旧 <prefix>/guard_ms/<slot>。
-func TestRollingUpgrade_MsWatermarkMirroredToLegacyKey(t *testing.T) {
-	cli := newTestClient(t)
-	kind := uniqueKind(t)
-	cleanupKind(t, cli, kind)
-	legacy := "/legacy-" + kind
-
-	h := alloc(t, cli, kind, "host-new", Options{ClusterBits: 3, SlotBits: 10, LegacyPrefix: legacy})
-	defer h.Close()
-	const target = 1893456000000
-	if err := h.PutMsWatermark(context.Background(), target); err != nil {
-		t.Fatal(err)
-	}
-	got, err := readUint(context.Background(), cli, legacy+"/guard_ms/"+strconv.FormatUint(h.Slot, 10))
-	if err != nil || got != target {
-		t.Fatalf("旧布局毫秒水位=%d err=%v, 期望 %d", got, err, target)
-	}
-}
-
 // ---- F2:reclaim 的两次比较必须是一笔 Txn ------------------------------------------
 //
 // 槽 key 在两次比较之间消失(旧 lease 的 revoke 落在中间)不是"被别人抢走" —— 那正是
@@ -1120,7 +1049,7 @@ func TestReuse_FailsClosedWhenTheWatermarkFloorIsUnreadable(t *testing.T) {
 // A 失联 > Q 期间 B 合法拿走这个槽、写了水位、发了号;B 随后也与 etcd 断开(或退出),它的槽 key
 // 随 lease 过期。A 回来时槽 key 不存在,reclaim 走 CreateRev==0 的重建分支。修复前 A 直接把 key
 // 重新 Create 回自己名下、把 B 的水位吃成地板继续发号 —— 可 B 若仍在自己的 F 内发号,两个进程
-// 就用同一个 worker id 同时发号(隔离期被重建分支绕过)。修复后两把水位 key 的 ModRevision 已不是
+// 就用同一个 worker id 同时发号(隔离期被重建分支绕过)。修复后水位 key 的 ModRevision 已不是
 // A 最后一次观测的值 ⇒ 不重建、Lost()、发号器永久 fence,槽 key 留空,重启后走受隔离期保护的申领。
 
 // holdSlotForTest 让 h 以自己的 uuid 挂上槽 key(相当于申领成功),返回所挂的 lease。
@@ -1136,74 +1065,114 @@ func holdSlotForTest(t *testing.T, cli *clientv3.Client, h *Handle) clientv3.Lea
 	return l.ID
 }
 
-// 秒级与毫秒级水位各验一遍:两者任一写成功都会 Ack 闸,所以 B 只写过其中一把也足以发号。
+// 闸只在水位 watermark/<slot> 写成功时 Ack,所以 B 能发号就一定动过这把 key 的 ModRevision。
 func TestReclaim_RefusesToRecreateASlotAnotherHolderUsedWhileWeWereAway(t *testing.T) {
 	cli := newTestClient(t)
-	cases := []struct {
-		name  string
-		key   func(kind string) string
-		value uint64
-	}{
-		{"sec watermark", func(kind string) string { return watermarkKey(kind, 0, 0) }, snowflake.NowEpochSec() + 600},
-		{"ms watermark", func(kind string) string { return watermarkMsKey(kind, 0, 0) }, uint64(time.Now().UnixMilli()) + 600_000},
+	kind := uniqueKind(t)
+	cleanupKind(t, cli, kind)
+	r, err := Options{LeaseTTL: 10}.resolve()
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			kind := uniqueKind(t)
-			cleanupKind(t, cli, kind)
-			r, err := Options{LeaseTTL: 10}.resolve()
-			if err != nil {
-				t.Fatal(err)
-			}
-			h := newHandle(cli, kind, "host-away", r, 0, 0, "uuid-A")
-			node := snowflake.NewNode(0)
-			h.node.Store(node)
-			h.AttachFencer(node)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
+	h := newHandle(cli, kind, "host-away", r, 0, 0, "uuid-A")
+	node := snowflake.NewNode(0)
+	h.node.Store(node)
+	h.attachFencer(node)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-			// A 持有槽 0、写过自己的水位(guardRev 落在这一笔上),然后 lease 过期。
-			aLease := holdSlotForTest(t, cli, h)
-			if !h.advanceGuard(ctx) {
-				t.Fatal("前置条件:A 持槽时的水位写必须成功")
-			}
-			if _, err := cli.Revoke(ctx, aLease); err != nil {
-				t.Fatal(err)
-			}
+	// A 持有槽 0、写过自己的水位(guardRev 落在这一笔上),然后 lease 过期。
+	aLease := holdSlotForTest(t, cli, h)
+	if !h.advanceGuard(ctx) {
+		t.Fatal("前置条件:A 持槽时的水位写必须成功")
+	}
+	if _, err := cli.Revoke(ctx, aLease); err != nil {
+		t.Fatal(err)
+	}
 
-			// B 在 A 失联期间申领同一个槽并写了水位(直接写 key 模拟 B 的水位 Txn),随后 B 的 key 也过期。
-			bLease, err := cli.Grant(ctx, 30)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := cli.Put(ctx, h.sKey(), "uuid-B", clientv3.WithLease(bLease.ID)); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := cli.Put(ctx, tc.key(kind), strconv.FormatUint(tc.value, 10)); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := cli.Revoke(ctx, bLease.ID); err != nil {
-				t.Fatal(err)
-			}
+	// B 在 A 失联期间申领同一个槽并写了水位(直接写 key 模拟 B 的水位 Txn),随后 B 的 key 也过期。
+	bLease, err := cli.Grant(ctx, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cli.Put(ctx, h.sKey(), "uuid-B", clientv3.WithLease(bLease.ID)); err != nil {
+		t.Fatal(err)
+	}
+	bWatermark := snowflake.NowEpochSec() + 600
+	if _, err := cli.Put(ctx, watermarkKey(kind, 0, 0), strconv.FormatUint(bWatermark, 10)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cli.Revoke(ctx, bLease.ID); err != nil {
+		t.Fatal(err)
+	}
 
-			kaCtx, kaCancel := context.WithCancel(context.Background())
-			defer kaCancel()
-			h.reclaim(kaCtx, &loopState{}, "test")
+	kaCtx, kaCancel := context.WithCancel(context.Background())
+	defer kaCancel()
+	h.reclaim(kaCtx, &loopState{}, "test")
 
-			if !isClosed(h.Lost()) {
-				t.Fatal("key 过期期间水位被别人写过:必须判失去所有权,否则两个进程会用同一个 worker id 同时发号")
-			}
-			if _, err := node.Generate(); !errors.Is(err, snowflake.ErrFenced) {
-				t.Fatalf("失去所有权后发号器必须已永久 fence, got %v", err)
-			}
-			if r := getKV(t, cli, h.sKey()); len(r.Kvs) != 0 {
-				t.Fatalf("拒绝重建时不得把槽 key 挂回自己名下: %+v", r.Kvs)
-			}
-		})
+	if !isClosed(h.Lost()) {
+		t.Fatal("key 过期期间水位被别人写过:必须判失去所有权,否则两个进程会用同一个 worker id 同时发号")
+	}
+	if _, err := node.Generate(); !errors.Is(err, snowflake.ErrFenced) {
+		t.Fatalf("失去所有权后发号器必须已永久 fence, got %v", err)
+	}
+	if got := getKV(t, cli, h.sKey()); len(got.Kvs) != 0 {
+		t.Fatalf("拒绝重建时不得把槽 key 挂回自己名下: %+v", got.Kvs)
 	}
 }
 
-// F5 的对照组:失联期间只有我们自己写过水位(秒级 + 毫秒级都写过),lease 抖动后重建必须照常
+// 2026-11-12 删掉毫秒水位后的回归:etcd 里还留着旧版本写的毫秒水位 watermark_ms/<slot>(清库前的残留),
+// 而本进程从没观测过它。重建只比较 watermark/<slot>,这把没有读者的旧键不得让 reclaim 误判"别人写过"而无故 fence。
+func TestReclaim_IgnoresALeftoverMsWatermarkKey(t *testing.T) {
+	cli := newTestClient(t)
+	kind := uniqueKind(t)
+	cleanupKind(t, cli, kind)
+	r, err := Options{LeaseTTL: 10}.resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newHandle(cli, kind, "host-leftover", r, 0, 0, "uuid-leftover")
+	node := snowflake.NewNode(0)
+	h.node.Store(node)
+	h.attachFencer(node)
+	defer func() {
+		if l := h.Lease(); l != 0 {
+			cli.Revoke(context.Background(), l)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ownLease := holdSlotForTest(t, cli, h)
+	if !h.advanceGuard(ctx) {
+		t.Fatal("前置条件:秒级水位写必须成功")
+	}
+	// 旧版本(login 的毫秒水位协程)留下的键,键名照抄删除前的布局。
+	leftover := rootKey(kind, 0) + "/watermark_ms/0"
+	if _, err := cli.Put(ctx, leftover, strconv.FormatInt(time.Now().UnixMilli()+600_000, 10)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cli.Revoke(ctx, ownLease); err != nil {
+		t.Fatal(err)
+	}
+
+	kaCtx, kaCancel := context.WithCancel(context.Background())
+	defer kaCancel()
+	h.reclaim(kaCtx, &loopState{}, "test")
+
+	if isClosed(h.Lost()) {
+		t.Fatal("只有没有读者的旧毫秒水位键:重建不得判成失去所有权")
+	}
+	got := getKV(t, cli, h.sKey())
+	if len(got.Kvs) != 1 || string(got.Kvs[0].Value) != h.UUID || clientv3.LeaseID(got.Kvs[0].Lease) != h.Lease() {
+		t.Fatalf("重建后槽 key 必须挂在我们的 uuid / 新 lease 上: %+v", got.Kvs)
+	}
+	if node.IsFenced() {
+		t.Fatal("重建成功不得 fence 发号器")
+	}
+}
+
+// F5 的对照组:失联期间只有我们自己写过水位,lease 抖动后重建必须照常
 // 成功 —— revision 比较不能把自己的写误判成别人的,否则"etcd 是弱依赖"就退化成"lease 一过期就重启"。
 func TestReclaim_RecreatesTheSlotWhenOnlyOurOwnWatermarksAreThere(t *testing.T) {
 	cli := newTestClient(t)
@@ -1217,7 +1186,7 @@ func TestReclaim_RecreatesTheSlotWhenOnlyOurOwnWatermarksAreThere(t *testing.T) 
 	h := newHandle(cli, kind, "host-own", r, 0, 0, "uuid-own")
 	node := snowflake.NewNode(0)
 	h.node.Store(node)
-	h.AttachFencer(node)
+	h.attachFencer(node)
 	defer func() {
 		if l := h.Lease(); l != 0 {
 			cli.Revoke(context.Background(), l)
@@ -1228,10 +1197,7 @@ func TestReclaim_RecreatesTheSlotWhenOnlyOurOwnWatermarksAreThere(t *testing.T) 
 
 	ownLease := holdSlotForTest(t, cli, h)
 	if !h.advanceGuard(ctx) {
-		t.Fatal("前置条件:秒级水位写必须成功")
-	}
-	if err := h.PutMsWatermark(ctx, uint64(time.Now().UnixMilli())+2000); err != nil {
-		t.Fatalf("前置条件:毫秒水位写必须成功: %v", err)
+		t.Fatal("前置条件:水位写必须成功")
 	}
 	if _, err := cli.Revoke(ctx, ownLease); err != nil {
 		t.Fatal(err)
@@ -1255,7 +1221,7 @@ func TestReclaim_RecreatesTheSlotWhenOnlyOurOwnWatermarksAreThere(t *testing.T) 
 	if !h.advanceGuard(ctx) {
 		t.Fatal("重建后水位写必须成功")
 	}
-	if stale, _ := h.FenceClock().Stale(); stale {
+	if stale, _ := h.fence.Stale(); stale {
 		t.Fatal("重建并写成水位后闸必须已 Ack")
 	}
 	// 不在这里调 Generate:refloor 把地板抬到了自己的水位(now+lead),发号要等真实时钟越过它。

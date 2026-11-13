@@ -2,17 +2,21 @@ package routing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/zeromicro/go-zero/core/stores/redis"
+	"shared/clusterredis"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // 玩家名字读缓存(设计 docs/design/guild-phase2/03-names.md §3.5)。
 //
-// 【这把 Redis 只放可丢弃的读缓存】配置键 NameCacheRedis,里面没有任何权威数据:整个实例丢了,
-// 名字读路径回源一次全局库,建角和归属都不受影响。不要往上面加要落盘或要保证一致的东西。
+// 【这把 Redis 只放可丢弃的读缓存】它在控制集群上(配置段 ControlRedis,docs/design/redis-cluster-all-domains-20261110.md §4.8;
+// 2026-11-13 起取代独立的 NameCacheRedis 段),里面没有任何权威数据:整组节点丢了,名字读路径回源一次全局库,
+// 建角和归属都不受影响。不要往上面加要落盘或要保证一致的东西。
 //
 // 【真相在哪】名字的唯一真源是全局库的 player_name 表(store/player_name_store.go)。
 // 本文件里的一切都只是加速:缓存写失败**绝不能**让业务写失败,缓存读到的脏值最坏
@@ -22,6 +26,12 @@ import (
 // "库里根本没有"的 id(早于本功能建的角色、已释放的名字)。不记"查不到"这件事,
 // 这些 id 每次都要回源打一次 SQL,而它们恰恰是永远不会命中的那批 —— 缓存就只剩
 // 负担没有收益了。
+//
+// 【键不带 hash tag,批量读走单键 GET 的管道】键是 player:name:<id>,每个玩家一个,不需要和别的键同槽。
+// 控制集群的守卫(clusterredis.ControlClusterKeys)允许单键命令不带 tag,但多键命令的每个键都必须带同一个 tag。
+// 所以批量读不能用 MGET,也不能用按槽分组的 MGetBySlot:一批 500 个 id 在 16384 个槽里几乎必然有两个落同槽
+// (生日问题,约 99.9%),那一组就是两个不带 tag 的键,守卫拒绝,整批读失败、退化成全部回源。
+// 单键 GET 的管道没有这个问题;ClusterClient 会按节点拆管道,单实例时就是一条管道。
 
 const (
 	playerNameKeyPrefix = "player:name:"
@@ -32,8 +42,8 @@ const (
 	// 数字、拉丁字母和几段汉字区间,**不可能**出现 NUL。所以"值等于哨兵"与"值是一个
 	// 真名字"两件事在语义上永远互斥,不需要再加一层编码或前缀。
 	//
-	// 为什么不用空串当哨兵:go-zero 的 MgetCtx 把"键不存在"也映射成空串,空串一旦
-	// 被当成哨兵,"没缓存"和"缓存说没有"就分不开了。
+	// 为什么不用空串当哨兵:空串是"名字为空"这个非法值的自然写法,写入侧(SetPlayerNames)
+	// 拒绝空名字;读侧把空串一律当未命中。哨兵用合法字符集之外的字节,两种判定互不依赖。
 	playerNameAbsentSentinel = "\x00"
 )
 
@@ -43,14 +53,30 @@ func PlayerNameKey(playerID uint64) string {
 	return playerNameKeyPrefix + strconv.FormatUint(playerID, 10)
 }
 
-// PlayerNameCache 是 player:name:{id} 的读写。并发安全;底层 go-zero 客户端按地址共享,不归这里关闭。
+// PlayerNameCache 是 player:name:{id} 的读写。并发安全;底层句柄不归这里关闭(见两个构造函数)。
 type PlayerNameCache struct {
-	rds *redis.Redis
+	rds redis.UniversalClient
 }
 
-// NewPlayerNameCache 按 NameCacheRedis 配置建缓存客户端(不拨号)。配置不合法就退出进程,与 go-zero 的 MustNewRedis 同口径。
-func NewPlayerNameCache(c redis.RedisConf) *PlayerNameCache {
-	return &PlayerNameCache{rds: redis.MustNewRedis(c)}
+// NewPlayerNameCache 用调用方建好的控制集群句柄(clusterredis.New(..., clusterredis.ControlClusterKeys))包一层名字缓存。
+// 句柄归调用方关闭(常驻服务登记在 ServiceContext 的 upstreamClosers 里)。
+func NewPlayerNameCache(rds redis.UniversalClient) *PlayerNameCache {
+	return &PlayerNameCache{rds: rds}
+}
+
+// OpenPlayerNameCache 按控制集群配置建句柄并 PING 一次;配置不合法、连不上都回错误,不退出进程。
+// 给运维工具用(cmd/create_residual 修完名字要删缓存):工具要自己决定拒绝运行、给出固定文案。
+// 句柄随工具进程退出释放,不另给关闭入口。
+func OpenPlayerNameCache(ctx context.Context, c clusterredis.Config) (*PlayerNameCache, error) {
+	rds, err := clusterredis.New(c, clusterredis.ControlClusterKeys)
+	if err != nil {
+		return nil, err
+	}
+	if err := rds.Ping(ctx).Err(); err != nil {
+		_ = rds.Close()
+		return nil, err
+	}
+	return &PlayerNameCache{rds: rds}, nil
 }
 
 // MGetPlayerNames 一次查多个玩家的名字缓存。
@@ -63,8 +89,8 @@ func NewPlayerNameCache(c redis.RedisConf) *PlayerNameCache {
 // 入参里的 0 与重复 id 会被跳过(0 不是合法 player_id;重复查同一个键纯属浪费),
 // 所以本方法对调用方是否已经去重不敏感。ids 为空时返回两个空 map 和 nil。
 //
-// Redis 报错时返回 (nil, nil, err):调用方应当把它降级成"全部未命中"(缓存挂了
-// 不该让读接口整体失败),而不是把错误往上抛。
+// Redis 报错时(任何一个键的读失败都算)返回 (nil, nil, err):调用方应当把它降级成"全部未命中"
+// (缓存挂了不该让读接口整体失败),而不是把错误往上抛。不返回部分结果,与 clusterredis.MGetBySlot 同口径。
 func (c *PlayerNameCache) MGetPlayerNames(ctx context.Context, ids []uint64) (hits map[uint64]string, absent map[uint64]bool, err error) {
 	hits = make(map[uint64]string)
 	absent = make(map[uint64]bool)
@@ -72,9 +98,6 @@ func (c *PlayerNameCache) MGetPlayerNames(ctx context.Context, ids []uint64) (hi
 		return hits, absent, nil
 	}
 
-	// keys 与 wanted 必须严格同序同长:MgetCtx 的返回值是按 key 位置对齐的,
-	// 少跳过一个或多跳过一个,后面的名字就会安到别人头上。
-	keys := make([]string, 0, len(ids))
 	wanted := make([]uint64, 0, len(ids))
 	seen := make(map[uint64]struct{}, len(ids))
 	for _, id := range ids {
@@ -85,28 +108,33 @@ func (c *PlayerNameCache) MGetPlayerNames(ctx context.Context, ids []uint64) (hi
 			continue
 		}
 		seen[id] = struct{}{}
-		keys = append(keys, PlayerNameKey(id))
 		wanted = append(wanted, id)
 	}
-	if len(keys) == 0 {
+	if len(wanted) == 0 {
 		return hits, absent, nil
 	}
 
-	vals, err := c.rds.MgetCtx(ctx, keys...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("player name cache mget (%d keys): %w", len(keys), err)
-	}
-	// 防御:go-zero 正常会按 key 数返回等长切片,长度对不上说明底层语义变了,
-	// 这时宁可整体当未命中,也不能按错位的下标取值。
-	if len(vals) != len(keys) {
-		return nil, nil, fmt.Errorf("player name cache mget returned %d values for %d keys", len(vals), len(keys))
+	// cmds 与 wanted 同序同长:第 i 条 GET 读的就是 wanted[i] 的键。
+	cmds := make([]*redis.StringCmd, len(wanted))
+	_, err = c.rds.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		for i, id := range wanted {
+			cmds[i] = pipe.Get(ctx, PlayerNameKey(id))
+		}
+		return nil
+	})
+	// 管道把第一条失败命令的错误带回来;缺键的 GET 也会以 redis.Nil 出现在这里,那不是故障,逐条再判。
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return nil, nil, fmt.Errorf("player name cache get (%d keys): %w", len(wanted), err)
 	}
 
-	for i, val := range vals {
-		switch val {
-		case "":
-			// 键不存在 = 未命中,两个 map 都不放。
-		case playerNameAbsentSentinel:
+	for i, cmd := range cmds {
+		val, getErr := cmd.Result()
+		switch {
+		case errors.Is(getErr, redis.Nil), getErr == nil && val == "":
+			// 键不存在(或被写成了不该出现的空串)= 未命中,两个 map 都不放。
+		case getErr != nil:
+			return nil, nil, fmt.Errorf("player name cache get %s: %w", PlayerNameKey(wanted[i]), getErr)
+		case val == playerNameAbsentSentinel:
 			absent[wanted[i]] = true
 		default:
 			hits[wanted[i]] = val
@@ -123,8 +151,8 @@ func (c *PlayerNameCache) MGetPlayerNames(ctx context.Context, ids []uint64) (hi
 // TTL 的作用**不是**让数据过期失效(v1 不支持改名,名字不会变),而是给"释放之后
 // DEL 缓存失败"留下的脏值封一个顶:最坏 CacheTTL(24h)之后它自己消失。
 //
-// 跳过 id==0 与空名字:空名字写进去会和"未命中"(MgetCtx 对缺键返回空串)混为一谈。
-// 全部被跳过时不发任何命令,直接返回 nil。
+// 跳过 id==0 与空名字:读侧把空串当未命中,写进去也只是白占一个键。
+// 全部被跳过时不发任何命令,直接返回 nil。SET 带固定值与 TTL,重放结果相同,守卫允许它进管道。
 func (c *PlayerNameCache) SetPlayerNames(ctx context.Context, names map[uint64]string, ttl time.Duration) error {
 	if len(names) == 0 {
 		return nil
@@ -146,12 +174,13 @@ func (c *PlayerNameCache) SetPlayerNames(ctx context.Context, names map[uint64]s
 		return nil
 	}
 
-	return c.rds.PipelinedCtx(ctx, func(pipe redis.Pipeliner) error {
+	_, err := c.rds.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 		for id, name := range writable {
 			pipe.Set(ctx, PlayerNameKey(id), name, ttl)
 		}
 		return nil
 	})
+	return err
 }
 
 // SetPlayerNamesAbsent 回填负缓存(SET NX + 过期)。
@@ -163,6 +192,7 @@ func (c *PlayerNameCache) SetPlayerNames(ctx context.Context, names map[uint64]s
 //
 // 唯一残留的坏时序是"Reserve 的 SET 失败 + 本方法的 SETNX 成功",后果是名字被隐藏
 // ≤ NegativeCacheTTL(60s)。名字是展示数据,这个代价可以接受(§3.5)。
+// SETNX 重放不改变终态(键已在就不写),守卫允许它进管道。
 func (c *PlayerNameCache) SetPlayerNamesAbsent(ctx context.Context, ids []uint64, ttl time.Duration) error {
 	if len(ids) == 0 {
 		return nil
@@ -182,23 +212,23 @@ func (c *PlayerNameCache) SetPlayerNamesAbsent(ctx context.Context, ids []uint64
 		return nil
 	}
 
-	return c.rds.PipelinedCtx(ctx, func(pipe redis.Pipeliner) error {
+	_, err := c.rds.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 		for id := range seen {
 			pipe.SetNX(ctx, PlayerNameKey(id), playerNameAbsentSentinel, ttl)
 		}
 		return nil
 	})
+	return err
 }
 
 // DelPlayerName 删掉一个玩家的名字缓存(正负缓存是同一个键,一次删干净)。
 //
-// 调用点只有一处:Release 成功删库**之后**。顺序不能反 —— 先删缓存再删库的话,
+// 调用点:Release 成功删库**之后**,以及 create_residual 修完名字之后。顺序不能反 —— 先删缓存再删库的话,
 // 两步之间的一次读会把库里那个即将消失的名字重新缓存起来,DEL 就白做了。
 // 本方法失败不算业务失败(库已经是真相),调用方记日志即可,脏值由 TTL 兜底。
 func (c *PlayerNameCache) DelPlayerName(ctx context.Context, playerID uint64) error {
 	if playerID == 0 {
 		return nil
 	}
-	_, err := c.rds.DelCtx(ctx, PlayerNameKey(playerID))
-	return err
+	return c.rds.Del(ctx, PlayerNameKey(playerID)).Err()
 }

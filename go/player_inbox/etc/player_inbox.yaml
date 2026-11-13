@@ -65,23 +65,26 @@ MySQL:
 Schema:
   AutoMigrate: false
 
-# 控制域 Redis:player_inbox:maintenance:leader —— 后台循环选主锁。
+# 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1;2026-11-12 取代 CoreRedis 段):
+# player_inbox:maintenance:leader —— 后台循环选主锁(单键,不带 tag)。
 # 段名不能叫 Redis:与 zrpc.RpcServerConf 的同名字段冲突,加载期报 conflict key Redis。
-CoreRedis:
-  Host: 127.0.0.1:6379
-  Password: ""
-  DB: 0
-  # go-redis 连接池上限(P0-E 第 3 批,共享 Redis 连接总账)。必须显式写正整数(评审 L7,config.Validate 拒绝 ≤ 0):
-  # 0 在 go-redis 里是缺省 10 × GOMAXPROCS,随 CPU limit 漂移。20 = K8s 上 GOMAXPROCS 按 2 时的缺省值。
+# 集群部署写种子地址并打开 Cluster:
+#   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
+#   Cluster: true
+# 口令写 Password 字面量,或在 SharedRedisPasswordEnv 指名变量(PasswordEnv 不用)。
+ControlRedis:
+  Addrs: [127.0.0.1:6379]
+  # 每个节点的连接池上限(P0-E 第 3 批,共享 Redis 连接总账),单实例即总上限。必须显式写正整数
+  # (评审 L7,config.Validate 拒绝 ≤ 0):不写就是客户端缺省值,随版本漂移。20 = 换句柄之前 K8s 上 GOMAXPROCS 按 2 时的缺省值。
   # tools/scripts/k8s_deploy.ps1 把它镜像进 player-inbox ConfigMap(要求正整数),Redis 连接总账读同一个键:
   # 改它看部署时打印的 "Redis connection ledger" 一行。
-  # 读 / 写超时(各 1s 兜底)与 ContextTimeoutEnabled 写在代码里(svc.coreRedisOptions),不是配置项。
-  PoolSize: 20
+  # 读 / 写超时不写 = 各 1s 兜底(config.EffectiveControlRedis),ctx 截止约束缺省开启。
+  PoolSizePerNode: 20
 
 # 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):
 #   player:{id}:owner_epoch —— 围栏上界 R(IB-8);
 #   player:{id}:location    —— 在线提醒定位玩家所在 scene 节点。
-# 不写 Addrs = 指向上面的 CoreRedis 实例。集群部署写种子地址并打开 Cluster:
+# 不写 Addrs = 指向上面的 ControlRedis。集群部署写种子地址并打开 Cluster:
 #   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
 #   Cluster: true
 # PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。
@@ -128,10 +131,8 @@ PlayerInbox:
   # 同币种旧欠款、并用后来那单覆盖到期时间,挂错之后也没有撤销路径。合并语义、撤销类型与单笔上限做完之前,
   # 把它列进来 config.Validate 拒启;GmSanctionPlayer 对它回 kPlayerInboxDisabled。
   EnqueueTypes: [PLAYER_INBOX_MSG_BATTLE_SETTLEMENT]
-  # 条目行全部永久保留(终态行是 request 的永久收据,SweepTerminal 不删行,设计 §9.1)。下面两项只给空转的清理循环用,
-  # 调它们不会改变容量;配置校验仍要求保留天数大于签发窗 7 天。
-  TerminalRetentionDays: 30
-  SweepIntervalSeconds: 600
+  # 条目行全部永久保留(终态行是 request 的永久收据,设计 §9.1),没有清理循环。原来的 TerminalRetentionDays、
+  # SweepIntervalSeconds 两项 2026-11-12 随空转的清理循环删除;旧配置里还留着也能启动(go-zero 忽略未知键)。
   # 提醒补发循环 30 秒一轮(设计 §6.3)。
   NotifyResendIntervalSeconds: 30
   GaugeIntervalSeconds: 60

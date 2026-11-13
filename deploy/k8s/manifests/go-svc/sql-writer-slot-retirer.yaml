@@ -7,16 +7,23 @@
 #
 # 判据与顺序(writer_authority -command retire-removed-slots,go/data_service/cmd/writer_authority/retire_removed_slots.go):
 #   1. 读这个 StatefulSet 的 spec.replicas,只扫序号 >= 它的槽位。StatefulSet 不存在算 0 个副本(金丝雀收尾会删整个 StatefulSet,
-#      这份 CronJob 留着,把金丝雀各槽位的末代结束掉);
+#      这份 CronJob 先留着,把金丝雀各槽位的末代结束掉;k8s_deploy.ps1 等它做完再删它,Complete-SqlWriterCanaryRemoval);
 #   2. 读这些槽位在名册里每个逻辑库的最新一代,ACTIVE 的记作候选;
 #   3. 目录读完之后再读一次副本数,逐个查候选序号的 Pod:序号 >= 副本数、这个名字的 Pod 对象已经没了(优雅退出走完)才结束。
 #      先读目录、后看集群:读目录期间新建的 Pod 注册的一代不在快照里,不会被结束;不靠时钟,也不在本地记状态;
-#   4. 结束:非 run 的 RETIRE,登记行置 REVOKED、64 个 slot 行删掉、收据永久保留。闸门冻结、排空 run 开着时这一轮跳过,
+#   4. 归属:只结束本 namespace 的工作负载登记的一代。注册器登记时把自己的 ServiceAccount 连同 UID 记进 REGISTER(registered_by),
+#      这里读回来,和本 namespace 现在同名 ServiceAccount 的 UID 比;对不上(另一个集群或 namespace 在用同一份名册、集群外登记)
+#      就不动它、记 registered-elsewhere、这一轮 Job 失败。这份 CronJob 连同名册和账号被备份恢复、克隆到另一个集群时,
+#      那边「Pod 不在」不说明正式集群的写者没了,靠这一步不误伤;
+#   5. 结束:非 run 的 RETIRE,登记行置 REVOKED、64 个 slot 行删掉、收据永久保留。闸门冻结、排空 run 开着时这一轮跳过,
 #      下一轮再来(排空期间的退休归排空记账)。
 #
 # 凭据:和这个写者 init 里的 sql-writer-registrar 同一个镜像、同一个名册 Secret、同一个注册账号 Secret、同一份库映射,不多给任何凭据。
 # 注册账号本来就能注册新一代、在换代里结束上一代;这里是没有下一代的那种结束(deploy/sql/authority_operator_role.sql)。
-# 集群权限只有本 namespace 里这一个 StatefulSet 与 pods 的 get。
+# 集群权限只有本 namespace 里这一个 StatefulSet、pods 与 serviceaccounts 的 get。
+#
+# 当场一轮:k8s_deploy.ps1 在写者缩容、金丝雀收尾之后按这份模板起一个 Job(kubectl create job --from=cronjob),等它结束、
+# 读最后一行汇总的 pending(被缩掉、这一轮还没能结束的在役一代),为 0 才算做完(Complete-SqlWriterSlotRetirement)。定时这一份是兜底。
 #
 # 失败:任何一步失败 Job 就失败、不重试(backoffLimit: 0),下一轮按目录与集群的现状重新判,不会多结束或漏结束。
 # 一直不成功由告警 SqlWriterSlotRetirerFailing 发现(deploy/k8s/logical-db-alerts.yaml)。
@@ -50,6 +57,11 @@ rules:
   # 查候选序号的 Pod 在不在。Pod 名随序号变,不按名字限定;只有 get,不能列、不能改。
   - apiGroups: [""]
     resources: ["pods"]
+    verbs: ["get"]
+  # 核归属:一代的 REGISTER 记着登记它的 ServiceAccount 与 UID,这里读本 namespace 同名 ServiceAccount 的 UID 来比。
+  # 只读对象本身(名字随写者用哪个 ServiceAccount 而定,不按名字限定);ServiceAccount 对象里没有令牌,签发令牌是另一个子资源,这里没有。
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
     verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -87,6 +99,9 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      # 结束一天后自动删。部署脚本按这份模板手工起的 Job(kubectl create job --from=cronjob)不带 controller 属主,
+      # 不算进上面两条历史上限:不等的那一轮、没做完留着查日志的那一个都靠它回收。告警读 CronJob 的 status,不受影响。
+      ttlSecondsAfterFinished: 86400
       backoffLimit: 0
       # 小于调度周期,上一个 Job 卡住时不挡下一轮;命令自己最多 60 秒(-timeout)。
       activeDeadlineSeconds: 240

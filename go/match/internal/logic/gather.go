@@ -199,6 +199,8 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		TargetInstanceId:       f.TargetInstanceId,
 		AdmitBeforeMs:          prepareDeadlineMs,
 		OutcomeProtocolVersion: 1,
+		// 每一方的战斗剧本按值冻结进原件(battle-script.md §5.2):随原件落库,恢复重放不再重新解析
+		TeamScripts: resolveTeamScripts(svcCtx, f, teams),
 	}
 	// 先证明原UUID支持SQL终局门禁；不支持的节点会忽略Create新字段，因此不能直接试发。
 	capctx, capcancel := context.WithTimeout(context.Background(), 3*time.Second)

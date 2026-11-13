@@ -31,6 +31,8 @@
 #include "services/scene/player/system/enter_fence.h"
 // 断线保留(ExpireConnectionLostHolds 的参数类型、PlayerConnectionLostComp)。写全路径,理由同上。
 #include "services/scene/player/system/connection_lost_hold.h"
+// 托管落点提交之后的有界补救(SweepHostedPlacementRetries 的参数类型、PeekHostedPlacementRetry 的返回类型)。写全路径,理由同上。
+#include "services/scene/player/system/hosted_placement_retry.h"
 
 namespace scene_manager { class EnterSceneRequest; class EnterSceneResponse; }
 namespace boost::cobalt { template<class T> struct task; }
@@ -759,6 +761,9 @@ namespace exit_release_stats
 //                          补写(owner_epoch 条件写)的结果:写成 / owner_epoch 已变没写 / 失败(不重试)。
 //                          credential_attempted == 这三项之和 + credential_superseded + 在途
 //   credential_superseded  补写返回 -2:条目缓存的原 H 已被轮换(典型:改派自己已把它写成 F),不写。追加在行尾(2026-10-23)
+//   hosted_resent          托管条目(离线托管的角色)核实没生效、又能证明 scene_manager 没放行他,把同一条改派重发了一次
+//                          (relocate_confirm::ShouldResendHosted,每条至多 kMaxHostedResends 次)。托管条目"踢线"不推送,
+//                          计在 push_no_client。追加在行尾(2026-11-12)
 namespace relocate_confirm_stats
 {
 	struct Counters
@@ -782,6 +787,7 @@ namespace relocate_confirm_stats
 		std::atomic<uint64_t> credentialEpochMoved{0};
 		std::atomic<uint64_t> credentialFailed{0};
 		std::atomic<uint64_t> credentialSuperseded{0};
+		std::atomic<uint64_t> hostedResent{0};
 	};
 
 	inline Counters& Get()
@@ -813,6 +819,7 @@ namespace relocate_confirm_stats
 		uint64_t credentialEpochMoved{0};
 		uint64_t credentialFailed{0};
 		uint64_t credentialSuperseded{0};
+		uint64_t hostedResent{0};
 
 		bool operator==(const Snapshot&) const = default;
 	};
@@ -852,6 +859,7 @@ namespace relocate_confirm_stats
 		snapshot.credentialEpochMoved = counters.credentialEpochMoved.load(std::memory_order_relaxed);
 		snapshot.credentialFailed = counters.credentialFailed.load(std::memory_order_relaxed);
 		snapshot.credentialSuperseded = counters.credentialSuperseded.load(std::memory_order_relaxed);
+		snapshot.hostedResent = counters.hostedResent.load(std::memory_order_relaxed);
 		return snapshot;
 	}
 } // namespace relocate_confirm_stats
@@ -1263,6 +1271,7 @@ public:
 	// 摘掉 SceneEntityComp 后导航夹持也失效),退出存盘的收敛比对每轮都判不一致。重连后客户端会重新上报速度。
 	// 公开只为单测能直接验证;业务代码不要在退出流程之外调用。唯一的例外是断线保留(HandleClientConnectionLost):
 	// 掉线的角色要停在原地,效果与退出时停步完全相同。
+	// 停步的实现是 MovementSystem::HaltMotion(同时给旁人补一条停步);退出链之外要停步的地方直接调它。
 	static void StopMotionForExit(entt::entity player);
 
 	// 重连取消退出(EnterScene 第 0 步):UnregisterPlayer 与 PlayerExitIntentComp 成对摘掉
@@ -1318,11 +1327,25 @@ public:
 	// SceneHandler::PlayerEnterGameNode 同一条入场链:角色登记 → 交接栅栏 → HandleEnterGameNode(入场会话栅栏、
 	// 复用本节点上的实体换场景,或认领载入)→ EnterScene(不绑会话、入场后重建断线托管)。
 	// 重复 / 迟到的事件由入场会话栅栏(登录代次)与角色登记的在途比对挡住,已在目标场景时幂等。只在 scene 逻辑线程上调用。
+	// 到达时本节点没有这名玩家的实体(跨节点搬来)就先登记一条看护(hosted_placement_retry.h,player-connection-lost-hold.md §4.4):
+	// 这一次入场链没建出实体时,由 SweepHostedPlacementRetries 核实落点仍指着本节点后,用同一条落点有限次重试。
 	static void HandleHostedPlacement(const HostedPlacement& placement);
 
 	// HandleHostedPlacement 组的上下文(纯函数,单测直接验):hostedPlacement 置位、会话号与代次取断开的那次登录、
 	// enter_gs_type 为 0(不是一次登录)。字段不全时为空。
 	static std::optional<PlayerEnterContext> HostedPlacementContext(const HostedPlacement& placement);
+
+	// 推进托管落点的看护(hosted_placement_retry.h 的契约):本节点已有实体的结清;入场链结束而没建出实体的进退避;
+	// 退避到点的先读权威落点(只读脚本),读数仍指着这条落点才用同一条落点再走一遍入场链;用尽次数或超出总预算就放弃。
+	// 节点疏散中、计划排空中、持久任务已停时不读、不重试。由 RedisSystem 的 1s 定时器驱动(与改派待确认表同一个节拍),
+	// now 显式传入(单调时钟,单测注入)。表空时直接返回。只在 scene 逻辑线程上调。
+	static void SweepHostedPlacementRetries(hosted_placement_retry::Clock::time_point now);
+
+	// 看护表里还有多少条(排障日志与单测用;不进任何停机谓词:节点要走时本来就不再重试)。
+	static std::size_t HostedPlacementRetriesPending();
+
+	// 只读:取某个玩家当前看护的副本,没有则为空。只供单测与排障(先例:PeekRelocateConfirm),业务代码不要依赖它。
+	static std::optional<hosted_placement_retry::Watch> PeekHostedPlacementRetry(Guid playerId);
 
 	// 进场路由命中本节点上的旧实体(退出中的,或不在交接中的活实体)、且 owner_epoch 显示中间有别的持有者
 	// (player_exit::IsDeposedOnReentry)时,按"被废黜"不存盘销毁它并返回 true,调用方随后从盘上重载。
@@ -1353,13 +1376,41 @@ public:
 	// 本节点身份当前是否确认有效(M3)的只读探针,由节点入口(nodes/scene/main.cpp)注入:scene 库不直接依赖
 	// Node(单测宿主没有 Node,链进 node.cpp 会拖进整条 gRPC / etcd 依赖)。未注入 / 传空 = 身份不确认,
 	// A1′ 一律不写(fail-closed)。探针只在 scene 逻辑线程上调用。
-	// 每次调用(含传空)都把下面「身份不确认期间补存」的节奏清零:新的探针从第 0 槽、未进入补存算起。
+	// 每次调用(含传空)都把下面「身份不确认期间补存 / 续租」的节奏清零:新的探针从第 0 槽、未进入补存算起。
 	static void SetNodeIdentityProbe(std::function<bool()> probe);
 
 	// 身份不确认期间补存,每秒调一次(推导见 player_lifecycle.cpp kIdentityAtRiskSaveIntervalSec 上方的注释)。探针已注入、身份不确认、有在线
 	// 玩家时,只给「玩家号 % 5 == 本秒的槽」的那批可改玩家(IsPlayerMutable)调 SavePlayer,每名玩家 5 秒一次;
 	// 身份确认或没注入探针时什么都不做。由 SetNodeIdentityProbe 挂上的 1 秒定时器与单测调用,只在 scene 逻辑线程上。
 	static void RunIdentityAtRiskSaves();
+
+	// 身份不确认期间续持有者存活租约,每秒调一次(推导见 player_lifecycle.cpp kHolderLeaseRenewIntervalSec 上方的注释)。
+	// 前提与 RunIdentityAtRiskSaves 相同;成立时给「玩家号 % 3 == 本秒的槽」的那批玩家各发一条
+	// SET player:{id}:holder_lease <本进程实例号> PX 15000,每名玩家 3 秒一次。内存里有实体的玩家都续,不看可不可改。
+	// scene_manager 判死接管之前读这个键,还在就不接管。由同一个 1 秒定时器与单测调用,只在 scene 逻辑线程上。
+	static void RenewHolderLeasesAtRisk();
+
+	// 续租命令的发送注入点。生产恒为空:走 tlsPlayerRedis。返回 false 表示没发出去。
+	// 单测宿主没有玩家域 Redis,注入后可以看到每一条续期;传空恢复生产路径。
+	using HolderLeaseSender = std::function<bool(Guid playerId, const std::string &instance)>;
+	static void SetHolderLeaseSenderForTest(HolderLeaseSender sender);
+
+	// 离线托管角色的在场心跳与托管归位信息(契约见 hosted_presence.h,设计 player-connection-lost-hold.md §4.5)。
+	// 由 RedisSystem 的 1 秒节拍调用,只在 scene 逻辑线程上;nowUnixSec 是墙钟 Unix 秒(与月卡到期时刻同一口径)。
+	// 本节点对其负责的托管角色(托管着、带托管改派票据退出中、托管改派待确认、托管落点看护)里,到了自己那一秒的各续一次心跳;
+	// 托管着的那些顺带重写归位信息。同一名玩家一秒内至多一条。
+	static void RefreshHostedPresence(uint64_t nowUnixSec);
+
+	// 一条心跳写:returnRecord 为空 = 只续心跳。
+	struct HostedPresenceWrite
+	{
+		Guid playerId{kInvalidGuid};
+		std::string returnRecord;
+		uint64_t returnTtlSec{0};
+	};
+	// 心跳的发送注入点。生产恒为空:走 tlsPlayerRedis。返回 false 表示没发出去(单测宿主没有玩家域 Redis,注入后看得到每一条)。
+	using HostedPresenceSender = std::function<bool(const HostedPresenceWrite &write)>;
+	static void SetHostedPresenceSenderForTest(HostedPresenceSender sender);
 
 	// 只读查询有效玩家实体是否带有 PlayerFrozenComp。该标记用于同 zone / 跨 zone 的归属交接，
 	// 也用于角色交易封存；业务修改必须保护已冻结的交接或交易原件，不能继续制造分叉。
@@ -1485,6 +1536,28 @@ public:
 		}
 	}
 
+	// 离线托管角色的改派被 scene_manager 拒绝之后,隔一会儿把同一条请求再发一次有没有可能成功(relocate_confirm::ShouldResendHosted
+	// 的 rejectionRetryable 入参,docs/design/player-connection-lost-hold.md §4.3)。只认两条都成立的码:
+	//   1. SmRejectedBeforeAnyPlacementWrite 为真 —— 拒绝发生在任何落点写之前,重发不会和上一次的写叠在一起;
+	//   2. 拒因会自己消失 —— 没有去处(1:排空中节点多、频道还没迁好)、目标节点实例号还没同步进本副本的镜像(4)、Redis 抖动(8)、
+	//      再入屏障还没过(17)、归属 zone 查询不可用(20)。
+	// 排除:5(请求形状不对 / 跨 zone,重发一样被拒)、18(换手门不认这份标记:重发也拿同一份)、25(落点会话身份已被更新的登录取代:
+	// 玩家已经回来了,不该替旧身份重发)。拿不准的码不要加:多加只是白白多问一次,漏加只是早一点结清。
+	static constexpr bool SmRejectionRetryableForHostedRelocate(uint32_t smErrorCode)
+	{
+		switch (smErrorCode)
+		{
+		case kSmErrNoAvailableNode:
+		case kSmErrInvalidNodeID:
+		case kSmErrRedis:
+		case kSmErrSceneReentryBarrier:
+		case kSmErrHomeZoneUnavailable:
+			return SmRejectedBeforeAnyPlacementWrite(smErrorCode);
+		default:
+			return false;
+		}
+	}
+
 	// 客户端 RPC SceneSceneClientPlayer.TravelToZone 的系统层入口(CZ-7),handler 只委托到这里。
 	// 校验 CZ-6(战斗 / 备战在途、组队在途不可传送)与参数,通过后调 StartTravelHandoff。
 	// 返回 kTravelAccepted = 已受理(玩家已冻结、存盘已发起),**不代表已到达**。受理之后客户端只会看到三种结局之一:
@@ -1533,8 +1606,8 @@ public:
 	// EnterScene 的应答 / 传输失败还没回来(TTL = SceneManager 的 gRPC deadline + 1s 内)时为真,调用方不得再发。应答已按 correlation_id 对号、不再串号;
 	// 闸仍然必要,理由是在途记录只有一个槽(第二次登记会覆盖第一次的号,第一次的 18 就对不上号而被丢弃),
 	// 以及旧版 scene_manager 不回显时仍按 player_id 对应答。详见 PlayerSceneChangeInFlightComp。
-	// 该玩家有一份作废交接留下的 handoff 标记还没确认撤回时同样为真(按 player_id 判,见
-	// handoff_mark_withdraw.h):标记可能还带着当前 owner_epoch,这时发跨节点 EnterScene 会免存盘过门。
+	// 该玩家有一份作废交接的撤销还没确认时同样为真(按 player_id 判,见 handoff_mark_withdraw.h):入场登记之上的
+	// 第二道,旧标记万一还带着当前 owner_epoch 活着,这时发跨节点 EnterScene 会免存盘过门。
 	// 镜像 CreateScene 在途(PlayerMirrorCreateInFlightComp,同一 TTL 内)同样为真:镜像随后会自动进场,
 	// 与它同时在途的换图 / 传送 / 跟随会让玩家被搬两次。闸只读;新普通换图、交接、退出提交或权威落点成功
 	// 会摘掉旧镜像令牌,永久撤销其自动进场资格,不受随后 UTC 恢复影响。
@@ -1634,9 +1707,11 @@ public:
 	//   3. playerList 里留着无效句柄:不写凭证(表不一致,fail-closed)。
 	// coveredSessionId / coveredLoginGeneration = ReleasePlayerRequest.covered_session_id / covered_login_generation
 	// (代次 0 = 旧版 scene_manager,只比 owner_epoch)。
+	// keepHeld = ReleasePlayerRequest.keep_held(托管归位撞门,player-connection-lost-hold.md §4.5):为 true 时第 1 项整个不做
+	// (本节点有实体就原样留着、计 session_ended_kept_held),只剩第 2、3 项。
 	// 判定只读本地缓存、不采纳 epoch(CZ-3);第 2 项读的 Redis 原件只用作 CAS 的期望值,不改任何本地状态。scene 逻辑线程调用。
 	static void HandleSessionEndedRelease(Guid playerId, uint64_t expectedOwnerEpoch, SessionId coveredSessionId,
-										  uint64_t coveredLoginGeneration);
+										  uint64_t coveredLoginGeneration, bool keepHeld = false);
 
 	// 进场路由(PlayerEnterGameNode)撞上一个交接已发起的旧实体,且路由带来的 owner_epoch 比实体
 	// 缓存的新:说明那次交接其实已被放行(应答丢了,看门狗还没到期),玩家在别处玩过一圈又被
@@ -1694,10 +1769,12 @@ public:
 	//   2. **不**设 tlsEmergencyRelocating —— 节点自己不退出,还要继续服务
 	//      别的场景。把它标成"疏散中"会让 Node 的 drain 看门狗误判。
 	//
-	// 返回登记了改派票据的玩家数(已断线的玩家只存盘、不计入);计划排空期间返回新排进限速队列的人数。
+	// 返回登记了改派票据的玩家数(在线的与离线托管中的都计;普通断线保留中的只存盘、不计入);计划排空期间返回
+	// 新排进限速队列的人数。
 	// 调用方不应假设返回后玩家已经走完:改派是异步的,要靠"下一拍再看
 	// 场景空没空"来收敛。
-	// 每个被消费的票据同样登记进待确认表:改派被拒 / 没发出去 / 落回本节点后载入没成时,核实后踢线让客户端重登。
+	// 每个被消费的票据同样登记进待确认表:改派被拒 / 没发出去 / 落回本节点后载入没成时,核实后踢线让客户端重登
+	// (离线托管的角色没有客户端:不推送,能证明没被放行时有界重发,见 player-connection-lost-hold.md §4.3)。
 	// 票据带去向提示(relocate_target.h):原频道与原地图,由 scene_manager 按「原频道 → 同图 → 默认大世界」解析。
 	static std::size_t BeginSceneDrain(SceneEntity sceneEntity);
 
@@ -1741,8 +1818,11 @@ public:
 	//   2. 他有待确认条目时:sessionId 与票据里的会话相同 → 本节点替他发的改派有了去向,转入"落地等载入"(kLanding),
 	//      由 SweepRelocateConfirms 等实体建出来,载入被放弃就核实后踢;sessionId 不同或为 0 → 玩家已重登、旧会话已死,
 	//      按 superseded 结清,不踢。
+	// hostedPlacement:这次进场是托管落点(sessionId 是断开那次登录)。托管落点从不取消退出(EnterScene 对退出中的实体直接
+	// 丢下这条落点),被它"打断"的退出照常收尾、票据照常被消费,所以第 1 步不作废票据 —— 作废的话,组队跟随的同节点托管落点
+	// 恰好撞上排空退出时,他会存盘下线而不是被改派(player-connection-lost-hold.md §4.3)。第 2 步不受影响。
 	// 没有票据也没有条目时 no-op。
-	static void ReconcileRelocateOnReentry(Guid playerId, SessionId sessionId);
+	static void ReconcileRelocateOnReentry(Guid playerId, SessionId sessionId, bool hostedPlacement = false);
 
 	// 推进待确认表:各阶段的截止时刻、核实的首发与重发、落地条目看实体建出来没有、读不到时的处置。由 RedisSystem 的
 	// 1s 定时器驱动,与标记撤回、A2′ 重发同一个节拍。核实只在条目自己的 nextVerifyAt 到了才(重)发:Redis 重连成功时
@@ -1760,6 +1840,12 @@ public:
 
 	// 只读:取某个玩家当前条目的副本,没有则为空。只供单测与排障(先例:GetPendingEnterMap),业务代码不要依赖它。
 	static std::optional<relocate_confirm::Entry> PeekRelocateConfirm(Guid playerId);
+
+	// 托管条目的有界重发(player-connection-lost-hold.md §4.3):只由核实应答在 relocate_confirm::ShouldResendHosted 为真、且等过
+	// HostedResendDelay 之后的那次核实仍读到没变时调用。按条目里抄下的身份(断开那次登录)、去向提示与归属修订重建托管票据,
+	// 条目回到 kMarkWriting 后照派发路径(TrackRelocateDispatch → SendEmergencyRelocateEnterScene)再发一次,计 hosted_resent。
+	// 沿用派发时写的标记,不新写任何键。条目已不在、不是托管条目或不在 kVerifying 时 no-op。只在 scene 逻辑线程上调。
+	static void ResendHostedRelocate(Guid playerId, uint64_t seq, relocate_confirm::Clock::time_point now);
 
 	// 玩家是否正在等待退出收尾：只查询有效实体上的 UnregisterPlayer 标记。
 	// 退出存盘、释放及改派等收尾完成前，该标记可能持续存在；实体销毁或重连接回后为 false。
@@ -1783,6 +1869,9 @@ private:
 	// 票据取出后先过 relocate_confirm::DecideTicket:本次退出期间客户端已断线(意图组件的 clientDisconnected),或实体
 	// 当前的会话已不是票据那一条 → 票据作废,不发改派,返回 false(A1′ 按第一次退出原因接手)。给死会话改派,
 	// scene_manager 放行后路由会在 gate 被丢掉,location 停在一个从未载入该玩家的节点上。
+	// 托管票据(离线托管的角色)改过 relocate_confirm::DecideHostedTicket:断线是它的前提,只在实体又绑上活会话、或登录身份
+	// 已不是票据那一次时作废。它发的是托管落点(不带 gate,scene_manager 提交后直接推给目标 scene 节点,§4.2),
+	// 登记的条目带 hosted 标志(待确认表对它不推送、可有界重发,player-connection-lost-hold.md §4.3)。
 	// 发的改派登记进待确认表(表满时计 untracked_overflow,按旧行为发出、不跟踪)。条件写的结果只记在条目上进日志,
 	// 不进任何判定:owner_epoch 已变时本次没写、scene_manager 凭的是别人的标记,从"写没写成"推不出有没有被放行。
 	// earlierEnterSceneMayReply:本节点替他发出的更早 EnterScene(退出优先作废的交接、还在途的普通换图)可能稍后才被
@@ -1801,7 +1890,9 @@ private:
 	static boost::cobalt::task<void> PublishAndDispatchRelocate(RelocateMarkAttempt attempt);
 
 	// 抄改派票据 + 推进退出流程。整节点疏散与单场景排空共用。
-	// 返回 true 表示登记了票据(玩家有活着的 gate 会话)。
+	// 返回 true 表示他会被改派:玩家有活着的 gate 会话(在线票据),或正离线托管中(OfflineHostedIdentity,托管票据,
+	// player-connection-lost-hold.md §4.3),或手里已有一张前一次排空发的托管票据(那次退出已摘掉保留,票据照样会被消费)。
+	// 其余(普通 25 秒断线保留、退出中而没有票据)只存盘、返回 false。
 	// cause:整节点疏散传 kIdentityConflict,单场景排空与计划排空传 kSceneDrain(原样交给 HandleExitGameNode)。
 	static bool EnqueueRelocateTicket(entt::entity playerEntity, const char *reasonTag, ExitCause cause);
 	// 计划排空期间把玩家放进限速队列。已在队里或已有改派票据时不重复排,返回 false。
@@ -2001,6 +2092,7 @@ private:
 	// trackSeq = 这次改派在待确认表里的条目号,0 = 未跟踪。非 0 且条目仍在 kMarkWriting 时,**先**把号记到条目上
 	// (Table::MarkSent:转 kAwaitingReply,应答与 settle 的钟从此刻起算)**再**交给 gRPC —— 统一出口
 	// SendCorrelatedEnterScene 的前置条件"先记到等待者上再发"。应答 / 传输失败回来时靠这个号认领。
+	// 托管票据发托管落点:hosted_placement 置位、不带 gate,会话号与代次是断开那次登录(scene_manager 的请求形状预检要求)。
 	static uint64_t SendEmergencyRelocateEnterScene(Guid playerId, const EmergencyRelocateTicket &ticket,
 													uint64_t trackSeq, EnterSceneDone done);
 

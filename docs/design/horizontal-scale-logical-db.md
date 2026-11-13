@@ -315,7 +315,7 @@ message GetRoleFenceStateResponse { bool found = 1; RoleFenceState state = 2; bo
 | 带内业务拒绝 | 确定 | tip 表、服务私有码表 |
 | 带内故障码、码表之外的码 | 未知,Hold | 同上 |
 | `NotFound`、`InvalidArgument`、`FailedPrecondition`、`AlreadyExists`、`PermissionDenied`、`Unauthenticated`、`OutOfRange` | 确定 | 服务端明确没有写入,下面逐个核过 |
-| `Aborted` | 确定 | 这次请求没有结局未知的写。目录的 `ErrNotCommitted`(§5.3)、`ErrRetryLater`(下面)、guild 的入口归属预检(只读)回它。handler 回它之前要能证明这一点 |
+| `Aborted` | 确定 | 这次请求没有结局未知的写。目录的 `ErrNotCommitted`(§5.3)、`ErrRetryLater`(下面)、入口归属预检(`roleidentity.OwnershipInterceptor`,guild / match / trade 在用,只读)这一次判不了时回它。handler 回它之前要能证明这一点 |
 | `ResourceExhausted` | 确定 | 全仓只有目录的「账号角色数已满」回它,建角和过户都在提交点之前拒绝。别的 handler 不要拿它表示过载 |
 | 闸门冻结(`errWriterFrozen`,内层拦截器确认这次请求没有结局未知的 SQL 才回它) | 确定 | 冻结的闸门上没有写入;之前提交成功的写结局已知 |
 | 自愈读不到目录(`errNoWriteRetry`,同样由内层拦截器确认) | 确定 | 事务已回滚,见 §3.3。映射成非故障 tip 的不改写 |
@@ -328,7 +328,7 @@ message GetRoleFenceStateResponse { bool found = 1; RoleFenceState state = 2; bo
 
 **全仓核对结论**(2026-10-31,data_service、trade、guild、friend、chat、match、player_inbox、mail、rank,这些是挂发布准入的全部服务)。问题是有没有 handler 在事务已提交或结局未知时回上面判成确定的码:
 
-- **拦截器和入口校验**:会话、鉴权、身份(在线域共用的入口准入 `roleidentity.EntryInterceptor`,guild 的入口归属预检 `OriginalIdentityInterceptor`,`domainhost.Guard`,`RoleFenceParticipant.admit`,mail、rank 的 `caller`)都在 handler 写之前,一个字都没写。入口准入只回 `PermissionDenied` / `Unauthenticated`。guild 的预检只有角色确实变了才回 `PermissionDenied`,闸门冻结、目录读不到、库故障回 `Aborted` 让客户端重试:这一层在 serverbase 外面,冻结不会被拦截器改写,回 `Unavailable` 又会被外层打成 Hold。friend 入口 2026-11-06 起不再预检([gate 在线身份](gate-online-identity.md) §9.3):角色变了、目录读不到由业务事务带内回 `ErrRoleNotVerified`,闸门冻结由业务链里的 serverbase 改写成确定没写的可重试状态。
+- **拦截器和入口校验**:会话、鉴权、身份(在线域共用的入口准入 `roleidentity.EntryInterceptor`,guild、match、trade 的入口归属预检 `roleidentity.OwnershipInterceptor`,`domainhost.Guard`,`RoleFenceParticipant.admit`,mail、rank 的 `caller`)都在 handler 写之前,一个字都没写。入口准入只回 `PermissionDenied` / `Unauthenticated`。归属预检(2026-11-12 起三个服务共用一份,[gate 在线身份](gate-online-identity.md) §9.3)只有角色确实不归这份原身份才回 `PermissionDenied`,闸门冻结、目录读不到、库故障回 `Aborted` 让客户端重试:serverbase 不改写 `Aborted`,回 `Unavailable` 又会被外层打成 Hold。预检只读本库的护栏副本;副本缺行、落后或冻结时读一次目录并把权威状态写回副本,这次写按版本合并、可重复,结局未知也不影响排空。friend 入口 2026-11-06 起不再预检([gate 在线身份](gate-online-identity.md) §9.3):角色变了、目录读不到由业务事务带内回 `ErrRoleNotVerified`,闸门冻结由业务链里的 serverbase 改写成确定没写的可重试状态。
 - **friend、chat、trade、mail、rank**:业务结论全部带内回,gRPC 错误只有上一条那些,加 trade `SeedListing` 在入口拒绝。
 - **guild**:`PermissionDenied` 都在写之前(`clientWrite`、`activityPrelude`、`economyCaller`)。`ListAppliedAssetOpsSince` 只读。转发的下游错误是包了一层的,算未知。调 match 的结果全部映射成带内结论。
 - **player_inbox**:`FailedPrecondition`(`ErrBattleSettlementOriginal`)出在 `validateBattleOriginal` 或玩家事务里,事务回滚;同局内容冲突时读到已有条目,没有写。
@@ -466,7 +466,9 @@ func DirectoryDBName(base string, slot, k int) string // K=1 是 base,否则 <ba
 |---|---|
 | ACTIVE | ACTIVE 只在提交点之后写,所以已易主或删除,删。没有角色行不删,只记错误日志:角色行从不删除,库被人动过 |
 | PENDING、`tx_id≠0`(过户) | 提交要求 listing 是 FROZEN,而 FROZEN 只会走到 TRANSFERRED 或 CANCELLED。到了这两个终态才删;还在 FROZEN 不算陈旧。listing 缺失不删,只记日志:第 1 步之前核过它是 FROZEN,FROZEN 的收据不会删 |
-| PENDING、`tx_id=0`(建角) | 角色行已存在且不是这个账号:严格插入不会再成功,删。没有角色行:未超过 5 分钟不动(可能在途);超过之后先找这名角色提交过的证据(名字行已绑定、存档库进过场或存过盘;路由行、存档库名单、名字登记表缺了算核不全),有证据或核不全就不写墓碑、不删,记 ERROR 加 `account_role_ref_tombstone_held_total`,留给核账或人工(多集群恢复点错开时角色行可能丢了,墓碑不可逆,2026-11-06 评审补);证据读失败这一轮不写,下一轮再试。没有证据才在玩家分片的事务里写一条墓碑挡住迟到的建角,然后才删。写墓碑时发现建角先提交了,补 ACTIVE |
+| PENDING、`tx_id=0`(建角) | 角色行已存在且不是这个账号:严格插入不会再成功,删。没有角色行:未超过 5 分钟不动(可能在途);超过之后先找这名角色提交过的证据(名字行已绑定、存档库进过场或存过盘、这名角色在某个账号上有 ACTIVE 的 ref(按 `idx_account_role_ref_player` 查各账号片,2026-11-12 起);路由行、存档库名单、名字登记表缺了算核不全),有证据或核不全就不写墓碑、不删,把 ref 标成保留(`held_ms` / `held_reason`),第一次标时记 ERROR 加 `account_role_ref_tombstone_held_total`,留给核账或人工(多集群恢复点错开时角色行可能丢了,墓碑不可逆,2026-11-06 评审补);证据读失败这一轮不写,下一轮再试。没有证据才在玩家分片的事务里写一条墓碑挡住迟到的建角,然后才删。写墓碑时发现建角先提交了,补 ACTIVE |
+
+**标了保留的建角 ref**(2026-11-12):后台扫描(`scanPendingRefs`)只扫 `held_ms = 0` 的,标了保留的不再每轮重算、不再按 `created_ms` 排在队首挤占名额;它们在每轮单独的复核名额(8 条,按 `held_ms` 从旧到新,复核还留着就刷新 `held_ms` 排到队尾)里轮着重判:角色行补回来了就补 ACTIVE 并清掉标记,证据没了就照常写墓碑删。读路径(`rolesOfRefs`)不把已保留的排进后台队列,队列里遇到已保留的也跳过,不占名额。改写这条 ref 的写(建角重放、过户第 1 步、补 ACTIVE)一律清掉标记。索引 `idx_account_role_ref_state` 改为 `(state, held_ms, created_ms)`,扫描、复核、计数各走一段。各账号片还标着保留的条数由每轮的计数报成 gauge `data_service_account_role_ref_held`,告警 `DataServiceRoleRefHeldForReview`。
 
 **过户的 PENDING 先读 listing、后读真相**。反过来的话:读到真相是卖家,这时过户提交,再读到 listing 已是 TRANSFERRED,就把买家的 ref 当陈旧删了;第 3 步补 ACTIVE 又失败的话,买家拥有角色却没有 ref,没有任何路径能再发现。先读 listing 时,读到终态说明这笔过户的提交已经在这之前,接着读到的真相一定盖住了它;读到 FROZEN 就不删。
 
@@ -645,33 +647,44 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 
 子命令 `plan`、`prepare`、`verify`、`cutover`、`rollback`、`audit`、`cleanup`。每步幂等,可重跑,带 `-run-id`,状态写进映射值和本地日志。操作和每种故障的结局见[手册](../ops/db-move-runbook.md)。
 
-1. `plan`:只读。核源、目标后端相同,目标上没有这个库,维护账号能控制源库闸门,写者账号(ACTIVE 加 `-roster` 名册里的)和维护账号在目标集群已存在,没有别的逻辑库在搬,默认集群和 etcd 记的一致。
+1. `plan`:只读。核源、目标后端相同,目标上没有这个库,维护账号能控制源库闸门,写者账号(ACTIVE 加 `-roster` 名册里的)和维护账号在目标集群已存在,没有别的逻辑库在搬,默认集群和 etcd 记的一致,**源库每张表都有主键**(2026-11-12)。没有主键的表点名拒绝:逐行摘要按 `BIT_XOR` 合并,完全相同的两行互相抵消,这种表数据不同也比不出来;判据是 `information_schema.statistics` 里有没有 `PRIMARY`,只有非空唯一键不算。`prepare` 开始新搬迁时同样核,`verify` 读表时再拦一次。
 2. `prepare`:写 `state=MOVING`,**在目标上把全部写者账号 `ACCOUNT LOCK`**,再建空库。全量加增量复制由运维按手册起(TiDB:BR 加 TiCDC;MySQL:GTID 复制)。
    - 为什么锁账号:闸门表是复制过去的,目标上 `writable=1`,翻转之前连到目标的写者能直接过闸,两边分叉。账号不随复制走,TiDB 和 MySQL 都成立。要写进映射(`Move.LockedAccounts`),cutover 按它解锁,rollback 按它再锁一遍。
    - `ACCOUNT LOCK` 按账号生效,不按库。账号还在写目标集群上别的库时(go/db、data_service 一个 boot 写全部存档库),锁了就把那些库一起断了。这种账号默认拒绝,`-allow-shared-writer-accounts` 确认之后不锁,记进 `Move.SharedAccounts`。没锁的账号只靠翻转之前查连接挡,Go 进程按映射拨号,翻转之前不会连过来。判据是 `SHOW GRANTS` 里有没有别的业务库。
 3. `verify`:复制运行中用一致快照比校验和。TiDB 用 TiCDC syncpoint 给的一对 TSO 设 `tidb_snapshot`;MySQL 用 `CHECKSUM TABLE`,要读锁,所以在停在同一 GTID 的副本上做。成功时把位置的时刻和复制流的身份记进映射值:
    - **复制连续性**:流断过之后用较新的位置重建,中间一段写没复制,延迟回到 0,光看时间和延迟 cutover 全绿,目标缺数据就开放写入。所以记身份(`Move.VerifiedFeed`):TiDB 档是 changefeed id、`start_ts`、`create_time`,加 `primary_ts`;MySQL 档是通道、`source_uuid`、来源地址,且要求 `SOURCE_AUTO_POSITION=1`(按文件位置复制能跳事务);两档都带目标库 `route_meta` 的建表时间,删库重建之后身份就变了。cutover 在预检和冻结之后各比一次,预检时变了拒绝,窗口里变了或看到复制断开就回滚并清掉记录。
+   - **复制的配置**(2026-11-12):流没换、过滤被改,上面那些字段一个都不变,改完却有一段写不再复制。所以身份里再带一个配置摘要(`FeedIdentity.ConfigDigest`),和身份一起比。TiDB 档取 TiCDC 报告的整份 `config`(过滤规则、`ignore_txn_start_ts`、事件过滤都在里面),规范化(键排序,数字按原文不经浮点)之后取 SHA-256;不挑字段,因为各版本的字段在变,漏掉一个会影响内容的这道核对就空了,代价是改任何一项都要重跑 verify。MySQL 档取通道生效的复制过滤(`performance_schema.replication_applier_filters`),并要求目标 `replica_skip_errors=OFF`、`replica_exec_mode=STRICT`:这两个开关让应用出错的事件被直接跳过,开着就拒绝。
    - **etcd 回档**:映射只在 etcd 里,回档之后它说没翻转不算数。cutover、重跑 prepare、rollback 都先读目标上的翻转标记。标记没来得及写的情况,靠解冻之前核「目标闸门被这个 run 打开过且写者连着」,成立就不解冻,退出码 3。
    - TiDB 档要求 `primary_ts >= start_ts`(否则是同名旧 changefeed 留下的行),且物理时间不早于源库当前 TSO 往前 4 个 sync point 间隔。`VerifiedMs` 取 `primary_ts` 的物理时间,不取工具开始的时刻。
-   - 工具看不出的:`--overwrite-checkpoint-ts`、手工注入 GTID 这类不换身份的跳过。手册 §3 明确禁止,做过就从全量重来。
-   - **TiDB 不比 `ADMIN CHECKSUM TABLE` 的校验和本身**:它把 `table_id` 算进去,官方文档明说同样的数据、不同的 `table_id` 校验和不同,而 BR 和 TiCDC 建的表 `table_id` 都和源不同。比 `Total_kvs`(和 `table_id` 无关,能发现索引和行对不上)、行数,再加逐行摘要 `BIT_XOR(MD5(CONCAT_WS(...)))`(和 sync-diff-inspector 同一个做法)。
-4. `cutover`。要求有一次足够新的 `verify` 成功记录(默认 6 小时内),否则拒绝。切换窗口里只做快操作:
-   - 冻结之前:核复制流身份没变、延迟低于阈值,在回滚掉的事务里试一遍两侧闸门的权限;目标上重查全部账号(ACTIVE、`-roster` 名册、维护、注册、schema)存在,两侧 `SHOW GRANTS` 比这个库和全局的授权,缺一个就拒绝;抓 `-metrics-targets`,任何进程不认识目标集群就拒绝。不过就拒绝,什么都没变。
+   - 身份和配置都看不出的:`resume --overwrite-checkpoint-ts`、往目标注入空事务占掉 GTID 这类跳过。verify 之后做了这种事,位置、延迟、哨兵全都对得上。手册 §3 明确禁止;工具不靠自觉,在 cutover 的冻结窗口里把两边全量再比一次(第 4 步的「静止比对」),比不过不翻转。
+   - **TiDB 不比 `ADMIN CHECKSUM TABLE` 的校验和本身**:它把 `table_id` 算进去,官方文档明说同样的数据、不同的 `table_id` 校验和不同,而 BR 和 TiCDC 建的表 `table_id` 都和源不同。比 `Total_kvs`(和 `table_id` 无关,能发现索引和行对不上)、行数,再加逐行摘要。
+   - **逐行摘要的拼法**(2026-11-12 改):每列各取一次 `MD5`,`NULL` 用一个不是十六进制的字符顶替,拼起来再取 `MD5`,取高 64 位按 `BIT_XOR` 合并。每列占的长度固定,一行只有一种拼法。原来照 sync-diff-inspector 用 `CONCAT_WS(',', ...)` 把各列的值直接连起来,值里有逗号时有歧义:`('a,b','c')` 和 `('a','b,c')` 连出来是同一串。`BIT_XOR` 和行序无关,但两行完全相同会互相抵消,所以要求每张表都有主键(第 1 步)。
+   - **表的定义也比**(2026-11-12):只比数据时,目标少一个唯一约束、列类型或排序规则不同,摘要照样相同,翻转之后行为却不一样。每张表读 `information_schema.columns`(类型、排序规则、可空性、缺省值、生成方式)和 `information_schema.statistics`(主键和每个索引的列序、前缀长度、升降序、唯一性、索引类型),写成逐行文本,两边一字不差才算相同;不同时报出只在一边出现的行。源和目标是同一种后端(plan 核),所以不做归一化:同一份定义在两个版本上展示不同(比如整数的显示宽度)也判不一致,要求两个集群同版本。表选项、注释、`CHECK`、外键、分区不比:表选项两边本来就可以不同(自增游标、TTL 开关);其余几样没有纳入,靠全量导入把定义原样带过去。
+4. `cutover`。要求有一次足够新的 `verify` 成功记录(默认 6 小时内),否则拒绝。切换窗口里除了一次全量比对,只做快操作:
+   - 冻结之前:核复制流的身份和配置摘要没变、延迟低于阈值,在回滚掉的事务里试一遍两侧闸门的权限;目标上重查全部账号(ACTIVE、`-roster` 名册、维护、注册、schema)存在,两侧 `SHOW GRANTS` 比这个库和全局的授权,缺一个就拒绝;抓 `-metrics-targets`,任何进程不认识目标集群就拒绝;verify 记下的比对耗时(`Move.VerifyTookMs`)不小于 `-compare-budget` 也拒绝,窗口里的那次比对明知装不下就不去冻结。不过就拒绝,什么都没变。
    - 源库 `FreezeWriters`。它拿到所有写者的 slot 行锁才推进 epoch,所以在途事务都已提交,之后的事务在闸门上被拒,业务收到可重试错误。
    - 在源库写哨兵行(`db_move_sentinel`,和闸门表一起预建,切换时不做 DDL)。
    - 等复制追上:TiCDC 的 checkpoint 不小于哨兵之后取的 TSO,MySQL 用 `WAIT_FOR_EXECUTED_GTID_SET`,而且目标能读到哨兵行。超过预算(默认 30 秒)自动回滚。
+   - **静止比对**(2026-11-12):这时源库冻结、复制追平、目标闸门还没开,两边都不动,把全量再比一次(和 verify 同一套比法)。读当前数据就行,不用 syncpoint;MySQL 档直接比两侧主库,源库冻结着,`CHECKSUM TABLE` 的读锁挡不到写入。不一致就不翻转,按下面的顺序回滚,并清掉 verify 记录(`errTargetDiverged`,退出码 2)。它拦的是 verify 之后复制被跳过一段:位置和哨兵只证明复制「到了」,证明不了中间没少。排在记目标位置前面,比不过时还没碰过目标。
+     - 代价是冻结窗口变长,约等于 verify 的比对耗时,这段时间这个库读写暂停。它的时限单独给(`-compare-budget`,默认 30 秒),不占 `-budget`:`-budget` 原来挡的是「复制追不上时源库冻着干等」,库大了比对要很久,不能因此把这一条也放宽。愿意停多久由运维用参数明说,工具不按 verify 的耗时自动放宽。
+     - 库大到不能接受时用 `-skip-final-compare` 显式跳过:标准错误输出告警、写进本地日志,`Move.FinalCompareSkipped` 和翻转同一次 CAS 写进映射。跳过之后只剩 audit 能发现漏写,那时已经翻转。缺省不跳过。
+     - 源库上不过闸门的后台删除(TiDB 的 TTL 任务)冻结之后照样跑,撞上这次比对会判不一致并回滚,没有数据损失,重跑 verify 即可。
    - 把目标位置 CAS 写进映射(`Move.TargetPoint`)。窗口崩在打开目标闸门之后时,重跑复用它,不重读:重读的位置已经包含那次打开,audit 会报不一致。
    - 查目标 processlist(TiDB `cluster_processlist`,MySQL `performance_schema.threads`):锁定的账号连着就回滚,`ACCOUNT LOCK` 不踢已有连接。没锁的账号只看连到这个库的。
    - `ACCOUNT UNLOCK`,再打开目标库闸门(`ReleaseWriters`,闸门表是复制过去的冻结点)。解锁排在前面:解锁之后、闸门打开之前连上来的写者还是过不了闸。两步都幂等,重跑接着做。
-   - etcd CAS 翻转映射。**这是提交点。**
+   - etcd CAS 翻转映射。**这是提交点。** 同一次写里记下 `-sync` 的 TiCDC 地址(`Move.FeedEndpoint`,cleanup 用)和有没有跳过静止比对。
    - 在目标库写翻转标记(`db_move_sentinel` 里按 run id 算的一行)。映射只在 etcd 里,etcd 回档之后 `rollback` 读到的是翻转之前的状态,解冻源库就分叉了。标记和目标的数据在一起,`rollback` 先读它。写不成回退出码 2,重跑 cutover 补上,翻转不受影响。
    - 各进程 Watch 到后丢弃旧连接,重试的请求落到新位置。源库保持冻结,旧进程写不进去。
    - 回滚的顺序不能反:**先写一次映射让还在路上的翻转失效,再把目标账号锁回去,再解冻源库**。解冻之后源库的闸门表复制过去,目标又是 `writable=1`。没记过目标位置就没解锁过,不碰目标:回滚常常就是因为目标连不上。翻转结局未知、etcd 又不通时绝不解冻,退出码 3,等 etcd 恢复后重跑。
 5. `rollback`:翻转之前可用,先读目标上的翻转标记(读到就拒绝),把账号再锁一遍,作废映射,解冻源库。翻转之后拒绝,只能反向再搬一次。目标连不上时什么都核不了,默认拒绝,确认它没收过写入之后加 `-target-lost`。
 6. `audit`:翻转后对冻结的源库和目标库跑全量校验和(目标站在翻转之前记下的位置上),核各进程上报的映射版本。不一致退出码非 0。`route_meta`、`writer_slot` 单独比,允许目标正好多一次 release;`db_move_sentinel` 不比,窗口重跑时源库多一行新哨兵,和业务数据无关。
 7. `cleanup`:保留期(默认 7 天)过后才允许删源库,必须显式 `-confirm-drop`,要求 `audit` 成功过,删之前核闸门确实是这个 run 冻结的。
+   - **删之前核复制流已经撤掉**(2026-11-12)。`DROP DATABASE` 也会被复制:翻转之后 changefeed 没 remove(或只 pause)、通道只 `STOP REPLICA` 没 `RESET REPLICA ALL` 时,源库的 DROP 顺着它到达目标,正在收写入的整个库被删。反向搬时 `-retention 0s` 翻转完立刻 cleanup,最容易撞上。
+   - 核的是 `Move.VerifiedFeed` 记下的那一条,所以 `cleanup` 要带 `-sync`(必填,不给就拒绝)。TiDB 档问 TiCDC:查得到就拒绝,不管状态;只有 TiCDC 明确回「没有这个 changefeed」(HTTP 400 加 `ErrChangeFeedNotExists`)才算撤掉,光秃秃的 404 不算(地址写错碰到别的 HTTP 服务也是它)。MySQL 档连目标读 `performance_schema.replication_connection_configuration`,这个通道还有配置就拒绝。查不成一律拒绝。
+   - TiDB 档只认 cutover 读这条流用的 TiCDC 地址(`Move.FeedEndpoint`):换一个 TiCDC 去问,答「没有」不说明它撤掉了。反向搬时两个方向的 changefeed 常常同名,分别在两个集群的 TiCDC 上,照抄上一次的 `-sync` 就会问错。同一个 TiCDC 集群换了地址时用 `-allow-addr-mismatch`。MySQL 档查的是目标,靠连接串地址和 `SqlClusters` 的核对绑定。
+   - 核完紧接着 DROP。只认记下的那一条流;翻转之后另起的同方向复制工具不知道,手册写明要自己撤。
 
-玩家感知:存盘在 scene 内存里按原序号退避重试,不丢;RPC 回可重试错误。窗口预期是秒级,压测确认。
+玩家感知:存盘在 scene 内存里按原序号退避重试,不丢;RPC 回可重试错误。窗口的长度是等复制追平的几秒加一次全量比对:小库秒级,大库约等于 verify 的比对耗时(或者显式跳过比对换回秒级),压测确认。
 
 ### 8.3 约束
 

@@ -67,7 +67,8 @@ vsout/
 # Runtime artifacts (logs, pid files, scratch dumps) — separate from build outputs in bin/
 run/*
 # snowflake 槽位本地缓存(design: node-id-overhaul-plan-20260908.md §3.5)。
-# Go 服务默认写 run/snowflake/(已被 run/* 覆盖);C++ scene 默认写 <cwd>/data/,从 bin 起就是 bin/data/。
+# 现在只有 scene_manager 写,默认在 run/snowflake/(已被 run/* 覆盖)。C++ scene 的槽位客户端已删,
+# 它以前写 <cwd>/data/(从 bin 起就是 bin/data/);下面两条规则留着,只为忽略本机残留的旧文件。
 bin/data/snowflake-*.json
 data/snowflake-*.json
 
@@ -105,6 +106,9 @@ tools/proto-generator/protogen/.idea/
 
 # Legacy / dead directories
 test/
+# Java 模块的测试源码目录不是上面那个早已停用的 test/。不加这条例外,java/<模块>/src/test 下新建的测试会被 `test/` 挡在版本库外:
+# gateway_node 的测试是早先加进来的所以一直在库里,authority_jdbc 的三份测试到 2026-11-12 才发现从没入过库。
+!java/**/src/test/
 scripts/
 cpp/libs/game/
 cpp/libs/base/common/
@@ -328,3 +332,7 @@ robot/.last_stress_dir.txt
 # Redis Secret 交接比对所需的历史脚本，避免被通用 scripts/ 规则忽略。
 !/docs/handoff/shared-redis-secret-20261106/shared-redis-secret-backup/tools/scripts/
 !/docs/handoff/shared-redis-secret-20261106/shared-redis-secret-backup/tools/scripts/k8s_deploy.ps1
+
+# 手绘导航的同源几何必须长期留存；仅放行本批两张地图。
+!/data/scene_nav_bin/authored_maps/26000/world-y-up.obj
+!/data/scene_nav_bin/authored_maps/26008/world-y-up.obj

@@ -78,8 +78,11 @@ $GateDrainBlock
 
 function New-MockGatePod {
     param([string]$Uid = 'uid-old', [string]$PodIp = '10.0.0.11', [bool]$Ready = $true, [bool]$Terminating = $false,
-        [string]$OwnerKind = 'StatefulSet', [string]$Name = 'gate-1')
+        [string]$OwnerKind = 'StatefulSet', [string]$Name = 'gate-1',
+        # StatefulSet 控制器打的 controller-revision-hash;空 = 不带 labels(读不到修订)。
+        [string]$Revision = '')
     $metadata = @{ name = $Name; uid = $Uid; ownerReferences = @(@{ kind = $OwnerKind; name = 'gate'; controller = $true }) }
+    if (-not [string]::IsNullOrEmpty($Revision)) { $metadata.labels = @{ 'controller-revision-hash' = $Revision; app = 'gate' } }
     if ($Terminating) { $metadata.deletionTimestamp = '2026-09-29T00:00:00Z' }
     $status = if ($Ready) { 'True' } else { 'False' }
     @{ metadata = $metadata; spec = @{ terminationGracePeriodSeconds = 30 }
@@ -91,7 +94,9 @@ function New-MockGatePod {
 # 客户端地址缺省不填(podip 形态);-ClientIp / -ClientPort 模拟 external 形态自报的地址。
 function New-EtcdGate {
     param([uint32]$NodeId, [string]$Ip, [string]$Uuid, [uint32]$Players = 0, [int]$ValueNodeId = -1, [switch]$ProtoNames,
-        [uint32]$ZoneId = 7, [uint64]$LaunchTime = 100, [string]$ClientIp = '', [uint32]$ClientPort = 0)
+        [uint32]$ZoneId = 7, [uint64]$LaunchTime = 100, [string]$ClientIp = '', [uint32]$ClientPort = 0,
+        # gate 自报的连接上限;0 = 不写这个字段(protojson 省略零值,也就是「没声明上限」)。
+        [uint32]$MaxConnections = 0)
     $valueId = if ($ValueNodeId -ge 0) { $ValueNodeId } else { $NodeId }
     $info = if ($ProtoNames) {
         @{ node_id = $valueId; node_type = 4; endpoint = @{ ip = $Ip; port = 18000 }; node_uuid = $Uuid; player_count = $Players
@@ -101,6 +106,9 @@ function New-EtcdGate {
             zoneId = $ZoneId; launchTime = [string]$LaunchTime }
     }
     if ($Players -eq 0 -and -not $ProtoNames) { $info.Remove('playerCount') }   # protojson 省略零值
+    if ($MaxConnections -ne 0) {
+        if ($ProtoNames) { $info.max_connections = $MaxConnections } else { $info.maxConnections = $MaxConnections }
+    }
     if (-not [string]::IsNullOrEmpty($ClientIp) -or $ClientPort -ne 0) {
         $client = @{}
         if (-not [string]::IsNullOrEmpty($ClientIp)) { $client.ip = $ClientIp }
@@ -108,6 +116,14 @@ function New-EtcdGate {
         if ($ProtoNames) { $info.client_endpoint = $client } else { $info.clientEndpoint = $client }
     }
     [pscustomobject]@{ Key = "GateNodeService.rpc/zone/7/node_type/4/node_id/$NodeId"; Value = ($info | ConvertTo-Json -Compress) }
+}
+
+# StatefulSet/gate 的查询结果:就绪数(等重建用)与修订状态(逐台重启的修订处理用)。
+function New-MockSts {
+    param([int]$Replicas = 2, [int]$ReadyReplicas = 2, [string]$UpdateRevision = '', [long]$Generation = 1, [long]$ObservedGeneration = 1)
+    $status = @{ readyReplicas = $ReadyReplicas; observedGeneration = $ObservedGeneration }
+    if (-not [string]::IsNullOrEmpty($UpdateRevision)) { $status.updateRevision = $UpdateRevision }
+    return (@{ metadata = @{ generation = $Generation }; spec = @{ replicas = $Replicas }; status = $status } | ConvertTo-Json -Depth 4 -Compress)
 }
 
 function ConvertTo-EtcdJson {
@@ -221,6 +237,10 @@ function Reset-DrainFixture {
     $script:EtcdResponses.Enqueue((ConvertTo-EtcdJson @((New-EtcdGate -NodeId 3 -Ip '10.0.0.11' -Uuid 'uuid-a' -Players 5),
                 (New-EtcdGate -NodeId 4 -Ip '10.0.0.12' -Uuid 'uuid-b'))))
     $script:StsJson = @{ spec = @{ replicas = 2 }; status = @{ readyReplicas = 2 } } | ConvertTo-Json -Compress
+    # rollout restart 的模拟:非 0 退出码 = 执行失败;StsAfterRollout 非空时,成功的 restart 之后 StatefulSet 换成它(控制器算出新修订)。
+    $script:RolloutExitCode = 0
+    $script:StsAfterRollout = $null
+    $script:StsExitCode = 0
 
     # 最后一层防护:意外绕过封装也只能失败,不会连接真实集群;睡眠换成空操作,预算仍按真实单调时钟走。
     Set-Item Function:script:kubectl { throw '测试禁止执行真实 kubectl' }
@@ -235,7 +255,17 @@ function Reset-DrainFixture {
             return New-MockResult -Output (@{ data = @{ 'login.yaml' = $script:LoginYaml } } | ConvertTo-Json -Compress)
         }
         if ($a[0] -eq 'get' -and $a[1] -eq 'pod') { $script:Events.Add('get:pod'); return New-MockResult -Output (Get-NextMock $script:PodResponses) }
-        if ($a[0] -eq 'get' -and $a[1] -eq 'statefulset') { $script:Events.Add('get:sts'); return New-MockResult -Output $script:StsJson }
+        if ($a[0] -eq 'get' -and $a[1] -eq 'statefulset') {
+            $script:Events.Add('get:sts')
+            if ($script:StsExitCode -ne 0) { return New-MockResult -ExitCode $script:StsExitCode -ErrorOutput 'forbidden' }
+            return New-MockResult -Output $script:StsJson
+        }
+        if ($a[0] -eq 'rollout') {
+            $script:Events.Add("rollout:$($a[1]):$($a[2])")
+            if ($script:RolloutExitCode -ne 0) { return New-MockResult -ExitCode $script:RolloutExitCode -ErrorOutput 'statefulsets.apps "gate" is forbidden' }
+            if ($null -ne $script:StsAfterRollout) { $script:StsJson = $script:StsAfterRollout }
+            return New-MockResult -Output 'statefulset.apps/gate restarted'
+        }
         if ($a[0] -eq 'delete') { $script:Events.Add("delete:$($a[1]):$($a[2])"); return New-MockResult }
         if ($a[0] -eq 'exec') {
             $tail = @($a[([Array]::IndexOf($a, '--') + 1)..($a.Count - 1)])
@@ -307,18 +337,27 @@ Test-Case '契约字面量与 login / proto / 部署生成器的源头一致' {
     $c = Get-GateDrainContract
     $nodeProto = Read-RepoText 'proto/common/base/node.proto'
     Assert-Match -Text $nodeProto -Pattern ("(?m)^\s*{0}\s*=\s*{1}\s*;" -f $c.GateServiceName, $c.GateNodeType) -Because 'gate 的 node_type 必须与 proto 一致,否则 etcd 前缀对不上'
-    # 2026-11-10 起 draining 键名(连同停写标记键名)只在 go/shared/gatepick/marks.go 定义一份,login 与 scene_manager 都引用它。
+    # 键名只在 go/shared/gatepick/marks.go 定义一份(2026-11-10 起),login 与 scene_manager 都经它取键。2026-11-12 起键带 zone 的
+    # hash tag:gate:{gm:<zone>}:<id>:…(Redis 上 Cluster 第 4 批)。Go 的格式串里 %s 是 MarkTag(zone),与脚本的 -f 格式串写法不同,
+    # 所以对两样:Go 的格式串与 tag 的取法本身;Go 金样测试里的同一组例子,按脚本的格式串算出来逐字相同。
     $marksGo = Read-RepoText 'go/shared/gatepick/marks.go'
-    $drainingLiteral = [regex]::Escape(($c.DrainingKeyFormat -replace '\{0\}', '%d'))
-    Assert-Match -Text $marksGo -Pattern ('DrainingKeyFmt\s*=\s*"{0}"' -f $drainingLiteral) -Because 'draining 键名的唯一定义必须与脚本一致'
+    Assert-Match -Text $marksGo -Pattern 'DrainingKeyFmt\s*=\s*"gate:%s:%d:draining"' -Because 'draining 键形的唯一定义'
+    Assert-Match -Text $marksGo -Pattern 'DrainedKeyFmt\s*=\s*"gate:%s:%d:drained"' -Because 'drained 键形的唯一定义'
+    Assert-Match -Text $marksGo -Pattern 'redisslot\.ZoneControlTag\(redisslot\.ControlFamilyGateMark, zoneID\)' -Because 'tag 取 gm 族、按 zone'
+    $marksTest = Read-RepoText 'go/shared/gatepick/marks_test.go'
+    foreach ($case in @(@{ Format = $c.DrainingKeyFormat; Go = 'DrainingKey(3, 7)' }, @{ Format = $c.DrainedKeyFormat; Go = 'DrainedKey(3, 7)' })) {
+        $expected = $case.Format -f 3, 7
+        Assert-Match -Text $marksTest -Pattern ('{0}:\s*"{1}"' -f [regex]::Escape($case.Go), [regex]::Escape($expected)) -Because "脚本算出的 $expected 必须与 Go 金样逐字相同"
+    }
     $drainGo = Read-RepoText 'go/login/internal/logic/pkg/loginqueue/gatedrain.go'
-    Assert-Match -Text $drainGo -Pattern 'GateDrainingKeyFmt\s*=\s*gatepick\.DrainingKeyFmt' -Because 'login 的 draining 键名是 gatepick 那份的别名'
-    Assert-NotMatch -Text $drainGo -Pattern ('"{0}"' -f $drainingLiteral) -Because 'login 不另写 draining 键名字面量'
+    Assert-Match -Text $drainGo -Pattern 'gatepick\.DrainingKey\(zoneID, nodeID\)' -Because 'login 的 draining 键经 gatepick 取'
+    Assert-NotMatch -Text $drainGo -Pattern '"gate:' -Because 'login 不另写键名字面量'
     $redirectGo = Read-RepoText 'go/scene_manager/internal/logic/gate_redirect.go'
-    Assert-Match -Text $redirectGo -Pattern 'gatepick\.DrainingKey\(' -Because 'scene_manager 跨 zone 重定向读同一个 draining 键(2026-10-18 起),经 gatepick 取键名'
-    Assert-NotMatch -Text $redirectGo -Pattern ('"{0}"' -f $drainingLiteral) -Because 'scene_manager 不另写 draining 键名字面量'
+    Assert-Match -Text $redirectGo -Pattern 'gatepick\.DrainingKey\(zoneID, ' -Because 'scene_manager 跨 zone 重定向读同一个 draining 键(2026-10-18 起),经 gatepick 取键名'
+    Assert-NotMatch -Text $redirectGo -Pattern '"gate:' -Because 'scene_manager 不另写键名字面量'
     $monitorGo = Read-RepoText 'go/login/internal/logic/pkg/loginqueue/gatedrain_monitor.go'
-    Assert-Match -Text $monitorGo -Pattern ('GateDrainedKeyFmt\s*=\s*"{0}"' -f [regex]::Escape(($c.DrainedKeyFormat -replace '\{0\}', '%d'))) -Because 'drained 键名必须与 login 一致'
+    Assert-Match -Text $monitorGo -Pattern 'gatepick\.DrainedKey\(zoneID, g\.NodeID\)' -Because 'drained 键经 gatepick 取,与 login 一致'
+    Assert-NotMatch -Text $monitorGo -Pattern '"gate:' -Because 'login 不另写 drained 键名字面量'
     Assert-Match -Text $monitorGo -Pattern ('DrainReasonBelowThreshold\s*=\s*"{0}"' -f $c.DrainedReasonBelowThreshold) -Because '判定理由 below_threshold'
     Assert-Match -Text $monitorGo -Pattern ('DrainReasonDeadline\s*=\s*"{0}"' -f $c.DrainedReasonDeadline) -Because '判定理由 deadline'
     $configGo = Read-RepoText 'go/login/internal/config/config.go'
@@ -490,6 +529,21 @@ Test-Case 'login 配置:显式 GateDrain 块按 login 口径换算,判定循环�
     Assert-Match -Text $failure -Pattern 'Node.RedisClient.Host' -Because 'IP 推不出要 exec 的 Service'
 }
 
+Test-Case 'login 配置:写了 ControlRedis.Addrs 时标记所在的 Redis 跟随它(同 login 的 EffectiveControlRedis)' {
+    Reset-DrainFixture
+    $block = "ControlRedis:`n  Addrs:`n    - `"redis-control.audit-infra:6379`"`n    - `"redis-control-1.audit-infra:6379`"`n  Cluster: true"
+    $login = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock $block) -Source 'audit'
+    Assert-Equal -Expected 'redis-control.audit-infra|6379|0' -Actual ("{0}|{1}|{2}" -f $login.Redis.Host, $login.Redis.Port, $login.RedisDb) -Because 'login 写 gate 标记用的是 ControlRedis 的第一个种子,库号缺省 0'
+    $login = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock "ControlRedis:`n  Addrs:`n    - `"redis-control.audit-infra:6379`"`n  DB: 2") -Source 'audit'
+    Assert-Equal -Expected 2 -Actual $login.RedisDb -Because '单实例的 ControlRedis 写了库号就用它'
+    $failure = Get-ThrownMessage { ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock "ControlRedis:`n  Addrs:`n    - `"10.1.2.3:6379`"") -Source 'audit' }
+    Assert-Match -Text $failure -Pattern 'ControlRedis\.Addrs\[0\]' -Because 'IP 推不出要 exec 的 Service,报错点名 ControlRedis'
+    $failure = Get-ThrownMessage { ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock "ControlRedis:`n  Addrs:`n    - `"redis-control.audit-infra:6379`"`n  DB: x") -Source 'audit' }
+    Assert-Match -Text $failure -Pattern 'ControlRedis\.DB' -Because '非法库号拒绝'
+    $login = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock "ControlRedis:`n  PoolSizePerNode: 20") -Source 'audit'
+    Assert-Equal -Expected 'redis.audit-infra' -Actual $login.Redis.Host -Because '只写了池、没写地址:与 login 一样回落 Node.RedisClient'
+}
+
 Test-Case 'login 配置:RequireClientEndpoint 缺省 false,true / false 大小写不敏感,其它值拒绝' {
     Reset-DrainFixture
     Assert-True -Condition (-not (ConvertFrom-LoginDrainConfig -Text (New-LoginYaml) -Source 'audit').RequireClientEndpoint) -Because '缺省同 login default=false'
@@ -499,10 +553,10 @@ Test-Case 'login 配置:RequireClientEndpoint 缺省 false,true / false 大小�
     Assert-Match -Text $failure -Pattern 'RequireClientEndpoint' -Because '不认识的值不猜'
 }
 
-Test-Case 'login 配置:GateDrain.Migrate 缺省关闭,显式值按 login 口径换算,非法值拒绝,迁移说明按速率估算' {
+Test-Case 'login 配置:GateDrain.Migrate 缺省开启,显式值按 login 口径换算,非法值拒绝,迁移说明按速率估算' {
     Reset-DrainFixture
     $defaults = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml) -Source 'audit'
-    Assert-Equal -Expected 'False|20|0' -Actual ("{0}|{1}|{2}" -f $defaults.MigrateEnabled, $defaults.MigrateRatePerSecond, $defaults.MigrateStartAfterSeconds) -Because '缺 Migrate 子块取 GateDrainMigrateConf 的默认值'
+    Assert-Equal -Expected 'True|20|0' -Actual ("{0}|{1}|{2}" -f $defaults.MigrateEnabled, $defaults.MigrateRatePerSecond, $defaults.MigrateStartAfterSeconds) -Because '缺 Migrate 子块取 GateDrainMigrateConf 的默认值'
     $block = "GateDrain:`n  Interval: 5s`n  Migrate:`n    Enabled: true`n    RatePerSecond: 50`n    StartAfter: 1500ms"
     $login = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock $block) -Source 'audit'
     Assert-Equal -Expected 'True|50|2' -Actual ("{0}|{1}|{2}" -f $login.MigrateEnabled, $login.MigrateRatePerSecond, $login.MigrateStartAfterSeconds) -Because '显式值优先,StartAfter 不足 1s 向上取整(与 gateDrainMigratePolicy 同口径)'
@@ -511,7 +565,10 @@ Test-Case 'login 配置:GateDrain.Migrate 缺省关闭,显式值按 login 口径
     $failure = Get-ThrownMessage { ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock "GateDrain:`n  Migrate:`n    RatePerSecond: -1") -Source 'audit' }
     Assert-Match -Text $failure -Pattern 'GateDrain.Migrate.RatePerSecond' -Because '速率必须是非负整数'
     Assert-Match -Text (Format-GateDrainMigrationLine -Login $login -Online 4500) -Pattern 'about 92s' -Because '起始 2s + 4500 人 / 每秒 50 人 = 92s'
-    Assert-Match -Text (Format-GateDrainMigrationLine -Login $defaults -Online 4500) -Pattern 'migration: off' -Because '缺省关闭:只等自然下线,到期删 Pod 会断开剩余玩家'
+    Assert-Match -Text (Format-GateDrainMigrationLine -Login $defaults -Online 4500) -Pattern 'about 225s' -Because '缺省开启:4500 人 / 每秒 20 人 = 225s'
+    $off = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock "GateDrain:`n  Migrate:`n    Enabled: false") -Source 'audit'
+    Assert-Equal -Expected 'False|20|0' -Actual ("{0}|{1}|{2}" -f $off.MigrateEnabled, $off.MigrateRatePerSecond, $off.MigrateStartAfterSeconds) -Because '应急关闭只写 Enabled: false,其余取默认值'
+    Assert-Match -Text (Format-GateDrainMigrationLine -Login $off -Online 4500) -Pattern 'migration: off' -Because '显式关闭:只等自然下线,到期删 Pod 会断开剩余玩家'
 }
 
 Test-Case 'login ConfigMap 从 zone namespace 读取,读取失败 fail-closed' {
@@ -577,6 +634,46 @@ Test-Case 'etcd:客户端地址、launch_time(字符串)、zone_id 按两种字�
     }
 }
 
+Test-Case 'etcd:max_connections 按两种字段名解析,省略时为 0(没声明上限)' {
+    Reset-DrainFixture
+    $prefix = 'GateNodeService.rpc/zone/7/node_type/4/'
+    foreach ($proto in @($false, $true)) {
+        $json = ConvertTo-EtcdJson @(
+            (New-EtcdGate -NodeId 3 -Ip '10.0.0.11' -Uuid 'a' -Players 1200 -MaxConnections 20000 -ProtoNames:$proto),
+            (New-EtcdGate -NodeId 4 -Ip '10.0.0.12' -Uuid 'b' -Players 5 -ProtoNames:$proto))
+        $records = ConvertFrom-GateEtcdRecords -Json $json -Prefix $prefix
+        Assert-Equal -Expected '1200|20000' -Actual ("{0}|{1}" -f $records[0].PlayerCount, $records[0].MaxConnections) -Because "protoNames=$proto:自报上限原样读出"
+        Assert-Equal -Expected '5|0' -Actual ("{0}|{1}" -f $records[1].PlayerCount, $records[1].MaxConnections) -Because "protoNames=$proto:字段省略 = 没声明上限"
+    }
+}
+
+Test-Case '容量估算:水位口径与 login 的 gatepick 一致,装不下时给出缺口,有 gate 没声明上限时不估' {
+    Reset-DrainFixture
+    $c = Get-GateDrainContract
+    $eligibilityGo = Read-RepoText 'go/shared/gatepick/eligibility.go'
+    Assert-Match -Text $eligibilityGo -Pattern ("(?m)^const FullPercent = {0}\s*$" -f $c.GateFullPercent) -Because '水位百分比必须与 login 挑 gate 用的 FullPercent 一致'
+    $capacityGo = Read-RepoText 'go/shared/gatepick/capacity.go'
+    Assert-Match -Text $capacityGo -Pattern 'return \(uint64\(maxConnections\)\*FullPercent \+ 99\) / 100' -Because '水位 = ceil(上限 × 百分比 / 100),本脚本照这条整数算法'
+
+    $peer = { param([uint32]$Id, [uint32]$Players, [uint32]$Max) [pscustomobject]@{ NodeId = $Id; PlayerCount = $Players; MaxConnections = $Max } }
+    # 上限 20000 → 水位 18000;上限 15 → 水位 ceil(13.5) = 14;已过水位的记 0,不出现负数。
+    $bounded = Get-GateDrainPeerHeadroom -Peers @((& $peer 4 17000 20000), (& $peer 5 10 15), (& $peer 6 19500 20000))
+    Assert-Equal -Expected 'True|1004|3' -Actual ("{0}|{1}|{2}" -f $bounded.Bounded, $bounded.Headroom, $bounded.PeerCount) -Because '(18000-17000) + (14-10) + 0'
+    $fits = Format-GateDrainCapacityLine -Capacity $bounded -Online 1004
+    Assert-True -Condition (-not $fits.Short) -Because '余量恰好等于在线数:装得下'
+    Assert-Match -Text $fits.Text -Pattern 'about 1004 more before their 90% watermark, so everyone fits' -Because '装得下时的说明'
+    $short = Format-GateDrainCapacityLine -Capacity $bounded -Online 4500
+    Assert-True -Condition $short.Short -Because '在线数超过余量:装不下,调用方按 WARNING 打'
+    Assert-Match -Text $short.Text -Pattern 'peer capacity is SHORT: 4500 online here' -Because '缺口说明带在线数'
+    Assert-Match -Text $short.Text -Pattern 'About 3496 player\(s\) will find no migration target' -Because '缺口 = 4500 - 1004'
+
+    $unbounded = Get-GateDrainPeerHeadroom -Peers @((& $peer 4 17000 20000), (& $peer 5 3 0))
+    Assert-Equal -Expected 'False|2' -Actual ("{0}|{1}" -f $unbounded.Bounded, $unbounded.PeerCount) -Because '有一台没声明上限(dev、旧版 gate):无从封顶'
+    $note = Format-GateDrainCapacityLine -Capacity $unbounded -Online 999999
+    Assert-True -Condition (-not $note.Short) -Because '估不出来不告警:不能凭一个算不出的数说装不下'
+    Assert-Match -Text $note.Text -Pattern 'peer capacity: not estimated' -Because '说明为什么没估'
+}
+
 Test-Case '同 zone 候选:按 login 口径选地址、去重;一台别的候选都没有就拒绝' {
     Reset-DrainFixture
     $prefix = 'GateNodeService.rpc/zone/7/node_type/4/'
@@ -617,24 +714,24 @@ Write-Host '=== gate drain script: draining marks and drained polling ==='
 Test-Case '新标记:取服务器时间,一次 EVAL 里判定其它候选、清残留 drained、SET NX EX' {
     Reset-DrainFixture
     $context = Get-FixtureContext
-    $script:Redis['gate:3:drained'] = 'deadline'   # 上一轮留下的判定,不能被这一轮误读
+    $script:Redis['gate:{gm:7}:3:drained'] = 'deadline'   # 上一轮留下的判定,不能被这一轮误读
     $mark = Set-GateDrainingMark -Login $context.Login -NodeId 3 -PeerNodeIds @(4) -TtlSeconds 1800 6>$null
-    Assert-Equal -Expected 'TIME|EVAL mark 3 gate:3:draining gate:3:drained gate:4:draining 1790000000 1800' -Actual ($script:RedisLog -join '|') -Because '只读的 TIME 之后,判定与写入同在一个原子脚本里'
-    Assert-Match -Text $script:Redis['gate:3:draining'] -Pattern '^\d+$' -Because 'login 用 ParseInt 读,非整数会被当成 0 立刻按 deadline 放行'
-    Assert-Equal -Expected '1800' -Actual $script:RedisTtl['gate:3:draining'] -Because 'TTL 取 -DrainTtlSeconds'
-    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:drained')) -Because '残留 drained 必须先清掉'
+    Assert-Equal -Expected 'TIME|EVAL mark 3 gate:{gm:7}:3:draining gate:{gm:7}:3:drained gate:{gm:7}:4:draining 1790000000 1800' -Actual ($script:RedisLog -join '|') -Because '只读的 TIME 之后,判定与写入同在一个原子脚本里'
+    Assert-Match -Text $script:Redis['gate:{gm:7}:3:draining'] -Pattern '^\d+$' -Because 'login 用 ParseInt 读,非整数会被当成 0 立刻按 deadline 放行'
+    Assert-Equal -Expected '1800' -Actual $script:RedisTtl['gate:{gm:7}:3:draining'] -Because 'TTL 取 -DrainTtlSeconds'
+    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:{gm:7}:3:drained')) -Because '残留 drained 必须先清掉'
     Assert-True -Condition ($mark.Created -and $mark.MarkedAt -eq 1790000000 -and $mark.Value -eq '1790000000') -Because '返回本次写入的值,供撤回时比对'
 }
 
 Test-Case '新标记:其它候选全部在排空时原子拒绝,不写任何键' {
     Reset-DrainFixture
     $context = Get-FixtureContext
-    $script:Redis['gate:4:draining'] = '1789990000'
-    $script:Redis['gate:3:drained'] = 'deadline'
+    $script:Redis['gate:{gm:7}:4:draining'] = '1789990000'
+    $script:Redis['gate:{gm:7}:3:drained'] = 'deadline'
     $failure = Get-ThrownMessage { Set-GateDrainingMark -Login $context.Login -NodeId 3 -PeerNodeIds @(4) -TtlSeconds 1800 }
     Assert-Match -Text $failure -Pattern '全部在排空.*未做任何写入' -Because 'login 会忽略全部排空的标记'
-    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:draining')) -Because '不得写 draining'
-    Assert-Equal -Expected 'deadline' -Actual $script:Redis['gate:3:drained'] -Because '拒绝发生在 DEL drained 之前'
+    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:{gm:7}:3:draining')) -Because '不得写 draining'
+    Assert-Equal -Expected 'deadline' -Actual $script:Redis['gate:{gm:7}:3:drained'] -Because '拒绝发生在 DEL drained 之前'
     $failure = Get-ThrownMessage { Set-GateDrainingMark -Login $context.Login -NodeId 3 -PeerNodeIds @() -TtlSeconds 1800 }
     Assert-Match -Text $failure -Pattern '全部在排空' -Because '没有候选时脚本同样拒绝(纵深防御)'
 }
@@ -652,6 +749,7 @@ Test-Case 'Redis 走 login 配置的地址,密码只经目标 Pod 的环境变�
     Assert-Match -Text $exec[9] -Pattern 'REDISCLI_AUTH=\$REDIS_PASSWORD' -Because '密码取自 Pod 自己的 Secret 环境变量'
     Assert-Match -Text $exec[9] -Pattern 'if \[ -n "\$REDIS_PASSWORD" \]' -Because '空密码时不能设 REDISCLI_AUTH(会发 AUTH "")'
     Assert-Match -Text $exec[9] -Pattern '--no-raw' -Because 'nil 与空串必须可区分'
+    Assert-Match -Text $exec[9] -Pattern 'redis-cli --no-raw -c -h ' -Because '集群模式:上了 Redis Cluster 时按键跟随 MOVED / ASK,单实例下无影响'
     # 失败提示两种形态都写:单实例要 hairpin,高可用经 redis-proxy、不涉及 hairpin(不把运维引向错误的排查方向)。
     $hint = Get-GateDrainRedisFailureHint -Login $context.Login
     Assert-Match -Text $hint -Pattern 'hairpin' -Because '单实例形态下 exec 落在 Service 背后的同一个 Pod'
@@ -663,12 +761,12 @@ Test-Case 'Redis 走 login 配置的地址,密码只经目标 Pod 的环境变�
 Test-Case '已有合法标记:沿用、不重置期限;无 TTL、0、晚于现在、溢出 int64、非整数:拒绝' {
     Reset-DrainFixture
     $context = Get-FixtureContext
-    $script:Redis['gate:3:draining'] = '1789999000'
-    $script:RedisTtl['gate:3:draining'] = '800'
+    $script:Redis['gate:{gm:7}:3:draining'] = '1789999000'
+    $script:RedisTtl['gate:{gm:7}:3:draining'] = '800'
     $mark = Set-GateDrainingMark -Login $context.Login -NodeId 3 -PeerNodeIds @(4) -TtlSeconds 1800 -WarningAction SilentlyContinue
     Assert-True -Condition (-not $mark.Created -and $mark.MarkedAt -eq 1789999000) -Because '重跑沿用原标记时间,期限不重新起算'
-    Assert-Equal -Expected '1789999000' -Actual $script:Redis['gate:3:draining'] -Because '不能覆盖已有标记'
-    Assert-Equal -Expected '800' -Actual $script:RedisTtl['gate:3:draining'] -Because '不能重置 TTL'
+    Assert-Equal -Expected '1789999000' -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '不能覆盖已有标记'
+    Assert-Equal -Expected '800' -Actual $script:RedisTtl['gate:{gm:7}:3:draining'] -Because '不能重置 TTL'
     $cases = @(
         @{ Value = '1789999000'; Ttl = $null; Pattern = 'TTL=-1' },
         @{ Value = '0'; Ttl = '800'; Pattern = "不是 \(0, Redis TIME=1790000000\] 内" },
@@ -677,13 +775,13 @@ Test-Case '已有合法标记:沿用、不重置期限;无 TTL、0、晚于现�
         @{ Value = 'yesterday'; Ttl = '800'; Pattern = "不是 \(0, Redis TIME=1790000000\] 内" }
     )
     foreach ($case in $cases) {
-        $script:Redis['gate:3:draining'] = $case.Value
-        $script:RedisTtl.Remove('gate:3:draining')
-        if ($null -ne $case.Ttl) { $script:RedisTtl['gate:3:draining'] = $case.Ttl }
+        $script:Redis['gate:{gm:7}:3:draining'] = $case.Value
+        $script:RedisTtl.Remove('gate:{gm:7}:3:draining')
+        if ($null -ne $case.Ttl) { $script:RedisTtl['gate:{gm:7}:3:draining'] = $case.Ttl }
         $failure = Get-ThrownMessage { Set-GateDrainingMark -Login $context.Login -NodeId 3 -PeerNodeIds @(4) -TtlSeconds 1800 }
         Assert-Match -Text $failure -Pattern $case.Pattern -Because "已有标记 '$($case.Value)' 必须拒绝"
-        Assert-Match -Text $failure -Pattern '先人工 DEL gate:3:draining gate:3:drained' -Because '拒绝要给出处理方法'
-        Assert-Equal -Expected $case.Value -Actual $script:Redis['gate:3:draining'] -Because '拒绝时不改动已有标记'
+        Assert-Match -Text $failure -Pattern '先人工 DEL gate:{gm:7}:3:draining gate:{gm:7}:3:drained' -Because '拒绝要给出处理方法'
+        Assert-Equal -Expected $case.Value -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '拒绝时不改动已有标记'
     }
     Assert-True -Condition (-not (Test-GateDrainMarkValue '1790000000' -NotAfterUnix 1789999999)) -Because '晚于上限的值不可信'
     Assert-True -Condition (Test-GateDrainMarkValue '9223372036854775807') -Because 'int64 上限本身合法(无上限参数时)'
@@ -696,24 +794,24 @@ Test-Case '已有标记早于 TIME - MaxDrainTtlSeconds(例如手工 SET 成 1):
     $lower = [long]$script:RedisNow - [long]$c.MaxDrainTtlSeconds   # 1790000000 - 86400 = 1789913600
     # 这些值 login 会算出巨大的已排空时长、立刻按 deadline 放行;沿用它们,带 -DeletePod 就是直接断线。
     foreach ($value in @('1', [string]($lower - 1))) {
-        $script:Redis['gate:3:draining'] = $value
-        $script:RedisTtl['gate:3:draining'] = '3000'
+        $script:Redis['gate:{gm:7}:3:draining'] = $value
+        $script:RedisTtl['gate:{gm:7}:3:draining'] = '3000'
         # login 按这个 draining 已写下的判定。钉住现状:MarkScript 在 SET NX 之前先 DEL drained,所以已有标记
         # 被判不可信而拒绝时,drained 已经被删 —— 这是拒绝之前唯一的一次写(见 Set-GateDrainingMark 注释第 2 步);
         # draining 仍在,login 下一个判定周期会按它重写 drained。脚本属主若把已有标记的校验挪到 DEL drained
         # 之前,这里改为断言 drained 被保留。
-        $script:Redis['gate:3:drained'] = 'deadline'
+        $script:Redis['gate:{gm:7}:3:drained'] = 'deadline'
         $script:RedisLog.Clear()
         $failure = Get-ThrownMessage { Set-GateDrainingMark -Login $context.Login -NodeId 3 -PeerNodeIds @(4) -TtlSeconds 1800 }
-        Assert-Match -Text $failure -Pattern "gate:3:draining='$value' 不是 .*不早于 TIME-$($c.MaxDrainTtlSeconds)=$lower 的整数 Unix 秒" -Because "已有标记 '$value' 早于下界,不能沿用"
-        Assert-Match -Text $failure -Pattern '先人工 DEL gate:3:draining gate:3:drained 再重跑' -Because '拒绝要给出人工 DEL 指引'
-        Assert-Equal -Expected $value -Actual $script:Redis['gate:3:draining'] -Because '拒绝时不改动已有标记'
-        Assert-Equal -Expected '3000' -Actual $script:RedisTtl['gate:3:draining'] -Because '拒绝时不重置 TTL'
-        Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:drained')) -Because '现状:MarkScript 在拒绝之前已 DEL drained(待脚本属主决定是否前移校验)'
+        Assert-Match -Text $failure -Pattern "gate:{gm:7}:3:draining='$value' 不是 .*不早于 TIME-$($c.MaxDrainTtlSeconds)=$lower 的整数 Unix 秒" -Because "已有标记 '$value' 早于下界,不能沿用"
+        Assert-Match -Text $failure -Pattern '先人工 DEL gate:{gm:7}:3:draining gate:{gm:7}:3:drained 再重跑' -Because '拒绝要给出人工 DEL 指引'
+        Assert-Equal -Expected $value -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '拒绝时不改动已有标记'
+        Assert-Equal -Expected '3000' -Actual $script:RedisTtl['gate:{gm:7}:3:draining'] -Because '拒绝时不重置 TTL'
+        Assert-True -Condition (-not $script:Redis.ContainsKey('gate:{gm:7}:3:drained')) -Because '现状:MarkScript 在拒绝之前已 DEL drained(待脚本属主决定是否前移校验)'
         Assert-True -Condition (@($script:RedisLog | Where-Object { $_ -like 'DEL *' -or $_ -like 'EVAL release *' }).Count -eq 0) -Because '拒绝时不另发 DEL / 撤回命令(MarkScript 内对 drained 的 DEL 见上一条)'
     }
-    $script:Redis['gate:3:draining'] = [string]$lower
-    $script:RedisTtl['gate:3:draining'] = '1'
+    $script:Redis['gate:{gm:7}:3:draining'] = [string]$lower
+    $script:RedisTtl['gate:{gm:7}:3:draining'] = '1'
     $mark = Set-GateDrainingMark -Login $context.Login -NodeId 3 -PeerNodeIds @(4) -TtlSeconds 1800 -WarningAction SilentlyContinue
     Assert-True -Condition (-not $mark.Created -and $mark.MarkedAt -eq $lower -and $mark.Value -eq [string]$lower) -Because '恰好等于下界(闭区间):可能是本脚本以最大 TTL 写下、还没过期的标记,沿用'
     Assert-True -Condition (-not (Test-GateDrainMarkValue '1' -NotBeforeUnix $lower)) -Because '低于下界的正整数不可信'
@@ -724,30 +822,30 @@ Test-Case '轮询:drained 出现即返回判定理由;两个理由都认' {
     foreach ($reason in @('below_threshold', 'deadline')) {
         Reset-DrainFixture
         $context = Get-FixtureContext
-        $script:Redis['gate:3:draining'] = '1790000000'
+        $script:Redis['gate:{gm:7}:3:draining'] = '1790000000'
         $script:ReasonToWrite = $reason
         # 模拟 login 的判定循环:第 3 次查询前才写上 drained。
-        $script:OnMget = { if ($script:MgetCount -ge 3) { $script:Redis['gate:3:drained'] = $script:ReasonToWrite } }
+        $script:OnMget = { if ($script:MgetCount -ge 3) { $script:Redis['gate:{gm:7}:3:drained'] = $script:ReasonToWrite } }
         $result = Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 30 -PollIntervalSeconds 0.01
         Assert-Equal -Expected $reason -Actual $result.Reason -Because '返回 login 写的判定理由'
         Assert-True -Condition (-not $result.IdentityLost) -Because '正常排空不是身份丢失'
         Assert-Equal -Expected 3 -Actual $script:MgetCount -Because '一出现就返回,不多等'
-        Assert-True -Condition ($script:RedisLog -contains 'MGET gate:3:draining gate:3:drained') -Because '每轮一次 MGET 同时看两个键'
+        Assert-True -Condition ($script:RedisLog -contains 'MGET gate:{gm:7}:3:draining gate:{gm:7}:3:drained') -Because '每轮一次 MGET 同时看两个键'
     }
 }
 
 Test-Case '轮询:draining 消失、被改写(含非整数)、drained 值未知都中止,不当成已排空' {
     # 每个用例预置 draining='1790000000' 并以它作 MarkValue(Set-GateDrainingMark 确认的值);Setup 再改动现场。
     $cases = @(
-        @{ Setup = { $script:Redis.Remove('gate:3:draining') }; Pattern = '已不存在' },
-        @{ Setup = { $script:Redis['gate:3:draining'] = 'abc' }; Pattern = "已被改写:当前值 'abc'.*不删 Pod" },
-        @{ Setup = { $script:Redis['gate:3:draining'] = '1790000500' }; Pattern = "已被改写:当前值 '1790000500'.*不删 Pod" },
-        @{ Setup = { $script:Redis['gate:3:drained'] = 'maybe' }; Pattern = "未知的 gate:3:drained 值 'maybe'" }
+        @{ Setup = { $script:Redis.Remove('gate:{gm:7}:3:draining') }; Pattern = '已不存在' },
+        @{ Setup = { $script:Redis['gate:{gm:7}:3:draining'] = 'abc' }; Pattern = "已被改写:当前值 'abc'.*不删 Pod" },
+        @{ Setup = { $script:Redis['gate:{gm:7}:3:draining'] = '1790000500' }; Pattern = "已被改写:当前值 '1790000500'.*不删 Pod" },
+        @{ Setup = { $script:Redis['gate:{gm:7}:3:drained'] = 'maybe' }; Pattern = "未知的 gate:{gm:7}:3:drained 值 'maybe'" }
     )
     foreach ($case in $cases) {
         Reset-DrainFixture
         $context = Get-FixtureContext
-        $script:Redis['gate:3:draining'] = '1790000000'
+        $script:Redis['gate:{gm:7}:3:draining'] = '1790000000'
         & $case.Setup
         $failure = Get-ThrownMessage { Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 30 -PollIntervalSeconds 0.01 }
         Assert-Match -Text $failure -Pattern $case.Pattern -Because "必须中止:$($case.Pattern)"
@@ -757,22 +855,22 @@ Test-Case '轮询:draining 消失、被改写(含非整数)、drained 值未知�
 Test-Case '轮询:等待中 draining 被改写(例如手工 SET 成 1,login 随即写 deadline)即中止,不把这个 deadline 当成排空完成' {
     Reset-DrainFixture
     $context = Get-FixtureContext
-    $script:Redis['gate:3:draining'] = '1790000000'
+    $script:Redis['gate:{gm:7}:3:draining'] = '1790000000'
     # 第 2 次查询前被人工 SET 成 1:login 按它算出「已排空 50 多年」,同一判定周期就写下 drained=deadline。
-    $script:OnMget = { if ($script:MgetCount -ge 2) { $script:Redis['gate:3:draining'] = '1'; $script:Redis['gate:3:drained'] = 'deadline' } }
+    $script:OnMget = { if ($script:MgetCount -ge 2) { $script:Redis['gate:{gm:7}:3:draining'] = '1'; $script:Redis['gate:{gm:7}:3:drained'] = 'deadline' } }
     $failure = Get-ThrownMessage { Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 30 -PollIntervalSeconds 0.01 }
     Assert-Match -Text $failure -Pattern "已被改写:当前值 '1'.*本次确认的 '1790000000'.*不删 Pod" -Because 'draining 已不是本次确认的值,login 据它写的 deadline 不可信'
-    Assert-Match -Text $failure -Pattern '人工 DEL gate:3:draining gate:3:drained' -Because '中止要给出处理方法'
+    Assert-Match -Text $failure -Pattern '人工 DEL gate:{gm:7}:3:draining gate:{gm:7}:3:drained' -Because '中止要给出处理方法'
     Assert-Equal -Expected 2 -Actual $script:MgetCount -Because '被改写的那一轮立即中止,不再等'
     Assert-True -Condition (@($script:RedisLog | Where-Object { $_ -notlike 'MGET *' }).Count -eq 0) -Because '中止时不写 Redis'
-    Assert-Equal -Expected '1' -Actual $script:Redis['gate:3:draining'] -Because '被改写的标记不归本次运行处理'
+    Assert-Equal -Expected '1' -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '被改写的标记不归本次运行处理'
 }
 
 Test-Case '轮询:每隔几轮复核进程仍在 etcd;进程没了返回 IdentityLost,查询失败继续等' {
     Reset-DrainFixture
     $context = Get-FixtureContext
     $c = Get-GateDrainContract
-    $script:Redis['gate:3:draining'] = '1790000000'
+    $script:Redis['gate:{gm:7}:3:draining'] = '1790000000'
     $script:Events.Clear()
     # 第 1 次复核查询失败(未知,继续等);第 2 次看到 node_id 3 换成了另一个进程。
     $script:EtcdResponses.Clear()
@@ -788,8 +886,8 @@ Test-Case '轮询:每隔几轮复核进程仍在 etcd;进程没了返回 Identit
 Test-Case '轮询:查询失败只计数继续等;预算耗尽后报超时且不删任何东西' {
     Reset-DrainFixture
     $context = Get-FixtureContext
-    $script:Redis['gate:3:draining'] = '1790000000'
-    $script:Redis['gate:3:drained'] = 'below_threshold'
+    $script:Redis['gate:{gm:7}:3:draining'] = '1790000000'
+    $script:Redis['gate:{gm:7}:3:drained'] = 'below_threshold'
     $script:RedisFailures = 2
     $result = Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 30 -PollIntervalSeconds 0.01 -WarningAction SilentlyContinue
     Assert-Equal -Expected 'below_threshold' -Actual $result.Reason -Because '两次失败后第三次查到'
@@ -798,9 +896,9 @@ Test-Case '轮询:查询失败只计数继续等;预算耗尽后报超时且不�
     Reset-DrainFixture
     $context = Get-FixtureContext
     $script:Calls.Clear()
-    $script:Redis['gate:3:draining'] = '1790000000'
+    $script:Redis['gate:{gm:7}:3:draining'] = '1790000000'
     $failure = Get-ThrownMessage { Wait-GateDrained -Login $context.Login -NodeId 3 -Record $context.Record -MarkValue '1790000000' -TimeoutSeconds 0.05 -PollIntervalSeconds 0.01 }
-    Assert-Match -Text $failure -Pattern '超过 0.05s 仍未出现.*DEL gate:3:draining gate:3:drained' -Because '超时要给出取消方法'
+    Assert-Match -Text $failure -Pattern '超过 0.05s 仍未出现.*DEL gate:{gm:7}:3:draining gate:{gm:7}:3:drained' -Because '超时要给出取消方法'
     Assert-True -Condition (@($script:Events | Where-Object { $_ -like 'delete:*' -or $_ -eq 'redis:DEL' }).Count -eq 0) -Because '超时不删 Pod、不动标记'
     Assert-True -Condition (@($script:Calls | Where-Object { $_.TimeoutSeconds -gt 0.05 -or $_.TimeoutSeconds -le 0 }).Count -eq 0) -Because '每次查询只分到剩余预算'
 }
@@ -828,8 +926,8 @@ function Set-ReplacementScenario {
     $script:EtcdResponses.Clear()
     $script:EtcdResponses.Enqueue($AssertEtcd)
     foreach ($item in $AfterEtcd) { $script:EtcdResponses.Enqueue($item) }
-    $script:Redis['gate:3:draining'] = '1790000000'
-    $script:Redis['gate:3:drained'] = 'below_threshold'
+    $script:Redis['gate:{gm:7}:3:draining'] = '1790000000'
+    $script:Redis['gate:{gm:7}:3:drained'] = 'below_threshold'
     $script:Events.Clear()
 }
 
@@ -851,7 +949,7 @@ Test-Case '删 Pod:复核通过 → 删除 → 旧记录消失后清两个标记
     $deleteCall = @($script:Calls | Where-Object { $_.Args[0] -eq 'delete' })[0]
     Assert-Equal -Expected 'delete pod gate-1 -n mmorpg-zone-e2e --wait=true --timeout=90s' -Actual ($deleteCall.Args -join ' ') -Because '删除等待 = Pod 宽限期 30s + 60s 余量'
     Assert-True -Condition ($deleteCall.TimeoutSeconds -gt 90) -Because '进程截止要长于 kubectl 自己的等待'
-    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:draining') -and -not $script:Redis.ContainsKey('gate:3:drained')) -Because '两个标记都清掉'
+    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:{gm:7}:3:draining') -and -not $script:Redis.ContainsKey('gate:{gm:7}:3:drained')) -Because '两个标记都清掉'
     Assert-True -Condition $result.MarksCleared -Because '报告已清'
 }
 
@@ -902,7 +1000,7 @@ Test-Case '删 Pod:旧记录迟迟不消失时不清标记,如实报告' {
         -AfterPods @((New-MockGatePod -Uid 'uid-new' -PodIp '10.0.0.21'))
     $result = Invoke-GatePodReplacement -Login $context.Login -Pod $context.Pod -Record $context.Record -ReadyTimeoutSeconds 30 -WarningAction SilentlyContinue
     Assert-True -Condition (-not $result.MarksCleared) -Because '清早了 login 会把玩家分到已删 Pod 的陈旧记录上'
-    Assert-Equal -Expected '1790000000' -Actual $script:Redis['gate:3:draining'] -Because '标记保留到 TTL'
+    Assert-Equal -Expected '1790000000' -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '标记保留到 TTL'
     Assert-True -Condition ($script:Events -contains 'get:sts') -Because '仍然等新 Pod 就绪'
     Assert-True -Condition ($null -eq $result.ReadyError) -Because '新 Pod 已就绪'
 }
@@ -917,7 +1015,7 @@ Test-Case '删 Pod:清标记抛错只记 MarksCleared=false;就绪超时带在 R
         -WarningVariable warned -WarningAction SilentlyContinue 6>$null
     Assert-True -Condition (-not $result.MarksCleared) -Because '清除失败不能报成已清'
     Assert-Match -Text ($warned -join ' ') -Pattern 'Failed to clear drain marks.*Could not connect' -Because '失败原因要可见'
-    Assert-Equal -Expected '1790000000' -Actual $script:Redis['gate:3:draining'] -Because '标记仍在'
+    Assert-Equal -Expected '1790000000' -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '标记仍在'
     Assert-True -Condition ($null -eq $result.ReadyError -and $script:Events -contains 'get:sts') -Because '清除失败不影响等重建'
 
     Reset-DrainFixture
@@ -947,14 +1045,14 @@ Test-Case '旧记录是否消失:按 uuid 认进程;缺 uuid 时退回 node_id +
 Test-Case '撤回标记:只删本次写入的值(连同 drained),别人改写过的不动' {
     Reset-DrainFixture
     $login = ConvertFrom-LoginDrainConfig -Text $script:LoginYaml -Source 'audit'
-    $script:Redis['gate:3:draining'] = '1790000000'
-    $script:Redis['gate:3:drained'] = 'below_threshold'
+    $script:Redis['gate:{gm:7}:3:draining'] = '1790000000'
+    $script:Redis['gate:{gm:7}:3:drained'] = 'below_threshold'
     Assert-True -Condition (Remove-OwnGateDrainMark -Login $login -NodeId 3 -MarkValue '1790000000') -Because '值相同:撤回'
-    Assert-Equal -Expected 'EVAL release 2 gate:3:draining gate:3:drained 1790000000' -Actual $script:RedisLog[0] -Because '一次原子比对删除'
-    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:draining') -and -not $script:Redis.ContainsKey('gate:3:drained')) -Because '两个键都删'
-    $script:Redis['gate:3:draining'] = '1790000500'
+    Assert-Equal -Expected 'EVAL release 2 gate:{gm:7}:3:draining gate:{gm:7}:3:drained 1790000000' -Actual $script:RedisLog[0] -Because '一次原子比对删除'
+    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:{gm:7}:3:draining') -and -not $script:Redis.ContainsKey('gate:{gm:7}:3:drained')) -Because '两个键都删'
+    $script:Redis['gate:{gm:7}:3:draining'] = '1790000500'
     Assert-True -Condition (-not (Remove-OwnGateDrainMark -Login $login -NodeId 3 -MarkValue '1790000000')) -Because '值已被改写:不是本次的'
-    Assert-Equal -Expected '1790000500' -Actual $script:Redis['gate:3:draining'] -Because '别人的标记不动'
+    Assert-Equal -Expected '1790000500' -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '别人的标记不动'
 }
 
 Test-Case '等重建:旧 Pod 仍在或 STS 未满都要等到超时报错,不当成就绪' {
@@ -989,7 +1087,7 @@ Test-Case 'DryRun 计划:只打印写操作,不碰 Redis、不删 Pod' {
     $context = Get-FixtureContext
     $script:Events.Clear()
     $text = (Write-GateDrainDryRunPlan -Login $context.Login -Pod $context.Pod -Record $context.Record -PeerNodeIds @(4) -DrainTtlSeconds 1800 -WaitTimeoutSeconds 1800 -WillDeletePod 6>&1) -join "`n"
-    Assert-Match -Text $text -Pattern 'SET gate:3:draining <Redis TIME seconds> NX EX 1800' -Because '计划里要写清标记的形状'
+    Assert-Match -Text $text -Pattern 'SET gate:{gm:7}:3:draining <Redis TIME seconds> NX EX 1800' -Because '计划里要写清标记的形状'
     Assert-Match -Text $text -Pattern 'kubectl delete pod gate-1 -n mmorpg-zone-e2e' -Because '带 -DeletePod 时计划里要有删除'
     Assert-Equal -Expected 0 -Actual $script:Events.Count -Because 'DryRun 计划不发出任何调用'
 }
@@ -1007,7 +1105,7 @@ function Set-FullFlowScenario {
     $script:EtcdResponses.Clear()
     foreach ($i in 1..3) { $script:EtcdResponses.Enqueue((& $script:BeforeEtcd)) }
     $script:EtcdResponses.Enqueue((& $script:AfterEtcd))
-    $script:OnMget = { $script:Redis['gate:3:drained'] = 'below_threshold' }
+    $script:OnMget = { $script:Redis['gate:{gm:7}:3:drained'] = 'below_threshold' }
 }
 
 function Invoke-DrainForTest {
@@ -1025,7 +1123,8 @@ Test-Case '主流程 -DryRun:只读定位后返回 0,不访问 Redis、不删 Po
     Assert-Equal -Expected 0 -Actual $code -Because 'DryRun 成功'
     Assert-Equal -Expected 0 -Actual $script:RedisLog.Count -Because 'DryRun 不发任何 Redis 命令'
     Assert-Equal -Expected 0 -Actual (Get-DeleteEvents).Count -Because 'DryRun 不删 Pod'
-    Assert-Equal -Expected 'get:configmap|get:pod|etcd:get' -Actual ($script:Events -join '|') -Because '只做只读定位'
+    Assert-Equal -Expected 'get:configmap|get:pod|etcd:get|get:sts' -Actual ($script:Events -join '|') `
+        -Because '只做只读定位;带 -DeletePod 时另读一次 StatefulSet 的修订,不改它'
 }
 
 Test-Case '主流程:预算不合格在读 Pod / etcd 与任何 Redis 调用之前拒绝' {
@@ -1053,10 +1152,10 @@ Test-Case '主流程:单副本 zone 在任何 Redis 调用之前拒绝(-DryRun �
 Test-Case '主流程:其它候选全在排空时原子拒绝,本台不被标记' {
     Reset-DrainFixture
     Set-FullFlowScenario
-    $script:Redis['gate:4:draining'] = '1789990000'
+    $script:Redis['gate:{gm:7}:4:draining'] = '1789990000'
     Assert-Match -Text (Get-ThrownMessage { Invoke-DrainForTest -DeletePod }) -Pattern '全部在排空' -Because '并发排空把 zone 标满时 login 会忽略标记'
-    Assert-Equal -Expected 'TIME|EVAL mark 3 gate:3:draining gate:3:drained gate:4:draining 1790000000 1800' -Actual ($script:RedisLog -join '|') -Because '只有只读的 TIME 与拒绝时不写的 EVAL'
-    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:draining')) -Because '本台没被标记'
+    Assert-Equal -Expected 'TIME|EVAL mark 3 gate:{gm:7}:3:draining gate:{gm:7}:3:drained gate:{gm:7}:4:draining 1790000000 1800' -Actual ($script:RedisLog -join '|') -Because '只有只读的 TIME 与拒绝时不写的 EVAL'
+    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:{gm:7}:3:draining')) -Because '本台没被标记'
     Assert-Equal -Expected 0 -Actual (Get-DeleteEvents).Count -Because '不删 Pod'
 }
 
@@ -1066,11 +1165,15 @@ Test-Case '主流程 -DeletePod:标记 → 复核 → 等 drained → 删 Pod �
     $code = Invoke-DrainForTest -DeletePod
     Assert-Equal -Expected 0 -Actual $code -Because '全部完成'
     $events = @($script:Events)
-    $order = @('redis:EVAL', 'redis:MGET', 'delete:pod:gate-1', 'redis:DEL', 'get:sts') | ForEach-Object { [Array]::IndexOf($events, $_) }
+    # get:sts 出现两次:标记之前读修订(Sync-GateRestartRevision),删 Pod 之后等就绪。顺序看最后一次。
+    $order = @(@('redis:EVAL', 'redis:MGET', 'delete:pod:gate-1', 'redis:DEL') | ForEach-Object { [Array]::IndexOf($events, $_) }) +
+        @([Array]::LastIndexOf($events, 'get:sts'))
     Assert-True -Condition ((@($order | Where-Object { $_ -lt 0 }).Count -eq 0) -and ($order -join ',') -eq (($order | Sort-Object) -join ',')) -Because "顺序不对:$($events -join ' ')"
+    Assert-True -Condition ([Array]::IndexOf($events, 'get:sts') -lt [Array]::IndexOf($events, 'redis:EVAL')) -Because '修订在任何 Redis 写之前读'
+    Assert-Equal -Expected 0 -Actual @($events | Where-Object { $_ -like 'rollout:*' }).Count -Because 'Pod 没带修订标签:读不到就只告警,不动 StatefulSet'
     $recheck = [Array]::IndexOf($events, 'get:pod', [Array]::IndexOf($events, 'redis:EVAL'))
     Assert-True -Condition ($recheck -gt 0 -and $recheck -lt [Array]::IndexOf($events, 'redis:MGET')) -Because '标记后立即复核 Pod 与进程身份'
-    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:draining') -and -not $script:Redis.ContainsKey('gate:3:drained')) -Because '标记已清'
+    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:{gm:7}:3:draining') -and -not $script:Redis.ContainsKey('gate:{gm:7}:3:drained')) -Because '标记已清'
 }
 
 Test-Case '主流程未带 -DeletePod:drained 后返回 0,标记保留,不删 Pod' {
@@ -1078,7 +1181,7 @@ Test-Case '主流程未带 -DeletePod:drained 后返回 0,标记保留,不删 Po
     Set-FullFlowScenario
     Assert-Equal -Expected 0 -Actual (Invoke-DrainForTest) -Because '排空完成即成功'
     Assert-Equal -Expected 0 -Actual (Get-DeleteEvents).Count -Because '不删 Pod'
-    Assert-Equal -Expected '1790000000' -Actual $script:Redis['gate:3:draining'] -Because '标记保留,供加 -DeletePod 重跑沿用'
+    Assert-Equal -Expected '1790000000' -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '标记保留,供加 -DeletePod 重跑沿用'
 }
 
 # 定位时是 uuid-a;标记后复核看到同一 podIP 上已是另一个进程(定位与 SET 之间 gate 重启过)。
@@ -1092,8 +1195,8 @@ Test-Case '主流程:标记后复核不通过,撤回本次写入的标记并中�
     $script:EtcdResponses.Enqueue((& $script:RestartedEtcd))
     $failure = Get-ThrownMessage { Invoke-DrainForTest -DeletePod }
     Assert-Match -Text $failure -Pattern '标记后复核不通过.*重启过' -Because '标记落在旧 node_id 上'
-    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:draining')) -Because '本次写入的标记已撤回'
-    Assert-True -Condition ($script:RedisLog -contains 'EVAL release 2 gate:3:draining gate:3:drained 1790000000') -Because '按本次写入值比对撤回'
+    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:{gm:7}:3:draining')) -Because '本次写入的标记已撤回'
+    Assert-True -Condition ($script:RedisLog -contains 'EVAL release 2 gate:{gm:7}:3:draining gate:{gm:7}:3:drained 1790000000') -Because '按本次写入值比对撤回'
     Assert-Equal -Expected 0 -Actual $script:MgetCount -Because '不再等 drained'
     Assert-Equal -Expected 0 -Actual (Get-DeleteEvents).Count -Because '不删 Pod'
 }
@@ -1104,13 +1207,13 @@ Test-Case '主流程:复核不通过而标记是沿用的,不删它,返回 3 并
     $script:EtcdResponses.Clear()
     $script:EtcdResponses.Enqueue((& $script:BeforeEtcd))
     $script:EtcdResponses.Enqueue((& $script:RestartedEtcd))
-    $script:Redis['gate:3:draining'] = '1789999000'
-    $script:RedisTtl['gate:3:draining'] = '800'
+    $script:Redis['gate:{gm:7}:3:draining'] = '1789999000'
+    $script:RedisTtl['gate:{gm:7}:3:draining'] = '800'
     $code = Invoke-GateDrain -ZoneName 'e2e' -Ordinal 1 -DrainTtlSeconds 1800 -WaitTimeoutSeconds 1800 -ReadyTimeoutSeconds 30 `
         -NamespacePrefix 'mmorpg-zone' -DeletePod -WarningVariable warned -WarningAction SilentlyContinue 6>$null
     Assert-Equal -Expected 3 -Actual $code -Because '留下了需要人工清理的标记'
-    Assert-Equal -Expected '1789999000' -Actual $script:Redis['gate:3:draining'] -Because '不是本次写入的不删'
-    Assert-Match -Text ($warned -join ' ') -Pattern 'manually DEL gate:3:draining gate:3:drained' -Because '要给出人工清理方法'
+    Assert-Equal -Expected '1789999000' -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '不是本次写入的不删'
+    Assert-Match -Text ($warned -join ' ') -Pattern 'manually DEL gate:{gm:7}:3:draining gate:{gm:7}:3:drained' -Because '要给出人工清理方法'
 }
 
 Test-Case '主流程:等 drained 期间进程没了,撤回标记并中止(不空等到超时)' {
@@ -1122,7 +1225,7 @@ Test-Case '主流程:等 drained 期间进程没了,撤回标记并中止(不空
     $script:EtcdResponses.Enqueue((& $script:AfterEtcd))
     $failure = Get-ThrownMessage { Invoke-DrainForTest -DeletePod }
     Assert-Match -Text $failure -Pattern 'uuid=uuid-a\)已从 etcd 消失.*中止' -Because '进程没了,drained 永远不会来'
-    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:draining')) -Because '撤回本次标记,免得挡住之后复用 node_id 3 的 gate'
+    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:{gm:7}:3:draining')) -Because '撤回本次标记,免得挡住之后复用 node_id 3 的 gate'
     Assert-Equal -Expected (Get-GateDrainContract).IdentityRecheckEveryRounds -Actual $script:MgetCount -Because '第一次复核就发现'
     Assert-Equal -Expected 0 -Actual (Get-DeleteEvents).Count -Because '不删 Pod'
 }
@@ -1130,38 +1233,38 @@ Test-Case '主流程:等 drained 期间进程没了,撤回标记并中止(不空
 Test-Case '主流程 -DeletePod:已有 draining 被手工 SET 成 1,在等待与删 Pod 之前拒绝' {
     Reset-DrainFixture
     Set-FullFlowScenario
-    $script:Redis['gate:3:draining'] = '1'
-    $script:RedisTtl['gate:3:draining'] = '3000'
-    $script:OnMget = { $script:Redis['gate:3:drained'] = 'deadline' }   # login 按 1 算出的判定:立刻 deadline
+    $script:Redis['gate:{gm:7}:3:draining'] = '1'
+    $script:RedisTtl['gate:{gm:7}:3:draining'] = '3000'
+    $script:OnMget = { $script:Redis['gate:{gm:7}:3:drained'] = 'deadline' }   # login 按 1 算出的判定:立刻 deadline
     $failure = Get-ThrownMessage { Invoke-DrainForTest -DeletePod }
-    Assert-Match -Text $failure -Pattern "gate:3:draining='1' 不是 .*不早于 TIME-86400=1789913600.*先人工 DEL gate:3:draining gate:3:drained" -Because '过小的已有标记不沿用,并给出人工 DEL 指引'
+    Assert-Match -Text $failure -Pattern "gate:{gm:7}:3:draining='1' 不是 .*不早于 TIME-86400=1789913600.*先人工 DEL gate:{gm:7}:3:draining gate:{gm:7}:3:drained" -Because '过小的已有标记不沿用,并给出人工 DEL 指引'
     Assert-Equal -Expected 0 -Actual $script:MgetCount -Because '不进入等待,读不到 login 按 1 写下的 deadline'
     Assert-Equal -Expected 0 -Actual (Get-DeleteEvents).Count -Because '不删 Pod:在线玩家不能因手工改坏的标记断线'
-    Assert-Equal -Expected '1' -Actual $script:Redis['gate:3:draining'] -Because '不改动已有标记'
+    Assert-Equal -Expected '1' -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '不改动已有标记'
 }
 
 Test-Case '主流程 -DeletePod:等 drained 期间 draining 被改写成 1、login 随即写 deadline,中止且不删 Pod' {
     Reset-DrainFixture
     Set-FullFlowScenario
     # 本次写入 1790000000;第 2 次查询前被人工 SET 成 1,login 同一周期写下 drained=deadline。
-    $script:OnMget = { if ($script:MgetCount -ge 2) { $script:Redis['gate:3:draining'] = '1'; $script:Redis['gate:3:drained'] = 'deadline' } }
+    $script:OnMget = { if ($script:MgetCount -ge 2) { $script:Redis['gate:{gm:7}:3:draining'] = '1'; $script:Redis['gate:{gm:7}:3:drained'] = 'deadline' } }
     $failure = Get-ThrownMessage { Invoke-DrainForTest -DeletePod }
     Assert-Match -Text $failure -Pattern "已被改写:当前值 '1'.*本次确认的 '1790000000'.*不删 Pod" -Because '被改写后的 deadline 判定不可信'
     Assert-Equal -Expected 2 -Actual $script:MgetCount -Because '被改写的那一轮立即中止'
     Assert-Equal -Expected 0 -Actual (Get-DeleteEvents).Count -Because '不删 Pod'
     Assert-True -Condition (-not ($script:Events -contains 'redis:DEL')) -Because '不清标记'
-    Assert-Equal -Expected '1' -Actual $script:Redis['gate:3:draining'] -Because '被改写的标记不归本次运行处理'
+    Assert-Equal -Expected '1' -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '被改写的标记不归本次运行处理'
 }
 
 Test-Case '主流程 -DeletePod:沿用已有合法标记时按沿用值轮询,正常完成' {
     Reset-DrainFixture
     Set-FullFlowScenario
-    $script:Redis['gate:3:draining'] = '1789999000'
-    $script:RedisTtl['gate:3:draining'] = '800'
+    $script:Redis['gate:{gm:7}:3:draining'] = '1789999000'
+    $script:RedisTtl['gate:{gm:7}:3:draining'] = '800'
     $code = Invoke-DrainForTest -DeletePod
     Assert-Equal -Expected 0 -Actual $code -Because 'Wait-GateDrained 拿到的 MarkValue 必须是沿用的 1789999000,不是本次 Redis TIME'
     Assert-Equal -Expected 1 -Actual (Get-DeleteEvents).Count -Because 'drained 出现后照常删 Pod'
-    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:3:draining')) -Because '删 Pod 后照常清标记'
+    Assert-True -Condition (-not $script:Redis.ContainsKey('gate:{gm:7}:3:draining')) -Because '删 Pod 后照常清标记'
 }
 
 Test-Case '主流程:删 Pod 后标记没清,先报残留指引;新 Pod 就绪超时也返回 3' {
@@ -1175,9 +1278,9 @@ Test-Case '主流程:删 Pod 后标记没清,先报残留指引;新 Pod 就绪�
         -NamespacePrefix 'mmorpg-zone' -DeletePod -WarningVariable warned -WarningAction SilentlyContinue 6>$null
     Assert-Equal -Expected 3 -Actual $code -Because '标记没清优先于就绪超时'
     $text = $warned -join ' | '
-    $guidance = $text.IndexOf('manually DEL gate:3:draining gate:3:drained')
+    $guidance = $text.IndexOf('manually DEL gate:{gm:7}:3:draining gate:{gm:7}:3:drained')
     Assert-True -Condition ($guidance -ge 0 -and $guidance -lt $text.IndexOf('The new Pod is also not ready')) -Because "先报残留指引再报就绪超时:$text"
-    Assert-Equal -Expected '1790000000' -Actual $script:Redis['gate:3:draining'] -Because '标记仍在'
+    Assert-Equal -Expected '1790000000' -Actual $script:Redis['gate:{gm:7}:3:draining'] -Because '标记仍在'
 
     Reset-DrainFixture
     Set-FullFlowScenario
@@ -1213,6 +1316,114 @@ exit 7
     } finally {
         Remove-Item -LiteralPath $fixture -Force -ErrorAction SilentlyContinue
     }
+}
+
+# ─── 逐台重启的修订(Sync-GateRestartRevision)───
+
+Write-Host '=== gate drain script: restart revision ==='
+
+Test-Case '逐台重启的修订:Pod 已是当前修订才 bump,模板变过不动,有一项读不到为 Unknown;标签名与部署生成器一致' {
+    Reset-DrainFixture
+    Assert-Equal -Expected 'Bump' -Actual (Get-GateRevisionAction -PodRevision 'gate-7d9f' -UpdateRevision 'gate-7d9f') -Because '相等:删掉重建出来还是同一代'
+    Assert-Equal -Expected 'Keep' -Actual (Get-GateRevisionAction -PodRevision 'gate-7d9f' -UpdateRevision 'gate-8aa1') -Because '不等:模板已经变过'
+    foreach ($case in @(@('', 'gate-7d9f'), @('gate-7d9f', ''), @(' ', 'gate-7d9f'), @($null, $null))) {
+        Assert-Equal -Expected 'Unknown' -Actual (Get-GateRevisionAction -PodRevision $case[0] -UpdateRevision $case[1]) `
+            -Because "读不到就不判(pod='$($case[0])' sts='$($case[1])')"
+    }
+    $script:PodResponses.Clear()
+    $script:PodResponses.Enqueue((New-MockGatePod -Revision 'gate-7d9f'))
+    Assert-Equal -Expected 'gate-7d9f' -Actual (Get-GateStatefulSetPod -Namespace 'mmorpg-zone-e2e' -Ordinal 1).Revision -Because 'Pod 的修订取自 controller-revision-hash 标签'
+    $script:PodResponses.Clear()
+    $script:PodResponses.Enqueue((New-MockGatePod))
+    Assert-Equal -Expected '' -Actual (Get-GateStatefulSetPod -Namespace 'mmorpg-zone-e2e' -Ordinal 1).Revision -Because '没有标签时为空串'
+    $c = Get-GateDrainContract
+    $entry = Read-RepoText 'tools/scripts/lib/k8s_client_entry.ps1'
+    Assert-Match -Text $entry -Pattern ("-RevisionLabelKey\s+'{0}'" -f [regex]::Escape($c.PodRevisionLabel)) `
+        -Because 'gate StatefulSet 注入 MMORPG_POD_REVISION 用的标签必须是脚本读的这一个'
+}
+
+Test-Case '逐台重启的修订:相等时先 rollout restart 并确认新修订;不等、读不到、执行失败都不挡排空;-DryRun 只打印' {
+    $pod = [pscustomobject]@{ Name = 'gate-1'; Namespace = 'mmorpg-zone-e2e'; Revision = 'gate-7d9f' }
+
+    # 相等:restart 一次、只改 gate 这个 StatefulSet,控制器算出新修订后确认。
+    Reset-DrainFixture
+    $script:StsJson = New-MockSts -UpdateRevision 'gate-7d9f'
+    $script:StsAfterRollout = New-MockSts -UpdateRevision 'gate-8aa1' -Generation 2 -ObservedGeneration 2
+    Assert-Equal -Expected 'Bumped' -Actual (Sync-GateRestartRevision -Pod $pod 6>$null) -Because '这台已是当前修订'
+    $rollouts = @($script:Calls | Where-Object { $_.Args[0] -eq 'rollout' })
+    Assert-Equal -Expected 1 -Actual $rollouts.Count -Because '只 restart 一次'
+    Assert-Equal -Expected 'rollout restart statefulset/gate -n mmorpg-zone-e2e' -Actual ($rollouts[0].Args -join ' ') -Because '只改 gate 这个 StatefulSet'
+
+    # 控制器迟迟没跟上(observedGeneration 落后、修订没变):告警,不挡排空。
+    Reset-DrainFixture
+    $script:StsJson = New-MockSts -UpdateRevision 'gate-7d9f'
+    $script:StsAfterRollout = New-MockSts -UpdateRevision 'gate-7d9f' -Generation 2 -ObservedGeneration 1
+    $outcome = Sync-GateRestartRevision -Pod $pod -ConfirmTimeoutSeconds 0.05 -WarningVariable warned -WarningAction SilentlyContinue 6>$null
+    Assert-Equal -Expected 'Bumped' -Actual $outcome -Because 'restart 已经执行'
+    Assert-Match -Text (@($warned | ForEach-Object { $_.Message }) -join "`n") -Pattern 'has not reported a new revision' -Because '没确认到新修订要告警'
+
+    # 不等:模板已经变过(正常换版),不动 StatefulSet。
+    Reset-DrainFixture
+    $script:StsJson = New-MockSts -UpdateRevision 'gate-8aa1'
+    Assert-Equal -Expected 'Kept' -Actual (Sync-GateRestartRevision -Pod $pod 6>$null) -Because '正常换版'
+    Assert-Equal -Expected 0 -Actual @($script:Events | Where-Object { $_ -like 'rollout:*' }).Count -Because '不 restart'
+
+    # 读不到:Pod 没有修订标签、StatefulSet 没有 updateRevision、查询失败,都只告警、不 restart。
+    foreach ($case in @('no-pod-label', 'no-update-revision', 'sts-read-fails')) {
+        Reset-DrainFixture
+        $subject = $pod
+        $script:StsJson = New-MockSts -UpdateRevision 'gate-7d9f'
+        switch ($case) {
+            'no-pod-label' { $subject = [pscustomobject]@{ Name = 'gate-1'; Namespace = 'mmorpg-zone-e2e'; Revision = '' } }
+            'no-update-revision' { $script:StsJson = New-MockSts }
+            'sts-read-fails' { $script:StsExitCode = 1 }
+        }
+        $outcome = Sync-GateRestartRevision -Pod $subject -WarningVariable warned -WarningAction SilentlyContinue 6>$null
+        Assert-Equal -Expected 'Unknown' -Actual $outcome -Because "读不到不判($case)"
+        Assert-True -Condition (@($warned).Count -ge 1) -Because "读不到要告警($case)"
+        Assert-Equal -Expected 0 -Actual @($script:Events | Where-Object { $_ -like 'rollout:*' }).Count -Because "读不到不 restart($case)"
+    }
+
+    # restart 失败(例如没有 patch statefulsets 的权限):告警,不挡排空。
+    Reset-DrainFixture
+    $script:StsJson = New-MockSts -UpdateRevision 'gate-7d9f'
+    $script:RolloutExitCode = 1
+    $outcome = Sync-GateRestartRevision -Pod $pod -WarningVariable warned -WarningAction SilentlyContinue 6>$null
+    Assert-Equal -Expected 'Failed' -Actual $outcome -Because 'restart 没执行成功'
+    Assert-Match -Text (@($warned | ForEach-Object { $_.Message }) -join "`n") -Pattern 'rollout restart statefulset/gate failed' -Because '要告警'
+
+    # -DryRun:只读、打印要执行的命令,不 restart。
+    Reset-DrainFixture
+    $script:StsJson = New-MockSts -UpdateRevision 'gate-7d9f'
+    $text = (Sync-GateRestartRevision -Pod $pod -DryRun 6>&1) -join "`n"
+    Assert-Match -Text $text -Pattern 'kubectl rollout restart statefulset/gate -n mmorpg-zone-e2e' -Because '打印将要执行的命令'
+    Assert-Equal -Expected 0 -Actual @($script:Events | Where-Object { $_ -like 'rollout:*' }).Count -Because 'DryRun 不改 StatefulSet'
+}
+
+Test-Case '主流程 -DeletePod:Pod 已是当前修订时先 restart StatefulSet 再标记;不带 -DeletePod 不看修订' {
+    Reset-DrainFixture
+    Set-FullFlowScenario
+    $script:PodResponses.Clear()
+    foreach ($i in 1..3) { $script:PodResponses.Enqueue((New-MockGatePod -Revision 'gate-7d9f')) }
+    $script:PodResponses.Enqueue((New-MockGatePod -Uid 'uid-new' -PodIp '10.0.0.21' -Revision 'gate-8aa1'))
+    $script:StsJson = New-MockSts -UpdateRevision 'gate-7d9f'
+    $script:StsAfterRollout = New-MockSts -UpdateRevision 'gate-8aa1' -Generation 2 -ObservedGeneration 2
+    $code = Invoke-DrainForTest -DeletePod
+    Assert-Equal -Expected 0 -Actual $code -Because '全部完成'
+    $events = @($script:Events)
+    $rollout = [Array]::IndexOf($events, 'rollout:restart:statefulset/gate')
+    Assert-True -Condition ($rollout -ge 0 -and $rollout -lt [Array]::IndexOf($events, 'redis:EVAL')) -Because "restart 在任何 Redis 写之前:$($events -join ' ')"
+    Assert-Equal -Expected 1 -Actual @($events | Where-Object { $_ -like 'rollout:*' }).Count -Because '一次排空只 restart 一次'
+    Assert-Equal -Expected 1 -Actual (Get-DeleteEvents).Count -Because '照常删 Pod'
+
+    Reset-DrainFixture
+    Set-FullFlowScenario
+    $script:PodResponses.Clear()
+    foreach ($i in 1..3) { $script:PodResponses.Enqueue((New-MockGatePod -Revision 'gate-7d9f')) }
+    $script:StsJson = New-MockSts -UpdateRevision 'gate-7d9f'
+    $code = Invoke-DrainForTest
+    Assert-Equal -Expected 0 -Actual $code -Because '不带 -DeletePod:到 drained 为止'
+    Assert-Equal -Expected 0 -Actual @($script:Events | Where-Object { $_ -like 'rollout:*' -or $_ -eq 'get:sts' }).Count -Because '不删 Pod 就不看修订、不动 StatefulSet'
 }
 
 exit (Complete-TestRun -SuiteName 'k8s_gate_drain')

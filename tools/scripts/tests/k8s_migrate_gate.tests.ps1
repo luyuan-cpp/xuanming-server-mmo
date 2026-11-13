@@ -156,6 +156,12 @@ function Reset-MigrateFixture {
     # 桩只替真函数做占位替换这一步(换成目录里的 Secret 名和摘要),清单才和真部署同形状,「占位必须全部替换」的断言继续管得住其余占位。
     Set-Item Function:script:Add-SqlWriterBootManifest { param($ManifestContent, $Namespace, $SvcName, $RuntimeKind) $script:Events.Add("render:boot:$SvcName"); return ($ManifestContent -creplace 'PLACEHOLDER_SQL_WRITER_[A-Z0-9_]+', 'fixture-sql-writer') }
     Set-Item Function:script:Add-SqlWriterPlacementEnv { param($ManifestContent) return $ManifestContent }
+    # 缩容收尾(docs/design/writer-roster-exhaustion-20261106.md §5.9)也不归本套:渲染、落地与当场收尾只记事件,
+    # 它们的拼装与顺序由 sql_writer_slot_retirer_contract.tests.ps1 守。线上副本数回 0:本套的用例都不是缩容。
+    Set-Item Function:script:New-SqlWriterSlotRetirerManifest { param($Namespace, $StatefulSet) $script:Events.Add("render:slot-retirer:$StatefulSet"); return "fixture-slot-retirer-$StatefulSet" }
+    Set-Item Function:script:Apply-SqlWriterSlotRetirer { param($Namespace, $StatefulSet, $Manifest) $script:Events.Add("apply:slot-retirer:$StatefulSet") }
+    Set-Item Function:script:Get-SqlWriterLiveReplicas { param($Namespace, $StatefulSet) $script:Events.Add("query:live-replicas:$StatefulSet"); return 0 }
+    Set-Item Function:script:Complete-SqlWriterScaleDown { param($Namespace, $StatefulSet, $LiveReplicas, $ManifestContent) $script:Events.Add("check:scale-down:$StatefulSet") }
     # 写者换成 StatefulSet 之前留下的同名 Deployment 由它收掉(k8s_deploy.ps1 Remove-LegacySqlWriterDeployment)。只记事件,不走 Invoke-Kubectl:那个桩把一切 delete 记成 delete:Job。
     Set-Item Function:script:Remove-LegacySqlWriterDeployment { param($Namespace, $Name) $script:Events.Add("delete:legacy-deployment:$Name") }
     Set-Item Function:script:Assert-DataServiceRosterSchemas { param($Namespace) $script:Events.Add('check:roster') }
@@ -222,6 +228,10 @@ function Reset-MigrateFixture {
             # data-service 读集群身份的 RBAC:ServiceAccount、ClusterRole、ClusterRoleBinding 同一份清单。
             $script:Events.Add('apply:IdentityRbac')
             $script:IdentityRbacContent = $InputContent
+        } elseif ($InputContent -match '(?m)^kind: RoleBinding\s*$' -and $InputContent -match '(?m)^  name: match-battle-pod-reader\s*$') {
+            # match 查 battle Pod 的 RBAC:ServiceAccount、Role、RoleBinding 同一份清单(match-battle-pod-reader-rbac.yaml)。
+            $script:Events.Add('apply:BattlePodReaderRbac')
+            $script:BattlePodReaderRbacContent = $InputContent
         } else { throw '未识别的模拟 apply 内容' }
     }
     Set-Item Function:script:Invoke-Kubectl {
@@ -403,6 +413,25 @@ Test-Case 'Apply-GoSvcManifests -Stage Prepare 只跑带迁移 Job 的 zone 服�
     Assert-Equal -Expected 'db:All,data-service:All,login:All' -Actual (@($script:Called) -join ',') -Because '正常部署全部 zone 服务,db-migrate 先于 data-service 的 registrar'
 }
 
+Test-Case 'Apply-GoSvcManifests -Only / -Except:zone-up 先单独发 db,后面那批跳过它(存档世代顺序,数据覆写审计 r2-ps#11)' {
+    Reset-MigrateFixture
+    $script:SkipGoSvc = $false
+    $script:Called = [Collections.Generic.List[string]]::new()
+    $script:GoSvcCatalogue['login'] = @{ ConfigMap = 'go-svc-login-config'; Manifest = 'login.yaml' }
+    Set-Item Function:script:Apply-OneGoSvc {
+        param($SvcName, $Namespace, $CurrentZoneId, $CurrentClusterId, $Stage)
+        $script:Called.Add("${SvcName}:$Stage")
+    }
+    Apply-GoSvcManifests -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0 -Only @('db')
+    Assert-Equal -Expected 'db:All' -Actual (@($script:Called) -join ',') -Because '-Only 只发点名的服务'
+    $script:Called.Clear()
+    Apply-GoSvcManifests -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0 -Except @('db')
+    Assert-Equal -Expected 'data-service:All,login:All' -Actual (@($script:Called) -join ',') -Because '-Except 跳过已发的服务,其余照旧按 Get-ZoneScopedGoSvcNames 的先后'
+    $script:Called.Clear()
+    Apply-GoSvcManifests -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0 -Only @() -Except @()
+    Assert-Equal -Expected 'db:All,data-service:All,login:All' -Actual (@($script:Called) -join ',') -Because '两个都空 = 全部,与不传相同'
+}
+
 Test-Case '-SqlSchemaOnly 恒等 Job 结束,dev 也等:下一步要读 generation' {
     Reset-MigrateFixture
     $script:ReleaseProfile = 'dev'
@@ -557,6 +586,106 @@ Test-Case 'mail 的迁移门禁与 trade 同链路,只引用现役预置生产�
     }
     Assert-Match -Text $content -Pattern '(?m)^  replicas: 2\s*$' -Because 'MySQL / Redis 连接总账按两副本计'
     Assert-Match -Text $content -Pattern 'name: mail-pdb' -Because 'PDB 随主 manifest 一起 apply'
+}
+
+Test-Case 'mail-producer-battle:缺键、过短、与 infra 不同、读失败、base64 不合法都拒绝,报错里不带值;DryRun 不连集群' {
+    foreach ($name in @('Assert-MailProducerBattleSecret', 'Read-MailProducerBattleSecret', 'Build-KubectlBaseArgs')) {
+        Restore-ProductionFunction $name
+    }
+    $script:MailStubCalls = [System.Collections.Generic.List[string]]::new()
+    $script:MailStubByNamespace = @{}
+    $script:MailStubExitCode = 0
+    Set-Item -Path 'Function:script:kubectl' -Value {
+        $script:MailStubCalls.Add(($args -join ' '))
+        $global:LASTEXITCODE = $script:MailStubExitCode
+        $ns = [string]$args[([array]::IndexOf($args, '-n') + 1)]
+        if ($script:MailStubByNamespace.ContainsKey($ns)) { return $script:MailStubByNamespace[$ns] }
+        return ''
+    }
+    $encode = { param([string]$Value) [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Value)) }
+    $secretOf = { param([string]$Value) ConvertTo-Json -InputObject @{ data = @{ 'mail-producer-battle' = (& $encode $Value); 'other-key' = 'eA==' } } -Depth 4 -Compress }
+    $thrownBy = { param([scriptblock]$Action) try { & $Action | Out-Null; return '' } catch { return $_.Exception.Message } }
+    $battle = 'battle-sender-secret-0123456789abcdef'
+    $other = 'zone-sender-secret-differs-0123456789'
+    try {
+        $script:DryRun = $true
+        $message = & $thrownBy { Assert-MailProducerBattleSecret -Namespace 'mmorpg-zone-alpha' -Purpose 'test' -CompareWithNamespace 'mmorpg-infra' }
+        Assert-Equal -Expected '' -Actual $message -Because 'DryRun 只打说明'
+        Assert-Equal -Expected 0 -Actual $script:MailStubCalls.Count -Because 'DryRun 一次 kubectl 都不调'
+
+        $script:DryRun = $false
+        $script:MailStubCalls.Clear()
+        $script:MailStubByNamespace = @{ 'mmorpg-infra' = (& $secretOf $battle); 'mmorpg-zone-alpha' = (& $secretOf $battle) }
+        $message = & $thrownBy { Assert-MailProducerBattleSecret -Namespace 'mmorpg-zone-alpha' -Purpose 'test' -CompareWithNamespace 'mmorpg-infra' }
+        Assert-Equal -Expected '' -Actual $message -Because '两边同值放行'
+        Assert-Equal -Expected 'get secret domain-service-secrets -n mmorpg-zone-alpha --ignore-not-found -o json' -Actual $script:MailStubCalls[0] -Because '只读这一个 Secret'
+
+        $cases = @(
+            @{ Why = '缺键'; Zone = (ConvertTo-Json -InputObject @{ data = @{ 'other-key' = 'eA==' } } -Depth 4 -Compress); Pattern = 'lacks the key mail-producer-battle' }
+            @{ Why = '过短'; Zone = (& $secretOf 'too-short'); Pattern = 'shorter than 32 bytes' }
+            @{ Why = '与 infra 不同'; Zone = (& $secretOf $other); Pattern = 'differs from namespace mmorpg-infra' }
+            @{ Why = 'Secret 不存在'; Zone = ''; Pattern = 'is missing in namespace mmorpg-zone-alpha' }
+            @{ Why = 'base64 不合法'; Zone = (ConvertTo-Json -InputObject @{ data = @{ 'mail-producer-battle' = '%%%' } } -Depth 4 -Compress); Pattern = 'not valid base64' }
+        )
+        foreach ($case in $cases) {
+            $script:MailStubByNamespace = @{ 'mmorpg-infra' = (& $secretOf $battle); 'mmorpg-zone-alpha' = $case.Zone }
+            $message = & $thrownBy { Assert-MailProducerBattleSecret -Namespace 'mmorpg-zone-alpha' -Purpose 'test' -CompareWithNamespace 'mmorpg-infra' }
+            Assert-Match -Text $message -Pattern $case.Pattern -Because "$($case.Why)时必须拒绝"
+            Assert-Match -Text $message -Pattern 'Nothing was written for this step\.$' -Because "$($case.Why)时写明这一步什么都没写"
+            Assert-True -Condition (-not $message.Contains($battle) -and -not $message.Contains($other)) -Because "$($case.Why)时报错里不带值"
+        }
+
+        $script:MailStubByNamespace = @{ 'mmorpg-infra' = (& $secretOf $battle); 'mmorpg-zone-alpha' = (& $secretOf $battle) }
+        $script:MailStubExitCode = 1
+        $message = & $thrownBy { Assert-MailProducerBattleSecret -Namespace 'mmorpg-zone-alpha' -Purpose 'test' }
+        Assert-Match -Text $message -Pattern 'Cannot read Secret domain-service-secrets' -Because 'kubectl 读失败时拒绝'
+        $script:MailStubExitCode = 0
+    }
+    finally {
+        Remove-Item -Path 'Function:script:kubectl' -ErrorAction SilentlyContinue
+        $script:DryRun = $false
+    }
+
+    # 门禁接线:zone-up 核对本 zone 的 scene(与 infra 同值);infra-up 核对 infra 的 mail;不部署全局 Go 服务就不核对 infra。
+    # Reset-MigrateFixture 与其它用例共用这些脚本变量(如 InfraNamespace、GoSvcRegistry),这里改完必须原样还原。
+    $wiringNames = @('Command', 'ZoneName', 'InfraNamespace', 'NamespacePrefix', 'SkipInfra', 'SkipGoSvc', 'GoSvcRegistry', 'DryRun')
+    $wiringBefore = @{}
+    foreach ($v in $wiringNames) { $wiringBefore[$v] = Get-Variable -Name $v -Scope Script -ValueOnly -ErrorAction SilentlyContinue }
+    foreach ($name in @('Assert-MailProducerBattleSecretForRun', 'Get-ZoneNamespace')) {
+        Restore-ProductionFunction $name
+    }
+    $script:NamespacePrefix = 'mmorpg-zone'
+    $script:InfraNamespace = 'mmorpg-infra'
+    $script:ZoneName = 'alpha'
+    $script:SkipInfra = $false
+    $script:SkipGoSvc = $false
+    $script:GoSvcRegistry = 'registry.example'
+    $script:DryRun = $true
+    try {
+        $script:Command = 'zone-up'
+        $printed = (Assert-MailProducerBattleSecretForRun 6>&1 | Out-String)
+        Assert-Match -Text $printed -Pattern 'namespace mmorpg-zone-alpha has key mail-producer-battle' -Because 'zone-up 核对本 zone 的 scene 侧键'
+        Assert-Match -Text $printed -Pattern 'must equal the same key in namespace mmorpg-infra' -Because 'scene 侧与 infra 比'
+        Assert-NotMatch -Text $printed -Pattern 'namespace mmorpg-infra has key' -Because 'zone-up 不核对 infra 的 mail,那是 infra-up 的事'
+
+        $script:Command = 'infra-up'
+        $printed = (Assert-MailProducerBattleSecretForRun 6>&1 | Out-String)
+        Assert-Match -Text $printed -Pattern 'namespace mmorpg-infra has key mail-producer-battle' -Because 'infra-up 部署 mail 时核对 infra 侧键'
+        Assert-NotMatch -Text $printed -Pattern 'mmorpg-zone-' -Because 'infra-up 不核对 zone'
+
+        $script:SkipGoSvc = $true
+        $printed = (Assert-MailProducerBattleSecretForRun 6>&1 | Out-String)
+        Assert-Equal -Expected '' -Actual ([string]$printed).Trim() -Because '不部署全局 Go 服务就不部署 mail,不核对 infra 侧'
+    }
+    finally {
+        foreach ($v in $wiringNames) { Set-Variable -Name $v -Scope Script -Value $wiringBefore[$v] }
+    }
+
+    # 写路径门禁早于 switch ($Command):任何集群写操作之前核对。
+    $text = ([IO.File]::ReadAllText($script:DeployScript)) -replace "`r`n", "`n"
+    $gateAt = $text.IndexOf("`n`tAssert-MailProducerBattleSecretForRun`n", [StringComparison]::Ordinal)
+    $switchAt = $text.IndexOf("`nswitch (`$Command) {", [StringComparison]::Ordinal)
+    Assert-True -Condition ($gateAt -gt 0 -and $switchAt -gt $gateAt) -Because 'mail-producer-battle 门禁在 switch ($Command) 之前'
 }
 
 Test-Case 'mail 遗留运维令牌不覆盖现役生产者Secret,密钥值不进 manifest' {
@@ -915,6 +1044,16 @@ Test-Case '全球match即使dev不带WaitReady也须先完成独立迁移Job' {
     Assert-Match -Text $script:MigrationContent -Pattern 'key: match-migration-password' -Because '独立迁移口令'
     Assert-NotMatch -Text $script:MigrationContent -Pattern 'MATCH_PROBE_SECRET|RANK_PRODUCER_SECRET_MATCH|MMORPG_LOGIN_REDIS_PASSWORD' -Because '迁移不取得业务密钥'
     Assert-NotMatch -Text $script:DeploymentContent -Pattern 'MATCH_MIGRATION_USER|MATCH_MIGRATION_PASSWORD' -Because '常驻进程不得取得DDL凭据'
+    # match 查 battle Pod 的身份与权限(battle-instance-loss-early-abort.md §4.2):Pod 用专用 ServiceAccount,RBAC 先于 StatefulSet 落地,
+    # 权限只有本命名空间的 pods list;迁移 Job 不带这个身份。
+    $rbacAt = [Array]::IndexOf($events, 'apply:BattlePodReaderRbac')
+    Assert-True -Condition ($rbacAt -ge 0 -and $rbacAt -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'Pod 引用的 ServiceAccount 必须先于 StatefulSet 存在'
+    Assert-Match -Text $script:DeploymentContent -Pattern '(?m)^      serviceAccountName: match\s*$' -Because '常驻进程用专用 ServiceAccount 查 battle Pod'
+    Assert-NotMatch -Text $script:MigrationContent -Pattern 'serviceAccountName' -Because '迁移 Job 不需要查 Pod 的身份'
+    Assert-Match -Text $script:BattlePodReaderRbacContent -Pattern '(?m)^kind: Role\s*$' -Because '权限只限本命名空间'
+    Assert-NotMatch -Text $script:BattlePodReaderRbacContent -Pattern 'ClusterRole' -Because '不给集群级权限'
+    Assert-Match -Text $script:BattlePodReaderRbacContent -Pattern 'resources: \["pods"\]\s+verbs: \["list"\]' -Because '只给 pods 的 list'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($script:BattlePodReaderRbacContent, '(?m)^\s+verbs:').Count) -Because '只有这一条规则'
     $source = Get-Content -LiteralPath $script:DeployScript -Raw
     Assert-Match -Text $source -Pattern 'match\s+=.*MigrateJob = "match-migrate.yaml"' -Because '真实生产目录登记迁移Job，不能只有测试目录'
 }

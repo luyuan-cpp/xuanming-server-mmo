@@ -1148,9 +1148,10 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
   不断言「本局由系统出手」;② `AbortAllRooms` 在 `CloseDirectConnections` 之前给参战者推作废帧;③ scene reaper 解冻 FIGHTING 时推
   `NotifyBattleEnd`;④ `SpectateBattleRecord` 加建房时的实例 uuid,与当前同 node_id 注册实例的 `NodeUuid` 不等才判 `BattleGone`
   (改 proto,按 AGENTS §4 重生)。
-  **(2026-11-11 方案已定案,未落码)** 本条与「崩溃后要等到原截止才放人」合并处理,见 [battle-instance-loss-early-abort.md](./battle-instance-loss-early-abort.md):
-  参战者补签失败触发匹配服取证,原进程确定不在时约 1 分钟内写 ABORT;所有 ABORT 经个人结算链给参战者投「作废结算」,
-  场景服解冻并推 `BattleEndS2C{outcome = BATTLE_OUTCOME_VOID}`(覆盖候选 ①③;④ 已无必要,补签现在只读 SQL 成局原件)。
+  **(2026-11-12 已修,服务端与客户端落码未编译)** 本条与「崩溃后要等到原截止才放人」合并处理,见 [battle-instance-loss-early-abort.md](./battle-instance-loss-early-abort.md):
+  参战者补签问不到原实例时触发匹配服取证,原进程确认不在(同一实例两次观察相隔不少于 30 秒)后约 1 分钟内写 ABORT;所有 ABORT 经
+  个人结算链给参战者投「作废结算」,场景服解冻并推 `BattleEndS2C{outcome = BATTLE_OUTCOME_VOID}`,客户端结算面板显示「本局作废」,
+  连不上战斗服时的文案改成中性(覆盖候选 ①③;② 只对正常停机有用、没做;④ 已无必要,补签现在只读 SQL 成局原件)。
   上文「`no_node` 分支」「观战记录 TTL」是 09-30 时的代码,现补签走 `global_match.go` 的 `globalRequestBattleTicket`。
 - D40 `SubmitBattleAction` 回合号幂等(收缩后直连抖动丢一手 = 该回合默认普攻)。
 - 生成器按服务过滤 gate 侧 gRPC 客户端桩。

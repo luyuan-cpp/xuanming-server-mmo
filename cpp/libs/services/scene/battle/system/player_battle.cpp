@@ -111,6 +111,7 @@
 #include "proto/scene/scene.pb.h"                                     // PrepareBattle* / CancelBattlePrepare*(重生成后新增消息)
 #include "proto/battle/player_battle.pb.h"                            // BattleEndS2C / BattleReconnectS2C
 #include "rpc/service_metadata/player_battle_service_metadata.h"      // BattleClientPlayerNotify*MessageId
+#include "spatial/system/movement.h"                                  // HaltMotion:进入战斗冻结即停步
 
 // Windows SDK 的同名宏会改写 protobuf 反射方法名，此处隔离宏污染。
 #ifdef GetMessage
@@ -1014,6 +1015,15 @@ namespace
 		message.set_battle_id(settlement.battle_id());
 		message.set_outcome(settlement.outcome());
 		*message.mutable_settlement() = settlement;
+		// 掉落放不进两个包、整批改投了邮件(battle-overflow-mail.md):这件事记在这一局的近期结果里(与结算同一次存档提交),
+		// 从那里取,结算屏据此提示去邮箱领取。结果已被淘汰出列表(之后又结算了 10 局以上)时不带这个提示。
+		if (const auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player); history != nullptr)
+		{
+			if (const auto* result = battle_result::FindByBattle(*history, settlement.battle_id()); result != nullptr)
+			{
+				message.set_items_mailed(result->items_mailed());
+			}
+		}
 		SendToPlayerClient(BattleClientPlayerNotifyBattleEndMessageId, message, player);
 	}
 
@@ -1197,7 +1207,8 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 
 	// —— 战斗道具副本(G2)——
 	// 只从主背包取、且只取 ItemTable.battle_usable 非 0 的物品。
-	//   * 只取主背包:仓库/装备栏不参战;临时格(kTemporary)是两包都放不下时的溢出缓冲,
+	//   * 只取主背包:仓库/装备栏不参战;临时格(kTemporary)是主背包放不下整批掉落时的溢出缓冲,
+	//     满了就拒、不挤掉旧物(2026-11-05 起;之前的先进先出已删除,bag-rule-policy-layering.md §6.6),玩家可以随时取回。
 	//     结算扣消耗只看主背包,把它计进副本就是让战斗用一份结算扣不到的药。
 	//   * 这是一份**数量副本**,不带 guid/格子:实例身份归 scene(战斗掉落 iid 归属决策),
 	//     战斗服只拿可丢弃的派生副本(D1)。
@@ -1367,6 +1378,9 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	inBattle.set_deadline_ms(request.deadline_ms());
 	inBattle.set_prepare_deadline_ms(prepareDeadlineMs);
 	inBattle.set_state(IN_BATTLE_STATE_PREPARING);
+	// 备战即停步:从这一刻起 MovementSystem 不再积分他的位移,客户端的移动上报也一律丢弃。
+	// 速度留着的话,旁人按最后一条移动一直外推(spatial/system/actor_motion.h 的 kNotIntegratedByMovement)。
+	MovementSystem::HaltMotion(player);
 	// 记下写进快照 routing 的会话号(BuildBattleSnapshot 已保证非 0),ConfirmBattle 据此判断
 	// 备战期间是否换过会话。emplace_or_replace:正常不会残留(随 RemoveInBattleComp 摘),防御性覆盖。
 	tlsEcs.actorRegistry.emplace_or_replace<BattlePrepareSessionComp>(
@@ -1695,6 +1709,8 @@ void PlayerBattleSystem::RebuildBattleFreezeFromLock(entt::entity player, const 
 				rebuilt.set_deadline_ms(deadlineMsHint);
 			}
 			tlsEcs.actorRegistry.emplace<InBattleComp>(player, rebuilt);
+			// 重建出冻结与备战同样停步:备战冻结被摘掉之后到确认事件到达之间,他可能已经又走起来了。
+			MovementSystem::HaltMotion(player);
 
 			// 续期到冻结最晚到期时刻(正式 deadline + 宽限 + 余量 + 续冻上限)+ 覆写 ctx,同时复核锁仍是本战斗的(否则撤销重建)
 			const uint64_t ttlSec = FightingLockTtlSecFor(rebuilt.deadline_ms(), nowMs);
@@ -1795,6 +1811,8 @@ void PlayerBattleSystem::RestoreBattleFreezeOnLogin(entt::entity player, const u
 			const InBattleComp rebuilt =
 				BuildInBattleFromCtx(battleId, ctxPayload, ReplyElementToInteger(reply, 2), nowMs);
 			tlsEcs.actorRegistry.emplace<InBattleComp>(player, rebuilt);
+			// 重建出冻结与备战同样停步:登录之后到这条读回来之间,客户端可能已经开始走了。
+			MovementSystem::HaltMotion(player);
 
 			// 复核锁仍是本战斗的(登录窗口内恰好确认的结算已删锁 -> 撤销重建);
 			// TTL 按重建后冻结最晚的到期时刻算:PREPARING 看 prepare_deadline,
@@ -1987,6 +2005,8 @@ bool HasUnsupportedInboxConsumption(entt::entity player, const ::BattleSettlemen
     return unsupported;
 }
 
+// 结算里的宝宝效果哪些可以应用。false = 整笔 DEFER(缺持久组件、带未知字段、坏数据、宝宝种类在本节点 Pet 表里查不到);
+// skipped = 按规则只跳过这一只、其余照常的原因计数(宝宝已不在身上、宝宝属性池缺配)。
 bool CollectApplicableInboxPets(entt::entity player, const ::BattleSettlementData& settlement,
                                std::set<uint64_t>& applicable, std::map<std::string, uint32_t>& skipped)
 {
@@ -2008,7 +2028,17 @@ bool CollectApplicableInboxPets(entt::entity player, const ::BattleSettlementDat
         });
         if (pet == owned->pets().end()) { ++skipped["pet_no_longer_owned"]; continue; }
         const auto* row = PetTableManager::Instance().FindByIdSilent(pet->pet_table_id()).first;
-        if (!row) { ++skipped["pet_table_missing"]; continue; }
+        if (!row) {
+            // 玩家还带着这只宝宝,它的种类在本节点 Pet 表里查不到:整笔 DEFER,不跳过这一只。Pet 表与 Item 表同一条规则
+            // (行 id 只增不删,cfg_ids_permanent),查不到只可能是这一行还没热更到本节点,或宝宝来自更新版本;跳过就永久丢掉
+            // 它的战后终值,热更到之后本地续做即可成功(与 ApplySettlementToEntity 里物品查不到表同一口径)。
+            LOG_WARN << "[PlayerBattle] metric=persist_version_skew where=battle_pet player_id=" << tlsEcs.GetPlayerId(player)
+                     << " battle_id=" << settlement.battle_id() << " pet_id=" << effect.pet_id()
+                     << " pet_table_id=" << pet->pet_table_id()
+                     << "; pet config is not in this node's pet table (row not hot-updated here yet, or pet from a newer"
+                        " version), deferring the whole settlement without side effects";
+            return false;
+        }
         if (HasNestedUnknownFields(*row)) return false;
         if (!hasPool) { ++skipped["pet_pool_missing"]; continue; }
         if (unknownPool) return false;
@@ -2096,8 +2126,10 @@ PlayerBattleResult BuildBattleResult(const ::BattleSettlementData& settlement, c
 
 // 把这一局的本人结果写进近期结果。ApplySettlementToEntity 全部效果写完之后、同一帧调用,随同一次存档提交;
 // 效果之前已确认 PlayerBattleResultComp 在场,这之后没有失败分支,所以这里只记日志、不回失败。
+// itemsMailed:granted 这批掉落两个包都放不下、整批改投了邮件(battle-overflow-mail.md);照常列进 items_gained。
 void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::BattleSettlementData& settlement,
-                        const SettlementCurrencyGains& currencyGains, const ItemCountMap& granted, const ItemCountMap& consumed)
+                        const SettlementCurrencyGains& currencyGains, const ItemCountMap& granted, const ItemCountMap& consumed,
+                        const bool itemsMailed)
 {
     const uint64_t battleId = settlement.battle_id();
     auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player);
@@ -2109,6 +2141,7 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
         return;
     }
     auto entry = BuildBattleResult(settlement, currencyGains, granted, consumed, TimeSystem::NowMillisecondsUTC());
+    entry.set_items_mailed(itemsMailed);
     const bool truncated = entry.lines_truncated();
     const int currencyLines = entry.currencies_size();
     const int gainedLines = entry.items_gained_size();
@@ -2166,13 +2199,30 @@ void PublishBattleResult(entt::entity player, const uint64_t battleId)
 // Match 为这一局写了唯一的 ABORT(执行进程失效、截止作废、帮会取消、人工处置等),在同一事务里给每名成员投一份
 // outcome = BATTLE_OUTCOME_VOID、效果字段全空的结算(go/match/internal/authority/void_settlement.go)。
 
-// 作废结算只认「效果字段全空」的正文。任何效果字段非空都是生产方缺陷,不当作废也不当结算。
+// 作废结算只许带身份、作废结局与只供展示的字段;出现名单之外的字段(现有的效果字段,或以后新加的)就不是作废结算,
+// 是生产方缺陷,不当作废也不当结算。按「只许出现哪些」判而不是逐个列效果字段:以后给结算加新效果时,带着它的作废正文默认被拒。
+// 名单与 Match 写作废结算的字段(voidSettlementFor)、收件箱服务的 voidSettlementFields 是同一份。
 bool IsEffectFreeVoidSettlement(const ::BattleSettlementData& settlement)
 {
-    return settlement.health() == 0 && settlement.mana() == 0 && settlement.exp_gain() == 0 && settlement.gold_gain() == 0 &&
-           settlement.items_consumed_size() == 0 && settlement.items_gained_size() == 0 && !settlement.is_dead() &&
-           !settlement.fled() && settlement.total_rounds() == 0 && settlement.pets_size() == 0 &&
-           settlement.defeated_monsters_size() == 0 && settlement.currency_gains_size() == 0;
+    std::vector<const google::protobuf::FieldDescriptor*> present;
+    settlement.GetReflection()->ListFields(settlement, &present);
+    for (const auto* field : present)
+    {
+        switch (field->number())
+        {
+        case ::BattleSettlementData::kBattleIdFieldNumber:
+        case ::BattleSettlementData::kPlayerIdFieldNumber:
+        case ::BattleSettlementData::kOutcomeFieldNumber:
+        case ::BattleSettlementData::kPlayerTeamIndexFieldNumber:
+        case ::BattleSettlementData::kFinishedAtMsFieldNumber:
+        case ::BattleSettlementData::kMatchModeFieldNumber:
+        case ::BattleSettlementData::kBattleConfigIdFieldNumber:
+            continue;
+        default:
+            return false;
+        }
+    }
+    return true;
 }
 
 // 应用一份作废结算。绝不进 ApplySettlementToEntity:那里把 health / mana 当战后终值回写,作废正文里的 0 会把血量写成 0
@@ -2201,7 +2251,8 @@ PlayerInboxExecResult ApplyVoidSettlement(entt::entity player, const ::BattleSet
         return {PlayerInboxExecKind::kDefer, 0};
     }
     ReleaseBattleItemHold(player, playerId, battleId, "void_settlement");
-    RecordBattleResult(player, playerId, settlement, SettlementCurrencyGains{}, ItemCountMap{}, ItemCountMap{});
+    RecordBattleResult(player, playerId, settlement, SettlementCurrencyGains{}, ItemCountMap{}, ItemCountMap{},
+                       /*itemsMailed=*/false);
     LOG_INFO << "[PlayerBattle] metric=battle_void_settlement_applied player_id=" << playerId << " battle_id=" << battleId
              << ";match aborted this battle, no effects applied; freeze is released after the save commits";
     return {PlayerInboxExecKind::kApplied, 0};
@@ -2239,7 +2290,8 @@ PlayerInboxExecResult PlayerBattleSystem::ApplyInboxSettlement(entt::entity play
         if (amount > 0 && CurrencySystem::DebtCarriesUnknownFields(player, type))
             return {PlayerInboxExecKind::kVersionSkew, 0};
     // 两包都放不下而延后时把 kBagItemNotStacked 当作 DEFER 的原因带回(2026-11-06,bag-rule-policy-layering.md §6.6):
-    // 收件箱记在本域上,玩家从临时格取回之后 PlayerInboxSystem::OnBagSpaceFreed 只提前这一类延后。判据是这一次调用里
+    // 收件箱记在本域上;人物背包或临时格腾出位置之后(BagService 的「腾位通知」:出包、扣消耗、整理合堆、取回临时格、
+    // 穿到空槽,2026-11-12 起不只取回),PlayerInboxSystem::OnBagSpaceFreed 只提前这一类延后。判据是这一次调用里
     // 「连续放不下」的计数涨了 —— 只有 ConsumeInventoryAndGrant 两包都放不下、改投邮件也接不住(待寄队列满、请求号暂缺;
     // docs/design/battle-overflow-mail.md)那一支会加它。其余延后原因不带,照常退避。
     const uint32_t overflowBefore = BagService::ConsecutiveGrantOverflowRejections(player);
@@ -2591,7 +2643,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     // 本人近期战斗结果:与上面全部效果同一帧写入,随同一次存档提交;存档确认提交之后由 CompleteInboxSettlement 公开
     // (docs/design/battle-result-recovery.md §5)。记实际入账:剔除被封禁项之后的掉落(两包都放不下而改投邮件的
     // 那一批也算:它已经是玩家的,经邮件领取)、未被封禁的币种、按实际持有夹紧的消耗。
-    RecordBattleResult(player, playerId, settlement, currencyGains, inboxGained, actualConsumption);
+    RecordBattleResult(player, playerId, settlement, currencyGains, inboxGained, actualConsumption,
+                       /*itemsMailed=*/!mailed.empty());
     return true; // 永久Inbox域水位由调用方与本次效果同帧记入同一快照。
 }
 

@@ -58,7 +58,7 @@ func TestRedisDomainsKeepTheirOwnKeys(t *testing.T) {
 	directory := fixtureDirectory(t, control)
 	directory.seed(account, &pbbase.AccountSimplePlayer{PlayerId: identityPlayerID, ClassId: 3, Name: "云中君"})
 	svcCtx := &svc.ServiceContext{
-		RedisClient: control, PlayerRedis: player, LoginRedis: login, AccountDirectory: directory,
+		ControlRedis: control, PlayerRedis: player, LoginRedis: login, AccountDirectory: directory,
 		TokenManager:        token.NewManager(login, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 24 * time.Hour, RefreshReuseGrace: 30 * time.Second}),
 		PlayerLocatorClient: locator,
 		PreloadPool:         pool,

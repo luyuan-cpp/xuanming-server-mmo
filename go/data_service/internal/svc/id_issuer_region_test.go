@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"data_service/internal/config"
+	"data_service/internal/idissuer"
 
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/service"
@@ -69,6 +70,21 @@ func TestNewIdIssuer_ProductionRequiresRegistryTLS(t *testing.T) {
 	c.IdSegment.Issuer.RegistryTLS.CertFile = filepath.Join(t.TempDir(), "missing.crt")
 	_, err = NewIdIssuer(c)
 	require.ErrorContains(t, err, "id registry client certificate")
+}
+
+// 运维入口操作别的码(-id-issuer-retire-code):不和部署注入的地域码比。普通装配的配置对不上,照样拒绝。
+func TestNewIdIssuerForRegionCode_SkipsTheDeploymentRegionCheck(t *testing.T) {
+	c := productionIssuerConfig(t) // 部署注入的地域码是 1
+	issuer, err := NewIdIssuerForRegionCode(c, 7)
+	require.NoError(t, err)
+	_ = issuer.Close()
+
+	c.IdSegment.Issuer.Region = 7
+	_, err = NewIdIssuer(c)
+	require.ErrorContains(t, err, "fix the runtime config")
+
+	_, err = NewIdIssuerForRegionCode(c, uint32(idissuer.MaxRegion)+1)
+	require.ErrorContains(t, err, "exceeds")
 }
 
 // writeRegistryClientTLS 现场生成一套 CA 和它签的客户端证书,写成 Secret 卷里的三个文件。有效期固定,不依赖当前时间。

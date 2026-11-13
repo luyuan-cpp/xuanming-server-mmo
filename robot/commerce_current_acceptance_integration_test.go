@@ -225,7 +225,7 @@ func (r *currentCommerceRun) open(account string) *mallArrivalBot {
 	index := r.accountIndex(account)
 	require.GreaterOrEqual(r.t, index, 0)
 	zone := r.in.AccountZones[index]
-	assignment, err := assignAssetArrivalGate(r.cfg.GatewayAddr, &httpAssignGateRequest{ZoneID: zone, Account: account}, 5*time.Second)
+	assignment, err := assignAssetArrivalGate(r.cfg.GatewayAddr, &httpAssignGateRequest{ZoneID: zone}, 5*time.Second)
 	require.NoError(r.t, err)
 	require.NoError(r.t, validateAssetArrivalAssignment(assignment))
 	stats := &metrics.Stats{}

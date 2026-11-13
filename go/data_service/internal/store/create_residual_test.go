@@ -35,6 +35,14 @@ type residualFake struct {
 	allowed map[uint32]bool
 	// others 是不在 roles 里的名字占用者。
 	others map[uint64]residualPlayer
+	// nameCreated 是名字行的登记时刻(name_norm → created_ms),不在里面的按很早登记算(孤儿名字的判龄)。
+	nameCreated map[string]uint64
+	// evidence 是没有角色行的 player_id 提交过的证据(orphanEvidence 的应答),不在里面的没有证据。
+	evidence map[uint64]string
+	// routedOnly 是没有角色行、却有带落点的路由行的 player_id:证明时写墓碑(sealOrphanRole)。
+	routedOnly map[uint64]bool
+	// overCap 里的玩家补 ref 时回「补上了、但超过角色上限」。
+	overCap map[uint64]bool
 
 	calls []string
 	// fail 给每一步排错误,按调用顺序消费。nil 表示这一次放行。
@@ -45,20 +53,34 @@ type residualFake struct {
 
 func newResidualFake() *residualFake {
 	return &residualFake{
-		roles:   map[uint64]*residualRole{},
-		refs:    map[residualRefKey]bool{},
-		names:   map[string]uint64{},
-		unbound: map[string]bool{},
-		owned:   map[uint64]string{},
-		stores:  map[uint64][]int32{},
-		allowed: map[uint32]bool{residualStorage: true},
-		others:  map[uint64]residualPlayer{},
-		fail:    map[string][]error{},
+		roles:       map[uint64]*residualRole{},
+		refs:        map[residualRefKey]bool{},
+		names:       map[string]uint64{},
+		unbound:     map[string]bool{},
+		owned:       map[uint64]string{},
+		stores:      map[uint64][]int32{},
+		allowed:     map[uint32]bool{residualStorage: true},
+		others:      map[uint64]residualPlayer{},
+		nameCreated: map[string]uint64{},
+		evidence:    map[uint64]string{},
+		routedOnly:  map[uint64]bool{},
+		overCap:     map[uint64]bool{},
+		fail:        map[string][]error{},
 	}
 }
 
+// residualNow 是核账用例的固定时刻;孤儿名字按它判龄。
+var residualNow = time.UnixMilli(1_700_000_000_000)
+
 func residualAuditorForTest(steps residualSteps) *CreateResidualAuditor {
-	return &CreateResidualAuditor{steps: steps, shards: 1, maxRoles: 5, now: func() time.Time { return time.UnixMilli(1_700_000_000_000) }}
+	a, _ := residualAuditorWithCacheForTest(steps)
+	return a
+}
+
+// residualAuditorWithCacheForTest 同 residualAuditorForTest,另回名字缓存的记录器(名字每修一处都删这名玩家的缓存)。
+func residualAuditorWithCacheForTest(steps residualSteps) (*CreateResidualAuditor, *recordedNameCache) {
+	cache := &recordedNameCache{}
+	return &CreateResidualAuditor{steps: steps, shards: 1, maxRoles: 5, cache: cache, now: func() time.Time { return residualNow }}, cache
 }
 
 func (f *residualFake) step(name string) error {
@@ -75,7 +97,7 @@ func (f *residualFake) writes() []string {
 	var out []string
 	for _, call := range f.calls {
 		switch call {
-		case "restoreRef", "restoreName", "restoreInitialRows":
+		case "restoreRef", "restoreName", "restoreInitialRows", "releaseRemovedName", "sealOrphanRole", "releaseReservedName":
 			out = append(out, call)
 		}
 	}
@@ -123,8 +145,9 @@ func (f *residualFake) scanRoles(_ context.Context, _ int, after uint64, limit i
 		return nil, err
 	}
 	ids := make([]uint64, 0, len(f.roles))
-	for id, r := range f.roles {
-		if id > after && r.Account != "" {
+	for id := range f.roles {
+		// 和 SQL 一样连墓碑一起读。
+		if id > after {
 			ids = append(ids, id)
 		}
 	}
@@ -219,6 +242,9 @@ func (f *residualFake) restoreRef(_ context.Context, account string, player uint
 		return refPresent, nil
 	}
 	f.refs[key] = true
+	if f.overCap[player] {
+		return refRestoredOverCap, nil
+	}
 	return refRestored, nil
 }
 
@@ -255,6 +281,97 @@ func (f *residualFake) restoreInitialRows(_ context.Context, _ uint32, role *bas
 	}
 	f.stores[role.GetPlayerId()] = []int32{playerStoreOwnerKind, playerStoreProfileKind}
 	return storeRestored, nil
+}
+
+// scanNames 语义抄 SQL:按判重键升序,after 之后最多 limit 行,不筛状态。
+func (f *residualFake) scanNames(_ context.Context, _ int, after string, limit int) ([]residualNameEntry, error) {
+	if err := f.step("scanNames"); err != nil {
+		return nil, err
+	}
+	norms := make([]string, 0, len(f.names))
+	for norm := range f.names {
+		if norm > after {
+			norms = append(norms, norm)
+		}
+	}
+	slices.Sort(norms)
+	out := []residualNameEntry{}
+	for _, norm := range norms {
+		if len(out) == limit {
+			break
+		}
+		entry := residualNameEntry{Norm: norm, Holder: f.names[norm], CreatedMs: f.nameCreated[norm]}
+		if !f.unbound[norm] {
+			entry.BoundMs = 1
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+func (f *residualFake) orphanEvidence(_ context.Context, player uint64) (string, error) {
+	if err := f.step("orphanEvidence"); err != nil {
+		return "", err
+	}
+	return f.evidence[player], nil
+}
+
+// sealOrphanRole 语义抄 sealRoleTx:在役 → Committed;墓碑 → Removed;没有角色行、有路由行 → 写墓碑;都没有 → Unrouted。
+func (f *residualFake) sealOrphanRole(_ context.Context, player uint64) (RoleSeal, error) {
+	if err := f.step("sealOrphanRole"); err != nil {
+		return 0, err
+	}
+	switch r := f.roles[player]; {
+	case r != nil && r.Account != "":
+		return RoleSealCommitted, nil
+	case r != nil:
+		return RoleSealRemoved, nil
+	case f.routedOnly[player]:
+		f.roles[player] = &residualRole{PlayerID: player, OwnerRevision: 1, Role: &base.AccountSimplePlayer{PlayerId: player, ZoneId: 1}}
+		return RoleSealSealed, nil
+	default:
+		return RoleSealUnrouted, nil
+	}
+}
+
+// releaseReservedName 语义抄 PlayerNameStore.Release(不限登记时刻):只删这个 player_id 的预留态,已绑定回 Bound。
+func (f *residualFake) releaseReservedName(_ context.Context, player uint64, norm string) (ReleaseOutcome, error) {
+	if err := f.step("releaseReservedName"); err != nil {
+		return 0, err
+	}
+	holder, held := f.names[norm]
+	switch {
+	case held && holder == player && !f.unbound[norm]:
+		return ReleaseBound, nil
+	case held && holder == player:
+		delete(f.names, norm)
+		delete(f.unbound, norm)
+		f.dropOwned(player, norm)
+		return ReleaseDeleted, nil
+	}
+	f.dropOwned(player, norm)
+	return ReleaseAbsent, nil
+}
+
+// releaseRemovedName 语义抄 PlayerNameStore.ReleaseRemoved:这个 player_id 名下就删,不看状态;名字副本按判重键一起删。
+func (f *residualFake) releaseRemovedName(_ context.Context, player uint64, norm string) (ReleaseOutcome, error) {
+	if err := f.step("releaseRemovedName"); err != nil {
+		return 0, err
+	}
+	outcome := ReleaseAbsent
+	if holder, held := f.names[norm]; held && holder == player {
+		delete(f.names, norm)
+		delete(f.unbound, norm)
+		outcome = ReleaseDeleted
+	}
+	f.dropOwned(player, norm)
+	return outcome, nil
+}
+
+func (f *residualFake) dropOwned(player uint64, norm string) {
+	if f.owned[player] == norm {
+		delete(f.owned, player)
+	}
 }
 
 // residualOutline 把结论压成「player kind result [reason]」,一项一行,顺序就是报告的顺序。
@@ -561,7 +678,7 @@ func TestCreateResidualPagesThroughTheShardAndResumes(t *testing.T) {
 	}
 	delete(f.refs, residualRefKey{account: "acct", player: 203})
 	delete(f.refs, residualRefKey{account: "acct", player: 205})
-	f.put(206, "", "") // 墓碑不扫
+	f.put(206, "", "") // 墓碑也扫(只核名字),没有名字的墓碑没有可核的
 	a := residualAuditorForTest(f)
 	ctx := context.Background()
 
@@ -574,8 +691,8 @@ func TestCreateResidualPagesThroughTheShardAndResumes(t *testing.T) {
 
 	report, err = a.Run(ctx, CreateResidualScan{After: report.NextAfter, Batch: 2})
 	require.NoError(t, err)
-	require.Equal(t, 2, report.Scanned)
-	require.EqualValues(t, 205, report.NextAfter)
+	require.Equal(t, 3, report.Scanned, "墓碑也算扫过的一行")
+	require.EqualValues(t, 206, report.NextAfter)
 	require.True(t, report.Done)
 	require.Equal(t, []string{"205 ref_missing planned"}, residualOutline(report.Findings))
 }

@@ -1,6 +1,12 @@
 # gate 连接准入控制：muduo 无条件 accept 的业界解法与本仓落地 (2026-09-03)
 
-> **状态：调研 / 设计文档，未落码。** 回答的是
+> **状态（2026-11-12 更新）：** 本文起初是调研 / 设计文档；§6 的清单已陆续落码，各节自带状态：
+> P0-1（fd 上限）、P0-2 的握手死线、P0-3（LogLevel）、P0-4（accept 资源耗尽降级）、
+> **P1-1 ~ P1-4（准入前移到 Acceptor、拒绝发 RST、新建连接速率闸、连接类指标，2026-11-12 落码，未编译）**。
+> 仍未做：P0-2 的未验签独立预算 / LRU / 按概率早拒、P1-5 的其余条目、P2 全部。
+> 文中引用的 `client_message_processor.cpp` 已更名为 `client_session_handler.cpp`，§4、§5 里的行号是 2026-09-03 的，以当前文件为准。
+>
+> 回答的是
 > [`client_message_processor.cpp`](../../cpp/nodes/gate/handler/rpc/client_message_processor.cpp) 第 443-451 行
 > 那段注释自己提出的问题——「muduo 的 `TcpServer` 无条件 accept，有没有更好的办法？业界标准做法是什么？」
 > 以及 [`cpp/nodes/gate/SECURITY.md`](../../cpp/nodes/gate/SECURITY.md) 第 4 节末段自认的那个洞：
@@ -86,6 +92,8 @@ cookie 一点忙不帮）；反过来，应用层再怎么改也吸收不了带�
 
 **但要补两件事**，把 accept-then-close 的成本压下来（§6.2 / §6.5）：把闸门前移到 `Acceptor`，
 以及拒绝时用 `SO_LINGER(1,0)` 发 RST 消掉 60s TIME_WAIT。
+**（2026-11-12：两件都已落码，见 §6 的 P1-1、P1-2。上表「accept 后立刻 close」一列的成本因此变成：
+被拒连接零用户态对象、3 次系统调用（accept、setsockopt、close）、无 TIME_WAIT。）**
 
 > **反对意见（保留在案）**：若将来 gate 前面上了 L4 且真的遇到 volumetric 场景，
 > 「极端过载时停止 accept」仍是有价值的最后一档降级（Envoy 的编排就是
@@ -138,18 +146,18 @@ cookie 一点忙不帮）；反过来，应用层再怎么改也吸收不了带�
 | # | 缺口 | 证据 |
 | --- | --- | --- |
 | G1 | **未认证连接零死线、零收割器**(2026-11-06 死线已落码,未编译;独立预算未做,见 P0-2) | 全 gate 只有一个定时器：`main.cpp:134` 声明、`main.cpp:315` 每 10s 上报 player_count。`SessionInfo`（`session_info_comp.h`）**整个结构体没有任何时间戳字段**——今天就算想写 sweeper 也没有判据数据。`setKeepAlive` 在 `cpp/` 下零命中 |
-| G2 | **闸门位置比注释声称的晚**：拒绝发生时 `TcpConnection`、两个 1KB Buffer、`connections_` map 节点、`epoll_ctl ADD` 已全部完成 | `TcpServer.cc newConnection` 先于我们的回调执行；`Buffer.h:45-46`（`kCheapPrepend=8`+`kInitialSize=1024`） |
-| G3 | **只有总量、没有速率**。每秒建 5000 条又立刻关的攻击者永远碰不到 `:468` 那条闸 | `client_message_processor.cpp:468` 是唯一判据 |
+| G2 | **闸门位置比注释声称的晚**：拒绝发生时 `TcpConnection`、两个 1KB Buffer、`connections_` map 节点、`epoll_ctl ADD` 已全部完成。**（2026-11-12 状态：已改，未编译，见 P1-1。）** | `TcpServer.cc newConnection` 先于我们的回调执行；`Buffer.h:45-46`（`kCheapPrepend=8`+`kInitialSize=1024`） |
+| G3 | **只有总量、没有速率**。每秒建 5000 条又立刻关的攻击者永远碰不到 `:468` 那条闸。**（2026-11-12 状态：已改，未编译，见 P1-3。）** | `client_message_processor.cpp:468` 是唯一判据 |
 | G4 | **`RLIMIT_NOFILE` 全链路无人设**：镜像没设、k8s 没有该 API 字段、进程从不 `setrlimit`。containerd 依赖 systemd v240+ 隐式默认 **soft=1024**——真正生效的上限很可能是 ~1000 而不是 20000，**`GateMaxConnections` 那条分支是够不着的死代码** | `Dockerfile.runtime`/`Dockerfile.cpp` 无 ulimit；`cpp/` 下 `setrlimit` 仅命中 Windows shim |
 | G5 | **muduo 两行 per-connection `LOG_INFO` 抵消了全部采样纪律** | `TcpServer.cc:80`（newConnection）+ `:109`（removeConnectionInLoop）**无条件**；`Logging.h:20-29` 里 `INFO==2`；`node.cpp:1092-1098` 把 `log_level` **直接 `static_cast`** 进 `muduo::Logger::LogLevel`；而 `bin/etc/base_deploy_config.yaml:25` 是 `LogLevel: 2`，注释却写「2=WARN」——**注释错了，实际是 INFO，这两行现在就在打**。更糟：proto3 缺键得 0 = **TRACE**。**（2026-11-10 状态：已修，见 P0-3。注释已按 muduo 枚举改正，键现位于 `bin/etc/base_deploy_config.yaml:31`，生产值定为 2 = INFO；缺键 / 越界拒启。两行 per-connection 日志两个平台都已是 `LOG_TRACE`：Windows 的 `muduo_windows` 与 `third_party/muduo` 自 `52ebf9e5d`（2026-04-13），Linux 的 `third_party/muduo-linux` 经 `tools/archived/muduo_linux_overlay/muduo/net/TcpServer.cc`（2026-11-10 落码，未编译）。上面「这两行现在就在打」是修复前的状态）** |
-| G6 | **`sockets::accept` 对 `ENFILE`/`ENOBUFS`/`ENOMEM` 直接 `LOG_FATAL` → abort** | `SocketsOps.cc:125-156`。即便把连接上限调到 1，只要内核在 accept 时返回 `ENOBUFS`（连接洪水的典型产物）gate 照样崩。这条与 gate 自己的上限**完全正交** |
-| G7 | **`Acceptor` 的 EMFILE 分支自带日志洪水**：`LOG_SYSERR` 在 `errno==EMFILE` 判断**之外**，LT epoll + EMFILE = 忙循环，每转一圈一行同步日志 | `Acceptor.cc` handleRead 的 else 分支第一行。应用层采样在这一层完全帮不上忙 |
-| G8 | **`idleFd_` 不是可靠兜底**：`close(idleFd_)` 与 `::accept` 之间被别的线程抢走名额时 `idleFd_` 会变成 -1 且**没有任何重新装填路径**（重开 `/dev/null` 的返回值根本不检查），对进程剩余生命周期彻底失效 | `Acceptor.cc` EMFILE 分支。gate 进程里 grpc/redis/kafka 客户端都在别的线程开 fd，窗口是存在的 |
+| G6 | **`sockets::accept` 对 `ENFILE`/`ENOBUFS`/`ENOMEM` 直接 `LOG_FATAL` → abort** | `SocketsOps.cc:125-156`。即便把连接上限调到 1，只要内核在 accept 时返回 `ENOBUFS`（连接洪水的典型产物）gate 照样崩。这条与 gate 自己的上限**完全正交**。**（2026-11-12 状态：已改，未编译，见 P0-4。）** |
+| G7 | **`Acceptor` 的 EMFILE 分支自带日志洪水**：`LOG_SYSERR` 在 `errno==EMFILE` 判断**之外**，LT epoll + EMFILE = 忙循环，每转一圈一行同步日志 | `Acceptor.cc` handleRead 的 else 分支第一行。应用层采样在这一层完全帮不上忙。**（2026-11-12 状态：已改，未编译，见 P0-4。）** |
+| G8 | **`idleFd_` 不是可靠兜底**：`close(idleFd_)` 与 `::accept` 之间被别的线程抢走名额时 `idleFd_` 会变成 -1 且**没有任何重新装填路径**（重开 `/dev/null` 的返回值根本不检查），对进程剩余生命周期彻底失效 | `Acceptor.cc` EMFILE 分支。gate 进程里 grpc/redis/kafka 客户端都在别的线程开 fd，窗口是存在的。**（2026-11-12 状态：已改，未编译，见 P0-4。）** |
 | G9 | **零 per-source 限制**，且**做之前有前置条件未满足**：`peerAddress()` 全仓只出现在 5 行日志里；而 `gate-entry` Service 未设 `externalTrafficPolicy` → 默认 `Cluster` → kube-proxy SNAT → `peerAddress()` 拿到的是 **node IP**。**(2026-09-29 更正:前置条件在 external 形态下已由部署层满足,podip 形态仍不满足,见下方 §4.2.1;per-source 限制本身仍为零)** | `k8s_deploy.ps1:928-947`（Service spec 只有 type/selector/ports）——**行号已漂移**,2026-09-29 现为 `tools/scripts/k8s_deploy.ps1:2405-2424` `New-GateServiceYaml` |
 | G10 | **pre-auth 路径的按包防护为零**：`DispatchClientRpcMessage` 在 `:736` 的 `verified` 判定**排在** `ValidateClientMessage`（`:707`）之前；`DispatchTokenVerify`（`:780`）从头到尾不调限流器、也不调 `CheckMessageSize` | 未认证连接可反复让 gate 缓冲 64KB（`codec.h:64`）+ adler32 + 反射建 message + parse |
 | G11 | **gate 容器 BestEffort**：无 `resources`、无探针、无 `securityContext`、无 PDB。`oom_score_adj=1000`，节点内存压力时最先被驱逐，且连接洪峰打的是整个 node | `k8s_deploy.ps1:560-632`（`New-NodeDeploymentYaml` 全文）。对照 go-svc 的 login/gateway 都配了 limits |
 | G12 | **131071 硬上限是借来的**：`network_utils.h:12` 借 `snow_flake.h:26` 的 `kNodeBits=17` 当 seq 位宽。编译期打开 `ENABLE_SNOWFLAKE_TESTING` 会让它**静默变成 511**，并让默认的 `GateMaxConnections: 20000` 在 `main.cpp:116` 直接 `LOG_FATAL` | 两个语义完全无关的常量共用一个名字 |
-| G13 | **应用侧零 Prometheus 埋点** | `cpp/nodes/gate` 全仓 grep 不到 prometheus。现在只能靠内核计数器 + 采样日志间接推断 |
+| G13 | **应用侧零 Prometheus 埋点** | `cpp/nodes/gate` 全仓 grep 不到 prometheus。现在只能靠内核计数器 + 采样日志间接推断。**（2026-11-12 状态：C++ 节点已有 Prometheus 出口，`MMORPG_METRICS_PORT`；fd 用量与 accept 降级的指标已加，见 P0-4。P1-4 列的连接类 SLI 同日另一批落码，未编译，见 P1-4。）** |
 
 > **2026-10-18 G4 落码说明(未编译、未验证,待 Codex 跑容器级对照与 kind 实测)**:进程启动时自抬软限并做门槛检查,
 > 位置在引擎的 `Node::Initialize`(`LoadConfigs` / `InitLogSystem` 之后、`InitRpcServer` 连 Redis 之前),gate / scene / battle 都经过这里;
@@ -191,6 +199,10 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 `main.cpp:303/307` 整体替换了回调），任何拨到该端口的 TCP 对端——端口扫描、探活、拨错的节点——
 都会占一个会话槽。
 
+> **2026-11-12 更正（P1-1 落码之后）**：因满员、超速或关源被拒的连接现在在 `Acceptor` 里同步关闭，
+> 不建 `TcpConnection`，也不再有「异步 forceClose、关闭完成前仍占 fd」这一段；`在途被拒数` 恒为 0。
+> 「sessions 是会话配额」「18000 端口上任何 TCP 对端都占一个会话槽」两点不变。
+
 ---
 
 ## 5. 攻击者今天仍能做到的事（零凭证）
@@ -205,6 +217,16 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 4. **把 fd 推到 `RLIMIT_NOFILE`**，随后触发 G6/G7/G8 那一串。
 5. **已验证会话可无限重发 `ClientTokenVerifyRequest`**（`:813` 直接 `sendReply(true,"")` 返回），
    每次都让 gate 序列化一条响应，既不过限流器也不计非法包。
+
+> **2026-11-12 现状（握手死线与 P1-1 ~ P1-4 落码之后；上面五条是 2026-09-03 的状态）**
+>
+> - 第 1 条：不再能「永久持有」。未验签连接最多活 10 秒（握手死线），新建速率闸又把「不停补位」压到每秒上限的 1%：
+>   攻击者第一次能在 10 秒内占满全部槽位（桶深等于上限），之后稳态最多占住上限的 10%。
+>   这 10 秒里与之后抢同一个速率桶的合法新连接仍会被拒，要再往下压靠 P0-2 的未验签独立预算与 LRU（未做）。
+> - 第 2 条：每条被拒连接的开销降到 3 次系统调用、零分配、无 TIME_WAIT；被接纳的速率有上界（桶深 + 速率 × 时间）。
+>   建连又立刻关、但没超过速率的那部分仍然付全价，`:325` 那次 `toIpPort()` 也还在。
+> - 第 3、5 条：没有变化，见 G10。
+> - 第 4 条：fd 耗尽不再崩溃（P0-4）；满员时被拒的连接不再占 fd 到下一轮。
 
 ---
 
@@ -228,9 +250,13 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 >    代价:误配 `GateMaxConnections` > 131071 又碰上硬限不够时,先看到的是 fd 拒启而不是 gate 的上限报错(拒启文案里带配置键和取值,仍可诊断)。
 > 2. **不学 Redis 下调 `maxclients`**,抬不够就拒启:下调会让准入上限悄悄失真(login 仍按配置上限往这台 gate 派人),scene 也没有上限可以下调。
 >    余量取固定 4096(推算:gate 直连模式约 2Z 条到全服 scene_manager,scene 约 4Z 条到全服 SM / DS,Z ≈ 200~445),只是拒启门槛。
+>    (2026-11-12 定案:维持 4096,不再等实测。scene_manager 11-05 起按 zone 收窄、gate 到路由服只连按 zone 取的 k 台,
+>    上面随 Z 增长的那几项已经不存在;运行期够不够改由 `process_open_fds / process_max_fds` 超过 80% 的告警看。理由写在 `open_file_limit.h`。)
 > 3. **加了运维豁免开关** `NODE_OPEN_FILE_LIMIT_MODE`(缺省 enforce,`warn` 时只打 WARN 继续启动;负责人 2026-10-17 拍板)。
 >    理由:硬限在节点运行时层面,各集群尚未实测,工作区又会被整区快照带进镜像,scene 的门槛没有配置可调,不能只剩回滚镜像一种应急手段。
 >    C++ 节点没有指标出口(G13),豁免只进 stdout 与日志。
+>    (2026-11-12 更正:C++ 节点现在有指标出口,豁免是否生效以 `cpp_node_open_file_limit_exempted` 导出,
+>    带豁免运行超过 1 小时由 `CppNodeOpenFileLimitExempted` 告警。)
 > 验收订正见 §9.2 的 2026-10-18 注:gate / scene 的 PID 1 可能是 `sh`,不要读 `/proc/1/limits`。
 >
 > **2026-10-18 评审补充**:① warn 的代价比「超出的连接 EMFILE」大:本节准入闸门在 accept 拿到 fd 之后才判,上限没调时客户端连接先占满 fd 表,
@@ -261,6 +287,10 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 - 计数与日志:`[ClientHeartbeat] summary` 的 `handshake_timeouts`;拒绝日志按 1024 采样。
 
 **独立预算 + LRU + 按概率早拒(未做)。** 有了死线,占槽的未验签连接每条最多活 10 秒,但持续高速建连仍能把槽位占满。
+2026-11-12 起新建连接速率闸(P1-3)给这件事加了上界:稳态下未验签连接最多占上限的 10%(速率 × 10 秒),
+但攻击期间合法新连接与攻击连接抢同一个速率桶,公平性仍要靠这里的独立预算。预算要用的计数已经有了:
+`SessionInfo::preAuthSlot` 是 RAII 占位(`pre_auth_slot.h`),`gate_connection_admission::UnauthenticatedConnections()` 是 O(1) 读数,
+指标 `gate_unauthenticated_connections` 导出的就是它(P1-4);做预算时在准入回调里加一条判据即可,不必再造计数。
 原方案的要点不变:
 
 - `HandleConnectionEstablished` 在现有总量闸之后再加一道 `preAuthCount >= kPreAuthMax`(取 `GateMaxConnections` 的 5–10%)。
@@ -310,67 +340,214 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 > 已经是一份被本地魔改过的 muduo（整套 WIN32 分支）。但注意 `third_party/muduo`（Windows）
 > 与 `third_party/muduo-linux` 是**两份独立副本，必须同改**，否则 Windows 编过、Linux 的 clang `-Werror` 红。
 
+> **2026-11-12 落码说明（未编译、未运行，待 Codex 验证；G7、G8 一并处理）**
+>
+> 只把三个 errno 挪进「预期错误」不够：`Acceptor` 只对 `EMFILE` 让位，`ENFILE` / `ENOBUFS` / `ENOMEM` 不 abort 之后，监听 fd 一直可读，循环会原地空转，每圈还打两行 ERROR。所以改成下面这样：
+>
+> - **分类**：`Acceptor::classifyAcceptFailure(errno)` 是纯函数，把 accept 失败分成四类：
+>   - 等下一次：`EAGAIN`、`EINTR`；
+>   - 这一条连接没了，接着接下一条：`ECONNABORTED`、`EPROTO`、`EPERM`，以及 accept(2) 列出的已排队连接上的网络错误（`ENETDOWN`、`EHOSTUNREACH` 等。上游把其中的 `EOPNOTSUPP` 也当致命错误）；
+>   - fd 用尽：`EMFILE`、`ENFILE`；
+>   - 内核缓冲或内存不足：`ENOBUFS`、`ENOMEM`。
+> - **fd 用尽**：用空闲 fd 让位，接进排在最前的连接再立刻关掉，对端马上看到断开、可以换一台重试。空闲 fd 重新占位失败时记成 -1，下次进来先补占（G8）。让位做不成就暂停监听。
+> - **内存不足，或让位做不成**：暂停监听 100ms 再恢复。期间新连接留在内核的全连接队列里，循环不空转。恢复用的定时器只持存活令牌的 weak（AGENTS §11.7）。
+> - **日志**：失败日志最多每秒一行，带这一秒里攒下的次数（G7）。连接自己没了打 WARN，资源耗尽打 ERROR。
+> - **仍然 `LOG_FATAL` 的**：编程错误（`EBADF`、`EFAULT`、`EINVAL`、`ENOTSOCK`）与不认识的 errno。
+> - **指标**：`cpp_node_accept_exhausted_total{reason}`、`cpp_node_accept_paused_total`，以及进程 fd 用量 `process_open_fds` / `process_max_fds`、启动门槛 `cpp_node_open_file_limit_required` / `_exempted`（`process_fd_metrics.h`）。告警在 `deploy/k8s/cpp-node-resource-alerts.yaml`。
+> - **改了哪几份**：muduo 现在是三份副本，都要改，由 `tools/scripts/tests/muduo_acceptor_copies_contract.tests.ps1` 守住。
+>   - `tools/archived/muduo_linux_overlay/muduo/net/{Acceptor.h,Acceptor.cc,SocketsOps.cc}`：Linux 构建时覆盖进 muduo-linux，生产用的是这份；
+>   - `cpp/libs/engine/muduo_windows/src/muduo/net/` 下同名三个文件：Windows 编进 muduo.lib；
+>   - `third_party/muduo/muduo/net/` 下同名三个文件：业务代码 include 实际命中的头文件镜像。`Acceptor` 加了成员，镜像不同步会导致类布局对不上。
+> - **顺带**：任何一处 `LOG_FATAL` 在 abort 之前都会把最后一行同步写进 stderr（`node.cpp` 的 `EchoFatalLineToStderr`，经 `muduo::Logger::setFlush` 挂上）。gate / battle 的启动门禁原来直接 `LOG_FATAL`，Linux 上日志只进异步文件，`kubectl logs --previous` 里看不到原因；现在不用逐个调用点改。
+> - **这次没有碰**：把容量闸前移到 `Acceptor`（P1-1）、拒绝时发 RST（P1-2）、新建连接速率闸（P1-3）、连接类 SLI（P1-4），现状以各节为准。
+>   （同日另一批已把这四项落码，在本批的 `Acceptor` 改动之上；fd 用尽时让位排掉的那一条连接也随 P1-2 改成以 RST 关闭。）
+
 ### P1-1 · 把容量闸前移到 `Acceptor`（对应 G2）
 
-`TcpServer` 把 `acceptor_` 放在 private 且注释写着 "avoid revealing Acceptor"，
-`newConnection` 是 private 且非 virtual——**继承路线不通，别试**。可行的最小侵入约 20 行：
+**状态（2026-11-12）：已落码，未编译、未运行，待 Codex 验证。**
 
-```cpp
-// Acceptor.h
-typedef std::function<bool(int, const InetAddress&)> AdmissionCallback;
-void setAdmissionCallback(AdmissionCallback cb);
-// Acceptor::handleRead()，connfd >= 0 之后、newConnectionCallback_ 之前：
-if (admissionCallback_ && !admissionCallback_(connfd, peerAddr)) {
-    // 设 SO_LINGER(1,0) 后直接 close，连 TcpConnection 都不构造
-    sockets::close(connfd);
-    return;
-}
-```
+**落码前的核对结论**：G2 原样成立。`Acceptor` 没有任何准入口子；`TcpServer::newConnection` 对每条 accept 成功的连接无条件建
+`TcpConnection`；容量判定在 `GateClientSessionHandler::HandleConnectionEstablished`（`client_session_handler.cpp`），拒绝靠 `forceClose`。
 
-判据与采样日志原样搬过来，省掉每条被拒连接的 `TcpConnection` 构造、2KB 缓冲、
-连接表 insert/erase 和 3 次 `epoll_ctl`。
+`TcpServer` 把 `acceptor_` 放在 private 且注释写着 "avoid revealing Acceptor"，`newConnection` 是 private 且非 virtual——
+**继承路线不通**。落下来的是两层各加一个口子：
+
+- **muduo（三份副本同改）**
+  - `Acceptor::setAdmissionCallback(std::function<bool (const InetAddress& peerAddr)>)`：`handleRead` 在 accept 成功之后、
+    交给 `newConnectionCallback_` 之前问它一次；返回 false 就当场关掉这条连接（方式见 P1-2）并返回，不建 `TcpConnection`。
+    没设回调时全部放行，与上游行为一致（metrics 出口、节点间 RPC、测试里的 `TcpServer` 都不受影响）。
+  - `TcpServer::setAdmissionCallback`：只做转发（`loop_->assertInLoopThread()` 后调 `acceptor_->setAdmissionCallback`）。
+    只多一个成员函数，`TcpServer` 的数据成员不变；`Acceptor` 多了一个 `std::function` 成员，所以头文件镜像必须同步。
+  - 三份：`cpp/libs/engine/muduo_windows/src/muduo/net/`（Windows 编译件）、`third_party/muduo/muduo/net/`（头文件镜像，逐字节相同）、
+    `tools/archived/muduo_linux_overlay/muduo/net/`（Linux 覆盖件；`TcpServer.h` 是新增的覆盖文件，上游两个 gitlink 版本的这个文件只差一处注释拼写）。
+    `tools/scripts/tests/muduo_acceptor_copies_contract.tests.ps1` 的 A1、A6、A7 守住三份一致与调用顺序。
+- **gate**
+  - 判定在 `cpp/nodes/gate/handler/rpc/connection_admission.{h,cpp}`，顺序是「关源 → 总量 → 新建速率」（速率见 P1-3）。
+    总量排在速率前面：满员时被拒的连接不消耗速率名额。
+  - `main.cpp` 在 `SetAfterStart` 里、种好 session_id 的 node 段之后、装连接回调之前调 `n.GetTcpServer().setAdmissionCallback(...)`。
+    回调不捕获任何对象，状态在该模块的线程局部变量里（AGENTS §11.7）；关源时 `disconnectAllClients` 同步调 `CloseSource()`。
+  - 启动时 `ConfigureConnectionAdmissionOrDie()` 定下上限与速率闸参数，并打一行
+    `Client connection admission ENFORCED at accept, max_connections=... accept_rate_per_second=... accept_burst=...`。
+
+**与原方案的三处不同（AGENTS §11 偏离须记录）**
+
+1. **回调签名不带 fd。** 原稿是 `bool(int, const InetAddress&)`。现有判据都不需要 fd；把裸 fd 交给回调只多出一种用法——
+   回调自己把它关了，随后 `Acceptor` 再关一次。以后真有判据要读 socket 选项时再加。
+2. **`HandleConnectionEstablished` 里原来那道总量判定没有删，留作第二道。** 第一道装上之后它走不到（accept、准入、建连、
+   插入会话在同一个 loop 回调里同步完成，两处读到的会话数相同）。留着是为了准入回调没装上时（有人改了装配顺序，
+   或单测直接调连接回调）上限仍然成立。两处用同一个 `EffectiveMaxConnections()`。
+3. **三条 fail-closed 拒绝里只前移了总量。** 「session_id 的 node 段还没种好」「prod 下令牌密钥为空」两条留在连接回调里：
+   它们是启动配置错误的兜底，正常运行走不到；为它们让准入层去读发号器与密钥配置不值得。两条都计进
+   `gate_rejected_total{reason}`（`not_ready` / `no_token_secret`）。
+
+**效果**：被拒连接省掉 `TcpConnection` 构造、两个 1KB 缓冲、连接表 insert / erase、3 次 `epoll_ctl` 与两次连接回调；
+剩下 accept、setsockopt、close 三次系统调用，零分配。被拒连接在 `handleRead` 返回前已经关闭，不再占 fd 到下一轮（§4.3）。
 
 - ⚠️ **不要顺手改掉 `Acceptor.cc` 里那句 `//FIXME loop until no more`**。
   每次可读事件只 accept 一条，在这个场景下等价于 Envoy 的
   `max_connections_to_accept_per_socket_event=1`，是**免费的保护**：
   accept 风暴不会在单次事件里饿死同一 event loop 上已有连接的读写。改成 while 循环会直接放大伤害。
+  （三份 `Acceptor.cc` 里这句 FIXME 下面都加了说明，契约测试 A7 断言 `handleRead` 里只有一次 accept、没有循环。）
+
+**测试**
+
+- `cpp/tests/rpc_controller_test/acceptor_admission_test.cpp`：真实回环连接。被拒的连接连接回调一次都不来、对端读到 RST；
+  放行的连接先问准入后到连接回调；没设回调全部放行；同一监听上先拒后放互不影响。
+- `cpp/nodes/gate/tests/connection_admission_test.cpp`（`routing_identity_test` 工程）：判定顺序、按原因计数、
+  满员拒绝不消耗速率名额、关源之后一律拒绝。
+- 把回调装到 `TcpServer` 上的那几行在 `main.cpp`，靠 `tools/scripts/tests/gate_connection_alerts_contract.tests.ps1` 静态核对与冒烟。
 
 ### P1-2 · 拒绝时发 RST 而不是 FIN（消掉 60s TIME_WAIT）
 
-muduo 全库零 `SO_LINGER`，`TcpConnection` 也不暴露 fd，所以必须加 8 行：
-`Socket::setLinger(bool, int)` + `TcpConnection::setLingerAbort()`。
-若走了 P1-1，则连 `TcpConnection` 都不存在，直接对裸 `connfd` `setsockopt` 再 close 即可。
+**状态（2026-11-12）：已落码，未编译、未运行，待 Codex 验证。**
+
+**落码前的核对结论**：muduo 三份副本与 `cpp/` 下 `SO_LINGER` 零命中，所有关闭都走 FIN。
+
+**落码**：`Acceptor.cc` 里的文件内函数 `abortiveClose(connfd)`：先 `setsockopt(SO_LINGER, {l_onoff = 1, l_linger = 0})` 再 `sockets::close`。
+内核直接发 RST 并立刻释放这个 socket，不进 TIME_WAIT。用在两处：
+
+1. 准入回调说不要的连接（P1-1）；
+2. fd 用尽时让位排掉的那一条（P0-4 的 `makeRoomForAccept`，原来是 `::close`）——同样是拒绝，同样不该留 TIME_WAIT。
+
+`SO_LINGER` 设不上时照样关，退回 FIN。契约测试 A8 钉住「先设后关、逗留时间为 0、让位路径也走它」。
+
+**没有做原稿里的另一条路**（`Socket::setLinger` + `TcpConnection::setLingerAbort`）：走了 P1-1 之后被拒的连接根本没有
+`TcpConnection`。已经建出来的连接——第二道总量闸、握手超时、非法包、高水位、关机——关闭时仍然走 FIN，这是有意的：
+**只在准入拒绝路径用 RST，正常关闭走 FIN。**
 
 - 参照 nginx 的 `reset_timedout_connection`——**这就是它存在的理由**。
-- ⚠️ 副作用：客户端拿到 `ECONNRESET` 而不是干净的 FIN。**只在被限流路径用 RST，正常关闭仍走 FIN**，
-  并确认 UE 客户端能区分二者，否则会触发更激进的立即重连、把限流放大成重连风暴。
-- ⚠️ RST 会丢弃未读数据，与任何「服务器已满」提示互斥；中间设备也可能过滤 RST。
+- ⚠️ 副作用：客户端拿到「连接被重置」而不是干净的 EOF。**2026-11-12 已核对客户端**（`mmorpg-client` `8f317d4d`，只读）：
+  - `Assets/Scripts/Net/GateTcpClient.cs` 的读循环对「读到 0 字节」与「读抛异常」走同一条关闭路径，不区分 FIN 与 RST；
+  - `Assets/Scripts/Game/GameClient.Reconnect.cs` 的重连是指数退避（0.5 秒起、4 秒封顶、±20% 抖动）加总时间预算，
+    而且每次重试都重新走 AssignGate 领新票据，不会盯着同一台 gate 连。
+  - 所以 RST 不会引出更激进的立即重连，客户端不用改。`robot/` 同理（Go 的读错误与 EOF 都按断线处理）。
+- ⚠️ RST 会丢弃未读数据，与任何「服务器已满」提示互斥（本来就不回提示，见 §7）；中间设备也可能过滤 RST，
+  那时客户端要等到自己的读超时才发现，与被吊住的效果相同，这一点没有变得更差。
+- 「服务端主动 FIN 关闭留 60 秒 TIME_WAIT」仍是 §10 标注的未联网核实论断；验收时用 `ss -s` 的 TIME_WAIT 计数直接看（§9.6）。
 
 ### P1-3 · 全局新建连接速率闸（对应 G3）
 
-**限速率、不限总量**，且**全局、不按 IP**（per-IP 的前置条件见 §7）。参照 HAProxy `maxconnrate`。
-单 IO 线程下就是一个普通令牌桶，不需要锁。阈值必须能覆盖**正常洪峰**（§6.8）。
+**状态（2026-11-12）：已落码，未编译、未运行，待 Codex 验证。阈值按下面的推导先定，没有等压测。**
 
-### P1-4 · 埋点（对应 G13）——**先埋点，再定阈值，顺序反了会同时误杀玩家和放过攻击**
+**落码前的核对结论**：G3 原样成立，唯一的判据是会话总数。
 
-必须的低基数 SLI：
-- `gate_connections_current`
-- `gate_unauthenticated_connections`（**未认证池占用率**，决定 `kPreAuthMax`）
-- `gate_accept_rate`
-- `gate_rejected_total{reason}`（reason 是有限枚举）
-- `gate_handshake_duration`（**P99.9 决定死线值**）
-- `gate_preauth_reaped_total`
+**落码**：`connection_admission.h` 的 `AcceptRateGate`，全局一个，不按 IP（per-IP 的前置条件见 §7）。
+算法是 GCRA（与令牌桶等价，和 `world_chat_push_budget.h` 同一算法）：只记一个「理论到达时刻」，全用整数时长，
+拒绝不改状态。位置是准入回调的第三道，排在关源与总量之后。单 IO 线程，不加锁。
+
+**超限时拒绝（RST），不是暂停 accept。** 原稿写的是「参照 HAProxy `maxconnrate`」，而 HAProxy 的实现是到速率就暂停 accept、
+让连接在内核队列里排队。这里没有照搬，理由：
+
+1. §2.3 给这台 gate 定的主路线是快速失败。暂停 accept 时客户端的 `connect()` 已经成功，却收不到任何响应，
+   就是 §7 明确不推荐的「吊住」；持续超限时内核队列满了还会丢握手包，客户端等的是秒级的 SYN 重传。
+2. 「拒绝会误伤正常洪峰」（§8）的前提是阈值低于洪峰。桶深取连接上限之后这个前提不成立（见下面的取值）。
+3. P1-1、P1-2 之后拒绝一条只要 3 次系统调用，不留 TIME_WAIT，拒绝本身不再是负担。
+
+代价（保留在案）：持续超限期间，合法的新连接与攻击连接抢同一个桶，谁先到谁进。这是「全局、不按来源」的闸固有的，
+公平性要靠 P0-2 的未验签独立预算与 P2-2。已经连上的玩家不受影响。
+
+**取值（`DefaultRateLimit`）**
+
+| 参数 | 缺省 | `GateMaxConnections` = 20000 时 |
+| --- | --- | --- |
+| 桶深（一次最多放行） | 连接上限 | 20000 |
+| 持续速率 | 连接上限 / 100 每秒，下限 100 | 200 条 / 秒 |
+
+- **桶深 = 连接上限。** 一台 gate 合法的最坏洪峰是「重启后从零接回一整台的人」（§8 的冷启动 + 全量重连），量级就是连接上限。
+  桶深取上限，总量闸会放行的合法洪峰就不会被速率闸拒绝；速率闸只限制「上限之外的周转」。
+- **持续速率 = 每秒 1% 的容量。** 三条依据：
+  1. 握手死线是 10 秒：一个从不验签的来源稳态下最多占住 速率 × 10 秒 = 上限的 10%，正好是 P0-2 给未验签连接定的预算上沿（5% ~ 10%）。
+  2. 合法的稳态周转远低于它：2 万人、人均在线半小时，进出约 11 条 / 秒，加上移动网络的断线重连也只有几十条 / 秒，200 条 / 秒留了一个数量级。
+  3. 任意时间窗 T 内接纳的连接数 ≤ 上限 + 速率 × T，「不停建连又立刻关」的开销因此有界。
+- **下限 100 条 / 秒**：给把上限配得很小的环境（本机、把上限调到个位数验证总量闸的用例）留的，那时该起作用的是总量闸。
+- 会被这组值拒绝的合法情形只有一种：桶还没攒回来时又来一次整台规模的重连（例如 30 秒内连续两次全量掉线）。
+  第二次里超出的部分被 RST，客户端退避后经 AssignGate 重来，约 100 秒内接完。可以接受；实测不够就调高持续速率。
+
+**覆盖**：环境变量 `GATE_ACCEPT_RATE_PER_SECOND`、`GATE_ACCEPT_BURST`（规范十进制 1..1000000）。不设就是上面的推导；
+写错拒绝启动（与本文件其它启动门禁一致）；没有「0 = 关闭」，不留一个拼错就整个失效的开关。
+**压测要打超过缺省速率的建连时必须先设它**（运维手册 `gate-kernel-tuning-runbook.md` §3.2），否则桶用完之后压测机看到的是连接被重置。
+`k8s_deploy.ps1` 没有加对应参数：缺省值随 `GateMaxConnections` 走，不需要部署侧配合；实测要改缺省时改 `DefaultRateLimit` 的两个常数。
+
+**复核方法**（上线或压测之后）：看 `rate(gate_accepted_total[1m])` 的峰值离 `gate_accept_rate_limit_per_second` 多远，
+以及 `gate_rejected_total{reason="accept_rate"}` 在正常洪峰里是否为 0。
+
+**测试**：`connection_admission_test.cpp` 的 `AcceptRateGate.*` 与 `ConnectionAdmissionPolicy.*`——起步是满桶、之后按间隔放行、
+空闲再久不超过桶深、任意窗口不超过「桶深 + 速率 × 时间」、拒绝不消耗也不推迟名额、时钟倒退只会多拒、缺省值的推导、环境变量解析。
+
+### P1-4 · 埋点（对应 G13）
+
+**状态（2026-11-12）：已落码，未编译、未运行，待 Codex 验证。**
+
+**落码前的核对结论**：gate 导出的只有排空迁移那一组（`gate_drain_migration_*`，11-12 另一个会话加的）与节点通用的 fd / accept 指标，
+本节列的六项连接类 SLI 一项都没有。握手超时只有 `[ClientHeartbeat] summary` 日志里的 `handshake_timeouts`。
+
+**指标**（`connection_admission.cpp` 的 `CollectMetrics`，经 `GlobalMetricsRegistry().Register` 登记，在 gate 主 loop 上采集）
+
+| 原稿里的名字 | 实际导出 | 类型 | 说明 |
+| --- | --- | --- | --- |
+| `gate_connections_current` | `gate_connections_current`、`gate_connections_max` | gauge | 会话数与生效上限；占比不用在规则里写死上限 |
+| `gate_unauthenticated_connections` | 同名 | gauge | 还没验签的连接数 |
+| `gate_accept_rate` | `gate_accepted_total` | counter | 导出计数器，速率在查询侧用 `rate()` 算（Prometheus 惯例；算好的速率换个窗口就没法再用） |
+| `gate_rejected_total{reason}` | 同名 | counter | reason ∈ `capacity` / `accept_rate` / `shutting_down` / `not_ready` / `no_token_secret` |
+| `gate_handshake_duration` | `gate_handshake_duration_ms` | histogram | 建连到验签成功，毫秒。`prometheus_text::Writer` 只写整数，所以单位取毫秒并写进名字；桶 10 ~ 10000，1 秒以上分得细 |
+| `gate_preauth_reaped_total` | 同名 | counter | 建连满握手期限仍未验签、被关掉的连接；与 `[ClientHeartbeat] summary` 的 `handshake_timeouts` 读同一份计数 |
+| — | `gate_accept_rate_limit_per_second`、`gate_accept_burst` | gauge | 生效的速率闸参数，给「离阈值多远」的图用 |
+
+- **未验签连接数不靠手写加减。** 每条未验签会话持有一个 RAII 占位（`cpp/libs/services/gate/session/comp/pre_auth_slot.h`，
+  `SessionInfo::preAuthSlot`）：建连时领、验签成功时还；会话从任何路径销毁（断开回调、无连接残留会话的就地摘除、清表）占位都随之归还。
+  会话表有两处 erase，将来还可能更多，靠各个出口手写减一迟早漏一处。占位同时记着建连时刻，握手耗时就是从它算的。
+- **握手耗时只统计验签成功的连接**；没验签就断开或被死线关掉的不进直方图，它们在 `gate_preauth_reaped_total` 与未验签连接数里。
+- dev / test 的免验签会话建连即已验证：计接纳，不占未验签位，不进握手直方图。
 
 🚩 **高基数红线**：`peer_ip` / `session_id` / `account` **绝不能进 metrics label**——
 标签基数由攻击者控制，会把连接层 DoS 转成监控系统 DoS，而且监控挂了你就瞎了。
-排障维度进日志/trace，不进 label。
+排障维度进日志/trace，不进 label。本批唯一的标签是 `reason`（封闭枚举）；对端地址只出现在采样日志里。
+`gate_connection_alerts_contract.tests.ps1` 断言采集函数里只有这一个标签名。
+
+**告警**：`deploy/k8s/gate-connection-alerts.yaml`，6 条，都是 warning；处置在运维手册 §3.2。
+
+| 告警 | 条件 | 阈值依据 |
+| --- | --- | --- |
+| `GateConnectionsNearCapacity` | 会话数 / 上限 > 0.9，持续 5 分钟 | login 在 90% 就不再往这台派人 |
+| `GateRejectingAtCapacity` | 5 分钟内有 `capacity` 拒绝 | 发生一次就该知道 |
+| `GateAcceptRateLimited` | 5 分钟内有 `accept_rate` 拒绝 | 同上；用未验签连接数与握手耗时区分洪峰与攻击（§8） |
+| `GateUnauthenticatedConnectionsHigh` | 未验签连接 / 上限 > 0.05，持续 2 分钟 | 速率闸把稳态压在 10% 以内；正常接近 0；取预算区间的下沿 |
+| `GatePreauthConnectionsReaped` | 每秒收割超过 1 条，持续 5 分钟 | 偶发收割是常态（建连后网络断了），持续的不是 |
+| `GateHandshakeSlow` | 握手 P99 > 3 秒，持续 10 分钟 | 握手期限 10 秒，P99 到 3 秒说明正常客户端离被误关不远 |
+
+**「先埋点，再定阈值」这条顺序**：本批把指标与按推导定的阈值一起上了，没有等指标先跑一段。理由是负责人 2026-11-11 定的口径
+（等压测的先按标准做法定）；握手期限、速率闸、告警阈值都写了推导，指标上线后按 §8 的判据复核，要调的只是常数。
+
+**测试**：`connection_admission_test.cpp` 的 `ConnectionAdmission.*`（占位随验签 / 会话销毁归还、共享占位只还一次、
+指标页的样本行、不出现高基数字样）；`gate_connection_alerts_contract.tests.ps1`（规则引用的指标名与 reason 取值都由 C++ 导出、
+装配都接上了、告警名不重名）。
 
 ### P1-5 · 部署清单补齐（对应 G9/G11）
 
 ⚠️ **改法与直觉不同**：C++ gate **没有静态 YAML**，它的 Deployment/Service 由
 `tools/scripts/k8s_deploy.ps1` 的 `New-NodeDeploymentYaml`（:560）/ `New-GateServiceYaml`（:928）
-在 apply 时 here-string 现拼。`deploy/k8s/manifests/go-svc/gateway.yaml` 和
-`java-svc/gateway.yaml` **都不是它**（是 Go/Java 的 HTTP 网关，ClusterIP:8080/8081）。
+在 apply 时 here-string 现拼。`deploy/k8s/manifests/java-svc/gateway.yaml` **不是它**
+（那是 Java 的 HTTP 网关，ClusterIP:8081；同名的 `go-svc/gateway.yaml` 是从不部署的旧清单，2026-11-12 已删）。
 改动必须落在那两个 PowerShell 函数里，并同步补一条
 `tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的契约断言（那里已经有对 `GateMaxConnections` 的断言先例）。
 
@@ -526,6 +703,26 @@ conntrack -C; cat /proc/sys/net/netfilter/nf_conntrack_max
 
 ⚠️ 定容时 `GateMaxConnections` 与每连接高水位是**相乘的**：20000 × 2MB = 40GB 理论最坏
 output buffer。单独看每个都合理，乘起来超过任何合理预算。
+
+### 9.6 P1-1 ~ P1-4 的验收（2026-11-12 补）
+
+单测与契约测试的命令在 `docs/PROGRESS.md` 2026-11-12「gate 连接准入 P1-1 ~ P1-4」条目里。下面是要在 Linux 容器里看的行为
+（本机 Windows 只能验单测；`ss`、TIME_WAIT 计数都是 Linux 上的）。
+
+准备：一台 gate，`GateMaxConnections` 调小（例如 50），`MMORPG_METRICS_PORT=9400`，按 §9.3 写一个只建连不发包的裸 dial 循环。
+
+| 要证明的事 | 做法 | 通过标准 |
+| --- | --- | --- |
+| 满员的连接在 accept 处被拒 | 建 50 条不发包的连接占满，再建 20 条 | 后 20 条的客户端读到 `ECONNRESET`；`gate_rejected_total{reason="capacity"}` 增加 20；`gate_connections_current` 停在 50 |
+| 拒绝不留 TIME_WAIT | 满员期间每秒建 100 条、持续 30 秒，前后各取一次 `ss -s` | TIME_WAIT 计数没有随被拒数上涨（改动前应上涨约「60 × 拒绝速率」，可用旧镜像对照） |
+| 被拒连接不建对象 | 同上期间看 gate 的 RSS 与 `process_open_fds` | 两者都不随被拒数上涨 |
+| 握手死线收割 + 未验签连接数 | 建 50 条不发包的连接，等 12 秒 | `gate_unauthenticated_connections` 先到 50、约 10 秒后回到 0；`gate_preauth_reaped_total` 增加 50 |
+| 速率闸 | `GATE_ACCEPT_RATE_PER_SECOND=10`、`GATE_ACCEPT_BURST=20` 启动，上限调回 20000，一次建 100 条 | 立刻接纳约 20 条（建连本身花的时间里会多放行一两条），其余 RST；`gate_rejected_total{reason="accept_rate"}` 增加约 80；之后每秒能再进约 10 条 |
+| 速率闸参数写错拒启 | `GATE_ACCEPT_RATE_PER_SECOND=0` 启动 | 进程退出，stderr 最后一行含 `Refusing to start: GATE_ACCEPT_RATE_PER_SECOND must be an integer` |
+| 正常登录不受影响 | 缺省参数下跑一轮 robot 登录冒烟 | 全部登录成功；`gate_rejected_total` 各 reason 都是 0；`gate_handshake_duration_ms_count` 等于登录的 robot 数 |
+| 关源 | 给 gate 发 SIGTERM，期间继续建连 | 新连接读到 `ECONNRESET`；`gate_rejected_total{reason="shutting_down"}` 增加（进程退出前抓得到的话） |
+
+判据仍是 §9.4 那三条：攻击进行中已登录玩家的延迟不变、新玩家登录成功率高于阈值、进程 RSS 不涨。
 
 ---
 

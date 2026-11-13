@@ -1,13 +1,16 @@
 # match 服务私有的 Redis Cluster(3 主 3 从),部署到 mmorpg-infra namespace。
 # 设计:docs/design/cross-zone-matchmaking.md §2 D2(双存储)/ §7(部署形态)。
 #
-# 与控制域 redis.yaml、玩家域 redis-player-cluster.yaml 并存:player:{id}:location / player:session:{id} /
+# 与控制域 redis.yaml、玩家域与控制集群(redis-cluster.yaml 渲染的 redis-player、redis-control)并存:player:{id}:location / player:session:{id} /
 # battle:lock:{id} 这类跨运行时契约 key 在玩家域(C++ 经自研路由层访问 Redis Cluster,docs/design/redis-player-store-cluster.md §5.6),
 # 本集群只放 match:* / challenge:* / spectate:* 这类 match 独占的 key。
 #
 # 节点 announce 的是 pod 的 headless DNS 而不是 pod IP(cluster-announce-hostname +
 # cluster-preferred-endpoint-type hostname):StatefulSet pod 重启后 IP 会变而
 # DNS 不变,集群拓扑 / 客户端 MOVED 目标都不会指向一个已经消失的 IP。
+#
+# 镜像钉 8.10.2 同一个摘要(2026-11-12,原来是浮动的 redis:7.2):与玩家域、控制集群同一版本、同一份运维口径
+# (docs/design/redis-cluster-all-domains-20261110.md §0 第 1 条)。节点、等待与建群三处必须一起改。
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -90,7 +93,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
       containers:
         - name: redis
-          image: redis:7.2
+          image: redis:8.10.2@sha256:6f81e8915c60b065a524e6967e0ad1c639ba6efa84d669f823683ea04d9150ee
           env:
             - name: POD_NAME
               valueFrom:
@@ -100,7 +103,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-          # 启动薄壳(2026-11-11,与 redis.yaml、redis-player-cluster.yaml 同一做法):打印 fd 限值,显式 --maxclients。
+          # 启动薄壳(2026-11-11,与 redis.yaml、redis-cluster.yaml 同一做法):打印 fd 限值,显式 --maxclients。
           # 被容器 nofile 硬限下调时,redis-server 只在启动日志里留一条,这一行是事后唯一的证据;硬限不够只打 ERROR、不拒启。
           # MAXCLIENTS 只在这里定义一次,与核心、玩家域集群同值;部署脚本的 match 集群总账(Get-RedisMatchConnectionLedgerInputs)
           # 与 -WaitReady 的逐节点核对都从这一行读值。改它要滚动重启六个节点(或逐节点 CONFIG SET 后再滚动)。
@@ -199,7 +202,7 @@ spec:
       initContainers:
         # 等六个 pod 的 redis 都应答 PING,再交给主容器建群
         - name: wait-nodes
-          image: redis:7.2
+          image: redis:8.10.2@sha256:6f81e8915c60b065a524e6967e0ad1c639ba6efa84d669f823683ea04d9150ee
           env:
             - name: POD_NAMESPACE
               valueFrom:
@@ -220,7 +223,7 @@ spec:
               done
       containers:
         - name: cluster-create
-          image: redis:7.2
+          image: redis:8.10.2@sha256:6f81e8915c60b065a524e6967e0ad1c639ba6efa84d669f823683ea04d9150ee
           env:
             - name: POD_NAMESPACE
               valueFrom:

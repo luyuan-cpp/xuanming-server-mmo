@@ -34,6 +34,9 @@ zone 桶是全区请求共用的热键，CAS 版副本越多冲突越多，重�
 两个 HTTP 入口共享 zone / IP 桶；冷却 scope 分别为 `login`、`assign`，避免正常的连续调用互相冷却。
 冷却使用本机 Map 的 get / put，每个 Gateway 副本各一份，是尽力过滤重试，不能称严格账号串行化或 Redis 账号锁。
 第三方登录没有 account 时，LoginController 用凭据的 Java hashCode 构造冷却标识；它不是认证后的账号身份。
+assign-gate 的冷却标识（2026-11-12 起，已落码未编译）是请求里 access token 的 SHA-256 摘要（`tok:` + 前 16 字节的十六进制，
+`AssignGateController.cooldownKey`），不再是客户端自报的 account：assign-gate 不再收 account（[登录排队](./login-queue-2026-05.md) §5 末尾的更正），
+摘要也不把令牌原文留在内存键里。不带令牌的匿名分配没有冷却标识，只受 IP / zone 桶约束。
 
 带非空 `queue_token` 重入 assign-gate 时仍过波次与 zone / IP 桶，只跳过账号冷却。
 Gateway 验不了 token，不能因字段非空就绕过限流。权威账号互斥与后台提交校验仍由 login 负责，见 [ARCH §3.3](./ARCH.md#33-并发安全)。
@@ -177,8 +180,8 @@ login 仍先受门禁限制，不能据此声称下次部署会自动开启排�
 ### 11.2 起步值
 
 单一来源为脚本的 `PeakShavingLaunchTier`：zone 2000/s、burst 5000，IP 5/s、burst 20，冷却 5000ms。
-排队将来开启时使用的本 zone 容量起步值为 5000，它是人数上限，不是每秒速率；当前不因常量存在就生效。
-这些值均待容量验收。脚本不自动写波次、zone 覆盖或未被消费的 queue-timeout-ms。
+排队开启后用的区容量(人数上限，不是每秒速率)2026-11-10 起只来自网关区服目录 `zone_config.capacity`(建表缺省与种子 zone 都是 45000，运维经 `/admin/zones` 改，本区网关经 etcd 发布给本区 login)，脚本不再渲染容量常量。
+限流这组值已定(2026-11-12)，压测出基线后可调；依据见[部署手册](../../deploy/k8s/README.md)「削峰(G4b)」：zone 档取上面 Layer 1 配额参考的开服档，burst 是 2.5 秒的补充量；IP 档与冷却同打包缺省，一次登录扣 2 个 IP 令牌。脚本不自动写波次、zone 覆盖或未被消费的 queue-timeout-ms。
 
 ### 11.3 部署取舍与配置指纹
 
@@ -187,7 +190,7 @@ login 仍先受门禁限制，不能据此声称下次部署会自动开启排�
 | 1 | IP 使用打包配置的 5 / 20 | 两个 HTTP 入口共用桶，NAT 玩家仍相互影响。 |
 | 2 | Gateway staging / prod 的 auto 直接开启 | 没有自动单 zone canary；关闭需显式 off 并等待滚动完成。 |
 | 3 | login 排队先受合入门禁约束 | 当前所有档位关闭，尚未执行开排队的整体发布。 |
-| 4 | 排队预设容量统一为 5000/zone | 未按各 zone 的实测峰值定标，不能当成承载保证。 |
+| 4 | 排队用的区容量只认 `zone_config.capacity`(缺省 45000/zone，2026-11-10 起；原脚本常量 5000/zone 已删) | 未按各 zone 的实测峰值定标，不能当成承载保证；压测出基线后经 `/admin/zones` 按区调。 |
 | 5 | 限流／排队配置在启动时读取 | 仅修改 ConfigMap 不会让运行中进程重读；改值要关注对应 Pod 是否实际滚动。 |
 | 6 | Redis 口令及将来启用的 QueueToken 仍存在 ConfigMap 明文字段 | 本次未改变注入机制；Redis 口令已有 YAML 特殊字符拒绝检查，QueueToken 的占位判定及原样嵌入 YAML 仍须按部署安全待办核对。 |
 | 7 | Gateway 限流指纹覆盖 rate-limit 配置块（含 trusted-proxies）与 Redis 口令；login 排队指纹覆盖 Queue 块与 QueueToken | 两种指纹仅在各自功能开启时写入，关闭时移除也触发模板变化。login 此指纹不含 Redis 口令。单步排队密钥轮换会让在排 token 失效、重新入队，不能当作保排位轮换。 |

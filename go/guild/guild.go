@@ -17,7 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/netx"
@@ -35,7 +34,6 @@ import (
 	"guild/internal/logic"
 	"guild/internal/node"
 	"guild/internal/server"
-	"guild/internal/session"
 	"guild/internal/svc"
 	base "proto/common/base"
 	kafkapb "proto/contracts/kafka"
@@ -43,6 +41,7 @@ import (
 	rfpb "proto/role_fence"
 	"schemamigrate"
 	"shared/buildinfo"
+	"shared/clusterredis"
 	"shared/etcdwatch"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
@@ -54,10 +53,18 @@ import (
 	"shared/roleidentity"
 	"shared/safego"
 	"shared/serverbase"
+	"shared/shutdownbudget"
 	"shared/sqlpoolstats"
 )
 
 var configFile = flag.String("f", "etc/guild.yaml", "config file path")
+
+// guildShutdownDrain 是计划停机时 main 末尾的 StopAndReport(关入口、等中继排空、结果消费者提交位点、号段收尾)
+// 最多再等多久。go-zero 缺省 5.5 秒就强杀,这段有序收尾常常做不完:位点没提交的结果消费者重启后重投一遍,
+// 靠幂等兜住,但白做一轮。18 秒让强退时限 = wrap-up 1 + 请求超时 4 + 18 + 余量 1 = 24 秒,与 friend / trade / chat /
+// player_inbox / mail / rank 的 24 秒硬截止同一口径,在 guild 35 秒的宽限期之内
+// (docs/design/scene-node-planned-drain.md §9「Go 服务停机时限」)。
+const guildShutdownDrain = 18 * time.Second
 
 // guildAnonymousReads 是不带会话也受理的客户端方法(入口准入的匿名只读例外)。只能放只读方法:
 // mail 领附件时经 GuildRPCDirectory 读玩家当前所在帮(go/mail/internal/data/guild_directory.go),按内部调用走。
@@ -101,6 +108,8 @@ func main() {
 		return
 	}
 	conf.MustLoad(*configFile, &config.AppConfig)
+	// 停机强退时限要盖住在途请求与 StopAndReport 的有序收尾(guildShutdownDrain);必须在建 zrpc 服务之前。
+	shutdownbudget.ApplyWithBackgroundDrain(&config.AppConfig.RpcServerConf, guildShutdownDrain)
 
 	// -migrate:只建表然后退出,不碰 Redis / etcd / Kafka。
 	if *migrateOnly {
@@ -169,7 +178,7 @@ func main() {
 	}
 
 	// Initialize data repo with singleflight + cache-aside
-	repo := data.NewGuildRepo(svcCtx.RedisClient, svcCtx.DB, config.AppConfig.Cache.DefaultTTL)
+	repo := data.NewGuildRepo(svcCtx.ControlRedis, svcCtx.DB, config.AppConfig.Cache.DefaultTTL)
 	if err := repo.BindPublication(relay); err != nil {
 		panic(err)
 	}
@@ -237,7 +246,7 @@ func main() {
 	logx.Infof("Guild node registered: id=%d uuid=%s", n.Info.NodeId, n.Info.NodeUuid)
 
 	// 这个客户端给 killswitch 与场景节点镜像做 watch;keepalive 让 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
-	// guild_id 与 op_id 只由发号器发(号段),guild 不申领 snowflake 槽位、不写水位,也没有失槽退出(2026-11-11 删)。
+	// guild_id 与 op_id 只由发号器发(号段),guild 不申领 snowflake 槽位、不写水位,也没有失槽退出(2026-11-12 删)。
 	etcdCli, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{
 		Endpoints:   config.AppConfig.Registry.Etcd.Hosts,
 		DialTimeout: config.AppConfig.Registry.Etcd.DialTimeout,
@@ -261,7 +270,12 @@ func main() {
 	// ⚠️ 这个 defer 必须写在 `defer etcdCli.Close()` 之后:defer 是后进先出,
 	// 先取消 watch 循环,再关 etcd 客户端,否则 watch 会撞上一个已经 Close 的 client。
 	defer ksCancel()
-	ks := killswitch.New(killswitch.Config{Prefix: config.AppConfig.KillSwitchPrefix})
+	// NodeTypes:认 type/GuildNodeService/ 下的规则;本进程的 uuid 上面注册时已经拿到(docs/design/rpc-kill-switch.md §5)。
+	ks := killswitch.New(killswitch.Config{
+		Prefix:    config.AppConfig.KillSwitchPrefix,
+		NodeTypes: []string{base.ENodeType_name[int32(nodeType)]},
+	})
+	ks.AddInstance(n.Info.NodeUuid)
 	ks.Start(ksCtx, etcdCli)
 
 	// repo 已在建表之后创建。
@@ -320,7 +334,7 @@ func main() {
 			logx.Must(fmt.Errorf("guild asset op timing invalid: %w", err))
 		}
 		assetPipe, err = svc.NewAssetPipeline(config.AppConfig.AssetOp, logic.AssetOpRetryBase(),
-			svcCtx.PlayerRedis, svcCtx.PlayerLocatorRedisClient, assetStore)
+			svcCtx.PlayerRedis, svcCtx.ControlRedis, assetStore)
 		if err != nil {
 			logx.Must(fmt.Errorf("guild asset pipeline: %w", err))
 		}
@@ -335,7 +349,7 @@ func main() {
 		// 日对账 + 自动放弃(落地恢复 §6.2 / §6.3)的选主:锁在 guild 全局 Redis(全体副本共享),只有当选副本跑维护。
 		// 同样必须在 Start 之前接上。竞选者标识用节点 uuid(每个进程实例唯一,与历练巡检租约的持有者标识同源)。
 		// 自动放弃另需 Loop.Ledger(上一行)。
-		assetPipe.AttachMaintenanceLeader(svcCtx.RedisClient, n.Info.NodeUuid)
+		assetPipe.AttachMaintenanceLeader(svcCtx.ControlRedis, n.Info.NodeUuid)
 		// 重投循环的到期扫描按玩家分片,分给本 zone 注册的 stable guild 副本(缺口清单第 25 条,
 		// docs/design/assetop-redelivery-sharding-20261110.md)。同样必须在 Start 之前;身份取上面注册拿到的 zone 与 uuid。
 		if err := assetPipe.AttachWorkShards(n.Info.ZoneId, n.Info.NodeUuid); err != nil {
@@ -397,7 +411,7 @@ func main() {
 		}
 		trialResults = records
 	}
-	trialLobby, err := data.NewSQLTrialLobbyRepo(svcCtx.RedisClient, repo, guildIDs.Mint)
+	trialLobby, err := data.NewSQLTrialLobbyRepo(svcCtx.ControlRedis, repo, guildIDs.Mint)
 	if err != nil {
 		logx.Must(fmt.Errorf("guild trial lobby repo: %w", err))
 	}
@@ -461,13 +475,18 @@ func main() {
 	// svcCtx.PlayerSyncBumper 由 NewServiceContext 无条件建好(玩家域的专用小池客户端 newPlayerSyncRedis,没建玩家域集群时回落到核心库),
 	// NewGuildSyncBumper 自己判 nil。
 	// 配额不能挤占正常仓储池；go-redis 必须启用 context 截止及短套接字/取连接预算。
-	quotaRedis := redis.NewClient(&redis.Options{
-		Addr: config.AppConfig.RedisClient.Host, Password: config.AppConfig.RedisClient.Password, DB: config.AppConfig.RedisClient.DB,
-		PoolSize: logic.ApplicationQuotaRedisPoolSize, MaxActiveConns: logic.ApplicationQuotaRedisPoolSize,
-		MaxRetries: -1, DialerRetries: 1, ContextTimeoutEnabled: true,
-		DialTimeout: logic.ApplicationQuotaBudget, ReadTimeout: logic.ApplicationQuotaBudget,
-		WriteTimeout: logic.ApplicationQuotaBudget, PoolTimeout: logic.ApplicationQuotaBudget,
-	})
+	// 与 svcCtx.ControlRedis 同一份控制集群配置,单独一个小池(clusterredis:每节点 PoolSize = MaxActiveConns,不重发、
+	// 认 ctx 截止时间);拨号 / 读写 / 取连接都按配额预算封顶。
+	quotaRedisConf := config.AppConfig.EffectiveControlRedis()
+	quotaRedisConf.PoolSizePerNode = logic.ApplicationQuotaRedisPoolSize
+	quotaBudgetMs := int(logic.ApplicationQuotaBudget / time.Millisecond)
+	quotaRedisConf.DialTimeoutMs, quotaRedisConf.ReadTimeoutMs = quotaBudgetMs, quotaBudgetMs
+	quotaRedisConf.WriteTimeoutMs, quotaRedisConf.PoolTimeoutMs = quotaBudgetMs, quotaBudgetMs
+	quotaRedisConf.DisableContextTimeout = false
+	quotaRedis, err := clusterredis.New(quotaRedisConf, clusterredis.ControlClusterKeys)
+	if err != nil {
+		logx.Must(fmt.Errorf("application quota Redis: %w", err))
+	}
 	defer func() {
 		if !ownerReady || shutdownComplete {
 			quotaRedis.Close()
@@ -523,10 +542,14 @@ func main() {
 	if entryErr != nil {
 		panic(entryErr)
 	}
+	// 原角色归属预检(docs/design/gate-online-identity.md §9.3):与 match、trade 共用拦截器 roleidentity.OwnershipInterceptor
+	// 和判据 rolefence.Guard.VerifyOwner(只判归属,冻结不拦)。读接口靠它核归属;写仍在提交点持锁复核,冻结的角色写不进去。
+	ownership, ownershipErr := roleidentity.OwnershipInterceptor(repo.CheckOriginalRole, guildOwnerRejected)
+	if ownershipErr != nil {
+		panic(ownershipErr)
+	}
 	s.AddUnaryInterceptors(serverbase.RootAdmission(root), gateIdentity)
-	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), onlineEntry, session.OriginalIdentityInterceptor(repo.CheckOriginalRole, func(err error) bool {
-		return errors.Is(err, data.ErrWriteConflict) || errors.Is(err, rolefence.ErrRoleNotFound)
-	}))...)
+	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), onlineEntry, ownership)...)
 	defer s.Stop()
 
 	// 资产通道后台 goroutine(guild.scene_node_watch / guild.asset_op_reconcile / guild.asset_op_cleanup,
@@ -726,22 +749,24 @@ func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf, admiss
 			root.Hold()
 			return
 		}
-		// 活性(缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8):起来时写一次,
-		// 每跑完一轮写一次(这一轮成败都写,panic 的那一轮不写),退出时删掉序列。
-		data.MarkCleanupRun(time.Now())
-		defer data.ClearCleanupRun()
+		// 活性(data.CleanupLive;缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8):起来时写一次;
+		// 每一轮正常返回(成败都算)就写这一刻,panic 的一轮不写、循环接着跑;ctx 结束、有意停止时删掉序列。
+		data.CleanupLive.Mark(time.Now())
 		timer := time.NewTimer(time.Duration(rand.Int64N(int64(c.Interval))))
 		defer timer.Stop()
 		for {
 			select {
 			case <-ctx.Done():
+				data.CleanupLive.Stop()
 				return
 			case <-timer.C:
 			}
+			// 定时器与取消同时就绪时 select 可能选到定时器:已经要停了就不再开新的一轮。
 			if ctx.Err() != nil {
+				data.CleanupLive.Stop()
 				return
 			}
-			safego.Run("guild.asset_op_cleanup", func() {
+			data.CleanupLive.Round(data.CleanupPoint, func() {
 				finish, err := root.Enter()
 				if err != nil {
 					return
@@ -762,8 +787,6 @@ func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf, admiss
 					}
 					logx.Errorf("guild cleanup failed: %v", err)
 				}
-				// 写在这一轮正常走完的地方,不用 defer:defer 会在开头就求值 time.Now(),panic 时也照样执行。
-				data.MarkCleanupRun(time.Now())
 			})
 			timer.Reset(c.Interval)
 		}
@@ -812,6 +835,8 @@ func startTrialResultConsumerWithOwner(c config.Config, guildLogic *logic.GuildL
 	}, guildkafka.TrialResultCounters{
 		DecodeError:  logic.CountTrialResultDecodeError,
 		HandlerRetry: logic.CountTrialResultHandlerRetry,
+		// 消费组 guild-trial 的 lag 探针(告警 deploy/k8s/guild-trial-result-consumer-alerts.yaml);生产路径才起。
+		LagObserver: logic.TrialResultLagObserver(),
 	})
 	if err != nil {
 		return nil, err
@@ -849,7 +874,8 @@ func ensureTrialResultTopic(c config.Config, ensure func([]string, []kafkautil.T
 		return nil
 	}
 	cfg := trialConsumerConfigFrom(c)
-	return ensure(cfg.Brokers, []kafkautil.TopicSpec{cfg.TopicSpec()})
+	// 结果 topic 与本组死信 topic(guild-trial-dlq)同一套耐久契约,注册前一起核。
+	return ensure(cfg.Brokers, cfg.TopicSpecs())
 }
 
 // logTrialClosedReason 在同道历练因为**配置**而关闭时打一行原因(开着时什么都不打)。
@@ -874,6 +900,12 @@ func logTrialClosedReason(c config.Config, matchConfigured bool) {
 	}
 }
 
+// guildOwnerRejected 判 GuildRepo.CheckOriginalRole 的错误是不是确定查到角色已不归原会话身份:已换主、已删或目录里没有(入口回 PermissionDenied);
+// 为假就是目录读不到或库故障,这一次判不了(入口回 Aborted,客户端重试)。
+func guildOwnerRejected(err error) bool {
+	return errors.Is(err, data.ErrWriteConflict) || errors.Is(err, rolefence.ErrRoleNotFound)
+}
+
 // buildUnaryInterceptors 组装本服务的一元拦截器链。
 //
 // 返回的切片顺序**就是执行顺序**:go-zero 把它们原样交给
@@ -885,7 +917,7 @@ func logTrialClosedReason(c config.Config, matchConfigured bool) {
 // 见 guild_test.go。
 //
 // onlineEntry 是在线域共用的入口准入(roleidentity.EntryInterceptor),由装配层传入,不得为 nil;
-// identity 是追加在最内层的原角色归属预检(session.OriginalIdentityInterceptor)。
+// identity 是追加在最内层的原角色归属预检(roleidentity.OwnershipInterceptor,判定用 GuildRepo.CheckOriginalRole)。
 func buildUnaryInterceptors(ks *killswitch.Switch, budget time.Duration, onlineEntry grpc.UnaryServerInterceptor, identity ...grpc.UnaryServerInterceptor) []grpc.UnaryServerInterceptor {
 	chain := []grpc.UnaryServerInterceptor{
 		// ① 流量统计放最外层:被热关停短路掉的请求也必须被统计到。
@@ -996,11 +1028,7 @@ func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan sch
 // missingIndexWarnings 挑出缺普通索引的告警原文。判断按 schemamigrate 报告项的结构化类别
 // (Report.MissingIndexes),不匹配告警文案:文案只给人看,改措辞不能改变拒启行为。
 func missingIndexWarnings(r schemamigrate.Report) []string {
-	var missing []string
-	for _, f := range r.MissingIndexes() {
-		missing = append(missing, f.Message)
-	}
-	return missing
+	return schemamigrate.Messages(r.MissingIndexes())
 }
 
 func missingIndexError(r schemamigrate.Report) error {

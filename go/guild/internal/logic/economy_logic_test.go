@@ -133,7 +133,7 @@ func economyRPCs() []managementCall {
 // seedMembership 按 data 包的键契约(guild_repo.go 的 playerGuildKey)写"玩家 → 帮会"映射缓存。
 func seedMembership(t *testing.T, mr *miniredis.Miniredis, playerID, guildID uint64) {
 	t.Helper()
-	require.NoError(t, mr.Set(fmt.Sprintf("player_guild:v2:%d", playerID), fmt.Sprintf("%d", guildID)))
+	require.NoError(t, mr.Set(fmt.Sprintf("player_guild:v2:{pg:%d}", playerID), fmt.Sprintf("%d", guildID)))
 }
 
 // seedEconomyCallerCache 为"前置全过、拒绝只可能来自被测那条判定"的用例布好缓存:帮会 9 为 10 级
@@ -349,8 +349,8 @@ func TestEconomyRPCsRefuseWhenSnapshotLacksCaller(t *testing.T) {
 			assert.Equal(t, constants.ErrNotInGuild, id)
 			assert.Zero(t, fake.guildRowReadCount(), "快照必须取自缓存:走的是'快照缺本人',不是'帮已不存在'")
 			assert.Equal(t, 1, fake.membershipReadCount(), "以 MySQL 复核映射(Y-01),且只复核一次")
-			assert.False(t, mr.Exists("player_guild:v2:42"), "陈旧映射必须经 MySQL 复核后失效")
-			assert.False(t, mr.Exists("guild:v2:9"), "可疑快照必须被失效,下一个读者才会回源")
+			assert.False(t, mr.Exists("player_guild:v2:{pg:42}"), "陈旧映射必须经 MySQL 复核后失效")
+			assert.False(t, mr.Exists("guild:v2:{g:9}"), "可疑快照必须被失效,下一个读者才会回源")
 		})
 	}
 }
@@ -372,7 +372,7 @@ func TestEconomyRPCsRefuseWhenMappedGuildGone(t *testing.T) {
 			assert.Equal(t, constants.ErrNotInGuild, id)
 			assert.Positive(t, fake.guildRowReadCount(), "缓存里没有快照:必须回源读帮会行,并读到'不存在'")
 			assert.Equal(t, 1, fake.membershipReadCount(), "以 MySQL 复核映射(Y-01),且只复核一次")
-			assert.False(t, mr.Exists("player_guild:v2:42"), "指向已解散帮会的映射必须经 MySQL 复核后失效")
+			assert.False(t, mr.Exists("player_guild:v2:{pg:42}"), "指向已解散帮会的映射必须经 MySQL 复核后失效")
 		})
 	}
 }
@@ -418,7 +418,7 @@ func TestEconomyCallerHealsFromAuthoritativeSnapshot(t *testing.T) {
 			_, ok := memberOf(g, 42)
 			assert.True(t, ok, "回带的快照必须含本人")
 			assert.Equal(t, uint32(3), g.Level, "回带的必须是 MySQL 的权威快照,不是缓存里那份旧的")
-			assert.False(t, mr.Exists(fmt.Sprintf("guild:v2:%d", tc.cachedGuild)), "可疑快照必须被失效,下一个读者才会回源")
+			assert.False(t, mr.Exists(fmt.Sprintf("guild:v2:{g:%d}", tc.cachedGuild)), "可疑快照必须被失效,下一个读者才会回源")
 		})
 	}
 }
@@ -446,7 +446,7 @@ func TestEconomyRPCsKickedWhileResolvingIsNotAFault(t *testing.T) {
 			assert.Equal(t, constants.ErrNotInGuild, id)
 			assert.Equal(t, 2, fake.membershipReadCount(),
 				"前提:ResolvePlayerGuild 复核时他还在帮(第一次),报错之后再复核一次才看到他已离帮(第二次)")
-			assert.False(t, mr.Exists("player_guild:v2:42"), "离帮后的映射必须失效")
+			assert.False(t, mr.Exists("player_guild:v2:{pg:42}"), "离帮后的映射必须失效")
 		})
 	}
 }

@@ -407,29 +407,33 @@ func TestLoadAndClaim_RejectionDoesNotTouchRows(t *testing.T) {
 
 func TestVerifySchema(t *testing.T) {
 	columns := func(names ...string) dbtest.Handler {
-		return func(context.Context, string, []driver.NamedValue) (*dbtest.Rows, error) {
+		return func(_ context.Context, query string, _ []driver.NamedValue) (*dbtest.Rows, error) {
 			out := &dbtest.Rows{Columns: []string{"COLUMN_NAME"}}
-			for _, name := range names {
+			tableColumns := names
+			if query == sqlSelectAuditOutboxColumns {
+				tableColumns = requiredAuditOutboxColumns
+			}
+			for _, name := range tableColumns {
 				out.Values = append(out.Values, []driver.Value{name})
 			}
 			return out, nil
 		}
 	}
 	store, _ := openStore(t, columns("player_id", "kind", "owner_epoch", "save_seq", "schema_gen", "holder_instance", "released", "PAYLOAD", "claim_seq"))
-	if err := store.VerifySchema(context.Background()); err != nil {
+	if err := VerifySchema(context.Background(), store.db); err != nil {
 		t.Fatal(err)
 	}
 	missingColumn, _ := openStore(t, columns("player_id", "kind"))
-	if err := missingColumn.VerifySchema(context.Background()); err == nil {
+	if err := VerifySchema(context.Background(), missingColumn.db); err == nil {
 		t.Fatal("missing columns must be rejected")
 	}
 	// 缺 claim_seq:判死比不出同实例重新认领,会踢掉在线玩家。
 	noClaimSeq, _ := openStore(t, columns("player_id", "kind", "owner_epoch", "save_seq", "schema_gen", "holder_instance", "released", "payload"))
-	if err := noClaimSeq.VerifySchema(context.Background()); err == nil {
+	if err := VerifySchema(context.Background(), noClaimSeq.db); err == nil {
 		t.Fatal("missing claim_seq must be rejected")
 	}
 	noTable, _ := openStore(t, columns())
-	if err := noTable.VerifySchema(context.Background()); err == nil {
+	if err := VerifySchema(context.Background(), noTable.db); err == nil {
 		t.Fatal("missing table must be rejected")
 	}
 }

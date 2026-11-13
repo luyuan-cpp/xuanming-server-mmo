@@ -13,7 +13,6 @@ import (
 
 	"shared/playername"
 
-	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -594,10 +593,4 @@ func BatchGetPlayerName(ctx context.Context, svcCtx *svc.ServiceContext, ids []u
 
 	metricResult = playerNameResultOK
 	return result, nil
-}
-
-func mget(ctx context.Context, c goredis.Cmdable, keys ...string) ([]interface{}, error) {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	return c.MGet(ctx, keys...).Result()
 }

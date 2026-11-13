@@ -201,6 +201,10 @@ const (
 	// R14 列 merged_into(一致读,不取锁)。
 	routeListMergedIntoSQL = "SELECT src_zone, dst_zone, run_id, merged_at_ms FROM zone_merged_into ORDER BY src_zone"
 
+	// R16 按区数路由行的头部,由 routeCountHomeZonesSQL 拼(一致读,不取锁)。home_zone 是 idx_route_home 的首列:
+	// IN 里每个区一段索引范围,COUNT(*) 只读索引、不回表。
+	routeCountHomeZonesHeadSQL = "SELECT COUNT(*) FROM player_route WHERE home_zone IN ("
+
 	// R15 迁移种 meta 行。不用 ON DUPLICATE KEY:schema 账号对 route_meta 只有 INSERT,没有 UPDATE,这样它改不了可写开关。
 	routeMetaSeedSQL = "INSERT INTO route_meta (id, generation, writable) VALUES (1, ?, 1)"
 )
@@ -1194,6 +1198,56 @@ func (s *RouteStore) GetRoutes(ctx context.Context, ids []uint64) (map[uint64]Ro
 		return map[uint64]RouteRow{}, nil
 	}
 	return routesAcrossShards(ctx, s.pools, nonZero)
+}
+
+// CountHomeZones 数 home_zone 落在 zones 里的路由行(R16),即这些原始区一共建过多少角色:路由行建号时写入、之后不删,
+// 删角只在账号目录写墓碑,所以删角不减。
+//
+// 目录 K 片每片各数一次(最多 shardFanOut 片同时),全部成功才求和;任一片失败整次报错,不回部分和:部分和偏小,
+// 会被调用方当成「还没到上限」。各片不是同一快照,结果是这一刻附近的值,调用方只拿它跟软上限比。
+// zones 必须非空、不超过 RouteBatchLimit 个、每个在 [1, RouteHomeZoneMax],否则不碰库,回 ErrRouteInvalidArgument。
+// 重复的区不影响结果(IN 对每行只匹配一次)。
+func (s *RouteStore) CountHomeZones(ctx context.Context, zones []uint32) (uint64, error) {
+	if len(zones) == 0 || len(zones) > RouteBatchLimit {
+		return 0, fmt.Errorf("%w: %d zones, want 1..%d", ErrRouteInvalidArgument, len(zones), RouteBatchLimit)
+	}
+	args := make([]any, len(zones))
+	for i, zone := range zones {
+		if zone == 0 || zone > RouteHomeZoneMax {
+			return 0, fmt.Errorf("%w: zone %d out of [1, %d]", ErrRouteInvalidArgument, zone, RouteHomeZoneMax)
+		}
+		args[i] = zone
+	}
+	query := routeCountHomeZonesSQL(len(zones))
+	perShard := make([]uint64, s.pools.k)
+	err := runParallel(s.pools.k, shardFanOut, func(slot int) error {
+		if err := s.pools.pools[slot].QueryRowContext(ctx, query, args...).Scan(&perShard[slot]); err != nil {
+			return fmt.Errorf("count player_route of %d zones in directory shard %s: %w", len(zones), s.pools.names[slot], err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	var total uint64
+	for _, n := range perShard {
+		total += n
+	}
+	return total, nil
+}
+
+// routeCountHomeZonesSQL 拼 n 个区的计数(R16):n 个占位符,实参是区号。
+func routeCountHomeZonesSQL(n int) string {
+	var b strings.Builder
+	b.WriteString(routeCountHomeZonesHeadSQL)
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("?")
+	}
+	b.WriteString(")")
+	return b.String()
 }
 
 // routesAcrossShards 按玩家分片拆组批量读。任一片失败整批报错,结果按 player_id 索引。

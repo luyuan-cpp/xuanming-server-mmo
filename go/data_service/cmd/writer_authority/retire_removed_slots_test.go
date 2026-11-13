@@ -37,6 +37,26 @@ type fakeRetirementCatalog struct {
 	supersedeBeforeRetire bool
 	retireErr             error
 	retired               []*dbpb.SqlWriterLifecycleReceipt_Request
+	// registeredBy:账号 → 这个账号在役一代的 REGISTER 里记的登记身份;没列的账号是本 namespace 的工作负载登记的(workloadIdentityForTest)。
+	registeredBy map[string]string
+	// registrationErr:读 REGISTER 收据失败。
+	registrationErr error
+}
+
+// Registration 回这一代的 REGISTER 原件:名册模板的形状加上这一代的登记行与登记身份。
+func (c *fakeRetirementCatalog) Registration(_ context.Context, writer *dbpb.SqlWriterRegistry) (*dbpb.SqlWriterLifecycleReceipt_Request, error) {
+	c.log.add("registration " + c.schema + " " + string(writer.SqlPrincipal))
+	if c.registrationErr != nil {
+		return nil, c.registrationErr
+	}
+	identity, overridden := c.registeredBy[string(writer.SqlPrincipal)]
+	if !overridden {
+		identity = workloadIdentityForTest
+	}
+	request := slotTemplateForTest(c.schema)
+	request.Writer = proto.Clone(writer).(*dbpb.SqlWriterRegistry)
+	request.RegisteredBy = identity
+	return request, nil
 }
 
 func (c *fakeRetirementCatalog) LatestBoot(_ context.Context, principal []byte) (*dbpb.SqlWriterRegistry, error) {
@@ -87,12 +107,28 @@ func (c *fakeRetirementCatalog) Retire(_ context.Context, request *dbpb.SqlWrite
 }
 
 // fakeStatefulSet 是集群里的写者 StatefulSet:第 n 次读副本数回 replicas[n](读多了回最后一个),pods 里为 true 的 Pod 对象在。
+// serviceAccounts 是本 namespace 里的 ServiceAccount(名字 → UID);nil 表示只有夹具写者用的那一个(default)。
 type fakeStatefulSet struct {
-	log      *retirementLog
-	replicas []int
-	pods     map[string]bool
-	podErr   error
-	reads    int
+	log               *retirementLog
+	replicas          []int
+	pods              map[string]bool
+	podErr            error
+	reads             int
+	serviceAccounts   map[string]string
+	serviceAccountErr error
+}
+
+func (s *fakeStatefulSet) ServiceAccountUID(_ context.Context, name string) (string, bool, error) {
+	s.log.add("service-account " + name)
+	if s.serviceAccountErr != nil {
+		return "", false, s.serviceAccountErr
+	}
+	accounts := s.serviceAccounts
+	if accounts == nil {
+		accounts = map[string]string{serviceAccountForTest: serviceAccountUIDForTest}
+	}
+	uid, found := accounts[name]
+	return uid, found, nil
 }
 
 func (s *fakeStatefulSet) Replicas(_ context.Context, statefulSet string) (int, error) {
@@ -154,7 +190,7 @@ func (h *retirementHarness) boot(slot int, seq uint64, state dbpb.SqlWriterRegis
 }
 
 func (h *retirementHarness) retirer() slotRetirer {
-	return slotRetirer{statefulSet: "db", deploymentID: "sql-writer-slot-retirer/db/job-pod-uid",
+	return slotRetirer{statefulSet: "db", namespace: namespaceForTest, deploymentID: "sql-writer-slot-retirer/db/job-pod-uid",
 		open: func(request *dbpb.SqlWriterLifecycleReceipt_Request) (retirementCatalog, error) {
 			return h.catalogs[request.AuthoritySchema], nil
 		},
@@ -440,5 +476,116 @@ func TestRetireRemovedSlotsCLIStopsBeforeLookingUpCredentials(t *testing.T) {
 		if err == nil || lookedUp || out.Len() != 0 {
 			t.Fatalf("%s: 非法命令行要在读凭据之前拒绝: err=%v lookedUp=%v", name, err, lookedUp)
 		}
+	}
+}
+
+// 只结束本 namespace 的工作负载登记的一代(设计稿 §5.9「归属」)。同一份名册和注册账号被带到另一个集群时(集群级备份恢复、
+// 备用集群把写者缩到 0 却没停 CronJob、两个环境误共用名册),那边「Pod 不在」不说明这一代没有进程了:不核归属,
+// 那边的收尾会把正式集群在役的写者结束掉。归属说不清的一律不动、这一轮算失败;同一轮里自己登记的照常结束。
+func TestRetireRemovedSlotsLeavesGenerationsRegisteredElsewhere(t *testing.T) {
+	otherCluster := workloadIdentity{namespace: namespaceForTest, serviceAccount: serviceAccountForTest, uid: "11111111-2222-3333-4444-555555555555"}.String()
+	for name, identity := range map[string]string{
+		"另一个集群:同名 namespace 与 ServiceAccount,UID 不同": otherCluster,
+		"另一个 namespace":           workloadIdentity{namespace: "mmorpg-zone-2", serviceAccount: serviceAccountForTest, uid: serviceAccountUIDForTest}.String(),
+		"集群外登记的空身份":               "",
+		"认不出的身份":                  "node:worker-1",
+		"这里已经没有这个 ServiceAccount": workloadIdentity{namespace: namespaceForTest, serviceAccount: "removed-account", uid: serviceAccountUIDForTest}.String(),
+	} {
+		h := newRetirementHarness(t, 3, "zone_1_db")
+		h.boot(1, 4, dbpb.SqlWriterRegistry_ACTIVE)
+		h.boot(2, 6, dbpb.SqlWriterRegistry_ACTIVE)
+		h.workload.replicas = []int{1}
+		catalog := h.catalogs["zone_1_db"]
+		catalog.registeredBy = map[string]string{slotPrincipalForTest(1): identity}
+		report, err := h.run(t)
+		if !errors.Is(err, errRegisteredElsewhere) {
+			t.Fatalf("%s: 归属说不清要报出来: %v", name, err)
+		}
+		if got := outcomesOf(report); got["1/"+slotRegisteredElsewhere] != 1 || got["2/"+slotRetired] != 1 || len(got) != 2 {
+			t.Fatalf("%s: 别处登记的不动,自己登记的照常结束: %v", name, got)
+		}
+		if catalog.latest[slotPrincipalForTest(1)].State != dbpb.SqlWriterRegistry_ACTIVE || catalog.latest[slotPrincipalForTest(2)].State != dbpb.SqlWriterRegistry_REVOKED {
+			t.Fatalf("%s: 只结束自己登记的那一代", name)
+		}
+		if len(catalog.retired) != 1 || string(catalog.retired[0].Writer.SqlPrincipal) != slotPrincipalForTest(2) {
+			t.Fatalf("%s: 别处登记的一代连 RETIRE 都不发: %v", name, catalog.retired)
+		}
+		if lines := report.lines("db"); !strings.Contains(strings.Join(lines, "\n"), "slot=1 logical_db=zone_1_db boot_seq=4 result=registered-elsewhere") || !strings.HasSuffix(lines[len(lines)-1], " candidates=2 retired=1 pending=1") {
+			t.Fatalf("%s: 日志点名这一代,汇总行算作没做完: %v", name, lines)
+		}
+	}
+}
+
+// 归属只在 Pod 已经没了、真要结束的时候才核:Pod 还在、读完目录又扩回来的候选不读 REGISTER、不查 ServiceAccount。
+// 同一轮里同一个 ServiceAccount 只查一次。
+func TestRetireRemovedSlotsChecksOwnershipOnlyBeforeRetiring(t *testing.T) {
+	h := newRetirementHarness(t, 4, "zone_1_db", "zone_2_db")
+	for slot := 1; slot < 4; slot++ {
+		h.boot(slot, 2, dbpb.SqlWriterRegistry_ACTIVE)
+	}
+	h.workload.replicas = []int{1, 2}
+	h.workload.pods["db-2"] = true
+	if _, err := h.run(t); err != nil {
+		t.Fatal(err)
+	}
+	if h.called("registration ") != 2 || h.called("service-account ") != 1 || h.called("retire ") != 2 {
+		t.Fatalf("只有序号 3(Pod 没了)在两个库各核一次归属,ServiceAccount 只查一次: %v", h.log.calls)
+	}
+	for _, call := range h.log.calls {
+		if strings.HasPrefix(call, "registration ") && !strings.Contains(call, slotPrincipalForTest(3)) {
+			t.Fatalf("扩回来的序号 1、Pod 还在的序号 2 不核归属: %s", call)
+		}
+	}
+}
+
+// 读不到 REGISTER 收据、查不到 ServiceAccount(API server 报错):不结束,记失败,不当成「别处登记的」;别的库照常。
+func TestRetireRemovedSlotsDoesNotRetireWhenOwnershipCannotBeRead(t *testing.T) {
+	h := newRetirementHarness(t, 2, "zone_1_db", "zone_2_db")
+	h.boot(1, 4, dbpb.SqlWriterRegistry_ACTIVE)
+	h.workload.replicas = []int{1}
+	h.catalogs["zone_1_db"].registrationErr = errors.New("connection reset")
+	report, err := h.run(t)
+	if err == nil || errors.Is(err, errRegisteredElsewhere) {
+		t.Fatalf("读不到收据是失败,不是别处登记: %v", err)
+	}
+	outcomes := map[string]string{}
+	for _, result := range report.results {
+		outcomes[result.schema] = result.outcome
+	}
+	if outcomes["zone_1_db"] != slotFailed || outcomes["zone_2_db"] != slotRetired || len(h.catalogs["zone_1_db"].retired) != 0 {
+		t.Fatalf("读不到收据的库不结束,另一个库照常: %v", outcomes)
+	}
+
+	h = newRetirementHarness(t, 2, "zone_1_db")
+	h.boot(1, 4, dbpb.SqlWriterRegistry_ACTIVE)
+	h.workload.replicas = []int{1}
+	h.workload.serviceAccountErr = errors.New("HTTP 403")
+	report, err = h.run(t)
+	if err == nil || errors.Is(err, errRegisteredElsewhere) || h.called("retire ") != 0 {
+		t.Fatalf("查不到 ServiceAccount 不结束: %v %v", err, h.log.calls)
+	}
+	if got := outcomesOf(report); got["1/"+slotFailed] != 1 {
+		t.Fatalf("记失败: %v", got)
+	}
+}
+
+// 汇总行的 pending 是部署脚本判「这一轮收尾做完没有」的依据(k8s_deploy.ps1 Complete-SqlWriterSlotRetirement):
+// Pod 还在、闸门冻结、排空 run 开着、失败、不是本集群登记的都算还没做完;结束了的、别处先结束的、又扩回来的不算。
+func TestRetirementReportCountsPendingCandidates(t *testing.T) {
+	report := retirementReport{replicasBefore: 1, replicasAfter: 1, slots: 4}
+	for _, outcome := range []string{slotRetired, slotAlreadyEnded, slotScaledBackUp, slotPodPresent, slotGateFrozen, slotDrainRunOpen, slotFailed, slotRegisteredElsewhere} {
+		report.results = append(report.results, slotRetirementResult{ordinal: 2, schema: "zone_1_db", bootSeq: 3, outcome: outcome})
+	}
+	lines := report.lines("db")
+	if len(lines) != len(report.results)+1 {
+		t.Fatalf("每个候选一行,再加一行汇总: %v", lines)
+	}
+	want := "writer_authority command=retire-removed-slots statefulset=db replicas_before=1 replicas_after=1 roster_slots=4 candidates=8 retired=1 pending=5"
+	if summary := lines[len(lines)-1]; summary != want {
+		t.Fatalf("汇总行:\n got %s\nwant %s", summary, want)
+	}
+	done := retirementReport{slots: 4}.lines("db")
+	if len(done) != 1 || !strings.HasSuffix(done[0], " candidates=0 retired=0 pending=0") {
+		t.Fatalf("没有候选时汇总行 pending=0: %v", done)
 	}
 }

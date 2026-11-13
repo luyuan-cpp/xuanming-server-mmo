@@ -142,14 +142,14 @@ Q        = 4h(可配,下界见 3.4)
 选择      = 候选中 wm 最小者;并列取最小 i
 CAS      = If CreateRev(slots/<i>)==0 Then Put slots/<i>=uuid (lease), Put affinity/<host>=i (lease)
 失败      = 重扫重试
-候选为空  = fail-closed 报错(13 万槽不可能;login 1024 槽也不可能)
+候选为空  = fail-closed 报错(13 万槽不可能)
 ```
 
 同主机亲和复用(Go 保留):**只在 `released/<host>` 存在时允许**(前任已优雅退出并已 fence),复用 Txn 同时删 released。lease 死了但没 released 标记(崩溃)→ 不复用,走正常申领(受隔离期约束),重启拿到不同 id,日志靠 incarnation 关联(3.6)。
 
 **滚动升级过渡规则(落码时发现的缺口,保留一个版本后删):** 灰度期间旧二进制仍在用"路由 node_id = worker"发号,而新命名空间里对应槽位的水位是 0,会被当成"从没用过"优先选中,与旧进程同 worker 位撞号。所以过渡期申领时:
 - C++:把 `<SceneNodeService>.rpc/allocated/node_type/<T>/node_id/<N>` 被任何节点持有视为槽 N 已占用;能连上分 zone Redis 时把旧 `snowflake_guard:<node_type>:<N>` 读作额外水位取 max。
-- Go:cluster 0 读旧 `<oldprefix>/snowflake_guard/<slot>`(login 另读 `/login/guard_ms/<slot>`)与新水位取 max,隔离期自然把旧进程刚用过的槽挡住。
+- Go:cluster 0 读旧 `<oldprefix>/snowflake_guard/<slot>` 与新水位取 max,隔离期自然把旧进程刚用过的槽挡住。login 原来另读 `/login/guard_ms/<slot>`,2026-11-12 随 login 的槽位申领删除。
 
 ### 3.3 水位契约(Go 已有,C++ 对齐)
 
@@ -167,7 +167,8 @@ CAS      = If CreateRev(slots/<i>)==0 Then Put slots/<i>=uuid (lease), Put affin
 - `F = Q/2 = 2h`。下界推导:`Q ≥ 2 × (TTL_max 180s + 最大时钟偏差 + drain 预算 15s + 冻结感知延迟)`,4h 对所有项都是两个数量级余量。
 - lease 过期但 slots 没被别人挂走 → 重新挂上,**不 fence**。两种情形在**一笔**嵌套 Txn 里判定:
   - key 还在、value 是自己(挂在旧 lease 上)→ 直接改挂新 lease;
-  - key 已过期(`CreateRev==0`)→ 只有**两把水位 key(`watermark/<i>`、`watermark_ms/<i>`)的 ModRevision 仍等于自己最后一次观测的值**才重新 Create。原因:key 过期后槽对别人就是空的,过了 Q 继任者可以合法申领并发号;继任者若此刻也恰好与 etcd 断开(它的 key 同样过期),它在自己的 F 内还会继续发号,这时重建就是同一个 worker id 两处发号,隔离期被重建绕过。任何发过号的持有者都先写过水位(闸只在水位写成功后 Ack,秒级或毫秒级任一),所以 revision 没动 = 没人用过;动了就分不清继任者已退出还是仍在发号,**永久 fence**,重启后走受隔离期保护的正常申领(2026-11-05,第一轮数据审计 §4 第 21 条)。代价:自己最后一笔水位写"已提交但没收到应答"时 revision 也对不上,同样 fence,只多一次重启。
+  - key 已过期(`CreateRev==0`)→ 只有**水位 key `watermark/<i>` 的 ModRevision 仍等于自己最后一次观测的值**才重新 Create。原因:key 过期后槽对别人就是空的,过了 Q 继任者可以合法申领并发号;继任者若此刻也恰好与 etcd 断开(它的 key 同样过期),它在自己的 F 内还会继续发号,这时重建就是同一个 worker id 两处发号,隔离期被重建绕过。任何发过号的持有者都先写过水位(闸只在水位写成功后 Ack),所以 revision 没动 = 没人用过;动了就分不清继任者已退出还是仍在发号,**永久 fence**,重启后走受隔离期保护的正常申领(2026-11-05,第一轮数据审计 §4 第 21 条)。代价:自己最后一笔水位写"已提交但没收到应答"时 revision 也对不上,同样 fence,只多一次重启。
+  - 2026-11-05 到 11-12 这里还同时比较毫秒水位 `watermark_ms/<i>`。它只有 login 写过,申领时又不读它的 revision:login 第一笔毫秒水位写失败、随后碰上 key 过期,本进程记的 0 与 etcd 里前任的值对不上,进程无故 fence 退出。毫秒水位 2026-11-12 随 login 的槽位申领删除,这条比较一起删掉,水位只剩秒级一把。
 - slots 被挂到别的 uuid / 别的 lease → 立即 fence(watch 与 reclaim 的读校验);被删 → 按上一条重挂。
 - 排空预算从 TTL/3 = 20s 变成 F − 已过时间,不再紧张。
 
@@ -175,12 +176,12 @@ CAS      = If CreateRev(slots/<i>)==0 Then Put slots/<i>=uuid (lease), Put affin
 
 - 文件:`<数据目录>/snowflake-<kind>.json` = `{cluster, id, uuid, incarnation, lastWatermark, lastAckWall}`,每次水位写成功后原子更新(写临时文件 + rename)。
 - 启动:etcd 可达 → 正常申领(缓存只做日志关联);etcd 不可达 且 `now − lastAckWall < F` → 用缓存 id 起,`SetGuardTime(max(now, lastWatermark + lead))`,后台每 2s 重试注册,注册成功前 lastAck 不推进(所以最多再撑 F);超过 F 仍未注册 → fence。
-- 缓存另记落盘那一刻观测到的两把水位 key 的 ModRevision(`watermarkRev` / `watermarkMsRev`,Go 实现,2026-11-05 加)。etcd 回来时前任的 slots key 多半已随 lease 过期,重新注册走 3.4 的重建分支,靠它做 revision 比较。它只在既有落盘时机抄入、不额外写盘:优雅退出与故障期崩溃时是准的;稳态崩溃时落后于前任后来的写入,缺字段的旧文件读成 0 —— 两者都只会让重建 fence(多一次重启),不会放行。
+- 缓存另记落盘那一刻观测到的水位 key 的 ModRevision(`watermarkRev`,Go 实现,2026-11-05 加;同批加的毫秒水位 `watermarkMsRev` 2026-11-12 随毫秒水位删除,旧文件里的这个字段读时被忽略)。etcd 回来时前任的 slots key 多半已随 lease 过期,重新注册走 3.4 的重建分支,靠它做 revision 比较。它只在既有落盘时机抄入、不额外写盘:优雅退出与故障期崩溃时是准的;稳态崩溃时落后于前任后来的写入,缺字段的旧文件读成 0 —— 两者都只会让重建 fence(多一次重启),不会放行。
 - etcd 不可达 且缓存过期 → 等 etcd(今天的行为)。
 
 ### 3.5.1 落码注记(2026-09-08,与上文设计的差异)
 
-- **Go**(`go/shared/snowflakealloc`):键前缀 `/snowflake/<kind>/c<cluster>/{slots,affinity,released,watermark,watermark_ms}`;kind = `login-player`(3/10 位)、`guild`、`match`、`scene-manager`;水位 Put 是 `If Value(slots/<slot>)==uuid` 的 txn,写成功即所有权证明并推进 FenceClock;按水位年龄的自 fence 是**可恢复**的(`ErrWatermarkStale`,下一次水位写成功即恢复),永久 `Fence()` 只在确认被接管时;本地缓存文件 `snowflake-<kind>-<affinity>.json`,新增配置键 `SnowflakeCacheDir`(默认 `../../run/snowflake`,k8s 里由 ConfigMap 指到 emptyDir);cluster 0 兼容读旧 `snowflake_guard`/`guard_ms` 并把旧 `snowflake_ids`/`snowflake_nodes` 算作占用。
+- **Go**(`go/shared/snowflakealloc`):键前缀 `/snowflake/<kind>/c<cluster>/{slots,affinity,released,watermark}`;kind 现在只有 `scene-manager`(`login-player`、`guild`、`match` 已退役;login 专用的毫秒水位 `watermark_ms`、3/10 位布局与 `SyncWatermark` / `AttachFencer` / `FenceClock` 接口 2026-11-12 删除);水位 Put 是 `If Value(slots/<slot>)==uuid` 的 txn,写成功即所有权证明并推进 FenceClock;按水位年龄的自 fence 是**可恢复**的(`ErrWatermarkStale`,下一次水位写成功即恢复),永久 `Fence()` 只在确认被接管时;本地缓存文件 `snowflake-<kind>-<affinity>.json`,新增配置键 `SnowflakeCacheDir`(默认 `../../run/snowflake`,k8s 里由 ConfigMap 指到 emptyDir);cluster 0 兼容读旧 `snowflake_guard`(login 的 `guard_ms` 已随毫秒水位删除)并把旧 `snowflake_ids`/`snowflake_nodes` 算作占用。
 - **C++**(`cpp/libs/engine/core/node/system/snowflake/`):不写 affinity/released;申领 txn = `If Create(slots)==0 Then [Put slots(lease), Put watermark]`(第一笔水位与申领原子);**没有单独的 watch**,每个 tick 的水位 txn 自带 `Value==uuid` 比较,失败即按"被删/被抢"分支处理(重挂或永久 fence),等价且少一条流;`CLUSTER_ID` 环境变量覆盖;`SNOWFLAKE_QUARANTINE_SEC` 仅供故障注入;缓存文件 `<SNOWFLAKE_CACHE_DIR or ./data>/snowflake-scene-item.json`,与 Go 不共享;顺手修了 LeaseGrant RPC 失败会永久卡住注册的老问题(10s 超时重试)。
 - 两端共用 `go/shared/snowflakealloc/testdata/selection_vectors.json`(15 例)做选号一致性测试,C++ 侧以 YAML 1.2 flow 方式读同一文件。
 
@@ -262,8 +263,8 @@ SELECT max_id, step FROM id_segment WHERE biz_tag = ?;
 
 ### 6.4 接线
 
-- **player_id**(Phase 4):login `CreatePlayer` 改用 `idsegment(biz="player")`;`PlayerIDGen` 与 `/login-player` 槽保留一个版本做回滚开关,之后删。
-- **guild_id**(Phase 4):`CreateGuild` 同理。
+- **player_id**(Phase 4):login `CreatePlayer` 改用 `idsegment(biz="player")`;`PlayerIDGen` 与 `/login-player` 槽保留一个版本做回滚开关,之后删。**已删**:回退开关随 2026-10-30 发号器批删除,`PlayerIDGen` 与 `/login-player` 槽位申领 2026-11-12 删除。
+- **guild_id**(Phase 4):`CreateGuild` 同理。guild 的 `/guild` 槽位申领同样 2026-11-12 删除。
 - **item guid**(Phase 5,最后):`ItemStore::MintGuid` 改从 `SegmentClient(biz="item")` 取;段耗尽且续段失败 → 返回 `kInvalidGuid`(与今天 fence 语义一致,bag 已 fail-closed)。可选:续段失败时回退 snowflake 发号——因为 6.3 的值域不相交,这个回退是**安全**的,代价是 snowflake 机器永远留着。默认不回退,只告警,由你选。
 - **继续用 snowflake 的**:snapshot_id、tx_id(需要时间序,且已经是 Kafka 去重键)、scene_id、battle_id / challenge_id、session_id。它们走第 3 节的协议。
 

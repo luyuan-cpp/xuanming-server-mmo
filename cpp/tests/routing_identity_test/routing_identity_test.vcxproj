@@ -214,6 +214,28 @@
       <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)gate_drain_migration\</ObjectFileName>
     </ClCompile>
+    <!-- gate 登录态续租调度(handler/rpc/login_session_renewal.h,docs/design/gate-online-identity.md §10.4):被测源码直接编进测试,
+         发请求的出口注入替身,会话表 tlsSessionManager 来自 gate.lib。client_request_lane.cpp 在登录成功时调用它,
+         下面 lane 那组也靠这里的目标文件链接。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/handler/rpc/login_session_renewal.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_login_renewal\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/login_session_renewal_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_login_renewal\</ObjectFileName>
+    </ClCompile>
+    <!-- gate 客户端连接准入(handler/rpc/connection_admission.h,docs/design/gate-connection-admission-control.md P1-1 ~ P1-4):
+         被测源码直接编进测试;会话表 tlsSessionManager 来自 gate.lib,握手超时计数读上面已编进来的 client_heartbeat.cpp。
+         ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/handler/rpc/connection_admission.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_connection_admission\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/connection_admission_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_connection_admission\</ObjectFileName>
+    </ClCompile>
     <!-- gate 路由服子集(handler/rpc/router_subset_policy.h,docs/design/connection-fanout-subsetting-20261106.md §3.2):
          只测纯计算头,不编 router_subset.cpp(它拖着节点注册表与 gRPC 通道)。ObjectFileName 的理由同上。 -->
     <ClCompile Include="../../nodes/gate/tests/router_subset_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -240,10 +262,46 @@
       <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)gate_lane\</ObjectFileName>
     </ClCompile>
+    <!-- gate 场景 lane(docs/design/client-scene-request-handoff-hold.md §4):纯逻辑头 scene_lane.h 只依赖 STL;装配层 client_scene_lane.cpp
+         直接编进测试,发送函数注入替身、时刻由用例传入,会话表 tlsSessionManager 来自 gate.lib;它用到的 SendEnvelope / FindLiveSession
+         在上面已编进来的 client_request_lane.cpp 里。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/handler/rpc/client_scene_lane.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_scene_lane\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/scene_lane_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../libs/services/gate/session/comp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_scene_lane\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="client_scene_lane_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_scene_lane\</ObjectFileName>
+    </ClCompile>
     <!-- 排空迁移遇上 lane 不空的会话:只测 Classify,被测源码随上面 drain_migration 那组编进来。 -->
     <ClCompile Include="drain_migration_lane_busy_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)gate_drain_migration\</ObjectFileName>
+    </ClCompile>
+    <!-- 推 msg 124 的收口(handler/gate_redirect_delivery.h,跨 zone 传送与 gate 排空迁移共用):被测源码直接编进测试;它用到的路由 lane、
+         场景 lane 装配层与排空迁移调度在上面已编进来,会话连接是回环 TCP(nodes/gate/tests/loopback_connection.h)。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/handler/gate_redirect_delivery.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_redirect\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/gate_redirect_delivery_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_redirect\</ObjectFileName>
+    </ClCompile>
+    <!-- gate 客户端入口两道 login 相关闸的装配层(handler/rpc/client_entry_admission.h,2026-11-12):被测源码直接编进测试;
+         回执信封经上面已编进来的路由 lane 装配层(client_request_lane.cpp)与真实的回环 TCP 写出(nodes/gate/tests/loopback_connection.h),
+         会话表 tlsSessionManager 来自 gate.lib。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/handler/rpc/client_entry_admission.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_client_entry\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/client_entry_admission_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_client_entry\</ObjectFileName>
     </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"friend/internal/data"
+	"shared/clusterredis"
 	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -85,17 +86,13 @@ func TestEtcYamlContractValues(t *testing.T) {
 		t.Errorf("KillSwitchPrefix = %q, want 空串(用默认前缀 /mmorpg/killswitch/)", c.KillSwitchPrefix)
 	}
 
-	// 共享库必须配:它是 FriendRedis 的回落目标,也是读契约 key player:session:{id} 的唯一句柄。
-	if c.Redis.Host == "" {
-		t.Error("Redis.Host(共享库)不能为空")
+	// 本地默认是单实例形态:ControlRedis 指本机 6379,不开 Cluster;PlayerRedis 不写地址、回落到它。
+	// 钉住"本地默认形态没被人顺手改成指向一个不存在的集群"。
+	if control := c.EffectiveControlRedis(); len(control.Addrs) != 1 || control.Addrs[0] != "127.0.0.1:6379" || control.Cluster {
+		t.Errorf("ControlRedis = %+v, want 本机单实例 127.0.0.1:6379", control)
 	}
-	if c.Redis.Type != "node" {
-		t.Errorf("Redis.Type = %q, want node(契约 key 的写者含 C++,hiredis 没有集群客户端)", c.Redis.Type)
-	}
-	// 本地默认是单库形态:FriendRedis 整段注释掉,私有 key 回落共享库。
-	// 这条断言不是"必须回落",而是钉住"本地默认形态没被人顺手改成指向一个不存在的集群"。
-	if c.FriendRedis.Host != "" {
-		t.Errorf("FriendRedis.Host = %q, want 空(本地默认单库形态,整段注释掉)", c.FriendRedis.Host)
+	if len(c.PlayerRedis.Addrs) != 0 {
+		t.Errorf("PlayerRedis.Addrs = %v, want 空(本地回落到 ControlRedis)", c.PlayerRedis.Addrs)
 	}
 
 	if c.MySQL.DBName != data.DatabaseName {
@@ -310,8 +307,7 @@ func validConfig() Config {
 	c.ListenOn = "127.0.0.1:50400"
 	c.Timeout = 4000
 	c.Etcd.Hosts = []string{"127.0.0.1:2379"}
-	c.Redis.Host = "127.0.0.1:6379"
-	c.Redis.Type = "node"
+	c.ControlRedis.Addrs = []string{"127.0.0.1:6379"}
 	return c
 }
 
@@ -332,25 +328,24 @@ func TestValidateAcceptsMaxFriendsAtCeiling(t *testing.T) {
 }
 
 // TestValidateAcceptsOptionalSections 证明"整段可缺失"的几段真的可以缺:
-// Schema缺失 = 只读核对;FriendRedis 缺失 = 回落共享库;Kafka.Brokers 缺失 = 不推送。
+// Schema缺失 = 只读核对;ControlRedis 缺失 = 本机单实例;Kafka.Brokers 缺失 = 不推送。
 // 这三条都是本地 / 冒烟环境的常态,不能被 Validate 拒。
 func TestValidateAcceptsOptionalSections(t *testing.T) {
 	c := validConfig()
 	c.Schema = SchemaConf{}
-	c.FriendRedis.Host = ""
+	c.ControlRedis = clusterredis.Config{}
 	c.Kafka = KafkaConf{}
 	if err := c.Validate(); err != nil {
-		t.Fatalf("Schema / FriendRedis / Kafka 整段缺失应通过校验: %v", err)
+		t.Fatalf("Schema / ControlRedis / Kafka 整段缺失应通过校验: %v", err)
 	}
 	if c.ShouldAutoMigrate() {
 		t.Error("Schema段缺失时不得请求自动DDL")
 	}
 
-	// FriendRedis 配上独立实例(甚至 cluster)同样合法:私有 key 全是单 key 操作。
-	c.FriendRedis.Host = "127.0.0.1:7000,127.0.0.1:7001"
-	c.FriendRedis.Type = "cluster"
+	// ControlRedis 配成 Redis Cluster 同样合法:私有 key 的多键脚本都同 tag。
+	c.ControlRedis = clusterredis.Config{Addrs: []string{"127.0.0.1:7100", "127.0.0.1:7101"}, Cluster: true}
 	if err := c.Validate(); err != nil {
-		t.Fatalf("FriendRedis 配 cluster 应通过校验: %v", err)
+		t.Fatalf("ControlRedis 配 cluster 应通过校验: %v", err)
 	}
 }
 
@@ -379,7 +374,9 @@ func TestValidateRejects(t *testing.T) {
 		{"MySQL.DBName 指向别的库", func(c *Config) { c.MySQL.DBName = "mmorpg" }},
 		{"MySQL.MaxOpenConn=0", func(c *Config) { c.MySQL.MaxOpenConn = 0 }},
 		{"MySQL.MaxIdleConn=0", func(c *Config) { c.MySQL.MaxIdleConn = 0 }},
-		{"Redis.Host 为空(共享库)", func(c *Config) { c.Redis.Host = "" }},
+		{"ControlRedis 是 Cluster 却没写种子", func(c *Config) { c.ControlRedis = clusterredis.Config{Cluster: true} }},
+		{"ControlRedis 单实例写了两个地址", func(c *Config) { c.ControlRedis.Addrs = []string{"a:6379", "b:6379"} }},
+		{"ControlRedis.PasswordEnv(口令变量名只写 SharedRedisPasswordEnv)", func(c *Config) { c.ControlRedis.PasswordEnv = "X" }},
 
 		{"Friend.MaxFriends=0", func(c *Config) { c.Friend.MaxFriends = 0 }},
 		{"Friend.MaxPendingRequests=0", func(c *Config) { c.Friend.MaxPendingRequests = 0 }},
@@ -510,16 +507,16 @@ func TestListenHostPort(t *testing.T) {
 	}
 }
 
-// 没写 PlayerRedis.Addrs:玩家域指向 Redis 段那一个实例;写了就完全按它来;Cluster 没写种子拒启。
+// 没写 PlayerRedis.Addrs:玩家域指向 ControlRedis 那一个实例;写了就完全按它来;Cluster 没写种子拒启。
 func TestEffectivePlayerRedis(t *testing.T) {
 	c := validConfig()
-	c.Redis.Pass = "shared-secret"
+	c.ControlRedis.Password = "shared-secret"
 	got := c.EffectivePlayerRedis()
-	if len(got.Addrs) != 1 || got.Addrs[0] != c.Redis.Host || got.Cluster || got.Password != "shared-secret" {
-		t.Fatalf("没写 Addrs 应指向 Redis 段: %+v", got)
+	if len(got.Addrs) != 1 || got.Addrs[0] != c.ControlRedis.Addrs[0] || got.Cluster || got.Password != "shared-secret" {
+		t.Fatalf("没写 Addrs 应指向 ControlRedis: %+v", got)
 	}
-	if got.PoolSizePerNode != playerRedisFallbackPoolSize {
-		t.Errorf("PoolSizePerNode = %d, want %d", got.PoolSizePerNode, playerRedisFallbackPoolSize)
+	if got.PoolSizePerNode != redisFallbackPoolSize {
+		t.Errorf("PoolSizePerNode = %d, want %d", got.PoolSizePerNode, redisFallbackPoolSize)
 	}
 	if err := got.Validate(); err != nil {
 		t.Errorf("生效配置应合法: %v", err)

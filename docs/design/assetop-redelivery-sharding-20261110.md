@@ -4,7 +4,7 @@
 > 第二批(2026-11-11,「G4a Redis 设计稿修订应用」会话):mail 与 GM 回收的重投分片(§10)、guild / trade 终态清理分片(§11)、分片缺口告警(§12),**同样已落码,未编译、未运行**,待 Codex 按 §13.3 验证。
 > 复用 `go/shared/workshard`(先例:trade 合同推进,[聚宝斋设计](jubaozhai-market.md) §15.8)与 match 的 `svc.OwnsWork`([全服匹配设计](global-match-hierarchical-pools.md) §5.2、§12.7)。
 > 第一、二批不改表、不改协议、不改 proto,不需要重新生成。第三批(2026-11-11,本会话):四张表的到期索引 `idx_0` 加 `op_id`、`player_id`(§2.4),**改了 proto 的索引选项,要先重新生成协议、删库重建**;未生成、未编译、未运行,待 Codex 按 §8 末尾「第三批」验证。
-> 第四批(2026-11-11,「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话):GM 回收派发与 mail 过期清理按片分工、三个周期循环的活性指标与按副本判的停摆告警(§14)。第五批(同一会话同一天):其余三个按片分工循环(guild / trade 终态清理、match 终局发件箱)的活性,trade 清理改成每一轮各自 recover(§14.8)。两批都**已落码,未编译、未运行**,待 Codex 按 §14.7 验证。不改表、不改协议、不改 proto。
+> 第四批(2026-11-11~12,「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话):GM 回收派发与 mail 过期清理按片分工、三个周期循环的活性指标与按副本判的停摆告警(§14)。第五批(同一会话):其余三个按片分工循环(guild / trade 终态清理、match 终局发件箱)的活性;六个循环的活性口径收进共享包 `go/shared/looplive`,每一轮各自 recover(mail 清理与 match 发件箱原来一轮 panic 会打死进程,trade 清理原来会让循环退出),并加对全部 Go 服务后台点位的「panic 过」告警(§14.3、§14.8);match 的撮合与投榜循环有同一类缺陷,一并修了(§14.10)。第六批(同一会话):match 经 `StartSourceLoop` / `StartRelayLoop` 起的循环与投榜循环的活性,一族 gauge 按点位区分(§14.10)。三批都**已落码,未编译、未运行**,待 Codex 按 §14.7 验证。不改表、不改协议、不改 proto。
 
 ## 1. 问题
 
@@ -297,9 +297,9 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 10. 规则语法:按 PROGRESS 2026-11-10「死节点收尾告警」条目的做法,用固定摘要的 `prom/prometheus` 容器(`--network none --rm`,只读挂载)对 `deploy/k8s/asset-channel-alerts.yaml` 提取的 `.spec` 跑 `promtool check rules`,期望 `SUCCESS`,规则数等于文件里 `- alert:` 的条数(写本条时 16)。
 11. 多副本冒烟(同 §8 第 9 步的环境):mail、data_service(同一 zone,`Recall.Enabled=true`)各起 2 个副本,`assetop_owned_shards{service="mail"}` 与 `{service="data_service"}` 两副本之和各为 64;guild / trade 开 `CleanupEnabled` 时,两副本启动日志都带 `sharded_by_player=true`,造一批保留期外的终态行后两边的 `*_cleanup_deleted_total` 合计等于造的行数、各自只删自己片里的行。
 
-## 14. 第四批:GM 回收派发与 mail 过期清理按片分工、循环活性指标(2026-11-11)
+## 14. 第四、五批:GM 回收派发与 mail 过期清理按片分工、循环活性(2026-11-11~12)
 
-「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话。**已落码,未编译、未运行**,待 Codex 按 §14.7 验证。同批的第 35 条(mail 列表截断计数)结论写在[邮件设计](mail-system.md)文末 2026-11-11 节。
+「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话。**已落码,未编译、未运行**,待 Codex 按 §14.7 验证。同批的第 35 条(mail 列表截断计数)结论写在[邮件设计](mail-system.md)文末 2026-11-11 节。不改表、不改协议、不改 proto,不需要重新生成。
 
 ### 14.1 两个循环原来的样子
 
@@ -308,7 +308,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 | GM 回收派发(PLANNED → PENDING) | `go/data_service/internal/svc/recall_channel.go` 的 `runDispatch` / `dispatchRound` | 装配了回收通道的每个副本(canary 也跑)每秒读一次 `gm_recall_op` 的到期 PLANNED 行(`ORDER BY next_attempt_ms, op_id LIMIT 64`),逐行 `Dispatch`:持这名玩家的 role_fence 行锁、分配 GM_RECALL 流的 seq、CAS 成 PENDING。所有副本读同一个队头,输家记 `data_service_recall_dispatch_total{result="lost"}`;同一玩家的几行被几个副本同时派,还会在这名玩家的 role_fence 行与 seq 行上排队 |
 | mail 过期清理 | `go/mail/internal/maintenance/sweep.go` → `data.Repo.Sweep` | 每个 stable 副本每 5 分钟读保留期外、可删的邮件(`ORDER BY expire_ms, mail_id LIMIT BatchLimit`),逐封点锁、复核,先删 `mail_state` 再删 `mail_message`。所有副本读同一批候选:点锁排队,输家复核落空;`expire_ms = 0` 的抽样每个副本抽同一批,`mail_sweep_invalid_rows_total` 跨副本求和按副本数重复 |
 
-### 14.2 做法
+### 14.2 分片做法
 
 **GM 回收派发**:按 `player_id` 分 64 片,类别键 `gm-recall-dispatch`。
 
@@ -317,8 +317,10 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 - 片条件每轮开头算一次(`workshard.SQLFilter(owns, "gm-recall-dispatch", "player_id")`),一轮里不变。
 - 为什么按玩家:派发持的是这名玩家的 role_fence 行锁、分配的是这名玩家的 seq。分片之后,同一玩家的 PLANNED 行在成员表稳定时只有一个副本在派,不会几个副本在同一把行锁上排队、各派一部分。
 - 类别键不复用重投的 `gm-recall-assetop`:派发只把行改成 PENDING,投递由重投那一片的负责者做,两件事不必落在同一个副本上;另起类别键,两类工作各自均匀分布。
+- 索引:第三批把 `gm_recall_op` 的 `idx_0` 改成 `(status, next_attempt_ms, op_id, player_id)`(§2.4)之后,派发这条读整条落在索引上——等值的 `status`、范围的 `next_attempt_ms`、按 `(next_attempt_ms, op_id)` 的排序、片条件里的 `player_id`、取出的 `op_id` 与 `player_id` 都是索引列:按索引顺序扫、凑满一批就停,别的副本的行只花索引条目的代价,不回表。
 - canary 照旧跑派发循环,但不进成员表(§10.2):有 stable 副本时一片都不派,成员表为空时派全部片。
 - 派发循环要用到的三个存储方法收成一个小接口 `recallDispatchStore`(`*store.RecallStore` 满足它),只为单测能注入假存储,生产只有这一个实现。
+- 派发读到期行失败原来只有错误日志,加计数 `data_service_recall_dispatch_list_errors_total`(重投那边对应的是 `assetop_store_errors_total{op="list"}`)。它不进 `data_service_recall_dispatch_total`:那是逐行的结果,读队头失败不是某一行的结果。
 
 **mail 过期清理**:按 `mail_id` 分 64 片,类别键 `mail-expiry-sweep`。
 
@@ -326,7 +328,8 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 - **片号按 `mail_id` 取,不按玩家**:
   - 清理的单位是一封邮件(点锁它、删它的 state 行、再删它),与收件人无关;
   - 系统邮件、帮会邮件和活动邮件的 `owner_player_id` 都是 0,按收件人分会全挤进第 0 片,而一封系统邮件挂着所有交互过它的玩家的 state 行,恰是清理里最重的部分;
-  - `mail_id` 由发号器发,是打散值(AGENTS §7 不变量 1),取模均匀;它是主键,候选读走的 `(kind, expire_ms)` 二级索引条目里带着它,片条件在索引上就能判,不回表。
+  - `mail_id` 由发号器发,是打散值(AGENTS §7 不变量 1),取模均匀。
+- 索引不改。候选读走 `(kind, expire_ms)`,它本来就要回表:`campaign_id` 不在索引里;TiDB 上 `mail_message` 的主键非聚簇,二级索引条目里也不带 `mail_id`。片条件跟 `campaign_id = 0` 一起在回表之后判,每检查一行的代价不变;变的是积压时本副本要跳过别的副本的行才凑满一批。清理每 5 分钟一轮,稳态下候选只有刚过保留期的那几封,不为它改索引。
 - `data.Repo.Sweep` 多一个参数 `owned workshard.Filter`,候选读(`sweepCandidateQuery`)和无效行抽样(`sweepInvalidSampleQuery`)都接上,条件在 `ORDER BY … LIMIT` 之前。抽样从「全表按 `mail_id` 取前 `BatchLimit` 行」变成「本副本的片里按 `mail_id` 取前 `BatchLimit` 行」:各副本的样本不再重叠,合起来覆盖得更多,计数跨副本求和也不再重复。点锁复核与删除不变,按 `mail_id` 点查,只碰本轮候选。
 - 片条件每轮开头算一次,候选读与抽样共用同一份。
 - `maintenance.Run` 依赖的存储收成接口 `maintenance.Sweeper`(`*data.Repo` 满足它),同样只为单测。
@@ -335,40 +338,66 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 
 - 派发的提交点是 role_fence 行锁下 `status = PLANNED` 的 CAS:两个副本扫到同一行,只有一方派成,另一方得 `RecallLost`。清理的提交点是 `FOR UPDATE` 点锁 + 原条件复核 + 带条件的 `DELETE`:两个副本删同一封,后到的复核落空。
 - 成员表变化的几秒里,某一片可能两个副本都做(与分片前相同),也可能暂时没人做(下一轮补上)。副本崩溃时它名下的片停到 etcd 租约过期再加一次整表读(§3):派发晚这么久,清理晚一轮。
-- 登记着却不跑、或循环卡死的副本:它名下的片一直没人做,`assetop_owned_shards` 之和照样是 64(§12 盲区)。本批的活性指标(§14.3)按副本报出来。
-- 滚动升级:老版本扫全部片,只是重复;全部换成新版本后分工才生效。不改表、不改协议、不改 proto。
+- 登记着、循环却停住的副本:它名下的片一直没人做,`assetop_owned_shards` 之和照样是 64(§12 盲区)。§14.3 的活性按副本报出来。
+- 滚动升级:老版本扫全部片,只是重复;全部换成新版本后分工才生效。
 
-### 14.3 循环活性指标
+### 14.3 循环活性
 
-| 循环 | 指标(gauge,Unix 秒) | 写在哪 | 告警 |
-|---|---|---|---|
-| 资产指令重投(guild / trade / mail / data_service 回收) | `assetop_loop_last_run_unixtime`(只有 `service` 常量 label) | `assetop.Loop.Run` | `AssetOpRedeliveryLoopStalled` |
-| GM 回收派发 | `data_service_recall_dispatch_last_run_unixtime` | `RecallChannel.runDispatch` | `RecallDispatchLoopStalled` |
-| mail 过期清理 | `mail_sweep_last_run_unixtime`(原有,口径改) | `maintenance.Run` | `MailSweepStalled`(原有,改成按副本判) |
+第 25 条里按片分工的循环一共六个(重投那一个由四个服务共用);match 经包装函数起的十几个后台循环与投榜循环是同一类问题,第六批用一族 gauge 补上(§14.10)。每个循环一个「最近一次跑完一轮的时刻」gauge:
 
-三个指标同一个口径:
+| 循环 | 指标(gauge,Unix 秒) | 循环在哪 | 每一轮的 safego 点位 | 停摆告警 |
+|---|---|---|---|---|
+| 资产指令重投(guild / trade / mail / data_service 回收) | `assetop_loop_last_run_unixtime`(只有 `service` 常量 label) | `assetop.Loop.Run` | `assetop.reconcile_tick` | `AssetOpRedeliveryLoopStalled` |
+| GM 回收派发 | `data_service_recall_dispatch_last_run_unixtime` | `RecallChannel.runDispatch` | `data_service.recall.dispatch` | `RecallDispatchLoopStalled` |
+| mail 过期清理 | `mail_sweep_last_run_unixtime`(原有,口径改) | `maintenance.Run` | `mail.expired_sweep` | `MailSweepStalled`(原有,改成按副本判) |
+| guild 终态清理 | `guild_asset_cleanup_last_run_unixtime` | `guild.go` 的 `startAssetOpCleanup`、`GuildAssetStore.RunCleanup` | `guild.asset_op_cleanup` | `AssetOpCleanupLoopStalled` |
+| trade 终态清理 | `trade_assetop_cleanup_last_run_unixtime` | `svc.runSourcedCleanup`、`AssetOpRepo.RunCleanup` | `trade.asset_op_cleanup` | 同上 |
+| match 终局发件箱 | `match_outcome_outbox_last_run_unixtime` | `svc.runOutcomeOutboxLoop` | `match.outcome_outbox` | `MatchOutcomeOutboxLoopStalled` |
+| match 后台循环(撮合、成局推进、到期终局恢复、整队维护、观战维护、投榜,14 个点位) | `match_loop_last_run_unixtime{point}`(一族,`point` 是循环的点位名) | `ServiceContext.StartSourceLoop` / `StartRelayLoop`、`authority.RunRankPublisher` | 各循环自己的点位(§14.10) | `MatchBackgroundLoopStalled` |
 
-- 循环起来时写一次;每跑完一轮写这一轮**结束**的时刻,这一轮成功、出错都写;这一轮 panic(被 safego 兜住)时不写;循环退出时删掉序列。
-  - 「有序列」= 这个副本的这个循环在跑;「值停住」= 循环卡在某一轮里,或者每一轮都 panic。
-  - 不写成「最近一次成功」:要抓的是登记在成员表里、循环却不转的副本。出错有各自的信号(重投读队头失败计 `assetop_store_errors_total{op="list"}`;派发逐行失败计 `data_service_recall_dispatch_total{result="error"}`,读队头失败计新加的 `data_service_recall_dispatch_list_errors_total`(原来只有错误日志);清理失败有错误日志,删除模式下还会打排空 HOLD),一次库故障不该同时报成每个副本的循环卡死。
-  - 退出时删序列,不置 0:没起循环的副本(canary、`Recall.Enabled=false`、单测、离线工具)和已经停掉循环的副本(停机排空)都没有序列,规则不用另外滤掉 0,也不会对正在排空的副本误报。
-- 没有可变 label,不放 player_id 之类实体 id。
-- mail 原来的 `defer metrics.MarkSweepRun(time.Now())` 在这一轮开头就求了 `time.Now()`,记下的是开始时刻,改成结束时刻;原来是 Gauge(canary 上也报 0,原规则只能 `max()` 聚合),改成不带可变 label 的 GaugeVec,与另外两个同一口径。
+**口径只有一份**,在共享包 `go/shared/looplive`(`looplive.Gauge`:`Mark`、`Round`、`Stop`、`Value`;一族循环用 `NewFamily` / `For` 取各自那一条),上表的循环都用它:
 
-告警按副本逐条判,不聚合:分片之后一个副本卡住,别的副本照常推进,`max()` 看不出来。
+- 循环起来时 `Mark` 一次:首轮之前可能有随机延迟,不能等第一轮。
+- 每一轮经 `Round(point, fn)` 跑:`fn` 在 `safego.Run` 里执行。正常返回就写这一刻,这一轮成功、出错都算;panic 的一轮被兜住(记点位、栈与 `safego_panic_total{point}`),不写时刻,循环接着跑下一轮。
+  - 不写成「最近一次成功」:要抓的是登记在成员表里、循环却不转的副本。出错有各自的信号(重投读队头失败计 `assetop_store_errors_total{op="list"}`;派发逐行失败计 `data_service_recall_dispatch_total{result="error"}`、读队头失败计 `data_service_recall_dispatch_list_errors_total`;清理与发件箱失败有错误日志,并打排空 HOLD),一次库故障不该同时报成每个副本的循环卡死。
+  - 写的是一轮**结束**的时刻。mail 原来的 `defer metrics.MarkSweepRun(time.Now())` 在一轮开头就求了 `time.Now()`,记下的是开始时刻。
+- 循环**有意停止**(ctx 结束、排空入口关闭)时 `Stop` 删掉序列,写在那个 `return` 之前,不用 defer:defer 在 panic 展开时也会执行。循环因为意料之外的原因退出时,旧值要留在 `/metrics` 上,停摆告警才报得出来。
+- 序列只在循环运行期间存在:没起循环的副本(canary、`Recall.Enabled=false`、没开 `CleanupEnabled`、单测、离线工具)和已经有意停掉循环的副本(停机排空)都没有序列,规则不用另外滤掉 0,也不会对正在排空的副本误报。实现上是不带可变 label 的 GaugeVec(Gauge 一注册就报 0;mail 原来就是 Gauge,canary 上也报 0,所以原规则只能 `max()` 聚合)。
+- 单独的 gauge 没有可变 label;match 那一族只有 `point` 一个 label,值是代码里写死的十四个点位名,`Stop` 只删自己那一条。都不放 player_id 之类的实体 id。
+
+**每一轮各自 recover**。按片分工的循环里,一轮 panic 不能把进程打死:一条解释不了的行先打死负责它那一片的副本,片换主之后再打死下一个,整个服务跟着倒。也不能让循环悄悄退出:进程还活着、还在成员表里,它名下的片从此没人做。所以统一成「panic 只丢这一轮,循环接着跑,由告警报出来」。三处原来不是这样,本批改了:
+
+| 循环 | 原来一轮 panic 的后果 | 现在 |
+|---|---|---|
+| mail 过期清理 | 打 HOLD 后一路抛出 `Run`,进程退出(M1 的实现走 `safego.Loop`、每轮各自 recover,见[邮件设计](mail-system.md) §12.2 第 14 条;之后的重写没带上) | 打 HOLD,丢这一轮,循环接着跑 |
+| match 终局发件箱 | 打 HOLD 后一路抛出,进程退出 | 同上 |
+| trade 终态清理(带排空 SOURCE 的那条) | 整个 goroutine 共用一个 recover:打 HOLD 后循环退出,进程还活着 | 同上 |
+
+重投、派发、guild 清理原来就是每轮各自 recover。HOLD 的语义没变:panic 的那一轮结局未知,这个进程的排空证明停在 HOLD,要重启才清得掉。match 的撮合与投榜循环有同一类缺陷,不在这六个里,一并修了,见 §14.10。
+
+**告警**按副本逐条判,不聚合:分片之后一个副本停住,别的副本照常推进,`max()` 看不出来。
 
 | 规则 | 式子 | for | 级别 | 所在文件 |
 |---|---|---|---|---|
-| `AssetOpRedeliveryLoopStalled` | `time() - assetop_loop_last_run_unixtime > 300` | 5m | warning | `deploy/k8s/asset-channel-alerts.yaml` 新组 `asset-channel.loop-liveness` |
+| `AssetOpRedeliveryLoopStalled` | `time() - assetop_loop_last_run_unixtime > 300` | 5m | warning | `deploy/k8s/asset-channel-alerts.yaml` 的 `asset-channel.loop-liveness` 组 |
 | `RecallDispatchLoopStalled` | `time() - data_service_recall_dispatch_last_run_unixtime > 300` | 5m | warning | 同上 |
+| `AssetOpCleanupLoopStalled` | `(time() - guild_asset_cleanup_last_run_unixtime > 1800) or (time() - trade_assetop_cleanup_last_run_unixtime > 1800)` | 5m | warning | 同上 |
 | `MailSweepStalled` | `time() - mail_sweep_last_run_unixtime > 900` | 5m | warning | `deploy/k8s/mail-alerts.yaml`(原式 `time() - max(mail_sweep_last_run_unixtime) > 900`) |
+| `MatchOutcomeOutboxLoopStalled` | `time() - match_outcome_outbox_last_run_unixtime > 300` | 5m | warning | `deploy/k8s/match-outcome-outbox-alerts.yaml` 的 `match.outcome-outbox-liveness` 组 |
+| `MatchBackgroundLoopStalled` | `time() - match_loop_last_run_unixtime > 300`(按副本、按点位逐条) | 5m | warning | `deploy/k8s/match-alerts.yaml` 的 `match.loop-liveness` 组 |
+| `GoBackgroundPanicRecovered` | `max by (namespace, pod, point) (safego_panic_total) > 0` | 0m | warning | `deploy/k8s/go-background-alerts.yaml`(新文件,对全部 Go 服务) |
 
-阈值按「一轮最长要跑多久」取若干倍:
-
-- 重投:一轮最长约 `Interval + ceil(Batch / Workers) × OpBudget`(Tick 等全部 worker 跑完才返回,每行不超过 OpBudget)。默认 2 + 13 × 2.5 ≈ 35 秒,300 秒约 8 轮。guild 允许把间隔调到 60 秒、单行预算调到 10 秒,那时最长约 190 秒,300 秒仍盖得住;再调大 `Batch` 时要复核这个阈值。契约测试按 `DefaultLoopConfig` 钉住「阈值 ≥ 5 × 默认最长一轮」。
-- 派发:间隔 1 秒,一轮的总预算 30 秒(`recallDispatchRoundLimit`),300 秒约 10 轮;契约测试钉住「阈值 ≥ 5 × 一轮总预算」。
-- mail 清理:3 × `Sweep.Interval`(当前 5 分钟 = 900 秒),沿用原有契约测试的联动。首轮之前有至多一个间隔的随机抖动,起来时先写的那一次盖住它。
-- 级别取 warning:片没人做只是延迟,不丢。处置是重启卡住的副本或把它缩掉;它从 etcd 摘掉之后,它的片由别的副本接手。
+- 停摆阈值按「一轮最长要跑多久」取若干倍:
+  - 重投:一轮最长约 `Interval + ceil(Batch / Workers) × OpBudget`(Tick 等全部 worker 跑完才返回,每行不超过 OpBudget)。默认 2 + 13 × 2.5 ≈ 35 秒,300 秒约 8 轮。guild 允许把间隔调到 60 秒、单行预算调到 10 秒,那时最长约 190 秒,300 秒仍盖得住;再调大 `Batch` 时要复核这个阈值。契约测试按 `DefaultLoopConfig` 钉住「阈值 ≥ 5 × 默认最长一轮」。
+  - 派发:间隔 1 秒,一轮的总预算 30 秒(`recallDispatchRoundLimit`),300 秒约 10 轮;契约测试钉住「阈值 ≥ 5 × (间隔 + 一轮总预算)」。
+  - mail 清理:3 × `Sweep.Interval`(当前 5 分钟 = 900 秒),沿用原有契约测试的联动。
+  - guild / trade 清理:3 × `AssetOp.CleanupIntervalMinutes`(两个服务的 yaml 都写 10 分钟,一轮有 1 分钟预算),即 1800 秒;契约测试按服务 yaml(没写时取代码缺省)钉住,并要求部署脚本不另设这个间隔。
+  - match 发件箱:一轮总预算 40 秒(`outcomeOutboxRoundBudget`),间隔缺省 2 秒,取 300 秒(约 7 轮);`IntervalMs` 调到 60 秒以上时要复核。
+  - match 后台循环一族:一条规则一个阈值,按最慢的循环取。现有最长间隔 1 分钟(滞留成局巡检、观战索引清理、观战意图清理),最长一轮预算 30 秒(全球撮合一轮),300 秒 ≥ 3 × (60 + 30)。契约测试从调用点读每个循环的间隔写法,每种写法都要登记、来源逐项核对,点位名单钉死:新加循环时先确认它的间隔加一轮预算在阈值的三分之一以内。
+- `GoBackgroundPanicRecovered` 报「这个副本的这个后台点位 panic 过」。把「打死进程」改成「兜住接着跑」之后必须有它:进程重启是响的,兜住是静的;每一轮都 panic 时停摆规则会响,只 panic 一两轮的不会。
+  - 不列点位名单,对 `safego_panic_total` 的全部点位报(全仓 65 个点位,分布在各个 Go 服务):名单会漏掉以后新加的循环;任何一个后台点位 panic 都是缺陷,这个指标的帮助文本本来就写着「压测期应恒 0」。所以它单独放一个文件,不放在资产通道的告警里。
+  - 序列在某个点位第一次 panic 时才出现、进程重启才清零,所以直接判大于 0,不用 `increase()`(它看不到第一次);告警从第一次 panic 一直挂到这个 Pod 重启,与 HOLD 同寿命:修掉根因、重启,它才消失。
+- 级别都取 warning:片没人做只是延迟,不丢。处置是修掉根因后重启停住的副本,或把它缩掉;它从 etcd 摘掉之后,它的片由别的副本接手。
 
 ### 14.4 第 35 条与 mail 的两个死计数器
 
@@ -376,90 +405,140 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 
 ### 14.5 改动清单
 
-第四批(GM 回收派发与 mail 过期清理分片、三个循环的活性、第 35 条):
+第四批(GM 回收派发与 mail 过期清理分片、前三个循环的活性、第 35 条):
 
 | 文件 | 改动 |
 |---|---|
-| `go/shared/assetop/metrics.go` | `assetop_loop_last_run_unixtime`、`markLoopRun` / `clearLoopRun` |
-| `go/shared/assetop/reconcile.go` | `Loop.Run` 起来写、退出删;`runTick` 每轮跑完写 |
+| `go/shared/looplive/looplive.go`(新) | 活性 gauge 的唯一实现:`New` / `NewRegistered`、`Mark`、`Round`、`Stop`、`Value` |
+| `go/shared/assetop/metrics.go` | `assetop_loop_last_run_unixtime`(`looplive.Gauge`)、`loopLiveness` |
+| `go/shared/assetop/reconcile.go` | `Loop.Run`:起来 `Mark`、每拍 `Round`、ctx 结束 `Stop` |
 | `go/data_service/internal/store/recall_store.go` | `ListPlannedOwned` 取代 `ListPlanned`,`recallListPlannedQuery` |
-| `go/data_service/internal/svc/recall_channel.go` | 派发按片(`gm-recall-dispatch`)、`recallDispatchStore` 接口、`owns`、`runDispatch` / `dispatchOnce` 的活性 |
-| `go/data_service/internal/metrics/recall.go` | `data_service_recall_dispatch_last_run_unixtime`、`MarkRecallDispatchRun` / `ClearRecallDispatchRun`;读队头失败计数 `data_service_recall_dispatch_list_errors_total` |
+| `go/data_service/internal/svc/recall_channel.go` | 派发按片(`gm-recall-dispatch`)、`recallDispatchStore` 接口、`owns`;`runDispatch` / `dispatchTick` 的活性;读队头失败计数 |
+| `go/data_service/internal/metrics/recall.go` | `RecallDispatchLive`(`data_service_recall_dispatch_last_run_unixtime`)、`data_service_recall_dispatch_list_errors_total` |
 | `go/mail/internal/data/sweep.go` | `Sweep` 多 `owned`;`SweepWorkKind`、`SweepShardColumn`、两条读的拼接函数 |
-| `go/mail/internal/maintenance/sweep.go` | `Run` 多 `owns`、`Sweeper` 接口;活性改写结束时刻、退出删序列 |
+| `go/mail/internal/maintenance/sweep.go` | `Run` 多 `owns`、`Sweeper` 接口;`sweepTick` / `sweepRound`:每轮各自 recover、活性 |
 | `go/mail/mail.go` | 清理接附件重投那份成员表 |
-| `go/mail/internal/metrics/metrics.go` | 删 `list_truncated_total`、`claim_short_circuit_total`;清理 gauge 改不带可变 label 的 GaugeVec,加 `ClearSweepRun` |
-| `deploy/k8s/asset-channel-alerts.yaml` | 新组 `asset-channel.loop-liveness`(重投、派发两条);work-shards 组「盲区」注释 |
+| `go/mail/internal/metrics/metrics.go` | 删 `list_truncated_total`、`claim_short_circuit_total`;`SweepLive` |
+| `deploy/k8s/asset-channel-alerts.yaml` | 新组 `asset-channel.loop-liveness`;work-shards 组「盲区」注释 |
 | `deploy/k8s/mail-alerts.yaml` | `MailSweepStalled` 按副本判;删 `mail.read` 组;文件头 |
 | `deploy/k8s/README.md` | mail 告警说明 |
 | `tools/scripts/tests/k8s_deploy_contract.tests.ps1` | mail 告警用例按新式子;match 发件箱告警用例的规则名单多一条 |
 
-第五批(其余按片分工循环的活性,§14.8):
+第五批(其余三个循环的活性与每轮 recover,§14.8):
 
 | 文件 | 改动 |
 |---|---|
-| `go/guild/internal/data/asset_store.go` | `guild_asset_cleanup_last_run_unixtime`、`MarkCleanupRun` / `ClearCleanupRun`;`RunCleanup` 的活性 |
+| `go/guild/internal/data/asset_store.go` | `CleanupLive`(`guild_asset_cleanup_last_run_unixtime`)、`CleanupPoint`;`RunCleanup` 的活性 |
 | `go/guild/guild.go` | `startAssetOpCleanup` 的活性 |
-| `go/trade/internal/data/asset_op_repo.go` | `trade_assetop_cleanup_last_run_unixtime`、`MarkCleanupRun` / `ClearCleanupRun`;`RunCleanup` 的活性 |
-| `go/trade/internal/svc/assetchannel.go` | `StartAssetOpCleanup` 的活性;每一轮各自 recover |
-| `go/match/internal/metrics/outcome.go` | `match_outcome_outbox_last_run_unixtime`、`MarkOutcomeOutboxRun` / `ClearOutcomeOutboxRun` |
-| `go/match/internal/svc/servicecontext.go` | `runOutcomeOutbox` 的活性 |
-| `deploy/k8s/asset-channel-alerts.yaml` | `asset-channel.loop-liveness` 组加 `AssetOpCleanupLoopStalled` |
+| `go/trade/internal/data/asset_op_repo.go` | `CleanupLive`(`trade_assetop_cleanup_last_run_unixtime`);`RunCleanup` 的活性 |
+| `go/trade/internal/svc/assetchannel.go` | 带排空 SOURCE 的清理循环抽成 `runSourcedCleanup` / `sourcedCleanupRound`:每轮各自 recover、活性 |
+| `go/match/internal/metrics/outcome.go` | `OutcomeOutboxLive`(`match_outcome_outbox_last_run_unixtime`) |
+| `go/match/internal/svc/outcome_outbox_loop.go`(新) | 发件箱投递循环 `runOutcomeOutboxLoop`:每轮各自 recover、活性 |
+| `go/match/internal/svc/servicecontext.go` | 原来内联的循环改为调用上面的函数 |
+| `deploy/k8s/asset-channel-alerts.yaml` | `AssetOpCleanupLoopStalled` |
+| `deploy/k8s/go-background-alerts.yaml`(新) | `GoBackgroundPanicRecovered`:对全部 Go 服务的后台点位报「panic 过」 |
+| `go/match/internal/svc/servicecontext.go` | `StartSourceLoop`(撮合的两个循环)每一轮各自 recover(§14.10) |
+| `go/match/internal/authority/rank_publisher.go` | `RunRankPublisher`(投榜)每一轮各自 recover(§14.10) |
 | `deploy/k8s/match-outcome-outbox-alerts.yaml` | 新组 `match.outcome-outbox-liveness` |
 
-两批都不改表、不改协议、不改 proto,不需要重新生成。
+第六批(match 其余后台循环的活性,§14.10):
+
+| 文件 | 改动 |
+|---|---|
+| `go/shared/looplive/looplive.go` | `Family`(`NewFamily`、`For`、`Collector`):一族循环共用一个指标名,按一个 label 区分;`Gauge` 多 label / value,`Stop` 在族里只删自己那一条,`Value` 只读自己那一条 |
+| `go/match/internal/metrics/loops.go`(新) | `LoopLive`(`match_loop_last_run_unixtime{point}`)、`loopCollectors` |
+| `go/match/internal/metrics/metrics.go` | `register()` 挂上 `loopCollectors()` |
+| `go/match/internal/svc/servicecontext.go` | `StartSourceLoop` / `StartRelayLoop`:起来 `Mark`、每轮 `Round`、ctx 结束 `Stop`;入口已关跳过的一拍也 `Mark` |
+| `go/match/internal/authority/rank_publisher.go` | `RunRankPublisher`:一进来 `Mark`、每轮 `Round`(替换 `safego.Run`)、ctx 结束 `Stop` |
+| `deploy/k8s/match-alerts.yaml` | 新组 `match.loop-liveness`(`MatchBackgroundLoopStalled`) |
+| `deploy/k8s/README.md` | 新节「Go 服务后台循环的活性与 panic 告警」 |
+| `tools/scripts/tests/k8s_deploy_contract.tests.ps1` | match-alerts 用例的规则数 4 → 5 |
+| `tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1` | 一族的定义、注册、三处接线;新用例:点位名单、节拍表与阈值 |
 
 ### 14.6 测试(都没有运行)
 
-- `go/shared/assetop/loop_liveness_test.go`(新):`TestRunTickMarksEachFinishedRound`(跑完一轮写、读到期行失败的一轮也写、panic 的一轮不写)、`TestRunMarksLivenessAtStartAndClearsItOnExit`、`TestRunTickWithoutMetrics`。
+- `go/shared/looplive/looplive_test.go`(新):`TestSeriesExistsOnlyBetweenMarkAndStop`、`TestRoundMarksOnlyRoundsThatReturn`、`TestNilGaugeStillRunsRounds`、`TestNewRegistered`;第六批加 `TestFamilyMembersAreIndependent`(同族两个循环各写各的,panic 的一个停住不影响另一个,`Stop` 只删自己那一条,`Value` 不造序列)、`TestNilFamilyGivesNilGauge`。
+- `go/shared/assetop/loop_liveness_test.go`(新):`TestRunMarksLivenessAtStartAndStopsItOnExit`、`TestRunMarksLivenessOnFailedRounds`、`TestRunKeepsRunningButStopsMarkingWhenRoundsPanic`、`TestRunWithoutMetrics`。
 - `go/shared/workshard/workshard_test.go`:分散回归加 `gm-recall-dispatch`、`mail-expiry-sweep` 两个类别键。
 - `go/data_service/internal/store/recall_store_test.go`:`TestRecallListPlannedQueryPutsShardFilterBeforeLimit`、`TestRecallListPlannedOwned_NonPositiveLimitSkipsSQL`;`recall_store_integration_test.go`(`integration` 标签,真库):`TestRecallStore_ListPlannedOwnedReadsOnlyOwnedShards`。
-- `go/data_service/internal/svc/recall_channel_test.go`:`TestDispatchRoundDispatchesOnlyOwnedShards`(两个副本各派各的片,每行恰好派一次)、`TestDispatchRoundTakesOverWhenMembersChange`(独自时全派、加入一个让出、它消失接回、自己不在表里一片不派)、`TestDispatchLoopLivenessMarksFinishedRoundsOnly`、`TestDispatchRoundCountsListFailures`(读队头失败计数、不派、不打 Hold、照写活性)。
+- `go/data_service/internal/svc/recall_channel_test.go`:`TestDispatchRoundDispatchesOnlyOwnedShards`(两个副本各派各的片,每行恰好派一次)、`TestDispatchRoundTakesOverWhenMembersChange`(独自时全派、加入一个让出、它消失接回、自己不在表里一片不派)、`TestDispatchTickCountsListFailures`(读队头失败计数、不派、不打 HOLD、照写活性)、`TestDispatchLoopLiveness`(panic 的一拍被兜住、不写活性、打了 HOLD,下一拍照常跑;起来写、停止删)。
 - `go/mail/internal/data/sweep_test.go`(新):纯单测 `TestSweepQueriesPutShardFilterBeforeLimit`;TiDB `TestTiDBSweepDeletesOnlyOwnedShards`(两个副本互补分片,各删自己的,合起来一封不漏;一片都不归时不读不删)。
-- `go/mail/internal/maintenance/sweep_test.go`(新):`TestSweepRoundPassesOwnedShardsByMailID`、`TestSweepRoundMarksTheEndOfEachFinishedRound`(写的是结束时刻,回归原来 defer 在开头求值的问题)、`TestRunMarksLivenessAtStartAndClearsItOnExit`。
-- `go/mail/internal/metrics/metrics_test.go`:`TestPrebuiltZeroSeries`(去掉两个死计数器,并钉住它们不再注册)、`TestSweepLastRunExistsOnlyWhileTheLoopRuns`(新)。
-- `go/guild/internal/data/asset_cleanup_liveness_test.go`(新)、`go/trade/internal/data/asset_op_cleanup_liveness_test.go`(新):各 `TestCleanupLastRunExistsOnlyWhileMarked`、`TestRunCleanupMarksLivenessAtStartAndClearsItOnExit`。
-- `go/trade/internal/svc/assetchannel_recovery_test.go`:`TestStartAssetOpCleanupWithSourceMarksLiveness`。
-- `go/match/internal/metrics/outcome_test.go`:`TestOutcomeOutboxLastRunExistsOnlyWhileTheLoopRuns`。
-- `tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1`(新,4 个用例):五条活性规则的名单与形状(warning、for 5m、按副本判、式子只由 `time() - gauge > 秒` 组成);六个 gauge 都是不带可变 label 的 GaugeVec、退出 `Reset`;八处循环都在起来时写、退出删、每轮在正常走完处写、不用 defer 写;阈值与代码常量和服务配置同源;告警名不重名。
-- 没有单测的一处:trade 清理改成每一轮各自 recover 之后「一轮 panic 不再让循环停掉」。清理间隔最短 1 分钟、首轮前还有随机延迟,单测要等满一个间隔,只靠代码审查与契约测试(每轮写活性、不用 defer)覆盖。
+- `go/mail/internal/maintenance/sweep_test.go`(新):`TestSweepRoundPassesOwnedShardsByMailID`、`TestSweepTickMarksLivenessAfterEachFinishedRound`、`TestSweepRoundHoldsOnDeleteFailureOnly`、`TestSweepTickSurvivesAPanickingRound`(回归:panic 不再往外抛)、`TestSweepRoundSkipsWhenAdmissionIsClosed`、`TestRunMarksLivenessAtStartAndStopsItOnExit`。
+- `go/mail/internal/metrics/metrics_test.go`:`TestPrebuiltZeroSeries`(去掉两个死计数器,并钉住它们不再注册)、`TestSweepLiveIsRegisteredAndExistsOnlyWhileTheLoopRuns`(新)。
+- `go/guild/internal/data/asset_cleanup_liveness_test.go`(新)、`go/trade/internal/data/asset_op_cleanup_liveness_test.go`(新):各 `TestCleanupLiveIsRegisteredUnderTheAlertedName`、`TestRunCleanupMarksLivenessAtStartAndStopsItOnExit`。
+- `go/trade/internal/svc/assetchannel_recovery_test.go`:`TestStartAssetOpCleanupWithSourceMarksLiveness`、`TestSourcedCleanupSurvivesAPanickingRound`(回归:一轮 panic 之后循环接着跑、打了 HOLD)、`TestSourcedCleanupRound`。
+- `go/match/internal/metrics/outcome_test.go`:`TestOutcomeOutboxLiveIsRegisteredAndExistsOnlyWhileTheLoopRuns`。
+- `go/match/internal/svc/outcome_outbox_loop_test.go`(新):`TestOutcomeOutboxLoopSurvivesAPanickingRound`(回归:panic 不再打死进程)、`TestOutcomeOutboxLoopStopsMarkingWhenEveryRoundPanics`、`TestOutcomeOutboxLoopHoldsOnDeliveryErrorAndKeepsRunning`、`TestOutcomeOutboxLoopStopsWhenRelayAdmissionCloses`。
+- `go/match/internal/svc/source_loop_test.go`(新):`TestStartSourceLoopSurvivesAPanickingRound`(回归:撮合循环一轮 panic 后不再退出)、`TestStartSourceLoopDoesNotHoldOnHealthyRounds`;第六批加 `TestStartSourceLoopLiveness`(起来有序列、正常轮次往前写、之后每轮都 panic 时循环接着跑而时刻停住、ctx 结束删序列)、`TestStartRelayLoopLivenessAndPanic`(一轮 panic 打中继 HOLD、循环接着跑、之后照写活性、ctx 结束删序列)。
+- `go/match/internal/authority/rank_publisher_panic_test.go`(新):`TestRunRankPublisherSurvivesAPanickingRound`(回归:投榜循环一轮 panic 不再打死进程;改之前这个用例会让整个测试进程退出);第六批加断言:跑着时有活性序列,ctx 结束后删掉。
+- `tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1`(新,第六批后 7 个用例):规则名单与停摆规则的形状;口径只有 `looplive` 一份、各个 gauge 都用它定义,match 一族按 `point` 区分并挂进 `register()`;每处循环(第六批后 11 处)都是起来 `Mark`、每轮经 `Round`、`Stop` 紧跟 `return`、不 defer;通用 panic 规则的式子(全部点位、按副本按点位、不用 `increase()`),各循环的点位名是代码常量,投榜不再另包 `safego.Run`;阈值与代码常量和服务配置同源;match 一族的点位名单、每个调用点的间隔写法登记与来源核对、阈值 ≥ 3 × (最长间隔 + 最长一轮预算);告警名不重名。
+- guild 的 `startAssetOpCleanup`(`guild.go`,package main)没有单测:它每轮各自 recover 是原有行为,本批只换了活性的写法,由契约测试核对写法。
 
 ### 14.7 给 Codex 的验证命令
 
 工作目录是仓库根目录下对应的 Go 模块,PowerShell 7,Go 命令前先 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`。按顺序跑,失败时保留编译错误全文、失败用例名与断言原文,不改弱断言,不连续重试。§8、§13.3 的步骤若还没跑,先跑完它们。
 
-1. `cd go/shared; gofmt -l assetop workshard; go vet ./assetop/... ./workshard/...; go test ./assetop/... ./workshard/... -count=1`。通过:gofmt 无输出;全部 PASS,`TestRunTickMarksEachFinishedRound`、`TestRunMarksLivenessAtStartAndClearsItOnExit`、`TestRunTickWithoutMetrics` 与 `TestOwnerSpreadsShortShardKeysAcrossMembers` 的两个新前缀子用例在列。
-2. `cd go/data_service; gofmt -l internal/store internal/svc internal/metrics; go build ./...; go vet ./...; go test ./internal/store/ ./internal/svc/ ./internal/metrics/ -count=1`。通过:全部 PASS,`TestRecallListPlannedQueryPutsShardFilterBeforeLimit`、`TestRecallListPlannedOwned_NonPositiveLimitSkipsSQL`、`TestDispatchRoundDispatchesOnlyOwnedShards`、`TestDispatchRoundTakesOverWhenMembersChange`、`TestDispatchLoopLivenessMarksFinishedRoundsOnly`、`TestDispatchRoundCountsListFailures` 在列。
+1. `cd go/shared; gofmt -l looplive assetop workshard; go vet ./looplive/... ./assetop/... ./workshard/...; go test ./looplive/... ./assetop/... ./workshard/... -count=1`。通过:gofmt 无输出;全部 PASS,`looplive` 的 6 个用例、`TestRunMarksLivenessAtStartAndStopsItOnExit`、`TestRunMarksLivenessOnFailedRounds`、`TestRunKeepsRunningButStopsMarkingWhenRoundsPanic`、`TestRunWithoutMetrics` 与 `TestOwnerSpreadsShortShardKeysAcrossMembers` 的两个新前缀子用例在列。panic 用例会打 `goroutine_panic` 的 ERROR 日志与栈,属预期。
+2. `cd go/data_service; gofmt -l internal/store internal/svc internal/metrics; go build ./...; go vet ./...; go test ./internal/store/ ./internal/svc/ ./internal/metrics/ -count=1`。通过:全部 PASS,`TestRecallListPlannedQueryPutsShardFilterBeforeLimit`、`TestRecallListPlannedOwned_NonPositiveLimitSkipsSQL`、`TestDispatchRoundDispatchesOnlyOwnedShards`、`TestDispatchRoundTakesOverWhenMembersChange`、`TestDispatchTickCountsListFailures`、`TestDispatchLoopLiveness` 在列。
 3. data_service 真库(一次性 MySQL / TiDB,`DATA_SERVICE_IT_MYSQL_HOST` / `_USER` / `_PASSWORD`):`go test -tags=integration ./internal/store/ -count=1 -run 'TestRecallStore_'`。通过:`TestRecallStore_ListPlannedOwnedReadsOnlyOwnedShards` 与既有 `TestRecallStore_*` 全部 PASS。
-4. `cd go/mail; gofmt -l mail.go internal/data internal/maintenance internal/metrics; go build ./...; go vet ./...; go test ./internal/data/ ./internal/maintenance/ ./internal/metrics/ -count=1`。通过:全部 PASS(没设 `MAIL_RANK_TEST_TIDB` 时 TiDB 用例 Skip,另算),`TestSweepQueriesPutShardFilterBeforeLimit`、`TestSweepRoundPassesOwnedShardsByMailID`、`TestSweepRoundMarksTheEndOfEachFinishedRound`、`TestRunMarksLivenessAtStartAndClearsItOnExit`、`TestPrebuiltZeroSeries`、`TestSweepLastRunExistsOnlyWhileTheLoopRuns` 在列。
+4. `cd go/mail; gofmt -l mail.go internal/data internal/maintenance internal/metrics; go build ./...; go vet ./...; go test ./internal/data/ ./internal/maintenance/ ./internal/metrics/ -count=1`。通过:全部 PASS(没设 `MAIL_RANK_TEST_TIDB` 时 TiDB 用例 Skip,另算),`TestSweepQueriesPutShardFilterBeforeLimit`、maintenance 的 6 个用例、`TestPrebuiltZeroSeries`、`TestSweepLiveIsRegisteredAndExistsOnlyWhileTheLoopRuns` 在列。
 5. mail TiDB(一次性 TiDB,数值 loopback 端口):`$env:MAIL_RANK_TEST_TIDB='127.0.0.1:<端口>'; $env:MAIL_RANK_REQUIRE_TESTS='1'; go test ./internal/data/ -count=1 -run 'TestTiDBSweepDeletesOnlyOwnedShards|TestTiDBUnknownClaimStateNeverDeletesEvenAfterExpiry'`。通过:两个都 PASS、不 Skip。
-6. `cd go/guild; gofmt -l guild.go internal/data; go build ./...; go vet ./...; go test ./internal/data/ -count=1 -run 'TestCleanupLastRunExistsOnlyWhileMarked|TestRunCleanupMarksLivenessAtStartAndClearsItOnExit|TestCleanupCandidateQueriesPutShardFilterBeforeLimit'`。通过:3 个 PASS。
-7. `cd go/trade; gofmt -l internal/data internal/svc; go build ./...; go vet ./...; go test ./internal/data/ ./internal/svc/ -count=1`。通过:全部 PASS,`TestCleanupLastRunExistsOnlyWhileMarked`、`TestRunCleanupMarksLivenessAtStartAndClearsItOnExit`、`TestStartAssetOpCleanupWithSourceMarksLiveness`、既有 `TestStartAssetOpCleanup*` 在列。
-8. `cd go/match; gofmt -l internal/metrics internal/svc; go build ./...; go vet ./...; go test ./internal/metrics/ ./internal/svc/ -count=1`。通过:全部 PASS,`TestOutcomeOutboxLastRunExistsOnlyWhileTheLoopRuns` 在列。
-9. 仓库根目录:`pwsh -NoProfile -File tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1`(通过:`fail=0`);`pwsh -NoProfile -File tools/scripts/tests/assetop_work_shard_alerts_contract.tests.ps1`(`fail=0`,asset-channel 文件多了一组,原用例不受影响);`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(mail 告警、match 发件箱告警、LogQL 契约三条 PASS)。
-10. 规则语法:照 PROGRESS 2026-11-10「死节点收尾告警」条目的容器做法(固定摘要的 `prom/prometheus`,`--network none --rm`,只读挂载),对 `deploy/k8s/asset-channel-alerts.yaml`、`mail-alerts.yaml`、`match-outcome-outbox-alerts.yaml` 各自提取的 `.spec` 跑 `promtool check rules`,期望 `SUCCESS`,规则数等于各文件里 `- alert:` 的条数。
+6. `cd go/guild; gofmt -l guild.go internal/data; go build ./...; go vet ./...; go test ./internal/data/ -count=1 -run 'TestCleanupLiveIsRegisteredUnderTheAlertedName|TestRunCleanupMarksLivenessAtStartAndStopsItOnExit|TestCleanupCandidateQueriesPutShardFilterBeforeLimit'`。通过:3 个 PASS。
+7. `cd go/trade; gofmt -l internal/data internal/svc; go build ./...; go vet ./...; go test ./internal/data/ ./internal/svc/ -count=1`。通过:全部 PASS,`TestCleanupLiveIsRegisteredUnderTheAlertedName`、`TestRunCleanupMarksLivenessAtStartAndStopsItOnExit`、`TestStartAssetOpCleanupWithSourceMarksLiveness`、`TestSourcedCleanupSurvivesAPanickingRound`、`TestSourcedCleanupRound`、既有 `TestStartAssetOpCleanup*` 在列。
+8. `cd go/match; gofmt -l internal/metrics internal/svc internal/authority; go build ./...; go vet ./...; go test ./internal/metrics/ ./internal/svc/ -count=1; go test ./internal/authority/ -count=1 -run 'TestRunRankPublisherSurvivesAPanickingRound'`。通过:全部 PASS,`TestOutcomeOutboxLiveIsRegisteredAndExistsOnlyWhileTheLoopRuns`、`TestOutcomeOutboxLoop*` 4 个、`TestStartSourceLoop*` 3 个、`TestStartRelayLoopLivenessAndPanic`、`TestRunRankPublisherSurvivesAPanickingRound` 在列。panic 用例会打 `goroutine_panic` 的 ERROR 日志与栈,属预期。另跑一遍 `go test ./internal/logic/ ./internal/team/ -count=1`:两个包里起了真循环的用例(如观战维护)现在每拍多写一次活性,结果应与改前相同。
+9. 仓库根目录:`pwsh -NoProfile -File tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1`(通过:`fail=0`);`pwsh -NoProfile -File tools/scripts/tests/assetop_work_shard_alerts_contract.tests.ps1`(`fail=0`,asset-channel 文件多了一组,原用例不受影响);`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(mail 告警、match-alerts.yaml、match 发件箱告警、LogQL 契约四条 PASS)。
+10. 规则语法:照 PROGRESS 2026-11-10「死节点收尾告警」条目的容器做法(固定摘要的 `prom/prometheus`,`--network none --rm`,只读挂载),对 `deploy/k8s/asset-channel-alerts.yaml`、`mail-alerts.yaml`、`match-outcome-outbox-alerts.yaml`、`go-background-alerts.yaml`、`match-alerts.yaml` 各自提取的 `.spec` 跑 `promtool check rules`,期望 `SUCCESS`,规则数等于各文件里 `- alert:` 的条数(写本条时 19、2、3、1、5)。
 11. 多副本冒烟(清空 Redis / MySQL / etcd 之后;`Recall.Enabled=true`,guild / trade 开 `CleanupEnabled`):data_service、mail、guild、trade、match 各起 2 个副本(同一 zone):
-    - `/metrics` 上每个副本都有 `assetop_loop_last_run_unixtime`、`data_service_recall_dispatch_last_run_unixtime`、`mail_sweep_last_run_unixtime`、`guild_asset_cleanup_last_run_unixtime`、`trade_assetop_cleanup_last_run_unixtime`、`match_outcome_outbox_last_run_unixtime` 中属于它的那几条,值随时间前进;canary 副本上没有这些序列;
+    - `/metrics` 上每个副本都有上表里属于它的那几条活性序列,值随时间前进;canary 副本上没有这些序列(例外:match 的提前作废取证循环两条轨道都起,canary 上 `match_loop_last_run_unixtime` 只有 `point="match.battle_instance_loss"` 这一条;stable 上 14 条都在);
     - 下一批 GM 回收:两个 data_service 副本的派发日志里出现的 `player` 不重叠,`data_service_recall_dispatch_total{result="lost"}` 基本不涨;
     - 造一批保留期外的过期邮件,开 `Sweep.Mode=delete`:两个 mail 副本的 `mail_sweep_deleted_total` 合计等于造的行数;
     - 正常停掉每个服务的一个副本:它的活性序列随进程消失,停摆规则不响;约 65 秒内另一个副本的 `assetop_owned_shards` 涨到 64,派发、清理、发件箱继续推进。
-    - 「循环卡住、进程还在」这条路径没有冒烟:要注入故障让某一轮挂住(`kill -STOP` 会连 `/metrics` 一起冻住,序列变陈旧,规则不会响,不能用它模拟)。这条只靠第 9 步的契约测试与第 10 步的 promtool。
+    - 「循环停住、进程还在」这条路径没有冒烟:要注入故障让某一轮挂住或 panic(`kill -STOP` 会连 `/metrics` 一起冻住,序列变陈旧,规则不会响,不能用它模拟)。这条靠第 1~8 步的单测、第 9 步的契约测试与第 10 步的 promtool。
 
-### 14.8 第五批:其余按片分工循环的活性(2026-11-11)
+### 14.8 第五批:其余三个循环(guild / trade 终态清理、match 终局发件箱)
 
-同一会话、同一天,负责人要求「查出来的问题不要等以后,现在修」。第 25 条里按片分工的循环还有三个没有活性信号,一个副本卡住时它名下的片没人做,总和类指标看不出来:
+同一会话。负责人要求「查出来的问题不要等以后,现在修」:第 25 条里还有三个按片分工的循环没有活性信号,一个副本停住时它名下的片没人做,合计类指标看不出来:
 
-| 循环 | 位置 | 卡住的后果 | 指标 | 告警 |
-|---|---|---|---|---|
-| guild 终态清理 | `guild.go` 的 `startAssetOpCleanup`、`data.GuildAssetStore.RunCleanup` | 名下的终态行、过期计数行不删,表一直长;`guild_asset_cleanup_deleted_total` 的总和照样在涨 | `guild_asset_cleanup_last_run_unixtime` | `AssetOpCleanupLoopStalled` |
-| trade 终态清理 | `svc.StartAssetOpCleanup`、`data.AssetOpRepo.RunCleanup` | 同上;`trade_assetop_cleanup_deleted_total` 照样在涨 | `trade_assetop_cleanup_last_run_unixtime` | 同上 |
-| match 终局发件箱 | `svc/servicecontext.go` 的 `runOutcomeOutbox` | 名下的整局结果不发布、个人结算不进收件箱;已有告警只看个人结算首投的最老年龄,整局结果那一类卡住没有规则 | `match_outcome_outbox_last_run_unixtime` | `MatchOutcomeOutboxLoopStalled` |
+| 循环 | 停住的后果 | 合计类指标为什么看不出来 |
+|---|---|---|
+| guild 终态清理 | 名下的终态行、过期计数行不删,表一直长 | `guild_asset_cleanup_deleted_total` 的总和照样在涨 |
+| trade 终态清理 | 同上 | `trade_assetop_cleanup_deleted_total` 照样在涨 |
+| match 终局发件箱 | 名下的整局结果不发布、个人结算不进收件箱 | 已有告警只看个人结算首投的最老年龄;整局结果那一类停住没有规则 |
 
-- 口径与 §14.3 相同:起来时写一次,每跑完一轮在这一轮正常走完的地方写(成败都写,panic 的那一轮不写),退出时删序列;不带可变 label。guild 的指标原来都用 go-zero 的 `metric`,它删不了序列,这一个改用 Prometheus 客户端注册在默认注册表上,与 go-zero 的指标同一个 `/metrics`。
-- 阈值:清理是 3 × `AssetOp.CleanupIntervalMinutes`(两个服务的服务 yaml 都写 10 分钟,一轮有 1 分钟预算),即 1800 秒;契约测试按服务 yaml(没写时取代码缺省)钉住,并要求部署脚本不另设这个间隔。发件箱一轮有 40 秒总预算、间隔缺省 2 秒,取 300 秒(约 7 轮);`IntervalMs` 调到 60 秒以上时要复核。
-- **trade 清理改成每一轮各自 recover**:原来整个 goroutine 共用一个 recover,一轮 panic 打完 HOLD 之后整个清理循环就退出了,进程还活着、还在成员表里,它名下的片从此没人清,而且退出时活性序列会被删,告警也看不见。改成与 guild 清理、`assetop.Loop.Run` 一样:每一轮包在 `safego.Run` 里,panic 先打 HOLD、只丢这一轮,循环接着跑;每一轮都 panic 时活性时刻不前进,由告警报出来。HOLD 的语义不变。
-- mail 清理与 match 发件箱一轮 panic 会让进程退出(原有设计,先打 HOLD 再重新抛出,没有外层 recover),不存在「循环死了、进程还在」的情况,没改。
+指标、点位、告警与口径都在 §14.3 的表里,与前三个循环同一份实现。另有两处结构改动:
+
+- trade 带排空 SOURCE 的清理循环从 `StartAssetOpCleanup` 里抽成 `runSourcedCleanup` / `sourcedCleanupRound`(节拍与一轮清理分开),为的是能用毫秒级间隔写回归用例;行为上的变化只有「每一轮各自 recover」(§14.3)。
+- match 的投递循环从 `NewServiceContextWithAdmission` 里的闭包抽成 `runOutcomeOutboxLoop`(新文件 `outcome_outbox_loop.go`),同样为了可测;一轮的 40 秒预算收成常量 `outcomeOutboxRoundBudget`。
+- guild 的指标原来都用 go-zero 的 `metric`,它删不了序列;活性这一个用 Prometheus 客户端注册在默认注册表上,与 go-zero 的指标同一个 `/metrics`。
 
 ### 14.9 Java 版
 
-服务端内部改动,没有客户端契约。Java 版只登记待做(Java 仓 `PARITY.md`「2026-11-11 回收派发与邮件过期清理分片、循环活性指标」):GM 回收派发与邮件过期清理按同一口径分片(派发按玩家、邮件清理按邮件号,成员表只圈连同一个库、都在跑这项工作的实例),各个按片分工的周期循环加「最近一次跑完一轮的时刻」并按实例判停摆;核对 Java 的邮件列表有没有「系统有效集截断」的计数,没有截断路径就不要这个指标。
+服务端内部改动,没有客户端契约。Java 版只登记待做(Java 仓 `PARITY.md`「2026-11-12 回收派发与邮件过期清理按片分工、后台循环活性与每轮各自 recover」):GM 回收派发与邮件过期清理按同一口径分片(派发按玩家、邮件清理按邮件号,成员表只圈连同一个库、都在跑这项工作的实例);各个按片分工的周期循环(含撮合与投榜)报「最近一次跑完一轮的时刻」并按实例判停摆,一轮抛异常只丢这一轮、不打死进程也不让循环退出,被兜住的异常要有告警;核对 Java 的邮件列表有没有「系统有效集截断」的计数,没有截断路径就不要这个指标。
+
+### 14.10 match 的撮合、投榜与其余后台循环
+
+这些循环不在第 25 条里(归全服匹配,缺口第 24 条),但与 §14.3 是同一类缺陷。第五批先修一轮 panic 的后果,第六批补上活性。
+
+**第五批:一轮 panic 的后果**
+
+| 循环 | 原来一轮 panic 的后果 | 现在 |
+|---|---|---|
+| 撮合的两个循环(`match.global.pool`、`match.global`,走 `ServiceContext.StartSourceLoop`) | 打 HOLD 后重新抛出,被最外层的 `safego.Go` 兜住,**循环就此退出**:进程还活着、还在成员表里,它名下的撮合段从此没人撮合,没有任何信号 | 每一轮包在 `safego.Run` 里:打 HOLD,丢这一轮,循环接着跑(与同文件的 `StartRelayLoop` 同一写法) |
+| 投榜循环(`authority.RunRankPublisher`,新点位 `match.rank_publish`) | 打 HOLD 后一路抛出,进程退出;投榜按 (模式, 来源片) 分工,会随着片换主把副本挨个打死 | 同上 |
+
+- 丢一轮不影响正确性:撮合的内存状态(翻页游标)只用于调度,提交决策都在 SQL 提交点;投榜的游标在库里、只在确认之后推进,下一轮从同一位置重投。
+- 兜住的 panic 由 §14.3 的 `GoBackgroundPanicRecovered` 报。走 `StartRelayLoop` 的循环原来就是每一轮各自 recover。
+
+**第六批:活性**(2026-11-12,同一会话;负责人要求查出来的问题现在修,原来写的「另开任务」作废)
+
+第五批之后,这些循环「卡在某一轮里不返回」「goroutine 意外退出」仍然看不出来:撮合与投榜按片分给各副本,停住的副本名下的撮合段排队不成局、投榜片排名不更新,别的副本照常推进,`match_pool_owned` 之和、成局计数这些合计指标都正常。
+
+- 一共 14 个点位,都经三个入口起:`ServiceContext.StartSourceLoop`(`match.global`、`match.global.pool`)、`ServiceContext.StartRelayLoop`(`match.global.ready.scan`、`match.global.outcome.recover`、`match.global.expired.audit`、`match.global.spectate.cleanup`、`match.global.spectator_intent.purge`、`match.battle_instance_loss`、`match.team.sql.prepared` / `queued` / `forming` / `completed` / `idle`)、`authority.RunRankPublisher`(`match.rank_publish`)。
+- 所以活性接在这三个入口里,不改十几个调用点:一族 gauge `match_loop_last_run_unixtime{point}`(`metrics.LoopLive`,`looplive.NewFamily`),每个循环 `LoopLive.For(point)` 取自己那一条,口径与 §14.3 相同(起来 `Mark`、每轮经 `Round`、ctx 结束 `Stop`)。以后经这两个包装函数起的循环自动有活性。
+- `point` 是 label,但值只是代码里写死的点位名(与 `safego_panic_total{point}` 同一组值),不放实体 id。
+- 两处入口特有的写法:
+  - `StartSourceLoop` 的排空入口已关(停机排空中)时这一拍不开新一轮,但循环还活着,照写时刻;入口报出别的错误时循环 `return`、序列留着(意料之外的退出,告警报出来)。
+  - `RunRankPublisher` 一进来就 `Mark`:它后面有几处意料之外的 `return`(参数不对、建不了 gRPC 连接),原来只打一行日志、投榜从此不跑;现在序列停在那一刻,告警报出来。只有 ctx 结束的两处 `return` 之前 `Stop`。投榜每一轮改由 `live.Round` 兜住,不再另包 `safego.Run`。
+- 告警 `MatchBackgroundLoopStalled`(`deploy/k8s/match-alerts.yaml` 的 `match.loop-liveness` 组):`time() - match_loop_last_run_unixtime > 300`,for 5m,warning,按副本、按点位逐条判。一条规则一个阈值,取法见 §14.3 的阈值一节:现有最长间隔 1 分钟、最长一轮预算 30 秒,300 ≥ 3 × 90。契约测试从调用点读出每个循环的间隔写法,写法要登记、来源逐项核对,点位名单钉死,新加循环时会先在这里判红。
+- canary 只起提前作废取证循环(`match.battle_instance_loss`),撮合、恢复、巡检、观战维护、整队维护与投榜都只在 stable 起(发布轨道设计 §2.5),canary 上的序列只有那一条。
+- 终局发件箱仍用自己的 `match_outcome_outbox_last_run_unixtime` 与告警(第五批),不并进这一族:它不经这两个包装函数,阈值也按它自己的 40 秒预算定。

@@ -17,7 +17,8 @@ public:
     // 从临时格取回到人物背包(SceneBagClientPlayer.RetrieveTemporaryItems;docs/design/bag-rule-policy-layering.md §6.6)。
     // itemId != 0 取回这一件;takeAll 取回临时格里的全部(按入包先后)。两者恰好给一个。
     // 全或无:人物背包放不下这一批就整批拒绝,两个包都不动;成功后由 handler 回两个包的全量。不改装备栏、不重算属性。
-    // 真搬了东西之后调 PlayerInboxSystem::OnBagSpaceFreed:因两包都放不下而延后的结算下一个 Tick 就重试,不用等退避。
+    // 真搬了东西之后 BagService::RetrieveFromTemporary 发「腾位通知」(bag_service.h),收件箱据此把因两包都放不下而延后的
+    // 结算提到下一个 Tick 重试,不用等退避;本函数不直接调收件箱。
     // 校验顺序(全部在任何修改之前)与返回的 tip:
     //   实体无效                                       kThisEntityIsInvalid
     //   itemId 与 takeAll 都给或都不给                 kInvalidParameter(纯参数错误先于状态判定)

@@ -11,6 +11,7 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "core/utils/registry/game_registry.h"
 #include "modules/currency/comp/player_currency_comp.h"
+#include "modules/currency/system/currency_clawback_stats.h" // 补缴因版本错位被跳过的计数(scene 的 Prometheus 出口导出)
 #include "modules/gain_block/gain_block_service.h"
 #include "modules/transaction_log/anomaly_detector.h"
 #include "modules/transaction_log/transaction_log_system.h"
@@ -58,6 +59,45 @@ bool DebtCarriesNewerVersionFields(const CurrencyDebt &debt)
     const auto debtEntryName = CurrencyDebtEntry::descriptor()->full_name();
     return unknown_field_carry::CarriesNewerVersionFields(
         std::string_view(debtEntryName.data(), debtEntryName.size()), debt.unknownFields);
+}
+
+// 一笔收入按补缴先扣之后的计划:扣还多少、净入账多少,以及是否因欠款带新版本字段而跳过扣还。只读,不动欠款。
+// AddCurrency 的提交与 CurrencySystem::CreditOverflows 的预检共用它,两处对同一笔收入不会给出不同结论。
+struct CreditPlan
+{
+    uint64_t deduct = 0;
+    uint64_t credit = 0;
+    bool clawbackSkippedForVersionSkew = false;
+};
+
+CreditPlan PlanCredit(const CurrencyDebt *debt, uint64_t gain)
+{
+    CreditPlan plan;
+    if (debt != nullptr)
+    {
+        // 只扣有效欠款(没冻结、没过期)。
+        const bool expired = (debt->expiresAt > 0 && TimeSystem::NowSecondsUTC() >= debt->expiresAt);
+        if (!debt->frozen && !expired)
+        {
+            plan.deduct = std::min(gain, debt->Remaining());
+        }
+        // 混版本保护(docs/design/mixed-version-persist-field-protection.md §4.4):欠款带着更新版本才有的字段时,
+        // 本版本不扣还也不删除,按冻结处理。新字段可能改了扣还口径(例如利息、分期),按 owed−paid 扣就扣错了;
+        // 扣满还会整条删除,新字段随之消失。这笔收入全额入账,欠款原样留给认识这些字段的版本去收。
+        if (plan.deduct > 0 && DebtCarriesNewerVersionFields(*debt))
+        {
+            plan.clawbackSkippedForVersionSkew = true;
+            plan.deduct = 0;
+        }
+    }
+    plan.credit = gain - plan.deduct;
+    return plan;
+}
+
+// 净入账 credit 加到 balance 上会不会回绕。
+bool BalanceOverflows(uint64_t balance, uint64_t credit)
+{
+    return credit > std::numeric_limits<uint64_t>::max() - balance;
 }
 
 } // namespace
@@ -181,35 +221,20 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     // ── Deferred-clawback / 补缴:先只算扣还额,不动欠款 ─────────────────
     // 判定与提交分两段:下面的溢出判定要用扣还后的净入账额,而拒绝必须发生在扣还之前 ——
     // 先扣还、再发现溢出而拒绝,欠款已经少了一截,这笔收入却没入账,扣掉的那部分就凭空没了。
+    // 扣还计划(PlanCredit)与资产通道入账之前的溢出预检(CreditOverflows)是同一份。
     auto debtIt = comp->debts.find(static_cast<uint32_t>(type));
     CurrencyDebt *debt = (debtIt != comp->debts.end()) ? &debtIt->second : nullptr;
-    uint64_t deduct = 0;
-    bool clawbackSkippedForVersionSkew = false;
-    if (debt != nullptr)
-    {
-        // Only deduct if the debt is active (not frozen and not expired).
-        const bool expired = (debt->expiresAt > 0 && TimeSystem::NowSecondsUTC() >= debt->expiresAt);
-        if (!debt->frozen && !expired)
-        {
-            deduct = std::min(gain, debt->Remaining());
-        }
-        // 混版本保护(docs/design/mixed-version-persist-field-protection.md §4.4):欠款带着更新版本才有的字段时,
-        // 本版本不扣还也不删除,按冻结处理。新字段可能改了扣还口径(例如利息、分期),按 owed−paid 扣就扣错了;
-        // 扣满还会整条删除,新字段随之消失。这笔收入全额入账,欠款原样留给认识这些字段的版本去收。
-        if (deduct > 0 && DebtCarriesNewerVersionFields(*debt))
-        {
-            clawbackSkippedForVersionSkew = true;
-            deduct = 0;
-        }
-    }
-    const uint64_t credit = gain - deduct;
+    const CreditPlan plan = PlanCredit(debt, gain);
+    const uint64_t deduct = plan.deduct;
+    const uint64_t credit = plan.credit;
+    const bool clawbackSkippedForVersionSkew = plan.clawbackSkippedForVersionSkew;
 
     // ── uint64 溢出:零副作用拒绝 ─────────────────────────────────────────
     // 回绕后的余额是个很小的数:玩家的钱凭空没了,流水却记成一笔正常入账。余额逼近 2^64 只可能是坏数据或刷钱,
     // 与 amount<=0 同类按编程错误回 kInvalidParameter(不新增 tip)。按净入账额判,与战斗结算的整批预检
     // CanCreditWholeBattleCurrency 同口径 —— 预检放行的那一笔这里不能再拒,否则多币种结算会只入一半。
     // 判定排在扣还、流水、异常检测之前:拒绝时欠款、余额、脏标记、流水、异常窗口都不动。
-    if (credit > std::numeric_limits<uint64_t>::max() - balanceBefore)
+    if (BalanceOverflows(balanceBefore, credit))
     {
         LOG_ERROR << "CurrencySystem::AddCurrency: balance overflow rejected, balance=" << balanceBefore
                   << " credit=" << credit << " amount=" << amount
@@ -221,7 +246,9 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     // ── 提交:从这里起不再有失败分支 ───────────────────────────────────
     if (clawbackSkippedForVersionSkew)
     {
-        // 版本错位的统一计数口径:告警与值班查询按 metric= / where= 数行(asset-channel-alerts.yaml 文件头)。
+        // 版本错位的统一计数口径:值班查询按 metric= / where= 数行(asset-channel-alerts.yaml 文件头);同一时刻进程计数加一,
+        // 由 scene 的 Prometheus 出口导出为 scene_currency_clawback_version_skew_total,告警读它(persist-version-skew-alerts.yaml)。
+        currency_clawback_stats::IncVersionSkewSkipped();
         LOG_WARN << "[CurrencySystem] metric=persist_version_skew where=currency_clawback player_id="
                  << tlsEcs.GetPlayerId(player) << " currency_type=" << static_cast<uint32_t>(type)
                  << " owed=" << debt->owed << " paid=" << debt->paid << " gain=" << gain
@@ -479,6 +506,26 @@ bool CurrencySystem::DebtCarriesUnknownFields(entt::entity player, CurrencyType 
     // 只认更新版本加的字段;已退役字段的残留字节不算(否则带残留的欠款会被永远当成新版本数据,再也挂不上新欠款)。
     // 与 AddCurrency 的补缴扣还守卫是同一个判据。
     return DebtCarriesNewerVersionFields(existing->second);
+}
+
+bool CurrencySystem::CreditOverflows(entt::entity player, CurrencyType type, uint64_t amount)
+{
+    if (amount == 0 || !IsKnownCurrencyType(type))
+    {
+        return false;
+    }
+    const auto *balances = tlsEcs.actorRegistry.try_get<CurrencyComp>(player);
+    const auto *comp = tlsEcs.actorRegistry.try_get<PlayerCurrencyComp>(player);
+    if (balances == nullptr || comp == nullptr)
+    {
+        return false;
+    }
+    // 余额槽位缺的按 0 读,与 EnsureCurrencySlots 补的零值一致;这里只读,不补槽位。
+    const auto index = static_cast<int>(type);
+    const uint64_t balance = index < balances->values_size() ? balances->values(index) : 0;
+    const auto debtIt = comp->debts.find(static_cast<uint32_t>(type));
+    const CurrencyDebt *debt = (debtIt != comp->debts.end()) ? &debtIt->second : nullptr;
+    return BalanceOverflows(balance, PlanCredit(debt, amount).credit);
 }
 
 // ---------------------------------------------------------------------------

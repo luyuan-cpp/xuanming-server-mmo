@@ -123,7 +123,7 @@ func TestRejectedOriginalTiDBAbortsOnReplayAfterDeadline(t *testing.T) {
 			for _, m := range f.Members {
 				require.EqualValues(t, 4, ticketRow(t, s, m.PlayerId).State, "原票随 ABORT 释放")
 			}
-			require.Zero(t, settlementSources(t, s, f.BattleId), "作废的局没有任何个人来源")
+			requireOnlyVoidSources(t, s, f.BattleId, len(f.Members))
 		})
 	}
 }

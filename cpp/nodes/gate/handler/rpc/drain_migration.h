@@ -22,6 +22,7 @@
 #include <functional>
 
 #include "engine/core/type_define/type_define.h"
+#include "metrics/prometheus_text.h"
 #include "proto/contracts/kafka/gate_event.pb.h"
 #include "proto/login/login.pb.h"
 #include "proto/scene/client_player_common.pb.h"
@@ -48,7 +49,7 @@ inline constexpr std::chrono::minutes kEnterGameSettle{5};
 // 一个会话这一拍按什么身份迁。票据绑不绑玩家由 login 按 SessionDetails 的 player_id 判,gate 只决定迁不迁。
 enum class Candidate : uint8_t
 {
-	kSkip,       // 不迁:没验票、没登录成功、进场途中、选角界面但刚转发过 EnterGame、已推过 124、路由 lane 有在途或排队的请求
+	kSkip,       // 不迁:没验票、没登录成功、进场途中、选角界面但刚转发过 EnterGame、已推过 124、路由 lane 或场景 lane 有在途或排队的请求
 	kInGame,     // 已进游戏:已绑角色、有场景路由、没有待补发的进场。票据绑定本人
 	kRoleSelect, // 停在选角界面:登录过、没绑角色、距上次 EnterGame 已满 kEnterGameSettle。票据不绑玩家
 };
@@ -120,6 +121,18 @@ struct Counters
 	bool operator==(const Counters &) const = default;
 };
 const Counters &GetCounters();
+
+// 把上面的计数写成 Prometheus 指标(metrics/metrics_registry.h 的采集回调):
+//   gate_drain_migration_total{result}        要票与推送的各种结局;
+//   gate_drain_migration_lease_total{event}   许可:received(含续期)/ stopped;
+//   gate_drain_migration_active               许可有效为 1(到期由下一拍收口,最多晚一拍);
+//   gate_drain_migration_in_flight            已发出、login 还没回的要票请求数;
+//   gate_redirect_linger_closed_total         推过 124 满 kRedirectLinger 仍连着、被 gate 关掉的连接(迁移与跨 zone 共用)。
+// 标签只有 result / event 两个封闭集合,不带玩家号与会话号(AGENTS.md §9);定位具体连接靠 [DrainMigration] 日志。
+// 在 /metrics 出口所在的 gate 主 loop 上执行,读的就是本线程的计数,与汇总日志同一份。
+void CollectMetrics(prometheus_text::Writer &writer);
+// gate 启动时调一次,把 CollectMetrics 登记进进程的指标注册表;重复登记只记一行 ERROR。
+void RegisterMetrics();
 
 // 清空本线程的全部状态(许可、在途计数、滞留队列、计数),不动注入的出口。只给单测用。
 void ResetForTesting();

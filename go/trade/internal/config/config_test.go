@@ -10,6 +10,7 @@ import (
 	"time"
 
 	basepb "proto/common/base"
+	"shared/clusterredis"
 	"shared/currencytype"
 	"shared/playerredis"
 	"trade/internal/data"
@@ -71,18 +72,17 @@ func TestEtcYamlContractValues(t *testing.T) {
 	if c.ShouldAutoMigrate() {
 		t.Error("本地dev也必须显式迁移，常驻默认仅核对表结构")
 	}
-	// 位置键 player:{id}:location 在共享 Redis 的 DB 0(写者是 C++ scene / scene_manager)。
-	// 段名写错会被 go-zero 当未知键忽略 → Host 空 → Validate 拒绝起服,这里先在测试里点名。
-	if c.SharedRedis.Host == "" {
-		t.Error("SharedRedis.Host 为空:段名写错(必须逐字是 SharedRedis)或整段漏写")
+	// 唤醒频道与选主锁在控制集群上(没写 PlayerRedis 时位置键 player:{id}:location 也在这里,DB 0)。
+	// 段名写错会被 go-zero 当未知键忽略 → Addrs 空 → Validate 拒绝起服,这里先在测试里点名。
+	if len(c.ControlRedis.Addrs) == 0 {
+		t.Error("ControlRedis.Addrs 为空:段名写错(必须逐字是 ControlRedis)或整段漏写")
 	}
-	if c.SharedRedis.DB != 0 {
-		t.Errorf("SharedRedis.DB = %d, want 0(位置键所在库)", c.SharedRedis.DB)
+	if c.ControlRedis.DB != 0 {
+		t.Errorf("ControlRedis.DB = %d, want 0(位置键所在库;Redis Cluster 只有 DB 0)", c.ControlRedis.DB)
 	}
 	// 连接池上限要显式写正整数:k8s_deploy.ps1 把它镜像进 ConfigMap 并要求正整数,Redis 连接总账读同一个键。
-	// 写成 0 / 漏写 = go-redis 缺省 10 × GOMAXPROCS,随 CPU limit 漂移,部署在镜像时就会拒绝。
-	if c.SharedRedis.PoolSize <= 0 {
-		t.Errorf("SharedRedis.PoolSize = %d, want > 0(共享 Redis 连接总账按它记账)", c.SharedRedis.PoolSize)
+	if c.ControlRedis.PoolSizePerNode <= 0 {
+		t.Errorf("ControlRedis.PoolSizePerNode = %d, want > 0(Redis 连接总账按它记账)", c.ControlRedis.PoolSizePerNode)
 	}
 	// 资产通道默认关闭,本地这份也不例外 —— 这份 yaml 是最容易被整份抄去别的环境的一份。
 	// 要在本机验托管时才临时改 true,并先让 start_game.ps1 注入两把开发密钥;
@@ -170,12 +170,12 @@ func TestEtcYamlZoneRewriteAnchors(t *testing.T) {
 		t.Error("唯一的 ZoneId 必须是顶层键(-Zone 只改写第一处 ZoneId)")
 	}
 	// 顶层不许出现名为 Redis 的段:zrpc.RpcServerConf 已经有同名字段,conf.MustLoad 会直接报
-	// "conflict key Redis" 起不来。共享 Redis 一律写成 SharedRedis(与 config.Config 同名)。
+	// "conflict key Redis" 起不来。控制集群一律写成 ControlRedis(与 config.Config 同名)。
 	if regexp.MustCompile(`(?m)^Redis:`).MatchString(text) {
 		t.Error("顶层不能有 `Redis:` 段:与 zrpc.RpcServerConf 的同名字段冲突,加载期报 conflict key Redis")
 	}
-	if !regexp.MustCompile(`(?m)^SharedRedis:`).MatchString(text) {
-		t.Error("缺少顶层 `SharedRedis:` 段:资产通道按 player:{id}:location 定位玩家所在 scene")
+	if !regexp.MustCompile(`(?m)^ControlRedis:`).MatchString(text) {
+		t.Error("缺少顶层 `ControlRedis:` 段:资产通道订阅落地唤醒,没写 PlayerRedis 时还按 player:{id}:location 定位玩家所在 scene")
 	}
 }
 
@@ -192,8 +192,8 @@ func validConfig() Config {
 		Market: MarketConf{
 			Scope: ScopeGlobal, DefaultPageSize: 20, MaxPageSize: 20, MaxPage: 100, MaxFavoritesPerPlayer: 100,
 		},
-		// 共享 Redis 必填:资产通道靠 player:{id}:location 找玩家所在 scene。
-		SharedRedis: RedisConf{Host: "127.0.0.1:6379"},
+		// 控制集群必填:资产通道订阅落地唤醒,没写 PlayerRedis 时还靠 player:{id}:location 找玩家所在 scene。
+		ControlRedis: clusterredis.Config{Addrs: []string{"127.0.0.1:6379"}},
 	}
 	c.ListenOn = "127.0.0.1:50800"
 	c.Timeout = 4000
@@ -235,8 +235,9 @@ func TestValidate(t *testing.T) {
 		{"MaxPage=0", func(c *Config) { c.Market.MaxPage = 0 }},
 		{"MaxFavoritesPerPlayer=0", func(c *Config) { c.Market.MaxFavoritesPerPlayer = 0 }},
 		{"DefaultPageSize>MaxPageSize", func(c *Config) { c.Market.DefaultPageSize = 21 }},
-		{"SharedRedis.Host 为空", func(c *Config) { c.SharedRedis.Host = "" }},
-		{"SharedRedis.PoolSize 为负", func(c *Config) { c.SharedRedis.PoolSize = -1 }},
+		{"ControlRedis.Addrs 为空", func(c *Config) { c.ControlRedis.Addrs = nil }},
+		{"ControlRedis.PoolSizePerNode 为负", func(c *Config) { c.ControlRedis.PoolSizePerNode = -1 }},
+		{"ControlRedis.PasswordEnv(口令变量名只写 SharedRedisPasswordEnv)", func(c *Config) { c.ControlRedis.PasswordEnv = "X" }},
 		// 密钥写进配置文件 = 泄漏,不看开关一律拒。
 		{"AssetOp.Secret 非空(通道关着也拒)", func(c *Config) { c.AssetOp.Secret = "any-value-at-all" }},
 		{"AssetOp.Secret 非空(通道开着)", func(c *Config) {
@@ -385,17 +386,17 @@ func TestMarketScopeEnum(t *testing.T) {
 	}
 }
 
-// 没写 PlayerRedis.Addrs:玩家域指向 SharedRedis 那一个实例;写了就完全按它来;Cluster 没写种子拒启。
+// 没写 PlayerRedis.Addrs:玩家域指向 ControlRedis 那一个实例;写了就完全按它来;Cluster 没写种子拒启。
 func TestEffectivePlayerRedis(t *testing.T) {
 	c := validConfig()
-	c.SharedRedis = RedisConf{Host: "shared:6379", Password: "shared-secret"}
+	c.ControlRedis = clusterredis.Config{Addrs: []string{"shared:6379"}, Password: "shared-secret"}
 	got := c.EffectivePlayerRedis()
-	if len(got.Addrs) != 1 || got.Addrs[0] != "shared:6379" || got.Password != "shared-secret" || got.PoolSizePerNode != playerRedisFallbackPoolSize {
-		t.Fatalf("没写 Addrs 应指向 SharedRedis: %+v", got)
+	if len(got.Addrs) != 1 || got.Addrs[0] != "shared:6379" || got.Password != "shared-secret" || got.PoolSizePerNode != redisFallbackPoolSize {
+		t.Fatalf("没写 Addrs 应指向 ControlRedis: %+v", got)
 	}
-	c.SharedRedis.PoolSize = 9
+	c.ControlRedis.PoolSizePerNode = 9
 	if got := c.EffectivePlayerRedis(); got.PoolSizePerNode != 9 {
-		t.Errorf("连接池应跟 SharedRedis.PoolSize: %+v", got)
+		t.Errorf("连接池应跟 ControlRedis.PoolSizePerNode: %+v", got)
 	}
 
 	c.PlayerRedis = playerredis.Config{Addrs: []string{"a:7000", "b:7000"}, Cluster: true}

@@ -61,36 +61,25 @@ Etcd:
   Key: ""
 
 # ---- 双存储(契约 §4)----
-# Redis:既有共享库。两个用途:
-#   1) FriendRedis 未配置时私有 key 的回落目标;
-#   2) PlayerRedis 没写 Addrs 时玩家域的落点。
-# 这是 zrpc.RpcServerConf 自带的 Redis(RedisKeyConf)段:Key 仅在 Auth=true 时使用,
-# 但字段不是 optional,Redis 段存在时必须显式写(空串即可),否则加载报 "Redis.Key" is not set。
-# 不写 DB(契约 §4):契约 key 由多个运行时共写,DB 号必须全仓一致 = 默认 0。
-Redis:
-  Host: 127.0.0.1:6379
-  Type: node
-  Key: ""
+# 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1;2026-11-12 取代 go-zero 的 Redis 与 FriendRedis 两段)。
+# 放 friend 私有 key:好友列表缓存 friend:{f:<p>}:*、申请配额 friend:{rq:<p>}、目录配额 friend:{directory:<p>}。
+# 两段缓存 Lua 都是同 tag 两键,其余单键,集群安全。不写 Addrs = 本机 127.0.0.1:6379 单实例;集群部署写种子地址并打开 Cluster:
+#   Addrs: [127.0.0.1:7100, 127.0.0.1:7101, 127.0.0.1:7102]
+#   Cluster: true
+# PoolSizePerNode 是每个节点的连接池上限;读写 3s、取连接 4s、拨号 5s 沿用换句柄之前 go-zero 的口径(不写即是)。
+# ⚠ 实例必须 maxmemory-policy=noeviction:配额 / 限流 key 被淘汰等于限流静默失效。
+# 口令写 Password 字面量,或在 SharedRedisPasswordEnv 指名变量。zrpc 自带的 Redis 段 friend 不用,不写。
+ControlRedis:
+  Addrs: [127.0.0.1:6379]
+  PoolSizePerNode: 20
 
 # 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):player:session:{id}(判在线、推送路由、在线目录)
-# 与 player:{id}:sync_digest。不写 Addrs = 指向上面的 Redis 实例。集群部署写种子地址并打开 Cluster:
+# 与 player:{id}:sync_digest。不写 Addrs = 指向上面的 ControlRedis 实例。集群部署写种子地址并打开 Cluster:
 #   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
 #   Cluster: true
 # PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。读写 3s、取连接 4s、拨号 5s 沿用这条路径换句柄之前的口径。
 PlayerRedis:
   PoolSizePerNode: 20
-
-# FriendRedis:friend 私有 key(好友列表缓存 / 申请配额 / 限流)的存储。
-# 全部单 key 操作,Redis Cluster 安全;Host 逗号分隔种子地址,Type 必须是 cluster。
-# 整段留空 / 注释掉 = 回落到上面的共享库,启动时打 WARN 并在横幅打印 shared-fallback 落点。
-# 本地默认就走这个单库形态(不另起集群,省一套 compose profile)。
-# ⚠ staging/prod 必须指向独立实例且 maxmemory-policy=noeviction。2026-10-12 起本地 compose 也改为
-#   noeviction(K8s 一直是 noeviction),回落时这些 key 不会被淘汰,但会与契约 key 争内存:共享库设了
-#   maxmemory 时写满会连带拒写契约 key,配额计数写不进去也按 fail-open 放行(见 internal/logic/rate_quota.go)。
-#   共享库一旦被配成淘汰型:好友列表缓存被淘汰只是多打一次 MySQL,但**配额 / 限流 key 被淘汰等于限流静默失效**。
-# FriendRedis:
-#   Host: 127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005
-#   Type: cluster
 
 # ---- 独占库 mmorpg_friend(D-14 第 1、5 条)----
 # 库由 deploy/mysql-init 预建(存量卷需手工执行建库语句);表由 go/schemamigrate 按

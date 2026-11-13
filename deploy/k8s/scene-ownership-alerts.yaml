@@ -35,7 +35,7 @@ spec:
           annotations:
             summary: "{{ $labels.namespace }} 的 scene {{ $labels.instance }} 15 分钟内开始排空 {{ $value | printf \"%.0f\" }} 个已不归它的场景"
             description: >-
-              节点读到本地场景的 scene:{id}:node 已不是自己,或自己的节点号已被新进程接走,正在把住户改派走、销毁本地实体。
+              节点读到本地场景的 scene:{ctl:<z>}:<id>:node 已不是自己,或自己的节点号已被新进程接走,正在把住户改派走、销毁本地实体。
               看这个 Pod 的 `[SceneOwnership] ... is no longer owned by this process` 日志里的 observed:other_node / no_mapping 多半是它
               与 etcd 失联后被判死(对照 scene_manager 的 death_at 与 dead_node_reconcile 指标),superseded 见 SceneOwnershipNodeIdTakenOver。
               只有一两个场景、且不反复出现时多是个别 DestroyScene 丢失,不用处置。

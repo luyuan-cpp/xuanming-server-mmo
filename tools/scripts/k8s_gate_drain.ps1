@@ -5,15 +5,16 @@
 
 .DESCRIPTION
     集群外入口 D87:gate 是 StatefulSet(updateStrategy OnDelete、PDB maxUnavailable 0),
-    滚动一律走本脚本 —— 标 gate:<id>:draining → 等 gate:<id>:drained → 删 Pod(-DeletePod)。
+    滚动一律走本脚本 —— 标 gate:{gm:<zone>}:<id>:draining → 等 gate:{gm:<zone>}:<id>:drained → 删 Pod(-DeletePod)。
+    键里的 zone 是 login ConfigMap 的 Node.ZoneId;键名与 go/shared/gatepick/marks.go 逐字一致(测试钉住)。
 
     本脚本不做缩容。排空后直接 scale StatefulSet,两个标记会留到 TTL 到期;node_id 全局唯一、按最小
-    空闲号复用,login 的 Redis 跨 zone 共用,期间之后拿到同一 node_id 的 gate(可能在任意 zone)分不到
-    玩家。缩容后的清标记步骤见运维手册(docs/design/k8s-client-entry.md)。
+    空闲号复用,期间本 zone 里之后拿到同一 node_id 的 gate 分不到玩家(标记键带 zone,别的 zone 不受影响)。
+    缩容后的清标记步骤见运维手册(docs/design/k8s-client-entry.md)。
 
     流程:
       1. 读 zone namespace 里的 login ConfigMap(go-svc-login-config / login.yaml),取 zone_id、
-         login 连的 Redis(Node.RedisClient)与 etcd(Registry.Etcd.Hosts,缺省 Etcd.Hosts)、
+         login 写 gate 标记的 Redis(ControlRedis.Addrs[0],没写时 Node.RedisClient)与 etcd(Registry.Etcd.Hosts,缺省 Etcd.Hosts)、
          RequireClientEndpoint,以及 GateDrain 判定参数(不写该块 = login 结构体默认值 Interval 5s /
          Deadline 25m)。「Redis 与 etcd 在哪」只认这份 ConfigMap,不在本脚本另写一份地址。
       2. 入口校验(任何写操作之前):-DrainTtlSeconds 与 -WaitTimeoutSeconds 都必须大于 login 的
@@ -22,13 +23,17 @@
          得到 node_id;0 条或多条都报错(多条 = 同 IP 上还挂着旧进程的陈旧记录,等租约过期再来)。
          再按 login 下发候选集的口径确认本 zone 还有别的 gate(Select-GateDrainPeers):login 在候选
          全部 draining 时会忽略标记照常分配,单副本 zone 标了也挡不住新玩家。
+         带 -DeletePod 时再看修订(Sync-GateRestartRevision):这台 Pod 的 controller-revision-hash 等于 StatefulSet 的
+         status.updateRevision(镜像与模板都没变的重启)就先 kubectl rollout restart statefulset/gate,让修订变一次 ——
+         OnDelete 策略下这一步不重启任何 Pod,之后删掉重建的 Pod 带新修订,login 迁移选目标时分得出哪台已经换过
+         (docs/design/gate-drain-session-migration.md §7.3)。两者不等(模板已经变过)什么都不做;读不到或执行失败只告警。
       4. 取 Redis 服务器时间(TIME),一次原子 EVAL:同 zone 其它候选全部在排空 → 什么都不写并拒绝;
-         否则 DEL 残留的 drained,再 SET gate:<id>:draining <整数 Unix 秒> NX EX <ttl>。已有标记沿用
+         否则 DEL 残留的 drained,再 SET gate:{gm:<zone>}:<id>:draining <整数 Unix 秒> NX EX <ttl>。已有标记沿用
          (不重置期限),但必须带 TTL,值必须是 [Redis TIME - MaxDrainTtlSeconds, Redis TIME] 内的整数 Unix 秒
          (本脚本写的标记 TTL 不超过 -DrainTtlSeconds 的上限 MaxDrainTtlSeconds;更早的值不是本脚本写的,
          login 会立刻按 deadline 放行),否则拒绝。
          写完立即复核 Pod UID 与 etcd 里的 node_id/uuid,变了就撤回本次写入的标记并中止。
-      5. 有界轮询 gate:<id>:drained(由 login 的排空判定循环写,值 below_threshold | deadline,
+      5. 有界轮询 gate:{gm:<zone>}:<id>:drained(由 login 的排空判定循环写,值 below_threshold | deadline,
          TTL 跟随 draining 剩余 TTL)。draining 中途消失 = gate 已重新接客,中止且不删 Pod;
          draining 的值被改写(不再等于第 4 步确认的值)= login 的判定不再对应本次排空,同样中止且不删 Pod。
          每隔几轮复核被排空进程的 etcd 记录还在不在:进程没了(Pod 被替换 / 重启换了 node_id)就撤回
@@ -38,15 +43,18 @@
          etcd 记录消失再清掉两个标记(新 gate 常会复用同一 node_id,不清就在 TTL 内分不到玩家),
          最后等新 Pod 与 STS 就绪。
 
-    -DryRun 只做只读定位(ConfigMap / Pod / etcd),把将要执行的写操作打印出来,不访问 Redis、不删 Pod。
+    -DryRun 只做只读定位(ConfigMap / Pod / etcd,带 -DeletePod 时另读 StatefulSet 的修订),把将要执行的写操作打印出来,
+    不访问 Redis、不改 StatefulSet、不删 Pod。
 
     退出码:0 = 完成(含 -DryRun,以及未带 -DeletePod 到 drained 为止);1 = 出错中止(输出里说明标记现状);
     3 = 结束时留下了需要人工清理的排空标记(输出里有 DEL 指引;删 Pod 后新 Pod 是否就绪也在输出里)。
 
     依赖:etcdctl 在 kubectl exec 进 login 所连 etcd Service 背后的 Pod 后,按 login 配置里的 Service 地址连回同一个
-    Service(hairpin);redis-cli 在 kubectl exec 进与 Redis Service 同名的 StatefulSet(statefulset/redis 的 redis 容器)后,
-    同样按 Service 地址连 —— 单实例形态下 Service 背后就是这个 Pod(hairpin),高可用形态(redis-ha.yaml)下 Service 指向
-    redis-proxy、经代理落到主,不涉及 hairpin。读写失败的方向都是 fail-closed(读不到就不写、不删)。
+    Service(hairpin);redis-cli 在 kubectl exec 进 login 控制域地址背后的 Redis 节点(核心单实例是 statefulset/redis,控制集群
+    redis-control 是种子 Service 同名的 Pod)的 redis 容器后,同样按 Service 地址连 —— 单实例与集群的种子背后就是这个 Pod(hairpin),
+    高可用形态(redis-ha.yaml)下 Service 指向 redis-proxy、经代理落到主,不涉及 hairpin。redis-cli 带 -c:集群上按键跟随 MOVED / ASK,
+    单实例下无影响。
+    读写失败的方向都是 fail-closed(读不到就不写、不删)。
 
     所有 kubectl 调用都有 HTTP 超时与进程级截止;轮询共用单调时钟的总预算。
     kind 上务必显式传 -KubeContext kind-mmorpg(本机默认 current-context 是别的集群)。
@@ -114,12 +122,18 @@ function Get-GateDrainContract {
         GateNodeType                  = 4
         # k8s_deploy.ps1 生成的 gate StatefulSet 名(Pod 名 gate-<序号>)。
         GateStatefulSet               = 'gate'
+        # StatefulSet 控制器给 Pod 打的修订标签。lib/k8s_client_entry.ps1 经 downward API 把它注入 MMORPG_POD_REVISION,
+        # C++ 拼进 NodeInfo.build;逐台重启前据此判断要不要先让 StatefulSet 的修订变一次(Sync-GateRestartRevision)。
+        PodRevisionLabel              = 'controller-revision-hash'
+        # rollout restart 之后等 StatefulSet 控制器算出新修订的上限(秒)。等不到只告警,不挡排空。
+        RevisionBumpConfirmSeconds    = 30
         # k8s_deploy.ps1 $GoSvcCatalogue.login 的 ConfigMap 名与数据键(ConfigFile)。
         LoginConfigMap                = 'go-svc-login-config'
         LoginConfigKey                = 'login.yaml'
-        # go/login/internal/logic/pkg/loginqueue:GateDrainingKeyFmt / GateDrainedKeyFmt 与两个判定理由。
-        DrainingKeyFormat             = 'gate:{0}:draining'
-        DrainedKeyFormat              = 'gate:{0}:drained'
+        # go/shared/gatepick/marks.go 的 DrainingKey / DrainedKey(-f 的参数:{0} = zone,{1} = node_id;
+        # 字面花括号写双份),与 loginqueue 的两个判定理由。键带 hash tag {gm:<zone>}:一个 zone 的标记同槽。
+        DrainingKeyFormat             = 'gate:{{gm:{0}}}:{1}:draining'
+        DrainedKeyFormat              = 'gate:{{gm:{0}}}:{1}:drained'
         DrainedReasonBelowThreshold   = 'below_threshold'
         DrainedReasonDeadline         = 'deadline'
         # go/login/internal/config/config.go GateDrainConf 的 default 标签。k8s_deploy.ps1 生成的
@@ -128,9 +142,13 @@ function Get-GateDrainContract {
         DefaultDeadlineSeconds        = 1500
         # 同一文件 GateDrainMigrateConf 的 default 标签(排空迁移,docs/design/gate-drain-session-migration.md)。
         # 本脚本只据此打印与估算迁移时长,不改变排空流程与预算校验。
-        DefaultMigrateEnabled           = $false
+        DefaultMigrateEnabled           = $true
         DefaultMigrateRatePerSecond     = 20
         DefaultMigrateStartAfterSeconds = 0
+        # go/shared/gatepick/eligibility.go 的 FullPercent:gate 人数到自报连接上限的这个百分比就算到水位,
+        # login 不再往它身上分人或迁人。本脚本只用它估算其余 gate 还能接多少人(Get-GateDrainPeerHeadroom),
+        # 测试钉住与源头一致。
+        GateFullPercent                 = 90
         # 轮询:一轮 = 至多 CallTimeoutSeconds 的查询 + PollIntervalSeconds 的睡眠。
         PollIntervalSeconds           = 5
         CallTimeoutSeconds            = 10
@@ -160,8 +178,8 @@ function Get-GateDrainContract {
         # 标记脚本(原子)。KEYS[1] = 本台 draining,KEYS[2] = 本台 drained,KEYS[3..] = 同 zone 其它候选的
         # draining;ARGV[1] = 标记秒,ARGV[2] = TTL。其它候选全部在排空(或一台都没有)→ 返回
         # NoUndrainedPeerReply、什么都不写;否则 DEL 残留 drained,再 SET draining NX EX(已存在返回 nil)。
-        # 检查与写入同在一个脚本里,两次并发排空不会都通过检查、把整个 zone 标满。login 用单机 Redis,
-        # 不涉及跨 slot。
+        # 检查与写入同在一个脚本里,两次并发排空不会都通过检查、把整个 zone 标满。全部 KEYS 都是本 zone 的标记,
+        # 共用 tag {gm:<zone>},在 Redis Cluster 上同槽;redis-cli -c 按第一个键路由到持有该槽的主。
         MarkScript                    = "local free=0 for i=3,#KEYS do if redis.call('EXISTS',KEYS[i])==0 then free=free+1 end end if free==0 then return 'NO_UNDRAINED_PEER' end redis.call('DEL',KEYS[2]) return redis.call('SET',KEYS[1],ARGV[1],'NX','EX',ARGV[2])"
         NoUndrainedPeerReply          = 'NO_UNDRAINED_PEER'
         # 撤回脚本(原子):draining 的值仍等于 ARGV[1](本次写入的标记秒)才 DEL draining 与 drained,
@@ -320,7 +338,11 @@ function Split-ClusterServiceHost {
 }
 
 # 从 login.yaml 文本取排空要用的定位与判定参数。键名对照 go/login/internal/config/config.go:
-# Node.ZoneId;Node.RedisClient.{Host,DB}(排空判定循环用的就是这个 Redis 句柄);
+# Node.ZoneId;gate 标记所在的 Redis 与 login 的 EffectiveControlRedis 同一取法(排空判定循环用的就是这个句柄):
+# 写了 ControlRedis.Addrs 就取第一个地址(集群种子;redis-cli -c 跟随重定向),库号 ControlRedis.DB(缺省 0,与 login 结构体
+# 的零值相同),ControlRedis.Cluster 决定 exec 进哪个 Pod(Get-GateDrainRedisExecTarget);没写就是 Node.RedisClient.{Host,DB}。
+# K8s 上 login 的 ConfigMap 恒写 ControlRedis(k8s_deploy.ps1,缺口第 34 条第 6b 批):控制集群开着是 redis-control 的种子,否则核心单实例;
+# Registry.Etcd.Hosts,缺省 Etcd.Hosts(同 login/internal/logic/pkg/etcd.NewClient 的取法,GateWatcher 用它);
 # Registry.Etcd.Hosts,缺省 Etcd.Hosts(同 login/internal/logic/pkg/etcd.NewClient 的取法,GateWatcher 用它);
 # GateDrain.{Interval,Deadline,DrainedBelowPlayers},缺键取结构体 default(见 Get-GateDrainContract)。
 function ConvertFrom-LoginDrainConfig {
@@ -335,10 +357,25 @@ function ConvertFrom-LoginDrainConfig {
     if ($zoneText -notmatch '^\d{1,10}$' -or [uint64]$zoneText -gt [uint32]::MaxValue) {
         throw "$Source 缺少或非法的 Node.ZoneId='$zoneText'"
     }
-    $redisHost = [string]$scalars['Node.RedisClient.Host']
-    if ([string]::IsNullOrWhiteSpace($redisHost)) { throw "$Source 缺少 Node.RedisClient.Host" }
-    $redisDbText = [string]$scalars['Node.RedisClient.DB']
-    if ($redisDbText -notmatch '^\d{1,5}$') { throw "$Source 缺少或非法的 Node.RedisClient.DB='$redisDbText'(login 该字段必填,不替它猜 0)" }
+    $redisField = 'ControlRedis.Addrs[0]'
+    $redisHost = [string]$scalars[$redisField]
+    $redisCluster = $false
+    if (-not [string]::IsNullOrWhiteSpace($redisHost)) {
+        $redisDbText = [string]$scalars['ControlRedis.DB']
+        if ([string]::IsNullOrWhiteSpace($redisDbText)) { $redisDbText = '0' }
+        if ($redisDbText -notmatch '^\d{1,5}$') { throw "$Source 的 ControlRedis.DB='$redisDbText' 非法" }
+        $clusterText = ([string]$scalars['ControlRedis.Cluster']).Trim()
+        if ($clusterText -ieq 'true') { $redisCluster = $true }
+        elseif (-not [string]::IsNullOrEmpty($clusterText) -and $clusterText -ine 'false') {
+            throw "$Source 的 ControlRedis.Cluster='$clusterText' 不是 true / false"
+        }
+    } else {
+        $redisField = 'Node.RedisClient.Host'
+        $redisHost = [string]$scalars[$redisField]
+        if ([string]::IsNullOrWhiteSpace($redisHost)) { throw "$Source 缺少 Node.RedisClient.Host" }
+        $redisDbText = [string]$scalars['Node.RedisClient.DB']
+        if ($redisDbText -notmatch '^\d{1,5}$') { throw "$Source 缺少或非法的 Node.RedisClient.DB='$redisDbText'(login 该字段必填,不替它猜 0)" }
+    }
     $etcdHost = [string]$scalars['Registry.Etcd.Hosts[0]']
     if ([string]::IsNullOrWhiteSpace($etcdHost)) { $etcdHost = [string]$scalars['Etcd.Hosts[0]'] }
     if ([string]::IsNullOrWhiteSpace($etcdHost)) { throw "$Source 缺少 Registry.Etcd.Hosts 与 Etcd.Hosts" }
@@ -399,8 +436,10 @@ function ConvertFrom-LoginDrainConfig {
         Source                 = $Source
         ZoneId                 = [uint32]$zoneText
         RequireClientEndpoint  = $requireClientEndpoint
-        Redis                  = Split-ClusterServiceHost -HostPort $redisHost -Name "$Source Node.RedisClient.Host"
+        Redis                  = Split-ClusterServiceHost -HostPort $redisHost -Name "$Source $redisField"
         RedisDb                = [int]$redisDbText
+        # 控制域是不是 Redis Cluster(login 的 ControlRedis.Cluster):决定 exec 进哪个 Pod,见 Get-GateDrainRedisExecTarget。
+        RedisCluster           = $redisCluster
         Etcd                   = Split-ClusterServiceHost -HostPort $etcdHost -Name "$Source etcd Hosts[0]"
         MonitorIntervalSeconds = $intervalSeconds
         DeadlineSeconds        = $deadlineSeconds
@@ -427,6 +466,64 @@ function Format-GateDrainMigrationLine {
     return ("[gate-drain] migration: on, {0}/s starting {1}s after the mark; {2} online now -> about {3}s to move them " +
         "(login refreshes the lease every GateDrain.Interval; the gate redirects logged-in connections with msg 124)") -f `
         $Login.MigrateRatePerSecond, $Login.MigrateStartAfterSeconds, $Online, $estimateSeconds
+}
+
+# 同 zone 其余候选到水位为止还能接多少人(docs/design/gate-drain-session-migration.md §6)。纯函数,只看 etcd 记录里
+# gate 自报的在线数与连接上限,口径同 login 的 gatepick:水位 = ceil(max_connections × GateFullPercent / 100),
+# 已到水位的记 0。有候选没声明上限(max_connections 为 0:dev 下不设上限的 gate、旧版 gate)时无从封顶,Bounded = $false。
+# 估的是此刻的余量,有两处看不到:其余候选里已经在排空的不接新人,它们的标记在 Redis 里;停写(卡住)的 gate 要比较
+# 两次读取才认得出。两者都会让余量偏大,提示文案里写明。只用于提示,不改变排空流程。
+function Get-GateDrainPeerHeadroom {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Peers)
+    $contract = Get-GateDrainContract
+    $bounded = $true
+    $headroom = [long]0
+    $peerCount = 0
+    foreach ($peer in $Peers) {
+        if ($null -eq $peer) { continue }
+        $peerCount++
+        $maxConnections = [long]$peer.MaxConnections
+        if ($maxConnections -le 0) { $bounded = $false; continue }
+        # 整数算 ceil(max × 百分比 / 100):先凑成 100 的整倍数再除,不经过浮点。
+        $scaled = $maxConnections * [long]$contract.GateFullPercent + 99
+        $watermark = [long](($scaled - ($scaled % 100)) / 100)
+        $free = $watermark - [long]$peer.PlayerCount
+        if ($free -gt 0) { $headroom += $free }
+    }
+    return [pscustomobject]@{ Bounded = $bounded; Headroom = $headroom; PeerCount = $peerCount }
+}
+
+# 容量估算的一行说明。纯函数。Short = $true 表示这台 gate 上的人其余 gate 装不下,调用方用 Write-Warning 打出来:
+# 多出来的人迁不走(login 不往到水位的 gate 迁人,也不回落),只能留到期限、随删 Pod 断线。
+function Format-GateDrainCapacityLine {
+    param(
+        [Parameter(Mandatory = $true)]$Capacity,
+        [Parameter(Mandatory = $true)][long]$Online
+    )
+    $contract = Get-GateDrainContract
+    if (-not $Capacity.Bounded) {
+        return [pscustomobject]@{
+            Short = $false
+            Text  = ("[gate-drain] peer capacity: not estimated; at least one of the {0} other gate(s) in this zone does not declare " +
+                "max_connections, so there is no watermark to count against") -f $Capacity.PeerCount
+        }
+    }
+    if ($Capacity.Headroom -ge $Online) {
+        return [pscustomobject]@{
+            Short = $false
+            Text  = ("[gate-drain] peer capacity: {0} online here; the {1} other gate(s) can take about {2} more before their {3}% " +
+                "watermark, so everyone fits (gates that are already draining or stalled are not subtracted)") -f `
+                $Online, $Capacity.PeerCount, $Capacity.Headroom, $contract.GateFullPercent
+        }
+    }
+    return [pscustomobject]@{
+        Short = $true
+        Text  = ("[gate-drain] peer capacity is SHORT: {0} online here, but the {1} other gate(s) can take only about {2} more before " +
+            "their {3}% watermark. About {4} player(s) will find no migration target, stay on this gate, and be disconnected when the " +
+            "Pod is deleted after the deadline. Scale out the gate StatefulSet before draining, or accept that. Gates that are already " +
+            "draining or stalled are not subtracted, so the real shortfall can be larger") -f `
+            $Online, $Capacity.PeerCount, $Capacity.Headroom, $contract.GateFullPercent, ($Online - $Capacity.Headroom)
+    }
 }
 
 # 读 zone namespace 里 login 的 ConfigMap。它是 login 进程实际加载的配置,
@@ -508,7 +605,11 @@ function Get-GateStatefulSetPod {
     # K8s 的缺省宽限期是 30s;显式写了就以 Pod 自己的为准。
     $grace = 30
     if ($null -ne $pod.spec -and $null -ne $pod.spec.terminationGracePeriodSeconds) { $grace = [int]$pod.spec.terminationGracePeriodSeconds }
-    return [pscustomobject]@{ Name = $name; Namespace = $Namespace; Ordinal = $Ordinal; Uid = $uid; PodIp = $podIp; GraceSeconds = $grace }
+    # 修订标签(StatefulSet 控制器写的)。读不到为空串:逐台重启的修订处理据此降级为告警,不挡排空。
+    $revision = ''
+    if ($null -ne $pod.metadata.labels) { $revision = [string]$pod.metadata.labels.($contract.PodRevisionLabel) }
+    return [pscustomobject]@{ Name = $name; Namespace = $Namespace; Ordinal = $Ordinal; Uid = $uid; PodIp = $podIp; GraceSeconds = $grace
+        Revision = $revision }
 }
 
 # login GateWatcher 看的 gate 前缀(node.BuildRpcPrefix 同形,末尾带 /)。
@@ -562,6 +663,8 @@ function ConvertFrom-GateEtcdRecords {
         $endpoint = Get-GateNodeInfoField -Object $info -Names @('endpoint')
         $clientEndpoint = Get-GateNodeInfoField -Object $info -Names @('clientEndpoint', 'client_endpoint')
         $players = Get-GateNodeInfoField -Object $info -Names @('playerCount', 'player_count')
+        # gate 自报的客户端连接上限(NodeInfo.max_connections);省略 = 0 = 没声明上限。只用于容量估算。
+        $maxConnections = Get-GateNodeInfoField -Object $info -Names @('maxConnections', 'max_connections')
         $endpointPort = Get-GateNodeInfoField -Object $endpoint -Names @('port')
         $clientPort = Get-GateNodeInfoField -Object $clientEndpoint -Names @('port')
         # protojson 把 uint64 写成字符串,[uint64] 两种都接。
@@ -579,6 +682,7 @@ function ConvertFrom-GateEtcdRecords {
                 ZoneId       = if ($null -eq $zoneId) { [uint32]0 } else { [uint32]$zoneId }
                 Uuid         = [string](Get-GateNodeInfoField -Object $info -Names @('nodeUuid', 'node_uuid'))
                 PlayerCount  = if ($null -eq $players) { [uint32]0 } else { [uint32]$players }
+                MaxConnections = if ($null -eq $maxConnections) { [uint32]0 } else { [uint32]$maxConnections }
             })
     }
     return ,$records.ToArray()
@@ -693,26 +797,32 @@ function Select-GateDrainPeers {
 
 # ─── Redis(login 所用的那个)───
 
-# 用哪个 Pod 里的 redis-cli:login 所连 Redis Service 同名的 StatefulSet(共享 Redis 的两种形态都叫 redis)里任一 Pod 的 redis 容器。
-# 不 exec svc/<Service>:高可用形态(redis-ha.yaml)下 Service redis 指向 haproxy 入口代理,代理镜像里没有 redis-cli。
-# 连哪台仍由 -h 决定(login 配置里的 Service 地址):高可用形态下经代理落到当前的主,单实例就是它自己 —— 与 login 写的是同一处,
-# 不随 exec 落到哪个 Pod(可能是从)而变。
+# 用哪个 Pod 里的 redis-cli:
+#   - 核心单实例(login 的控制域地址是 Service redis):与 Service 同名的 StatefulSet 里任一 Pod 的 redis 容器。不 exec svc/<Service>:
+#     高可用形态(redis-ha.yaml)下 Service redis 指向 haproxy 入口代理,代理镜像里没有 redis-cli;
+#   - 控制集群(ControlRedis.Cluster: true,地址是种子 Service redis-control-<序号>):与种子 Service 同名的 Pod(redis-cluster.yaml
+#     每 Pod 一个 Service、名字相同),StatefulSet 叫 redis-control,不是种子的名字。
+# 连哪台仍由 -h 决定(login 配置里的 Service 地址):高可用形态下经代理落到当前的主,集群上 redis-cli -c 按键跟到持有该槽的主 ——
+# 与 login 写的是同一处,不随 exec 落到哪个 Pod(可能是从)而变。
 function Get-GateDrainRedisExecTarget {
     param([Parameter(Mandatory = $true)]$Login)
+    if ($Login.PSObject.Properties['RedisCluster'] -and $Login.RedisCluster) { return "pod/$($Login.Redis.Service)" }
     return "statefulset/$($Login.Redis.Service)"
 }
 
 # exec 进 login 所连共享 Redis 的节点 Pod(Get-GateDrainRedisExecTarget),用它自带的 redis-cli 连 login 配置里的同一 host:port/DB。
 # 密码取该 Pod 自己的 REDIS_PASSWORD(Secret redis-auth,与 requirepass 同源),经 REDISCLI_AUTH 传给 redis-cli:
 # 不经本机命令行、不进日志;为空时不设(设成空串 redis-cli 会发 AUTH "" 并报错)。
-# 参数经 sh 的位置参数传入,不拼进脚本文本。--no-raw 让 nil 与空串可区分。-c redis:高可用形态的节点 Pod 另有哨兵容器。
+# 参数经 sh 的位置参数传入,不拼进脚本文本。--no-raw 让 nil 与空串可区分。redis-cli 的 -c:集群模式,跟随 MOVED / ASK
+# (本脚本的多键命令与两段脚本只碰同一个 zone 的标记,同槽);单实例下无影响。-n 照传:集群只有 DB 0,传 0 合法,
+# 传别的会被集群拒绝(fail-closed),单实例开发库号仍与 login 对得上。kubectl 的 -c redis:高可用形态的节点 Pod 另有哨兵容器。
 function Invoke-GateDrainRedis {
     param(
         [Parameter(Mandatory = $true)]$Login,
         [Parameter(Mandatory = $true)][string[]]$Command,
         [ValidateRange(0.001, 2147483)][double]$TimeoutSeconds = 10
     )
-    $shell = 'h=$1; p=$2; d=$3; shift 3; if [ -n "$REDIS_PASSWORD" ]; then REDISCLI_AUTH=$REDIS_PASSWORD; export REDISCLI_AUTH; fi; exec redis-cli --no-raw -h "$h" -p "$p" -n "$d" "$@"'
+    $shell = 'h=$1; p=$2; d=$3; shift 3; if [ -n "$REDIS_PASSWORD" ]; then REDISCLI_AUTH=$REDIS_PASSWORD; export REDISCLI_AUTH; fi; exec redis-cli --no-raw -c -h "$h" -p "$p" -n "$d" "$@"'
     $arguments = @('exec', '-n', $Login.Redis.Namespace, (Get-GateDrainRedisExecTarget -Login $Login), '-c', 'redis', '--',
         'sh', '-c', $shell, 'sh', $Login.Redis.Host, [string]$Login.Redis.Port, [string]$Login.RedisDb) + $Command
     return Invoke-GateDrainKubectl -Arguments $arguments -TimeoutSeconds $TimeoutSeconds
@@ -777,12 +887,16 @@ function ConvertFrom-RedisCliArray {
     return ,$values.ToArray()
 }
 
+# 一台 gate 的两个标记键。ZoneId 是 login ConfigMap 的 Node.ZoneId($Login.ZoneId):login 按它拼键,本脚本也只能按它。
 function Get-GateDrainKeys {
-    param([Parameter(Mandatory = $true)][uint32]$NodeId)
+    param(
+        [Parameter(Mandatory = $true)][uint32]$ZoneId,
+        [Parameter(Mandatory = $true)][uint32]$NodeId
+    )
     $contract = Get-GateDrainContract
     return [pscustomobject]@{
-        Draining = $contract.DrainingKeyFormat -f $NodeId
-        Drained  = $contract.DrainedKeyFormat -f $NodeId
+        Draining = $contract.DrainingKeyFormat -f $ZoneId, $NodeId
+        Drained  = $contract.DrainedKeyFormat -f $ZoneId, $NodeId
     }
 }
 
@@ -822,12 +936,12 @@ function Set-GateDrainingMark {
         [Parameter(Mandatory = $true)][int]$TtlSeconds
     )
     $contract = Get-GateDrainContract
-    $keys = Get-GateDrainKeys -NodeId $NodeId
+    $keys = Get-GateDrainKeys -ZoneId $Login.ZoneId -NodeId $NodeId
     $time = ConvertFrom-RedisCliArray -Text (Invoke-GateDrainRedisChecked -Login $Login -Command @('TIME') -What '读取 Redis 服务器时间') -ExpectedCount 2
     $now = [string]$time[0]
     if (-not (Test-GateDrainMarkValue $now)) { throw "Redis TIME 返回的秒数 '$now' 不是正整数" }
 
-    $peerKeys = @($PeerNodeIds | ForEach-Object { (Get-GateDrainKeys -NodeId $_).Draining })
+    $peerKeys = @($PeerNodeIds | ForEach-Object { (Get-GateDrainKeys -ZoneId $Login.ZoneId -NodeId $_).Draining })
     $command = @('EVAL', $contract.MarkScript, [string](2 + $peerKeys.Count), $keys.Draining, $keys.Drained) + $peerKeys + @($now, [string]$TtlSeconds)
     $reply = ConvertFrom-RedisCliSingle -Text (Invoke-GateDrainRedisChecked -Login $Login -Command $command -What "写入 $($keys.Draining)")
     if ($reply -is [string] -and $reply -eq $contract.NoUndrainedPeerReply) {
@@ -867,7 +981,7 @@ function Remove-OwnGateDrainMark {
         [Parameter(Mandatory = $true)][string]$MarkValue
     )
     $contract = Get-GateDrainContract
-    $keys = Get-GateDrainKeys -NodeId $NodeId
+    $keys = Get-GateDrainKeys -ZoneId $Login.ZoneId -NodeId $NodeId
     $reply = ConvertFrom-RedisCliSingle -Text (Invoke-GateDrainRedisChecked -Login $Login `
             -Command @('EVAL', $contract.ReleaseScript, '2', $keys.Draining, $keys.Drained, $MarkValue) -What "撤回 $($keys.Draining)")
     if ($reply -isnot [long]) { throw "撤回 $($keys.Draining) 得到意外回复 '$reply'" }
@@ -899,7 +1013,7 @@ function Wait-GateDrained {
         [Parameter(Mandatory = $true)][ValidateRange(0.001, 3600)][double]$PollIntervalSeconds
     )
     $contract = Get-GateDrainContract
-    $keys = Get-GateDrainKeys -NodeId $NodeId
+    $keys = Get-GateDrainKeys -ZoneId $Login.ZoneId -NodeId $NodeId
     $reasons = @($contract.DrainedReasonBelowThreshold, $contract.DrainedReasonDeadline)
     $budget = [System.Diagnostics.Stopwatch]::StartNew()
     $failures = 0
@@ -1041,7 +1155,7 @@ function Clear-GateDrainMarks {
         [Parameter(Mandatory = $true)]$Login,
         [Parameter(Mandatory = $true)][uint32]$NodeId
     )
-    $keys = Get-GateDrainKeys -NodeId $NodeId
+    $keys = Get-GateDrainKeys -ZoneId $Login.ZoneId -NodeId $NodeId
     $deleted = ConvertFrom-RedisCliSingle -Text (Invoke-GateDrainRedisChecked -Login $Login -Command @('DEL', $keys.Draining, $keys.Drained) -What "清除 $($keys.Draining) / $($keys.Drained)")
     if ($deleted -isnot [long]) { throw "清除排空标记得到意外回复 '$deleted'" }
     Write-Host "[gate-drain] Removed $($keys.Draining) / $($keys.Drained)"
@@ -1153,11 +1267,11 @@ function Write-GateLeftoverMarkGuidance {
         [Parameter(Mandatory = $true)][uint32]$NodeId,
         [Parameter(Mandatory = $true)][string]$Situation
     )
-    $keys = Get-GateDrainKeys -NodeId $NodeId
+    $keys = Get-GateDrainKeys -ZoneId $Login.ZoneId -NodeId $NodeId
     # -f 的优先级高于 +,拼接必须先括起来,否则只有后半句被格式化。
-    Write-Warning (("{0}: drain marks {1} / {2} remain; any gate that later receives node_id={3} (in any zone) cannot receive new players until the TTL expires." +
-            "After confirming the old node_id={3} process has disappeared from etcd, manually DEL {1} {2} in login Redis ({4} DB {5})") -f `
-            $Situation, $keys.Draining, $keys.Drained, $NodeId, $Login.Redis.Endpoint, $Login.RedisDb)
+    Write-Warning (("{0}: drain marks {1} / {2} remain; any gate of zone {6} that later receives node_id={3} cannot receive new players until the TTL expires." +
+            "After confirming the old node_id={3} process has disappeared from etcd, manually DEL {1} {2} in login Redis ({4} DB {5}; redis-cli -c on a cluster)") -f `
+            $Situation, $keys.Draining, $keys.Drained, $NodeId, $Login.Redis.Endpoint, $Login.RedisDb, $Login.ZoneId)
 }
 
 # 排空中止时处理本次的标记:只撤回本次写入的(Remove-OwnGateDrainMark 值比对),沿用来的不动。
@@ -1185,6 +1299,124 @@ function Undo-GateDrainMark {
     return $false
 }
 
+# ─── 逐台重启:让重建的 gate 带上新修订 ───
+#
+# gate 自报的 NodeInfo.build = 构建标识 @ 工作负载修订(Pod 标签 controller-revision-hash,经 MMORPG_POD_REVISION 注入)。
+# login 迁移选目标时优先不在「外出构建」(排空中 gate 的构建)上的 gate(docs/design/gate-drain-session-migration.md §7.3)。
+# 镜像与模板都没变时,删掉重建的 Pod 还是同一个修订,分不出哪台已经重启过,玩家可能被迁不止一次。K8s 的标准做法是删之前
+# 先让修订变一次:kubectl rollout restart 只给 Pod 模板加一个 kubectl.kubernetes.io/restartedAt 注解;gate 的 StatefulSet
+# 是 OnDelete,这一步不重启任何 Pod,之后按本脚本逐台删掉的 Pod 都带新修订重建。一轮换版里只有第一台会触发:
+# 之后各台的修订已经与 updateRevision 不等。
+
+# 纯函数。PodRevision = 这台 Pod 的修订标签,UpdateRevision = StatefulSet 的 status.updateRevision。
+# 返回 Bump(相等:这台已是当前修订,删掉重建出来还是同一代)、Keep(不等:模板已经变过,重建自然是新修订)、
+# Unknown(有一项读不到)。
+function Get-GateRevisionAction {
+    param(
+        [AllowNull()][AllowEmptyString()][string]$PodRevision,
+        [AllowNull()][AllowEmptyString()][string]$UpdateRevision
+    )
+    if ([string]::IsNullOrWhiteSpace($PodRevision) -or [string]::IsNullOrWhiteSpace($UpdateRevision)) { return 'Unknown' }
+    if ($PodRevision -eq $UpdateRevision) { return 'Bump' }
+    return 'Keep'
+}
+
+# 读 StatefulSet/gate 的修订状态。读不到 throw,由调用方降级为告警。
+function Get-GateStatefulSetRevision {
+    param(
+        [Parameter(Mandatory = $true)][string]$Namespace,
+        [ValidateRange(0.001, 2147483)][double]$TimeoutSeconds = 10
+    )
+    $contract = Get-GateDrainContract
+    $json = Invoke-GateDrainKubectlChecked -Arguments @('get', 'statefulset', $contract.GateStatefulSet, '-n', $Namespace, '-o', 'json') `
+        -TimeoutSeconds $TimeoutSeconds -What "查询 StatefulSet/$($contract.GateStatefulSet) 的修订"
+    try { $sts = $json | ConvertFrom-Json -ErrorAction Stop } catch { throw "StatefulSet/$($contract.GateStatefulSet) 的查询结果不是合法 JSON" }
+    $generation = [long]0
+    $observed = [long]0
+    if ($null -ne $sts.metadata -and $null -ne $sts.metadata.generation) { $generation = [long]$sts.metadata.generation }
+    if ($null -ne $sts.status -and $null -ne $sts.status.observedGeneration) { $observed = [long]$sts.status.observedGeneration }
+    $updateRevision = ''
+    if ($null -ne $sts.status) { $updateRevision = [string]$sts.status.updateRevision }
+    return [pscustomobject]@{ UpdateRevision = $updateRevision; Generation = $generation; ObservedGeneration = $observed }
+}
+
+# 带 -DeletePod 时、任何 Redis 写之前调用(-DryRun 只读,打印要做什么)。只决定重建出来的 Pod 带哪个修订,不影响排空本身,
+# 所以读不到、执行失败、控制器迟迟没跟上都只打 WARNING 继续,代价是这一轮换下来有的玩家可能多迁一次。
+# 返回 Bumped / Kept / Unknown / Failed / DryRun,只给调用方与测试看。
+function Sync-GateRestartRevision {
+    param(
+        [Parameter(Mandatory = $true)]$Pod,
+        [switch]$DryRun,
+        # 确认新修订的上限(秒);不传 = 契约 RevisionBumpConfirmSeconds。只给测试缩短用。
+        [double]$ConfirmTimeoutSeconds = -1
+    )
+    $contract = Get-GateDrainContract
+    if ($ConfirmTimeoutSeconds -lt 0) { $ConfirmTimeoutSeconds = [double]$contract.RevisionBumpConfirmSeconds }
+    $sts = $null
+    try {
+        $sts = Get-GateStatefulSetRevision -Namespace $Pod.Namespace -TimeoutSeconds $contract.CallTimeoutSeconds
+    } catch {
+        # -f 的优先级高于 +:拼接要先括起来,否则只有后半句被格式化(本函数里的每一处同理)。
+        Write-Warning (("[gate-drain] could not read the revision of StatefulSet/{0}; the recreated Pod may not be told apart from the gates " +
+                "still to restart, so some players may be migrated twice: {1}") -f $contract.GateStatefulSet, $_.Exception.Message)
+        return 'Unknown'
+    }
+    switch (Get-GateRevisionAction -PodRevision $Pod.Revision -UpdateRevision $sts.UpdateRevision) {
+        'Unknown' {
+            Write-Warning (("[gate-drain] revision unknown (pod {0} label {1}='{2}', StatefulSet/{3} updateRevision='{4}'); the recreated Pod may " +
+                    "not be told apart from the gates still to restart") -f $Pod.Name, $contract.PodRevisionLabel, $Pod.Revision,
+                $contract.GateStatefulSet, $sts.UpdateRevision)
+            return 'Unknown'
+        }
+        'Keep' {
+            Write-Host ("[gate-drain] pod {0} is at revision {1} and StatefulSet/{2} is already at {3}; the recreated Pod gets the new revision" -f `
+                    $Pod.Name, $Pod.Revision, $contract.GateStatefulSet, $sts.UpdateRevision)
+            return 'Kept'
+        }
+    }
+    if ($DryRun) {
+        Write-Host (("[dry-run]   Pod {0} is already at the current revision {1}: kubectl rollout restart statefulset/{2} -n {3} before draining " +
+                "(OnDelete: no Pod restarts), so the recreated Pod is told apart from the gates still to restart") -f `
+                $Pod.Name, $Pod.Revision, $contract.GateStatefulSet, $Pod.Namespace)
+        return 'DryRun'
+    }
+    $result = Invoke-GateDrainKubectl -Arguments @('rollout', 'restart', "statefulset/$($contract.GateStatefulSet)", '-n', $Pod.Namespace) `
+        -TimeoutSeconds $contract.CallTimeoutSeconds
+    if ($result.TimedOut -or $result.ExitCode -ne 0) {
+        Write-Warning (("[gate-drain] kubectl rollout restart statefulset/{0} failed (exit={1}, timedOut={2}): {3}; continuing the drain, " +
+                "but the recreated Pod keeps revision {4} and some players may be migrated twice") -f $contract.GateStatefulSet, $result.ExitCode,
+            $result.TimedOut, (Get-GateDrainErrorTail $result.ErrorOutput), $Pod.Revision)
+        return 'Failed'
+    }
+    Write-Host (("[gate-drain] pod is already at the current revision; bumped the StatefulSet revision so that restarted gates are told apart " +
+            "from the ones still to restart (StatefulSet/{0} is OnDelete: no Pod restarts)") -f $contract.GateStatefulSet)
+
+    # 确认控制器已按新模板算出新修订:之后重建的 Pod 才带上它。删 Pod 要等排空,通常远晚于此,这里只为把结果打清楚。
+    $budget = [System.Diagnostics.Stopwatch]::StartNew()
+    $last = '<not read>'
+    while ($true) {
+        $remaining = $ConfirmTimeoutSeconds - $budget.Elapsed.TotalSeconds
+        if ($remaining -lt 0.001) { break }
+        try {
+            $now = Get-GateStatefulSetRevision -Namespace $Pod.Namespace -TimeoutSeconds ([Math]::Min([double]$contract.CallTimeoutSeconds, $remaining))
+            $last = "updateRevision=$($now.UpdateRevision) observedGeneration=$($now.ObservedGeneration)/$($now.Generation)"
+            if ($now.ObservedGeneration -ge $now.Generation -and -not [string]::IsNullOrWhiteSpace($now.UpdateRevision) -and
+                $now.UpdateRevision -ne $Pod.Revision) {
+                Write-Host ("[gate-drain] StatefulSet/{0} updateRevision is now {1}; the recreated Pod gets it" -f $contract.GateStatefulSet, $now.UpdateRevision)
+                return 'Bumped'
+            }
+        } catch {
+            $last = "read failed: $($_.Exception.Message)"
+        }
+        $remaining = $ConfirmTimeoutSeconds - $budget.Elapsed.TotalSeconds
+        if ($remaining -lt 0.001) { break }
+        Start-Sleep -Milliseconds ([int][Math]::Max(1, [Math]::Min($contract.PollIntervalSeconds * 1000, [Math]::Floor($remaining * 1000))))
+    }
+    Write-Warning (("[gate-drain] StatefulSet/{0} has not reported a new revision within {1}s after the restart ({2}); continuing the drain. " +
+            "The Pod is deleted only after the drain, normally long after the controller catches up") -f $contract.GateStatefulSet, $ConfirmTimeoutSeconds, $last)
+    return 'Bumped'
+}
+
 # -DryRun:只读定位已经做完,这里只把后续写操作打印出来。
 function Write-GateDrainDryRunPlan {
     param(
@@ -1197,8 +1429,8 @@ function Write-GateDrainDryRunPlan {
         [switch]$WillDeletePod
     )
     $contract = Get-GateDrainContract
-    $keys = Get-GateDrainKeys -NodeId $Record.NodeId
-    $peerKeys = @($PeerNodeIds | ForEach-Object { (Get-GateDrainKeys -NodeId $_).Draining }) -join ' '
+    $keys = Get-GateDrainKeys -ZoneId $Login.ZoneId -NodeId $Record.NodeId
+    $peerKeys = @($PeerNodeIds | ForEach-Object { (Get-GateDrainKeys -ZoneId $Login.ZoneId -NodeId $_).Draining }) -join ' '
     Write-Host "[dry-run] The following Redis operations will not execute (Redis $($Login.Redis.Endpoint) DB $($Login.RedisDb), via $(Get-GateDrainRedisExecTarget -Login $Login) -c redis exec):"
     Write-Host "[dry-run]   TIME; EVAL (atomic): DEL $($keys.Drained) only if at least one key in $peerKeys is absent,"
     Write-Host "[dry-run]     SET $($keys.Draining) <Redis TIME seconds> NX EX $DrainTtlSeconds; otherwise write nothing and reject"
@@ -1253,6 +1485,12 @@ function Invoke-GateDrain {
     Write-Host ("[gate-drain] {0} podIP={1} uid={2} -> node_id={3} uuid={4} online(etcd-reported)={5}; other candidate node_id values in this zone={6}" -f `
             $pod.Name, $pod.PodIp, $pod.Uid, $record.NodeId, $record.Uuid, $record.PlayerCount, ($peerIds -join ','))
     Write-Host (Format-GateDrainMigrationLine -Login $login -Online ([long]$record.PlayerCount))
+    # 其余 gate 装不装得下这台的人:只读 etcd 的估算,在任何写之前打出来(-DryRun 也打),装不下时是一条 WARNING。
+    $capacity = Format-GateDrainCapacityLine -Capacity (Get-GateDrainPeerHeadroom -Peers $peers) -Online ([long]$record.PlayerCount)
+    if ($capacity.Short) { Write-Warning $capacity.Text } else { Write-Host $capacity.Text }
+    # 要删 Pod 时,模板没变也先让 StatefulSet 的修订变一次,重建的 gate 才与还没换的分得开(见 Sync-GateRestartRevision)。
+    # 放在任何 Redis 写之前;-DryRun 只读、打印要做什么。这一步不影响排空本身,失败只告警。
+    if ($DeletePod) { $null = Sync-GateRestartRevision -Pod $pod -DryRun:$DryRun }
 
     if ($DryRun) {
         Write-GateDrainDryRunPlan -Login $login -Pod $pod -Record $record -PeerNodeIds $peerIds -DrainTtlSeconds $DrainTtlSeconds `

@@ -100,7 +100,8 @@ add_executable(redis_lifecycle_test
     "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/infra/storage/redis_cluster/redis_cluster_topology.cpp"
     "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/infra/storage/redis_cluster/redis_command_route.cpp"
     "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/infra/storage/redis_cluster/redis_reply_classifier.cpp"
-    "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/thread_context/redis_manager.cpp")
+    "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/thread_context/redis_manager.cpp"
+    "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/thread_context/trace_context_tls.cpp")
 target_include_directories(redis_lifecycle_test PRIVATE
     "${MMORPG_SOURCE_ROOT}/cpp/libs"
     "${MMORPG_SOURCE_ROOT}/cpp/libs/engine"

@@ -220,9 +220,15 @@ func (f *fakeAllocator) stats() (allocate, remove, add int) {
 // seedAgonesRoom 在假 GameServer gsName 上放一个属于 sceneID 的名额条目,并把记录写进 scene:{id}:agones_gs,回记录。
 func seedAgonesRoom(t *testing.T, sc *svc.ServiceContext, alloc *fakeAllocator, sceneID uint64, gsName string) string {
 	t.Helper()
+	return seedAgonesRoomInZone(t, sc, alloc, sc.Config.ZoneId, sceneID, gsName)
+}
+
+// seedAgonesRoomInZone 同 seedAgonesRoom,场景在 zoneID(记录键带场景所在 zone 的 tag)。
+func seedAgonesRoomInZone(t *testing.T, sc *svc.ServiceContext, alloc *fakeAllocator, zoneID uint32, sceneID uint64, gsName string) string {
+	t.Helper()
 	room := agonesRoom{GameServer: gsName, Entry: newAgonesRoomEntry(sceneID)}
 	alloc.addEntryForTest(gsName, room.Entry)
-	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(sceneID), room.record()))
+	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(zoneID, sceneID), room.record()))
 	return room.record()
 }
 
@@ -230,7 +236,7 @@ func seedAgonesRoom(t *testing.T, sc *svc.ServiceContext, alloc *fakeAllocator, 
 // 假 GameServer 上,回条目。
 func requireAgonesRecordOn(t *testing.T, sc *svc.ServiceContext, alloc *fakeAllocator, sceneID uint64, gsName string) string {
 	t.Helper()
-	record, err := sc.Redis.Get(sceneAgonesGsKey(sceneID))
+	record, err := sc.Redis.Get(sceneAgonesGsKey(sc.Config.ZoneId, sceneID))
 	require.NoError(t, err)
 	room := parseAgonesRoom(record)
 	require.Equal(t, gsName, room.GameServer, "记录 %q 应当在 %s 上", record, gsName)
@@ -533,7 +539,7 @@ func TestCreateScene_NodeRpcFails_RollsBackRedisAndCounter(t *testing.T) {
 	// Redis 里不能留下任何 phantom 状态。
 	members, _ := sc.Redis.ZrangeWithScores(activeInstancesKey(testZoneId), 0, -1)
 	assert.Empty(t, members)
-	assert.False(t, mr.Exists(fmt.Sprintf(SceneNodeKeyFmt, resp.SceneId)))
+	assert.False(t, mr.Exists(sceneNodeKey(testZoneId, resp.SceneId)))
 
 	// 节点 scene_count 必须减回去,否则负载分数永久偏高。
 	cnt, _ := sc.Redis.Get(nodeSceneCountKey(testZoneId, "10"))
@@ -596,8 +602,7 @@ func TestCreateScene_Mirror_StillColocatesUnderAgones(t *testing.T) {
 	withReachableSceneNode(t, sc, "10")
 
 	const sourceSceneId = uint64(777)
-	sc.Redis.Set(sceneNodeKey(sourceSceneId), "10")
-	sc.Redis.Set(sceneZoneKey(sourceSceneId), fmt.Sprintf("%d", testZoneId))
+	sc.Redis.Set(sceneNodeKey(testZoneId, sourceSceneId), "10")
 
 	alloc := newFakeAllocator(
 		&fakeGameServer{name: "gs-source", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 8},
@@ -634,8 +639,7 @@ func TestCreateScene_Mirror_SourceFull_FallsBackToFreeAllocation(t *testing.T) {
 	withReachableSceneNode(t, sc, "10", "20")
 
 	const sourceSceneId = uint64(778)
-	sc.Redis.Set(sceneNodeKey(sourceSceneId), "10")
-	sc.Redis.Set(sceneZoneKey(sourceSceneId), fmt.Sprintf("%d", testZoneId))
+	sc.Redis.Set(sceneNodeKey(testZoneId, sourceSceneId), "10")
 
 	alloc := newFakeAllocator(
 		&fakeGameServer{name: "gs-source", podIP: "10.0.0.8", state: "Allocated", count: 2, capacity: 2},
@@ -704,9 +708,9 @@ func TestClaimIdleSceneTeardown_ReturnsAndWipesAgonesMapping(t *testing.T) {
 	sc, _ := newTestSvcCtx(t, "node-1")
 	sceneId := uint64(4242)
 
-	sc.Redis.Set(fmt.Sprintf(SceneNodeKeyFmt, sceneId), "10")
+	sc.Redis.Set(sceneNodeKey(testZoneId, sceneId), "10")
 	seedSceneMembersVia(sc, sceneId, 0)
-	sc.Redis.Set(sceneAgonesGsKey(sceneId), "gs-77")
+	sc.Redis.Set(sceneAgonesGsKey(testZoneId, sceneId), "gs-77")
 
 	claim, err := ClaimIdleSceneTeardown(sc, testZoneId, sceneId)
 	require.NoError(t, err)
@@ -714,7 +718,7 @@ func TestClaimIdleSceneTeardown_ReturnsAndWipesAgonesMapping(t *testing.T) {
 	assert.Equal(t, "10", claim.NodeID)
 	assert.Equal(t, "gs-77", claim.AgonesGs)
 
-	left, _ := sc.Redis.Get(sceneAgonesGsKey(sceneId))
+	left, _ := sc.Redis.Get(sceneAgonesGsKey(testZoneId, sceneId))
 	assert.Equal(t, "", left, "agones mapping must be wiped with the rest of the scene state")
 }
 
@@ -723,9 +727,9 @@ func TestClaimIdleSceneTeardown_AbortKeepsAgonesMapping(t *testing.T) {
 	sc, _ := newTestSvcCtx(t, "node-1")
 	sceneId := uint64(4243)
 
-	sc.Redis.Set(fmt.Sprintf(SceneNodeKeyFmt, sceneId), "10")
+	sc.Redis.Set(sceneNodeKey(testZoneId, sceneId), "10")
 	seedSceneMembersVia(sc, sceneId, 3)
-	sc.Redis.Set(sceneAgonesGsKey(sceneId), "gs-77")
+	sc.Redis.Set(sceneAgonesGsKey(testZoneId, sceneId), "gs-77")
 
 	claim, err := ClaimIdleSceneTeardown(sc, testZoneId, sceneId)
 	require.NoError(t, err)
@@ -734,7 +738,7 @@ func TestClaimIdleSceneTeardown_AbortKeepsAgonesMapping(t *testing.T) {
 	assert.Equal(t, "", claim.NodeID)
 	assert.Equal(t, "", claim.AgonesGs)
 
-	left, _ := sc.Redis.Get(sceneAgonesGsKey(sceneId))
+	left, _ := sc.Redis.Get(sceneAgonesGsKey(testZoneId, sceneId))
 	assert.Equal(t, "gs-77", left, "aborted destroy must not touch the mapping")
 }
 
@@ -779,6 +783,6 @@ func TestAgonesDisabled_IsCompletelyInert(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, uint32(0), resp.ErrorCode)
 
-	gs, _ := sc.Redis.Get(sceneAgonesGsKey(resp.SceneId))
+	gs, _ := sc.Redis.Get(sceneAgonesGsKey(testZoneId, resp.SceneId))
 	assert.Equal(t, "", gs, "no agones mapping may be written when disabled")
 }

@@ -1,7 +1,8 @@
-# Prometheus alert rules for the player-domain Redis Cluster(玩家域 Redis Cluster,deploy/k8s/manifests/infra/redis-player-cluster.yaml)。
+# Prometheus alert rules for the player-domain Redis Cluster(玩家域 Redis Cluster,deploy/k8s/manifests/infra/redis-cluster.yaml,name=redis-player)。
 #
 # 来源:docs/design/redis-player-store-cluster.md §7(持久性与故障转移)、§8(扩缩容);处置见 docs/ops/redis-player-cluster-runbook.md。
-# 控制域(redis、redis-ha、redis-queue-g<N>、redis-match-cluster)的规则在 deploy/k8s/redis-alerts.yaml,不在这里。
+# 单实例控制域(redis、redis-ha、redis-queue-g<N>、redis-ctl-g<N>、redis-match-cluster)的规则在 deploy/k8s/redis-alerts.yaml,不在这里。
+# 控制 Redis Cluster(redis-control,同一份模板)的规则在 deploy/k8s/redis-control-alerts.yaml,与本文件一条对一条,改阈值时两边一起改。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 redis-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/redis-player-alerts.yaml
@@ -16,7 +17,7 @@
 #   redis_rejected_connections_total、redis_connected_clients、redis_config_maxclients、redis_aof_last_write_status、redis_master_link_up。
 #   部署后逐个对着 exporter 的 /metrics 核对,对不上就改这里 —— 指标名写错的规则不报错,只是永远不响。
 #
-# 阈值与 for 时长是占位值,**待压测确认**(设计 §14.3、AGENTS.md §6:没有压测对比不下容量结论)。
+# 阈值与 for 时长已定(2026-11-12),压测出基线后可调(设计 §14.3、AGENTS.md §6:容量结论仍以压测对比为准):依据是业界 Redis 常用口径——内存 80% 预警、拒绝连接 / 驱逐出现即报、for 5~10 分钟滤掉 BGSAVE 与故障切换抖动。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up

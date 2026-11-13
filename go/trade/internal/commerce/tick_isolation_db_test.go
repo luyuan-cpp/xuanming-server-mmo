@@ -761,22 +761,24 @@ func TestRealDBQuarantineExpiresInFlightEscrowDebits(t *testing.T) {
 	require.Zero(t, opCount(t, e, 102, 4), "隔离不退回任何托管")
 }
 
-// 复核 should_fix:角色换主是长期状态,以前按暂时失败每 10 秒重试一次并打 ERROR,指标上与存储抖动分不开。
-func TestRealDBRoleConflictBacksOffForMinutes(t *testing.T) {
+// 复核 should_fix:角色被另一条挂单冻结是会自己解除的长期状态,以前按暂时失败每 10 秒重试一次并打 ERROR,
+// 指标上与存储抖动分不开;现在按分钟级复查。换主、删角不可逆,2026-11-11 起当场转人工(owner_changed),
+// 见 manual_db_test.go 的 TestRealDBOwnerChangeQuarantinesAndRedirectRebinds。
+func TestRealDBFrozenRoleBacksOffForMinutes(t *testing.T) {
 	e := realDBEngine(t)
 	clock := newTestClock()
 	e.Now = clock.Now
 	offer := consignment(t, e, 104, "role-conflict-01")
-	// 卖家角色挂单之后换了主:合同里存的原归属身份(account-104, 修订 1)永远对不上了。
+	// 卖家角色挂单之后被另一条人民币挂单冻结:原归属身份(account-104, 修订 1)没变,冻结解除后照常推进。
 	e.Roles = fixtureRoles{Values: map[uint64]*dspb.AccountRoleOwnership{
-		104: {Account: "account-new-owner", OwnerRevision: 2, Role: &base.AccountSimplePlayer{PlayerId: 104}},
+		104: {Account: "account-104", OwnerRevision: 1, TradeListingId: 99, Role: &base.AccountSimplePlayer{PlayerId: 104}},
 	}}
 
 	tick(t, e)
 	r, w := state(t, e, offer.CommerceId)
-	require.Nil(t, leg(w, "seller_debit"), "已换主的角色不托管、不发资产")
+	require.Nil(t, leg(w, "seller_debit"), "被冻结的角色不托管、不发资产")
 	require.Equal(t, offer.Version, r.Version, "推迟不改版本")
-	require.NotEqual(t, Manual, r.Status, "角色冲突不是坏数据,不隔离")
+	require.NotEqual(t, Manual, r.Status, "冻结会自己解除,不隔离")
 	nowMs := e.now()
 	backoffMs := uint64(tickRoleConflictBackoff.Milliseconds())
 	require.GreaterOrEqual(t, r.UpdatedMs, nowMs+backoffMs*8/10, "按分钟级复查,不再每 10 秒重试")

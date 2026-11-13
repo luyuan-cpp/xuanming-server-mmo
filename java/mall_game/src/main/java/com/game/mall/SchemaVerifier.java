@@ -14,9 +14,13 @@ final class SchemaVerifier {
         Map.entry("oms_order", "id,order_sn,buyer_id,request_id,sku_id,quantity,pay_amount,currency,status,create_time_ms,payment_deadline_ms,payment_time_ms"),
         Map.entry("oms_order_item", "order_sn,product_id,product_sku_id,product_sku_code,product_quantity,product_price_minor"),
         Map.entry("commerce_official_owner", "order_sn,buyer_account,buyer_owner_revision"),
-        Map.entry("commerce_payment_receipt", "channel,transaction_id,order_sn,amount_minor,currency"),
+        Map.entry("commerce_payment_receipt", "channel,transaction_id,order_sn,amount_minor,currency,revision,fact"),
+        Map.entry("commerce_sku_grant", "sku_id,item_config_id,count_per_unit,currency_type,currency_amount,title"),
+        Map.entry("commerce_order_grant", "order_sn,item_config_id,count_per_unit,currency_type,currency_amount,title"),
+        Map.entry("commerce_reversal_intent", "order_sn,revision,status,updated_ms"),
+        Map.entry("commerce_reversal_receipt", "order_sn,revision,trade_order_id,state,proof"),
         Map.entry("commerce_delivery_intent", "order_sn,buyer_id,sku_id,quantity,status,created_ms"),
-        Map.entry("commerce_refund_intent", "channel,transaction_id,order_sn,source,status"),
+        Map.entry("commerce_refund_intent", "channel,transaction_id,order_sn,source,status,close_reason"),
         Map.entry("commerce_refund_receipt", "channel,payment_transaction_id,transaction_id,order_sn,amount_minor,currency"),
         Map.entry("commerce_abnormal_payment", "channel,transaction_id,order_sn,reason,created_ms"),
         Map.entry("commerce_mock_transaction", "kind,order_sn,request_id,transaction_id,payment_transaction_id,amount_minor,currency,created_ms,applied"),
@@ -31,10 +35,10 @@ final class SchemaVerifier {
         Map.entry("commerce_mock_payout", "withdrawal_id,request_id,transaction_id,amount_fen,successful,created_ms,applied"),
         Map.entry("commerce_request_nonce", "caller_role,nonce,expires_ms"));
     /**
-     * 存储合同戳,与 schema.sql 末行一致。2026-11-10 起换新:之前装的库里,退款待办的 CHECK 只认三种来源,
-     * 记不下金额或币种不符的付款(那笔待办插不进去,整笔回滚);下面只核表、列和唯一键,CHECK 的取值测不出,靠换戳强制重装。
+     * 存储合同戳,与 schema.sql 末行一致。2026-11-13 起换新:发放物多了货币一种、付款回执多了修订号、多了扣回待办与回执、
+     * 退款待办多了转人工的状态(payment-recharge.md §22.6)。下面只核表、列和唯一键,CHECK 的取值测不出,靠换戳强制重装。
      */
-    static final String STORAGE_CONTRACT = "mall-game-official-sku-v1-minor-units-abnormal-payment";
+    static final String STORAGE_CONTRACT = "mall-game-official-sku-v2-currency-grant-payment-revision";
     private SchemaVerifier() {}
     static void verify(JdbcTemplate jdbc, DataSource source) throws SQLException {
         List<Map<String, Object>> version = jdbc.queryForList("SELECT version,storage_contract FROM commerce_schema_version");
@@ -79,6 +83,13 @@ final class SchemaVerifier {
             unique(connection, "commerce_refund_receipt", List.of("channel", "payment_transaction_id"));
             unique(connection, "commerce_refund_receipt", List.of("channel", "transaction_id"));
             unique(connection, "commerce_delivery_intent", List.of("order_sn"));
+            // 扣回待办一张订单一行(最新修订号),回执按 (订单, 修订号) 幂等;待办要能按状态与改写时间续扫。
+            unique(connection, "commerce_reversal_intent", List.of("order_sn"));
+            unique(connection, "commerce_reversal_receipt", List.of("order_sn", "revision"));
+            if (indexes(connection, "commerce_reversal_intent", false).values().stream().noneMatch(cols -> cols.size() >= 3
+                    && cols.subList(0, 3).equals(List.of("status", "updated_ms", "order_sn")))) {
+                throw new IllegalStateException("payment reversal intents lack their resumable scan index");
+            }
             if(indexes(connection,"commerce_delivery_intent",false).values().stream().noneMatch(cols->cols.size()>=3&&cols.subList(0,3).equals(List.of("status","created_ms","order_sn"))))throw new IllegalStateException("商城交付待办缺可恢复扫描索引");
             unique(connection, "commerce_request_nonce", List.of("caller_role", "nonce"));
             unique(connection, "commerce_admin_command", List.of("actor", "request_id"));

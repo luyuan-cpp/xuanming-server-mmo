@@ -8,7 +8,7 @@ package node
 //
 // 这些用例验证 node_id 分配的核心不变量:
 //   1. node_id 永远从 1 开始,不分配 0
-//   2. 同 node_type 跨 zone 全局唯一(修复 Snowflake 冲突)
+//   2. 同 node_type 跨 zone 全局唯一(allocationKey 路径不带 zone)
 //   3. 不同 node_type 可复用同一数字 node_id(隔离正确)
 //   4. lease revoke 后 node_id 立即可被复用
 //   5. CAS 失败时继续尝试下一个 ID
@@ -185,7 +185,7 @@ func TestAllocSkipsZero(t *testing.T) {
 }
 
 // TestAllocCrossZoneUnique: 同 node_type、不同 zone 并发申请,得到的 node_id 集合必须无交集。
-// 这是修复 Snowflake worker id 跨 zone 冲突的核心断言。
+// 这是 allocationKey 不带 zone(全服范围内 (node_type, node_id) 唯一)的核心断言。
 func TestAllocCrossZoneUnique(t *testing.T) {
 	cli := newTestClient(t)
 	defer cli.Close()

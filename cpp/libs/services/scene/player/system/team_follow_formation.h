@@ -29,8 +29,9 @@
 #include <span>
 #include <vector>
 
-// 槽位间距(米,沿轨迹量)。沿用客户端跟随一直用的 1.4(team-system.md V.4)。
-// 视觉上偏紧是待定项(team-system.md V.7 第 5 条);改大时要一并核对 kTeamRegroupDistance 与可见半径 kMaxViewRadius。
+// 槽位间距(米,沿轨迹量)。沿用客户端跟随一直用的 1.4(team-system.md V.4);2026-11-12 定案保留(V.7 第 5 条):
+// 紧凑纵队,整列 4 × 1.4 = 5.6 落在视野半径里、互相看得见不靠显式关注;贴图叠在一起由客户端按脚底排序。
+// 要按美术身宽拉开时,先过 player_team.cpp 顶部两条 static_assert(整列不超过归队阈值,归队阈值小于视野半径)。
 constexpr double kTeamFollowSpacing = 1.4;
 // 队形里最多的队员数:队伍上限 5 人,队长之外 4 人。
 constexpr std::size_t kTeamFollowMaxMembers = 4;

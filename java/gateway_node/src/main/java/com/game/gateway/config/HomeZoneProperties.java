@@ -17,6 +17,8 @@ import java.util.Set;
  *   <li>{@code service.ZoneHealthPublisher}:本区健康汇总写进 etcd(docs/design/gateway-zone-health-publish-20261111.md);</li>
  *   <li>{@code service.ZonePolicyPublisher}:本区 zone_config 的容量与建角开关写进 etcd 的固定键
  *       {@code /mmorpg/zone_policy/zone/<zoneId>}(不挂租约,内容变了才写),给本区 login 读。</li>
+ *   <li>{@code service.RoleCapacityGuard}(2026-11-12):本区设了角色上限、建角开关还开着时问本区 login 角色数,到了就关上
+ *       zone_config 里本区的建角开关(比较并写);只管这里列出的区,问量只随正在导量的区的个数增长。</li>
  * </ul>
  *
  * <p>取值:

@@ -10,8 +10,7 @@
 
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "thread_context/ecs_context.h"
-#include "thread_context/redis_manager.h"
-// hiredis 应答类型(redisReply / REDIS_REPLY_* / REDIS_OK)。redis_manager.h 经 muduo 的 Hiredis.h 已带进来,
+// hiredis 应答类型(redisReply / REDIS_REPLY_* / REDIS_OK)。集群客户端头经 muduo 的 Hiredis.h 已带进来,
 // 这里显式再包含一次,不靠传递包含拿这些符号(同 player_scene.cpp / player_team.h)。
 #include <hiredis/hiredis.h>
 
@@ -30,11 +29,11 @@ namespace
 		return guid != nullptr ? guid->value : 0;
 	}
 
-	// 唤醒频道在控制域(玩家域不用 PUBLISH,redis-player-store-cluster.md §5.12)。同步摘要在玩家域,直接看 tlsPlayerRedis。
+	// 唤醒频道在控制集群(玩家域不发布,redis-player-store-cluster.md §5.12;redis-cluster-all-domains-20261110.md §4.6)。
+	// 同步摘要在玩家域,直接看 tlsPlayerRedis。
 	bool ControlRedisReady()
 	{
-		auto &redis = tlsRedis.GetConnection();
-		return redis && redis->connected();
+		return tlsControlRedis.connected();
 	}
 
 	// 进程内的时间窗口用单调时钟(AGENTS §11.3):系统时间被回拨时,合并窗口不能因此长期不放行。
@@ -252,9 +251,12 @@ void PlayerLandingSystem::PublishAssetWake(entt::entity player, AssetWakeReason 
 		return;
 	}
 
-	const int ret = tlsRedis.GetConnection()->command(
+	// SPUBLISH 按分片频道路由到它所在 slot 的主节点(集群里普通 PUBLISH 经总线广播到全部节点,不随节点数扩展)。
+	// 集群客户端把回调绑到提交这一刻的 trace 上,回调里的告警落在这次进场的 trace 上(docs/design/distributed-tracing.md §4.3)。
+	const std::string channel = player_landing::AssetWakeChannel(playerId);
+	const int ret = tlsControlRedis.command(
 		[playerId = playerId](hiredis::Hiredis *, redisReply *reply) {
-			// 只在出错时打日志:PUBLISH 的正常应答是收到的订阅者数(整数),0 个订阅者也不算错
+			// 只在出错时打日志:SPUBLISH 的正常应答是收到的订阅者数(整数),0 个订阅者也不算错
 			// (guild / trade 的资产通道可能未开启)。
 			if (reply == nullptr)
 			{
@@ -267,12 +269,11 @@ void PlayerLandingSystem::PublishAssetWake(entt::entity player, AssetWakeReason 
 						 << " err=" << (reply->str != nullptr ? reply->str : "");
 			}
 		},
-		(std::string("PUBLISH ") + player_landing::kAssetWakeChannel + " %llu").c_str(),
-		static_cast<unsigned long long>(playerId));
+		"SPUBLISH %s %llu", channel.c_str(), static_cast<unsigned long long>(playerId));
 	if (ret != REDIS_OK)
 	{
 		// 没发出去不记合并窗口:下一次进场照发。唤醒丢了退回资产通道原有的退避重投(设计 L-4)。
-		LOG_WARN << "[PlayerLanding] asset wake PUBLISH not sent;falls back to retry backoff, player_id=" << playerId
+		LOG_WARN << "[PlayerLanding] asset wake SPUBLISH not sent;falls back to retry backoff, player_id=" << playerId
 				 << " ret=" << ret;
 		return;
 	}

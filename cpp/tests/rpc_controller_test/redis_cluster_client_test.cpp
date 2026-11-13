@@ -52,6 +52,7 @@
 
 #include "engine/infra/storage/redis_cluster/redis_cluster_client.h"
 #include "engine/infra/storage/redis_cluster/redis_slot.h"
+#include "thread_context/trace_context_tls.h"
 
 using namespace std::chrono_literals;
 
@@ -485,7 +486,7 @@ protected:
 		options.connect.reconnectIntervalSec = 30.0;       // 不测重连的用例:整个用例内不重连,结果确定
 		options.connect.livenessProbeIntervalSec = 30.0;   // 用例期间不发探测 PING,线上序列只有被测命令
 		options.connect.livenessTimeoutSec = 90.0;
-		options.reconnectJitterSec = 0.0;
+		options.connect.reconnectJitterSec = 0.0;
 		options.retry.budget = 2s;
 		options.retry.initialBackoff = 1ms;
 		options.retry.maxBackoff = 20ms;
@@ -509,6 +510,15 @@ protected:
 	{
 		return [this, label](hiredis::Hiredis*, redisReply* reply) {
 			events_.push_back(label + ":" + ReplyText(reply));
+		};
+	}
+
+	// 同 Recorder,但记的是回调执行时线程上的 trace_id(没有 trace 记 none),核对 trace 续接(distributed-tracing.md §4.3)。
+	RedisClusterClient::CommandCallback TraceRecorder(const std::string& label)
+	{
+		return [this, label](hiredis::Hiredis*, redisReply*) {
+			const tracing::TraceContext& current = tracing::Current();
+			events_.push_back(label + ":" + (current.IsValid() ? current.trace_id.ToHex() : std::string("none")));
 		};
 	}
 
@@ -685,6 +695,57 @@ TEST_F(RedisClusterClientTest, AllKeysPolicyKeepsUntaggedKeysOffTheWire)
 	ASSERT_TRUE(WaitEvents(1));
 	EXPECT_EQ(WireCount(node), 1u);
 	EXPECT_EQ(Wire(node).back(), "GET player:{42}:location");
+}
+
+// commandArgv(docs/design/redis-cluster-all-domains-20261110.md §4.2):归属对账一次读几百个键的 MGET 走它。
+// 与 command 同一套守卫与路由;用与 scene 控制集群句柄相同的策略(kMultiKeyOnly + KeyDomain::kControl)。
+TEST_F(RedisClusterClientTest, ArgvCommandGoesThroughTheSameGuardAndRoute)
+{
+	const std::size_t node = AddNode();
+	RedisClusterOptions options = BaseOptions(RedisClusterMode::kStandalone, {node});
+	options.hashTagPolicy = redis_cluster::HashTagPolicy::kMultiKeyOnly;
+	options.keyDomain = redis_cluster::KeyDomain::kControl;
+	StartClient(std::move(options));
+	ASSERT_TRUE(WaitClientConnected());
+
+	const std::vector<std::string> keys = {"node:{ctl:7}:3:holder", "scene:{ctl:7}:101:node", "scene:{ctl:7}:102:node"};
+	const std::string foreignKey = "scene:{ctl:8}:101:node";
+	int rejectedCalls = 0;
+	const auto rejectedCallback = [&rejectedCalls](hiredis::Hiredis*, redisReply*) { ++rejectedCalls; };
+	RunInLoopAndWait([&] {
+		std::vector<const char*> argv{"MGET"};
+		std::vector<std::size_t> argvLen{4};
+		for (const std::string& key : keys)
+		{
+			argv.push_back(key.data());
+			argvLen.push_back(key.size());
+		}
+		EXPECT_EQ(client_->commandArgv(Recorder("mget"), static_cast<int>(argv.size()), argv.data(), argvLen.data(),
+									   RedisClusterClient::SideEffects::kNone),
+				  REDIS_OK);
+
+		// 混进别的 zone 的键:同一套守卫当场拒绝(kMixedTags),不调回调。
+		std::vector<const char*> mixed{"MGET", keys[0].data(), foreignKey.data()};
+		std::vector<std::size_t> mixedLen{4, keys[0].size(), foreignKey.size()};
+		EXPECT_EQ(client_->commandArgv(rejectedCallback, static_cast<int>(mixed.size()), mixed.data(), mixedLen.data(),
+									   RedisClusterClient::SideEffects::kNone),
+				  REDIS_ERR);
+		EXPECT_EQ(client_->stats().rejectedByGuard, 1u);
+
+		// 参数不完整:不进路由层,不调回调。
+		EXPECT_EQ(client_->commandArgv(rejectedCallback, 0, argv.data(), argvLen.data(), RedisClusterClient::SideEffects::kNone),
+				  REDIS_ERR);
+		EXPECT_EQ(client_->commandArgv(rejectedCallback, 1, nullptr, argvLen.data(), RedisClusterClient::SideEffects::kNone),
+				  REDIS_ERR);
+		EXPECT_EQ(client_->commandArgv({}, static_cast<int>(argv.size()), argv.data(), argvLen.data(),
+									   RedisClusterClient::SideEffects::kNone),
+				  REDIS_ERR)
+			<< "空回调";
+	});
+	ASSERT_TRUE(WaitEvents(1));
+	EXPECT_EQ(WireCount(node), 1u);
+	EXPECT_EQ(Wire(node).back(), "MGET node:{ctl:7}:3:holder scene:{ctl:7}:101:node scene:{ctl:7}:102:node");
+	EXPECT_TRUE(HoldsFor([&] { return rejectedCalls == 0 && WireCount(node) == 1u; }));
 }
 
 TEST_F(RedisClusterClientTest, RoutingKeyAndScriptLoadReachTheRightNodes)
@@ -1102,7 +1163,7 @@ TEST_F(RedisClusterClientTest, UnreachableSeedRejectsCommandsAndShutsDownCleanly
 	options.seeds.push_back(redis_cluster::NodeEndpoint{"127.0.0.1", unusedPort});
 	options.seeds.push_back(redis_cluster::NodeEndpoint{"redis-0.infra.svc", 6379});   // 不是 IP 字面量,忽略
 	options.connect.reconnectIntervalSec = 0.05;
-	options.reconnectJitterSec = 0.0;
+	options.connect.reconnectJitterSec = 0.0;
 	options.topologyRefreshMinInterval = 10ms;
 	StartClient(std::move(options));
 	EXPECT_TRUE(HoldsFor([&] {
@@ -1210,6 +1271,80 @@ TEST_F(RedisClusterClientTest, DestroyingClientInsideReplyCallbackDeliversDeferr
 	});
 	ASSERT_TRUE(WaitEvents(3));
 	EXPECT_EQ(Events(), (std::vector<std::string>{"first:ok", "inflight:null", "queued:null"}));
+}
+
+// ---------------------------------------------------------------------------
+// trace 续接(docs/design/distributed-tracing.md §4.3)
+// ---------------------------------------------------------------------------
+
+// 同 slot 停等:后一条由前一条的应答驱动上线,应答都在 loop 顶层派发。每条的回调仍挂提交它时的 trace,
+// 不挂前一条的;提交时没有 trace 的,回调里也没有。
+TEST_F(RedisClusterClientTest, CallbackRunsUnderTheTraceCapturedAtSubmit)
+{
+	const std::size_t node = AddNode();
+	SetBusinessHandler(node, HoldEveryReply);
+	StartClient(BaseOptions(RedisClusterMode::kStandalone, {node}));
+	ASSERT_TRUE(WaitClientConnected());
+
+	const std::string key(kKeySlot8000);
+	std::string traceA;
+	std::string traceB;
+	RunInLoopAndWait([&] {
+		{
+			const tracing::ScopedRoot root;
+			traceA = tracing::Current().trace_id.ToHex();
+			ASSERT_EQ(client_->command(TraceRecorder("a"), "SET %s %s", key.c_str(), "1"), REDIS_OK);
+		}
+		{
+			const tracing::ScopedRoot root;
+			traceB = tracing::Current().trace_id.ToHex();
+			ASSERT_EQ(client_->command(TraceRecorder("b"), "SET %s %s", key.c_str(), "2"), REDIS_OK);
+		}
+		ASSERT_EQ(client_->command(TraceRecorder("c"), "SET %s %s", key.c_str(), "3"), REDIS_OK);
+	});
+	ASSERT_NE(traceA, traceB);
+
+	ASSERT_TRUE(WaitWireCount(node, 1));
+	ReleaseReply(node, kOkReply);
+	ASSERT_TRUE(WaitWireCount(node, 2));
+	ReleaseReply(node, kOkReply);
+	ASSERT_TRUE(WaitWireCount(node, 3));
+	ReleaseReply(node, kOkReply);
+	ASSERT_TRUE(WaitEvents(3));
+	EXPECT_EQ(Events(), (std::vector<std::string>{"a:" + traceA, "b:" + traceB, "c:none"}));
+}
+
+// 本地收尾在调用方的调用栈上同步回调(这里是 Shutdown 收掉握手中节点上的排队命令):回调挂的仍是提交时的 trace,
+// 不挂调用 Shutdown 的那一条;提交时没有 trace 的,回调里也没有。
+TEST_F(RedisClusterClientTest, LocalCompletionKeepsTheSubmitTraceNotTheCallers)
+{
+	const std::size_t a = AddNode();
+	const std::size_t b = AddNode();
+	RunInLoopAndWait([&] { nodes_[b]->holdAuth = true; });
+	SetSlots({{0, 8191, a}, {8192, 16383, b}});
+	RedisClusterOptions options = BaseOptions(RedisClusterMode::kCluster, {a});
+	options.connect.password = "cluster-test-pass";
+	StartClient(std::move(options));
+	ASSERT_TRUE(WaitUntil([&] { return !nodes_[b]->commands.empty(); })) << "b 的 AUTH 已到,应答被压住";
+
+	const std::string key(kKeySlot9842);
+	std::string submitTrace;
+	std::string shutdownTrace;
+	RunInLoopAndWait([&] {
+		{
+			const tracing::ScopedRoot root;
+			submitTrace = tracing::Current().trace_id.ToHex();
+			ASSERT_EQ(client_->command(TraceRecorder("traced"), "SET %s %s", key.c_str(), "1"), REDIS_OK);
+		}
+		ASSERT_EQ(client_->command(TraceRecorder("untraced"), "SET %s %s", key.c_str(), "2"), REDIS_OK);
+		const tracing::ScopedRoot root;
+		shutdownTrace = tracing::Current().trace_id.ToHex();
+		client_->Shutdown();
+	});
+	ASSERT_NE(submitTrace, shutdownTrace);
+	ASSERT_TRUE(WaitEvents(2));
+	EXPECT_EQ(Events(), (std::vector<std::string>{"traced:" + submitTrace, "untraced:none"}));
+	EXPECT_EQ(WireCount(b), 0u) << "握手没完成,命令从未上线";
 }
 
 } // namespace

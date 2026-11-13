@@ -13,23 +13,22 @@ func sharedRedisEnv(env map[string]string) func(string) (string, bool) {
 	}
 }
 
-// K8s 的形状:NameCacheRedis 与 SharedRedis 的口令都是空串,SharedRedisPasswordEnv 指名 Secret 注入的变量。
-// 两段都要填上;玩家域没写 Addrs 时回落到 SharedRedis,也要拿到同一个口令。返回的是副本,原值不动。
-func TestResolveSharedRedisPasswordFillsBothSections(t *testing.T) {
+// K8s 的形状:ControlRedis 的口令是空串,SharedRedisPasswordEnv 指名 Secret 注入的变量(名字读缓存 2026-11-13 起也在这一段)。
+// 玩家域没写 Addrs 时回落到 ControlRedis,也要拿到同一个口令。返回的是副本,原值不动。
+func TestResolveSharedRedisPasswordFillsControlSection(t *testing.T) {
 	c := Config{SharedRedisPasswordEnv: "SHARED_REDIS_PASSWORD"}
-	c.NameCacheRedis.Host = "redis.infra:6379"
-	c.SharedRedis.Host = "redis.infra:6379"
+	c.ControlRedis.Addrs = []string{"redis.infra:6379"}
 	got, err := c.ResolveSharedRedisPassword(sharedRedisEnv(map[string]string{"SHARED_REDIS_PASSWORD": "pw-from-secret"}))
 	if err != nil {
 		t.Fatalf("ResolveSharedRedisPassword: %v", err)
 	}
-	if got.NameCacheRedis.Pass != "pw-from-secret" || got.SharedRedis.Password != "pw-from-secret" {
-		t.Fatalf("both sections must get the password: name_cache=%q shared=%q", got.NameCacheRedis.Pass, got.SharedRedis.Password)
+	if got.ControlRedis.Password != "pw-from-secret" {
+		t.Fatalf("ControlRedis must get the password, got %q", got.ControlRedis.Password)
 	}
 	if pw := got.EffectivePlayerRedis().Password; pw != "pw-from-secret" {
-		t.Fatalf("PlayerRedis falls back to SharedRedis and must carry the same password, got %q", pw)
+		t.Fatalf("PlayerRedis falls back to ControlRedis and must carry the same password, got %q", pw)
 	}
-	if c.NameCacheRedis.Pass != "" || c.SharedRedis.Password != "" {
+	if c.ControlRedis.Password != "" {
 		t.Fatal("the receiver must stay untouched; the caller uses the returned copy")
 	}
 }
@@ -37,13 +36,13 @@ func TestResolveSharedRedisPasswordFillsBothSections(t *testing.T) {
 // 本机 etc/data_service.yaml 不写 SharedRedisPasswordEnv:照用字面量。
 func TestResolveSharedRedisPasswordKeepsLiteralWithoutEnvName(t *testing.T) {
 	c := Config{}
-	c.SharedRedis.Password = "local"
+	c.ControlRedis.Password = "local"
 	got, err := c.ResolveSharedRedisPassword(sharedRedisEnv(map[string]string{"SHARED_REDIS_PASSWORD": "other"}))
 	if err != nil {
 		t.Fatalf("ResolveSharedRedisPassword: %v", err)
 	}
-	if got.SharedRedis.Password != "local" || got.NameCacheRedis.Pass != "" {
-		t.Fatalf("literals must stay when SharedRedisPasswordEnv is not set: %+v / %+v", got.SharedRedis, got.NameCacheRedis)
+	if got.ControlRedis.Password != "local" {
+		t.Fatalf("literals must stay when SharedRedisPasswordEnv is not set: %q", got.ControlRedis.Password)
 	}
 }
 
@@ -54,9 +53,9 @@ func TestResolveSharedRedisPasswordFailsClosed(t *testing.T) {
 		t.Fatalf("a missing variable must be rejected by name, got %v", err)
 	}
 	both := Config{SharedRedisPasswordEnv: "SHARED_REDIS_PASSWORD"}
-	both.NameCacheRedis.Pass = "stale-literal"
+	both.ControlRedis.Password = "stale-literal"
 	_, err := both.ResolveSharedRedisPassword(sharedRedisEnv(map[string]string{"SHARED_REDIS_PASSWORD": "pw"}))
-	if err == nil || !strings.Contains(err.Error(), "NameCacheRedis.Pass") || strings.Contains(err.Error(), "stale-literal") {
+	if err == nil || !strings.Contains(err.Error(), "ControlRedis.Password") || strings.Contains(err.Error(), "stale-literal") {
 		t.Fatalf("a literal next to the env name must be rejected by key without echoing it, got %v", err)
 	}
 }

@@ -61,6 +61,40 @@ func TestRelocateSettleWindowCoversKafkaWriteTimeout(t *testing.T) {
 		kafkaWriteTimeout, settleSeconds)
 }
 
+// relocateSettleCallDeadlineMarginMs 是「C++ deadline ≥ scene_manager zrpc Timeout + 2000」那条规则里的余量
+// (docs/design/grpc-muduo-transport.md §16.3,部署门禁 Assert-GrpcClientDeadlineBudget 守着 base_deploy_config.yaml)。
+const relocateSettleCallDeadlineMarginMs = 2000
+
+// C++ relocate_confirm.h 的 kSmSettleWindow 是 settle 窗口的下限:deadline 被配小、或宿主没 Apply 配置落到内置缺省 10000 时,
+// 窗口不跟着缩。它必须盖住 scene_manager 允许的最小 deadline(zrpc Timeout + 2000)之后 handler 再跑的一次 Kafka 写,
+// 否则疏散 / 排空改派会在落点还没定的时候去核实,误踢玩家。2026-11-12 scene_manager 的 Timeout 由 8000 调到 11500
+// (把角色目录强读与铸造的 WAITAOF 算进预算),下限由 15s 调到 19s;以后谁再调大 Timeout 或 Kafka 写超时而没同步下限,这里变红。
+// 找不到 C++ 源码(只拷了 go/ 的构建环境)时跳过。
+func TestRelocateSettleFloorCoversSceneManagerTimeout(t *testing.T) {
+	header, err := os.ReadFile(filepath.Join(crossLangRepoRoot,
+		filepath.FromSlash("cpp/libs/services/scene/player/system/relocate_confirm.h")))
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Skip("找不到 C++ 源码(只拷了 go/ 的构建环境),跳过跨配置检查")
+	}
+	require.NoError(t, err)
+	floorSeconds := firstIntSubmatchForTest(t, `std::chrono::seconds\s+kSmSettleWindow\{(\d+)\}`, string(header),
+		"relocate_confirm.h 里以 std::chrono::seconds 声明的 kSmSettleWindow")
+
+	etc, err := os.ReadFile(filepath.Join("..", "..", "etc", "scene_manager_service.yaml"))
+	require.NoError(t, err)
+	// Timeout 是文件顶层的键(行首无缩进);写成别的形式就让用例失败,不退回 go-zero 的缺省值去比。
+	timeoutMs := firstIntSubmatchForTest(t, `(?m)^Timeout:\s*(\d+)\s*(?:#.*)?$`, string(etc),
+		"scene_manager_service.yaml 顶层的 Timeout(裸十进制毫秒)")
+	kafkaSeconds := firstIntSubmatchForTest(t, `(?m)^KafkaWriteTimeoutSeconds:\s*(\d+)\s*(?:#.*)?$`, string(etc),
+		"scene_manager_service.yaml 顶层的 KafkaWriteTimeoutSeconds(裸十进制秒)")
+
+	require.Positive(t, timeoutMs)
+	need := timeoutMs + relocateSettleCallDeadlineMarginMs + kafkaSeconds*1000
+	require.GreaterOrEqualf(t, floorSeconds*1000, need,
+		"C++ relocate_confirm::kSmSettleWindow=%ds 小于 scene_manager Timeout(%dms)+ %dms + KafkaWriteTimeoutSeconds(%ds) = %dms:"+
+			"两边必须同步调整", floorSeconds, timeoutMs, relocateSettleCallDeadlineMarginMs, kafkaSeconds, need)
+}
+
 // firstIntSubmatchForTest 返回 pattern 在 src 里第一处匹配的第一个捕获组(十进制整数)。找不到时让用例失败:
 // 常量改名或改写法也要被发现,不能悄悄变成「没东西可比」。
 func firstIntSubmatchForTest(t *testing.T, pattern, src, what string) int {

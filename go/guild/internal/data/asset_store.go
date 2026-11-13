@@ -91,7 +91,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/metric"
 	"google.golang.org/protobuf/proto"
@@ -102,7 +101,7 @@ import (
 	"shared/assetop"
 	"shared/authoritysql"
 	"shared/gameday"
-	"shared/safego"
+	"shared/looplive"
 	"shared/workshard"
 )
 
@@ -191,23 +190,20 @@ var (
 	recordCleanupDeleted = func(table string, n int64) { guildAssetCleanupDeletedTotal.Add(float64(n), table) }
 )
 
-// guildAssetCleanupLastRun 是清理循环的活性(缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8):
-// 最近一次跑完一轮的时刻(Unix 秒)。清理按 player_id 分片之后,一个副本的循环卡住,它名下的片就没人清,
-// 而 cleanup_deleted_total 的总和照样在涨,看不出来。用 Prometheus 客户端的不带可变 label 的 GaugeVec
-// (go-zero 的 metric 删不了序列):循环起来才有序列、退出就删,没开 CleanupEnabled 的副本没有序列;
-// 告警 AssetOpCleanupLoopStalled 按副本判。注册在默认注册表上,与 go-zero 的指标同一个 /metrics。
-var guildAssetCleanupLastRun = promauto.NewGaugeVec(prometheus.GaugeOpts{
+// CleanupLive 是清理循环的活性,指标 guild_asset_cleanup_last_run_unixtime(缺口清单第 25 条第五批,
+// docs/design/assetop-redelivery-sharding-20261110.md §14.8;口径在 shared/looplive 的包注释)。清理按 player_id 分片之后,
+// 一个副本的循环停住,它名下的片就没人清,而 cleanup_deleted_total 的总和照样在涨,看不出来;告警 AssetOpCleanupLoopStalled
+// 按副本判。没开 CleanupEnabled 的副本没有序列。RunCleanup 与 guild.go 的 startAssetOpCleanup 两处循环共用(一个进程只起其中一个)。
+// 用 Prometheus 客户端而不是 go-zero 的 metric(它删不了序列),注册在默认注册表上,与 go-zero 的指标同一个 /metrics。
+var CleanupLive = looplive.NewRegistered(prometheus.DefaultRegisterer, prometheus.GaugeOpts{
 	Namespace: guildMetricNamespace,
 	Subsystem: "asset",
 	Name:      "cleanup_last_run_unixtime",
 	Help:      "清理循环最近一次跑完一轮的时刻(Unix 秒,这一轮成败都算,panic 的那一轮不算;循环起来时也写一次)。只在循环运行时有序列。",
-}, nil)
+})
 
-// MarkCleanupRun 记清理循环起来、或跑完一轮的时刻(RunCleanup 与 guild.go 的 startAssetOpCleanup 两处循环共用)。
-func MarkCleanupRun(now time.Time) { guildAssetCleanupLastRun.WithLabelValues().Set(float64(now.Unix())) }
-
-// ClearCleanupRun 在清理循环退出时删掉活性序列:停掉的循环不该被当成卡住。
-func ClearCleanupRun() { guildAssetCleanupLastRun.Reset() }
+// CleanupPoint 是清理每一轮的 safego 点位名(safego_panic_total 的 label,必须是常量)。
+const CleanupPoint = "guild.asset_op_cleanup"
 
 const (
 	// 到期扫描的两段(ListDueOwned):新行 `attempts` < ?、老行 `attempts` >= ?,其后接分片条件(workshard.Filter,
@@ -1342,27 +1338,26 @@ func cleanupArgs(owned workshard.Filter, before ...any) []any {
 // 每个 stable 副本都跑,c.Owns 装配了时各清各的片(CleanupOnce);没装配时各副本清全部行:删除幂等,多副本同时跑无害。
 // 随机初始延迟 [0, Interval) 只是把各副本错开,少抢同一批行锁。
 // 每一轮各自 recover:单轮 panic 只丢那一轮,清理不会从此静默停摆。
+// 活性(CleanupLive):起来时写一次;每一轮正常返回(成败都算)就写这一刻,panic 的一轮不写;ctx 结束、有意停止时删掉序列。
 func (s *GuildAssetStore) RunCleanup(ctx context.Context, c CleanupConf) {
 	if c.Interval <= 0 {
 		logx.Errorf("[GuildAsset] Invalid cleanup interval (%v); cleanup task not started", c.Interval)
 		return
 	}
-	// 活性:起来时写一次,每跑完一轮写一次(这一轮成败都写,panic 的那一轮由 safego.Run 兜住、不写),退出时删掉序列。
-	MarkCleanupRun(time.Now())
-	defer ClearCleanupRun()
+	CleanupLive.Mark(time.Now())
 	timer := time.NewTimer(time.Duration(rand.Int64N(int64(c.Interval))))
 	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			CleanupLive.Stop()
 			return
 		case <-timer.C:
 		}
-		safego.Run("guild.asset_op_cleanup", func() {
+		CleanupLive.Round(CleanupPoint, func() {
 			if err := s.CleanupOnce(ctx, time.Now(), c); err != nil && ctx.Err() == nil {
 				logx.Errorf("[GuildAsset] Cleanup failed: %v", err)
 			}
-			MarkCleanupRun(time.Now())
 		})
 		timer.Reset(c.Interval)
 	}

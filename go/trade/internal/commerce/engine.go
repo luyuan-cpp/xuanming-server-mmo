@@ -791,6 +791,12 @@ func (e *Engine) plan(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWo
 			addLeg(w, "seller_return", r.SellerPlayerId, 4, b)
 		}
 	}
+	if w.Stage == "deliver" {
+		// 先买家、后卖家:买家那条终局没到账时整单退回或转人工(delivery_order.go)。
+		if err := settleBuyerFirstDelivery(r, w, now); err != nil {
+			return err
+		}
+	}
 	if w.Stage == "deliver" || w.Stage == "return" {
 		ready, ok := finalCredits(w)
 		if ready && !ok {
@@ -831,11 +837,12 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			return err
 		}
 	}
-	// parentToWake 是这一步让哪张市场成交子单收尾了时它的母单号,提交之后唤醒母单(filledParentToWake)。
-	// 事务体可能被重跑,每次进入先清零。
-	var parentToWake uint64
+	// parentsToWake 是这一步让市场成交子单收尾了时它的两张母单,提交之后唤醒(filledParentsToWake);
+	// bidToWake 是这一步让拍品结案了时它引用的出价(finishedLotBid)。事务体可能被重跑,每次进入先清空。
+	var parentsToWake []uint64
+	var bidToWake uint64
 	err = e.roleTx(ctx, func(tx *sql.Tx) error {
-		parentToWake = 0
+		parentsToWake, bidToWake = nil, 0
 		if err := e.lockRoles(ctx, tx, 0, old.SellerPlayerId, old.BuyerPlayerId, w.HighestBidder); err != nil {
 			return err
 		}
@@ -884,7 +891,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 					return err
 				}
 				markManual(r, w, manualReasonAppliedPartial, fmt.Sprintf("腿 %s op_id=%d 部分发放", l.Role, l.OpId), e.now())
-				parentToWake = filledParentToWake(lockedRecord, r)
+				parentsToWake = filledParentsToWake(lockedRecord, r)
 				return e.Repo.Save(ctx, tx, r, w, e.now())
 			}
 			if err := recordLegOutcome(l, out); err != nil {
@@ -915,7 +922,8 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 		}
 		pending := []*tradepb.TradeCommerceLeg{}
 		for _, l := range w.Legs {
-			if l.OpId == 0 {
+			// 被取代的腿不发(自动退回会取代还没发出的卖家所得腿);卖家所得要等买家那条到账才发(delivery_order.go)。
+			if legReadyToSend(w, l) {
 				pending = append(pending, l)
 			}
 		}
@@ -968,14 +976,23 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			// 合同与 workflow 都在锁内比较,别的写者在拿锁之前提交的变化这里读得到,之后的要等这把锁。
 			return e.Repo.RescheduleTx(ctx, tx, r.CommerceId, r.Version, nextDueMs(r, w, e.now()))
 		}
-		parentToWake = filledParentToWake(lockedRecord, r)
+		parentsToWake = filledParentsToWake(lockedRecord, r)
+		bidToWake = finishedLotBid(lockedRecord, r, w)
 		return e.Repo.Save(ctx, tx, r, w, e.now())
 	})
-	if err == nil && parentToWake != 0 {
-		// 子单收尾已提交:唤醒在 marketBarrier 里等它的母单(缺口清单第 16 条)。单独执行,不在子单的事务里锁母单行。
+	if err == nil {
+		// 子单收尾已提交:唤醒在 marketBarrier 里等它的两张母单(缺口清单第 16 条)。单独执行,不在子单的事务里锁母单行。
 		// 尽力而为:失败时母单最晚在 inFlightRecheck 之后自己到期。
-		if wakeErr := e.Repo.Wake(ctx, parentToWake, e.now()); wakeErr != nil {
-			logx.Errorf("[Commerce] Could not wake parent market order %d after its fill settled, it rechecks on its own schedule: %v", parentToWake, wakeErr)
+		for _, parent := range parentsToWake {
+			if wakeErr := e.Repo.Wake(ctx, parent, e.now()); wakeErr != nil {
+				logx.Errorf("[Commerce] Could not wake parent market order %d after its fill settled, it rechecks on its own schedule: %v", parent, wakeErr)
+			}
+		}
+		// 拍品结案已提交:唤醒在 settleHeldBid 里等它的出价,同样尽力而为,失败时出价最晚在 bidHeldRecheck 之后自己到期。
+		if bidToWake != 0 {
+			if wakeErr := e.Repo.Wake(ctx, bidToWake, e.now()); wakeErr != nil {
+				logx.Errorf("[Commerce] Could not wake held bid %d after its lot finished, it rechecks on its own schedule: %v", bidToWake, wakeErr)
+			}
 		}
 	}
 	return err

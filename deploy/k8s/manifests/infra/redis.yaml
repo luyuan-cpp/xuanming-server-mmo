@@ -1,5 +1,5 @@
 # 共享 Redis:player:session:{id} / player:{id}:location / 登录锁 / 玩家锁 / scene_manager 选主锁 /
-# 场景路由(scene:{id}:node)/ battle:lock / 战斗结算待销账记录都在这一个实例里,而且它在
+# 场景路由(scene:{ctl:<z>}:<id>:node)/ battle:lock / 战斗结算待销账记录都在这一个实例里,而且它在
 # **同步登录路径**上(login 拿不到锁即拒绝 EnterGame)。
 #
 # 为什么是 StatefulSet + PVC,而不是原来的 Deployment + emptyDir:

@@ -12,13 +12,13 @@ import (
 	"data_service/internal/store"
 	"data_service/internal/svc"
 
+	"shared/clusterredis"
 	"shared/playername"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // 玩家名字 logic 的单测(设计 docs/design/guild-phase2/03-names.md §3.19)。
@@ -168,10 +168,6 @@ func newPlayerNameTestCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minired
 	mr := miniredis.RunT(t)
 
 	c := config.Config{
-		NameCacheRedis: redis.RedisConf{
-			Host: mr.Addr(),
-			Type: "node",
-		},
 		PlayerName: config.PlayerNameConfig{
 			MaxOpenConn:      20,
 			MaxIdleConn:      5,
@@ -189,7 +185,16 @@ func newPlayerNameTestCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minired
 	// 证明默认是「封过了」:建角回滚的常态(没有角色行、有路由行,写了墓碑)。
 	sealer := &fakeRoleSealer{seal: store.RoleSealSealed}
 
-	return &svc.ServiceContext{Config: c, PlayerNameCache: routing.NewPlayerNameCache(c.NameCacheRedis), PlayerNameStore: fake, PlayerRoleSeals: sealer}, mr, fake
+	return &svc.ServiceContext{Config: c, PlayerNameCache: newTestNameCache(t, mr), PlayerNameStore: fake, PlayerRoleSeals: sealer}, mr, fake
+}
+
+// newTestNameCache 把名字缓存接到 miniredis 上,句柄与线上同一种(clusterredis 控制集群守卫),句柄随用例关闭。
+func newTestNameCache(t *testing.T, mr *miniredis.Miniredis) *routing.PlayerNameCache {
+	t.Helper()
+	rds, err := clusterredis.New(clusterredis.Config{Addrs: []string{mr.Addr()}}, clusterredis.ControlClusterKeys)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rds.Close() })
+	return routing.NewPlayerNameCache(rds)
 }
 
 // playerNameOpsCount 从默认 registry 里 gather 一次,读出 ops_total 上某个
@@ -857,16 +862,9 @@ func newTestSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
 
-	c := config.Config{
-		NameCacheRedis: redis.RedisConf{
-			Host: mr.Addr(),
-			Type: "node",
-		},
-	}
-
 	sc := &svc.ServiceContext{
-		Config:          c,
-		PlayerNameCache: routing.NewPlayerNameCache(c.NameCacheRedis),
+		Config:          config.Config{},
+		PlayerNameCache: newTestNameCache(t, mr),
 	}
 	return sc, mr
 }

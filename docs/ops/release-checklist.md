@@ -111,13 +111,15 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
   `-ReleaseVersion` 追加的 H 节检查项:`release.version`、`release.changelog`、`release.artifact.dir`、`release.artifact.sha256sums`、`release.buildinfo.version`、`release.buildinfo.clean`、`release.manifest`、`release.imagetag.commit`(给了 `-ImageTag` 时),以及只告警的 `release.buildinfo.commit`——当前工作树不在制品 commit 上时,A–G 节读到的配置不代表该版本,切到发布提交重跑。
   注意:`k8s_image.ps1` / `k8s_deploy.ps1` 在 staging/prod 自动调用的预检**不带** `-ReleaseVersion`,只查配置与 tag;制品检查只靠这一步手动跑。
 - [ ] **⑦(人工)打 tag、部署、核对**:
+  **先于下面的部署命令做（2026-11-12 增补）**：首次上线含改投邮件的 scene 与 mail 之前，要先在 infra namespace 与每个 zone namespace 的 `domain-service-secrets` 里补上 `mail-producer-battle`（各处同值，至少 32 字节）。缺了 mail 与 scene 的 Pod 都起不来（manifest 是 `optional: false`）。顺序与核对命令见 [k8s-open-server-runbook.md](k8s-open-server-runbook.md) §1。`k8s_deploy.ps1` 在 `zone-up` / `all-up` / `infra-up` 的任何写操作之前核对这个键（存在、不少于 32 字节；zone 与 infra 同值），缺了或不一致就拒绝，一个都不写；`-DryRun` 只打一行说明。发布预检 `release_preflight.ps1` 只查配置与制品、不连集群，所以不查这一项。
   ```powershell
   git tag vX.Y.Z <12位commit>
   git push origin vX.Y.Z
   ```
   部署沿用 `k8s_deploy.ps1` / `k8s_image.ps1` 的既有命令,`-ReleaseProfile prod`,镜像参数统一用本版本 tag:`-NodeImage <registry>/mmorpg-node:vX.Y.Z-<12位commit>`、`-GoSvcRegistry <registry> -GoSvcTag vX.Y.Z-<12位commit>`、`-JavaSvcRegistry <registry> -JavaSvcTag vX.Y.Z-<12位commit>`。部署前后按 §3.2 核对 digest。
   部署核对完成后,查看 §6 有没有本版本对应的一次性项(2026-10-16 增补)。
-  带新持久字段的版本(2026-10-20 增补,审计 r2-ps#1;2026-11-05 起由机器门禁兜住):首次上线之后,台账已在 ① 封存过,引导期内再加持久字段时 proto 生成直接失败(要求先做完 §6.2),合并带进已发布世代的字段行同样失败;⑥ 的 `release.persist_schema.sealed` 核对本版本台账已封存到最大世代。原因:同一世代号的新旧二进制认识的字段集合必须相同,否则 go/db 的世代校验拦不住,旧 go/db 会静默丢掉新列或读成旧值,见 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §3.1「封存」与 §8.1 第 6 条。首次上线本身不受此限(首次封存时台账可以仍是 `bootstrap`)。
+  带新持久字段的版本(2026-10-20 增补,审计 r2-ps#1;2026-11-05 起由机器门禁兜住):首次上线之后,台账已在 ① 封存过,引导期内再加持久字段时 proto 生成直接失败(要求先做完 §6.2),合并带进已发布世代的字段行同样失败;⑥ 的 `release.persist_schema.sealed` 核对本版本台账已封存到最大世代。原因:世代号是「go/db 不比 scene、不比存档旧」这道门禁的依据,同一世代号的二进制认识的行种与字段集合必须相同;字段本身不会因此丢,旧版本原样带回不认识的内容(2026-11-12 起),见 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §3.1「封存」、§5.3。首次上线本身不受此限(首次封存时台账可以仍是 `bootstrap`)。
+  **升世代的版本分两步部署**(2026-11-12 增补):本版本台账封存的世代比线上版本高时,第一步对**每个** zone 跑 `zone-up -ZoneId <z> -NodeImage <线上版本的节点镜像> -GoSvcTag <本版本 tag>`:只换 zone 内的 Go 服务(含 go/db),C++ 节点不变(显式给 `-GoSvcTag` 时不跟随 `-NodeImage`);全部 zone 都滚完,第二步才逐 zone 跑 `zone-up -ZoneId <z> -NodeImage <本版本节点镜像>`(可以先开金丝雀 zone)。只逐 zone 一次换完的话,已升级 zone 的玩家在别的 zone 的 go/db 升级之前进不了那些 zone(认领回 `SCHEMA_TOO_NEW`,不丢数据)。原因见 mixed-version §8.2。
   首次发布含 B0-4(C++ 节点 fd 上限不够就拒启)的版本之前,先按 [gate-kernel-tuning-runbook.md](gate-kernel-tuning-runbook.md) §3.1「上线前置」第 1 步,读各集群各节点池的容器 nofile 硬限并记进 PROGRESS;硬限不够时先处理再发布。拒启的影响面按工作负载形态不同(单副本 battle hostPort 会整体停服),回滚另有 external gate 删 Pod 等额外步骤,见同节「紧急回退」(2026-10-18 增补)。
   共享 Redis 单实例 → 高可用(2026-10-19 增补;部署脚本改动未运行、待 Codex 验证,尚未在任何真实 staging / prod 集群上切换过):staging / prod 首次以缺省档跑 `infra-up`(或不带 `-SkipInfra` 的 `all-up`)时,`-RedisReplicas` 缺省按档位解析为 3,而线上还是单实例,脚本判定 1 → 3(`[RedisTopology]Upgrade:`)。这是一次全服登录中断:在维护窗口里做,先停写,带 `-ConfirmRedisCoreRestart`(没带就在任何写操作之前拒绝),口令不得含空白或单引号;步骤与回退见 [deploy/k8s/README.md](../../deploy/k8s/README.md)「共享 Redis:高可用形态」→「切换与回退」。切完对**每个 zone** 重跑 `zone-up`(WAITAOF 副本份数随之变为 1,入口行 `Redis topology: ... waitaof_replicas=1`),并在各 zone namespace 里 `kubectl rollout restart statefulset/db` 与 `statefulset/data-service`(只改 ConfigMap 不会滚动它们)。还没切的环境照常发 zone 版本:zone 写路径没给 `-RedisReplicas` 时跟随线上 `sts/redis` 的副本数,显式值与线上不同会被拒绝。
 
@@ -258,12 +260,11 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
 
 ### 6.2 首次上线后:关闭持久 schema 引导期,台账切到 `active`(2026-10-20 增补,审计 r2-ps#1)
 
-- **背景**:台账 `proto/persist_schema_gen.txt` 的 `state=bootstrap` 期间,生成器把新增持久字段一律记为世代 1。上线后台账若仍是 `bootstrap`,第一次带新持久列的滚动发布里,新旧二进制世代号相同、认识的字段集合不同,go/db 的 C1 / C1b / C2 都拦不住:旧 go/db 会把新列静默丢掉或读成旧值,scene 随后把它写成零值或旧值。新列若是限购或幂等账本,就会重复发放。推导见 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §8.1 第 6 条。
-- **时机**:首次上线(go/db 以 dual + 严格提交屏障整批起步)之后、**第一次发布带新持久字段的版本之前**。只做一次;台账不能从 `active` 改回 `bootstrap`,生成器会拒绝。
-- [ ] **① 逐个 zone 关闭引导期**:按 [deploy/k8s/README.md](../../deploy/k8s/README.md)「玩家持久 schema 世代」的「关闭引导期」执行(负责人执行;先确认全部 go/db Pod 上 `db_persist_schema_unstamped_write_total` 持续一个完整存盘周期不再增长,再写 `db:persist_schema:bootstrap_closed:zone:<zone>` = `closed`,`db_persist_schema_bootstrap_closed` 变为 1 即生效)。
-- [ ] **② 主干上把台账切到 `active`**:全部 zone 都做完 ① 之后,由负责人在主干提交里把 `proto/persist_schema_gen.txt` 的 `state=bootstrap` 改为 `state=active`(只改这一行),再按 AGENTS.md §4 跑一次 proto 生成(Codex 执行),确认生成通过、台账其余行不变。此后每次出现新增字段的生成运行都会追加一个新世代。
-- [ ] **③ 记录**:在 `docs/PROGRESS.md` 记一条:各 zone 关闭引导期的时间、`state=active` 的提交号。
-- **门禁**:② 完成之前,不得发布任何新增持久字段的版本。2026-11-05 起有机器门禁:首次上线的版本在 §2.1 ① 封存过台账之后,引导期内再加持久字段,proto 生成会失败并提示先做本节;发布预检 `release.persist_schema.sealed` 要求每个版本都封存到最大世代。
+- **背景**(2026-11-12 按存盘直接提交的路径改写):台账 `proto/persist_schema_gen.txt` 的 `state=bootstrap` 期间,生成器把新增持久字段一律记为世代 1,所有二进制的世代都是 1。字段本身不受影响:旧版本原样带回不认识的内容,不看世代号。失效的是世代判定:go/db 认领时核不出「scene、存档比自己新」,只剩每笔存盘的行种检查兜底,新 scene 可能经旧 go/db 认领成功、抬了代次之后一笔也存不进(进度只在内存里,scene 退出就丢);带数据行却没带回世代的写入也发现不了。推导见 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §5.3、§8.1。
+- **时机**:首次上线之后、**第一次发布带新持久字段的版本之前**。只做一次;台账不能从 `active` 改回 `bootstrap`,生成器会拒绝。原先的「逐个 zone 关闭引导期」(引导关闭标记、未盖戳写入计数)随旧存盘链删除,建角初始行本来就带世代,不再需要这一步。
+- [ ] **① 主干上把台账切到 `active`**:由负责人在主干提交里把 `proto/persist_schema_gen.txt` 的 `state=bootstrap` 改为 `state=active`(只改这一行),再按 AGENTS.md §4 跑一次 proto 生成(Codex 执行),确认生成通过、台账其余行不变。此后每次出现新增字段的生成运行都会追加一个新世代。
+- [ ] **② 记录**:在 `docs/PROGRESS.md` 记一条:`state=active` 的提交号。
+- **门禁**:① 完成之前,不得发布任何新增持久字段的版本。2026-11-05 起有机器门禁:首次上线的版本在 §2.1 ① 封存过台账之后,引导期内再加持久字段,proto 生成会失败并提示先做本节;发布预检 `release.persist_schema.sealed` 要求每个版本都封存到最大世代。
 
 ---
 

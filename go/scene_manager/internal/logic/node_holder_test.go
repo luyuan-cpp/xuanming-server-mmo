@@ -24,6 +24,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"scene_manager/internal/svc"
+	"shared/redisslot"
 )
 
 func nodeHolderValueForTest(t *testing.T, mr *miniredis.Miniredis, zoneID uint32, nodeID string) string {
@@ -64,12 +65,18 @@ func etcdRevisionRegressionsForTest(t *testing.T) float64 {
 }
 
 func TestNodeHolderKeyShape(t *testing.T) {
-	// 跨语言契约:C++ scene_ownership::NodeHolderKey 读同一个键。以 node:zone: 开头(合服按前缀清),不带 hash tag。
-	assert.Equal(t, "node:zone:3:17:holder", nodeHolderKey(3, "17"))
-	// 纪元旁记与持有者同一个前缀,合服时一起清掉;两个 zone 级键与死节点收尾任务表同一命名。
-	assert.Equal(t, "node:zone:3:17:holder_epoch", nodeHolderEpochKey(3, "17"))
-	assert.Equal(t, "scene_manager:etcd_revision_seen:zone:3", etcdRevisionSeenKey(3))
-	assert.Equal(t, "scene_manager:etcd_epoch:zone:3", etcdEpochKey(3))
+	// 跨语言契约:C++ scene_ownership::NodeHolderKey 读同一个键。带本 zone 的控制集群 tag
+	// (docs/design/redis-cluster-all-domains-20261110.md §4.1),与节点级、zone 级的其余控制域键同槽。
+	assert.Equal(t, "node:{ctl:3}:17:holder", nodeHolderKey(3, "17"))
+	// 纪元旁记、修订号水位与纪元同一个 tag:luaPublishNodeHolder 的 KEYS 是 [holder, holder_epoch, etcd_epoch],
+	// luaStartNewEtcdEpoch 是 [etcd_revision_seen, etcd_epoch],都要同槽。
+	assert.Equal(t, "node:{ctl:3}:17:holder_epoch", nodeHolderEpochKey(3, "17"))
+	assert.Equal(t, "scene_manager:etcd_revision_seen:{ctl:3}", etcdRevisionSeenKey(3))
+	assert.Equal(t, "scene_manager:etcd_epoch:{ctl:3}", etcdEpochKey(3))
+	slot := redisslot.HashSlot(nodeHolderKey(3, "17"))
+	for _, key := range []string{nodeHolderEpochKey(3, "17"), etcdRevisionSeenKey(3), etcdEpochKey(3)} {
+		assert.Equal(t, slot, redisslot.HashSlot(key), "%s 必须与持有者记录同槽", key)
+	}
 }
 
 func TestPublishNodeHolder_NewerRegistrationWins(t *testing.T) {

@@ -13,27 +13,11 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
     PlayerAllData candidate(message);
     if (!PlayerDatabaseMessageFieldsMarshal(player, *candidate.mutable_player_database_data()))
         return false;
-    // 兼容旧跨服/回滚读者；数据库记录中的两项是持久化事实源。
-    candidate.mutable_bag_data()->CopyFrom(candidate.player_database_data().bag_component());
-    candidate.mutable_quest_data()->CopyFrom(candidate.player_database_data().mission_component());
     message.Swap(&candidate);
     return true;
 }
 
 inline void PlayerAllDataMessageFieldsUnmarshal(entt::entity player, const PlayerAllData& message)
 {
-    // 先把旧顶层数据并入数据库记录，再统一解码，保证派生属性初始化能看到装备与任务。
-    const bool legacyBag = !message.player_database_data().has_bag_component() && message.has_bag_data();
-    const bool legacyQuest = !message.player_database_data().has_mission_component() && message.has_quest_data();
-    PlayerAllData upgraded;
-    const PlayerAllData* source = &message;
-    if (legacyBag || legacyQuest)
-    {
-        upgraded = message;
-        auto* db = upgraded.mutable_player_database_data();
-        if (legacyBag) *db->mutable_bag_component() = message.bag_data();
-        if (legacyQuest) *db->mutable_mission_component() = message.quest_data();
-        source = &upgraded;
-    }
-    PlayerDatabaseMessageFieldsUnmarshal(player, source->player_database_data());
+    PlayerDatabaseMessageFieldsUnmarshal(player, message.player_database_data());
 }

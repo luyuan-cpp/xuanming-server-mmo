@@ -34,6 +34,7 @@ type enterHolderReleaseCall struct {
 	playerID           uint64
 	expectedOwnerEpoch uint64
 	covered            placementIdentity // ReleasePlayerRequest.covered_*(§13)
+	keepHeld           bool              // ReleasePlayerRequest.keep_held(托管归位,player-connection-lost-hold.md §4.5)
 	locationNodeAtCall string
 }
 
@@ -44,7 +45,7 @@ func installEnterHolderReleaseRecorder(t *testing.T, replyErr error) func() []en
 	var calls []enterHolderReleaseCall
 	prev := enterHolderReleaseRequester
 	enterHolderReleaseRequester = func(_ context.Context, svcCtx *svc.ServiceContext, zoneID uint32, nodeID string,
-		playerID uint64, expected uint64, covered placementIdentity) error {
+		playerID uint64, expected uint64, covered placementIdentity, keepHeld bool) error {
 		nodeAtCall := ""
 		if loc, err := GetPlayerLocation(context.Background(), svcCtx, playerID); err == nil && loc != nil {
 			nodeAtCall = loc.NodeId
@@ -52,7 +53,7 @@ func installEnterHolderReleaseRecorder(t *testing.T, replyErr error) func() []en
 		mu.Lock()
 		defer mu.Unlock()
 		calls = append(calls, enterHolderReleaseCall{zoneID: zoneID, nodeID: nodeID, playerID: playerID,
-			expectedOwnerEpoch: expected, covered: covered, locationNodeAtCall: nodeAtCall})
+			expectedOwnerEpoch: expected, covered: covered, keepHeld: keepHeld, locationNodeAtCall: nodeAtCall})
 		return replyErr
 	}
 	t.Cleanup(func() { enterHolderReleaseRequester = prev })
@@ -130,7 +131,7 @@ func requireHandoffRejectedUnchanged(t *testing.T, sc *svc.ServiceContext, mr *m
 // ── 纯判定 ──────────────────────────────────────────────────────────────────
 
 func TestDecideEnterHolderRelease_Table(t *testing.T) {
-	eligible := enterHolderReleaseFacts{enabled: true, loginRequest: true, identityNewer: true, epoch: 3,
+	eligible := enterHolderReleaseFacts{enabled: true, loginRequest: true, identityCovers: true, epoch: 3,
 		holderAddressable: true, chainAlive: true}
 	cases := []struct {
 		name   string
@@ -141,10 +142,10 @@ func TestDecideEnterHolderRelease_Table(t *testing.T) {
 		{"switch off wins over everything", func(f *enterHolderReleaseFacts) { f.enabled = false }, enterHolderReleaseDisabled},
 		{"scene-initiated request", func(f *enterHolderReleaseFacts) { f.loginRequest = false }, enterHolderReleaseNotLogin},
 		{"scene-initiated is decided before identity and chain", func(f *enterHolderReleaseFacts) {
-			f.loginRequest, f.identityNewer, f.chainAlive = false, false, false
+			f.loginRequest, f.identityCovers, f.chainAlive = false, false, false
 		}, enterHolderReleaseNotLogin},
-		{"identity not strictly newer", func(f *enterHolderReleaseFacts) { f.identityNewer = false }, enterHolderReleaseIdentityNotNewer},
-		{"identity is decided before epoch", func(f *enterHolderReleaseFacts) { f.identityNewer, f.epoch = false, 0 },
+		{"identity not strictly newer", func(f *enterHolderReleaseFacts) { f.identityCovers = false }, enterHolderReleaseIdentityNotNewer},
+		{"identity is decided before epoch", func(f *enterHolderReleaseFacts) { f.identityCovers, f.epoch = false, 0 },
 			enterHolderReleaseIdentityNotNewer},
 		{"unminted epoch", func(f *enterHolderReleaseFacts) { f.epoch = 0 }, enterHolderReleaseLegacyEpochZero},
 		{"holder not addressable", func(f *enterHolderReleaseFacts) { f.holderAddressable = false }, enterHolderReleaseUnaddressable},
@@ -409,4 +410,129 @@ func TestEnterScene_LoginReleaseReachesHolderAsSessionEnded(t *testing.T) {
 	// §13:线上带着这次登录的身份,持有节点据此不退已绑上更新登录的实体。
 	assert.Equal(t, uint32(22), got.GetCoveredSessionId())
 	assert.Equal(t, identGenB, got.GetCoveredLoginGeneration())
+	assert.False(t, got.GetKeepHeld(), "登录撞门照旧:持有节点按会话结束退出旧实体")
+}
+
+// ── 托管归位(player-connection-lost-hold.md §4.5)────────────────────────────
+
+// enterHolderReleaseHostedResume 是 player_locator 替离线托管中的角色发的托管归位:hosted_placement、不带 gate、关联号 0,
+// 身份是断开的那次登录(这里就是 location 记的 enterHolderReleaseZombie)。真实请求不带去向(回 location 的场景);
+// 这里与登录用例一样显式指定节点 20 上的场景,把「被派到别的节点」固定下来。
+func enterHolderReleaseHostedResume(playerID, targetScene uint64, identity placementIdentity) *scene_manager.EnterSceneRequest {
+	return &scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetScene, ZoneId: testZoneId, GateZoneId: testZoneId,
+		SessionId: identity.sessionID, LoginGeneration: identity.loginGeneration, HostedPlacement: true,
+	}
+}
+
+// 托管归位只认 location 记的那一次登录:会话号与代次逐一相等、代次非 0。
+func TestIdentityIsHostedLogin(t *testing.T) {
+	cases := []struct {
+		name string
+		loc  placementIdentity
+		req  placementIdentity
+		want bool
+	}{
+		{"exactly the hosted login", enterHolderReleaseZombie, enterHolderReleaseZombie, true},
+		{"same session number, newer generation (gate restarted and reused it)", enterHolderReleaseZombie,
+			placementIdentity{11, identGenB}, false},
+		{"another login", enterHolderReleaseZombie, placementIdentity{22, identGenA}, false},
+		{"location without generation", placementIdentity{11, 0}, placementIdentity{11, 0}, false},
+		{"location without identity", placementIdentity{}, placementIdentity{}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, identityIsHostedLogin(tc.loc, tc.req))
+		})
+	}
+}
+
+// location 指着不再持有他的节点(排空改派没放行 / 看护放弃),托管归位撞上 18:回之前请持有节点释放一次,带 keep_held ——
+// 持有节点有实体就不动,完全不持有才补凭证。覆盖身份就是这次托管的登录。
+func TestEnterScene_HostedResumeBehindNonHolderRequestsKeepHeldRelease(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const (
+		playerID    = uint64(8791)
+		holderScene = uint64(9691)
+		targetScene = uint64(9692)
+	)
+	enterHolderReleaseSeed(t, sc, mr, playerID, holderScene, targetScene, enterHolderReleaseZombie)
+	setKnownNodeInstanceForTest(t, testZoneId, "20", "scene-20-uuid")
+	requested := installEnterHolderReleaseRecorder(t, nil)
+	leaveRequested := installLeaveReleaseRecorder(t)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(
+		enterHolderReleaseHostedResume(playerID, targetScene, enterHolderReleaseZombie))
+	requireHandoffRejectedUnchanged(t, sc, mr, playerID, resp, err, enterHolderReleaseZombie)
+	calls := requested()
+	require.Len(t, calls, 1, "托管归位撞上不持有的节点:回 18 之前请它释放一次")
+	assert.Equal(t, enterHolderReleaseCall{zoneID: testZoneId, nodeID: "10", playerID: playerID,
+		expectedOwnerEpoch: 3, covered: enterHolderReleaseZombie, keepHeld: true, locationNodeAtCall: "10"}, calls[0],
+		"keep_held:归位只把没人持有的角色放回世界,不退持有节点上的实体")
+	assert.Empty(t, leaveRequested())
+}
+
+// 归位代表的登录不是 location 记的那一次(同会话号、代次不同:gate 重启复用了会话号)→ 不请释放,照回 18。
+func TestEnterScene_HostedResumeForAnotherLoginDoesNotRequestRelease(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const (
+		playerID    = uint64(8792)
+		holderScene = uint64(9693)
+		targetScene = uint64(9694)
+	)
+	enterHolderReleaseSeed(t, sc, mr, playerID, holderScene, targetScene, enterHolderReleaseZombie)
+	setKnownNodeInstanceForTest(t, testZoneId, "20", "scene-20-uuid")
+	requested := installEnterHolderReleaseRecorder(t, nil)
+	before := enterHolderReleaseCount(t, enterHolderReleaseIdentityNotNewer.String())
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(
+		enterHolderReleaseHostedResume(playerID, targetScene, placementIdentity{11, identGenB}))
+	requireHandoffRejectedUnchanged(t, sc, mr, playerID, resp, err, enterHolderReleaseZombie)
+	assert.Empty(t, requested(), "只替 location 记的那一次登录请释放")
+	assert.Equal(t, before+1, enterHolderReleaseCount(t, enterHolderReleaseIdentityNotNewer.String()))
+}
+
+// scene 节点自发的托管落点(带关联号)撞上 18 不请释放:持有者就是发起方,自己会冻结、存盘、写标记。
+func TestEnterScene_SceneInitiatedHostedPlacementDoesNotRequestRelease(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const (
+		playerID    = uint64(8793)
+		holderScene = uint64(9695)
+		targetScene = uint64(9696)
+	)
+	enterHolderReleaseSeed(t, sc, mr, playerID, holderScene, targetScene, enterHolderReleaseZombie)
+	setKnownNodeInstanceForTest(t, testZoneId, "20", "scene-20-uuid")
+	requested := installEnterHolderReleaseRecorder(t, nil)
+	in := enterHolderReleaseHostedResume(playerID, targetScene, enterHolderReleaseZombie)
+	in.CorrelationId = 9001
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(in)
+	requireHandoffRejectedUnchanged(t, sc, mr, playerID, resp, err, enterHolderReleaseZombie)
+	assert.Empty(t, requested())
+}
+
+// 真实的 RequestNodeReleaseEndedSession:托管归位的释放在线上带 keep_held = true,覆盖身份是托管的那次登录。
+func TestEnterScene_HostedResumeReleaseReachesHolderWithKeepHeld(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const (
+		playerID    = uint64(8794)
+		holderScene = uint64(9697)
+		targetScene = uint64(9698)
+	)
+	enterHolderReleaseSeed(t, sc, mr, playerID, holderScene, targetScene, enterHolderReleaseZombie)
+	setKnownNodeInstanceForTest(t, testZoneId, "20", "scene-20-uuid")
+	fake := installDefaultFakeSceneNode(t)
+	before := len(fake.releaseRequestsFor(playerID))
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(
+		enterHolderReleaseHostedResume(playerID, targetScene, enterHolderReleaseZombie))
+	requireHandoffRejectedUnchanged(t, sc, mr, playerID, resp, err, enterHolderReleaseZombie)
+	requests := fake.releaseRequestsFor(playerID)
+	require.Len(t, requests, before+1)
+	got := requests[len(requests)-1]
+	assert.True(t, got.GetSessionEnded())
+	assert.True(t, got.GetKeepHeld())
+	assert.Equal(t, uint64(3), got.GetExpectedOwnerEpoch())
+	assert.Equal(t, enterHolderReleaseZombie.sessionID, got.GetCoveredSessionId())
+	assert.Equal(t, enterHolderReleaseZombie.loginGeneration, got.GetCoveredLoginGeneration())
 }

@@ -13,11 +13,11 @@ import (
 
 // 新场景的登记(缺口清单第 1 条残余)。
 //
-// 原来一个新场景的登记是十来条独立命令:映射、zone、节点计数、节点场景集合、agones_gs、active 集合或频道集合、
+// 原来一个新场景的登记是十来条独立命令:映射、节点计数、节点场景集合、agones_gs、active 集合或频道集合、
 // 镜像标记和镜像源索引。进程在中途崩溃会留下「映射在、却不在 active 集合 / 频道集合里」的场景:空闲回收和
 // 频道逻辑都找不到它,节点计数多加了一次,Agones 名额永远不还。现在这些写入在一段脚本里完成,要么全有、要么全无。
 //
-// 登记带一次性 token,记在自己的记录键 scene:{id}:registration(TTL sceneRegistrationRecordTTLSeconds),
+// 登记带一次性 token,记在自己的记录键 scene:{ctl:<z>}:<id>:registration(TTL sceneRegistrationRecordTTLSeconds),
 // 不和销毁认领的记录共用:两边的 token 互不相干,共用一把键就会互相覆盖。
 //   - go-redis 重发同一段 EVAL 时,记录里是同一个 token,不再写任何键,计数不会加两次;
 //   - EVAL 最终回错、结局未知时,用同一个 token 跑 luaAbortSceneRegistration 问清楚:登记已经落地就照常往下走;
@@ -43,24 +43,28 @@ import (
 const sceneRegistrationRecordTTLSeconds = 600
 
 // sceneRegistrationRecordKey 是登记的一次性记录(token 与结局),见文件头。
-func sceneRegistrationRecordKey(sceneID uint64) string {
-	return fmt.Sprintf("scene:%d:registration", sceneID)
+func sceneRegistrationRecordKey(zoneID uint32, sceneID uint64) string {
+	return fmt.Sprintf("scene:%s:%d:registration", sceneControlTag(zoneID), sceneID)
 }
 
-// luaSceneRegistrationPrelude 是两段登记脚本共用的开头:查记录、映射与拆除任务,消费 Agones 名额的在途占用,
-// 写一个场景都有的五样。
+// 两段登记脚本共用的开头分成两截:luaSceneRegistrationGuard 只读、只判,luaSceneRegistrationCommit 才开始写。
+// 分开是为了让世界频道登记在两截之间再加一条只读的判断(luaWorldChannelWithinDesired),它不成立时一个键都没写。
 //
-// KEYS[1] = scene:{id}:node,KEYS[2] = scene:{id}:zone,KEYS[3] = 节点 scene_count,KEYS[4] = 节点场景集合,
-// KEYS[5] = scene:{id}:agones_gs,KEYS[6] = scene:{id}:registration,KEYS[7] = scene:{id}:teardown,
-// KEYS[8] = 本 zone 的 Agones 在途占用 agones_rooms:zone:{z}:holds。
-// ARGV[1] = sceneId,ARGV[2] = token,ARGV[3] = 记录存活秒数,ARGV[4] = 节点,ARGV[5] = zoneId,
-// ARGV[6] = 名额记录「GameServer/条目」(空串表示不占名额),ARGV[7] = 名额条目(在途占用的成员;空串表示没有在途占用)。
+// KEYS[1] = scene:{ctl:<z>}:<id>:node,KEYS[2] = 节点 scene_count,KEYS[3] = 节点场景集合,
+// KEYS[4] = scene:{ctl:<z>}:<id>:agones_gs,KEYS[5] = scene:{ctl:<z>}:<id>:registration,KEYS[6] = scene:{ctl:<z>}:<id>:teardown,
+// KEYS[7] = 本 zone 的 Agones 在途占用 agones_rooms:{ctl:<z>}:holds。全部 KEYS 同一个 zone 的 tag,同槽。
+// ARGV[1] = sceneId,ARGV[2] = token,ARGV[3] = 记录存活秒数,ARGV[4] = 节点,
+// ARGV[5] = 名额记录「GameServer/条目」(空串表示不占名额),ARGV[6] = 名额条目(在途占用的成员;空串表示没有在途占用)。
+// 场景所在的 zone 就是键的 tag,不再另写 scene:<id>:zone(docs/design/redis-cluster-all-domains-20261110.md §3.3)。
+
+// luaSceneRegistrationGuard 查记录、映射与拆除任务,不写任何键。
 //
+// 同一 token 的记录在最前面判:重发的那次直接拿回上一次的结局,不再走后面的判断(第一次登记落地后,
+// 世界频道的在役数已经把自己算进去了)。
 // 拆除任务还在(scene_teardown_job.go,上一个用这个号的场景没拆完)同样回 conflict:登记了的话,旧任务补发的
 // DestroyScene 会打到新场景上。号源不重号时不会发生,是纵深防御。
-// 在途占用删不到回 fenced,见文件头。fenced 不写登记记录:重发的那次照样删不到,结局相同。
-const luaSceneRegistrationPrelude = `
-local prior = redis.call('GET', KEYS[6])
+const luaSceneRegistrationGuard = `
+local prior = redis.call('GET', KEYS[5])
 if prior then
     local record = cjson.decode(prior)
     if record.token ~= ARGV[2] then
@@ -71,54 +75,82 @@ if prior then
     end
     return record.reply
 end
-if redis.call('EXISTS', KEYS[1], KEYS[7]) > 0 then
+if redis.call('EXISTS', KEYS[1], KEYS[6]) > 0 then
     return {'conflict'}
 end
-if ARGV[7] ~= '' and redis.call('ZREM', KEYS[8], ARGV[7]) == 0 then
+`
+
+// luaSceneRegistrationCommit 消费 Agones 名额的在途占用,写一个场景都有的四样。
+//
+// 在途占用删不到回 fenced,见文件头。fenced 不写登记记录:重发的那次照样删不到,结局相同。
+const luaSceneRegistrationCommit = `
+if ARGV[6] ~= '' and redis.call('ZREM', KEYS[7], ARGV[6]) == 0 then
     return {'fenced'}
 end
 redis.call('SET', KEYS[1], ARGV[4])
-redis.call('SET', KEYS[2], ARGV[5])
-redis.call('INCR', KEYS[3])
-redis.call('SADD', KEYS[4], ARGV[1])
-if ARGV[6] ~= '' then
-    redis.call('SET', KEYS[5], ARGV[6])
+redis.call('INCR', KEYS[2])
+redis.call('SADD', KEYS[3], ARGV[1])
+if ARGV[5] ~= '' then
+    redis.call('SET', KEYS[4], ARGV[5])
 end
 `
 
 // luaSceneRegistrationRecord 是两段登记脚本共用的结尾:写下记录,重发和作废查询都靠它。
 const luaSceneRegistrationRecord = `
 local reply = {'registered'}
-redis.call('SET', KEYS[6], cjson.encode({token = ARGV[2], reply = reply}), 'EX', ARGV[3])
+redis.call('SET', KEYS[5], cjson.encode({token = ARGV[2], reply = reply}), 'EX', ARGV[3])
 return reply
 `
 
-// luaRegisterInstance 登记一个按需实例。KEYS[1..8]、ARGV[1..7] 见 luaSceneRegistrationPrelude。
+// luaRegisterInstance 登记一个按需实例。KEYS[1..7]、ARGV[1..6] 见 luaSceneRegistrationGuard 上方的说明。
 //
-// KEYS[9] = zone 的 active instances 有序集合,KEYS[10] = scene:{id}:mirror,KEYS[11] = scene:{id}:source,
-// KEYS[12] = 镜像源的子集合 scene:{源}:mirrors(没有镜像源时不传)。
-// ARGV[8] = 创建时刻 Unix 秒(空闲时钟起点),ARGV[9] = '1' 表示镜像,ARGV[10] = 镜像源 scene_id。
-const luaRegisterInstance = luaSceneRegistrationPrelude + `
-redis.call('ZADD', KEYS[9], ARGV[8], ARGV[1])
-if ARGV[9] == '1' then
-    redis.call('SET', KEYS[10], '1')
+// KEYS[8] = zone 的 active instances 有序集合,KEYS[9] = scene:{ctl:<z>}:<id>:mirror,KEYS[10] = scene:{ctl:<z>}:<id>:source,
+// KEYS[11] = 镜像源的子集合 scene:{ctl:<z>}:<源>:mirrors(没有镜像源时不传)。
+// ARGV[7] = 创建时刻 Unix 秒(空闲时钟起点),ARGV[8] = '1' 表示镜像,ARGV[9] = 镜像源 scene_id。
+const luaRegisterInstance = luaSceneRegistrationGuard + luaSceneRegistrationCommit + `
+redis.call('ZADD', KEYS[8], ARGV[7], ARGV[1])
+if ARGV[8] == '1' then
+    redis.call('SET', KEYS[9], '1')
 end
-if KEYS[12] then
-    redis.call('SET', KEYS[11], ARGV[10])
-    redis.call('SADD', KEYS[12], ARGV[1])
+if KEYS[11] then
+    redis.call('SET', KEYS[10], ARGV[9])
+    redis.call('SADD', KEYS[11], ARGV[1])
 end
 ` + luaSceneRegistrationRecord
 
-// luaRegisterWorldChannel 登记一个世界频道。KEYS[1..8]、ARGV[1..7] 见 luaSceneRegistrationPrelude。
+// luaWorldChannelWithinDesired 是世界频道登记多出来的一条判断:这张图在役的频道数已经不小于期望数,就不登记,
+// 回 over_desired,一个键都不写(2026-11-12,docs/design/infra-reconnect-overview.md §4.1 R7)。
 //
-// KEYS[9] = 这个地图的频道集合。
-const luaRegisterWorldChannel = luaSceneRegistrationPrelude + `
-redis.call('SADD', KEYS[9], ARGV[1])
+// 补建(world_init.go 的 initWorldScenesForZone)是「数集合缺几个、补几个」,数和补之间隔着占名额与多次往返,靠 zone 级的
+// world_init:lock 串行。那把锁在 Redis 上:主从切换丢了锁,或补建拖过了锁的 TTL,两个补建者会按同一份「缺 1 个」各建一条,
+// 多出来的那条没有任何路径收回(缩容只在人少时才摘频道)。把判断放进登记的同一步之后,后到的那个看到在役数已满,不登记。
+//
+// 期望数以哈希里的权威值为准(与自动伸缩改的是同一个字段);字段缺失或不是正整数时用调用方读到的 ARGV[8]
+// (DesiredWorldChannelCount 这时回的是配置种子)。只数在役集合,不加排空集合:与 initWorldScenesForZone 算「缺几个」
+// 同一口径,缩容把频道移进排空集合的同一步已经把期望数减一。
+// 只读,放在 luaSceneRegistrationGuard 之后(重发先拿回上一次的结局)、luaSceneRegistrationCommit 之前(不消费在途占用)。
+//
+// KEYS[8] = 这个地图的频道集合,KEYS[9] = 期望频道数哈希 world_channels:desired:{ctl:<z>}。
+// ARGV[7] = confId,ARGV[8] = 调用方读到的期望频道数。
+const luaWorldChannelWithinDesired = `
+local desired = tonumber(redis.call('HGET', KEYS[9], ARGV[7]) or '')
+if not desired or desired < 1 then
+    desired = tonumber(ARGV[8])
+end
+if desired and redis.call('SCARD', KEYS[8]) >= desired then
+    return {'over_desired'}
+end
+`
+
+// luaRegisterWorldChannel 登记一个世界频道。KEYS[1..7]、ARGV[1..6] 见 luaSceneRegistrationGuard 上方的说明,
+// KEYS[8..9]、ARGV[7..8] 见 luaWorldChannelWithinDesired。
+const luaRegisterWorldChannel = luaSceneRegistrationGuard + luaWorldChannelWithinDesired + luaSceneRegistrationCommit + `
+redis.call('SADD', KEYS[8], ARGV[1])
 ` + luaSceneRegistrationRecord
 
 // luaAbortSceneRegistration 在登记结局未知时问清楚,并保证它之后不会再落地。
 //
-// KEYS[1] = scene:{id}:registration,KEYS[2] = scene:{id}:node。ARGV[1] = 登记用的 token,ARGV[2] = 记录存活秒数,
+// KEYS[1] = scene:{ctl:<z>}:<id>:registration,KEYS[2] = scene:{ctl:<z>}:<id>:node。ARGV[1] = 登记用的 token,ARGV[2] = 记录存活秒数,
 // ARGV[3] = 登记的节点。
 // 记录是这个 token 的:返回登记当时的结果('registered',映射已不指向这个节点时回 'conflict',同登记脚本),
 // 或上一次作废的结果。
@@ -155,6 +187,9 @@ const (
 	registrationUnknown
 	// registrationFenced:这次登记占的 Agones 名额的在途占用已被对账取消(拖过了截止时刻),一个键都没写。见文件头。
 	registrationFenced
+	// registrationOverDesired:只有世界频道登记会回 —— 这张图在役的频道数已经不小于期望数(别的补建者抢先建好了),
+	// 一个键都没写,在途占用也没消费。见 luaWorldChannelWithinDesired。
+	registrationOverDesired
 )
 
 func (o registrationOutcome) String() string {
@@ -167,17 +202,19 @@ func (o registrationOutcome) String() string {
 		return "aborted"
 	case registrationFenced:
 		return "fenced"
+	case registrationOverDesired:
+		return "over_desired"
 	default:
 		return "unknown"
 	}
 }
 
 // releasesReservation 说明登记失败时调用方能不能放弃为它预占的 Agones 名额(abandonAgonesPlacement)。
-// aborted、conflict、fenced 都能:记录没指向这次占的条目(conflict 时即使登记落过地,名额也已由销毁方删过或随场景
-// 转走),删的只是自己这一条,删两次无害。unknown 不能:登记可能已经落地,记录指向这一条,删了就少记、会超卖;
-// 这时条目与在途占用都留着,在途占用过期之后对账按记录判(agones_reconcile.go)。
+// aborted、conflict、fenced、over_desired 都能:记录没指向这次占的条目(conflict 时即使登记落过地,名额也已由销毁方
+// 删过或随场景转走;over_desired 时一个键都没写),删的只是自己这一条,删两次无害。unknown 不能:登记可能已经落地,
+// 记录指向这一条,删了就少记、会超卖;这时条目与在途占用都留着,在途占用过期之后对账按记录判(agones_reconcile.go)。
 func (o registrationOutcome) releasesReservation() bool {
-	return o == registrationAborted || o == registrationConflict || o == registrationFenced
+	return o == registrationAborted || o == registrationConflict || o == registrationFenced || o == registrationOverDesired
 }
 
 // sceneRegistration 是每个新场景都要登记的内容。
@@ -185,7 +222,7 @@ type sceneRegistration struct {
 	SceneID uint64
 	ZoneID  uint32
 	NodeID  string
-	// AgonesRoom 是场景占的 Agones 名额(agonesRoom.record() 写进 scene:{id}:agones_gs,Entry 是要消费的在途占用);
+	// AgonesRoom 是场景占的 Agones 名额(agonesRoom.record() 写进 scene:{ctl:<z>}:<id>:agones_gs,Entry 是要消费的在途占用);
 	// 不占名额时为空。
 	AgonesRoom agonesRoom
 }
@@ -204,12 +241,12 @@ func registerInstance(svcCtx *svc.ServiceContext, reg instanceRegistration) regi
 	return runSceneRegistration(svcCtx, metrics.SceneRegistrationKindInstance, reg.sceneRegistration, luaRegisterInstance, keys, extraArgs...)
 }
 
-// instanceRegistrationParams 是 luaRegisterInstance 的 KEYS 与 ARGV[8..10]。
+// instanceRegistrationParams 是 luaRegisterInstance 的 KEYS 与 ARGV[7..9]。
 func instanceRegistrationParams(reg instanceRegistration) ([]string, []any) {
 	keys := append(sceneRegistrationKeys(reg.sceneRegistration),
-		activeInstancesKey(reg.ZoneID), sceneMirrorFlagKey(reg.SceneID), sceneSourceKey(reg.SceneID))
+		activeInstancesKey(reg.ZoneID), sceneMirrorFlagKey(reg.ZoneID, reg.SceneID), sceneSourceKey(reg.ZoneID, reg.SceneID))
 	if reg.SourceSceneID > 0 {
-		keys = append(keys, sceneMirrorsKey(reg.SourceSceneID))
+		keys = append(keys, sceneMirrorsKey(reg.ZoneID, reg.SourceSceneID))
 	}
 	mirror := "0"
 	if reg.Mirror {
@@ -219,21 +256,27 @@ func instanceRegistrationParams(reg instanceRegistration) ([]string, []any) {
 }
 
 // registerWorldChannel 原子登记一个世界频道,见文件头。
-func registerWorldChannel(svcCtx *svc.ServiceContext, reg sceneRegistration, confID uint64) registrationOutcome {
-	keys := append(sceneRegistrationKeys(reg), worldChannelsKey(reg.ZoneID, confID))
-	return runSceneRegistration(svcCtx, metrics.SceneRegistrationKindWorldChannel, reg, luaRegisterWorldChannel, keys)
+// desiredChannels 是调用方刚读到的期望频道数(DesiredWorldChannelCount):脚本以哈希里的权威值为准,权威值缺失或非法时
+// 才用它。这张图在役的频道数已不小于期望数时回 registrationOverDesired,一个键都不写(luaWorldChannelWithinDesired)。
+func registerWorldChannel(svcCtx *svc.ServiceContext, reg sceneRegistration, confID uint64, desiredChannels int) registrationOutcome {
+	return runSceneRegistration(svcCtx, metrics.SceneRegistrationKindWorldChannel, reg, luaRegisterWorldChannel,
+		worldChannelRegistrationKeys(reg, confID), strconv.FormatUint(confID, 10), desiredChannels)
 }
 
-// sceneRegistrationKeys 是登记脚本的 KEYS[1..8],顺序是脚本的契约。
+// worldChannelRegistrationKeys 是 luaRegisterWorldChannel 的 KEYS[1..9],顺序是脚本的契约。
+func worldChannelRegistrationKeys(reg sceneRegistration, confID uint64) []string {
+	return append(sceneRegistrationKeys(reg), worldChannelsKey(reg.ZoneID, confID), worldDesiredChannelsKey(reg.ZoneID))
+}
+
+// sceneRegistrationKeys 是登记脚本的 KEYS[1..7],顺序是脚本的契约。
 func sceneRegistrationKeys(reg sceneRegistration) []string {
 	return []string{
-		sceneNodeKey(reg.SceneID),
-		sceneZoneKey(reg.SceneID),
+		sceneNodeKey(reg.ZoneID, reg.SceneID),
 		nodeSceneCountKey(reg.ZoneID, reg.NodeID),
 		nodeScenesKey(reg.ZoneID, reg.NodeID),
-		sceneAgonesGsKey(reg.SceneID),
-		sceneRegistrationRecordKey(reg.SceneID),
-		sceneTeardownJobKey(reg.SceneID),
+		sceneAgonesGsKey(reg.ZoneID, reg.SceneID),
+		sceneRegistrationRecordKey(reg.ZoneID, reg.SceneID),
+		sceneTeardownJobKey(reg.ZoneID, reg.SceneID),
 		agonesRoomHoldsKey(reg.ZoneID),
 	}
 }
@@ -262,16 +305,20 @@ func runSceneRegistration(svcCtx *svc.ServiceContext, kind string, reg sceneRegi
 	case registrationFenced:
 		logx.Errorf("[SceneRegistration] %s %d on node %s: the hold of Agones room %q expired before registering "+
 			"(the reconciler reclaims the room); nothing written", kind, reg.SceneID, reg.NodeID, reg.AgonesRoom.record())
+	case registrationOverDesired:
+		// INFO:别的补建者抢先建好了,不是故障。能走到这里说明补建锁没挡住并发(锁丢了或补建拖过了锁的 TTL),值得留一行。
+		logx.Infof("[SceneRegistration] %s %d on node %s: the map already has its desired number of channels "+
+			"(another initializer registered one first); nothing written", kind, reg.SceneID, reg.NodeID)
 	}
 	metrics.ObserveSceneRegistration(reg.ZoneID, kind, outcome.String())
 	return outcome
 }
 
-// evalSceneRegistration 用给定的 token 跑一次登记脚本。keys 与 extraArgs(ARGV[8..])按脚本各自的契约给。
+// evalSceneRegistration 用给定的 token 跑一次登记脚本。keys 与 extraArgs(ARGV[7..])按脚本各自的契约给。
 func evalSceneRegistration(svcCtx *svc.ServiceContext, script string, keys []string, reg sceneRegistration, token string, extraArgs ...any) (any, error) {
 	args := append([]any{
 		strconv.FormatUint(reg.SceneID, 10), token, sceneRegistrationRecordTTLSeconds,
-		reg.NodeID, strconv.FormatUint(uint64(reg.ZoneID), 10), reg.AgonesRoom.record(), reg.AgonesRoom.Entry,
+		reg.NodeID, reg.AgonesRoom.record(), reg.AgonesRoom.Entry,
 	}, extraArgs...)
 	return svcCtx.Redis.Eval(script, keys, args...)
 }
@@ -279,7 +326,7 @@ func evalSceneRegistration(svcCtx *svc.ServiceContext, script string, keys []str
 // evalAbortSceneRegistration 用登记时的 token 跑作废脚本,见 luaAbortSceneRegistration。
 func evalAbortSceneRegistration(svcCtx *svc.ServiceContext, reg sceneRegistration, token string) (any, error) {
 	return svcCtx.Redis.Eval(luaAbortSceneRegistration,
-		[]string{sceneRegistrationRecordKey(reg.SceneID), sceneNodeKey(reg.SceneID)},
+		[]string{sceneRegistrationRecordKey(reg.ZoneID, reg.SceneID), sceneNodeKey(reg.ZoneID, reg.SceneID)},
 		token, sceneRegistrationRecordTTLSeconds, reg.NodeID)
 }
 
@@ -299,6 +346,8 @@ func parseRegistrationReply(raw any) registrationOutcome {
 		return registrationAborted
 	case "fenced":
 		return registrationFenced
+	case "over_desired":
+		return registrationOverDesired
 	}
 	logx.Errorf("[SceneRegistration] unexpected script status %v", parts[0])
 	return registrationUnknown

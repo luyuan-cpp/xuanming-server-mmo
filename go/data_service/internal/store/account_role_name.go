@@ -28,6 +28,10 @@ import (
 //   - 预留态的释放(ReleasePlayerName:login 建角回滚、运维清孤儿)之前,在玩家片证明这名角色永远不会提交
 //     (SealUncommittedRole):在役 → 拒绝;墓碑 → 已证明;没有角色行而有路由行 → 写墓碑,迟到的建角在提交点撞上它被拒。
 //     已绑定的名字 ReleasePlayerName 一律拒绝,那一步在名字片(PlayerNameStore.Release 的 bound_ms 条件)。
+//
+// 绑定、删角收尾没做完都按原因计数(DirectoryEvents,account_directory_events.go),告警见
+// deploy/k8s/data-service-account-directory-alerts.yaml;目录自己补回或删掉名字行之后删名字读缓存(NameCacheInvalidator)。
+// 释放没做成留下的孤儿名字、删角之后名字片回档又冒出来的名字,由核账工具 cmd/create_residual 收(create_residual.go 文件头)。
 
 // roleNameRegistry 是目录要的几步名字操作,*PlayerNameStore 实现。拆成接口只为在编排的单测里换内存替身。
 //   - Bind:建角提交之后绑定;UndoRestore:绑定时补登记撞上并发删角,撤掉本次补写的那一行(undoRestoreIfRemoved)。
@@ -56,7 +60,8 @@ func (s *AccountDirectoryStore) ConfigurePlayerNames(names *PlayerNameStore) {
 	}
 }
 
-// bindRoleNameBestEffort 是建角提交之后的一步:名字行从预留置为已绑定。失败只记日志,不改建角结局。
+// bindRoleNameBestEffort 是建角提交之后的一步:名字行从预留置为已绑定。失败只记日志并计数(DirectoryEvents.NameBindFailed),
+// 不改建角结局。
 func (s *AccountDirectoryStore) bindRoleNameBestEffort(ctx context.Context, role *base.AccountSimplePlayer) {
 	if s.names == nil || role.GetName() == "" {
 		// 没有名字的角色(早于名字功能的建角路径、单测)没有可绑的。
@@ -65,17 +70,35 @@ func (s *AccountDirectoryStore) bindRoleNameBestEffort(ctx context.Context, role
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), nameBindTimeout)
 	defer cancel()
 	if err := s.bindRoleName(ctx, role); err != nil {
-		logx.Errorf("[player-name] name of a committed role is not bound, replay the create or run create_residual (plan, then -repair name): player=%d: %v",
-			role.GetPlayerId(), err)
+		reason := NameBindFailureError
+		var failure *nameBindError
+		if errors.As(err, &failure) {
+			reason = failure.reason
+		}
+		s.noteNameBindFailed(reason)
+		logx.Errorf("[player-name] name of a committed role is not bound, replay the create or run create_residual (plan, then -repair name): player=%d reason=%s: %v",
+			role.GetPlayerId(), reason, err)
 	}
 }
 
-// bindRoleName 先在玩家片复核角色确已提交、名字就是这个,再绑定。回错误表示这一次没绑上(名字行可能还是预留态)。
+// nameBindError 是绑定没做完的原因,reason 取 NameBindFailure* 常量(进计数)。不带它的错误按 NameBindFailureError 计。
+type nameBindError struct {
+	reason string
+	err    error
+}
+
+func (e *nameBindError) Error() string { return e.err.Error() }
+func (e *nameBindError) Unwrap() error { return e.err }
+
+func bindFailure(reason string, err error) error { return &nameBindError{reason: reason, err: err} }
+
+// bindRoleName 先在玩家片复核角色确已提交、名字就是这个,再绑定。回错误表示这一次没绑上(名字行可能还是预留态);
+// 错误能用 errors.As 取出 *nameBindError 时,里面是原因。
 func (s *AccountDirectoryStore) bindRoleName(ctx context.Context, role *base.AccountSimplePlayer) error {
 	key, ok := residualNameKeyOf(role.GetName())
 	if !ok {
 		// 现行字符集规则算不出判重键:名字行是用当时的规则登记的,这里认不出它,也就绑不了。
-		return errors.New("role name is rejected by the current charset rules, cannot derive its name_norm")
+		return bindFailure(NameBindFailureRulesChanged, errors.New("role name is rejected by the current charset rules, cannot derive its name_norm"))
 	}
 	owned, err := s.steps.readOwner(ctx, role.GetPlayerId())
 	if err != nil {
@@ -83,7 +106,7 @@ func (s *AccountDirectoryStore) bindRoleName(ctx context.Context, role *base.Acc
 	}
 	if owned == nil || owned.GetAccount() == "" || owned.GetRole().GetName() != role.GetName() {
 		// 提交点之后才会走到这里,角色行一定在。对不上说明有别的写改了它(删角、改名都不该发生):不绑,留给人看。
-		return errors.New("the role row is missing, removed or carries another name; refusing to bind")
+		return bindFailure(NameBindFailureRoleMismatch, errors.New("the role row is missing, removed or carries another name; refusing to bind"))
 	}
 	// 补登记(BindRestored)把同一个时刻写进 created_ms 和 bound_ms,撤销按它认出本次写的那一行。
 	nowMs := uint64(time.Now().UnixMilli())
@@ -97,9 +120,15 @@ func (s *AccountDirectoryStore) bindRoleName(ctx context.Context, role *base.Acc
 	case BindRestored:
 		// 名字行在提交之前就没了(被误释放,或者恢复点错开)。现在补回来了,但中间那段时间别人能登记同一个名字。
 		logx.Errorf("[player-name] committed role had lost its name registration, re-registered and bound it: player=%d", role.GetPlayerId())
-		return s.undoRestoreIfRemoved(ctx, role.GetPlayerId(), key.norm, nowMs)
+		undoErr := s.undoRestoreIfRemoved(ctx, role.GetPlayerId(), key.norm, nowMs)
+		// 名字行补回来了(或者撞上删角又撤掉了):两种都删缓存。名字缺着的那段时间读路径可能记了「没有名字」的负缓存,
+		// 补回之后不删就要等它过期才查得到;撤掉的那种,补回期间读到的名字不能再展示。
+		s.invalidateNameCache(ctx, role.GetPlayerId())
+		return undoErr
 	case BindTaken:
-		return fmt.Errorf("one name held by two roles: the name is registered to player %d", holder)
+		return bindFailure(NameBindFailureTaken, fmt.Errorf("one name held by two roles: the name is registered to player %d", holder))
+	case BindConflict:
+		return bindFailure(NameBindFailureConflict, fmt.Errorf("the player already holds another name registration"))
 	default:
 		return fmt.Errorf("bind outcome %s", outcome)
 	}
@@ -119,31 +148,36 @@ func (s *AccountDirectoryStore) undoRestoreIfRemoved(ctx context.Context, player
 		return fmt.Errorf("re-read the role after re-registering its name: %w", err)
 	}
 	if owned == nil {
-		return errors.New("the role row is missing after its name was re-registered; leaving the registration for review")
+		return bindFailure(NameBindFailureRoleMismatch, errors.New("the role row is missing after its name was re-registered; leaving the registration for review"))
 	}
 	if owned.GetAccount() != "" {
 		return nil
 	}
 	outcome, err := s.names.UndoRestore(ctx, player, norm, restoredMs)
 	if err != nil {
-		return fmt.Errorf("the role was removed while its name was re-registered, and undoing the re-registration failed: %w", err)
+		return bindFailure(NameBindFailureRoleRemoved, fmt.Errorf("the role was removed while its name was re-registered, and undoing the re-registration failed: %w", err))
 	}
-	return fmt.Errorf("the role was removed while its name was re-registered; undo outcome=%s", outcome)
+	return bindFailure(NameBindFailureRoleRemoved, fmt.Errorf("the role was removed while its name was re-registered; undo outcome=%s", outcome))
 }
 
-// settleRemovedRole 是删角写完墓碑之后的收尾:释放这名角色登记的名字,再删小表那一行。
+// settleRemovedRole 是删角写完墓碑之后的收尾:释放这名角色登记的名字,再删小表那一行。回非 nil 表示这一次没做完。
 // 小表那一行在墓碑事务里留着(finishRemoval),所以收尾没做完(名字片不可达、进程崩溃)时,后台 ResumeRemovals 照样扫得到它,
-// beginRemoval 读到墓碑走回这里接着做。失败无害:名字留在已删的角色名下,只是暂时没人能用,不会一名两角。
-func (s *AccountDirectoryStore) settleRemovedRole(ctx context.Context, player uint64) {
+// beginRemoval 读到墓碑走回这里接着做。没做完不改删角结局(墓碑已提交):名字留在已删的角色名下,只是暂时没人能用,不会一名两角。
+// 每次没做完都计一次(DirectoryEvents.RemovalSettleFailed),后台收尾按它把这一行算成没收完(RemovalResumeResult.Unsettled)。
+func (s *AccountDirectoryStore) settleRemovedRole(ctx context.Context, player uint64) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), removedRoleSettleTimeout)
 	defer cancel()
 	if err := s.releaseRemovedRoleName(ctx, player); err != nil {
+		s.noteRemovalSettleFailed(RemovalSettleReleaseName)
 		logx.Errorf("[player-name] name of a removed role is not released yet, the removal resumer retries: player=%d: %v", player, err)
-		return
+		return fmt.Errorf("release the name of removed role %d: %w", player, err)
 	}
 	if err := s.dropSettledRemoval(ctx, player); err != nil {
+		s.noteRemovalSettleFailed(RemovalSettleDropRow)
 		logx.Errorf("[account-role-removal] removal row of a settled role not dropped, the removal resumer retries: player=%d: %v", player, err)
+		return fmt.Errorf("drop the removal row of settled role %d: %w", player, err)
 	}
+	return nil
 }
 
 // releaseRemovedRoleName 先在玩家片核角色行确是墓碑,再按墓碑里留着的原名删名字行。墓碑不可逆,这个 player_id 再也不会有角色。
@@ -177,6 +211,8 @@ func (s *AccountDirectoryStore) releaseRemovedRoleName(ctx context.Context, play
 	if err != nil {
 		return err
 	}
+	// 已删角色的名字不再展示:删掉它的名字缓存(删失败只记日志,最多按正缓存 TTL 再展示一阵)。
+	s.invalidateNameCache(ctx, player)
 	logx.Infof("[player-name] released the name of a removed role: player=%d outcome=%s", player, outcome)
 	return nil
 }
@@ -260,43 +296,9 @@ func (s *AccountDirectoryStore) SealUncommittedRole(ctx context.Context, player 
 func (s *AccountDirectoryStore) sealUncommittedRoleOnce(ctx context.Context, player uint64) (RoleSeal, error) {
 	var seal RoleSeal
 	err := s.playerTx(ctx, player, func(tx *sql.Tx) error {
-		var route RouteRow
-		routed := true
-		if err := scanRouteRow(tx.QueryRowContext(ctx, routeLockRowSQL, routeShardArg(player), player), &route, false); errors.Is(err, sql.ErrNoRows) {
-			routed = false
-		} else if err != nil {
-			return err
-		}
-		old, err := scanOwnership(tx.QueryRowContext(ctx, lockOwnershipSQL, player), player)
-		switch {
-		case err == nil && old.Account != "":
-			seal = RoleSealCommitted
-			return nil
-		case err == nil:
-			seal = RoleSealRemoved
-			return nil
-		case !errors.Is(err, accountdirectory.ErrMissing):
-			return err
-		}
-		if !routed || !route.HasHome() {
-			seal = RoleSealUnrouted
-			return nil
-		}
-		raw, err := proto.Marshal(&base.AccountSimplePlayer{PlayerId: player, ZoneId: route.HomeZone})
-		if err != nil {
-			return err
-		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,initial_player_commit,fence_version) VALUES (?,?,?,1,"+dbNowMsSQL+",0,1)",
-			player, []byte{}, raw)
-		var duplicate *mysql.MySQLError
-		if errors.As(err, &duplicate) && duplicate.Number == mysqlErrDupEntry {
-			return errRoleSealRaced
-		}
-		if err != nil {
-			return err
-		}
-		seal = RoleSealSealed
-		return nil
+		var err error
+		seal, err = sealRoleTx(ctx, tx, player)
+		return err
 	})
 	if err != nil {
 		return 0, err
@@ -305,4 +307,43 @@ func (s *AccountDirectoryStore) sealUncommittedRoleOnce(ctx context.Context, pla
 		logx.Infof("[player-name] sealed an uncommitted role before releasing its reserved name: player=%d", player)
 	}
 	return seal, nil
+}
+
+// sealRoleTx 是证明的事务体,在调用方开在这名玩家所在片上的事务里跑(锁序、结论见 SealUncommittedRole)。
+// 核账工具用维护身份直连、不过写者闸门,在同一个事务里先锁本库闸门行再调它(create_residual_sql.go 的 sealOrphanRole)。
+// 插墓碑撞键回 errRoleSealRaced,调用方回滚重来。
+func sealRoleTx(ctx context.Context, tx *sql.Tx, player uint64) (RoleSeal, error) {
+	var route RouteRow
+	routed := true
+	if err := scanRouteRow(tx.QueryRowContext(ctx, routeLockRowSQL, routeShardArg(player), player), &route, false); errors.Is(err, sql.ErrNoRows) {
+		routed = false
+	} else if err != nil {
+		return 0, err
+	}
+	old, err := scanOwnership(tx.QueryRowContext(ctx, lockOwnershipSQL, player), player)
+	switch {
+	case err == nil && old.Account != "":
+		return RoleSealCommitted, nil
+	case err == nil:
+		return RoleSealRemoved, nil
+	case !errors.Is(err, accountdirectory.ErrMissing):
+		return 0, err
+	}
+	if !routed || !route.HasHome() {
+		return RoleSealUnrouted, nil
+	}
+	raw, err := proto.Marshal(&base.AccountSimplePlayer{PlayerId: player, ZoneId: route.HomeZone})
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,initial_player_commit,fence_version) VALUES (?,?,?,1,"+dbNowMsSQL+",0,1)",
+		player, []byte{}, raw)
+	var duplicate *mysql.MySQLError
+	if errors.As(err, &duplicate) && duplicate.Number == mysqlErrDupEntry {
+		return 0, errRoleSealRaced
+	}
+	if err != nil {
+		return 0, err
+	}
+	return RoleSealSealed, nil
 }

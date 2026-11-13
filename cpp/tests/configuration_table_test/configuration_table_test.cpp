@@ -582,31 +582,31 @@ TEST(GameConfigEnvOverride, AcceptsAllFourSceneNodeTypeValues)
     ClearEnvVar("SCENE_NODE_TYPE");
 }
 
-// P0-A(docs/handoff/global-singletons-p0-findings-20261014.md):zone Redis 口令可由环境变量
-// ZONE_REDIS_PASSWORD 注入(K8s Secret),覆盖 yaml 的 zoneredis.password。
+// P0-A(docs/handoff/global-singletons-p0-findings-20261014.md)的口令注入,2026-11-12 起落在控制集群这一段:
+// 口令可由环境变量 CONTROL_REDIS_PASSWORD 注入(K8s Secret),覆盖 yaml 的 control_redis.password。
 // 先读配置、再清变量、最后断言:断言失败提前返回时也不会把变量漏给后面的用例。
 // 断言不打印口令值(AGENTS.md §11.3),只说明哪条规则不成立。
-TEST(GameConfigEnvOverride, ZoneRedisPasswordFromEnvOverridesYaml)
+TEST(GameConfigEnvOverride, ControlRedisPasswordFromEnvOverridesYaml)
 {
     constexpr const char *kEnvPassword = "p0a-env-pass-01";
     GameConfig cfg;
-    SetEnvVar("ZONE_REDIS_PASSWORD", kEnvPassword);
+    SetEnvVar("CONTROL_REDIS_PASSWORD", kEnvPassword);
     const bool loaded = readGameConfig("etc/game_config.yaml", cfg);
-    ClearEnvVar("ZONE_REDIS_PASSWORD");
+    ClearEnvVar("CONTROL_REDIS_PASSWORD");
     ASSERT_TRUE(loaded);
-    EXPECT_TRUE(cfg.zone_redis().password() == kEnvPassword)
-        << "ZONE_REDIS_PASSWORD must win over the yaml zoneredis.password";
+    EXPECT_TRUE(cfg.control_redis().password() == kEnvPassword)
+        << "CONTROL_REDIS_PASSWORD must win over the yaml control_redis.password";
 }
 
-TEST(GameConfigEnvOverride, ZoneRedisPasswordWithoutEnvKeepsYaml)
+TEST(GameConfigEnvOverride, ControlRedisPasswordWithoutEnvKeepsYaml)
 {
     GameConfig cfg;
-    ClearEnvVar("ZONE_REDIS_PASSWORD");
+    ClearEnvVar("CONTROL_REDIS_PASSWORD");
     ASSERT_TRUE(readGameConfig("etc/game_config.yaml", cfg));
     // 随仓库发布的 bin/etc/game_config.yaml 写的是空串(= 不认证);同时钉住占位口令 "yourpassword" 不再回来。
     // 用 EXPECT_TRUE 而不是 EXPECT_EQ:失败时不把 yaml 里的口令值打进测试输出(AGENTS.md §11.3)。
-    EXPECT_TRUE(cfg.zone_redis().password().empty())
-        << "the shipped yaml must keep zoneredis.password empty; inject real passwords via ZONE_REDIS_PASSWORD";
+    EXPECT_TRUE(cfg.control_redis().password().empty())
+        << "the shipped yaml must keep control_redis.password empty; inject real passwords via CONTROL_REDIS_PASSWORD";
 }
 
 // ---------------------------------------------------------------------------
@@ -617,16 +617,14 @@ TEST(GameConfigEnvOverride, ZoneRedisPasswordWithoutEnvKeepsYaml)
 
 namespace
 {
-    // 写一份只含必需段(zoneredis)的临时 yaml,extra 追加在末尾;返回路径。用例结束时删除。
+    // 写一份只含 SceneNodeType / ZoneId 的临时 yaml(Redis 两段都可以不写,缺了取默认),extra 追加在末尾;返回路径。
+    // 用例结束时删除。
     std::filesystem::path WriteTempGameConfig(const char *fileName, const std::string &extra)
     {
         const auto path = std::filesystem::temp_directory_path() / fileName;
         std::ofstream out(path, std::ios::trunc);
         out << "SceneNodeType: 0\n"
             << "ZoneId: 1\n"
-            << "zoneredis:\n"
-            << "  host: \"127.0.0.1\"\n"
-            << "  port: 6379\n"
             << extra;
         return path;
     }
@@ -685,38 +683,118 @@ TEST(GameConfigPlayerInbox, ExplicitValuesWinIncludingZero)
 }
 
 // ---------------------------------------------------------------------------
-// GameConfig.player_redis(docs/design/redis-player-store-cluster.md §5.1、§5.6)
-// 整段缺失 = standalone,地址与口令沿用 zoneredis,开发环境不用改配置。
-// 断言不打印口令值(AGENTS.md §11.3)。
+// GameConfig.control_redis(docs/design/redis-cluster-all-domains-20261110.md §4.2、§5.2)
+// 整段或单键缺失 = standalone、127.0.0.1:6379、不认证(同 Go 各服务 ControlRedis 的缺省)。
+// zoneredis / scene_control_redis 两个旧段 2026-11-12 起不再读。断言不打印口令值(AGENTS.md §11.3)。
 // ---------------------------------------------------------------------------
 
-TEST(GameConfigPlayerRedis, ShippedYamlIsStandaloneOnZoneRedis)
+TEST(GameConfigControlRedis, ShippedYamlIsLocalStandalone)
+{
+    GameConfig cfg;
+    ClearEnvVar("CONTROL_REDIS_PASSWORD");
+    ASSERT_TRUE(readGameConfig("etc/game_config.yaml", cfg));
+    EXPECT_EQ(cfg.control_redis().mode(), "standalone");
+    ASSERT_EQ(cfg.control_redis().seeds_size(), 1);
+    EXPECT_EQ(cfg.control_redis().seeds(0), "127.0.0.1:6379");
+}
+
+TEST(GameConfigControlRedis, MissingSectionFallsBackToLocalStandalone)
+{
+    const auto path = WriteTempGameConfig("game_config_control_redis_missing.yaml", "");
+    GameConfig cfg;
+    ClearEnvVar("CONTROL_REDIS_PASSWORD");
+    const bool loaded = readGameConfig(path.string(), cfg);
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded) << "gate、battle 不连 Redis,缺这一段不能拒绝加载";
+    EXPECT_EQ(cfg.control_redis().mode(), "standalone");
+    ASSERT_EQ(cfg.control_redis().seeds_size(), 1);
+    EXPECT_EQ(cfg.control_redis().seeds(0), "127.0.0.1:6379");
+    EXPECT_TRUE(cfg.control_redis().password().empty());
+}
+
+TEST(GameConfigControlRedis, LegacySectionsAreNotRead)
+{
+    // 按旧形状渲染的配置:旧段里的地址不会被当成控制集群的地址(scene 连缺省地址,并打一条 WARN)。
+    const auto path = WriteTempGameConfig("game_config_control_redis_legacy.yaml",
+                                          "zoneredis:\n"
+                                          "  host: \"10.9.9.9\"\n"
+                                          "  port: 6380\n"
+                                          "scene_control_redis:\n"
+                                          "  host: \"10.9.9.8\"\n"
+                                          "  port: 6381\n");
+    GameConfig cfg;
+    ClearEnvVar("CONTROL_REDIS_PASSWORD");
+    const bool loaded = readGameConfig(path.string(), cfg);
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded);
+    ASSERT_EQ(cfg.control_redis().seeds_size(), 1);
+    EXPECT_EQ(cfg.control_redis().seeds(0), "127.0.0.1:6379");
+}
+
+TEST(GameConfigControlRedis, ExplicitClusterKeepsItsSeeds)
+{
+    const auto path = WriteTempGameConfig("game_config_control_redis_cluster.yaml",
+                                          "control_redis:\n"
+                                          "  mode: cluster\n"
+                                          "  seeds: [\"10.0.1.1:7100\", \"redis-control-1.infra:7100\"]\n");
+    GameConfig cfg;
+    ClearEnvVar("CONTROL_REDIS_PASSWORD");
+    const bool loaded = readGameConfig(path.string(), cfg);
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(cfg.control_redis().mode(), "cluster");
+    ASSERT_EQ(cfg.control_redis().seeds_size(), 2);
+    EXPECT_EQ(cfg.control_redis().seeds(0), "10.0.1.1:7100");
+    EXPECT_EQ(cfg.control_redis().seeds(1), "redis-control-1.infra:7100");
+}
+
+TEST(GameConfigControlRedis, ClusterWithoutSeedsStaysEmptyForTheConsumerToReject)
+{
+    // cluster 不写种子不能悄悄落到本机单实例:由 scene 启动时拒绝。
+    const auto path = WriteTempGameConfig("game_config_control_redis_no_seeds.yaml", "control_redis:\n  mode: cluster\n");
+    GameConfig cfg;
+    const bool loaded = readGameConfig(path.string(), cfg);
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(cfg.control_redis().mode(), "cluster");
+    EXPECT_EQ(cfg.control_redis().seeds_size(), 0);
+}
+
+// ---------------------------------------------------------------------------
+// GameConfig.player_redis(docs/design/redis-player-store-cluster.md §5.1、§5.6)
+// 整段缺失 = 与 control_redis 同一个实例或集群(模式、种子与口令都沿用),开发环境不用改配置;
+// 写了这一段就是另一个实例或集群,种子与口令只认这一段。断言不打印口令值(AGENTS.md §11.3)。
+// ---------------------------------------------------------------------------
+
+TEST(GameConfigPlayerRedis, ShippedYamlFollowsControlRedis)
 {
     GameConfig cfg;
     ClearEnvVar("PLAYER_REDIS_PASSWORD");
     ASSERT_TRUE(readGameConfig("etc/game_config.yaml", cfg));
-    EXPECT_EQ(cfg.player_redis().mode(), "standalone");
+    EXPECT_EQ(cfg.player_redis().mode(), cfg.control_redis().mode());
     ASSERT_EQ(cfg.player_redis().seeds_size(), 1);
-    EXPECT_EQ(cfg.player_redis().seeds(0),
-              cfg.zone_redis().host() + ":" + std::to_string(cfg.zone_redis().port()));
+    EXPECT_EQ(cfg.player_redis().seeds(0), cfg.control_redis().seeds(0));
 }
 
-TEST(GameConfigPlayerRedis, MissingSectionInheritsZoneRedisPassword)
+TEST(GameConfigPlayerRedis, MissingSectionFollowsControlRedisIncludingPassword)
 {
-    constexpr const char *kZonePassword = "zone-pass-01";
-    const auto path = WriteTempGameConfig("game_config_player_redis_missing.yaml", "");
+    constexpr const char *kControlPassword = "control-pass-01";
+    const auto path = WriteTempGameConfig("game_config_player_redis_missing.yaml",
+                                          "control_redis:\n"
+                                          "  mode: cluster\n"
+                                          "  seeds: [\"10.0.1.1:7100\"]\n");
     GameConfig cfg;
     ClearEnvVar("PLAYER_REDIS_PASSWORD");
-    SetEnvVar("ZONE_REDIS_PASSWORD", kZonePassword);
+    SetEnvVar("CONTROL_REDIS_PASSWORD", kControlPassword);
     const bool loaded = readGameConfig(path.string(), cfg);
-    ClearEnvVar("ZONE_REDIS_PASSWORD");
+    ClearEnvVar("CONTROL_REDIS_PASSWORD");
     RemoveTempGameConfig(path);
     ASSERT_TRUE(loaded);
-    EXPECT_EQ(cfg.player_redis().mode(), "standalone");
+    EXPECT_EQ(cfg.player_redis().mode(), "cluster") << "没配 player_redis 时与控制集群是同一个集群,模式也沿用";
     ASSERT_EQ(cfg.player_redis().seeds_size(), 1);
-    EXPECT_EQ(cfg.player_redis().seeds(0), "127.0.0.1:6379");
-    EXPECT_TRUE(cfg.player_redis().password() == kZonePassword)
-        << "没配 player_redis 时与 zoneredis 是同一个实例,口令必须沿用";
+    EXPECT_EQ(cfg.player_redis().seeds(0), "10.0.1.1:7100");
+    EXPECT_TRUE(cfg.player_redis().password() == kControlPassword)
+        << "没配 player_redis 时口令沿用 control_redis(含环境变量覆盖之后的值)";
 }
 
 TEST(GameConfigPlayerRedis, ExplicitClusterKeepsItsOwnSeedsAndDoesNotInheritPassword)
@@ -727,9 +805,9 @@ TEST(GameConfigPlayerRedis, ExplicitClusterKeepsItsOwnSeedsAndDoesNotInheritPass
                                           "  seeds: [\"10.0.0.1:7000\", \"redis-1.infra:7000\"]\n");
     GameConfig cfg;
     ClearEnvVar("PLAYER_REDIS_PASSWORD");
-    SetEnvVar("ZONE_REDIS_PASSWORD", "zone-pass-02");
+    SetEnvVar("CONTROL_REDIS_PASSWORD", "control-pass-02");
     const bool loaded = readGameConfig(path.string(), cfg);
-    ClearEnvVar("ZONE_REDIS_PASSWORD");
+    ClearEnvVar("CONTROL_REDIS_PASSWORD");
     RemoveTempGameConfig(path);
     ASSERT_TRUE(loaded);
     EXPECT_EQ(cfg.player_redis().mode(), "cluster");
@@ -737,18 +815,31 @@ TEST(GameConfigPlayerRedis, ExplicitClusterKeepsItsOwnSeedsAndDoesNotInheritPass
     EXPECT_EQ(cfg.player_redis().seeds(0), "10.0.0.1:7000");
     EXPECT_EQ(cfg.player_redis().seeds(1), "redis-1.infra:7000");
     EXPECT_TRUE(cfg.player_redis().password().empty())
-        << "显式配了种子就是另一个实例,不能继承 zoneredis 的口令";
+        << "显式配了种子就是另一个集群,不能继承 control_redis 的口令";
 }
 
 TEST(GameConfigPlayerRedis, ClusterWithoutSeedsStaysEmptyForTheConsumerToReject)
 {
-    // 不能悄悄回落到 zoneredis:cluster 指向单实例是部署错误,由 scene 启动时拒绝。
+    // 不能悄悄回落到 control_redis:cluster 指向别处是部署错误,由 scene 启动时拒绝。
     const auto path = WriteTempGameConfig("game_config_player_redis_no_seeds.yaml", "player_redis:\n  mode: cluster\n");
     GameConfig cfg;
     const bool loaded = readGameConfig(path.string(), cfg);
     RemoveTempGameConfig(path);
     ASSERT_TRUE(loaded);
     EXPECT_EQ(cfg.player_redis().mode(), "cluster");
+    EXPECT_EQ(cfg.player_redis().seeds_size(), 0);
+}
+
+TEST(GameConfigPlayerRedis, StandaloneSectionWithoutSeedsDoesNotFallBackToControlRedis)
+{
+    // 写了这一段就是另一个实例:standalone 也不回落到 control_redis(原来会回落到 zoneredis),种子留空,由 scene 启动时拒绝。
+    const auto path = WriteTempGameConfig("game_config_player_redis_standalone_no_seeds.yaml",
+                                          "player_redis:\n  mode: standalone\n");
+    GameConfig cfg;
+    const bool loaded = readGameConfig(path.string(), cfg);
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(cfg.player_redis().mode(), "standalone");
     EXPECT_EQ(cfg.player_redis().seeds_size(), 0);
 }
 

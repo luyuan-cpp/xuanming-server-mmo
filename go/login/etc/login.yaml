@@ -49,7 +49,6 @@ Node:
   # 不会因 etcd 短暂抖动而永久掉线:租约丢失后 NodeRegistry.reRegister 无限重试(带退避)、
   # 用事务 CAS 重新挂 key 并重启续租;优雅下线走 Close() 主动删 key,不受此值影响。
   LeaseTTL: 60
-  QueueShardCount: 50 # Queue shard count
   # Login duration limit (max online time per session)
   MaxLoginDuration: 5m # Max login duration (forced logout on timeout)
   LogoutGraceTime: 5s # Grace period to notify player before timeout
@@ -63,14 +62,21 @@ Node:
     WriteTimeout: 3s
     # go-redis 连接池上限(P0-E 第 3 批,共享 Redis 连接总账)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
     # 随 CPU limit 漂移(本机 Windows 上是 10 × 核数)。20 = K8s 上 GOMAXPROCS 按 2 时的缺省值,显式写出后不再随 CPU limit 变。
-    # 任务结果 Pub/Sub 专用连接不占池名额。tools/scripts/k8s_deploy.ps1 把它镜像进 login ConfigMap(要求正整数),
+    # 没写 ControlRedis.Addrs 时,控制集群句柄(gate 标记、排队)回落到这个实例,连接池上限也取这个值。
+    # tools/scripts/k8s_deploy.ps1 把它镜像进 login ConfigMap(要求正整数),
     # Redis 连接总账读同一个键:改它看部署时打印的 "Redis connection ledger" 一行。池等满会排队(go-redis PoolTimeout)。
     PoolSize: 20
-  # QueueRedis(可选,G4a 第 1a 批):排队、准入与放行锁所在的 Redis。本机单实例不写,即与上面 RedisClient 共用同一个 client;
+  # QueueRedis(可选,G4a 第 1a 批):排队、准入与放行锁单独所在的 Redis。本机单实例不写,即与下面的 ControlRedis 共用同一个句柄;
   # K8s 上由 tools/scripts/k8s_deploy.ps1 -RedisSplit queue 整段渲染(字段同 RedisClient,全部必填,含 PoolSize)。
-  # gate 排空标记不在这里,始终在 RedisClient(shared-redis-split-by-purpose.md §25.3)。
+  # gate 标记不在这里,始终在 ControlRedis。
 
-# 玩家域与登录域(docs/design/redis-player-store-cluster.md §5.7、§10.2)。上面的 Node.RedisClient 只剩控制域:账号锁、gate 排空标记。
+# 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.3、§4.4):gate 排空 / 已排空 / 停写标记 gate:{gm:<zone>}:<id>:…,
+# 以及排队、准入与放行锁 queue:{q:<zone>} 等(没写 Node.QueueRedis 时)。键带 hash tag,句柄发送前按控制集群键策略核对。
+# 没写 Addrs 时指向上面 Node.RedisClient 那一个实例,地址、口令、库号、超时、连接池跟着它;上 Redis Cluster 时写
+# Addrs(集群种子)+ Cluster: true。口令的环境变量名写顶层 SharedRedisPasswordEnv,不写这里的 PasswordEnv。
+# 这里不写任何键:本机就是回落。
+#
+# 玩家域与登录域(docs/design/redis-player-store-cluster.md §5.7、§10.2)。
 #   PlayerRedis:player_locker、login_idempotent、login_generation。
 #   LoginRedis:连接栅栏、登录态、设备集、账号索引、令牌、令牌家族、口令配额。
 # 没写 Addrs 时都指向 Node.RedisClient 那一个实例,地址、口令、库号、超时跟着它。上 Redis Cluster 时写 Addrs(集群种子)+ Cluster: true,
@@ -160,11 +166,13 @@ SceneManagerRpc:
     Hosts:
       - 127.0.0.1:2379
     Key: scenemanagerservice.rpc
-  # 调用方超时必须 ≥ scene_manager 服务端 zrpc Timeout(scene_manager_service.yaml,8000)+ 2000:服务端自己的超时
+  # 调用方超时必须 ≥ scene_manager 服务端 zrpc Timeout(scene_manager_service.yaml,11500)+ 2000:服务端自己的超时
   # 应答要能回到 login。以前是 5000 < 8000,scene_manager 还在落点 / 推路由时 login 就按失败收口、给客户端推 3023,
   # 服务端随后却可能已放行(结果未知)。与 C++ deadline ≥ Timeout + 2000 同一条规则(cross-zone-scene-travel.md §13.5);
-  # 由 tools/scripts/tests/k8s_deploy_contract.tests.ps1 守着,K8s ConfigMap 从这里镜像。
-  Timeout: 10000
+  # 由 tools/scripts/tests/k8s_deploy_contract.tests.ps1 守着,K8s ConfigMap 从这里镜像。2026-11-12 随 scene_manager
+  # 的 Timeout 由 8000 调到 11500(把角色目录强读与铸造的 WAITAOF 算进预算)从 10000 调到 13500。
+  # 这一跳在 EnterGame 的后台链里(enterGameChainBudget 5 分钟),不受 login 自己的 zrpc Timeout 约束。
+  Timeout: 13500
   # NonBlock: true —— 理由同 PlayerLocatorRpc:scene_manager 没起不能让 login 起不来。
   NonBlock: true
   Middlewares:
@@ -353,14 +361,20 @@ PreloadPool:
   StatsInterval: 30s
 
 # Production password auth is opt-in and reads Argon2id PHC hashes from the
-# authoritative MySQL user_accounts.password column on EVERY password login.
+# authoritative user_accounts.password column on EVERY password login.
 # The DSN (including DB credentials) must come from the named environment
 # variable and should grant SELECT on user_accounts only; never put the DSN
 # itself in this file. Disabled means fail-closed, while third-party/access-token
 # auth remains available.
+# 口令凭据全服一份,放在 mmorpg 库(login 登记写者资格的那个库),不在存档库里;建表语句是 model/password_auth_schema.sql,
+# 账号开通与口令写入用 cmd/password_admin。读库走权威 SQL 连接,启动时核对表结构,不符就拒绝启动。
 PasswordAuth:
   Enabled: false
   DSNEnv: "LOGIN_PASSWORD_AUTH_DSN"
+  # tidb | mysql。tidb 档只读 leader、不读陈旧快照;mysql 档只连可写主库。
+  Backend: tidb
+  # DSN 里的库名必须与它一致;Mode 不是 dev / test 时只接受 mmorpg。
+  Database: mmorpg
   MaxOpenConns: 20
   MaxIdleConns: 10
   # Each Argon2id verification uses 64 MiB. Per-process KDF working set is
@@ -424,6 +438,27 @@ AuthProviders:
 #   # 写 RequestUnionId: false 且必须同时写 RequireUnionId: false。
 #   QQ:
 #     AppId: "101234567"
+#   # 微信小游戏。小游戏端 wx.login() 拿到一次性 code,LoginRequest{auth_type:"wechat_minigame", auth_token:<code>}。
+#   # login 用小游戏自己的 AppId / AppSecret 调 /sns/jscode2session;上面 App 形态的 WeChat 段换不了小游戏的 code,
+#   # 两段的 AppId 必须不同(写成一样会拒绝启动)。账号同样是 "wx_<unionid>":小游戏要先绑定到微信开放平台账号
+#   # 才有 unionid,绑在同一主体下时 App 与小游戏是同一个账号。密钥与 RequireUnionId 的规则同 WeChat 段。
+#   WeChatMiniGame:
+#     AppId: "wxfedcba9876543210"
+#     AppSecretEnv: "LOGIN_WECHAT_MINIGAME_APP_SECRET"
+#   # 抖音小游戏。小游戏端 tt.login({force: true}) 拿到一次性 code,LoginRequest{auth_type:"douyin_minigame",
+#   # auth_token:<code>}。login 调 minigame.zijieapi.com 的 /mgplatform/api/apps/jscode2session。
+#   # 账号 "dy_<unionid>"。匿名用户(只有 anonymousCode)不能登录。密钥与 RequireUnionId 的规则同 WeChat 段。
+#   DouyinMiniGame:
+#     AppId: "tt0123456789abcdef"
+#     AppSecretEnv: "LOGIN_DOUYIN_MINIGAME_APP_SECRET"
+#   # Sign in with Apple / Google 登录(海外)。客户端 SDK 拿到身份令牌(OIDC ID token),
+#   # LoginRequest{auth_type:"apple" / "google", auth_token:<令牌>}。login 去渠道取公钥验签,不需要密钥;
+#   # 账号 "apple_<sub>" / "google_<sub>"。ClientId 是令牌 aud 必须包含的值:Apple 填 iOS App 的 Bundle ID,
+#   # Google 填服务端 OAuth 客户端 ID(必须以 .apps.googleusercontent.com 结尾)。Endpoint 只给沙箱 mock 用。
+#   Apple:
+#     ClientId: "com.example.mmorpg"
+#   Google:
+#     ClientId: "123456789012-abc.apps.googleusercontent.com"
 #   # NetEase URS — provider is currently a stub (see auth-provider-framework.md).
 #   NetEase:
 #     AppKey: "${NETEASE_APP_KEY}"
@@ -517,6 +552,6 @@ GateDrain:
   # 排空时把在线连接按限速迁到同 zone 其他 gate(msg 124 + 租约内重连回原场景,
   # docs/design/gate-drain-session-migration.md)。子块可缺省,缺省即下面这组值。
   Migrate:
-    Enabled: false        # 第一批默认关;客户端「成功进场后跳数清零」与 robot 集成跑过之后再开
+    Enabled: true         # 默认开(2026-11-12 定案);false 是应急开关,最多一个许可租期后所有 gate 停止迁移
     RatePerSecond: 20     # 每台排空中的 gate 每秒最多发起的迁移数;0 等同关闭
     StartAfter: 0s        # 标记 draining 之后多久开始迁移,留给玩家自然下线

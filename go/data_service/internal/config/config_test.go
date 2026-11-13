@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"shared/clusterredis"
 	"shared/rolefence"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -17,9 +18,6 @@ import (
 const minimalYaml = `
 Name: dataservice.rpc
 ListenOn: 0.0.0.0:9000
-NameCacheRedis:
-  Host: 127.0.0.1:6379
-  Type: node
 `
 
 func TestAccountDirectoryRoleTradeSQLProofRequiresExplicitConfig(t *testing.T) {
@@ -394,8 +392,8 @@ func TestShippedYamlLoads(t *testing.T) {
 	if err := conf.Load("../../etc/data_service.yaml", &c); err != nil {
 		t.Fatalf("load etc/data_service.yaml: %v", err)
 	}
-	if c.NameCacheRedis.Host == "" {
-		t.Fatal("etc/data_service.yaml: NameCacheRedis.Host 不能为空")
+	if err := c.ValidateControlRedis(); err != nil {
+		t.Fatalf("etc/data_service.yaml: ControlRedis 段必须能通过常驻启动校验(名字读缓存与落地唤醒都在控制集群): %v", err)
 	}
 	if c.AdminToken != "" {
 		t.Fatalf("etc/data_service.yaml 不该内置 AdminToken(会让本地栈默认开着运维 RPC),got %q", c.AdminToken)
@@ -779,23 +777,28 @@ func TestValidateRecall_OnlyRequiresRedisWhenEnabled(t *testing.T) {
 	}
 	on := Config{Recall: RecallConfig{Enabled: true}}
 	if err := on.ValidateRecall(); err == nil {
-		t.Fatal("开着缺 SharedRedis.Host 要拒绝")
+		t.Fatal("开着缺 ControlRedis.Addrs 要拒绝")
 	}
-	on.SharedRedis.Host = "127.0.0.1:6379"
+	on.ControlRedis.Addrs = []string{"127.0.0.1:6379"}
 	if err := on.ValidateRecall(); err != nil {
 		t.Fatalf("配置齐全: %v", err)
 	}
-	on.SharedRedis.PoolSize = -1
+	on.ControlRedis.PoolSizePerNode = -1
 	if err := on.ValidateRecall(); err == nil {
 		t.Fatal("负的连接池要拒绝")
 	}
+	on.ControlRedis.PoolSizePerNode = 0
+	on.ControlRedis.PasswordEnv = "X"
+	if err := on.ValidateRecall(); err == nil {
+		t.Fatal("ControlRedis.PasswordEnv 要拒绝(口令变量名写 SharedRedisPasswordEnv)")
+	}
 }
 
-func TestEffectivePlayerRedis_FallsBackToSharedRedis(t *testing.T) {
-	c := Config{SharedRedis: SharedRedisConf{Host: "redis:6379", Password: "p", PoolSize: 8}}
+func TestEffectivePlayerRedis_FallsBackToControlRedis(t *testing.T) {
+	c := Config{ControlRedis: clusterredis.Config{Addrs: []string{"redis:6379"}, Password: "p", PoolSizePerNode: 8}}
 	got := c.EffectivePlayerRedis()
-	if len(got.Addrs) != 1 || got.Addrs[0] != "redis:6379" || got.Password != "p" {
-		t.Fatalf("没写 Addrs 要指向 SharedRedis: %+v", got)
+	if len(got.Addrs) != 1 || got.Addrs[0] != "redis:6379" || got.Password != "p" || got.PoolSizePerNode != 8 {
+		t.Fatalf("没写 Addrs 要指向 ControlRedis: %+v", got)
 	}
 	c.PlayerRedis.Addrs = []string{"player:7000"}
 	if got := c.EffectivePlayerRedis(); len(got.Addrs) != 1 || got.Addrs[0] != "player:7000" {

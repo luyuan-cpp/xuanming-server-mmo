@@ -423,9 +423,11 @@ for anchor in snapshot(按等待序, 最多 32 个):
 - 每条(2026-11-05 按现行代码改写,r2-kc#1):生产路径由共享的消费组 owner `kafkautil.BoundConsumerGroup` 驱动,
   先归档完整结算来源、再入账,两步都有 SQL 收据、幂等;一次回调内最多 3 次(1s 退避,写闸冻结不占次数),
   仍失败或解码失败都**不提交、不跳过**:owner 按 1s 起翻倍、封顶 30s 的退避原地重试同一条,再均衡时交还 Kafka 由新属主重投;
-  成功后逐条同步提交。owner 只在不变量破坏、提交点越过保留期或维护排空时仍没结清才 HOLD 停止取新(日志「[rating] result consumer HOLD」),
-  见 [db-write-fencing-mysql.md](db-write-fencing-mysql.md)「Kafka 消费组 owner 的再均衡与暂时失败」。毒丸(解码失败)会让所在分区停在那一条,
-  靠 lag 告警(`deploy/k8s/match-result-consumer-alerts.yaml`)发现、人工处置。
+  成功后逐条同步提交。owner 只在不变量破坏、提交点越过保留期、保留期删掉了没处理的记录,或维护排空收尾核不到交还记录的结局时才 HOLD
+  停止取新(日志「[rating] result consumer HOLD」),见 [kafka-bound-consumer-group.md](kafka-bound-consumer-group.md)。
+  本组**不开死信**(§13.4 负责人 2026-11-06 决定):毒丸(解码失败、原字节冲突)会让所在分区停在那一条,
+  靠 lag 告警(`deploy/k8s/match-result-consumer-alerts.yaml`)发现、人工处置。2026-11-12 起只有 owner 这一条消费路径:
+  缺 RelayAdmission / BindOwner 拒启,原来那条不进关停 join 的自建 reader 循环已删除。
 - `ApplyBattleResult`:非 PVP 队列模式 / outcome 非 A 胜、B 胜、平局 / 队伍不是恰好两支非空 → `ignored`(不写标记);
   `SETNX applied` 失败 → `duplicate`;否则读全员评分、按队伍平均分算 `E_A`,`Δ_A = 32 × (S_A − E_A)`,`Δ_B = −Δ_A`,
   逐人 `ratingApplyScript`(rating / games+1 / updated_at_ms)。评分下限 0。
@@ -640,6 +642,8 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
   - 积压（2026-11-11 改：见下面「收尾补充」第 2 条）：一拍在预算之内把一条车道连续扫空，一条车道同时到期超过一页不再要隔几圈；上限不等式成立的前提从「车道没有积压」变成「恢复一拍预算清得完到期局」。清不完（单副本吞吐不够，或每拍两页都等满取证期限、SQL 也慢到用满一拍预算）、或 match / 它的库长期不可用时不保证，由每分钟巡检报「超期未作废」，加副本线性扩容；scene 按上限解冻，结算由战斗道具预留兜住。
   - 原件内容不合格的局（2026-11-11 改：见下面「收尾补充」第 1 条）：过了截止加宽限之后，battle 的下一次重放就在锁内写 ABORT，不再等到截止约 + 14 分钟。仍要等到硬上限的只剩版本错位类拒收（带本版本不认识的字段、结算格式版本不是 1、本版本读不到 Inbox 上限）：滚动升级时新版 match 可能接受它，给升级留窗口；可观测信号是 `abort_wait_battle_still_holds` 加 match 日志里同一 battle_id 的 `match_terminal_outcome_rejected`。
   - 别的副本给一局改取证排期的那一瞬恰好进锁的 COMPLETE（2026-11-11 已修，未编译）：`terminalFormationOnce` 锁外读成局只为找原票，原先整行比对，撞上排期改动就回「终局原提交尚未确认」、battle 5 秒后重放；现在比对忽略调度字段 `retry_at_ms`（`sameFormationIgnoringSchedule`），成员、身份、状态变了仍算并发变化。要比排期或租约的调用方各自在锁内比（到期恢复比观察值、提前作废 `checkWork`、人工处置比摘要）。回归 `TestSameFormationIgnoringScheduleOnlyIgnoresRetryAt`。
+  - 「原进程已不在」不再凭一次观察作数（2026-11-12 已改，未编译；[battle-instance-loss-early-abort.md](./battle-instance-loss-early-abort.md) §4.3、§4.5）：同一个实例要有两次相隔不少于 30 秒的观察、期间没有亲口应答，才给出 `InstanceGone`；第一次观察回新取值 `InstanceGonePending`，下一次取证排在 32 秒之后。上一条的窄窗口由此关上。复核按实例记、各局共用，实例确认之后同实例的其余各局不再取证。观察另多一种旁证：K8s 里战斗服所在命名空间已没有存活的 Pod 持有原 IP。同一套旁证与复核也用于截止之前的提前作废（来源 `MATCH_INSTANCE_GONE_ABORT`），那条路径对原实例只做只读查询。
+  - 所有 ABORT 现在都在同一事务里给每名成员写一份作废结算（同一文档 §5，2026-11-12）：「作废的局没有任何个人结算来源」不再成立，个人发件箱的积压读数包含这些行。
   - 帮会取消等证据期间每次重放都问一次 battle（帮会恢复器每 10 秒一轮；一次调用只问一次），不按到期恢复的 30 秒排期。
   - 发房失败后的单局入口（`globalAbortPrepared` → `RecoverExpiredOutcome`）取证不看排期，排期没到时可能多问一次 battle；频率由发房失败决定。
   - 老路径会把到已摘册端点的连接放回进程级缓存（2026-11-11 已修其中「新节点在同一地址上线却拿到旧连接」这一半，未编译）：玩家申请战斗票据（`globalRequestBattleTicket`）、观战、恢复路径对已摘册的 `TargetEndpoint` 调 `DialEndpoint` 时，连接仍会回到缓存，这一点没变。修的是新节点在同一 ip:port 上线时拿到旧连接：`NodeWatcher.Upsert` 与 `fullSync` 遇到新上线的条目（新 key，或同 key 换了 endpoint），丢掉这个 endpoint 上停在 TRANSIENT_FAILURE 的缓存连接（`discovery.dropStaleEndpointConn`），下次 `DialEndpoint` 新建连接，首个调用在 CONNECTING 里等建连。只丢 TRANSIENT_FAILURE 的：READY / CONNECTING / IDLE 的连接可能正被同一进程的在途调用使用（同一进程换 key 重新登记时旧 key 还在镜像里）；停在 TRANSIENT_FAILURE 的连接上调用本来就当场失败，丢掉不会更糟。同 key 同 endpoint 的重复登记（例如准入状态变化的 PUT）不算上线、不换连接。查状态与摘除在同一把锁里。回归 `internal/discovery/node_watcher_conn_test.go`（`TestNodeOnlineDropsTransientFailureConnToSameEndpoint`、`TestNodeOnlineKeepsHealthyConnToSameEndpoint`、`TestNodeReputSameEndpointLeavesCachedConnAlone`）。死端点的连接对象（K8s 里 Pod 重启换 IP 之后的旧地址多半不会再有节点上线）2026-11-11 起由巡检清掉（未编译）：每个 watcher 周期性全量同步之后调 `pruneUnlistedConns`，关掉「不在任何一份镜像里、超过 10 分钟没人拨、且不是 READY」的缓存连接；还在册的、最近拨过的（`DialEndpoint` 先刷新时刻再读缓存，刚交出去的连接一定不算久未使用）、READY 的（活着的长连接）都不动。回归 `TestPruneUnlistedConnsOnlyDropsIdleDeadEndpoints`。
@@ -655,7 +659,7 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
 
 评级、对局摘要去重和连续来源 outbox 游标同一 SQL 事务；同对局不同内容拒绝。来源停止与新评级争同一 source 行锁，返回真实最终游标；停写后不再产生该代新 outbox。发送只从已确认游标的下一项顺发，重启沿原 request_id 重投。封榜前同时要求来源已停止且 committed_cursor=produced_cursor，再交通用排行榜验证预期游标。Java 使用原生 RankAdminService / Triple 20917、group rank 和按 full method 绑定的服务签名；不借用 Go gRPC 地址。
 
-全球模式的 Kafka 结果位点只在 SQL 入账确认之后推进。Go 每轮最多重试原消息三次，仍未确认则关闭 reader、退避重建并从 broker 原提交位点恢复；损坏协议同样保留位点。Java 数据错误（含 SQLState 22/23）暂停分区并重试原记录，损坏协议关闭该轮，由既有监督器恢复。提交前崩溃由同一 SQL 入账摘要收据去重。显式旧兼容测试保留原“软评分跳过”语义，生产默认不可选择该策略；不能因一条未入账记录失败而提交后面的位点。
+全球模式的 Kafka 结果位点只在 SQL 入账确认之后推进。Go 一次回调内最多重试原消息三次，仍未确认则不提交，由消费组 owner 保留原位点、退避后原地重调同一条（2026-11-12 起不再有关闭 reader 重建的旧循环，见 [kafka-bound-consumer-group.md](kafka-bound-consumer-group.md)）；损坏协议同样保留位点。Java 数据错误（含 SQLState 22/23）暂停分区并重试原记录，损坏协议关闭该轮，由既有监督器恢复。提交前崩溃由同一 SQL 入账摘要收据去重。显式旧兼容测试保留原“软评分跳过”语义，生产默认不可选择该策略；不能因一条未入账记录失败而提交后面的位点。
 
 2026-11-06 负责人再次确认：解码失败和同局原字节冲突都保留位点、告警，等待人工处置，不能仅记日志后跳过。Go 单轮 `processResultRecord` 对这两类永久错误立即返回，不做三次业务重试；外层 consumer owner 仍按既有退避保留原消息，未处置前分区不能前进。保留 `decode_error` / `original_conflict` 指标及包含 topic、partition、offset 的 ERROR 日志；既有 `MatchResultConsumerLagging` 告警监视有积压分区的提交停滞。处置须在 topic 七天保留窗口内保全 Kafka 原字节和位置，核对同局 SQL 原件及摘要，再修复生产者或数据；没有确认入账收据前不得手工推进位点。此决定取代 `infra-reconnect-overview.md` R11 的“跳过并提交”方案；没有新增自动 ABORT、丢弃或毒丸表路径。
 

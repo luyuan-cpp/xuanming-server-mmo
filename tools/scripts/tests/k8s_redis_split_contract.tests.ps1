@@ -270,6 +270,8 @@ $splitFunctionNames = @(
     # redis-split-status 的控制域一段(缺口第 5 条):读线上 ConfigMap 与 redis-ctl-g<N>,走同一个 Invoke-ClientEntryKubectl 替身。
     'Get-RedisCtlInstanceName', 'Get-ZoneRedisCtlTopology', 'Read-LiveConfigMapData', 'ConvertFrom-RedisCtlLiveYaml', 'ConvertFrom-RedisCtlNodeConfigYaml',
     'Get-RedisCtlZoneProblems', 'Get-RedisCtlZoneStatus',
+    # redis-wipe 与 redis-split-status 的 Redis Cluster 一段(缺口第 34 条第 6a 批):集群名取自集群描述,线上状态走同一个 Invoke-ClientEntryKubectl 替身。
+    'Get-RedisCluster', 'Get-RedisClusters', 'ConvertFrom-RedisClusterInfoText', 'Read-RedisClusterLiveStatus',
     # 总账的告警路径(第 8 节):客户端输入 Get-RedisQueueConnectionLedgerInputs 换成替身,算式与判定是同一份函数体。
     'Get-RedisConnectionLedger', 'Write-RedisQueueConnectionLedger'
 )
@@ -456,7 +458,7 @@ Test-Case 'redis-wipe DryRun:非压测 namespace 或缺确认即拒绝;两条都
     Assert-Match -Text $noConfirm.Output -Pattern '没给 -ConfirmWipeAllRedis' -Because '错误点名缺确认'
     $plan = Invoke-SplitDryRun -Arguments @('-Command', 'redis-wipe', '-DryRun', '-InfraNamespace', 'mmorpg-stress-contract', '-ConfirmWipeAllRedis')
     Assert-Equal -Expected 0 -Actual $plan.ExitCode -Because "准入满足时 DryRun 成功。输出: $($plan.Output)"
-    Assert-Match -Text $plan.Output -Pattern '\[dry-run\] redis-wipe would list StatefulSets redis / redis-queue-g<N> / redis-ctl-g<N> / redis-match-cluster / redis-player ' -Because 'DryRun 只打计划;控制域实例与玩家域集群的每个主节点也要清'
+    Assert-Match -Text $plan.Output -Pattern '\[dry-run\] redis-wipe would list StatefulSets redis / redis-queue-g<N> / redis-ctl-g<N> / redis-match-cluster / redis-player / redis-control ' -Because 'DryRun 只打计划;控制域实例与两套 Redis Cluster(玩家域、控制)的每个主节点也要清'
     Assert-NotMatch -Text $plan.Output -Pattern '\[dry-run\] kubectl ' -Because 'DryRun 不发任何 kubectl'
 }
 
@@ -468,6 +470,8 @@ Test-Case 'redis-split-status DryRun:按 zones 配置逐 zone 打出将要读的
     Assert-Match -Text $run.Output -Pattern '\[dry-run\] would read ConfigMaps go-svc-scene-manager-config / node-config and rollout status of deployment/scene-manager in namespace mmorpg-zone-split-test, expecting control Redis redis-ctl-g0\.[a-z0-9-]+:6379' `
         -Because 'the control domain is checked for every zone, independent of -RedisSplit'
     Assert-Match -Text $run.Output -Pattern '\[dry-run\] would also read statefulset, proxy deployment and service of the redis-ctl-g<N> of every zone group' -Because 'control instances are only planned in DryRun'
+    Assert-Match -Text $run.Output -Pattern '\[dry-run\] would also read statefulset redis-player / redis-control in namespace \S+ and CLUSTER INFO from pod <name>-0; absent is not a failure' `
+        -Because 'both Redis Clusters are planned in DryRun; an absent cluster is not a failure'
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -777,10 +781,8 @@ Test-Case '单实例形态(dev 档缺省,或显式 -RedisReplicas 1):Service 直
 $SplitProdEnv = @{
     MMORPG_GATE_TOKEN_SECRET        = 'contract-test-secret-0123456789abcdef0123'
     MMORPG_MYSQL_USER               = 'mmorpg_app'
-    MMORPG_MYSQL_PASSWORD           = 'contract-test-mysql-pw-01'
     MMORPG_REDIS_PASSWORD           = 'contract-test-redis-pw-01'
     MMORPG_GATEWAY_DB_USER          = 'gateway_app'
-    MMORPG_GATEWAY_DB_PASSWORD      = 'contract-test-gwdb-pw-01'
     MMORPG_INTERNAL_AUTH_SIGNING_KEY = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60'
     MMORPG_INTERNAL_AUTH_PUBLIC_KEYS = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
     MMORPG_DB_ALLOWED_DATABASES     = $PlayerStoreAllowlistFixture
@@ -1230,6 +1232,12 @@ Test-Case 'Show-RedisSplitStatus(线上事实注入):打印 zone 实际指向的
         if ($Joined -like 'get statefulset redis-ctl-g0 -n ns *') { return New-KubectlReply -Stdout '{"spec":{"replicas":1},"status":{"readyReplicas":1}}' }
         if ($Joined -like 'get deployment redis-ctl-g0-proxy -n ns *') { return New-KubectlReply }
         if ($Joined -like 'get service redis-ctl-g0 -n ns *') { return New-KubectlReply -Stdout '{"spec":{"selector":{"app":"redis-ctl-g0"}}}' }
+        # 两套 Redis Cluster(缺口第 34 条第 6a 批):玩家域在且健康,控制集群没部署(--ignore-not-found 的空输出)。
+        if ($Joined -like 'get statefulset redis-player -n ns --ignore-not-found -o json') { return New-KubectlReply -Stdout '{"spec":{"replicas":6},"status":{"readyReplicas":6}}' }
+        if ($Joined -like 'exec -n ns pod/redis-player-0 -c redis -- *') {
+            return New-KubectlReply -Stdout "cluster_state:ok`r`ncluster_slots_assigned:16384`r`ncluster_slots_ok:16384`r`ncluster_known_nodes:6`r`n"
+        }
+        if ($Joined -like 'get statefulset redis-control -n ns --ignore-not-found -o json') { return New-KubectlReply }
         if ($Joined -like 'get deployment * -o name') { return New-KubectlReply -Stdout 'deployment.apps/x' }
         # login、gateway 是 SQL 写者,按 StatefulSet 查(Get-RedisSplitRolloutState -Kind statefulset)。
         if ($Joined -like 'get statefulset * -o name') { return New-KubectlReply -Stdout 'statefulset.apps/x' }
@@ -1244,11 +1252,62 @@ Test-Case 'Show-RedisSplitStatus(线上事实注入):打印 zone 实际指向的
         -Because 'control domain: one line per zone, scene-manager and node-config both on the group instance'
     Assert-Equal -Expected 1 -Actual ([regex]::Matches($printed, 'instance=redis-ctl-g0 namespace=ns shape=single ready=1/1 proxy=<none> service_selector=redis-ctl-g0').Count) `
         -Because 'control instance of a shared group is checked and printed once'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($printed, 'cluster=redis-player namespace=ns ready=6/6 state=ok slots_ok=16384 known_nodes=6').Count) `
+        -Because 'each Redis Cluster is cluster-wide: checked and printed once, not once per zone'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($printed, 'cluster=redis-control namespace=ns <absent>').Count) -Because 'a cluster that is not deployed prints <absent> and is not a failure'
 
     $body = ($deployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Show-RedisSplitStatus' }, $true)).Body.Extent.Text
     Assert-Match -Text $body -Pattern 'foreach \(\$problem in \$instance\.Problems\) \{ \$failures\.Add' -Because '实例的问题要进失败列表(退出码 1),不能只打印'
+    Assert-Match -Text $body -Pattern 'foreach \(\$problem in \$clusterStatus\.Problems\) \{ \$failures\.Add' -Because 'Redis Cluster problems must reach the failure list (exit code 1), not only be printed'
     Assert-Match -Text $body -Pattern 'foreach \(\$address in @\(\$live\.LoginQueueHostPort, \$live\.GatewayHost\)\)' -Because 'login 与 gateway 分开取:切换没做完时两者可能指向不同实例'
     Assert-Match -Text $body -Pattern 'foreach \(\$problem in \(Get-RedisCtlZoneStatus [^\r\n]*\)\) \{\s*\$failures\.Add\(\$problem\)' -Because 'control domain problems must reach the failure list (exit code 1), not only be printed'
+}
+
+Test-Case 'Read-RedisClusterLiveStatus / ConvertFrom-RedisClusterInfoText(kubectl 替身):没部署不算问题;没就绪、读不出 CLUSTER INFO、state 不是 ok、slot 不全、节点数对不上都算问题;kubectl 失败与非 JSON 一律 throw' {
+    $KubeContext = ''; $KubeConfig = ''
+    $cluster = Get-RedisCluster -Kind 'control'
+    $healthyInfo = "cluster_state:ok`ncluster_slots_assigned:16384`ncluster_slots_ok:16384`ncluster_known_nodes:6`n"
+    $script:ClusterCase = $null
+    $script:KubectlResponder = {
+        param([string]$Joined)
+        if ($Joined -like 'get statefulset redis-control -n infra-ns --ignore-not-found -o json') { return $script:ClusterCase.StatefulSet }
+        if ($Joined -like 'exec -n infra-ns pod/redis-control-0 -c redis -- sh -c *') { return $script:ClusterCase.Exec }
+        throw "kubectl 替身没想到的调用:$Joined"
+    }
+
+    $script:ClusterCase = @{ StatefulSet = (New-KubectlReply); Exec = $null }
+    $absent = Read-RedisClusterLiveStatus -Cluster $cluster -Namespace 'infra-ns'
+    Assert-Equal -Expected 'False/0' -Actual ('{0}/{1}' -f $absent.Present, @($absent.Problems).Count) -Because '--ignore-not-found 的空输出 = 没部署,不算问题(建不建由部署参数决定)'
+
+    $script:ClusterCase = @{ StatefulSet = (New-KubectlReply -Stdout '{"spec":{"replicas":6},"status":{"readyReplicas":6}}'); Exec = (New-KubectlReply -Stdout $healthyInfo) }
+    $healthy = Read-RedisClusterLiveStatus -Cluster $cluster -Namespace 'infra-ns'
+    Assert-Equal -Expected 'True/6/6/ok/16384/6/0' -Actual ('{0}/{1}/{2}/{3}/{4}/{5}/{6}' -f $healthy.Present, $healthy.Replicas, $healthy.Ready, $healthy.Info.State, $healthy.Info.SlotsOk, $healthy.Info.KnownNodes, @($healthy.Problems).Count) `
+        -Because '全部就绪、16384 个 slot 可用、6 个节点都认识'
+
+    $readySts = '{"spec":{"replicas":6},"status":{"readyReplicas":6}}'
+    foreach ($case in @(
+            @{ Label = 'Pod 没全部就绪'; Sts = '{"spec":{"replicas":6},"status":{"readyReplicas":5}}'; Exec = (New-KubectlReply -Stdout $healthyInfo); Pattern = 'statefulset/redis-control ready 5/6' },
+            @{ Label = 'status 里还没有 readyReplicas'; Sts = '{"spec":{"replicas":6},"status":{}}'; Exec = (New-KubectlReply -Stdout $healthyInfo); Pattern = 'ready 0/6' },
+            @{ Label = 'exec 失败'; Sts = $readySts; Exec = (New-KubectlReply -ExitCode 1 -Stderr 'container not found'); Pattern = 'CLUSTER INFO not readable \(exit code 1\): container not found' },
+            @{ Label = '输出认不出(口令错)'; Sts = $readySts; Exec = (New-KubectlReply -Stdout 'NOAUTH Authentication required.'); Pattern = 'CLUSTER INFO not readable' },
+            @{ Label = 'cluster_state:fail'; Sts = $readySts; Exec = (New-KubectlReply -Stdout ($healthyInfo -replace 'cluster_state:ok', 'cluster_state:fail')); Pattern = "cluster_state is 'fail'" },
+            @{ Label = '一片没有可用的主(full-coverage no 时 state 仍是 ok)'; Sts = $readySts; Exec = (New-KubectlReply -Stdout ($healthyInfo -replace 'cluster_slots_ok:16384', 'cluster_slots_ok:10923')); Pattern = 'cluster_slots_ok=10923, expected 16384' },
+            @{ Label = '扩容的新节点还没入群'; Sts = '{"spec":{"replicas":9},"status":{"readyReplicas":9}}'; Exec = (New-KubectlReply -Stdout $healthyInfo); Pattern = 'cluster_known_nodes=6 but the StatefulSet has 9 replicas' }
+        )) {
+        $script:ClusterCase = @{ StatefulSet = (New-KubectlReply -Stdout $case.Sts); Exec = $case.Exec }
+        $r = Read-RedisClusterLiveStatus -Cluster $cluster -Namespace 'infra-ns'
+        Assert-True -Condition $r.Present -Because "$($case.Label):StatefulSet 在"
+        Assert-Match -Text (@($r.Problems) -join ' | ') -Pattern $case.Pattern -Because "$($case.Label) 必须算问题"
+    }
+
+    foreach ($case in @(@{ Reply = (New-KubectlReply -ExitCode 1 -Stderr 'forbidden'); Pattern = 'forbidden' }, @{ Reply = (New-KubectlReply -Stdout 'not json'); Pattern = '不是合法 JSON' })) {
+        $script:ClusterCase = @{ StatefulSet = $case.Reply; Exec = $null }
+        $message = ''
+        try { $null = Read-RedisClusterLiveStatus -Cluster $cluster -Namespace 'infra-ns' } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern $case.Pattern -Because '读不到不等于没部署,不能当成集群不存在'
+    }
+    $unparsed = ConvertFrom-RedisClusterInfoText -Text $null
+    Assert-Equal -Expected 'False/-1' -Actual ('{0}/{1}' -f $unparsed.Parsed, $unparsed.SlotsOk) -Because '空输出认不出,数字字段是 -1 而不是 0(0 会被当成真读到的值)'
 }
 
 Test-Case 'Get-RedisCtlZoneProblems / ConvertFrom-RedisCtlNodeConfigYaml: wrong group, missing scene_control_redis section and unfinished rollout are problems; absent ConfigMaps are not' {

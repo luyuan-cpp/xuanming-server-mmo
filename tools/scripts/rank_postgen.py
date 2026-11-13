@@ -68,44 +68,44 @@ def cmd_verify(_dry_run: bool) -> None:
     wanted = ["ClientPlayerRank" + m for m in CLIENT_METHODS] + ["RankAdmin" + m for m in ADMIN_METHODS]
     missing = [k for k in wanted if k not in ids]
     if missing:
-        problems.append(f"proto/message_id.txt 缺 {missing}(含 rank 的全量 proto-gen 没跑或没跑完)")
+        problems.append(f"proto/message_id.txt is missing {missing} (the full proto-gen including rank did not run or did not finish)")
     extra = sorted(k for k in ids if k.startswith("ClientPlayerRank") and k not in wanted)
     if extra:
-        problems.append(f"proto/message_id.txt 多出 {extra}(rank.proto 的方法与本脚本的清单不一致)")
+        problems.append(f"proto/message_id.txt has extra {extra} (the rank.proto methods differ from this script's list)")
     seen: dict[int, str] = {}
     for key, number in ids.items():
         if number in seen:
-            problems.append(f"proto/message_id.txt 的号 {number} 同时分给了 {seen[number]} 与 {key}")
+            problems.append(f"proto/message_id.txt assigns ID {number} to both {seen[number]} and {key}")
         seen[number] = key
     before = committed_message_ids()
     if before is None:
-        print("[SKIP] 拿不到 HEAD:proto/message_id.txt,跳过\"已有方法号不变\"的核对")
+        print("[SKIP] HEAD:proto/message_id.txt is unavailable; skipping the \"existing method IDs unchanged\" check")
     else:
         moved = sorted(f"{k}: {before[k]} -> {ids[k]}" for k in before if k in ids and ids[k] != before[k])
         if moved:
-            problems.append(f"生成之前就有的方法号变了(会让已发布的客户端错解包):{moved}")
+            problems.append(f"method IDs that existed before generation changed (released clients would decode packets wrongly): {moved}")
 
     route = REPO / "go" / "client_rpc_router" / "generated" / "pb" / "game" / "route_table.go"
     route_text = route.read_text(encoding="utf-8") if route.is_file() else ""
     for key in wanted:
         line = next((l for l in route_text.splitlines() if l.strip().startswith(key + "MessageId:")), None)
         if line is None:
-            problems.append(f"{rel(route)} 没有 {key} 这一行")
+            problems.append(f"{rel(route)} has no {key} line")
             continue
         if "ENodeType_RankNodeService" not in line:
-            problems.append(f"{rel(route)} 的 {key} 目标节点不是 RankNodeService(proto 目录必须叫 proto/rank/,设计 §4.1):{line.strip()}")
+            problems.append(f"{rel(route)}: {key} does not target RankNodeService (the proto directory must be proto/rank/, design §4.1): {line.strip()}")
         client_protocol = "true" if key.startswith("ClientPlayerRank") else "false"
         if f"ClientProtocol: {client_protocol}" not in line:
-            problems.append(f"{rel(route)} 的 {key} 应为 ClientProtocol: {client_protocol}:{line.strip()}")
+            problems.append(f"{rel(route)}: {key} should be ClientProtocol: {client_protocol}: {line.strip()}")
 
     go_dir = REPO / "go" / "proto" / "rank"
     for name in GO_PROTO_FILES:
         if not (go_dir / name).is_file():
-            problems.append(f"缺 {rel(go_dir / name)}")
+            problems.append(f"missing {rel(go_dir / name)}")
     if (REPO / "go" / "rank" / "go.mod").is_file():
         p = REPO / "go" / "rank" / "generated" / "pb" / "game" / "message_id.go"
         if not p.is_file():
-            problems.append(f"缺 {rel(p)}")
+            problems.append(f"missing {rel(p)}")
 
     if problems:
         print("[FAIL] proto-gen output check (rank):")
@@ -222,13 +222,14 @@ def cmd_register_cpp(dry_run: bool, allow_missing: bool = False, allow_unknown: 
         for s in stray:
             print("  - " + s)
         if not allow_unknown:
-            fail("有本脚本不认识的 rank 生成物(见上)—— 生成器换了产物形状;看清是否要登记、改好本脚本再跑。"
-                 "确认它们不需要登记时加 --allow-unknown。未写任何文件。")
+            fail("there are rank outputs this script does not know (see above): the generator changed its output shape; "
+                 "check whether they need registering and fix this script before rerunning. "
+                 "Pass --allow-unknown once you have confirmed they need no registration. No files were written.")
     if missing:
-        msg = "以下期望的生成文件不存在:" + ", ".join(missing)
+        msg = "these expected generated files are missing: " + ", ".join(missing)
         if not allow_missing:
-            fail(msg + " —— 全量 proto-gen 没跑,或生成器换了产物形状;看清后再改本脚本,不要手补文件。未写任何文件。")
-        print("[SKIP] " + msg + "(--allow-missing:只登记已存在的文件)")
+            fail(msg + " -- the full proto-gen did not run, or the generator changed its output shape; check before changing this script, do not hand-write the files. No files were written.")
+        print("[SKIP] " + msg + " (--allow-missing: only registering files that exist)")
 
     print("register-cpp (rank):")
     for e in edits:
@@ -248,14 +249,14 @@ def cmd_vendor_robot(dry_run: bool) -> None:
                   REPO / "robot" / "vendor" / "shared" / "generated" / "pb" / "table" / TIP_GO_FILE))
     for src, _dst in pairs:
         if not src.is_file():
-            fail(f"缺 {rel(src)} —— 先跑全量 proto-gen。未写任何文件。")
+            fail(f"missing {rel(src)} -- run the full proto-gen first. No files were written.")
     src_extra = sorted(p.name for p in src_dir.glob("*.go") if p.name not in GO_PROTO_FILES)
     if src_extra:
-        fail(f"go/proto/rank 里有本脚本清单之外的文件 {src_extra}(生成器多出了产物?)—— 先把它们加进 GO_PROTO_FILES"
-             f" 再同步,否则 robot/vendor 会缺文件。未写任何文件。")
+        fail(f"go/proto/rank has files outside this script's list {src_extra} (did the generator add outputs?) -- add them to GO_PROTO_FILES"
+             f" before syncing, or robot/vendor will miss files. No files were written.")
     dst_extra = sorted(p.name for p in dst_dir.glob("*.go") if p.name not in GO_PROTO_FILES) if dst_dir.is_dir() else []
     if dst_extra:
-        fail(f"robot/vendor/proto/rank 里有 go/proto/rank 没有的文件 {dst_extra} —— 先查清再删。未写任何文件。")
+        fail(f"robot/vendor/proto/rank has files that go/proto/rank does not have {dst_extra} -- find out why before deleting them. No files were written.")
 
     modules = REPO / "robot" / "vendor" / "modules.txt"
     text = modules.read_bytes().decode("utf-8")
@@ -266,7 +267,7 @@ def cmd_vendor_robot(dry_run: bool) -> None:
         try:
             start = next(i for i, l in enumerate(lines) if l.startswith("# proto v0.0.0"))
         except StopIteration:
-            fail("robot/vendor/modules.txt 里找不到 `# proto v0.0.0 => ../go/proto` 模块段。未写任何文件。")
+            fail("robot/vendor/modules.txt has no `# proto v0.0.0 => ../go/proto` module section. No files were written.")
         i = start + 1
         while i < len(lines) and lines[i].startswith("## "):
             i += 1

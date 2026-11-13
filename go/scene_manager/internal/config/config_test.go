@@ -1,22 +1,39 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"shared/clusterredis"
 	"shared/playerredis"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// 没写 PlayerRedis.Addrs、也没写 CoreRedis(开发环境):指向 Redis 段那一个实例,连接身份原样带过去,不用改配置。
-func TestEffectivePlayerRedisFallsBackToRedisSection(t *testing.T) {
+// 没写 ControlRedis.Addrs(开发环境):指向本机单实例,池与超时取换句柄之前 go-zero 句柄的量级;段里单独写的池优先。
+func TestEffectiveControlRedisFallsBackToLocalInstance(t *testing.T) {
 	var c Config
-	c.Redis.Host = "redis.infra:6379"
-	c.Redis.User = "u"
-	c.Redis.Pass = "p"
-	c.Redis.Tls = true
+	got := c.EffectiveControlRedis()
+	assert.Equal(t, []string{"127.0.0.1:6379"}, got.Addrs)
+	assert.False(t, got.Cluster)
+	assert.Equal(t, redisFallbackPoolSize, got.PoolSizePerNode)
+	assert.Equal(t, redisFallbackIOTimeoutMs, got.ReadTimeoutMs)
+	assert.Equal(t, redisFallbackIOTimeoutMs, got.WriteTimeoutMs)
+	require.NoError(t, got.Validate())
+
+	c.ControlRedis.PoolSizePerNode = 7
+	c.ControlRedis.Password = "p"
+	got = c.EffectiveControlRedis()
+	assert.Equal(t, 7, got.PoolSizePerNode)
+	assert.Equal(t, "p", got.Password)
+}
+
+// 没写 PlayerRedis.Addrs(开发环境):指向控制集群那一个实例,连接身份原样带过去;只写连接池时地址仍取控制集群。
+func TestEffectivePlayerRedisFallsBackToTheControlInstance(t *testing.T) {
+	var c Config
+	c.ControlRedis = clusterredis.Config{Addrs: []string{"redis.infra:6379"}, Username: "u", Password: "p", TLS: true}
 
 	got := c.EffectivePlayerRedis()
 	assert.Equal(t, []string{"redis.infra:6379"}, got.Addrs)
@@ -24,44 +41,19 @@ func TestEffectivePlayerRedisFallsBackToRedisSection(t *testing.T) {
 	assert.Equal(t, "u", got.Username)
 	assert.Equal(t, "p", got.Password)
 	assert.True(t, got.TLS)
-	assert.Equal(t, playerRedisFallbackPoolSize, got.PoolSizePerNode)
+	assert.Equal(t, redisFallbackPoolSize, got.PoolSizePerNode)
 	require.NoError(t, got.Validate())
 
-	// 只写连接池:地址仍取 Redis 段,写了的那一项生效。
 	c.PlayerRedis.PoolSizePerNode = 7
 	got = c.EffectivePlayerRedis()
 	assert.Equal(t, []string{"redis.infra:6379"}, got.Addrs)
 	assert.Equal(t, 7, got.PoolSizePerNode)
 }
 
-// K8s 没建玩家域集群时的形状:Redis 段是控制域实例 redis-ctl-g<N>,CoreRedis 是核心,PlayerRedis 只写池上限。
-// 玩家域必须回落到核心:别的服务与 C++ scene 的玩家域都在核心,回落到控制域会让 location / owner_epoch 有两份
-// (control-plane-zone-scoping-20261105.md §4.2)。连接身份取核心那一段,不混进控制域的。
-func TestEffectivePlayerRedisFallsBackToCoreNotControlInstance(t *testing.T) {
-	var c Config
-	c.Redis.Host = "redis-ctl-g0.infra:6379"
-	c.Redis.User = "control-user"
-	c.Redis.Pass = "control"
-	c.CoreRedis.Host = "redis.infra:6379"
-	c.CoreRedis.User = "core-user"
-	c.CoreRedis.Pass = "core"
-	c.PlayerRedis.PoolSizePerNode = 7
-
-	got := c.EffectivePlayerRedis()
-	assert.Equal(t, []string{"redis.infra:6379"}, got.Addrs)
-	assert.False(t, got.Cluster)
-	assert.Equal(t, "core-user", got.Username)
-	assert.Equal(t, "core", got.Password)
-	assert.False(t, got.TLS)
-	assert.Equal(t, 7, got.PoolSizePerNode)
-	require.NoError(t, got.Validate())
-}
-
-// 写了 Addrs:完全按它来,不混进 Redis 段的连接身份。
+// 写了 Addrs:完全按它来,不混进控制集群的连接身份。
 func TestEffectivePlayerRedisExplicitCluster(t *testing.T) {
 	var c Config
-	c.Redis.Host = "redis.infra:6379"
-	c.Redis.Pass = "control"
+	c.ControlRedis = clusterredis.Config{Addrs: []string{"redis.infra:6379"}, Password: "control"}
 	c.PlayerRedis = playerredis.Config{Addrs: []string{"a:7000", "b:7000"}, Cluster: true, Password: "player"}
 
 	got := c.EffectivePlayerRedis()
@@ -69,6 +61,36 @@ func TestEffectivePlayerRedisExplicitCluster(t *testing.T) {
 	assert.True(t, got.Cluster)
 	assert.Equal(t, "player", got.Password)
 	require.NoError(t, got.Validate())
+}
+
+// 三段 Redis 配置的拒启条件(ValidateRedisSections):旧的 go-zero Redis 段、ControlRedis.PasswordEnv、控制集群是 Cluster 却不给
+// 玩家域地址,任何一条都拒启;合法的开发与集群形状放行。
+func TestValidateRedisSections(t *testing.T) {
+	var dev Config
+	require.NoError(t, dev.ValidateRedisSections(), "开发环境什么都不写:两个域都在本机单实例")
+
+	legacy := Config{}
+	legacy.Redis.Host = "redis-ctl-g0.infra:6379"
+	err := legacy.ValidateRedisSections()
+	require.Error(t, err, "旧形状(go-zero Redis 段)拒启:照它起服,控制域会落到 127.0.0.1:6379")
+	assert.Contains(t, err.Error(), "ControlRedis")
+
+	passwordEnv := Config{ControlRedis: clusterredis.Config{PasswordEnv: "X"}}
+	require.Error(t, passwordEnv.ValidateRedisSections(), "ControlRedis.PasswordEnv 在变量缺失时静默落成空口令")
+
+	clusterWithoutPlayer := Config{ControlRedis: clusterredis.Config{Addrs: []string{"c0:7000", "c1:7000"}, Cluster: true}}
+	err = clusterWithoutPlayer.ValidateRedisSections()
+	require.Error(t, err, "控制集群是 Cluster 时玩家域不能回落到它")
+	assert.Contains(t, err.Error(), "PlayerRedis.Addrs")
+
+	cluster := clusterWithoutPlayer
+	cluster.PlayerRedis = playerredis.Config{Addrs: []string{"p0:7000"}, Cluster: true}
+	require.NoError(t, cluster.ValidateRedisSections())
+
+	bad := Config{ControlRedis: clusterredis.Config{Cluster: true}}
+	err = bad.ValidateRedisSections()
+	require.Error(t, err, "Cluster=true 却没写种子地址是配错了")
+	assert.True(t, strings.HasPrefix(err.Error(), "ControlRedis:"), err.Error())
 }
 
 func TestSceneMemberReconcileBudgetsAreBounded(t *testing.T) {

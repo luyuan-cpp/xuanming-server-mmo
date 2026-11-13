@@ -12,7 +12,9 @@
 //   player:{player_id}:sync_digest  玩家域(tlsPlayerRedis),hash
 //                                         g          = 代次(hash 创建时刻的 Redis 服务器毫秒,只在 hash 不存在时写)
 //                                         "<域号十进制>" = 该域的变更计数(HINCRBY)
-//   assetop:wake                    控制域(tlsRedis),Pub/Sub 频道,载荷 = 十进制 player_id
+//   assetop:wake:{aw:<k>}           控制集群(tlsControlRedis),分片 Pub/Sub 频道(SPUBLISH),k = player_id 对分片数取模,
+//                                   载荷 = 十进制 player_id;Go 侧 go/shared/assetopwake 按同一规则 SSUBSCRIBE 全部分片
+//                                   (docs/design/redis-cluster-all-domains-20261110.md §4.6)
 // kSyncDigestKeyFmt 由 Go 测试逐字解析比对(沿用 owner_epoch_crosslang_test.go 的 cppStringConstant:
 // 它在文件里找第一处「星号 + 名字 + 空格 + 等号」,再取其后的字符串字面量),所以声明必须保持
 // "inline constexpr const char 指针" 的写法,名字与值都不要改;注释里也不要写出那个模式,否则会先被它匹配到。
@@ -30,6 +32,7 @@
 
 #include "entt/src/entt/entity/entity.hpp"
 
+#include "engine/infra/storage/redis_cluster/redis_slot.h" // 唤醒频道的控制集群 tag(纯头文件,单测不用多链库)
 #include "proto/scene/player_scene.pb.h"
 
 namespace player_landing
@@ -40,8 +43,19 @@ namespace player_landing
 	// 摘要 hash 里代次字段的名字;其余字段名都是域号十进制。
 	inline constexpr const char *kSyncDigestGenerationField = "g";
 
-	// 资产待办唤醒频道;guild / trade 的 assetopwake 订阅它。
-	inline constexpr const char *kAssetWakeChannel = "assetop:wake";
+	// 资产待办唤醒的分片频道(设计 §4.6):频道名 = 下面的前缀 + 控制集群 aw 族的 tag,tag 的身份是 player_id 对分片数取模的
+	// 十进制,与资产通道的工作分片同一规则。只用一个频道会全落在一个 slot 上;普通 PUBLISH 在集群里经总线广播到每个节点。
+	// guild / trade / data_service 经 go/shared/assetopwake 订阅。那边的 TestChannelMatchesCpp 逐字解析这两个常量的写法与值,
+	// 并要求本头文件用 aw 族拼 tag:名字、写法与值都不要改(注释里也不要写出它们的声明样式,否则会先被匹配到)。
+	inline constexpr const char *kAssetWakeChannelPrefix = "assetop:wake:";
+	inline constexpr uint64_t kAssetWakeShardCount = 64;
+
+	// 一名玩家的唤醒频道,例如 player_id 130 落在分片 2:"assetop:wake:{aw:2}"。
+	inline std::string AssetWakeChannel(uint64_t playerId)
+	{
+		return std::string(kAssetWakeChannelPrefix) +
+			   redis_slot::ControlTag(redis_slot::ControlFamily::kAssetWake, std::to_string(playerId % kAssetWakeShardCount));
+	}
 
 	// 同一实体两次唤醒之间的最小间隔(毫秒,单调时钟)。
 	inline constexpr uint64_t kAssetWakeCoalesceMs = 5000;
@@ -144,7 +158,7 @@ public:
 		kBattleFreezeCleared,
 	};
 
-	// 发布资产待办唤醒:PUBLISH assetop:wake <player_id 十进制>(设计 §5.2)。
+	// 发布资产待办唤醒:SPUBLISH <AssetWakeChannel(player_id)> <player_id 十进制>(设计 §5.2;分片频道见上面 player_landing 命名空间)。
 	//   - 实体带 PlayerFrozenComp(归属交接在途)时跳过:资产写路径此时本来就会拒绝;
 	//   - 只有 kEnteredScene 走合并窗口:同一实体 kAssetWakeCoalesceMs 内只发一次(PlayerLandingWakeComp);
 	//     kBattleFreezeCleared 直接发送,也不刷新窗口;

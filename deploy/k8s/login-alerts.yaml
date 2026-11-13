@@ -42,7 +42,7 @@
 #   - LoginQueueCapacityLimitedByGates 是 warning、for 10m:gate 台数装不下配置的区容量,排队会比配置的早开始拦人。
 #     不会断线、不会多放,只是容量规划与实际不符;按 namespace、zone 取各副本的最小值比较。
 #   - login 自己的视图出问题不会造成「全部停写」:镜像跟不上 etcd 时读路径回落直读,直读不判停写(node_cache.go 的 cacheStaleAfter)。
-#   - 没有实测基线(代码未压测),首轮演练后回头校准。
+#   - 阈值已定(2026-11-12),压测出基线后可调:规则按「持续出现即报」与容量比值定,for 盖住滚动发布与 etcd 选主窗口(约 1~2 分钟),不依赖压测基线。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up
@@ -101,7 +101,7 @@ spec:
             description: >-
               过去 10 分钟约 {{ $value | printf "%.0f" }} 次挑 gate 时本 zone 没有一台 gate 既没排空、又没到自报 max_connections 的 90%,
               只能在连得上的里挑(停写的 gate 照样剔掉)。reason=draining:连得上的 gate 全被标了排空,多半是整个 zone 被误标,
-              或缩容时剩下的副本也被标了,查 gate:<id>:draining 与 tools/scripts/k8s_gate_drain.ps1 的执行记录;
+              或缩容时剩下的副本也被标了,查 gate:{gm:<zone>}:<id>:draining 与 tools/scripts/k8s_gate_drain.ps1 的执行记录;
               reason=full:全到水位。排队的区容量已按 gate 到水位的承载封顶,排队开着时走到这里只剩重连豁免与人数上报滞后;
               排队关着时快速通道不判容量,人数超过 gate 承载就会走到这里。持续出现就扩 gate 副本,排队开着时一并看
               LoginQueueCapacityLimitedByGates;

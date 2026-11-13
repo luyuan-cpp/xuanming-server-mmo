@@ -16,6 +16,7 @@ import (
 
 	"match/internal/authority"
 	"match/internal/battleplace"
+	"match/internal/battlescript"
 	"match/internal/catalog"
 	"match/internal/config"
 	"match/internal/discovery"
@@ -92,6 +93,9 @@ type ServiceContext struct {
 	// Catalog 是启动时由 PlayMode / Dungeon / ZoneGroup 三张表编译的模板目录,之后只读
 	// (docs/design/global-match-hierarchical-pools.md §7)。手工构造的单测 ServiceContext 可为 nil。
 	Catalog *catalog.Catalog
+	// BattleScripts 是启动时解析、按配表校验过的内置官方战斗剧本目录,之后只读(docs/design/battle-script.md §5)。
+	// 建房时据它与玩家选用解析每一方的剧本;手工构造的单测 ServiceContext 可为 nil(= 不带任何剧本)。
+	BattleScripts *battlescript.Catalog
 	// MatchNodes 是 match 实例自身注册(MatchNodeService)的 etcd 镜像。按池撮合用它的实例 UUID 作成员表,
 	// 以最高随机权重哈希决定每个池由哪个副本负责(internal/poolowner)。
 	MatchNodes *discovery.NodeWatcher
@@ -139,8 +143,8 @@ type ServiceContext struct {
 	CanaryBattleNodes *discovery.NodeWatcher
 
 	// BattleInstanceLoss 是原执行进程失效的提前作废(docs/design/battle-instance-loss-early-abort.md §4):补签问不到原实例时
-	// 把这一局记成可疑,取证循环两次确认原进程已不在之后写 ABORT。由 logic.BindDeadlineAbortEvidence 装配(与截止作废共用
-	// 一个复核记录器),取证循环只在跑后台任务的副本上启动(logic.StartBattleInstanceLossWatcher)。nil = 没装配,补签不记可疑。
+	// 把这一局记成可疑,取证循环按实例两次确认原进程已不在之后写 ABORT。由 logic.BindDeadlineAbortEvidence 装配(与截止作废共用
+	// 一个复核记录器),取证循环在 stable 与 canary 副本上都启动(logic.StartBattleInstanceLossWatcher)。nil = 没装配,补签不记可疑。
 	BattleInstanceLoss BattleInstanceLossWatcher
 
 	// DataServiceClient 是 data_service 的 gRPC 客户端:领号段、查玩家昵称与展示资料。
@@ -200,7 +204,7 @@ func (s *ServiceContext) PoolMember() string {
 	return ""
 }
 
-// OwnsWork 报告本实例是否负责 key 这份后台工作:撮合池(catalog.OwnerKey)、成局恢复片、整队维护片、投榜片
+// OwnsWork 报告本实例是否负责 key 这份后台工作:撮合段(poolowner.Segment.Key)、成局恢复片、整队维护片、投榜片
 // (authority/work_owner.go)。全部用同一条规则:在 etcd 注册的 match 实例上做最高随机权重哈希(internal/poolowner)。
 // 它只管分工,正确性在各自的 SQL 提交点。成员表为空(watch 还没同步,或 etcd 一直起不来)时全部副本都做,保活优先;
 // 成员表非空、但本实例不在其中(尚未注册或已注销)时什么都不负责,交给表里的副本。
@@ -324,6 +328,14 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	}
 	sc.Catalog = matchCatalog
 
+	// 内置官方剧本按配表校验不过同样拒绝启动:坏配置不能带病上线,开局时也就不会有半份剧本。
+	battleScripts, err := battlescript.LoadWithTables(c.TableDir)
+	if err != nil {
+		sc.Stop()
+		panic(fmt.Errorf("failed to load official battle scripts (TableDir=%s): %w", c.TableDir, err))
+	}
+	sc.BattleScripts = battleScripts
+
 	sc.DataServiceClient = NewDataServiceClient(c.DataServiceRpc)
 	battleIDSegment, err := NewBattleIDSegment(c.IdSegment, sc.DataServiceClient)
 	if err != nil {
@@ -436,47 +448,12 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		defer publishers.Done()
 		authority.RunRankPublisher(pubctx, store, c.GlobalMatch.RankEndpoint, secret, relay)
 	}
+	// 投递循环本身(节拍、每轮 recover、活性)在 outcome_outbox_loop.go。
 	runOutcomeOutbox := func() {
 		defer publishers.Done()
-		ticker := time.NewTicker(c.GlobalMatch.OutcomeOutboxInterval())
-		defer ticker.Stop()
-		// 活性(缺口清单第 25 条第五批):起来时写一次,每跑完一轮写一次(这一轮成败都写;panic 会让进程退出),退出时删掉序列。
-		metrics.MarkOutcomeOutboxRun(time.Now())
-		defer metrics.ClearOutcomeOutboxRun()
-		for {
-			if pubctx.Err() != nil {
-				return
-			}
-			call, cancel := context.WithTimeout(context.WithoutCancel(pubctx), 40*time.Second)
-			finish, enterErr := relay.Enter()
-			if enterErr != nil {
-				cancel()
-				return
-			}
-			err := func() (resultErr error) {
-				defer finish()
-				defer func() {
-					if recovered := recover(); recovered != nil {
-						relay.Hold()
-						panic(recovered)
-					}
-					if resultErr != nil && !authoritysql.IsWriterFrozen(resultErr) {
-						relay.Hold()
-					}
-				}()
-				return store.PublishBattleOutcomes(call, resolveInbox, inboxSecret, publishResult, outboxOptions)
-			}()
-			cancel()
-			metrics.MarkOutcomeOutboxRun(time.Now())
-			if err != nil && pubctx.Err() == nil {
-				logx.Errorf("outcome original delivery awaiting recovery: %v", err)
-			}
-			select {
-			case <-pubctx.Done():
-				return
-			case <-ticker.C:
-			}
-		}
+		runOutcomeOutboxLoop(pubctx, relay, c.GlobalMatch.OutcomeOutboxInterval(), func(call context.Context) error {
+			return store.PublishBattleOutcomes(call, resolveInbox, inboxSecret, publishResult, outboxOptions)
+		})
 	}
 	// 收件箱节点镜像是数据面(JoinQueue、GetQueueStatus 经 RefreshBattleSettlement 要找收件箱),canary 也起。
 	// 排名发布与终局发件箱是全局作用域的后台,只在 stable 起(发布轨道设计 §2.5),canary 写下的终局由 stable 投出。
@@ -695,6 +672,16 @@ func (sc *ServiceContext) Stop() {
 }
 
 // StartSourceLoop 拥有新撮合发起者；prepared 阶段不执行新轮次，P1 真正停止并 join。
+//
+// 每一轮各自 recover(2026-11-12,与 StartRelayLoop 同一写法):一轮 panic 打 HOLD(结局未知),只丢这一轮,循环接着跑。
+// 原来 panic 一路抛到最外层的 safego.Go 才被兜住,循环就此退出,进程却还活着、还在成员表里:它名下的撮合段从此没人撮合,
+// 而且没有任何信号。兜住的 panic 计 safego_panic_total{point},告警 GoBackgroundPanicRecovered 按点位报
+// (deploy/k8s/go-background-alerts.yaml)。撮合的内存状态只用于调度,提交决策都在 SQL 提交点,丢一轮不影响正确性。
+//
+// 活性(metrics.LoopLive 里 point 那一条;缺口清单第 25 条第六批,docs/design/assetop-redelivery-sharding-20261110.md §14.10,
+// 口径在 shared/looplive 的包注释):起来时写一次;每一轮正常返回(成败都算)就写这一刻,panic 的一轮不写;入口已关(停机排空中)
+// 有意跳过的一拍也写,循环活着、只是不开新一轮;ctx 结束时删掉序列。入口报出别的错误时循环退出、序列留着:这是意料之外的退出,
+// 停摆告警 MatchBackgroundLoopStalled 报出来。告警按 300 秒判,所以间隔加一轮预算要远小于它(现有循环最长 1 分钟一拍、一轮 30 秒)。
 func (sc *ServiceContext) StartSourceLoop(parent context.Context, point string, interval time.Duration, round func(context.Context)) {
 	if interval <= 0 || round == nil {
 		sc.RootAdmission.Hold()
@@ -717,23 +704,29 @@ func (sc *ServiceContext) StartSourceLoop(parent context.Context, point string, 
 				panic(recovered)
 			}
 		}()
+		live := metrics.LoopLive.For(point)
+		live.Mark(time.Now())
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
+				live.Stop()
 				return
 			case <-ticker.C:
 			}
 			finish, err := sc.RootAdmission.Enter()
 			if err != nil {
 				if errors.Is(err, drainproof.ErrClosed) {
+					live.Mark(time.Now())
 					continue
 				}
 				sc.RootAdmission.Hold()
 				return
 			}
-			func() { defer finish(); round(context.WithoutCancel(ctx)) }()
+			if !live.Round(point, func() { defer finish(); round(context.WithoutCancel(ctx)) }) {
+				sc.RootAdmission.Hold()
+			}
 		}
 	})
 }
@@ -795,22 +788,28 @@ func (sc *ServiceContext) LaunchRelayTask(point string, fn func()) bool {
 }
 
 // StartRelayLoop 拥有计时器及整个循环的生命周期；每轮保留原有超时，停止只阻止新轮。
+//
+// 活性同 StartSourceLoop(metrics.LoopLive 里 point 那一条):起来时写一次,每一轮正常返回就写,panic 的一轮不写,ctx 结束时删掉序列;
+// 间隔加一轮预算同样要远小于停摆告警的 300 秒。
 func (sc *ServiceContext) StartRelayLoop(ctx context.Context, point string, interval time.Duration, round func(context.Context)) {
 	if interval <= 0 {
 		sc.HoldRelay(drainproof.ErrHold)
 		return
 	}
 	sc.LaunchRelayTask(point, func() {
+		live := metrics.LoopLive.For(point)
+		live.Mark(time.Now())
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
+				live.Stop()
 				return
 			case <-ticker.C:
 			}
 			// 让已接受的一轮用其自身有界预算结束，不能把主循环取消当作 SQL 终局。
-			if !safego.Run(point, func() { round(context.WithoutCancel(ctx)) }) {
+			if !live.Round(point, func() { round(context.WithoutCancel(ctx)) }) {
 				sc.HoldRelay(drainproof.ErrHold)
 			}
 		}

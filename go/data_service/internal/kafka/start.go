@@ -14,7 +14,8 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// snapshotTopicMaxMessageBytes 与 C++ 生产端的 message.max.bytes(kafka_producer.cpp)、消费端的 MaxBytes(consumer.go)相同。
+// snapshotTopicMaxMessageBytes 与生产端 go/db 审计发件箱转发的快照批上限(go/db/internal/auditoutbox/kafka.go 的 snapshotBatchBytes,
+// go/db 的单测核对)、消费端的 MaxBytes(consumer.go)相同。
 const snapshotTopicMaxMessageBytes = 16 << 20
 
 // StartConfig 由 main 从 config.KafkaConfig 装配。

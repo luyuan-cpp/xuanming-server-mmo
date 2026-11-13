@@ -759,15 +759,12 @@ func finalizedRefOfRow(row *inboxpb.PlayerInboxItemRow) FinalizedRef {
 	}
 }
 
-// reconcileReport 是 ReconcilePlayer 读完之后的纯逻辑部分(设计 §9.3):
-//   - cursors:按 domains 的顺序逐域列出账本水位与收件箱 next_seq;收件箱没有流、账本也没有水位的域不列;
-//   - diffs:逐行按 reconcileDiff 与账本里该域的游标(含最近结局环)比对,只列有差异的行,顺序同 rows
-//     (按 domain、seq 升序读出)。
-//
-// streams 按域给出流行(没有流的域不在 map 里);ledger 是已落盘账本(非 nil,调用方已确认 validLedger)。
-func reconcileReport(domains []inboxpb.PlayerInboxDomain, streams map[inboxpb.PlayerInboxDomain]*inboxpb.PlayerInboxStream,
-	ledger *componentpb.PlayerInboxLedgerComp, rows []*inboxpb.PlayerInboxItemRow) (
-	cursors []*inboxpb.PlayerInboxReconcileCursor, diffs []*inboxpb.PlayerInboxReconcileDiff) {
+// reconcileCursors 是 ReconcilePlayer 回包里的游标部分(设计 §9.3):按 domains 的顺序逐域列出账本水位与收件箱 next_seq;
+// 收件箱没有流、账本也没有水位的域不列。streams 按域给出流行(没有流的域不在 map 里);
+// ledger 是已落盘账本(非 nil,调用方已确认 validLedger)。
+func reconcileCursors(domains []inboxpb.PlayerInboxDomain, streams map[inboxpb.PlayerInboxDomain]*inboxpb.PlayerInboxStream,
+	ledger *componentpb.PlayerInboxLedgerComp) []*inboxpb.PlayerInboxReconcileCursor {
+	var cursors []*inboxpb.PlayerInboxReconcileCursor
 	for _, d := range domains {
 		st := streams[d]
 		dt := DecidedThrough(ledger, d)
@@ -778,6 +775,14 @@ func reconcileReport(domains []inboxpb.PlayerInboxDomain, streams map[inboxpb.Pl
 			Domain: d, LedgerDecidedThrough: dt, InboxNextSeq: st.GetNextSeq(),
 		})
 	}
+	return cursors
+}
+
+// appendReconcileDiffs 是 ReconcilePlayer 回包里的差异部分(设计 §9.3):逐行按 reconcileDiff 与账本里该域的游标
+// (含最近结局环)比对,把有差异的行追加到 diffs 后面,顺序同 rows。每行只看自己和账本,所以 ReconcilePlayer
+// 按 (domain, seq) 升序一页一页追加,结果与一次读完相同。ledger 同 reconcileCursors。
+func appendReconcileDiffs(diffs []*inboxpb.PlayerInboxReconcileDiff, ledger *componentpb.PlayerInboxLedgerComp,
+	rows []*inboxpb.PlayerInboxItemRow) []*inboxpb.PlayerInboxReconcileDiff {
 	for _, row := range rows {
 		d := inboxpb.PlayerInboxDomain(row.GetDomain())
 		kind := reconcileDiff(row, findCursor(ledger, row.GetDomain()))
@@ -792,7 +797,7 @@ func reconcileReport(domains []inboxpb.PlayerInboxDomain, streams map[inboxpb.Pl
 			RequestId: row.GetRequestId(),
 		})
 	}
-	return cursors, diffs
+	return diffs
 }
 
 // ledgerMismatch 是定时对账发现的一处不一致:哪一行,缺口是哪一种(gap 只进日志)。

@@ -298,7 +298,8 @@ private:
 
 	// 把结算终值落到玩家实体。true = 整笔已应用;false = 整笔零副作用,调用方按 DEFER 处理。
 	// 「整笔已应用」含按规则跳过的子效果,跳过的项逐项记日志、其余照常:被获得封禁的币种与掉落(封禁是终局业务决定,
-	// 解封后不补发)、已不可用的宠物效果。本节点 Item 表查不到的掉落 / 消耗不跳过:整笔 false,热更到这一行之后续做即成功。
+	// 解封后不补发)、已不可用的宝宝效果(宝宝已不在身上、宝宝属性池缺配)。本节点 Item / Pet 表查不到的掉落、消耗与
+	// 宝宝种类不跳过:整笔 false,热更到这一行之后续做即成功。
 	// 去重不在这里:ApplyInboxSettlement 由收件箱状态机驱动,同一条目按永久域水位只执行一次。
 	static bool ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement);
 

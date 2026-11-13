@@ -8,6 +8,7 @@ import (
 	"github.com/zeromicro/go-zero/zrpc"
 
 	"shared/accountdirectory"
+	"shared/clusterredis"
 	"shared/idsegment"
 	"shared/placement"
 	"shared/playerredis"
@@ -19,10 +20,17 @@ import (
 type Config struct {
 	zrpc.RpcServerConf            // Embedded go-zero RPC config (ListenOn, Etcd, etc.)
 	Node               NodeConfig `json:"Node"`
-	// SharedRedisPasswordEnv 是 Node.RedisClient 与 Node.QueueRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在
-	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里两段的 Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// SharedRedisPasswordEnv 是 Node.RedisClient、Node.QueueRedis 与 ControlRedis 的口令所在的环境变量名(shared/redisauth)。
+	// K8s 上口令只在 Secret 里,经 secretKeyRef 注入;ConfigMap 里各段的 Password 写空串。不写 = 照用 Password 字面量(本机)。
 	// 由 ResolveSharedRedisPassword 在任何外部连接之前填好,变量缺失或为空即拒启。
 	SharedRedisPasswordEnv string `json:",optional"`
+	// ControlRedis 是控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.3、§4.4、§5.1;2026-11-12 起):
+	// gate 排空 / 已排空 / 停写标记(gm 族),以及没单独配 Node.QueueRedis 时的排队、准入与放行锁(q 族)。
+	// 键守卫是 clusterredis.ControlClusterKeys:多键命令的键必须是同一个登记过的族 tag;结果未知的命令不由客户端重发。
+	// 没写 Addrs 时指向 Node.RedisClient 那一个实例(EffectiveControlRedis),开发环境与还没渲染这一段的 ConfigMap 不用改;
+	// 上控制集群时写 Addrs(集群种子)+ Cluster: true。ControlRedis.PasswordEnv 不用:它在变量缺失时静默落成空口令,
+	// 做不到拒启,口令变量名写在 SharedRedisPasswordEnv。
+	ControlRedis clusterredis.Config `json:"ControlRedis,optional"`
 	// PlayerRedis 是玩家域(player_locker、login_idempotent、login_generation),LoginRedis 是登录域(连接栅栏、登录态、设备集、
 	// 账号索引、令牌、令牌家族、口令配额;docs/design/redis-player-store-cluster.md §10.2)。结构相同,部署上可以共用一个 Redis Cluster。
 	// 没写 Addrs 时都指向 Node.RedisClient 那一个实例,开发环境不用改(EffectivePlayerRedis / EffectiveLoginRedis)。
@@ -123,7 +131,7 @@ type Config struct {
 	RequireClientEndpoint bool `json:"RequireClientEndpoint,default=false"`
 
 	// GateDrain 是 gate 排空判定循环(loginqueue.StartGateDrainMonitor)的参数:已标
-	// gate:{id}:draining 的 gate 在线掉到阈值或等到期限后,由它写上 gate:{id}:drained,
+	// 标了排空(gate:{gm:<zone>}:<id>:draining)的 gate 在线掉到阈值或等到期限后,由它写上 drained 标记(…:drained),
 	// k8s_gate_drain.ps1 看到标记才删 Pod(集群外入口 D87)。
 	//
 	// **刻意不标 optional**:go-zero 对整块缺失的 optional 结构体不填内层 default(见 KillSwitchConf),
@@ -151,7 +159,7 @@ type GateDrainConf struct {
 	// 这台 gate 重新接客,drained 永远等不到。调小脚本的 TTL 时同步调小这里。
 	Deadline time.Duration `json:"Deadline,default=25m"`
 	// Migrate 是排空时把在线连接主动迁到同 zone 其他 gate 的参数(docs/design/gate-drain-session-migration.md)。
-	// 同样不标 optional、每个字段都带 default:整块缺失时取默认值,即迁移关闭,行为与没有这项功能时相同。
+	// 同样不标 optional、每个字段都带 default:整块缺失时取默认值,即迁移开启、每台每秒 20 人。
 	Migrate GateDrainMigrateConf `json:"Migrate"`
 }
 
@@ -159,11 +167,13 @@ type GateDrainConf struct {
 // 不另配(设计文档 §4.6)。
 type GateDrainMigrateConf struct {
 	// Enabled:排空判定是否给排空中的 gate 发迁移许可,以及 RequestGateMigration 是否签票。
-	// 第一批默认关(设计文档 §12 第 1 条):客户端「成功进场后跳数清零」改完、一轮 robot 集成跑过之后再改成默认开。
-	// 置 false 之后,最多一个许可租期(3 × Interval)所有 gate 停止迁移;之后到达的签票请求回 DISABLED。
-	Enabled bool `json:"Enabled,default=false"`
+	// 默认开(设计文档 §12 第 1 条,负责人 2026-11-12 定「不等以后」):客户端与 robot 都已在成功进场后把跳数清零,
+	// 逐台换 gate 时同一个玩家被迁多次不会撞上 3 跳熔断。不开的话 gate 重启只能等玩家自己下线,到期断开。
+	// 置 false 是应急开关:最多一个许可租期(3 × Interval)所有 gate 停止迁移;之后到达的签票请求回 DISABLED。
+	Enabled bool `json:"Enabled,default=true"`
 	// RatePerSecond:每台排空中的 gate 每秒最多发起的迁移数。每迁一个人的负载等于一次普通短重连
-	// (Login + EnterGame + scene 换会话入场);默认 20 按容量模型一台 gate 约 4500 人、约 4 分钟迁完,以压测为准再调。
+	// (Login + EnterGame + scene 换会话入场)。定为 20(设计文档 §12 第 2 条):按容量模型一台 gate 约 4500 人、约 4 分钟迁完,
+	// 远小于 25 分钟的排空期限;一台 gate 人数超过 20 × 期限的一半(约 1.5 万)时再调大。
 	// 0 等同关闭(gate 收到 rate=0 立即停)。
 	RatePerSecond uint32 `json:"RatePerSecond,default=20"`
 	// StartAfter:标记 draining 之后等多久才开始迁移,留给玩家自然下线。0 = 立即开始。
@@ -220,10 +230,30 @@ func (c *Config) EffectiveLoginRedis() playerredis.Config {
 	return c.LoginRedis.OrDefault(c.redisDomainFallback())
 }
 
-// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Node.RedisClient 与 Node.QueueRedis(写了才有)的口令,规则见 redisauth.Apply。
-// 玩家域与登录域没写 Addrs 时回落到 Node.RedisClient(redisDomainFallback),填完之后它们用的也是这个口令。
+// EffectiveControlRedis 返回生效的控制集群配置:写了 ControlRedis.Addrs 就用它,否则指向 Node.RedisClient 那一个实例
+// (地址、口令、库号、超时与连接池跟着它;段里单独写的池与超时优先,见 clusterredis.Config.OrDefault)。
+func (c *Config) EffectiveControlRedis() clusterredis.Config {
+	return c.ControlRedis.OrDefault(c.redisDomainFallback())
+}
+
+// EffectiveQueueRedis 返回排队单独所在实例的配置;没写 Node.QueueRedis 时回 nil,排队与 gate 标记共用控制集群句柄。
+// 没写的字段取与 Node.RedisClient 回落相同的缺省(redisConfAsDomain)。
+func (c *Config) EffectiveQueueRedis() *clusterredis.Config {
+	if c.Node.QueueRedis == nil {
+		return nil
+	}
+	conf := redisConfAsDomain(*c.Node.QueueRedis)
+	return &conf
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Node.RedisClient、Node.QueueRedis(写了才有)与 ControlRedis 的口令,
+// 规则见 redisauth.Apply。玩家域、登录域与控制集群没写 Addrs 时回落到 Node.RedisClient(redisDomainFallback),填完之后它们用的
+// 也是这个口令。
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
-	targets := []redisauth.Target{{Field: "Node.RedisClient.Password", Password: &c.Node.RedisClient.Password}}
+	targets := []redisauth.Target{
+		{Field: "Node.RedisClient.Password", Password: &c.Node.RedisClient.Password},
+		{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password},
+	}
 	if c.Node.QueueRedis != nil {
 		targets = append(targets, redisauth.Target{Field: "Node.QueueRedis.Password", Password: &c.Node.QueueRedis.Password})
 	}
@@ -231,12 +261,17 @@ func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) 
 }
 
 func (c *Config) redisDomainFallback() playerredis.Config {
-	r := c.Node.RedisClient
+	return redisConfAsDomain(c.Node.RedisClient)
+}
+
+// redisConfAsDomain 把 Node 段的一个 RedisConf(单实例)换成域客户端的配置;没写的池与超时取 redisDomainFallback* 常量。
+// 负的 PoolSize 原样带过去,由 clusterredis.Config.Validate 在建客户端时拒绝。
+func redisConfAsDomain(r RedisConf) clusterredis.Config {
 	poolSize := r.PoolSize
 	if poolSize == 0 {
 		poolSize = redisDomainFallbackPoolSize
 	}
-	return playerredis.Config{
+	return clusterredis.Config{
 		Addrs:           []string{r.Host},
 		Password:        r.Password,
 		DB:              int(r.DB),
@@ -255,13 +290,19 @@ func durationMsOr(d time.Duration, fallbackMs int) int {
 	return int(d.Milliseconds())
 }
 
-// ValidateRedisDomains 校验配置文件里写出来的 PlayerRedis / LoginRedis 两段,在任何外部连接之前调用。
+// ValidateRedisDomains 校验配置文件里写出来的 PlayerRedis / LoginRedis / ControlRedis 三段,在任何外部连接之前调用。
 func (c *Config) ValidateRedisDomains() error {
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
 		return fmt.Errorf("PlayerRedis: %w", err)
 	}
 	if err := c.LoginRedis.ValidateSection(); err != nil {
 		return fmt.Errorf("LoginRedis: %w", err)
+	}
+	if err := c.ControlRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("ControlRedis: %w", err)
+	}
+	if c.ControlRedis.PasswordEnv != "" {
+		return fmt.Errorf("ControlRedis.PasswordEnv is not used: name the variable in SharedRedisPasswordEnv (a missing variable then refuses to start)")
 	}
 	return nil
 }
@@ -355,7 +396,7 @@ type HomeZoneConf struct {
 //     largest observed PlayerCount while the zone policy cannot be read,
 //     so freshly-deployed zones aren't capped at "current load".
 //   - DispatcherLockKey 是出队 leader 锁键的**前缀**,实际锁键是
-//     <DispatcherLockKey>:zone:<Node.ZoneId>(loginqueue.ZoneDispatcherLockKey),
+//     <DispatcherLockKey>:{q:<Node.ZoneId>}(loginqueue.ZoneDispatcherLockKey,与本 zone 的排队键同槽),
 //     每个 zone 一个 leader。dispatcher 只看得见本 zone 的 gate,锁的范围必须与之相同。
 //     2026-10-12 以前它就是锁键本身、全服一把,多 zone 共用 Redis 时只有 leader 所在
 //     zone 出队(G1b)。默认值没变,旧配置无需改动;Queue.Enabled=true 时它不能为空、
@@ -454,17 +495,33 @@ type AuthConfig struct {
 	WeChat  *WeChatAuthConf  `json:"WeChat,optional"`
 	QQ      *QQAuthConf      `json:"QQ,optional"`
 	NetEase *NeteaseAuthConf `json:"NetEase,optional"`
+	// 小游戏形态(微信 wx.login、抖音 tt.login),auth_type 是 wechat_minigame / douyin_minigame。
+	// 小游戏与上面 App 形态的 WeChat 是两个应用,各配各的 AppId 与密钥。
+	WeChatMiniGame *MiniGameAuthConf `json:"WeChatMiniGame,optional"`
+	DouyinMiniGame *MiniGameAuthConf `json:"DouyinMiniGame,optional"`
+	// 海外渠道:Sign in with Apple、Google 登录,auth_type 是 apple / google。客户端送渠道签发的身份令牌(OIDC ID token),
+	// 服务端用渠道公布的公钥验签,不需要应用密钥(pkg/auth/idtoken.go)。
+	Apple  *IdTokenAuthConf `json:"Apple,optional"`
+	Google *IdTokenAuthConf `json:"Google,optional"`
 }
 
-// PasswordAuthConf 配置生产口令认证。MySQL DSN 含凭证，只允许通过命名的
+// PasswordAuthConf 配置生产口令认证。DSN 含凭证，只允许通过命名的
 // 环境变量注入，不能把 DSN/密码直接写进 YAML；运行时账号只需
-// user_accounts 的 SELECT 权限。password 必须已由离线工具迁移为 Argon2id
-// PHC 字符串；空值和旧明文都会 fail-closed。
+// 口令凭据表 user_accounts 的 SELECT 权限。口令哈希由离线工具 password_admin 写成 Argon2id
+// PHC 字符串；空值和不合规的哈希都会 fail-closed。
 type PasswordAuthConf struct {
-	Enabled      bool   `json:"Enabled,default=false"`
-	DSNEnv       string `json:"DSNEnv,optional"`
+	Enabled bool   `json:"Enabled,default=false"`
+	DSNEnv  string `json:"DSNEnv,optional"`
+	// Backend 是口令凭据库的部署档位(tidb | mysql,见 shared/authoritysql 的 ParseBackend);没写按 tidb。
+	// 读库走权威 SQL 连接:tidb 档只读 leader、不读陈旧快照,mysql 档只连可写主库。
+	Backend string `json:"Backend,default=tidb"`
+	// Database 是口令凭据表所在的逻辑库,DSN 里的库名必须与它一致。生产(非 dev / test)只接受 mmorpg:
+	// 凭据全服一份,放在 login 登记写者资格的那个库,不在存档库里(svc.passwordAuthorityFromConfig 核对)。
+	// dev / test 可以指到夹具库。
+	Database     string `json:"Database,default=mmorpg"`
 	MaxOpenConns int    `json:"MaxOpenConns,default=20"`
-	MaxIdleConns int    `json:"MaxIdleConns,default=10"`
+	// MaxIdleConns 在 (0, MaxOpenConns) 内才生效,其余取 MaxOpenConns:每条新建连接都要重新固定会话,不宜不留空闲连接。
+	MaxIdleConns int `json:"MaxIdleConns,default=10"`
 	// 单次 Argon2id 默认使用 64 MiB；并发 2 约占 128 MiB。代码硬上限为 8。
 	KDFConcurrency int `json:"KDFConcurrency,default=2"`
 	// 只约束等待 semaphore 的时间；调用方 context 更早取消时立即失败。
@@ -550,6 +607,37 @@ type NeteaseAuthConf struct {
 	AppSecret string `json:"AppSecret"`
 }
 
+// MiniGameAuthConf 是小游戏渠道(微信小游戏、抖音小游戏)的登录配置。两个渠道都是「客户端拿一次性 code,
+// 服务端用本应用的 AppId / AppSecret 调 code2Session」,形状相同,共用这一个类型。
+// 密钥纪律与 WeChatAuthConf 相同:生产只写 AppSecretEnv,门禁在 auth_providers.go。
+type MiniGameAuthConf struct {
+	// AppId 是小游戏自己的应用号,不是 App / 网站应用的。
+	AppId string `json:"AppId"`
+	// AppSecretEnv 是环境变量名(不是密钥本身)。非空时优先于 AppSecret。
+	AppSecretEnv string `json:"AppSecretEnv,optional"`
+	// AppSecret 是内联明文,只允许 Mode=dev/test(本地沙箱);其余模式拒绝启动。
+	AppSecret string `json:"AppSecret,optional"`
+	// RequireUnionId 缺省 true:渠道没返回 unionid 时拒绝登录并回故障码,不回落 openid(理由同 WeChatAuthConf)。
+	// 微信小游戏要先绑定到微信开放平台账号才会下发 unionid。
+	RequireUnionId bool `json:"RequireUnionId,default=true"`
+	// Endpoint 覆盖渠道 code2Session 的域名,指向本地沙箱 mock;生产留空。
+	// 生产模式只接受 https://,http:// 只在 Mode=dev/test 下放行。
+	Endpoint string `json:"Endpoint,optional"`
+}
+
+// IdTokenAuthConf 是用身份令牌登录的渠道(Sign in with Apple、Google 登录)的配置。
+// 令牌由渠道用自己的私钥签名,服务端只需要渠道公布的公钥,所以这里没有密钥字段,也没有 RequireUnionId:
+// 令牌的 sub 本身就是跨应用稳定的标识(Apple 对同一开发者团队稳定,Google 全局唯一)。
+type IdTokenAuthConf struct {
+	// ClientId 是令牌 aud 必须包含的值:Apple 填 iOS App 的 Bundle ID(网页 / 安卓登录用 Services ID);
+	// Google 填客户端请求 ID token 时用的服务端 OAuth 客户端 ID(以 .apps.googleusercontent.com 结尾)。
+	// 填错的后果是所有令牌都按 aud 不符拒绝,不会放进别家应用的令牌。
+	ClientId string `json:"ClientId"`
+	// Endpoint 覆盖取公钥(JWKS)的域名,指向本地沙箱 mock;生产留空。签发方(iss)不随它变。
+	// 生产模式只接受 https://,http:// 只在 Mode=dev/test 下放行。
+	Endpoint string `json:"Endpoint,optional"`
+}
+
 // TokenConf holds access/refresh token settings.
 //
 // **每个字段都必须带 default,整块也不标 optional**:go-zero 对 optional 的结构体整块缺失时不填内层 default,
@@ -575,15 +663,16 @@ type NodeConfig struct {
 	SessionExpireMin uint32    `json:"SessionExpireMin"` // Session idle timeout in minutes
 	MaxLoginDevices  uint32    `json:"MaxLoginDevices"`
 	RedisClient      RedisConf `json:"RedisClient"`
-	// QueueRedis 是排队、准入与放行锁所在的 Redis(shared-redis-split-by-purpose.md §3.2.1、§25.3 第 10 条:
-	// 按 zone 组分实例 redis-queue-g<N>)。整段不写 = 复用 RedisClient,而且是同一个 *redis.Client(不多开连接池),
-	// 行为与拆分前逐字相同。gate 排空标记(gate:<id>:draining / drained)**不在**这里,仍在 RedisClient:
-	// k8s_gate_drain.ps1 与 scene_manager 的跨 zone 重定向都读核心上的那一份。
+	// QueueRedis 是排队、准入与放行锁单独所在的 Redis(shared-redis-split-by-purpose.md §3.2.1、§25.3 第 10 条:
+	// 按 zone 组分实例 redis-queue-g<N>)。整段不写 = 排队与 gate 标记共用控制集群句柄(顶层 ControlRedis),不多开连接池。
+	// gate 标记(gate:{gm:<zone>}:<id>:draining / drained / stale)**不在**这里,始终在 ControlRedis:
+	// k8s_gate_drain.ps1 与 scene_manager 的跨 zone 重定向读的是那一份。
+	// 这一段随 -RedisSplit queue 的部署形态保留到控制集群部署批(redis-cluster-all-domains-20261110.md §10 第 6 批):
+	// 那一批把排队并进 redis-control 之后,连同 -RedisSplit 一起删。
 	// 用指针 + optional:go-zero 不会为没出现的 optional 嵌套结构回填内层字段;段一旦出现,内层字段按 RedisConf
 	// 的规则全部必填,K8s ConfigMap 必须整段写出(含 PoolSize,连接总账按它记账)。
 	QueueRedis       *RedisConf    `json:"QueueRedis,optional"`
-	LeaseTTL         int64         `json:"LeaseTTL"` // Lease TTL in seconds
-	QueueShardCount  uint64        `json:"QueueShardCount"`
+	LeaseTTL         int64         `json:"LeaseTTL"`         // Lease TTL in seconds
 	MaxLoginDuration time.Duration `json:"MaxLoginDuration"` // Max online duration per login (e.g. 24h, force logout on expiry)
 	LogoutGraceTime  time.Duration `json:"LogoutGraceTime"`  // Grace period before forced logout (e.g. 5m, for player warning)
 }
@@ -600,7 +689,8 @@ type RedisConf struct {
 	// PoolSize 是这个 go-redis 客户端的连接池上限(共享 Redis 连接总账,P0-E 第 3 批)。
 	// 0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,随 CPU limit 漂移;负数起服即失败(ValidatePoolSize)。
 	// K8s 上 tools/scripts/k8s_deploy.ps1 从 etc/login.yaml 镜像 Node.RedisClient.PoolSize 并要求正整数,
-	// Redis 连接总账读同一个键。Pub/Sub 专用连接不占池名额;PasswordAuth 的失败配额池固定 4 条,不读本字段。
+	// Redis 连接总账读同一个键。没写 ControlRedis.Addrs 时控制集群句柄回落到 Node.RedisClient,池上限也取它;
+	// PasswordAuth 的失败配额池固定 4 条,不读本字段。
 	PoolSize int `json:"PoolSize,optional"`
 }
 

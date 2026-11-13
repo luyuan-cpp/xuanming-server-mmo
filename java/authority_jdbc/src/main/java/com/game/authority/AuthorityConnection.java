@@ -17,6 +17,11 @@ import javax.sql.rowset.*;
 public final class AuthorityConnection implements InvocationHandler {
     /** 仅请求同handle的正常首锁，不带维护、注册或raw控制能力。 */
     public interface Fence { void requireNormalTransaction() throws SQLException; }
+    /**
+     * 对端复核：在同一条物理连接上确认对端仍然合格，不合格就抛 SQLException。由 AuthorityDataSource 按档位给出
+     * （mysql 档核对可写主库，其余档位不给）。每个事务进入前调一次，连接池探活时也调；实现必须只读、带超时、可重复执行。
+     */
+    @FunctionalInterface public interface ServerCheck { void recheck(Connection physical) throws SQLException; }
     /** 物化资源边界可由启动配置收紧/放宽；绝不更改updateCount，超限在COMMIT前完整回滚。 */
     public record KeyLimits(int rows,long bytes,int columns,long millis){
         public KeyLimits{if(rows<1||bytes<1||columns<1||millis<1)throw new IllegalArgumentException("keys资源上限必须为正数");}
@@ -32,6 +37,8 @@ public final class AuthorityConnection implements InvocationHandler {
     private long sessionDeadlineUntil;
     private final Connection physical;
     private final WriterAuthority authority;
+    /** 进入事务前的对端复核；null 表示这一档不用复核。 */
+    private final ServerCheck serverCheck;
     private final Connection view;
     private final Set<StatementOwner> statements=Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<ValueStream> valueStreams=Collections.newSetFromMap(new IdentityHashMap<>());
@@ -39,14 +46,20 @@ public final class AuthorityConnection implements InvocationHandler {
     private boolean auto=true,readOnly,closed,ending,serverAborted;
     private volatile boolean begun;
     private volatile StatementOwner activeAuto;
-    private AuthorityConnection(Connection physical,WriterAuthority authority)throws SQLException {
+    private AuthorityConnection(Connection physical,WriterAuthority authority,ServerCheck serverCheck)throws SQLException {
         this.physical=Objects.requireNonNull(physical);this.authority=Objects.requireNonNull(authority);this.keyLimits=KeyLimits.environment();
+        this.serverCheck=serverCheck;
         if(!physical.getAutoCommit())throw new SQLException("受管安装不能继承已有事务");
         view=(Connection)Proxy.newProxyInstance(AuthorityConnection.class.getClassLoader(),
                 new Class<?>[]{Connection.class,Fence.class},this);
     }
+    /** 不带对端复核的安装：对端没有会随时间变化的角色时用（tidb 档、本机夹具）。 */
     public static Connection wrap(Connection physical,WriterAuthority authority)throws SQLException {
-        authority.verifyPhysical(physical);return new AuthorityConnection(physical,authority).view;
+        return wrap(physical,authority,null);
+    }
+    /** serverCheck 非 null 时，每个事务（或 auto operation）进入前先在同一条物理连接上复核对端，见 recheckServer。 */
+    public static Connection wrap(Connection physical,WriterAuthority authority,ServerCheck serverCheck)throws SQLException {
+        authority.verifyPhysical(physical);return new AuthorityConnection(physical,authority,serverCheck).view;
     }
     public static void require(Connection connection)throws SQLException {
         connection.unwrap(Fence.class).requireNormalTransaction();
@@ -56,6 +69,7 @@ public final class AuthorityConnection implements InvocationHandler {
         synchronized(this) {
             String name=method.getName();
             if(name.equals("isClosed"))return closed||physical.isClosed();
+            if(name.equals("isValid"))return valid((Integer)args[0]);
             if(name.equals("close")){close();return null;}
             if(name.equals("abort")){poison();physical.abort((Executor)args[0]);closed=true;return null;}
             if(name.equals("isWrapperFor"))return ((Class<?>)args[0]).isInstance(view);
@@ -116,7 +130,35 @@ public final class AuthorityConnection implements InvocationHandler {
     }
     private void begin()throws SQLException {
         healthy();if(serverAborted)throw new SQLException("服务器已中止原事务，仅允许完整rollback","25000");
-        if(!begun){try{authority.begin(physical);begun=true;}catch(SQLException failure){if(uncertain(failure)){poison();throw unknown(failure);}throw failure;}}
+        if(begun)return;
+        recheckServer();
+        try{authority.begin(physical);begun=true;}catch(SQLException failure){if(uncertain(failure)){poison();throw unknown(failure);}throw failure;}
+    }
+    /**
+     * 进入事务前在同一条物理连接上复核对端（没给 serverCheck 的档位不发语句）。与 Go 每次从连接池取用连接都重新核对同一用意：
+     * mysql 档主从切换之后，池里的老连接可能还连着已经降成只读的旧主库，继续用它读到的可能是旧数据。
+     * 这时一条业务语句都没发，所以复核不过（或复核语句没跑通）不算结局未知：丢弃这条连接，回可重试的 ServerRecheckFailedException。
+     */
+    private void recheckServer()throws SQLException {
+        if(serverCheck==null)return;
+        try{serverCheck.recheck(physical);}
+        catch(SQLException|RuntimeException failure){discard();throw new ServerRecheckFailedException(failure);}
+    }
+    /**
+     * 连接池借出前的探活（Hikari 对空闲超过约半秒的连接调用）。驱动自己的探活之外再做一次对端复核：
+     * 主从切换后还连着旧主库的空闲连接在这里就判成无效，由连接池换新，不用等业务调用失败一次。
+     * 它只是提前发现；刚用过的连接不经过探活，保证仍在 recheckServer。事务进行中不往里插语句，只回驱动的探活结果。
+     */
+    private boolean valid(int timeoutSeconds)throws SQLException {
+        if(closed||unknown.get()||!physical.isValid(timeoutSeconds))return false;
+        if(serverCheck==null||begun)return true;
+        try{serverCheck.recheck(physical);return true;}
+        catch(SQLException|RuntimeException failure){discard();return false;}
+    }
+    /** 丢弃这条物理连接但不标记结局未知：只在一条业务语句都没发的时候用。之后本 handle 报“连接已关闭”，连接池换一条新的。 */
+    private void discard(){
+        closed=true;
+        try{physical.abort(Runnable::run);}catch(SQLException|RuntimeException ignored){try{physical.close();}catch(SQLException ignoredClose){}}
     }
     private void finish(boolean commit)throws SQLException {
         healthy();if(!begun)return;

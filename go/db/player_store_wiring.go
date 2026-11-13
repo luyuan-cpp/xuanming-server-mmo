@@ -34,7 +34,6 @@ const (
 	playerStoreEtcdDialTimeout  = 5 * time.Second
 	playerStoreRegisterTimeout  = 30 * time.Second
 	playerStoreListenProbeLimit = 30 * time.Second
-	playerStoreSchemaTimeout    = 30 * time.Second
 )
 
 // newPlayerStoreServer 装配存盘接口。配置不对就拒绝启动:这个节点起不来比起来却存不进要好。
@@ -52,20 +51,6 @@ func newPlayerStoreServer(c *config.Config, stores *proto_sql.StoreRegistry) (*p
 			return nil, err
 		}
 		return store.DB, nil
-	}
-	// 本 zone 的库必须已经有 player_store。别的落点库在第一次用到时才打开,缺表由启动它们的 zone 发现。
-	verifyCtx, cancel := context.WithTimeout(context.Background(), playerStoreSchemaTimeout)
-	defer cancel()
-	home, err := open(verifyCtx, c.ZoneId)
-	if err != nil {
-		return nil, fmt.Errorf("open home storage %d: %w", c.ZoneId, err)
-	}
-	store, err := playerstore.New(home, persistschema.Gen, limits)
-	if err != nil {
-		return nil, err
-	}
-	if err := store.VerifySchema(verifyCtx); err != nil {
-		return nil, err
 	}
 	resolve, err := newStorageResolver(c)
 	if err != nil {
@@ -100,7 +85,8 @@ func newStorageResolver(c *config.Config) (playerstore.StorageResolver, error) {
 // registerPlayerStoreNode 写 C++ 约定的 etcd 注册:scene 靠它发现本 zone 的 go/db。
 // 等端口真正 accept 之后才写 key,C++ 一看到 NodeInfo 就会拨。
 // 失败返回错误,调用方拒绝继续:scene 发现不到就存不了盘。
-func registerPlayerStoreNode(c *config.Config) (func(), error) {
+// onRegistered 可为 nil;注册成功后收到本进程的 node_uuid(进程内不变),生产接热关停的 AddInstance。
+func registerPlayerStoreNode(c *config.Config, onRegistered func(nodeUUID string)) (func(), error) {
 	if len(c.Etcd.Hosts) == 0 {
 		return nil, fmt.Errorf("Etcd.Hosts is empty; scene discovers go/db through etcd")
 	}
@@ -147,10 +133,18 @@ func registerPlayerStoreNode(c *config.Config) (func(), error) {
 		return nil, fmt.Errorf("register node: %w", err)
 	}
 	registration.KeepAlive()
+	if onRegistered != nil {
+		onRegistered(registration.NodeUUID)
+	}
 	return func() {
 		registration.Close()
 		_ = cli.Close()
 	}, nil
+}
+
+// playerStoreNodeTypeName 是本进程注册用的 eNodeType 枚举名(发现前缀、热关停的 type/ 范围都用它)。
+func playerStoreNodeTypeName() string {
+	return base.ENodeType_name[int32(playerStoreNodeType)]
 }
 
 // playerStoreNodeInfo 按 C++ NodeInfo 约定生成 protojson。

@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS zone_config (
     recommended    BIT(1) DEFAULT 0,
     sort_order     INT DEFAULT 0,
     create_role_closed BIT(1) NOT NULL DEFAULT 0 COMMENT '1 = 暂停创建新角色;只经 /admin/zones/{id}/create-role/close|open 改',
+    role_capacity INT NOT NULL DEFAULT 0 COMMENT '本区角色上限(0 = 不设):角色总数到了就由本区网关关上 create_role_closed;只经 /admin/zones/{id}/role-capacity 改',
+    version        BIGINT NOT NULL DEFAULT 1 COMMENT '行版本:每次写入加一,GET /admin/zones/{id} 以它作 ETag,整行 PUT 带 If-Match 比较并写',
     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -40,6 +42,15 @@ CREATE TABLE IF NOT EXISTS announcement (
 -- Seed default zone
 INSERT IGNORE INTO zone_config (zone_id, name, manual_status, capacity, recommended, sort_order)
 VALUES (1, 'zone-1', 0, 45000, 1, 1);
+
+-- login 的口令凭据表(PasswordAuth):全服一份,放在 mmorpg(login 登记写者资格的库)。建表语句的唯一来源是
+-- go/login/model/password_auth_schema.sql,这里是给本机与集群内开发 MySQL 的同一条;K8s 上的 TiDB / 外部 MySQL 由建表 Job 执行那份文件。
+-- 上面三张网关表与这张表都和各自的来源文件逐句相同,logical_db_deploy_contract.tests.ps1 钉住,改的时候两边一起改。
+CREATE TABLE IF NOT EXISTS user_accounts (
+    account  VARCHAR(191) NOT NULL,
+    password VARCHAR(255) NULL COMMENT 'Argon2id PHC string. NULL = password login disabled for this account',
+    PRIMARY KEY (account)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='login password credentials, owner go/login';
 
 -- 写者闸门:每个逻辑库自带一份,闸门跟着库走(docs/design/horizontal-scale-logical-db.md §2)。
 -- mmorpg 没有 Go 服务的 -migrate,所以写在这里。DDL 与 go/shared/authoritysql/catalog.go 逐字相同,TestGatewayTablesCarryWriterGate 钉住。

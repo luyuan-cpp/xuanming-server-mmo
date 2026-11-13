@@ -23,7 +23,7 @@ import (
 // 不得退回读登录 Redis,也不得按 player_id 反查当前归属替旧请求补权。
 var ErrUnverifiedSession = errors.New("在线请求缺少 gate 签名的原角色身份")
 
-// 入口拒绝原因,作 label 用,取值固定为下面四个(低基数,不放方法名与玩家标识)。
+// 入口拒绝原因,作 label 用(低基数,不放方法名与玩家标识)。入口准入用下面四个;归属预检另有两个,见 ownership.go。
 const (
 	rejectClientWithoutSession  = "client_without_session"
 	rejectInternalWithSession   = "internal_with_session"
@@ -34,7 +34,7 @@ const (
 var entryRejectedTotal = metric.NewCounterVec(&metric.CounterVecOpts{
 	Namespace: "online_entry",
 	Name:      "rejected_total",
-	Help:      "在线域入口准入拒绝次数;reason 取 client_without_session / internal_with_session / unverified_session / incomplete_identity。",
+	Help:      "在线域入口拒绝次数;入口准入的 reason 取 client_without_session / internal_with_session / unverified_session / incomplete_identity,归属预检取 ownership_changed / ownership_unverified。",
 	Labels:    []string{"reason"},
 })
 

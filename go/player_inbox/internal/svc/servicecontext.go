@@ -1,4 +1,4 @@
-// Package svc 是 player_inbox 的依赖装配:etcd 客户端、mmorpg_player_inbox 连接池、核心 Redis、玩家域 Redis、
+// Package svc 是 player_inbox 的依赖装配:etcd 客户端、mmorpg_player_inbox 连接池、控制集群 Redis、玩家域 Redis、
 // Kafka 生产者、scene 节点镜像、data_service 客户端,以及 inbox 的 Store / 在线提醒 / 后台循环。
 package svc
 
@@ -22,6 +22,7 @@ import (
 	dspb "proto/data_service"
 
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/etcdwatch"
@@ -50,17 +51,11 @@ const (
 	etcdDialTimeout      = 5 * time.Second
 	mysqlPingTimeout     = 5 * time.Second
 	coreRedisPingTimeout = 3 * time.Second
-	// coreRedisReadTimeout / coreRedisWriteTimeout:核心 Redis 单次 socket 读 / 写的兜底上限(评审 L7)。
-	// 客户端开了 ContextTimeoutEnabled,带截止时间的 ctx(选主续期 2s)取两者较早者;
-	// 不带截止时间的调用(选主竞选的 SETNX 用的是循环 ctx)靠它封顶。
-	// 只用到 GET / SET NX / EVAL 这类单键命令,正常往返是毫秒级,1s 足够宽。必须为正:-1 / -2 会关掉 socket 截止,
-	// 连 ctx 截止也一起失效(shared/leader GoRedisMaxCallDuration 的注释)。
-	coreRedisReadTimeout  = time.Second
-	coreRedisWriteTimeout = time.Second
+	// 控制集群单次 socket 读 / 写的兜底上限(1s,评审 L7)由 config.EffectiveControlRedis 给出,不在这里。
 	// loopsStopTimeout 只限定旧 Stop 适配器的等待预算；到期必须 HOLD，不能关闭仍有历史工作的资源。
 	loopsStopTimeout = 2 * time.Second
 
-	// MaintenanceLeaderKey 是后台循环选主锁(核心 Redis)。
+	// MaintenanceLeaderKey 是后台循环选主锁(控制集群)。
 	MaintenanceLeaderKey = "player_inbox:maintenance:leader"
 	// sceneWatcherName 进 scenenode_nodes{kind} 这一个 label。
 	sceneWatcherName = "scene"
@@ -84,8 +79,8 @@ type ServiceContext struct {
 	Etcd *clientv3.Client
 	// DB 是 mmorpg_player_inbox 的连接池(设计 §10 的独立连接池)。表由 schemamigrate 建,本包不碰 DDL。
 	DB *sql.DB
-	// CoreRedis 是控制域 Redis(选主锁)。
-	CoreRedis *redis.Client
+	// ControlRedis 是控制集群句柄(选主锁),shared/clusterredis 构造,发送前按控制集群键策略核对。
+	ControlRedis redis.UniversalClient
 	// PlayerRedis 是玩家域句柄(owner_epoch / location)。键一律带 {player_id},发送前经守卫核对。
 	PlayerRedis redis.UniversalClient
 	// Kafka 写在线提醒(scene-cmd_g<N>,显式分区)。
@@ -131,7 +126,7 @@ type backgroundTask struct {
 }
 
 // externalDeps 是 NewServiceContext 建外部连接的入口(AGENTS §11.2 显式依赖)。生产为 productionDeps();
-// 单测注入假实现,只验证装配顺序、失败时的回收与接线,不连真实的 etcd / MySQL / 核心 Redis / data_service。
+// 单测注入假实现,只验证装配顺序、失败时的回收与接线,不连真实的 etcd / MySQL / 控制集群 Redis / data_service。
 type externalDeps struct {
 	openEtcd  func(hosts []string) (*clientv3.Client, error)
 	openMySQL func(config.MySQLConf) (*sql.DB, error)
@@ -139,8 +134,8 @@ type externalDeps struct {
 	checkRoleFence func(context.Context, *sql.DB) error
 	// newRoleAuthority 建角色护栏:本库副本 + 经 data_service 读权威状态和入场登记。
 	newRoleAuthority func(*sql.DB, dspb.DataServiceClient) (inbox.RoleAuthority, error)
-	// openCoreRedis 建核心 Redis 客户端并探活;返回错误时自己负责关掉已建的客户端。
-	openCoreRedis func(config.RedisConf) (*redis.Client, error)
+	// openControlRedis 建控制集群客户端并探活;返回错误时自己负责关掉已建的客户端。
+	openControlRedis func(clusterredis.Config) (redis.UniversalClient, error)
 	// openPlayerRedis 建玩家域客户端并探活;返回错误时自己负责关掉已建的客户端。
 	openPlayerRedis func(playerredis.Config) (redis.UniversalClient, error)
 	openDataService func(zrpc.RpcClientConf) (*grpc.ClientConn, error)
@@ -158,7 +153,7 @@ func productionDeps() externalDeps {
 		openMySQL:        OpenMySQL,
 		checkRoleFence:   rolefence.VerifySchema,
 		newRoleAuthority: newFenceRoleAuthority,
-		openCoreRedis:    openCoreRedis,
+		openControlRedis: openControlRedis,
 		openPlayerRedis:  openPlayerRedis,
 		openDataService: func(c zrpc.RpcClientConf) (*grpc.ClientConn, error) {
 			// 不用 MustNewClient:它在配置错误时直接退出进程,跳过本函数「返回错误、关闭已建资源」的契约。
@@ -186,42 +181,28 @@ func newFenceRoleAuthority(db *sql.DB, client dspb.DataServiceClient) (inbox.Rol
 	return inbox.NewFenceRoleAuthority(db, states, admissions)
 }
 
-// coreRedisOptions 是核心 Redis 客户端的选项(评审 L7):
-//   - ContextTimeoutEnabled:go-redis 缺省用 context.Background() 做 socket 读写,只受读写超时(缺省 3s + 3s)约束,
-//     500ms 的 owner_epoch 预算、整请求预算都管不住 socket 读,依赖变慢时 go-zero 超时拦截器会抢先回 DeadlineExceeded,
-//     in-band 回 kPlayerInboxStoreUnavailable 的契约被击穿。开了之后 socket 截止时间取 ctx 截止与读写超时的较早者;
-//   - 读 / 写超时显式写出(见 coreRedisReadTimeout),不赌 go-redis 缺省;
-//   - PoolSize 取配置(config.Validate 要求正整数):k8s_deploy.ps1 的 Redis 连接总账镜像同一个键。
+// openControlRedis 建控制集群客户端并探活;它不裁决消费身份。错误不含口令。
+// 超时契约(评审 L7)由 config.EffectiveControlRedis 给出,clusterredis 构造器落实:
+//   - 缺省开启 ctx 截止约束:请求预算(Timeout − 500ms)、OwnerEpochReadTimeout、提醒预算才管得住 socket 读写,
+//     否则读写只受缺省读超时约束,in-band 回 kPlayerInboxStoreUnavailable 的契约会被击穿;
+//   - 读 / 写超时各 1s 显式为正:不带截止时间的调用(选主竞选的 SETNX 用的是循环 ctx)靠它封顶;
+//   - 节点客户端不自动重发结果未知的命令(R8);选主锁值由 shared/leader 按锁值核对自己的写入兜住。
 //
-// 选主心跳(shared/leader,经 GoRedisMaxCallDuration 读这套选项)的单次续期最坏耗时因此从 2s + 读写超时之和(8s)
-// 降到续期 ctx 本身的 2s,FenceAfter 门槛仍是 20s、降级最晚在 22s 完成(TTL 30s),不必调选主参数
-// (servicecontext_test 的 TestCoreRedisOptionsBoundEveryCall 钉住)。
-func coreRedisOptions(c config.RedisConf) *redis.Options {
-	return &redis.Options{
-		Addr:                  c.Host,
-		Password:              c.Password,
-		DB:                    c.DB,
-		PoolSize:              c.PoolSize,
-		ContextTimeoutEnabled: true,
-		ReadTimeout:           coreRedisReadTimeout,
-		WriteTimeout:          coreRedisWriteTimeout,
+// 选主心跳(shared/leader,经 UniversalMaxCallDuration 读这套选项)的单次续期最坏耗时是续期 ctx 本身的 2s,
+// FenceAfter 门槛 20s、降级最晚 22s 完成(TTL 30s),不必调选主参数(servicecontext_test 的 TestControlRedisClientBoundsEveryCall 钉住)。
+func openControlRedis(c clusterredis.Config) (redis.UniversalClient, error) {
+	client, err := clusterredis.New(c, clusterredis.ControlClusterKeys)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ControlRedis config: %w", err)
 	}
-}
-
-// openCoreRedis建选主客户端并探活；它不裁决消费身份。错误不含密码。
-func openCoreRedis(c config.RedisConf) (*redis.Client, error) {
-	client := redis.NewClient(coreRedisOptions(c))
 	pingCtx, cancel := context.WithTimeout(context.Background(), coreRedisPingTimeout)
-	err := client.Ping(pingCtx).Err()
+	err = client.Ping(pingCtx).Err()
 	cancel()
 	if err != nil {
 		_ = client.Close()
-		return nil, fmt.Errorf("ping core Redis %s (DB %d) failed (the maintenance leader lock lives there): %w", c.Host, c.DB, err)
+		return nil, fmt.Errorf("ping control Redis (%s) failed (the maintenance leader lock lives there): %w", c.Describe(), err)
 	}
-	// 生效值:核对 ConfigMap 镜像的 PoolSize 是否真的被加载,以及超时契约是否生效。
-	opts := client.Options()
-	logx.Infof("Core Redis client %s DB=%d pool_size=%d read_timeout=%v write_timeout=%v context_timeout_enabled=%v",
-		c.Host, c.DB, opts.PoolSize, opts.ReadTimeout, opts.WriteTimeout, opts.ContextTimeoutEnabled)
+	logx.Infof("Control Redis client %s", c.Describe())
 	return client, nil
 }
 
@@ -308,7 +289,7 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 		return nil, fmt.Errorf("player_inbox: role_fence 表不可用,先执行 -migrate: %w", err)
 	}
 
-	sc.CoreRedis, err = deps.openCoreRedis(c.CoreRedis)
+	sc.ControlRedis, err = deps.openControlRedis(c.EffectiveControlRedis())
 	if err != nil {
 		return nil, fmt.Errorf("player_inbox: %w", err)
 	}
@@ -368,13 +349,12 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 	sc.Ledgers = &DataServiceLedgers{Client: sc.DataService, Timeout: constants.LedgerReadTimeout}
 	sc.ItemGainBlocks = &DataServiceItemGainBlocks{Client: sc.DataService, Timeout: constants.LedgerReadTimeout}
 
-	elector := leader.New(leader.NewGoRedisStore(sc.CoreRedis), MaintenanceLeaderKey, leader.Options{ID: leaderID()})
+	elector := leader.New(leader.NewUniversalStore(sc.ControlRedis), MaintenanceLeaderKey, leader.Options{ID: leaderID()})
 	loopCfg := loopConfigFrom(c.PlayerInbox)
 	sc.Loops, err = inbox.NewLoops(sc.Store, sc.Ledgers, loopCfg, elector.Run, time.Now)
 	if err != nil {
 		return nil, fmt.Errorf("player_inbox: build maintenance loops: %w", err)
 	}
-	sc.Loops.RootAdmission = root
 	sc.Loops.RelayAdmission = relay
 	sc.background = []backgroundTask{
 		{name: "player_inbox.scenenode.watcher", run: func(ctx context.Context) { sc.SceneNodes.Run(ctx, sc.Etcd) }},
@@ -433,8 +413,6 @@ func (w *relayMessageWriter) WriteMessages(ctx context.Context, msgs ...kafka.Me
 // loopConfigFrom 把配置换算成 inbox.LoopConfig。合法区间由 config.Validate 先拦,inbox.NewLoops 再兜底。
 func loopConfigFrom(p config.PlayerInboxConf) inbox.LoopConfig {
 	return inbox.LoopConfig{
-		TerminalRetention: time.Duration(p.TerminalRetentionDays) * 24 * time.Hour,
-		SweepInterval:     time.Duration(p.SweepIntervalSeconds) * time.Second,
 		NotifyInterval:    time.Duration(p.NotifyResendIntervalSeconds) * time.Second,
 		GaugeInterval:     time.Duration(p.GaugeIntervalSeconds) * time.Second,
 		ReconcileInterval: time.Duration(p.ReconcileIntervalMinutes) * time.Minute,
@@ -518,7 +496,7 @@ func (sc *ServiceContext) CloseSource(ctx context.Context) error {
 	if err := sc.RootAdmission.Wait(ctx); err != nil {
 		return err
 	}
-	return nil // main 已按客户端/Admin SOURCE 与 Fetch/Ack/终局 RELAY 分流；sweep 同 RootAdmission。
+	return nil // main 已按客户端/Admin SOURCE 与 Fetch/Ack/终局 RELAY 分流;后台循环都归 RELAY(清理循环已删除)。
 }
 
 // StopAndReport 停止取新并等待真实本机调用、轮次和通知 CAS；未知结局保留 HOLD。
@@ -593,8 +571,8 @@ func (sc *ServiceContext) closeResourcesReport() error {
 	if sc.PlayerRedis != nil {
 		result = errors.Join(result, sc.PlayerRedis.Close())
 	}
-	if sc.CoreRedis != nil {
-		result = errors.Join(result, sc.CoreRedis.Close())
+	if sc.ControlRedis != nil {
+		result = errors.Join(result, sc.ControlRedis.Close())
 	}
 	if sc.dataServiceConn != nil {
 		result = errors.Join(result, sc.dataServiceConn.Close())

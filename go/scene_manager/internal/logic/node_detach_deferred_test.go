@@ -665,11 +665,11 @@ func TestReassignSceneNode_BlockedWhileDeathMarkDeferred(t *testing.T) {
 	require.NoError(t, err)
 	faults.failDeathAt.Store(true)
 	removeNodeFromRedis(sc, deadNodeEntryForTest(testZoneId, "10"))
-	require.NoError(t, mr.Set(sceneNodeKey(9001), "10"))
+	require.NoError(t, mr.Set(sceneNodeKey(testZoneId, 9001), "10"))
 	blockedBefore := barrierBlockedCountForTest(t, testZoneId, barrierSiteReassign)
 
 	assert.False(t, reassignSceneNode(sc, testZoneId, 9001, "10", "20", freshPlacementGeneration(t, sc, testZoneId)))
-	owner, err := mr.Get(sceneNodeKey(9001))
+	owner, err := mr.Get(sceneNodeKey(testZoneId, 9001))
 	require.NoError(t, err)
 	assert.Equal(t, "10", owner)
 	assert.Equal(t, blockedBefore+1, barrierBlockedCountForTest(t, testZoneId, barrierSiteReassign))
@@ -754,7 +754,7 @@ func TestOrphanCleanup_SkipsGroupWhileOwnerDetachDeferred(t *testing.T) {
 	blockedBefore := barrierBlockedCountForTest(t, testZoneId, barrierSiteOrphanCleanup)
 
 	assert.Equal(t, 0, CleanupOrphanWorldChannels(ctx, sc))
-	owner, err := mr.Get(sceneNodeKey(701))
+	owner, err := mr.Get(sceneNodeKey(testZoneId, 701))
 	require.NoError(t, err)
 	assert.Equal(t, "10", owner)
 	assert.True(t, mr.Exists(worldChannelsKey(testZoneId, orphanConfID)))

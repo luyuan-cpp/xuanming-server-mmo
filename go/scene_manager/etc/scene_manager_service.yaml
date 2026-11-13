@@ -1,38 +1,46 @@
 Name: scenemanagerservice.rpc
 ListenOn: 127.0.0.1:60300
-# zrpc 服务端超时(毫秒)。必须为正,且 >= HomeZoneLookupTimeoutMs + KafkaWriteTimeoutSeconds*1000 + 1500
-# (现 1500 + 5000 + 1500 = 8000;1500 是读 location、预占频道、铸造 / CAS Lua、失败回滚 Lua 等 Redis 往返的余量)。
+# zrpc 服务端超时(毫秒)。必须为正,且不小于 EnterScene 成功路径上逐段串行的预算之和:
+#   角色目录强读 1500(go/scene_manager/internal/svc/role_directory.go 的 roleDirectoryLookupTimeout)
+#   + HomeZoneLookupTimeoutMs + OwnerEpochMint.WaitAOFTimeoutMs + KafkaWriteTimeoutSeconds*1000 + 1500
+#   (现 1500 + 1500 + 2000 + 5000 + 1500 = 11500;末项 1500 是读 location、预占频道、铸造 / CAS Lua、失败回滚 Lua 等 Redis 往返的余量)。
+# 每段都在自己的上限之内时,铸造的 WAITAOF 总能等满 WaitAOFTimeoutMs,推路由也总能用满 Kafka 写超时,不会因为前面几段慢而被截短。
+# 2026-11-12 以前是 8000,漏了角色目录强读与 WAITAOF 两段:前置 RPC 一慢,铸造就被截短、回 3。
+# 推路由失败之后的回滚与落盘确认用剩下的时间:最坏(前面各段都用满上限)约 1.2s,通常有数秒;确认不了时回执留在待确认形态,
+# 源端按 B5′ 收口(docs/design/zone-redis-regression-guard-20261022.md §4.3.3「时间预算」)。
 # EnterScene 第一条腿依次做归属查询、Kafka 同步写、失败回滚,然后回 7;服务端先超时的话调用方只拿到 DeadlineExceeded,
 # C++ 把它当"结果未知"的传输失败:交接只记日志,源 scene 仍要冻到 30s 应答看门狗(docs/design/cross-zone-scene-travel.md §12.2)。
-# C++ 每次调用的 deadline 是 bin/etc/base_deploy_config.yaml 的 GrpcClient.CallDeadlineMs.SceneManagerNodeService(10000),
-# 必须 >= 本值 + 2000(上游比下游宽,docs/design/grpc-muduo-transport.md §16.3)。本值也是源 scene 还可能
-# 收到带真实错误码的 EnterScene 应答的最晚时刻(从本服务收到请求起算),须远小于 C++ 的 30s 应答看门狗。
+# 调用方超时必须 >= 本值 + 2000(上游比下游宽,docs/design/grpc-muduo-transport.md §16.3):C++ 是 bin/etc/base_deploy_config.yaml
+# 的 GrpcClient.CallDeadlineMs.SceneManagerNodeService(13500),login 是 go/login/etc/login.yaml 的 SceneManagerRpc.Timeout(13500)。
+# 本值也是源 scene 还可能收到带真实错误码的 EnterScene 应答的最晚时刻(从本服务收到请求起算),须远小于 C++ 的 30s 应答看门狗;
+# C++ 疏散 / 排空改派的 settle 窗口下限 relocate_confirm::kSmSettleWindow 按「本值 + 2000 + Kafka 写超时」取(19s,Go 跨语言测试守)。
 # <=0 = go-zero 不装超时拦截器(应答时刻无上界)。不要用 MethodTimeouts 只放宽
 # EnterScene:tools/scripts/k8s_deploy.ps1 只镜像标量 Timeout,K8s 上会静默退回全局值。以上由
-# tools/scripts/tests/k8s_deploy_contract.tests.ps1 守着。8000 只覆盖不触发同步建场景的正常路径:懒改派 / 死节点改派里
+# tools/scripts/tests/k8s_deploy_contract.tests.ps1 守着。本值只覆盖不触发同步建场景的正常路径:懒改派 / 死节点改派里
 # 挂在请求 ctx 上的 CreateScene 同步 RPC 不在预算内,超时会被截断。K8s ConfigMap 由 k8s_deploy.ps1 从这里取值。
-Timeout: 8000
+Timeout: 11500
 Etcd:
   Hosts:
     - 127.0.0.1:2379
   Key: scenemanagerservice.rpc
-# 控制域实例(docs/design/control-plane-zone-scoping-20261105.md §4.2):本 zone 的场景路由、成员集合、世界频道、选主锁
-# (scene_manager:leader:lock:zone:<ZoneId>)、死节点收尾任务。K8s 上是本 zone 所属组的 redis-ctl-g<N>(组号 = zones 配置的
-# redisQueueGroup),同组几个 zone 共用一个实例;本进程只读写 ZoneId 这一个 zone 的键。
-Redis:
-  Host: 127.0.0.1:6379
-  Type: node
-  Key: scenemanagerservice
-
-# 核心共享实例:只读 gate 排空标记 gate:<id>:draining|drained。不写 = 与上面的控制域实例是同一个(开发环境如此)。
-# K8s 上指向核心 redis.<infra>,由 k8s_deploy.ps1 渲染。
-# CoreRedis:
-#   Host: 127.0.0.1:6379
-#   Type: node
+# 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.1、§5.1):本 zone 的场景路由、成员集合、世界频道、Agones 名额、
+# 选主锁(scene_manager:leader:lock:{ctl:<ZoneId>})、死节点收尾任务,以及跨 zone 重定向读的目标 zone 的 gate 排空 / 停写标记
+# gate:{gm:<z>}:*(login 与排空脚本写在同一个集群)。键都带 zone 的 hash tag,本进程只读写 ZoneId 这一个 zone 的控制域键。
+# 集群部署写种子地址并打开 Cluster;K8s 上由 tools/scripts/k8s_deploy.ps1 渲染。口令走 SharedRedisPasswordEnv,不用 PasswordEnv。
+# 池与超时沿用换句柄之前 go-zero 句柄的口径(池 20,读写 3s,取连接 4s,拨号 5s)。
+# 2026-11-12 起旧的 Redis 段(Host / Type / Key)与 CoreRedis 段退役:配置里还写着 Redis.Host 就拒启。
+ControlRedis:
+  Addrs:
+    - 127.0.0.1:6379
+  PoolSizePerNode: 20
+  DialTimeoutMs: 5000
+  ReadTimeoutMs: 3000
+  WriteTimeoutMs: 3000
+  PoolTimeoutMs: 4000
 
 # 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.10):location、位置修订、离场等待、切线冷却、进场去重、
-# owner_epoch、handoff、handoff_fence。上面的 Redis 段只剩控制域(场景路由、成员集合、选主锁),一段脚本不跨这两个域。
-# 不写 Addrs = 指向上面的 Redis 实例。集群部署写种子地址并打开 Cluster:
+# owner_epoch、handoff、handoff_fence。控制域在上面的 ControlRedis,一段脚本不跨这两个域。
+# 不写 Addrs = 指向上面 ControlRedis 的实例(只适合本机单实例;ControlRedis 是集群时不写 Addrs 拒启)。集群部署写种子地址并打开 Cluster:
 #   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
 #   Cluster: true
 # PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。铸造通道另有固定 32 条(svc.ownerEpochMintPoolSize)。
@@ -67,7 +75,8 @@ KafkaWriteTimeoutSeconds: 5
 # 铸造 owner_epoch 之后的落盘确认(docs/design/zone-redis-regression-guard-20261022.md §4.3.2 G3b):铸造 EVAL 与
 # WAITAOF <NumLocal> <NumReplicas> <timeout> 走同一条专用连接,确认之后才推路由 / 重定向;确认不足按推送失败单调回滚、回 7。
 # 实际等待 = min(WaitAOFTimeoutMs, 请求剩余 − KafkaWriteTimeoutSeconds − 0.3s − 0.1s):铸造之后的同步推路由与回滚
-# 必须仍在上面的 Timeout 之内。按现值,归属查询很快时等满 2000ms;归属查询用满 1500ms 时约 1100ms;不足 1ms 时一条都不发、回 3。
+# 必须仍在上面的 Timeout 之内。文件头的 Timeout 已把本项算进去:角色目录强读与归属查询都在各自上限之内时总能等满;
+# 不足 1ms 时一条都不发、回 3。调大它必须同步调大文件头的 Timeout(不等式见那里,契约测试守)。
 # 取上限 2000 而不是 go/db 的 1500:高可用下 numreplicas=1 要等副本自己 everysec 刷盘,副本只在每秒一次的 cron 或主节点
 # GETACK(每次 WAITAOF 发一次)时上报已刷盘偏移,低负载下平均约 1s、最坏近 2s,1500 会让约 1/8 的铸造回 7(推算,设计 §4.3.3)。
 # 单实例只等本地刷盘(≤ 约 1s),上限调高不影响它。

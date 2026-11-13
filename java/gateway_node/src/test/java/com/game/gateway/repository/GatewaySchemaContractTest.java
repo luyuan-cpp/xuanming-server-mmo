@@ -198,6 +198,8 @@ class GatewaySchemaContractTest {
                 });
                 factory.inSession(session -> {
                     assertEquals(MAX_UINT32, session.find(ZoneConfig.class, MAX_UINT32).getZoneId());
+                    // 行版本(2026-11-12):schema.sql 的种子行不写 version,取库缺省 1;缺省丢了种子会插不进或落成 0。
+                    assertEquals(1L, session.find(ZoneConfig.class, 1L).getVersion(), "种子区服取 version 的库缺省 1");
                     ZoneWhitelist restored = session.find(ZoneWhitelist.class, whitelist.getId());
                     assertNotNull(restored);
                     assertEquals(MAX_UINT32, restored.getZoneId());

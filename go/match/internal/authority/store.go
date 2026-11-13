@@ -219,7 +219,9 @@ func (s *Store) commitProfileOnce(ctx context.Context, pid uint64, plan, binding
 			return decodeErr
 		}
 		if oldProfile.SessionBinding == binding {
-			if _, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET network_profile=?,expires_ms=? WHERE player_id=? AND state=1", b, expires, pid); e != nil {
+			// 首选机房列跟着新原件重算（读页分段键，global-match-hierarchical-pools.md §5.2.1 第 6 条）：回执在票的有效期内都有效，
+			// 撮合与提交点现算的首选机房只在这里变；不跟着改，换了首选机房的票会留在旧机房段的页里。
+			if _, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET network_profile=?,expires_ms=?,pool_region=? WHERE player_id=? AND state=1", b, expires, PreferredRegion(p, n), pid); e != nil {
 				return e
 			}
 		}
@@ -367,11 +369,16 @@ func (s *Store) joinOnce(ctx context.Context, t *pb.MatchAuthorityTicketRecord, 
 			return nil, false, errors.New("原匹配探测已失效，需取消原请求")
 		}
 	}
+	// 首选机房列只给读页分段用（global-match-hierarchical-pools.md §5.2.1 第 6 条），按刚落库的原件现算。
+	poolRegion, e := preferredRegionOf(b, n)
+	if e != nil {
+		return nil, false, e
+	}
 	t.State = 1
 	t.EnqueuedMs = n
 	t.NetworkProfile = b
 	t.ExpiresMs = exp
-	_, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=1,enqueued_ms=?,not_before_ms=0,zone_id=?,rating_centi=?,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,owner_account=?,owner_revision=? WHERE player_id=?", t.Ticket, t.RequestId, t.Mode, t.ConfigId, t.TeamSize, t.EnqueuedMs, t.ZoneId, t.RatingCenti, t.TeamId, t.NetworkProfile, t.ExpiresMs, t.OwnerAccount, t.OwnerRevision, t.PlayerId)
+	_, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=1,enqueued_ms=?,not_before_ms=0,zone_id=?,rating_centi=?,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,pool_region=?,owner_account=?,owner_revision=? WHERE player_id=?", t.Ticket, t.RequestId, t.Mode, t.ConfigId, t.TeamSize, t.EnqueuedMs, t.ZoneId, t.RatingCenti, t.TeamId, t.NetworkProfile, t.ExpiresMs, poolRegion, t.OwnerAccount, t.OwnerRevision, t.PlayerId)
 	if e != nil {
 		return nil, false, e
 	}
@@ -570,7 +577,7 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 		rtt, ok := Latencies(p, n, s.Config.HardLatencyMs)[f.PhysicalRegion]
 		// 候选扫描之后可能等待行锁；整份探测的有效期也必须在提交点重新检查。
 		if t.Ticket != want.Ticket || t.State != 1 || t.NotBeforeMs > n || t.ExpiresMs <= n || !ok || rtt == 0 || !bytes.Equal(t.NetworkProfile, want.NetworkProfile) || t.OwnerAccount != want.OwnerAccount || t.OwnerRevision != want.OwnerRevision || p.OwnerAccount != t.OwnerAccount || p.OwnerRevision != t.OwnerRevision {
-			return errors.New("成局成员代次或地域条件已经变化")
+			return ErrClaimStale
 		}
 		if PreferredRegion(p, n) != f.PhysicalRegion {
 			allPreferred = false
@@ -606,12 +613,14 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 	f.State = 1
 	f.RetryAtMs = n
 	sides := map[uint64]uint32{}
+	captains := map[uint64]bool{} // 撮合带进来的队长标记(战斗剧本按队长选用,battle-script.md §5.2)
 	for _, member := range f.Members {
 		sides[member.PlayerId] = member.TeamIndex
+		captains[member.PlayerId] = member.Captain
 	}
 	f.Members = nil
 	for _, t := range group {
-		f.Members = append(f.Members, &pb.MatchFormationMember{PlayerId: t.PlayerId, Ticket: t.Ticket, TeamIndex: sides[t.PlayerId]})
+		f.Members = append(f.Members, &pb.MatchFormationMember{PlayerId: t.PlayerId, Ticket: t.Ticket, TeamIndex: sides[t.PlayerId], Captain: captains[t.PlayerId]})
 	}
 	// repeated 消息按 proto2mysql 的同一序列化格式写入，不制造平行成员模型。
 	memberValue := &pb.MatchFormationRecord{Members: f.Members}

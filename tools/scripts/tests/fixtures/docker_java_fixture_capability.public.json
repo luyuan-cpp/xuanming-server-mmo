@@ -1,0 +1,8 @@
+{
+  "format": "JAVA_FIXTURE_CAPABILITY_OBSERVED_V1",
+  "target_outcome": "confirmed",
+  "sql_sha256": "a0a90ab2215fcaa9e6814996200d8c3a38359768a5496fa20f983c5f4dcd8978",
+  "columns": ["TIDB_VERSION()", "@@SESSION.tidb_snapshot", "@@SESSION.tidb_read_staleness", "@@SESSION.tidb_read_consistency", "@@SESSION.tidb_replica_read", "@@SESSION.tidb_low_resolution_tso", "@@SESSION.max_execution_time", "@@SESSION.tidb_dml_max_execution_time"],
+  "rows": [["Release Version: v8.5.8-20261021-849a85c\nEdition: Community\nGit Commit Hash: 849a85c3795c3472b46f59a8f2917b880d7ee923\nGit Branch: HEAD\nUTC Build Time: 2026-10-20 18:04:38\nGoVersion: go1.25.12\nRace Enabled: false\nCheck Table Before Drop: false\nStore: tikv", "", "0", "strict", "leader", "0", "0", "0"]],
+  "credentials_written": false
+}

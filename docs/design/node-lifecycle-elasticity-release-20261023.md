@@ -66,7 +66,7 @@
 
 | 服务 | 多实例与状态归属 | 已有的正常下线处理 | 当前能作的结论／发布边界 |
 |---|---|---|---|
-| **go/db（玩家存档消费者）** | 同 zone 多实例通过同一 Kafka consumer group 分担分区；重试 processing 按实例隔离并带租约，可归还／回收。持有分区的实例数受固定分区数限制，实例内部另有子分片 | 已有实际业务排空：撤拉取→等待已派发任务并提交连续完成位点→离组→停 worker→归还未完重试收据→最后关持久入队层；主进程专门处理 go-zero 重发的终止信号 | 可以多实例，也有计划停机基础。成员增减会再平衡，可能短时停消费；SQL／Redis／网络耗时总和仍可能超过 Pod 退出预算，不能承诺任意负载零停顿。新版消费者获得的是 Kafka 分区，不能由副本比例推导精确的玩家灰度比例 |
+| **go/db（玩家存档 player_store）** | 2026-10-30 起存档改为 scene 经 RPC 直接提交 TiDB（[存盘直接提交](player-save-direct-commit.md)），db 是无状态 RPC 服务，多实例对等；Kafka 只剩审计发件箱的转发（生产方）。下面的原结论写于 10-23，当时 db 还是 Kafka 存档消费者，已不适用 | 自己接管终止信号，GracefulStop 等在途存盘（`MethodTimeouts` 12 秒），宽限期 45 秒由部署契约测试钉住 | 可以多实例滚动。不再是消费组成员，没有再平衡停顿；在途存盘被砍断时由 owner_epoch 围栏与 scene 的重试兜住。灰度比例按 RPC 实例数推算 |
 | **login** | 玩家登录／会话权威主要在 Redis、SQL 与 player_locator，不要求玩家固定黏在某个 login；进程内仍有预加载任务、异步结果等待、排队 dispatcher 与发号缓冲 | `ServiceContext.Stop()` 会停止后台监视、发号客户端、结果 dispatcher、排队和预加载池；入口仍以 go-zero 启停与 defer 为主，不能把 `RpcServer.Stop()` 当作整个业务链已排空 | 可以多实例；替换 login 不会直接关闭 Gate 上已进场玩家的 TCP。但正在登录、建角、排队、冷加载或续令牌的请求仍可能受影响，须验证撤流／在途完成／取消与安全重试。历史“无状态”只说明无需实例亲和，不等于没有待完成工作 |
 | **guild（公会）** | 有共享 SQL 权威、版本／事务／租约及资产操作的幂等基础，可以多副本承接；并非要求把整个公会固定在一个常驻内存 actor 上 | 已有资产通道、清理、历练调度／结果消费者等 stop，入口通过 defer 编排；没有 friend 同等明确的注销→真实 RPC 排空→后台与资源关闭协调流程 | 可以多实例，不必搬迁 Gate 式玩家连接；仍须闭合存量 RPC、资产任务、活动开局／结果的持久接管及退出预算。资产幂等能防重复提交，不证明玩家请求没有失败。公会／活动灰度应保持同一业务归属的兼容性 |
 | **friend（好友）** | 全服多副本使用同一 SQL 事务域；申请、双向边与容量在事务里提交，不依赖特定副本长期保存玩家权威状态 | 已有显式流程：注销尝试返回→真实 `grpc.Server.GracefulStop`（最多 5 秒）→关闭后台／依赖→框架收尾；可恢复的终态清理循环仅随信号取消、不等待退出。24 秒硬截止超时会报错／退出，明确不保证剩余在途完成 | 具备较完整的请求级平滑退出基础，可以作为同类服务的参考。仍须验收发现传播、超时长请求、提交结果不明与通知；不能由已有排空推导全链路灰度已完成 |
@@ -79,9 +79,9 @@
 
 ### 3.3 如果 guid 指 GUID 发号
 
-发号是能力，当前没有名为 `guid` 的独立部署节点。主仓的永久 ID 逐种走 `data_service.AllocateIdSegment`，调用方在本地消耗不重叠号段；SQL 事务锁定对应 `biz_tag` 行并推进水位，支持多个 data_service 实例分配。停掉一个调用方可能浪费剩余号码，这与重号不同；服务或调用方重启不能把剩余号段重新发给另一实例，也不能降低已分配水位。多实例可扩接入，同一 tag 的领段事务仍有串行点，不能据此承诺无上限吞吐。
+发号是能力，当前没有名为 `guid` 的独立部署节点。主仓的永久 ID 逐种走 `data_service.AllocateIdSegment`，调用方在本地消耗不重叠号段；data_service 在内存里从自己预留的块切段，预留新块时对两套本地 etcd 与全局号源登记处的三份记录做 CAS，三份都写成功才发号，多个 data_service 实例各切各的块（2026-10-30 起；原来按 `biz_tag` 行推进水位的 `id_segment` 表已删）。停掉一个调用方可能浪费剩余号码，这与重号不同；服务或调用方重启不能把剩余号段重新发给另一实例，也不能降低已预留的水位。多实例可扩接入：只有预留新块（每块 2^32 个号）才写存储；吞吐没有实测，不据此承诺上限。
 
-login 当前建角优先号段，号段耗尽且续段不可用时按配置明确失败；Snowflake 回退须显式允许。仍走 Snowflake 的种类按独立 worker 租约、水位与失去所有权时的发号围栏保证安全，扩实例不能复制 worker 身份。源码在 `go/data_service/internal/store/id_segment_store.go` 的 `Allocate`／`tryAllocate`、`go/login/internal/svc/player_id_minter.go` 与发号装配；设计见 [ID 改造方案](node-id-overhaul-plan-20260908.md)。发号数据兼容、耗尽／退出与恢复路径同样要验收。
+login 建角只走号段，没有 Snowflake 回退：号段不可用时建角明确失败（回退开关 2026-10-30 删除；login、guild 里已不发号的 snowflake 槽位申领 2026-11-12 删除）。仍走 Snowflake 的只有 scene_manager 的 scene_id，按独立 worker 租约、水位与失去所有权时的发号围栏保证安全，扩实例不能复制 worker 身份。源码在 `go/data_service/internal/idissuer`（`issuer.go`、`etcd_store.go`）、`go/login/internal/svc/player_id_minter.go` 与 `go/scene_manager/internal/svc/servicecontext.go` 的槽位申领；设计见 [发号器设计](player-data-tidb-scaling-plan.md) §6 与 [ID 改造方案](node-id-overhaul-plan-20260908.md)。发号数据兼容、耗尽／退出与恢复路径同样要验收。
 
 独立 Java 版没有主仓 go/db 存盘消费者，也明确没有移植 data_service 号段服务；本版 scene 直接受 owner epoch 保护写 SQL，永久 ID 走 Snowflake＋节点租约。Java login／friend／guild 已有各自工作池的有界排空，guild 资产任务另有停止领新任务与等待手中任务的处理；仍未证明全链路无感发布。上述机制不能跨版本仓库互相充作验收证据。
 
@@ -167,12 +167,20 @@ login 当前建角优先号段，号段耗尽且续段不可用时按配置明�
 | TiDB | 仓库不部署，按 TiDB 自己的滚动升级 | 重启后坏连接修复 R2，Codex 11-08 单测通过 | 滚动重启演练；`mmorpg` 库迁 TiDB（批 A）未编译，迁完之前它还在单实例 MySQL 上 |
 | Redis | 核心是哨兵主从，玩家域是 Cluster（先切主再删 Pod）；单主的部分重启就中断 | — | 全部上 Cluster 的 7 批未开工；主从切换窗口与选主（R7、R8） |
 
-同日按「最标准的方式」落码（未生成协议、未编译、未运行），设计与分批见 [scene 节点计划排空](scene-node-planned-drain.md)：
+同日起按「最标准的方式」落码，设计、分批与验证状态见 [scene 节点计划排空](scene-node-planned-drain.md)（11-11 的批 1~5 已随 Codex 11-12 全量构建编译通过，单测与冒烟未跑；11-12 的批 6 未编译）。上表是 11-11 落码之前的现状，下面是落码之后各行的变化：
 
 - **scene**：SIGTERM 与 Agones 排空标签先进计划排空 —— 关建场景准入、etcd 发布 admission = CLOSED；scene_manager 不再往它放东西，并把它的世界频道迁到别的节点（同 scene_id、有人也迁），老节点收到 DestroyScene 后按限速疏散住户，疏散请求带原频道与原地图，落到同一个频道、坐标保留；副本与没赶上的到自疏散时刻由节点自己疏散。完成或到预算才进普通停机。落点优先选不在外出构建上的节点（`NodeInfo.build`），滚动升级时就是新版本。上表 scene 行的五条缺口都在这批里补上；scene 内存状态（怪物、施法、副本进度）仍不搬。
-- **battle**：同一套 Node 计划排空 —— 关建房准入、等房间清零再停机。进程缺省关闭，要部署按对局时长调大宽限期并注入预算才生效。
-- **Agones**：旧构建的 Allocated GameServer 用 `tools/scripts/k8s_scene_roll.ps1` 逐台打排空标签。
-- 表里其余各行（gate 迁移开关、Go 服务逐个演练、Kafka acks、TiDB 演练、Redis 上 Cluster）不在这批，状态不变。
+- **battle**：同一套 Node 计划排空 —— 关建房准入、等房间清零再停机。K8s 部署的三种编排都把宽限期定为 330 秒（缺省模板一局的成局期限 300 秒 + 停机 25 秒 + 余量）并注入预算 305 秒；没注入的本机进程行为不变。
+- **Agones**：旧构建的 Allocated GameServer 用 `tools/scripts/k8s_scene_roll.ps1` 逐台打排空标签，`zone-up` 结尾会把命令打出来。
+- **gate**（11-12）：排空迁移改为默认开；客户端在成功进场后把重定向跳数清零（逐台换 gate 被迁多次不再撞 3 跳熔断）；迁移选目标优先不在外出构建上的 gate，一轮换版一个玩家最多迁 2 次（[gate 排空迁移](gate-drain-session-migration.md) §7.3、§19）。login 的 goctl 服务包装还缺 `RequestGateMigration`，Codex 重生之前迁移不会生效，已加守卫用例。
+- **Go 服务**（11-12）：逐个核对了进程停机时限、请求超时与 Pod 宽限期（[scene 计划排空](scene-node-planned-drain.md) §9「Go 服务停机时限」）。scene_manager、player_locator、client_rpc_router 的强退时限放宽到盖住最长在途请求；data-service 宽限期由 30 改为 70，对齐它自己 60 秒的停机预算。scene_manager 的领导者在停机时主动让位（原本就有），排空迁移由接任者的周期 rebalance 接着做。逐服务的滚动演练仍要在集群上跑（[scene 计划排空](scene-node-planned-drain.md) §11 第 6 条）。
+- **Go 服务**（11-13，批 8）：§3.2 / §3.7 表里列的四处 Go 缺口都已处理。
+  - login 在途登录：停机时等已受理的 EnterGame 后台链（最多 15 秒），强退时限 21 秒；
+  - 换主空窗：跟随者的竞选间隔与锁 TTL 脱钩，由 10 秒改为 2 秒（`shared/leader` 与 login 排队放行者同一口径），现任让位后最迟 2 秒有新领导者；
+  - db 再平衡停顿：存档已改为直接提交，db 不再是 Kafka 消费组成员，这一条不复存在（§3.2 db 行已改写）；
+  - data_service 收尾预算：宽限期 70 秒（批 6）；guild 的有序收尾放宽到与其他服务相同的 24 秒硬截止。
+- **Kafka**（11-11）：拿 broker ACK 当提交点的两个写入器（scene_manager 路由命令、player_locator 清理命令）改 acks=all。审计流水（R13）的事务性发件箱由别的会话落码，状态以 [断线重连核对](infra-reconnect-overview.md) §4.1 为准。
+- 其余各行（etcd / TiDB 的滚动演练、`mmorpg` 库迁 TiDB、Redis 全部上 Cluster）是演练或别的会话在做的批次，状态不变。
 
 ## 4. 后续设计必须给出的契约
 

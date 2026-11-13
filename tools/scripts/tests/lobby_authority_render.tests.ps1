@@ -27,7 +27,7 @@ $TradeTiDBHost = $GlobalAuthorityTiDBHost; $FriendTiDBHost = $GlobalAuthorityTiD
 $MatchTiDBHost = $GlobalAuthorityTiDBHost; $PhysicalRegion = 7
 $DatabaseBackend = 'tidb'
 $KafkaBrokers = 3; $OpsProfile = 'custom'
-$script:MysqlUser = 'fixture'; $script:MysqlPassword = ''; $script:RedisPassword = ''
+$script:MysqlUser = 'fixture'; $script:RedisPassword = ''
 $script:GateTokenSecret = ''; $script:InternalAuthSigningKey = ''; $script:InternalAuthPublicKeys = ''
 $NodeImage = 'fixture.invalid/game:fixed'; $ImagePullPolicy = 'IfNotPresent'
 $SnowflakeCacheDir = '/run/snowflake'; $GrpcServerMaxPollers = 0; $GateRouterMode = '1'
@@ -133,6 +133,10 @@ foreach ($check in @(
 }
 $DatabaseBackend = 'tidb'
 Assert-Render ($match['GlobalMatch.RankEndpoint'] -eq 'rank.fixture-infra:51100') '匹配投榜误拨本地地址'
+# match 按这个命名空间向 K8s 查 battle 的原 Pod 还在不在(battle-instance-loss-early-abort.md §4.2):必须是部署 battle 的基础设施命名空间,
+# 写成别的命名空间「原 IP 上已没有存活的 Pod」会恒成立;服务自己的 yaml 不许写这个键(本机不查 Pod),只由部署脚本生成。
+Assert-Render ($match['GlobalMatch.BattlePodNamespace'] -eq 'fixture-infra') '匹配查 battle Pod 的命名空间必须是部署 battle 的基础设施命名空间'
+Assert-Render (-not (Get-YamlScalar -Path (Join-Path $RepoRoot 'go/match/etc/match_service.yaml') -KeyPath 'GlobalMatch.BattlePodNamespace').Found) '服务自己的 yaml 不该写 GlobalMatch.BattlePodNamespace'
 Assert-Render (-not $match.Contains('GlobalMatch.GuildTrialSchema') -and -not $match.Contains('GlobalMatch.AccountRoleSchema')) '匹配不再跨库，不该渲染这些库名'
 Assert-Render ($match['GlobalMatch.DbPlacement.DefaultCluster'] -eq 'main') '匹配的 DbPlacement 段要在 GlobalMatch 下'
 foreach ($key in @('GlobalMatch.CrossRegionWaitSeconds','GlobalMatch.HardLatencyMs','GlobalMatch.ProbeTTLSeconds','ResultTopic','RatingEnabled','RatingToleranceMaxWaitSeconds')) {

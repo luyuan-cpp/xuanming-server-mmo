@@ -775,6 +775,61 @@ TEST_F(PlayerFeaturePersistenceTest, RegisteredPlayerInitializesActorProjections
     ExpectLoadedActorProjections(created);
 }
 
+// 存档里的基础属性只有当前血蓝:力量、护甲、抗性、暴击每次加载按职业表写回(旧档里存着的值不沿用),速度由重算给出;
+// 存盘时这些派生值不写出去。这样改职业表对已经建好的角色同样生效,落库的行里也没有一份会过期的缓存。
+TEST_F(PlayerFeaturePersistenceTest, OnlyVitalsArePersistedAndClassAttributesAreRederivedOnLoad)
+{
+    const ScopedInitializationScene target;
+    ASSERT_FALSE(tlsEcs.playerList.contains(kPlayerId));
+    ASSERT_FALSE(tlsGuidSegmentRegistry.Get(GuidKind::kSnapshot).IsEnabled());
+    const auto& classes = ClassTableManager::Instance().FindAll();
+    ASSERT_GT(classes.data_size(), 0);
+    const auto& cls = classes.data(0);
+    PlayerAllData data;
+    auto* database = data.mutable_player_database_data();
+    database->set_player_id(kPlayerId);
+    database->mutable_uint32_pb_component()->set_class_(cls.id());
+    database->mutable_uint64_pb_component()->set_registration_timestamp(1);
+    database->mutable_level_component()->set_level(30);
+    auto* stored = database->mutable_derived_attributes_component();
+    stored->set_health(123); // 活着:血蓝不走回满
+    stored->set_mana(77);
+    // 旧档里存下来的派生值,故意与职业表不同。
+    stored->set_strength(cls.init_strength() + 1000);
+    stored->set_armor(cls.init_armor() + 1000);
+    stored->set_resistance(cls.init_resistance() + 1000);
+    stored->set_critchance(cls.init_critchance() + 1000);
+
+    const auto created = PlayerLifecycleSystem::InitPlayerFromAllData(data, target.Context());
+    PlayerMapCleanup mapCleanup{kPlayerId, created};
+    if (created != entt::null) players.push_back(created);
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(created));
+
+    const BaseAttributesComp live = tlsEcs.actorRegistry.get<BaseAttributesComp>(created);
+    EXPECT_EQ(cls.init_strength(), live.strength());
+    EXPECT_EQ(cls.init_armor(), live.armor());
+    EXPECT_EQ(cls.init_resistance(), live.resistance());
+    EXPECT_EQ(cls.init_critchance(), live.critchance());
+    EXPECT_GT(live.health(), 0u) << "活着的玩家血量不清零";
+    const auto* derived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(created);
+    ASSERT_NE(derived, nullptr);
+    EXPECT_EQ(derived->speed(), live.speed()) << "速度是重算结果的镜像";
+
+    PlayerAllData saved;
+    ASSERT_TRUE(PlayerAllDataMessageFieldsMarshal(created, saved));
+    const auto& persisted = saved.player_database_data().derived_attributes_component();
+    EXPECT_EQ(live.health(), persisted.health());
+    EXPECT_EQ(live.mana(), persisted.mana());
+    EXPECT_EQ(0u, persisted.strength());
+    EXPECT_EQ(0u, persisted.stamina());
+    EXPECT_EQ(0u, persisted.critchance());
+    EXPECT_EQ(0u, persisted.armor());
+    EXPECT_EQ(0u, persisted.resistance());
+    EXPECT_EQ(0u, persisted.speed());
+    EXPECT_EQ(live.SerializeAsString(), tlsEcs.actorRegistry.get<BaseAttributesComp>(created).SerializeAsString())
+        << "存盘只读,不改内存里的组件";
+}
+
 TEST_F(PlayerFeaturePersistenceTest, InitAdmitsNonCreatorIntoPrivateMirror)
 {
     const ScopedInitializationScene target;

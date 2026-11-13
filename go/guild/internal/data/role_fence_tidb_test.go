@@ -54,7 +54,9 @@ func TestTiDBRoleFenceFrozenRoleRejectsGuildWritesAndThawHeals(t *testing.T) {
 	var text string
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT announcement FROM guild WHERE guild_id=44").Scan(&text))
 	require.Empty(t, text)
-	require.ErrorIs(t, repo.CheckOriginalRole(actor), ErrWriteConflict, "预检读本库副本,同一个判据")
+	// 入口预检只判归属:冻结期间角色仍归原身份,读不拦;冻结的副本先读一次目录确认没有过户,写由上面的提交点拒绝。
+	require.NoError(t, repo.CheckOriginalRole(actor))
+	require.Len(t, directory.Reads, 2, "冻结的副本先读目录再判")
 	// 解冻推送丢了:下一次访问自愈,照常放行。
 	directory.Set(11, "seller", 1, 0)
 	require.NoError(t, repo.CheckOriginalRole(actor))

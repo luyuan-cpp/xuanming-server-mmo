@@ -435,6 +435,39 @@ func TestRecallStore_ResolveManuallyIfQuiet(t *testing.T) {
 	assert.EqualValues(t, 1, f.db.Count(t, "gm_recall_op", "op_id = ? AND resolved_by = 'tester'", ops[0].OpID))
 }
 
+// 人工终结和 ROLE_GONE 不是 scene 的答复:durable、last_outcome、last_reason 留着最后一次投递时 scene 实际回的值(事后核对用);
+// 只有自动终结把终结所凭的落盘答复写进去、置 durable=1。
+func TestRecallStore_ManualResolutionKeepsTheLastSceneAnswer(t *testing.T) {
+	f := newRecallFixture(t)
+	ops := f.createBatch(t, 1, 5, 901, 902, 903)
+	const lastReason = uint32(27001)
+	unknown := uint32(assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN)
+
+	f.claim(t, ops[0])
+	require.NoError(t, f.store.Reschedule(f.ctx, assetop.Op{OpID: ops[0].OpID, LeaseToken: 77}, 3500,
+		assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN, Reason: lastReason}, 3100))
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, assetop.ManualResolution{OpID: ops[0].OpID, Final: assetop.StatusAppliedPartial,
+		Operator: "tester", Reason: "账本判不了"}, f.witness(t, ops[0].OpID), 6000)
+	require.NoError(t, err)
+	require.True(t, resolved)
+	assert.EqualValues(t, 1, f.db.Count(t, "gm_recall_op", "op_id = ? AND status = ? AND durable = 0 AND last_outcome = ? AND last_reason = ? AND resolved_by = 'tester'",
+		ops[0].OpID, recallPartial, unknown, lastReason), "人工终结保留最后一次 scene 答复,不置 durable")
+
+	delete(f.roles, 902)
+	result, err := f.store.Dispatch(f.ctx, store.RecallPlanned{OpID: ops[1].OpID, PlayerID: 902}, 2000)
+	require.NoError(t, err)
+	require.Equal(t, store.RecallRoleGone, result)
+	assert.EqualValues(t, 1, f.db.Count(t, "gm_recall_op", "op_id = ? AND status = ? AND durable = 0 AND last_outcome = 0 AND last_reason = 0",
+		ops[1].OpID, recallRoleGone), "ROLE_GONE 从没投出去过,也不是 scene 的答复")
+
+	applied := f.claim(t, ops[2])
+	finalized, err := f.store.Finalize(f.ctx, applied, assetop.StatusApplied, appliedResult(&assetpb.AssetRecallLine{Requested: 5, Taken: 5}), 7000)
+	require.NoError(t, err)
+	require.True(t, finalized)
+	assert.EqualValues(t, 1, f.db.Count(t, "gm_recall_op", "op_id = ? AND status = ? AND durable = 1 AND last_outcome = ? AND resolved_by = ''",
+		ops[2].OpID, recallApplied, uint32(assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED)), "自动终结写终结所凭的落盘答复")
+}
+
 // 读证据之后重投循环又领了这一行:见证对不上,终结落空,批次计数与来源都不动;按新读的值再来才终结。
 func TestRecallStore_ResolveManuallyIfQuiet_MissesAfterAClaim(t *testing.T) {
 	f := newRecallFixture(t)

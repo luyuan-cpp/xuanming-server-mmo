@@ -125,10 +125,8 @@ $InfraEnv = @{ MMORPG_BATTLE_TOKEN_SECRET = 'contract-battle-ticket-0123456789ab
 $ProdEnv = @{
     MMORPG_GATE_TOKEN_SECRET        = 'contract-test-secret-0123456789abcdef0123'
     MMORPG_MYSQL_USER               = 'mmorpg_app'
-    MMORPG_MYSQL_PASSWORD           = 'contract-test-mysql-pw-01'
     MMORPG_REDIS_PASSWORD           = 'contract-test-redis-pw-01'
     MMORPG_GATEWAY_DB_USER          = 'gateway_app'
-    MMORPG_GATEWAY_DB_PASSWORD      = 'contract-test-gwdb-pw-01'
     MMORPG_INTERNAL_AUTH_SIGNING_KEY = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60'
     MMORPG_INTERNAL_AUTH_PUBLIC_KEYS = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
     MMORPG_GATEWAY_ADMIN_API_KEY    = 'contract-test-gw-admin-key-0123456789abcdef'
@@ -364,7 +362,40 @@ Test-Case 'dev zone-up:K=1、地域 0,池就是服务 yaml 的值,入口打印�
     }
     Assert-Match -Text $devZoneRun.Output -Pattern 'Logical databases: directory_shards=1 directory=mmorpg_global ledger=mmorpg_global_ledger id_region=0' -Because '入口打印一行本次形态'
     Assert-Match -Text $devZoneRun.Output -Pattern 'MySQL connection ledger by logical db: logical_shards=1 limit=tidb_budget' -Because 'tidb 档 K=1 也对照 TiDB 预算:mmorpg 迁走之后这一档没有 MySQL'
-    Assert-Match -Text $devMysqlZoneRun.Output -Pattern 'MySQL connection ledger by logical db: logical_shards=1 limit=mysql_manifest' -Because 'mysql 档照旧对照 mysql.yaml'
+    # mysql 档连外部主库($AuthorityHost)、dev 没给 -MysqlMaxConnections:仍按 mysql.yaml 的值比,但标明是假定值并另打一行说明。
+    Assert-Match -Text $devMysqlZoneRun.Output -Pattern 'MySQL connection ledger by logical db: logical_shards=1 limit=mysql_manifest_assumed ' -Because '外部主库的上限脚本读不到,dev 不给时不能把 mysql.yaml 的值说成它的上限'
+    Assert-Match -Text $devMysqlZoneRun.Output -Pattern 'MySQL connection ledger: the SQL entry is an external MySQL primary and -MysqlMaxConnections was not given' -Because '另打一行,点名该给的参数'
+    Assert-NotMatch -Text $devZoneRun.Output -Pattern '-MysqlMaxConnections was not given' -Because 'tidb 档对照 TiDB 预算,不提这个参数'
+}
+
+Test-Case 'SQL 连接总账的上限跟着连接实际打到的服务器走:外部 MySQL 主库用 -MysqlMaxConnections,staging / prod 不给就拒绝,给了用不上也拒绝' {
+    # 入口是集群内那台 MySQL(只在 dev):上限读 mysql.yaml,不用也不许给 -MysqlMaxConnections。
+    $inClusterArgs = @($ZoneArgs | ForEach-Object { if ($_ -ceq $AuthorityHost) { $InClusterMysqlHost } else { $_ } }) + @('-DatabaseBackend', 'mysql')
+    $inCluster = Invoke-LogicalDbDryRun -Arguments $inClusterArgs
+    Assert-Equal -Expected 0 -Actual $inCluster.ExitCode -Because "dev 用集群内 MySQL。输出: $($inCluster.Output)"
+    Assert-Match -Text $inCluster.Output -Pattern 'MySQL connection ledger by logical db: logical_shards=1 limit=mysql_manifest ' -Because '集群内 MySQL 的上限就是 mysql.yaml 写的值'
+    $inClusterWithLimit = Invoke-LogicalDbDryRun -Arguments ($inClusterArgs + @('-MysqlMaxConnections', '3000'))
+    Assert-True -Condition ($inClusterWithLimit.ExitCode -ne 0) -Because "入口是集群内 MySQL 时给了也不生效,要拒绝。输出: $($inClusterWithLimit.Output)"
+    Assert-Match -Text $inClusterWithLimit.Output -Pattern 'this run has no external MySQL primary' -Because '说明为什么用不上'
+    Assert-NotMatch -Text $inClusterWithLimit.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写路径入口拒绝'
+
+    # 外部主库:给了就拿它当上限,打在总账两行里。
+    $external = Invoke-LogicalDbDryRun -Arguments ($ZoneArgs + @('-DatabaseBackend', 'mysql', '-MysqlMaxConnections', '3000'))
+    Assert-Equal -Expected 0 -Actual $external.ExitCode -Because "输出: $($external.Output)"
+    Assert-Match -Text $external.Output -Pattern 'MySQL connection ledger: zones=\d+ steady=\d+ peak=\d+ max_connections=3000 ' -Because '上限是运维给的那台主库的 max_connections'
+    Assert-Match -Text $external.Output -Pattern 'MySQL connection ledger by logical db: logical_shards=1 limit=mysql_external ' -Because '来源标成外部主库'
+    Assert-NotMatch -Text $external.Output -Pattern '-MysqlMaxConnections was not given' -Because '给了就不再打假定值的说明'
+
+    # staging / prod 连外部主库却不给上限:总账不替运维猜,在任何写操作之前拒绝。
+    $prodNoLimit = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-DatabaseBackend', 'mysql')) -Env $ProdEnv
+    Assert-True -Condition ($prodNoLimit.ExitCode -ne 0) -Because "prod 的 mysql 档连外部主库必须给 -MysqlMaxConnections。输出: $($prodNoLimit.Output)"
+    Assert-Match -Text $prodNoLimit.Output -Pattern 'needs -MysqlMaxConnections' -Because '点名缺的参数'
+    Assert-NotMatch -Text $prodNoLimit.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写路径入口拒绝'
+
+    # tidb 档给了它:那一档对照 TiDB 预算,参数不生效,同样拒绝。
+    $tidbWithLimit = Invoke-LogicalDbDryRun -Arguments ($ZoneArgs + @('-MysqlMaxConnections', '3000'))
+    Assert-True -Condition ($tidbWithLimit.ExitCode -ne 0) -Because "tidb 档不认 -MysqlMaxConnections。输出: $($tidbWithLimit.Output)"
+    Assert-Match -Text $tidbWithLimit.Output -Pattern '-MysqlMaxConnections only applies to -DatabaseBackend mysql' -Because '说明它只属于 mysql 档'
 }
 
 Test-Case 'prod zone-up K=64:片数、每片池、地域码进 ConfigMap,上限换 TiDB 预算,存档库池按存档库数摊开' {
@@ -533,11 +564,13 @@ Test-Case '参与者清单等于 go/shared/rolefence 的 Participants,地址是 
     }
 }
 
-Test-Case 'guild、match 的 gRPC 准入放行 data-service,否则 -NetworkPolicies on 时协调者连不上' {
+Test-Case '受 gRPC 准入保护的角色护栏参与者都放行 data-service,否则 -NetworkPolicies on 时协调者连不上' {
     $node = $deployAst.Find({ param($a) $a -is [Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$script:GrpcAllowLists' }, $false)
     Assert-True -Condition ($null -ne $node) -Because '要有放行名单'
     $lists = & ([scriptblock]::Create($node.Right.Extent.Text))
-    foreach ($name in @('guild', 'match')) {
+    # 参与者里有准入策略的那几个(player_inbox 没有客户端入口,不设准入)。2026-11-12 起 trade、mail、friend 也受保护。
+    foreach ($name in @('guild', 'match', 'trade', 'mail', 'friend')) {
+        Assert-True -Condition ($lists.Contains($name)) -Because "$name 收玩家会话身份,要有准入名单"
         Assert-True -Condition ($lists[$name].AllowedApps -contains 'data-service') -Because "$name 是参与者"
     }
     Assert-True -Condition ($lists['guild'].AllowedApps -contains 'mail') -Because 'mail 读玩家所在的帮'
@@ -635,7 +668,11 @@ Test-Case 'TiDB 档(目录 64 片、存档库 64 个)峰值不超 TiDB 预算,My
 Test-Case '告警:规则名单和形状,指标名与取值从 Go 源码核对,闸门冻结时长有规则' {
     $alerts = Read-RepoText 'deploy/k8s/logical-db-alerts.yaml'
     $names = @([regex]::Matches($alerts, '(?m)^\s+- alert: (\S+)') | ForEach-Object { $_.Groups[1].Value })
-    Assert-Equal -Expected 'DbPlacementRejected,DbPlacementSyncFailing,DbPlacementVersionLagging,RoleFencePrepareStale,RoleFencePrepareUnreachable,RoleFencePushFailing,SqlWriterRegistrarFailing,WriterGateFrozenTooLong' -Actual (($names | Sort-Object) -join ',') -Because '规则名单'
+    Assert-Equal -Expected 'DbPlacementRejected,DbPlacementSyncFailing,DbPlacementVersionLagging,RoleFencePrepareStale,RoleFencePrepareUnreachable,RoleFencePushFailing,SqlWriterRegistrarFailing,SqlWriterSlotRetirerFailing,WriterGateFrozenTooLong' -Actual (($names | Sort-Object) -join ',') -Because '规则名单'
+    # 缩容收尾 CronJob 的名字前缀与 k8s_deploy.ps1 起的名字一致,告警才对得上(docs/design/writer-roster-exhaustion-20261106.md §5.8)。
+    Assert-Match -Text $alerts -Pattern 'kube_cronjob_status_last_successful_time\{cronjob=~"sql-writer-slot-retirer-\.\+"\}' -Because '缩容收尾一直失败要靠这条发现'
+    Assert-Match -Text $alerts -Pattern 'kube_cronjob_created\{cronjob=~"sql-writer-slot-retirer-\.\+"\}' -Because '从没成功过的 CronJob 也要报'
+    Assert-Match -Text (Read-RepoText 'tools/scripts/k8s_deploy.ps1') -Pattern '\$name = "sql-writer-slot-retirer-\$StatefulSet"' -Because '告警里的 CronJob 名前缀和部署脚本一致'
     Assert-Match -Text $alerts -Pattern 'kube_pod_init_container_status_restarts_total\{container="sql-writer-registrar"\}' -Because '回收 CronJob 不删 init 反复失败的 Pod,要靠这条发现,副本数比名册槽位多也在这里'
     Assert-Match -Text (Read-RepoText 'deploy/k8s/manifests/go-svc/data-service.yaml') -Pattern '(?m)^        - name: sql-writer-registrar\s*$' -Because '告警里的 init 容器名和清单一致'
     Assert-Match -Text $alerts -Pattern 'kube-state-metrics' -Because '抓取前提写明白,没有它这条是哑的'
@@ -809,7 +846,8 @@ Test-Case '网关的 mmorpg 跟全球权威入口:档位写成 mmorpg.sql.backen
     Assert-NotMatch -Text $noHost.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写路径入口拒绝'
 
     # MySQL 主从省钱档在 prod 也能部署网关:Java 的 mysql 档逐条物理连接核对端是可写的 MySQL 主库。入口是外部主库,建表 Job 照跑。
-    $prodMysql = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-DatabaseBackend', 'mysql')) -Env $ProdEnv
+    # prod 连外部主库要给那台主库的 max_connections(连接总账的上限,见上面「SQL 连接总账的上限」那条用例)。
+    $prodMysql = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-DatabaseBackend', 'mysql', '-MysqlMaxConnections', '12000')) -Env $ProdEnv
     Assert-Equal -Expected 0 -Actual $prodMysql.ExitCode -Because "prod 的 mysql 档。输出: $($prodMysql.Output)"
     $prodMysqlFlat = Get-ConfigFlat -Output $prodMysql.Output -ConfigMap 'java-svc-gateway-config'
     Assert-Equal -Expected 'mysql' -Actual (Get-FlatValue -Flat $prodMysqlFlat -KeyPath 'data.application.yaml.mmorpg.sql.backend') -Because 'prod 的 mysql 档按主库核对'
@@ -819,14 +857,14 @@ Test-Case '网关的 mmorpg 跟全球权威入口:档位写成 mmorpg.sql.backen
     Assert-Match -Text $prodMysqlJob[0] -Pattern 'name: MMORPG_SQL_BACKEND\s+value: "mysql"' -Because 'writer_authority 按 mysql 档连'
 }
 
-Test-Case '网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就是网关的 schema.sql,先于网关 Deployment;只有入口是集群内 MySQL 时不渲染' {
-    Assert-Match -Text (Read-RepoText 'go/data_service/cmd/writer_authority/main.go') -Pattern 'flags\.String\("ddl-file"' -Because 'writer_authority 有 -ddl-file(前提)'
+Test-Case '网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就是网关的 schema.sql 加 login 的口令凭据表,先于网关 Deployment;只有入口是集群内 MySQL 时不渲染' {
+    Assert-Match -Text (Read-RepoText 'go/data_service/cmd/writer_authority/main.go') -Pattern 'flags\.Var\(&ddlFiles, "ddl-file"' -Because 'writer_authority 有可重复的 -ddl-file(前提)'
     $jobs = @(Get-ManifestBlocks -Output $devZoneRun.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: gateway-schema\s*$' })
     Assert-Equal -Expected 1 -Actual $jobs.Count -Because 'tidb 档恰好一份'
     $job = $jobs[0]
     Assert-NotMatch -Text $job -Pattern 'PLACEHOLDER_' -Because '占位全部替换'
     Assert-Match -Text $job -Pattern ('(?m)^\s+image: ' + [regex]::Escape('fixture.invalid/registrar@sha256:' + ('a' * 64)) + '\s*$') -Because '镜像是 boot 目录 gateway 条目的 registrarImage,按摘要固定'
-    Assert-Match -Text $job -Pattern 'args: \["-command", "prepare-schema", "-schema", "mmorpg", "-ddl-file", "/app/gateway-schema/schema\.sql"' -Because '闸门表和业务表一次建完'
+    Assert-Match -Text $job -Pattern 'args: \["-command", "prepare-schema", "-schema", "mmorpg", "-ddl-file", "/app/gateway-schema/schema\.sql", "-ddl-file", "/app/gateway-schema/login-password-auth\.sql", "-timeout", "60s"\]' -Because '闸门表和两个属主的业务表一次建完:先网关的区目录表,再 login 的口令凭据表'
     foreach ($key in @('dsn', 'principal')) {
         Assert-Match -Text $job -Pattern ('valueFrom: \{secretKeyRef: \{name: fixture-schema-permission, key: ' + $key + ', optional: false\}\}') -Because "schema 身份的 $key 来自 schemaPermissionSecret,不用网关常驻账号"
     }
@@ -840,12 +878,20 @@ Test-Case '网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就是网关�
     Assert-Match -Text $job -Pattern 'mountPath: /app/gateway-schema, readOnly: true' -Because '-ddl-file 读挂载的 ConfigMap'
     Assert-Match -Text $job -Pattern 'configMap: \{name: gateway-schema-sql\}' -Because '挂的就是渲染出的 DDL ConfigMap'
 
-    # ConfigMap 的内容逐行等于 schema.sql:业务表只有这一份来源。
-    $configMap = Get-ConfigBlock -Output $devZoneRun.Output -ConfigMap 'gateway-schema-sql'
-    $body = [regex]::Match(($configMap -replace "`r`n", "`n"), '(?ms)^  schema\.sql: \|\n(?<body>.*)$').Groups['body'].Value
-    $rendered = @($body.TrimEnd("`n") -split "`n" | ForEach-Object { $_ -replace '^    ', '' }) -join "`n"
-    $expected = ((Read-RepoText 'java/gateway_node/src/main/resources/schema.sql') -replace "`r`n", "`n").TrimEnd("`n")
-    Assert-Equal -Expected $expected -Actual $rendered -Because 'DDL ConfigMap 就是网关的 schema.sql'
+    # ConfigMap 每个键的内容逐行等于它的来源文件:每张表的建表语句只有一份来源。键的先后就是 Job 里 -ddl-file 的先后。
+    $configMap = (Get-ConfigBlock -Output $devZoneRun.Output -ConfigMap 'gateway-schema-sql') -replace "`r`n", "`n"
+    $ddlSources = [ordered]@{
+        'schema.sql'              = 'java/gateway_node/src/main/resources/schema.sql'
+        'login-password-auth.sql' = 'go/login/model/password_auth_schema.sql'
+    }
+    $ddlKeys = @([regex]::Matches($configMap, '(?m)^  (?<key>[A-Za-z0-9._-]+): \|$') | ForEach-Object { $_.Groups['key'].Value })
+    Assert-Equal -Expected (@($ddlSources.Keys) -join ',') -Actual ($ddlKeys -join ',') -Because 'ConfigMap 的键就是这两个 DDL 文件,先后与 Job 的 -ddl-file 相同'
+    foreach ($key in $ddlSources.Keys) {
+        $body = [regex]::Match($configMap, '(?ms)^  ' + [regex]::Escape($key) + ': \|\n(?<body>.*?)(?=\n  [A-Za-z0-9._-]+: \|\n|\z)').Groups['body'].Value
+        $rendered = @($body.TrimEnd("`n") -split "`n" | ForEach-Object { $_ -replace '^    ', '' }) -join "`n"
+        $expected = ((Read-RepoText $ddlSources[$key]) -replace "`r`n", "`n").TrimEnd("`n")
+        Assert-Equal -Expected $expected -Actual $rendered -Because "DDL ConfigMap 的 $key 就是 $($ddlSources[$key])"
+    }
 
     $applied = $devZoneRun.Output.IndexOf('[applied] gateway-schema -> fixture.invalid/registrar@sha256:')
     Assert-True -Condition ($applied -ge 0) -Because '打印镜像'
@@ -861,6 +907,26 @@ Test-Case '网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就是网关�
     Assert-NotMatch -Text $inCluster.Output -Pattern '(?m)^  name: gateway-schema(-sql)?\s*$' -Because '集群内 MySQL 由 mysql-init 建这个库'
     $inClusterFlat = Get-ConfigFlat -Output $inCluster.Output -ConfigMap 'java-svc-gateway-config'
     Assert-Equal -Expected 'mysql' -Actual (Get-FlatValue -Flat $inClusterFlat -KeyPath 'data.application.yaml.mmorpg.sql.backend') -Because '集群内 MySQL 同样按主库核对'
+}
+
+Test-Case 'mmorpg 的两条建表路径不漂移:gateway_tables.sql(本机与集群内开发 MySQL)原样包含建表 Job 执行的每一份 DDL 文件' {
+    # 建表 Job 读的是各属主自己的文件;docker 的 initdb 只能吃一份自带 USE 的脚本,所以 gateway_tables.sql 里另有一份。
+    # 两边靠人手同步时,改了一边忘了另一边不会有任何报错:本机 MySQL 与 K8s 上的表结构就此不同。这里机械钉住。
+    # 比较前去掉整行注释、把连续空白压成一个空格;语句本身(含列注释)必须逐字相同。
+    $normalize = {
+        param([string]$Text)
+        $kept = ($Text -replace "`r`n", "`n") -split "`n" | Where-Object { $_.Trim() -cnotmatch '^--' }
+        return ((($kept -join "`n") -replace '\s+', ' ').Trim())
+    }
+    $init = & $normalize (Read-RepoText 'deploy/mysql-init/gateway_tables.sql')
+    $deploy = Read-RepoText 'tools/scripts/k8s_deploy.ps1'
+    $sources = @([regex]::Matches($deploy, "(?m)^\s*\[pscustomobject\]@\{ Key = '(?<key>[^']+)'; Source = '(?<source>[^']+)' \}\s*$") | ForEach-Object { $_.Groups['source'].Value })
+    Assert-Equal -Expected 'java/gateway_node/src/main/resources/schema.sql,go/login/model/password_auth_schema.sql' -Actual ($sources -join ',') -Because 'Get-MmorpgSchemaDdlFiles 列出的就是这两份来源(加了属主要同步改这条用例与 gateway_tables.sql)'
+    foreach ($source in $sources) {
+        $ddl = & $normalize (Read-RepoText $source)
+        Assert-True -Condition ($ddl.Length -gt 0) -Because "$source 不是空文件"
+        Assert-True -Condition ($init.Contains($ddl)) -Because "deploy/mysql-init/gateway_tables.sql 必须原样包含 $source 的全部语句(先后相同),两边一起改"
+    }
 }
 
 Test-Case '-Region 注入 data-service 主容器,所有档位都写;go/db 注入 POD_IP;dev 的 Schema.AutoMigrate 也是 false' {
@@ -1107,7 +1173,7 @@ Test-Case '手册:开新地域的手册写清地域码的约束,docs/README 登�
     }
     Assert-Match -Text (Read-RepoText 'docs/README.md') -Pattern 'ops/open-new-region-runbook\.md' -Because '文档总索引登记'
     $openServer = Read-RepoText 'docs/ops/k8s-open-server-runbook.md'
-    foreach ($key in @('role-fence-coordinator', 'role-fence-guild', 'role-fence-trade', 'role-fence-mail', 'role-fence-match', 'role-fence-player-inbox', 'role-fence-friend', 'role-fence-chat', 'role-fence-db', 'match-internal-guild')) {
+    foreach ($key in @('role-fence-coordinator', 'role-fence-guild', 'role-fence-trade', 'role-fence-mail', 'role-fence-match', 'role-fence-player-inbox', 'role-fence-friend', 'role-fence-chat', 'role-fence-db', 'match-internal-guild', 'mail-producer-battle')) {
         Assert-True -Condition ($openServer.Contains($key)) -Because "预置清单要有 $key"
     }
     Assert-Match -Text $openServer -Pattern 'DirectoryLogicalShards = 64' -Because '部署参数示例'

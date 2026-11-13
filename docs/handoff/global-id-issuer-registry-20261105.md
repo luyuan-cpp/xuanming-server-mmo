@@ -1,6 +1,6 @@
 # 交接:发号器三份记录与全局号源登记处(交 Codex 验证,2026-11-05)
 
-> 状态:**Codex 已修复 §4.1 三项问题并补回归；最新证据见 §5。Go 固定副本构建、单测及真 etcd 回归通过；部署大套和本轮快照演练尚未全部完成。Claude Code 11-10 独立审核见 §6：发现 1 个高危问题（同命名空间部署出的 etcd 集群号相同，地域码绑定分不出两套环境），整体验收不通过，待用户决定是否修复。11-11 第二轮独立审核见 §7：同意 §6，另补修法限制与 4 个新问题（1 个中低、3 个低）。11-11 已按「令牌 + 运行期部署身份」修 §6.2、§6.3，见 §8。其余查出的问题（§6.4、§6 低危、§7.3 四项）同日在 §9 全部修完，包括登记处双向 TLS、按顺序认领、换码参数 `-IdIssuerRegion`。全部未编译、未运行，待 Codex 按 §8.3、§9.2 验证。** Java 版本轮不实现(用户 11-05:「java 先不要实现」),只在 Java 仓 `PARITY.md` 记待做。
+> 状态:**Codex 已修复 §4.1 三项问题并补回归；最新证据见 §5。Go 固定副本构建、单测及真 etcd 回归通过；部署大套和本轮快照演练尚未全部完成。Claude Code 11-10 独立审核见 §6：发现 1 个高危问题（同命名空间部署出的 etcd 集群号相同，地域码绑定分不出两套环境），整体验收不通过，待用户决定是否修复。11-11 第二轮独立审核见 §7：同意 §6，另补修法限制与 4 个新问题（1 个中低、3 个低）。11-11 已按「令牌 + 运行期部署身份」修 §6.2、§6.3，见 §8。其余查出的问题（§6.4、§6 低危、§7.3 四项）同日在 §9 全部修完，包括登记处双向 TLS、按顺序认领、换码参数 `-IdIssuerRegion`。11-12 静态走查又查出四处并修了，见 §10：登记处丢码后拷来的记录能重新登记（会重号）、给没认领过的码补墓碑会卡死之后的认领、预留冲突重试没有退避、手册里退役别的码的做法跑不通。全部未编译、未运行，待 Codex 按 §8.3、§9.2、§10.2 验证。** Java 版本轮不实现(用户 11-05:「java 先不要实现」),只在 Java 仓 `PARITY.md` 记待做。
 > 需求来源:用户 11-05 贴的三个问题(两套 etcd 同时回档会重发、地域码防重靠人工、Java 版未对齐)和 [10-28 交接](./global-id-prelaunch-claude-20261028.md)。10-28 交接写的是 SQL `id_segment` 号段,10-30 起发号器已换成 etcd,本轮按当前代码修。
 > 设计以 [总体方案](../design/player-data-tidb-scaling-plan.md) §6.3 为准,运维以 [发号器运维手册](../ops/id-issuer-runbook.md) 为准。
 
@@ -299,7 +299,7 @@ go test -mod=readonly -tags etcd_integration -count=1 -v -timeout 2m -run TestEt
 - 调用方抽查：
   - login 建角只有号段一条路，`idsegment.Minter` 没有回退。
   - match 的 battle、challenge、team 走号段。
-  - login 里的 `PlayerIDGen`（snowflake）没有发号调用方，只剩节点槽位和水位维护（设计 §6.4 已记，可单独清理）。
+  - login 里的 `PlayerIDGen`（snowflake）没有发号调用方，只剩节点槽位和水位维护（设计 §6.4 已记，可单独清理）。**2026-11-12 已清理**：login、guild 不再申领槽位、不写水位、没有失槽退出，配置、清单与 C++ 节点的槽位缓存残留一并删除（未编译，见 PROGRESS 同日条目）。
   - scene_id 仍是 snowflake，设计明示不在本线。
   - C++ 调用方没有逐个看。
 - 部署：三套 etcd 清单的引导参数；`k8s_deploy.ps1` 的 `Resolve-IdRegistryEtcd` 和写路径预检。
@@ -806,7 +806,7 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 
 通过标准：
 - 解析无错，前五套全部 PASS、退出 0；
-- `k8s_deploy_contract` 末尾的两条发号器用例 PASS，这套已知的其他失败逐条列名、分开报告。
+- `k8s_deploy_contract` 末尾的两条发号器用例 PASS，§9.4 列的 7 条也 PASS；这套已知的其他失败逐条列名、分开报告。
 
 **④ 可选 kind 冒烟**：按 §8.4 末尾的四条 kubectl。
 
@@ -818,3 +818,214 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 - 部署账号能读 `namespaces/kube-system`，能建 ClusterRole / ClusterRoleBinding。
 
 Java 0.1.0-SNAPSHOT：Java 版没有发号器和登记处，`PARITY.md` 11-05 的发号器待做照旧。
+
+### 9.4 2026-11-12 顺带修的合同测试（只改测试，未运行）
+
+§9.2 ③ 要跑 `tools/scripts/tests/k8s_deploy_contract.tests.ps1`。核对时发现这套里有 7 条用例和发号器无关、却一定会红：缺口第 22 条把 SQL 写者（含 Java gateway）改成了 StatefulSet（`docs/design/writer-roster-exhaustion-20261106.md` §5.5），测试还留着 Deployment 时代的断言。清单和 `k8s_deploy.ps1` 没动，用例标题没改。
+
+| 用例 | 原来为什么会红 | 现在断什么 |
+|---|---|---|
+| `data-service 是多副本形态…`、`db 是多副本形态…`、`guild 部署形态…` | 要求 `rollingUpdate` 下有 `maxSurge: 1`、`maxUnavailable: 0`，StatefulSet 没有这两个字段 | `serviceName`、`podManagementPolicy: Parallel`、`updateStrategy` 是 `RollingUpdate`，非注释行不出现 `maxSurge` |
+| `mail 现役部署…` | 要求清单原文里有 `maxSurge: 1`、`maxUnavailable: 0` | 同上，另加 `kind: StatefulSet` |
+| `rank 部署形态…` | 「不许出现 maxSurge」被清单注释里的「不能 maxSurge」误伤 | 只看非注释行 |
+| `共享 Redis 口令(prod zone-up)…`、`共享 Redis 口令(带口令的 infra-up)…` | 选文档的 `Select-SharedRedisDeploymentDoc` 只认 `kind: Deployment`，login、data-service、db、gateway 和全局写者都选不到 | 删掉这个函数，改用文件开头已有的 `Select-WorkloadSecretDoc` |
+
+五处「非注释行不出现 `maxSurge`」共用一个模式变量 `$WriterMaxSurgeKeyPattern`，定义在 data-service 用例前面。
+
+这 7 条如果还红，保留用例名和断言原文，归写者名册（缺口第 22 条）那条线看，不算发号器的失败。
+
+## 10. 2026-11-12 第三批：静态走查又查出的四处（未编译、未运行，待 Codex 验证）
+
+用户再次要求把查出的问题现在修完、不等压测。「永久ID发号器与全局号源审核」会话把 §8、§9 落下的代码又逐行走查了一遍，查出下面四处并修了。只动 `idissuer` 包、`svc` 的发号器装配、`data_service.go` 的运维入口和文档；部署侧没有改动。「全球同服发号三个问题修复」会话确认不碰这些文件。
+
+### 10.1 问题与修法
+
+**① 登记处丢了某个码之后，拷来的本地记录可以用来重新登记（会重号）**
+
+- 触发：别的 K8s 集群里有原地域 etcd 数据的克隆（集群级备份恢复）。登记处完好时它被部署身份挡住；登记处丢了这个码，它跑 `-id-issuer-recover` 就按自己那份过期的本地水位重新登记，绑定到自己。
+- 影响：原地域被挡在外面；克隆从过期水位往上发的号，和原地域发过的重叠。
+- 根因：§8 把部署身份只存在登记处。登记处一丢，幸存的本地记录证明不了谁是绑定的那一份，也证明不了它们不是旧拷贝。
+- 修法：
+  - 两份本地记录也写上部署身份（JSON 加可缺省的 `deployment`），每次预留、初始化、恢复建记录时写入。
+  - `Recover` 的「登记处没有这个码」分支：在的本地记录必须都是本环境写下的，否则返回新错误 `ErrForeignRecords`，带 `-id-issuer-rebind` 也不放行。
+  - 预留路径不看本地记录里的身份，仍以登记处的绑定为准。
+- 为什么 rebind 也不放行：登记处在的时候，错误的 rebind 只影响可用性，水位由登记处盖住。登记处没有这个码时，拷来的记录就是唯一的水位，而它可能比原环境发过的号旧。灾备环境遇上登记处同时丢码，只能换发号码（手册 §4.3、§4.5）。
+
+**② 给没认领过的码补墓碑，会把之后的认领全部卡死**
+
+- 触发：§9 把认领改成「只认下一个可认领的码」，而 `Retire` 对登记处里没有的码照旧直接写墓碑。地域码填错（比如该退 4 填成 40）就会在指针之上留下一条墓碑。
+- 影响：顺序认领走到这个码时既认领不了、也推不过去，更大的码永远用不上。没有修复入口。
+- 修法：登记处在「给没有记录的码补一条」的同一个事务里守住「有记录的码都小于下一个可认领的码」（`EtcdRegistry.createEntry`，契约写在 `Registry.CompareAndSwap`）：
+
+  | 情形 | 结果 |
+  |---|---|
+  | 登记处没开启（重建中） | 直接写，开启时再核对 |
+  | 码小于指针 | 直接写 |
+  | 在用的码不小于指针（Recover 凭本地记录重新登记） | 写入，指针推到它后面 |
+  | 墓碑恰好在指针上 | 写入，指针加一：这就是「跳过一个码」 |
+  | 墓碑大于指针 | 拒绝，`ErrRegionOutOfOrder`，什么都不写 |
+
+**③ 预留遇到 CAS 冲突立刻重试，没有退避和抖动**
+
+- 依据：AGENTS §11.3 要求重试有退避和抖动。§7.5 把「大量副本同时重启时的预留争抢」列为没有证据的一项，用户要求不等压测、按标准定。
+- 影响：同一地域的全部 data-service 副本共用三份记录。整地域冷启动时它们同步相撞，每撞一次白白前进一块（只浪费值域，不重号），8 轮很快用完。
+- 修法：一次预留里，冲突之后的下一轮开始前等 `[0, 上限)` 的随机时长，上限从 10 毫秒起逐轮翻倍、封顶 320 毫秒；受预留的 ctx 约束。7 次等待最多共约 1 秒。这几个数没有实测依据，压测后可以调，不影响唯一性。
+
+**④ 手册里「复制一份配置、把 Region 改成那个码再退役」在 Pod 里跑不通**
+
+- 触发：§4.3 给退役码补墓碑、§4.6 退役已下线的地域，都要操作配置以外的码。而 data-service 启动时会比对配置里的地域码和部署注入的 `MMORPG_ID_ISSUER_EXPECTED_REGION`，改过的配置副本直接被拒。
+- 修法：新参数 `-id-issuer-retire-code <码>`，只能和 `-id-issuer-retire` 一起用，必须是 1..63；显式给了不合法的值就报错，不回落到配置里的码。这一条路不比部署注入的地域码（`svc.NewIdIssuerForRegionCode`），其余装配不变，所以在用的码照样被绑定核对拒绝。
+
+改动文件：
+
+| 文件 | 改动 |
+|---|---|
+| `go/data_service/internal/idissuer/issuer.go` | `Record.Deployment`；`CounterStore.CompareAndSwap` 多一个 `deployment` 参数；`writtenHere`、`ErrForeignRecords`；`conflictPause`、`conflictBackoffLimit` 和预留循环里的等待；`Retire` 对 `ErrRegionOutOfOrder` 原样返回；`ErrRegionClaimed` 的提示改成「用下一个可认领的码」 |
+| `.../idissuer/etcd_store.go` | 本地记录 JSON 加 `deployment` 和共用校验 `validRecord`；`createEntry`、`allowCreateAtOrAboveNext` |
+| `.../idissuer/issuer_test.go` | 内存替身同步两条规则；夹具默认不等待；新增 12 个用例，见下 |
+| `.../idissuer/etcd_integration_test.go` | `StoreContract` 补本地记录身份的往返、格式不对的身份拒写、补记录的四种情形 |
+| `go/data_service/internal/svc/servicecontext.go`、`id_issuer_region_test.go` | `NewIdIssuer` 拆出 `newIdIssuer`，新增 `NewIdIssuerForRegionCode`；用例 `TestNewIdIssuerForRegionCode_SkipsTheDeploymentRegionCheck` |
+| `go/data_service/data_service.go`、`data_service_entry_test.go` | `-id-issuer-retire-code`、`flagGiven`、`retireIssuerFactory`；`runIdIssuerTool` 的装配函数改为参数；`TestSelectEntry` 加 3 行，新增 `TestRetireIssuerFactory` |
+| `tools/scripts/tests/id_issuer_deploy_contract.tests.ps1` | 「运维手册」那条用例：flag 清单补上 `-id-issuer-retire-unbound`、`-id-issuer-retire-code`，按整词匹配，并核对每个 flag 在 `data_service.go` 里真有定义 |
+| 文档 | 发号器手册 §1、§4.3、§4.6、§4.7、§5、§6；设计 §6.3 |
+
+`issuer_test.go` 新增或改写的用例：
+
+- 退避：`TestReserve_ConflictsBackOffBeforeRetrying`、`TestReserve_StopsWhenTheConflictPauseIsInterrupted`、`TestConflictBackoffLimit_DoublesUpToTheCap`、`TestConflictPause_ReturnsAtOnceWhenTheContextIsDone`。
+- 拷来的记录：`TestRecovery_RegistryEntryLostCopyOfTheRecordsCannotReRegister`、`TestRecovery_RegistryEntryLostRecordsNotWrittenHereAreNotATrustedBound`、`TestRecordJSON_CarriesTheDeployment`。
+- 补记录的规则：`TestRetire_WritesATombstoneForAnUnknownCodeBeforeTheRegistryOpens`（由原 `TestRetire_WritesATombstoneForAnUnknownCode` 改写，原用例断言的正是会卡死的行为）、`TestRetire_WritesATombstoneForAUsedCodeThatLostItsEntry`、`TestRetire_ACodeAboveTheNextClaimableOneIsRefused`、`TestRetire_TheNextClaimableCodeIsSkippedAndClaimingGoesOn`、`TestRecovery_ReRegisteringAtOrAboveTheNextClaimableCodeAdvancesIt`。
+
+### 10.2 交 Codex
+
+工作目录 `go/data_service`，`GOTOOLCHAIN=local`。这一批和 §9.2 ① 是同一组命令，§9.2 还没跑的话合并成一轮即可；失败保留完整输出，不连续重试，不放宽断言。
+
+```powershell
+gofmt -l ./internal/idissuer ./internal/clusteridentity ./internal/config ./internal/logic ./internal/metrics ./internal/svc ./data_service.go ./data_service_entry_test.go
+go build -mod=readonly ./...
+go vet -mod=readonly ./internal/idissuer/ ./internal/clusteridentity/ ./internal/config/ ./internal/logic/ ./internal/metrics/ ./internal/svc/ .
+go vet -mod=readonly -tags etcd_integration ./internal/idissuer/
+go test -mod=readonly -count=1 -v -timeout 3m ./internal/idissuer/ ./internal/clusteridentity/ ./internal/config/ ./internal/logic/
+go test -mod=readonly -count=1 -v -timeout 2m -run 'TestNewIdIssuer|TestCheckExpectedRegion|TestSelectEntry|TestRetireIssuerFactory' ./internal/svc/ .
+```
+
+通过标准：
+
+- 全部 exit 0，`gofmt -l` 无输出。
+- §10.1 列的 12 个 `idissuer` 用例、`TestNewIdIssuerForRegionCode_SkipsTheDeploymentRegionCheck`、`TestRetireIssuerFactory` 都实际运行并 PASS，`idissuer` 0 SKIP。
+- 有 CGO 时再跑 `go test -race -count=1 ./internal/idissuer/`。
+
+仓库根目录再跑一条契约（§9.2 ③ 里已有，这一批改了其中一条用例）：
+
+```powershell
+pwsh -NoProfile -File tools/scripts/tests/id_issuer_deploy_contract.tests.ps1
+```
+
+通过标准：全部 PASS、退出 0。
+
+真 etcd（Docker 修好之后）：按 §8.3 起五个节点，跑 `TestEtcdIntegration`。`StoreContract` 里新加的断言要过：本地记录读回 `deployment`；格式不对的身份拒写；墓碑大于指针被拒、等于指针被跳过、在用的码重新登记后指针到 8。
+
+### 10.3 兼容与没做的
+
+- 本地记录多了 `deployment` 字段。dev 写的记录没有它，照样能读，dev 不用清数据。生产形态下，旧二进制读到带这个字段的记录会当作损坏（严格解码），新旧不能混跑。项目未上线，没有存量。
+- `CounterStore.CompareAndSwap` 的签名变了，包外没有实现方和调用方。
+- 登记处重建时（还没开启）补墓碑，没有指针可以对照，填错的码也会写进去，之后开启会被它卡住。~~手册 §4.3 第 3 步写了处置：确认没开启、这个码没用过，两人核对后删掉那一条。~~ 已由 §11 ① 修掉，手工删记录的例外随之删除。
+- 本环境自己写的本地记录在同一个 K8s 集群里被回档、同时登记处丢码，仍然查不出来，这是原来就有的「三处同时出事」残余。已由 §11 ② 处理，剩下的残余见 §11.5。
+- Java 0.1.0-SNAPSHOT：不涉及，Java 版没有发号器和登记处，`PARITY.md` 11-05 的发号器待做照旧。
+
+## 11. 2026-11-12 第四批：§10.3 的两处残余（未编译、未运行，待 Codex 验证）
+
+用户要求把 §10.3 列的两处残余现在处理掉。「永久ID发号器与全局号源审核」会话改的，只动 `idissuer` 包、`metrics` 的说明文字、`data_service.go` 的运维入口、契约测试和文档；部署侧、`svc` 装配没有改动。
+
+### 11.1 问题与修法
+
+**① 登记处重建、还没开启时补墓碑，没有指针可对照**
+
+- 触发：§10 定的重建顺序是「重新登记 → 补墓碑 → 开启」，补墓碑时还没有「下一个可认领的码」。
+- 影响：填错的码（该补 4 填成 40）照样写进去。之后开启必须高于全部已有记录：要么把指针开到 41、烧掉中间的码，要么手工删登记处记录（手册里唯一的手工改登记处例外）。
+- 修法：「下一个可认领的码」加一个「重建中」状态，值是 `{"next":N,"rebuilding":true}`。
+  - 新入口 `-id-registry-rebuild -id-registry-next <台账最大码+1>`（`Issuer.BeginRegistryRebuild` → `Registry.BeginRebuild`）：声明指针，不开放认领。声明时核对已有记录都小于它，扫描之后连同地域键范围在提交点复核（`declarePointer`，和原来的开启是同一段代码）。已经声明过就什么也不做。
+  - 没有指针时补墓碑一律拒绝（`ErrRegistryNotOpened`，`allowCreateWithoutPointer`）。在用的码照旧可以直接写：dev 第一次预留时认领；在用的地域先于声明重新登记，发号尽早恢复。
+  - 重建中补记录按指针核对，规则同 §10.1 ②；推指针时保留重建标记。
+  - 重建中初始化拒绝（`ErrRegistryRebuilding`）。在用的地域还没全部重新登记时，新地域可能认领到一个台账漏记、还没登记回来的码。
+  - `-id-registry-open` 结束重建：`-id-registry-next` 必须等于登记处里现在的值（重建期间可能被推高过），否则 `ErrNextRegionMismatch`，什么都不写（`finishRebuild`）。
+  - 有地域记录却没有指针时，`-id-registry-open` 拒绝直接开启（`ErrRegistryNeedsRebuild`）。生产只有 Recover 会在没有指针时写记录，所以这只能是丢过数据的登记处；直接开启会跳过「重建期间不许认领」那段窗口。没有任何记录的新世界照旧直接开启。
+  - 手册 §4.3 删掉手工 `etcdctl del` 的例外，契约测试断言它不再出现。
+
+**② 同一个集群里本地记录被回档、登记处又同时丢码，查不出来**
+
+- 触发：本环境自己的本地两套 etcd 被恢复到旧快照（部署身份不变，§10 的 `writtenHere` 照样通过），同时登记处丢了这个码；或者三份一起回档。
+- 影响：`Recover` 按过期的本地水位重新登记，之后发的号和快照之后预留过的块重叠。三份一起回档时，预留直接从过期水位起步。
+- 修法，两样一起：
+  - **活着的进程作证**。每个 `Issuer` 记住自己确认过的水位（`witnessHigh`）：自己三份都写成功的块尾，以及作证检查读到的登记处水位。登记处最后写，读到的值另外两份也写到过；三份只增不减，所以低于它只能是被回档或丢了，没有并发误报。
+    - `nextStart` 的起点不低于它；三份都低于它时上报 `records_behind_issuer`。
+    - 第一次预留成功后起作证检查（`checkRecords`，每 10 秒，`recordCheckInterval`）：三份里低于它的抬回去，不存在的建出来，写序同预留。登记处丢了这个码时只抬本地两份，不替它建登记处记录。码退役、rebind 到别处、世系对不上时不碰。本进程正在预留时跳过这一轮。运维入口不发号，不起它。
+  - **重新登记的时间上界**（`reRegisterHighWater`）。登记处丢码、凭本地记录重新登记时，水位取本地最大值和「现在的时间下限 + 7 天 + 一块」里大的那个，随后把本地两份抬到新水位（`raiseLocal`，原 `createMissing` 改名并扩成「建出来或抬上去」）。
+    - 推理：每块的起点比当时的时间下限超前 7 天以上就会告警（`ahead_of_clock`）；没告警过，发过的号就都在「当时的时间下限 + 7 天 + 一块」之下，而当时的时间下限不超过现在的。
+    - 本地记录本身比上界还高：推理不成立，`ErrNoTrustedBound`，换码。时钟超出可表示范围：拒绝，修好时钟再跑。
+  - `Recover` 在「登记处在、绑定在这里、本地没有都丢」时，把本地两份抬到三份里的最高值（原来是什么也不做）。重新登记之后抬本地记录中断了，重跑一次就走这里做完。
+- `ahead_of_clock` 的日志文字补上两种新原因：崩溃循环，以及刚重新登记过。
+
+### 11.2 改动文件
+
+| 文件 | 改动 |
+|---|---|
+| `go/data_service/internal/idissuer/etcd_store.go` | `nextJSON.Rebuilding`；`claimPointer`、`readPointer` 取代 `readNext`；`createEntry` 按三种指针状态分支，`allowCreateWithoutPointer`；`ClaimNew` 区分没声明与重建中；`BeginRebuild`；`Open` 改为按状态处理，`declarePointer`、`finishRebuild` |
+| `.../idissuer/issuer.go` | 错误 `ErrRegistryRebuilding`、`ErrRegistryNeedsRebuild`、`ErrNextRegionMismatch`；`Registry.BeginRebuild` 与契约改写；`ReserveBehindIssuer`、`recordCheckInterval`；`witnessHigh` 等字段，`witness`、`witnessed`、`startWatchLocked`、`checkRecords`；`nextStart` 加本进程水位；`reRegisterHighWater`；`createMissing` → `raiseLocal`；`Recover` 两个分支；`Init`、`Retire` 透传新的确定拒绝；`BeginRegistryRebuild` |
+| `.../idissuer/issuer_test.go` | 内存替身改成三种指针状态、加 `BeginRebuild`、`pointer()`；夹具关掉作证检查的后台循环；新增、改写的用例见下 |
+| `.../idissuer/etcd_integration_test.go` | `StoreContract` 补没有指针时墓碑被拒，改用 `readPointer`；新增 `TestEtcdIntegration_RebuildContract` |
+| `.../idissuer/registry_open_integration_test.go` | `TestEtcdIntegration_OpenRechecksConcurrentRegionEntry` 改名为 `TestEtcdIntegration_DeclaringThePointerRechecksConcurrentRegionEntry`，覆盖声明重建和直接开启两条路；「同码退役」一行删掉（没有指针时墓碑已经写不进去） |
+| `go/data_service/internal/metrics/metrics.go` | 预留结果的说明加 `records_behind_issuer` |
+| `go/data_service/data_service.go`、`data_service_entry_test.go` | `-id-registry-rebuild`、`entryIdRegistryRebuild`、`idRegistryRebuildOp`；`-id-registry-open` 的输出改成「next claimable」；`TestSelectEntry` 加 4 行 |
+| `tools/scripts/tests/id_issuer_deploy_contract.tests.ps1` | 「运维手册」那条用例：flag 清单加 `-id-registry-rebuild`；断言手册不再有 `etcdctl del /id_registry` |
+| 文档 | 发号器手册 §1、§2.1、§2.2、§3、§4、§4.1、§4.3、§4.6、§4.7、§5；设计 §6.2 故障表、§6.3 |
+
+`issuer_test.go` 新增或改写的用例：
+
+- 重建：`TestRetire_ATombstoneNeedsTheNextClaimableCodeToCheckAgainst`（取代 `TestRetire_WritesATombstoneForAnUnknownCodeBeforeTheRegistryOpens`，原用例断言的正是这条残余）、`TestRebuild_RecordsAreCheckedAgainstTheDeclaredPointer`、`TestRecovery_WholeRegistryLostRebuiltFromRegions`（改为走重建）、`TestRecovery_ReRegisteringAtOrAboveTheNextClaimableCodeAdvancesIt`（重建中、已开放两种各跑一遍）。
+- 时间上界：`TestRecovery_RegistryEntryLostReRegisteredFromLocal`（断言改为新水位并抬齐本地）、`TestRecovery_ReRegisteringCoversLocalRecordsRestoredWhileTheRegistryLostTheCode`、`TestRecovery_ReRegisteringRefusesLocalRecordsFarAheadOfTheClock`、`TestRecovery_ReRegisteringNeedsAClockInRange`、`TestRecovery_ARerunFinishesRaisingTheLocalRecords`；`TestRecovery_RegistryEntryLostCopyOfTheRecordsCannotReRegister` 的断言从「等于本地」改成「不低于本地」。
+- 作证：`TestWitness_NextBlockStartsAboveWhatThisProcessConfirmed`、`TestWitness_CheckRaisesRecordsRolledBackTogether`、`TestWitness_CheckKeepsTheLocalRecordsUpWhenTheRegistryLostTheCode`、`TestWitness_CheckLeavesACodeThatIsNoLongerBoundHere`、`TestWitness_CheckWritesNothingWhileRecordsAreUpToDate`、`TestWitness_WatchStartsAfterTheFirstReservationAndStopsOnClose`。
+
+### 11.3 交 Codex
+
+工作目录 `go/data_service`，`GOTOOLCHAIN=local`。§9.2、§10.2 还没跑的话合并成一轮，用 §10.2 的命令（是这里的超集）；失败保留完整输出，不连续重试，不放宽断言。
+
+```powershell
+gofmt -l ./internal/idissuer ./internal/metrics ./data_service.go ./data_service_entry_test.go
+go build -mod=readonly ./...
+go vet -mod=readonly ./internal/idissuer/ ./internal/metrics/ .
+go vet -mod=readonly -tags etcd_integration ./internal/idissuer/
+go test -mod=readonly -count=1 -v -timeout 3m ./internal/idissuer/
+go test -mod=readonly -count=1 -v -timeout 2m -run 'TestSelectEntry|TestRetireIssuerFactory' .
+```
+
+通过标准：
+
+- 全部 exit 0，`gofmt -l` 无输出。
+- §11.2 列的 `idissuer` 用例都实际运行并 PASS，`idissuer` 0 SKIP。
+- 有 CGO 时再跑 `go test -race -count=1 ./internal/idissuer/`：作证检查和预留在同一个进程里并发，这条最要紧。
+
+仓库根目录：
+
+```powershell
+pwsh -NoProfile -File tools/scripts/tests/id_issuer_deploy_contract.tests.ps1
+```
+
+通过标准：全部 PASS、退出 0。
+
+真 etcd（Docker 修好之后）：按 §8.3 起五个节点，`go test -mod=readonly -tags etcd_integration -count=1 -v -run 'TestEtcdIntegration' ./internal/idissuer/`。新的和改过的三条要过：`StoreContract`（没有指针时墓碑被拒、什么都没写）、`RebuildContract`（丢过数据的登记处不能直接开启；声明不能低于已有码；重建中认领被拒；墓碑与重新登记按指针核对、推完仍在重建中；结束重建要对上指针）、`DeclaringThePointerRechecksConcurrentRegionEntry`（四个子用例）。
+
+### 11.4 设计取舍
+
+- 「重建中」放在指针的值里，不另起一个键：补记录和声明、开放都只比这一个键的版本，提交点的复核不用多看一个键。
+- 作证检查只抬高、不预留新块：预留会多烧一块，而且要过完整的绑定核对；抬高本身就够用，冲突了下一轮再看。
+- 作证检查读到的 P、S 值不算确认过：别的副本可能写完 P、S 就失败在登记处，这样的值没有发过号。只算自己写成功的块尾和登记处的值，所以没有并发误报。
+- 时间上界用告警阈值 7 天：它是现成的、运维看得见的门槛，「没告警过」可以从指标历史核对。取更大的值能少拒绝几次，但重新登记之后告警会持续更久。
+- 本地记录比上界还高时拒绝而不是照用：这时分不出「登记处单独丢码」和「三处同时出事」，按 AGENTS §11.3 对玩家资产路径 fail-closed，代价是这个地域换一个码。
+
+### 11.5 兼容与剩下的
+
+- 指针的值多了可缺省的 `rebuilding`。旧二进制读到 `{"next":N,"rebuilding":true}` 会当作损坏（严格解码），新旧不能混跑。`{"next":N}` 照旧。项目未上线，没有存量。
+- `Registry` 接口多了 `BeginRebuild`，包外没有实现方。
+- 行为变化：没有指针时补墓碑被拒；有记录却没有指针时不能直接开启；重新登记把计数器放到时钟前面 7 天，之后几分钟有 `ahead_of_clock`；`Recover` 在本地落后时会写本地记录；每个副本每 10 秒多三次线性读（一次跨地域）。
+- 剩下的残余（设计 §6.3「还会不会重号」）：出事时没有一个发号进程活着，而且这个地域出现过 `ahead_of_clock`，或者时钟比当初预留时还慢；或者别的副本在最近一个检查间隔里预留、随即连同三份记录一起丢掉那一块。「没出现过 `ahead_of_clock`」靠运维查指标历史，没有自动化：丢码时登记处里的痕迹也跟着丢了。
+- Java 0.1.0-SNAPSHOT：不涉及，Java 版没有发号器和登记处，`PARITY.md` 11-05 的发号器待做照旧，不加行。

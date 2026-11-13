@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -52,11 +53,18 @@ type Rules struct {
 	// WorldHistoryCacheMs 是世界频道近窗快照的最长使用时长(毫秒),0 = 每次拉取都直读 SQL(world_window.go)。
 	// 同样不进 policyBytes,理由同 ActorVerifyTTLSeconds。
 	WorldHistoryCacheMs int
+	// WorldChannelCooldownMs 是同一名玩家相邻两条世界频道消息的最短间隔(毫秒),0 = 不限。
+	// 世界频道一条消息要推给全服在线玩家,每秒条数(RateLimitPerSecond)只管单人突发,管不住全服总量;
+	// 发言间隔把全服世界消息量压在「在线人数 ÷ 间隔」之内(docs/design/chat-world-channel-fanout.md §5)。
+	// 不进 policyBytes:它是运营会调的值,滚动改它时各副本短暂按不同间隔判,只影响新请求放不放行,不改变已登记原件的判定。
+	WorldChannelCooldownMs int
 }
 
 type SendResult struct {
 	Tip       uint32
 	Duplicate bool
+	// Cooldown 表示这次是被世界频道发言间隔拒绝的(Tip 同为限流码),调用方只用它区分指标。
+	Cooldown bool
 	// Message 是本次首次提交的显示原件(与历史里那一份逐字相同),只在这次请求真正写入了新的一行时非 nil;
 	// 重放、限流都为 nil。世界频道推送只推它,重放不再推第二次(docs/design/chat-world-channel-fanout.md §4)。
 	Message *chatpb.ChatMessage
@@ -98,6 +106,13 @@ type role struct {
 
 func New(ctx context.Context, db *sql.DB, states rolefence.StateReader, backend authoritysql.Backend, rules Rules) (*Store, error) {
 	if db == nil || states == nil || rules.MaxContentBytes <= 0 || rules.RateLimitPerSecond <= 0 || rules.HistoryMaxEntries <= 0 || rules.HistoryDefaultLimit <= 0 || rules.HistoryMaxLimit < rules.HistoryDefaultLimit || rules.HistoryMaxLimit > constants.MaxHistoryPullLimit || rules.HistoryTTLSeconds <= 0 || uint64(rules.HistoryTTLSeconds) > math.MaxUint64/1000 || rules.ActorVerifyTTLSeconds < 0 || rules.ActorVerifyTTLSeconds > constants.MaxActorVerifyTTLSeconds || rules.WorldHistoryCacheMs < 0 || rules.WorldHistoryCacheMs > constants.MaxWorldHistoryCacheMs {
+		return nil, ErrInvalid
+	}
+	if rules.WorldChannelCooldownMs < 0 || rules.WorldChannelCooldownMs > constants.MaxWorldChannelCooldownMs {
+		return nil, ErrInvalid
+	}
+	// 原件到期由库删除(schema.go 的 TTL 属性):可见窗口必须短于保留期,否则还在窗口里的历史会被删掉。
+	if uint64(rules.HistoryTTLSeconds) > constants.MaxHistoryTTLSeconds {
 		return nil, ErrInvalid
 	}
 	if err := authoritysql.AssertCurrentSession(ctx, db, backend); err != nil {
@@ -163,12 +178,14 @@ func (s *Store) ensurePolicy(ctx context.Context) error {
 }
 
 // 本版固定字节序，避免序列化库键序/HTML转义变化造成同规则误拒；不是客户端协议。
+// v2(2026-11-12)把两个存储布局常量也钉进来:世界频道的分段数与原件保留天数。它们写在代码里,同一版构建的副本必然一致;
+// 钉进策略行是为了挡住以后的构建悄悄改它们:分段数变了旧消息读不到,保留天数变了表上的 TTL 属性不会跟着变,都必须显式迁移。
 func policyBytes(r Rules) []byte {
 	var out bytes.Buffer
-	out.WriteString("chat-authority-v1")
+	out.WriteString("chat-authority-v2")
 	var number [8]byte
 	put := func(n uint64) { binary.BigEndian.PutUint64(number[:], n); out.Write(number[:]) }
-	for _, n := range []int{r.MaxContentBytes, r.RateLimitPerSecond, r.HistoryMaxEntries, r.HistoryTTLSeconds, r.HistoryDefaultLimit, r.HistoryMaxLimit} {
+	for _, n := range []int{r.MaxContentBytes, r.RateLimitPerSecond, r.HistoryMaxEntries, r.HistoryTTLSeconds, r.HistoryDefaultLimit, r.HistoryMaxLimit, constants.WorldStreamShards, constants.OriginalRetentionDays} {
 		put(uint64(n))
 	}
 	put(uint64(len(r.SensitiveWords)))
@@ -179,12 +196,26 @@ func policyBytes(r Rules) []byte {
 	return out.Bytes()
 }
 
-// worldStreamKey 是世界频道全服唯一的流键。
-const worldStreamKey = "world-v2"
+// worldStreamKeys 是世界频道的全部流键,下标是分段号(docs/design/chat-world-channel-fanout.md §5)。
+// 世界频道的每条消息都要进按 (stream_key, state, accepted_ms, …) 排的索引:只有一个流键时,全服的写入都追加在这个索引的同一处,
+// TiDB 上是一个拆不开的热点 Region。按发送者分成 WorldStreamShards 段之后有这么多个追加点,能被拆到不同的 Region。
+// 读最新一窗时每段各取最新 N 行再合并(readWorldRows)。
+var worldStreamKeys = func() [constants.WorldStreamShards]string {
+	var keys [constants.WorldStreamShards]string
+	for shard := range keys {
+		keys[shard] = fmt.Sprintf("world-v3:%d", shard)
+	}
+	return keys
+}()
+
+// worldStreamKey 返回一名玩家的世界频道消息所在的流键。一名玩家的世界消息只落在这一段。
+func worldStreamKey(sender uint64) string {
+	return worldStreamKeys[sender%constants.WorldStreamShards]
+}
 
 func streamKey(actor, peer uint64) string {
 	if peer == 0 {
-		return worldStreamKey
+		return worldStreamKey(actor)
 	}
 	left, right := actor, peer
 	if left > right {
@@ -282,15 +313,29 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM chat_send_authority WHERE player_id=? AND state=1 AND accepted_ms>=? AND accepted_ms<?", actor, start, start+1000).Scan(&count); err != nil {
 		return SendResult{}, err
 	}
+	// limited 是两种限流共用的出口。计数或间隔查询看到的行里可能有同一 request_id 并发首发的赢家:它已提交就是重复,不是超限。
+	// 否则客户端换新 id 重发会多出一条。
+	limited := func(cooldown bool) (SendResult, error) {
+		winner, readErr := scanReceipt(tx.QueryRowContext(ctx, receiptSelectSQL, actor, []byte(requestID)))
+		if readErr == nil {
+			return replay(winner)
+		}
+		if !errors.Is(readErr, sql.ErrNoRows) {
+			return SendResult{}, readErr
+		}
+		return SendResult{Tip: constants.ErrRateLimited, Cooldown: cooldown}, nil
+	}
 	if count >= uint64(s.rules.RateLimitPerSecond) {
-		// 计数里可能有同一 request_id 并发首发的赢家:它已提交就是重复,不是超限。否则客户端换新 id 重发会多出一条。
-		if r, err = scanReceipt(tx.QueryRowContext(ctx, receiptSelectSQL, actor, []byte(requestID))); err == nil {
-			return replay(r)
+		return limited(false)
+	}
+	if peer == 0 && s.rules.WorldChannelCooldownMs > 0 {
+		cooling, coolErr := worldCooldownActive(ctx, tx, actor, now, uint64(s.rules.WorldChannelCooldownMs))
+		if coolErr != nil {
+			return SendResult{}, coolErr
 		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return SendResult{}, err
+		if cooling {
+			return limited(true)
 		}
-		return SendResult{Tip: constants.ErrRateLimited}, nil
 	}
 	var payload []byte
 	message := &chatpb.ChatMessage{SenderPlayerId: actor, TargetPlayerId: peer, Channel: in.Message.Channel, Content: s.filter.Mask(strings.TrimSpace(in.Message.Content)), SendTimeMs: int64(now)}
@@ -298,7 +343,7 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 	if err != nil {
 		return SendResult{}, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO chat_send_authority(player_id,request_id,"+receiptColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?)", actor, []byte(requestID), []byte(owned.account), owned.revision, digest[:], raw, payload, []byte(streamKey(actor, peer)), acceptedState, now, uint32(0)); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO chat_send_authority(player_id,request_id,"+receiptColumns+",accepted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", actor, []byte(requestID), []byte(owned.account), owned.revision, digest[:], raw, payload, []byte(streamKey(actor, peer)), acceptedState, now, uint32(0), acceptedAt(now)); err != nil {
 		var duplicate *mysql.MySQLError
 		if !errors.As(err, &duplicate) || duplicate.Number != 1062 {
 			return SendResult{}, err
@@ -318,6 +363,34 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		s.world.invalidate()
 	}
 	return SendResult{Message: message}, nil
+}
+
+// worldCooldownActive 报告这名玩家是否还在世界频道的发言间隔里:最近 cooldownMs 毫秒内已有一条被接受的世界频道消息。
+// 一名玩家的世界消息只落在他自己那一段(worldStreamKey)。查询沿 (player_id, state, accepted_ms) 的索引只看他最近这段时间的行,
+// 行数不超过「间隔秒数 × 每秒条数上限」。
+// 和每秒限流一样是近似的:查询与插入之间没有锁。同一会话的请求由 gate 的会话 lane 串行(client-request-ordering.md),
+// 正常客户端不会并发;绕过 lane 的并发最多多放过在途的那几条。
+func worldCooldownActive(ctx context.Context, tx *sql.Tx, actor, now, cooldownMs uint64) (bool, error) {
+	since := uint64(0)
+	if now > cooldownMs {
+		since = now - cooldownMs
+	}
+	var found int
+	err := tx.QueryRowContext(ctx, "SELECT 1 FROM chat_send_authority WHERE player_id=? AND state=1 AND accepted_ms>? AND stream_key=? LIMIT 1", actor, since, []byte(worldStreamKey(actor))).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// acceptedAt 把接受时刻(毫秒)写成保留期列 accepted_at 的值(schema.go 的 TTL 属性按它删过期原件)。
+// DATETIME 不带时区,固定写 UTC:集群时区不是 UTC 时,到期最多早或晚十几个小时。可见窗口比保留期至少短一天
+// (constants.MaxHistoryTTLSeconds),这点偏差不会删掉还看得见的历史。
+func acceptedAt(ms uint64) string {
+	return time.UnixMilli(int64(ms)).UTC().Format("2006-01-02 15:04:05.000")
 }
 
 func (s *Store) Pull(ctx context.Context, in *chatpb.PullChatHistoryRequest, limit int) ([]*chatpb.ChatMessage, error) {
@@ -364,7 +437,12 @@ func (s *Store) Pull(ctx context.Context, in *chatpb.PullChatHistoryRequest, lim
 	if now == 0 || now > math.MaxInt64 {
 		return nil, errors.New("聊天SQL时间非法")
 	}
-	rows, err := readHistoryRows(ctx, tx, streamKey(actor, peer), limit)
+	var rows []historyRow
+	if peer == 0 {
+		rows, err = readWorldRows(ctx, tx, limit)
+	} else {
+		rows, err = readHistoryRows(ctx, tx, streamKey(actor, peer), limit)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -390,11 +468,43 @@ func (s *Store) loadWorldSnapshot(ctx context.Context) (*worldSnapshot, error) {
 	if now == 0 || now > math.MaxInt64 {
 		return nil, errors.New("聊天SQL时间非法")
 	}
-	rows, err := readHistoryRows(ctx, tx, worldStreamKey, s.maxPullRows())
+	rows, err := readWorldRows(ctx, tx, s.maxPullRows())
 	if err != nil {
 		return nil, err
 	}
 	return &worldSnapshot{rows: rows, dbNowMs: now}, nil
+}
+
+// readWorldRows 按新到旧读世界频道最新的 limit 行:每一段各取最新 limit 行,合并后取前 limit 行。
+// 全服最新的 limit 行里,任何一行都在它自己那一段的最新 limit 行之内,所以每段取 limit 行不会漏。
+// 各段在同一个事务里先后读,读已提交隔离下后读的段可能多看到刚提交的行:结果仍是那一刻各段都已提交的消息,下一次读会补齐。
+func readWorldRows(ctx context.Context, tx *sql.Tx, limit int) ([]historyRow, error) {
+	merged := make([]historyRow, 0, limit)
+	for _, key := range worldStreamKeys {
+		rows, err := readHistoryRows(ctx, tx, key, limit)
+		if err != nil {
+			return nil, err
+		}
+		merged = append(merged, rows...)
+	}
+	return newestRows(merged, limit), nil
+}
+
+// newestRows 把若干段的行按单段查询的同一个顺序(接受时刻、发送者、请求号都从大到小)排好,取前 limit 行。会重排入参。
+func newestRows(rows []historyRow, limit int) []historyRow {
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].acceptedMs != rows[j].acceptedMs {
+			return rows[i].acceptedMs > rows[j].acceptedMs
+		}
+		if rows[i].sender != rows[j].sender {
+			return rows[i].sender > rows[j].sender
+		}
+		return bytes.Compare(rows[i].requestID, rows[j].requestID) > 0
+	})
+	if len(rows) > limit {
+		rows = rows[:limit]
+	}
+	return rows
 }
 
 // historyRow 是一个频道流里的一行已提交原件,还没有校验。

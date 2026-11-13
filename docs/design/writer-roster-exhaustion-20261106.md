@@ -1,6 +1,6 @@
 # 写者名册会用完、死写者会堆积(缺口清单第 22 条,2026-11-06)
 
-状态:**2026-11-10 定案(§4),11-10~11 按 §5 落码完毕,未生成、未编译、未测试,待 Codex 验证(命令、顺序与通过标准见 `docs/PROGRESS.md` 2026-11-11「写者名册按槽位换代」)。11-11 残余回收定案并落码(§5.8:slot 行只属于在役的一代,一代结束时同一事务删掉;登记行与收据永久保留),同样未编译,验证见 `docs/PROGRESS.md` 2026-11-11「写者名册残余:一代结束即删 slot 行」。** 负责人要求「待拍板项按有依据的标准做法直接定案」,两个待定项按 §4 定了。改动跨 `go/shared/authoritysql`、`writer_authority` 注册器、proto、排空收据、部署脚本与手册,超过 30 个文件,按 §4 分 4 批落码,每批不超过 30 个文件。
+状态:**2026-11-10 定案(§4),11-10~11 按 §5 落码完毕,未生成、未编译、未测试,待 Codex 验证(命令、顺序与通过标准见 `docs/PROGRESS.md` 2026-11-11「写者名册按槽位换代」)。11-11 残余回收定案并落码(§5.8:slot 行只属于在役的一代,一代结束时同一事务删掉;登记行与收据永久保留),同样未编译,验证见 `docs/PROGRESS.md` 2026-11-11「写者名册残余:一代结束即删 slot 行」。11-11~12 缩容收尾定案并落码(§5.9:每个写者 StatefulSet 一份 CronJob,按目录与集群的现状结束被缩掉槽位的末代,不再要人工退休),同样未编译,验证见 `docs/PROGRESS.md` 2026-11-12「写者缩容收尾:被缩掉槽位的末代自动结束」。11-12 复查补「归属」(§5.9:REGISTER 记下登记它的工作负载身份,收尾只结束本集群登记的一代,名册被带到别的集群时不误伤),改了协议,未生成、未编译,验证见 `docs/PROGRESS.md` 2026-11-12「写者缩容收尾补归属」。** 负责人要求「待拍板项按有依据的标准做法直接定案」,两个待定项按 §4 定了。改动跨 `go/shared/authoritysql`、`writer_authority` 注册器、proto、排空收据、部署脚本与手册,超过 30 个文件,按 §4 分 4 批落码,每批不超过 30 个文件。
 上游:[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md) 第 22 条;相关:[MySQL 写入围栏](db-write-fencing-mysql.md)「2026-10-26:单次 writer 身份与永久排空收据」、[逻辑库自治与水平扩展](horizontal-scale-logical-db.md)「写资格什么时候消费」、[开服手册](../ops/k8s-open-server-runbook.md) §1、§9。
 
 ## 1. 现状
@@ -74,6 +74,7 @@
 - `writer_registry` 加 `boot_seq`(pb:11):这个 SQL 账号上第几次启动,从 1 起,严格递增,允许有空洞。账号就是槽位:同一个账号在一个逻辑库里同一时刻至多一行 ACTIVE,而且就是 `boot_seq` 最大的那一行。唯一键 `uk_writer_principal(sql_principal)` 换成 `uk_writer_principal_boot(sql_principal, boot_seq)`,挡住同一账号同一序号注册两次;`writer_key`、`instance_id` 仍然永久唯一。
   - 不另建槽位表:槽位和账号一一对应,账号已经在注册表里,再存一份槽位名就是第二份真相。「这个槽位现在是哪一代」= 按账号取 `boot_seq` 最大的一行,走唯一键前缀。
 - `sql_writer_lifecycle_receipt.Request` 加 `successor_request_id`(pb:13):换代退休时填退休它的那份 REGISTER 的 `request_id`,人工退休和排空退休为空。看收据全文就知道这次 RETIRE 是谁做的。
+- `sql_writer_lifecycle_receipt.Request` 加 `registered_by`(pb:14,2026-11-12):登记这一代的工作负载身份,只在 REGISTER 里有意义,算进注册摘要。不进登记表,要看时按登记行的摘要读回 REGISTER 收据(`Catalog.Registration`)。用途见 §5.9「归属」。
 - 名册格式改为 `SQL_WRITER_BOOT_ROSTER_V2`,沿用 `sql_writer_boot_roster` 消息:一条 entry 是一个槽位,下标就是 StatefulSet 序号。entry 里每个逻辑库一份 REGISTER 模板,固定账号、逻辑库、锁原语与资格、`generation`、维护 run;身份字段(`request_id`、`writer_key`、`instance_id`、`registration_digest`、`registered_ms`、`boot_seq`、`deployment_id`)必须为空,由注册器现场生成。条数等于这个服务副本数的上限,不随启动次数增长。V1 名册整份拒绝:项目未上线,不做兼容。
 
 ### 5.2 注册事务(`Catalog.Register`)
@@ -89,13 +90,14 @@
 
 RETIRE 排在 REGISTER 之后,是为了让带 `expected_catalog_revision` 的 REGISTER 仍满足「收据版本 = 期望版本 + 1」。两份在同一事务里,外面看不到先后。
 
-人工退休(缩容后留下的末代)和排空 run 的退休照旧由运维准备 RETIRE 原件,`writer` 要原样复制这一代 REGISTER 收据里的 `writer`,包括 `boot_seq`。`boot_seq` 为 0 的生命周期请求,闸门(`validateLifecycle`)和注册器(`validateRequestIdentity`)都在发 SQL 之前拒绝;退休的 UPDATE 按 `writer_key`、`instance_id`、`sql_principal`、`registration_digest`、`boot_seq` 一起匹配那一行。`successor_request_id` 只有换代事务能填,手工 RETIRE 带它也在发 SQL 之前被拒。
+缩容留下的末代由收尾 CronJob 自动退休(§5.9),它拼的 RETIRE 与人工退休同一形状。人工退休(收尾一直失败时的兜底)和排空 run 的退休照旧由运维准备 RETIRE 原件,`writer` 要原样复制这一代 REGISTER 收据里的 `writer`,包括 `boot_seq`。`boot_seq` 为 0 的生命周期请求,闸门(`validateLifecycle`)和注册器(`validateRequestIdentity`)都在发 SQL 之前拒绝;退休的 UPDATE 按 `writer_key`、`instance_id`、`sql_principal`、`registration_digest`、`boot_seq` 一起匹配那一行。`successor_request_id` 只有换代事务能填,手工 RETIRE 带它也在发 SQL 之前被拒。
 
 ### 5.3 注册器
 
 - 新参数 `-pod-name`(K8s 注入 `metadata.name`):序号取最后一个 `-` 之后的十进制数,选 `entries[序号]`;序号超出名册就拒绝,说明副本数比槽位多。
 - 启动记录 `<boot-output>.register.started.protojson`(本 Pod 私有 emptyDir,独占创建):第一次运行时现场生成 `writer_key`、`instance_id`、每个库的 `request_id`、`registered_ms`,`deployment_id` 是 Pod UID;`boot_seq` 取各库「这个账号最大序号 + 1」里最大的那个,各库用同一个号。顺序是先逐库预检,再写启动记录,再逐库注册。同一个 Pod 的 init 重跑只读启动记录、重发同样的请求,不再生成新身份;启动记录里除身份以外的字段必须和名册模板逐字相同。
 - 原来「结局未知就只能查原请求,查不到就停」,现在可以重发:注册事务在锁内先查收据,`boot_seq` CAS 挡住陈旧请求,同一请求最多落地一次。
+- 登记身份(2026-11-12):现场生成一代时,注册器把自己的工作负载身份写进各库 REGISTER 的 `registered_by`(K8s 里是 `k8s-sa:<namespace>/<ServiceAccount>/<UID>`,集群外为空),缩容收尾按它判这一代归不归自己,换代不看它。细节与理由见 §5.9「归属」。
 - 输出(grant 集合、选中配置、环境文件)不变。`RegistrationConsumedByOtherDeployment` 与「这条被别人用了就换下一条」的逻辑删除;单 Request 的注册入口(`-command register -request`)删除,注册只走槽位名册;`retire`、`status` 不变。
 
 ### 5.4 权限
@@ -104,12 +106,15 @@ RETIRE 排在 REGISTER 之后,是为了让带 `expected_catalog_revision` 的 RE
 
 2026-11-11 回收(§5.8)之后:一代结束时删掉它的 slot 行,所以注册账号对 `writer_slot` 是 `SELECT,INSERT,DELETE`(不再改写 slot 行,不给 `UPDATE`;MySQL 上 `FOR UPDATE` 锁读由 `DELETE` 权限满足),维护账号对 `writer_slot` 是 `SELECT,UPDATE,DELETE`(人工与排空退休要删,冻结、解冻推进 epoch 要改)。授权模板 `deploy/sql/authority_operator_role.sql`。
 
+缩容收尾(§5.9)用注册账号做非 run 的退休,不加任何授权:结束一代要的 slot 表 `DELETE`、登记表 `UPDATE`、收据 `INSERT`、`route_meta` 的 `UPDATE`,注册账号为换代本来就有。不用维护账号:它能冻结闸门、推进排空,放进集群常驻的 Job 是扩大权限。
+
 ### 5.5 部署
 
 - 写者服务(db、data-service、login、gateway 和 infra namespace 的全局写者,含 `<svc>-canary`)从 Deployment 改成 StatefulSet:`serviceName` 用同名 Service;`podManagementPolicy: Parallel`,扩缩容和首次部署不按序号排队;`updateStrategy: RollingUpdate`,一次换一个副本,不能 `maxSurge`。Pod 模板注入 `POD_NAME`,registrar init 加 `-pod-name`。
 - 名册校验改成「格式 V2、槽位数 ≥ 副本数、≤ 1024」,不再要求副本数 × 6。
 - 首次切换要先删同名的旧 Deployment:同一个 label 选择器不能同时归两个控制器。`k8s_deploy.ps1` 在 apply 写者之前删(`Remove-LegacySqlWriterDeployment`;gateway 排在建表 Job 之后),所以首次切换时这个服务有一段没有副本,直到 StatefulSet 的 Pod 就绪;项目未上线,不做无中断迁移。
 - 回收 CronJob 不变:删掉主容器以 78 退出的 Pod,StatefulSet 按同序号重建,新 Pod 换代。
+- 每个写者 StatefulSet 另有一份缩容收尾 CronJob `sql-writer-slot-retirer-<StatefulSet>`(§5.9),和写者清单一起渲染、写者 apply 之后落地;金丝雀收尾删 `<svc>-canary` 时不删它。
 - 节点失联:StatefulSet 不会在别的节点自动重建同序号的 Pod,要等节点对象被删或人工强删。强删是安全的:新 Pod 换代,旧代下一笔事务被拒。
 
 ### 5.6 失败与回滚
@@ -123,7 +128,8 @@ RETIRE 排在 REGISTER 之后,是为了让带 `expected_catalog_revision` 的 RE
 | 结局未知 | 重跑时重发同一请求,锁内查收据收口,最多落地一次 |
 | 同序号出现两个 Pod(强删之后旧节点其实还活着) | 后注册的那个换代,先注册的那份被退休、写不进去;旧 Pod 拿着过期的启动记录重跑时被 CAS 拒绝,停在 Init,告警 `SqlWriterRegistrarFailing`,删掉它即可 |
 | 两个工作负载误用同一份名册 | 同一账号会被两边轮流换代,谁都写不稳。部署脚本在 apply 之前核全部写者名册的账号互不重复 |
-| 缩容 | 被缩掉的序号最后一代留着 ACTIVE(没有下一代来退休它),再扩回来时被换代。下一次排空之前按非 run 的 RETIRE 退休,和原来一样,但数量不超过槽位数 |
+| 名册连同注册账号被带到另一个集群(备份恢复、备用集群、两个环境共用目录) | 部署脚本核不到另一个集群。那边起了写者 Pod,就按上一行轮流换代(换代凭持有槽位账号,不看是谁登记的);那边只跑着缩容收尾的 CronJob、写者缩到 0,收尾也不会结束这边的一代:它只结束本 namespace 登记的(§5.9「归属」),对别处登记的记 `registered-elsewhere`、Job 失败、告警 |
+| 缩容 | 被缩掉的序号没有下一代来换代;缩容的那次部署当场按非 run 的 RETIRE 结束它们的末代,等到 `pending=0` 才往下走,部署结束就可以排空;没做完只警告,收尾 CronJob(每 5 分钟)兜底(§5.9)。再扩回来的序号只注册新一代 |
 
 代码回滚:项目未上线,名册、注册与账号整批重建,不做 V1 兼容。
 
@@ -131,7 +137,7 @@ RETIRE 排在 REGISTER 之后,是为了让带 `expected_catalog_revision` 的 RE
 
 - 单测:`validateLifecycle` 对 `boot_seq`、`successor_request_id` 的规则;注册器的序号解析、启动记录的生成与重放、模板比对;同一槽位连续换代 1100 次(超过旧上限 1024)不需要新的名册条目。
 - 真库(`MMORPG_SQL_FIXTURE_ADMIN_DSN`,MySQL 与 TiDB):首次注册;同账号换代(上一代 REVOKED,两份收据的版本与 `successor_request_id` 正确,旧代事务被拒);同序号重复与陈旧请求被 CAS 拒绝;冻结时换代确定没写;重放同一请求只落地一次;排空 run 开着时有上一代就拒绝换代,run 之前换代的新一代计入 P0,SQL_RELEASED 之后上一代已退休只注册。共享夹具解冻之后用同一账号重新注册(原来会撞唯一键,真库用例一直没跑过),改成换代。
-- 回收(§5.8,2026-11-11)的用例见 §5.8 末尾。
+- 回收(§5.8,2026-11-11)的用例见 §5.8 末尾;缩容收尾(§5.9)的用例见 §5.9 末尾。
 
 ### 5.8 回收(2026-11-11 定案)与残余
 
@@ -188,5 +194,82 @@ RETIRE 排在 REGISTER 之后,是为了让带 `expected_catalog_revision` 的 RE
 
 **其余残余**
 
-- 缩容留下的末代(§5.6 最后一行)先不自动退休:数量不超过槽位数;忘了退休时,下一次排空收不了尾、停下来(没有进程替它关闭),不会写坏数据;自动化要新加注册器命令和部署脚本里的收尾 Job。缩容变频繁时再做:部署脚本发现副本数变小、等多出来的序号的 Pod 删完之后,跑一次 Job,按名册把这些槽位当前 ACTIVE 的那一代用非 run 的 RETIRE 退休(写者已经没了,退休只会挡住它,总是安全的)。
+- 缩容留下的末代:11-11~12 定案并落码,见 §5.9。
 - Java 版(`D:\luyuan\xuanming-server-mmo`)只在 `PARITY.md` 登记待做(换代与 11-11 回收各一节)。本仓库的 Java 网关只消费 grant,核 REGISTER 原文用的 descriptor 在构建时由 proto 生成,不用改代码,要重新构建。回收也不用改它:它只在自己的事务里锁自己的 slot 行,行没了 `begin` 抛错、启动时 `verifySlots` 拒启,和读到 REVOKED 同一结局;注册与退休都由 Go 的 `Catalog` 做。
+
+### 5.9 缩容收尾(2026-11-11 定案,11-12 补齐)
+
+缩容之后,被缩掉的序号不再有 Pod 启动,它们在每个逻辑库的末代没有下一代来换代结束。留着它有两个问题:下一次排空收不了尾(没有进程替它关闭,只能人工 RETIRE);被缩掉的 Pod 若其实还活着(Pod 对象被强删、节点失联),它仍能写。负责人 11-11 要求现在做,不等「缩容变频繁」。
+
+**定案:每个写者 StatefulSet 一份收尾 CronJob,每一轮按目录与集群的现状对账,不靠部署脚本发现「副本数变小」。**
+
+- CronJob `sql-writer-slot-retirer-<StatefulSet>`(含 `<svc>-canary` 与 Java 的 gateway),每 5 分钟一轮,跑 `writer_authority -command retire-removed-slots`(`go/data_service/cmd/writer_authority/retire_removed_slots.go`,读集群在 `kube_workload.go`)。清单 `deploy/k8s/manifests/go-svc/sql-writer-slot-retirer.yaml`;`k8s_deploy.ps1` 的 `New-SqlWriterSlotRetirerManifest` 和写者清单一起在任何集群写操作之前渲染(目录条目不对就在这里拦下),写者 apply 之后紧跟着 `Apply-SqlWriterSlotRetirer`。
+- 为什么不按本条原来的写法「部署脚本发现副本数变小、等 Pod 删完再跑一次 Job」:那是边沿触发。脚本在缩容与建 Job 之间断了、Job 失败、或者有人不经脚本 `kubectl scale`,末代都会漏掉,还得另做一份「待办」标记让下次部署重跑。按现状对账是 K8s 控制器的标准做法(level-triggered):每一轮都从目录和集群重新判,失败的下一轮自己补上,不在任何地方记状态。代价是每 5 分钟一次只读扫描:副本数以内的槽位不读;被缩掉的槽位每个逻辑库一次按 `uk_writer_principal_boot` 前缀的点读,没有在役的被缩掉槽位时不再读集群。
+- 部署脚本在写者缩容与金丝雀收尾时**当场**按同一份 CronJob 模板起一轮、等它做完(11-12 补,见下文「部署当场收尾」),部署返回时末代已经结束;定时那一份是兜底。事件触发加周期对账,与控制器「watch + resync」同一结构。
+
+**判据与顺序(安全性就在这里)**
+
+1. 读 StatefulSet 的 `spec.replicas`,只扫序号 ≥ 它的槽位。StatefulSet 不存在算 0 个副本:金丝雀收尾会删整个 `<svc>-canary`,这份 CronJob 留着,把金丝雀各槽位的末代结束掉。这一步只缩小扫描范围,不做判定。
+2. 读这些槽位在名册里每个逻辑库的最新一代(`LatestBoot`),ACTIVE 的记作候选。这是目录快照。
+3. 目录读完之后再读一次副本数,逐个查候选序号的 Pod(`<StatefulSet>-<序号>`):只结束「序号 ≥ 这次读到的副本数、这个名字的 Pod 对象已经没了」的候选。Pod 对象还在(优雅退出没走完,带 `deletionTimestamp` 也算在)就留给下一轮,不打断它最后的写。
+4. 归属:Pod 已经没了的候选,读这一代的 REGISTER 原件(`Catalog.Registration`),只有它是本 namespace 的工作负载登记的才往下走(见下面「归属」)。不是就不动它,记 `registered-elsewhere`,这一轮 Job 失败。
+5. 结束:每个候选一份非 run 的 RETIRE,`writer` 原样是快照里的登记行(含 `boot_seq`),按当时的 meta 绑 epoch 与目录版本,走 `Catalog.Retire` → `endGeneration`(64 个 slot 行删掉、登记行置 REVOKED、收据永久保留),和人工退休同一条写路径。
+
+为什么不会误退在役的一代:
+
+- 槽位 i 只会被名字是 `<StatefulSet>-i` 的 Pod 注册:注册器按自己的 Pod 名选名册下标(§5.3),名册只挂进这个工作负载的 Pod,部署脚本在 apply 之前核全部名册的账号互不重复(§5.6)。这一条只在一个集群、一份部署目录里成立;名册连同账号被带到别的集群时,由第 4 步的归属兜住。
+- 第 2 步读到的一代 g,是在第 2 步之前由某个 `<StatefulSet>-i` 注册的。第 3 步这个名字的 Pod 对象已经没了,说明注册 g 的那个 Pod 已被删除:K8s 只在容器终止之后删 Pod 对象,例外只有强删,那时旧进程是僵尸,退休恰好把它围栏掉(与同序号新 Pod 换代同一结局)。
+- 第 2 步之后才建出来的同名 Pod 注册的是更新的一代,不在快照里;RETIRE 按 g 的全部身份字段与 `boot_seq` 匹配那一行,新一代永远不会被它结束。新 Pod 的换代和这里的退休锁的是同一代的 slot 行:退休在先,新 Pod 看到上一代已结束,只注册;换代在先,这里的退休读不到 slot 行、被拒,重读得知已结束(`already-ended`)。
+- 反过来「先看集群、后读目录」就不成立:看完集群之后才注册的新一代会进快照,被误结束。所以顺序是硬约束,单测 `TestRetireRemovedSlotsReadsCatalogBeforeCluster` 守着。
+
+**幂等与失败**
+
+- 不在本地记任何状态,RETIRE 的 `request_id` 每次现场随机生成:重跑时落地过的一代已经不在役、不再是候选;没落地的照常再退;目录保证一代只结束一次(`endGeneration` 要求 `state=1`、正好 64 行)。同一轮里只在确定被拒时重读、换一份新请求重试(最多 3 次,拒绝多半是读 meta 之后目录版本被同库别的注册推进了);结局未知不重发,报错留给下一轮按目录状态收口。
+- 闸门冻结(搬库、排空)、排空 run 开着:这一轮跳过,不算失败。排空期间的退休归排空记账,非 run 的 RETIRE 本来就会被拒。
+- 连不上库或 API server、权限不够、结局未知、试满还被拒:报错,Job 失败(`backoffLimit: 0`),下一轮按现状重来。连续 30 分钟没有一次成功由告警 `SqlWriterSlotRetirerFailing`(`deploy/k8s/logical-db-alerts.yaml`,读 kube-state-metrics 的 `kube_cronjob_status_last_successful_time`,从没成功过的按 `kube_cronjob_created` 补)发现,warning:末代留着不写坏数据,只是下一次排空之前要人工退休。
+
+**归属:只结束本集群登记的一代(2026-11-12 复查补)**
+
+- **洞**:前三步只证明「本集群里这个序号的 Pod 不在了」,没证明这一代是本集群的 Pod 登记的。同一份名册和注册账号 Secret 被带到第二个集群时,那边的 Pod 当然不在:集群级备份恢复把 namespace 连 CronJob、Secret 一起恢复出来;备用集群把写者缩到 0 却没停 CronJob;两个环境的部署目录误共用名册。那边的收尾每 5 分钟就会把正式集群在役的写者全部结束,写者进程不会自己重启,正式集群的写一直被拒。数据不会坏(围栏是 fail-closed),但这是一个缩到 0 的副本就能触发的全量写中断。
+- **规矩**:按「不在」做删除的自动化,只能动自己建的东西。K8s 垃圾回收按属主 UID 判,云控制器按集群标签只回收自己建的负载均衡与卷,是同一条。换代不受它约束:新持有者(拿着槽位账号、活着)围栏旧的,不需要旧的归自己,这正是围栏要的「不靠旧持有者配合」。只有「推断没人了」这一步需要归属证明。
+- **身份**:登记进程的 ServiceAccount 连同这个对象的 UID,写成 `k8s-sa:<namespace>/<ServiceAccount 名>/<UID>`,存在 REGISTER 的 `registered_by`(`sql_writer_lifecycle_receipt.Request` 字段 14),算进注册摘要,登记之后改不了。
+  - UID 由所在集群的 API server 在建对象时分配。备份恢复、克隆 namespace 得到的 ServiceAccount 是新对象、新 UID,带不过去。带得过去的只有连 etcd 一起克隆整个控制面,那已经是同一个集群的两份,和发号器用的 kube-system UID 同一个前提。
+  - 注册器在运行期问 API server 得到它(`SelfSubjectReview`,K8s 1.28 起正式),不由部署脚本渲染:渲染进清单的值会跟着备份走(发号器的部署身份同一个理由)。这个接口所有已认证身份默认可调,12 个写者不用加任何 RBAC,也不用改清单。
+  - 不选 kube-system 的 UID:读它要给每个写者的 ServiceAccount 加一条集群级授权。ServiceAccount 的 UID 还多分得清一层:同一个集群里两个 namespace 误共用名册也对不上。
+- **注册器**(`workload_identity.go` 的 `registrarIdentity`):现场生成一代时问一次,各库的 REGISTER 写同一个值;init 重跑读启动记录,不再问。在 K8s 里读不到就报错、不登记(停在 init,`SqlWriterRegistrarFailing` 会响):带着空身份登记的一代以后缩容不会被自动结束,宁可当场看见原因。集群外(本机脚本、调试栈)登记为空,那里没有收尾。名册模板里预先写了 `registeredBy` 的,注册器和部署脚本都拒绝。
+- **收尾**(`retire_removed_slots.go` 的 `registeredHere`):`registered_by` 的 namespace 是自己的,而且本 namespace 现在这个名字的 ServiceAccount 就是那个 UID,才结束。别的 namespace、别的集群的 UID、这个 ServiceAccount 已被删掉或重建、空身份、认不出的文本,一律记 `registered-elsewhere`:不动它,算 `pending`,Job 失败,靠 `SqlWriterSlotRetirerFailing` 让人来看。读不到 REGISTER 收据或 API server 报错记 `failed`,同样不结束。只在 Pod 已经没了、真要结束时才核,Pod 还在或又扩回来的候选不读。
+- **代价**:namespace 或 ServiceAccount 被删掉重建之后,重建之前登记的末代不会被自动结束,要人工 RETIRE(手册 §9);本条上线之前登记的一代没有身份,同样处理。项目未上线,存量按 PROGRESS 的前置清库重建。
+
+**权限**:注册账号(与这个写者 init 里的 registrar 同一个 Secret),SQL 授权不变(§5.4);集群权限只有本 namespace 里这一个 StatefulSet 的 `get`、`pods` 的 `get` 与 `serviceaccounts` 的 `get`(核归属),不能列、不能改,不能签发令牌。只挂名册所在的 Secret,不挂运行配置。
+
+**部署当场收尾(2026-11-12)**
+
+11-11 落码时只有定时这一份,留下两条残余:缩容之后要等一轮(最多约 5 分钟)才能开排空,否则 P0 会把没有进程的末代算进 ACTIVE 全集,还得按 run 人工退休;金丝雀删掉之后它的收尾 CronJob 一直留着,删金丝雀的目录条目与 Secret 之前得先手工删它。负责人 11-12 要求现在修。
+
+- **为什么在部署这一侧修,不在排空那一侧**:排空 run 要每个 ACTIVE 写者在 P0 里有存活进程给出的闭合原件(`maintenance_drain.ps1` 的 issuers),没有进程的末代给不出,只能由运维按 run 准备退休原件。所以正确的做法是不让它们留到排空:写者的副本数只经部署脚本改(目录 `replicas` 与清单逐字核对),缩容的那一次部署就负责把末代结束掉。
+- **缩容**:`Apply-OneGoSvc`(稳定版与金丝雀)、`Apply-JavaSvcManifests`(gateway)在 apply 写者 StatefulSet 之前读线上副本数(`Get-SqlWriterLiveReplicas`,读不到就不 apply),收尾 CronJob 落地之后比较(`Complete-SqlWriterScaleDown`):新副本数小于旧的,就当场跑一轮(`Complete-SqlWriterSlotRetirement`)。扩容、不变、首次部署不做事。
+- **一轮怎么跑**:`kubectl create job <CronJob 名>-d<9 位秒> --from=cronjob/<CronJob 名>`(镜像、凭据与权限都是那一份,Job 名不超过 63 个字符),等 Job 进终态(复用迁移 Job 的 `Get-GoSvcMigrateJobState`,Failed 立刻停),读日志最后一行汇总。Job 成功而且汇总行 `pending=0` 才算做完;`pending` 是被缩掉、这一轮还没能结束的在役一代(`pod-present`、`gate-frozen`、`drain-run-open`、`failed`),`retired`、`already-ended`、`scaled-back-up` 不算。没做完多半是被缩掉的 Pod 还在优雅退出,隔 10 秒再起一轮;总预算 max(`-WaitTimeoutSeconds`, 180 秒)。做完的 Job 删掉(结果已经打进部署日志),没做完的最后一个留着查日志。
+- **门禁**:与迁移 Job 相同,staging/prod 恒等,dev 仅 `-WaitReady`;不等时只起一轮就返回。
+- **没做完只警告、不中断部署**:部署按服务顺序 apply,中途 throw 会让后面的服务没部署上;没做完的原因(闸门冻结、排空 run 开着、收尾失败)CronJob 会接着做。警告写明排空之前要等哪个 CronJob 报 `pending=0`。
+- **金丝雀收尾**:`Apply-GlobalGoSvcCanaries` 删掉没列出的 `<svc>-canary` 之后,对 SQL 写者调 `Complete-SqlWriterCanaryRemoval`:它的收尾 CronJob 还在,就当场跑一轮(`-AlwaysWait`,不看门禁,要靠结果决定删不删),做完才删这份 CronJob 与同名的 ServiceAccount、Role、RoleBinding;没做完就留着,下一次部署(金丝雀仍没列出)再来一遍;CronJob 不在(从没起过或已收完)什么都不做;存在与否读不到就不动它。之后删金丝雀的目录条目与 Secret,不会留下每轮都起不来的 CronJob。
+- **手工 Job 的回收**:`kubectl create job --from=cronjob` 起的 Job 属主不带 `controller: true`,不算进 CronJob 的 `successfulJobsHistoryLimit` / `failedJobsHistoryLimit`,所以 jobTemplate 加 `ttlSecondsAfterFinished: 86400`,结束一天后自动删(两种 Job 都管)。告警读 CronJob 的 status,不受影响。
+- **一个坑**:部署脚本的 `Invoke-Kubectl` 不重定向 kubectl 的标准输出,在要返回真假的函数里直接调用,输出会混进返回值、让判断永远为真(没收完也会删金丝雀的 CronJob)。这几个函数里的 kubectl 输出一律 `| Out-Host`,契约测试的桩照样往标准输出写一行来守住。
+
+**时延与排空**:经部署缩容时,部署结束就可以开排空;部署打了「没做完」的警告,或者有人绕过部署脚本 `kubectl scale`,才要等定时那一份(Pod 优雅退出完之后最多约 5 分钟)。在末代结束之前开排空,P0 会把它们算进 ACTIVE 全集,还要按 run 人工退休(开服手册 §9「没有进程的写者」)。
+
+**落码与用例(未编译、未运行)**
+
+- Go:`retire_removed_slots.go`、`kube_workload.go`、`main.go` 的 `retire-removed-slots` 分支与 `-statefulset` 参数(11-11 写,已随 `4edb25640` 入库)。
+- 单测 `retire_removed_slots_test.go`(内存里的目录与集群):只结束 Pod 已经没了的被缩掉槽位、先读目录后看集群、读完目录又扩回来跳过、整个 StatefulSet 删了全部结束、冻结与排空 run 跳过、别处先结束了算 `already-ended`、目录版本竞争重试后放弃、结局未知报错、没有候选什么都不做、查不到 Pod 就停、命令行参数;`kube_workload_test.go`:API server 回 200 / 404 / 其他状态码与凭据缺失。
+- 真库 `retire_removed_slots_tidb_test.go`(MySQL 与 TiDB,真实 `Catalog` + 内存集群,11-12 补):`TestRetireRemovedSlotsEndsLastGenerationOnRealCatalog`(Pod 还在、扩回来都不动;Pod 没了在两个库结束,收据非 run、无继任者、登记行指回它、slot 行删掉、旧进程写被拒;重跑不写;同槽位扩回来只注册)、`TestRetireRemovedSlotsWaitsOutFrozenGateOnRealCatalog`(冻结的库跳过、解冻后下一轮按新 epoch 结束)、`TestRetireRemovedSlotsNeverEndsANewerGenerationOnRealCatalog`(读目录之后同序号新 Pod 先换代:收尾被拒记 `already-ended`,新一代照常在役)。
+- 部署契约 `tools/scripts/tests/sql_writer_slot_retirer_contract.tests.ps1`(11-12 补):凭据与权限、TTL、命令行与 Go 参数一致、金丝雀条目、名字长度、渲染在写操作之前、落地在写者 apply 之后、告警与手册;部署当场收尾(11-12 第二轮):汇总行格式与 Go 单测样本一致、读线上副本数(不在回 0、读不到或不是数字拒绝)、只有缩容才收尾、Pod 还在时隔轮重试直到 `pending=0`、Job 失败或汇总行属于别的 StatefulSet 不算做完、预算用完警告、门禁、金丝雀收尾做完才删 CronJob 与 RBAC、kubectl 输出不混进返回值、调用顺序(apply 之前读副本数、收尾 CronJob 落地之后判缩容、删金丝雀 StatefulSet 之后收尾)。告警名单 `logical_db_deploy_contract.tests.ps1`。`k8s_migrate_gate.tests.ps1` 真跑 `Apply-OneGoSvc`,给收尾的四个函数补了只记事件的桩。
+- Go 单测 `TestRetirementReportCountsPendingCandidates`(11-12 第二轮):汇总行的 `pending` 计哪些结局。
+- 归属(11-12 复查补,要先重新生成协议):
+  - 协议 `proto/common/database/rollback_database_table.proto` 的 `sql_writer_lifecycle_receipt.Request.registered_by = 14`。
+  - `go/shared/authoritysql/catalog.go`:`Registration`(按登记行读回 REGISTER 原件)、`validRegisteredBy`(只限长度与字符);夹具 `sqltest/fixture.go` 加 `Options.RegisteredBy`。
+  - `go/data_service/cmd/writer_authority`:新文件 `workload_identity.go`(身份的文本形状、`registrarIdentity`);`kube_workload.go` 拆出 `kubeClient`,加 `selfIdentity`(SelfSubjectReview)与 `ServiceAccountUID`;`main.go` 的 `mintBoot` 写 `registered_by`、模板与启动记录的核对;`retire_removed_slots.go` 的 `registeredHere`。
+  - 清单 `sql-writer-slot-retirer.yaml` 的 Role 加 `serviceaccounts` 的 `get`;`k8s_deploy.ps1` 名册模板预填检查加 `registeredBy`、没做完的警告点名这种结局;告警说明。
+  - 单测:`catalog_succession_test.go` `TestLifecycleBoundsRegisteredBy`;`main_test.go` `TestBootRecordsWhoRegisteredIt`、`TestIdentityFailureRegistersNothing`、`TestBootOutsideKubernetesHasNoIdentity`、`TestBootRecordWithMixedIdentityRefused`;`workload_identity_test.go`;`kube_workload_test.go` `TestSelfIdentityAsksTheAPIServerWhoThisPodIs` 等;`retire_removed_slots_test.go` `TestRetireRemovedSlotsLeavesGenerationsRegisteredElsewhere`(别的集群的 UID、别的 namespace、空身份、认不出、ServiceAccount 不在)、`TestRetireRemovedSlotsChecksOwnershipOnlyBeforeRetiring`、`TestRetireRemovedSlotsDoesNotRetireWhenOwnershipCannotBeRead`。
+  - 真库:`writer_succession_tidb_test.go` `TestRegistrationReadsBackTheRegisterRequest`;`retire_removed_slots_tidb_test.go` 的夹具那一代改为带本 namespace 的身份,新增 `TestRetireRemovedSlotsLeavesGenerationRegisteredElsewhereOnRealCatalog`(别的集群登记的、集群外登记的:目录一个字节不写,那一代照常能写)。
+  - 契约:`sql_writer_slot_retirer_contract.tests.ps1` 的 Role 断言改为三条 `get`、不含令牌与 Secret;`k8s_deploy_contract.tests.ps1` 加「模板预填 `registeredBy` 在渲染前拒绝」。
+- Java 版只在 Java 仓 `PARITY.md` 登记待做。本仓库的 Java 网关不用改代码:收尾由 Go 的 `writer_authority` 做,gateway 的收尾 CronJob 用它的 registrar 镜像;`registered_by` 是 REGISTER 的新字段,`java/authority_jdbc` 核 REGISTER 原文的描述符由 proto 生成,要重新构建,否则按未知字段拒绝带身份的 REGISTER。

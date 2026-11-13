@@ -428,7 +428,7 @@ const ::CurrencyAmount* FindCurrencyUnknownToThisVersion(const ::AssetBundle& bu
 // 依赖行内容的规则只在行存在时才判。
 struct ConfigUnknownToThisVersion
 {
-	const char* table; // 只进日志
+	std::string table; // 只进日志
 	uint32_t id;
 };
 
@@ -1130,6 +1130,25 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 		if (GainBlockService::IsItemGainBlocked(player, transfer.config_id()))
 		{
 			RejectAndRecord(player, ledgerComp, request, kAssetBlocked, nowMs, response);
+			return;
+		}
+	}
+
+	// (a″) 货币入账溢出预检:按补缴扣还后的净额判,与 AddCurrency 同一份扣还计划(CurrencySystem::CreditOverflows)。
+	// 货币排在物品之后入账,溢出若留到 (d) 才判,物品与完整实例已经发出,成了部分到账、要人工补偿;一点没改时又回 RETRY,
+	// 对一个永远成功不了的请求无限重投。所以和封禁一样在任何改动之前判掉,记确定拒绝(审计 r2-trade#1 一并修)。
+	// 排在号段余量与背包空间两道 RETRY 预检之前,理由同 (a′)。币种与金额已由第 8 步 ValidateCreditBundle 核对过。
+	for (const auto& currency : bundle.currencies())
+	{
+		const auto type = static_cast<CurrencyType>(currency.currency_type());
+		if (CurrencySystem::CreditOverflows(player, type, currency.amount()))
+		{
+			LOG_ERROR << "[AssetOp] metric=asset_credit_currency_overflow player_id=" << request.player_id()
+					  << " stream=" << static_cast<int>(request.stream()) << " seq=" << request.seq()
+					  << " currency_type=" << currency.currency_type() << " amount=" << currency.amount()
+					  << " balance=" << CurrencySystem::GetBalance(player, type)
+					  << ";credit would overflow the balance after debt clawback, rejected before any change";
+			RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
 			return;
 		}
 	}

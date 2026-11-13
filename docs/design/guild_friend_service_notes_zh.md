@@ -16,7 +16,7 @@
 
 ## 公会服务当前路径
 
-- 已实现管理、入帮审批、资产与商店、活动和排行榜等功能；RPC 契约见 [guild.proto](../../proto/guild/guild.proto)。公会 ID 默认通过 data_service 的 `AllocateIdSegment` 领取 `guild` 号段；当前 `IdSegment.Enabled=true`、`FallbackToSnowflake=false`，号段不可用时拒绝建帮，策略见 [guild_id_minter.go](../../go/guild/internal/svc/guild_id_minter.go)。
+- 已实现管理、入帮审批、资产与商店、活动和排行榜等功能；RPC 契约见 [guild.proto](../../proto/guild/guild.proto)。公会 ID 默认通过 data_service 的 `AllocateIdSegment` 领取 `guild` 号段；当前 `IdSegment.Enabled=true`，没有 Snowflake 回退（回退配置 2026-10-30 已删，guild 的 snowflake 槽位申领 2026-11-12 已删），号段不可用时拒绝建帮，策略见 [guild_id_minter.go](../../go/guild/internal/svc/guild_id_minter.go)。
 - **写路径**：业务校验与授权在 SQL 事务里复核，只写发生变化的字段或关系；提交后失效相关 Redis 展示缓存。例如公告更新在同一事务锁公会与操作者成员行，只允许权威角色为 officer/leader 时修改；陈旧成员缓存不能继续授权。禁止把 Redis 快照改完后整份写回 SQL。建帮、公告等管理路径见 [guild_repo.go](../../go/guild/internal/data/guild_repo.go) 与 [guild_manage_repo.go](../../go/guild/internal/data/guild_manage_repo.go)。
 - **展示读路径**：Redis → 未命中 → SQL → 校验缓存代次后回填 Redis。加载互斥用于合并冷读；这不等于每个公会有一个常驻 Actor，也不提供展示快照的强一致保证。权限、成员与资产判定仍须使用事务内的权威状态。
 - **Redis 配置**：本地 `RedisClient.DB=2` 承载公会私有缓存与排行；`PlayerLocatorRedis` 单独读取跨运行时共享状态。DB 编号是配置约定，不能据此判断数据权威性；见 [guild.yaml](../../go/guild/etc/guild.yaml) 与 [servicecontext.go](../../go/guild/internal/svc/servicecontext.go)。

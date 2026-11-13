@@ -21,6 +21,8 @@ import (
 // retire-removed-slots 由每个写者 StatefulSet 自己的 CronJob 定时跑(deploy/k8s/manifests/go-svc/sql-writer-slot-retirer.yaml),
 // 用和 init 里 registrar 同一个注册账号,把这些槽位的在役一代按非 run 的 RETIRE 结束。结束一代与换代同一段写(endGeneration),
 // 注册账号本来就能做:它能注册新一代,也能在换代里结束上一代,这里只是没有下一代的那种结束。
+// 只结束本 namespace 的工作负载登记的一代(REGISTER 的 registered_by,workload_identity.go):同一份名册和账号被带到另一个集群时,
+// 那边「Pod 不在」不说明这一代没有进程了。
 
 // retireRemovedSlotsAttempts 是一份退休被拒之后最多试几次。拒绝多半是读 meta 之后,目录版本被同库别的注册推进了,拿新的 meta 再试就过。
 const retireRemovedSlotsAttempts = 3
@@ -75,6 +77,7 @@ func runRetireRemovedSlots(ctx context.Context, o retireRemovedSlotsOptions, get
 	defer opener.close()
 	retirer := slotRetirer{
 		statefulSet:  o.statefulSet,
+		namespace:    workload.namespace,
 		deploymentID: "sql-writer-slot-retirer/" + o.statefulSet + "/" + o.deploymentID,
 		open: func(request *dbpb.SqlWriterLifecycleReceipt_Request) (retirementCatalog, error) {
 			return opener.open(request)
@@ -94,6 +97,8 @@ func runRetireRemovedSlots(ctx context.Context, o retireRemovedSlotsOptions, get
 // retirementCatalog 是结束一代用到的目录操作,生产实现 *authoritysql.Catalog。
 type retirementCatalog interface {
 	LatestBoot(ctx context.Context, principal []byte) (*dbpb.SqlWriterRegistry, error)
+	// Registration 回一代的 REGISTER 原件(永久收据里的完整请求),用它的 registered_by 判这一代是谁登记的。
+	Registration(ctx context.Context, writer *dbpb.SqlWriterRegistry) (*dbpb.SqlWriterLifecycleReceipt_Request, error)
 	CurrentMeta(ctx context.Context) (*dbpb.RouteMeta, error)
 	Retire(ctx context.Context, request *dbpb.SqlWriterLifecycleReceipt_Request) (*dbpb.SqlWriterLifecycleReceipt, error)
 }
@@ -104,11 +109,15 @@ type statefulSetState interface {
 	Replicas(ctx context.Context, statefulSet string) (int, error)
 	// PodExists 回这个名字的 Pod 对象在不在。正在删的(带 deletionTimestamp,还在优雅退出)也算在。
 	PodExists(ctx context.Context, pod string) (bool, error)
+	// ServiceAccountUID 回本 namespace 里这个 ServiceAccount 对象的 UID;对象不存在回 found=false。
+	ServiceAccountUID(ctx context.Context, name string) (uid string, found bool, err error)
 }
 
 // slotRetirer 结束一个写者 StatefulSet 被缩掉的槽位上的在役一代。
 type slotRetirer struct {
-	statefulSet  string
+	statefulSet string
+	// namespace 是本 Job 所在的 namespace,也就是这个 StatefulSet 所在的 namespace:只结束这里的工作负载登记的一代。
+	namespace    string
 	deploymentID string
 	open         func(*dbpb.SqlWriterLifecycleReceipt_Request) (retirementCatalog, error)
 	workload     statefulSetState
@@ -132,6 +141,8 @@ const (
 	slotGateFrozen   = "gate-frozen"    // 闸门冻结(搬库、排空),解冻之后的下一轮再来
 	slotDrainRunOpen = "drain-run-open" // 排空 run 开着:非 run 的退休会被拒,排空要退休的写者按排空的流程走
 	slotFailed       = "failed"         // 结局未知或别的错误:Job 失败,下一轮按目录状态重来
+	// 这一代不是本 namespace 的工作负载登记的(另一个集群或 namespace 在用同一份名册,或者登记时不在 K8s 里):不动它,Job 失败,要人来看。
+	slotRegisteredElsewhere = "registered-elsewhere"
 )
 
 // slotRetirementResult 是一个候选的结局,写进日志。
@@ -150,8 +161,21 @@ type retirementReport struct {
 	results                       []slotRetirementResult
 }
 
+// stillPending 判一个结局是不是「被缩掉、这一轮还没能结束的在役一代」:Pod 还在、闸门冻结、排空 run 开着、失败、不是本集群登记的。
+// 已结束(retired、already-ended)和又扩回来的(scaled-back-up,新 Pod 会换代)都不算。
+func stillPending(outcome string) bool {
+	switch outcome {
+	case slotRetired, slotAlreadyEnded, slotScaledBackUp:
+		return false
+	default:
+		return true
+	}
+}
+
+// lines 是写进日志的结果:每个候选一行,最后一行是汇总。汇总行的 pending 是部署脚本判「这一轮收尾做完没有」的依据
+// (k8s_deploy.ps1 Complete-SqlWriterSlotRetirement 按这一行的格式解析,改格式要同批改脚本与契约测试)。
 func (r retirementReport) lines(statefulSet string) []string {
-	retired := 0
+	retired, pending := 0, 0
 	lines := make([]string, 0, len(r.results)+1)
 	for _, result := range r.results {
 		line := fmt.Sprintf("writer_authority command=retire-removed-slots statefulset=%s slot=%d logical_db=%s boot_seq=%d result=%s", statefulSet, result.ordinal, result.schema, result.bootSeq, result.outcome)
@@ -161,10 +185,13 @@ func (r retirementReport) lines(statefulSet string) []string {
 		if result.outcome == slotRetired {
 			retired++
 		}
+		if stillPending(result.outcome) {
+			pending++
+		}
 		lines = append(lines, line)
 	}
-	return append(lines, fmt.Sprintf("writer_authority command=retire-removed-slots statefulset=%s replicas_before=%d replicas_after=%d roster_slots=%d candidates=%d retired=%d",
-		statefulSet, r.replicasBefore, r.replicasAfter, r.slots, len(r.results), retired))
+	return append(lines, fmt.Sprintf("writer_authority command=retire-removed-slots statefulset=%s replicas_before=%d replicas_after=%d roster_slots=%d candidates=%d retired=%d pending=%d",
+		statefulSet, r.replicasBefore, r.replicasAfter, r.slots, len(r.results), retired, pending))
 }
 
 // run 结束被缩掉槽位的在役一代。顺序就是这条命令的安全性所在:
@@ -174,7 +201,9 @@ func (r retirementReport) lines(statefulSet string) []string {
 //     第 2 步之后才建出来的 Pod 注册的是更新的一代,不在快照里,不会被结束;第 2、3 步之间扩回来的序号,这一步看得到,跳过。
 //     第 3 步之后才扩回来的序号:新 Pod 的换代和这里的退休锁的是同一代的 slot 行,谁先谁后结局都对 —— 退休在先,
 //     新 Pod 看到上一代已结束,只注册;换代在先,这里的退休读不到 slot 行,回拒绝,重读目录得知已结束。
-//  4. 结束:每个候选一份非 run 的 RETIRE,按当时的 meta 绑 epoch 与目录版本(retire)。
+//  4. 归属:Pod 没了的候选,读这一代的 REGISTER 原件,核它是本 namespace 的工作负载登记的(registeredHere)。不是就不动它、
+//     这一轮算失败:「Pod 不在」只对本集群自己登记的一代才说明没有进程了(workload_identity.go)。
+//  5. 结束:每个候选一份非 run 的 RETIRE,按当时的 meta 绑 epoch 与目录版本(retire)。
 //
 // 不靠时钟,也不在本地记任何状态:每一轮都从目录和集群的现状重新判,所以 Job 半途失败、重跑都不会多结束或漏结束。
 func (r slotRetirer) run(ctx context.Context, roster *dbpb.SqlWriterBootRoster) (retirementReport, error) {
@@ -208,6 +237,7 @@ func (r slotRetirer) run(ctx context.Context, roster *dbpb.SqlWriterBootRoster) 
 	}
 	report.replicasAfter = replicas
 	podGone := map[int]bool{}
+	serviceAccounts := map[string]string{}
 	var failures []error
 	for _, candidate := range candidates {
 		result := slotRetirementResult{ordinal: candidate.ordinal, schema: candidate.template.AuthoritySchema, bootSeq: candidate.writer.BootSeq}
@@ -230,6 +260,15 @@ func (r slotRetirer) run(ctx context.Context, roster *dbpb.SqlWriterBootRoster) 
 			report.results = append(report.results, result)
 			continue
 		}
+		if err = r.registeredHere(ctx, candidate, serviceAccounts); err != nil {
+			result.outcome = slotFailed
+			if errors.Is(err, errRegisteredElsewhere) {
+				result.outcome = slotRegisteredElsewhere
+			}
+			failures = append(failures, fmt.Errorf("slot %d in %s, boot %d: %w", result.ordinal, result.schema, result.bootSeq, err))
+			report.results = append(report.results, result)
+			continue
+		}
 		result, err = r.retire(ctx, candidate, result)
 		if err != nil {
 			result.outcome = slotFailed
@@ -238,6 +277,37 @@ func (r slotRetirer) run(ctx context.Context, roster *dbpb.SqlWriterBootRoster) 
 		report.results = append(report.results, result)
 	}
 	return report, errors.Join(failures...)
+}
+
+// registeredHere 核一个候选是本 namespace 的工作负载登记的:它的 REGISTER 记着登记进程的 ServiceAccount 与 UID(registered_by),
+// namespace 要是本 namespace,而且这里现在这个名字的 ServiceAccount 对象就是那个 UID。是就回 nil。
+// 不是(别的 namespace、别的集群的 UID、这个 ServiceAccount 已经不在或被重建、集群外登记的空身份)回 errRegisteredElsewhere:
+// 归属说不清就不结束,由人按手册核实后人工退休。读不到 REGISTER 或 API server 的错误原样回,同样不结束。
+// uids 缓存这一轮查过的 ServiceAccount(名字 → UID,不存在记空串):一个 StatefulSet 的各代几乎都是同一个 ServiceAccount。
+func (r slotRetirer) registeredHere(ctx context.Context, candidate retirementCandidate, uids map[string]string) error {
+	registration, err := candidate.catalog.Registration(ctx, candidate.writer)
+	if err != nil {
+		return fmt.Errorf("read its REGISTER receipt: %w", err)
+	}
+	owner, ok := parseWorkloadIdentity(registration.RegisteredBy)
+	if !ok || owner.namespace != r.namespace {
+		return fmt.Errorf("%w (registered_by=%q, this namespace is %s); it is left active", errRegisteredElsewhere, registration.RegisteredBy, r.namespace)
+	}
+	uid, checked := uids[owner.serviceAccount]
+	if !checked {
+		current, found, err := r.workload.ServiceAccountUID(ctx, owner.serviceAccount)
+		if err != nil {
+			return fmt.Errorf("look up service account %s: %w", owner.serviceAccount, err)
+		}
+		if found {
+			uid = current
+		}
+		uids[owner.serviceAccount] = uid
+	}
+	if uid != owner.uid {
+		return fmt.Errorf("%w (registered_by=%q, service account %s/%s here has uid %q); it is left active", errRegisteredElsewhere, registration.RegisteredBy, r.namespace, owner.serviceAccount, uid)
+	}
+	return nil
 }
 
 // retire 结束一个候选。结局按目录状态判,不靠本地记录:

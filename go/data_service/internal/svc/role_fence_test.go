@@ -18,6 +18,7 @@ type roleRemovalsFake struct {
 	calls     int
 	olderThan time.Duration
 	limit     int
+	result    store.RemovalResumeResult
 	err       error
 	panics    bool
 }
@@ -28,7 +29,64 @@ func (f *roleRemovalsFake) ResumeRemovals(_ context.Context, olderThan time.Dura
 	if f.panics {
 		panic("test")
 	}
-	return store.RemovalResumeResult{}, f.err
+	return f.result, f.err
+}
+
+// counterValue 读默认注册表里某个计数在一组 label 下的当前值;还没有这条序列时是 0。计数是进程级累加的,用例只比增量。
+func counterValue(t *testing.T, name string, labels map[string]string) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, mf := range families {
+		if mf.GetName() != name {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			matched := len(m.GetLabel()) == len(labels)
+			for _, pair := range m.GetLabel() {
+				if labels[pair.GetName()] != pair.GetValue() {
+					matched = false
+				}
+			}
+			if matched {
+				if m.GetCounter() != nil {
+					return m.GetCounter().GetValue()
+				}
+				return m.GetGauge().GetValue()
+			}
+		}
+	}
+	return 0
+}
+
+// 用例「删角收尾失败不再算完成」:后台一轮的逐行结局都计,收尾没做完的计 unsettled,出错的一轮也照记。
+func TestResumeRoleRemovalsCountsEveryResult(t *testing.T) {
+	const name = "data_service_account_role_removal_resume_total"
+	before := map[string]float64{}
+	for _, result := range []string{"finished", "abandoned", "unsettled", "failed"} {
+		before[result] = counterValue(t, name, map[string]string{"result": result})
+	}
+	fake := &roleRemovalsFake{result: store.RemovalResumeResult{Finished: 2, Abandoned: 1, Unsettled: 3}}
+	s := &ServiceContext{RelayAdmission: drainproof.New(), RoleRemovals: fake}
+	s.resumeRoleRemovals(context.Background())
+	fake.result, fake.err = store.RemovalResumeResult{Unsettled: 1, Failed: 1}, errors.New("participant unreachable")
+	s.resumeRoleRemovals(context.Background())
+
+	for result, want := range map[string]float64{"finished": 2, "abandoned": 1, "unsettled": 4, "failed": 1} {
+		require.Equalf(t, before[result]+want, counterValue(t, name, map[string]string{"result": result}), "result=%s", result)
+	}
+}
+
+// 目录的失败计数接到 metrics:建角提交之后名字没绑上、删角收尾没做完,各按原因计一次。
+func TestDirectoryEventsReachTheCounters(t *testing.T) {
+	const bind, settle = "data_service_account_role_name_bind_failures_total", "data_service_account_role_removal_settle_failures_total"
+	beforeBind := counterValue(t, bind, map[string]string{"reason": store.NameBindFailureTaken})
+	beforeSettle := counterValue(t, settle, map[string]string{"step": store.RemovalSettleReleaseName})
+	var events store.DirectoryEvents = directoryEvents{}
+	events.NameBindFailed(store.NameBindFailureTaken)
+	events.RemovalSettleFailed(store.RemovalSettleReleaseName)
+	require.Equal(t, beforeBind+1, counterValue(t, bind, map[string]string{"reason": store.NameBindFailureTaken}))
+	require.Equal(t, beforeSettle+1, counterValue(t, settle, map[string]string{"step": store.RemovalSettleReleaseName}))
 }
 
 func TestResumeRoleRemovalsGoesThroughRelayGate(t *testing.T) {
@@ -104,16 +162,20 @@ func roleRefHeldCount(t *testing.T) float64 {
 	return 0
 }
 
-// 一轮里留下没写墓碑的建角 ref(角色行不在,但角色提交过)计进低基数计数,出错的一轮也照记;逐条明细在 store 的 ERROR 日志里。
+// 一轮里新标成保留、没写墓碑的建角 ref(角色行不在,但角色提交过)计进低基数计数,出错的一轮也照记;逐条明细在 store 的 ERROR 日志里。
+// 还留着多少条报 gauge;这一轮没数成(HeldCounted=false)不写,保留上一轮的值。
 func TestSweepStaleRoleRefsCountsHeldRefs(t *testing.T) {
+	const gauge = "data_service_account_role_ref_held"
 	before := roleRefHeldCount(t)
-	s := &ServiceContext{RelayAdmission: drainproof.New(), RoleRefs: &roleRefsFake{result: store.SweepResult{Scanned: 3, Dropped: 1, Held: 2}}}
+	s := &ServiceContext{RelayAdmission: drainproof.New(), RoleRefs: &roleRefsFake{result: store.SweepResult{Scanned: 3, Dropped: 1, Held: 2, HeldTotal: 5, HeldCounted: true}}}
 	s.sweepStaleRoleRefs(context.Background())
 	require.Equal(t, before+2, roleRefHeldCount(t))
+	require.Equal(t, float64(5), counterValue(t, gauge, map[string]string{}))
 
 	s.RoleRefs = &roleRefsFake{result: store.SweepResult{Scanned: 1, Held: 1}, err: errors.New("one ref failed")}
 	s.sweepStaleRoleRefs(context.Background())
 	require.Equal(t, before+3, roleRefHeldCount(t))
+	require.Equal(t, float64(5), counterValue(t, gauge, map[string]string{}), "没数成就不写,保留上一轮的值")
 }
 
 func TestSweepStaleRoleRefsGoesThroughRelayGate(t *testing.T) {

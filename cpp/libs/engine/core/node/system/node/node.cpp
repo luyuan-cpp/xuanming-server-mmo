@@ -25,6 +25,9 @@
 #include "time/system/time.h"
 #include "core/utils/debug/stacktrace_system.h"
 #include "core/tracing/log_context_suffix.h"
+#include "core/tracing/otlp_http.h"
+#include "core/tracing/otlp_span_exporter.h"
+#include "core/tracing/span_export_queue.h"
 #include "build_info/build_info.h"
 #include "error_reporter/error_reporter.h"
 #include "network/node_utils.h"
@@ -37,11 +40,14 @@
 #include "metrics/metrics_registry.h"
 #include <boost/algorithm/string.hpp>
 #include "node/system/etcd/etcd_service.h"
+#include "node/system/etcd/kill_switch_etcd_sync.h"
+#include "kill_switch/kill_switch.h"
 #include "node/system/grpc_call_deadline.h"
 #include "node/system/node/node_connector.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "node/system/node/client_endpoint.h"
 #include "node/system/node/open_file_limit.h"
+#include "node/system/node/process_fd_metrics.h"
 #include "node/system/node/node_planned_drain.h"
 #include "node/system/node/release_track.h"
 #include "engine/config/node_log_level.h"
@@ -63,8 +69,10 @@
 #include <optional>
 #include <string_view>
 #ifdef __linux__
+#include <dirent.h>
 #include <sys/resource.h>
 #endif
+#include "muduo/net/Acceptor.h" // 只读 Acceptor::exhaustionCounts(),给指标出口用
 
 
 #include <algorithm>
@@ -447,6 +455,33 @@ struct NodeMaintenanceControl {
 namespace
 {
 	std::atomic<Node *> gNodeAtomic{nullptr};
+
+	// 本线程最近一行日志,由 Node::AsyncOutput 记下,只给 EchoFatalLineToStderr 用。
+	// muduo 的 Logger 析构里先调输出函数,FATAL 级别紧接着调冲刷函数再 abort:两次调用在同一线程、同一次析构里,
+	// 所以冲刷时这里指着的就是那一行,它指向的缓冲(Logger 自己的流缓冲,或 AsyncOutput 的线程局部拼接缓冲)也都还活着。
+	thread_local std::string_view tlsLastLogLine;
+	// 拒启函数已经自己往 stderr 写过一行固定格式的原因时置位,冲刷函数不再重复写。
+	thread_local bool tlsFatalReasonAlreadyOnStderr = false;
+
+	// muduo 只在 LOG_FATAL / LOG_SYSFATAL 时、abort 之前调一次冲刷函数(Logger::setFlush)。
+	// Linux 上业务日志只进异步文件,abort 时后端线程来不及落盘,`kubectl logs --previous` 里什么都没有,
+	// CrashLoopBackOff 找不到原因。这里把那一行同步写进 stderr:全进程任何一处 LOG_FATAL 都留得下最后一句,
+	// 不靠每个调用点自己记得先写一遍(gate / battle 的启动门禁、运行期不变量检查都是直接 LOG_FATAL)。
+	// 不在这里等异步日志落盘:后端线程卡在磁盘上时,致命错误也必须立刻终止进程。
+	// Windows 上 AsyncOutput 已经把每一行写到控制台,不重复写。
+	void EchoFatalLineToStderr()
+	{
+#ifndef WIN32
+		const std::string_view line = tlsLastLogLine;
+		if (!tlsFatalReasonAlreadyOnStderr && !line.empty())
+		{
+			std::fwrite(line.data(), 1, line.size(), stderr);
+		}
+		std::fflush(stderr);
+#endif
+		std::fflush(stdout); // muduo 缺省的冲刷函数只做这一件事,保留
+	}
+
 	// gRPC 服务端排空预算(docs/design/grpc-muduo-transport.md §15.3 Q4、§15.10):从 BeginShutdown 起算 2s;
 	// 第二段 GOAWAY 在 PING ACK 或满 1s 时发;排空到期后连接继续读写,已提交的应答(含被对端流控卡住的 DATA)写完、
 	// 所有流关闭才半关;closeGrace 1s 从排空到期起算,是硬上限,到期强制关闭。总上限约 3s。
@@ -770,10 +805,14 @@ namespace
 	// K8s 下 C++ 节点的业务日志只落 logs/cpp_nodes/*.log,而 muduo 的 LOG_FATAL 直接 abort,
 	// 异步日志后端来不及把最后几行刷盘 —— CrashLoopBackOff 时运维会找不到原因。
 	// 所以先同步写一行 stderr(kubectl logs --previous 可见),再 LOG_FATAL 以非 0 退出。
+	// 2026-11-12 起任何 LOG_FATAL 都会经 EchoFatalLineToStderr 把最后一行写进 stderr;这里和 FatalStartupConfig 仍自己写,
+	// 是因为它们的行有固定前缀,部署脚本与运维手册按前缀去找(例如 "FATAL open file limit config:")。
+	// 自己写过就置 tlsFatalReasonAlreadyOnStderr,免得同一个原因在 stderr 里出现两行。
 	[[noreturn]] void FatalClientEndpoint(const std::string &reason)
 	{
 		std::fprintf(stderr, "FATAL client endpoint: %s\n", reason.c_str());
 		std::fflush(stderr);
+		tlsFatalReasonAlreadyOnStderr = true;
 		LOG_FATAL << "Client endpoint: " << reason;
 		std::abort(); // LOG_FATAL 已 abort;这一行只为让 [[noreturn]] 对编译器成立
 	}
@@ -784,6 +823,7 @@ namespace
 	{
 		std::fprintf(stderr, "FATAL %s config: %s\n", area, reason.c_str());
 		std::fflush(stderr);
+		tlsFatalReasonAlreadyOnStderr = true;
 		LOG_FATAL << area << " config: " << reason;
 		std::abort(); // LOG_FATAL 已 abort;这一行只为让 [[noreturn]] 对编译器成立
 	}
@@ -835,12 +875,82 @@ namespace
 	{
 		return value == RLIM_INFINITY ? open_file_limit::kUnlimited : static_cast<uint64_t>(value);
 	}
+
+	// 本进程当前打开的 fd 数。优先读 /proc/self/fd 的目录大小(Linux 6.2 起就是 fd 数,O(1));更老的内核退回逐项数。
+	// 读不到返回空。只在 /metrics 抓取时调用(loop 线程):procfs 在内存里,不碰磁盘,也不会阻塞在别的进程上。
+	std::optional<uint64_t> ReadOpenFdCount()
+	{
+		struct stat fdDirStat{};
+		if (::stat("/proc/self/fd", &fdDirStat) == 0)
+		{
+			if (const auto fromSize = process_fd_metrics::OpenFdsFromProcDirSize(static_cast<int64_t>(fdDirStat.st_size)))
+			{
+				return fromSize;
+			}
+		}
+		DIR *fdDir = ::opendir("/proc/self/fd");
+		if (fdDir == nullptr)
+		{
+			return std::nullopt;
+		}
+		uint64_t entries = 0;
+		while (const dirent *entry = ::readdir(fdDir))
+		{
+			if (entry->d_name[0] != '.')
+			{
+				++entries;
+			}
+		}
+		::closedir(fdDir);
+		return process_fd_metrics::OpenFdsFromDirEntryCount(entries);
+	}
+
+	std::optional<uint64_t> ReadOpenFileSoftLimit()
+	{
+		struct rlimit current{};
+		if (::getrlimit(RLIMIT_NOFILE, &current) != 0)
+		{
+			return std::nullopt;
+		}
+		return FromRlim(current.rlim_cur);
+	}
 #endif
+
+	// EnsureOpenFileLimitOrDie 的结果,给 /metrics 出口读。启动时在 loop 线程上写一次,之后只在同一线程上读。
+	struct OpenFileLimitCheckResult
+	{
+		bool checked = false;
+		uint64_t required = 0;
+		bool exempted = false;
+	};
+	OpenFileLimitCheckResult gOpenFileLimitCheckResult;
+
+	// fd 用量、启动门槛与 accept 降级的指标页(指标含义见 process_fd_metrics.h)。排在各模块的采集结果之前。
+	std::string RenderProcessFdMetrics()
+	{
+		process_fd_metrics::Snapshot snapshot;
+#ifdef __linux__
+		snapshot.openFds = ReadOpenFdCount();
+		snapshot.maxFds = ReadOpenFileSoftLimit();
+#endif
+		snapshot.limitChecked = gOpenFileLimitCheckResult.checked;
+		snapshot.requiredOpenFiles = gOpenFileLimitCheckResult.required;
+		snapshot.exempted = gOpenFileLimitCheckResult.exempted;
+		const muduo::net::Acceptor::ExhaustionCounts acceptCounts = muduo::net::Acceptor::exhaustionCounts();
+		snapshot.acceptDescriptorExhaustions = acceptCounts.descriptors;
+		snapshot.acceptMemoryExhaustions = acceptCounts.memory;
+		snapshot.acceptPauses = acceptCounts.pauses;
+
+		prometheus_text::Writer writer;
+		process_fd_metrics::Write(writer, snapshot);
+		return writer.Text();
+	}
 
 	// fd 上限(RLIMIT_NOFILE)启动门槛,判定规则、余量与取舍见 open_file_limit.h。只在 Linux 上执行,Windows 本地开发不受影响。
 	// 软限抬到 min(硬限, 1048576),只抬不降、不动硬限;抬完仍低于「客户端面准入上限 + 余量」时:
 	// 缺省(enforce)经 FatalStartupConfig 先写 stderr 再拒启;NODE_OPEN_FILE_LIMIT_MODE=warn 时只打 WARN 继续启动。
-	// C++ 节点没有 Prometheus 出口(gate 准入设计 G13),所以豁免与缺口只进 stdout 与日志,不出指标。
+	// 门槛与豁免是否生效记进 gOpenFileLimitCheckResult,由指标出口导出 cpp_node_open_file_limit_required / _exempted
+	// (告警 CppNodeOpenFileLimitExempted:带豁免运行只是短时应急,不能长期留着)。
 	void EnsureOpenFileLimitOrDie(uint32_t nodeType, const BaseDeployConfig &deploy)
 	{
 #ifdef __linux__
@@ -889,8 +999,10 @@ namespace
 		switch (open_file_limit::ActionFor(outcome.verdict, mode.mode))
 		{
 		case open_file_limit::Action::kProceed:
+			gOpenFileLimitCheckResult = {true, required, false};
 			return;
 		case open_file_limit::Action::kProceedExempted:
+			gOpenFileLimitCheckResult = {true, required, true};
 			EmitOpenFileLimitLine(open_file_limit::FormatExemptionWarning(role, outcome), true);
 			return;
 		case open_file_limit::Action::kRefuse:
@@ -930,6 +1042,8 @@ Node::Node(muduo::net::EventLoop *loop, const std::string &logFilePath)
 {
 	// Start async log system early so all constructor logs have correct formatting/colors.
 	muduo::Logger::setOutput(AsyncOutput);
+	// 任何一处 LOG_FATAL 在 abort 之前都把最后一行同步写进 stderr(原因见 EchoFatalLineToStderr)。
+	muduo::Logger::setFlush(EchoFatalLineToStderr);
 	logSystem.start();
 
 	// Set timezone before any LOG_xxx call. Without a valid timezone, muduo appends 'Z'
@@ -1054,7 +1168,7 @@ void Node::Initialize()
 	LoadConfigs();
 	InitLogSystem();
 	// fd 上限门槛(容量模型 A0-2、gate 准入 G4 / P0-1)。这里是第一个配置已读、又还没开任何网络 fd 的位置:
-	// 此后 InitRpcServer 连 Redis、InitKafka、InitEtcdService 都要 fd,软限必须在它们之前抬好,拒启也要在注册进 etcd、
+	// 此后 InitRpcServer、InitKafka、InitEtcdService(scene 另在 RedisSystem 里连 Redis)都要 fd,软限必须在它们之前抬好,拒启也要在注册进 etcd、
 	// 开始接流量之前。gate / scene / battle 都经过这里,以后新增的 C++ 节点自动覆盖。
 	// 缺省 fail-closed:fd 不够时 gate 的唯一 IO 线程会 EMFILE 忙循环、Redis / Kafka / etcd 重连失败、日志滚动时崩溃,
 	// 而且是运行到某个时刻才暴露、难以归因;宁可在发布时就暴露。拒启不是无代价的:影响面按工作负载形态不同,
@@ -1068,12 +1182,37 @@ void Node::Initialize()
 	// /metrics 出口排在任何业务网络之前:启动卡在 etcd / Redis 时也能抓到 cpp_node_info。
 	StartMetricsExporter();
 	InitRpcServer();
+	// span 导出排在 InitRpcServer 之后:资源属性要用它定下的节点类型、uuid 与 zone(docs/design/distributed-tracing.md §10.3)。
+	StartSpanExporter();
 	InitMaintenanceControl();
 	LoadAllConfigData();
 	InitKafka();
 	InitEtcdService();
+	InitKillSwitch();
 
 	LOG_DEBUG << "Node initialization complete.";
+}
+
+void Node::InitKillSwitch()
+{
+	eventLoop.assertInLoopThread();
+	// 热关停(docs/design/rpc-kill-switch.md):节点类型与 uuid 在 InitRpcServer 里已经定下,这里登记成本进程身份,
+	// 之后 type/<本类型>/、instance/<本 uuid>/ 下的规则才对本进程生效。
+	const NodeInfo &info = GetNodeInfo();
+	kill_switch::KillSwitch::Process().SetIdentity(
+		{{eNodeType_Name(static_cast<eNodeType>(info.node_type()))}, {info.node_uuid()}});
+	kill_switch::RegisterMetrics();
+	const auto &etcdHosts = tlsNodeConfigManager.GetBaseDeployConfig().etcd_hosts();
+	if (etcdHosts.empty())
+	{
+		LOG_WARN << "Kill switch inactive: no etcd host configured (all requests allowed)";
+		return;
+	}
+	// 独立的 etcd 连接,与注册 / 发现分开(§9);与 EtcdService 同一个地址,也在节点构造期建好(传输构造时解析地址)。
+	killSwitchSync_ = std::make_unique<KillSwitchEtcdSync>(kill_switch::KillSwitch::Process());
+	killSwitchSync_->Start(eventLoop, *etcdHosts.begin());
+	LOG_INFO << "Kill switch identity: node_type=" << eNodeType_Name(static_cast<eNodeType>(info.node_type()))
+			 << " node_uuid=" << info.node_uuid();
 }
 
 void Node::StartMetricsExporter()
@@ -1094,9 +1233,86 @@ void Node::StartMetricsExporter()
 	// 属于 AGENTS.md §11.7「与被绑对象同寿命的成员」的例外。只在 loop 线程上读 NodeInfo。
 	metricsExporter_ = std::make_unique<MetricsHttpExporter>(&eventLoop, *port, [this]
 	{
-		return RenderNodeIdentityMetrics(GetNodeInfo()) + GlobalMetricsRegistry().Render();
+		return RenderNodeIdentityMetrics(GetNodeInfo()) + RenderProcessFdMetrics() + GlobalMetricsRegistry().Render();
 	});
 	metricsExporter_->Start();
+}
+
+namespace
+{
+// Tempo 里的 service.name 与 Loki 的 service 标签同值:SceneNodeService → scene、GateNodeService → gate、BattleNodeService → battle。
+std::string SpanServiceNameOf(uint32_t nodeType)
+{
+	std::string name = eNodeType_Name(static_cast<eNodeType>(nodeType));
+	constexpr std::string_view kSuffix = "NodeService";
+	if (name.size() > kSuffix.size() && std::string_view(name).substr(name.size() - kSuffix.size()) == kSuffix)
+	{
+		name.resize(name.size() - kSuffix.size());
+	}
+	for (char &c : name)
+	{
+		if (c >= 'A' && c <= 'Z')
+		{
+			c = static_cast<char>(c - 'A' + 'a');
+		}
+	}
+	return name.empty() ? std::string("cpp_node") : name;
+}
+} // namespace
+
+void Node::StartSpanExporter()
+{
+	eventLoop.assertInLoopThread();
+	// 地址与开关:OTEL_* 环境变量优先,其次 base_deploy_config 的 Tracing.OtlpTracesEndpoint(取值规则见 core/tracing/otlp_http.h)。
+	const tracing::OtlpExportSettings settings = tracing::ResolveOtlpExportSettings(
+		tlsNodeConfigManager.GetBaseDeployConfig().tracing().otlp_traces_endpoint(),
+		[](const char *name) -> const char * { return std::getenv(name); });
+	if (!settings.error.empty())
+	{
+		// 与 MMORPG_METRICS_PORT 同一口径:配错就别带着看不见的链路上线。报错不回显地址。
+		FatalStartupConfig("span exporter", settings.error);
+	}
+	if (!settings.enabled)
+	{
+		if (settings.source.empty())
+		{
+			LOG_INFO << "[Tracing] no OTLP traces endpoint configured; span export disabled";
+		}
+		else
+		{
+			LOG_INFO << "[Tracing] span export disabled by " << settings.source;
+		}
+		return;
+	}
+
+	const NodeInfo &info = GetNodeInfo();
+	tracing::OtlpSpanExporterOptions options;
+	options.endpoint = settings.endpoint;
+	options.resource.serviceName = SpanServiceNameOf(info.node_type());
+	options.resource.serviceNamespace = "mmorpg";
+	options.resource.serviceInstanceId = info.node_uuid();
+	options.resource.serviceVersion = info.build();
+	options.resource.extraAttributes.emplace_back("mmorpg.zone_id", std::to_string(info.zone_id()));
+	spanExporter_ = std::make_unique<tracing::OtlpSpanExporter>(tracing::ProcessSpanExportQueue(),
+																 tracing::ProcessSpanExportStats(), std::move(options));
+	spanExporter_->Start();
+	tracing::RegisterSpanExportMetrics();
+	// 导出线程起来之后才装去处:之前结束的 span 不记录(没装去处时接缝只多一次原子读)。
+	tracing::InstallSpanSink(&tracing::ProcessSpanExportQueue());
+	LOG_INFO << "[Tracing] exporting spans over OTLP/HTTP to " << settings.endpoint.ToUrl() << " (from " << settings.source
+			 << ", queue " << tracing::kDefaultSpanQueueCapacity << ", batch " << tracing::kDefaultSpanExportBatchSize << ")";
+}
+
+void Node::StopSpanExporter()
+{
+	if (!spanExporter_)
+	{
+		return;
+	}
+	// 先摘去处,之后结束的 span 不再入队;再在导出线程上有界冲刷(OtlpSpanExporterOptions::shutdownTimeout)并停线程。
+	tracing::InstallSpanSink(nullptr);
+	spanExporter_->Shutdown();
+	spanExporter_.reset();
 }
 
 void Node::InitRpcServer()
@@ -1148,22 +1364,8 @@ void Node::InitRpcServer()
 
 	localNodeInfo.set_node_uuid(boost::uuids::to_string(uuidGenerator()));
 
-	const auto &zoneRedisConfig = tlsNodeConfigManager.GetGameConfig().zone_redis();
-	// 不实现 SELECT:跨运行时契约把库号钉在 0(Go / Java / C++ 读写同一组键,见 k8s_deploy.ps1 Go Redis 段
-	// 「DB 号必须全仓一致」的注释)。非 0 说明配置写错了,带着它启动会把数据静默写进 0 号库,所以当场失败。
-	if (zoneRedisConfig.db() != 0)
-	{
-		FatalStartupConfig("zone Redis", "zoneredis.db=" + std::to_string(zoneRedisConfig.db()) +
-											  " is not supported; every runtime shares Redis db 0");
-	}
-	const muduo::net::InetAddress zoneRedisAddress =
-		ResolveRedisAddress(zoneRedisConfig.host(), static_cast<uint16_t>(zoneRedisConfig.port()));
-	LOG_INFO << "Zone Redis address: " << zoneRedisAddress.toIpPort();
-	// 只打开关,不打口令。口令来自 game_config.yaml 的 zoneredis.password,可被环境变量 ZONE_REDIS_PASSWORD 覆盖。
-	LOG_INFO << "Zone Redis auth: " << (zoneRedisConfig.password().empty() ? "off" : "on");
-	RedisConnectOptions redisOptions;
-	redisOptions.password = zoneRedisConfig.password();
-	tlsRedis.Connect(&eventLoop, zoneRedisAddress, std::move(redisOptions));
+	// Node 不再替各节点连 Redis(docs/design/redis-cluster-all-domains-20261110.md §4.2):gate、battle 原来只建一条连接、
+	// 只发 AUTH 与存活 PING;scene 的两个集群句柄(玩家域、控制集群)由 RedisSystem::Initialize 建连。
 
 	LOG_DEBUG << "Node info: " << localNodeInfo.DebugString();
 }
@@ -1374,6 +1576,18 @@ void Node::StartGrpcServer()
 	muduo_grpc::ServerOptions serverOptions;
 	// 入站接续调用方带来的 trace,不合法就开新根(docs/design/distributed-tracing.md §5.3)。
 	serverOptions.dispatchInterceptor = grpc_tracing::DispatchUnderIncomingTrace;
+	// 热关停(docs/design/rpc-kill-switch.md §7):收到请求头即判,被关停的调用不收请求体、handler 不执行,
+	// 状态码取规则里的 code(缺省 UNAVAILABLE),与 Go 侧拦截器同口径。
+	serverOptions.admission = [](const std::string &methodPath) -> std::optional<muduo_grpc::Status>
+	{
+		const auto rule = kill_switch::CheckGrpcMethod(methodPath);
+		if (!rule)
+		{
+			return std::nullopt;
+		}
+		return muduo_grpc::Status(static_cast<muduo_grpc::StatusCode>(rule->GrpcStatusCode()),
+								  kill_switch::DenyMessage(methodPath, *rule));
+	};
 	auto server = muduo_grpc::Server::Create(eventLoop, grpcEp.ip(), static_cast<uint16_t>(grpcEp.port()),
 											 serverOptions);
 	if (!server)
@@ -1631,6 +1845,15 @@ void Node::StartRpcServer()
 	if (etcdHosts.empty())
 		etcdHosts = "(not configured)";
 
+	// 只有 scene 连 Redis(控制集群句柄的种子;玩家域句柄由 RedisSystem 另打一行),gate、battle 不连。
+	std::string controlRedisSeeds = "(not connected)";
+	if (GetNodeInfo().node_type() == SceneNodeService)
+	{
+		controlRedisSeeds = boost::algorithm::join(std::vector<std::string>(gameConfig.control_redis().seeds().begin(),
+																			 gameConfig.control_redis().seeds().end()),
+												   ", ");
+	}
+
 	// Build gRPC listen string
 	std::string grpcListen = "(disabled)";
 	if (GetNodeInfo().grpc_endpoint().port() > 0)
@@ -1660,8 +1883,8 @@ void Node::StartRpcServer()
 					"  kafka:       " +
 		kafkaBrokers + "\n"
 					   "  redis:       " +
-		gameConfig.zone_redis().host() + ":" + std::to_string(gameConfig.zone_redis().port()) + "\n"
-																								"  connects_to: " +
+		controlRedisSeeds + "\n"
+							"  connects_to: " +
 		connectsTo + "\n"
 					 "  log_level:   " +
 		std::to_string(deployConfig.log_level()) + "\n"
@@ -1857,6 +2080,9 @@ void Node::CloseTransportOwnersInLoop()
     transportCloseStarted_ = true;
     ReleaseNodeId();
     serviceDiscoveryManager.Shutdown();
+    // 热关停的独立 etcd 连接与注册那条同时拆(传输要求 loop 仍在运行)。之后规则停在最后一份快照上,
+    // 停机期间仍照它判;没有新请求进来,这不改变任何结果。
+    if (killSwitchSync_) killSwitchSync_->Shutdown();
     serviceHealthMonitorTimer.Cancel(); conflictDrainTimer.Cancel();
     RpcChannel::ProcessMaintenance()->ClosePublications();
     muduo_grpc::Channel::ProcessMaintenance()->Close();
@@ -1871,9 +2097,9 @@ void Node::ReleaseLocalOwnersInLoop()
     if (localOwnerReleaseStarted_) return;
     localOwnerReleaseStarted_ = true;
     hiredis::Hiredis::ProcessMaintenance()->Close();
-    tlsRedis.Shutdown();
-    tlsSceneControlRedis.Shutdown(); // 只有 scene 连过场景控制域;其它节点这里是空操作
-    tlsPlayerRedis.Shutdown(); // 只有 scene 连过玩家域;其它节点这里是空操作
+    // 两个句柄都只有 scene 连过;其它节点这里是空操作。
+    tlsControlRedis.Shutdown();
+    tlsPlayerRedis.Shutdown();
     // TcpServer 析构不能发生在 I/O 分发栈；所有 TCP owner 都在原 loop 释放，随后两跳覆盖 forceClose/connectDestroyed。
     eventLoop.queueInLoop([this] {
         rpcServer.reset(); tlsNodeContextManager.Clear();
@@ -2168,6 +2394,9 @@ void Node::FinalizeTeardownInLoop()
 	// /metrics 出口同理趁 EventLoop 还活着释放(~TcpServer 要在 loop 线程上关掉已有连接);它的采集回调读 tlsEcs,
 	// 必须排在 tlsEcs.Clear() 之前。关闭排进队列的连接收尾由下面的两跳 queueInLoop 排空。
 	metricsExporter_.reset();
+	// span 导出线程:RPC 通道、Kafka、Redis 都已收尾,最后一批 client / consumer span 已经入队;在 logSystem.stop() 之前停,
+	// 收尾日志还写得出去。它有自己的线程与 loop,连接在那边释放,不占本 loop 的两跳;最多阻塞 shutdownTimeout + 2 秒。
+	StopSpanExporter();
 	// Cleared by tlsEcs.Clear() below.
 	tlsEcs.Clear();
 #ifdef WIN32
@@ -2306,6 +2535,8 @@ void Node::AsyncOutput(const char *msg, int len)
 		msg = lineWithContext.data();
 		len = static_cast<int>(rewritten);
 	}
+	// 这一行若是 FATAL,muduo 紧接着会调 EchoFatalLineToStderr,它从这里取最后一行。
+	tlsLastLogLine = std::string_view(msg, static_cast<size_t>(len));
 
 	Node *activeNode = gNodeAtomic.load(std::memory_order_acquire);
 	if (activeNode != nullptr)

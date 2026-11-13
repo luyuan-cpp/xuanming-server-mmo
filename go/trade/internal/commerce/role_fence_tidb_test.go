@@ -180,6 +180,62 @@ func TestTiDBRoleFenceAllowListingOnlyPassesItsOwnToken(t *testing.T) {
 	require.ErrorIs(t, lock(0), ErrConflict, "墓碑拒绝")
 }
 
+// 入口归属预检(docs/design/gate-online-identity.md §9.3):不加锁读副本,只判归属,冻结不拦。
+func TestTiDBVerifyOriginalOwnerFollowsOwnershipNotFreeze(t *testing.T) {
+	e := tiDBEngine(t)
+	directory := &fenceDirectory{states: map[uint64]*rfpb.RoleFenceState{}}
+	roles, err := NewRoleAuthority(e.Repo.DB, directory)
+	require.NoError(t, err)
+	seller, buyer := fenceActor(t, 11, "seller", 1), fenceActor(t, 11, "buyer", 2)
+
+	// 副本缺行:读一次目录写进副本后通过;之后副本相符,只读本库。
+	directory.set(fenceOf(11, "seller", 1, 0, 1))
+	require.NoError(t, roles.VerifyOriginalOwner(seller))
+	require.Equal(t, 1, directory.readCount())
+	require.NoError(t, roles.VerifyOriginalOwner(seller))
+	require.Equal(t, 1, directory.readCount(), "副本相符不读目录")
+
+	// 卖家把这名角色挂了人民币寄售:冻结期间角色仍归原身份,查询与重放照常放行(合同写入由 lockRoles 另判)。
+	frozen := finalFenceOf(11, "seller", 1, 77, 2)
+	directory.set(frozen)
+	_, err = rolefence.Apply(context.Background(), e.Repo.DB, frozen)
+	require.NoError(t, err)
+	require.NoError(t, roles.VerifyOriginalOwner(seller))
+
+	// 过户提交、推送丢了:副本还停在「卖家 + 冻结」。只比修订号会把旧主放过去,所以冻结的副本先读目录再判。
+	directory.set(fenceOf(11, "buyer", 2, 0, 3))
+	err = roles.VerifyOriginalOwner(seller)
+	require.ErrorIs(t, err, ErrConflict)
+	require.True(t, OwnerRejected(err))
+	require.NoError(t, roles.VerifyOriginalOwner(buyer))
+
+	// 旧主再来:副本修订号已经更大,直接拒绝,不读目录。
+	reads := directory.readCount()
+	require.ErrorIs(t, roles.VerifyOriginalOwner(seller), ErrConflict)
+	require.Equal(t, reads, directory.readCount(), "旧主被拒不用自愈")
+
+	// 删角:目录里是账号清空的墓碑,原身份不再拥有这名角色。
+	directory.set(fenceOf(11, "", 3, 0, 4))
+	_, err = rolefence.Apply(context.Background(), e.Repo.DB, fenceOf(11, "", 3, 0, 4))
+	require.NoError(t, err)
+	require.True(t, OwnerRejected(roles.VerifyOriginalOwner(buyer)))
+
+	// 目录里没有这名角色、ctx 里没有原身份:都是确定不归。
+	err = roles.VerifyOriginalOwner(fenceActor(t, 404, "ghost", 1))
+	require.True(t, OwnerRejected(err), "目录里没有这名角色: %v", err)
+	require.True(t, OwnerRejected(roles.VerifyOriginalOwner(context.Background())))
+}
+
+// 目录读不到时这一次判不了:入口回可重试,不能当成角色变了。
+func TestTiDBVerifyOriginalOwnerInconclusiveWhenDirectoryUnreadable(t *testing.T) {
+	e := tiDBEngine(t)
+	roles, err := NewRoleAuthority(e.Repo.DB, &unreadableDirectory{err: errors.Join(rolefence.ErrUnavailable, errors.New("data_service down"))})
+	require.NoError(t, err)
+	err = roles.VerifyOriginalOwner(fenceActor(t, 11, "seller", 1))
+	require.ErrorIs(t, err, rolefence.ErrUnavailable)
+	require.False(t, OwnerRejected(err))
+}
+
 // 退款不可逆:副本冻结或落后时不能直接判退款,先读权威状态。
 func TestTiDBOfficialIntentHealsStaleFrozenReplicaBeforeRefunding(t *testing.T) {
 	e, directory := fenceEngine(t)

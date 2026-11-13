@@ -20,8 +20,10 @@
 #include "player/system/player_team_follow_scope.h"
 #include "player/system/player_ownership_metrics.h"
 #include "player/system/player_save_metrics.h"
+#include "player/system/currency_metrics.h"
 #include "player/system/player_equip.h"
 #include "player/system/player_inbox_system.h"
+#include "modules/bag/bag_service.h"
 #include "player/system/player_mail_outbox.h"
 #include "player/system/player_mystery_merchant.h"
 #include "battle/system/player_battle.h"
@@ -167,6 +169,8 @@ int main(int argc, char *argv[])
         RegisterBroadcastFanoutMetrics();
         // 服务器压力监控的读数:模拟步利用率、AOI 压力、因容量收缩裁掉的关注条目(spatial/system/aoi_load.h)。
         RegisterAoiLoadMetrics();
+        // 补缴扣还因欠款带更新版本字段而跳过的次数(player/system/currency_metrics.h),同一个出口。
+        RegisterCurrencyMetrics();
 
         // context 先于 node 构造、晚于 node 析构:方法表闭包捕获 grpcService 的 this,服务必须活过 Node。
         node.RegisterGrpcService(context->grpcService);
@@ -175,6 +179,9 @@ int main(int argc, char *argv[])
 
         // 玩家持久收件箱:注册表自检并打印生效配置(GameConfig 已在 Node 构造时加载)。
         PlayerInboxSystem::Initialize();
+        // 人物背包或临时格腾出位置时(BagService 唯一的「腾位通知」出口,bag_service.h),把收件箱里因两包都放不下而延后的
+        // 那一次尝试提到下一个 Tick。此刻还没有任何玩家,装在第一笔背包流量之前。
+        BagService::SetSpaceFreedListener(&PlayerInboxSystem::OnBagSpaceFreed);
 
         tlsRedisSystem.Initialize(&loop);
         World::InitializeSystemBeforeConnect();
@@ -462,6 +469,17 @@ int main(int argc, char *argv[])
             // 待寄邮件的 tick(docs/design/battle-overflow-mail.md):每秒把已确认落盘的待寄条目交给邮件服务,
             // 每名玩家至多一封在途。只寄已提交的存档快照里已有的条目,所以不必等别的启动依赖。
             context->mailOutboxTimer.RunEvery(PlayerMailOutboxSystem::kTickIntervalSec, PlayerMailOutboxSystem::Tick);
+            // 没配发件密钥(没有部署 mail 的调试栈)时不接改投:两包都放不下的结算照旧整笔延后。在这里说一次,
+            // 之后每一次不接只打 DEBUG。K8s 上密钥是必需的 secretKeyRef,缺了 Pod 起不来,走不到这一行。
+            if (PlayerMailOutboxSystem::IsSenderConfigured())
+            {
+                LOG_INFO << "[MailOutbox] Battle overflow mail is enabled: drops that fit neither bag are mailed to the player";
+            }
+            else
+            {
+                LOG_WARN << "[MailOutbox] Battle overflow mail is disabled: MAIL_PRODUCER_SECRET_BATTLE is not set (or shorter"
+                            " than 32 bytes); settlements whose drops fit neither bag are deferred until the player frees space";
+            }
             // 神秘商人:每 5 秒从 zone Redis 读一次「这一轮商人在哪、卖什么」(scene_manager 写入),
             // 读到新的一轮就向本节点玩家发出现公告(docs/design/mystery-merchant.md §5.1)。不进 20FPS World::Update。
             PlayerMysteryMerchantSystem::Start(n.GetLoop());
@@ -507,8 +525,7 @@ int main(int argc, char *argv[])
 		context->tasks.StopAll();
 		context->grpcService.CloseCreationAdmission();
 		StopGuidSegmentTransport();
-		tlsRedis.Shutdown();
-		tlsSceneControlRedis.Shutdown();
+		tlsControlRedis.Shutdown();
 		tlsPlayerRedis.Shutdown();
 		tlsRedisSystem.Shutdown();
 

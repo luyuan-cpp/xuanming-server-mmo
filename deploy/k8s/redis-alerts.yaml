@@ -1,8 +1,8 @@
 # Prometheus alert rules for the control-domain Redis instances(控制域 Redis:核心 redis / redis-ha、排队实例 redis-queue-g<N>、redis-match-cluster)。
 #
 # 来源:shared-redis-split-by-purpose.md §25.3(2026-10-23 拍板记录,原 §13 第 6 条「Redis 监控直接上 redis_exporter」)。
-#       玩家域 Redis Cluster 的告警在 deploy/k8s/redis-player-alerts.yaml,不在本文件。这里的规则不限定 pod,exporter 指标同样会落到 redis-player 的 Pod 上:
-#       RedisDown 等几条会和玩家域那一份同时响,名字不同、处置看各自的 description。
+#       两套 Redis Cluster 的告警在 deploy/k8s/redis-player-alerts.yaml(redis-player)与 redis-control-alerts.yaml(redis-control),不在本文件。
+#       这里的规则不限定 pod,exporter 指标同样会落到这两套集群的 Pod 上:RedisDown 等几条会和集群那一份同时响,名字不同、处置看各自的 description。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 mysql-connection-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/redis-alerts.yaml
@@ -18,7 +18,7 @@
 #   redis_connected_clients、redis_config_maxclients、redis_aof_last_write_status、redis_master_link_up、redis_cluster_state。
 #   部署后逐个对着 exporter 的 /metrics 核对,对不上就改这里 —— 指标名写错的规则不报错,只是永远不响。
 #
-# 阈值与 for 时长是占位值,**待压测确认**(AGENTS.md §6:没有压测对比不下容量结论)。
+# 阈值与 for 时长已定(2026-11-12),压测出基线后可调(AGENTS.md §6:容量结论仍以压测对比为准):依据是业界 Redis 常用口径——内存使用率 80% 预警(留 20% 给 fork 写时复制与碎片)、拒绝连接 / 驱逐出现即报、for 5~10 分钟滤掉 BGSAVE / 故障切换抖动。
 # 核心 redis 今天不设 maxmemory(redis.yaml「只写 requests」一段),redis_memory_max_bytes 为 0,RedisMemoryNearMax 对核心恒不触发;
 # 核心显式写 maxmemory 之后(§25.3 第 9 条)自动生效。排队实例一直写 maxmemory,这条对它生效。
 #

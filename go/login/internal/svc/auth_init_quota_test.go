@@ -16,13 +16,49 @@ import (
 
 	"login/internal/config"
 	"login/internal/logic/pkg/auth"
+	"shared/authoritysql"
 	"shared/playerredis"
 )
 
 func TestPasswordQuotaFactoryRejectsBadConfigBeforeOpeningDependencies(t *testing.T) {
-	_, _, err := productionPasswordProviderFromConfig(config.PasswordAuthConf{}, playerredis.Config{}, func(string) (string, bool) { t.Fatal("无效配额不得读DSN或开连接"); return "", false })
+	_, _, err := productionPasswordProviderFromConfig(config.PasswordAuthConf{}, "", playerredis.Config{}, func(string) (string, bool) { t.Fatal("无效配额不得读DSN或开连接"); return "", false })
 	if err == nil {
 		t.Fatal("无效配置被接受")
+	}
+}
+
+// 口令凭据库的档位与库名在读 DSN、连库之前就核对:生产只认 mmorpg,dev / test 才能指到夹具库。
+func TestPasswordAuthorityFromConfigPinsDatabaseOutsideDevAndTest(t *testing.T) {
+	defaults, err := passwordAuthorityFromConfig(config.PasswordAuthConf{}, "")
+	if err != nil || defaults.backend != authoritysql.BackendTiDB || defaults.database != auth.PasswordAuthDatabase {
+		t.Fatalf("没写的档位与库名必须取 tidb 与 %s: %+v err=%v", auth.PasswordAuthDatabase, defaults, err)
+	}
+	mysqlTier, err := passwordAuthorityFromConfig(config.PasswordAuthConf{Backend: "mysql", Database: auth.PasswordAuthDatabase}, "pro")
+	if err != nil || mysqlTier.backend != authoritysql.BackendMySQL {
+		t.Fatalf("MySQL 主从档必须能进生产: %+v err=%v", mysqlTier, err)
+	}
+	for _, mode := range []string{"", "pro", "pre", "rt"} {
+		if _, err := passwordAuthorityFromConfig(config.PasswordAuthConf{Database: "mmorpg_zone_1"}, mode); err == nil {
+			t.Fatalf("mode=%q 时口令库指到了存档库却被接受", mode)
+		}
+	}
+	for _, mode := range []string{"dev", "test"} {
+		fixture, err := passwordAuthorityFromConfig(config.PasswordAuthConf{Database: "login_fixture"}, mode)
+		if err != nil || fixture.database != "login_fixture" {
+			t.Fatalf("mode=%q 必须能指到夹具库: %+v err=%v", mode, fixture, err)
+		}
+	}
+	if _, err := passwordAuthorityFromConfig(config.PasswordAuthConf{Backend: "MySQL"}, "dev"); err == nil {
+		t.Fatal("写错的档位不能被猜成任何一档")
+	}
+	// 库名与档位不合格时不读 DSN:环境变量名写错不该盖住真正的配置错误,也不该为注定失败的配置去取凭证。
+	quota := config.PasswordAuthConf{FailureLimit: 5, FailureWindow: 15 * time.Minute, FailureLock: 5 * time.Minute}
+	quota.Database = "mmorpg_zone_1"
+	if _, _, err := productionPasswordProviderFromConfig(quota, "pro", playerredis.Config{}, func(string) (string, bool) {
+		t.Fatal("口令库名不合格时不得读 DSN")
+		return "", false
+	}); err == nil {
+		t.Fatal("生产模式下指到存档库的口令库被接受")
 	}
 }
 
@@ -101,7 +137,9 @@ func TestInitAuthProvidersRealSQLCanonicalQuotaAcrossReplicas(t *testing.T) {
 	previous := config.AppConfig
 	t.Cleanup(func() { config.AppConfig = previous })
 	config.AppConfig = config.Config{}
-	config.AppConfig.PasswordAuth = config.PasswordAuthConf{Enabled: true, DSNEnv: "LOGIN_TEST_FACTORY_DSN", MaxOpenConns: 2, MaxIdleConns: 1, KDFConcurrency: 2, KDFWaitTimeout: 500 * time.Millisecond, FailureLimit: 5, FailureWindow: 15 * time.Minute, FailureLock: 5 * time.Minute}
+	// 夹具是本机一次性 MySQL 上的随机库:档位写 mysql,库名写这个随机库;test 模式才允许口令库不是 mmorpg。
+	config.AppConfig.Mode = "test"
+	config.AppConfig.PasswordAuth = config.PasswordAuthConf{Enabled: true, DSNEnv: "LOGIN_TEST_FACTORY_DSN", Backend: "mysql", Database: name, MaxOpenConns: 2, MaxIdleConns: 1, KDFConcurrency: 2, KDFWaitTimeout: 500 * time.Millisecond, FailureLimit: 5, FailureWindow: 15 * time.Minute, FailureLock: 5 * time.Minute}
 	config.AppConfig.Node.RedisClient = config.RedisConf{Host: "127.0.0.1:13379", DB: 14}
 	t.Setenv("LOGIN_TEST_FACTORY_DSN", dsn)
 	closeFirst := InitAuthProviders()
@@ -110,14 +148,14 @@ func TestInitAuthProvidersRealSQLCanonicalQuotaAcrossReplicas(t *testing.T) {
 	if first == nil {
 		t.Fatal("生产工厂未注册")
 	}
-	second, closeSecond, err := productionPasswordProviderFromConfig(config.AppConfig.PasswordAuth, config.AppConfig.EffectiveLoginRedis(), os.LookupEnv)
+	second, closeSecond, err := productionPasswordProviderFromConfig(config.AppConfig.PasswordAuth, config.AppConfig.Mode, config.AppConfig.EffectiveLoginRedis(), os.LookupEnv)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(closeSecond)
 	aliases := []string{strings.Replace(canonical, "Álice", "Alice", 1), strings.ToUpper(canonical), strings.ToLower(canonical)}
 	// 真 SQL 接缝先核三种 CI/重音等价别名确实回同一权威原值。
-	store, err := auth.NewSQLPasswordHashStore(dsn, 1, 0)
+	store, err := auth.NewSQLPasswordHashStore(ctx, dsn, authoritysql.BackendMySQL, name, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

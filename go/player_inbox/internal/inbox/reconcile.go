@@ -77,13 +77,14 @@ func (s *Store) ReconcilePlayer(ctx context.Context, req *inboxpb.ReconcilePlaye
 			"or more than %d ring entries); reconcile result is unknown", req.GetPlayerId(), ledgerRecentCapacity)
 	}
 
-	rows, truncated, err := s.playerItems(ctx, req.GetPlayerId(), domain)
+	// 一页一页比对,只留有差异的行:读完这名玩家的全部条目行,读不全就回错误(forEachPlayerItemsPage)。
+	var diffs []*inboxpb.PlayerInboxReconcileDiff
+	err = s.forEachPlayerItemsPage(ctx, req.GetPlayerId(), domain, playerItemsPageSize, func(rows []*inboxpb.PlayerInboxItemRow) error {
+		diffs = appendReconcileDiffs(diffs, ledger, rows)
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	if truncated {
-		logx.WithContext(ctx).Errorf("[player_inbox] ReconcilePlayer read only the first %d rows of player=%d; result is partial",
-			playerItemsLimit, req.GetPlayerId())
 	}
 
 	shard := RowShard(req.GetPlayerId())
@@ -101,7 +102,7 @@ func (s *Store) ReconcilePlayer(ctx context.Context, req *inboxpb.ReconcilePlaye
 			streams[d] = st
 		}
 	}
-	resp.Cursors, resp.Diffs = reconcileReport(domains, streams, ledger, rows)
+	resp.Cursors, resp.Diffs = reconcileCursors(domains, streams, ledger), diffs
 	return resp, nil
 }
 

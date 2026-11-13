@@ -91,7 +91,7 @@ func TestFoldMergedZoneRanks_MovesOldEntriesAndDeletesTheOldKey(t *testing.T) {
 	assert.Equal(t, float64(10), zscore(t, repo, 6, 501))
 	assert.Equal(t, float64(20), zscore(t, repo, 6, 502))
 	assert.Equal(t, float64(30), zscore(t, repo, 6, 601), "目标区原有的条目不动")
-	assert.EqualValues(t, 0, repo.rdb.Exists(ctx, guildRankLockKey).Val(), "维护锁要释放")
+	assert.EqualValues(t, 0, repo.rdb.Exists(ctx, guildRankLockKey(5)).Val(), "维护锁要释放")
 }
 
 // 折叠按版本合并:合服之后写进最终区的分数版本更新,旧榜里同一个公会的旧分数不能盖掉它。
@@ -161,7 +161,7 @@ func (h *afterHeadReadHook) ProcessPipelineHook(next redis.ProcessPipelineHook) 
 func (h *afterHeadReadHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
 		err := next(ctx, cmd)
-		// 折叠里单条发出、带源区键的脚本只有读榜头这一个;合并与摘除都在 pipeline 里。
+		// 折叠里第一条带源区键的脚本是读榜头;并进目标区与按版本摘都在它之后。
 		if err == nil && (cmd.Name() == "eval" || cmd.Name() == "evalsha") && slices.Contains(cmd.Args(), any(h.srcKey)) {
 			h.once.Do(func() {
 				h.fired = true
@@ -267,7 +267,7 @@ func TestFoldMergedZoneRanks_SteadyStateTakesNoLock(t *testing.T) {
 	repo, _ := newRankRepo(t)
 	ctx := context.Background()
 	bindMergedZones(t, repo, map[uint32]uint32{5: 6})
-	require.NoError(t, repo.rdb.Set(ctx, guildRankLockKey, "someone-else", time.Minute).Err())
+	require.NoError(t, repo.rdb.Set(ctx, guildRankLockKey(5), "someone-else", time.Minute).Err())
 
 	done, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
@@ -291,7 +291,7 @@ func TestFoldMergedZoneRanks_LockBusyLeavesOldRankIntact(t *testing.T) {
 	ctx := context.Background()
 	bindMergedZones(t, repo, map[uint32]uint32{5: 6})
 	zadd(t, repo, 5, 501, 10)
-	require.NoError(t, repo.rdb.Set(ctx, guildRankLockKey, "someone-else", time.Minute).Err())
+	require.NoError(t, repo.rdb.Set(ctx, guildRankLockKey(5), "someone-else", time.Minute).Err())
 
 	short, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
@@ -300,7 +300,7 @@ func TestFoldMergedZoneRanks_LockBusyLeavesOldRankIntact(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, context.DeadlineExceeded), "err = %v", err)
 	assert.Equal(t, float64(10), zscore(t, repo, 5, 501))
-	assert.Equal(t, "someone-else", repo.rdb.Get(ctx, guildRankLockKey).Val(), "别人的锁不能动")
+	assert.Equal(t, "someone-else", repo.rdb.Get(ctx, guildRankLockKey(5)).Val(), "别人的锁不能动")
 }
 
 // Redis 挂了:这一轮报错,不当成没有旧榜。

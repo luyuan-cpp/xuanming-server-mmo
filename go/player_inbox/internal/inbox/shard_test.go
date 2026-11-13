@@ -42,8 +42,8 @@ func TestMix64MatchesSplitMix64(t *testing.T) {
 	}
 }
 
-// TestRowShardSpreadsBwmarrinIDs 是评审 L5 的回归:存量 player_id 来自 bwmarrin/snowflake
-// (AGENTS §7.1:login 布局 13-bit node / 9-bit step;库默认 10-bit node / 12-bit step)。同一毫秒只建一个角色时
+// TestRowShardSpreadsBwmarrinIDs 是评审 L5 的回归:当时存量 player_id 来自 bwmarrin/snowflake(login 原布局
+// 13-bit node / 9-bit step;库默认 10-bit node / 12-bit step;login 的这套号源 2026-11-12 已删,保留用例钉住公式与位布局无关)。同一毫秒只建一个角色时
 // step = 0,低 9 / 12 位全 0,旧公式 player_id % 64 会把它们全部压进 shard 0。新公式必须把它们打散到多个分片。
 // 输入是固定的一批 ID,结论确定、可重复。
 func TestRowShardSpreadsBwmarrinIDs(t *testing.T) {

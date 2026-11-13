@@ -40,6 +40,11 @@ func neverDial(t *testing.T) func(context.Context, string) bool {
 	}
 }
 
+// witnessOf 是只有拒连拨号与固定镜像两样旁证的装配,不查 Pod(2026-11-11 之前的全部旁证)。
+func witnessOf(refuses func(context.Context, string) bool, view battleRegistryView) originalInstanceWitness {
+	return originalInstanceWitness{refuses: refuses, registry: func(*pb.MatchFormationRecord) battleRegistryView { return view }}
+}
+
 // closedLoopbackAddr 返回一个刚关掉、没人在听的回环端口:拨它对端当场回 RST。
 func closedLoopbackAddr(t *testing.T) string {
 	t.Helper()
@@ -71,24 +76,30 @@ func TestClassifyDeadlineEvidenceTable(t *testing.T) {
 		answer   originalInstanceAnswer
 		refused  bool
 		registry battleRegistryView
+		podGone  bool
 		want     authority.DeadlineAbortEvidence
 	}{
-		{"原实例立了墓碑、回 ABORTED", reached(battlepb.BattleCreationState_BATTLE_CREATION_ABORTED, nil), false, listed, authority.DeadlineEvidenceNoRoom},
-		{"回 ABORTED 但本次立墓碑没成", reached(battlepb.BattleCreationState_BATTLE_CREATION_ABORTED, mismatch), false, listed, authority.DeadlineEvidenceUndetermined},
-		{"原实例回 PRESENT", reached(battlepb.BattleCreationState_BATTLE_CREATION_PRESENT, nil), false, listed, authority.DeadlineEvidenceBattleStillHolds},
-		{"原实例回 PRESENT,镜像里却已不在册", reached(battlepb.BattleCreationState_BATTLE_CREATION_PRESENT, nil), false, gone, authority.DeadlineEvidenceBattleStillHolds},
-		{"原实例记着别的 operation(UNKNOWN)", reached(battlepb.BattleCreationState_BATTLE_CREATION_UNKNOWN, mismatch), false, gone, authority.DeadlineEvidenceUndetermined},
-		{"原实例回 ABSENT", reached(battlepb.BattleCreationState_BATTLE_CREATION_ABSENT, nil), false, listed, authority.DeadlineEvidenceUndetermined},
-		{"原地址上应答的是另一个实例", otherInstance, false, listed, authority.DeadlineEvidenceInstanceGone},
-		{"回显了别的实例(battle 不会这样回)", originalInstanceAnswer{query: &battlepb.QueryBattleCreationResponse{TargetInstanceId: "someone-else"}}, false, gone, authority.DeadlineEvidenceUndetermined},
-		{"查询失败、原地址拒连、已不在册", failed, true, gone, authority.DeadlineEvidenceInstanceGone},
-		{"查询失败、原地址拒连、仍在册(停机排空:已停听、还没撤租约)", failed, true, listed, authority.DeadlineEvidenceUndetermined},
-		{"查询失败、原地址拒连、镜像没同步过", failed, true, battleRegistryView{}, authority.DeadlineEvidenceUndetermined},
-		{"缓存连接当场回 Unavailable、原地址没拒连、已不在册(黑洞端点的第二次取证)", failed, false, gone, authority.DeadlineEvidenceUndetermined},
-		{"超时或黑洞、已不在册(含原 node_id 已被新进程占用的分区)", failed, false, gone, authority.DeadlineEvidenceUndetermined},
-		{"查询失败、仍在册", failed, false, listed, authority.DeadlineEvidenceUndetermined},
+		{"原实例立了墓碑、回 ABORTED", reached(battlepb.BattleCreationState_BATTLE_CREATION_ABORTED, nil), false, listed, false, authority.DeadlineEvidenceNoRoom},
+		{"回 ABORTED 但本次立墓碑没成", reached(battlepb.BattleCreationState_BATTLE_CREATION_ABORTED, mismatch), false, listed, false, authority.DeadlineEvidenceUndetermined},
+		{"只查询、没立墓碑的 ABORTED 不算没有房间", reached(battlepb.BattleCreationState_BATTLE_CREATION_ABORTED, errTombstoneNotAttempted), false, listed, false, authority.DeadlineEvidenceUndetermined},
+		{"原实例回 PRESENT", reached(battlepb.BattleCreationState_BATTLE_CREATION_PRESENT, nil), false, listed, false, authority.DeadlineEvidenceBattleStillHolds},
+		{"原实例回 PRESENT,镜像里却已不在册", reached(battlepb.BattleCreationState_BATTLE_CREATION_PRESENT, nil), false, gone, false, authority.DeadlineEvidenceBattleStillHolds},
+		{"原实例回 PRESENT,Pod 查询却说没有(命名空间配错):以原实例为准", reached(battlepb.BattleCreationState_BATTLE_CREATION_PRESENT, nil), false, gone, true, authority.DeadlineEvidenceBattleStillHolds},
+		{"原实例记着别的 operation(UNKNOWN)", reached(battlepb.BattleCreationState_BATTLE_CREATION_UNKNOWN, mismatch), false, gone, false, authority.DeadlineEvidenceUndetermined},
+		{"原实例回 ABSENT", reached(battlepb.BattleCreationState_BATTLE_CREATION_ABSENT, nil), false, listed, false, authority.DeadlineEvidenceUndetermined},
+		{"原地址上应答的是另一个实例", otherInstance, false, listed, false, authority.DeadlineEvidenceInstanceGone},
+		{"回显了别的实例(battle 不会这样回)", originalInstanceAnswer{query: &battlepb.QueryBattleCreationResponse{TargetInstanceId: "someone-else"}}, false, gone, false, authority.DeadlineEvidenceUndetermined},
+		{"回显了别的实例,Pod 查询说没有也不算(连上的是谁说不清)", originalInstanceAnswer{query: &battlepb.QueryBattleCreationResponse{TargetInstanceId: "someone-else"}}, false, gone, true, authority.DeadlineEvidenceUndetermined},
+		{"查询失败、原地址拒连、已不在册", failed, true, gone, false, authority.DeadlineEvidenceInstanceGone},
+		{"查询失败、原地址拒连、仍在册(停机排空:已停听、还没撤租约)", failed, true, listed, false, authority.DeadlineEvidenceUndetermined},
+		{"查询失败、原地址拒连、镜像没同步过", failed, true, battleRegistryView{}, false, authority.DeadlineEvidenceUndetermined},
+		{"缓存连接当场回 Unavailable、原地址没拒连、已不在册(黑洞端点的第二次取证)", failed, false, gone, false, authority.DeadlineEvidenceUndetermined},
+		{"超时或黑洞、已不在册(含原 node_id 已被新进程占用的分区)", failed, false, gone, false, authority.DeadlineEvidenceUndetermined},
+		{"查询失败、仍在册", failed, false, listed, false, authority.DeadlineEvidenceUndetermined},
+		{"超时或黑洞、仍在册,K8s 里原 IP 上已没有存活的 Pod(Agones 下崩溃)", failed, false, listed, true, authority.DeadlineEvidenceInstanceGone},
+		{"查询失败、镜像没同步过,K8s 里原 IP 上已没有存活的 Pod", failed, false, battleRegistryView{}, true, authority.DeadlineEvidenceInstanceGone},
 	} {
-		require.Equal(t, c.want, classifyDeadlineEvidence(f, c.answer, c.refused, c.registry), c.why)
+		require.Equal(t, c.want, classifyDeadlineEvidence(f, c.answer, c.refused, c.registry, c.podGone), c.why)
 	}
 	require.True(t, gone.forgotten())
 	require.False(t, listed.forgotten())
@@ -149,7 +160,7 @@ func TestDeadlineEvidenceProbeFastGrpcFailureIsNotRefusal(t *testing.T) {
 		dials++
 		return originalAddressRefuses(ctx, endpoint)
 	}
-	probe := deadlineEvidenceProbe(askOriginalInstance, refuses, func(*pb.MatchFormationRecord) battleRegistryView { return battleRegistryView{synced: true} })
+	probe := deadlineEvidenceProbe(askOriginalInstance, witnessOf(refuses, battleRegistryView{synced: true}))
 	for attempt := 1; attempt <= 3; attempt++ {
 		ctx := generousProbeContext(t)
 		answer := askOriginalInstance(ctx, f)
@@ -184,13 +195,13 @@ func TestAskOriginalInstanceLeavesNoCachedConnection(t *testing.T) {
 // 镜像没同步过都判不了,且不拨。
 func TestDeadlineEvidenceProbeCountsRefusalOnlyForAForgottenInstance(t *testing.T) {
 	f := noRoomFormation(t, closedLoopbackAddr(t), noRoomInstance, noRoomNowMs)
-	gone := deadlineEvidenceProbe(askOriginalInstance, originalAddressRefuses, func(*pb.MatchFormationRecord) battleRegistryView { return battleRegistryView{synced: true} })
+	gone := deadlineEvidenceProbe(askOriginalInstance, witnessOf(originalAddressRefuses, battleRegistryView{synced: true}))
 	require.Equal(t, authority.DeadlineEvidenceInstanceGone, gone(generousProbeContext(t), f))
 	for why, view := range map[string]battleRegistryView{
 		"仍在册":    {synced: true, listed: true},
 		"镜像没同步过": {},
 	} {
-		probe := deadlineEvidenceProbe(askOriginalInstance, neverDial(t), func(*pb.MatchFormationRecord) battleRegistryView { return view })
+		probe := deadlineEvidenceProbe(askOriginalInstance, witnessOf(neverDial(t), view))
 		require.Equal(t, authority.DeadlineEvidenceUndetermined, probe(generousProbeContext(t), f), why)
 	}
 }
@@ -216,7 +227,7 @@ func startBareGRPC(t *testing.T) string {
 func TestDeadlineEvidenceProbeAsksTheOriginalInstanceOnce(t *testing.T) {
 	ctx := context.Background()
 	registry := battleRegistryView{synced: true, listed: true}
-	probe := deadlineEvidenceProbe(askOriginalInstance, neverDial(t), func(*pb.MatchFormationRecord) battleRegistryView { return registry })
+	probe := deadlineEvidenceProbe(askOriginalInstance, witnessOf(neverDial(t), registry))
 
 	calls := &noRoomCalls{}
 	empty, endpoint := startNoRoomBattle(t, calls)
@@ -244,13 +255,88 @@ func TestDeadlineEvidenceProbeWhenTheEndpointIsNotABattle(t *testing.T) {
 		"镜像没同步过": {},
 		"已不在册":   {synced: true},
 	} {
-		probe := deadlineEvidenceProbe(askOriginalInstance, originalAddressRefuses, func(*pb.MatchFormationRecord) battleRegistryView { return view })
+		probe := deadlineEvidenceProbe(askOriginalInstance, witnessOf(originalAddressRefuses, view))
 		require.Equal(t, authority.DeadlineEvidenceUndetermined, probe(generousProbeContext(t), f), why)
 	}
 	expired, cancel := context.WithCancel(context.Background())
 	cancel()
-	probe := deadlineEvidenceProbe(askOriginalInstance, originalAddressRefuses, func(*pb.MatchFormationRecord) battleRegistryView { return battleRegistryView{synced: true} })
+	probe := deadlineEvidenceProbe(askOriginalInstance, witnessOf(originalAddressRefuses, battleRegistryView{synced: true}))
 	require.Equal(t, authority.DeadlineEvidenceUndetermined, probe(expired, f), "期限已到:没问成,不算证据")
+}
+
+// 2026-11-11:实例级结论(提前作废与截止作废共用)。原实例亲口应答(不论这一局是什么状态)= 还活着;原地址上换了实例、
+// 拒连且已不在册、K8s 里原 IP 上已没有存活的 Pod = 这一次观察说已不在;其余判不了。
+func TestClassifyInstanceSightingTable(t *testing.T) {
+	f := &pb.MatchFormationRecord{BattleId: 3201, OperationId: "deadline-op", TargetInstanceId: "original-instance"}
+	echoed := func(state battlepb.BattleCreationState) originalInstanceAnswer {
+		return originalInstanceAnswer{query: &battlepb.QueryBattleCreationResponse{TargetInstanceId: "original-instance", State: state}, destroyErr: errTombstoneNotAttempted}
+	}
+	unavailable := errors.New("fixture: rpc error: code = Unavailable")
+	failed := originalInstanceAnswer{destroyErr: unavailable, queryErr: unavailable}
+	listed := battleRegistryView{synced: true, listed: true}
+	gone := battleRegistryView{synced: true}
+	for _, c := range []struct {
+		why      string
+		answer   originalInstanceAnswer
+		refused  bool
+		registry battleRegistryView
+		podGone  bool
+		want     instanceSighting
+	}{
+		{"回 PRESENT", echoed(battlepb.BattleCreationState_BATTLE_CREATION_PRESENT), false, listed, false, instanceAnswered},
+		{"回 ABSENT(建房还在途)", echoed(battlepb.BattleCreationState_BATTLE_CREATION_ABSENT), false, listed, false, instanceAnswered},
+		{"回 ABORTED", echoed(battlepb.BattleCreationState_BATTLE_CREATION_ABORTED), false, listed, false, instanceAnswered},
+		{"回 UNKNOWN(记着别的 operation),但回显了自己", echoed(battlepb.BattleCreationState_BATTLE_CREATION_UNKNOWN), false, gone, true, instanceAnswered},
+		{"原地址上应答的是另一个实例(空包)", originalInstanceAnswer{query: &battlepb.QueryBattleCreationResponse{}}, false, listed, false, instanceSeenGone},
+		{"回显了别的实例", originalInstanceAnswer{query: &battlepb.QueryBattleCreationResponse{TargetInstanceId: "someone-else"}}, false, gone, true, instanceUndetermined},
+		{"查询失败、拒连、已不在册", failed, true, gone, false, instanceSeenGone},
+		{"查询失败、拒连、仍在册", failed, true, listed, false, instanceUndetermined},
+		{"查询失败、没拒连、已不在册", failed, false, gone, false, instanceUndetermined},
+		{"查询失败、原 IP 上已没有存活的 Pod", failed, false, listed, true, instanceSeenGone},
+	} {
+		require.Equal(t, c.want, classifyInstanceSighting(f, c.answer, c.refused, c.registry, c.podGone), c.why)
+	}
+	noInstance := &pb.MatchFormationRecord{BattleId: 3202, OperationId: "deadline-op"}
+	require.Equal(t, instanceSeenGone, classifyInstanceSighting(noInstance, originalInstanceAnswer{query: &battlepb.QueryBattleCreationResponse{}}, false, listed, false),
+		"成局没有实例号(坏数据)时空包照旧归成已不在;复核记录器不为空实例号记账,不会据它作废")
+}
+
+// 提前作废只向原实例做只读查询:不发 DestroyBattle,不给还没建成的原操作立拒收墓碑(建房的 Create 可能还在途,补签又是客户端
+// 可以随时触发的)。原实例应答 = 还活着;原地址上换了实例 = 这一次观察说已不在。
+func TestInstanceSightingProbeOnlyQueriesAndNeverTombstones(t *testing.T) {
+	ctx := context.Background()
+	probe := instanceSightingProbe(queryOriginalInstance, witnessOf(neverDial(t), battleRegistryView{synced: true, listed: true}))
+
+	calls := &noRoomCalls{}
+	creating, endpoint := startNoRoomBattle(t, calls)
+	require.Equal(t, instanceAnswered, probe(ctx, noRoomFormation(t, endpoint, noRoomInstance, noRoomNowMs)))
+	require.Equal(t, []string{"QueryBattleCreation"}, calls.snapshot(), "只查询")
+	require.False(t, creating.tombstoned(noRoomOperation), "没有房间的原操作不能被这次观察立墓碑")
+
+	replacedCalls := &noRoomCalls{}
+	_, replacedEndpoint := startNoRoomBattle(t, replacedCalls)
+	require.Equal(t, instanceSeenGone, probe(ctx, noRoomFormation(t, replacedEndpoint, "replaced-instance", noRoomNowMs)))
+	require.Equal(t, []string{"QueryBattleCreation"}, replacedCalls.snapshot())
+}
+
+// Pod 查询与原实例的交互并行,交互失败(这里是端口上没人听、原实例仍在册,拒连不算证据)时由它给出结论;
+// 没装配 Pod 查询(podGone 为 nil)时同一个场景判不了。查询拿到的是成局的原执行地址。
+func TestDeadlineEvidenceProbeCountsAGonePodWhenTheInstanceDoesNotAnswer(t *testing.T) {
+	f := noRoomFormation(t, closedLoopbackAddr(t), noRoomInstance, noRoomNowMs)
+	listed := battleRegistryView{synced: true, listed: true}
+	var asked []string
+	witness := witnessOf(neverDial(t), listed)
+	witness.podGone = func(_ context.Context, endpoint string) bool {
+		asked = append(asked, endpoint)
+		return true
+	}
+	require.Equal(t, authority.DeadlineEvidenceInstanceGone, deadlineEvidenceProbe(askOriginalInstance, witness)(generousProbeContext(t), f))
+	require.Equal(t, []string{f.TargetEndpoint}, asked)
+	require.Equal(t, instanceSeenGone, instanceSightingProbe(queryOriginalInstance, witness)(generousProbeContext(t), f))
+
+	witness.podGone = func(context.Context, string) bool { return false }
+	require.Equal(t, authority.DeadlineEvidenceUndetermined, deadlineEvidenceProbe(askOriginalInstance, witness)(generousProbeContext(t), f), "原 IP 上还有存活的 Pod")
+	require.Equal(t, authority.DeadlineEvidenceUndetermined, deadlineEvidenceProbe(askOriginalInstance, witnessOf(neverDial(t), listed))(generousProbeContext(t), f), "没装配 Pod 查询")
 }
 
 // 注册中心镜像:stable 与 canary 两份都查;没同步过不算同步(Upsert 只是测试灌节点);原 node_id 另登记了一个实例不单独算证据,

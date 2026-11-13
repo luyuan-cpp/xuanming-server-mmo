@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -50,7 +51,7 @@ class LoginRpcClientParseTest {
 
     @Test
     void nameStaysNullWhenOldLoginOmitsField5() throws IOException {
-        // 老版本 login 的 AccountSimplePlayer 只有 1–4;2/3/4 网关不读,必须被跳过而不影响 player_id。
+        // 老版本 login 的 AccountSimplePlayer 只有 1–4;2/3 网关不读,必须被跳过而不影响 player_id 与 zone_id(4)。
         byte[] bytes = loginResponse(playerEntry(out -> {
             out.writeUInt64(1, PLAYER_ID);
             out.writeUInt32(2, 3);
@@ -62,7 +63,29 @@ class LoginRpcClientParseTest {
 
         assertEquals(1, resp.players.size());
         assertEquals(PLAYER_ID, resp.players.get(0).getPlayerId());
+        assertEquals(7L, resp.players.get(0).getZoneId());
         assertNull(resp.players.get(0).getName());
+    }
+
+    // zone_id = 4(2026-11-12):角色现在所在的区,客户端用它在排队前判断「所选区暂停创角、账号在这里没有角色」。
+    // 没发(加字段前的存量角色)是 0;逐个角色各取各的,不沿用前一个。
+    @Test
+    void parsesZoneIdFromField4PerPlayerAndDefaultsToZero() throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        CodedOutputStream out = CodedOutputStream.newInstance(baos);
+        out.writeByteArray(2, playerEntry(p -> {
+            p.writeUInt64(1, PLAYER_ID);
+            p.writeUInt32(4, 101);
+            p.writeString(5, PLAYER_NAME);
+        }));
+        out.writeByteArray(2, playerEntry(p -> p.writeUInt64(1, PLAYER_ID + 1)));
+        out.flush();
+
+        LoginRpcClient.LoginResponseProto resp = LoginRpcClient.parseLoginResponse(baos.toByteArray());
+
+        assertEquals(2, resp.players.size());
+        assertEquals(101L, resp.players.get(0).getZoneId());
+        assertEquals(0L, resp.players.get(1).getZoneId(), "a role without zone_id must not inherit the previous role's zone");
     }
 
     @Test
@@ -128,5 +151,28 @@ class LoginRpcClientParseTest {
         wrapperOut.writeByteArray(1, playerBytes.toByteArray());
         wrapperOut.flush();
         return wrapperBytes.toByteArray();
+    }
+
+    // proto/login/login.proto ZoneRoleCountRequest.zone_id = 1、ZoneRoleCountResponse.roles = 1(uint64)。
+    @Test
+    void zoneRoleCountRequestWritesZoneIdAsField1() throws IOException {
+        ByteArrayOutputStream want = new ByteArrayOutputStream();
+        CodedOutputStream out = CodedOutputStream.newInstance(want);
+        out.writeUInt32(1, 101);
+        out.flush();
+
+        assertArrayEquals(want.toByteArray(), new LoginRpcClient.ZoneRoleCountRequestProto(101).toBytes());
+    }
+
+    @Test
+    void parsesZoneRoleCountFromField1AndSkipsUnknownFields() throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        CodedOutputStream out = CodedOutputStream.newInstance(bytes);
+        out.writeString(9, "future field");
+        out.writeUInt64(1, 5_000_000_000L);
+        out.flush();
+
+        assertEquals(5_000_000_000L, LoginRpcClient.parseZoneRoleCountResponse(bytes.toByteArray()).roles);
+        assertEquals(0L, LoginRpcClient.parseZoneRoleCountResponse(new byte[0]).roles, "roles = 0 is encoded as absent");
     }
 }

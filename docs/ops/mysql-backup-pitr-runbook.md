@@ -291,14 +291,21 @@ TRUNCATE TABLE role_fence;
 | 名字未绑定(`name_unbound`) | 名字片早于建角提交之后的绑定,或者那一步当时就失败了 | 名字仍受保护(释放预留态之前要在玩家片证明角色从未提交,它提交了),但没有「只有删角能释放」那一道 | 名字行在本角色名下,`bound_ms=0` | 置为已绑定,和建角提交之后同一步;名字副本缺的一并补上(和名字缺失同属 `-repair name`) |
 | 初始存档行缺失 | 存档库早于写初始行 | go/db 认领回 `NO_OWNER`,永远进不了场;建角重放不碰存档 | 按 `player_route.storage_id` 到存档库查 `player_store(player_id, kind=0)` | 这名角色在存档库一行都没有、`initial_player_commit=1`(现行建角流程建的)、`owner_revision=1`(没过过户)、没挂交易或删角:重写建角时那几行初始行。有别的行只缺写权行、旧角色、过过户的、挂着令牌的只报告 |
 
-反方向(`account_role` 不在,名字、路由、ref、初始行在)不在这张表,工具也不报。多集群恢复时它有两种来历,**先分清再动**(2026-11-06 评审补):
+名字登记表上另有两种,工具也收(2026-11-12,`-target names` 扫名字行,`-target roles` 连墓碑一起扫):
+
+| 残留 | 哪个库早了 / 怎么来的 | 后果 | 判据 | 处理 |
+|---|---|---|---|---|
+| 删角的名字还登记着(`removed_role_name`) | 名字片早于删角释放 | 名字留在已删的角色名下,小表 `account_role_removal` 那一行已删,后台不会再放它,谁都登记不了 | 墓碑(`account='')里留着原名,按它查到名字行在这名角色名下,或者名字副本还在 | 先复核墓碑,再按 `(player_id, name_norm)` 条件删名字行和名字副本(和删角收尾同一步)。名字副本指着别的名字只报告 |
+| 孤儿名字(`orphan_name`) | 建角回滚的释放没做成:玩家片冻结或不可达时证明写不了墓碑;login 判不出结局、来不及补偿 | 名字被一个永远建不成的 id 占着 | 名字行是预留态、登记超过 30 分钟,这个 player_id 没有活角色(没有角色行,或者是不带这个名字的墓碑) | 没有提交证据时同带 token 的 `ReleasePlayerName`:先在玩家片证明永远不会提交(有路由行、没有角色行时写墓碑),再只删预留态。有证据(存档库进过场或存过盘、某个账号上有 ACTIVE 的 ref、落点不在名单里)只报告 |
+
+反方向(`account_role` 不在,名字、路由、ref、初始行在)不在上面的表里;它的名字一项由 `orphan_name` 按证据判。多集群恢复时它有两种来历,**先分清再动**(2026-11-06 评审补):
 
 - 建成了,只是玩家片恢复点早于建角提交。有任何一条已提交的证据就是这种:账号片的 ref 是 ACTIVE(`state=2`,提交点之后才写)、名字行已绑定(`bound_ms≠0`)、存档库有存过盘的行(`save_seq` 大于初始值,或者有初始行以外的 kind)。这时**不要**释放名字:`ReleasePlayerName` 释放预留态之前会在玩家片写墓碑(有路由行时),墓碑不可逆,角色再也补不回来。先看玩家片所在集群能不能恢复到更靠近 T 的点,不能就记工单交负责人定。名字行已绑定时 `ReleasePlayerName` 在证明之前就以 `error_code=38` 拒绝,不写墓碑。
 - 没有任何已提交的证据,是 login 当时就放弃了的建角:PENDING ref 由后台判陈旧,初始行没人读得到,名字留着(预留态),按日志带 token 调 `ReleasePlayerName` 释放:它先在玩家片证明这名角色永远不会提交(有路由行就写墓碑),再删预留态的名字行。
 
-后台判陈旧(data_service 一起服就开始扫)对「角色行不在、ref 还是 PENDING、超过 5 分钟」的 ref 写墓碑之前,先看名字行是否已绑定、存档库是否进过场或存过盘,路由行、存档库名单、名字登记表缺了算核不全(2026-11-06 起)。有证据或核不全就不写墓碑也不删,记 ERROR `[account-role-ref] stale create ref kept without a tombstone`(带 player 和 evidence),并给 `data_service_account_role_ref_tombstone_held_total` 加一;ref 留着等人,每一轮都会再记一次。ACTIVE 而没有角色行的 ref 本来就只报告不动。它分不出来的只有一种:建成了、从没进过场、提交之后的绑定也没做完,这种仍会被写墓碑。所以分清反方向残留、以及下面第 1~3 步的 plan 和 apply,仍要在起服之前做完;第 4 步里要调 `ReleasePlayerName`、要等 `ResumeRemovals` 的那几项在起服之后做。
+后台判陈旧(data_service 一起服就开始扫)对「角色行不在、ref 还是 PENDING、超过 5 分钟」的 ref 写墓碑之前,先看名字行是否已绑定、存档库是否进过场或存过盘、这名角色在某个账号上有没有 ACTIVE 的 ref,路由行、存档库名单、名字登记表缺了算核不全(2026-11-06 起,ACTIVE ref 一条 2026-11-12 起)。有证据或核不全就不写墓碑也不删,把这条 ref 标成保留(`held_ms` 非 0、`held_reason` 是证据),记一次 ERROR `[account-role-ref] stale create ref kept without a tombstone`(带 player 和 evidence)并给 `data_service_account_role_ref_tombstone_held_total` 加一。标了保留的 ref 后台扫描跳过,不再每轮重算、不占名额,只在每轮 8 条的复核名额里轮着重判;还留着多少条看 gauge `data_service_account_role_ref_held`,持续 15 分钟非 0 就报 `DataServiceRoleRefHeldForReview`。按账号片查:`SELECT account,player_id,held_reason FROM account_role_ref WHERE state=1 AND held_ms>0`。人把玩家片恢复到更靠近 T 的点、角色行回来之后,复核轮到它的那一轮自动补 ACTIVE、清掉标记,不用手工摘。ACTIVE 而没有角色行的 ref 本来就只报告不动。它分不出来的只有一种:建成了、从没进过场、提交之后的绑定没做完、ref 也没到 ACTIVE,这种仍会被写墓碑。所以分清反方向残留、以及下面第 1~3 步的 plan 和 apply,仍要在起服之前做完;第 4 步里要等 `ResumeRemovals` 的那几项在起服之后做。
 
-工具是 data_service 的 `cmd/create_residual`,只连 data_service 自己的库(目录各片、名字表、存档库)。维护身份直连,不过写者闸门:每笔写在事务里先锁本库闸门行,冻结的库那一项拒绝(搬库期间不要 apply,见 [搬库手册](db-move-runbook.md) §2)。按玩家片分页扫,只做一致读,不锁表。默认只报告;修复要 `-mode apply` 加 `-repair` 选种类,每项修之前重读角色行复核,变了就拒绝,可以重放。
+工具是 data_service 的 `cmd/create_residual`,只连 data_service 自己的库(目录各片、名字表、存档库),修名字时另连 data_service 的名字读缓存(`NameCacheRedis`)。维护身份直连,不过写者闸门:每笔写在事务里先锁本库闸门行,冻结的库那一项拒绝(搬库期间不要 apply,见 [搬库手册](db-move-runbook.md) §2)。按片分页扫(角色行按玩家片、名字行按名字片),只做一致读,不锁表。默认只报告;修复要 `-mode apply` 加 `-repair` 选种类,每项修之前重读角色行复核,变了就拒绝,可以重放。名字每修一处都删这名玩家的名字缓存(`player:name:<player>`,正、负缓存同一个键),修完马上查得到。孤儿名字的证明会写墓碑(`account_role` 插一行),维护账号要有这张表的 INSERT 权限;补 ref、补名字、补初始行同样要目录各表、存档库 `player_store` 的写权限。`deploy/sql/authority_operator_role.sql` 只授闸门与写者表,业务表的授权在 apply 之前要先核对(2026-11-12 记为待核,真库用例用的是夹具的维护身份)。
 
 步骤。第 1~3 步在 §4.0 第 4 步核完闸门之后、第 6 步起服之前做(工具直连库,不依赖服务;起服之后后台判陈旧会给反方向残留写墓碑,见上一段),第 4 步起服之后、第 7 步开流量之前做完。单集群恢复也跑一遍 plan,确认是 0:
 
@@ -306,24 +313,26 @@ TRUNCATE TABLE role_fence;
 2. plan:
 
    ```bash
-   # 工作目录 go/data_service。K>1 时可以每片一个进程并行:加 -shard 0 … -shard K-1。
+   # 工作目录 go/data_service。K>1 时可以每片一个进程并行:加 -shard 0 … -shard K-1。默认 -target all:每片先扫角色行(含墓碑),再扫名字行。
    go run ./cmd/create_residual -schema mmorpg_global -logical-shards <K> -storage-ids <全部 storage_id,逗号分隔> -max-roles <AccountDirectory.MaxPlayersPerAccount>
    ```
 
-   每项一行 `finding shard=… player=… kind=… result=…`,每片一行 `shard … next_after=… done=…`,最后一行 `summary`。`-storage-ids` 要列全,落点不在里面的报 `storage_not_listed`,没核。中途出错时按提示带 `-shard <片> -after <next_after>` 接着扫。
-3. apply,三类一起修(也可以只列其中几类):
+   每项一行 `finding shard=… player=… kind=… result=…`,要人看的项行末带 `attention=true`;每片每种扫描一行 `shard … target=roles … next_after=… done=…` 或 `target=names … next_after_name="…"`,最后一行 `summary`。`-storage-ids` 要列全,落点不在里面的报 `storage_not_listed`,没核。中途出错时按提示带 `-shard <片> -target roles -after <next_after>` 或 `-shard <片> -target names -after-name "<next_after_name>"` 接着扫。
+3. apply,三类一起修(也可以只列其中几类)。带 `name` 时必须给名字读缓存(2026-11-13 起在控制集群上:data_service 配置的 `ControlRedis.Addrs`,逗号分隔;`ControlRedis.Cluster` 为真时再加 `-name-cache-cluster`;K8s 上口令在 Secret `redis-auth`,注入成 `SHARED_REDIS_PASSWORD` 后用 `-name-cache-pass-env` 指过去):
 
    ```bash
-   go run ./cmd/create_residual -mode apply -repair ref,name,initial_rows -schema mmorpg_global -logical-shards <K> -storage-ids <同上> -max-roles <同上>
+   go run ./cmd/create_residual -mode apply -repair ref,name,initial_rows -schema mmorpg_global -logical-shards <K> -storage-ids <同上> -max-roles <同上> \
+     -name-cache-addrs <ControlRedis.Addrs,逗号分隔> [-name-cache-cluster] -name-cache-pass-env SHARED_REDIS_PASSWORD
    ```
 
-4. 再跑一遍 plan,退出码 0 才算干净。剩下的按 `reason` 处理:
-   - `name_held_by_other`:`holder_live=false` 是占用者没有活角色。它的登记是预留态的孤儿时,带 token 调 `ReleasePlayerName` 释放之后重跑 apply。占用者是已删的角色、登记已绑定时 `ReleasePlayerName` 回 `error_code=38` 拒绝:看占用者那一片的 `account_role_removal` 里还有没有它那一行,有就等后台删角收尾(data_service 的 `ResumeRemovals`,每分钟一轮,接着做开始超过 5 分钟的那几行)放掉,没有(名字片恢复点早于删角释放)就人工核对后由 DBA 按 `(player_id, name_norm)` 删,再重跑 apply。`holder_live=true` 是一名两角,`keeper` 是该留名的一方(0 是判不出),两边都不动,记工单交负责人定。
+4. 再跑一遍 plan,退出码 0 才算干净。apply 那一遍退出码 1 时先看带 `attention=true` 的项:`over_role_cap`(补回 ref 之后这个账号的角色数超过上限:角色是真的,补回比藏着对,超出的名额只挡以后建角,要不要处理由负责人定,记工单)和 `name_cache_not_invalidated`(库里修好了,名字缓存没删掉:`redis-cli -h <NameCacheRedis> DEL player:name:<player>`,或者等负缓存 60 秒、正缓存 24 小时过期)修好了也算要人看,重跑 plan 不会再报它们。剩下的按 `reason` 处理:
+   - `name_held_by_other`:`holder_live=false` 是占用者没有活角色。它的登记是预留态的孤儿时,名字行扫描会把它报成 `orphan_name`,apply 收掉之后重跑。占用者是已删的角色、登记已绑定时:看占用者那一片的 `account_role_removal` 里还有没有它那一行,有就等后台删角收尾(data_service 的 `ResumeRemovals`,每分钟一轮,接着做开始超过 5 分钟的那几行)放掉;没有(名字片恢复点早于删角释放)角色行扫描会把占用者报成 `removed_role_name`,apply 放掉之后重跑。`holder_live=true` 是一名两角,`keeper` 是该留名的一方(0 是判不出),两边都不动,记工单交负责人定。
+   - `orphan_name` 带 `store_saved`、`ref_active`:那名角色像是建成了、只是玩家片恢复点早于提交(反方向残留,见上),不要释放名字,先看玩家片所在集群能不能恢复到更靠近 T 的点,不能就记工单。带 `live_role_holds_other_name`、`corrupt_role_row`:ID 复用或库被人动过,人工核对。`role_committed`:扫完之后角色建成了,重跑 plan 按 `name_unbound` 处理。
    - `transferred_role`:建角之后过过户,存档库丢的不只是初始行。先看存档库所在集群能不能恢复到更靠近 T 的点,再按过户收据和商城订单处理,不要直接重写初始行。
-   - `legacy_role`、`partial_store_rows`、`no_route_or_placement`、`corrupt_role_row`、`name_rules_changed`、`player_holds_other_name`、`ref_hard_cap`:人工核对。`role_busy`(交易或删角令牌挡住初始行)、`role_removing`(删角进行中,名字三项只报告:补回去的名字可能赶在删角收尾放名字之后,绑在墓碑上没人放)等交易或删角走完再跑。
+   - `legacy_role`、`partial_store_rows`、`no_route_or_placement`、`corrupt_role_row`、`name_rules_changed`、`player_holds_other_name`、`ref_hard_cap`、`name_bound`:人工核对。`role_busy`(交易或删角令牌挡住初始行)、`role_removing`(删角进行中,名字三项只报告:补回去的名字可能赶在删角收尾放名字之后,绑在墓碑上没人放)等交易或删角走完再跑。
    - 同一个存档库报出大量 `initial_rows_missing`,说明这个集群的恢复点明显早于别的集群,先考虑把它重新恢复得更靠近 T,再跑 apply。
-   - `role_changed`、`writer_gate_frozen`、`store_changed`,以及 `result=failed`:重跑 plan 再看。
-5. 补回的名字,data_service 名字负缓存(`PlayerName.NegativeCacheTTL`,默认 60 秒)过期之前按玩家查名字可能还是空。
+   - `role_changed`、`writer_gate_frozen`、`store_changed`、`name_cache_unavailable`(没给 `-name-cache-addrs`,名字一项都不修),以及 `result=failed`:补上参数或重跑 plan 再看。
+5. 补回的名字修完马上查得到:工具在修好之后删了名字缓存(2026-11-12 起;以前要等负缓存 `PlayerName.NegativeCacheTTL` 的 60 秒)。核账要在起服之前跑:有服务在读名字时,一次在修复之前读库、修复之后才回填的读还能把负缓存写回去,最多再藏 60 秒。
 
 **这些残留不要用摘孤儿删。** `LoginAdmin.RemovePlayersFromAccounts` 对 `initial_player_commit=1` 的角色(`LookupAccountRole` 回这个标记)一律回 `NOT_ORPHAN`,日志提示走本工具:墓碑不可逆,这些角色是真的建成了。
 

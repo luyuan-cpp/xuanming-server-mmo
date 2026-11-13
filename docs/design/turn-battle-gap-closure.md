@@ -139,8 +139,10 @@
 - **G9 的首投延迟**:结算首投仍打开局时的 scene 节点,玩家换节点重登后要等 battle 侧下一轮探测(≤10s)才入账。R07 的 12 轮 ×10s 耗尽后靠登录钩子兜底。本轮判定为可接受,不改码。
 - **buff 剩余时长仍按表全量换算**:控制类已剔除,剩下的都是周期效果类,影响有界。要精确剩余时长得给 `BuffComp` 加到期时间字段。
 - **脱敏挡不住推算**:`TurnResultS2C.events` 带 `skill_table_id` / `buff_table_id`,对手查表仍可推算冷却与 buff 时长;`pending_actor_ids` 与 `is_auto` 也暴露"谁已出手/谁挂机"。本轮只堵"直接读"。
-- **`items_gained` 全部落在主背包或临时格**:没有邮件兜底。临时格 2026-11-05 起满了就拒、不再 FIFO 挤掉更早的掉落:两处都放不下时整笔结算延后,
-  玩家用 `RetrieveTemporaryItems` 把临时格的东西取回人物背包腾位后自动补发(`bag-rule-policy-layering.md` §6.6)。
+- **`items_gained` 先落主背包,放不下整批落临时格,两处都放不下改投邮件**(2026-11-12,[battle-overflow-mail.md](battle-overflow-mail.md))。
+  临时格 2026-11-05 起满了就拒、不再 FIFO 挤掉更早的掉落。两处都放不下时,这一局照常应用,掉落整批记进玩家存档的待寄队列,
+  落盘后由 scene 以 battle 身份寄成个人邮件;`BattleEndS2C.items_mailed` 告诉客户端。只有邮件接不住时(没配发件密钥、
+  待寄队列满、请求号暂缺)才整笔结算延后,等玩家用 `RetrieveTemporaryItems` 取回腾位后补做(`bag-rule-policy-layering.md` §6.6)。
 - **掉落数据只填了 1、2 号怪**:其余 14 只怪的 `drop` 留空,等策划。
 - **战斗期间 buff 只出不进**:新 buff(含存量 buff 的子 buff 派生)被丢弃,而 `BuffSystem::Update`
   仍在给存量 buff 计时到期。要完全对称还得给 tick 也加 `exclude<InBattleComp>`,本轮判定为可接受
@@ -519,6 +521,10 @@ REJECTED 的处置路径;战斗结算没有可退的对侧,拒收就是丢奖励
 
 ### 11.2 FIGHTING 冻结到期先查 SQL 终局(r2-v1#1 残余窗口)
 
+> 2026-11-12 补([battle-instance-loss-early-abort.md](./battle-instance-loss-early-abort.md),已落码未编译):match 的每个 ABORT 现在都给成员投一份
+> 作废结算(`BATTLE_OUTCOME_VOID`),场景服应用后随存档确认解冻、删锁、推作废通知,不必等冻结到期。本节的到期查询保留作兜底:
+> 作废结算没送到(原票缺失的坏数据、收件箱不可用)时仍按下表处置;作废结算已应用的局在到期时走 `applied_here`,直接解冻。
+
 **根因。** 冻结到期 = 截止 + 60s 终局宽限 + 60s 投递余量(`FreezeExpiresAtMs`,2026-10-30)。但 COMPLETE 不受截止约束,
 match 的宽限只推迟 ABORT(`completion.go` 的 `terminalOutcomeGraceMs`);发件箱每 2 秒一轮、每副本每轮首投 4 行,失败等租约到期才重投,
 收件箱拉取还有退避。积压时结算可能晚于截止 + 120s 才到。那时已解冻,资产通道的战斗闸只看 `InBattleComp`,
@@ -710,6 +716,11 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
 上面的续冻与上限保持不动,它们还管着 HP / MP、宠物状态的覆盖时序。续冻到上限解冻时**不放**预留,
 冻结已不在的预留由 reaper 按同一张终局表收尾、没有上限(`ReviewBattleItemHolds`);上面「残余与代价」的第一条
 (越过上限之后照现行规则解冻)因此只剩 HP / MP 与宠物状态的覆盖,道具不再夹紧。
+
+**2026-11-12 补记(已落码,未编译,待 Codex)**:上面第 1 条「会死锁」的出口不再是 15 分钟上限。两个背包都放不下的掉落
+改投邮件([battle-overflow-mail.md](battle-overflow-mail.md),负责人 2026-11-11 定),结算在冻结期间就能应用,
+不用等玩家腾位;人物背包里全是被押着的满堆、临时格也满的局面同样由它解掉。方案 A 的代价一栏里「客户端要显示占用的数量」
+也已做:`BagInfo.held_items`([battle-item-reservation.md](battle-item-reservation.md) §4.1)。续冻与上限的规则没有改。
 
 ### 11.3 用例与验证(全部未执行,待 Codex)
 

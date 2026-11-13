@@ -1,0 +1,45 @@
+{
+  "format": "hand-authored-navmesh-source-v2",
+  "status": "draft",
+  "mapKey": "26000-mid-autumn",
+  "geometrySha256": "d74b8e85b812f1037ec6c5ccd5f08cd8e6a81ad49e5ddf853f3650914e93f343",
+  "authoringSha256": "2e4a495efa61e471a49891e527b08b72d345259fe99e817f7fe3bc8a1cf72c27",
+  "serverBakeArgumentsSha256": "456e3cf6d2f8726afcb1826655088ab3bd3f641347845caaa4fa9541ba28107b",
+  "coordinateSystem": "Unity Y-up; X/Z ground; OBJ has no axis conversion",
+  "boundsConfirmedByAuthor": false,
+  "serverAcceptance": "NOT_RUN",
+  "notes": "Shared source geometry and exposed inputs do not guarantee identical navigation. Unity NavMeshData is not a Detour MSET; validate paired spawn, obstacle, edge and route queries.",
+  "agent": {
+    "typeId": 0,
+    "radius": 0.4,
+    "height": 1.8,
+    "climb": 0.3,
+    "slope": 45.0,
+    "voxelSize": 0.1
+  },
+  "bakeContract": {
+    "revision": "authored-flat-v2",
+    "serverProfile": "authored-flat",
+    "tileSizeVoxels": 256,
+    "minRegionAreaWorld": 0.0,
+    "unity": {
+      "overrideVoxelSize": true,
+      "overrideTileSize": true,
+      "heightMesh": true,
+      "ledgeDropHeight": 0,
+      "maxJumpAcrossDistance": 0,
+      "groundPointTolerancePerAxis": 0.02,
+      "cellHeight": "not exposed by Unity NavMeshBuildSettings"
+    },
+    "serverOnly": {
+      "cellHeight": 0.2,
+      "filterLedges": true,
+      "mergeRegionAreaVoxels": 400,
+      "walkableClimbVoxels": 1.0,
+      "effectiveClimb": 0.2,
+      "climbQuantization": "floor(agentClimb / cellHeight)",
+      "heightPolicy": "authored-flat restores the original coplanar OBJ height"
+    },
+    "queryEquivalence": "NOT_PROVEN; paired-query validation required"
+  }
+}

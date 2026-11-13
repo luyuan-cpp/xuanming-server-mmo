@@ -313,6 +313,10 @@ func (c *Catalog) validateLifecycle(request *databasepb.SqlWriterLifecycleReceip
 	if len(request.SuccessorRequestId) != 0 && (kind != databasepb.SqlWriterLifecycleReceipt_RETIRE || len(request.SuccessorRequestId) != 16 || len(request.MaintenanceRunId) != 0) {
 		return nil, nil, ErrWriterDenied
 	}
+	// registered_by 是登记这一代的工作负载身份,闸门不解释它,只限长度和字符;缩容收尾拿它判这一代归不归自己(§5.9)。
+	if !validRegisteredBy(request.RegisteredBy) {
+		return nil, nil, ErrWriterDenied
+	}
 	raw, err := deterministic(request)
 	if err != nil {
 		return nil, nil, err
@@ -329,6 +333,22 @@ func (c *Catalog) validateLifecycle(request *databasepb.SqlWriterLifecycleReceip
 	}
 	sum := sha256.Sum256(raw)
 	return raw, sum[:], nil
+}
+
+// registeredByLimit 是 registered_by 的长度上限:k8s-sa: 前缀加 namespace(63)、ServiceAccount 名(253)与 UID(36),留足余量。
+const registeredByLimit = 512
+
+// validRegisteredBy 核 registered_by 的形状:可以为空(集群外登记),不超长,不含控制字符。
+func validRegisteredBy(identity string) bool {
+	if len(identity) > registeredByLimit {
+		return false
+	}
+	for _, c := range identity {
+		if c < 0x20 || c == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // CanonicalRegistrationRequest 的唯一摘要规则包含deployment和已核锁资格，排除摘要自身。
@@ -400,6 +420,51 @@ func (c *Catalog) LatestBoot(ctx context.Context, principal []byte) (*databasepb
 		return nil, ErrWriterDenied
 	}
 	return row, nil
+}
+
+// Registration 读一代的 REGISTER 原件:永久收据里那份完整请求。缩容收尾拿它看这一代是谁登记的(registered_by)。
+// 按登记行的 registration_digest 走 (kind, request_digest) 索引找到收据,再按 request_id 过 readLifecycleReceipt 的全文与摘要校验;
+// 收据里的 writer 必须就是这一代(writer key、instance、账号、序号、摘要逐项相同)。找不到、不止一份、对不上都拒绝,不猜。
+// 只读、不加锁:REGISTER 收据只追加,落地之后不会变。
+func (c *Catalog) Registration(ctx context.Context, writer *databasepb.SqlWriterRegistry) (*databasepb.SqlWriterLifecycleReceipt_Request, error) {
+	if !c.validRegistry(writer) {
+		return nil, ErrWriterDenied
+	}
+	rows, err := c.db.QueryContext(ctx, "SELECT request_id FROM "+c.table("writer_lifecycle_receipt")+" WHERE kind=1 AND request_digest=? LIMIT 2", writer.RegistrationDigest)
+	if err != nil {
+		return nil, err
+	}
+	var ids [][]byte
+	for rows.Next() {
+		var id []byte
+		if scanErr := rows.Scan(&id); scanErr != nil {
+			return nil, errors.Join(scanErr, rows.Close())
+		}
+		ids = append(ids, bytes.Clone(id))
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	if len(ids) != 1 {
+		return nil, ErrWriterDenied
+	}
+	receipt, err := c.readLifecycleReceipt(ctx, c.db, ids[0])
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrWriterDenied
+	}
+	if err != nil {
+		return nil, err
+	}
+	request := &databasepb.SqlWriterLifecycleReceipt_Request{}
+	if receipt.Kind != databasepb.SqlWriterLifecycleReceipt_REGISTER || proto.Unmarshal(receipt.RequestProto, request) != nil || request.Writer == nil {
+		return nil, ErrWriterDenied
+	}
+	registered := request.Writer
+	if !bytes.Equal(registered.WriterKey, writer.WriterKey) || !bytes.Equal(registered.InstanceId, writer.InstanceId) || !bytes.Equal(registered.SqlPrincipal, writer.SqlPrincipal) ||
+		!bytes.Equal(registered.RegistrationDigest, writer.RegistrationDigest) || registered.BootSeq != writer.BootSeq || registered.Generation != writer.Generation {
+		return nil, ErrWriterDenied
+	}
+	return request, nil
 }
 
 // landedRegistration 查同 request_id 的收据:在且全文、摘要都相同,就是这份请求已经落地(幂等重放);

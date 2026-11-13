@@ -1,0 +1,383 @@
+{
+  "schemaVersion": 1,
+  "status": "DEVELOPMENT_AUTHORED_NAVIGATION",
+  "installed": true,
+  "exportDeliverySha256": "f5cc6fa645f79180b5d1a3a71f279004bc6dbb5101c8c05e15a028de40bd3f79",
+  "bakerSha256": "7d22adc031d97385d13cf3b76cd6fd701387a8566ded216cf2499fc4ff8e6fbd",
+  "querySha256": "363c8c4d1e687e63f9209a7f11d1899b9a625e0d683b848f953908e053fc093f",
+  "maps": [
+    {
+      "mapKey": "26000-mid-autumn",
+      "sceneConfigId": 26000,
+      "navBinFile": "data/scene_nav_bin/authored_maps/26000/scene.bin",
+      "spawnUnity": [
+        110.921211,
+        0.0,
+        33.47244
+      ],
+      "spawnServer": [
+        33.47244,
+        110.921211,
+        0.0
+      ],
+      "worldRect": {
+        "x": 0.0,
+        "z": 0.0,
+        "width": 300.0,
+        "depth": 240.0
+      },
+      "boundsConfirmedByAuthor": false,
+      "sourceAsset": {
+        "mapKey": "26000-mid-autumn",
+        "sceneId": 26000,
+        "sceneConfigId": 26000,
+        "appearance": "mid-autumn",
+        "authoredAsset": "Assets/MapNavigationDrafts/Festival20261111/26000-mid-autumn.asset",
+        "authoredAssetGuid": "cba6b37b52a47cf4ca0424b245c6b51f",
+        "authoredAssetSha256": "401ce609036473e50afc24c0e35990cde82ff80a8303e8e62f79645417f6fdf2",
+        "sourceAssetPath": "D:\\luyuan\\mmorpg-client\\Assets\\MapNavigationDrafts\\Festival20261111\\26000-mid-autumn.asset",
+        "sourceAssetSha256": "401ce609036473e50afc24c0e35990cde82ff80a8303e8e62f79645417f6fdf2",
+        "navMeshAsset": "Assets/MapNavigationDrafts/Festival20261111/26000-mid-autumn.navmesh-9d2185138bdcb22c.asset",
+        "navMeshGuid": "c871785b2398fba4cbddeab29609e37a",
+        "navMeshAssetSha256": "afec23c154e96428869cc021bc097ec4e74251638557d9e95db5129acea7540f",
+        "bakedGeometrySha256": "9d2185138bdcb22cd7c296a028d28c93d24b8dd3b48ec96da36b1a7e16ac78d4",
+        "authoringGeometryHash": "9d2185138bdcb22cd7c296a028d28c93d24b8dd3b48ec96da36b1a7e16ac78d4",
+        "isBakeCurrent": true,
+        "worldRect": {
+          "x": 0.0,
+          "z": 0.0,
+          "width": 300.0,
+          "depth": 240.0
+        },
+        "boundsConfirmed": false,
+        "authoredSpawnSet": true,
+        "authoredSpawnUnity": [
+          110.921211,
+          0.0,
+          33.47244
+        ],
+        "testSpawnUnity": [
+          110.921211,
+          0.0,
+          33.47244
+        ],
+        "spawnUnity": [
+          110.921211,
+          0.0,
+          33.47244
+        ],
+        "testSpawnServer": [
+          33.47244,
+          110.921211,
+          0.0
+        ],
+        "spawnReason": "Author-saved spawn, kept unchanged",
+        "candidateCount": 1739,
+        "sampledConnectedGroupSizes": [
+          1739
+        ],
+        "selectedSpawnClearance": 25.17244,
+        "polygons": [
+          {
+            "index": 0,
+            "name": "地面1",
+            "blocked": false,
+            "points": 88
+          },
+          {
+            "index": 1,
+            "name": "障碍2",
+            "blocked": true,
+            "points": 113
+          },
+          {
+            "index": 2,
+            "name": "障碍3",
+            "blocked": true,
+            "points": 23
+          },
+          {
+            "index": 3,
+            "name": "障碍4",
+            "blocked": true,
+            "points": 51
+          },
+          {
+            "index": 4,
+            "name": "障碍5",
+            "blocked": true,
+            "points": 18
+          },
+          {
+            "index": 5,
+            "name": "障碍6",
+            "blocked": true,
+            "points": 30
+          },
+          {
+            "index": 6,
+            "name": "障碍7",
+            "blocked": true,
+            "points": 13
+          },
+          {
+            "index": 7,
+            "name": "障碍8",
+            "blocked": true,
+            "points": 13
+          },
+          {
+            "index": 8,
+            "name": "障碍9",
+            "blocked": true,
+            "points": 5
+          }
+        ],
+        "sourceVertexCount": 9063,
+        "sourceTriangleCount": 3021,
+        "exportDirectory": "D:\\luyuan\\mmorpg-client\\.codex-artifacts\\authored-festival-export-20261112\\delivery\\26000-mid-autumn",
+        "sourceJsonSha256": "627418cbf0f686584742014fa2dec23196e4c17d8d2f11f1655f6d255622a6c9",
+        "sourceSha256": "627418cbf0f686584742014fa2dec23196e4c17d8d2f11f1655f6d255622a6c9",
+        "authoringJsonSha256": "2e4a495efa61e471a49891e527b08b72d345259fe99e817f7fe3bc8a1cf72c27",
+        "objSha256": "d74b8e85b812f1037ec6c5ccd5f08cd8e6a81ad49e5ddf853f3650914e93f343",
+        "serverBakeArgumentsSha256": "456e3cf6d2f8726afcb1826655088ab3bd3f641347845caaa4fa9541ba28107b",
+        "unityQueriesSha256": "a2d3e7c088678bcc64211c9caf9f414e23d6e40357fda8a9afdc48f15e30c5f5",
+        "agent": {
+          "typeId": 0,
+          "radius": 0.4,
+          "height": 1.8,
+          "climb": 0.3,
+          "slope": 45.0,
+          "voxelSize": 0.1
+        },
+        "bakeContract": {
+          "revision": "authored-flat-v2",
+          "serverProfile": "authored-flat",
+          "tileSizeVoxels": 256,
+          "minRegionAreaWorld": 0.0,
+          "unity": {
+            "overrideVoxelSize": true,
+            "overrideTileSize": true,
+            "heightMesh": true,
+            "ledgeDropHeight": 0,
+            "maxJumpAcrossDistance": 0,
+            "groundPointTolerancePerAxis": 0.02,
+            "cellHeight": "not exposed by Unity NavMeshBuildSettings"
+          },
+          "serverOnly": {
+            "cellHeight": 0.2,
+            "filterLedges": true,
+            "mergeRegionAreaVoxels": 400,
+            "walkableClimbVoxels": 1.0,
+            "effectiveClimb": 0.2,
+            "climbQuantization": "floor(agentClimb / cellHeight)",
+            "heightPolicy": "authored-flat restores the original coplanar OBJ height"
+          },
+          "queryEquivalence": "NOT_PROVEN; paired-query validation required"
+        },
+        "serverAcceptance": "NOT_RUN",
+        "liveGameAcceptance": "NOT_RUN"
+      },
+      "sourceFileSha256": {
+        "world-y-up.obj": "d74b8e85b812f1037ec6c5ccd5f08cd8e6a81ad49e5ddf853f3650914e93f343",
+        "navigation.json": "2e4a495efa61e471a49891e527b08b72d345259fe99e817f7fe3bc8a1cf72c27",
+        "source.json": "627418cbf0f686584742014fa2dec23196e4c17d8d2f11f1655f6d255622a6c9",
+        "server-bake-args.json": "456e3cf6d2f8726afcb1826655088ab3bd3f641347845caaa4fa9541ba28107b"
+      },
+      "navigationSha256": "889942f36dd8c272cd4688070a279119709069aa3896bc4e6fa6e6cafcd8ee1f",
+      "boundsSha256": "d3fda2e8fda0f6fd0f357b6456c3daf8ba201ce779c3282c30a1fab97e6dd2aa",
+      "spawnQuery": {
+        "input": [
+          110.921211,
+          0,
+          33.47244
+        ],
+        "found": true,
+        "onMesh": true,
+        "polyRef": 147849216,
+        "nearest": [
+          110.921211,
+          0,
+          33.47244
+        ]
+      },
+      "candidateDirectory": "D:\\luyuan\\xuanming-server-mmo-cpp\\build\\verification\\authored-festival-20261112\\navigation\\candidate\\26000"
+    },
+    {
+      "mapKey": "26008-spring",
+      "sceneConfigId": 26008,
+      "navBinFile": "data/scene_nav_bin/authored_maps/26008/scene.bin",
+      "spawnUnity": [
+        122.5,
+        0.0,
+        127.5
+      ],
+      "spawnServer": [
+        127.5,
+        122.5,
+        0.0
+      ],
+      "worldRect": {
+        "x": 0.0,
+        "z": 0.0,
+        "width": 300.0,
+        "depth": 225.0
+      },
+      "boundsConfirmedByAuthor": false,
+      "sourceAsset": {
+        "mapKey": "26008-spring",
+        "sceneId": 26008,
+        "sceneConfigId": 26008,
+        "appearance": "spring",
+        "authoredAsset": "Assets/MapNavigationDrafts/Festival20261111/26008-spring.asset",
+        "authoredAssetGuid": "4bbc7c586cc5b2843ac3dc1fd1c98a0c",
+        "authoredAssetSha256": "dd1d5f603bd3d1376b3a0631e923839e79477eaa85c3e37837f025223e706bf4",
+        "sourceAssetPath": "D:\\luyuan\\mmorpg-client\\Assets\\MapNavigationDrafts\\Festival20261111\\26008-spring.asset",
+        "sourceAssetSha256": "dd1d5f603bd3d1376b3a0631e923839e79477eaa85c3e37837f025223e706bf4",
+        "navMeshAsset": "Assets/MapNavigationDrafts/Festival20261111/26008-spring.navmesh-504096e2f15fb98b.asset",
+        "navMeshGuid": "1492049b46b65574c8f4500302a2a533",
+        "navMeshAssetSha256": "37aa02eae243d1aebe74c27e1adb8bb94b795fb7017af7d939547b0fb1f0637f",
+        "bakedGeometrySha256": "504096e2f15fb98b5de8e0e7a036c13c7d31a9e0adaa17b8927dc8607a3e6609",
+        "authoringGeometryHash": "504096e2f15fb98b5de8e0e7a036c13c7d31a9e0adaa17b8927dc8607a3e6609",
+        "isBakeCurrent": true,
+        "worldRect": {
+          "x": 0.0,
+          "z": 0.0,
+          "width": 300.0,
+          "depth": 225.0
+        },
+        "boundsConfirmed": false,
+        "authoredSpawnSet": false,
+        "authoredSpawnUnity": null,
+        "testSpawnUnity": [
+          122.5,
+          0.0,
+          127.5
+        ],
+        "spawnUnity": [
+          122.5,
+          0.0,
+          127.5
+        ],
+        "testSpawnServer": [
+          127.5,
+          122.5,
+          0.0
+        ],
+        "spawnReason": "Test-only snapshot spawn: maximum edge clearance within the largest sampled PathComplete-connected group; 5-world-unit grid",
+        "candidateCount": 809,
+        "sampledConnectedGroupSizes": [
+          809
+        ],
+        "selectedSpawnClearance": 52.1483536,
+        "polygons": [
+          {
+            "index": 0,
+            "name": "地面1",
+            "blocked": false,
+            "points": 26
+          },
+          {
+            "index": 1,
+            "name": "地面2",
+            "blocked": false,
+            "points": 15
+          },
+          {
+            "index": 2,
+            "name": "地面3",
+            "blocked": false,
+            "points": 16
+          },
+          {
+            "index": 3,
+            "name": "地面4",
+            "blocked": false,
+            "points": 8
+          },
+          {
+            "index": 4,
+            "name": "地面5",
+            "blocked": false,
+            "points": 60
+          },
+          {
+            "index": 5,
+            "name": "地面6",
+            "blocked": false,
+            "points": 24
+          }
+        ],
+        "sourceVertexCount": 2835,
+        "sourceTriangleCount": 945,
+        "exportDirectory": "D:\\luyuan\\mmorpg-client\\.codex-artifacts\\authored-festival-export-20261112\\delivery\\26008-spring",
+        "sourceJsonSha256": "066177889eab819566994f733cb6751199baa0230b44786639ae205606600e63",
+        "sourceSha256": "066177889eab819566994f733cb6751199baa0230b44786639ae205606600e63",
+        "authoringJsonSha256": "f34a40ec5532b391bd7750f9612d16b7c01f870c4a522b82c01202568fe36eba",
+        "objSha256": "913daa70771f356617b85dc20435d0f1ef41761985cdae4373ae407ba1bb2263",
+        "serverBakeArgumentsSha256": "9c3a55201de687bf419fb95d853b769f663a6915a8eae058fdeb1dfd6c49c2fe",
+        "unityQueriesSha256": "72c0e5c7c40336f25a2ff0b178e6ab2d216939649eaf2c65e586870343070f65",
+        "agent": {
+          "typeId": 0,
+          "radius": 0.4,
+          "height": 1.8,
+          "climb": 0.3,
+          "slope": 45.0,
+          "voxelSize": 0.1
+        },
+        "bakeContract": {
+          "revision": "authored-flat-v2",
+          "serverProfile": "authored-flat",
+          "tileSizeVoxels": 256,
+          "minRegionAreaWorld": 0.0,
+          "unity": {
+            "overrideVoxelSize": true,
+            "overrideTileSize": true,
+            "heightMesh": true,
+            "ledgeDropHeight": 0,
+            "maxJumpAcrossDistance": 0,
+            "groundPointTolerancePerAxis": 0.02,
+            "cellHeight": "not exposed by Unity NavMeshBuildSettings"
+          },
+          "serverOnly": {
+            "cellHeight": 0.2,
+            "filterLedges": true,
+            "mergeRegionAreaVoxels": 400,
+            "walkableClimbVoxels": 1.0,
+            "effectiveClimb": 0.2,
+            "climbQuantization": "floor(agentClimb / cellHeight)",
+            "heightPolicy": "authored-flat restores the original coplanar OBJ height"
+          },
+          "queryEquivalence": "NOT_PROVEN; paired-query validation required"
+        },
+        "serverAcceptance": "NOT_RUN",
+        "liveGameAcceptance": "NOT_RUN"
+      },
+      "sourceFileSha256": {
+        "world-y-up.obj": "913daa70771f356617b85dc20435d0f1ef41761985cdae4373ae407ba1bb2263",
+        "navigation.json": "f34a40ec5532b391bd7750f9612d16b7c01f870c4a522b82c01202568fe36eba",
+        "source.json": "066177889eab819566994f733cb6751199baa0230b44786639ae205606600e63",
+        "server-bake-args.json": "9c3a55201de687bf419fb95d853b769f663a6915a8eae058fdeb1dfd6c49c2fe"
+      },
+      "navigationSha256": "79673906ee2ce6a47fe7fc51488b5ba9d0e538e0b2d85b240cb88ce15de9557e",
+      "boundsSha256": "309ab6bdb29dc5e735d779f8b0c91b1add4161597abf32e922d3f5baa8b14309",
+      "spawnQuery": {
+        "input": [
+          122.5,
+          0,
+          127.5
+        ],
+        "found": true,
+        "onMesh": true,
+        "polyRef": 163577856,
+        "nearest": [
+          122.5,
+          0,
+          127.5
+        ]
+      },
+      "candidateDirectory": "D:\\luyuan\\xuanming-server-mmo-cpp\\build\\verification\\authored-festival-20261112\\navigation\\candidate\\26008"
+    }
+  ],
+  "result": "PASS"
+}

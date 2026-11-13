@@ -504,7 +504,7 @@ func friendSmokePreclean(a, b, c *friendSmokeBot) {
 	pending := &friendpb.GetPendingRequestsResponse{}
 	code, err := b.rpc(game.ClientPlayerFriendGetPendingRequestsMessageId, &friendpb.GetPendingRequestsRequest{}, pending)
 	if err != nil || code != 0 {
-		zap.L().Debug("[friend-smoke] 预清理拉取待审失败", zap.Uint32("tip", code), zap.Error(err))
+		zap.L().Debug("[friend-smoke] pre-cleanup: failed to fetch pending requests", zap.Uint32("tip", code), zap.Error(err))
 		return
 	}
 	for _, request := range pending.GetRequests() {
@@ -513,7 +513,7 @@ func friendSmokePreclean(a, b, c *friendSmokeBot) {
 		}
 		code, err = b.rpc(game.ClientPlayerFriendRejectFriendMessageId,
 			&friendpb.RejectFriendRequest{RequestId: request.GetRequestId()}, &friendpb.RejectFriendResponse{})
-		zap.L().Debug("[friend-smoke] 按申请代次预清理", zap.Uint32("tip", code), zap.Error(err))
+		zap.L().Debug("[friend-smoke] pre-cleanup: rejected a pending request by its request generation", zap.Uint32("tip", code), zap.Error(err))
 	}
 }
 

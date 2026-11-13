@@ -6,24 +6,20 @@ import (
 	"strings"
 	"time"
 
+	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/dirshard"
 	"shared/kafkautil"
 	"shared/playerredis"
 	"shared/redisauth"
 	"shared/rolefence"
-	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/discov"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
-	// NameCacheRedis 只放可丢弃的读缓存(player:name:{id},routing.PlayerNameCache):里面没有任何权威数据,
-	// 整个实例丢了,名字读路径回源一次目录,建角和归属都不受影响。不要往上面加要落盘或要保证一致的东西。
-	NameCacheRedis redis.RedisConf
 
 	// Snapshot MySQL(player_snapshot / transaction_log 审计库)
 	SnapshotMySQL SnapshotMySQLConfig `json:",optional"`
@@ -35,18 +31,16 @@ type Config struct {
 	RoleFence RoleFenceConfig `json:",optional"`
 	// Recall 是 GM 批量回收的资产通道,见 RecallConfig。
 	Recall RecallConfig `json:",optional"`
-	// SharedRedis 是控制域:落地唤醒频道 assetop:wake 和去重键,必须和 scene 发布的是同一实例。实例指错的表现是永远收不到唤醒,且不报错。
-	// 只有 Recall.Enabled=true 时才连。
-	SharedRedis SharedRedisConf `json:",optional"`
-	// SharedRedisPasswordEnv 是 NameCacheRedis 与 SharedRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在
-	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里两段的口令写空串。不写 = 照用字面量(本机)。
-	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
+	// ControlRedis 是控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1;2026-11-12 取代 SharedRedis 段):
+	// 落地唤醒分片频道 assetop:wake:{aw:N}(64 个,SSUBSCRIBE)和去重键,必须和 scene 发布的是同一集群。实例指错的表现是永远收不到唤醒,且不报错。
+	// 名字读缓存 player:name:<id>(routing.PlayerNameCache,只放可丢弃的读缓存)也在这里:2026-11-13 起取代独立的 NameCacheRedis 段。
+	// 键守卫是 clusterredis.ControlClusterKeys。名字缓存常驻就要连,所以常驻启动时必须显式写 Addrs(ValidateControlRedis)。
+	ControlRedis clusterredis.Config `json:",optional"`
+	// SharedRedisPasswordEnv 是 ControlRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在
+	// Secret 里,经 secretKeyRef 注入;ConfigMap 里的口令写空串。不写 = 照用字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。ControlRedis.PasswordEnv 不用(变量缺失时静默落成空口令)。
 	SharedRedisPasswordEnv string `json:",optional"`
-	// MySQLPasswordEnv 是 SnapshotMySQL 口令所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md)。
-	// 写了它,SnapshotMySQL.Password 必须写成空串(不写这一键会落回缺省值 apppass123,被当成字面量而拒启);不写 = 照用字面量(本机)。
-	// 由 ResolveMySQLPassword 在加载配置后、任何入口连库之前填好,变量缺失或为空即拒启。
-	MySQLPasswordEnv string `json:",optional"`
-	// PlayerRedis 是玩家域:读位置键 player:{id}:location。没写 Addrs 时指向 SharedRedis。只有 Recall.Enabled=true 时才连。
+	// PlayerRedis 是玩家域:读位置键 player:{id}:location。没写 Addrs 时指向 ControlRedis。只有 Recall.Enabled=true 时才连。
 	PlayerRedis playerredis.Config `json:",optional"`
 
 	// AdminToken 是运维专用 RPC 的共享口令,调用方放在 gRPC metadata 的 `x-admin-token` 里。
@@ -77,8 +71,8 @@ type Config struct {
 	// RouteStore 是全局库 player_route 连接池与合服映射缓存的运行参数,见 RouteStoreConfig。整段可缺失。
 	RouteStore RouteStoreConfig `json:",optional"`
 
-	// Kafka 是 C++ scene 产出的 transaction_log_topic / player_snapshot_topic 的落库消费者
-	// 配置。Brokers 为空 = 不消费(本地无 Kafka 时的合法形态);消费者启动失败不会拖死
+	// Kafka 是 transaction_log_topic / player_snapshot_topic 的落库消费者配置;两个 topic 由 go/db 的审计发件箱转发投递
+	// (docs/design/player-audit-outbox.md §7)。Brokers 为空 = 不消费(本地无 Kafka 时的合法形态);消费者启动失败不会拖死
 	// data_service(Load/Save 是热路径),只记日志并每 30s 后台重试。
 	Kafka KafkaConfig `json:",optional"`
 
@@ -185,69 +179,72 @@ type RecallConfig struct {
 	Enabled bool `json:",optional"`
 }
 
-// SharedRedisConf 是 SharedRedis 的连接参数。
-type SharedRedisConf struct {
-	Host     string `json:",optional"`
-	Password string `json:",optional"`
-	DB       int    `json:",optional"`
-	// PoolSize 是连接池上限。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS。
-	PoolSize int `json:",optional"`
-}
-
-// recallPlayerRedisFallbackPoolSize、IOTimeoutMs:没写 PlayerRedis.Addrs 且 SharedRedis.PoolSize 也没写时的取值,和 trade 同口径。
+// recallRedisFallbackPoolSize、IOTimeoutMs:没写 ControlRedis / PlayerRedis 的池与超时时的取值,和 trade 同口径
+// (换句柄之前 go-redis 缺省的量级:K8s 上 GOMAXPROCS 按 2 算是 20 条,读写 3 秒)。
 const (
-	recallPlayerRedisFallbackPoolSize    = 20
-	recallPlayerRedisFallbackIOTimeoutMs = 3000
+	recallRedisFallbackPoolSize    = 20
+	recallRedisFallbackIOTimeoutMs = 3000
 )
 
-// ValidateRecall 只在 Recall.Enabled 时要求配置齐全。
-func (c Config) ValidateRecall() error {
-	if !c.Recall.Enabled {
-		return nil
+// ValidateControlRedis 校验控制集群段。常驻 data_service 一定会连它(名字读缓存),所以不分开关,常驻启动时必校验。
+// 必须显式写 Addrs:唤醒订阅与名字缓存指错实例都不报错(收不到唤醒、缓存永不命中),不能落到缺省地址上。
+func (c Config) ValidateControlRedis() error {
+	if len(c.ControlRedis.Addrs) == 0 {
+		return errors.New("ControlRedis.Addrs is required (player name cache and landing wake-ups live on the control cluster)")
 	}
-	if c.SharedRedis.Host == "" {
-		return errors.New("SharedRedis.Host is required when Recall.Enabled=true")
+	if err := c.ControlRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("ControlRedis: %w", err)
 	}
-	if c.SharedRedis.PoolSize < 0 {
-		return fmt.Errorf("SharedRedis.PoolSize must not be negative, got %d", c.SharedRedis.PoolSize)
+	if c.ControlRedis.PasswordEnv != "" {
+		return errors.New("ControlRedis.PasswordEnv is not used: name the password variable in SharedRedisPasswordEnv")
 	}
 	return nil
 }
 
-// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 SharedRedis 那一个实例。
-func (c Config) EffectivePlayerRedis() playerredis.Config {
-	pool := c.SharedRedis.PoolSize
-	if pool == 0 {
-		pool = recallPlayerRedisFallbackPoolSize
+// ValidateRecall 只在 Recall.Enabled 时要求配置齐全;它用的控制集群段与常驻启动是同一条校验(ValidateControlRedis)。
+func (c Config) ValidateRecall() error {
+	if !c.Recall.Enabled {
+		return nil
 	}
+	return c.ValidateControlRedis()
+}
+
+// EffectiveControlRedis 返回生效的控制集群配置:段里没写的池与读写超时取回落值。ValidateControlRedis 已要求写了 Addrs。
+func (c Config) EffectiveControlRedis() clusterredis.Config {
+	control := c.ControlRedis
+	if control.PoolSizePerNode == 0 {
+		control.PoolSizePerNode = recallRedisFallbackPoolSize
+	}
+	if control.ReadTimeoutMs == 0 {
+		control.ReadTimeoutMs = recallRedisFallbackIOTimeoutMs
+	}
+	if control.WriteTimeoutMs == 0 {
+		control.WriteTimeoutMs = recallRedisFallbackIOTimeoutMs
+	}
+	return control
+}
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 ControlRedis 那一个实例。
+func (c Config) EffectivePlayerRedis() playerredis.Config {
+	control := c.EffectiveControlRedis()
 	return c.PlayerRedis.OrDefault(playerredis.Config{
-		Addrs:           []string{c.SharedRedis.Host},
-		Password:        c.SharedRedis.Password,
-		PoolSizePerNode: min(pool, playerredis.MaxPoolSizePerNode),
-		ReadTimeoutMs:   recallPlayerRedisFallbackIOTimeoutMs,
-		WriteTimeoutMs:  recallPlayerRedisFallbackIOTimeoutMs,
+		Addrs:           control.Addrs,
+		Cluster:         control.Cluster,
+		Username:        control.Username,
+		Password:        control.Password,
+		TLS:             control.TLS,
+		PoolSizePerNode: min(control.PoolSizePerNode, playerredis.MaxPoolSizePerNode),
+		ReadTimeoutMs:   recallRedisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  recallRedisFallbackIOTimeoutMs,
 	})
 }
 
-// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 NameCacheRedis.Pass 与 SharedRedis.Password,返回填好的副本;规则见 redisauth.Apply。
-// 玩家域没写 Addrs 时回落到 SharedRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 ControlRedis.Password,返回填好的副本;规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落到 ControlRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
 // -migrate 与发号器运维入口不连 Redis,只在常驻启动时调用(data_service.go)。
 func (c Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) (Config, error) {
 	err := redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
-		redisauth.Target{Field: "NameCacheRedis.Pass", Password: &c.NameCacheRedis.Pass},
-		redisauth.Target{Field: "SharedRedis.Password", Password: &c.SharedRedis.Password})
-	if err != nil {
-		return Config{}, err
-	}
-	return c, nil
-}
-
-// ResolveMySQLPassword 按 MySQLPasswordEnv 填 SnapshotMySQL.Password,返回填好的副本;规则见 secretenv.Fill。
-// -migrate、-route-tool 与常驻启动都连库,所以在 conf.MustLoad 之后、分流到各入口之前调用(data_service.go);
-// 迁移与 route-tool 的 Job 同样注入这个变量。
-func (c Config) ResolveMySQLPassword(lookup func(string) (string, bool)) (Config, error) {
-	err := secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
-		secretenv.Target{Field: "SnapshotMySQL.Password", Value: &c.SnapshotMySQL.Password})
+		redisauth.Target{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password})
 	if err != nil {
 		return Config{}, err
 	}
@@ -565,7 +562,8 @@ type KafkaConfig struct {
 	TopicGeneration uint32 `json:",default=1"`
 
 	// TransactionLogTopic 是**基名**;实际使用的名字是 EffectiveTransactionLogTopic()。
-	// 基名必须与 C++ 生产者的 topic 常量一致(全局单 topic,key=player_id)。
+	// 基名与 TopicGeneration 必须与生产者 go/db 的 AuditOutbox 段一致(全局单 topic,key=player_id):本机两份 yaml 由 go/db 的单测核对,
+	// K8s 的 db ConfigMap 由部署脚本从这一份渲染。
 	TransactionLogTopic         string `json:",default=transaction_log_topic"`
 	TransactionLogPartitions    int32  `json:",default=6"`
 	TransactionLogConsumerGroup string `json:",default=data_service-transaction-log"`
@@ -747,7 +745,7 @@ type PlayerNameConfig struct {
 	// 后一次),10 分钟已经极其宽裕。运维清孤儿走 admin token 那条路,不限时间。
 	ReleaseWindow time.Duration `json:",optional"`
 
-	// CacheTTL 是 player:name:{id} 正缓存的存活时间(NameCacheRedis)。v1 不支持改名,名字**内容**不会变,
+	// CacheTTL 是 player:name:<id> 正缓存的存活时间(控制集群 ControlRedis)。v1 不支持改名,名字**内容**不会变,
 	// 所以可以给很长;上限的意义只在"名字被释放且 DEL 缓存失败"时封顶脏值。
 	CacheTTL time.Duration `json:",optional"`
 

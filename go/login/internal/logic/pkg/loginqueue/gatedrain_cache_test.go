@@ -37,13 +37,13 @@ func TestDrainMarkCache_OneQueryPerZonePerRefresh(t *testing.T) {
 	rdb, mr := newDrainRedis(t)
 	ctx := context.Background()
 	clock := newDrainTestClock()
-	cache := NewDrainMarkCache(rdb, time.Second, clock.Now)
+	cache := NewDrainMarkCache(rdb, testMarkZone, time.Second, clock.Now)
 	gates := candidates(1, 2)
 
 	assert.Empty(t, cache.Draining(ctx, 1, gates))
 	queries := mr.CommandCount()
 
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, clock.Now().Unix(), 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, clock.Now().Unix(), 600))
 	afterMark := mr.CommandCount()
 	clock.Advance(999 * time.Millisecond)
 	for i := 0; i < 5; i++ {
@@ -62,11 +62,11 @@ func TestDrainMarkCache_ZonesAreCachedSeparately(t *testing.T) {
 	rdb, _ := newDrainRedis(t)
 	ctx := context.Background()
 	clock := newDrainTestClock()
-	cache := NewDrainMarkCache(rdb, time.Second, clock.Now)
+	cache := NewDrainMarkCache(rdb, testMarkZone, time.Second, clock.Now)
 	zone2 := []GateCandidate{{NodeID: 7, IP: "10.0.0.2", Port: 18000, ZoneID: 2}}
 
 	assert.Empty(t, cache.Draining(ctx, 1, candidates(1)))
-	require.NoError(t, MarkGateDraining(ctx, rdb, 7, clock.Now().Unix(), 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 7, clock.Now().Unix(), 600))
 
 	assert.Equal(t, map[uint32]bool{7: true}, cache.Draining(ctx, 2, zone2), "zone 2 第一次查,不受 zone 1 的缓存影响")
 }
@@ -76,9 +76,9 @@ func TestDrainMarkCache_FailureIsFailOpenAndCached(t *testing.T) {
 	rdb, mr := newDrainRedis(t)
 	ctx := context.Background()
 	clock := newDrainTestClock()
-	cache := NewDrainMarkCache(rdb, time.Second, clock.Now)
+	cache := NewDrainMarkCache(rdb, testMarkZone, time.Second, clock.Now)
 	gates := candidates(1, 2)
-	require.NoError(t, MarkGateDraining(ctx, rdb, 2, clock.Now().Unix(), 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 2, clock.Now().Unix(), 600))
 
 	mr.SetError("ERR simulated failure") // 不用 LOADING 之类前缀:go-redis 会把它们当可重试错误重发
 	assert.Empty(t, cache.Draining(ctx, 1, gates), "查询失败按没人在排空放行")
@@ -93,11 +93,11 @@ func TestDrainMarkCache_FailureIsFailOpenAndCached(t *testing.T) {
 func TestDrainMarkCache_ZeroRefreshQueriesEveryTime(t *testing.T) {
 	rdb, _ := newDrainRedis(t)
 	ctx := context.Background()
-	cache := NewDrainMarkCache(rdb, 0, nil)
+	cache := NewDrainMarkCache(rdb, testMarkZone, 0, nil)
 	gates := candidates(1, 2)
 
 	assert.Empty(t, cache.Draining(ctx, 1, gates))
-	require.NoError(t, MarkGateDraining(ctx, rdb, 1, time.Now().Unix(), 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 1, time.Now().Unix(), 600))
 	assert.Equal(t, map[uint32]bool{1: true}, cache.Draining(ctx, 1, gates))
 }
 
@@ -108,9 +108,9 @@ func TestDrainMarkCache_NoRedisNoCandidatesOrNilCache(t *testing.T) {
 
 	var nilCache *DrainMarkCache
 	assert.Nil(t, nilCache.Draining(ctx, 1, candidates(1)))
-	assert.Nil(t, NewDrainMarkCache(nil, time.Second, nil).Draining(ctx, 1, candidates(1)))
+	assert.Nil(t, NewDrainMarkCache(nil, testMarkZone, time.Second, nil).Draining(ctx, 1, candidates(1)))
 
-	cache := NewDrainMarkCache(rdb, time.Second, nil)
+	cache := NewDrainMarkCache(rdb, testMarkZone, time.Second, nil)
 	before := mr.CommandCount()
 	assert.Nil(t, cache.Draining(ctx, 9, nil))
 	assert.Equal(t, before, mr.CommandCount(), "候选为空不查 Redis")
@@ -122,9 +122,9 @@ func TestDrainMarkCache_ConcurrentCallersShareOneQuery(t *testing.T) {
 	rdb, mr := newDrainRedis(t)
 	ctx := context.Background()
 	clock := newDrainTestClock()
-	cache := NewDrainMarkCache(rdb, time.Second, clock.Now)
+	cache := NewDrainMarkCache(rdb, testMarkZone, time.Second, clock.Now)
 	gates := candidates(1, 2, 3)
-	require.NoError(t, MarkGateDraining(ctx, rdb, 3, clock.Now().Unix(), 600))
+	require.NoError(t, MarkGateDraining(ctx, rdb, testMarkZone, 3, clock.Now().Unix(), 600))
 	before := mr.CommandCount()
 
 	var wg sync.WaitGroup

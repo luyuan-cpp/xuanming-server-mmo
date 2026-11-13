@@ -109,7 +109,8 @@ Write-Host "Out dir: $OutDir" -ForegroundColor Cyan
 # 只处理已存在的表:没跑过迁移的库里一张都没有,是合法状态。
 #
 # 本脚本只连本机 mysql 容器。TiDB 环境的清库按 docs/design/tidb-phase1-and-launch-readiness.md §3.5 做:
-# TiDB 上 TRUNCATE 会换表 ID、丢掉预切与 table attributes,清完要重跑 `route_tool -f <yaml> tidb-prepare -zones=… -dry-run=false`。
+# TiDB 上 TRUNCATE 会换表 ID、丢掉预切与 table attributes,清完要重跑 `route_tool -f <yaml> tidb-prepare -zones=… -dry-run=false`
+# (连库身份取 MMORPG_SQL_SCHEMA_DSN 与 MMORPG_SQL_SCHEMA_PRINCIPAL,不用 yaml 里的账号)。
 # 既有全量本地 reset 同时清全局角色目录；Redis清空不再删除SQL归属。仅原显式wipe门禁允许执行。
 # 目录每片一个库(zone_merged_into、zone_merge_history 只在第 0 片,只清已存在的表),流水库没有这些表,只复位 route_meta。
 $RouteDataTables   = @('account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role_removal', 'account_role', 'account_role_ref', 'account_directory', 'player_name_owner', 'player_route', 'zone_merged_into', 'zone_merge_history')
@@ -205,12 +206,15 @@ function Invoke-DataReset {
     # MySQL: truncate the player tables in every player store of this region (player_store_<id>_db, region and K
     # from go/login Placement; zone databases are retired, player-data-tidb-scaling-plan.md §7.2 A17c).
     # Keep table definitions (DROP would force a re-init dance). We touch only the tables this verification reads.
+    # player_audit_outbox(审计发件箱,docs/design/player-audit-outbox.md §3)同 stress_round19.ps1 的 $MySqlTables:不清的话上一轮没投完的
+    # 流水与快照会投进这一轮的账本;排在最后,旧库缺这张表时 mysql 客户端停在这一条,不拦住前面几张表。
     $sql = @"
 SET FOREIGN_KEY_CHECKS=0;
 TRUNCATE TABLE player_store;
 TRUNCATE TABLE player_centre_database;
 TRUNCATE TABLE user_accounts;
 TRUNCATE TABLE account_share_database;
+TRUNCATE TABLE player_audit_outbox;
 SET FOREIGN_KEY_CHECKS=1;
 "@
     foreach ($dbName in @(Get-LoginPlayerStoreDbNames -LoginConfigPath (Join-Path $RepoRoot 'go/login/etc/login.yaml'))) {

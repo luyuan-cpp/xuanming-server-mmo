@@ -32,7 +32,7 @@ const reassignCASZone uint32 = 1
 // seedSceneOwnedBy 摆出「scene 归 nodeID 所有」的完整记账:属主映射、反向索引、scene_count=1。
 func seedSceneOwnedBy(t *testing.T, mr *miniredis.Miniredis, zoneID uint32, sceneID uint64, nodeID string) {
 	t.Helper()
-	require.NoError(t, mr.Set(sceneNodeKey(sceneID), nodeID))
+	require.NoError(t, mr.Set(sceneNodeKey(zoneID, sceneID), nodeID))
 	_, err := mr.SAdd(nodeScenesKey(zoneID, nodeID), strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 	require.NoError(t, mr.Set(nodeSceneCountKey(zoneID, nodeID), "1"))
@@ -71,7 +71,7 @@ func TestReassignSceneNode_StaleSecondWriterChangesNothing(t *testing.T) {
 	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeLate, freshPlacementGeneration(t, sc, reassignCASZone)),
 		"属主已不是 old,后到的改派必须落空")
 
-	owner, err := mr.Get(sceneNodeKey(sceneID))
+	owner, err := mr.Get(sceneNodeKey(reassignCASZone, sceneID))
 	require.NoError(t, err)
 	require.Equal(t, casNodeFirst, owner)
 	requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, casNodeFirst, casNodeOld, casNodeLate)
@@ -89,7 +89,7 @@ func TestReassignSceneNode_EmptyOldNodeClaimsOnlyUnmappedScene(t *testing.T) {
 	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, "", casNodeLate, freshPlacementGeneration(t, sc, reassignCASZone)),
 		"映射已被别的懒改派认领,空串期望不得命中")
 
-	owner, err := mr.Get(sceneNodeKey(sceneID))
+	owner, err := mr.Get(sceneNodeKey(reassignCASZone, sceneID))
 	require.NoError(t, err)
 	require.Equal(t, casNodeFirst, owner)
 	requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, casNodeFirst, casNodeLate)
@@ -110,7 +110,7 @@ func TestReassignSceneNode_UnincrementableCounterLeavesOwnershipUntouched(t *tes
 	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeFirst, freshPlacementGeneration(t, sc, reassignCASZone)),
 		"新节点计数键无法 INCR 时,改派必须整体失败")
 
-	owner, err := mr.Get(sceneNodeKey(sceneID))
+	owner, err := mr.Get(sceneNodeKey(reassignCASZone, sceneID))
 	require.NoError(t, err)
 	require.Equal(t, casNodeOld, owner, "脚本报错时归属一个字节都不改")
 	requireSceneIndexedOnlyOn(t, sc, reassignCASZone, sceneID, casNodeOld, casNodeFirst)
@@ -183,7 +183,6 @@ func newWorldChannelRace(t *testing.T) *worldChannelRace {
 	// 频道当前归 old,记账按正常建频道后的样子摆好。
 	_, err := mr.SAdd(worldChannelsKey(worldChannelRaceZone, r.confID), strconv.FormatUint(r.sceneID, 10))
 	require.NoError(t, err)
-	require.NoError(t, mr.Set(sceneZoneKey(r.sceneID), strconv.FormatUint(uint64(worldChannelRaceZone), 10)))
 	seedSceneOwnedBy(t, mr, worldChannelRaceZone, r.sceneID, r.old)
 
 	// 前提:old 已死且有死亡证据,两个写者都会改派它。
@@ -212,7 +211,7 @@ func (r *worldChannelRace) migrate(ctx context.Context, plan channelMigration) b
 // requireOwnedOnlyBy 断言频道的记账全部指向 owner:属主映射、反向索引、scene_count 都只改了一次。
 func (r *worldChannelRace) requireOwnedOnlyBy(t *testing.T, owner, loser *sceneNodeHarness) {
 	t.Helper()
-	got, err := r.mr.Get(sceneNodeKey(r.sceneID))
+	got, err := r.mr.Get(sceneNodeKey(worldChannelRaceZone, r.sceneID))
 	require.NoError(t, err)
 	require.Equal(t, owner.nodeID, got, "属主映射必须指向先提交的写者")
 	requireSceneIndexedOnlyOn(t, r.sc, worldChannelRaceZone, r.sceneID, owner.nodeID, r.old, loser.nodeID)
@@ -235,7 +234,7 @@ func TestWorldChannelRace_InitCommitsFirst_StaleRebalanceBacksOut(t *testing.T) 
 	plan := r.planOnlyMigration(t)
 
 	initWorldScenesForZone(ctx, r.sc, worldChannelRaceZone, []uint64{r.confID}, true)
-	owner, err := r.mr.Get(sceneNodeKey(r.sceneID))
+	owner, err := r.mr.Get(sceneNodeKey(worldChannelRaceZone, r.sceneID))
 	require.NoError(t, err)
 	require.Equal(t, r.x.nodeID, owner, "前提:init 已把频道改派到 x")
 	require.EqualValues(t, 1, r.x.fake.createCalls.Load())
@@ -304,7 +303,7 @@ func TestWorldChannelRace_BarrierAfterPlanReclaimsPreCreatedEntity(t *testing.T)
 
 	require.False(t, r.migrate(ctx, plan))
 
-	owner, err := r.mr.Get(sceneNodeKey(r.sceneID))
+	owner, err := r.mr.Get(sceneNodeKey(worldChannelRaceZone, r.sceneID))
 	require.NoError(t, err)
 	require.Equal(t, r.old, owner, "屏障未到,归属一个字节都不改")
 	requireSceneIndexedOnlyOn(t, r.sc, worldChannelRaceZone, r.sceneID, r.old, r.x.nodeID, r.y.nodeID)

@@ -1,13 +1,16 @@
 package main
 
-// 复制进度。工具不起复制、不停复制(手册 §3),只读它走到了哪里。
+// 复制进度。工具不起复制、不停复制(手册 §3),只读它走到了哪里、配置动没动过、撤掉了没有。
 //
 //	-sync=ticdc:<openapi地址>:<changefeed>   TiDB 档:比 changefeed 的 checkpoint 和源库的 TSO
 //	-sync=mysql-gtid[:<channel>]             MySQL 档:WAIT_FOR_EXECUTED_GTID_SET,channel 缺省 dbmove
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,8 +56,22 @@ type replication interface {
 	VerifyPoint(ctx context.Context) (verifyPoint, error)
 	// RecheckVerifyPoint 校验和算完之后再核一次位置没动。
 	RecheckVerifyPoint(ctx context.Context, point verifyPoint) error
-	// Identity 读当前复制流的身份。verify 记下,cutover 比:流重建过,延迟回到 0 也可能缺一段写。
+	// Identity 读当前复制流的身份,连同它的配置摘要。verify 记下,cutover 比:流重建过或者过滤改过,延迟回到 0 也可能缺一段写。
 	Identity(ctx context.Context) (dbplacement.FeedIdentity, error)
+}
+
+// feedPresence 回答「这条复制流还在不在」,cleanup 删源库之前问。和 replication 分开:cleanup 不读进度,
+// TiDB 档只连 TiCDC,MySQL 档只连目标(通道配在目标上)。
+type feedPresence interface {
+	// StillExists 报告 feed 这条流还在不在,在的话 detail 说明它现在的样子。在跑、暂停、出错都算在:它一恢复就接着复制。
+	// -sync 指的不是 feed 这一条回 errRefused。查不成回错误,调用方不能把「不知道」当成「没有」。
+	StillExists(ctx context.Context, feed dbplacement.FeedIdentity) (exists bool, detail string, err error)
+}
+
+// digestOf 是配置摘要的算法:SHA-256 的十六进制。
+func digestOf(canonical []byte) string {
+	sum := sha256.Sum256(canonical)
+	return hex.EncodeToString(sum[:])
 }
 
 const defaultGTIDChannel = "dbmove"
@@ -129,6 +146,7 @@ func readTiDBTSO(ctx context.Context, db *sql.DB) (uint64, error) {
 }
 
 // ticdcReplication 实现 replication,TiDB 档。source、target 是只读的原始连接。
+// 也实现 feedPresence:cleanup 只问 TiCDC,这时 source、target、schema 不填。
 type ticdcReplication struct {
 	api, changefeed string
 	client          *http.Client
@@ -160,20 +178,30 @@ type changefeedDetail struct {
 	Error        *struct {
 		Message string `json:"message"`
 	} `json:"error"`
-	Config *struct {
-		EnableSyncPoint *bool `json:"enable_sync_point"`
-		// 版本之间形状不同:新版是 "30s" 这样的字符串,旧版是纳秒整数。
-		SyncPointInterval json.RawMessage `json:"sync_point_interval"`
-	} `json:"config"`
+	// Config 留着原文:整份进配置摘要(configDigest),sync point 的两项用到时再解析(syncPointInterval)。
+	Config json.RawMessage `json:"config"`
+}
+
+// syncPointConfig 是 config 里 verify 要读的两项。
+type syncPointConfig struct {
+	EnableSyncPoint *bool `json:"enable_sync_point"`
+	// 版本之间形状不同:新版是 "30s" 这样的字符串,旧版是纳秒整数。
+	SyncPointInterval json.RawMessage `json:"sync_point_interval"`
 }
 
 // syncPointInterval 取 changefeed 配的 sync point 间隔。没开或者读不出来回错误:verify 就站在 syncpoint 上。
 func (d changefeedDetail) syncPointInterval() (time.Duration, error) {
-	if d.Config == nil || len(d.Config.SyncPointInterval) == 0 || (d.Config.EnableSyncPoint != nil && !*d.Config.EnableSyncPoint) {
+	var config syncPointConfig
+	if len(d.Config) != 0 {
+		if err := json.Unmarshal(d.Config, &config); err != nil {
+			return 0, errors.New("bad changefeed config")
+		}
+	}
+	if len(config.SyncPointInterval) == 0 || (config.EnableSyncPoint != nil && !*config.EnableSyncPoint) {
 		return 0, errors.New("sync point is not enabled")
 	}
 	var text string
-	if err := json.Unmarshal(d.Config.SyncPointInterval, &text); err == nil {
+	if err := json.Unmarshal(config.SyncPointInterval, &text); err == nil {
 		interval, err := time.ParseDuration(text)
 		if err != nil || interval <= 0 {
 			return 0, fmt.Errorf("bad sync_point_interval %q", text)
@@ -181,18 +209,42 @@ func (d changefeedDetail) syncPointInterval() (time.Duration, error) {
 		return interval, nil
 	}
 	var nanos int64
-	if err := json.Unmarshal(d.Config.SyncPointInterval, &nanos); err != nil || nanos <= 0 {
+	if err := json.Unmarshal(config.SyncPointInterval, &nanos); err != nil || nanos <= 0 {
 		return 0, errors.New("bad sync_point_interval")
 	}
 	return time.Duration(nanos), nil
 }
 
-// changefeedIdentity 是 changefeed 的身份:id、start_ts、create_time。用同一个 id 删了重建,create_time 就变了。
+// configDigest 是 changefeed 整份 config 的摘要。过滤规则(filter.rules)、忽略的事务(filter.ignore_txn_start_ts)、事件过滤、
+// force_replicate 都在 config 里,改了之后有一段写不再复制,changefeed 的 id、start_ts、create_time 却都不变。
+// 不挑字段:各版本的字段在变,漏掉一个会影响复制内容的,这道核对就空了。代价是改任何一项(哪怕和内容无关)都要重跑 verify。
+func (d changefeedDetail) configDigest() (string, error) {
+	decoder := json.NewDecoder(bytes.NewReader(d.Config))
+	// TSO 是 64 位整数,按 float64 解会丢低位:两个不同的 ignore_txn_start_ts 可能算出同一个摘要。
+	decoder.UseNumber()
+	var config map[string]any
+	if err := decoder.Decode(&config); err != nil || len(config) == 0 {
+		return "", errors.New("TiCDC did not report its config")
+	}
+	// 重新编码:map 的键按字典序输出,摘要和 TiCDC 回的字段顺序无关。
+	canonical, err := json.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+	return digestOf(canonical), nil
+}
+
+// changefeedIdentity 是 changefeed 的身份:id、start_ts、create_time,加上配置摘要。用同一个 id 删了重建,create_time 就变了;
+// 暂停之后改过滤再恢复,只有配置摘要会变。
 func changefeedIdentity(changefeed string, d changefeedDetail) (dbplacement.FeedIdentity, error) {
 	if d.StartTs == 0 || d.CreateTime == "" {
 		return dbplacement.FeedIdentity{}, refusedf("TiCDC did not report start_ts and create_time of changefeed %s: cannot tell whether it was recreated", changefeed)
 	}
-	return dbplacement.FeedIdentity{Changefeed: changefeed, StartTs: d.StartTs, CreateTime: d.CreateTime}, nil
+	digest, err := d.configDigest()
+	if err != nil {
+		return dbplacement.FeedIdentity{}, refusedf("changefeed %s: %v: cannot tell whether its filter was edited", changefeed, err)
+	}
+	return dbplacement.FeedIdentity{Changefeed: changefeed, StartTs: d.StartTs, CreateTime: d.CreateTime, ConfigDigest: digest}, nil
 }
 
 // checkSyncPoint 判一个 syncpoint 能不能拿来 verify。nowTs 取源库的 TSO,不用工具所在机器的时钟。
@@ -218,26 +270,40 @@ func changefeedBroken(state string) bool {
 	return false
 }
 
-func (r *ticdcReplication) detail(ctx context.Context) (changefeedDetail, error) {
+// get 向 TiCDC 查一次这个 changefeed,回 HTTP 状态码和响应体。
+func (r *ticdcReplication) get(ctx context.Context) (int, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.api+"/api/v2/changefeeds/"+url.PathEscape(r.changefeed), nil)
 	if err != nil {
-		return changefeedDetail{}, err
+		return 0, nil, err
 	}
 	resp, err := r.client.Do(req)
 	if err != nil {
-		return changefeedDetail{}, fmt.Errorf("query TiCDC: %w", err)
+		return 0, nil, fmt.Errorf("query TiCDC: %w", err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return changefeedDetail{}, fmt.Errorf("query TiCDC: %w", err)
+		return 0, nil, fmt.Errorf("query TiCDC: %w", err)
 	}
-	// 查不存在的 changefeed,TiCDC 回 400 加错误码,不是 404(tiflow cdc/api/util.go 的 httpBadRequestError)。
-	if resp.StatusCode == http.StatusNotFound || (resp.StatusCode == http.StatusBadRequest && strings.Contains(string(body), "ErrChangeFeedNotExists")) {
+	return resp.StatusCode, body, nil
+}
+
+// changefeedNotExists:查不存在的 changefeed,TiCDC 回 400 加错误码,不是 404(tiflow cdc/api/util.go 的 httpBadRequestError)。
+func changefeedNotExists(status int, body []byte) bool {
+	return status == http.StatusBadRequest && strings.Contains(string(body), "ErrChangeFeedNotExists")
+}
+
+func (r *ticdcReplication) detail(ctx context.Context) (changefeedDetail, error) {
+	status, body, err := r.get(ctx)
+	if err != nil {
+		return changefeedDetail{}, err
+	}
+	// 读进度时 404 也按不存在处理:宁可早一点当成复制断了回滚。
+	if status == http.StatusNotFound || changefeedNotExists(status, body) {
 		return changefeedDetail{}, fmt.Errorf("%w: changefeed %s does not exist", errReplicationBroken, r.changefeed)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return changefeedDetail{}, fmt.Errorf("query TiCDC: HTTP %d", resp.StatusCode)
+	if status != http.StatusOK {
+		return changefeedDetail{}, fmt.Errorf("query TiCDC: HTTP %d", status)
 	}
 	var d changefeedDetail
 	if err := json.Unmarshal(body, &d); err != nil {
@@ -251,6 +317,28 @@ func (r *ticdcReplication) detail(ctx context.Context) (changefeedDetail, error)
 		return changefeedDetail{}, fmt.Errorf("%w: changefeed %s is %s %s", errReplicationBroken, r.changefeed, d.State, message)
 	}
 	return d, nil
+}
+
+// StillExists 见 feedPresence。只认 TiCDC 明确的回答:查到了就是还在,不看状态(暂停、出错的 changefeed 一恢复就接着复制);
+// 回「没有这个 changefeed」的错误码才是撤掉了。别的回答都算查不成,包括光秃秃的 404:地址写错碰到别的 HTTP 服务也是 404。
+func (r *ticdcReplication) StillExists(ctx context.Context, feed dbplacement.FeedIdentity) (bool, string, error) {
+	if feed.Changefeed != r.changefeed {
+		return false, "", refusedf("-sync names changefeed %s, but this move verified changefeed %q: pass the -sync that cutover used", r.changefeed, feed.Changefeed)
+	}
+	status, body, err := r.get(ctx)
+	switch {
+	case err != nil:
+		return false, "", err
+	case changefeedNotExists(status, body):
+		return false, "", nil
+	case status != http.StatusOK:
+		return false, "", fmt.Errorf("query TiCDC: HTTP %d", status)
+	}
+	var d changefeedDetail
+	if err := json.Unmarshal(body, &d); err != nil {
+		return false, "", fmt.Errorf("query TiCDC: bad response: %w", err)
+	}
+	return true, fmt.Sprintf("changefeed %s still exists (state %q)", r.changefeed, d.State), nil
 }
 
 func (r *ticdcReplication) CheckLag(ctx context.Context, maxLag time.Duration) error {
@@ -362,6 +450,7 @@ func (r *ticdcReplication) VerifyPoint(ctx context.Context) (verifyPoint, error)
 func (r *ticdcReplication) RecheckVerifyPoint(context.Context, verifyPoint) error { return nil }
 
 // gtidReplication 实现 replication,MySQL 档。source 是源主库,target 是目标主库,verifySource 是源库的复制副本(只有 verify 用)。
+// 也实现 feedPresence:cleanup 只连目标,这时只填 channel 和 target。
 type gtidReplication struct {
 	channel                      string
 	source, target, verifySource *sql.DB
@@ -461,7 +550,8 @@ func (r *gtidReplication) TargetPoint(ctx context.Context) (string, error) {
 	return readGTIDExecuted(ctx, r.target)
 }
 
-// Identity 见 replication。通道的身份是通道名和它的来源;AUTO_POSITION 必须开着:按文件位置复制能跳过事务,GTID 集合对不上它也看不出来。
+// Identity 见 replication。通道的身份是通道名和它的来源,加上复制过滤的摘要(channelConfig)。
+// AUTO_POSITION 必须开着:按文件位置复制能跳过事务,GTID 集合对不上它也看不出来。
 func (r *gtidReplication) Identity(ctx context.Context) (dbplacement.FeedIdentity, error) {
 	var autoPosition, host, sourceUUID string
 	var port uint32
@@ -477,11 +567,87 @@ func (r *gtidReplication) Identity(ctx context.Context) (dbplacement.FeedIdentit
 	if err != nil {
 		return dbplacement.FeedIdentity{}, err
 	}
+	feed.ConfigDigest, err = r.channelConfig(ctx)
+	if err != nil {
+		return dbplacement.FeedIdentity{}, err
+	}
 	feed.TargetCreated, err = readTargetCreated(ctx, r.target, r.schema)
 	if err != nil {
 		return dbplacement.FeedIdentity{}, err
 	}
 	return feed, nil
+}
+
+// channelConfig 核目标没有开「应用出错就跳过」的开关,再回通道复制过滤的摘要。
+// 过滤只读这个通道生效的那一份:不带 FOR CHANNEL 的 CHANGE REPLICATION FILTER 会同时改到每个通道上。
+func (r *gtidReplication) channelConfig(ctx context.Context) (string, error) {
+	var skipErrors, execMode string
+	if err := r.target.QueryRowContext(ctx, "SELECT @@global.replica_skip_errors,@@global.replica_exec_mode").Scan(&skipErrors, &execMode); err != nil {
+		return "", fmt.Errorf("read the replica settings of the target: %w", err)
+	}
+	if err := checkNoSilentSkip(skipErrors, execMode); err != nil {
+		return "", err
+	}
+	rows, err := r.target.QueryContext(ctx, "SELECT FILTER_NAME,FILTER_RULE FROM performance_schema.replication_applier_filters WHERE CHANNEL_NAME=? ORDER BY FILTER_NAME", r.channel)
+	if err != nil {
+		return "", fmt.Errorf("read the filters of replication channel %s: %w", r.channel, err)
+	}
+	defer rows.Close()
+	var filters []string
+	for rows.Next() {
+		var name string
+		var rule sql.NullString
+		if err := rows.Scan(&name, &rule); err != nil {
+			return "", fmt.Errorf("read the filters of replication channel %s: %w", r.channel, err)
+		}
+		filters = append(filters, channelFilter(name, rule.String))
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("read the filters of replication channel %s: %w", r.channel, err)
+	}
+	return channelFilterDigest(filters), nil
+}
+
+// checkNoSilentSkip:这两个开关让副本应用出错时不停下来,直接跳过那条事件。目标少了写入,GTID 集合和延迟却都对得上。
+//   - replica_skip_errors:列出的错误码整条跳过;
+//   - replica_exec_mode=IDEMPOTENT:主键冲突、找不到行都不报错。
+//
+// 开着的时候之前有没有跳过已经说不清,所以提示从全量重来。
+func checkNoSilentSkip(skipErrors, execMode string) error {
+	if value := strings.TrimSpace(skipErrors); value != "" && !strings.EqualFold(value, "OFF") {
+		return refusedf("the target runs with replica_skip_errors=%s: failed events are skipped without stopping the channel, so the target can miss writes and nothing here would notice. Restart it with replica_skip_errors=OFF and start again from a full copy", value)
+	}
+	if value := strings.TrimSpace(execMode); !strings.EqualFold(value, "STRICT") {
+		return refusedf("the target runs with replica_exec_mode=%s: duplicate-key and missing-row errors are ignored, so the target can miss writes and nothing here would notice. Set replica_exec_mode=STRICT and start again from a full copy", value)
+	}
+	return nil
+}
+
+// channelFilter 是摘要里的一条过滤。名字和规则都加引号转义,规则里有什么字符都不会和下一条串起来。
+func channelFilter(name, rule string) string {
+	return strconv.Quote(name) + "=" + strconv.Quote(rule)
+}
+
+// channelFilterDigest 是通道过滤的摘要,filters 按过滤名排好序。没有配过滤时是空集合的摘要。
+func channelFilterDigest(filters []string) string {
+	return digestOf([]byte(strings.Join(filters, "\n")))
+}
+
+// StillExists 见 feedPresence。通道配在目标上:配置表里还有这一行就算在,STOP REPLICA 之后它还在,RESET REPLICA ALL 才没有。
+func (r *gtidReplication) StillExists(ctx context.Context, feed dbplacement.FeedIdentity) (bool, string, error) {
+	if feed.Channel != r.channel {
+		return false, "", refusedf("-sync names replication channel %s, but this move verified channel %q: pass the -sync that cutover used", r.channel, feed.Channel)
+	}
+	var host string
+	var port uint32
+	err := r.target.QueryRowContext(ctx, "SELECT HOST,PORT FROM performance_schema.replication_connection_configuration WHERE CHANNEL_NAME=?", r.channel).Scan(&host, &port)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, "", nil
+	}
+	if err != nil {
+		return false, "", fmt.Errorf("read the replication channels of the target: %w", err)
+	}
+	return true, fmt.Sprintf("replication channel %s is still configured on the target (source %s:%d)", r.channel, host, port), nil
 }
 
 func channelIdentity(channel, autoPosition, host string, port uint32, sourceUUID string) (dbplacement.FeedIdentity, error) {

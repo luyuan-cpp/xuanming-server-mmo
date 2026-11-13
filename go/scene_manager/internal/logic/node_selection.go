@@ -14,7 +14,7 @@ import (
 // getNodesForPurpose returns the subset of the zone's registered nodes that
 // can host the given purpose (world vs instance), preserving the ascending
 // load-score order from the Redis sorted set. Classification reads
-// `node:zone:{zoneId}:{nodeId}:scene_node_type` mirrored by load_reporter.
+// `node:{ctl:<zone>}:<nodeId>:scene_node_type` mirrored by load_reporter.
 //
 // Filtering rules:
 //   - A node with a KNOWN scene_node_type is included only if it matches

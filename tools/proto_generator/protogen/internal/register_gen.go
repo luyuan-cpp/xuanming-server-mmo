@@ -66,7 +66,7 @@ void InitServiceHandler()
 
 	content := utils.RenderTemplateOrExit("registerFile", tmplStr, data)
 	if err := utils.WriteFileIfChanged(dst, []byte(content)); err != nil {
-		logger.Global.Fatal("写入服务注册文件失败", zap.String("output_path", dst), zap.Error(err))
+		logger.Global.Fatal("Failed to write the service register file", zap.String("output_path", dst), zap.Error(err))
 		return
 	}
 

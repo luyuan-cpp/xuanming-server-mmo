@@ -73,6 +73,34 @@ def write_json(path: Path, value: object) -> None:
         target.write("\n")
 
 
+def create_workspace(output: Path, details: dict[str, object]) -> tuple[Path, Path]:
+    """Reserve a short, fresh workspace independently of the evidence path.
+
+    The protobuf plugin copies the protoc URL into target; nesting both that URL
+    and target below a long --output can exceed Windows process path limits.
+    Keep every workspace on success and failure for inspection; never adopt an
+    existing directory or its target/JAR files.
+    """
+    base = REPO_ROOT / "build/jv"
+    base.mkdir(parents=True, exist_ok=True)
+    if (not base.resolve().is_relative_to(REPO_ROOT.resolve()) or
+            any(path.is_symlink() or path.is_junction() for path in (REPO_ROOT / "build", base))):
+        raise RuntimeError("Java workspace must stay in the repository's ignored build directory")
+    workspace = base / uuid.uuid4().hex[:12]
+    workspace.mkdir(exist_ok=False)
+    snapshot, toolchain = workspace / "s", workspace / "t"
+    details.update(workspace=str(workspace), snapshot=str(snapshot), toolchain=str(toolchain),
+                   workspaceLayout="repo-build-jv-v1", workspaceRetained=True)
+    provenance = {"layout": "repo-build-jv-v1", "sourceRoot": str(REPO_ROOT),
+                  "evidence": str(output), "workspace": str(workspace),
+                  "snapshot": str(snapshot), "toolchain": str(toolchain), "retained": True}
+    write_json(output / "workspace.json", provenance)
+    write_json(workspace / "owner.json", provenance)
+    snapshot.mkdir()
+    toolchain.mkdir()
+    return snapshot, toolchain
+
+
 def proto_inputs(root: Path) -> dict[str, Path]:
     """只解析 import 图来封存输入，descriptor 内容仍由正式 protoc 生成。"""
     pending, found = [PROTO_ROOT], {}
@@ -332,8 +360,7 @@ def build(args: argparse.Namespace, output: Path,
     revision = commit + ("-dirty" if dirty else "") + "-source." + source_hash[:12]
     details.update(sourceSHA256=source_hash, revision=revision)
     write_json(output / "source-before.json", before)
-    snapshot = output / "snapshot"
-    snapshot.mkdir()
+    snapshot, tool_directory = create_workspace(output, details)
     for relative in before:
         source = REPO_ROOT / relative
         target = snapshot / source.relative_to(REPO_ROOT)
@@ -341,13 +368,10 @@ def build(args: argparse.Namespace, output: Path,
         shutil.copy2(source, target)
     assert_inputs(before, snapshot)
     details["sourceCount"] = len(before)
-    details["snapshot"] = str(snapshot)
 
     # 仅拷贝现成 protoc 与相邻 DLL；不下载、安装或借用未钉摘要的编译器。
     tool_inputs = [protoc, *sorted(protoc.parent.glob("*.dll"))]
     tool_hashes = {str(path): sha256(path) for path in tool_inputs}
-    tool_directory = output / "toolchain"
-    tool_directory.mkdir()
     for path in tool_inputs:
         shutil.copy2(path, tool_directory / path.name)
         if sha256(tool_directory / path.name) != tool_hashes[str(path)]:

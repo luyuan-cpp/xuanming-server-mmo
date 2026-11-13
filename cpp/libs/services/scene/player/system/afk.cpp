@@ -6,7 +6,9 @@
 #include "frame/manager/frame_time.h"
 #include "player/comp/afk_comp.h"
 #include "player/comp/player_frozen_comp.h"
+#include "player/comp/team_follow_comp.h"  // TeamFollowerComp:随从挂机照样被队形驱动,不停步
 #include "proto/common/component/player_comp.pb.h"
+#include "spatial/system/movement.h"  // HaltMotion:挂机即停步
 #include "thread_context/ecs_context.h"
 
 // A player with no client messages for this many frames is marked AFK.
@@ -36,6 +38,13 @@ void AfkSystem::Update(double delta)
         if (currentFrame - lastActive.frame >= kAfkInactivityFrames)
         {
             registry.emplace<AfkComp>(entity, AfkComp{currentFrame, 0});
+            // 挂机即停步:MovementSystem 从这一刻起不再积分他的位移。速度留着的话,旁人按最后一条移动一直外推,
+            // 摘掉挂机后服务器也会从原地按旧速度接着走。组队随从例外:挂机照样被队形驱动(TeamFollowSystem 不看挂机标记)。
+            // 只改当前实体的 Velocity 与脏位组件,不碰本 view 遍历的组件,可以在遍历中做。
+            if (!registry.any_of<TeamFollowerComp>(entity))
+            {
+                MovementSystem::HaltMotion(entity);
+            }
             LOG_INFO << "Player entity " << entt::to_integral(entity)
                      << " marked AFK after " << kAfkInactivityFrames << " frames of inactivity";
         }

@@ -18,6 +18,7 @@ import (
 	base "proto/common/base"
 	dspb "proto/data_service"
 
+	"shared/clusterredis"
 	"shared/leader"
 	"shared/playerredis"
 
@@ -65,12 +66,10 @@ func testConfig() config.Config {
 	var c config.Config
 	c.Etcd.Hosts = []string{"127.0.0.1:2379"}
 	c.MySQL = configMySQL()
-	c.CoreRedis = config.RedisConf{Host: "127.0.0.1:6379"}
+	c.ControlRedis = clusterredis.Config{Addrs: []string{"127.0.0.1:6379"}}
 	c.Kafka = config.KafkaConf{Brokers: []string{"127.0.0.1:9092"}, WriteTimeoutMs: 2000}
 	c.PlayerInbox = config.PlayerInboxConf{
 		EnqueueTypes:                []string{"PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN"},
-		TerminalRetentionDays:       30,
-		SweepIntervalSeconds:        600,
 		NotifyResendIntervalSeconds: 30,
 		GaugeIntervalSeconds:        60,
 		ReconcileIntervalMinutes:    60,
@@ -79,39 +78,41 @@ func testConfig() config.Config {
 	return c
 }
 
-// TestCoreRedisOptionsBoundEveryCall 钉住核心 Redis 客户端的超时契约(评审 L7):
-//   - 开 ContextTimeoutEnabled:请求预算(Timeout − 500ms)、OwnerEpochReadTimeout、提醒预算才真正管得住 socket 读写,
-//     否则 go-redis 用 context.Background() 读写,只受 3s 缺省读超时约束,in-band 回故障的契约会被击穿;
-//   - 读 / 写超时显式为正:不带截止时间的调用(选主竞选的 SETNX 用的是循环 ctx)靠它封顶;-1 / -2 会关掉 socket 截止,
-//     连 ctx 截止也一起失效(go/shared/leader GoRedisMaxCallDuration 的注释);
-//   - PoolSize 原样取配置(Redis 连接总账读同一个键),不落回 go-redis 缺省。
+// TestControlRedisClientBoundsEveryCall 钉住控制集群客户端的超时契约(评审 L7):
+//   - ctx 截止约束开启:请求预算(Timeout − 500ms)、OwnerEpochReadTimeout、提醒预算才真正管得住 socket 读写,
+//     否则读写只受缺省读超时约束,in-band 回故障的契约会被击穿;
+//   - 读 / 写超时显式为正(EffectiveControlRedis 缺省 1s):不带截止时间的调用(选主竞选的 SETNX 用的是循环 ctx)靠它封顶;
+//     -1 / -2 会关掉 socket 截止,连 ctx 截止也一起失效(go/shared/leader GoRedisMaxCallDuration 的注释);
+//   - 池上限原样取配置(Redis 连接总账读同一个键),不落回客户端缺省。
 //
 // 并核对选主心跳在这套选项下仍能保证「key 过期之前自我降级」:收件箱用 leader 的缺省 TTL(30s),
 // 节拍 = TTL/3、续期 ctx = min(2s, TTL/8)(go/shared/leader/leader.go startHeartbeat)。
-func TestCoreRedisOptionsBoundEveryCall(t *testing.T) {
-	opts := coreRedisOptions(config.RedisConf{Host: "127.0.0.1:1", DB: 0, PoolSize: 20})
-	if !opts.ContextTimeoutEnabled {
-		t.Fatal("核心 Redis 必须开 ContextTimeoutEnabled")
-	}
-	if opts.ReadTimeout <= 0 || opts.WriteTimeout <= 0 || opts.ReadTimeout != coreRedisReadTimeout || opts.WriteTimeout != coreRedisWriteTimeout {
-		t.Fatalf("ReadTimeout = %v WriteTimeout = %v, want 显式正值 %v / %v", opts.ReadTimeout, opts.WriteTimeout,
-			coreRedisReadTimeout, coreRedisWriteTimeout)
-	}
-	if opts.PoolSize != 20 || opts.Addr != "127.0.0.1:1" {
-		t.Fatalf("PoolSize = %d Addr = %q, want 取自配置", opts.PoolSize, opts.Addr)
+func TestControlRedisClientBoundsEveryCall(t *testing.T) {
+	c := config.Config{ControlRedis: clusterredis.Config{Addrs: []string{"127.0.0.1:1"}, PoolSizePerNode: 20}}
+	effective := c.EffectiveControlRedis()
+	if effective.ReadTimeoutMs != 1000 || effective.WriteTimeoutMs != 1000 || effective.DisableContextTimeout {
+		t.Fatalf("EffectiveControlRedis = %+v, want 读写各 1000ms 且开 ctx 截止约束", effective)
 	}
 
-	client := redis.NewClient(opts) // 不发命令就不连
-	defer client.Close()
-	effective := client.Options()
-	if effective.ReadTimeout != coreRedisReadTimeout || effective.WriteTimeout != coreRedisWriteTimeout || effective.PoolSize != 20 {
-		t.Fatalf("初始化后的选项被改写: read=%v write=%v pool=%d", effective.ReadTimeout, effective.WriteTimeout, effective.PoolSize)
+	client, err := clusterredis.New(effective, clusterredis.ControlClusterKeys) // 不发命令就不连
+	if err != nil {
+		t.Fatalf("clusterredis.New: %v", err)
 	}
-	if got := leader.GoRedisMaxCallDuration(effective); got != 0 {
-		t.Fatalf("GoRedisMaxCallDuration = %v, want 0(客户端认 ctx 截止时间)", got)
+	defer client.Close()
+	node, ok := client.(*redis.Client)
+	if !ok {
+		t.Fatalf("单实例配置应得到 *redis.Client,得到 %T", client)
+	}
+	opts := node.Options()
+	if !opts.ContextTimeoutEnabled || opts.ReadTimeout != time.Second || opts.WriteTimeout != time.Second || opts.PoolSize != 20 {
+		t.Fatalf("客户端选项 ctx_timeout=%v read=%v write=%v pool=%d, want true / 1s / 1s / 20",
+			opts.ContextTimeoutEnabled, opts.ReadTimeout, opts.WriteTimeout, opts.PoolSize)
+	}
+	if got := leader.UniversalMaxCallDuration(client); got != 0 {
+		t.Fatalf("UniversalMaxCallDuration = %v, want 0(客户端认 ctx 截止时间)", got)
 	}
 	const ttl = 30 * time.Second
-	maxCall := leader.CallBudget(min(2*time.Second, ttl/8), leader.GoRedisMaxCallDuration(effective))
+	maxCall := leader.CallBudget(min(2*time.Second, ttl/8), leader.UniversalMaxCallDuration(client))
 	if fence, ok := leader.FenceAfter(ttl, ttl/3, maxCall); !ok || fence != 2*(ttl/3) || 2*(ttl/3)+maxCall >= ttl {
 		t.Fatalf("FenceAfter(ttl=%v, maxCall=%v) = (%v, %v):选主心跳必须能在 key 过期前自我降级", ttl, maxCall, fence, ok)
 	}
@@ -167,7 +168,7 @@ func (r *recordingDeps) deps() externalDeps {
 			}
 			return assemblyRoles{}, nil
 		},
-		openCoreRedis: func(config.RedisConf) (*redis.Client, error) {
+		openControlRedis: func(clusterredis.Config) (redis.UniversalClient, error) {
 			r.calls["redis"]++
 			if r.failAt == "redis" {
 				return nil, errInjected
@@ -302,7 +303,7 @@ func TestNewServiceContextWiresDependencies(t *testing.T) {
 			t.Errorf("%s 入口应恰好调用一次,got %d", name, rec.calls[name])
 		}
 	}
-	if sc.Etcd != rec.etcd || sc.DB != rec.db || sc.CoreRedis != rec.rds || sc.PlayerRedis != rec.player || sc.dataServiceConn != rec.conn {
+	if sc.Etcd != rec.etcd || sc.DB != rec.db || sc.ControlRedis != rec.rds || sc.PlayerRedis != rec.player || sc.dataServiceConn != rec.conn {
 		t.Fatal("ServiceContext 持有的连接不是入口建出来的那些")
 	}
 	if sc.Registry == nil || sc.Store == nil || sc.Ledgers == nil || sc.ItemGainBlocks == nil || sc.Loops == nil || sc.DataService == nil ||

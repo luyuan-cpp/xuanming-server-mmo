@@ -213,16 +213,20 @@ Deleted、Absent 之后按名字删 owner 行;Bound、OutsideWindow 两边都不
 
 **和建角各步的先后**(login `createplayerlogic.go` 的编号):⑥b 发号 → ⑥c 登记(预留)→ ⑥d 登记路由 → ⑦ 目录建角(ref PENDING → 初始行 → **提交点** → **绑定** → ref ACTIVE)。login 回滚释放名字的几处都在提交点之前或确定没提交:登记结局未知、截止之后放弃、路由登记失败、锁丢失、目录回 `ErrNotCommitted` / `ErrFull` / `ErrConflict` / `ErrInvalid`。⑥d 之前回滚时没有路由行,证明不写墓碑;之后回滚时写墓碑。目录回结局未知时 login 不释放,记孤儿(不变)。
 
-**核账**:`cmd/create_residual` 以角色行为准,新增 `name_unbound`(名字在本角色名下但还是预留态),`-repair name` 修:和名字缺失同一步(重新登记 + 置绑定),名字副本缺的一并补上。
+**核账**:`cmd/create_residual` 以角色行为准,新增 `name_unbound`(名字在本角色名下但还是预留态),`-repair name` 修:和名字缺失同一步(重新登记 + 置绑定),名字副本缺的一并补上。2026-11-12 起再收名字登记表上的两种(`create_residual.go` 文件头):
+
+- `removed_role_name`:角色行扫描连墓碑一起扫,按墓碑里留着的原名查。名字行或名字副本还在已删的角色名下(名字片恢复点早于删角释放),先复核墓碑,再按 `(player_id, 判重键)` 条件删(`PlayerNameStore.ReleaseRemoved`,和删角收尾同一步)。名字副本指着别的名字只报告。
+- `orphan_name`:`-target names` 按名字片翻页扫名字行(名字表刻意没有二级索引,按主键翻页、在编排里筛),预留态、登记超过 30 分钟、这个 player_id 没有活角色的就是孤儿:建角回滚的释放没做成(玩家片冻结或不可达时证明写不了墓碑,login 判不出结局、来不及补偿时也会留下)。修法同运维带 token 的释放:先在玩家片证明永远不会提交(工具在同一个事务里先锁本库闸门行;有路由行、没有角色行时写墓碑),再只删预留态。没有角色行时先找提交过的证据(存档库进过场或存过盘、这名角色在某个账号上有 ACTIVE 的 ref、落点不在本次名单里),有就只报告。
+- 名字每修一处(补回、置绑定、释放)都删这名玩家的名字缓存(`player:name:{id}`,正、负缓存同一个键),修完马上查得到;`-repair name` 必须给 `-name-cache-addrs`(名字缓存 2026-11-13 起在控制集群 `ControlRedis` 上,集群形态再加 `-name-cache-cluster`),删不掉标 `name_cache_not_invalidated`,算要人看。
+
+**失败的计数与告警**(2026-11-12):绑定没做完按原因计 `data_service_account_role_name_bind_failures_total{reason}`(`error`、`taken`、`conflict`、`role_mismatch`、`role_removed`、`rules_changed`),删角收尾没做完按步骤计 `data_service_account_role_removal_settle_failures_total{step}`(`release_name`、`drop_removal_row`),后台 `ResumeRemovals` 每一行的结局计 `data_service_account_role_removal_resume_total{result}`:收尾没做完算 `unsettled`,不再算完成。计数接缝是 `store.DirectoryEvents`(svc 接到 metrics,store 不依赖指标包),告警在 `deploy/k8s/data-service-account-directory-alerts.yaml`。目录自己补回(`BindRestored`)或删角释放名字之后也删名字缓存(`store.NameCacheInvalidator`)。
 
 **残余**:
 
 - 证明遇到「没有角色行也没有路由行」时不写墓碑。之后要提交,得先为这个已放弃的 id 登记路由再发建角,login 回滚之后不会再碰这个 id;真发生了,提交之后的绑定发现名字行不在会按原名补登记,名字在那之前被别人占了就是一名两角,由核账报 `name_taken`。
-- 玩家片冻结(搬库、维护闸门)或不可达时,证明那一步写不了墓碑,建角回滚的释放失败,名字留成孤儿(login 照常记孤儿日志和计数);解冻之后运维按日志带 token 释放。以前这条释放只碰名字片,冻结玩家片时也能放掉,现在宁可留孤儿也不放一个证明不了的名字。
-- 删角之后放掉的名字在 Redis 名字缓存里最多留 `CacheTTL`(24 小时):只是已删角色的展示名,唯一性只看库。
-- 名字片恢复点早于删角释放(多集群 PITR):名字行还绑在已删的角色名下,小表那一行已经删了,没有自动重试。不会一名两角,只是这个名字暂时没人能用;核账工具目前只扫活角色,要靠人按 player_id 核对。
-- 绑定和删角释放的失败只有 ERROR 日志,没有单独的指标。
-- 后台判陈旧(账号 ref 还是 PENDING、角色行不在)写墓碑之前会看名字是否已绑定、存档是否进过场或存过盘,有就只报告不写(2026-11-06 评审补,`data_service_account_role_ref_tombstone_held_total`)。分不出来的只有「建成了、从没进过场、提交之后的绑定也没做完」这一种,仍会被写墓碑;所以 PITR 手册 §4.1a 要求核账在起服之前做完。
+- 玩家片冻结(搬库、维护闸门)或不可达时,证明那一步写不了墓碑,建角回滚的释放失败,名字留成孤儿(login 照常记孤儿日志和计数)。2026-11-12 起解冻之后跑 `create_residual -target names`(plan,再 `-mode apply -repair name`)收尾,不用再按日志逐条带 token 释放;有提交证据的只报告。没有做成服务里的自动扫描:名字表上没有能按「预留态 + 登记时刻」找行的索引(加二级索引会破坏 Reserve 的锁序结论),全表翻页只适合按需跑的工具。以前这条释放只碰名字片,冻结玩家片时也能放掉,现在宁可留孤儿也不放一个证明不了的名字。
+- 名字缓存只在库里改完之后删一次:工具和服务同时在跑时,一次在修复之前读库、修复之后才回填的 `BatchGet` 还能把负缓存写回去,最多藏 `NegativeCacheTTL`(60 秒);PITR 手册要求核账在起服之前跑,那时没有读者。
+- 后台判陈旧(账号 ref 还是 PENDING、角色行不在)写墓碑之前会看名字是否已绑定、存档是否进过场或存过盘、这名角色在某个账号上有没有 ACTIVE 的 ref,有就不写墓碑,把这条 ref 标成保留(`held_ms` / `held_reason`;2026-11-06 评审补,2026-11-12 改成标保留、不再每轮重算)。分不出来的只有「建成了、从没进过场、提交之后的绑定没做完、ref 也没到 ACTIVE」这一种,仍会被写墓碑;所以 PITR 手册 §4.1a 要求核账在起服之前做完。
 
 代码:`go/data_service/internal/store/player_name_store.go`(Bind、NameRowState、Release、ReleaseRemoved)、`account_role_name.go`(绑定、证明、删角释放)、`account_role_removal.go`(收尾)、`logic/player_name_logic.go`、`server/dataserviceserver.go`(核调用方);login `pkg/playernamereg`(`NewSigned` 签名)。
 
@@ -308,9 +312,9 @@ PlayerName:
 |---|---|---|
 | INSERT 已提交、写缓存前崩 | 缓存缺 | BatchGet 回源回填 |
 | INSERT 已发出、login 超时 | 结果未知 | login 同名重试一次(幂等);仍未知 → 立即条件 Release + 约 10s 后再发一次(防"Release 先于在途 INSERT 提交")|
-| login 在延迟 Release 前崩溃 / 两次 Release 都失败 | 名字被不存在的角色占住(孤儿) | ERROR 日志带 player_id、name + `login_create_player_name_orphan_total`;运维带 x-admin-token 调 `ReleasePlayerName{player_id,name}`(同样只删预留态,先在玩家片证明角色永远不会提交,3.4a) |
-| 角色已提交、提交之后的绑定没做完 | 名字停在预留态 | 仍受保护:释放之前的证明读到在役角色就拒绝。同一建角重放或 `create_residual -repair name` 补绑(3.4a) |
-| 删角墓碑已提交、释放名字失败 | 名字留在已删的角色名下,别人登记不了 | `account_role_removal` 那一行留着,后台 `ResumeRemovals` 接着放(3.4a) |
+| login 在延迟 Release 前崩溃 / 两次 Release 都失败 | 名字被不存在的角色占住(孤儿) | ERROR 日志带 player_id、name + `login_create_player_name_orphan_total`;跑 `create_residual -target names`(2026-11-12 起,报 `orphan_name`,收法同带 token 的释放),或运维带 x-admin-token 调 `ReleasePlayerName{player_id,name}`(同样只删预留态,先在玩家片证明角色永远不会提交,3.4a) |
+| 角色已提交、提交之后的绑定没做完 | 名字停在预留态 | 仍受保护:释放之前的证明读到在役角色就拒绝。计 `data_service_account_role_name_bind_failures_total`、告警 `DataServiceRoleNameBindFailed`;同一建角重放或 `create_residual -repair name` 补绑(3.4a) |
+| 删角墓碑已提交、释放名字失败 | 名字留在已删的角色名下,别人登记不了 | `account_role_removal` 那一行留着,后台 `ResumeRemovals` 接着放;计 `data_service_account_role_removal_settle_failures_total`,后台也收不了尾时计 `resume_total{result="unsettled"}`、告警 `DataServiceRoleRemovalResumeStuck`(3.4a)。小表那一行已删(名字片回档)时由 `create_residual` 报 `removed_role_name` |
 | DELETE 已提交、DEL 缓存失败 | 已释放 id 在缓存里仍有名 ≤24h | 该 id 不在任何账号 / 帮会,展示面不可见;唯一性只看库 |
 | 全局库不可用 | 建角全部拒绝;读侧名字降级为空 | 与发号器、home zone 同档 fail-closed |
 

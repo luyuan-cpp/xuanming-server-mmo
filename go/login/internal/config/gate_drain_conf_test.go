@@ -21,9 +21,9 @@ var wantGateDrainDefaults = GateDrainConf{
 	Migrate:             wantGateDrainMigrateDefaults,
 }
 
-// 迁移默认关(docs/design/gate-drain-session-migration.md §12 第 1 条);速率与起始延迟取设计文档的建议值。
+// 迁移默认开(docs/design/gate-drain-session-migration.md §12 第 1 条,2026-11-12 定案);速率与起始延迟取设计文档的定值。
 var wantGateDrainMigrateDefaults = GateDrainMigrateConf{
-	Enabled:       false,
+	Enabled:       true,
 	RatePerSecond: 20,
 	StartAfter:    0,
 }
@@ -70,7 +70,7 @@ func TestGateDrainPartialBlockFillsDefaults(t *testing.T) {
 }
 
 // Migrate 子块与外层同一规矩:不标 optional,外层写了、子块没写时整块取默认值;子块只写一部分时其余取默认值。
-// 不这样的话,运维只写一行 Enabled: true 会得到 RatePerSecond = 0,迁移开了却一个人都不迁。
+// 不这样的话,运维只写一行 RatePerSecond 会得到 Enabled = false,或者只写 Enabled 会得到 RatePerSecond = 0,迁移开了却一个人都不迁。
 func TestGateDrainMigrateBlockDefaults(t *testing.T) {
 	f, ok := reflect.TypeOf(GateDrainConf{}).FieldByName("Migrate")
 	if !ok {
@@ -89,14 +89,26 @@ func TestGateDrainMigrateBlockDefaults(t *testing.T) {
 		t.Fatalf("Migrate on a missing sub-block = %+v, want %+v", p.GateDrain.Migrate, wantGateDrainMigrateDefaults)
 	}
 
+	// 应急关闭只写一行 Enabled: false:显式的 false 必须盖过 default=true,其余字段仍取默认值。
 	var q gateDrainProbe
-	if err := conf.LoadFromYamlBytes([]byte("GateDrain:\n  Migrate:\n    Enabled: true\n"), &q); err != nil {
+	if err := conf.LoadFromYamlBytes([]byte("GateDrain:\n  Migrate:\n    Enabled: false\n"), &q); err != nil {
 		t.Fatalf("load partial Migrate block: %v", err)
 	}
 	want := wantGateDrainMigrateDefaults
-	want.Enabled = true
+	want.Enabled = false
 	if q.GateDrain.Migrate != want {
 		t.Fatalf("Migrate on a partial sub-block = %+v, want %+v", q.GateDrain.Migrate, want)
+	}
+
+	// 只调速率:开关仍取默认值(开)。
+	var r gateDrainProbe
+	if err := conf.LoadFromYamlBytes([]byte("GateDrain:\n  Migrate:\n    RatePerSecond: 50\n"), &r); err != nil {
+		t.Fatalf("load Migrate block with only the rate: %v", err)
+	}
+	want = wantGateDrainMigrateDefaults
+	want.RatePerSecond = 50
+	if r.GateDrain.Migrate != want {
+		t.Fatalf("Migrate with only RatePerSecond = %+v, want %+v", r.GateDrain.Migrate, want)
 	}
 }
 

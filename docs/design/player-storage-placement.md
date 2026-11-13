@@ -136,20 +136,18 @@ TiDB 决策 D1 的「映射持久化兜底表」仍是遗留项(§11.4)。
 
 ### 6.1 库注册表
 
-- 启动时照旧打开本 zone 库并做既有断言;其余库在第一次被指向时按需打开(singleflight),之后常驻。
-- 可打开 = 名字在 `dbguard` 白名单里,**或** `Placement.AllowStoreFamilies=true`(默认)且名字属于 `zone_{1..999999}_db` / `player_store_{≥1000000}_db` 两个家族。
-  按需打开**从不建库**,只 Ping + 只读 schema 闸;白名单防「ZoneId 填错静默建新库」的原有语义不变。
+- 启动时不打开任何存档库(2026-11-11 A17c 起 go/db 没有本区库);每个存档库在第一次被路由指向时按需打开(singleflight)并核表,之后常驻。
+- 可打开 = 落点编号是存档库编号(≥ 1000000,`placement.StoreDBName` 认得;区号值域的编号一律拒绝,zone 存档库已退役),并且库名在 `dbguard` 白名单里,**或** `Placement.AllowStoreFamilies=true`(默认)且名字属于 `player_store_{≥1000000}_db` 家族。
+  按需打开**从不建库**,只 Ping + 只读 schema 闸;白名单防的是「落点编号填错,静默写进一个新库」。
 - 前提:所有落点库与 go/db 的 `Database.Hosts` 在同一 MySQL 实例 / TiDB 集群(与合服工具同一前提)。
 - 每库独立 `*sql.DB` + proto2mysql 模型(proto2mysql 靠 DSN 默认库选库)。不设库数上限。
   连接池只有一类(2026-11-11 A17c:go/db 不再有本区库,zone 存档库家族已退役,[总体方案 §7.2](./player-data-tidb-scaling-plan.md)):
   - `Placement.StoreMaxOpenConn` / `StoreMaxIdleConn`:**每个**地域存档库 `player_store_{≥1000000}_db` 的池,服务 yaml 写的是本地域只有一个库时的预算,K8s 按 `max(2, ceil(预算 / K))` 摊到每个库;
   - `Placement.StoreConnMaxIdleSeconds`(默认 60):存档库池的 `SetConnMaxIdleTime`,空闲超过这么多秒的连接即关闭,冷库的池回到 0 条,不再按 MaxIdleConn 常驻。
-  - 更早的 `ZoneStore*` / `NonZoneStore*` / `ExtraStore*` 与本区库池 `ServerConfig.Database.MaxOpenConn` / `MaxIdleConn` 都已删除。
-    `ConnMaxLifetime` 仍是 5 分钟,所以本值大于 300 等于不生效;
-  - 旧键 `Placement.ExtraStoreMaxOpenConn` / `ExtraStoreMaxIdleConn` 仍认,但只作回落:新键没写(≤ 0)时两类库都取旧键的值,旧键也没写再取默认 8 / 2
-    (`go/db/internal/config/config.go` 的 `Normalize`,优先级 新键 > 旧键 > 默认;「只写旧键」的旧部署两类库维持原来的大小)。新配置不要再写旧键。
-  - 拆开的原因:zone 家族池的名义预算随 zone 数平方增长(最坏每个实例打开其余全部 zone 的库),非 zone 池在 Phase 2 是瓶颈、要单独调大,一个旋钮两头顾不上。
-    两组都计入共用 MySQL 的连接总账(`tools/scripts/k8s_deploy.ps1` 的 `Get-MysqlConnectionLedger`,说明见 `deploy/k8s/README.md`「MySQL 连接总账」),调任一旋钮前先重算;数值待压测确认。
+    `ConnMaxLifetime` 仍是 5 分钟,所以本值大于 300 等于不生效。
+  - 更早的 `ZoneStore*` / `NonZoneStore*` / `ExtraStore*` 与本区库池 `ServerConfig.Database.MaxOpenConn` / `MaxIdleConn` 都已删除,也不再作回落:配置里只有上面两组键,没写取默认 8 / 2(`go/db/internal/config/config.go` 的 `Normalize`)。
+  - 存档库池计入共用 MySQL 的连接总账(`tools/scripts/k8s_deploy.ps1` 的 `Get-MysqlConnectionLedger`,说明见 `deploy/k8s/README.md`「MySQL 连接总账」),调旋钮前先重算。
+    数值按总账定:每库的池 × 库数 × 实例数加上其余服务不超过 `max_connections` 的预算,部署时由总账自检拦住超支。压测只用来复核,不是定案前提。
 - 按需打开失败 = **延后重试且不耗重试次数**(与排序锁忙同口径),ERROR 日志 + `db_placement_store_open_total{result="error"}`;不进死信(死信无消费者)。
 
 实现口径(v2.1):
@@ -157,9 +155,9 @@ TiDB 决策 D1 的「映射持久化兜底表」仍是遗留项(§11.4)。
   - 2026-10-14 L-04 第 1 批起(代码已落、未编译):选库时库打不开或在冷却期内的读**立即回失败回执**并 ack,不再进重试队列;读重试用完预算后丢弃,不进死信。已打开的库在运行期失联时也会进冷却(探活确认整库不可达才进)。见 [db-task-store-unavailable-deferral.md](db-task-store-unavailable-deferral.md) §3.4、§3.6。
 - **单次按需打开预算 10s,失败后冷却 10s。** 同一个库的并发请求在 singleflight 上等打开结果,所在的 worker 子分片跟着停住。没有冷却,一个连不上的库会让每条指向它的任务都在 worker 上等满超时,同子分片里无关的玩家一起被拖住。冷却期内直接复用上次的错误,不重复计数、不重复打 ERROR。
 - `db_placement_store_open_total` 的 result 多一个 `rejected`(不被放行,属于配置问题),与 `error`(连不上 / 库不存在 / schema 闸不过)分开。
-- 本 zone 库照旧由 `InitDB` 打开,再登记为落点 ZoneId。启动期有两道拒启:ZoneId 不在 `1..999999`;`config.ZoneDBName(ZoneId)` 与 `placement.StoreDBName(ZoneId)` 不一致。
+- 2026-11-11 A17c 起没有「本 zone 库」:go/db 启动时只取白名单里每个存档库的写资格,不连库、不登记落点;`config.ZoneDBName` 已删除,区号不再参与任何库名推导。白名单里出现存档库以外的名字(包括 `zone_{n}_db`)拒绝启动。
 - **proto2mysql 核实结论**:生成的 SQL 都是裸表名,库由连接池 DSN 的默认库决定。f3b308f 版 `OpenDB` 只在池里一条连接上 `USE`,main(83fed85)版改为只校验 `SELECT DATABASE()`。所以多库必须一库一池,不能靠 `USE` 切换。实现两种 `OpenDB` 下都正确,最终以 v0.2.0 实跑为准。
-- `cmd/migrate -storage-id N`:库名 = `placement.StoreDBName(N)`,放行与业务服务调同一个 `AdmitStore`(白名单或家族)。但 `-create-database` 仍只认外部白名单 `DB_ALLOWED_DATABASES`,因为业务服务从不按需建库。外部白名单为空且不是 warn 档时拒绝。`N=0` 逐字节保持旧行为。
+- `cmd/migrate -storage-id N`:库名 = `placement.StoreDBName(N)`,放行与业务服务调同一个 `AdmitStore`(白名单或家族)。但 `-create-database` 仍只认外部白名单 `DB_ALLOWED_DATABASES`,因为业务服务从不按需建库。外部白名单为空且不是 warn 档时拒绝。`N` 必填且必须是存档库编号:0 和区号值域的编号都拒绝(A17c),一次只迁一个存档库,部署侧逐库调用。
 
 ### 6.2 选库规则
 

@@ -143,6 +143,14 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 		finish(metrics.OutcomeBattleRejected)
 		return rejected(request, constants.ErrServiceUnavailable), nil
 	}
+	// 热关停(docs/design/rpc-kill-switch.md §7):按目标方法判,规则范围是路由服自己的节点类型 / uuid 与全局;
+	// LeaveGame / Disconnect 受保护(只认精确规则)。回信封 1003(与 gate 入口同码),不选实例、不转发。
+	if ks := l.svcCtx.KillSwitch; ks != nil {
+		if _, blocked := ks.Deny(route.FullMethod); blocked {
+			finish(metrics.OutcomeKillSwitch)
+			return rejected(request, constants.ErrServiceUnavailable), nil
+		}
+	}
 
 	// 3) 选实例。会话轨道认不出是 gate 的契约违例,不论目标类型一律拒绝,不猜它属于哪条轨道。
 	if trackErr != nil {

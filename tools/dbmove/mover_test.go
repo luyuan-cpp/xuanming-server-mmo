@@ -24,11 +24,16 @@ const (
 	testOtherRun = "ffffffffffffffffffffffffffffffff"
 	testSource   = "a"
 	testTarget   = "b"
+	// testFeedEndpoint 是 -sync 里的 TiCDC 地址:cutover 记进映射,cleanup 比。
+	testFeedEndpoint = "http://cdc-a:8300"
 )
 
 var errEtcdDown = errors.New("etcd is down")
 
-var testFeed = dbplacement.FeedIdentity{Changefeed: "feed-1", StartTs: 100, CreateTime: "2026-10-31 10:00:00"}
+var testFeed = dbplacement.FeedIdentity{Changefeed: "feed-1", StartTs: 100, CreateTime: "2026-10-31 10:00:00", ConfigDigest: "config-1"}
+
+// testStructure 是替身视图里表定义的原文。比较只看两边是否一字不差,替身不解析它;真实的形状见 TestStructureText。
+const testStructure = "id bigint primary key"
 
 type eventLog struct{ events []string }
 
@@ -235,11 +240,17 @@ type fakeAdmin struct {
 	// gate 是这一侧逻辑库的闸门,GateState 读它。
 	gate    *fakeGate
 	gateErr error
+	// noPrimaryKey 是这一侧没有主键的表。
+	noPrimaryKey    []string
+	noPrimaryKeyErr error
 }
 
 func (a *fakeAdmin) ServerBackend(context.Context) (string, error) { return a.backend, nil }
 func (a *fakeAdmin) SchemaExists(_ context.Context, schema string) (bool, error) {
 	return a.schemas[schema], nil
+}
+func (a *fakeAdmin) TablesWithoutPrimaryKey(context.Context, string) ([]string, error) {
+	return a.noPrimaryKey, a.noPrimaryKeyErr
 }
 func (a *fakeAdmin) CreateSchema(_ context.Context, schema, _, _ string) error {
 	a.log.add("admin.create")
@@ -309,6 +320,17 @@ type fakeRepl struct {
 	feed        dbplacement.FeedIdentity
 	identityErr error
 	targetPoint string
+	// stillExists、existsErr 是 cleanup 问「复制流还在不在」时的回答;askedFeed 记下它问的是哪一条。
+	stillExists bool
+	existsErr   error
+	askedFeed   dbplacement.FeedIdentity
+}
+
+// StillExists 实现 feedPresence。
+func (r *fakeRepl) StillExists(_ context.Context, feed dbplacement.FeedIdentity) (bool, string, error) {
+	r.log.add("repl.exists")
+	r.askedFeed = feed
+	return r.stillExists, "changefeed " + feed.Changefeed + " still exists (state \"stopped\")", r.existsErr
 }
 
 func (r *fakeRepl) replicate() {
@@ -355,6 +377,10 @@ type fakeView struct {
 	closed   bool
 	gate     gateRows
 	gateErr  error
+	// digestErr 让读表失败;stall 让它一直算到 ctx 结束(大表在窗口里比不完);delay 让每张表多算这么久。
+	digestErr error
+	stall     bool
+	delay     time.Duration
 }
 
 func (v *fakeView) Tables(context.Context) ([]string, error) {
@@ -364,8 +390,17 @@ func (v *fakeView) Tables(context.Context) ([]string, error) {
 	}
 	return out, nil
 }
-func (v *fakeView) TableDigest(_ context.Context, table string) (tableDigest, error) {
-	return v.tables[table], nil
+func (v *fakeView) TableDigest(ctx context.Context, table string) (tableDigest, error) {
+	if v.stall {
+		<-ctx.Done()
+		return tableDigest{}, ctx.Err()
+	}
+	if v.delay > 0 {
+		if err := sleepContext(ctx, v.delay); err != nil {
+			return tableDigest{}, err
+		}
+	}
+	return v.tables[table], v.digestErr
 }
 func (v *fakeView) CheckPoint(context.Context, string) error { return v.pointErr }
 func (v *fakeView) GateRows(context.Context) (gateRows, error) {
@@ -385,6 +420,7 @@ type harness struct {
 	sourceView  *fakeView
 	targetView  *fakeView
 	out         *bytes.Buffer
+	errOut      *bytes.Buffer
 	now         time.Time
 	metrics     map[string]uint64
 	// clusterless 是不认识目标集群的进程;cannotScrape 是读不到指标的进程。
@@ -400,7 +436,7 @@ func newHarness(t *testing.T) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &harness{log: log, run: run, out: &bytes.Buffer{}, now: time.UnixMilli(1_800_000_000_000), metrics: map[string]uint64{}, clusterless: map[string]bool{}, cannotScrape: map[string]bool{}}
+	h := &harness{log: log, run: run, out: &bytes.Buffer{}, errOut: &bytes.Buffer{}, now: time.UnixMilli(1_800_000_000_000), metrics: map[string]uint64{}, clusterless: map[string]bool{}, cannotScrape: map[string]bool{}}
 	h.store = &fakeStore{log: log, records: map[string]dbplacement.Record{}, defaultCluster: testSource}
 	h.source = &fakeGate{name: "source", log: log, sentinels: map[string]bool{}, principals: []string{"writer@%"},
 		meta: &databasepb.RouteMeta{Id: 1, Generation: "ab", Writable: 1, WriterEpoch: 5, CatalogRevision: 9}}
@@ -409,7 +445,7 @@ func newHarness(t *testing.T) *harness {
 	h.sourceAdmin = &fakeAdmin{log: log, backend: "tidb", schemas: map[string]bool{testDB: true}, accounts: map[string]bool{}, frozen: true, locked: map[string]bool{}}
 	h.targetAdmin = &fakeAdmin{log: log, backend: "tidb", schemas: map[string]bool{}, accounts: map[string]bool{"writer@%": true, "maintenance@%": true}, locked: map[string]bool{}, gate: h.target}
 	h.repl = &fakeRepl{log: log, source: h.source, target: h.target, feed: testFeed, targetPoint: "target-point", point: verifyPoint{Source: "100", Target: "200", Detail: "syncpoint", Feed: testFeed}}
-	matching := map[string]tableDigest{"guild": {Columns: "id", Rows: 3, Digest: "abc"}}
+	matching := map[string]tableDigest{"guild": {Structure: testStructure, Rows: 3, Digest: "abc"}}
 	h.sourceView = &fakeView{tables: matching}
 	h.targetView = &fakeView{tables: matching}
 	h.m = &mover{
@@ -420,14 +456,17 @@ func newHarness(t *testing.T) *harness {
 			}},
 			maxLag: 3 * time.Second, budget: 2 * time.Second, rollbackBudget: time.Second, preflight: time.Second,
 			verifyMaxAge: time.Hour, retention: 24 * time.Hour, pollInterval: time.Millisecond, metricsTargets: []string{"game:9101"},
+			feedEndpoint: testFeedEndpoint, compareBudget: 2 * time.Second,
 		},
-		store: h.store, source: h.source, target: h.target, sourceAdmin: h.sourceAdmin, targetAdmin: h.targetAdmin, repl: h.repl,
+		store: h.store, source: h.source, target: h.target, sourceAdmin: h.sourceAdmin, targetAdmin: h.targetAdmin, repl: h.repl, feeds: h.repl,
+		// 每打开一次视图记一个事件,用例靠它核比对排在哪一步前后。
 		openView: func(_ context.Context, role, snapshot string) (checksumView, error) {
+			log.add("view." + role)
 			view := h.sourceView
 			if role == roleTarget {
 				view = h.targetView
 			}
-			view.snapshot = snapshot
+			view.snapshot, view.closed = snapshot, false
 			return view, nil
 		},
 		scrape: func(_ context.Context, target, _ string) (uint64, bool, error) {
@@ -442,15 +481,16 @@ func newHarness(t *testing.T) *harness {
 		},
 		now:   func() time.Time { return h.now },
 		sleep: sleepContext,
-		log:   &journal{out: h.out, now: time.Now},
+		log:   &journal{out: h.out, errOut: h.errOut, now: time.Now},
 	}
 	return h
 }
 
 // seedMoving 把映射放到 prepare、verify 都做过的状态。
 func (h *harness) seedMoving() dbplacement.Record {
+	feed := testFeed
 	rec := dbplacement.Record{ModRevision: 7, Placement: dbplacement.Placement{Cluster: testSource, Version: 2, State: dbplacement.StateMoving, Move: &dbplacement.Move{
-		RunID: testRun, SourceCluster: testSource, TargetCluster: testTarget, VerifiedMs: uint64(h.now.UnixMilli()), VerifiedFeed: &dbplacement.FeedIdentity{Changefeed: testFeed.Changefeed, StartTs: testFeed.StartTs, CreateTime: testFeed.CreateTime},
+		RunID: testRun, SourceCluster: testSource, TargetCluster: testTarget, VerifiedMs: uint64(h.now.UnixMilli()), VerifiedFeed: &feed,
 		LockedAccounts: []string{"writer@%"},
 	}}}
 	h.store.records[testDB] = rec
@@ -458,8 +498,11 @@ func (h *harness) seedMoving() dbplacement.Record {
 	return rec
 }
 
+// seedFlipped 把映射放到 cutover 翻转之后:记着喂过目标的复制流和读它用的地址。
 func (h *harness) seedFlipped(audited bool) {
-	move := &dbplacement.Move{RunID: testRun, SourceCluster: testSource, TargetCluster: testTarget, FlippedMs: uint64(h.now.Add(-48 * time.Hour).UnixMilli()), TargetPoint: "target-point"}
+	feed := testFeed
+	move := &dbplacement.Move{RunID: testRun, SourceCluster: testSource, TargetCluster: testTarget, FlippedMs: uint64(h.now.Add(-48 * time.Hour).UnixMilli()), TargetPoint: "target-point",
+		VerifiedFeed: &feed, FeedEndpoint: testFeedEndpoint}
 	if audited {
 		move.AuditedMs = move.FlippedMs + 1
 	}
@@ -523,6 +566,9 @@ func TestPlanRefusals(t *testing.T) {
 		{"上一次搬迁的源库没清", func(h *harness) {
 			h.store.records[testDB] = dbplacement.Record{ModRevision: 1, Placement: dbplacement.Placement{Cluster: "c", Version: 1, State: dbplacement.StateActive, Move: &dbplacement.Move{RunID: testOtherRun, SourceCluster: testSource, TargetCluster: "c", FlippedMs: 1}}}
 		}, "not cleaned up"},
+		// 逐行摘要按 BIT_XOR 合并,无主键表里相同的两行互相抵消:这种表比不出差异,要点名。
+		{"有表没有主键", func(h *harness) { h.sourceAdmin.noPrimaryKey = []string{"guild_log", "tmp_import"} }, "guild_log, tmp_import"},
+		{"源库的管理员连接串指错集群", func(h *harness) { h.m.o.sourceAdminAddr = "10.9.9.9:4000" }, "the DSN points at"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -539,6 +585,28 @@ func TestPlanAllowsTunnelAddressWhenAcknowledged(t *testing.T) {
 	h.m.o.allowAddrMismatch = true
 	if err := h.m.plan(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// 查不出哪些表没有主键时不能当成「都有」:不是拒绝(退出码 1),是没做成(退出码 2),什么都没写。
+func TestPlanFailsWhenPrimaryKeysCannotBeListed(t *testing.T) {
+	h := newHarness(t)
+	h.sourceAdmin.noPrimaryKeyErr = errors.New("connection refused")
+	err := h.m.plan(context.Background())
+	if err == nil || exitCodeOf(err) != exitFailed || !strings.Contains(err.Error(), "without a primary key") {
+		t.Fatalf("读不到就不能往下走: %v", err)
+	}
+	if h.store.rev != 0 {
+		t.Fatal("plan 不写映射")
+	}
+}
+
+func TestPrepareRefusesTableWithoutPrimaryKeyBeforeWriting(t *testing.T) {
+	h := newHarness(t)
+	h.sourceAdmin.noPrimaryKey = []string{"guild_log"}
+	requireRefused(t, h.m.prepare(context.Background()), "guild_log")
+	if h.log.has("store.put") || h.log.has("admin.lock") || h.log.has("admin.create") {
+		t.Fatalf("拒绝时什么都不能动: %v", h.log.events)
 	}
 }
 
@@ -605,6 +673,10 @@ func TestVerifyRecordsStartTime(t *testing.T) {
 	if got := h.placement().Move.VerifiedMs; got != started {
 		t.Fatalf("新鲜度从开始时刻算: %d, want %d", got, started)
 	}
+	// 替身时钟每读一次走一分钟:比对前后各读一次,耗时正好一分钟。cutover 拿它估窗口里那次比对。
+	if got := h.placement().Move.VerifyTookMs; got != uint64(time.Minute.Milliseconds()) {
+		t.Fatalf("要记下比对花了多久: %d", got)
+	}
 	if h.sourceView.snapshot != "100" || h.targetView.snapshot != "200" {
 		t.Fatalf("两边要站在同一对快照上: %s %s", h.sourceView.snapshot, h.targetView.snapshot)
 	}
@@ -617,7 +689,7 @@ func TestVerifyMismatchRecordsNothing(t *testing.T) {
 	h := newHarness(t)
 	h.seedMoving()
 	h.store.records[testDB].Placement.Move.VerifiedMs = 0
-	h.targetView.tables = map[string]tableDigest{"guild": {Columns: "id", Rows: 2, Digest: "abc"}}
+	h.targetView.tables = map[string]tableDigest{"guild": {Structure: testStructure, Rows: 2, Digest: "abc"}}
 	err := h.m.verify(context.Background())
 	if !errors.Is(err, errMismatch) || exitCodeOf(err) != exitRefused {
 		t.Fatalf("不一致: %v", err)
@@ -676,6 +748,8 @@ func TestCutoverHappyPathOrderAndResult(t *testing.T) {
 		{"source.freeze", "source.sentinel"},
 		{"source.sentinel", "repl.mark"},
 		{"repl.mark", "target.release"},
+		{"repl.mark", "view.source"},  // 追平之后两边静止,再比一次全量
+		{"view.target", "store.put"},  // 比过了才记目标位置
 		{"repl.mark", "store.put"},    // 目标位置先写进映射
 		{"store.put", "admin.unlock"}, // 再解锁账号
 		{"admin.unlock", "target.release"},
@@ -735,6 +809,10 @@ func TestCutoverRefusesBeforeFreezing(t *testing.T) {
 		{"管理员连接串指错集群", func(h *harness) { h.m.o.targetAdminAddr = "10.9.9.9:4000" }, "the DSN points at"},
 		{"复制流重建过", func(h *harness) { h.repl.feed.CreateTime = "2026-10-31 11:00:00" }, "run verify again"},
 		{"复制流用了新的起点", func(h *harness) { h.repl.feed.StartTs = 999 }, "run verify again"},
+		// 流没换,过滤被改过:id、start_ts、create_time 都不变,只有配置摘要变。
+		{"复制流的配置改过", func(h *harness) { h.repl.feed.ConfigDigest = "config-2" }, "the config of the replication stream changed"},
+		// 窗口里还要再比一次全量:verify 比了 5 秒,给比对的 2 秒装不下,不去白冻结一次。
+		{"给比对的时限装不下", func(h *harness) { h.store.records[testDB].Placement.Move.VerifyTookMs = 5000 }, "-compare-budget=2s cannot hold"},
 		{"读不到复制流", func(h *harness) { h.repl.identityErr = errReplicationBroken }, "replication is not ready"},
 		{"映射里没有复制流", func(h *harness) { h.store.records[testDB].Placement.Move.VerifiedFeed = nil }, "run verify again"},
 		{"名册里的账号目标上没有", func(h *harness) {
@@ -1286,7 +1364,7 @@ func TestAuditProblemsExitNonZero(t *testing.T) {
 	}{
 		{"表内容不一致", func(h *harness) {
 			h.metrics["game:9101"] = 3
-			h.targetView.tables = map[string]tableDigest{"guild": {Columns: "id", Rows: 3, Digest: "zzz"}}
+			h.targetView.tables = map[string]tableDigest{"guild": {Structure: testStructure, Rows: 3, Digest: "zzz"}}
 		}, "guild"},
 		{"进程版本落后", func(h *harness) { h.metrics["game:9101"] = 2 }, "at version 2"},
 		{"进程没上报", func(h *harness) {}, "reports no db_placement_version"},
@@ -1348,6 +1426,38 @@ func TestCleanupGuards(t *testing.T) {
 			h.m.o.confirmDrop = true
 			h.m.o.sourceAddr = "10.9.9.9:4000"
 		}, "the DSN points at"},
+		// DROP DATABASE 会进复制流。changefeed 只是暂停、通道只是 STOP REPLICA 时,它一恢复就把目标上正在用的库删掉。
+		{"复制流还在,暂停着也算", func(h *harness) {
+			h.seedFlipped(true)
+			h.m.o.confirmDrop = true
+			h.repl.stillExists = true
+		}, "would replicate to cluster b"},
+		{"查不到复制流还在不在", func(h *harness) {
+			h.seedFlipped(true)
+			h.m.o.confirmDrop = true
+			h.repl.existsErr = errors.New("query TiCDC: HTTP 502")
+		}, "cannot tell whether the replication stream"},
+		{"-sync 指的不是喂过目标的那条流", func(h *harness) {
+			h.seedFlipped(true)
+			h.m.o.confirmDrop = true
+			h.repl.existsErr = refusedf("-sync names changefeed feed-9")
+		}, "-sync names changefeed feed-9"},
+		{"映射里没记复制流", func(h *harness) {
+			h.seedFlipped(true)
+			h.m.o.confirmDrop = true
+			h.store.records[testDB].Placement.Move.VerifiedFeed = nil
+		}, "does not record the replication stream"},
+		// 换一个 TiCDC 去问,答「没有这个 changefeed」不说明它撤掉了。
+		{"-sync 换了 TiCDC 地址", func(h *harness) {
+			h.seedFlipped(true)
+			h.m.o.confirmDrop = true
+			h.m.o.feedEndpoint = "http://cdc-b:8300"
+		}, "proves nothing"},
+		{"目标的管理员连接串指错集群", func(h *harness) {
+			h.seedFlipped(true)
+			h.m.o.confirmDrop = true
+			h.m.o.targetAdminAddr = "10.9.9.9:4000"
+		}, "the DSN points at"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1357,7 +1467,45 @@ func TestCleanupGuards(t *testing.T) {
 			if h.log.has("admin.drop") {
 				t.Fatal("拒绝时不能删库")
 			}
+			if h.placement().Move.CleanedMs != 0 {
+				t.Fatal("拒绝时不能记成已清理")
+			}
 		})
+	}
+}
+
+// 复制流撤掉了才删,而且紧挨着 DROP 才问:问的是映射里记下的那一条。
+func TestCleanupAsksAboutTheVerifiedFeedRightBeforeDropping(t *testing.T) {
+	h := newHarness(t)
+	h.seedFlipped(true)
+	h.m.o.confirmDrop = true
+	if err := h.m.cleanup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.repl.askedFeed != testFeed {
+		t.Fatalf("要按映射里记的复制流去问: %+v", h.repl.askedFeed)
+	}
+	h.log.mustPrecede(t, "repl.exists", "admin.drop")
+}
+
+// 同一个 TiCDC 集群换了地址(换了一个 capture、走隧道):确认之后照常问、照常拒绝或放行。
+func TestCleanupAcceptsAnotherTiCDCAddressWhenAcknowledged(t *testing.T) {
+	h := newHarness(t)
+	h.seedFlipped(true)
+	h.m.o.confirmDrop = true
+	h.m.o.feedEndpoint = "http://127.0.0.1:18300"
+	h.m.o.allowAddrMismatch = true
+	h.repl.stillExists = true
+	requireRefused(t, h.m.cleanup(context.Background()), "still exists")
+	if h.log.has("admin.drop") {
+		t.Fatal("流还在不能删库")
+	}
+	h.repl.stillExists = false
+	if err := h.m.cleanup(context.Background()); err != nil {
+		t.Fatalf("流撤掉之后: %v", err)
+	}
+	if h.sourceAdmin.schemas[testDB] {
+		t.Fatal("源库要删")
 	}
 }
 

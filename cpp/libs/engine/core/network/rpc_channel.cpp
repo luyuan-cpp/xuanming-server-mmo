@@ -18,6 +18,7 @@
 #include "network/rpc_trace_envelope.h"
 #include "network/traffic_statistics.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
+#include "kill_switch/kill_switch.h"
 
 using namespace std::placeholders;
 
@@ -47,6 +48,22 @@ long long ToMilliseconds(std::chrono::steady_clock::duration duration)
 const char *MethodNameOf(uint32_t messageId)
 {
     return IsDispatchableMessageId(messageId) ? gRpcMethodRegistry[messageId].methodName : "<unknown_method>";
+}
+
+// span 名(docs/design/distributed-tracing.md §10.3):"<服务>/<方法>",OTel RPC 约定的 {rpc.service}/{rpc.method}。
+// 注册表里的名字是生成代码的静态字符串;不认识的消息号统一记成一个名字,不让 span 名带上任意数字。
+tracing::SpanName RpcSpanNameOf(uint32_t messageId)
+{
+    if (!IsDispatchableMessageId(messageId))
+    {
+        return tracing::SpanName{"<unknown_method>"};
+    }
+    const auto &meta = gRpcMethodRegistry[messageId];
+    if (meta.serviceName == nullptr || meta.methodName == nullptr)
+    {
+        return tracing::SpanName{"<unknown_method>"};
+    }
+    return tracing::SpanName{meta.serviceName, meta.methodName};
 }
 
 std::string PeerOf(const std::weak_ptr<muduo::net::TcpConnection> &connection)
@@ -364,6 +381,8 @@ private:
         completed_ = true;
         if (controller_.Failed())
         {
+            // 没有 Adopt 的 done 只在本次派发的同步执行里走到这里,当前在录的就是这次派发的 server span(§10.3)。
+            tracing::MarkCurrentSpanError("HANDLER_FAILED");
             // 必回之后,SetFailed 不能再被忽略:否则调用方收到的是「成功 + 空响应」(fail-open)。
             const auto n = Bump(GetRpcChannelStats().handlerFailed);
             if (ShouldLogRpcEvent(n))
@@ -588,10 +607,17 @@ void RpcChannel::Deliver(OutstandingCall &call, const RpcStatus &status, const M
     const auto operation = std::move(call.maintenance);
     auto done = std::move(call.done); // 后构造先析构；target 释放及其派生工作仍在票据内。
     RecordOutcome(status);
-    if (call.trace.IsValid()) {
-        tracing::ScopedSpan span(call.trace);
+    // client span 在回调之前结束:它量的是「发出到结果回来」,不含回调本身(docs/design/distributed-tracing.md §10.3)。
+    if (!status.ok())
+    {
+        call.span.SetError(status.name());
+    }
+    call.span.End();
+    // 回调在发起时的上下文里执行(原样装回);发起时没有 trace,回调里也没有,不接线程上碰巧在场的上下文(§4.2 第 3 条)。
+    {
+        const tracing::ScopedSpan restore(call.trace);
         done(status, response);
-    } else { done(status, response); }
+    }
     if (operation) operation->known = status.ok() || status.DefinitelyNotExecuted();
 }
 
@@ -653,7 +679,11 @@ void RpcChannel::CallMethodWithResponseType(uint32_t messageId, const ProtobufMe
     GameRpcMessage message;
     message.set_type(REQUEST);
     message.set_message_id(messageId);
-    WriteTraceToRpcEnvelope(tracing::Current(), message);
+    // client span(docs/design/distributed-tracing.md §10.3):当前 span 的子 span,信封带它的上下文,对端的 server span 以它为父。
+    // 本地没发出去的(下面两条 notSent)不记 span,span 随作用域丢掉;发起时不在 trace 里则是空 span,信封不带 trace。
+    tracing::PendingSpan span = tracing::PendingSpan::StartChildOf(
+        tracing::Current(), tracing::SpanKind::kClient, tracing::SpanSystem::kRpc0, RpcSpanNameOf(messageId));
+    WriteTraceToRpcEnvelope(span.Context(), message);
     if (!SerializeMessage(request, message.mutable_request()))
     {
         return notSent("request serialization failed");
@@ -670,6 +700,7 @@ void RpcChannel::CallMethodWithResponseType(uint32_t messageId, const ProtobufMe
     call.messageId = messageId;
     call.done = std::move(done);
     call.trace = tracing::Current();
+    call.span = std::move(span);
     outstandings_.Insert(id, std::move(call));   // id 单调非 0,不会重复
     RaiseMax(stats.maxInFlight, outstandings_.Size());
 
@@ -713,7 +744,10 @@ bool RpcChannel::SendRequest(uint32_t messageId, const ProtobufMessage &request)
     GameRpcMessage message;
     message.set_type(REQUEST);
     message.set_message_id(messageId);
-    WriteTraceToRpcEnvelope(tracing::Current(), message);
+    // 单向请求同样有 client span(§10.3),发出即结束;有了它,Tempo 的服务关系图才有「发送方 → 接收方」这条边。
+    tracing::PendingSpan span = tracing::PendingSpan::StartChildOf(
+        tracing::Current(), tracing::SpanKind::kClient, tracing::SpanSystem::kRpc0, RpcSpanNameOf(messageId));
+    WriteTraceToRpcEnvelope(span.Context(), message);
     if (!SerializeMessage(request, message.mutable_request()))
     {
         return reject("request serialization failed");
@@ -734,6 +768,7 @@ bool RpcChannel::SendRequest(uint32_t messageId, const ProtobufMessage &request)
     }
     // 默认旧 id0 无远端确认，保留 UNKNOWN；只有显式维护模式才由上面的 RESPONSE/RPC_ERROR 收账。
     SendFrame(connection, message);
+    span.End();
     if (acknowledged) ArmTimeoutTick();
     Bump(stats.onewaySent);
     return true;
@@ -1101,7 +1136,10 @@ void RpcChannel::CallServiceMethod(const TcpConnectionPtr &connection, const Gam
 {
     // 派发期间接续信封上的 trace(合法就建子 span,否则开新根),退出时恢复派发前的值。早年这里直接 Set(NewRoot())
     // 且从不恢复,TLS 里的 trace 一直留到下一次派发,之后同一线程上跑的回包回调、超时回调都挂到它下面。
-    const tracing::ScopedIncoming dispatchTrace(IncomingTraceOf(message));
+    // 这个子 span 就是本次派发的 server span(docs/design/distributed-tracing.md §10.3),作用域结束时交给导出去处:
+    // 覆盖派发前的拒绝与同步执行的 handler;handler Adopt 之后的延后回复不延长它。
+    const tracing::ScopedIncoming dispatchTrace(IncomingTraceOf(message), tracing::SpanKind::kServer,
+                                                tracing::SpanSystem::kRpc0, RpcSpanNameOf(message.message_id()));
 
     const uint32_t messageId = message.message_id();
     if (!IsDispatchableMessageId(messageId))
@@ -1121,6 +1159,13 @@ void RpcChannel::CallServiceMethod(const TcpConnectionPtr &connection, const Gam
     if (method == nullptr)
     {
         RejectRequest(message, NO_METHOD);
+        return;
+    }
+    // 热关停(docs/design/rpc-kill-switch.md §7):方法解析之后、请求体解析之前判,被关停的请求不白解码。
+    // 回 KILL_SWITCH_DENIED:派发前拒绝,调用方按「确定未执行」处理。握手与 scene 的转发信封在豁免名单里(§8)。
+    if (kill_switch::CheckMessageId(messageId))
+    {
+        RejectRequest(message, KILL_SWITCH_DENIED);
         return;
     }
 
@@ -1147,6 +1192,8 @@ void RpcChannel::CallServiceMethod(const TcpConnectionPtr &connection, const Gam
 
 void RpcChannel::RejectRequest(const GameRpcMessage &request, GameErrorCode error)
 {
+    // 只在 CallServiceMethod 的派发作用域里调用:当前在录的 span 就是这次派发的 server span,标成错误(§10.3)。
+    tracing::MarkCurrentSpanError(GameErrorCode_Name(error));
     // Review R3 fix (2026-05-17): NO stacktrace here either — an adversarial peer sending packets that produce
     // rejections on every receive would turn boost::stacktrace into a DoS amplifier. Logging is sampled for the
     // same reason; the exact count is in RpcChannelStats.

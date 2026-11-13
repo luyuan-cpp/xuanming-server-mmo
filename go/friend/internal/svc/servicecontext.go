@@ -1,5 +1,5 @@
 // Package svc 是 friend 服务的依赖装配:etcd 客户端、mmorpg_friend 连接池、
-// FriendRedis / PlayerRedis 双句柄,以及 S2C 推送用的 Kafka writer。
+// FriendRedis(控制集群)/ PlayerRedis 双句柄,以及 S2C 推送用的 Kafka writer。
 //
 // 与 trade / chat 的 svc 包刻意不同的一点:本包**不含** Prometheus 指标。
 // friend 的指标在 friend/internal/metrics 里(懒注册 + Start(addr),由 main 调用),
@@ -22,6 +22,7 @@ import (
 
 	redv9 "github.com/redis/go-redis/v9"
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/idsegment"
@@ -35,7 +36,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
@@ -86,10 +86,10 @@ type ServiceContext struct {
 	// 双存储(契约 §4):
 	//   - PlayerRedis:玩家域句柄(shared/playerredis,生产可以是 Redis Cluster):跨运行时契约 key
 	//     `player:session:{id}` 与 `player:{id}:sync_digest`。键一律带 {player_id},发送前经守卫核对。
-	//   - FriendRedis:friend 私有 key(好友列表缓存、申请配额……),go-zero 句柄,可指向 Redis Cluster。
-	//     未配置时回落到 Redis 段的共享库(本地单库形态),见 NewRedisHandles。
+	//   - FriendRedis:friend 私有 key(好友列表缓存、申请配额……),控制集群句柄(shared/clusterredis,ControlRedis 段),
+	//     单实例与 Redis Cluster 同一条路径,见 NewRedisHandles。
 	PlayerRedis redv9.UniversalClient
-	FriendRedis *redis.Redis
+	FriendRedis redv9.UniversalClient
 
 	// SyncDigest 在好友写提交之后给受影响玩家的落地摘要 bump 好友三个域
 	// (docs/design/landing-recovery-sync-digest.md §3.3 friend 行)。
@@ -180,7 +180,12 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic(fmt.Sprintf("friend: Backend=%q, but the authority database dialect is %s; refusing to start", c.Backend, dialect))
 	}
 
-	friendRds, target := NewRedisHandles(c)
+	friendRds, target, err := NewRedisHandles(c)
+	if err != nil {
+		_ = db.Close()
+		_ = etcdCli.Close()
+		panic(err)
+	}
 	playerRedisConf := c.EffectivePlayerRedis()
 	playerRedis, err := playerredis.New(playerRedisConf)
 	if err != nil {
@@ -236,24 +241,19 @@ func newDirectoryDataService(c config.Config) (dspb.DataServiceClient, *grpc.Cli
 	return dspb.NewDataServiceClient(conn), conn
 }
 
-// NewRedisHandles 按配置建立 FriendRedis 句柄,并返回它的落点描述。
-// FriendRedis.Host 为空即未配置,私有 key 回落到共享库(config.Validate 把 `Redis.Host == ""` 当配置错误拒掉,这里不用再判空)。
-// 拆成独立函数是为了不依赖 etcd / MySQL 就能测回落逻辑(与 chat / match 的同名函数同形)。
-func NewRedisHandles(c config.Config) (friendRds *redis.Redis, target string) {
-	if c.FriendRedis.Host == "" {
-		// go-zero 的 logx 没有 Warn 级别;用 Error 级打出来,保证在默认日志级别下一定可见
-		// (Info 级在 staging/prod 常被调掉,这条正是那里最需要看到的)。
-		// 回落本身不是故障(本地单库形态就是这样),但在 staging/prod 出现就是部署缺陷:
-		// 好友私有 key 要和同实例的其他键抢内存。2026-10-12 起本地 compose 也改为 noeviction(K8s 一直是
-		// noeviction),共享库设了 maxmemory 时写满会连带拒写契约 key;共享库一旦被配成淘汰型,
-		// 契约 key 也可能被淘汰,后果是"玩家明明在线却判成离线",推送静默丢。
-		logx.Errorf("[friend] WARN FriendRedis not configured; friend private keys falling back to shared database host=%s type=%s -- "+
-			"local single-database deployments only; staging/prod require separate FriendRedis with maxmemory-policy=noeviction (contract section 4)",
-			c.Redis.Host, c.Redis.Type)
-		return redis.MustNewRedis(c.Redis.RedisConf), fmt.Sprintf("shared-fallback host=%s type=%s", c.Redis.Host, c.Redis.Type)
+// NewRedisHandles 按 ControlRedis 段建立 FriendRedis 句柄(shared/clusterredis,控制集群键策略),并返回它的落点描述。
+// 2026-11-12 起不再有「FriendRedis 未配置回落共享库」这条路:控制集群只有一个段,不写 Addrs = 本机单实例
+// (docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1)。节点客户端不自动重发结果未知的命令,申请配额的
+// INCR Lua 不会被多算(R8)。配置不合法返回错误,调用方拒启。
+// 拆成独立函数是为了不依赖 etcd / MySQL 就能测装配。
+func NewRedisHandles(c config.Config) (redv9.UniversalClient, string, error) {
+	conf := c.EffectiveControlRedis()
+	client, err := clusterredis.New(conf, clusterredis.ControlClusterKeys)
+	if err != nil {
+		return nil, "", fmt.Errorf("friend: invalid ControlRedis config: %w", err)
 	}
-	logx.Infof("[friend] Separate FriendRedis configuration active host=%s type=%s", c.FriendRedis.Host, c.FriendRedis.Type)
-	return redis.MustNewRedis(c.FriendRedis), fmt.Sprintf("FriendRedis host=%s type=%s", c.FriendRedis.Host, c.FriendRedis.Type)
+	logx.Infof("[friend] control redis %s", conf.Describe())
+	return client, "ControlRedis " + conf.Describe(), nil
 }
 
 // BuildDSN 拼 mmorpg_friend 的 DSN,与 go/trade/internal/svc BuildDSN、
@@ -520,6 +520,9 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	}
 	if sc.PlayerRedis != nil {
 		result = errors.Join(result, sc.PlayerRedis.Close())
+	}
+	if sc.FriendRedis != nil {
+		result = errors.Join(result, sc.FriendRedis.Close())
 	}
 	if sc.DB != nil {
 		result = errors.Join(result, sc.DB.Close())

@@ -238,6 +238,12 @@ message TradeCommerceWorkflow {
   TradeCommerceQuarantine quarantine = 23;
   // 人工处理留痕,只追加(commerce.ResolveManual 写)。
   repeated TradeCommerceManualAction manual_actions = 24;
+  // 官方订单绑定付款的渠道修订(docs/design/payment-recharge.md §22.6,commerce.Mall 收到商城的扣回待办或带修订号的交付待办时写)。
+  // payment_revision 是已收到的最新修订号(0 = 原始付款,只增不减);payment_revoked 是这个修订号下买家不该持有这份发放
+  // (修订号为奇数)。plan 把发放收敛到它:持有却已撤销 → 扣回腿 official_reverse_<修订号>;未持有却已恢复 →
+  // 补发腿 official_regrant_<修订号>(从没发过的作废合同走原发放腿 official_credit)。
+  uint32 payment_revision = 25;
+  bool payment_revoked = 26;
 }
 
 // 合同转人工的记录。stage、status 是转人工之前的值;reason 是类别(commerce 包的 manualReason* 常量);

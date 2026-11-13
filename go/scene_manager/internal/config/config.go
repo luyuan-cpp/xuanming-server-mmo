@@ -1,39 +1,55 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
 	"time"
 
+	"shared/clusterredis"
 	"shared/playerredis"
 	"shared/redisauth"
 	"shared/secretenv"
 
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
-// EffectiveCoreRedis 返回读 gate 排空标记的核心实例配置:写了 CoreRedis.Host 就用它(Type 缺省 node),
-// 否则就是 Redis 段那一个实例(开发环境控制域与核心是同一个)。
-func (c *Config) EffectiveCoreRedis() redis.RedisConf {
-	if c.CoreRedis.Host == "" {
-		return c.Redis.RedisConf
-	}
-	core := c.CoreRedis
-	if core.Type == "" {
-		core.Type = redis.NodeType
-	}
-	return core
-}
-
-// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Redis.Pass 与 CoreRedis.Pass,规则见 redisauth.Apply。
-// 没写 CoreRedis.Host 时 EffectiveCoreRedis 用 Redis 段;玩家域没写 Addrs 时回落到核心实例(EffectivePlayerRedis)——
-// 填完之后这几条路径用的都是这个口令。
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 ControlRedis.Password,规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落到控制集群那一个实例(EffectivePlayerRedis),填完之后用的也是这个口令。
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
 	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
-		redisauth.Target{Field: "Redis.Pass", Password: &c.Redis.Pass},
-		redisauth.Target{Field: "CoreRedis.Pass", Password: &c.CoreRedis.Pass})
+		redisauth.Target{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password})
+}
+
+// ValidateRedisSections 在建任何 Redis 客户端之前校验三段 Redis 配置,任何一条不满足即拒启(fail-closed)。
+//
+//   - 退役段:2026-11-12 第 2b 批起控制域与 gate 标记只走 ControlRedis(docs/design/redis-cluster-all-domains-20261110.md §5.1)。
+//     嵌入的 zrpc Redis 段写了 Host,说明配置还是旧形状(K8s 上是第 6 批之前渲染的 ConfigMap):照旧形状起服,控制域会落到
+//     ControlRedis 的回落地址 127.0.0.1:6379 上,所以拒启,不静默。旧的 CoreRedis 段已从 Config 删掉;旧渲染总是同时写
+//     Redis.Host,这一条一并拦住。
+//   - ControlRedis.PasswordEnv 不用:变量缺失时它静默落成空口令,做不到拒启。口令变量名写在 SharedRedisPasswordEnv。
+//   - 控制集群是 Redis Cluster 时,玩家域必须显式写地址:玩家域是另一个集群(redis-player),回落到控制集群会让 location、
+//     owner_epoch 与别的服务、C++ scene 读写的那一份分家,跨服务的 CAS 全部失效。
+func (c *Config) ValidateRedisSections() error {
+	if c.Redis.Host != "" {
+		return errors.New("the Redis section (go-zero) is retired: control keys and gate marks live in ControlRedis " +
+			"(docs/design/redis-cluster-all-domains-20261110.md §5.1); remove Redis.Host and render ControlRedis")
+	}
+	if err := c.ControlRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("ControlRedis: %w", err)
+	}
+	if c.ControlRedis.PasswordEnv != "" {
+		return errors.New("ControlRedis.PasswordEnv is not supported: name the password variable in SharedRedisPasswordEnv " +
+			"(a missing variable must refuse to start, not fall back to an empty password)")
+	}
+	if err := c.PlayerRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("PlayerRedis: %w", err)
+	}
+	if c.EffectiveControlRedis().Cluster && len(c.PlayerRedis.Addrs) == 0 {
+		return errors.New("PlayerRedis.Addrs is required when ControlRedis is a Redis Cluster: the player domain lives on its own cluster")
+	}
+	return nil
 }
 
 // ResolveGateTokenSecret 按 GateTokenSecretEnv 填 GateTokenSecret(跨 zone 重定向签发 gate 令牌用),规则见 secretenv.Fill。
@@ -95,9 +111,9 @@ type Config struct {
 
 	// ZoneId: 本进程服务、编排的 zone(docs/design/control-plane-zone-scoping-20261105.md §3.3)。
 	//   - 按 C++ 约定注册进 etcd 的 SceneManagerNodeService.rpc/zone/<ZoneId>/,本 zone 的 scene / gate 只连这里的实例;
-	//   - 选主锁是 scene_manager:leader:lock:zone:<ZoneId>,领导者的全部循环只处理这个 zone;
+	//   - 选主锁是 scene_manager:leader:lock:{ctl:<ZoneId>},领导者的全部循环只处理这个 zone;
 	//   - 只 watch SceneNodeService.rpc/zone/<ZoneId>/,内存镜像只有本 zone 的场景节点;
-	//   - 只读写本 zone 的控制域键(Redis 段是本 zone 所属组的控制域实例)。
+	//   - 只读写本 zone 的控制域键(键带 {ctl:<ZoneId>},在 ControlRedis 控制集群上)。
 	// 每个有 scene / gate 节点的 zone 都必须部署至少一个 ZoneId 等于它的 scene_manager。
 	ZoneId uint32 `json:",default=1"`
 
@@ -119,12 +135,12 @@ type Config struct {
 	// (补频道 / rebalance / 孤儿与空闲副本清理 / 自动扩缩容 / Agones 对账)
 	// 只在领导者上执行;领导者失联后,其余副本最迟 ~TTL 内接管。
 	// 心跳续期间隔 = TTL/3。见 internal/logic/leader_gate.go。
-	// 下限约束:go-zero Redis 客户端 socket 读写上界 ~6s(读 3s + 写 3s,不认 ctx 截止时间;按本模块
-	// go.mod 的 go-zero v1.10.0 / go-redis v9.17.3 核对,升级须复核 shared/leader/store_gozero.go),
-	// 加上写之前受续期 ctx 超时 2s 约束的排队 / 重试退避 / 拨号,单次续期最坏 maxCall = 8s。
-	// 自我降级要赶在锁过期之前,须 maxCall < TTL/3,即 TTL > 24s。默认 30s 得到 20s 降级门槛,
-	// 降级最晚 28s 完成、早于 30s 过期;低于下限时选主器任一续期出错即降级,并记错误日志。
-	// 读取走 EffectiveLeaderLockTTLSeconds():分线目录的 TTL 也按它算竞选间隔(TTL/3)。
+	// 时间约束:锁存储是 ControlRedis 控制集群句柄(shared/leader.NewUniversalStore),它按 ctx 截止时间约束 socket 读写
+	// (clusterredis 缺省开 ContextTimeoutEnabled),单次续期最坏 maxCall = 续期 ctx 超时 min(2s, TTL/8)
+	// (shared/leader 的 CallBudget)。自我降级要赶在锁过期之前,须 maxCall < TTL/3 且 2·TTL/3 + maxCall < TTL,
+	// 对任何 TTL 都成立。默认 30s 得到 20s 降级门槛,降级最晚 22s 完成、早于 30s 过期。
+	// (2026-11-12 以前锁存储是 go-zero 句柄,socket 读写不认 ctx 截止时间,maxCall = 8s,TTL 要 > 24s。)
+	// 读取走 EffectiveLeaderLockTTLSeconds():分线目录的 TTL 也按它算竞选间隔(shared/leader.CampaignInterval:缺省 2s,不超过 TTL/3)。
 	LeaderLockTTLSeconds int64 `json:",default=30"`
 
 	// LeaderEligible:本副本是否参与选主。金丝雀副本必须设 false ——
@@ -168,7 +184,7 @@ type Config struct {
 	StrictNodeTypeSeparation bool `json:",default=true"`
 
 	// NodeLoadWeightSceneCount / NodeLoadWeightPlayerCount: weights combined
-	// into the per-node load score stored in scene_nodes:zone:{zone}:load.
+	// into the per-node load score stored in scene_nodes:{ctl:<zone>}:load.
 	// score = α·scene_count + β·player_count. Defaults α=1.0, β=0.01 — one
 	// scene entity costs the same as ~100 players, reflecting the fact that
 	// an empty scene still burns CPU on ticks/AOI scaffolding.
@@ -207,19 +223,20 @@ type Config struct {
 	OwnerEpochMint OwnerEpochMintConfig `json:",optional"`
 
 	// PlayerRedis: 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.10):location、位置修订、离场等待、
-	// 切线冷却、进场去重、owner_epoch、handoff、handoff_fence。嵌入的 Redis 段只剩控制域(场景路由、成员集合、选主锁)。
-	// 一段脚本不能跨这两个域。读取走 EffectivePlayerRedis():没写 Addrs 时指向核心实例(EffectiveCoreRedis),开发环境不用改。
+	// 切线冷却、进场去重、owner_epoch、handoff、handoff_fence。控制域在下面的 ControlRedis,一段脚本不能跨这两个域。
+	// 读取走 EffectivePlayerRedis():没写 Addrs 时指向 ControlRedis 那一个实例,只适合开发环境的单实例;控制集群是 Redis Cluster 时
+	// 必须写 Addrs(ValidateRedisSections)。
 	PlayerRedis playerredis.Config `json:",optional"`
 
-	// CoreRedis: 核心共享实例(docs/design/control-plane-zone-scoping-20261105.md §4.2)。scene_manager 经 CoreRedis 句柄只读 gate 排空标记
-	// gate:<id>:draining|drained(G4a §25.3 的 10-23 订正:排空标记留在核心,运维脚本与 login 都读那一份);
-	// PlayerRedis 没写 Addrs 时玩家域也回落到这个实例(EffectivePlayerRedis),与别的服务、C++ scene 同一份。
-	// 上面嵌入的 Redis 段是本 zone 所属组的控制域实例(K8s 上 redis-ctl-g<N>),两者在部署上是不同实例。
-	// 没写 Host 时指向 Redis 段那一个实例:开发环境两者是同一个,不用改。读取走 EffectiveCoreRedis()。
-	CoreRedis redis.RedisConf `json:",optional"`
+	// ControlRedis: 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.1、§4.4、§5.1;2026-11-12 第 2b 批取代嵌入的 go-zero
+	// Redis 段与 CoreRedis 段)。放本 zone 的全部控制域键(scene:{ctl:<z>}:*、node:{ctl:<z>}:*、世界频道、Agones 名额、选主锁……),
+	// 以及跨 zone 重定向时读的目标 zone 的 gate 排空 / 停写标记 gate:{gm:<z>}:*(login 与排空脚本写在同一个集群)。
+	// 句柄是 controlredis.Client(键策略 clusterredis.ControlClusterKeys,不自动重发结果未知的命令)。
+	// 读取走 EffectiveControlRedis():没写 Addrs 时指向本机 127.0.0.1:6379 单实例;K8s 上由 tools/scripts/k8s_deploy.ps1 渲染集群种子。
+	ControlRedis clusterredis.Config `json:",optional"`
 
-	// SharedRedisPasswordEnv 是 Redis 段(控制域)与 CoreRedis 段(核心)的口令所在的环境变量名(shared/redisauth)。两个实例在部署上
-	// 用同一个口令;K8s 上口令只在 Secret redis-auth 里,经 secretKeyRef 注入,ConfigMap 里两段的 Pass 写空串。不写 = 照用 Pass 字面量(本机)。
+	// SharedRedisPasswordEnv 是 ControlRedis 口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret 里,经 secretKeyRef 注入,
+	// ConfigMap 里 ControlRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
 	// 由 ResolveSharedRedisPassword 在建任何 Redis 客户端之前填好,变量缺失或为空即拒启。
 	SharedRedisPasswordEnv string `json:",optional"`
 
@@ -319,7 +336,7 @@ type Config struct {
 	// scans Redis on fullSync for world_channels:* sets whose confId is
 	// not in World.json and deletes them.
 	// (2026-10-16 起不再 SCAN;2026-11-05 起只查本进程的 ZoneId,同组别的 zone 由它自己的领导者清,
-	// 候选 (zone, confId) 取 world_channels:desired:zone:{z} 的字段,全部是点查;覆盖范围见
+	// 候选 (zone, confId) 取 world_channels:desired:{ctl:<z>} 的字段,全部是点查;覆盖范围见
 	// internal/logic/orphan_cleanup.go 文件头。) This removes drift left by
 	// designers dropping a map from the table without a clean tear-down.
 	// Set to false in environments where you migrate maps manually or
@@ -571,7 +588,7 @@ const defaultLeaderLockTTLSeconds int64 = 30
 // EffectiveLeaderLockTTLSeconds 返回生效的选主锁 TTL(秒),恒为正:配置 ≤ 0 时取默认 30。
 //
 // 选主接线(scene_manager_service.go)与分线目录的 TTL(logic/world_channel_directory.go
-// worldChannelDirectoryTTLSeconds:要盖住一个竞选间隔 = 锁 TTL / 3)都从这里取。两处各自兜底的话,
+// worldChannelDirectoryTTLSeconds:要盖住一个竞选间隔,由 shared/leader.CampaignInterval 按锁 TTL 算)都从这里取。两处各自兜底的话,
 // 只改其中一处,目录 TTL 就悄悄盖不住领导者让位了。
 func (c *Config) EffectiveLeaderLockTTLSeconds() int64 {
 	if c.LeaderLockTTLSeconds <= 0 {
@@ -639,34 +656,51 @@ func (c *Config) EffectiveKafkaWriteTimeout() time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
-// 没写 PlayerRedis.Addrs 时玩家域连接的口径:go-zero 对 Redis 段的缺省值(池 10 × GOMAXPROCS,K8s 上 GOMAXPROCS 按 2 算,读写 3s,
-// 取连接 4s,拨号 5s)。这里写成常量,不随 CPU limit 漂移。
+// 没写 Addrs 时两个域的连接口径:沿用换句柄之前 go-zero 句柄的缺省值(池 10 × GOMAXPROCS,K8s 上 GOMAXPROCS 按 2 算是 20;
+// 读写 3s,取连接 4s,拨号 5s),写成常量,不随 CPU limit 漂移。段里单独写的池与超时优先(clusterredis.Config.OrDefault)。
 const (
-	playerRedisFallbackPoolSize      = 20
-	playerRedisFallbackIOTimeoutMs   = 3000
-	playerRedisFallbackPoolTimeoutMs = 4000
-	playerRedisFallbackDialTimeoutMs = 5000
+	redisFallbackAddr          = "127.0.0.1:6379"
+	redisFallbackPoolSize      = 20
+	redisFallbackIOTimeoutMs   = 3000
+	redisFallbackPoolTimeoutMs = 4000
+	redisFallbackDialTimeoutMs = 5000
 )
 
-// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向核心实例(EffectiveCoreRedis:写了
-// CoreRedis 就是它,没写就是 Redis 段;开发环境三者是同一个实例)。PlayerRedis 段里单独写的池与超时在两种情况下都生效。
+// EffectiveControlRedis 返回生效的控制集群配置:写了 ControlRedis.Addrs 就用它,否则指向本机 127.0.0.1:6379 单实例(开发环境)。
+func (c *Config) EffectiveControlRedis() clusterredis.Config {
+	return c.ControlRedis.OrDefault(clusterredis.Config{
+		Addrs:           []string{redisFallbackAddr},
+		Username:        c.ControlRedis.Username,
+		Password:        c.ControlRedis.Password,
+		TLS:             c.ControlRedis.TLS,
+		PoolSizePerNode: redisFallbackPoolSize,
+		DialTimeoutMs:   redisFallbackDialTimeoutMs,
+		ReadTimeoutMs:   redisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  redisFallbackIOTimeoutMs,
+		PoolTimeoutMs:   redisFallbackPoolTimeoutMs,
+	})
+}
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向控制集群那一个实例(EffectiveControlRedis 的地址
+// 与连接身份,开发环境两个域是同一个单实例)。PlayerRedis 段里单独写的池与超时在两种情况下都生效。
 //
-// 不能回落到 Redis 段:K8s 上 Redis 段是本 zone 所属组的控制域实例 redis-ctl-g<N>,而没建玩家域集群时,login、player_locator、
-// data_service 等服务的玩家域都回落到各自连的核心实例,C++ scene 的 node-config 不写 player_redis 段时也沿用核心(zoneredis)。
-// scene_manager 若回落到控制域,location、owner_epoch、handoff 就在两个实例上各有一份、各写各的,
-// 跨服务的 CAS 全部失效(docs/design/control-plane-zone-scoping-20261105.md §4.2)。
+// 回落只给开发环境:K8s 上玩家域是单独的集群(redis-player),login、player_locator、data_service、C++ scene 都连它,
+// 渲染必须写 Addrs。控制集群是 Redis Cluster 时不写 Addrs 由 ValidateRedisSections 拒启:回落过去 location、owner_epoch、handoff
+// 就与别的服务读写的那一份分家,跨服务的 CAS 全部失效。
 func (c *Config) EffectivePlayerRedis() playerredis.Config {
-	core := c.EffectiveCoreRedis()
+	control := c.EffectiveControlRedis()
 	return c.PlayerRedis.OrDefault(playerredis.Config{
-		Addrs:           []string{core.Host},
-		Username:        core.User,
-		Password:        core.Pass,
-		TLS:             core.Tls,
-		PoolSizePerNode: playerRedisFallbackPoolSize,
-		DialTimeoutMs:   playerRedisFallbackDialTimeoutMs,
-		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
-		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
-		PoolTimeoutMs:   playerRedisFallbackPoolTimeoutMs,
+		Addrs:           control.Addrs,
+		Cluster:         control.Cluster,
+		Username:        control.Username,
+		Password:        control.Password,
+		DB:              control.DB,
+		TLS:             control.TLS,
+		PoolSizePerNode: redisFallbackPoolSize,
+		DialTimeoutMs:   redisFallbackDialTimeoutMs,
+		ReadTimeoutMs:   redisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  redisFallbackIOTimeoutMs,
+		PoolTimeoutMs:   redisFallbackPoolTimeoutMs,
 	})
 }
 
@@ -750,7 +784,9 @@ type OwnerEpochMintConfig struct {
 }
 
 // OwnerEpochMint 的默认值与上界。
-// 超时上界 2000:专用客户端读超时 = 本值 + 1s;everysec 下本地确认最长约 1s,2000 已留出一倍余量。
+// 超时上界 2000:everysec 下本地确认最长约 1s,高可用下等副本刷盘与上报最坏近 2s。专用客户端读超时 = max(本值, 启动探针的等待 5s) + 1s
+// (svc/owner_epoch_mint.go ownerEpochMintClientConfig)。铸造通道的池按这个上界定(svc/owner_epoch_mint.go ownerEpochMintPoolSize,
+// Little 定律);yaml 里实际写的 WaitAOFTimeoutMs 算进 scene_manager_service.yaml 文件头的 Timeout 不等式(契约测试守),调大要同步 Timeout。
 const (
 	DefaultOwnerEpochMintWaitAOFNumLocal    = 1
 	DefaultOwnerEpochMintWaitAOFNumReplicas = 0

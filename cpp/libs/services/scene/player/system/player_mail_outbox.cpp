@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <limits>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -12,6 +13,7 @@
 
 #include "core/network/grpc_client_call.h"
 #include "core/security/service_call_auth.h"
+#include "core/security/token_security.h"
 #include "grpc_client/mail/mail_admin_grpc_client.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "node/system/grpc_call_deadline.h"
@@ -36,12 +38,15 @@ namespace
 	using mail_outbox_rules::MailOutboxSource;
 	using mail_outbox_rules::SendVerdict;
 	using SendStart = PlayerMailOutboxSystem::SendStart;
+	using Dependencies = PlayerMailOutboxSystem::Dependencies;
 
 	// 邮件服务按调用方身份定死的发件角色:go/mail/internal/data/repo.go 的 SenderKind("battle") = 5,
 	// 签名的调用方名是 "battle",验签密钥是 mail 的 Producers.battle(go/mail/etc/mail.yaml)。三处同一个身份。
 	constexpr uint32_t kBattleSenderKind = 5;
 	constexpr std::string_view kBattleCaller = "battle";
 	constexpr char kBattleProducerSecretEnv[] = "MAIL_PRODUCER_SECRET_BATTLE";
+	// 与 service_call_auth::Signature、go/shared/domainhost Config.Secrets 同一个下限:去掉首尾空白后至少 32 字节。
+	constexpr std::size_t kMinSecretBytes = 32;
 
 	constexpr const char* kSendStartNames[] = {"sent", "no_ready_node", "no_secret", "invalid_entry", "sign_failed"};
 	static_assert(std::size(kSendStartNames) == static_cast<std::size_t>(SendStart::kCount),
@@ -51,7 +56,7 @@ namespace
 				  "kSendVerdictNames 与 SendVerdict 逐项对应");
 
 	// 寄送的按需状态(只在内存,docs/design/ecs-component-access-rules.md「按需状态」):至多一封在途,失败退避。
-	// 玩家有可寄条目、第一次寄送时建;待寄队列寄空时摘;实体销毁自然清理。只由本文件读写。
+	// Tick 第一次处理这名玩家的待寄条目(寄送或请求存盘)时建;待寄队列寄空时摘;实体销毁自然清理。只由本文件读写。
 	struct MailOutboxSendStateComp
 	{
 		uint64_t inFlightRequestId{0}; // 0 = 没有在途
@@ -60,6 +65,7 @@ namespace
 		uint64_t nextAttemptMs{0};     // 失败退避到这个时刻(UTC 毫秒);0 = 随时
 		uint32_t failStreak{0};        // 连续失败次数(含没发出去、在途丢失),寄到一封归 0
 		uint64_t attempts{0};          // 已发起的尝试次数,尝试号从 1 起
+		uint64_t lastSaveRequestMs{0}; // 上一次因「条目还没落盘」请求存盘的时刻;0 = 还没请求过
 	};
 
 	uint64_t InFlightLostAfterMs()
@@ -67,6 +73,17 @@ namespace
 		// 在途记录必须比调用期限宽(grpc_call_deadline.h:依赖调用结果的看门狗一律从 Get 派生)。
 		return static_cast<uint64_t>(grpc_call_deadline::Get(common::base::MailNodeService).count()) +
 			   PlayerMailOutboxSystem::kInFlightLostMarginMs;
+	}
+
+	// 发件密钥:没配或不足 32 字节时返回空串。每次现读环境变量(与别的调用密钥同一做法),不缓存、不进日志。
+	std::string BattleProducerSecret()
+	{
+		const char* secret = std::getenv(kBattleProducerSecretEnv);
+		if (secret == nullptr || token_security::TrimAscii(secret).size() < kMinSecretBytes)
+		{
+			return {};
+		}
+		return secret;
 	}
 
 	// 就绪的 mail 节点里随机挑一个:任一副本读写的都是同一个全局库,某个副本卡住时下一次大概率换到别的副本。
@@ -88,10 +105,15 @@ namespace
 		return ready[tlsRandom.Rand<std::size_t>(0, ready.size() - 1)];
 	}
 
+	bool DefaultSenderConfigured()
+	{
+		return !BattleProducerSecret().empty();
+	}
+
 	SendStart DefaultSend(const uint64_t playerId, const MailOutboxEntry& entry, PlayerMailOutboxSystem::SendDone done)
 	{
-		const char* secret = std::getenv(kBattleProducerSecretEnv);
-		if (secret == nullptr)
+		const std::string secret = BattleProducerSecret();
+		if (secret.empty())
 		{
 			return SendStart::kNoSecret;
 		}
@@ -111,13 +133,14 @@ namespace
 		{
 			return SendStart::kNoReadyNode;
 		}
-		// 回调只捕获 done(不捕获实体句柄,GrpcDone 契约)。回包不签名:MailAdmin 的结果只用来决定删不删条目,
-		// 删错的代价是重寄一次拿回原邮件,不会多发。
+		// 回调只捕获 done(不捕获实体句柄,GrpcDone 契约)。MailAdmin 的回包没有签名字段(rank 发奖同此),
+		// 信的是发现到的 mail 节点,与存盘、收件箱的回包同一个信任层级(battle-overflow-mail.md「残余」)。
 		mailpb::SendMailAdminSendPersonalMail(
 			registry, node, request,
 			[done = std::move(done)](const GrpcCallOutcome& outcome, const mailpb::SendMailResponse* reply) {
 				PlayerMailOutboxSystem::SendOutcome result;
 				result.callOk = outcome.ok() && reply != nullptr;
+				result.signatureRejected = mail_outbox_rules::IsSignatureRejected(outcome.code);
 				if (reply != nullptr)
 				{
 					result.tipId = reply->error_message().id();
@@ -140,14 +163,48 @@ namespace
 		return mail_outbox_rules::Find(persisted->snapshot->player_database_data().mail_outbox(), requestId) != nullptr;
 	}
 
+	void DefaultRequestSave(entt::entity player, const char* reason)
+	{
+		PlayerLifecycleSystem::RequestKeyProgressSave(player, reason);
+	}
+
 	uint64_t DefaultNowMs()
 	{
 		return TimeSystem::NowMillisecondsUTC();
 	}
 
-	PlayerMailOutboxSystem::SendFn gSend = &DefaultSend;
-	PlayerMailOutboxSystem::DurableFn gIsDurable = &DefaultIsDurable;
-	std::function<uint64_t()> gNowMs = &DefaultNowMs;
+	// 没填的成员用生产实现补齐。
+	Dependencies WithDefaults(Dependencies dependencies)
+	{
+		if (!dependencies.senderConfigured)
+		{
+			dependencies.senderConfigured = &DefaultSenderConfigured;
+		}
+		if (!dependencies.send)
+		{
+			dependencies.send = &DefaultSend;
+		}
+		if (!dependencies.isDurable)
+		{
+			dependencies.isDurable = &DefaultIsDurable;
+		}
+		if (!dependencies.requestSave)
+		{
+			dependencies.requestSave = &DefaultRequestSave;
+		}
+		if (!dependencies.nowMs)
+		{
+			dependencies.nowMs = &DefaultNowMs;
+		}
+		return dependencies;
+	}
+
+	// 当前生效的依赖。只在 scene loop 线程读写;函数内静态,不依赖别的翻译单元的初始化顺序。
+	Dependencies& Deps()
+	{
+		static Dependencies dependencies = WithDefaults({});
+		return dependencies;
+	}
 
 	void RecordFailure(MailOutboxSendStateComp& state, const bool rejected, const uint64_t nowMs)
 	{
@@ -168,8 +225,8 @@ namespace
 			return;
 		}
 		const uint64_t attempt = ++state.attempts;
-		const auto started = gSend(playerId, *entry, [playerId, requestId, attempt](PlayerMailOutboxSystem::SendOutcome outcome) {
-			PlayerMailOutboxSystem::OnSendDone(playerId, requestId, attempt, outcome, gNowMs());
+		const auto started = Deps().send(playerId, *entry, [playerId, requestId, attempt](PlayerMailOutboxSystem::SendOutcome outcome) {
+			PlayerMailOutboxSystem::OnSendDone(playerId, requestId, attempt, outcome, Deps().nowMs());
 		});
 		if (started == SendStart::kSent)
 		{
@@ -183,7 +240,9 @@ namespace
 		{
 			return;
 		}
-		const char* reason = kSendStartNames[static_cast<std::size_t>(started)];
+		const char* reason = static_cast<std::size_t>(started) < std::size(kSendStartNames)
+								 ? kSendStartNames[static_cast<std::size_t>(started)]
+								 : "unknown";
 		if (started == SendStart::kNoReadyNode)
 		{
 			LOG_WARN << "[MailOutbox] metric=mail_outbox_send_failed player_id=" << playerId << " request_id=" << requestId
@@ -196,7 +255,26 @@ namespace
 				  << ",mail could not be sent (missing or short " << kBattleProducerSecretEnv
 				  << ", or an invalid entry); the items stay owed in the outbox until this is fixed";
 	}
+
+	// 有条目、却没有一条在已提交的快照里:刚加载(这个代次还没提交过),或写进条目的那一笔存盘还没落定。
+	// 隔 kResaveIntervalMs 请求一次存盘,不每拍都压(存盘路径故障时不变成重试风暴)。
+	void RequestSaveIfDue(entt::entity player, const uint64_t nowMs)
+	{
+		auto& state = tlsEcs.actorRegistry.get_or_emplace<MailOutboxSendStateComp>(player);
+		if (state.lastSaveRequestMs != 0 && nowMs >= state.lastSaveRequestMs &&
+			nowMs - state.lastSaveRequestMs < mail_outbox_rules::kResaveIntervalMs)
+		{
+			return;
+		}
+		state.lastSaveRequestMs = nowMs;
+		Deps().requestSave(player, "mail_outbox_pending");
+	}
 } // namespace
+
+bool PlayerMailOutboxSystem::IsSenderConfigured()
+{
+	return Deps().senderConfigured();
+}
 
 bool PlayerMailOutboxSystem::BuildSendRequest(const uint64_t playerId, const MailOutboxEntry& entry,
 											  mailpb::SendMailRequest& request)
@@ -234,6 +312,13 @@ uint32_t PlayerMailOutboxSystem::PrepareBattleOverflow(entt::entity player, cons
 		return kInvalidParameter;
 	}
 	const uint64_t playerId = tlsEcs.GetPlayerId(player);
+	if (!IsSenderConfigured())
+	{
+		// 没有部署 mail 的环境:不欠寄不出去的物品,结算照旧整笔延后(启动时已打过一行 WARN,这里不再逐次报)。
+		LOG_DEBUG << "[MailOutbox] Overflow not taken: battle mail sender is not configured, player_id=" << playerId
+				  << " battle_id=" << battleId;
+		return kServiceUnavailable;
+	}
 	const auto* outbox = tlsEcs.actorRegistry.try_get<PlayerMailOutboxComp>(player);
 	if (outbox == nullptr)
 	{
@@ -288,17 +373,17 @@ void PlayerMailOutboxSystem::CommitPrepared(entt::entity player, const uint64_t 
 
 void PlayerMailOutboxSystem::Tick()
 {
-	TickAt(gNowMs());
+	TickAt(Deps().nowMs());
 }
 
 void PlayerMailOutboxSystem::TickAt(const uint64_t nowMs)
 {
-	// 先收集再寄:寄送会挂按需状态组件。
+	// 先收集再处置:寄送与请求存盘都会挂按需状态组件,不能边遍历边改组件集合。
 	struct Due
 	{
 		entt::entity entity;
 		uint64_t playerId;
-		uint64_t requestId;
+		uint64_t requestId; // 0 = 没有一条可寄,只需要请求存盘
 	};
 	std::vector<Due> due;
 	for (auto&& [entity, outbox] : tlsEcs.actorRegistry.view<PlayerMailOutboxComp>().each())
@@ -334,18 +419,27 @@ void PlayerMailOutboxSystem::TickAt(const uint64_t nowMs)
 				continue;
 			}
 		}
+		uint64_t sendable = 0;
 		for (const auto& entry : outbox.entries())
 		{
-			if (gIsDurable(entity, entry.request_id()))
+			if (Deps().isDurable(entity, entry.request_id()))
 			{
-				due.push_back({entity, playerId, entry.request_id()});
+				sendable = entry.request_id();
 				break;
 			}
 		}
+		due.push_back({entity, playerId, sendable});
 	}
 	for (const auto& item : due)
 	{
-		SendOne(item.entity, item.playerId, item.requestId, nowMs);
+		if (item.requestId != 0)
+		{
+			SendOne(item.entity, item.playerId, item.requestId, nowMs);
+		}
+		else
+		{
+			RequestSaveIfDue(item.entity, nowMs);
+		}
 	}
 }
 
@@ -365,7 +459,9 @@ void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t 
 		state->inFlightRequestId = 0;
 		state->inFlightAttempt = 0;
 	}
-	const auto verdict = mail_outbox_rules::ClassifySend(outcome.callOk, outcome.tipId, outcome.mailId);
+	const auto verdict = outcome.signatureRejected
+		? SendVerdict::kRejected
+		: mail_outbox_rules::ClassifySend(outcome.callOk, outcome.tipId, outcome.mailId);
 	if (verdict != SendVerdict::kDelivered)
 	{
 		if (!current)
@@ -373,15 +469,18 @@ void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t 
 			return; // 不是当前在途那一次的失败回答(那一次已按在途丢失处理过):不再记一次
 		}
 		RecordFailure(*state, verdict == SendVerdict::kRejected, nowMs);
-		if (!mail_outbox_rules::IsFailureLogDue(state->failStreak))
+		if (verdict == SendVerdict::kRejected && (outcome.signatureRejected || mail_outbox_rules::NeedsManualFollowUp(outcome.tipId)))
 		{
+			// 每次都打,不走下面「第 1 次与每 8 次」的节拍:这类拒收按 30 秒起、封顶 5 分钟的间隔重试,一条卡住的条目
+			// 至多 5 分钟一行,值班查询 metric=mail_outbox_stuck 的 [10m] 窗口里始终看得到。限频的话封顶后 40 分钟才一行。
+			LOG_ERROR << "[MailOutbox] metric=mail_outbox_stuck player_id=" << playerId << " request_id=" << requestId
+					  << " reason=" << (outcome.signatureRejected ? "signature_rejected" : "mail_rejected")
+						  << " tip=" << outcome.tipId << " fail_streak=" << state->failStreak
+					  << ",mail rejected this entry and retrying will not change that; the items stay owed in the outbox";
 			return;
 		}
-		if (verdict == SendVerdict::kRejected && mail_outbox_rules::NeedsManualFollowUp(outcome.tipId))
+		if (!mail_outbox_rules::IsFailureLogDue(state->failStreak))
 		{
-			LOG_ERROR << "[MailOutbox] metric=mail_outbox_stuck player_id=" << playerId << " request_id=" << requestId
-					  << " reason=mail_rejected tip=" << outcome.tipId << " fail_streak=" << state->failStreak
-					  << ",mail rejected this entry and retrying will not change that; the items stay owed in the outbox";
 			return;
 		}
 		LOG_WARN << "[MailOutbox] metric=mail_outbox_send_failed player_id=" << playerId << " request_id=" << requestId
@@ -407,7 +506,7 @@ void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t 
 				 << " mail_id=" << outcome.mailId << " source=" << mail_outbox_rules::MailOutboxSourceName(source)
 				 << " source_id=" << sourceId;
 		// 删条目尽快落盘;没落盘就崩,下一次加载重寄,邮件回原邮件,再删一次。
-		PlayerLifecycleSystem::RequestKeyProgressSave(player, "mail_outbox_delivered");
+		Deps().requestSave(player, "mail_outbox_delivered");
 	}
 	if (state != nullptr)
 	{
@@ -420,17 +519,7 @@ void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t 
 	}
 }
 
-void PlayerMailOutboxSystem::SetSendForTest(SendFn fn)
+void PlayerMailOutboxSystem::SetDependenciesForTest(Dependencies dependencies)
 {
-	gSend = fn ? std::move(fn) : SendFn(&DefaultSend);
-}
-
-void PlayerMailOutboxSystem::SetDurableCheckForTest(DurableFn fn)
-{
-	gIsDurable = fn ? std::move(fn) : DurableFn(&DefaultIsDurable);
-}
-
-void PlayerMailOutboxSystem::SetNowForTest(std::function<uint64_t()> fn)
-{
-	gNowMs = fn ? std::move(fn) : std::function<uint64_t()>(&DefaultNowMs);
+	Deps() = WithDefaults(std::move(dependencies));
 }

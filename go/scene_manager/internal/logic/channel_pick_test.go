@@ -96,7 +96,7 @@ func scenePlayerCountRaw(t *testing.T, sc *svc.ServiceContext, sceneID uint64) s
 func placePlayerOnLine(t *testing.T, sc *svc.ServiceContext, playerID, sceneID uint64, nodeID string) {
 	t.Helper()
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneID, nodeID, testZoneId))
-	adoptSeedMemberVia(sc, instanceMembersKey(sceneID), playerID)
+	adoptSeedMemberVia(sc, instanceMembersKey(testZoneId, sceneID), playerID)
 	adoptSeedMemberVia(sc, nodeMembersKey(testZoneId, nodeID), playerID)
 }
 

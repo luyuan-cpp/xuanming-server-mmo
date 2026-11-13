@@ -138,8 +138,9 @@ function Invoke-Docker([string[]]$Arguments, [int]$Timeout = 30) {
 function Get-LocalKafkaContract {
     $basePath = Join-Path $serverRoot 'bin/etc/base_deploy_config.yaml'
     $auditPath = Join-Path $serverRoot 'go/data_service/etc/data_service.yaml'
+    $outboxPath = Join-Path $serverRoot 'go/db/etc/db.yaml'
     $values = @{}
-    foreach ($key in @('Kafka.CommandTopicPartitions','Kafka.CommandTopicGeneration','AuditTopicGeneration')) {
+    foreach ($key in @('Kafka.CommandTopicPartitions','Kafka.CommandTopicGeneration')) {
         $value = Get-YamlScalar -Path $basePath -KeyPath $key
         $number = 0L
         if (-not $value.Found -or -not [long]::TryParse($value.Value,[ref]$number) -or $number -le 0 -or $number -gt [int]::MaxValue) {
@@ -152,8 +153,17 @@ function Get-LocalKafkaContract {
         if (-not $value.Found -or [string]::IsNullOrWhiteSpace($value.Value)) { throw "data_service 缺少 Kafka.$key，已中止主题预建。" }
         $values[$key] = $value.Value
     }
-    if ($values['TopicGeneration'] -cne [string]$values['AuditTopicGeneration']) {
-        throw 'C++ AuditTopicGeneration 与 data_service Kafka.TopicGeneration 不一致，已中止主题预建。'
+    $auditGeneration = 0L
+    if (-not [long]::TryParse($values['TopicGeneration'],[ref]$auditGeneration) -or $auditGeneration -le 0 -or $auditGeneration -gt [int]::MaxValue) {
+        throw 'data_service Kafka.TopicGeneration must be a positive integer; topic pre-creation aborted.'
+    }
+    # 审计 topic 的生产者是 go/db 的审计发件箱转发(docs/design/player-audit-outbox.md §7),消费者是 data_service。
+    # 世代或基名不一致不会报任何错:流水与快照写进没人消费的 topic。C++ 不再直接发这两个 topic,不再核它的配置。
+    foreach ($key in @('TopicGeneration','TransactionLogTopic','SnapshotTopic')) {
+        $value = Get-YamlScalar -Path $outboxPath -KeyPath "AuditOutbox.$key"
+        if (-not $value.Found -or $value.Value -cne $values[$key]) {
+            throw "go/db AuditOutbox.$key does not match data_service Kafka.$key; topic pre-creation aborted."
+        }
     }
     # 正式 Compose 预建清单的审计主题名与保留期当前固定；漂移时显式拒绝，避免给生产者建错主题。
     foreach ($entry in @{TransactionLogTopic='transaction_log_topic';SnapshotTopic='player_snapshot_topic';RetentionMs='2592000000'}.GetEnumerator()) {
@@ -167,7 +177,6 @@ function Get-LocalKafkaContract {
     }
     $generation = $values['Kafka.CommandTopicGeneration']
     $partitions = $values['Kafka.CommandTopicPartitions']
-    $auditGeneration = $values['AuditTopicGeneration']
     return [pscustomobject]@{
         Generation=$generation; Partitions=$partitions; AuditGeneration=$auditGeneration
         Topics=@(
@@ -489,7 +498,7 @@ try {
         Wait-Ready 'Redis' { (Invoke-Docker @('exec','redis','redis-cli','ping')).Out.Trim() -eq 'PONG' }
         Wait-Ready 'Redis Cluster' { (Invoke-Docker @('exec','redis-cluster-0','redis-cli','-p','7000','cluster','info')).Out -match 'cluster_state:ok' }
         Wait-Ready 'Kafka' { (Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--list') 60).Code -eq 0 }
-        Write-Step '3/6 启动存档服务'
+        Write-Step '3/6 Start the save services'
         # 所有 Go 命令生产者须继承与 C++、主题预建相同的契约；运行中的进程不能事后改环境。
         $env:KAFKA_COMMAND_TOPIC_PARTITIONS = [string]$kafkaContract.Partitions
         $env:KAFKA_COMMAND_TOPIC_GENERATION = [string]$kafkaContract.Generation

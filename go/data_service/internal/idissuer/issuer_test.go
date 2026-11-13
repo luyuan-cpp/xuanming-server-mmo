@@ -31,13 +31,14 @@ func mintDeployment() string {
 
 // memStore 是内存里的一份本地预留记录,可以注入回退、丢失和写失败。
 type memStore struct {
-	mu        sync.Mutex
-	value     uint64
-	authority string
-	revision  int64
-	exists    bool
-	readErr   error
-	writeErr  error
+	mu         sync.Mutex
+	value      uint64
+	authority  string
+	deployment string
+	revision   int64
+	exists     bool
+	readErr    error
+	writeErr   error
 	// beforeWrite 在 CAS 比较之前调用,用来插入并发写。
 	beforeWrite func()
 	closed      bool
@@ -50,10 +51,11 @@ func (m *memStore) Read(context.Context) (Record, error) {
 	if m.readErr != nil {
 		return Record{}, m.readErr
 	}
-	return Record{Value: m.value, Authority: m.authority, Revision: m.revision, Exists: m.exists, ClusterID: m.clusterID}, nil
+	return Record{Value: m.value, Authority: m.authority, Deployment: m.deployment, Revision: m.revision, Exists: m.exists,
+		ClusterID: m.clusterID}, nil
 }
 
-func (m *memStore) CompareAndSwap(_ context.Context, prev Record, value uint64, authority string) (bool, error) {
+func (m *memStore) CompareAndSwap(_ context.Context, prev Record, value uint64, authority, deployment string) (bool, error) {
 	m.mu.Lock()
 	hook := m.beforeWrite
 	m.beforeWrite = nil
@@ -69,10 +71,10 @@ func (m *memStore) CompareAndSwap(_ context.Context, prev Record, value uint64, 
 	if m.exists != prev.Exists || m.revision != prev.Revision {
 		return false, nil
 	}
-	if value == 0 || !ValidAuthority(authority) {
-		return false, fmt.Errorf("invalid record value=%d authority=%q", value, authority)
+	if !validRecord(recordJSON{Counter: value, Authority: authority, Deployment: deployment}) {
+		return false, fmt.Errorf("invalid record value=%d authority=%q deployment=%q", value, authority, deployment)
 	}
-	m.value, m.authority, m.exists = value, authority, true
+	m.value, m.authority, m.deployment, m.exists = value, authority, deployment, true
 	m.revision++
 	return true, nil
 }
@@ -84,7 +86,7 @@ func (m *memStore) Close() error {
 	return nil
 }
 
-// set 直接改值(模拟旧备份覆盖或别的副本写入),世系不变;原来没有世系时用 testAuthority。
+// set 直接改值(模拟旧备份覆盖或别的副本写入),世系和部署身份不变;原来没有世系时用 testAuthority。
 func (m *memStore) set(value uint64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -98,7 +100,22 @@ func (m *memStore) set(value uint64) {
 func (m *memStore) drop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.value, m.authority, m.exists = 0, "", false
+	m.value, m.authority, m.deployment, m.exists = 0, "", "", false
+	m.revision++
+}
+
+// writer 是这份记录里写着的部署身份。
+func (m *memStore) writer() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.deployment
+}
+
+// setWriter 直接改记录里的部署身份,模拟本字段出现之前写的记录(传空串)。
+func (m *memStore) setWriter(deployment string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deployment = deployment
 	m.revision++
 }
 
@@ -122,28 +139,29 @@ func (m *memStore) setErrors(readErr, writeErr error) {
 
 // memSnap 是一份本地记录在某一时刻的内容,用来模拟 etcd 快照与回档。
 type memSnap struct {
-	value     uint64
-	authority string
-	exists    bool
+	value      uint64
+	authority  string
+	deployment string
+	exists     bool
 }
 
 func (m *memStore) snapshot() memSnap {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return memSnap{value: m.value, authority: m.authority, exists: m.exists}
+	return memSnap{value: m.value, authority: m.authority, deployment: m.deployment, exists: m.exists}
 }
 
 // restore 把记录恢复成快照里的内容。版本照样推进:回档之后,回档之前读到的版本不能再 CAS 成功。
 func (m *memStore) restore(s memSnap) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.value, m.authority, m.exists = s.value, s.authority, s.exists
+	m.value, m.authority, m.deployment, m.exists = s.value, s.authority, s.deployment, s.exists
 	m.revision++
 }
 
-// clone 是一套新 etcd 从这份快照恢复出来的记录:内容相同,集群号不同。
+// clone 是另一套 etcd 从这份快照恢复出来的记录:内容相同(包括原环境写下的部署身份),集群号由参数给。
 func (s memSnap) clone(clusterID uint64) *memStore {
-	return &memStore{value: s.value, authority: s.authority, exists: s.exists, revision: 1, clusterID: clusterID}
+	return &memStore{value: s.value, authority: s.authority, deployment: s.deployment, exists: s.exists, revision: 1, clusterID: clusterID}
 }
 
 type memClaim struct {
@@ -151,11 +169,12 @@ type memClaim struct {
 	revision int64
 }
 
-// memRegistry 是内存里的登记处,语义和 EtcdRegistry 一致。
+// memRegistry 是内存里的登记处,语义和 EtcdRegistry 一致。declared = 有「下一个可认领的码」,rebuilding = 它还在重建中。
 type memRegistry struct {
 	mu          sync.Mutex
 	entries     map[uint8]memClaim
-	opened      bool
+	declared    bool
+	rebuilding  bool
 	next        uint32
 	revision    int64
 	clusterID   uint64
@@ -206,9 +225,37 @@ func (m *memRegistry) CompareAndSwap(_ context.Context, region uint8, prev Claim
 	if !validClaim(next) {
 		return false, fmt.Errorf("invalid claim %+v", next)
 	}
+	// 补一条记录:和 EtcdRegistry.createEntry 同一条规则,守住「有记录的码都小于下一个可认领的码」。
+	if !ok {
+		switch {
+		case !m.declared:
+			if err := allowCreateWithoutPointer(region, next.State); err != nil {
+				return false, err
+			}
+		case uint32(region) >= m.next:
+			if err := allowCreateAtOrAboveNext(region, next.State, m.next); err != nil {
+				return false, err
+			}
+			m.next = uint32(region) + 1
+		}
+	}
 	m.revision++
 	m.entries[region] = memClaim{claim: next, revision: m.revision}
 	return true, nil
+}
+
+// nextClaimable 是登记处里下一个可认领的码;opened = 已开放认领(有指针且不在重建中)。
+func (m *memRegistry) nextClaimable() (next uint32, opened bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.next, m.declared && !m.rebuilding
+}
+
+// pointer 是「下一个可认领的码」的完整状态。
+func (m *memRegistry) pointer() (next uint32, declared, rebuilding bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.next, m.declared, m.rebuilding
 }
 
 func (m *memRegistry) ClaimNew(_ context.Context, region uint8, claim Claim) (bool, error) {
@@ -218,8 +265,11 @@ func (m *memRegistry) ClaimNew(_ context.Context, region uint8, claim Claim) (bo
 	if m.writeErr != nil {
 		return false, m.writeErr
 	}
-	if !m.opened {
+	if !m.declared {
 		return false, ErrRegistryNotOpened
+	}
+	if m.rebuilding {
+		return false, ErrRegistryRebuilding
 	}
 	if uint32(region) < m.next {
 		return false, fmt.Errorf("%w: code %d is below the next claimable code %d", ErrRegionClaimed, region, m.next)
@@ -239,13 +289,13 @@ func (m *memRegistry) ClaimNew(_ context.Context, region uint8, claim Claim) (bo
 	return true, nil
 }
 
-func (m *memRegistry) Open(_ context.Context, next uint32) (bool, error) {
+func (m *memRegistry) BeginRebuild(_ context.Context, next uint32) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.writeErr != nil {
 		return false, m.writeErr
 	}
-	if m.opened {
+	if m.declared {
 		return false, nil
 	}
 	for code := range m.entries {
@@ -253,7 +303,29 @@ func (m *memRegistry) Open(_ context.Context, next uint32) (bool, error) {
 			return false, fmt.Errorf("%w: code %d already has an entry", ErrRegionClaimed, code)
 		}
 	}
-	m.opened, m.next = true, next
+	m.declared, m.rebuilding, m.next = true, true, next
+	return true, nil
+}
+
+func (m *memRegistry) Open(_ context.Context, next uint32) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.writeErr != nil {
+		return false, m.writeErr
+	}
+	switch {
+	case m.rebuilding:
+		if next != m.next {
+			return false, fmt.Errorf("%w: the registry holds %d, the command gave %d", ErrNextRegionMismatch, m.next, next)
+		}
+		m.rebuilding = false
+		return true, nil
+	case m.declared:
+		return false, nil
+	case len(m.entries) > 0:
+		return false, fmt.Errorf("%w: %d codes already have entries", ErrRegistryNeedsRebuild, len(m.entries))
+	}
+	m.declared, m.next = true, next
 	return true, nil
 }
 
@@ -309,7 +381,7 @@ func (m *memRegistry) wipe() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.entries = map[uint8]memClaim{}
-	m.opened, m.next = false, 0
+	m.declared, m.rebuilding, m.next = false, false, 0
 	m.revision++
 }
 
@@ -411,6 +483,10 @@ func (h *harness) issuer(mut func(*Options)) *Issuer {
 	if err != nil {
 		h.t.Fatal(err)
 	}
+	// 冲突之后不等待:用例里的冲突是用钩子确定地插进去的,不需要真的错开时间。测退避本身的用例自己换掉它。
+	iss.pause = func(context.Context, int) error { return nil }
+	// 不起作证检查的后台循环:它按真实时间跑,会在用例中途改记录。测它的用例直接调 checkRecords。
+	iss.checkEvery = 0
 	return iss
 }
 
@@ -762,6 +838,85 @@ func TestReserve_PersistentConflictGivesUp(t *testing.T) {
 	}
 }
 
+// 冲突之后先退避再重读:每一轮冲突之后等一次,轮次从 1 递增;最后一轮冲突之后直接放弃,不再等。
+func TestReserve_ConflictsBackOffBeforeRetrying(t *testing.T) {
+	h := newHarness(t)
+	var keepConflicting func()
+	keepConflicting = func() {
+		h.primary.set(h.primary.get() + 1)
+		h.primary.mu.Lock()
+		h.primary.beforeWrite = keepConflicting
+		h.primary.mu.Unlock()
+	}
+	h.primary.beforeWrite = keepConflicting
+	iss := h.issuer(nil)
+	var waits []int
+	iss.pause = func(_ context.Context, attempt int) error {
+		waits = append(waits, attempt)
+		return nil
+	}
+	if _, _, err := iss.Allocate(context.Background(), "player", 100); !errors.Is(err, ErrContended) {
+		t.Fatalf("err=%v, want ErrContended", err)
+	}
+	if len(waits) != reserveAttempts-1 {
+		t.Fatalf("waited %v, want one wait before each of the %d retries", waits, reserveAttempts-1)
+	}
+	for n, attempt := range waits {
+		if attempt != n+1 {
+			t.Fatalf("waited %v, want attempts 1..%d in order", waits, reserveAttempts-1)
+		}
+	}
+}
+
+// 等待期间发号器关闭或预算用完:这次预留失败,不再重读,也不再写任何记录。
+func TestReserve_StopsWhenTheConflictPauseIsInterrupted(t *testing.T) {
+	h := newHarness(t)
+	h.primary.beforeWrite = func() { h.primary.set(h.primary.get() + 1) }
+	iss := h.issuer(nil)
+	iss.pause = func(context.Context, int) error { return context.Canceled }
+	if _, _, err := iss.Allocate(context.Background(), "player", 100); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err=%v, want the interrupted wait to fail the reservation", err)
+	}
+	if _, claimed := h.registry.get(0); claimed || h.secondary.has() {
+		t.Fatal("nothing may be written after the wait was interrupted")
+	}
+}
+
+// 等待上限逐轮翻倍、有封顶;轮次再大也不溢出。
+func TestConflictBackoffLimit_DoublesUpToTheCap(t *testing.T) {
+	for attempt, want := range map[int]time.Duration{
+		-1:      reserveConflictBackoffBase,
+		0:       reserveConflictBackoffBase,
+		1:       reserveConflictBackoffBase,
+		2:       2 * reserveConflictBackoffBase,
+		3:       4 * reserveConflictBackoffBase,
+		6:       reserveConflictBackoffMax,
+		7:       reserveConflictBackoffMax,
+		1 << 20: reserveConflictBackoffMax,
+	} {
+		if got := conflictBackoffLimit(attempt); got != want {
+			t.Errorf("attempt %d: limit=%v, want %v", attempt, got, want)
+		}
+	}
+	// 一次预留里全部等待加起来,必须远小于预留的总预算。
+	var total time.Duration
+	for attempt := 1; attempt < reserveAttempts; attempt++ {
+		total += conflictBackoffLimit(attempt)
+	}
+	if total > reserveTimeout/4 {
+		t.Fatalf("the waits of one reservation add up to %v, too close to the %v budget", total, reserveTimeout)
+	}
+}
+
+// ctx 已经结束时不等待,立即返回它的错误。
+func TestConflictPause_ReturnsAtOnceWhenTheContextIsDone(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := conflictPause(ctx, reserveAttempts-1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err=%v, want context.Canceled", err)
+	}
+}
+
 // ── 恢复:下面的用例对应设计 §6.2、§6.3 的故障表,全部断言发出去的段不重叠 ─────────────
 
 func TestRecovery_RestartReservesAboveOldBlock(t *testing.T) {
@@ -917,7 +1072,14 @@ func TestRecovery_RegistryRestoredToOldSnapshot(t *testing.T) {
 	}
 }
 
-// 登记处丢了这个码的记录(本地两份完好):预留和初始化都拒绝;Recover 按本地记录重新登记。
+// reRegisterBound 是登记处丢码后重新登记时、时钟推得出的上界(reRegisterHighWater):现在的时间下限 + 超前上限 + 一块。
+func reRegisterBound(region uint8, now time.Time) uint64 {
+	floor := uint64(region)<<regionShift | uint64(now.Unix()-epochUnix)<<seqBits
+	return floor + (maxAheadSeconds+1)<<seqBits + testBlock
+}
+
+// 登记处丢了这个码的记录(本地两份完好):预留和初始化都拒绝;Recover 重新登记。水位不只取本地记录,还盖住时钟推得出的上界
+// (本地记录自己证明不了没被回档),本地两份随即抬到新水位;之后的号都在它之上。
 func TestRecovery_RegistryEntryLostReRegisteredFromLocal(t *testing.T) {
 	h := newHarness(t)
 	a := &allocated{t: t}
@@ -935,13 +1097,199 @@ func TestRecovery_RegistryEntryLostReRegisteredFromLocal(t *testing.T) {
 	if _, err := iss.Recover(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}
+	want := reRegisterBound(1, testNow)
 	c, ok := h.registry.get(1)
-	if !ok || c.HighWater != local || c.Blocks == 0 || c.PrimaryCluster != 1 || c.SecondaryCluster != 2 {
-		t.Fatalf("re-registered claim %+v (exists=%v), want high_water=%d bound to (1,2)", c, ok, local)
+	if !ok || c.HighWater != want || c.Blocks == 0 || c.PrimaryCluster != 1 || c.SecondaryCluster != 2 {
+		t.Fatalf("re-registered claim %+v (exists=%v), want high_water=%d bound to (1,2)", c, ok, want)
+	}
+	if want <= local || h.primary.get() != want || h.secondary.get() != want {
+		t.Fatalf("local records (%d,%d) must be raised to the new high water %d, above %d", h.primary.get(), h.secondary.get(), want, local)
 	}
 	lo, _ := a.take(h.prodIssuer(1, nil), 100)
+	if lo < want {
+		t.Fatalf("lo=%d below the re-registered high water %d", lo, want)
+	}
+}
+
+// 三处同时出事(审核残余):同一个 K8s 集群里本地两套 etcd 被恢复到旧快照,同时登记处丢了这个码,当时的发号进程也都不在了。
+// 本地记录比发过的号旧;重新登记的水位还盖住时钟推得出的上界,新号不和任何发过的号重叠。
+func TestRecovery_ReRegisteringCoversLocalRecordsRestoredWhileTheRegistryLostTheCode(t *testing.T) {
+	h := newHarness(t)
+	a := &allocated{t: t}
+	a.take(h.production(1), 100)
+	snapP, snapS := h.primary.snapshot(), h.secondary.snapshot()
+	// 快照之后又重启了几次,每次作废一块:计数器跑到了时钟前面。
+	for restart := 0; restart < 5; restart++ {
+		a.take(h.prodIssuer(1, nil), 100)
+	}
+	historical := h.registry.highWater(1)
+	h.primary.restore(snapP)
+	h.secondary.restore(snapS)
+	h.registry.drop(1)
+	if max(h.primary.get(), h.secondary.get()) >= historical {
+		t.Fatal("fixture: the restored local records must be below the ids already reserved")
+	}
+
+	if _, err := h.prodIssuer(1, nil).Recover(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := h.registry.get(1); c.HighWater < historical {
+		t.Fatalf("re-registered at %d, below the ids reserved before the incident (%d)", c.HighWater, historical)
+	}
+	a.take(h.prodIssuer(1, nil), 100)
+}
+
+// 本地记录比时钟推得出的上界还高(计数器曾经超前时钟 7 天以上):它要是也被回档过,没有任何东西盖得住。拒绝重新登记,
+// 什么都不写,只能换码。恰好在上界上的还盖得住。
+func TestRecovery_ReRegisteringRefusesLocalRecordsFarAheadOfTheClock(t *testing.T) {
+	h := newHarness(t)
+	h.production(1)
+	bound := reRegisterBound(1, testNow)
+	h.primary.set(bound + 1)
+	h.secondary.set(bound + 1)
+	h.registry.drop(1)
+	if _, err := h.prodIssuer(1, nil).Recover(context.Background(), false); !errors.Is(err, ErrNoTrustedBound) {
+		t.Fatalf("err=%v, want ErrNoTrustedBound", err)
+	}
+	if _, registered := h.registry.get(1); registered {
+		t.Fatal("the refusal must not re-register the code")
+	}
+	if h.primary.get() != bound+1 || h.secondary.get() != bound+1 {
+		t.Fatal("the refusal must not touch the local records")
+	}
+
+	h.primary.set(bound)
+	h.secondary.set(bound)
+	if _, err := h.prodIssuer(1, nil).Recover(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := h.registry.get(1); c.HighWater != bound {
+		t.Fatalf("high_water=%d, want %d", c.HighWater, bound)
+	}
+}
+
+// 时钟不在可表示的范围内:重新登记推不出上界,拒绝,什么都不写,修好时钟再跑。
+func TestRecovery_ReRegisteringNeedsAClockInRange(t *testing.T) {
+	h := newHarness(t)
+	h.production(1)
+	h.registry.drop(1)
+	h.setClock(time.Unix(epochUnix-100, 0))
+	if _, err := h.prodIssuer(1, nil).Recover(context.Background(), false); err == nil ||
+		!strings.Contains(err.Error(), "outside the representable range") {
+		t.Fatalf("err=%v, want a clock error", err)
+	}
+	if _, registered := h.registry.get(1); registered {
+		t.Fatal("the refusal must not re-register the code")
+	}
+}
+
+// 重新登记之后抬本地记录中断(副记录写失败):报错并提示重跑;重跑走「登记处在、本地落后」那一支,把本地两份抬齐;
+// 再跑一次什么也不做。
+func TestRecovery_ARerunFinishesRaisingTheLocalRecords(t *testing.T) {
+	h := newHarness(t)
+	a := &allocated{t: t}
+	a.take(h.production(1), 100)
+	h.registry.drop(1)
+	h.secondary.setErrors(nil, errors.New("secondary down"))
+	if _, err := h.prodIssuer(1, nil).Recover(context.Background(), false); err == nil ||
+		!strings.Contains(err.Error(), "rerun -id-issuer-recover") {
+		t.Fatalf("err=%v, want the rerun hint", err)
+	}
+	high := h.registry.highWater(1)
+	if h.primary.get() != high || h.secondary.get() == high {
+		t.Fatalf("fixture: only the primary record reached the new high water %d: (%d,%d)", high, h.primary.get(), h.secondary.get())
+	}
+	h.secondary.setErrors(nil, nil)
+	if _, err := h.prodIssuer(1, nil).Recover(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if h.secondary.get() != high {
+		t.Fatalf("secondary=%d, want %d after the rerun", h.secondary.get(), high)
+	}
+	if again, err := h.prodIssuer(1, nil).Recover(context.Background(), false); err != nil || !strings.Contains(again, "nothing to repair") {
+		t.Fatalf("a third run: %q %v", again, err)
+	}
+	a.take(h.prodIssuer(1, nil), 100)
+}
+
+// 登记处丢了这个码,而别的 K8s 集群里有原环境 etcd 数据的克隆(集群级备份恢复):克隆的本地记录是原环境写下的,
+// 水位也是过期的。它重新登记被拒,带 rebind 也一样,什么都不写;原环境照常重新登记,之后克隆仍被绑定挡住。
+// 让克隆登记的话,原环境会被挡在外面,克隆从过期水位往上发的号会和原环境发过的重叠。
+func TestRecovery_RegistryEntryLostCopyOfTheRecordsCannotReRegister(t *testing.T) {
+	origin := newHarness(t)
+	a := &allocated{t: t}
+	a.take(origin.production(1), 100)
+	restored := origin.elsewhere()
+	restored.primary = origin.primary.snapshot().clone(origin.primary.clusterID)
+	restored.secondary = origin.secondary.snapshot().clone(origin.secondary.clusterID)
+	for restart := 0; restart < 3; restart++ {
+		a.take(origin.prodIssuer(1, nil), 100)
+	}
+	local := origin.primary.get()
+	if restored.primary.get() >= local || restored.primary.writer() != origin.deployment {
+		t.Fatal("fixture: the copy must hold stale records written by the original deployment")
+	}
+	origin.registry.drop(1)
+
+	copyIssuer := restored.prodIssuer(1, nil)
+	for _, rebind := range []bool{false, true} {
+		if _, err := copyIssuer.Recover(context.Background(), rebind); !errors.Is(err, ErrForeignRecords) {
+			t.Fatalf("recover from the copy (rebind=%v): err=%v, want ErrForeignRecords", rebind, err)
+		}
+	}
+	if _, registered := origin.registry.get(1); registered {
+		t.Fatal("the copy must not re-register the code")
+	}
+	if _, err := origin.prodIssuer(1, nil).Recover(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := origin.registry.get(1); c.Deployment != origin.deployment || c.HighWater < local {
+		t.Fatalf("re-registered claim %+v, want deployment %q above %d", c, origin.deployment, local)
+	}
+	if _, _, err := copyIssuer.Allocate(context.Background(), "player", 100); !errors.Is(err, ErrBindingMismatch) {
+		t.Fatalf("allocate from the copy: err=%v, want ErrBindingMismatch", err)
+	}
+	lo, _ := a.take(origin.prodIssuer(1, nil), 100)
 	if lo < local {
 		t.Fatalf("lo=%d below the local records %d", lo, local)
+	}
+}
+
+// 初始化和每次预留都把本环境的身份写进两份本地记录。记录里没有身份(本字段出现之前写的),或者只有一份是本环境写的:
+// 登记处丢了这个码时证明不了它们是不是拷来的旧数据,不能重新登记,带 rebind 也一样,什么都不写。
+func TestRecovery_RegistryEntryLostRecordsNotWrittenHereAreNotATrustedBound(t *testing.T) {
+	h := newHarness(t)
+	iss := h.production(1)
+	if h.primary.writer() != h.deployment || h.secondary.writer() != h.deployment {
+		t.Fatal("init must stamp the local records with the deployment")
+	}
+	h.primary.setWriter("")
+	h.secondary.setWriter("")
+	a := &allocated{t: t}
+	a.take(iss, 100)
+	if h.primary.writer() != h.deployment || h.secondary.writer() != h.deployment {
+		t.Fatal("a reservation must stamp the local records with the deployment")
+	}
+
+	h.registry.drop(1)
+	for _, tc := range []struct {
+		name      string
+		primary   string
+		secondary string
+	}{
+		{"neither record has a writer", "", ""},
+		{"one record was written by a stranger", h.deployment, "k8s:somewhere-else"},
+	} {
+		h.primary.setWriter(tc.primary)
+		h.secondary.setWriter(tc.secondary)
+		for _, rebind := range []bool{false, true} {
+			if _, err := h.prodIssuer(1, nil).Recover(context.Background(), rebind); !errors.Is(err, ErrForeignRecords) {
+				t.Fatalf("%s (rebind=%v): err=%v, want ErrForeignRecords", tc.name, rebind, err)
+			}
+		}
+		if _, registered := h.registry.get(1); registered {
+			t.Fatalf("%s: the refusal must not write anything", tc.name)
+		}
 	}
 }
 
@@ -975,8 +1323,9 @@ func TestRecovery_EverythingLostIsRefused(t *testing.T) {
 	}
 }
 
-// 登记处整个丢了(所有码和「下一个可认领的码」):两个地域都拒绝;各自按本地记录重新登记;开启时下一个可认领的码
-// 必须在已登记的码之上;用过的码不能重新初始化;之后两个地域的号都不和历史重叠。
+// 登记处整个丢了(所有码和「下一个可认领的码」):两个地域都拒绝。在用的地域可以先于声明重建重新登记(发号尽早恢复);
+// 有了地域记录就不能直接开启(它丢过数据),先声明重建,声明的指针必须在已登记的码之上;重建期间初始化一律拒绝;
+// 开启之后用过的码不能重新初始化,两个地域的号都不和历史重叠。
 func TestRecovery_WholeRegistryLostRebuiltFromRegions(t *testing.T) {
 	east := newHarness(t)
 	west := east.sibling(11, 12)
@@ -995,16 +1344,26 @@ func TestRecovery_WholeRegistryLostRebuiltFromRegions(t *testing.T) {
 	if _, err := fresh.prodIssuer(3, nil).Init(context.Background()); !errors.Is(err, ErrRegistryNotOpened) {
 		t.Fatalf("init on a wiped registry: err=%v, want ErrRegistryNotOpened", err)
 	}
-	for _, iss := range []*Issuer{eastIss, westIss} {
-		if _, err := iss.Recover(context.Background(), false); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := eastIss.OpenRegistry(context.Background(), 2); !errors.Is(err, ErrRegionClaimed) {
-		t.Fatalf("open below a registered code: err=%v, want ErrRegionClaimed", err)
-	}
-	if _, err := eastIss.OpenRegistry(context.Background(), 3); err != nil {
+	if _, err := eastIss.Recover(context.Background(), false); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := eastIss.OpenRegistry(context.Background(), 3); !errors.Is(err, ErrRegistryNeedsRebuild) {
+		t.Fatalf("open a registry that lost its data: err=%v, want ErrRegistryNeedsRebuild", err)
+	}
+	if _, err := eastIss.BeginRegistryRebuild(context.Background(), 1); !errors.Is(err, ErrRegionClaimed) {
+		t.Fatalf("declare at a registered code: err=%v, want ErrRegionClaimed", err)
+	}
+	if declared, err := eastIss.BeginRegistryRebuild(context.Background(), 3); err != nil || !declared {
+		t.Fatalf("declare the rebuild: declared=%v err=%v", declared, err)
+	}
+	if _, err := westIss.Recover(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fresh.prodIssuer(3, nil).Init(context.Background()); !errors.Is(err, ErrRegistryRebuilding) {
+		t.Fatalf("init while rebuilding: err=%v, want ErrRegistryRebuilding", err)
+	}
+	if opened, err := eastIss.OpenRegistry(context.Background(), 3); err != nil || !opened {
+		t.Fatalf("finish the rebuild: opened=%v err=%v", opened, err)
 	}
 	if _, err := east.sibling(31, 32).prodIssuer(1, nil).Init(context.Background()); !errors.Is(err, ErrRegionClaimed) {
 		t.Fatalf("a used code must never be initialized again: err=%v", err)
@@ -1408,18 +1767,194 @@ func TestBinding_RetiredCodeCannotBeReused(t *testing.T) {
 	}
 }
 
-// 登记处里没有的码也能写墓碑(重建登记处时按台账补退役码),之后不能被认领。
-func TestRetire_WritesATombstoneForAnUnknownCode(t *testing.T) {
+// 登记处还没有「下一个可认领的码」时(新世界没开启,或者整个丢了、还没声明重建),补墓碑没有东西可以对照:拒绝,
+// 什么都不写。不拒绝的话,填错的码也会写进去,之后声明指针就被它卡住(审核残余)。
+func TestRetire_ATombstoneNeedsTheNextClaimableCodeToCheckAgainst(t *testing.T) {
 	h := newHarness(t)
 	iss := h.prodIssuer(4, nil)
+	if retired, err := iss.Retire(context.Background(), false); retired || !errors.Is(err, ErrRegistryNotOpened) {
+		t.Fatalf("retire: retired=%v err=%v, want ErrRegistryNotOpened", retired, err)
+	}
+	if _, written := h.registry.get(4); written {
+		t.Fatal("the refusal must not write a tombstone")
+	}
+	if opened, err := iss.OpenRegistry(context.Background(), 1); err != nil || !opened {
+		t.Fatalf("nothing may block opening afterwards: opened=%v err=%v", opened, err)
+	}
+}
+
+// 重建登记处:先声明指针(重建中,不开放认领),补进来的记录都按它核对。台账里的退役码(小于指针)补墓碑;填错的大码拒绝;
+// 台账漏记的在用地域重新登记时把指针推过它;恰好在指针上的码跳过。重建期间初始化一律拒绝;结束重建要对上登记处里的值,
+// 之后照常按顺序认领,用过的码一个都放不出来。
+func TestRebuild_RecordsAreCheckedAgainstTheDeclaredPointer(t *testing.T) {
+	east := newHarness(t)
+	west := east.sibling(11, 12)
+	a := &allocated{t: t}
+	a.take(east.production(1), 100)
+	gone := east.sibling(41, 42)
+	gone.production(2)
+	if retired, err := gone.prodIssuer(2, nil).Retire(context.Background(), false); err != nil || !retired {
+		t.Fatalf("retire code 2: %v %v", retired, err)
+	}
+	a.take(west.production(3), 100)
+	east.registry.wipe()
+
+	ops := east.sibling(51, 52)
+	// 台账漏记了 3,按台账声明到 3。
+	if declared, err := ops.prodIssuer(1, nil).BeginRegistryRebuild(context.Background(), 3); err != nil || !declared {
+		t.Fatalf("declare: declared=%v err=%v", declared, err)
+	}
+	if again, err := ops.prodIssuer(1, nil).BeginRegistryRebuild(context.Background(), 9); err != nil || again {
+		t.Fatalf("a second declaration must do nothing: declared=%v err=%v", again, err)
+	}
+	if retired, err := ops.prodIssuer(2, nil).Retire(context.Background(), false); err != nil || !retired {
+		t.Fatalf("tombstone for a retired code from the ledger: %v %v", retired, err)
+	}
+	if retired, err := ops.prodIssuer(40, nil).Retire(context.Background(), false); retired || !errors.Is(err, ErrRegionOutOfOrder) {
+		t.Fatalf("a mistyped tombstone: retired=%v err=%v, want ErrRegionOutOfOrder", retired, err)
+	}
+	if _, written := east.registry.get(40); written {
+		t.Fatal("the mistyped tombstone must not be written")
+	}
+	if _, err := east.prodIssuer(1, nil).Recover(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := west.prodIssuer(3, nil).Recover(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if next, declared, rebuilding := east.registry.pointer(); next != 4 || !declared || !rebuilding {
+		t.Fatalf("pointer (%d, declared=%v, rebuilding=%v), want 4 and still rebuilding: the code the ledger missed pushes it",
+			next, declared, rebuilding)
+	}
+	if retired, err := ops.prodIssuer(4, nil).Retire(context.Background(), false); err != nil || !retired {
+		t.Fatalf("skip the next claimable code: %v %v", retired, err)
+	}
+	fresh := east.sibling(61, 62)
+	if _, err := fresh.prodIssuer(5, nil).Init(context.Background()); !errors.Is(err, ErrRegistryRebuilding) {
+		t.Fatalf("init while rebuilding: err=%v, want ErrRegistryRebuilding", err)
+	}
+	if opened, err := ops.prodIssuer(1, nil).OpenRegistry(context.Background(), 3); opened || !errors.Is(err, ErrNextRegionMismatch) {
+		t.Fatalf("finish with the stale ledger value: opened=%v err=%v, want ErrNextRegionMismatch", opened, err)
+	}
+	if opened, err := ops.prodIssuer(1, nil).OpenRegistry(context.Background(), 5); err != nil || !opened {
+		t.Fatalf("finish the rebuild: opened=%v err=%v", opened, err)
+	}
+	for code, want := range map[uint8]error{2: ErrRegionRetired, 3: ErrRegionClaimed, 4: ErrRegionRetired} {
+		if _, err := fresh.prodIssuer(code, nil).Init(context.Background()); !errors.Is(err, want) {
+			t.Fatalf("init code %d after the rebuild: err=%v, want %v", code, err, want)
+		}
+	}
+	if created, err := fresh.prodIssuer(5, nil).Init(context.Background()); err != nil || !created {
+		t.Fatalf("the next code after the rebuild: created=%v err=%v", created, err)
+	}
+	a.take(east.prodIssuer(1, nil), 100)
+	a.take(west.prodIssuer(3, nil), 100)
+}
+
+// 用过的码丢了记录(小于下一个可认领的码):开启之后照样能补墓碑,下一个可认领的码不动。
+func TestRetire_WritesATombstoneForAUsedCodeThatLostItsEntry(t *testing.T) {
+	h := newHarness(t)
+	h.production(1)
+	h.registry.drop(1)
+	if retired, err := h.prodIssuer(1, nil).Retire(context.Background(), false); err != nil || !retired {
+		t.Fatalf("retire: %v %v", retired, err)
+	}
+	if c, ok := h.registry.get(1); !ok || c.State != ClaimRetired {
+		t.Fatalf("tombstone %+v (exists=%v)", c, ok)
+	}
+	if next, _ := h.registry.nextClaimable(); next != 2 {
+		t.Fatalf("next claimable code %d, want 2", next)
+	}
+}
+
+// 从没认领过、又大于下一个可认领的码的码不能补墓碑:顺序认领走到它时既认领不了、也推不过去,之后的码全部卡死;
+// 而把指针直接推过去,填错一次就烧掉中间整段。拒绝,什么都不写。
+func TestRetire_ACodeAboveTheNextClaimableOneIsRefused(t *testing.T) {
+	h := newHarness(t)
+	iss := h.prodIssuer(40, nil)
 	if _, err := iss.OpenRegistry(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
-	if retired, err := iss.Retire(context.Background(), false); err != nil || !retired {
+	if retired, err := iss.Retire(context.Background(), false); retired || !errors.Is(err, ErrRegionOutOfOrder) {
+		t.Fatalf("retire: retired=%v err=%v, want ErrRegionOutOfOrder", retired, err)
+	}
+	if _, written := h.registry.get(40); written {
+		t.Fatal("the refusal must not write a tombstone")
+	}
+	if next, _ := h.registry.nextClaimable(); next != 1 {
+		t.Fatalf("next claimable code %d, want 1", next)
+	}
+}
+
+// 退役恰好是下一个可认领的码(这个码不用了,跳过它):写墓碑并把指针推过去,后面的码照常按顺序认领。
+func TestRetire_TheNextClaimableCodeIsSkippedAndClaimingGoesOn(t *testing.T) {
+	h := newHarness(t)
+	skipped := h.prodIssuer(1, nil)
+	if _, err := skipped.OpenRegistry(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	if retired, err := skipped.Retire(context.Background(), false); err != nil || !retired {
 		t.Fatalf("retire: %v %v", retired, err)
 	}
-	if _, err := iss.Init(context.Background()); !errors.Is(err, ErrRegionRetired) {
-		t.Fatalf("init: err=%v, want ErrRegionRetired", err)
+	if next, _ := h.registry.nextClaimable(); next != 2 {
+		t.Fatalf("next claimable code %d, want 2", next)
+	}
+	if _, err := skipped.Init(context.Background()); !errors.Is(err, ErrRegionRetired) {
+		t.Fatalf("init the skipped code: err=%v, want ErrRegionRetired", err)
+	}
+	a := &allocated{t: t}
+	following := h.sibling(11, 12).prodIssuer(2, nil)
+	if created, err := following.Init(context.Background()); err != nil || !created {
+		t.Fatalf("the following code must be claimable: created=%v err=%v", created, err)
+	}
+	a.take(following, 100)
+}
+
+// 登记处重建时声明(或开启)得太低,在用的地域随后才重新登记:它凭幸存的本地记录登记成功,并把下一个可认领的码推到自己之上;
+// 重建中推完仍在重建中。不推的话,顺序认领走到这个码就卡死;这个码也不会被当成没用过的码再认领一次。
+func TestRecovery_ReRegisteringAtOrAboveTheNextClaimableCodeAdvancesIt(t *testing.T) {
+	for _, rebuilding := range []bool{true, false} {
+		east := newHarness(t)
+		west := east.sibling(11, 12)
+		a := &allocated{t: t}
+		a.take(east.production(1), 100)
+		a.take(west.production(2), 100)
+		east.registry.wipe()
+		ops := east.prodIssuer(1, nil)
+		declare := ops.OpenRegistry
+		if rebuilding {
+			declare = ops.BeginRegistryRebuild
+		}
+		if _, err := declare(context.Background(), 1); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := west.prodIssuer(2, nil).Recover(context.Background(), false); err != nil {
+			t.Fatal(err)
+		}
+		if next, _, still := east.registry.pointer(); next != 3 || still != rebuilding {
+			t.Fatalf("rebuilding=%v: pointer (%d, rebuilding=%v), want 3 after re-registering code 2", rebuilding, next, still)
+		}
+		if _, err := east.prodIssuer(1, nil).Recover(context.Background(), false); err != nil {
+			t.Fatal(err)
+		}
+		if next, _, _ := east.registry.pointer(); next != 3 {
+			t.Fatalf("rebuilding=%v: next claimable code %d, want 3: re-registering a lower code must not move it", rebuilding, next)
+		}
+		if rebuilding {
+			if opened, err := ops.OpenRegistry(context.Background(), 3); err != nil || !opened {
+				t.Fatalf("finish the rebuild: opened=%v err=%v", opened, err)
+			}
+		}
+		a.take(east.prodIssuer(1, nil), 100)
+		a.take(west.prodIssuer(2, nil), 100)
+		fresh := east.sibling(21, 22)
+		if _, err := fresh.prodIssuer(2, nil).Init(context.Background()); !errors.Is(err, ErrRegionClaimed) {
+			t.Fatalf("rebuilding=%v: a used code must never be initialized again: err=%v", rebuilding, err)
+		}
+		if created, err := fresh.prodIssuer(3, nil).Init(context.Background()); err != nil || !created {
+			t.Fatalf("rebuilding=%v: the next code must be claimable: created=%v err=%v", rebuilding, created, err)
+		}
 	}
 }
 
@@ -1520,6 +2055,201 @@ func TestRecover_NothingToRepair(t *testing.T) {
 	}
 	if after, _ := h.registry.get(1); after != before {
 		t.Fatal("recover must not touch consistent records")
+	}
+}
+
+// ── 作证检查:活着的进程给三份记录作证 ──────────────────────────────────
+
+// 三份记录一起被恢复到旧状态(本地两套 etcd 和登记处同时回档):记录自己证明不了什么,但发号进程记得自己确认过的水位。
+// 它的下一块从那之上开始,并上报 records_behind_issuer。
+func TestWitness_NextBlockStartsAboveWhatThisProcessConfirmed(t *testing.T) {
+	h := newHarness(t)
+	h.production(1)
+	obs := newObserver()
+	iss := h.prodIssuer(1, func(o *Options) { o.OnReserve = obs.record })
+	a := &allocated{t: t}
+	a.take(iss, 100)
+	p, s, g := h.primary.snapshot(), h.secondary.snapshot(), h.registry.snapshot()
+	for n := 0; n < 3; n++ {
+		exhaust(iss)
+		a.take(iss, 100)
+	}
+	confirmed := h.registry.highWater(1)
+	h.primary.restore(p)
+	h.secondary.restore(s)
+	h.registry.restore(g)
+
+	exhaust(iss)
+	lo, _ := a.take(iss, 100)
+	if lo < confirmed {
+		t.Fatalf("lo=%d below %d, which this process confirmed before the rollback", lo, confirmed)
+	}
+	if obs.count(ReserveBehindIssuer) != 1 {
+		t.Fatalf("observed %v", obs.seen)
+	}
+}
+
+// 三份记录一起回档之后、别的副本(新进程,不知道之前发到哪)预留之前,活着的进程做一次作证检查,把三份都抬回去:
+// 新进程从回档前的水位之上开始,两边发过的段互不重叠。
+func TestWitness_CheckRaisesRecordsRolledBackTogether(t *testing.T) {
+	h := newHarness(t)
+	h.production(1)
+	obs := newObserver()
+	running := h.prodIssuer(1, func(o *Options) { o.OnReserve = obs.record })
+	a := &allocated{t: t}
+	a.take(running, 100)
+	p, s, g := h.primary.snapshot(), h.secondary.snapshot(), h.registry.snapshot()
+	for n := 0; n < 3; n++ {
+		exhaust(running)
+		a.take(running, 100)
+	}
+	confirmed := h.registry.highWater(1)
+	h.primary.restore(p)
+	h.secondary.restore(s)
+	h.registry.restore(g)
+
+	if err := running.checkRecords(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.primary.get() != confirmed || h.secondary.get() != confirmed || h.registry.highWater(1) != confirmed {
+		t.Fatalf("records (%d,%d,%d) must be raised back to %d", h.primary.get(), h.secondary.get(), h.registry.highWater(1), confirmed)
+	}
+	if obs.count(ReserveBehindIssuer) != 1 {
+		t.Fatalf("observed %v", obs.seen)
+	}
+	lo, _ := a.take(h.prodIssuer(1, nil), 100)
+	if lo < confirmed {
+		t.Fatalf("lo=%d below %d", lo, confirmed)
+	}
+	a.take(running, 100) // 活着的进程接着发手里的块
+}
+
+// 三处同时出事的另一种:本地两套回档(或整个丢了),同时登记处丢了这个码。活着的进程只抬本地两份,不替登记处建记录
+// (那要运维看过);之后 Recover 重新登记的水位盖得住它确认过的块。本地两份整个丢了时,没有它就只能换码。
+func TestWitness_CheckKeepsTheLocalRecordsUpWhenTheRegistryLostTheCode(t *testing.T) {
+	for _, dropLocal := range []bool{false, true} {
+		h := newHarness(t)
+		a := &allocated{t: t}
+		running := h.production(1)
+		a.take(running, 100)
+		p, s := h.primary.snapshot(), h.secondary.snapshot()
+		for n := 0; n < 3; n++ {
+			exhaust(running)
+			a.take(running, 100)
+		}
+		confirmed := h.registry.highWater(1)
+		if dropLocal {
+			h.primary.drop()
+			h.secondary.drop()
+		} else {
+			h.primary.restore(p)
+			h.secondary.restore(s)
+		}
+		h.registry.drop(1)
+
+		if err := running.checkRecords(context.Background()); err != nil {
+			t.Fatalf("dropLocal=%v: %v", dropLocal, err)
+		}
+		if _, registered := h.registry.get(1); registered {
+			t.Fatalf("dropLocal=%v: the check must not re-register the code", dropLocal)
+		}
+		if h.primary.get() != confirmed || h.secondary.get() != confirmed {
+			t.Fatalf("dropLocal=%v: local records (%d,%d) must be raised to %d", dropLocal, h.primary.get(), h.secondary.get(), confirmed)
+		}
+		if h.primary.writer() != h.deployment || h.secondary.writer() != h.deployment {
+			t.Fatalf("dropLocal=%v: the raised records must carry this deployment", dropLocal)
+		}
+		if _, err := h.prodIssuer(1, nil).Recover(context.Background(), false); err != nil {
+			t.Fatalf("dropLocal=%v: %v", dropLocal, err)
+		}
+		if c, _ := h.registry.get(1); c.HighWater < confirmed {
+			t.Fatalf("dropLocal=%v: re-registered at %d, below %d", dropLocal, c.HighWater, confirmed)
+		}
+		a.take(h.prodIssuer(1, nil), 100)
+		a.take(running, 100)
+	}
+}
+
+// 码已经不归本进程:绑定转到了别的 K8s 集群(rebind),或者退役了。作证检查什么也不做,哪怕本地记录比它确认过的低。
+func TestWitness_CheckLeavesACodeThatIsNoLongerBoundHere(t *testing.T) {
+	for _, moved := range []string{"rebind", "retire"} {
+		h := newHarness(t)
+		a := &allocated{t: t}
+		running := h.production(1)
+		a.take(running, 100)
+		switch moved {
+		case "rebind":
+			if _, err := h.elsewhere().prodIssuer(1, nil).Recover(context.Background(), true); err != nil {
+				t.Fatal(err)
+			}
+		case "retire":
+			if retired, err := running.Retire(context.Background(), false); err != nil || !retired {
+				t.Fatalf("retire: %v %v", retired, err)
+			}
+		}
+		h.primary.set(h.primary.get() - testBlock)
+		before, _ := h.registry.get(1)
+		primaryBefore, secondaryBefore := h.primary.get(), h.secondary.get()
+		if err := running.checkRecords(context.Background()); err != nil {
+			t.Fatalf("%s: %v", moved, err)
+		}
+		if after, _ := h.registry.get(1); after != before || h.primary.get() != primaryBefore || h.secondary.get() != secondaryBefore {
+			t.Fatalf("%s: the check must not write anything", moved)
+		}
+	}
+}
+
+// 记录都不低于本进程确认过的水位(别的副本又预留过,记录更高是正常的):作证检查什么都不写,也不上报。
+// 读到的登记处水位算确认过的:之后三份一起回档到它之下,也查得出来。
+func TestWitness_CheckWritesNothingWhileRecordsAreUpToDate(t *testing.T) {
+	h := newHarness(t)
+	h.production(1)
+	obs := newObserver()
+	running := h.prodIssuer(1, func(o *Options) { o.OnReserve = obs.record })
+	a := &allocated{t: t}
+	a.take(running, 100)
+	a.take(h.prodIssuer(1, nil), 100)
+	before, _ := h.registry.get(1)
+	p, s := h.primary.snapshot(), h.secondary.snapshot()
+	if err := running.checkRecords(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := h.registry.get(1); after != before || h.primary.snapshot() != p || h.secondary.snapshot() != s {
+		t.Fatal("the check must not write up-to-date records")
+	}
+	if obs.count(ReserveBehindIssuer) != 0 {
+		t.Fatalf("observed %v", obs.seen)
+	}
+	if high, _ := running.witnessed(); high != before.HighWater {
+		t.Fatalf("witnessed %d, want the registry high water %d it read", high, before.HighWater)
+	}
+}
+
+// 作证检查只在第一次预留成功之后起(运维入口不发号,不会起),Close 时随后台一起停。
+func TestWitness_WatchStartsAfterTheFirstReservationAndStopsOnClose(t *testing.T) {
+	h := newHarness(t)
+	h.production(1)
+	iss := h.prodIssuer(1, nil)
+	iss.checkEvery = time.Hour // 用例里不会到期:只看它起没起、停不停得下来
+	watching := func() bool {
+		iss.mu.Lock()
+		defer iss.mu.Unlock()
+		return iss.watching
+	}
+	if _, err := iss.Recover(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if watching() {
+		t.Fatal("an operation without a reservation must not start the check")
+	}
+	if _, _, err := iss.Allocate(context.Background(), "player", 100); err != nil {
+		t.Fatal(err)
+	}
+	if !watching() {
+		t.Fatal("the first reservation must start the check")
+	}
+	if err := iss.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1911,6 +2641,32 @@ func TestValidClaim(t *testing.T) {
 	}
 	if RegistryKey(7) != "/id_registry/v1/region/07" {
 		t.Fatalf("registry key %q", RegistryKey(7))
+	}
+}
+
+// 本地记录的 JSON 带上写下它的部署身份;dev 写的记录没有这个字段,照样能读,身份为空。格式不对的身份不能读也不能写。
+func TestRecordJSON_CarriesTheDeployment(t *testing.T) {
+	want := recordJSON{Counter: 12, Authority: testAuthority, Deployment: "k8s:cluster-a"}
+	raw, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body recordJSON
+	if err := decodeStrict(raw, &body); err != nil || body != want || !validRecord(body) {
+		t.Fatalf("round trip: %s -> %+v %v", raw, body, err)
+	}
+	var dev recordJSON
+	if err := decodeStrict([]byte(`{"counter":12,"authority":"`+testAuthority+`"}`), &dev); err != nil || dev.Deployment != "" || !validRecord(dev) {
+		t.Fatalf("a record without the deployment field: %+v %v", dev, err)
+	}
+	for _, bad := range []recordJSON{
+		{Authority: testAuthority, Deployment: "k8s:cluster-a"},
+		{Counter: 12, Authority: "not-hex", Deployment: "k8s:cluster-a"},
+		{Counter: 12, Authority: testAuthority, Deployment: "Not A Valid Identity"},
+	} {
+		if validRecord(bad) {
+			t.Errorf("%+v must be invalid", bad)
+		}
 	}
 }
 

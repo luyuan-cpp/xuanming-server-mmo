@@ -1,0 +1,88 @@
+# Prometheus alert rules for 区服策略发布、本区角色上限守卫与「新玩家还有没有区可进」(docs/design/zone-full-handling.md §5、§6)。
+#
+# 前两个组件跑在本 zone 的网关副本上(java/gateway_node),只处理 gateway.home-zone-ids 里的区:
+#   - ZonePolicyPublisher:把区服目录 zone_config 的容量与「暂停创建新角色」开关写到 etcd,给本区 login 读
+#     (排队的区容量、建角拦截)。写不进去时 login 停在最后一次读到的策略:手工或自动关上的创角开关都到不了 login,
+#     区服列表已显示「暂停创角」,login 却照常建角。
+#   - RoleCapacityGuard:zone_config.role_capacity > 0 时定时问本区 login 一共建过多少角色,到了上限就关上创角开关。
+#     问不到时不关(问不到不等于满了),本区一直问不到就一直不会自动关。开关关着的区不问。
+# 第三个每个网关副本都算,看的是全部区:
+#   - NewPlayerCapacityMetrics:区服列表里显示开放的区数,与其中还能建角的区数。守卫会在无人值守时关上创角开关,
+#     最后一个能建角的区被关上之后,新玩家选哪个区都建不了角。
+# 指标由 Micrometer 导出:
+#   gateway_zone_policy_publish_total{outcome}   counter:outcome = written / unchanged / zone_missing / error,每区每拍一次。
+#   gateway_role_capacity_check_total{outcome}   counter:outcome = zone_missing / no_cap / below / already_closed / closed /
+#                                                raced / error,每区每拍一次。closed = 这次自动关上了(网关日志同时有一条 WARN)。
+#   gateway_zone_role_count{zone}                gauge:设了上限的本区最近一次读到的角色数(按合服之后的最终区,删角不减);
+#                                                开关关着时不问,停在关上那一刻的读数。
+#   gateway_zone_role_capacity{zone}             gauge:当前上限(取消后回 0)。这两个看板用,不告警:区满了之后角色数不会回落,
+#                                                「到了上限」会一直成立,告它只会一直响。
+#   gateway_zones_open                           gauge:区服列表里显示开放的区数(维护、关闭、预告不算)。
+#   gateway_zones_accepting_new_players          gauge:其中没有暂停创建新角色的区数。列表读不到时两个都是 NaN。
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/gateway-zone-policy-alerts.yaml
+#
+# Scrape prerequisites:与 gateway-zone-health-alerts.yaml 相同(gateway 管理端口 8082 的 /actuator/prometheus,
+# 抓取配置附加 namespace / pod 两个目标 label)。
+#
+# 阈值是初值:前两条 for 10m 盖过一次 etcd 或 login 的滚动重启,两者每拍(5 秒 / 10 秒)都会重试,恢复后自愈;
+# 第三条 for 5m 盖过运维「先关老区、再开新区」之间的操作间隙。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: gateway-zone-policy-alerts
+  labels:
+    app: gateway
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: gateway.zone-policy
+      interval: 30s
+      rules:
+        - alert: GatewayZonePolicyPublishFailing
+          expr: sum by (namespace) (increase(gateway_zone_policy_publish_total{outcome="error"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的网关持续写不进区服策略"
+            description: >-
+              本 zone 的网关连续 10 分钟写 etcd 里的区服策略失败,本区 login 停在最后一次读到的容量与创角开关:
+              之后手工或按角色上限自动关上的创角开关都到不了 login,区服列表显示「暂停创角」、login 却照常建角。
+              网关日志里找 "Zone policy publication failed for zone"(异常栈说明是查库失败还是 etcd 读写失败),
+              查 etcd 是否可达、网关的 etcd 凭据与 zone_config 所在库是否正常。
+        - alert: GatewayRoleCapacityCheckFailing
+          expr: sum by (namespace) (increase(gateway_role_capacity_check_total{outcome="error"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的网关持续问不到本区角色数"
+            description: >-
+              本 zone 设了角色上限(zone_config.role_capacity),网关连续 10 分钟问不到本区一共建过多少角色,
+              到了上限也不会自动暂停创角(问不到时刻意不关)。网关日志里找 "Role capacity check failed for zone";
+              链路是 网关 → 本区 login(LoginPreGate.GetZoneRoleCount)→ data_service(CountZoneRoles):
+              login 日志找 "GetZoneRoleCount zone=",data_service 日志找 "[DataRoute] CountZoneRoles"。
+              期间要控制导量,先手工 POST /admin/zones/<id>/create-role/close。
+        # 每个网关副本看到的都是全部区,数相同;取全局 max,只出一条。全服维护时没有开放的区,前半个条件不成立,不响。
+        - alert: GatewayNoZoneAcceptsNewCharacters
+          expr: max(gateway_zones_open) > 0 and max(gateway_zones_accepting_new_players) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "有 {{ $value }} 个区开放,但没有一个能创建新角色"
+            description: >-
+              区服列表里开放的区全部暂停了创建新角色(手工关的,或角色数到了 zone_config.role_capacity 被网关自动关上),
+              新玩家选哪个区都建不了角,老玩家不受影响。网关日志里找 "reached its role capacity" 看是哪个区、什么时候被自动关上的。
+              处置:开放预备好的新区(POST /admin/zones/<id>/open),或给现有的区调高上限
+              (PUT /admin/zones/<id>/role-capacity)后再 POST /admin/zones/<id>/create-role/open。
+              确实要全服停止建角时静默本条。

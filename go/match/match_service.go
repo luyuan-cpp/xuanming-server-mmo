@@ -38,6 +38,7 @@ import (
 	"shared/buildinfo"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
+	"shared/killswitch"
 	sharedregistry "shared/noderegistry"
 	"shared/releasetrack"
 	"shared/rolefence"
@@ -219,8 +220,6 @@ func main() {
 	if globalBackground {
 		teamService.StartSQLMaintenance(ctx)
 		matchlogic.StartGlobalSpectatorRecovery(ctx, svcCtx)
-		// 原执行进程失效的提前作废(battle-instance-loss-early-abort.md §4):补签问不到原实例时记可疑,两次确认后写 ABORT。
-		matchlogic.StartBattleInstanceLossWatcher(ctx, svcCtx)
 		// 完整结果归档与队伍反向端口均就绪后才开放成局。全球模式下单排、整队与 PVP 都由同一个按池撮合循环负责。
 		matchlogic.StartMatcherLoop(ctx, svcCtx)
 	} else {
@@ -228,6 +227,9 @@ func main() {
 		matchlogic.InitGatherSlots(svcCtx)
 		logx.Infof("[match] release_track=%s: matcher, recovery, team maintenance and result consumer disabled (canary serves client RPCs only)", releaseTrack)
 	}
+	// 原执行进程失效的提前作废(battle-instance-loss-early-abort.md §4):补签问不到原实例时记可疑,按实例两次确认后写 ABORT。
+	// 两条轨道都起:它只处理本副本收到的补签记下的局(数据面),全员金丝雀的对局只会向 canary 副本补签。
+	matchlogic.StartBattleInstanceLossWatcher(ctx, svcCtx)
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		matchpb.RegisterMatchServiceServer(grpcServer, server.NewMatchServiceServer(svcCtx))
@@ -255,7 +257,33 @@ func main() {
 	if entryErr != nil {
 		panic(entryErr)
 	}
+	// 原角色归属预检(docs/design/gate-online-identity.md §9.3),紧跟入口准入:带原身份的客户端请求不加锁读一次本库护栏副本。
+	// 战报列表与回放、作战脚本列表这些只读方法不经 Fenced,靠这一层核归属;角色已不归这份原身份 → PermissionDenied,
+	// 这一次判不了 → Aborted。排队、应战、组队、网络探测等写入仍在提交点持副本行锁复核。不带会话的内部调用没有原身份,不受影响。
+	ownership, ownershipErr := roleidentity.OwnershipInterceptor(svcCtx.Authority.VerifyOriginalOwner, authority.OwnerRejected)
+	if ownershipErr != nil {
+		panic(ownershipErr)
+	}
+	// 热关停(docs/design/rpc-kill-switch.md):本进程同时以 MatchNodeService 与 TeamNodeService 注册,两种类型的规则都认;
+	// 注册成功后登记两个 uuid。放在链的最外层(与 login 同理):被关停的请求不白验签。
+	// 受保护的方法(§8,只认精确规则)是已开始工作的收尾,与下面 PublicationAdmission 放行的收尾同一类:
+	// 挡住它们会让参战玩家的冻结解不开、帮会历练的占用放不掉。
+	ks := killswitch.New(killswitch.Config{
+		NodeTypes: []string{
+			base.ENodeType_name[int32(base.ENodeType_MatchNodeService)],
+			base.ENodeType_name[int32(base.ENodeType_TeamNodeService)],
+		},
+		Protected: []string{
+			matchpb.MatchInternal_CancelActivityBattle_FullMethodName,
+			matchpb.MatchInternal_CommitBattleOutcome_FullMethodName,
+			matchpb.MatchInternal_ReleaseTrialOccupancy_FullMethodName,
+			matchpb.MatchInternal_GetBattleCompletion_FullMethodName,
+			matchpb.MatchInternal_GetBattleTerminalDecision_FullMethodName,
+		},
+	})
+	ks.Start(ctx, svcCtx.Etcd)
 	s.AddUnaryInterceptors(
+		ks.UnaryServerInterceptor(),
 		gateIdentity,
 		serverbase.PublicationAdmission(root, relay, map[string]bool{
 			matchpb.MatchInternal_StartActivityBattle_FullMethodName:  true,
@@ -268,6 +296,7 @@ func main() {
 			matchpb.MatchInternal_GetBattleTerminalDecision_FullMethodName: true,
 		}, svcCtx.RelayIngress),
 		onlineEntry,
+		ownership,
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
 		serverbase.WriterFrozenInterceptor(),
 	)
@@ -295,6 +324,9 @@ func main() {
 		s.Stop() // go-zero RpcServer.Stop 只做 logx.Close
 		os.Exit(1)
 	}
+	// 认 instance/<uuid>/ 下的热关停规则:两份注册各一个 uuid。
+	ks.AddInstance(regs.match.Info.NodeUuid)
+	ks.AddInstance(regs.team.NodeUUID)
 	// 注册成功后才参与池归属:成员表来自 etcd 里的 MatchNodeService 注册,本实例用同一个 NodeUuid。
 	// canary 副本不参与(发布轨道设计 §2.5):stable 的成员表本来就不收 canary(MatchNodes.StableOnly),它也不起撮合循环。
 	if globalBackground {

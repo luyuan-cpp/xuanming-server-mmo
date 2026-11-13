@@ -24,7 +24,7 @@ import (
 
 // ReadPlayerStoreHolder 普通读写权行判持有者用的三列。没有路由或写权行回 (nil, nil):没有东西要释放,
 // 与 ReleaseDeadPlayerStoreHolder 同一口径;落点不在白名单回 ErrUnavailable。
-// 不占展示读的名额(acquirePlayerStoreRead):那个名额本来就是为了不让展示读挤掉判死。
+// 不占展示读的名额(readSlots):那个名额本来就是为了不让展示读挤掉判死。
 func (s *AccountDirectoryStore) ReadPlayerStoreHolder(ctx context.Context, playerID uint64) (*dspb.PlayerStoreHolder, error) {
 	if s == nil || playerID == 0 {
 		return nil, accountdirectory.ErrInvalid

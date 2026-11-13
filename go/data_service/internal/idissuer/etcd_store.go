@@ -16,7 +16,8 @@ import (
 
 // EtcdStore 把一份本地预留记录存在 etcd 的一个键里。
 //
-// 值是 JSON:{"counter":<计数器>,"authority":"<发号世系>"}。没上线,不认旧的纯数字格式:读到就当记录损坏,
+// 值是 JSON:{"counter":<计数器>,"authority":"<发号世系>","deployment":"<写下它的部署环境身份>"}。
+// deployment 在 dev 写的记录里缺省。没上线,不认旧的纯数字格式:读到就当记录损坏,
 // dev 清掉 /id_issuer/ 和 /id_registry/ 下的键重来。
 type EtcdStore struct {
 	cli *clientv3.Client
@@ -42,8 +43,14 @@ func NewEtcdStore(endpoints []string, key string) (*EtcdStore, error) {
 }
 
 type recordJSON struct {
-	Counter   uint64 `json:"counter"`
-	Authority string `json:"authority"`
+	Counter    uint64 `json:"counter"`
+	Authority  string `json:"authority"`
+	Deployment string `json:"deployment,omitempty"`
+}
+
+// validRecord 是本地记录读写共用的格式校验:计数器非 0,世系合法,部署身份为空(dev)或合法。
+func validRecord(body recordJSON) bool {
+	return body.Counter != 0 && ValidAuthority(body.Authority) && (body.Deployment == "" || ValidDeployment(body.Deployment))
 }
 
 // Read 是 etcd 默认的线性读。值损坏时返回错误,不当作不存在。
@@ -61,18 +68,22 @@ func (s *EtcdStore) Read(ctx context.Context) (Record, error) {
 	if err := decodeStrict(kv.Value, &body); err != nil {
 		return Record{}, fmt.Errorf("id issuer: record %s is corrupt: %w", s.key, err)
 	}
-	if body.Counter == 0 || !ValidAuthority(body.Authority) {
-		return Record{}, fmt.Errorf("id issuer: record %s is corrupt: counter=%d authority=%q", s.key, body.Counter, body.Authority)
+	if !validRecord(body) {
+		return Record{}, fmt.Errorf("id issuer: record %s is corrupt: counter=%d authority=%q deployment=%q",
+			s.key, body.Counter, body.Authority, body.Deployment)
 	}
-	return Record{Value: body.Counter, Authority: body.Authority, Revision: kv.ModRevision, Exists: true, ClusterID: clusterID}, nil
+	return Record{Value: body.Counter, Authority: body.Authority, Deployment: body.Deployment, Revision: kv.ModRevision,
+		Exists: true, ClusterID: clusterID}, nil
 }
 
 // CompareAndSwap 用 Txn 比较版本。超时等错误一律是结果未知,见 CounterStore 的契约。
-func (s *EtcdStore) CompareAndSwap(ctx context.Context, prev Record, value uint64, authority string) (bool, error) {
-	if value == 0 || !ValidAuthority(authority) {
-		return false, fmt.Errorf("id issuer: refusing to write record %s: counter=%d authority=%q", s.key, value, authority)
+func (s *EtcdStore) CompareAndSwap(ctx context.Context, prev Record, value uint64, authority, deployment string) (bool, error) {
+	body := recordJSON{Counter: value, Authority: authority, Deployment: deployment}
+	if !validRecord(body) {
+		return false, fmt.Errorf("id issuer: refusing to write record %s: counter=%d authority=%q deployment=%q",
+			s.key, value, authority, deployment)
 	}
-	raw, err := json.Marshal(recordJSON{Counter: value, Authority: authority})
+	raw, err := json.Marshal(body)
 	if err != nil {
 		return false, err
 	}
@@ -85,7 +96,7 @@ func (s *EtcdStore) Close() error {
 }
 
 // registryRoot 是登记处的键根。一个地域码一个键(/id_registry/v1/region/07),外加「下一个可认领的码」
-// (/id_registry/v1/next_region)。
+// (/id_registry/v1/next_region,重建期间带 rebuilding 标记,见 nextJSON)。
 const registryRoot = "/id_registry/v1/"
 
 // RegistryKey 是地域码在登记处的键,运维手册里 etcdctl 查看用。
@@ -185,7 +196,7 @@ func (r *EtcdRegistry) Read(ctx context.Context, region uint8) (ClaimRecord, err
 	return ClaimRecord{Claim: claim, Revision: kv.ModRevision, Exists: true, ClusterID: clusterID}, nil
 }
 
-// CompareAndSwap 用 Txn 比较版本。超时等错误一律是结果未知。
+// CompareAndSwap 用 Txn 比较版本。超时等错误一律是结果未知。prev 不存在时是补一条记录,见 createEntry。
 func (r *EtcdRegistry) CompareAndSwap(ctx context.Context, region uint8, prev ClaimRecord, next Claim) (bool, error) {
 	key := r.key(region)
 	if !validClaim(next) {
@@ -195,27 +206,103 @@ func (r *EtcdRegistry) CompareAndSwap(ctx context.Context, region uint8, prev Cl
 	if err != nil {
 		return false, err
 	}
-	return casKey(ctx, r.cli, key, prev.Exists, prev.Revision, raw)
+	if prev.Exists {
+		return casKey(ctx, r.cli, key, true, prev.Revision, raw)
+	}
+	return r.createEntry(ctx, region, next.State, key, raw)
 }
 
-// nextJSON 是登记处里「下一个可认领的码」:{"next":N}。没有这个键 = 登记处没开启。
+// createEntry 给一个没有记录的码补一条记录(Recover 重新登记、Retire 补墓碑、dev 第一次预留时认领),并在同一个事务里
+// 守住「有记录的码都小于下一个可认领的码」,规则见 Registry.CompareAndSwap 的契约。
+func (r *EtcdRegistry) createEntry(ctx context.Context, region uint8, state, key string, raw []byte) (bool, error) {
+	p, err := r.readPointer(ctx)
+	if err != nil {
+		return false, err
+	}
+	absent := clientv3.Compare(clientv3.CreateRevision(key), "=", 0)
+	put := clientv3.OpPut(key, string(raw))
+	txn := r.cli.Txn(ctx)
+	switch {
+	case !p.declared:
+		if refusal := allowCreateWithoutPointer(region, state); refusal != nil {
+			return false, refusal
+		}
+		// 提交时必须仍然没有指针:和 Open、BeginRebuild 抢在一起时,由它们的范围复核或这里的比较让其中一方重来。
+		txn = txn.If(absent, clientv3.Compare(clientv3.CreateRevision(r.nextKey()), "=", 0)).Then(put)
+	case uint32(region) < p.next:
+		// 下一个可认领的码只增不减,这个码之后也一直小于它,不用再比。
+		txn = txn.If(absent).Then(put)
+	default:
+		if refusal := allowCreateAtOrAboveNext(region, state, p.next); refusal != nil {
+			return false, refusal
+		}
+		// 重建中推指针,仍然留在重建状态:开放认领只由 Open 决定。
+		rawNext, marshalErr := json.Marshal(nextJSON{Next: uint32(region) + 1, Rebuilding: p.rebuilding})
+		if marshalErr != nil {
+			return false, marshalErr
+		}
+		txn = txn.If(absent, clientv3.Compare(clientv3.ModRevision(r.nextKey()), "=", p.revision)).
+			Then(put, clientv3.OpPut(r.nextKey(), string(rawNext)))
+	}
+	resp, err := txn.Commit()
+	if err != nil {
+		return false, err
+	}
+	return resp.Succeeded, nil
+}
+
+// allowCreateWithoutPointer 判断登记处还没声明「下一个可认领的码」时能不能补记录。在用的码可以:dev 第一次预留时认领,
+// 或者 Recover 凭幸存的本地记录重新登记;之后声明指针时会核对它高于全部已有记录。墓碑不行:没有指针可以对照,
+// 填错的码也会写进去,之后声明指针就被它卡住。重建登记处要先用 -id-registry-rebuild 声明指针,再补墓碑。
+func allowCreateWithoutPointer(region uint8, state string) error {
+	if state == ClaimActive {
+		return nil
+	}
+	return fmt.Errorf("%w: a tombstone for code %d needs the next claimable code to be checked against; "+
+		"declare it first with data_service -id-registry-rebuild", ErrRegistryNotOpened, region)
+}
+
+// allowCreateAtOrAboveNext 判断能不能给一个不小于「下一个可认领的码」的码补记录(补完会把那个指针推到 region+1)。
+// 在用的码可以:它是 Recover 凭幸存的本地记录重新登记的,说明登记处重建时开启得太低。墓碑只有恰好等于
+// 下一个可认领的码时可以:这个码不用了,跳过它。墓碑更大时拒绝:没有任何证据说明中间的码用过,填错一次就烧掉一段。
+func allowCreateAtOrAboveNext(region uint8, state string, next uint32) error {
+	if state == ClaimActive || uint32(region) == next {
+		return nil
+	}
+	return fmt.Errorf("%w: code %d was never claimed and the next claimable code is %d, there is nothing to retire",
+		ErrRegionOutOfOrder, region, next)
+}
+
+// nextJSON 是登记处里「下一个可认领的码」:{"next":N},重建期间是 {"next":N,"rebuilding":true}。
 type nextJSON struct {
-	Next uint32 `json:"next"`
+	Next       uint32 `json:"next"`
+	Rebuilding bool   `json:"rebuilding,omitempty"`
 }
 
-func (r *EtcdRegistry) readNext(ctx context.Context) (next uint32, revision int64, opened bool, err error) {
+// claimPointer 是读到的「下一个可认领的码」,有三种状态:
+//   - 没声明(declared=false):键不存在。新世界还没开启,或者登记处整个丢了数据。
+//   - 重建中(rebuilding=true):声明了,只用来核对补进来的记录,还不开放认领。
+//   - 已开放:声明了,ClaimNew 可以认领 next。
+type claimPointer struct {
+	next       uint32
+	revision   int64
+	declared   bool
+	rebuilding bool
+}
+
+func (r *EtcdRegistry) readPointer(ctx context.Context) (claimPointer, error) {
 	resp, err := r.cli.Get(ctx, r.nextKey())
 	if err != nil {
-		return 0, 0, false, err
+		return claimPointer{}, err
 	}
 	if len(resp.Kvs) == 0 {
-		return 0, 0, false, nil
+		return claimPointer{}, nil
 	}
 	var body nextJSON
 	if err := decodeStrict(resp.Kvs[0].Value, &body); err != nil || body.Next > MaxNextRegion {
-		return 0, 0, false, fmt.Errorf("id issuer: registry key %s is corrupt: %q", r.nextKey(), resp.Kvs[0].Value)
+		return claimPointer{}, fmt.Errorf("id issuer: registry key %s is corrupt: %q", r.nextKey(), resp.Kvs[0].Value)
 	}
-	return body.Next, resp.Kvs[0].ModRevision, true, nil
+	return claimPointer{next: body.Next, revision: resp.Kvs[0].ModRevision, declared: true, rebuilding: body.Rebuilding}, nil
 }
 
 // ClaimNew 在一个 Txn 里核「下一个可认领的码」没变、这个码没有记录,再写这个码的记录并推进「下一个可认领的码」。
@@ -224,18 +311,21 @@ func (r *EtcdRegistry) ClaimNew(ctx context.Context, region uint8, claim Claim) 
 	if claim.State != ClaimActive || !validClaim(claim) {
 		return false, fmt.Errorf("id issuer: refusing to claim %s with %+v", key, claim)
 	}
-	next, revision, opened, err := r.readNext(ctx)
+	p, err := r.readPointer(ctx)
 	if err != nil {
 		return false, err
 	}
-	if !opened {
+	if !p.declared {
 		return false, ErrRegistryNotOpened
 	}
-	if uint32(region) < next {
-		return false, fmt.Errorf("%w: code %d is below the next claimable code %d", ErrRegionClaimed, region, next)
+	if p.rebuilding {
+		return false, ErrRegistryRebuilding
 	}
-	if uint32(region) > next {
-		return false, fmt.Errorf("%w: the next claimable code is %d, this deployment is configured with %d", ErrRegionOutOfOrder, next, region)
+	if uint32(region) < p.next {
+		return false, fmt.Errorf("%w: code %d is below the next claimable code %d", ErrRegionClaimed, region, p.next)
+	}
+	if uint32(region) > p.next {
+		return false, fmt.Errorf("%w: the next claimable code is %d, this deployment is configured with %d", ErrRegionOutOfOrder, p.next, region)
 	}
 	raw, err := json.Marshal(toClaimJSON(claim))
 	if err != nil {
@@ -246,7 +336,7 @@ func (r *EtcdRegistry) ClaimNew(ctx context.Context, region uint8, claim Claim) 
 		return false, err
 	}
 	resp, err := r.cli.Txn(ctx).If(
-		clientv3.Compare(clientv3.ModRevision(r.nextKey()), "=", revision),
+		clientv3.Compare(clientv3.ModRevision(r.nextKey()), "=", p.revision),
 		clientv3.Compare(clientv3.CreateRevision(key), "=", 0),
 	).Then(clientv3.OpPut(key, string(raw)), clientv3.OpPut(r.nextKey(), string(rawNext))).Commit()
 	if err != nil {
@@ -255,47 +345,101 @@ func (r *EtcdRegistry) ClaimNew(ctx context.Context, region uint8, claim Claim) 
 	return resp.Succeeded, nil
 }
 
-// Open 写入「下一个可认领的码」。已有记录的码(重建时重新登记的、补的墓碑)都必须小于 next。
+// BeginRebuild 声明「下一个可认领的码」但不开放认领,见 Registry 的契约。
+func (r *EtcdRegistry) BeginRebuild(ctx context.Context, next uint32) (bool, error) {
+	if next > MaxNextRegion {
+		return false, fmt.Errorf("id issuer: next region %d exceeds %d", next, MaxNextRegion)
+	}
+	for attempt := 0; attempt < reserveAttempts; attempt++ {
+		p, err := r.readPointer(ctx)
+		if err != nil || p.declared {
+			return false, err
+		}
+		declared, err := r.declarePointer(ctx, nextJSON{Next: next, Rebuilding: true})
+		if err != nil || declared {
+			return declared, err
+		}
+	}
+	return false, ErrContended
+}
+
+// Open 开放认领,见 Registry 的契约:没声明时写入「下一个可认领的码」,重建中时结束重建。
 func (r *EtcdRegistry) Open(ctx context.Context, next uint32) (bool, error) {
 	if next > MaxNextRegion {
 		return false, fmt.Errorf("id issuer: next region %d exceeds %d", next, MaxNextRegion)
 	}
+	for attempt := 0; attempt < reserveAttempts; attempt++ {
+		p, err := r.readPointer(ctx)
+		if err != nil {
+			return false, err
+		}
+		if p.declared && !p.rebuilding {
+			return false, nil
+		}
+		var opened bool
+		if p.rebuilding {
+			opened, err = r.finishRebuild(ctx, p, next)
+		} else {
+			opened, err = r.declarePointer(ctx, nextJSON{Next: next})
+		}
+		if err != nil || opened {
+			return opened, err
+		}
+	}
+	return false, ErrContended
+}
+
+// declarePointer 在还没有「下一个可认领的码」时写入它。
+//   - 声明重建(body.Rebuilding):已有记录的码(之前凭本地记录重新登记的)都必须小于它。
+//   - 直接开放(世界第一次部署):不能已有任何码的记录。有就是丢过数据的登记处,要先声明重建(ErrRegistryNeedsRebuild)。
+//
+// false = 提交时输给了并发的写入,什么都没写,调用方重读再来。
+func (r *EtcdRegistry) declarePointer(ctx context.Context, body nextJSON) (bool, error) {
 	prefix := r.root + "region/"
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return false, err
+	}
+	resp, err := r.cli.Get(ctx, prefix, clientv3.WithPrefix(), clientv3.WithKeysOnly())
+	if err != nil {
+		return false, err
+	}
+	for _, kv := range resp.Kvs {
+		code, err := strconv.ParseUint(strings.TrimPrefix(string(kv.Key), prefix), 10, 8)
+		if err != nil {
+			return false, fmt.Errorf("id issuer: unexpected registry key %q", kv.Key)
+		}
+		if !body.Rebuilding {
+			return false, fmt.Errorf("%w: code %d already has an entry", ErrRegistryNeedsRebuild, code)
+		}
+		if uint32(code) >= body.Next {
+			return false, fmt.Errorf("%w: code %d already has an entry, the next claimable code must be above it", ErrRegionClaimed, code)
+		}
+	}
+	// 扫描与提交之间可能有 Recover 新增记录,必须连同范围一起在提交点复核。
+	// 范围内任何键的版本超过扫描版本就重读;仅比较已扫描键会漏掉当时还不存在的码。
+	txn, err := r.cli.Txn(ctx).If(
+		clientv3.Compare(clientv3.CreateRevision(r.nextKey()), "=", 0),
+		clientv3.Compare(clientv3.ModRevision(prefix), "<", resp.Header.Revision+1).WithPrefix(),
+	).Then(clientv3.OpPut(r.nextKey(), string(raw))).Commit()
+	if err != nil {
+		return false, err
+	}
+	return txn.Succeeded, nil
+}
+
+// finishRebuild 结束重建、开放认领。next 必须等于登记处里现在的值:重建期间重新登记的码可能把它推高过,
+// 让运维对着地域码台账再确认一次。重建期间补记录都按指针核对过,这里不用再扫。
+// false = 提交时指针被并发的补记录推过,什么都没写,调用方重读再来。
+func (r *EtcdRegistry) finishRebuild(ctx context.Context, p claimPointer, next uint32) (bool, error) {
+	if next != p.next {
+		return false, fmt.Errorf("%w: the registry holds %d, the command gave %d", ErrNextRegionMismatch, p.next, next)
+	}
 	raw, err := json.Marshal(nextJSON{Next: next})
 	if err != nil {
 		return false, err
 	}
-	for attempt := 0; attempt < reserveAttempts; attempt++ {
-		if _, _, opened, err := r.readNext(ctx); err != nil || opened {
-			return false, err
-		}
-		resp, err := r.cli.Get(ctx, prefix, clientv3.WithPrefix(), clientv3.WithKeysOnly())
-		if err != nil {
-			return false, err
-		}
-		for _, kv := range resp.Kvs {
-			code, err := strconv.ParseUint(strings.TrimPrefix(string(kv.Key), prefix), 10, 8)
-			if err != nil {
-				return false, fmt.Errorf("id issuer: unexpected registry key %q", kv.Key)
-			}
-			if uint32(code) >= next {
-				return false, fmt.Errorf("%w: code %d already has an entry, the next claimable code must be above it", ErrRegionClaimed, code)
-			}
-		}
-		// 扫描与提交之间可能有 Recover/Retire 新增记录，必须连同范围一起在提交点复核。
-		// 范围内任何键的版本超过扫描版本就重读；仅比较已扫描键会漏掉当时还不存在的码。
-		txn, err := r.cli.Txn(ctx).If(
-			clientv3.Compare(clientv3.CreateRevision(r.nextKey()), "=", 0),
-			clientv3.Compare(clientv3.ModRevision(prefix), "<", resp.Header.Revision+1).WithPrefix(),
-		).Then(clientv3.OpPut(r.nextKey(), string(raw))).Commit()
-		if err != nil {
-			return false, err
-		}
-		if txn.Succeeded {
-			return true, nil
-		}
-	}
-	return false, ErrContended
+	return casKey(ctx, r.cli, r.nextKey(), true, p.revision, raw)
 }
 
 // Close 关闭 etcd 连接。

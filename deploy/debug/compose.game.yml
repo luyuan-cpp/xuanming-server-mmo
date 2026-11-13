@@ -179,7 +179,7 @@ services:
     <<: *app
     image: ${DB_MIGRATE_IMAGE:-local/mmorpg-db-migrate:debug-20261020}
     entrypoint: [/app/service]
-    command: [-f, /app/etc/service.yaml, -command, up]
+    command: [-f, /app/etc/service.yaml, -storage-id, "1000000", -command, up]
     environment:
       DB_ALLOWED_DATABASES: player_store_1000000_db
     volumes:

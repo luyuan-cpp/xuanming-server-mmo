@@ -210,10 +210,11 @@ func entriesRegisterInstance(entries []nodeEntry, instance string) bool {
 }
 
 // foreignZoneOpensWorldMap 是跨 zone 传送第一条腿上「目标图在目标 zone 开没开」的与 zone 无关的判定(§4.3 第 2 条)。
-// 目标 zone 恒不是本 zone,不读它的频道集合。开着的条件:confID 是 World 表里的图,且 etcd 里目标 zone 至少有一个能
-// 承载大世界的场景节点(本进程不按类型分池时任何节点都算,与 node_selection.go 的 StrictNodeTypeSeparation 同口径)。
-// 每个 zone 都给 World 表里的每张图铺频道(世界频道初始化),所以这与原来「频道集合非空」只差在目标 zone 刚起、
-// 领导者还没铺频道的那几秒。err 非空 = 读不到注册表,调用方按原有口径放行(这道检查不是安全门)。
+// 目标 zone 恒不是本 zone,不读它的频道集合。开着的条件:confID 是 World 表里的图,且 etcd 里目标 zone 至少有一个
+// 第二条腿能用来落地的大世界节点(hasWorldHostingRegistration,与选点 getNodesForPurpose 同口径,排空中的节点不算)。
+// 有这样的节点,第二条腿就落得了地:频道还没铺时(目标 zone 刚起、领导者还没跑完世界频道初始化),第二条腿当场补铺
+// (world_channel_on_demand.go),领导者还没把节点放进负载集时在请求期限内等它。
+// err 非空 = 读不到注册表,调用方按原有口径放行(这道检查不是安全门)。
 func foreignZoneOpensWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, confID uint64) (bool, error) {
 	if travelMapOpenOverride != nil {
 		return travelMapOpenOverride(zoneID, confID)
@@ -227,12 +228,28 @@ func foreignZoneOpensWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, z
 		return false, err
 	}
 	metrics.ObserveForeignZoneRegistryRead(zoneID, metrics.ForeignZoneRegistryReadOK)
+	return hasWorldHostingRegistration(entries, svcCtx.Config.StrictNodeTypeSeparation), nil
+}
+
+// hasWorldHostingRegistration:这份注册表(同一个 zone 的条目)里有没有能放大世界频道、收新玩家的节点。
+// 与 getNodesForPurpose(NodePurposeWorld) 同一个判据,改一处要同步另一处:
+//   - 计划排空中(NodeInfo.admission = CLOSED)的不算:不放新频道、不收新玩家(scene-node-planned-drain.md §4.2);
+//   - 身份歧义(同一 node_id 挂着不止一条注册)的不算:选点拒绝它;
+//   - 按类型分池(StrictNodeTypeSeparation)时类型要能承载大世界;不分池时任何节点都算,与选点的回落一致。
+func hasWorldHostingRegistration(entries []nodeEntry, strictNodeTypeSeparation bool) bool {
+	registrations := make(map[string]int, len(entries))
 	for _, entry := range entries {
-		if !svcCtx.Config.StrictNodeTypeSeparation || constants.IsWorldHostingType(entry.reg.SceneNodeType) {
-			return true, nil
+		registrations[entry.nodeID]++
+	}
+	for _, entry := range entries {
+		if entry.reg.Draining || registrations[entry.nodeID] > 1 {
+			continue
+		}
+		if !strictNodeTypeSeparation || constants.MatchesPurpose(entry.reg.SceneNodeType, constants.NodePurposeWorld) {
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
 // worldConfInTable:confID 是不是 World 表里的一张图(走 worldConfIds,单测可替换)。

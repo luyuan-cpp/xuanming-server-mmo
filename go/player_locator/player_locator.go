@@ -27,6 +27,7 @@ import (
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
+	"shared/shutdownbudget"
 )
 
 var configFile = flag.String("f", "etc/player_locator.yaml", "config file path")
@@ -44,6 +45,9 @@ func main() {
 		return
 	}
 	conf.MustLoad(*configFile, &config.AppConfig)
+	// 停机强退时限要盖住最长的在途请求(Timeout 10s 比 go-zero 缺省的 4.5s 长):滚动重启时在途的会话 / 位置请求
+	// 要么做完、要么自己超时,不被强杀砍断。
+	shutdownbudget.Apply(&config.AppConfig.RpcServerConf)
 	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入):在建任何 Redis 客户端之前填好。
 	if err := config.AppConfig.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
 		logx.Must(fmt.Errorf("shared Redis password: %w", err))
@@ -87,7 +91,13 @@ func main() {
 	// 复用 node 的 etcd 客户端,不另开第二条连接 —— 连的是同一个集群。
 	// Start 非阻塞:客户端为 nil、etcd 连不上、前缀下没有 key,一律放行(fail-open),
 	// 因此这里既不需要判错也不需要 logx.Must。
-	ks := killswitch.New(killswitch.Config{Prefix: config.AppConfig.KillSwitchPrefix})
+	// NodeTypes:认 type/PlayerLocatorNodeService/ 下的规则;本进程的 uuid 上面注册时已经拿到
+	// (docs/design/rpc-kill-switch.md §5)。
+	ks := killswitch.New(killswitch.Config{
+		Prefix:    config.AppConfig.KillSwitchPrefix,
+		NodeTypes: []string{proto_common.ENodeType_name[int32(nodeType)]},
+	})
+	ks.AddInstance(n.Info.NodeUuid)
 	ks.Start(leaseCtx, n.EtcdClient())
 
 	// 这两条后台链路(租约清理在这里,会话对账在 zrpc.MustNewServer 之后)都用 safego.Go 而不是裸 `go`:它们各自的循环体已经在内部
@@ -143,7 +153,7 @@ func main() {
 		fmt.Printf("  etcd:        %v\n", config.AppConfig.Etcd.Hosts)
 	}
 	fmt.Printf("  kafka:       %v\n", config.AppConfig.Kafka.Brokers)
-	fmt.Printf("  redis:       %s\n", config.AppConfig.RedisClient.Host)
+	fmt.Printf("  redis:       %s\n", config.AppConfig.EffectiveControlRedis().Describe())
 	fmt.Println("=============================================================")
 	s.Start()
 }

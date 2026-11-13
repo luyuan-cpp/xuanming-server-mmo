@@ -33,6 +33,8 @@ var (
 	ErrBattleScriptLoadoutFull = errors.New("battle script loadout full")
 	// ErrBattleScriptReviewStale 审核的这一版已不是当前待审版(作者改了、删了,或已被审过)
 	ErrBattleScriptReviewStale = errors.New("battle script review is stale")
+	// ErrBattleScriptReviewInvalid 要通过的这一版按当前配表已不合法(配表改过),只能驳回
+	ErrBattleScriptReviewInvalid = errors.New("battle script no longer validates")
 )
 
 const battleScriptColumns = "script_id,owner_player_id,revision,content,review_state,approved_revision,approved_content,reject_reason,submitted_ms,reviewed_ms"
@@ -331,13 +333,15 @@ func (s *Store) PendingBattleScripts(ctx context.Context, limit uint32) ([]*pb.M
 		" FROM match_battle_script WHERE review_state=? ORDER BY submitted_ms,script_id LIMIT ?", reviewPending, limit)
 }
 
-// BattleScriptReview 是一次审核:Revision 必须仍是当前提交版且待审
+// BattleScriptReview 是一次审核:Revision 必须仍是当前提交版且待审。
+// Validate 在通过时对锁住的那一版正文再校验一次(纯函数,不调 RPC);返回错误则不通过、回 ErrBattleScriptReviewInvalid
 type BattleScriptReview struct {
 	ScriptID uint64
 	Revision uint32
 	Approve  bool
 	Reviewer string
 	Reason   string
+	Validate func(content []byte) error
 }
 
 // ReviewBattleScript 通过或驳回一版剧本,同一事务写审核流水。审的不是当前待审版回 ErrBattleScriptReviewStale。
@@ -358,6 +362,9 @@ func (s *Store) ReviewBattleScript(ctx context.Context, in BattleScriptReview) e
 	}
 	if current.Revision != in.Revision || current.ReviewState != reviewPending {
 		return ErrBattleScriptReviewStale
+	}
+	if in.Approve && in.Validate != nil && in.Validate(current.Content) != nil {
+		return ErrBattleScriptReviewInvalid
 	}
 	n, err := now(ctx, tx)
 	if err != nil {

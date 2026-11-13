@@ -41,6 +41,7 @@ const (
 	OutcomeUnknownMessage      = "unknown_message"       // 消息号不在路由表
 	OutcomeNotClientProtocol   = "not_client_protocol"   // 所属 service 不是客户端协议
 	OutcomeBattleRejected      = "battle_rejected"       // 目标是 Battle,战斗只走直连(D33)
+	OutcomeKillSwitch          = "killswitch"            // 目标方法被热关停规则拒绝(docs/design/rpc-kill-switch.md §7),回信封 1003
 	OutcomeInvalidReleaseTrack = "invalid_release_track" // gate 自报的 release_track 不是空串 / stable / canary(契约违例)
 	OutcomeNoTarget            = "no_target"             // 目标类型没有可用实例(zone-scoped 时指同 zone 内)
 	OutcomeDialError           = "dial_error"            // 建目标连接失败
@@ -62,7 +63,7 @@ var (
 	forwardTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "forward_total",
-		Help:      "Forward calls by client message id and outcome (ok|missing_session|invalid_request|unknown_message|not_client_protocol|battle_rejected|invalid_release_track|no_target|dial_error|upstream_timeout|upstream_error).",
+		Help:      "Forward calls by client message id and outcome (ok|missing_session|invalid_request|unknown_message|not_client_protocol|battle_rejected|killswitch|invalid_release_track|no_target|dial_error|upstream_timeout|upstream_error).",
 	}, []string{"message_id", "outcome"})
 
 	forwardByTrackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{

@@ -37,7 +37,7 @@ class LoginRpcClientRetryTest {
     void setUp() throws IOException {
         server = ServerBuilder.forPort(0)
                 .addService(failingService(LOGIN_SERVICE, "Login", "RefreshToken"))
-                .addService(failingService(PREGATE_SERVICE, "AssignGate", "QueryQueueStatus"))
+                .addService(failingService(PREGATE_SERVICE, "AssignGate", "QueryQueueStatus", "GetZoneRoleCount"))
                 .build()
                 .start();
 
@@ -77,6 +77,13 @@ class LoginRpcClientRetryTest {
         assertEquals(1, callCount(PREGATE_SERVICE + "/QueryQueueStatus"));
     }
 
+    // 本区角色总数(2026-11-12)是纯读:UNAVAILABLE 按 login.grpc.retry 重试(这里 3 次),之后原样抛出,不兜底成 0。
+    @Test
+    void readOnlyZoneRoleCountRetriesUnavailableThenThrows() {
+        assertUnavailable(() -> client.getZoneRoleCount(1));
+        assertEquals(1 + 3, callCount(PREGATE_SERVICE + "/GetZoneRoleCount"));
+    }
+
     @Test
     void zoneBoundRpcsFailBeforeNetworkWhenMappingIsMissing() {
         assertMissingZone(() -> client.login(
@@ -85,11 +92,13 @@ class LoginRpcClientRetryTest {
                 new LoginRpcClient.AssignGateRequestProto(2, "", "account", "device"), 2), 2);
         assertMissingZone(() -> client.queryQueueStatus(
                 new LoginRpcClient.QueryQueueStatusRequestProto("queue-token"), 2), 2);
+        assertMissingZone(() -> client.getZoneRoleCount(2), 2);
 
         // 缺 mapping 必须在选 channel 阶段失败，不能悄悄打到 zone 1。
         assertEquals(0, callCount(LOGIN_SERVICE + "/Login"));
         assertEquals(0, callCount(PREGATE_SERVICE + "/AssignGate"));
         assertEquals(0, callCount(PREGATE_SERVICE + "/QueryQueueStatus"));
+        assertEquals(0, callCount(PREGATE_SERVICE + "/GetZoneRoleCount"));
     }
 
     @Test

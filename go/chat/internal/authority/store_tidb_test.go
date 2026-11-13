@@ -214,6 +214,94 @@ func TestChatTiDBSQLRateRejectDoesNotConsumeUUID(t *testing.T) {
 	require.Equal(t, 6, count(t, s))
 }
 
+// 世界频道发言间隔:同一名玩家相邻两条世界消息至少隔 WorldChannelCooldownMs。只管世界频道、只管他自己;
+// 被挡的请求不落库、不占 request_id,间隔到了用同一个 id 能发出去;已提交的首条照常按重放回。
+func TestChatTiDBWorldCooldownSpacesOneSendersWorldMessages(t *testing.T) {
+	rules := fixtureRules()
+	rules.WorldChannelCooldownMs = 5000
+	s, _ := nativeStoreFixture(t, false, rules)
+	ctx := original(t, 11)
+	now := uint64(100000)
+	s.clock = func(context.Context, *sql.Tx) (uint64, error) { return now, nil }
+
+	r, err := s.Send(ctx, sendRequest("world-first", 0))
+	require.NoError(t, err)
+	require.Zero(t, r.Tip)
+	require.NotNil(t, r.Message)
+
+	now += 4999
+	r, err = s.Send(ctx, sendRequest("world-second", 0))
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrRateLimited, r.Tip, "间隔差 1ms 没到")
+	require.True(t, r.Cooldown)
+	require.Nil(t, r.Message, "被挡的请求不推送")
+	require.Equal(t, 1, count(t, s), "被挡的请求不落库")
+
+	r, err = s.Send(ctx, sendRequest("private-inside-cooldown", 22))
+	require.NoError(t, err)
+	require.Zero(t, r.Tip, "私聊不受世界频道间隔约束")
+	require.False(t, r.Cooldown)
+
+	// 19 与 11 同一段(都 % 8 = 3):间隔按玩家算,不按分段算。
+	r, err = s.Send(original(t, 19), sendRequest("world-other-sender", 0))
+	require.NoError(t, err)
+	require.Zero(t, r.Tip, "别的玩家不受这名玩家的间隔影响")
+
+	r, err = s.Send(ctx, sendRequest("world-first", 0))
+	require.NoError(t, err)
+	require.True(t, r.Duplicate, "间隔内重放首条仍按重复回,不算被挡")
+	require.False(t, r.Cooldown)
+
+	now++ // 距首条正好 5000ms
+	r, err = s.Send(ctx, sendRequest("world-second", 0))
+	require.NoError(t, err)
+	require.Zero(t, r.Tip, "间隔到了,被挡过的 request_id 没被占用")
+	require.False(t, r.Duplicate)
+	require.Equal(t, 4, count(t, s))
+}
+
+// 世界频道按发送者分段写,读的时候各段合并:8 名发送者正好各占一段,拉取按接受时刻从新到旧拿到全服最新的几条。
+func TestChatTiDBWorldHistoryMergesEveryShard(t *testing.T) {
+	s, _ := nativeStoreFixture(t, false)
+	now := uint64(100000)
+	s.clock = func(context.Context, *sql.Tx) (uint64, error) { return now, nil }
+	for sender := uint64(8); sender < 8+constants.WorldStreamShards; sender++ {
+		now += 1000
+		_, err := s.Send(original(t, sender), sendRequest(fmt.Sprintf("world-%d", sender), 0))
+		require.NoError(t, err)
+	}
+	var streams int
+	require.NoError(t, s.db.QueryRow("SELECT COUNT(DISTINCT stream_key) FROM chat_send_authority").Scan(&streams))
+	require.Equal(t, constants.WorldStreamShards, streams, "8 名发送者各落一段")
+
+	reader := original(t, 11)
+	all := pull(t, s, reader, 0)
+	require.Len(t, all, constants.WorldStreamShards)
+	for i, message := range all {
+		require.EqualValues(t, 15-i, message.SenderPlayerId, "按接受时刻从新到旧")
+	}
+	newest, err := s.Pull(reader, &chatpb.PullChatHistoryRequest{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD}, 3)
+	require.NoError(t, err)
+	require.Len(t, newest, 3)
+	for i, message := range newest {
+		require.EqualValues(t, 15-i, message.SenderPlayerId, "只要 3 条时是全服最新的 3 条,不是某一段的 3 条")
+	}
+}
+
+// 保留期列与接受时刻是同一时刻(UTC):库按它删过期原件。
+func TestChatTiDBOriginalCarriesAcceptedAtForRetention(t *testing.T) {
+	s, _ := nativeStoreFixture(t, false)
+	now := uint64(1794441600123) // 2026-11-12 00:00:00.123 UTC
+	s.clock = func(context.Context, *sql.Tx) (uint64, error) { return now, nil }
+	_, err := s.Send(original(t, 11), sendRequest("retention", 22))
+	require.NoError(t, err)
+	var acceptedAtText string
+	var acceptedMs uint64
+	require.NoError(t, s.db.QueryRow("SELECT CAST(accepted_at AS CHAR),accepted_ms FROM chat_send_authority WHERE player_id=11").Scan(&acceptedAtText, &acceptedMs))
+	require.Equal(t, now, acceptedMs)
+	require.Equal(t, "2026-11-12 00:00:00.123", acceptedAtText)
+}
+
 func TestChatTiDBCallerCanReadHistoryAfterPeerDeletion(t *testing.T) {
 	s, _ := nativeStoreFixture(t, false)
 	ctx := original(t, 11)

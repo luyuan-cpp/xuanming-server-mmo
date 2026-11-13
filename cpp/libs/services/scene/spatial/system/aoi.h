@@ -59,6 +59,12 @@ public:
     // 为什么不交给 Update 的位移重判:重判按滞后区间处理,旧位置 20 m 内的观察者会继续看见它;
     // 瞬移不是走过去的,旧位置的观察者必须立刻收到移除,新位置只按进视野半径重建。
     static void ResetEntityVisibility(entt::entity entity);
+
+    // watcher 换了客户端之后调用(断线保留内重连、顶号、gate 排空迁移到另一台 gate):新客户端里一个 actor 都没有,
+    // 把 watcher 当前显示中的全部目标(空间来源与显式关注都算)当作刚出现,经同一个下发出口重新发一次创建。
+    // 只发消息:不改任何关系、名额与格子;正在显示 watcher 的观察者什么都收不到,所以别的玩家不会看到它先消失再出现。
+    // 暂时不可见的显式关注(目标隐身、名额不足)不发,条件满足时照常由原有入口创建。
+    static void ResendVisibleTargets(entt::entity watcher);
 private:
     // 把 entity 登记到 currentHex 对应的格子(格子变了才挪)。返回 true 表示这是它第一次进入
     // 本场景的格子(刚进场、换场景、同场景瞬移之后),调用方要立即做一次完整评估。
@@ -74,5 +80,8 @@ private:
     // 把一批可见性变化下发给各观察者的客户端。先按(观察者, 目标)求净变化,同一批里
     // 显示又隐藏的对不发;再按观察者分组:只涉及一个目标的按目标合并成一次广播(同一消息体只组包一次),
     // 涉及多个目标的一条列表消息单发。departed 是正在离场的实体:它的移除改用 ActorDestroyS2C 广播。
+    // 创建之后,新看见的目标里正在走的(actor_motion::IsAdvancing)再补它此刻的移动状态:移动广播只发给当时
+    // 已经在看的人,后来的观察者靠这一条才立刻看到它在走。只发给有客户端的观察者;所有会让客户端新显示一个
+    // 目标的入口(Update、Follow、隐身结束、压力回升补回)都经这里,不用各自补。
     static void SendVisibilityChanges(const AoiVisibilityChanges& changes, entt::entity departed = entt::null);
 };

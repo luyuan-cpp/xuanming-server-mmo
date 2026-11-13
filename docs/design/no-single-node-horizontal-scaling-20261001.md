@@ -183,7 +183,7 @@
   >
   > 修正方向(未落码):先把总账算对,配 `max_connections` 并同步 MySQL Pod 内存(现为 limits 1Gi);给 gateway 显式配 Hikari 池;导出连接池指标;额外落点库池加 `ConnMaxIdleTime`,并把 zone 库池与全局库池的大小拆成两个旋钮。详见 PROGRESS.md 2026-10-12「落点多库连接拓扑」条目。
   >
-  > **2026-10-13 落码说明(G2b;已落码,未编译、未测试,待 Codex 验证;数值均待压测确认)**:上一条的修正方向已按 `docs/handoff/launch-readiness-20261013/spec_G2b.md` 落到代码与部署清单。原文与上面的更正注都不改,口径不一致处以本条为准:
+  > **2026-10-13 落码说明(G2b;已落码,未编译、未测试,待 Codex 验证;数值 2026-11-12 起为已定值,压测出基线后可调,依据见 `deploy/k8s/README.md`「MySQL 连接总账」状态段)**:上一条的修正方向已按 `docs/handoff/launch-readiness-20261013/spec_G2b.md` 落到代码与部署清单。原文与上面的更正注都不改,口径不一致处以本条为准:
   > - `max_connections` 500 → **1800**,MySQL Pod 内存 requests 512Mi → 1Gi、limits 1Gi → 5Gi(`deploy/k8s/manifests/infra/mysql.yaml`);
   > - Java gateway 显式配 Hikari 池 `maximum-pool-size: 5` / `minimum-idle: 2`(以前没配,按默认值推断每实例恒开约 10 条),K8s ConfigMap 镜像这两个值;
   > - 滚动余量按**每个 Deployment 多 2 个实例**计(maxSurge 的 1 个新 Pod + 1 个仍在优雅退出、连接还没释放的旧 Pod),范围是一个 zone 的 db / data-service / gateway 加全局的 friend、trade。上面写的「每个 zone 还会临时再多 (60+8E)+35」少算了退出中的旧 Pod,也漏了 gateway 与两个全局服务;
@@ -362,7 +362,7 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 
 - Java 网关（`java/gateway_node`）的区目录、公告、白名单，以及这个库自己的写者闸门表。区目录读不到，选服和分配 gate 就都失败，所以它在登录链路上。
 - login 作为 SQL 写者登记在这个库的闸门上（`Apply-OneGoSvc` 注释：「login 登记在网关的 mmorpg 库上」）；login 的常驻进程不写业务表。
-- login 的 PasswordAuth（读 `user_accounts`）在 K8s 上没有部署，ConfigMap 里只有 DevPasswordAuth。`user_accounts` 归哪个库，文档互相矛盾：[TiDB 一期](tidb-phase1-and-launch-readiness.md) §2.7 写 zone 库，`docs/ops/db-move-runbook.md` §9 写 `mmorpg`，`gateway_tables.sql` 里没有这张表。这件事不在批 A，见 §6.5。
+- login 的 PasswordAuth（读口令凭据表 `user_accounts`）在 K8s 上缺省不开，由部署开关 `-LoginPasswordAuth` 打开（11-12 加，见 §6.5 末条）。11-05 时这张表归哪个库，文档互相矛盾（[TiDB 一期](tidb-phase1-and-launch-readiness.md) §2.7 写 zone 库，`docs/ops/db-move-runbook.md` §9 写 `mmorpg`，`gateway_tables.sql` 里没有这张表）。11-12 定为 `mmorpg`，见 §6.5。
 
 ### 6.2 现在被固定在 MySQL 的地方（11-05 只读核对）
 
@@ -380,15 +380,25 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 
 MySQL 主从省钱档也能部署网关（11-11 落码，未编译）。原来 `AuthorityDatabaseConfiguration` 只有「必须 TiDB」和「dev、test 下什么都放」两种，生产接不了 MySQL 主库。现在 `java/authority_jdbc` 的 `AuthorityDataSource` 加了 mysql 档，判据与 Go 的 `authoritysql` 一致：每条新的物理连接先核对端，版本串与 `version_comment` 里没有 TiDB、`read_only` 与 `super_read_only` 都是 0；再把会话固定成 RC 加严格模式并读回，不发任何 `tidb_*` 语句。配置怎么解析成档位的规则只在 `AuthorityDataSource.Backend.resolve`，网关与 auth 共用：`mmorpg.sql.backend` 取 tidb 或 mysql；`require-tidb=false` 仍只许 dev、test，而且只对 tidb 档有意义。商城（`mall_game`）有自己的 `commerce.*` 配置，不在 K8s 部署里，这次不动。
 
-Java 只在新建物理连接时核对；连接在池里复用时不再核，这一点比 Go 宽。主从切换时旧主上的连接会被断开，新连接照常核对，所以不会写进从库。Go 侧在每次取用连接时都核。
+mysql 档的 Java 连接在池里复用时也复核（11-12 落码，未编译），与 Go 每次取用连接都重新核对同一用意。原来只在新建物理连接时核：计划内的主从切换不一定断开旧主上的连接，池里的老连接会继续连着已经降成只读的旧主库，读到的可能是旧数据，最长要到连接寿命到期才换掉。现在有两处：
+
+- 每个事务（或自动提交的一条语句）进入前，在同一条物理连接上先跑一次主库核对，然后才进写者闸门。核对不过，或核对语句本身没跑通，就丢弃这条连接并回 `ServerRecheckFailedException`（SQLSTATE 08S01）。这时一条业务语句都没发，所以它是可重试的错误，不算结局未知；Hikari 按 08 开头把这条连接摘出连接池。
+- 连接池借出前的探活（`isValid`，Hikari 对空闲超过约半秒的连接调用）也带上这次核对，空闲的老连接在借出前就被换掉，不用等业务调用失败一次。事务进行中不往里插核对语句。
+
+tidb 档不复核：TiDB 的对端没有会随时间变化的角色，强会话变量在建连时固定，业务 SQL 改不了它们。代价是 mysql 档每个事务多一次往返。
+
+tidb 档识别对端时版本串与 `version_comment` 都看（11-12 落码，未编译）。原来只看 `VERSION()`：TiDB 配了 `server-version` 时那里没有 TiDB 字样，tidb 档会把这样一套真 TiDB 拒在门外。判据收在 `AuthorityDataSource.isTiDb`，mysql 档的「对端不能是 TiDB」用的是同一个函数。
 
 ### 6.3 TiDB 上的建库建表
 
 - 库：与其余逻辑库同一口径，由运维预建，显式写排序规则（TiDB 一期 §2.6）。
 - 闸门表：与其余逻辑库走同一份 `authoritysql.EnsureCatalogSchema`，由 `writer_authority -command prepare-schema -schema mmorpg` 执行，不再复制第三份闸门 DDL。本机脚本给商城建库就是这条路。
 - 业务表（zone_config、zone_whitelist、announcement）和种子行：同一次调用加 `-ddl-file`，在闸门表之后执行，DDL 以网关的 `schema.sql` 为唯一来源（`GatewaySchemaContractTest` 已在真 TiDB 上校验过它）。`-ddl-file` 只认 `CREATE TABLE IF NOT EXISTS` 与 `INSERT IGNORE INTO`，表名不许带库名；先校验整份再连库，有一句不合格一句都不执行。部署脚本把 `schema.sql` 原样渲染进 ConfigMap `gateway-schema-sql`。
+- 11-12 起 `-ddl-file` 可以重复，这个 Job 传两份：网关的 `schema.sql` 之后是 login 的口令凭据表 `go/login/model/password_auth_schema.sql`（§6.5），各占 ConfigMap 的一个键。来源清单在 `k8s_deploy.ps1` 的 `Get-MmorpgSchemaDdlFiles`，脚本核对清单与 Job 清单里的 `-ddl-file` 一致。拆句识别引号，列注释里可以有分号。
+- registrar 镜像要用 11-12 之后构建的：旧镜像里 `-ddl-file` 不可重复，传两份时只执行后一份，网关的三张表不会建，网关启动时按 `ddl-auto: validate` 失败。
 - Job（`manifests/java-svc/gateway-schema.yaml`）用 schema 权限账号，与其余 `*-migrate` Job 同法；网关的常驻账号不给 DDL 权限。镜像取 boot 目录 gateway 条目的 `registrarImage`（`writer_authority` 就在里面，按摘要固定），所以 gateway 条目在名册之前就要有它。排在网关 Deployment 之前；staging、prod 与 `-SqlSchemaOnly` 恒等它完成；`zone-up` 开头先渲染一次，目录条目不对在任何写操作之前拒绝。
 - tidb 档和外部 MySQL 主库（mysql 档）都跑这个 Job，`MMORPG_SQL_BACKEND` 跟着档位。只有入口就是集群内单实例 MySQL（只在 dev）时不跑：那台由 mysql-init 的 `gateway_tables.sql` 建这个库。
+- `gateway_tables.sql` 这一份留着（11-12 定）：docker 的 initdb 只能吃一份自带 `USE` 的脚本，本机 compose、调试栈和本机 SQL 启动脚本都读它，撤掉它要改一串本机工具，换不来什么。它与来源文件靠人手同步的风险用测试消掉：闸门表与 `catalog.go` 逐字相同由 `TestGatewayTablesCarryWriterGate` 钉住（原有）；四张业务表与两份来源文件逐句相同由 `logical_db_deploy_contract.tests.ps1` 钉住（11-12 新增，原来只有注释里的一句「保持一致」）。
 - 三张业务表补 `COLLATE=utf8mb4_0900_ai_ci`（TiDB 一期 §4 第 10 项：只写 CHARSET 的表，两边的排序规则一定不同）。这个值就是 MySQL 上这些表现在实际用的排序规则，MySQL 档的行为不变。
 
 ### 6.4 网关代码在 TiDB 上要改的一处
@@ -397,9 +407,26 @@ Java 只在新建物理连接时核对；连接在池里复用时不再核，这
 
 改成同一个事务里先按主键 `SELECT … FOR UPDATE`：行不在就直接回 404，不执行 UPDATE；行在就已经持有这一行的 X 锁，再 UPDATE、再回读。这样在 MySQL 的 RR、RC 和 TiDB 上都成立。create（ODKU 加回读）与 delete（按主键 DELETE、看删除行数）的论证不依赖间隙锁，不用改。
 
-### 6.5 不在批 A 的
+### 6.5 login 的口令登录（2026-11-12 定，已落码，未编译）与不在批 A 的
 
-- login 的 PasswordAuth：`user_accounts` 归哪个库、K8s 上怎么注入、`20260803_password_auth.sql` 里的存储过程改成应用侧检查（TiDB 不支持存储过程），三件事要一起定。只在启用 PasswordAuth 时才阻塞。
+login 的 PasswordAuth 原来留了三件事没定，11-12 一起定了：
+
+- **归哪个库：`mmorpg`。** 口令凭据按账号存，账号是全服的，所以凭据全服一份，放在 login 登记写者资格的那个库。存档库里同名的 `user_accounts` 是 db 服务的旧表，每个区各有一份，不是口令权威；login 去读别的服务的库也违反逻辑库自治。代码里这样固定：库名常量 `auth.PasswordAuthDatabase`；生产（Mode 不是 dev、test）把 `PasswordAuth.Database` 配成别的值就拒绝启动；`password_admin` 的 DSN 不指向它也拒绝。
+- **读库强一致。** 原来是裸 `sql.Open`，不核对端、不固定会话，连到从库或陈旧读的连接上时，改密或停用之后旧口令在延迟窗口里仍能登录。现在走 `authoritysql.Open` 的只读权威连接，档位取 `PasswordAuth.Backend`（tidb 或 mysql），与其余 Go 服务同一套核对。
+- **存储过程删了，换成约束加启动时核对。** `20260803_password_auth.sql` 是给 MySQL 上的存量表做一次性改造的，TiDB 不支持存储过程，项目也没有存量表。它检查的前提（账号不重复、不为空、不超过 191 个字符、口令列放得下哈希）改由建表语句的主键、NOT NULL 与列宽保证；login 与 `password_admin` 每次启动核对表确实是这个形状（含 `account` 列的排序规则，账号匹配语义靠它），不是就拒绝启动。
+- **建表。** 语句的唯一来源是 `go/login/model/password_auth_schema.sql`。`mmorpg` 的建表 Job 现在传两个 `-ddl-file`（`writer_authority` 的这个参数改成可重复），先网关的 `schema.sql`，再 login 这一份；口令登录没开时也建，空表无害。本机与集群内开发 MySQL 仍由 `deploy/mysql-init/gateway_tables.sql` 建库，那份脚本里的四张业务表与两份来源文件逐句相同，契约测试 `logical_db_deploy_contract.tests.ps1` 钉住，改的时候两边一起改。
+- **`-ddl-file` 的拆句改成识别引号。** 原来按分号硬拆；网关 `schema.sql` 的列注释里后来出现了分号（`create_role_closed`、`role_capacity` 两列），整份文件会被拒，建表 Job 在 K8s 上跑不过。现在引号里的分号与 `--` 原样保留，引号之外只认 `-- ` 注释，`#` 与 `/* */` 一律拒绝。
+- **开通账号。** `password_admin -create` 开通一个新的口令账号；不带 `-create` 给已有、还没有哈希的账号写入一次。不改密。玩家自助注册仍未开放。
+- **K8s 上的部署开关 `-LoginPasswordAuth`（11-12 落码，11-13 改成连接串由运维预置，未运行）。** 各档位都可用，与 `-LoginDevPasswordAuth` 互斥（login 两个都开会拒绝启动，同时给在任何写操作之前拒绝）。开了之后：
+  - 口令库的只读连接串由运维预置：zone namespace 里一个 Secret（键 `dsn`），名字写在 SQL boot 目录（`MMORPG_SQL_K8S_BOOT_CATALOG`）`<zone-ns>/login` 条目的 `passwordAuthSecret`。部署脚本只按名字经 `secretKeyRef`（不写 optional）注入 login 常驻容器里 `DSNEnv` 指的变量（镜像 `login.yaml`，缺省 `LOGIN_PASSWORD_AUTH_DSN`），不读值、不建、不删，与「部署脚本不经手任何数据库口令」（[工作负载密钥](workload-secrets-via-k8s-secret.md) §1、`deploy/k8s/AGENTS.md`）一致。账号只要 `mmorpg.user_accounts` 的 SELECT，不是写者身份，全部 login 副本共用。
+  - 写操作之前的核对：开了开关时，每个要部署 login 的 zone，目录里要有这个字段、是合法的 Secret 名、与条目里其余 Secret 不同名（`Resolve-LoginPasswordAuthSecretName`）；真跑时再核 Secret 在、键 `dsn` 非空，只用 go-template 列键名与长度，值不出 kubectl（`Assert-LoginPasswordAuthSecrets`，与 route-tool 核 schema 身份 Secret 同一手法）。别的写者条目带这个字段按未知字段拒绝。连接串的内容（库名是不是 `mmorpg`、对端档位）由 login 启动时核对（`authoritysql.Open` 与表形状核对），不对就拒绝启动。
+  - 本脚本读不到连接串，Pod 模板上没有它的指纹：换口令时运维先改 Secret，再 `kubectl rollout restart statefulset/login`。11-12 第一版曾经从部署机环境变量读入、写成 Secret 并带指纹，那是「不经手数据库口令」规则的例外，负责人 11-13 定改成运维预置，那一版已撤掉。
+  - login 的配置模板（ConfigMap `go-svc-login-config`）多一段 `PasswordAuth`：`Enabled`、`DSNEnv`（变量名）、`Backend`（跟 `-DatabaseBackend`）、`Database: mmorpg`，连接池、Argon2id 并发、失败配额各项镜像 `go/login/etc/login.yaml`。login 是 SQL 写者，进程读的是运维预置的 `runtimeConfigSecret`：**这一段要照抄进每个槽位的运行配置**，没抄进去口令登录不会开（开服手册 §1）。
+  - 三处预算由部署脚本自动加上：SQL 连接总账每个 zone 加「login 副本数 × `PasswordAuth.MaxOpenConns`」并记在 `mmorpg` 上（滚动余量同样多一份）；Redis 连接总账每个 login 副本加 4 条失败配额池（`auth_init.go` 的 `passwordQuotaRedisPoolSize`），跟着登录域走（没建玩家域集群记在核心那一份，建了记在玩家域那一份）；login 容器的内存请求与上限各加 `KDFConcurrency × 64 MiB`（每次 Argon2id 的工作集），只加上限会让节点超卖，所以两边一起加。
+  - 不粘滞，有防误关：线上 login ConfigMap 里 `PasswordAuth` 开着而本次没给开关（或那一段认不出），在任何写操作之前拒绝；确要关闭，先从运行配置里去掉 `PasswordAuth` 并滚动 login，再加 `-ConfirmLoginAuthProviderChange` 部署。包装入口 `dev_tools.ps1` 的 `k8s-zone-up` / `k8s-all-up` 给了才透传，`k8s-image-*` / `k8s-release-*` 给了即拒绝（`k8s_image.ps1` 不部署 login）。
+  - 账号仍只能由运维用 `password_admin -create` 开通，没有玩家自助注册；要不要对玩家开放口令注册是产品决定。建表由 `gateway-schema` Job 完成（上一条），开关不建表。契约测试 `tools/scripts/tests/login_password_auth_deploy_contract.tests.ps1`。
+
+仍不在批 A 的：
 - 运维侧要按 TiDB 重新产出：runtimeConfigSecret、registrar DSN、名册（新 generation，锁原语从 LOCK_TOUCH 换成 SELECT_ONLY）、物理身份摘要。写进开服手册，脚本不代办。
 - 存量数据：项目未上线，不写 `mmorpg` 从 MySQL 到 TiDB 的数据迁移；已有的环境按开服手册重建。
 
@@ -437,7 +464,7 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 | 控制域 Redis 全服单主 | 所有 zone 的场景路由、世界频道和选主锁在一个主节点上 | 按 zone 组分实例，见[控制面按 zone 化](control-plane-zone-scoping-20261105.md)第 5 条 | 另一会话做，5a～5c 11-05 已落码未编译 |
 | scene_manager 全服一个 leader，C++ 每 2 秒全量读 etcd | 同上 | 按 zone 选主、只发现本 zone，同一设计第 4 条 | 另一会话做，4a～4c 11-05 已落码未编译 |
 | 选主的后台任务 | 见 §9 | 两处改分片（C1、C2）；帮会榜维护锁退出写分路径，只留给重建与合服折叠互斥（C3）；其余保持单 leader（§9） | C1、C2、C3 已落码未编译 |
-| 排行榜 Redis | rank 自 10-19 起以 SQL 为权威，不连 Redis。`redis-rank.yaml` 只作历史保留，部署脚本不 apply 它，契约测试「R2b Redis清单保留历史，现役SQL排行不自动部署旧写榜存储」守着 | 不是单点，不用改 | — |
+| 排行榜 Redis | rank 自 10-19 起以 SQL 为权威，不连 Redis。遗留的 `redis-rank.yaml` 2026-11-12 已删除(部署脚本从不 apply 它),契约测试「R2b 的 redis-rank 清单已删除,现役 SQL 排行不部署旧写榜存储」守着 | 不是单点，不用改 | — |
 | Loki | 单副本加本地盘 | 单体模式 3 副本加共享对象存储，见 §10 | 批 B 11-10 已落码，未编译 |
 
 ## 9. 选主的后台任务：哪些要分片（2026-11-05 只读核对）
@@ -451,9 +478,9 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 | `player_inbox:maintenance:leader` 下的清理、补发、gauge | 全服 | 清理已空转；补发只扫到期未通知的行；gauge 是两条聚合查询 | 近零、异常、在途量 | 保持 |
 | 同一把锁下的定时对账 | 全服 | 每小时读 24 小时内由消费方终结的行，每轮最多 2000 名玩家，超出就截断 | 业务量（战斗结算也进对账） | **改分片**（11-06 已落码，未编译）：64 个逻辑片用 HRW 分给 etcd 里注册的 stable 副本（与 match 的 poolowner 同法），每个副本只对账自己的分片，gauge 按本副本的分片求和，告警仍取 max() > 0。做法见[收件箱设计](player-inbox-service.md) §9.3「分片归属」 |
 | `player_locator:session_reconciler:leader` 下的写者检查 | 全服 | 每 60 秒一次 etcd 只读 Txn | 节点数 | 保持 |
-| 同一把锁下的补建与日审计 | 全服 | 全键 SCAN 加逐 slot SSCAN，限速 200 页/秒 | 在线会话数；2000 万在线时一遍约 19 小时（[会话索引设计](player-locator-gate-session-index.md) §7） | **改分片**（11-10 已落码，未编译）：玩家域是 Cluster 时复用死 gate 清扫的 256 段租约，每个副本逐 slot 用 `CLUSTER GETKEYSINSLOT` 列键补成员、清脏成员，进度按段记在控制域；leader 只发布一遍、等它做完，就绪与审计的判据不变。单实例玩家域（dev）仍由 leader 自己扫。做法见会话索引设计 §4.5 |
+| 同一把锁下的补建与日审计 | 全服 | 全键 SCAN 加逐 slot SSCAN，限速 200 页/秒 | 在线会话数；2000 万在线时一遍约 19 小时（[会话索引设计](player-locator-gate-session-index.md) §7） | **改分片**（11-10 已落码，未编译）：玩家域是 Cluster 时复用死 gate 清扫的 256 段租约，每个副本逐 slot 用 `CLUSTER GETKEYSINSLOT` 列键补成员、清脏成员，进度按段记在控制域；leader 只发布一遍、等它做完，就绪与审计的判据不变。单实例玩家域（dev）仍由 leader 自己扫。做法见会话索引设计 §4.5。扫描限速 `ScanPagesPerSecond` 11-12 定为全服预算，各副本按持有的段数分摊（落码未编译）：加副本不加重玩家域 Redis 的负担，一遍的耗时由预算定，不再留给压测按副本数去调 |
 | `guild_rank:maintenance_lock` | 全服互斥，不在请求路径上 | 启动重建（stable 副本）与合服折叠（有源区旧键时）之间互斥；不续期 | 不随积分写入量增长：写分、建帮上榜、解散摘榜都不拿它 | **已改**（C3，负责人 11-10 要求现在就改，11-11 落码，未编译）：写分改成按 `score_version` 的条件写入，锁只留给重建与折叠，做法见表下 |
-| login 出队 `dispatcher:lock:login_queue:zone:<z>` | 按 zone | 每秒放行一批，受空位封顶 | 排队人数 | 保持按 zone |
+| login 出队 `dispatcher:lock:login_queue:{q:<z>}` | 按 zone | 每秒放行一批，受空位封顶 | 排队人数 | 保持按 zone |
 | guild 历练巡检 `guild:trial:sweep:lease` | 全服 | 每 60 秒只扫超时的对局，每轮最多 200 条 | 异常 | 保持 |
 
 `guild_rank:maintenance_lock` 的改法（C3）。原来帮会积分写入、解散摘榜、启动重建、合服折叠都抢这一把全服锁，全服所有帮会的积分写入因此串行，加副本也没用。11-10 曾以「积分写入只有建帮时写一次 0 分」定为暂不改，负责人看过后要求现在就改。验收见 [PROGRESS](../PROGRESS.md) 2026-11-11「帮会积分写入不再抢全服锁」，细节见[帮会排行架构](guild_ranking_architecture_zh.md) §3、§5、§7。
@@ -468,7 +495,7 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 
 另外两点：
 
-- friend 的 `sweep.go` 没有选主，每个副本每 5 分钟跑同一批 `DELETE … LIMIT 1000`，是重复执行而不是分摊。它缺省 report_only，不删数据，本轮不改，记为后续项。
+- friend 的 `sweep.go` 没有选主，原来每个副本每 5 分钟读同一批候选、删同一批行，是重复执行而不是分摊。**已改**（11-11 落码，未编译）：两类候选读都按玩家 id 分 64 片，分给本 zone 注册的 stable friend 副本（`shared/workshard`，归属键前缀 `friend-sweep`，与 guild、trade 的终态清理同法），片条件在 `LIMIT` 之前，每个副本一轮各删自己片里的一批；「`updated_ms` 为 0 就拒删」的保险仍看全表。新指标 `friend_sweep_owned_shards`，全部 stable 副本加起来应为 64。细节见[好友持久化架构](friend-persistence-architecture.md)「多副本按片分工」。
 - data_service、match、mail、rank、chat、db 没有全服单例：靠消费组、HRW 或行级租约分摊。
 
 §1 那条 2026-10-18 增补说 player_locator 对账「多开分担没有收益」，写于死 gate 清扫拆出 leader 之前，对补建与日审计已不成立，以本节为准。

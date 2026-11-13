@@ -47,6 +47,9 @@ const (
 // quarantineDetailMaxBytes 是转人工记录里错误原文的上限。
 const quarantineDetailMaxBytes = 256
 
+// ManualListPageMax 是列转人工合同一页最多的条数(TradeAdmin.ListManualContracts 与运维工具共用)。
+const ManualListPageMax = 500
+
 // manualOperatorMaxBytes、manualReasonMaxBytes 与资产指令人工终结同口径(assetop.ManualResolution)。
 const (
 	manualOperatorMaxBytes = 64
@@ -717,10 +720,12 @@ func ShowManual(ctx context.Context, deps ManualDeps, id, nowMs uint64) (ManualR
 	}
 	if linkedID != 0 {
 		linked, err := deps.Repo.Get(ctx, linkedID)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		switch {
+		case err == nil:
+			report.Linked = linked
+		case !errors.Is(err, sql.ErrNoRows):
 			return ManualReport{}, err
 		}
-		report.Linked = linked
 	}
 	report.Verdicts = showVerdicts(ctx, deps, report, nowMs)
 	return report, nil

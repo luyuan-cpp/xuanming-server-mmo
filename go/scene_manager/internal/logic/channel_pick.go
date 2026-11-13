@@ -112,8 +112,8 @@ func locateWorldChannel(svcCtx *svc.ServiceContext, zoneID uint32, sceneID, hint
 
 // readScenePlayerCountChecked 与 readScenePlayerCount 只差一条:Redis 读失败时返回 error 而不是当 0。
 // 选线预检要 fail-closed —— 读不到人数就当 0 放行,等于 Redis 抖动时上限失效。键不存在按 0。
-func readScenePlayerCountChecked(svcCtx *svc.ServiceContext, sceneID uint64) (int64, error) {
-	return svcCtx.Redis.Scard(instanceMembersKey(sceneID))
+func readScenePlayerCountChecked(svcCtx *svc.ServiceContext, zoneID uint32, sceneID uint64) (int64, error) {
+	return svcCtx.Redis.Scard(instanceMembersKey(zoneID, sceneID))
 }
 
 // isChannelSwitch 判定这次选线是不是一次「真正的切换」:玩家此刻落在某个具体节点的某个场景里,
@@ -169,7 +169,7 @@ func (l *EnterSceneLogic) checkClientChannelPick(in *scene_manager.EnterSceneReq
 	}
 
 	maxPlayers := l.svcCtx.Config.ChannelMaxPlayers()
-	players, err := readScenePlayerCountChecked(l.svcCtx, in.SceneId)
+	players, err := readScenePlayerCountChecked(l.svcCtx, targetZoneId, in.SceneId)
 	if err != nil {
 		l.Logger.Errorf("[ChannelSwitch] Failed to read target channel player count; rejecting fail-closed: player=%d zone=%d scene=%d err=%v",
 			in.PlayerId, targetZoneId, in.SceneId, err)

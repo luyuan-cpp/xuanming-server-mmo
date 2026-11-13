@@ -63,6 +63,17 @@
 // 由 scene_kafka_command_router.cpp 的 DispatchSceneKafkaCommand 白名单解包后直接调用 TeamEventHandler。
 #include "proto/common/event/team_event.pb.h"
 
+#include "player/system/team_follow_formation.h" // kTeamFollowSpacing / kTeamFollowMaxMembers:下面两条队形不变量
+#include "spatial/constants/view.h"              // kMaxViewRadius
+
+// 整列队形不靠显式关注就互相看得见(team-system.md V.7 第 5 条,2026-11-12 定案):
+//   队尾离队长的路程 = 队员数 × 间距,不超过归队阈值,队形内的正常落后不触发旧客户端的瞬移归队;
+//   归队阈值又小于视野半径,所以"不触发瞬移"的队员一定在队长的视野里。改间距、队伍人数或视野半径前先过这两条。
+static_assert(static_cast<double>(kTeamFollowMaxMembers) * kTeamFollowSpacing <= kTeamRegroupDistance,
+			  "the whole follow column must stay within the regroup distance");
+static_assert(kTeamRegroupDistance < kMaxViewRadius,
+			  "a member not regrouped must stay within the leader's view radius");
+
 namespace
 {
 	namespace asio = boost::asio;

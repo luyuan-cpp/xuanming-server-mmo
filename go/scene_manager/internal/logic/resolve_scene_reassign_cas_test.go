@@ -24,13 +24,14 @@ package logic
 // 修复前红的取法(按变异,修复前的代码没有这些方法,新用例编不过):
 //   - 变异 A:把 moveChannelOffDeadNode(reassignSceneOffDeadNode 的搬迁一半,2026-11-11 拆出)里的
 //     `if !reassignWorldChannelNode(...) { ... l.adoptOwnerAfterLostReassign(...) ... }`
-//     换回无条件的 `l.svcCtx.Redis.Set(sceneNodeKey(sceneId), newNodeId)`。
+//     换回无条件的 `l.svcCtx.Redis.Set(sceneNodeKey(resolveCASZone, sceneId), newNodeId)`。
 //     AnotherWriterFirst、ScriptFailure、MovesIndexAndSceneCount、AgonesRoom 红;CreateSceneFailure 的后半段
 //     (重试成功后的反向索引 / scene_count 断言)也红,共 5 条。
 //   - 变异 B:把 CreateScene 挪回 CAS 成功之后,失败只打日志、照常返回成功。CreateSceneFailure 红;
 //     AnotherWriterFirst、SameTargetAdoptsPreCreatedEntity、ScriptFailure 的「CAS 之前已预建」断言跟着红。
 //   - 变异 C:删掉 reassignSceneOffDeadNode 开头的 world_channels 成员资格检查。InstanceAndMismatchedConf 红。
-//   - 变异 D:resolveScene 的 zone 守卫换回 GetSceneZone(读错 / 值损坏都当 0 放行)。CorruptZoneRecord 红。
+//   - 变异 D:删掉 resolveScene Case 1 的「映射不存在就拒绝」(nodeId == "" 那一支),查无此场景时照常往下判活。
+//     SceneInOtherZoneReadsAsMissing 红(按空属主走死节点自愈,在 late 上建实体、写出本 zone 的属主)。
 //   - 变异 F:删掉 luaReassignSceneNode 里 `#KEYS >= 8` 那段在役核对(2026-11-05 前是 `#KEYS >= 6`;KEYS[6] 让给了
 //     重发回执,KEYS[7] 让给了 2026-11-06 的放置代次高水位)。ChannelDrainedBeforeCommit 红。
 // BarrierPending 是行为守护,上面各种变异下都绿。
@@ -116,7 +117,6 @@ func seedWorldChannelOwnedByDeadNode(t *testing.T, mr *miniredis.Miniredis, scen
 	t.Helper()
 	_, err := mr.SAdd(worldChannelsKey(resolveCASZone, resolveCASConfID), strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
-	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(resolveCASZone), 10)))
 	seedSceneOwnedBy(t, mr, resolveCASZone, sceneID, resolveNodeDead)
 }
 
@@ -124,7 +124,7 @@ func seedWorldChannelOwnedByDeadNode(t *testing.T, mr *miniredis.Miniredis, scen
 // bystander 是没拿到归属的那个活节点,不得记账。
 func (c *resolveDeadOwnerCase) requireOwnedOnlyBy(t *testing.T, owner, bystander string) {
 	t.Helper()
-	got, err := c.mr.Get(sceneNodeKey(c.sceneID))
+	got, err := c.mr.Get(sceneNodeKey(resolveCASZone, c.sceneID))
 	require.NoError(t, err)
 	require.Equal(t, owner, got)
 	requireSceneIndexedOnlyOn(t, c.sc, resolveCASZone, c.sceneID, owner, resolveNodeDead, bystander)
@@ -136,7 +136,7 @@ func (c *resolveDeadOwnerCase) requireOwnedOnlyBy(t *testing.T, owner, bystander
 // requireStillOnDeadNode 断言归属与记账一个字节都没改。
 func (c *resolveDeadOwnerCase) requireStillOnDeadNode(t *testing.T) {
 	t.Helper()
-	owner, err := c.mr.Get(sceneNodeKey(c.sceneID))
+	owner, err := c.mr.Get(sceneNodeKey(resolveCASZone, c.sceneID))
 	require.NoError(t, err)
 	require.Equal(t, resolveNodeDead, owner, "归属一个字节都不改")
 	requireSceneIndexedOnlyOn(t, c.sc, resolveCASZone, c.sceneID, resolveNodeDead, resolveNodeFirst, resolveNodeLate)
@@ -193,7 +193,7 @@ func TestResolveScene_DeadOwner_ScriptFailureChangesNothing(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, errors.Is(err, ErrReentryBarrierPending), "屏障早已放行,这不是屏障拒绝")
 
-	owner, err := c.mr.Get(sceneNodeKey(c.sceneID))
+	owner, err := c.mr.Get(sceneNodeKey(resolveCASZone, c.sceneID))
 	require.NoError(t, err)
 	require.Equal(t, resolveNodeDead, owner, "脚本报错时归属一个字节都不改")
 	requireSceneIndexedOnlyOn(t, c.sc, resolveCASZone, c.sceneID, resolveNodeDead, resolveNodeFirst, resolveNodeLate)
@@ -297,17 +297,24 @@ func TestResolveScene_DeadOwner_ChannelDrainedBeforeCommitChangesNothing(t *test
 	c.requireOwnedOnlyBy(t, resolveNodeLate, resolveNodeFirst)
 }
 
-// scene:{id}:zone 读不出来(值损坏)时拒绝,不能当成「没记录 zone」放过跨 zone 守卫。NodeId 只在 zone 内
-// 唯一:守卫被跳过时,别的 zone 的场景会被当成本 zone 的来判活、改派。修复前:GetSceneZone 把它读成 0 放行,
-// 本用例的频道随后被重建到 late。
-func TestResolveScene_DeadOwner_CorruptZoneRecordRejects(t *testing.T) {
+// 只给场景号、场景却登记在别的 zone(docs/design/redis-cluster-all-domains-20261110.md §3.3):本 zone 的属主键里读不到它,
+// 按「查无此场景」拒绝,一个字节都不改,哪个节点都不建实体 —— 与场景不存在同一个结局,不判活、不改派。NodeId 只在 zone 内
+// 唯一,当成本 zone 的场景判活会把它改派到本 zone 的节点。原来靠读 scene:<id>:zone 的守卫拦,那把键已删。
+func TestResolveScene_SceneInOtherZoneReadsAsMissing(t *testing.T) {
 	c := newResolveDeadOwnerCase(t, 89008)
-	require.NoError(t, c.mr.Set(sceneZoneKey(c.sceneID), "not-a-zone"))
+	otherZone := resolveCASZone + 1
+	// 把这个频道的属主挪到别的 zone 的键里:本 zone 只剩在役集合里的成员。
+	owner := mustGet(t, c.mr, sceneNodeKey(resolveCASZone, c.sceneID))
+	c.mr.Del(sceneNodeKey(resolveCASZone, c.sceneID))
+	require.NoError(t, c.mr.Set(sceneNodeKey(otherZone, c.sceneID), owner))
 
 	_, _, err := c.logic.resolveScene(c.sceneID, resolveCASConfID, resolveCASZone)
 	require.Error(t, err)
-	c.requireStillOnDeadNode(t)
+	require.Contains(t, err.Error(), "does not exist")
+	require.Equal(t, owner, mustGet(t, c.mr, sceneNodeKey(otherZone, c.sceneID)), "别的 zone 的属主不动")
+	require.False(t, c.mr.Exists(sceneNodeKey(resolveCASZone, c.sceneID)), "本 zone 不凭空写出属主")
 	require.EqualValues(t, 0, c.late.fake.createCalls.Load())
+	require.EqualValues(t, 0, c.first.fake.createCalls.Load())
 }
 
 // 老属主刚判死时回可重试的 ErrReentryBarrierPending,一个字节都不改,哪个节点都不建实体。
@@ -366,7 +373,7 @@ func TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership(t *testing.T) {
 	require.EqualValues(t, 0, alloc.roomsOf("gs-first"), "first 的名额归改派成功的写者")
 	require.EqualValues(t, 3, alloc.roomsOf("gs-dead"), "不得归还死节点的名额,那是改派成功的写者的事")
 	require.Empty(t, agonesHoldsOf(t, sc, resolveCASZone), "放弃时在途占用一起删")
-	gs, err := mr.Get(sceneAgonesGsKey(lostScene))
+	gs, err := mr.Get(sceneAgonesGsKey(resolveCASZone, lostScene))
 	require.NoError(t, err)
 	require.Equal(t, records[lostScene], gs)
 

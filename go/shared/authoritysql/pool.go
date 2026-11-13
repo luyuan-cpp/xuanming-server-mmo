@@ -109,12 +109,18 @@ func (d *placedDialer) dial() (driver.Connector, func() bool, error) {
 	}
 	return inner, stale, nil
 }
+
+// pin 在新建物理连接时执行一次:固定会话变量,核对主体、实际库,写者池再核世代与本 boot 的注册全文。
+// 连接复用时不重放它,见 revalidate。
 func (c connector) pin(ctx context.Context, conn driver.Conn) error {
+	if c.permission.kind == permissionWriter {
+		defer observeWriterGate(c.permission.writer.AuthoritySchema(), gatePhasePin, time.Now())
+	}
 	exec, ok := conn.(driver.ExecerContext)
 	if !ok {
 		return errors.New("SQL驱动不支持会话初始化")
 	}
-	// mysql 档先核身份再动会话。逐物理连接(也含回池复用)都核:主从切换后同一地址可能已经是从库,只在启动时核一次拦不住。
+	// mysql 档先核身份再动会话。逐物理连接都核,回池复用时 revalidate 再核:主从切换后同一地址可能已经是从库,只在启动时核一次拦不住。
 	if c.backend == BackendMySQL {
 		if err := verifyMySQLConnection(ctx, conn); err != nil {
 			return err
@@ -154,6 +160,77 @@ func (c connector) pin(ctx context.Context, conn driver.Conn) error {
 		if principal != c.permission.principal {
 			return errors.New("权威SQL受限主体不匹配")
 		}
+	}
+	return nil
+}
+
+// idleProbeAfter 是「刚用过的连接不用探测」的窗口:连接归还之后空闲不到这么久又被借出,复用时一条语句都不发;
+// 空闲更久的发一条读(verifyTiDBSession)。取值与做法照 HikariCP 的 aliveBypassWindow(500ms):窗口之内对端刚应答过,
+// 再探一次得不到新信息;窗口之外才值得花一次往返。存盘高峰时连接几毫秒就被再次借出,热路径上不多发语句。
+const idleProbeAfter = 500 * time.Millisecond
+
+// revalidate 是连接复用时的核对(database/sql 每次从池里取出连接都调 ResetSession)。idle 是这条连接归还之后空闲了多久。
+//
+// 2026-11-12 之前这里把 pin 整个重放:十几条 SET、读主体与库名,写者池再读 route_meta 和两条注册核对,每次取连接约 14 次往返,
+// 一笔存盘事务的往返大半花在这里(docs/design/player-save-direct-commit.md §9 第 1 条)。现在只核「不经过这条连接也会变」的事实:
+//   - 会话变量、默认库、登录主体只有语句能改。运行池(Reader、Writer)的语句包络只放行单条数据语句,不放行 SET、USE、
+//     事务控制语句和 SET_VAR 提示(statement.go);驱动的 ResetSession 只做本地存活检查,不向服务端发重置。
+//     所以建连时固定之后不会再变,不重放。TestRuntimeEnvelopeKeepsPinnedSessionFixed 钉住这条前提:
+//     放宽包络的人会先在那里变红。带隔离级别的 BEGIN 留下的一次性隔离级别由 guardedConn.beginLocked 处理。
+//   - 对端还在不在:重放 pin 的时候,第一条 SET 顺带就是一次主动探测。对端没发 FIN 就消失的连接(节点宕机、网络分区),
+//     驱动的本地存活检查看不出来;不探测的话,池里每条这样的连接都要让一次业务调用失败,Reader 池上那条读还会被记成结局未知
+//     (docs/design/infra-reconnect-overview.md §4.1 R2)。所以空闲超过 idleProbeAfter 的连接复用时发一条读:
+//     读的就是建连时固定的那组会话变量,一次往返同时确认对端还在、会话没被改过(也就守住了上一条里
+//     「驱动复用时不重置会话」这个只靠读驱动源码确认的前提)。失败或不符都由 ResetSession 回 ErrBadConn,
+//     这时还没发业务语句,database/sql 换一条连接,业务调用照常成功。
+//   - 写者的世代、冻结、slot 与注册行:每笔写事务在 BEGIN 前后各核一次(runtimeGate.beforeBegin、runtimeAttempt.enter,
+//     后者在 slot 行锁之下),事务外的读过读闸门(admitRead)。复用时既不持锁也不在事务里,再读一遍判不出更多,
+//     判完到事务开始之间照样会变。REGISTER 收据是只追加的永久原件、按 registration_digest 取,
+//     注册行的摘要每笔写事务都核,全文在建连时核过一次就够。
+//   - mysql 档:主从切换之后,同一条连接的对端可能已经降成只读从库,读它不再是当前读。这一条照旧逐次核对
+//     (它本身就是一次往返,也起探测的作用)。
+//   - Schema、Operator 权限的池(迁移、注册、维护工具)不在热路径上,而且 Schema 的包络放行一条改锁等待的 SET
+//     (schemaLockWaitStatement):它们照旧整个重放 pin,行为不变。
+func (c connector) revalidate(ctx context.Context, conn driver.Conn, idle time.Duration) error {
+	if c.permission.kind != permissionReader && c.permission.kind != permissionWriter {
+		return c.pin(ctx, conn)
+	}
+	if c.backend == BackendTiDB && idle < idleProbeAfter {
+		return nil
+	}
+	if c.permission.kind == permissionWriter {
+		defer observeWriterGate(c.permission.writer.AuthoritySchema(), gatePhaseRevalidate, time.Now())
+	}
+	if c.backend == BackendMySQL {
+		return verifyMySQLConnection(ctx, conn)
+	}
+	return verifyTiDBSession(ctx, conn)
+}
+
+// tidbSessionSQL 读回 tidb 档建连时固定的强读会话变量(tidbSettings 加隔离级别)。
+const tidbSessionSQL = "SELECT @@tidb_txn_mode,@@transaction_isolation,@@tidb_read_staleness,@@tidb_low_resolution_tso,@@tidb_replica_read,@@tidb_read_consistency,@@tidb_snapshot"
+
+// tidbSessionPinned 判断 tidbSessionSQL 读回的值是不是建连时固定的那一组。AssertCurrentSession(启动核对)与
+// verifyTiDBSession(空闲连接复用)共用这一条规则。
+func tidbSessionPinned(mode, isolation string, staleness, lowResolutionTSO int64, replicaRead, consistency, snapshot string) bool {
+	return mode == "pessimistic" && isolation == "READ-COMMITTED" && staleness == 0 && lowResolutionTSO == 0 &&
+		replicaRead == "leader" && consistency == "strict" && snapshot == ""
+}
+
+// verifyTiDBSession 在物理连接上读一次固定的会话变量:读不回来(对端没了)或和建连时固定的不一样都回错误。
+// 不碰任何表,不过闸门,不改会话。
+func verifyTiDBSession(ctx context.Context, conn driver.Conn) error {
+	values, err := rawOne(ctx, conn, tidbSessionSQL, nil, 7)
+	if err != nil {
+		return err
+	}
+	// 这两列固定的值都是 0。驱动按列类型给值:布尔开关是整数,整数开关是文本(TiDB 把它当字符串列回),unsignedValue 两种都认。
+	// 读回负数(tidb_read_staleness 生效时是负的秒数)或解析不了,和读回非 0 一样算不符。
+	staleness, e1 := unsignedValue(values[2])
+	lowResolutionTSO, e2 := unsignedValue(values[3])
+	if e1 != nil || e2 != nil || !tidbSessionPinned(stringValue(values[0]), stringValue(values[1]), int64(staleness), int64(lowResolutionTSO),
+		stringValue(values[4]), stringValue(values[5]), stringValue(values[6])) {
+		return errors.New("权威SQL强读会话不符")
 	}
 	return nil
 }
@@ -206,7 +283,7 @@ func AssertCurrentSession(ctx context.Context, db *sql.DB, backend Backend) erro
 	}
 	var mode, isolation, replica, consistency, snapshot string
 	var stale, low int64
-	if err := db.QueryRowContext(ctx, "SELECT @@tidb_txn_mode,@@transaction_isolation,@@tidb_read_staleness,@@tidb_low_resolution_tso,@@tidb_replica_read,@@tidb_read_consistency,@@tidb_snapshot").Scan(&mode, &isolation, &stale, &low, &replica, &consistency, &snapshot); err != nil || mode != "pessimistic" || isolation != "READ-COMMITTED" || stale != 0 || low != 0 || replica != "leader" || consistency != "strict" || snapshot != "" {
+	if err := db.QueryRowContext(ctx, tidbSessionSQL).Scan(&mode, &isolation, &stale, &low, &replica, &consistency, &snapshot); err != nil || !tidbSessionPinned(mode, isolation, stale, low, replica, consistency, snapshot) {
 		return errors.New("权威SQL强读会话不符")
 	}
 	return nil

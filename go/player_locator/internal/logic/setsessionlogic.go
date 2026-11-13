@@ -6,12 +6,29 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	"player_locator/internal/svc"
 	common "proto/common/base"
 	pb "proto/player_locator"
 )
+
+// sessionChangedError 构造「会话记录已不是调用方读到的那条」的应答:gRPC ABORTED。
+//
+// ABORTED 的通行语义就是读改写序列被并发打断,调用方应从读开始重做。回它有两个前提,缺一不可:
+//  1. 本次写入确定没有发生(不是结果未知),记录一个字节都没改;
+//  2. 被拒的原因只是「记录在调用方读取之后变了」,重读、重新决策之后再写是合法的。
+//
+// 典型来源是 gate 排空迁移与跨 zone 重定向:客户端先关旧连接、再在新连接上 EnterGame,旧 gate 的断线上报
+// (SetDisconnecting 推进了版本)落在 login 那条登录链的 GetSession 与 SetSession 之间。login 收到 ABORTED 后重读,
+// 这次看到 DISCONNECTING,改走短线重连(go/login/internal/logic/pkg/sessionmanager 的 ErrSessionChanged;
+// docs/design/gate-drain-session-migration.md §5)。
+// 代次不前进、清理未完成等拒绝不满足第 2 条,仍按普通错误返回,调用方按登录失败处理。
+func sessionChangedError(format string, args ...any) error {
+	return status.Errorf(codes.Aborted, format, args...)
+}
 
 type SetSessionLogic struct {
 	ctx    context.Context
@@ -69,12 +86,14 @@ func (l *SetSessionLogic) SetSession(in *pb.SetSessionRequest) (*common.Empty, e
 		if proto.Equal(s, current) {
 			// RPC 响应丢失后的同请求重放：允许幂等地清掉残留 lease 状态。
 		} else if s.SessionVersion != current.SessionVersion+1 {
-			return nil, fmt.Errorf(
+			// 调用方按它读到的版本构造了这次写入,而记录已被别的写者推进过:回 ABORTED,调用方重读重判。
+			return nil, sessionChangedError(
 				"stale session update for player %d: current version=%d incoming=%d",
 				s.PlayerId, current.SessionVersion, s.SessionVersion,
 			)
 		} else if !loginGenerationAdvances(current.LoginGeneration, s.LoginGeneration) {
-			// 与版本不匹配同一 stale 语义:调用方按登录失败处理,不重放读改写。
+			// 版本对得上、代次却不前进:不是记录变了,是调用方带来的代次不合法(失锁的旧登录链)。
+			// 不回 ABORTED:调用方按登录失败处理,不重放读改写。
 			return nil, fmt.Errorf(
 				"stale session update for player %d: current login_generation=%d incoming=%d",
 				s.PlayerId, current.LoginGeneration, s.LoginGeneration,
@@ -98,7 +117,8 @@ func (l *SetSessionLogic) SetSession(in *pb.SetSessionRequest) (*common.Empty, e
 		return nil, fmt.Errorf("%w for player %d", ErrSessionCleanupPending, s.PlayerId)
 	}
 	if result != replaceSessionApplied {
-		return nil, fmt.Errorf("session changed concurrently for player %d", s.PlayerId)
+		// 上面 GET 之后、这段 Lua 之前记录又被改写(整字节 CAS 没对上):同样是「记录变了」,回 ABORTED。
+		return nil, sessionChangedError("session changed concurrently for player %d", s.PlayerId)
 	}
 
 	return &common.Empty{}, nil

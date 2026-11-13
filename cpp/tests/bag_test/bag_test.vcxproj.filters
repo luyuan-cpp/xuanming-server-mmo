@@ -22,6 +22,9 @@
     <ClCompile Include="bag_temporary_retrieve_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="bag_space_freed_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="player_equip_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
@@ -47,6 +50,7 @@
     <ClCompile Include="player_battle_settlement_test.cpp" />
     <ClCompile Include="battle_freeze_hold_test.cpp" />
     <ClCompile Include="item_hold_test.cpp" />
+    <ClCompile Include="mail_outbox_test.cpp" />
     <ClCompile Include="player_mission_system_test.cpp" />
     <ClCompile Include="player_activity_schedule_test.cpp" />
     <ClCompile Include="player_activity_system_test.cpp" />
@@ -60,7 +64,7 @@
     <ClCompile Include="player_save_metrics_test.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="fifo_eviction_profile_for_test.h">
+    <ClInclude Include="space_freed_recorder_for_test.h">
       <Filter>Include</Filter>
     </ClInclude>
   </ItemGroup>

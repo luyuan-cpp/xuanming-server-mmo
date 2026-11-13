@@ -9,49 +9,52 @@ C++ `cpp/libs/engine/core/utils/id/snow_flake.h` 与 Go `go/shared/snowflake/sno
 
 - `[time:32][cluster:5][slot:12][step:15]`,epoch 1773446400(2026-03-14 UTC),秒级。
 - worker(17 位)= `(cluster << 12) | slot`;cluster 是部署级常量(`ClusterId` / 环境变量 `CLUSTER_ID`,默认 0),slot ∈ [0, 4095]。
-- login 的 player_id 用 bwmarrin 毫秒布局 `[time:41ms][cluster:3][slot:10][step:9]`,epoch 1721473263000;布局不能换(换了作废存量),cluster/slot 切分同上。
+- login 原来的 bwmarrin 毫秒布局 player_id 2026-11-12 已随申领代码删除,player_id 只由发号器发(见下文「永久身份」),全系统不再有第三种布局。
 - 老 ID 的 17 位 worker 等于新布局 cluster=0 的 slot,时间字段只增不减,所以**不作废存量**。
 
-## 槽位(worker)号源:etcd,两种语言同一协议
+## 槽位(worker)号源:etcd,现在只有 scene_manager 申领
 
 ```
 /snowflake/<kind>/c<cluster>/slots/<slot>       = holder uuid   挂 lease(只表活性)
 /snowflake/<kind>/c<cluster>/watermark/<slot>   = epoch 秒       无 lease(持久;既是 guard 地板又是隔离期墓碑)
-/snowflake/<kind>/c<cluster>/affinity/<host>    = slot           挂 lease(仅 Go;同主机优雅重启复用)
-/snowflake/<kind>/c<cluster>/released/<host>    = "released"     挂 lease(仅 Go)
-/snowflake/<kind>/c<cluster>/watermark_ms/<slot>= unix 毫秒      无 lease(仅 login-player)
+/snowflake/<kind>/c<cluster>/affinity/<host>    = slot           挂 lease(同主机优雅重启复用)
+/snowflake/<kind>/c<cluster>/released/<host>    = "released"     挂 lease
 ```
+
+毫秒水位 `watermark_ms/<slot>` 只有已删的 login-player 写过,2026-11-12 从分配器里删掉:不再读写,reclaim 也不再比较它的 revision(原来那条比较在 login 第一笔毫秒水位写失败、又碰上 key 过期时会误 fence)。etcd 里的旧键没有读者,清 etcd 时一并清掉。
 
 | kind | 铸什么 | 实现 |
 |---|---|---|
-| `scene-item` | C++ scene 的 item guid(过渡期)/ tx_id / snapshot_id | `cpp/libs/engine/core/node/system/snowflake/snowflake_slot_client.*` |
-| `login-player` | player_id(仅作号段的回退与解析旧号) | `go/shared/snowflakealloc` + `go/login/internal/svc/player_id_gen.go` |
-| `guild` | guild_id(仅作号段的回退) | `go/shared/snowflakealloc` |
-| `scene-manager` | scene_id | 同上 |
-| `match` | battle_id / challenge_id | 同上 |
+| `scene-manager` | scene_id | `go/shared/snowflakealloc` + `go/scene_manager/internal/svc/servicecontext.go` |
 
-规则(两端共用 `go/shared/snowflakealloc/testdata/selection_vectors.json` 做一致性测试):
+已退役的 kind,etcd 里这些前缀下的旧键没有读者,项目未上线,清 etcd 时一并清掉:
+
+- `scene-item`:C++ scene 的 item guid / tx_id / snapshot_id 全部改走号段,C++ 槽位客户端已删(`bin/etc/base_deploy_config.yaml` 号段一节)。
+- `match`:battle_id / challenge_id / team_id 改走号段(biz_tag = battle,[发号器设计](./player-data-tidb-scaling-plan.md) §6.4)。
+- `login-player`、`guild`:player_id、guild_id 早就只由号段发,2026-11-12 删掉了还在跑的槽位申领、水位与失槽 fence。
+
+规则(`go/shared/snowflakealloc/testdata/selection_vectors.json` 钉住选号;C++ 侧不再申领,不再对拍):
 
 1. **选号**:候选 = 未被占 且 `now − watermark ≥ Q`(Q = 4h);取 watermark 最小者(从没用过的优先),并列取最小 slot。不再"最小空闲位"。
 2. **水位**:持有者每秒写 `max(墙钟, 逻辑高水位) + 2s`,单调不回退;申领时第一笔与 slots key 同一 txn 落地;启动地板 `SetGuardTime(max(now, watermark))` 并等真实时钟越过。
 3. **自 fence**:距上次水位写成功超过 F = 2h(单调钟或墙钟任一;墙钟按去掉单调读数的时刻相减,否则 VM 挂起后不触发)→ `Generate()` 拒发;水位再写成功即恢复(Go)/ 永久 fence 仅在 `slots/<slot>` 被别的 uuid 持有,或槽 key 过期期间水位被别人写过时(见第 4 条)。
-4. **lease 只做活性**:lease 过期但槽没被别人挂走 → 重挂,不 fence、不退出。槽 key 已过期时,只有两把水位 key 的 ModRevision 仍是自己最后一次观测的值才重新 Create(与 `CreateRev==0` 同一笔 Txn);对不上说明失联期间有人用过这个槽,永久 fence,重启后走受隔离期保护的申领。细节见设计稿 §3.4。
-5. **弱依赖**:Go 服务 etcd 不可达且本地缓存(`SnowflakeCacheDir`)未过 F 时可用缓存槽起;C++ 只用缓存抬地板与关联日志(发现仍需 etcd)。
+4. **lease 只做活性**:lease 过期但槽没被别人挂走 → 重挂,不 fence、不退出。槽 key 已过期时,只有水位 key `watermark/<slot>` 的 ModRevision 仍是自己最后一次观测的值才重新 Create(与 `CreateRev==0` 同一笔 Txn);对不上说明失联期间有人用过这个槽,永久 fence,重启后走受隔离期保护的申领。细节见设计稿 §3.4。
+5. **弱依赖**:scene_manager 在 etcd 不可达且本地缓存(`SnowflakeCacheDir`)未过 F 时可用缓存槽起。
 
 路由用的 `NodeInfo.node_id`(`<Svc>.rpc/allocated/node_type/T/node_id/N` + `/zone/Z/...`)与发号槽位**无关**,只做 Kafka topic 名、gate 会话反查、`SessionDetails.gate_node_id`;gate session_id 与 scene buff/skill 的临时复合 id 仍用它。
 
 ## 永久身份:号段(Leaf-segment)
 
-player_id / guild_id / item guid 从 `data_service.AllocateIdSegment(biz_tag, step)` 领 `[lo, hi)`,表 `id_segment`(全局库,`biz_tag VARCHAR(64)` 预建,其余列 proto 驱动),号从 1 起、上限 2^55,与存量 snowflake 号(≥ 6.7e16)值域不相交,新旧共存不迁数据。客户端双 buffer、剩 10% 预取:`go/shared/idsegment`(login/guild)、C++ `ItemGuidSegmentClient`(scene)。回退 snowflake 默认关(`FallbackToSnowflake`),开了也安全。
+player_id、guild_id、物品 guid、流水号、battle_id 等永久 ID 从 `data_service.AllocateIdSegment(biz_tag, step)` 领 `[lo, hi)`。发号器的预留记录写在两套本地 etcd 与全局号源登记处(`id_segment` 表已删),发出的是打散过的计数器值:63 位以内、不单调、没有位布局,不能按 snowflake 解析,也不能靠大小判断先后。客户端双 buffer 预取:`go/shared/idsegment`(login、guild 等 Go 服务)、C++ `GuidSegmentClient`(scene)。**没有回退号源**,发号失败就是操作失败。设计见 [player-data-tidb-scaling-plan.md](./player-data-tidb-scaling-plan.md) §6,运维见 [发号器运维手册](../ops/id-issuer-runbook.md)。
 
 ## 过渡期兼容(一个版本后删)
 
-- Go cluster 0 读旧 `<oldprefix>/snowflake_guard/<slot>`、`/login/guard_ms/<slot>` 取 max,并把旧 `snowflake_ids`/`snowflake_nodes` 算作占用。
-- C++ 把 `SceneNodeService.rpc/allocated/node_type/<T>/node_id/<N>` 被持有视为 slot N 占用,并读旧 Redis `snowflake_guard:<type>:<N>` 取 max。
+- scene_manager(`LegacyPrefix` = `/scene_manager`)在 cluster 0 读旧 `<oldprefix>/snowflake_guard/<slot>` 取 max,并把旧 `snowflake_ids`/`snowflake_nodes` 算作占用。login、guild 的 `/login`、`/guild` 旧前缀随申领代码一起不再读。
+- C++ 那一条随 C++ 槽位客户端删除。
 
 ## Cross-ID-kind isolation
 
-不同 kind 的槽池相互独立,所以 guild_id / scene_id / battle_id 可能数值相同;一种 ID 只能由一种 kind 铸,不能混进同一个键空间。跨 kind 全局唯一的需求今天不存在。
+现在只剩 `scene-manager` 一种 kind,规则不变:一种 ID 只能由一种 kind 铸;不同 kind 的槽池相互独立,铸出的值可能相同,不能混进同一个键空间。发号器发的永久 ID 与 scene_id 是两种号源,同样不能混用。跨 kind 全局唯一的需求今天不存在。
 
 
 ## Scene 领段预取的单次协程（2026-11-05）

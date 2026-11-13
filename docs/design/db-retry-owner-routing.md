@@ -641,7 +641,7 @@ go run ./cmd/retry_requeue -f etc/db.yaml -zone <z> -redis 127.0.0.1:16379 -redi
 
 | 告警 | 级别 / for | 条件（要点） | 窗口 | 局限与处置 |
 |---|---|---|---|---|
-| DbTaskRetryQueueGrowing（改 expr） | warning / 10m | `max by (namespace) (sum by (namespace, pod) (db_retry_queue_length{queue=~"ready\|partitioned"})) > 1000` | — | 先按 pod 相加、再按 namespace 取 max；S1 之前的 Pod 不报 partitioned，照样按 ready 计入。阈值待压测确认 |
+| DbTaskRetryQueueGrowing（改 expr） | warning / 10m | `max by (namespace) (sum by (namespace, pod) (db_retry_queue_length{queue=~"ready\|partitioned"})) > 1000` | — | 先按 pod 相加、再按 namespace 取 max；S1 之前的 Pod 不报 partitioned，照样按 ready 计入。阈值不再定值:这条规则已随 go/db 的 Kafka 消费链与 `db-task-retry-alerts.yaml` 一起删除(2026-10-30,见文首),2026-11-12 核对仓库里已没有它 |
 | DbRetryPartitionedNoProgress | warning / 0m | p* 的 15 分钟最小值 > 0，**unless** 本 namespace 15 分钟内 `executed` 或 `executed_nonowner` 有增长，**unless** `db_store_cooldown_stores{pool="home"} > 0` | 15m（子查询步长 1m） | 按 namespace 聚合，看不到单个分区卡住；单分区的属主卡住时，该分区的 Kafka 消费也一起停（重试与新消息走同一个 worker），同时看 Kafka lag 与 DbZoneNoPartitionClaims。按分区的深度 gauge 不做（修订稿裁决第 9 条）。冷却抑制见下 |
 | DbRetryPartitionedStranded | critical / 5m | 「最后一次上报时间最晚」的那个 Pod（`timestamp()` 子查询 + `topk by (namespace)`）的 partitioned 最后值 > 0，**unless** 本 namespace 有任何 `db_retry_routing_mode` 序列 | `last_over_time` 6h | 不依赖新版二进制在线；不能简化成 max（早先退出的 Pod 留下的旧非零值会误报）；6h 之后只能靠 `retry_requeue -check`；处置见 §10.5 |
 | DbZoneNoPartitionClaims | critical / 5m | `sum by (namespace) (db_owned_partitions) == 0`，**unless** ready 序列条数 > `mode="owner"` 序列条数（说明还有 S1 之前的 Pod 在混跑） | — | 两种模式都适用（租约总是登记）；db 全停时没有序列、不响（由 Stranded 报）；再平衡与切组中途的短暂为 0 由 for 吸收；处置见 §6.2 |

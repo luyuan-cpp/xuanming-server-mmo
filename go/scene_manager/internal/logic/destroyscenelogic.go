@@ -57,7 +57,8 @@ func NewDestroySceneLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Dest
 //   - 映射已不存在时视为已被销毁(幂等成功):不再级联镜像,也不记 explicit 指标。
 //   - 只拆本 zone 的场景(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):请求的 zone 不是本进程的
 //     zone 时在任何读写之前拒绝,与 CreateScene 同一条路由不变量;zone_id 没填(0)按本进程的 zone。场景登记在别的
-//     zone(请求填的 zone 与场景不符)时认领脚本一个键都不动,回错误。
+//     zone 时,本 zone 的键里读不到它的映射(docs/design/redis-cluster-all-domains-20261110.md §3.3),与「映射已不存在」
+//     同一个结局:幂等成功,一个键都不动,不拆任何东西。
 //   - 只拆副本与镜像(2026-11-06):目标是本 zone 某张大世界地图的线(在役或回收中)时在任何写之前拒绝,回
 //     errWorldChannelNotDestroyable;查不清是不是线(读失败)时同样拒绝。这里走副本的销毁脚本,只删映射、不摘频道集合,
 //     拆世界频道会留下「在役、没有属主」的频道,随后被懒改派或 rebalance 以空属主复活;这次拆除又不带放置代次,晚到时会

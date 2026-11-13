@@ -82,7 +82,7 @@ func gateDrainMigratePolicy(cfg config.GateDrainConf) loginqueue.DrainMigratePol
 // gates 是排空判定同一拍的快照(直读 etcd,带实例 uuid)。发送失败只计数、打日志:下一拍会重发,
 // gate 在租期内照常迁移。
 func (s *ServiceContext) sendDrainMigrationLeases(ctx context.Context, gates []loginqueue.GateOnline, p loginqueue.DrainMigratePolicy) {
-	for _, lease := range loginqueue.DrainMigrationsDue(ctx, s.RedisClient, gates, p, time.Now().Unix()) {
+	for _, lease := range loginqueue.DrainMigrationsDue(ctx, s.ControlRedis, config.AppConfig.Node.ZoneId, gates, p, time.Now().Unix()) {
 		gateID := strconv.FormatUint(uint64(lease.NodeID), 10)
 		err := s.SendGateDrainMigration(gateID, lease.InstanceID, &kafkapb.GateDrainMigrationEvent{
 			DrainMarkedAt: lease.DrainMarkedAt,
@@ -143,7 +143,7 @@ func (s *ServiceContext) signGateMigration(ctx context.Context, details *login_p
 			details.GetGateNodeId(), details.GetGateInstanceId(), details.GetSessionIncarnation())
 		return unspecified, "no_identity"
 	}
-	if s.GateWatcher == nil || s.RedisClient == nil {
+	if s.GateWatcher == nil || s.ControlRedis == nil {
 		return unspecified, "failed"
 	}
 
@@ -166,7 +166,7 @@ func (s *ServiceContext) signGateMigration(ctx context.Context, details *login_p
 	}
 	zoneID := config.AppConfig.Node.ZoneId
 	// 读失败就不签(fail-closed,见 DrainingGateSet):不知道谁在排空时,不能把人迁过去。
-	draining, err := loginqueue.DrainingGateSet(ctx, s.RedisClient, zoneGateIDs(nodes, zoneID))
+	draining, err := loginqueue.DrainingGateSet(ctx, s.ControlRedis, zoneID, zoneGateIDs(nodes, zoneID))
 	if err != nil {
 		logx.Errorf("[GateMigration] %v", err)
 		return unspecified, "failed"

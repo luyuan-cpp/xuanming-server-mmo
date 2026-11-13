@@ -198,7 +198,7 @@ def main() -> int:
             "--build-arg", "BUILD_TIME=" + stamp,
             "--build-context", "source_meta=" + str(meta), "--iidfile", str(iid),
             "-f", str(RECIPE), "-t", tag, str(context)]
-        print(f"C++ Debug：{len(hashes)} 份输入，jobs={args.jobs}；日志 {output / 'build.log'}", flush=True)
+        print(f"C++ Debug: {len(hashes)} inputs, jobs={args.jobs}; log {output / 'build.log'}", flush=True)
         with (output / "build.log").open("x", encoding="utf-8") as log:
             process = subprocess.run(command, cwd=REPO, stdout=log, stderr=subprocess.STDOUT, timeout=14400)
         if process.returncode:
@@ -212,11 +212,11 @@ def main() -> int:
             result["images"][node] = {"image": tag, "imageId": identity}
             result["manifestPaths"][node] = str(manifest_path)
         result["success"] = True
-        print("三个 C++ 节点的同批 Debug 镜像构建完成。", flush=True)
+        print("Debug images for all three C++ nodes built from the same batch.", flush=True)
         return 0
     except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as error:
         (output / "failure.txt").write_text(str(error), encoding="utf-8")
-        print("C++ 构建停止：" + str(error), file=sys.stderr)
+        print("C++ build stopped: " + str(error), file=sys.stderr)
         return 1
     finally:
         (output / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

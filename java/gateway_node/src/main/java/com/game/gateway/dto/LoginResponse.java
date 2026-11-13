@@ -77,6 +77,12 @@ public class LoginResponse {
         private long playerId;
         private String name;
         private int level;
+        /**
+         * 这个角色现在所在的区(2026-11-12;login 已按归属映射解析过,合服之后是目标区)。0 = 不知道:老版本 login 没发,
+         * 或加这个字段之前建的存量角色。账号的角色列表是全服的,客户端据此在排队之前判断「所选区暂停创角、而账号在这个区
+         * 没有角色」,不让新玩家白排一次队(docs/design/zone-full-handling.md §6);JSON 名 zone_id。
+         */
+        private long zoneId;
 
         public long getPlayerId() { return playerId; }
         public void setPlayerId(long playerId) { this.playerId = playerId; }
@@ -84,6 +90,8 @@ public class LoginResponse {
         public void setName(String name) { this.name = name; }
         public int getLevel() { return level; }
         public void setLevel(int level) { this.level = level; }
+        public long getZoneId() { return zoneId; }
+        public void setZoneId(long zoneId) { this.zoneId = zoneId; }
     }
 
     public int getCode() { return code; }

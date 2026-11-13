@@ -139,6 +139,11 @@ namespace player_store_rows
         return kind != kOwnerIndex && IsKnownKind(kind);
     }
 
+    bool IsNewerKind(std::size_t kind)
+    {
+        return kind >= kKindCount;
+    }
+
     PersistRowSavePolicy RowSavePolicy(std::size_t kind)
     {
         return kind < kKindCount ? Groups().policy[kind] : PERSIST_ROW_SAVE_UNSPECIFIED;
@@ -159,9 +164,10 @@ namespace player_store_rows
             return false;
         }
         const auto *reflection = db.GetReflection();
+        // 行里不认识的顶层字段由存盘状态机按行保管,不经过这份消息(AssemblePlayer)。这里出现就写不回原来的行。
         if (!reflection->GetUnknownFields(db).empty())
         {
-            error = "player_database has unknown top-level fields; refusing to save and lose them";
+            error = "player_database has unknown top-level fields that belong to no row; refusing to save and lose them";
             return false;
         }
         player_database scratch;
@@ -198,12 +204,17 @@ namespace player_store_rows
         for (const auto &row : rows)
         {
             const auto kind = static_cast<std::size_t>(row.kind());
-            // 写权行不随数据返回;退役号(旧布局的 1、2、5)和本版本不认识的号都整份拒绝:
+            // 更新版本才有的行:里面只有本二进制不认识的字段,不读。存盘也不会写它,库里那一行原样留着。
+            if (IsNewerKind(kind))
+            {
+                continue;
+            }
+            // 写权行不随数据返回;剩下不是数据行的只有退役号(旧布局的 1、2、5),整份拒绝:
             // 按现在的分行去解读别的布局写的行,不属于本行的字段会被清掉,等于静默丢数据。
             if (!IsDataKind(kind))
             {
-                error = "unknown or retired player_store kind " + std::to_string(kind) +
-                        " (a row from another row layout; the project has not launched, rebuild the database)";
+                error = "retired player_store kind " + std::to_string(kind) +
+                        " (a row from a retired row layout; the project has not launched, rebuild the database)";
                 return false;
             }
             player_database part;
@@ -213,14 +224,9 @@ namespace player_store_rows
                 return false;
             }
             const auto *reflection = part.GetReflection();
-            const auto &partName = part.GetDescriptor()->full_name();
-            if (unknown_field_carry::ContainsNewerVersionFields(std::string_view(partName.data(), partName.size()),
-                                                                reflection->GetUnknownFields(part)))
-            {
-                error = "player_store kind " + std::to_string(kind) + " has fields of a newer version";
-                return false;
-            }
-            // 剩下的是退役字段的残留。丢掉:留着会进 Carry 组件,下一次存盘被 ProjectPlayer 拒绝。
+            // 这一行里本二进制不认识的顶层字段(更新版本加的,或已退役字段的残留)不并进消息:它们属于这一行,
+            // 由存盘状态机按行保管、写这一行时原样接回去(CarriedTopLevelBytes、PlayerStoreClient)。
+            // 这里清掉的只是内存里的这一份,库里的还在;并进消息的话 ProjectPlayer 分不清它们该写回哪一行。
             reflection->MutableUnknownFields(&part)->Clear();
             // 只认字段的当前分组:两行各有一份时(旧数据)按当前分组取,合并不翻倍。它不防丢失 —— 字段换组后
             // 旧分组那一行里的这份会在这里被清掉,所以换组由 proto 生成器拒绝(持久 schema 台账记 group=,
@@ -236,6 +242,18 @@ namespace player_store_rows
             }
             db.MergeFrom(part);
         }
+        return true;
+    }
+
+    bool CarriedTopLevelBytes(const std::string &payload, std::string &carried)
+    {
+        carried.clear();
+        player_database part;
+        if (!part.ParseFromString(payload))
+        {
+            return false;
+        }
+        carried = unknown_field_carry::Capture(part);
         return true;
     }
 }

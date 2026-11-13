@@ -13,6 +13,8 @@ import (
 	"shared/redisauth"
 	"shared/secretenv"
 
+	matchpb "proto/match"
+
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -191,8 +193,16 @@ type GlobalMatchConf struct {
 	// GatherSlots:每个副本同时进行的成局备战(PrepareBattle + CreateBattle)上限。池写者先占槽再提交成局,
 	// 占不到槽本轮就不再提交,票留在队列里。不是提交点规则,不进策略指纹。
 	GatherSlots int `json:",default=256"`
-	// PoolPageSize:池写者每轮每个池读的单排票页大小;队首一整页都凑不出组时下一轮翻到下一页。
-	PoolPageSize  int    `json:",default=512"`
+	// PoolPageSize:池写者每轮每个撮合段读的单排票页大小;队首一整页都凑不出组时下一轮翻到下一页。
+	PoolPageSize int `json:",default=512"`
+	// 热池拆分(docs/design/global-match-hierarchical-pools.md §5.2.1):SubPools 按模板列出要在每个机房里再按玩家拆成几个子池
+	// (子池号 = 单排 player_id / 整队发起者 actor_id 对 Count 取模),缺省为空 = 全部不拆。子池段只撮合入队不满
+	// SubPoolMergeSeconds 的单位,之后回到机房段统一撮合;合并时长只在配了 Count > 1 时生效,须小于 CrossRegionWaitSeconds。
+	// 两项只决定谁读哪一段票,不是提交点规则,不进策略指纹;滚动改配置时各副本短暂不同,只会让一部分新票晚几秒才被撮合。
+	SubPools            []SubPoolConf `json:",optional"`
+	SubPoolMergeSeconds uint32        `json:",default=5"`
+	// RankEndpoint / RankSecretEnv:评分榜投递的 rank 服务地址、生产者密钥所在的环境变量名。
+	RankEndpoint  string `json:",default=127.0.0.1:51100"`
 	RankEndpoint  string `json:",default=127.0.0.1:51100"`
 	RankSecretEnv string `json:",default=RANK_PRODUCER_SECRET_MATCH"`
 	// OutcomeOutbox:终局发件箱(整局结果发 Kafka、个人结算入 Inbox)的投递节拍、每轮批量与并发(2026-10-30,评审 B-6)。
@@ -249,6 +259,61 @@ func (g GlobalMatchConf) PoolPage() int {
 		return 512
 	}
 	return g.PoolPageSize
+}
+
+// SubPoolConf 是一个模板的子池数(热池拆分,§5.2.1 第 5 条)。Mode 是 MatchMode 的数值,与 PlayMode 表的 match_mode 同口径;
+// Count 1..MaxSubPools,1 = 不拆。
+type SubPoolConf struct {
+	Mode     uint32
+	ConfigId uint32
+	Count    uint32
+}
+
+// MaxSubPools 是一个模板最多拆成的子池数。子池段在索引项上按 id 取模过滤,每轮最多扫「页大小 × 子池数」个索引项
+// (§5.2.1 第 6 条),上限把这份放大封住。
+const MaxSubPools = 64
+
+// SubPoolCount 返回 (模式, 模板) 的子池数;没配、配了 1 或 0 都是 1(不拆)。
+func (g GlobalMatchConf) SubPoolCount(mode, configId uint32) uint32 {
+	for _, entry := range g.SubPools {
+		if entry.Mode == mode && entry.ConfigId == configId {
+			return max(entry.Count, 1)
+		}
+	}
+	return 1
+}
+
+// SubPoolMergeMs 返回子池合并时长(毫秒):入队满这么久的单位离开子池段,回到机房段。
+func (g GlobalMatchConf) SubPoolMergeMs() uint64 {
+	return uint64(g.SubPoolMergeSeconds) * 1000
+}
+
+// validateSubPools 在加载配置时核子池配置,越界拒启、不悄悄夹紧。只有有多人池的模式能拆:PVE_SOLO 只有每组 1 人的池,
+// 本来就不拆;切磋没有池;3V3 未开放。模板是否在 PlayMode 目录里由撮合循环启动时核(不在只打 ERROR,它不起作用)。
+func (g GlobalMatchConf) validateSubPools() error {
+	seen := map[[2]uint32]bool{}
+	split := false
+	for _, entry := range g.SubPools {
+		switch matchpb.MatchMode(entry.Mode) {
+		case matchpb.MatchMode_MATCH_MODE_PVE_TEAM, matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_5V5, matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
+		default:
+			return fmt.Errorf("GlobalMatch.SubPools: mode %d has no multi-player pools to split (allowed: PVE_TEAM, 1V1, 5V5, PVP_TEAM)", entry.Mode)
+		}
+		if entry.Count < 1 || entry.Count > MaxSubPools {
+			return fmt.Errorf("GlobalMatch.SubPools: mode %d config %d Count must be in 1..%d, got %d", entry.Mode, entry.ConfigId, MaxSubPools, entry.Count)
+		}
+		key := [2]uint32{entry.Mode, entry.ConfigId}
+		if seen[key] {
+			return fmt.Errorf("GlobalMatch.SubPools: mode %d config %d is listed twice", entry.Mode, entry.ConfigId)
+		}
+		seen[key] = true
+		split = split || entry.Count > 1
+	}
+	// 子池阶段必须在跨机房阶段之前结束:跨机房段只读等满 CrossRegionWaitSeconds 的票,它们都得已经回到机房段(§5.2.1 第 3 条)。
+	if split && (g.SubPoolMergeSeconds < 1 || g.SubPoolMergeSeconds >= g.CrossRegionWaitSeconds) {
+		return fmt.Errorf("GlobalMatch.SubPoolMergeSeconds must be at least 1 and less than CrossRegionWaitSeconds(%d), got %d", g.CrossRegionWaitSeconds, g.SubPoolMergeSeconds)
+	}
+	return nil
 }
 
 // PartyBonusCenti 返回组队加成(×100),撮合算队伍分与提交点复核共用。直接构造 Config 的单测里是 0。
@@ -437,6 +502,9 @@ func (c *Config) Validate() error {
 	if c.GlobalMatch.ScopeGroupAfterSeconds > c.GlobalMatch.ScopeGlobalAfterSeconds {
 		return fmt.Errorf("GlobalMatch.ScopeGroupAfterSeconds(%d) 不能大于 ScopeGlobalAfterSeconds(%d):先放宽到大区,再放宽到全服",
 			c.GlobalMatch.ScopeGroupAfterSeconds, c.GlobalMatch.ScopeGlobalAfterSeconds)
+	}
+	if err := c.GlobalMatch.validateSubPools(); err != nil {
+		return err
 	}
 	return c.validateSpectate()
 }

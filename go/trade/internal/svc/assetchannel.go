@@ -22,6 +22,7 @@ import (
 
 	"shared/assetop"
 	"shared/assetopwake"
+	"shared/clusterredis"
 	"shared/idsegment"
 	"shared/leader"
 	"shared/playerredis"
@@ -72,7 +73,7 @@ const (
 	// 读账本只是"可能省一次卡死"的优化,不值得吃掉其中的大头;data_service 一次 Redis GET 远小于它。
 	persistedLedgerReadTimeout = 300 * time.Millisecond
 
-	// maintenanceLeaderKey 是"资产通道维护(日对账 + 自动放弃)"选主锁的键,放在 SharedRedis(全体副本共享),
+	// maintenanceLeaderKey 是"资产通道维护(日对账 + 自动放弃)"选主锁的键,放在 ControlRedis(全体副本共享;单键,不带 tag),
 	// 与 guild 的 guild:assetop:maintenance:leader 同一个命名风格。值是竞选者标识 + 随机串,排障时 GET 一眼看出谁在跑。
 	maintenanceLeaderKey = "trade:assetop:maintenance:leader"
 
@@ -95,9 +96,9 @@ var ErrAssetSecretMissing = errors.New("trade: 资产通道密钥未配置")
 type AssetChannel struct {
 	RelayAdmission *drainproof.Session
 	RootAdmission  *drainproof.Session
-	// Redis 是控制域客户端(SharedRedis):落地唤醒的跨副本去重键 assetop:wake:trade:{player_id}(SET NX EX,shared/assetopwake),
-	// 与维护选主锁 trade:assetop:maintenance:leader(shared/leader,值带属主校验)。唤醒订阅的 assetop:wake 频道也在这一实例上。
-	Redis *redis.Client
+	// Redis 是控制集群客户端(ControlRedis 段,shared/clusterredis):落地唤醒的跨副本去重键 assetop:wake:trade:{player_id}(SET NX EX,shared/assetopwake),
+	// 与维护选主锁 trade:assetop:maintenance:leader(shared/leader,值带属主校验)。唤醒订阅的分片频道 assetop:wake:{aw:N} 也在这一集群上。
+	Redis redis.UniversalClient
 	// PlayerRedis 是玩家域句柄(shared/playerredis):读位置键 player:{id}:location(scenenode.Locator)。
 	PlayerRedis redis.UniversalClient
 	// Conns 到各 scene 节点的 gRPC 连接缓存(按 endpoint)。
@@ -121,7 +122,7 @@ type AssetChannel struct {
 	// (第 25 条)共用,Commerce.Owns 与 Pipeline 的重投循环(Pipeline.BindWorkOwner)绑的都是它。
 	// 只在跑全局后台的副本上读;nil 时两者都不分工、做全部片。
 	Members *workshard.Membership
-	// Wake 落地唤醒订阅(shared/assetopwake,设计 §5.3):订 SharedRedis 上的 assetop:wake,
+	// Wake 落地唤醒订阅(shared/assetopwake,设计 §5.3):用 ControlRedis 句柄 SSUBSCRIBE 全部 64 个分片频道 assetop:wake:{aw:N},
 	// 把玩家落地交给 Pipeline.WakePlayer。AssetOp.Wake 显式关闭时为 nil(nil 接收者的 Start / Stop 安全)。
 	Wake *assetopwake.Subscriber
 
@@ -144,7 +145,7 @@ type AssetChannel struct {
 	// wg 记 Start 起的全部后台 goroutine:节点镜像(Watcher.Run)、重投循环(Pipeline.Run)、维护(选主 + RunMaintenance)。
 	// Close 必须等它们全部退出之后才关 Conns / Redis(与 guild 的 AssetPipeline.Stop 同序):
 	//   - 重投循环每一行的落库走 assetop 不继承取消的落库预留,取消 ctx 拦不住它,投递还在用 Conns;
-	//   - 放弃那一行的提交同样走落库预留,卸任时带属主校验释放选主锁要用 SharedRedis;
+	//   - 放弃那一行的提交同样走落库预留,卸任时带属主校验释放选主锁要用 ControlRedis;
 	//   - 节点镜像的回调会往 Conns 里删连接(节点下线时),关缓存之前它必须先停。
 	wg sync.WaitGroup
 }
@@ -155,24 +156,23 @@ func (a *AssetChannel) Enabled() bool { return a != nil && a.Pipeline != nil }
 // newAssetChannel 建整套依赖。返回错误 = 启动致命(共享 Redis 连不上、outbox 表名非法、
 // op_id 号段建不出来);密钥缺失只降级,不返回错误。
 func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient, roles ...*drainproof.Session) (*AssetChannel, error) {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     c.SharedRedis.Host,
-		Password: c.SharedRedis.Password,
-		DB:       c.SharedRedis.DB,
-		// 共享 Redis 连接总账按它记账(0 = go-redis 缺省 10 × GOMAXPROCS;负数已被 config.Validate 拒绝)。
-		PoolSize: c.SharedRedis.PoolSize,
-	})
+	// 控制集群句柄:节点客户端不自动重发结果未知的命令(R8),发送前按控制集群键策略核对。
+	controlConf := c.EffectiveControlRedis()
+	rdb, err := clusterredis.New(controlConf, clusterredis.ControlClusterKeys)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ControlRedis config: %w", err)
+	}
 	pingCtx, cancel := context.WithTimeout(context.Background(), sharedRedisPingTimeout)
 	defer cancel()
 	if err := rdb.Ping(pingCtx).Err(); err != nil {
 		_ = rdb.Close()
-		// 探不通就不起服:位置键读不到时资产指令一律 NOT_HERE,表现是"上架永远卡在处理中",
-		// 比起服失败难查得多。地址只含 host:port,不含密码。
-		return nil, fmt.Errorf("连接共享 Redis %s (DB %d) 失败(位置键 player:{id}:location 在这里,"+
-			"必须与 C++ scene / scene_manager 同一实例): %w", c.SharedRedis.Host, c.SharedRedis.DB, err)
+		// 探不通就不起服:唤醒订阅与选主锁都在这里,没写 PlayerRedis 时位置键也在这里;位置键读不到时资产指令一律 NOT_HERE,
+		// 表现是"上架永远卡在处理中",比起服失败难查得多。Describe 不含密码。
+		return nil, fmt.Errorf("连接控制集群 Redis(%s)失败(落地唤醒与选主锁在这里,唤醒频道必须与 C++ scene 发布的同一实例): %w",
+			controlConf.Describe(), err)
 	}
-	// 生效值(缺省时是 go-redis 算出来的 10 × GOMAXPROCS):核对 ConfigMap 镜像的 PoolSize 是否真的被加载。
-	logx.Infof("Shared Redis client %s DB=%d pool_size=%d", c.SharedRedis.Host, c.SharedRedis.DB, rdb.Options().PoolSize)
+	// 生效的池上限:核对 ConfigMap 镜像的 PoolSizePerNode 是否真的被加载。
+	logx.Infof("Control Redis client %s", controlConf.Describe())
 
 	playerConf := c.EffectivePlayerRedis()
 	playerRdb, err := playerredis.New(playerConf)
@@ -262,7 +262,7 @@ func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient, rol
 	}
 	ch.Pipeline = pipeline
 
-	// 落地唤醒(设计 §5.3)。订的是 SharedRedis:scene 在玩家进场完成时向同一实例 PUBLISH assetop:wake <player_id>。
+	// 落地唤醒(设计 §5.3)。订的是 ControlRedis:scene 在玩家进场完成时按 player_id % 64 向同一集群 SPUBLISH 分片频道 assetop:wake:{aw:N}。
 	// 实例指错的表现是永远收不到唤醒、只剩原退避,且不报错。
 	// counter 必须是 Loop 用的同一个 assetop.Metrics:assetop_wake_total 在一个注册表里只能注册一次,
 	// 订阅端与 Loop.WakePlayer 各管一段 result。去重键 assetop:wake:trade:{player_id},与 guild 互不去重。
@@ -282,7 +282,7 @@ func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient, rol
 	// 多副本同时跑不会出错,但按类 gauge 会有多份、候选扫描会重复,告警 max(...) 的口径也会被搅乱。
 	if pipeline.MaintenanceEnabled() {
 		id := maintenanceLeaderID()
-		ch.maintenance = leader.New(leader.NewGoRedisStore(rdb), maintenanceLeaderKey, leader.Options{
+		ch.maintenance = leader.New(leader.NewUniversalStore(rdb), maintenanceLeaderKey, leader.Options{
 			ID: id,
 			OnStateChange: func(leading bool) {
 				if leading {
@@ -394,52 +394,12 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, owns func(key string)
 			repo.RunCleanup(ctx, conf)
 			return
 		}
-		owner := roots[0]
-		// 活性(缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8):起来时写一次,
-		// 每跑完一轮写一次(这一轮成败都写,panic 的那一轮不写),退出时删掉序列。
-		data.MarkCleanupRun(time.Now())
-		defer data.ClearCleanupRun()
-		timer := time.NewTimer(time.Duration(rand.Int64N(int64(conf.Interval))))
-		defer timer.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-			}
-			finish, enterErr := owner.Enter()
-			if enterErr != nil {
-				if !errors.Is(enterErr, drainproof.ErrClosed) {
-					owner.Hold()
-					return
-				}
-				timer.Reset(conf.Interval)
-				continue
-			}
-			// 每一轮各自 recover(同 guild 的清理与 assetop.Loop.Run):一轮 panic 先打 HOLD,只丢这一轮,循环接着跑。
-			// 原来整个 goroutine 共用一个 recover,一轮 panic 清理就停了,进程还活着、它名下的片从此没人清。
-			safego.Run(assetOpCleanupPoint, func() {
-				defer finish()
-				defer func() {
-					if recovered := recover(); recovered != nil {
-						owner.Hold()
-						panic(recovered)
-					}
-				}()
-				budget, release := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
-				defer release()
-				// 片的归属每轮开头算一次,一轮里不变。
-				owned := workshard.SQLFilter(conf.Owns, data.CleanupWorkKind, "player_id")
-				if _, err := repo.CleanupTerminalOpsOwned(budget, time.Now(), conf.TerminalRetention, owned); err != nil {
-					if !authoritysql.IsWriterFrozen(err) {
-						owner.Hold()
-					}
-					logx.Errorf("trade cleanup failed: %v", err)
-				}
-				data.MarkCleanupRun(time.Now())
-			})
-			timer.Reset(conf.Interval)
-		}
+		runSourcedCleanup(ctx, roots[0], conf.Interval, func(budget context.Context) error {
+			// 片的归属每轮开头算一次,一轮里不变。
+			owned := workshard.SQLFilter(conf.Owns, data.CleanupWorkKind, "player_id")
+			_, err := repo.CleanupTerminalOpsOwned(budget, time.Now(), conf.TerminalRetention, owned)
+			return err
+		})
 	})
 	logx.Infof("[trade] Asset cleanup started: goroutine %s interval=%v terminal_retention=%v sharded_by_player=%t",
 		assetOpCleanupPoint, conf.Interval, conf.TerminalRetention, conf.Owns != nil)
@@ -447,6 +407,59 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, owns func(key string)
 		cancel()
 		<-done
 	}, nil
+}
+
+// runSourcedCleanup 是带排空 SOURCE 的清理循环:首轮前随机延迟 [0, interval)(把各副本错开),之后每 interval 一轮,直到 ctx 结束。
+// clean 是一轮清理本身,拿到的 ctx 带这一轮的 1 分钟预算。
+//
+// 活性(data.CleanupLive;缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8):起来时写一次;
+// 每一轮正常返回(成败都算)就写这一刻,panic 的一轮不写;ctx 结束、有意停止时删掉序列。
+//
+// 每一轮各自 recover(同 guild 的清理与 assetop.Loop.Run):一轮 panic 只丢这一轮,循环接着跑。原来整个 goroutine 共用一个
+// recover,一轮 panic 之后清理循环就退出了,进程还活着、还在成员表里,它名下的片从此没人清。
+func runSourcedCleanup(ctx context.Context, owner *drainproof.Session, interval time.Duration, clean func(ctx context.Context) error) {
+	data.CleanupLive.Mark(time.Now())
+	timer := time.NewTimer(time.Duration(rand.Int64N(int64(interval))))
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			data.CleanupLive.Stop()
+			return
+		case <-timer.C:
+		}
+		data.CleanupLive.Round(assetOpCleanupPoint, func() { sourcedCleanupRound(ctx, owner, clean) })
+		timer.Reset(interval)
+	}
+}
+
+// sourcedCleanupRound 跑一轮清理,走排空 SOURCE 门禁:入口已关(停机排空)就跳过这一轮;清理出错按结局未知打 HOLD,
+// 闸门冻结除外(确定没写,下一轮接着清);panic 先打 HOLD 再抛给调用方(looplive.Round 里的 safego 兜住)。
+// 已经进了入口的一轮不随 ctx 取消:它用自己的 1 分钟预算跑完,停机不会把一笔删除截在半路。
+func sourcedCleanupRound(ctx context.Context, owner *drainproof.Session, clean func(ctx context.Context) error) {
+	finish, err := owner.Enter()
+	if err != nil {
+		// Enter 今天只会回「入口已关」;别的错误按结局未知记 HOLD,同样不开这一轮。
+		if !errors.Is(err, drainproof.ErrClosed) {
+			owner.Hold()
+		}
+		return
+	}
+	defer finish()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			owner.Hold()
+			panic(recovered)
+		}
+	}()
+	budget, release := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer release()
+	if err := clean(budget); err != nil {
+		if !authoritysql.IsWriterFrozen(err) {
+			owner.Hold()
+		}
+		logx.Errorf("trade cleanup failed: %v", err)
+	}
 }
 
 // Start 起 etcd 节点镜像与重投循环,以及(装配了的话)维护选主与落地唤醒订阅。ctx 取消即全部退出;
@@ -600,7 +613,7 @@ func (a *AssetChannel) holdUnknownTick(err error) {
 // 关号段客户端 / 连接缓存 / 共享 Redis。全部后台 goroutine 都被**等到退出**才往下关:
 //   - 在途唤醒用的是 Loop 与连接缓存,最坏再等 WakeTimeout 加落库预留(assetopwake.Subscriber.Stop);
 //   - 重投循环要等本轮 Tick 的 worker 结束,每行最多 OpBudget(投递 + 不继承取消的落库预留),Store 的每条 SQL 另有子预算;
-//   - 放弃那一行的提交同样走落库预留,维护卸任时带属主校验释放锁(≤ 2s)要用 SharedRedis;
+//   - 放弃那一行的提交同样走落库预留,维护卸任时带属主校验释放锁(≤ 2s)要用 ControlRedis;
 //   - 节点镜像取消即退出(etcd watch 随 ctx 结束)。
 //
 // 在途的资产 RPC 被连接关闭打断不会丢数据:那一行仍是 PENDING,下次循环照常重投,

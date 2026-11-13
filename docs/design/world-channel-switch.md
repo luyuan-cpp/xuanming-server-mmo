@@ -128,7 +128,7 @@ scene_manager 的拒绝码(§4.4)在 C++ 侧一律变成 3023(`player_lifecycle.
 | 键 | 类型 | 内容 | TTL |
 |---|---|---|---|
 | `world_channel_lineno:zone:{zone}:{conf}` | HASH | field = scene_id(十进制),value = 线号 | 无 |
-| `world_channel_directory:zone:{zone}:{conf}` | STRING | `SceneChannelDirectory` 序列化字节 | `3 × 发布周期 + 竞选间隔`(竞选间隔 = 选主锁 TTL / 3 向上取整;默认 6 + 10 = 16s) |
+| `world_channel_directory:zone:{zone}:{conf}` | STRING | `SceneChannelDirectory` 序列化字节 | `3 × 发布周期 + 竞选间隔`(竞选间隔 = `shared/leader.CampaignInterval`:缺省 2s、不超过选主锁 TTL / 3,向上取整到秒;默认 6 + 2 = 8s。2026-11-12 起竞选间隔不再跟着锁 TTL 走,原为 TTL / 3 = 10s) |
 | `player:{player_id}:channel_switch_cooldown` | STRING `"1"` | 存在 = 冷却中 | 冷却秒数 |
 
 前两个键刻意不用 `world_channels:zone:` 前缀:孤儿清理按那个前缀 SCAN,会把它们当成频道集合。

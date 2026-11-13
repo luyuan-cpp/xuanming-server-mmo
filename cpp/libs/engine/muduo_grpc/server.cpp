@@ -114,8 +114,10 @@ std::string FormatBudget(std::chrono::microseconds budget)
 
 // 执行一次 unary handler;装了派发拦截时经它包一层(ServerOptions::dispatchInterceptor)。
 // 拦截器多调 invoke 的被忽略,一次都没调的在这里补调:handler 恰好执行一次。
+// methodPath 引用方法表里的 ":path",服务端存活期间不变(方法表在 Start 之后不再修改)。
 void InvokeUnaryHandler(const UnaryDispatchInterceptor &interceptor, const UnaryMethodHandler &handler,
-                        ServerCall call, std::string_view message, const std::string &methodName)
+                        ServerCall call, std::string_view message, const std::string &methodName,
+                        const std::string &methodPath)
 {
     if (!interceptor)
     {
@@ -134,7 +136,7 @@ void InvokeUnaryHandler(const UnaryDispatchInterceptor &interceptor, const Unary
         invoked = true;
         handler(std::move(call), message);
     };
-    interceptor(metadata, invoke);
+    interceptor(methodPath, metadata, invoke);
     if (!invoked)
     {
         LOG_ERROR << "[GrpcServer] dispatch interceptor did not invoke the handler; invoking it now, method="
@@ -1222,8 +1224,18 @@ ServerSession::Verdict Server::RouteRequest(const RequestHeaders &headers)
         ++stats_.refusedOnShutdown; // 排空到期之后才开的流:没处理,客户端可透明重试(§15.3 Q4)
         return RefuseVerdict();
     }
-    if (methodIndex_.find(std::string_view(headers.path)) != methodIndex_.end())
+    if (const auto known = methodIndex_.find(std::string_view(headers.path)); known != methodIndex_.end())
     {
+        // 准入(ServerOptions::admission,节点接的是热关停):业务开始之前拒绝,请求体不收、handler 不执行。
+        // 拒绝的状态码由准入决定,计入 codes / methods 统计;逐条不打日志(准入方自己计数与采样)。
+        if (options_.admission)
+        {
+            if (auto denied = options_.admission(headers.path); denied && denied->code() != StatusCode::kOk)
+            {
+                CountStatus(known->second, denied->code());
+                return RejectVerdict(std::move(*denied));
+            }
+        }
         return AcceptVerdict();
     }
     // ServerSession 保证 path 能拆开;拆不开时按 grpc-go 同文案兜底。
@@ -1435,7 +1447,7 @@ void Server::RunDispatchTurn()
         ++stats_.dispatched;
         ++dispatchedThisTurn;
         InvokeUnaryHandler(options_.dispatchInterceptor, handler, ServerCall(std::move(token)), std::string_view(message),
-                           methods_[record.methodIndex].displayName);
+                           methods_[record.methodIndex].displayName, methods_[record.methodIndex].path);
     }
     stats_.maxDispatchedPerTurn = std::max(stats_.maxDispatchedPerTurn, dispatchedThisTurn);
     if (!ready_.empty())

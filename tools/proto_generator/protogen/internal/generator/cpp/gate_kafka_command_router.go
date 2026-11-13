@@ -189,7 +189,7 @@ func GenerateGateKafkaCommandRouter(wg *sync.WaitGroup) {
 
 		cases, err := buildGateKafkaRouterCases()
 		if err != nil {
-			logger.Global.Fatal("生成网关 Kafka 路由失败", zap.Error(err))
+			logger.Global.Fatal("Failed to generate the gate Kafka router", zap.Error(err))
 		}
 
 		// 撤销全部标注也必须覆写旧输出,使空白名单确实拒绝所有事件。
@@ -197,7 +197,7 @@ func GenerateGateKafkaCommandRouter(wg *sync.WaitGroup) {
 		data := gateKafkaRouterTemplateData{Cases: cases}
 
 		if err := utils2.RenderTemplateToFile("internal/template/gate_kafka_command_router.cpp.tmpl", outputPath, data); err != nil {
-			logger.Global.Fatal("写入网关 Kafka 路由失败",
+			logger.Global.Fatal("Failed to write the gate Kafka router",
 				zap.String("output_file", outputPath),
 				zap.Error(err),
 			)

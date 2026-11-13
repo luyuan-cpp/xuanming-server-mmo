@@ -1,6 +1,11 @@
 # scene 节点计划排空：重启、缩容、滚动升级时把玩家搬到别的节点（2026-11-11）
 
-> **状态**：方案已定，2026-11-11 批 1~5 全部落码（§9），第一轮查出的残余在批 5 一并修完，数字按标准做法定案（§4.7）；未生成协议、未编译、未运行，待 Codex 验证。Java 版待做（§10）。
+> **状态**：方案已定，批 1~8 全部落码（§9），查出的残余都已修完，数字按标准做法定案（§4.7）。
+> - 批 1~5（2026-11-11）：协议已生成，C++ 与 Go 随 Codex 11-12 的全量构建编译通过（`build/verification/docker-rebuild-all-20261112T040700.029055Z`），部署后双机器人登录进场通过；本文新增的单测、脚本契约测试与计划排空冒烟还没有运行证据。
+> - 批 6（2026-11-12）：gate 与 Go 服务的收尾，未编译、未运行。
+> - 批 7（2026-11-12 晚）：Agones Fleet 也按模板修订分代、模板不变的整批重启（§4.6、§6），以及演练清单（§11）；只有脚本与文档，未运行。
+> - 批 8（2026-11-13）：Go 服务的两处交接空窗——选主竞选间隔与锁 TTL 脱钩、login 与 guild 停机时等后台收尾（§9），未编译。
+> - Java 版待做（§10）。
 > **需求来源**：负责人 2026-11-11：「scene 重启之前是把当前的节点玩家传送到已有 scene 节点（新版本节点优先），或者是收缩的时候，这样玩家就像无感一样」；同日要求「按最标准的方式做：数据强一致、代码易懂、可水平扩展，Java 留待做」。总需求与逐节点现状见 [全类型节点平滑停机需求](node-lifecycle-elasticity-release-20261023.md) §3.7。
 > **核对基线**：HEAD `e0790ad40` 加 11-11 工作区。十几个会话并行在改，行号会漂，按函数名找。
 > **上线状态**：未上线，玩家数据可以整体清空，不为旧部署做兼容。新旧版本只在滚动窗口里并存，按 §6 的发布顺序。
@@ -104,7 +109,7 @@
   4. 都没有 → `ErrNoAvailableNode`，C++ 待确认表按「改派没生效」核实后踢线（现有行为）。
 - 整节点疏散（身份冲突）、频道缩容、归属对账走同一套解析，顺带修掉 §2 第 3 条的两个问题。
 - 换手门、owner_epoch 铸造、location 写入、路由下发全部是现有跨节点交接的路径（同 scene_id、不同节点不算同落点）。
-- **离线托管中的角色**（服务器替它挂着，没有客户端、没有 gate 会话，如组队跟随）同样抄票据，按托管落点发疏散请求：`hosted_placement = true`、不带 gate，身份取断开的那次登录（与组队跟随的托管落点同一契约，`enter_hosted_placement.go`），落点按上面同一套疏散解析，到了新节点接着托管。抄票据要在进退出流程之前（进了退出流程就不认托管身份，按原规则只存盘）。这类票据不进待确认表：没有在场的客户端可踢；改派失败时存档已经落地，玩家下次登录照常进入。
+- **离线托管中的角色**（服务器替它挂着，没有客户端、没有 gate 会话，如组队跟随）同样抄票据，按托管落点发疏散请求：`hosted_placement = true`、不带 gate，身份取断开的那次登录（与组队跟随的托管落点同一契约，`enter_hosted_placement.go`），落点按上面同一套疏散解析，到了新节点接着托管。抄票据要在进退出流程之前（进了退出流程保留就被摘掉，不再认得出托管身份）。这类票据与在线票据一样进待确认表（条目带 `hosted`，2026-11-12 起，取代批 5 的「不进表」）：派发按登录身份判（断线是它的前提，不按 `clientDisconnected` 作废；批 5 那一版派发时去读已被退出入口摘掉的保留组件，每张托管票据都被作废）；核实没生效时不推送、只结清（没有在场的客户端，旧会话号可能已被新登录拿回）；能证明 scene_manager 没放行（没发出去、可重试的拒绝、已过 settle 的结果未知）时等 5 秒 / 20 秒各重发一次。到了目标节点却没建起来时，由目标节点有界重试同一条落点。细节与不变量见 [player-connection-lost-hold.md](player-connection-lost-hold.md) §4.3 / §4.4。
 
 ### 4.5 副本、镜像与跨服场景
 
@@ -115,13 +120,22 @@
 
 ### 4.6 新版本优先
 
-- `NodeInfo` 新增 `string build = 16`：部署构建标识。部署把与 Pod 标签 `mmorpg.io/build` 同一个值（`Get-ImageBuildLabel`）经环境变量 `MMORPG_BUILD_LABEL` 注入，C++ Node 注册时写入。空串 = 没上报（本机开发），不参与偏好。
+- `NodeInfo` 新增 `string build = 16`：这台节点属于哪一代部署。C++ Node 注册时由两样拼成（`ComposeBuildLabel`），选点的一方只比相等、不解析：
+  - **构建标识**：部署把与 Pod 标签 `mmorpg.io/build` 同一个值（`Get-ImageBuildLabel`）经环境变量 `MMORPG_BUILD_LABEL` 注入；
+  - **工作负载修订**（批 6）：Deployment 的 `pod-template-hash`、StatefulSet 的 `controller-revision-hash`，部署经 downward API 注入 `MMORPG_POD_REVISION`。同一个镜像只改配置或 `kubectl rollout restart` 时构建标识不变、修订会变，拼上它之后，同镜像滚动重启也分得出哪一代 Pod 要留下。
+  - **Agones Fleet 的修订**（批 7）：Fleet 的 Pod 没有上面那种标签，部署自己算一个等价的值——Fleet 清单里 GameServer 模板那一段的内容哈希（`Get-SceneFleetTemplateRevision`，形如 `r1a2b3c4d5e`），写进 GameServer 模板的标签 `mmorpg.io/revision` 与 Pod 的 `MMORPG_POD_REVISION`。副本数不在哈希范围内，扩缩容不换代；按行排序、换行归一后再算，行的先后与检出的换行符都不影响结果。`MMORPG_POD_REVISION` 后面再拼上重启令牌（Pod 模板注解 `mmorpg.io/restarted-at`，经 downward API 读，没打过是空串），见下面「整批重启」。
+  - 两样都没有 = 空串（本机开发），不参与偏好。
 - scene_manager 把「本 zone 里至少有一台排空中节点的构建」视为**外出构建**。选落点时：
   - 迁频道的目标按一致性哈希在**非外出构建的开放节点**里选，没有才退回全部开放节点；
   - 疏散与新玩家选频道时，属主是非外出构建的频道优先；
   - 新副本选节点同理。
-- 不需要知道「哪个是新版本」：滚动升级时被排空的永远是被换下的那一代，回滚时也一样（被换下的是新版本，偏好自然落到旧版本）。缩容与单台重启时只有一个构建，没有偏好。
+- 不需要知道「哪个是新版本」：滚动升级时被排空的永远是被换下的那一代，回滚时也一样（被换下的是新版本，偏好自然落到旧版本）。缩容与单台重启（`kubectl delete pod`）时新旧 Pod 同一代，没有偏好，也不需要。
+- **整批重启（模板没有任何变化）**要先让修订变一次，重启出来的才是「新一代」，否则已经重启过的与还没重启的分不出来，玩家可能被搬不止一次。各形态的做法：
+  - Deployment（scene、podip 形态的 gate、battle）：`kubectl rollout restart deployment/<名字>`。它给 Pod 模板加一个注解，`pod-template-hash` 随之变化，K8s 按滚动策略逐个替换，旧 Pod 收到 SIGTERM 后按本文排空。不要手工逐个 `kubectl delete pod`。
+  - gate 的 StatefulSet（`OnDelete`）：直接用 `k8s_gate_drain.ps1 -DeletePod` 逐台排空并删除。脚本发现被排空的 Pod 已经是 StatefulSet 的当前修订时，会先自动 `kubectl rollout restart statefulset/gate`（只改模板、不重启任何 Pod），重建出来的 Pod 带新的 `controller-revision-hash`；细节见 [gate 排空迁移](gate-drain-session-migration.md) §7.3。
+  - scene 的 Agones Fleet：`k8s_scene_roll.ps1 -Restart`。它给 Fleet 的 GameServer 模板与 Pod 模板打重启令牌 `mmorpg.io/restarted-at`（相当于 rollout restart），Agones 自己替换 Ready 的 GameServer，脚本再逐台排空 Allocated 的。这个注解不在 `zone-up` 渲染的清单里，之后再 `zone-up` 不会把它抹掉。
 - 滚动期间，外出构建上没人的频道会被 rebalance 顺带迁到新构建（哈希环只含非外出构建），以后排空它们时没有人要搬。
+- `NodeInfo.build` 是每种 C++ 节点都自报的通用属性（部署给 gate、scene、battle 都注入 `MMORPG_BUILD_LABEL`）。gate 排空迁移选目标用的是同一个「外出构建」口径：login 优先把连接迁到不在外出构建上的 gate（[gate 排空迁移](gate-drain-session-migration.md) §7.3）。
 
 ### 4.7 预算、限速与兜底
 
@@ -155,7 +169,7 @@
 ## 6. 部署与发布顺序
 
 - **Deployment（缺省）**：`zone-up` 换镜像即可。K8s 先起新 Pod、就绪后给旧 Pod 发 SIGTERM，旧 Pod 按本文排空。缩容（减副本）同理。部署脚本给 scene 注入 `MMORPG_BUILD_LABEL` 与 `MMORPG_PLANNED_DRAIN_BUDGET_SECONDS`，宽限期缺省改为 120 秒。
-- **Agones**：Fleet 模板更新只替换 Ready 的 GameServer。旧构建的 Allocated GameServer 要逐台打 `mmorpg.io/drain` 标签，等它排空并自己退出、Fleet 补出新构建后再打下一台：`zone-up` 换完 Fleet 模板后对每个 scene Fleet 跑 `pwsh -File tools/scripts/k8s_scene_roll.ps1 -Namespace <zone ns> -Fleet <fleet>`（缺省每次 1 台，`-MaxConcurrent` 可调，`-DryRun` 只列名字）；`zone-up` 在 Agones 形态结尾把每个 Fleet 的这条命令打出来。不放进 `zone-up` 自动跑：它等一台疏散完才打下一台，耗时与台数成正比。Fleet 缩容时 Agones 的 allocationOverflow 打的是同一个标签，scene 同样按计划排空处理。
+- **Agones**：Fleet 模板更新只替换 Ready 的 GameServer。旧一代的 Allocated GameServer 要逐台打 `mmorpg.io/drain` 标签，等它排空并自己退出、Fleet 按当前模板补出新的之后再打下一台。「旧一代」= 构建标识、模板修订、重启令牌三样里任何一样与 Fleet 的 GameServer 模板不同（§4.6），所以只改配置的换版和 `-Restart` 的整批重启同样会被滚掉：`zone-up` 换完 Fleet 模板后对每个 scene Fleet 跑 `pwsh -File tools/scripts/k8s_scene_roll.ps1 -Namespace <zone ns> -Fleet <fleet>`（缺省每次 1 台，`-MaxConcurrent` 可调，`-DryRun` 只列名字）；`zone-up` 在 Agones 形态结尾把每个 Fleet 的这条命令打出来。不放进 `zone-up` 自动跑：它等一台疏散完才打下一台，耗时与台数成正比。Fleet 缩容时 Agones 的 allocationOverflow 打的是同一个标签，scene 同样按计划排空处理。
 - **顺序**：scene_manager 先于 scene 升级（它要先认得 CLOSED、`build` 与 `evacuation`），与发布轨道的「保护先随 stable 上线」同一纪律。首次上线整批带上即可。
 
 ## 7. 契约
@@ -165,7 +179,7 @@
 | 字段 | 类型 | 语义 |
 |---|---|---|
 | `NodeInfo.admission = 14`（已有，扩用） | enum | 原只由 battle 填。scene 在计划排空开始时写 CLOSED，平时留 UNSPECIFIED（scene_manager 按开放处理） |
-| `NodeInfo.build = 16`（新增） | string | 部署构建标识，同 `mmorpg.io/build` 标签值；空串 = 没上报 |
+| `NodeInfo.build = 16`（新增） | string | 这台节点属于哪一代部署：`mmorpg.io/build` 标签值，Deployment / StatefulSet 形态再拼上 `@<工作负载修订>`；不透明，只比相等；空串 = 没上报 |
 | `EnterSceneRequest.evacuation = 15`（新增，scene_manager 服务内部） | bool | 源节点疏散；解析按 §4.4，排除 location 记的源节点 |
 
 客户端协议不变。
@@ -193,9 +207,35 @@
 | 2 | C++：Node 计划排空阶段与信号拆分、注册写 build、通用 admission 对账（battle 改用）；scene 排空编排、疏散去向与限速、单测 | `cpp/libs/engine/core/node/system/node/{node.h,node.cpp,node_entry.h,node_planned_drain.h,node_admission_advertise.h,node_admission_publisher.h}`、`core.vcxproj{,.filters}`、`cpp/nodes/scene/{main.cpp,scene_planned_drain.h,scene_planned_drain.cpp,scene.vcxproj{,.filters}}`、`cpp/libs/services/scene/player/system/{player_lifecycle.h,player_lifecycle.cpp,relocate_target.h}`、`cpp/libs/services/scene/world/scene_planned_drain_rules.h`、`cpp/nodes/battle/{battle_admission_advertise.h,main.cpp}`、`cpp/tests/cross_zone_test/{planned_drain_test.cpp,cross_zone_test.vcxproj{,.filters}}` | 11-11 落码，未编译 |
 | 3 | 部署：scene 宽限期 120、两种编排注入 `MMORPG_BUILD_LABEL` 与预算；契约测试 | `tools/scripts/k8s_deploy.ps1`、`tools/scripts/tests/scene_planned_drain_deploy.tests.ps1` | 11-11 落码，未运行 |
 | 4 | Agones 旧构建 GameServer 逐台排空脚本；battle 计划排空（关准入 → 等房间清零 → 普通停机） | `tools/scripts/k8s_scene_roll.ps1`、`tools/scripts/tests/k8s_scene_roll.tests.ps1`、`cpp/nodes/battle/main.cpp` | 11-11 落码，未编译；battle 进程缺省关闭，部署侧在批 5 接上 |
-| 5 | 第一轮残余全部修掉：gate 场景广播按发送节点过滤（§4.3）；离线托管角色按托管落点疏散（§4.4）；battle 三种编排的宽限期 330 与预算注入（§4.7）；`zone-up` 在 Agones 形态打出逐台排空命令（§6）；拿 broker ACK 当提交点的 Kafka 写入器改 acks=all（见下） | `cpp/nodes/gate/handler/{gate_push_delivery.h,gate_push_delivery.cpp,rpc/gate_service_handler.cpp}`、`cpp/nodes/gate/tests/gate_push_delivery_test.cpp`、`cpp/libs/services/scene/player/system/player_lifecycle.{h,cpp}`、`cpp/nodes/battle/main.cpp`、`tools/scripts/k8s_deploy.ps1`、`tools/scripts/tests/scene_planned_drain_deploy.tests.ps1`、`go/scene_manager/internal/svc/servicecontext.go`、`go/player_locator/internal/svc/servicecontext.go` | 11-11 落码，未编译、未运行 |
+| 5 | 第一轮残余全部修掉：gate 场景广播按发送节点过滤（§4.3）；离线托管角色按托管落点疏散（§4.4；这一项 2026-11-12 由托管搬迁会话重写为进待确认表、按登录身份派发、有界重发，批 5 原写法派发时恒作废，见 player-connection-lost-hold.md §4.3）；battle 三种编排的宽限期 330 与预算注入（§4.7）；`zone-up` 在 Agones 形态打出逐台排空命令（§6）；拿 broker ACK 当提交点的 Kafka 写入器改 acks=all（见下） | `cpp/nodes/gate/handler/{gate_push_delivery.h,gate_push_delivery.cpp,rpc/gate_service_handler.cpp}`、`cpp/nodes/gate/tests/gate_push_delivery_test.cpp`、`cpp/libs/services/scene/player/system/player_lifecycle.{h,cpp}`、`cpp/nodes/battle/main.cpp`、`tools/scripts/k8s_deploy.ps1`、`tools/scripts/tests/scene_planned_drain_deploy.tests.ps1`、`go/scene_manager/internal/svc/servicecontext.go`、`go/player_locator/internal/svc/servicecontext.go` | 11-11 落码，未编译、未运行 |
+| 6 | 其余节点的收尾（2026-11-12）：gate 排空迁移默认开、选目标优先新构建、客户端进场后跳数清零（[gate 排空迁移](gate-drain-session-migration.md) §19）；gate 与 battle 注入构建标识；`NodeInfo.build` 拼上工作负载修订，同镜像滚动重启也分得出新旧（§4.6）；Go 服务停机时限盖住在途请求、data-service 宽限期对齐（见下）；login goctl 包装的守卫用例 | `cpp/libs/engine/core/node/system/node/node_planned_drain.h`、`cpp/tests/cross_zone_test/planned_drain_test.cpp`；客户端 `Assets/Scripts/Game/GameClient.cs`、`Assets/Tests/EditMode/Net/GameClientReconnectTests.cs`；`go/login/internal/{config,logic/pkg/loginqueue,svc}`、`go/login/goctl_wrappers_test.go`、`go/login/etc/login.yaml`；`go/shared/shutdownbudget/`、`go/{scene_manager,player_locator,client_rpc_router}` 的入口文件；`deploy/k8s/manifests/go-svc/data-service.yaml`；`tools/scripts/{k8s_deploy.ps1,k8s_gate_drain.ps1,lib/k8s_client_entry.ps1}` 与对应测试 | 11-12 落码，未编译、未运行 |
+| 7 | 新旧分代补到底（2026-11-12 晚）：scene Fleet 的模板修订（内容哈希）与重启令牌；`k8s_scene_roll.ps1` 按「构建标识 + 模板修订 + 重启令牌」认旧一代，新增 `-Restart`；模板不变的整批重启各形态的做法（§4.6）；演练清单（§11） | `tools/scripts/{k8s_deploy.ps1,k8s_scene_roll.ps1}`、`tools/scripts/tests/{scene_planned_drain_deploy.tests.ps1,k8s_scene_roll.tests.ps1}` | 11-12 落码，未运行 |
+| 8 | Go 服务的两处交接空窗（2026-11-13）：选主让位后跟随者的竞选间隔与锁 TTL 脱钩（见下「选主交接」）；login 停机时等已受理的 EnterGame 后台链、guild 等自己的有序收尾（见下表） | `go/shared/leader/{leader.go,leader_test.go}`、`go/login/internal/logic/pkg/loginqueue/{dispatcher.go,dispatcher_campaign_test.go}`、`go/scene_manager/internal/logic/{world_channel_directory.go,world_channel_directory_test.go}`、`go/scene_manager/internal/config/config.go`（注释）、`go/shared/shutdownbudget/`、`go/login/{login.go,internal/logic/clientplayerlogin/entergamelogic.go}`、`go/guild/guild.go`、`deploy/k8s/manifests/go-svc/login.yaml`（注释）、`docs/design/world-channel-switch.md` | 11-13 落码，未编译 |
 
 验证命令与通过标准在 PROGRESS 的落码条目里（AGENTS.md §10.1：协议生成、编译、单测、冒烟由 Codex 执行）。
+
+**Go 服务停机时限**（批 6）：Go 服务没有玩家长连接要搬，计划重启的标准做法是「先从 etcd 注销、再等在途请求结束、最后退出」，go-zero 自带这三步，但缺省从收到 SIGTERM 起 5.5 秒就强杀进程，在途请求只有 4.5 秒。逐个服务核对「进程自己的停机时限」与「服务端请求超时」「Pod 宽限期」：
+
+| 服务 | 停机方式 | 进程硬截止 | 核对结果 |
+|---|---|---|---|
+| friend、trade、chat、player_inbox | 自己接管信号（`internal/lifecycle`） | 24 秒 | 宽限期 30 ≥ preStop 5 + 24，已对齐 |
+| mail、rank | `shared/domainhost` | 24 秒 | 宽限期 35，已对齐 |
+| db | 自己接管信号，等在途存盘 | 按 `MethodTimeouts` 12 秒 | 宽限期 45，已有契约测试。存档已改为直接提交（[存盘直接提交](player-save-direct-commit.md)），db 不再是 Kafka 消费组成员，滚动时没有再平衡停顿 |
+| match | 自己接管信号（`shutdownDrainTimeout` 5 秒） | 约 5 秒 | 请求超时 4 秒，盖得住，不改 |
+| login | go-zero，外加 main 末尾等已受理的 EnterGame 后台链 | 批 8 起 21 秒 | EnterGame 应答只表示「已受理」，后台链（写会话、绑 gate、进场）应答之后才跑完。原 5.5 秒强杀时，跑到一半的链被砍断，玩家既收不到进场也收不到失败提示，要等客户端 60 秒超时再重新登录。批 8 按 `EnterGameShutdownDrain` 15 秒放宽（wrap-up 1 + 请求 4 + 15 + 余量 1），宽限期 30 ≥ preStop 5 + 21 |
+| guild | go-zero，外加 main 末尾的 `StopAndReport`（关入口、中继排空、结果消费者提交位点、号段收尾） | 批 8 起 24 秒 | 原 5.5 秒常常做不完这段有序收尾，位点没提交的消费者重启后重投一遍（幂等兜住，但白做一轮）。批 8 按 18 秒放宽到 24 秒，与上面几个服务的硬截止同一口径，宽限期 35 |
+| scene_manager、player_locator、client_rpc_router | go-zero 缺省 | 5.5 秒 | 请求超时 8 / 10 / 6 秒 **超过** 4.5 秒：计划重启会砍掉还在限时内的请求（包括排空中的 scene 发来的疏散请求）。批 6 用 `shared/shutdownbudget` 把强退时限放宽到「wrap-up + 最长请求超时 + 1 秒」（10 / 12 / 8 秒），仍在 30 秒宽限期内 |
+| data_service | 自己接管信号（go-zero 的强退不生效） | 60 秒（`shutdownRuntime`） | 宽限期原为 30：排空超过 25 秒会被 K8s SIGKILL。批 6 改为 70（preStop 5 + 60 + 余量 5） |
+
+规则收在一处（`shared/shutdownbudget`）：强退时限 ≥ wrap-up + 最长服务端超时 + 后台收尾 + 余量；Pod 宽限期 ≥ preStop + 强退时限 + 余量。只放宽、不收紧。被强杀的请求等同于进程崩溃时的在途请求，数据由各业务的幂等与围栏兜住，这两批改的是「计划重启不比崩溃更糟」。
+
+**选主交接**（批 8）：选主任务（scene_manager 的排空迁移、死节点接管、世界频道铺设，login 的排队放行，guild / trade / player_inbox / player_locator 的维护循环）在现任让位到新领导者当选之间全部停摆。现任停机时会主动释放锁（`Elector.Stop`、login 放行者的 `Release`），但跟随者两次竞选之间的间隔原来跟着锁 TTL 走（TTL / 3，缺省 30 秒的 TTL 是 10 秒），所以每次滚动重启都会白等最多 10 秒。批 8 把两者分开，取 client-go leaderelection 的口径：
+
+- 心跳间隔仍是 TTL / 3（TTL 内留 2~3 次续期机会，自我降级门槛按它算，锁的安全性不变）；
+- 竞选间隔缺省 2 秒（`leader.DefaultRetryPeriod`，`leader.CampaignInterval`），不超过心跳间隔。现任让位后最迟 2 秒有新领导者；现任崩溃来不及放锁时仍要等锁过期，再加最多 2 秒；
+- 代价只是跟随者每 2 秒一次 SETNX（每个锁一个跟随者），可以忽略；
+- login 排队放行者有自己的竞选循环（`loginqueue.Dispatcher`），同一口径（`campaignRetry`）；
+- 按竞选间隔推算的地方同批改：scene_manager 分线目录的 TTL 是「3 × 发布周期 + 一个竞选间隔」，缺省值由 16 秒变成 8 秒，改为直接调 `leader.CampaignInterval`，不再自己写 TTL / 3。
 
 **Kafka 滚动重启**（批 5）：Kafka broker 本身按副本 3、`min.insync.replicas` 2 部署，滚动重启时分区 leader 切到同步副本，消费方按位点续读。剩下的风险在生产方：acks=1 时 leader 写进自己的日志就回 ACK，切 leader 那一刻还没复制的消息会被新 leader 截掉，而生产方已经当它送达。两个把 ACK 当提交点的写入器因此改 acks=all——scene_manager 的路由 / 重定向命令（写完就当 gate 会照做）、player_locator 的清理命令（写完就结清 claim、不再重试）。guild / friend / mail / match / player_inbox / chat 发的是提示，丢了有拉取或 SQL 后台循环兜底，保持 acks=1（[断线重连核对](infra-reconnect-overview.md) R19）。
 
@@ -204,3 +244,26 @@
 ## 10. Java 版
 
 待做。Java 版（0.1.0-SNAPSHOT）按自己的 Netty、Dubbo 与部署形态实现同一套规则：SIGTERM 先摘流再疏散、疏散请求带去向且排除源节点、外出构建优先级、预算到期退回存盘下线。已在 Java `PARITY.md` 的全类型平滑停机条目下登记待做。
+
+## 11. 演练清单（尚未执行）
+
+按 [AGENTS.md](../../AGENTS.md) §10.1 交给 Codex 在 kind 或 dev 集群执行，不在生产做。故障注入类的演练（断网、杀进程、切主）在 [断线重连核对](infra-reconnect-overview.md) §5，这里只列**计划内**的重启、缩容与换版。
+
+**环境**：一个 zone；scene（Deployment 形态）、gate、login、scene_manager、player_locator、db 各至少 2 个副本；robot 保持若干账号在线并持续做移动、聊天、背包操作。每条都记录各组件的版本与副本数。
+
+**每条都要满足**：演练期间 robot 没有掉回登录；没有 `Planned drain budget expired` 之类到预算强停的 ERROR；演练结束后抽查角色存档与演练前一致或更新（不回档）。
+
+| # | 场景 | 步骤 | 应观察到 |
+|---|---|---|---|
+| 1 | scene 换版（Deployment） | `zone-up` 换镜像；或镜像不变时 `kubectl -n <zone ns> rollout restart deployment/<scene 池>` | 旧 Pod 日志 `[PlannedDrain] scene drain started` 到 `Planned drain complete; shutting down.` 在预算内；scene_manager 日志 `[Drain] ... migrating its world channels`；`scene_manager_evacuation_resolve_total{result="same_channel"}` 增长、`result="none"` 为 0；robot 收到同一个 scene_id 的进场、坐标不变；同一个 robot 整轮只被搬一次（落点优先新一代 Pod） |
+| 2 | scene 缩容 | `kubectl -n <zone ns> scale deployment/<scene 池> --replicas=<少一台>` | 被缩掉的那台按第 1 条排空，上面的玩家落到其余节点的同一个频道 |
+| 3 | scene 换版（Agones） | `zone-up` 换 Fleet 模板后跑 `k8s_scene_roll.ps1 -Namespace <ns> -Fleet <fleet>`；再做一次只改配置的换版；再做一次 `-Restart` | 三次都逐台打标签、等上一台消失才打下一台，结束时输出 `done: every game server ... is on the current generation`；新 Pod 里 `printenv MMORPG_POD_REVISION` 形如 `r<10 位十六进制>.`，`-Restart` 之后点号后面是时间戳；玩家体验同第 1 条 |
+| 4 | gate 逐台换版 | 起两台以上 gate，用 `k8s_gate_drain.ps1 -DeletePod` 逐台排空并删除；换镜像做一轮，模板不变再做一轮（第一台时脚本应打出 `[gate-drain] pod is already at the current revision; bumped the StatefulSet revision`） | login 日志 `[GateDrain] gate N: migration lease sent`；robot 日志 `redirect complete`；scene 日志 `[ConnectionLostHold] resumed by a new session`；`gate:{gm:<zone>}:<id>:drained` 的理由是 `below_threshold`；同一个账号连续被迁 4 次以上不出现 `hop limit reached`；从第二台起连接只迁到已经换好的 gate |
+| 5 | battle 停机 | 有一局在打时 `kubectl -n <ns> delete pod <battle Pod>` | 日志 `[PlannedDrain] battle admission closed; waiting for live rooms to finish`；这一局正常结算，不是 ABORT；删除期间新开的局落到别的 battle |
+| 6 | Go 服务逐个滚动 | 对 login、scene-manager、player-locator、client-rpc-router、db、data-service、guild、friend、mail、rank、trade、chat、player-inbox、match 依次 `kubectl -n <ns> rollout restart deployment/<名字>`（StatefulSet 形态的用 `statefulset/<名字>`），每个等 `kubectl rollout status` 完成再做下一个 | robot 的操作没有失败，或只出现一次可重试的错误后自愈；被重启的服务日志里没有 go-zero 的 `going to force kill the process`；scene-manager、player-locator、client-rpc-router 起服日志有 `[shutdown] force-quit wait time raised`；重启 scene-manager 的领导者副本时，另一个副本在一个竞选周期内接任，正在排空的 scene 继续被迁频道；data-service 的 Pod 在 70 秒内退出，日志里没有 `HOLD` |
+| 7 | etcd 成员滚动 | 按 [etcd 运维手册](../ops/etcd-maintenance-runbook.md) 逐个重启 3 个成员 | 没有节点被误判下线，没有场景被接管，gate 与 scene 的节点列表不抖动 |
+| 8 | Kafka broker 滚动 | 按 [Kafka 生产手册](../ops/kafka-cluster-production-runbook.md) 逐个重启 broker，期间让 robot 持续登录、切场景 | 进场不卡（scene_manager 的路由命令 acks=all，切 leader 时不丢）；消费延迟在 broker 回来后回落 |
+| 9 | TiDB 滚动重启 | 外部集群按 TiDB 自己的滚动升级流程；期间让 robot 持续存盘、做帮会与交易写 | 没有成批失败，`authoritysql` 的 Hold 计数不涨（同 [断线重连核对](infra-reconnect-overview.md) R2） |
+| 10 | Redis 切主 | 核心 Redis 做一次 Sentinel 手动切主；玩家域集群按 [玩家域集群手册](../ops/redis-player-cluster-runbook.md) 先切主再删 Pod | 记录无领导窗口与双领导窗口的时长（R7、R8）；在线玩家不掉线，登录在切主完成后恢复 |
+
+第 1~6 条对应本文与 [gate 排空迁移](gate-drain-session-migration.md) 的改动，是这两份设计的验收；第 7~10 条是基础设施自己的滚动，仓库里没有对应的新代码，只需要记录观察结果。

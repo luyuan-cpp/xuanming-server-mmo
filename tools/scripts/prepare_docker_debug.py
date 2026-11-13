@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import copy
 import hashlib
 import ipaddress
@@ -12,6 +13,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import tempfile
 
 import yaml
 
@@ -117,7 +119,7 @@ def container_addresses(value):
     return value
 
 
-def read_environment(path: Path) -> dict[str, str]:
+def read_environment(path: Path, *, generate_additive: bool = True) -> dict[str, str]:
     if not path.exists():
         return {name: secrets.token_hex(32) for name in SECRET_NAMES}
     values = {}
@@ -125,21 +127,25 @@ def read_environment(path: Path) -> dict[str, str]:
         if line and not line.startswith("#"):
             key, value = line.split("=", 1)
             values[key] = value
-    for name in ADDITIVE_SECRET_NAMES:
-        values.setdefault(name, secrets.token_hex(32))
+    if generate_additive:
+        for name in ADDITIVE_SECRET_NAMES:
+            if name not in values:
+                values[name] = secrets.token_hex(32)
     # 已有数据卷的口令不能因重新准备配置而悄悄轮换。
-    if any(not re.fullmatch(r"[0-9a-f]{64}", values.get(name, "")) for name in SECRET_NAMES):
+    checked = [name for name in SECRET_NAMES
+               if generate_additive or name not in ADDITIVE_SECRET_NAMES or name in values]
+    if any(not re.fullmatch(r"[0-9a-f]{64}", values.get(name, "")) for name in checked):
         raise ValueError("已有 .env 缺少有效密钥；保留原文件并人工核对，拒绝自动轮换")
-    if len({values[name] for name in SECRET_NAMES}) != len(SECRET_NAMES):
+    if len({values[name] for name in checked}) != len(checked):
         raise ValueError("已有 .env 不同用途复用了密钥，拒绝继续")
     return values
 
 
 def check_subnet(subnet: ipaddress.IPv4Network, project: str) -> None:
-    names = subprocess.run(["docker", "network", "ls", "-q"], check=True, capture_output=True, text=True).stdout.split()
+    names = subprocess.run(["docker", "--context", "desktop-linux", "network", "ls", "-q"], check=True, capture_output=True, text=True).stdout.split()
     if not names:
         return
-    networks = json.loads(subprocess.run(["docker", "network", "inspect", *names], check=True, capture_output=True, text=True).stdout)
+    networks = json.loads(subprocess.run(["docker", "--context", "desktop-linux", "network", "inspect", *names], check=True, capture_output=True, text=True).stdout)
     for network in networks:
         for config in network.get("IPAM", {}).get("Config") or []:
             current = config.get("Subnet")
@@ -153,11 +159,15 @@ def check_subnet(subnet: ipaddress.IPv4Network, project: str) -> None:
                 raise ValueError(f"开发子网与现有 Docker 网络重叠: {network['Name']} ({current})")
 
 
-def topic_script(base: dict, data: dict) -> str:
+def topic_script(base: dict, data: dict, db: dict) -> str:
     commands = base["Kafka"]
     audit = data["Kafka"]
-    if base["AuditTopicGeneration"] != audit["TopicGeneration"]:
-        raise ValueError("C++/data_service 的审计 topic 世代不一致")
+    # 审计 topic 的生产者是 go/db 的审计发件箱转发(docs/design/player-audit-outbox.md §7),消费者是 data_service:
+    # 世代或基名不一致,流水与快照就写进没人消费的 topic,两边都不报错。C++ 不再直接发这两个 topic。
+    outbox = db["AuditOutbox"]
+    for key in ("TopicGeneration", "TransactionLogTopic", "SnapshotTopic"):
+        if outbox[key] != audit[key]:
+            raise ValueError(f"go/db AuditOutbox.{key} ({outbox[key]!r}) differs from data_service Kafka.{key} ({audit[key]!r})")
     groups = [audit["TransactionLogConsumerGroup"], audit["SnapshotConsumerGroup"]]
     if any(not isinstance(group, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", group) for group in groups):
         raise ValueError("源配置包含无效 Kafka 审计消费组")
@@ -178,7 +188,7 @@ def topic_script(base: dict, data: dict) -> str:
     ]
     script = r"""#!/bin/sh
 set -eu
-command -v timeout >/dev/null || { echo '缺少 Kafka CLI 超时工具' >&2; exit 1; }
+command -v timeout >/dev/null || { echo 'Kafka CLI timeout tool is missing' >&2; exit 1; }
 cli_output=$(mktemp)
 trap 'rm -f "$cli_output"' EXIT
 trap 'exit 1' HUP INT TERM
@@ -215,13 +225,13 @@ topic_missing() {
 # Compose 已等待 broker 健康；这里再次确认连通，真实 CLI 错误不静默重试。
 broker_deadline=$(($(now_seconds) + 15))
 if ! run_cli "$broker_deadline" /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:29092; then
-  fail_cli 'Kafka 就绪检查失败或超时'
+  fail_cli 'Kafka readiness check failed or timed out'
 fi
 ensure_topic() {
   topic="$1"; partitions="$2"; retention="$3"; grow="${4:-}"
   topic_deadline=$(($(now_seconds) + 60))
   if ! run_cli "$topic_deadline" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic "$topic" --partitions "$partitions" --replication-factor 1 --config "retention.ms=$retention"; then
-    fail_cli "创建 topic 失败或超时: $topic"
+    fail_cli "creating topic failed or timed out: $topic"
   fi
   cat "$cli_output"
   while :; do
@@ -235,26 +245,26 @@ ensure_topic() {
         wait_metadata "$topic_deadline" "audit topic $topic still has fewer partitions than configured at the deadline: expected>=$partitions actual=$actual"
         continue
       fi
-      [ "$actual" = "$partitions" ] || fail_cli "分区契约不符: $topic expected=$partitions actual=$actual"
+      [ "$actual" = "$partitions" ] || fail_cli "partition contract mismatch: $topic expected=$partitions actual=$actual"
       break
     fi
-    if ! topic_missing "$topic"; then fail_cli "查询 topic 失败或超时: $topic"; fi
-    wait_metadata "$topic_deadline" "topic 元数据在截止时间前仍不可见: $topic"
+    if ! topic_missing "$topic"; then fail_cli "describing topic failed or timed out: $topic"; fi
+    wait_metadata "$topic_deadline" "topic metadata still not visible at the deadline: $topic"
   done
   if ! run_cli "$topic_deadline" /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:29092 --entity-type topics --entity-name "$topic" --alter --add-config "retention.ms=$retention"; then
-    fail_cli "设置保留期失败或超时: $topic"
+    fail_cli "setting retention failed or timed out: $topic"
   fi
   while :; do
     if run_cli "$topic_deadline" /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:29092 --entity-type topics --entity-name "$topic" --describe; then
       actual=$(sed -n 's/^[[:space:]]*retention\.ms=\([0-9][0-9]*\).*/\1/p' "$cli_output")
-      case "$actual" in ''|*[!0-9]*) fail_cli "无法解析保留期契约: $topic";; esac
+      case "$actual" in ''|*[!0-9]*) fail_cli "cannot parse the retention contract: $topic";; esac
       [ "$actual" != "$retention" ] || break
     elif ! topic_missing "$topic"; then
-      fail_cli "查询保留期失败或超时: $topic"
+      fail_cli "describing retention failed or timed out: $topic"
     fi
-    wait_metadata "$topic_deadline" "保留期在截止时间前仍不符合契约: $topic expected=$retention actual=${actual:-unknown}"
+    wait_metadata "$topic_deadline" "retention still violates the contract at the deadline: $topic expected=$retention actual=${actual:-unknown}"
   done
-  echo "topic 就绪: $topic partitions=$partitions"
+  echo "topic ready: $topic partitions=$partitions"
 }
 """
     for name, partitions, retention in topics:
@@ -270,7 +280,7 @@ ensure_group_coordinator() {
   while :; do
     status=0
     run_cli "$coordinator_deadline" /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --describe --group "$group" --state --timeout 10000 || status=$?
-    case "$status" in 0|1) ;; *) fail_cli "消费组协调器查询超时或执行异常: $group (exit=$status)";; esac
+    case "$status" in 0|1) ;; *) fail_cli "consumer group coordinator query timed out or failed: $group (exit=$status)";; esac
     # Kafka CLI 某些错误只打印到输出而仍退出 0，必须一起检查实际语义。
     classification=0
     awk -v group="$group" '
@@ -302,11 +312,11 @@ ensure_group_coordinator() {
     ' "$cli_output" || classification=$?
     if [ "$classification" -eq 0 ] && [ "$status" -eq 0 ]; then
       cat "$cli_output"
-      echo "消费组协调器就绪: $group"
+      echo "consumer group coordinator ready: $group"
       return
     fi
-    if [ "$classification" -ne 2 ]; then fail_cli "消费组协调器查询失败或格式未知: $group (exit=$status)"; fi
-    wait_metadata "$coordinator_deadline" "消费组协调器在截止时间前仍未就绪: $group"
+    if [ "$classification" -ne 2 ]; then fail_cli "consumer group coordinator query failed or returned an unknown format: $group (exit=$status)"; fi
+    wait_metadata "$coordinator_deadline" "consumer group coordinator still not ready at the deadline: $group"
   done
 }
 ensure_offsets_leaders() {
@@ -316,12 +326,12 @@ ensure_offsets_leaders() {
     if topic_missing __consumer_offsets; then
       # 已发出正规协调器请求后的明确传播延迟；不能混入其他错误。
       if grep -E 'Error|ERROR|Exception' "$cli_output" | grep -Fv "Topic '__consumer_offsets' does not exist as expected" >/dev/null; then
-        fail_cli '内部偏移 topic 查询包含其他错误'
+        fail_cli 'describing the internal offsets topic returned other errors'
       fi
-      wait_metadata "$coordinator_deadline" '内部偏移 topic 在截止时间前仍不可见'
+      wait_metadata "$coordinator_deadline" 'internal offsets topic still not visible at the deadline'
       continue
     fi
-    [ "$status" -eq 0 ] || fail_cli '查询内部偏移 topic 失败或超时'
+    [ "$status" -eq 0 ] || fail_cli 'describing the internal offsets topic failed or timed out'
     classification=0
     awk '
       function ids(text, empty_ok, parts, count, i, seen) {
@@ -371,11 +381,11 @@ ensure_offsets_leaders() {
     ' "$cli_output" || classification=$?
     if [ "$classification" -eq 0 ]; then
       cat "$cli_output"
-      echo '内部偏移 topic 全部分区 Leader/ISR 就绪'
+      echo 'internal offsets topic: Leader/ISR ready on every partition'
       return
     fi
-    if [ "$classification" -ne 2 ]; then fail_cli '内部偏移 topic 分区集合、Leader/ISR 或输出格式不符合预期'; fi
-    wait_metadata "$coordinator_deadline" '内部偏移 topic 在截止时间前仍有分区 Leader/ISR 未就绪'
+    if [ "$classification" -ne 2 ]; then fail_cli 'internal offsets topic: partition set, Leader/ISR or output format is not as expected'; fi
+    wait_metadata "$coordinator_deadline" 'internal offsets topic still has partitions without a ready Leader/ISR at the deadline'
   done
 }
 # 两个真实组、内部偏移分区和最后复核共享最多 90 秒，不随调用次数增加总预算。
@@ -386,8 +396,137 @@ coordinator_deadline=$(($(now_seconds) + 90))
     script += "ensure_offsets_leaders\n"
     for group in groups:
         script += f"ensure_group_coordinator '{group}'\n"
-    script += '[ "$(now_seconds)" -lt "$coordinator_deadline" ] || fail_cli "消费组冷启动就绪超过总预算"\n'
+    script += '[ "$(now_seconds)" -lt "$coordinator_deadline" ] || fail_cli "consumer group cold-start readiness exceeded the total budget"\n'
     return script
+
+
+def refresh_existing_options() -> tuple[argparse.Namespace, bytes]:
+    """Read the canonical environment without printing values or writing files."""
+    state = (REPO / "build/docker-debug-current").resolve()
+    canonical = state / ".env"
+    if not state.is_relative_to(REPO.resolve()) or not canonical.resolve().is_relative_to(state):
+        raise ValueError("Canonical environment is outside the workspace")
+    original = canonical.read_bytes()
+    values = {}
+    for line in original.decode("utf-8-sig").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        if not separator or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key) or key in values:
+            raise ValueError("Invalid or duplicate canonical environment assignment")
+        values[key] = value
+    required = ("DEBUG_RUN_DIR", "COMPOSE_PROJECT_NAME", "DEBUG_SUBNET", "KAFKA_CLUSTER_ID",
+                "GATEWAY_CLIENT_PORT", "GATEWAY_PORT", "GATE_PORT", "BATTLE_PORT")
+    if any(not values.get(key) for key in required):
+        raise ValueError("Canonical environment lacks required stack settings")
+    run = Path(values["DEBUG_RUN_DIR"])
+    if (not run.is_absolute() or not run.is_dir() or not run.resolve().is_relative_to(state)
+            or not state.is_relative_to((REPO / "build").resolve())):
+        raise ValueError("Existing runtime directory is outside the current stack")
+    # Existing key validation and additive key generation stay in read_environment.
+    environment = read_environment(canonical, generate_additive=False)
+    identity_keys = [key in environment for key in DEV_INTERNAL_IDENTITY]
+    if any(identity_keys) and not all(identity_keys):
+        raise ValueError("Existing internal identity key pair is incomplete")
+    if canonical.read_bytes() != original:
+        raise ValueError("Canonical environment changed while reading")
+    try:
+        options = argparse.Namespace(output=str(run.resolve()), project=values["COMPOSE_PROJECT_NAME"],
+            subnet=values["DEBUG_SUBNET"], gateway_client_port=int(values["GATEWAY_CLIENT_PORT"]),
+            gateway_port=int(values["GATEWAY_PORT"]), gate_port=int(values["GATE_PORT"]),
+            battle_port=int(values["BATTLE_PORT"]), refresh_existing=True, environment=environment)
+    except ValueError:
+        raise ValueError("Invalid existing stack port") from None
+    return options, original
+
+
+def source_hashes(paths: list[str]) -> dict[str, str]:
+    return {path: hashlib.sha256((REPO / path).read_bytes()).hexdigest() for path in paths}
+
+
+def publish_refresh(staged: Path, output: Path, original: bytes, source_paths: list[str], before: dict) -> None:
+    """Publish only a fully rendered batch whose source and control inputs still match."""
+    canonical = REPO / "build/docker-debug-current/.env"
+    if source_hashes(source_paths) != before:
+        raise ValueError("Source inputs changed during configuration refresh")
+    if canonical.read_bytes() != original:
+        raise ValueError("Canonical environment changed during configuration refresh")
+    files = list(staged.rglob("*"))
+    for source in files:
+        if source.is_file():
+            target = output / source.relative_to(staged)
+            if not target.resolve().is_relative_to(output.resolve()):
+                raise ValueError("Runtime output path escapes the current stack")
+    publications = [(source, output / source.relative_to(staged)) for source in files
+                    if source.is_file() and source.name not in (".env", "source-manifest.json")]
+    runtime_count = len(publications)
+    for directory in dict.fromkeys((output, canonical.parent)):
+        for name in ("source-manifest.json", ".env"):
+            publications.append((staged / name, directory / name))
+    # Backups live beside the ignored runtime batch; keep them if recovery fails.
+    recovery = Path(tempfile.mkdtemp(prefix=".refresh-recovery-", dir=output.parent))
+    touched = []
+    completed = set()
+    backups = {}
+    try:
+        for index, (_, target) in enumerate(publications):
+            if not target.resolve().is_relative_to(canonical.parent.resolve()):
+                raise ValueError("Runtime output path escapes the current stack")
+            backup = recovery / str(index)
+            existed = target.exists()
+            if existed:
+                shutil.copyfile(target, backup)
+            backups[target] = backup if existed else None
+        for index, (source, target) in enumerate(publications):
+            if index >= runtime_count:
+                if canonical.read_bytes() != original:
+                    raise ValueError("Canonical environment changed before refresh commit")
+                if source_hashes(source_paths) != before:
+                    raise ValueError("Source inputs changed before refresh commit")
+            backup = backups[target]
+            unchanged = (target.read_bytes() == backup.read_bytes()) if backup else not target.exists()
+            if not unchanged:
+                raise ValueError("Runtime file changed during configuration refresh")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            touched.append((target, source))
+            # Retain existing inodes: individual Docker file binds must see updates.
+            shutil.copyfile(source, target)
+            completed.add(target)
+        if source_hashes(source_paths) != before:
+            raise ValueError("Source inputs changed during refresh commit")
+        if canonical.read_bytes() != (staged / ".env").read_bytes():
+            raise ValueError("Canonical environment changed during refresh commit")
+    except BaseException as error:
+        failures = []
+        for target, source in reversed(touched):
+            try:
+                backup = backups[target]
+                # Do not undo somebody else's edit after our successful copy.
+                if target in completed and target.read_bytes() != source.read_bytes():
+                    if backup and target.read_bytes() == backup.read_bytes():
+                        continue
+                    raise ValueError("Concurrent runtime edit prevents automatic recovery")
+                if backup:
+                    shutil.copyfile(backup, target)
+                else:
+                    target.unlink(missing_ok=True)
+            except BaseException:
+                failures.append(str(target))
+        if failures:
+            receipt = recovery / "recovery.json"
+            try:
+                receipt.write_text(json.dumps({"status": "rollback-incomplete", "failedPaths": failures,
+                    "backups": {str(target): str(backup) if backup else None
+                                for target, backup in backups.items()}}, indent=2), encoding="utf-8")
+            except OSError:
+                raise RuntimeError("Configuration refresh rollback incomplete; receipt unavailable; "
+                                   "private backups retained at: " + str(recovery)) from None
+            raise RuntimeError("Configuration refresh rollback incomplete; private recovery receipt: "
+                               + str(receipt)) from None
+        shutil.rmtree(recovery)
+        raise error
+    else:
+        shutil.rmtree(recovery)
 
 
 def main() -> None:
@@ -399,7 +538,17 @@ def main() -> None:
     parser.add_argument("--gateway-client-port", type=int, default=8081)
     parser.add_argument("--gate-port", type=int, default=28000)
     parser.add_argument("--battle-port", type=int, default=28010)
+    parser.add_argument("--refresh-existing", action="store_true",
+                        help="Refresh current runtime files while preserving canonical stack settings")
     args = parser.parse_args()
+    original = None
+    if args.refresh_existing:
+        args, original = refresh_existing_options()
+    with ExitStack() as stack:
+        prepare(args, stack, original)
+
+
+def prepare(args: argparse.Namespace, stack: ExitStack, original: bytes | None = None) -> None:
     output = (REPO / args.output).resolve()
     if not output.is_relative_to((REPO / "build").resolve()):
         raise ValueError("配置与密钥只能输出到仓库忽略的 build/ 子目录")
@@ -416,18 +565,33 @@ def main() -> None:
         raise ValueError("开发栈需要独立私有 IPv4 /24 子网")
     check_subnet(subnet, args.project)
     output.mkdir(parents=True, exist_ok=True)
-    environment = read_environment(output / ".env")
+    runtime_output = output
+    if args.refresh_existing:
+        environment = dict(args.environment)
+        for name in ADDITIVE_SECRET_NAMES:
+            if name not in environment:
+                environment[name] = secrets.token_hex(32)
+        output = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix=".refresh-", dir=output.parent)))
+    else:
+        environment = read_environment(output / ".env")
     environment.setdefault("KAFKA_CLUSTER_ID", secrets.token_urlsafe(16))
     # 旧版 .env 里共用的 HMAC 内部身份密钥已退役，换成开发密钥对。
     environment.pop("INTERNAL_AUTH_SECRET", None)
-    environment.update(DEV_INTERNAL_IDENTITY)
+    if args.refresh_existing:
+        for key, value in DEV_INTERNAL_IDENTITY.items():
+            environment.setdefault(key, value)
+    else:
+        environment.update(DEV_INTERNAL_IDENTITY)
     config_dir = output / "config"
     sql_dir = output / "mysql-init"
     config_dir.mkdir(exist_ok=True)
     sql_dir.mkdir(exist_ok=True)
     source_paths = [f"go/{service}/etc/{filename}" for service, filename in GO_CONFIGS.items()]
     source_paths += ["bin/etc/base_deploy_config.yaml", "bin/etc/game_config.yaml",
-                     "bin/etc/battle_rewards.json", *SQL_BOOT_SOURCES]
+                     "bin/etc/battle_rewards.json", "tools/scripts/prepare_docker_debug.py", *SQL_BOOT_SOURCES]
+    # mysql init sources are copied too, so guard them against concurrent edits.
+    guarded_paths = list(dict.fromkeys(source_paths + ["deploy/mysql-init/00_init_zone_dbs.sql"]))
+    before = source_hashes(guarded_paths)
     configs = {service: container_addresses(load_yaml(f"go/{service}/etc/{filename}")) for service, filename in GO_CONFIGS.items()}
     for service, config in configs.items():
         # 这两个入口把 ListenOn 原样注册为 NodeInfo，并不读取 POD_IP；显式绑定本容器可达地址。
@@ -497,7 +661,8 @@ def main() -> None:
     base.update(TableDataDirectory="/app/generated/generated_tables/", DataRootDirectory="/app/", GateTokenSecret=environment["GATE_TOKEN_SECRET"], BattleTokenSecret=environment["BATTLE_TOKEN_SECRET"], SpectateTokenSecret=environment["SPECTATE_TOKEN_SECRET"])
     write_yaml(config_dir / "base_deploy_config.yaml", base)
     game = load_yaml("bin/etc/game_config.yaml")
-    game["zoneredis"]["host"] = "redis"
+    # scene 的控制集群句柄连 compose 里的单实例 redis;没写 player_redis 段,玩家域沿用这一个(config.cpp readGameConfig)。
+    game["control_redis"]["seeds"] = ["redis:6379"]
     # 这个栈常驻 player_inbox，scene 要真的拉取：入箱的结算只有消费之后才落到玩家身上。这里显式写，不跟着源配置变（线上分步回退时源配置可能是 false）。
     game["player_inbox"]["consumer_enabled"] = True
     write_yaml(config_dir / "game_config.yaml", game)
@@ -515,20 +680,29 @@ def main() -> None:
     write_yaml(config_dir / "gateway.yaml", gateway)
     for filename in ("00_init_zone_dbs.sql", "gateway_tables.sql"):
         shutil.copyfile(REPO / "deploy/mysql-init" / filename, sql_dir / filename)
-    (output / "init-topics.sh").write_text(topic_script(base, data), encoding="utf-8", newline="\n")
+    (output / "init-topics.sh").write_text(topic_script(base, data, db), encoding="utf-8", newline="\n")
     for source in SQL_BOOT_SOURCES:
         target = output / "sql-boot" / source
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(REPO / source, target)
     (output / "sql-writer-entry.sh").write_text(SQL_WRITER_ENTRY, encoding="utf-8", newline="\n")
-    environment.update(DEBUG_RUN_DIR=output.as_posix(), COMPOSE_PROJECT_NAME=args.project, DEBUG_SUBNET=str(subnet), GATEWAY_CLIENT_PORT=str(args.gateway_client_port), GATEWAY_PORT=str(args.gateway_port), GATE_PORT=str(args.gate_port), BATTLE_PORT=str(args.battle_port), KAFKA_COMMAND_TOPIC_GENERATION=str(base["Kafka"]["CommandTopicGeneration"]), KAFKA_COMMAND_TOPIC_PARTITIONS=str(base["Kafka"]["CommandTopicPartitions"]))
+    environment.update(DEBUG_RUN_DIR=runtime_output.as_posix(), COMPOSE_PROJECT_NAME=args.project, DEBUG_SUBNET=str(subnet), GATEWAY_CLIENT_PORT=str(args.gateway_client_port), GATEWAY_PORT=str(args.gateway_port), GATE_PORT=str(args.gate_port), BATTLE_PORT=str(args.battle_port), KAFKA_COMMAND_TOPIC_GENERATION=str(base["Kafka"]["CommandTopicGeneration"]), KAFKA_COMMAND_TOPIC_PARTITIONS=str(base["Kafka"]["CommandTopicPartitions"]))
+    if args.refresh_existing:
+        for key in ("DEBUG_RUN_DIR", "COMPOSE_PROJECT_NAME", "DEBUG_SUBNET", "GATEWAY_CLIENT_PORT",
+                    "GATEWAY_PORT", "GATE_PORT", "BATTLE_PORT"):
+            environment[key] = args.environment[key]
     for service, host_number in SERVICE_IP_OFFSETS.items():
-        environment[f"{service.upper()}_IP"] = str(subnet.network_address + host_number)
+        name = f"{service.upper()}_IP"
+        if not args.refresh_existing or name not in environment:
+            environment[name] = str(subnet.network_address + host_number)
     (output / ".env").write_text("# 仅用于本机独立开发栈；不要输出、上传或加入版本控制。\n" + "".join(f"{key}={value}\n" for key, value in sorted(environment.items())), encoding="utf-8")
-    manifest = {path: hashlib.sha256((REPO / path).read_bytes()).hexdigest() for path in source_paths}
+    manifest = source_hashes(source_paths)
     (output / "source-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"已从当前 {len(source_paths)} 份源配置准备独立开发栈: {output}")
-    print("密钥已保存在忽略目录并沿用已有值；未构建、启动容器或删除数据。")
+    if args.refresh_existing:
+        publish_refresh(output, runtime_output, original, guarded_paths, before)
+        print("Existing stack configuration refreshed; canonical settings preserved.")
+    print(f"Prepared the standalone dev stack from the current {len(source_paths)} source configs: {runtime_output}")
+    print("Secrets are kept in the ignored directory and existing values were reused; nothing was built, no container was started, no data was deleted.")
 
 
 if __name__ == "__main__":

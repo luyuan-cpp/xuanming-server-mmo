@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 
-	"github.com/zeromicro/go-zero/core/breaker"
+	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // 负载分刷新:领导者按 zone 批量刷新(2026-10-16)。入口是 load_reporter.go 的 refreshLoadScores
@@ -30,8 +30,10 @@ import (
 // 一次刷新的形状(refreshZoneLoadSets):
 //  1. (原来的「SADD 登记 zone」2026-11-05 随 zone 登记集合删除;byZone 只有本 zone)
 //  2. 读:pipeline 分批,每个节点一条 GET(scene_count)、一条 SCARD(成员集合);
-//  3. 写之前再判一次领导权;pipeline 分批写:每个节点一条 SET 类型镜像,每个 zone 一条 ZADD 写读成功的
-//     节点,再加一条 ZADD NX 把读失败的节点以哨兵分加进去(已在负载集里的不受影响);
+//  3. 写之前再判一次领导权;分批写:每个节点一条 SET 类型镜像,每个 zone 一条 ZADD 写读成功的
+//     节点,再加一条 ZADD NX 把读失败的节点以哨兵分加进去(已在负载集里的不受影响)。两种 ZADD 都会加成员,
+//     接了选主时带围栏执行:脚本先核对选主锁键仍是本任期的值再写(luaFencedLeaderZadd,2026-11-12)。
+//     带围栏的 ZADD 是 EVAL,控制集群句柄不许它进管道,逐条单独发;其余命令一批一条管道(writeLoadRefreshScores);
 //  4. 计数读成功、且所在 zone 的分数 ZADD 确认写成功的节点发每节点指标(导出的分数必须是 Redis 里生效的那个)。
 //
 // 读失败语义(fail-closed):
@@ -43,17 +45,17 @@ import (
 //     判存活。Redis 丢了成员(或节点刚注册)时若因计数读失败就不加回去,活节点会被判死,在老属主仍在存盘时
 //     放行改派 / 接管,即双写 / 回档。哨兵分让它在选点里排到最后,下一拍读成功后自然纠正。
 //
-// pipeline 结果要按批判定(2026-10-16 对照模块缓存里 go-zero v1.10.0 与 go-redis v9.17.3 的源码核实):
-//   - go-zero 的熔断挂在 ProcessPipelineHook 上(core/stores/redis/breakerhook.go):熔断打开时直接返回
-//     breaker.ErrServiceUnavailable,不调用下一层 —— 队列里的命令一条都没执行,各自的 err 也不回填,
-//     StringCmd.Result() 是 ("", nil);
+// pipeline 结果要按批判定(对照模块缓存里 go-redis v9.17.3 的源码核实;2026-11-12 起句柄是控制集群句柄
+// controlredis.Client,go-zero 的熔断钩子随 go-zero 句柄一起退役):
+//   - 钩子在发送前拒绝整批时(控制集群的键守卫:混 tag、管道里有非幂等命令),每条命令都被回填同一个错误,
+//     返回值也是它;别的钩子若只返回错误、不回填,队列里的命令一条都没执行,StringCmd.Result() 是 ("", nil);
 //   - 取连接 / 网络出错时 go-redis 把错误回填到每条命令(redis.go generalProcessPipeline 的 setCmdsErr);
 //   - 正常执行时返回值是第一条带错命令的错误(cmdsFirstErr),redis.Nil 也算。
 //
-// 所以 PipelinedCtx 的返回值既不能直接当判据(redis.Nil 也会出现在这里),也不能忽略(熔断拒绝只体现在
-// 这里)。判定见 pipelineBatchRejected 与 classifyCounterReply。
+// 所以 PipelinedCtx 的返回值既不能直接当判据(redis.Nil 也会出现在这里),也不能忽略(只返回、不回填的拒绝
+// 只体现在这里)。判定见 pipelineBatchRejected 与 classifyCounterReply。
 //
-// outcome 上 read_failed 只记传输层失败(批被拒,或有命令带着非 Redis 回复的错误:取连接 / 网络 / 超时),
+// outcome 上 read_failed 只记传输层失败(批被拒,或有命令带着非 Redis 回复的错误:取连接 / 网络 / 超时 / 守卫拒绝),
 // 判定见 pipelineHitTransportError;个别键的逐条回复错误(WRONGTYPE)与坏值(空串 / 非数字)不论批多大
 // 都只记 partial。按「整批全错」判会让同一个坏键在独占尾批、或部署里只有 1 个节点时记 read_failed,
 // 与别的节点同批时记 partial,告警随节点增减时响时不响。
@@ -70,7 +72,31 @@ const (
 	// 真实负载分是 α·scene_count + β·player_count,碰不到 1e12。它只写进 Redis:读失败的节点本次不调
 	// ObserveNode,scene_manager_node_load_score 不会出现这个值,看板与告警不会把它当负载画出来。
 	nodeLoadScoreUnknown int64 = 1_000_000_000_000
+
+	// loadRefreshZaddMaxMembers:一条 ZADD 最多带这么多个成员,多了拆成几条。带围栏的 ZADD 在脚本里用 unpack
+	// 展开参数,Lua 一次能展开的个数有上限(Redis 内嵌的 Lua 约 8000 个);512 个成员是 1024 个参数,留足余量。
+	loadRefreshZaddMaxMembers = 512
+
+	// notLeaderReplyPrefix 是 luaFencedLeaderZadd 拒绝写入时错误回复的错误码。
+	notLeaderReplyPrefix = "NOTLEADER"
 )
+
+// luaFencedLeaderZadd 是带选主锁核对的一条负载集 ZADD。
+//
+// KEYS[1] = zone 的选主锁键,KEYS[2] = zone 的负载集(同一个 zone 的 tag,同槽)。
+// ARGV[1] = 本任期写进锁键的值(leaderFence),ARGV[2..] = ZADD 在键之后的参数(可以带 NX)。
+//
+// ZADD 会把成员加进负载集,而成员资格就是存活信号(见文件头「读失败语义」)。只凭本进程的 isLeader 写的话,
+// 丢了领导权而自己还不知道的副本(进程卡顿到锁过期,或 Redis 主从切换丢了锁),会把新领导者刚摘掉的死节点加回去:
+// 它被当成活的,选点会选到它,死节点接管也被挡住,要等新领导者下一次全量同步才摘掉。
+// 锁键里不是本任期的值(被别的副本拿走、过期、切主后没有了)就一个键都不写,回 NOTLEADER。
+// 类型镜像的 SET 不带围栏:类型来自 etcd 注册,谁写都是同一个值;只有镜像、没有成员也无害。
+const luaFencedLeaderZadd = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+    return redis.error_reply('NOTLEADER leader lock is not held by this replica')
+end
+return redis.call('ZADD', KEYS[2], unpack(ARGV, 2))
+`
 
 // nodesByRoleKey 是 metrics.SetNodesByRole 的计数键。类型别名,与其签名里的匿名结构体是同一个类型。
 type nodesByRoleKey = struct {
@@ -91,7 +117,7 @@ type loadRefreshNode struct {
 // loadRefreshReport 汇总一次刷新,outcome() 折成 metrics.LoadRefreshOutcome* 之一。
 type loadRefreshReport struct {
 	nodeReadErrors      int  // 计数没读到的节点数(含传输层失败与逐条回复错误 / 坏值)
-	readTransportFailed bool // 至少一批读遇到传输层失败(熔断拒绝 / 取连接 / 网络 / 超时),见 pipelineHitTransportError
+	readTransportFailed bool // 至少一批读遇到传输层失败(批被拒 / 取连接 / 网络 / 超时),见 pipelineHitTransportError
 	writeFailed         bool
 	lostLeadership      bool
 }
@@ -216,7 +242,8 @@ func refreshZoneLoadSets(svcCtx *svc.ServiceContext, byZone map[uint32][]loadRef
 	return report
 }
 
-// counterReply 是 pipeline 里一条 GET 的结果(*redis.StringCmd 满足它;用接口是为了不直接 import go-redis)。
+// counterReply 是 pipeline 里一条 GET 的结果(*redis.StringCmd 满足它)。用接口而不是具体类型:回调没被调用时切片里是 nil,
+// replyResult 按「未执行」处理;单测也能直接构造结果。
 type counterReply interface {
 	Result() (string, error)
 }
@@ -264,8 +291,8 @@ func readLoadRefreshCounters(ctx context.Context, svcCtx *svc.ServiceContext, no
 			}
 			sceneVal, sceneErr := replyResult(sceneReplies[i])
 			playerCount, playerErr := memberCountResult(playerReplies[i])
-			sceneCount, sceneOK := classifyCounterReply(sceneVal, sceneErr, batchErr)
-			playerOK := classifyMemberCountReply(playerReplies[i], playerErr, batchErr)
+			sceneCount, sceneOK := classifyCounterReply(sceneVal, sceneErr)
+			playerOK := classifyMemberCountReply(playerReplies[i], playerErr)
 			if sceneOK && playerOK {
 				n.sceneCount, n.playerCount, n.readOK = sceneCount, playerCount, true
 				readOK++
@@ -282,7 +309,7 @@ func readLoadRefreshCounters(ctx context.Context, svcCtx *svc.ServiceContext, no
 		switch {
 		case transportFailed:
 			report.readTransportFailed = true
-			logx.Errorf("[LoadRefresh] counter read pipeline hit a transport-level failure (breaker/connection/timeout): %d/%d nodes keep their scores (non-members join with the unknown-load sentinel): rejected=%t batch_err=%v first=%s",
+			logx.Errorf("[LoadRefresh] counter read pipeline hit a transport-level failure (rejected batch/connection/timeout): %d/%d nodes keep their scores (non-members join with the unknown-load sentinel): rejected=%t batch_err=%v first=%s",
 				failed, len(batch), rejected, batchErr, firstFailure)
 		case failed > 0:
 			logx.Errorf("[LoadRefresh] %d/%d node counter reads failed; their scores are kept (non-members join with the unknown-load sentinel): first %s",
@@ -313,15 +340,11 @@ func memberCountResult(r memberCountReply) (int64, error) {
 // cmdErrs 是每条命令自身的 err(回调没被调用时全是 nil)。
 //
 //   - batchErr 为 nil 或 redis.Nil:批已执行,逐条判;
-//   - batchErr 是熔断拒绝(breaker.ErrServiceUnavailable):整批没执行;
-//   - 其它 batchErr,且没有任何一条命令自己带错:错误没落到任何命令上(回调未被调用、钩子拒绝),整批没执行;
-//   - 其它 batchErr,且有命令自己带错:批已执行(或网络错误已回填到每条命令),逐条判。
+//   - 其它 batchErr,且没有任何一条命令自己带错:错误没落到任何命令上(回调未被调用、钩子只返回不回填),整批没执行;
+//   - 其它 batchErr,且有命令自己带错:批已执行,或错误已回填到每条命令(网络错误、键守卫整批拒绝),逐条判。
 func pipelineBatchRejected(batchErr error, cmdErrs []error) bool {
 	if batchErr == nil || errors.Is(batchErr, redis.Nil) {
 		return false
-	}
-	if errors.Is(batchErr, breaker.ErrServiceUnavailable) {
-		return true
 	}
 	for _, err := range cmdErrs {
 		if err != nil {
@@ -348,28 +371,22 @@ func pipelineHitTransportError(cmdErrs []error) bool {
 }
 
 // isRedisReplyError 判断 err 是不是 Redis 服务端对这一条命令的回复错误(-ERR / -WRONGTYPE / redis.Nil 等)。
-// 与 go-redis 的 isRedisError(v9.17.3 error.go)同义:它的回复错误类型都带 RedisError() 方法;用接口判,
-// 不直接 import go-redis。
+// go-redis 的回复错误类型都实现 redis.Error(带 RedisError() 方法,v9.17.3 error.go);键守卫的拒绝、网络错误、
+// 结果未知(clusterredis.ResultUnknownError)都不是。
 func isRedisReplyError(err error) bool {
-	var replyErr interface{ RedisError() }
+	var replyErr redis.Error
 	return errors.As(err, &replyErr)
 }
 
 // classifyCounterReply 把 pipeline 里一条计数 GET 的结果判成 (计数, 是否可信)。val / err 是这条命令自己的
-// 结果,batchErr 是整批 PipelinedCtx 的返回值。
+// 结果;整批没执行的情形由调用方先按 pipelineBatchRejected 跳过,不走到这里。
 //
-//   - 熔断拒绝(batchErr 是 breaker.ErrServiceUnavailable):命令没执行,不可信;
 //   - 命令自身 redis.Nil:键不存在,计数就是 0(节点刚注册、还没有任何 INCR);
-//   - 命令自身其它错误(网络 / WRONGTYPE):不可信;
-//   - ("", nil):命令没执行(熔断 / 回调未被调用),或值被写成了空串 —— 两种都不可信。go-zero 的
+//   - 命令自身其它错误(网络 / WRONGTYPE / 键守卫拒绝):不可信;
+//   - ("", nil):命令没执行(回调未被调用),或值被写成了空串 —— 两种都不可信。控制集群句柄的
 //     非 pipeline Get 会把 redis.Nil 吞成 ("", nil),pipeline 不会,这里不能沿用 readInt64 的「空串当 0」;
 //   - 不是十进制整数:不可信。
-//
-// 只有 batchErr 是熔断拒绝才压过单条结果:别的 batchErr 只是「第一条带错命令的错误」,与本条无关。
-func classifyCounterReply(val string, err error, batchErr error) (int64, bool) {
-	if batchErr != nil && errors.Is(batchErr, breaker.ErrServiceUnavailable) {
-		return 0, false
-	}
+func classifyCounterReply(val string, err error) (int64, bool) {
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return 0, true
@@ -386,29 +403,30 @@ func classifyCounterReply(val string, err error, batchErr error) (int64, bool) {
 	return n, true
 }
 
-// classifyMemberCountReply 判一条 SCARD 的结果可不可信。键不存在时 SCARD 回 0,是可信的「没有人」,但熔断拒绝时
-// IntCmd 的零值同样是 (0, nil),不能读成 0 人:
+// classifyMemberCountReply 判一条 SCARD 的结果可不可信。键不存在时 SCARD 回 0,是可信的「没有人」;回调没被调用时
+// 切片里是 nil(IntCmd 的零值同样是 (0, nil),不能读成 0 人)。整批没执行的情形由调用方先按 pipelineBatchRejected 跳过。
 //
-//   - 回调没被调用(r 为 nil)或熔断拒绝:命令没执行,不可信;
-//   - 命令自身带错(网络 / WRONGTYPE):不可信;
+//   - r 为 nil:命令没执行,不可信;
+//   - 命令自身带错(网络 / WRONGTYPE / 键守卫拒绝):不可信;
 //   - 其余可信。
-func classifyMemberCountReply(r memberCountReply, err error, batchErr error) bool {
-	if r == nil || (batchErr != nil && errors.Is(batchErr, breaker.ErrServiceUnavailable)) {
-		return false
-	}
-	return err == nil
+func classifyMemberCountReply(r memberCountReply, err error) bool {
+	return r != nil && err == nil
 }
 
 // loadRefreshWriteCmd 是写批里的一条命令。zoneID 用于出错时的日志与按 zone 判定指标能否导出;
-// scores 标记「读成功节点的分数 ZADD」:它没落地时,该 zone 本拍不发每节点指标。
+// scores 标记「读成功节点的分数 ZADD」:它没落地时,该 zone 本拍不发每节点指标;
+// addsMembers 标记会把成员加进负载集的命令(两种 ZADD,args 形如 ["ZADD", 负载集键, …]):接了选主时它带围栏执行,
+// 见 loadRefreshWireArgs。
 type loadRefreshWriteCmd struct {
-	zoneID uint32
-	scores bool
-	args   []any
+	zoneID      uint32
+	scores      bool
+	addsMembers bool
+	args        []any
 }
 
-// buildLoadRefreshWrites 按 zone 生成写命令:每个节点一条 SET 类型镜像;读成功的节点合成一条 ZADD;
-// 读失败的节点合成一条 ZADD NX(哨兵分,已在负载集里的成员不受影响)。
+// buildLoadRefreshWrites 按 zone 生成写命令:每个节点一条 SET 类型镜像;读成功的节点合成 ZADD;
+// 读失败的节点合成 ZADD NX(哨兵分,已在负载集里的成员不受影响)。一条 ZADD 最多带 loadRefreshZaddMaxMembers
+// 个成员,多了拆成几条。
 //
 // 类型镜像排在 ZADD 前面,而且不论读成败都写(类型来自 etcd 注册,与计数无关):新成员进负载集时已经带
 // 类型,缩短 getNodesForPurpose 把「没有类型镜像」的节点当作未分类、放进所有池子的窗口。只有镜像没有
@@ -419,8 +437,8 @@ func buildLoadRefreshWrites(svcCtx *svc.ServiceContext, zones []uint32, byZone m
 	var cmds []loadRefreshWriteCmd
 	for _, z := range zones {
 		loadKey := nodeLoadKey(z)
-		scored := []any{"ZADD", loadKey}
-		unknown := []any{"ZADD", loadKey, "NX"}
+		// 两个切片都是「分数, 成员」交替排列。
+		var scored, unknown []any
 		for _, n := range byZone[z] {
 			cmds = append(cmds, loadRefreshWriteCmd{zoneID: z, args: []any{
 				"SET", nodeSceneNodeTypeKey(z, n.nodeID), strconv.FormatUint(uint64(n.role), 10),
@@ -431,20 +449,63 @@ func buildLoadRefreshWrites(svcCtx *svc.ServiceContext, zones []uint32, byZone m
 				unknown = append(unknown, nodeLoadScoreUnknown, n.nodeID)
 			}
 		}
-		if len(scored) > 2 {
-			cmds = append(cmds, loadRefreshWriteCmd{zoneID: z, scores: true, args: scored})
+		for pairs := range slices.Chunk(scored, 2*loadRefreshZaddMaxMembers) {
+			cmds = append(cmds, loadRefreshWriteCmd{zoneID: z, scores: true, addsMembers: true,
+				args: append([]any{"ZADD", loadKey}, pairs...)})
 		}
-		if len(unknown) > 3 {
-			cmds = append(cmds, loadRefreshWriteCmd{zoneID: z, args: unknown})
+		for pairs := range slices.Chunk(unknown, 2*loadRefreshZaddMaxMembers) {
+			cmds = append(cmds, loadRefreshWriteCmd{zoneID: z, addsMembers: true,
+				args: append([]any{"ZADD", loadKey, "NX"}, pairs...)})
 		}
 	}
 	return cmds
 }
 
-// writeLoadRefreshScores 分批 pipeline 执行写命令。批与批之间判领导权,降级即停。
-// 某一批被整体拒绝(熔断)时继续后面的批:熔断是本地按比例丢请求,后面的批可能放行。
+// loadRefreshWireArgs 是一条写命令实际发给 Redis 的参数。会加成员的 ZADD 在接了选主时改成一次
+// luaFencedLeaderZadd(先核对选主锁键、再 ZADD);没接选主(单测、旧启动路径)和不加成员的命令原样发。
+// inOffice=false 表示本副本此刻已不在任(围栏值为空),这条命令不得发。
+func loadRefreshWireArgs(c loadRefreshWriteCmd) (args []any, inOffice bool) {
+	if !c.addsMembers {
+		return c.args, true
+	}
+	lockKey, token, fenced := leaderFence(c.zoneID)
+	if !fenced {
+		return c.args, true
+	}
+	if token == "" {
+		return nil, false
+	}
+	wire := make([]any, 0, len(c.args)+4)
+	wire = append(wire, "EVAL", luaFencedLeaderZadd, 2, lockKey, c.args[1], token)
+	return append(wire, c.args[2:]...), true
+}
+
+// sentAlone 报告一条写命令是不是要单独发:EVAL(带围栏的 ZADD)不能进控制集群句柄的管道,见 writeLoadRefreshScores。
+func sentAlone(wire []any) bool {
+	name, _ := wire[0].(string)
+	return strings.EqualFold(name, "EVAL")
+}
+
+// isNotLeaderReply 判断一条写命令的错误是不是 luaFencedLeaderZadd 的拒绝:选主锁已不在本副本手里。
+func isNotLeaderReply(err error) bool {
+	return err != nil && isRedisReplyError(err) && strings.HasPrefix(err.Error(), notLeaderReplyPrefix)
+}
+
+// writeLoadRefreshScores 分批执行写命令。批与批之间判领导权,降级即停。
+// 某一批的管道被整体拒绝时继续后面的批:下一批可能就能执行(连接恢复)。
 //
-// 返回分数 ZADD 没有确认写成功的 zone(该条命令失败,或所在批被整体拒绝),调用方据此不导出这些 zone 的
+// 会加成员的 ZADD 带围栏(loadRefreshWireArgs):本进程的 isLeader 会过时,选主锁已不在本副本手里时由 Redis
+// 拒掉这条写(NOTLEADER)。拒掉记 lost_leadership,不记 write_failed,并停下不再发后面的批。
+//
+// 一批之内分两种发法(2026-11-12 换成控制集群句柄之后):
+//   - 带围栏的 ZADD 是 EVAL,逐条单独发(Do)。控制集群句柄的守卫不许非幂等命令进管道
+//     (clusterredis.ErrNonIdempotentInPipeline:集群客户端在管道中途遇到 EOF / 超时会整批重发);
+//   - 其余命令(SET 类型镜像、不带围栏的 ZADD,重放无害)照旧一条管道。
+//
+// 先发管道、后发单条:同一 zone 的类型镜像在 ZADD 前面落地(buildLoadRefreshWrites 的排序要的就是这个先后)。
+// 带围栏的 ZADD 每个 zone 一拍只有一两条(一条最多 loadRefreshZaddMaxMembers 个成员),单发不多出几次往返。
+//
+// 返回分数 ZADD 没有确认写成功的 zone(该条命令失败,或所在管道被整体拒绝),调用方据此不导出这些 zone 的
 // 每节点指标。降级中途停下时不统计剩余批次:调用方此时整拍放弃指标。
 // 失败按批聚合成一行日志:网络错误被回填到整批命令时,逐条打会在 Redis 故障期间每拍放大成 N_s+Z 行。
 func writeLoadRefreshScores(ctx context.Context, svcCtx *svc.ServiceContext, cmds []loadRefreshWriteCmd, report *loadRefreshReport) map[uint32]struct{} {
@@ -457,50 +518,100 @@ func writeLoadRefreshScores(ctx context.Context, svcCtx *svc.ServiceContext, cmd
 			return unwrittenScoreZones
 		}
 		batch := cmds[start:min(start+loadRefreshPipelineMaxCmds, len(cmds))]
-		replies := make([]errReply, len(batch))
-		batchErr := svcCtx.Redis.PipelinedCtx(ctx, func(p redis.Pipeliner) error {
-			for i, c := range batch {
-				replies[i] = p.Do(ctx, c.args...)
+		wire := make([][]any, len(batch))
+		for i, c := range batch {
+			args, inOffice := loadRefreshWireArgs(c)
+			if !inOffice {
+				report.lostLeadership = true
+				logx.Infof("[LoadRefresh] no longer in office before sending a write batch; remaining %d commands dropped, successor refreshes on its next tick",
+					len(cmds)-start)
+				return unwrittenScoreZones
 			}
-			return nil
-		})
+			wire[i] = args
+		}
+		replies := make([]errReply, len(batch))
+		piped := 0
+		for i := range batch {
+			if !sentAlone(wire[i]) {
+				piped++
+			}
+		}
+		var batchErr error
+		if piped > 0 {
+			batchErr = svcCtx.Redis.PipelinedCtx(ctx, func(p redis.Pipeliner) error {
+				for i := range batch {
+					if !sentAlone(wire[i]) {
+						replies[i] = p.Do(ctx, wire[i]...)
+					}
+				}
+				return nil
+			})
+		}
+		for i := range batch {
+			if sentAlone(wire[i]) {
+				replies[i] = svcCtx.Redis.Do(ctx, wire[i]...)
+			}
+		}
 
 		cmdErrs := make([]error, len(batch))
+		pipedErrs := make([]error, 0, piped)
 		for i, r := range replies {
 			if r != nil {
 				cmdErrs[i] = r.Err()
 			}
+			if !sentAlone(wire[i]) {
+				pipedErrs = append(pipedErrs, cmdErrs[i])
+			}
 		}
-		rejected := pipelineBatchRejected(batchErr, cmdErrs)
+		// 「整批没执行」只说管道里的那部分;单发的命令各有各的结果。
+		rejected := piped > 0 && pipelineBatchRejected(batchErr, pipedErrs)
 
-		failedCmds := 0
+		failedCmds, fencedOff := 0, 0
 		var firstFailure string
 		var minZone, maxZone uint32
 		for i, c := range batch {
-			if !rejected && cmdErrs[i] == nil {
+			notExecuted := rejected && !sentAlone(wire[i])
+			if !notExecuted && cmdErrs[i] == nil {
 				continue
 			}
 			if c.scores {
 				unwrittenScoreZones[c.zoneID] = struct{}{}
 			}
+			// 选主锁已不在本副本手里:Redis 拒掉了这条会加成员的写。这是丢了领导权,不是写失败。
+			if !notExecuted && isNotLeaderReply(cmdErrs[i]) {
+				fencedOff++
+				continue
+			}
+			cause := cmdErrs[i]
+			if notExecuted {
+				cause = batchErr
+			}
 			if failedCmds == 0 {
 				minZone, maxZone = c.zoneID, c.zoneID
-				firstFailure = fmt.Sprintf("%v %v: %v", c.args[0], c.args[1], cmdErrs[i])
+				firstFailure = fmt.Sprintf("%v %v: %v", c.args[0], c.args[1], cause)
 			}
 			minZone, maxZone = min(minZone, c.zoneID), max(maxZone, c.zoneID)
 			failedCmds++
 		}
-		if failedCmds == 0 {
-			continue
+		if fencedOff > 0 {
+			report.lostLeadership = true
+			logx.Errorf("[LoadRefresh] leader lock is not held by this replica any more: Redis refused %d membership writes of this batch, remaining %d commands dropped; the lock holder refreshes on its next tick",
+				fencedOff, len(cmds)-start-len(batch))
 		}
-		report.writeFailed = true
-		if rejected {
-			logx.Errorf("[LoadRefresh] write pipeline of %d commands (zones %d..%d) was not executed: %v",
-				len(batch), minZone, maxZone, batchErr)
-			continue
+		if failedCmds > 0 {
+			report.writeFailed = true
+			if rejected {
+				logx.Errorf("[LoadRefresh] write pipeline of %d commands (zones %d..%d) was not executed: %v; %d failed in total, first %s",
+					piped, minZone, maxZone, batchErr, failedCmds, firstFailure)
+			} else {
+				logx.Errorf("[LoadRefresh] %d/%d write commands failed (zones %d..%d); per-node metrics of zones whose score ZADD failed are not exported this tick: first %s",
+					failedCmds, len(batch), minZone, maxZone, firstFailure)
+			}
 		}
-		logx.Errorf("[LoadRefresh] %d/%d write commands failed (zones %d..%d); per-node metrics of zones whose score ZADD failed are not exported this tick: first %s",
-			failedCmds, len(batch), minZone, maxZone, firstFailure)
+		if fencedOff > 0 {
+			// 选主锁已不在本副本手里:后面的批不再发。
+			return unwrittenScoreZones
+		}
 	}
 	return unwrittenScoreZones
 }

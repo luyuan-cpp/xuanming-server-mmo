@@ -1,11 +1,8 @@
 package node
 
-// 本文件中的 allocator 逻辑在 guild / friend / player_locator / scene_manager
-// 四个服务里是逐字相同的副本(只有 import 包名不同)。
-// 若需修改 allocator 行为,请同步修改另外三个服务的对应文件:
-//   - go/friend/internal/node/node.go
-//   - go/player_locator/internal/node/node.go
-//   - go/scene_manager/internal/noderegistry/registry.go
+// 本文件的 allocator 与 go/player_locator/internal/node/node.go 是同源副本,改 allocator 行为时两份同步改。
+// 语义以 shared/noderegistry 为准(唯一实现,见其包注释「与既有副本的关系」):friend 原来那份已删、直接用它,
+// scene_manager 等服务的 internal/noderegistry 已是它的薄适配层;guild 与 player_locator 这两份尚未迁移。
 //
 // 2026-10-18 登记:player_locator 的副本在 tryClaimNodeID / allocateNodeID 末尾多一个可选 extraOps 钩子
 // (缺省为空,用来把能力键放进同一个注册事务),详见该文件头「有意的差异」;同步修改时保留它即可。
@@ -30,17 +27,17 @@ import (
 	base "proto/common/base"
 	"shared/nodeinfo"
 	"shared/releasetrack"
-	"shared/snowflake"
 )
 
 // nodeIDMin 是合法 node_id 的下界。0 永远作为 "未分配 / 非法值" 保留,
-// 不会被 allocator 分配出来。这样上游 `if info.NodeId == 0` 这种哨兵判定才有意义,
-// 也避免 Snowflake worker id=0 看起来像 "合法但未初始化" 的歧义状态。
+// 不会被 allocator 分配出来。这样上游 `if info.NodeId == 0` 这种哨兵判定才有意义。
 const nodeIDMin uint32 = 1
 
-// nodeIDMax 与 Snowflake worker id 位宽对齐(shared/snowflake.NodeMask)。
-// 超过这个范围的 node_id 喂给 Snowflake.NewNode 会 panic,所以分配阶段就拒掉。
-var nodeIDMax = uint32(snowflake.NodeMask)
+// nodeIDMax 是 node_id 的上界(含),分配时从 nodeIDMin 顺序扫到它为止。node_id 只是服务发现路径
+// 和 NodeInfo 里的编号,不喂给任何发号器:永久 ID 由 data_service 发号器发,scene_manager 的 scene_id
+// 由 shared/snowflakealloc 另行申领槽位,都与 node_id 无关。取值 1<<17-1 与 C++ NodeAllocator 的
+// kMaxNodeId 相同,各语言的分配器用同一个上界;它远大于任何一种节点的实例数。
+const nodeIDMax uint32 = 1<<17 - 1
 
 type Node struct {
 	Info       *base.NodeInfo
@@ -63,8 +60,8 @@ func rpcPath(prefix string, zoneId, nodeType, nodeId uint32) string {
 // allocationKey 是跨 zone 的全局占位 key。
 // 它的存在性(version != 0)就是 (node_type, node_id) 这对资源被占用的真相;
 // 同一个 lease 同时挂在 allocationKey 和 rpcPath 上,进程退出 / lease 过期时一起消失。
-// 关键点:这个 key 路径里**不带 zone**,所以两个不同 zone 的实例不可能同时拿到同一个 (node_type, node_id)。
-// 这正是修复 Snowflake worker id 跨 zone 冲突的核心。
+// 关键点:这个 key 路径里**不带 zone**,所以两个不同 zone 的实例不可能同时拿到同一个 (node_type, node_id)
+// (与 shared/noderegistry 的 AllocationKey 同一约定)。
 func allocationKey(prefix string, nodeType, nodeID uint32) string {
 	return fmt.Sprintf("%s/allocated/node_type/%d/node_id/%d", prefix, nodeType, nodeID)
 }
@@ -148,7 +145,7 @@ func newNodeInfo(nodeType, zoneId uint32, ip string, port uint32, track releaset
 //  2. node_id 从 1 开始,0 保留为非法值。
 //  3. Txn 同时 Put allocationKey 和 rpcPath,同一个 lease,保证 "占位" 和 "服务发现" 原子地一起生效。
 //  4. CAS 条件仅检查 allocationKey 不存在;如果它已存在(无论 value 是谁的 uuid),都不能强占。
-//  5. CAS 失败继续尝试下一个 ID,直到 nodeIDMax(对齐 Snowflake 位宽)。
+//  5. CAS 失败继续尝试下一个 ID,直到 nodeIDMax。
 func allocateNodeID(ctx context.Context, client *clientv3.Client, prefix string, info *base.NodeInfo, leaseID clientv3.LeaseID) (uint32, error) {
 	usedIDs, err := scanUsedNodeIDs(ctx, client, prefix, info.NodeType)
 	if err != nil {
@@ -284,8 +281,8 @@ func (n *Node) watchKeepAlive(ctx context.Context, ch <-chan *clientv3.LeaseKeep
 //	可能已抢占同一个 node_id。绝不能盲 Put 老 key(会覆盖别人的 NodeInfo,
 //	把流量路由到错误节点);只能 CAS "allocationKey 仍不存在" 重夺,
 //	失败就换一个全新 node_id —— guild 没有"我必须是 node N"的持久化语义,
-//	换 ID 安全(Snowflake worker id 由 shared/snowflakealloc 独立分配,
-//	与 NodeInfo.NodeId 解耦,见 guild.go 启动注释)。
+//	换 ID 安全(node_id 只是发现路径里的编号;guild_id 等永久 ID 由 data_service
+//	发号器发,guild 不申领 snowflake 槽位,见 guild.go 启动注释)。
 func (n *Node) reRegister(ctx context.Context) {
 	prefix := rpcPrefix(n.Info.NodeType)
 	backoff := time.Second

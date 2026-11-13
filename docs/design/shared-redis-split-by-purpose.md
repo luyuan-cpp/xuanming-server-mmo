@@ -2,6 +2,8 @@
 
 > **部分过期(2026-10-30)**:玩家存档已不在 Redis([player-data-tidb-scaling-plan.md](./player-data-tidb-scaling-plan.md) §2),本文里 db_task、父快照相关的连接和容量估算作废。按用途拆实例的思路仍然适用于协调键。
 
+> **部分被取代(2026-11-13)**:负责人 2026-11-10 要求所有 Redis 都上 Cluster、能加主节点扩写入,设计见 [redis-cluster-all-domains-20261110.md](./redis-cluster-all-domains-20261110.md)。按 zone 组分的 `redis-queue-g<N>` 实例、`-RedisSplit` 参数与核心单主形态由该稿第 6b 批退役(排队键改 `{q:<zone>}` 进控制集群 `redis-control`)。由此 §25.3 第 10、18-子项 1、19-原 §13 第 4 条里 queue 实例的形态与容量初值(每组 1gb、「仍待 L-14 压测复核」)作废,不再等压测;控制集群的 maxmemory、noeviction 与告警以该稿为准。本稿第 1a 批已落的代码在 6b 落地前仍是部署的现状。
+
 > **状态**:设计稿,2026-10-12 起草。**未落码、未编译、未测试、未压测**。本稿只读代码、grep 和 git 得出(AGENTS.md §10.1),
 > 行号以 HEAD `73b852f32` 加当前工作区(D1 映射持久化第 0、1a 批的在途改动)为准。
 > **起因**:用户 2026-10-12 列出开服首日的五个瓶颈,第 3 条是「共享 Redis 只有一个主节点,所有 zone 共用」,并追问「万一归属全服库成瓶颈了呢」。
@@ -107,12 +109,12 @@
 
 | 键 | 写 | 读 | 频率 | TTL | 多键原子 | 证据 |
 |---|---|---|---|---|---|---|
-| `queue:zone:{z}` ZSET、`queue:meta:{qid}` HASH、`queue:token:{token}` | login Enqueue | login Lookup(每次轮询 ≥4–5 条命令) | 排队开启时最高频 | `QueueEntryTTL` 1h | Enqueue 用 MULTI 写三键 | `go/login/internal/logic/pkg/loginqueue/queue.go:138-142`、`:170-183`、`:226-284` |
-| `admit:{qid}`、`admitted:zset:zone:{z}` ZSET(成员逐个到期;2026-10-13 G4b-G 起,此前是 `admitted:zone:{z}` SET) | login 放行循环、快速通道 | login | 中 | `admit:{qid}` 为 `AdmitTTL` 60s;占位成员按分数到期,整键 TTL `AdmitTTL + 1min` 只做垃圾回收 | 放行 MULTI(`:465-469`);计数与快速通道是单键 Lua(`:495-498`、`:521-527`);取走后续期是单键 MULTI(`:387-389`) | 同上 |
+| `queue:{q:<z>}` ZSET、`queue:meta:{qid}` HASH、`queue:token:{token}` | login Enqueue | login Lookup(每次轮询 ≥4–5 条命令) | 排队开启时最高频 | `QueueEntryTTL` 1h | Enqueue 用 MULTI 写三键 | `go/login/internal/logic/pkg/loginqueue/queue.go:138-142`、`:170-183`、`:226-284` |
+| `admit:{qid}`、`admitted:zset:{q:<z>}` ZSET(成员逐个到期;2026-10-13 G4b-G 起,此前是 `admitted:zone:{z}` SET) | login 放行循环、快速通道 | login | 中 | `admit:{qid}` 为 `AdmitTTL` 60s;占位成员按分数到期,整键 TTL `AdmitTTL + 1min` 只做垃圾回收 | 放行 MULTI(`:465-469`);计数与快速通道是单键 Lua(`:495-498`、`:521-527`);取走后续期是单键 MULTI(`:387-389`) | 同上 |
 | `dispatcher:lock:login_queue` | login 选主 | login | 1/s | 30s | 单键 | `go/login/internal/config/config.go:244-258`;`go/login/etc/login.yaml:436`。键是全局的,L-01 缺陷相关 |
-| `gate:{id}:draining` / `gate:{id}:drained` | `k8s_gate_drain.ps1` 的多键 Lua;login 排空循环 | login AssignGate 一次 MGET(失败时放行)。**2026-11-05 改**(缺口清单第 31 条):login 选 gate 的各条路径按 zone 共用一份缓存 1 秒的结果(`loginqueue.DrainMarkCache`),每个 login 实例每个 zone 每秒至多一次 MGET,标记最多晚 1 秒生效;scene_manager 跨 zone 重定向 `drainingGateIDs` 一次 MGET(2026-10-18 起,失败时放行,经 scene_manager 自己的 Redis 连接读,只能读 DB 0) | 低 | 有 | MarkScript 同时碰本台的 draining、drained 和同 zone 其它候选的 draining | `tools/scripts/k8s_gate_drain.ps1:150-158`;`loginqueue/gatedrain.go:30`、`:47-81`;`gatedrain_monitor.go:37`、`:129-181` |
+| `gate:{gm:<zone>}:<id>:draining` / `gate:{gm:<zone>}:<id>:drained` | `k8s_gate_drain.ps1` 的多键 Lua;login 排空循环 | login AssignGate 一次 MGET(失败时放行)。**2026-11-05 改**(缺口清单第 31 条):login 选 gate 的各条路径按 zone 共用一份缓存 1 秒的结果(`loginqueue.DrainMarkCache`),每个 login 实例每个 zone 每秒至多一次 MGET,标记最多晚 1 秒生效;scene_manager 跨 zone 重定向 `drainingGateIDs` 一次 MGET(2026-10-18 起,失败时放行,经 scene_manager 自己的 Redis 连接读,只能读 DB 0) | 低 | 有 | MarkScript 同时碰本台的 draining、drained 和同 zone 其它候选的 draining | `tools/scripts/k8s_gate_drain.ps1:150-158`;`loginqueue/gatedrain.go:30`、`:47-81`;`gatedrain_monitor.go:37`、`:129-181` |
 
-> **(2026-10-18 更正,上表「A. 排队与准入」前两行;原文保留;未编译、未测试)** 登录排队改造后(详见 `login-queue-2026-05.md` §5 决策树后的 2026-10-18 更正):排队中的每次轮询 = GET token 索引 + GETDEL 放行槽 + 一次读状态脚本(EVALSHA,内含 HMGET / ZRANK / ZCARD,剩余 TTL 不足 `QueueEntryTTL` 时才续期),共 3 次往返;放行 = 每拍一次 ZRANGE + 每放行一人一次 EVALSHA(不再 ZPOPMIN);`queue:zone:{z}`、`queue:meta:{qid}`、`queue:token:{token}` 改为空闲 TTL,至多约 1.25×`QueueEntryTTL`。脚本里只访问同一实例的键,redis-queue 仍可单独拆出。
+> **(2026-10-18 更正,上表「A. 排队与准入」前两行;原文保留;未编译、未测试)** 登录排队改造后(详见 `login-queue-2026-05.md` §5 决策树后的 2026-10-18 更正):排队中的每次轮询 = GET token 索引 + GETDEL 放行槽 + 一次读状态脚本(EVALSHA,内含 HMGET / ZRANK / ZCARD,剩余 TTL 不足 `QueueEntryTTL` 时才续期),共 3 次往返;放行 = 每拍一次 ZRANGE + 每放行一人一次 EVALSHA(不再 ZPOPMIN);`queue:{q:<z>}`、`queue:meta:{qid}`、`queue:token:{token}` 改为空闲 TTL,至多约 1.25×`QueueEntryTTL`。脚本里只访问同一实例的键,redis-queue 仍可单独拆出。
 
 排队默认关闭:`login.yaml:428-429`;K8s 的 login ConfigMap 不写 Queue 段,取缺省值 false。
 
@@ -120,13 +122,13 @@
 >
 > - **第 2 行「多键原子」一格作废**,现状是:
 >   - **放行**:每个出队条目一个 MULTI,里面是 `SET admit:{qid} <AdmitSlot JSON>`(TTL = `AdmitTTL`)加一段 `EVAL admittedHoldScript`(`:465-473`),两键都在排队族内。MULTI 只保证这两条连着执行、中间不插入别的命令,**不回滚**:EXEC 里一条运行期出错,另一条照样生效;`Exec` 回 error,该条目不计入放行数(`:467-469` 注释)。`ZPOPMIN`(`:433`)在 MULTI 之外:弹出之后、写入之前进程退出,这些条目既不在队列里,也不在占位里。
->   - **取走**:`GETDEL admit:{qid}`(`:335`)→ 现签 gate 票 → `HMGET queue:meta`(`:368`)→ 单段 `EVAL admittedHoldScript`(`:389`),把占位改为「现在 + 20s」到期。这几步各是独立命令,不在一个事务里,也不是 MULTI。最后那段 EVAL 只碰 `admitted:zset:zone:{z}` 一个键;它失败只记日志,占位保持放行时的分数,最迟 `AdmitTTL` 到期。
+>   - **取走**:`GETDEL admit:{qid}`(`:335`)→ 现签 gate 票 → `HMGET queue:meta`(`:368`)→ 单段 `EVAL admittedHoldScript`(`:389`),把占位改为「现在 + 20s」到期。这几步各是独立命令,不在一个事务里,也不是 MULTI。最后那段 EVAL 只碰 `admitted:zset:{q:<z>}` 一个键;它失败只记日志,占位保持放行时的分数,最迟 `AdmitTTL` 到期。
 >   - **计数**:`admittedCountScript` 一段 Lua(`:531-534`),先 `ZREMRANGEBYSCORE` 清掉过期成员再 `ZCARD`。单键,而且是写命令。
 >   - **快速通道**:`reserveFastPathSlotScript` 一段 Lua(`:560-568`),清过期、判 `ZCARD < budget`、`ZADD`、续整键 TTL 都在这一段里。单键。
 >   - `admittedHoldScript` 定义在 `:504-510`,由 `holdAdmitted`(`:519-524`)带脚本全文以 `EVAL` 调用:排在 MULTI 里的 EVALSHA 撞上 NOSCRIPT 时来不及回退(`:515-518`)。计数与快速通道用 `Script.Run`。
 > - **整键 TTL**:是 `W = max(AdmitTTL, 20s) + 1min`(`admittedKeyTTL`,`:493-495`;默认仍是 2 分钟),不是 `AdmitTTL + 1min`。放行、取走、快速通道三条写路径都先 `ZADD`,剩余 `PTTL < W` 时才 `PEXPIRE W`,**只延长不缩短**;计数不碰 TTL。20s 是交票后宽限,代码常量 `defaultHandoffGrace`(`:130`),不是配置。成员是否有效只看分数:放行时为 `now + AdmitTTL`,取走后与快速通道为 `now + 20s`。§5.8 回退里「等 `admitted:*` 过期(AdmitTTL + 1min)」同样按此读:有副本配过更大的 `AdmitTTL` 时,按其中最大的 `W` 等。
 > - **第 1 行行号**:键名函数 `:171-175`;Enqueue 的 MULTI `:204-216`(写 `queue:zone`、`queue:meta`、`queue:token` 三键);Lookup `:258-317`。
-> - **第 3 行(`dispatcher:lock:login_queue`)作废**:G1b(2026-10-12,对应 L-01,见 `docs/handoff/launch-readiness-20261013/spec_G1b.md`)起锁按 zone 分。实际锁键是 `dispatcher:lock:login_queue:zone:{z}`,配置项 `Queue.DispatcherLockKey` 只是前缀(`loginqueue/dispatcher.go:137-142`;`go/login/internal/config/config.go:265-271`、`:282`;`go/login/etc/login.yaml:481-484`)。同一 zone 的 login 副本抢同一把,不同 zone 互不相干,不再是全服一把键。表中「1/s」是出队拍的频率;锁键本身只在抢锁退避与心跳时读写,每个副本约 `DispatcherLockTTL/3`(默认 10s)一次(`dispatcher.go:206`、`:252`)。
+> - **第 3 行(`dispatcher:lock:login_queue`)作废**:G1b(2026-10-12,对应 L-01,见 `docs/handoff/launch-readiness-20261013/spec_G1b.md`)起锁按 zone 分。实际锁键是 `dispatcher:lock:login_queue:{q:<z>}`,配置项 `Queue.DispatcherLockKey` 只是前缀(`loginqueue/dispatcher.go:137-142`;`go/login/internal/config/config.go:265-271`、`:282`;`go/login/etc/login.yaml:481-484`)。同一 zone 的 login 副本抢同一把,不同 zone 互不相干,不再是全服一把键。表中「1/s」是出队拍的频率;锁键本身只在抢锁退避与心跳时读写,每个副本约 `DispatcherLockTTL/3`(默认 10s)一次(`dispatcher.go:206`、`:252`)。
 > - 上一句「排队默认关闭」引的 `login.yaml:428-429`,现为 `:473-474`。
 
 **B. 开服限流(Java gateway)**
@@ -269,7 +271,7 @@ merge_zone 合服与撤销时会按玩家删缓存（`playerCacheKeys`）；清�
 | C++ 战斗锁与结算 | `player_battle.cpp:170-226`;`settlement_outbox.h:101-111` | `battle:lock` + `battle:ctx` + 结算待销账记录 | 战斗族内部 |
 | match 组队 S_COMMIT 等 | `go/match/internal/team/keys.go:9`;`scripts.go` | `team:*` 四类 | 组队族内部(C++ 读) |
 | login 排队 | `queue.go:170-183`(MULTI)、`:428-431`(MULTI)、`:456-463` | 排队 / 准入 | 排队族内部 |
-| gate 排空标记与撤回 | `k8s_gate_drain.ps1:150-158` | `gate:{id}:draining` + `drained` + 同 zone 其它台的 draining | 排队族内部 |
+| gate 排空标记与撤回 | `k8s_gate_drain.ps1:150-158` | `gate:{gm:<zone>}:<id>:draining` + `drained` + 同 zone 其它台的 draining | 排队族内部 |
 | login 签令牌 | `token.go:105-112`(MULTI) | `access_token` + `refresh_token` + `account_refresh` | 会话族内部 |
 | data_service W1 注册 | `router.go:152-237` | `player:zone` + `merge:in_progress` | 映射族内部 |
 | data_service 读 home 带围栏 | `router.go:299-324` | `player:zone` + 脚本内拼出的围栏键 | 映射族内部(脚本内拼键,单实例才成立) |
@@ -400,7 +402,7 @@ merge_zone 合服与撤销时会按玩家删缓存（`playerCacheKeys`）；清�
   - Bucket4j fail-open(`application.yaml:120`);
   - **排队关闭时**:AssignGate 走快速通道,不碰 `redis-queue` 上的排队键,新登录不受影响;
   - **排队打开时**:`FreeSlots` 读 SCARD、快速通道占位、入队都在 `redis-queue` 上,任何一步出错都返回 `StatusError`;占位失败按设计不放行快速通道(fail-closed,`assigngatelogic.go:98-135`)。结果是**新登录全部失败**,直到实例恢复;
-    - **(2026-10-19 更正,上句原文保留)** 「`FreeSlots` 读 SCARD」已过时:计数现为 `admitted:zset:zone:{z}` 上的 `admittedCountScript`(先 `ZREMRANGEBYSCORE` 清过期、再 `ZCARD`),快速通道占位是 `reserveFastPathSlotScript`,两者都是单键 Lua,见 §2.2 A 表后的 2026-10-15 更正。本条「排队实例挂了新登录全部失败」的结论不变,但「任一步出错都返回 `StatusError`」不准(10-22 订正):实例不可用时 `FreeSlots` 先失败并返回 `StatusError`;`QueueLen` 出错按 0 处理;占位出错不放行快速通道而转入队,入队也失败才返回 `StatusError`(`go/login/internal/logic/loginpregate/assigngatelogic.go` 的 AssignGate)。
+    - **(2026-10-19 更正,上句原文保留)** 「`FreeSlots` 读 SCARD」已过时:计数现为 `admitted:zset:{q:<z>}` 上的 `admittedCountScript`(先 `ZREMRANGEBYSCORE` 清过期、再 `ZCARD`),快速通道占位是 `reserveFastPathSlotScript`,两者都是单键 Lua,见 §2.2 A 表后的 2026-10-15 更正。本条「排队实例挂了新登录全部失败」的结论不变,但「任一步出错都返回 `StatusError`」不准(10-22 订正):实例不可用时 `FreeSlots` 先失败并返回 `StatusError`;`QueueLen` 出错按 0 处理;占位出错不放行快速通道而转入队,入队也失败才返回 `StatusError`(`go/login/internal/logic/loginpregate/assigngatelogic.go` 的 AssignGate)。
   - **已在游戏里的玩家、断线重连的会话判定(读核心)和存盘都不受影响。** 拆分换来的是「排队实例挂了只停新登录」,不是「排队实例挂了还能登录」。
 - **约束**:
   1. 同一个 zone 的 login 与 `k8s_gate_drain.ps1` 必须看同一个实例:MarkScript 会同时检查本台和同 zone 其它台的 draining(`k8s_gate_drain.ps1:150-158`)。(2026-10-18 补:scene_manager 跨 zone 重定向也读这组标记,`go/scene_manager/internal/logic/gate_redirect.go` 的 `drainingGateIDs`;它的读要与 login 同批指向排队实例,部署闸校验 queue 地址时也要把 scene_manager 算进去,否则拆分后它静默读不到标记、退回不过滤。)
@@ -1011,7 +1013,7 @@ type Family struct {
 | redis-mapping(第 1 批) | go/db 每个任务 2 次 MGET;每次进场 1 次 EVAL;每次角色列表 1 次 MGET;每次建角 2–3 条(db_first 模式再加 WAITAOF);心跳 | ≈ 2W + E + 列表数/s + 3C |
 | redis-mapping(第 2 批后) | 再加每个写任务约 7 条控制面命令:锁 SETNX、游标 GET / SET、epoch GET / EVAL、解锁 EVAL | ≈ 9W + E + … |
 | redis-cache | 每个任务 1 次大 value 的 SET;每个读任务 LPUSH / EXPIRE / PUBLISH 各一次;PUBLISH 扇出到 L 个 login | ≈ W + 3R,另有推送 R × L 条 |
-| redis(核心) | C++ 存盘每玩家每 300s 一次 EVALSHA;进场链路(锁、父键、会话、位置 / epoch 的 Lua、场景计数);离场;战斗与组队;会话续租 | 待压测 |
+| redis(核心) | C++ 存盘每玩家每 300s 一次 EVALSHA;进场链路(锁、父键、会话、位置 / epoch 的 Lua、场景计数);离场;战斗与组队;会话续租 | 不再按本行估(2026-11-12 注:存盘与父键已随玩家存档移出 Redis,见文首;剩下的协调负载按现行键族重算) |
 
 > **(2026-10-18 更正,上表 redis-queue 一行;原文保留)** 排队 Lookup 改为 3 次往返(其中 1 次是脚本),放行改为每人 1 次 EVALSHA,不再 ZPOPMIN;稳态续期写约 100 PEXPIRE/s(4.5 万人在排、2s 轮询、`QueueEntryTTL`=1h 的估算,未实测)。见 `login-queue-2026-05.md` §5 的 2026-10-18 更正。
 
@@ -1030,7 +1032,7 @@ type Family struct {
 |---|---|---|---|
 | redis-queue | 每个排队玩家:ZSET 成员 + meta HASH + token 键,约 0.5–1KB;每个 IP 桶约 0.2KB | 与在途排队人数、活跃 IP 数成正比,带 TTL | 10 万人排队约 100MB |
 | redis-mapping | 每个玩家的 `player:zone`(加上 placement、maprev)约 0.1–0.3KB;第 2 批起,每个存过盘的玩家再加「表数(2)× 2 个游标键」约 0.5KB | **随累计注册 / 存过盘的玩家数增长,无 TTL,不会回落** | 1000 万玩家约 3–8GB |
-| redis-cache | 最近一个 TTL 内(K8s 为 1h)写过的玩家 × 子表大小 | 与近 1h 活跃玩家数成正比 | 待压测 |
+| redis-cache | 最近一个 TTL 内(K8s 为 1h)写过的玩家 × 子表大小 | 与近 1h 活跃玩家数成正比 | 不再估(2026-11-12 注:子表缓存随 go/db 消费链删除,`k8s_deploy.ps1` 里已没有 redis-cache) |
 | redis(核心) | `PlayerAllData` 父键(2026-06 实测每玩家约 21KB / 17 个键,`docs/notes/redis-oom-data-safety-qa-record.md:21`)+ `owner_epoch`(永不删)+ 账号 + `dirty_keys_set` 成员(2026-10-16:写入已在代码中删除(已落码,未编译、未测试;全部 scene 换成新镜像前生产仍在写),存量待按 release-checklist §6.1 清理) | **随累计进过场景的玩家数增长**(§2.5 第 1、2 条) | 累计 100 万玩家约 20GB |
 
 **核心内存没有上界,这是比拆分更急的容量问题**:
@@ -1065,7 +1067,7 @@ type Family struct {
 
 - **取值**:`maxmemory` = 压测峰值 × 1.5;`limits.memory` = 2 × maxmemory。release 档不给值就拒绝部署;dev 档用很小的缺省值。D1 的 noeviction 自检需要 `CONFIG GET` 可用,所以不能禁用这个命令。
   - `redis-queue` 的峰值要按最坏情况算 `rl:ip:*`:每个出现过的 IP 一个桶,TTL 是重填时间加 1h(`RateLimitConfig.java:71-91`)。trusted-proxies 配错时 IP 可被 X-Forwarded-For 伪造(`ClientIpResolver.java:20`),桶数没有上界。它满了之后,排队开着时新登录全部失败(§7),所以这个实例的内存告警要比别的实例更早。
-- **持久化**:全部用 AOF everysec;核心维持现状(`redis.yaml:95-97`)。`redis-mapping` 上的 W1 用 `WAITAOF 1 0`(D1)。要不要改成 `appendfsync always`,按 D1 §11.1 第 5 条,压测后再定。
+- **持久化**:全部用 AOF everysec;核心维持现状(`redis.yaml:95-97`)。`redis-mapping` 上的 W1 用 `WAITAOF 1 0`(D1)。要不要改成 `appendfsync always`(原按 D1 §11.1 第 5 条等压测):不再定(2026-11-12 注:映射 2026-10-30 起直读 TiDB,`redis-mapping` 已从部署里删除;其余实例维持 everysec,需要落盘确认的写各自用 WAITAOF,如铸造 owner_epoch)。
 
 ### 6.4 监控
 
@@ -1688,13 +1690,13 @@ Cluster 下:跨 slot 的 MGET / MULTI 报 CROSSSLOT;SCAN 只扫当前连接的�
 | 同上 | friend `OnlineDirectory.readEntries`(`online_directory.go:178`) | SCAN 扫到的 `player:session:*` | 同上 |
 | 同上 | guild `OnlineStatusResolver.BatchResolve` / `mgetWithin`(`go/guild/internal/logic/online_status_resolver.go` :80、:221);`loadGateInfos`(`push.go:174`) | `player:session:<id>` | 同上 |
 | 同上 | login `fillMissingRoleAppearances`(`role_appearance_backfill.go:36`) | 账号下各角色的键 | 同上 |
-| 同上 | login `DrainingGates`(`loginqueue/gatedrain.go:77`);scene_manager 跨 zone 重定向 `drainingGateIDs`(`gate_redirect.go`,2026-10-18 起,见 §2.2 A 表) | `gate:<id>:draining` | 排队族,随 redis-queue 的形态。重定向读的是目标 zone 的 gate,与 login 的读法一样,同 zone 的 gate 键打 `{zone}` tag 后就能一次 MGET;scene_manager 要与 login 同批指向排队实例 |
+| 同上 | login `DrainingGates`(`loginqueue/gatedrain.go:77`);scene_manager 跨 zone 重定向 `drainingGateIDs`(`gate_redirect.go`,2026-10-18 起,见 §2.2 A 表) | `gate:{gm:<zone>}:<id>:draining` | 排队族,随 redis-queue 的形态。重定向读的是目标 zone 的 gate,与 login 的读法一样,同 zone 的 gate 键打 `{zone}` tag 后就能一次 MGET;scene_manager 要与 login 同批指向排队实例 |
 | 同上 | match `presenceReader.mget`(`go/match/internal/team/presence.go:116`) | 队员的会话 / 父键 | 按 slot 分组 |
 | 同上 | data_service `Router.BatchGetPlayerHomeZone`(`router.go:463`)、`Router.MGetPlayerNames`(`player_name_cache.go:87`)、`Router.registerPlayerZoneDBFirst`(`route_publish.go:147`) | 映射三族、`player:name:<id>` | 三族同 `{pid}` 后,单玩家的 MGET 合法;跨玩家的按 slot 分组(§21) |
 | 同上 | data_service `mget`(`data_logic.go:364`);routetool `redisread.go` :123、:256、:384;merge_zone `readPlacements`(`placement_ops.go:52`);data_consistency_check `redisRouteSource.LiveZones`(`route_source.go:128`) | 映射与玩家数据 | 按 slot 分组 |
 | 同上(2026-10-18 补) | merge_zone `readPlayerZones`(`merge_run.go` 约 :851)、`restoreMappingForIDs`(`unmerge.go` 约 :433);`placement_ops.go` 另两处:`readCapabilityMarkers`(约 :435)、`collectStoragePlayers`(约 :877) | 映射三族;`db:capability:zone:<z>`(按 zone 的全局键) | 映射按 slot 分组;能力标记跨 zone 的 MGET 改逐键 GET 或打同一 tag |
 | 跨键 MULTI | login `Manager.Issue`(`go/login/internal/logic/pkg/token/token.go:104` 的 `TxPipeline`)、`trimRefreshSet`(:268) | `access_token:*`、`refresh_token:*`、`account_refresh:<a>` | 令牌键名带上 `{account}`,或拆成可重放的独立命令;改令牌键名会让旧令牌失效,要设计过渡 |
-| 同上 | login `Queue.Enqueue`(`loginqueue/queue.go:324`) | `queue:zone:<z>`、`queue:meta:<qid>`、`queue:token:<token>` | 三键都带 `{z}`,或 redis-queue 按 zone 组分实例 |
+| 同上 | login `Queue.Enqueue`(`loginqueue/queue.go:324`) | `queue:{q:<z>}`、`queue:meta:<qid>`、`queue:token:<token>` | 三键都带 `{z}`,或 redis-queue 按 zone 组分实例 |
 | SCAN | friend `OnlineDirectory.List`(`online_directory.go:86`,SCAN 在 :118) | `player:session:*` | 逐主节点扫;**游标格式要变**(见下) |
 | 同上 | data_service `Router.GetAllPlayerIDsInZone`(`router.go:545`);routetool importer(`importer.go:199`);data_consistency_check(`route_source.go:112`) | `player:zone:*`、`player:placement:*` | 逐主节点扫,或改从 `player_route` 读 |
 | 同上 | player_locator 补建 / 审计(`session_reconciler.go:1092`) | `player:session:*` | 逐主节点扫,run_id 核对改为每节点 |
@@ -1974,7 +1976,7 @@ Java 版账号与角色已在 MySQL(§26),本项在 Java 是「已做,实现不�
 - 部署闸只保留两条:地址要变必须显式确认;任一 zone 排队开着时拒绝切换 queue;
 - scene_manager 读排空标记的句柄随 queue 一起指过去(§3.2.1 约束 1 的 10-18 补)。
 - **(2026-10-23 落码时订正,上面几条原文保留)**:
-  - **gate 排空标记 `gate:<id>:draining` / `drained` 留在核心,不随 queue 拆走**,上一条作废。排空标记是运维置位的低频标志,读方有 login 的 AssignGate 过滤与排空监视器、`k8s_gate_drain.ps1`、scene_manager 的跨 zone 重定向,与排队键之间没有原子操作。留在核心后:scene_manager 与 `k8s_gate_drain.ps1` 不用改;也不需要「按目标 zone 找它所属的 queue 组」这种跨组寻址;§4.4 第 5 条「核心上没有正在进行的排空」的闸也随之不需要。queue 实例只放 `queue:*` / `admit:*` / `admitted:*`、放行锁和 gateway 的 `rl:*` 限流桶。
+  - **gate 排空标记 `gate:{gm:<zone>}:<id>:draining` / `drained` 留在核心,不随 queue 拆走**,上一条作废。排空标记是运维置位的低频标志,读方有 login 的 AssignGate 过滤与排空监视器、`k8s_gate_drain.ps1`、scene_manager 的跨 zone 重定向,与排队键之间没有原子操作。留在核心后:scene_manager 与 `k8s_gate_drain.ps1` 不用改;也不需要「按目标 zone 找它所属的 queue 组」这种跨组寻址;§4.4 第 5 条「核心上没有正在进行的排空」的闸也随之不需要。queue 实例只放 `queue:*` / `admit:*` / `admitted:*`、放行锁和 gateway 的 `rl:*` 限流桶。
   - **`-RedisSplit` 在所有档位缺省都解析为不拆**,第 19 条原 §13 第 16 条「非 dev 缺省拆 queue」改为:首次上线显式 `-RedisSplit queue` 部署;不带参数时渲染逐字节不变;zone 写路径跟随线上,与线上不同须 `-ConfirmRedisSplitSwitch`。
   - **(2026-10-24)第 1a 批已落码,未编译、未测试**:login 的 `Node.QueueRedis`、`k8s_deploy.ps1 -RedisSplit queue`、模板 `redis-purpose.yaml`、`redis-split-status` / `redis-wipe`,以及 dev_tools / k8s_image / 回档脚本的转发;文件清单与 Codex 验证命令见 PROGRESS「2026-10-24 G4a 第 1a 批落码」。
   - **queue 实例的形态(第 18 条子项 1;2026-11-01 落地说明)**:dev 档单实例,非 dev 档高可用,与核心同一个 `-RedisReplicas`。第 1a 批(10-24)只落了单实例,因为 `redis-ha.yaml` 的对象名(redis、redis-proxy、mymaster、redis-ha-scripts)写死;高可用形态 11-01 落码,未编译、未跑测试、未上集群,待 Codex 验证。

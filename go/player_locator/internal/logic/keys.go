@@ -65,29 +65,39 @@ func shardSegmentKey(role string, segment int) string {
 	return "player:locator_shard:" + role + ":segment:" + redisslot.SlotIndexTag(uint16(segment*slotsPerSegment))
 }
 
-// 控制域的键(ServiceContext.RedisClient,不带 hash tag,不和玩家键进同一段脚本):
-// 就绪、代次、审计时间与选主锁都是全服一份,只由对账 leader 读写。
-const (
+// 控制域的键(ServiceContext.ControlRedis,在控制集群上,不和玩家键进同一段脚本):
+// 就绪、代次、审计时间、一遍的进度与选主锁都是全服一份,只由对账 leader(进度由各副本)读写。
+//
+// 除选主锁外的 7 把控制键共用一个 tag {pl:gix}(docs/design/redis-cluster-all-domains-20261110.md §3.2、§4.8),
+// 带它们的 5 段 Lua(markLegacyWritersScript、setGateIndexReadyIfGenScript、beginPassScript、endPassScript、passAdvanceScript)
+// 在 Redis Cluster 上同槽;访问是 10 秒级的低频,一个槽装得下。tag 经 redisslot 的族前缀函数构造,不手拼。
+// 选主锁是单键,不带 tag(设计 §3.2「不带 tag 的单键族」)。
+var playerLocatorControlTag = redisslot.ControlTag(redisslot.ControlFamilyPlayerLocator, redisslot.ControlPlayerLocatorIdentity)
+
+var (
 	// gateIndexReadyKey:就绪标记(值 v2:<设置时刻 unix 秒>,带 PX 租约)。存在 = 最近一次完整补建开始之后
 	// 没有观察到旧写者,且此后每拍都有 leader 在成功的 etcd 读里确认零旧写者并续期。只由 leader 写。
-	gateIndexReadyKey = "player:gate_index:ready"
-	// gateIndexReadyValuePrefix 随索引形状走:v1 是全局索引,v2 是按 slot 分桶。
-	gateIndexReadyValuePrefix = "v2:"
+	gateIndexReadyKey = "player:gate_index:ready:" + playerLocatorControlTag
 	// gateIndexGenKey:代次计数器。leader 在一次成功的 etcd 读里看到旧写者就 INCR;补建结束时
 	// 「代次未变才设就绪标记」,跨 leader 守住「补建期间出现过旧写者」这件事。
-	gateIndexGenKey = "player:gate_index:gen"
+	gateIndexGenKey = "player:gate_index:gen:" + playerLocatorControlTag
 	// gateIndexLastAuditKey:上一次完整补建 / 审计完成的 unix 秒。审计时机以它为准,换主不重置。
-	gateIndexLastAuditKey = "player:gate_index:last_audit"
+	gateIndexLastAuditKey = "player:gate_index:last_audit:" + playerLocatorControlTag
 	// gateIndexAuditCooldownKey:审计失败后的冷却键(值 1,带 EX)。存在时审计不到期,换主不重置。
-	gateIndexAuditCooldownKey = "player:gate_index:audit_cooldown"
-	// reconcilerLeaderKey:写者检查与补建 / 审计的选主锁(shared/leader,带 TTL)。全服一个 leader。
-	reconcilerLeaderKey = "player_locator:session_reconciler:leader"
+	gateIndexAuditCooldownKey = "player:gate_index:audit_cooldown:" + playerLocatorControlTag
 
 	// 玩家域是 Cluster 时,补建 / 审计的一遍按段分给各副本(index_pass.go)。三把键都由 leader 建、删,各副本只推进自己段的进度。
 	// gateIndexPassKey:当前这一遍,值 "<id>|<kind>|<开始时的代次>",kind 是 backfill 或 audit。不存在 = 没有在跑的一遍。
-	gateIndexPassKey = "player:gate_index:pass"
+	gateIndexPassKey = "player:gate_index:pass:" + playerLocatorControlTag
 	// gateIndexPassSeqKey:一遍的编号计数器,只增不减。
-	gateIndexPassSeqKey = "player:gate_index:pass_seq"
+	gateIndexPassSeqKey = "player:gate_index:pass_seq:" + playerLocatorControlTag
 	// gateIndexPassProgressKey:HASH,字段是段号,值是这一段在哪一遍、做到哪个 slot 以及累计的统计(passProgress)。
-	gateIndexPassProgressKey = "player:gate_index:pass_progress"
+	gateIndexPassProgressKey = "player:gate_index:pass_progress:" + playerLocatorControlTag
+)
+
+const (
+	// gateIndexReadyValuePrefix 随索引形状走:v1 是全局索引,v2 是按 slot 分桶。
+	gateIndexReadyValuePrefix = "v2:"
+	// reconcilerLeaderKey:写者检查与补建 / 审计的选主锁(shared/leader,带 TTL)。全服一个 leader。
+	reconcilerLeaderKey = "player_locator:session_reconciler:leader"
 )

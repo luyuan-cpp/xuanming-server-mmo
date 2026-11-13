@@ -1,6 +1,6 @@
 # 网关区服健康:每 zone 发布汇总记录,网关只读汇总(2026-11-11)
 
-> 状态:**已落码,未编译、未测试,待 Codex 验证**(命令见 §9;指标与告警见 §4.7)。对应[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md)第 29 条残余:健康探测与 login 发现 11-05 已改成 list + watch 镜像,但每个网关副本仍 watch 全服的 gate / scene 前缀,事件扇出随 zone 数平方增长。
+> 状态:**已落码,未编译、未测试,待 Codex 验证**(命令见 §9;指标与告警见 §4.7;2026-11-12 复查又改三处,见 §8 末段)。对应[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md)第 29 条残余:健康探测与 login 发现 11-05 已改成 list + watch 镜像,但每个网关副本仍 watch 全服的 gate / scene 前缀,事件扇出随 zone 数平方增长。
 > 相关:[区服列表静态发布提案](serverlist-static-publish-2026-05.md)(未实施)、[连接与发现扇出](connection-fanout-subsetting-20261106.md)、[控制面按 zone 化](control-plane-zone-scoping-20261105.md)。
 
 ## 1. 结论
@@ -74,7 +74,9 @@
 3. 一条记录连续 `status-ttl-ms` 都没被核实(读镜像失败、遇到坏 NodeInfo、读目录失败、写失败),发布者就把它删掉(撤回)。这是「查询失败保留上一轮结果、过期回 UNKNOWN」在发布侧的对应:在 TTL 内读方照旧看到上一份,过了 TTL 读方看不到这条,当 UNKNOWN。
 4. 进程正常停机时撤销租约,本进程的记录立即消失;同 zone 另一个副本的记录还在。
 
-只在调度线程上运行,状态不跨线程共享。续租靠发布循环自己(每拍 `keepAliveOnce`),不交给 jetcd 的后台续租:循环卡死时记录随租约过期,而不是被后台线程一直续着、内容却不再更新。
+只由调度器调用,同一时刻只有一个线程在跑,状态不跨线程共享。续租靠发布循环自己(每拍 `keepAliveOnce`),不交给 jetcd 的后台续租:循环卡死时记录随租约过期,而不是被后台线程一直续着、内容却不再更新。
+
+续租靠循环自己,就要求循环不被别的任务拖住。Spring 缺省只有 1 个调度线程,网关的全部 `@Scheduled` 任务(login 发现、健康读方、健康发布、区服策略发布、角色上限守卫)排队跑,各自阻塞在 etcd、MySQL、login 的 gRPC 上,超时都是秒级。所以 `application.yaml` 把 `spring.task.scheduling.pool.size` 设成任务数(现为 5),每个任务各有线程可用;`ScheduledTaskThreadsTest` 钉住「线程数不少于定时任务数」。
 
 ### 4.3 读方(`service/ZoneHealthProbeService`)
 
@@ -100,7 +102,7 @@
 - K8s:`k8s_deploy.ps1` 的 `New-JavaSvcConfigMapYaml` 给网关 ConfigMap 写 `gateway.home-zone-ids: [<本 zone>]`(块式序列)。挂载的配置与 jar 内配置按属性合并、列表整体替换,不会拼出 `[1, 2, 3, z]`。契约测试钉住。
 - 顺带改正:原 ConfigMap 把探测周期写成 `zone.probe.interval-ms`,而代码读 `zone-probe.interval-ms`(`ZoneProbeProperties` 与 `@Scheduled` 都是这个键),这一行在 K8s 上从没生效过(值恰好等于缺省 5000)。改成 `zone-probe.interval-ms`。
 - 本机多 zone:一个网关进程发布 1、2、3 三个区。只起了 zone 1 时,2、3 没有 gate,发布 DOWN,列表显示维护,与改动前相同。
-- 部署闸:每个有 gate 的 zone 都要部署本 zone 的网关(`-JavaSvcRegistry`);只部署了部分 zone 的网关时,没部署的 zone 在列表里是 UNKNOWN。
+- 部署要求:每个有 gate 的 zone 都要部署本 zone 的网关(`-JavaSvcRegistry`)。只部署了部分 zone 的网关时,没部署的 zone 在列表里是 UNKNOWN(它的 login 还在),`GatewayZoneHealthUnpublished` 一直响;写在 `deploy/k8s/README.md`「区服健康汇总与告警」。
 
 ### 4.6 语义对照
 
@@ -132,7 +134,9 @@
 - **两个发布者短暂不一致**(事件送达有先后):读方取最近写入的一条,落后的那个随后观察到同一变化再写一次,收敛。
 - **etcd NOSPACE**:写被拒、删与续租可用;记录过了 TTL 被撤回,读方 UNKNOWN。与 gate 心跳同时停写是同一类故障。
 - **读方 etcd 不可达**:同改动前,保留快照到 TTL。
-- **调度延迟**:网关的 `@Scheduled` 任务共用一个线程。发布者用固定频率、每拍先续租;同一线程上其他任务卡到超过 TTL(要 etcd 整段读超时与 SQL 读超时同时出现)时这一拍续不上租,记录短暂消失,下一拍重新申请、重写,读方期间显示 UNKNOWN。是安全方向的失败。
+- **别的定时任务卡住**:不影响发布者。调度线程数等于任务数(§4.2 末段),别的任务卡在自己的依赖上时,发布者照常每拍续租。
+- **发布者自己的一拍超过 TTL**(它读的 etcd 或 MySQL 挂住,单次最坏分别 5 秒、10 秒):这一拍续不上租,记录消失,下一拍重新申请租约、重写,读方期间显示 UNKNOWN。这时它本来也核实不了本 zone 的状态,是安全方向的失败。
+- **两个任务同时读 login 的镜像**(login 发现与健康读方各有线程):镜像的重新同步是串行的,后到的线程等前一个同步完直接用结果,不会各读一遍 etcd,也不会有一方失败(`EtcdPrefixMirror` 的 `resyncLock`)。
 - **混跑窗口**(只在上线后有意义,项目尚未上线):没升级的 zone 不发布记录,升级过的网关把它们显示为 UNKNOWN。首次上线整批起步;上线后这项改动按全部 zone 的网关一起升级。
 
 ## 6. 扇出前后量级
@@ -173,18 +177,25 @@
 
 起草时列为残余、落码时一并做了的两项:「整个 zone 连同网关都没了」改为看 login 登记判 DOWN(§4.3);指标与告警(§4.7)。
 
+2026-11-12 复查时又改了三处,不再留作残余:
+
+- 调度线程数从缺省的 1 改成任务数(§4.2 末段)。原稿把「别的任务卡住会拖掉租约」记成可接受的失败;11-11~12 网关的定时任务从 2 个增加到 5 个,依赖从 etcd 扩到 MySQL 和 login,这个耦合不该留。
+- `EtcdPrefixMirror` 的重新同步改成串行(§5)。原来假定一个镜像只有一个线程读,两个线程撞上时先发起的一方失败;login 的镜像现在有两个读者、各有线程。
+- 删掉没人读的配置 `zone-probe.gate-stale-threshold-seconds`(gate 停写由 login 判,网关从没读过这个键)。
+
 ## 9. 文件与验证(交 Codex)
 
 改动(都在主工作区,未编译):
 
 - 新增 `java/gateway_node/src/main/java/com/game/gateway/config/HomeZoneProperties.java`、`etcd/EtcdPrefixMirror.java`(从 `NodeInfoMirror` 抽出的 list + watch 引擎,带 ModRevision)、`etcd/LeasedEtcdWriter.java`、`etcd/ZoneHealthRecord.java`、`etcd/ZoneHealthWatcher.java`、`service/ZoneHealthPublisher.java`。
 - 改 `etcd/NodeInfoMirror.java`(只剩 NodeInfo 解码)、`etcd/GateWatcher.java`(去掉全服 gate / scene,加按 zone 的两份镜像)、`service/ZoneHealthProbeService.java`(改成读汇总与 login 登记,导出两项指标;静态规则保留并供发布者调用;不再注入用不到的 `StringRedisTemplate` 与目录仓库)、`src/main/resources/application.yaml`、`src/test/resources/application-test.yaml`。
-- 用例:新增 `LeasedEtcdWriterTest`、`ZoneHealthWatcherTest`(含记录格式)、`ZoneHealthPublisherTest`;改 `GateWatcherTest`、`ZoneHealthProbeServiceTest`;`NodeInfoMirrorTest` 不改(经 `NodeInfoMirror` 覆盖抽出的引擎)。
-- 部署:`tools/scripts/k8s_deploy.ps1`(ConfigMap 两处键,连接总账两处注释改掉过时的 ZoneHealthProbeService 与 bucket4j 叫法)、`tools/scripts/tests/k8s_deploy_contract.tests.ps1`(新用例);新增 `deploy/k8s/gateway-zone-health-alerts.yaml` 与 `tools/scripts/tests/gateway_zone_health_alerts_contract.tests.ps1`;`deploy/login-stack.linux/README.md` 的「Bucket4j ON」标题改为「Gateway rate limit ON」(缺口清单第 29 行记的旧叫法)。
+- 2026-11-12 复查:`etcd/EtcdPrefixMirror.java`(重新同步串行化)、`config/ZoneProbeProperties.java`(删死配置)、`application.yaml`(`spring.task.scheduling.pool.size: 5`,删 `gate-stale-threshold-seconds`,改正连接池注释里过时的「健康探测每 5s 一次 findAll」)。
+- 用例:新增 `LeasedEtcdWriterTest`、`ZoneHealthWatcherTest`(含记录格式)、`ZoneHealthPublisherTest`、`config/ScheduledTaskThreadsTest`(11-12);改 `GateWatcherTest`、`ZoneHealthProbeServiceTest`;`NodeInfoMirrorTest` 经 `NodeInfoMirror` 覆盖抽出的引擎,11-12 加一条两个线程同时读的用例 `concurrentReaders_shareOneRelist`。
+- 部署:`tools/scripts/k8s_deploy.ps1`(ConfigMap 两处键,连接总账两处注释改掉过时的 ZoneHealthProbeService 与 bucket4j 叫法)、`tools/scripts/tests/k8s_deploy_contract.tests.ps1`(新用例);新增 `deploy/k8s/gateway-zone-health-alerts.yaml` 与 `tools/scripts/tests/gateway_zone_health_alerts_contract.tests.ps1`;`deploy/login-stack.linux/README.md` 的「Bucket4j ON」标题改为「Gateway rate limit ON」(缺口清单第 29 行记的旧叫法);`deploy/k8s/README.md` 加「区服健康汇总与告警」一节(11-12)。
 
 验证:
 
-1. Java:`cd java && mvn -pl gateway_node -am test -Dtest=NodeInfoMirrorTest,GateWatcherTest,LeasedEtcdWriterTest,ZoneHealthWatcherTest,ZoneHealthPublisherTest,ZoneHealthProbeServiceTest,ServerListServiceTest,ServerListServiceZoneRowsCacheTest,LoginEndpointIntegrationTest,GatewayTracingIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false`,再全量 `mvn -pl gateway_node -am test`。依赖的 `authority-jdbc` 快照照平常做法先装好。两个集成用例核对新组件能在测试上下文里装配(测试配置 `gateway.home-zone-ids: []`,发布者空转)。
+1. Java:`cd java && mvn -pl gateway_node -am test -Dtest=NodeInfoMirrorTest,GateWatcherTest,LeasedEtcdWriterTest,ZoneHealthWatcherTest,ZoneHealthPublisherTest,ZoneHealthProbeServiceTest,ScheduledTaskThreadsTest,ServerListServiceTest,ServerListServiceZoneRowsCacheTest,LoginEndpointIntegrationTest,GatewayTracingIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false`,再全量 `mvn -pl gateway_node -am test`。依赖的 `authority-jdbc` 快照照平常做法先装好。两个集成用例核对新组件能在测试上下文里装配(测试配置 `gateway.home-zone-ids: []`,发布者空转)。
 2. 部署契约:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`,新用例「Java gateway ConfigMap 写 gateway.home-zone-ids = [本 zone] 与 zone-probe.interval-ms」通过,其余用例与改动前同样结果;`pwsh -NoProfile -File tools/scripts/tests/gateway_zone_health_alerts_contract.tests.ps1` 全绿。告警语法用 `promtool check rules` 另验(取 `spec.groups` 部分)。
 3. 本机冒烟:起 etcd、MySQL、zone 1 的 login、gate 与 scene、网关(本机缺省发布 1、2、3 区)。
    - `etcdctl get --prefix /mmorpg/zone_health/` 看到 zone 1、2、3 各一条,2、3 为 DOWN(没有 gate);`GET /api/server-list` 里 zone 1 有负载档。

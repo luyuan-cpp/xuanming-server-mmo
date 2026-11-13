@@ -195,12 +195,3 @@ func TestRejectsBadRows(t *testing.T) {
 		}
 	}
 }
-
-func TestOwnerKeyGroupsSizesOfOneTemplate(t *testing.T) {
-	a := Pool{Mode: modeTeam, ConfigId: 1, TeamSize: 2}
-	b := Pool{Mode: modeTeam, ConfigId: 1, TeamSize: 5}
-	c := Pool{Mode: modeTeam, ConfigId: 2, TeamSize: 2}
-	if a.OwnerKey() != b.OwnerKey() || a.OwnerKey() == c.OwnerKey() {
-		t.Fatal("同模板各人数档应同归属键，不同模板应不同")
-	}
-}

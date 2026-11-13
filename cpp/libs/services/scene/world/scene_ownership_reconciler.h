@@ -8,7 +8,7 @@
 // 实例谁也回收不了)。做法同 kubelet 按 API server 的期望状态停掉本地多余的 Pod:每 10 秒读一次本地场景的 scene:{id}:node
 // 与本节点号的持有者,不归本进程的实体走与 DestroyScene 相同的路径排空、销毁,按住户预算限速。
 //
-// 线程:全部只在 scene 节点的 EventLoop 线程上调用(tlsEcs、tlsSceneControlRedis 与定时器都属于它)。
+// 线程:全部只在 scene 节点的 EventLoop 线程上调用(tlsEcs、tlsControlRedis 与定时器都属于它)。
 
 #include <array>
 #include <cstddef>
@@ -27,10 +27,7 @@
 
 struct redisReply;
 
-namespace hiredis
-{
-class Hiredis;
-}
+class RedisClusterClient;
 
 // 场景实体上的归属核对状态。按需状态(docs/design/ecs-component-access-rules.md):唯一创建入口是
 // scene_ownership::CollectChecks 第一次核对到这个实体;SceneLifecycle::ReuseExistingScene 把它整个摘掉,下一轮从头算
@@ -96,9 +93,9 @@ enum class SweepOutcome : std::uint8_t
 {
 	kSent,             // 读已发出
 	kNoScenes,         // 本地没有场景
-	kRedisUnavailable, // 控制域 Redis 没连上
+	kRedisUnavailable, // 控制集群没连上
 	kPreviousInFlight, // 上一轮还有应答没回来:不叠加
-	kSendFailed,       // 命令没被 hiredis 收下
+	kSendFailed,       // 命令没被集群客户端收下(守卫拒绝、slot 没有可用连接、排队满)
 	kCount
 };
 
@@ -176,8 +173,8 @@ public:
 private:
 	struct Session;
 	static scene_ownership::SweepOutcome Sweep(const std::shared_ptr<Session> &session);
-	// 发一条 MGET 读本节点号的持有者与这一批场景的属主;hiredis 收下回 true(应答一定会回来,断线时是空应答)。
-	static bool SendOwnerRead(hiredis::Hiredis &redis, const std::shared_ptr<Session> &session,
+	// 发一条 MGET 读本节点号的持有者与这一批场景的属主;集群客户端收下回 true(应答一定会回来,断线时是空应答)。
+	static bool SendOwnerRead(RedisClusterClient &redis, const std::shared_ptr<Session> &session,
 							  std::vector<scene_ownership::PendingCheck> batch, const std::string &holderKey,
 							  const std::string &selfNodeId, const std::string &selfUuid,
 							  scene_ownership::Clock::time_point issuedAt,

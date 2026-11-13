@@ -79,7 +79,7 @@ func decodeRoutePlayerEvent(t *testing.T, msg kafka.Message) *kafkacontracts.Rou
 
 func ownerEpochRaw(t *testing.T, sc *svc.ServiceContext, playerID uint64) string {
 	t.Helper()
-	raw, err := sc.Redis.Get(ownerepoch.OwnerEpochKey(playerID))
+	raw, err := playerRedisGet(sc, ownerepoch.OwnerEpochKey(playerID))
 	require.NoError(t, err)
 	return raw
 }
@@ -87,9 +87,8 @@ func ownerEpochRaw(t *testing.T, sc *svc.ServiceContext, playerID uint64) string
 // seedSceneOnNode 摆一个已存在的场景实例:scene→node 映射、zone 映射、人数。
 func seedSceneOnNode(mr *miniredis.Miniredis, zoneID uint32, sceneID uint64, nodeID string, playerCount string) {
 	mr.ZAdd(nodeLoadKey(zoneID), 0, nodeID)
-	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, sceneID), nodeID)
-	mr.Set(fmt.Sprintf(SceneZoneKeyFmt, sceneID), fmt.Sprintf("%d", zoneID))
-	seedSceneMembers(mr, sceneID, mustAtoi(playerCount))
+	mr.Set(sceneNodeKey(zoneID, sceneID), nodeID)
+	seedSceneMembersInZone(mr, zoneID, sceneID, mustAtoi(playerCount))
 }
 
 // defaultWorldTestConf 是单测里顶替「World 表第一行」的默认大世界 conf。
@@ -108,7 +107,7 @@ func seedDefaultWorldChannel(t *testing.T, mr *miniredis.Miniredis, zoneID uint3
 func writeHandoffMarker(t *testing.T, sc *svc.ServiceContext, playerID uint64, epoch uint64) {
 	t.Helper()
 	marker := ownerepoch.Handoff{Epoch: epoch, SavedAtMs: 1757000000000}
-	require.NoError(t, sc.Redis.Setex(ownerepoch.HandoffKey(playerID), marker.String(), int(ownerepoch.HandoffTTL.Seconds())))
+	require.NoError(t, playerRedisSetex(sc, ownerepoch.HandoffKey(playerID), marker.String(), int(ownerepoch.HandoffTTL.Seconds())))
 }
 
 // --- 铸造 ------------------------------------------------------------------
@@ -179,7 +178,7 @@ func TestEnterScene_SamePlacementReconnectDoesNotMintEpoch(t *testing.T) {
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneID, "10", testZoneId))
 	adoptSceneMember(mr, sceneID, playerID)
 	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-	beforeRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	beforeRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: sceneID, ZoneId: testZoneId,
@@ -189,7 +188,7 @@ func TestEnterScene_SamePlacementReconnectDoesNotMintEpoch(t *testing.T) {
 	assert.Equal(t, uint32(0), resp.ErrorCode)
 
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "同一落点重连不得推进 epoch:持有节点的缓存值必须仍然合法")
-	afterRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	afterRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, beforeRaw, afterRaw, "重连不改写 location")
 	require.Len(t, *captured, 1)
 	event := decodeRoutePlayerEvent(t, (*captured)[0])
@@ -201,27 +200,27 @@ func TestEnterScene_SamePlacementReconnectDoesNotMintEpoch(t *testing.T) {
 func TestMintEpochLuaRejectsStaleExpectedValueWithoutTouchingKeys(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 	const playerID = uint64(6103)
-	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "3"))
-	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), "old-location-bytes"))
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "3"))
+	require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), "old-location-bytes"))
 
 	// 调用方读到的是 2(并发请求已经推到 3):CAS 必须落败且两把键一个字节不动。
-	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation,
+	result, err := playerRedisEval(sc, luaMintEpochAndSetLocation,
 		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
 		mintLuaArgs("2", "new-location-bytes", "")...)
 	require.NoError(t, err)
 	assert.Equal(t, "0", fmt.Sprint(result))
 	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
-	locRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	locRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, "old-location-bytes", locRaw)
 
 	// 期望值对上:INCR 到 4 并写 location,一次原子完成。
-	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation,
+	result, err = playerRedisEval(sc, luaMintEpochAndSetLocation,
 		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
 		mintLuaArgs("3", "new-location-bytes", "")...)
 	require.NoError(t, err)
 	assert.Equal(t, "4", fmt.Sprint(result))
 	assert.Equal(t, "4", ownerEpochRaw(t, sc, playerID))
-	locRaw, _ = sc.Redis.Get(getPlayerLocationKey(playerID))
+	locRaw, _ = playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, "new-location-bytes", locRaw)
 }
 
@@ -229,15 +228,15 @@ func TestMintEpochLuaTreatsMissingKeyAsZero(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 	const playerID = uint64(6104)
 
-	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation,
+	result, err := playerRedisEval(sc, luaMintEpochAndSetLocation,
 		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
 		mintLuaArgs("0", "loc", "")...)
 	require.NoError(t, err)
 	assert.Equal(t, "1", fmt.Sprint(result), "键不存在与 \"0\" 同义:首次铸造得到 1")
 
 	// 键值就是 "0"(旧版 / 外部写入)与键不存在同义,同样铸出 1。回滚只 INCR,不会把键退回 "0"。
-	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "0"))
-	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation,
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "0"))
+	result, err = playerRedisEval(sc, luaMintEpochAndSetLocation,
 		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
 		mintLuaArgs("0", "loc", "")...)
 	require.NoError(t, err)
@@ -373,6 +372,8 @@ func TestClassifyRollbackReply(t *testing.T) {
 	bump := routeRollbackPlan{mode: rollbackModeBump, epochAfter: 3}
 	bumpWithMarker := routeRollbackPlan{mode: rollbackModeBump, epochAfter: 3, requiredMarker: "2:1757000000000"}
 	keep := routeRollbackPlan{mode: rollbackModeKeep, epochAfter: 1}
+	voidBump := routeRollbackPlan{mode: rollbackModeBump, epochAfter: 3, voidUnapplied: true}
+	voidBumpWithMarker := routeRollbackPlan{mode: rollbackModeBump, epochAfter: 3, requiredMarker: "2:1757000000000", voidUnapplied: true}
 	cases := []struct {
 		name   string
 		signed int64
@@ -393,6 +394,13 @@ func TestClassifyRollbackReply(t *testing.T) {
 		{"marked_bump_five_is_unknown", 5, bumpWithMarker, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
 		{"keep_four_is_unknown", 4, keep, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
 		{"six_is_unknown", 6, bump, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
+		// 6 / 7 只由作废分支返回,而且只在计划要求作废时才认(铸造结果未知的回滚):6 是不凭标记、状态已写成回滚之后的那一份;
+		// 7 是凭标记、只删了标记,location 没动。计划没要求作废、或标记的有无对不上,都是约定漂移,按结果未知处理。
+		{"void_unmarked_wrote_rolled_back_state", 6, voidBump, rollbackVerdict{outcome: rollbackOutcomeVoided, restored: true, echo: 3}},
+		{"void_marked_removed_marker", 7, voidBumpWithMarker, rollbackVerdict{outcome: rollbackOutcomeMarkerVoided}},
+		{"void_unmarked_seven_is_unknown", 7, voidBump, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
+		{"void_marked_six_is_unknown", 6, voidBumpWithMarker, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
+		{"seven_without_void_is_unknown", 7, bumpWithMarker, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
 		{"keep_rolled_back", 1, keep, rollbackVerdict{outcome: rollbackOutcomeRolledBack, restored: true}},
 		{"keep_never_replays", 2, keep, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
 	}
@@ -480,7 +488,7 @@ func TestEnterScene_CrossNodeWithCurrentMarkerIsAllowedAndMintsNextEpoch(t *test
 	assert.Equal(t, "5", targetCount)
 	assert.Equal(t, "2", oldCount)
 	// 标记由 scene_manager 只读不删,靠 TTL 过期。
-	markerRaw, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	markerRaw, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 	assert.NotEmpty(t, markerRaw)
 }
 
@@ -543,7 +551,7 @@ func TestEnterScene_CrossZoneRedirectKafkaFailureBumpsEpochAndLeavesReceipt(t *t
 	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	seedDefaultWorldChannel(t, mr, 2)
-	marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	marker, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 	require.Equal(t, "1:1757000000000", marker)
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
@@ -568,7 +576,7 @@ func TestEnterScene_CrossZoneRedirectKafkaFailureBumpsEpochAndLeavesReceipt(t *t
 	assert.Equal(t, oldScene, loc.SceneId)
 	assert.Equal(t, uint64(3), loc.OwnerEpoch, "location 与键同为 3")
 	assert.Equal(t, marker, loc.RollbackReceipt, "回执 = 本次所凭标记原文")
-	forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	forwarded, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 	assert.Equal(t, "3:1757000000000", forwarded, "标记转写到新 epoch,saved_at_ms 后缀不变")
 	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "3", oldCount, "旧场景人数退回")
@@ -689,7 +697,7 @@ func TestEnterScene_RouteFailureAfterHandoffBumpsEpochAndLeavesReceipt(t *testin
 	assert.Equal(t, testZoneId, loc.ZoneId)
 	assert.Equal(t, uint64(3), loc.OwnerEpoch)
 	assert.Equal(t, "1:1757000000000", loc.RollbackReceipt)
-	forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	forwarded, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 	assert.Equal(t, "3:1757000000000", forwarded)
 	assert.Greater(t, mr.TTL(ownerepoch.HandoffKey(playerID)), time.Duration(0), "转写标记必须带 TTL")
 	targetCount := sceneCountText(sc, targetID)
@@ -722,7 +730,7 @@ func TestRollbackPlayerPlacementSkipsWhenEpochAdvancedConcurrently(t *testing.T)
 	assert.False(t, restored, "本次写入已被覆盖,回滚必须跳过")
 	assert.Zero(t, echo)
 	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
-	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, later.raw, raw)
 }
 
@@ -847,7 +855,7 @@ func TestRollbackPlayerPlacementJudgesUnmarkedMintByHandoffFence(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			sc, mr := newTestSvcCtxWithWorldScenes(t)
 			playerID := uint64(6240 + i)
-			require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "4"))
+			require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "4"))
 			placed, err := placePlayerLocation(sc, playerID, 7340, "10", testZoneId, placementGuard{observedEpoch: 4, mint: true})
 			require.NoError(t, err)
 			require.Greater(t, placed.epoch, uint64(4))
@@ -862,7 +870,7 @@ func TestRollbackPlayerPlacementJudgesUnmarkedMintByHandoffFence(t *testing.T) {
 			restored, echo := rollbackPlayerPlacement(sc, log, playerID, placed, plan)
 			assert.Equal(t, c.wantRestored, restored)
 			assert.Equal(t, outcomeBefore+1, enterSceneRollbackCount(t, c.wantOutcome))
-			raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+			raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 			if c.wantRestored {
 				assert.Equal(t, placed.epoch+1, echo)
 				assert.Equal(t, fmt.Sprint(placed.epoch+1), ownerEpochRaw(t, sc, playerID))
@@ -941,8 +949,8 @@ func TestEnterScene_SecondLegRouteFailureBumpsEpochAndStaysAwaiting(t *testing.T
 	}
 	awaitingRaw, err := gproto.Marshal(awaiting)
 	require.NoError(t, err)
-	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), string(awaitingRaw)))
-	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "2"))
+	require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), string(awaitingRaw)))
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "2"))
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: 2,
@@ -1048,7 +1056,7 @@ func TestEnterScene_ForwardedMarkerReopensHandoffGateAfterRollback(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, constants.ErrKafkaRoute, failed.ErrorCode)
 	require.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
-	forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	forwarded, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 	require.Equal(t, "3:1757000000000", forwarded)
 
 	captured := capturingKafkaWriter(sc)
@@ -1074,26 +1082,26 @@ func TestMintEpochLuaReplayAfterBumpedRollbackIsConflict(t *testing.T) {
 	const playerID = uint64(6235)
 	mintKeys := []string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)}
 	rollbackKeys := []string{getPlayerLocationKey(playerID), ownerepoch.OwnerEpochKey(playerID), ownerepoch.HandoffKey(playerID)}
-	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
-	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), "old-bytes"))
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "1"))
+	require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), "old-bytes"))
 	writeHandoffMarker(t, sc, playerID, 1)
-	marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	marker, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 
-	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, mintLuaArgs("1", "placed-bytes", marker)...)
+	result, err := playerRedisEval(sc, luaMintEpochAndSetLocation, mintKeys, mintLuaArgs("1", "placed-bytes", marker)...)
 	require.NoError(t, err)
 	require.Equal(t, "2", fmt.Sprint(result))
-	result, err = sc.Redis.Eval(luaRollbackPlayerPlacement, rollbackKeys,
+	result, err = playerRedisEval(sc, luaRollbackPlayerPlacement, rollbackKeys,
 		"placed-bytes", "restored-bytes", "2", "bump", marker, "3:1757000000000", "300")
 	require.NoError(t, err)
 	require.Equal(t, "-3", fmt.Sprint(result))
 
-	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, mintLuaArgs("1", "placed-bytes", marker)...)
+	result, err = playerRedisEval(sc, luaMintEpochAndSetLocation, mintKeys, mintLuaArgs("1", "placed-bytes", marker)...)
 	require.NoError(t, err)
 	assert.Equal(t, "0", fmt.Sprint(result), "铸造重发晚于回滚:不是本请求已生效")
 	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
-	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, "restored-bytes", raw)
-	handoff, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	handoff, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 	assert.Equal(t, "3:1757000000000", handoff)
 }
 
@@ -1257,7 +1265,7 @@ func TestEnterScene_SameNodeSceneSwitchReseedsLostEpochKeyInsteadOfMinting(t *te
 		SceneId: oldScene, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 5, UpdateTime: uint64(time.Now().Unix()),
 	})
 	require.NoError(t, err)
-	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), string(raw)))
+	require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), string(raw)))
 	require.False(t, mr.Exists(ownerepoch.OwnerEpochKey(playerID)))
 	fake := withReachableSceneNode(t, sc, "10")
 	releasesBefore := fake.releaseCalls.Load()
@@ -1295,8 +1303,8 @@ func TestEnterScene_SameNodeReseedBlockedByZeroKeyRejectsWithoutErasingLocationE
 		SceneId: oldScene, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 5, UpdateTime: uint64(time.Now().Unix()),
 	})
 	require.NoError(t, err)
-	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), string(raw)))
-	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "0"))
+	require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), string(raw)))
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "0"))
 	withReachableSceneNode(t, sc, "10")
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
@@ -1306,7 +1314,7 @@ func TestEnterScene_SameNodeReseedBlockedByZeroKeyRejectsWithoutErasingLocationE
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrOwnerEpochConflict, resp.ErrorCode)
 	assert.Equal(t, "0", ownerEpochRaw(t, sc, playerID), "不得铸造,也不得改写键")
-	after, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	after, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, string(raw), after, "location 里的 5 不得被抹成 0")
 	assert.Empty(t, *captured, "拒绝时不发路由")
 	oldCount := sceneCountText(sc, oldScene)
@@ -1333,7 +1341,7 @@ func TestEnterScene_SameNodeZeroEpochMintRouteFailureKeepsMintedEpoch(t *testing
 	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
 	require.NoError(t, err)
 	adoptSceneMember(mr, oldScene, playerID)
-	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	oldRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	withReachableSceneNode(t, sc, "10")
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
@@ -1344,7 +1352,7 @@ func TestEnterScene_SameNodeZeroEpochMintRouteFailureKeepsMintedEpoch(t *testing
 	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
 	assert.Zero(t, resp.OwnerEpochAfterRollback, "keep 回滚不回显")
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "同节点 epoch 0 的铸造回滚不退 epoch,也不再 INCR")
-	restoredRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	restoredRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, oldRaw, restoredRaw, "location 照常退回")
 	assert.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)), "keep 不写转写标记")
 	oldCount := sceneCountText(sc, oldScene)
@@ -1362,7 +1370,7 @@ func TestSetLocationIfEpochRejectsStaleObservation(t *testing.T) {
 
 	_, err = placePlayerLocation(sc, playerID, 7216, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
 	require.ErrorIs(t, err, errOwnerEpochConflict, "观察值 0 已过期(当前是 1)")
-	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, first.raw, raw)
 
 	moved, err := placePlayerLocation(sc, playerID, 7216, "10", testZoneId, placementGuard{observedEpoch: 1, mint: false})
@@ -1388,7 +1396,7 @@ func TestPlacePlayerLocationIsAnchoredToObservedEpoch(t *testing.T) {
 	_, err = placePlayerLocation(sc, playerID, 7317, "30", testZoneId, placementGuard{observedEpoch: 1, mint: true})
 	require.ErrorIs(t, err, errOwnerEpochConflict, "A 的观察值已过期,不得再铸造 3")
 	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
-	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, winner.raw, raw)
 }
 
@@ -1404,7 +1412,7 @@ func TestMintIsRefusedOnceTheSourceWithdrewItsHandoffMarker(t *testing.T) {
 	verdict, err := checkHandoffCommitted(sc, playerID, 1)
 	require.NoError(t, err)
 	require.True(t, verdict.committed)
-	before, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	before, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 
 	// 预检之后、落点之前,源 scene 撤回了标记。
 	mr.Del(ownerepoch.HandoffKey(playerID))
@@ -1412,7 +1420,7 @@ func TestMintIsRefusedOnceTheSourceWithdrewItsHandoffMarker(t *testing.T) {
 		placementGuard{observedEpoch: 1, mint: true, requiredMarker: verdict.marker})
 	require.ErrorIs(t, err, errHandoffWithdrawn)
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "撤回之后不得再铸造")
-	after, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	after, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, before, after)
 
 	// 标记原样还在:正常铸造。
@@ -1481,7 +1489,7 @@ func TestEnterScene_TravelToUnopenedMapIsRejectedBeforeReleasingOwnership(t *tes
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
 	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
-	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	oldRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
 	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
@@ -1498,7 +1506,7 @@ func TestEnterScene_TravelToUnopenedMapIsRejectedBeforeReleasingOwnership(t *tes
 
 	// 源 scene 仍持有玩家:它缓存的 epoch(1)、location、旧场景人数都必须原样。
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, oldRaw, raw, "被拒的传送不得留下等待落点")
 	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "3", oldCount)
@@ -1531,8 +1539,8 @@ func TestEnterScene_TravelWithoutMapRejectedWhenTargetDefaultWorldUnavailable(t 
 			require.NoError(t, UpdatePlayerLocation(context.Background(), sc, tc.playerID, tc.oldScene, "10", 1))
 			adoptSceneMember(mr, tc.oldScene, tc.playerID)
 			writeHandoffMarker(t, sc, tc.playerID, 1)
-			oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
-			markerRaw, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
+			oldRaw, _ := playerRedisGet(sc, getPlayerLocationKey(tc.playerID))
+			markerRaw, _ := playerRedisGet(sc, ownerepoch.HandoffKey(tc.playerID))
 			before := enterSceneRejectedCount(t, 2, rejectReasonTravelMapUnavailable)
 
 			logic := NewEnterSceneLogic(context.Background(), sc)
@@ -1552,14 +1560,14 @@ func TestEnterScene_TravelWithoutMapRejectedWhenTargetDefaultWorldUnavailable(t 
 
 			// 源 scene 仍持有玩家并将据此解冻:epoch(1)、location、标记、旧场景人数都必须原样。
 			assert.Equal(t, "1", ownerEpochRaw(t, sc, tc.playerID), "被拒的传送不得铸造 epoch")
-			raw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
+			raw, _ := playerRedisGet(sc, getPlayerLocationKey(tc.playerID))
 			assert.Equal(t, oldRaw, raw, "被拒的传送不得留下等待落点")
-			markerAfter, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
+			markerAfter, _ := playerRedisGet(sc, ownerepoch.HandoffKey(tc.playerID))
 			assert.Equal(t, markerRaw, markerAfter)
 			oldCount := sceneCountText(sc, tc.oldScene)
 			assert.Equal(t, "3", oldCount)
 			assert.Empty(t, *captured, "被拒的传送不得发出 RedirectToGateEvent")
-			exists, existsErr := sc.Redis.Exists(redisslot.EnterSceneDedupKey(tc.playerID, "travel-no-default-world"))
+			exists, existsErr := playerRedisExists(sc, redisslot.EnterSceneDedupKey(tc.playerID, "travel-no-default-world"))
 			require.NoError(t, existsErr)
 			assert.False(t, exists, "拒绝必须释放 request_id 占位")
 		})
@@ -1832,7 +1840,7 @@ func TestEnterScene_CrossZoneRedirectIntoOwnZoneLeavesOwnershipUntouched(t *test
 	mr.ZAdd(nodeLoadKey(2), 0, "10")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneID, "10", 2))
 	adoptSceneMember(mr, sceneID, playerID)
-	before, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	before, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
 	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, zone uint32, _ uint64) (*scene_manager.RedirectToGateInfo, error) {
@@ -1845,7 +1853,7 @@ func TestEnterScene_CrossZoneRedirectIntoOwnZoneLeavesOwnershipUntouched(t *test
 	require.NoError(t, err)
 	assert.Equal(t, uint32(0), resp.ErrorCode, "没有 handoff 标记也必须能被送回自己所在的 zone")
 	require.NotNil(t, resp.Redirect)
-	after, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	after, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, before, after, "只送连接:location 不动")
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "只送连接:不铸造")
 }
@@ -1868,8 +1876,8 @@ func seedAwaitingPlacement(t *testing.T, sc *svc.ServiceContext, mr *miniredis.M
 	mr.ZAdd(nodeLoadKey(2), 0, "10")
 	raw, err := gproto.Marshal(&scene_manager.PlayerLocation{ZoneId: 2, OwnerEpoch: 1, UpdateTime: uint64(updatedAt.Unix())})
 	require.NoError(t, err)
-	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), string(raw)))
-	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+	require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), string(raw)))
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "1"))
 }
 
 // GO-5(取代旧 R8「票据有效期内等待落点牵引去向」):没指定去向(ZoneId == 0)的登录遇到**未过期**的
@@ -1934,7 +1942,7 @@ func TestEnterScene_FreshAwaitingPlacementWithoutZoneRejectsUnmappedHomeZone(t *
 		defaultID   = uint64(7613)
 	)
 	seedAwaitingPlacement(t, sc, mr, playerID, time.Now())
-	awaitingRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	awaitingRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
 	mr.SAdd(worldChannelsKey(testZoneId, defaultConf), fmt.Sprintf("%d", defaultID))
 	seedSceneOnNode(mr, testZoneId, defaultID, "10", "0")
@@ -1954,7 +1962,7 @@ func TestEnterScene_FreshAwaitingPlacementWithoutZoneRejectsUnmappedHomeZone(t *
 	assert.Equal(t, 1, fake.calls)
 	assert.Empty(t, *captured)
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, awaitingRaw, raw)
 	count := sceneCountText(sc, defaultID)
 	nodeCount := nodeCountText(sc, testZoneId, "10")
@@ -2012,7 +2020,7 @@ func TestEnterScene_ZeroZoneOverLocationInGateZoneBehavesLikeExplicitGateZone(t 
 		require.NoError(t, err)
 		require.Len(t, *captured, 1)
 		event := decodeRoutePlayerEvent(t, (*captured)[0])
-		locRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		locRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		count := sceneCountText(sc, defaultID)
 		return outcome{
 			errorCode:   resp.ErrorCode,
@@ -2222,8 +2230,8 @@ func TestEnterScene_TravelFirstLegRejectsUnmappedHomeZoneWithoutSideEffects(t *t
 			writeHandoffMarker(t, sc, tc.playerID, 1)
 			// 地图预检(先于归属检查)要过:目标 zone 开着默认大世界,能挡住这次放行的只剩归属。
 			seedDefaultWorldChannel(t, mr, 2)
-			oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
-			markerRaw, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
+			oldRaw, _ := playerRedisGet(sc, getPlayerLocationKey(tc.playerID))
+			markerRaw, _ := playerRedisGet(sc, ownerepoch.HandoffKey(tc.playerID))
 
 			logic := NewEnterSceneLogic(context.Background(), sc)
 			logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
@@ -2241,14 +2249,14 @@ func TestEnterScene_TravelFirstLegRejectsUnmappedHomeZoneWithoutSideEffects(t *t
 
 			// 源 scene 仍持有玩家并将据此解冻:它缓存的 epoch(1)、location、标记、旧场景人数都必须原样。
 			assert.Equal(t, "1", ownerEpochRaw(t, sc, tc.playerID), "被拒的传送不得铸造 epoch")
-			raw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
+			raw, _ := playerRedisGet(sc, getPlayerLocationKey(tc.playerID))
 			assert.Equal(t, oldRaw, raw, "被拒的传送不得留下等待落点")
-			markerAfter, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
+			markerAfter, _ := playerRedisGet(sc, ownerepoch.HandoffKey(tc.playerID))
 			assert.Equal(t, markerRaw, markerAfter)
 			oldCount := sceneCountText(sc, tc.oldScene)
 			assert.Equal(t, "3", oldCount)
 			assert.Empty(t, *captured, "被拒的传送不得发出 RedirectToGateEvent")
-			exists, existsErr := sc.Redis.Exists(redisslot.EnterSceneDedupKey(tc.playerID, "travel-unmapped"))
+			exists, existsErr := playerRedisExists(sc, redisslot.EnterSceneDedupKey(tc.playerID, "travel-unmapped"))
 			require.NoError(t, existsErr)
 			assert.False(t, exists, "拒绝必须释放 request_id 占位")
 		})
@@ -2342,7 +2350,7 @@ func TestEnterScene_TravelSecondLegRejectsUnmappedHomeZone(t *testing.T) {
 			placed, err := placePlayerLocation(sc, tc.playerID, 0, "", 2, placementGuard{observedEpoch: 0, mint: true})
 			require.NoError(t, err)
 			require.Equal(t, uint64(1), placed.epoch)
-			awaitingRaw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
+			awaitingRaw, _ := playerRedisGet(sc, getPlayerLocationKey(tc.playerID))
 
 			resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 				PlayerId: tc.playerID, SceneId: tc.targetID, ZoneId: 2,
@@ -2352,7 +2360,7 @@ func TestEnterScene_TravelSecondLegRejectsUnmappedHomeZone(t *testing.T) {
 			assert.Equal(t, constants.ErrHomeZoneUnavailable, resp.ErrorCode, "第二条腿的 gate zone 是目标 zone,不得当归属")
 			assert.Empty(t, *captured)
 			assert.Equal(t, "1", ownerEpochRaw(t, sc, tc.playerID))
-			raw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
+			raw, _ := playerRedisGet(sc, getPlayerLocationKey(tc.playerID))
 			assert.Equal(t, awaitingRaw, raw, "等待落点原样留着,映射补上后重试即可落地")
 			count := sceneCountText(sc, tc.targetID)
 			nodeCount := nodeCountText(sc, 2, "10")
@@ -2377,7 +2385,7 @@ func TestEnterScene_ExpiredAwaitingPlacementStillRejectsUnmappedHomeZone(t *test
 	)
 	// 等待落点在 zone 2(有活节点,不会被当成陈旧位置过滤掉),已过票据有效期。
 	seedAwaitingPlacement(t, sc, mr, playerID, time.Now().Add(-(redirectTokenTTLSeconds+60)*time.Second))
-	awaitingRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	awaitingRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
 	seedNodeMembers(mr, testZoneId, "10", 4)
 
@@ -2391,7 +2399,7 @@ func TestEnterScene_ExpiredAwaitingPlacementStillRejectsUnmappedHomeZone(t *test
 	assert.Equal(t, 1, fake.calls)
 	assert.Empty(t, *captured)
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, awaitingRaw, raw)
 	count := sceneCountText(sc, targetID)
 	nodeCount := nodeCountText(sc, testZoneId, "10")
@@ -2438,7 +2446,7 @@ func TestEnterScene_SceneDestroyedWhileEnteringIsCountedAsSceneGone(t *testing.T
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
 	seedNodeMembers(mr, testZoneId, "10", 4)
 	sc.HomeZone = &fakeHomeZoneClient{zone: testZoneId, onCall: func() {
-		mr.Del(fmt.Sprintf(SceneNodeKeyFmt, targetID))
+		mr.Del(sceneNodeKey(testZoneId, targetID))
 	}}
 	before := enterSceneRejectedCount(t, testZoneId, "scene_gone")
 
@@ -2487,7 +2495,7 @@ func TestEnterScene_HomeZoneUnavailableIsRejectedWithoutSideEffects(t *testing.T
 	nodeCount := nodeCountText(sc, testZoneId, "10")
 	assert.Equal(t, "4", count)
 	assert.Equal(t, "4", nodeCount)
-	exists, existsErr := sc.Redis.Exists(redisslot.EnterSceneDedupKey(playerID, "home-zone-down"))
+	exists, existsErr := playerRedisExists(sc, redisslot.EnterSceneDedupKey(playerID, "home-zone-down"))
 	require.NoError(t, existsErr)
 	assert.False(t, exists, "可重试拒绝必须释放 request_id 占位")
 }
@@ -2567,7 +2575,7 @@ func TestCheckHandoffCommitted(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, verdict.committed, "观察值已被推进到 5,4 的标记不再算数")
 
-	require.NoError(t, sc.Redis.Set(ownerepoch.HandoffKey(playerID), "garbage"))
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.HandoffKey(playerID), "garbage"))
 	verdict, err = checkHandoffCommitted(sc, playerID, 4)
 	require.NoError(t, err, "标记写坏不是 Redis 故障")
 	assert.False(t, verdict.committed, "标记写坏:不放行")
@@ -2659,8 +2667,8 @@ func TestEnterScene_DeadOwnerTakeoverDoesNotRecreateCountOfDestroyedScene(t *tes
 		targetID = uint64(7235)
 	)
 	seedPlayerOnDeadNode(t, sc, mr, playerID, oldScene, targetID)
-	mr.Del(fmt.Sprintf(SceneNodeKeyFmt, oldScene))
-	mr.Del(instanceMembersKey(oldScene))
+	mr.Del(sceneNodeKey(testZoneId, oldScene))
+	mr.Del(instanceMembersKey(testZoneId, oldScene))
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
@@ -2668,7 +2676,7 @@ func TestEnterScene_DeadOwnerTakeoverDoesNotRecreateCountOfDestroyedScene(t *tes
 	})
 	require.NoError(t, err)
 	require.Equal(t, uint32(0), resp.ErrorCode)
-	assert.False(t, mr.Exists(instanceMembersKey(oldScene)))
+	assert.False(t, mr.Exists(instanceMembersKey(testZoneId, oldScene)))
 }
 
 // leader 缺位时节点丢了租约:没有人写 Redis 的 death_at。本副本亲眼看到它从注册表消失,
@@ -2711,7 +2719,7 @@ func TestEnterScene_DeadOwnerWithinBarrierIsStillRejected(t *testing.T) {
 	)
 	seedPlayerOnDeadNode(t, sc, mr, playerID, oldScene, targetID)
 	markNodeDeath(sc, testZoneId, "10")
-	before, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	before, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 
 	req := &scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
@@ -2721,7 +2729,7 @@ func TestEnterScene_DeadOwnerWithinBarrierIsStillRejected(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode)
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-	after, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	after, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, before, after)
 	assert.Empty(t, *captured)
 	targetCount := sceneCountText(sc, targetID)
@@ -2845,11 +2853,11 @@ func TestRollbackPlayerPlacementReportsAlreadyRolledBackOnReExecution(t *testing
 		t.Helper()
 		sc, mr := newTestSvcCtxWithWorldScenes(t)
 		require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, 7236, "10", 1))
-		oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		oldRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		oldLoc, err := GetPlayerLocation(context.Background(), sc, playerID)
 		require.NoError(t, err)
 		writeHandoffMarker(t, sc, playerID, 1)
-		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+		marker, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 		placed, err := placePlayerLocation(sc, playerID, 0, "", 2,
 			placementGuard{observedEpoch: 1, mint: true, requiredMarker: marker})
 		require.NoError(t, err)
@@ -2864,7 +2872,7 @@ func TestRollbackPlayerPlacementReportsAlreadyRolledBackOnReExecution(t *testing
 		sc, _ := newTestSvcCtxWithWorldScenes(t)
 		const playerID = uint64(6190)
 		require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, 7190, "10", 1))
-		oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		oldRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		oldLoc, err := GetPlayerLocation(context.Background(), sc, playerID)
 		require.NoError(t, err)
 		require.NotNil(t, oldLoc)
@@ -2888,7 +2896,7 @@ func TestRollbackPlayerPlacementReportsAlreadyRolledBackOnReExecution(t *testing
 		assert.Equal(t, alreadyBefore+1, enterSceneRollbackCount(t, rollbackOutcomeAlreadyRolledBack))
 
 		assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID), "只进一格:重发不再 INCR")
-		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		assert.Equal(t, plan.restoredRaw, raw)
 	})
 
@@ -2899,7 +2907,7 @@ func TestRollbackPlayerPlacementReportsAlreadyRolledBackOnReExecution(t *testing
 		restored, echo := rollbackPlayerPlacement(sc, log, playerID, placed, plan)
 		require.True(t, restored)
 		assert.Equal(t, uint64(3), echo)
-		forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+		forwarded, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 		assert.Equal(t, plan.forwardMarker, forwarded, "原标记还在:转写到新 epoch,后缀不变")
 
 		// 源 scene 取证:原子删掉本族标记(含转写出来的那份)。
@@ -2940,7 +2948,7 @@ func TestRollbackPlayerPlacementReportsAlreadyRolledBackOnReExecution(t *testing
 		sc, _ := newTestSvcCtxWithWorldScenes(t)
 		const playerID = uint64(6192)
 		require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, 7192, "10", testZoneId))
-		oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		oldRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		oldLoc, err := GetPlayerLocation(context.Background(), sc, playerID)
 		require.NoError(t, err)
 		// 同物理节点换图:不铸造,epoch 仍是 1。
@@ -2963,7 +2971,7 @@ func TestRollbackPlayerPlacementReportsAlreadyRolledBackOnReExecution(t *testing
 		assert.Equal(t, alreadyBefore, enterSceneRollbackCount(t, rollbackOutcomeAlreadyRolledBack))
 		assert.Equal(t, supersededBefore+1, enterSceneRollbackCount(t, rollbackOutcomeSuperseded))
 		assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		assert.Equal(t, oldRaw, raw)
 	})
 
@@ -2979,7 +2987,7 @@ func TestRollbackPlayerPlacementReportsAlreadyRolledBackOnReExecution(t *testing
 		assert.Zero(t, echo)
 		assert.Equal(t, markerGoneBefore+1, enterSceneRollbackCount(t, rollbackOutcomeMarkerGone))
 		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "一个字节都不动")
-		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		assert.Equal(t, placed.raw, raw, "本次落点保留")
 		assert.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)), "不转写")
 	})
@@ -2996,34 +3004,34 @@ func TestMintEpochLuaRecognizesReplayOfItsOwnWrite(t *testing.T) {
 	t.Run("with_marker_replay_is_recognized", func(t *testing.T) {
 		sc, _ := newTestSvcCtxWithWorldScenes(t)
 		const playerID = uint64(6193)
-		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+		require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "1"))
 		writeHandoffMarker(t, sc, playerID, 1)
-		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+		marker, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 
-		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
+		result, err := playerRedisEval(sc, luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		assert.Equal(t, "2", fmt.Sprint(result))
-		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
+		result, err = playerRedisEval(sc, luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		assert.Equal(t, "-2", fmt.Sprint(result), "重发:认出是本请求自己的写入,返回取负的同一个新 epoch")
 		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "epoch 只前进一格")
-		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		assert.Equal(t, "awaiting-bytes", raw)
 	})
 
 	t.Run("replay_after_marker_withdrawn_is_conflict", func(t *testing.T) {
 		sc, mr := newTestSvcCtxWithWorldScenes(t)
 		const playerID = uint64(6194)
-		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+		require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "1"))
 		writeHandoffMarker(t, sc, playerID, 1)
-		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+		marker, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 
-		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
+		result, err := playerRedisEval(sc, luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		require.Equal(t, "2", fmt.Sprint(result))
 		// 源 scene 的取证脚本已删掉本族标记(同一步里读 epoch / location 自行裁决),重发不再认。这里用 DEL 模拟。
 		mr.Del(ownerepoch.HandoffKey(playerID))
-		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
+		result, err = playerRedisEval(sc, luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		assert.Equal(t, "0", fmt.Sprint(result))
 		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
@@ -3032,30 +3040,30 @@ func TestMintEpochLuaRecognizesReplayOfItsOwnWrite(t *testing.T) {
 	t.Run("replay_after_location_changed_is_conflict", func(t *testing.T) {
 		sc, _ := newTestSvcCtxWithWorldScenes(t)
 		const playerID = uint64(6195)
-		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+		require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "1"))
 		writeHandoffMarker(t, sc, playerID, 1)
-		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+		marker, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 
-		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
+		result, err := playerRedisEval(sc, luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		require.Equal(t, "2", fmt.Sprint(result))
-		require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), "someone-else-bytes"))
-		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
+		require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), "someone-else-bytes"))
+		result, err = playerRedisEval(sc, luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		assert.Equal(t, "0", fmt.Sprint(result), "location 不是本请求写的那份:不是本请求生效")
-		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		assert.Equal(t, "someone-else-bytes", raw)
 	})
 
 	t.Run("without_marker_replay_stays_conflict", func(t *testing.T) {
 		sc, _ := newTestSvcCtxWithWorldScenes(t)
 		const playerID = uint64(6196)
-		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+		require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "1"))
 
-		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "loc-bytes", "")...)
+		result, err := playerRedisEval(sc, luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "loc-bytes", "")...)
 		require.NoError(t, err)
 		require.Equal(t, "2", fmt.Sprint(result))
-		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "loc-bytes", "")...)
+		result, err = playerRedisEval(sc, luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "loc-bytes", "")...)
 		require.NoError(t, err)
 		assert.Equal(t, "0", fmt.Sprint(result), "不凭标记的铸造区分不开「我已生效」与「别人写了同样的值」,维持冲突")
 		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
@@ -3188,7 +3196,7 @@ func TestEnterScene_LoginAtSourceZoneOverUnrolledAwaitingPlacement(t *testing.T)
 	t.Run("unmapped_rejected_without_side_effects", func(t *testing.T) {
 		fake := &fakeHomeZoneClient{err: status.Error(codes.NotFound, "error_code=2: no home zone mapping for player 6198")}
 		sc, captured := setup(t, fake)
-		awaitingRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		awaitingRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 
 		resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(request())
 		require.NoError(t, err)
@@ -3196,7 +3204,7 @@ func TestEnterScene_LoginAtSourceZoneOverUnrolledAwaitingPlacement(t *testing.T)
 		assert.Equal(t, 1, fake.calls)
 		assert.Empty(t, *captured)
 		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
-		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 		assert.Equal(t, awaitingRaw, raw)
 		count := sceneCountText(sc, sceneID)
 		assert.Equal(t, "0", count)

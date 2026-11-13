@@ -23,8 +23,7 @@ type GroupLagObserver func(target GroupLagTarget, lag GroupLag, err error)
 // RunGroupLagProbe 每 interval 探一次各目标在 broker 上的积压，直到 ctx 结束；第一轮在 interval 之后。
 // 只读 broker 元数据（computeGroupLag），不碰消费与提交，可以和任意副本数的消费者并存：每个副本报同一个组的值，告警取 max。
 // 任何一个目标探失败都关掉连接、下一轮重建（sarama 的连接坏了没有可靠的就地自愈判据），写法同 data_service 的 runLagProbe。
-// 交给 observe 的 lag.CommitStall 由本循环跨轮算出，按 handler 模式的口径（有积压就计时，见 CommitStall）；
-// reader 模式的消费组要自己用 CommitStall{RequireArrivals: true}（如 data_service 的 runLagProbe）。
+// 交给 observe 的 lag.CommitStall 由本循环跨轮算出（有积压就计时，不要求新消息到达，见 CommitStall）。
 // point 是 safego 点位名（常量）：每一轮各自 recover，一轮 panic 不杀循环；panic 的那一轮停在哪一步不知道，它持有的连接
 // （含这一轮刚建的）一律关掉、下一轮重建。返回前关掉手上的连接；调用方要在关停时等本函数返回（match 的 StopAndReport）。
 // interval <= 0 视为装配错误，记一条日志后不启动。
@@ -120,26 +119,25 @@ func (l *groupLagProbeLoop) round(now time.Time) {
 }
 
 // CommitStall 跟踪一个消费组「有积压的分区里,已提交位点最久多长时间没动」,探针每轮成功探测后调一次 Observe。
-// 只在探针 goroutine 里用,不加锁;零值可用。
+// 只在探针 goroutine 里用,不加锁;零值可用。判据是「组内已提交位点低于日志末端(high watermark)且停着」,不依赖新消息到达:
+// 安静分区上卡在一条上(毒丸、消费者停了)也报。
 //
 // 为什么不看合计积压是否归零:逐条提交的消费者在持续高负载下,每次探测都有刚到、还没处理的消息,合计积压几乎从不为 0,
 // 而已提交位点一直在前进;停了或卡住时位点不动。为什么按分区:一个分区卡在毒丸上、其余分区照常前进时,
 // 组的合计位点照样在动,按合计看会漏掉它。
 //
-// RequireArrivals 为 true 时,只从「已提交位点停下之后又新到了消息」起计时。reader 模式(NewBoundMessageReader)提交失败时
-// 把已落库的记录交还 Kafka,本代次内不再重投,低流量分区上这几条会一直挂着积压(数据其实已落库),直到同分区来了新消息
-// 被一并提交、或下一代次重投;这段积压不算卡住,来了新消息而位点仍不动才算。代价:分区上一条新消息都不来时卡住看不见。
-// handler 模式没有这种已落库的积压(代次还在就原地重试同一条,代次结束交还、下一代次立刻重投),用 false:
-// 安静分区上卡在毒丸也要报。
+// 两种模式都没有「已落库却一直挂着」的正常积压:handler 模式代次还在就原地重试同一条,代次结束交还、下一代次立刻重投;
+// reader 模式提交失败交还已落库的记录时结束本代次,下一代次立即重投并提交(BoundConsumerGroup.releaseUncommitted)。
+// 2026-11-12 以前 reader 模式不结束代次,低流量分区上交还的几条会挂着积压直到新消息到达,所以当时另有 RequireArrivals
+// 只认「位点停下之后新到的消息」,代价是安静分区卡住看不见;根因修掉之后去掉了这个开关。
 type CommitStall struct {
-	RequireArrivals bool
-	marks           map[int32]commitStallMark
+	marks map[int32]commitStallMark
 }
 
 // commitStallMark 是一个有积压的分区最近一次看到已提交位点变化(或第一次看到这段积压)时的状态。
 type commitStallMark struct {
-	committed, end int64     // 那一轮读到的已提交位点与日志末端
-	since          time.Time // 开始计时的时刻;零值 = 还没开始(RequireArrivals 时在等新消息)
+	committed int64     // 那一轮读到的已提交位点
+	since     time.Time // 开始计时的时刻
 }
 
 // Observe 用一轮读到的各分区位点更新状态,返回有积压的分区里已提交位点最久没动的时长,没有停滞返回 0。
@@ -157,19 +155,11 @@ func (s *CommitStall) Observe(now time.Time, partitions []PartitionOffsets) time
 			continue
 		}
 		mark, tracked := s.marks[p.Partition]
-		switch {
-		case !tracked || mark.committed != p.Committed:
-			mark = commitStallMark{committed: p.Committed, end: p.End}
-			if !s.RequireArrivals {
-				mark.since = now
-			}
-		case s.RequireArrivals && mark.since.IsZero() && p.End > mark.end:
-			mark.since = now
+		if !tracked || mark.committed != p.Committed {
+			mark = commitStallMark{committed: p.Committed, since: now}
+			s.marks[p.Partition] = mark
 		}
-		s.marks[p.Partition] = mark
-		if !mark.since.IsZero() {
-			longest = max(longest, now.Sub(mark.since))
-		}
+		longest = max(longest, now.Sub(mark.since))
 	}
 	for partition := range s.marks {
 		if !seen[partition] {

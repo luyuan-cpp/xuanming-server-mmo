@@ -133,28 +133,12 @@ BattleMaxConnections: 4096
 # K8s 的 node-config 由 k8s_deploy.ps1 从环境变量 MMORPG_SPECTATE_TOKEN_SECRET 注入,不抄这份。
 SpectateTokenSecret: "local-dev-spectate-token-secret-a1b2c3d4e5f60718"
 
-# 审计 topic(流水 / 快照)的世代号,进有效 topic 名:transaction_log_topic_g<N> / player_snapshot_topic_g<N>。
-# 基名是 C++ 常量(cpp/libs/modules/transaction_log/transaction_log_system.h、
-# cpp/libs/modules/snapshot/snapshot_system.h),后缀由本键拼(0 = 1)。
-#
-# **必须与 go/data_service/etc/data_service.yaml 的 Kafka.TopicGeneration 相等**:
-# C++ scene 是这两个 topic 唯一的生产者,go/data_service 的两条落库消费者是唯一的消费者,
-# topic 名是两边唯一的会合点。不一致不会有任何报错 —— 生产者往一个没人消费的 topic 写,
-# 流水 / 快照静默积压到保留期(默认 30 天)被删。
-#
-# 为什么第一代就带后缀:broker 开着 auto.create.topics.enable + num.partitions=1
-# (deploy/docker-compose.yml KAFKA_NUM_PARTITIONS=1),生产者一发消息就把**裸名字**的 topic
-# 自动建成 1 分区;消费端 kafkautil.EnsureTopics 拿 6 / 3 的分区契约去比,得到的永远是
-# "partition contract mismatch",两条消费者一条都起不来,唯一症状是每 30s 一条 Error 日志。
-# 带代号的名字与那两个被自动建出来的裸名 topic 互不相干,第一次就能按契约建成 6 / 3 分区。
-#
-# 换代(= 改分区数,绝不原地扩分区:扩分区会重映射 key=player_id 的哈希,同一玩家的流水顺序就断了)
-# 必须同一次提交改两处并重出/重滚镜像:本键 + data_service.yaml 的 Kafka.TopicGeneration。
-# K8s 上 node ConfigMap 里的这一键由 k8s_deploy.ps1 从 data_service.yaml 镜像生成(不抄这份)。
-AuditTopicGeneration: 1
+# 审计 topic(流水 / 快照)的世代号不在这里了(2026-11-12):C++ 不直接发审计 topic,流水与快照随玩家存盘进 go/db 的
+# 审计发件箱,由 go/db 投 Kafka(docs/design/player-audit-outbox.md)。世代号看 go/db/etc/db.yaml 的 AuditOutbox.TopicGeneration
+# (生产者)与 go/data_service/etc/data_service.yaml 的 Kafka.TopicGeneration(消费者),两处必须相等。
 
 # 集群号(0..31):部署级常量,运维一次性设定,策划不碰。只有 Go 的 snowflake 槽位协议
-# (login-player / guild / scene-manager / match)消费它,作为 17 位 worker 字段的高 5 位;
+# 消费它(现在只剩 scene-manager 的 scene_id;login、guild、match 改由发号器发号,不再申领槽位),作为 17 位 worker 字段的高 5 位;
 # C++ 侧 2026-09-08 起没有消费者(scene 的永久 guid 走号段,不编码集群),这里只是同一份口径。
 # 本地/单集群保持 0;第二套集群才需要改。见 docs/design/node-id-overhaul-plan-20260908.md §5 / §7.5。
 ClusterId: 0
@@ -211,7 +195,7 @@ IdSegments:
 # 不满足就拒绝部署并点名是哪一项。本块由 k8s_deploy.ps1 原样搬进 node ConfigMap(Get-AuthoritativeYamlBlock)。
 GrpcClient:
   CallDeadlineMs:
-    SceneManagerNodeService: 10000     # scene_manager_service.yaml Timeout 8000(归属查询 1500 + Kafka 写 5000 + 1500)
+    SceneManagerNodeService: 13500     # scene_manager_service.yaml Timeout 11500(角色目录强读 1500 + 归属查询 1500 + 铸造 WAITAOF 2000 + Kafka 写 5000 + 1500)+2000;换图在途 TTL 由此派生为 14.5s,疏散 / 排空改派的 settle 窗口 18.5s(取下限 19s)
     DataServiceNodeService: 4000       # data_service.yaml 没写 Timeout = go-zero 默认 2000(RpcServerConf default=2000),+2000 余量;号段 fetchTimeout 由此派生为 5s
     ClientRpcRouterNodeService: 8000   # client_rpc_router.yaml Timeout 6000(> ForwardTimeoutMs 5000)
     MatchNodeService: 7000             # match_service.yaml Timeout 4000(10-14 由 5000 降,client-request-ordering.md O10;gate 直连模式,仍 ≥ +2000)
@@ -221,3 +205,11 @@ GrpcClient:
     PlayerInboxNodeService: 6000       # go/player_inbox/etc/player_inbox.yaml 显式写的 zrpc Timeout(≤ 4000)+2000;scene 的 Fetch / Ack 失败只退避,不阻断进场(player-inbox-service.md IB-7)
     PlayerStoreNodeService: 14000      # go/db/etc/db.yaml 的 MethodTimeouts 12s(大于 SQL 锁等待 10s)+2000
     MailNodeService: 6000              # go/mail/etc/mail.yaml 的 zrpc Timeout 3500 + 2000 + 500;scene 寄待寄邮件失败只退避(battle-overflow-mail.md)
+
+# span 导出(docs/design/distributed-tracing.md §10.3,阶段三):C++ 节点把接缝处产生的 span 经 OTLP/HTTP(protobuf)
+# 送本机 Alloy(deploy/docker-compose.observability.yml,dev.bat obs 起),Alloy 尾部采样后存进 Tempo。
+# 地址原样使用;删掉这一键或写空串 = 不导出,不起导出线程。Alloy 没起时导出线程按 1~60 秒退避、丢批并计数,不影响业务。
+# OTel 规范的环境变量优先于这里:OTEL_EXPORTER_OTLP_TRACES_ENDPOINT 换地址,OTEL_SDK_DISABLED=true 或 OTEL_TRACES_EXPORTER=none 关掉。
+# K8s 上这一键由 k8s_deploy.ps1 按是否部署了节点采集器重写(New-NodeConfigMapYaml),不搬本机这个值。
+Tracing:
+  OtlpTracesEndpoint: "http://127.0.0.1:4318/v1/traces"

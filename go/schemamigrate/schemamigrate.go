@@ -179,6 +179,15 @@ func (r Report) MissingIndexes() []Finding {
 	return out
 }
 
+// Messages 取出各项的文案,顺序不变。服务把某一类项(如缺普通索引)拼进拒启错误时用。
+func Messages(findings []Finding) []string {
+	var out []string
+	for _, f := range findings {
+		out = append(out, f.Message)
+	}
+	return out
+}
+
 // add 记一项报告:结构化形式进 Findings,文案按类别进 Manual 或 Warnings。本包只经这里写这三个切片,
 // 所以 Findings 与两份文案不会对不上。
 func (r *Report) add(f Finding) {

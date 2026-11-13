@@ -15,6 +15,12 @@ func TestKeyFormats(t *testing.T) {
 	if got := HandoffKey(12345); got != "player:{12345}:handoff" {
 		t.Fatalf("HandoffKey = %q", got)
 	}
+	if got := HolderLeaseKey(12345); got != "player:{12345}:holder_lease" {
+		t.Fatalf("HolderLeaseKey = %q", got)
+	}
+	if got := ConfirmedKey(12345); got != "player:{12345}:owner_epoch_confirmed" {
+		t.Fatalf("ConfirmedKey = %q", got)
+	}
 }
 
 // owner_epoch 是玩家域键:必须带 tag,且与玩家所在 slot 一致(存盘屏障 Lua 把它与父快照、屏障放进同一段脚本)。
@@ -26,6 +32,13 @@ func TestOwnerEpochKeyInPlayerSlot(t *testing.T) {
 		}
 		if handoff := HandoffKey(pid); redisslot.HashSlot(handoff) != redisslot.PlayerSlot(pid) {
 			t.Fatalf("HandoffKey(%d) = %q 不在玩家 slot %d", pid, handoff, redisslot.PlayerSlot(pid))
+		}
+		if lease := HolderLeaseKey(pid); !redisslot.HasHashTag(lease) || redisslot.HashSlot(lease) != redisslot.PlayerSlot(pid) {
+			t.Fatalf("HolderLeaseKey(%d) = %q 不在玩家 slot %d", pid, lease, redisslot.PlayerSlot(pid))
+		}
+		// 已确认位点与 owner_epoch、location 在同一段确认流程里读写,必须同槽。
+		if confirmed := ConfirmedKey(pid); !redisslot.HasHashTag(confirmed) || redisslot.HashSlot(confirmed) != redisslot.PlayerSlot(pid) {
+			t.Fatalf("ConfirmedKey(%d) = %q 不在玩家 slot %d", pid, confirmed, redisslot.PlayerSlot(pid))
 		}
 	}
 }

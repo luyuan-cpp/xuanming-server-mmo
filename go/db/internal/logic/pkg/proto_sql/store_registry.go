@@ -6,11 +6,13 @@ import (
 	"db/internal/config"
 	"db/internal/dbguard"
 	"db/internal/metrics"
+	"db/internal/playerstore"
 	"errors"
 	"fmt"
 	"shared/authoritysql"
 	"shared/placement"
 	"shared/sqlpoolstats"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -400,6 +402,10 @@ func OpenPlacementStore(ctx context.Context, dbName string, pool StorePoolOption
 		_ = handle.Close()
 		return nil, err
 	}
+	if err := playerstore.VerifySchema(ctx, handle); err != nil {
+		_ = handle.Close()
+		return nil, fmt.Errorf("verify player store %s: %w", dbName, err)
+	}
 	store.Connector = connector
 	return store, nil
 }
@@ -439,4 +445,27 @@ func preparePlacementStore(ctx context.Context, handle *sql.DB, dbName string, t
 		return nil, fmt.Errorf("select placement store %s: %w", dbName, err)
 	}
 	return &GameDB{DB: handle, SqlModel: model}, nil
+}
+
+// RelayStorageIDs 返回审计发件箱转发要覆盖的存档库编号,升序、去重(docs/design/player-audit-outbox.md §7.1)。
+//
+// 外部白名单不空时就是白名单里的全部存档库:部署保证它恰好是本地域的 K 个库,所以转发不依赖本进程有没有打开过它们
+// (进程重启之后,没人认领过的库里也可能有上一个进程写下、还没投出去的行)。白名单为空只出现在本机 dev 的宽松档,
+// 这时退到本进程已经打开过的库:那里的存档库都是按需打开的,没打开过的库在这个进程里也没写过发件箱。
+func (r *StoreRegistry) RelayStorageIDs() []uint32 {
+	ids := make([]uint32, 0, len(r.allow.Names))
+	for _, name := range r.allow.Names {
+		if id, ok := placement.StorageIDFromDBName(name); ok {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		r.mu.RLock()
+		for id := range r.stores {
+			ids = append(ids, id)
+		}
+		r.mu.RUnlock()
+	}
+	slices.Sort(ids)
+	return slices.Compact(ids)
 }

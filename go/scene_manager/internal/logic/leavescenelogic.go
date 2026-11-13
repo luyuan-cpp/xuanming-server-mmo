@@ -377,8 +377,10 @@ func (l *LeaveSceneLogic) judgeHolderRelease(in *scene_manager.LeaveSceneRequest
 		facts.epoch = j.epoch
 		facts.noHolder = loc.GetNodeId() == ""
 		j.zoneID = loc.GetZoneId()
+		// 没有 zone_id 的历史记录:场景在本 zone 才认本 zone,否则 zone 未知、判死不认(ownZoneOfScene,
+		// docs/design/redis-cluster-all-domains-20261110.md §3.3)。
 		if j.zoneID == 0 && loc.GetSceneId() != 0 {
-			j.zoneID = GetSceneZone(l.svcCtx, loc.GetSceneId())
+			j.zoneID = ownZoneOfScene(l.svcCtx, loc.GetSceneId())
 		}
 		if j.epoch != 0 && !facts.noHolder {
 			owner := NewEnterSceneLogic(l.ctx, l.svcCtx)
@@ -393,6 +395,13 @@ func (l *LeaveSceneLogic) judgeHolderRelease(in *scene_manager.LeaveSceneRequest
 			if !facts.ownerDead && !facts.markerReleased {
 				facts.ownerDead = owner.playerLocationOwnerReplaced(in.PlayerId, loc, j.zoneID, observedEpoch,
 					barrierSiteReplacedOwnerLeaveRelease) == ownerReplacedTakeover
+			}
+			// 判死的证据(从 etcd 消失)证明不了持有进程已经停写:它还在续存活租约、又没有为这一代写出落盘标记时,
+			// 不按判死删 location、不释放它的写权(holder_lease.go)。照没拿到证据处理:保留、请释放、清理任务重试,
+			// 等它存盘释放或进程退出、租约过期之后再判。
+			if facts.ownerDead && !facts.markerReleased &&
+				holderLeaseKeepsOwner(l.svcCtx, l.Logger, in.PlayerId, j.zoneID, holderLeaseSiteLeaveRelease) {
+				facts.ownerDead = false
 			}
 		}
 	}

@@ -106,12 +106,6 @@ func main() {
 	var c config.Config
 	// conf.MustLoad 会自动调用 (*Config).Validate(go-zero v1.10.0),不合法即 Fatalf 退出。
 	conf.MustLoad(*configFile, &c)
-	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入)。-migrate 与常驻启动都连库,所以放在迁移分支之前;
-	// 迁移 Job 同样注入这个变量。退出码与迁移入口的 ExitFailed 一致。
-	if err := c.ResolveMySQLPassword(os.LookupEnv); err != nil {
-		fmt.Fprintf(os.Stderr, "[player_inbox] %v\n", err)
-		os.Exit(schemamigrate.ExitFailed)
-	}
 
 	if *migrateOnly {
 		os.Exit(runMigration(c, *allowModify, svc.OpenSchemaMySQL, migrateUp, checkRowShardLayout))
@@ -250,7 +244,13 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	// RPC 级热关停(shared/killswitch):复用 svcCtx 的 etcd 客户端;Start 非阻塞,etcd 不可达一律放行。
 	ksCtx, ksCancel := context.WithCancel(context.Background())
 	stopKillSwitch = ksCancel
-	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix})
+	// NodeTypes:认 type/PlayerInboxNodeService/ 下的规则;注册成功后再 AddInstance(docs/design/rpc-kill-switch.md §5)。
+	// AckItems 是投递回执(受保护,§8):挡住它会让已经发出的条目重复投递,只有精确规则能关。
+	ks := killswitch.New(killswitch.Config{
+		Prefix:    c.KillSwitchPrefix,
+		NodeTypes: []string{base.ENodeType_name[int32(nodeType)]},
+		Protected: []string{inboxpb.PlayerInbox_AckItems_FullMethodName},
+	})
 	ks.Start(ksCtx, svcCtx.Etcd)
 
 	budget := c.RequestBudget()
@@ -327,6 +327,7 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+	ks.AddInstance(nr.NodeUUID) // 认 instance/<本进程 uuid>/ 下的热关停规则
 	// 定时对账的分片成员表靠 node_uuid 认出自己;在这之前本副本不负责任何对账分片(svc.ServiceContext.SetNodeUUID)。
 	svcCtx.SetNodeUUID(nr.NodeUUID)
 
@@ -361,7 +362,7 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	// MySQLTarget 只含 host / 库名 / 用户名,绝不含密码。
 	fmt.Printf("  mysql:         %s\n", svc.MySQLTarget(c.MySQL))
 	fmt.Printf("  schema:        %s\n", schemaModeLabel(c))
-	fmt.Printf("  core_redis:    %s (DB %d)\n", c.CoreRedis.Host, c.CoreRedis.DB)
+	fmt.Printf("  control_redis: %s\n", c.EffectiveControlRedis().Describe())
 	playerRedisConf := c.EffectivePlayerRedis()
 	fmt.Printf("  player_redis:  %s\n", playerRedisConf.Describe())
 	fmt.Printf("  kafka:         %v\n", c.Kafka.Brokers)

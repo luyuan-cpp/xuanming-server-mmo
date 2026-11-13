@@ -61,10 +61,18 @@
 #             预留只在结算应用、或 SQL 终局是 ABORT / 没有可裁决原件时释放;COMPLETE、终局未定、查不到都留着,没有上限,
 #             这段时间玩家转不走、用不掉押着的那几样道具(人照常能玩)。前因与上一条相同:收件箱迟迟没投到,或 match 不可用。
 #             正文有 player_id 与 battle_id,按 battle_id 核对 match_battle_completion 与收件箱;处置见 docs/ops/player-inbox-runbook.md §6.1。
+#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=mail_outbox_stuck" [10m]) > 0
+#             (2026-11-12)人物背包与临时格都放不下的战斗掉落改投邮件(docs/design/battle-overflow-mail.md):这批物品记在玩家存档的
+#             待寄队列里,由 scene 以 battle 身份寄出。这一行是重试不会变的失败:没配发件密钥、本地签名失败、条目形状不合法、验签被拒（两边密钥不同或时钟相差超过 5 分钟，`reason=signature_rejected`）,
+#             或邮件判附件无效 / 请求冲突 / 参数错。物品没有丢,仍在队列里按退避重试,但不会自己好。
+#             正文有 player_id、request_id 与 reason;处置见 docs/ops/player-inbox-runbook.md §6.1「待寄邮件」。
+#             邮箱满、邮件不可达、结果未知是会自己好的失败,只打 metric=mail_outbox_send_failed(WARN),不进这条查询。
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_terminal_query_unknown" [10m]) > 20
 #             scene 查不到 match 的终局(MatchInternal.GetBattleTerminalDecision:没发出去、传输失败、回包验签不过、带内 retry),
 #             按「结果未知」续冻,会一直拖到续冻上限。查 scene 的场景密钥与 match 是否同源、scene 能否发现并连上 match、match 是否可用;
-#             偶发属正常(在途超时也计),阈值 20 / 10 分钟是占位,压测出基线后校准。
+#             偶发属正常(在途超时也计)。阈值 20 / 10 分钟已定(2026-11-12),压测出基线后可调:
+#             依据是 scene 对每个冻结中的玩家约每 30 秒核对一次终局,10 分钟窗口下 20 行约等于一个 match 或链路持续不可用时至少 2~3 个玩家的整窗查询失败,
+#             单次在途超时或一次 match 滚动重启(通常 < 1 分钟,只产出个位数行)不会越线;越线说明查询链路持续不通,续冻会一路拖到上限。
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "[AssetOp]" |= "metric=persist_version_skew" [10m]) > 0
 #             (2026-10-30,混版本持久字段保护第 6 批)资产通道遇到本版本解释不了的东西,回 RETRY + reason 1006
 #             (kFeatureUnavailable)、不记账:where=asset_debit 是按数量扣出只有算上带更新版本字段的物品才够,
@@ -236,10 +244,11 @@ spec:
               缺片不会自愈:登记着却不跑重投循环的副本不退出、不恢复,它名下的片就一直没人扫;trade 的合同推进与收据 ACK 用同一份成员表,
               托管资产也会跟着停在合同里。先按 AssetOpOwnedShardsMissing 找出那个副本,让它的配置与其余副本一致后重启,或把它缩掉。
 
-    # 周期循环的活性(缺口清单第 25 条第四批,docs/design/assetop-redelivery-sharding-20261110.md §14.3)。
-    # 每个循环一个「最近一次跑完一轮的时刻」gauge(Unix 秒):起来时写一次,每跑完一轮写一次(这一轮成败都写,panic 的那一轮不写),
-    # 循环退出时删掉序列。没起循环(canary、Recall.Enabled=false)或已经停掉循环(停机排空)的副本没有序列,不会误报。
-    # 按副本逐条判,不聚合:分片之后一个副本卡住,别的副本照常推进,max() 看不出来;卡住的副本名下的片没人做,
+    # 周期循环的活性(缺口清单第 25 条第四批,docs/design/assetop-redelivery-sharding-20261110.md §14.3;口径只有一份,
+    # 在 go/shared/looplive)。每个循环一个「最近一次跑完一轮的时刻」gauge(Unix 秒):起来时写一次;每一轮正常返回(成败都算)就写,
+    # panic 的那一轮被兜住、不写,循环接着跑;循环有意停止(停机排空)时删掉序列,异常退出时旧值留着。
+    # 没起循环(canary、Recall.Enabled=false)或已经有意停掉循环的副本没有序列,不会误报。
+    # 按副本逐条判,不聚合:分片之后一个副本停住,别的副本照常推进,max() 看不出来;停住的副本名下的片没人做,
     # 而 assetop_owned_shards 之和仍是 64(上面 work-shards 组的盲区)。
     # 阈值按「一轮最长要跑多久」取若干倍:
     #   - 重投一轮最长约 Interval + ceil(Batch / Workers) × OpBudget,默认 2 + 13 × 2.5 ≈ 35 秒;guild 把间隔、单行预算调到上限
@@ -247,8 +256,9 @@ spec:
     #   - 回收派发间隔 1 秒、一轮总预算 30 秒(recallDispatchRoundLimit),300 秒约 10 轮。
     #   - 终态清理见规则上方的注释。
     # 同类规则:mail 过期清理 MailSweepStalled 在 mail-alerts.yaml,match 终局发件箱 MatchOutcomeOutboxLoopStalled
-    # 在 match-outcome-outbox-alerts.yaml。契约测试 tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1
-    # 钉住指标名、按副本判的式子与阈值和代码常量的关系。
+    # 在 match-outcome-outbox-alerts.yaml。「有一轮 panic 过、循环还在跑」不在这里:由 go-background-alerts.yaml 的
+    # GoBackgroundPanicRecovered 对全部 Go 服务的后台点位统一报。
+    # 契约测试 tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1 钉住指标名、点位名、按副本判的式子与阈值和代码常量的关系。
     - name: asset-channel.loop-liveness
       interval: 60s
       rules:
@@ -326,11 +336,12 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "trade 有交易合同因参与角色换主或被冻结而停住"
+            summary: "trade 有交易合同因参与角色被冻结或在投票中而停住"
             description: >-
               过去 1 小时有约 {{ $value | printf "%.0f" }} 次合同推进撞上 role_conflict(每条停住的合同约每 5 分钟一次)。
               按日志 "[Commerce] Contract blocked by a party role" 取 commerce_id,
-              按 docs/ops/trade-commerce-quarantine-runbook.md 判断是暂时冻结还是已换主。
+              按 docs/ops/trade-commerce-quarantine-runbook.md §3.3 核对冻结与投票。
+              参与方已换主或已删的合同不停在这里,当场转人工(原因 owner_changed),由 TradeCommerceQuarantined 告警。
 
         # 一般暂时失败持续不断:存储 / 号段 / 依赖 RPC 长时间不可用,或某几条合同反复卡满子预算。
         # 单条失败会推迟 10s±20%,偶发锁冲突不会让每个 5 分钟窗口都有失败。

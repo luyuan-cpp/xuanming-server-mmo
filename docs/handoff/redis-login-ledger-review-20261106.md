@@ -428,7 +428,7 @@ Java：本次修复属于本仓 PowerShell 部署总账，Java 版没有同一�
 - `docs/design/microservice-zone-contract-20260914.md` §19 两句：
   - 「原账号由只读全局 login Redis 捕获」改为「取自 gate 签名的会话身份原件（`roleidentity.Original`），chat 不读 login 的 Redis」。已对照 `go/chat/internal/authority/actor_verify.go` 核实。
   - 「Redis 句柄仅是既有可丢缓存装配」改为「chat 不建任何 Redis 句柄」。
-  - §19 其余句子这次没有逐条复核。
+  - §19 其余句子 11-12 已对照代码复核并改写，见文末「契约 §19 按现行代码改写」。
 - `docs/design/turn-based-battle-server.md` 09-30 补充：加带日期的更正。这个集群 10-23 起已是 noeviction，chat 不再连它，静默淘汰的风险已不存在。
 - `docs/design/redis-cluster-all-domains-20261110.md`（「全部 Redis 上 Cluster」那条线的设计稿）：
   - §4.8 与第 5 批注明「chat 删无用句柄」11-11 已做；
@@ -460,3 +460,48 @@ Java：本次修复属于本仓 PowerShell 部署总账，Java 版没有同一�
 ### Java
 
 部署脚本、清单与契约测试只在本仓，Java 版没有 K8s 清单。不适用，不新增 `PARITY.md` 条目。
+
+## 2026-11-12 Claude：契约 §19 按现行代码改写，本会话收尾
+
+### 契约 §19
+
+`docs/design/microservice-zone-contract-20260914.md` §19 是 chat 的现行契约。11-11 改了其中两句，复核其余句子时发现与代码出入较大：
+
+- 原文写身份核对在发送事务里，事务前缀是「meta、route / 64 片合服围栏、路由原件复核、P 锁」，限速与旧 owner 拒绝都在 P 内。
+- 现行代码（`go/chat/internal/authority/store.go`、`actor_verify.go`、`world_window.go`）是另一套：
+  - 身份核对在事务之外，调目录 `GetRoleFenceState`，成功结果按（玩家、账号、修订）缓存 `ActorVerifyTTLSeconds`；
+  - 事务里只有聊天自己的表；
+  - 并发首发由主键裁决，限流是近似计数；
+  - 世界频道读本副本快照。
+
+改动：按代码改写第 1、3、4、5、7 段，节首加一条说明（改了哪三件事、推导在哪三份设计稿），没动的段落原样保留。新文字逐条对照了代码：
+
+- 拒绝条件；
+- 缓存键与到期规则、上限 3600；
+- 1062 转读赢家；
+- 近似限流的超额上界；
+- 空 request_id 由服务端生成；
+- 世界频道快照缺省 500 毫秒、上限 5000，提交后作废。
+
+只改文档，`git diff --check` 干净。
+
+### 本会话范围的状态
+
+- 审核结论、三处发现、chat 死句柄、启动器名单、match 集群连接上限与总账、几处过时说明，代码和文档都已写完。代码已随 `4edb25640` 进入 main；之后其他会话又改了 `k8s_deploy.ps1` 等文件，本会话的改动都还在。
+- 没有留到以后的问题。剩下的只有 Codex 验证，命令按本文件各节「交 Codex 验证」执行，汇总如下：
+  1. Go：
+     - `go/guild` 跑 `go vet ./...`、`go build ./...`、`go test -count=1 ./...`；
+     - `go/chat` 跑同样三条。
+     - 都设 `GOTOOLCHAIN=local`、`GOPROXY=off`。
+  2. 脚本契约（仓库根目录，同一 pwsh 会话先清 `Env:MMORPG_*`）：
+     - `k8s_deploy_contract`
+     - `redis_player_cluster_contract`
+     - `lobby_authority_render`
+     - `redis_maxclients_contract`
+     - `chat_authority_deploy`
+     - `start_game_command_contract`
+     - 回归：`k8s_redis_split_contract`、`logical_db_deploy_contract`、`k8s_migrate_gate`
+  3. 可选：
+     - dev 集群 `infra-up -WaitReady` 看 match 集群那两行；
+     - 本机起 chat，跑 chat 冒烟。
+- **跨会话协调**：11-11「Gate 在线身份传递实现审核」会话要在 go/login 的 loginsession 加 Renew，问是否冲突。已回复本会话不碰那些文件；并提醒它，如果新建 Redis 客户端或连接池，要记进连接总账。

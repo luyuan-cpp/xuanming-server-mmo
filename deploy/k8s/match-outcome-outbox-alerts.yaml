@@ -74,9 +74,12 @@ spec:
     # 投递循环的活性(缺口清单第 25 条第五批,docs/design/assetop-redelivery-sharding-20261110.md §14.8)。
     # 发件箱按片分给各 stable 副本(整局结果按局号、个人结算按玩家号),一个副本的循环卡住,它名下的片就没人投,
     # 别的副本照常推进;上面两条只看个人结算首投的最老年龄,整局结果那一类卡住没有规则。
-    # 活性 gauge 起来时写一次、每跑完一轮写一次(这一轮成败都写;一轮里 panic 会让进程退出),循环退出时删掉序列;
-    # canary 不跑发件箱,没有序列。按副本逐条判、不取 max:取 max 会被别的副本盖住。
-    # 阈值:一轮有 40 秒总预算,间隔缺省 2 秒(GlobalMatch.OutcomeOutbox.IntervalMs),300 秒约 7 轮;间隔调到 60 秒以上时复核。
+    # 活性 gauge 起来时写一次;每一轮正常返回(成败都算)就写,panic 的那一轮被兜住、不写,循环接着跑(点位见下面的描述);
+    # 循环有意停止(停机排空)时删掉序列。口径只有一份,在 go/shared/looplive。canary 不跑发件箱,没有序列。
+    # 按副本逐条判、不取 max:取 max 会被别的副本盖住。只 panic 过一两轮、循环还在跑的情形由
+    # go-background-alerts.yaml 的 GoBackgroundPanicRecovered 报(撮合、投榜等其余后台循环的 panic 也在那一条里)。
+    # 阈值:一轮有 40 秒总预算(outcomeOutboxRoundBudget),间隔缺省 2 秒(GlobalMatch.OutcomeOutbox.IntervalMs),300 秒约 7 轮;
+    # 间隔调到 60 秒以上时复核。
     - name: match.outcome-outbox-liveness
       interval: 30s
       rules:
@@ -91,5 +94,6 @@ spec:
             description: >-
               这个副本的投递循环已经 {{ $value | printf "%.0f" }} 秒没有跑完一轮(正常每轮不超过 40 秒)。
               它名下那几片的整局结果不再发布、个人结算不再进收件箱(不丢,换主后由新负责者接着投);
-              打满时限的局会续冻,MatchSettlementInboxLagging 随后也会响。看这个副本的 goroutine 栈与
-              "outcome original delivery awaiting recovery" 日志,再重启它或把它缩掉:它从 etcd 摘掉之后,它的片由别的副本接手。
+              打满时限的局会续冻,MatchSettlementInboxLagging 随后也会响。循环要么卡在某一轮里(看这个副本的 goroutine 栈),
+              要么每一轮都 panic(看 safego_panic_total{point="match.outcome_outbox"} 与日志事件 goroutine_panic 的栈);
+              再看 "outcome original delivery awaiting recovery" 日志,然后重启它或把它缩掉:它从 etcd 摘掉之后,它的片由别的副本接手。

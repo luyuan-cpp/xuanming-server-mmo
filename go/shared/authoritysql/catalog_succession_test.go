@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -167,6 +168,46 @@ func TestLockedSlotsOutcome(t *testing.T) {
 	}
 	if !c.activeSlotsAt(full, 7) || c.activeSlotsAt(full, 8) {
 		t.Fatal("在役判据:64 行都在这个 epoch 上 ACTIVE")
+	}
+}
+
+// registered_by 是登记这一代的工作负载身份(§5.9):空(集群外登记)和 K8s 身份都合法,它算进 REGISTER 的摘要(登记之后改不了);
+// 闸门只限长度和字符,超长或带控制字符的在发 SQL 之前拒绝。
+func TestLifecycleBoundsRegisteredBy(t *testing.T) {
+	c := successionCatalogForTest()
+	plain := successionRegisterForTest(t, 1)
+	if plain.RegisteredBy != "" {
+		t.Fatal("夹具的 REGISTER 不带身份")
+	}
+	withIdentity := func(identity string) *databasepb.SqlWriterLifecycleReceipt_Request {
+		request := proto.Clone(plain).(*databasepb.SqlWriterLifecycleReceipt_Request)
+		request.RegisteredBy = identity
+		request.Writer.RegistrationDigest = nil
+		canonical, err := CanonicalRegistrationRequest(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return canonical
+	}
+	registered := withIdentity("k8s-sa:mmorpg-zone-1/default/0f8fad5b-d9cb-469f-a165-70867728950e")
+	if _, _, err := c.validateLifecycle(registered, databasepb.SqlWriterLifecycleReceipt_REGISTER); err != nil {
+		t.Fatalf("带 K8s 身份的 REGISTER 合法: %v", err)
+	}
+	if bytes.Equal(registered.Writer.RegistrationDigest, plain.Writer.RegistrationDigest) {
+		t.Fatal("身份要算进 REGISTER 的摘要")
+	}
+	if _, _, err := c.validateLifecycle(withIdentity(strings.Repeat("a", registeredByLimit)), databasepb.SqlWriterLifecycleReceipt_REGISTER); err != nil {
+		t.Fatalf("正好到上限的身份合法: %v", err)
+	}
+	for name, identity := range map[string]string{
+		"超长":    strings.Repeat("a", registeredByLimit+1),
+		"带换行":   "k8s-sa:mmorpg-zone-1/default\n/0f8fad5b-d9cb-469f-a165-70867728950e",
+		"带 NUL": "k8s-sa:\x00",
+		"带 DEL": "k8s-sa:\x7f",
+	} {
+		if _, _, err := c.validateLifecycle(withIdentity(identity), databasepb.SqlWriterLifecycleReceipt_REGISTER); !errors.Is(err, ErrWriterDenied) {
+			t.Fatalf("%s 的 registered_by 要拒绝: %v", name, err)
+		}
 	}
 }
 

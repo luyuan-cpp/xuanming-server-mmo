@@ -30,7 +30,7 @@ message PlayerBattleResultItem {
 message PlayerBattleResult {
   uint64 result_seq = 1;      // 本玩家的结果序号,从 1 起只增;新旧看它
   uint64 battle_id = 2;       // 去重键:同一局至多一条
-  uint32 outcome = 3;         // eBattleOutcome:A 胜 / B 胜 / 平局,不会是 ONGOING
+  uint32 outcome = 3;         // eBattleOutcome:A 胜 / B 胜 / 平局 / 作废(VOID:本局被 Match 作废,下面的明细全空);不会是 ONGOING
   uint32 team_index = 4;      // 本人所在方(0 = A 方);胜负 = outcome 对照它
   bool is_dead = 5;           // 本人终局时阵亡
   bool fled = 6;              // 本人逃离了战斗
@@ -38,12 +38,15 @@ message PlayerBattleResult {
   uint64 finished_at_ms = 8;  // 战斗结束时刻(battle 冻结终局时的 UTC 毫秒);0 = 结算原件没带
   uint64 settled_at_ms = 9;   // 奖励入账时刻(scene 应用结算时的 UTC 毫秒)
   repeated PlayerBattleResultCurrency currencies = 10;  // 按 currency_type 升序,只含非 0
-  repeated PlayerBattleResultItem items_gained = 11;    // 实际入包(含临时背包)的掉落,按 item_table_id 升序
+  repeated PlayerBattleResultItem items_gained = 11;    // 本人实得的掉落(入了人物背包或临时背包;items_mailed 时改由邮件发放),按 item_table_id 升序
   repeated PlayerBattleResultItem items_consumed = 12;  // 实际扣除的战斗消耗,按 item_table_id 升序
   bool lines_truncated = 13;  // 物品行超过上限被截掉了一部分(只留配置号最小的那些)
   bool seen = 14;             // 客户端已确认展示过(AckBattleResults)
   uint32 match_mode = 15;     // MatchMode 数值;0 = 结算原件没带
   uint32 battle_config_id = 16; // 战斗配置号;0 = 结算原件没带
+  // 掉落放不进人物背包与临时背包,整批改由邮件发放(docs/design/battle-overflow-mail.md)。items_gained 照常列出这批掉落
+  // (它们已经是本人的,只是要去邮箱领);客户端据此在结算屏提示。
+  bool items_mailed = 17;
 }
 
 message PlayerBattleResultComp {

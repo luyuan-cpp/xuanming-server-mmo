@@ -39,11 +39,12 @@ func runLagProbe(ctx context.Context, brokers []string, interval time.Duration, 
 	// 每条消费者上一轮看到的「没提交过的分区数」:只在它变化时打 Info,低流量环境里永远收不到消息的分区
 	// 不至于每 30s 刷一行。
 	lastUncommitted := make(map[string]int, len(targets))
-	// 各消费者的停滞计时,跨轮保留、不随连接重建清零。两个消费者都是 reader 模式:提交失败时交还的已落库记录会在低流量分区上
-	// 一直挂着积压,只认「位点停下之后新到的消息」才计时(kafkautil.CommitStall.RequireArrivals)。
+	// 各消费者的停滞计时,跨轮保留、不随连接重建清零。判据是「有积压的分区上组内已提交位点停着」,不依赖新消息到达:
+	// 收不到新消息的分区卡住也看得见(2026-11-12)。reader 模式提交失败交还已落库的记录时,消费组 owner 结束本代次、
+	// 由下一代次立即重投并提交,不会再有「已落库却一直挂着」的正常积压(kafkautil.BoundConsumerGroup.releaseUncommitted)。
 	stalls := make(map[string]*kafkautil.CommitStall, len(targets))
 	for _, t := range targets {
-		stalls[t.consumer] = &kafkautil.CommitStall{RequireArrivals: true}
+		stalls[t.consumer] = &kafkautil.CommitStall{}
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

@@ -20,7 +20,9 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/luyuancpp/proto2mysql"
 
+	dbpb "proto/common/database"
 	storepb "proto/player_store"
 )
 
@@ -72,11 +74,17 @@ func itStore(t *testing.T) (*Store, *sql.DB, context.Context) {
 	if _, err := db.ExecContext(ctx, itDDL); err != nil {
 		t.Fatal(err)
 	}
+	model := proto2mysql.NewDB()
+	outbox := &dbpb.PlayerAuditOutbox{}
+	model.RegisterTable(outbox)
+	if _, err := db.ExecContext(ctx, model.GetCreateTableSQL(outbox)); err != nil {
+		t.Fatal(err)
+	}
 	store, err := New(db, testKnownGen, DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.VerifySchema(ctx); err != nil {
+	if err := VerifySchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	return store, db, ctx
@@ -284,15 +292,38 @@ func TestIT_NoOwnerAndSchemaChecks(t *testing.T) {
 	if err != nil || resp.GetResult() != storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED {
 		t.Fatalf("resp=%+v err=%v", resp, err)
 	}
-	resp, err = store.Save(ctx, &storepb.SavePlayerRequest{PlayerId: 7, OwnerEpoch: 100, SaveSeq: 2, SchemaGen: 2, InstanceId: instanceA})
+	// 带数据行、世代却低于写权行记下的:倒退,拒写。
+	resp, err = store.Save(ctx, &storepb.SavePlayerRequest{PlayerId: 7, OwnerEpoch: 100, SaveSeq: 2, SchemaGen: 2, InstanceId: instanceA,
+		Rows: []*storepb.PlayerStoreRow{hot("regressed")}})
 	if err != nil || resp.GetResult() != storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_REGRESSED {
 		t.Fatalf("resp=%+v err=%v", resp, err)
 	}
+	// 旧 scene(世代 2)接手世代 3 写过的存档:放行,回包带着库里的世代。它把不认识的内容原样带回,存盘世代不低于加载到的。
 	old, err := store.LoadAndClaim(ctx, &storepb.LoadAndClaimRequest{PlayerId: 7, OwnerEpoch: 200, InstanceId: instanceB, BinarySchemaGen: 2})
-	if err != nil || old.GetResult() != storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW {
+	if err != nil || old.GetResult() != storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED || old.GetSchemaGen() != 3 {
 		t.Fatalf("resp=%+v err=%v", old, err)
 	}
-	wantSave(t, save(t, ctx, store, 7, 100, 3, instanceA, false, hot("still-mine")), storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_REGRESSED)
+	resp, err = store.Save(ctx, &storepb.SavePlayerRequest{PlayerId: 7, OwnerEpoch: 200, SaveSeq: 3, SchemaGen: 3, InstanceId: instanceB,
+		Rows: []*storepb.PlayerStoreRow{hot("carried-by-the-older-scene")}})
+	if err != nil || resp.GetResult() != storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED {
+		t.Fatalf("resp=%+v err=%v", resp, err)
+	}
+	// 没把加载到的世代带回来的存盘照旧被拒(save 助手盖的是世代 1)。
+	wantSave(t, save(t, ctx, store, 7, 200, 4, instanceB, false, hot("stamped-too-low")), storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_REGRESSED)
+	// 不带行的存盘(实体已经没了的空行释放)不算倒退,写权行的世代也不会被它拉低。
+	wantSave(t, save(t, ctx, store, 7, 200, 5, instanceB, true), storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED)
+	var keptGen uint32
+	if err := db.QueryRowContext(ctx, "SELECT schema_gen FROM player_store WHERE player_id=7 AND kind=0").Scan(&keptGen); err != nil || keptGen != 3 {
+		t.Fatalf("a rowless save must not lower the generation: gen=%d err=%v", keptGen, err)
+	}
+	// go/db 回退到比存档更旧的版本:认领就拒、不抬代次,现任还是 B。
+	if _, err := db.ExecContext(ctx, "UPDATE player_store SET schema_gen=? WHERE player_id=7 AND kind=0", testKnownGen+1); err != nil {
+		t.Fatal(err)
+	}
+	tooNew, err := store.LoadAndClaim(ctx, &storepb.LoadAndClaimRequest{PlayerId: 7, OwnerEpoch: 300, InstanceId: instanceA, BinarySchemaGen: testKnownGen})
+	if err != nil || tooNew.GetResult() != storepb.LoadAndClaimResult_LOAD_AND_CLAIM_SCHEMA_TOO_NEW || tooNew.GetOwnerEpoch() != 200 {
+		t.Fatalf("resp=%+v err=%v", tooNew, err)
+	}
 }
 
 // scene 比本 go/db 新(数据覆写审计 r2-ps#11):认领回 TOO_NEW、不抬代次,旧持有者照常提交;
@@ -425,13 +456,13 @@ func TestIT_CanceledSaveLeavesNothing(t *testing.T) {
 	}
 }
 
-// 表不存在:VerifySchema 拒绝启动。
+// 表不存在:VerifySchema 拒绝打开这个存档库。
 func TestIT_VerifySchemaRejectsMissingTable(t *testing.T) {
 	store, db, ctx := itStore(t)
 	if _, err := db.ExecContext(ctx, "DROP TABLE player_store"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.VerifySchema(ctx); err == nil {
+	if err := VerifySchema(ctx, db); err == nil {
 		t.Fatal("missing table must be rejected")
 	}
 	if _, err := store.Save(ctx, &storepb.SavePlayerRequest{PlayerId: 7, OwnerEpoch: 100, SaveSeq: 1, SchemaGen: 1, InstanceId: instanceA}); err == nil {

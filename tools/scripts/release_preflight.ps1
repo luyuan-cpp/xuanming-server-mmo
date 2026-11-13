@@ -624,7 +624,7 @@ function Invoke-ReleaseArtifactChecks {
                 Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.app_version is empty; cannot prove this artifact is $ReleaseVersion."
             }
             elseif ($appVersion -cne $ReleaseVersion -and $appVersion -cne $versionCheck.Normalized) {
-                Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.app_version='$appVersion' differs from -ReleaseVersion=$ReleaseVersion: the version directory name does not match the artifact content."
+                Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.app_version='$appVersion' differs from -ReleaseVersion=${ReleaseVersion}: the version directory name does not match the artifact content."
             }
             else {
                 Add-Result -Id 'release.buildinfo.version' -Status 'PASS' -Target $buildInfoPath -Detail "app_version='$appVersion'."

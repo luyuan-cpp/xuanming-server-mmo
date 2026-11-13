@@ -24,9 +24,17 @@ foreach ($node in $script:RouteToolAst.FindAll({ param($a) $a -is [Management.Au
     Set-Item -Path "Function:script:$($node.Name)" -Value $node.Body.GetScriptBlock()
 }
 foreach ($name in @('Get-RouteToolContract', 'Get-RouteToolArgErrors', 'New-RouteToolRunId', 'ConvertTo-RouteToolArgsYaml', 'New-RouteToolJobManifest',
-        'Split-RouteToolLog', 'Resolve-RouteToolExitCode', 'Get-RouteToolJobPhase', 'Invoke-RouteTool', 'Save-RouteToolSummary', 'Save-RouteToolReportText')) {
+        'Get-RouteToolSchemaPermissionSecret', 'Assert-RouteToolSchemaSecretKeys', 'Split-RouteToolLog', 'Resolve-RouteToolExitCode', 'Get-RouteToolJobPhase', 'Invoke-RouteTool',
+        'Save-RouteToolSummary', 'Save-RouteToolReportText')) {
     if (-not (Test-Path "Function:$name")) { throw "k8s_route_tool.ps1 缺少函数 $name(后续断言无意义)" }
 }
+# Read-MaintenanceJson:脚本 dot-source 它来读 SQL boot 目录;这里只抽了脚本自己的函数,要同样 dot-source(只定义函数,不执行维护命令)。
+. (Join-Path (Get-ToolsScriptsDir) 'maintenance_drain.ps1')
+
+# SQL boot 目录夹具(deploy_capture.ps1 的 New-SqlWriterCatalogFixture):zone z1 的 data-service 条目带 schemaPermissionSecret = fixture-schema-permission。
+$script:CatalogFixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('route-tool-catalog-' + [guid]::NewGuid().ToString('N'))
+$script:CatalogFixture = New-SqlWriterCatalogFixture -Root $script:CatalogFixtureRoot -Namespaces @('mmorpg-zone-z1')
+$script:FixtureSchemaSecret = 'fixture-schema-permission'
 
 function Read-RepoText {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
@@ -47,9 +55,11 @@ function New-TestManifest {
         [string]$PullPolicy = 'IfNotPresent',
         [string[]]$Arguments = @('tidb-prepare', '-zones=1,2'),
         [int]$TimeoutSeconds = 2400,
-        [string]$TemplateText = (Read-RepoText (Get-RouteToolContract).JobTemplate)
+        [string]$TemplateText = (Read-RepoText (Get-RouteToolContract).JobTemplate),
+        [string]$SchemaPermissionSecret = $script:FixtureSchemaSecret
     )
-    return New-RouteToolJobManifest -TemplateText $TemplateText -RunId $RunId -Image $Image -PullPolicy $PullPolicy -Arguments $Arguments -TimeoutSeconds $TimeoutSeconds
+    return New-RouteToolJobManifest -TemplateText $TemplateText -RunId $RunId -Image $Image -PullPolicy $PullPolicy -Arguments $Arguments `
+        -TimeoutSeconds $TimeoutSeconds -SchemaPermissionSecret $SchemaPermissionSecret
 }
 
 # 清单里容器 args 那一行(JSON 数组)还原成字符串数组。
@@ -82,7 +92,7 @@ Test-Case '参数块:-ZoneName / -RouteToolArgs 必填;-TimeoutSeconds 缺省 24
     Assert-Equal -Expected 1 -Actual $zonePattern.Count -Because '-ZoneName 必须有 ValidatePattern(进 namespace 名,只许 DNS 标签字符)'
 }
 
-Test-Case '契约字面量与源头一致:固定 args 的配置文件名 == data-service.yaml 选中的那一份;ConfigMap 名 == migrate Job 与部署目录;cli.go 的每个子命令都在白名单里;镜像 ENTRYPOINT 是 /app/service' {
+Test-Case '契约字面量与源头一致:固定 args 的配置文件名 == data-service.yaml 选中的那一份;ConfigMap 名 == migrate Job 与部署目录;cli.go 的每个子命令恰好归 Job 或运维机一组;SQL boot 目录与 k8s_deploy.ps1 同一份;镜像 ENTRYPOINT 是 /app/service' {
     $c = Get-RouteToolContract
     $serviceManifest = Read-RepoText 'deploy/k8s/manifests/go-svc/data-service.yaml'
     # 第一行 args 是 registrar init,取带 -f 的那一行(主容器)。常驻进程读本 boot 选中的配置(私有子目录),route-tool 的 Job 读 ConfigMap 挂载的模板,文件名相同。
@@ -102,15 +112,25 @@ Test-Case '契约字面量与源头一致:固定 args 的配置文件名 == data
     $subs = @([regex]::Matches($cli, '(?m)^\s*sub[A-Z][A-Za-z0-9]*\s*=\s*"(?<s>[a-z][a-z0-9-]*)"') | ForEach-Object { $_.Groups['s'].Value })
     Assert-True -Condition ($subs.Count -ge 3) -Because "cli.go 里应当至少有 3 个 sub* 子命令常量(实际 $($subs.Count) 个),正则失配时这条先红"
     foreach ($sub in $subs) {
-        Assert-True -Condition ($c.Subcommands -ccontains $sub) -Because "cli.go 的子命令 '$sub' 必须在 Get-RouteToolContract.Subcommands 里,否则 K8s 上跑不了它"
+        $inJob = $c.Subcommands -ccontains $sub
+        $onOperator = $c.OperatorSideSubcommands -ccontains $sub
+        Assert-True -Condition ($inJob -xor $onOperator) -Because "cli.go 的子命令 '$sub' 必须恰好在 Get-RouteToolContract 的 Subcommands(Job 跑)或 OperatorSideSubcommands(运维机跑)其中一组里"
     }
+    Assert-Equal -Expected (@($subs | Sort-Object) -join ',') -Actual (@(@($c.Subcommands) + @($c.OperatorSideSubcommands) | Sort-Object) -join ',') -Because '两组合起来就是 cli.go 的全部子命令,不多不少'
+    Assert-Equal -Expected 'tidb-prepare' -Actual (@($c.Subcommands) -join ',') -Because 'Job 只跑 tidb-prepare:freeze / unfreeze 用维护 owner 的身份,不进集群'
+    # 前置核对查的键(SchemaSecretKeys)就是 Job 模板经 secretKeyRef 引用的键,不多不少:模板加了键而核对没跟上,缺键的 Secret 又会让 Pod 卡到 deadline。
+    $templateKeys = @([regex]::Matches((Read-RepoText $c.JobTemplate), 'secretKeyRef: \{name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: (?<k>[a-z0-9._-]+),') | ForEach-Object { $_.Groups['k'].Value })
+    Assert-Equal -Expected (@($c.SchemaSecretKeys | Sort-Object) -join ',') -Actual (@($templateKeys | Sort-Object -Unique) -join ',') -Because 'SchemaSecretKeys 与 Job 模板引用的 schema Secret 键一致'
+    # SQL boot 目录:同一个环境变量、同一个字段名(k8s_deploy.ps1 的 Get-SqlWriterCatalogEntry 与 Add-SchemaPermissionManifest)。
+    $deploy = Read-RepoText 'tools/scripts/k8s_deploy.ps1'
+    Assert-Match -Text $deploy -Pattern ("GetEnvironmentVariable\('" + [regex]::Escape($c.BootCatalogEnv) + "','Process'\)") -Because '与 k8s_deploy.ps1 读同一个 SQL boot 目录'
+    Assert-Match -Text $deploy -Pattern ('\$entry\.' + [regex]::Escape($c.SchemaSecretField) + '\b') -Because 'schema 身份的 Secret 名与 Add-SchemaPermissionManifest 取的是同一个字段'
     Assert-Match -Text (Read-RepoText 'deploy/k8s/Dockerfile.go-svc') -Pattern '(?m)^ENTRYPOINT \["/app/service"\]' -Because '模板写了 command,要显式调 /app/service;镜像入口改了这里先红'
 }
 
-Test-Case 'Get-RouteToolArgErrors:合法组合放行;空、未知子命令、入口参数、控制字符、整条命令行塞成一项都拒绝并点名' {
+Test-Case 'Get-RouteToolArgErrors:合法组合放行;空、未知子命令、运维机子命令、入口参数、控制字符、整条命令行塞成一项都拒绝并点名' {
     foreach ($ok in @(
-            @('tidb-prepare'), @('tidb-prepare', '-zones=1,2,3', '-dry-run=false'), @('tidb-prepare', '-timeout', '60m'),
-            @('freeze', '-reason=全局库回档 2026-10-19'), @('unfreeze', '-ticket-id=00112233445566778899aabbccddeeff')
+            @('tidb-prepare'), @('tidb-prepare', '-zones=1,2,3', '-dry-run=false'), @('tidb-prepare', '-timeout', '60m')
         )) {
         $errors = @(Get-RouteToolArgErrors -Arguments $ok)
         Assert-Equal -Expected 0 -Actual $errors.Count -Because "合法参数 '$($ok -join ' ')' 不该被拒:$($errors -join ';')"
@@ -128,8 +148,11 @@ Test-Case 'Get-RouteToolArgErrors:合法组合放行;空、未知子命令、入
             @{ Args = @('tidb-prepare', '-migrate'); Pattern = '是入口参数' }
             @{ Args = @('tidb-prepare', '-version'); Pattern = '是入口参数' }
             @{ Args = @('tidb-prepare', ''); Pattern = '第 2 项是空串' }
-            @{ Args = @('freeze', "-reason=a`nb"); Pattern = '控制字符' }
-            @{ Args = @('freeze', "-reason=a`tb"); Pattern = '控制字符' }
+            @{ Args = @('tidb-prepare', "-zones=1`n2"); Pattern = '控制字符' }
+            @{ Args = @('tidb-prepare', "-zones=1`t2"); Pattern = '控制字符' }
+            # freeze / unfreeze 用维护 owner 的身份,在运维机上跑:拒绝并给出跑法,不当成「不认识的子命令」。
+            @{ Args = @('freeze', '-reason=全局库回档 2026-10-19'); Pattern = "'freeze' does not run as a K8s Job[\s\S]*MMORPG_SQL_MAINTENANCE_DSN[\s\S]*-route-tool freeze" }
+            @{ Args = @('unfreeze', '-ticket-id=00112233445566778899aabbccddeeff'); Pattern = "'unfreeze' does not run as a K8s Job[\s\S]*maintenance_drain\.ps1" }
         )) {
         $errors = @(Get-RouteToolArgErrors -Arguments $case.Args)
         Assert-True -Condition ($errors.Count -gt 0) -Because "非法参数 '$($case.Args -join '|')' 必须被拒"
@@ -146,7 +169,7 @@ Test-Case 'New-RouteToolRunId:yyyyMMdd-HHmmss-<4 位小写十六进制>,能进 J
     Assert-True -Condition ($jobName.Length -le 63 -and $jobName -cmatch '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$') -Because "Job 名 '$jobName' 必须是 ≤ 63 字符的 DNS 标签(Pod 的 job-name 标签值同长)"
 }
 
-Test-Case 'New-RouteToolJobManifest:Job 名 / 运行号 / 镜像 / 拉取策略 / deadline 替换到位,args = 固定前缀 + 子命令,backoffLimit 0、restartPolicy Never、不带 app=data-service,不残留占位' {
+Test-Case 'New-RouteToolJobManifest:Job 名 / 运行号 / 镜像 / 拉取策略 / deadline / schema 身份 Secret 替换到位,args = 固定前缀 + 子命令,backoffLimit 0、restartPolicy Never、不带 app=data-service,不残留占位' {
     $c = Get-RouteToolContract
     $manifest = New-TestManifest -TimeoutSeconds 4200
     Assert-Match -Text $manifest -Pattern '(?m)^kind: Job$' -Because '渲染结果是一个 Job'
@@ -166,10 +189,18 @@ Test-Case 'New-RouteToolJobManifest:Job 名 / 运行号 / 镜像 / 拉取策略 
     Assert-NotMatch -Text $manifest -Pattern 'PLACEHOLDER_|__[A-Z][A-Z0-9_]*__' -Because '不残留任何占位'
     $renderedArgs = Get-ManifestArgs -Manifest $manifest
     Assert-Equal -Expected '-f|/app/etc/data_service.yaml|-route-tool|tidb-prepare|-zones=1,2' -Actual ($renderedArgs -join '|') -Because 'args = -f /app/etc/data_service.yaml -route-tool <子命令与参数>'
+    # 连库身份:data-service 的 schema 身份,两个键都从 SQL boot 目录登记的那份 Secret 引用;不写 optional,缺了 Pod 起不来。
+    foreach ($pair in @(@('MMORPG_SQL_SCHEMA_DSN', 'dsn'), @('MMORPG_SQL_SCHEMA_PRINCIPAL', 'principal'))) {
+        $pattern = '(?m)^[ ]+- name: ' + $pair[0] + '\n[ ]+valueFrom:\n[ ]+secretKeyRef: \{name: ' + [regex]::Escape($script:FixtureSchemaSecret) + ', key: ' + $pair[1] + ', optional: false\}$'
+        Assert-Match -Text $manifest -Pattern $pattern -Because "$($pair[0]) 只经 schema 身份 Secret 的键 $($pair[1]) 引用,清单里没有明文 value"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($manifest, '(?m)^[ ]+- name: ' + $pair[0] + '[ ]*$').Count) -Because "$($pair[0]) 只注入一次"
+    }
+    Assert-NotMatch -Text $manifest -Pattern 'MMORPG_MYSQL_PASSWORD|mysql-auth' -Because '不再注入共享数据库口令:账号、口令、地址都来自 schema 身份的连接串'
+    Assert-NotMatch -Text $manifest -Pattern 'MMORPG_SQL_MAINTENANCE_DSN|MMORPG_SQL_OPERATOR_PRINCIPAL|MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256' -Because '维护身份不进集群(freeze / unfreeze 在运维机上跑)'
 }
 
 Test-Case 'args 逐项 JSON 转义:引号、反斜杠、中文、逗号、等号原样往返;镜像里的说明文字(含空格与括号)也是合法 YAML 字符串' {
-    $tricky = @('freeze', '-reason=回档 "PITR" C:\tmp, 2026-10-19', '-zones=1,2')
+    $tricky = @('tidb-prepare', '-max-report=回档 "PITR" C:\tmp, 2026-10-19', '-zones=1,2')
     $manifest = New-TestManifest -Arguments $tricky -Image '(resolved at run time from statefulset/data-service in mmorpg-zone-z1)'
     $renderedArgs = Get-ManifestArgs -Manifest $manifest
     Assert-Equal -Expected (@('-f', '/app/etc/data_service.yaml', '-route-tool') + $tricky -join '|') -Actual ($renderedArgs -join '|') -Because '每一项都必须原样还原(不按逗号 / 空格切,不吞引号与反斜杠)'
@@ -177,13 +208,79 @@ Test-Case 'args 逐项 JSON 转义:引号、反斜杠、中文、逗号、等号
     Assert-Equal -Expected '(resolved at run time from statefulset/data-service in mmorpg-zone-z1)' -Actual ($imageLine | ConvertFrom-Json) -Because '镜像写成 JSON 字符串,说明文字不会被 YAML 误解析'
 }
 
-Test-Case 'New-RouteToolJobManifest 负向:运行号形状、拉取策略、镜像含换行、参数非法、模板多出未知占位都 throw' {
+Test-Case 'New-RouteToolJobManifest 负向:运行号形状、拉取策略、镜像含换行、参数非法、运维机子命令、schema 身份 Secret 名非法、模板多出未知占位都 throw' {
     Assert-Match -Text (Get-ThrownMessage { New-TestManifest -RunId 'NOT-A-RUN-ID' }) -Pattern '运行号' -Because '运行号进 Job 名,形状不对就拒绝'
     Assert-Match -Text (Get-ThrownMessage { New-TestManifest -PullPolicy 'always' }) -Pattern '拉取策略' -Because 'K8s 枚举区分大小写'
     Assert-Match -Text (Get-ThrownMessage { New-TestManifest -Image "a`nb" }) -Pattern '镜像引用' -Because '镜像不许含控制字符'
     Assert-Match -Text (Get-ThrownMessage { New-TestManifest -Arguments @('drop-everything') }) -Pattern '不是已知子命令' -Because '渲染前再核一遍参数(纵深防御)'
+    Assert-Match -Text (Get-ThrownMessage { New-TestManifest -Arguments @('freeze', '-reason=x') }) -Pattern 'does not run as a K8s Job' -Because 'freeze 渲染不出 Job(维护身份不进集群)'
+    foreach ($bad in @('Bad_Name', 'with space', "a`nb", ('x' * 254))) {
+        Assert-Match -Text (Get-ThrownMessage { New-TestManifest -SchemaPermissionSecret $bad }) -Pattern 'not a valid Secret name' -Because "Secret 名 '$bad' 不是合法的 DNS 子域名,渲染前拒绝"
+    }
     $template = (Read-RepoText (Get-RouteToolContract).JobTemplate) + "`n# PLACEHOLDER_SOMETHING_NEW`n"
     Assert-Match -Text (Get-ThrownMessage { New-TestManifest -TemplateText $template }) -Pattern 'PLACEHOLDER_SOMETHING_NEW' -Because '模板加了新占位而渲染没跟上时 fail-closed,点名占位'
+}
+
+Test-Case 'Get-RouteToolSchemaPermissionSecret:取 SQL boot 目录里 <namespace>/data-service 的 schemaPermissionSecret;目录没给、读不了、没有条目、没有字段、名字非法一律 throw' {
+    $envName = (Get-RouteToolContract).BootCatalogEnv
+    $saved = [Environment]::GetEnvironmentVariable($envName, 'Process')
+    $customRoot = Join-Path ([IO.Path]::GetTempPath()) ('route-tool-catalog-custom-' + [guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $customRoot
+    try {
+        [Environment]::SetEnvironmentVariable($envName, $script:CatalogFixture, 'Process')
+        Assert-Equal -Expected $script:FixtureSchemaSecret -Actual (Get-RouteToolSchemaPermissionSecret -Namespace 'mmorpg-zone-z1') -Because '与 k8s_deploy.ps1 同一份目录、同一个条目、同一个字段'
+        Assert-Match -Text (Get-ThrownMessage { Get-RouteToolSchemaPermissionSecret -Namespace 'mmorpg-zone-z2' }) -Pattern 'has no entry mmorpg-zone-z2/data-service' -Because '本 namespace 没有条目就拒绝,不借别区的身份'
+        foreach ($case in @(
+                @{ Why = '条目没有 schemaPermissionSecret'; Json = '{"mmorpg-zone-z1/data-service":{"schemaConfigSecret":"fixture-schema-config"}}'; Pattern = 'has no schemaPermissionSecret' }
+                @{ Why = '条目不是对象'; Json = '{"mmorpg-zone-z1/data-service":"fixture-schema-permission"}'; Pattern = 'has no schemaPermissionSecret' }
+                @{ Why = '名字不是合法的 Secret 名'; Json = '{"mmorpg-zone-z1/data-service":{"schemaPermissionSecret":"Bad_Name"}}'; Pattern = 'is not a valid Secret name' }
+                @{ Why = '名字为空'; Json = '{"mmorpg-zone-z1/data-service":{"schemaPermissionSecret":""}}'; Pattern = 'is not a valid Secret name' }
+            )) {
+            $path = Join-Path $customRoot ([guid]::NewGuid().ToString('N') + '.json')
+            [IO.File]::WriteAllText($path, $case.Json, [Text.UTF8Encoding]::new($false))
+            [Environment]::SetEnvironmentVariable($envName, $path, 'Process')
+            Assert-Match -Text (Get-ThrownMessage { Get-RouteToolSchemaPermissionSecret -Namespace 'mmorpg-zone-z1' }) -Pattern $case.Pattern -Because $case.Why
+        }
+        [Environment]::SetEnvironmentVariable($envName, (Join-Path $customRoot 'missing.json'), 'Process')
+        Assert-True -Condition ((Get-ThrownMessage { Get-RouteToolSchemaPermissionSecret -Namespace 'mmorpg-zone-z1' }) -ne '') -Because '目录文件读不了就 throw'
+        [Environment]::SetEnvironmentVariable($envName, $null, 'Process')
+        Assert-Match -Text (Get-ThrownMessage { Get-RouteToolSchemaPermissionSecret -Namespace 'mmorpg-zone-z1' }) -Pattern ([regex]::Escape($envName) + ' is not set') -Because '没给目录就拒绝,不猜 Secret 名'
+    }
+    finally {
+        [Environment]::SetEnvironmentVariable($envName, $saved, 'Process')
+        Remove-Item -LiteralPath $customRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Test-Case 'Assert-RouteToolSchemaSecretKeys:只读键名(go-template,不取值);两个键都在放行;没有这个 Secret、缺任一键、kubectl 失败一律 throw 并点名' {
+    $script:SecretKeysCalls = [System.Collections.Generic.List[string]]::new()
+    $script:SecretKeysReply = ''
+    # 调用方作用域里的同名函数就是替身(Assert-RouteToolSchemaSecretKeys 按动态作用域找它)。
+    function Invoke-RouteToolKubectlChecked {
+        param([string[]]$Arguments, [string]$What)
+        $script:SecretKeysCalls.Add($Arguments -join ' ')
+        if ($script:SecretKeysReply -ceq 'THROW') { throw "$What failed: forbidden" }
+        return $script:SecretKeysReply
+    }
+    $script:SecretKeysReply = "found`ndsn`nprincipal`n"
+    Assert-Equal -Expected '' -Actual (Get-ThrownMessage { Assert-RouteToolSchemaSecretKeys -Namespace 'mmorpg-zone-z1' -SecretName 'fixture-schema-permission' }) -Because '两个键都在就放行'
+    $call = $script:SecretKeysCalls[0]
+    Assert-Match -Text $call -Pattern '^get secret fixture-schema-permission -n mmorpg-zone-z1 --ignore-not-found -o go-template=' -Because '查本 namespace 的这一份 Secret,不存在时不报 kubectl 错而是空输出'
+    Assert-Match -Text $call -Pattern '\{\{\$key\}\}' -Because '模板只输出键名'
+    Assert-NotMatch -Text $call -Pattern '\{\{\$value\}\}|-o json|-o yaml|jsonpath' -Because '值不出 kubectl:不取 json / yaml,也不打印值'
+    $script:SecretKeysReply = "found`r`nprincipal`r`ndsn`r`nextra`r`n"
+    Assert-Equal -Expected '' -Actual (Get-ThrownMessage { Assert-RouteToolSchemaSecretKeys -Namespace 'mmorpg-zone-z1' -SecretName 'fixture-schema-permission' }) -Because 'CRLF、键的先后、多余的键都不影响'
+    foreach ($case in @(
+            @{ Why = '没有这个 Secret(--ignore-not-found 下是空输出)'; Reply = ''; Pattern = 'does not exist in namespace mmorpg-zone-z1' }
+            @{ Why = 'Secret 一个键都没有'; Reply = "found`n"; Pattern = 'lacks the key\(s\) dsn, principal' }
+            @{ Why = '缺 dsn(以前只有 principal 的 data-service 条目)'; Reply = "found`nprincipal`n"; Pattern = 'lacks the key\(s\) dsn:' }
+            @{ Why = '缺 principal'; Reply = "found`ndsn`n"; Pattern = 'lacks the key\(s\) principal:' }
+            @{ Why = '键名大小写不同不算'; Reply = "found`nDSN`nprincipal`n"; Pattern = 'lacks the key\(s\) dsn:' }
+            @{ Why = 'kubectl 读失败(没有 get secrets 权限等)'; Reply = 'THROW'; Pattern = 'read the key names of Secret fixture-schema-permission in namespace mmorpg-zone-z1 failed' }
+        )) {
+        $script:SecretKeysReply = $case.Reply
+        Assert-Match -Text (Get-ThrownMessage { Assert-RouteToolSchemaSecretKeys -Namespace 'mmorpg-zone-z1' -SecretName 'fixture-schema-permission' }) -Pattern $case.Pattern -Because $case.Why
+    }
 }
 
 Test-Case 'Job 模板的 sh 包装:标记行与 Get-RouteToolContract 的格式一致、带运行号;stdout 先进 emptyDir 再打印;以 route-tool 的退出码退出' {
@@ -269,11 +366,11 @@ function New-FakeKubectlDir {
     return $dir
 }
 
-Test-Case '子进程 -DryRun:退出码 0,打印 BEGIN / END MANIFEST 之间的 Job,一次都不调用 kubectl,不建报告目录;没给 -Image 时清单写说明文字并提示' {
+Test-Case '子进程 -DryRun:退出码 0,打印 BEGIN / END MANIFEST 之间的 Job,一次都不调用 kubectl,不建报告目录;没给 -Image 时清单写说明文字并提示;没给 SQL boot 目录时以 2 退出、什么都不建' {
     $fake = New-FakeKubectlDir
     try {
         $report = Join-Path $fake 'report-should-not-exist'
-        $fakeEnv = @{ PATH = "$fake$([IO.Path]::PathSeparator)$env:PATH" }
+        $fakeEnv = @{ PATH = "$fake$([IO.Path]::PathSeparator)$env:PATH"; MMORPG_SQL_K8S_BOOT_CATALOG = $script:CatalogFixture }
         $withImage = Invoke-ToolScript -ScriptName 'k8s_route_tool.ps1' -Env $fakeEnv -Arguments @(
             '-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare', '-Image', 'ghcr.io/luyuancpp/mmorpg-data-service:0123456789ab', '-DryRun', '-ReportDir', $report, '-KubeContext', 'contract-bogus')
         Assert-Equal -Expected 0 -Actual $withImage.ExitCode -Because "DryRun 应当成功。输出: $($withImage.Output)"
@@ -284,12 +381,27 @@ Test-Case '子进程 -DryRun:退出码 0,打印 BEGIN / END MANIFEST 之间的 J
         $renderedArgs = Get-ManifestArgs -Manifest ($blocks[0] -replace "`r`n", "`n")
         Assert-Equal -Expected '-f|/app/etc/data_service.yaml|-route-tool|tidb-prepare' -Actual ($renderedArgs -join '|') -Because 'args 原样'
         Assert-Match -Text $withImage.Output -Pattern 'namespace=mmorpg-zone-z1 ' -Because 'namespace = <NamespacePrefix>-<ZoneName>'
-        Assert-NotMatch -Text $withImage.Output -Pattern '(?i)password|Mmorpg#' -Because 'DryRun 不读 ConfigMap,输出里不会有口令'
+        # 连库身份只按名字引用 SQL boot 目录登记的 schema 身份 Secret;DryRun 不读 Secret 的内容,输出里不会有口令值(dev 回落口令以 Mmorpg# 开头)。
+        Assert-NotMatch -Text $withImage.Output -Pattern 'Mmorpg#' -Because 'DryRun 不读 ConfigMap 与 Secret,输出里不会有口令值'
+        $block = $blocks[0] -replace "`r`n", "`n"
+        foreach ($pair in @(@('MMORPG_SQL_SCHEMA_DSN', 'dsn'), @('MMORPG_SQL_SCHEMA_PRINCIPAL', 'principal'))) {
+            Assert-Match -Text $block -Pattern ('(?m)^[ ]+- name: ' + $pair[0] + '\n[ ]+valueFrom:\n[ ]+secretKeyRef: \{name: ' + [regex]::Escape($script:FixtureSchemaSecret) + ', key: ' + $pair[1] + ', optional: false\}$') -Because "$($pair[0]) 引用目录里 mmorpg-zone-z1/data-service 的 schemaPermissionSecret"
+        }
+        Assert-NotMatch -Text $block -Pattern 'MMORPG_MYSQL_PASSWORD|mysql-auth' -Because '不再注入共享数据库口令'
+        Assert-Match -Text $withImage.Output -Pattern ('schema_secret=' + [regex]::Escape($script:FixtureSchemaSecret)) -Because 'DryRun 的摘要行点名用的是哪份 schema 身份 Secret'
+        Assert-Match -Text $withImage.Output -Pattern ('a real run first checks that Secret ' + [regex]::Escape($script:FixtureSchemaSecret) + ' in mmorpg-zone-z1 has the keys dsn and principal') -Because 'DryRun 不连集群,但说明真跑之前会核这份 Secret 的键'
 
         $noImage = Invoke-ToolScript -ScriptName 'k8s_route_tool.ps1' -Env $fakeEnv -Arguments @('-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare', '-DryRun', '-ReportDir', $report)
         Assert-Equal -Expected 0 -Actual $noImage.ExitCode -Because "没给 -Image 的 DryRun 也应当成功。输出: $($noImage.Output)"
         Assert-Match -Text $noImage.Output -Pattern 'resolved at run time from statefulset/data-service in mmorpg-zone-z1' -Because '清单里的镜像写成说明文字'
         Assert-Match -Text $noImage.Output -Pattern '-Image not given' -Because '提示真跑时从 statefulset/data-service 读镜像'
+
+        # 没给 SQL boot 目录:取不到 schema 身份就不渲染、不调 kubectl,以 2 退出(不换别的身份去连库)。
+        $noCatalogEnv = @{ PATH = $fakeEnv.PATH; MMORPG_SQL_K8S_BOOT_CATALOG = '' }
+        $noCatalog = Invoke-ToolScript -ScriptName 'k8s_route_tool.ps1' -Env $noCatalogEnv -Arguments @('-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare', '-DryRun', '-ReportDir', $report)
+        Assert-Equal -Expected 2 -Actual $noCatalog.ExitCode -Because "没给 SQL boot 目录以 2 退出。输出: $($noCatalog.Output)"
+        Assert-Match -Text $noCatalog.Output -Pattern 'cannot take the schema identity Secret[\s\S]*MMORPG_SQL_K8S_BOOT_CATALOG is not set' -Because '点名缺的是 SQL boot 目录'
+        Assert-Equal -Expected 0 -Actual @(Get-ManifestBlocks -Output $noCatalog.Output).Count -Because '取不到身份就不打印清单'
 
         Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $fake 'calls.txt'))) -Because "DryRun 不得调用 kubectl(假 kubectl 记了:$(if (Test-Path -LiteralPath (Join-Path $fake 'calls.txt')) { Get-Content -LiteralPath (Join-Path $fake 'calls.txt') -Raw }))"
         Assert-True -Condition (-not (Test-Path -LiteralPath $report)) -Because 'DryRun 不建报告目录'
@@ -299,7 +411,7 @@ Test-Case '子进程 -DryRun:退出码 0,打印 BEGIN / END MANIFEST 之间的 J
     }
 }
 
-Test-Case '子进程非法参数:退出码 2、点名原因,在任何 kubectl 之前(pwsh -File 下整条命令行 / 逗号列表塞成一个字符串、未知子命令)' {
+Test-Case '子进程非法参数:退出码 2、点名原因,在任何 kubectl 之前(pwsh -File 下整条命令行 / 逗号列表塞成一个字符串、未知子命令、运维机子命令)' {
     # 入口参数(-f / -migrate …)的拒绝只在纯函数用例里测:pwsh -File 会把 '-migrate' 当成本脚本的参数名去绑定,到不了校验。
     $fake = New-FakeKubectlDir
     try {
@@ -308,6 +420,8 @@ Test-Case '子进程非法参数:退出码 2、点名原因,在任何 kubectl �
                 @{ Args = @('-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare -zones=1'); Pattern = '整条命令行塞成了一个字符串' }
                 @{ Args = @('-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare,-zones=1'); Pattern = '整条命令行塞成了一个字符串' }
                 @{ Args = @('-ZoneName', 'z1', '-RouteToolArgs', 'drop-everything'); Pattern = "'drop-everything' 不是已知子命令" }
+                @{ Args = @('-ZoneName', 'z1', '-RouteToolArgs', 'freeze'); Pattern = "'freeze' does not run as a K8s Job" }
+                @{ Args = @('-ZoneName', 'z1', '-RouteToolArgs', 'unfreeze'); Pattern = "'unfreeze' does not run as a K8s Job" }
             )) {
             $run = Invoke-ToolScript -ScriptName 'k8s_route_tool.ps1' -Env $fakeEnv -Arguments $case.Args
             Assert-Equal -Expected 2 -Actual $run.ExitCode -Because "非法参数 '$($case.Args -join ' ')' 以 2 退出。输出: $($run.Output)"
@@ -320,13 +434,15 @@ Test-Case '子进程非法参数:退出码 2、点名原因,在任何 kubectl �
     }
 }
 
-Test-Case '脚本入口:函数之外只有参数、$ErrorActionPreference、两个路径变量、dot-source 与入口两条;入口以 Invoke-RouteTool 的返回值作退出码,未预料的异常兜成 2' {
+Test-Case '脚本入口:函数之外只有参数、$ErrorActionPreference、两个路径变量、两个 dot-source 与入口两条;入口以 Invoke-RouteTool 的返回值作退出码,未预料的异常兜成 2' {
     $statements = @($script:RouteToolAst.EndBlock.Statements | Where-Object { $_ -isnot [Management.Automation.Language.FunctionDefinitionAst] })
     $texts = @($statements | ForEach-Object { $_.Extent.Text })
-    Assert-Equal -Expected 6 -Actual $statements.Count -Because "函数之外只有 6 条语句(主流程不得漏在入口里,测不到):$($texts -join ' || ')"
-    Assert-Match -Text $texts[4] -Pattern '^try\s*\{\s*\$exitCode = Invoke-RouteTool\s*\}\s*catch\s*\{' -Because '入口调用 Invoke-RouteTool,外面包一层 try(review B3-7 / OPS-5)'
-    Assert-Match -Text $texts[4] -Pattern '\$exitCode = \(Get-RouteToolContract\)\.ExitFailed' -Because '未预料的异常按本脚本自己的失败(2)退出:pwsh -File 下未捕获异常是 1,与「完成但需要人工处理」撞号'
-    Assert-Equal -Expected 'exit ([int]$exitCode)' -Actual $texts[5] -Because '以主流程返回值作退出码(0 / 2 原样)'
+    Assert-Equal -Expected 7 -Actual $statements.Count -Because "函数之外只有 7 条语句(主流程不得漏在入口里,测不到):$($texts -join ' || ')"
+    Assert-Match -Text $texts[3] -Pattern 'release_common\.ps1' -Because '第一个 dot-source 是 release_common.ps1'
+    Assert-Match -Text $texts[4] -Pattern 'maintenance_drain\.ps1' -Because '第二个 dot-source 是 maintenance_drain.ps1(Read-MaintenanceJson 读 SQL boot 目录;它在 dot-source 时只定义函数)'
+    Assert-Match -Text $texts[5] -Pattern '^try\s*\{\s*\$exitCode = Invoke-RouteTool\s*\}\s*catch\s*\{' -Because '入口调用 Invoke-RouteTool,外面包一层 try(review B3-7 / OPS-5)'
+    Assert-Match -Text $texts[5] -Pattern '\$exitCode = \(Get-RouteToolContract\)\.ExitFailed' -Because '未预料的异常按本脚本自己的失败(2)退出:pwsh -File 下未捕获异常是 1,与「完成但需要人工处理」撞号'
+    Assert-Equal -Expected 'exit ([int]$exitCode)' -Actual $texts[6] -Because '以主流程返回值作退出码(0 / 2 原样)'
 }
 
 # ─── 退出码兜底(review B3-7 / OPS-5):本脚本自己的失败一律 2,Job 之后的落盘失败不盖掉容器退出码 ───
@@ -358,7 +474,7 @@ Test-Case 'Invoke-RouteTool:Job 模板读不到时返回 2 并点名原因,不 t
     Assert-True -Condition (-not (Test-Path -LiteralPath $missingRoot)) -Because '不建报告目录'
 }
 
-Test-Case 'Invoke-RouteTool:Job 跑完、容器退出 3 之后 stdout.txt / stderr.txt / summary.txt 都写不了:只告警,仍返回 3,done 一行照常打出' {
+Test-Case 'Invoke-RouteTool:Job 跑完、容器退出 0 之后 stdout.txt / stderr.txt / summary.txt 都写不了:只告警,仍返回 0,done 一行照常打出;真跑的清单引用 SQL boot 目录登记的 schema 身份 Secret' {
     $c = Get-RouteToolContract
     $runId = '20261022-120000-00ab'
     # Get-Command kubectl -CommandType Application 要找得到一个 kubectl;真正的 kubectl 调用全部经下面的替身函数,假 kubectl 一次都不该被调。
@@ -368,7 +484,13 @@ Test-Case 'Invoke-RouteTool:Job 跑完、容器退出 3 之后 stdout.txt / stde
     foreach ($name in @('stdout.txt', 'stderr.txt', 'summary.txt')) { $null = New-Item -ItemType Directory -Force -Path (Join-Path $report $name) }
     $kubectlCalls = [System.Collections.Generic.List[string]]::new()
     function New-RouteToolRunId { param($Now, $Random) return '20261022-120000-00ab' }
-    function Invoke-RouteToolKubectlChecked { param([string[]]$Arguments, [string]$What) $kubectlCalls.Add($Arguments -join ' '); return '' }
+    # 前置核对读 schema 身份 Secret 的键名:回两个键都在;其余调用(namespace、apply)回空。
+    function Invoke-RouteToolKubectlChecked {
+        param([string[]]$Arguments, [string]$What)
+        $kubectlCalls.Add($Arguments -join ' ')
+        if ($Arguments[0] -eq 'get' -and $Arguments[1] -eq 'secret') { return "found`ndsn`nprincipal`n" }
+        return ''
+    }
     function Get-ActiveRouteToolJobs { return @() }
     function Get-RouteToolJobState { param($Namespace, $JobName) return [pscustomobject]@{ Phase = 'complete'; Reason = ''; Uid = 'uid-1' } }
     function Get-RouteToolPodResult { param($Namespace, $JobName, $JobUid) return [pscustomobject]@{ PodName = 'route-tool-pod'; ExitCode = 0; Reason = 'Completed' } }
@@ -379,8 +501,11 @@ Test-Case 'Invoke-RouteTool:Job 跑完、容器退出 3 之后 stdout.txt / stde
         return [pscustomobject]@{ TimedOut = $false; ExitCode = 0; Output = $log; ErrorOutput = '' }
     }
     $savedPath = $env:PATH
+    $catalogEnv = $c.BootCatalogEnv
+    $savedCatalog = [Environment]::GetEnvironmentVariable($catalogEnv, 'Process')
     try {
         $env:PATH = "$fake$([IO.Path]::PathSeparator)$env:PATH"
+        [Environment]::SetEnvironmentVariable($catalogEnv, $script:CatalogFixture, 'Process')
         $r = Invoke-RouteToolInProcess -Variables @{ RepoRoot = (Get-RepoRoot); RouteToolArgs = @('tidb-prepare'); ZoneName = 'z1'; NamespacePrefix = 'mmorpg-zone'
             Image = 'ghcr.io/luyuancpp/mmorpg-data-service:0123456789ab'; TimeoutSeconds = 2400; ReportDir = $report; DryRun = $false; KubeContext = ''; KubeConfig = '' }
         Assert-Equal -Expected '0' -Actual $r.Codes -Because "容器退出码 0 必须原样返回,报告写不了也不能盖成 2。输出: $($r.Text)"
@@ -390,13 +515,55 @@ Test-Case 'Invoke-RouteTool:Job 跑完、容器退出 3 之后 stdout.txt / stde
         Assert-Match -Text $r.Text -Pattern 'done: job_phase=complete container_exit=0 verdict=clean exit=0 ' -Because 'done 一行照常打出,运维在控制台看得到结局'
         Assert-Match -Text $r.Text -Pattern 'route_tidb_prepare zones=2' -Because '统计行照常打到控制台'
         Assert-True -Condition (Test-Path -LiteralPath (Join-Path $report 'manifest.yaml') -PathType Leaf) -Because 'apply 之前写的清单照常落盘(apply 读的就是它)'
+        $applied = [IO.File]::ReadAllText((Join-Path $report 'manifest.yaml')) -replace "`r`n", "`n"
+        Assert-Match -Text $applied -Pattern ('secretKeyRef: \{name: ' + [regex]::Escape($script:FixtureSchemaSecret) + ', key: dsn, optional: false\}') -Because '真跑的清单引用 SQL boot 目录登记的 schema 身份 Secret'
+        Assert-NotMatch -Text $applied -Pattern 'MMORPG_MYSQL_PASSWORD|mysql-auth' -Because '真跑的清单也不注入共享数据库口令'
         Assert-Equal -Expected 1 -Actual @($kubectlCalls | Where-Object { $_ -like 'apply -n mmorpg-zone-z1 -f *' }).Count -Because '夹具前提:走到了 apply'
+        $secretCheck = @($kubectlCalls).IndexOf((@($kubectlCalls | Where-Object { $_ -like "get secret $($script:FixtureSchemaSecret) -n mmorpg-zone-z1 *" }) | Select-Object -First 1))
+        $apply = @($kubectlCalls).IndexOf((@($kubectlCalls | Where-Object { $_ -like 'apply -n mmorpg-zone-z1 -f *' }) | Select-Object -First 1))
+        Assert-True -Condition ($secretCheck -ge 0 -and $secretCheck -lt $apply) -Because "apply 之前先核 schema 身份 Secret 的键名。调用序列:$($kubectlCalls -join ' | ')"
         Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $fake 'calls.txt'))) -Because '夹具前提:kubectl 调用全部经替身函数,假 kubectl 没被直接调用'
     }
     finally {
         $env:PATH = $savedPath
+        [Environment]::SetEnvironmentVariable($catalogEnv, $savedCatalog, 'Process')
         Remove-Item -LiteralPath $fake -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
+Test-Case 'Invoke-RouteTool:schema 身份 Secret 缺 dsn 时在 apply 之前返回 2,点名缺的键,不建报告目录、不建 Job' {
+    $fake = New-FakeKubectlDir
+    $report = Join-Path $fake 'report-should-not-exist'
+    $kubectlCalls = [System.Collections.Generic.List[string]]::new()
+    function Invoke-RouteToolKubectlChecked {
+        param([string[]]$Arguments, [string]$What)
+        $kubectlCalls.Add($Arguments -join ' ')
+        # data-service 条目的 Secret 以前只给 migrate Job 用,只有 principal:第 8 批起 route-tool 还要 dsn。
+        if ($Arguments[0] -eq 'get' -and $Arguments[1] -eq 'secret') { return "found`nprincipal`n" }
+        return ''
+    }
+    function Get-ActiveRouteToolJobs { $kubectlCalls.Add('get jobs --all-namespaces'); return @() }
+    function Invoke-RouteToolKubectl { param([string[]]$Arguments, [int]$TimeoutSeconds) $kubectlCalls.Add($Arguments -join ' '); return [pscustomobject]@{ TimedOut = $false; ExitCode = 0; Output = ''; ErrorOutput = '' } }
+    $savedPath = $env:PATH
+    $catalogEnv = (Get-RouteToolContract).BootCatalogEnv
+    $savedCatalog = [Environment]::GetEnvironmentVariable($catalogEnv, 'Process')
+    try {
+        $env:PATH = "$fake$([IO.Path]::PathSeparator)$env:PATH"
+        [Environment]::SetEnvironmentVariable($catalogEnv, $script:CatalogFixture, 'Process')
+        $r = Invoke-RouteToolInProcess -Variables @{ RepoRoot = (Get-RepoRoot); RouteToolArgs = @('tidb-prepare'); ZoneName = 'z1'; NamespacePrefix = 'mmorpg-zone'
+            Image = 'ghcr.io/luyuancpp/mmorpg-data-service:0123456789ab'; TimeoutSeconds = 2400; ReportDir = $report; DryRun = $false; KubeContext = ''; KubeConfig = '' }
+        Assert-Equal -Expected '2' -Actual $r.Codes -Because "Secret 缺键是本脚本的前置失败,返回 2。输出: $($r.Text)"
+        Assert-Match -Text $r.Text -Pattern 'preflight failed, nothing was created: Secret fixture-schema-permission in namespace mmorpg-zone-z1 lacks the key\(s\) dsn' -Because '点名哪份 Secret、缺哪个键,并说明什么都没建'
+        Assert-Equal -Expected 0 -Actual @($kubectlCalls | Where-Object { $_ -like 'apply *' }).Count -Because '不建 Job(缺键的 Job 会卡在 CreateContainerConfigError 直到 deadline)'
+        Assert-True -Condition (-not (Test-Path -LiteralPath $report)) -Because '不建报告目录'
+        Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $fake 'calls.txt'))) -Because '夹具前提:kubectl 调用全部经替身函数'
+    }
+    finally {
+        $env:PATH = $savedPath
+        [Environment]::SetEnvironmentVariable($catalogEnv, $savedCatalog, 'Process')
+        Remove-Item -LiteralPath $fake -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Remove-Item -LiteralPath $script:CatalogFixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
 exit (Complete-TestRun -SuiteName 'k8s_route_tool')

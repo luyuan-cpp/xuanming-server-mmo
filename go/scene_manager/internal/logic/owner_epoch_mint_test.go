@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2/server"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	gproto "google.golang.org/protobuf/proto"
 
 	"proto/scene_manager"
@@ -31,14 +33,14 @@ import (
 // 注入替身,只断言 logic 对落盘结论的处置:确认之前不推路由 / 重定向;没确认按推送失败单调回滚、回 7。
 // ---------------------------------------------------------------------------
 
-// fakeOwnerEpochMinter 是单测用的 svc.OwnerEpochMinter:铸造 EVAL 走 svcCtx 同一个 go-zero 客户端(miniredis 没有
+// fakeOwnerEpochMinter 是单测用的 svc.OwnerEpochMinter:铸造 EVAL 走玩家域句柄(与生产的铸造通道同域;miniredis 没有
 // WAITAOF),落盘结论由用例指定,缺省 Confirmed。三个 svcCtx 构造助手(newTestSvcCtx、newTestSvcCtxWithWorldScenes、
 // newIntegrationSvcCtxWithRedisOptions)缺省装上它。
 //
 // 墙钟缺省 0:墙钟地板不起作用,铸造退化为观察值 + 1,既有用例里的 1 / 2 / 3 照旧成立;要测地板的用例用 setNowMs
 // 钉一个固定毫秒(单测不读真实墙钟,AGENTS §11.4)。
 type fakeOwnerEpochMinter struct {
-	rds *redis.Redis
+	rds goredis.UniversalClient
 
 	mu         sync.Mutex
 	nowMs      uint64
@@ -54,6 +56,23 @@ type fakeOwnerEpochMinter struct {
 	queued []fakeDurability
 	// scripts 按调用顺序记下经过本接口的脚本(断言哪段脚本走了铸造通道)。
 	scripts []string
+	// unknownAfterEval > 0 时接下来这么多次调用先把 EVAL 执行掉,再回 svc.ErrOwnerEpochMintResultUnknown:模拟首发已生效、
+	// 回复丢了,重发也没拿到结论(铸造通道的「结果未知」)。
+	unknownAfterEval int
+	// resendAfterEval > 0 时接下来这么多次调用把 EVAL 执行两遍,交回第二遍的回复且 Attempts = 2:模拟首发已生效、回复丢了,
+	// 新连接上的原样重发拿到了回复(不凭标记的铸造会回 0)。
+	resendAfterEval int
+	// withholdEval > 0 时接下来这么多次调用**不执行** EVAL,只把它原样记进 withheld,回 svc.ErrOwnerEpochMintResultUnknown:
+	// 模拟首发卡在连接里、调用方已经放弃(铸造通道的「结果未知」,而且首发还没到 Redis)。用例之后用 deliverWithheld 让它迟到执行。
+	withholdEval int
+	withheld     []withheldMintEval
+}
+
+// withheldMintEval 是一条被扣住、还没到 Redis 的 EVAL(脚本、KEYS、ARGV 原样)。
+type withheldMintEval struct {
+	script string
+	keys   []string
+	args   []any
 }
 
 // fakeDurability 是一次排队的落盘结论。
@@ -64,7 +83,7 @@ type fakeDurability struct {
 
 var _ svc.OwnerEpochMinter = (*fakeOwnerEpochMinter)(nil)
 
-func newFakeOwnerEpochMinter(rds *redis.Redis) *fakeOwnerEpochMinter {
+func newFakeOwnerEpochMinter(rds goredis.UniversalClient) *fakeOwnerEpochMinter {
 	return &fakeOwnerEpochMinter{rds: rds, durability: svc.MintDurabilityConfirmed}
 }
 
@@ -90,18 +109,78 @@ func (m *fakeOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script string
 		durability, durableErr = m.queued[0].durability, m.queued[0].err
 		m.queued = m.queued[1:]
 	}
+	unknown := m.unknownAfterEval > 0
+	if unknown {
+		m.unknownAfterEval--
+	}
+	resend := !unknown && m.resendAfterEval > 0
+	if resend {
+		m.resendAfterEval--
+	}
+	withhold := !notSent && !unknown && !resend && m.withholdEval > 0
+	if withhold {
+		m.withholdEval--
+		m.withheld = append(m.withheld, withheldMintEval{script: script, keys: append([]string(nil), keys...), args: append([]any(nil), args...)})
+	}
 	m.mu.Unlock()
 	if notSent {
 		return svc.MintEvalResult{}, svc.ErrOwnerEpochMintNotSent
 	}
-	reply, err := m.rds.EvalCtx(ctx, script, keys, args...)
+	if withhold {
+		return svc.MintEvalResult{Attempts: 3}, fmt.Errorf("%w after 3 attempt(s): test transport error, first attempt still in flight", svc.ErrOwnerEpochMintResultUnknown)
+	}
+	reply, err := m.rds.Eval(ctx, script, keys, args...).Result()
 	if err != nil {
 		return svc.MintEvalResult{Attempts: 1}, err
+	}
+	if unknown {
+		return svc.MintEvalResult{Attempts: 3}, fmt.Errorf("%w after 3 attempt(s): test transport error", svc.ErrOwnerEpochMintResultUnknown)
+	}
+	attempts := 1
+	if resend {
+		reply, err = m.rds.Eval(ctx, script, keys, args...).Result()
+		if err != nil {
+			return svc.MintEvalResult{Attempts: 2}, fmt.Errorf("%w: %w", svc.ErrOwnerEpochMintResultUnknown, err)
+		}
+		attempts = 2
 	}
 	if afterEval != nil {
 		afterEval()
 	}
-	return svc.MintEvalResult{Reply: reply, Durability: durability, DurableErr: durableErr, Attempts: 1, Elapsed: time.Millisecond}, nil
+	return svc.MintEvalResult{Reply: reply, Durability: durability, DurableErr: durableErr, Attempts: attempts, Elapsed: time.Millisecond}, nil
+}
+
+// setUnknownAfterEval 让接下来 n 次调用执行 EVAL 之后回「结果未知」。
+func (m *fakeOwnerEpochMinter) setUnknownAfterEval(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.unknownAfterEval = n
+}
+
+// setResendAfterEval 让接下来 n 次调用把 EVAL 执行两遍,交回第二遍的回复(Attempts = 2)。
+func (m *fakeOwnerEpochMinter) setResendAfterEval(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.resendAfterEval = n
+}
+
+// setWithholdEval 让接下来 n 次调用不执行 EVAL、只记下来,并回「结果未知」(首发还没到 Redis)。
+func (m *fakeOwnerEpochMinter) setWithholdEval(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.withholdEval = n
+}
+
+// deliverWithheld 让被扣住的第 i 条 EVAL 现在才执行(迟到的首发),返回脚本回复的十进制文本。
+func (m *fakeOwnerEpochMinter) deliverWithheld(t *testing.T, i int) string {
+	t.Helper()
+	m.mu.Lock()
+	held := append([]withheldMintEval(nil), m.withheld...)
+	m.mu.Unlock()
+	require.Less(t, i, len(held), "没有第 %d 条被扣住的 EVAL", i)
+	reply, err := m.rds.Eval(context.Background(), held[i].script, held[i].keys, held[i].args...).Result()
+	require.NoError(t, err)
+	return fmt.Sprint(reply)
 }
 
 // setDurability 改之后每次铸造的落盘结论。
@@ -265,7 +344,7 @@ func TestEnterScene_MintNotDurableRollsBackHandoffWithoutRouting(t *testing.T) {
 	assert.Equal(t, uint64(3), loc.OwnerEpoch)
 	assert.Equal(t, ownerepoch.PendingRollbackReceipt("1:1757000000000"), loc.RollbackReceipt,
 		"回滚没确认落盘:回执停在待确认形态,源端不得采纳")
-	forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	forwarded, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 	assert.Equal(t, "3:1757000000000", forwarded)
 	assert.Equal(t, "4", sceneCountText(sc, targetID), "目标场景预占退回")
 	assert.Equal(t, "3", sceneCountText(sc, oldScene), "旧场景人数还回去")
@@ -414,7 +493,7 @@ func TestEnterScene_SameNodeZeroEpochMintNotDurableKeepsEpoch(t *testing.T) {
 	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
 	require.NoError(t, err)
 	adoptSceneMember(mr, oldScene, playerID)
-	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	oldRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	withReachableSceneNode(t, sc, "10")
 	testMinter(t, sc).setDurability(svc.MintDurabilityNotDurable, errTestWaitAOFShort)
 
@@ -427,12 +506,659 @@ func TestEnterScene_SameNodeZeroEpochMintNotDurableKeepsEpoch(t *testing.T) {
 	assert.Zero(t, resp.OwnerEpochAfterRollback, "keep 回滚不回显")
 	assert.Empty(t, *captured)
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-	restoredRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	restoredRaw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, oldRaw, restoredRaw)
 	oldCount := sceneCountText(sc, oldScene)
 	targetCount := sceneCountText(sc, targetID)
 	assert.Equal(t, "3", oldCount)
 	assert.Equal(t, "4", targetCount)
+}
+
+// --- 铸造结果未知(errOwnerEpochMintResultUnknown)与同节点 epoch 0 的残留值(§4.3.4) ------------------------------
+
+// 首次落点的铸造 EVAL 结果未知(首发其实已生效、回复丢了,重发也没拿到结论):不推路由,按计划好的落点原字节回滚 ——
+// location 删掉、epoch 再进一格作废,目标场景预占退回,回 7。以前回 3、不回滚:生效了的落点(没确认落盘的 1)留在 Redis 里,
+// 之后的同落点重连会原样下发它。
+func TestEnterScene_FirstPlacementMintResultUnknownRollsBack(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6921)
+		targetID = uint64(7921)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "5")
+	testMinter(t, sc).setUnknownAfterEval(1)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Empty(t, *captured, "结果未知的铸造值一次都不下发")
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "生效了的首次落点被撤掉")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "铸出 1 → 回滚到 2,1 作废")
+	assert.Equal(t, "5", sceneCountText(sc, targetID), "目标场景预占退回")
+}
+
+// 首次落点的铸造首发已生效、回复丢了,新连接上的重发拿到了回复,却是 0(不凭标记的铸造认不出自己的写):按结果未知收尾,
+// 回滚撤掉那次落点,回 7。以前按并发冲突回 19、不回滚。
+func TestEnterScene_UnmarkedMintResendReturningZeroRollsBack(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6922)
+		targetID = uint64(7922)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "5")
+	testMinter(t, sc).setResendAfterEval(1)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode, "重发回 0 不再当成并发冲突")
+	assert.Empty(t, *captured)
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "首发写下的落点被撤掉")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	assert.Equal(t, "5", sceneCountText(sc, targetID), "目标场景预占退回")
+}
+
+// 凭标记的跨节点交接,铸造 EVAL 结果未知:按计划好的落点回滚到源节点,两段回执照常走 —— 这里回滚之后的落盘确认到了份数,
+// 回执改成正式回执,源端可以凭它采纳 3。不推路由,回 7;两边人数与回滚之后的 location 对得上。
+func TestEnterScene_HandoffMintResultUnknownRollsBackWithReceipt(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6923)
+		oldScene = uint64(7923)
+		targetID = uint64(7924)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
+	seedNodeMembers(mr, testZoneId, "10", 3)
+	seedNodeMembers(mr, testZoneId, "20", 4)
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
+	writeHandoffMarker(t, sc, playerID, 1)
+	withReachableSceneNode(t, sc, "10", "20")
+	testMinter(t, sc).setUnknownAfterEval(1)
+	testMinter(t, sc).resetScriptCalls()
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Equal(t, uint64(3), resp.OwnerEpochAfterRollback)
+	assert.Empty(t, *captured)
+	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID), "铸出 2 → 回滚到 3")
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, oldScene, loc.SceneId)
+	assert.Equal(t, "10", loc.NodeId)
+	assert.Equal(t, "1:1757000000000", loc.RollbackReceipt, "回滚之后的确认到了份数,改成正式回执")
+	assert.Equal(t, "4", sceneCountText(sc, targetID), "目标场景预占退回")
+	assert.Equal(t, "3", sceneCountText(sc, oldScene), "旧场景身份不动")
+	assert.Equal(t, "4", nodeCountText(sc, testZoneId, "20"), "目标节点预占退回")
+	assert.Equal(t, "3", nodeCountText(sc, testZoneId, "10"), "旧节点身份不动")
+	assert.Equal(t, []string{luaMintEpochAndSetLocation, luaConfirmPendingRollback}, testMinter(t, sc).scriptCalls(),
+		"回滚走共享连接池,铸造通道只收到铸造与之后的落盘确认")
+}
+
+// 跨 zone 第一条腿凭标记铸造,EVAL 结果未知:不推重定向,按计划好的等待落点回滚,location 回到源 zone,旧场景人数不动;回 7。
+func TestEnterScene_CrossZoneMintResultUnknownRollsBack(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6925)
+		oldScene = uint64(7927)
+	)
+	seedSceneOnNode(mr, 1, oldScene, "10", "3")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
+	writeHandoffMarker(t, sc, playerID, 1)
+	seedDefaultWorldChannel(t, mr, 2)
+	testMinter(t, sc).setUnknownAfterEval(1)
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, ZoneId: 2,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Nil(t, resp.Redirect, "结果未知时不推重定向")
+	assert.Equal(t, uint64(3), resp.OwnerEpochAfterRollback)
+	assert.Empty(t, *captured)
+	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, uint32(1), loc.ZoneId, "location 回到源 zone")
+	assert.Equal(t, oldScene, loc.SceneId)
+	assert.Equal(t, "1:1757000000000", loc.RollbackReceipt)
+	assert.Equal(t, "3", sceneCountText(sc, oldScene), "旧场景人数不动")
+}
+
+// 同节点 epoch 0 的铸造没确认落盘、keep 回滚之后,键里留着没确认的 1,location 仍记 0。重试同一次换图时必须再铸一次
+// (新值确认之后才下发),不能把 1 原样下发:1 可能随 Redis 回退消失(zone-redis-regression-guard-20261022.md §4.3.4)。
+func TestEnterScene_SameNodeLeftoverOfUnconfirmedZeroMintIsReminted(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6926)
+		oldScene = uint64(7928)
+		targetID = uint64(7929)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
+	require.NoError(t, err)
+	adoptSceneMember(mr, oldScene, playerID)
+	withReachableSceneNode(t, sc, "10")
+	enter := func() *scene_manager.EnterSceneResponse {
+		resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+			PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+			GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+		})
+		require.NoError(t, err)
+		return resp
+	}
+
+	testMinter(t, sc).setDurability(svc.MintDurabilityNotDurable, errTestWaitAOFShort)
+	require.Equal(t, constants.ErrKafkaRoute, enter().ErrorCode)
+	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "keep 回滚:键停在没确认的 1")
+	require.Empty(t, *captured)
+
+	testMinter(t, sc).setDurability(svc.MintDurabilityConfirmed, nil)
+	require.Equal(t, uint32(0), enter().ErrorCode)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(2), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch, "再铸一次:下发确认过的 2,不下发没确认的 1")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+}
+
+// 同上的残留状态(键 1 没确认、location 记 0),玩家重连回原场景(同落点):不铸造,下发 location 记的 0,不下发没确认的 1。
+func TestEnterScene_SamePlacementDoesNotRouteLeftoverOfZeroMint(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6927)
+		oldScene = uint64(7930)
+		targetID = uint64(7931)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
+	require.NoError(t, err)
+	adoptSceneMember(mr, oldScene, playerID)
+	withReachableSceneNode(t, sc, "10")
+
+	testMinter(t, sc).setDurability(svc.MintDurabilityNotDurable, errTestWaitAOFShort)
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "keep 回滚:键停在没确认的 1")
+
+	testMinter(t, sc).setDurability(svc.MintDurabilityConfirmed, nil)
+	resp, err = NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: oldScene, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(0), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch, "同落点重连下发 location 记的 0")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "同落点重连不铸造")
+}
+
+// --- 结果未知而首发还没到 Redis:作废(§4.3.5) ---------------------------------------------------------------
+
+// 首次落点的铸造 EVAL 结果未知,而且首发还卡在连接里没执行:收尾的回滚脚本认出「状态还是观察时那一份」,直接写成回滚之后的
+// 状态(epoch 越过本该铸出的值)。之后首发才到 Redis,CAS 不过,一个字节都写不进去。以前回滚 CAS 不过、什么都不改,迟到的
+// 首发照样生效,留下一条没人知道的落点。
+func TestEnterScene_FirstPlacementUnknownMintNotYetAppliedIsVoided(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6931)
+		targetID = uint64(7941)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "5")
+	minter := testMinter(t, sc)
+	minter.setWithholdEval(1)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Equal(t, uint64(2), resp.OwnerEpochAfterRollback)
+	assert.Empty(t, *captured)
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "作废:epoch 越过本该铸出的 1,与「生效了再回滚」同一个终态")
+	assert.Equal(t, "5", sceneCountText(sc, targetID), "目标场景预占退回")
+
+	assert.Equal(t, "0", minter.deliverWithheld(t, 0), "迟到的首发 CAS 不过")
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "迟到的首发一个字节都写不进去")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+}
+
+// 凭标记的跨节点交接,铸造 EVAL 结果未知而首发还没执行:作废只删掉所凭的标记,epoch 与 location 一个字节都不动。源端仍
+// 持有玩家、手里的 epoch 仍然有效,收到 7 之后取证读到「epoch 没变」照常解冻。迟到的首发过不了标记比对。没有回执要确认,
+// 铸造通道只收到那一条铸造。
+func TestEnterScene_HandoffUnknownMintNotYetAppliedVoidsMarker(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6932)
+		oldScene = uint64(7942)
+		targetID = uint64(7943)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
+	seedNodeMembers(mr, testZoneId, "10", 3)
+	seedNodeMembers(mr, testZoneId, "20", 4)
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
+	writeHandoffMarker(t, sc, playerID, 1)
+	withReachableSceneNode(t, sc, "10", "20")
+	seededRaw := identLocationRaw(t, sc, playerID)
+	minter := testMinter(t, sc)
+	minter.setWithholdEval(1)
+	minter.resetScriptCalls()
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Zero(t, resp.OwnerEpochAfterRollback, "epoch 没动,不回显")
+	assert.Empty(t, *captured)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "源端手里的 epoch 仍然有效")
+	assert.Equal(t, seededRaw, identLocationRaw(t, sc, playerID), "location 一个字节都不动,没有回执")
+	assert.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)), "所凭的标记被删掉")
+	assert.Equal(t, "4", sceneCountText(sc, targetID), "目标场景预占退回")
+	assert.Equal(t, "3", sceneCountText(sc, oldScene), "旧场景身份不动")
+	assert.Equal(t, "4", nodeCountText(sc, testZoneId, "20"), "目标节点预占退回")
+	assert.Equal(t, "3", nodeCountText(sc, testZoneId, "10"), "旧节点身份不动")
+	assert.Equal(t, []string{luaMintEpochAndSetLocation}, minter.scriptCalls(), "没有回执要确认")
+
+	assert.Equal(t, "-1", minter.deliverWithheld(t, 0), "迟到的首发过不了标记比对")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	assert.Equal(t, seededRaw, identLocationRaw(t, sc, playerID))
+}
+
+// 跨 zone 第一条腿同理:凭标记的铸造结果未知而首发还没执行,删掉所凭的标记,不推重定向,location 留在源 zone 原样不动。
+func TestEnterScene_CrossZoneUnknownMintNotYetAppliedVoidsMarker(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6933)
+		oldScene = uint64(7944)
+	)
+	seedSceneOnNode(mr, 1, oldScene, "10", "3")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
+	writeHandoffMarker(t, sc, playerID, 1)
+	seedDefaultWorldChannel(t, mr, 2)
+	seededRaw := identLocationRaw(t, sc, playerID)
+	minter := testMinter(t, sc)
+	minter.setWithholdEval(1)
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, ZoneId: 2,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Nil(t, resp.Redirect, "结果未知时不推重定向")
+	assert.Zero(t, resp.OwnerEpochAfterRollback)
+	assert.Empty(t, *captured)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	assert.Equal(t, seededRaw, identLocationRaw(t, sc, playerID), "location 留在源 zone,原样不动")
+	assert.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)), "所凭的标记被删掉")
+	assert.Equal(t, "3", sceneCountText(sc, oldScene), "旧场景人数不动")
+
+	assert.Equal(t, "-1", minter.deliverWithheld(t, 0), "迟到的首发过不了标记比对")
+	assert.Equal(t, seededRaw, identLocationRaw(t, sc, playerID))
+}
+
+// 同节点 epoch 0 的铸造(keep)不作废:持有节点可能已经缓存了铸出值,抬 epoch 会废黜它。结果未知而首发没执行时,
+// 回滚照旧什么都不改;迟到的首发照样生效,但它留下的值没有已确认位点,不会被原样下发(见下面「已确认位点」一组)。
+func TestEnterScene_SameNodeZeroEpochUnknownMintIsNotVoided(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6934)
+		oldScene = uint64(7945)
+		targetID = uint64(7946)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
+	require.NoError(t, err)
+	adoptSceneMember(mr, oldScene, playerID)
+	withReachableSceneNode(t, sc, "10")
+	seededRaw := identLocationRaw(t, sc, playerID)
+	minter := testMinter(t, sc)
+	minter.setWithholdEval(1)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Empty(t, *captured)
+	assert.Equal(t, "", ownerEpochRaw(t, sc, playerID), "keep 不作废:epoch 键不动")
+	assert.Equal(t, seededRaw, identLocationRaw(t, sc, playerID))
+
+	assert.Equal(t, "1", minter.deliverWithheld(t, 0), "迟到的首发照样生效")
+	assert.False(t, mr.Exists(ownerepoch.ConfirmedKey(playerID)), "它铸出的值没有已确认位点")
+}
+
+// 回滚脚本的作废分支,不凭标记(只有带上 ARGV[11..14] 才走):
+//   - 不带作废参数:首发没生效时照旧回 0,什么都不改(推路由失败的回滚不作废);
+//   - 带作废参数、状态还是观察到的那一份:写成回滚之后的状态,回 6;原样重发走重放识别回 2;
+//   - 带作废参数、首发先到已生效:照常回滚,回 -after;
+//   - 状态被别的请求改过:回 0,一个字节都不写。
+func TestRollbackLuaVoidsUnmarkedMintThatHasNotApplied(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6935)
+	keys := rollbackPlacementKeys(playerID)
+	placed := placedLocation{epoch: 8, minted: true, raw: "placed-bytes",
+		observedEpoch: 5, observedRaw: "observed-bytes", observedKnown: true}
+	plan := routeRollbackPlan{mode: rollbackModeBump, restoredRaw: "restored-bytes", epochAfter: 9}
+	plainArgs := rollbackPlacementArgs(placed, plan)
+	plan.voidUnapplied = true
+	voidArgs := rollbackPlacementArgs(placed, plan)
+	require.Len(t, plainArgs, 10, "不作废的回滚不带 ARGV[11..14]")
+	require.Len(t, voidArgs, 14)
+	locKey, epochKey := getPlayerLocationKey(playerID), ownerepoch.OwnerEpochKey(playerID)
+	mr.Set(epochKey, "5")
+	mr.Set(locKey, "observed-bytes")
+
+	got, err := playerRedisEval(sc, luaRollbackPlayerPlacement, keys, plainArgs...)
+	require.NoError(t, err)
+	assert.Equal(t, "0", fmt.Sprint(got), "不带作废参数:首发没生效时什么都不改")
+	assert.Equal(t, "5", ownerEpochRaw(t, sc, playerID))
+
+	got, err = playerRedisEval(sc, luaRollbackPlayerPlacement, keys, voidArgs...)
+	require.NoError(t, err)
+	assert.Equal(t, "6", fmt.Sprint(got))
+	assert.Equal(t, "9", ownerEpochRaw(t, sc, playerID), "epoch 越过本该铸出的 8")
+	raw, _ := mr.Get(locKey)
+	assert.Equal(t, "restored-bytes", raw, "location 写成回滚之后的那一份")
+
+	replay, err := playerRedisEval(sc, luaRollbackPlayerPlacement, keys, voidArgs...)
+	require.NoError(t, err)
+	assert.Equal(t, "2", fmt.Sprint(replay), "作废之后的状态就是回滚之后的状态,原样重发走重放识别")
+
+	mr.Set(epochKey, "8")
+	mr.Set(locKey, "placed-bytes")
+	got, err = playerRedisEval(sc, luaRollbackPlayerPlacement, keys, voidArgs...)
+	require.NoError(t, err)
+	assert.Equal(t, "-9", fmt.Sprint(got), "首发先到、已生效:带着作废参数照常回滚")
+
+	mr.Set(epochKey, "5")
+	mr.Set(locKey, "someone-else-bytes")
+	mr.SetTTL(epochKey, time.Hour)
+	got, err = playerRedisEval(sc, luaRollbackPlayerPlacement, keys, voidArgs...)
+	require.NoError(t, err)
+	assert.Equal(t, "0", fmt.Sprint(got), "状态既不是观察到的那一份,也不是本次落点")
+	assert.Greater(t, mr.TTL(epochKey), time.Duration(0), "回 0 的分支一个字节都不写")
+}
+
+// 回滚脚本的作废分支,凭标记:只删所凭的那一份标记;标记已不在或已换成别的,同样回 7 而不碰它。epoch 与 location 都不写。
+func TestRollbackLuaVoidOfMarkedMintOnlyRemovesItsMarker(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6936)
+	keys := rollbackPlacementKeys(playerID)
+	marker := ownerepoch.Handoff{Epoch: 5, SavedAtMs: 1757000000000}.String()
+	placed := placedLocation{epoch: 8, minted: true, raw: "placed-bytes",
+		observedEpoch: 5, observedRaw: "observed-bytes", observedKnown: true}
+	plan := routeRollbackPlan{mode: rollbackModeBump, restoredRaw: "restored-bytes", epochAfter: 9,
+		requiredMarker: marker, forwardMarker: "9:1757000000000", voidUnapplied: true}
+	args := rollbackPlacementArgs(placed, plan)
+	locKey, epochKey, markerKey := getPlayerLocationKey(playerID), ownerepoch.OwnerEpochKey(playerID), ownerepoch.HandoffKey(playerID)
+	mr.Set(epochKey, "5")
+	mr.Set(locKey, "observed-bytes")
+
+	const newerMarker = "5:1757000009999"
+	for _, c := range []struct {
+		name   string
+		seeded string // "" = 标记已不在
+		left   string // 执行之后标记键的值;"" = 不存在
+	}{
+		{"marker_present", marker, ""},
+		{"marker_gone", "", ""},
+		{"marker_replaced", newerMarker, newerMarker},
+	} {
+		mr.Del(markerKey)
+		if c.seeded != "" {
+			mr.Set(markerKey, c.seeded)
+		}
+		mr.SetTTL(epochKey, time.Hour)
+		got, err := playerRedisEval(sc, luaRollbackPlayerPlacement, keys, args...)
+		require.NoError(t, err, c.name)
+		assert.Equal(t, "7", fmt.Sprint(got), c.name)
+		assert.Greater(t, mr.TTL(epochKey), time.Duration(0), "%s: epoch 键没被写过", c.name)
+		raw, _ := mr.Get(locKey)
+		assert.Equal(t, "observed-bytes", raw, "%s: location 不动", c.name)
+		if c.left == "" {
+			assert.False(t, mr.Exists(markerKey), c.name)
+		} else {
+			left, _ := mr.Get(markerKey)
+			assert.Equal(t, c.left, left, "%s: 别的标记不碰", c.name)
+		}
+	}
+}
+
+// --- 已确认位点(§4.3.5) -------------------------------------------------------------------------------------
+
+// 铸造确认落盘之后记下已确认位点(带 TTL);没确认落盘的铸造不记。
+func TestPlacePlayerLocation_ConfirmedMintRecordsConfirmedMark(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6937)
+	key := ownerepoch.ConfirmedKey(playerID)
+
+	testMinter(t, sc).setDurability(svc.MintDurabilityNotDurable, errTestWaitAOFShort)
+	_, err := placePlayerLocation(sc, playerID, 7950, "10", testZoneId, placementGuard{observedEpoch: 0, mint: true})
+	require.ErrorIs(t, err, errOwnerEpochMintNotDurable)
+	assert.False(t, mr.Exists(key), "没确认落盘的铸造不记位点")
+
+	testMinter(t, sc).setDurability(svc.MintDurabilityConfirmed, nil)
+	placed, err := placePlayerLocation(sc, playerID, 7950, "10", testZoneId, placementGuard{observedEpoch: 1, mint: true})
+	require.NoError(t, err)
+	got, _ := mr.Get(key)
+	assert.Equal(t, strconv.FormatUint(placed.epoch, 10), got)
+	assert.Greater(t, mr.TTL(key), time.Duration(0), "位点带 TTL,过期只会多确认一次")
+}
+
+// 同落点重连不铸造,要下发观察到的 epoch。位点等于它:直接下发,铸造通道一条都不收。位点缺失(那次铸造没走完:没确认而回滚
+// 又没做成、scene_manager 中途退出,或位点写丢了、过期了):先经铸造通道确认落盘、记下位点,再下发;下发的仍是这个值。
+func TestEnterScene_SamePlacementConfirmsEpochMissingConfirmedMark(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6938)
+		sceneID  = uint64(7951)
+	)
+	seedSceneOnNode(mr, testZoneId, sceneID, "10", "1")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneID, "10", testZoneId))
+	adoptSceneMember(mr, sceneID, playerID)
+	minter := testMinter(t, sc)
+	enter := func() *scene_manager.EnterSceneResponse {
+		resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+			PlayerId: playerID, SceneId: sceneID, ZoneId: testZoneId,
+			GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+		})
+		require.NoError(t, err)
+		return resp
+	}
+
+	minter.resetScriptCalls()
+	require.Equal(t, uint32(0), enter().ErrorCode)
+	require.Len(t, *captured, 1)
+	assert.Empty(t, minter.scriptCalls(), "位点等于要下发的值:不经铸造通道")
+
+	mr.Del(ownerepoch.ConfirmedKey(playerID))
+	require.Equal(t, uint32(0), enter().ErrorCode)
+	require.Len(t, *captured, 2)
+	assert.Equal(t, uint64(1), decodeRoutePlayerEvent(t, (*captured)[1]).OwnerEpoch, "确认之后下发的仍是这个值,不铸造")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	assert.Equal(t, []string{luaConfirmPendingRollback}, minter.scriptCalls(), "位点缺失:下发之前先确认落盘")
+	got, _ := mr.Get(ownerepoch.ConfirmedKey(playerID))
+	assert.Equal(t, "1", got, "确认之后记下位点")
+}
+
+// 同上,但确认不到份数:不下发、回 7,状态原样,位点仍然缺失;人数不动。
+func TestEnterScene_SamePlacementRefusesEpochThatCannotBeConfirmed(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6939)
+		sceneID  = uint64(7952)
+	)
+	seedSceneOnNode(mr, testZoneId, sceneID, "10", "1")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneID, "10", testZoneId))
+	adoptSceneMember(mr, sceneID, playerID)
+	seededRaw := identLocationRaw(t, sc, playerID)
+	mr.Del(ownerepoch.ConfirmedKey(playerID))
+	testMinter(t, sc).setDurability(svc.MintDurabilityNotDurable, errTestWaitAOFShort)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: sceneID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Empty(t, *captured, "没确认落盘的 epoch 不得下发")
+	assert.Equal(t, seededRaw, identLocationRaw(t, sc, playerID))
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	assert.False(t, mr.Exists(ownerepoch.ConfirmedKey(playerID)), "没确认就不记位点")
+	assert.Equal(t, "1", sceneCountText(sc, sceneID))
+}
+
+// 同物理节点换图(不铸造)同理:位点等于观察值时铸造通道一条都不收;位点缺失时先确认落盘,再落点、下发。
+func TestEnterScene_SameNodeSceneChangeConfirmsEpochMissingConfirmedMark(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6940)
+		sceneA   = uint64(7953)
+		sceneB   = uint64(7954)
+	)
+	seedSceneOnNode(mr, testZoneId, sceneA, "10", "3")
+	seedSceneOnNode(mr, testZoneId, sceneB, "10", "4")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneA, "10", testZoneId))
+	adoptSceneMember(mr, sceneA, playerID)
+	minter := testMinter(t, sc)
+	enter := func(sceneID uint64) *scene_manager.EnterSceneResponse {
+		resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+			PlayerId: playerID, SceneId: sceneID, ZoneId: testZoneId,
+			GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+		})
+		require.NoError(t, err)
+		return resp
+	}
+
+	minter.resetScriptCalls()
+	require.Equal(t, uint32(0), enter(sceneB).ErrorCode)
+	require.Len(t, *captured, 1)
+	assert.Empty(t, minter.scriptCalls(), "位点等于观察值:同节点换图不经铸造通道")
+
+	mr.Del(ownerepoch.ConfirmedKey(playerID))
+	require.Equal(t, uint32(0), enter(sceneA).ErrorCode)
+	require.Len(t, *captured, 2)
+	assert.Equal(t, uint64(1), decodeRoutePlayerEvent(t, (*captured)[1]).OwnerEpoch)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "不铸造")
+	assert.Equal(t, []string{luaConfirmPendingRollback}, minter.scriptCalls(), "位点缺失:落点之前先确认落盘")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, sceneA, loc.SceneId)
+}
+
+// 最坏的一种叠加:铸造结果未知,收尾的回滚又没到 Redis(这里让回滚的 EVAL 直接出错),首发之后才生效 —— 留下一条指向从未载入
+// 玩家的目标、epoch 没确认落盘的落点,而且与正常落点逐字节相同。玩家重试落回同一落点时不铸造;下发之前那道闸发现位点对不上,
+// 先确认落盘再下发。
+func TestEnterScene_LeftoverOfLateMintIsConfirmedBeforeRouting(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6941)
+		targetID = uint64(7955)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "5")
+	minter := testMinter(t, sc)
+	minter.setWithholdEval(1)
+	enter := func() *scene_manager.EnterSceneResponse {
+		resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+			PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+			GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+		})
+		require.NoError(t, err)
+		return resp
+	}
+
+	// 钩子跑在 miniredis 的连接 goroutine 上,只读写原子标志;与 mr.SetError 共用钩子槽位,本用例不用 SetError。
+	var rollbackFailed atomic.Bool
+	mr.Server().SetPreHook(func(c *server.Peer, cmd string, args ...string) bool {
+		if cmd != "EVAL" || len(args) == 0 || args[0] != luaRollbackPlayerPlacement || !rollbackFailed.CompareAndSwap(false, true) {
+			return false
+		}
+		c.WriteError("ERR injected rollback failure")
+		return true
+	})
+	t.Cleanup(func() { mr.Server().SetPreHook(nil) })
+
+	require.Equal(t, constants.ErrKafkaRoute, enter().ErrorCode)
+	mr.Server().SetPreHook(nil)
+	require.True(t, rollbackFailed.Load(), "回滚的 EVAL 确实没执行")
+	require.Empty(t, *captured)
+	require.Equal(t, "1", minter.deliverWithheld(t, 0), "回滚没到 Redis,迟到的首发照样生效")
+	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	require.False(t, mr.Exists(ownerepoch.ConfirmedKey(playerID)), "这次铸造没有人确认过")
+
+	minter.resetScriptCalls()
+	require.Equal(t, uint32(0), enter().ErrorCode)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(1), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+	assert.Equal(t, []string{luaConfirmPendingRollback}, minter.scriptCalls(), "不铸造就下发之前先确认落盘")
+	got, _ := mr.Get(ownerepoch.ConfirmedKey(playerID))
+	assert.Equal(t, "1", got)
 }
 
 // 落盘确认关闭(两项份数都配 0):铸造照常放行、照常推路由。
@@ -522,7 +1248,7 @@ func TestPlacePlayerLocation_NotDurableReturnsUsablePlacement(t *testing.T) {
 	require.ErrorIs(t, err, errOwnerEpochMintNotDurable)
 	assert.Equal(t, uint64(1), placed.epoch)
 	assert.True(t, placed.minted)
-	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	raw, _ := playerRedisGet(sc, getPlayerLocationKey(playerID))
 	assert.Equal(t, placed.raw, raw, "铸造确实写进了 Redis,placed.raw 就是写进去的原文")
 }
 
@@ -570,19 +1296,19 @@ func TestMintEpochLuaReplayBranchRewritesEpochForWaitAOF(t *testing.T) {
 	mr.Set(ownerepoch.OwnerEpochKey(playerID), "1")
 	mr.Set(ownerepoch.HandoffKey(playerID), marker)
 
-	first, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys, mintLuaArgs("1", "placed-bytes", marker)...)
+	first, err := playerRedisEval(sc, luaMintEpochAndSetLocation, keys, mintLuaArgs("1", "placed-bytes", marker)...)
 	require.NoError(t, err)
 	require.Equal(t, "2", fmt.Sprint(first))
 
 	mr.SetTTL(ownerepoch.OwnerEpochKey(playerID), time.Hour)
-	replay, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys, mintLuaArgs("1", "placed-bytes", marker)...)
+	replay, err := playerRedisEval(sc, luaMintEpochAndSetLocation, keys, mintLuaArgs("1", "placed-bytes", marker)...)
 	require.NoError(t, err)
 	assert.Equal(t, "-2", fmt.Sprint(replay), "重放识别命中")
 	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "写回的是原值")
 	assert.Zero(t, mr.TTL(ownerepoch.OwnerEpochKey(playerID)), "识别分支对 owner_epoch 发了一次写")
 
 	mr.SetTTL(ownerepoch.OwnerEpochKey(playerID), time.Hour)
-	other, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys, mintLuaArgs("1", "someone-else-bytes", marker)...)
+	other, err := playerRedisEval(sc, luaMintEpochAndSetLocation, keys, mintLuaArgs("1", "someone-else-bytes", marker)...)
 	require.NoError(t, err)
 	assert.Equal(t, "0", fmt.Sprint(other), "不是本请求的写:回 0")
 	assert.Greater(t, mr.TTL(ownerepoch.OwnerEpochKey(playerID)), time.Duration(0), "回 0 的分支一个字节都不写")
@@ -700,7 +1426,7 @@ func TestEnterScene_WallClockFloorRouteFailureBumpsOneAndForwardsMarker(t *testi
 	assert.Equal(t, oldScene, loc.SceneId)
 	assert.Equal(t, rolledBack, loc.OwnerEpoch, "location 与键同值(C++ 交叉校验)")
 	assert.Equal(t, "1:1757000000000", loc.RollbackReceipt)
-	forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	forwarded, _ := playerRedisGet(sc, ownerepoch.HandoffKey(playerID))
 	assert.Equal(t, strconv.FormatUint(rolledBack, 10)+":1757000000000", forwarded)
 }
 
@@ -725,28 +1451,28 @@ func TestMintEpochLuaFloorTargetReplayAndRollback(t *testing.T) {
 	marker := ownerepoch.Handoff{Epoch: 1, SavedAtMs: 1757000000000}.String()
 	mintKeys := []string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)}
 	rollbackKeys := []string{getPlayerLocationKey(playerID), ownerepoch.OwnerEpochKey(playerID), ownerepoch.HandoffKey(playerID)}
-	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
-	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), "old-bytes"))
-	require.NoError(t, sc.Redis.Set(ownerepoch.HandoffKey(playerID), marker))
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), "1"))
+	require.NoError(t, setPlayerKeyForTest(sc, getPlayerLocationKey(playerID), "old-bytes"))
+	require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.HandoffKey(playerID), marker))
 	target := strconv.FormatUint(testWallClockMs, 10)
 	args := mintLuaArgsWithTarget(target, "1", "placed-bytes", marker)
 
-	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, args...)
+	result, err := playerRedisEval(sc, luaMintEpochAndSetLocation, mintKeys, args...)
 	require.NoError(t, err)
 	require.Equal(t, target, fmt.Sprint(result))
 	require.Equal(t, target, ownerEpochRaw(t, sc, playerID))
 
-	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, args...)
+	result, err = playerRedisEval(sc, luaMintEpochAndSetLocation, mintKeys, args...)
 	require.NoError(t, err)
 	assert.Equal(t, "-"+target, fmt.Sprint(result), "原样重发:认出本请求自己的写")
 
 	rolledBack := strconv.FormatUint(testWallClockMs+1, 10)
-	result, err = sc.Redis.Eval(luaRollbackPlayerPlacement, rollbackKeys,
+	result, err = playerRedisEval(sc, luaRollbackPlayerPlacement, rollbackKeys,
 		"placed-bytes", "restored-bytes", target, "bump", marker, rolledBack+":1757000000000", "300")
 	require.NoError(t, err)
 	require.Equal(t, "-"+rolledBack, fmt.Sprint(result), "回滚仍是 INCR 一格")
 
-	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, args...)
+	result, err = playerRedisEval(sc, luaMintEpochAndSetLocation, mintKeys, args...)
 	require.NoError(t, err)
 	assert.Equal(t, "0", fmt.Sprint(result), "回滚之后的重发:目标值对不上,不是本请求已生效")
 	assert.Equal(t, rolledBack, ownerEpochRaw(t, sc, playerID))
@@ -775,8 +1501,8 @@ func TestMintEpochLuaRejectsInvalidTargetWithoutWriting(t *testing.T) {
 			sc, mr := newTestSvcCtxWithWorldScenes(t)
 			const playerID = uint64(6924)
 			mintKeys := []string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)}
-			require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), fmt.Sprint(c.args[0])))
-			_, err := sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, c.args...)
+			require.NoError(t, setPlayerKeyForTest(sc, ownerepoch.OwnerEpochKey(playerID), fmt.Sprint(c.args[0])))
+			_, err := playerRedisEval(sc, luaMintEpochAndSetLocation, mintKeys, c.args...)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "owner epoch mint target invalid")
 			assert.Equal(t, fmt.Sprint(c.args[0]), ownerEpochRaw(t, sc, playerID), "epoch 一个字节都不动")
@@ -790,7 +1516,7 @@ func TestMintEpochLuaRejectsInvalidTargetWithoutWriting(t *testing.T) {
 	mintKeys := []string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)}
 	maxText := strconv.FormatUint(maxMintedOwnerEpoch, 10)
 	require.Equal(t, "9007199254740990", maxText, "luaMintTargetCheck 的字面量必须与 maxMintedOwnerEpoch 同值")
-	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, mintLuaArgsWithTarget(maxText, "0", "loc", "")...)
+	result, err := playerRedisEval(sc, luaMintEpochAndSetLocation, mintKeys, mintLuaArgsWithTarget(maxText, "0", "loc", "")...)
 	require.NoError(t, err)
 	assert.Equal(t, maxText, fmt.Sprint(result))
 }
@@ -816,13 +1542,13 @@ func TestRollbackLuaReplayBranchWritesNothing(t *testing.T) {
 		requiredMarker: marker, forwardMarker: "3:1757000000000"}
 	args := rollbackPlacementArgs(placed, plan)
 
-	first, err := sc.Redis.Eval(luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), args...)
+	first, err := playerRedisEval(sc, luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), args...)
 	require.NoError(t, err)
 	require.Equal(t, "-3", fmt.Sprint(first))
 
 	mr.SetTTL(ownerepoch.OwnerEpochKey(playerID), time.Hour)
 	mr.Del(ownerepoch.HandoffKey(playerID)) // 源端取证删掉了本族标记
-	replay, err := sc.Redis.Eval(luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), args...)
+	replay, err := playerRedisEval(sc, luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), args...)
 	require.NoError(t, err)
 	assert.Equal(t, "2", fmt.Sprint(replay), "重放识别命中")
 	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID), "不再 INCR")
@@ -831,7 +1557,7 @@ func TestRollbackLuaReplayBranchWritesNothing(t *testing.T) {
 
 	mr.Set(getPlayerLocationKey(playerID), "someone-else-bytes")
 	mr.SetTTL(ownerepoch.OwnerEpochKey(playerID), time.Hour)
-	other, err := sc.Redis.Eval(luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), args...)
+	other, err := playerRedisEval(sc, luaRollbackPlayerPlacement, rollbackPlacementKeys(playerID), args...)
 	require.NoError(t, err)
 	assert.Equal(t, "0", fmt.Sprint(other))
 	assert.Greater(t, mr.TTL(ownerepoch.OwnerEpochKey(playerID)), time.Duration(0), "回 0 的分支一个字节都不写")
@@ -846,7 +1572,7 @@ func TestConfirmPendingRollbackLuaWritesBackOnlyWhenUnchanged(t *testing.T) {
 	mr.Set(getPlayerLocationKey(playerID), "pending-bytes")
 
 	mr.SetTTL(ownerepoch.OwnerEpochKey(playerID), time.Hour)
-	ok, err := sc.Redis.Eval(luaConfirmPendingRollback, keys, "3", "pending-bytes", "")
+	ok, err := playerRedisEval(sc, luaConfirmPendingRollback, keys, "3", "pending-bytes", "")
 	require.NoError(t, err)
 	assert.Equal(t, "1", fmt.Sprint(ok))
 	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
@@ -858,7 +1584,7 @@ func TestConfirmPendingRollbackLuaWritesBackOnlyWhenUnchanged(t *testing.T) {
 		"tag_changed":      {"3", "pending-bytes", "some-tag"},
 	} {
 		mr.SetTTL(ownerepoch.OwnerEpochKey(playerID), time.Hour)
-		got, err := sc.Redis.Eval(luaConfirmPendingRollback, keys, args...)
+		got, err := playerRedisEval(sc, luaConfirmPendingRollback, keys, args...)
 		require.NoError(t, err, name)
 		assert.Equal(t, "0", fmt.Sprint(got), name)
 		assert.Greater(t, mr.TTL(ownerepoch.OwnerEpochKey(playerID)), time.Duration(0), "%s: 一个字节都不写", name)

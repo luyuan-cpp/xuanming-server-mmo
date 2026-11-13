@@ -80,7 +80,7 @@ func runGenerationPipeline(runner *ExecutionRunner) {
 		{Name: "cppGen.CppGrpcCallClient", Run: cppGen.CppGrpcCallClient},
 		{Name: "protoToolsOption.ProcessAllOptions", Run: func(wg *sync.WaitGroup) {
 			if err := protoToolsOption.ProcessAllOptions(wg, internal.FdSet); err != nil {
-				logger.Global.Fatal("处理协议 option 失败", zap.Error(err))
+				logger.Global.Fatal("Failed to process proto options", zap.Error(err))
 			}
 		}},
 	})

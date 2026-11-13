@@ -201,7 +201,7 @@
 | PickGate 集中度 | 按 10 秒才刷新一次的 player_count 确定性地取最小那台（`gatetoken.go:84-101`；gate 每 10 秒写 etcd，`cpp/nodes/gate/main.cpp:407-411`），所以每个 10 秒窗口有 λ_zone×10 个新连接落到同一台 | 稳态每窗口 250~560 个；开新区 4,500~50,000 个 | 同 | 同 | 本应 10 台均摊。候选集只做地址去重和排空过滤，没有存活或新鲜度过滤（`servicecontext.go:310-317`）；gate 键 TTL 180 秒（`base_deploy_config.yaml:6`），死掉的 gate 最长 180 秒内仍会被选中（「黑洞」）[C][I] | 集中度 10 倍；开新区一个窗口就能超过单台 20,000 / 1024 |
 | login 的 AssignGate | 每次 1 次 etcd Range，不缓存（`servicecontext.go:292-297`）+ 1 次 Redis MGET（`gatedrain.go:77`） | 稳态 556/s；开服 1k~5k/s | 2,778/s；5k~2.5 万/s | 5,556/s；1~5 万/s | 未测 | 计入 etcd |
 | 口令哈希 Argon2id（PasswordAuth，缺省关） | 每实例需求 E·f_pwd/(2Z)；能力 = min(2 并发 / t_kdf, 1 核 / t_cpu)（`password_provider.go:24-35`；`login.yaml:356-373`） | 稳态每实例 12~28·f_pwd 次/s | 同 | 同 | t_kdf 未测；按单次 50~150 ms 假设，约 7~20 次/s/实例；每个 login 1 CPU（`login.yaml:89`） | f_pwd≈1 时：稳态 0.6~4 倍，开新区 10 倍以上 |
-| HTTP 入口（Ingress + Java gateway，每 zone 2 副本 × 500m，`gateway.yaml:24`、`:70`） | 2E + Q/2s（排队轮询间隔 2 秒，`go/login/internal/config/config.go:276`） | 稳态 1.1k/s；开服再加 5 万/s | 5.6k；再加 25 万 | 1.1 万；再加 50 万 | 未测；TLS 可选（`k8s-client-entry.md:174`、`:311`） | 开 TLS 且不复用连接：按每次握手 0.5~2 ms CPU 假设，S3 开服要 250~1,000 核 [I] |
+| HTTP 入口（Ingress + Java gateway，每 zone 2 副本、CPU 上限 1 核，`java-svc/gateway.yaml:24`、`:111`；2026-11-12 更正：原写的 500m 取自从不部署的旧清单 `go-svc/gateway.yaml`，该文件已删） | 2E + Q/2s（排队轮询间隔 2 秒，`go/login/internal/config/config.go:276`） | 稳态 1.1k/s；开服再加 5 万/s | 5.6k；再加 25 万 | 1.1 万；再加 50 万 | 未测；TLS 可选（`k8s-client-entry.md:174`、`:311`） | 开 TLS 且不复用连接：按每次握手 0.5~2 ms CPU 假设，S3 开服要 250~1,000 核 [I] |
 | 下行带宽 | PCU×b_down，b_down 取 2~10 KB/s/人 [I] | 16~80 Gbps | 80~400 Gbps | 160~800 Gbps | 未测：R18 的机器人不移动，也没有 AOI | 未测；scene→gate 的内网流量再加一份 |
 | NodePort 端口段 | N_g（另加 battle）对比 30000-32767，共 2,768 个（`k8s_deploy.ps1:140-144`、`:203-207`） | 2~8% | 9~40% | 18~80% | 2,768 | S3 逼近上限；改用 LoadBalancer 就是每台 gate 一个云 LB |
 
@@ -211,7 +211,7 @@
 |---|---|---|---|---|---|---|
 | etcd 全前缀 Range | 每个 C++ 节点每 2 秒（`service_discovery_manager.cpp:16`）对 10 个前缀（`base_deploy_config.yaml:39-49`，含 BattleNodeService）各做一次全前缀线性一致 Range（`etcd_helper.cpp:33-41`，前缀不带 zone；分配键也在同一前缀下，`etcd_manager.cpp:60-69`）。KV/s ≈ N_cpp·K/2，其中 K ≈ 2(N_cpp + 6Z)；Range 次数 = 5·N_cpp | 2.8 万~54 万 KV/s；695~3,330 次/s | 69 万~1,335 万；3,470~16,665 | 276 万~5,336 万；6,945~33,330。SceneNodeService 前缀单次响应在 S3 上沿约 2.7 MB，接近 gRPC 默认的 4 MiB 接收上限 [I] | 未测。etcd 3 副本，requests 100m、没有 limits（`deploy/k8s/manifests/infra/etcd.yaml:181-183`）；线性一致读每次都要 leader 做 ReadIndex，3 个成员不能按 3 倍分摊；现网 2 zone 约 288 KV/s | 对 10^5 参照：0.3~5.4（存疑）/ 6.9~134 / 28~534 倍 |
 | etcd watch 扇出 | gate 每 10 秒 Put 一次 NodeInfo；所有 C++ 节点都 watch 全服前缀，并带 prev_kv（`etcd_service.cpp:278-284`），每个事件两份 KV。事件/s = (N_g/10)·N_cpp；每节点每秒解析 JSON 约 (N_cpp + 6Z) + N_g/10 次 | 700~1.5 万事件/s | 1.7 万~37 万 | 6.9 万~148 万；出向上沿约 0.9 GB/s；每节点每秒解析 2.0k~8.2k 次 | 未测；现网 2 zone 约 4.8 事件/s | 若单次解析 10~30 µs [I]，S3 吃掉 scene 主线程 2~25% 的时间 |
-| etcd 写入与版本压缩（新增） | 写入/s ≈ N_g/10 + 4Z：gate NodeInfo，加上 login 和 scene_manager 每进程每秒一次 snowflake 水位 Txn（`go/shared/snowflakealloc/allocator.go:926`、`:1427`） | 45~114/s；每天 390 万~985 万个版本，0.8~2 GB（按每个版本约 200 B [I]） | 225~559/s；3.9~9.7 GB/天 | 450~1,114/s；7.8~19 GB/天 | `etcd.yaml` 和 `docker-compose.yml` 都没设 `ETCD_AUTO_COMPACTION_*`（本次抽查）。etcd 缺省不自动压缩；bitnamilegacy 镜像有没有预置缺省值未核实。配额 2 GB（`etcd.yaml:190` 注释）；镜像是 `:latest`（`etcd.yaml:114`，本次抽查） | 推算达到 2 GB 的时间：现网约 2 周 / 1~2.5 天 / 5~12 小时 / 2.5~6 小时 |
+| etcd 写入与版本压缩（新增） | 写入/s ≈ N_g/10 + 4Z：gate NodeInfo，加上 login 和 scene_manager 每进程每秒一次 snowflake 水位 Txn（`go/shared/snowflakealloc/allocator.go:926`、`:1427`）。2026-11-12 更正：login 已不申领 snowflake 槽位、不写水位（player_id 只由发号器发），持槽的只剩 scene_manager，公式变为 N_g/10 + 2Z；右侧各档数字仍按 4Z 算，是偏高的上界。自动压缩、配额与镜像的现状以 [etcd 维护手册](../ops/etcd-maintenance-runbook.md) 为准 | 45~114/s；每天 390 万~985 万个版本，0.8~2 GB（按每个版本约 200 B [I]） | 225~559/s；3.9~9.7 GB/天 | 450~1,114/s；7.8~19 GB/天 | `etcd.yaml` 和 `docker-compose.yml` 都没设 `ETCD_AUTO_COMPACTION_*`（本次抽查）。etcd 缺省不自动压缩；bitnamilegacy 镜像有没有预置缺省值未核实。配额 2 GB（`etcd.yaml:190` 注释）；镜像是 `:latest`（`etcd.yaml:114`，本次抽查） | 推算达到 2 GB 的时间：现网约 2 周 / 1~2.5 天 / 5~12 小时 / 2.5~6 小时 |
 | etcd 注册规模与 node_id | 每进程约 2~3 个键；node_id 17 bit（`node_util.h:124-131`）；续约每秒 N_cpp 次 | 键 0.3k~2k | 1.4k~10k | 2.8k~20k | 键数和号空间远低于上限；续约吞吐未测；NodeTTL 180 秒 | 存储和号空间没有缺口 |
 | scene_manager 编排：全服只有一个 leader | 全服共用一把锁（`go/scene_manager/internal/config/config.go:78-80`）；fullSync 对所有 zone 跑一遍（`load_reporter.go:703-712`）；每 300 秒全 zone rebalance（`scene_manager_service.yaml:209`） | 一个进程编排 10~23 个 zone | 50~112 | 100~223 | 只在 3 个 zone 以内跑过 | 3.3~7.7 / 17~37 / 33~74 倍；单点 |
 | scene_manager 负载刷新 | 每个副本每 5 秒对全服每个 scene 节点各做 2 次串行 GET（`load_reporter.go:31-32`、`:231-233`）→ 0.8·Z·N_s GET/s；Prometheus 序列 6·Z·N_s（`metrics.go:37-51`） | 712~8.2k GET/s；序列 0.5 万~6.1 万 | 1.8 万~19.9 万；13 万~149 万 | 7.1 万~79.3 万；53 万~595 万；每副本每拍串行 1,778~8,888 次，按 0.2~0.5 ms 往返要 0.4~4.4 秒，逼近 5 秒周期 | 共享单主（`k8s_deploy.ps1:3731-3735`） | 对 10 万参照：0.01~0.08 / 0.2~2 / 0.7~7.9 倍 |
@@ -514,7 +514,7 @@
   - 回档负责人先拍板 RPO 粒度，并写设计文档。
   - 对象存储是新依赖，要按 AGENTS §11.2 写清现有能力为什么不够。
   - A0-6。
-  - 和 A4 的审计 topic 换代一起做（AuditTopicGeneration：`snapshot_system.h:6-17`；`data_service.yaml:221-236`）。
+  - 和 A4 的审计 topic 换代一起做（世代号：`go/data_service/etc/data_service.yaml` 的 `Kafka.TopicGeneration`，2026-11-12 起生产者 go/db 的 `AuditOutbox.TopicGeneration` 从它渲染；步骤见 `docs/ops/audit-topic-generation-bump-runbook.md`）。
 - **契约 / Java**：不改客户端。回档 RPO 是两版共享的运营契约，Java 版同批决策并登记 PARITY。
 
 ### A4 Kafka 分区与世代
@@ -731,7 +731,7 @@
 
 ### 4.5 TiDB Phase 1 拓扑规格
 
-现文 §2.2 的 prod 档「3 PD / 至少 3 TiKV / 至少 2 TiDB，规格按压测定」是现网 2 个 zone 的量级。S 档按下面的公式定。
+现文 §2.2 的 prod 档「3 PD / 至少 3 TiKV / 至少 2 TiDB」是现网 2 个 zone 的量级(单机规格 2026-11-12 定为官方生产档下限,见该行)。S 档按下面的公式定。
 
 | 量 | 公式 | S1 | S3 |
 |---|---|---|---|
@@ -823,7 +823,7 @@ S2/S3 不做全量演练，按「单元容量 × 单元数」线性外推，前�
 - [C] `go/login/internal/svc/servicecontext.go:151-160`、`:292-297`、`:310-317`
 - [C] `go/login/internal/logic/pkg/loginqueue/gatetoken.go:84-101`；`gatedrain.go:67-90`；`queue.go` 的 `Lookup`
 - [C] `go/login/internal/logic/pkg/auth/password_provider.go:24-35`；`go/login/etc/login.yaml:89`、`:189-191`、`:356-373`、`:496`；`go/login/internal/config/config.go:276`
-- [C] `deploy/k8s/manifests/go-svc/gateway.yaml:24`、`:70`；[D] `docs/design/k8s-client-entry.md:174`、`:311`
+- [C] `deploy/k8s/manifests/java-svc/gateway.yaml:24`、`:111`（2026-11-12 更正，原引 `go-svc/gateway.yaml` 是从不部署的旧清单）；[D] `docs/design/k8s-client-entry.md:174`、`:311`
 - [C] `tools/scripts/k8s_deploy.ps1:77`、`:140-144`、`:203-207`、`:211`
 
 **控制面**

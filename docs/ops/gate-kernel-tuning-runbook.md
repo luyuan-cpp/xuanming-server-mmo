@@ -109,7 +109,18 @@ securityContext:
 
 - getrlimit 后把软限抬到 min(硬限, 1048576),只抬不降、不动硬限(非 root 也能做)。
 - 需求 = 客户端面准入上限 + 4096 余量:gate = `GateMaxConnections` + 4096(默认 24096),battle = `BattleMaxConnections` + 4096(默认 8192),scene = 4096。配 0(仅 dev/test 合法)按 0 算。
-- 余量 4096 是推算,只是拒启门槛,进程实际可用的是抬起来的软限:gate 直连模式约 2Z 条到全服 scene_manager,scene 约 4Z 条到全服 SM / DS(Z ≈ 200~445,2000 万在线口径),都在 4096 以内;Z 超过约 900 或副本数变多时要重新核这个常数(推导见头文件注释)。
+- 余量 4096 只是拒启门槛,进程实际可用的是抬起来的软限。2026-11-12 定案维持 4096:scene_manager 11-05 起按 zone 收窄,gate 到路由服只连按 zone 取的几台,非客户端连接数不再随全服 zone 数增长(推导见头文件注释)。运行期够不够不靠这个常数,看下面的指标。
+- **运行期观测(2026-11-12,已落码、未编译)**:C++ 节点的 Prometheus 出口(`-CppMetricsPort`,缺省 9400)导出:
+  - `process_open_fds` / `process_max_fds`:当前打开的 fd 数与软限。超过 80% 持续 5 分钟报 `ProcessOpenFilesNearLimit`;
+  - `cpp_node_open_file_limit_required` / `cpp_node_open_file_limit_exempted`:启动门槛,以及是否带 `warn` 豁免在跑。带豁免超过 1 小时报 `CppNodeOpenFileLimitExempted`;
+  - `cpp_node_accept_exhausted_total{reason}`、`cpp_node_accept_paused_total`:accept 因 fd 或内存耗尽失败、监听暂停的次数,对应 `CppNodeAcceptResourceExhausted` 与持续 5 分钟以上的 `CppNodeAcceptResourceExhaustedSustained`。
+  - 告警文件 `deploy/k8s/cpp-node-resource-alerts.yaml`,手工 apply:`kubectl apply -n observability -f deploy/k8s/cpp-node-resource-alerts.yaml`。
+- **fd 或内存耗尽时 accept 的行为(2026-11-12,已落码、未编译)**:进程不再崩溃(原来 `ENFILE` / `ENOBUFS` / `ENOMEM` 会让 muduo 直接 abort,这台节点上的全部在线连接一起断)。
+  - fd 用尽:监听端接进排在最前的连接再立刻关掉,对端马上看到断开;做不到时暂停监听 100ms 再试。
+  - 内核缓冲或内存不足:暂停监听 100ms 再试。
+  - 已建立的连接不受影响。节点日志里每秒最多一行 `Acceptor: accept failed, errno=... action=... failures_since_last_report=...`。
+  - 处置:先看上面的 fd 指标;fd 跟着连接数涨就调低准入上限或加台数,持续上涨而连接数不涨多半是泄漏,保留现场(`ls -l /proc/<pid>/fd | awk '{print $NF}' | sort | uniq -c | sort -rn | head`)后重启这台。
+- **拒启与其他致命错误的最后一行(2026-11-12,已落码、未编译)**:C++ 节点任何一处 `LOG_FATAL` 在退出前都会把那一行同步写进 stderr,`kubectl logs --previous` 看得到。原来只有 fd 上限、客户端地址这几类拒启会写,gate / battle 的令牌密钥、连接上限等启动门禁只进异步日志文件,崩溃后找不到原因。
 - 抬完仍低于需求:缺省**拒绝启动**,stderr 一行 `FATAL open file limit config: role=... soft=... hard=... required=... shortfall=...`(`kubectl logs --previous` 可见),Pod 进 CrashLoop。多副本形态下新 Pod 起不来只会让滚动停住、旧 Pod 继续服务;全新 zone-up 则整个 zone 起不来。
   - **2026-10-18 更正(上一句把影响面说小了,按工作负载形态分开看)**:「只停住」只对滚动时 maxUnavailable 为 0 的工作负载成立。C++ 节点的 Deployment 模板(`k8s_deploy.ps1` 的 `New-NodeDeploymentYaml`)没写 strategy,按 K8s 缺省 25% / 25% 取整:
     - gate Deployment(podip 形态,缺省 2 副本):maxUnavailable = 0,确实只是停在滚动中途,旧 Pod 继续服务;
@@ -209,6 +220,54 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
    - Deployment 形态(含 external 的 hostPort 形态):`kubectl -n <infra-ns> set image deployment/battle battle=<旧镜像>`,再 `kubectl -n <infra-ns> rollout status deployment/battle`;
    - Agones Fleet 形态:`kubectl -n <infra-ns> edit fleet battle`,把 `spec.template.spec.template.spec.containers` 里 `name: battle` 那一项的 `image` 改回旧镜像,然后盯 `kubectl -n <infra-ns> get gs -l app=battle`;
    - 这是相对清单的漂移:下一次 `k8s-infra-up` 会按它的 `-NodeImage` 参数覆盖回去,所以下一次 infra-up 必须带旧镜像或已修好的镜像。
+
+### 3.2 gate 连接准入:指标、告警与速率闸的调整(2026-11-12,已落码、未编译)
+
+设计与取值依据见 [gate-connection-admission-control.md](../design/gate-connection-admission-control.md) §6 的 P1-1 ~ P1-4。这里只写运维要用到的部分。
+
+**gate 在 accept 处做三道判定**(顺序:关源 → 总量 → 新建速率),被拒的连接当场收到 RST,gate 不为它建任何对象、内核不留 TIME_WAIT:
+
+| 判定 | 参数 | 缺省 | 被拒时的 `gate_rejected_total{reason}` |
+| --- | --- | --- | --- |
+| 关源(停机 / 维护) | 无 | — | `shutting_down` |
+| 总量 | `GateMaxConnections`(`base_deploy_config.yaml`) | 20000 | `capacity` |
+| 新建速率(令牌桶) | 环境变量 `GATE_ACCEPT_RATE_PER_SECOND`、`GATE_ACCEPT_BURST` | 速率 = 上限的 1%/秒(下限 100),桶深 = 上限 | `accept_rate` |
+
+- 启动日志有一行 `Client connection admission ENFORCED at accept, max_connections=... accept_rate_per_second=... accept_burst=...`,以它为准。
+- 两个环境变量只接受规范十进制正整数(1..1000000),写错拒绝启动;不设就是缺省推导。没有「0 = 关闭」,要放开就写一个大数。
+- **压测要打超过缺省速率的建连时**(例如反复登录登出的登录压测,持续新建速率超过上限的 1%/秒),先给 gate 设 `GATE_ACCEPT_RATE_PER_SECOND`,否则桶用完之后压测机会看到连接被重置,结果失真。`k8s_deploy.ps1` 目前没有对应参数,K8s 上要调时用 `kubectl -n <ns> set env statefulset/gate GATE_ACCEPT_RATE_PER_SECOND=<n>`(deployment 形态换成 `deployment/gate`)。set env 加的变量不在 last-applied 里,之后的部署不会把它清掉;压测完要显式撤销:`kubectl -n <ns> set env statefulset/gate GATE_ACCEPT_RATE_PER_SECOND- GATE_ACCEPT_BURST-`。
+
+**指标**(gate 的 Prometheus 出口,`-CppMetricsPort`,缺省 9400):
+
+- `gate_connections_current` / `gate_connections_max`:会话数与生效上限。
+- `gate_unauthenticated_connections`:还没验签的连接数。握手期限 10 秒,正常客户端毫秒级验签,这个数平时接近 0。
+- `gate_accepted_total`:接纳的连接;`rate(gate_accepted_total[1m])` 就是新建连接速率。
+- `gate_rejected_total{reason}`:被拒的连接。`not_ready` / `no_token_secret` 只在启动配置有问题时出现。
+- `gate_accept_rate_limit_per_second` / `gate_accept_burst`:生效的速率闸参数。
+- `gate_handshake_duration_ms`:建连到验签成功的耗时直方图。握手期限要不要调,看它的 P99.9。
+- `gate_preauth_reaped_total`:建连满 10 秒仍未验签、被关掉的连接。
+
+**区分正常洪峰与攻击**(只看这两项,别看连接总数):
+
+| | 正常洪峰(开服、维护后重连) | 只建连不验签 |
+| --- | --- | --- |
+| `gate_unauthenticated_connections` | 低,周转快 | 高,不周转 |
+| `gate_handshake_duration_ms` | 分布正常 | 样本少(大多数连接根本不验签) |
+| `gate_preauth_reaped_total` | 基本不涨 | 持续上涨 |
+| 处置 | `accept_rate` 在拒绝时调高速率闸;`capacity` 在拒绝时加 gate 台数 | 速率闸与握手期限在按设计工作;去上游(L4、防火墙、云清洗)处置来源 |
+
+**告警**:`deploy/k8s/gate-connection-alerts.yaml`,手工 apply:`kubectl apply -n observability -f deploy/k8s/gate-connection-alerts.yaml`。
+
+| 告警 | 含义 | 先看什么 |
+| --- | --- | --- |
+| `GateConnectionsNearCapacity` | 会话数超过上限的 90% 持续 5 分钟 | 同 zone 其余 gate 是否也高;login 本应在 90% 停止往这台派人 |
+| `GateRejectingAtCapacity` | 因满员拒绝了新连接 | 未验签连接占比:高 = 位置被占着;低 = 真实玩家满了 |
+| `GateAcceptRateLimited` | 新建连接超过速率上限 | 按上表区分洪峰与攻击 |
+| `GateUnauthenticatedConnectionsHigh` | 未验签连接超过上限的 5% 持续 2 分钟 | 采样日志里的 `latest_peer` |
+| `GatePreauthConnectionsReaped` | 每秒超过 1 条未验签连接被关,持续 5 分钟 | 握手 P99 是否也在变慢 |
+| `GateHandshakeSlow` | 握手 P99 超过 3 秒持续 10 分钟 | 这台 gate 的 CPU 与 loop 延迟;多台同时变慢看入口网络 |
+
+**客户端看到的现象**:被拒的连接在客户端是「连接被重置」(RST),不是「对端正常关闭」。客户端按普通断线处理、退避后重连即可;排查玩家「连不上」时,先在对应时段的 `gate_rejected_total` 里找原因。
 
 ---
 

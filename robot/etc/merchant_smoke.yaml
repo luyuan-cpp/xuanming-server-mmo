@@ -7,9 +7,14 @@
 #       → M4 MoveStop 上报站位旁 1 个单位的点
 #       → M5 负例:份数 0 → kMysteryMerchantInvalidCount;旧轮次,以及报价四项(单价 / 货币 / 物品 / 每份数量)
 #            各错一处 → kMysteryMerchantShelfChanged
-#       → M6 GM 加银两后买 1 份:bought_count +1、余额 == 加钱后 − 单价、背包里有这件物品
+#       → M6 GM 加银两后买 1 份:bought_count +1、余额 == 加钱后 − 单价、背包里有这件物品;
+#            随后同一个请求原样重发(step=replay):标 replayed,不再扣钱、不再发物、bought_count 不变
 #       → M7 把剩余名额一次买完,再买 1 份 → kMysteryMerchantLimitReached
-#       → M8 再查一次:bought_count == limit_count。
+#       → M8 再查一次:bought_count == limit_count
+#       → M9 正常下线、等 2 秒、重新登录进场,再原样发一次 M6 的请求(step=replay-after-relogin):
+#            幂等键账本随存档落盘,仍须标 replayed、银两与物品不变(docs/design/client-request-idempotency.md)。
+#       每次购买都带一个新的幂等键 client_request_id;scene 日志里 replay 与 replay-after-relogin 各有一行
+#       [ClientRequest] metric=client_request_replay kind=… player_id=… client_request_id=<M6 那一行 PASS 里的键>。
 #
 # 前置(缺一条就会失败或跳过,原因写进 MERCHANT_SMOKE_FAIL 的 reason / MERCHANT_SMOKE_SKIP):
 #   1. 三张新表与新提示码已导表、proto-gen 已跑、scene / gate / scene_manager / robot 都用新产物重编过
@@ -40,7 +45,7 @@
 # 退出码 0 = 全部断言通过(日志有 MERCHANT_SMOKE_OK player_id=… 一行),或前置条件不满足而跳过
 #   (MERCHANT_SMOKE_SKIP reason=merchant_away / merchant_on_another_map / all_bought);
 # 退出码 1 = 任一步失败(MERCHANT_SMOKE_FAIL step=… reason=…)。每步通过另有一行 [merchant-smoke] PASS step=…。
-# 跑一轮约 20 秒。
+# 跑一轮约 30 秒(M9 的下线重登占五六秒)。
 #
 # 可重复运行:限购按「每人每件每轮」记在玩家存档里。同一轮里跑第二遍时,上一遍买满的那件会被跳过、改买下一件;
 #   货架上每件都买满了就打印 MERCHANT_SMOKE_SKIP reason=all_bought —— 等下一轮(按上面的配置是两分钟)再跑。

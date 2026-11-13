@@ -130,7 +130,7 @@ func TestFenceClock_RealWallClockAnchorCarriesNoMonotonicReading(t *testing.T) {
 }
 
 // Node.Generate 必须在入口执行水位年龄判定:过期 → ErrWatermarkStale,不交号;
-// 重新 Ack → 恢复。这是 shared/snowflake 与 login PlayerIDGen 共用的规则。
+// 重新 Ack → 恢复。
 func TestGenerate_RefusesWhenWatermarkStale(t *testing.T) {
 	restore := nowEpoch
 	defer func() { nowEpoch = restore }()

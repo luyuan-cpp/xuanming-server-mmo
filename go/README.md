@@ -65,7 +65,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-stop
 cd go/login && go test ./...
 ```
 
-区库的表结构用 `go/db/cmd/migrate` 管理(`-command status | plan | up`);guild、friend、trade
+玩家存档库(每地域固定 K 个的 `player_store_<编号>_db`,按区分的 `zone_<n>_db` 已退役)的表结构用 `go/db/cmd/migrate` 管理
+(`-storage-id <编号> -command status | plan | up`,`-storage-id` 必填,一次迁一个库);guild、friend、trade
 的独占库在服务启动时按 proto 自动迁移,也可以用 `-migrate` 参数只迁移不启动。
 
 维护排空的阶段动作入口为 `go/db/cmd/maintenance_phase`（必须带 `-authority-phase`，由 `tools/scripts/maintenance_drain.ps1` 调用）。

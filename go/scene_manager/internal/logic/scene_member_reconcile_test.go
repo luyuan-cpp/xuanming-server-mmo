@@ -4,7 +4,6 @@ package logic
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"strconv"
 	"sync"
@@ -79,7 +78,7 @@ func TestSceneMemberReconcileRemovesStaleMembers(t *testing.T) {
 	seedPlayerLocation(t, mr, here, reconcileMemberScene, reconcileMemberNode)
 	seedPlayerLocation(t, mr, otherScn, reconcileMemberScene+1, reconcileMemberNode)
 	seedPlayerLocation(t, mr, otherNode, reconcileMemberScene+2, "11")
-	sceneKey, nodeKey := instanceMembersKey(reconcileMemberScene), nodeMembersKey(testZoneId, reconcileMemberNode)
+	sceneKey, nodeKey := instanceMembersKey(testZoneId, reconcileMemberScene), nodeMembersKey(testZoneId, reconcileMemberNode)
 	addReconcileMembers(t, mr, sceneKey, here, otherScn, otherNode, noLoc)
 	addReconcileMembers(t, mr, nodeKey, here, otherScn, otherNode, noLoc)
 
@@ -92,18 +91,18 @@ func TestSceneMemberReconcileRemovesStaleMembers(t *testing.T) {
 // 空闲实例的残留摘掉之后,销毁判据看到 0 人。这是对账存在的理由。
 func TestSceneMemberReconcileUnblocksIdleDestroy(t *testing.T) {
 	sc, mr := newMemberReconcileCase(t)
-	addReconcileMembers(t, mr, instanceMembersKey(reconcileMemberScene), 1101)
-	require.EqualValues(t, 1, readScenePlayerCount(sc, reconcileMemberScene))
+	addReconcileMembers(t, mr, instanceMembersKey(testZoneId, reconcileMemberScene), 1101)
+	require.EqualValues(t, 1, readScenePlayerCount(sc, testZoneId, reconcileMemberScene))
 
 	(&sceneMemberReconciler{}).runRound(context.Background(), sc, 100, 100)
 
-	assert.EqualValues(t, 0, readScenePlayerCount(sc, reconcileMemberScene))
+	assert.EqualValues(t, 0, readScenePlayerCount(sc, testZoneId, reconcileMemberScene))
 }
 
 // 每轮读 location 的成员数不超过预算,余下的下一轮接着走,不会漏掉。SSCAN 一批可能比预算大(miniredis 忽略 COUNT,小集合一次回完)。
 func TestSceneMemberReconcileHonorsMemberBudgetAndResumes(t *testing.T) {
 	sc, mr := newMemberReconcileCase(t)
-	sceneKey := instanceMembersKey(reconcileMemberScene)
+	sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 	addReconcileMembers(t, mr, sceneKey, 1201, 1202, 1203, 1204, 1205)
 	var mu sync.Mutex
 	locationReads := 0
@@ -137,7 +136,7 @@ func TestSceneMemberReconcileHonorsMemberBudgetAndResumes(t *testing.T) {
 // SSCAN 预算用完就停,下一轮接着走下一个集合。
 func TestSceneMemberReconcileHonorsScanBudget(t *testing.T) {
 	sc, mr := newMemberReconcileCase(t)
-	sceneKey := instanceMembersKey(reconcileMemberScene)
+	sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 	addReconcileMembers(t, mr, sceneKey, 1301)
 
 	r := &sceneMemberReconciler{}
@@ -150,7 +149,7 @@ func TestSceneMemberReconcileHonorsScanBudget(t *testing.T) {
 // 走完一遍之后新出现的残留,下一遍能看到。
 func TestSceneMemberReconcileStartsNextPass(t *testing.T) {
 	sc, mr := newMemberReconcileCase(t)
-	sceneKey := instanceMembersKey(reconcileMemberScene)
+	sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 
 	r := &sceneMemberReconciler{}
 	r.runRound(context.Background(), sc, 100, 100)
@@ -164,7 +163,7 @@ func TestSceneMemberReconcileStartsNextPass(t *testing.T) {
 func TestSceneMemberReconcileInFlightReservationRecovers(t *testing.T) {
 	sc, mr := newMemberReconcileCase(t)
 	const player = uint64(1501)
-	sceneKey := instanceMembersKey(reconcileMemberScene)
+	sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 	addReconcileMembers(t, mr, sceneKey, player)
 
 	r := &sceneMemberReconciler{}
@@ -185,7 +184,7 @@ func TestSceneMemberReconcileWaitsOutGraceBeforeRemoving(t *testing.T) {
 		stale  = uint64(1521) // 一直没有 location
 		landed = uint64(1522) // 第二遍之前落点,第三遍之前又离开
 	)
-	sceneKey := instanceMembersKey(reconcileMemberScene)
+	sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 	addReconcileMembers(t, mr, sceneKey, stale, landed)
 	clock := time.Unix(1000, 0)
 	r := &sceneMemberReconciler{grace: time.Minute, now: func() time.Time { return clock }}
@@ -216,7 +215,7 @@ func TestSceneMemberReconcileWaitsOutGraceBeforeRemoving(t *testing.T) {
 func TestSceneMemberReconcileForgetsSuspectsMissingFromAPass(t *testing.T) {
 	sc, mr := newMemberReconcileCase(t)
 	const player = uint64(1531)
-	sceneKey := instanceMembersKey(reconcileMemberScene)
+	sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 	addReconcileMembers(t, mr, sceneKey, player)
 	clock := time.Unix(1000, 0)
 	r := &sceneMemberReconciler{grace: time.Minute, now: func() time.Time { return clock }}
@@ -248,10 +247,10 @@ func TestForceDestroyRemovesResidualMembersByLocation(t *testing.T) {
 		otherScene = uint64(1542) // location 指向同节点的另一个场景
 	)
 	seedPlayerLocation(t, mr, otherScene, reconcileMemberScene+1, reconcileMemberNode)
-	sceneKey, nodeKey := instanceMembersKey(reconcileMemberScene), nodeMembersKey(testZoneId, reconcileMemberNode)
+	sceneKey, nodeKey := instanceMembersKey(testZoneId, reconcileMemberScene), nodeMembersKey(testZoneId, reconcileMemberNode)
 	addReconcileMembers(t, mr, sceneKey, stale, otherScene)
 	addReconcileMembers(t, mr, nodeKey, stale, otherScene)
-	require.NoError(t, mr.Set(fmt.Sprintf(SceneNodeKeyFmt, reconcileMemberScene), reconcileMemberNode))
+	require.NoError(t, mr.Set(sceneNodeKey(testZoneId, reconcileMemberScene), reconcileMemberNode))
 	// 节点不在负载集里就不发 DestroyScene,用例不用起假节点;摘成员的路径和活节点是同一段。
 	_, err := mr.ZRem(nodeLoadKey(testZoneId), reconcileMemberNode)
 	require.NoError(t, err)
@@ -291,7 +290,7 @@ func (h *afterLocationReadHook) ProcessHook(next goredis.ProcessHook) goredis.Pr
 func TestSceneMemberReconcileAddsBackWhenPlayerArrivesDuringRemoval(t *testing.T) {
 	sc, mr := newMemberReconcileCase(t)
 	const player = uint64(1551)
-	sceneKey := instanceMembersKey(reconcileMemberScene)
+	sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 	addReconcileMembers(t, mr, sceneKey, player)
 	hook := &afterLocationReadHook{inject: func() { seedPlayerLocation(t, mr, player, reconcileMemberScene, reconcileMemberNode) }}
 	sc.PlayerRedis.AddHook(hook)
@@ -305,7 +304,7 @@ func TestSceneMemberReconcileAddsBackWhenPlayerArrivesDuringRemoval(t *testing.T
 // 领导权丢了就不动,遍历位置也丢掉。
 func TestSceneMemberReconcileFollowerDoesNothing(t *testing.T) {
 	sc, mr := newMemberReconcileCase(t)
-	sceneKey := instanceMembersKey(reconcileMemberScene)
+	sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 	addReconcileMembers(t, mr, sceneKey, 1601)
 	restore := SetLeaderCheckForTest(func() bool { return false })
 	t.Cleanup(restore)
@@ -322,7 +321,7 @@ func TestSceneMemberReconcileKeepsMemberWhenLocationUnknown(t *testing.T) {
 	t.Run("corrupt_location", func(t *testing.T) {
 		sc, mr := newMemberReconcileCase(t)
 		const player = uint64(1701)
-		sceneKey := instanceMembersKey(reconcileMemberScene)
+		sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 		addReconcileMembers(t, mr, sceneKey, player)
 		require.NoError(t, mr.Set(getPlayerLocationKey(player), "\xff\xff\xff"))
 		(&sceneMemberReconciler{}).runRound(context.Background(), sc, 100, 100)
@@ -330,7 +329,7 @@ func TestSceneMemberReconcileKeepsMemberWhenLocationUnknown(t *testing.T) {
 	})
 	t.Run("location_read_fails", func(t *testing.T) {
 		sc, mr := newMemberReconcileCase(t)
-		sceneKey := instanceMembersKey(reconcileMemberScene)
+		sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 		addReconcileMembers(t, mr, sceneKey, 1702)
 		mr.Server().SetPreHook(func(peer *server.Peer, cmd string, _ ...string) bool {
 			if cmd == "MGET" {
@@ -348,7 +347,7 @@ func TestSceneMemberReconcileKeepsMemberWhenLocationUnknown(t *testing.T) {
 // 不是合法 player_id 的成员没有 location 可核,摘掉。
 func TestSceneMemberReconcileRemovesMalformedMember(t *testing.T) {
 	sc, mr := newMemberReconcileCase(t)
-	sceneKey := instanceMembersKey(reconcileMemberScene)
+	sceneKey := instanceMembersKey(testZoneId, reconcileMemberScene)
 	_, err := mr.SetAdd(sceneKey, "not-a-player", "0")
 	require.NoError(t, err)
 

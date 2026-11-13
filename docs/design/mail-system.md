@@ -409,7 +409,7 @@ ON DUPLICATE KEY UPDATE read_ms = IF(read_ms = 0, VALUES(read_ms), read_ms), …
 | `mail_sweep_candidate_rows{table,mode}` | gauge | 本轮有界计数得到的候选行数(`report_only` 下就是"本该删"的量) |
 | `mail_sweep_deleted_total{table}` | counter | 实删行数 |
 | `mail_sweep_invalid_rows{table}` | counter | `expire_ms = 0` 保险分支命中数 |
-| `mail_sweep_last_run_unixtime` | gauge | 清理循环起来时写一次,之后每轮跑完(**无论删了几行、这一轮成败**)写这一轮结束的时刻,循环退出时删掉序列(2026-11-11 起;canary 不跑清理,没有序列);循环卡住时它停止前进 |
+| `mail_sweep_last_run_unixtime` | gauge | 清理循环起来时写一次,之后每一轮正常返回(**无论删了几行、这一轮成败**)写这一轮结束的时刻;panic 的一轮被兜住、不写,循环接着跑;循环有意停止时删掉序列(2026-11-11~12 起;canary 不跑清理,没有序列)。循环卡在某一轮里、或每一轮都 panic 时它停止前进 |
 
 ### 4.7 告警(评审第 15 条)
 
@@ -417,10 +417,10 @@ ON DUPLICATE KEY UPDATE read_ms = IF(read_ms = 0, VALUES(read_ms), read_ms), …
 
 | 告警 | 表达式 | 含义 |
 |---|---|---|
-| `MailSweepStalled` | `time() - mail_sweep_last_run_unixtime > 3 * <Interval 秒>`(按副本) | 某个副本的 sweep 循环卡住,它名下的片没人清 |
+| `MailSweepStalled` | `time() - mail_sweep_last_run_unixtime > 3 * <Interval 秒>`(按副本) | 某个副本的 sweep 循环停住(卡在某一轮里,或每一轮都 panic),它名下的片没人清 |
 | `MailSweepInvalidRows` | `increase(mail_sweep_invalid_rows[1h]) > 0` | 出现 `expire_ms = 0` 的行(发件校验被绕过) |
 
-该文件计入 M1d 文件清单;§10 第 ⑤ 步验证 `:9240/metrics` 上计数器都有预建的 0 值序列(否则 `increase` 类告警在首个事件前没有序列可比)。活性 gauge `mail_sweep_last_run_unixtime` 例外:只在清理循环运行时有序列(canary 上没有),它是按副本判的,不靠预建。附件重投循环的停摆告警是 `asset-channel-alerts.yaml` 的 `AssetOpRedeliveryLoopStalled{service="mail"}`。
+该文件计入 M1d 文件清单;§10 第 ⑤ 步验证 `:9240/metrics` 上计数器都有预建的 0 值序列(否则 `increase` 类告警在首个事件前没有序列可比)。活性 gauge `mail_sweep_last_run_unixtime` 例外:只在清理循环运行时有序列(canary 上没有),它是按副本判的,不靠预建。附件重投循环的停摆告警是 `asset-channel-alerts.yaml` 的 `AssetOpRedeliveryLoopStalled{service="mail"}`;sweep 或重投有一轮 panic 过(被兜住、循环还在跑)由 `go-background-alerts.yaml` 的 `GoBackgroundPanicRecovered` 报(对全部 Go 服务的后台点位)。
 
 ---
 
@@ -1332,6 +1332,24 @@ Java `DomainClientDispatch.withSession` 将完整不可变 `SessionContext` 送�
   - 改动:`go/mail/internal/metrics/metrics.go`(删计数器与注册)、`metrics_test.go`(钉住它不再注册)、`deploy/k8s/mail-alerts.yaml`(删 `mail.read` 组)、`deploy/k8s/README.md`、`tools/scripts/tests/k8s_deploy_contract.tests.ps1`(mail 告警用例不再要求引用它);本文 §3.1、§4.2、§4.7 的正文同步改成现在的读法。
   - 同类的死计数器 `mail_claim_short_circuit_total` 一并删掉:M1 的领取短路(§4.3)已被 M2 的资产通道领取取代,`ObserveClaimShortCircuit` 没有调用方,也没有告警引用它。
 - **过期清理按 `mail_id` 分 64 片**(第 25 条第四批):复用附件重投那份成员表(本 zone 注册的 stable mail),类别键 `mail-expiry-sweep`;`data.Repo.Sweep` 多一个 `owned workshard.Filter`,候选读与无效行抽样的片条件都在 `LIMIT` 之前,删除前的点锁复核不变。按 `mail_id` 不按收件人:系统、帮会、活动邮件的 `owner_player_id` 都是 0,按收件人分会全挤进第 0 片。做法、理由与失败推演见[资产指令重投分片设计](assetop-redelivery-sharding-20261110.md) §14.2。
-- **清理活性改按副本判**:`mail_sweep_last_run_unixtime` 改成不带可变 label 的 GaugeVec,循环起来写一次、每轮跑完写这一轮**结束**的时刻(原来 `defer metrics.MarkSweepRun(time.Now())` 在开头就求了时刻,记的是开始时刻)、循环退出删序列;`MailSweepStalled` 从 `time() - max(...) > 900` 改成按副本的 `time() - mail_sweep_last_run_unixtime > 900`。原告警描述里引用的 `safego_panic_total{point=~"mail.expired_sweep.*"}` 与 `"[mail] Sweep"` 日志在代码里都不存在,一并改成实际的日志行。
-- **测试**(都没有运行):`go/mail/internal/data/sweep_test.go`(新,纯单测 `TestSweepQueriesPutShardFilterBeforeLimit`;TiDB 用例 `TestTiDBSweepDeletesOnlyOwnedShards`,门控同 `repo_integration_test.go`)、`go/mail/internal/maintenance/sweep_test.go`(新,3 个纯单测)、`go/mail/internal/metrics/metrics_test.go`(改 1 个、加 1 个)、`tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1`(新)。验证命令见 `docs/PROGRESS.md` 2026-11-11「回收派发与 mail 过期清理按片分工、循环活性指标、删 mail 截断计数」。
-- **Java 版**:只登记待做(Java 仓 `PARITY.md` 同日条目)。
+- **清理活性改按副本判**:`mail_sweep_last_run_unixtime` 改用共享包 `go/shared/looplive` 的活性 gauge(`metrics.SweepLive`,六个按片分工的循环共用一份口径):循环起来写一次;每一轮正常返回(成败都算)写这一轮**结束**的时刻(原来 `defer metrics.MarkSweepRun(time.Now())` 在开头就求了时刻,记的是开始时刻);循环有意停止时删序列,canary 上没有序列。`MailSweepStalled` 从 `time() - max(...) > 900` 改成按副本的 `time() - mail_sweep_last_run_unixtime > 900`。
+- **清理每一轮各自 recover**(2026-11-12):一轮 panic 先打 HOLD,只丢这一轮,循环接着跑,计 `safego_panic_total{point="mail.expired_sweep"}`,不写活性时刻。原来 panic 会一路抛出 `maintenance.Run` 把进程打死(M1 的实现走 `safego.Loop`,§12.2 第 14 条;之后的重写没带上):按片分工之后,一封坏邮件会先打死负责它那一片的副本,片换主之后再打死下一个,整个邮件服务跟着倒。兜住之后由两条告警报出来:每一轮都 panic 时 `MailSweepStalled` 响;只 panic 过一两轮时 `go-background-alerts.yaml` 的 `GoBackgroundPanicRecovered` 响(挂到这个 Pod 重启)。原告警描述里引用的 `"[mail] Sweep"` 日志在代码里不存在,改成实际的日志行。
+- **测试**(都没有运行):`go/mail/internal/data/sweep_test.go`(新,纯单测 `TestSweepQueriesPutShardFilterBeforeLimit`;TiDB 用例 `TestTiDBSweepDeletesOnlyOwnedShards`,门控同 `repo_integration_test.go`)、`go/mail/internal/maintenance/sweep_test.go`(新,6 个纯单测,含回归 `TestSweepTickSurvivesAPanickingRound`)、`go/mail/internal/metrics/metrics_test.go`(改 1 个、加 1 个)、`tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1`(新)。验证命令见 `docs/PROGRESS.md` 2026-11-12「回收派发与 mail 过期清理按片分工、循环活性指标、删 mail 截断计数」。
+- **Java 版**:只登记待做(Java 仓 `PARITY.md` 2026-11-12 条目)。
+
+### 2026-11-12 scene 以 battle 身份发个人邮件:战斗掉落两包都放不下改投邮件(未编译、未运行)
+
+- **多了一个真实的发件方**。`battle`(sender_kind 5)此前只在角色表里占位,没有调用方。现在 C++ scene 在战斗掉落人物背包与临时格都放不下时,以 `battle` 身份调 `MailAdmin.SendPersonalMail`,附件就是这批掉落。做法、一致性论证与部署前提见 [battle-overflow-mail.md](battle-overflow-mail.md)。
+- **mail 的代码没有改,只改配置**:`go/mail/etc/mail.yaml` 的 `Producers` 加 `battle: MAIL_PRODUCER_SECRET_BATTLE`;`deploy/k8s/manifests/go-svc/mail.yaml` 注入同名环境变量(Secret `domain-service-secrets` 的 key `mail-producer-battle`,`optional: false`)。scene 在每个 zone namespace 注入同一把。
+- **scene 怎么找到 mail**:mail 经 `shared/noderegistry` 注册在 `MailNodeService.rpc` 前缀下。scene 的发现集合与建连白名单加 `MailNodeService`,挑 READY 的节点直连 gRPC,调用期限 `GrpcClient.CallDeadlineMs.MailNodeService`(6000 ms)。mail 是 scene 的弱依赖,不进启动闸。
+- **用到的现成契约**:
+  - 判重键 `(sender_kind, request_id)`,判重先于一切依赖当前时间的校验(§2.4、`Repo.Send`)。scene 的请求由玩家存档里的条目逐字段重建,不带 `expire_ms`,同一条目每次内容相同;有效期由 mail 在首次落库时按 `MaxPersonalMailTtlDays`(30 天)算。请求号取自发号器的 `txlog` 号段。
+  - 附件上限按 `mailgrant.Bundle`(16 种、合计 4096 件)。scene 分封时用同值(`mail_outbox_rules.h`),超出就分成多封。
+  - 邮箱满回 `kMailRecipientBoxFull`(§3.4 的拒收策略)。scene 把条目留在玩家存档里按退避重试,玩家删信之后寄出,不换通道、不丢。
+  - 回包定性与 rank 奖励工作器同一口径:只有码表里列出的业务拒绝算确定拒收,故障码与不认识的码按结果未知重试。
+- **身份常量两边各写一份**:发件角色号、调用方名、方法路径、密钥环境变量名在 C++(`player_mail_outbox.cpp`)和 Go 各有一份,`go/mail/internal/data/battle_sender_crosslang_test.go` 的 `TestBattleSenderIdentityMatchesSceneOutbox` 逐字比对。
+- 改投的掉落是带附件的个人邮件,领取与其它附件邮件走同一条资产通道,没有新的领取路径。
+- **残余**:
+  - `MailAdmin` 的回包没有签名,scene 信的是发现到的 mail 节点(rank 发奖同此);
+  - 判重记录随邮件一起被过期清理删除。清理开了删除模式之后,若邮件已建、scene 侧条目的删除一直没落盘、之后又连续 37 天以上(有效期 30 天 + 保留 7 天)寄不到,重寄会新建一封。现行默认是只报告不删,不会发生。
+- **Java 版**:只登记待做(Java 仓 `PARITY.md` 2026-11-12 同名条目)。

@@ -9,8 +9,8 @@ import (
 	"scene_manager/internal/svc"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // This file holds the server-side Lua scripts that make scene-manager's
@@ -40,9 +40,10 @@ import (
 //     when KEYS[3] is passed) and returns the new SCARD,
 //  3. if no, returns -1 without creating the members key.
 //
-// KEYS[1] = scene:{id}:node
-// KEYS[2] = instance:<id>:members
-// KEYS[3] = node:zone:{zoneId}:{nodeId}:members(节点未知时不传)
+// KEYS[1] = scene:{ctl:<z>}:<id>:node
+// KEYS[2] = instance:{ctl:<z>}:<id>:members
+// KEYS[3] = node:{ctl:<z>}:<nodeId>:members(节点未知时不传)
+// (同一个 zone 的 tag,同槽。)
 // ARGV[1] = 十进制 player_id
 // Return: (int) new count, or -1 if scene is gone.
 const luaAtomicAddSceneMember = `
@@ -63,11 +64,12 @@ return redis.call('SCARD', KEYS[2])
 //
 // KEYS are laid out as 3N entries so every key the script touches is declared up-front:
 //
-//	KEYS[1..2N]    = scene:{id}:node, instance:<id>:members, ...
+//	KEYS[1..2N]    = scene:{ctl:<z>}:<id>:node, instance:{ctl:<z>}:<id>:members, ...
 //	                 (interleaved per candidate)
-//	KEYS[2N+1..3N] = node:zone:{zoneId}:{candidateNode}:members (one per candidate, so the
+//	KEYS[2N+1..3N] = node:{ctl:<z>}:<candidateNode>:members (one per candidate, so the
 //	                 script can look up the chosen candidate's node set without
 //	                 string-building a key from data).
+//	候选都是同一个 zone 的频道,3N 把键同一个 tag。
 //
 // ARGV[i] for i in 1..N = nodeId string for candidate i, used both for the
 // equality check against scene:{id}:node and to remember the picked node.
@@ -122,23 +124,26 @@ const sceneClaimRecordTTLSeconds = 600
 // 销毁认领脚本有三段:空闲回收用 luaAtomicDestroyInstance,死节点收尾用 luaAtomicDestroyOrphanOfDeadNode,
 // 其余拆除一律用 luaAtomicDestroyInstanceForce。都由下面几块拼成,拆除任务的整体说明见 scene_teardown_job.go。
 //
-// KEYS(由 sceneTeardownRequest.keys 拼,顺序是脚本的契约):
-//   - [1..9] sceneClaimKeys:场景的状态键、zone 的 active 集合、拆除任务 scene:{id}:teardown、本 zone 的待办集合;
-//   - [10..11] 期望属主的场景集合与 scene_count,只在期望属主非空时传;
+// KEYS(由 sceneTeardownRequest.keys 拼,顺序是脚本的契约;全部带认领方 zone 的 tag {ctl:<z>},同槽):
+//   - [1..8] sceneClaimKeys:场景的状态键、zone 的 active 集合、拆除任务 scene:{ctl:<z>}:<id>:teardown、本 zone 的待办集合;
+//   - [9..10] 期望属主的场景集合与 scene_count,只在期望属主非空时传;
 //   - 其后:要在同一步把场景摘掉的集合(世界频道的频道集合 / 排空集合);
-//   - 最后:死节点收尾任务表,只在死节点收尾时传(个数见 ARGV[9],摘集合的循环跳过它)。
+//   - 最后:死节点收尾任务表,只在死节点收尾时传(个数见 ARGV[8],摘集合的循环跳过它)。
 //
 // ARGV:
 //   - [1] sceneId(十进制,ZREM / SREM 的成员);[2] 本次认领的 token;[3] 当前 Unix 秒;
 //   - [4] 拆除任务种类;[5] reason;[6] 期望属主,空串表示映射必须已不存在;[7] '1' 表示同一步扣属主的 scene_count;
-//   - [8] 认领方的 zone(十进制),也就是 KEYS 里 active 集合、待办与属主键所属的 zone;
-//   - [9] KEYS 末尾的死节点收尾任务表个数('0' 或 '1');[10] 收尾任务成员;[11] 收尾任务的入队时刻(Unix 毫秒)。
-//     [10]、[11] 只在 [9] 为 '1' 时有意义(deadNodeTaskFence)。
+//   - [8] KEYS 末尾的死节点收尾任务表个数('0' 或 '1');[9] 收尾任务成员;[10] 收尾任务的入队时刻(Unix 毫秒)。
+//     [9]、[10] 只在 [8] 为 '1' 时有意义(deadNodeTaskFence)。
+//
+// 场景所在的 zone 就是键的 tag(docs/design/redis-cluster-all-domains-20261110.md §3.3):认领方只拼本 zone 的键,
+// 别的 zone 的场景在这里读不到映射,按期望落空 / 映射不在处理,一个键都不动。原来的 zone 核对(读 scene:<id>:zone,
+// 不符回 'foreign')随那把键删除。
 //
 // 应答由 parseSceneClaimReply 解:{状态, 属主, agones_gs, 镜像源, 镜像标记, 成员...}。状态是 'claimed'、
-// 'stale'(期望落空,一个键都没动)、'pending'(这个场景的上一次拆除还没做完,一个键都没动)、'foreign'
-// (场景登记在别的 zone,一个键都没动)、'withdrawn'(死节点收尾任务已被撤或换了一次判死,一个键都没动,只有死节点
-// 收尾脚本会回)或 'busy'(场景里有人,只有空闲回收脚本会回)。
+// 'stale'(期望落空,一个键都没动)、'pending'(这个场景的上一次拆除还没做完,一个键都没动)、
+// 'withdrawn'(死节点收尾任务已被撤或换了一次判死,一个键都没动,只有死节点收尾脚本会回)或
+// 'busy'(场景里有人,只有空闲回收脚本会回)。
 
 // luaSceneClaimPrelude 是认领脚本的开头,先看拆除任务:
 //   - 同一 token 的任务在:脚本已经执行过,这次是 go-redis 读超时 / EOF 之后的原样重发(R5)。原样返回当时的快照,
@@ -146,24 +151,12 @@ const sceneClaimRecordTTLSeconds = 600
 //   - 别的 token 的任务在:这个场景已被另一次认领拿走、副作用还没做完,回 'pending'、一个键都不动。同一个 scene_id
 //     被重新登记时(号源出错)也挡在这里,旧任务做完之前新场景不会被认领。
 const luaSceneClaimPrelude = `
-local pendingToken = redis.call('HGET', KEYS[8], 'token')
+local pendingToken = redis.call('HGET', KEYS[7], 'token')
 if pendingToken then
     if pendingToken == ARGV[2] then
-        return cjson.decode(redis.call('HGET', KEYS[8], 'reply'))
+        return cjson.decode(redis.call('HGET', KEYS[7], 'reply'))
     end
     return {'pending', '', '', '', ''}
-end
-`
-
-// luaSceneClaimZoneCheck 守 zone 归属(docs/design/control-plane-zone-scoping-20261105.md §4.3:zone z 的控制域键只由
-// zone z 的 scene_manager 读写):场景登记的 zone(scene:{id}:zone,登记脚本写)不是认领方的 zone(ARGV[8])就回
-// 'foreign'、一个键都不动。同组几个 zone 共用一个控制域实例,别的 zone 的场景键在这里读得到、也删得掉,删了却会按
-// 本 zone 的 active 集合、待办和节点计数去记账。没有 zone 记录(登记之前的旧数据)时不拦。
-// 放在认领的同一步里比,调用方事先的判断(级联先读子镜像的 zone)只是少一次无用的 EVAL,挡不住所有调用方。
-const luaSceneClaimZoneCheck = `
-local sceneZone = redis.call('GET', KEYS[6])
-if sceneZone and sceneZone ~= ARGV[8] then
-    return {'foreign', '', '', '', ''}
 end
 `
 
@@ -174,7 +167,7 @@ end
 // 死节点收尾靠它(2026-10-22):收尾读到「属主是死节点」之后,只要有写者用 reassignSceneNode 把实例改派到活节点并
 // CreateScene,不比对的话这里会把新属主的场景抹掉、向新节点发 DestroyScene、扣新节点的计数。比较必须和删除在同一个
 // 脚本里,收尾自己的读挡不住这个窗口。所有调用方都带期望属主,属主的反向索引与 scene_count 因此能在同一步里改
-// (键由调用方按期望属主拼好放进 KEYS[10..11],脚本不从数据拼键)。
+// (键由调用方按期望属主拼好放进 KEYS[9..10],脚本不从数据拼键)。
 const luaSceneClaimOwnerCheck = `
 local nodeId = redis.call('GET', KEYS[1])
 if ARGV[6] == '' then
@@ -187,16 +180,17 @@ elseif nodeId ~= ARGV[6] then
 end
 `
 
-// luaSceneClaimDeadNodeTaskCheck 只在死节点收尾脚本里:KEYS 末尾的收尾任务表里,成员 ARGV[10] 的入队时刻必须仍是
-// ARGV[11](deadNodeTaskFence),否则回 'withdrawn'、一个键都不动。任务不在了,是判死的那一代回来、任务被撤
+// luaSceneClaimDeadNodeTaskCheck 只在死节点收尾脚本里:KEYS 末尾的收尾任务表里,成员 ARGV[9] 的入队时刻必须仍是
+// ARGV[10](deadNodeTaskFence),否则回 'withdrawn'、一个键都不动。任务表与场景键同一个 zone 的 tag,同槽。任务不在了,是判死的那一代回来、任务被撤
 // (luaWithdrawDeadNodeForReturningInstance);入队时刻变了,是撤销之后同一 node_id 又判死了一次,新任务有自己的
 // 屏障,这一轮按旧快照拆不得(R1-I6,reentry_barrier.go)。
 //
-// 必须和删除在同一个脚本里:收尾只在每条任务开始时判一次「判死的那一代回来没有」,之后逐个认领场景的这段时间里它回来,
-// 只有这里拦得住。放在属主比对之前:回来的就是这个 node_id,属主比对拦不住;先回 'withdrawn',调用方才知道停掉整轮。
+// 必须和删除在同一个脚本里:收尾只在每条任务开始时判一次「判死的那一代回来没有」,之后逐个认领场景的这段时间里任务被
+// 别的进程撤了(换主时新旧领导者短暂重叠),只有这里拦得住。放在属主比对之前:回来的就是这个 node_id,属主比对拦不住;
+// 先回 'withdrawn',调用方才知道停掉整轮。
 const luaSceneClaimDeadNodeTaskCheck = `
-local deadNodeTaskQueuedAt = redis.call('ZSCORE', KEYS[#KEYS], ARGV[10])
-if not deadNodeTaskQueuedAt or tonumber(deadNodeTaskQueuedAt) ~= tonumber(ARGV[11]) then
+local deadNodeTaskQueuedAt = redis.call('ZSCORE', KEYS[#KEYS], ARGV[9])
+if not deadNodeTaskQueuedAt or tonumber(deadNodeTaskQueuedAt) ~= tonumber(ARGV[10]) then
     return {'withdrawn', '', '', '', ''}
 end
 `
@@ -220,27 +214,27 @@ end
 // scene_count 只在 > 0 时才减:计数键可能已被死节点收尾整个删掉,DECR 会把它重建成 -1,被复用同一 node_id 的
 // 新进程继承(同 luaReassignSceneNode 对老节点的处理)。
 //
-// 摘集合的循环止于 KEYS 末尾的死节点收尾任务表之前(ARGV[9] 个):那是只读的核对键,类型是有序集合,SREM 会报
+// 摘集合的循环止于 KEYS 末尾的死节点收尾任务表之前(ARGV[8] 个):那是只读的核对键,类型是有序集合,SREM 会报
 // WRONGTYPE,而那时前面的删除已经执行、不会回滚。
 const luaSceneClaimCommit = `
-local agonesGs = redis.call('GET', KEYS[7]) or ''
+local agonesGs = redis.call('GET', KEYS[6]) or ''
 local source = redis.call('GET', KEYS[5]) or ''
 local mirror = redis.call('GET', KEYS[4]) or ''
 local members = redis.call('SMEMBERS', KEYS[2])
-redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
+redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6])
 redis.call('ZREM', KEYS[3], ARGV[1])
-local unlistFrom = 10
+local unlistFrom = 9
 if nodeId ~= '' then
-    redis.call('SREM', KEYS[10], ARGV[1])
+    redis.call('SREM', KEYS[9], ARGV[1])
     if ARGV[7] == '1' then
-        local count = tonumber(redis.call('GET', KEYS[11]) or '0') or 0
+        local count = tonumber(redis.call('GET', KEYS[10]) or '0') or 0
         if count > 0 then
-            redis.call('DECR', KEYS[11])
+            redis.call('DECR', KEYS[10])
         end
     end
-    unlistFrom = 12
+    unlistFrom = 11
 end
-local unlistTo = #KEYS - (tonumber(ARGV[9] or '0') or 0)
+local unlistTo = #KEYS - (tonumber(ARGV[8] or '0') or 0)
 for i = unlistFrom, unlistTo do
     redis.call('SREM', KEYS[i], ARGV[1])
 end
@@ -248,40 +242,35 @@ local reply = {'claimed', nodeId, agonesGs, source, mirror}
 for i = 1, #members do
     reply[i + 5] = members[i]
 end
-redis.call('HSET', KEYS[8], 'token', ARGV[2], 'kind', ARGV[4], 'reason', ARGV[5], 'claimed_at', ARGV[3],
+redis.call('HSET', KEYS[7], 'token', ARGV[2], 'kind', ARGV[4], 'reason', ARGV[5], 'claimed_at', ARGV[3],
     'reply', cjson.encode(reply))
-redis.call('ZADD', KEYS[9], ARGV[3], ARGV[1])
+redis.call('ZADD', KEYS[8], ARGV[3], ARGV[1])
 return reply
 `
 
 // luaAtomicDestroyInstance 是空闲回收的认领脚本:有人就不拆、只重置空闲时钟,没人才拆。
-const luaAtomicDestroyInstance = luaSceneClaimPrelude + luaSceneClaimZoneCheck + luaSceneClaimOwnerCheck +
-	luaSceneClaimIdleGuard + luaSceneClaimCommit
+const luaAtomicDestroyInstance = luaSceneClaimPrelude + luaSceneClaimOwnerCheck + luaSceneClaimIdleGuard + luaSceneClaimCommit
 
 // luaAtomicDestroyInstanceForce 是其余拆除的认领脚本,不看人数,只看期望属主。调用方:显式 DestroyScene、镜像级联、
 // 源迁移 / 缩容时的镜像级联(都经 AtomicDestroyForce),世界频道的排空收尾与孤儿清理(atomicTeardownScene),
 // 建实例失败的回滚(atomicRollbackInstanceAllocation)。
-const luaAtomicDestroyInstanceForce = luaSceneClaimPrelude + luaSceneClaimZoneCheck + luaSceneClaimOwnerCheck + luaSceneClaimCommit
+const luaAtomicDestroyInstanceForce = luaSceneClaimPrelude + luaSceneClaimOwnerCheck + luaSceneClaimCommit
 
 // luaAtomicDestroyOrphanOfDeadNode 是死节点收尾的认领脚本(atomicClaimOrphanOfDeadNode):不看人数,先核收尾任务仍是
 // 这一次判死,再核属主仍是死节点。
-const luaAtomicDestroyOrphanOfDeadNode = luaSceneClaimPrelude + luaSceneClaimZoneCheck + luaSceneClaimDeadNodeTaskCheck +
+const luaAtomicDestroyOrphanOfDeadNode = luaSceneClaimPrelude + luaSceneClaimDeadNodeTaskCheck +
 	luaSceneClaimOwnerCheck + luaSceneClaimCommit
 
-// errSceneInOtherZone 表示要拆的场景登记在别的 zone:它的键只由那个 zone 的 scene_manager 读写,这里一个键都没动。
-var errSceneInOtherZone = errors.New("scene is registered in another zone")
-
-// sceneClaimKeys 是认领脚本的 KEYS[1..9],见 luaSceneClaimPrelude 之前的说明。
+// sceneClaimKeys 是认领脚本的 KEYS[1..8],见 luaSceneClaimPrelude 之前的说明。
 func sceneClaimKeys(zoneId uint32, sceneId uint64) []string {
 	return []string{
-		sceneNodeKey(sceneId),
-		instanceMembersKey(sceneId),
+		sceneNodeKey(zoneId, sceneId),
+		instanceMembersKey(zoneId, sceneId),
 		activeInstancesKey(zoneId),
-		sceneMirrorFlagKey(sceneId),
-		sceneSourceKey(sceneId),
-		sceneZoneKey(sceneId),
-		sceneAgonesGsKey(sceneId),
-		sceneTeardownJobKey(sceneId),
+		sceneMirrorFlagKey(zoneId, sceneId),
+		sceneSourceKey(zoneId, sceneId),
+		sceneAgonesGsKey(zoneId, sceneId),
+		sceneTeardownJobKey(zoneId, sceneId),
 		sceneTeardownPendingKey(zoneId),
 	}
 }
@@ -318,7 +307,7 @@ func (r sceneTeardownRequest) keys() []string {
 	return keys
 }
 
-// fenceArgs 是 ARGV[9..11]:KEYS 末尾的死节点收尾任务表个数、任务成员与入队时刻。不核对任务时是 '0' 与两个空串。
+// fenceArgs 是 ARGV[8..10]:KEYS 末尾的死节点收尾任务表个数、任务成员与入队时刻。不核对任务时是 '0' 与两个空串。
 func (r sceneTeardownRequest) fenceArgs() []any {
 	if r.DeadNodeTask == nil {
 		return []any{"0", "", ""}
@@ -326,8 +315,8 @@ func (r sceneTeardownRequest) fenceArgs() []any {
 	return []any{"1", r.DeadNodeTask.member, strconv.FormatInt(r.DeadNodeTask.queuedAtMs, 10)}
 }
 
-// sceneClaim 是认领脚本的应答。Claimed=false 时其余字段都为空:期望落空,场景里有人(Busy),这个场景的上一次拆除
-// 还没做完(Pending,任务做完之前谁都认领不到),场景登记在别的 zone(Foreign),或死节点收尾任务已被撤 / 换了一次
+// sceneClaim 是认领脚本的应答。Claimed=false 时其余字段都为空:期望落空(含场景不在本 zone 的键里),场景里有人(Busy),
+// 这个场景的上一次拆除还没做完(Pending,任务做完之前谁都认领不到),或死节点收尾任务已被撤 / 换了一次
 // 判死(Withdrawn,只有 luaAtomicDestroyOrphanOfDeadNode 会回)。
 // Claimed=true 时其余字段是脚本删除前读到的值(属主为空串 = 映射本来就不在),认领之后的副作用一律以它们为准。
 // Source 是镜像源 scene_id 的十进制(不是镜像时为空),MirrorFlag 是 scene:{id}:mirror 的值("1" 表示镜像)。
@@ -337,7 +326,6 @@ type sceneClaim struct {
 	Claimed    bool
 	Busy       bool
 	Pending    bool
-	Foreign    bool
 	Withdrawn  bool
 	NodeID     string
 	AgonesGs   string
@@ -359,8 +347,6 @@ func parseSceneClaimReply(raw any) sceneClaim {
 		return sceneClaim{Busy: true}
 	case "pending":
 		return sceneClaim{Pending: true}
-	case "foreign":
-		return sceneClaim{Foreign: true}
 	case "withdrawn":
 		return sceneClaim{Withdrawn: true}
 	case "claimed":
@@ -396,7 +382,6 @@ func evalSceneClaimWithToken(svcCtx *svc.ServiceContext, script string, req scen
 	}
 	args := append([]any{
 		strconv.FormatUint(req.SceneID, 10), token, time.Now().Unix(), req.Kind, req.Reason, req.ExpectedOwner, countOwner,
-		strconv.FormatUint(uint64(req.ZoneID), 10),
 	}, req.fenceArgs()...)
 	raw, err := svcCtx.Redis.Eval(script, req.keys(), args...)
 	if err != nil {
@@ -418,8 +403,9 @@ const sceneClaimOwnerAttempts = 3
 // expectedOwner 非空时只在 scene:{id}:node 仍等于它时才拆;不等(含映射已不存在)一个键都不动。死节点收尾不走这里,
 // 它还要核对收尾任务,见 atomicClaimOrphanOfDeadNode。
 // 空串表示谁是属主都拆:先读属主、按读到的值认领;读完之后被改派就重读,至多读 sceneClaimOwnerAttempts 次。
-// 映射已不存在时不认领 —— 映射没了、别的键还在的残留只由空闲回收清扫(R3)。上一次拆除还没做完(Pending)、
-// 场景登记在别的 zone(Foreign)时也不重读,原样返回。
+// 映射已不存在时不认领 —— 映射没了、别的键还在的残留只由空闲回收清扫(R3)。场景不在 zoneId 的键里(别的 zone 的,或已
+// 销毁)也是这一支:一个键都不动,不会拆到别的 zone 的场景(docs/design/redis-cluster-all-domains-20261110.md §3.3)。
+// 上一次拆除还没做完(Pending)时也不重读,原样返回。
 //
 // 是否认领只看 Claimed:未认领时调用方必须跳过一切副作用。
 func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner, reason string) (sceneClaim, error) {
@@ -429,7 +415,7 @@ func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint6
 		return evalSceneClaim(svcCtx, luaAtomicDestroyInstanceForce, req)
 	}
 	for attempt := 0; attempt < sceneClaimOwnerAttempts; attempt++ {
-		owner, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+		owner, err := svcCtx.Redis.Get(sceneNodeKey(zoneId, sceneId))
 		if err != nil {
 			return sceneClaim{}, err
 		}
@@ -438,7 +424,7 @@ func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint6
 		}
 		req.ExpectedOwner = owner
 		claim, err := evalSceneClaim(svcCtx, luaAtomicDestroyInstanceForce, req)
-		if err != nil || claim.Claimed || claim.Pending || claim.Foreign {
+		if err != nil || claim.Claimed || claim.Pending {
 			return claim, err
 		}
 	}
@@ -458,7 +444,7 @@ func atomicClaimOrphanOfDeadNode(svcCtx *svc.ServiceContext, zoneId uint32, scen
 // atomicRollbackInstanceAllocation 原子撤销一次失败的实例创建(R3:原来逐条 DEL、不查错,中途中断会留下「映射没了、
 // 其它键还在」的残留)。只有映射仍指向这次分配的节点才认领,否则一个键都不动:期间被销毁或改派了,收尾归那条路径。
 // 节点反向索引与 scene_count 在同一步里改。镜像源的子集合按快照里的镜像源摘(runRollbackTeardown),不按请求里的
-// SourceSceneId:源在别的 zone 时登记不写 scene:{id}:source,也不进源的子集合,快照与登记天然一致。
+// SourceSceneId:快照是登记脚本写下的 scene:{ctl:<z>}:<id>:source,与登记天然一致。
 func atomicRollbackInstanceAllocation(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, nodeId string) (sceneClaim, error) {
 	return evalSceneClaim(svcCtx, luaAtomicDestroyInstanceForce, sceneTeardownRequest{
 		ZoneID: zoneId, SceneID: sceneId, Kind: teardownKindRollback, Reason: "create_rpc_failed",
@@ -483,8 +469,8 @@ func atomicTeardownScene(svcCtx *svc.ServiceContext, req sceneTeardownRequest) (
 // fail the request".
 func AtomicAddSceneMemberIfSceneExists(svcCtx *svc.ServiceContext, sceneId uint64, zoneId uint32, nodeId string, playerId uint64) (int64, error) {
 	keys := []string{
-		sceneNodeKey(sceneId),
-		instanceMembersKey(sceneId),
+		sceneNodeKey(zoneId, sceneId),
+		instanceMembersKey(zoneId, sceneId),
 	}
 	if nodeId != "" {
 		keys = append(keys, nodeMembersKey(zoneId, nodeId))
@@ -502,11 +488,12 @@ func AtomicAddSceneMemberIfSceneExists(svcCtx *svc.ServiceContext, sceneId uint6
 //
 // KEY layout passed to the script:
 //
-//	KEYS[1..2N]   = scene:{id}:node, instance:<id>:members, ...
+//	KEYS[1..2N]   = scene:{ctl:<z>}:<id>:node, instance:{ctl:<z>}:<id>:members, ...
 //	                interleaved per candidate (N candidates total)
-//	KEYS[2N+1..3N] = node:zone:{zoneId}:{candidateNode}:members, one per candidate,
+//	KEYS[2N+1..3N] = node:{ctl:<z>}:<candidateNode>:members, one per candidate,
 //	                 indexed identically to ARGV so the script can pick
 //	                 the winner's node key without string-building.
+//	(全部候选都是同一个 zone 的频道,3N 把键同一个 tag。)
 //
 // ARGV[i] = candidate i's nodeId string. Used both as the value the
 // scene:{id}:node GET is compared to, and as the node identifier
@@ -521,8 +508,8 @@ func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChann
 	// Pairs: scene_node_key, members_key, scene_node_key, members_key, ...
 	for _, c := range candidates {
 		keys = append(keys,
-			fmt.Sprintf(SceneNodeKeyFmt, c.SceneID),
-			instanceMembersKey(c.SceneID),
+			sceneNodeKey(c.ZoneID, c.SceneID),
+			instanceMembersKey(c.ZoneID, c.SceneID),
 		)
 	}
 	// Trailing N entries: per-candidate node members keys.
@@ -567,7 +554,7 @@ func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChann
 // 属主先读一次,按读到的值认领。映射已经不在时按「必须仍不在」认领,收掉 active 集合里的残留:NodeID 为空,
 // agones_gs 还在就由副作用归还,不当成有人进场再加回去。属主在读与认领之间变了就回未认领,下一拍重判。
 func ClaimIdleSceneTeardown(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (sceneClaim, error) {
-	owner, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+	owner, err := svcCtx.Redis.Get(sceneNodeKey(zoneId, sceneId))
 	if err != nil {
 		return sceneClaim{}, err
 	}

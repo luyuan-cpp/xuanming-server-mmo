@@ -220,7 +220,7 @@ func listSceneMemberSets(svcCtx *svc.ServiceContext) []sceneMemberSet {
 				if err != nil || sceneID == 0 {
 					continue
 				}
-				sets = append(sets, sceneMemberSet{key: instanceMembersKey(sceneID), sceneID: sceneID, zoneID: zone})
+				sets = append(sets, sceneMemberSet{key: instanceMembersKey(zone, sceneID), sceneID: sceneID, zoneID: zone})
 			}
 		}
 	}

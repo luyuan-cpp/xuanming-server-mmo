@@ -25,7 +25,8 @@ import java.util.function.LongSupplier;
  *   <li>账号冷却(进程内):同一端点上同一(账号, 客户端 IP)距上次放行不足冷却窗口 → 429 {@code ACCOUNT_COOLDOWN}。</li>
  * </ol>
  *
- * <p><b>两个桶一次原子地判</b>({@link RateLimitStore#admit};Redis 上是一段 Lua,见 {@link RedisRateLimitStore})。
+ * <p><b>两个桶在一次 {@link RateLimitStore#admit} 里判</b>(Redis 上 2026-11-12 起每个桶一段单键 Lua,区桶空时退还 IP 令牌,
+ * 两键可以在 Redis Cluster 的不同节点上,见 {@link RedisRateLimitStore})。
  * 2026-11-05 起先 IP 后区(服务器缺口清单第 29 条,同时了结开服限流设计的 R13 / J1):以前先扣区桶,被 IP 桶拒掉的请求
  * 也已经吃掉一个区令牌,单个 IP 狂发就能把全区的桶掏空、让所有人排队。区桶空时 IP 令牌不扣:排队中的重试不吃 IP 桶,
  * 同一 NAT 后面的一群人等区桶时不会被 429 踢出排队。判定顺序与 Java 版(xuanming-server-mmo 的 RateLimiter)一致。

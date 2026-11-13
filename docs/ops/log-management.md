@@ -58,7 +58,8 @@ Container stdout/stderr
 
 - Applications write structured JSON logs to stdout.
   **这一条对 C++ 节点不成立**:Linux 下 muduo 的业务日志根本不进 stdout(原因见 This Project),
-  所以本仓的 C++ 采集走的是"共享卷直接读文件",而不是上面这条管线。
+  所以本仓的 C++ 业务日志走的是"共享卷直接读文件",而不是上面这条管线。Go / Java 与 C++ 容器自己的 stdout / stderr
+  走的就是这条,DaemonSet 用的是 Alloy(2026-11-12,见 This Project)。
 - Fluentd / Filebeat 与 Elasticsearch / ClickHouse / Kibana:**本项目未部署**,这里只是通用参考;
   本仓落地的是 Alloy + Loki + Grafana。
 - Every log entry should include `trace_id` for cross-service correlation.
@@ -92,9 +93,9 @@ Container runtime handles log rotation automatically:
 
 ### This Project
 
-本仓 k8s 上**当前实际**的日志形态(2026-09-19),与上面的通用参考对照着看:
+本仓 k8s 上**当前实际**的日志形态(2026-09-19;2026-11-12 补上容器 stdout / stderr 与 trace 字段),与上面的通用参考对照着看:
 
-- **C++ 节点 = 共享卷 + Alloy sidecar → 集群内 Loki(已落码)**。不走 stdout,也没有 DaemonSet 参与:
+- **C++ 节点的业务日志 = 共享卷 + Alloy sidecar → 集群内 Loki(已落码)**。不走 stdout,DaemonSet 不参与这一路:
   每个 C++ Pod 带一个名为 `log-sidecar` 的 **k8s 原生 sidecar**(写在 `initContainers` 里,带 `restartPolicy: Always`),
   与业务容器共享 `node-logs` 卷(sidecar 侧只读),直接读 `/app/bin/logs/cpp_nodes/*.log` 推给 infra namespace 的 Loki
   (`deploy/k8s/manifests/infra/loki.yaml`)。生成逻辑集中在 `tools/scripts/k8s_deploy.ps1` 的 `New-CppLogSidecar*`,
@@ -117,14 +118,19 @@ Container runtime handles log rotation automatically:
     访问密钥经环境变量 `MMORPG_LOKI_S3_ACCESS_KEY_ID`、`MMORPG_LOKI_S3_SECRET_ACCESS_KEY` 注入成 Secret)。云上用云厂商的对象存储,自建机房用平台层的 Rook-Ceph RGW。
     dev、kind 上验证 3 副本用 `-LokiS3DevFixture`(单进程 SeaweedFS,数据在 emptyDir,不进 staging、prod)。
   - 1 → 3 要 `-ConfirmLokiTopologyChange`,旧 PVC 里的日志不迁移;3 → 1 拒绝。细节见 `deploy/k8s/README.md`「Loki:单副本与单体模式 3 副本」。
-- **Go / Java 服务 = 仍是容器 stdout,尚未采集**。集群里**还没有**读 `/var/log/pods` 的 DaemonSet,这条路属于**未做**;
-  现在只能 `kubectl logs` 看,Pod 重建即丢。
-- **这套方案采不到的东西**(别以为都进了 Loki):容器 stdout/stderr 上的 gRPC / abseil / librdkafka 输出,
-  以及崩溃现场文本(glibc 断言、`terminate called`、abort 栈)—— 它们不经 muduo,不落共享卷。
-  Loki 里的 `level="fatal"` 只覆盖代码里显式 `LOG_FATAL` 的分支。
-- **链路关联字段(2026-11-11)**:本机 Alloy 已把 `trace_id` / `span_id` / `player_id` 提成结构化元数据;
-  集群里的 C++ sidecar 规则**还没加**([distributed-tracing.md](../design/distributed-tracing.md) §9.2,改它会滚动重启 C++ 节点),
-  Go / Java 在集群里本来就没采。在那之前集群里按 trace 查用行内搜索 `|= "trace_id=<32 位>"`,C++ 行尾后缀里有原文。
+- **容器 stdout / stderr = 读 `/var/log/pods` 的 Alloy DaemonSet → 同一个 Loki(2026-11-12 已落码,未运行)**:
+  infra namespace 里的 `pod-log-collector`,每个节点一个,采 Go 服务与 Java 网关的全部日志(清单标了 `tier: go-svc` / `java-svc` 的 Pod),
+  以及 C++ 节点容器自己的 stdout / stderr(gRPC / abseil、librdkafka、未捕获异常、gate 的启动行)。解析规则照搬本机 `config.alloy`,
+  时间用 CRI 时间戳;标签从 Pod 元数据取(`service` = `app` 标签,`zone` 取自命名空间)。与 C++ sidecar 同开同关(`-NoCppLogSidecar`)、
+  推同一个地址,只随 `infra-up` 部署。细节、权限(root 只读 hostPath,PSA baseline 会拒)与排障见
+  [grafana-loki-local-logs.md](grafana-loki-local-logs.md) §6.11。
+- **这套方案采不到的东西**(别以为都进了 Loki):infra 里 etcd / Kafka / Redis / MySQL / Loki 自己的日志;没有文本的崩溃
+  (段错误、被信号杀掉);DaemonSet 没部署的集群里上面那一路的全部内容。Loki 里的 `level="fatal"` 覆盖 `LOG_FATAL` 与未捕获异常,
+  查不到仍不等于没崩,崩没崩看 Pod 的 `Last State`。
+- **链路关联字段**:本机(2026-11-11)与集群(2026-11-12,未运行)都把 `trace_id` / `span_id` / `player_id` 提成结构化元数据,
+  只在那一行真带了值时才写,绝不做标签。集群里 C++ 由 sidecar 的两条行尾正则取,Go / Java 由 DaemonSet 照本机的规则取
+  ([distributed-tracing.md](../design/distributed-tracing.md) §9.2)。查询:`{env="k8s"} | trace_id="<32 位>"`、`{env="k8s"} | player_id="<id>"`。
+  sidecar 规则这一改会让下一次 `zone-up` 滚动重启 C++ 节点。
 - **未部署**:Fluentd / Filebeat / Elasticsearch / Kibana 本项目一个都没有。
 - **本地文件只留最近一小段**:业务容器的启动命令里带一个每 5 分钟跑一次的清理循环,把
   `/app/bin/logs/cpp_nodes/*.log` 按时间排序后只留最近 8 个(≈64MiB)—— muduo 每 8MiB 滚一个新文件且**从不删旧文件**。

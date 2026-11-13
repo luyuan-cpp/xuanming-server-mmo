@@ -107,3 +107,54 @@ TEST(SceneClientCallReplyTest, EveryRpcFailureGetsServiceUnavailableEnvelope)
 			<< RpcStatusCodeName(code);
 	}
 }
+
+// ---------------------------------------------------------------------------
+// 「稍后重投」(docs/design/client-scene-request-handoff-hold.md §4.3、§4.5):scene 在派发前早退、但明确答复
+// dispatch_verdict = RETRY_LATER 时,gate 不回 1003,而是把请求放回会话队头按序重投。回归对象:玩家换场景节点的
+// 窗口里,发往 scene 的请求原先一律被当成普通早退回 1003,由客户端自己重发。
+// ---------------------------------------------------------------------------
+
+TEST(SceneClientCallReplyTest, RetryLaterVerdictIsRetriedInsteadOfAnswered)
+{
+	ProcessClientPlayerMessageResponse sent;
+	sent.set_dispatch_verdict(CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER);
+	const auto reply = OverTheWire(sent);
+	ASSERT_FALSE(reply.has_message_content());
+	EXPECT_EQ(Decide(RpcStatus::Ok(), &reply, kCorrelatedRequestId), Disposition::kRetryLater);
+	// 请求号为 0 的同样重投:重投不靠请求号关联,只有最终放弃时才按「没法关联」不回执。
+	EXPECT_EQ(Decide(RpcStatus::Ok(), &reply, kUncorrelatedRequestId), Disposition::kRetryLater);
+}
+
+TEST(SceneClientCallReplyTest, EarlyReturnWithoutVerdictIsStillAnsweredAtOnce)
+{
+	// 旧版 scene 不填这个字段,新版 scene 的其余早退(请求解析失败、旧会话、身份栅栏等)也不填:等也没用,照旧回 1003。
+	ProcessClientPlayerMessageResponse sent;
+	sent.set_dispatch_verdict(CLIENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIED);
+	const auto reply = OverTheWire(sent);
+	EXPECT_EQ(Decide(RpcStatus::Ok(), &reply, kCorrelatedRequestId), Disposition::kServiceUnavailableEnvelope);
+}
+
+TEST(SceneClientCallReplyTest, DispatchedContentWinsOverRetryLaterVerdict)
+{
+	// 防御:应答既带内容又带「稍后重投」时,以内容为准 —— 带内容就说明 handler 跑过了,重投会让请求执行两次。
+	auto sent = DispatchedReply(kCorrelatedRequestId, "body");
+	sent.set_dispatch_verdict(CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER);
+	const auto reply = OverTheWire(sent);
+	EXPECT_EQ(Decide(RpcStatus::Ok(), &reply, kCorrelatedRequestId), Disposition::kForwardContent);
+}
+
+TEST(SceneClientCallReplyTest, RpcFailureIsNeverRetried)
+{
+	// 结果未知的失败(超时 / 断连等)重投可能让请求执行两次;确定未执行的失败(没发出去 / 对端派发前拒绝)等也未必有用。
+	// 两类都不重投,照旧回 1003,由客户端决定是否重发(有副作用的请求靠幂等键)。
+	constexpr std::array kFailures{
+		RpcStatusCode::kNotSent,      RpcStatusCode::kRemoteRejected, RpcStatusCode::kRemoteFailed,
+		RpcStatusCode::kReplyDropped, RpcStatusCode::kTimeout,        RpcStatusCode::kDisconnected,
+		RpcStatusCode::kChannelClosed, RpcStatusCode::kInvalidResponse,
+	};
+	for (const auto code : kFailures)
+	{
+		EXPECT_NE(Decide(RpcStatus{code}, nullptr, kCorrelatedRequestId), Disposition::kRetryLater)
+			<< RpcStatusCodeName(code);
+	}
+}

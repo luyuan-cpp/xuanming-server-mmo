@@ -111,7 +111,7 @@ message AssetItemInstance {
 }
 
 message AssetPetInstance {
-  uint64 pet_id = 1;       // 与 PetInstance.pet_id 同源(SnowFlake guid)
+  uint64 pet_id = 1;       // 与 PetInstance.pet_id 同源(发号器 item 号段),只当身份用,不能解析
   uint32 pet_table_id = 2; // Pet 表 id
   string name = 3;         // 玩家自定义名;空 = 用 PetTable.name
   uint32 level = 4;        // 成交时的等级快照,只为展示

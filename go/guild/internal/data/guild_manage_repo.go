@@ -671,7 +671,7 @@ func (r *GuildRepo) ResolvePlayerGuild(ctx context.Context, playerID uint64) (*G
 		return guild, nil
 	}
 
-	// 帮已不存在,或快照里没有本人:两种情况都说明 guild:v2:{id} 与映射至少有一个是陈旧的。
+	// 帮已不存在,或快照里没有本人:两种情况都说明 guild:v2:{g:<id>} 与映射至少有一个是陈旧的。
 	r.invalidateAfterCommit(ctx, opVerifyMapping, guildID)
 	verified, err := r.VerifyPlayerGuildID(ctx, playerID, guildID)
 	if err != nil {

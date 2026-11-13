@@ -80,10 +80,22 @@ var idIssuerRetire = flag.Bool("id-issuer-retire", false, "retire the configured
 var idIssuerRetireUnbound = flag.Bool("id-issuer-retire-unbound", false,
 	"with -id-issuer-retire: retire a code that is in use from a deployment it is not bound to, once the bound region is confirmed gone")
 
-// idRegistryOpen 开启全局号源登记处:写入第一个可认领的码。只在世界第一次部署(-id-registry-next 1),
-// 或登记处整个丢了数据重建时跑(-id-registry-next 取台账里用过的最大码 +1)。
+// idIssuerRetireCode 只和 -id-issuer-retire 一起用:退役这个码,而不是配置里的地域码。给登记处重建时的退役码补墓碑、
+// 跳过下一个可认领的码、退役一个已经不在的地域,都要操作别的码;配置里的地域码有部署注入的值把关,不能为了这个去改配置。
+// 没给这个参数就退役配置里的码;显式给的值必须是 1..63(retireIssuerFactory),缺省值 -1 只是占位。
+var idIssuerRetireCode = flag.Int("id-issuer-retire-code", -1,
+	"with -id-issuer-retire: retire this region code (1..63) instead of the configured one")
+
+// idRegistryOpen 开放全局号源登记处的认领。只在两种时候跑:世界第一次部署(-id-registry-next 1);
+// 登记处整个丢了数据、重建做完时(-id-registry-next 等于登记处里重建中的那个值)。
 var idRegistryOpen = flag.Bool("id-registry-open", false, "open the global id registry with -id-registry-next as the first claimable region code and exit")
-var idRegistryNext = flag.Int("id-registry-next", -1, "with -id-registry-open: the first region code -id-issuer-init may claim (1 for a new world)")
+
+// idRegistryRebuild 在登记处整个丢了数据之后声明重建:写入下一个可认领的码(-id-registry-next 取台账里用过的最大码 +1),
+// 还不开放认领。之后在用的地域各自 -id-issuer-recover,台账里的退役码按它核对补墓碑,全部做完再 -id-registry-open(运维手册 §4.3)。
+var idRegistryRebuild = flag.Bool("id-registry-rebuild", false,
+	"declare the next claimable region code (-id-registry-next) of a global id registry that lost its data, without opening claims, and exit")
+var idRegistryNext = flag.Int("id-registry-next", -1,
+	"with -id-registry-open or -id-registry-rebuild: the next claimable region code (1 for a new world, the largest used code + 1 for a rebuild)")
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 
@@ -103,6 +115,7 @@ const (
 	entryIdIssuerRecover
 	entryIdIssuerRetire
 	entryIdRegistryOpen
+	entryIdRegistryRebuild
 )
 
 // entryFlags 是选入口要看的 flag。
@@ -114,30 +127,36 @@ type entryFlags struct {
 	issuerRebind        bool
 	issuerRetire        bool
 	issuerRetireUnbound bool
+	issuerRetireCode    bool // 给了 -id-issuer-retire-code
 	registryOpen        bool
+	registryRebuild     bool
 }
 
 // selectEntry 按 flag 选入口(纯函数,data_service_entry_test.go 表驱动钉住)。args 是 flag.Args()(第一个非 flag 参数起)。
-//   - -migrate、-route-tool、-id-issuer-init、-id-issuer-recover、-id-issuer-retire、-id-registry-open 同时给多个:拒绝(一次只做一件事);
+//   - -migrate、-route-tool、-id-issuer-init、-id-issuer-recover、-id-issuer-retire、-id-registry-open、-id-registry-rebuild
+//     同时给多个:拒绝(一次只做一件事);
 //   - -id-issuer-rebind 不和 -id-issuer-recover 一起:拒绝,它只是恢复的一个确认开关;
-//   - -id-issuer-retire-unbound 不和 -id-issuer-retire 一起:拒绝,它只是退役的一个确认开关;
+//   - -id-issuer-retire-unbound、-id-issuer-retire-code 不和 -id-issuer-retire 一起:拒绝,它们只是退役的参数;
 //   - -route-tool 但没有子命令:拒绝;
 //   - 没有 -route-tool 却带位置参数:拒绝 —— 以前这些参数被静默忽略,`data_service -f x.yaml freeze` 会被当成一次普通启动、
 //     起一个服务进发现池,而运维以为自己跑的是冻结。
 func selectEntry(f entryFlags, args []string) (entryMode, error) {
 	exclusive := 0
-	for _, on := range []bool{f.migrate, f.routeTool, f.issuerInit, f.issuerRecover, f.issuerRetire, f.registryOpen} {
+	for _, on := range []bool{f.migrate, f.routeTool, f.issuerInit, f.issuerRecover, f.issuerRetire, f.registryOpen, f.registryRebuild} {
 		if on {
 			exclusive++
 		}
 	}
 	switch {
 	case exclusive > 1:
-		return entryServe, errors.New("-migrate, -route-tool, -id-issuer-init, -id-issuer-recover, -id-issuer-retire and -id-registry-open are mutually exclusive")
+		return entryServe, errors.New("-migrate, -route-tool, -id-issuer-init, -id-issuer-recover, -id-issuer-retire, -id-registry-open " +
+			"and -id-registry-rebuild are mutually exclusive")
 	case f.issuerRebind && !f.issuerRecover:
 		return entryServe, errors.New("-id-issuer-rebind only works together with -id-issuer-recover")
 	case f.issuerRetireUnbound && !f.issuerRetire:
 		return entryServe, errors.New("-id-issuer-retire-unbound only works together with -id-issuer-retire")
+	case f.issuerRetireCode && !f.issuerRetire:
+		return entryServe, errors.New("-id-issuer-retire-code only works together with -id-issuer-retire")
 	case f.routeTool && len(args) == 0:
 		return entryServe, errors.New("-route-tool needs a subcommand: data_service -f <yaml> -route-tool <subcommand> [flags]")
 	case f.routeTool:
@@ -155,6 +174,8 @@ func selectEntry(f entryFlags, args []string) (entryMode, error) {
 		return entryIdIssuerRetire, nil
 	case f.registryOpen:
 		return entryIdRegistryOpen, nil
+	case f.registryRebuild:
+		return entryIdRegistryRebuild, nil
 	default:
 		return entryServe, nil
 	}
@@ -192,7 +213,9 @@ func main() {
 		issuerRebind:        *idIssuerRebind,
 		issuerRetire:        *idIssuerRetire,
 		issuerRetireUnbound: *idIssuerRetireUnbound,
+		issuerRetireCode:    flagGiven("id-issuer-retire-code"),
 		registryOpen:        *idRegistryOpen,
+		registryRebuild:     *idRegistryRebuild,
 	}, flag.Args())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "data_service: %v\n", err)
@@ -216,35 +239,37 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
-	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入)。-migrate、-route-tool 与常驻启动都连库,所以在分流之前填;
-	// 迁移与 route-tool 的 Job 同样注入这个变量。
-	var mysqlAuthErr error
-	c, mysqlAuthErr = c.ResolveMySQLPassword(os.LookupEnv)
-	if mysqlAuthErr != nil {
-		fmt.Fprintf(os.Stderr, "data_service refuses to start: %v\n", mysqlAuthErr)
-		os.Exit(1)
-	}
 
 	if entry == entryMigrate {
 		os.Exit(runMigration(c))
 	}
 	switch entry {
 	case entryIdIssuerInit:
-		os.Exit(runIdIssuerTool(c, "id issuer init", idIssuerInitOp))
+		os.Exit(runIdIssuerTool(c, svc.NewIdIssuer, "id issuer init", idIssuerInitOp))
 	case entryIdIssuerRecover:
 		rebind := *idIssuerRebind
-		os.Exit(runIdIssuerTool(c, "id issuer recover", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
+		os.Exit(runIdIssuerTool(c, svc.NewIdIssuer, "id issuer recover", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
 			return issuer.Recover(ctx, rebind)
 		}))
 	case entryIdIssuerRetire:
 		unbound := *idIssuerRetireUnbound
-		os.Exit(runIdIssuerTool(c, "id issuer retire", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
+		newIssuer, codeErr := retireIssuerFactory(flagGiven("id-issuer-retire-code"), *idIssuerRetireCode)
+		if codeErr != nil {
+			fmt.Fprintf(os.Stderr, "data_service: %v\n", codeErr)
+			os.Exit(2)
+		}
+		os.Exit(runIdIssuerTool(c, newIssuer, "id issuer retire", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
 			return idIssuerRetireOp(ctx, issuer, unbound)
 		}))
 	case entryIdRegistryOpen:
 		next := *idRegistryNext
-		os.Exit(runIdIssuerTool(c, "id registry open", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
+		os.Exit(runIdIssuerTool(c, svc.NewIdIssuer, "id registry open", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
 			return idRegistryOpenOp(ctx, issuer, next)
+		}))
+	case entryIdRegistryRebuild:
+		next := *idRegistryNext
+		os.Exit(runIdIssuerTool(c, svc.NewIdIssuer, "id registry rebuild", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
+			return idRegistryRebuildOp(ctx, issuer, next)
 		}))
 	}
 	var globalErr error
@@ -259,6 +284,11 @@ func main() {
 	c, redisAuthErr = c.ResolveSharedRedisPassword(os.LookupEnv)
 	if redisAuthErr != nil {
 		fmt.Fprintf(os.Stderr, "data_service refuses to start: %v\n", redisAuthErr)
+		os.Exit(1)
+	}
+	// 控制集群段:名字读缓存常驻就连它,不分开关(Recall 用的是同一段)。-migrate 与发号器运维入口不连 Redis,所以也放在它们之后。
+	if err := c.ValidateControlRedis(); err != nil {
+		fmt.Fprintf(os.Stderr, "data_service refuses to start: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -422,7 +452,17 @@ func runDataService(c config.Config) (runErr error) {
 	//
 	// New 出来立刻可用(规则为空 = 全放行),Start 非阻塞、etcd 为 nil 也合法,
 	// 所以整段接线不会让 data_service 的启动多出任何一个失败点。
-	ks := killswitch.New(killswitch.Config{})
+	//
+	// NodeTypes:认 type/DataServiceNodeService/ 下的规则;注册成功后在 onRegistered 里 AddInstance
+	// (docs/design/rpc-kill-switch.md §5)。受保护的方法(§8,只认精确规则):ReleasePlayerName 是 login 建角失败的回滚,
+	// 挡住它名字会一直被占;AckRoleTradeDrain 是交易排空回执,挡住它排空证明提交不了。
+	ks := killswitch.New(killswitch.Config{
+		NodeTypes: []string{base.ENodeType_name[int32(base.ENodeType_DataServiceNodeService)]},
+		Protected: []string{
+			data_service.DataService_ReleasePlayerName_FullMethodName,
+			data_service.DataService_AckRoleTradeDrain_FullMethodName,
+		},
+	})
 	ksCtx, ksCancel := context.WithCancel(context.Background())
 	etcdCli := newKillSwitchEtcdClient(c.Etcd)
 	// watch 只更新本地拒绝规则，不发行资产、不使用 SQL，也不能重新打开生命周期门禁。
@@ -509,7 +549,10 @@ func runDataService(c config.Config) (runErr error) {
 	// 这把的契约恰好相反(建不出来就拒启)。两把 defer 的 LIFO 顺序保证先注销再关客户端。
 	regCli := mustNewNodeRegistryEtcdClient(c.Etcd)
 	// 注册拿到 node_uuid 之后,回收重投的成员表才认得出本副本(缺口清单第 25 条);此前成员表若已有别的副本,本副本一片都不做。
-	registrar := startNodeRegistration(c, regCli, svcCtx.BindRecallWorkMember)
+	registrar := startNodeRegistration(c, regCli, func(nodeUUID string) {
+		svcCtx.BindRecallWorkMember(nodeUUID)
+		ks.AddInstance(nodeUUID) // 认 instance/<本进程 uuid>/ 下的热关停规则
+	})
 	stopAuxiliary = func(ctx context.Context) error {
 		ksCancel()
 		result := registrar.closeAndReport(ctx)
@@ -534,13 +577,13 @@ func runDataService(c config.Config) (runErr error) {
 	// node_id 要等端口 accept 后由注册 goroutine 打日志([NodeRegistry] ...);横幅只能给出路径与租约。
 	fmt.Printf("  c++ node:    DataServiceNodeService.rpc/zone/%d/node_type/%d (lease_ttl=%ds, advertised %s:%d)\n",
 		c.ZoneId, uint32(base.ENodeType_DataServiceNodeService), c.LeaseTTL, registrar.host, registrar.port)
-	fmt.Printf("  name cache:  %s\n", c.NameCacheRedis.Host)
+	fmt.Printf("  name cache:  control cluster %s\n", c.ControlRedis.Describe())
 	fmt.Printf("  route:       player_route on the global DB (merged_zone_refresh_sec=%d)\n", c.RouteStore.MergedZoneRefreshSec)
 	if c.MetricsListenAddr != "" {
 		fmt.Printf("  metrics:     %s/metrics\n", c.MetricsListenAddr)
 	}
 	if len(c.Kafka.Brokers) > 0 {
-		// 打**有效** topic 名(带代号后缀):排障时第一件要核对的就是它与 C++ 生产者一致。
+		// 打**有效** topic 名(带代号后缀):排障时第一件要核对的就是它与生产者 go/db(AuditOutbox 段,审计发件箱转发)一致。
 		fmt.Printf("  kafka:       %v (%s, %s)\n", c.Kafka.Brokers,
 			c.Kafka.EffectiveTransactionLogTopic(), c.Kafka.EffectiveSnapshotTopic())
 	}
@@ -650,9 +693,38 @@ func runMigration(c config.Config) int {
 // idIssuerToolTimeout 是发号器运维入口的预算:读写三套 etcd 各几次,登记处可能在别的地域,不需要更久。
 const idIssuerToolTimeout = 30 * time.Second
 
-// runIdIssuerTool 按配置装配发号器,跑一个运维操作:成功 0,失败 1。输出一行结果给运维核对。
-func runIdIssuerTool(c config.Config, name string, op func(context.Context, *idissuer.Issuer) (string, error)) int {
-	issuer, err := svc.NewIdIssuer(c)
+// idIssuerFactory 装配运维入口要用的发号器。
+type idIssuerFactory func(config.Config) (*idissuer.Issuer, error)
+
+// flagGiven 报告命令行里有没有显式给过这个 flag,给的值恰好等于缺省值也算。
+func flagGiven(name string) bool {
+	given := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			given = true
+		}
+	})
+	return given
+}
+
+// retireIssuerFactory 选 -id-issuer-retire 用哪种装配。没给 -id-issuer-retire-code:退役配置里的码,它要和部署注入的地域码一致。
+// 给了:操作那个码,必须是 1..63。显式给的值不合法一律报错,绝不回落到配置里的码:那是本地域正在用的码,
+// 而本地域正是绑定它的环境,退役会直接通过。
+func retireIssuerFactory(codeGiven bool, code int) (idIssuerFactory, error) {
+	if !codeGiven {
+		return svc.NewIdIssuer, nil
+	}
+	if code < 1 || code > int(idissuer.MaxRegion) {
+		return nil, fmt.Errorf("-id-issuer-retire-code must be in 1..%d, got %d", idissuer.MaxRegion, code)
+	}
+	return func(c config.Config) (*idissuer.Issuer, error) {
+		return svc.NewIdIssuerForRegionCode(c, uint32(code))
+	}, nil
+}
+
+// runIdIssuerTool 用 newIssuer 装配发号器,跑一个运维操作:成功 0,失败 1。输出一行结果给运维核对。
+func runIdIssuerTool(c config.Config, newIssuer idIssuerFactory, name string, op func(context.Context, *idissuer.Issuer) (string, error)) int {
+	issuer, err := newIssuer(c)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s FAILED: %v\n", name, err)
 		return 1
@@ -682,7 +754,7 @@ func idIssuerInitOp(ctx context.Context, issuer *idissuer.Issuer) (string, error
 }
 
 // idIssuerRetireOp 是 -id-issuer-retire。已退役时什么也不做。码还在用时只能在绑定它的地域执行;
-// unbound(-id-issuer-retire-unbound)是那个地域已经不在时的确认开关。
+// unbound(-id-issuer-retire-unbound)是那个地域已经不在时的确认开关。退役哪个码由装配决定(retireIssuerFactory)。
 func idIssuerRetireOp(ctx context.Context, issuer *idissuer.Issuer, unbound bool) (string, error) {
 	retired, err := issuer.Retire(ctx, unbound)
 	if err != nil {
@@ -695,10 +767,11 @@ func idIssuerRetireOp(ctx context.Context, issuer *idissuer.Issuer, unbound bool
 }
 
 // idRegistryOpenOp 是 -id-registry-open。-id-registry-next 必须显式给 1..64:新世界给 1,
-// 重建给台账里用过的最大码 +1。已开启时什么也不做。
+// 结束重建时给登记处里重建中的那个值(对不上就报出它现在的值)。已开放时什么也不做。
 func idRegistryOpenOp(ctx context.Context, issuer *idissuer.Issuer, next int) (string, error) {
 	if next < 1 || next > int(idissuer.MaxNextRegion) {
-		return "", fmt.Errorf("-id-registry-open needs -id-registry-next in 1..%d (1 for a new world, the largest used code + 1 when rebuilding)", idissuer.MaxNextRegion)
+		return "", fmt.Errorf("-id-registry-open needs -id-registry-next in 1..%d (1 for a new world, "+
+			"the value the registry holds when finishing a rebuild)", idissuer.MaxNextRegion)
 	}
 	opened, err := issuer.OpenRegistry(ctx, uint32(next))
 	if err != nil {
@@ -707,7 +780,25 @@ func idRegistryOpenOp(ctx context.Context, issuer *idissuer.Issuer, next int) (s
 	if !opened {
 		return "the id registry is already open, nothing changed", nil
 	}
-	return fmt.Sprintf("id registry opened, the first claimable region code is %d", next), nil
+	return fmt.Sprintf("id registry opened, the next claimable region code is %d", next), nil
+}
+
+// idRegistryRebuildOp 是 -id-registry-rebuild。-id-registry-next 必须显式给 1..64,取地域码台账里用过的最大码 +1。
+// 已经声明过(重建中或已开放)时什么也不做。
+func idRegistryRebuildOp(ctx context.Context, issuer *idissuer.Issuer, next int) (string, error) {
+	if next < 1 || next > int(idissuer.MaxNextRegion) {
+		return "", fmt.Errorf("-id-registry-rebuild needs -id-registry-next in 1..%d (the largest used code in the region code ledger + 1)",
+			idissuer.MaxNextRegion)
+	}
+	declared, err := issuer.BeginRegistryRebuild(ctx, uint32(next))
+	if err != nil {
+		return "", err
+	}
+	if !declared {
+		return "the id registry already holds a next claimable region code (it is being rebuilt or is open), nothing changed", nil
+	}
+	return fmt.Sprintf("id registry rebuild started at next claimable region code %d; recover every active region, add the "+
+		"tombstones from the ledger, then finish with -id-registry-open (docs/ops/id-issuer-runbook.md §4.3)", next), nil
 }
 
 // migrateExitLockBusy 与 go/schemamigrate 的 ExitLockBusy 同值:迁移锁被另一个实例(另一个副本的启动路径,
@@ -1157,6 +1248,7 @@ func dataServiceRelayMethods() map[string]bool {
 		"/data_service.DataService/GetPlayerHomeZone":             true,
 		"/data_service.DataService/BatchGetPlayerHomeZone":        true,
 		"/data_service.DataService/GetMergedZones":                true,
+		"/data_service.DataService/CountZoneRoles":                true,
 		"/data_service.DataService/ListPlayerSnapshots":           true,
 		"/data_service.DataService/QueryTransactionLog":           true,
 		"/data_service.DataService/AllocateIdSegment":             true,

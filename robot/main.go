@@ -318,6 +318,15 @@ func main() {
 		return
 	}
 
+	// gate-migrate-smoke: gate 排空迁移的端到端冒烟(C++ 仓 docs/design/gate-drain-session-migration.md)
+	// (4 个机器人登录进场 → 等人给其中一台 gate 打排空标记 → 那台上的机器人全部经 msg 124 换到别的 gate、
+	//  接回原场景里的同一个实体、没被踢 → 别的 gate 上的机器人不动 → 迁走的机器人在新连接上请求有应答、心跳有回包)。
+	// 跟随 124 用的是上面注册的通用重登。见 gate_migrate_smoke_scenario.go;前置条件写在 etc/gate_migrate_smoke.yaml 文件头。
+	if cfg.Mode == "gate-migrate-smoke" {
+		RunGateMigrateSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {
@@ -443,7 +452,8 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 	// Fetch a fresh gate token for each connection attempt so the gate token
 	// TTL (10min since Round 19, see login assigngatelogic.gateTokenTTL) is
 	// never stale — even under high robot counts or retry backoff.
-	host, portStr, tokenPayload, tokenSig, err := resolveGateAddrLocal(cfg)
+	// 重连时带上一轮的 access token:login 鉴权后对仍有在线会话的账号免排队,与真实客户端同一口径;首次登录没有令牌,匿名分配。
+	host, portStr, tokenPayload, tokenSig, err := resolveGateViaHTTPLocal(cfg, reusableAccessToken(prevAccessToken, prevAccessExpire))
 	if err != nil {
 		zap.L().Error("resolve gate address failed", zap.String("account", account), zap.Error(err))
 		stats.LoginFail()
@@ -691,8 +701,19 @@ type gateAssignmentLocal struct {
 }
 
 // resolveGateAddrLocal keeps main.go runnable as a single-file command.
+// 不带 access token,匿名分配:各冒烟场景都是先分配 gate、连上之后才认证,只在 login 的旧 gate 凭据登录还开着时可用。
+// 主压测循环的重连带上一轮的令牌,见 runRobotOnce。
 func resolveGateAddrLocal(cfg *config.Config) (host, port string, payload, signature []byte, err error) {
-	return resolveGateViaHTTPLocal(cfg)
+	return resolveGateViaHTTPLocal(cfg, "")
+}
+
+// reusableAccessToken 返回还能用来认证的 access token:非空,且离过期至少 60 秒(过期时间为 0 = 不知道,照用)。
+// 用不了返回空串。重连时的会话绑定(loginAndEnterWithAuth)与 assign-gate 鉴权(runRobotOnce)共用这条判据。
+func reusableAccessToken(accessToken string, accessExpire int64) string {
+	if accessToken != "" && (accessExpire == 0 || time.Now().Unix() < accessExpire-60) {
+		return accessToken
+	}
+	return ""
 }
 
 // resolveGateViaHTTPLocal calls POST /api/assign-gate (HTTP mode) with retry.
@@ -702,7 +723,11 @@ func resolveGateAddrLocal(cfg *config.Config) (host, port string, payload, signa
 // transparently polls /api/queue-status until admitted, expired, or the
 // outer retry budget runs out. This makes a stress run with N > zoneCapacity
 // robots actually exercise the queue path instead of treating it as an error.
-func resolveGateViaHTTPLocal(cfg *config.Config) (host, port string, payload, signature []byte, err error) {
+//
+// accessToken 非空时带上(login 鉴权后对已有在线会话的账号免排队,与真实客户端重连同一口径);
+// 被拒(code=401:过期或已吊销)就丢掉、改匿名分配。匿名也被拒说明 login 已关旧 gate 凭据登录,
+// 先分配后认证的流程走不通,重试也不会变,直接返回错误。
+func resolveGateViaHTTPLocal(cfg *config.Config, accessToken string) (host, port string, payload, signature []byte, err error) {
 	zoneID := cfg.ZoneID
 	if zoneID == 0 {
 		zoneID, err = resolveZoneIDLocal(cfg.GatewayAddr)
@@ -714,10 +739,18 @@ func resolveGateViaHTTPLocal(cfg *config.Config) (host, port string, payload, si
 	const maxRetries = 30
 	backoff := 2 * time.Second
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		result, assignErr := assignGateHTTPLocal(cfg, zoneID)
+		result, assignErr := assignGateHTTPLocal(cfg, zoneID, accessToken)
 		if assignErr == nil {
 			h, p, splitErr := net.SplitHostPort(result.addr)
 			return h, p, result.payload, result.signature, splitErr
+		}
+		if errors.Is(assignErr, errAssignGateUnauthenticated) {
+			if accessToken == "" {
+				return "", "", nil, nil, fmt.Errorf("anonymous AssignGate rejected (legacy gate login is disabled on login): %w", assignErr)
+			}
+			zap.L().Info("AssignGate rejected the previous access token; retrying anonymously", zap.Error(assignErr))
+			accessToken = ""
+			continue
 		}
 		if attempt < maxRetries {
 			time.Sleep(backoff)
@@ -778,7 +811,7 @@ func resolveZoneIDLocal(gatewayAddr string) (uint32, error) {
 //
 // 每个 robot 的排队统计(entered / admitted-after-wait / expired / 等待时长 / 最大名次)由状态机写进
 // Stats,周期报表据此区分「排队正常但慢」与「dispatcher 卡住」。
-func assignGateHTTPLocal(cfg *config.Config, zoneId uint32) (*gateAssignmentLocal, error) {
+func assignGateHTTPLocal(cfg *config.Config, zoneId uint32, accessToken string) (*gateAssignmentLocal, error) {
 	// Total budget for queue-aware polling. Generous on purpose: a real
 	// queue under load can take minutes to drain. The outer
 	// resolveGateViaHTTPLocal retry loop adds another layer on top.
@@ -787,8 +820,8 @@ func assignGateHTTPLocal(cfg *config.Config, zoneId uint32) (*gateAssignmentLoca
 	defer cancel()
 
 	req := &httpAssignGateRequest{
-		ZoneID:  zoneId,
-		Account: "", // robot doesn't have a stable account at this stage
+		ZoneID:      zoneId,
+		AccessToken: accessToken, // 空 = 匿名分配(首次登录时 robot 还没有令牌)
 	}
 	api := httpGatewayQueueAPI{gatewayAddr: cfg.GatewayAddr, perCallTimeout: 5 * time.Second}
 
@@ -881,7 +914,7 @@ func loginAndEnterLocal(gc *pkg.GameClient, password string, stats *metrics.Stat
 // 让重定向失败结束会话要改 logic/handler 与 pkg,不在本文件范围。
 func loginAndEnterWithAuth(gc *pkg.GameClient, cfg *config.Config, stats *metrics.Stats, prevAccessToken string, prevAccessExpire int64) error {
 	// Use access_token reconnect when available and with at least 60s of TTL left.
-	if prevAccessToken != "" && (prevAccessExpire == 0 || time.Now().Unix() < prevAccessExpire-60) {
+	if reusableAccessToken(prevAccessToken, prevAccessExpire) != "" {
 		if err := loginAndEnterAccessToken(gc, prevAccessToken, stats); err == nil {
 			stats.AccessReconnectOK()
 			zap.L().Debug("access_token reconnect ok", zap.String("account", gc.Account))

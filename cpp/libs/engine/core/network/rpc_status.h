@@ -20,7 +20,7 @@ enum class RpcStatusCode : uint8_t
 {
     kOk,
     kNotSent,          // 本地确定未发出:未连接 / 通道已关闭 / 在途已满 / 消息号不可派发 / 类型与注册表不符 / 序列化失败
-    kRemoteRejected,   // 对端 RPC_ERROR:NO_SERVICE / NO_METHOD / INVALID_REQUEST / WRONG_PROTO —— 派发前拒绝,确定未执行
+    kRemoteRejected,   // 对端 RPC_ERROR:NO_SERVICE / NO_METHOD / INVALID_REQUEST / WRONG_PROTO / KILL_SWITCH_DENIED —— 派发前拒绝,确定未执行
     kRemoteFailed,     // 对端 RPC_ERROR:HANDLER_FAILED —— handler 已运行并显式失败
     kReplyDropped,     // 对端 RPC_ERROR:REPLY_DROPPED —— handler 接管后没完成就释放了,结果未知
     kTimeout,          // 截止时刻已到仍未回包,结果未知
@@ -71,8 +71,8 @@ public:
         case REPLY_DROPPED:
             return RpcStatus{RpcStatusCode::kReplyDropped, error};
         default:
-            // NO_SERVICE / NO_METHOD / INVALID_REQUEST / WRONG_PROTO,以及将来新增而本端不认识的码:
-            // 一律按「派发前拒绝」处理。新增码若含义是「已执行」,必须在上面单列。
+            // NO_SERVICE / NO_METHOD / INVALID_REQUEST / WRONG_PROTO / KILL_SWITCH_DENIED(热关停),以及将来新增而
+            // 本端不认识的码:一律按「派发前拒绝」处理。新增码若含义是「已执行」,必须在上面单列。
             return RpcStatus{RpcStatusCode::kRemoteRejected, error};
         }
     }

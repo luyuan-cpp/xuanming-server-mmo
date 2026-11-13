@@ -8,6 +8,7 @@
 #include "muduo/base/Logging.h"
 
 #include "engine/core/metrics/metrics_registry.h"
+#include "modules/audit/audit_outbox_stats.h"
 #include "player/system/dirty_save_stats.h"
 
 namespace
@@ -73,6 +74,23 @@ namespace
 		writer.Sample({{"event", "marshal_refused"}}, saves.marshalRefused);
 		// 定时存盘只遇到位置这类只顺带的行有变化、推迟写入(player-save-direct-commit.md §1.1)。
 		writer.Sample({{"event", "piggyback_deferred"}}, saves.piggybackDeferred);
+
+		// 审计记录随存盘提交(docs/design/player-audit-outbox.md §5.6)。两个计数健康时都恒 0,告警在 deploy/k8s/audit-outbox-alerts.yaml。
+		writer.BeginFamily("scene_audit_outbox_records_dropped_total",
+						   "Audit records (transaction logs, snapshot requests) dropped on this scene node since process start, by reason; "
+						   "the change each one describes still takes effect and commits with the save, so every drop is a committed change "
+						   "without its audit record. Should stay 0.",
+						   prometheus_text::MetricType::kCounter);
+		for (std::size_t i = 0; i < audit_outbox_stats::kDropReasonCount; ++i)
+		{
+			writer.Sample({{"reason", audit_outbox_stats::kDropReasonNames[i]}},
+						  audit_outbox_stats::ReadDropped(static_cast<audit_outbox_stats::DropReason>(i)));
+		}
+		writer.BeginFamily("scene_audit_outbox_store_too_old_total",
+						   "Saves carrying audit records that committed without the store writing them to the audit outbox "
+						   "(the store is older than this scene); the records are kept and sent again with the next save. Should stay 0.",
+						   prometheus_text::MetricType::kCounter);
+		writer.Sample({}, audit_outbox_stats::ReadStoreTooOld());
 	}
 } // namespace
 

@@ -20,13 +20,14 @@ MethodTimeouts:
 # 签名密钥 MMORPG_ASSET_OP_SECRET_DATA_SERVICE 必须和 scene 同值(本地由 tools/scripts/lib/assetop_dev_secret.ps1 注入)。
 Recall:
   Enabled: true
-# 控制域:落地唤醒频道 assetop:wake,和 scene 发布的同一实例。PoolSize 计入 Redis 连接总账。
-SharedRedis:
-  Host: 127.0.0.1:6379
-  Password: ""
-  DB: 0
-  PoolSize: 8
-# 玩家域:读位置键 player:{id}:location。没写 Addrs 时指向 SharedRedis。
+# 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1;2026-11-12 取代 SharedRedis 段):落地唤醒分片频道 assetop:wake:{aw:N}(64 个)
+# 与去重键,和 scene SPUBLISH 的同一集群;玩家名字读缓存 player:name:<id> 也在这里(2026-11-13 取代 NameCacheRedis 段,只放可丢弃的读缓存)。
+# 常驻启动必须写 Addrs(名字缓存不分开关)。PoolSizePerNode 计入 Redis 连接总账。
+# 集群部署写种子地址并打开 Cluster;口令写 Password 字面量,或在 SharedRedisPasswordEnv 指名变量。
+ControlRedis:
+  Addrs: [127.0.0.1:6379]
+  PoolSizePerNode: 8
+# 玩家域:读位置键 player:{id}:location。没写 Addrs 时指向 ControlRedis。
 PlayerRedis:
   PoolSizePerNode: 8
 
@@ -97,17 +98,6 @@ RoleFence:
 # 必须保持顶层单行:go_services.ps1 -Zone 按与 ListenOn 相同的规则位移它。k8s ConfigMap 本批不镜像(07 §7.9.1 前提缺口)。
 MetricsListenAddr: ":9260"
 
-# 玩家名字读缓存(player:name:{id},internal/routing/player_name_cache.go)。
-# 这把 Redis 只放可丢弃的读缓存,里面没有任何权威数据:整个实例丢了,名字读路径回源一次全局库,
-# 建角和归属都不受影响。不要往上面加要落盘或要保证一致的东西。
-#
-# ⚠ 这里**没有 DB 键**,而且不能加:go-zero 的 redis.RedisConf 只有
-#   Host / Type / User / Pass / Tls / NonBlock / PingTimeout,压根没有 DB 字段,
-#   写了也会被静默忽略,缓存实际一直落在 DB 0。
-NameCacheRedis:
-  Host: 127.0.0.1:6379
-  Type: node
-
 # Snapshot MySQL (player_snapshot / transaction_log 审计库)
 SnapshotMySQL:
   # 后端档位 tidb | mysql,不写就是 tidb;mysql 档必须连主库。
@@ -167,6 +157,8 @@ RouteStore:
 # MEDIUMTEXT,而 player_name 的唯一键必须建在 VARCHAR 上),迁移对它只做列漂移校验;
 # 路由表同样走手写 DDL,迁移按 proto 只守列名与主键,并种 route_meta(id=1)。
 # TiDB 上建表之后另跑 `route_tool -f <yaml> tidb-prepare -zones=<全部 zone> -dry-run=false` 预切路由表(MySQL 自动跳过)。
+# route_tool 不用本文件 SnapshotMySQL 的账号:tidb-prepare 连 MMORPG_SQL_SCHEMA_DSN(真执行另设 MMORPG_SQL_SCHEMA_PRINCIPAL),
+# 库名、后端与映射仍取本文件(go/data_service/internal/routetoolcli 包注释)。
 # AutoMigrate=true:启动时按 proto(rollback_database_table.proto)用 proto2mysql 建表/补列。
 # 生产必须**显式**设 false(多副本并发 ALTER 会互相 MDL 阻塞),改在部署阶段跑一次:
 #   data_service -f etc/data_service.yaml -migrate
@@ -194,12 +186,13 @@ IdSegment:
   AllowAutoSeed: true      # dev only;生产必须 false,Mode 不是 dev、test 时写 true 发号器不装配
   Tags: [player, guild, item, txlog, snapshot, trade_listing, guild_asset_op, friend_request, trade_asset_op, mail, mail_asset_op, rank_board, rank_settlement, rank_reward, battle, snapshot_row, rollback_audit, gm_recall_op]
 
-# C++ scene 产出的交易流水 / 玩家快照落库消费者。Brokers 留空 = 不消费(本地无 Kafka 合法)。
+# 交易流水 / 玩家快照落库消费者。生产者是 go/db 的审计发件箱转发(docs/design/player-audit-outbox.md §7)。
+# Brokers 留空 = 不消费(本地无 Kafka 合法)。
 # Kafka 不可达不影响 Load/Save,只记日志并每 30s 后台重试。
 #
 # 真正使用的 topic 名 = <基名>_g<TopicGeneration>,即默认
 #   transaction_log_topic_g1 / player_snapshot_topic_g1
-# C++ 生产者(cpp/libs/modules/{transaction_log,snapshot}/*.h 里的 topic 常量)必须用同样的名字。
+# 生产者 go/db(go/db/etc/db.yaml 的 AuditOutbox 段)必须用同样的世代与基名,go/db 的单测核对两份 yaml。
 # 为什么连第一代也带后缀:broker 开着 auto.create.topics.enable 且 num.partitions=1
 # (deploy/docker-compose.yml KAFKA_NUM_PARTITIONS=1),生产者一发消息就把**裸名字**的 topic
 # 自动建成 1 分区、保留期继承 broker 默认值。带代号的名字与那两个自动建出来的裸 topic 互不相干。

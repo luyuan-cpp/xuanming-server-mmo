@@ -103,7 +103,7 @@ func newFenceWiring(t *testing.T) (*svc.ServiceContext, *redis.Client, *fenceLoc
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 	locator := &fenceLocator{}
-	return &svc.ServiceContext{RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb), PlayerLocatorClient: locator}, rdb, locator
+	return &svc.ServiceContext{ControlRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb), PlayerLocatorClient: locator}, rdb, locator
 }
 
 func fenceWiringState(gen uint64) enterGameSessionState {

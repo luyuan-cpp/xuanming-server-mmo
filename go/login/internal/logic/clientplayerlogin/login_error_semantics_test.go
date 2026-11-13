@@ -117,7 +117,7 @@ func newSemanticsEnv(t *testing.T, provider semanticsProvider, tokenRedisFails b
 	auth.Register(authType, provider)
 	return &semanticsEnv{
 		mr:                mr,
-		svcCtx:            &svc.ServiceContext{RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb), TokenManager: tokens},
+		svcCtx:            &svc.ServiceContext{ControlRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb), TokenManager: tokens},
 		authType:          authType,
 		tokenStoreFailure: storeFailure,
 	}

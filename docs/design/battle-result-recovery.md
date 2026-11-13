@@ -1,6 +1,6 @@
 # 战斗结果重登恢复:近期战斗结果
 
-> **状态**:v1 — 2026-11-05 方案定稿,服务端已落码,**未编译、未测试**,验证按 §10 交 Codex。客户端改动见 §7,由 Codex 做。Java 版待做,已在 Java 仓 `PARITY.md` 登记(§11)。
+> **状态**:v1 — 2026-11-05 方案定稿,服务端已落码,**未编译、未测试**,验证按 §10 交 Codex。客户端 §7 于 2026-11-12 落码(`../mmorpg-client`,未生成、未编译),落码时定下的取舍写在 §7 末尾。Java 版待做,已在 Java 仓 `PARITY.md` 登记(§11)。
 > **来源**:[断线重连审计 §9.3](disconnect-reconnect-audit-20261020.md#93-战斗结果展示缺少重登恢复)、[缺口清单「待确认」](../handoff/server-gap-audit-20261101.md)。
 > **关系**:结算链路以 [总体方案 §5.4](player-data-tidb-scaling-plan.md#54-战斗结算与本地模式2026-10-30-定) 为准(结算只走 match SQL + player_inbox,scene 的 `ApplyInboxSettlement` 是唯一应用点);组件创建与缺失语义以 [ECS 组件访问规则](ecs-component-access-rules.md) 为准;存档分组见 [存盘直接提交 §1.1](player-save-direct-commit.md#11-字段分组);客户端的落地判定沿用 [落地恢复 §4.3](landing-recovery-sync-digest.md#43-客户端实现mmorpg-client)。
 
@@ -31,7 +31,7 @@
 
 | | (a) 存档里的有界列表(采用) | (b) match 终局事务写历史表 | (c) 复用 `match_battle_settlement_source` 加索引 | (d) 落地时把最近一局的 `BattleEndS2C` 再推一次 |
 |---|---|---|---|---|
-| 记的是什么 | 本人实际入账:消耗按实际持有夹紧,配置行已删的物品不记 | 终局原件 | 终局原件 | 终局原件 |
+| 记的是什么 | 本人实际入账:消耗按实际持有夹紧,被获得封禁的掉落与币种不记 | 终局原件 | 终局原件 | 终局原件 |
 | 与奖励的一致性 | 同一帧写、同一个事务提交;崩溃回到上次存盘时一起回退,收件箱重投后一起重做 | COMPLETE 时就有,早于入账;收件箱 DEFER 或按版本错位停用时,面板上的奖励背包里没有 | 同 (b);要等 `dispatch_state = 2` 才能当成已入账 | 一致,但推送至多一次 |
 | 扩展 | 跟着玩家存档按玩家分片;查询在 scene 内存里完成,不给任何服务加读 QPS | 全局表每局每人一行;每次落地多一次跨服务查询 | 同 (b) | 不加存储 |
 | 新增部件 | 一个持久组件、一个只在本文件内的按需组件 | 新表、保留期清理任务、新 match RPC、容量规划 | 新索引、新 match RPC;这张表是恢复原件,「保留到显式迁移 / 恢复流程接管」 | 无 |
@@ -75,12 +75,13 @@ message PlayerBattleResult {
   uint64 finished_at_ms = 8;  // 战斗结束时刻(battle 冻结终局时的 UTC 毫秒);0 = 结算原件没带
   uint64 settled_at_ms = 9;   // 奖励入账时刻(scene 应用结算时的 UTC 毫秒)
   repeated PlayerBattleResultCurrency currencies = 10;  // 按 currency_type 升序,只含非 0
-  repeated PlayerBattleResultItem items_gained = 11;    // 实际入包(含临时背包)的掉落,按 item_table_id 升序
+  repeated PlayerBattleResultItem items_gained = 11;    // 本人实得的掉落(入了人物背包或临时背包;items_mailed 时改由邮件发放),按 item_table_id 升序
   repeated PlayerBattleResultItem items_consumed = 12;  // 实际扣除的战斗消耗,按 item_table_id 升序
   bool lines_truncated = 13;  // 物品行超过上限被截掉了一部分
   bool seen = 14;             // 客户端已确认展示过
   uint32 match_mode = 15;     // MatchMode 数值;0 = 结算原件没带
   uint32 battle_config_id = 16; // 战斗配置号;0 = 结算原件没带
+  bool items_mailed = 17;     // 掉落两个包都放不下,整批改由邮件发放(2026-11-12)
 }
 
 message PlayerBattleResultComp {
@@ -91,7 +92,10 @@ message PlayerBattleResultComp {
 
 `player_database` 加 `PlayerBattleResultComp battle_results = 23 [(OptionPersistGroup) = 4];`。
 
-- **只记实际入账**:货币取整笔预检通过、实际调用 `AddCurrency` 的金额;掉落取剔除了配置行已删项之后的清单(这些项另记 `metric=battle_inbox_item_effect_skipped`,交人工补偿);消耗取 `min(要求, 实际持有)`。经验系统还没接入(`exp_gain` 只记日志),所以不记经验,接入时在同一写入点加字段。
+- **只记实际入账**:货币取整笔预检通过、实际调用 `AddCurrency` 的金额;掉落取剔除了被获得封禁项之后的清单(被封的项另记 `metric=battle_settlement_item_blocked`,不补发);消耗取 `min(要求, 实际持有)`。掉落或消耗里有本节点 Item 表查不到的配置号时整笔延后、这一局什么都不记(2026-11-11 起,`mixed-version-persist-field-protection.md` §13 第 10 条;此前是剔除这一项后照记)。经验系统还没接入(`exp_gain` 只记日志),所以不记经验,接入时在同一写入点加字段。
+- **改投邮件的掉落照常记**(2026-11-12,[战斗掉落改投邮件](battle-overflow-mail.md)):人物背包与临时格都放不下时,掉落整批进玩家存档的待寄队列、
+  之后寄成个人邮件。`items_gained` 照常列出这一批(玩家确实得到了,只是去处是邮箱),`items_mailed = true` 说明去处;
+  `BattleEndS2C.items_mailed` 取自同一条记录,客户端在结算界面道具行之后加一句提示。两个字段同一帧写、随同一次存档提交。
 - **枚举存 uint32**:common 不反向依赖 battle 包,与收件箱账本同口径。
 - **顺序显式**:新旧只看 `result_seq`,存放顺序只为确定性序列化。
 - **为什么放 PROFILE 组**:列表只在结算和客户端确认时变。放 ASSET 会让每一次资产写入(交易、商店、捐献)都带上它。原子性不受分组影响:一次存盘的所有脏行同事务提交(存盘直接提交 §1.1,「账本不变量 I3 由一次存盘的所有脏行同事务保证」)。
@@ -174,7 +178,7 @@ service SceneBattleResultClientPlayer {
 
 **发布顺序**:scene 必须先于 battle 升级。旧 scene 的执行器把结算原件里不认识的嵌套字段按版本错位处理,会停用战斗结算域。项目未上线,整批起步;上线后这类加字段都按这个顺序发。
 
-## 7. 客户端怎么用(交 Codex,`../mmorpg-client`)
+## 7. 客户端怎么用(`../mmorpg-client`,2026-11-12 已落码,未编译)
 
 1. **生成**:客户端的 proto 生成白名单加 `proto/scene/player_battle_result.proto` 与 `proto/common/component/player_battle_result_comp.proto`,重新生成 C#。`BattleSettlementData` 多了 `finished_at_ms`。
 2. **落地就查一次**:落地判定沿用落地恢复 §4.3 第 1 条(`(PlayerId, GateConnectionIdentity)` 变化且 `InGame && IsGateReady`),在收到 `NotifyEnterScene` 之后发 `GetRecentBattleResults`。单飞;超时或失败按 15 / 30 / 60 秒封顶退避。实体还在异步载入时 scene 丢弃请求不回包,所以必须等进场之后再发。
@@ -182,6 +186,17 @@ service SceneBattleResultClientPlayer {
 4. **去重与展示**:进程内维护「本次已展示的 battle_id」集合。查询结果里 `seen = false`、且不在这个集合里的,按 `result_seq` 从小到大逐个弹结果面板(或只弹最新一局,其余进列表,由产品定)。胜负 = `outcome` 对照 `team_index`(`SIDE_A_WIN` 且 `team_index = 0` 为胜,`DRAW` 为平,其余为负),`fled` / `is_dead` 照现有面板显示。时间用 `finished_at_ms`,为 0 时用 `settled_at_ms`。货币与物品用客户端配表显示名称和图标,`lines_truncated` 为真时提示「等」。
 5. **确认**:面板展示之后(含有上下文的现有终局面板),发 `AckBattleResults`,带本次展示过的 battle_id。失败(1006、超时)不重弹面板,保留在待确认列表里,下次落地先补发。
 6. **测试**:EditMode 用假 transport 覆盖:落地查到一条未读只弹一次;同一局先收到有上下文的 `BattleEndS2C` 再查到不重复弹;无上下文的 `BattleEndS2C` 触发查询;确认失败下次落地补发;查询失败退避。
+
+**2026-11-12 落码(Claude,未生成、未编译)**。11-05 定稿时这一节交给 Codex,一直没做:玩家断线或离线期间结算入账的那一局,重登后看不到结果。按上面六条落码,定下的取舍:
+
+- **在途期间的触发**:「短时间内多次触发只查一次」的做法是在途时只记一笔,回包之后再查一次。只合并不补查的话,结果在第一次查询发出之后才公开,这一局就漏了。
+- **弹法**:逐个弹,确认一局再弹下一局。客户端没有结果列表界面,「只弹最新一局、其余进列表」不采用。只在空闲时弹(没有战斗屏、观战屏,也没有结算面板在显示);相位回到空闲、观战收屏或玩家确认面板之后再弹下一局。确认键写「知道了」,不收战斗屏,不调 `AckBattleEnd`。
+- **确认时机**:面板真正弹出之后才确认(补弹的与现场的都是);交给界面而没来得及弹(断线)的不确认,下次落地再交。确认一次至多 10 个,一次只有一个在途。
+- **作废局**:没有上下文的作废终局已经用提示告诉过玩家(`OnBattleVoidNotice`),视同展示过,直接确认,补查时不再弹面板;补查查到别的作废局按作废显示(标题「本局作废」、作废说明行)。
+- **回包里 `seen = true` 的局**:顺手从待确认列表里删掉(上一次确认其实到了,不必再补发)。
+- **展示内容**:记录里没有经验与战后血蓝,补弹面板不列这两项;货币、获得与消耗的道具、`items_mailed` 提示行、`lines_truncated` 提示行、阵亡 / 逃离照列。说明行是「上次未查看的战斗 · MM-dd HH:mm 结束 · 共 N 回合」。
+- **文件**:新 `Assets/Scripts/Game/Battle/BattleResultRecoveryClient.cs`(纯逻辑,不引用 UnityEngine);`BattleClient.cs`(新事件 `OnBattleEndWithoutContext(end, alreadyNotified)`);`GameClient.cs`(`BattleResults` 装配,`Tick` 驱动);`BattleResultPanel.cs`(`ShowRecovered`、`BuildRecoveredLines`、`BuildRecoveredSubtitle`,胜负标题与展示抽成 `ResolveTitle` / `Present`,现场与补弹共用);`BattleUiRoot.cs`(补弹排队与确认分支)。
+- **用例**:新 `Assets/Tests/EditMode/Battle/BattleResultRecoveryClientTests.cs` 13 例,`DamageNumberLayoutTests.cs` 加 4 例。命令见 `docs/PROGRESS.md` 2026-11-12「近期战斗结果客户端补查与补弹」。
 
 ## 8. 日志与可观测性
 

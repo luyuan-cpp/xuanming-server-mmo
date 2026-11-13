@@ -182,6 +182,21 @@ func TestGlobalResultStartupRequiresCompletionRecorderBeforeKafka(t *testing.T) 
 	require.ErrorContains(t, StartResultConsumer(context.Background(), config, handle, recorder), "lag 探针")
 }
 
+// 第 6 条:消费 goroutine 只能是排空 owner 的 Run,它由 BindOwner 登记、StopAndReport 经 CloseAndReport 等它返回。
+// 修复前缺 RelayAdmission 时另起一条自建 reader 循环,goroutine 不进任何关停 join;现在缺 relay 或 BindOwner 在碰 Kafka 之前拒绝。
+func TestGlobalResultStartupRequiresJoinedOwnerBeforeKafka(t *testing.T) {
+	handle := func(context.Context, *kafkapb.BattleResultEvent) error { return nil }
+	recorder := func(context.Context, *kafkapb.BattleResultEvent, []byte, string, int, int64) error { return nil }
+	bindProbe := func(<-chan struct{}) error { return nil }
+	config := ResultConsumerConfig{GroupID: "match-rating", BindLagProbe: bindProbe}
+	require.ErrorContains(t, StartResultConsumer(context.Background(), config, handle, recorder), "排空 relay")
+	config.RelayAdmission = drainproof.New()
+	require.ErrorContains(t, StartResultConsumer(context.Background(), config, handle, recorder), "生命周期 owner",
+		"有 relay 没 BindOwner 也不能起:owner 的 goroutine 没人收口")
+	config.RelayAdmission, config.BindOwner = nil, func(*kafkautil.BoundConsumerGroup) error { return nil }
+	require.ErrorContains(t, StartResultConsumer(context.Background(), config, handle, recorder), "排空 relay")
+}
+
 // lag 探针纳入关停 join:起 goroutine 之前把退出信号交给 BindLagProbe;ctx 结束后探针退出、信号关闭(svc 的 StopAndReport 等的就是它)。
 // 登记被拒就不起探针。首轮探测在 30s 之后,用例在那之前结束 ctx,不连 Kafka;time.After 只是防挂死的护栏。
 func TestStartResultLagProbeIsJoinedAtShutdown(t *testing.T) {

@@ -1,0 +1,125 @@
+// Copyright 2010, Shuo Chen.  All rights reserved.
+// http://code.google.com/p/muduo/
+//
+// Use of this source code is governed by a BSD-style license
+// that can be found in the License file.
+
+// Author: Shuo Chen (chenshuo at chenshuo dot com)
+//
+// This is an internal header file, you should not include this.
+
+// ---------------------------------------------------------------------------
+// LOCAL OVERLAY -- 由 tools/archived/setup_dependencies.sh 在配置 muduo 之前
+// 拷到 third_party/muduo-linux/muduo/net/Acceptor.h。必须与同目录 Acceptor.cc、SocketsOps.cc 覆盖件一起生效。
+//
+// 底稿是上游 v2.0.3-1(f1fc77e)。除标 LOCAL DELTA 的几处外与上游逐字一致:
+//   1. 保留旧拼写 listenning() 作别名。gitlink 在 b55b0ac(v2.0.2,listenning)与 f1fc77e(listening)
+//      之间翻转过,整文件覆盖必须两版都能编。
+//   2. accept 失败的分类、进程级计数与降级处理的声明(资源耗尽时不再崩溃,见 Acceptor.cc 文件头)。
+//   3. 准入回调:accept 成功之后、建任何每连接对象之前问一次要不要这条连接,不要就当场以 RST 关掉
+//      (docs/design/gate-connection-admission-control.md 的 P1-1、P1-2)。
+// Windows 侧同一改动在 cpp/libs/engine/muduo_windows/src/muduo/net/Acceptor.h。
+//
+// 升级 muduo 子模块时:用新的上游文件覆盖本文件,再逐处补回 LOCAL DELTA。
+// ---------------------------------------------------------------------------
+
+#ifndef MUDUO_NET_ACCEPTOR_H
+#define MUDUO_NET_ACCEPTOR_H
+
+#include <chrono>
+#include <functional>
+#include <memory>
+
+#include <stdint.h>
+
+#include "muduo/net/Channel.h"
+#include "muduo/net/Socket.h"
+
+namespace muduo
+{
+namespace net
+{
+
+class EventLoop;
+class InetAddress;
+
+///
+/// Acceptor of incoming TCP connections.
+///
+class Acceptor : noncopyable
+{
+ public:
+  typedef std::function<void (int sockfd, const InetAddress&)> NewConnectionCallback;
+
+  // LOCAL DELTA 2: accept 返回 -1 之后该怎么办,只由 errno 决定(纯函数,单测见
+  // cpp/tests/rpc_controller_test/acceptor_failure_policy_test.cpp)。
+  enum class AcceptFailure : uint8_t
+  {
+    kRetryLater,            // 没有就绪连接或被信号打断:等下一次可读事件
+    kConnectionGone,        // 排在最前的那条连接已经没了,内核已把它移出队列:接着接下一条
+    kDescriptorsExhausted,  // fd 用尽(进程级 EMFILE、全机级 ENFILE):让位排掉一条,排不掉就暂停监听
+    kMemoryExhausted,       // 内核缓冲或内存不足(ENOBUFS、ENOMEM):暂停监听
+    kCount,
+  };
+  static AcceptFailure classifyAcceptFailure(int savedErrno);
+
+  // LOCAL DELTA 2: 进程内全部 Acceptor 的累计次数,供 /metrics 出口读;任意线程可调。
+  struct ExhaustionCounts
+  {
+    uint64_t descriptors;  // accept 因 fd 用尽失败的次数
+    uint64_t memory;       // accept 因内核缓冲或内存不足失败的次数
+    uint64_t pauses;       // 因此暂停监听的次数
+  };
+  static ExhaustionCounts exhaustionCounts();
+
+  Acceptor(EventLoop* loop, const InetAddress& listenAddr, bool reuseport);
+  ~Acceptor();
+
+  void setNewConnectionCallback(const NewConnectionCallback& cb)
+  { newConnectionCallback_ = cb; }
+
+  // LOCAL DELTA 3: 准入回调。每条 accept 成功的连接在交给 newConnectionCallback_ 之前先问它一次(loop 线程上同步调用):
+  // 返回 false 时这条连接当场以 RST 关闭,不建 TcpConnection、不分配缓冲、不进连接表;没设回调 = 全部放行。
+  // 只适合「不需要知道对端是谁」的判据(总量、全局速率、是否在关停);回调里不要做 I/O,不要碰这个 Acceptor。
+  // 不是线程安全的:在 loop 线程上设置。
+  typedef std::function<bool (const InetAddress& peerAddr)> AdmissionCallback;
+  void setAdmissionCallback(const AdmissionCallback& cb)
+  { admissionCallback_ = cb; }
+
+  void listen();
+
+  bool listening() const { return listening_; }
+
+  // LOCAL DELTA 1: 上游 v2.0.3 把这个旧拼写注释掉了;v2.0.2 的调用方还在用,保留为别名。
+  bool listenning() const { return listening(); }
+
+ private:
+  void handleRead();
+
+  // LOCAL DELTA 2: 三个都只在 loop 线程上调用。
+  bool makeRoomForAccept();
+  void pauseAccepting();
+  void reportAcceptFailure(int savedErrno, bool resourceExhausted, const char* action);
+
+  EventLoop* loop_;
+  Socket acceptSocket_;
+  Channel acceptChannel_;
+  NewConnectionCallback newConnectionCallback_;
+  bool listening_;
+  int idleFd_;
+
+  // LOCAL DELTA 2
+  bool paused_;
+  // 恢复监听的定时器只持它的 weak:Acceptor 先析构时回调什么也不做,不需要记 TimerId 去取消。
+  std::shared_ptr<bool> lifeToken_;
+  // 失败日志限频:下一行最早什么时候可以打,以及这期间攒下没打的失败次数。
+  std::chrono::steady_clock::time_point nextFailureReport_;
+  uint64_t unreportedFailures_;
+  // LOCAL DELTA 3
+  AdmissionCallback admissionCallback_;
+};
+
+}  // namespace net
+}  // namespace muduo
+
+#endif  // MUDUO_NET_ACCEPTOR_H

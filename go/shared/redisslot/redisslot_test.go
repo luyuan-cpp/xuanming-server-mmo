@@ -124,7 +124,7 @@ func TestReservedPlayerKeySuffixes(t *testing.T) {
 	sort.Strings(got)
 	want := []string{
 		"asset_sql_commit", "channel_switch_cooldown", "handoff", "handoff_fence", "leave_release_wait", "leave_tomb", "location",
-		"location_revision", "location_revision_floor", "login_generation", "owner_epoch", "sync_digest",
+		"location_revision", "location_revision_floor", "login_generation", "owner_epoch", "owner_epoch_confirmed", "sync_digest",
 	}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("保留后缀表 = %v, want %v(新增 player:{<id>}: 键必须登记,删除须同步 data_service)", got, want)

@@ -1,0 +1,129 @@
+{
+  "mapKey": "26008-spring",
+  "sceneId": 26008,
+  "sceneConfigId": 26008,
+  "appearance": "spring",
+  "authoredAsset": "Assets/MapNavigationDrafts/Festival20261111/26008-spring.asset",
+  "authoredAssetGuid": "4bbc7c586cc5b2843ac3dc1fd1c98a0c",
+  "authoredAssetSha256": "dd1d5f603bd3d1376b3a0631e923839e79477eaa85c3e37837f025223e706bf4",
+  "sourceAssetPath": "D:\\luyuan\\mmorpg-client\\Assets\\MapNavigationDrafts\\Festival20261111\\26008-spring.asset",
+  "sourceAssetSha256": "dd1d5f603bd3d1376b3a0631e923839e79477eaa85c3e37837f025223e706bf4",
+  "navMeshAsset": "Assets/MapNavigationDrafts/Festival20261111/26008-spring.navmesh-504096e2f15fb98b.asset",
+  "navMeshGuid": "1492049b46b65574c8f4500302a2a533",
+  "navMeshAssetSha256": "37aa02eae243d1aebe74c27e1adb8bb94b795fb7017af7d939547b0fb1f0637f",
+  "bakedGeometrySha256": "504096e2f15fb98b5de8e0e7a036c13c7d31a9e0adaa17b8927dc8607a3e6609",
+  "authoringGeometryHash": "504096e2f15fb98b5de8e0e7a036c13c7d31a9e0adaa17b8927dc8607a3e6609",
+  "isBakeCurrent": true,
+  "worldRect": {
+    "x": 0.0,
+    "z": 0.0,
+    "width": 300.0,
+    "depth": 225.0
+  },
+  "boundsConfirmed": false,
+  "authoredSpawnSet": false,
+  "authoredSpawnUnity": null,
+  "testSpawnUnity": [
+    122.5,
+    0.0,
+    127.5
+  ],
+  "spawnUnity": [
+    122.5,
+    0.0,
+    127.5
+  ],
+  "testSpawnServer": [
+    127.5,
+    122.5,
+    0.0
+  ],
+  "spawnReason": "Test-only snapshot spawn: maximum edge clearance within the largest sampled PathComplete-connected group; 5-world-unit grid",
+  "candidateCount": 809,
+  "sampledConnectedGroupSizes": [
+    809
+  ],
+  "selectedSpawnClearance": 52.1483536,
+  "polygons": [
+    {
+      "index": 0,
+      "name": "地面1",
+      "blocked": false,
+      "points": 26
+    },
+    {
+      "index": 1,
+      "name": "地面2",
+      "blocked": false,
+      "points": 15
+    },
+    {
+      "index": 2,
+      "name": "地面3",
+      "blocked": false,
+      "points": 16
+    },
+    {
+      "index": 3,
+      "name": "地面4",
+      "blocked": false,
+      "points": 8
+    },
+    {
+      "index": 4,
+      "name": "地面5",
+      "blocked": false,
+      "points": 60
+    },
+    {
+      "index": 5,
+      "name": "地面6",
+      "blocked": false,
+      "points": 24
+    }
+  ],
+  "sourceVertexCount": 2835,
+  "sourceTriangleCount": 945,
+  "exportDirectory": "D:\\luyuan\\mmorpg-client\\.codex-artifacts\\authored-festival-export-20261112\\delivery\\26008-spring",
+  "sourceJsonSha256": "066177889eab819566994f733cb6751199baa0230b44786639ae205606600e63",
+  "sourceSha256": "066177889eab819566994f733cb6751199baa0230b44786639ae205606600e63",
+  "authoringJsonSha256": "f34a40ec5532b391bd7750f9612d16b7c01f870c4a522b82c01202568fe36eba",
+  "objSha256": "913daa70771f356617b85dc20435d0f1ef41761985cdae4373ae407ba1bb2263",
+  "serverBakeArgumentsSha256": "9c3a55201de687bf419fb95d853b769f663a6915a8eae058fdeb1dfd6c49c2fe",
+  "unityQueriesSha256": "72c0e5c7c40336f25a2ff0b178e6ab2d216939649eaf2c65e586870343070f65",
+  "agent": {
+    "typeId": 0,
+    "radius": 0.4,
+    "height": 1.8,
+    "climb": 0.3,
+    "slope": 45.0,
+    "voxelSize": 0.1
+  },
+  "bakeContract": {
+    "revision": "authored-flat-v2",
+    "serverProfile": "authored-flat",
+    "tileSizeVoxels": 256,
+    "minRegionAreaWorld": 0.0,
+    "unity": {
+      "overrideVoxelSize": true,
+      "overrideTileSize": true,
+      "heightMesh": true,
+      "ledgeDropHeight": 0,
+      "maxJumpAcrossDistance": 0,
+      "groundPointTolerancePerAxis": 0.02,
+      "cellHeight": "not exposed by Unity NavMeshBuildSettings"
+    },
+    "serverOnly": {
+      "cellHeight": 0.2,
+      "filterLedges": true,
+      "mergeRegionAreaVoxels": 400,
+      "walkableClimbVoxels": 1.0,
+      "effectiveClimb": 0.2,
+      "climbQuantization": "floor(agentClimb / cellHeight)",
+      "heightPolicy": "authored-flat restores the original coplanar OBJ height"
+    },
+    "queryEquivalence": "NOT_PROVEN; paired-query validation required"
+  },
+  "serverAcceptance": "NOT_RUN",
+  "liveGameAcceptance": "NOT_RUN"
+}

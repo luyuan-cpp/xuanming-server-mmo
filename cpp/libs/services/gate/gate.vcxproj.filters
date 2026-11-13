@@ -3,8 +3,11 @@
   <ItemGroup>
     <ClInclude Include="session\comp\session_info_comp.h" />
     <ClInclude Include="session\comp\pending_scene_entry_comp.h" />
+    <ClInclude Include="session\comp\pre_auth_slot.h" />
     <ClInclude Include="session\comp\router_lane.h" />
     <ClInclude Include="session\comp\router_lane_item.h" />
+    <ClInclude Include="session\comp\scene_lane.h" />
+    <ClInclude Include="session\comp\scene_lane_item.h" />
     <ClInclude Include="session\manager\session_manager.h" />
   </ItemGroup>
   <ItemGroup>

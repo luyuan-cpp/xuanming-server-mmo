@@ -27,6 +27,10 @@ func (f playerRouteFake) RegisterHome(context.Context, store.RouteRegisterReques
 	return store.RouteRegisterResult{}, errors.New("not used")
 }
 
+func (f playerRouteFake) CountHomeZones(context.Context, []uint32) (uint64, error) {
+	return 0, errors.New("not used")
+}
+
 func (f playerRouteFake) GetRoutes(_ context.Context, ids []uint64) (map[uint64]store.RouteRow, error) {
 	if f.err != nil {
 		return nil, f.err

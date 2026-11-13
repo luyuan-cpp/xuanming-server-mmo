@@ -38,10 +38,14 @@ type AccountDirectoryStore struct {
 	stores   *PlayerStorePools // 按 storage_id 的存档库连接池,见 ConfigurePlayerStores
 	// names 是名字登记表:建角提交之后绑定名字、删角写完墓碑之后释放名字(account_role_name.go)。nil 时两步都不做,见 ConfigurePlayerNames。
 	names roleNameRegistry
+	// nameCache 是名字读缓存:目录补回或删掉名字行之后删缓存,nil 时不删(account_directory_events.go,ConfigureNameCache)。
+	nameCache NameCacheInvalidator
+	// events 收「失败只记日志、不改结局」那几步的计数,nil 时只记日志(account_directory_events.go,ConfigureEvents)。
+	events DirectoryEvents
 	// 读路径发现的陈旧 ref,等后台清。
 	staleRefs chan staleRefKey
-	// 账本和展示资料读的名额,见 acquirePlayerStoreRead。
-	playerStoreReads chan struct{}
+	// directoryReads 是目录每一片留给账本、展示读的名额(readSlots),下标是片号。存档库那一侧的名额在 stores 里。
+	directoryReads []readSlots
 	// removalCursor 让删角收尾逐轮换起点。
 	removalCursor atomic.Uint64
 	// preparingCursor 让超时 PREPARING 的撤销逐轮换起点。
@@ -73,9 +77,14 @@ func NewAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, max
 	if err != nil {
 		return nil, err
 	}
+	// 每片一个池,每个池一份读名额;maxOpenConn 就是每片池的上限。
+	directoryReads := make([]readSlots, shards.k)
+	for slot := range directoryReads {
+		directoryReads[slot] = newReadSlots(maxOpenConn)
+	}
 	s := &AccountDirectoryStore{shards: shards, backend: backend, maxRoles: maxRoles, cfg: cfg,
-		staleRefs:        make(chan staleRefKey, staleRefQueueSize),
-		playerStoreReads: make(chan struct{}, playerStoreReadLimit(maxOpenConn))}
+		staleRefs:      make(chan staleRefKey, staleRefQueueSize),
+		directoryReads: directoryReads}
 	s.steps = &sqlDirectorySteps{shards: shards, directory: s}
 	return s, nil
 }
@@ -212,7 +221,10 @@ func (s *AccountDirectoryStore) rolesOfRefs(ctx context.Context, account string,
 			out.Players = append(out.Players, owned.Role)
 			continue
 		}
-		s.noteStaleRef(account, ref.PlayerID)
+		// 已标保留的不再排队:它们在后台的复核名额里轮着重判,排进来只会占读路径队列的位置(SweepStaleRefs 第 1 段也会跳过)。
+		if ref.HeldMs == 0 {
+			s.noteStaleRef(account, ref.PlayerID)
+		}
 	}
 	return out, nil
 }

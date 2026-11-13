@@ -7,6 +7,7 @@
     <ClCompile Include="node\system\etcd\etcd_helper.cpp" />
     <ClCompile Include="node\system\etcd\etcd_manager.cpp" />
     <ClCompile Include="node\system\etcd\etcd_service.cpp" />
+    <ClCompile Include="node\system\etcd\kill_switch_etcd_sync.cpp" />
     <ClCompile Include="node\system\etcd\etcd_transport.cpp" />
     <ClCompile Include="node\system\etcd\muduo_etcd_transport.cpp" />
     <ClCompile Include="node\system\node\node.cpp" />
@@ -25,9 +26,14 @@
     <ClCompile Include="network\rpc_channel_stats.cpp" />
     <ClCompile Include="network\grpc_trace_hooks.cpp" />
     <ClCompile Include="tracing\log_context_suffix.cpp" />
+    <ClCompile Include="tracing\span_export_queue.cpp" />
+    <ClCompile Include="tracing\otlp_trace_encoder.cpp" />
+    <ClCompile Include="tracing\otlp_http.cpp" />
+    <ClCompile Include="tracing\otlp_span_exporter.cpp" />
     <ClCompile Include="metrics\prometheus_text.cpp" />
     <ClCompile Include="metrics\metrics_registry.cpp" />
     <ClCompile Include="metrics\metrics_http_exporter.cpp" />
+    <ClCompile Include="kill_switch\kill_switch.cpp" />
     <ClCompile Include="network\message_statistics.cpp" />
     <ClCompile Include="network\network_utils.cpp" />
     <ClCompile Include="network\client_message_sender.cpp" />
@@ -59,6 +65,7 @@
     <ClInclude Include="node\system\etcd\etcd_helper.h" />
     <ClInclude Include="node\system\etcd\etcd_manager.h" />
     <ClInclude Include="node\system\etcd\etcd_service.h" />
+    <ClInclude Include="node\system\etcd\kill_switch_etcd_sync.h" />
     <ClInclude Include="node\system\etcd\etcd_transport.h" />
     <ClInclude Include="node\system\etcd\muduo_etcd_transport.h" />
     <ClInclude Include="node\system\etcd\etcd_endpoint.h" />
@@ -72,6 +79,7 @@
     <ClInclude Include="node\system\node\node_connector.h" />
     <ClInclude Include="node\system\node\client_endpoint.h" />
     <ClInclude Include="node\system\node\open_file_limit.h" />
+    <ClInclude Include="node\system\node\process_fd_metrics.h" />
     <ClInclude Include="node\system\node\release_track.h" />
     <ClInclude Include="node\system\node\node_planned_drain.h" />
     <ClInclude Include="node\system\node\node_admission_advertise.h" />
@@ -93,9 +101,15 @@
     <ClInclude Include="tracing\log_context_suffix.h" />
     <ClInclude Include="tracing\player_field.h" />
     <ClInclude Include="tracing\trace_context.h" />
+    <ClInclude Include="tracing\span_record.h" />
+    <ClInclude Include="tracing\span_export_queue.h" />
+    <ClInclude Include="tracing\otlp_trace_encoder.h" />
+    <ClInclude Include="tracing\otlp_http.h" />
+    <ClInclude Include="tracing\otlp_span_exporter.h" />
     <ClInclude Include="metrics\prometheus_text.h" />
     <ClInclude Include="metrics\metrics_registry.h" />
     <ClInclude Include="metrics\metrics_http_exporter.h" />
+    <ClInclude Include="kill_switch\kill_switch.h" />
     <ClInclude Include="network\rpc_controller.h" />
     <ClInclude Include="network\rpc_done_callback.h" />
     <ClInclude Include="network\rpc_link_liveness.h" />

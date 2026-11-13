@@ -1,11 +1,12 @@
 """验证独立地图位图入口、失败不落盘以及旧天墉入口兼容。"""
 import base64
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
-BAKER = Path(__file__).resolve().parent / "build/Release/navmesh_baker.exe"
+BAKER = Path(os.environ.get("NAVMESH_BAKER", Path(__file__).resolve().parent / "build/Release/navmesh_baker.exe"))
 
 class BakerContractTest(unittest.TestCase):
     def setUp(self):

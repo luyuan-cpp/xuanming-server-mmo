@@ -1,7 +1,6 @@
 #include "redis_cluster_client.h"
 
 #include <cstddef>
-#include <random>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -14,6 +13,7 @@
 #include "redis_cluster_topology.h"
 #include "redis_command_route.h"
 #include "redis_reply_classifier.h"
+#include "thread_context/trace_context_tls.h"
 
 using redis_cluster::Clock;
 using redis_cluster::CommandRoute;
@@ -63,7 +63,7 @@ namespace
 			callback = nullptr;
 			if (maintenance)
 			{
-				maintenance->Complete(known);
+				maintenance->Complete(known || noSideEffect);
 			}
 		}
 
@@ -80,6 +80,8 @@ namespace
 		// 路由层接受的命令在拿到最终结果之前都算进程未结清:排队与退避中的命令不在任何连接上,维护排空不能漏掉它们。
 		std::shared_ptr<hiredis::Hiredis::MaintenanceState> maintenance;
 		bool known = false;
+		// 调用方声明的只读命令(SideEffects::kNone):任何结局都按「结果确定」记账。
+		bool noSideEffect = false;
 	};
 
 	using PendingCommandPtr = std::shared_ptr<PendingCommand>;
@@ -109,7 +111,6 @@ public:
 		, queues_(options_.retry, options_.limits)
 		, refreshPolicy_(options_.topologyRefreshPeriod, options_.topologyRefreshMinInterval)
 		, maintenance_(hiredis::Hiredis::ProcessMaintenance())
-		, rng_(std::random_device{}())
 	{
 	}
 
@@ -234,10 +235,37 @@ public:
 			LOG_ERROR << "Redis cluster client could not format command " << Loggable(fmt) << " (ret=" << length << ")";
 			return REDIS_ERR;
 		}
+		return Accept(routingKey, cb, raw, static_cast<std::size_t>(length), SideEffects::kMayWrite);
+	}
 
+	// 参数数组形式(RedisClusterClient::commandArgv):格式化之后与 Submit 走同一条路径。
+	int SubmitArgv(const CommandCallback& cb, int argc, const char** argv, const std::size_t* argvlen, SideEffects sideEffects)
+	{
+		loop_.get().assertInLoopThread();
+		if (closing_)
+		{
+			return REDIS_ERR;
+		}
+		char* raw = nullptr;
+		const auto length = ::redisFormatCommandArgv(&raw, argc, argv, argvlen);
+		if (length < 0 || raw == nullptr)
+		{
+			++stats_.rejectedByGuard;
+			LOG_ERROR << "Redis cluster client could not format an argv command (argc=" << argc << ", ret=" << length << ")";
+			return REDIS_ERR;
+		}
+		return Accept(std::nullopt, cb, raw, static_cast<std::size_t>(length), sideEffects);
+	}
+
+	// raw 是 redis*FormatCommand* 产出的缓冲,所有权交给本函数:任何结局都由 PendingCommand 释放。
+	// Submit / SubmitArgv 的公共后半段:守卫、选队列、维护记账、入队与发送。
+	int Accept(std::optional<std::string_view> routingKey, const CommandCallback& cb, char* raw, std::size_t length,
+			   SideEffects sideEffects)
+	{
 		auto command = std::make_shared<PendingCommand>();
 		command->formatted.reset(raw);
-		command->formattedLength = static_cast<std::size_t>(length);
+		command->formattedLength = length;
+		command->noSideEffect = sideEffects == SideEffects::kNone;
 
 		const CommandRoute route = redis_cluster::ResolveCommandRoute(
 			std::string_view(raw, command->formattedLength), routingKey, options_.hashTagPolicy, options_.keyDomain);
@@ -260,7 +288,10 @@ public:
 			return REDIS_ERR;
 		}
 		command->maintenance = maintenance_;
-		command->callback = cb;
+		// 回调落在提交这一刻的 trace 上(docs/design/distributed-tracing.md §4.3)。应答在 loop 顶层派发,同 slot 的后一条
+		// 由前一条的应答驱动上线,本地收尾(Shutdown、预算耗尽)又在别人的调用栈上同步回调:不包这一层,回调要么没有 trace,
+		// 要么挂到不相干的那条上。提交时没有 trace,回调里也没有。所有回调出口都经过这个对象,不必逐个出口恢复。
+		command->callback = tracing::Bind(cb);
 		command->queue = queue;
 		command->id = nextCommandId_++;
 
@@ -361,15 +392,9 @@ private:
 					self->OnNodeReady(endpoint);
 				}
 			});
-		RedisConnectOptions connect = options_.connect;
-		const double base = connect.reconnectIntervalSec > 0
-			? connect.reconnectIntervalSec
-			: RedisConnectOptions::kDefaultReconnectIntervalSec;
-		std::uniform_real_distribution<double> unit(0.0, 1.0);
-		connect.reconnectIntervalSec =
-			redis_cluster::JitteredReconnectIntervalSec(base, options_.reconnectJitterSec, unit(rng_));
+		// 重连抖动由 RedisManager::Connect 按 options_.connect.reconnectJitterSec 给每条节点连接各抽一次,这里不再另算。
 		node.manager->Connect(
-			&loop_.get(), muduo::net::InetAddress(endpoint.ip, endpoint.port, endpoint.IsIpv6()), std::move(connect));
+			&loop_.get(), muduo::net::InetAddress(endpoint.ip, endpoint.port, endpoint.IsIpv6()), options_.connect);
 		return node;
 	}
 
@@ -847,11 +872,11 @@ private:
 	bool topologyReady_ = false;
 	uint64_t nextCommandId_ = 1;
 	std::size_t pickCursor_ = 0;
-	std::mt19937_64 rng_;   // 重连抖动。只影响连接时机,不进任何业务判定
 	RedisClusterStats stats_;
 };
 
 thread_local RedisClusterClient tlsPlayerRedis;
+thread_local RedisClusterClient tlsControlRedis;
 
 RedisClusterClient::RedisClusterClient() = default;
 
@@ -926,6 +951,18 @@ int RedisClusterClient::commandForKey(std::string_view routingKey, const Command
 	const int ret = Submit(routingKey, cb, fmt.c_str(), args);
 	va_end(args);
 	return ret;
+}
+
+int RedisClusterClient::commandArgv(const CommandCallback& cb, int argc, const char** argv, const std::size_t* argvlen,
+									SideEffects sideEffects)
+{
+	if (!impl_ || !cb || argc <= 0 || argv == nullptr || argvlen == nullptr)
+	{
+		return REDIS_ERR;
+	}
+	// 局部引用保住 Impl,理由同 Submit。
+	const std::shared_ptr<Impl> impl = impl_;
+	return impl->SubmitArgv(cb, argc, argv, argvlen, sideEffects);
 }
 
 bool RedisClusterClient::connected() const

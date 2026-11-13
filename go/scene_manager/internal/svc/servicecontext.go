@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"scene_manager/internal/config"
+	"scene_manager/internal/controlredis"
 	"scene_manager/internal/metrics"
 	"strings"
 	"sync"
@@ -23,7 +24,6 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
@@ -45,12 +45,11 @@ type HomeZoneClient interface {
 
 type ServiceContext struct {
 	Config config.Config
-	// Redis 是控制域句柄:场景路由(scene:*、node:zone:*)、成员集合(instance:*:members、node:zone:*:members)、
-	// 世界频道、选主锁。这个域不分片,键一律不带 hash tag。部署上是本 zone 所属组的控制域实例(redis-ctl-g<N>),
-	// 只读写本 zone(Config.ZoneId)的键(docs/design/control-plane-zone-scoping-20261105.md §4.3)。
-	Redis *redis.Redis
-	// CoreRedis 是核心共享实例,只读 gate 排空标记(Config.CoreRedis;没配时与 Redis 是同一个对象)。
-	CoreRedis *redis.Redis
+	// Redis 是控制集群句柄(Config.ControlRedis;docs/design/redis-cluster-all-domains-20261110.md §4.1、§5.1):场景路由
+	// (scene:{ctl:<z>}:*、node:{ctl:<z>}:*)、成员集合、世界频道、Agones 名额、选主锁,以及跨 zone 重定向读的目标 zone 的 gate 标记
+	// (gate:{gm:<z>}:*)。只读写本 zone(Config.ZoneId)的控制域键(docs/design/control-plane-zone-scoping-20261105.md §4.3)。
+	// 发送前守卫核对键:多键命令同一个 tag,玩家域的键在这里一律被拒;结果未知的命令不自动重发。
+	Redis *controlredis.Client
 	// PlayerRedis 是玩家域句柄(shared/playerredis,生产可以是 Redis Cluster):location、位置修订、离场等待、切线冷却、
 	// 进场去重、owner_epoch、handoff、handoff_fence。键一律带 {player_id},发送前经守卫核对。
 	// 一段脚本不能跨这两个域,离场与摘成员是两步(docs/design/redis-player-store-cluster.md §5.10)。
@@ -92,8 +91,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err := c.ValidateUnqualifiedHolderRevokeGrace(); err != nil {
 		panic("scene_manager invalid configuration: " + err.Error())
 	}
-	if err := c.PlayerRedis.ValidateSection(); err != nil {
-		panic("scene_manager invalid configuration: PlayerRedis: " + err.Error())
+	// 三段 Redis 配置(退役的旧段、ControlRedis、PlayerRedis)在建任何客户端之前校验,规则见 ValidateRedisSections。
+	if err := c.ValidateRedisSections(); err != nil {
+		panic("scene_manager invalid configuration: " + err.Error())
 	}
 	playerRedisConf := c.EffectivePlayerRedis()
 	playerRedis, err := playerredis.New(playerRedisConf)
@@ -144,16 +144,23 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 	logx.Infof("[scene_manager] snowflake %s worker_id=%d (node=%s)", hd.LogFields(), hd.WorkerID, nodeName)
 
-	controlRedis := redis.MustNewRedis(c.Redis.RedisConf)
-	coreRedis := controlRedis
-	if coreConf := c.EffectiveCoreRedis(); coreConf.Host != c.Redis.Host {
-		coreRedis = redis.MustNewRedis(coreConf)
+	controlRedisConf := c.EffectiveControlRedis()
+	controlRedis, err := controlredis.New(controlRedisConf)
+	if err != nil {
+		panic("scene_manager invalid configuration: ControlRedis: " + err.Error())
 	}
-	logx.Infof("[scene_manager] control redis %s (zone %d), core redis %s", c.Redis.Host, c.ZoneId, c.EffectiveCoreRedis().Host)
+	// 启动探活:连不上就拒启(换句柄之前 go-zero 的 MustNewRedis 同样先探一次)。
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	pingErr := controlRedis.Ping(pingCtx)
+	pingCancel()
+	if pingErr != nil {
+		_ = controlRedis.Close()
+		panic(fmt.Sprintf("failed to connect control redis (%s): %v", controlRedisConf.Describe(), pingErr))
+	}
+	logx.Infof("[scene_manager] control redis %s (zone %d)", controlRedisConf.Describe(), c.ZoneId)
 	sc := &ServiceContext{
 		Config:      c,
 		Redis:       controlRedis,
-		CoreRedis:   coreRedis,
 		PlayerRedis: playerRedis,
 		Etcd:        etcdCli,
 		// Handle.NewNode 会注入前任高水位作地板(见 snowflakealloc),
@@ -301,6 +308,11 @@ func (sc *ServiceContext) Stop() {
 		if sc.PlayerRedis != nil {
 			if err := sc.PlayerRedis.Close(); err != nil {
 				logx.Errorf("[scene_manager] player redis client close failed: %v", err)
+			}
+		}
+		if sc.Redis != nil {
+			if err := sc.Redis.Close(); err != nil {
+				logx.Errorf("[scene_manager] control redis client close failed: %v", err)
 			}
 		}
 		if sc.snowflakeHd != nil {

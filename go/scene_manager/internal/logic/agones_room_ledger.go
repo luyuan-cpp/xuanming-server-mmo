@@ -79,7 +79,7 @@ func (r agonesRoom) record() string {
 	return r.GameServer + agonesRoomRecordSep + r.Entry
 }
 
-// parseAgonesRoom 解 scene:{id}:agones_gs 的值。空串解出空的 agonesRoom。
+// parseAgonesRoom 解 scene:{ctl:<z>}:<id>:agones_gs 的值。空串解出空的 agonesRoom。
 func parseAgonesRoom(record string) agonesRoom {
 	gs, entry, _ := strings.Cut(record, agonesRoomRecordSep)
 	return agonesRoom{GameServer: gs, Entry: entry}
@@ -102,30 +102,32 @@ func dropAgonesRoomHold(svcCtx *svc.ServiceContext, zoneID uint32, entry string)
 // luaJudgeAgonesRoomEntry 判 GameServer 上的一个条目该不该留着,见文件头。过期的在途占用在同一步取消,
 // 之后晚到的提交读不到它就不写记录。
 //
-// KEYS[1] = scene:{id}:zone,KEYS[2] = scene:{id}:agones_gs,KEYS[3] = scene:{id}:teardown,KEYS[4] = 本 zone 的在途占用。
-// ARGV[1] = 本 zone,ARGV[2] = 「GameServer/条目」,ARGV[3] = 条目,ARGV[4] = 现在(Unix 秒)。
+// KEYS[1] = scene:{ctl:<z>}:<id>:agones_gs,KEYS[2] = scene:{ctl:<z>}:<id>:teardown,KEYS[3] = 本 zone 的在途占用
+// (三把键同一个 zone 的 tag,同槽)。
+// ARGV[1] = 「GameServer/条目」,ARGV[2] = 条目,ARGV[3] = 现在(Unix 秒)。
 // 拆除任务的 reply 是认领应答 {状态, 属主, agones_gs, 镜像源, 镜像标记, 成员...}(scene_atomic.go),第 3 项是记录。
+//
+// 只读本 zone 的键(docs/design/redis-cluster-all-domains-20261110.md §3.3):条目里的场景不在本 zone(登记在别的 zone,
+// 或已销毁、拆除任务也做完了)时三把键都读不到,按孤儿判 —— 调用方只从本 zone 的 GameServer 上删掉这一条,不碰场景。
+// 原来单列的 foreign(按 scene:<id>:zone 认出别的 zone、留着不删)随那把键一起删除:按 zone 打标签列出的 GameServer
+// 只承载本 zone 的场景,别的 zone 的场景出现在这里本身就是错账。
 const luaJudgeAgonesRoomEntry = `
-local zone = redis.call('GET', KEYS[1])
-if zone and zone ~= ARGV[1] then
-    return 'foreign'
-end
-if redis.call('GET', KEYS[2]) == ARGV[2] then
+if redis.call('GET', KEYS[1]) == ARGV[1] then
     return 'recorded'
 end
-local reply = redis.call('HGET', KEYS[3], 'reply')
+local reply = redis.call('HGET', KEYS[2], 'reply')
 if reply then
     local snapshot = cjson.decode(reply)
-    if snapshot[3] == ARGV[2] then
+    if snapshot[3] == ARGV[1] then
         return 'releasing'
     end
 end
-local deadline = redis.call('ZSCORE', KEYS[4], ARGV[3])
+local deadline = redis.call('ZSCORE', KEYS[3], ARGV[2])
 if deadline then
-    if tonumber(deadline) > tonumber(ARGV[4]) then
+    if tonumber(deadline) > tonumber(ARGV[3]) then
         return 'held'
     end
-    redis.call('ZREM', KEYS[4], ARGV[3])
+    redis.call('ZREM', KEYS[3], ARGV[2])
     return 'hold_expired'
 end
 return 'orphan'
@@ -135,8 +137,6 @@ return 'orphan'
 type agonesRoomVerdict string
 
 const (
-	// agonesRoomForeign:场景登记在别的 zone,它的键只由那个 zone 读写,不碰。
-	agonesRoomForeign agonesRoomVerdict = "foreign"
 	// agonesRoomRecorded:记录指向这一条,在用。
 	agonesRoomRecorded agonesRoomVerdict = "recorded"
 	// agonesRoomReleasing:场景已销毁,拆除任务快照指向这一条,等拆除任务删。
@@ -156,15 +156,14 @@ func (v agonesRoomVerdict) reclaimable() bool {
 
 // judgeAgonesRoomEntry 跑 luaJudgeAgonesRoomEntry。认不出的应答回错误,调用方按读不到处理(不删)。
 func judgeAgonesRoomEntry(svcCtx *svc.ServiceContext, zoneID uint32, sceneID uint64, room agonesRoom, now time.Time) (agonesRoomVerdict, error) {
-	keys := []string{sceneZoneKey(sceneID), sceneAgonesGsKey(sceneID), sceneTeardownJobKey(sceneID), agonesRoomHoldsKey(zoneID)}
-	raw, err := svcCtx.Redis.Eval(luaJudgeAgonesRoomEntry, keys,
-		strconv.FormatUint(uint64(zoneID), 10), room.record(), room.Entry, now.Unix())
+	keys := []string{sceneAgonesGsKey(zoneID, sceneID), sceneTeardownJobKey(zoneID, sceneID), agonesRoomHoldsKey(zoneID)}
+	raw, err := svcCtx.Redis.Eval(luaJudgeAgonesRoomEntry, keys, room.record(), room.Entry, now.Unix())
 	if err != nil {
 		return "", err
 	}
 	verdict := agonesRoomVerdict(toString(raw))
 	switch verdict {
-	case agonesRoomForeign, agonesRoomRecorded, agonesRoomReleasing, agonesRoomHeld, agonesRoomHoldExpired, agonesRoomOrphan:
+	case agonesRoomRecorded, agonesRoomReleasing, agonesRoomHeld, agonesRoomHoldExpired, agonesRoomOrphan:
 		return verdict, nil
 	}
 	return "", fmt.Errorf("unexpected verdict %v for room entry %s", raw, room.Entry)

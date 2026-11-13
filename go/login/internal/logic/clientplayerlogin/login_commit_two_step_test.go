@@ -87,7 +87,7 @@ func newLoginCommitEnv(t *testing.T) *loginCommitEnv {
 		authType: authType,
 		hook:     hook,
 		svcCtx: &svc.ServiceContext{
-			RedisClient: control, LoginRedis: login, AccountDirectory: fixtureDirectory(t, control),
+			ControlRedis: control, LoginRedis: login, AccountDirectory: fixtureDirectory(t, control),
 			TokenManager: token.NewManager(login, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 24 * time.Hour}),
 		},
 	}

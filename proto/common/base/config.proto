@@ -64,6 +64,15 @@ message GrpcClientConfig {
     map<string, uint32> call_deadline_ms = 1;
 }
 
+// C++ 节点的 span 导出(docs/design/distributed-tracing.md §10.3,阶段三)。
+// 地址空 = 不导出(不起导出线程)。OTel 规范的环境变量优先于这里:OTEL_EXPORTER_OTLP_TRACES_ENDPOINT、
+// OTEL_EXPORTER_OTLP_ENDPOINT、OTEL_SDK_DISABLED、OTEL_TRACES_EXPORTER(取值规则见 core/tracing/otlp_http.h)。
+message TracingConfig {
+    // OTLP/HTTP 的 traces 地址,原样使用:http://host[:port]/v1/traces。本机是 Alloy 的 127.0.0.1:4318,
+    // K8s 上由 k8s_deploy.ps1 写成本节点 Alloy 的 Service(internalTrafficPolicy: Local)。只认明文 http。
+    string otlp_traces_endpoint = 1;
+}
+
 // Base deploy config
 message BaseDeployConfig {
     repeated string etcd_hosts = 1;
@@ -128,8 +137,8 @@ message BaseDeployConfig {
     string spectate_token_secret = 24;
 
     // 集群号:部署级常量,由运维一次性设定(ConfigMap / yaml),策划不碰,默认 0。
-    // 只有 Go 的 snowflake 槽位协议(login-player / guild / scene-manager / match)消费它,
-    // 作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者
+    // 只有 Go 的 snowflake 槽位协议消费它(现在只剩 scene-manager 的 scene_id;login、guild、match
+    // 改由发号器发号,不再申领槽位),作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者
     // (scene 的永久 guid 走号段,不编码集群),这里只是同一份 yaml 口径的原样读入。
     // 取值 0..31。见 docs/design/node-id-overhaul-plan-20260908.md §5 / §7.5。
     uint32 cluster_id = 18;
@@ -137,34 +146,37 @@ message BaseDeployConfig {
     // 永久 guid 号段(item / txlog / snapshot 各一块,见 IdSegmentConfig)。
     IdSegmentConfig id_segment = 19;
 
-    // 审计 topic(transaction_log / player_snapshot)的**世代号**,进有效 topic 名:
-    // `<基名>_g<N>`,基名在 cpp/libs/modules/{transaction_log,snapshot} 的头文件里。
-    // 0 当 1 处理(proto3 没有 presence,存量 yaml 不写这一键也能起,名字仍规范)。
-    //
-    // **必须等于 go/data_service 的 Kafka.TopicGeneration**(go/data_service/etc/data_service.yaml):
-    // C++ 是这两个 topic 唯一的生产者,data_service 是唯一的消费者,名字是两边唯一的会合点。
-    // 两边分家不报任何错 —— 生产者写进一个没人消费的 topic,流水 / 快照在保留期(默认 30 天)
-    // 到期时被静默吃掉。2026-09-09 之前这个后缀是 C++ 编译期常量,换代要手改两个头文件并重出镜像;
-    // 现在收敛成这一个部署键(k8s 侧由 k8s_deploy.ps1 从 data_service.yaml 镜像进 node ConfigMap)。
-    uint32 audit_topic_generation = 20;
+    // 20 是 audit_topic_generation(审计 topic 的世代号),2026-11-12 删除:C++ 不再直接发审计 topic,
+    // 流水与快照随玩家存盘进 go/db 的审计发件箱,由 go/db 投 Kafka(docs/design/player-audit-outbox.md)。
+    // 世代号现在只在 Go 一侧:go/db 的 AuditOutbox.TopicGeneration(生产者)与 go/data_service 的 Kafka.TopicGeneration(消费者)。
+    reserved 20;
+    reserved "audit_topic_generation";
 
     // C++ 节点 unary gRPC 调用的 deadline(见 GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
     GrpcClientConfig grpc_client = 21;
+
+    // span 导出(见 TracingConfig)。22、23 没用过但不确定历史上有无存量配置,新字段从 25 起。yaml 键 Tracing。
+    TracingConfig tracing = 25;
 }
 
 // Game config
 message GameConfig {
     uint32 scene_node_type = 1;  // Scene node type
     uint32 zone_id = 2;          // Zone ID
-    // Zone Redis config
-    message ZoneRedisConfig {
-        string host = 3;           // Redis host
-        uint32 port = 4;           // Redis port
-        string password = 5;       // Redis password (optional)
-        uint32 db = 6;             // Redis database number
+
+    // 一个 Redis 句柄的地址(scene 的 RedisClusterClient):player_redis 与 control_redis 共用这一种写法。
+    // 由 readGameConfig 手工逐键解析,取值由 scene 启动时校验,配错拒绝启动。
+    message RedisClusterConfig {
+        string mode = 1;             // standalone | cluster
+        repeated string seeds = 2;   // host:port。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑
+        string password = 3;         // 空 = 不认证;各段有自己的口令环境变量覆盖,值不进日志
     }
 
-    ZoneRedisConfig zone_redis = 7; // Zone Redis config
+    // 7 是 zone_redis(核心单实例,gate / scene / battle 都连)、11 是 scene_control_redis(本 zone 组的控制域单实例),
+    // 2026-11-12 合成 control_redis = 12:scene 只连一个控制集群句柄,gate、battle 不再连 Redis
+    // (docs/design/redis-cluster-all-domains-20261110.md §4.2)。项目未上线,没有存量配置要兼容。
+    reserved 7, 11;
+    reserved "zone_redis", "scene_control_redis";
 
     // 玩家持久收件箱的 scene 消费端(docs/design/player-inbox-service.md §3.3、§7.3、§11.7)。
     // 由 readGameConfig 手工逐键解析(cpp/libs/engine/config/config.cpp),yaml 键名 player_inbox。
@@ -178,16 +190,10 @@ message GameConfig {
 
     PlayerInboxConfig player_inbox = 8;
 
-    // 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它;控制域仍是 zone_redis。
-    // 由 readGameConfig 手工逐键解析,yaml 键名 player_redis。**整段缺失时加载器显式取默认**:standalone,
-    // 地址与口令沿用 zone_redis,开发环境不用改配置。
-    message PlayerRedisConfig {
-        string mode = 1;             // standalone | cluster;取值由 scene 启动时校验,配错拒绝启动
-        repeated string seeds = 2;   // host:port。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑
-        string password = 3;         // 空 = 不认证;可被环境变量 PLAYER_REDIS_PASSWORD 覆盖,值不进日志
-    }
-
-    PlayerRedisConfig player_redis = 9;
+    // 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它。yaml 键名 player_redis。
+    // **整段缺失时加载器显式取 control_redis 的值**(模式、种子与口令,同 Go 各服务 PlayerRedis 回落到 ControlRedis),
+    // 开发环境不用改配置;写了这一段就是另一个实例或集群,口令只认显式值与环境变量 PLAYER_REDIS_PASSWORD。
+    RedisClusterConfig player_redis = 9;
 
     // 进场、离场的审计快照(整档发 Kafka,data_service 落 player_snapshot;modules/snapshot/audit_snapshot_policy.h)。
     // 由 readGameConfig 手工逐键解析,yaml 键名 audit_snapshot。**整段或单键缺失时加载器显式取默认**:两个触发点都开、全量。
@@ -201,8 +207,9 @@ message GameConfig {
 
     AuditSnapshotConfig audit_snapshot = 10;
 
-    // 本 zone 的场景控制域实例(docs/design/control-plane-zone-scoping-20261105.md §4.5):scene_manager 把分线目录、神秘商人
-    // 等读模型写在本 zone 所属组的控制域实例(K8s 上 redis-ctl-g<N>),只有 scene 读它。yaml 键 scene_control_redis,
-    // 由 readGameConfig 手工解析;**整段缺失时取 zone_redis 的值**(开发环境两者是同一个实例)。db 只认 0。
-    ZoneRedisConfig scene_control_redis = 11;
+    // 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.2、§5.2),只有 scene 连它:scene_manager 写的分线目录、
+    // 神秘商人读模型,场景归属对账,资产待办唤醒(SPUBLISH 分片频道)。yaml 键 control_redis。
+    // **整段或单键缺失时加载器显式取默认**:standalone、种子 127.0.0.1:6379、不认证(同 Go 各服务 ControlRedis 的缺省);
+    // 口令可被环境变量 CONTROL_REDIS_PASSWORD 覆盖。
+    RedisClusterConfig control_redis = 12;
 }

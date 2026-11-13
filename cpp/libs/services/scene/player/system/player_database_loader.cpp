@@ -77,11 +77,25 @@ PlayerReviveOutcome ApplyClassInitialAttributesOrReviveFromTable(
 	if (outcome == PlayerReviveOutcome::kUntouched) {
 		return outcome;
 	}
+	// 加载路径上力量、速度不在存档里,血量为 0 的号(新号,或阵亡后下线)都落在 kInitialized 这一支(player_revive.h)。
 	LOG_INFO << "[PlayerInit] "
-			 << (outcome == PlayerReviveOutcome::kInitialized ? "New player attribute initialization" : "Full recovery after revival")
+			 << (outcome == PlayerReviveOutcome::kInitialized ? "Base attributes initialized (new character, or loaded with zero health)"
+															  : "Full recovery after revival")
 			 << ": health=" << attrs.health() << " strength=" << attrs.strength()
 			 << " speed=" << attrs.speed();
 	return outcome;
+}
+
+// 玩家的职业行:按存档里的职业取,取不到(职业为 0、表里没有这一行)退回首行,与 PlayerAttributeSystem 重算时的取法一致。
+// 表是空的返回 nullptr。
+const ClassTable* ClassRowOfLoadedPlayer(const PlayerUint32Comp& uint32Comp) {
+	if (const uint32_t classId = uint32Comp.class_(); classId != 0) {
+		if (const auto [row, err] = ClassTableManager::Instance().FindByIdSilent(classId); row != nullptr) {
+			return row;
+		}
+	}
+	const auto& classRows = ClassTableManager::Instance().FindAll().data();
+	return classRows.size() > 0 ? &classRows.Get(0) : nullptr;
 }
 
 // 二级属性算完之后把 HP/MP 顶到真实上限(登录路径专用)。
@@ -140,11 +154,17 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	tlsEcs.actorRegistry.emplace<PlayerUint64Comp>(player, message.uint64_pb_component());
 	// 技能列表的清理与补初始技能要看职业与等级,放在下面两者挂上之后(PlayerSkillSystem::InitializeOnLoad)
 	tlsEcs.actorRegistry.emplace<PlayerSkillListComp>(player, message.skill_list());
-	tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(player, message.uint32_pb_component());
+	const auto& uint32Comp = tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(player, message.uint32_pb_component());
 	auto& baseAttrs = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player, message.derived_attributes_component());
 	// 上限此刻还没算(DerivedAttributesComp 由下面的 InitializeOnLoad 产出),
 	// 先按职业初值落地,拿到 outcome 决定后面要不要顶到真实上限。
 	const auto reviveOutcome = ApplyClassInitialAttributesOrReviveFromTable(baseAttrs);
+	// 存档里的基础属性只有当前血蓝(存盘时清掉其余字段,见 PlayerDatabaseMessageFieldsMarshal):力量、护甲、抗性、暴击、速度
+	// 每次加载按职业表写回,活着的玩家也要(上面的血量规则不碰活人)。放在血量规则之后:规则靠「血量、力量、速度都是 0」
+	// 认新号,先写职业常量的话新号会被当成阵亡 —— 两者都是回满血蓝,只是日志对不上。
+	if (const auto* classRow = ClassRowOfLoadedPlayer(uint32Comp); classRow != nullptr) {
+		ApplyClassConstants(baseAttrs, *classRow);
+	}
 	const auto& levelComp = tlsEcs.actorRegistry.emplace<LevelComp>(player, message.level_component());
 	// 存储等级原样携带,不按本版本上限压回(docs/design/mixed-version-persist-field-protection.md §12.1):
 	// 新版本提高上限后回滚 scene、混版本跨 zone 迁移,以及上限下调(2026-09-10:200 → 85)前 GM 设过的老存档,
@@ -313,7 +333,17 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_uint64_pb_component()->CopyFrom(*uint64Comp);
 	message.mutable_skill_list()->CopyFrom(*skillList);
 	message.mutable_uint32_pb_component()->CopyFrom(*uint32Comp);
-	message.mutable_derived_attributes_component()->CopyFrom(*baseAttributes);
+	// 基础属性只存当前血蓝。力量、体质、暴击、护甲、抗性、速度只有职业表和重算这两个来源,加载时写回(Unmarshal 里的
+	// ApplyClassConstants 与随后的重算),落库的话就是一份改了表也不会跟着变的缓存(AGENTS §11.6,存盘规格 §1.1)。
+	// 先整份拷再清,不是只拷两个字段:组件里带着的未知字段(更新版本加的)要原样存回(混版本保护)。
+	auto* vitals = message.mutable_derived_attributes_component();
+	vitals->CopyFrom(*baseAttributes);
+	vitals->clear_strength();
+	vitals->clear_stamina();
+	vitals->clear_critchance();
+	vitals->clear_armor();
+	vitals->clear_resistance();
+	vitals->clear_speed();
 	message.mutable_level_component()->CopyFrom(*level);
 	message.mutable_attribute_component()->CopyFrom(*attribute);
 	message.mutable_pet_component()->CopyFrom(*pet);

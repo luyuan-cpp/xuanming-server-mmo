@@ -17,12 +17,12 @@
 | MySQL `guild.score` | 列 | 排行分的权威副本 |
 | MySQL `guild.score_version` | 列 | 分数版本。建帮写 0，`UpdateGuildScore` 在写 `score` 的同一事务里加 1。同一帮会的写分在 guild 行锁上串行，所以版本随提交顺序严格递增，一个版本只对应一个已提交的分数 |
 | MySQL `guild.zone_id` | 列 | 建帮时的原始区。建帮只在请求者的归属区建，所以恒非 0；合服不改写 |
-| `guild_rank:zone:<最终区>` | ZSET | member = guild_id，score = 排行分 |
-| `guild_rank:version:<最终区>` | HASH | field = guild_id，value = 榜上那个分数的 `score_version`。与同区的 ZSET 只经脚本一起改，两者的成员始终一致 |
-| `guild_rank:tombstone:<区>` | ZSET | 本区的解散墓碑，member = guild_id，score = 到期时刻（Redis 服务器时间，毫秒，立碑后 24 小时）。挡住解散前提交、解散后才到的写入。每次立碑把整个键的 TTL 续到这一条的到期时刻 |
-| `guild_rank:maintenance_lock` | 字符串 | 榜维护锁，只让重建与合服折叠互斥。SETNX，TTL 5 分钟，最多等 5 秒，令牌相符才释放。写分、建帮上榜、解散摘榜都不拿它 |
+| `guild_rank:zone:{gr:<最终区>}` | ZSET | member = guild_id，score = 排行分 |
+| `guild_rank:version:{gr:<最终区>}` | HASH | field = guild_id，value = 榜上那个分数的 `score_version`。与同区的 ZSET 只经脚本一起改，两者的成员始终一致 |
+| `guild_rank:tombstone:{gr:<区>}` | ZSET | 本区的解散墓碑，member = guild_id，score = 到期时刻（Redis 服务器时间，毫秒，立碑后 24 小时）。挡住解散前提交、解散后才到的写入。每次立碑把整个键的 TTL 续到这一条的到期时刻 |
+| `guild_rank:maintenance_lock:{gr:<区>}` | 字符串 | 榜维护锁，每区一把，只让重建与合服折叠互斥（重建按升序拿涉及的各区，折叠拿各源区）。SETNX，TTL 5 分钟，最多等 5 秒，令牌相符才释放。写分、建帮上榜、解散摘榜都不拿它 |
 
-键里没有 hash tag。guild 用自己的 `RedisClient`（`go/guild/etc/guild.yaml`，DB 0），是单实例客户端。以 `guild_rank` 开头的键都归公会榜：`RebuildRanks` 会扫 `guild_rank:zone:*`，把每张榜上与 MySQL 对不上的成员摘掉，所以别的服务的键不得用这个前缀（[排行榜设计](leaderboard-system.md) §3.1）。版本 HASH 故意不以 `guild_rank:zone:` 开头，按这个前缀扫榜的地方（重建、摘榜、`tools/data_consistency_check`）不会把它当成一张榜。
+键在控制集群上（guild 的 `ControlRedis` 段，`go/guild/etc/guild.yaml`；2026-11-12 全部 Redis 上 Cluster 第 5a 批改形）。同区的榜、版本 HASH、墓碑与维护锁共用一个 hash tag `{gr:<区>}`，写榜的每段脚本只碰一个区、一个槽。以 `guild_rank` 开头的键都归公会榜，别的服务的键不得用这个前缀（[排行榜设计](leaderboard-system.md) §3.1）。哪些区有榜键从 SQL 推出（`rankZones`：guild 表出现过的原始区与它们的最终区，加合服映射两端），重建与摘榜都不扫 Redis；盖不到的只有「某区帮会全部解散、摘榜又失败」留下的幽灵，那个区再有帮会后下一次重建摘掉。
 
 ## 3. 写入
 
@@ -41,7 +41,7 @@
   - 条件写入没写（榜上已是更新的版本、帮会已解散）是并发下的正常结果，打 INFO 日志，不算失败。
 - **改分 RPC**：同名 RPC `UpdateGuildScore` 标了 `CLIENT_RPC_SERVER_ONLY`，客户端发上来会被 gate 当非法包丢弃。全仓现在没有正常调用方，robot 只用它验证客户端发不上来。
 - **建帮**：logic 层建帮成功后调 `AddNewGuildToRank`，按建帮事务写入的初始分数 0、版本 0 上榜，只写一次 Redis，不再开第二个事务。版本 0 输给之后任何一次推分，晚到也盖不掉新分数。失败只记日志：权威分在 MySQL，缺的榜项由下次推分或启动重建补上。
-- **解散与摘榜**：`RemoveGuildFromRank` 先定区。帮会行还在时以 MySQL 的 `zone_id` 为准；行已删（解散的正常路径）时，用解散事务里 `FOR UPDATE` 读到的区。然后对 `SCAN guild_rank:zone:*` 找到的每张榜，以及该帮合服组（解析到同一最终区的全部原始区，含最终区）的每个区，逐个把这一项连同版本摘掉。解散时，合服组里的区在摘的同一段脚本里立墓碑（`rankBuryScript`）。不拿维护锁。
+- **解散与摘榜**：`RemoveGuildFromRank` 先定区。帮会行还在时以 MySQL 的 `zone_id` 为准；行已删（解散的正常路径）时，用解散事务里 `FOR UPDATE` 读到的区。然后对 zone 清单里的每张榜（guild 表出现过的区及其最终区、合服映射两端，从 SQL 推出，不扫 Redis），以及该帮合服组（解析到同一最终区的全部原始区，含最终区）的每个区，逐个把这一项连同版本摘掉。解散时，合服组里的区在摘的同一段脚本里立墓碑（`rankBuryScript`）。不拿维护锁。
   - 为什么不只摘一张：合服折叠之前，条目可能还在源区的旧键上；撤销合服之后，条目可能还在目标区的键上。只摘一张会留下查不到名字的幽灵条目。
   - 为什么不用和写分互斥：一个区的立墓碑与摘榜是同一段脚本。在它之前执行的写入留下的项被它摘掉，在它之后的写入被墓碑拒绝。
   - 为什么墓碑立在合服组就够：写榜只写进 `Final(zone_id)`。映射缓存滞后的副本算出来的也在合服组里：还不知道合服的写原始区，知道的写最终区。剩一个窗口：刚合服时摘榜的副本还没刷新到新映射，推分的副本已经刷新了，迟到的推分会写进摘榜副本不知道的新最终区，留下一个幽灵条目，到下次重建才摘掉。只影响榜上的显示。
@@ -69,7 +69,7 @@
 1. 持维护锁，只为与折叠、别的副本的重建互斥。
 2. 全量读 `SELECT guild_id, zone_id, score, score_version FROM guild`。
 3. 每行按版本合并进当前合服映射下的最终区。榜上已是更新的版本（快照之后又推过分）就不动；帮会已解散（墓碑在）就不写。
-4. 扫每张 `guild_rank:zone:*`，找出不在快照里、或快照说不归这个区的项。这些项先回库复核当前权威，不凭快照下结论：
+4. 按 zone 清单（从快照推出，同上）逐张读榜，找出不在快照里、或快照说不归这个区的项。这些项先回库复核当前权威，不凭快照下结论：
    - 库里已没有：解散后没摘干净的幽灵。在这个区立墓碑并摘掉；
    - 在库里、属于这个区：快照之后才建的帮会。按当前权威合并，不删；
    - 在库里、属于别的区（映射变了）或 `zone_id=0`：权威分并进它该在的区，再按读到的版本从这里摘，期间新写进来的版本不会被误删。
@@ -86,10 +86,10 @@
 - **只有代价**：每次推分多一次 ZADD；所有帮会挤在一个键上，上 Redis Cluster 就是单槽热点。
 - **两版一致**：Java 版本来就不提供全服榜。
 
-旧环境里残留的 `guild_rank` 键不再有人读写，`RebuildRanks` 只扫 `guild_rank:zone:*`，也不删它。项目未上线，不写迁移代码，有两种清法：
+旧环境里残留的 `guild_rank` 键不再有人读写，`RebuildRanks` 只按 zone 清单读 `guild_rank:zone:{gr:<区>}`，也不删它。项目未上线，不写迁移代码，有两种清法：
 
 - 压测前清库时一并清掉：`pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`，K8s 用 `-Command k8s-redis-wipe`。
-- 只删这一个键：`redis-cli -h <guild 的 RedisClient 地址> -n 0 DEL guild_rank`。
+- 只删这一个键：`redis-cli -h <guild 的 ControlRedis 地址> -n 0 DEL guild_rank`。
 
 ## 7. 合服工具与公会榜
 
@@ -106,7 +106,7 @@
 ## 8. 扩展约束
 
 - **写分可以并发**：写分、建帮上榜、解散摘榜都不拿维护锁，不同帮会、不同副本的推分互不等待。同一帮会的写分在 MySQL 的 guild 行锁上串行：这是版本单调的来源，也是单个帮会写分吞吐的上限。维护锁只让重建与折叠互斥，两者都不在请求路径上。
-- **还不能上 Cluster**：guild 现在用单实例 Redis 客户端，键里没有 hash tag。榜的每个脚本都只碰一个区的三个键，上 Redis Cluster 时给同区三个键打同一个 tag（[全部 Redis 上 Cluster 设计稿](redis-cluster-all-domains-20261110.md) §3.2 的 `gr` 族）即可，协议不用改。同时要改的还有 `guild_repo.go` 的缓存代次脚本（`guild:v2:cache_generation:<id>` 与 `guild:v2:<id>` 两键不同槽），以及按 `SCAN guild_rank:zone:*` 找榜的几处（重建、摘榜、`tools/data_consistency_check`）。
+- **已按 Cluster 改形（2026-11-12，第 5a 批，未编译）**：榜键加 `{gr:<区>}`，缓存代次脚本的两把键改成 `guild:v2:cache_generation:{g:<id>}` / `guild:v2:{g:<id>}`（玩家所在帮会是 `{pg:<id>}`），按 zone 清单处理取代 `SCAN guild_rank:zone:*`，维护锁按区。写榜脚本不再进 pipeline（控制集群句柄的守卫拒绝 pipeline 里的 EVAL），重建与折叠逐条发。`tools/data_consistency_check` 的孤儿检查 2026-11-12 已改成逐主节点 SCAN（`-redis-cluster`，单实例与 Cluster 都支持），按 `guild_rank:zone:{gr:<区>}` 解析（与 guild 同用 `redisslot.ZoneControlTag`），改形前的旧键报「形状不认识」，未编译，见 [全部 Redis 上 Cluster 设计稿](redis-cluster-all-domains-20261110.md) §4.8。
 - **键的大小**：按区拆键之后，单个键的大小只是一个区的帮会数，不随全服帮会数增长。墓碑键只装本区合服组最近 24 小时解散的帮会。
 
 ## 9. 代码位置
