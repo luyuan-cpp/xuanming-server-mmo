@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <utility>
+#include <vector>
 
 #include "engine/core/type_define/type_define.h"
 #include "config/config.h"
@@ -106,10 +108,48 @@ TEST_F(SceneSpawnTest, ReentryPreservesLegalPositionWhileMapTravelUsesDestinatio
     }
 }
 
+TEST_F(SceneSpawnTest, YuexiBayLoadedMapRoutesReachBothDocksAndRelocateOldInvalidPosition) {
+    SelectScene(3);
+    auto* nav = SceneNavManager::Instance().Get(3);
+    ASSERT_NE(nullptr, nav);
+    ASSERT_TRUE(nav->versionedMask);
+    ASSERT_TRUE(NavQuerySystem::RequiresNavigation(3));
+    const auto spawn = SceneSpawnSystem::DefaultSpawnFor(3);
+    EXPECT_NEAR(36.73125, spawn.x(), 1e-9);
+    EXPECT_NEAR(20.19375, spawn.y(), 1e-9);
+    EXPECT_DOUBLE_EQ(0, spawn.z());
+    // 真实双节导航计划的南北码头接近点，按服务端 Z-up 坐标写入。
+    for (const auto& [x,y] : {std::pair{44.4375, 59.34375}, std::pair{21.88125, 48.15}}) {
+        Location dock;
+        dock.set_x(x); dock.set_y(y);
+        std::vector<Location> route;
+        ASSERT_TRUE(NavQuerySystem::FindPath(*nav, spawn, dock, route)) << x << ',' << y;
+        ASSERT_GE(route.size(), 2U);
+        EXPECT_NEAR(spawn.x(), route.front().x(), .02);
+        EXPECT_NEAR(spawn.y(), route.front().y(), .02);
+        EXPECT_NEAR(dock.x(), route.back().x(), .02);
+        EXPECT_NEAR(dock.y(), route.back().y(), .02);
+        for (size_t i = 1; i < route.size(); ++i) {
+            Location accepted;
+            ASSERT_TRUE(NavQuerySystem::ValidateMove(*nav, route[i-1], route[i], accepted)) << i;
+        }
+        SetPosition(dock.x(), dock.y(), 0);
+        EXPECT_FALSE(SceneSpawnSystem::EnsureValidEnterLocation(player, scene));
+        ExpectPosition(dock);
+    }
+    SetPosition(147, 201, 0);
+    EXPECT_TRUE(SceneSpawnSystem::EnsureValidEnterLocation(player, scene));
+    ExpectPosition(spawn);
+    Location sea, accepted;
+    sea.set_x(spawn.x()); sea.set_y(75);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, sea, accepted));
+    EXPECT_FALSE(NavQuerySystem::ValidateMove(*nav, spawn, sea, accepted));
+}
+
 TEST_F(SceneSpawnTest, NoNavigationStillHonorsDestinationSpawnAndPreservesReentry) {
     SceneNavManager::Instance().sceneNav.clear();
-    SelectScene(3);
-    const auto spawn = SceneSpawnSystem::DefaultSpawnFor(3);
+    SelectScene(4);
+    const auto spawn = SceneSpawnSystem::DefaultSpawnFor(4);
     SetPosition(10, 20, 0);
     EXPECT_FALSE(SceneSpawnSystem::EnsureValidEnterLocation(player, scene));
     EXPECT_EQ(10, tlsEcs.actorRegistry.get<Transform>(player).location().x());

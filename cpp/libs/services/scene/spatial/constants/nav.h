@@ -1,6 +1,23 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <string>
+
+enum class NavDataContract { Legacy, ExactMask, VersionedMask, AuthoredFlat };
+
+// 配表中的版本目录声明运行端必须加载哪种导航合同。常驻旧图的 bin 仍位于父目录。
+inline NavDataContract NavContractForPath(std::string path)
+{
+    std::replace(path.begin(), path.end(), '\\', '/');
+    if (path.starts_with("data/scene_nav_bin/festival_maps/"))
+        return NavDataContract::ExactMask;
+    if (path.starts_with("data/scene_nav_bin/current_maps/"))
+        return NavDataContract::VersionedMask;
+    if (path.starts_with("data/scene_nav_bin/authored_maps/"))
+        return NavDataContract::AuthoredFlat;
+    return NavDataContract::Legacy;
+}
 
 constexpr uint32_t kMaxMeshQueryNodes = 4096;
 

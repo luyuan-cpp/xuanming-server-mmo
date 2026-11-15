@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "key": "village",
+  "sceneId": 3,
+  "revision": "yuexi-bay-20261115",
+  "appearance": "spring",
+  "resourceRoot": "World/QdaoMaps20261102/village/yuexi-bay-20261115/spring/1434311d8576a300720996a44e37cd2d0cfce7098e82c47fdd58802e468d1d6d/",
+  "layoutSha256": "1434311d8576a300720996a44e37cd2d0cfce7098e82c47fdd58802e468d1d6d",
+  "worldRect": {
+    "x": 0,
+    "y": 0,
+    "width": 86.4,
+    "height": 72
+  },
+  "effectiveWorldRect": {
+    "x": 0.0,
+    "y": 0.0,
+    "width": 72.0,
+    "height": 72.0
+  },
+  "cellSize": 0.5,
+  "imageRect": {
+    "x": 0,
+    "y": 0,
+    "width": 5120,
+    "height": 5120
+  },
+  "referenceWidth": 5120,
+  "referenceHeight": 5120,
+  "walkmaskColumns": 173,
+  "walkmaskRows": 144,
+  "spawnWorld": {
+    "x": 20.19375,
+    "y": 0.0,
+    "z": 36.73125
+  },
+  "name": "月汐湾",
+  "artStatus": "formal_tiles_overview",
+  "layoutPixels": {
+    "width": 6144,
+    "height": 5120
+  },
+  "clientOnly": true,
+  "authoritativeServerRegistered": false,
+  "visualSourceCommit": "8ee9f4e4b93c9ff9e9a856647512c220073408a7",
+  "visualProvenancePath": "Docs/VerificationEvidence/yuexi-bay-preview-20261115/asset-provenance.json",
+  "navigationPlanPath": "Docs/VerificationEvidence/yuexi-bay-preview-20261115/navigation-plan.json",
+  "navigationPlanSha256": "5c01ae672ef3e930b231121c7b39901aa972ad75b058a722bacc33d9cb962bc0",
+  "navigationSha256": "3a3a6298cadf424506d17284f1a1ecf1bd13b690ffcb50422d0964a9d3d7374d",
+  "maskEncoding": "base64-msb-first-row-major-top-to-bottom",
+  "walkmaskSha256": "2f36d3c5676de84b8b7b8ff252dd043144f8a251f7bd350ff3fe4a2fb289692e",
+  "walkmaskPackedSha256": "e18dde078030d723473074502c1e5c0ad67ece1fef86d822cd20667c8099d582",
+  "walkableCellCount": 952,
+  "navigationStatus": "conservative_visible_ground",
+  "runtimeEngineAcceptance": false
+}

@@ -1,0 +1,58 @@
+{
+  "revision": "yuexi-bay-20261115",
+  "navPath": "data/scene_nav_bin/current_maps/village/yuexi-bay-20261115/scene.bin",
+  "navigation": {
+    "spawn": [
+      36.73125,
+      20.19375,
+      0.0
+    ],
+    "rows": 144,
+    "columns": 173,
+    "walkable": 952,
+    "points": 12,
+    "blocked": 14,
+    "completeRoutes": 11,
+    "msetSha256": "9c6c77f3a9bd81ad37600d770619816b8ca7cc576267eabebd07ef9227816876",
+    "fmaskSha256": "74a8785e354b607ed0690f5f62a7809c20943e913dd4f63d5a411e9f22e65545"
+  },
+  "springSourceSha256": "99fec92614867c04f1c3cdd6bcf6e8bd0d3235d3b44409c3db6a3174951c8a86",
+  "midAutumnSourceSha256": "2fa14628bfe7763b471539ceddf17ed9ca5018db34a38632d8c4138728931670",
+  "tables": {
+    "originalBaseSceneSha256": "17142d3be150bf92041fab2523c85c1b145c5c47168af46c17c89800208073bb",
+    "sourceBaseSceneSha256": "c31f4cde7b1cbc86cc7f425b2970f14c2ee4b85b374eaa1ecd57be21e881d864",
+    "originalManifestSha256": "57326490e969095ae60ff5dce7f23a647f7a4eb2150facb02ee3e2df87e7c3a1",
+    "generatedDataSha256": {
+      "basescene.json": "ab3045d31ce2f8fc347f4a155762ab1c2cd42dd59af6cc3320aae6a4ddaa9745",
+      "basescene.pb": "02dc27776377f6d2b7928806457790794a4a6b56a1d108b17c43e0254d928ab1",
+      "manifest.json": "b22102236073b0e5acd8203e22f2331a7a9a0b58285e83b06a8b9a3ae68e7c92"
+    },
+    "changedTableFiles": [
+      "basescene.json",
+      "basescene.pb",
+      "manifest.json"
+    ]
+  },
+  "verification": {
+    "sceneLibraryBuilt": true,
+    "nativeLoaderAndSpawnTests": {
+      "passed": 27,
+      "failed": 0,
+      "reportSha256": "e3082fbe1fd6b7bf1cb9a8bf0f32d82854737ecb4e02b69a6048f5065d946b45"
+    },
+    "strictRouteQueriesWithMovementPerSegment": {
+      "passed": 11,
+      "reportSha256": "e383dccd6e79a4650f319986cc5e7434961a7017729fb3eaf171ebcf581382c1"
+    },
+    "navigationToolTests": {
+      "passed": 48
+    },
+    "legacyMapGridChecks": {
+      "maps": 3,
+      "cells": 67500,
+      "mismatches": 0
+    },
+    "repeatImportChanges": false,
+    "sharedRuntimeDeploymentPerformed": false
+  }
+}

@@ -7,7 +7,7 @@ import unittest
 
 import openpyxl
 
-from sync_current_maps import digest, expected_rows, load_contract
+from sync_current_maps import YUEXI_NAV_PATH, digest, expected_rows, load_contract
 
 
 class CurrentMapContractTest(unittest.TestCase):
@@ -92,6 +92,23 @@ class CurrentMapContractTest(unittest.TestCase):
         sheet.cell(6, 2).value = "data/scene_nav_bin/lanxian_scene.bin"
         with self.assertRaisesRegex(ValueError, "实际导航路径"):
             expected_rows(book, contracts)
+        book.close()
+
+    def test_legacy_rebake_keeps_versioned_scene_three_binding(self):
+        book = openpyxl.Workbook()
+        sheet = book.active
+        sheet.append(["id", "nav_bin_file", "spawn_x", "spawn_y", "spawn_z"])
+        for _ in range(4):
+            sheet.append([None])
+        sheet.append([1, "data/scene_nav_bin/main_scene.bin", 133, 199, 0])
+        sheet.append([2, "data/scene_nav_bin/penglai_scene.bin", 173, 195, 0])
+        sheet.append([3, YUEXI_NAV_PATH, 36.73125, 20.19375, 0])
+        contracts = {key: {"spawnWorld": {"x": x, "y": 0, "z": z}}
+                     for key, x, z in (("main", 199, 133), ("island", 195, 173), ("village", 201, 147))}
+        rows, changes = expected_rows(book, contracts)
+        self.assertEqual([], changes)
+        self.assertEqual({"id": 3, "nav_bin_file": YUEXI_NAV_PATH,
+                          "spawn_x": 36.73125, "spawn_y": 20.19375, "spawn_z": 0}, rows[2])
         book.close()
 
 

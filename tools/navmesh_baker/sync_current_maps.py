@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MAPS = ((1, "main", "main_scene.bin"), (2, "island", "penglai_scene.bin"),
         (3, "village", "donghai_scene.bin"))
 MANIFEST = "current_maps_20261009.json"
+YUEXI_NAV_PATH = "data/scene_nav_bin/current_maps/village/yuexi-bay-20261115/scene.bin"
 
 
 def digest(data: bytes) -> str:
@@ -92,6 +93,9 @@ def expected_rows(workbook, contracts: dict) -> tuple[list, list]:
                 row[field] = value
         rows.append(row)
     for scene_id, _, filename in MAPS:
+        # 历史渔村照常验证或重烘。场景3已迁移时，旧工具不改月汐湾的版本路径或出生点。
+        if scene_id == 3 and seen.get(scene_id) == YUEXI_NAV_PATH:
+            continue
         if seen.get(scene_id) != f"data/scene_nav_bin/{filename}":
             raise ValueError(f"场景 {scene_id} 的实际导航路径改变,拒绝覆盖错误文件")
     return rows, changes

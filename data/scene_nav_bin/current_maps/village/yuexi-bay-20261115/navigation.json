@@ -1,0 +1,317 @@
+{
+  "schemaVersion": 1,
+  "sceneId": 3,
+  "key": "village",
+  "revision": "yuexi-bay-20261115",
+  "navigationPlanSha256": "5c01ae672ef3e930b231121c7b39901aa972ad75b058a722bacc33d9cb962bc0",
+  "source": {
+    "worldRect": {
+      "x": 0,
+      "y": 0,
+      "width": 86.4,
+      "height": 72
+    },
+    "effectiveWorldRect": {
+      "x": 0.0,
+      "y": 0.0,
+      "width": 72.0,
+      "height": 72.0
+    },
+    "cellSize": 0.5,
+    "imageRect": {
+      "x": 0,
+      "y": 0,
+      "width": 5120,
+      "height": 5120
+    },
+    "referenceWidth": 5120,
+    "referenceHeight": 5120,
+    "walkmaskColumns": 173,
+    "walkmaskRows": 144,
+    "spawnWorld": {
+      "x": 20.19375,
+      "y": 0.0,
+      "z": 36.73125
+    }
+  },
+  "stats": {
+    "walkableCells": 952,
+    "totalCells": 24912,
+    "componentCount": 1,
+    "componentSizes": [
+      952
+    ],
+    "spawnComponent": 0,
+    "landmarks": {
+      "spawn": {
+        "pixel": [
+          1436,
+          2508
+        ],
+        "world": {
+          "x": 20.19375,
+          "y": 0.0,
+          "z": 36.73125
+        },
+        "component": 0
+      },
+      "northwest_path": {
+        "pixel": [
+          272,
+          336
+        ],
+        "world": {
+          "x": 3.8250000000000006,
+          "y": 0.0,
+          "z": 67.275
+        },
+        "component": 0
+      },
+      "west_path": {
+        "pixel": [
+          204,
+          2564
+        ],
+        "world": {
+          "x": 2.8687500000000004,
+          "y": 0.0,
+          "z": 35.94375
+        },
+        "component": 0
+      },
+      "north_house_approach": {
+        "pixel": [
+          1912,
+          940
+        ],
+        "world": {
+          "x": 26.887500000000003,
+          "y": 0.0,
+          "z": 58.78125
+        },
+        "component": 0
+      },
+      "walled_house_approach": {
+        "pixel": [
+          1264,
+          2316
+        ],
+        "world": {
+          "x": 17.775000000000002,
+          "y": 0.0,
+          "z": 39.43125
+        },
+        "component": 0
+      },
+      "shrine_approach": {
+        "pixel": [
+          2036,
+          2840
+        ],
+        "world": {
+          "x": 28.631250000000005,
+          "y": 0.0,
+          "z": 32.0625
+        },
+        "component": 0
+      },
+      "fish_shop_approach": {
+        "pixel": [
+          2936,
+          2308
+        ],
+        "world": {
+          "x": 41.2875,
+          "y": 0.0,
+          "z": 39.54375
+        },
+        "component": 0
+      },
+      "shore_house_approach": {
+        "pixel": [
+          3316,
+          3044
+        ],
+        "world": {
+          "x": 46.63125,
+          "y": 0.0,
+          "z": 29.19375
+        },
+        "component": 0
+      },
+      "north_dock": {
+        "pixel": [
+          4220,
+          1960
+        ],
+        "world": {
+          "x": 59.34375,
+          "y": 0.0,
+          "z": 44.4375
+        },
+        "component": 0
+      },
+      "south_dock": {
+        "pixel": [
+          3424,
+          3564
+        ],
+        "world": {
+          "x": 48.150000000000006,
+          "y": 0.0,
+          "z": 21.88125
+        },
+        "component": 0
+      },
+      "north_beach": {
+        "pixel": [
+          4308,
+          904
+        ],
+        "world": {
+          "x": 60.581250000000004,
+          "y": 0.0,
+          "z": 59.2875
+        },
+        "component": 0
+      },
+      "salt_pool_approach": {
+        "pixel": [
+          1236,
+          3660
+        ],
+        "world": {
+          "x": 17.38125,
+          "y": 0.0,
+          "z": 20.53125
+        },
+        "component": 0
+      }
+    },
+    "blockedLandmarks": [
+      "open_sea",
+      "foam",
+      "north_boat",
+      "south_boat",
+      "salt_pool_water",
+      "spring_stage",
+      "midautumn_lanterns",
+      "fish_shop_roof",
+      "shore_house_roof",
+      "ship_shed_roof",
+      "fenced_garden",
+      "cliff",
+      "shore_stone",
+      "east_padding"
+    ],
+    "connectedRoutes": [
+      [
+        "spawn",
+        "northwest_path"
+      ],
+      [
+        "spawn",
+        "west_path"
+      ],
+      [
+        "spawn",
+        "north_house_approach"
+      ],
+      [
+        "spawn",
+        "walled_house_approach"
+      ],
+      [
+        "spawn",
+        "shrine_approach"
+      ],
+      [
+        "spawn",
+        "fish_shop_approach"
+      ],
+      [
+        "spawn",
+        "shore_house_approach"
+      ],
+      [
+        "spawn",
+        "north_dock"
+      ],
+      [
+        "spawn",
+        "south_dock"
+      ],
+      [
+        "spawn",
+        "north_beach"
+      ],
+      [
+        "spawn",
+        "salt_pool_approach"
+      ]
+    ],
+    "routeMeasurements": [
+      {
+        "from": "spawn",
+        "to": "northwest_path",
+        "gridDistanceWorldUnits": 46.33452377915604
+      },
+      {
+        "from": "spawn",
+        "to": "west_path",
+        "gridDistanceWorldUnits": 17.914213562373092
+      },
+      {
+        "from": "spawn",
+        "to": "north_house_approach",
+        "gridDistanceWorldUnits": 31.39949493661166
+      },
+      {
+        "from": "spawn",
+        "to": "walled_house_approach",
+        "gridDistanceWorldUnits": 4.707106781186548
+      },
+      {
+        "from": "spawn",
+        "to": "shrine_approach",
+        "gridDistanceWorldUnits": 10.949747468305834
+      },
+      {
+        "from": "spawn",
+        "to": "fish_shop_approach",
+        "gridDistanceWorldUnits": 62.6274169979695
+      },
+      {
+        "from": "spawn",
+        "to": "shore_house_approach",
+        "gridDistanceWorldUnits": 32.72792206135785
+      },
+      {
+        "from": "spawn",
+        "to": "north_dock",
+        "gridDistanceWorldUnits": 62.834523779156044
+      },
+      {
+        "from": "spawn",
+        "to": "south_dock",
+        "gridDistanceWorldUnits": 36.26345596729058
+      },
+      {
+        "from": "spawn",
+        "to": "north_beach",
+        "gridDistanceWorldUnits": 77.52691193458122
+      },
+      {
+        "from": "spawn",
+        "to": "salt_pool_approach",
+        "gridDistanceWorldUnits": 21.192388155425117
+      }
+    ],
+    "maximumListedRouteSecondsAt18": 4.30705066303229,
+    "separatedRoutes": [],
+    "maskSha256": "e18dde078030d723473074502c1e5c0ad67ece1fef86d822cd20667c8099d582",
+    "maskBytes": 3114,
+    "engineAccepted": false,
+    "serverNavigationPublished": false
+  }
+}

@@ -180,6 +180,30 @@ TEST_F(FestivalDisconnectedNavigationTest, TeamTeleportCannotBridgeDisconnectedP
 TEST_F(FestivalNavigationTest, MissingExactMaskRejectsRegistrationAndEntry) {
     fs::remove(folder / "scene.bin.mask"); LoadAndExpectRejected();
 }
+
+class CurrentVillageNavigationTest : public FestivalNavigationTest {
+protected:
+    uint32_t SceneId() const override { return 3; }
+    uint32_t SourceSceneId() const override { return 19004; }
+    std::string MapPath() const override {
+        return "data/scene_nav_bin/current_maps/village/yuexi-bay-20261115";
+    }
+};
+
+TEST_F(CurrentVillageNavigationTest, VersionedMapRegistersItsVerifiedExactMask) {
+    NavigationSystem::LoadNavBins();
+    ASSERT_TRUE(NavQuerySystem::RequiresNavigation(SceneId()));
+    auto* nav = SceneNavManager::Instance().Get(SceneId());
+    ASSERT_NE(nullptr, nav);
+    EXPECT_TRUE(nav->strictMask);
+    Location accepted;
+    EXPECT_TRUE(NavQuerySystem::SnapToMesh(*nav, spawn, accepted));
+}
+
+TEST_F(CurrentVillageNavigationTest, MissingChecksumRejectsVersionedSceneBeforeEntry) {
+    fs::remove(folder / "scene.bin.sha256");
+    LoadAndExpectRejected();
+}
 TEST_F(FestivalNavigationTest, MissingChecksumsRejectsRegistrationAndEntry) {
     fs::remove(folder / "scene.bin.sha256"); LoadAndExpectRejected();
 }

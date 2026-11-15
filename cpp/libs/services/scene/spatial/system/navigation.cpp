@@ -36,15 +36,13 @@ int CountLoadedTiles(const dtNavMesh& navMesh)
 }
 
 // 同一文件只加载与初始化一次;每个场景自己的出生点在注册前单独验证。
-std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath)
+std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath, const NavDataContract contract)
 {
-	const bool festival = navPath.find("/festival_maps/") != std::string::npos ||
-		navPath.find("\\festival_maps\\") != std::string::npos;
-	const bool authored = navPath.find("/authored_maps/") != std::string::npos ||
-		navPath.find("\\authored_maps\\") != std::string::npos;
+	const bool exactMask = contract == NavDataContract::ExactMask || contract == NavDataContract::VersionedMask;
+	const bool authored = contract == NavDataContract::AuthoredFlat;
 	if (authored && std::filesystem::exists(navPath + ".mask"))
 	{ LOG_ERROR << "skip nav registration (authored nav has a residual legacy mask): " << navPath; return nullptr; }
-	if (festival || authored)
+	if (exactMask || authored)
 	{
 		std::ifstream checksums(navPath + ".sha256");
 		std::string expectedNav, expectedMask, extra;
@@ -108,7 +106,7 @@ std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath)
 		LOG_ERROR << "skip nav registration (navQuery init failed): " << navPath;
 		return nullptr;
 	}
-	if (!authored && (festival || std::filesystem::exists(navPath + ".mask")))
+	if (!authored && (exactMask || std::filesystem::exists(navPath + ".mask")))
 	{
 		if (!nav->mask.Load(navPath + ".mask"))
 		{
@@ -133,6 +131,7 @@ std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath)
 				{ LOG_ERROR << "skip nav registration (exact mask mismatch): " << navPath; return nullptr; }
 			}
 		nav->strictMask = true;
+		nav->versionedMask = contract == NavDataContract::VersionedMask;
 	}
 
 	return nav;
@@ -188,7 +187,7 @@ void NavigationSystem::LoadNavBins()
 		auto it = byPath.find(navPath);
 		if (it == byPath.end())
 		{
-			it = byPath.emplace(navPath, LoadNavFile(navPath)).first;
+			it = byPath.emplace(navPath, LoadNavFile(navPath, NavContractForPath(item.nav_bin_file()))).first;
 		}
 		if (!it->second || !ProbeSceneSpawn(it->second, navPath, item.id()))
 		{

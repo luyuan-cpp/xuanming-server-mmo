@@ -1,13 +1,17 @@
 #include "nav_query.h"
 
 #include <algorithm>
+#include <array>
+#include <deque>
 #include <limits>
+#include <utility>
 
 #include "Detour/DetourNavMeshQuery.h"
 
 #include "modules/scene/comp/scene_comp.h"
 #include "proto/scene/scene_info.pb.h"
 #include "spatial/comp/nav_comp.h"
+#include "spatial/constants/nav.h"
 #include "spatial/manager/scene_nav.h"
 #include "thread_context/ecs_context.h"
 #include "table/code/basescene_table.h"
@@ -72,17 +76,80 @@ bool SnapNav(NavComp& nav, const NavVec& in, dtPolyRef& outRef, NavVec& outPos)
 	return accepted;
 }
 
+// 新版小网格的 Detour 漏斗可令边界拐点穿出严格位图。只有 Detour 已证实拓扑连通，
+// 才沿同一份位图尝试四邻格心路线；每一段仍必须通过正式移动的位图与 Detour 射线校验。
+bool FindVersionedMaskPath(NavComp& nav, const Location& start, const Location& end,
+	std::vector<Location>& outPath)
+{
+	const auto& mask = nav.mask;
+	const int total = mask.columns * mask.rows;
+	constexpr int kMaxSearchCells = 262144;
+	if (total > kMaxSearchCells) return false;
+
+	auto index = [&mask](const Location& point) {
+		const int col = static_cast<int>(std::floor((point.y() - mask.minX) / mask.cellSize));
+		const int row = mask.rows - 1 - static_cast<int>(std::floor((point.x() - mask.minZ) / mask.cellSize));
+		return row * mask.columns + col;
+	};
+	const int first = index(start), goal = index(end);
+	Location accepted;
+	if (first == goal)
+	{
+		if (!NavQuerySystem::ValidateMove(nav, start, end, accepted)) return false;
+		outPath = {start, end};
+		return true;
+	}
+
+	auto location = [&](int cell, Location& point) {
+		if (cell == first) { point = start; return true; }
+		if (cell == goal) { point = end; return true; }
+		double x0, x1, z0, z1;
+		if (!mask.CellBounds(cell % mask.columns, cell / mask.columns, x0, x1, z0, z1)) return false;
+		point.set_x((z0 + z1) / 2);
+		point.set_y((x0 + x1) / 2);
+		point.set_z(0);
+		return true;
+	};
+	std::vector<int> parent(total, -1);
+	std::deque<int> pending{first};
+	parent[first] = first;
+	constexpr std::array<std::pair<int,int>, 4> kSteps{{{1,0}, {-1,0}, {0,1}, {0,-1}}};
+	while (!pending.empty() && parent[goal] == -1)
+	{
+		const int current = pending.front();
+		pending.pop_front();
+		Location point;
+		if (!location(current, point)) continue;
+		for (const auto& [dx, dy] : kSteps)
+		{
+			const int col = current % mask.columns + dx, row = current / mask.columns + dy;
+			if (!mask.Cell(col, row)) continue;
+			const int next = row * mask.columns + col;
+			if (parent[next] != -1) continue;
+			Location target;
+			if (!location(next, target) || !NavQuerySystem::ValidateMove(nav, point, target, accepted)) continue;
+			parent[next] = current;
+			pending.push_back(next);
+		}
+	}
+	if (parent[goal] == -1) return false;
+	for (int cell = goal; cell != first; cell = parent[cell])
+	{
+		Location point;
+		if (!location(cell, point)) { outPath.clear(); return false; }
+		outPath.push_back(point);
+	}
+	outPath.push_back(start);
+	std::reverse(outPath.begin(), outPath.end());
+	return true;
+}
+
 }  // namespace
 
 bool NavQuerySystem::RequiresNavigation(const uint32_t sceneConfigId)
 {
 	const auto* row = BaseSceneTableManager::Instance().FindByIdSilent(sceneConfigId).first;
-	// 本批严格合同显式按目录声明；旧图的无导航兼容行为保持原状。
-	if (row == nullptr) return false;
-	std::string path = row->nav_bin_file();
-	std::replace(path.begin(), path.end(), '\\', '/');
-	return path.starts_with("data/scene_nav_bin/festival_maps/") ||
-		path.starts_with("data/scene_nav_bin/authored_maps/");
+	return row != nullptr && NavContractForPath(row->nav_bin_file()) != NavDataContract::Legacy;
 }
 
 bool NavQuerySystem::MissingRequiredNavigation(const entt::entity player)
@@ -247,7 +314,14 @@ bool NavQuerySystem::FindPath(NavComp& nav, const Location& from, const Location
 	{
 		for (size_t i = 1; i < outPath.size(); ++i)
 			if (!nav.mask.Segment(outPath[i-1].y(), outPath[i-1].x(), outPath[i].y(), outPath[i].x()))
-			{ outPath.clear(); return false; }
+			{
+				outPath.clear();
+				if (!nav.versionedMask) return false;
+				Location startPoint, endPoint;
+				ToServer(startPos.v, startPoint);
+				ToServer(endPos.v, endPoint);
+				return FindVersionedMaskPath(nav, startPoint, endPoint, outPath);
+			}
 	}
 	return true;
 }

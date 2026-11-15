@@ -24,6 +24,7 @@ struct NavComp
     dtNavMeshQuery navQuery;
     NavMask mask;
     bool strictMask = false;
+    bool versionedMask = false;
     AuthoredNavBounds authoredBounds;
     bool authoredFlat = false;
 };

@@ -16,9 +16,9 @@
   },
   {
    "id": 3,
-   "nav_bin_file": "data/scene_nav_bin/donghai_scene.bin",
-   "spawn_x": 147.0,
-   "spawn_y": 201.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/village/yuexi-bay-20261115/scene.bin",
+   "spawn_x": 36.73125,
+   "spawn_y": 20.19375,
    "spawn_z": 0.0
   },
   {
