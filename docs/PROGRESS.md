@@ -34352,3 +34352,13 @@ Windows modules、scene及bag_test按/m:1构建和完整裸指针门禁通过；
 - 复用后端基础检查实际通过：C++工程契约24、日志守卫20、发布规则21、Go游戏日7个顶层测试（35条含子测试通过事件）、Java游戏日7。接线期间修复原日志测试动态导入未登记sys.modules；Java首次报告路径接线失败如实留证，改为所选reactor clean test、唯一Surefire报告名及本轮归档后通过，未放宽验收。
 - 最终完整证据在忽略目录 build/ai-pipeline/client-isolation-run-02 与 backend-smoke-run-03，均PASS且已逐文件核对checksums.json；早期失败目录保留。使用说明见 docs/design/ai-development-pipeline.md，索引和脚本目录说明仅追加，保留已有并行改动。本条纯追加并核验旧字节保留。
 - 没有修改两版服务端玩法、客户端协议、正式表或运行服务；双版本玩法对齐不适用，不把开发工具验收记为新玩法完成。未执行Unity原生Player打包、联网、画面或性能压测；模板要求显式登记适用项，不以本轮结果替代这些证据。未提交或推送。
+
+
+## 2026-11-17 Codex：装备打造、36词条与八法宝业务代码收口
+
+- 八部位继续属于一个装备背包：物品实例、固定槽layout、放入规则各司其职。补齐53配方、36固定词条、八法宝正式配置；同名首饰/法宝以不同item_id共存，V1强化和旧装备规则保留。
+- 完成服务端规则/预览/提交、严格材料兑换事务、首次词条安装、持久forge_revision与请求防重；回执淘汰后旧水位返回UNKNOWN，durable要求当前归属代次的真实提交快照。客户端完整原意图发送前落盘，未知结果与未持久确认均复用原键恢复。
+- 36词条进入人物面板与入战快照；独立治疗/盾曲线、七类障碍判定、十二类减耗及八法宝实际触发接入。双同名法宝按原基数同层叠加，按实例独立计次/补偿/失效；状态和来源进入回放，客户端保留触发元数据但不增加动画拍。
+- 共享scene/battle法宝参数与词条来源上限校验，防止无效配置被打造后拒绝入战；补齐配置热更指纹、A26完整施放方快照、旧盾序列、主目标失效和状态重排边界。新增21项打造与36项战斗测试源码，客户端追加4项协议/回放测试源码。
+- 协议、配表及CMake/工程登记完成生成同步；静态差异与项目登记核对记录在build/verification/equipment-complete-20261117/final-static-review.json，表证据在equipment-complete-tables-20261117/final-validation.json，客户端最新静态证据在.codex-artifacts/equipment-crafting-20261117/final-static-review.json。
+- 用户最新要求先完成代码，装备和技能后续统一验收：本轮最终源码未继续编译或运行测试，不把之前302/126项通过当作最终版本验收。未改新UI、未部署/重启服务、未提交推送；独立Java玩法服务器不在本窗口范围。未定义的重铸/继承/升档、旧资产转换与支付不冒称已完成。详见docs/design/equipment-eight-slot-implementation.md。

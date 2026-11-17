@@ -3,7 +3,7 @@
     <div class="gm-heading">
       <div>
         <h1>GM 控制台</h1>
-        <p>查询玩家与区服，通过邮件发放银两和物品，保留每次操作记录。</p>
+        <p>查询玩家与区服，执行玩家 GM 或邮件发放，核对并保留每次操作记录。</p>
       </div>
       <a-button :loading="overviewLoading" :disabled="mutationBusy" @click="loadOverview">刷新服务状态</a-button>
     </div>
@@ -98,7 +98,14 @@
       </a-col>
     </a-row>
 
-    <a-card v-if="hasPermission('gm:audit:read')" title="最近操作记录" class="gm-card">
+    <PlayerCommands
+      v-if="canViewPlayerCommands"
+      :busy="mutationBusy"
+      :player-id="player?.found ? player.playerId : undefined"
+      @busy-change="playerCommandBusy = $event"
+    />
+
+    <a-card v-if="hasPermission('gm:audit:read')" title="邮件操作记录" class="gm-card">
       <template #extra>
         <a-button v-auth="'gm:audit:read'" :loading="auditLoading" :disabled="mutationBusy" @click="loadAudit">刷新审计</a-button>
       </template>
@@ -214,6 +221,8 @@
   import { BasicModal, useModal } from '/@/components/Modal';
   import { usePermission } from '/@/hooks/web/usePermission';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import PlayerCommands from './PlayerCommands.vue';
+  import { PLAYER_OPERATIONS } from '/@/api/gm/playerCommands';
   import {
     buildMailDraft,
     getGmCommands,
@@ -229,6 +238,9 @@
   } from '/@/api/gm/console';
 
   const { hasPermission } = usePermission();
+  const canViewPlayerCommands = computed(
+    () => hasPermission('gm:audit:read') || PLAYER_OPERATIONS.some((operation) => hasPermission(operation.permission))
+  );
   const { createMessage } = useMessage();
   const overview = ref<GmOverview>();
   const overviewLoading = ref(false);
@@ -239,7 +251,8 @@
   );
   const preparing = ref(false);
   const sending = ref(false);
-  const mutationBusy = computed(() => preparing.value || sending.value);
+  const playerCommandBusy = ref(false);
+  const mutationBusy = computed(() => preparing.value || sending.value || playerCommandBusy.value);
   const playerIdInput = ref('');
   const player = ref<GmPlayer>();
   const playerLoading = ref(false);

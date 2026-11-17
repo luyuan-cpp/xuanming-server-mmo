@@ -167,7 +167,6 @@ private:
     // 装备静态来源来自 scene，次数只由本局状态拥有；按 item_id 排序使双同名预算分配稳定。
     bool InitializeEquipment(BattleActorState& actor, const EquipmentEffects& effects);
     uint32_t EquipmentManaCategory(const SkillTable& skill) const;
-    uint32_t MainEquipmentAilment(const SkillTable& skill) const;
     std::vector<int> AvailableArtifacts(const BattleActorState& actor, uint32_t effect) const;
     void UseArtifact(BattleActorState& actor, int index, uint64_t targetId, uint64_t value,
                        TurnResultS2C& result);
@@ -186,6 +185,7 @@ private:
                                 const std::vector<int>& contributions, TurnResultS2C& result);
 
     friend class TurnBattleEngineDeathTestAccess; // 内存测试注入周期伤害来源，不新增业务控制接口
+    friend class TurnBattleEngineEquipmentTestAccess; // 回放重排/缺失运行状态回归，不开放业务写接口。
     // ---- 初始化 ----
 
     bool InitPlayers(const CreateBattleRequest& request);
@@ -230,7 +230,7 @@ private:
                            TurnResultS2C& result);
     // 单目标落地:敌方技能 命中 → 伤害(× 等级系数)→ 死亡;之后(目标仍活着)治疗 → 回蓝 → 驱散 → 增减益
     void ApplyClassSkillToTarget(BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
-                                 double baseDamage, BattleActorState& target, TurnResultS2C& result);
+                                 double baseDamage, BattleActorState& target, TurnResultS2C& result, uint64_t primaryTargetId);
     // 伤害基数:表达式求值(职业技能表里是常数 10),等级参数吃"所有技能上升"。出手与挂机估算共用
     double ClassSkillBaseDamage(const BattleActorState& actor, const SkillTable& skillRow) const;
     // 治疗量(未按缺口封顶):(法伤 × 倍率 + 施法者等级 × 每级加值) × 等级系数 × (1 + 治疗加成被动),
@@ -329,7 +329,7 @@ private:
     //   COUNTER 反击,伤害原样落地,且**不**触发对方的反震(反击不再引发任何连锁)。
     // 返回本段是否命中。出手者可能在本段被反震弹死,调用方用 IsActorActive(attacker) 判断能否继续
     bool ResolveBasicAttackHit(BattleActorState& attacker, BattleActorState& target,
-                               eBattleHitKind hitKind, TurnResultS2C& result);
+                               eBattleHitKind hitKind, TurnResultS2C& result, uint64_t primaryTargetId = 0);
     // 普攻首段落血前消费“下次普攻”Buff。先快照实例 ID,再逐个重查;触发中新加的条目留给下次普通行动。
     // 复制施加者上下文后完成本次子效果,不持有跨 AddBuffToActor 的容器引用;返回附伤后的原始伤害。
     double TriggerBeforeBasicAttackBuffs(BattleActorState& attacker, BattleActorState& target,

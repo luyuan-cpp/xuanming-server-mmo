@@ -24,6 +24,321 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// auth 为 operator|Unix秒|nonce|小写HMAC-SHA256。沿用 GM canonical 六行格式，
+// method=/scene_node.SceneNodeGrpc/GmExecutePlayerCommand，node=目标十进制节点号，
+// reason 段固定为 "gm-player-command-v1\n" + SHA256(清空 auth 后确定性 protobuf) 小写 hex。
+// 密钥独立使用 MMORPG_GM_PLAYER_COMMAND_SECRET，不复用停机/描述实体的密钥。
+type GmExecutePlayerCommandRequest struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	CommandId               uint64                 `protobuf:"varint,1,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	PlayerId                uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Operator                string                 `protobuf:"bytes,3,opt,name=operator,proto3" json:"operator,omitempty"`
+	Reason                  string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	Auth                    string                 `protobuf:"bytes,5,opt,name=auth,proto3" json:"auth,omitempty"`
+	TargetNodeId            uint32                 `protobuf:"varint,6,opt,name=target_node_id,json=targetNodeId,proto3" json:"target_node_id,omitempty"`
+	ExpectedSessionId       uint32                 `protobuf:"varint,7,opt,name=expected_session_id,json=expectedSessionId,proto3" json:"expected_session_id,omitempty"`
+	ExpectedLoginGeneration uint64                 `protobuf:"varint,8,opt,name=expected_login_generation,json=expectedLoginGeneration,proto3" json:"expected_login_generation,omitempty"`
+	IssuedAtMs              uint64                 `protobuf:"varint,9,opt,name=issued_at_ms,json=issuedAtMs,proto3" json:"issued_at_ms,omitempty"`
+	// Types that are valid to be assigned to Command:
+	//
+	//	*GmExecutePlayerCommandRequest_AddCurrency
+	//	*GmExecutePlayerCommandRequest_DeductCurrency
+	//	*GmExecutePlayerCommandRequest_BlockCurrency
+	//	*GmExecutePlayerCommandRequest_UnblockCurrency
+	//	*GmExecutePlayerCommandRequest_GrantItem
+	//	*GmExecutePlayerCommandRequest_GrantPet
+	//	*GmExecutePlayerCommandRequest_SetLevel
+	Command       isGmExecutePlayerCommandRequest_Command `protobuf_oneof:"command"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GmExecutePlayerCommandRequest) Reset() {
+	*x = GmExecutePlayerCommandRequest{}
+	mi := &file_proto_scene_manager_scene_node_service_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GmExecutePlayerCommandRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GmExecutePlayerCommandRequest) ProtoMessage() {}
+
+func (x *GmExecutePlayerCommandRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_manager_scene_node_service_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GmExecutePlayerCommandRequest.ProtoReflect.Descriptor instead.
+func (*GmExecutePlayerCommandRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_manager_scene_node_service_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *GmExecutePlayerCommandRequest) GetCommandId() uint64 {
+	if x != nil {
+		return x.CommandId
+	}
+	return 0
+}
+
+func (x *GmExecutePlayerCommandRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GmExecutePlayerCommandRequest) GetOperator() string {
+	if x != nil {
+		return x.Operator
+	}
+	return ""
+}
+
+func (x *GmExecutePlayerCommandRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *GmExecutePlayerCommandRequest) GetAuth() string {
+	if x != nil {
+		return x.Auth
+	}
+	return ""
+}
+
+func (x *GmExecutePlayerCommandRequest) GetTargetNodeId() uint32 {
+	if x != nil {
+		return x.TargetNodeId
+	}
+	return 0
+}
+
+func (x *GmExecutePlayerCommandRequest) GetExpectedSessionId() uint32 {
+	if x != nil {
+		return x.ExpectedSessionId
+	}
+	return 0
+}
+
+func (x *GmExecutePlayerCommandRequest) GetExpectedLoginGeneration() uint64 {
+	if x != nil {
+		return x.ExpectedLoginGeneration
+	}
+	return 0
+}
+
+func (x *GmExecutePlayerCommandRequest) GetIssuedAtMs() uint64 {
+	if x != nil {
+		return x.IssuedAtMs
+	}
+	return 0
+}
+
+func (x *GmExecutePlayerCommandRequest) GetCommand() isGmExecutePlayerCommandRequest_Command {
+	if x != nil {
+		return x.Command
+	}
+	return nil
+}
+
+func (x *GmExecutePlayerCommandRequest) GetAddCurrency() *scene.GmAddCurrencyRequest {
+	if x != nil {
+		if x, ok := x.Command.(*GmExecutePlayerCommandRequest_AddCurrency); ok {
+			return x.AddCurrency
+		}
+	}
+	return nil
+}
+
+func (x *GmExecutePlayerCommandRequest) GetDeductCurrency() *scene.GmDeductCurrencyRequest {
+	if x != nil {
+		if x, ok := x.Command.(*GmExecutePlayerCommandRequest_DeductCurrency); ok {
+			return x.DeductCurrency
+		}
+	}
+	return nil
+}
+
+func (x *GmExecutePlayerCommandRequest) GetBlockCurrency() *scene.GmBlockCurrencyRequest {
+	if x != nil {
+		if x, ok := x.Command.(*GmExecutePlayerCommandRequest_BlockCurrency); ok {
+			return x.BlockCurrency
+		}
+	}
+	return nil
+}
+
+func (x *GmExecutePlayerCommandRequest) GetUnblockCurrency() *scene.GmUnblockCurrencyRequest {
+	if x != nil {
+		if x, ok := x.Command.(*GmExecutePlayerCommandRequest_UnblockCurrency); ok {
+			return x.UnblockCurrency
+		}
+	}
+	return nil
+}
+
+func (x *GmExecutePlayerCommandRequest) GetGrantItem() *scene.GmGrantItemRequest {
+	if x != nil {
+		if x, ok := x.Command.(*GmExecutePlayerCommandRequest_GrantItem); ok {
+			return x.GrantItem
+		}
+	}
+	return nil
+}
+
+func (x *GmExecutePlayerCommandRequest) GetGrantPet() *scene.GmGrantPetRequest {
+	if x != nil {
+		if x, ok := x.Command.(*GmExecutePlayerCommandRequest_GrantPet); ok {
+			return x.GrantPet
+		}
+	}
+	return nil
+}
+
+func (x *GmExecutePlayerCommandRequest) GetSetLevel() *scene.GmSetPlayerLevelRequest {
+	if x != nil {
+		if x, ok := x.Command.(*GmExecutePlayerCommandRequest_SetLevel); ok {
+			return x.SetLevel
+		}
+	}
+	return nil
+}
+
+type isGmExecutePlayerCommandRequest_Command interface {
+	isGmExecutePlayerCommandRequest_Command()
+}
+
+type GmExecutePlayerCommandRequest_AddCurrency struct {
+	AddCurrency *scene.GmAddCurrencyRequest `protobuf:"bytes,11,opt,name=add_currency,json=addCurrency,proto3,oneof"`
+}
+
+type GmExecutePlayerCommandRequest_DeductCurrency struct {
+	DeductCurrency *scene.GmDeductCurrencyRequest `protobuf:"bytes,12,opt,name=deduct_currency,json=deductCurrency,proto3,oneof"`
+}
+
+type GmExecutePlayerCommandRequest_BlockCurrency struct {
+	BlockCurrency *scene.GmBlockCurrencyRequest `protobuf:"bytes,13,opt,name=block_currency,json=blockCurrency,proto3,oneof"`
+}
+
+type GmExecutePlayerCommandRequest_UnblockCurrency struct {
+	UnblockCurrency *scene.GmUnblockCurrencyRequest `protobuf:"bytes,14,opt,name=unblock_currency,json=unblockCurrency,proto3,oneof"`
+}
+
+type GmExecutePlayerCommandRequest_GrantItem struct {
+	GrantItem *scene.GmGrantItemRequest `protobuf:"bytes,15,opt,name=grant_item,json=grantItem,proto3,oneof"`
+}
+
+type GmExecutePlayerCommandRequest_GrantPet struct {
+	GrantPet *scene.GmGrantPetRequest `protobuf:"bytes,16,opt,name=grant_pet,json=grantPet,proto3,oneof"`
+}
+
+type GmExecutePlayerCommandRequest_SetLevel struct {
+	SetLevel *scene.GmSetPlayerLevelRequest `protobuf:"bytes,17,opt,name=set_level,json=setLevel,proto3,oneof"`
+}
+
+func (*GmExecutePlayerCommandRequest_AddCurrency) isGmExecutePlayerCommandRequest_Command() {}
+
+func (*GmExecutePlayerCommandRequest_DeductCurrency) isGmExecutePlayerCommandRequest_Command() {}
+
+func (*GmExecutePlayerCommandRequest_BlockCurrency) isGmExecutePlayerCommandRequest_Command() {}
+
+func (*GmExecutePlayerCommandRequest_UnblockCurrency) isGmExecutePlayerCommandRequest_Command() {}
+
+func (*GmExecutePlayerCommandRequest_GrantItem) isGmExecutePlayerCommandRequest_Command() {}
+
+func (*GmExecutePlayerCommandRequest_GrantPet) isGmExecutePlayerCommandRequest_Command() {}
+
+func (*GmExecutePlayerCommandRequest_SetLevel) isGmExecutePlayerCommandRequest_Command() {}
+
+type GmExecutePlayerCommandResponse struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	CommandId    uint64                 `protobuf:"varint,1,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	ErrorMessage *base.TipInfoMessage   `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	BalanceAfter uint64                 `protobuf:"varint,3,opt,name=balance_after,json=balanceAfter,proto3" json:"balance_after,omitempty"`
+	PetId        uint64                 `protobuf:"varint,4,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	// 仅表示本次同步内存操作成功，不是已落盘或跨进程幂等的承诺。
+	Executed      bool `protobuf:"varint,5,opt,name=executed,proto3" json:"executed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GmExecutePlayerCommandResponse) Reset() {
+	*x = GmExecutePlayerCommandResponse{}
+	mi := &file_proto_scene_manager_scene_node_service_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GmExecutePlayerCommandResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GmExecutePlayerCommandResponse) ProtoMessage() {}
+
+func (x *GmExecutePlayerCommandResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_manager_scene_node_service_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GmExecutePlayerCommandResponse.ProtoReflect.Descriptor instead.
+func (*GmExecutePlayerCommandResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_manager_scene_node_service_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *GmExecutePlayerCommandResponse) GetCommandId() uint64 {
+	if x != nil {
+		return x.CommandId
+	}
+	return 0
+}
+
+func (x *GmExecutePlayerCommandResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GmExecutePlayerCommandResponse) GetBalanceAfter() uint64 {
+	if x != nil {
+		return x.BalanceAfter
+	}
+	return 0
+}
+
+func (x *GmExecutePlayerCommandResponse) GetPetId() uint64 {
+	if x != nil {
+		return x.PetId
+	}
+	return 0
+}
+
+func (x *GmExecutePlayerCommandResponse) GetExecuted() bool {
+	if x != nil {
+		return x.Executed
+	}
+	return false
+}
+
 type ReleasePlayerRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -58,7 +373,7 @@ type ReleasePlayerRequest struct {
 
 func (x *ReleasePlayerRequest) Reset() {
 	*x = ReleasePlayerRequest{}
-	mi := &file_proto_scene_manager_scene_node_service_proto_msgTypes[0]
+	mi := &file_proto_scene_manager_scene_node_service_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -70,7 +385,7 @@ func (x *ReleasePlayerRequest) String() string {
 func (*ReleasePlayerRequest) ProtoMessage() {}
 
 func (x *ReleasePlayerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_manager_scene_node_service_proto_msgTypes[0]
+	mi := &file_proto_scene_manager_scene_node_service_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -83,7 +398,7 @@ func (x *ReleasePlayerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleasePlayerRequest.ProtoReflect.Descriptor instead.
 func (*ReleasePlayerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_manager_scene_node_service_proto_rawDescGZIP(), []int{0}
+	return file_proto_scene_manager_scene_node_service_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ReleasePlayerRequest) GetPlayerId() uint64 {
@@ -147,7 +462,35 @@ var File_proto_scene_manager_scene_node_service_proto protoreflect.FileDescripto
 const file_proto_scene_manager_scene_node_service_proto_rawDesc = "" +
 	"\n" +
 	",proto/scene_manager/scene_node_service.proto\x12\n" +
-	"scene_node\x1a!proto/common/asset/asset_op.proto\x1a\x1dproto/common/base/empty.proto\x1a\x17proto/scene/scene.proto\"\xdd\x02\n" +
+	"scene_node\x1a!proto/common/asset/asset_op.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\x1a\x17proto/scene/scene.proto\x1a!proto/scene/player_currency.proto\x1a\x1cproto/scene/player_bag.proto\x1a\x1cproto/scene/player_pet.proto\x1a\"proto/scene/player_attribute.proto\"\x8f\x06\n" +
+	"\x1dGmExecutePlayerCommandRequest\x12\x1d\n" +
+	"\n" +
+	"command_id\x18\x01 \x01(\x04R\tcommandId\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1a\n" +
+	"\boperator\x18\x03 \x01(\tR\boperator\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\x12\x12\n" +
+	"\x04auth\x18\x05 \x01(\tR\x04auth\x12$\n" +
+	"\x0etarget_node_id\x18\x06 \x01(\rR\ftargetNodeId\x12.\n" +
+	"\x13expected_session_id\x18\a \x01(\rR\x11expectedSessionId\x12:\n" +
+	"\x19expected_login_generation\x18\b \x01(\x04R\x17expectedLoginGeneration\x12 \n" +
+	"\fissued_at_ms\x18\t \x01(\x04R\n" +
+	"issuedAtMs\x12:\n" +
+	"\fadd_currency\x18\v \x01(\v2\x15.GmAddCurrencyRequestH\x00R\vaddCurrency\x12C\n" +
+	"\x0fdeduct_currency\x18\f \x01(\v2\x18.GmDeductCurrencyRequestH\x00R\x0edeductCurrency\x12@\n" +
+	"\x0eblock_currency\x18\r \x01(\v2\x17.GmBlockCurrencyRequestH\x00R\rblockCurrency\x12F\n" +
+	"\x10unblock_currency\x18\x0e \x01(\v2\x19.GmUnblockCurrencyRequestH\x00R\x0funblockCurrency\x124\n" +
+	"\n" +
+	"grant_item\x18\x0f \x01(\v2\x13.GmGrantItemRequestH\x00R\tgrantItem\x121\n" +
+	"\tgrant_pet\x18\x10 \x01(\v2\x12.GmGrantPetRequestH\x00R\bgrantPet\x127\n" +
+	"\tset_level\x18\x11 \x01(\v2\x18.GmSetPlayerLevelRequestH\x00R\bsetLevelB\t\n" +
+	"\acommand\"\xcd\x01\n" +
+	"\x1eGmExecutePlayerCommandResponse\x12\x1d\n" +
+	"\n" +
+	"command_id\x18\x01 \x01(\x04R\tcommandId\x124\n" +
+	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12#\n" +
+	"\rbalance_after\x18\x03 \x01(\x04R\fbalanceAfter\x12\x15\n" +
+	"\x06pet_id\x18\x04 \x01(\x04R\x05petId\x12\x1a\n" +
+	"\bexecuted\x18\x05 \x01(\bR\bexecuted\"\xdd\x02\n" +
 	"\x14ReleasePlayerRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12&\n" +
 	"\x0ftarget_scene_id\x18\x02 \x01(\x04R\rtargetSceneId\x12$\n" +
@@ -156,7 +499,7 @@ const file_proto_scene_manager_scene_node_service_proto_rawDesc = "" +
 	"\rsession_ended\x18\x05 \x01(\bR\fsessionEnded\x12,\n" +
 	"\x12covered_session_id\x18\x06 \x01(\rR\x10coveredSessionId\x128\n" +
 	"\x18covered_login_generation\x18\a \x01(\x04R\x16coveredLoginGeneration\x12\x1b\n" +
-	"\tkeep_held\x18\b \x01(\bR\bkeepHeld2\xcf\x04\n" +
+	"\tkeep_held\x18\b \x01(\bR\bkeepHeld2\xc2\x05\n" +
 	"\rSceneNodeGrpc\x12:\n" +
 	"\vCreateScene\x12\x13.CreateSceneRequest\x1a\x14.CreateSceneResponse\"\x00\x12.\n" +
 	"\fDestroyScene\x12\x14.DestroySceneRequest\x1a\x06.Empty\"\x00\x12;\n" +
@@ -168,7 +511,8 @@ const file_proto_scene_manager_scene_node_service_proto_rawDesc = "" +
 	"AssetDebit\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00\x126\n" +
 	"\x0fAssetAbortDebit\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00\x122\n" +
 	"\vAssetCredit\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00\x126\n" +
-	"\x0fAssetAckReceipt\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00B\x15Z\x13proto/scene_managerb\x06proto3"
+	"\x0fAssetAckReceipt\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00\x12q\n" +
+	"\x16GmExecutePlayerCommand\x12).scene_node.GmExecutePlayerCommandRequest\x1a*.scene_node.GmExecutePlayerCommandResponse\"\x00B\x1dZ\x1bscene_manager/scene_managerb\x06proto3"
 
 var (
 	file_proto_scene_manager_scene_node_service_proto_rawDescOnce sync.Once
@@ -182,46 +526,66 @@ func file_proto_scene_manager_scene_node_service_proto_rawDescGZIP() []byte {
 	return file_proto_scene_manager_scene_node_service_proto_rawDescData
 }
 
-var file_proto_scene_manager_scene_node_service_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_proto_scene_manager_scene_node_service_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_scene_manager_scene_node_service_proto_goTypes = []any{
-	(*ReleasePlayerRequest)(nil),              // 0: scene_node.ReleasePlayerRequest
-	(*scene.CreateSceneRequest)(nil),          // 1: CreateSceneRequest
-	(*scene.DestroySceneRequest)(nil),         // 2: DestroySceneRequest
-	(*scene.PrepareBattleRequest)(nil),        // 3: PrepareBattleRequest
-	(*scene.CancelBattlePrepareRequest)(nil),  // 4: CancelBattlePrepareRequest
-	(*scene.SealAccountRoleTradeRequest)(nil), // 5: SealAccountRoleTradeRequest
-	(*asset.AssetOpRequest)(nil),              // 6: AssetOpRequest
-	(*scene.CreateSceneResponse)(nil),         // 7: CreateSceneResponse
-	(*base.Empty)(nil),                        // 8: Empty
-	(*scene.PrepareBattleResponse)(nil),       // 9: PrepareBattleResponse
-	(*asset.AssetOpResponse)(nil),             // 10: AssetOpResponse
+	(*GmExecutePlayerCommandRequest)(nil),     // 0: scene_node.GmExecutePlayerCommandRequest
+	(*GmExecutePlayerCommandResponse)(nil),    // 1: scene_node.GmExecutePlayerCommandResponse
+	(*ReleasePlayerRequest)(nil),              // 2: scene_node.ReleasePlayerRequest
+	(*scene.GmAddCurrencyRequest)(nil),        // 3: GmAddCurrencyRequest
+	(*scene.GmDeductCurrencyRequest)(nil),     // 4: GmDeductCurrencyRequest
+	(*scene.GmBlockCurrencyRequest)(nil),      // 5: GmBlockCurrencyRequest
+	(*scene.GmUnblockCurrencyRequest)(nil),    // 6: GmUnblockCurrencyRequest
+	(*scene.GmGrantItemRequest)(nil),          // 7: GmGrantItemRequest
+	(*scene.GmGrantPetRequest)(nil),           // 8: GmGrantPetRequest
+	(*scene.GmSetPlayerLevelRequest)(nil),     // 9: GmSetPlayerLevelRequest
+	(*base.TipInfoMessage)(nil),               // 10: TipInfoMessage
+	(*scene.CreateSceneRequest)(nil),          // 11: CreateSceneRequest
+	(*scene.DestroySceneRequest)(nil),         // 12: DestroySceneRequest
+	(*scene.PrepareBattleRequest)(nil),        // 13: PrepareBattleRequest
+	(*scene.CancelBattlePrepareRequest)(nil),  // 14: CancelBattlePrepareRequest
+	(*scene.SealAccountRoleTradeRequest)(nil), // 15: SealAccountRoleTradeRequest
+	(*asset.AssetOpRequest)(nil),              // 16: AssetOpRequest
+	(*scene.CreateSceneResponse)(nil),         // 17: CreateSceneResponse
+	(*base.Empty)(nil),                        // 18: Empty
+	(*scene.PrepareBattleResponse)(nil),       // 19: PrepareBattleResponse
+	(*asset.AssetOpResponse)(nil),             // 20: AssetOpResponse
 }
 var file_proto_scene_manager_scene_node_service_proto_depIdxs = []int32{
-	1,  // 0: scene_node.SceneNodeGrpc.CreateScene:input_type -> CreateSceneRequest
-	2,  // 1: scene_node.SceneNodeGrpc.DestroyScene:input_type -> DestroySceneRequest
-	0,  // 2: scene_node.SceneNodeGrpc.ReleasePlayer:input_type -> scene_node.ReleasePlayerRequest
-	3,  // 3: scene_node.SceneNodeGrpc.PrepareBattle:input_type -> PrepareBattleRequest
-	4,  // 4: scene_node.SceneNodeGrpc.CancelBattlePrepare:input_type -> CancelBattlePrepareRequest
-	5,  // 5: scene_node.SceneNodeGrpc.SealAccountRoleTrade:input_type -> SealAccountRoleTradeRequest
-	6,  // 6: scene_node.SceneNodeGrpc.AssetDebit:input_type -> AssetOpRequest
-	6,  // 7: scene_node.SceneNodeGrpc.AssetAbortDebit:input_type -> AssetOpRequest
-	6,  // 8: scene_node.SceneNodeGrpc.AssetCredit:input_type -> AssetOpRequest
-	6,  // 9: scene_node.SceneNodeGrpc.AssetAckReceipt:input_type -> AssetOpRequest
-	7,  // 10: scene_node.SceneNodeGrpc.CreateScene:output_type -> CreateSceneResponse
-	8,  // 11: scene_node.SceneNodeGrpc.DestroyScene:output_type -> Empty
-	8,  // 12: scene_node.SceneNodeGrpc.ReleasePlayer:output_type -> Empty
-	9,  // 13: scene_node.SceneNodeGrpc.PrepareBattle:output_type -> PrepareBattleResponse
-	8,  // 14: scene_node.SceneNodeGrpc.CancelBattlePrepare:output_type -> Empty
-	8,  // 15: scene_node.SceneNodeGrpc.SealAccountRoleTrade:output_type -> Empty
-	10, // 16: scene_node.SceneNodeGrpc.AssetDebit:output_type -> AssetOpResponse
-	10, // 17: scene_node.SceneNodeGrpc.AssetAbortDebit:output_type -> AssetOpResponse
-	10, // 18: scene_node.SceneNodeGrpc.AssetCredit:output_type -> AssetOpResponse
-	10, // 19: scene_node.SceneNodeGrpc.AssetAckReceipt:output_type -> AssetOpResponse
-	10, // [10:20] is the sub-list for method output_type
-	0,  // [0:10] is the sub-list for method input_type
-	0,  // [0:0] is the sub-list for extension type_name
-	0,  // [0:0] is the sub-list for extension extendee
-	0,  // [0:0] is the sub-list for field type_name
+	3,  // 0: scene_node.GmExecutePlayerCommandRequest.add_currency:type_name -> GmAddCurrencyRequest
+	4,  // 1: scene_node.GmExecutePlayerCommandRequest.deduct_currency:type_name -> GmDeductCurrencyRequest
+	5,  // 2: scene_node.GmExecutePlayerCommandRequest.block_currency:type_name -> GmBlockCurrencyRequest
+	6,  // 3: scene_node.GmExecutePlayerCommandRequest.unblock_currency:type_name -> GmUnblockCurrencyRequest
+	7,  // 4: scene_node.GmExecutePlayerCommandRequest.grant_item:type_name -> GmGrantItemRequest
+	8,  // 5: scene_node.GmExecutePlayerCommandRequest.grant_pet:type_name -> GmGrantPetRequest
+	9,  // 6: scene_node.GmExecutePlayerCommandRequest.set_level:type_name -> GmSetPlayerLevelRequest
+	10, // 7: scene_node.GmExecutePlayerCommandResponse.error_message:type_name -> TipInfoMessage
+	11, // 8: scene_node.SceneNodeGrpc.CreateScene:input_type -> CreateSceneRequest
+	12, // 9: scene_node.SceneNodeGrpc.DestroyScene:input_type -> DestroySceneRequest
+	2,  // 10: scene_node.SceneNodeGrpc.ReleasePlayer:input_type -> scene_node.ReleasePlayerRequest
+	13, // 11: scene_node.SceneNodeGrpc.PrepareBattle:input_type -> PrepareBattleRequest
+	14, // 12: scene_node.SceneNodeGrpc.CancelBattlePrepare:input_type -> CancelBattlePrepareRequest
+	15, // 13: scene_node.SceneNodeGrpc.SealAccountRoleTrade:input_type -> SealAccountRoleTradeRequest
+	16, // 14: scene_node.SceneNodeGrpc.AssetDebit:input_type -> AssetOpRequest
+	16, // 15: scene_node.SceneNodeGrpc.AssetAbortDebit:input_type -> AssetOpRequest
+	16, // 16: scene_node.SceneNodeGrpc.AssetCredit:input_type -> AssetOpRequest
+	16, // 17: scene_node.SceneNodeGrpc.AssetAckReceipt:input_type -> AssetOpRequest
+	0,  // 18: scene_node.SceneNodeGrpc.GmExecutePlayerCommand:input_type -> scene_node.GmExecutePlayerCommandRequest
+	17, // 19: scene_node.SceneNodeGrpc.CreateScene:output_type -> CreateSceneResponse
+	18, // 20: scene_node.SceneNodeGrpc.DestroyScene:output_type -> Empty
+	18, // 21: scene_node.SceneNodeGrpc.ReleasePlayer:output_type -> Empty
+	19, // 22: scene_node.SceneNodeGrpc.PrepareBattle:output_type -> PrepareBattleResponse
+	18, // 23: scene_node.SceneNodeGrpc.CancelBattlePrepare:output_type -> Empty
+	18, // 24: scene_node.SceneNodeGrpc.SealAccountRoleTrade:output_type -> Empty
+	20, // 25: scene_node.SceneNodeGrpc.AssetDebit:output_type -> AssetOpResponse
+	20, // 26: scene_node.SceneNodeGrpc.AssetAbortDebit:output_type -> AssetOpResponse
+	20, // 27: scene_node.SceneNodeGrpc.AssetCredit:output_type -> AssetOpResponse
+	20, // 28: scene_node.SceneNodeGrpc.AssetAckReceipt:output_type -> AssetOpResponse
+	1,  // 29: scene_node.SceneNodeGrpc.GmExecutePlayerCommand:output_type -> scene_node.GmExecutePlayerCommandResponse
+	19, // [19:30] is the sub-list for method output_type
+	8,  // [8:19] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_manager_scene_node_service_proto_init() }
@@ -229,13 +593,22 @@ func file_proto_scene_manager_scene_node_service_proto_init() {
 	if File_proto_scene_manager_scene_node_service_proto != nil {
 		return
 	}
+	file_proto_scene_manager_scene_node_service_proto_msgTypes[0].OneofWrappers = []any{
+		(*GmExecutePlayerCommandRequest_AddCurrency)(nil),
+		(*GmExecutePlayerCommandRequest_DeductCurrency)(nil),
+		(*GmExecutePlayerCommandRequest_BlockCurrency)(nil),
+		(*GmExecutePlayerCommandRequest_UnblockCurrency)(nil),
+		(*GmExecutePlayerCommandRequest_GrantItem)(nil),
+		(*GmExecutePlayerCommandRequest_GrantPet)(nil),
+		(*GmExecutePlayerCommandRequest_SetLevel)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_manager_scene_node_service_proto_rawDesc), len(file_proto_scene_manager_scene_node_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

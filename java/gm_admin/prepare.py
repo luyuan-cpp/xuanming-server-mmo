@@ -57,7 +57,39 @@ def patch_login(frontend):
     remove_block('                  <div class="aui-flex">\n                    <a class="aui-linek-code aui-flex-box" @click="registerHandleClick"', '                  </div>')
     remove_block('              <a-form @keyup.enter.native="loginHandleClick">', '              </a-form>')
     remove_block('    <div v-if="forgotLoaded"', '    <ThirdModal ref="thirdModalRef"></ThirdModal>')
+    department_start = "  //初始化数据\n  let deptTimer;\n  function checkAccount() {"
+    department_end = " //**********************查询部门逻辑end*************************************************"
+    if source.count(department_start) != 1 or source.count(department_end) != 1:
+        raise SystemExit("Unexpected pinned login department lookup; refusing an unchecked replacement")
+    department_code = source[source.index(department_start):source.index(department_end)]
+    if department_code.count("url: '/sys/loginGetUserDeparts'") != 1:
+        raise SystemExit("Unexpected pinned login department request")
+    replace_once(department_code, "  // 独立 GM 仅使用原生账号登录，验证码输入期间不发起部门预查询。\n  function checkAccount() {}\n")
     (frontend / "src/views/system/loginmini/MiniLogin.vue").write_text(source, encoding="utf-8")
+
+
+def patch_home(frontend):
+    """GM 部署使用自己的根路由，避免原生登录查询参数覆盖服务端配置的首页。"""
+    relative = "jeecgboot-vue3/src/enums/pageEnum.ts"
+    source = subprocess.check_output(
+        ["git", "-C", str(UPSTREAM), "show", f"{REVISION}:{relative}"], text=True, encoding="utf-8"
+    )
+    original = "  BASE_HOME = '/dashboard/analysis',"
+    if source.count(original) != 1:
+        raise SystemExit("Unexpected pinned home route; refusing an unchecked replacement")
+    (frontend / "src/enums/pageEnum.ts").write_text(source.replace(original, "  BASE_HOME = '/gm/console',", 1), encoding="utf-8")
+
+
+def patch_ai_entry(frontend):
+    """原生 aiIconShow 默认已关闭，但页签栏链接未使用该设置；GM 部署关闭此固定入口。"""
+    relative = "jeecgboot-vue3/src/layouts/default/tabs/index.vue"
+    source = subprocess.check_output(
+        ["git", "-C", str(UPSTREAM), "show", f"{REVISION}:{relative}"], text=True, encoding="utf-8"
+    )
+    original = '<router-link v-if="!getIsSimpleTheme" to="/ai" class="ai-icon">'
+    if source.count(original) != 1:
+        raise SystemExit("Unexpected pinned AI link; refusing an unchecked replacement")
+    (frontend / "src/layouts/default/tabs/index.vue").write_text(source.replace(original, '<router-link v-if="false" to="/ai" class="ai-icon">', 1), encoding="utf-8")
 
 
 def patch_icon_lock(frontend):
@@ -88,6 +120,8 @@ def main():
     for part, destination in [(MODULE / "src/main", start / "src/main"), (MODULE / "frontend/src", frontend / "src")]:
         shutil.copytree(part, destination, dirs_exist_ok=True)
     patch_login(frontend)
+    patch_home(frontend)
+    patch_ai_entry(frontend)
     # GM 使用在线图标，不运行上游交互式全量图标库生成器。
     package_file = frontend / "package.json"
     package = json.loads(package_file.read_text(encoding="utf-8"))
@@ -99,17 +133,26 @@ def main():
     generated.mkdir(parents=True, exist_ok=True)
     run(options.protoc, "--proto_path=.", "--proto_path=third_party/protobuf/src", "--include_imports",
         f"--descriptor_set_out={generated / 'gm-contracts.pb'}", "proto/mail/mail_admin.proto",
-        "proto/data_service/data_service.proto", "proto/player_locator/player_locator.proto")
+        "proto/data_service/data_service.proto", "proto/player_locator/player_locator.proto",
+        "proto/common/base/currency_type.proto", "proto/scene_manager/scene_node_service.proto")
     shutil.copy2(generated / "gm-contracts.pb", start / "src/main/resources/gm-contracts.pb")
     # 原生模块不引入独立测试 POM 的框架版本；只补入所需的传输依赖。
     pom = start / "pom.xml"
     content = pom.read_text(encoding="utf-8")
-    dependencies = [("io.grpc", "grpc-netty-shaded", "1.70.0"), ("io.grpc", "grpc-protobuf", "1.70.0"),
-                    ("io.grpc", "grpc-stub", "1.70.0"), ("com.google.protobuf", "protobuf-java", "4.29.3"),
-                    ("com.google.protobuf", "protobuf-java-util", "4.29.3")]
+    dependencies = [("io.grpc", "grpc-netty-shaded", "1.80.0"), ("io.grpc", "grpc-protobuf", "1.80.0"),
+                    ("io.grpc", "grpc-stub", "1.80.0"), ("com.google.protobuf", "protobuf-java", "4.34.2"),
+                    ("com.google.protobuf", "protobuf-java-util", "4.34.2")]
+    # 与固定上游 BOM 对齐，禁止 gRPC core/API 与 transport 混用版本。
+    content = content.replace("<version>1.70.0</version>", "<version>1.80.0</version>")
+    content = content.replace("<version>4.29.3</version>", "<version>4.34.2</version>")
     additions = "".join(f"\n        <dependency><groupId>{group}</groupId><artifactId>{name}</artifactId><version>{version}</version></dependency>"
                         for group, name, version in dependencies if f"<artifactId>{name}</artifactId>" not in content)
     content = content.replace("    </dependencies>", additions + "\n    </dependencies>", 1)
+    if "<nonFilteredFileExtension>pb</nonFilteredFileExtension>" not in content:
+        content = content.replace("        <plugins>", """        <plugins>
+            <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-resources-plugin</artifactId>
+                <configuration><nonFilteredFileExtensions combine.children="append"><nonFilteredFileExtension>pb</nonFilteredFileExtension></nonFilteredFileExtensions></configuration>
+            </plugin>""", 1)
     pom.write_text(content, encoding="utf-8")
     (frontend / ".env.gm").write_text('''VITE_PORT=3101
 VITE_GLOB_APP_TITLE=玄冥游戏管理

@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS gm_command (
     id VARCHAR(20) PRIMARY KEY,
+    command_type VARCHAR(16) NOT NULL DEFAULT 'MAIL',
     operator_name VARBINARY(512) NOT NULL,
     client_request_id VARBINARY(128) NOT NULL,
     player_id VARCHAR(20) NOT NULL,

@@ -39,6 +39,7 @@
 #include "proto/db/proto_option.pb.h"
 #include "proto/common/base/tip.pb.h"
 #include "proto/common/base/empty.pb.h"
+#include "proto/common/component/equipment_effects.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -3340,365 +3341,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AutoAllocateAttributePointsResponse
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePanelInfo final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:AttributePanelInfo) */ {
- public:
-  inline AttributePanelInfo() : AttributePanelInfo(nullptr) {}
-  ~AttributePanelInfo() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(AttributePanelInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(AttributePanelInfo));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr AttributePanelInfo(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline AttributePanelInfo(const AttributePanelInfo& from) : AttributePanelInfo(nullptr, from) {}
-  inline AttributePanelInfo(AttributePanelInfo&& from) noexcept : AttributePanelInfo(nullptr, ::std::move(from)) {}
-  inline AttributePanelInfo& operator=(const AttributePanelInfo& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline AttributePanelInfo& operator=(AttributePanelInfo&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const AttributePanelInfo& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AttributePanelInfo>(&AttributePanelInfo_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 5;
-  friend void swap(AttributePanelInfo& a, AttributePanelInfo& b) { a.Swap(&b); }
-  inline void Swap(AttributePanelInfo* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(AttributePanelInfo* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] AttributePanelInfo* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<AttributePanelInfo>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const AttributePanelInfo& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const AttributePanelInfo& from) { AttributePanelInfo::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(AttributePanelInfo* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "AttributePanelInfo"; }
-
-  explicit AttributePanelInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  AttributePanelInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AttributePanelInfo& from);
-  AttributePanelInfo(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AttributePanelInfo&& from) noexcept
-      : AttributePanelInfo(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kPoolsFieldNumber = 1,
-    kDimensionsFieldNumber = 2,
-    kSchemesFieldNumber = 3,
-    kCombatFieldNumber = 10,
-    kDerivedFieldNumber = 6,
-    kActiveSchemeIdFieldNumber = 4,
-    kMaxSchemesFieldNumber = 5,
-    kSwitchCooldownUntilFieldNumber = 8,
-    kCreateSchemeCostGoldFieldNumber = 9,
-    kLevelFieldNumber = 7,
-  };
-  // repeated .AttributePoolInfo pools = 1;
-  [[nodiscard]] int pools_size()
-      const;
-  private:
-  int _internal_pools_size() const;
-
-  public:
-  void clear_pools() ;
-  [[nodiscard]] const ::AttributePoolInfo& pools(int index) const;
-  [[nodiscard]] ::AttributePoolInfo* PROTOBUF_NONNULL mutable_pools(int index);
-  ::AttributePoolInfo* PROTOBUF_NONNULL add_pools();
-  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::AttributePoolInfo>&
-  pools() const;
-  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::AttributePoolInfo>* PROTOBUF_NONNULL
-  mutable_pools();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::AttributePoolInfo>& _internal_pools() const;
-  ::google::protobuf::RepeatedPtrField<::AttributePoolInfo>* PROTOBUF_NONNULL _internal_mutable_pools();
-
-  public:
-  // repeated .AttributeDimensionInfo dimensions = 2;
-  [[nodiscard]] int dimensions_size()
-      const;
-  private:
-  int _internal_dimensions_size() const;
-
-  public:
-  void clear_dimensions() ;
-  [[nodiscard]] const ::AttributeDimensionInfo& dimensions(int index) const;
-  [[nodiscard]] ::AttributeDimensionInfo* PROTOBUF_NONNULL mutable_dimensions(int index);
-  ::AttributeDimensionInfo* PROTOBUF_NONNULL add_dimensions();
-  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::AttributeDimensionInfo>&
-  dimensions() const;
-  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::AttributeDimensionInfo>* PROTOBUF_NONNULL
-  mutable_dimensions();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::AttributeDimensionInfo>& _internal_dimensions() const;
-  ::google::protobuf::RepeatedPtrField<::AttributeDimensionInfo>* PROTOBUF_NONNULL _internal_mutable_dimensions();
-
-  public:
-  // repeated .AttributeSchemeInfo schemes = 3;
-  [[nodiscard]] int schemes_size()
-      const;
-  private:
-  int _internal_schemes_size() const;
-
-  public:
-  void clear_schemes() ;
-  [[nodiscard]] const ::AttributeSchemeInfo& schemes(int index) const;
-  [[nodiscard]] ::AttributeSchemeInfo* PROTOBUF_NONNULL mutable_schemes(int index);
-  ::AttributeSchemeInfo* PROTOBUF_NONNULL add_schemes();
-  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::AttributeSchemeInfo>&
-  schemes() const;
-  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::AttributeSchemeInfo>* PROTOBUF_NONNULL
-  mutable_schemes();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::AttributeSchemeInfo>& _internal_schemes() const;
-  ::google::protobuf::RepeatedPtrField<::AttributeSchemeInfo>* PROTOBUF_NONNULL _internal_mutable_schemes();
-
-  public:
-  // repeated .CombatAttributeInfo combat = 10;
-  [[nodiscard]] int combat_size()
-      const;
-  private:
-  int _internal_combat_size() const;
-
-  public:
-  void clear_combat() ;
-  [[nodiscard]] const ::CombatAttributeInfo& combat(int index) const;
-  [[nodiscard]] ::CombatAttributeInfo* PROTOBUF_NONNULL mutable_combat(int index);
-  ::CombatAttributeInfo* PROTOBUF_NONNULL add_combat();
-  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::CombatAttributeInfo>&
-  combat() const;
-  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::CombatAttributeInfo>* PROTOBUF_NONNULL
-  mutable_combat();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::CombatAttributeInfo>& _internal_combat() const;
-  ::google::protobuf::RepeatedPtrField<::CombatAttributeInfo>* PROTOBUF_NONNULL _internal_mutable_combat();
-
-  public:
-  // .DerivedAttributeInfo derived = 6;
-  [[nodiscard]] bool has_derived()
-      const;
-  void clear_derived() ;
-  [[nodiscard]] const ::DerivedAttributeInfo& derived() const;
-  [[nodiscard]] ::DerivedAttributeInfo* PROTOBUF_NULLABLE release_derived();
-  ::DerivedAttributeInfo* PROTOBUF_NONNULL mutable_derived();
-  void set_allocated_derived(::DerivedAttributeInfo* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_derived(::DerivedAttributeInfo* PROTOBUF_NULLABLE value);
-  ::DerivedAttributeInfo* PROTOBUF_NULLABLE unsafe_arena_release_derived();
-
-  private:
-  const ::DerivedAttributeInfo& _internal_derived() const;
-  ::DerivedAttributeInfo* PROTOBUF_NONNULL _internal_mutable_derived();
-
-  public:
-  // uint32 active_scheme_id = 4;
-  void clear_active_scheme_id() ;
-  [[nodiscard]] ::uint32_t active_scheme_id() const;
-  void set_active_scheme_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_active_scheme_id() const;
-  void _internal_set_active_scheme_id(::uint32_t value);
-
-  public:
-  // uint32 max_schemes = 5;
-  void clear_max_schemes() ;
-  [[nodiscard]] ::uint32_t max_schemes() const;
-  void set_max_schemes(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_max_schemes() const;
-  void _internal_set_max_schemes(::uint32_t value);
-
-  public:
-  // uint64 switch_cooldown_until = 8;
-  void clear_switch_cooldown_until() ;
-  [[nodiscard]] ::uint64_t switch_cooldown_until() const;
-  void set_switch_cooldown_until(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_switch_cooldown_until() const;
-  void _internal_set_switch_cooldown_until(::uint64_t value);
-
-  public:
-  // uint64 create_scheme_cost_gold = 9;
-  void clear_create_scheme_cost_gold() ;
-  [[nodiscard]] ::uint64_t create_scheme_cost_gold() const;
-  void set_create_scheme_cost_gold(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_create_scheme_cost_gold() const;
-  void _internal_set_create_scheme_cost_gold(::uint64_t value);
-
-  public:
-  // uint32 level = 7;
-  void clear_level() ;
-  [[nodiscard]] ::uint32_t level() const;
-  void set_level(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_level() const;
-  void _internal_set_level(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:AttributePanelInfo)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
-                          5, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const AttributePanelInfo& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::AttributePoolInfo > pools_;
-    ::google::protobuf::RepeatedPtrField< ::AttributeDimensionInfo > dimensions_;
-    ::google::protobuf::RepeatedPtrField< ::AttributeSchemeInfo > schemes_;
-    ::google::protobuf::RepeatedPtrField< ::CombatAttributeInfo > combat_;
-    ::DerivedAttributeInfo* PROTOBUF_NULLABLE derived_;
-    ::uint32_t active_scheme_id_;
-    ::uint32_t max_schemes_;
-    ::uint64_t switch_cooldown_until_;
-    ::uint64_t create_scheme_cost_gold_;
-    ::uint32_t level_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fscene_2fplayer_5fattribute_2eproto;
-};
-// -------------------------------------------------------------------
-
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateAttributePointsRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:AllocateAttributePointsRequest) */ {
  public:
@@ -3911,6 +3553,383 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateAttributePointsRequest fina
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t pool_id_;
     ::google::protobuf::internal::MapField<AllocateAttributePointsRequest_AllocatedEntry_DoNotUse, ::uint32_t, ::uint32_t> allocated_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fattribute_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePanelInfo final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:AttributePanelInfo) */ {
+ public:
+  inline AttributePanelInfo() : AttributePanelInfo(nullptr) {}
+  ~AttributePanelInfo() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AttributePanelInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AttributePanelInfo));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AttributePanelInfo(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AttributePanelInfo(const AttributePanelInfo& from) : AttributePanelInfo(nullptr, from) {}
+  inline AttributePanelInfo(AttributePanelInfo&& from) noexcept : AttributePanelInfo(nullptr, ::std::move(from)) {}
+  inline AttributePanelInfo& operator=(const AttributePanelInfo& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AttributePanelInfo& operator=(AttributePanelInfo&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AttributePanelInfo& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AttributePanelInfo>(&AttributePanelInfo_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 5;
+  friend void swap(AttributePanelInfo& a, AttributePanelInfo& b) { a.Swap(&b); }
+  inline void Swap(AttributePanelInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AttributePanelInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AttributePanelInfo* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AttributePanelInfo>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AttributePanelInfo& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AttributePanelInfo& from) { AttributePanelInfo::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AttributePanelInfo* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "AttributePanelInfo"; }
+
+  explicit AttributePanelInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AttributePanelInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AttributePanelInfo& from);
+  AttributePanelInfo(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AttributePanelInfo&& from) noexcept
+      : AttributePanelInfo(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPoolsFieldNumber = 1,
+    kDimensionsFieldNumber = 2,
+    kSchemesFieldNumber = 3,
+    kCombatFieldNumber = 10,
+    kDerivedFieldNumber = 6,
+    kEquipmentEffectsFieldNumber = 11,
+    kActiveSchemeIdFieldNumber = 4,
+    kMaxSchemesFieldNumber = 5,
+    kSwitchCooldownUntilFieldNumber = 8,
+    kCreateSchemeCostGoldFieldNumber = 9,
+    kLevelFieldNumber = 7,
+  };
+  // repeated .AttributePoolInfo pools = 1;
+  [[nodiscard]] int pools_size()
+      const;
+  private:
+  int _internal_pools_size() const;
+
+  public:
+  void clear_pools() ;
+  [[nodiscard]] const ::AttributePoolInfo& pools(int index) const;
+  [[nodiscard]] ::AttributePoolInfo* PROTOBUF_NONNULL mutable_pools(int index);
+  ::AttributePoolInfo* PROTOBUF_NONNULL add_pools();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::AttributePoolInfo>&
+  pools() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::AttributePoolInfo>* PROTOBUF_NONNULL
+  mutable_pools();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::AttributePoolInfo>& _internal_pools() const;
+  ::google::protobuf::RepeatedPtrField<::AttributePoolInfo>* PROTOBUF_NONNULL _internal_mutable_pools();
+
+  public:
+  // repeated .AttributeDimensionInfo dimensions = 2;
+  [[nodiscard]] int dimensions_size()
+      const;
+  private:
+  int _internal_dimensions_size() const;
+
+  public:
+  void clear_dimensions() ;
+  [[nodiscard]] const ::AttributeDimensionInfo& dimensions(int index) const;
+  [[nodiscard]] ::AttributeDimensionInfo* PROTOBUF_NONNULL mutable_dimensions(int index);
+  ::AttributeDimensionInfo* PROTOBUF_NONNULL add_dimensions();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::AttributeDimensionInfo>&
+  dimensions() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::AttributeDimensionInfo>* PROTOBUF_NONNULL
+  mutable_dimensions();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::AttributeDimensionInfo>& _internal_dimensions() const;
+  ::google::protobuf::RepeatedPtrField<::AttributeDimensionInfo>* PROTOBUF_NONNULL _internal_mutable_dimensions();
+
+  public:
+  // repeated .AttributeSchemeInfo schemes = 3;
+  [[nodiscard]] int schemes_size()
+      const;
+  private:
+  int _internal_schemes_size() const;
+
+  public:
+  void clear_schemes() ;
+  [[nodiscard]] const ::AttributeSchemeInfo& schemes(int index) const;
+  [[nodiscard]] ::AttributeSchemeInfo* PROTOBUF_NONNULL mutable_schemes(int index);
+  ::AttributeSchemeInfo* PROTOBUF_NONNULL add_schemes();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::AttributeSchemeInfo>&
+  schemes() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::AttributeSchemeInfo>* PROTOBUF_NONNULL
+  mutable_schemes();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::AttributeSchemeInfo>& _internal_schemes() const;
+  ::google::protobuf::RepeatedPtrField<::AttributeSchemeInfo>* PROTOBUF_NONNULL _internal_mutable_schemes();
+
+  public:
+  // repeated .CombatAttributeInfo combat = 10;
+  [[nodiscard]] int combat_size()
+      const;
+  private:
+  int _internal_combat_size() const;
+
+  public:
+  void clear_combat() ;
+  [[nodiscard]] const ::CombatAttributeInfo& combat(int index) const;
+  [[nodiscard]] ::CombatAttributeInfo* PROTOBUF_NONNULL mutable_combat(int index);
+  ::CombatAttributeInfo* PROTOBUF_NONNULL add_combat();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::CombatAttributeInfo>&
+  combat() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::CombatAttributeInfo>* PROTOBUF_NONNULL
+  mutable_combat();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::CombatAttributeInfo>& _internal_combat() const;
+  ::google::protobuf::RepeatedPtrField<::CombatAttributeInfo>* PROTOBUF_NONNULL _internal_mutable_combat();
+
+  public:
+  // .DerivedAttributeInfo derived = 6;
+  [[nodiscard]] bool has_derived()
+      const;
+  void clear_derived() ;
+  [[nodiscard]] const ::DerivedAttributeInfo& derived() const;
+  [[nodiscard]] ::DerivedAttributeInfo* PROTOBUF_NULLABLE release_derived();
+  ::DerivedAttributeInfo* PROTOBUF_NONNULL mutable_derived();
+  void set_allocated_derived(::DerivedAttributeInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_derived(::DerivedAttributeInfo* PROTOBUF_NULLABLE value);
+  ::DerivedAttributeInfo* PROTOBUF_NULLABLE unsafe_arena_release_derived();
+
+  private:
+  const ::DerivedAttributeInfo& _internal_derived() const;
+  ::DerivedAttributeInfo* PROTOBUF_NONNULL _internal_mutable_derived();
+
+  public:
+  // .EquipmentEffects equipment_effects = 11;
+  [[nodiscard]] bool has_equipment_effects()
+      const;
+  void clear_equipment_effects() ;
+  [[nodiscard]] const ::EquipmentEffects& equipment_effects() const;
+  [[nodiscard]] ::EquipmentEffects* PROTOBUF_NULLABLE release_equipment_effects();
+  ::EquipmentEffects* PROTOBUF_NONNULL mutable_equipment_effects();
+  void set_allocated_equipment_effects(::EquipmentEffects* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_equipment_effects(::EquipmentEffects* PROTOBUF_NULLABLE value);
+  ::EquipmentEffects* PROTOBUF_NULLABLE unsafe_arena_release_equipment_effects();
+
+  private:
+  const ::EquipmentEffects& _internal_equipment_effects() const;
+  ::EquipmentEffects* PROTOBUF_NONNULL _internal_mutable_equipment_effects();
+
+  public:
+  // uint32 active_scheme_id = 4;
+  void clear_active_scheme_id() ;
+  [[nodiscard]] ::uint32_t active_scheme_id() const;
+  void set_active_scheme_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_scheme_id() const;
+  void _internal_set_active_scheme_id(::uint32_t value);
+
+  public:
+  // uint32 max_schemes = 5;
+  void clear_max_schemes() ;
+  [[nodiscard]] ::uint32_t max_schemes() const;
+  void set_max_schemes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_schemes() const;
+  void _internal_set_max_schemes(::uint32_t value);
+
+  public:
+  // uint64 switch_cooldown_until = 8;
+  void clear_switch_cooldown_until() ;
+  [[nodiscard]] ::uint64_t switch_cooldown_until() const;
+  void set_switch_cooldown_until(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_switch_cooldown_until() const;
+  void _internal_set_switch_cooldown_until(::uint64_t value);
+
+  public:
+  // uint64 create_scheme_cost_gold = 9;
+  void clear_create_scheme_cost_gold() ;
+  [[nodiscard]] ::uint64_t create_scheme_cost_gold() const;
+  void set_create_scheme_cost_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_create_scheme_cost_gold() const;
+  void _internal_set_create_scheme_cost_gold(::uint64_t value);
+
+  public:
+  // uint32 level = 7;
+  void clear_level() ;
+  [[nodiscard]] ::uint32_t level() const;
+  void set_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_level() const;
+  void _internal_set_level(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:AttributePanelInfo)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          6, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AttributePanelInfo& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::AttributePoolInfo > pools_;
+    ::google::protobuf::RepeatedPtrField< ::AttributeDimensionInfo > dimensions_;
+    ::google::protobuf::RepeatedPtrField< ::AttributeSchemeInfo > schemes_;
+    ::google::protobuf::RepeatedPtrField< ::CombatAttributeInfo > combat_;
+    ::DerivedAttributeInfo* PROTOBUF_NULLABLE derived_;
+    ::EquipmentEffects* PROTOBUF_NULLABLE equipment_effects_;
+    ::uint32_t active_scheme_id_;
+    ::uint32_t max_schemes_;
+    ::uint64_t switch_cooldown_until_;
+    ::uint64_t create_scheme_cost_gold_;
+    ::uint32_t level_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7023,7 +7042,7 @@ AttributePanelInfo::_internal_mutable_schemes() {
 inline void AttributePanelInfo::clear_active_scheme_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.active_scheme_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t AttributePanelInfo::active_scheme_id() const {
   // @@protoc_insertion_point(field_get:AttributePanelInfo.active_scheme_id)
@@ -7031,7 +7050,7 @@ inline ::uint32_t AttributePanelInfo::active_scheme_id() const {
 }
 inline void AttributePanelInfo::set_active_scheme_id(::uint32_t value) {
   _internal_set_active_scheme_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:AttributePanelInfo.active_scheme_id)
 }
 inline ::uint32_t AttributePanelInfo::_internal_active_scheme_id() const {
@@ -7047,7 +7066,7 @@ inline void AttributePanelInfo::_internal_set_active_scheme_id(::uint32_t value)
 inline void AttributePanelInfo::clear_max_schemes() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_schemes_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t AttributePanelInfo::max_schemes() const {
   // @@protoc_insertion_point(field_get:AttributePanelInfo.max_schemes)
@@ -7055,7 +7074,7 @@ inline ::uint32_t AttributePanelInfo::max_schemes() const {
 }
 inline void AttributePanelInfo::set_max_schemes(::uint32_t value) {
   _internal_set_max_schemes(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:AttributePanelInfo.max_schemes)
 }
 inline ::uint32_t AttributePanelInfo::_internal_max_schemes() const {
@@ -7169,7 +7188,7 @@ inline void AttributePanelInfo::set_allocated_derived(::DerivedAttributeInfo* PR
 inline void AttributePanelInfo::clear_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t AttributePanelInfo::level() const {
   // @@protoc_insertion_point(field_get:AttributePanelInfo.level)
@@ -7177,7 +7196,7 @@ inline ::uint32_t AttributePanelInfo::level() const {
 }
 inline void AttributePanelInfo::set_level(::uint32_t value) {
   _internal_set_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:AttributePanelInfo.level)
 }
 inline ::uint32_t AttributePanelInfo::_internal_level() const {
@@ -7193,7 +7212,7 @@ inline void AttributePanelInfo::_internal_set_level(::uint32_t value) {
 inline void AttributePanelInfo::clear_switch_cooldown_until() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.switch_cooldown_until_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t AttributePanelInfo::switch_cooldown_until() const {
   // @@protoc_insertion_point(field_get:AttributePanelInfo.switch_cooldown_until)
@@ -7201,7 +7220,7 @@ inline ::uint64_t AttributePanelInfo::switch_cooldown_until() const {
 }
 inline void AttributePanelInfo::set_switch_cooldown_until(::uint64_t value) {
   _internal_set_switch_cooldown_until(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:AttributePanelInfo.switch_cooldown_until)
 }
 inline ::uint64_t AttributePanelInfo::_internal_switch_cooldown_until() const {
@@ -7217,7 +7236,7 @@ inline void AttributePanelInfo::_internal_set_switch_cooldown_until(::uint64_t v
 inline void AttributePanelInfo::clear_create_scheme_cost_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.create_scheme_cost_gold_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t AttributePanelInfo::create_scheme_cost_gold() const {
   // @@protoc_insertion_point(field_get:AttributePanelInfo.create_scheme_cost_gold)
@@ -7225,7 +7244,7 @@ inline ::uint64_t AttributePanelInfo::create_scheme_cost_gold() const {
 }
 inline void AttributePanelInfo::set_create_scheme_cost_gold(::uint64_t value) {
   _internal_set_create_scheme_cost_gold(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:AttributePanelInfo.create_scheme_cost_gold)
 }
 inline ::uint64_t AttributePanelInfo::_internal_create_scheme_cost_gold() const {
@@ -7290,6 +7309,99 @@ inline ::google::protobuf::RepeatedPtrField<::CombatAttributeInfo>* PROTOBUF_NON
 AttributePanelInfo::_internal_mutable_combat() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.combat_;
+}
+
+// .EquipmentEffects equipment_effects = 11;
+inline bool AttributePanelInfo::has_equipment_effects() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.equipment_effects_ != nullptr);
+  return value;
+}
+inline const ::EquipmentEffects& AttributePanelInfo::_internal_equipment_effects() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::EquipmentEffects* p = _impl_.equipment_effects_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::EquipmentEffects>(&::EquipmentEffects_globals_);
+}
+inline const ::EquipmentEffects& AttributePanelInfo::equipment_effects() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AttributePanelInfo.equipment_effects)
+  return _internal_equipment_effects();
+}
+inline void AttributePanelInfo::unsafe_arena_set_allocated_equipment_effects(
+    ::EquipmentEffects* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.equipment_effects_);
+  }
+  _impl_.equipment_effects_ = reinterpret_cast<::EquipmentEffects*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:AttributePanelInfo.equipment_effects)
+}
+inline ::EquipmentEffects* PROTOBUF_NULLABLE AttributePanelInfo::release_equipment_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::EquipmentEffects* released = _impl_.equipment_effects_;
+  _impl_.equipment_effects_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::EquipmentEffects* PROTOBUF_NULLABLE AttributePanelInfo::unsafe_arena_release_equipment_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AttributePanelInfo.equipment_effects)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::EquipmentEffects* temp = _impl_.equipment_effects_;
+  _impl_.equipment_effects_ = nullptr;
+  return temp;
+}
+inline ::EquipmentEffects* PROTOBUF_NONNULL AttributePanelInfo::_internal_mutable_equipment_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.equipment_effects_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::EquipmentEffects>(GetArena());
+    _impl_.equipment_effects_ = reinterpret_cast<::EquipmentEffects*>(p);
+  }
+  return _impl_.equipment_effects_;
+}
+inline ::EquipmentEffects* PROTOBUF_NONNULL AttributePanelInfo::mutable_equipment_effects()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::EquipmentEffects* _msg = _internal_mutable_equipment_effects();
+  // @@protoc_insertion_point(field_mutable:AttributePanelInfo.equipment_effects)
+  return _msg;
+}
+inline void AttributePanelInfo::set_allocated_equipment_effects(::EquipmentEffects* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.equipment_effects_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+
+  _impl_.equipment_effects_ = reinterpret_cast<::EquipmentEffects*>(value);
+  // @@protoc_insertion_point(field_set_allocated:AttributePanelInfo.equipment_effects)
 }
 
 // -------------------------------------------------------------------

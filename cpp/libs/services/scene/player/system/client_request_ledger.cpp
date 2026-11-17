@@ -140,7 +140,7 @@ std::string Validate(const ClientRequestLedgerComp &ledger)
 	for (const auto &record : ledger.records())
 	{
 		if (record.kind() == static_cast<uint32_t>(ClientRequestKind::kEquipmentCraft) &&
-			(record.equipment_item_id() == 0 || record.forge_revision() == 0 ||
+			(record.equipment_item_id() == 0 || (record.equipment_item_id() >> 63) != 0 || record.forge_revision() == 0 ||
 			 record.forge_revision() > ledger.forge_revision() || !forgeRevisions.insert(record.forge_revision()).second))
 		{
 			return "invalid equipment craft receipt";

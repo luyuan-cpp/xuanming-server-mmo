@@ -409,6 +409,9 @@ def recovery_contract(rows, authored_input):
                 {'type': 'volume', 'source': key, 'target': mount['target']})
             anonymous[mount['target']] = mount
     require(len(anonymous) == 2, 'Historical Kafka volume proof incomplete')
+    # 新 GM Scene 仅能通过带源码/产物及原运行身份的显式前移回执；原历史原件仍逐字节核验。
+    from gm_scene_promotion import expected_overlay
+    expected = expected_overlay(ROOT, env_values(ENV.read_bytes()), expected, rows, config, signature)
     raw = path.read_bytes()
     require(json.loads(raw) == expected, 'Unauthorized recovery Compose overlay')
     combined = json.loads(authored_input) if authored_input else {'services': {}}

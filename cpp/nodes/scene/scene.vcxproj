@@ -243,6 +243,7 @@
     <ClInclude Include="handler\rpc\player\player_pet_handler.h" />
     <ClInclude Include="handler\rpc\player\player_state_attribute_sync_handler.h" />
     <ClInclude Include="handler\grpc\scene_node_service.h" />
+    <ClInclude Include="handler\grpc\gm_player_command_security.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -14,6 +14,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,6 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /** 管理库中的冻结命令和发送意图；不持有游戏资产，也不在数据库事务内执行网络调用。 */
 @Service
+@Lazy(false)
 public final class GmCommandJournal {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -50,40 +52,59 @@ public final class GmCommandJournal {
 
     public ObjectNode prepare(String operator, String clientRequestId, String playerId,
             String reason, ObjectNode input) {
+        return prepareInternal(operator, clientRequestId, playerId, reason, input, "MAIL");
+    }
+
+    public ObjectNode preparePlayerCommand(String operator, String clientRequestId, String playerId,
+            String reason, ObjectNode input) {
+        return prepareInternal(operator, clientRequestId, playerId, reason, input, "PLAYER");
+    }
+
+    private ObjectNode prepareInternal(String operator, String clientRequestId, String playerId,
+            String reason, ObjectNode input, String kind) {
         check(operator != null && !operator.isBlank() && bytes(operator).length <= 512, "操作者非法");
         check(clientRequestId != null && clientRequestId.matches("[A-Za-z0-9._:-]{1,128}"), "客户端幂等号非法");
         check(playerId != null && playerId.matches("[1-9][0-9]{0,19}"), "玩家 ID 非法");
         check(reason != null && !reason.isBlank() && reason.length() <= 1000, "操作原因非法");
-        check(input != null && input.path("validDays").isIntegralNumber()
-                && input.path("validDays").canConvertToInt(), "有效天数非法");
-        int days = input.path("validDays").intValue();
-        check(days >= 1 && days <= 30, "有效天数须为 1 至 30");
+        check(input != null, "命令内容不能为空");
+        int days = input.path("validDays").asInt();
+        if (kind.equals("MAIL")) {
+            check(input.path("validDays").isIntegralNumber() && input.path("validDays").canConvertToInt(), "有效天数非法");
+            check(days >= 1 && days <= 30, "有效天数须为 1 至 30");
+        } else {
+            check(input.path("operation").isTextual() && input.path("arguments").isObject(), "玩家命令格式非法");
+            check(!input.has("operator") && !input.has("reason") && !input.has("issuedAtMs") && !input.has("playerId"), "不得覆盖服务端冻结字段");
+        }
         for (String field : List.of("requestId", "request_id", "expireMs", "expire_ms", "auth", "recipient_player_id")) {
             check(!input.has(field), "不得覆盖服务端冻结字段");
         }
         check(!input.has("recipientPlayerId") || playerId.equals(input.path("recipientPlayerId").asText()), "玩家不一致");
         ObjectNode original = input.deepCopy();
         List<Row> previous = byKey(operator, clientRequestId);
-        if (!previous.isEmpty()) return replay(previous.get(0), playerId, reason, original);
+        if (!previous.isEmpty()) return replay(previous.get(0), playerId, reason, original, kind);
         long candidate = ids.getAsLong() & Long.MAX_VALUE;
         if (candidate == 0) throw new IllegalStateException("Command ID generation failed");
         String id = Long.toString(candidate);
         long now = clock.millis();
         ObjectNode request = original.deepCopy();
-        request.remove("validDays");
-        request.put("requestId", id).put("recipientPlayerId", playerId)
-                .put("expireMs", Long.toString(Math.addExact(now, days * 86_400_000L)));
+        request.put("requestId", id);
+        if (kind.equals("MAIL")) {
+            request.remove("validDays");
+            request.put("recipientPlayerId", playerId).put("expireMs", Long.toString(Math.addExact(now, days * 86_400_000L)));
+        } else {
+            request.put("playerId", playerId).put("operator", operator).put("reason", reason).put("issuedAtMs", Long.toString(now));
+        }
         try {
             return tx.execute(status -> {
-                jdbc.update("INSERT INTO gm_command (id,operator_name,client_request_id,player_id,reason,input_json,"
-                        + "request_json,status,attempt,created_ms,updated_ms) VALUES (?,?,?,?,?,?,?,'DRAFT',0,?,?)",
-                        id, bytes(operator), bytes(clientRequestId), playerId, reason, original.toString(), request.toString(), now, now);
+                jdbc.update("INSERT INTO gm_command (id,command_type,operator_name,client_request_id,player_id,reason,input_json,"
+                        + "request_json,status,attempt,created_ms,updated_ms) VALUES (?,?,?,?,?,?,?,?,'DRAFT',0,?,?)",
+                        id, kind, bytes(operator), bytes(clientRequestId), playerId, reason, original.toString(), request.toString(), now, now);
                 audit(id, operator, "DRAFT", 0, null, now);
                 return get(id);
             });
         } catch (DuplicateKeyException collision) {
             previous = byKey(operator, clientRequestId);
-            if (!previous.isEmpty()) return replay(previous.get(0), playerId, reason, original);
+            if (!previous.isEmpty()) return replay(previous.get(0), playerId, reason, original, kind);
             throw conflict("命令号冲突，请重新创建草稿");
         }
     }
@@ -91,39 +112,64 @@ public final class GmCommandJournal {
     public ObjectNode get(String id) { return row(id, false).view; }
 
     public ObjectNode list() {
+        return list("MAIL");
+    }
+
+    public ObjectNode listPlayerCommands() {
+        return list("PLAYER");
+    }
+
+    private ObjectNode list(String kind) {
         ObjectNode result = mapper.createObjectNode();
         var records = result.putArray("records");
-        jdbc.query("SELECT * FROM gm_command ORDER BY created_ms DESC,id DESC LIMIT 50", this::map)
+        jdbc.query("SELECT * FROM gm_command WHERE command_type=? ORDER BY created_ms DESC,id DESC LIMIT 50", this::map, kind)
                 .forEach(row -> records.add(row.view));
-        result.put("total", jdbc.queryForObject("SELECT COUNT(*) FROM gm_command", Long.class));
+        result.put("total", jdbc.queryForObject("SELECT COUNT(*) FROM gm_command WHERE command_type=?", Long.class, kind));
         return result;
     }
 
     public ObjectNode send(String id, String operator, Function<ObjectNode, ObjectNode> sender) {
+        return sendInternal(id, operator, sender, "MAIL");
+    }
+
+    public ObjectNode sendPlayerCommand(String id, String operator, Function<ObjectNode, ObjectNode> sender) {
+        return sendInternal(id, operator, sender, "PLAYER");
+    }
+
+    private ObjectNode sendInternal(String id, String operator, Function<ObjectNode, ObjectNode> sender, String kind) {
         Objects.requireNonNull(sender);
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Sending inside an ambient transaction is forbidden");
         }
         Row claimed = tx.execute(status -> {
             Row current = row(id, true);
+            if (!kind.equals(current.view.path("commandType").asText())) throw conflict("命令类型与操作入口不符");
             if (!current.view.path("operator").asText().equals(operator)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅草稿创建者可发送");
             }
-            if (current.view.path("status").asText().equals("DELIVERED")) return current;
+            String complete = kind.equals("MAIL") ? "DELIVERED" : "EXECUTED";
+            if (current.view.path("status").asText().equals(complete)) return current;
             long now = clock.millis();
-            int changed = jdbc.update("UPDATE gm_command SET status='SENDING',attempt=attempt+1,updated_ms=? "
-                    + "WHERE id=? AND attempt=? AND (status IN ('DRAFT','UNKNOWN') OR (status='SENDING' AND updated_ms<?))",
-                    now, id, current.attempt, now - 60_000);
+            int changed;
+            if (kind.equals("MAIL")) {
+                changed = jdbc.update("UPDATE gm_command SET status='SENDING',attempt=attempt+1,updated_ms=? "
+                        + "WHERE id=? AND attempt=? AND (status IN ('DRAFT','UNKNOWN') OR (status='SENDING' AND updated_ms<?))",
+                        now, id, current.attempt, now - 60_000);
+            } else {
+                // 在线玩家的直接 GM 没有跨进程持久去重；一旦开始执行，未知结果永远不能重发。
+                changed = jdbc.update("UPDATE gm_command SET status='SENDING',attempt=attempt+1,updated_ms=? "
+                        + "WHERE id=? AND attempt=? AND status='DRAFT'", now, id, current.attempt);
+            }
             if (changed != 1) throw conflict("命令正在发送或已拒绝，请核对当前状态");
             audit(id, operator, "SENDING", current.attempt + 1, null, now);
             return row(id, false);
         });
-        if (claimed.view.path("status").asText().equals("DELIVERED")) return claimed.view;
+        if (claimed.view.path("status").asText().equals(kind.equals("MAIL") ? "DELIVERED" : "EXECUTED")) return claimed.view;
         ObjectNode outcome;
         String state;
         try {
             outcome = Objects.requireNonNull(sender.apply((ObjectNode) claimed.view.path("request").deepCopy()));
-            state = "DELIVERED";
+            state = kind.equals("MAIL") ? "DELIVERED" : "EXECUTED";
         } catch (GameServices.CallFailure error) {
             outcome = mapper.createObjectNode().put("code", error.getCode()).put("tipId", error.getTipId())
                     .put("outcomeUnknown", error.isOutcomeUnknown());
@@ -144,8 +190,8 @@ public final class GmCommandJournal {
         });
     }
 
-    private ObjectNode replay(Row old, String player, String reason, ObjectNode original) {
-        if (!old.view.path("playerId").asText().equals(player) || !old.view.path("reason").asText().equals(reason)
+    private ObjectNode replay(Row old, String player, String reason, ObjectNode original, String kind) {
+        if (!old.view.path("commandType").asText().equals(kind) || !old.view.path("playerId").asText().equals(player) || !old.view.path("reason").asText().equals(reason)
                 || !old.original.equals(original)) throw conflict("同一幂等号不能更换玩家、原因或发放内容");
         return old.view;
     }
@@ -162,12 +208,13 @@ public final class GmCommandJournal {
     }
 
     private Row map(ResultSet rs, int index) throws SQLException {
-        ObjectNode view = mapper.createObjectNode().put("id", rs.getString("id")).put("status", rs.getString("status"))
+        ObjectNode view = mapper.createObjectNode().put("id", rs.getString("id")).put("commandType", rs.getString("command_type")).put("status", rs.getString("status"))
                 .put("operator", new String(rs.getBytes("operator_name"), StandardCharsets.UTF_8))
                 .put("playerId", rs.getString("player_id")).put("reason", rs.getString("reason"))
                 .put("createdAt", Instant.ofEpochMilli(rs.getLong("created_ms")).toString())
                 .put("updatedAt", Instant.ofEpochMilli(rs.getLong("updated_ms")).toString());
         view.set("request", parse(rs.getString("request_json")));
+        if (view.path("commandType").asText().equals("PLAYER")) view.put("operation", view.path("request").path("operation").asText());
         String result = rs.getString("result_json");
         view.set("result", result == null ? mapper.nullNode() : parse(result));
         return new Row(view, parse(rs.getString("input_json")), rs.getLong("attempt"));

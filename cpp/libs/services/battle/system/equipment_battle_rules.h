@@ -6,6 +6,29 @@
 
 // 装备计算纯规则：不查表、不掷骰、不修改状态。调用方负责来源资格与实际收益后的次数提交。
 namespace equipbattle {
+inline uint32_t MaximumSourceBps(uint32_t effect) {
+    switch (effect) {
+    case 1: case 2: case 5: case 6: return 3200;
+    case 3: case 7: case 8: return 800;
+    case 4: return 200;
+    case 9: case 10: return 600;
+    case 11: case 12: return 1600;
+    case 13: return 1200;
+    default: return 0;
+    }
+}
+
+inline bool ValidArtifactDefinition(uint32_t effectId, uint32_t bonusBps, uint32_t capBps,
+                                     uint32_t perRoundLimit, uint32_t battleLimit,
+                                     uint32_t activeRounds, uint32_t healthThresholdBps) {
+    if (effectId < 1 || effectId > 8 || bonusBps == 0 || bonusBps > 10000 ||
+        capBps > 10000 || healthThresholdBps > 10000 || perRoundLimit > 1 || battleLimit > 3 || activeRounds > 2) return false;
+    if (effectId != 6 && perRoundLimit == 0) return false;
+    if ((effectId == 3 || effectId >= 6) && battleLimit == 0) return false;
+    if (effectId == 6 && (capBps == 0 || activeRounds == 0)) return false;
+    return effectId != 4 || healthThresholdBps != 0;
+}
+
 inline uint64_t FloorBps(uint64_t value, uint32_t bps) {
     // 此处比例只用于限额与减免，最大 10000；拆商余避免 uint64 乘法溢出。
     const uint64_t bounded = std::min(bps, 10000u);

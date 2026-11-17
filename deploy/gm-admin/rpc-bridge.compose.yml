@@ -1,0 +1,28 @@
+name: xuanming-gm-rpc
+services:
+  bridge:
+    image: ${GM_RPC_BRIDGE_IMAGE:?Build the verified GM RPC bridge first}
+    pull_policy: never
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 64m
+    environment:
+      GOMEMLIMIT: 32MiB
+      GOMAXPROCS: '2'
+    ports:
+      - 127.0.0.1:2356:50901
+      - 127.0.0.1:2357:50902
+    healthcheck:
+      test: [CMD, /app/gm-rpc-bridge, --check]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    networks: [game]
+networks:
+  game:
+    external: true
+    name: xuanming-debug-current_default

@@ -29,6 +29,10 @@ namespace _fl = ::google::protobuf::internal::field_layout;
 namespace {
 PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
+        // ::scene_node::GmExecutePlayerCommandRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::scene_node::GmExecutePlayerCommandResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::scene_node::ReleasePlayerRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto, /* tracker*/ nullptr,},
 };
@@ -179,7 +183,7 @@ constexpr auto ReleasePlayerRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[0],
+      &file_reflection_data[2],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto,
@@ -230,6 +234,453 @@ const ::_pbi::ClassData* ReleasePlayerRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GmExecutePlayerCommandResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GmExecutePlayerCommandResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_._has_bits_);
+};
+
+constexpr GmExecutePlayerCommandResponse::ParseTableT_ GmExecutePlayerCommandResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::scene_node::GmExecutePlayerCommandResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 command_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GmExecutePlayerCommandResponse, _impl_.command_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.command_id_)}},
+      // .TipInfoMessage error_message = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.error_message_)}},
+      // uint64 balance_after = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GmExecutePlayerCommandResponse, _impl_.balance_after_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.balance_after_)}},
+      // uint64 pet_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GmExecutePlayerCommandResponse, _impl_.pet_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.pet_id_)}},
+      // bool executed = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GmExecutePlayerCommandResponse, _impl_.executed_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.executed_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 command_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.command_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .TipInfoMessage error_message = 2;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 balance_after = 3;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.balance_after_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 pet_id = 4;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.pet_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool executed = 5;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.executed_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GmExecutePlayerCommandResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        command_id_{::uint64_t{0u}},
+        balance_after_{::uint64_t{0u}},
+        pet_id_{::uint64_t{0u}},
+        executed_{false} {}
+
+template <typename>
+constexpr GmExecutePlayerCommandResponse::GmExecutePlayerCommandResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GmExecutePlayerCommandResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GmExecutePlayerCommandResponse(arena);
+}
+constexpr auto GmExecutePlayerCommandResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GmExecutePlayerCommandResponse), alignof(GmExecutePlayerCommandResponse));
+}
+constexpr auto GmExecutePlayerCommandResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GmExecutePlayerCommandResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GmExecutePlayerCommandResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GmExecutePlayerCommandResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GmExecutePlayerCommandResponse>(), &GmExecutePlayerCommandResponse::ByteSizeLong,
+              &GmExecutePlayerCommandResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[1],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GmExecutePlayerCommandResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GmExecutePlayerCommandResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GmExecutePlayerCommandResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GmExecutePlayerCommandResponse::InternalGenerateClassData_(
+            _default, &GmExecutePlayerCommandResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GmExecutePlayerCommandResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GmExecutePlayerCommandResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GmExecutePlayerCommandResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GmExecutePlayerCommandResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GmExecutePlayerCommandResponseGlobalsTypeInternal GmExecutePlayerCommandResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GmExecutePlayerCommandResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GmExecutePlayerCommandResponse_globals_.GetClassData();
+#else
+  return GmExecutePlayerCommandResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GmExecutePlayerCommandRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GmExecutePlayerCommandRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_._has_bits_);
+  static constexpr ::int32_t kOneofCaseOffset =
+      PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_._oneof_case_);
+};
+
+constexpr GmExecutePlayerCommandRequest::ParseTableT_ GmExecutePlayerCommandRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      17, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294836736,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      16,  // num_field_entries
+      7,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::scene_node::GmExecutePlayerCommandRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 command_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GmExecutePlayerCommandRequest, _impl_.command_id_), 3>(),
+       {8, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.command_id_)}},
+      // uint64 player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GmExecutePlayerCommandRequest, _impl_.player_id_), 4>(),
+       {16, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.player_id_)}},
+      // string operator = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.operator__)}},
+      // string reason = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.reason_)}},
+      // string auth = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.auth_)}},
+      // uint32 target_node_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GmExecutePlayerCommandRequest, _impl_.target_node_id_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.target_node_id_)}},
+      // uint32 expected_session_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GmExecutePlayerCommandRequest, _impl_.expected_session_id_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.expected_session_id_)}},
+      // uint64 expected_login_generation = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GmExecutePlayerCommandRequest, _impl_.expected_login_generation_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.expected_login_generation_)}},
+      // uint64 issued_at_ms = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GmExecutePlayerCommandRequest, _impl_.issued_at_ms_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.issued_at_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 command_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.command_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string operator = 3;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.operator__), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string reason = 4;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.reason_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string auth = 5;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.auth_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 target_node_id = 6;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.target_node_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 expected_session_id = 7;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.expected_session_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 expected_login_generation = 8;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.expected_login_generation_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 issued_at_ms = 9;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.issued_at_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .GmAddCurrencyRequest add_currency = 11;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.command_.add_currency_), _Internal::kOneofCaseOffset + 0, 0, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .GmDeductCurrencyRequest deduct_currency = 12;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.command_.deduct_currency_), _Internal::kOneofCaseOffset + 0, 1, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .GmBlockCurrencyRequest block_currency = 13;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.command_.block_currency_), _Internal::kOneofCaseOffset + 0, 2, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .GmUnblockCurrencyRequest unblock_currency = 14;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.command_.unblock_currency_), _Internal::kOneofCaseOffset + 0, 3, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .GmGrantItemRequest grant_item = 15;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.command_.grant_item_), _Internal::kOneofCaseOffset + 0, 4, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .GmGrantPetRequest grant_pet = 16;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.command_.grant_pet_), _Internal::kOneofCaseOffset + 0, 5, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .GmSetPlayerLevelRequest set_level = 17;
+      {PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.command_.set_level_), _Internal::kOneofCaseOffset + 0, 6, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::GmAddCurrencyRequest>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::GmAddCurrencyRequest_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::GmDeductCurrencyRequest>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::GmDeductCurrencyRequest_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::GmBlockCurrencyRequest>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::GmBlockCurrencyRequest_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::GmUnblockCurrencyRequest>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::GmUnblockCurrencyRequest_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::GmGrantItemRequest>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::GmGrantItemRequest_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::GmGrantPetRequest>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::GmGrantPetRequest_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::GmSetPlayerLevelRequest>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::GmSetPlayerLevelRequest_globals_},
+        #endif
+    }},
+    {{
+      "\50\0\0\10\6\4\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "scene_node.GmExecutePlayerCommandRequest"
+      "operator"
+      "reason"
+      "auth"
+    }},
+  };
+}
+
+
+inline constexpr GmExecutePlayerCommandRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        operator__(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        command_id_{::uint64_t{0u}},
+        player_id_{::uint64_t{0u}},
+        target_node_id_{0u},
+        expected_session_id_{0u},
+        expected_login_generation_{::uint64_t{0u}},
+        issued_at_ms_{::uint64_t{0u}},
+        command_{},
+        _oneof_case_{} {}
+
+template <typename>
+constexpr GmExecutePlayerCommandRequest::GmExecutePlayerCommandRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GmExecutePlayerCommandRequest(arena);
+}
+constexpr auto GmExecutePlayerCommandRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GmExecutePlayerCommandRequest), alignof(GmExecutePlayerCommandRequest));
+}
+constexpr auto GmExecutePlayerCommandRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GmExecutePlayerCommandRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GmExecutePlayerCommandRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GmExecutePlayerCommandRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GmExecutePlayerCommandRequest>(), &GmExecutePlayerCommandRequest::ByteSizeLong,
+              &GmExecutePlayerCommandRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[0],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GmExecutePlayerCommandRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GmExecutePlayerCommandRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GmExecutePlayerCommandRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GmExecutePlayerCommandRequest::InternalGenerateClassData_(
+            _default, &GmExecutePlayerCommandRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GmExecutePlayerCommandRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GmExecutePlayerCommandRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GmExecutePlayerCommandRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GmExecutePlayerCommandRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GmExecutePlayerCommandRequestGlobalsTypeInternal GmExecutePlayerCommandRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GmExecutePlayerCommandRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GmExecutePlayerCommandRequest_globals_.GetClassData();
+#else
+  return GmExecutePlayerCommandRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace scene_node
 static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_enum_descriptors_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto = nullptr;
@@ -238,6 +689,56 @@ static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULL
 const ::uint32_t
     TableStruct_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto::offsets[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
         protodesc_cold) = {
+        0x085, // bitmap
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_._has_bits_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_._oneof_case_[0]),
+        21, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.command_id_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.operator__),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.reason_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.auth_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.target_node_id_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.expected_session_id_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.expected_login_generation_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.issued_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.command_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.command_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.command_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.command_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.command_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.command_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.command_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandRequest, _impl_.command_),
+        3,
+        4,
+        0,
+        1,
+        2,
+        5,
+        6,
+        7,
+        8,
+        ~0u,
+        ~0u,
+        ~0u,
+        ~0u,
+        ~0u,
+        ~0u,
+        ~0u,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandResponse, _impl_.command_id_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandResponse, _impl_.balance_after_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandResponse, _impl_.pet_id_),
+        PROTOBUF_FIELD_OFFSET(::scene_node::GmExecutePlayerCommandResponse, _impl_.executed_),
+        1,
+        0,
+        2,
+        3,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::scene_node::ReleasePlayerRequest, _impl_._has_bits_),
         11, // hasbit index offset
@@ -261,10 +762,14 @@ const ::uint32_t
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
-        {0, sizeof(::scene_node::ReleasePlayerRequest)},
+        {0, sizeof(::scene_node::GmExecutePlayerCommandRequest)},
+        {37, sizeof(::scene_node::GmExecutePlayerCommandResponse)},
+        {50, sizeof(::scene_node::ReleasePlayerRequest)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
+        &::scene_node::GmExecutePlayerCommandRequest_globals_,
+        &::scene_node::GmExecutePlayerCommandResponse_globals_,
         &::scene_node::ReleasePlayerRequest_globals_,
 };
 const char descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
@@ -272,47 +777,77 @@ const char descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fnode_5fse
     "\n,proto/scene_manager/scene_node_service"
     ".proto\022\nscene_node\032!proto/common/asset/a"
     "sset_op.proto\032\035proto/common/base/empty.p"
-    "roto\032\027proto/scene/scene.proto\"\340\001\n\024Releas"
-    "ePlayerRequest\022\021\n\tplayer_id\030\001 \001(\004\022\027\n\017tar"
-    "get_scene_id\030\002 \001(\004\022\026\n\016target_node_id\030\003 \001"
-    "(\t\022\034\n\024expected_owner_epoch\030\004 \001(\004\022\025\n\rsess"
-    "ion_ended\030\005 \001(\010\022\032\n\022covered_session_id\030\006 "
-    "\001(\r\022 \n\030covered_login_generation\030\007 \001(\004\022\021\n"
-    "\tkeep_held\030\010 \001(\0102\317\004\n\rSceneNodeGrpc\022:\n\013Cr"
-    "eateScene\022\023.CreateSceneRequest\032\024.CreateS"
-    "ceneResponse\"\000\022.\n\014DestroyScene\022\024.Destroy"
-    "SceneRequest\032\006.Empty\"\000\022;\n\rReleasePlayer\022"
-    " .scene_node.ReleasePlayerRequest\032\006.Empt"
-    "y\"\000\022@\n\rPrepareBattle\022\025.PrepareBattleRequ"
-    "est\032\026.PrepareBattleResponse\"\000\022<\n\023CancelB"
-    "attlePrepare\022\033.CancelBattlePrepareReques"
-    "t\032\006.Empty\"\000\022>\n\024SealAccountRoleTrade\022\034.Se"
-    "alAccountRoleTradeRequest\032\006.Empty\"\000\0221\n\nA"
-    "ssetDebit\022\017.AssetOpRequest\032\020.AssetOpResp"
-    "onse\"\000\0226\n\017AssetAbortDebit\022\017.AssetOpReque"
-    "st\032\020.AssetOpResponse\"\000\0222\n\013AssetCredit\022\017."
-    "AssetOpRequest\032\020.AssetOpResponse\"\000\0226\n\017As"
-    "setAckReceipt\022\017.AssetOpRequest\032\020.AssetOp"
-    "Response\"\000B\035Z\033scene_manager/scene_manage"
-    "rb\006proto3"
+    "roto\032\033proto/common/base/tip.proto\032\027proto"
+    "/scene/scene.proto\032!proto/scene/player_c"
+    "urrency.proto\032\034proto/scene/player_bag.pr"
+    "oto\032\034proto/scene/player_pet.proto\032\"proto"
+    "/scene/player_attribute.proto\"\300\004\n\035GmExec"
+    "utePlayerCommandRequest\022\022\n\ncommand_id\030\001 "
+    "\001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\020\n\010operator\030\003 \001(\t"
+    "\022\016\n\006reason\030\004 \001(\t\022\014\n\004auth\030\005 \001(\t\022\026\n\016target"
+    "_node_id\030\006 \001(\r\022\033\n\023expected_session_id\030\007 "
+    "\001(\r\022!\n\031expected_login_generation\030\010 \001(\004\022\024"
+    "\n\014issued_at_ms\030\t \001(\004\022-\n\014add_currency\030\013 \001"
+    "(\0132\025.GmAddCurrencyRequestH\000\0223\n\017deduct_cu"
+    "rrency\030\014 \001(\0132\030.GmDeductCurrencyRequestH\000"
+    "\0221\n\016block_currency\030\r \001(\0132\027.GmBlockCurren"
+    "cyRequestH\000\0225\n\020unblock_currency\030\016 \001(\0132\031."
+    "GmUnblockCurrencyRequestH\000\022)\n\ngrant_item"
+    "\030\017 \001(\0132\023.GmGrantItemRequestH\000\022\'\n\tgrant_p"
+    "et\030\020 \001(\0132\022.GmGrantPetRequestH\000\022-\n\tset_le"
+    "vel\030\021 \001(\0132\030.GmSetPlayerLevelRequestH\000B\t\n"
+    "\007command\"\225\001\n\036GmExecutePlayerCommandRespo"
+    "nse\022\022\n\ncommand_id\030\001 \001(\004\022&\n\rerror_message"
+    "\030\002 \001(\0132\017.TipInfoMessage\022\025\n\rbalance_after"
+    "\030\003 \001(\004\022\016\n\006pet_id\030\004 \001(\004\022\020\n\010executed\030\005 \001(\010"
+    "\"\340\001\n\024ReleasePlayerRequest\022\021\n\tplayer_id\030\001"
+    " \001(\004\022\027\n\017target_scene_id\030\002 \001(\004\022\026\n\016target_"
+    "node_id\030\003 \001(\t\022\034\n\024expected_owner_epoch\030\004 "
+    "\001(\004\022\025\n\rsession_ended\030\005 \001(\010\022\032\n\022covered_se"
+    "ssion_id\030\006 \001(\r\022 \n\030covered_login_generati"
+    "on\030\007 \001(\004\022\021\n\tkeep_held\030\010 \001(\0102\302\005\n\rSceneNod"
+    "eGrpc\022:\n\013CreateScene\022\023.CreateSceneReques"
+    "t\032\024.CreateSceneResponse\"\000\022.\n\014DestroyScen"
+    "e\022\024.DestroySceneRequest\032\006.Empty\"\000\022;\n\rRel"
+    "easePlayer\022 .scene_node.ReleasePlayerReq"
+    "uest\032\006.Empty\"\000\022@\n\rPrepareBattle\022\025.Prepar"
+    "eBattleRequest\032\026.PrepareBattleResponse\"\000"
+    "\022<\n\023CancelBattlePrepare\022\033.CancelBattlePr"
+    "epareRequest\032\006.Empty\"\000\022>\n\024SealAccountRol"
+    "eTrade\022\034.SealAccountRoleTradeRequest\032\006.E"
+    "mpty\"\000\0221\n\nAssetDebit\022\017.AssetOpRequest\032\020."
+    "AssetOpResponse\"\000\0226\n\017AssetAbortDebit\022\017.A"
+    "ssetOpRequest\032\020.AssetOpResponse\"\000\0222\n\013Ass"
+    "etCredit\022\017.AssetOpRequest\032\020.AssetOpRespo"
+    "nse\"\000\0226\n\017AssetAckReceipt\022\017.AssetOpReques"
+    "t\032\020.AssetOpResponse\"\000\022q\n\026GmExecutePlayer"
+    "Command\022).scene_node.GmExecutePlayerComm"
+    "andRequest\032*.scene_node.GmExecutePlayerC"
+    "ommandResponse\"\000B\035Z\033scene_manager/scene_"
+    "managerb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto_deps[3] = {
+    descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto_deps[8] = {
         &::descriptor_table_proto_2fcommon_2fasset_2fasset_5fop_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2fempty_2eproto,
+        &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
+        &::descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto,
+        &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
+        &::descriptor_table_proto_2fscene_2fplayer_5fcurrency_2eproto,
+        &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
         &::descriptor_table_proto_2fscene_2fscene_2eproto,
 };
 static ::absl::once_flag descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto = {
     false,
     false,
-    1009,
+    2015,
     descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto,
     "proto/scene_manager/scene_node_service.proto",
     &descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto_once,
     descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto_deps,
+    8,
     3,
-    1,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto::offsets,
@@ -320,6 +855,1205 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_
     file_level_service_descriptors_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto,
 };
 namespace scene_node {
+// ===================================================================
+
+void GmExecutePlayerCommandRequest::set_allocated_add_currency(::GmAddCurrencyRequest* PROTOBUF_NULLABLE add_currency) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_command();
+  if (add_currency) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(add_currency)->GetArena();
+    if (message_arena != submessage_arena) {
+      add_currency = ::google::protobuf::internal::GetOwnedMessage(message_arena, add_currency, submessage_arena);
+    }
+    set_has_add_currency();
+    _impl_.command_.add_currency_ = add_currency;
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandRequest.add_currency)
+}
+void GmExecutePlayerCommandRequest::clear_add_currency() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (command_case() == kAddCurrency) {
+    if (GetArena() == nullptr) {
+      delete _impl_.command_.add_currency_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.add_currency_);
+    }
+    clear_has_command();
+  }
+}
+void GmExecutePlayerCommandRequest::set_allocated_deduct_currency(::GmDeductCurrencyRequest* PROTOBUF_NULLABLE deduct_currency) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_command();
+  if (deduct_currency) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(deduct_currency)->GetArena();
+    if (message_arena != submessage_arena) {
+      deduct_currency = ::google::protobuf::internal::GetOwnedMessage(message_arena, deduct_currency, submessage_arena);
+    }
+    set_has_deduct_currency();
+    _impl_.command_.deduct_currency_ = deduct_currency;
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandRequest.deduct_currency)
+}
+void GmExecutePlayerCommandRequest::clear_deduct_currency() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (command_case() == kDeductCurrency) {
+    if (GetArena() == nullptr) {
+      delete _impl_.command_.deduct_currency_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.deduct_currency_);
+    }
+    clear_has_command();
+  }
+}
+void GmExecutePlayerCommandRequest::set_allocated_block_currency(::GmBlockCurrencyRequest* PROTOBUF_NULLABLE block_currency) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_command();
+  if (block_currency) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(block_currency)->GetArena();
+    if (message_arena != submessage_arena) {
+      block_currency = ::google::protobuf::internal::GetOwnedMessage(message_arena, block_currency, submessage_arena);
+    }
+    set_has_block_currency();
+    _impl_.command_.block_currency_ = block_currency;
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandRequest.block_currency)
+}
+void GmExecutePlayerCommandRequest::clear_block_currency() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (command_case() == kBlockCurrency) {
+    if (GetArena() == nullptr) {
+      delete _impl_.command_.block_currency_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.block_currency_);
+    }
+    clear_has_command();
+  }
+}
+void GmExecutePlayerCommandRequest::set_allocated_unblock_currency(::GmUnblockCurrencyRequest* PROTOBUF_NULLABLE unblock_currency) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_command();
+  if (unblock_currency) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(unblock_currency)->GetArena();
+    if (message_arena != submessage_arena) {
+      unblock_currency = ::google::protobuf::internal::GetOwnedMessage(message_arena, unblock_currency, submessage_arena);
+    }
+    set_has_unblock_currency();
+    _impl_.command_.unblock_currency_ = unblock_currency;
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandRequest.unblock_currency)
+}
+void GmExecutePlayerCommandRequest::clear_unblock_currency() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (command_case() == kUnblockCurrency) {
+    if (GetArena() == nullptr) {
+      delete _impl_.command_.unblock_currency_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.unblock_currency_);
+    }
+    clear_has_command();
+  }
+}
+void GmExecutePlayerCommandRequest::set_allocated_grant_item(::GmGrantItemRequest* PROTOBUF_NULLABLE grant_item) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_command();
+  if (grant_item) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(grant_item)->GetArena();
+    if (message_arena != submessage_arena) {
+      grant_item = ::google::protobuf::internal::GetOwnedMessage(message_arena, grant_item, submessage_arena);
+    }
+    set_has_grant_item();
+    _impl_.command_.grant_item_ = grant_item;
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandRequest.grant_item)
+}
+void GmExecutePlayerCommandRequest::clear_grant_item() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (command_case() == kGrantItem) {
+    if (GetArena() == nullptr) {
+      delete _impl_.command_.grant_item_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.grant_item_);
+    }
+    clear_has_command();
+  }
+}
+void GmExecutePlayerCommandRequest::set_allocated_grant_pet(::GmGrantPetRequest* PROTOBUF_NULLABLE grant_pet) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_command();
+  if (grant_pet) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(grant_pet)->GetArena();
+    if (message_arena != submessage_arena) {
+      grant_pet = ::google::protobuf::internal::GetOwnedMessage(message_arena, grant_pet, submessage_arena);
+    }
+    set_has_grant_pet();
+    _impl_.command_.grant_pet_ = grant_pet;
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandRequest.grant_pet)
+}
+void GmExecutePlayerCommandRequest::clear_grant_pet() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (command_case() == kGrantPet) {
+    if (GetArena() == nullptr) {
+      delete _impl_.command_.grant_pet_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.grant_pet_);
+    }
+    clear_has_command();
+  }
+}
+void GmExecutePlayerCommandRequest::set_allocated_set_level(::GmSetPlayerLevelRequest* PROTOBUF_NULLABLE set_level) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_command();
+  if (set_level) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(set_level)->GetArena();
+    if (message_arena != submessage_arena) {
+      set_level = ::google::protobuf::internal::GetOwnedMessage(message_arena, set_level, submessage_arena);
+    }
+    set_has_set_level();
+    _impl_.command_.set_level_ = set_level;
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandRequest.set_level)
+}
+void GmExecutePlayerCommandRequest::clear_set_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (command_case() == kSetLevel) {
+    if (GetArena() == nullptr) {
+      delete _impl_.command_.set_level_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.set_level_);
+    }
+    clear_has_command();
+  }
+}
+GmExecutePlayerCommandRequest::GmExecutePlayerCommandRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GmExecutePlayerCommandRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:scene_node.GmExecutePlayerCommandRequest)
+}
+PROTOBUF_NDEBUG_INLINE GmExecutePlayerCommandRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::scene_node::GmExecutePlayerCommandRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        operator__(arena, from.operator__),
+        reason_(arena, from.reason_),
+        auth_(arena, from.auth_),
+        command_{},
+        _oneof_case_{from._oneof_case_[0]} {}
+
+GmExecutePlayerCommandRequest::GmExecutePlayerCommandRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GmExecutePlayerCommandRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GmExecutePlayerCommandRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GmExecutePlayerCommandRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, command_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, command_id_),
+           offsetof(Impl_, issued_at_ms_) -
+               offsetof(Impl_, command_id_) +
+               sizeof(Impl_::issued_at_ms_));
+  switch (command_case()) {
+    case COMMAND_NOT_SET:
+      break;
+      case kAddCurrency:
+        _impl_.command_.add_currency_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.add_currency_);
+        break;
+      case kDeductCurrency:
+        _impl_.command_.deduct_currency_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.deduct_currency_);
+        break;
+      case kBlockCurrency:
+        _impl_.command_.block_currency_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.block_currency_);
+        break;
+      case kUnblockCurrency:
+        _impl_.command_.unblock_currency_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.unblock_currency_);
+        break;
+      case kGrantItem:
+        _impl_.command_.grant_item_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.grant_item_);
+        break;
+      case kGrantPet:
+        _impl_.command_.grant_pet_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.grant_pet_);
+        break;
+      case kSetLevel:
+        _impl_.command_.set_level_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.set_level_);
+        break;
+  }
+
+  // @@protoc_insertion_point(copy_constructor:scene_node.GmExecutePlayerCommandRequest)
+}
+PROTOBUF_NDEBUG_INLINE GmExecutePlayerCommandRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        operator__(arena),
+        reason_(arena),
+        auth_(arena),
+        command_{},
+        _oneof_case_{} {}
+
+inline void GmExecutePlayerCommandRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, command_id_),
+           0,
+           offsetof(Impl_, issued_at_ms_) -
+               offsetof(Impl_, command_id_) +
+               sizeof(Impl_::issued_at_ms_));
+}
+GmExecutePlayerCommandRequest::~GmExecutePlayerCommandRequest() {
+  // @@protoc_insertion_point(destructor:scene_node.GmExecutePlayerCommandRequest)
+  SharedDtor(*this);
+}
+inline void GmExecutePlayerCommandRequest::SharedDtor(MessageLite& self) {
+  GmExecutePlayerCommandRequest& this_ = static_cast<GmExecutePlayerCommandRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.operator__.Destroy();
+  this_._impl_.reason_.Destroy();
+  this_._impl_.auth_.Destroy();
+  if (this_.has_command()) {
+    this_.clear_command();
+  }
+  this_._impl_.~Impl_();
+}
+
+void GmExecutePlayerCommandRequest::clear_command() {
+// @@protoc_insertion_point(one_of_clear_start:scene_node.GmExecutePlayerCommandRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  switch (command_case()) {
+    case kAddCurrency: {
+      if (GetArena() == nullptr) {
+        delete _impl_.command_.add_currency_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.add_currency_);
+      }
+      break;
+    }
+    case kDeductCurrency: {
+      if (GetArena() == nullptr) {
+        delete _impl_.command_.deduct_currency_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.deduct_currency_);
+      }
+      break;
+    }
+    case kBlockCurrency: {
+      if (GetArena() == nullptr) {
+        delete _impl_.command_.block_currency_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.block_currency_);
+      }
+      break;
+    }
+    case kUnblockCurrency: {
+      if (GetArena() == nullptr) {
+        delete _impl_.command_.unblock_currency_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.unblock_currency_);
+      }
+      break;
+    }
+    case kGrantItem: {
+      if (GetArena() == nullptr) {
+        delete _impl_.command_.grant_item_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.grant_item_);
+      }
+      break;
+    }
+    case kGrantPet: {
+      if (GetArena() == nullptr) {
+        delete _impl_.command_.grant_pet_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.grant_pet_);
+      }
+      break;
+    }
+    case kSetLevel: {
+      if (GetArena() == nullptr) {
+        delete _impl_.command_.set_level_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.command_.set_level_);
+      }
+      break;
+    }
+    case COMMAND_NOT_SET: {
+      break;
+    }
+  }
+  _impl_._oneof_case_[0] = COMMAND_NOT_SET;
+}
+
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GmExecutePlayerCommandRequest_class_data_ =
+        GmExecutePlayerCommandRequest::InternalGenerateClassData_(GmExecutePlayerCommandRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GmExecutePlayerCommandRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GmExecutePlayerCommandRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GmExecutePlayerCommandRequest_class_data_.tc_table);
+  return GmExecutePlayerCommandRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GmExecutePlayerCommandRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GmExecutePlayerCommandRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GmExecutePlayerCommandRequest_globals_));
+  return GmExecutePlayerCommandRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GmExecutePlayerCommandRequest::ParseTableT_
+    GmExecutePlayerCommandRequest::_table_ =
+        GmExecutePlayerCommandRequest::InternalGenerateParseTable_(GmExecutePlayerCommandRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GmExecutePlayerCommandRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:scene_node.GmExecutePlayerCommandRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.operator__.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.reason_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.auth_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+    ::memset(&_impl_.command_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.expected_login_generation_) -
+        reinterpret_cast<char*>(&_impl_.command_id_)) + sizeof(_impl_.expected_login_generation_));
+  }
+  _impl_.issued_at_ms_ = ::uint64_t{0u};
+  clear_command();
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GmExecutePlayerCommandRequest& this_ = static_cast<const GmExecutePlayerCommandRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GmExecutePlayerCommandRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:scene_node.GmExecutePlayerCommandRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 command_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_command_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_command_id(), target);
+    }
+  }
+
+  // uint64 player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_player_id(), target);
+    }
+  }
+
+  // string operator = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_operator_().empty()) {
+      const ::std::string& _s = this_._internal_operator_();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "scene_node.GmExecutePlayerCommandRequest.operator");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // string reason = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_reason().empty()) {
+      const ::std::string& _s = this_._internal_reason();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "scene_node.GmExecutePlayerCommandRequest.reason");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // string auth = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_auth().empty()) {
+      const ::std::string& _s = this_._internal_auth();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "scene_node.GmExecutePlayerCommandRequest.auth");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // uint32 target_node_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_target_node_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_target_node_id(), target);
+    }
+  }
+
+  // uint32 expected_session_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_expected_session_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_expected_session_id(), target);
+    }
+  }
+
+  // uint64 expected_login_generation = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_expected_login_generation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_expected_login_generation(), target);
+    }
+  }
+
+  // uint64 issued_at_ms = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_issued_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_issued_at_ms(), target);
+    }
+  }
+
+  switch (this_.command_case()) {
+    case kAddCurrency: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          11, *this_._impl_.command_.add_currency_, this_._impl_.command_.add_currency_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kDeductCurrency: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          12, *this_._impl_.command_.deduct_currency_, this_._impl_.command_.deduct_currency_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kBlockCurrency: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          13, *this_._impl_.command_.block_currency_, this_._impl_.command_.block_currency_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kUnblockCurrency: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          14, *this_._impl_.command_.unblock_currency_, this_._impl_.command_.unblock_currency_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kGrantItem: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          15, *this_._impl_.command_.grant_item_, this_._impl_.command_.grant_item_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kGrantPet: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          16, *this_._impl_.command_.grant_pet_, this_._impl_.command_.grant_pet_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kSetLevel: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          17, *this_._impl_.command_.set_level_, this_._impl_.command_.set_level_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    default:
+      break;
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:scene_node.GmExecutePlayerCommandRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GmExecutePlayerCommandRequest::ByteSizeLong(const MessageLite& base) {
+  const GmExecutePlayerCommandRequest& this_ = static_cast<const GmExecutePlayerCommandRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GmExecutePlayerCommandRequest::ByteSizeLong() const {
+  const GmExecutePlayerCommandRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:scene_node.GmExecutePlayerCommandRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string operator = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_operator_().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_operator_());
+      }
+    }
+    // string reason = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_reason().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_reason());
+      }
+    }
+    // string auth = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_auth().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_auth());
+      }
+    }
+    // uint64 command_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_command_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_command_id());
+      }
+    }
+    // uint64 player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint32 target_node_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_target_node_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_target_node_id());
+      }
+    }
+    // uint32 expected_session_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_expected_session_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_expected_session_id());
+      }
+    }
+    // uint64 expected_login_generation = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_expected_login_generation() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_login_generation());
+      }
+    }
+  }
+   {
+    // uint64 issued_at_ms = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_issued_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_issued_at_ms());
+      }
+    }
+  }
+  switch (this_.command_case()) {
+    // .GmAddCurrencyRequest add_currency = 11;
+    case kAddCurrency: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.command_.add_currency_);
+      break;
+    }
+    // .GmDeductCurrencyRequest deduct_currency = 12;
+    case kDeductCurrency: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.command_.deduct_currency_);
+      break;
+    }
+    // .GmBlockCurrencyRequest block_currency = 13;
+    case kBlockCurrency: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.command_.block_currency_);
+      break;
+    }
+    // .GmUnblockCurrencyRequest unblock_currency = 14;
+    case kUnblockCurrency: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.command_.unblock_currency_);
+      break;
+    }
+    // .GmGrantItemRequest grant_item = 15;
+    case kGrantItem: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.command_.grant_item_);
+      break;
+    }
+    // .GmGrantPetRequest grant_pet = 16;
+    case kGrantPet: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.command_.grant_pet_);
+      break;
+    }
+    // .GmSetPlayerLevelRequest set_level = 17;
+    case kSetLevel: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.command_.set_level_);
+      break;
+    }
+    case COMMAND_NOT_SET: {
+      break;
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GmExecutePlayerCommandRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GmExecutePlayerCommandRequest*>(&to_msg);
+  auto& from = static_cast<const GmExecutePlayerCommandRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:scene_node.GmExecutePlayerCommandRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_operator_().empty()) {
+        _this->_internal_set_operator_(from._internal_operator_());
+      } else {
+        if (_this->_impl_.operator__.IsDefault()) {
+          _this->_internal_set_operator_("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_reason().empty()) {
+        _this->_internal_set_reason(from._internal_reason());
+      } else {
+        if (_this->_impl_.reason_.IsDefault()) {
+          _this->_internal_set_reason("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_auth().empty()) {
+        _this->_internal_set_auth(from._internal_auth());
+      } else {
+        if (_this->_impl_.auth_.IsDefault()) {
+          _this->_internal_set_auth("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_command_id() != 0) {
+        _this->_impl_.command_id_ = from._impl_.command_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_target_node_id() != 0) {
+        _this->_impl_.target_node_id_ = from._impl_.target_node_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_expected_session_id() != 0) {
+        _this->_impl_.expected_session_id_ = from._impl_.expected_session_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_expected_login_generation() != 0) {
+        _this->_impl_.expected_login_generation_ = from._impl_.expected_login_generation_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_issued_at_ms() != 0) {
+      _this->_impl_.issued_at_ms_ = from._impl_.issued_at_ms_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  if (const uint32_t oneof_from_case =
+          from._impl_._oneof_case_[0]) {
+    const uint32_t oneof_to_case = _this->_impl_._oneof_case_[0];
+    const bool oneof_needs_init = oneof_to_case != oneof_from_case;
+    if (oneof_needs_init) {
+      if (oneof_to_case != 0) {
+        _this->clear_command();
+      }
+      _this->_impl_._oneof_case_[0] = oneof_from_case;
+    }
+
+    switch (oneof_from_case) {
+      case kAddCurrency: {
+        if (oneof_needs_init) {
+          _this->_impl_.command_.add_currency_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.add_currency_);
+        } else {
+          _this->_impl_.command_.add_currency_->MergeFrom(*from._impl_.command_.add_currency_);
+        }
+        break;
+      }
+      case kDeductCurrency: {
+        if (oneof_needs_init) {
+          _this->_impl_.command_.deduct_currency_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.deduct_currency_);
+        } else {
+          _this->_impl_.command_.deduct_currency_->MergeFrom(*from._impl_.command_.deduct_currency_);
+        }
+        break;
+      }
+      case kBlockCurrency: {
+        if (oneof_needs_init) {
+          _this->_impl_.command_.block_currency_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.block_currency_);
+        } else {
+          _this->_impl_.command_.block_currency_->MergeFrom(*from._impl_.command_.block_currency_);
+        }
+        break;
+      }
+      case kUnblockCurrency: {
+        if (oneof_needs_init) {
+          _this->_impl_.command_.unblock_currency_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.unblock_currency_);
+        } else {
+          _this->_impl_.command_.unblock_currency_->MergeFrom(*from._impl_.command_.unblock_currency_);
+        }
+        break;
+      }
+      case kGrantItem: {
+        if (oneof_needs_init) {
+          _this->_impl_.command_.grant_item_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.grant_item_);
+        } else {
+          _this->_impl_.command_.grant_item_->MergeFrom(*from._impl_.command_.grant_item_);
+        }
+        break;
+      }
+      case kGrantPet: {
+        if (oneof_needs_init) {
+          _this->_impl_.command_.grant_pet_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.grant_pet_);
+        } else {
+          _this->_impl_.command_.grant_pet_->MergeFrom(*from._impl_.command_.grant_pet_);
+        }
+        break;
+      }
+      case kSetLevel: {
+        if (oneof_needs_init) {
+          _this->_impl_.command_.set_level_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.command_.set_level_);
+        } else {
+          _this->_impl_.command_.set_level_->MergeFrom(*from._impl_.command_.set_level_);
+        }
+        break;
+      }
+      case COMMAND_NOT_SET:
+        break;
+    }
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GmExecutePlayerCommandRequest::CopyFrom(const GmExecutePlayerCommandRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:scene_node.GmExecutePlayerCommandRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GmExecutePlayerCommandRequest::InternalSwap(GmExecutePlayerCommandRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.operator__, &other->_impl_.operator__, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.auth_, &other->_impl_.auth_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.issued_at_ms_)
+      + sizeof(GmExecutePlayerCommandRequest::_impl_.issued_at_ms_)
+      - PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandRequest, _impl_.command_id_)>(
+          reinterpret_cast<char*>(&_impl_.command_id_),
+          reinterpret_cast<char*>(&other->_impl_.command_id_));
+  swap(_impl_.command_, other->_impl_.command_);
+  swap(_impl_._oneof_case_[0], other->_impl_._oneof_case_[0]);
+}
+
+::google::protobuf::Metadata GmExecutePlayerCommandRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void GmExecutePlayerCommandResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+GmExecutePlayerCommandResponse::GmExecutePlayerCommandResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GmExecutePlayerCommandResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:scene_node.GmExecutePlayerCommandResponse)
+}
+PROTOBUF_NDEBUG_INLINE GmExecutePlayerCommandResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::scene_node::GmExecutePlayerCommandResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+GmExecutePlayerCommandResponse::GmExecutePlayerCommandResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GmExecutePlayerCommandResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GmExecutePlayerCommandResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GmExecutePlayerCommandResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, command_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, command_id_),
+           offsetof(Impl_, executed_) -
+               offsetof(Impl_, command_id_) +
+               sizeof(Impl_::executed_));
+
+  // @@protoc_insertion_point(copy_constructor:scene_node.GmExecutePlayerCommandResponse)
+}
+PROTOBUF_NDEBUG_INLINE GmExecutePlayerCommandResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GmExecutePlayerCommandResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, executed_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::executed_));
+}
+GmExecutePlayerCommandResponse::~GmExecutePlayerCommandResponse() {
+  // @@protoc_insertion_point(destructor:scene_node.GmExecutePlayerCommandResponse)
+  SharedDtor(*this);
+}
+inline void GmExecutePlayerCommandResponse::SharedDtor(MessageLite& self) {
+  GmExecutePlayerCommandResponse& this_ = static_cast<GmExecutePlayerCommandResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GmExecutePlayerCommandResponse_class_data_ =
+        GmExecutePlayerCommandResponse::InternalGenerateClassData_(GmExecutePlayerCommandResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GmExecutePlayerCommandResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GmExecutePlayerCommandResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GmExecutePlayerCommandResponse_class_data_.tc_table);
+  return GmExecutePlayerCommandResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GmExecutePlayerCommandResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GmExecutePlayerCommandResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GmExecutePlayerCommandResponse_globals_));
+  return GmExecutePlayerCommandResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GmExecutePlayerCommandResponse::ParseTableT_
+    GmExecutePlayerCommandResponse::_table_ =
+        GmExecutePlayerCommandResponse::InternalGenerateParseTable_(GmExecutePlayerCommandResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GmExecutePlayerCommandResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:scene_node.GmExecutePlayerCommandResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.error_message_ != nullptr);
+    _impl_.error_message_->Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+    ::memset(&_impl_.command_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.executed_) -
+        reinterpret_cast<char*>(&_impl_.command_id_)) + sizeof(_impl_.executed_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GmExecutePlayerCommandResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GmExecutePlayerCommandResponse& this_ = static_cast<const GmExecutePlayerCommandResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GmExecutePlayerCommandResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GmExecutePlayerCommandResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:scene_node.GmExecutePlayerCommandResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 command_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_command_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_command_id(), target);
+    }
+  }
+
+  // .TipInfoMessage error_message = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 balance_after = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_balance_after() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_balance_after(), target);
+    }
+  }
+
+  // uint64 pet_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_pet_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_pet_id(), target);
+    }
+  }
+
+  // bool executed = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_executed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_executed(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:scene_node.GmExecutePlayerCommandResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GmExecutePlayerCommandResponse::ByteSizeLong(const MessageLite& base) {
+  const GmExecutePlayerCommandResponse& this_ = static_cast<const GmExecutePlayerCommandResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GmExecutePlayerCommandResponse::ByteSizeLong() const {
+  const GmExecutePlayerCommandResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:scene_node.GmExecutePlayerCommandResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // .TipInfoMessage error_message = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // uint64 command_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_command_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_command_id());
+      }
+    }
+    // uint64 balance_after = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_balance_after() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_balance_after());
+      }
+    }
+    // uint64 pet_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_pet_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_pet_id());
+      }
+    }
+    // bool executed = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_executed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GmExecutePlayerCommandResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GmExecutePlayerCommandResponse*>(&to_msg);
+  auto& from = static_cast<const GmExecutePlayerCommandResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:scene_node.GmExecutePlayerCommandResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_command_id() != 0) {
+        _this->_impl_.command_id_ = from._impl_.command_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_balance_after() != 0) {
+        _this->_impl_.balance_after_ = from._impl_.balance_after_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_pet_id() != 0) {
+        _this->_impl_.pet_id_ = from._impl_.pet_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_executed() != 0) {
+        _this->_impl_.executed_ = from._impl_.executed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GmExecutePlayerCommandResponse::CopyFrom(const GmExecutePlayerCommandResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:scene_node.GmExecutePlayerCommandResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GmExecutePlayerCommandResponse::InternalSwap(GmExecutePlayerCommandResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.executed_)
+      + sizeof(GmExecutePlayerCommandResponse::_impl_.executed_)
+      - PROTOBUF_FIELD_OFFSET(GmExecutePlayerCommandResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata GmExecutePlayerCommandResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
 // ===================================================================
 
 ReleasePlayerRequest::ReleasePlayerRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)

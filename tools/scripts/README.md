@@ -113,6 +113,8 @@ python -X utf8 -B tools/scripts/start_docker_debug.py --execute
 
 入口仅操作 `desktop-linux` 上的 `xuanming-debug-current` 原容器，要求基础初始化和写者注册任务已成功完成。17 个常驻服务及六个写者注册容器须与当前 `.env` 指定的镜像、挂载、端口及显式环境变量一致；不会重跑的历史初始化、迁移和 login 注册容器只核对成功状态与实际身份、配置及挂载基线，不要求追溯更新成最新业务镜像。正常运行的服务只检查，不重复启动或注册；停止的 `db`、`data-service`、`match`、`rank`、`player-inbox`、`gateway` 先重新执行各自原注册容器，取得新授权，再启动服务。login 不消费 SQL 授权，不重跑它的注册任务。所有服务已经正常运行时，重复执行只做检查。
 
+本机独立网页 GM 的 Scene 单项升级使用 `deploy/gm-admin/scene-deploy.py` 准备、封存构建回执后审阅再执行；不是日常启动的自动动作。`gm_scene_promotion.py` 仅接受原私有环境明确绑定 SHA 的 GM Scene 前移回执，继续核对原恢复历史、四份 Compose、其他容器身份与卷，禁止通过第五份 overlay 或任意新镜像绕过。具体入口和未实测边界见 `deploy/gm-admin/mail-README.md`；仅运行 prepare 不启用写通道、不重启服务。
+
 现有容器使用手绘节庆地图时，日常启动会从容器的 Compose 标签识别部署批次的 `compose.authored.json`。预检逐项核对六个服务的开发表只读挂载和三个 C++ 节点的导航只读挂载，并将这些文件与覆盖配置的摘要纳入启动基线。该部署批次的配置和表目录需要保留。
 
 更新普通玩法表后，已有手绘地图覆盖目录不会自动读取镜像里的新表。先用 `tools/navmesh_baker/refresh_authored_runtime_tables.py` 生成新的开发批次：`--previous-manifest <旧批/runtime-data-manifest.json> --output build/verification/authored-festival-<新批次> --allow-table Pet --allow-table Monster --allow-table Dungeon --allow-table PlayMode --allow-table MessageLimiter`。脚本验证旧批来源和导航，复制当前正式源表与旧批的 `BaseScene.xlsx`、`World.xlsx`，调用正式沙盒导表器；两张地图的 JSON/PB 必须逐字节保持，其他表必须匹配当前正式导出，旧批变化必须局限于显式列出的表。成功后产出新的 `runtime-data-manifest.json`、`compose.authored.json` 和 `refresh-verification.json`，通过现有运行数据校验；旧批和正式源表不改，也不启动容器。部署时使用新覆盖文件并验证运行挂载；不能只更新镜像后继续挂旧表目录。

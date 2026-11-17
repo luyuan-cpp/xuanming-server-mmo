@@ -170,6 +170,7 @@
     <ClCompile Include="player_equip_test.cpp" />
     <ClCompile Include="player_equip_target_slot_test.cpp" />
     <ClCompile Include="player_equip_v1_test.cpp" />
+    <ClCompile Include="player_equipment_craft_test.cpp" />
     <ClCompile Include="player_equip_attribute_test.cpp" />
     <ClCompile Include="player_mystery_merchant_test.cpp" />
     <ClCompile Include="client_request_ledger_test.cpp" />

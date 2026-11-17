@@ -52,6 +52,10 @@ set(SOURCE_FILES
     data/battle_table_fingerprint.cpp
     data/table_battle_data_provider.cpp
     system/turn_battle_engine.cpp
+    system/configured_battle_effects.cpp
+    system/equipment_battle_effects.cpp
+    system/battle_replay_recorder.cpp
+    system/battle_script.cpp
 )
 
 add_library(battle STATIC ${SOURCE_FILES})

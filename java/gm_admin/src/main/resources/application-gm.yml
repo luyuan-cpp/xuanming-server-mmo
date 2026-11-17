@@ -43,8 +43,10 @@ gm:
   game:
     gateway-url: ${GM_GATEWAY_URL:http://127.0.0.1:8081}
     gateway-admin-key: ${GM_GATEWAY_ADMIN_KEY:}
-    data-target: ${GM_DATA_TARGET:127.0.0.1:2347}
-    locator-target: ${GM_LOCATOR_TARGET:127.0.0.1:2349}
+    data-target: ${GM_DATA_TARGET:}
+    locator-target: ${GM_LOCATOR_TARGET:}
     plaintext: ${GM_GAME_PLAINTEXT:true}
     mail-target: ${GM_MAIL_TARGET:}
     mail-admin-secret: ${GM_MAIL_ADMIN_SECRET:}
+    scene-targets-json: '${GM_SCENE_TARGETS_JSON:{}}'
+    scene-admin-secret: ${GM_SCENE_ADMIN_SECRET:}

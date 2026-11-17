@@ -36,6 +36,7 @@ public:
     static constexpr std::string_view kAssetAbortDebitPath = "/scene_node.SceneNodeGrpc/AssetAbortDebit";
     static constexpr std::string_view kAssetCreditPath = "/scene_node.SceneNodeGrpc/AssetCredit";
     static constexpr std::string_view kAssetAckReceiptPath = "/scene_node.SceneNodeGrpc/AssetAckReceipt";
+    static constexpr std::string_view kGmExecutePlayerCommandPath = "/scene_node.SceneNodeGrpc/GmExecutePlayerCommand";
 
 private:
     using CreateSceneCall = GrpcUnaryCall<::CreateSceneRequest, ::CreateSceneResponse>;
@@ -48,6 +49,7 @@ private:
     using AssetAbortDebitCall = GrpcUnaryCall<::AssetOpRequest, ::AssetOpResponse>;
     using AssetCreditCall = GrpcUnaryCall<::AssetOpRequest, ::AssetOpResponse>;
     using AssetAckReceiptCall = GrpcUnaryCall<::AssetOpRequest, ::AssetOpResponse>;
+    using GmExecutePlayerCommandCall = GrpcUnaryCall<::scene_node::GmExecutePlayerCommandRequest, ::scene_node::GmExecutePlayerCommandResponse>;
     void CreateScene(const std::shared_ptr<CreateSceneCall>& call);
     void DestroyScene(const std::shared_ptr<DestroySceneCall>& call);
     void ReleasePlayer(const std::shared_ptr<ReleasePlayerCall>& call);
@@ -58,6 +60,7 @@ private:
     void AssetAbortDebit(const std::shared_ptr<AssetAbortDebitCall>& call);
     void AssetCredit(const std::shared_ptr<AssetCreditCall>& call);
     void AssetAckReceipt(const std::shared_ptr<AssetAckReceiptCall>& call);
+    void GmExecutePlayerCommand(const std::shared_ptr<GmExecutePlayerCommandCall>& call);
     static void HandleCreateScene(const ::CreateSceneRequest* request, ::CreateSceneResponse* response);
     static void HandleDestroyScene(const ::DestroySceneRequest* request);
     static void HandleReleasePlayer(const ::scene_node::ReleasePlayerRequest* request);
@@ -68,6 +71,7 @@ private:
     static void HandleAssetAbortDebit(const ::AssetOpRequest* request, ::AssetOpResponse* response);
     static void HandleAssetCredit(const ::AssetOpRequest* request, ::AssetOpResponse* response);
     static void HandleAssetAckReceipt(const ::AssetOpRequest* request, ::AssetOpResponse* response);
+    static void HandleGmExecutePlayerCommand(const ::scene_node::GmExecutePlayerCommandRequest* request, ::scene_node::GmExecutePlayerCommandResponse* response);
     muduo::net::EventLoop& loop_;
     ///<<< BEGIN WRITING YOUR CODE: grpc.header.private
     LoopTaskScope creationTasks_{loop_};

@@ -294,6 +294,7 @@ void SceneBagClientPlayerHandler::GetEquipmentCraftRules(entt::entity player,con
     const auto error = PlayerEquipmentV1System::GetRules(player, *response);
     if (error != kSuccess) response->mutable_error_message()->set_id(error);
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneBagClientPlayerHandler::PreviewEquipmentCraft(entt::entity player,const ::PreviewEquipmentCraftRequest* request,
@@ -303,6 +304,7 @@ void SceneBagClientPlayerHandler::PreviewEquipmentCraft(entt::entity player,cons
     const auto error = PlayerEquipmentV1System::Preview(player, *request, *response);
     if (error != kSuccess) response->mutable_error_message()->set_id(error);
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneBagClientPlayerHandler::CommitEquipmentCraft(entt::entity player,const ::CommitEquipmentCraftRequest* request,
@@ -311,4 +313,5 @@ void SceneBagClientPlayerHandler::CommitEquipmentCraft(entt::entity player,const
 ///<<< BEGIN WRITING YOUR CODE
     PlayerEquipmentV1System::Commit(player, *request, *response);
 ///<<< END WRITING YOUR CODE
+
 }

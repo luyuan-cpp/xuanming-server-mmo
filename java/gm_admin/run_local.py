@@ -111,7 +111,40 @@ def environment(values):
                 "useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true",
                 "GM_REDIS_PORT": "16391", "GM_HTTP_PORT": "18090", "GM_UPLOAD_PATH": str(RUNTIME / "uploads"),
                 "GM_GATEWAY_ADMIN_KEY": gateway_key(), "GM_GAME_PLAINTEXT": "true"})
+    # 游戏写通道只认本任务部署后的真实就绪回执；外层进程遗留变量不能跳过验收。
+    for key in ("GM_DATA_TARGET", "GM_LOCATOR_TARGET", "GM_SCENE_ADMIN_SECRET", "GM_SCENE_TARGETS_JSON", "GM_MAIL_TARGET", "GM_MAIL_ADMIN_SECRET"):
+        env.pop(key, None)
+    env.update(verified_read_runtime())
+    env.update(verified_game_runtime())
     return env
+
+
+def verified_read_runtime():
+    try:
+        scripts = str(ROOT / "tools/scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        import gm_scene_promotion
+        return gm_scene_promotion.verified_read_bridge(ROOT)
+    except Exception:
+        return {}
+
+
+def verified_game_runtime():
+    try:
+        scripts = str(ROOT / "tools/scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        import gm_scene_promotion
+        import start_docker_debug
+        def process_environment(identity):
+            raw = start_docker_debug.run(DOCKER + ["exec", identity, "cat", "/proc/1/environ"])
+            return dict(value.split("=", 1) for value in raw.split("\0") if "=" in value)
+        return gm_scene_promotion.ready_runtime(ROOT, start_docker_debug.preflight,
+            start_docker_debug.inspect, process_environment, verified_read_runtime)
+    except Exception:
+        # 缺少、陈旧或被改动的回执都关闭写通道；不可打印异常原文或私有内容。
+        return {}
 
 
 def infra(values):

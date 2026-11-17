@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
@@ -22,6 +23,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /** 仅初始化独立 GM 库；关闭演示账号和无关公开入口，后续启动不重置管理员。 */
 @Configuration
+@Lazy(false)
 public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
     // 上游 logout 为 Shiro anon，控制器自行验证签名并撤销令牌，不能要求此时已有认证 Subject。
     private static final Set<String> OPEN = Set.of("/sys/login", "/sys/checkCaptcha", "/sys/getEncryptedString", "/sys/logout");
@@ -39,6 +41,16 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
         if (!"gm_admin".equals(db.queryForObject("SELECT DATABASE()", String.class)))
             throw new IllegalStateException("GM installation requires its dedicated gm_admin database");
         new ResourceDatabasePopulator(new ClassPathResource("gm-schema.sql")).execute(db.getDataSource());
+        db.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) connection -> {
+            try (var columns = connection.getMetaData().getColumns(connection.getCatalog(), null, "gm_command", "command_type")) {
+                if (!columns.next()) {
+                    try (var statement = connection.createStatement()) {
+                        statement.execute("ALTER TABLE gm_command ADD COLUMN command_type VARCHAR(16) NOT NULL DEFAULT 'MAIL'");
+                    }
+                }
+            }
+            return null;
+        });
         db.execute("CREATE TABLE IF NOT EXISTS gm_install (version INTEGER PRIMARY KEY, installed_at TIMESTAMP NOT NULL)");
         if (db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=1", Integer.class) == 0) {
             if (password.length() < 20) throw new IllegalStateException("GM bootstrap password must be injected and at least 20 characters");
@@ -74,6 +86,29 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
                 db.update("UPDATE sys_role_index SET status='0'");
                 db.update("INSERT INTO sys_role_index(id,role_code,url,component,is_route,priority,status,relation_type) VALUES('gm_default_index','DEF_INDEX_ALL','/gm/console','gm/console/index',1,-100,'1','DEFAULT')");
                 db.update("INSERT INTO gm_install(version,installed_at) VALUES(2,CURRENT_TIMESTAMP)");
+            });
+        }
+        if (db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=3", Integer.class) == 0) {
+            tx.executeWithoutResult(status -> {
+                String roleId = db.queryForObject("SELECT id FROM sys_role WHERE role_code='admin'", String.class);
+                String[] permissions = {"gm:currency:add", "gm:currency:deduct", "gm:currency:block", "gm:currency:unblock", "gm:player:level", "gm:pet:grant", "gm:item:grant"};
+                String[] labels = {"增加货币", "扣除货币", "封禁货币获取", "解除货币封禁", "设置等级", "发放宝宝", "发放物品"};
+                for (int i = 0; i < permissions.length; i++) {
+                    String id = "gm_player_permission_" + i;
+                    addMenu(id, "gm_console", labels[i], null, null, 2, permissions[i]);
+                    db.update("INSERT INTO sys_role_permission(id,role_id,permission_id) VALUES(?,?,?)", "gm_admin_player_" + i, roleId, id);
+                }
+                db.update("INSERT INTO gm_install(version,installed_at) VALUES(3,CURRENT_TIMESTAMP)");
+            });
+        }
+        if (db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=4", Integer.class) == 0) {
+            tx.executeWithoutResult(status -> {
+                // 独立 GM 仅展示游戏管理和原生账号权限管理，不展示上游演示及开发平台菜单。
+                // 只调整菜单展示；保留原生按钮权限和已分配的角色，接口仍由访问保护逐次检查。
+                db.update("UPDATE sys_permission SET hidden=1 WHERE menu_type IN (0,1) AND (url IS NULL OR url NOT IN ('/gm/console','/isystem','/system/user','/system/role','/system/menu'))");
+                // 原生授权树仅递归非叶子节点，GM 菜单必须展开其十二项按钮权限。
+                db.update("UPDATE sys_permission SET is_leaf=0 WHERE id='gm_console'");
+                db.update("INSERT INTO gm_install(version,installed_at) VALUES(4,CURRENT_TIMESTAMP)");
             });
         }
         ready = true;

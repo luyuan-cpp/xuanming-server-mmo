@@ -4,6 +4,8 @@
 #include "engine/core/async/coroutine_callback.h"
 #include <boost/cobalt/task.hpp>
 #include "proto/scene/scene_info.pb.h"
+#include "proto/common/component/player_network_comp.pb.h"
+#include "type_alias/player_session_type_alias.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/role_admission_system.h"
 #include "player/system/player_scene.h"
@@ -16,6 +18,17 @@
 #include "muduo/base/Logging.h"
 #include "battle/system/player_battle.h"
 #include "player/system/asset_op_system.h"
+#include "gm_player_command_security.h"
+#include "../rpc/player/player_gm_guard.h"
+#include "node/system/node/node.h"
+#include "modules/currency/system/currency_system.h"
+#include "modules/scene/comp/scene_comp.h"
+#include "player/system/player_attribute.h"
+#include "player/system/player_equip.h"
+#include "player/system/player_pet.h"
+#include "player/system/player_mutability.h"
+#include "player/system/connection_lost_hold.h"
+#include "table/proto/tip/common_error_tip.pb.h"
 #include <memory>
 
 namespace
@@ -238,6 +251,106 @@ void SceneNodeGrpcImpl::HandleAssetAckReceipt(const ::AssetOpRequest* request,
 ///<<< END WRITING YOUR CODE
 }
 
+void SceneNodeGrpcImpl::HandleGmExecutePlayerCommand(const ::scene_node::GmExecutePlayerCommandRequest* request,
+    ::scene_node::GmExecutePlayerCommandResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    // 全部同步运行在同一个 Scene loop：查归属、会话、去重占位和域写入之间没有异步间隙。
+    static gm_player_command::CommandCache commands;
+    response->set_command_id(request->command_id());
+    const auto admission = commands.Begin(*request, *response);
+    if (admission == gm_player_command::CommandCache::Admission::kReplay) return;
+    if (admission != gm_player_command::CommandCache::Admission::kNew) {
+        response->mutable_error_message()->set_id(kFeatureUnavailable);
+        LOG_WARN << "[GmPlayerCommand] rejected command_id=" << request->command_id()
+                 << " reason=command_conflict_or_capacity";
+        return;
+    }
+    const auto finish = [&] (uint32_t error) {
+        if (error != kSuccess) response->mutable_error_message()->set_id(error);
+        response->set_executed(error == kSuccess);
+        commands.Complete(*request, *response);
+        LOG_INFO << "[GmPlayerCommand] completed command_id=" << request->command_id()
+                 << " operator=" << gm_player_command::AuditText(request->operator_())
+                 << " player_id=" << request->player_id() << " command=" << request->command_case()
+                 << " reason=" << gm_player_command::AuditText(request->reason()) << " error=" << error;
+    };
+    if (scene_gm_guard::RejectGmClientRpc("GmExecutePlayerCommand")) {
+        finish(kFeatureUnavailable);
+        return;
+    }
+    const auto player = tlsEcs.GetPlayer(request->player_id());
+    auto& registry = tlsEcs.actorRegistry;
+    if (!registry.valid(player) || PlayerLifecycleSystem::GetPendingEnterMap().contains(request->player_id()) ||
+        !registry.all_of<Player, SceneEntityComp>(player) ||
+        !tlsEcs.sceneRegistry.valid(registry.get<SceneEntityComp>(player).sceneEntity) ||
+        registry.any_of<PlayerConnectionLostComp>(player) ||
+        !player_mutability::IsPlayerMutable(player) || PlayerBattleSystem::IsInBattle(player) ||
+        !RoleAdmissionSystem::ConfirmedIdentity(request->player_id())) {
+        finish(kFeatureUnavailable);
+        return;
+    }
+    const auto* snapshot = registry.try_get<PlayerSessionSnapshotComp>(player);
+    const auto* identity = registry.try_get<PlayerLoginIdentityComp>(player);
+    const auto session = SessionMap().find(request->expected_session_id());
+    if (snapshot == nullptr || identity == nullptr ||
+        snapshot->gate_session_id() != request->expected_session_id() ||
+        snapshot->player_id() != request->player_id() || identity->sessionId != request->expected_session_id() ||
+        identity->loginGeneration != request->expected_login_generation() ||
+        session == SessionMap().end() || session->second != request->player_id()) {
+        finish(kFeatureUnavailable);
+        return;
+    }
+    // 审计先于副作用；只写可信操作者与已签名原因，不记录 auth 或密钥。
+    LOG_INFO << "[GmPlayerCommand] executing command_id=" << request->command_id()
+             << " operator=" << gm_player_command::AuditText(request->operator_())
+             << " player_id=" << request->player_id() << " command=" << request->command_case()
+             << " reason=" << gm_player_command::AuditText(request->reason());
+    uint32_t error = kInvalidParameter;
+    using Request = scene_node::GmExecutePlayerCommandRequest;
+    switch (request->command_case()) {
+    case Request::kAddCurrency: {
+        const auto& args = request->add_currency();
+        const auto type = static_cast<CurrencyType>(args.currency_type());
+        error = CurrencySystem::AddCurrency(player, type, args.amount(), TX_GM_GRANT);
+        if (error == kSuccess) response->set_balance_after(CurrencySystem::GetBalance(player, type));
+        break;
+    }
+    case Request::kDeductCurrency: {
+        const auto& args = request->deduct_currency();
+        const auto type = static_cast<CurrencyType>(args.currency_type());
+        error = CurrencySystem::DeductCurrency(player, type, args.amount(), TX_GM_DEDUCT);
+        if (error == kSuccess) response->set_balance_after(CurrencySystem::GetBalance(player, type));
+        break;
+    }
+    case Request::kBlockCurrency:
+        error = CurrencySystem::BlockCurrency(player, static_cast<CurrencyType>(request->block_currency().currency_type()));
+        break;
+    case Request::kUnblockCurrency:
+        error = CurrencySystem::UnblockCurrency(player, static_cast<CurrencyType>(request->unblock_currency().currency_type()));
+        break;
+    case Request::kGrantItem:
+        error = PlayerEquipSystem::GmGrantItem(player, request->grant_item().config_id(), request->grant_item().count());
+        break;
+    case Request::kGrantPet: {
+        uint64_t petId = 0;
+        error = PetSystem::GrantPet(player, request->grant_pet().pet_table_id(), petId);
+        if (error == kSuccess) {
+            response->set_pet_id(petId);
+            // 网页调用没有客户端 RPC 的 pets 响应，复用既有通知刷新在线客户端。
+            PetSystem::PushList(player);
+        }
+        break;
+    }
+    case Request::kSetLevel:
+        error = PlayerAttributeSystem::GmSetLevel(player, request->set_level().level());
+        break;
+    default: break;
+    }
+    finish(error);
+///<<< END WRITING YOUR CODE
+}
+
 void SceneNodeGrpcImpl::CreateScene(const std::shared_ptr<CreateSceneCall>& call)
 {
     [[maybe_unused]] const ::CreateSceneRequest* request = &call->request();
@@ -353,6 +466,28 @@ void SceneNodeGrpcImpl::AssetAckReceipt(const std::shared_ptr<AssetAckReceiptCal
     call->Proceed();
 }
 
+void SceneNodeGrpcImpl::GmExecutePlayerCommand(const std::shared_ptr<GmExecutePlayerCommandCall>& call)
+{
+    [[maybe_unused]] const ::scene_node::GmExecutePlayerCommandRequest* request = &call->request();
+    ///<<< BEGIN WRITING YOUR CODE: grpc.GmExecutePlayerCommand.guard
+    if (call->ServerDraining() || gNode->PlannedDrainStarted() ||
+        !gNode->GetServiceDiscoveryManager().etcdService.IsIdentityConfirmedFresh()) {
+        call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, "scene_node_not_ready"));
+        return;
+    }
+    const char* secret = std::getenv(gm_player_command::kSecretEnv);
+    static gate_security::GmNonceCache commandNonces;
+    const auto auth = gm_player_command::Verify(*request, gNode->GetNodeId(), secret != nullptr ? secret : "",
+        static_cast<int64_t>(std::time(nullptr)), gate_security::ResolveGmSkewSeconds(), commandNonces);
+    if (auth.result != gate_security::GmAuthResult::kOk) {
+        LOG_WARN << "[GmPlayerCommand] authentication rejected reason=" << gate_security::GmAuthResultName(auth.result);
+        call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kPermissionDenied, "GM player command rejected"));
+        return;
+    }
+    ///<<< END WRITING YOUR CODE
+    call->Proceed();
+}
+
 void SceneNodeGrpcImpl::RegisterMethods(muduo_grpc::MethodTable& table)
 {
     table.AddUnary(std::string(kCreateScenePath),
@@ -447,6 +582,15 @@ void SceneNodeGrpcImpl::RegisterMethods(muduo_grpc::MethodTable& table)
             if (call->ParseRequest(requestBytes))
             {
                 AssetAckReceipt(call);
+            }
+        });
+    table.AddUnary(std::string(kGmExecutePlayerCommandPath),
+        [this](muduo_grpc::ServerCall serverCall, std::string_view requestBytes)
+        {
+            const auto call = GmExecutePlayerCommandCall::Create(std::move(serverCall), &HandleGmExecutePlayerCommand);
+            if (call->ParseRequest(requestBytes))
+            {
+                GmExecutePlayerCommand(call);
             }
         });
 }

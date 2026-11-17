@@ -16,6 +16,7 @@ import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.subject.Subject;
 import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,9 +24,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 /** 浏览器接缝：身份只取 JeecgBoot 的已认证主体，授权在每次服务端调用时执行。 */
 @RestController
+@Lazy(false)
 @RequestMapping(value = "/gm", produces = "application/json;charset=UTF-8")
 public class GmController {
-    private static final Set<String> PERMISSIONS = Set.of("gm:zone:read", "gm:player:read", "gm:mail:prepare", "gm:mail:send", "gm:audit:read");
+    private static final Set<String> PERMISSIONS = Set.of("gm:zone:read", "gm:player:read", "gm:mail:prepare", "gm:mail:send", "gm:audit:read",
+            "gm:currency:add", "gm:currency:deduct", "gm:currency:block", "gm:currency:unblock", "gm:player:level", "gm:pet:grant", "gm:item:grant");
     private static final Set<String> DRAFT_FIELDS = Set.of("clientRequestId", "playerId", "title", "body", "reason", "currencyType", "currencyAmount", "itemConfigId", "itemCount", "validDays");
     private final ObjectMapper json;
     private final GameServices game;

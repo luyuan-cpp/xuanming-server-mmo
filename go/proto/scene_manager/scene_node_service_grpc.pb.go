@@ -22,16 +22,17 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SceneNodeGrpc_CreateScene_FullMethodName          = "/scene_node.SceneNodeGrpc/CreateScene"
-	SceneNodeGrpc_DestroyScene_FullMethodName         = "/scene_node.SceneNodeGrpc/DestroyScene"
-	SceneNodeGrpc_ReleasePlayer_FullMethodName        = "/scene_node.SceneNodeGrpc/ReleasePlayer"
-	SceneNodeGrpc_PrepareBattle_FullMethodName        = "/scene_node.SceneNodeGrpc/PrepareBattle"
-	SceneNodeGrpc_CancelBattlePrepare_FullMethodName  = "/scene_node.SceneNodeGrpc/CancelBattlePrepare"
-	SceneNodeGrpc_SealAccountRoleTrade_FullMethodName = "/scene_node.SceneNodeGrpc/SealAccountRoleTrade"
-	SceneNodeGrpc_AssetDebit_FullMethodName           = "/scene_node.SceneNodeGrpc/AssetDebit"
-	SceneNodeGrpc_AssetAbortDebit_FullMethodName      = "/scene_node.SceneNodeGrpc/AssetAbortDebit"
-	SceneNodeGrpc_AssetCredit_FullMethodName          = "/scene_node.SceneNodeGrpc/AssetCredit"
-	SceneNodeGrpc_AssetAckReceipt_FullMethodName      = "/scene_node.SceneNodeGrpc/AssetAckReceipt"
+	SceneNodeGrpc_CreateScene_FullMethodName            = "/scene_node.SceneNodeGrpc/CreateScene"
+	SceneNodeGrpc_DestroyScene_FullMethodName           = "/scene_node.SceneNodeGrpc/DestroyScene"
+	SceneNodeGrpc_ReleasePlayer_FullMethodName          = "/scene_node.SceneNodeGrpc/ReleasePlayer"
+	SceneNodeGrpc_PrepareBattle_FullMethodName          = "/scene_node.SceneNodeGrpc/PrepareBattle"
+	SceneNodeGrpc_CancelBattlePrepare_FullMethodName    = "/scene_node.SceneNodeGrpc/CancelBattlePrepare"
+	SceneNodeGrpc_SealAccountRoleTrade_FullMethodName   = "/scene_node.SceneNodeGrpc/SealAccountRoleTrade"
+	SceneNodeGrpc_AssetDebit_FullMethodName             = "/scene_node.SceneNodeGrpc/AssetDebit"
+	SceneNodeGrpc_AssetAbortDebit_FullMethodName        = "/scene_node.SceneNodeGrpc/AssetAbortDebit"
+	SceneNodeGrpc_AssetCredit_FullMethodName            = "/scene_node.SceneNodeGrpc/AssetCredit"
+	SceneNodeGrpc_AssetAckReceipt_FullMethodName        = "/scene_node.SceneNodeGrpc/AssetAckReceipt"
+	SceneNodeGrpc_GmExecutePlayerCommand_FullMethodName = "/scene_node.SceneNodeGrpc/GmExecutePlayerCommand"
 )
 
 // SceneNodeGrpcClient is the client API for SceneNodeGrpc service.
@@ -73,6 +74,9 @@ type SceneNodeGrpcClient interface {
 	AssetCredit(ctx context.Context, in *asset.AssetOpRequest, opts ...grpc.CallOption) (*asset.AssetOpResponse, error)
 	// 交易库已持久保存托管快照后释放场景收据；幂等，不改变玩家资产与原始结局。
 	AssetAckReceipt(ctx context.Context, in *asset.AssetOpRequest, opts ...grpc.CallOption) (*asset.AssetOpResponse, error)
+	// 独立 GM 后台的固定命令入口，不接受服务名、方法名或任意序列化载荷。
+	// 仅 dev/test 且本节点仍持有该在线会话时执行；调用方不得重发结果未知的命令。
+	GmExecutePlayerCommand(ctx context.Context, in *GmExecutePlayerCommandRequest, opts ...grpc.CallOption) (*GmExecutePlayerCommandResponse, error)
 }
 
 type sceneNodeGrpcClient struct {
@@ -183,6 +187,16 @@ func (c *sceneNodeGrpcClient) AssetAckReceipt(ctx context.Context, in *asset.Ass
 	return out, nil
 }
 
+func (c *sceneNodeGrpcClient) GmExecutePlayerCommand(ctx context.Context, in *GmExecutePlayerCommandRequest, opts ...grpc.CallOption) (*GmExecutePlayerCommandResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GmExecutePlayerCommandResponse)
+	err := c.cc.Invoke(ctx, SceneNodeGrpc_GmExecutePlayerCommand_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneNodeGrpcServer is the server API for SceneNodeGrpc service.
 // All implementations must embed UnimplementedSceneNodeGrpcServer
 // for forward compatibility.
@@ -222,6 +236,9 @@ type SceneNodeGrpcServer interface {
 	AssetCredit(context.Context, *asset.AssetOpRequest) (*asset.AssetOpResponse, error)
 	// 交易库已持久保存托管快照后释放场景收据；幂等，不改变玩家资产与原始结局。
 	AssetAckReceipt(context.Context, *asset.AssetOpRequest) (*asset.AssetOpResponse, error)
+	// 独立 GM 后台的固定命令入口，不接受服务名、方法名或任意序列化载荷。
+	// 仅 dev/test 且本节点仍持有该在线会话时执行；调用方不得重发结果未知的命令。
+	GmExecutePlayerCommand(context.Context, *GmExecutePlayerCommandRequest) (*GmExecutePlayerCommandResponse, error)
 	mustEmbedUnimplementedSceneNodeGrpcServer()
 }
 
@@ -261,6 +278,9 @@ func (UnimplementedSceneNodeGrpcServer) AssetCredit(context.Context, *asset.Asse
 }
 func (UnimplementedSceneNodeGrpcServer) AssetAckReceipt(context.Context, *asset.AssetOpRequest) (*asset.AssetOpResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AssetAckReceipt not implemented")
+}
+func (UnimplementedSceneNodeGrpcServer) GmExecutePlayerCommand(context.Context, *GmExecutePlayerCommandRequest) (*GmExecutePlayerCommandResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GmExecutePlayerCommand not implemented")
 }
 func (UnimplementedSceneNodeGrpcServer) mustEmbedUnimplementedSceneNodeGrpcServer() {}
 func (UnimplementedSceneNodeGrpcServer) testEmbeddedByValue()                       {}
@@ -463,6 +483,24 @@ func _SceneNodeGrpc_AssetAckReceipt_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneNodeGrpc_GmExecutePlayerCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GmExecutePlayerCommandRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneNodeGrpcServer).GmExecutePlayerCommand(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneNodeGrpc_GmExecutePlayerCommand_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneNodeGrpcServer).GmExecutePlayerCommand(ctx, req.(*GmExecutePlayerCommandRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneNodeGrpc_ServiceDesc is the grpc.ServiceDesc for SceneNodeGrpc service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -509,6 +547,10 @@ var SceneNodeGrpc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AssetAckReceipt",
 			Handler:    _SceneNodeGrpc_AssetAckReceipt_Handler,
+		},
+		{
+			MethodName: "GmExecutePlayerCommand",
+			Handler:    _SceneNodeGrpc_GmExecutePlayerCommand_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

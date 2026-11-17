@@ -7,10 +7,12 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <google/protobuf/message.h>
 #include "core/type_define/player_guid_comp.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
+#include "player/comp/player_ownership_comp.h"
 #include "player/system/client_request_ledger.h"
 #include "player/system/player_attribute.h"
 #include "player/system/player_equip.h"
@@ -21,7 +23,10 @@
 #include "proto/common/component/equipment_effects.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/scene/player_bag.pb.h"
+#include "services/battle/system/equipment_battle_rules.h"
 #include "table/code/equipartifact_table.h"
+#include "table/code/equipattribute_table.h"
+#include "table/code/equipenhance_table.h"
 #include "table/code/equipv1affix_table.h"
 #include "table/code/item_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -48,7 +53,7 @@ bool ValidAffix(const EquipV1AffixTable& row) {
     if (row.id() == 0 || row.value_permyriad() == 0 || row.source_cap() < row.value_permyriad() ||
         row.source_cap() > 10000 || !ValidMaterial(row.material_id(), row.material_count())) return false;
     const auto effect = row.effect(), param = row.effect_param();
-    if (effect < 1 || effect > 13) return false;
+    if (effect < 1 || effect > 13 || row.source_cap() > equipbattle::MaximumSourceBps(effect)) return false;
     if (effect <= 10 && param != 0) return false;
     if ((effect == 11 || effect == 12) && (param < 1 || param > 7)) return false;
     if (effect == 13 && (param < 1 || param > 12)) return false;
@@ -57,9 +62,8 @@ bool ValidAffix(const EquipV1AffixTable& row) {
     return row.pool() == 3 && (effect == 3 || effect == 4 || effect == 9 || effect == 10 || effect == 12);
 }
 bool ValidArtifact(const EquipArtifactTable& row) {
-    return row.id() >= 1 && row.id() <= 8 && row.bonus_bps() > 0 && row.bonus_bps() <= 10000 &&
-        row.cap_bps() <= 10000 && row.health_threshold_bps() <= 10000 &&
-        (row.per_round_limit() != 0 || row.battle_limit() != 0);
+    return equipbattle::ValidArtifactDefinition(row.id(),row.bonus_bps(),row.cap_bps(),
+        row.per_round_limit(),row.battle_limit(),row.active_rounds(),row.health_threshold_bps());
 }
 bool ValidTemplate(const ItemTable& row) {
     if (row.max_stack_size() != 1 || row.affix_pool() != 0 || row.affix_rule() != 0 ||
@@ -128,6 +132,13 @@ uint32_t BuildDefinition(GetEquipmentCraftRulesResponse& rules) {
     if (recipes.empty() || affixes.empty()) return kFeatureUnavailable;
     std::sort(affixes.begin(), affixes.end(), [](auto* a, auto* b) { return a->id() < b->id(); });
     for (const auto* row : affixes) FillAffix(*row, *rules.add_affixes());
+    // 预览显示值之外的属性语义和材料规则同样属于版本；热更不能让旧确认继续扣料。
+    rules.set_rules_fingerprint(
+        ClientRequestFingerprintDigest(ItemTableManager::Instance().FindAll()) +
+        ClientRequestFingerprintDigest(EquipAttributeTableManager::Instance().FindAll()) +
+        ClientRequestFingerprintDigest(EquipEnhanceTableManager::Instance().FindAll()) +
+        ClientRequestFingerprintDigest(EquipV1AffixTableManager::Instance().FindAll()) +
+        ClientRequestFingerprintDigest(EquipArtifactTableManager::Instance().FindAll()));
     rules.set_rules_fingerprint(ClientRequestFingerprintDigest(rules));
     return kSuccess;
 }
@@ -149,8 +160,10 @@ uint32_t CheckWritable(entt::entity player) {
 bool Durable(entt::entity player, uint64_t revision) {
     const auto* persisted = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
     const auto* identity = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
+    const auto* owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
     if (revision == 0 || identity == nullptr || !player_mutability::HasFencedOwnership(player) ||
-        persisted == nullptr || !persisted->HasSnapshot()) return false;
+        owner == nullptr || persisted == nullptr || !persisted->HasSnapshot() ||
+        persisted->committed_owner_epoch != owner->epoch || persisted->committed_save_seq == 0) return false;
     const auto& saved = persisted->snapshot->player_database_data();
     return saved.player_id() == identity->value && saved.client_request_ledger().forge_revision() >= revision;
 }

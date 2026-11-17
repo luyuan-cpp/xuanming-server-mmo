@@ -32,7 +32,30 @@ SQL 沿用 `sql_boot_catalog_docker.ps1`、正式 `mail -migrate` 和 `writer_au
 
 证据在 `image.json`、`verification.json`、`mail-*.log`。健康和 etcd 注册通过，原 17 个游戏容器的 ID、镜像、启动时间未变；`mail_message`、`mail_asset_op` 均为 0。未发玩家邮件，未改玩家资产。`SendPersonalMail` 成功只代表投递，资产在玩家领取附件后发放；当前 Scene 未配置附件验签密钥，不能把服务健康当成领取成功。
 
-## 待主线审阅的 Scene 最小变更
+## Scene 最终升级入口
+
+邮件密钥单项草案已由 `scene-deploy.py` 的完整方案取代：最终一次只重建 Scene，同时接入新 GM 二进制、独立 `MMORPG_GM_PLAYER_COMMAND_SECRET`、现有邮件附件密钥及 `127.0.0.1:2355 → 50001`。`20001` 是 RPC0，不是 gRPC。当前 etcd 注册核实 nodeId=1。准备、构建、审阅和执行分开；prepare 已完成，正式 Linux 构建单独留回执，尚未进行 stage 或重启。
+
+**当前不能直接 stage/apply。** 用户已明确选择先完成 GM 代码和构建，Scene 等装备、技能统一验收后再重建。旧手绘表目录缺少新节点必读的 `equipartifact.json`、`equipv1affix.json`，直接挂载会在 `File2String` 中 `LOG_FATAL`；本轮不修改表快照、manifest 或 Compose。新增只读覆盖门禁会在 stage/apply 写配置之前拒绝缺表，并给出审阅清单 `build/verification/gm-admin-20261117/scene/table-compatibility-review.json`。下面是后续统一验收后的计划入口，不是本轮发布指令。表覆盖通过本身也不等于装备/技能已验收。
+
+```powershell
+python -X utf8 -B deploy/gm-admin/scene-deploy.py prepare
+# 待 C++ 构建槽释放与源码冻结，执行 scene/plan.json 内 buildCommand。
+# 正式构建器仍统一封存、验证 SDK 并构建 gate/scene/battle；只交付 Scene 容器。
+python -X utf8 -B deploy/gm-admin/scene-deploy.py stage --build-result build/verification/gm-admin-20261117/scene/cpp-build/result.json
+# 审阅 scene/review.patch、promotion.json、plan.json 后，由主线释放执行。
+python -X utf8 -B deploy/gm-admin/scene-deploy.py apply --execute
+```
+
+新材料位于 `build/verification/gm-admin-20261117/scene/`。`stage` 必须核对同一正式构建批次、镜像 ID、当前源码全量快照、镜像内产物摘要、SDK、原运行合同及封存的手绘场景表。`apply` 持原启动锁，要求当前完整合同和状态仍等于准备时的原件；保留原四份 Compose 路径，只给原恢复 overlay 的 Scene 单项 image 前移，其余镜像和卷保持原身份。不执行全栈重建、迁移、注册、发信或玩家 GM。
+
+现役 `start_docker_debug.py` 通过窄 helper 校验前移回执：原私有 `.env` 中的 `GM_SCENE_PROMOTION_SHA256` 必须与 `promotion.json` 完全匹配；原历史证据继续逐字节核验，另核源码/镜像构建链、原 Scene 身份、仅 Scene 的 overlay 差异、固定 loopback 端口以及其余所有原容器签名。没有显式摘要时仍执行原规则，准备文件本身不能启用新镜像。
+
+只有实际替换成功、正式 preflight 与源码/产物核验通过、etcd nodeId/gRPC 地址一致、两端运行密钥匹配后，才写 `ready.json` 和私有摘要。`run_local.py` 清除继承来的四项游戏写通道变量，仅在完整回执和实时身份核验通过后读取 `scene/private/gm-runtime.env`；缺少、陈旧或篡改回执均保持禁用。就绪只证明通道部署，不证明已做玩家命令或附件领取，回执明确记录这两项未实测。
+
+玩家查询另由主线的 `rpc-bridge.py` 独立验证并启用：`127.0.0.1:2356 → data-service:9000`、`127.0.0.1:2357 → player-locator:53200`，不重启原服务。原 `2347/2349` 是 Delve 调试器端口，不能当业务 gRPC。应用两项目标默认留空，启动器只能从桥的真实 `verify_ready()` 取得它们；读通道可先启用，Scene 写通道的最终回执还必须绑定同一份已验证桥回执。
+
+## 早期邮件单项草案（保留证据，不再作为执行入口）
 
 只影响 **1 个 Scene 容器**，会断开其中当前在线玩家。`scene-key-presence.json` 证明 `Config.Env` 和实际 `/proc/1/environ` 均无邮件资产密钥；进程直接执行 `/app/bin/scene`，没有入口脚本延后注入。运行代码读取并缓存进程环境，修改文件不能热生效。
 

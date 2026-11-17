@@ -55,6 +55,11 @@ class GmCommandJournalTest {
     }
     ObjectNode prepare(String key) { return journal.prepare("operator", key, "9007199254740993", "测试原因", input()); }
     String status(ObjectNode command) { return command.path("status").asText(); }
+    ObjectNode playerInput() {
+        ObjectNode input = mapper.createObjectNode().put("operation", "currency.add");
+        input.putObject("arguments").put("currencyType", 0).put("amount", "9007199254740993");
+        return input;
+    }
     void http(int code, Runnable call) {
         assertEquals(code, assertThrows(ResponseStatusException.class, call::run).getStatusCode().value());
     }
@@ -75,6 +80,34 @@ class GmCommandJournalTest {
         assertEquals(1, journal.list().path("total").asInt());
         assertEquals(original, journal.list().path("records").get(0));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM gm_command_audit", Integer.class));
+    }
+
+    @Test void playerCommandFreezesIdentityAndDoesNotCrossMailEndpoint() {
+        ObjectNode draft = journal.preparePlayerCommand("operator", "player-key", "9007199254740993", "客服工单", playerInput());
+        String id = draft.path("id").asText();
+        assertEquals("PLAYER", draft.path("commandType").asText());
+        assertEquals("operator", draft.path("request").path("operator").asText());
+        assertEquals("客服工单", draft.path("request").path("reason").asText());
+        assertTrue(draft.path("request").path("issuedAtMs").isTextual());
+        assertEquals(0, journal.list().path("total").asInt());
+        assertEquals(1, journal.listPlayerCommands().path("total").asInt());
+        http(409, () -> journal.send(id, "operator", request -> { fail("Wrong transport was called"); return null; }));
+        var calls = new AtomicInteger();
+        ObjectNode done = journal.sendPlayerCommand(id, "operator", request -> { calls.incrementAndGet(); return mapper.createObjectNode().put("executed", true); });
+        assertEquals("EXECUTED", status(done));
+        assertEquals(done, journal.sendPlayerCommand(id, "operator", request -> { fail("Executed command was resent"); return null; }));
+        assertEquals(1, calls.get());
+    }
+
+    @Test void unknownPlayerCommandCannotBeResentAfterTimeoutOrRestart() {
+        String id = journal.preparePlayerCommand("operator", "unknown-player", "123", "工单", playerInput()).path("id").asText();
+        ObjectNode result = journal.sendPlayerCommand(id, "operator", request -> { throw new GameServices.CallFailure("DEADLINE_EXCEEDED", "unknown", true, 0); });
+        assertEquals("UNKNOWN", status(result));
+        now.addAndGet(86_400_000);
+        journal = new GmCommandJournal(jdbc, mapper, manager, clock, ids::incrementAndGet);
+        http(409, () -> journal.sendPlayerCommand(id, "operator", request -> { fail("Unknown command was resent"); return null; }));
+        jdbc.update("UPDATE gm_command SET status='SENDING' WHERE id=?", id);
+        http(409, () -> journal.sendPlayerCommand(id, "operator", request -> { fail("Interrupted command was resent"); return null; }));
     }
 
     @Test void idempotencyKeyCannotChangePayloadAndIsCaseSensitive() {

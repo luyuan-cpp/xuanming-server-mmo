@@ -165,6 +165,7 @@
     <ClCompile Include="asset_op_ledger_test.cpp" />
     <ClCompile Include="asset_op_system_test.cpp" />
     <ClCompile Include="client_gm_gate_test.cpp" />
+    <ClCompile Include="gm_player_command_test.cpp" />
     <ClCompile Include="player_inbox_rules_test.cpp" />
     <ClCompile Include="player_inbox_reply_test.cpp" />
     <ClCompile Include="gm_sanction_inbox_executor_test.cpp" />

@@ -32,7 +32,12 @@
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/common/asset/asset_op.pb.h"
 #include "proto/common/base/empty.pb.h"
+#include "proto/common/base/tip.pb.h"
 #include "proto/scene/scene.pb.h"
+#include "proto/scene/player_currency.pb.h"
+#include "proto/scene/player_bag.pb.h"
+#include "proto/scene/player_pet.pb.h"
+#include "proto/scene/player_attribute.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -57,6 +62,22 @@ extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto;
 }  // extern "C"
 namespace scene_node {
+class GmExecutePlayerCommandRequest;
+struct GmExecutePlayerCommandRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GmExecutePlayerCommandRequestGlobalsTypeInternal GmExecutePlayerCommandRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GmExecutePlayerCommandRequest_class_data_;
+#else
+extern const GmExecutePlayerCommandRequestGlobalsTypeInternal GmExecutePlayerCommandRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GmExecutePlayerCommandResponse;
+struct GmExecutePlayerCommandResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GmExecutePlayerCommandResponseGlobalsTypeInternal GmExecutePlayerCommandResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GmExecutePlayerCommandResponse_class_data_;
+#else
+extern const GmExecutePlayerCommandResponseGlobalsTypeInternal GmExecutePlayerCommandResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class ReleasePlayerRequest;
 struct ReleasePlayerRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -134,7 +155,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleasePlayerRequest final : public
   [[nodiscard]] static const ReleasePlayerRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleasePlayerRequest>(&ReleasePlayerRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 0;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(ReleasePlayerRequest& a, ReleasePlayerRequest& b) { a.Swap(&b); }
   inline void Swap(ReleasePlayerRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -366,6 +387,753 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleasePlayerRequest final : public
   union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto;
 };
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmExecutePlayerCommandResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:scene_node.GmExecutePlayerCommandResponse) */ {
+ public:
+  inline GmExecutePlayerCommandResponse() : GmExecutePlayerCommandResponse(nullptr) {}
+  ~GmExecutePlayerCommandResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GmExecutePlayerCommandResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GmExecutePlayerCommandResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GmExecutePlayerCommandResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GmExecutePlayerCommandResponse(const GmExecutePlayerCommandResponse& from) : GmExecutePlayerCommandResponse(nullptr, from) {}
+  inline GmExecutePlayerCommandResponse(GmExecutePlayerCommandResponse&& from) noexcept : GmExecutePlayerCommandResponse(nullptr, ::std::move(from)) {}
+  inline GmExecutePlayerCommandResponse& operator=(const GmExecutePlayerCommandResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GmExecutePlayerCommandResponse& operator=(GmExecutePlayerCommandResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GmExecutePlayerCommandResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GmExecutePlayerCommandResponse>(&GmExecutePlayerCommandResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(GmExecutePlayerCommandResponse& a, GmExecutePlayerCommandResponse& b) { a.Swap(&b); }
+  inline void Swap(GmExecutePlayerCommandResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GmExecutePlayerCommandResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GmExecutePlayerCommandResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GmExecutePlayerCommandResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GmExecutePlayerCommandResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GmExecutePlayerCommandResponse& from) { GmExecutePlayerCommandResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GmExecutePlayerCommandResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "scene_node.GmExecutePlayerCommandResponse"; }
+
+  explicit GmExecutePlayerCommandResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GmExecutePlayerCommandResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GmExecutePlayerCommandResponse& from);
+  GmExecutePlayerCommandResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GmExecutePlayerCommandResponse&& from) noexcept
+      : GmExecutePlayerCommandResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 2,
+    kCommandIdFieldNumber = 1,
+    kBalanceAfterFieldNumber = 3,
+    kPetIdFieldNumber = 4,
+    kExecutedFieldNumber = 5,
+  };
+  // .TipInfoMessage error_message = 2;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // uint64 command_id = 1;
+  void clear_command_id() ;
+  [[nodiscard]] ::uint64_t command_id() const;
+  void set_command_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_command_id() const;
+  void _internal_set_command_id(::uint64_t value);
+
+  public:
+  // uint64 balance_after = 3;
+  void clear_balance_after() ;
+  [[nodiscard]] ::uint64_t balance_after() const;
+  void set_balance_after(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_balance_after() const;
+  void _internal_set_balance_after(::uint64_t value);
+
+  public:
+  // uint64 pet_id = 4;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
+  // bool executed = 5;
+  void clear_executed() ;
+  [[nodiscard]] bool executed() const;
+  void set_executed(bool value);
+
+  private:
+  bool _internal_executed() const;
+  void _internal_set_executed(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:scene_node.GmExecutePlayerCommandResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GmExecutePlayerCommandResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::uint64_t command_id_;
+    ::uint64_t balance_after_;
+    ::uint64_t pet_id_;
+    bool executed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmExecutePlayerCommandRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:scene_node.GmExecutePlayerCommandRequest) */ {
+ public:
+  inline GmExecutePlayerCommandRequest() : GmExecutePlayerCommandRequest(nullptr) {}
+  ~GmExecutePlayerCommandRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GmExecutePlayerCommandRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GmExecutePlayerCommandRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GmExecutePlayerCommandRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GmExecutePlayerCommandRequest(const GmExecutePlayerCommandRequest& from) : GmExecutePlayerCommandRequest(nullptr, from) {}
+  inline GmExecutePlayerCommandRequest(GmExecutePlayerCommandRequest&& from) noexcept : GmExecutePlayerCommandRequest(nullptr, ::std::move(from)) {}
+  inline GmExecutePlayerCommandRequest& operator=(const GmExecutePlayerCommandRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GmExecutePlayerCommandRequest& operator=(GmExecutePlayerCommandRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GmExecutePlayerCommandRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GmExecutePlayerCommandRequest>(&GmExecutePlayerCommandRequest_globals_);
+  }
+  enum CommandCase {
+    kAddCurrency = 11,
+    kDeductCurrency = 12,
+    kBlockCurrency = 13,
+    kUnblockCurrency = 14,
+    kGrantItem = 15,
+    kGrantPet = 16,
+    kSetLevel = 17,
+    COMMAND_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 0;
+  friend void swap(GmExecutePlayerCommandRequest& a, GmExecutePlayerCommandRequest& b) { a.Swap(&b); }
+  inline void Swap(GmExecutePlayerCommandRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GmExecutePlayerCommandRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GmExecutePlayerCommandRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GmExecutePlayerCommandRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GmExecutePlayerCommandRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GmExecutePlayerCommandRequest& from) { GmExecutePlayerCommandRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GmExecutePlayerCommandRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "scene_node.GmExecutePlayerCommandRequest"; }
+
+  explicit GmExecutePlayerCommandRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GmExecutePlayerCommandRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GmExecutePlayerCommandRequest& from);
+  GmExecutePlayerCommandRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GmExecutePlayerCommandRequest&& from) noexcept
+      : GmExecutePlayerCommandRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOperatorFieldNumber = 3,
+    kReasonFieldNumber = 4,
+    kAuthFieldNumber = 5,
+    kCommandIdFieldNumber = 1,
+    kPlayerIdFieldNumber = 2,
+    kTargetNodeIdFieldNumber = 6,
+    kExpectedSessionIdFieldNumber = 7,
+    kExpectedLoginGenerationFieldNumber = 8,
+    kIssuedAtMsFieldNumber = 9,
+    kAddCurrencyFieldNumber = 11,
+    kDeductCurrencyFieldNumber = 12,
+    kBlockCurrencyFieldNumber = 13,
+    kUnblockCurrencyFieldNumber = 14,
+    kGrantItemFieldNumber = 15,
+    kGrantPetFieldNumber = 16,
+    kSetLevelFieldNumber = 17,
+  };
+  // string operator = 3;
+  void clear_operator_() ;
+  [[nodiscard]] const ::std::string& operator_() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_operator_(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_operator_();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_operator_();
+  void set_allocated_operator_(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_operator_() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_operator_(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_operator_();
+
+  public:
+  // string reason = 4;
+  void clear_reason() ;
+  [[nodiscard]] const ::std::string& reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reason();
+  void set_allocated_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reason();
+
+  public:
+  // string auth = 5;
+  void clear_auth() ;
+  [[nodiscard]] const ::std::string& auth() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_auth(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_auth();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_auth();
+  void set_allocated_auth(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_auth() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_auth(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_auth();
+
+  public:
+  // uint64 command_id = 1;
+  void clear_command_id() ;
+  [[nodiscard]] ::uint64_t command_id() const;
+  void set_command_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_command_id() const;
+  void _internal_set_command_id(::uint64_t value);
+
+  public:
+  // uint64 player_id = 2;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 target_node_id = 6;
+  void clear_target_node_id() ;
+  [[nodiscard]] ::uint32_t target_node_id() const;
+  void set_target_node_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_node_id() const;
+  void _internal_set_target_node_id(::uint32_t value);
+
+  public:
+  // uint32 expected_session_id = 7;
+  void clear_expected_session_id() ;
+  [[nodiscard]] ::uint32_t expected_session_id() const;
+  void set_expected_session_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_expected_session_id() const;
+  void _internal_set_expected_session_id(::uint32_t value);
+
+  public:
+  // uint64 expected_login_generation = 8;
+  void clear_expected_login_generation() ;
+  [[nodiscard]] ::uint64_t expected_login_generation() const;
+  void set_expected_login_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expected_login_generation() const;
+  void _internal_set_expected_login_generation(::uint64_t value);
+
+  public:
+  // uint64 issued_at_ms = 9;
+  void clear_issued_at_ms() ;
+  [[nodiscard]] ::uint64_t issued_at_ms() const;
+  void set_issued_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_issued_at_ms() const;
+  void _internal_set_issued_at_ms(::uint64_t value);
+
+  public:
+  // .GmAddCurrencyRequest add_currency = 11;
+  [[nodiscard]] bool has_add_currency()
+      const;
+  private:
+  bool _internal_has_add_currency() const;
+
+  public:
+  void clear_add_currency() ;
+  [[nodiscard]] const ::GmAddCurrencyRequest& add_currency() const;
+  [[nodiscard]] ::GmAddCurrencyRequest* PROTOBUF_NULLABLE release_add_currency();
+  ::GmAddCurrencyRequest* PROTOBUF_NONNULL mutable_add_currency();
+  void set_allocated_add_currency(::GmAddCurrencyRequest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_add_currency(::GmAddCurrencyRequest* PROTOBUF_NULLABLE value);
+  ::GmAddCurrencyRequest* PROTOBUF_NULLABLE unsafe_arena_release_add_currency();
+
+  private:
+  const ::GmAddCurrencyRequest& _internal_add_currency() const;
+  ::GmAddCurrencyRequest* PROTOBUF_NONNULL _internal_mutable_add_currency();
+
+  public:
+  // .GmDeductCurrencyRequest deduct_currency = 12;
+  [[nodiscard]] bool has_deduct_currency()
+      const;
+  private:
+  bool _internal_has_deduct_currency() const;
+
+  public:
+  void clear_deduct_currency() ;
+  [[nodiscard]] const ::GmDeductCurrencyRequest& deduct_currency() const;
+  [[nodiscard]] ::GmDeductCurrencyRequest* PROTOBUF_NULLABLE release_deduct_currency();
+  ::GmDeductCurrencyRequest* PROTOBUF_NONNULL mutable_deduct_currency();
+  void set_allocated_deduct_currency(::GmDeductCurrencyRequest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_deduct_currency(::GmDeductCurrencyRequest* PROTOBUF_NULLABLE value);
+  ::GmDeductCurrencyRequest* PROTOBUF_NULLABLE unsafe_arena_release_deduct_currency();
+
+  private:
+  const ::GmDeductCurrencyRequest& _internal_deduct_currency() const;
+  ::GmDeductCurrencyRequest* PROTOBUF_NONNULL _internal_mutable_deduct_currency();
+
+  public:
+  // .GmBlockCurrencyRequest block_currency = 13;
+  [[nodiscard]] bool has_block_currency()
+      const;
+  private:
+  bool _internal_has_block_currency() const;
+
+  public:
+  void clear_block_currency() ;
+  [[nodiscard]] const ::GmBlockCurrencyRequest& block_currency() const;
+  [[nodiscard]] ::GmBlockCurrencyRequest* PROTOBUF_NULLABLE release_block_currency();
+  ::GmBlockCurrencyRequest* PROTOBUF_NONNULL mutable_block_currency();
+  void set_allocated_block_currency(::GmBlockCurrencyRequest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_block_currency(::GmBlockCurrencyRequest* PROTOBUF_NULLABLE value);
+  ::GmBlockCurrencyRequest* PROTOBUF_NULLABLE unsafe_arena_release_block_currency();
+
+  private:
+  const ::GmBlockCurrencyRequest& _internal_block_currency() const;
+  ::GmBlockCurrencyRequest* PROTOBUF_NONNULL _internal_mutable_block_currency();
+
+  public:
+  // .GmUnblockCurrencyRequest unblock_currency = 14;
+  [[nodiscard]] bool has_unblock_currency()
+      const;
+  private:
+  bool _internal_has_unblock_currency() const;
+
+  public:
+  void clear_unblock_currency() ;
+  [[nodiscard]] const ::GmUnblockCurrencyRequest& unblock_currency() const;
+  [[nodiscard]] ::GmUnblockCurrencyRequest* PROTOBUF_NULLABLE release_unblock_currency();
+  ::GmUnblockCurrencyRequest* PROTOBUF_NONNULL mutable_unblock_currency();
+  void set_allocated_unblock_currency(::GmUnblockCurrencyRequest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_unblock_currency(::GmUnblockCurrencyRequest* PROTOBUF_NULLABLE value);
+  ::GmUnblockCurrencyRequest* PROTOBUF_NULLABLE unsafe_arena_release_unblock_currency();
+
+  private:
+  const ::GmUnblockCurrencyRequest& _internal_unblock_currency() const;
+  ::GmUnblockCurrencyRequest* PROTOBUF_NONNULL _internal_mutable_unblock_currency();
+
+  public:
+  // .GmGrantItemRequest grant_item = 15;
+  [[nodiscard]] bool has_grant_item()
+      const;
+  private:
+  bool _internal_has_grant_item() const;
+
+  public:
+  void clear_grant_item() ;
+  [[nodiscard]] const ::GmGrantItemRequest& grant_item() const;
+  [[nodiscard]] ::GmGrantItemRequest* PROTOBUF_NULLABLE release_grant_item();
+  ::GmGrantItemRequest* PROTOBUF_NONNULL mutable_grant_item();
+  void set_allocated_grant_item(::GmGrantItemRequest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_grant_item(::GmGrantItemRequest* PROTOBUF_NULLABLE value);
+  ::GmGrantItemRequest* PROTOBUF_NULLABLE unsafe_arena_release_grant_item();
+
+  private:
+  const ::GmGrantItemRequest& _internal_grant_item() const;
+  ::GmGrantItemRequest* PROTOBUF_NONNULL _internal_mutable_grant_item();
+
+  public:
+  // .GmGrantPetRequest grant_pet = 16;
+  [[nodiscard]] bool has_grant_pet()
+      const;
+  private:
+  bool _internal_has_grant_pet() const;
+
+  public:
+  void clear_grant_pet() ;
+  [[nodiscard]] const ::GmGrantPetRequest& grant_pet() const;
+  [[nodiscard]] ::GmGrantPetRequest* PROTOBUF_NULLABLE release_grant_pet();
+  ::GmGrantPetRequest* PROTOBUF_NONNULL mutable_grant_pet();
+  void set_allocated_grant_pet(::GmGrantPetRequest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_grant_pet(::GmGrantPetRequest* PROTOBUF_NULLABLE value);
+  ::GmGrantPetRequest* PROTOBUF_NULLABLE unsafe_arena_release_grant_pet();
+
+  private:
+  const ::GmGrantPetRequest& _internal_grant_pet() const;
+  ::GmGrantPetRequest* PROTOBUF_NONNULL _internal_mutable_grant_pet();
+
+  public:
+  // .GmSetPlayerLevelRequest set_level = 17;
+  [[nodiscard]] bool has_set_level()
+      const;
+  private:
+  bool _internal_has_set_level() const;
+
+  public:
+  void clear_set_level() ;
+  [[nodiscard]] const ::GmSetPlayerLevelRequest& set_level() const;
+  [[nodiscard]] ::GmSetPlayerLevelRequest* PROTOBUF_NULLABLE release_set_level();
+  ::GmSetPlayerLevelRequest* PROTOBUF_NONNULL mutable_set_level();
+  void set_allocated_set_level(::GmSetPlayerLevelRequest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_set_level(::GmSetPlayerLevelRequest* PROTOBUF_NULLABLE value);
+  ::GmSetPlayerLevelRequest* PROTOBUF_NULLABLE unsafe_arena_release_set_level();
+
+  private:
+  const ::GmSetPlayerLevelRequest& _internal_set_level() const;
+  ::GmSetPlayerLevelRequest* PROTOBUF_NONNULL _internal_mutable_set_level();
+
+  public:
+  void clear_command();
+  CommandCase command_case() const;
+  // @@protoc_insertion_point(class_scope:scene_node.GmExecutePlayerCommandRequest)
+ private:
+  class _Internal;
+  void set_has_add_currency();
+  void set_has_deduct_currency();
+  void set_has_block_currency();
+  void set_has_unblock_currency();
+  void set_has_grant_item();
+  void set_has_grant_pet();
+  void set_has_set_level();
+  [[nodiscard]] inline bool has_command() const;
+  inline void clear_has_command();
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          7, 83,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GmExecutePlayerCommandRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr operator__;
+    ::google::protobuf::internal::ArenaStringPtr reason_;
+    ::google::protobuf::internal::ArenaStringPtr auth_;
+    ::uint64_t command_id_;
+    ::uint64_t player_id_;
+    ::uint32_t target_node_id_;
+    ::uint32_t expected_session_id_;
+    ::uint64_t expected_login_generation_;
+    ::uint64_t issued_at_ms_;
+    union CommandUnion {
+      constexpr CommandUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE add_currency_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE deduct_currency_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE block_currency_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE unblock_currency_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE grant_item_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE grant_pet_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE set_level_;
+    } command_;
+    ::uint32_t _oneof_case_[1];
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto;
+};
 
 // ===================================================================
 
@@ -379,6 +1147,1045 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleasePlayerRequest final : public
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// GmExecutePlayerCommandRequest
+
+// uint64 command_id = 1;
+inline void GmExecutePlayerCommandRequest::clear_command_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.command_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t GmExecutePlayerCommandRequest::command_id() const {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.command_id)
+  return _internal_command_id();
+}
+inline void GmExecutePlayerCommandRequest::set_command_id(::uint64_t value) {
+  _internal_set_command_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandRequest.command_id)
+}
+inline ::uint64_t GmExecutePlayerCommandRequest::_internal_command_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.command_id_;
+}
+inline void GmExecutePlayerCommandRequest::_internal_set_command_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.command_id_ = value;
+}
+
+// uint64 player_id = 2;
+inline void GmExecutePlayerCommandRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t GmExecutePlayerCommandRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.player_id)
+  return _internal_player_id();
+}
+inline void GmExecutePlayerCommandRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandRequest.player_id)
+}
+inline ::uint64_t GmExecutePlayerCommandRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void GmExecutePlayerCommandRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// string operator = 3;
+inline void GmExecutePlayerCommandRequest::clear_operator_() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operator__.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& GmExecutePlayerCommandRequest::operator_() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.operator)
+  return _internal_operator_();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GmExecutePlayerCommandRequest::set_operator_(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.operator__.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandRequest.operator)
+}
+inline ::std::string* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::mutable_operator_()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_operator_();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandRequest.operator)
+  return _s;
+}
+inline const ::std::string& GmExecutePlayerCommandRequest::_internal_operator_() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.operator__.Get();
+}
+inline void GmExecutePlayerCommandRequest::_internal_set_operator_(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operator__.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_internal_mutable_operator_() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.operator__.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::release_operator_() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandRequest.operator)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.operator__.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.operator__.Set("", GetArena());
+  }
+  return released;
+}
+inline void GmExecutePlayerCommandRequest::set_allocated_operator_(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.operator__.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.operator__.IsDefault()) {
+    _impl_.operator__.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandRequest.operator)
+}
+
+// string reason = 4;
+inline void GmExecutePlayerCommandRequest::clear_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& GmExecutePlayerCommandRequest::reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.reason)
+  return _internal_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GmExecutePlayerCommandRequest::set_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandRequest.reason)
+}
+inline ::std::string* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::mutable_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_reason();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandRequest.reason)
+  return _s;
+}
+inline const ::std::string& GmExecutePlayerCommandRequest::_internal_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reason_.Get();
+}
+inline void GmExecutePlayerCommandRequest::_internal_set_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_internal_mutable_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::release_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandRequest.reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GmExecutePlayerCommandRequest::set_allocated_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reason_.IsDefault()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandRequest.reason)
+}
+
+// string auth = 5;
+inline void GmExecutePlayerCommandRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& GmExecutePlayerCommandRequest::auth() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.auth)
+  return _internal_auth();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GmExecutePlayerCommandRequest::set_auth(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.auth_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandRequest.auth)
+}
+inline ::std::string* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::mutable_auth()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_auth();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandRequest.auth)
+  return _s;
+}
+inline const ::std::string& GmExecutePlayerCommandRequest::_internal_auth() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.auth_.Get();
+}
+inline void GmExecutePlayerCommandRequest::_internal_set_auth(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_internal_mutable_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.auth_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandRequest.auth)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.auth_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.auth_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GmExecutePlayerCommandRequest::set_allocated_auth(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.auth_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.auth_.IsDefault()) {
+    _impl_.auth_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandRequest.auth)
+}
+
+// uint32 target_node_id = 6;
+inline void GmExecutePlayerCommandRequest::clear_target_node_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_node_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t GmExecutePlayerCommandRequest::target_node_id() const {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.target_node_id)
+  return _internal_target_node_id();
+}
+inline void GmExecutePlayerCommandRequest::set_target_node_id(::uint32_t value) {
+  _internal_set_target_node_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandRequest.target_node_id)
+}
+inline ::uint32_t GmExecutePlayerCommandRequest::_internal_target_node_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_node_id_;
+}
+inline void GmExecutePlayerCommandRequest::_internal_set_target_node_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_node_id_ = value;
+}
+
+// uint32 expected_session_id = 7;
+inline void GmExecutePlayerCommandRequest::clear_expected_session_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_session_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t GmExecutePlayerCommandRequest::expected_session_id() const {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.expected_session_id)
+  return _internal_expected_session_id();
+}
+inline void GmExecutePlayerCommandRequest::set_expected_session_id(::uint32_t value) {
+  _internal_set_expected_session_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandRequest.expected_session_id)
+}
+inline ::uint32_t GmExecutePlayerCommandRequest::_internal_expected_session_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_session_id_;
+}
+inline void GmExecutePlayerCommandRequest::_internal_set_expected_session_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_session_id_ = value;
+}
+
+// uint64 expected_login_generation = 8;
+inline void GmExecutePlayerCommandRequest::clear_expected_login_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_login_generation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t GmExecutePlayerCommandRequest::expected_login_generation() const {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.expected_login_generation)
+  return _internal_expected_login_generation();
+}
+inline void GmExecutePlayerCommandRequest::set_expected_login_generation(::uint64_t value) {
+  _internal_set_expected_login_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandRequest.expected_login_generation)
+}
+inline ::uint64_t GmExecutePlayerCommandRequest::_internal_expected_login_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_login_generation_;
+}
+inline void GmExecutePlayerCommandRequest::_internal_set_expected_login_generation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_login_generation_ = value;
+}
+
+// uint64 issued_at_ms = 9;
+inline void GmExecutePlayerCommandRequest::clear_issued_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.issued_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t GmExecutePlayerCommandRequest::issued_at_ms() const {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.issued_at_ms)
+  return _internal_issued_at_ms();
+}
+inline void GmExecutePlayerCommandRequest::set_issued_at_ms(::uint64_t value) {
+  _internal_set_issued_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandRequest.issued_at_ms)
+}
+inline ::uint64_t GmExecutePlayerCommandRequest::_internal_issued_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.issued_at_ms_;
+}
+inline void GmExecutePlayerCommandRequest::_internal_set_issued_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.issued_at_ms_ = value;
+}
+
+// .GmAddCurrencyRequest add_currency = 11;
+inline bool GmExecutePlayerCommandRequest::has_add_currency() const {
+  return command_case() == kAddCurrency;
+}
+inline bool GmExecutePlayerCommandRequest::_internal_has_add_currency() const {
+  return command_case() == kAddCurrency;
+}
+inline void GmExecutePlayerCommandRequest::set_has_add_currency() {
+  _impl_._oneof_case_[0] = kAddCurrency;
+}
+inline ::GmAddCurrencyRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::release_add_currency() {
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandRequest.add_currency)
+  if (command_case() == kAddCurrency) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmAddCurrencyRequest*>(_impl_.command_.add_currency_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.command_.add_currency_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::GmAddCurrencyRequest& GmExecutePlayerCommandRequest::_internal_add_currency() const {
+  return command_case() == kAddCurrency ? static_cast<const ::GmAddCurrencyRequest&>(*reinterpret_cast<::GmAddCurrencyRequest*>(_impl_.command_.add_currency_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GmAddCurrencyRequest>(&::GmAddCurrencyRequest_globals_);
+}
+inline const ::GmAddCurrencyRequest& GmExecutePlayerCommandRequest::add_currency() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.add_currency)
+  return _internal_add_currency();
+}
+inline ::GmAddCurrencyRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::unsafe_arena_release_add_currency() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:scene_node.GmExecutePlayerCommandRequest.add_currency)
+  if (command_case() == kAddCurrency) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmAddCurrencyRequest*>(_impl_.command_.add_currency_);
+    _impl_.command_.add_currency_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GmExecutePlayerCommandRequest::unsafe_arena_set_allocated_add_currency(
+    ::GmAddCurrencyRequest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_command();
+  if (value) {
+    set_has_add_currency();
+    _impl_.command_.add_currency_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:scene_node.GmExecutePlayerCommandRequest.add_currency)
+}
+inline ::GmAddCurrencyRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_internal_mutable_add_currency() {
+  if (command_case() != kAddCurrency) {
+    clear_command();
+    set_has_add_currency();
+    _impl_.command_.add_currency_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::GmAddCurrencyRequest>(GetArena()));
+  }
+  return reinterpret_cast<::GmAddCurrencyRequest*>(_impl_.command_.add_currency_);
+}
+inline ::GmAddCurrencyRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::mutable_add_currency()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::GmAddCurrencyRequest* _msg = _internal_mutable_add_currency();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandRequest.add_currency)
+  return _msg;
+}
+
+// .GmDeductCurrencyRequest deduct_currency = 12;
+inline bool GmExecutePlayerCommandRequest::has_deduct_currency() const {
+  return command_case() == kDeductCurrency;
+}
+inline bool GmExecutePlayerCommandRequest::_internal_has_deduct_currency() const {
+  return command_case() == kDeductCurrency;
+}
+inline void GmExecutePlayerCommandRequest::set_has_deduct_currency() {
+  _impl_._oneof_case_[0] = kDeductCurrency;
+}
+inline ::GmDeductCurrencyRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::release_deduct_currency() {
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandRequest.deduct_currency)
+  if (command_case() == kDeductCurrency) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmDeductCurrencyRequest*>(_impl_.command_.deduct_currency_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.command_.deduct_currency_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::GmDeductCurrencyRequest& GmExecutePlayerCommandRequest::_internal_deduct_currency() const {
+  return command_case() == kDeductCurrency ? static_cast<const ::GmDeductCurrencyRequest&>(*reinterpret_cast<::GmDeductCurrencyRequest*>(_impl_.command_.deduct_currency_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GmDeductCurrencyRequest>(&::GmDeductCurrencyRequest_globals_);
+}
+inline const ::GmDeductCurrencyRequest& GmExecutePlayerCommandRequest::deduct_currency() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.deduct_currency)
+  return _internal_deduct_currency();
+}
+inline ::GmDeductCurrencyRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::unsafe_arena_release_deduct_currency() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:scene_node.GmExecutePlayerCommandRequest.deduct_currency)
+  if (command_case() == kDeductCurrency) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmDeductCurrencyRequest*>(_impl_.command_.deduct_currency_);
+    _impl_.command_.deduct_currency_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GmExecutePlayerCommandRequest::unsafe_arena_set_allocated_deduct_currency(
+    ::GmDeductCurrencyRequest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_command();
+  if (value) {
+    set_has_deduct_currency();
+    _impl_.command_.deduct_currency_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:scene_node.GmExecutePlayerCommandRequest.deduct_currency)
+}
+inline ::GmDeductCurrencyRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_internal_mutable_deduct_currency() {
+  if (command_case() != kDeductCurrency) {
+    clear_command();
+    set_has_deduct_currency();
+    _impl_.command_.deduct_currency_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::GmDeductCurrencyRequest>(GetArena()));
+  }
+  return reinterpret_cast<::GmDeductCurrencyRequest*>(_impl_.command_.deduct_currency_);
+}
+inline ::GmDeductCurrencyRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::mutable_deduct_currency()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::GmDeductCurrencyRequest* _msg = _internal_mutable_deduct_currency();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandRequest.deduct_currency)
+  return _msg;
+}
+
+// .GmBlockCurrencyRequest block_currency = 13;
+inline bool GmExecutePlayerCommandRequest::has_block_currency() const {
+  return command_case() == kBlockCurrency;
+}
+inline bool GmExecutePlayerCommandRequest::_internal_has_block_currency() const {
+  return command_case() == kBlockCurrency;
+}
+inline void GmExecutePlayerCommandRequest::set_has_block_currency() {
+  _impl_._oneof_case_[0] = kBlockCurrency;
+}
+inline ::GmBlockCurrencyRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::release_block_currency() {
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandRequest.block_currency)
+  if (command_case() == kBlockCurrency) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmBlockCurrencyRequest*>(_impl_.command_.block_currency_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.command_.block_currency_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::GmBlockCurrencyRequest& GmExecutePlayerCommandRequest::_internal_block_currency() const {
+  return command_case() == kBlockCurrency ? static_cast<const ::GmBlockCurrencyRequest&>(*reinterpret_cast<::GmBlockCurrencyRequest*>(_impl_.command_.block_currency_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GmBlockCurrencyRequest>(&::GmBlockCurrencyRequest_globals_);
+}
+inline const ::GmBlockCurrencyRequest& GmExecutePlayerCommandRequest::block_currency() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.block_currency)
+  return _internal_block_currency();
+}
+inline ::GmBlockCurrencyRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::unsafe_arena_release_block_currency() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:scene_node.GmExecutePlayerCommandRequest.block_currency)
+  if (command_case() == kBlockCurrency) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmBlockCurrencyRequest*>(_impl_.command_.block_currency_);
+    _impl_.command_.block_currency_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GmExecutePlayerCommandRequest::unsafe_arena_set_allocated_block_currency(
+    ::GmBlockCurrencyRequest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_command();
+  if (value) {
+    set_has_block_currency();
+    _impl_.command_.block_currency_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:scene_node.GmExecutePlayerCommandRequest.block_currency)
+}
+inline ::GmBlockCurrencyRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_internal_mutable_block_currency() {
+  if (command_case() != kBlockCurrency) {
+    clear_command();
+    set_has_block_currency();
+    _impl_.command_.block_currency_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::GmBlockCurrencyRequest>(GetArena()));
+  }
+  return reinterpret_cast<::GmBlockCurrencyRequest*>(_impl_.command_.block_currency_);
+}
+inline ::GmBlockCurrencyRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::mutable_block_currency()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::GmBlockCurrencyRequest* _msg = _internal_mutable_block_currency();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandRequest.block_currency)
+  return _msg;
+}
+
+// .GmUnblockCurrencyRequest unblock_currency = 14;
+inline bool GmExecutePlayerCommandRequest::has_unblock_currency() const {
+  return command_case() == kUnblockCurrency;
+}
+inline bool GmExecutePlayerCommandRequest::_internal_has_unblock_currency() const {
+  return command_case() == kUnblockCurrency;
+}
+inline void GmExecutePlayerCommandRequest::set_has_unblock_currency() {
+  _impl_._oneof_case_[0] = kUnblockCurrency;
+}
+inline ::GmUnblockCurrencyRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::release_unblock_currency() {
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandRequest.unblock_currency)
+  if (command_case() == kUnblockCurrency) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmUnblockCurrencyRequest*>(_impl_.command_.unblock_currency_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.command_.unblock_currency_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::GmUnblockCurrencyRequest& GmExecutePlayerCommandRequest::_internal_unblock_currency() const {
+  return command_case() == kUnblockCurrency ? static_cast<const ::GmUnblockCurrencyRequest&>(*reinterpret_cast<::GmUnblockCurrencyRequest*>(_impl_.command_.unblock_currency_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GmUnblockCurrencyRequest>(&::GmUnblockCurrencyRequest_globals_);
+}
+inline const ::GmUnblockCurrencyRequest& GmExecutePlayerCommandRequest::unblock_currency() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.unblock_currency)
+  return _internal_unblock_currency();
+}
+inline ::GmUnblockCurrencyRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::unsafe_arena_release_unblock_currency() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:scene_node.GmExecutePlayerCommandRequest.unblock_currency)
+  if (command_case() == kUnblockCurrency) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmUnblockCurrencyRequest*>(_impl_.command_.unblock_currency_);
+    _impl_.command_.unblock_currency_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GmExecutePlayerCommandRequest::unsafe_arena_set_allocated_unblock_currency(
+    ::GmUnblockCurrencyRequest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_command();
+  if (value) {
+    set_has_unblock_currency();
+    _impl_.command_.unblock_currency_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:scene_node.GmExecutePlayerCommandRequest.unblock_currency)
+}
+inline ::GmUnblockCurrencyRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_internal_mutable_unblock_currency() {
+  if (command_case() != kUnblockCurrency) {
+    clear_command();
+    set_has_unblock_currency();
+    _impl_.command_.unblock_currency_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::GmUnblockCurrencyRequest>(GetArena()));
+  }
+  return reinterpret_cast<::GmUnblockCurrencyRequest*>(_impl_.command_.unblock_currency_);
+}
+inline ::GmUnblockCurrencyRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::mutable_unblock_currency()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::GmUnblockCurrencyRequest* _msg = _internal_mutable_unblock_currency();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandRequest.unblock_currency)
+  return _msg;
+}
+
+// .GmGrantItemRequest grant_item = 15;
+inline bool GmExecutePlayerCommandRequest::has_grant_item() const {
+  return command_case() == kGrantItem;
+}
+inline bool GmExecutePlayerCommandRequest::_internal_has_grant_item() const {
+  return command_case() == kGrantItem;
+}
+inline void GmExecutePlayerCommandRequest::set_has_grant_item() {
+  _impl_._oneof_case_[0] = kGrantItem;
+}
+inline ::GmGrantItemRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::release_grant_item() {
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandRequest.grant_item)
+  if (command_case() == kGrantItem) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmGrantItemRequest*>(_impl_.command_.grant_item_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.command_.grant_item_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::GmGrantItemRequest& GmExecutePlayerCommandRequest::_internal_grant_item() const {
+  return command_case() == kGrantItem ? static_cast<const ::GmGrantItemRequest&>(*reinterpret_cast<::GmGrantItemRequest*>(_impl_.command_.grant_item_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GmGrantItemRequest>(&::GmGrantItemRequest_globals_);
+}
+inline const ::GmGrantItemRequest& GmExecutePlayerCommandRequest::grant_item() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.grant_item)
+  return _internal_grant_item();
+}
+inline ::GmGrantItemRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::unsafe_arena_release_grant_item() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:scene_node.GmExecutePlayerCommandRequest.grant_item)
+  if (command_case() == kGrantItem) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmGrantItemRequest*>(_impl_.command_.grant_item_);
+    _impl_.command_.grant_item_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GmExecutePlayerCommandRequest::unsafe_arena_set_allocated_grant_item(
+    ::GmGrantItemRequest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_command();
+  if (value) {
+    set_has_grant_item();
+    _impl_.command_.grant_item_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:scene_node.GmExecutePlayerCommandRequest.grant_item)
+}
+inline ::GmGrantItemRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_internal_mutable_grant_item() {
+  if (command_case() != kGrantItem) {
+    clear_command();
+    set_has_grant_item();
+    _impl_.command_.grant_item_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::GmGrantItemRequest>(GetArena()));
+  }
+  return reinterpret_cast<::GmGrantItemRequest*>(_impl_.command_.grant_item_);
+}
+inline ::GmGrantItemRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::mutable_grant_item()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::GmGrantItemRequest* _msg = _internal_mutable_grant_item();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandRequest.grant_item)
+  return _msg;
+}
+
+// .GmGrantPetRequest grant_pet = 16;
+inline bool GmExecutePlayerCommandRequest::has_grant_pet() const {
+  return command_case() == kGrantPet;
+}
+inline bool GmExecutePlayerCommandRequest::_internal_has_grant_pet() const {
+  return command_case() == kGrantPet;
+}
+inline void GmExecutePlayerCommandRequest::set_has_grant_pet() {
+  _impl_._oneof_case_[0] = kGrantPet;
+}
+inline ::GmGrantPetRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::release_grant_pet() {
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandRequest.grant_pet)
+  if (command_case() == kGrantPet) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmGrantPetRequest*>(_impl_.command_.grant_pet_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.command_.grant_pet_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::GmGrantPetRequest& GmExecutePlayerCommandRequest::_internal_grant_pet() const {
+  return command_case() == kGrantPet ? static_cast<const ::GmGrantPetRequest&>(*reinterpret_cast<::GmGrantPetRequest*>(_impl_.command_.grant_pet_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GmGrantPetRequest>(&::GmGrantPetRequest_globals_);
+}
+inline const ::GmGrantPetRequest& GmExecutePlayerCommandRequest::grant_pet() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.grant_pet)
+  return _internal_grant_pet();
+}
+inline ::GmGrantPetRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::unsafe_arena_release_grant_pet() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:scene_node.GmExecutePlayerCommandRequest.grant_pet)
+  if (command_case() == kGrantPet) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmGrantPetRequest*>(_impl_.command_.grant_pet_);
+    _impl_.command_.grant_pet_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GmExecutePlayerCommandRequest::unsafe_arena_set_allocated_grant_pet(
+    ::GmGrantPetRequest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_command();
+  if (value) {
+    set_has_grant_pet();
+    _impl_.command_.grant_pet_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:scene_node.GmExecutePlayerCommandRequest.grant_pet)
+}
+inline ::GmGrantPetRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_internal_mutable_grant_pet() {
+  if (command_case() != kGrantPet) {
+    clear_command();
+    set_has_grant_pet();
+    _impl_.command_.grant_pet_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::GmGrantPetRequest>(GetArena()));
+  }
+  return reinterpret_cast<::GmGrantPetRequest*>(_impl_.command_.grant_pet_);
+}
+inline ::GmGrantPetRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::mutable_grant_pet()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::GmGrantPetRequest* _msg = _internal_mutable_grant_pet();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandRequest.grant_pet)
+  return _msg;
+}
+
+// .GmSetPlayerLevelRequest set_level = 17;
+inline bool GmExecutePlayerCommandRequest::has_set_level() const {
+  return command_case() == kSetLevel;
+}
+inline bool GmExecutePlayerCommandRequest::_internal_has_set_level() const {
+  return command_case() == kSetLevel;
+}
+inline void GmExecutePlayerCommandRequest::set_has_set_level() {
+  _impl_._oneof_case_[0] = kSetLevel;
+}
+inline ::GmSetPlayerLevelRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::release_set_level() {
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandRequest.set_level)
+  if (command_case() == kSetLevel) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmSetPlayerLevelRequest*>(_impl_.command_.set_level_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.command_.set_level_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::GmSetPlayerLevelRequest& GmExecutePlayerCommandRequest::_internal_set_level() const {
+  return command_case() == kSetLevel ? static_cast<const ::GmSetPlayerLevelRequest&>(*reinterpret_cast<::GmSetPlayerLevelRequest*>(_impl_.command_.set_level_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GmSetPlayerLevelRequest>(&::GmSetPlayerLevelRequest_globals_);
+}
+inline const ::GmSetPlayerLevelRequest& GmExecutePlayerCommandRequest::set_level() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandRequest.set_level)
+  return _internal_set_level();
+}
+inline ::GmSetPlayerLevelRequest* PROTOBUF_NULLABLE GmExecutePlayerCommandRequest::unsafe_arena_release_set_level() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:scene_node.GmExecutePlayerCommandRequest.set_level)
+  if (command_case() == kSetLevel) {
+    clear_has_command();
+    auto* temp = reinterpret_cast<::GmSetPlayerLevelRequest*>(_impl_.command_.set_level_);
+    _impl_.command_.set_level_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GmExecutePlayerCommandRequest::unsafe_arena_set_allocated_set_level(
+    ::GmSetPlayerLevelRequest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_command();
+  if (value) {
+    set_has_set_level();
+    _impl_.command_.set_level_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:scene_node.GmExecutePlayerCommandRequest.set_level)
+}
+inline ::GmSetPlayerLevelRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::_internal_mutable_set_level() {
+  if (command_case() != kSetLevel) {
+    clear_command();
+    set_has_set_level();
+    _impl_.command_.set_level_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::GmSetPlayerLevelRequest>(GetArena()));
+  }
+  return reinterpret_cast<::GmSetPlayerLevelRequest*>(_impl_.command_.set_level_);
+}
+inline ::GmSetPlayerLevelRequest* PROTOBUF_NONNULL GmExecutePlayerCommandRequest::mutable_set_level()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::GmSetPlayerLevelRequest* _msg = _internal_mutable_set_level();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandRequest.set_level)
+  return _msg;
+}
+
+inline bool GmExecutePlayerCommandRequest::has_command() const {
+  return command_case() != COMMAND_NOT_SET;
+}
+inline void GmExecutePlayerCommandRequest::clear_has_command() {
+  _impl_._oneof_case_[0] = COMMAND_NOT_SET;
+}
+inline GmExecutePlayerCommandRequest::CommandCase GmExecutePlayerCommandRequest::command_case() const {
+  return GmExecutePlayerCommandRequest::CommandCase(_impl_._oneof_case_[0]);
+}
+// -------------------------------------------------------------------
+
+// GmExecutePlayerCommandResponse
+
+// uint64 command_id = 1;
+inline void GmExecutePlayerCommandResponse::clear_command_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.command_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t GmExecutePlayerCommandResponse::command_id() const {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandResponse.command_id)
+  return _internal_command_id();
+}
+inline void GmExecutePlayerCommandResponse::set_command_id(::uint64_t value) {
+  _internal_set_command_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandResponse.command_id)
+}
+inline ::uint64_t GmExecutePlayerCommandResponse::_internal_command_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.command_id_;
+}
+inline void GmExecutePlayerCommandResponse::_internal_set_command_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.command_id_ = value;
+}
+
+// .TipInfoMessage error_message = 2;
+inline bool GmExecutePlayerCommandResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& GmExecutePlayerCommandResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& GmExecutePlayerCommandResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandResponse.error_message)
+  return _internal_error_message();
+}
+inline void GmExecutePlayerCommandResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:scene_node.GmExecutePlayerCommandResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GmExecutePlayerCommandResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GmExecutePlayerCommandResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:scene_node.GmExecutePlayerCommandResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GmExecutePlayerCommandResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GmExecutePlayerCommandResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:scene_node.GmExecutePlayerCommandResponse.error_message)
+  return _msg;
+}
+inline void GmExecutePlayerCommandResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:scene_node.GmExecutePlayerCommandResponse.error_message)
+}
+
+// uint64 balance_after = 3;
+inline void GmExecutePlayerCommandResponse::clear_balance_after() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.balance_after_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t GmExecutePlayerCommandResponse::balance_after() const {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandResponse.balance_after)
+  return _internal_balance_after();
+}
+inline void GmExecutePlayerCommandResponse::set_balance_after(::uint64_t value) {
+  _internal_set_balance_after(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandResponse.balance_after)
+}
+inline ::uint64_t GmExecutePlayerCommandResponse::_internal_balance_after() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.balance_after_;
+}
+inline void GmExecutePlayerCommandResponse::_internal_set_balance_after(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.balance_after_ = value;
+}
+
+// uint64 pet_id = 4;
+inline void GmExecutePlayerCommandResponse::clear_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t GmExecutePlayerCommandResponse::pet_id() const {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandResponse.pet_id)
+  return _internal_pet_id();
+}
+inline void GmExecutePlayerCommandResponse::set_pet_id(::uint64_t value) {
+  _internal_set_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandResponse.pet_id)
+}
+inline ::uint64_t GmExecutePlayerCommandResponse::_internal_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_id_;
+}
+inline void GmExecutePlayerCommandResponse::_internal_set_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = value;
+}
+
+// bool executed = 5;
+inline void GmExecutePlayerCommandResponse::clear_executed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.executed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool GmExecutePlayerCommandResponse::executed() const {
+  // @@protoc_insertion_point(field_get:scene_node.GmExecutePlayerCommandResponse.executed)
+  return _internal_executed();
+}
+inline void GmExecutePlayerCommandResponse::set_executed(bool value) {
+  _internal_set_executed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:scene_node.GmExecutePlayerCommandResponse.executed)
+}
+inline bool GmExecutePlayerCommandResponse::_internal_executed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.executed_;
+}
+inline void GmExecutePlayerCommandResponse::_internal_set_executed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.executed_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // ReleasePlayerRequest

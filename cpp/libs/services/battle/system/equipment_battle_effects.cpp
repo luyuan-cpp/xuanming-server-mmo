@@ -17,26 +17,30 @@ bool Bounded(const google::protobuf::Map<uint32_t, uint32_t>& values, uint32_t k
     return true;
 }
 bool IsAilment(uint32_t state) { return state >= 1 && state <= 7; }
+const BattleArtifactState* ArtifactState(const BattleActorState& actor, uint64_t itemId) {
+    for (const auto& state : actor.artifact_states()) if (state.item_id() == itemId) return &state;
+    return nullptr;
+}
+BattleArtifactState* ArtifactState(BattleActorState& actor, uint64_t itemId) {
+    for (auto& state : *actor.mutable_artifact_states()) if (state.item_id() == itemId) return &state;
+    return nullptr;
+}
 }
 
 bool TurnBattleEngine::InitializeEquipment(BattleActorState& actor, const EquipmentEffects& effects) {
-    if (effects.physical_attack_bps() > 3200 || effects.magic_attack_bps() > 3200 ||
-        effects.max_health_bps() > 800 || effects.speed_bps() > 200 ||
-        effects.outgoing_heal_bps() > 3200 || effects.shield_capacity_bps() > 3200 ||
-        effects.physical_crit_bps() > 800 || effects.magic_crit_bps() > 800 ||
-        effects.physical_resist_bps() > 600 || effects.magic_resist_bps() > 600 ||
-        !Bounded(effects.ailment_hit_bps(), 7, 1600) || !Bounded(effects.ailment_resist_bps(), 7, 1600) ||
-        !Bounded(effects.mana_reduction_bps(), 12, 1200) || effects.artifacts_size() > 2) return false;
+    if (effects.physical_attack_bps() > equipbattle::MaximumSourceBps(1) || effects.magic_attack_bps() > equipbattle::MaximumSourceBps(2) ||
+        effects.max_health_bps() > equipbattle::MaximumSourceBps(3) || effects.speed_bps() > equipbattle::MaximumSourceBps(4) ||
+        effects.outgoing_heal_bps() > equipbattle::MaximumSourceBps(5) || effects.shield_capacity_bps() > equipbattle::MaximumSourceBps(6) ||
+        effects.physical_crit_bps() > equipbattle::MaximumSourceBps(7) || effects.magic_crit_bps() > equipbattle::MaximumSourceBps(8) ||
+        effects.physical_resist_bps() > equipbattle::MaximumSourceBps(9) || effects.magic_resist_bps() > equipbattle::MaximumSourceBps(10) ||
+        !Bounded(effects.ailment_hit_bps(), 7, equipbattle::MaximumSourceBps(11)) ||
+        !Bounded(effects.ailment_resist_bps(), 7, equipbattle::MaximumSourceBps(12)) ||
+        !Bounded(effects.mana_reduction_bps(), 12, equipbattle::MaximumSourceBps(13)) || effects.artifacts_size() > 2) return false;
     std::set<uint64_t> instances;
     for (const auto& source : effects.artifacts()) {
         if (source.item_id() == 0 || source.item_id() >> 63 || !instances.insert(source.item_id()).second ||
-            source.effect_id() < 1 || source.effect_id() > 8 || source.bonus_bps() == 0 ||
-            source.bonus_bps() > 10000 || source.cap_bps() > 10000 || source.health_threshold_bps() > 10000 ||
-            source.per_round_limit() > 1 || source.battle_limit() > 3 || source.active_rounds() > 2) return false;
-        if (source.effect_id() != 6 && source.per_round_limit() == 0) return false;
-        if ((source.effect_id() == 3 || source.effect_id() >= 6) && source.battle_limit() == 0) return false;
-        if (source.effect_id() == 6 && (source.cap_bps() == 0 || source.active_rounds() == 0)) return false;
-        if (source.effect_id() == 4 && source.health_threshold_bps() == 0) return false;
+            !equipbattle::ValidArtifactDefinition(source.effect_id(), source.bonus_bps(), source.cap_bps(),
+                source.per_round_limit(), source.battle_limit(), source.active_rounds(), source.health_threshold_bps())) return false;
     }
     *actor.mutable_equipment_effects() = effects;
     auto* sources = actor.mutable_equipment_effects()->mutable_artifacts();
@@ -45,17 +49,6 @@ bool TurnBattleEngine::InitializeEquipment(BattleActorState& actor, const Equipm
     actor.set_entry_max_health(actor.max_health());
     actor.set_entry_max_mana(actor.max_mana());
     return true;
-}
-
-uint32_t TurnBattleEngine::MainEquipmentAilment(const SkillTable& skill) const {
-    // effect[] 顺序就是技能效果判定顺序。仅技能自身的主障碍消费回响，子触发不冒充普通施法。
-    for (const auto id : skill.effect()) {
-        const auto* row = dataProvider->FindBuff(id);
-        if (row != nullptr && IsAilment(row->state_kind()) &&
-            (row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Control) ||
-             row->battle_op() == static_cast<uint32_t>(BattleEffectOp::PeriodicDamage))) return row->state_kind();
-    }
-    return 0;
 }
 
 uint32_t TurnBattleEngine::EquipmentManaCategory(const SkillTable& skill) const {
@@ -90,21 +83,25 @@ std::vector<int> TurnBattleEngine::AvailableArtifacts(const BattleActorState& ac
     std::vector<int> available;
     if (actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER || !IsActorActive(actor)) return available;
     const auto& sources = actor.equipment_effects().artifacts();
-    for (int i = 0; i < sources.size() && i < actor.artifact_states_size(); ++i) {
-        const auto& source = sources.Get(i); const auto& state = actor.artifact_states(i);
-        if (source.effect_id() != effect || (source.active_rounds() > 0 && roundIndex > source.active_rounds()) ||
-            (source.battle_limit() > 0 && state.used_count() >= source.battle_limit()) ||
-            (source.per_round_limit() > 0 && state.last_trigger_round() == roundIndex &&
-                state.round_trigger_count() >= source.per_round_limit())) continue;
+    for (int i = 0; i < sources.size(); ++i) {
+        const auto& source = sources.Get(i); const auto* state = ArtifactState(actor, source.item_id());
+        if (state == nullptr || source.effect_id() != effect || (source.active_rounds() > 0 && roundIndex > source.active_rounds()) ||
+            (source.battle_limit() > 0 && state->used_count() >= source.battle_limit()) ||
+            (source.per_round_limit() > 0 && state->last_trigger_round() == roundIndex &&
+                state->round_trigger_count() >= source.per_round_limit())) continue;
         available.push_back(i);
     }
+    std::sort(available.begin(), available.end(), [&sources](int left, int right) {
+        return sources.Get(left).item_id() < sources.Get(right).item_id();
+    });
     return available;
 }
 
 void TurnBattleEngine::UseArtifact(BattleActorState& actor, int index, uint64_t targetId,
                                     uint64_t value, TurnResultS2C& result) {
     const auto& source = actor.equipment_effects().artifacts(index);
-    auto* state = actor.mutable_artifact_states(index);
+    auto* state = ArtifactState(actor, source.item_id());
+    if (state == nullptr) return;
     state->set_used_count(state->used_count() + 1);
     state->set_round_trigger_count(state->last_trigger_round() == roundIndex ? state->round_trigger_count() + 1 : 1);
     state->set_last_trigger_round(roundIndex);
@@ -210,6 +207,7 @@ bool TurnBattleEngine::EquipmentControlRoll(BattleActorState& caster, BattleActo
     const auto* skill = dataProvider->FindSkill(context.skillId);
     const bool normal = context.origin == BattleDamageOrigin::Direct && context.primaryTargetId != 0;
     uint32_t primaryBuff = 0;
+    // 技能效果顺序显式确定唯一主障碍；同动作的次要或重复障碍不生成、消费回响。
     if (skill != nullptr) for (const auto id : skill->effect()) {
         const auto* candidate = dataProvider->FindBuff(id);
         if (candidate != nullptr && IsAilment(candidate->state_kind()) &&
@@ -229,10 +227,10 @@ bool TurnBattleEngine::EquipmentControlRoll(BattleActorState& caster, BattleActo
     }
     if (kind == 4 || kind == 5) resist += 10000 * ConfiguredModifier(target, BattleModifier::ControlResist);
     bool consumedEcho = false;
-    if (primary) for (int index = 0; index < caster.artifact_states_size(); ++index) {
-        auto* state = caster.mutable_artifact_states(index);
-        if (state->pending_round() != roundIndex || state->pending_ailment_kind() != kind) continue;
-        hit += caster.equipment_effects().artifacts(index).bonus_bps();
+    if (primary) for (const auto& source : caster.equipment_effects().artifacts()) {
+        auto* state = ArtifactState(caster, source.item_id());
+        if (source.effect_id() != 3 || state == nullptr || state->pending_round() != roundIndex || state->pending_ailment_kind() != kind) continue;
+        hit += source.bonus_bps();
         state->clear_pending_ailment_kind(); state->clear_pending_round(); consumedEcho = true;
     }
     if (normal && kind <= 6) for (const int index : AvailableArtifacts(target, 8)) {
@@ -246,8 +244,8 @@ bool TurnBattleEngine::EquipmentControlRoll(BattleActorState& caster, BattleActo
         auto* event = AppendEvent(result, BATTLE_EVENT_RESIST, caster.actor_id(), target.actor_id());
         event->set_buff_table_id(row.id());
         if (primary && !consumedEcho) for (const int index : AvailableArtifacts(caster, 3)) {
-            auto* state = caster.mutable_artifact_states(index);
-            if (state->pending_round() != 0) continue;
+            auto* state = ArtifactState(caster, caster.equipment_effects().artifacts(index).item_id());
+            if (state == nullptr || state->pending_round() != 0) continue;
             state->set_pending_ailment_kind(kind); state->set_pending_round(roundIndex + 1);
             UseArtifact(caster, index, caster.actor_id(), kind, result);
         }

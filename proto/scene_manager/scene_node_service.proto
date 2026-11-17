@@ -3,7 +3,12 @@ package scene_node;
 
 import "proto/common/asset/asset_op.proto";
 import "proto/common/base/empty.proto";
+import "proto/common/base/tip.proto";
 import "proto/scene/scene.proto";
+import "proto/scene/player_currency.proto";
+import "proto/scene/player_bag.proto";
+import "proto/scene/player_pet.proto";
+import "proto/scene/player_attribute.proto";
 
 option go_package = "scene_manager/scene_manager";
 
@@ -44,6 +49,43 @@ service SceneNodeGrpc {
   rpc AssetCredit(AssetOpRequest) returns (AssetOpResponse) {}
   // 交易库已持久保存托管快照后释放场景收据；幂等，不改变玩家资产与原始结局。
   rpc AssetAckReceipt(AssetOpRequest) returns (AssetOpResponse) {}
+  // 独立 GM 后台的固定命令入口，不接受服务名、方法名或任意序列化载荷。
+  // 仅 dev/test 且本节点仍持有该在线会话时执行；调用方不得重发结果未知的命令。
+  rpc GmExecutePlayerCommand(GmExecutePlayerCommandRequest) returns (GmExecutePlayerCommandResponse) {}
+}
+
+// auth 为 operator|Unix秒|nonce|小写HMAC-SHA256。沿用 GM canonical 六行格式，
+// method=/scene_node.SceneNodeGrpc/GmExecutePlayerCommand，node=目标十进制节点号，
+// reason 段固定为 "gm-player-command-v1\n" + SHA256(清空 auth 后确定性 protobuf) 小写 hex。
+// 密钥独立使用 MMORPG_GM_PLAYER_COMMAND_SECRET，不复用停机/描述实体的密钥。
+message GmExecutePlayerCommandRequest {
+  uint64 command_id = 1;
+  uint64 player_id = 2;
+  string operator = 3;
+  string reason = 4;
+  string auth = 5;
+  uint32 target_node_id = 6;
+  uint32 expected_session_id = 7;
+  uint64 expected_login_generation = 8;
+  uint64 issued_at_ms = 9;
+  oneof command {
+    GmAddCurrencyRequest add_currency = 11;
+    GmDeductCurrencyRequest deduct_currency = 12;
+    GmBlockCurrencyRequest block_currency = 13;
+    GmUnblockCurrencyRequest unblock_currency = 14;
+    GmGrantItemRequest grant_item = 15;
+    GmGrantPetRequest grant_pet = 16;
+    GmSetPlayerLevelRequest set_level = 17;
+  }
+}
+
+message GmExecutePlayerCommandResponse {
+  uint64 command_id = 1;
+  TipInfoMessage error_message = 2;
+  uint64 balance_after = 3;
+  uint64 pet_id = 4;
+  // 仅表示本次同步内存操作成功，不是已落盘或跨进程幂等的承诺。
+  bool executed = 5;
 }
 
 message ReleasePlayerRequest {

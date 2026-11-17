@@ -9,6 +9,23 @@
 #include "system/equipment_battle_rules.h"
 #include "system/combat_damage_rules.h"
 
+namespace turnbattle {
+class TurnBattleEngineEquipmentTestAccess {
+public:
+    static void ReverseStates(TurnBattleEngine& engine) {
+        for (auto& actor : engine.actors) {
+            auto* states = actor.mutable_artifact_states(); std::reverse(states->begin(), states->end());
+        }
+    }
+    static void RemoveState(TurnBattleEngine& engine, uint64_t actorId, uint64_t itemId) {
+        for (auto& actor : engine.actors) if (actor.actor_id() == actorId) {
+            for (int index = 0; index < actor.artifact_states_size(); ++index)
+                if (actor.artifact_states(index).item_id() == itemId) { actor.mutable_artifact_states()->DeleteSubrange(index, 1); return; }
+        }
+    }
+};
+}
+
 namespace {
 using turnbattle::TurnBattleEngine;
 using turnbattle::BattleEffectOp;
@@ -137,7 +154,7 @@ TEST_F(EquipmentV1BattleTest, PanelIsNotAppliedAgainAndTypedCriticalResistanceAr
 }
 TEST_F(EquipmentV1BattleTest, HealingHasItsOwnLayerAndOnlyPrimaryReceivesBothArtifacts) {
     Skill(901, BattleEffectOp::Heal, 2, 2); Learn(kSelf, 901);
-    Player(kSelf).mutable_base_attributes()->set_health(2500); Player(kAlly).mutable_base_attributes()->set_health(2500);
+    Player(kSelf).mutable_base_attributes()->set_health(2500); Player(kAlly).mutable_base_attributes()->set_health(3000);
     Player(kSelf).mutable_equipment_effects()->set_outgoing_heal_bps(3200);
     Player(kSelf).mutable_equipment_effects()->set_shield_capacity_bps(3200);
     Artifact(kSelf, 4, 41); Artifact(kSelf, 4, 42);
@@ -444,5 +461,51 @@ TEST_F(EquipmentV1BattleTest, PetSharedHealDoesNotInheritOwnersEquipmentOrArtifa
     EXPECT_EQ(EventSum(result, BATTLE_EVENT_HEAL, petActor, kSelf), 1000u);
     EXPECT_FALSE(Unit(result.state(), petActor).has_equipment_effects());
     EXPECT_EQ(Uses(result.state(), kSelf, 41), 0u); EXPECT_EQ(Uses(result.state(), kSelf, 42), 0u);
+}
+TEST_F(EquipmentV1BattleTest, ReorderedArtifactStatesPreservePerInstanceUseAndPendingCompensation) {
+    Skill(905, BattleEffectOp::Control); Learn(kSelf, 905);
+    data->AddBuff(9050).set_state_kind(1); data->AddBuff(9050).set_application_chance(.01);
+    Player(kSelf).mutable_base_attributes()->set_mana(9900); Artifact(kSelf, 3, 31); Artifact(kSelf, 7, 71);
+    auto ordered = Start(), reordered = Start(); turnbattle::TurnBattleEngineEquipmentTestAccess::ReverseStates(*reordered);
+    for (const auto& action : {Command(BATTLE_ACTION_DEFEND), Command(BATTLE_ACTION_SKILL, kEnemy, 905)}) {
+        const auto first = Round(*ordered, kSelf, action), second = Round(*reordered, kSelf, action);
+        ASSERT_EQ(first.events_size(), second.events_size());
+        for (int index = 0; index < first.events_size(); ++index)
+            EXPECT_EQ(first.events(index).SerializeAsString(), second.events(index).SerializeAsString());
+        EXPECT_EQ(Uses(first.state(), kSelf, 31), Uses(second.state(), kSelf, 31));
+        EXPECT_EQ(Uses(first.state(), kSelf, 71), Uses(second.state(), kSelf, 71));
+    }
+    const auto state = reordered->BuildStateSnapshot();
+    EXPECT_EQ(Uses(state, kSelf, 31), 1u); EXPECT_EQ(Uses(state, kSelf, 71), 1u);
+    for (const auto& artifact : Unit(state, kSelf).artifact_states())
+        EXPECT_EQ(artifact.pending_round(), artifact.item_id() == 31 ? 3u : 0u);
+}
+TEST_F(EquipmentV1BattleTest, MissingRuntimeArtifactStateIsRejectedWithoutReadPathCreation) {
+    Player(kSelf).mutable_base_attributes()->set_mana(9900); Artifact(kSelf, 7, 71); Artifact(kSelf, 7, 72);
+    auto engine = Start(); turnbattle::TurnBattleEngineEquipmentTestAccess::RemoveState(*engine, kSelf, 71);
+    const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_DEFEND));
+    EXPECT_EQ(Unit(result.state(), kSelf).artifact_states_size(), 1); EXPECT_EQ(Uses(result.state(), kSelf, 72), 1u);
+    EXPECT_EQ(EventSum(result, BATTLE_EVENT_MANA, kSelf, kSelf), 100u);
+    EXPECT_FALSE(std::any_of(result.events().begin(), result.events().end(), [](const auto& event) { return event.artifact_item_id() == 71; }));
+}
+TEST_F(EquipmentV1BattleTest, HitLimitedShieldDoesNotBecomeAnExtraCapacityBreakTarget) {
+    auto& skill = Skill(904, BattleEffectOp::Damage); skill.set_damage_type(combatdamage::kPhysicalDamage); Learn(kSelf, 904);
+    data->SetSkillDamage(904, 2000); Artifact(kSelf, 1, 11); Artifact(kSelf, 1, 12); Shield(kEnemy, 9101, 1000);
+    data->AddBuff(9101).set_hit_limit(2); Player(kEnemy).mutable_buffs(0)->set_remaining_hits(2);
+    auto engine = Start(); const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kEnemy, 904));
+    EXPECT_EQ(Capacity(result.state(), kEnemy, 9101), 400u);
+    EXPECT_EQ(Uses(result.state(), kSelf, 11), 0u); EXPECT_EQ(Uses(result.state(), kSelf, 12), 0u);
+}
+TEST_F(EquipmentV1BattleTest, LostOriginalPrimaryDoesNotTransferShieldBreakToFallbackTarget) {
+    auto& skill = Skill(904, BattleEffectOp::Damage); skill.set_damage_type(combatdamage::kPhysicalDamage); Learn(kAlly, 904);
+    data->SetSkillDamage(904, 2000); Player(kEnemy).mutable_base_attributes()->set_health(1);
+    Player(kAlly).mutable_base_attributes()->set_speed(500); Player(kSelf).set_physical_attack(1990);
+    Artifact(kSelf, 1, 11); Artifact(kSelf, 1, 12); Shield(kOtherEnemy, 9101, 1000);
+    auto engine = Start(); engine->SubmitAction(kSelf, Command(BATTLE_ACTION_ATTACK, kEnemy));
+    engine->SubmitAction(kAlly, Command(BATTLE_ACTION_SKILL, kEnemy, 904));
+    engine->SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND)); engine->SubmitAction(kOtherEnemy, Command(BATTLE_ACTION_DEFEND));
+    const auto result = engine->ResolveCurrentRound();
+    EXPECT_TRUE(Unit(result.state(), kEnemy).is_dead()); EXPECT_EQ(Capacity(result.state(), kOtherEnemy, 9101), 400u);
+    EXPECT_EQ(Uses(result.state(), kSelf, 11), 0u); EXPECT_EQ(Uses(result.state(), kSelf, 12), 0u);
 }
 } // namespace

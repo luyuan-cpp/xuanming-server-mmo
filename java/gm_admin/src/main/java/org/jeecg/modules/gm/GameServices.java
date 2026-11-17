@@ -3,6 +3,7 @@ package org.jeecg.modules.gm;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.DynamicMessage;
 import io.grpc.CallOptions;
@@ -22,10 +23,12 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /** 独立 GM 的受限游戏服务适配器；不直接访问游戏存储，不模拟玩家会话。 */
 @Service
+@Lazy(false)
 public final class GameServices {
     static final String DISPLAY = "data_service.DataService/BatchGetPlayerDisplay";
     static final String HOME = "data_service.DataService/GetPlayerHomeZone";
@@ -39,6 +42,7 @@ public final class GameServices {
     private final ManagedChannel mail;
     private final String mailSecret;
     private final long budgetMillis;
+    private final GamePlayerAdmin playerAdmin;
     private final List<ManagedChannel> channels = new ArrayList<>();
 
     @Autowired
@@ -47,12 +51,20 @@ public final class GameServices {
             @Value("${gm.game.locator-target:}") String locatorTarget,
             @Value("${gm.game.mail-target:}") String mailTarget,
             @Value("${gm.game.mail-admin-secret:}") String mailSecret,
-            @Value("${gm.game.plaintext:false}") boolean plaintext) {
-        this(GameProto.load(), mapper, dataTarget, locatorTarget, mailTarget, mailSecret, plaintext, 5000);
+            @Value("${gm.game.plaintext:false}") boolean plaintext,
+            @Value("${gm.game.scene-targets-json:}") String sceneTargetsJson,
+            @Value("${gm.game.scene-admin-secret:}") String sceneSecret) {
+        this(GameProto.load(), mapper, dataTarget, locatorTarget, mailTarget, mailSecret, plaintext, 5000,
+                sceneTargetsJson, sceneSecret);
     }
 
     GameServices(GameProto proto, ObjectMapper mapper, String dataTarget, String locatorTarget,
             String mailTarget, String mailSecret, boolean plaintext, long budgetMillis) {
+        this(proto, mapper, dataTarget, locatorTarget, mailTarget, mailSecret, plaintext, budgetMillis, "{}", "");
+    }
+
+    GameServices(GameProto proto, ObjectMapper mapper, String dataTarget, String locatorTarget,
+            String mailTarget, String mailSecret, boolean plaintext, long budgetMillis, String sceneTargetsJson, String sceneSecret) {
         this.proto = proto;
         this.mapper = mapper;
         this.mailSecret = mailSecret == null ? "" : mailSecret.strip();
@@ -62,11 +74,19 @@ public final class GameServices {
             data = channel(dataTarget, plaintext);
             locator = channel(locatorTarget, plaintext);
             mail = channel(mailTarget, plaintext);
+            playerAdmin = new GamePlayerAdmin(proto, mapper, locator, sceneTargetsJson, sceneSecret, budgetMillis,
+                    target -> channel(target, plaintext));
         } catch (RuntimeException error) {
             close();
             throw error;
         }
     }
+
+    public ArrayNode currencyTypes() { return proto.currencyTypes(); }
+
+    public boolean playerCommandsEnabled() { return playerAdmin.enabled(); }
+
+    public ObjectNode sendPlayerCommand(ObjectNode frozenRequest) { return playerAdmin.execute(frozenRequest); }
 
     private ManagedChannel channel(String target, boolean plaintext) {
         if (target == null || target.isBlank()) return null;

@@ -2432,258 +2432,6 @@ const ::_pbi::ClassData* AutoAllocateAttributePointsResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
-class AttributePanelInfo::_Internal {
- public:
-  using HasBits = decltype(::std::declval<AttributePanelInfo>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_._has_bits_);
-};
-
-constexpr AttributePanelInfo::ParseTableT_ AttributePanelInfo::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_._has_bits_),
-      0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
-      5,  // num_aux_entries
-      offsetof(ParseTableT_, aux_entries),
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::AttributePanelInfo>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // repeated .AttributePoolInfo pools = 1;
-      {::_pbi::TcParser::FastMtR1,
-       {10, 0, 0,
-        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.pools_)}},
-      // repeated .AttributeDimensionInfo dimensions = 2;
-      {::_pbi::TcParser::FastMtR1,
-       {18, 1, 1,
-        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.dimensions_)}},
-      // repeated .AttributeSchemeInfo schemes = 3;
-      {::_pbi::TcParser::FastMtR1,
-       {26, 2, 2,
-        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.schemes_)}},
-      // uint32 active_scheme_id = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AttributePanelInfo, _impl_.active_scheme_id_), 5>(),
-       {32, 5, 0,
-        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.active_scheme_id_)}},
-      // uint32 max_schemes = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AttributePanelInfo, _impl_.max_schemes_), 6>(),
-       {40, 6, 0,
-        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.max_schemes_)}},
-      // .DerivedAttributeInfo derived = 6;
-      {::_pbi::TcParser::FastMtS1,
-       {50, 4, 3,
-        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.derived_)}},
-      // uint32 level = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AttributePanelInfo, _impl_.level_), 9>(),
-       {56, 9, 0,
-        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.level_)}},
-      // uint64 switch_cooldown_until = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AttributePanelInfo, _impl_.switch_cooldown_until_), 7>(),
-       {64, 7, 0,
-        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.switch_cooldown_until_)}},
-      // uint64 create_scheme_cost_gold = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AttributePanelInfo, _impl_.create_scheme_cost_gold_), 8>(),
-       {72, 8, 0,
-        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.create_scheme_cost_gold_)}},
-      // repeated .CombatAttributeInfo combat = 10;
-      {::_pbi::TcParser::FastMtR1,
-       {82, 3, 4,
-        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.combat_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // repeated .AttributePoolInfo pools = 1;
-      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.pools_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // repeated .AttributeDimensionInfo dimensions = 2;
-      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.dimensions_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // repeated .AttributeSchemeInfo schemes = 3;
-      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.schemes_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-      // uint32 active_scheme_id = 4;
-      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.active_scheme_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 max_schemes = 5;
-      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.max_schemes_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // .DerivedAttributeInfo derived = 6;
-      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.derived_), _Internal::kHasBitsOffset + 4, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-      // uint32 level = 7;
-      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.level_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint64 switch_cooldown_until = 8;
-      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.switch_cooldown_until_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 create_scheme_cost_gold = 9;
-      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.create_scheme_cost_gold_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // repeated .CombatAttributeInfo combat = 10;
-      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.combat_), _Internal::kHasBitsOffset + 3, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-    }},
-    {{
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::AttributePoolInfo>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::AttributePoolInfo_globals_},
-        #endif
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::AttributeDimensionInfo>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::AttributeDimensionInfo_globals_},
-        #endif
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::AttributeSchemeInfo>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::AttributeSchemeInfo_globals_},
-        #endif
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::DerivedAttributeInfo>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::DerivedAttributeInfo_globals_},
-        #endif
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::CombatAttributeInfo>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::CombatAttributeInfo_globals_},
-        #endif
-    }},
-    {{
-    }},
-  };
-}
-
-
-inline constexpr AttributePanelInfo::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        pools_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::AttributePanelInfo,
-            PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.pools_)>()
-         }
-        ,
-        dimensions_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::AttributePanelInfo,
-            PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.dimensions_)>()
-         }
-        ,
-        schemes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::AttributePanelInfo,
-            PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.schemes_)>()
-         }
-        ,
-        combat_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::AttributePanelInfo,
-            PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.combat_)>()
-         }
-        ,
-        derived_{nullptr},
-        active_scheme_id_{0u},
-        max_schemes_{0u},
-        switch_cooldown_until_{::uint64_t{0u}},
-        create_scheme_cost_gold_{::uint64_t{0u}},
-        level_{0u} {}
-
-template <typename>
-constexpr AttributePanelInfo::AttributePanelInfo(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL AttributePanelInfo::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) AttributePanelInfo(arena);
-}
-constexpr auto AttributePanelInfo::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AttributePanelInfo), alignof(AttributePanelInfo));
-}
-constexpr auto AttributePanelInfo::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &AttributePanelInfo::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<AttributePanelInfo>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &AttributePanelInfo::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<AttributePanelInfo>(), &AttributePanelInfo::ByteSizeLong,
-              &AttributePanelInfo::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct AttributePanelInfoGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr AttributePanelInfoGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 AttributePanelInfo_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(AttributePanelInfo::InternalGenerateClassData_(
-            _default, &AttributePanelInfo_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<AttributePanelInfo>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~AttributePanelInfoGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) AttributePanelInfo _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<AttributePanelInfo>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(AttributePanelInfoGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AttributePanelInfoGlobalsTypeInternal AttributePanelInfo_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* AttributePanelInfo_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return AttributePanelInfo_globals_.GetClassData();
-#else
-  return AttributePanelInfo_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
 class AllocateAttributePointsRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<AllocateAttributePointsRequest>()._impl_._has_bits_);
@@ -2831,6 +2579,269 @@ const ::_pbi::ClassData* AllocateAttributePointsRequest_get_class_data() {
   return AllocateAttributePointsRequest_globals_.GetClassData();
 #else
   return AllocateAttributePointsRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AttributePanelInfo::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AttributePanelInfo>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_._has_bits_);
+};
+
+constexpr AttributePanelInfo::ParseTableT_ AttributePanelInfo::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_._has_bits_),
+      0, // no _extensions_
+      11, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294965248,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      11,  // num_field_entries
+      6,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::AttributePanelInfo>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // repeated .AttributePoolInfo pools = 1;
+      {::_pbi::TcParser::FastMtR1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.pools_)}},
+      // repeated .AttributeDimensionInfo dimensions = 2;
+      {::_pbi::TcParser::FastMtR1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.dimensions_)}},
+      // repeated .AttributeSchemeInfo schemes = 3;
+      {::_pbi::TcParser::FastMtR1,
+       {26, 2, 2,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.schemes_)}},
+      // uint32 active_scheme_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AttributePanelInfo, _impl_.active_scheme_id_), 6>(),
+       {32, 6, 0,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.active_scheme_id_)}},
+      // uint32 max_schemes = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AttributePanelInfo, _impl_.max_schemes_), 7>(),
+       {40, 7, 0,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.max_schemes_)}},
+      // .DerivedAttributeInfo derived = 6;
+      {::_pbi::TcParser::FastMtS1,
+       {50, 4, 3,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.derived_)}},
+      // uint32 level = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AttributePanelInfo, _impl_.level_), 10>(),
+       {56, 10, 0,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.level_)}},
+      // uint64 switch_cooldown_until = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AttributePanelInfo, _impl_.switch_cooldown_until_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.switch_cooldown_until_)}},
+      // uint64 create_scheme_cost_gold = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AttributePanelInfo, _impl_.create_scheme_cost_gold_), 9>(),
+       {72, 9, 0,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.create_scheme_cost_gold_)}},
+      // repeated .CombatAttributeInfo combat = 10;
+      {::_pbi::TcParser::FastMtR1,
+       {82, 3, 4,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.combat_)}},
+      // .EquipmentEffects equipment_effects = 11;
+      {::_pbi::TcParser::FastMtS1,
+       {90, 5, 5,
+        PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.equipment_effects_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated .AttributePoolInfo pools = 1;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.pools_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .AttributeDimensionInfo dimensions = 2;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.dimensions_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .AttributeSchemeInfo schemes = 3;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.schemes_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 active_scheme_id = 4;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.active_scheme_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 max_schemes = 5;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.max_schemes_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .DerivedAttributeInfo derived = 6;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.derived_), _Internal::kHasBitsOffset + 4, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 level = 7;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.level_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 switch_cooldown_until = 8;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.switch_cooldown_until_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 create_scheme_cost_gold = 9;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.create_scheme_cost_gold_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // repeated .CombatAttributeInfo combat = 10;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.combat_), _Internal::kHasBitsOffset + 3, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .EquipmentEffects equipment_effects = 11;
+      {PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_.equipment_effects_), _Internal::kHasBitsOffset + 5, 5, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::AttributePoolInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::AttributePoolInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::AttributeDimensionInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::AttributeDimensionInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::AttributeSchemeInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::AttributeSchemeInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::DerivedAttributeInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::DerivedAttributeInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::CombatAttributeInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::CombatAttributeInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::EquipmentEffects>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::EquipmentEffects_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr AttributePanelInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        pools_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::AttributePanelInfo,
+            PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.pools_)>()
+         }
+        ,
+        dimensions_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::AttributePanelInfo,
+            PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.dimensions_)>()
+         }
+        ,
+        schemes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::AttributePanelInfo,
+            PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.schemes_)>()
+         }
+        ,
+        combat_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::AttributePanelInfo,
+            PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.combat_)>()
+         }
+        ,
+        derived_{nullptr},
+        equipment_effects_{nullptr},
+        active_scheme_id_{0u},
+        max_schemes_{0u},
+        switch_cooldown_until_{::uint64_t{0u}},
+        create_scheme_cost_gold_{::uint64_t{0u}},
+        level_{0u} {}
+
+template <typename>
+constexpr AttributePanelInfo::AttributePanelInfo(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AttributePanelInfo::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AttributePanelInfo(arena);
+}
+constexpr auto AttributePanelInfo::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AttributePanelInfo), alignof(AttributePanelInfo));
+}
+constexpr auto AttributePanelInfo::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AttributePanelInfo::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AttributePanelInfo>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AttributePanelInfo::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AttributePanelInfo>(), &AttributePanelInfo::ByteSizeLong,
+              &AttributePanelInfo::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AttributePanelInfo, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[5],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AttributePanelInfoGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AttributePanelInfoGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AttributePanelInfo_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AttributePanelInfo::InternalGenerateClassData_(
+            _default, &AttributePanelInfo_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AttributePanelInfo>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AttributePanelInfoGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AttributePanelInfo _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AttributePanelInfo>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AttributePanelInfoGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AttributePanelInfoGlobalsTypeInternal AttributePanelInfo_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AttributePanelInfo_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AttributePanelInfo_globals_.GetClassData();
+#else
+  return AttributePanelInfo_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4197,7 +4208,7 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_._has_bits_),
-        13, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.pools_),
         PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.dimensions_),
         PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.schemes_),
@@ -4208,16 +4219,18 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.switch_cooldown_until_),
         PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.create_scheme_cost_gold_),
         PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.combat_),
+        PROTOBUF_FIELD_OFFSET(::AttributePanelInfo, _impl_.equipment_effects_),
         0,
         1,
         2,
-        5,
         6,
-        4,
-        9,
         7,
+        4,
+        10,
         8,
+        9,
         3,
+        5,
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetAttributePanelResponse, _impl_._has_bits_),
@@ -4351,25 +4364,25 @@ static const ::_pbi::MigrationSchema
         {47, sizeof(::DerivedAttributeInfo)},
         {66, sizeof(::CombatAttributeInfo)},
         {79, sizeof(::AttributePanelInfo)},
-        {102, sizeof(::GetAttributePanelRequest)},
-        {103, sizeof(::GetAttributePanelResponse)},
-        {110, sizeof(::AllocateAttributePointsRequest_AllocatedEntry_DoNotUse)},
-        {117, sizeof(::AllocateAttributePointsRequest)},
-        {124, sizeof(::AllocateAttributePointsResponse)},
-        {131, sizeof(::ResetAttributePointsRequest)},
-        {136, sizeof(::ResetAttributePointsResponse)},
-        {143, sizeof(::AutoAllocateAttributePointsRequest)},
-        {148, sizeof(::AutoAllocateAttributePointsResponse_SuggestedEntry_DoNotUse)},
-        {155, sizeof(::AutoAllocateAttributePointsResponse)},
-        {164, sizeof(::CreateAttributeSchemeRequest)},
-        {171, sizeof(::CreateAttributeSchemeResponse)},
-        {182, sizeof(::SwitchAttributeSchemeRequest)},
-        {187, sizeof(::SwitchAttributeSchemeResponse)},
-        {194, sizeof(::RenameAttributeSchemeRequest)},
-        {201, sizeof(::RenameAttributeSchemeResponse)},
-        {208, sizeof(::AttributePanelChangedS2C)},
-        {213, sizeof(::GmSetPlayerLevelRequest)},
-        {218, sizeof(::GmSetPlayerLevelResponse)},
+        {104, sizeof(::GetAttributePanelRequest)},
+        {105, sizeof(::GetAttributePanelResponse)},
+        {112, sizeof(::AllocateAttributePointsRequest_AllocatedEntry_DoNotUse)},
+        {119, sizeof(::AllocateAttributePointsRequest)},
+        {126, sizeof(::AllocateAttributePointsResponse)},
+        {133, sizeof(::ResetAttributePointsRequest)},
+        {138, sizeof(::ResetAttributePointsResponse)},
+        {145, sizeof(::AutoAllocateAttributePointsRequest)},
+        {150, sizeof(::AutoAllocateAttributePointsResponse_SuggestedEntry_DoNotUse)},
+        {157, sizeof(::AutoAllocateAttributePointsResponse)},
+        {166, sizeof(::CreateAttributeSchemeRequest)},
+        {173, sizeof(::CreateAttributeSchemeResponse)},
+        {184, sizeof(::SwitchAttributeSchemeRequest)},
+        {189, sizeof(::SwitchAttributeSchemeResponse)},
+        {196, sizeof(::RenameAttributeSchemeRequest)},
+        {203, sizeof(::RenameAttributeSchemeResponse)},
+        {210, sizeof(::AttributePanelChangedS2C)},
+        {215, sizeof(::GmSetPlayerLevelRequest)},
+        {220, sizeof(::GmSetPlayerLevelResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4404,110 +4417,114 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fattribute_2eproto[
     "\n\"proto/scene/player_attribute.proto\032\033pr"
     "oto/db/proto_option.proto\032\033proto/common/"
     "base/tip.proto\032\035proto/common/base/empty."
-    "proto\"\247\001\n\026AttributeDimensionInfo\022\024\n\014dime"
-    "nsion_id\030\001 \001(\r\022\017\n\007pool_id\030\002 \001(\r\022\014\n\004name\030"
-    "\003 \001(\t\022\014\n\004desc\030\004 \001(\t\022\021\n\tallocated\030\005 \001(\r\022\r"
-    "\n\005value\030\006 \001(\004\022\013\n\003cap\030\007 \001(\r\022\014\n\004sort\030\010 \001(\r"
-    "\022\r\n\005bonus\030\t \001(\r\"\254\001\n\021AttributePoolInfo\022\017\n"
-    "\007pool_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\r\n\005total\030\003 "
-    "\001(\r\022\021\n\tremaining\030\004 \001(\r\022\025\n\rdimension_cap\030"
-    "\005 \001(\r\022\020\n\010unlocked\030\006 \001(\010\022\024\n\014unlock_level\030"
-    "\007 \001(\r\022\027\n\017reset_cost_gold\030\010 \001(\004\"6\n\023Attrib"
-    "uteSchemeInfo\022\021\n\tscheme_id\030\001 \001(\r\022\014\n\004name"
-    "\030\002 \001(\t\"\251\001\n\024DerivedAttributeInfo\022\022\n\nmax_h"
-    "ealth\030\001 \001(\004\022\020\n\010max_mana\030\002 \001(\004\022\027\n\017physica"
-    "l_attack\030\003 \001(\004\022\024\n\014magic_attack\030\004 \001(\004\022\r\n\005"
-    "speed\030\005 \001(\004\022\017\n\007defense\030\006 \001(\004\022\016\n\006health\030\007"
-    " \001(\004\022\014\n\004mana\030\010 \001(\004\"d\n\023CombatAttributeInf"
-    "o\022\021\n\tcombat_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\r\n\005va"
-    "lue\030\003 \001(\004\022\017\n\007percent\030\004 \001(\010\022\014\n\004sort\030\005 \001(\r"
-    "\"\327\002\n\022AttributePanelInfo\022!\n\005pools\030\001 \003(\0132\022"
-    ".AttributePoolInfo\022+\n\ndimensions\030\002 \003(\0132\027"
-    ".AttributeDimensionInfo\022%\n\007schemes\030\003 \003(\013"
-    "2\024.AttributeSchemeInfo\022\030\n\020active_scheme_"
-    "id\030\004 \001(\r\022\023\n\013max_schemes\030\005 \001(\r\022&\n\007derived"
-    "\030\006 \001(\0132\025.DerivedAttributeInfo\022\r\n\005level\030\007"
-    " \001(\r\022\035\n\025switch_cooldown_until\030\010 \001(\004\022\037\n\027c"
-    "reate_scheme_cost_gold\030\t \001(\004\022$\n\006combat\030\n"
-    " \003(\0132\024.CombatAttributeInfo\"\032\n\030GetAttribu"
-    "tePanelRequest\"g\n\031GetAttributePanelRespo"
-    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
-    "age\022\"\n\005panel\030\002 \001(\0132\023.AttributePanelInfo\""
-    "\246\001\n\036AllocateAttributePointsRequest\022\017\n\007po"
-    "ol_id\030\001 \001(\r\022A\n\tallocated\030\002 \003(\0132..Allocat"
-    "eAttributePointsRequest.AllocatedEntry\0320"
-    "\n\016AllocatedEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002"
-    " \001(\r:\0028\001\"m\n\037AllocateAttributePointsRespo"
-    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
-    "age\022\"\n\005panel\030\002 \001(\0132\023.AttributePanelInfo\""
-    ".\n\033ResetAttributePointsRequest\022\017\n\007pool_i"
-    "d\030\001 \001(\r\"j\n\034ResetAttributePointsResponse\022"
-    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022"
-    "\"\n\005panel\030\002 \001(\0132\023.AttributePanelInfo\"5\n\"A"
-    "utoAllocateAttributePointsRequest\022\017\n\007poo"
-    "l_id\030\001 \001(\r\"\330\001\n#AutoAllocateAttributePoin"
-    "tsResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
-    "nfoMessage\022\017\n\007pool_id\030\002 \001(\r\022F\n\tsuggested"
-    "\030\003 \003(\01323.AutoAllocateAttributePointsResp"
-    "onse.SuggestedEntry\0320\n\016SuggestedEntry\022\013\n"
-    "\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"G\n\034CreateA"
-    "ttributeSchemeRequest\022\014\n\004name\030\001 \001(\t\022\031\n\021c"
-    "lient_request_id\030\002 \001(\004\"\220\001\n\035CreateAttribu"
-    "teSchemeResponse\022&\n\rerror_message\030\001 \001(\0132"
-    "\017.TipInfoMessage\022\"\n\005panel\030\002 \001(\0132\023.Attrib"
-    "utePanelInfo\022\021\n\tscheme_id\030\003 \001(\r\022\020\n\010repla"
-    "yed\030\004 \001(\010\"1\n\034SwitchAttributeSchemeReques"
-    "t\022\021\n\tscheme_id\030\001 \001(\r\"k\n\035SwitchAttributeS"
-    "chemeResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
+    "proto\032.proto/common/component/equipment_"
+    "effects.proto\"\247\001\n\026AttributeDimensionInfo"
+    "\022\024\n\014dimension_id\030\001 \001(\r\022\017\n\007pool_id\030\002 \001(\r\022"
+    "\014\n\004name\030\003 \001(\t\022\014\n\004desc\030\004 \001(\t\022\021\n\tallocated"
+    "\030\005 \001(\r\022\r\n\005value\030\006 \001(\004\022\013\n\003cap\030\007 \001(\r\022\014\n\004so"
+    "rt\030\010 \001(\r\022\r\n\005bonus\030\t \001(\r\"\254\001\n\021AttributePoo"
+    "lInfo\022\017\n\007pool_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\r\n\005"
+    "total\030\003 \001(\r\022\021\n\tremaining\030\004 \001(\r\022\025\n\rdimens"
+    "ion_cap\030\005 \001(\r\022\020\n\010unlocked\030\006 \001(\010\022\024\n\014unloc"
+    "k_level\030\007 \001(\r\022\027\n\017reset_cost_gold\030\010 \001(\004\"6"
+    "\n\023AttributeSchemeInfo\022\021\n\tscheme_id\030\001 \001(\r"
+    "\022\014\n\004name\030\002 \001(\t\"\251\001\n\024DerivedAttributeInfo\022"
+    "\022\n\nmax_health\030\001 \001(\004\022\020\n\010max_mana\030\002 \001(\004\022\027\n"
+    "\017physical_attack\030\003 \001(\004\022\024\n\014magic_attack\030\004"
+    " \001(\004\022\r\n\005speed\030\005 \001(\004\022\017\n\007defense\030\006 \001(\004\022\016\n\006"
+    "health\030\007 \001(\004\022\014\n\004mana\030\010 \001(\004\"d\n\023CombatAttr"
+    "ibuteInfo\022\021\n\tcombat_id\030\001 \001(\r\022\014\n\004name\030\002 \001"
+    "(\t\022\r\n\005value\030\003 \001(\004\022\017\n\007percent\030\004 \001(\010\022\014\n\004so"
+    "rt\030\005 \001(\r\"\205\003\n\022AttributePanelInfo\022!\n\005pools"
+    "\030\001 \003(\0132\022.AttributePoolInfo\022+\n\ndimensions"
+    "\030\002 \003(\0132\027.AttributeDimensionInfo\022%\n\007schem"
+    "es\030\003 \003(\0132\024.AttributeSchemeInfo\022\030\n\020active"
+    "_scheme_id\030\004 \001(\r\022\023\n\013max_schemes\030\005 \001(\r\022&\n"
+    "\007derived\030\006 \001(\0132\025.DerivedAttributeInfo\022\r\n"
+    "\005level\030\007 \001(\r\022\035\n\025switch_cooldown_until\030\010 "
+    "\001(\004\022\037\n\027create_scheme_cost_gold\030\t \001(\004\022$\n\006"
+    "combat\030\n \003(\0132\024.CombatAttributeInfo\022,\n\021eq"
+    "uipment_effects\030\013 \001(\0132\021.EquipmentEffects"
+    "\"\032\n\030GetAttributePanelRequest\"g\n\031GetAttri"
+    "butePanelResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022\"\n\005panel\030\002 \001(\0132\023.Attri"
+    "butePanelInfo\"\246\001\n\036AllocateAttributePoint"
+    "sRequest\022\017\n\007pool_id\030\001 \001(\r\022A\n\tallocated\030\002"
+    " \003(\0132..AllocateAttributePointsRequest.Al"
+    "locatedEntry\0320\n\016AllocatedEntry\022\013\n\003key\030\001 "
+    "\001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"m\n\037AllocateAttrib"
+    "utePointsResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022\"\n\005panel\030\002 \001(\0132\023.Attri"
+    "butePanelInfo\".\n\033ResetAttributePointsReq"
+    "uest\022\017\n\007pool_id\030\001 \001(\r\"j\n\034ResetAttributeP"
+    "ointsResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
     "ipInfoMessage\022\"\n\005panel\030\002 \001(\0132\023.Attribute"
-    "PanelInfo\"\?\n\034RenameAttributeSchemeReques"
-    "t\022\021\n\tscheme_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\"k\n\035Re"
-    "nameAttributeSchemeResponse\022&\n\rerror_mes"
+    "PanelInfo\"5\n\"AutoAllocateAttributePoints"
+    "Request\022\017\n\007pool_id\030\001 \001(\r\"\330\001\n#AutoAllocat"
+    "eAttributePointsResponse\022&\n\rerror_messag"
+    "e\030\001 \001(\0132\017.TipInfoMessage\022\017\n\007pool_id\030\002 \001("
+    "\r\022F\n\tsuggested\030\003 \003(\01323.AutoAllocateAttri"
+    "butePointsResponse.SuggestedEntry\0320\n\016Sug"
+    "gestedEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:"
+    "\0028\001\"G\n\034CreateAttributeSchemeRequest\022\014\n\004n"
+    "ame\030\001 \001(\t\022\031\n\021client_request_id\030\002 \001(\004\"\220\001\n"
+    "\035CreateAttributeSchemeResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022\"\n\005panel\030"
+    "\002 \001(\0132\023.AttributePanelInfo\022\021\n\tscheme_id\030"
+    "\003 \001(\r\022\020\n\010replayed\030\004 \001(\010\"1\n\034SwitchAttribu"
+    "teSchemeRequest\022\021\n\tscheme_id\030\001 \001(\r\"k\n\035Sw"
+    "itchAttributeSchemeResponse\022&\n\rerror_mes"
     "sage\030\001 \001(\0132\017.TipInfoMessage\022\"\n\005panel\030\002 \001"
-    "(\0132\023.AttributePanelInfo\">\n\030AttributePane"
-    "lChangedS2C\022\"\n\005panel\030\001 \001(\0132\023.AttributePa"
-    "nelInfo\"(\n\027GmSetPlayerLevelRequest\022\r\n\005le"
-    "vel\030\001 \001(\r\"f\n\030GmSetPlayerLevelResponse\022&\n"
-    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\"\n"
-    "\005panel\030\002 \001(\0132\023.AttributePanelInfo2\253\006\n\032Sc"
-    "eneAttributeClientPlayer\022J\n\021GetAttribute"
-    "Panel\022\031.GetAttributePanelRequest\032\032.GetAt"
-    "tributePanelResponse\022\\\n\027AllocateAttribut"
-    "ePoints\022\037.AllocateAttributePointsRequest"
-    "\032 .AllocateAttributePointsResponse\022S\n\024Re"
-    "setAttributePoints\022\034.ResetAttributePoint"
-    "sRequest\032\035.ResetAttributePointsResponse\022"
-    "h\n\033AutoAllocateAttributePoints\022#.AutoAll"
-    "ocateAttributePointsRequest\032$.AutoAlloca"
-    "teAttributePointsResponse\022V\n\025CreateAttri"
-    "buteScheme\022\035.CreateAttributeSchemeReques"
-    "t\032\036.CreateAttributeSchemeResponse\022V\n\025Swi"
-    "tchAttributeScheme\022\035.SwitchAttributeSche"
-    "meRequest\032\036.SwitchAttributeSchemeRespons"
-    "e\022V\n\025RenameAttributeScheme\022\035.RenameAttri"
-    "buteSchemeRequest\032\036.RenameAttributeSchem"
-    "eResponse\022G\n\033NotifyAttributePanelChanged"
-    "\022\031.AttributePanelChangedS2C\032\006.Empty\"\005\210\231\310"
-    "\001\002\022G\n\020GmSetPlayerLevel\022\030.GmSetPlayerLeve"
-    "lRequest\032\031.GmSetPlayerLevelResponse\032\n\200\250\303"
-    "\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "(\0132\023.AttributePanelInfo\"\?\n\034RenameAttribu"
+    "teSchemeRequest\022\021\n\tscheme_id\030\001 \001(\r\022\014\n\004na"
+    "me\030\002 \001(\t\"k\n\035RenameAttributeSchemeRespons"
+    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
+    "e\022\"\n\005panel\030\002 \001(\0132\023.AttributePanelInfo\">\n"
+    "\030AttributePanelChangedS2C\022\"\n\005panel\030\001 \001(\013"
+    "2\023.AttributePanelInfo\"(\n\027GmSetPlayerLeve"
+    "lRequest\022\r\n\005level\030\001 \001(\r\"f\n\030GmSetPlayerLe"
+    "velResponse\022&\n\rerror_message\030\001 \001(\0132\017.Tip"
+    "InfoMessage\022\"\n\005panel\030\002 \001(\0132\023.AttributePa"
+    "nelInfo2\253\006\n\032SceneAttributeClientPlayer\022J"
+    "\n\021GetAttributePanel\022\031.GetAttributePanelR"
+    "equest\032\032.GetAttributePanelResponse\022\\\n\027Al"
+    "locateAttributePoints\022\037.AllocateAttribut"
+    "ePointsRequest\032 .AllocateAttributePoints"
+    "Response\022S\n\024ResetAttributePoints\022\034.Reset"
+    "AttributePointsRequest\032\035.ResetAttributeP"
+    "ointsResponse\022h\n\033AutoAllocateAttributePo"
+    "ints\022#.AutoAllocateAttributePointsReques"
+    "t\032$.AutoAllocateAttributePointsResponse\022"
+    "V\n\025CreateAttributeScheme\022\035.CreateAttribu"
+    "teSchemeRequest\032\036.CreateAttributeSchemeR"
+    "esponse\022V\n\025SwitchAttributeScheme\022\035.Switc"
+    "hAttributeSchemeRequest\032\036.SwitchAttribut"
+    "eSchemeResponse\022V\n\025RenameAttributeScheme"
+    "\022\035.RenameAttributeSchemeRequest\032\036.Rename"
+    "AttributeSchemeResponse\022G\n\033NotifyAttribu"
+    "tePanelChanged\022\031.AttributePanelChangedS2"
+    "C\032\006.Empty\"\005\210\231\310\001\002\022G\n\020GmSetPlayerLevel\022\030.G"
+    "mSetPlayerLevelRequest\032\031.GmSetPlayerLeve"
+    "lResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006p"
+    "roto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto_deps[3] = {
+    descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto_deps[4] = {
         &::descriptor_table_proto_2fcommon_2fbase_2fempty_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
+        &::descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
 };
 static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto = {
     false,
     false,
-    3591,
+    3685,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fattribute_2eproto,
     "proto/scene/player_attribute.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto_deps,
-    3,
+    4,
     25,
     schemas,
     file_message_globals,
@@ -6250,6 +6267,11 @@ void CombatAttributeInfo::InternalSwap(CombatAttributeInfo* PROTOBUF_RESTRICT PR
 }
 // ===================================================================
 
+void AttributePanelInfo::clear_equipment_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.equipment_effects_ != nullptr) _impl_.equipment_effects_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
 AttributePanelInfo::AttributePanelInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, AttributePanelInfo_get_class_data()) {
@@ -6312,6 +6334,9 @@ AttributePanelInfo::AttributePanelInfo(
   _impl_.derived_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.derived_)
                 : nullptr;
+  _impl_.equipment_effects_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.equipment_effects_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, active_scheme_id_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -6368,6 +6393,7 @@ inline void AttributePanelInfo::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   delete this_._impl_.derived_;
+  delete this_._impl_.equipment_effects_;
   this_._impl_.~Impl_();
 }
 
@@ -6405,7 +6431,7 @@ PROTOBUF_NOINLINE void AttributePanelInfo::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.pools_.Clear();
     }
@@ -6422,16 +6448,20 @@ PROTOBUF_NOINLINE void AttributePanelInfo::Clear() {
       ABSL_DCHECK(_impl_.derived_ != nullptr);
       _impl_.derived_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(_impl_.equipment_effects_ != nullptr);
+      _impl_.equipment_effects_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
     ::memset(&_impl_.active_scheme_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.switch_cooldown_until_) -
-        reinterpret_cast<char*>(&_impl_.active_scheme_id_)) + sizeof(_impl_.switch_cooldown_until_));
+        reinterpret_cast<char*>(&_impl_.max_schemes_) -
+        reinterpret_cast<char*>(&_impl_.active_scheme_id_)) + sizeof(_impl_.max_schemes_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
-    ::memset(&_impl_.create_scheme_cost_gold_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.switch_cooldown_until_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.level_) -
-        reinterpret_cast<char*>(&_impl_.create_scheme_cost_gold_)) + sizeof(_impl_.level_));
+        reinterpret_cast<char*>(&_impl_.switch_cooldown_until_)) + sizeof(_impl_.level_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -6496,7 +6526,7 @@ PROTOBUF_NOINLINE void AttributePanelInfo::Clear() {
   }
 
   // uint32 active_scheme_id = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_active_scheme_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -6505,7 +6535,7 @@ PROTOBUF_NOINLINE void AttributePanelInfo::Clear() {
   }
 
   // uint32 max_schemes = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_max_schemes() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -6521,7 +6551,7 @@ PROTOBUF_NOINLINE void AttributePanelInfo::Clear() {
   }
 
   // uint32 level = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -6530,7 +6560,7 @@ PROTOBUF_NOINLINE void AttributePanelInfo::Clear() {
   }
 
   // uint64 switch_cooldown_until = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_switch_cooldown_until() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6539,7 +6569,7 @@ PROTOBUF_NOINLINE void AttributePanelInfo::Clear() {
   }
 
   // uint64 create_scheme_cost_gold = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_create_scheme_cost_gold() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6558,6 +6588,13 @@ PROTOBUF_NOINLINE void AttributePanelInfo::Clear() {
               10, repfield, repfield.GetCachedSize(),
               target, stream);
     }
+  }
+
+  // .EquipmentEffects equipment_effects = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        11, *this_._impl_.equipment_effects_, this_._impl_.equipment_effects_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -6619,38 +6656,43 @@ PROTOBUF_NOINLINE void AttributePanelInfo::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.derived_);
     }
-    // uint32 active_scheme_id = 4;
+    // .EquipmentEffects equipment_effects = 11;
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.equipment_effects_);
+    }
+    // uint32 active_scheme_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_active_scheme_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_active_scheme_id());
       }
     }
     // uint32 max_schemes = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_max_schemes() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_schemes());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint64 switch_cooldown_until = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_switch_cooldown_until() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_switch_cooldown_until());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     // uint64 create_scheme_cost_gold = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_create_scheme_cost_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_create_scheme_cost_gold());
       }
     }
     // uint32 level = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_level());
@@ -6705,28 +6747,36 @@ void AttributePanelInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(from._impl_.equipment_effects_ != nullptr);
+      if (_this->_impl_.equipment_effects_ == nullptr) {
+        _this->_impl_.equipment_effects_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.equipment_effects_);
+      } else {
+        _this->_impl_.equipment_effects_->MergeFrom(*from._impl_.equipment_effects_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_active_scheme_id() != 0) {
         _this->_impl_.active_scheme_id_ = from._impl_.active_scheme_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_max_schemes() != 0) {
         _this->_impl_.max_schemes_ = from._impl_.max_schemes_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_switch_cooldown_until() != 0) {
         _this->_impl_.switch_cooldown_until_ = from._impl_.switch_cooldown_until_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_create_scheme_cost_gold() != 0) {
         _this->_impl_.create_scheme_cost_gold_ = from._impl_.create_scheme_cost_gold_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_level() != 0) {
         _this->_impl_.level_ = from._impl_.level_;
       }

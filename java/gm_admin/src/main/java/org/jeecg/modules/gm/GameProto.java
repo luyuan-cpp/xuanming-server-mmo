@@ -2,6 +2,8 @@ package org.jeecg.modules.gm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
@@ -26,9 +28,11 @@ import javax.crypto.spec.SecretKeySpec;
 /** 只消费权威 proto 的构建产物，不维护另一份消息字段或 RPC 映射。 */
 public final class GameProto {
     private final Map<String, Descriptors.MethodDescriptor> methods;
+    private final Descriptors.EnumDescriptor currencies;
 
-    private GameProto(Map<String, Descriptors.MethodDescriptor> methods) {
+    private GameProto(Map<String, Descriptors.MethodDescriptor> methods, Descriptors.EnumDescriptor currencies) {
         this.methods = Map.copyOf(methods);
+        this.currencies = currencies;
     }
 
     public static GameProto load() {
@@ -53,7 +57,11 @@ public final class GameProto {
                     }
                 }
             }
-            return new GameProto(methods);
+            Descriptors.FileDescriptor currencyFile = files.get("proto/common/base/currency_type.proto");
+            if (currencyFile == null || currencyFile.findEnumTypeByName("CurrencyType") == null) {
+                throw new IllegalStateException("游戏协议缺少权威币种目录");
+            }
+            return new GameProto(methods, currencyFile.findEnumTypeByName("CurrencyType"));
         } catch (IOException | Descriptors.DescriptorValidationException error) {
             throw new IllegalStateException("无法读取游戏协议描述文件", error);
         }
@@ -104,6 +112,51 @@ public final class GameProto {
 
     public ObjectNode json(DynamicMessage message, ObjectMapper mapper) throws IOException {
         return (ObjectNode) mapper.readTree(JsonFormat.printer().print(message));
+    }
+
+    /** 币种编号只来自权威枚举，展示翻译由界面负责。 */
+    public ArrayNode currencyTypes() {
+        ArrayNode result = JsonNodeFactory.instance.arrayNode();
+        for (Descriptors.EnumValueDescriptor value : currencies.getValues()) {
+            result.addObject().put("id", value.getNumber()).put("label", value.getName());
+        }
+        return result;
+    }
+
+    boolean supportsCurrency(int value) { return currencies.findValueByNumber(value) != null; }
+
+    /** 与 Scene 既有 GM nonce 信封相同，但 reason 绑定清空 auth 后的完整请求摘要。 */
+    DynamicMessage signPlayerCommand(String method, DynamicMessage request, String secret, long timestampSeconds,
+            String nonce) {
+        Descriptors.Descriptor type = request.getDescriptorForType();
+        Descriptors.FieldDescriptor auth = type.findFieldByName("auth");
+        String actor = (String) request.getField(type.findFieldByName("operator"));
+        int nodeId = ((Number) request.getField(type.findFieldByName("target_node_id"))).intValue();
+        if (auth == null || auth.getJavaType() != Descriptors.FieldDescriptor.JavaType.STRING || nodeId == 0
+                || timestampSeconds <= 0 || actor.isBlank() || actor.getBytes(StandardCharsets.UTF_8).length > 64
+                || actor.contains("|") || actor.chars().anyMatch(Character::isISOControl)
+                || nonce == null || !nonce.matches("[A-Za-z0-9_-]{1,128}")
+                || secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalArgumentException("场景管理签名参数非法");
+        }
+        try {
+            DynamicMessage business = request.toBuilder().clearField(auth).build();
+            byte[] bytes = new byte[business.getSerializedSize()];
+            CodedOutputStream output = CodedOutputStream.newInstance(bytes);
+            output.useDeterministicSerialization();
+            business.writeTo(output);
+            output.checkNoSpaceLeft();
+            String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+            String reason = "gm-player-command-v1\n" + digest;
+            String canonical = "/" + method(method).getFullMethodName() + "\n" + Integer.toUnsignedString(nodeId)
+                    + "\n" + actor + "\n" + timestampSeconds + "\n" + nonce + "\n" + reason;
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            String signature = HexFormat.of().formatHex(mac.doFinal(canonical.getBytes(StandardCharsets.UTF_8)));
+            return business.toBuilder().setField(auth, actor + "|" + timestampSeconds + "|" + nonce + "|" + signature).build();
+        } catch (IOException | GeneralSecurityException error) {
+            throw new IllegalStateException("无法构造场景管理调用证明", error);
+        }
     }
 
     /** 与 go/shared/serviceauth 完全相同：每次重投只刷新证明，不改业务请求。 */

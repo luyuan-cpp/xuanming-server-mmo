@@ -37,6 +37,10 @@ class GmInstallationTest {
         db.update("INSERT INTO sys_role_index VALUES('demo_index','DEF_INDEX_ALL','/dashboard/analysis','dashboard/Analysis',1,0,'1','DEFAULT')");
         db.execute("CREATE TABLE sys_user(id VARCHAR(32), password VARCHAR(255))");
         db.update("INSERT INTO sys_user VALUES('admin','operator-changed-password')");
+        db.execute("CREATE TABLE sys_role(id VARCHAR(32),role_code VARCHAR(50))");
+        db.update("INSERT INTO sys_role VALUES('role_admin','admin')");
+        db.execute("CREATE TABLE sys_role_permission(id VARCHAR(32) PRIMARY KEY,role_id VARCHAR(32),permission_id VARCHAR(32))");
+        db.execute("CREATE TABLE sys_permission(id VARCHAR(32) PRIMARY KEY,parent_id VARCHAR(32),name VARCHAR(100),url VARCHAR(100),component VARCHAR(100),is_route INT,menu_type INT,perms VARCHAR(100),perms_type VARCHAR(2),sort_no INT,is_leaf INT,hidden INT,del_flag INT,status VARCHAR(2),internal_or_external INT)");
         installation = new GmInstallation(db, new DataSourceTransactionManager(data), "");
         var registry = new TestRegistry();
         installation.addInterceptors(registry);
@@ -55,6 +59,7 @@ class GmInstallationTest {
         assertEquals("gm/console/index", db.queryForObject("SELECT component FROM sys_role_index WHERE id='gm_default_index'", String.class));
         assertEquals("DEFAULT", db.queryForObject("SELECT relation_type FROM sys_role_index WHERE id='gm_default_index'", String.class));
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=2", Integer.class));
+        assertEquals(7, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
         db.update("UPDATE sys_role_index SET priority=5 WHERE id='gm_default_index'");
         start();
         assertEquals(5, db.queryForObject("SELECT priority FROM sys_role_index WHERE id='gm_default_index'", Integer.class));
@@ -67,6 +72,28 @@ class GmInstallationTest {
         assertEquals("1", db.queryForObject("SELECT status FROM sys_role_index WHERE id='demo_index'", String.class));
         assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=2", Integer.class));
         request("/sys/login", 503);
+    }
+
+    @Test void independentConsoleHidesDemoMenusButPreservesAccountControlsAndPermissions() throws Exception {
+        db.update("INSERT INTO sys_permission(id,url,menu_type,hidden,is_leaf) VALUES('gm_console','/gm/console',0,0,1)");
+        for (String route : List.of("/isystem", "/system/user", "/system/role", "/system/menu", "/dashboard/analysis", "/ai")) {
+            db.update("INSERT INTO sys_permission(id,url,menu_type,hidden) VALUES(?,?,1,0)", route, route);
+        }
+        db.update("INSERT INTO sys_permission(id,menu_type,hidden,perms) VALUES('native_button',2,0,'system:user:add')");
+        start();
+        assertEquals(0, db.queryForObject("SELECT is_leaf FROM sys_permission WHERE id='gm_console'", Integer.class));
+        for (String route : List.of("/isystem", "/system/user", "/system/role", "/system/menu")) {
+            assertEquals(0, db.queryForObject("SELECT hidden FROM sys_permission WHERE id=?", Integer.class, route));
+        }
+        for (String route : List.of("/dashboard/analysis", "/ai")) {
+            assertEquals(1, db.queryForObject("SELECT hidden FROM sys_permission WHERE id=?", Integer.class, route));
+        }
+        assertEquals("system:user:add", db.queryForObject("SELECT perms FROM sys_permission WHERE id='native_button'", String.class));
+        assertEquals(7, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
+        db.update("UPDATE sys_permission SET hidden=0 WHERE id='/ai'");
+        start();
+        assertEquals(0, db.queryForObject("SELECT hidden FROM sys_permission WHERE id='/ai'", Integer.class));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=4", Integer.class));
     }
 
     @Test void nativeLogoutReachesItsOwnTokenValidatorWithoutAnAuthenticatedSubject() throws Exception {

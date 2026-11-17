@@ -1422,6 +1422,8 @@ void TurnBattleEngine::ExecuteAttack(BattleActorState& actor, uint64_t targetId,
                                      TurnResultS2C& result) {
     // 目标失效(未指定/已死/已逃/是己方)→ 引擎 RNG 随机存活敌方(默认行动同路径)
     auto* target = FindActor(targetId);
+    const bool eligibleEquipmentPrimary = targetId == 0 ||
+        (target != nullptr && IsActorActive(*target) && target->team_index() != actor.team_index());
     if (target == nullptr || !IsActorActive(*target) || target->team_index() == actor.team_index()) {
         const auto enemyIds = CollectAliveEnemyIds(actor);
         if (enemyIds.empty()) {
@@ -1438,7 +1440,7 @@ void TurnBattleEngine::ExecuteAttack(BattleActorState& actor, uint64_t targetId,
 
     // 首段。没打中就谈不上"被普攻打中":连击(D3)、反击(D4)的前提都不成立,本次行动到此为止
     // (一期命中率 100%,永不进入此分支)
-    if (!ResolveBasicAttackHit(actor, *target, BATTLE_HIT_NORMAL, result)) {
+    if (!ResolveBasicAttackHit(actor, *target, BATTLE_HIT_NORMAL, result, eligibleEquipmentPrimary ? targetId : 0)) {
         return;
     }
 
@@ -1462,7 +1464,7 @@ void TurnBattleEngine::ExecuteAttack(BattleActorState& actor, uint64_t targetId,
 }
 
 bool TurnBattleEngine::ResolveBasicAttackHit(BattleActorState& attacker, BattleActorState& target,
-                                             eBattleHitKind hitKind, TurnResultS2C& result) {
+                                             eBattleHitKind hitKind, TurnResultS2C& result, uint64_t primaryTargetId) {
     // hit_kind 为 NORMAL(= 0,proto3 缺省值不上线)时,本段产出的事件字节与装备系统落地前逐位相同
 
     // 命中判定(D1):未命中只出 MISS,不出 DAMAGE(一期命中率 100%,永不进入此分支)
@@ -1496,7 +1498,7 @@ bool TurnBattleEngine::ResolveBasicAttackHit(BattleActorState& attacker, BattleA
         EffectContext context;
         context.critical = isCritical;
         context.origin = hitKind == BATTLE_HIT_COUNTER ? BattleDamageOrigin::Mirror : BattleDamageOrigin::Direct;
-        context.primaryTargetId = hitKind == BATTLE_HIT_NORMAL ? target.actor_id() : 0;
+        context.primaryTargetId = primaryTargetId;
         context.hitOrdinal = hitKind == BATTLE_HIT_COMBO ? currentHitIndex : 0;
         context.actualDamage = ResolveConfiguredDamage(attacker, target, finalDamage, combatdamage::kPhysicalDamage,
             context, result, hitKind);
@@ -1744,7 +1746,7 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
                                  skillRow.damage_type(), isCritical);
         if (HasConfiguredBuffs(actor) || HasConfiguredBuffs(target) || actor.has_equipment_effects() || target.has_equipment_effects()) {
             EffectContext context; context.skillId = action.skill_table_id(); context.critical = isCritical;
-            context.primaryTargetId = currentHitIndex == 0 ? target.actor_id() : 0;
+            context.primaryTargetId = action.target_id() != 0 ? action.target_id() : currentHitIndex == 0 ? target.actor_id() : 0;
             ResolveConfiguredDamage(actor, target, finalDamage, skillRow.damage_type(), context, result);
         } else {
         const uint64_t dealt = ApplyDamage(target, finalDamage);
@@ -1963,7 +1965,8 @@ void TurnBattleEngine::ExecuteClassSkill(BattleActorState& actor, const BattleAc
             continue;
         }
         currentHitIndex = static_cast<uint32_t>(hitIndex);
-        ApplyClassSkillToTarget(actor, skillRow, rank, baseDamage, *target, result);
+        ApplyClassSkillToTarget(actor, skillRow, rank, baseDamage, *target, result,
+            action.target_id() != 0 ? action.target_id() : targetIds.front());
     }
     currentHitIndex = 0;
 }
@@ -1986,7 +1989,7 @@ double TurnBattleEngine::ClassSkillHealAmount(const BattleActorState& actor, con
 
 void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
                                                double baseDamage, BattleActorState& target,
-                                               TurnResultS2C& result) {
+                                               TurnResultS2C& result, uint64_t primaryTargetId) {
     const bool hostile = skillRow.target_team() == static_cast<uint32_t>(classskill::TargetTeam::kEnemy);
     if (hostile) {
         // 命中判定只对敌方技能做(一期命中率 100%,不消耗随机数)
@@ -2009,7 +2012,7 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
                 classskill::DamageRankFactor(rank);
             if (HasConfiguredBuffs(actor) || HasConfiguredBuffs(target) || actor.has_equipment_effects() || target.has_equipment_effects()) {
                 EffectContext context; context.skillId = skillRow.id(); context.rank = rank; context.critical = isCritical;
-                context.primaryTargetId = currentHitIndex == 0 ? target.actor_id() : 0;
+                context.primaryTargetId = primaryTargetId;
                 ResolveConfiguredDamage(actor, target, finalDamage, skillRow.damage_type(), context, result);
             } else {
             const uint64_t dealt = ApplyDamage(target, finalDamage);

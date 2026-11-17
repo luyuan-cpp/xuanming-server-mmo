@@ -234,6 +234,8 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     const bool hostile = receiver.team_index() != caster.team_index();
     if (HasConfiguredState(receiver, BattleStateKind::Freeze) && hostile) return;
     double value = ConfiguredValue(caster, receiver, row, context);
+    // 持续治疗的覆盖强度与每跳快照采用同一完整施放方值，避免旧印因施法者加成不同被弱覆盖。
+    if (op == BattleEffectOp::ReviveMark) value *= std::max(0.0, 1 + EquipmentOutgoingHeal(caster));
     std::vector<int> shieldArtifacts;
     if (op == BattleEffectOp::Shield && row.hit_limit() == 0)
         value = EquipmentShield(caster, receiver, value, context, shieldArtifacts);
@@ -379,7 +381,7 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     added->set_tick_round(row.tick_on_apply() ? roundIndex : roundIndex + 1);
     added->set_extensions_used(extensions);
     if (op == BattleEffectOp::ReviveMark)
-        added->set_outgoing_heal_snapshot(value * std::max(0.0, 1 + EquipmentOutgoingHeal(caster)));
+        added->set_outgoing_heal_snapshot(value);
     if (op == BattleEffectOp::Modifier && row.modifier_stat() == static_cast<uint32_t>(BattleModifier::AdaptiveDamage))
         added->set_chosen_stat(receiver.physical_attack() >= receiver.magic_attack() ? 1 : 2);
     if (op == BattleEffectOp::TemporaryHealth) {
@@ -479,7 +481,8 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
         (void)priority;
         const int index = FindBuffIndex(target, id); if (index < 0) continue;
         const auto* row = dataProvider->FindBuff(target.buffs(index).buff_table_id());
-        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Shield)) originalShields.push_back(id);
+        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Shield) && row->hit_limit() == 0)
+            originalShields.push_back(id);
     }
     uint64_t shieldDamage = remaining;
     // 先完成分担，再进入本人吸收链；法宝破盾基数锁定在这两个阶段之间。
