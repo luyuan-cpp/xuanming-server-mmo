@@ -28,10 +28,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// 缺省值与上界。上界防止配置笔误把连接数或超时放大到失控。
+// 缺省值与上界。连接池上界须容纳 scene_manager 铸造通道的 130 条连接。
 const (
 	DefaultPoolSizePerNode    = 4
-	MaxPoolSizePerNode        = 128
+	MaxPoolSizePerNode        = 130
 	DefaultConnMaxIdleSeconds = 60
 	DefaultTimeoutMs          = 1000
 	MaxTimeoutMs              = 10000
