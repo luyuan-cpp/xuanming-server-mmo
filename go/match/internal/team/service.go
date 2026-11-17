@@ -198,18 +198,18 @@ func (s *Service) applyJoinTeam(ctx context.Context, caller uint64, in *teampb.A
 	if self.PlayerTeamId != 0 {
 		return s.snapshotResponse(ctx, caller, ErrMemberInTeam, 0, self)
 	}
-	other, err := s.readFree(ctx, methodApplyJoinTeam, target)
+	teamID, err := s.peerTeamID(ctx, methodApplyJoinTeam, caller, target)
 	if err != nil {
 		return s.snapshotResponse(ctx, caller, ErrInternal, 0, self)
 	}
-	if other.PlayerTeamId == 0 {
+	if teamID == 0 {
 		return s.snapshotResponse(ctx, caller, ErrNoTeam, 0, self)
 	}
 	zone, code := s.homeZoneOf(ctx, caller)
 	if code != 0 {
 		return s.snapshotResponse(ctx, caller, code, 0, self)
 	}
-	resp, _ := s.runMutate(ctx, caller, BindTarget(caller, other.PlayerTeamId), ApplyOp(caller, zone),
+	resp, _ := s.runMutate(ctx, caller, BindTarget(caller, teamID), ApplyOp(caller, zone),
 		mutateSpec{method: methodApplyJoinTeam})
 	return resp
 }
@@ -236,11 +236,11 @@ func (s *Service) inviteToTeam(ctx context.Context, caller uint64, in *teampb.In
 	if !playercontract.IsSessionOnline(session) {
 		return s.respond(ctx, caller, ErrTargetOffline, 0)
 	}
-	other, err := s.readFree(ctx, methodInviteToTeam, target)
+	teamID, err := s.peerTeamID(ctx, methodInviteToTeam, caller, target)
 	if err != nil {
 		return s.respond(ctx, caller, ErrInternal, 0)
 	}
-	if other.PlayerTeamId != 0 {
+	if teamID != 0 {
 		return s.respond(ctx, caller, ErrMemberInTeam, target)
 	}
 	zone, code := s.homeZoneOf(ctx, target)
@@ -542,6 +542,14 @@ func (s *Service) readFree(ctx context.Context, method string, playerId uint64) 
 		logx.WithContext(ctx).Errorf("[team] %s unlocked read failed player=%d: %v", method, playerId, err)
 	}
 	return snap, err
+}
+
+func (s *Service) peerTeamID(ctx context.Context, method string, caller, peer uint64) (uint64, error) {
+	teamID, err := s.store.sql.peerTeamID(ctx, caller, peer)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("[team] %s peer membership lookup failed peer=%d: %v", method, peer, err)
+	}
+	return teamID, err
 }
 
 // homeZoneOf 查单个玩家 home zone,返回 (zone, tip);tip≠0 时 zone 无意义(§D.3 fail-closed)。

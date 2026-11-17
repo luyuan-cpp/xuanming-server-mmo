@@ -147,6 +147,58 @@ func (f *nativeTeamFixture) inviteAndAccept(t *testing.T, leader, member, teamID
 	require.Equal(t, OutcomeCommitted, result.Outcome)
 }
 
+// 入口预检只能以调用者身份读对端队伍编号，不能读取对端私有名册；后续审批和接受仍走真实事务。
+func TestTeamTiDBApplyAndInvitePeerMembership(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	h := newServiceHarness(t)
+	h.addPlayers(1, 2, 3, 4)
+	h.svcCtx.Authority = f.owner
+	h.service.store = f.store
+	h.service.homeZones = &fakeHomeZones{zones: map[uint64]uint32{1: 1, 2: 1, 3: 1, 4: 1}}
+	f.create(t, 1, 101)
+
+	teamID, err := f.store.sql.peerTeamID(f.actor(t, 2), 2, 1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(101), teamID)
+	teamID, err = f.store.sql.peerTeamID(f.actor(t, 1), 1, 3)
+	require.NoError(t, err)
+	require.Zero(t, teamID)
+	_, err = f.store.sql.peerTeamID(f.actor(t, 2), 1, 3)
+	require.ErrorIs(t, err, authority.ErrOriginalPlayer, "不能冒用另一玩家的身份预查")
+
+	apply := &teampb.ApplyJoinTeamRequest{TargetPlayerId: 1, RequestId: uuid.NewString()}
+	response := h.service.ApplyJoinTeam(f.actor(t, 2), 2, apply)
+	require.Zero(t, response.GetErrorMessage().GetId())
+	replay := h.service.ApplyJoinTeam(f.actor(t, 2), 2, apply)
+	require.Zero(t, replay.GetErrorMessage().GetId(), "同一请求重放不得新增申请")
+	approved := h.service.HandleApplication(f.actor(t, 1), 1, &teampb.HandleApplicationRequest{
+		ApplicantId: 2, Approve: true, ExpectedTeamId: 101, RequestId: uuid.NewString(),
+	})
+	require.Zero(t, approved.GetErrorMessage().GetId())
+
+	invite := &teampb.InviteToTeamRequest{TargetPlayerId: 3, ExpectedTeamId: 101, RequestId: uuid.NewString()}
+	response = h.service.InviteToTeam(f.actor(t, 1), 1, invite)
+	require.Zero(t, response.GetErrorMessage().GetId())
+	accepted := h.service.RespondInvite(f.actor(t, 3), 3, &teampb.RespondInviteRequest{
+		TeamId: 101, Accept: true, RequestId: uuid.NewString(),
+	})
+	require.Zero(t, accepted.GetErrorMessage().GetId())
+	snap, err := f.store.ReadFree(f.actor(t, 1), 1)
+	require.NoError(t, err)
+	require.NotNil(t, FindMember(snap.Record, 2))
+	require.NotNil(t, FindMember(snap.Record, 3))
+
+	noTeam := h.service.ApplyJoinTeam(f.actor(t, 4), 4, &teampb.ApplyJoinTeamRequest{TargetPlayerId: 4 + 1, RequestId: uuid.NewString()})
+	require.Equal(t, ErrNoTeam, noTeam.GetErrorMessage().GetId())
+	alreadyJoined := h.service.InviteToTeam(f.actor(t, 1), 1, &teampb.InviteToTeamRequest{TargetPlayerId: 2, ExpectedTeamId: 101, RequestId: uuid.NewString()})
+	require.Equal(t, ErrMemberInTeam, alreadyJoined.GetErrorMessage().GetId())
+
+	// 变更角色归属后，旧会话不能再查询对端索引。
+	fencetest.Update(t, context.Background(), f.owner.DB, 4, "buyer", 8, 0)
+	_, err = f.store.sql.peerTeamID(f.actor(t, 4), 4, 1)
+	require.ErrorIs(t, err, authority.ErrOriginalPlayer)
+}
+
 func TestTeamTiDBOriginalUUIDReplayAfterLeaveAndRestart(t *testing.T) {
 	f := newNativeTeamFixture(t)
 	request := &teampb.CreateTeamRequest{RequestId: uuid.NewString()}
