@@ -73,6 +73,7 @@
     <ClInclude Include="player\system\equip_attribute_rules.h" />
     <ClInclude Include="player\system\mystery_merchant_rules.h" />
     <ClInclude Include="player\system\player_equip.h" />
+    <ClInclude Include="player\system\player_equipment_v1.h" />
     <ClInclude Include="player\system\player_mystery_merchant.h" />
     <ClInclude Include="player\system\player_level_rules.h" />
     <ClInclude Include="player\system\player_tip.h" />
@@ -157,6 +158,7 @@
     <ClCompile Include="player\system\player_attribute.cpp" />
     <ClCompile Include="player\system\player_pet.cpp" />
     <ClCompile Include="player\system\player_equip.cpp" />
+    <ClCompile Include="player\system\player_equipment_v1.cpp" />
     <ClCompile Include="player\system\player_mystery_merchant.cpp" />
     <ClCompile Include="player\system\player_tip.cpp" />
     <ClCompile Include="spatial\system\aoi.cpp" />

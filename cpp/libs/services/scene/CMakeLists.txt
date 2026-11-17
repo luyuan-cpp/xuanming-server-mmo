@@ -77,12 +77,14 @@ set(SOURCE_FILES
     combat/buff/system/buff_impl.cpp
     combat/buff/system/modifier_buff_impl.cpp
     combat/buff/system/motion_modifier_impl.cpp
+    combat/engagement/system/combat_engagement.cpp
     combat/skill/system/skill.cpp
     combat_state/system/combat_state.cpp
     core/config/config.cpp
     actor/actor_net_id.cpp
     core/system/id_generator.cpp
     core/system/redis.cpp
+    core/system/scene_task_scope.cpp
     frame/manager/frame_time.cpp
     generated/attribute/actorbaseattributess2c_attribute_sync.cpp
     generated/attribute/attributedelta10framess2c_attribute_sync.cpp
@@ -99,28 +101,35 @@ set(SOURCE_FILES
     player/system/player_inbox_registry.cpp
     player/system/gm_sanction_inbox_executor.cpp
     player/system/player_inbox_system.cpp
+    player/system/player_mail_outbox.cpp
     player/system/player_store_client.cpp
     player/system/player_store_projection.cpp
     player/system/player_database_loader.cpp
-    player/system/player_database_1_loader.cpp
     battle/system/player_battle.cpp
+    battle/system/battle_terminal_query.cpp
     player/system/player_lifecycle.cpp
     player/system/player_ownership_metrics.cpp
     player/system/player_save_metrics.cpp
+    player/system/currency_metrics.cpp
     player/system/role_admission_system.cpp
     player/system/player_scene.cpp
     player/system/player_team.cpp
     player/system/player_team_aoi.cpp
+    player/system/team_follow_formation.cpp
+    player/system/team_follow_system.cpp
+    player/system/afk_hosting.cpp
     player/system/player_landing.cpp
     player/system/player_skill.cpp
     player/system/player_attribute.cpp
     player/system/player_pet.cpp
     player/system/player_equip.cpp
+    player/system/player_equipment_v1.cpp
     player/system/player_mystery_merchant.cpp
     player/system/player_tip.cpp
     player/system/stress_test_probe.cpp
     player/system/bag_marshal.cpp
     spatial/system/aoi.cpp
+    spatial/system/aoi_load.cpp
     spatial/system/grid.cpp
     spatial/system/interest.cpp
     spatial/system/movement.cpp
@@ -130,6 +139,7 @@ set(SOURCE_FILES
     spatial/system/scene_spawn.cpp
     spatial/system/view.cpp
     world/scene_lifecycle.cpp
+    world/scene_ownership_reconciler.cpp
     world/world.cpp
     player/system/player_feature_snapshot.cpp
     player/system/player_mission.cpp

@@ -305,6 +305,9 @@ uint32_t Availability(entt::entity player,const PreparedCraft& prepared) {
     const auto verdict = BagService::CheckRemovable(player,inventory,{{prepared.materialId,prepared.materialCount}});
     if (verdict == BagService::RemovalVerdict::kInsufficient) return kEquipEnhanceMaterialNotEnough;
     if (verdict != BagService::RemovalVerdict::kEnough) return kFeatureUnavailable;
+    if (prepared.original.item_id() == 0)
+        return BagService::CheckInventoryExchangeSpace(player,{{prepared.materialId,prepared.materialCount}},
+                                                      {{prepared.result.config_id(),1}});
     return kSuccess;
 }
 void FillMaterial(entt::entity player,const PreparedCraft& prepared,EquipmentCraftMaterial& cost) {

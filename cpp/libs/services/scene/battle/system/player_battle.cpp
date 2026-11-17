@@ -3189,4 +3189,9 @@ void PlayerBattleSystem::StopReaper()
 {
 	if (!gReaperActive || gReaperLoop == nullptr)
 	{
-	
+		return;
+	}
+	gReaperLoop->cancel(gReaperTimerId);
+	gReaperActive = false;
+	LOG_INFO << "[PlayerBattle] Battle freeze reaper stopped";
+}

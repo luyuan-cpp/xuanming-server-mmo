@@ -525,6 +525,32 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     return kSuccess;
 }
 
+uint32_t BagService::CheckInventoryExchangeSpace(entt::entity playerEntity, const ItemCountMap& consumed,
+                                               const ItemCountMap& gained)
+{
+    if (!tlsEcs.actorRegistry.valid(playerEntity)) return kInvalidParameter;
+    const auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
+    if (bags == nullptr) return kInvalidParameter;
+    const auto& inventory = bags->bags[kInventory];
+    if (!inventory.IsLayerConsistent()) return kInvalidParameter;
+    if (CheckRemovable(playerEntity, inventory, consumed) != RemovalVerdict::kEnough) return kBagInsufficientItems;
+    for (const auto& [config,count] : gained) {
+        if (config == 0 || count == 0) return kInvalidParameter;
+        if (GainBlockService::IsItemGainBlocked(playerEntity,config)) return kAssetBlocked;
+    }
+    Bag candidate;
+    candidate.store_ = inventory.store_;
+    candidate.layout_ = inventory.layout_->Clone();
+    if (candidate.layout_ == nullptr) return kInvalidParameter;
+    candidate.admission_ = std::make_unique<BorrowedAdmission>(inventory.Admission());
+    candidate.profileId_ = inventory.profileId_; candidate.playerGuid = inventory.playerGuid;
+    if (!consumed.empty()) {
+        const auto error = candidate.RemoveItems(consumed);
+        if (error != kSuccess) return error;
+    }
+    return gained.empty() ? uint32_t{kSuccess} : candidate.CheckSpaceFor(gained);
+}
+
 uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const ItemCountMap& consumed,
     const std::vector<InitItemParam>& gained, const std::vector<InstanceReplacement>& replacements,
     uint64_t correlationId, const std::string& extra, std::vector<GuidVector>& written,

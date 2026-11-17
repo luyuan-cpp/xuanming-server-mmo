@@ -128,6 +128,9 @@ public:
         ItemComp expected;
         ItemComp replacement;
     };
+    // 纯预览：在副本上模拟严格扣料后检查新增空间，不发号、不初始化、不写审计。
+    static uint32_t CheckInventoryExchangeSpace(entt::entity playerEntity, const ItemCountMap& consumed,
+                                                const ItemCountMap& gained);
     // 同步严格兑换：材料必须扣足，新增只进人物背包，满包不转临时格。
     // 实例修改只允许人物包/装备包内同身份、同模板、同数量的内容替换，不改变布局。
     // 全部操作先在候选上完成并复核同源；beforeCommit可原子发布预构造的外部账本，

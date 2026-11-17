@@ -1919,4 +1919,6 @@ bool PlayerEquipSystem::IsGem(uint32_t configId) {
 // 仅供单测
 // ---------------------------------------------------------------------------
 
-void PlayerEquipSystem::SetRandomSourceForTest(std::f
+void PlayerEquipSystem::SetRandomSourceForTest(std::function<uint64_t(uint64_t)> rand) {
+	RandomSourceForTestSlot() = std::move(rand);
+}

@@ -318,4 +318,67 @@ TEST_F(EquipmentV1BattleTest, EquipmentStateIsDeterministicAndRemovedFromClientS
     EXPECT_EQ(Unit(visible, kSelf).entry_max_health(), 0u); EXPECT_EQ(Unit(visible, kSelf).entry_max_mana(), 0u);
     EXPECT_EQ(Unit(first->BuildStateSnapshot(), kSelf).artifact_states_size(), 2);
 }
+TEST_F(EquipmentV1BattleTest, AllSevenAilmentsReadOnlyMatchingHitAndResistanceWithoutSecondRoll) {
+    request.set_seed(1); // 首个确定性概率值约0.134，处于10%与26%之间。
+    for (uint32_t kind = 1; kind <= 7; ++kind) {
+        for (const bool matchingResist : {false, true}) {
+            SCOPED_TRACE(std::to_string(kind) + "/" + std::to_string(matchingResist));
+            Player(kSelf).clear_skill_table_ids(); Player(kSelf).clear_skill_ranks();
+            Skill(905, kind == 7 ? BattleEffectOp::PeriodicDamage : BattleEffectOp::Control); Learn(kSelf, 905);
+            auto& control = data->AddBuff(9050); control.set_state_kind(kind); control.set_application_chance(.1);
+            control.set_duration_rounds(2); control.set_tick_count(2);
+            Player(kSelf).clear_equipment_effects(); Player(kEnemy).clear_equipment_effects();
+            (*Player(kSelf).mutable_equipment_effects()->mutable_ailment_hit_bps())[kind] = 1600;
+            (*Player(kEnemy).mutable_equipment_effects()->mutable_ailment_resist_bps())[matchingResist ? kind : kind % 7 + 1] = 1600;
+            auto engine = Start(); const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kEnemy, 905));
+            const auto& target = Unit(result.state(), kEnemy);
+            const bool applied = std::any_of(target.buffs().begin(), target.buffs().end(), [](const auto& entry) { return entry.buff_table_id() == 9050; });
+            EXPECT_EQ(applied, !matchingResist);
+        }
+    }
+}
+TEST_F(EquipmentV1BattleTest, EveryManaCategorySelectsExactlyOneDiscount) {
+    for (uint32_t category = 1; category <= 12; ++category) {
+        SCOPED_TRACE(category); Player(kSelf).clear_skill_table_ids(); Player(kSelf).clear_skill_ranks();
+        const auto op = category <= 2 ? BattleEffectOp::Damage : category == 3 ? BattleEffectOp::Heal :
+            category == 4 ? BattleEffectOp::Shield : category <= 10 ? BattleEffectOp::Control :
+            category == 11 ? BattleEffectOp::PeriodicDamage : BattleEffectOp::Modifier;
+        auto& skill = Skill(907, op, category == 3 || category == 4 || category == 12 ? 2 : 1);
+        skill.set_damage_type(category == 1 ? combatdamage::kPhysicalDamage : combatdamage::kMagicDamage);
+        auto& buff = data->AddBuff(9070); if (category >= 5 && category <= 11) { buff.set_state_kind(category - 4); buff.set_application_chance(.5); }
+        if (category == 12) { buff.set_modifier_stat(static_cast<uint32_t>(BattleModifier::Speed)); buff.set_ratio(.1); }
+        data->SetSkillDamage(907, 10); Learn(kSelf, 907); Player(kSelf).clear_equipment_effects();
+        for (uint32_t other = 1; other <= 12; ++other)
+            (*Player(kSelf).mutable_equipment_effects()->mutable_mana_reduction_bps())[other] = other == category ? 300 : 1200;
+        auto engine = Start(); const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, skill.target_team() == 2 ? kAlly : kEnemy, 907));
+        EXPECT_EQ(EventSum(result, BATTLE_EVENT_MANA, kSelf, kSelf), 970u);
+    }
+}
+TEST_F(EquipmentV1BattleTest, NormalAttackRoutesThroughHeartProtectionWithoutAnyConfiguredBuff) {
+    Player(kSelf).set_physical_attack(1990); Artifact(kEnemy, 6, 61); Artifact(kEnemy, 6, 62);
+    auto engine = Start(); const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_ATTACK, kEnemy));
+    EXPECT_EQ(EventSum(result, BATTLE_EVENT_DAMAGE, kSelf, kEnemy), 360u);
+    EXPECT_EQ(Uses(result.state(), kEnemy, 61), 1u); EXPECT_EQ(Uses(result.state(), kEnemy, 62), 1u);
+}
+TEST_F(EquipmentV1BattleTest, NormalAttackCanBreakShieldsButCounterCannotTriggerAttackArtifacts) {
+    Player(kSelf).set_physical_attack(1990); Player(kEnemy).set_physical_attack(1990);
+    Player(kEnemy).mutable_combat()->set_counter_rate(100);
+    Artifact(kSelf, 1, 11); Artifact(kSelf, 1, 12); Artifact(kEnemy, 1, 21); Artifact(kEnemy, 1, 22);
+    Shield(kSelf, 9101, 1000); Shield(kEnemy, 9102, 100);
+    auto engine = Start(); const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_ATTACK, kEnemy));
+    // 普攻首段打空100容量盾，无剩余可破，不耗次数；反击只做正常盾吸收。
+    EXPECT_EQ(Uses(result.state(), kSelf, 11), 0u); EXPECT_EQ(Uses(result.state(), kSelf, 12), 0u);
+    EXPECT_EQ(Uses(result.state(), kEnemy, 21), 0u); EXPECT_EQ(Uses(result.state(), kEnemy, 22), 0u);
+    EXPECT_EQ(Capacity(result.state(), kSelf, 9101), 400u);
+}
+TEST_F(EquipmentV1BattleTest, LaterDamageSegmentCannotClaimMissedFirstSegmentShieldBreak) {
+    auto& skill = Skill(904, BattleEffectOp::Damage); skill.set_damage_type(combatdamage::kPhysicalDamage); Learn(kSelf, 904);
+    skill.add_effect(9041); data->AddBuff(9041).set_battle_op(static_cast<uint32_t>(BattleEffectOp::Damage));
+    data->SetSkillDamage(904, 2000); Artifact(kSelf, 1, 11); Artifact(kSelf, 1, 12);
+    Shield(kEnemy, 9101, 600); Shield(kEnemy, 9102, 1000, 30);
+    // 第一段只剩第二层，按同一冻结序列削240；第二段不得再次多削。
+    auto engine = Start(); const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kEnemy, 904));
+    EXPECT_EQ(Capacity(result.state(), kEnemy, 9102), 160u);
+    EXPECT_EQ(Uses(result.state(), kSelf, 11), 1u); EXPECT_EQ(Uses(result.state(), kSelf, 12), 1u);
+}
 } // namespace

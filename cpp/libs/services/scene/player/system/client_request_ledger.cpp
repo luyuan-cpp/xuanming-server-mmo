@@ -229,4 +229,11 @@ void Remember(entt::entity player, uint64_t key, ClientRequestKind kind, std::st
 				  << " player_id=" << tlsEcs.GetPlayerId(player) << " client_request_id=" << key;
 		return;
 	}
-	if (!client_request_ledger::Remember(*ledger, key, kind, std::move(fingerp
+	if (!client_request_ledger::Remember(*ledger, key, kind, std::move(fingerprint), result))
+	{
+		// 只有接入点没先 Check 就执行才会走到这里:说明那个接入点的顺序写错了。
+		LOG_ERROR << "[ClientRequest] Remember refused, key is already in the ledger: kind=" << ClientRequestKindName(kind)
+				  << " player_id=" << tlsEcs.GetPlayerId(player) << " client_request_id=" << key;
+	}
+}
+} // namespace client_request_dedup
