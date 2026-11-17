@@ -402,3 +402,6 @@
 401=TradeAdminResolveManualContract
 402=ScenePetClientPlayerGetPetShop
 403=ScenePetClientPlayerBuyPet
+404=SceneBagClientPlayerGetEquipmentCraftRules
+405=SceneBagClientPlayerPreviewEquipmentCraft
+406=SceneBagClientPlayerCommitEquipmentCraft

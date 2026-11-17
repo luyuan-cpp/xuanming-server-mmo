@@ -443,6 +443,9 @@ void FillCombatPanel(entt::entity player, AttributePanelInfo& panel) {
 
 	const auto* derived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(player);
 	const auto* baseAttrs = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player);
+	EquipmentEffects equipmentEffects;
+	PlayerEquipmentV1System::CollectEffects(player, equipmentEffects);
+	*panel.mutable_equipment_effects() = equipmentEffects;
 
 	std::vector<Line> lines;
 	lines.reserve(static_cast<std::size_t>(equiprules::CombatStat::kCount));
@@ -457,6 +460,13 @@ void FillCombatPanel(entt::entity player, AttributePanelInfo& panel) {
 		}
 		const uint64_t bonus = derived != nullptr ? CombatBonusOf(derived->combat(), stat) : 0;
 		line.value = SaturatingAdd(CombatBaseValue(baseAttrs, stat), bonus);
+		// 旧面板使用整数百分点，详细万分比与新分类在equipment_effects中完整下发。
+		uint32_t fixedBps = 0;
+		if (stat == equiprules::CombatStat::kPhysicalCritRate) fixedBps = equipmentEffects.physical_crit_bps();
+		else if (stat == equiprules::CombatStat::kMagicCritRate) fixedBps = equipmentEffects.magic_crit_bps();
+		else if (stat == equiprules::CombatStat::kPhysicalResist) fixedBps = equipmentEffects.physical_resist_bps();
+		else if (stat == equiprules::CombatStat::kMagicResist) fixedBps = equipmentEffects.magic_resist_bps();
+		line.value = SaturatingAdd(line.value, fixedBps / 100);
 		if (line.display.percent && line.value > kPercentDisplayCap) {
 			line.value = kPercentDisplayCap;
 		}

@@ -371,7 +371,7 @@ TEST_F(EquipmentV1BattleTest, NormalAttackCanBreakShieldsButCounterCannotTrigger
     EXPECT_EQ(Uses(result.state(), kEnemy, 21), 0u); EXPECT_EQ(Uses(result.state(), kEnemy, 22), 0u);
     EXPECT_EQ(Capacity(result.state(), kSelf, 9101), 400u);
 }
-TEST_F(EquipmentV1BattleTest, LaterDamageSegmentCannotClaimMissedFirstSegmentShieldBreak) {
+TEST_F(EquipmentV1BattleTest, LaterDamageSegmentDoesNotRepeatFirstSegmentShieldBreak) {
     auto& skill = Skill(904, BattleEffectOp::Damage); skill.set_damage_type(combatdamage::kPhysicalDamage); Learn(kSelf, 904);
     skill.add_effect(9041); data->AddBuff(9041).set_battle_op(static_cast<uint32_t>(BattleEffectOp::Damage));
     data->SetSkillDamage(904, 2000); Artifact(kSelf, 1, 11); Artifact(kSelf, 1, 12);
@@ -380,5 +380,69 @@ TEST_F(EquipmentV1BattleTest, LaterDamageSegmentCannotClaimMissedFirstSegmentShi
     auto engine = Start(); const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kEnemy, 904));
     EXPECT_EQ(Capacity(result.state(), kEnemy, 9102), 160u);
     EXPECT_EQ(Uses(result.state(), kSelf, 11), 1u); EXPECT_EQ(Uses(result.state(), kSelf, 12), 1u);
+}
+TEST_F(EquipmentV1BattleTest, DeathAndRevivalDoNotRestoreEitherHeartBudget) {
+    auto& skill = Skill(904, BattleEffectOp::Damage); skill.set_damage_type(combatdamage::kPhysicalDamage); Learn(kSelf, 904);
+    data->SetSkillDamage(904, 10000); Player(kEnemy).mutable_base_attributes()->set_health(100);
+    Artifact(kEnemy, 6, 61); Artifact(kEnemy, 6, 62);
+    SnapshotBuff(kEnemy, 9140);
+    auto& mark = data->AddBuff(9140); mark.set_battle_op(static_cast<uint32_t>(BattleEffectOp::ReviveMark));
+    mark.set_keep_on_death(1); mark.set_secondary_ratio(.2);
+    Player(kEnemy).mutable_buffs(0)->set_remaining_ticks(1); Player(kEnemy).mutable_buffs(0)->set_tick_round(1);
+    auto engine = Start(); const auto first = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kEnemy, 904));
+    EXPECT_FALSE(Unit(first.state(), kEnemy).is_dead()); EXPECT_EQ(Unit(first.state(), kEnemy).attributes().health(), 2000u);
+    EXPECT_EQ(Uses(first.state(), kEnemy, 61), 1u); EXPECT_EQ(Uses(first.state(), kEnemy, 62), 1u);
+    const auto second = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kEnemy, 904));
+    EXPECT_TRUE(Unit(second.state(), kEnemy).is_dead());
+    EXPECT_EQ(Uses(second.state(), kEnemy, 61), 1u); EXPECT_EQ(Uses(second.state(), kEnemy, 62), 1u);
+}
+TEST_F(EquipmentV1BattleTest, DeathClearsBothPendingEchoesButRevivalPreservesSpentGenerationBudget) {
+    Skill(905, BattleEffectOp::Control); Learn(kSelf, 905);
+    data->AddBuff(9050).set_state_kind(1); data->AddBuff(9050).set_application_chance(.01);
+    auto& hit = Skill(904, BattleEffectOp::Damage); hit.set_damage_type(combatdamage::kPhysicalDamage); Learn(kEnemy, 904);
+    data->SetSkillDamage(904, 10000); Player(kSelf).mutable_base_attributes()->set_health(100);
+    Artifact(kSelf, 3, 31); Artifact(kSelf, 3, 32); SnapshotBuff(kSelf, 9140);
+    auto& mark = data->AddBuff(9140); mark.set_battle_op(static_cast<uint32_t>(BattleEffectOp::ReviveMark));
+    mark.set_keep_on_death(1); mark.set_secondary_ratio(.2);
+    Player(kSelf).mutable_buffs(0)->set_remaining_ticks(1); Player(kSelf).mutable_buffs(0)->set_tick_round(1);
+    auto engine = Start(); engine->SubmitAction(kSelf, Command(BATTLE_ACTION_SKILL, kEnemy, 905));
+    engine->SubmitAction(kEnemy, Command(BATTLE_ACTION_SKILL, kSelf, 904));
+    engine->SubmitAction(kAlly, Command(BATTLE_ACTION_DEFEND)); engine->SubmitAction(kOtherEnemy, Command(BATTLE_ACTION_DEFEND));
+    const auto result = engine->ResolveCurrentRound(); EXPECT_FALSE(Unit(result.state(), kSelf).is_dead());
+    for (const auto& state : Unit(result.state(), kSelf).artifact_states()) { EXPECT_EQ(state.used_count(), 1u); EXPECT_EQ(state.pending_round(), 0u); }
+}
+TEST_F(EquipmentV1BattleTest, ControlledSkippedDefendDoesNotTriggerGourds) {
+    Player(kSelf).mutable_base_attributes()->set_mana(0); Artifact(kSelf, 7, 71); Artifact(kSelf, 7, 72);
+    SnapshotBuff(kSelf, 9150); auto& frozen = data->AddBuff(9150);
+    frozen.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Control)); frozen.set_state_kind(6);
+    auto engine = Start(); const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_DEFEND));
+    EXPECT_EQ(Unit(result.state(), kSelf).attributes().mana(), 0u);
+    EXPECT_EQ(Uses(result.state(), kSelf, 71), 0u); EXPECT_EQ(Uses(result.state(), kSelf, 72), 0u);
+}
+TEST_F(EquipmentV1BattleTest, PurityWorksOnGroupSecondaryTargetAndOnlyFirstLegalControlInAction) {
+    auto& skill = Skill(905, BattleEffectOp::Control, 1, 2); Learn(kSelf, 905);
+    data->AddBuff(9050).set_state_kind(1); data->AddBuff(9050).set_application_chance(.01);
+    skill.add_effect(9051); auto& second = data->AddBuff(9051);
+    second.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Control)); second.set_state_kind(2); second.set_application_chance(.01);
+    Artifact(kOtherEnemy, 8, 81); Artifact(kOtherEnemy, 8, 82);
+    auto engine = Start(); const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kEnemy, 905));
+    EXPECT_EQ(Uses(result.state(), kOtherEnemy, 81), 1u); EXPECT_EQ(Uses(result.state(), kOtherEnemy, 82), 1u);
+}
+TEST_F(EquipmentV1BattleTest, PetSharedHealDoesNotInheritOwnersEquipmentOrArtifacts) {
+    const auto& skill = Skill(901, BattleEffectOp::Heal, 2); data->AddPet(1);
+    Player(kSelf).mutable_equipment_effects()->set_outgoing_heal_bps(3200); Artifact(kSelf, 4, 41); Artifact(kSelf, 4, 42);
+    Player(kSelf).mutable_base_attributes()->set_health(100);
+    auto* pet = Player(kSelf).add_pets(); pet->set_pet_id(1001); pet->set_owner_player_id(kSelf); pet->set_pet_table_id(1);
+    pet->set_level(30); pet->set_max_health(10000); pet->set_max_mana(10000);
+    pet->mutable_base_attributes()->set_health(10000); pet->mutable_base_attributes()->set_mana(10000); pet->mutable_base_attributes()->set_speed(500);
+    pet->add_skill_table_ids(skill.id()); (*pet->mutable_skill_ranks())[skill.id()] = 1;
+    auto engine = Start(); uint64_t petActor = 0;
+    const auto start = engine->BuildStateSnapshot();
+    for (const auto& actor : start.actors()) if (actor.actor_type() == BATTLE_ACTOR_TYPE_PET) petActor = actor.actor_id();
+    ASSERT_NE(petActor, 0u);
+    const auto result = Round(*engine, petActor, Command(BATTLE_ACTION_SKILL, kSelf, 901));
+    EXPECT_EQ(EventSum(result, BATTLE_EVENT_HEAL, petActor, kSelf), 1000u);
+    EXPECT_FALSE(Unit(result.state(), petActor).has_equipment_effects());
+    EXPECT_EQ(Uses(result.state(), kSelf, 41), 0u); EXPECT_EQ(Uses(result.state(), kSelf, 42), 0u);
 }
 } // namespace

@@ -300,6 +300,12 @@ state=bootstrap
 1=PlayerPetComp#5 optional uint64 last_purchase_pet_id
 1=PlayerPetComp#6 optional uint64 last_purchase_price_gold
 1=PetInstance#11 map map<uint32,uint32> skill_ranks
+1=ClientRequestLedgerComp#3 optional uint64 forge_revision
+1=ClientRequestRecord#8 optional uint64 equipment_item_id
+1=ClientRequestRecord#9 optional uint64 forge_revision
+1=EquipFixedAffix#1 optional uint32 slot
+1=EquipFixedAffix#2 optional uint32 affix_id
+1=EquipInstanceData#4 repeated EquipFixedAffix fixed_affixes
 
 retired=player_database#10
 retired=player_database#17
